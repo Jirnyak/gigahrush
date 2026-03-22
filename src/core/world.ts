@@ -1,0 +1,129 @@
+/* ── Toroidal world grid ──────────────────────────────────────── */
+
+import { W, Cell, DoorState, Feature, type Room, type Door, type Zone } from './types';
+
+export class World {
+  cells:     Uint8Array;
+  roomMap:   Int16Array;   // room id per cell (-1 = none)
+  wallTex:   Uint8Array;
+  floorTex:  Uint8Array;
+  features:  Uint8Array;   // Feature enum per cell
+  light:     Float32Array; // lightmap 0..1 per cell
+  rooms:     Room[]  = [];
+  doors:     Map<number, Door> = new Map();
+  apartmentRoomCount = 0;          // first N rooms are permanent apartments
+  aptMask:   Uint8Array;           // 1 = protected apartment cell (interior + wall ring)
+  zones:     Zone[] = [];          // 64 macro-regions
+  zoneMap:   Uint8Array;           // zone id per cell (0-63)
+  fog:       Uint8Array;           // purple fog density per cell (0 = clear, 255 = full)
+  slideCells: number[] = [];       // cell indices of slide walls (cycle textures)
+  decals:    Map<number, {tx: number; ty: number}[]> = new Map(); // bullet hole decals per cell
+
+  constructor() {
+    const n = W * W;
+    this.cells    = new Uint8Array(n).fill(Cell.WALL);
+    this.roomMap  = new Int16Array(n).fill(-1);
+    this.wallTex  = new Uint8Array(n);
+    this.floorTex = new Uint8Array(n);
+    this.features = new Uint8Array(n);              // Feature.NONE = 0
+    this.light    = new Float32Array(n);            // 0 = dark
+    this.aptMask  = new Uint8Array(n);              // 0 = volatile, 1 = apartment-protected
+    this.zoneMap  = new Uint8Array(n);              // zone id
+    this.fog      = new Uint8Array(n);              // fog density
+  }
+
+  /* rebuild lightmap from lamp features */
+  bakeLights(): void {
+    this.light.fill(0);
+    const R = 8;  // lamp radius in cells
+    for (let i = 0; i < W * W; i++) {
+      if (this.features[i] !== Feature.LAMP) continue;
+      const lx = i % W;
+      const ly = (i / W) | 0;
+      for (let dy = -R; dy <= R; dy++) {
+        for (let dx = -R; dx <= R; dx++) {
+          const d2 = dx * dx + dy * dy;
+          if (d2 > R * R) continue;
+          const wx = this.wrap(lx + dx);
+          const wy = this.wrap(ly + dy);
+          const ti = wy * W + wx;
+          const brightness = 1.0 - Math.sqrt(d2) / R;
+          if (brightness > this.light[ti]) this.light[ti] = brightness;
+        }
+      }
+    }
+  }
+
+  /* toroidal helpers */
+  wrap(v: number): number { return ((v % W) + W) % W; }
+
+  idx(x: number, y: number): number {
+    return this.wrap(y) * W + this.wrap(x);
+  }
+
+  get(x: number, y: number): number {
+    return this.cells[this.idx(x, y)];
+  }
+
+  set(x: number, y: number, v: Cell): void {
+    this.cells[this.idx(x, y)] = v;
+  }
+
+  solid(x: number, y: number): boolean {
+    const i = this.idx(x, y);
+    const c = this.cells[i];
+    if (c === Cell.FLOOR || c === Cell.WATER) return false;
+    if (c === Cell.LIFT) return true;  // lift wall — interact to use
+    if (c === Cell.DOOR) {
+      const d = this.doors.get(i);
+      if (!d) return true;
+      return d.state === DoorState.CLOSED
+          || d.state === DoorState.LOCKED
+          || d.state === DoorState.HERMETIC_CLOSED;
+    }
+    return true;
+  }
+
+  /* toroidal shortest displacement from a→b */
+  delta(a: number, b: number): number {
+    let d = b - a;
+    if (d >  W / 2) d -= W;
+    if (d < -W / 2) d += W;
+    return d;
+  }
+
+  dist(x1: number, y1: number, x2: number, y2: number): number {
+    const dx = this.delta(x1, x2);
+    const dy = this.delta(y1, y2);
+    return Math.sqrt(dx * dx + dy * dy);
+  }
+
+  roomAt(x: number, y: number): Room | null {
+    const id = this.roomMap[this.idx(Math.floor(x), Math.floor(y))];
+    return id >= 0 ? this.rooms[id] ?? null : null;
+  }
+
+  addDecal(ci: number, tx: number, ty: number): void {
+    let list = this.decals.get(ci);
+    if (!list) { list = []; this.decals.set(ci, list); }
+    if (list.length < 20) list.push({ tx, ty });
+  }
+
+  /* carve a floor cell */
+  carve(x: number, y: number): void {
+    this.set(x, y, Cell.FLOOR);
+  }
+
+  /* carve rectangle */
+  carveRect(rx: number, ry: number, rw: number, rh: number, roomId: number): void {
+    for (let dy = 0; dy < rh; dy++) {
+      for (let dx = 0; dx < rw; dx++) {
+        const wx = this.wrap(rx + dx);
+        const wy = this.wrap(ry + dy);
+        const i = wy * W + wx;
+        this.cells[i] = Cell.FLOOR;
+        this.roomMap[i] = roomId;
+      }
+    }
+  }
+}
