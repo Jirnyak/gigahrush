@@ -1,25 +1,10 @@
 /* ── Procedural texture generator (64×64, retro horror style) ── */
 
-import { Tex, TEX } from '../core/types';
+import { Tex } from '../core/types';
 import { generateSlideTextures } from '../gen/living';
+import { S, rgba, noise, clamp } from './pixutil';
 
-const S = TEX; // shorthand
 export type TexData = Uint32Array; // S*S RGBA pixels (0xAABBGGRR little-endian)
-
-/* ── RGBA pack (little endian) ────────────────────────────────── */
-function rgba(r: number, g: number, b: number, a = 255): number {
-  return ((a << 24) | (b << 16) | (g << 8) | r) >>> 0;
-}
-
-
-function noise(x: number, y: number, seed: number): number {
-  let n = (x * 374761393 + y * 668265263 + seed * 1274126177) | 0;
-  n = (n ^ (n >> 13)) * 1103515245;
-  n = (n ^ (n >> 16));
-  return (n & 0x7fff) / 0x7fff;
-}
-
-function clamp(v: number, lo = 0, hi = 255): number { return v < lo ? lo : v > hi ? hi : v; }
 
 /* ── Generate all game textures ───────────────────────────────── */
 export function generateTextures(): TexData[] {

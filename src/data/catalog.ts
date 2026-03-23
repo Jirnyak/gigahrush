@@ -1,7 +1,7 @@
 /* ── Game data catalogue — rooms, items, monsters, names ─────── */
 
 import {
-  RoomType, ItemType, Tex,
+  RoomType, ItemType, Tex, Faction,
   type ItemDef, type Entity, type Needs,
 } from '../core/types';
 
@@ -26,9 +26,9 @@ export const WEAPON_STATS: Record<string, WeaponStats> = {
   pipe:     { dmg: 18, durability: 50, range: 1.5, speed: 0.5,  isRanged: false },
   rebar:    { dmg: 25, durability: 80, range: 1.6, speed: 0.6,  isRanged: false },
   axe:      { dmg: 30, durability: 70, range: 1.5, speed: 0.7,  isRanged: false },
-  makarov:  { dmg: 20, durability: 0,  range: 0,   speed: 0.4,  isRanged: true, ammoType: 'ammo_9mm',    projSpeed: 20, pellets: 1, spread: 0.02, projSprite: 22 },
-  shotgun:  { dmg: 8,  durability: 0,  range: 0,   speed: 1.0,  isRanged: true, ammoType: 'ammo_shells', projSpeed: 18, pellets: 6, spread: 0.15, projSprite: 23 },
-  nailgun:  { dmg: 12, durability: 0,  range: 0,   speed: 0.12, isRanged: true, ammoType: 'ammo_nails',  projSpeed: 15, pellets: 1, spread: 0.04, projSprite: 24 },
+  makarov:  { dmg: 20, durability: 0,  range: 0,   speed: 0.4,  isRanged: true, ammoType: 'ammo_9mm',    projSpeed: 20, pellets: 1, spread: 0.02, projSprite: 29 },
+  shotgun:  { dmg: 8,  durability: 0,  range: 0,   speed: 1.0,  isRanged: true, ammoType: 'ammo_shells', projSpeed: 18, pellets: 6, spread: 0.15, projSprite: 30 },
+  nailgun:  { dmg: 12, durability: 0,  range: 0,   speed: 0.12, isRanged: true, ammoType: 'ammo_nails',  projSpeed: 15, pellets: 1, spread: 0.04, projSprite: 31 },
 };
 
 // ── Room definitions ─────────────────────────────────────────────
@@ -51,11 +51,10 @@ export const ROOM_DEFS: Record<RoomType, RoomDef> = {
   [RoomType.CORRIDOR]:   { type: RoomType.CORRIDOR,   name: 'Коридор',      minW:2, maxW:3,  minH:8, maxH:20, wallTex: Tex.CONCRETE,  floorTex: Tex.F_LINO },
   [RoomType.SMOKING]:    { type: RoomType.SMOKING,    name: 'Курилка',      minW:3, maxW:6,  minH:3, maxH:5,  wallTex: Tex.CONCRETE,  floorTex: Tex.F_CONCRETE },
   [RoomType.OFFICE]:     { type: RoomType.OFFICE,     name: 'Бухгалтерия',  minW:4, maxW:8,  minH:4, maxH:7,  wallTex: Tex.PANEL,     floorTex: Tex.F_LINO },
+  [RoomType.HQ]:         { type: RoomType.HQ,         name: 'Штаб',         minW:7, maxW:7,  minH:7, maxH:7,  wallTex: Tex.METAL,     floorTex: Tex.F_CONCRETE },
 };
 
 // ── Items ────────────────────────────────────────────────────────
-// heal is available for extending item effects
-// function heal(hp: number) { return (e: Entity) => { e.hp = Math.min((e.maxHp ?? 100), (e.hp ?? 0) + hp); return `+${hp} здоровья`; }; }
 function feed(v: number) { return (e: Entity) => { if (e.needs) e.needs.food = Math.min(100, e.needs.food + v); return 'Вы поели'; }; }
 function drink(v: number) { return (e: Entity) => { if (e.needs) e.needs.water = Math.min(100, e.needs.water + v); return 'Вы попили'; }; }
 function medicine(hp: number) { return (e: Entity) => { e.hp = Math.min((e.maxHp ?? 100), (e.hp ?? 0) + hp); return `Лечение +${hp}`; }; }
@@ -96,27 +95,81 @@ export const ITEMS: Record<string, ItemDef> = {
   key:       { id:'key',       name:'Ключ',         type:ItemType.KEY,      stack:1,  desc:'Подходит к двери',       spawnRooms:[],                                 spawnW:0, value:50 },
 };
 
-export const WEAPON_DMG: Record<string, number> = {
-  pipe: 18, wrench: 12, knife: 8, rebar: 25, axe: 30,
-  makarov: 20, shotgun: 8, nailgun: 12, '': 3,
-};
-
 // ── Monsters ─────────────────────────────────────────────────────
 // Monster definitions now live in src/entities/ (per-monster files).
 // Re-export from the central monster registry for backward compat.
 export { MONSTERS, type MonsterDef } from '../entities/monster';
 
 // ── NPC names ────────────────────────────────────────────────────
-const FIRST_M = ['Иван','Пётр','Алексей','Дмитрий','Сергей','Андрей','Николай','Михаил','Виктор','Олег','Григорий','Борис','Фёдор','Геннадий','Валерий','Юрий','Анатолий','Владимир','Константин','Евгений'];
-const FIRST_F = ['Мария','Анна','Елена','Ольга','Наталья','Татьяна','Ирина','Светлана','Людмила','Галина','Нина','Валентина','Екатерина','Лариса','Тамара','Зинаида','Раиса','Вера','Надежда','Любовь'];
-const LAST = ['Иванов','Петров','Сидоров','Кузнецов','Попов','Васильев','Соколов','Михайлов','Новиков','Фёдоров','Морозов','Волков','Алексеев','Лебедев','Семёнов','Егоров','Павлов','Козлов','Степанов','Орлов'];
 
-export function randomName(): string {
-  const male = Math.random() < 0.5;
-  const first = male ? FIRST_M : FIRST_F;
-  const last = LAST[Math.floor(Math.random() * LAST.length)];
-  const suffix = male ? '' : 'а';
-  return `${first[Math.floor(Math.random() * first.length)]} ${last}${suffix}`;
+// Citizens: normal Russian names
+const CIT_M = ['Иван','Пётр','Алексей','Дмитрий','Сергей','Андрей','Николай','Михаил','Виктор','Олег','Григорий','Борис','Фёдор','Геннадий','Валерий','Юрий','Анатолий','Владимир','Константин','Евгений'];
+const CIT_F = ['Мария','Анна','Елена','Ольга','Наталья','Татьяна','Ирина','Светлана','Людмила','Галина','Нина','Валентина','Екатерина','Лариса','Тамара','Зинаида','Раиса','Вера','Надежда','Любовь'];
+const CIT_LAST = ['Иванов','Петров','Сидоров','Кузнецов','Попов','Васильев','Соколов','Михайлов','Новиков','Фёдоров','Морозов','Волков','Алексеев','Лебедев','Семёнов','Егоров','Павлов','Козлов','Степанов','Орлов'];
+
+// Liquidators: military ranks + surnames
+const LIQ_RANKS = ['Рядовой','Ефрейтор','Сержант','Ст. сержант','Лейтенант','Ст. лейтенант','Капитан','Майор','Подполковник','Полковник'];
+const LIQ_LAST = ['Петренко','Бондаренко','Шевченко','Коваль','Мельник','Ткаченко','Гриценко','Кравченко','Олейник','Литвин','Сидорук','Бойко','Марченко','Поляков','Кравцов','Зайцев','Жук','Левченко','Руденко','Савченко'];
+
+// Wild: nickname-based names
+const WILD_M = ['Дима','Серый','Толик','Лёха','Колян','Жека','Саня','Вован','Макс','Костыль','Шурик','Борян'];
+const WILD_F = ['Машка','Светка','Ленка','Танька','Наташка','Иришка','Зинка','Верка','Нинка','Анька'];
+const WILD_NICK = ['Бетон','Шило','Гвоздь','Крыса','Дым','Штырь','Башка','Кирпич','Резак','Гайка','Труба','Ржавый','Шакал','Метла','Кабан','Цемент','Молот','Арматура','Пыль','Болт'];
+
+// Cultists: eldritch names (adjective + noun)
+const CULT_ADJ = ['Чёрн','Кровав','Безглаз','Гнил','Тёмн','Слеп','Пепельн','Утопш','Безмолвн','Полз','Бетонн','Серебрян','Пустотн','Могильн','Хтоничн'];
+const CULT_NOUN_M = ['Идол','Коготь','Скрежет','Червь','Столп','Глаз','Рот','Клык','Зов','Дым','Прах','Камень','Шёпот','Голод'];
+const CULT_NOUN_F = ['Гниль','Тень','Плоть','Яма','Пасть','Бездна','Жила','Завеса','Мгла','Тишь','Язва','Пелена','Дыра'];
+
+// Monster name: procedural syllable generation (eerie nonsense)
+const M_ONSETS = ['к','м','х','г','б','т','ш','в','р','п','д','ж','з','н','л','ч','ц'];
+const M_VOWELS = ['а','о','у','э','и','ы','е'];
+const M_CODAS = ['р','л','н','т','к','х','г','б','д','ш','рх','лг','бт','хн','гр','тк','рд','лк','нт'];
+
+function _pick<T>(arr: T[]): T { return arr[Math.floor(Math.random() * arr.length)]; }
+
+export function monsterName(): string {
+  const syllables = 2 + Math.floor(Math.random() * 2); // 2-3 syllables
+  let name = '';
+  for (let i = 0; i < syllables; i++) {
+    name += _pick(M_ONSETS) + _pick(M_VOWELS);
+    if (i < syllables - 1 && Math.random() < 0.5) name += _pick(M_CODAS);
+  }
+  // Final coda always
+  name += _pick(M_CODAS);
+  return name.charAt(0).toUpperCase() + name.slice(1);
+}
+
+export interface NameResult { name: string; female: boolean; }
+
+export function randomName(faction?: Faction): NameResult {
+  switch (faction) {
+    case Faction.LIQUIDATOR: {
+      const rank = _pick(LIQ_RANKS);
+      const last = _pick(LIQ_LAST);
+      return { name: `${rank} ${last}`, female: false };
+    }
+    case Faction.WILD: {
+      const female = Math.random() < 0.35;
+      const first = female ? _pick(WILD_F) : _pick(WILD_M);
+      const nick = _pick(WILD_NICK);
+      return { name: `${first} «${nick}»`, female };
+    }
+    case Faction.CULTIST: {
+      const female = Math.random() < 0.5;
+      const adj = _pick(CULT_ADJ);
+      const suffix = female ? 'ая' : 'ый';
+      const noun = female ? _pick(CULT_NOUN_F) : _pick(CULT_NOUN_M);
+      return { name: `${adj}${suffix} ${noun}`, female };
+    }
+    default: { // CITIZEN, SCIENTIST, undefined
+      const female = Math.random() < 0.5;
+      const first = female ? _pick(CIT_F) : _pick(CIT_M);
+      const last = _pick(CIT_LAST);
+      const lastSuffix = female ? 'а' : '';
+      return { name: `${first} ${last}${lastSuffix}`, female };
+    }
+  }
 }
 
 // ── Lore notes ───────────────────────────────────────────────────

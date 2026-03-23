@@ -14,9 +14,17 @@ export function updateNeeds(entities: Entity[], dt: number, time: number, msgs: 
     if (!e.alive || !e.needs) continue;
     const n = e.needs;
 
-    n.food  = Math.max(0, n.food  - FOOD_RATE  * dt);
-    n.water = Math.max(0, n.water - WATER_RATE * dt);
-    n.sleep = Math.max(0, n.sleep - SLEEP_RATE * dt);
+    // Attribute scaling: STR slows hunger, AGI slows thirst, INT slows sleep decay
+    const str = e.rpg?.str ?? 0;
+    const agi = e.rpg?.agi ?? 0;
+    const int = e.rpg?.int ?? 0;
+    const foodRate  = FOOD_RATE  / (1 + 0.1 * str);
+    const waterRate = WATER_RATE / (1 + 0.1 * agi);
+    const sleepRate = SLEEP_RATE / (1 + 0.1 * int);
+
+    n.food  = Math.max(0, n.food  - foodRate  * dt);
+    n.water = Math.max(0, n.water - waterRate * dt);
+    n.sleep = Math.max(0, n.sleep - sleepRate * dt);
     n.pee   = Math.min(100, n.pee   + PEE_RATE   * dt);
     n.poo   = Math.min(100, n.poo   + POO_RATE   * dt);
 

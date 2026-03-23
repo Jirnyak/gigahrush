@@ -10,6 +10,8 @@ import { World } from '../core/world';
 import { ITEMS, WEAPON_STATS } from '../data/catalog';
 import { FACTION_NAMES, OCCUPATION_NAMES } from '../data/relations';
 import { getEquippedDurability, countAmmo } from '../systems/inventory';
+import { xpForLevel } from '../systems/rpg';
+import { drawDebugOverlay } from '../systems/debug';
 
 const BAR_W = 50, BAR_H = 5;
 const MAP_SIZE = 80;
@@ -42,6 +44,7 @@ const ZONE_FACTION_NAMES: Record<ZoneFaction, string> = {
   [ZoneFaction.LIQUIDATOR]: 'Ликвидаторы',
   [ZoneFaction.CULTIST]: 'Культисты',
   [ZoneFaction.SAMOSBOR]: 'Самосбор',
+  [ZoneFaction.WILD]: 'Дикие',
 };
 const MSG_MAX = 6;
 
@@ -75,14 +78,26 @@ export function drawHUD(
 
   if (player.needs) {
     const bars: [string, number, string][] = [
+      ['ХП',   (player.hp ?? 100), '#e44'],
+    ];
+    if (player.rpg) {
+      bars.push(['ПСИ', (player.rpg.psi / player.rpg.maxPsi) * 100, '#a4f']);
+    }
+    bars.push(
       ['ЕДА',  player.needs.food,  '#8a4'],
       ['ВОДА', player.needs.water, '#48c'],
       ['СОН',  player.needs.sleep, '#a8f'],
       ['ТУАЛ', Math.max(0, 100 - player.needs.pee), '#da4'],
-      ['ХП',   (player.hp ?? 100), '#e44'],
-    ];
+    );
+    if (player.rpg) {
+      const xpNeeded = xpForLevel(player.rpg.level + 1);
+      const xpPct = xpNeeded > 0 ? (player.rpg.xp / xpNeeded) * 100 : 0;
+      bars.push(['XP', xpPct, '#af4']);
+    }
     bars.forEach(([label, val, color], i) => {
-      const bx = 8 * sx + i * 62 * sx;
+      const barSpacing = bars.length > 5 ? 44 : 62;
+      const barW = bars.length > 5 ? 36 : BAR_W;
+      const bx = 8 * sx + i * barSpacing * sx;
       const by = barY + 4 * sy;
       // Label
       ctx.fillStyle = '#aaa';
@@ -90,10 +105,10 @@ export function drawHUD(
       ctx.fillText(label, bx, by);
       // Bar bg
       ctx.fillStyle = '#222';
-      ctx.fillRect(bx, by + 9 * sy, BAR_W * sx, BAR_H * sy);
+      ctx.fillRect(bx, by + 9 * sy, barW * sx, BAR_H * sy);
       // Bar fill
       ctx.fillStyle = color;
-      ctx.fillRect(bx, by + 9 * sy, BAR_W * sx * val / 100, BAR_H * sy);
+      ctx.fillRect(bx, by + 9 * sy, barW * sx * val / 100, BAR_H * sy);
     });
   }
 
@@ -207,13 +222,13 @@ export function drawHUD(
     const zid = world.zoneMap[pci];
     const zone = world.zones[zid];
 
-    // Game clock + day counter (top-left)
+    // Game clock + day counter — just above status bar
     const hh = String(state.clock.hour).padStart(2, '0');
     const mm = String(state.clock.minute).padStart(2, '0');
     const day = Math.floor(state.clock.totalMinutes / 1440);
     ctx.fillStyle = '#aac';
     ctx.font = `${9 * sy}px monospace`;
-    ctx.fillText(`День ${day}  ${hh}:${mm}`, 4 * sx, h - 82 * sy);
+    ctx.fillText(`День ${day}  ${hh}:${mm}`, 4 * sx, barY - 42 * sy);
 
     // Zone
     if (zone) {
@@ -221,10 +236,10 @@ export function drawHUD(
       const fLabel = ZONE_FACTION_NAMES[zone.faction];
       ctx.fillStyle = `rgb(${zr},${zg},${zb})`;
       ctx.font = `${8 * sy}px monospace`;
-      ctx.fillText(`■ Зона ${zid + 1}`, 4 * sx, h - 72 * sy);
+      ctx.fillText(`■ Зона ${zid + 1}  Ур.${zone.level ?? 1}`, 4 * sx, barY - 32 * sy);
       ctx.fillStyle = zone.faction === ZoneFaction.SAMOSBOR ? '#c4f' : '#aaa';
       ctx.font = `${7 * sy}px monospace`;
-      ctx.fillText(fLabel, 4 * sx, h - 62 * sy);
+      ctx.fillText(fLabel, 4 * sx, barY - 22 * sy);
     }
 
     // Room info
@@ -232,7 +247,7 @@ export function drawHUD(
     if (room) {
       ctx.fillStyle = '#888';
       ctx.font = `${7 * sy}px monospace`;
-      ctx.fillText(room.name, 4 * sx, h - 52 * sy);
+      ctx.fillText(room.name, 4 * sx, barY - 12 * sy);
     }
   }
 
@@ -256,135 +271,25 @@ export function drawHUD(
     ctx.fillText('[R] — заново', w / 2 - 40 * sx, h / 2 + 30 * sy);
   }
 
+  // ── Debug screen (~) ─────────────────────────────────────
+  if (state.showDebug) {
+    drawDebugOverlay(ctx, sx, sy, w, h, world, entities, state.debugSel);
+  }
+
   ctx.restore();
 }
 
-/* ── Minimap ──────────────────────────────────────────────────── */
-function drawMinimap(
+/* ── Shared map renderer (used by minimap + fullmap) ──────────── */
+function drawMap(
   ctx: CanvasRenderingContext2D,
   world: World, entities: Entity[], player: Entity,
-  sx: number, sy: number,
+  _sx: number, _sy: number,
+  mapX: number, mapY: number, mapW: number, mapH: number,
+  radius: number, bgAlpha: number,
 ): void {
-  const mw = MAP_SIZE * sx, mh = MAP_SIZE * sy;
-  const mx = ctx.canvas.width - mw - 4 * sx;
-  const my = 4 * sy;
-  const radius = 40; // cells shown in each direction
+  ctx.fillStyle = `rgba(0,0,0,${bgAlpha})`;
+  ctx.fillRect(mapX, mapY, mapW, mapH);
 
-  ctx.fillStyle = 'rgba(0,0,0,0.75)';
-  ctx.fillRect(mx, my, mw, mh);
-
-  const pxI = Math.floor(player.x);
-  const pyI = Math.floor(player.y);
-  const cellW = mw / (radius * 2);
-  const cellH = mh / (radius * 2);
-
-  for (let dy = -radius; dy < radius; dy++) {
-    for (let dx = -radius; dx < radius; dx++) {
-      const wx = ((pxI + dx) % W + W) % W;
-      const wy = ((pyI + dy) % W + W) % W;
-      const ci = wy * W + wx;
-      const cell = world.cells[ci];
-      if (cell === Cell.WALL) continue;
-      if (cell === Cell.ABYSS) {
-        ctx.fillStyle = '#100810';
-        ctx.fillRect(mx + (dx + radius) * cellW, my + (dy + radius) * cellH, cellW + 0.5, cellH + 0.5);
-        continue;
-      }
-      if (cell === Cell.LIFT) {
-        ctx.fillStyle = '#cc0';
-        ctx.fillRect(mx + (dx + radius) * cellW, my + (dy + radius) * cellH, cellW + 0.5, cellH + 0.5);
-        continue;
-      }
-      if (cell === Cell.WATER) {
-        ctx.fillStyle = '#235';
-        ctx.fillRect(mx + (dx + radius) * cellW, my + (dy + radius) * cellH, cellW + 0.5, cellH + 0.5);
-        continue;
-      }
-
-      const rid = world.roomMap[ci];
-      let cr: number, cg: number, cb: number;
-      if (rid >= 0) {
-        const r = world.rooms[rid];
-        if (r) {
-          switch (r.type) {
-            case RoomType.LIVING:     cr = 68; cg = 68; cb = 102; break;
-            case RoomType.KITCHEN:    cr = 85; cg = 85; cb = 68; break;
-            case RoomType.BATHROOM:   cr = 68; cg = 85; cb = 85; break;
-            case RoomType.STORAGE:    cr = 85; cg = 68; cb = 51; break;
-            case RoomType.MEDICAL:    cr = 68; cg = 102; cb = 102; break;
-            case RoomType.COMMON:     cr = 68; cg = 68; cb = 68; break;
-            case RoomType.PRODUCTION: cr = 85; cg = 85; cb = 68; break;
-            default:                  cr = 51; cg = 51; cb = 51;
-          }
-        } else { cr = 51; cg = 51; cb = 51; }
-      } else {
-        // Corridor: use zone color (dimmed)
-        const zid = world.zoneMap[ci];
-        const [zr, zg, zb] = ZONE_COLORS[zid % 64];
-        cr = zr >> 1; cg = zg >> 1; cb = zb >> 1;
-      }
-      if (cell === Cell.DOOR) { cr = 136; cg = 100; cb = 68; }
-
-      // Purple fog overlay
-      if (world.fog[ci] > 50) {
-        const f = world.fog[ci] / 255;
-        cr = Math.round(cr * (1 - f) + 80 * f);
-        cg = Math.round(cg * (1 - f) + 20 * f);
-        cb = Math.round(cb * (1 - f) + 120 * f);
-      }
-
-      ctx.fillStyle = `rgb(${cr},${cg},${cb})`;
-      ctx.fillRect(mx + (dx + radius) * cellW, my + (dy + radius) * cellH, cellW + 0.5, cellH + 0.5);
-    }
-  }
-
-  // Entities
-  for (const e of entities) {
-    if (!e.alive || e.type === EntityType.PLAYER) continue;
-    const edx = world.delta(pxI, Math.floor(e.x));
-    const edy = world.delta(pyI, Math.floor(e.y));
-    if (Math.abs(edx) > radius || Math.abs(edy) > radius) continue;
-
-    ctx.fillStyle = e.type === EntityType.NPC ? '#4a4'
-                  : e.type === EntityType.MONSTER ? '#e33'
-                  : '#dd4';
-    const esx = mx + (edx + radius) * cellW;
-    const esy = my + (edy + radius) * cellH;
-    ctx.fillRect(esx - 1, esy - 1, 3, 3);
-  }
-
-  // Player dot
-  ctx.fillStyle = '#fff';
-  ctx.fillRect(mx + radius * cellW - 1, my + radius * cellH - 1, 3, 3);
-  // Direction indicator
-  ctx.strokeStyle = '#fff';
-  ctx.beginPath();
-  ctx.moveTo(mx + radius * cellW, my + radius * cellH);
-  ctx.lineTo(
-    mx + (radius + Math.cos(player.angle) * 4) * cellW,
-    my + (radius + Math.sin(player.angle) * 4) * cellH,
-  );
-  ctx.stroke();
-}
-
-/* ── Full world map (same style as minimap, fullscreen) ──────── */
-function drawFullMap(
-  ctx: CanvasRenderingContext2D,
-  world: World, entities: Entity[], player: Entity,
-  sx: number, sy: number,
-): void {
-  const cw = ctx.canvas.width;
-  const ch = ctx.canvas.height;
-  const pad = 4 * sx;
-
-  const mapW = cw - pad * 2;
-  const mapH = ch - pad * 2;
-
-  ctx.fillStyle = 'rgba(0,0,0,0.85)';
-  ctx.fillRect(pad, pad, mapW, mapH);
-
-  // Larger radius — show more area than minimap
-  const radius = 200;
   const pxI = Math.floor(player.x);
   const pyI = Math.floor(player.y);
   const cellW = mapW / (radius * 2);
@@ -399,17 +304,17 @@ function drawFullMap(
       if (cell === Cell.WALL) continue;
       if (cell === Cell.ABYSS) {
         ctx.fillStyle = '#100810';
-        ctx.fillRect(pad + (dx + radius) * cellW, pad + (dy + radius) * cellH, cellW + 0.5, cellH + 0.5);
+        ctx.fillRect(mapX + (dx + radius) * cellW, mapY + (dy + radius) * cellH, cellW + 0.5, cellH + 0.5);
         continue;
       }
       if (cell === Cell.LIFT) {
         ctx.fillStyle = '#cc0';
-        ctx.fillRect(pad + (dx + radius) * cellW, pad + (dy + radius) * cellH, cellW + 0.5, cellH + 0.5);
+        ctx.fillRect(mapX + (dx + radius) * cellW, mapY + (dy + radius) * cellH, cellW + 0.5, cellH + 0.5);
         continue;
       }
       if (cell === Cell.WATER) {
         ctx.fillStyle = '#235';
-        ctx.fillRect(pad + (dx + radius) * cellW, pad + (dy + radius) * cellH, cellW + 0.5, cellH + 0.5);
+        ctx.fillRect(mapX + (dx + radius) * cellW, mapY + (dy + radius) * cellH, cellW + 0.5, cellH + 0.5);
         continue;
       }
 
@@ -430,14 +335,12 @@ function drawFullMap(
           }
         } else { cr = 51; cg = 51; cb = 51; }
       } else {
-        // Corridor: zone color (dimmed)
         const zid = world.zoneMap[ci];
         const [zr, zg, zb] = ZONE_COLORS[zid % 64];
         cr = zr >> 1; cg = zg >> 1; cb = zb >> 1;
       }
       if (cell === Cell.DOOR) { cr = 136; cg = 100; cb = 68; }
 
-      // Purple fog overlay
       if (world.fog[ci] > 50) {
         const f = world.fog[ci] / 255;
         cr = Math.round(cr * (1 - f) + 80 * f);
@@ -446,7 +349,7 @@ function drawFullMap(
       }
 
       ctx.fillStyle = `rgb(${cr},${cg},${cb})`;
-      ctx.fillRect(pad + (dx + radius) * cellW, pad + (dy + radius) * cellH, cellW + 0.5, cellH + 0.5);
+      ctx.fillRect(mapX + (dx + radius) * cellW, mapY + (dy + radius) * cellH, cellW + 0.5, cellH + 0.5);
     }
   }
 
@@ -460,15 +363,15 @@ function drawFullMap(
     ctx.fillStyle = e.type === EntityType.NPC ? '#4a4'
                   : e.type === EntityType.MONSTER ? '#e33'
                   : '#dd4';
-    const esx = pad + (edx + radius) * cellW;
-    const esy = pad + (edy + radius) * cellH;
+    const esx = mapX + (edx + radius) * cellW;
+    const esy = mapY + (edy + radius) * cellH;
     ctx.fillRect(esx - 1, esy - 1, 3, 3);
   }
 
   // Player dot
+  const pcx = mapX + radius * cellW;
+  const pcy = mapY + radius * cellH;
   ctx.fillStyle = '#fff';
-  const pcx = pad + radius * cellW;
-  const pcy = pad + radius * cellH;
   ctx.fillRect(pcx - 1, pcy - 1, 3, 3);
   // Direction indicator
   ctx.strokeStyle = '#fff';
@@ -479,13 +382,39 @@ function drawFullMap(
     pcy + Math.sin(player.angle) * 4 * cellH,
   );
   ctx.stroke();
+}
+
+/* ── Minimap ──────────────────────────────────────────────────── */
+function drawMinimap(
+  ctx: CanvasRenderingContext2D,
+  world: World, entities: Entity[], player: Entity,
+  sx: number, sy: number,
+): void {
+  const mw = MAP_SIZE * sx, mh = MAP_SIZE * sy;
+  const mx = ctx.canvas.width - mw - 4 * sx;
+  const my = 4 * sy;
+  drawMap(ctx, world, entities, player, sx, sy, mx, my, mw, mh, 40, 0.75);
+}
+
+/* ── Full world map (fullscreen) ─────────────────────────────── */
+function drawFullMap(
+  ctx: CanvasRenderingContext2D,
+  world: World, entities: Entity[], player: Entity,
+  sx: number, sy: number,
+): void {
+  const cw = ctx.canvas.width;
+  const ch = ctx.canvas.height;
+  const pad = 4 * sx;
+  const mapW = cw - pad * 2;
+  const mapH = ch - pad * 2;
+  drawMap(ctx, world, entities, player, sx, sy, pad, pad, mapW, mapH, 200, 0.85);
 
   ctx.fillStyle = '#666';
   ctx.font = `${8 * sy}px monospace`;
   ctx.fillText('[M] закрыть', pad + 4, pad + mapH - 4);
 }
 
-/* ── Inventory panel (5×5 grid + stats) ───────────────────────── */
+/* ── Inventory panel (fullscreen) ──────────────────────────────── */
 function drawInventory(
   ctx: CanvasRenderingContext2D,
   player: Entity, state: GameState,
@@ -493,31 +422,32 @@ function drawInventory(
 ): void {
   const inv = player.inventory ?? [];
   const GRID = 5;
-  const cellSz = 22 * sx;
-  const gridW = GRID * cellSz;
-  const statsW = 100 * sx;
-  const pw = gridW + statsW + 24 * sx;
-  const ph = Math.max(GRID * cellSz + 50 * sy, 160 * sy);
-  const px = (ctx.canvas.width - pw) / 2;
-  const py = (ctx.canvas.height - ph) / 2;
+  const cw = ctx.canvas.width;
+  const ch = ctx.canvas.height;
 
-  // Background
-  ctx.fillStyle = 'rgba(0,0,0,0.9)';
-  ctx.fillRect(px, py, pw, ph);
-  ctx.strokeStyle = '#555';
-  ctx.strokeRect(px, py, pw, ph);
+  // Fullscreen background
+  ctx.fillStyle = 'rgba(0,0,0,0.92)';
+  ctx.fillRect(0, 0, cw, ch);
 
-  // Title
+  // Title + money + close hint
   ctx.fillStyle = '#aaa';
   ctx.font = `${9 * sy}px monospace`;
-  ctx.fillText('ИНВЕНТАРЬ', px + 8 * sx, py + 6 * sy);
+  ctx.fillText('ИНВЕНТАРЬ', 8 * sx, 6 * sy);
+  ctx.fillStyle = '#ee4';
+  ctx.fillText(`₽${player.money ?? 0}`, 88 * sx, 6 * sy);
   ctx.fillStyle = '#555';
-  ctx.fillText('[I] закрыть  [ESC] закрыть', px + 80 * sx, py + 6 * sy);
+  ctx.font = `${7 * sy}px monospace`;
+  ctx.textAlign = 'right';
+  ctx.fillText('[I] закрыть', cw - 8 * sx, 6 * sy);
+  ctx.textAlign = 'left';
 
-  // ── 5×5 Grid ─────────────────────────────────────────────
-  const gridX = px + 8 * sx;
-  const gridY = py + 18 * sy;
+  // ── LEFT COLUMN: grid + item desc + weapon + money ───────
+  const cellSz = 22 * sx;
+  const gridX = 8 * sx;
+  const gridY = 18 * sy;
+  const gridW = GRID * cellSz;
 
+  // 5×5 Grid
   for (let row = 0; row < GRID; row++) {
     for (let col = 0; col < GRID; col++) {
       const idx = row * GRID + col;
@@ -525,22 +455,18 @@ function drawInventory(
       const cy = gridY + row * cellSz;
       const selected = idx === state.invSel;
 
-      // Cell background
       ctx.fillStyle = selected ? 'rgba(120,120,50,0.5)' : 'rgba(30,30,30,0.8)';
       ctx.fillRect(cx, cy, cellSz - 2, cellSz - 2);
       ctx.strokeStyle = selected ? '#ee4' : '#444';
       ctx.strokeRect(cx, cy, cellSz - 2, cellSz - 2);
 
-      // Item
       if (idx < inv.length) {
         const item = inv[idx];
         const def = ITEMS[item.defId];
-        // Item name (truncated)
         ctx.fillStyle = selected ? '#ee4' : '#ccc';
         ctx.font = `${6 * sy}px monospace`;
         const name = (def?.name ?? item.defId).slice(0, 6);
         ctx.fillText(name, cx + 2 * sx, cy + 10 * sy);
-        // Count
         if (item.count > 1) {
           ctx.fillStyle = '#8a8';
           ctx.font = `${5 * sy}px monospace`;
@@ -550,47 +476,109 @@ function drawInventory(
     }
   }
 
-  // ── Selected item description ────────────────────────────
+  // Selected item description (under grid, shifted right toward center)
   const descY = gridY + GRID * cellSz + 4 * sy;
+  const descX = gridX + gridW / 2;
+  ctx.textAlign = 'center';
   if (state.invSel < inv.length) {
     const item = inv[state.invSel];
     const def = ITEMS[item.defId];
     if (def) {
       ctx.fillStyle = '#ccc';
       ctx.font = `${8 * sy}px monospace`;
-      ctx.fillText(`${def.name} ×${item.count}`, gridX, descY);
+      ctx.fillText(`${def.name} ×${item.count}`, descX, descY);
       ctx.fillStyle = '#888';
       ctx.font = `${7 * sy}px monospace`;
-      ctx.fillText(def.desc, gridX, descY + 10 * sy);
+      ctx.fillText(def.desc, descX, descY + 10 * sy);
       ctx.fillStyle = '#da4';
-      ctx.fillText(`Цена: ${def.value ?? 0}₽`, gridX, descY + 20 * sy);
+      ctx.fillText(`Цена: ${def.value ?? 0}₽`, descX, descY + 20 * sy);
       if (def.use || def.type === ItemType.WEAPON) {
         ctx.fillStyle = '#6a6';
-        ctx.fillText('[ENTER] использовать', gridX, descY + 30 * sy);
+        ctx.fillText('[E] использовать', descX, descY + 30 * sy);
       }
     }
   } else {
     ctx.fillStyle = '#555';
     ctx.font = `${7 * sy}px monospace`;
-    ctx.fillText('Пустой слот', gridX, descY);
+    ctx.fillText('Пустой слот', descX, descY + 6 * sy);
   }
+  ctx.textAlign = 'left';
 
-  // ── Player stats (right panel) ───────────────────────────
-  const stX = gridX + gridW + 8 * sx;
+  // ── RIGHT COLUMN: stats ──────────────────────────────────
+  const stX = gridX + gridW + 16 * sx;
+  const barW = cw - stX - 16 * sx;
   let stY = gridY;
 
+  // Name + Level + Attributes on same row
   ctx.fillStyle = '#ee4';
-  ctx.font = `${9 * sy}px monospace`;
-  ctx.fillText(player.name ?? 'Вы', stX, stY);
+  ctx.font = `${10 * sy}px monospace`;
+  const nameStr = player.name ?? 'Вы';
+  ctx.fillText(nameStr, stX, stY);
+  let nameEndX = stX + ctx.measureText(nameStr + '  ').width;
+  if (player.rpg) {
+    ctx.fillStyle = '#af4';
+    ctx.font = `${10 * sy}px monospace`;
+    ctx.fillText(`Ур.${player.rpg.level}`, nameEndX, stY);
+    nameEndX += ctx.measureText(`Ур.${player.rpg.level}   `).width;
+  }
+
+  // Attributes right of name/level
+  if (player.rpg) {
+    const rpg = player.rpg;
+    const apLabel = rpg.attrPoints > 0 ? `  +${rpg.attrPoints}` : '';
+    ctx.font = `${8 * sy}px monospace`;
+    ctx.fillStyle = '#e84';
+    ctx.fillText(`[1]СИЛ:${rpg.str}`, nameEndX, stY);
+    const s1w = ctx.measureText(`[1]СИЛ:${rpg.str}  `).width;
+    ctx.fillStyle = '#4e8';
+    ctx.fillText(`[2]ЛОВ:${rpg.agi}`, nameEndX + s1w, stY);
+    const s2w = ctx.measureText(`[2]ЛОВ:${rpg.agi}  `).width;
+    ctx.fillStyle = '#48f';
+    ctx.fillText(`[3]ИНТ:${rpg.int}`, nameEndX + s1w + s2w, stY);
+    if (apLabel) {
+      const s3w = ctx.measureText(`[3]ИНТ:${rpg.int} `).width;
+      ctx.fillStyle = '#ee4';
+      ctx.fillText(apLabel, nameEndX + s1w + s2w + s3w, stY);
+    }
+  }
   stY += 14 * sy;
+
+  // Attribute points (always visible)
+  if (player.rpg) {
+    ctx.fillStyle = player.rpg.attrPoints > 0 ? '#ee4' : '#888';
+    ctx.font = `${8 * sy}px monospace`;
+    ctx.fillText(`Очков характеристик: ${player.rpg.attrPoints}`, stX, stY);
+    stY += 12 * sy;
+  }
+
+  // XP bar
+  if (player.rpg) {
+    const xpNeeded = xpForLevel(player.rpg.level + 1);
+    ctx.fillStyle = '#8a8';
+    ctx.font = `${7 * sy}px monospace`;
+    ctx.fillText(`XP: ${player.rpg.xp}/${xpNeeded}`, stX, stY);
+    stY += 9 * sy;
+    drawStatBar(ctx, stX, stY, barW, 4 * sy, xpNeeded > 0 ? player.rpg.xp / xpNeeded : 0, '#af4');
+    stY += 8 * sy;
+  }
 
   // HP bar
   ctx.fillStyle = '#aaa';
   ctx.font = `${7 * sy}px monospace`;
   ctx.fillText(`ХП: ${player.hp ?? 0}/${player.maxHp ?? 100}`, stX, stY);
   stY += 10 * sy;
-  drawStatBar(ctx, stX, stY, statsW - 8 * sx, 5 * sy, (player.hp ?? 0) / (player.maxHp ?? 100), '#e44');
-  stY += 10 * sy;
+  drawStatBar(ctx, stX, stY, barW, 5 * sy, (player.hp ?? 0) / (player.maxHp ?? 100), '#e44');
+  stY += 8 * sy;
+
+  // PSI bar
+  if (player.rpg) {
+    ctx.fillStyle = '#a4f';
+    ctx.font = `${7 * sy}px monospace`;
+    ctx.fillText(`ПСИ: ${Math.round(player.rpg.psi)}/${player.rpg.maxPsi}`, stX, stY);
+    stY += 10 * sy;
+    drawStatBar(ctx, stX, stY, barW, 5 * sy, player.rpg.maxPsi > 0 ? player.rpg.psi / player.rpg.maxPsi : 0, '#a4f');
+    stY += 8 * sy;
+  }
 
   // Needs
   if (player.needs) {
@@ -605,50 +593,33 @@ function drawInventory(
       ctx.font = `${7 * sy}px monospace`;
       ctx.fillText(`${label}: ${Math.round(val)}`, stX, stY);
       stY += 9 * sy;
-      drawStatBar(ctx, stX, stY, statsW - 8 * sx, 4 * sy, val / 100, color);
+      drawStatBar(ctx, stX, stY, barW, 4 * sy, val / 100, color);
       stY += 8 * sy;
     }
   }
 
-  // Weapon
+  // Equipped weapon info — one line, right side
   stY += 4 * sy;
   const wpn2 = player.weapon ? ITEMS[player.weapon]?.name : 'Кулаки';
   const ws2 = WEAPON_STATS[player.weapon ?? ''] ?? WEAPON_STATS[''];
-  ctx.fillStyle = '#ccc';
-  ctx.font = `${7 * sy}px monospace`;
-  ctx.fillText(`Оружие: ${wpn2}`, stX, stY);
-  stY += 10 * sy;
-  ctx.fillText(`Урон: ${ws2.dmg}`, stX, stY);
-  stY += 10 * sy;
+  let durLabel: string;
   if (ws2.isRanged) {
     const ammo = countAmmo(player);
-    ctx.fillStyle = ammo > 0 ? '#4af' : '#f44';
-    ctx.fillText(`Патроны: ${ammo}`, stX, stY);
+    durLabel = `Патроны:${ammo}`;
   } else {
     const dur2 = getEquippedDurability(player);
-    if (dur2) {
-      const pct = dur2.cur / dur2.max;
-      ctx.fillStyle = pct > 0.3 ? '#8a4' : '#f84';
-      ctx.fillText(`Прочность: ${dur2.cur}/${dur2.max}`, stX, stY);
-    } else {
-      ctx.fillStyle = '#888';
-      ctx.fillText(`Прочность: ∞`, stX, stY);
-    }
+    durLabel = dur2 ? `Прочн:${dur2.cur}/${dur2.max}` : 'Прочн:∞';
   }
-  stY += 10 * sy;
+  ctx.fillStyle = '#ccc';
+  ctx.font = `${7 * sy}px monospace`;
+  ctx.fillText(`${wpn2}  Урон:${ws2.dmg}  ${durLabel}`, stX, stY);
+  stY += 12 * sy;
 
-  // Money
-  ctx.fillStyle = '#ee4';
-  ctx.fillText(`Рубли: ${player.money ?? 0}`, stX, stY);
-  stY += 10 * sy;
-
-  // Time display (game clock)
-  const hh = String(state.clock.hour).padStart(2, '0');
-  const mm = String(state.clock.minute).padStart(2, '0');
+  // Stats
   ctx.fillStyle = '#888';
-  ctx.fillText(`Время: ${hh}:${mm}`, stX, stY);
-  stY += 10 * sy;
-  ctx.fillText(`Самосборов: ${state.samosborCount}`, stX, stY);
+  ctx.font = `${7 * sy}px monospace`;
+  const day = Math.floor(state.clock.totalMinutes / 1440);
+  ctx.fillText(`Выжил дней: ${day}  |  Самосборов: ${state.samosborCount}`, stX, stY);
 }
 
 function drawStatBar(
@@ -773,7 +744,7 @@ function drawGameMenu(
 
   ctx.fillStyle = '#555';
   ctx.font = `${7 * sy}px monospace`;
-  ctx.fillText('W/S — выбор  |  ENTER — подтвердить  |  ESC — закрыть', w / 2, h / 2 + 70 * sy);
+  ctx.fillText('W/S — выбор  |  E — подтвердить  |  ENTER — закрыть', w / 2, h / 2 + 70 * sy);
 
   ctx.textAlign = 'left';
 }
@@ -823,7 +794,7 @@ function drawNpcMenu(
     }
     ctx.fillStyle = '#555';
     ctx.font = `${7 * sy}px monospace`;
-    ctx.fillText('W/S — выбор  |  ENTER — подтвердить  |  ESC — закрыть', px + 8 * sx, py + ph - 8 * sy);
+    ctx.fillText('W/S — выбор  |  E — подтвердить  |  ENTER — закрыть', px + 8 * sx, py + ph - 8 * sy);
 
   } else if (state.npcMenuTab === 'talk') {
     // Talk: show procedural text
@@ -848,7 +819,7 @@ function drawNpcMenu(
 
     ctx.fillStyle = '#555';
     ctx.font = `${7 * sy}px monospace`;
-    ctx.fillText('[ENTER/ESC] назад', px + 8 * sx, py + ph - 8 * sy);
+    ctx.fillText('[E/ENTER] назад', px + 8 * sx, py + ph - 8 * sy);
 
   } else if (state.npcMenuTab === 'quest') {
     // Quest tab: paginated, one quest per page with word wrap
@@ -895,7 +866,7 @@ function drawNpcMenu(
     }
     ctx.fillStyle = '#555';
     ctx.font = `${7 * sy}px monospace`;
-    const hint = total > 1 ? '[W/S] листать  |  [ENTER/ESC] назад' : '[ENTER/ESC] назад';
+    const hint = total > 1 ? '[W/S] листать  |  [E/ENTER] назад' : '[E/ENTER] назад';
     ctx.fillText(hint, px + 8 * sx, py + ph - 8 * sy);
 
   } else if (state.npcMenuTab === 'trade') {
@@ -947,7 +918,7 @@ function drawNpcMenu(
 
     ctx.fillStyle = '#555';
     ctx.font = `${6 * sy}px monospace`;
-    ctx.fillText('A/D — колонка | W/S — выбор | ENTER — обменять | ESC — назад', px + 8 * sx, py + ph - 8 * sy);
+    ctx.fillText('A/D — колонка | W/S — выбор | E — обменять | ENTER — назад', px + 8 * sx, py + ph - 8 * sy);
   }
 }
 

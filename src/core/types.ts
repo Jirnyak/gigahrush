@@ -15,6 +15,8 @@ export const enum Cell {
   WATER   = 5,
 }
 
+
+
 // ── Texture indices ──────────────────────────────────────────────
 export const enum Tex {
   CONCRETE  = 0,
@@ -79,6 +81,7 @@ export enum RoomType {
   CORRIDOR,    // passage
   SMOKING,     // курилка — free time
   OFFICE,      // бухгалтерия — paperwork
+  HQ,          // штаб фракции — spawn + охрана
 }
 
 export interface Room {
@@ -137,6 +140,12 @@ export enum MonsterKind {
   TVAR,       // medium                   — ходит за стенами
   POLZUN,     // slow, strong, creepy     — вылезает из-под пола
   BETONNIK,   // rare boss, very strong   — бетонная тварь
+  ZOMBIE,     // humanoid undead          — мертвяк
+  EYE,        // flying eye, ranged       — глаз (стреляет)
+  NIGHTMARE,  // procedural horror        — кошмарище
+  SHADOW,     // dark silhouette          — теневик
+  REBAR,      // inorganic rebar monster  — арматура
+  MATKA,      // spawner boss             — матка
 }
 
 // ── Factions ─────────────────────────────────────────────────────
@@ -145,6 +154,7 @@ export enum Faction {
   LIQUIDATOR,  // ликвидаторы
   CULTIST,     // культисты
   SCIENTIST,   // учёные
+  WILD,        // дикие
 }
 
 // ── Zone control factions ────────────────────────────────────────
@@ -153,6 +163,7 @@ export enum ZoneFaction {
   LIQUIDATOR,  // ликвидаторы
   CULTIST,     // культисты
   SAMOSBOR,    // самосбор (захваченная зона)
+  WILD,        // дикие
 }
 
 // ── Zones (64 macro-regions ~128×128) ────────────────────────────
@@ -162,6 +173,8 @@ export interface Zone {
   faction: ZoneFaction;
   hasLift: boolean;
   fogged: boolean;            // фиолетовый туман active
+  level: number;              // zone danger level (scales monsters & loot)
+  hqRoomId: number;           // room id of faction HQ in this zone (-1 = none)
 }
 
 // ── Occupations ──────────────────────────────────────────────────
@@ -192,6 +205,18 @@ export interface Needs {
   poo:   number;
 }
 
+// ── RPG stats (level, XP, attributes, PSI) ───────────────────────
+export interface RPGStats {
+  level: number;
+  xp: number;
+  attrPoints: number;      // unspent attribute points
+  str: number;             // сила: +10% melee dmg & maxHP per point
+  agi: number;             // ловкость: +10% attack speed & move speed per point
+  int: number;             // интеллект: +10% maxPsi & XP bonus per point
+  psi: number;             // current PSI (mana)
+  maxPsi: number;          // base max PSI (scaled by INT)
+}
+
 export enum AIGoal {
   IDLE, GOTO, EAT, DRINK, SLEEP, TOILET, WORK, HIDE, HUNT, FLEE, WANDER,
 }
@@ -216,6 +241,8 @@ export interface AIState {
   timer: number;
   npcState?: NpcState;        // A-Life FSM current state
   stateTimer?: number;        // time remaining in current sub-activity
+  combatTargetId?: number;    // cached hostile target entity id
+  combatScanCd?: number;      // cooldown until next full hostile scan
 }
 
 export interface Entity {
@@ -245,6 +272,7 @@ export interface Entity {
   canGiveQuest?: boolean;     // only ~10% NPCs can give quests
   money?: number;             // рубли
   spriteScale?: number;       // sprite size multiplier (child = 0.6)
+  spriteZ?: number;           // vertical offset: 0=ground, 0.5=eye level (projectiles)
   isTutor?: boolean;          // Ольга Дмитриевна — tutorial NPC in start room
   isTutorBarni?: boolean;     // Барни — tutorial armory NPC
   tutorDone?: boolean;        // tutor phase ended, acts as normal doctor
@@ -254,6 +282,11 @@ export interface Entity {
   projDmg?: number;           // projectile damage
   projLife?: number;          // remaining lifetime (seconds)
   ownerId?: number;           // entity that fired this
+  rpg?: RPGStats;             // RPG stats (level, XP, attributes)
+  isFemale?: boolean;          // gender for kill message grammar
+  isFogBoss?: boolean;         // fog boss — killing stops fog in zone
+  fogBossZone?: number;        // zone id this boss guards
+  matkaTimer?: number;         // матка spawn timer (seconds until next spawn)
 }
 
 // ── Items ────────────────────────────────────────────────────────
@@ -303,6 +336,9 @@ export interface Quest {
   rewardCount?: number;
   extraRewards?: {defId: string; count: number}[];  // additional rewards
   relationDelta?: number;     // how much relation changes on completion
+  difficulty?: number;        // difficulty modifier (scales XP & rewards)
+  xpReward?: number;          // XP reward on completion
+  moneyReward?: number;       // money reward on completion
   done: boolean;
 }
 
@@ -346,6 +382,8 @@ export interface GameState {
   questPage: number;
   tradeSel: number;
   tradeMode: string;          // 'npc'|'player'
+  showDebug: boolean;
+  debugSel: number;
 }
 
 export interface Msg { text: string; time: number; color: string; }
@@ -362,5 +400,8 @@ export interface InputState {
   debugSamosbor: boolean;
   questLog: boolean;
   mouseAttack: boolean;
+  attrStr: boolean; attrAgi: boolean; attrInt: boolean;  // 1,2,3 keys for attribute spending
+  debugScreen: boolean;
+  pee: boolean;                 // P key — urinate
   mouse: { dx: number; dy: number; locked: boolean; };
 }

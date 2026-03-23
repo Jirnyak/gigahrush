@@ -9,6 +9,7 @@ import { World } from '../core/world';
 import { ITEMS } from '../data/catalog';
 import { addRelMutual, getRel } from '../data/relations';
 import { addItem, hasItem, removeItem } from './inventory';
+import { questDifficulty, questXpReward, questMoneyReward, awardXP } from './rpg';
 
 const MAX_ACTIVE_QUESTS = 5;
 
@@ -40,12 +41,14 @@ export function offerQuest(
     msgs.push({ text: `${npc.name}: «Ещё не выполнил прошлое задание?»`, time: state.time, color: '#aaa' });
     return;
   }
-  // Need positive relation to give quest
-  const npcRelIdx = npcRelIndex(npc, entities);
-  const rel = getRel(npcRelIdx, 0);
-  if (rel < -10) {
-    msgs.push({ text: `${npc.name} не хочет с вами разговаривать.`, time: state.time, color: '#a44' });
-    return;
+  // Tutorial NPCs always give quests — they are not in the relation matrix
+  if (!npc.isTutor && !npc.isTutorBarni) {
+    const npcRelIdx = npcRelIndex(npc, entities);
+    const rel = getRel(npcRelIdx, 0);
+    if (rel < -10) {
+      msgs.push({ text: `${npc.name} не хочет с вами разговаривать.`, time: state.time, color: '#a44' });
+      return;
+    }
   }
 
   const quest = generateQuest(npc, world, entities, state);
@@ -148,6 +151,17 @@ function completeQuest(
     }
   }
 
+  // XP reward
+  if (q.xpReward) {
+    awardXP(player, q.xpReward, msgs, state.time);
+  }
+
+  // Money reward
+  if (q.moneyReward) {
+    player.money = (player.money ?? 0) + q.moneyReward;
+    msgs.push({ text: `+${q.moneyReward}₽`, time: state.time, color: '#ee4' });
+  }
+
   // Relation boost
   const delta = q.relationDelta ?? 10;
   const giverIdx = npcRelIndex(entities.find(e => e.id === q.giverId), entities);
@@ -226,12 +240,14 @@ function generateQuest(
     const def = ITEMS[item];
     if (!def) return null;
     const reward = pickRewardItem(occ);
+    const diff = questDifficulty(def.value ?? 10, 50, 1.0);
     return {
       id, type: QuestType.FETCH,
       giverId: npc.id, giverName: npc.name ?? '???',
       desc: `${npc.name}: \u00abПринеси ${def.name}\u00bb`,
       targetItem: item, targetCount: 1,
       rewardItem: reward, rewardCount: 1, relationDelta: 10,
+      difficulty: diff, xpReward: questXpReward(diff), moneyReward: questMoneyReward(diff),
       done: false,
     };
   }
@@ -240,12 +256,14 @@ function generateQuest(
   if (r < 0.65) {
     const room = pickVisitRoom(world, npc);
     if (!room) return null;
+    const diff = questDifficulty(0, 80, 0.8);
     return {
       id, type: QuestType.VISIT,
       giverId: npc.id, giverName: npc.name ?? '???',
       desc: `${npc.name}: \u00abСходи в ${room.name}\u00bb`,
       targetRoom: room.id,
       rewardItem: pickRewardItem(occ), rewardCount: 1, relationDelta: 8,
+      difficulty: diff, xpReward: questXpReward(diff), moneyReward: questMoneyReward(diff),
       done: false,
     };
   }
@@ -259,12 +277,14 @@ function generateQuest(
       [MonsterKind.TVAR]: 'Тварь',
       [MonsterKind.POLZUN]: 'Ползуна',
     };
+    const killDiff = questDifficulty(0, 0, kind === MonsterKind.POLZUN ? 2.5 : kind === MonsterKind.TVAR ? 1.5 : 1.0);
     return {
       id, type: QuestType.KILL,
       giverId: npc.id, giverName: npc.name ?? '???',
       desc: `${npc.name}: \u00abУбей ${names[kind]}\u00bb`,
       targetMonsterKind: kind, killCount: 0, killNeeded: 1,
       rewardItem: pickRewardItem(occ), rewardCount: 1, relationDelta: 15,
+      difficulty: killDiff, xpReward: questXpReward(killDiff), moneyReward: questMoneyReward(killDiff),
       done: false,
     };
   }
@@ -273,12 +293,15 @@ function generateQuest(
   const otherNpcs = entities.filter(e => e.type === EntityType.NPC && e.alive && e.id !== npc.id);
   if (otherNpcs.length === 0) return null;
   const target = otherNpcs[Math.floor(Math.random() * otherNpcs.length)];
+  const dist = world.dist(npc.x, npc.y, target.x, target.y);
+  const talkDiff = questDifficulty(0, dist, 0.6);
   return {
     id, type: QuestType.TALK,
     giverId: npc.id, giverName: npc.name ?? '???',
     desc: `${npc.name}: \u00abПередай ${target.name} сообщение\u00bb`,
     targetNpcId: target.id, targetNpcName: target.name,
     rewardItem: pickRewardItem(occ), rewardCount: 1, relationDelta: 12,
+    difficulty: talkDiff, xpReward: questXpReward(talkDiff), moneyReward: questMoneyReward(talkDiff),
     done: false,
   };
 }

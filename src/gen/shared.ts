@@ -775,12 +775,14 @@ export function generateZones(world: World): void {
       const cx = world.wrap(zx * ZONE_CELL + Math.floor(ZONE_CELL / 2) + rng(-20, 20));
       const cy = world.wrap(zy * ZONE_CELL + Math.floor(ZONE_CELL / 2) + rng(-20, 20));
 
-      // Faction distribution: 40% citizen, 25% liquidator, 25% cultist, 10% scientist->citizen
+      // Faction distribution: 30% citizen, 20% liquidator, 20% cultist, 15% wild, 15% samosbor-free
       const roll = Math.random();
       let faction: ZoneFaction;
-      if (roll < 0.40) faction = ZoneFaction.CITIZEN;
-      else if (roll < 0.65) faction = ZoneFaction.LIQUIDATOR;
-      else faction = ZoneFaction.CULTIST;
+      if (roll < 0.30) faction = ZoneFaction.CITIZEN;
+      else if (roll < 0.50) faction = ZoneFaction.LIQUIDATOR;
+      else if (roll < 0.70) faction = ZoneFaction.CULTIST;
+      else if (roll < 0.85) faction = ZoneFaction.WILD;
+      else faction = ZoneFaction.CITIZEN; // remaining goes to citizens
       // No SAMOSBOR zones initially
 
       zones.push({
@@ -788,6 +790,8 @@ export function generateZones(world: World): void {
         faction,
         hasLift: Math.random() < 0.10,
         fogged: false,
+        level: 1, // computed later per floor via assignZoneLevels
+        hqRoomId: -1,
       });
     }
   }
@@ -873,6 +877,73 @@ export function placeAirlocks(world: World): void {
           used.add(world.idx(world.wrap(x + r * dx), world.wrap(y + r * dy)));
         }
       }
+    }
+  }
+}
+
+/* ── Stamp HQ rooms for each zone ─────────────────────────────── */
+const HQ_W = 7, HQ_H = 7;
+const ZONE_FACTION_TEX: Record<ZoneFaction, Tex> = {
+  [ZoneFaction.CITIZEN]:    Tex.PANEL,
+  [ZoneFaction.LIQUIDATOR]: Tex.METAL,
+  [ZoneFaction.CULTIST]:    Tex.DARK,
+  [ZoneFaction.WILD]:       Tex.ROTTEN,
+  [ZoneFaction.SAMOSBOR]:   Tex.CONCRETE,
+};
+
+export function stampHQRooms(world: World): void {
+  for (const zone of world.zones) {
+    if (zone.faction === ZoneFaction.SAMOSBOR) continue;
+
+    // Find a valid spot near zone center for a 7×7 room
+    let placed = false;
+    for (let attempt = 0; attempt < 20 && !placed; attempt++) {
+      const rx = world.wrap(zone.cx + rng(-15, 15));
+      const ry = world.wrap(zone.cy + rng(-15, 15));
+
+      // Check area is all walls (not yet carved)
+      let ok = true;
+      for (let dy = -1; dy <= HQ_H && ok; dy++) {
+        for (let dx = -1; dx <= HQ_W && ok; dx++) {
+          const ci = world.idx(rx + dx, ry + dy);
+          if (world.aptMask[ci]) ok = false;
+          if (world.cells[ci] !== Cell.WALL) ok = false;
+        }
+      }
+      if (!ok) continue;
+
+      // Stamp HQ room
+      const roomId = world.rooms.length;
+      const room = stampRoom(world, roomId, RoomType.HQ, rx, ry, HQ_W, HQ_H, -1);
+      room.name = `Штаб зоны ${zone.id}`;
+      room.wallTex = ZONE_FACTION_TEX[zone.faction] ?? Tex.METAL;
+      // Apply wall/floor texture to all cells in the room
+      for (let dy = -1; dy <= HQ_H; dy++) {
+        for (let dx = -1; dx <= HQ_W; dx++) {
+          const ci = world.idx(rx + dx, ry + dy);
+          world.wallTex[ci] = room.wallTex;
+          if (dx >= 0 && dx < HQ_W && dy >= 0 && dy < HQ_H) {
+            world.floorTex[ci] = Tex.F_CONCRETE;
+          }
+        }
+      }
+
+      // Add lamp in center
+      world.features[world.idx(rx + 3, ry + 3)] = Feature.LAMP;
+
+      // Place door on south wall
+      const doorX = rx + Math.floor(HQ_W / 2);
+      const doorY = world.wrap(ry + HQ_H);
+      const doorI = world.idx(doorX, doorY);
+      world.cells[doorI] = Cell.DOOR;
+      world.doors.set(doorI, {
+        idx: doorI, state: DoorState.CLOSED,
+        roomA: roomId, roomB: -1, keyId: '', timer: 0,
+      });
+      room.doors.push(doorI);
+
+      zone.hqRoomId = roomId;
+      placed = true;
     }
   }
 }

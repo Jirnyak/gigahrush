@@ -15,10 +15,11 @@
 /*   To add a new hand-crafted room, create a .ts file here      */
 /*   and call it from generateWorld() below.                     */
 
-import { type Entity } from '../../core/types';
+import { type Entity, FloorLevel } from '../../core/types';
 import { World } from '../../core/world';
 import { reassignQuestGivers } from '../../systems/quests';
-import { generateZones } from '../shared';
+import { calcZoneLevel } from '../../systems/rpg';
+import { generateZones, stampHQRooms } from '../shared';
 import { generateApartments } from './apartments';
 import { generateVolatileMaze, wipeVolatile } from './volatile';
 import { generateStartRoom } from './start_room';
@@ -41,7 +42,11 @@ export function generateWorld(): { world: World; entities: Entity[]; spawnX: num
   world.apartmentRoomCount = world.rooms.length;
 
   /* ── A2: Permanent zones (64 macro-regions) ─────── */
-  generateZones(world);
+  generateZones(world);  // Assign zone levels for living floor
+  for (const z of world.zones) z.level = calcZoneLevel(z.id, FloorLevel.LIVING);
+
+  /* ── A3: HQ rooms for faction zones ─────────────── */
+  stampHQRooms(world);
 
   /* ── B: Volatile gigastructure ─────────────────────── */
   generateVolatileMaze(world);

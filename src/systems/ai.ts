@@ -3,20 +3,36 @@
 import {
   W, Cell, DoorState,
   type Entity, type Msg, type GameClock,
-  EntityType, AIGoal, RoomType, NpcState, Occupation, Faction,
+  EntityType, AIGoal, RoomType, NpcState, Occupation, Faction, MonsterKind,
 } from '../core/types';
 import { World } from '../core/world';
-import { MONSTERS } from '../data/catalog';
+import { MONSTERS, monsterName } from '../data/catalog';
 import { playGrowl } from './audio';
+import { isHostile, applyDamageRelationPenalty } from './factions';
+import { addRelMutual } from '../data/relations';
+import { scaleMonsterDmg, strMeleeDmgMult, scaleMonsterHp, scaleMonsterSpeed, randomRPG } from './rpg';
+import { spawnBloodHit, spawnDeathPool } from '../render/blood';
 
 const BFS_LIMIT = 800;
 
+/* ── Entity lookup map — rebuilt once per AI tick ─────────────── */
+let entityById = new Map<number, Entity>();
+
 /* ── Main AI update ───────────────────────────────────────────── */
-export function updateAI(world: World, entities: Entity[], dt: number, time: number, msgs: Msg[], playerId: number, clock: GameClock, samosborActive: boolean): void {
+export function updateAI(world: World, entities: Entity[], dt: number, time: number, msgs: Msg[], playerId: number, clock: GameClock, samosborActive: boolean, nextId: { v: number }): void {
+  // Build id→entity map once per frame for O(1) cached target lookups
+  entityById.clear();
+  for (const e of entities) if (e.alive) entityById.set(e.id, e);
+
   for (const e of entities) {
     if (!e.alive || !e.ai) continue;
-    if (e.type === EntityType.NPC) updateNPC(world, entities, e, dt, time, clock, samosborActive);
-    if (e.type === EntityType.MONSTER) updateMonster(world, entities, e, dt, time, msgs, playerId);
+    if (e.type === EntityType.NPC) {
+      // Check for faction combat before normal FSM
+      if (!tryFactionCombat(world, entities, e, dt, time, msgs)) {
+        updateNPC(world, entities, e, dt, time, clock, samosborActive);
+      }
+    }
+    if (e.type === EntityType.MONSTER) updateMonster(world, entities, e, dt, time, msgs, playerId, nextId);
   }
 }
 
@@ -127,6 +143,12 @@ function updateNPC(world: World, _entities: Entity[], e: Entity, dt: number, _ti
     }
     // Toilet: bathroom
     if (currentRoom.type === RoomType.BATHROOM) {
+      // Stamp urine on floor while relieving
+      if (n.pee > 15 && Math.random() < 0.3) {
+        const fx = ((e.x % 1) + 1) % 1;
+        const fy = ((e.y % 1) + 1) % 1;
+        world.stamp(Math.floor(e.x), Math.floor(e.y), fx, fy, 0.1, 40, Math.floor(e.id * 1000 + n.pee), 200, 180, 30);
+      }
       n.pee = Math.max(0, n.pee - 20 * dt);
       n.poo = Math.max(0, n.poo - 15 * dt);
     }
@@ -453,35 +475,184 @@ function wanderFar(world: World, e: Entity): void {
   wanderNearby(world, e);
 }
 
-/* ── Monster behavior: hunt player ────────────────────────────── */
-function updateMonster(world: World, entities: Entity[], e: Entity, dt: number, time: number, msgs: Msg[], playerId: number): void {
+/* ── Shared combat target finder ──────────────────────────────── */
+const MONSTER_DETECT = 20;
+const MONSTER_DETECT_SQ = MONSTER_DETECT * MONSTER_DETECT;
+const PREFER_PLAYER = 15;
+const PREFER_SQ = PREFER_PLAYER * PREFER_PLAYER;
+
+function findCombatTarget(
+  world: World, entities: Entity[], e: Entity, dt: number,
+  rangeSq: number, scanCd: number,
+  typeFilter: (other: Entity) => boolean,
+): Entity | null {
   const ai = e.ai!;
-  const player = entities.find(p => p.id === playerId);
-  if (!player || !player.alive) { ai.goal = AIGoal.WANDER; return; }
+  let target: Entity | null = null;
+  let bestDist2 = rangeSq;
 
-  const dist = world.dist(e.x, e.y, player.x, player.y);
+  ai.combatScanCd = (ai.combatScanCd ?? 0) - dt;
+  if (ai.combatTargetId !== undefined) {
+    const cached = entityById.get(ai.combatTargetId);
+    if (cached && cached.alive) {
+      const d2 = world.dist2(e.x, e.y, cached.x, cached.y);
+      if (d2 < rangeSq) { target = cached; bestDist2 = d2; }
+    }
+    if (!target) ai.combatTargetId = undefined;
+  }
 
-  // Attack if close enough
-  if (dist < 1.2) {
+  if (!target && ai.combatScanCd! <= 0) {
+    ai.combatScanCd = scanCd;
+    for (const other of entities) {
+      if (!other.alive || other.id === e.id) continue;
+      if (!typeFilter(other)) continue;
+      const d2 = world.dist2(e.x, e.y, other.x, other.y);
+      if (d2 >= bestDist2) continue;
+      if (!isHostile(e, other)) continue;
+      bestDist2 = d2;
+      target = other;
+    }
+    if (target) ai.combatTargetId = target.id;
+  }
+
+  return target;
+}
+
+/* ── Monster behavior: hunt player + hostile NPCs ─────────────── */
+const MATKA_MAX_CHILDREN = 100;
+
+function updateMonster(world: World, entities: Entity[], e: Entity, dt: number, time: number, msgs: Msg[], playerId: number, nextId: { v: number }): void {
+  const ai = e.ai!;
+
+  // Матка: spawn a random monster every 60 real seconds (1 game hour)
+  if (e.monsterKind === MonsterKind.MATKA) {
+    e.matkaTimer = (e.matkaTimer ?? 60) - dt;
+    if (e.matkaTimer <= 0) {
+      e.matkaTimer = 60;
+      // Cap spawns: count nearby monsters within ~20 cells
+      let nearby = 0;
+      for (const o of entities) {
+        if (o.type === EntityType.MONSTER && o.alive && o.id !== e.id && world.dist2(e.x, e.y, o.x, o.y) < 400) nearby++;
+      }
+      if (nearby < MATKA_MAX_CHILDREN) {
+        const spawnKinds = [MonsterKind.SBORKA, MonsterKind.TVAR, MonsterKind.ZOMBIE, MonsterKind.SHADOW, MonsterKind.POLZUN];
+        const kind = spawnKinds[Math.floor(Math.random() * spawnKinds.length)];
+        const def = MONSTERS[kind];
+        const zid = world.zoneMap[world.idx(Math.floor(e.x), Math.floor(e.y))];
+        const zoneLevel = (zid >= 0 && world.zones[zid]) ? (world.zones[zid].level ?? 1) : 1;
+        const rpg = randomRPG(zoneLevel);
+        const hpBase = scaleMonsterHp(def.hp, zoneLevel);
+        const hpFinal = Math.round(hpBase * (1 + 0.1 * rpg.str));
+        const ox = (Math.random() - 0.5) * 2;
+        const oy = (Math.random() - 0.5) * 2;
+        const sx = ((e.x + ox) % W + W) % W;
+        const sy = ((e.y + oy) % W + W) % W;
+        if (!world.solid(Math.floor(sx), Math.floor(sy))) {
+          entities.push({
+            id: nextId.v++,
+            type: EntityType.MONSTER,
+            x: sx, y: sy,
+            angle: Math.random() * Math.PI * 2,
+            pitch: 0,
+            alive: true,
+            speed: scaleMonsterSpeed(def.speed, zoneLevel),
+            sprite: def.sprite,
+            name: monsterName(),
+            hp: hpFinal, maxHp: hpFinal,
+            monsterKind: kind,
+            attackCd: def.attackRate,
+            ai: { goal: AIGoal.HUNT, tx: 0, ty: 0, path: [], pi: 0, stuck: 0, timer: 0 },
+            rpg,
+          });
+          msgs.push({ text: `Матка родила ${def.name}!`, time, color: '#f4a' });
+        }
+      }
+    }
+  }
+
+  let target = findCombatTarget(
+    world, entities, e, dt,
+    MONSTER_DETECT_SQ, 1.0 + Math.random() * 0.5,
+    o => o.type !== EntityType.MONSTER && o.type !== EntityType.PROJECTILE && o.type !== EntityType.ITEM_DROP,
+  );
+
+  // Always prefer player if close
+  const player = entityById.get(playerId);
+  if (player?.alive) {
+    const pd2 = world.dist2(e.x, e.y, player.x, player.y);
+    if (pd2 < PREFER_SQ) { target = player; ai.combatTargetId = player.id; }
+  }
+
+  if (!target) { ai.goal = AIGoal.WANDER; ai.combatTargetId = undefined; return; }
+  ai.combatTargetId = target.id;
+
+  const bestDist = Math.sqrt(world.dist2(e.x, e.y, target.x, target.y));
+
+  const def = e.monsterKind !== undefined ? MONSTERS[e.monsterKind] : null;
+
+  // Ranged attack: shoot projectile if in range but not too close
+  if (def?.isRanged && bestDist < 15 && bestDist > 1.5) {
     e.attackCd = (e.attackCd ?? 0) - dt;
     if (e.attackCd! <= 0) {
-      const def = e.monsterKind !== undefined ? MONSTERS[e.monsterKind] : null;
-      const dmg = def?.dmg ?? 10;
-      if (player.hp !== undefined) {
-        player.hp -= dmg;
-        if (player.hp <= 0) { player.alive = false; player.hp = 0; }
+      const baseDmg = def.dmg ?? 10;
+      const level = e.rpg?.level ?? 1;
+      const strMult = e.rpg ? strMeleeDmgMult(e.rpg) : 1;
+      const dmg = Math.round(scaleMonsterDmg(baseDmg, level) * strMult);
+      const ang = Math.atan2(target.y - e.y, target.x - e.x);
+      const spd = def.projSpeed ?? 8;
+      const cos = Math.cos(ang);
+      const sin = Math.sin(ang);
+      entities.push({
+        id: nextId.v++,
+        type: EntityType.PROJECTILE,
+        x: e.x + cos * 0.5,
+        y: e.y + sin * 0.5,
+        angle: ang,
+        pitch: 0,
+        alive: true,
+        speed: 0,
+        sprite: def.projSprite ?? 27,
+        vx: cos * spd,
+        vy: sin * spd,
+        projDmg: dmg,
+        projLife: 3.0,
+        ownerId: e.id,
+        spriteScale: 0.3,
+        spriteZ: 0.5,
+      });
+      playGrowl();
+      e.attackCd = def.attackRate ?? 2;
+    }
+    // Strafe sideways instead of closing in
+    return;
+  }
+
+  // Melee attack if close enough
+  if (bestDist < 1.2) {
+    e.attackCd = (e.attackCd ?? 0) - dt;
+    if (e.attackCd! <= 0) {
+      const baseDmg = def?.dmg ?? 10;
+      const level = e.rpg?.level ?? 1;
+      const strMult = e.rpg ? strMeleeDmgMult(e.rpg) : 1;
+      const dmg = Math.round(scaleMonsterDmg(baseDmg, level) * strMult);
+      if (target.hp !== undefined) {
+        target.hp -= dmg;
+        if (target.hp <= 0) { target.alive = false; target.hp = 0; }
+        // Blood splatter from monster hit
+        const hitAng = Math.atan2(target.y - e.y, target.x - e.x);
+        spawnBloodHit(world, target.x, target.y, hitAng, dmg, target.type === EntityType.MONSTER);
+        if (target.hp <= 0) spawnDeathPool(world, target.x, target.y, target.type === EntityType.MONSTER);
       }
-      msgs.push({ text: `${e.name ?? 'Монстр'} атакует! -${dmg}`, time, color: '#f44' });
+      msgs.push({ text: `${e.name ?? 'Монстр'} атакует ${target.name ?? 'цель'}! -${dmg}`, time, color: '#f44' });
       playGrowl();
       e.attackCd = def?.attackRate ?? 1;
     }
     return;
   }
 
-  // Hunt: pathfind to player
+  // Hunt: pathfind to target
   ai.timer -= dt;
   if (ai.path.length === 0 || ai.timer <= 0) {
-    ai.path = bfsPath(world, Math.floor(e.x), Math.floor(e.y), Math.floor(player.x), Math.floor(player.y));
+    ai.path = bfsPath(world, Math.floor(e.x), Math.floor(e.y), Math.floor(target.x), Math.floor(target.y));
     ai.pi = 0;
     ai.timer = 2;
   }
@@ -490,36 +661,41 @@ function updateMonster(world: World, entities: Entity[], e: Entity, dt: number, 
 }
 
 /* ── BFS pathfinding (toroidal, avoids closed doors) ──────────── */
+// Pre-allocated buffers to avoid GC pressure from per-call Set/Map/Array
+const _bfsVisitGen = new Uint16Array(W * W);
+let _bfsGen = 0;
+const _bfsPrev = new Int32Array(W * W);
+const _bfsQueue = new Int32Array(BFS_LIMIT);
+
 export function bfsPath(world: World, sx: number, sy: number, ex: number, ey: number): number[] {
   sx = world.wrap(sx); sy = world.wrap(sy);
   ex = world.wrap(ex); ey = world.wrap(ey);
 
   if (sx === ex && sy === ey) return [];
 
-  const visited = new Set<number>();
-  const prev = new Map<number, number>();
-  const queue: number[] = [];
+  _bfsGen = (_bfsGen + 1) & 0xFFFF;
+  if (_bfsGen === 0) { _bfsGen = 1; _bfsVisitGen.fill(0); }
+
   const start = sy * W + sx;
   const end = ey * W + ex;
 
-  visited.add(start);
-  queue.push(start);
-
-  const dirs = [[-1,0],[1,0],[0,-1],[0,1]];
+  _bfsVisitGen[start] = _bfsGen;
+  _bfsQueue[0] = start;
+  let head = 0, tail = 1;
   let found = false;
 
-  for (let i = 0; i < queue.length && i < BFS_LIMIT; i++) {
-    const cur = queue[i];
+  while (head < tail && head < BFS_LIMIT) {
+    const cur = _bfsQueue[head++];
     if (cur === end) { found = true; break; }
 
     const cx = cur % W;
     const cy = (cur - cx) / W;
 
-    for (const [dx, dy] of dirs) {
-      const nx = ((cx + dx) % W + W) % W;
-      const ny = ((cy + dy) % W + W) % W;
+    for (let d = 0; d < 4; d++) {
+      const nx = ((cx + (d === 0 ? -1 : d === 1 ? 1 : 0)) % W + W) % W;
+      const ny = ((cy + (d === 2 ? -1 : d === 3 ? 1 : 0)) % W + W) % W;
       const ni = ny * W + nx;
-      if (visited.has(ni)) continue;
+      if (_bfsVisitGen[ni] === _bfsGen) continue;
 
       const cell = world.cells[ni];
       if (cell === Cell.WALL) continue;
@@ -528,9 +704,9 @@ export function bfsPath(world: World, sx: number, sy: number, ex: number, ey: nu
         if (door && (door.state === DoorState.LOCKED || door.state === DoorState.HERMETIC_CLOSED)) continue;
       }
 
-      visited.add(ni);
-      prev.set(ni, cur);
-      queue.push(ni);
+      _bfsVisitGen[ni] = _bfsGen;
+      _bfsPrev[ni] = cur;
+      if (tail < BFS_LIMIT) _bfsQueue[tail++] = ni;
     }
   }
 
@@ -541,8 +717,8 @@ export function bfsPath(world: World, sx: number, sy: number, ex: number, ey: nu
   let c = end;
   while (c !== start) {
     path.push(c);
-    c = prev.get(c)!;
-    if (c === undefined) return [];
+    c = _bfsPrev[c];
+    if (_bfsVisitGen[c] !== _bfsGen && c !== start) return [];
   }
   path.reverse();
   return path;
@@ -629,13 +805,87 @@ function findFamilyRoom(world: World, e: Entity, type: RoomType): number {
   return findNearest(world, e, type);
 }
 
+/* ── NPC faction combat: attack nearby hostile entities ────────── */
+const NPC_COMBAT_RANGE = 8;    // detection range
+const NPC_ATTACK_RANGE = 1.3;  // melee distance
+const NPC_COMBAT_CD = 1.2;     // attack cooldown
+
+function tryFactionCombat(
+  world: World, entities: Entity[], e: Entity, dt: number, _time: number, msgs: Msg[],
+): boolean {
+  // Only combatants fight: travelers, hunters, pilgrims, liquidators, cultists, wild
+  const isCombatant = e.isTraveler ||
+    e.occupation === Occupation.HUNTER ||
+    e.occupation === Occupation.PILGRIM ||
+    e.faction === Faction.LIQUIDATOR ||
+    e.faction === Faction.CULTIST ||
+    e.faction === Faction.WILD;
+  if (!isCombatant) return false;
+
+  const ai = e.ai!;
+  const target = findCombatTarget(
+    world, entities, e, dt,
+    NPC_COMBAT_RANGE * NPC_COMBAT_RANGE, 0.8 + Math.random() * 0.4,
+    o => o.type === EntityType.NPC || o.type === EntityType.MONSTER || o.type === EntityType.PLAYER,
+  );
+
+  if (!target) return false;
+  ai.combatTargetId = target.id;
+
+  // Move toward target
+  const bestDist = Math.sqrt(world.dist2(e.x, e.y, target.x, target.y));
+  if (bestDist > NPC_ATTACK_RANGE) {
+    if (ai.path.length === 0 || ai.timer <= 0) {
+      ai.path = bfsPath(world, Math.floor(e.x), Math.floor(e.y), Math.floor(target.x), Math.floor(target.y));
+      ai.pi = 0;
+      ai.timer = 2;
+    }
+    followPath(world, e, dt);
+    return true;
+  }
+
+  // Attack
+  e.attackCd = (e.attackCd ?? 0) - dt;
+  if (e.attackCd! <= 0) {
+    const baseDmg = 5 + Math.floor(Math.random() * 8);
+    const dmg = e.rpg ? Math.round(baseDmg * strMeleeDmgMult(e.rpg)) : baseDmg;
+    if (target.hp !== undefined) {
+      target.hp -= dmg;
+      if (target.type === EntityType.NPC) {
+        applyDamageRelationPenalty(e.id, target.id, dmg, e.faction, target.faction, { addRelMutual });
+      }
+      // Blood splatter from NPC hit
+      const hitAng = Math.atan2(target.y - e.y, target.x - e.x);
+      spawnBloodHit(world, target.x, target.y, hitAng, dmg, target.type === EntityType.MONSTER);
+      if (target.hp <= 0) {
+        target.alive = false;
+        spawnDeathPool(world, target.x, target.y, target.type === EntityType.MONSTER);
+        msgs.push({ text: `${e.name ?? 'NPC'} ${e.isFemale ? 'убила' : 'убил'} ${target.name ?? 'цель'}`, time: _time, color: '#fa4' });
+        // Fog boss killed by NPC — clear fog in zone
+        if (target.isFogBoss && target.fogBossZone !== undefined) {
+          const zone = world.zones[target.fogBossZone];
+          if (zone) {
+            zone.fogged = false;
+            for (let i = 0; i < W * W; i++) {
+              if (world.zoneMap[i] === target.fogBossZone) world.fog[i] = 0;
+            }
+            msgs.push({ text: `Туман в зоне ${target.fogBossZone} рассеялся!`, time: _time, color: '#4f4' });
+          }
+        }
+      }
+    }
+    e.attackCd = NPC_COMBAT_CD;
+  }
+  return true;
+}
+
 /* ── Force NPCs to hide (called by samosbor) ─────────────────── */
 /* Citizens and scientists hide. Liquidators and cultists do not. */
 export function forceHide(entities: Entity[]): void {
   for (const e of entities) {
     if (e.type === EntityType.NPC && e.alive && e.ai) {
-      // Liquidators and cultists don't hide during samosbor
-      if (e.faction === Faction.LIQUIDATOR || e.faction === Faction.CULTIST) continue;
+      // Liquidators, cultists and wilds don't hide during samosbor
+      if (e.faction === Faction.LIQUIDATOR || e.faction === Faction.CULTIST || e.faction === Faction.WILD) continue;
       e.ai.npcState = NpcState.HIDING;
       e.ai.goal = AIGoal.HIDE;
       e.ai.path = [];

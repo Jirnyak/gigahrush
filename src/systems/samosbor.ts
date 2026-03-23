@@ -3,19 +3,29 @@
 /*   destroyed and regenerated. Hide in жилая or die.            */
 
 import {
-  W, Cell, DoorState, ZoneFaction,
-  type Entity, type GameState,
+  W, Cell, DoorState, ZoneFaction, FloorLevel,
+  type Entity, type GameState, type Msg,
   EntityType, AIGoal, MonsterKind,
 } from '../core/types';
 import { World } from '../core/world';
-import { ITEMS, NOTES, MONSTERS } from '../data/catalog';
+import { ITEMS, NOTES, MONSTERS, monsterName } from '../data/catalog';
 import { forceHide } from './ai';
 import { playSamosborAlarm } from './audio';
 import { reassignQuestGivers } from './quests';
 import { regrowMaze } from '../gen/living';
 import { rng, pick, weightedPick } from '../gen/shared';
+import { initFactionControl, countFactionTerritory, spawnPatrolSquads } from './factions';
+import { scaleMonsterHp, scaleMonsterSpeed, randomRPG } from './rpg';
 
-const SAMOSBOR_INTERVAL = 180;     // seconds between samosbors
+// Floor-dependent samosbor intervals (seconds)
+function samosborInterval(floor: FloorLevel): number {
+  switch (floor) {
+    case FloorLevel.LIVING:      return 300 + Math.random() * 300;  // 5-10 min
+    case FloorLevel.MAINTENANCE: return 180 + Math.random() * 240;  // 3-7 min
+    case FloorLevel.HELL:        return 60  + Math.random() * 240;  // 1-5 min
+    default:                     return 300 + Math.random() * 300;
+  }
+}
 const SAMOSBOR_DUR_MIN = 12;      // min duration (0.2 game hours = 12 real sec)
 const SAMOSBOR_DUR_MAX = 90;      // max duration (1.5 game hours = 90 real sec)
 const MONSTERS_PER_SAMOSBOR = 6;
@@ -36,6 +46,7 @@ export function updateSamosbor(
     state.samosborTimer = SAMOSBOR_DUR_MIN + Math.random() * (SAMOSBOR_DUR_MAX - SAMOSBOR_DUR_MIN);
     state.samosborCount++;
     state.fogSpreadTimer = 0;
+    fogSpawnAccum = 0;
     state.msgs.push({ text: '⚠ САМОСБОР НАЧАЛСЯ ⚠', time: state.time, color: '#f44' });
     playSamosborAlarm();
 
@@ -45,8 +56,8 @@ export function updateSamosbor(
     // Seal apartment living rooms
     sealApartments(world, entities);
 
-    // Capture a zone with фиолетовый туман
-    captureZone(world, state);
+    // Capture a zone with фиолетовый туман + spawn fog boss
+    captureZone(world, entities, nextId, state);
 
     // Spawn monsters in corridors
     spawnMonsters(world, entities, nextId, state.samosborCount);
@@ -66,7 +77,7 @@ export function updateSamosbor(
   if (state.samosborActive && state.samosborTimer <= 0) {
     // ── END samosbor: unseal, then rebuild world ──
     state.samosborActive = false;
-    state.samosborTimer = SAMOSBOR_INTERVAL + Math.random() * 60;
+    state.samosborTimer = samosborInterval(state.currentFloor);
     state.msgs.push({ text: 'Самосбор закончился... мир перестраивается.', time: state.time, color: '#aa4' });
 
     // Unseal apartment doors
@@ -77,6 +88,11 @@ export function updateSamosbor(
 
     // Now rebuild: wipe volatile maze and regenerate
     rebuildWorld(world, entities, nextId, state.samosborCount);
+
+    // Re-init faction control after world rebuild
+    initFactionControl(world);
+    const fStats = countFactionTerritory(world);
+    spawnPatrolSquads(world, entities, nextId, fStats);
   }
 }
 
@@ -115,10 +131,10 @@ function unsealApartments(world: World): void {
 function rebuildWorld(world: World, entities: Entity[], nextId: { v: number }, _samosborCount: number): void {
   const aptCount = world.apartmentRoomCount;
 
-  // Kill all monsters, projectiles and remove item drops outside apartments
+  // Kill projectiles and remove item drops outside apartments
   for (let i = entities.length - 1; i >= 0; i--) {
     const e = entities[i];
-    if (e.type === EntityType.MONSTER || e.type === EntityType.PROJECTILE) {
+    if (e.type === EntityType.PROJECTILE) {
       entities.splice(i, 1);
       continue;
     }
@@ -154,10 +170,45 @@ function rebuildWorld(world: World, entities: Entity[], nextId: { v: number }, _
   }
 }
 
+/* ── Shared helpers for monster creation ───────────────────────── */
+function getKindsForWave(samosborCount: number): MonsterKind[] {
+  const kinds = [MonsterKind.SBORKA, MonsterKind.TVAR, MonsterKind.POLZUN];
+  if (samosborCount >= 2) kinds.push(MonsterKind.ZOMBIE, MonsterKind.SHADOW);
+  if (samosborCount >= 3) kinds.push(MonsterKind.BETONNIK, MonsterKind.EYE, MonsterKind.NIGHTMARE);
+  if (samosborCount >= 5) kinds.push(MonsterKind.REBAR);
+  return kinds;
+}
+
+function createMonster(world: World, nextId: { v: number }, kind: MonsterKind, x: number, y: number): Entity {
+  const def = MONSTERS[kind];
+  const ci = world.idx(Math.floor(x), Math.floor(y));
+  const zid = world.zoneMap[ci];
+  const zoneLevel = (zid >= 0 && world.zones[zid]) ? (world.zones[zid].level ?? 1) : 1;
+  const rpg = randomRPG(zoneLevel);
+  const hpBase = scaleMonsterHp(def.hp, zoneLevel);
+  const hpFinal = Math.round(hpBase * (1 + 0.1 * rpg.str));
+  return {
+    id: nextId.v++,
+    type: EntityType.MONSTER,
+    x, y,
+    angle: Math.random() * Math.PI * 2,
+    pitch: 0,
+    alive: true,
+    speed: scaleMonsterSpeed(def.speed, zoneLevel),
+    sprite: def.sprite,
+    name: monsterName(),
+    hp: hpFinal,
+    maxHp: hpFinal,
+    monsterKind: kind,
+    attackCd: def.attackRate,
+    ai: { goal: AIGoal.HUNT, tx: 0, ty: 0, path: [], pi: 0, stuck: 0, timer: 0 },
+    rpg,
+  };
+}
+
 /* ── Spawn monsters in corridors ──────────────────────────────── */
 function spawnMonsters(world: World, entities: Entity[], nextId: { v: number }, samosborCount: number): void {
-  const kinds = [MonsterKind.SBORKA, MonsterKind.TVAR, MonsterKind.POLZUN];
-  if (samosborCount >= 3) kinds.push(MonsterKind.BETONNIK);
+  const kinds = getKindsForWave(samosborCount);
 
   const corridorCells: number[] = [];
   for (let i = 0; i < 5000; i++) {
@@ -170,32 +221,13 @@ function spawnMonsters(world: World, entities: Entity[], nextId: { v: number }, 
   const count = MONSTERS_PER_SAMOSBOR + Math.floor(samosborCount * 1.5);
   for (let i = 0; i < count && corridorCells.length > 0; i++) {
     const ci = corridorCells.splice(Math.floor(Math.random() * corridorCells.length), 1)[0];
-    const mx = (ci % W) + 0.5;
-    const my = Math.floor(ci / W) + 0.5;
-
     const kind = kinds[Math.floor(Math.random() * kinds.length)];
-    const def = MONSTERS[kind];
-    const monster: Entity = {
-      id: nextId.v++,
-      type: EntityType.MONSTER,
-      x: mx, y: my,
-      angle: Math.random() * Math.PI * 2,
-      pitch: 0,
-      alive: true,
-      speed: def.speed,
-      sprite: def.sprite,
-      name: def.name,
-      hp: def.hp, maxHp: def.hp,
-      monsterKind: kind,
-      attackCd: def.attackRate,
-      ai: { goal: AIGoal.HUNT, tx: 0, ty: 0, path: [], pi: 0, stuck: 0, timer: 0 },
-    };
-    entities.push(monster);
+    entities.push(createMonster(world, nextId, kind, (ci % W) + 0.5, Math.floor(ci / W) + 0.5));
   }
 }
 
 /* ── Capture a random non-samosbor zone with фиолетовый туман ── */
-function captureZone(world: World, state: GameState): void {
+function captureZone(world: World, entities: Entity[], nextId: { v: number }, state: GameState): void {
   // Pick a random non-SAMOSBOR zone
   const candidates = world.zones.filter(z => z.faction !== ZoneFaction.SAMOSBOR);
   if (candidates.length === 0) return;
@@ -220,6 +252,47 @@ function captureZone(world: World, state: GameState): void {
     }
   }
 
+  // Spawn fog boss at zone center (10% chance Матка, otherwise random boss)
+  const isMatka = Math.random() < 0.1;
+  const bossKind = isMatka ? MonsterKind.MATKA :
+    [MonsterKind.BETONNIK, MonsterKind.REBAR, MonsterKind.NIGHTMARE][Math.floor(Math.random() * 3)];
+  const bossDef = MONSTERS[bossKind];
+  const zoneLevel = zone.level ?? 1;
+  const rpg = randomRPG(zoneLevel + 3); // boss is stronger
+  const hpBase = scaleMonsterHp(bossDef.hp, zoneLevel + 3);
+  const hpFinal = Math.round(hpBase * (1 + 0.1 * rpg.str) * 2); // 2x HP for boss
+  // Find a walkable cell near zone center for boss spawn
+  let bx = zone.cx, by = zone.cy;
+  for (let r = 0; r < 10; r++) {
+    for (let dy = -r; dy <= r; dy++) {
+      for (let dx = -r; dx <= r; dx++) {
+        const bi = world.idx(world.wrap(zone.cx + dx), world.wrap(zone.cy + dy));
+        if (world.cells[bi] === Cell.FLOOR) { bx = world.wrap(zone.cx + dx); by = world.wrap(zone.cy + dy); r = 99; break; }
+      }
+      if (r >= 99) break;
+    }
+  }
+  entities.push({
+    id: nextId.v++,
+    type: EntityType.MONSTER,
+    x: bx + 0.5, y: by + 0.5,
+    angle: Math.random() * Math.PI * 2,
+    pitch: 0,
+    alive: true,
+    speed: scaleMonsterSpeed(bossDef.speed, zoneLevel),
+    sprite: bossDef.sprite,
+    spriteScale: 1.5,
+    name: '⚡ ' + monsterName(),
+    hp: hpFinal,
+    maxHp: hpFinal,
+    monsterKind: bossKind,
+    attackCd: bossDef.attackRate,
+    ai: { goal: AIGoal.HUNT, tx: 0, ty: 0, path: [], pi: 0, stuck: 0, timer: 0 },
+    rpg,
+    isFogBoss: true,
+    fogBossZone: zone.id,
+  });
+
   const zoneNames = ['', '', '', ''];
   zoneNames[ZoneFaction.CITIZEN] = 'гражданской';
   zoneNames[ZoneFaction.LIQUIDATOR] = 'ликвидаторской';
@@ -227,6 +300,10 @@ function captureZone(world: World, state: GameState): void {
   state.msgs.push({
     text: `☠ Зона ${zone.id} захвачена самосбором! Фиолетовый туман распространяется...`,
     time: state.time, color: '#a3f',
+  });
+  state.msgs.push({
+    text: `Босс тумана появился в зоне ${zone.id}! Убейте его чтобы остановить туман.`,
+    time: state.time, color: '#f4a',
   });
 }
 
@@ -263,6 +340,23 @@ function spreadFog(world: World): void {
   }
 }
 
+/* ── Clear fog when fog boss is killed ────────────────────────── */
+export function clearFogInZone(world: World, zoneId: number, msgs: Msg[], time: number): void {
+  const zone = world.zones[zoneId];
+  if (!zone) return;
+  zone.fogged = false;
+  // Clear all fog cells belonging to this zone
+  for (let i = 0; i < W * W; i++) {
+    if (world.zoneMap[i] === zoneId) {
+      world.fog[i] = 0;
+    }
+  }
+  msgs.push({
+    text: `Туман в зоне ${zoneId} рассеялся! Босс повержен.`,
+    time, color: '#4f4',
+  });
+}
+
 /* ── Spawn monsters in fogged areas during samosbor ──────────── */
 let fogSpawnAccum = 0;
 function spawnFogMonsters(world: World, entities: Entity[], nextId: { v: number }, samosborCount: number): void {
@@ -286,24 +380,7 @@ function spawnFogMonsters(world: World, entities: Entity[], nextId: { v: number 
   if (foggedCells.length === 0) return;
 
   const ci = foggedCells[Math.floor(Math.random() * foggedCells.length)];
-  const kinds = [MonsterKind.SBORKA, MonsterKind.TVAR, MonsterKind.POLZUN];
-  if (samosborCount >= 3) kinds.push(MonsterKind.BETONNIK);
+  const kinds = getKindsForWave(samosborCount);
   const kind = kinds[Math.floor(Math.random() * kinds.length)];
-  const def = MONSTERS[kind];
-
-  entities.push({
-    id: nextId.v++,
-    type: EntityType.MONSTER,
-    x: (ci % W) + 0.5, y: Math.floor(ci / W) + 0.5,
-    angle: Math.random() * Math.PI * 2,
-    pitch: 0,
-    alive: true,
-    speed: def.speed,
-    sprite: def.sprite,
-    name: def.name,
-    hp: def.hp, maxHp: def.hp,
-    monsterKind: kind,
-    attackCd: def.attackRate,
-    ai: { goal: AIGoal.HUNT, tx: 0, ty: 0, path: [], pi: 0, stuck: 0, timer: 0 },
-  });
+  entities.push(createMonster(world, nextId, kind, (ci % W) + 0.5, Math.floor(ci / W) + 0.5));
 }

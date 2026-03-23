@@ -15,9 +15,11 @@ export class World {
   aptMask:   Uint8Array;           // 1 = protected apartment cell (interior + wall ring)
   zones:     Zone[] = [];          // 64 macro-regions
   zoneMap:   Uint8Array;           // zone id per cell (0-63)
+  factionControl: Uint8Array;      // per-cell faction control (ZoneFaction enum)
   fog:       Uint8Array;           // purple fog density per cell (0 = clear, 255 = full)
   slideCells: number[] = [];       // cell indices of slide walls (cycle textures)
   decals:    Map<number, {tx: number; ty: number}[]> = new Map(); // bullet hole decals per cell
+  surfaceMap: Map<number, Uint8Array> = new Map(); // sparse RGBA canvas, 16×16×4 per cell
 
   constructor() {
     const n = W * W;
@@ -29,6 +31,7 @@ export class World {
     this.light    = new Float32Array(n);            // 0 = dark
     this.aptMask  = new Uint8Array(n);              // 0 = volatile, 1 = apartment-protected
     this.zoneMap  = new Uint8Array(n);              // zone id
+    this.factionControl = new Uint8Array(n);        // per-cell faction (ZoneFaction)
     this.fog      = new Uint8Array(n);              // fog density
   }
 
@@ -98,6 +101,12 @@ export class World {
     return Math.sqrt(dx * dx + dy * dy);
   }
 
+  dist2(x1: number, y1: number, x2: number, y2: number): number {
+    const dx = this.delta(x1, x2);
+    const dy = this.delta(y1, y2);
+    return dx * dx + dy * dy;
+  }
+
   roomAt(x: number, y: number): Room | null {
     const id = this.roomMap[this.idx(Math.floor(x), Math.floor(y))];
     return id >= 0 ? this.rooms[id] ?? null : null;
@@ -107,6 +116,48 @@ export class World {
     let list = this.decals.get(ci);
     if (!list) { list = []; this.decals.set(ci, list); }
     if (list.length < 20) list.push({ tx, ty });
+  }
+
+  /* paint RGBA onto sparse 16×16 canvas — spills across cell boundaries */
+  stamp(cx: number, cy: number, fx: number, fy: number, radius: number, intensity: number, seed: number, cr: number, cg: number, cb: number): void {
+    const bx = Math.floor(fx * 16);
+    const by = Math.floor(fy * 16);
+    const r = Math.max(1, Math.floor(radius * 16));
+    for (let dy = -r; dy <= r; dy++) {
+      for (let dx = -r; dx <= r; dx++) {
+        const d2 = dx * dx + dy * dy;
+        if (d2 > r * r) continue;
+        let px = bx + dx, py = by + dy;
+        let cellDx = 0, cellDy = 0;
+        while (px < 0)  { px += 16; cellDx--; }
+        while (px >= 16) { px -= 16; cellDx++; }
+        while (py < 0)  { py += 16; cellDy--; }
+        while (py >= 16) { py -= 16; cellDy++; }
+        const ncx = this.wrap(cx + cellDx);
+        const ncy = this.wrap(cy + cellDy);
+        const ci = ncy * W + ncx;
+        if (this.cells[ci] === Cell.WALL) continue;
+        const absPx = bx + dx, absPy = by + dy;
+        const h = ((seed * 2654435761 + absPx * 73856093 + absPy * 19349663) >>> 0) & 0xFF;
+        if (d2 > r * r * 0.4 && h > 160) continue;
+        const fall = 1 - d2 / (r * r + 1);
+        const newA = Math.min(255, Math.floor(intensity * fall));
+        if (newA <= 0) continue;
+        let cell = this.surfaceMap.get(ci);
+        if (!cell) { cell = new Uint8Array(1024); this.surfaceMap.set(ci, cell); }
+        const idx = (py * 16 + px) << 2;
+        const curA = cell[idx + 3];
+        if (curA === 0) {
+          cell[idx] = cr; cell[idx + 1] = cg; cell[idx + 2] = cb; cell[idx + 3] = newA;
+        } else {
+          const total = curA + newA;
+          cell[idx]     = Math.floor((cell[idx]     * curA + cr * newA) / total);
+          cell[idx + 1] = Math.floor((cell[idx + 1] * curA + cg * newA) / total);
+          cell[idx + 2] = Math.floor((cell[idx + 2] * curA + cb * newA) / total);
+          cell[idx + 3] = Math.min(255, total);
+        }
+      }
+    }
   }
 
   /* carve a floor cell */

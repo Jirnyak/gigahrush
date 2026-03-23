@@ -1,24 +1,13 @@
 /* ── Procedural sprite generator ──────────────────────────────── */
 
-import { TEX } from '../core/types';
 import { NPC_SPRITE_GENERATORS, generateTravelerSprite } from '../entities/npc';
-import { MONSTER_SPRITES } from '../entities/monster';
+import { MONSTER_SPRITES, EYE_BOLT_SPRITE } from '../entities/monster';
+import { MonsterKind } from '../core/types';
+import { S, rgba, noise, clamp, CLEAR } from './pixutil';
 
-const S = TEX;
 export type SpriteData = Uint32Array; // S*S RGBA with alpha
 
-function rgba(r: number, g: number, b: number, a = 255): number {
-  return ((a << 24) | (b << 16) | (g << 8) | r) >>> 0;
-}
-function noise(x: number, y: number, s: number): number {
-  let n = (x * 374761393 + y * 668265263 + s * 1274126177) | 0;
-  n = (n ^ (n >> 13)) * 1103515245; n = n ^ (n >> 16);
-  return (n & 0x7fff) / 0x7fff;
-}
-const clamp = (v: number) => v < 0 ? 0 : v > 255 ? 255 : v;
-const CLEAR = rgba(0, 0, 0, 0);
-
-/* ── 25 sprite sheets: npcs 0-15, item 16, monsters 17-20, desk 21, projectiles 22-24 ── */
+/* ── 32 sprite sheets: npcs 0-15, item 16, monsters 17-27, desk 28, projectiles 29-31 ── */
 export function generateSprites(): SpriteData[] {
   const sprites: SpriteData[] = [];
   // Occupation NPCs (0-12)
@@ -31,16 +20,18 @@ export function generateSprites(): SpriteData[] {
   sprites.push(generateTravelerSprite(150, 60, 80, 60));     // 15: hunter — green
   // Item drop (16)
   sprites.push(gen_itemDrop());
-  // Monsters (17-20, from entity modules)
-  for (const gen of MONSTER_SPRITES) {
-    sprites.push(gen());
+  // Monsters (17-26, keyed by MonsterKind)
+  for (let k = 0; k <= MonsterKind.MATKA; k++) {
+    sprites.push(MONSTER_SPRITES[k as MonsterKind]());
   }
-  // Desk (21)
+  // Eye bolt projectile (27)
+  sprites.push(EYE_BOLT_SPRITE());
+  // Desk (28)
   sprites.push(gen_deskSprite());
-  // Projectiles (22-24)
-  sprites.push(gen_bulletSprite());     // 22: pistol bullet
-  sprites.push(gen_pelletSprite());     // 23: shotgun pellet
-  sprites.push(gen_nailSprite());       // 24: nail
+  // Projectiles (29-31)
+  sprites.push(gen_bulletSprite());     // 28: pistol bullet
+  sprites.push(gen_pelletSprite());     // 29: shotgun pellet
+  sprites.push(gen_nailSprite());       // 30: nail
   return sprites;
 }
 

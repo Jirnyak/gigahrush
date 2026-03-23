@@ -10,14 +10,16 @@
 import {
   W, Cell, Tex, RoomType, Feature, Faction, Occupation,
   type Room, type Entity,
-  EntityType, AIGoal, MonsterKind,
+  EntityType, AIGoal, MonsterKind, FloorLevel,
 } from '../../core/types';
 import { World } from '../../core/world';
-import { randomName, freshNeeds } from '../../data/catalog';
+import { randomName, freshNeeds, monsterName } from '../../data/catalog';
 import {
   rng, pick, canPlaceRoom, connectRoomsMST,
   ensureConnectivity, placeLifts, repairRoomWalls, sanitizeDoors,
+  generateZones,
 } from '../shared';
+import { calcZoneLevel, randomRPG, scaleMonsterHp, scaleMonsterSpeed, gaussianLevel, getMaxHp } from '../../systems/rpg';
 
 export function generateHell(): { world: World; entities: Entity[]; spawnX: number; spawnY: number } {
   const world = new World();
@@ -98,7 +100,9 @@ export function generateHell(): { world: World; entities: Entity[]; spawnX: numb
 
   /* ── Phase 4: lifts ────────────────────────────────── */
   placeLifts(world, 3);
-
+  /* ── Phase 4.5: zones + zone levels ──────────────── */
+  generateZones(world);
+  for (const z of world.zones) z.level = calcZoneLevel(z.id, FloorLevel.HELL);
   /* ── Phase 5: lights (very sparse) ──────────────────── */
   for (let i = 0; i < W * W; i++) {
     if (world.cells[i] === Cell.FLOOR && Math.random() < 0.008) {
@@ -112,19 +116,26 @@ export function generateHell(): { world: World; entities: Entity[]; spawnX: numb
     const ci = rng(0, W * W - 1);
     if (world.cells[ci] !== Cell.FLOOR) continue;
     const cx = (ci % W) + 0.5, cy = ((ci / W) | 0) + 0.5;
+    const zid = world.zoneMap[ci];
+    const zoneLevel = (zid >= 0 && world.zones[zid]) ? (world.zones[zid].level ?? 10) : 10;
+    const npcLevel = gaussianLevel(zoneLevel, 2);
+    const rpg = randomRPG(npcLevel);
+    const scaledHp = Math.round(getMaxHp(rpg) * 1.2);
+    const nm = randomName(Faction.CULTIST);
     entities.push({
       id: nextId++, type: EntityType.NPC,
       x: cx, y: cy,
       angle: Math.random() * Math.PI * 2, pitch: 0,
       alive: true, speed: 1.5, sprite: Occupation.PILGRIM,
-      name: randomName(), needs: freshNeeds(),
-      hp: 120, maxHp: 120,
+      name: nm.name, isFemale: nm.female, needs: freshNeeds(),
+      hp: scaledHp, maxHp: scaledHp,
       ai: { goal: AIGoal.WANDER, tx: 0, ty: 0, path: [], pi: 0, stuck: 0, timer: 0 },
       inventory: [],
       familyId: -1,
       faction: Faction.CULTIST,
       occupation: Occupation.PILGRIM,
       questId: -1,
+      rpg,
     });
   }
 
@@ -133,21 +144,32 @@ export function generateHell(): { world: World; entities: Entity[]; spawnX: numb
     const ci = rng(0, W * W - 1);
     if (world.cells[ci] !== Cell.FLOOR) continue;
     const mx = (ci % W) + 0.5, my = ((ci / W) | 0) + 0.5;
-    const kind = pick([MonsterKind.TVAR, MonsterKind.TVAR, MonsterKind.POLZUN, MonsterKind.BETONNIK]);
-    const stats: Record<MonsterKind, { hp: number; speed: number; sprite: number; name: string }> = {
-      [MonsterKind.SBORKA]:  { hp: 10, speed: 2.8, sprite: 17, name: 'Сборка' },
-      [MonsterKind.TVAR]:    { hp: 60, speed: 2.0, sprite: 18, name: 'Тварь' },
-      [MonsterKind.POLZUN]:  { hp: 120, speed: 1.2, sprite: 19, name: 'Ползун' },
-      [MonsterKind.BETONNIK]:{ hp: 2000, speed: 1.0, sprite: 20, name: 'Бетонник' },
+    const kind = pick([MonsterKind.TVAR, MonsterKind.TVAR, MonsterKind.POLZUN, MonsterKind.BETONNIK,
+      MonsterKind.ZOMBIE, MonsterKind.NIGHTMARE, MonsterKind.SHADOW, MonsterKind.REBAR]);
+    const stats: Record<number, { hp: number; speed: number; sprite: number; name: string }> = {
+      [MonsterKind.SBORKA]:    { hp: 10,   speed: 2.8, sprite: 17, name: 'Сборка' },
+      [MonsterKind.TVAR]:      { hp: 60,   speed: 2.0, sprite: 18, name: 'Тварь' },
+      [MonsterKind.POLZUN]:    { hp: 120,  speed: 1.2, sprite: 19, name: 'Ползун' },
+      [MonsterKind.BETONNIK]:  { hp: 2000, speed: 1.0, sprite: 20, name: 'Бетонник' },
+      [MonsterKind.ZOMBIE]:    { hp: 25,   speed: 1.4, sprite: 21, name: 'Мертвяк' },
+      [MonsterKind.EYE]:       { hp: 35,   speed: 2.2, sprite: 22, name: 'Глаз' },
+      [MonsterKind.NIGHTMARE]: { hp: 60,   speed: 1.5, sprite: 23, name: 'Кошмарище' },
+      [MonsterKind.SHADOW]:    { hp: 45,   speed: 2.4, sprite: 24, name: 'Теневик' },
+      [MonsterKind.REBAR]:     { hp: 90,   speed: 0.9, sprite: 25, name: 'Арматура' },
+      [MonsterKind.MATKA]:     { hp: 300,  speed: 0.4, sprite: 26, name: 'Матка' },
     };
     const def = stats[kind];
+    const zid = world.zoneMap[ci];
+    const zoneLevel = (zid >= 0 && world.zones[zid]) ? (world.zones[zid].level ?? 10) : 10;
+    const rpg = randomRPG(zoneLevel);
     entities.push({
       id: nextId++, type: EntityType.MONSTER,
       x: mx, y: my, angle: Math.random() * Math.PI * 2, pitch: 0,
-      alive: true, speed: def.speed, sprite: def.sprite,
-      name: def.name, hp: def.hp, maxHp: def.hp,
+      alive: true, speed: scaleMonsterSpeed(def.speed, zoneLevel), sprite: def.sprite,
+      name: monsterName(), hp: scaleMonsterHp(def.hp, zoneLevel), maxHp: scaleMonsterHp(def.hp, zoneLevel),
       monsterKind: kind, attackCd: 0,
       ai: { goal: AIGoal.WANDER, tx: 0, ty: 0, path: [], pi: 0, stuck: 0, timer: 0 },
+      rpg,
     });
   }
 

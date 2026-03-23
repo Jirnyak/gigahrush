@@ -49,20 +49,25 @@ export function initRelations(
       setRel(a.relIdx, b.relIdx, base);
       setRel(b.relIdx, a.relIdx, base);
     }
-    // Player starts neutral/slightly positive with everyone
-    setRel(0, a.relIdx, 5);
-    setRel(a.relIdx, 0, 5);
+    // Player (id=0) inherits Citizen relations as personal starting base
+    const playerRel = FACTION_MATRIX[Faction.CITIZEN][a.faction];
+    setRel(0, a.relIdx, playerRel);
+    setRel(a.relIdx, 0, playerRel);
   }
 }
 
 /* ── Faction cross-relation matrix ────────────────────────────── */
 // [row faction][col faction] = base attitude modifier
+// <=−50 hostile, −50..50 neutral, >=50 friendly
 const FACTION_MATRIX: Record<Faction, Record<Faction, number>> = {
-  [Faction.CITIZEN]:    { [Faction.CITIZEN]: 0, [Faction.LIQUIDATOR]: 10, [Faction.CULTIST]: -10, [Faction.SCIENTIST]: 5 },
-  [Faction.LIQUIDATOR]: { [Faction.CITIZEN]: 10, [Faction.LIQUIDATOR]: 0, [Faction.CULTIST]: -30, [Faction.SCIENTIST]: 15 },
-  [Faction.CULTIST]:    { [Faction.CITIZEN]: -10, [Faction.LIQUIDATOR]: -30, [Faction.CULTIST]: 0, [Faction.SCIENTIST]: -20 },
-  [Faction.SCIENTIST]:  { [Faction.CITIZEN]: 5, [Faction.LIQUIDATOR]: 15, [Faction.CULTIST]: -20, [Faction.SCIENTIST]: 0 },
+  [Faction.CITIZEN]:    { [Faction.CITIZEN]: 0, [Faction.LIQUIDATOR]: 50, [Faction.CULTIST]: 0,   [Faction.SCIENTIST]: 50, [Faction.WILD]: -50 },
+  [Faction.LIQUIDATOR]: { [Faction.CITIZEN]: 50, [Faction.LIQUIDATOR]: 0, [Faction.CULTIST]: -50, [Faction.SCIENTIST]: 50, [Faction.WILD]: -50 },
+  [Faction.CULTIST]:    { [Faction.CITIZEN]: 0, [Faction.LIQUIDATOR]: -50, [Faction.CULTIST]: 0,  [Faction.SCIENTIST]: -20, [Faction.WILD]: -50 },
+  [Faction.SCIENTIST]:  { [Faction.CITIZEN]: 50, [Faction.LIQUIDATOR]: 50, [Faction.CULTIST]: -20, [Faction.SCIENTIST]: 0, [Faction.WILD]: -50 },
+  [Faction.WILD]:       { [Faction.CITIZEN]: -50, [Faction.LIQUIDATOR]: -50, [Faction.CULTIST]: -50, [Faction.SCIENTIST]: -50, [Faction.WILD]: 0 },
 };
+
+export { FACTION_MATRIX };
 
 /* ── Faction names ────────────────────────────────────────────── */
 export const FACTION_NAMES: Record<Faction, string> = {
@@ -70,6 +75,7 @@ export const FACTION_NAMES: Record<Faction, string> = {
   [Faction.LIQUIDATOR]: 'Ликвидатор',
   [Faction.CULTIST]: 'Культист',
   [Faction.SCIENTIST]: 'Учёный',
+  [Faction.WILD]: 'Дикий',
 };
 
 /* ── Occupation names ─────────────────────────────────────────── */
@@ -95,10 +101,11 @@ export const OCCUPATION_NAMES: Record<Occupation, string> = {
 /* ── Weighted faction/occupation assignment ────────────────────── */
 export function randomFaction(): Faction {
   const r = Math.random();
-  if (r < 0.50) return Faction.CITIZEN;
-  if (r < 0.70) return Faction.LIQUIDATOR;
-  if (r < 0.85) return Faction.CULTIST;
-  return Faction.SCIENTIST;
+  if (r < 0.40) return Faction.CITIZEN;
+  if (r < 0.60) return Faction.LIQUIDATOR;
+  if (r < 0.75) return Faction.CULTIST;
+  if (r < 0.90) return Faction.SCIENTIST;
+  return Faction.WILD;
 }
 
 /* ── Weighted occupation distribution (faction-independent) ───── */

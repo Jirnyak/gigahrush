@@ -9,10 +9,12 @@
 import {
   W, Cell, Tex, RoomType, Feature,
   type Room, type Entity,
-  EntityType, AIGoal, MonsterKind,
+  EntityType, AIGoal, MonsterKind, FloorLevel,
 } from '../../core/types';
 import { World } from '../../core/world';
-import { rng, pick, ensureConnectivity, placeLifts, repairRoomWalls, sanitizeDoors } from '../shared';
+import { rng, pick, ensureConnectivity, placeLifts, repairRoomWalls, sanitizeDoors, generateZones } from '../shared';
+import { monsterName } from '../../data/catalog';
+import { calcZoneLevel, randomRPG, scaleMonsterHp, scaleMonsterSpeed } from '../../systems/rpg';
 
 export function generateMaintenance(): { world: World; entities: Entity[]; spawnX: number; spawnY: number } {
   const world = new World();
@@ -128,6 +130,10 @@ export function generateMaintenance(): { world: World; entities: Entity[]; spawn
   /* ── Phase 5: lifts ────────────────────────────────── */
   placeLifts(world, 4);
 
+  /* ── Phase 5.5: zones + zone levels ─────────────────── */
+  generateZones(world);
+  for (const z of world.zones) z.level = calcZoneLevel(z.id, FloorLevel.MAINTENANCE);
+
   /* ── Phase 6: lights (sparse, dim) ──────────────────── */
   for (let i = 0; i < W * W; i++) {
     if (world.cells[i] === Cell.FLOOR && Math.random() < 0.015) {
@@ -158,19 +164,25 @@ export function generateMaintenance(): { world: World; entities: Entity[]; spawn
     const ci = rng(0, W * W - 1);
     if (world.cells[ci] !== Cell.FLOOR) continue;
     const mx = (ci % W) + 0.5, my = ((ci / W) | 0) + 0.5;
-    const kind = pick([MonsterKind.SBORKA, MonsterKind.POLZUN]);
+    const kind = pick([MonsterKind.SBORKA, MonsterKind.POLZUN, MonsterKind.ZOMBIE, MonsterKind.SHADOW]);
     const mstats: Record<number, { hp: number; speed: number; sprite: number; name: string }> = {
-      [MonsterKind.SBORKA]: { hp: 5, speed: 2.8, sprite: 17, name: 'Сборка' },
+      [MonsterKind.SBORKA]: { hp: 5,  speed: 2.8, sprite: 17, name: 'Сборка' },
       [MonsterKind.POLZUN]: { hp: 80, speed: 1.0, sprite: 19, name: 'Ползун' },
+      [MonsterKind.ZOMBIE]: { hp: 25, speed: 1.4, sprite: 21, name: 'Мертвяк' },
+      [MonsterKind.SHADOW]: { hp: 45, speed: 2.4, sprite: 24, name: 'Теневик' },
     };
     const def = mstats[kind];
+    const zid = world.zoneMap[ci];
+    const zoneLevel = (zid >= 0 && world.zones[zid]) ? (world.zones[zid].level ?? 5) : 5;
+    const rpg = randomRPG(zoneLevel);
     entities.push({
       id: nextId++, type: EntityType.MONSTER,
       x: mx, y: my, angle: Math.random() * Math.PI * 2, pitch: 0,
-      alive: true, speed: def.speed, sprite: def.sprite,
-      name: def.name, hp: def.hp, maxHp: def.hp,
+      alive: true, speed: scaleMonsterSpeed(def.speed, zoneLevel), sprite: def.sprite,
+      name: monsterName(), hp: scaleMonsterHp(def.hp, zoneLevel), maxHp: scaleMonsterHp(def.hp, zoneLevel),
       monsterKind: kind, attackCd: 0,
       ai: { goal: AIGoal.WANDER, tx: 0, ty: 0, path: [], pi: 0, stuck: 0, timer: 0 },
+      rpg,
     });
   }
 

@@ -8,11 +8,11 @@ import type { SpriteData } from './sprites';
 /* ── Screen constants ─────────────────────────────────────────── */
 export const SCR_W = 320;
 export const SCR_H = 200;
-const FOV = Math.PI / 3;       // 60 degrees
-const HALF_FOV = FOV / 2;
+export const FOV = Math.PI / 3;       // 60 degrees
+export const HALF_FOV = FOV / 2;
 
 /* ── Per-column depth buffer (for sprite clipping) ────────────── */
-const zBuf = new Float64Array(SCR_W);
+export const zBuf = new Float64Array(SCR_W);
 
 /* ── Raycaster render ─────────────────────────────────────────── */
 export function renderScene(
@@ -211,6 +211,21 @@ export function renderScene(
         const floorTexId = isWaterF ? Tex.F_WATER : (world.floorTex[fi] || Tex.F_CONCRETE);
         const fTex = textures[floorTexId] ?? textures[0];
         let fc = darken(fTex[fty * TEX + ftx], cellLight);
+        // Surface overlay (sparse RGBA canvas, 16×16 per cell)
+        const bx = ftx >> 2, by = fty >> 2;
+        const surfCell = world.surfaceMap.get(fi);
+        if (surfCell) {
+          const si = (by * 16 + bx) << 2;
+          const sa = surfCell[si + 3];
+          if (sa > 0) {
+            const a = sa / 255;
+            const cr = (fc & 0xFF), cg = ((fc >> 8) & 0xFF), cb = ((fc >> 16) & 0xFF);
+            const nr = Math.floor(cr * (1 - a) + surfCell[si]     * a);
+            const ng = Math.floor(cg * (1 - a) + surfCell[si + 1] * a);
+            const nb = Math.floor(cb * (1 - a) + surfCell[si + 2] * a);
+            fc = ((0xFF << 24) | (nb << 16) | (ng << 8) | nr) >>> 0;
+          }
+        }
         buf[y * SCR_W + col] = applyFog(fc, ff, fogR, fogG, fogB);
       }
     }
@@ -316,8 +331,9 @@ function renderSprites(
     const spriteH = Math.floor(rawH * scale);
     const spriteW = spriteH; // square sprites
 
-    // Keep feet on the ground: shift up by the height difference
-    const footY = halfH + Math.floor(rawH / 2);
+    // Vertical offset: spriteZ 0=ground, 0.5=eye level
+    const spriteZ = e.spriteZ ?? 0;
+    const footY = halfH + Math.floor(rawH / 2) - Math.floor(rawH * spriteZ);
     const drawStartY = Math.max(0, footY - spriteH);
     const drawEndY   = Math.min(SCR_H - 1, footY);
     const drawStartX = Math.max(0, spriteScreenX - Math.floor(spriteW / 2));

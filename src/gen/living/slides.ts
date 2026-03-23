@@ -1,28 +1,17 @@
 /* ── Slide textures — intro-presentation, 8 paired slides ────── */
 
-import { Tex, TEX } from '../../core/types';
+import { Tex } from '../../core/types';
 import { drawTextCentered, CELL_H } from '../../render/text';
+import { S, rgba, noise, clamp } from '../../render/pixutil';
 
-const TS = TEX;
-
-function texRgba(r: number, g: number, b: number, a = 255): number {
-  return ((a << 24) | (b << 16) | (g << 8) | r) >>> 0;
-}
-function texNoise(x: number, y: number, seed: number): number {
-  let n = (x * 374761393 + y * 668265263 + seed * 1274126177) | 0;
-  n = (n ^ (n >> 13)) * 1103515245;
-  n = (n ^ (n >> 16));
-  return (n & 0x7fff) / 0x7fff;
-}
-function texClamp(v: number, lo = 0, hi = 255): number { return v < lo ? lo : v > hi ? hi : v; }
 function tpx(t: Uint32Array, x: number, y: number, c: number): void {
-  if (x >= 0 && x < TS && y >= 0 && y < TS) t[y * TS + x] = c;
+  if (x >= 0 && x < S && y >= 0 && y < S) t[y * S + x] = c;
 }
 
-const COL_FG     = texRgba(255, 240, 200);
-const COL_BORDER = texRgba(180, 150, 50);
-const COL_ACCENT = texRgba(220, 180, 80);
-const COL_DIM    = texRgba(140, 110, 40);
+const COL_FG     = rgba(255, 240, 200);
+const COL_BORDER = rgba(180, 150, 50);
+const COL_ACCENT = rgba(220, 180, 80);
+const COL_DIM    = rgba(140, 110, 40);
 const BLOCK_NUM  = String(Math.floor(Math.random() * 900 + 100));
 
 const SLIDES: string[][] = [
@@ -41,9 +30,9 @@ const DEC_GAP = 2;
 function drawEye(t: Uint32Array, cx: number, cy: number): void {
   const EW = 11, EH = 5;
   const outline = COL_ACCENT;
-  const white = texRgba(200, 190, 170);
-  const irisC = texRgba(180, 50, 30);
-  const pupilC = texRgba(25, 6, 6);
+  const white = rgba(200, 190, 170);
+  const irisC = rgba(180, 50, 30);
+  const pupilC = rgba(25, 6, 6);
   for (let dx = -EW; dx <= EW; dx++) {
     const f = Math.cos((dx / EW) * Math.PI * 0.5);
     const ry = Math.max(0, Math.round(f * EH));
@@ -57,7 +46,7 @@ function drawEye(t: Uint32Array, cx: number, cy: number): void {
   for (let dy = -2; dy <= 2; dy++)
     for (let dx = -2; dx <= 2; dx++)
       if (dx * dx + dy * dy <= 4) tpx(t, cx + dx, cy + dy, pupilC);
-  tpx(t, cx - 1, cy - 1, texRgba(255, 230, 230));
+  tpx(t, cx - 1, cy - 1, rgba(255, 230, 230));
   for (const ox of [-6, 0, 6]) { tpx(t, cx + ox, cy - EH - 1, outline); tpx(t, cx + ox, cy - EH - 2, outline); }
 }
 
@@ -78,7 +67,7 @@ function drawStar(t: Uint32Array, cx: number, cy: number, R: number): void {
 }
 
 function drawHRule(t: Uint32Array, y: number): void {
-  const mid = TS >> 1;
+  const mid = S >> 1;
   for (let d = 0; d <= 14; d++) { tpx(t, mid - d, y, COL_DIM); tpx(t, mid + d, y, COL_DIM); }
   for (let d = 16; d <= 20; d += 2) { tpx(t, mid - d, y, COL_DIM); tpx(t, mid + d, y, COL_DIM); }
   tpx(t, mid, y - 1, COL_ACCENT); tpx(t, mid - 1, y, COL_ACCENT); tpx(t, mid, y, COL_ACCENT);
@@ -94,31 +83,31 @@ function drawWarning(t: Uint32Array, cx: number, cy: number, h: number): void {
     if (y === botY) for (let x = cx - hw; x <= cx + hw; x++) tpx(t, x, y, COL_ACCENT);
   }
   tpx(t, cx, topY, COL_ACCENT);
-  const bangTop = topY + Math.floor(h * 0.3), bangBot = botY - 3, bangCol = texRgba(255, 80, 40);
+  const bangTop = topY + Math.floor(h * 0.3), bangBot = botY - 3, bangCol = rgba(255, 80, 40);
   for (let y = bangTop; y <= bangBot - 2; y++) tpx(t, cx, y, bangCol);
   tpx(t, cx, bangBot, bangCol);
 }
 
 function drawSlideBorder(t: Uint32Array): void {
-  for (let i = 0; i < TS; i++) for (let b = 0; b < 2; b++) {
-    t[b * TS + i] = COL_BORDER; t[(TS - 1 - b) * TS + i] = COL_BORDER;
-    t[i * TS + b] = COL_BORDER; t[i * TS + (TS - 1 - b)] = COL_BORDER;
+  for (let i = 0; i < S; i++) for (let b = 0; b < 2; b++) {
+    t[b * S + i] = COL_BORDER; t[(S - 1 - b) * S + i] = COL_BORDER;
+    t[i * S + b] = COL_BORDER; t[i * S + (S - 1 - b)] = COL_BORDER;
   }
-  for (const [cx, cy] of [[5, 5], [TS - 6, 5], [5, TS - 6], [TS - 6, TS - 6]]) {
+  for (const [cx, cy] of [[5, 5], [S - 6, 5], [5, S - 6], [S - 6, S - 6]]) {
     tpx(t, cx, cy, COL_ACCENT); tpx(t, cx - 1, cy, COL_ACCENT); tpx(t, cx + 1, cy, COL_ACCENT);
     tpx(t, cx, cy - 1, COL_ACCENT); tpx(t, cx, cy + 1, COL_ACCENT);
   }
-  const m = TS >> 1;
-  for (const [x, y] of [[m, 2], [m, TS - 3], [2, m], [TS - 3, m]]) tpx(t, x, y, COL_ACCENT);
+  const m = S >> 1;
+  for (const [x, y] of [[m, 2], [m, S - 3], [2, m], [S - 3, m]]) tpx(t, x, y, COL_ACCENT);
 }
 
 export function generateSlideTextures(textures: Uint32Array[]): void {
   for (let i = 0; i < 8; i++) {
     const t = textures[Tex.SLIDE_1 + i];
     const bgR = 130, bgG = 20, bgB = 20;
-    for (let y = 0; y < TS; y++) for (let x = 0; x < TS; x++) {
-      const n = texNoise(x, y, 270 + i * 10) * 8 - 4;
-      t[y * TS + x] = texRgba(texClamp(bgR + Math.floor(n)), texClamp(bgG + Math.floor(n / 2)), texClamp(bgB + Math.floor(n / 2)));
+    for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) {
+      const n = noise(x, y, 270 + i * 10) * 8 - 4;
+      t[y * S + x] = rgba(clamp(bgR + Math.floor(n)), clamp(bgG + Math.floor(n / 2)), clamp(bgB + Math.floor(n / 2)));
     }
     drawSlideBorder(t);
     const lines = SLIDES[i] ?? SLIDES[0];
@@ -128,8 +117,8 @@ export function generateSlideTextures(textures: Uint32Array[]): void {
     const decH = DEC_H[i] ?? 0;
     const gap = decH > 0 ? DEC_GAP : 0;
     const totalH = decH + gap + textH;
-    const startY = 5 + Math.max(0, Math.floor(((TS - 10) - totalH) / 2));
-    const mid = TS >> 1;
+    const startY = 5 + Math.max(0, Math.floor(((S - 10) - totalH) / 2));
+    const mid = S >> 1;
     switch (i) {
       case 0: drawEye(t, mid, startY + 7); break;
       case 1: drawStar(t, mid, startY + 7, 7); break;

@@ -11,6 +11,9 @@ export function createInput(): InputState {
     use: false, escape: false,
     debugSamosbor: false, questLog: false,
     mouseAttack: false,
+    attrStr: false, attrAgi: false, attrInt: false,
+    debugScreen: false,
+    pee: false,
     mouse: { dx: 0, dy: 0, locked: false },
   };
 }
@@ -41,9 +44,13 @@ export function bindInput(input: InputState, canvas: HTMLCanvasElement): () => v
     if (e.code === 'ArrowDown' || e.code === 'KeyS') input.invDn = true;
     if (e.code === 'ArrowLeft' || e.code === 'KeyA') input.invLeft = true;
     if (e.code === 'ArrowRight' || e.code === 'KeyD') input.invRight = true;
-    if (e.code === 'Enter') input.use = true;
-    if (e.code === 'Escape') { input.escape = true; e.preventDefault(); return; }
+    if (e.code === 'Enter') { input.escape = true; e.preventDefault(); return; }
     if (e.code === 'Tab') { input.debugSamosbor = true; e.preventDefault(); return; }
+    if (e.code === 'Digit1') input.attrStr = true;
+    if (e.code === 'Digit2') input.attrAgi = true;
+    if (e.code === 'Digit3') input.attrInt = true;
+    if (e.code === 'Backquote') input.debugScreen = true;
+    if (e.code === 'KeyP') input.pee = true;
     e.preventDefault();
   };
 
@@ -55,8 +62,13 @@ export function bindInput(input: InputState, canvas: HTMLCanvasElement): () => v
     input.invLeft = false;
     input.invRight = false;
     input.use = false;
-    if (e.code === 'Escape') input.escape = false;
+    if (e.code === 'Enter') input.escape = false;
     if (e.code === 'Tab') input.debugSamosbor = false;
+    if (e.code === 'Digit1') input.attrStr = false;
+    if (e.code === 'Digit2') input.attrAgi = false;
+    if (e.code === 'Digit3') input.attrInt = false;
+    if (e.code === 'Backquote') input.debugScreen = false;
+    if (e.code === 'KeyP') input.pee = false;
   };
 
   const onMouse = (e: MouseEvent) => {

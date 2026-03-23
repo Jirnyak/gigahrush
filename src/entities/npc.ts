@@ -1,18 +1,6 @@
 /* ── NPC sprite generation — one per occupation ──────────────── */
 
-import { TEX } from '../core/types';
-
-const S = TEX;
-function rgba(r: number, g: number, b: number, a = 255): number {
-  return ((a << 24) | (b << 16) | (g << 8) | r) >>> 0;
-}
-function noise(x: number, y: number, s: number): number {
-  let n = (x * 374761393 + y * 668265263 + s * 1274126177) | 0;
-  n = (n ^ (n >> 13)) * 1103515245; n = n ^ (n >> 16);
-  return (n & 0x7fff) / 0x7fff;
-}
-const clamp = (v: number) => v < 0 ? 0 : v > 255 ? 255 : v;
-const CLEAR = rgba(0, 0, 0, 0);
+import { S, rgba, noise, clamp, CLEAR } from '../render/pixutil';
 
 /* ── Base humanoid sprite generator ──────────────────────────── */
 function genHumanoid(
@@ -183,14 +171,3 @@ export const NPC_SPRITE_GENERATORS: (() => Uint32Array)[] = [
 export function generateTravelerSprite(seed: number, shirtR: number, shirtG: number, shirtB: number): Uint32Array {
   return genHumanoid(175, 155, 135, shirtR, shirtG, shirtB, 60, 55, 50, seed, H_TOP, H_BOT, B_TOP, B_BOT, L_BOT);
 }
-
-// Keep old export for backward compatibility (unused by sprites.ts now)
-export function generateSprite(skinR: number, skinG: number, skinB: number, seed: number): Uint32Array {
-  return genHumanoid(skinR, skinG, skinB, 60 + seed * 40, 70 + seed * 20, 100 - seed * 10, 50, 50, 60, seed, H_TOP, H_BOT, B_TOP, B_BOT, L_BOT);
-}
-
-export const NPC_VARIANTS: [number, number, number, number][] = [
-  [180, 160, 140, 0],
-  [170, 150, 135, 1],
-  [190, 170, 150, 2],
-];

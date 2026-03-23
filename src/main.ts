@@ -1,9 +1,10 @@
 /* ── ГИГАХРУЩ — main entry point ──────────────────────────────── */
+import './index.css';
 
 import {
   W, Cell, DoorState, FloorLevel, Feature, Tex,
   type Entity, type GameState,
-  EntityType,
+  EntityType, Faction, Occupation,
 } from './core/types';
 import { World } from './core/world';
 import { generateWorld } from './gen/living';
@@ -11,11 +12,12 @@ import { generateMaintenance } from './gen/maintenance';
 import { generateHell } from './gen/hell';
 import { generateTextures } from './render/textures';
 import { generateSprites } from './render/sprites';
-import { renderScene, SCR_W, SCR_H } from './render/engine';
+import { renderScene, SCR_W, SCR_H, HALF_FOV, zBuf } from './render/engine';
 import { drawHUD } from './render/hud';
+import { spawnBloodHit, spawnDeathPool, updateBloodTrails, updateParticles, renderParticles } from './render/blood';
 import { updateNeeds } from './systems/needs';
 import { updateAI, getNpcStateText } from './systems/ai';
-import { updateSamosbor } from './systems/samosbor';
+import { updateSamosbor, clearFogInZone } from './systems/samosbor';
 import { pickupNearby, useItem, getWeaponStats, addItem, consumeDurability, consumeAmmo } from './systems/inventory';
 import { createInput, bindInput } from './input';
 import { freshNeeds } from './data/catalog';
@@ -25,6 +27,17 @@ import {
   startAmbientDrone,
 } from './systems/audio';
 import { offerQuest, checkQuests, checkTalkQuest, notifyKill } from './systems/quests';
+import {
+  freshRPG, awardXP, xpForMonsterKill, xpForNpcKill,
+  strMeleeDmgMult, agiSpeedMult, agiAttackSpeedMult,
+  regenPsi, spendAttrPoint,
+} from './systems/rpg';
+import { execDebugCommand } from './systems/debug';
+import {
+  applyDamageRelationPenalty,
+  updateFactionCapture, initFactionControl, countFactionTerritory, spawnPatrolSquads,
+} from './systems/factions';
+import { addRelMutual } from './data/relations';
 
 /* ── Canvas setup ─────────────────────────────────────────────── */
 const canvas = document.getElementById('game') as HTMLCanvasElement;
@@ -74,8 +87,15 @@ function initGame(): void {
     inventory: [],
     weapon: '',
     name: 'Вы',
+    rpg: freshRPG(1),
+    faction: Faction.CITIZEN,
   };
   entities.push(player);
+
+  // Initialize per-cell faction control and spawn patrol squads
+  initFactionControl(world);
+  const fStats = countFactionTerritory(world);
+  spawnPatrolSquads(world, entities, nextEntityId, fStats);
 
   state = {
     tick: 0,
@@ -105,6 +125,8 @@ function initGame(): void {
     questPage: 0,
     tradeSel: 0,
     tradeMode: 'npc',
+    showDebug: false,
+    debugSel: 0,
   };
 }
 
@@ -115,7 +137,7 @@ const input = createInput();
 bindInput(input, canvas);
 
 /* ── Toggles (edge-detect) ────────────────────────────────────── */
-let prevMap = false, prevSamosbor = false; // eslint-disable-line
+let prevMap = false, prevSamosbor = false, prevDebug = false; // eslint-disable-line
 let stepAccum = 0; // footstep sound accumulator
 
 /* ── Door auto-close update ───────────────────────────────────── */
@@ -161,8 +183,10 @@ function movePlayer(dt: number): void {
     const speed = player.speed * dt;
     // Sleep exhaustion reduces speed
     const sleepMod = player.needs && player.needs.sleep < 10 ? 0.5 : 1;
-    mx = mx / len * speed * sleepMod;
-    my = my / len * speed * sleepMod;
+    // AGI bonus to move speed
+    const agiMod = player.rpg ? agiSpeedMult(player.rpg) : 1;
+    mx = mx / len * speed * sleepMod * agiMod;
+    my = my / len * speed * sleepMod * agiMod;
 
     const r = 0.2; // collision radius
     // X movement – check all 4 AABB corners
@@ -274,6 +298,8 @@ function playerActions(_dt: number): void {
 
   if (wantsAttack && player.attackCd! <= 0) {
     const ws = getWeaponStats(player);
+    // AGI reduces attack cooldown
+    const atkSpeedMod = player.rpg ? agiAttackSpeedMult(player.rpg) : 1;
 
     if (ws.isRanged) {
       // ── Ranged attack: spawn projectile(s) ──────────────
@@ -294,42 +320,51 @@ function playerActions(_dt: number): void {
             pitch: 0,
             alive: true,
             speed: 0,
-            sprite: ws.projSprite ?? 22,
+            sprite: ws.projSprite ?? 29,
             vx: Math.cos(ang) * spd,
             vy: Math.sin(ang) * spd,
             projDmg: ws.dmg,
             projLife: 3.0,
             ownerId: player.id,
             spriteScale: 0.25,
+            spriteZ: 0.5,
           });
         }
         // Play weapon-specific sound
         if (player.weapon === 'shotgun') playShotgun();
         else if (player.weapon === 'nailgun') playNailgun();
         else playGunshot();
-        player.attackCd = ws.speed;
+        player.attackCd = ws.speed * atkSpeedMod;
       } else {
         state.msgs.push({ text: 'Нет патронов!', time: state.time, color: '#f84' });
         player.attackCd = 0.5;
       }
     } else {
       // ── Melee attack: range check + durability ──────────
-      const dmg = ws.dmg;
+      // STR bonus to melee damage
+      const strMult = player.rpg ? strMeleeDmgMult(player.rpg) : 1;
+      const dmg = Math.round(ws.dmg * strMult);
       const range = ws.range;
       const ax = player.x + Math.cos(player.angle) * range;
       const ay = player.y + Math.sin(player.angle) * range;
 
       let hitSomething = false;
       for (const e of entities) {
-        if (e.type !== EntityType.MONSTER || !e.alive) continue;
+        if ((e.type !== EntityType.MONSTER && e.type !== EntityType.NPC) || !e.alive) continue;
+        if (e.id === player.id) continue;
         if (world.dist(ax, ay, e.x, e.y) < 1.2) {
           if (e.hp !== undefined) {
             e.hp -= dmg;
+            // Relation penalty for hitting non-hostile NPCs
+            if (e.type === EntityType.NPC) {
+              applyDamageRelationPenalty(player.id, e.id, dmg, player.faction, e.faction, { addRelMutual });
+            }
+            // Blood splatter on hit
+            spawnBloodHit(world, e.x, e.y, player.angle, dmg, e.type === EntityType.MONSTER);
             state.msgs.push({ text: `Удар! ${e.name} -${dmg}`, time: state.time, color: '#fc4' });
             if (e.hp <= 0) {
               e.alive = false;
-              state.msgs.push({ text: `${e.name} повержен!`, time: state.time, color: '#4f4' });
-              if (e.monsterKind !== undefined) notifyKill(e.monsterKind, state);
+              handleKill(e, true);
             }
           }
           hitSomething = true;
@@ -342,8 +377,26 @@ function playerActions(_dt: number): void {
         const broke = consumeDurability(player, state.msgs, state.time);
         if (broke) playBreak();
       }
-      player.attackCd = ws.speed;
+      player.attackCd = ws.speed * atkSpeedMod;
     }
+  }
+}
+
+/* ── Shared kill handling (melee + projectile) ────────────────── */
+function handleKill(e: Entity, killerIsPlayer: boolean): void {
+  // Death blood pool
+  spawnDeathPool(world, e.x, e.y, e.type === EntityType.MONSTER);
+  state.msgs.push({ text: `${e.name ?? 'Цель'} ${e.isFemale ? 'повержена' : 'повержен'}!`, time: state.time, color: '#4f4' });
+  if (e.isFogBoss && e.fogBossZone !== undefined) {
+    clearFogInZone(world, e.fogBossZone, state.msgs, state.time);
+  }
+  if (e.monsterKind !== undefined) {
+    notifyKill(e.monsterKind, state);
+    if (killerIsPlayer) {
+      awardXP(player, xpForMonsterKill(e.monsterKind, e.rpg?.level ?? 1), state.msgs, state.time);
+    }
+  } else if (e.type === EntityType.NPC && killerIsPlayer) {
+    awardXP(player, xpForNpcKill(e.rpg?.level ?? 1), state.msgs, state.time);
   }
 }
 
@@ -386,10 +439,16 @@ function updateProjectiles(dt: number): void {
       if (world.dist(p.x, p.y, e.x, e.y) < 0.6) {
         if (e.hp !== undefined) {
           e.hp -= dmg;
+          // Relation penalty for projectile hits on non-hostile NPCs
+          if (e.type === EntityType.NPC && p.ownerId === player.id) {
+            applyDamageRelationPenalty(player.id, e.id, dmg, player.faction, e.faction, { addRelMutual });
+          }
+          // Blood splatter on projectile hit
+          const hitAngle = Math.atan2(p.vy ?? 0, p.vx ?? 0);
+          spawnBloodHit(world, e.x, e.y, hitAngle, dmg, e.type === EntityType.MONSTER);
           if (e.hp <= 0) {
             e.alive = false;
-            state.msgs.push({ text: `${e.name ?? 'Цель'} повержен!`, time: state.time, color: '#4f4' });
-            if (e.monsterKind !== undefined) notifyKill(e.monsterKind, state);
+            handleKill(e, p.ownerId === player.id);
           }
         }
         p.alive = false;
@@ -425,6 +484,8 @@ function switchFloor(): void {
   const savedHp = player.hp ?? 100;
   const savedMaxHp = player.maxHp ?? 100;
   const savedWeapon = player.weapon ?? '';
+  const savedRpg = player.rpg ? { ...player.rpg } : freshRPG(1);
+  const savedMoney = player.money ?? 100;
 
   // Generate new floor
   let gen: { world: World; entities: Entity[]; spawnX: number; spawnY: number };
@@ -456,15 +517,25 @@ function switchFloor(): void {
     maxHp: savedMaxHp,
     inventory: savedInventory,
     weapon: savedWeapon,
+    money: savedMoney,
+    rpg: savedRpg,
     name: 'Вы',
+    faction: Faction.CITIZEN,
   };
   entities.push(player);
 
-  // Reset samosbor for hell (constant) vs normal
+  // Initialize faction control for new floor
+  initFactionControl(world);
+  const fStats = countFactionTerritory(world);
+  spawnPatrolSquads(world, entities, nextEntityId, fStats);
+
+  // Reset samosbor for new floor (interval depends on floor)
   if (nextFloor === FloorLevel.HELL) {
-    state.samosborTimer = 30 + Math.random() * 30; // faster samosbors in hell
+    state.samosborTimer = 60 + Math.random() * 240;  // 1-5 min
+  } else if (nextFloor === FloorLevel.MAINTENANCE) {
+    state.samosborTimer = 180 + Math.random() * 240; // 3-7 min
   } else {
-    state.samosborTimer = 120 + Math.random() * 60;
+    state.samosborTimer = 300 + Math.random() * 300; // 5-10 min
   }
   state.samosborActive = false;
 
@@ -493,14 +564,22 @@ function openNpcMenu(npc: Entity): void {
 function generateNpcTradeItems(npc: Entity): { defId: string; count: number }[] {
   const items: { defId: string; count: number }[] = [];
   const OCC_ITEMS: Record<number, string[]> = {
-    0: ['bread', 'water', 'cigs'],                          // resident
-    1: ['bread', 'kasha', 'kompot', 'canned'],              // cook
-    2: ['bandage', 'pills', 'antidep'],                     // doctor
-    3: ['wrench', 'flashlight', 'pipe', 'ammo_nails'],      // engineer
-    4: ['knife', 'canned', 'rawmeat', 'ammo_9mm'],          // hunter
-    5: ['book', 'tea', 'cigs'],                              // priest
-    6: ['flashlight', 'book', 'note', 'ammo_9mm'],          // researcher
-    7: ['bread', 'water', 'cigs', 'bandage', 'ammo_shells'],// trader
+    [Occupation.HOUSEWIFE]:   ['bread', 'water', 'cigs'],
+    [Occupation.LOCKSMITH]:   ['wrench', 'pipe', 'flashlight'],
+    [Occupation.SECRETARY]:   ['book', 'tea', 'cigs'],
+    [Occupation.ELECTRICIAN]: ['wrench', 'flashlight', 'ammo_nails'],
+    [Occupation.COOK]:        ['bread', 'kasha', 'kompot', 'canned'],
+    [Occupation.DOCTOR]:      ['bandage', 'pills', 'antidep'],
+    [Occupation.TURNER]:      ['wrench', 'pipe', 'rebar'],
+    [Occupation.MECHANIC]:    ['wrench', 'pipe', 'flashlight', 'ammo_nails'],
+    [Occupation.STOREKEEPER]: ['bread', 'water', 'cigs', 'bandage', 'ammo_shells'],
+    [Occupation.ALCOHOLIC]:   ['bread', 'cigs', 'water'],
+    [Occupation.SCIENTIST]:   ['flashlight', 'book', 'note', 'ammo_9mm'],
+    [Occupation.CHILD]:       ['bread', 'water'],
+    [Occupation.DIRECTOR]:    ['book', 'tea', 'cigs', 'ammo_9mm'],
+    [Occupation.TRAVELER]:    ['bread', 'water', 'canned', 'cigs'],
+    [Occupation.PILGRIM]:     ['bread', 'water', 'knife'],
+    [Occupation.HUNTER]:      ['knife', 'canned', 'rawmeat', 'ammo_9mm'],
   };
   const pool = OCC_ITEMS[npc.occupation ?? 0] ?? ['bread', 'water'];
   const count = 2 + Math.floor(Math.random() * 3);
@@ -601,6 +680,8 @@ function saveGame(): void {
         needs: player.needs,
         inventory: player.inventory,
         weapon: player.weapon,
+        rpg: player.rpg,
+        money: player.money,
       },
       state: {
         time: state.time,
@@ -655,9 +736,17 @@ function loadGame(): boolean {
       maxHp: data.player.maxHp ?? 100,
       inventory: data.player.inventory ?? [],
       weapon: data.player.weapon ?? '',
+      money: data.player.money ?? 100,
+      rpg: data.player.rpg ?? freshRPG(1),
       name: 'Вы',
+      faction: Faction.CITIZEN,
     };
     entities.push(player);
+
+    // Init faction control for loaded world
+    initFactionControl(world);
+    const fStats = countFactionTerritory(world);
+    spawnPatrolSquads(world, entities, nextEntityId, fStats);
 
     state.time = data.state.time ?? 0;
     state.tick = data.state.tick ?? 0;
@@ -682,7 +771,7 @@ function loadGame(): boolean {
 /* ── Menu input handling (runs regardless of pause state) ─────── */
 let prevEsc = false, prevInvMenu = false, prevQuestMenu = false;
 let prevMenuUp = false, prevMenuDn = false, prevMenuLeft = false, prevMenuRight = false;
-let prevMenuUse = false;
+let prevMenuInteract = false;
 
 function handleMenuInput(): void {
   const escEdge = input.escape && !prevEsc;
@@ -690,11 +779,11 @@ function handleMenuInput(): void {
   const dnEdge = input.invDn && !prevMenuDn;
   const leftEdge = input.invLeft && !prevMenuLeft;
   const rightEdge = input.invRight && !prevMenuRight;
-  const useEdge = input.use && !prevMenuUse;
+  const interactEdge = input.interact && !prevMenuInteract;
   const invEdge = input.inv && !prevInvMenu;
   const questEdge = input.questLog && !prevQuestMenu;
 
-  // ── ESC: toggle game menu (or close any open menu) ───────
+  // ── Enter: toggle game menu (or close any open menu) ─────
   if (escEdge) {
     if (state.showNpcMenu) { state.showNpcMenu = false; }
     else if (state.showInventory) { state.showInventory = false; }
@@ -706,7 +795,7 @@ function handleMenuInput(): void {
   if (state.showMenu) {
     if (upEdge) state.menuSel = Math.max(0, state.menuSel - 1);
     if (dnEdge) state.menuSel = Math.min(3, state.menuSel + 1);
-    if (useEdge) {
+    if (interactEdge) {
       switch (state.menuSel) {
         case 0: state.showMenu = false; break;                // Continue
         case 1: state.showMenu = false; initGame(); break;    // New Game
@@ -724,7 +813,23 @@ function handleMenuInput(): void {
       if (dnEdge) state.invSel = Math.min(24, state.invSel + GRID_W);
       if (leftEdge && state.invSel % GRID_W > 0) state.invSel--;
       if (rightEdge && state.invSel % GRID_W < GRID_W - 1) state.invSel++;
-      if (useEdge) useItem(player, state.invSel, state.msgs, state.time);
+      if (interactEdge) useItem(player, state.invSel, state.msgs, state.time);
+      // Attribute spending (1=STR, 2=AGI, 3=INT)
+      if (input.attrStr && player.rpg && player.rpg.attrPoints > 0) {
+        if (spendAttrPoint(player, 'str'))
+          state.msgs.push({ text: `Сила +1 (${player.rpg.str})`, time: state.time, color: '#f84' });
+        input.attrStr = false;
+      }
+      if (input.attrAgi && player.rpg && player.rpg.attrPoints > 0) {
+        if (spendAttrPoint(player, 'agi'))
+          state.msgs.push({ text: `Ловкость +1 (${player.rpg.agi})`, time: state.time, color: '#4af' });
+        input.attrAgi = false;
+      }
+      if (input.attrInt && player.rpg && player.rpg.attrPoints > 0) {
+        if (spendAttrPoint(player, 'int'))
+          state.msgs.push({ text: `Интеллект +1 (${player.rpg.int})`, time: state.time, color: '#a4f' });
+        input.attrInt = false;
+      }
     }
   }
   // ── Quest log toggle ─────────────────────────────────────
@@ -740,7 +845,7 @@ function handleMenuInput(): void {
     if (state.npcMenuTab === 'main') {
       if (upEdge) state.npcMenuSel = Math.max(0, state.npcMenuSel - 1);
       if (dnEdge) state.npcMenuSel = Math.min(2, state.npcMenuSel + 1);
-      if (useEdge) {
+      if (interactEdge) {
         switch (state.npcMenuSel) {
           case 0: // Talk
             state.npcMenuTab = 'talk';
@@ -762,12 +867,12 @@ function handleMenuInput(): void {
         }
       }
     } else if (state.npcMenuTab === 'talk') {
-      if (useEdge || escEdge) state.npcMenuTab = 'main';
+      if (interactEdge || escEdge) state.npcMenuTab = 'main';
     } else if (state.npcMenuTab === 'quest') {
       const totalQ = state.quests.filter(q => !q.done).length;
       if (upEdge || leftEdge) state.questPage = Math.max(0, state.questPage - 1);
       if (dnEdge || rightEdge) state.questPage = Math.min(Math.max(0, totalQ - 1), state.questPage + 1);
-      if (useEdge || escEdge) state.npcMenuTab = 'main';
+      if (interactEdge || escEdge) state.npcMenuTab = 'main';
     } else if (state.npcMenuTab === 'trade') {
       if (npc) {
         const npcInv = npc.inventory ?? [];
@@ -779,7 +884,7 @@ function handleMenuInput(): void {
           state.tradeMode = state.tradeMode === 'npc' ? 'player' : 'npc';
           state.tradeSel = 0;
         }
-        if (useEdge) {
+        if (interactEdge) {
           if (state.tradeMode === 'npc' && npcInv.length > state.tradeSel) {
             // Buy from NPC: take their item, they get a random player item
             const npcSlot = npcInv[state.tradeSel];
@@ -809,8 +914,20 @@ function handleMenuInput(): void {
       if (escEdge) state.npcMenuTab = 'main';
     }
   }
+  // ── Debug menu navigation ────────────────────────────────
+  else if (state.showDebug) {
+    const dbgEdge = input.debugScreen && !prevDebug;
+    if (escEdge || dbgEdge) { state.showDebug = false; }
+    else {
+      if (upEdge) state.debugSel = Math.max(0, state.debugSel - 1);
+      if (dnEdge) state.debugSel = Math.min(4, state.debugSel + 1);
+      if (interactEdge) execDebugCommand(state.debugSel, player, entities, state, nextEntityId);
+    }
+  }
   // ── Normal gameplay toggles ──────────────────────────────
   else {
+    const dbgEdge = input.debugScreen && !prevDebug;
+    if (dbgEdge) { state.showDebug = true; state.debugSel = 0; }
     if (invEdge) { state.showInventory = true; state.invSel = 0; }
     if (questEdge) { state.showQuests = true; }
   }
@@ -821,12 +938,13 @@ function handleMenuInput(): void {
   prevMenuDn = input.invDn;
   prevMenuLeft = input.invLeft;
   prevMenuRight = input.invRight;
-  prevMenuUse = input.use;
+  prevMenuInteract = input.interact;
   prevInvMenu = input.inv;
   prevQuestMenu = input.questLog;
+  prevDebug = input.debugScreen;
 
   // Auto-pause when any menu is open
-  state.paused = state.showMenu || state.showInventory || state.showNpcMenu || state.showQuests;
+  state.paused = state.showMenu || state.showInventory || state.showNpcMenu || state.showQuests || state.showDebug;
 }
 
 /* ── Game loop ────────────────────────────────────────────────── */
@@ -853,11 +971,36 @@ function gameLoop(now: number): void {
 
     movePlayer(dt);
     playerActions(dt);
+    // Player urination (P key)
+    if (input.pee && player.alive && player.needs && player.needs.pee > 5) {
+      const range = 1.5;
+      const ux = player.x + Math.cos(player.angle) * range;
+      const uy = player.y + Math.sin(player.angle) * range;
+      const cx = ((Math.floor(ux) % W) + W) % W;
+      const cy = ((Math.floor(uy) % W) + W) % W;
+      if (!world.solid(cx, cy)) {
+        const fx = ((ux % 1) + 1) % 1;
+        const fy = ((uy % 1) + 1) % 1;
+        world.stamp(cx, cy, fx, fy, 0.15, 60, Math.floor(state.time * 100), 200, 180, 30);
+        player.needs.pee = Math.max(0, player.needs.pee - 12 * dt);
+        if (player.needs.pee <= 5) {
+          state.msgs.push({ text: 'Полегчало.', time: state.time, color: '#da4' });
+        }
+      }
+    }
     updateProjectiles(dt);
     updateDoors(dt);
     updateNeeds(entities, dt, state.time, state.msgs, player.id);
-    updateAI(world, entities, dt, state.time, state.msgs, player.id, state.clock, state.samosborActive);
+    updateAI(world, entities, dt, state.time, state.msgs, player.id, state.clock, state.samosborActive, nextEntityId);
     updateSamosbor(world, entities, state, dt, nextEntityId);
+    // Faction zone capture (cell-based territory control)
+    updateFactionCapture(world, entities, dt);
+    // Regenerate PSI for player
+    regenPsi(player, dt);
+
+    // Blood trails from wounded entities + particle physics
+    updateBloodTrails(world, entities, dt);
+    updateParticles(world, dt);
 
     // Cycle slide textures every 5 seconds — left tile=even, right tile=odd
     if (world.slideCells.length >= 2) {
@@ -914,6 +1057,19 @@ function gameLoop(now: number): void {
   renderScene(buf32, world, textures, sprites, entities,
     player.x, player.y, player.angle, player.pitch,
     fogDensity, glitch);
+
+  // Blood particles on top of scene
+  {
+    const dirX = Math.cos(player.angle);
+    const dirY = Math.sin(player.angle);
+    const planeLen = Math.tan(HALF_FOV);
+    const planeX = -dirY * planeLen;
+    const planeY =  dirX * planeLen;
+    const horizonShift = Math.floor(player.pitch * SCR_H);
+    const halfH = Math.floor(SCR_H / 2) + horizonShift;
+    renderParticles(buf32, SCR_W, SCR_H, player.x, player.y, player.angle,
+      dirX, dirY, planeX, planeY, halfH, zBuf);
+  }
 
   // Blit low-res buffer to canvas (pixel-perfect upscale)
   screen.data.set(new Uint8ClampedArray(buf32.buffer));

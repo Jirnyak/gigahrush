@@ -49,7 +49,7 @@ export function generateStartRoom(
   protectRoom(world, hallX, hallY, hallW, hallH, Tex.PANEL, Tex.F_LINO);
 
   // Desks: rows of half-height desk sprites
-  const DESK_SPRITE = 21;
+  const DESK_SPRITE = 28;
   for (let dy = 2; dy <= hallH - 3; dy += 2)
     for (let dx = 1; dx < hallW - 1; dx++)
       if (dx % 2 === 1) {
@@ -83,7 +83,7 @@ export function generateStartRoom(
     x: hallX + Math.floor(hallW / 2) + 0.5, y: hallY + 1 + 0.5,
     angle: Math.PI / 2, pitch: 0, alive: true, speed: 1.2,
     sprite: Occupation.DOCTOR,
-    name: 'Ольга Дмитриевна',
+    name: 'Ольга Дмитриевна', isFemale: true,
     needs: freshNeeds(), hp: 100, maxHp: 100, money: 50,
     ai: { goal: AIGoal.IDLE, tx: 0, ty: 0, path: [], pi: 0, stuck: 0, timer: 0 },
     inventory: [{ defId: 'bandage', count: 3 }, { defId: 'pills', count: 1 }, { defId: 'water', count: 2 }, { defId: 'bread', count: 2 }],
@@ -169,7 +169,7 @@ export function generateStartRoom(
     x: armX + 2 + 0.5, y: armY + 1 + 0.5,
     angle: Math.PI, pitch: 0, alive: true, speed: 1.4,
     sprite: Occupation.HUNTER,
-    name: 'Барни',
+    name: 'Барни', isFemale: false,
     needs: freshNeeds(), hp: 120, maxHp: 120, money: 80,
     ai: { goal: AIGoal.IDLE, tx: 0, ty: 0, path: [], pi: 0, stuck: 0, timer: 0 },
     inventory: [{ defId: 'makarov', count: 1 }, { defId: 'ammo_9mm', count: 8 }, { defId: 'canned', count: 1 }],

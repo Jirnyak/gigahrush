@@ -4,7 +4,7 @@ import {
   type Entity, type Msg, ItemType,
   EntityType,
 } from '../core/types';
-import { ITEMS, WEAPON_DMG, WEAPON_STATS, type WeaponStats } from '../data/catalog';
+import { ITEMS, WEAPON_STATS, type WeaponStats } from '../data/catalog';
 import { World } from '../core/world';
 import { playPickup } from './audio';
 
@@ -113,11 +113,6 @@ export function pickupNearby(world: World, entities: Entity[], player: Entity, m
       playPickup();
     }
   }
-}
-
-/* ── Get weapon damage ────────────────────────────────────────── */
-export function getWeaponDmg(e: Entity): number {
-  return WEAPON_DMG[e.weapon ?? ''] ?? 3;
 }
 
 /* ── Get full weapon stats ────────────────────────────────────── */

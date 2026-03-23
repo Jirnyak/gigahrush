@@ -214,10 +214,3 @@ export function startAmbientDrone(): void {
   droneOsc.connect(lp).connect(g).connect(gain());
   droneOsc.start();
 }
-
-export function stopAmbientDrone(): void {
-  if (droneOsc) {
-    droneOsc.stop();
-    droneOsc = null;
-  }
-}

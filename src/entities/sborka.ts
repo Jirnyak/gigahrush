@@ -1,19 +1,8 @@
 /* ── Sborka — fast twitchy creature ───────────────────────────── */
 
-import { TEX, MonsterKind } from '../core/types';
+import { MonsterKind } from '../core/types';
 import type { MonsterDef } from './monster';
-
-const S = TEX;
-function rgba(r: number, g: number, b: number, a = 255): number {
-  return ((a << 24) | (b << 16) | (g << 8) | r) >>> 0;
-}
-function noise(x: number, y: number, s: number): number {
-  let n = (x * 374761393 + y * 668265263 + s * 1274126177) | 0;
-  n = (n ^ (n >> 13)) * 1103515245; n = n ^ (n >> 16);
-  return (n & 0x7fff) / 0x7fff;
-}
-const clamp = (v: number) => v < 0 ? 0 : v > 255 ? 255 : v;
-const CLEAR = rgba(0, 0, 0, 0);
+import { S, rgba, noise, clamp, CLEAR } from '../render/pixutil';
 
 export const DEF: MonsterDef = {
   kind: MonsterKind.SBORKA,

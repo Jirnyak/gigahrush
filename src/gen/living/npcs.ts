@@ -9,6 +9,7 @@ import { World } from '../../core/world';
 import { ITEMS, randomName, freshNeeds, NOTES } from '../../data/catalog';
 import { randomFaction, randomOccupation, initRelations } from '../../data/relations';
 import { rng, pick, weightedPick } from '../shared';
+import { gaussianLevel, randomRPG, getMaxHp } from '../../systems/rpg';
 import type { AptPlan } from './apartments';
 
 /* ── Spawn items in every room ───────────────────────────────── */
@@ -37,7 +38,7 @@ export function spawnRoomItems(
 
 /* ── Spawn NPC families — one per apartment ──────────────────── */
 export function spawnFamilies(
-  _world: World, apartments: AptPlan[], entities: Entity[], nextIdStart: number,
+  world: World, apartments: AptPlan[], entities: Entity[], nextIdStart: number,
 ): number {
   let nextId = nextIdStart;
   const npcSlots: { relIdx: number; familyId: number; faction: number }[] = [];
@@ -51,6 +52,14 @@ export function spawnFamilies(
       const room = apt.living;
       const faction = f === 0 ? familyFaction : (Math.random() < 0.8 ? familyFaction : randomFaction());
       const occupation = randomOccupation(faction);
+      // NPC level based on zone level (Gaussian)
+      const ci = world.idx(room.x + Math.floor(room.w / 2), room.y + Math.floor(room.h / 2));
+      const zoneId = world.zoneMap[ci];
+      const zoneLevel = world.zones[zoneId]?.level ?? 1;
+      const npcLevel = gaussianLevel(zoneLevel, 2);
+      const rpg = randomRPG(npcLevel);
+      const maxHp = getMaxHp(rpg);
+      const nm = randomName(faction);
       entities.push({
         id: nextId++, type: EntityType.NPC,
         x: room.x + rng(1, Math.max(1, room.w - 2)) + 0.5,
@@ -61,11 +70,12 @@ export function spawnFamilies(
         speed: occupation === Occupation.CHILD ? 0.8 : occupation === Occupation.ALCOHOLIC ? 0.9 : 1.2,
         sprite: occupation,
         spriteScale: occupation === Occupation.CHILD ? 0.6 : 1.0,
-        name: randomName(), needs: freshNeeds(),
-        hp: 100, maxHp: 100,
+        name: nm.name, isFemale: nm.female, needs: freshNeeds(),
+        hp: maxHp, maxHp,
         money: occupation === Occupation.DIRECTOR ? rng(200, 500) : occupation === Occupation.CHILD ? rng(0, 10) : rng(20, 100),
         ai: { goal: AIGoal.IDLE, tx: 0, ty: 0, path: [], pi: 0, stuck: 0, timer: 0 },
         inventory: [], familyId: a, faction, occupation, questId: -1,
+        rpg,
       });
       npcSlots.push({ relIdx, familyId: a, faction });
       relIdx++;
@@ -100,18 +110,25 @@ export function spawnTravelers(
       const ci = corridorSpawns.splice(Math.floor(Math.random() * corridorSpawns.length), 1)[0];
       const sx = (ci % W) + 0.5;
       const sy = Math.floor(ci / W) + 0.5;
+      const zoneId = world.zoneMap[ci];
+      const zoneLevel = world.zones[zoneId]?.level ?? 1;
+      const npcLevel = gaussianLevel(zoneLevel, 2);
+      const rpg = randomRPG(npcLevel);
+      const maxHp = Math.round(getMaxHp(rpg) * 1.2);
+      const nm = randomName(def.faction);
       entities.push({
         id: nextId++, type: EntityType.NPC,
         x: sx, y: sy,
         angle: Math.random() * Math.PI * 2,
         pitch: 0,
         alive: true, speed: 1.4, sprite: def.occupation,
-        name: randomName(), needs: freshNeeds(),
-        hp: 120, maxHp: 120,
+        name: nm.name, isFemale: nm.female, needs: freshNeeds(),
+        hp: maxHp, maxHp,
         money: rng(10, 80),
         ai: { goal: AIGoal.IDLE, tx: 0, ty: 0, path: [], pi: 0, stuck: 0, timer: 0 },
         inventory: [], faction: def.faction, occupation: def.occupation,
         isTraveler: true, questId: -1,
+        rpg,
       });
     }
   }
