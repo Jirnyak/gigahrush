@@ -12,7 +12,7 @@ import {
   decorateRoom, placeAbyssPits, connectToNetwork,
   ensureConnectivity, sanitizeDoors, pruneDeadEnds, placeLifts,
   repairRoomWalls, shapeRoom, openVolatileDoors,
-  placeAirlocks,
+  placeAirlocks, ensurePermanentRoomAccess,
 } from '../shared';
 import { connectApartmentsToMaze } from './apartments';
 
@@ -200,6 +200,9 @@ export function generateVolatileMaze(world: World): void {
     const vrF = placed[0];
     ensureConnectivity(world, vrF.x + Math.floor(vrF.w / 2) + 0.5, vrF.y + Math.floor(vrF.h / 2) + 0.5);
   }
+
+  /* ── Connect any isolated permanent rooms (universal) ─ */
+  ensurePermanentRoomAccess(world);
 
   /* ── Decorations ───────────────────────────────────── */
   for (const room of placed) {

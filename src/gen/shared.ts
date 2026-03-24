@@ -593,6 +593,124 @@ export function ensureConnectivity(world: World, spawnX: number, spawnY: number)
   }
 }
 
+/* ── Ensure every permanent room is reachable from the maze ───── */
+/*   Runs after the volatile maze is fully built.  BFS from the   */
+/*   maze graph, then for each isolated permanent room places a   */
+/*   DOOR on its perimeter and carves a corridor outward.         */
+export function ensurePermanentRoomAccess(world: World): void {
+  const dirs: [number, number][] = [[1,0],[-1,0],[0,1],[0,-1]];
+
+  /* BFS seed: first non-aptMask walkable cell (= volatile maze) */
+  let seed = -1;
+  for (let i = 0; i < W * W; i++) {
+    if (!world.aptMask[i] && (world.cells[i] === Cell.FLOOR || world.cells[i] === Cell.DOOR)) {
+      seed = i; break;
+    }
+  }
+  if (seed < 0) return;
+
+  const vis = new Uint8Array(W * W);
+  vis[seed] = 1;
+  const q: number[] = [seed];
+  let h = 0;
+  while (h < q.length) {
+    const ci = q[h++];
+    const cx = ci % W, cy = (ci / W) | 0;
+    for (const [dx, dy] of dirs) {
+      const ni = world.idx(cx + dx, cy + dy);
+      if (!vis[ni] && (world.cells[ni] === Cell.FLOOR || world.cells[ni] === Cell.DOOR)) {
+        vis[ni] = 1; q.push(ni);
+      }
+    }
+  }
+
+  /* Sparse sample of reachable cells for nearest-neighbour queries */
+  const sStep = Math.max(1, q.length >> 10);
+  const samples: number[] = [];
+  for (let i = 0; i < q.length; i += sStep) samples.push(q[i]);
+
+  for (let ri = 0; ri < world.apartmentRoomCount; ri++) {
+    const room = world.rooms[ri];
+    if (!room) continue;
+
+    /* Already reachable? */
+    let ok = false;
+    for (let dy = 0; dy < room.h && !ok; dy++)
+      for (let dx = 0; dx < room.w && !ok; dx++)
+        if (vis[world.idx(room.x + dx, room.y + dy)]) ok = true;
+    if (ok) continue;
+
+    /* Find best perimeter wall cell for a door */
+    let bestD = Infinity, bestWi = -1, bestOx = 0, bestOy = 0;
+
+    for (let dy = -1; dy <= room.h; dy++) {
+      for (let dx = -1; dx <= room.w; dx++) {
+        if (dx >= 0 && dx < room.w && dy >= 0 && dy < room.h) continue;
+        const wx = world.wrap(room.x + dx), wy = world.wrap(room.y + dy);
+        const wi = world.idx(wx, wy);
+        if (world.cells[wi] !== Cell.WALL) continue;
+
+        for (const [ddx, ddy] of dirs) {
+          /* Inside neighbour must belong to this room */
+          const ix = world.wrap(wx - ddx), iy = world.wrap(wy - ddy);
+          if (world.roomMap[world.idx(ix, iy)] !== room.id) continue;
+
+          /* Outside neighbour must not be aptMask (another protected room) */
+          const ox = world.wrap(wx + ddx), oy = world.wrap(wy + ddy);
+          if (world.aptMask[world.idx(ox, oy)]) continue;
+
+          /* Flanking cells must be walls (wall–door–wall pattern) */
+          if (world.cells[world.idx(world.wrap(wx + ddy), world.wrap(wy + ddx))] !== Cell.WALL) continue;
+          if (world.cells[world.idx(world.wrap(wx - ddy), world.wrap(wy - ddx))] !== Cell.WALL) continue;
+
+          /* Manhattan distance to nearest reachable sample */
+          for (const si of samples) {
+            const d = Math.abs(world.delta(ox, si % W)) + Math.abs(world.delta(oy, (si / W) | 0));
+            if (d < bestD) { bestD = d; bestWi = wi; bestOx = ox; bestOy = oy; }
+          }
+        }
+      }
+    }
+    if (bestWi < 0) continue;
+
+    /* Place door on the wall ring */
+    world.cells[bestWi] = Cell.DOOR;
+    world.doors.set(bestWi, {
+      idx: bestWi, state: DoorState.HERMETIC_OPEN,
+      roomA: room.id, roomB: -1, keyId: '', timer: 0,
+    });
+    room.doors.push(bestWi);
+
+    /* Nearest reachable target for corridor */
+    let tgtX = 0, tgtY = 0, tgtD = Infinity;
+    for (const si of samples) {
+      const sx = si % W, sy = (si / W) | 0;
+      const d = Math.abs(world.delta(bestOx, sx)) + Math.abs(world.delta(bestOy, sy));
+      if (d < tgtD) { tgtD = d; tgtX = sx; tgtY = sy; }
+    }
+
+    /* Carve corridor from outside the door to the maze */
+    carveCorridor(world, bestOx, bestOy, tgtX, tgtY);
+
+    /* Update reachability so subsequent rooms benefit */
+    const doorOut = world.idx(bestOx, bestOy);
+    if (!vis[doorOut] && (world.cells[doorOut] === Cell.FLOOR || world.cells[doorOut] === Cell.DOOR)) {
+      vis[doorOut] = 1; q.push(doorOut);
+      let nh = q.length - 1;
+      while (nh < q.length) {
+        const ci = q[nh++];
+        const cx = ci % W, cy = (ci / W) | 0;
+        for (const [dx, dy] of dirs) {
+          const ni = world.idx(cx + dx, cy + dy);
+          if (!vis[ni] && (world.cells[ni] === Cell.FLOOR || world.cells[ni] === Cell.DOOR)) {
+            vis[ni] = 1; q.push(ni);
+          }
+        }
+      }
+    }
+  }
+}
+
 /* ── Repair room walls: seal breaches in APARTMENT perimeters only ── */
 export function repairRoomWalls(world: World): void {
   const aptCount = world.apartmentRoomCount;

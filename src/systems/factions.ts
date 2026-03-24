@@ -10,35 +10,28 @@ import {
 import { World } from '../core/world';
 import { freshNeeds, randomName } from '../data/catalog';
 import { gaussianLevel, randomRPG, getMaxHp } from './rpg';
+import { getFactionRel, addFactionRelMutual } from '../data/relations';
+import { isPsiMad, isPsiAlly } from './psi';
 
-/* ── Faction relation matrix (symmetric) ─────────────────────── */
-// Values: <=−50 hostile, −50..50 neutral, >=50 friendly
-// CITIZEN=0, LIQUIDATOR=1, CULTIST=2, SCIENTIST=3, WILD=4, MONSTER=-1(special)
-// Monsters use Faction index -1 conceptually but are EntityType.MONSTER
+const _PSI_IDS = ['psi_strike','psi_rupture','psi_madness','psi_storm','psi_brainburn'];
+function _pickPsi(): string { return _PSI_IDS[Math.floor(Math.random() * _PSI_IDS.length)]; }
 
-const FACTION_REL: number[][] = [
-  /*              CIT   LIQ   CUL   SCI   WILD */
-  /* CITIZEN  */ [ 100,   50,    0,   50,  -50 ],
-  /* LIQUID.  */ [  50,  100,  -50,   50,  -50 ],
-  /* CULTIST  */ [   0,  -50,  100,  -20,  -50 ],
-  /* SCIENTIST*/ [  50,   50,  -20,  100,  -50 ],
-  /* WILD     */ [ -50,  -50,  -50,  -50,  100 ],
-];
-
-// Faction vs monsters
+/* ── Faction relation accessors (dynamic — reads live matrix) ─── */
+// Monsters use a fixed attitude, not tracked in the matrix
 const FACTION_VS_MONSTER: number[] = [
   /* CITIZEN */ -100,
   /* LIQUID. */ -100,
   /* CULTIST */   50,
   /* SCIENTIST*/ -80,
   /* WILD    */ -100,
+  /* PLAYER  */ -100,
 ];
 
 const HOSTILE_THRESHOLD = -50;
 
-/** Get base faction-to-faction relation */
+/** Get dynamic faction-to-faction relation */
 export function getFactionRelation(a: Faction, b: Faction): number {
-  return FACTION_REL[a]?.[b] ?? 0;
+  return getFactionRel(a, b);
 }
 
 /** Get faction-to-monster relation */
@@ -53,6 +46,10 @@ export function areFactionsHostile(a: Faction, b: Faction): boolean {
 
 /** Check if entity considers another entity hostile */
 export function isHostile(attacker: Entity, target: Entity): boolean {
+  // PSI control: controlled entities don't attack their controller (and vice-versa)
+  if (isPsiAlly(attacker, target)) return false;
+  // PSI madness: mad entities attack everyone
+  if (isPsiMad(attacker)) return target.id !== attacker.id;
   // Monsters: use faction-vs-monster table
   if (attacker.type === EntityType.MONSTER && target.type === EntityType.MONSTER) return false;
   if (attacker.type === EntityType.MONSTER) {
@@ -78,6 +75,7 @@ export function factionToZone(f: Faction): ZoneFaction {
     case Faction.CULTIST:    return ZoneFaction.CULTIST;
     case Faction.SCIENTIST:  return ZoneFaction.CITIZEN; // scientists align with citizens
     case Faction.WILD:       return ZoneFaction.WILD;
+    case Faction.PLAYER:     return ZoneFaction.CITIZEN; // player aligned with citizens for zone purposes
   }
 }
 
@@ -276,7 +274,9 @@ export function spawnPatrolSquads(
         hp: maxHp, maxHp,
         money: Math.floor(Math.random() * 50),
         ai: { goal: AIGoal.IDLE, tx: 0, ty: 0, path: [], pi: 0, stuck: 0, timer: 0 },
-        inventory: [],
+        inventory: (faction === Faction.CULTIST && Math.random() < 0.4)
+          ? [{ defId: _pickPsi(), count: 1 }] : [],
+        weapon: (faction === Faction.CULTIST && Math.random() < 0.4) ? _pickPsi() : undefined,
         faction,
         occupation,
         isTraveler: true,
@@ -287,17 +287,17 @@ export function spawnPatrolSquads(
   }
 }
 
-/* ── Apply damage relation penalty (call when entity damages another) */
+/* ── Apply damage relation penalty between factions ──────────── */
 export function applyDamageRelationPenalty(
-  attackerId: number, targetId: number, damage: number,
   attackerFaction: Faction | undefined, targetFaction: Faction | undefined,
-  relations: { addRelMutual: (a: number, b: number, delta: number) => void },
+  damage: number,
 ): void {
   if (attackerFaction === undefined || targetFaction === undefined) return;
+  if (attackerFaction === targetFaction) return;
   // Only penalize if factions are NOT hostile (hitting allies/neutrals)
   if (areFactionsHostile(attackerFaction, targetFaction)) return;
 
   // Penalty proportional to damage: -1 per 5 damage, min -1
   const penalty = -Math.max(1, Math.floor(damage / 5));
-  relations.addRelMutual(attackerId, targetId, penalty);
+  addFactionRelMutual(attackerFaction, targetFaction, penalty);
 }

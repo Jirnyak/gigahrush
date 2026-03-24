@@ -89,6 +89,41 @@ export function useItem(e: Entity, slotIdx: number, msgs: Msg[], time: number): 
   }
 }
 
+/* ── Drop item from inventory onto the ground ─────────────────── */
+export function dropItem(
+  player: Entity, slotIdx: number, entities: Entity[],
+  msgs: Msg[], time: number, nextId: { v: number },
+): void {
+  if (!player.inventory || slotIdx >= player.inventory.length) return;
+  const slot = player.inventory[slotIdx];
+  const def = ITEMS[slot.defId];
+  if (!def) return;
+
+  // Place drop 3 cells in front of player (far enough to avoid auto-pickup)
+  const dx = Math.cos(player.angle);
+  const dy = Math.sin(player.angle);
+  const dropX = player.x + dx * 3.0;
+  const dropY = player.y + dy * 3.0;
+
+  entities.push({
+    id: nextId.v++, type: EntityType.ITEM_DROP,
+    x: dropX, y: dropY, angle: 0, pitch: 0, alive: true, speed: 0, sprite: 16,
+    inventory: [{ defId: slot.defId, count: 1, data: slot.data }],
+  });
+
+  // If dropping equipped weapon, unequip
+  if (def.type === ItemType.WEAPON && player.weapon === def.id) {
+    // Check if there's another copy left after removing one
+    const remaining = slot.count - 1;
+    if (remaining <= 0) player.weapon = '';
+  }
+
+  slot.count--;
+  if (slot.count <= 0) player.inventory.splice(slotIdx, 1);
+
+  msgs.push({ text: `Выброшено: ${def.name}`, time, color: '#aa6' });
+}
+
 /* ── Pickup nearby item drops ─────────────────────────────────── */
 export function pickupNearby(world: World, entities: Entity[], player: Entity, msgs: Msg[], time: number): void {
   for (let i = entities.length - 1; i >= 0; i--) {

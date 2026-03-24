@@ -2,7 +2,7 @@
 import './index.css';
 
 import {
-  W, Cell, DoorState, FloorLevel, Feature, Tex,
+  W, Cell, DoorState, FloorLevel, Feature, Tex, RoomType,
   type Entity, type GameState,
   EntityType, Faction, Occupation,
 } from './core/types';
@@ -18,26 +18,33 @@ import { spawnBloodHit, spawnDeathPool, updateBloodTrails, updateParticles, rend
 import { updateNeeds } from './systems/needs';
 import { updateAI, getNpcStateText } from './systems/ai';
 import { updateSamosbor, clearFogInZone } from './systems/samosbor';
-import { pickupNearby, useItem, getWeaponStats, addItem, consumeDurability, consumeAmmo } from './systems/inventory';
+import { pickupNearby, useItem, dropItem, getWeaponStats, addItem, consumeDurability, consumeAmmo } from './systems/inventory';
 import { createInput, bindInput } from './input';
 import { freshNeeds } from './data/catalog';
 import {
   playFootstep, playAttack, playDoor,
   playGunshot, playShotgun, playNailgun, playBreak,
+  playFleshHit, playPsiCast,
   startAmbientDrone,
 } from './systems/audio';
 import { offerQuest, checkQuests, checkTalkQuest, notifyKill } from './systems/quests';
 import {
   freshRPG, awardXP, xpForMonsterKill, xpForNpcKill,
   strMeleeDmgMult, agiSpeedMult, agiAttackSpeedMult,
-  regenPsi, spendAttrPoint,
+  spendAttrPoint,
 } from './systems/rpg';
 import { execDebugCommand } from './systems/debug';
 import {
+  castInstantSpell, updatePsiEffects, psiAoeExplosion,
+  isPhaseActive, resetPsiState,
+} from './systems/psi';
+import {
   applyDamageRelationPenalty,
   updateFactionCapture, initFactionControl, countFactionTerritory, spawnPatrolSquads,
+  zoneFactionToFaction,
 } from './systems/factions';
-import { addRelMutual } from './data/relations';
+import { addFactionRel, initFactionRelations } from './data/relations';
+import { type DeathCam, initDeathCam, updateDeathCam, getDeathCamAngle, getDeathCamPitch } from './systems/death';
 
 /* ── Canvas setup ─────────────────────────────────────────────── */
 const canvas = document.getElementById('game') as HTMLCanvasElement;
@@ -64,6 +71,8 @@ let entities: Entity[];
 let player: Entity;
 let state: GameState;
 let nextEntityId = { v: 1 };
+let prevPlayerHp = 100; // track HP changes for damage flash
+let deathCam: DeathCam | null = null;
 
 function initGame(): void {
   const gen = generateWorld();
@@ -88,11 +97,13 @@ function initGame(): void {
     weapon: '',
     name: 'Вы',
     rpg: freshRPG(1),
-    faction: Faction.CITIZEN,
+    faction: Faction.PLAYER,
   };
   entities.push(player);
+  prevPlayerHp = player.hp ?? 100;
 
-  // Initialize per-cell faction control and spawn patrol squads
+  // Initialize faction relations and per-cell faction control
+  initFactionRelations();
   initFactionControl(world);
   const fStats = countFactionTerritory(world);
   spawnPatrolSquads(world, entities, nextEntityId, fStats);
@@ -127,7 +138,12 @@ function initGame(): void {
     tradeMode: 'npc',
     showDebug: false,
     debugSel: 0,
+    showFactions: false,
+    dmgFlash: 0,
+    dmgSeed: 0,
+    deathTimer: 0,
   };
+  resetPsiState();
 }
 
 initGame();
@@ -189,20 +205,22 @@ function movePlayer(dt: number): void {
     my = my / len * speed * sleepMod * agiMod;
 
     const r = 0.2; // collision radius
-    // X movement – check all 4 AABB corners
+    // X movement – check all 4 AABB corners (skip if phase shift active)
     const nx = player.x + mx;
-    if (!world.solid(Math.floor(nx + r), Math.floor(player.y + r)) &&
+    if (isPhaseActive() || (
+        !world.solid(Math.floor(nx + r), Math.floor(player.y + r)) &&
         !world.solid(Math.floor(nx + r), Math.floor(player.y - r)) &&
         !world.solid(Math.floor(nx - r), Math.floor(player.y + r)) &&
-        !world.solid(Math.floor(nx - r), Math.floor(player.y - r))) {
+        !world.solid(Math.floor(nx - r), Math.floor(player.y - r)))) {
       player.x = ((nx % W) + W) % W;
     }
     // Y movement – check all 4 AABB corners (use updated X)
     const ny = player.y + my;
-    if (!world.solid(Math.floor(player.x + r), Math.floor(ny + r)) &&
+    if (isPhaseActive() || (
+        !world.solid(Math.floor(player.x + r), Math.floor(ny + r)) &&
         !world.solid(Math.floor(player.x + r), Math.floor(ny - r)) &&
         !world.solid(Math.floor(player.x - r), Math.floor(ny + r)) &&
-        !world.solid(Math.floor(player.x - r), Math.floor(ny - r))) {
+        !world.solid(Math.floor(player.x - r), Math.floor(ny - r)))) {
       player.y = ((ny % W) + W) % W;
     }
 
@@ -223,11 +241,8 @@ function playerActions(_dt: number): void {
   if (input.map && !prevMap) state.mapMode = (state.mapMode + 1) % 3;
   prevMap = input.map;
 
-  // Pickup
-  if (input.pickup) {
-    pickupNearby(world, entities, player, state.msgs, state.time);
-    input.pickup = false;
-  }
+  // Pickup (on interact key E, if looking at item drop)
+  // Auto-pickup handles walking over items (see tick%15 below)
 
   // Interact (doors + NPCs)
   if (input.interact) {
@@ -301,7 +316,53 @@ function playerActions(_dt: number): void {
     // AGI reduces attack cooldown
     const atkSpeedMod = player.rpg ? agiAttackSpeedMult(player.rpg) : 1;
 
-    if (ws.isRanged) {
+    if (ws.psiCost) {
+      // ── PSI spell: consume PSI instead of ammo ──────────
+      if (!player.rpg || player.rpg.psi < ws.psiCost) {
+        state.msgs.push({ text: 'Недостаточно ПСИ!', time: state.time, color: '#f84' });
+        player.attackCd = 0.5;
+      } else {
+        player.rpg.psi -= ws.psiCost;
+        if (ws.isRanged) {
+          // Projectile PSI spell
+          const cos = Math.cos(player.angle);
+          const sin = Math.sin(player.angle);
+          const spd = ws.projSpeed ?? 14;
+          const proj: Entity = {
+            id: nextEntityId.v++,
+            type: EntityType.PROJECTILE,
+            x: player.x + cos * 0.5,
+            y: player.y + sin * 0.5,
+            angle: player.angle,
+            pitch: 0,
+            alive: true,
+            speed: 0,
+            sprite: ws.projSprite ?? 32,
+            vx: Math.cos(player.angle) * spd,
+            vy: Math.sin(player.angle) * spd,
+            projDmg: ws.dmg,
+            projLife: 3.0,
+            ownerId: player.id,
+            spriteScale: 0.3,
+            spriteZ: 0.5,
+          };
+          if (ws.aoeRadius) {
+            proj.aoeRadius = ws.aoeRadius;
+            proj.aoeDmg = ws.dmg;
+          }
+          entities.push(proj);
+        } else {
+          // Instant PSI spell
+          castInstantSpell(
+            ws.psiEffect ?? '', player, entities, world,
+            state.msgs, state.time,
+            (e) => handleKill(e, true),
+          );
+        }
+        playPsiCast();
+        player.attackCd = ws.speed * atkSpeedMod;
+      }
+    } else if (ws.isRanged) {
       // ── Ranged attack: spawn projectile(s) ──────────────
       if (consumeAmmo(player)) {
         const cos = Math.cos(player.angle);
@@ -357,7 +418,7 @@ function playerActions(_dt: number): void {
             e.hp -= dmg;
             // Relation penalty for hitting non-hostile NPCs
             if (e.type === EntityType.NPC) {
-              applyDamageRelationPenalty(player.id, e.id, dmg, player.faction, e.faction, { addRelMutual });
+              applyDamageRelationPenalty(player.faction, e.faction, dmg);
             }
             // Blood splatter on hit
             spawnBloodHit(world, e.x, e.y, player.angle, dmg, e.type === EntityType.MONSTER);
@@ -424,6 +485,8 @@ function updateProjectiles(dt: number): void {
       const tx = Math.floor(texU * 64) & 63;
       const ty = Math.floor(64 * 0.35 + Math.random() * 64 * 0.3);
       world.addDecal(ci, tx, ty);
+      // AoE explosion on wall impact
+      if (p.aoeRadius) psiAoeExplosion(p, entities, world, state.msgs, state.time, (e) => handleKill(e, p.ownerId === player.id));
       p.alive = false;
       continue;
     }
@@ -441,7 +504,7 @@ function updateProjectiles(dt: number): void {
           e.hp -= dmg;
           // Relation penalty for projectile hits on non-hostile NPCs
           if (e.type === EntityType.NPC && p.ownerId === player.id) {
-            applyDamageRelationPenalty(player.id, e.id, dmg, player.faction, e.faction, { addRelMutual });
+            applyDamageRelationPenalty(player.faction, e.faction, dmg);
           }
           // Blood splatter on projectile hit
           const hitAngle = Math.atan2(p.vy ?? 0, p.vx ?? 0);
@@ -451,6 +514,8 @@ function updateProjectiles(dt: number): void {
             handleKill(e, p.ownerId === player.id);
           }
         }
+        // AoE explosion on entity impact
+        if (p.aoeRadius) psiAoeExplosion(p, entities, world, state.msgs, state.time, (e2) => handleKill(e2, p.ownerId === player.id));
         p.alive = false;
         break;
       }
@@ -461,6 +526,7 @@ function updateProjectiles(dt: number): void {
 /* ── Restart check ────────────────────────────────────────────── */
 function checkRestart(): void {
   if (state.gameOver && input.use) {
+    deathCam = null;
     initGame();
     input.use = false;
   }
@@ -520,11 +586,13 @@ function switchFloor(): void {
     money: savedMoney,
     rpg: savedRpg,
     name: 'Вы',
-    faction: Faction.CITIZEN,
+    faction: Faction.PLAYER,
   };
   entities.push(player);
+  prevPlayerHp = player.hp ?? 100;
 
-  // Initialize faction control for new floor
+  // Initialize faction relations and faction control for new floor
+  initFactionRelations();
   initFactionControl(world);
   const fStats = countFactionTerritory(world);
   spawnPatrolSquads(world, entities, nextEntityId, fStats);
@@ -538,6 +606,9 @@ function switchFloor(): void {
     state.samosborTimer = 300 + Math.random() * 300; // 5-10 min
   }
   state.samosborActive = false;
+
+  // Reset PSI transient effects on floor switch
+  resetPsiState();
 
   state.msgs.push({
     text: `Лифт прибыл: ${FLOOR_NAMES[nextFloor]}`,
@@ -596,7 +667,7 @@ function generateTalkText(npc: Entity): string {
     const tutorLines = [
       'Добро пожаловать в блок! Я Ольга Дмитриевна, врач. Прочитайте слайды на стене — там основные правила.',
       'Двигайтесь клавишами WASD, мышь — обзор. Нажмите E чтобы поговорить с кем-нибудь или открыть дверь.',
-      'Клавиша F — подобрать предмет с пола. I — открыть инвентарь. Кушайте вовремя, иначе здоровье падает.',
+      'Предметы подбираются автоматически. I — открыть инвентарь. F — отношения фракций. Кушайте вовремя, иначе здоровье падает.',
       'Пробел или ЛКМ — удар/выстрел. Зайдите в оружейную — там Барни покажет как стрелять.',
       'Когда услышите сирену — это САМОСБОР. Бегите в ближайшую комнату и закройте дверь! Коридоры смертельно опасны.',
       'Фиолетовый туман убивает. Из него лезут твари. Не стойте в тумане — бегите к шлюзу.',
@@ -739,11 +810,13 @@ function loadGame(): boolean {
       money: data.player.money ?? 100,
       rpg: data.player.rpg ?? freshRPG(1),
       name: 'Вы',
-      faction: Faction.CITIZEN,
+      faction: Faction.PLAYER,
     };
     entities.push(player);
+    prevPlayerHp = player.hp ?? 100;
 
-    // Init faction control for loaded world
+    // Init faction relations and control for loaded world
+    initFactionRelations();
     initFactionControl(world);
     const fStats = countFactionTerritory(world);
     spawnPatrolSquads(world, entities, nextEntityId, fStats);
@@ -768,10 +841,43 @@ function loadGame(): boolean {
   }
 }
 
+/* ── Urination faction penalty ─────────────────────────────────── */
+let _urinePenaltyAccum = 0;
+let _urinePenaltyStarted = false;
+
+function applyUrinationPenalty(dt: number): void {
+  const room = world.roomAt(player.x, player.y);
+  if (room && room.type === RoomType.BATHROOM) return; // toilet — no penalty
+
+  const pci = world.idx(Math.floor(player.x), Math.floor(player.y));
+  const zid = world.zoneMap[pci];
+  const zone = world.zones[zid];
+  if (!zone) return;
+  const ownerFaction = zoneFactionToFaction(zone.faction);
+  if (ownerFaction === null) return;
+
+  // Immediate penalty when urination starts
+  if (!_urinePenaltyStarted) {
+    _urinePenaltyStarted = true;
+    addFactionRel(ownerFaction, Faction.PLAYER, -1);
+    addFactionRel(Faction.PLAYER, ownerFaction, -1);
+    state.msgs.push({ text: 'Местные недовольны...', time: state.time, color: '#f84' });
+  }
+
+  // Ongoing penalty: -1 per game minute (= per real second)
+  _urinePenaltyAccum += dt;
+  if (_urinePenaltyAccum >= 1.0) {
+    _urinePenaltyAccum -= 1.0;
+    addFactionRel(ownerFaction, Faction.PLAYER, -1);
+    addFactionRel(Faction.PLAYER, ownerFaction, -1);
+  }
+}
+
 /* ── Menu input handling (runs regardless of pause state) ─────── */
 let prevEsc = false, prevInvMenu = false, prevQuestMenu = false;
 let prevMenuUp = false, prevMenuDn = false, prevMenuLeft = false, prevMenuRight = false;
-let prevMenuInteract = false;
+let prevMenuInteract = false, prevDrop = false;
+let prevFactionMenu = false;
 
 function handleMenuInput(): void {
   const escEdge = input.escape && !prevEsc;
@@ -780,14 +886,17 @@ function handleMenuInput(): void {
   const leftEdge = input.invLeft && !prevMenuLeft;
   const rightEdge = input.invRight && !prevMenuRight;
   const interactEdge = input.interact && !prevMenuInteract;
+  const dropEdge = input.drop && !prevDrop;
   const invEdge = input.inv && !prevInvMenu;
   const questEdge = input.questLog && !prevQuestMenu;
+  const factionEdge = input.factionMenu && !prevFactionMenu;
 
   // ── Enter: toggle game menu (or close any open menu) ─────
   if (escEdge) {
     if (state.showNpcMenu) { state.showNpcMenu = false; }
     else if (state.showInventory) { state.showInventory = false; }
     else if (state.showQuests) { state.showQuests = false; }
+    else if (state.showFactions) { state.showFactions = false; }
     else { state.showMenu = !state.showMenu; state.menuSel = 0; }
   }
 
@@ -814,6 +923,7 @@ function handleMenuInput(): void {
       if (leftEdge && state.invSel % GRID_W > 0) state.invSel--;
       if (rightEdge && state.invSel % GRID_W < GRID_W - 1) state.invSel++;
       if (interactEdge) useItem(player, state.invSel, state.msgs, state.time);
+      if (dropEdge) dropItem(player, state.invSel, entities, state.msgs, state.time, nextEntityId);
       // Attribute spending (1=STR, 2=AGI, 3=INT)
       if (input.attrStr && player.rpg && player.rpg.attrPoints > 0) {
         if (spendAttrPoint(player, 'str'))
@@ -924,12 +1034,17 @@ function handleMenuInput(): void {
       if (interactEdge) execDebugCommand(state.debugSel, player, entities, state, nextEntityId);
     }
   }
+  // ── Faction relations menu ───────────────────────────────
+  else if (state.showFactions) {
+    if (factionEdge || escEdge) { state.showFactions = false; }
+  }
   // ── Normal gameplay toggles ──────────────────────────────
   else {
     const dbgEdge = input.debugScreen && !prevDebug;
     if (dbgEdge) { state.showDebug = true; state.debugSel = 0; }
     if (invEdge) { state.showInventory = true; state.invSel = 0; }
     if (questEdge) { state.showQuests = true; }
+    if (factionEdge) { state.showFactions = true; }
   }
 
   // Update prev states
@@ -939,12 +1054,14 @@ function handleMenuInput(): void {
   prevMenuLeft = input.invLeft;
   prevMenuRight = input.invRight;
   prevMenuInteract = input.interact;
+  prevDrop = input.drop;
   prevInvMenu = input.inv;
   prevQuestMenu = input.questLog;
   prevDebug = input.debugScreen;
+  prevFactionMenu = input.factionMenu;
 
   // Auto-pause when any menu is open
-  state.paused = state.showMenu || state.showInventory || state.showNpcMenu || state.showQuests || state.showDebug;
+  state.paused = state.showMenu || state.showInventory || state.showNpcMenu || state.showQuests || state.showDebug || state.showFactions;
 }
 
 /* ── Game loop ────────────────────────────────────────────────── */
@@ -959,6 +1076,15 @@ function gameLoop(now: number): void {
   handleMenuInput();
 
   // ── Update ───────────────────────────────────────────────
+  // Decay damage flash
+  if (state.dmgFlash > 0) state.dmgFlash = Math.max(0, state.dmgFlash - dt * 1.2);
+
+  // Rolling head physics after death
+  if (state.gameOver && deathCam) {
+    state.deathTimer += dt;
+    updateDeathCam(deathCam, world, dt);
+  }
+
   if (!state.paused && !state.gameOver) {
     state.time += dt;
     state.tick++;
@@ -982,11 +1108,17 @@ function gameLoop(now: number): void {
         const fx = ((ux % 1) + 1) % 1;
         const fy = ((uy % 1) + 1) % 1;
         world.stamp(cx, cy, fx, fy, 0.15, 60, Math.floor(state.time * 100), 200, 180, 30);
+        // Faction penalty for urinating outside bathroom
+        applyUrinationPenalty(dt);
         player.needs.pee = Math.max(0, player.needs.pee - 12 * dt);
         if (player.needs.pee <= 5) {
           state.msgs.push({ text: 'Полегчало.', time: state.time, color: '#da4' });
         }
       }
+    } else {
+      // Reset urination penalty tracking when not peeing
+      _urinePenaltyStarted = false;
+      _urinePenaltyAccum = 0;
     }
     updateProjectiles(dt);
     updateDoors(dt);
@@ -995,8 +1127,9 @@ function gameLoop(now: number): void {
     updateSamosbor(world, entities, state, dt, nextEntityId);
     // Faction zone capture (cell-based territory control)
     updateFactionCapture(world, entities, dt);
-    // Regenerate PSI for player
-    regenPsi(player, dt);
+    // PSI does NOT auto-regenerate — only restored via items (pills, antidepressant)
+    // Update ongoing PSI spell effects (phase shift, madness, control)
+    updatePsiEffects(entities, dt);
 
     // Blood trails from wounded entities + particle physics
     updateBloodTrails(world, entities, dt);
@@ -1025,9 +1158,22 @@ function gameLoop(now: number): void {
       pickupNearby(world, entities, player, state.msgs, state.time);
     }
 
+    // Detect player damage for vignette flash
+    const curHp = player.hp ?? 100;
+    if (curHp < prevPlayerHp) {
+      const lost = prevPlayerHp - curHp;
+      const maxHp = player.maxHp ?? 100;
+      state.dmgFlash = Math.min(1, 0.3 + (lost / maxHp) * 1.5);
+      state.dmgSeed = Math.random() * 10000;
+      playFleshHit();
+    }
+    prevPlayerHp = curHp;
+
     // Check player death
     if (!player.alive && !state.gameOver) {
       state.gameOver = true;
+      state.deathTimer = 0;
+      deathCam = initDeathCam(player.x, player.y, player.angle);
     }
 
     // Clean up dead entities (except player) — projectiles cleaned every frame, rest every 2s
@@ -1044,6 +1190,33 @@ function gameLoop(now: number): void {
     while (state.msgs.length > 50) state.msgs.shift();
   }
 
+  // ── World simulation continues after death (NPC, monsters, samosbor keep running) ──
+  if (!state.paused && state.gameOver) {
+    state.time += dt;
+    state.tick++;
+    state.clock.totalMinutes += dt;
+    const totalMins = Math.floor(state.clock.totalMinutes);
+    state.clock.hour = (8 + Math.floor(totalMins / 60)) % 24;
+    state.clock.minute = totalMins % 60;
+    updateProjectiles(dt);
+    updateDoors(dt);
+    updateNeeds(entities, dt, state.time, state.msgs, player.id);
+    updateAI(world, entities, dt, state.time, state.msgs, player.id, state.clock, state.samosborActive, nextEntityId);
+    updateSamosbor(world, entities, state, dt, nextEntityId);
+    updateFactionCapture(world, entities, dt);
+    updateBloodTrails(world, entities, dt);
+    updateParticles(world, dt);
+    for (let i = entities.length - 1; i >= 0; i--) {
+      const e = entities[i];
+      if (!e.alive && e.type !== EntityType.PLAYER) {
+        if (e.type === EntityType.PROJECTILE || state.tick % 120 === 0) {
+          entities.splice(i, 1);
+        }
+      }
+    }
+    while (state.msgs.length > 50) state.msgs.shift();
+  }
+
   checkRestart();
 
   // ── Render ───────────────────────────────────────────────
@@ -1054,20 +1227,27 @@ function gameLoop(now: number): void {
   const fogDensity = state.samosborActive ? baseFog + 0.03 : baseFog;
   const glitch = state.samosborActive ? 0.3 + Math.sin(state.time * 5) * 0.15 : 0;
 
+  // Use death cam position/angle when dead, otherwise player
+  const camX     = deathCam ? deathCam.x              : player.x;
+  const camY     = deathCam ? deathCam.y              : player.y;
+  const camAngle = deathCam ? getDeathCamAngle(deathCam) : player.angle;
+  const camPitch = deathCam ? getDeathCamPitch(deathCam) : player.pitch;
+
+  const camH = deathCam ? deathCam.height : 0.5;
   renderScene(buf32, world, textures, sprites, entities,
-    player.x, player.y, player.angle, player.pitch,
-    fogDensity, glitch);
+    camX, camY, camAngle, camPitch,
+    fogDensity, glitch, camH);
 
   // Blood particles on top of scene
   {
-    const dirX = Math.cos(player.angle);
-    const dirY = Math.sin(player.angle);
+    const dirX = Math.cos(camAngle);
+    const dirY = Math.sin(camAngle);
     const planeLen = Math.tan(HALF_FOV);
     const planeX = -dirY * planeLen;
     const planeY =  dirX * planeLen;
-    const horizonShift = Math.floor(player.pitch * SCR_H);
+    const horizonShift = Math.floor(camPitch * SCR_H);
     const halfH = Math.floor(SCR_H / 2) + horizonShift;
-    renderParticles(buf32, SCR_W, SCR_H, player.x, player.y, player.angle,
+    renderParticles(buf32, SCR_W, SCR_H, camX, camY, camAngle,
       dirX, dirY, planeX, planeY, halfH, zBuf);
   }
 
@@ -1103,7 +1283,7 @@ function showTitle(): void {
   ctx.fillText('Нажмите ENTER чтобы войти', canvas.width / 2, canvas.height / 2 + 50);
   ctx.fillStyle = '#555';
   ctx.font = '12px monospace';
-  ctx.fillText('WASD — движение  |  Мышь — обзор  |  E — действие  |  F — подобрать  |  I — инвентарь  |  M — карта  |  Пробел — удар  |  TAB — самосбор', canvas.width / 2, canvas.height / 2 + 90);
+  ctx.fillText('WASD — движение  |  Мышь — обзор  |  E — действие  |  F — фракции  |  I — инвентарь  |  M — карта  |  Пробел — удар  |  TAB — самосбор', canvas.width / 2, canvas.height / 2 + 90);
   ctx.textAlign = 'left';
 }
 

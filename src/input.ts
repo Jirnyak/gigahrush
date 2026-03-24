@@ -14,6 +14,8 @@ export function createInput(): InputState {
     attrStr: false, attrAgi: false, attrInt: false,
     debugScreen: false,
     pee: false,
+    drop: false,
+    factionMenu: false,
     mouse: { dx: 0, dy: 0, locked: false },
   };
 }
@@ -26,7 +28,7 @@ export function bindInput(input: InputState, canvas: HTMLCanvasElement): () => v
     KeyA: 'strafeL', KeyD: 'strafeR',
     Space: 'attack',
     KeyE: 'interact',
-    KeyF: 'pickup',
+    KeyF: 'factionMenu',
     KeyM: 'map',
     KeyI: 'inv',
     KeyR: 'use', // restart (handled in main)
@@ -43,7 +45,8 @@ export function bindInput(input: InputState, canvas: HTMLCanvasElement): () => v
     if (e.code === 'ArrowUp' || e.code === 'KeyW') input.invUp = true;
     if (e.code === 'ArrowDown' || e.code === 'KeyS') input.invDn = true;
     if (e.code === 'ArrowLeft' || e.code === 'KeyA') input.invLeft = true;
-    if (e.code === 'ArrowRight' || e.code === 'KeyD') input.invRight = true;
+    if (e.code === 'ArrowRight') input.invRight = true;
+    if (e.code === 'KeyD') input.drop = true;
     if (e.code === 'Enter') { input.escape = true; e.preventDefault(); return; }
     if (e.code === 'Tab') { input.debugSamosbor = true; e.preventDefault(); return; }
     if (e.code === 'Digit1') input.attrStr = true;
@@ -62,6 +65,7 @@ export function bindInput(input: InputState, canvas: HTMLCanvasElement): () => v
     input.invLeft = false;
     input.invRight = false;
     input.use = false;
+    input.drop = false;
     if (e.code === 'Enter') input.escape = false;
     if (e.code === 'Tab') input.debugSamosbor = false;
     if (e.code === 'Digit1') input.attrStr = false;

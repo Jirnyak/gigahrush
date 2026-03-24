@@ -22,13 +22,15 @@ export function execDebugCommand(
   nextEntityId: { v: number },
 ): void {
   switch (idx) {
-    case 0: { // All weapons + ammo
+    case 0: { // All weapons + ammo + PSI spells
       const weapons = ['knife', 'wrench', 'pipe', 'rebar', 'axe', 'makarov', 'shotgun', 'nailgun'];
       for (const w of weapons) addItem(player, w, 1);
       addItem(player, 'ammo_9mm', 20);
       addItem(player, 'ammo_shells', 8);
       addItem(player, 'ammo_nails', 30);
-      state.msgs.push({ text: 'Все оружия получены', time: state.time, color: '#ff0' });
+      const psiSpells = ['psi_strike', 'psi_rupture', 'psi_storm', 'psi_brainburn', 'psi_madness', 'psi_control', 'psi_phase', 'psi_mark', 'psi_recall'];
+      for (const s of psiSpells) addItem(player, s, 1);
+      state.msgs.push({ text: 'Все оружия + сгустки получены', time: state.time, color: '#ff0' });
       break;
     }
     case 1: { // Spawn one of each monster nearby
@@ -112,7 +114,7 @@ const ZONE_FACTION_NAMES: Record<ZoneFaction, string> = {
 };
 
 const CMD_LABELS = [
-  'Все оружия',
+  'Все оружия + сгустки',
   'Спавн монстров',
   'Спавн NPC',
   'Спавн предметов',

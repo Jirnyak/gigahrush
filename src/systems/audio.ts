@@ -197,6 +197,60 @@ export function playBreak(): void {
   src.start();
 }
 
+/* ── Fleshy damage hit: wet organic impact ───────────────────── */
+export function playFleshHit(): void {
+  const ac = ensureContext();
+  const len = 0.35;
+  const buf = ac.createBuffer(1, ac.sampleRate * len, ac.sampleRate);
+  const d = buf.getChannelData(0);
+  for (let i = 0; i < d.length; i++) {
+    const t = i / d.length;
+    const env = Math.exp(-t * 8);
+    // Low wet thump + squelchy noise
+    d[i] = Math.sin(i * 0.008 + Math.sin(i * 0.003) * 4) * 0.5 * env;
+    d[i] += (Math.random() * 2 - 1) * 0.3 * env * (1 - t);
+    d[i] += Math.sin(i * 0.025) * 0.2 * env; // sub bass
+    d[i] = Math.max(-0.8, Math.min(0.8, d[i] * 1.5));
+  }
+  const src = ac.createBufferSource();
+  src.buffer = buf;
+  const g = ac.createGain();
+  g.gain.value = 0.25;
+  const lp = ac.createBiquadFilter();
+  lp.type = 'lowpass';
+  lp.frequency.value = 2000;
+  src.connect(lp).connect(g).connect(gain());
+  src.start();
+}
+
+/* ── PSI cast: eerie ethereal whoosh ─────────────────────────── */
+export function playPsiCast(): void {
+  const ac = ensureContext();
+  const len = 0.4;
+  const buf = ac.createBuffer(1, ac.sampleRate * len, ac.sampleRate);
+  const d = buf.getChannelData(0);
+  for (let i = 0; i < d.length; i++) {
+    const t = i / d.length;
+    const env = Math.sin(t * Math.PI) * Math.exp(-t * 3);
+    // Eerie sweep: rising sine + phase modulation
+    const phase = i * 0.006 * (1 + t * 2);
+    d[i] = Math.sin(phase + Math.sin(i * 0.002) * 3) * 0.4 * env;
+    d[i] += Math.sin(i * 0.015 + Math.sin(i * 0.008) * 2) * 0.2 * env;
+    d[i] += (Math.random() * 2 - 1) * 0.1 * env * (1 - t);
+    d[i] = Math.max(-0.7, Math.min(0.7, d[i]));
+  }
+  const src = ac.createBufferSource();
+  src.buffer = buf;
+  const g = ac.createGain();
+  g.gain.value = 0.3;
+  const bp = ac.createBiquadFilter();
+  bp.type = 'bandpass';
+  bp.frequency.value = 800;
+  bp.Q.value = 1.5;
+  src.connect(bp).connect(g).connect(gain());
+  src.start();
+}
+
 /* ── Ambient drone (looping) ─────────────────────────────────── */
 let droneOsc: OscillatorNode | null = null;
 

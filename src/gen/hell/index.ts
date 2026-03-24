@@ -111,6 +111,9 @@ export function generateHell(): { world: World; entities: Entity[]; spawnX: numb
   }
   world.bakeLights();
 
+  const _PSI_IDS = ['psi_strike','psi_rupture','psi_madness','psi_storm','psi_brainburn'];
+  function _pickPsi(): string { return _PSI_IDS[Math.floor(Math.random() * _PSI_IDS.length)]; }
+
   /* ── Phase 6: cultists (aggressive NPCs) ────────────── */
   for (let c = 0; c < 80; c++) {
     const ci = rng(0, W * W - 1);
@@ -130,7 +133,8 @@ export function generateHell(): { world: World; entities: Entity[]; spawnX: numb
       name: nm.name, isFemale: nm.female, needs: freshNeeds(),
       hp: scaledHp, maxHp: scaledHp,
       ai: { goal: AIGoal.WANDER, tx: 0, ty: 0, path: [], pi: 0, stuck: 0, timer: 0 },
-      inventory: [],
+      inventory: Math.random() < 0.4 ? [{ defId: _pickPsi(), count: 1 }] : [],
+      weapon: Math.random() < 0.4 ? _pickPsi() : undefined,
       familyId: -1,
       faction: Faction.CULTIST,
       occupation: Occupation.PILGRIM,

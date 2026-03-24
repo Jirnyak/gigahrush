@@ -2,12 +2,12 @@
 
 import {
   type Entity, type Quest, type GameState, type Msg,
-  QuestType, EntityType, Occupation, MonsterKind,
+  QuestType, EntityType, Occupation, MonsterKind, Faction,
   RoomType,
 } from '../core/types';
 import { World } from '../core/world';
 import { ITEMS } from '../data/catalog';
-import { addRelMutual, getRel } from '../data/relations';
+import { addFactionRelMutual, getFactionRel } from '../data/relations';
 import { addItem, hasItem, removeItem } from './inventory';
 import { questDifficulty, questXpReward, questMoneyReward, awardXP } from './rpg';
 
@@ -17,7 +17,7 @@ const MAX_ACTIVE_QUESTS = 5;
 export function reassignQuestGivers(entities: Entity[]): void {
   for (const e of entities) {
     if (e.type !== EntityType.NPC || !e.alive) continue;
-    if (e.isTutor || e.isTutorBarni) continue;
+    if (e.isTutor || e.isTutorBarni || e.isTutorYakov) continue;
     e.canGiveQuest = Math.random() < 0.10;
   }
 }
@@ -42,9 +42,9 @@ export function offerQuest(
     return;
   }
   // Tutorial NPCs always give quests — they are not in the relation matrix
-  if (!npc.isTutor && !npc.isTutorBarni) {
-    const npcRelIdx = npcRelIndex(npc, entities);
-    const rel = getRel(npcRelIdx, 0);
+  if (!npc.isTutor && !npc.isTutorBarni && !npc.isTutorYakov) {
+    const npcFaction = npc.faction ?? Faction.CITIZEN;
+    const rel = getFactionRel(Faction.PLAYER, npcFaction);
     if (rel < -10) {
       msgs.push({ text: `${npc.name} не хочет с вами разговаривать.`, time: state.time, color: '#a44' });
       return;
@@ -119,7 +119,11 @@ export function checkTalkQuest(
   for (const q of state.quests) {
     if (q.done || q.type !== QuestType.TALK) continue;
     if (q.targetNpcId === targetNpc.id) {
-      msgs.push({ text: `${targetNpc.name}: «Передам, спасибо.»`, time: state.time, color: '#aaf' });
+      if (targetNpc.isTutorYakov) {
+        msgs.push({ text: `${targetNpc.name}: «Ольга прислала? Хорошо. Я занимаюсь пси-явлениями хруща. Возьмите это — пригодится.»`, time: state.time, color: '#aaf' });
+      } else {
+        msgs.push({ text: `${targetNpc.name}: «Передам, спасибо.»`, time: state.time, color: '#aaf' });
+      }
       completeQuest(q, player, entities, state, msgs);
     }
   }
@@ -164,8 +168,8 @@ function completeQuest(
 
   // Relation boost
   const delta = q.relationDelta ?? 10;
-  const giverIdx = npcRelIndex(entities.find(e => e.id === q.giverId), entities);
-  if (giverIdx > 0) addRelMutual(0, giverIdx, delta);
+  const giverFaction = entities.find(e => e.id === q.giverId)?.faction ?? Faction.CITIZEN;
+  addFactionRelMutual(Faction.PLAYER, giverFaction, delta);
 
   // Clear NPC's questId
   const giver = entities.find(e => e.id === q.giverId);
@@ -173,7 +177,18 @@ function completeQuest(
 
   msgs.push({ text: `Задание выполнено: ${q.desc}`, time: state.time, color: '#4f4' });
 }
-
+/* ── Toroidal direction name (from → to) ─────────────────────── */
+function toroidalDirection(world: World, fromX: number, fromY: number, toX: number, toY: number): string {
+  const dx = world.delta(Math.floor(fromX), Math.floor(toX));
+  const dy = world.delta(Math.floor(fromY), Math.floor(toY));
+  // dy<0 = target is above = north; dx>0 = target is right = east
+  const ns = dy < -5 ? 'север' : dy > 5 ? 'юг' : '';
+  const ew = dx > 5 ? 'восток' : dx < -5 ? 'запад' : '';
+  if (ns && ew) return `на ${ns}о-${ew}е`;
+  if (ns) return `на ${ns}е`;
+  if (ew) return `на ${ew}е`;
+  return 'недалеко';
+}
 /* ── Generate quest based on NPC occupation ───────────────────── */
 function generateQuest(
   npc: Entity, world: World, entities: Entity[], state: GameState,
@@ -183,30 +198,56 @@ function generateQuest(
 
   // ── Tutorial quest: Ольга → «Поговори с Барни» ──
   if (npc.isTutor) {
-    // Only offer once — if already given (done or active), skip
-    if (state.quests.some(q => q.giverId === npc.id && q.type === QuestType.TALK)) return null;
-    const barni = entities.find(e => e.isTutorBarni && e.alive);
-    if (barni) {
+    const olgaQuests = state.quests.filter(q => q.giverId === npc.id);
+
+    // Step 1: Ольга → Барни (first quest)
+    if (!olgaQuests.some(q => q.type === QuestType.TALK && q.targetNpcName === 'Барни' || (q as any)._storyStep === 'olga1')) {
+      const barni = entities.find(e => e.isTutorBarni && e.alive);
+      if (barni) {
+        return {
+          id, type: QuestType.TALK,
+          giverId: npc.id, giverName: npc.name ?? 'Ольга Дмитриевна',
+          desc: 'Ольга Дмитриевна: «Сходите в оружейную. Поговорите с Барни — он научит стрелять.»',
+          targetNpcId: barni.id, targetNpcName: barni.name,
+          rewardItem: 'makarov', rewardCount: 1,
+          extraRewards: [{ defId: 'ammo_9mm', count: 8 }],
+          relationDelta: 10, xpReward: 10,
+          done: false,
+        };
+      }
       return {
-        id, type: QuestType.TALK,
+        id, type: QuestType.VISIT,
         giverId: npc.id, giverName: npc.name ?? 'Ольга Дмитриевна',
-        desc: 'Ольга Дмитриевна: «Сходите в оружейную. Поговорите с Барни — он научит стрелять.»',
-        targetNpcId: barni.id, targetNpcName: barni.name,
-        rewardItem: 'makarov', rewardCount: 1,
-        extraRewards: [{ defId: 'ammo_9mm', count: 8 }],
-        relationDelta: 15,
+        desc: 'Ольга Дмитриевна: «Осмотрите блок. Найдите медпункт.»',
+        targetRoom: world.rooms.find(r => r && r.type === RoomType.MEDICAL)?.id,
+        rewardItem: 'bandage', rewardCount: 2, relationDelta: 10, xpReward: 10,
         done: false,
       };
     }
-    // fallback: original VISIT quest if Барни not found
-    return {
-      id, type: QuestType.VISIT,
-      giverId: npc.id, giverName: npc.name ?? 'Ольга Дмитриевна',
-      desc: 'Ольга Дмитриевна: «Осмотрите блок. Найдите медпункт.»',
-      targetRoom: world.rooms.find(r => r && r.type === RoomType.MEDICAL)?.id,
-      rewardItem: 'bandage', rewardCount: 2, relationDelta: 15,
-      done: false,
-    };
+
+    // Step 3: Ольга → Яков Давидович (after both Olga#1 and Barni#1 are done)
+    const barniQuestDone = state.quests.some(q => {
+      const barni = entities.find(e => e.isTutorBarni);
+      return barni && q.giverId === barni.id && q.done;
+    });
+    const olga1Done = olgaQuests.some(q => q.done);
+    if (olga1Done && barniQuestDone && !olgaQuests.some(q => q.targetNpcName === 'Яков Давидович')) {
+      const yakov = entities.find(e => e.isTutorYakov && e.alive);
+      if (yakov) {
+        const dir = toroidalDirection(world, npc.x, npc.y, yakov.x, yakov.y);
+        return {
+          id, type: QuestType.TALK,
+          giverId: npc.id, giverName: npc.name ?? 'Ольга Дмитриевна',
+          desc: `Ольга Дмитриевна: «Зайдите к моему коллеге — Якову Давидовичу. Его лаборатория ${dir}. Изучает пси-явления.»`,
+          targetNpcId: yakov.id, targetNpcName: yakov.name,
+          rewardItem: 'psi_strike', rewardCount: 1,
+          relationDelta: 10, xpReward: 20,
+          done: false,
+        };
+      }
+    }
+
+    return null; // No more quests from Olga currently
   }
 
   // ── Tutorial quest: Барни → «Доложите Ольге Дмитриевне» ──
@@ -225,7 +266,26 @@ function generateQuest(
       targetNpcId: olga.id, targetNpcName: olga.name,
       rewardItem: 'bandage', rewardCount: 2,
       extraRewards: [{ defId: 'water', count: 2 }, { defId: 'bread', count: 2 }],
-      relationDelta: 12,
+      relationDelta: 12, xpReward: 10,
+      done: false,
+    };
+  }
+
+  // ── Story quest: Яков Давидович → «Культы Чернобога» (FETCH idol) ──
+  if (npc.isTutorYakov) {
+    // Only after player has talked to Yakov (Olga's #2 quest targeting Yakov is done)
+    const yakovTalkDone = state.quests.some(q => q.targetNpcId === npc.id && q.done);
+    if (!yakovTalkDone) return null;
+    // Only offer FETCH quest once
+    if (state.quests.some(q => q.giverId === npc.id)) return null;
+    return {
+      id, type: QuestType.FETCH,
+      giverId: npc.id, giverName: npc.name ?? 'Яков Давидович',
+      desc: 'Яков Давидович: «Культисты поклоняются Чернобогу. Найдите мне один из их идолов — они разбросаны по всему лабиринту.»',
+      targetItem: 'idol_chernobog', targetCount: 1,
+      rewardItem: 'antidep', rewardCount: 2,
+      extraRewards: [{ defId: 'pills', count: 2 }],
+      relationDelta: 20, xpReward: 50, moneyReward: 50,
       done: false,
     };
   }
@@ -345,18 +405,4 @@ function pickVisitRoom(world: World, npc: Entity): { id: number; name: string } 
   const pool = candidates.length > 0 ? candidates : rooms;
   const r = pool[Math.floor(Math.random() * pool.length)];
   return { id: r.id, name: r.name };
-}
-
-/* ── Helper: NPC relation index (1-based, 0=player) ──────────── */
-function npcRelIndex(npc: Entity | undefined, entities: Entity[]): number {
-  if (!npc) return 0;
-  // Find NPC index among all NPCs
-  let idx = 1;
-  for (const e of entities) {
-    if (e.type === EntityType.NPC) {
-      if (e.id === npc.id) return idx;
-      idx++;
-    }
-  }
-  return 0;
 }

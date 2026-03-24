@@ -9,6 +9,7 @@
 /*     apartments.ts  — permanent apartment clusters             */
 /*     volatile.ts    — volatile gigastructure maze              */
 /*     start_room.ts  — tutorial briefing room (Актовый зал)     */
+/*     yakov_lab.ts   — Yakov's lab (PSI researcher, story quest)*/
 /*     slides.ts      — slide texture generation                 */
 /*     npcs.ts        — NPC & item spawning                      */
 /*                                                               */
@@ -23,6 +24,7 @@ import { generateZones, stampHQRooms } from '../shared';
 import { generateApartments } from './apartments';
 import { generateVolatileMaze, wipeVolatile } from './volatile';
 import { generateStartRoom } from './start_room';
+import { generateYakovLab } from './yakov_lab';
 import { spawnRoomItems, spawnFamilies, spawnTravelers } from './npcs';
 
 export { generateSlideTextures } from './slides';
@@ -38,6 +40,10 @@ export function generateWorld(): { world: World; entities: Entity[]; spawnX: num
 
   /* ── A1: Start room (briefing hall) ─────────────── */
   const startRoom = generateStartRoom(world, world.rooms.length, entities, { v: nextId });
+  nextId = entities.reduce((mx, e) => Math.max(mx, e.id), nextId) + 1;
+
+  /* ── A1b: Yakov's lab (at distance from spawn) ──── */
+  generateYakovLab(world, world.rooms.length, entities, { v: nextId }, startRoom.spawnX, startRoom.spawnY);
   nextId = entities.reduce((mx, e) => Math.max(mx, e.id), nextId) + 1;
   world.apartmentRoomCount = world.rooms.length;
 

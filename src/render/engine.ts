@@ -24,6 +24,7 @@ export function renderScene(
   px: number, py: number, pAngle: number, pPitch: number,
   fogDensity: number,
   glitch: number,
+  camHeight = 0.5,        // camera height: 0=floor, 1=ceiling, 0.5=default
 ): void {
   // Y-shearing: shift horizon based on pitch (-1..1)
   const horizonShift = Math.floor(pPitch * SCR_H);
@@ -107,10 +108,10 @@ export function renderScene(
     if (!hit) { dist = MAX_DRAW; }
     if (dist < 0.001) dist = 0.001;
 
-    // Wall height (y-sheared)
+    // Wall height (y-sheared), shifted by camera height
     const lineH = Math.floor(SCR_H / dist);
-    let drawStart = Math.max(0, HALF_H - Math.floor(lineH / 2));
-    let drawEnd   = Math.min(SCR_H - 1, HALF_H + Math.floor(lineH / 2));
+    let drawStart = Math.max(0, HALF_H - Math.floor(lineH * (1 - camHeight)));
+    let drawEnd   = Math.min(SCR_H - 1, HALF_H + Math.floor(lineH * camHeight));
 
     // Texture X coordinate
     let wallX: number;
@@ -158,7 +159,7 @@ export function renderScene(
     const lit = AMBIENT + world.light[hitCI] * (1 - AMBIENT);
     const cellDecals = world.decals.get(hitCI);
     for (let y = drawStart; y <= drawEnd; y++) {
-      const d = y - (HALF_H - lineH / 2);
+      const d = y - (HALF_H - lineH * (1 - camHeight));
       const texY = Math.floor((d / lineH) * TEX) & (TEX - 1);
       let c = tex[texY * TEX + texX];
       // Bullet hole decals
@@ -187,7 +188,7 @@ export function renderScene(
     for (let y = drawEnd + 1; y < SCR_H; y++) {
       const rowDist = y - HALF_H;
       if (rowDist <= 0) continue;
-      const currentDist = SCR_H / (2.0 * rowDist);
+      const currentDist = (SCR_H * camHeight) / rowDist;
       const weight = Math.min(currentDist / dist, 1.0);
       const floorX = weight * fwx + (1.0 - weight) * px;
       const floorY = weight * fwy + (1.0 - weight) * py;
@@ -234,7 +235,7 @@ export function renderScene(
     for (let y = drawStart - 1; y >= 0; y--) {
       const rowDist = HALF_H - y;
       if (rowDist <= 0) continue;
-      const currentDist = SCR_H / (2.0 * rowDist);
+      const currentDist = (SCR_H * (1 - camHeight)) / rowDist;
       const weight = Math.min(currentDist / dist, 1.0);
       const floorX = weight * fwx + (1.0 - weight) * px;
       const floorY = weight * fwy + (1.0 - weight) * py;
@@ -288,7 +289,7 @@ export function renderScene(
   }
 
   /* ── Sprite rendering ───────────────────────────────────── */
-  renderSprites(buf, world, textures, sprites, entities, px, py, pAngle, dirX, dirY, planeX, planeY, fogDensity, fogR, fogG, fogB, HALF_H);
+  renderSprites(buf, world, textures, sprites, entities, px, py, pAngle, dirX, dirY, planeX, planeY, fogDensity, fogR, fogG, fogB, HALF_H, camHeight);
 }
 
 /* ── Sprite rendering with depth sorting ──────────────────────── */
@@ -297,7 +298,7 @@ function renderSprites(
   entities: Entity[], px: number, py: number, _pAngle: number,
   dirX: number, dirY: number, planeX: number, planeY: number,
   fogDensity: number, fogR: number, fogG: number, fogB: number,
-  halfH: number,
+  halfH: number, camHeight: number,
 ): void {
   // Collect visible entities with toroidal distance
   const visible: { e: Entity; dx: number; dy: number; dist: number }[] = [];
@@ -333,7 +334,7 @@ function renderSprites(
 
     // Vertical offset: spriteZ 0=ground, 0.5=eye level
     const spriteZ = e.spriteZ ?? 0;
-    const footY = halfH + Math.floor(rawH / 2) - Math.floor(rawH * spriteZ);
+    const footY = halfH + Math.floor(rawH * camHeight) - Math.floor(rawH * spriteZ);
     const drawStartY = Math.max(0, footY - spriteH);
     const drawEndY   = Math.min(SCR_H - 1, footY);
     const drawStartX = Math.max(0, spriteScreenX - Math.floor(spriteW / 2));

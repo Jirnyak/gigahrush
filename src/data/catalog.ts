@@ -17,6 +17,9 @@ export interface WeaponStats {
   pellets?: number;     // projectiles per shot (shotgun)
   spread?: number;      // spread angle in radians
   projSprite?: number;  // sprite index for projectile
+  psiCost?: number;     // PSI cost per cast (if set, uses PSI instead of ammo)
+  aoeRadius?: number;   // AoE explosion radius on projectile impact
+  psiEffect?: string;   // instant PSI effect id (non-projectile spells)
 }
 
 export const WEAPON_STATS: Record<string, WeaponStats> = {
@@ -29,6 +32,16 @@ export const WEAPON_STATS: Record<string, WeaponStats> = {
   makarov:  { dmg: 20, durability: 0,  range: 0,   speed: 0.4,  isRanged: true, ammoType: 'ammo_9mm',    projSpeed: 20, pellets: 1, spread: 0.02, projSprite: 29 },
   shotgun:  { dmg: 8,  durability: 0,  range: 0,   speed: 1.0,  isRanged: true, ammoType: 'ammo_shells', projSpeed: 18, pellets: 6, spread: 0.15, projSprite: 30 },
   nailgun:  { dmg: 12, durability: 0,  range: 0,   speed: 0.12, isRanged: true, ammoType: 'ammo_nails',  projSpeed: 15, pellets: 1, spread: 0.04, projSprite: 31 },
+  // ── PSI spells (Сгустки) — use PSI instead of ammo ──
+  psi_strike:   { dmg: 10, durability: 0, range: 0, speed: 0.35, isRanged: true,  psiCost: 1,  projSpeed: 16, projSprite: 32 },
+  psi_rupture:  { dmg: 10, durability: 0, range: 0, speed: 0.6,  isRanged: true,  psiCost: 3,  projSpeed: 14, projSprite: 32, aoeRadius: 3 },
+  psi_storm:    { dmg: 10, durability: 0, range: 0, speed: 1.0,  isRanged: false, psiCost: 10, psiEffect: 'storm' },
+  psi_brainburn:{ dmg: 0,  durability: 0, range: 0, speed: 1.0,  isRanged: false, psiCost: 8,  psiEffect: 'brain_burn' },
+  psi_madness:  { dmg: 0,  durability: 0, range: 0, speed: 0.8,  isRanged: false, psiCost: 5,  psiEffect: 'madness' },
+  psi_control:  { dmg: 0,  durability: 0, range: 0, speed: 0.8,  isRanged: false, psiCost: 8,  psiEffect: 'control' },
+  psi_phase:    { dmg: 0,  durability: 0, range: 0, speed: 0.5,  isRanged: false, psiCost: 8,  psiEffect: 'phase' },
+  psi_mark:     { dmg: 0,  durability: 0, range: 0, speed: 0.3,  isRanged: false, psiCost: 3,  psiEffect: 'mark' },
+  psi_recall:   { dmg: 0,  durability: 0, range: 0, speed: 0.3,  isRanged: false, psiCost: 3,  psiEffect: 'recall' },
 };
 
 // ── Room definitions ─────────────────────────────────────────────
@@ -58,6 +71,7 @@ export const ROOM_DEFS: Record<RoomType, RoomDef> = {
 function feed(v: number) { return (e: Entity) => { if (e.needs) e.needs.food = Math.min(100, e.needs.food + v); return 'Вы поели'; }; }
 function drink(v: number) { return (e: Entity) => { if (e.needs) e.needs.water = Math.min(100, e.needs.water + v); return 'Вы попили'; }; }
 function medicine(hp: number) { return (e: Entity) => { e.hp = Math.min((e.maxHp ?? 100), (e.hp ?? 0) + hp); return `Лечение +${hp}`; }; }
+function psiMedicine(hp: number, psi: number) { return (e: Entity) => { e.hp = Math.min((e.maxHp ?? 100), (e.hp ?? 0) + hp); if (e.rpg) e.rpg.psi = Math.min(e.rpg.maxPsi, e.rpg.psi + psi); return hp > 0 ? `Лечение +${hp}, ПСИ +${psi}` : `ПСИ +${psi}`; }; }
 
 export const ITEMS: Record<string, ItemDef> = {
   bread:     { id:'bread',     name:'Хлеб',         type:ItemType.FOOD,     stack:5,  desc:'Чёрствый хлеб',          spawnRooms:[RoomType.KITCHEN,RoomType.STORAGE], spawnW:8, value:5, use:feed(15) },
@@ -70,8 +84,8 @@ export const ITEMS: Record<string, ItemDef> = {
   kompot:    { id:'kompot',    name:'Компот',       type:ItemType.DRINK,    stack:2,  desc:'Мутный компот',          spawnRooms:[RoomType.KITCHEN],                  spawnW:3, value:6, use:drink(20) },
 
   bandage:   { id:'bandage',   name:'Бинт',         type:ItemType.MEDICINE, stack:5,  desc:'Рулон бинта',            spawnRooms:[RoomType.MEDICAL,RoomType.BATHROOM],spawnW:5, value:10, use:medicine(15) },
-  pills:     { id:'pills',     name:'Таблетки',     type:ItemType.MEDICINE, stack:3,  desc:'Обезболивающее',         spawnRooms:[RoomType.MEDICAL],                  spawnW:3, value:20, use:medicine(25) },
-  antidep:   { id:'antidep',   name:'Антидепрессант',type:ItemType.MEDICINE, stack:2,  desc:'Помогает с психикой',    spawnRooms:[RoomType.MEDICAL],                  spawnW:2, value:30, use:medicine(10) },
+  pills:     { id:'pills',     name:'Таблетки',     type:ItemType.MEDICINE, stack:3,  desc:'Обезболивающее. Лечит 25 HP, +5 ПСИ',   spawnRooms:[RoomType.MEDICAL],                  spawnW:3, value:20, use:psiMedicine(25, 5) },
+  antidep:   { id:'antidep',   name:'Антидепрессант',type:ItemType.MEDICINE, stack:2,  desc:'Помогает с психикой. +20 ПСИ',           spawnRooms:[RoomType.MEDICAL],                  spawnW:2, value:30, use:psiMedicine(0, 20) },
 
   pipe:      { id:'pipe',      name:'Труба',        type:ItemType.WEAPON,   stack:1,  desc:'Тяжёлая труба. Урон 18. Прочность 50', spawnRooms:[RoomType.PRODUCTION,RoomType.STORAGE], spawnW:3, value:25 },
   wrench:    { id:'wrench',    name:'Ключ гаечный', type:ItemType.WEAPON,   stack:1,  desc:'Увесистый. Урон 12. Прочность 60',     spawnRooms:[RoomType.PRODUCTION,RoomType.STORAGE], spawnW:4, value:15 },
@@ -86,6 +100,17 @@ export const ITEMS: Record<string, ItemDef> = {
   ammo_shells:{ id:'ammo_shells',name:'Дробь',       type:ItemType.AMMO,     stack:8,  desc:'Дробовые патроны',                     spawnRooms:[RoomType.STORAGE],                  spawnW:1, value:20 },
   ammo_nails:{ id:'ammo_nails', name:'Гвозди',      type:ItemType.AMMO,     stack:30, desc:'Гвозди для гвоздомёта',                spawnRooms:[RoomType.PRODUCTION,RoomType.STORAGE], spawnW:3, value:8 },
 
+  // ── Сгустки (PSI runes) — equip as weapon, use PSI instead of ammo ──
+  psi_strike:   { id:'psi_strike',    name:'Сгусток: Пси удар',        type:ItemType.WEAPON, stack:1, desc:'Пси-снаряд. 1 ПСИ, 10 урона',                                     spawnRooms:[RoomType.MEDICAL,RoomType.OFFICE,RoomType.COMMON], spawnW:2, value:40 },
+  psi_rupture:  { id:'psi_rupture',   name:'Сгусток: Разрыв',          type:ItemType.WEAPON, stack:1, desc:'Взрыв пси-энергии. 3 ПСИ, 10 урона по площади',                    spawnRooms:[RoomType.MEDICAL,RoomType.STORAGE],               spawnW:1, value:60 },
+  psi_storm:    { id:'psi_storm',     name:'Сгусток: Пси буря',        type:ItemType.WEAPON, stack:1, desc:'Волна боли. 10 ПСИ, урон всем в поле зрения',                       spawnRooms:[RoomType.MEDICAL],                                spawnW:1, value:80 },
+  psi_brainburn:{ id:'psi_brainburn', name:'Сгусток: Выжиг мозга',     type:ItemType.WEAPON, stack:1, desc:'Мгновенная смерть цели ≤ вашего уровня. 8 ПСИ',                     spawnRooms:[RoomType.MEDICAL],                                spawnW:0, value:100 },
+  psi_madness:  { id:'psi_madness',   name:'Сгусток: Безумие',         type:ItemType.WEAPON, stack:1, desc:'Цель нападает на всех. 5 ПСИ, 60с',                                 spawnRooms:[RoomType.OFFICE,RoomType.COMMON],                 spawnW:1, value:50 },
+  psi_control:  { id:'psi_control',   name:'Сгусток: Контроль',        type:ItemType.WEAPON, stack:1, desc:'Цель становится союзником. 8 ПСИ, 60с',                              spawnRooms:[RoomType.MEDICAL],                                spawnW:0, value:90 },
+  psi_phase:    { id:'psi_phase',     name:'Сгусток: Фазовый сдвиг',   type:ItemType.WEAPON, stack:1, desc:'Проходить сквозь стены. 8 ПСИ, 60с',                                 spawnRooms:[RoomType.STORAGE],                                spawnW:0, value:120 },
+  psi_mark:     { id:'psi_mark',      name:'Сгусток: Метка',           type:ItemType.WEAPON, stack:1, desc:'Запомнить позицию для телепорта. 3 ПСИ',                              spawnRooms:[RoomType.OFFICE,RoomType.COMMON],                 spawnW:1, value:30 },
+  psi_recall:   { id:'psi_recall',    name:'Сгусток: Возврат',         type:ItemType.WEAPON, stack:1, desc:'Телепорт к метке. 3 ПСИ',                                             spawnRooms:[RoomType.OFFICE,RoomType.COMMON],                 spawnW:1, value:30 },
+
   flashlight:{ id:'flashlight', name:'Фонарик',     type:ItemType.TOOL,     stack:1,  desc:'Освещает путь',          spawnRooms:[RoomType.STORAGE,RoomType.LIVING],  spawnW:2, value:35 },
   toiletpaper:{id:'toiletpaper',name:'Туал. бумага', type:ItemType.MISC,     stack:5,  desc:'Рулон',                  spawnRooms:[RoomType.BATHROOM,RoomType.STORAGE],spawnW:6, value:2 },
   cigs:      { id:'cigs',      name:'Сигареты',     type:ItemType.MISC,     stack:3,  desc:'Пачка «Прима»',          spawnRooms:[RoomType.LIVING,RoomType.COMMON,RoomType.SMOKING],   spawnW:4, value:8 },
@@ -93,6 +118,9 @@ export const ITEMS: Record<string, ItemDef> = {
   note:      { id:'note',      name:'Записка',      type:ItemType.NOTE,     stack:1,  desc:'Чья-то записка',         spawnRooms:[RoomType.LIVING,RoomType.COMMON,RoomType.STORAGE,RoomType.OFFICE], spawnW:3, value:1 },
 
   key:       { id:'key',       name:'Ключ',         type:ItemType.KEY,      stack:1,  desc:'Подходит к двери',       spawnRooms:[],                                 spawnW:0, value:50 },
+
+  // ── Story quest items ──
+  idol_chernobog: { id:'idol_chernobog', name:'Идол Чернобога', type:ItemType.MISC, stack:1, desc:'Тёмная фигурка из неизвестного камня. Холодная на ощупь.', spawnRooms:[RoomType.COMMON,RoomType.STORAGE,RoomType.OFFICE,RoomType.SMOKING], spawnW:0, value:100 },
 };
 
 // ── Monsters ─────────────────────────────────────────────────────

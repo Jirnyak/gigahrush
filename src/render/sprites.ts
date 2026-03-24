@@ -29,9 +29,11 @@ export function generateSprites(): SpriteData[] {
   // Desk (28)
   sprites.push(gen_deskSprite());
   // Projectiles (29-31)
-  sprites.push(gen_bulletSprite());     // 28: pistol bullet
-  sprites.push(gen_pelletSprite());     // 29: shotgun pellet
-  sprites.push(gen_nailSprite());       // 30: nail
+  sprites.push(gen_bulletSprite());     // 29: pistol bullet
+  sprites.push(gen_pelletSprite());     // 30: shotgun pellet
+  sprites.push(gen_nailSprite());       // 31: nail
+  // PSI bolt (32)
+  sprites.push(gen_psiBoltSprite());    // 32: purple psi energy bolt
   return sprites;
 }
 
@@ -143,6 +145,28 @@ function gen_nailSprite(): SpriteData {
       const f = Math.max(0, 1 - d / 10);
       const a = clamp(Math.floor(120 * f));
       if (a > 10) t[y * S + x] = rgba(180, 160, 100, a);
+    }
+  }
+  return t;
+}
+
+/* ── PSI bolt: purple-violet glowing energy orb ──────────────── */
+function gen_psiBoltSprite(): SpriteData {
+  const t = new Uint32Array(S * S).fill(CLEAR);
+  const cx = S / 2, cy = S / 2;
+  const R = 7;
+  for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) {
+    const dx = x - cx, dy = y - cy;
+    const d = Math.sqrt(dx * dx + dy * dy);
+    if (d < R * 3) {
+      const f = 1 - d / (R * 3);
+      const core = d < R ? 1 : 0;
+      const n = noise(x, y, 77) * 0.3;
+      const r = clamp(Math.floor(180 * core + 140 * f * 0.6 + n * 40));
+      const g = clamp(Math.floor(60 * core + 40 * f * 0.3));
+      const b = clamp(Math.floor(255 * core + 220 * f * 0.8 + n * 30));
+      const a = clamp(Math.floor(255 * f * f + 220 * core));
+      t[y * S + x] = rgba(r, g, b, a);
     }
   }
   return t;

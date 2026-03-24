@@ -9,7 +9,6 @@ import { World } from '../core/world';
 import { MONSTERS, monsterName } from '../data/catalog';
 import { playGrowl } from './audio';
 import { isHostile, applyDamageRelationPenalty } from './factions';
-import { addRelMutual } from '../data/relations';
 import { scaleMonsterDmg, strMeleeDmgMult, scaleMonsterHp, scaleMonsterSpeed, randomRPG } from './rpg';
 import { spawnBloodHit, spawnDeathPool } from '../render/blood';
 
@@ -814,7 +813,9 @@ function tryFactionCombat(
   world: World, entities: Entity[], e: Entity, dt: number, _time: number, msgs: Msg[],
 ): boolean {
   // Only combatants fight: travelers, hunters, pilgrims, liquidators, cultists, wild
-  const isCombatant = e.isTraveler ||
+  // PSI madness overrides: mad NPCs always fight
+  const isCombatant = (e.psiMadness ?? 0) > 0 ||
+    e.isTraveler ||
     e.occupation === Occupation.HUNTER ||
     e.occupation === Occupation.PILGRIM ||
     e.faction === Faction.LIQUIDATOR ||
@@ -852,7 +853,7 @@ function tryFactionCombat(
     if (target.hp !== undefined) {
       target.hp -= dmg;
       if (target.type === EntityType.NPC) {
-        applyDamageRelationPenalty(e.id, target.id, dmg, e.faction, target.faction, { addRelMutual });
+        applyDamageRelationPenalty(e.faction, target.faction, dmg);
       }
       // Blood splatter from NPC hit
       const hitAng = Math.atan2(target.y - e.y, target.x - e.x);

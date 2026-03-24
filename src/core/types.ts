@@ -155,6 +155,7 @@ export enum Faction {
   CULTIST,     // культисты
   SCIENTIST,   // учёные
   WILD,        // дикие
+  PLAYER,      // игрок (отдельная фракция в системе отношений)
 }
 
 // ── Zone control factions ────────────────────────────────────────
@@ -275,6 +276,7 @@ export interface Entity {
   spriteZ?: number;           // vertical offset: 0=ground, 0.5=eye level (projectiles)
   isTutor?: boolean;          // Ольга Дмитриевна — tutorial NPC in start room
   isTutorBarni?: boolean;     // Барни — tutorial armory NPC
+  isTutorYakov?: boolean;     // Яков Давидович — PSI researcher, story quest NPC
   tutorDone?: boolean;        // tutor phase ended, acts as normal doctor
   _tutorIdx?: number;         // internal: tutorial dialogue line counter
   // projectile fields
@@ -282,11 +284,15 @@ export interface Entity {
   projDmg?: number;           // projectile damage
   projLife?: number;          // remaining lifetime (seconds)
   ownerId?: number;           // entity that fired this
+  aoeRadius?: number;         // AoE explosion radius on impact
+  aoeDmg?: number;            // AoE damage on impact
   rpg?: RPGStats;             // RPG stats (level, XP, attributes)
   isFemale?: boolean;          // gender for kill message grammar
   isFogBoss?: boolean;         // fog boss — killing stops fog in zone
   fogBossZone?: number;        // zone id this boss guards
   matkaTimer?: number;         // матка spawn timer (seconds until next spawn)
+  psiMadness?: number;         // remaining seconds of PSI madness (attacks everyone)
+  psiControlledBy?: number;    // entity id of PSI controller (ally override)
 }
 
 // ── Items ────────────────────────────────────────────────────────
@@ -384,6 +390,10 @@ export interface GameState {
   tradeMode: string;          // 'npc'|'player'
   showDebug: boolean;
   debugSel: number;
+  showFactions: boolean;       // faction relations matrix (F key)
+  dmgFlash: number;           // damage vignette intensity 0..1, decays over time
+  dmgSeed: number;            // random seed for vein pattern per hit
+  deathTimer: number;         // seconds since player death (for camera drop)
 }
 
 export interface Msg { text: string; time: number; color: string; }
@@ -403,5 +413,7 @@ export interface InputState {
   attrStr: boolean; attrAgi: boolean; attrInt: boolean;  // 1,2,3 keys for attribute spending
   debugScreen: boolean;
   pee: boolean;                 // P key — urinate
+  drop: boolean;                // D key — drop item (inventory)
+  factionMenu: boolean;         // F key — faction relations matrix
   mouse: { dx: number; dy: number; locked: boolean; };
 }

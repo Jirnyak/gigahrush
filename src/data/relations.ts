@@ -1,73 +1,63 @@
-/* ── NPC relation matrix + faction data ───────────────────────── */
+/* ── Faction-to-faction relation system ───────────────────────── */
 
 import { Faction, Occupation } from '../core/types';
 
-export const MAX_NPC = 1024;
+/* ── Constants ────────────────────────────────────────────────── */
+export const FACTION_COUNT = 6; // CITIZEN, LIQUIDATOR, CULTIST, SCIENTIST, WILD, PLAYER
 
-/* ── NxN relation array — Int8Array flat ─────────────────────── */
-// relations[a * MAX_NPC + b] = how entity a feels about entity b (-128..127)
-// Index 0 = player; NPC indices = 1..N
-export const relations = new Int8Array(MAX_NPC * MAX_NPC);
+/* ── Dynamic faction relation matrix — Int8Array flat ────────── */
+// factionRels[a * FACTION_COUNT + b] = how faction a feels about faction b (-128..127)
+const factionRels = new Int8Array(FACTION_COUNT * FACTION_COUNT);
 
-/* ── Get / set relation ───────────────────────────────────────── */
-export function getRel(a: number, b: number): number {
-  return relations[a * MAX_NPC + b];
+/* ── Get / set / add faction relation ─────────────────────────── */
+export function getFactionRel(a: number, b: number): number {
+  return factionRels[a * FACTION_COUNT + b];
 }
 
-export function setRel(a: number, b: number, v: number): void {
-  relations[a * MAX_NPC + b] = Math.max(-128, Math.min(127, v | 0));
+export function setFactionRel(a: number, b: number, v: number): void {
+  factionRels[a * FACTION_COUNT + b] = Math.max(-128, Math.min(127, v | 0));
 }
 
-export function addRel(a: number, b: number, delta: number): void {
-  setRel(a, b, getRel(a, b) + delta);
+export function addFactionRel(a: number, b: number, delta: number): void {
+  setFactionRel(a, b, getFactionRel(a, b) + delta);
 }
 
-/* ── Mutual relation change (both directions) ────────────────── */
-export function addRelMutual(a: number, b: number, delta: number): void {
-  addRel(a, b, delta);
-  addRel(b, a, delta);
+export function addFactionRelMutual(a: number, b: number, delta: number): void {
+  addFactionRel(a, b, delta);
+  addFactionRel(b, a, delta);
 }
 
-/* ── Initialize relations for all NPCs ────────────────────────── */
-export function initRelations(
-  npcSlots: { relIdx: number; familyId: number; faction: Faction }[],
-): void {
-  relations.fill(0);
+/* ── Base faction attitudes (used for initialization) ─────────── */
+// [row faction][col faction] = base attitude
+// <=−50 hostile, −50..50 neutral, >=50 friendly
+const BASE_FACTION_MATRIX: number[][] = [
+  /*                CIT   LIQ   CUL   SCI   WILD  PLAYER */
+  /* CITIZEN  */ [  100,   50,    0,   50,  -50,    50 ],
+  /* LIQUID.  */ [   50,  100,  -50,   50,  -50,    50 ],
+  /* CULTIST  */ [    0,  -50,  100,  -20,  -50,     0 ],
+  /* SCIENTIST*/ [   50,   50,  -20,  100,  -50,    50 ],
+  /* WILD     */ [  -50,  -50,  -50,  -50,  100,   -50 ],
+  /* PLAYER   */ [   50,   50,    0,   50,  -50,   100 ],
+];
 
-  for (let i = 0; i < npcSlots.length; i++) {
-    const a = npcSlots[i];
-    for (let j = i + 1; j < npcSlots.length; j++) {
-      const b = npcSlots[j];
-      let base = 0;
-      // Family bonus
-      if (a.familyId >= 0 && a.familyId === b.familyId) base += 60;
-      // Same faction bonus
-      if (a.faction === b.faction) base += 20;
-      // Cross-faction
-      base += FACTION_MATRIX[a.faction][b.faction];
-
-      setRel(a.relIdx, b.relIdx, base);
-      setRel(b.relIdx, a.relIdx, base);
+/* ── Initialize dynamic faction relations from base matrix ────── */
+export function initFactionRelations(): void {
+  for (let a = 0; a < FACTION_COUNT; a++) {
+    for (let b = 0; b < FACTION_COUNT; b++) {
+      setFactionRel(a, b, BASE_FACTION_MATRIX[a][b]);
     }
-    // Player (id=0) inherits Citizen relations as personal starting base
-    const playerRel = FACTION_MATRIX[Faction.CITIZEN][a.faction];
-    setRel(0, a.relIdx, playerRel);
-    setRel(a.relIdx, 0, playerRel);
   }
 }
 
-/* ── Faction cross-relation matrix ────────────────────────────── */
-// [row faction][col faction] = base attitude modifier
-// <=−50 hostile, −50..50 neutral, >=50 friendly
-const FACTION_MATRIX: Record<Faction, Record<Faction, number>> = {
-  [Faction.CITIZEN]:    { [Faction.CITIZEN]: 0, [Faction.LIQUIDATOR]: 50, [Faction.CULTIST]: 0,   [Faction.SCIENTIST]: 50, [Faction.WILD]: -50 },
-  [Faction.LIQUIDATOR]: { [Faction.CITIZEN]: 50, [Faction.LIQUIDATOR]: 0, [Faction.CULTIST]: -50, [Faction.SCIENTIST]: 50, [Faction.WILD]: -50 },
-  [Faction.CULTIST]:    { [Faction.CITIZEN]: 0, [Faction.LIQUIDATOR]: -50, [Faction.CULTIST]: 0,  [Faction.SCIENTIST]: -20, [Faction.WILD]: -50 },
-  [Faction.SCIENTIST]:  { [Faction.CITIZEN]: 50, [Faction.LIQUIDATOR]: 50, [Faction.CULTIST]: -20, [Faction.SCIENTIST]: 0, [Faction.WILD]: -50 },
-  [Faction.WILD]:       { [Faction.CITIZEN]: -50, [Faction.LIQUIDATOR]: -50, [Faction.CULTIST]: -50, [Faction.SCIENTIST]: -50, [Faction.WILD]: 0 },
+/* ── Legacy FACTION_MATRIX (Record form for backward compat) ─── */
+export const FACTION_MATRIX: Record<Faction, Record<Faction, number>> = {
+  [Faction.CITIZEN]:    { [Faction.CITIZEN]: 100, [Faction.LIQUIDATOR]: 50, [Faction.CULTIST]: 0,   [Faction.SCIENTIST]: 50, [Faction.WILD]: -50, [Faction.PLAYER]: 50 },
+  [Faction.LIQUIDATOR]: { [Faction.CITIZEN]: 50, [Faction.LIQUIDATOR]: 100, [Faction.CULTIST]: -50, [Faction.SCIENTIST]: 50, [Faction.WILD]: -50, [Faction.PLAYER]: 50 },
+  [Faction.CULTIST]:    { [Faction.CITIZEN]: 0, [Faction.LIQUIDATOR]: -50, [Faction.CULTIST]: 100,  [Faction.SCIENTIST]: -20, [Faction.WILD]: -50, [Faction.PLAYER]: 0 },
+  [Faction.SCIENTIST]:  { [Faction.CITIZEN]: 50, [Faction.LIQUIDATOR]: 50, [Faction.CULTIST]: -20, [Faction.SCIENTIST]: 100, [Faction.WILD]: -50, [Faction.PLAYER]: 50 },
+  [Faction.WILD]:       { [Faction.CITIZEN]: -50, [Faction.LIQUIDATOR]: -50, [Faction.CULTIST]: -50, [Faction.SCIENTIST]: -50, [Faction.WILD]: 100, [Faction.PLAYER]: -50 },
+  [Faction.PLAYER]:     { [Faction.CITIZEN]: 50, [Faction.LIQUIDATOR]: 50, [Faction.CULTIST]: 0, [Faction.SCIENTIST]: 50, [Faction.WILD]: -50, [Faction.PLAYER]: 100 },
 };
-
-export { FACTION_MATRIX };
 
 /* ── Faction names ────────────────────────────────────────────── */
 export const FACTION_NAMES: Record<Faction, string> = {
@@ -76,6 +66,7 @@ export const FACTION_NAMES: Record<Faction, string> = {
   [Faction.CULTIST]: 'Культист',
   [Faction.SCIENTIST]: 'Учёный',
   [Faction.WILD]: 'Дикий',
+  [Faction.PLAYER]: 'Игрок',
 };
 
 /* ── Occupation names ─────────────────────────────────────────── */

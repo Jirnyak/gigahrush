@@ -2,13 +2,13 @@
 
 import { SCR_W, SCR_H } from './engine';
 import {
-  type Entity, type GameState, EntityType, Cell, Feature,
-  RoomType, W, Faction, ItemType,
+  type Entity, type GameState, type Quest, EntityType, Cell, Feature,
+  RoomType, W, Faction, ItemType, QuestType,
   ZoneFaction,
 } from '../core/types';
 import { World } from '../core/world';
 import { ITEMS, WEAPON_STATS } from '../data/catalog';
-import { FACTION_NAMES, OCCUPATION_NAMES } from '../data/relations';
+import { FACTION_NAMES, OCCUPATION_NAMES, getFactionRel } from '../data/relations';
 import { getEquippedDurability, countAmmo } from '../systems/inventory';
 import { xpForLevel } from '../systems/rpg';
 import { drawDebugOverlay } from '../systems/debug';
@@ -191,9 +191,9 @@ export function drawHUD(
 
   // ── Minimap (if toggled) ─────────────────────────────────
   if (state.mapMode === 1) {
-    drawMinimap(ctx, world, entities, player, sx, sy);
+    drawMinimap(ctx, world, entities, player, sx, sy, state.quests);
   } else if (state.mapMode === 2) {
-    drawFullMap(ctx, world, entities, player, sx, sy);
+    drawFullMap(ctx, world, entities, player, sx, sy, state.quests);
   }
 
   // ── Inventory (if toggled) ───────────────────────────────
@@ -204,6 +204,11 @@ export function drawHUD(
   // ── Quest log (if toggled) ───────────────────────────────
   if (state.showQuests) {
     drawQuestLog(ctx, state, sx, sy);
+  }
+
+  // ── Faction relations matrix (F) ─────────────────────────
+  if (state.showFactions) {
+    drawFactionMenu(ctx, player, entities, sx, sy);
   }
 
   // ── Game menu (ESC) ──────────────────────────────────────
@@ -258,22 +263,128 @@ export function drawHUD(
     ctx.fillText('⚠ САМОСБОР ⚠', w / 2 - 60 * sx, 20 * sy);
   }
 
+  // ── Damage vignette (procedural blood edges) ──────────────
+  if (state.dmgFlash > 0) {
+    drawDamageVignette(ctx, w, h, state.dmgFlash, state.dmgSeed, state.time);
+  }
+
   // ── Game over ────────────────────────────────────────────
   if (state.gameOver) {
-    ctx.fillStyle = 'rgba(0,0,0,0.8)';
+    // No full-screen black — world is still visible through death camera
+    // Darken edges gradually
+    const deathAlpha = Math.min(0.5, state.deathTimer * 0.15);
+    const grd = ctx.createRadialGradient(w / 2, h / 2, Math.min(w, h) * 0.15, w / 2, h / 2, Math.min(w, h) * 0.7);
+    grd.addColorStop(0, `rgba(0,0,0,0)`);
+    grd.addColorStop(1, `rgba(0,0,0,${deathAlpha})`);
+    ctx.fillStyle = grd;
     ctx.fillRect(0, 0, w, h);
-    ctx.fillStyle = '#c00';
+
+    // Pulsing red text
+    const textAlpha = 0.6 + Math.sin(state.time * 3) * 0.3;
+    ctx.fillStyle = `rgba(200,0,0,${textAlpha})`;
     ctx.font = `bold ${24 * sy}px monospace`;
-    ctx.fillText('ВЫ ПОГИБЛИ', w / 2 - 80 * sx, h / 2 - 20 * sy);
-    ctx.fillStyle = '#888';
+    ctx.textAlign = 'center';
+    ctx.fillText('ВЫ ПОГИБЛИ', w / 2, h / 2 - 20 * sy);
+    ctx.fillStyle = `rgba(136,136,136,${Math.min(1, state.deathTimer * 0.5)})`;
     ctx.font = `${10 * sy}px monospace`;
-    ctx.fillText('Хрущ поглотил ещё одного', w / 2 - 90 * sx, h / 2 + 10 * sy);
-    ctx.fillText('[R] — заново', w / 2 - 40 * sx, h / 2 + 30 * sy);
+    ctx.fillText('Хрущ поглотил ещё одного', w / 2, h / 2 + 10 * sy);
+    ctx.fillText('[R] — заново', w / 2, h / 2 + 30 * sy);
+    ctx.textAlign = 'left';
   }
 
   // ── Debug screen (~) ─────────────────────────────────────
   if (state.showDebug) {
     drawDebugOverlay(ctx, sx, sy, w, h, world, entities, state.debugSel);
+  }
+
+  ctx.restore();
+}
+
+/* ── Procedural damage vignette (blood vessel edges) ──────────── */
+function drawDamageVignette(
+  ctx: CanvasRenderingContext2D,
+  w: number, h: number,
+  intensity: number, seed: number, time: number,
+): void {
+  ctx.save();
+
+  // Edge darkening — radial gradient from center
+  const darkA = intensity * 0.4;
+  const grd = ctx.createRadialGradient(w / 2, h / 2, Math.min(w, h) * 0.2, w / 2, h / 2, Math.min(w, h) * 0.65);
+  grd.addColorStop(0, `rgba(0,0,0,0)`);
+  grd.addColorStop(0.6, `rgba(40,0,0,${darkA * 0.3})`);
+  grd.addColorStop(1, `rgba(0,0,0,${darkA})`);
+  ctx.fillStyle = grd;
+  ctx.fillRect(0, 0, w, h);
+
+  // Red overlay with radial gradient (transparent center, red edges)
+  const redA = intensity * 0.5;
+  const grd2 = ctx.createRadialGradient(w / 2, h / 2, Math.min(w, h) * 0.15, w / 2, h / 2, Math.min(w, h) * 0.6);
+  grd2.addColorStop(0, `rgba(180,0,0,0)`);
+  grd2.addColorStop(0.5, `rgba(140,0,0,${redA * 0.2})`);
+  grd2.addColorStop(1, `rgba(120,0,0,${redA})`);
+  ctx.fillStyle = grd2;
+  ctx.fillRect(0, 0, w, h);
+
+  // Procedural blood vessel lines from edges
+  ctx.globalCompositeOperation = 'source-over';
+  const numVeins = 8 + Math.floor(intensity * 12);
+  const s = seed;
+  for (let i = 0; i < numVeins; i++) {
+    // Seeded pseudo-random for consistent pattern per hit
+    const r1 = ((Math.sin(s + i * 127.1) * 43758.5453) % 1 + 1) % 1;
+    const r2 = ((Math.sin(s + i * 269.5 + 311.7) * 43758.5453) % 1 + 1) % 1;
+    const r3 = ((Math.sin(s + i * 419.2 + 631.2) * 43758.5453) % 1 + 1) % 1;
+    const r4 = ((Math.sin(s + i * 173.9 + 967.3) * 43758.5453) % 1 + 1) % 1;
+
+    // Start from a random edge
+    const edge = Math.floor(r1 * 4);
+    let sx: number, sy: number;
+    if (edge === 0) { sx = r2 * w; sy = 0; }           // top
+    else if (edge === 1) { sx = r2 * w; sy = h; }      // bottom
+    else if (edge === 2) { sx = 0; sy = r2 * h; }      // left
+    else { sx = w; sy = r2 * h; }                       // right
+
+    // Draw branching vein toward center
+    const veinAlpha = intensity * (0.2 + r3 * 0.4);
+    const veinLen = (0.1 + r4 * 0.25) * Math.min(w, h);
+    const toX = w / 2 + (r3 - 0.5) * w * 0.3;
+    const toY = h / 2 + (r4 - 0.5) * h * 0.3;
+    const dx = toX - sx, dy = toY - sy;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    const nx = dx / dist, ny = dy / dist;
+
+    ctx.beginPath();
+    ctx.moveTo(sx, sy);
+
+    // Main vein with slight organic wobble
+    const steps = 6;
+    let cx = sx, cy = sy;
+    for (let j = 1; j <= steps; j++) {
+      const t = j / steps;
+      const wobbleT = Math.sin(time * 3 + i * 2 + j) * (4 + r2 * 8);
+      cx = sx + nx * veinLen * t + ny * wobbleT;
+      cy = sy + ny * veinLen * t - nx * wobbleT;
+      ctx.lineTo(cx, cy);
+    }
+
+    const lineW = 1 + r3 * 2.5 * intensity;
+    ctx.strokeStyle = `rgba(160,0,10,${veinAlpha})`;
+    ctx.lineWidth = lineW;
+    ctx.stroke();
+
+    // Thinner branch
+    if (r2 > 0.4 && i < numVeins - 2) {
+      const bx = sx + nx * veinLen * 0.5 + ny * (r4 - 0.5) * 20;
+      const by = sy + ny * veinLen * 0.5 - nx * (r4 - 0.5) * 20;
+      ctx.beginPath();
+      ctx.moveTo(bx, by);
+      ctx.lineTo(bx + nx * veinLen * 0.2 + ny * (r1 - 0.5) * 30,
+                 by + ny * veinLen * 0.2 - nx * (r1 - 0.5) * 30);
+      ctx.strokeStyle = `rgba(130,0,10,${veinAlpha * 0.6})`;
+      ctx.lineWidth = lineW * 0.5;
+      ctx.stroke();
+    }
   }
 
   ctx.restore();
@@ -286,6 +397,7 @@ function drawMap(
   _sx: number, _sy: number,
   mapX: number, mapY: number, mapW: number, mapH: number,
   radius: number, bgAlpha: number,
+  quests?: Quest[],
 ): void {
   ctx.fillStyle = `rgba(0,0,0,${bgAlpha})`;
   ctx.fillRect(mapX, mapY, mapW, mapH);
@@ -368,6 +480,44 @@ function drawMap(
     ctx.fillRect(esx - 1, esy - 1, 3, 3);
   }
 
+  // Quest markers
+  if (quests) {
+    for (const q of quests) {
+      if (q.done) continue;
+      let qx: number | undefined, qy: number | undefined;
+      if (q.type === QuestType.TALK && q.targetNpcId !== undefined) {
+        const tgt = entities.find(e => e.id === q.targetNpcId && e.alive);
+        if (tgt) { qx = tgt.x; qy = tgt.y; }
+      } else if (q.type === QuestType.VISIT && q.targetRoom !== undefined) {
+        const room = world.rooms[q.targetRoom];
+        if (room) { qx = room.x + room.w / 2; qy = room.y + room.h / 2; }
+      } else if (q.type === QuestType.FETCH && q.giverId !== undefined) {
+        const giver = entities.find(e => e.id === q.giverId && e.alive);
+        if (giver) { qx = giver.x; qy = giver.y; }
+      }
+      if (qx === undefined || qy === undefined) continue;
+      const qdx = world.delta(pxI, Math.floor(qx));
+      const qdy = world.delta(pyI, Math.floor(qy));
+      if (Math.abs(qdx) > radius || Math.abs(qdy) > radius) continue;
+      const qsx = mapX + (qdx + radius) * cellW;
+      const qsy = mapY + (qdy + radius) * cellH;
+      // Diamond marker — large, with dark outline for visibility
+      const sz = 6;  // half-height of diamond
+      const sw = 4;  // half-width of diamond
+      ctx.strokeStyle = '#024';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(qsx, qsy - sz);
+      ctx.lineTo(qsx + sw, qsy);
+      ctx.lineTo(qsx, qsy + sz);
+      ctx.lineTo(qsx - sw, qsy);
+      ctx.closePath();
+      ctx.stroke();
+      ctx.fillStyle = '#4af';
+      ctx.fill();
+    }
+  }
+
   // Player dot
   const pcx = mapX + radius * cellW;
   const pcy = mapY + radius * cellH;
@@ -388,26 +538,26 @@ function drawMap(
 function drawMinimap(
   ctx: CanvasRenderingContext2D,
   world: World, entities: Entity[], player: Entity,
-  sx: number, sy: number,
+  sx: number, sy: number, quests?: Quest[],
 ): void {
   const mw = MAP_SIZE * sx, mh = MAP_SIZE * sy;
   const mx = ctx.canvas.width - mw - 4 * sx;
   const my = 4 * sy;
-  drawMap(ctx, world, entities, player, sx, sy, mx, my, mw, mh, 40, 0.75);
+  drawMap(ctx, world, entities, player, sx, sy, mx, my, mw, mh, 40, 0.75, quests);
 }
 
 /* ── Full world map (fullscreen) ─────────────────────────────── */
 function drawFullMap(
   ctx: CanvasRenderingContext2D,
   world: World, entities: Entity[], player: Entity,
-  sx: number, sy: number,
+  sx: number, sy: number, quests?: Quest[],
 ): void {
   const cw = ctx.canvas.width;
   const ch = ctx.canvas.height;
   const pad = 4 * sx;
   const mapW = cw - pad * 2;
   const mapH = ch - pad * 2;
-  drawMap(ctx, world, entities, player, sx, sy, pad, pad, mapW, mapH, 200, 0.85);
+  drawMap(ctx, world, entities, player, sx, sy, pad, pad, mapW, mapH, 200, 0.85, quests);
 
   ctx.fillStyle = '#666';
   ctx.font = `${8 * sy}px monospace`;
@@ -496,6 +646,8 @@ function drawInventory(
         ctx.fillStyle = '#6a6';
         ctx.fillText('[E] использовать', descX, descY + 30 * sy);
       }
+      ctx.fillStyle = '#a86';
+      ctx.fillText('[D] выкинуть', descX, descY + 40 * sy);
     }
   } else {
     ctx.fillStyle = '#555';
@@ -711,6 +863,116 @@ function drawQuestLog(
   ctx.font = `${7 * sy}px monospace`;
   const hint = all.length > 1 ? '[W/S] листать  |  [Q] закрыть' : '[Q] закрыть';
   ctx.fillText(hint, px + 8 * sx, py + ph - 8 * sy);
+}
+
+/* ── Faction relations matrix (F key) ─────────────────────────── */
+const MATRIX_LABELS = ['Игрок', 'Граждане', 'Ликвид.', 'Культ.', 'Учёные', 'Дикие'];
+const MATRIX_FACTIONS = [Faction.PLAYER, Faction.CITIZEN, Faction.LIQUIDATOR, Faction.CULTIST, Faction.SCIENTIST, Faction.WILD];
+
+function drawFactionMenu(
+  ctx: CanvasRenderingContext2D,
+  _player: Entity,
+  _entities: Entity[],
+  sx: number, sy: number,
+): void {
+  const w = ctx.canvas.width;
+  const h = ctx.canvas.height;
+  const cols = MATRIX_LABELS.length; // 6
+
+  // Fullscreen background
+  ctx.fillStyle = 'rgba(10,10,15,0.94)';
+  ctx.fillRect(0, 0, w, h);
+
+  // Title
+  ctx.fillStyle = '#da4';
+  ctx.font = `bold ${12 * sy}px monospace`;
+  ctx.textAlign = 'center';
+  ctx.fillText('ОТНОШЕНИЯ ФРАКЦИЙ', w / 2, 20 * sy);
+
+  // Compute values directly from dynamic faction matrix
+  const values: number[][] = [];
+  for (let r = 0; r < cols; r++) {
+    values[r] = [];
+    for (let c = 0; c < cols; c++) {
+      values[r][c] = getFactionRel(MATRIX_FACTIONS[r], MATRIX_FACTIONS[c]);
+    }
+  }
+
+  // Layout: divide available space evenly
+  const topY = 32 * sy;
+  const botY = h - 16 * sy;
+  const leftX = 4 * sx;
+  const rightX = w - 4 * sx;
+  const tableW = rightX - leftX;
+  const tableH = botY - topY;
+  const cellW = tableW / (cols + 1);
+  const cellH = tableH / (cols + 1);
+  const fontSize = Math.min(cellH * 0.55, cellW * 0.15, 10 * sy);
+  const labelFontSize = Math.min(cellH * 0.5, cellW * 0.14, 9 * sy);
+
+  // Column headers
+  ctx.font = `bold ${labelFontSize}px monospace`;
+  for (let c = 0; c < cols; c++) {
+    const cx = leftX + (c + 1) * cellW + cellW / 2;
+    const cy = topY + cellH / 2;
+    ctx.fillStyle = c === 0 ? '#fff' : '#ccc';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(MATRIX_LABELS[c], cx, cy);
+  }
+
+  // Row headers + values
+  for (let r = 0; r < cols; r++) {
+    const ry = topY + (r + 1) * cellH + cellH / 2;
+
+    // Row label
+    ctx.fillStyle = r === 0 ? '#fff' : '#ccc';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.font = `bold ${labelFontSize}px monospace`;
+    ctx.fillText(MATRIX_LABELS[r], leftX + cellW / 2, ry);
+
+    // Values
+    ctx.font = `${fontSize}px monospace`;
+    for (let c = 0; c < cols; c++) {
+      const v = values[r][c];
+      const cx = leftX + (c + 1) * cellW + cellW / 2;
+      if (r === c) {
+        ctx.fillStyle = '#555';
+        ctx.fillText('—', cx, ry);
+      } else {
+        ctx.fillStyle = v >= 50 ? '#4f4' : v >= 0 ? '#cc4' : v >= -50 ? '#f84' : '#f44';
+        ctx.fillText(String(v), cx, ry);
+      }
+    }
+
+    // Grid line
+    const lineY = topY + (r + 1) * cellH;
+    ctx.strokeStyle = 'rgba(100,100,100,0.3)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(leftX, lineY);
+    ctx.lineTo(rightX, lineY);
+    ctx.stroke();
+  }
+
+  // Vertical grid lines
+  for (let c = 1; c <= cols; c++) {
+    const lx = leftX + c * cellW;
+    ctx.beginPath();
+    ctx.moveTo(lx, topY + cellH);
+    ctx.lineTo(lx, botY);
+    ctx.stroke();
+  }
+
+  // Hint
+  ctx.fillStyle = '#555';
+  ctx.font = `${8 * sy}px monospace`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'top';
+  ctx.fillText('[F] закрыть', w / 2, botY + 2 * sy);
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'top';
 }
 
 /* ── Game menu (ESC) ──────────────────────────────────────────── */

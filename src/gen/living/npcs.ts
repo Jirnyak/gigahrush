@@ -3,11 +3,11 @@
 import {
   W, Cell,
   type Entity,
-  EntityType, AIGoal, Faction, Occupation,
+  EntityType, AIGoal, Faction, Occupation, RoomType,
 } from '../../core/types';
 import { World } from '../../core/world';
 import { ITEMS, randomName, freshNeeds, NOTES } from '../../data/catalog';
-import { randomFaction, randomOccupation, initRelations } from '../../data/relations';
+import { randomFaction, randomOccupation } from '../../data/relations';
 import { rng, pick, weightedPick } from '../shared';
 import { gaussianLevel, randomRPG, getMaxHp } from '../../systems/rpg';
 import type { AptPlan } from './apartments';
@@ -33,6 +33,21 @@ export function spawnRoomItems(
       });
     }
   }
+
+  // ── Story items: 128 idol_chernobog scattered across the world ──
+  const eligibleRooms = world.rooms.filter(r => r && r.w >= 3 && r.h >= 3 &&
+    [RoomType.COMMON, RoomType.STORAGE, RoomType.OFFICE, RoomType.SMOKING].includes(r.type));
+  for (let i = 0; i < 128 && eligibleRooms.length > 0; i++) {
+    const room = eligibleRooms[Math.floor(Math.random() * eligibleRooms.length)];
+    const ix = room.x + rng(1, Math.max(1, room.w - 2));
+    const iy = room.y + rng(1, Math.max(1, room.h - 2));
+    entities.push({
+      id: nextId++, type: EntityType.ITEM_DROP,
+      x: ix + 0.5, y: iy + 0.5, angle: 0, pitch: 0, alive: true, speed: 0, sprite: 16,
+      inventory: [{ defId: 'idol_chernobog', count: 1 }],
+    });
+  }
+
   return nextId;
 }
 
@@ -41,8 +56,6 @@ export function spawnFamilies(
   world: World, apartments: AptPlan[], entities: Entity[], nextIdStart: number,
 ): number {
   let nextId = nextIdStart;
-  const npcSlots: { relIdx: number; familyId: number; faction: number }[] = [];
-  let relIdx = 1;
 
   for (let a = 0; a < apartments.length; a++) {
     const apt = apartments[a];
@@ -77,14 +90,14 @@ export function spawnFamilies(
         inventory: [], familyId: a, faction, occupation, questId: -1,
         rpg,
       });
-      npcSlots.push({ relIdx, familyId: a, faction });
-      relIdx++;
     }
   }
 
-  initRelations(npcSlots);
   return nextId;
 }
+
+const _PSI_IDS = ['psi_strike','psi_rupture','psi_madness','psi_storm','psi_brainburn'];
+function _pickPsi(): string { return _PSI_IDS[Math.floor(Math.random() * _PSI_IDS.length)]; }
 
 /* ── Spawn traveler NPCs — путники, паломники, охотники ──────── */
 export function spawnTravelers(
@@ -126,7 +139,10 @@ export function spawnTravelers(
         hp: maxHp, maxHp,
         money: rng(10, 80),
         ai: { goal: AIGoal.IDLE, tx: 0, ty: 0, path: [], pi: 0, stuck: 0, timer: 0 },
-        inventory: [], faction: def.faction, occupation: def.occupation,
+        inventory: (def.faction === Faction.CULTIST && Math.random() < 0.3)
+          ? [{ defId: _pickPsi(), count: 1 }] : [],
+        weapon: (def.faction === Faction.CULTIST && Math.random() < 0.3) ? _pickPsi() : undefined,
+        faction: def.faction, occupation: def.occupation,
         isTraveler: true, questId: -1,
         rpg,
       });
