@@ -16,6 +16,7 @@ export function createInput(): InputState {
     pee: false,
     drop: false,
     factionMenu: false,
+    logMenu: false,
     mouse: { dx: 0, dy: 0, locked: false },
   };
 }
@@ -29,6 +30,7 @@ export function bindInput(input: InputState, canvas: HTMLCanvasElement): () => v
     Space: 'attack',
     KeyE: 'interact',
     KeyF: 'factionMenu',
+    KeyL: 'logMenu',
     KeyM: 'map',
     KeyI: 'inv',
     KeyR: 'use', // restart (handled in main)

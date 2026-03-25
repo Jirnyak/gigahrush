@@ -386,17 +386,22 @@ export interface GameState {
   npcMenuTab: string;         // 'main'|'talk'|'quest'|'trade'
   npcTalkText: string;
   questPage: number;
-  tradeSel: number;
-  tradeMode: string;          // 'npc'|'player'
+  tradeCursorX: number;       // 0..4 column in trade grid
+  tradeCursorY: number;       // 0..4 row in trade grid
+  tradeSide: string;          // 'player'|'npc'
   showDebug: boolean;
   debugSel: number;
   showFactions: boolean;       // faction relations matrix (F key)
+  showLog: boolean;            // message log menu (L key)
+  logScroll: number;           // scroll offset in log menu
+  msgLog: LogEntry[];          // persistent message log with timestamps
   dmgFlash: number;           // damage vignette intensity 0..1, decays over time
   dmgSeed: number;            // random seed for vein pattern per hit
   deathTimer: number;         // seconds since player death (for camera drop)
 }
 
 export interface Msg { text: string; time: number; color: string; }
+export interface LogEntry { text: string; color: string; day: number; hour: number; minute: number; }
 
 // ── Input ────────────────────────────────────────────────────────
 export interface InputState {
@@ -415,5 +420,6 @@ export interface InputState {
   pee: boolean;                 // P key — urinate
   drop: boolean;                // D key — drop item (inventory)
   factionMenu: boolean;         // F key — faction relations matrix
+  logMenu: boolean;             // L key — message log
   mouse: { dx: number; dy: number; locked: boolean; };
 }

@@ -72,6 +72,45 @@ function addStripe(t: Uint32Array, r: number, g: number, b: number, bodyTop: num
       if (x >= 0 && x < S) t[y * S + x] = rgba(clamp(r), clamp(g), clamp(b));
 }
 
+function addHair(t: Uint32Array, r: number, g: number, b: number, headTop: number, headBot: number) {
+  const cx = S / 2;
+  const headRad = Math.floor((headBot - headTop) / 2);
+  const hairTop = headTop - 2;
+  // Top volume — rounded
+  for (let y = hairTop; y < headTop + 4; y++) {
+    const row = y - hairTop;
+    const shrink = row < 2 ? (2 - row) * 2 : 0;
+    for (let x = cx - headRad - 1 + shrink; x <= cx + headRad + 1 - shrink; x++)
+      if (x >= 0 && x < S && y >= 0) {
+        const n = noise(x, y, 55) * 10;
+        t[y * S + x] = rgba(clamp(r + n), clamp(g + n), clamp(b + n));
+      }
+  }
+  // Side locks
+  for (let y = headTop + 2; y < headBot + 4; y++)
+    for (let side = -1; side <= 1; side += 2)
+      for (let w = 0; w < 2; w++) {
+        const x = cx + side * (headRad + 1 - w);
+        if (x >= 0 && x < S) {
+          const n = noise(x, y, 55) * 10;
+          t[y * S + x] = rgba(clamp(r + n), clamp(g + n), clamp(b + n));
+        }
+      }
+  // Right bang sweeping down over forehead
+  const headCy = Math.floor((headTop + headBot) / 2);
+  for (let y = headTop + 1; y < headCy + 2; y++) {
+    const progress = (y - headTop - 1) / (headCy + 1 - headTop);
+    const width = Math.floor(1 + progress * 3);
+    for (let w = 0; w < width; w++) {
+      const x = cx + headRad - 1 - w;
+      if (x >= 0 && x < S) {
+        const n = noise(x, y, 55) * 10;
+        t[y * S + x] = rgba(clamp(r + n), clamp(g + n), clamp(b + n));
+      }
+    }
+  }
+}
+
 /* ── Occupation sprites — indexed by Occupation enum value ───── */
 // Normal adult proportions: head 8-22, body 22-44, legs 44-58
 const H_TOP = 8, H_BOT = 22, B_TOP = 22, B_BOT = 44, L_BOT = 58;
@@ -104,6 +143,7 @@ function genCook(): Uint32Array {
 }
 function genDoctor(): Uint32Array {
   const t = genHumanoid(185, 165, 150, 230, 240, 240, 60, 60, 80, 5, H_TOP, H_BOT, B_TOP, B_BOT, L_BOT);
+  addHair(t, 100, 70, 40, H_TOP, H_BOT); // brown hair
   addStripe(t, 200, 40, 40, B_TOP, B_TOP + 10); // red cross
   return t;
 }

@@ -20,7 +20,7 @@ import { updateAI, getNpcStateText } from './systems/ai';
 import { updateSamosbor, clearFogInZone } from './systems/samosbor';
 import { pickupNearby, useItem, dropItem, getWeaponStats, addItem, consumeDurability, consumeAmmo } from './systems/inventory';
 import { createInput, bindInput } from './input';
-import { freshNeeds } from './data/catalog';
+import { freshNeeds, ITEMS } from './data/catalog';
 import {
   playFootstep, playAttack, playDoor,
   playGunshot, playShotgun, playNailgun, playBreak,
@@ -134,11 +134,15 @@ function initGame(): void {
     npcMenuTab: 'main',
     npcTalkText: '',
     questPage: 0,
-    tradeSel: 0,
-    tradeMode: 'npc',
+    tradeCursorX: 0,
+    tradeCursorY: 0,
+    tradeSide: 'npc',
     showDebug: false,
     debugSel: 0,
     showFactions: false,
+    showLog: false,
+    logScroll: 0,
+    msgLog: [{ text: 'Добро пожаловать в ГИГАХРУЩ. Закройте дверь.', color: '#aaa', day: 0, hour: 8, minute: 0 }],
     dmgFlash: 0,
     dmgSeed: 0,
     deathTimer: 0,
@@ -155,6 +159,26 @@ bindInput(input, canvas);
 /* ── Toggles (edge-detect) ────────────────────────────────────── */
 let prevMap = false, prevSamosbor = false, prevDebug = false; // eslint-disable-line
 let stepAccum = 0; // footstep sound accumulator
+let _prevMsgCount = 0; // for syncing msgs → msgLog
+
+/** Sync new msgs to persistent msgLog with clock timestamps */
+function syncMsgLog(): void {
+  const msgs = state.msgs;
+  if (msgs.length > _prevMsgCount) {
+    const day = Math.floor(state.clock.totalMinutes / 1440);
+    for (let i = _prevMsgCount; i < msgs.length; i++) {
+      state.msgLog.push({
+        text: msgs[i].text,
+        color: msgs[i].color,
+        day,
+        hour: state.clock.hour,
+        minute: state.clock.minute,
+      });
+    }
+    if (state.msgLog.length > 500) state.msgLog.splice(0, state.msgLog.length - 500);
+  }
+  _prevMsgCount = msgs.length;
+}
 
 /* ── Door auto-close update ───────────────────────────────────── */
 function updateDoors(dt: number): void {
@@ -624,8 +648,9 @@ function openNpcMenu(npc: Entity): void {
   state.npcMenuTarget = npc.id;
   state.npcMenuTab = 'main';
   state.npcTalkText = '';
-  state.tradeSel = 0;
-  state.tradeMode = 'npc';
+  state.tradeCursorX = 0;
+  state.tradeCursorY = 0;
+  state.tradeSide = 'npc';
   // Generate NPC trade inventory if empty
   if (!npc.inventory || npc.inventory.length === 0) {
     npc.inventory = generateNpcTradeItems(npc);
@@ -878,6 +903,7 @@ let prevEsc = false, prevInvMenu = false, prevQuestMenu = false;
 let prevMenuUp = false, prevMenuDn = false, prevMenuLeft = false, prevMenuRight = false;
 let prevMenuInteract = false, prevDrop = false;
 let prevFactionMenu = false;
+let prevLogMenu = false;
 
 function handleMenuInput(): void {
   const escEdge = input.escape && !prevEsc;
@@ -890,6 +916,7 @@ function handleMenuInput(): void {
   const invEdge = input.inv && !prevInvMenu;
   const questEdge = input.questLog && !prevQuestMenu;
   const factionEdge = input.factionMenu && !prevFactionMenu;
+  const logEdge = input.logMenu && !prevLogMenu;
 
   // ── Enter: toggle game menu (or close any open menu) ─────
   if (escEdge) {
@@ -897,6 +924,7 @@ function handleMenuInput(): void {
     else if (state.showInventory) { state.showInventory = false; }
     else if (state.showQuests) { state.showQuests = false; }
     else if (state.showFactions) { state.showFactions = false; }
+    else if (state.showLog) { state.showLog = false; }
     else { state.showMenu = !state.showMenu; state.menuSel = 0; }
   }
 
@@ -971,8 +999,9 @@ function handleMenuInput(): void {
             break;
           case 2: // Trade
             state.npcMenuTab = 'trade';
-            state.tradeSel = 0;
-            state.tradeMode = 'npc';
+            state.tradeCursorX = 0;
+            state.tradeCursorY = 0;
+            state.tradeSide = 'npc';
             break;
         }
       }
@@ -985,39 +1014,62 @@ function handleMenuInput(): void {
       if (interactEdge || escEdge) state.npcMenuTab = 'main';
     } else if (state.npcMenuTab === 'trade') {
       if (npc) {
-        const npcInv = npc.inventory ?? [];
-        const plrInv = player.inventory ?? [];
-        const maxItems = state.tradeMode === 'npc' ? npcInv.length : plrInv.length;
-        if (upEdge) state.tradeSel = Math.max(0, state.tradeSel - 1);
-        if (dnEdge) state.tradeSel = Math.min(Math.max(0, maxItems - 1), state.tradeSel + 1);
-        if (leftEdge || rightEdge) {
-          state.tradeMode = state.tradeMode === 'npc' ? 'player' : 'npc';
-          state.tradeSel = 0;
+        const GRID = 5;
+        // W/S — move cursor up/down
+        if (upEdge) state.tradeCursorY = Math.max(0, state.tradeCursorY - 1);
+        if (dnEdge) state.tradeCursorY = Math.min(GRID - 1, state.tradeCursorY + 1);
+        // A/D — move cursor left/right, crossing between panels
+        if (leftEdge) {
+          if (state.tradeCursorX > 0) {
+            state.tradeCursorX--;
+          } else if (state.tradeSide === 'npc') {
+            state.tradeSide = 'player';
+            state.tradeCursorX = GRID - 1;
+          }
         }
+        if (rightEdge) {
+          if (state.tradeCursorX < GRID - 1) {
+            state.tradeCursorX++;
+          } else if (state.tradeSide === 'player') {
+            state.tradeSide = 'npc';
+            state.tradeCursorX = 0;
+          }
+        }
+        // E — buy or sell
         if (interactEdge) {
-          if (state.tradeMode === 'npc' && npcInv.length > state.tradeSel) {
-            // Buy from NPC: take their item, they get a random player item
-            const npcSlot = npcInv[state.tradeSel];
-            if (plrInv.length > 0) {
-              const giveIdx = Math.min(plrInv.length - 1, Math.floor(Math.random() * plrInv.length));
-              const giveSlot = plrInv[giveIdx];
-              // Swap
-              addItem(player, npcSlot.defId, 1);
-              npcSlot.count--;
-              if (npcSlot.count <= 0) npcInv.splice(state.tradeSel, 1);
-              giveSlot.count--;
-              if (giveSlot.count <= 0) plrInv.splice(giveIdx, 1);
-              state.msgs.push({ text: 'Обмен совершён', time: state.time, color: '#4f4' });
+          const idx = state.tradeCursorY * GRID + state.tradeCursorX;
+          const npcInv = npc.inventory ?? [];
+          const plrInv = player.inventory ?? [];
+          if (state.tradeSide === 'npc' && idx < npcInv.length) {
+            // Buy from NPC
+            const slot = npcInv[idx];
+            const def = ITEMS[slot.defId];
+            const price = def?.value ?? 0;
+            if ((player.money ?? 0) >= price) {
+              addItem(player, slot.defId, 1);
+              player.money = (player.money ?? 0) - price;
+              npc.money = (npc.money ?? 0) + price;
+              slot.count--;
+              if (slot.count <= 0) npcInv.splice(idx, 1);
+              state.msgs.push({ text: `Куплено: ${def?.name ?? slot.defId} (−${price}₽)`, time: state.time, color: '#4f4' });
             } else {
-              state.msgs.push({ text: 'Нечего предложить', time: state.time, color: '#f84' });
+              state.msgs.push({ text: 'Не хватает денег', time: state.time, color: '#f84' });
             }
-          } else if (state.tradeMode === 'player' && plrInv.length > state.tradeSel) {
+          } else if (state.tradeSide === 'player' && idx < plrInv.length) {
             // Sell to NPC
-            const plrSlot = plrInv[state.tradeSel];
-            addItem(npc, plrSlot.defId, 1);
-            plrSlot.count--;
-            if (plrSlot.count <= 0) plrInv.splice(state.tradeSel, 1);
-            state.msgs.push({ text: 'Предмет передан', time: state.time, color: '#4f4' });
+            const slot = plrInv[idx];
+            const def = ITEMS[slot.defId];
+            const price = def?.value ?? 0;
+            if ((npc.money ?? 0) >= price) {
+              addItem(npc, slot.defId, 1);
+              npc.money = (npc.money ?? 0) - price;
+              player.money = (player.money ?? 0) + price;
+              slot.count--;
+              if (slot.count <= 0) plrInv.splice(idx, 1);
+              state.msgs.push({ text: `Продано: ${def?.name ?? slot.defId} (+${price}₽)`, time: state.time, color: '#4f4' });
+            } else {
+              state.msgs.push({ text: 'У торговца нет денег', time: state.time, color: '#f84' });
+            }
           }
         }
       }
@@ -1038,6 +1090,13 @@ function handleMenuInput(): void {
   else if (state.showFactions) {
     if (factionEdge || escEdge) { state.showFactions = false; }
   }
+  // ── Message log menu ─────────────────────────────────────
+  else if (state.showLog) {
+    if (logEdge || escEdge) { state.showLog = false; }
+    const maxScroll = Math.max(0, state.msgLog.length * 3); // generous; draw clamps
+    if (upEdge) state.logScroll = Math.min(maxScroll, state.logScroll + 3);
+    if (dnEdge) state.logScroll = Math.max(0, state.logScroll - 3);
+  }
   // ── Normal gameplay toggles ──────────────────────────────
   else {
     const dbgEdge = input.debugScreen && !prevDebug;
@@ -1045,6 +1104,7 @@ function handleMenuInput(): void {
     if (invEdge) { state.showInventory = true; state.invSel = 0; }
     if (questEdge) { state.showQuests = true; }
     if (factionEdge) { state.showFactions = true; }
+    if (logEdge) { state.showLog = true; state.logScroll = 0; }
   }
 
   // Update prev states
@@ -1059,9 +1119,10 @@ function handleMenuInput(): void {
   prevQuestMenu = input.questLog;
   prevDebug = input.debugScreen;
   prevFactionMenu = input.factionMenu;
+  prevLogMenu = input.logMenu;
 
   // Auto-pause when any menu is open
-  state.paused = state.showMenu || state.showInventory || state.showNpcMenu || state.showQuests || state.showDebug || state.showFactions;
+  state.paused = state.showMenu || state.showInventory || state.showNpcMenu || state.showQuests || state.showDebug || state.showFactions || state.showLog;
 }
 
 /* ── Game loop ────────────────────────────────────────────────── */
@@ -1186,8 +1247,10 @@ function gameLoop(now: number): void {
       }
     }
 
-    // Trim old messages
+    // Sync new messages to persistent log, then trim
+    syncMsgLog();
     while (state.msgs.length > 50) state.msgs.shift();
+    _prevMsgCount = state.msgs.length;
   }
 
   // ── World simulation continues after death (NPC, monsters, samosbor keep running) ──
@@ -1214,7 +1277,9 @@ function gameLoop(now: number): void {
         }
       }
     }
+    syncMsgLog();
     while (state.msgs.length > 50) state.msgs.shift();
+    _prevMsgCount = state.msgs.length;
   }
 
   checkRestart();
