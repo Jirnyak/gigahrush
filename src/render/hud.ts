@@ -3,11 +3,11 @@
 import { SCR_W, SCR_H } from './engine';
 import {
   type Entity, type GameState, EntityType, Cell, Feature,
-  ZoneFaction,
+  ZoneFaction, LiftDirection,
 } from '../core/types';
 import { World } from '../core/world';
 import { ITEMS, WEAPON_STATS } from '../data/catalog';
-import { getEquippedDurability, countAmmo } from '../systems/inventory';
+import { getEquippedDurability, getEquippedToolDurability, countAmmo } from '../systems/inventory';
 import { xpForLevel } from '../systems/rpg';
 import { drawDebugOverlay } from '../systems/debug';
 import { ZONE_COLORS, drawMinimap, drawFullMap } from './map_ui';
@@ -19,6 +19,11 @@ import { drawGameMenu } from './menu_ui';
 import { drawNpcMenu } from './npc_ui';
 
 const BAR_W = 50, BAR_H = 5;
+
+function toPercent(current: number, max: number): number {
+  if (max <= 0) return 0;
+  return Math.max(0, Math.min(100, current / max * 100));
+}
 
 const ZONE_FACTION_NAMES: Record<ZoneFaction, string> = {
   [ZoneFaction.CITIZEN]: 'Граждане',
@@ -58,28 +63,27 @@ export function drawHUD(
   ctx.fillRect(0, barY, w, 32 * sy);
 
   if (player.needs) {
-    const bars: [string, number, string][] = [
-      ['ХП',   (player.hp ?? 100), '#e44'],
+    const bars: [string, number, number, string][] = [
+      ['ХП', player.hp ?? 100, player.maxHp ?? 100, '#e44'],
     ];
     if (player.rpg) {
-      bars.push(['ПСИ', (player.rpg.psi / player.rpg.maxPsi) * 100, '#a4f']);
+      bars.push(['ПСИ', player.rpg.psi, player.rpg.maxPsi, '#a4f']);
     }
     bars.push(
-      ['ЕДА',  player.needs.food,  '#8a4'],
-      ['ВОДА', player.needs.water, '#48c'],
-      ['СОН',  player.needs.sleep, '#a8f'],
-      ['ТУАЛ', Math.max(0, 100 - player.needs.pee), '#da4'],
+      ['ЕДА', player.needs.food, 100, '#8a4'],
+      ['ВОДА', player.needs.water, 100, '#48c'],
+      ['СОН', player.needs.sleep, 100, '#a8f'],
+      ['ТУАЛ', Math.max(0, 100 - player.needs.pee), 100, '#da4'],
     );
     if (player.rpg) {
-      const xpNeeded = xpForLevel(player.rpg.level + 1);
-      const xpPct = xpNeeded > 0 ? (player.rpg.xp / xpNeeded) * 100 : 0;
-      bars.push(['XP', xpPct, '#af4']);
+      bars.push(['XP', player.rpg.xp, xpForLevel(player.rpg.level + 1), '#af4']);
     }
-    bars.forEach(([label, val, color], i) => {
+    bars.forEach(([label, current, max, color], i) => {
       const barSpacing = bars.length > 5 ? 44 : 62;
       const barW = bars.length > 5 ? 36 : BAR_W;
       const bx = 8 * sx + i * barSpacing * sx;
       const by = barY + 4 * sy;
+      const pct = toPercent(current, max);
       // Label
       ctx.fillStyle = '#aaa';
       ctx.font = `${7 * sy}px monospace`;
@@ -89,7 +93,7 @@ export function drawHUD(
       ctx.fillRect(bx, by + 9 * sy, barW * sx, BAR_H * sy);
       // Bar fill
       ctx.fillStyle = color;
-      ctx.fillRect(bx, by + 9 * sy, barW * sx * val / 100, BAR_H * sy);
+      ctx.fillRect(bx, by + 9 * sy, barW * sx * pct / 100, BAR_H * sy);
     });
   }
 
@@ -111,6 +115,15 @@ export function drawHUD(
       ctx.fillText(`${wpn} (${ws.dmg})`, w - 8 * sx, weaponY);
     }
   }
+  const toolY = weaponY - 10 * sy;
+  if (player.tool) {
+    const toolName = ITEMS[player.tool]?.name ?? player.tool;
+    const toolDur = getEquippedToolDurability(player);
+    const toolLabel = toolDur ? `${toolName} [${Math.max(0, Math.ceil(toolDur.cur))}/${toolDur.max}]` : toolName;
+    ctx.fillStyle = '#8cf';
+    ctx.fillText(toolLabel, w - 8 * sx, toolY);
+    ctx.fillStyle = '#ccc';
+  }
   ctx.textAlign = 'left';
 
   // Universal [E] interaction prompt (color changes per target object)
@@ -121,8 +134,12 @@ export function drawHUD(
     const cell = world.cells[lci];
     let targetId = 0; // unique id for color hashing
     let canInteract = false;
-    if (cell === Cell.DOOR) { canInteract = true; targetId = lci + 100000; }
-    else if (cell === Cell.LIFT || world.features[lci] === Feature.LIFT_BUTTON) { canInteract = true; targetId = lci + 200000; }
+    let liftHint = '';
+    if (cell === Cell.DOOR && world.doors.has(lci)) { canInteract = true; targetId = lci + 100000; }
+    else if (cell === Cell.LIFT || world.features[lci] === Feature.LIFT_BUTTON) {
+      canInteract = true; targetId = lci + 200000;
+      liftHint = world.liftDir[lci] === LiftDirection.UP ? ' ↑' : ' ↓';
+    }
     if (!canInteract) {
       let bestD = 2.0;
       for (const e of entities) {
@@ -140,7 +157,7 @@ export function drawHUD(
       ctx.fillStyle = `rgb(${er},${eg},${eb})`;
       ctx.font = `${9 * sy}px monospace`;
       ctx.textAlign = 'center';
-      ctx.fillText('[E]', w / 2, h / 2 + 30 * sy);
+      ctx.fillText(`[E]${liftHint}`, w / 2, h / 2 + 30 * sy);
       ctx.textAlign = 'left';
     }
   }
@@ -287,6 +304,21 @@ export function drawHUD(
   // ── Debug screen (~) ─────────────────────────────────────
   if (state.showDebug) {
     drawDebugOverlay(ctx, sx, sy, w, h, world, entities, state.debugSel);
+  }
+
+  // ── Sleep overlay (Z held) ───────────────────────────────
+  if (state.sleeping) {
+    ctx.fillStyle = 'rgba(0,0,0,0.7)';
+    ctx.fillRect(0, 0, w, h);
+    ctx.fillStyle = '#a8f';
+    ctx.font = `bold ${16 * sy}px monospace`;
+    ctx.textAlign = 'center';
+    const sleepPct = Math.floor(player.needs?.sleep ?? 0);
+    ctx.fillText(`Сон... ${sleepPct}%`, w / 2, h / 2 - 10 * sy);
+    ctx.fillStyle = '#666';
+    ctx.font = `${8 * sy}px monospace`;
+    ctx.fillText('[Z] — отпустите чтобы проснуться', w / 2, h / 2 + 10 * sy);
+    ctx.textAlign = 'left';
   }
 
   ctx.restore();

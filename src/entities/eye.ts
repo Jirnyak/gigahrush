@@ -12,10 +12,10 @@ export const DEF: MonsterDef = {
   speed: 2.2,
   dmg: 10,
   attackRate: 2.5,
-  sprite: 22,
+  sprite: 0,   // auto-assigned by generateSprites()
   isRanged: true,
   projSpeed: 8,
-  projSprite: 27,       // eye bolt sprite
+  projSprite: 0,        // auto-assigned to Spr.EYE_BOLT
 };
 
 export function generateSprite(): Uint32Array {

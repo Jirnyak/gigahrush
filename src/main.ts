@@ -2,30 +2,35 @@
 import './index.css';
 
 import {
-  W, Cell, DoorState, FloorLevel, Feature, Tex, RoomType,
+  W, Cell, DoorState, FloorLevel, Feature, Tex, RoomType, LiftDirection,
   type Entity, type GameState,
-  EntityType, Faction, Occupation,
+  EntityType, Faction, MonsterKind,
 } from './core/types';
 import { World } from './core/world';
 import { generateWorld } from './gen/living';
 import { generateMaintenance } from './gen/maintenance';
-import { generateHell } from './gen/hell';
+import { generateHell, updateHellPopulation, resetHellPopulationState } from './gen/hell';
 import { generateTextures } from './render/textures';
 import { generateSprites } from './render/sprites';
+import { Spr } from './render/sprite_index';
 import { renderScene, SCR_W, SCR_H, HALF_FOV, zBuf } from './render/engine';
 import { drawHUD } from './render/hud';
 import { spawnBloodHit, spawnDeathPool, updateBloodTrails, updateParticles, renderParticles } from './render/blood';
 import { updateNeeds } from './systems/needs';
-import { updateAI, getNpcStateText } from './systems/ai';
-import { updateSamosbor, clearFogInZone } from './systems/samosbor';
-import { pickupNearby, useItem, dropItem, getWeaponStats, addItem, consumeDurability, consumeAmmo } from './systems/inventory';
+import { updateAI } from './systems/ai';
+import { generateTalkText, generateNpcTradeItems } from './data/dialogue';
+import { updateSamosbor, rebuildWorld, clearFogInZone } from './systems/samosbor';
+import {
+  pickupNearby, useItem, dropItem, getWeaponStats, addItem,
+  consumeDurability, consumeAmmo, consumeToolDurability, getEquippedToolDurability,
+} from './systems/inventory';
 import { createInput, bindInput } from './input';
 import { freshNeeds, ITEMS } from './data/catalog';
 import {
   playFootstep, playAttack, playDoor,
   playGunshot, playShotgun, playNailgun, playBreak,
   playFleshHit, playPsiCast,
-  startAmbientDrone,
+  startAmbientDrone, setListenerPos,
 } from './systems/audio';
 import { offerQuest, checkQuests, checkTalkQuest, notifyKill } from './systems/quests';
 import {
@@ -36,14 +41,14 @@ import {
 import { execDebugCommand } from './systems/debug';
 import {
   castInstantSpell, updatePsiEffects, psiAoeExplosion,
-  isPhaseActive, resetPsiState,
+  isNoClipActive, resetPsiState,
 } from './systems/psi';
 import {
   applyDamageRelationPenalty,
   updateFactionCapture, initFactionControl, countFactionTerritory, spawnPatrolSquads,
-  zoneFactionToFaction,
+  zoneFactionToFaction, spawnTerritoryReinforcements,
 } from './systems/factions';
-import { addFactionRel, initFactionRelations } from './data/relations';
+import { addFactionRel, addFactionRelMutual, initFactionRelations } from './data/relations';
 import { type DeathCam, initDeathCam, updateDeathCam, getDeathCamAngle, getDeathCamPitch } from './systems/death';
 
 /* ── Canvas setup ─────────────────────────────────────────────── */
@@ -73,6 +78,18 @@ let state: GameState;
 let nextEntityId = { v: 1 };
 let prevPlayerHp = 100; // track HP changes for damage flash
 let deathCam: DeathCam | null = null;
+let pendingLoad: (() => void) | null = null; // deferred heavy generation callback
+let pendingLoadDrawn = false; // true = loading screen was painted, next frame runs the callback
+
+function drawLoading(): void {
+  ctx.fillStyle = '#000';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = '#aaa';
+  ctx.font = `${Math.round(canvas.height / 20)}px monospace`;
+  ctx.textAlign = 'center';
+  ctx.fillText('ЗАГРУЗКА...', canvas.width / 2, canvas.height / 2);
+  ctx.textAlign = 'left';
+}
 
 function initGame(): void {
   const gen = generateWorld();
@@ -95,6 +112,7 @@ function initGame(): void {
     money: 100,
     inventory: [],
     weapon: '',
+    tool: '',
     name: 'Вы',
     rpg: freshRPG(1),
     faction: Faction.PLAYER,
@@ -107,6 +125,7 @@ function initGame(): void {
   initFactionControl(world);
   const fStats = countFactionTerritory(world);
   spawnPatrolSquads(world, entities, nextEntityId, fStats);
+  resetHellPopulationState();
 
   state = {
     tick: 0,
@@ -146,18 +165,23 @@ function initGame(): void {
     dmgFlash: 0,
     dmgSeed: 0,
     deathTimer: 0,
+    sleeping: false,
   };
   resetPsiState();
 }
 
-initGame();
+drawLoading();
+setTimeout(() => {
+  initGame();
+  showTitle();
+}, 0);
 
 /* ── Input ────────────────────────────────────────────────────── */
 const input = createInput();
 bindInput(input, canvas);
 
 /* ── Toggles (edge-detect) ────────────────────────────────────── */
-let prevMap = false, prevSamosbor = false, prevDebug = false; // eslint-disable-line
+let prevMap = false, prevDebug = false; // eslint-disable-line
 let stepAccum = 0; // footstep sound accumulator
 let _prevMsgCount = 0; // for syncing msgs → msgLog
 
@@ -195,6 +219,7 @@ function updateDoors(dt: number): void {
 /* ── Player movement ──────────────────────────────────────────── */
 function movePlayer(dt: number): void {
   if (!player.alive) return;
+  if (state.sleeping) return; // no movement while sleeping
 
   // Mouse look
   if (input.mouse.locked) {
@@ -229,9 +254,10 @@ function movePlayer(dt: number): void {
     my = my / len * speed * sleepMod * agiMod;
 
     const r = 0.2; // collision radius
-    // X movement – check all 4 AABB corners (skip if phase shift active)
+    const canClip = isNoClipActive();
+    // X movement – check all 4 AABB corners (skip if noclip effect is active)
     const nx = player.x + mx;
-    if (isPhaseActive() || (
+    if (canClip || (
         !world.solid(Math.floor(nx + r), Math.floor(player.y + r)) &&
         !world.solid(Math.floor(nx + r), Math.floor(player.y - r)) &&
         !world.solid(Math.floor(nx - r), Math.floor(player.y + r)) &&
@@ -240,7 +266,7 @@ function movePlayer(dt: number): void {
     }
     // Y movement – check all 4 AABB corners (use updated X)
     const ny = player.y + my;
-    if (isPhaseActive() || (
+    if (canClip || (
         !world.solid(Math.floor(player.x + r), Math.floor(ny + r)) &&
         !world.solid(Math.floor(player.x + r), Math.floor(ny - r)) &&
         !world.solid(Math.floor(player.x - r), Math.floor(ny + r)) &&
@@ -260,6 +286,7 @@ function movePlayer(dt: number): void {
 /* ── Player actions ───────────────────────────────────────────── */
 function playerActions(_dt: number): void {
   if (!player.alive) return;
+  if (state.sleeping) return; // no actions while sleeping
 
   // Toggle map
   if (input.map && !prevMap) state.mapMode = (state.mapMode + 1) % 3;
@@ -291,7 +318,8 @@ function playerActions(_dt: number): void {
       const isLiftCell = world.cells[lci] === Cell.LIFT;
       const isLiftButton = world.features[lci] === Feature.LIFT_BUTTON;
       if (isLiftCell || isLiftButton) {
-        switchFloor();
+        const dir = world.liftDir[lci] as LiftDirection;
+        switchFloor(dir);
         input.interact = false;
         return;
       }
@@ -361,7 +389,7 @@ function playerActions(_dt: number): void {
             pitch: 0,
             alive: true,
             speed: 0,
-            sprite: ws.projSprite ?? 32,
+            sprite: ws.projSprite ?? Spr.PSI_BOLT,
             vx: Math.cos(player.angle) * spd,
             vy: Math.sin(player.angle) * spd,
             projDmg: ws.dmg,
@@ -405,7 +433,7 @@ function playerActions(_dt: number): void {
             pitch: 0,
             alive: true,
             speed: 0,
-            sprite: ws.projSprite ?? 29,
+            sprite: ws.projSprite ?? Spr.BULLET,
             vx: Math.cos(ang) * spd,
             vy: Math.sin(ang) * spd,
             projDmg: ws.dmg,
@@ -467,16 +495,48 @@ function playerActions(_dt: number): void {
   }
 }
 
+/* ── Drop inventory as ITEM_DROP entities at death position ──── */
+function dropEntityInventory(e: Entity): void {
+  if (!e.inventory || e.inventory.length === 0) return;
+  for (const item of e.inventory) {
+    if (!item || item.count <= 0) continue;
+    entities.push({
+      id: nextEntityId.v++, type: EntityType.ITEM_DROP,
+      x: e.x + (Math.random() - 0.5) * 0.5,
+      y: e.y + (Math.random() - 0.5) * 0.5,
+      angle: 0, pitch: 0, alive: true, speed: 0, sprite: 16,
+      inventory: [{ defId: item.defId, count: item.count, data: item.data }],
+    });
+  }
+  e.inventory = [];
+}
+
 /* ── Shared kill handling (melee + projectile) ────────────────── */
 function handleKill(e: Entity, killerIsPlayer: boolean): void {
   // Death blood pool
   spawnDeathPool(world, e.x, e.y, e.type === EntityType.MONSTER);
   state.msgs.push({ text: `${e.name ?? 'Цель'} ${e.isFemale ? 'повержена' : 'повержен'}!`, time: state.time, color: '#4f4' });
+  // Drop NPC inventory as loot
+  if (e.type === EntityType.NPC) dropEntityInventory(e);
   if (e.isFogBoss && e.fogBossZone !== undefined) {
     clearFogInZone(world, e.fogBossZone, state.msgs, state.time);
   }
   if (e.monsterKind !== undefined) {
     notifyKill(e.monsterKind, state);
+    // Drop strange_clot from Shadow when plot KILL quest for shadows is active
+    if (e.monsterKind === MonsterKind.SHADOW && killerIsPlayer) {
+      const hasPlotShadowQuest = state.quests.some(q => !q.done && q.plotStepIndex !== undefined && q.targetMonsterKind === MonsterKind.SHADOW);
+      if (hasPlotShadowQuest) {
+        entities.push({
+          id: nextEntityId.v++, type: EntityType.ITEM_DROP,
+          x: e.x + (Math.random() - 0.5) * 0.3,
+          y: e.y + (Math.random() - 0.5) * 0.3,
+          angle: 0, pitch: 0, alive: true, speed: 0, sprite: 16,
+          inventory: [{ defId: 'strange_clot', count: 1 }],
+        });
+        state.msgs.push({ text: 'Теневик выронил странный пульсирующий сгусток!', time: state.time, color: '#c8f' });
+      }
+    }
     if (killerIsPlayer) {
       awardXP(player, xpForMonsterKill(e.monsterKind, e.rpg?.level ?? 1), state.msgs, state.time);
     }
@@ -502,13 +562,25 @@ function updateProjectiles(dt: number): void {
     // Wall collision → leave bullet hole decal
     if (world.solid(Math.floor(wx), Math.floor(wy))) {
       const cellX = Math.floor(wx), cellY = Math.floor(wy);
-      const ci = world.idx(cellX, cellY);
-      // Determine impact texture coordinate based on approach direction
-      const avx = Math.abs(p.vx ?? 0), avy = Math.abs(p.vy ?? 0);
-      const texU = avx > avy ? (wy - cellY) : (wx - cellX);
-      const tx = Math.floor(texU * 64) & 63;
-      const ty = Math.floor(64 * 0.35 + Math.random() * 64 * 0.3);
-      world.addDecal(ci, tx, ty);
+      const bvx = p.vx ?? 0, bvy = p.vy ?? 0;
+      const avx = Math.abs(bvx), avy = Math.abs(bvy);
+      // Precise impact U: step back from penetration to the wall face boundary
+      let impactU: number;
+      if (avx > avy) {
+        const faceX = bvx > 0 ? cellX : cellX + 1;
+        const t = avx > 0.01 ? (wx - faceX) / bvx : 0;
+        impactU = ((wy - bvy * t) % 1 + 1) % 1;
+      } else {
+        const faceY = bvy > 0 ? cellY : cellY + 1;
+        const t = avy > 0.01 ? (wy - faceY) / bvy : 0;
+        impactU = ((wx - bvx * t) % 1 + 1) % 1;
+      }
+      // V = projectile flight height mapped to wall face (spriteZ 0.5 = mid-wall)
+      const impactV = 1.0 - (p.spriteZ ?? 0.5);
+      // Two-layer stamp: scorch ring + dark center
+      const seed = Math.floor(Math.random() * 99999);
+      world.stamp(cellX, cellY, impactU, impactV, 0.08, 120, seed, 25, 22, 18, true);
+      world.stamp(cellX, cellY, impactU, impactV, 0.04, 255, seed + 1, 8, 8, 8, true);
       // AoE explosion on wall impact
       if (p.aoeRadius) psiAoeExplosion(p, entities, world, state.msgs, state.time, (e) => handleKill(e, p.ownerId === player.id));
       p.alive = false;
@@ -522,7 +594,7 @@ function updateProjectiles(dt: number): void {
     const dmg = p.projDmg ?? 0;
     for (const e of entities) {
       if (!e.alive || e.id === p.ownerId) continue;
-      if (e.type !== EntityType.MONSTER && e.type !== EntityType.NPC) continue;
+      if (e.type !== EntityType.MONSTER && e.type !== EntityType.NPC && e.type !== EntityType.PLAYER) continue;
       if (world.dist(p.x, p.y, e.x, e.y) < 0.6) {
         if (e.hp !== undefined) {
           e.hp -= dmg;
@@ -535,6 +607,7 @@ function updateProjectiles(dt: number): void {
           spawnBloodHit(world, e.x, e.y, hitAngle, dmg, e.type === EntityType.MONSTER);
           if (e.hp <= 0) {
             e.alive = false;
+            e.hp = 0;
             handleKill(e, p.ownerId === player.id);
           }
         }
@@ -551,7 +624,7 @@ function updateProjectiles(dt: number): void {
 function checkRestart(): void {
   if (state.gameOver && input.use) {
     deathCam = null;
-    initGame();
+    pendingLoad = () => { initGame(); };
     input.use = false;
   }
 }
@@ -563,10 +636,21 @@ const FLOOR_NAMES: Record<FloorLevel, string> = {
   [FloorLevel.HELL]:        'Преисподняя',
 };
 
-function switchFloor(): void {
-  // Cycle to next floor
-  const nextFloor = ((state.currentFloor + 1) % 3) as FloorLevel;
-  state.currentFloor = nextFloor;
+function switchFloor(direction: LiftDirection): void {
+  // Determine target floor based on direction
+  let nextFloor: FloorLevel;
+  if (direction === LiftDirection.DOWN) {
+    if (state.currentFloor >= FloorLevel.HELL) return; // already at bottom
+    nextFloor = (state.currentFloor + 1) as FloorLevel;
+  } else {
+    if (state.currentFloor <= FloorLevel.LIVING) return; // already at top
+    nextFloor = (state.currentFloor - 1) as FloorLevel;
+  }
+
+  // Save player position for same-xy spawn
+  const savedX = player.x;
+  const savedY = player.y;
+  const savedAngle = player.angle;
 
   // Save player state
   const savedInventory = player.inventory ? [...player.inventory] : [];
@@ -574,71 +658,101 @@ function switchFloor(): void {
   const savedHp = player.hp ?? 100;
   const savedMaxHp = player.maxHp ?? 100;
   const savedWeapon = player.weapon ?? '';
+  const savedTool = player.tool ?? '';
   const savedRpg = player.rpg ? { ...player.rpg } : freshRPG(1);
   const savedMoney = player.money ?? 100;
 
-  // Generate new floor
-  let gen: { world: World; entities: Entity[]; spawnX: number; spawnY: number };
-  if (nextFloor === FloorLevel.LIVING) {
-    gen = generateWorld();
-  } else if (nextFloor === FloorLevel.MAINTENANCE) {
-    gen = generateMaintenance();
-  } else {
-    gen = generateHell();
-  }
+  state.currentFloor = nextFloor;
 
-  world = gen.world;
-  entities = gen.entities;
-  nextEntityId.v = entities.reduce((mx, e) => Math.max(mx, e.id), 0) + 1;
+  // Defer heavy generation — game loop will show loading screen first
+  pendingLoad = () => {
+    resetHellPopulationState();
+    // Generate new floor
+    let gen: { world: World; entities: Entity[]; spawnX: number; spawnY: number };
+    if (nextFloor === FloorLevel.LIVING) {
+      gen = generateWorld();
+    } else if (nextFloor === FloorLevel.MAINTENANCE) {
+      gen = generateMaintenance();
+    } else {
+      gen = generateHell();
+    }
 
-  // Recreate player at new spawn
-  player = {
-    id: nextEntityId.v++,
-    type: EntityType.PLAYER,
-    x: gen.spawnX,
-    y: gen.spawnY,
-    angle: player.angle,
-    pitch: 0,
-    alive: true,
-    speed: 3.0,
-    sprite: 0,
-    needs: savedNeeds,
-    hp: savedHp,
-    maxHp: savedMaxHp,
-    inventory: savedInventory,
-    weapon: savedWeapon,
-    money: savedMoney,
-    rpg: savedRpg,
-    name: 'Вы',
-    faction: Faction.PLAYER,
+    world = gen.world;
+    entities = gen.entities;
+    nextEntityId.v = entities.reduce((mx, e) => Math.max(mx, e.id), 0) + 1;
+
+    // Find a valid spawn near the saved x,y position
+    let spawnX = savedX;
+    let spawnY = savedY;
+    const sx = Math.floor(savedX), sy = Math.floor(savedY);
+    if (world.cells[world.idx(sx, sy)] !== Cell.FLOOR) {
+      let found = false;
+      for (let r = 1; r <= 30 && !found; r++) {
+        for (let dy = -r; dy <= r && !found; dy++) {
+          for (let dx = -r; dx <= r && !found; dx++) {
+            if (Math.abs(dx) !== r && Math.abs(dy) !== r) continue;
+            const ci = world.idx(sx + dx, sy + dy);
+            if (world.cells[ci] === Cell.FLOOR) {
+              spawnX = world.wrap(sx + dx) + 0.5;
+              spawnY = world.wrap(sy + dy) + 0.5;
+              found = true;
+            }
+          }
+        }
+      }
+      if (!found) {
+        spawnX = gen.spawnX;
+        spawnY = gen.spawnY;
+      }
+    }
+    player = {
+      id: nextEntityId.v++,
+      type: EntityType.PLAYER,
+      x: spawnX,
+      y: spawnY,
+      angle: savedAngle,
+      pitch: 0,
+      alive: true,
+      speed: 3.0,
+      sprite: 0,
+      needs: savedNeeds,
+      hp: savedHp,
+      maxHp: savedMaxHp,
+      inventory: savedInventory,
+      weapon: savedWeapon,
+      tool: savedTool,
+      money: savedMoney,
+      rpg: savedRpg,
+      name: 'Вы',
+      faction: Faction.PLAYER,
+    };
+    entities.push(player);
+    prevPlayerHp = player.hp ?? 100;
+
+    initFactionRelations();
+    initFactionControl(world);
+    const fStats = countFactionTerritory(world);
+    if (nextFloor !== FloorLevel.HELL) {
+      spawnPatrolSquads(world, entities, nextEntityId, fStats);
+    }
+
+    if (nextFloor === FloorLevel.HELL) {
+      state.samosborTimer = 60 + Math.random() * 240;
+    } else if (nextFloor === FloorLevel.MAINTENANCE) {
+      state.samosborTimer = 180 + Math.random() * 240;
+    } else {
+      state.samosborTimer = 300 + Math.random() * 300;
+    }
+    state.samosborActive = false;
+
+    resetPsiState();
+
+    state.msgs.push({
+      text: `Лифт прибыл: ${FLOOR_NAMES[nextFloor]}`,
+      time: state.time,
+      color: nextFloor === FloorLevel.HELL ? '#f44' : '#4af',
+    });
   };
-  entities.push(player);
-  prevPlayerHp = player.hp ?? 100;
-
-  // Initialize faction relations and faction control for new floor
-  initFactionRelations();
-  initFactionControl(world);
-  const fStats = countFactionTerritory(world);
-  spawnPatrolSquads(world, entities, nextEntityId, fStats);
-
-  // Reset samosbor for new floor (interval depends on floor)
-  if (nextFloor === FloorLevel.HELL) {
-    state.samosborTimer = 60 + Math.random() * 240;  // 1-5 min
-  } else if (nextFloor === FloorLevel.MAINTENANCE) {
-    state.samosborTimer = 180 + Math.random() * 240; // 3-7 min
-  } else {
-    state.samosborTimer = 300 + Math.random() * 300; // 5-10 min
-  }
-  state.samosborActive = false;
-
-  // Reset PSI transient effects on floor switch
-  resetPsiState();
-
-  state.msgs.push({
-    text: `Лифт прибыл: ${FLOOR_NAMES[nextFloor]}`,
-    time: state.time,
-    color: nextFloor === FloorLevel.HELL ? '#f44' : '#4af',
-  });
 }
 
 /* ── NPC interaction menu ──────────────────────────────────────── */
@@ -657,113 +771,6 @@ function openNpcMenu(npc: Entity): void {
   }
 }
 
-function generateNpcTradeItems(npc: Entity): { defId: string; count: number }[] {
-  const items: { defId: string; count: number }[] = [];
-  const OCC_ITEMS: Record<number, string[]> = {
-    [Occupation.HOUSEWIFE]:   ['bread', 'water', 'cigs'],
-    [Occupation.LOCKSMITH]:   ['wrench', 'pipe', 'flashlight'],
-    [Occupation.SECRETARY]:   ['book', 'tea', 'cigs'],
-    [Occupation.ELECTRICIAN]: ['wrench', 'flashlight', 'ammo_nails'],
-    [Occupation.COOK]:        ['bread', 'kasha', 'kompot', 'canned'],
-    [Occupation.DOCTOR]:      ['bandage', 'pills', 'antidep'],
-    [Occupation.TURNER]:      ['wrench', 'pipe', 'rebar'],
-    [Occupation.MECHANIC]:    ['wrench', 'pipe', 'flashlight', 'ammo_nails'],
-    [Occupation.STOREKEEPER]: ['bread', 'water', 'cigs', 'bandage', 'ammo_shells'],
-    [Occupation.ALCOHOLIC]:   ['bread', 'cigs', 'water'],
-    [Occupation.SCIENTIST]:   ['flashlight', 'book', 'note', 'ammo_9mm'],
-    [Occupation.CHILD]:       ['bread', 'water'],
-    [Occupation.DIRECTOR]:    ['book', 'tea', 'cigs', 'ammo_9mm'],
-    [Occupation.TRAVELER]:    ['bread', 'water', 'canned', 'cigs'],
-    [Occupation.PILGRIM]:     ['bread', 'water', 'knife'],
-    [Occupation.HUNTER]:      ['knife', 'canned', 'rawmeat', 'ammo_9mm'],
-  };
-  const pool = OCC_ITEMS[npc.occupation ?? 0] ?? ['bread', 'water'];
-  const count = 2 + Math.floor(Math.random() * 3);
-  for (let i = 0; i < count; i++) {
-    const defId = pool[Math.floor(Math.random() * pool.length)];
-    items.push({ defId, count: 1 + Math.floor(Math.random() * 3) });
-  }
-  return items;
-}
-
-function generateTalkText(npc: Entity): string {
-  // ── Ольга Дмитриевна — tutorial dialogue ──
-  if (npc.isTutor && !npc.tutorDone) {
-    const tutorLines = [
-      'Добро пожаловать в блок! Я Ольга Дмитриевна, врач. Прочитайте слайды на стене — там основные правила.',
-      'Двигайтесь клавишами WASD, мышь — обзор. Нажмите E чтобы поговорить с кем-нибудь или открыть дверь.',
-      'Предметы подбираются автоматически. I — открыть инвентарь. F — отношения фракций. Кушайте вовремя, иначе здоровье падает.',
-      'Пробел или ЛКМ — удар/выстрел. Зайдите в оружейную — там Барни покажет как стрелять.',
-      'Когда услышите сирену — это САМОСБОР. Бегите в ближайшую комнату и закройте дверь! Коридоры смертельно опасны.',
-      'Фиолетовый туман убивает. Из него лезут твари. Не стойте в тумане — бегите к шлюзу.',
-      'Нажмите M — карта. Q — журнал заданий. Общайтесь с жителями, помогайте — от них зависит выживание.',
-      'У меня есть для вас задание. Откройте вкладку «Задание» — я расскажу.',
-    ];
-    const idx = (npc._tutorIdx ?? 0) % tutorLines.length;
-    npc._tutorIdx = idx + 1;
-    return tutorLines[idx];
-  }
-
-  // ── Барни — armory dialogue ──
-  if (npc.isTutorBarni) {
-    const barniLines = [
-      'Я Барни, старший ликвидатор. Добро пожаловать в оружейную.',
-      'Стреляй по мишеням — тренируйся. Патроны забирай со стойки.',
-      'Макаров — лучший друг в лабиринте. Держи его заряженным.',
-      'Слышишь сирену — хватай ствол и к двери. В коридоре без оружия — труп.',
-      'Мишени на стене — стреляй сколько хочешь. Следы от пуль видно.',
-      'Бетонник? Не лезь с ножом. Только с огнестрелом. И то — издалека.',
-    ];
-    return barniLines[Math.floor(Math.random() * barniLines.length)];
-  }
-
-  // After tutor phase — normal doctor dialogue
-  if (npc.isTutor && npc.tutorDone) {
-    const doctorLines = [
-      'Приходи если ранен. Помогу.',
-      'Таблеток мало осталось.',
-      'Мне пора на работу. Береги себя.',
-    ];
-    return doctorLines[Math.floor(Math.random() * doctorLines.length)];
-  }
-
-  // Sometimes NPC tells about their current state
-  if (npc.ai?.npcState !== undefined && Math.random() < 0.4) {
-    return getNpcStateText(npc.ai.npcState);
-  }
-  const general = [
-    'Стены опять гудят... Скоро будет самосбор.',
-    'Не ходи в длинные коридоры один.',
-    'Я слышал шорох за стеной. Проверь двери.',
-    'Тут раньше была кухня. Теперь — стена.',
-    'Свет мигает всё чаще. Дурной знак.',
-    'Сколько себя помню — одни стены и двери.',
-    'Говорят, кто-то нашёл выход. Вернулся через стену.',
-    'Бетон скрипит ночью. Будто дышит.',
-    'Самосбор был вчера. Половина коридоров пропала.',
-    'Мой сосед ушёл за водой и не вернулся.',
-  ];
-  const byFaction: Record<number, string[]> = {
-    0: ['Главное — не выходить во время самосбора.', 'Когда последний раз ел нормально?', 'Нужно беречь еду и воду.'],
-    1: ['Ликвидаторы всегда на переднем крае.', 'После самосбора надо зачищать коридоры.', 'Видел тварь? Бей первым.'],
-    2: ['Самосбор — не катастрофа. Это чудо.', 'Хрущ живой. Мы живём внутри его тела.', 'Стены — его плоть. Двери — суставы.'],
-    3: ['Я изучаю природу хруща. Данные неоднозначны.', 'По моим расчётам, мир тороидальной формы.', 'Нужно больше образцов стен.'],
-  };
-  const byOcc: Record<number, string[]> = {
-    1: ['Плита ещё работает. Приходи покушать.', 'Запасы тают. Нужна тушёнка.'],
-    2: ['Приходи если ранен. Помогу.', 'Таблеток мало осталось.'],
-    3: ['Трубы потекли опять. Нужен инструмент.'],
-    4: ['Я охочусь на сборок. Они слабые, но быстрые.'],
-    5: ['Помолись хрущу. Он слышит.'],
-    6: ['Я записываю всё что вижу.'],
-    7: ['Могу обменять кое-что полезное.'],
-  };
-  const lines: string[] = [...general];
-  if (npc.faction !== undefined) lines.push(...(byFaction[npc.faction] ?? []));
-  if (npc.occupation !== undefined) lines.push(...(byOcc[npc.occupation] ?? []));
-  return lines[Math.floor(Math.random() * lines.length)];
-}
-
 /* ── Save / Load ──────────────────────────────────────────────── */
 const SAVE_KEY = 'gigahrush_save';
 
@@ -776,6 +783,7 @@ function saveGame(): void {
         needs: player.needs,
         inventory: player.inventory,
         weapon: player.weapon,
+        tool: player.tool,
         rpg: player.rpg,
         money: player.money,
       },
@@ -805,60 +813,65 @@ function loadGame(): boolean {
       return false;
     }
     const data = JSON.parse(raw);
-
-    // Regenerate world for the saved floor
     const floor = data.state.currentFloor ?? FloorLevel.LIVING;
-    let gen: { world: World; entities: Entity[]; spawnX: number; spawnY: number };
-    if (floor === FloorLevel.LIVING) gen = generateWorld();
-    else if (floor === FloorLevel.MAINTENANCE) gen = generateMaintenance();
-    else gen = generateHell();
 
-    world = gen.world;
-    entities = gen.entities;
-    nextEntityId.v = entities.reduce((mx, e) => Math.max(mx, e.id), 0) + 1;
-
-    player = {
-      id: nextEntityId.v++,
-      type: EntityType.PLAYER,
-      x: data.player.x ?? gen.spawnX,
-      y: data.player.y ?? gen.spawnY,
-      angle: data.player.angle ?? 0,
-      pitch: 0,
-      alive: true,
-      speed: 3.0,
-      sprite: 0,
-      needs: data.player.needs ?? freshNeeds(),
-      hp: data.player.hp ?? 100,
-      maxHp: data.player.maxHp ?? 100,
-      inventory: data.player.inventory ?? [],
-      weapon: data.player.weapon ?? '',
-      money: data.player.money ?? 100,
-      rpg: data.player.rpg ?? freshRPG(1),
-      name: 'Вы',
-      faction: Faction.PLAYER,
-    };
-    entities.push(player);
-    prevPlayerHp = player.hp ?? 100;
-
-    // Init faction relations and control for loaded world
-    initFactionRelations();
-    initFactionControl(world);
-    const fStats = countFactionTerritory(world);
-    spawnPatrolSquads(world, entities, nextEntityId, fStats);
-
-    state.time = data.state.time ?? 0;
-    state.tick = data.state.tick ?? 0;
-    state.clock = data.state.clock ?? { hour: 8, minute: 0, totalMinutes: 0 };
-    state.samosborCount = data.state.samosborCount ?? 0;
-    state.samosborTimer = data.state.samosborTimer ?? 120;
-    state.quests = data.state.quests ?? [];
-    state.nextQuestId = data.state.nextQuestId ?? 1;
-    state.currentFloor = floor;
-    state.samosborActive = false;
-    state.gameOver = false;
     state.showMenu = false;
+    pendingLoad = () => {
+      resetHellPopulationState();
+      let gen: { world: World; entities: Entity[]; spawnX: number; spawnY: number };
+      if (floor === FloorLevel.LIVING) gen = generateWorld();
+      else if (floor === FloorLevel.MAINTENANCE) gen = generateMaintenance();
+      else gen = generateHell();
 
-    state.msgs.push({ text: 'Игра загружена', time: state.time, color: '#4af' });
+      world = gen.world;
+      entities = gen.entities;
+      nextEntityId.v = entities.reduce((mx, e) => Math.max(mx, e.id), 0) + 1;
+
+      player = {
+        id: nextEntityId.v++,
+        type: EntityType.PLAYER,
+        x: data.player.x ?? gen.spawnX,
+        y: data.player.y ?? gen.spawnY,
+        angle: data.player.angle ?? 0,
+        pitch: 0,
+        alive: true,
+        speed: 3.0,
+        sprite: 0,
+        needs: data.player.needs ?? freshNeeds(),
+        hp: data.player.hp ?? 100,
+        maxHp: data.player.maxHp ?? 100,
+        inventory: data.player.inventory ?? [],
+        weapon: data.player.weapon ?? '',
+        tool: data.player.tool ?? '',
+        money: data.player.money ?? 100,
+        rpg: data.player.rpg ?? freshRPG(1),
+        name: 'Вы',
+        faction: Faction.PLAYER,
+      };
+      entities.push(player);
+      prevPlayerHp = player.hp ?? 100;
+
+      initFactionRelations();
+      initFactionControl(world);
+      const fStats = countFactionTerritory(world);
+      if (floor !== FloorLevel.HELL) {
+        spawnPatrolSquads(world, entities, nextEntityId, fStats);
+      }
+
+      state.time = data.state.time ?? 0;
+      state.tick = data.state.tick ?? 0;
+      state.clock = data.state.clock ?? { hour: 8, minute: 0, totalMinutes: 0 };
+      state.samosborCount = data.state.samosborCount ?? 0;
+      state.samosborTimer = data.state.samosborTimer ?? 120;
+      state.quests = data.state.quests ?? [];
+      state.nextQuestId = data.state.nextQuestId ?? 1;
+      state.currentFloor = floor;
+      state.samosborActive = false;
+      state.gameOver = false;
+      state.showMenu = false;
+
+      state.msgs.push({ text: 'Игра загружена', time: state.time, color: '#4af' });
+    };
     return true;
   } catch {
     state.msgs.push({ text: 'Ошибка загрузки!', time: state.time, color: '#f44' });
@@ -869,6 +882,9 @@ function loadGame(): boolean {
 /* ── Urination faction penalty ─────────────────────────────────── */
 let _urinePenaltyAccum = 0;
 let _urinePenaltyStarted = false;
+let _prevToolUse = false;
+let _toolActionCd = 0;
+let _cleanRelAccum = 0;
 
 function applyUrinationPenalty(dt: number): void {
   const room = world.roomAt(player.x, player.y);
@@ -895,6 +911,171 @@ function applyUrinationPenalty(dt: number): void {
     _urinePenaltyAccum -= 1.0;
     addFactionRel(ownerFaction, Faction.PLAYER, -1);
     addFactionRel(Faction.PLAYER, ownerFaction, -1);
+  }
+}
+
+function setCellToFloor(x: number, y: number): void {
+  const ci = world.idx(x, y);
+  world.cells[ci] = Cell.FLOOR;
+  if (!world.floorTex[ci]) {
+    const room = world.roomAt(x + 0.5, y + 0.5);
+    world.floorTex[ci] = room?.floorTex ?? Tex.F_CONCRETE;
+  }
+}
+
+function cleanSurfaceArea(cx: number, cy: number, radiusCells: number): number {
+  const minX = Math.floor(cx - radiusCells) - 1;
+  const maxX = Math.floor(cx + radiusCells) + 1;
+  const minY = Math.floor(cy - radiusCells) - 1;
+  const maxY = Math.floor(cy + radiusCells) + 1;
+  let removed = 0;
+
+  for (let y = minY; y <= maxY; y++) {
+    for (let x = minX; x <= maxX; x++) {
+      const wx = world.wrap(x);
+      const wy = world.wrap(y);
+      const ci = world.idx(wx, wy);
+      const cell = world.surfaceMap.get(ci);
+      if (!cell) continue;
+
+      for (let py = 0; py < 16; py++) {
+        for (let px = 0; px < 16; px++) {
+          const wxf = wx + (px + 0.5) / 16;
+          const wyf = wy + (py + 0.5) / 16;
+          if (world.dist(wxf, wyf, cx, cy) > radiusCells) continue;
+          const ai = ((py * 16 + px) << 2) + 3;
+          const a = cell[ai];
+          if (a <= 0) continue;
+          const dec = Math.max(24, Math.floor(a * 0.45));
+          const na = Math.max(0, a - dec);
+          removed += a - na;
+          cell[ai] = na;
+        }
+      }
+    }
+  }
+
+  return removed;
+}
+
+function updateEquippedTool(dt: number): void {
+  if (!player.alive) {
+    _prevToolUse = input.use;
+    return;
+  }
+  if (_toolActionCd > 0) _toolActionCd = Math.max(0, _toolActionCd - dt);
+  const toolId = player.tool ?? '';
+  const useEdge = input.use && !_prevToolUse;
+  _prevToolUse = input.use;
+  if (!toolId) return;
+
+  const hasTool = (player.inventory ?? []).some(s => s.defId === toolId);
+  if (!hasTool) { player.tool = ''; return; }
+
+  // Flashlight is passive while equipped.
+  if (toolId === 'flashlight') {
+    consumeToolDurability(player, dt, state.msgs, state.time);
+    return;
+  }
+
+  const lookRange = 1.4;
+  const tx = player.x + Math.cos(player.angle) * lookRange;
+  const ty = player.y + Math.sin(player.angle) * lookRange;
+  const cx = Math.floor(tx);
+  const cy = Math.floor(ty);
+  const ci = world.idx(cx, cy);
+
+  if (toolId === 'jackhammer') {
+    if (!input.use || _toolActionCd > 0) return;
+    if (world.hermoWall[ci] || world.aptMask[ci]) {
+      state.msgs.push({ text: 'Гермостена неразрушима', time: state.time, color: '#f44' });
+      _toolActionCd = 0.2;
+      return;
+    }
+    if (world.cells[ci] !== Cell.WALL) {
+      state.msgs.push({ text: 'Отбойнику нужна стена перед вами', time: state.time, color: '#f84' });
+      _toolActionCd = 0.25;
+      return;
+    }
+    setCellToFloor(cx, cy);
+    consumeToolDurability(player, 1, state.msgs, state.time);
+    state.msgs.push({ text: 'Стена разрушена', time: state.time, color: '#fc4' });
+    playBreak();
+    _toolActionCd = 0.2;
+    return;
+  }
+
+  if (toolId === 'door_kit') {
+    if (!useEdge) return;
+    if (world.aptMask[ci]) {
+      state.msgs.push({ text: 'В защищенных укрытиях строительство запрещено', time: state.time, color: '#f44' });
+      return;
+    }
+    if (world.cells[ci] !== Cell.FLOOR) {
+      state.msgs.push({ text: 'Дверь ставится на проход (пол)', time: state.time, color: '#f84' });
+      return;
+    }
+    const l = world.cells[world.idx(cx - 1, cy)];
+    const r = world.cells[world.idx(cx + 1, cy)];
+    const u = world.cells[world.idx(cx, cy - 1)];
+    const d = world.cells[world.idx(cx, cy + 1)];
+    const horizontal = (l === Cell.WALL && r === Cell.WALL && u !== Cell.WALL && d !== Cell.WALL);
+    const vertical = (u === Cell.WALL && d === Cell.WALL && l !== Cell.WALL && r !== Cell.WALL);
+    if (!horizontal && !vertical) {
+      state.msgs.push({ text: 'Нужен проём типа стена-дверь-стена', time: state.time, color: '#f84' });
+      return;
+    }
+    const roomA = world.roomMap[world.idx(cx - 1, cy)] >= 0 ? world.roomMap[world.idx(cx - 1, cy)] : world.roomMap[world.idx(cx, cy - 1)];
+    const roomB = world.roomMap[world.idx(cx + 1, cy)] >= 0 ? world.roomMap[world.idx(cx + 1, cy)] : world.roomMap[world.idx(cx, cy + 1)];
+    world.cells[ci] = Cell.DOOR;
+    world.doors.set(ci, { idx: ci, state: DoorState.CLOSED, roomA, roomB, keyId: '', timer: 0 });
+    consumeToolDurability(player, 1, state.msgs, state.time);
+    state.msgs.push({ text: 'Дверь установлена', time: state.time, color: '#6cf' });
+    playDoor();
+    return;
+  }
+
+  if (toolId === 'block_kit') {
+    if (!useEdge) return;
+    const pci = world.idx(Math.floor(player.x), Math.floor(player.y));
+    if (ci === pci) {
+      state.msgs.push({ text: 'Нельзя замуровать себя', time: state.time, color: '#f84' });
+      return;
+    }
+    if (world.cells[ci] !== Cell.FLOOR && world.cells[ci] !== Cell.DOOR) {
+      state.msgs.push({ text: 'Блок ставится на пол/дверь', time: state.time, color: '#f84' });
+      return;
+    }
+    if (world.aptMask[ci] || world.hermoWall[ci]) {
+      state.msgs.push({ text: 'В защищенных укрытиях строительство запрещено', time: state.time, color: '#f44' });
+      return;
+    }
+    if (world.cells[ci] === Cell.DOOR) world.doors.delete(ci);
+    world.cells[ci] = Cell.WALL;
+    const room = world.roomAt(player.x, player.y);
+    world.wallTex[ci] = room?.wallTex ?? Tex.CONCRETE;
+    consumeToolDurability(player, 1, state.msgs, state.time);
+    state.msgs.push({ text: 'Блок стены установлен', time: state.time, color: '#6cf' });
+    return;
+  }
+
+  if (toolId === 'cleaning_kit') {
+    if (!input.use || _toolActionCd > 0) return;
+    const cleaned = cleanSurfaceArea(tx, ty, 1.0);
+    consumeToolDurability(player, dt, state.msgs, state.time);
+    if (cleaned > 0) {
+      _cleanRelAccum += dt;
+      if (_cleanRelAccum >= 1.0) {
+        _cleanRelAccum -= 1.0;
+        const z = world.zones[world.zoneMap[world.idx(Math.floor(player.x), Math.floor(player.y))]];
+        const owner = z ? zoneFactionToFaction(z.faction) : null;
+        if (owner !== null) {
+          addFactionRelMutual(Faction.PLAYER, owner, 1);
+          state.msgs.push({ text: 'Местные ценят вашу уборку (+отношения)', time: state.time, color: '#8f8' });
+        }
+      }
+    }
+    _toolActionCd = 0.08;
   }
 }
 
@@ -935,7 +1116,7 @@ function handleMenuInput(): void {
     if (interactEdge) {
       switch (state.menuSel) {
         case 0: state.showMenu = false; break;                // Continue
-        case 1: state.showMenu = false; initGame(); break;    // New Game
+        case 1: state.showMenu = false; pendingLoad = () => { initGame(); }; break;    // New Game
         case 2: saveGame(); state.showMenu = false; break;    // Save
         case 3: loadGame(); break;                            // Load
       }
@@ -994,7 +1175,7 @@ function handleMenuInput(): void {
             state.questPage = 0;
             if (npc) {
               checkTalkQuest(npc, player, entities, state, state.msgs);
-              offerQuest(npc, player, world, entities, state, state.msgs);
+              offerQuest(npc, player, world, entities, state, state.msgs, nextEntityId);
             }
             break;
           case 2: // Trade
@@ -1082,7 +1263,7 @@ function handleMenuInput(): void {
     if (escEdge || dbgEdge) { state.showDebug = false; }
     else {
       if (upEdge) state.debugSel = Math.max(0, state.debugSel - 1);
-      if (dnEdge) state.debugSel = Math.min(4, state.debugSel + 1);
+      if (dnEdge) state.debugSel = Math.min(6, state.debugSel + 1);
       if (interactEdge) execDebugCommand(state.debugSel, player, entities, state, nextEntityId);
     }
   }
@@ -1129,12 +1310,45 @@ function handleMenuInput(): void {
 let lastTime = performance.now();
 
 function gameLoop(now: number): void {
+  // Two-phase deferred loading:
+  // Phase 1: pendingLoad exists but not drawn yet → draw loading screen, yield to browser
+  // Phase 2: pendingLoad exists and was drawn → execute heavy generation
+  if (pendingLoad) {
+    if (!pendingLoadDrawn) {
+      // Phase 1: paint "ЗАГРУЗКА..." and yield so the browser can composite it
+      drawLoading();
+      pendingLoadDrawn = true;
+      requestAnimationFrame(gameLoop);
+      return;
+    }
+    // Phase 2: loading screen is visible, now do the heavy work
+    const fn = pendingLoad;
+    pendingLoad = null;
+    pendingLoadDrawn = false;
+    fn();
+    lastTime = performance.now(); // reset dt so we don't get a huge spike
+    requestAnimationFrame(gameLoop);
+    return;
+  }
+
   const rawDt = (now - lastTime) / 1000;
   lastTime = now;
-  const dt = Math.min(rawDt, 0.05); // cap delta
+  let dt = Math.min(rawDt, 0.05); // cap delta
+
+  // ── Sleep: hold Z to sleep (time acceleration ×10) ───────
+  const SLEEP_TIME_MULT = 10;
+  // Restore rate: 100 sleep in 5 game-hours (300 game-min = 300 real-sec at 1x)
+  // → 100/300 ≈ 0.333 per real-sec at 1x, but with 10x accel → ~30 real-sec full restore
+  const SLEEP_RESTORE_RATE = 100 / 300; // per simulated second
+  const wantSleep = input.sleep && !state.paused && !state.gameOver
+    && player.alive && player.needs !== undefined;
+  state.sleeping = wantSleep && (player.needs?.sleep ?? 100) < 100;
+  if (state.sleeping) dt *= SLEEP_TIME_MULT;
 
   // Menu input always processed (even when paused)
   handleMenuInput();
+  // If menu triggered new game / load, bail out to show loading screen
+  if (pendingLoad) { requestAnimationFrame(gameLoop); return; }
 
   // ── Update ───────────────────────────────────────────────
   // Decay damage flash
@@ -1156,8 +1370,19 @@ function gameLoop(now: number): void {
     state.clock.hour = (8 + Math.floor(totalMins / 60)) % 24;  // start at 8:00
     state.clock.minute = totalMins % 60;
 
+    // ── Sleep restoration while holding Z ──
+    if (state.sleeping && player.needs) {
+      player.needs.sleep = Math.min(100, player.needs.sleep + SLEEP_RESTORE_RATE * dt);
+      if (player.needs.sleep >= 100) {
+        state.msgs.push({ text: 'Вы выспались.', time: state.time, color: '#a8f' });
+      }
+    }
+
     movePlayer(dt);
     playerActions(dt);
+    // If switchFloor was triggered, pendingLoad is set — skip the rest of this frame
+    if (pendingLoad) { requestAnimationFrame(gameLoop); return; }
+    updateEquippedTool(dt);
     // Player urination (P key)
     if (input.pee && player.alive && player.needs && player.needs.pee > 5) {
       const range = 1.5;
@@ -1183,11 +1408,27 @@ function gameLoop(now: number): void {
     }
     updateProjectiles(dt);
     updateDoors(dt);
-    updateNeeds(entities, dt, state.time, state.msgs, player.id);
+    updateNeeds(entities, dt, state.time, state.msgs, player.id, nextEntityId);
+    setListenerPos(player.x, player.y, (ax, ay, bx, by) => world.dist2(ax, ay, bx, by));
     updateAI(world, entities, dt, state.time, state.msgs, player.id, state.clock, state.samosborActive, nextEntityId);
-    updateSamosbor(world, entities, state, dt, nextEntityId);
+    if (updateSamosbor(world, entities, state, dt, nextEntityId)) {
+      pendingLoad = () => {
+        rebuildWorld(world, entities, nextEntityId, state.samosborCount, state.currentFloor);
+        initFactionControl(world);
+        const fStats = countFactionTerritory(world);
+        if (state.currentFloor !== FloorLevel.HELL) {
+          spawnPatrolSquads(world, entities, nextEntityId, fStats);
+          spawnTerritoryReinforcements(world, entities, nextEntityId, fStats);
+        }
+      };
+      requestAnimationFrame(gameLoop);
+      return;
+    }
     // Faction zone capture (cell-based territory control)
     updateFactionCapture(world, entities, dt);
+    if (state.currentFloor === FloorLevel.HELL) {
+      updateHellPopulation(world, entities, nextEntityId, dt, state.samosborCount);
+    }
     // PSI does NOT auto-regenerate — only restored via items (pills, antidepressant)
     // Update ongoing PSI spell effects (phase shift, madness, control)
     updatePsiEffects(entities, dt);
@@ -1206,13 +1447,6 @@ function gameLoop(now: number): void {
     if (state.tick % 30 === 0) {
       checkQuests(player, world, entities, state, state.msgs);
     }
-
-    // Debug samosbor trigger (TAB key)
-    if (input.debugSamosbor && !prevSamosbor) {
-      state.samosborTimer = 0; // force trigger on next tick
-      state.msgs.push({ text: '[DEBUG] Самосбор форсирован', time: state.time, color: '#ff0' });
-    }
-    prevSamosbor = input.debugSamosbor;
 
     // Auto-pickup when walking
     if (state.tick % 15 === 0) {
@@ -1263,10 +1497,26 @@ function gameLoop(now: number): void {
     state.clock.minute = totalMins % 60;
     updateProjectiles(dt);
     updateDoors(dt);
-    updateNeeds(entities, dt, state.time, state.msgs, player.id);
+    updateNeeds(entities, dt, state.time, state.msgs, player.id, nextEntityId);
+    setListenerPos(player.x, player.y, (ax, ay, bx, by) => world.dist2(ax, ay, bx, by));
     updateAI(world, entities, dt, state.time, state.msgs, player.id, state.clock, state.samosborActive, nextEntityId);
-    updateSamosbor(world, entities, state, dt, nextEntityId);
+    if (updateSamosbor(world, entities, state, dt, nextEntityId)) {
+      pendingLoad = () => {
+        rebuildWorld(world, entities, nextEntityId, state.samosborCount, state.currentFloor);
+        initFactionControl(world);
+        const fStats = countFactionTerritory(world);
+        if (state.currentFloor !== FloorLevel.HELL) {
+          spawnPatrolSquads(world, entities, nextEntityId, fStats);
+          spawnTerritoryReinforcements(world, entities, nextEntityId, fStats);
+        }
+      };
+      requestAnimationFrame(gameLoop);
+      return;
+    }
     updateFactionCapture(world, entities, dt);
+    if (state.currentFloor === FloorLevel.HELL) {
+      updateHellPopulation(world, entities, nextEntityId, dt, state.samosborCount);
+    }
     updateBloodTrails(world, entities, dt);
     updateParticles(world, dt);
     for (let i = entities.length - 1; i >= 0; i--) {
@@ -1283,6 +1533,7 @@ function gameLoop(now: number): void {
   }
 
   checkRestart();
+  if (pendingLoad) { requestAnimationFrame(gameLoop); return; }
 
   // ── Render ───────────────────────────────────────────────
   // Fog density varies by floor level
@@ -1299,9 +1550,14 @@ function gameLoop(now: number): void {
   const camPitch = deathCam ? getDeathCamPitch(deathCam) : player.pitch;
 
   const camH = deathCam ? deathCam.height : 0.5;
+  let flashlight = 0;
+  if (!state.gameOver && player.tool === 'flashlight') {
+    const d = getEquippedToolDurability(player);
+    if (d && d.max > 0 && d.cur > 0) flashlight = Math.max(0.25, Math.min(1, d.cur / d.max));
+  }
   renderScene(buf32, world, textures, sprites, entities,
     camX, camY, camAngle, camPitch,
-    fogDensity, glitch, camH);
+    fogDensity, glitch, camH, flashlight, state.time);
 
   // Blood particles on top of scene
   {
@@ -1348,12 +1604,11 @@ function showTitle(): void {
   ctx.fillText('Нажмите ENTER чтобы войти', canvas.width / 2, canvas.height / 2 + 50);
   ctx.fillStyle = '#555';
   ctx.font = '12px monospace';
-  ctx.fillText('WASD — движение  |  Мышь — обзор  |  E — действие  |  F — фракции  |  I — инвентарь  |  M — карта  |  Пробел — удар  |  TAB — самосбор', canvas.width / 2, canvas.height / 2 + 90);
+  ctx.fillText('WASD — движение  |  Мышь — обзор  |  E — действие  |  R — инструмент  |  F — фракции  |  I — инвентарь  |  M — карта  |  Пробел — удар', canvas.width / 2, canvas.height / 2 + 90);
   ctx.textAlign = 'left';
 }
 
 let started = false;
-showTitle();
 
 document.addEventListener('keydown', function startHandler(e: KeyboardEvent) {
   if (e.code === 'Enter' && !started) {

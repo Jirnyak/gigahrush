@@ -49,15 +49,7 @@ export function initFactionRelations(): void {
   }
 }
 
-/* ── Legacy FACTION_MATRIX (Record form for backward compat) ─── */
-export const FACTION_MATRIX: Record<Faction, Record<Faction, number>> = {
-  [Faction.CITIZEN]:    { [Faction.CITIZEN]: 100, [Faction.LIQUIDATOR]: 50, [Faction.CULTIST]: 0,   [Faction.SCIENTIST]: 50, [Faction.WILD]: -50, [Faction.PLAYER]: 50 },
-  [Faction.LIQUIDATOR]: { [Faction.CITIZEN]: 50, [Faction.LIQUIDATOR]: 100, [Faction.CULTIST]: -50, [Faction.SCIENTIST]: 50, [Faction.WILD]: -50, [Faction.PLAYER]: 50 },
-  [Faction.CULTIST]:    { [Faction.CITIZEN]: 0, [Faction.LIQUIDATOR]: -50, [Faction.CULTIST]: 100,  [Faction.SCIENTIST]: -20, [Faction.WILD]: -50, [Faction.PLAYER]: 0 },
-  [Faction.SCIENTIST]:  { [Faction.CITIZEN]: 50, [Faction.LIQUIDATOR]: 50, [Faction.CULTIST]: -20, [Faction.SCIENTIST]: 100, [Faction.WILD]: -50, [Faction.PLAYER]: 50 },
-  [Faction.WILD]:       { [Faction.CITIZEN]: -50, [Faction.LIQUIDATOR]: -50, [Faction.CULTIST]: -50, [Faction.SCIENTIST]: -50, [Faction.WILD]: 100, [Faction.PLAYER]: -50 },
-  [Faction.PLAYER]:     { [Faction.CITIZEN]: 50, [Faction.LIQUIDATOR]: 50, [Faction.CULTIST]: 0, [Faction.SCIENTIST]: 50, [Faction.WILD]: -50, [Faction.PLAYER]: 100 },
-};
+
 
 /* ── Faction names ────────────────────────────────────────────── */
 export const FACTION_NAMES: Record<Faction, string> = {

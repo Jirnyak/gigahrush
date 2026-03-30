@@ -10,11 +10,18 @@ import { spawnBloodHit, spawnDeathPool } from '../render/blood';
 // ── Module state (player-only transient effects) ─────────────────
 let phaseTimer = 0;                              // phase shift remaining seconds
 let markPos: { x: number; y: number } | null = null;  // saved teleport mark
+let debugNoClip = false;                        // debug override for phase movement
 
 // ── Queries ──────────────────────────────────────────────────────
 export function isPhaseActive(): boolean { return phaseTimer > 0; }
+export function isNoClipActive(): boolean { return debugNoClip || phaseTimer > 0; }
+export function isDebugNoClipEnabled(): boolean { return debugNoClip; }
 export function getPhaseTimer(): number { return phaseTimer; }
 export function getPsiMark(): { x: number; y: number } | null { return markPos; }
+export function toggleDebugNoClip(): boolean {
+  debugNoClip = !debugNoClip;
+  return debugNoClip;
+}
 
 // ── Reset (on new game / floor switch) ───────────────────────────
 export function resetPsiState(): void {
@@ -185,7 +192,7 @@ function castBrainBurn(
 }
 
 // ── Безумие / Контроль: targeted PSI effects ─────────────────────
-const PSI_EFFECT_DURATION = 60; // 60 seconds = 1 game hour
+const PSI_EFFECT_DURATION = 15; // 15 seconds = 15 game minutes
 
 function castTargeted(
   player: Entity, entities: Entity[], world: World,

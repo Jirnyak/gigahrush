@@ -30,7 +30,9 @@ export function addItem(e: Entity, defId: string, count = 1): boolean {
   while (count > 0 && e.inventory.length < MAX_SLOTS) {
     const add = Math.min(count, def.stack);
     const ws = WEAPON_STATS[defId];
-    const data = (ws && !ws.isRanged && ws.durability > 0) ? { dur: ws.durability } : undefined;
+    let data: { dur: number } | undefined;
+    if (ws && !ws.isRanged && ws.durability > 0) data = { dur: ws.durability };
+    else if (def.durability && def.durability > 0) data = { dur: def.durability };
     e.inventory.push({ defId, count: add, data });
     count -= add;
   }
@@ -70,6 +72,13 @@ export function useItem(e: Entity, slotIdx: number, msgs: Msg[], time: number): 
   if (def.type === ItemType.WEAPON) {
     e.weapon = def.id;
     msgs.push({ text: `Экипировано: ${def.name}`, time, color: '#ccc' });
+    return;
+  }
+
+  // Tools: equip to utility slot
+  if (def.type === ItemType.TOOL) {
+    e.tool = def.id;
+    msgs.push({ text: `Инструмент: ${def.name}`, time, color: '#8cf' });
     return;
   }
 
@@ -116,6 +125,10 @@ export function dropItem(
     // Check if there's another copy left after removing one
     const remaining = slot.count - 1;
     if (remaining <= 0) player.weapon = '';
+  }
+  if (def.type === ItemType.TOOL && player.tool === def.id) {
+    const remaining = slot.count - 1;
+    if (remaining <= 0) player.tool = '';
   }
 
   slot.count--;
@@ -165,6 +178,17 @@ export function getEquippedDurability(e: Entity): { cur: number; max: number } |
   return { cur: d?.dur ?? ws.durability, max: ws.durability };
 }
 
+/* ── Contextual weapon break exclamations ─────────────────────── */
+const BREAK_EXCLAIM = [
+  'Бля!', 'Блин!', 'Пацаны!', 'Плохо дело!', 'Вот чёрт!',
+  'Да ну нах!', 'Твою мать!', 'Ну всё!', 'Капец!', 'Ёпта!',
+  'Мда уж...', 'Ай!', 'Ну отлично!', 'Вот блин!', 'Ну ёлки!',
+];
+const BREAK_EXCLAIM_F = [
+  'Блин!', 'Ой!', 'Ну нет!', 'Ужас!', 'Вот чёрт!',
+  'Плохо дело!', 'Капец!', 'Ну отлично!', 'Батюшки!', 'Кошмар!',
+];
+
 /* ── Consume durability on melee hit. Returns true if weapon broke */
 export function consumeDurability(e: Entity, msgs: Msg[], time: number): boolean {
   const ws = WEAPON_STATS[e.weapon ?? ''];
@@ -180,7 +204,49 @@ export function consumeDurability(e: Entity, msgs: Msg[], time: number): boolean
     const name = ITEMS[slot.defId]?.name ?? slot.defId;
     inv.splice(idx, 1);
     e.weapon = '';
-    msgs.push({ text: `${name} сломался!`, time, color: '#f84' });
+    if (e.type === EntityType.NPC && e.name) {
+      const pool = e.isFemale ? BREAK_EXCLAIM_F : BREAK_EXCLAIM;
+      const excl = pool[Math.floor(Math.random() * pool.length)];
+      msgs.push({ text: `${e.name}: ${excl} ${name} ${e.isFemale ? 'сломалась' : 'сломался'}!`, time, color: '#f84' });
+    } else {
+      msgs.push({ text: `${name} сломался!`, time, color: '#f84' });
+    }
+    return true;
+  }
+  return false;
+}
+
+/* ── Get current durability of equipped tool ──────────────────── */
+export function getEquippedToolDurability(e: Entity): { cur: number; max: number } | null {
+  const toolId = e.tool ?? '';
+  if (!toolId) return null;
+  const def = ITEMS[toolId];
+  if (!def || def.type !== ItemType.TOOL || !def.durability || def.durability <= 0) return null;
+  const slot = (e.inventory ?? []).find(s => s.defId === toolId);
+  if (!slot) return null;
+  const d = slot.data as { dur?: number } | undefined;
+  return { cur: d?.dur ?? def.durability, max: def.durability };
+}
+
+/* ── Consume durability on equipped tool use ──────────────────── */
+export function consumeToolDurability(e: Entity, amount: number, msgs: Msg[], time: number): boolean {
+  if (amount <= 0) return false;
+  const toolId = e.tool ?? '';
+  if (!toolId) return false;
+  const def = ITEMS[toolId];
+  if (!def || def.type !== ItemType.TOOL || !def.durability || def.durability <= 0) return false;
+  const inv = e.inventory ?? [];
+  const idx = inv.findIndex(s => s.defId === toolId);
+  if (idx < 0) { e.tool = ''; return false; }
+  const slot = inv[idx];
+  const d = (slot.data ?? { dur: def.durability }) as { dur: number };
+  d.dur -= amount;
+  slot.data = d;
+  if (d.dur <= 0) {
+    const name = ITEMS[slot.defId]?.name ?? slot.defId;
+    inv.splice(idx, 1);
+    e.tool = '';
+    msgs.push({ text: `${name} изношен и сломан!`, time, color: '#f84' });
     return true;
   }
   return false;

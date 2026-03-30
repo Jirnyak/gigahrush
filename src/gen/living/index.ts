@@ -8,10 +8,12 @@
 /*   Content modules live in sibling files:                      */
 /*     apartments.ts  — permanent apartment clusters             */
 /*     volatile.ts    — volatile gigastructure maze              */
-/*     start_room.ts  — tutorial briefing room (Актовый зал)     */
+/*     tutor_room.ts  — tutorial briefing room (Актовый зал)     */
 /*     yakov_lab.ts   — Yakov's lab (PSI researcher, story quest)*/
+/*     vanka_den.ts   — Vanka's den (cultist zone)              */
 /*     slides.ts      — slide texture generation                 */
 /*     npcs.ts        — NPC & item spawning                      */
+/*     side_quests.ts — side quest NPC registry & spawning       */
 /*                                                               */
 /*   To add a new hand-crafted room, create a .ts file here      */
 /*   and call it from generateWorld() below.                     */
@@ -23,11 +25,14 @@ import { calcZoneLevel } from '../../systems/rpg';
 import { generateZones, stampHQRooms } from '../shared';
 import { generateApartments } from './apartments';
 import { generateVolatileMaze, wipeVolatile } from './volatile';
-import { generateStartRoom } from './start_room';
+import { generateTutorRoom } from './tutor_room';
 import { generateYakovLab } from './yakov_lab';
+import { generateVankaDen, spawnVankaShadows } from './vanka_den';
 import { spawnRoomItems, spawnFamilies, spawnTravelers } from './npcs';
+import { spawnSideQuestNpcs } from './side_quests';
 
 export { generateSlideTextures } from './slides';
+export { generateHintTextures } from './tutor_room';
 
 /* ── generateWorld — called once at game start ───────────────── */
 export function generateWorld(): { world: World; entities: Entity[]; spawnX: number; spawnY: number } {
@@ -39,11 +44,15 @@ export function generateWorld(): { world: World; entities: Entity[]; spawnX: num
   const apartments = generateApartments(world);
 
   /* ── A1: Start room (briefing hall) ─────────────── */
-  const startRoom = generateStartRoom(world, world.rooms.length, entities, { v: nextId });
+  const startRoom = generateTutorRoom(world, world.rooms.length, entities, { v: nextId });
   nextId = entities.reduce((mx, e) => Math.max(mx, e.id), nextId) + 1;
 
   /* ── A1b: Yakov's lab (at distance from spawn) ──── */
   generateYakovLab(world, world.rooms.length, entities, { v: nextId }, startRoom.spawnX, startRoom.spawnY);
+  nextId = entities.reduce((mx, e) => Math.max(mx, e.id), nextId) + 1;
+
+  /* ── A1c: Vanka's den (cultist zone) ────────── */
+  generateVankaDen(world, world.rooms.length, entities, { v: nextId }, startRoom.spawnX, startRoom.spawnY);
   nextId = entities.reduce((mx, e) => Math.max(mx, e.id), nextId) + 1;
   world.apartmentRoomCount = world.rooms.length;
 
@@ -56,6 +65,14 @@ export function generateWorld(): { world: World; entities: Entity[]; spawnX: num
 
   /* ── B: Volatile gigastructure ─────────────────────── */
   generateVolatileMaze(world);
+
+  /* ── B1: Shadows near Vanka (needs corridors to exist) */
+  spawnVankaShadows(world, entities, { v: nextId });
+  nextId = entities.reduce((mx, e) => Math.max(mx, e.id), nextId) + 1;
+
+  /* ── B2: Side quest NPCs (random encounters, need FLOOR cells) */
+  spawnSideQuestNpcs(world, entities, { v: nextId });
+  nextId = entities.reduce((mx, e) => Math.max(mx, e.id), nextId) + 1;
 
   /* ── C: Items in all rooms ─────────────────────────── */
   nextId = spawnRoomItems(world, entities, nextId);

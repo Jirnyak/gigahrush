@@ -91,7 +91,7 @@ export function zoneFactionToFaction(zf: ZoneFaction): Faction | null {
 
 /* ── Territory counting per ZoneFaction ──────────────────────── */
 export interface FactionStats {
-  cells: number;         // total controlled cells
+
   zones: number;         // zones controlled
   spawnBudget: number;   // patrol squads to spawn (proportional to cells)
 }
@@ -99,7 +99,7 @@ export interface FactionStats {
 export function countFactionTerritory(world: World): Map<ZoneFaction, FactionStats> {
   const stats = new Map<ZoneFaction, FactionStats>();
   for (const zf of [ZoneFaction.CITIZEN, ZoneFaction.LIQUIDATOR, ZoneFaction.CULTIST, ZoneFaction.WILD]) {
-    stats.set(zf, { cells: 0, zones: 0, spawnBudget: 0 });
+    stats.set(zf, { zones: 0, spawnBudget: 0 });
   }
 
   // Count zones (the strategic unit — no need to scan 1M cells)
@@ -283,6 +283,99 @@ export function spawnPatrolSquads(
         questId: -1,
         rpg,
       });
+    }
+  }
+}
+
+/* ── A-Life territory reinforcements — spawn NPCs proportional to territory ── */
+const NPC_SOFT_CAP = 1024;
+
+export function spawnTerritoryReinforcements(
+  world: World, entities: Entity[], nextId: { v: number }, stats: Map<ZoneFaction, FactionStats>,
+): void {
+  // Count alive NPCs
+  let aliveNPCs = 0;
+  for (const e of entities) if (e.type === EntityType.NPC && e.alive) aliveNPCs++;
+  if (aliveNPCs >= NPC_SOFT_CAP) return;
+
+  const deficit = NPC_SOFT_CAP - aliveNPCs;
+
+  // Calculate total controlled zones across all factions
+  let totalZones = 0;
+  for (const [, s] of stats) totalZones += s.zones;
+  if (totalZones === 0) return;
+
+  // For each faction, spawn NPCs proportional to territory
+  for (const [zf, s] of stats) {
+    if (s.zones === 0) continue;
+    const faction = zoneFactionToFaction(zf);
+    if (faction === null) continue;
+
+    const factionShare = s.zones / totalZones;
+    const toSpawn = Math.max(1, Math.round(deficit * factionShare));
+
+    // Collect faction's zones for spawn distribution
+    const factionZones = world.zones.filter(z => z.faction === zf);
+    if (factionZones.length === 0) continue;
+
+    // Distribute evenly across zones
+    const perZone = Math.max(1, Math.ceil(toSpawn / factionZones.length));
+
+    let spawned = 0;
+    for (const zone of factionZones) {
+      if (spawned >= toSpawn) break;
+
+      // Find a walkable room in this zone to spawn into
+      const zoneRooms = world.rooms.filter(r =>
+        r && r.w >= 3 && r.h >= 3 &&
+        world.zoneMap[world.idx(r.x + (r.w >> 1), r.y + (r.h >> 1))] === zone.id,
+      );
+      if (zoneRooms.length === 0) continue;
+
+      const count = Math.min(perZone, toSpawn - spawned);
+      const occupation = faction === Faction.LIQUIDATOR ? Occupation.HUNTER :
+                         faction === Faction.CULTIST ? Occupation.PILGRIM :
+                         faction === Faction.WILD ? Occupation.TRAVELER :
+                         Occupation.TRAVELER;
+
+      for (let i = 0; i < count; i++) {
+        const room = zoneRooms[Math.floor(Math.random() * zoneRooms.length)];
+        const sx = room.x + 1 + Math.floor(Math.random() * Math.max(1, room.w - 2));
+        const sy = room.y + 1 + Math.floor(Math.random() * Math.max(1, room.h - 2));
+        if (world.solid(sx, sy)) continue;
+
+        const zoneLevel = zone.level ?? 1;
+        const npcLevel = gaussianLevel(zoneLevel, 2);
+        const rpg = randomRPG(npcLevel);
+        const maxHp = Math.round(getMaxHp(rpg) * 1.3);
+        const nm = randomName(faction);
+
+        entities.push({
+          id: nextId.v++,
+          type: EntityType.NPC,
+          x: sx + 0.5, y: sy + 0.5,
+          angle: Math.random() * Math.PI * 2,
+          pitch: 0,
+          alive: true,
+          speed: 1.3 + Math.random() * 0.3,
+          sprite: occupation,
+          name: nm.name,
+          isFemale: nm.female,
+          needs: freshNeeds(),
+          hp: maxHp, maxHp,
+          money: Math.floor(Math.random() * 50),
+          ai: { goal: AIGoal.IDLE, tx: 0, ty: 0, path: [], pi: 0, stuck: 0, timer: 0 },
+          inventory: (faction === Faction.CULTIST && Math.random() < 0.4)
+            ? [{ defId: _pickPsi(), count: 1 }] : [],
+          weapon: (faction === Faction.CULTIST && Math.random() < 0.4) ? _pickPsi() : undefined,
+          faction,
+          occupation,
+          isTraveler: true,
+          questId: -1,
+          rpg,
+        });
+        spawned++;
+      }
     }
   }
 }

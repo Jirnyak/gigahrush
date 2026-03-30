@@ -3,7 +3,7 @@
 /*   Protected by aptMask — never destroyed during samosbor.     */
 
 import {
-  W, Cell, RoomType, Feature, DoorState,
+  W, Cell, RoomType, Feature, DoorState, Tex,
   type Room,
 } from '../../core/types';
 import { World } from '../../core/world';
@@ -127,6 +127,23 @@ export function generateApartments(world: World): AptPlan[] {
     for (let dy = -1; dy <= room.h; dy++)
       for (let dx = -1; dx <= room.w; dx++)
         world.aptMask[world.idx(room.x + dx, room.y + dy)] = 1;
+  }
+
+  // Mark shelter walls for living rooms as unbreakable hermetic walls.
+  // These are the walls where residents hide behind hermetic doors during samosbor.
+  for (let i = 0; i < nextRoomId; i++) {
+    const room = world.rooms[i];
+    if (!room) continue;
+    if (room.type !== RoomType.LIVING) continue;
+    for (let dy = -1; dy <= room.h; dy++) {
+      for (let dx = -1; dx <= room.w; dx++) {
+        if (dx >= 0 && dx < room.w && dy >= 0 && dy < room.h) continue;
+        const ci = world.idx(room.x + dx, room.y + dy);
+        if (world.cells[ci] !== Cell.WALL) continue;
+        world.hermoWall[ci] = 1;
+        world.wallTex[ci] = Tex.HERMO_WALL;
+      }
+    }
   }
 
   // Place apartment features (permanent furniture)

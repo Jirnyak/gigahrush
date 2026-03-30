@@ -2,6 +2,7 @@
 
 import {
   type Entity, type Quest, EntityType, Cell, RoomType, W, QuestType,
+  LiftDirection,
 } from '../core/types';
 import { World } from '../core/world';
 
@@ -53,7 +54,14 @@ function drawMap(
       const wy = ((pyI + dy) % W + W) % W;
       const ci = wy * W + wx;
       const cell = world.cells[ci];
-      if (cell === Cell.WALL) continue;
+      if (cell === Cell.WALL) {
+        // Hermetic shelter walls: special unbreakable wall marker.
+        if (world.hermoWall[ci]) {
+          ctx.fillStyle = '#6ec3ff';
+          ctx.fillRect(mapX + (dx + radius) * cellW, mapY + (dy + radius) * cellH, cellW + 0.5, cellH + 0.5);
+        }
+        continue;
+      }
       if (cell === Cell.ABYSS) {
         ctx.fillStyle = '#100810';
         ctx.fillRect(mapX + (dx + radius) * cellW, mapY + (dy + radius) * cellH, cellW + 0.5, cellH + 0.5);
@@ -161,6 +169,38 @@ function drawMap(
   // Player dot
   const pcx = mapX + radius * cellW;
   const pcy = mapY + radius * cellH;
+
+  // Lift direction arrows
+  for (let dy = -radius; dy < radius; dy++) {
+    for (let dx = -radius; dx < radius; dx++) {
+      const wx = ((pxI + dx) % W + W) % W;
+      const wy = ((pyI + dy) % W + W) % W;
+      const ci = wy * W + wx;
+      if (world.cells[ci] !== Cell.LIFT) continue;
+      const lsx = mapX + (dx + radius) * cellW;
+      const lsy = mapY + (dy + radius) * cellH;
+      const isUp = world.liftDir[ci] === LiftDirection.UP;
+      const ah = 7;  // arrow half-height
+      const aw = 5;  // arrow half-width
+      // Dark outline
+      ctx.strokeStyle = '#440';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      if (isUp) {
+        ctx.moveTo(lsx, lsy - ah);
+        ctx.lineTo(lsx + aw, lsy + ah);
+        ctx.lineTo(lsx - aw, lsy + ah);
+      } else {
+        ctx.moveTo(lsx, lsy + ah);
+        ctx.lineTo(lsx + aw, lsy - ah);
+        ctx.lineTo(lsx - aw, lsy - ah);
+      }
+      ctx.closePath();
+      ctx.stroke();
+      ctx.fillStyle = '#ee2';
+      ctx.fill();
+    }
+  }
   ctx.fillStyle = '#fff';
   ctx.fillRect(pcx - 1, pcy - 1, 3, 3);
   // Direction indicator

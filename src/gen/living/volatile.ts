@@ -1,7 +1,7 @@
 /* ── Volatile maze — destroyed and rebuilt every samosbor ─────── */
 
 import {
-  W, Cell, Tex, RoomType, Feature,
+  W, Cell, Tex, RoomType, Feature, LiftDirection,
   type Room,
 } from '../../core/types';
 import { World } from '../../core/world';
@@ -12,7 +12,7 @@ import {
   decorateRoom, placeAbyssPits, connectToNetwork,
   ensureConnectivity, sanitizeDoors, pruneDeadEnds, placeLifts,
   repairRoomWalls, shapeRoom, openVolatileDoors,
-  placeAirlocks, ensurePermanentRoomAccess,
+  placeAirlocks, ensurePermanentRoomAccess, punchThinWalls,
 } from '../shared';
 import { connectApartmentsToMaze } from './apartments';
 
@@ -35,7 +35,14 @@ export function generateVolatileMaze(world: World): void {
     if (!room) continue;
     room.doors = room.doors.filter(di => {
       const door = world.doors.get(di);
-      if (!door) return false;
+      if (!door) {
+        // Door data already removed (by volatile room cleanup) — fix cell
+        if (world.cells[di] === Cell.DOOR) {
+          world.cells[di] = Cell.WALL;
+          world.wallTex[di] = room.wallTex;
+        }
+        return false;
+      }
       if (door.roomA >= 0 && door.roomA < aptCount &&
           door.roomB >= 0 && door.roomB < aptCount) return true;
       world.cells[door.idx] = Cell.WALL;
@@ -161,6 +168,9 @@ export function generateVolatileMaze(world: World): void {
     ensureConnectivity(world, vr3.x + Math.floor(vr3.w / 2) + 0.5, vr3.y + Math.floor(vr3.h / 2) + 0.5);
   }
 
+  /* ── Punch thin walls for shortcut loops ────────────── */
+  punchThinWalls(world, 0.12);
+
   /* ── Convert non-apartment doors to floor openings ─── */
   openVolatileDoors(world);
 
@@ -203,6 +213,10 @@ export function generateVolatileMaze(world: World): void {
 
   /* ── Connect any isolated permanent rooms (universal) ─ */
   ensurePermanentRoomAccess(world);
+
+  /* ── Final cleanup — catch any comb/dead-end artifacts ─ */
+  sanitizeDoors(world);
+  pruneDeadEnds(world);
 
   /* ── Decorations ───────────────────────────────────── */
   for (const room of placed) {
@@ -288,7 +302,7 @@ export function generateVolatileMaze(world: World): void {
   }
 
   /* ── Lifts + lightmap ──────────────────────────────── */
-  placeLifts(world, 4);
+  placeLifts(world, 16, LiftDirection.DOWN);
   world.bakeLights();
 }
 

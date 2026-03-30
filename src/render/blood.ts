@@ -1,6 +1,6 @@
 /* ── Blood FX — procedural splatter, trails, pools ────────────── */
 
-import { W, type Entity, EntityType } from '../core/types';
+import { W, Cell, type Entity, EntityType } from '../core/types';
 import { World } from '../core/world';
 
 /* ── Screen-space blood particles ─────────────────────────────── */
@@ -22,6 +22,33 @@ let _splatterSeed = 0;
 const BLOOD: [number, number, number] = [140, 10, 10];
 const GORE:  [number, number, number] = [30, 40, 10];
 
+/* ── Stamp blood/gore on adjacent wall cells ──────────────────── */
+function splatAdjacentWalls(
+  world: World, ex: number, ey: number,
+  radius: number, intensity: number, seed: number,
+  cr: number, cg: number, cb: number,
+): void {
+  const ecx = Math.floor(ex), ecy = Math.floor(ey);
+  const fracX = ((ex % 1) + 1) % 1;
+  const fracY = ((ey % 1) + 1) % 1;
+  // Cardinal directions: [dx, dy, face-U from entity position]
+  const dirs: [number, number, number][] = [
+    [-1, 0, fracY],  // West wall: horizontal on face = entity Y
+    [+1, 0, fracY],  // East wall
+    [0, -1, fracX],  // North wall: horizontal on face = entity X
+    [0, +1, fracX],  // South wall
+  ];
+  for (const [dx, dy, faceU] of dirs) {
+    const wx = world.wrap(ecx + dx);
+    const wy = world.wrap(ecy + dy);
+    if (world.cells[wy * W + wx] !== Cell.WALL) continue;
+    // Near-floor level on wall face (bottom ~20%)
+    const faceV = 0.78 + Math.random() * 0.17;
+    const u = Math.max(0, Math.min(0.999, faceU + (Math.random() - 0.5) * 0.15));
+    world.stamp(wx, wy, u, faceV, radius, intensity, seed + dx * 7 + dy * 13, cr, cg, cb, true);
+  }
+}
+
 /* ── Spawn blood particles on hit ─────────────────────────────── */
 export function spawnBloodHit(world: World, ex: number, ey: number, fromAngle: number, dmg: number, gore = false): void {
   const seed = ++_splatterSeed;
@@ -32,6 +59,9 @@ export function spawnBloodHit(world: World, ex: number, ey: number, fromAngle: n
   const radius = Math.min(0.35, 0.08 + dmg * 0.004);
   const intensity = Math.min(220, 80 + dmg * 3);
   world.stamp(cx, cy, fx, fy, radius, intensity, seed, sr, sg, sb);
+
+  // Splatter on adjacent walls
+  splatAdjacentWalls(world, ex, ey, radius * 0.6, Math.floor(intensity * 0.7), seed, sr, sg, sb);
 
   // Spray some blood in hit direction (away from attacker)
   const count = Math.min(24, 4 + Math.floor(dmg * 0.3));
@@ -62,6 +92,8 @@ export function spawnDeathPool(world: World, ex: number, ey: number, gore = fals
   const fx = ex - cx, fy = ey - cy;
   // Large central pool
   world.stamp(cx, cy, fx, fy, 0.45, 255, seed, sr, sg, sb);
+  // Blood on adjacent walls
+  splatAdjacentWalls(world, ex, ey, 0.25, 200, seed, sr, sg, sb);
   // Secondary splatters around
   for (let i = 0; i < 5; i++) {
     const ox = (((seed * 73856093 + i * 19349663) >>> 0) % 100 - 50) / 100;

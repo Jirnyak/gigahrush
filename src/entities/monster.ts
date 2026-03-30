@@ -26,6 +26,7 @@ import { DEF as NIGHTMARE_DEF, generateSprite as genNightmare } from './nightmar
 import { DEF as SHADOW_DEF, generateSprite as genShadow } from './shadow';
 import { DEF as REBAR_DEF, generateSprite as genRebar } from './rebar';
 import { DEF as MATKA_DEF, generateSprite as genMatka } from './matka';
+import { DEF as IDOL_DEF, generateSprite as genIdol } from './idol';
 
 export const MONSTERS: Record<MonsterKind, MonsterDef> = {
   [MonsterKind.SBORKA]:    SBORKA_DEF,
@@ -38,6 +39,7 @@ export const MONSTERS: Record<MonsterKind, MonsterDef> = {
   [MonsterKind.SHADOW]:    SHADOW_DEF,
   [MonsterKind.REBAR]:     REBAR_DEF,
   [MonsterKind.MATKA]:     MATKA_DEF,
+  [MonsterKind.IDOL]:      IDOL_DEF,
 };
 
 export const MONSTER_SPRITES: Record<MonsterKind, () => Uint32Array> = {
@@ -51,6 +53,7 @@ export const MONSTER_SPRITES: Record<MonsterKind, () => Uint32Array> = {
   [MonsterKind.SHADOW]:    genShadow,
   [MonsterKind.REBAR]:     genRebar,
   [MonsterKind.MATKA]:     genMatka,
+  [MonsterKind.IDOL]:      genIdol,
 };
 
 export const EYE_BOLT_SPRITE: () => Uint32Array = genEyeBolt;

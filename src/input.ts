@@ -9,7 +9,7 @@ export function createInput(): InputState {
     attack: false, interact: false, pickup: false,
     map: false, inv: false, invUp: false, invDn: false, invLeft: false, invRight: false,
     use: false, escape: false,
-    debugSamosbor: false, questLog: false,
+    questLog: false,
     mouseAttack: false,
     attrStr: false, attrAgi: false, attrInt: false,
     debugScreen: false,
@@ -17,6 +17,7 @@ export function createInput(): InputState {
     drop: false,
     factionMenu: false,
     logMenu: false,
+    sleep: false,
     mouse: { dx: 0, dy: 0, locked: false },
   };
 }
@@ -50,12 +51,12 @@ export function bindInput(input: InputState, canvas: HTMLCanvasElement): () => v
     if (e.code === 'ArrowRight') input.invRight = true;
     if (e.code === 'KeyD') input.drop = true;
     if (e.code === 'Enter') { input.escape = true; e.preventDefault(); return; }
-    if (e.code === 'Tab') { input.debugSamosbor = true; e.preventDefault(); return; }
     if (e.code === 'Digit1') input.attrStr = true;
     if (e.code === 'Digit2') input.attrAgi = true;
     if (e.code === 'Digit3') input.attrInt = true;
     if (e.code === 'Backquote') input.debugScreen = true;
     if (e.code === 'KeyP') input.pee = true;
+    if (e.code === 'KeyZ') input.sleep = true;
     e.preventDefault();
   };
 
@@ -66,15 +67,15 @@ export function bindInput(input: InputState, canvas: HTMLCanvasElement): () => v
     input.invDn = false;
     input.invLeft = false;
     input.invRight = false;
-    input.use = false;
-    input.drop = false;
+    if (e.code === 'KeyR') input.use = false;
+    if (e.code === 'KeyD') input.drop = false;
     if (e.code === 'Enter') input.escape = false;
-    if (e.code === 'Tab') input.debugSamosbor = false;
     if (e.code === 'Digit1') input.attrStr = false;
     if (e.code === 'Digit2') input.attrAgi = false;
     if (e.code === 'Digit3') input.attrInt = false;
     if (e.code === 'Backquote') input.debugScreen = false;
     if (e.code === 'KeyP') input.pee = false;
+    if (e.code === 'KeyZ') input.sleep = false;
   };
 
   const onMouse = (e: MouseEvent) => {

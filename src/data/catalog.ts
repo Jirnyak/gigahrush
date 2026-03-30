@@ -1,225 +1,27 @@
-/* ── Game data catalogue — rooms, items, monsters, names ─────── */
+/* ── Game data catalogue — barrel re-export ──────────────────── */
+/*  Отдельные модули:
+ *    weapons.ts  — WeaponStats + физ. оружие
+ *    psi.ts      — ПСИ-сгустки
+ *    rooms.ts    — RoomDef + ROOM_DEFS
+ *    items.ts    — ITEMS
+ *    names.ts    — randomName, monsterName, freshNeeds
+ *    notes.ts    — NOTES (лор-записки)
+ */
 
-import {
-  RoomType, ItemType, Tex, Faction,
-  type ItemDef, type Entity, type Needs,
-} from '../core/types';
+import { PHYS_WEAPON_STATS, type WeaponStats } from './weapons';
+import { PSI_WEAPON_STATS } from './psi';
 
-// ── Weapon stats registry ────────────────────────────────────────
-export interface WeaponStats {
-  dmg: number;
-  durability: number;   // max durability for melee (0 = infinite/fists)
-  range: number;        // melee reach in cells
-  speed: number;        // attack cooldown seconds
-  isRanged: boolean;
-  ammoType?: string;    // item def id for ammo
-  projSpeed?: number;   // projectile speed (cells/sec)
-  pellets?: number;     // projectiles per shot (shotgun)
-  spread?: number;      // spread angle in radians
-  projSprite?: number;  // sprite index for projectile
-  psiCost?: number;     // PSI cost per cast (if set, uses PSI instead of ammo)
-  aoeRadius?: number;   // AoE explosion radius on projectile impact
-  psiEffect?: string;   // instant PSI effect id (non-projectile spells)
-}
-
+// Merged weapon registry (physical + PSI)
 export const WEAPON_STATS: Record<string, WeaponStats> = {
-  '':       { dmg: 3,  durability: 0,  range: 1.3, speed: 0.3,  isRanged: false },
-  knife:    { dmg: 8,  durability: 40, range: 1.3, speed: 0.25, isRanged: false },
-  wrench:   { dmg: 12, durability: 60, range: 1.4, speed: 0.4,  isRanged: false },
-  pipe:     { dmg: 18, durability: 50, range: 1.5, speed: 0.5,  isRanged: false },
-  rebar:    { dmg: 25, durability: 80, range: 1.6, speed: 0.6,  isRanged: false },
-  axe:      { dmg: 30, durability: 70, range: 1.5, speed: 0.7,  isRanged: false },
-  makarov:  { dmg: 20, durability: 0,  range: 0,   speed: 0.4,  isRanged: true, ammoType: 'ammo_9mm',    projSpeed: 20, pellets: 1, spread: 0.02, projSprite: 29 },
-  shotgun:  { dmg: 8,  durability: 0,  range: 0,   speed: 1.0,  isRanged: true, ammoType: 'ammo_shells', projSpeed: 18, pellets: 6, spread: 0.15, projSprite: 30 },
-  nailgun:  { dmg: 12, durability: 0,  range: 0,   speed: 0.12, isRanged: true, ammoType: 'ammo_nails',  projSpeed: 15, pellets: 1, spread: 0.04, projSprite: 31 },
-  // ── PSI spells (Сгустки) — use PSI instead of ammo ──
-  psi_strike:   { dmg: 10, durability: 0, range: 0, speed: 0.35, isRanged: true,  psiCost: 1,  projSpeed: 16, projSprite: 32 },
-  psi_rupture:  { dmg: 10, durability: 0, range: 0, speed: 0.6,  isRanged: true,  psiCost: 3,  projSpeed: 14, projSprite: 32, aoeRadius: 3 },
-  psi_storm:    { dmg: 10, durability: 0, range: 0, speed: 1.0,  isRanged: false, psiCost: 10, psiEffect: 'storm' },
-  psi_brainburn:{ dmg: 0,  durability: 0, range: 0, speed: 1.0,  isRanged: false, psiCost: 8,  psiEffect: 'brain_burn' },
-  psi_madness:  { dmg: 0,  durability: 0, range: 0, speed: 0.8,  isRanged: false, psiCost: 5,  psiEffect: 'madness' },
-  psi_control:  { dmg: 0,  durability: 0, range: 0, speed: 0.8,  isRanged: false, psiCost: 8,  psiEffect: 'control' },
-  psi_phase:    { dmg: 0,  durability: 0, range: 0, speed: 0.5,  isRanged: false, psiCost: 8,  psiEffect: 'phase' },
-  psi_mark:     { dmg: 0,  durability: 0, range: 0, speed: 0.3,  isRanged: false, psiCost: 3,  psiEffect: 'mark' },
-  psi_recall:   { dmg: 0,  durability: 0, range: 0, speed: 0.3,  isRanged: false, psiCost: 3,  psiEffect: 'recall' },
+  ...PHYS_WEAPON_STATS,
+  ...PSI_WEAPON_STATS,
 };
 
-// ── Room definitions ─────────────────────────────────────────────
-export interface RoomDef {
-  type: RoomType;
-  name: string;
-  minW: number; maxW: number;
-  minH: number; maxH: number;
-  wallTex: Tex; floorTex: Tex;
-}
-
-export const ROOM_DEFS: Record<RoomType, RoomDef> = {
-  [RoomType.LIVING]:     { type: RoomType.LIVING,     name: 'Жилая',        minW:5, maxW:9,  minH:5, maxH:8,  wallTex: Tex.PANEL,     floorTex: Tex.F_WOOD },
-  [RoomType.KITCHEN]:    { type: RoomType.KITCHEN,    name: 'Кухня',        minW:4, maxW:7,  minH:4, maxH:6,  wallTex: Tex.TILE_W,    floorTex: Tex.F_LINO },
-  [RoomType.BATHROOM]:   { type: RoomType.BATHROOM,   name: 'Санузел',      minW:3, maxW:5,  minH:3, maxH:5,  wallTex: Tex.TILE_W,    floorTex: Tex.F_TILE },
-  [RoomType.STORAGE]:    { type: RoomType.STORAGE,    name: 'Кладовая',     minW:3, maxW:6,  minH:3, maxH:6,  wallTex: Tex.CONCRETE,  floorTex: Tex.F_CONCRETE },
-  [RoomType.MEDICAL]:    { type: RoomType.MEDICAL,    name: 'Медпункт',     minW:4, maxW:8,  minH:4, maxH:7,  wallTex: Tex.TILE_W,    floorTex: Tex.F_TILE },
-  [RoomType.COMMON]:     { type: RoomType.COMMON,     name: 'Зал',          minW:6, maxW:14, minH:6, maxH:12, wallTex: Tex.PANEL,     floorTex: Tex.F_CARPET },
-  [RoomType.PRODUCTION]: { type: RoomType.PRODUCTION, name: 'Цех',          minW:6, maxW:12, minH:6, maxH:10, wallTex: Tex.METAL,     floorTex: Tex.F_CONCRETE },
-  [RoomType.CORRIDOR]:   { type: RoomType.CORRIDOR,   name: 'Коридор',      minW:2, maxW:3,  minH:8, maxH:20, wallTex: Tex.CONCRETE,  floorTex: Tex.F_LINO },
-  [RoomType.SMOKING]:    { type: RoomType.SMOKING,    name: 'Курилка',      minW:3, maxW:6,  minH:3, maxH:5,  wallTex: Tex.CONCRETE,  floorTex: Tex.F_CONCRETE },
-  [RoomType.OFFICE]:     { type: RoomType.OFFICE,     name: 'Бухгалтерия',  minW:4, maxW:8,  minH:4, maxH:7,  wallTex: Tex.PANEL,     floorTex: Tex.F_LINO },
-  [RoomType.HQ]:         { type: RoomType.HQ,         name: 'Штаб',         minW:7, maxW:7,  minH:7, maxH:7,  wallTex: Tex.METAL,     floorTex: Tex.F_CONCRETE },
-};
-
-// ── Items ────────────────────────────────────────────────────────
-function feed(v: number) { return (e: Entity) => { if (e.needs) e.needs.food = Math.min(100, e.needs.food + v); return 'Вы поели'; }; }
-function drink(v: number) { return (e: Entity) => { if (e.needs) e.needs.water = Math.min(100, e.needs.water + v); return 'Вы попили'; }; }
-function medicine(hp: number) { return (e: Entity) => { e.hp = Math.min((e.maxHp ?? 100), (e.hp ?? 0) + hp); return `Лечение +${hp}`; }; }
-function psiMedicine(hp: number, psi: number) { return (e: Entity) => { e.hp = Math.min((e.maxHp ?? 100), (e.hp ?? 0) + hp); if (e.rpg) e.rpg.psi = Math.min(e.rpg.maxPsi, e.rpg.psi + psi); return hp > 0 ? `Лечение +${hp}, ПСИ +${psi}` : `ПСИ +${psi}`; }; }
-
-export const ITEMS: Record<string, ItemDef> = {
-  bread:     { id:'bread',     name:'Хлеб',         type:ItemType.FOOD,     stack:5,  desc:'Чёрствый хлеб',          spawnRooms:[RoomType.KITCHEN,RoomType.STORAGE], spawnW:8, value:5, use:feed(15) },
-  canned:    { id:'canned',    name:'Тушёнка',      type:ItemType.FOOD,     stack:3,  desc:'Мясная консерва',        spawnRooms:[RoomType.KITCHEN,RoomType.STORAGE], spawnW:5, value:15, use:feed(30) },
-  kasha:     { id:'kasha',     name:'Каша',         type:ItemType.FOOD,     stack:3,  desc:'Холодная каша',          spawnRooms:[RoomType.KITCHEN],                  spawnW:4, value:8, use:feed(20) },
-  rawmeat:   { id:'rawmeat',   name:'Сырое мясо',   type:ItemType.FOOD,     stack:2,  desc:'Подозрительное мясо',    spawnRooms:[RoomType.STORAGE,RoomType.PRODUCTION], spawnW:2, value:3, use:feed(10) },
-
-  water:     { id:'water',     name:'Вода',         type:ItemType.DRINK,    stack:3,  desc:'Бутылка воды',           spawnRooms:[RoomType.KITCHEN,RoomType.STORAGE,RoomType.BATHROOM], spawnW:10, value:3, use:drink(25) },
-  tea:       { id:'tea',       name:'Чай',          type:ItemType.DRINK,    stack:3,  desc:'Холодный чай',           spawnRooms:[RoomType.KITCHEN,RoomType.COMMON],  spawnW:4, value:4, use:drink(15) },
-  kompot:    { id:'kompot',    name:'Компот',       type:ItemType.DRINK,    stack:2,  desc:'Мутный компот',          spawnRooms:[RoomType.KITCHEN],                  spawnW:3, value:6, use:drink(20) },
-
-  bandage:   { id:'bandage',   name:'Бинт',         type:ItemType.MEDICINE, stack:5,  desc:'Рулон бинта',            spawnRooms:[RoomType.MEDICAL,RoomType.BATHROOM],spawnW:5, value:10, use:medicine(15) },
-  pills:     { id:'pills',     name:'Таблетки',     type:ItemType.MEDICINE, stack:3,  desc:'Обезболивающее. Лечит 25 HP, +5 ПСИ',   spawnRooms:[RoomType.MEDICAL],                  spawnW:3, value:20, use:psiMedicine(25, 5) },
-  antidep:   { id:'antidep',   name:'Антидепрессант',type:ItemType.MEDICINE, stack:2,  desc:'Помогает с психикой. +20 ПСИ',           spawnRooms:[RoomType.MEDICAL],                  spawnW:2, value:30, use:psiMedicine(0, 20) },
-
-  pipe:      { id:'pipe',      name:'Труба',        type:ItemType.WEAPON,   stack:1,  desc:'Тяжёлая труба. Урон 18. Прочность 50', spawnRooms:[RoomType.PRODUCTION,RoomType.STORAGE], spawnW:3, value:25 },
-  wrench:    { id:'wrench',    name:'Ключ гаечный', type:ItemType.WEAPON,   stack:1,  desc:'Увесистый. Урон 12. Прочность 60',     spawnRooms:[RoomType.PRODUCTION,RoomType.STORAGE], spawnW:4, value:15 },
-  knife:     { id:'knife',     name:'Нож',          type:ItemType.WEAPON,   stack:1,  desc:'Кухонный нож. Урон 8. Прочность 40',   spawnRooms:[RoomType.KITCHEN],                  spawnW:3, value:12 },
-  rebar:     { id:'rebar',     name:'Арматура',     type:ItemType.WEAPON,   stack:1,  desc:'Кусок арматуры. Урон 25. Прочность 80', spawnRooms:[RoomType.PRODUCTION,RoomType.STORAGE], spawnW:2, value:30 },
-  axe:       { id:'axe',       name:'Топор',        type:ItemType.WEAPON,   stack:1,  desc:'Пожарный топор. Урон 30. Прочность 70', spawnRooms:[RoomType.PRODUCTION],                  spawnW:1, value:50 },
-  makarov:   { id:'makarov',   name:'Макаров',      type:ItemType.WEAPON,   stack:1,  desc:'Пистолет ПМ. Урон 20. Патроны 9мм',    spawnRooms:[RoomType.STORAGE],                  spawnW:1, value:80 },
-  shotgun:   { id:'shotgun',   name:'Обрез',        type:ItemType.WEAPON,   stack:1,  desc:'Обрез. Урон 8×6. Дробь',               spawnRooms:[RoomType.STORAGE],                  spawnW:0, value:120 },
-  nailgun:   { id:'nailgun',   name:'Гвоздомёт',    type:ItemType.WEAPON,   stack:1,  desc:'Скорострельный. Урон 12. Гвозди',      spawnRooms:[RoomType.PRODUCTION],                  spawnW:1, value:60 },
-
-  ammo_9mm:  { id:'ammo_9mm',  name:'Патроны 9мм',  type:ItemType.AMMO,     stack:20, desc:'Патроны для Макарова',                  spawnRooms:[RoomType.STORAGE,RoomType.PRODUCTION], spawnW:2, value:15 },
-  ammo_shells:{ id:'ammo_shells',name:'Дробь',       type:ItemType.AMMO,     stack:8,  desc:'Дробовые патроны',                     spawnRooms:[RoomType.STORAGE],                  spawnW:1, value:20 },
-  ammo_nails:{ id:'ammo_nails', name:'Гвозди',      type:ItemType.AMMO,     stack:30, desc:'Гвозди для гвоздомёта',                spawnRooms:[RoomType.PRODUCTION,RoomType.STORAGE], spawnW:3, value:8 },
-
-  // ── Сгустки (PSI runes) — equip as weapon, use PSI instead of ammo ──
-  psi_strike:   { id:'psi_strike',    name:'Сгусток: Пси удар',        type:ItemType.WEAPON, stack:1, desc:'Пси-снаряд. 1 ПСИ, 10 урона',                                     spawnRooms:[RoomType.MEDICAL,RoomType.OFFICE,RoomType.COMMON], spawnW:2, value:40 },
-  psi_rupture:  { id:'psi_rupture',   name:'Сгусток: Разрыв',          type:ItemType.WEAPON, stack:1, desc:'Взрыв пси-энергии. 3 ПСИ, 10 урона по площади',                    spawnRooms:[RoomType.MEDICAL,RoomType.STORAGE],               spawnW:1, value:60 },
-  psi_storm:    { id:'psi_storm',     name:'Сгусток: Пси буря',        type:ItemType.WEAPON, stack:1, desc:'Волна боли. 10 ПСИ, урон всем в поле зрения',                       spawnRooms:[RoomType.MEDICAL],                                spawnW:1, value:80 },
-  psi_brainburn:{ id:'psi_brainburn', name:'Сгусток: Выжиг мозга',     type:ItemType.WEAPON, stack:1, desc:'Мгновенная смерть цели ≤ вашего уровня. 8 ПСИ',                     spawnRooms:[RoomType.MEDICAL],                                spawnW:0, value:100 },
-  psi_madness:  { id:'psi_madness',   name:'Сгусток: Безумие',         type:ItemType.WEAPON, stack:1, desc:'Цель нападает на всех. 5 ПСИ, 60с',                                 spawnRooms:[RoomType.OFFICE,RoomType.COMMON],                 spawnW:1, value:50 },
-  psi_control:  { id:'psi_control',   name:'Сгусток: Контроль',        type:ItemType.WEAPON, stack:1, desc:'Цель становится союзником. 8 ПСИ, 60с',                              spawnRooms:[RoomType.MEDICAL],                                spawnW:0, value:90 },
-  psi_phase:    { id:'psi_phase',     name:'Сгусток: Фазовый сдвиг',   type:ItemType.WEAPON, stack:1, desc:'Проходить сквозь стены. 8 ПСИ, 60с',                                 spawnRooms:[RoomType.STORAGE],                                spawnW:0, value:120 },
-  psi_mark:     { id:'psi_mark',      name:'Сгусток: Метка',           type:ItemType.WEAPON, stack:1, desc:'Запомнить позицию для телепорта. 3 ПСИ',                              spawnRooms:[RoomType.OFFICE,RoomType.COMMON],                 spawnW:1, value:30 },
-  psi_recall:   { id:'psi_recall',    name:'Сгусток: Возврат',         type:ItemType.WEAPON, stack:1, desc:'Телепорт к метке. 3 ПСИ',                                             spawnRooms:[RoomType.OFFICE,RoomType.COMMON],                 spawnW:1, value:30 },
-
-  flashlight:{ id:'flashlight', name:'Фонарик',     type:ItemType.TOOL,     stack:1,  desc:'Освещает путь',          spawnRooms:[RoomType.STORAGE,RoomType.LIVING],  spawnW:2, value:35 },
-  toiletpaper:{id:'toiletpaper',name:'Туал. бумага', type:ItemType.MISC,     stack:5,  desc:'Рулон',                  spawnRooms:[RoomType.BATHROOM,RoomType.STORAGE],spawnW:6, value:2 },
-  cigs:      { id:'cigs',      name:'Сигареты',     type:ItemType.MISC,     stack:3,  desc:'Пачка «Прима»',          spawnRooms:[RoomType.LIVING,RoomType.COMMON,RoomType.SMOKING],   spawnW:4, value:8 },
-  book:      { id:'book',      name:'Книга',        type:ItemType.MISC,     stack:1,  desc:'Потрёпанный том',        spawnRooms:[RoomType.LIVING,RoomType.COMMON,RoomType.OFFICE],   spawnW:3, value:5 },
-  note:      { id:'note',      name:'Записка',      type:ItemType.NOTE,     stack:1,  desc:'Чья-то записка',         spawnRooms:[RoomType.LIVING,RoomType.COMMON,RoomType.STORAGE,RoomType.OFFICE], spawnW:3, value:1 },
-
-  key:       { id:'key',       name:'Ключ',         type:ItemType.KEY,      stack:1,  desc:'Подходит к двери',       spawnRooms:[],                                 spawnW:0, value:50 },
-
-  // ── Story quest items ──
-  idol_chernobog: { id:'idol_chernobog', name:'Идол Чернобога', type:ItemType.MISC, stack:1, desc:'Тёмная фигурка из неизвестного камня. Холодная на ощупь.', spawnRooms:[RoomType.COMMON,RoomType.STORAGE,RoomType.OFFICE,RoomType.SMOKING], spawnW:0, value:100 },
-};
-
-// ── Monsters ─────────────────────────────────────────────────────
-// Monster definitions now live in src/entities/ (per-monster files).
-// Re-export from the central monster registry for backward compat.
-export { MONSTERS, type MonsterDef } from '../entities/monster';
-
-// ── NPC names ────────────────────────────────────────────────────
-
-// Citizens: normal Russian names
-const CIT_M = ['Иван','Пётр','Алексей','Дмитрий','Сергей','Андрей','Николай','Михаил','Виктор','Олег','Григорий','Борис','Фёдор','Геннадий','Валерий','Юрий','Анатолий','Владимир','Константин','Евгений'];
-const CIT_F = ['Мария','Анна','Елена','Ольга','Наталья','Татьяна','Ирина','Светлана','Людмила','Галина','Нина','Валентина','Екатерина','Лариса','Тамара','Зинаида','Раиса','Вера','Надежда','Любовь'];
-const CIT_LAST = ['Иванов','Петров','Сидоров','Кузнецов','Попов','Васильев','Соколов','Михайлов','Новиков','Фёдоров','Морозов','Волков','Алексеев','Лебедев','Семёнов','Егоров','Павлов','Козлов','Степанов','Орлов'];
-
-// Liquidators: military ranks + surnames
-const LIQ_RANKS = ['Рядовой','Ефрейтор','Сержант','Ст. сержант','Лейтенант','Ст. лейтенант','Капитан','Майор','Подполковник','Полковник'];
-const LIQ_LAST = ['Петренко','Бондаренко','Шевченко','Коваль','Мельник','Ткаченко','Гриценко','Кравченко','Олейник','Литвин','Сидорук','Бойко','Марченко','Поляков','Кравцов','Зайцев','Жук','Левченко','Руденко','Савченко'];
-
-// Wild: nickname-based names
-const WILD_M = ['Дима','Серый','Толик','Лёха','Колян','Жека','Саня','Вован','Макс','Костыль','Шурик','Борян'];
-const WILD_F = ['Машка','Светка','Ленка','Танька','Наташка','Иришка','Зинка','Верка','Нинка','Анька'];
-const WILD_NICK = ['Бетон','Шило','Гвоздь','Крыса','Дым','Штырь','Башка','Кирпич','Резак','Гайка','Труба','Ржавый','Шакал','Метла','Кабан','Цемент','Молот','Арматура','Пыль','Болт'];
-
-// Cultists: eldritch names (adjective + noun)
-const CULT_ADJ = ['Чёрн','Кровав','Безглаз','Гнил','Тёмн','Слеп','Пепельн','Утопш','Безмолвн','Полз','Бетонн','Серебрян','Пустотн','Могильн','Хтоничн'];
-const CULT_NOUN_M = ['Идол','Коготь','Скрежет','Червь','Столп','Глаз','Рот','Клык','Зов','Дым','Прах','Камень','Шёпот','Голод'];
-const CULT_NOUN_F = ['Гниль','Тень','Плоть','Яма','Пасть','Бездна','Жила','Завеса','Мгла','Тишь','Язва','Пелена','Дыра'];
-
-// Monster name: procedural syllable generation (eerie nonsense)
-const M_ONSETS = ['к','м','х','г','б','т','ш','в','р','п','д','ж','з','н','л','ч','ц'];
-const M_VOWELS = ['а','о','у','э','и','ы','е'];
-const M_CODAS = ['р','л','н','т','к','х','г','б','д','ш','рх','лг','бт','хн','гр','тк','рд','лк','нт'];
-
-function _pick<T>(arr: T[]): T { return arr[Math.floor(Math.random() * arr.length)]; }
-
-export function monsterName(): string {
-  const syllables = 2 + Math.floor(Math.random() * 2); // 2-3 syllables
-  let name = '';
-  for (let i = 0; i < syllables; i++) {
-    name += _pick(M_ONSETS) + _pick(M_VOWELS);
-    if (i < syllables - 1 && Math.random() < 0.5) name += _pick(M_CODAS);
-  }
-  // Final coda always
-  name += _pick(M_CODAS);
-  return name.charAt(0).toUpperCase() + name.slice(1);
-}
-
-export interface NameResult { name: string; female: boolean; }
-
-export function randomName(faction?: Faction): NameResult {
-  switch (faction) {
-    case Faction.LIQUIDATOR: {
-      const rank = _pick(LIQ_RANKS);
-      const last = _pick(LIQ_LAST);
-      return { name: `${rank} ${last}`, female: false };
-    }
-    case Faction.WILD: {
-      const female = Math.random() < 0.35;
-      const first = female ? _pick(WILD_F) : _pick(WILD_M);
-      const nick = _pick(WILD_NICK);
-      return { name: `${first} «${nick}»`, female };
-    }
-    case Faction.CULTIST: {
-      const female = Math.random() < 0.5;
-      const adj = _pick(CULT_ADJ);
-      const suffix = female ? 'ая' : 'ый';
-      const noun = female ? _pick(CULT_NOUN_F) : _pick(CULT_NOUN_M);
-      return { name: `${adj}${suffix} ${noun}`, female };
-    }
-    default: { // CITIZEN, SCIENTIST, undefined
-      const female = Math.random() < 0.5;
-      const first = female ? _pick(CIT_F) : _pick(CIT_M);
-      const last = _pick(CIT_LAST);
-      const lastSuffix = female ? 'а' : '';
-      return { name: `${first} ${last}${lastSuffix}`, female };
-    }
-  }
-}
-
-// ── Lore notes ───────────────────────────────────────────────────
-export const NOTES = [
-  'Стены дышат. Я слышу как бетон стонет ночью.',
-  'Не ходите в коридоры после самосбора. Они голодны.',
-  'Дверь закрыта. Ключ проглочен стеной. Мы заперты.',
-  'Этажей нет. Есть только бесконечный лабиринт из комнат.',
-  'Я видел свою квартиру в другом конце. Там жил кто-то другой. С МОИМ лицом.',
-  'Бетонник не атакует если не двигаться. Наврали. Он просто медленный.',
-  'Запас еды тает. Кухня перестроилась. Консервы вросли в стену.',
-  'Самосбор — не землетрясение. Это ХРУЩ переваривает сам себя.',
-  'Они выходят из стен. Буквально. Бетон расступается и закрывается за ними.',
-  'Мой сосед ушёл за водой два самосбора назад. Коридор, по которому он шёл, больше не существует.',
-  'Если слышишь скрежет — беги в комнату и закрой дверь. Герметично.',
-  'Мы считали этажи. Их нет. Только тор. Бесконечный серый тор.',
-  'Кто-то нашёл выход. Вернулся через стену с другой стороны.',
-  'Записка: «НЕ СПАТЬ В КОРИДОРАХ»',
-  'Ползун не видит. Он чувствует вибрации. Замри.',
-];
-
-// ── Helper: make fresh needs ─────────────────────────────────────
-export function freshNeeds(): Needs {
-  return { food: 70 + Math.random() * 30, water: 70 + Math.random() * 30, sleep: 60 + Math.random() * 40, pee: Math.random() * 30, poo: Math.random() * 20 };
-}
+export type { WeaponStats } from './weapons';
+export { ROOM_DEFS, type RoomDef } from './rooms';
+export { ITEMS } from './items';
+export { randomName, monsterName, type NameResult, freshNeeds } from './names';
+export { NOTES } from './notes';
+export { PLOT_NPCS, PLOT_CHAIN, isPlotNpc, getPlotDef, type PlotNpcDef, type PlotStep } from './plot';
+export { PLOT_ROOMS, type PlotRoomDef } from './plot_rooms';
+export { generateTalkText, generateNpcTradeItems } from './dialogue';

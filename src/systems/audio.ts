@@ -3,6 +3,41 @@
 let ctx: AudioContext | null = null;
 let mainGain: GainNode | null = null;
 
+/* ── Distance-based volume attenuation ────────────────────────── */
+const SOUND_MAX_DIST = 25;  // beyond this, sound is silent
+let _playerX = 0, _playerY = 0;
+let _worldDist2: ((ax: number, ay: number, bx: number, by: number) => number) | null = null;
+
+export function setListenerPos(x: number, y: number, distFn: (ax: number, ay: number, bx: number, by: number) => number): void {
+  _playerX = x;
+  _playerY = y;
+  _worldDist2 = distFn;
+}
+
+/** Compute volume multiplier [0..1] based on distance from listener */
+function volumeAt(x: number, y: number): number {
+  if (!_worldDist2) return 1;
+  const d2 = _worldDist2(_playerX, _playerY, x, y);
+  if (d2 <= 1) return 1;
+  const d = Math.sqrt(d2);
+  if (d >= SOUND_MAX_DIST) return 0;
+  return 1 - d / SOUND_MAX_DIST;
+}
+
+/** Play a sound at a world position (volume depends on distance to player) */
+export function playSoundAt(fn: () => void, x: number, y: number): void {
+  const vol = volumeAt(x, y);
+  if (vol < 0.01) return;  // too far, skip entirely
+  if (mainGain) {
+    const saved = mainGain.gain.value;
+    mainGain.gain.value = saved * vol;
+    fn();
+    mainGain.gain.value = saved;
+  } else {
+    fn();
+  }
+}
+
 function ensureContext(): AudioContext {
   if (!ctx) {
     ctx = new AudioContext();

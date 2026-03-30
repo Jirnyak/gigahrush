@@ -2,7 +2,7 @@
 
 import {
   W, Cell, Tex, RoomType, DoorState, Feature,
-  ZoneFaction,
+  ZoneFaction, LiftDirection,
   type Room, type Zone,
 } from '../core/types';
 import { World } from '../core/world';
@@ -13,6 +13,42 @@ export const rng  = (lo: number, hi: number) => lo + Math.floor(Math.random() * 
 export const pick = <T>(a: T[]): T => a[Math.floor(Math.random() * a.length)];
 export const shuffle = <T>(a: T[]): T[] => { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
 
+/* ── Protect room with aptMask + set wall/floor textures ─────── */
+export function protectRoom(world: World, rx: number, ry: number, w: number, h: number, wallTex: Tex, floorTex: Tex): void {
+  for (let dy = -1; dy <= h; dy++)
+    for (let dx = -1; dx <= w; dx++) {
+      const ci = world.idx(rx + dx, ry + dy);
+      world.aptMask[ci] = 1;
+      if (world.cells[ci] === Cell.WALL) world.wallTex[ci] = wallTex;
+    }
+  for (let dy = 0; dy < h; dy++)
+    for (let dx = 0; dx < w; dx++)
+      world.floorTex[world.idx(rx + dx, ry + dy)] = floorTex;
+}
+
+/* ── Find clear rectangular area (all WALL, no aptMask) ──────── */
+export function findClearArea(
+  world: World, cx: number, cy: number, w: number, h: number,
+  minDist: number, maxDist: number,
+): { x: number; y: number } | null {
+  for (let attempt = 0; attempt < 400; attempt++) {
+    const angle = Math.random() * Math.PI * 2;
+    const lo = attempt < 200 ? minDist : 0;
+    const hi = attempt < 200 ? maxDist : W / 4;
+    const dist = lo + Math.random() * (hi - lo);
+    const tx = (cx + Math.round(Math.cos(angle) * dist) + W) % W;
+    const ty = (cy + Math.round(Math.sin(angle) * dist) + W) % W;
+    let ok = true;
+    for (let dy = -1; dy <= h && ok; dy++)
+      for (let dx = -1; dx <= w && ok; dx++) {
+        const ci = world.idx((tx + dx + W) % W, (ty + dy + W) % W);
+        if (world.cells[ci] !== Cell.WALL || world.aptMask[ci]) ok = false;
+      }
+    if (ok) return { x: tx, y: ty };
+  }
+  return null;
+}
+
 /* ── 1-wide L-corridor with auto-doors at room walls ─────────── */
 export function carveCorridor(world: World, ax: number, ay: number, bx: number, by: number): void {
   const ddx = world.delta(ax, bx);
@@ -22,40 +58,59 @@ export function carveCorridor(world: World, ax: number, ay: number, bx: number, 
   const horizFirst = Math.random() < 0.5;
   let cx = ax, cy = ay;
 
-  function step(x: number, y: number): void {
+  // dirX/dirY: current movement direction of the corridor leg.
+  // Used to distinguish "crossing" a room wall (perpendicular entry)
+  // from "running alongside" a room wall (parallel), which previously
+  // created the repeating door-wall-door-wall "comb" pattern.
+  function step(x: number, y: number, dirX: number, dirY: number): void {
     const i = world.idx(x, y);
     if (world.aptMask[i]) return;  // never carve through apartment cells
     if (world.cells[i] === Cell.FLOOR || world.cells[i] === Cell.DOOR) return;
     if (world.cells[i] !== Cell.WALL) return;
 
-    let adjRoom = -1;
-    for (const [ox, oy] of [[1,0],[-1,0],[0,1],[0,-1]]) {
+    // Find adjacent rooms, distinguishing crossing vs alongside
+    let crossingRoom = -1;   // room in movement direction (corridor enters room)
+    let alongsideRoom = -1;  // room perpendicular to movement (corridor runs along wall)
+    for (const [ox, oy] of [[1,0],[-1,0],[0,1],[0,-1]] as const) {
       const ni = world.idx(world.wrap(x + ox), world.wrap(y + oy));
-      if (world.roomMap[ni] >= 0) { adjRoom = world.roomMap[ni]; break; }
+      if (world.roomMap[ni] < 0) continue;
+      const dot = ox * dirX + oy * dirY;
+      if (dot !== 0) {
+        crossingRoom = world.roomMap[ni];
+      } else {
+        alongsideRoom = world.roomMap[ni];
+      }
     }
 
-    if (adjRoom >= 0) {
+    if (crossingRoom >= 0) {
+      // Corridor crosses a room wall — place a door (if none nearby)
       let nearbyDoor = false;
       for (const [ox, oy] of [[1,0],[-1,0],[0,1],[0,-1]]) {
         const ni = world.idx(world.wrap(x + ox), world.wrap(y + oy));
         if (world.cells[ni] === Cell.DOOR) {
           const d = world.doors.get(ni);
-          if (d && (d.roomA === adjRoom || d.roomB === adjRoom)) { nearbyDoor = true; break; }
+          if (d && (d.roomA === crossingRoom || d.roomB === crossingRoom)) { nearbyDoor = true; break; }
         }
       }
       if (nearbyDoor) {
-        return;
+        // Don't place another door, but open the wall so the corridor
+        // connects to the existing nearby door instead of dead-ending
+        world.cells[i] = Cell.FLOOR;
       } else {
         world.cells[i] = Cell.DOOR;
         if (!world.doors.has(i)) {
           world.doors.set(i, {
             idx: i, state: DoorState.CLOSED,
-            roomA: adjRoom, roomB: -1, keyId: '', timer: 0,
+            roomA: crossingRoom, roomB: -1, keyId: '', timer: 0,
           });
-          const room = world.rooms[adjRoom];
+          const room = world.rooms[crossingRoom];
           if (room) room.doors.push(i);
         }
       }
+    } else if (alongsideRoom >= 0) {
+      // Corridor runs alongside a room wall — keep corridor flowing,
+      // don't place doors or leave wall gaps (eliminates "comb" pattern)
+      world.cells[i] = Cell.FLOOR;
     } else {
       world.cells[i] = Cell.FLOOR;
     }
@@ -63,20 +118,20 @@ export function carveCorridor(world: World, ax: number, ay: number, bx: number, 
 
   if (horizFirst) {
     for (let i = 0; i <= Math.abs(ddx); i++) {
-      step(cx, cy);
+      step(cx, cy, stepX, 0);
       if (i < Math.abs(ddx)) cx = world.wrap(cx + stepX);
     }
     for (let i = 0; i <= Math.abs(ddy); i++) {
-      step(cx, cy);
+      step(cx, cy, 0, stepY);
       if (i < Math.abs(ddy)) cy = world.wrap(cy + stepY);
     }
   } else {
     for (let i = 0; i <= Math.abs(ddy); i++) {
-      step(cx, cy);
+      step(cx, cy, 0, stepY);
       if (i < Math.abs(ddy)) cy = world.wrap(cy + stepY);
     }
     for (let i = 0; i <= Math.abs(ddx); i++) {
-      step(cx, cy);
+      step(cx, cy, stepX, 0);
       if (i < Math.abs(ddx)) cx = world.wrap(cx + stepX);
     }
   }
@@ -181,7 +236,7 @@ export function connectRoomsMST(world: World, rooms: Room[]): void {
     carveCorridor(world, exitA.ox, exitA.oy, exitB.ox, exitB.oy);
   }
 
-  const extra = Math.floor(n * 0.12);
+  const extra = Math.floor(n * 0.25);
   for (let k = 0; k < extra; k++) {
     const ai = rng(0, n - 1), bi = rng(0, n - 1);
     if (ai !== bi) {
@@ -792,7 +847,7 @@ export function pruneDeadEnds(world: World): void {
   const walk = (ni: number) =>
     world.cells[ni] === Cell.FLOOR || world.cells[ni] === Cell.DOOR;
 
-  for (let pass = 0; pass < 6; pass++) {
+  for (let pass = 0; pass < 40; pass++) {
     let changed = 0;
     for (let y = 0; y < W; y++) {
       for (let x = 0; x < W; x++) {
@@ -853,7 +908,7 @@ export function weightedPick<T extends { spawnW: number }>(defs: T[]): T | null 
 }
 
 /* ── Place lift cells in corridors ───────────────────────────── */
-export function placeLifts(world: World, count: number): void {
+export function placeLifts(world: World, count: number, direction: LiftDirection = LiftDirection.DOWN): void {
   let placed = 0;
   for (let attempt = 0; attempt < 2000 && placed < count; attempt++) {
     const x = rng(20, W - 20);
@@ -873,8 +928,11 @@ export function placeLifts(world: World, count: number): void {
     if (adjFloor < 2) continue;
     world.cells[ci] = Cell.LIFT;
     world.wallTex[ci] = Tex.LIFT_DOOR;
+    world.liftDir[ci] = direction;
     const bi = world.idx(btnX, btnY);
     world.features[bi] = Feature.LIFT_BUTTON;
+    // Store same direction on the button cell for easy lookup
+    world.liftDir[bi] = direction;
     placed++;
   }
 }
@@ -993,6 +1051,46 @@ export function placeAirlocks(world: World): void {
         // Mark area as used
         for (let r = -4; r <= 4; r++) {
           used.add(world.idx(world.wrap(x + r * dx), world.wrap(y + r * dy)));
+        }
+      }
+    }
+  }
+}
+
+/* ── Punch thin walls to create shortcut loops ───────────────── */
+export function punchThinWalls(world: World, chance: number = 0.12): void {
+  const dirs: [number, number][] = [[1,0],[0,1]];
+  const walk = (c: number) => c === Cell.FLOOR || c === Cell.DOOR;
+  const punched = new Set<number>();
+
+  for (let y = 1; y < W - 1; y++) {
+    for (let x = 1; x < W - 1; x++) {
+      const mi = y * W + x;
+      if (world.cells[mi] !== Cell.WALL) continue;
+      if (world.aptMask[mi]) continue;
+      if (world.roomMap[mi] >= 0) continue;
+
+      for (const [dx, dy] of dirs) {
+        const ai = world.idx(world.wrap(x - dx), world.wrap(y - dy));
+        const bi = world.idx(world.wrap(x + dx), world.wrap(y + dy));
+        if (!walk(world.cells[ai]) || !walk(world.cells[bi])) continue;
+        if (world.aptMask[ai] || world.aptMask[bi]) continue;
+
+        // Flanking cells must be walls (maintain wall-gap-wall pattern)
+        const f1 = world.idx(world.wrap(x + dy), world.wrap(y + dx));
+        const f2 = world.idx(world.wrap(x - dy), world.wrap(y - dx));
+        if (world.cells[f1] !== Cell.WALL || world.cells[f2] !== Cell.WALL) continue;
+
+        // Anti-clustering: skip if a nearby cell was already punched
+        let nearby = false;
+        for (const [ox, oy] of [[1,0],[-1,0],[0,1],[0,-1],[2,0],[-2,0],[0,2],[0,-2]]) {
+          if (punched.has(world.idx(world.wrap(x + ox), world.wrap(y + oy)))) { nearby = true; break; }
+        }
+        if (nearby) continue;
+
+        if (Math.random() < chance) {
+          world.cells[mi] = Cell.FLOOR;
+          punched.add(mi);
         }
       }
     }

@@ -14,7 +14,7 @@ export const DEF: MonsterDef = {
   speed: 1.5,
   dmg: 15,
   attackRate: 1.8,
-  sprite: 23,
+  sprite: 0,   // auto-assigned by generateSprites()
 };
 
 /* ── Static fallback sprite (used in sprite sheet) ────────────── */

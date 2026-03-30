@@ -1,7 +1,7 @@
 /* ── Procedural texture generator (64×64, retro horror style) ── */
 
 import { Tex } from '../core/types';
-import { generateSlideTextures } from '../gen/living';
+import { generateSlideTextures, generateHintTextures } from '../gen/living';
 import { S, rgba, noise, clamp } from './pixutil';
 
 export type TexData = Uint32Array; // S*S RGBA pixels (0xAABBGGRR little-endian)
@@ -35,7 +35,11 @@ export function generateTextures(): TexData[] {
   gen_meatFloor(textures[Tex.F_MEAT]);
   gen_desk(textures[Tex.DESK]);
   gen_target(textures[Tex.TARGET]);
+  gen_hermoWall(textures[Tex.HERMO_WALL]);
+  gen_gutWall(textures[Tex.GUT]);
+  gen_gutFloor(textures[Tex.F_GUT]);
   generateSlideTextures(textures);
+  generateHintTextures(textures);
 
   return textures;
 }
@@ -170,6 +174,24 @@ function gen_doorWood(t: TexData) {
   }
 }
 
+/* ── Hermetic shelter wall: reinforced steel-plated concrete ──── */
+function gen_hermoWall(t: TexData) {
+  for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) {
+    const n = noise(x, y, 180) * 12;
+    // Steel plate panels with horizontal seams every 16px
+    const seam = (y % 16 < 1 || x % 32 < 1) ? -25 : 0;
+    // Corner bolts on each 32×16 plate
+    const bx = x % 32, by = y % 16;
+    const bolt = ((bx < 3 || bx > 28) && (by < 3 || by > 12)) ? 30 : 0;
+    // Slight vertical streaks (weathering)
+    const streak = Math.sin(x * 0.4 + noise(x, 0, 181) * 3) * 6;
+    const r = clamp(70 + n + seam + bolt + streak);
+    const g = clamp(78 + n + seam + bolt + streak);
+    const b = clamp(88 + n + seam + bolt + streak);
+    t[y * S + x] = rgba(r, g, b);
+  }
+}
+
 function gen_doorMetal(t: TexData) {
   for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) {
     const border = (x < 3 || x > 60 || y < 3 || y > 60) ? -20 : 0;
@@ -295,6 +317,36 @@ function gen_meatFloor(t: TexData) {
     const r = clamp(90 + Math.floor(n + tissue + pool));
     const g = clamp(25 + Math.floor(n / 2 + pool));
     const b = clamp(28 + Math.floor(n / 2 + pool));
+    t[y * S + x] = rgba(r, g, b);
+  }
+}
+
+/* ── Gut wall: intestinal folds and wet tissue bands ─────────── */
+function gen_gutWall(t: TexData) {
+  for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) {
+    const foldA = Math.sin(x * 0.24 + noise(y, x, 261) * 5) * 22;
+    const foldB = Math.sin(y * 0.17 + noise(x, y, 262) * 7) * 14;
+    const tube = Math.sin((x + y) * 0.11 + noise(x >> 1, y >> 1, 263) * 6) * 18;
+    const slime = noise(x * 2, y * 2, 264) > 0.83 ? 26 : 0;
+    const bruise = noise(x >> 2, y >> 2, 265) > 0.72 ? -18 : 0;
+    const n = noise(x, y, 266) * 18 - 9;
+    const r = clamp(135 + foldA + foldB + tube + slime + bruise + n);
+    const g = clamp(55 + foldA * 0.35 + tube * 0.2 + bruise + n);
+    const b = clamp(45 + foldB * 0.22 + n * 0.5);
+    t[y * S + x] = rgba(r, g, b);
+  }
+}
+
+/* ── Gut floor: slick membranes with pooled mucus ────────────── */
+function gen_gutFloor(t: TexData) {
+  for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) {
+    const band = Math.sin(x * 0.18 + y * 0.09 + noise(x, y, 270) * 6) * 14;
+    const pocket = noise(x >> 1, y >> 1, 271) > 0.76 ? 18 : -10;
+    const wet = noise(x * 3, y * 3, 272) > 0.9 ? 20 : 0;
+    const n = noise(x, y, 273) * 20 - 10;
+    const r = clamp(108 + band + pocket + wet + n);
+    const g = clamp(38 + band * 0.3 + pocket * 0.35 + n * 0.5);
+    const b = clamp(34 + wet * 0.35 + n * 0.35);
     t[y * S + x] = rgba(r, g, b);
   }
 }

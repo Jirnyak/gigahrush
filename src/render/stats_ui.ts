@@ -2,7 +2,7 @@
 
 import { type Entity, type GameState, ItemType } from '../core/types';
 import { ITEMS, WEAPON_STATS } from '../data/catalog';
-import { getEquippedDurability, countAmmo } from '../systems/inventory';
+import { getEquippedDurability, getEquippedToolDurability, countAmmo } from '../systems/inventory';
 import { xpForLevel } from '../systems/rpg';
 
 export function drawInventory(
@@ -82,7 +82,7 @@ export function drawInventory(
       ctx.fillText(def.desc, descX, descY + 10 * sy);
       ctx.fillStyle = '#da4';
       ctx.fillText(`Цена: ${def.value ?? 0}₽`, descX, descY + 20 * sy);
-      if (def.use || def.type === ItemType.WEAPON) {
+      if (def.use || def.type === ItemType.WEAPON || def.type === ItemType.TOOL) {
         ctx.fillStyle = '#6a6';
         ctx.fillText('[E] использовать', descX, descY + 30 * sy);
       }
@@ -205,6 +205,13 @@ export function drawInventory(
   ctx.fillStyle = '#ccc';
   ctx.font = `${7 * sy}px monospace`;
   ctx.fillText(`${wpn2}  Урон:${ws2.dmg}  ${durLabel}`, stX, stY);
+  stY += 12 * sy;
+
+  const toolName = player.tool ? (ITEMS[player.tool]?.name ?? player.tool) : 'нет';
+  const toolDur = getEquippedToolDurability(player);
+  const toolDurLabel = toolDur ? `${Math.max(0, Math.ceil(toolDur.cur))}/${toolDur.max}` : '--';
+  ctx.fillStyle = '#8cf';
+  ctx.fillText(`Инструмент: ${toolName}  Износ:${toolDurLabel}`, stX, stY);
   stY += 12 * sy;
 
   // Stats

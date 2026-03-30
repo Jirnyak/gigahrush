@@ -11,7 +11,7 @@ export const DEF: MonsterDef = {
   speed: 1.8,
   dmg: 12,
   attackRate: 1.2,
-  sprite: 18,
+  sprite: 0,   // auto-assigned by generateSprites()
 };
 
 export function generateSprite(): Uint32Array {

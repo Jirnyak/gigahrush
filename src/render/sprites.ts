@@ -1,39 +1,50 @@
 /* ── Procedural sprite generator ──────────────────────────────── */
 
 import { NPC_SPRITE_GENERATORS, generateTravelerSprite } from '../entities/npc';
-import { MONSTER_SPRITES, EYE_BOLT_SPRITE } from '../entities/monster';
+import { MONSTERS, MONSTER_SPRITES, EYE_BOLT_SPRITE } from '../entities/monster';
 import { MonsterKind } from '../core/types';
 import { S, rgba, noise, clamp, CLEAR } from './pixutil';
+import { Spr, monsterSpr } from './sprite_index';
 
 export type SpriteData = Uint32Array; // S*S RGBA with alpha
 
-/* ── 32 sprite sheets: npcs 0-15, item 16, monsters 17-27, desk 28, projectiles 29-31 ── */
+/* ── Sprite sheet — indices computed automatically by sprite_index.ts ── */
 export function generateSprites(): SpriteData[] {
   const sprites: SpriteData[] = [];
-  // Occupation NPCs (0-12)
+  // Occupation NPCs
   for (const gen of NPC_SPRITE_GENERATORS) {
     sprites.push(gen());
   }
-  // Travelers (13-15): Путник, Паломник, Охотник
-  sprites.push(generateTravelerSprite(130, 100, 120, 80));   // 13: traveler — brown
-  sprites.push(generateTravelerSprite(140, 80, 60, 120));    // 14: pilgrim — dark robe
-  sprites.push(generateTravelerSprite(150, 60, 80, 60));     // 15: hunter — green
-  // Item drop (16)
+  // Travelers: Путник, Паломник, Охотник
+  sprites.push(generateTravelerSprite(130, 100, 120, 80));
+  sprites.push(generateTravelerSprite(140, 80, 60, 120));
+  sprites.push(generateTravelerSprite(150, 60, 80, 60));
+  // Item drop
   sprites.push(gen_itemDrop());
-  // Monsters (17-26, keyed by MonsterKind)
-  for (let k = 0; k <= MonsterKind.MATKA; k++) {
+  // Monsters (keyed by MonsterKind — auto-indexed)
+  const monsterCount = Object.values(MonsterKind).filter(v => typeof v === 'number').length;
+  for (let k = 0; k < monsterCount; k++) {
     sprites.push(MONSTER_SPRITES[k as MonsterKind]());
   }
-  // Eye bolt projectile (27)
+  // Auto-assign sprite indices on MonsterDefs so spawn code stays simple
+  for (let k = 0; k < monsterCount; k++) {
+    const def = MONSTERS[k as MonsterKind];
+    def.sprite = monsterSpr(k as MonsterKind);
+    // Auto-assign projSprite for ranged monsters
+    if (def.isRanged && (def.projSprite === undefined || def.projSprite === 0)) {
+      def.projSprite = k === MonsterKind.EYE ? Spr.EYE_BOLT : Spr.PSI_BOLT;
+    }
+  }
+  // Eye bolt projectile
   sprites.push(EYE_BOLT_SPRITE());
-  // Desk (28)
+  // Desk
   sprites.push(gen_deskSprite());
-  // Projectiles (29-31)
-  sprites.push(gen_bulletSprite());     // 29: pistol bullet
-  sprites.push(gen_pelletSprite());     // 30: shotgun pellet
-  sprites.push(gen_nailSprite());       // 31: nail
-  // PSI bolt (32)
-  sprites.push(gen_psiBoltSprite());    // 32: purple psi energy bolt
+  // Projectiles
+  sprites.push(gen_bulletSprite());
+  sprites.push(gen_pelletSprite());
+  sprites.push(gen_nailSprite());
+  // PSI bolt
+  sprites.push(gen_psiBoltSprite());
   return sprites;
 }
 

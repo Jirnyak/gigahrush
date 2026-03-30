@@ -1,7 +1,7 @@
 /* ── Debug menu: commands + overlay rendering ────────────────── */
 
 import {
-  W, Cell, RoomType, Faction, ZoneFaction,
+  W, Cell, RoomType, Faction, ZoneFaction, LiftDirection,
   EntityType, MonsterKind, Occupation, AIGoal,
   type Entity, type GameState,
 } from '../core/types';
@@ -11,6 +11,7 @@ import { FACTION_NAMES } from '../data/relations';
 import { MONSTERS } from '../entities/monster';
 import { addItem } from './inventory';
 import { awardXP, randomRPG, getMaxHp } from './rpg';
+import { isDebugNoClipEnabled, toggleDebugNoClip } from './psi';
 
 /* ── Command execution ───────────────────────────────────────── */
 
@@ -37,7 +38,7 @@ export function execDebugCommand(
       const kinds = [
         MonsterKind.SBORKA, MonsterKind.TVAR, MonsterKind.POLZUN, MonsterKind.BETONNIK,
         MonsterKind.ZOMBIE, MonsterKind.EYE, MonsterKind.NIGHTMARE, MonsterKind.SHADOW,
-        MonsterKind.REBAR, MonsterKind.MATKA,
+        MonsterKind.REBAR, MonsterKind.MATKA, MonsterKind.IDOL,
       ];
       for (let i = 0; i < kinds.length; i++) {
         const k = kinds[i];
@@ -100,6 +101,20 @@ export function execDebugCommand(
       state.msgs.push({ text: '+1 000 000 XP', time: state.time, color: '#ff0' });
       break;
     }
+    case 5: { // Force samosbor
+      state.samosborTimer = 0;
+      state.msgs.push({ text: '[DEBUG] Самосбор форсирован', time: state.time, color: '#ff0' });
+      break;
+    }
+    case 6: { // Toggle noclip
+      const enabled = toggleDebugNoClip();
+      state.msgs.push({
+        text: `[DEBUG] Noclip ${enabled ? 'включён' : 'выключен'}`,
+        time: state.time,
+        color: '#ff0',
+      });
+      break;
+    }
   }
 }
 
@@ -119,6 +134,8 @@ const CMD_LABELS = [
   'Спавн NPC',
   'Спавн предметов',
   '1 000 000 XP',
+  'Форсировать самосбор',
+  'Noclip',
 ];
 
 export function drawDebugOverlay(
@@ -162,8 +179,11 @@ export function drawDebugOverlay(
 
   let funcRooms = 0;
   for (const r of world.rooms) if (r.type !== RoomType.CORRIDOR) funcRooms++;
-  let lifts = 0;
-  for (let i = 0; i < W * W; i++) if (world.cells[i] === Cell.LIFT) lifts++;
+  let lifts = 0, liftsUp = 0, liftsDown = 0;
+  for (let i = 0; i < W * W; i++) if (world.cells[i] === Cell.LIFT) {
+    lifts++;
+    if (world.liftDir[i] === LiftDirection.UP) liftsUp++; else liftsDown++;
+  }
 
   /* ── Layout ───────────────────────────────────────────────── */
   const fs = Math.round(7 * sy);
@@ -196,7 +216,8 @@ export function drawDebugOverlay(
   const gap = () => { y += lh * 0.4; };
 
   row(`Существа: ${totalAlive}  Предметы: ${totalItems}`, '#aaa');
-  row(`Комнаты: ${funcRooms}  Лифты: ${lifts}`, '#aaa');
+  row(`Комнаты: ${funcRooms}  Лифты: ${lifts} (↑${liftsUp} ↓${liftsDown})`, '#aaa');
+  row(`Noclip: ${isDebugNoClipEnabled() ? 'ON' : 'OFF'}`, isDebugNoClipEnabled() ? '#ff0' : '#666');
   gap();
 
   // All factions — unified: NPC factions + monsters

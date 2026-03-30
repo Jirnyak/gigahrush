@@ -59,7 +59,13 @@ export const enum Tex {
   SLIDE_7    = 29,
   SLIDE_8    = 30,
   TARGET     = 31,
-  COUNT      = 32,
+  // keybind hint posters (tutorial room) — 2 hints per texture + lore poster
+  HINT_1 = 32, HINT_2 = 33, HINT_3 = 34, HINT_4 = 35,
+  HINT_5 = 36, HINT_6 = 37, HINT_7 = 38, HINT_LORE = 39,
+  HERMO_WALL = 40,
+  GUT        = 41,
+  F_GUT      = 42,
+  COUNT      = 43,
 }
 
 // ── Floor levels (Z-axis) ────────────────────────────────────────
@@ -67,6 +73,12 @@ export enum FloorLevel {
   LIVING       = 0,   // жилая зона — квартиры, цеха, залы
   MAINTENANCE  = 1,   // коллекторы — трубы, туннели, каналы с водой
   HELL         = 2,   // ад — мясо, постоянный самосбор, культисты
+}
+
+// ── Lift direction ───────────────────────────────────────────────
+export const enum LiftDirection {
+  DOWN = 0,   // ведёт на этаж ниже
+  UP   = 1,   // ведёт на этаж выше
 }
 
 // ── Rooms ────────────────────────────────────────────────────────
@@ -146,6 +158,7 @@ export enum MonsterKind {
   SHADOW,     // dark silhouette          — теневик
   REBAR,      // inorganic rebar monster  — арматура
   MATKA,      // spawner boss             — матка
+  IDOL,       // immobile psi monolith    — идол
 }
 
 // ── Factions ─────────────────────────────────────────────────────
@@ -204,6 +217,8 @@ export interface Needs {
   sleep: number;
   pee:   number;   // 0‥100   higher = more urgent
   poo:   number;
+  pendingPee?: number;  // pending digestion → passive pee growth
+  pendingPoo?: number;  // pending digestion → passive poo growth
 }
 
 // ── RPG stats (level, XP, attributes, PSI) ───────────────────────
@@ -244,6 +259,7 @@ export interface AIState {
   stateTimer?: number;        // time remaining in current sub-activity
   combatTargetId?: number;    // cached hostile target entity id
   combatScanCd?: number;      // cooldown until next full hostile scan
+  ambientBarkCd?: number;     // cooldown for rare generic A-Life chatter
 }
 
 export interface Entity {
@@ -266,6 +282,7 @@ export interface Entity {
   attackCd?: number;
   familyId?: number;
   weapon?: string;            // equipped item def id
+  tool?: string;              // equipped tool def id
   faction?: Faction;
   occupation?: Occupation;
   isTraveler?: boolean;       // путник/паломник/охотник — бродит по лабиринту
@@ -274,11 +291,9 @@ export interface Entity {
   money?: number;             // рубли
   spriteScale?: number;       // sprite size multiplier (child = 0.6)
   spriteZ?: number;           // vertical offset: 0=ground, 0.5=eye level (projectiles)
-  isTutor?: boolean;          // Ольга Дмитриевна — tutorial NPC in start room
-  isTutorBarni?: boolean;     // Барни — tutorial armory NPC
-  isTutorYakov?: boolean;     // Яков Давидович — PSI researcher, story quest NPC
-  tutorDone?: boolean;        // tutor phase ended, acts as normal doctor
-  _tutorIdx?: number;         // internal: tutorial dialogue line counter
+  plotNpcId?: string;         // story NPC key (e.g. 'olga', 'barni', 'yakov') — see data/plot.ts
+  plotDone?: boolean;         // story phase ended, NPC switches to post-plot dialogue
+  _plotTalkIdx?: number;      // internal: sequential dialogue line counter
   // projectile fields
   vx?: number; vy?: number;   // velocity (cells/sec)
   projDmg?: number;           // projectile damage
@@ -307,6 +322,7 @@ export interface ItemDef {
   spawnRooms: RoomType[];
   spawnW: number;             // spawn weight
   value: number;              // price in рубли (0 = worthless)
+  durability?: number;        // max durability for tools/consumable kits
   use?: (e: Entity) => string; // returns message
 }
 
@@ -345,6 +361,8 @@ export interface Quest {
   difficulty?: number;        // difficulty modifier (scales XP & rewards)
   xpReward?: number;          // XP reward on completion
   moneyReward?: number;       // money reward on completion
+  plotStepIndex?: number;     // index into PLOT_CHAIN (story quests only)
+  sideQuestId?: string;       // id from SIDE_QUESTS (hand-designed side quests)
   done: boolean;
 }
 
@@ -398,6 +416,7 @@ export interface GameState {
   dmgFlash: number;           // damage vignette intensity 0..1, decays over time
   dmgSeed: number;            // random seed for vein pattern per hit
   deathTimer: number;         // seconds since player death (for camera drop)
+  sleeping: boolean;          // player is holding Z to sleep
 }
 
 export interface Msg { text: string; time: number; color: string; }
@@ -412,7 +431,6 @@ export interface InputState {
   invUp: boolean; invDn: boolean; invLeft: boolean; invRight: boolean;
   use: boolean;
   escape: boolean;
-  debugSamosbor: boolean;
   questLog: boolean;
   mouseAttack: boolean;
   attrStr: boolean; attrAgi: boolean; attrInt: boolean;  // 1,2,3 keys for attribute spending
@@ -421,5 +439,6 @@ export interface InputState {
   drop: boolean;                // D key — drop item (inventory)
   factionMenu: boolean;         // F key — faction relations matrix
   logMenu: boolean;             // L key — message log
+  sleep: boolean;               // Z key — hold to sleep
   mouse: { dx: number; dy: number; locked: boolean; };
 }

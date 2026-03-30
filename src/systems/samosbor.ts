@@ -8,13 +8,15 @@ import {
   EntityType, AIGoal, MonsterKind,
 } from '../core/types';
 import { World } from '../core/world';
-import { ITEMS, NOTES, MONSTERS, monsterName } from '../data/catalog';
+import { ITEMS, NOTES, monsterName } from '../data/catalog';
+import { MONSTERS } from '../entities/monster';
 import { forceHide } from './ai';
 import { playSamosborAlarm } from './audio';
 import { reassignQuestGivers } from './quests';
 import { regrowMaze } from '../gen/living';
+import { generateMaintenance } from '../gen/maintenance';
+import { generateHell } from '../gen/hell';
 import { rng, pick, weightedPick } from '../gen/shared';
-import { initFactionControl, countFactionTerritory, spawnPatrolSquads } from './factions';
 import { scaleMonsterHp, scaleMonsterSpeed, randomRPG } from './rpg';
 
 // Floor-dependent samosbor intervals (seconds)
@@ -30,13 +32,14 @@ const SAMOSBOR_DUR_MIN = 12;      // min duration (0.2 game hours = 12 real sec)
 const SAMOSBOR_DUR_MAX = 90;      // max duration (1.5 game hours = 90 real sec)
 const MONSTERS_PER_SAMOSBOR = 6;
 const FOG_SPREAD_INTERVAL = 0.15; // seconds between fog spread ticks
-const FOG_SPAWN_INTERVAL  = 2.0;  // seconds between monster spawns in fog
+const FOG_SPAWN_INTERVAL  = 1.0;  // seconds between monster spawns in fog (~100 at max 90s samosbor)
+const MONSTER_CAP = 10_000;       // soft cap for auto-spawned monsters on the map
 
 /* ── Update samosbor timer and trigger ────────────────────────── */
 export function updateSamosbor(
   world: World, entities: Entity[], state: GameState, dt: number, nextId: { v: number },
-): void {
-  if (state.gameOver) return;
+): boolean {
+  if (state.gameOver) return false;
 
   state.samosborTimer -= dt;
 
@@ -51,7 +54,7 @@ export function updateSamosbor(
     playSamosborAlarm();
 
     // NPCs hide (citizens/scientists only — handled by forceHide)
-    forceHide(entities);
+    forceHide(entities, state.msgs, state.time);
 
     // Seal apartment living rooms
     sealApartments(world, entities);
@@ -61,6 +64,9 @@ export function updateSamosbor(
 
     // Spawn monsters in corridors
     spawnMonsters(world, entities, nextId, state.samosborCount);
+
+    // Spawn ~10 monsters at random map locations (scaled by zone level)
+    spawnRandomMapMonsters(world, entities, nextId, state.samosborCount);
   }
 
   // ── Fog spread tick (during active samosbor) ──
@@ -75,7 +81,7 @@ export function updateSamosbor(
   }
 
   if (state.samosborActive && state.samosborTimer <= 0) {
-    // ── END samosbor: unseal, then rebuild world ──
+    // ── END samosbor: unseal, mark for rebuild ──
     state.samosborActive = false;
     state.samosborTimer = samosborInterval(state.currentFloor);
     state.msgs.push({ text: 'Самосбор закончился... мир перестраивается.', time: state.time, color: '#aa4' });
@@ -86,23 +92,28 @@ export function updateSamosbor(
     // Re-roll which NPCs can give quests (10%)
     reassignQuestGivers(entities);
 
-    // Now rebuild: wipe volatile maze and regenerate
-    rebuildWorld(world, entities, nextId, state.samosborCount);
-
-    // Re-init faction control after world rebuild
-    initFactionControl(world);
-    const fStats = countFactionTerritory(world);
-    spawnPatrolSquads(world, entities, nextId, fStats);
+    return true; // signal: heavy rebuild needed
   }
+
+  return false;
 }
 
 /* ── Seal all apartment clusters (hermetic doors) ─────────────── */
-function sealApartments(world: World, _entities: Entity[]): void {
+function sealApartments(world: World, entities: Entity[]): void {
+  // Build set of apartmentIds that have alive resident NPCs
+  const occupiedApts = new Set<number>();
+  for (const e of entities) {
+    if (e.type === EntityType.NPC && e.alive && e.familyId !== undefined && e.familyId >= 0) {
+      occupiedApts.add(e.familyId);
+    }
+  }
+
   const aptCount = world.apartmentRoomCount;
   for (let i = 0; i < aptCount; i++) {
     const room = world.rooms[i];
     if (!room) continue;
-    // Seal entire apartment cluster — all rooms in same apartmentId
+    // Only seal apartments that have living residents
+    if (room.apartmentId < 0 || !occupiedApts.has(room.apartmentId)) continue;
     room.sealed = true;
     for (const di of room.doors) {
       const door = world.doors.get(di);
@@ -128,7 +139,79 @@ function unsealApartments(world: World): void {
 }
 
 /* ── Full world rebuild (except apartments) — runs AFTER samosbor ends ── */
-function rebuildWorld(world: World, entities: Entity[], nextId: { v: number }, _samosborCount: number): void {
+const ITEM_SOFT_CAP = 10_000;  // soft cap: only spawn new items up to this count
+
+function countItemDrops(entities: Entity[]): number {
+  let n = 0;
+  for (const e of entities) if (e.type === EntityType.ITEM_DROP && e.alive) n++;
+  return n;
+}
+
+export function rebuildWorld(
+  world: World, entities: Entity[], nextId: { v: number }, _samosborCount: number,
+  floor: FloorLevel = FloorLevel.LIVING,
+): void {
+  if (floor === FloorLevel.MAINTENANCE || floor === FloorLevel.HELL) {
+    // Non-living floors: full regeneration, preserve alive monsters + NPCs + player
+    const kept: Entity[] = [];
+    for (const e of entities) {
+      if (!e.alive) continue;
+      if (e.type === EntityType.MONSTER || e.type === EntityType.NPC || e.type === EntityType.PLAYER) {
+        kept.push(e);
+      }
+    }
+    entities.length = 0;
+    const gen = floor === FloorLevel.MAINTENANCE ? generateMaintenance() : generateHell();
+    // Overwrite world arrays in-place
+    world.cells.set(gen.world.cells);
+    world.wallTex.set(gen.world.wallTex);
+    world.floorTex.set(gen.world.floorTex);
+    world.roomMap.set(gen.world.roomMap);
+    world.features.set(gen.world.features);
+    world.light.set(gen.world.light);
+    world.zoneMap.set(gen.world.zoneMap);
+    world.aptMask.fill(0);
+    world.hermoWall.fill(0);
+    world.factionControl.set(gen.world.factionControl);
+    world.fog.fill(0);
+    world.rooms = gen.world.rooms;
+    world.zones = gen.world.zones;
+    world.doors = gen.world.doors;
+    world.liftDir.set(gen.world.liftDir);
+    world.surfaceMap = gen.world.surfaceMap;
+    world.slideCells = gen.world.slideCells;
+    world.apartmentRoomCount = 0;
+    // Restore kept entities + merge new entities from generator
+    for (const e of kept) entities.push(e);
+    for (const e of gen.entities) {
+      e.id = nextId.v++;
+      entities.push(e);
+    }
+    // Relocate kept entities that ended up in walls
+    for (const e of kept) {
+      const ci = world.idx(Math.floor(e.x), Math.floor(e.y));
+      if (world.cells[ci] !== Cell.FLOOR) {
+        // Find nearest floor cell
+        for (let r = 1; r < 20; r++) {
+          let found = false;
+          for (let dy = -r; dy <= r && !found; dy++) {
+            for (let dx = -r; dx <= r && !found; dx++) {
+              const ni = world.idx(world.wrap(Math.floor(e.x) + dx), world.wrap(Math.floor(e.y) + dy));
+              if (world.cells[ni] === Cell.FLOOR) {
+                e.x = world.wrap(Math.floor(e.x) + dx) + 0.5;
+                e.y = world.wrap(Math.floor(e.y) + dy) + 0.5;
+                found = true;
+              }
+            }
+          }
+          if (found) break;
+        }
+      }
+    }
+    return;
+  }
+
+  // Living floor: only rebuild volatile maze, keep apartments
   const aptCount = world.apartmentRoomCount;
 
   // Kill projectiles and remove item drops outside apartments
@@ -139,7 +222,6 @@ function rebuildWorld(world: World, entities: Entity[], nextId: { v: number }, _
       continue;
     }
     if (e.type === EntityType.ITEM_DROP) {
-      // Keep items inside apartment rooms, remove the rest
       const rid = world.roomMap[world.idx(Math.floor(e.x), Math.floor(e.y))];
       if (rid < 0 || rid >= aptCount) {
         entities.splice(i, 1);
@@ -150,14 +232,24 @@ function rebuildWorld(world: World, entities: Entity[], nextId: { v: number }, _
   // Regenerate the entire volatile maze
   regrowMaze(world);
 
-  // Spawn new items in volatile rooms
+  // Spawn new items in volatile rooms (zone-level dependent, soft cap 10k)
+  let itemCount = countItemDrops(entities);
   for (let ri = aptCount; ri < world.rooms.length; ri++) {
+    if (itemCount >= ITEM_SOFT_CAP) break;
     const room = world.rooms[ri];
     if (!room || room.w < 3 || room.h < 3) continue;
-    const itemDefs = Object.values(ITEMS).filter(it => it.spawnRooms.includes(room.type) && it.spawnW > 0);
-    const numItems = rng(0, 2);
+    const ci = world.idx(room.x + Math.floor(room.w / 2), room.y + Math.floor(room.h / 2));
+    const zid = world.zoneMap[ci];
+    const zoneLevel = (zid >= 0 && world.zones[zid]) ? (world.zones[zid].level ?? 1) : 1;
+    const valueThreshold = zoneLevel * 15 + 10;
+    const adjusted = Object.values(ITEMS)
+      .filter(it => it.spawnRooms.includes(room.type) && it.spawnW > 0)
+      .map(it => ({ ...it, spawnW: it.spawnW * Math.min(1, (valueThreshold + 5) / Math.max(1, it.value)) }))
+      .filter(it => it.spawnW >= 0.05);
+    const numItems = rng(0, 1);
     for (let n = 0; n < numItems; n++) {
-      const def = weightedPick(itemDefs);
+      if (itemCount >= ITEM_SOFT_CAP) break;
+      const def = weightedPick(adjusted);
       if (!def) continue;
       const ix = room.x + rng(1, Math.max(1, room.w - 2));
       const iy = room.y + rng(1, Math.max(1, room.h - 2));
@@ -166,6 +258,7 @@ function rebuildWorld(world: World, entities: Entity[], nextId: { v: number }, _
         x: ix + 0.5, y: iy + 0.5, angle: 0, pitch: 0, alive: true, speed: 0, sprite: 16,
         inventory: [{ defId: def.id, count: rng(1, def.stack), data: def.id === 'note' ? pick(NOTES) : undefined }],
       });
+      itemCount++;
     }
   }
 }
@@ -174,7 +267,7 @@ function rebuildWorld(world: World, entities: Entity[], nextId: { v: number }, _
 function getKindsForWave(samosborCount: number): MonsterKind[] {
   const kinds = [MonsterKind.SBORKA, MonsterKind.TVAR, MonsterKind.POLZUN];
   if (samosborCount >= 2) kinds.push(MonsterKind.ZOMBIE, MonsterKind.SHADOW);
-  if (samosborCount >= 3) kinds.push(MonsterKind.BETONNIK, MonsterKind.EYE, MonsterKind.NIGHTMARE);
+  if (samosborCount >= 3) kinds.push(MonsterKind.BETONNIK, MonsterKind.EYE, MonsterKind.NIGHTMARE, MonsterKind.IDOL);
   if (samosborCount >= 5) kinds.push(MonsterKind.REBAR);
   return kinds;
 }
@@ -206,8 +299,18 @@ function createMonster(world: World, nextId: { v: number }, kind: MonsterKind, x
   };
 }
 
+/* ── Count alive monsters ─────────────────────────────────────── */
+function countMonsters(entities: Entity[]): number {
+  let n = 0;
+  for (const e of entities) if (e.type === EntityType.MONSTER && e.alive) n++;
+  return n;
+}
+
 /* ── Spawn monsters in corridors ──────────────────────────────── */
 function spawnMonsters(world: World, entities: Entity[], nextId: { v: number }, samosborCount: number): void {
+  let mc = countMonsters(entities);
+  if (mc >= MONSTER_CAP) return;
+
   const kinds = getKindsForWave(samosborCount);
 
   const corridorCells: number[] = [];
@@ -220,9 +323,35 @@ function spawnMonsters(world: World, entities: Entity[], nextId: { v: number }, 
 
   const count = MONSTERS_PER_SAMOSBOR + Math.floor(samosborCount * 1.5);
   for (let i = 0; i < count && corridorCells.length > 0; i++) {
+    if (mc >= MONSTER_CAP) break;
     const ci = corridorCells.splice(Math.floor(Math.random() * corridorCells.length), 1)[0];
     const kind = kinds[Math.floor(Math.random() * kinds.length)];
     entities.push(createMonster(world, nextId, kind, (ci % W) + 0.5, Math.floor(ci / W) + 0.5));
+    mc++;
+  }
+}
+
+/* ── Spawn ~10 monsters at random map locations ──────────────── */
+function spawnRandomMapMonsters(world: World, entities: Entity[], nextId: { v: number }, samosborCount: number): void {
+  let mc = countMonsters(entities);
+  if (mc >= MONSTER_CAP) return;
+
+  const kinds = getKindsForWave(samosborCount);
+  const target = 10;
+  let spawned = 0;
+
+  for (let attempt = 0; attempt < 5000 && spawned < target; attempt++) {
+    const ci = Math.floor(Math.random() * W * W);
+    if (world.cells[ci] !== Cell.FLOOR) continue;
+    // Skip apartment rooms
+    const rid = world.roomMap[ci];
+    if (rid >= 0 && rid < world.apartmentRoomCount) continue;
+
+    const kind = kinds[Math.floor(Math.random() * kinds.length)];
+    entities.push(createMonster(world, nextId, kind, (ci % W) + 0.5, Math.floor(ci / W) + 0.5));
+    spawned++;
+    mc++;
+    if (mc >= MONSTER_CAP) break;
   }
 }
 
@@ -364,9 +493,7 @@ function spawnFogMonsters(world: World, entities: Entity[], nextId: { v: number 
   if (fogSpawnAccum < FOG_SPAWN_INTERVAL) return;
   fogSpawnAccum -= FOG_SPAWN_INTERVAL;
 
-  // Count existing monsters to limit density
-  const monsterCount = entities.filter(e => e.type === EntityType.MONSTER && e.alive).length;
-  if (monsterCount > 30 + samosborCount * 5) return;
+  if (countMonsters(entities) >= MONSTER_CAP) return;
 
   // Find a random fogged floor cell
   const foggedCells: number[] = [];

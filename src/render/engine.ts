@@ -4,6 +4,7 @@ import { W, Cell, DoorState, TEX, Tex, MAX_DRAW, Feature, type Entity, EntityTyp
 import { World } from '../core/world';
 import type { TexData } from './textures';
 import type { SpriteData } from './sprites';
+import { noise } from './pixutil';
 
 /* ── Screen constants ─────────────────────────────────────────── */
 export const SCR_W = 320;
@@ -25,6 +26,8 @@ export function renderScene(
   fogDensity: number,
   glitch: number,
   camHeight = 0.5,        // camera height: 0=floor, 1=ceiling, 0.5=default
+  flashlight = 0,         // 0..1 dynamic radial light around camera
+  time = 0,
 ): void {
   // Y-shearing: shift horizon based on pitch (-1..1)
   const horizonShift = Math.floor(pPitch * SCR_H);
@@ -43,6 +46,13 @@ export function renderScene(
   const fogG = purpleFog ? 5 : 5;
   const fogB = purpleFog ? 30 : 8;
   const AMBIENT = 0.12; // base darkness level — very dark without lamps
+  const flashlightBoost = (dist: number): number => {
+    if (flashlight <= 0) return 0;
+    const radius = 8.5;
+    if (dist >= radius) return 0;
+    const t = 1 - dist / radius;
+    return flashlight * t * t * 0.95;
+  };
 
   /* ── Cast walls ─────────────────────────────────────────── */
   for (let col = 0; col < SCR_W; col++) {
@@ -95,7 +105,14 @@ export function renderScene(
       }
       if (cell === Cell.DOOR) {
         const door = world.doors.get(ci);
-        if (door && door.state !== DoorState.OPEN && door.state !== DoorState.HERMETIC_OPEN) {
+        if (!door) {
+          // Orphaned Cell.DOOR with no data — render as wall
+          dist = side === 0 ? sdx - ddx : sdy - ddy;
+          wallTex = world.wallTex[ci] || Tex.CONCRETE;
+          hit = true;
+          break;
+        }
+        if (door.state !== DoorState.OPEN && door.state !== DoorState.HERMETIC_OPEN) {
           dist = side === 0 ? sdx - ddx : sdy - ddy;
           wallTex = door.state === DoorState.LOCKED ? Tex.DOOR_METAL : Tex.DOOR_WOOD;
           hit = true;
@@ -119,6 +136,9 @@ export function renderScene(
     else            wallX = px + dist * rayDX;
     wallX -= Math.floor(wallX);
     let texX = Math.floor(wallX * TEX) & (TEX - 1);
+    // Flip textures so text reads correctly from the viewing side
+    if (side === 0 && rayDX < 0) texX = TEX - 1 - texX;
+    if (side === 1 && rayDY > 0) texX = TEX - 1 - texX;
 
     // Fetch texture
     const tex = textures[wallTex] ?? textures[0];
@@ -156,18 +176,28 @@ export function renderScene(
     const hitWX = ((mapX % W) + W) % W;
     const hitWY = ((mapY % W) + W) % W;
     const hitCI = hitWY * W + hitWX;
-    const lit = AMBIENT + world.light[hitCI] * (1 - AMBIENT);
-    const cellDecals = world.decals.get(hitCI);
+    const lit = Math.min(1, AMBIENT + world.light[hitCI] * (1 - AMBIENT) + flashlightBoost(dist));
+    const surfWall = world.surfaceMap.get(hitCI);
     for (let y = drawStart; y <= drawEnd; y++) {
       const d = y - (HALF_H - lineH * (1 - camHeight));
       const texY = Math.floor((d / lineH) * TEX) & (TEX - 1);
       let c = tex[texY * TEX + texX];
-      // Bullet hole decals
-      if (cellDecals) {
-        for (let di = 0; di < cellDecals.length; di++) {
-          const dtx = texX - cellDecals[di].tx, dty = texY - cellDecals[di].ty;
-          if (dtx * dtx + dty * dty < 9) { c = darken(c, 0.2); break; }
+      // Surface overlay BEFORE lighting (blood, bullet holes, etc.)
+      if (surfWall) {
+        const bx = texX >> 2, by = texY >> 2;
+        const si = (by * 16 + bx) << 2;
+        const sa = surfWall[si + 3];
+        if (sa > 0) {
+          const a = sa / 255;
+          const cr = (c & 0xFF), cg = ((c >> 8) & 0xFF), cb = ((c >> 16) & 0xFF);
+          const nr = Math.floor(cr * (1 - a) + surfWall[si]     * a);
+          const ng = Math.floor(cg * (1 - a) + surfWall[si + 1] * a);
+          const nb = Math.floor(cb * (1 - a) + surfWall[si + 2] * a);
+          c = ((0xFF << 24) | (nb << 16) | (ng << 8) | nr) >>> 0;
         }
+      }
+      if (isHellOrganicWall(wallTex)) {
+        c = applyHellEyeOverlay(c, texX, texY, hitWX, hitWY, px, py, time);
       }
       // Darken side
       if (side === 1) c = darken(c, 0.7);
@@ -200,7 +230,7 @@ export function renderScene(
       const ftx = Math.floor(floorX * TEX) & (TEX - 1);
       const fty = Math.floor(floorY * TEX) & (TEX - 1);
       const ff = Math.min(1, currentDist * fogDensity);
-      const cellLight = AMBIENT + world.light[fi] * (1 - AMBIENT);
+      const cellLight = Math.min(1, AMBIENT + world.light[fi] * (1 - AMBIENT) + flashlightBoost(currentDist));
 
       const isAbyssF = world.cells[fi] === Cell.ABYSS;
       const isWaterF = world.cells[fi] === Cell.WATER;
@@ -211,8 +241,8 @@ export function renderScene(
       } else {
         const floorTexId = isWaterF ? Tex.F_WATER : (world.floorTex[fi] || Tex.F_CONCRETE);
         const fTex = textures[floorTexId] ?? textures[0];
-        let fc = darken(fTex[fty * TEX + ftx], cellLight);
-        // Surface overlay (sparse RGBA canvas, 16×16 per cell)
+        let fc = fTex[fty * TEX + ftx];
+        // Surface overlay BEFORE lighting (blood, urine, bullet holes, etc.)
         const bx = ftx >> 2, by = fty >> 2;
         const surfCell = world.surfaceMap.get(fi);
         if (surfCell) {
@@ -227,6 +257,7 @@ export function renderScene(
             fc = ((0xFF << 24) | (nb << 16) | (ng << 8) | nr) >>> 0;
           }
         }
+        fc = darken(fc, cellLight);
         buf[y * SCR_W + col] = applyFog(fc, ff, fogR, fogG, fogB);
       }
     }
@@ -247,7 +278,7 @@ export function renderScene(
       const ftx = Math.floor(floorX * TEX) & (TEX - 1);
       const fty = Math.floor(floorY * TEX) & (TEX - 1);
       const ff = Math.min(1, currentDist * fogDensity);
-      const cellLight = AMBIENT + world.light[fi] * (1 - AMBIENT);
+      const cellLight = Math.min(1, AMBIENT + world.light[fi] * (1 - AMBIENT) + flashlightBoost(currentDist));
 
       const isAbyssC = world.cells[fi] === Cell.ABYSS;
       if (isAbyssC) {
@@ -390,4 +421,82 @@ function applyFog(c: number, f: number, fr: number, fg: number, fb: number): num
     (Math.floor(g + (fg - g) * f) << 8) |
     Math.floor(r + (fr - r) * f)
   ) >>> 0;
+}
+
+function isHellOrganicWall(tex: Tex): boolean {
+  return tex === Tex.MEAT || tex === Tex.GUT;
+}
+
+function applyHellEyeOverlay(base: number, texX: number, texY: number, cellX: number, cellY: number, px: number, py: number, time: number): number {
+  const marker = noise(cellX, cellY, 901);
+  if (marker < 0.84) return base;
+
+  const eyeCount = marker > 0.97 ? 3 : marker > 0.915 ? 2 : 1;
+  const blinkSpeed = 0.25 + noise(cellX, cellY, 902) * 0.9;
+  const cycle = (time * blinkSpeed + noise(cellX, cellY, 903) * 5.0) % 1;
+  const eyelid = cycle < 0.16 ? Math.max(0.04, Math.abs(cycle - 0.08) / 0.08) : 1;
+  const toPlayerX = toroidalDelta(cellX + 0.5, px);
+  const toPlayerY = toroidalDelta(cellY + 0.5, py);
+  const playerDist = Math.sqrt(toPlayerX * toPlayerX + toPlayerY * toPlayerY);
+  const track = playerDist < 7.5 ? (1 - playerDist / 7.5) : 0;
+
+  let color = base;
+  for (let eyeIndex = 0; eyeIndex < eyeCount; eyeIndex++) {
+    const ox = 12 + noise(cellX + eyeIndex * 17, cellY, 904) * 40;
+    const oy = 14 + noise(cellX, cellY + eyeIndex * 23, 905) * 36;
+    const rx = 6 + noise(cellX + eyeIndex * 31, cellY, 906) * 7;
+    const ry = Math.max(1.2, rx * (0.12 + eyelid * 0.42));
+    const dx = texX - ox;
+    const dy = texY - oy;
+    const norm = (dx * dx) / (rx * rx) + (dy * dy) / (ry * ry);
+    if (norm > 1) continue;
+
+    color = mixColor(color, 230, 216, 182, 0.78);
+
+  const idleShiftX = (noise(cellX, cellY, 907 + eyeIndex) - 0.5) * 1.4;
+  const idleShiftY = (noise(cellX, cellY, 909 + eyeIndex) - 0.5) * 1.1;
+  const irisShiftX = idleShiftX + clampSigned(toPlayerX * 0.55 * track, rx * 0.24);
+  const irisShiftY = idleShiftY + clampSigned(toPlayerY * 0.55 * track, ry * 0.28);
+    const irisR = rx * 0.42;
+    const pupilR = rx * 0.18;
+    const ix = texX - (ox + irisShiftX);
+    const iy = texY - (oy + irisShiftY);
+    const irisNorm = (ix * ix + iy * iy) / (irisR * irisR);
+    if (irisNorm < 1 && eyelid > 0.18) {
+      color = mixColor(color, 186, 46, 28, 0.82);
+    }
+    const pupilNorm = (ix * ix + iy * iy) / (pupilR * pupilR);
+    if (pupilNorm < 1 && eyelid > 0.22) {
+      color = mixColor(color, 18, 8, 6, 0.92);
+    }
+    const glint = (texX - (ox - rx * 0.18)) ** 2 + (texY - (oy - ry * 0.22)) ** 2;
+    if (glint < 3.5 && eyelid > 0.35) {
+      color = mixColor(color, 255, 248, 238, 0.85);
+    }
+  }
+
+  return color;
+}
+
+function mixColor(base: number, r: number, g: number, b: number, alpha: number): number {
+  const br = base & 0xFF;
+  const bg = (base >> 8) & 0xFF;
+  const bb = (base >> 16) & 0xFF;
+  const nr = Math.floor(br * (1 - alpha) + r * alpha);
+  const ng = Math.floor(bg * (1 - alpha) + g * alpha);
+  const nb = Math.floor(bb * (1 - alpha) + b * alpha);
+  return ((0xFF << 24) | (nb << 16) | (ng << 8) | nr) >>> 0;
+}
+
+function toroidalDelta(a: number, b: number): number {
+  let d = b - a;
+  if (d > W / 2) d -= W;
+  if (d < -W / 2) d += W;
+  return d;
+}
+
+function clampSigned(v: number, limit: number): number {
+  if (v > limit) return limit;
+  if (v < -limit) return -limit;
+  return v;
 }

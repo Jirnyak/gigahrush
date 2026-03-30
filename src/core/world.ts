@@ -13,13 +13,14 @@ export class World {
   doors:     Map<number, Door> = new Map();
   apartmentRoomCount = 0;          // first N rooms are permanent apartments
   aptMask:   Uint8Array;           // 1 = protected apartment cell (interior + wall ring)
+  hermoWall: Uint8Array;           // 1 = unbreakable hermetic shelter wall
   zones:     Zone[] = [];          // 64 macro-regions
   zoneMap:   Uint8Array;           // zone id per cell (0-63)
   factionControl: Uint8Array;      // per-cell faction control (ZoneFaction enum)
   fog:       Uint8Array;           // purple fog density per cell (0 = clear, 255 = full)
   slideCells: number[] = [];       // cell indices of slide walls (cycle textures)
-  decals:    Map<number, {tx: number; ty: number}[]> = new Map(); // bullet hole decals per cell
-  surfaceMap: Map<number, Uint8Array> = new Map(); // sparse RGBA canvas, 16×16×4 per cell
+  surfaceMap: Map<number, Uint8Array> = new Map(); // sparse RGBA canvas, 16×16×4 per cell (floors + walls)
+  liftDir:   Uint8Array;           // LiftDirection per cell (only meaningful where cells[i] === Cell.LIFT)
 
   constructor() {
     const n = W * W;
@@ -30,9 +31,11 @@ export class World {
     this.features = new Uint8Array(n);              // Feature.NONE = 0
     this.light    = new Float32Array(n);            // 0 = dark
     this.aptMask  = new Uint8Array(n);              // 0 = volatile, 1 = apartment-protected
+    this.hermoWall = new Uint8Array(n);             // 0 = normal, 1 = unbreakable wall
     this.zoneMap  = new Uint8Array(n);              // zone id
     this.factionControl = new Uint8Array(n);        // per-cell faction (ZoneFaction)
     this.fog      = new Uint8Array(n);              // fog density
+    this.liftDir  = new Uint8Array(n);              // LiftDirection (0=DOWN, 1=UP)
   }
 
   /* rebuild lightmap from lamp features */
@@ -112,14 +115,9 @@ export class World {
     return id >= 0 ? this.rooms[id] ?? null : null;
   }
 
-  addDecal(ci: number, tx: number, ty: number): void {
-    let list = this.decals.get(ci);
-    if (!list) { list = []; this.decals.set(ci, list); }
-    if (list.length < 20) list.push({ tx, ty });
-  }
-
-  /* paint RGBA onto sparse 16×16 canvas — spills across cell boundaries */
-  stamp(cx: number, cy: number, fx: number, fy: number, radius: number, intensity: number, seed: number, cr: number, cg: number, cb: number): void {
+  /* paint RGBA onto sparse 16×16 canvas — spills across cell boundaries.
+     wallOk=true allows painting on wall/solid cells (for bullet holes, wall blood) */
+  stamp(cx: number, cy: number, fx: number, fy: number, radius: number, intensity: number, seed: number, cr: number, cg: number, cb: number, wallOk = false): void {
     const bx = Math.floor(fx * 16);
     const by = Math.floor(fy * 16);
     const r = Math.max(1, Math.floor(radius * 16));
@@ -136,7 +134,7 @@ export class World {
         const ncx = this.wrap(cx + cellDx);
         const ncy = this.wrap(cy + cellDy);
         const ci = ncy * W + ncx;
-        if (this.cells[ci] === Cell.WALL) continue;
+        if (!wallOk && this.cells[ci] === Cell.WALL) continue;
         const absPx = bx + dx, absPy = by + dy;
         const h = ((seed * 2654435761 + absPx * 73856093 + absPy * 19349663) >>> 0) & 0xFF;
         if (d2 > r * r * 0.4 && h > 160) continue;
