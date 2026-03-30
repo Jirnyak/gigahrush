@@ -8,6 +8,7 @@ import {
 import { World } from '../core/world';
 import { ITEMS, WEAPON_STATS } from '../data/catalog';
 import { getEquippedDurability, getEquippedToolDurability, countAmmo } from '../systems/inventory';
+import { strMeleeDmgMult } from '../systems/rpg';
 import { xpForLevel } from '../systems/rpg';
 import { drawDebugOverlay } from '../systems/debug';
 import { ZONE_COLORS, drawMinimap, drawFullMap } from './map_ui';
@@ -108,11 +109,15 @@ export function drawHUD(
     const ammo = countAmmo(player);
     ctx.fillText(`${wpn} (${ws.dmg}) 🔫${ammo}`, w - 8 * sx, weaponY);
   } else {
+    // Fist base dmg = player level; other melee uses ws.dmg; all × STR
+    const baseDmg = (!player.weapon && player.rpg) ? player.rpg.level : ws.dmg;
+    const strMult = player.rpg ? strMeleeDmgMult(player.rpg) : 1;
+    const effectiveDmg = Math.round(baseDmg * strMult);
     const dur = getEquippedDurability(player);
     if (dur) {
-      ctx.fillText(`${wpn} (${ws.dmg}) [${dur.cur}/${dur.max}]`, w - 8 * sx, weaponY);
+      ctx.fillText(`${wpn} (${effectiveDmg}) [${dur.cur}/${dur.max}]`, w - 8 * sx, weaponY);
     } else {
-      ctx.fillText(`${wpn} (${ws.dmg})`, w - 8 * sx, weaponY);
+      ctx.fillText(`${wpn} (${effectiveDmg})`, w - 8 * sx, weaponY);
     }
   }
   const toolY = weaponY - 10 * sy;

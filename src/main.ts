@@ -454,9 +454,11 @@ function playerActions(_dt: number): void {
       }
     } else {
       // ── Melee attack: range check + durability ──────────
+      // Fist base damage = player level; other melee uses ws.dmg
+      const baseDmg = (!player.weapon && player.rpg) ? player.rpg.level : ws.dmg;
       // STR bonus to melee damage
       const strMult = player.rpg ? strMeleeDmgMult(player.rpg) : 1;
-      const dmg = Math.round(ws.dmg * strMult);
+      const dmg = Math.round(baseDmg * strMult);
       const range = ws.range;
       const ax = player.x + Math.cos(player.angle) * range;
       const ay = player.y + Math.sin(player.angle) * range;

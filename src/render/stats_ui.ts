@@ -3,7 +3,7 @@
 import { type Entity, type GameState, ItemType } from '../core/types';
 import { ITEMS, WEAPON_STATS } from '../data/catalog';
 import { getEquippedDurability, getEquippedToolDurability, countAmmo } from '../systems/inventory';
-import { xpForLevel } from '../systems/rpg';
+import { xpForLevel, strMeleeDmgMult } from '../systems/rpg';
 
 export function drawInventory(
   ctx: CanvasRenderingContext2D,
@@ -202,9 +202,12 @@ export function drawInventory(
     const dur2 = getEquippedDurability(player);
     durLabel = dur2 ? `Прочн:${dur2.cur}/${dur2.max}` : 'Прочн:∞';
   }
+  // Fist base dmg = player level; other melee uses ws2.dmg; all melee × STR
+  const baseDmg2 = (!player.weapon && player.rpg) ? player.rpg.level : ws2.dmg;
+  const effectiveDmg2 = ws2.isRanged ? ws2.dmg : Math.round(baseDmg2 * (player.rpg ? strMeleeDmgMult(player.rpg) : 1));
   ctx.fillStyle = '#ccc';
   ctx.font = `${7 * sy}px monospace`;
-  ctx.fillText(`${wpn2}  Урон:${ws2.dmg}  ${durLabel}`, stX, stY);
+  ctx.fillText(`${wpn2}  Урон:${effectiveDmg2}  ${durLabel}`, stX, stY);
   stY += 12 * sy;
 
   const toolName = player.tool ? (ITEMS[player.tool]?.name ?? player.tool) : 'нет';
