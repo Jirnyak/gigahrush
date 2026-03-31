@@ -1272,11 +1272,11 @@ function updateEquippedTool(dt: number): void {
   if (toolId === 'cleaning_kit') {
     if (!input.use || _toolActionCd > 0) return;
     const cleaned = cleanSurfaceArea(tx, ty, 1.0);
-    consumeToolDurability(player, dt, state.msgs, state.time);
+    consumeToolDurability(player, 1, state.msgs, state.time);
     if (cleaned > 0) {
-      _cleanRelAccum += dt;
-      if (_cleanRelAccum >= 1.0) {
-        _cleanRelAccum -= 1.0;
+      _cleanRelAccum += 1;
+      if (_cleanRelAccum >= 5) {
+        _cleanRelAccum = 0;
         const z = world.zones[world.zoneMap[world.idx(Math.floor(player.x), Math.floor(player.y))]];
         const owner = z ? zoneFactionToFaction(z.faction) : null;
         if (owner !== null) {

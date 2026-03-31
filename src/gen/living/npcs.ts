@@ -65,9 +65,9 @@ export function spawnRoomItems(
     // Filter items by room type, then adjust weights by zone level (expensive items rarer in low-level zones)
     const valueThreshold = zoneLevel * 15 + 10;
     const adjusted = Object.values(ITEMS)
-      .filter(it => it.spawnRooms.includes(room.type) && it.spawnW > 0)
-      .map(it => ({ ...it, spawnW: it.spawnW * Math.min(1, (valueThreshold + 5) / Math.max(1, it.value)) }))
-      .filter(it => it.spawnW >= 0.05);
+      .filter(it => it.spawnRooms.includes(room.type))
+      .map(it => ({ ...it, spawnW: (1000 / (it.value + 10)) * Math.min(1, (valueThreshold + 5) / Math.max(1, it.value)) }))
+      .filter(it => it.spawnW >= 0.01);
     const numItems = rng(0, 2);  // slightly rarer (was 0-3)
     for (let n = 0; n < numItems; n++) {
       const def = weightedPick(adjusted);

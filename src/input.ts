@@ -35,6 +35,7 @@ export function bindInput(input: InputState, canvas: HTMLCanvasElement): () => v
     KeyM: 'map',
     KeyI: 'inv',
     KeyR: 'use', // restart (handled in main)
+    KeyG: 'use', // tool activation
     KeyQ: 'questLog',
     // Russian layout equivalents
     KeyC: 'fwd',   // Ц -> W pos
@@ -67,7 +68,7 @@ export function bindInput(input: InputState, canvas: HTMLCanvasElement): () => v
     input.invDn = false;
     input.invLeft = false;
     input.invRight = false;
-    if (e.code === 'KeyR') input.use = false;
+    if (e.code === 'KeyR' || e.code === 'KeyG') input.use = false;
     if (e.code === 'KeyD') input.drop = false;
     if (e.code === 'Enter') input.escape = false;
     if (e.code === 'Digit1') input.attrStr = false;

@@ -115,27 +115,25 @@ export function dropItem(
   const dropX = player.x + dx * 3.0;
   const dropY = player.y + dy * 3.0;
 
+  const dropCount = slot.count;
+
   entities.push({
     id: nextId.v++, type: EntityType.ITEM_DROP,
     x: dropX, y: dropY, angle: 0, pitch: 0, alive: true, speed: 0, sprite: 16,
-    inventory: [{ defId: slot.defId, count: 1, data: slot.data }],
+    inventory: [{ defId: slot.defId, count: dropCount, data: slot.data }],
   });
 
   // If dropping equipped weapon, unequip
   if (def.type === ItemType.WEAPON && player.weapon === def.id) {
-    // Check if there's another copy left after removing one
-    const remaining = slot.count - 1;
-    if (remaining <= 0) player.weapon = '';
+    player.weapon = '';
   }
   if (def.type === ItemType.TOOL && player.tool === def.id) {
-    const remaining = slot.count - 1;
-    if (remaining <= 0) player.tool = '';
+    player.tool = '';
   }
 
-  slot.count--;
-  if (slot.count <= 0) player.inventory.splice(slotIdx, 1);
+  player.inventory.splice(slotIdx, 1);
 
-  msgs.push({ text: `Выброшено: ${def.name}`, time, color: '#aa6' });
+  msgs.push({ text: `Выброшено: ${def.name}${dropCount > 1 ? ' ×' + dropCount : ''}`, time, color: '#aa6' });
 }
 
 /* ── Pickup nearby item drops ─────────────────────────────────── */

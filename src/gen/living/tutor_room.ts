@@ -232,7 +232,7 @@ const PAIRS: [string, string, string, string][] = [
   ['M',     'КАРТА',     'Q',     'ЗАДАНИЯ'],
   ['L',     'ЖУРНАЛ',    'Z',     'СОН'],
   ['P',     'ТУАЛЕТ',    'ENTER', 'МЕНЮ'],
-  ['~',     'ДЕБАГ',     '1 2 3', 'АТРИБУТЫ'],
+  ['G',     'ИНСТРУМ.',  '1 2 3', 'АТРИБУТЫ'],
 ];
 
 function drawHLine(t: Uint32Array, y: number, col: number): void {

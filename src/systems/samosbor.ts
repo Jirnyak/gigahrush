@@ -244,9 +244,9 @@ export function rebuildWorld(
     const zoneLevel = (zid >= 0 && world.zones[zid]) ? (world.zones[zid].level ?? 1) : 1;
     const valueThreshold = zoneLevel * 15 + 10;
     const adjusted = Object.values(ITEMS)
-      .filter(it => it.spawnRooms.includes(room.type) && it.spawnW > 0)
-      .map(it => ({ ...it, spawnW: it.spawnW * Math.min(1, (valueThreshold + 5) / Math.max(1, it.value)) }))
-      .filter(it => it.spawnW >= 0.05);
+      .filter(it => it.spawnRooms.includes(room.type))
+      .map(it => ({ ...it, spawnW: (1000 / (it.value + 10)) * Math.min(1, (valueThreshold + 5) / Math.max(1, it.value)) }))
+      .filter(it => it.spawnW >= 0.01);
     const numItems = rng(0, 1);
     for (let n = 0; n < numItems; n++) {
       if (itemCount >= ITEM_SOFT_CAP) break;

@@ -6,7 +6,7 @@
 /*   4. Add room spec to plot_rooms.ts (optional)                  */
 
 import {
-  type Entity, QuestType, Faction, Occupation, MonsterKind,
+  type Entity, type Quest, QuestType, Faction, Occupation, MonsterKind,
 } from '../core/types';
 
 /* ── Story NPC definition ─────────────────────────────────────── */
@@ -301,4 +301,27 @@ export function isPlotNpc(e: Entity): boolean {
 /** Get the PlotNpcDef for an entity (or undefined) */
 export function getPlotDef(e: Entity): PlotNpcDef | undefined {
   return e.plotNpcId ? PLOT_NPCS[e.plotNpcId] : undefined;
+}
+
+/** Check if a plot NPC has an available quest to give (not yet offered) */
+export function hasAvailableQuest(plotNpcId: string, quests: Quest[]): boolean {
+  // Check PLOT_CHAIN
+  for (let i = 0; i < PLOT_CHAIN.length; i++) {
+    const step = PLOT_CHAIN[i];
+    if (step.giverNpcId !== plotNpcId) continue;
+    if (quests.some(q => q.plotStepIndex === i)) continue;
+    let allPrevDone = true;
+    for (let j = 0; j < i; j++) {
+      if (!quests.some(q => q.plotStepIndex === j && q.done)) { allPrevDone = false; break; }
+    }
+    if (!allPrevDone) continue;
+    return true;
+  }
+  // Check SIDE_QUESTS
+  for (const sq of SIDE_QUESTS) {
+    if (sq.giverNpcId !== plotNpcId) continue;
+    if (quests.some(q => q.sideQuestId === sq.id)) continue;
+    return true;
+  }
+  return false;
 }

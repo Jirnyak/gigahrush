@@ -9,7 +9,7 @@
 /*   Подключается одной строкой в living/index.ts.                */
 
 import {
-  W, Tex, RoomType, Feature,
+  W, Cell, Tex, RoomType, Feature,
   type Room, type Entity,
   EntityType, AIGoal, Faction, Occupation,
 } from '../../core/types';
@@ -83,6 +83,24 @@ export function generateYakovLab(
     faction: yakovDef.faction, occupation: yakovDef.occupation,
     plotNpcId: 'yakov', canGiveQuest: true, questId: -1,
   });
+
+  // ── Guaranteed idol spawn within 50 cells of Yakov's lab ──
+  const IDOL_SEARCH_R = 50;
+  let idolPlaced = false;
+  for (let attempt = 0; attempt < 3000 && !idolPlaced; attempt++) {
+    const ox = labCx + Math.floor(Math.random() * IDOL_SEARCH_R * 2) - IDOL_SEARCH_R;
+    const oy = labCy + Math.floor(Math.random() * IDOL_SEARCH_R * 2) - IDOL_SEARCH_R;
+    const wx = ((ox % W) + W) % W;
+    const wy = ((oy % W) + W) % W;
+    if (world.cells[world.idx(wx, wy)] !== Cell.FLOOR) continue;
+    if (world.dist(labCx, labCy, wx, wy) > IDOL_SEARCH_R) continue;
+    entities.push({
+      id: nextId.v++, type: EntityType.ITEM_DROP,
+      x: wx + 0.5, y: wy + 0.5, angle: 0, pitch: 0, alive: true, speed: 0, sprite: 16,
+      inventory: [{ defId: 'idol_chernobog', count: 1 }],
+    });
+    idolPlaced = true;
+  }
 
   return { room, nextRoomId };
 }
