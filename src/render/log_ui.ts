@@ -1,6 +1,7 @@
 /* ── Message log (L key) — fullscreen STALKER-style PDA log ───── */
 
 import { type GameState } from '../core/types';
+import { drawNeuroPanel, drawGlitchText } from './hud_fx';
 
 export function drawLogMenu(
   ctx: CanvasRenderingContext2D,
@@ -9,23 +10,17 @@ export function drawLogMenu(
 ): void {
   const w = ctx.canvas.width;
   const h = ctx.canvas.height;
+  const time = state.time;
 
-  // Fullscreen dark background
-  ctx.fillStyle = 'rgba(0,0,10,0.92)';
-  ctx.fillRect(0, 0, w, h);
-
-  // Border
-  ctx.strokeStyle = '#446';
-  ctx.lineWidth = 2;
-  ctx.strokeRect(4 * sx, 4 * sy, w - 8 * sx, h - 8 * sy);
+  // Fullscreen neuro-panel background
+  drawNeuroPanel(ctx, 4 * sx, 4 * sy, w - 8 * sx, h - 8 * sy, time, 60);
 
   // Title
-  ctx.fillStyle = '#8af';
+  drawGlitchText(ctx, 'ЖУРНАЛ СООБЩЕНИЙ [L]', 12 * sx, 14 * sy, time, 600, '#6cf', 10 * sy);
   ctx.font = `${10 * sy}px monospace`;
-  ctx.fillText('ЖУРНАЛ СООБЩЕНИЙ [L]', 12 * sx, 14 * sy);
 
   // Separator
-  ctx.strokeStyle = '#335';
+  ctx.strokeStyle = 'rgba(0,180,160,0.2)';
   ctx.beginPath();
   ctx.moveTo(8 * sx, 22 * sy);
   ctx.lineTo(w - 8 * sx, 22 * sy);

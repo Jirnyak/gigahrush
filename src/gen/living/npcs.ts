@@ -7,6 +7,7 @@ import {
 } from '../../core/types';
 import { World } from '../../core/world';
 import { ITEMS, randomName, freshNeeds, NOTES } from '../../data/catalog';
+import { spawnCount } from '../../data/items';
 import { randomFaction, randomOccupation } from '../../data/relations';
 import { rng, pick, weightedPick } from '../shared';
 import { gaussianLevel, randomRPG, getMaxHp } from '../../systems/rpg';
@@ -17,10 +18,11 @@ function npcWeaponLoadout(faction: Faction, occupation: Occupation): { weapon: s
   // Liquidators and hunters get better gear
   if (faction === Faction.LIQUIDATOR || occupation === Occupation.HUNTER) {
     const roll = Math.random();
-    if (roll < 0.25) return { weapon: 'makarov', inv: [{ defId: 'makarov', count: 1 }, { defId: 'ammo_9mm', count: rng(6, 16) }] };
-    if (roll < 0.40) return { weapon: 'shotgun', inv: [{ defId: 'shotgun', count: 1 }, { defId: 'ammo_shells', count: rng(4, 8) }] };
-    if (roll < 0.60) return { weapon: 'axe', inv: [{ defId: 'axe', count: 1 }] };
-    if (roll < 0.80) return { weapon: 'pipe', inv: [{ defId: 'pipe', count: 1 }] };
+    if (roll < 0.20) return { weapon: 'makarov', inv: [{ defId: 'makarov', count: 1 }, { defId: 'ammo_9mm', count: rng(6, 16) }] };
+    if (roll < 0.32) return { weapon: 'shotgun', inv: [{ defId: 'shotgun', count: 1 }, { defId: 'ammo_shells', count: rng(4, 8) }] };
+    if (roll < 0.40) return { weapon: 'ppsh', inv: [{ defId: 'ppsh', count: 1 }, { defId: 'ammo_9mm', count: rng(20, 40) }] };
+    if (roll < 0.55) return { weapon: 'axe', inv: [{ defId: 'axe', count: 1 }] };
+    if (roll < 0.75) return { weapon: 'pipe', inv: [{ defId: 'pipe', count: 1 }] };
     return { weapon: 'knife', inv: [{ defId: 'knife', count: 1 }] };
   }
   // Wild faction: always armed
@@ -75,7 +77,7 @@ export function spawnRoomItems(
       entities.push({
         id: nextId++, type: EntityType.ITEM_DROP,
         x: ix + 0.5, y: iy + 0.5, angle: 0, pitch: 0, alive: true, speed: 0, sprite: 16,
-        inventory: [{ defId: def.id, count: rng(1, def.stack), data: def.id === 'note' ? pick(NOTES) : undefined }],
+        inventory: [{ defId: def.id, count: rng(1, spawnCount(def)), data: def.id === 'note' ? pick(NOTES) : undefined }],
       });
     }
   }

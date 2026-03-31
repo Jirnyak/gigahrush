@@ -4,9 +4,9 @@ import { TEX } from '../core/types';
 const S = TEX;
 
 /* glyph dimensions */
-export const GLYPH_W = 5;
-export const GLYPH_H = 7;
-export const CELL_W = 6;   // glyph + 1px gap
+const GLYPH_W = 5;
+const GLYPH_H = 7;
+const CELL_W = 6;   // glyph + 1px gap
 export const CELL_H = 8;   // glyph + 1px gap
 
 /* Each glyph: 7 rows of 5-bit bitmaps (MSB = leftmost pixel) */
@@ -85,7 +85,7 @@ const G: Record<string, number[]> = {
 };
 
 /** Draw text string onto a texture buffer at pixel position (ox, oy). */
-export function drawText(
+function drawText(
   t: Uint32Array, text: string,
   ox: number, oy: number, fg: number,
 ): void {
@@ -110,7 +110,7 @@ export function drawText(
 }
 
 /** Measure pixel width of a text string. */
-export function measureText(text: string): number {
+function measureText(text: string): number {
   return text.length > 0 ? text.length * CELL_W - 1 : 0;
 }
 

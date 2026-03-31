@@ -1,6 +1,6 @@
 /* ── HUD overlay: needs bars, minimap, messages, inventory ───── */
 
-import { SCR_W, SCR_H } from './engine';
+import { SCR_W, SCR_H } from './webgl';
 import {
   type Entity, type GameState, EntityType, Cell, Feature,
   ZoneFaction, LiftDirection,
@@ -18,6 +18,10 @@ import { drawLogMenu } from './log_ui';
 import { drawFactionMenu } from './factions_ui';
 import { drawGameMenu } from './menu_ui';
 import { drawNpcMenu } from './npc_ui';
+import {
+  textJitter, flicker, drawHoloBar, drawGlitchText,
+  drawNeuroPanel, drawGlitchLine, drawStaticNoise,
+} from './hud_fx';
 
 const BAR_W = 50, BAR_H = 5;
 
@@ -58,10 +62,11 @@ export function drawHUD(
   ctx.font = `${10 * sy}px monospace`;
   ctx.textBaseline = 'top';
 
-  // ── Bottom status bar ────────────────────────────────────
+  const time = state.time;
+
+  // ── Bottom status bar (neuro-interface) ─────────────────
   const barY = h - 32 * sy;
-  ctx.fillStyle = 'rgba(0,0,0,0.7)';
-  ctx.fillRect(0, barY, w, 32 * sy);
+  drawNeuroPanel(ctx, 0, barY, w, 32 * sy, time, 1);
 
   if (player.needs) {
     const bars: [string, number, number, string][] = [
@@ -85,16 +90,11 @@ export function drawHUD(
       const bx = 8 * sx + i * barSpacing * sx;
       const by = barY + 4 * sy;
       const pct = toPercent(current, max);
-      // Label
-      ctx.fillStyle = '#aaa';
+      // Label with jitter
+      drawGlitchText(ctx, label, bx, by, time, i * 13 + 7, '#8cc', 7 * sy);
       ctx.font = `${7 * sy}px monospace`;
-      ctx.fillText(label, bx, by);
-      // Bar bg
-      ctx.fillStyle = '#222';
-      ctx.fillRect(bx, by + 9 * sy, barW * sx, BAR_H * sy);
-      // Bar fill
-      ctx.fillStyle = color;
-      ctx.fillRect(bx, by + 9 * sy, barW * sx * pct / 100, BAR_H * sy);
+      // Holo bar
+      drawHoloBar(ctx, bx, by + 9 * sy, barW * sx, BAR_H * sy, pct, color, time, i);
     });
   }
 
@@ -107,17 +107,21 @@ export function drawHUD(
   const weaponY = barY - 14 * sy;
   if (ws.isRanged) {
     const ammo = countAmmo(player);
-    ctx.fillText(`${wpn} (${ws.dmg}) 🔫${ammo}`, w - 8 * sx, weaponY);
+    const wj = textJitter(time, 200);
+    ctx.fillStyle = `rgba(200,230,255,${flicker(time, 201)})`;
+    ctx.fillText(`${wpn} (${ws.dmg}) 🔫${ammo}`, w - 8 * sx + wj.dx, weaponY + wj.dy);
   } else {
     // Fist base dmg = player level; other melee uses ws.dmg; all × STR
     const baseDmg = (!player.weapon && player.rpg) ? player.rpg.level : ws.dmg;
     const strMult = player.rpg ? strMeleeDmgMult(player.rpg) : 1;
     const effectiveDmg = Math.round(baseDmg * strMult);
     const dur = getEquippedDurability(player);
+    const wj = textJitter(time, 202);
+    ctx.fillStyle = `rgba(200,230,255,${flicker(time, 203)})`;
     if (dur) {
-      ctx.fillText(`${wpn} (${effectiveDmg}) [${dur.cur}/${dur.max}]`, w - 8 * sx, weaponY);
+      ctx.fillText(`${wpn} (${effectiveDmg}) [${dur.cur}/${dur.max}]`, w - 8 * sx + wj.dx, weaponY + wj.dy);
     } else {
-      ctx.fillText(`${wpn} (${effectiveDmg})`, w - 8 * sx, weaponY);
+      ctx.fillText(`${wpn} (${effectiveDmg})`, w - 8 * sx + wj.dx, weaponY + wj.dy);
     }
   }
   const toolY = weaponY - 10 * sy;
@@ -125,8 +129,9 @@ export function drawHUD(
     const toolName = ITEMS[player.tool]?.name ?? player.tool;
     const toolDur = getEquippedToolDurability(player);
     const toolLabel = toolDur ? `${toolName} [${Math.max(0, Math.ceil(toolDur.cur))}/${toolDur.max}]` : toolName;
-    ctx.fillStyle = '#8cf';
-    ctx.fillText(toolLabel, w - 8 * sx, toolY);
+    const tj = textJitter(time, 210);
+    ctx.fillStyle = `rgba(136,200,255,${flicker(time, 211)})`;
+    ctx.fillText(toolLabel, w - 8 * sx + tj.dx, toolY + tj.dy);
     ctx.fillStyle = '#ccc';
   }
   ctx.textAlign = 'left';
@@ -154,20 +159,26 @@ export function drawHUD(
       }
     }
     if (canInteract) {
-      // Deterministic color from targetId
+      // Deterministic color from targetId — shifted to cyan/teal palette
       const h0 = ((targetId * 2654435761) >>> 0) % 360;
-      const er = Math.round(180 + 75 * Math.cos(h0 * Math.PI / 180));
-      const eg = Math.round(180 + 75 * Math.cos((h0 + 120) * Math.PI / 180));
-      const eb = Math.round(180 + 75 * Math.cos((h0 + 240) * Math.PI / 180));
-      ctx.fillStyle = `rgb(${er},${eg},${eb})`;
+      const er = Math.round(100 + 80 * Math.cos(h0 * Math.PI / 180));
+      const eg = Math.round(200 + 55 * Math.cos((h0 + 120) * Math.PI / 180));
+      const eb = Math.round(200 + 55 * Math.cos((h0 + 240) * Math.PI / 180));
+      const ej = textJitter(time, targetId);
+      const eAlpha = flicker(time, targetId + 500);
+      ctx.fillStyle = `rgba(${er},${eg},${eb},${eAlpha})`;
       ctx.font = `${9 * sy}px monospace`;
       ctx.textAlign = 'center';
-      ctx.fillText(`[E]${liftHint}`, w / 2, h / 2 + 30 * sy);
+      // Subtle glow behind
+      ctx.shadowColor = `rgba(${er},${eg},${eb},0.4)`;
+      ctx.shadowBlur = 6;
+      ctx.fillText(`[E]${liftHint}`, w / 2 + ej.dx, h / 2 + 30 * sy + ej.dy);
+      ctx.shadowBlur = 0;
       ctx.textAlign = 'left';
     }
   }
 
-  // ── Messages ─────────────────────────────────────────────
+  // ── Messages (with jitter) ────────────────────────────────
   const now = state.time;
   let my = 4 * sy;
   ctx.font = `${8 * sy}px monospace`;
@@ -180,23 +191,31 @@ export function drawHUD(
     const age = now - m.time;
     if (age > 8) continue;
     const alpha = age > 6 ? 1 - (age - 6) / 2 : 1;
-    ctx.globalAlpha = alpha;
-    ctx.fillStyle = '#666';
-    ctx.fillText(_stamp, 4 * sx, my);
+    const mj = textJitter(time, i * 17 + 300);
+    ctx.globalAlpha = alpha * flicker(time, i + 300);
+    ctx.fillStyle = '#556';
+    ctx.fillText(_stamp, 4 * sx + mj.dx, my + mj.dy);
     ctx.fillStyle = m.color;
-    ctx.fillText(m.text, 4 * sx + ctx.measureText(_stamp).width, my);
+    ctx.fillText(m.text, 4 * sx + ctx.measureText(_stamp).width + mj.dx, my + mj.dy);
     my += 10 * sy;
   }
   ctx.globalAlpha = 1;
 
-  // ── Crosshair ────────────────────────────────────────────
-  ctx.strokeStyle = 'rgba(200,200,200,0.5)';
+  // ── Crosshair (neuro-style) ──────────────────────────────
+  const cj = textJitter(time, 999);
+  const cAlpha = 0.4 + Math.sin(time * 2) * 0.08;
+  ctx.strokeStyle = `rgba(0,220,200,${cAlpha})`;
   ctx.lineWidth = 1;
-  const cx = w / 2, cy = h / 2;
+  const cx = w / 2 + cj.dx * 0.3, cy = h / 2 + cj.dy * 0.3;
   ctx.beginPath();
-  ctx.moveTo(cx - 6 * sx, cy); ctx.lineTo(cx + 6 * sx, cy);
-  ctx.moveTo(cx, cy - 6 * sy); ctx.lineTo(cx, cy + 6 * sy);
+  ctx.moveTo(cx - 6 * sx, cy); ctx.lineTo(cx - 2 * sx, cy);
+  ctx.moveTo(cx + 2 * sx, cy); ctx.lineTo(cx + 6 * sx, cy);
+  ctx.moveTo(cx, cy - 6 * sy); ctx.lineTo(cx, cy - 2 * sy);
+  ctx.moveTo(cx, cy + 2 * sy); ctx.lineTo(cx, cy + 6 * sy);
   ctx.stroke();
+  // Small dot center
+  ctx.fillStyle = `rgba(0,255,220,${cAlpha * 0.6})`;
+  ctx.fillRect(cx - 0.5, cy - 0.5, 1, 1);
 
   // ── Minimap (if toggled) ─────────────────────────────────
   if (state.mapMode === 1) {
@@ -217,7 +236,7 @@ export function drawHUD(
 
   // ── Faction relations matrix (F) ─────────────────────────
   if (state.showFactions) {
-    drawFactionMenu(ctx, player, entities, sx, sy);
+    drawFactionMenu(ctx, player, entities, sx, sy, time);
   }
 
   // ── Message log (L) ─────────────────────────────────────
@@ -235,7 +254,7 @@ export function drawHUD(
     drawNpcMenu(ctx, player, state, entities, sx, sy);
   }
 
-  // ── Zone info + time + room (top-left) ──────────────────
+  // ── Zone info + time + room (neuro-interface left panel) ──
   {
     const pci = world.idx(Math.floor(player.x), Math.floor(player.y));
     const zid = world.zoneMap[pci];
@@ -245,36 +264,49 @@ export function drawHUD(
     const hh = String(state.clock.hour).padStart(2, '0');
     const mm = String(state.clock.minute).padStart(2, '0');
     const day = Math.floor(state.clock.totalMinutes / 1440);
-    ctx.fillStyle = '#aac';
+    drawGlitchText(ctx, `День ${day}  ${hh}:${mm}`, 4 * sx, barY - 42 * sy, time, 400, '#8ac', 9 * sy);
     ctx.font = `${9 * sy}px monospace`;
-    ctx.fillText(`День ${day}  ${hh}:${mm}`, 4 * sx, barY - 42 * sy);
 
     // Zone
     if (zone) {
       const [zr, zg, zb] = ZONE_COLORS[zid % 64];
       const fLabel = ZONE_FACTION_NAMES[zone.faction];
-      ctx.fillStyle = `rgb(${zr},${zg},${zb})`;
+      const zj = textJitter(time, 410);
+      ctx.fillStyle = `rgba(${zr},${zg},${zb},${flicker(time, 411)})`;
       ctx.font = `${8 * sy}px monospace`;
-      ctx.fillText(`■ Зона ${zid + 1}  Ур.${zone.level ?? 1}`, 4 * sx, barY - 32 * sy);
-      ctx.fillStyle = zone.faction === ZoneFaction.SAMOSBOR ? '#c4f' : '#aaa';
+      ctx.fillText(`■ Зона ${zid + 1}  Ур.${zone.level ?? 1}`, 4 * sx + zj.dx, barY - 32 * sy + zj.dy);
+      const fColor = zone.faction === ZoneFaction.SAMOSBOR ? '#c4f' : '#7aa';
+      drawGlitchText(ctx, fLabel, 4 * sx, barY - 22 * sy, time, 412, fColor, 7 * sy);
       ctx.font = `${7 * sy}px monospace`;
-      ctx.fillText(fLabel, 4 * sx, barY - 22 * sy);
     }
 
     // Room info
     const room = world.roomAt(player.x, player.y);
     if (room) {
-      ctx.fillStyle = '#888';
+      drawGlitchText(ctx, room.name, 4 * sx, barY - 12 * sy, time, 420, '#688', 7 * sy);
       ctx.font = `${7 * sy}px monospace`;
-      ctx.fillText(room.name, 4 * sx, barY - 12 * sy);
     }
   }
 
-  // ── SAMOSBOR warning ─────────────────────────────────────
+  // ── SAMOSBOR warning (intense glitch) ──────────────────────
   if (state.samosborActive) {
-    ctx.fillStyle = `rgba(255,40,40,${0.3 + Math.sin(now * 8) * 0.2})`;
+    const sj = textJitter(time * 3, 666);
+    const sAlpha = 0.5 + Math.sin(now * 8) * 0.3;
+    ctx.save();
+    ctx.shadowColor = 'rgba(255,0,40,0.6)';
+    ctx.shadowBlur = 12;
+    ctx.fillStyle = `rgba(255,40,40,${sAlpha})`;
     ctx.font = `bold ${16 * sy}px monospace`;
-    ctx.fillText('⚠ САМОСБОР ⚠', w / 2 - 60 * sx, 20 * sy);
+    ctx.textAlign = 'center';
+    ctx.fillText('⚠ САМОСБОР ⚠', w / 2 + sj.dx * 3, 20 * sy + sj.dy * 2);
+    // Doubled glitch offset copy
+    ctx.fillStyle = `rgba(0,255,200,${sAlpha * 0.2})`;
+    ctx.fillText('⚠ САМОСБОР ⚠', w / 2 + sj.dx * 3 + 2, 20 * sy + sj.dy * 2 + 1);
+    ctx.textAlign = 'left';
+    ctx.shadowBlur = 0;
+    ctx.restore();
+    // Extra static noise during samosbor
+    drawStaticNoise(ctx, 0, 0, w, h, time, 0.04);
   }
 
   // ── Damage vignette (procedural blood edges) ──────────────
@@ -282,10 +314,13 @@ export function drawHUD(
     drawDamageVignette(ctx, w, h, state.dmgFlash, state.dmgSeed, state.time);
   }
 
-  // ── Game over ────────────────────────────────────────────
+  // ── PSI Beam visual (Kamehameha) ──────────────────────────
+  if (state.beamFx > 0) {
+    drawBeamFx(ctx, w, h, state.beamFx, state.beamAngle, state.beamLen, player.angle, state.time);
+  }
+
+  // ── Game over (neuro-interface death) ─────────────────────
   if (state.gameOver) {
-    // No full-screen black — world is still visible through death camera
-    // Darken edges gradually
     const deathAlpha = Math.min(0.5, state.deathTimer * 0.15);
     const grd = ctx.createRadialGradient(w / 2, h / 2, Math.min(w, h) * 0.15, w / 2, h / 2, Math.min(w, h) * 0.7);
     grd.addColorStop(0, `rgba(0,0,0,0)`);
@@ -293,17 +328,28 @@ export function drawHUD(
     ctx.fillStyle = grd;
     ctx.fillRect(0, 0, w, h);
 
-    // Pulsing red text
+    // Intense static noise
+    drawStaticNoise(ctx, 0, 0, w, h, time, 0.06 * Math.min(1, state.deathTimer * 0.3));
+
     const textAlpha = 0.6 + Math.sin(state.time * 3) * 0.3;
+    const dj = textJitter(time * 2, 777);
+    ctx.save();
+    ctx.shadowColor = 'rgba(255,0,0,0.5)';
+    ctx.shadowBlur = 15;
     ctx.fillStyle = `rgba(200,0,0,${textAlpha})`;
     ctx.font = `bold ${24 * sy}px monospace`;
     ctx.textAlign = 'center';
-    ctx.fillText('ВЫ ПОГИБЛИ', w / 2, h / 2 - 20 * sy);
+    ctx.fillText('ВЫ ПОГИБЛИ', w / 2 + dj.dx * 2, h / 2 - 20 * sy + dj.dy);
+    // RGB split ghost
+    ctx.fillStyle = `rgba(0,200,200,${textAlpha * 0.15})`;
+    ctx.fillText('ВЫ ПОГИБЛИ', w / 2 + dj.dx * 2 + 3, h / 2 - 20 * sy + dj.dy + 1);
+    ctx.shadowBlur = 0;
     ctx.fillStyle = `rgba(136,136,136,${Math.min(1, state.deathTimer * 0.5)})`;
     ctx.font = `${10 * sy}px monospace`;
     ctx.fillText('Хрущ поглотил ещё одного', w / 2, h / 2 + 10 * sy);
     ctx.fillText('[R] — заново', w / 2, h / 2 + 30 * sy);
     ctx.textAlign = 'left';
+    ctx.restore();
   }
 
   // ── Debug screen (~) ─────────────────────────────────────
@@ -326,6 +372,9 @@ export function drawHUD(
     ctx.textAlign = 'left';
   }
 
+  // ── Global neuro-interface overlay (always-on) ───────────
+  drawGlitchLine(ctx, w, h, time);
+
   ctx.restore();
 }
 
@@ -337,21 +386,27 @@ function drawDamageVignette(
 ): void {
   ctx.save();
 
+  // BFG green flash (seed === 2), explosion orange (seed === 3), normal red damage
+  const isGreen = seed === 2;
+  const isOrange = seed === 3;
+  const cR = isGreen ? 0 : 1;
+  const cG = isGreen ? 1 : isOrange ? 0.6 : 0;
+
   // Edge darkening — radial gradient from center
   const darkA = intensity * 0.4;
   const grd = ctx.createRadialGradient(w / 2, h / 2, Math.min(w, h) * 0.2, w / 2, h / 2, Math.min(w, h) * 0.65);
   grd.addColorStop(0, `rgba(0,0,0,0)`);
-  grd.addColorStop(0.6, `rgba(40,0,0,${darkA * 0.3})`);
+  grd.addColorStop(0.6, `rgba(${40 * cR},${Math.floor(40 * cG)},0,${darkA * 0.3})`);
   grd.addColorStop(1, `rgba(0,0,0,${darkA})`);
   ctx.fillStyle = grd;
   ctx.fillRect(0, 0, w, h);
 
-  // Red overlay with radial gradient (transparent center, red edges)
-  const redA = intensity * 0.5;
+  // Color overlay with radial gradient (transparent center, colored edges)
+  const colA = intensity * (isGreen ? 0.7 : 0.5);
   const grd2 = ctx.createRadialGradient(w / 2, h / 2, Math.min(w, h) * 0.15, w / 2, h / 2, Math.min(w, h) * 0.6);
-  grd2.addColorStop(0, `rgba(180,0,0,0)`);
-  grd2.addColorStop(0.5, `rgba(140,0,0,${redA * 0.2})`);
-  grd2.addColorStop(1, `rgba(120,0,0,${redA})`);
+  grd2.addColorStop(0, `rgba(${180 * cR},${180 * cG},0,0)`);
+  grd2.addColorStop(0.5, `rgba(${140 * cR},${140 * cG},0,${colA * 0.2})`);
+  grd2.addColorStop(1, `rgba(${120 * cR},${120 * cG},0,${colA})`);
   ctx.fillStyle = grd2;
   ctx.fillRect(0, 0, w, h);
 
@@ -398,7 +453,7 @@ function drawDamageVignette(
     }
 
     const lineW = 1 + r3 * 2.5 * intensity;
-    ctx.strokeStyle = `rgba(160,0,10,${veinAlpha})`;
+    ctx.strokeStyle = `rgba(${160 * cR},${160 * cG},10,${veinAlpha})`;
     ctx.lineWidth = lineW;
     ctx.stroke();
 
@@ -410,11 +465,92 @@ function drawDamageVignette(
       ctx.moveTo(bx, by);
       ctx.lineTo(bx + nx * veinLen * 0.2 + ny * (r1 - 0.5) * 30,
                  by + ny * veinLen * 0.2 - nx * (r1 - 0.5) * 30);
-      ctx.strokeStyle = `rgba(130,0,10,${veinAlpha * 0.6})`;
+      ctx.strokeStyle = `rgba(${130 * cR},${130 * cG},10,${veinAlpha * 0.6})`;
       ctx.lineWidth = lineW * 0.5;
       ctx.stroke();
     }
   }
+
+  ctx.restore();
+}
+
+/* ── PSI Beam visual (Kamehameha) — bright purple beam from center ── */
+function drawBeamFx(
+  ctx: CanvasRenderingContext2D,
+  w: number, h: number,
+  intensity: number,
+  _beamAngle: number,
+  _beamLen: number,
+  _playerAngle: number,
+  time: number,
+): void {
+  ctx.save();
+  const alpha = Math.min(1, intensity * 2.5); // fade from ~0.85 to 0
+
+  const cx = w / 2;
+  const cy = h / 2;
+  const beamEndX = w;
+
+  // ── Fullscreen purple flash ──
+  const flashA = intensity * 0.4;
+  const grd = ctx.createRadialGradient(cx, cy, 0, cx, cy, Math.max(w, h) * 0.7);
+  grd.addColorStop(0, `rgba(180,40,255,${flashA})`);
+  grd.addColorStop(0.3, `rgba(120,20,200,${flashA * 0.6})`);
+  grd.addColorStop(1, `rgba(40,0,80,0)`);
+  ctx.fillStyle = grd;
+  ctx.fillRect(0, 0, w, h);
+
+  // ── Central beam core — horizontal bands ──
+  const beamH = h * 0.12 * (0.5 + intensity * 0.5);
+  const wobble = Math.sin(time * 30) * beamH * 0.08;
+
+  for (let i = 0; i < 3; i++) {
+    const spread = beamH * (0.15 + i * 0.3);
+    const lineA = alpha * (1 - i * 0.3);
+    const r = i === 0 ? 255 : i === 1 ? 200 : 140;
+    const g = i === 0 ? 220 : i === 1 ? 80 : 20;
+    const b = 255;
+    const grdBeam = ctx.createLinearGradient(0, cy, w, cy);
+    grdBeam.addColorStop(0, `rgba(${r},${g},${b},0)`);
+    grdBeam.addColorStop(0.15, `rgba(${r},${g},${b},${lineA * 0.3})`);
+    grdBeam.addColorStop(0.4, `rgba(${r},${g},${b},${lineA})`);
+    grdBeam.addColorStop(0.5, `rgba(${r},${g},${b},${lineA})`);
+    grdBeam.addColorStop(0.6, `rgba(${r},${g},${b},${lineA})`);
+    grdBeam.addColorStop(0.85, `rgba(${r},${g},${b},${lineA * 0.3})`);
+    grdBeam.addColorStop(1, `rgba(${r},${g},${b},0)`);
+    ctx.fillStyle = grdBeam;
+    ctx.fillRect(0, cy - spread + wobble, w, spread * 2);
+  }
+
+  // ── Energy tendrils along beam ──
+  ctx.globalCompositeOperation = 'lighter';
+  const tendrilCount = 6;
+  for (let i = 0; i < tendrilCount; i++) {
+    const phase = time * 20 + i * 1.7;
+    ctx.beginPath();
+    ctx.moveTo(cx, cy);
+    const segs = 12;
+    for (let j = 1; j <= segs; j++) {
+      const t = j / segs;
+      const px = cx + (beamEndX - cx) * t;
+      const py = cy + Math.sin(phase + t * 8) * beamH * 0.5 * t
+        + Math.cos(phase * 1.3 + t * 12) * beamH * 0.2;
+      ctx.lineTo(px, py);
+    }
+    ctx.strokeStyle = `rgba(180,100,255,${alpha * 0.4})`;
+    ctx.lineWidth = 1.5 + intensity * 2;
+    ctx.stroke();
+  }
+  ctx.globalCompositeOperation = 'source-over';
+
+  // ── Muzzle flash (hot center dot) ──
+  const dotR = Math.min(w, h) * 0.04 * (0.5 + intensity);
+  const dotGrd = ctx.createRadialGradient(cx, cy + wobble, 0, cx, cy + wobble, dotR);
+  dotGrd.addColorStop(0, `rgba(255,255,255,${alpha})`);
+  dotGrd.addColorStop(0.3, `rgba(220,180,255,${alpha * 0.8})`);
+  dotGrd.addColorStop(1, `rgba(140,40,220,0)`);
+  ctx.fillStyle = dotGrd;
+  ctx.fillRect(cx - dotR, cy - dotR + wobble, dotR * 2, dotR * 2);
 
   ctx.restore();
 }

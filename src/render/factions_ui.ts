@@ -2,6 +2,7 @@
 
 import { type Entity, Faction } from '../core/types';
 import { getFactionRel } from '../data/relations';
+import { drawNeuroPanel, drawGlitchText } from './hud_fx';
 
 const MATRIX_LABELS = ['Игрок', 'Граждане', 'Ликвид.', 'Культ.', 'Учёные', 'Дикие'];
 const MATRIX_FACTIONS = [Faction.PLAYER, Faction.CITIZEN, Faction.LIQUIDATOR, Faction.CULTIST, Faction.SCIENTIST, Faction.WILD];
@@ -11,20 +12,19 @@ export function drawFactionMenu(
   _player: Entity,
   _entities: Entity[],
   sx: number, sy: number,
+  time = 0,
 ): void {
   const w = ctx.canvas.width;
   const h = ctx.canvas.height;
   const cols = MATRIX_LABELS.length; // 6
 
-  // Fullscreen background
-  ctx.fillStyle = 'rgba(10,10,15,0.94)';
-  ctx.fillRect(0, 0, w, h);
+  // Fullscreen neuro-panel background
+  drawNeuroPanel(ctx, 0, 0, w, h, time, 95);
 
   // Title
-  ctx.fillStyle = '#da4';
+  drawGlitchText(ctx, 'ОТНОШЕНИЯ ФРАКЦИЙ', w / 2 - 80 * sx, 20 * sy, time, 950, '#0ca', 12 * sy);
   ctx.font = `bold ${12 * sy}px monospace`;
   ctx.textAlign = 'center';
-  ctx.fillText('ОТНОШЕНИЯ ФРАКЦИЙ', w / 2, 20 * sy);
 
   // Compute values directly from dynamic faction matrix
   const values: number[][] = [];

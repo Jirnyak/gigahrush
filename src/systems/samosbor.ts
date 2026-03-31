@@ -9,6 +9,7 @@ import {
 } from '../core/types';
 import { World } from '../core/world';
 import { ITEMS, NOTES, monsterName } from '../data/catalog';
+import { spawnCount } from '../data/items';
 import { MONSTERS } from '../entities/monster';
 import { forceHide } from './ai';
 import { playSamosborAlarm } from './audio';
@@ -256,7 +257,7 @@ export function rebuildWorld(
       entities.push({
         id: nextId.v++, type: EntityType.ITEM_DROP,
         x: ix + 0.5, y: iy + 0.5, angle: 0, pitch: 0, alive: true, speed: 0, sprite: 16,
-        inventory: [{ defId: def.id, count: rng(1, def.stack), data: def.id === 'note' ? pick(NOTES) : undefined }],
+        inventory: [{ defId: def.id, count: rng(1, spawnCount(def)), data: def.id === 'note' ? pick(NOTES) : undefined }],
       });
       itemCount++;
     }

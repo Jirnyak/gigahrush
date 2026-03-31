@@ -147,6 +147,15 @@ export interface Door {
 // ── Entities ─────────────────────────────────────────────────────
 export enum EntityType { PLAYER, NPC, MONSTER, ITEM_DROP, PROJECTILE }
 
+/** Special projectile behaviour tags */
+export enum ProjType {
+  NORMAL,       // default: straight-line, single-hit
+  GRENADE,      // arc physics, explodes on timer/impact, scorch decal
+  FLAME,        // short range, leaves fire trail on floor
+  BFG,          // slow orb, on impact huge AoE + green screen flash
+  BEAM,         // continuous beam (psi kamehameha)
+}
+
 export enum MonsterKind {
   SBORKA,     // fast, weak               — бегает быстро
   TVAR,       // medium                   — ходит за стенами
@@ -296,11 +305,15 @@ export interface Entity {
   _plotTalkIdx?: number;      // internal: sequential dialogue line counter
   // projectile fields
   vx?: number; vy?: number;   // velocity (cells/sec)
+  vz?: number;                // vertical velocity (units/sec, affects spriteZ)
   projDmg?: number;           // projectile damage
   projLife?: number;          // remaining lifetime (seconds)
   ownerId?: number;           // entity that fired this
   aoeRadius?: number;         // AoE explosion radius on impact
   aoeDmg?: number;            // AoE damage on impact
+  projType?: ProjType;        // special projectile behaviour
+  projGore?: number;          // gore intensity 1-3 (1=clean, 3=messy)
+  burnTimer?: number;         // fire: remaining burn time on floor cell
   rpg?: RPGStats;             // RPG stats (level, XP, attributes)
   isFemale?: boolean;          // gender for kill message grammar
   isFogBoss?: boolean;         // fog boss — killing stops fog in zone
@@ -317,11 +330,11 @@ export interface ItemDef {
   id: string;
   name: string;
   type: ItemType;
-  stack: number;              // max stack (1 = unstackable)
   desc: string;
   spawnRooms: RoomType[];
   spawnW: number;             // spawn weight
   value: number;              // price in рубли (0 = worthless)
+  stack?: number;             // override max stack size
   durability?: number;        // max durability for tools/consumable kits
   use?: (e: Entity) => string; // returns message
 }
@@ -417,6 +430,9 @@ export interface GameState {
   dmgSeed: number;            // random seed for vein pattern per hit
   deathTimer: number;         // seconds since player death (for camera drop)
   sleeping: boolean;          // player is holding Z to sleep
+  beamFx: number;            // PSI beam visual timer (seconds remaining)
+  beamAngle: number;         // beam direction (radians)
+  beamLen: number;           // beam length (cells)
 }
 
 export interface Msg { text: string; time: number; color: string; }

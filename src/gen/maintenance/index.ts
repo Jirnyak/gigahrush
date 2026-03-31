@@ -363,7 +363,7 @@ export function generateMaintenance(): { world: World; entities: Entity[]; spawn
   for (const room of rooms) {
     const numItems = rng(0, 3);
     for (let n = 0; n < numItems; n++) {
-      const defs = ['pipe', 'wrench', 'flashlight', 'bandage', 'water', 'canned', 'bread'];
+      const defs = ['pipe', 'wrench', 'flashlight', 'bandage', 'water', 'canned', 'bread', 'ammo_fuel', 'grenade'];
       const defId = pick(defs);
       const ix = room.x + rng(0, Math.max(0, room.w - 1));
       const iy = room.y + rng(0, Math.max(0, room.h - 1));

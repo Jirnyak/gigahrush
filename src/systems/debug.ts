@@ -7,9 +7,9 @@ import {
 } from '../core/types';
 import { World } from '../core/world';
 import { freshNeeds, randomName, ITEMS } from '../data/catalog';
+import { getStack } from '../data/items';
 import { FACTION_NAMES } from '../data/relations';
 import { MONSTERS } from '../entities/monster';
-import { addItem } from './inventory';
 import { awardXP, randomRPG, getMaxHp } from './rpg';
 import { isDebugNoClipEnabled, toggleDebugNoClip } from './psi';
 
@@ -23,15 +23,36 @@ export function execDebugCommand(
   nextEntityId: { v: number },
 ): void {
   switch (idx) {
-    case 0: { // All weapons + ammo + PSI spells
-      const weapons = ['knife', 'wrench', 'pipe', 'rebar', 'axe', 'makarov', 'shotgun', 'nailgun'];
-      for (const w of weapons) addItem(player, w, 1);
-      addItem(player, 'ammo_9mm', 20);
-      addItem(player, 'ammo_shells', 8);
-      addItem(player, 'ammo_nails', 30);
-      const psiSpells = ['psi_strike', 'psi_rupture', 'psi_storm', 'psi_brainburn', 'psi_madness', 'psi_control', 'psi_phase', 'psi_mark', 'psi_recall'];
-      for (const s of psiSpells) addItem(player, s, 1);
-      state.msgs.push({ text: 'Все оружия + сгустки получены', time: state.time, color: '#ff0' });
+    case 0: { // All weapons + ammo + PSI spells — spawn as drops around player
+      const allItems: { defId: string; count: number }[] = [
+        // weapons
+        ...['knife', 'wrench', 'pipe', 'rebar', 'axe', 'makarov', 'shotgun', 'nailgun',
+          'chainsaw', 'ppsh', 'machinegun', 'gauss', 'plasma', 'bfg', 'flamethrower']
+          .map(w => ({ defId: w, count: 1 })),
+        { defId: 'grenade', count: 99 },
+        // ammo
+        { defId: 'ammo_9mm', count: 999 },
+        { defId: 'ammo_shells', count: 999 },
+        { defId: 'ammo_nails', count: 999 },
+        { defId: 'ammo_belt', count: 999 },
+        { defId: 'ammo_energy', count: 999 },
+        { defId: 'ammo_fuel', count: 999 },
+        // psi spells
+        ...['psi_strike', 'psi_rupture', 'psi_storm', 'psi_brainburn', 'psi_madness',
+          'psi_control', 'psi_phase', 'psi_mark', 'psi_recall', 'psi_beam']
+          .map(s => ({ defId: s, count: 1 })),
+      ];
+      for (let i = 0; i < allItems.length; i++) {
+        const ang = (i / allItems.length) * Math.PI * 2;
+        entities.push({
+          id: nextEntityId.v++, type: EntityType.ITEM_DROP,
+          x: player.x + Math.cos(ang) * 2,
+          y: player.y + Math.sin(ang) * 2,
+          angle: 0, pitch: 0, alive: true, speed: 0, sprite: 16,
+          inventory: [allItems[i]],
+        });
+      }
+      state.msgs.push({ text: 'Все оружия + сгустки заспавнены', time: state.time, color: '#ff0' });
       break;
     }
     case 1: { // Spawn one of each monster nearby
@@ -90,7 +111,7 @@ export function execDebugCommand(
           x: player.x + Math.cos(ang) * 2,
           y: player.y + Math.sin(ang) * 2,
           angle: 0, pitch: 0, alive: true, speed: 0, sprite: 16,
-          inventory: [{ defId: def.id, count: def.stack }],
+          inventory: [{ defId: def.id, count: getStack(def) }],
         });
       }
       state.msgs.push({ text: 'Все предметы заспавнены', time: state.time, color: '#ff0' });

@@ -13,4 +13,5 @@ export const PSI_WEAPON_STATS: Record<string, WeaponStats> = {
   psi_phase:    { dmg: 0,  durability: 0, range: 0, speed: 0.5,  isRanged: false, psiCost: 8,  psiEffect: 'phase' },
   psi_mark:     { dmg: 0,  durability: 0, range: 0, speed: 0.3,  isRanged: false, psiCost: 3,  psiEffect: 'mark' },
   psi_recall:   { dmg: 0,  durability: 0, range: 0, speed: 0.3,  isRanged: false, psiCost: 3,  psiEffect: 'recall' },
+  psi_beam:     { dmg: 15, durability: 0, range: 0, speed: 0.05, isRanged: false, psiCost: 3,  psiEffect: 'beam' },
 };

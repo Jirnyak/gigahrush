@@ -1,6 +1,7 @@
 /* ── Quest log panel — paginated, one quest per page ──────────── */
 
 import { type GameState } from '../core/types';
+import { drawNeuroPanel, drawGlitchText, textJitter, flicker } from './hud_fx';
 
 export function drawQuestLog(
   ctx: CanvasRenderingContext2D,
@@ -10,15 +11,12 @@ export function drawQuestLog(
   const pw = 200 * sx, ph = 140 * sy;
   const px = (ctx.canvas.width - pw) / 2;
   const py = (ctx.canvas.height - ph) / 2;
+  const time = state.time;
 
-  ctx.fillStyle = 'rgba(0,0,10,0.9)';
-  ctx.fillRect(px, py, pw, ph);
-  ctx.strokeStyle = '#448';
-  ctx.strokeRect(px, py, pw, ph);
+  drawNeuroPanel(ctx, px, py, pw, ph, time, 50);
 
-  ctx.fillStyle = '#8af';
+  drawGlitchText(ctx, 'ЗАДАНИЯ [Q]', px + 8 * sx, py + 6 * sy, time, 500, '#6cf', 9 * sy);
   ctx.font = `${9 * sy}px monospace`;
-  ctx.fillText('ЗАДАНИЯ [Q]', px + 8 * sx, py + 6 * sy);
 
   const active = state.quests.filter(q => !q.done);
   const done = state.quests.filter(q => q.done);

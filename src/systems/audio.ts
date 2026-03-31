@@ -303,3 +303,204 @@ export function startAmbientDrone(): void {
   droneOsc.connect(lp).connect(g).connect(gain());
   droneOsc.start();
 }
+
+/* ── PPSh: rapid buzzing rattle ──────────────────────────────── */
+export function playPPSh(): void {
+  const ac = ensureContext();
+  const len = 0.06;
+  const buf = ac.createBuffer(1, ac.sampleRate * len, ac.sampleRate);
+  const d = buf.getChannelData(0);
+  for (let i = 0; i < d.length; i++) {
+    const t = i / d.length;
+    const env = Math.exp(-t * 30);
+    d[i] = ((Math.random() * 2 - 1) * 0.6 + Math.sin(i * 0.08) * 0.4) * env;
+  }
+  const src = ac.createBufferSource();
+  src.buffer = buf;
+  const g = ac.createGain();
+  g.gain.value = 0.18;
+  const lp = ac.createBiquadFilter();
+  lp.type = 'lowpass';
+  lp.frequency.value = 4000;
+  src.connect(lp).connect(g).connect(gain());
+  src.start();
+}
+
+/* ── Chainsaw: grinding buzz ─────────────────────────────────── */
+export function playChainsaw(): void {
+  const ac = ensureContext();
+  const osc = ac.createOscillator();
+  const g = ac.createGain();
+  osc.type = 'sawtooth';
+  osc.frequency.setValueAtTime(120 + Math.random() * 40, ac.currentTime);
+  osc.frequency.linearRampToValueAtTime(80, ac.currentTime + 0.15);
+  g.gain.setValueAtTime(0.2, ac.currentTime);
+  g.gain.exponentialRampToValueAtTime(0.001, ac.currentTime + 0.2);
+  const lp = ac.createBiquadFilter();
+  lp.type = 'lowpass';
+  lp.frequency.value = 600;
+  osc.connect(lp).connect(g).connect(gain());
+  osc.start(); osc.stop(ac.currentTime + 0.2);
+}
+
+/* ── Machinegun: heavy rapid banging ──────────────────────────── */
+export function playMachinegun(): void {
+  const ac = ensureContext();
+  const len = 0.08;
+  const buf = ac.createBuffer(1, ac.sampleRate * len, ac.sampleRate);
+  const d = buf.getChannelData(0);
+  for (let i = 0; i < d.length; i++) {
+    const t = i / d.length;
+    const env = Math.exp(-t * 25);
+    d[i] = (Math.random() * 2 - 1) * env;
+    d[i] += Math.sin(i * 0.03) * 0.5 * env;
+    d[i] = Math.max(-1, Math.min(1, d[i] * 1.8));
+  }
+  const src = ac.createBufferSource();
+  src.buffer = buf;
+  const g = ac.createGain();
+  g.gain.value = 0.22;
+  const lp = ac.createBiquadFilter();
+  lp.type = 'lowpass';
+  lp.frequency.value = 2500;
+  src.connect(lp).connect(g).connect(gain());
+  src.start();
+}
+
+/* ── Grenade explosion: deep rumbling boom ────────────────────── */
+export function playExplosion(): void {
+  const ac = ensureContext();
+  const len = 0.6;
+  const buf = ac.createBuffer(1, ac.sampleRate * len, ac.sampleRate);
+  const d = buf.getChannelData(0);
+  for (let i = 0; i < d.length; i++) {
+    const t = i / d.length;
+    const env = t < 0.05 ? t / 0.05 : Math.exp(-(t - 0.05) * 5);
+    d[i] = (Math.random() * 2 - 1) * env;
+    d[i] += Math.sin(i * 0.008) * 0.6 * env;
+    d[i] += Math.sin(i * 0.003 + Math.sin(i * 0.001) * 3) * 0.4 * env;
+    d[i] = Math.max(-1, Math.min(1, d[i] * 2.5));
+  }
+  const src = ac.createBufferSource();
+  src.buffer = buf;
+  const g = ac.createGain();
+  g.gain.value = 0.35;
+  const lp = ac.createBiquadFilter();
+  lp.type = 'lowpass';
+  lp.frequency.value = 800;
+  src.connect(lp).connect(g).connect(gain());
+  src.start();
+}
+
+/* ── Gauss: electric whip crack ──────────────────────────────── */
+export function playGauss(): void {
+  const ac = ensureContext();
+  const len = 0.3;
+  const buf = ac.createBuffer(1, ac.sampleRate * len, ac.sampleRate);
+  const d = buf.getChannelData(0);
+  for (let i = 0; i < d.length; i++) {
+    const t = i / d.length;
+    const env = t < 0.02 ? 1 : Math.exp(-(t - 0.02) * 15);
+    d[i] = Math.sin(i * 0.1 * (1 + t * 3)) * 0.6 * env;
+    d[i] += (Math.random() * 2 - 1) * 0.3 * env;
+    d[i] = Math.max(-1, Math.min(1, d[i] * 2));
+  }
+  const src = ac.createBufferSource();
+  src.buffer = buf;
+  const g = ac.createGain();
+  g.gain.value = 0.3;
+  const hp = ac.createBiquadFilter();
+  hp.type = 'highpass';
+  hp.frequency.value = 1000;
+  src.connect(hp).connect(g).connect(gain());
+  src.start();
+}
+
+/* ── Plasma: electronic zap ──────────────────────────────────── */
+export function playPlasma(): void {
+  const ac = ensureContext();
+  const osc = ac.createOscillator();
+  const g = ac.createGain();
+  osc.type = 'sawtooth';
+  osc.frequency.setValueAtTime(2000 + Math.random() * 500, ac.currentTime);
+  osc.frequency.exponentialRampToValueAtTime(300, ac.currentTime + 0.1);
+  g.gain.setValueAtTime(0.15, ac.currentTime);
+  g.gain.exponentialRampToValueAtTime(0.001, ac.currentTime + 0.12);
+  osc.connect(g).connect(gain());
+  osc.start(); osc.stop(ac.currentTime + 0.12);
+}
+
+/* ── BFG: deep resonant charge + release ─────────────────────── */
+export function playBFG(): void {
+  const ac = ensureContext();
+  const len = 0.8;
+  const buf = ac.createBuffer(1, ac.sampleRate * len, ac.sampleRate);
+  const d = buf.getChannelData(0);
+  for (let i = 0; i < d.length; i++) {
+    const t = i / d.length;
+    const env = Math.sin(t * Math.PI) * (t < 0.3 ? t / 0.3 : 1);
+    d[i] = Math.sin(i * 0.006 + Math.sin(i * 0.002) * 5) * 0.5 * env;
+    d[i] += Math.sin(i * 0.015) * 0.3 * env;
+    d[i] += (Math.random() * 2 - 1) * 0.2 * env;
+    d[i] = Math.max(-0.9, Math.min(0.9, d[i] * 1.5));
+  }
+  const src = ac.createBufferSource();
+  src.buffer = buf;
+  const g = ac.createGain();
+  g.gain.value = 0.35;
+  const bp = ac.createBiquadFilter();
+  bp.type = 'bandpass';
+  bp.frequency.value = 200;
+  bp.Q.value = 2;
+  src.connect(bp).connect(g).connect(gain());
+  src.start();
+}
+
+/* ── Flamethrower: roaring whoosh ─────────────────────────────── */
+export function playFlame(): void {
+  const ac = ensureContext();
+  const len = 0.1;
+  const buf = ac.createBuffer(1, ac.sampleRate * len, ac.sampleRate);
+  const d = buf.getChannelData(0);
+  for (let i = 0; i < d.length; i++) {
+    const t = i / d.length;
+    const env = 1 - t * 0.5;
+    d[i] = (Math.random() * 2 - 1) * env * 0.4;
+    d[i] += Math.sin(i * 0.02 + Math.random() * 0.5) * 0.3 * env;
+  }
+  const src = ac.createBufferSource();
+  src.buffer = buf;
+  const g = ac.createGain();
+  g.gain.value = 0.15;
+  const bp = ac.createBiquadFilter();
+  bp.type = 'bandpass';
+  bp.frequency.value = 400;
+  bp.Q.value = 0.5;
+  src.connect(bp).connect(g).connect(gain());
+  src.start();
+}
+
+/* ── PSI Beam: continuous howling energy ──────────────────────── */
+export function playPsiBeam(): void {
+  const ac = ensureContext();
+  const len = 0.15;
+  const buf = ac.createBuffer(1, ac.sampleRate * len, ac.sampleRate);
+  const d = buf.getChannelData(0);
+  for (let i = 0; i < d.length; i++) {
+    const t = i / d.length;
+    const env = Math.sin(t * Math.PI);
+    d[i] = Math.sin(i * 0.01 + Math.sin(i * 0.004) * 4) * 0.5 * env;
+    d[i] += Math.sin(i * 0.025) * 0.2 * env;
+    d[i] += (Math.random() * 2 - 1) * 0.15 * env;
+  }
+  const src = ac.createBufferSource();
+  src.buffer = buf;
+  const g = ac.createGain();
+  g.gain.value = 0.25;
+  const bp = ac.createBiquadFilter();
+  bp.type = 'bandpass';
+  bp.frequency.value = 600;
+  bp.Q.value = 2;
+  src.connect(bp).connect(g).connect(gain());
+  src.start();
+}

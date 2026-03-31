@@ -4,6 +4,7 @@ import {
   W, type Entity, type Msg, EntityType,
 } from '../core/types';
 import { World } from '../core/world';
+import { stampMark, MarkType } from '../render/marks';
 import { WEAPON_STATS } from '../data/catalog';
 import { spawnBloodHit, spawnDeathPool } from '../render/blood';
 
@@ -38,7 +39,7 @@ export function castInstantSpell(
   msgs: Msg[],
   time: number,
   handleKill: (e: Entity) => void,
-): void {
+): { beamLen?: number } {
   switch (effect) {
     case 'storm':    castStorm(player, entities, world, msgs, time, handleKill); break;
     case 'brain_burn': castBrainBurn(player, entities, world, msgs, time, handleKill); break;
@@ -47,7 +48,9 @@ export function castInstantSpell(
     case 'phase':    castPhase(player, msgs, time); break;
     case 'mark':     castMark(player, msgs, time); break;
     case 'recall':   castRecall(player, msgs, time); break;
+    case 'beam':     return { beamLen: castBeam(player, entities, world, msgs, time, handleKill) };
   }
+  return {};
 }
 
 // ── Update ongoing PSI effects (call every frame) ────────────────
@@ -238,6 +241,91 @@ function castRecall(player: Entity, msgs: Msg[], time: number): void {
   player.x = markPos.x;
   player.y = markPos.y;
   msgs.push({ text: 'Телепорт к метке!', time, color: '#4af' });
+}
+
+// ── Пси Хамехамеха: wide beam that burns everything on path ─────
+const BEAM_RANGE = 20;
+const BEAM_WIDTH = 1.2; // half-width of the beam corridor
+
+function castBeam(
+  player: Entity, entities: Entity[], world: World,
+  msgs: Msg[], time: number,
+  handleKill: (e: Entity) => void,
+): number {
+  const ws = WEAPON_STATS['psi_beam'];
+  const dmg = ws?.dmg ?? 15;
+  const dirX = Math.cos(player.angle);
+  const dirY = Math.sin(player.angle);
+
+  // DDA ray to find beam end (wall hit or max range)
+  let beamEnd = BEAM_RANGE;
+  {
+    let mapX = Math.floor(player.x);
+    let mapY = Math.floor(player.y);
+    const ddx = Math.abs(1 / dirX);
+    const ddy = Math.abs(1 / dirY);
+    const stepX = dirX < 0 ? -1 : 1;
+    const stepY = dirY < 0 ? -1 : 1;
+    let sdx = dirX < 0 ? (player.x - mapX) * ddx : (mapX + 1 - player.x) * ddx;
+    let sdy = dirY < 0 ? (player.y - mapY) * ddy : (mapY + 1 - player.y) * ddy;
+
+    for (let step = 0; step < BEAM_RANGE * 2; step++) {
+      const dist = Math.min(sdx, sdy);
+      if (dist >= BEAM_RANGE) break;
+      if (sdx < sdy) { sdx += ddx; mapX += stepX; } else { sdy += ddy; mapY += stepY; }
+      const wx = ((mapX % W) + W) % W;
+      const wy = ((mapY % W) + W) % W;
+      if (world.solid(wx, wy)) {
+        beamEnd = dist;
+        break;
+      }
+    }
+  }
+
+  // Paint scorch along beam path on floor
+  const scorchStep = 0.35;
+  for (let d = 0.5; d < beamEnd; d += scorchStep) {
+    const sx = player.x + dirX * d;
+    const sy = player.y + dirY * d;
+    const fx = ((Math.floor(sx) % W) + W) % W;
+    const fy = ((Math.floor(sy) % W) + W) % W;
+    if (!world.solid(fx, fy)) {
+      const seed = Math.floor(Math.random() * 99999);
+      stampMark(world, fx, fy, sx - Math.floor(sx), sy - Math.floor(sy),
+        0.45, MarkType.PSI, seed, 80, 20, 120, 200); // bright purple scorch
+    }
+  }
+
+  // Damage all entities within the beam corridor
+  let hits = 0;
+  for (const e of entities) {
+    if (!e.alive || e.id === player.id) continue;
+    if (e.type !== EntityType.NPC && e.type !== EntityType.MONSTER) continue;
+    // Project entity position onto beam line
+    const dx = ((e.x - player.x + W / 2) % W + W) % W - W / 2;
+    const dy = ((e.y - player.y + W / 2) % W + W) % W - W / 2;
+    const along = dx * dirX + dy * dirY; // projection along beam
+    if (along < 0.5 || along > beamEnd) continue;
+    const perp = Math.abs(dx * (-dirY) + dy * dirX); // perpendicular distance
+    if (perp > BEAM_WIDTH) continue;
+    if (e.hp !== undefined) {
+      const falloff = 1 - (along / beamEnd) * 0.3;
+      const finalDmg = Math.round(dmg * falloff);
+      e.hp -= finalDmg;
+      spawnBloodHit(world, e.x, e.y, player.angle, finalDmg, e.type === EntityType.MONSTER);
+      if (e.hp <= 0) {
+        e.alive = false;
+        handleKill(e);
+      }
+      hits++;
+    }
+  }
+  if (hits > 0) {
+    msgs.push({ text: `ПСИ ХАМЕХАМЕХА! Поражено: ${hits}`, time, color: '#f0f' });
+  } else {
+    msgs.push({ text: 'ПСИ ХАМЕХАМЕХА!', time, color: '#c0f' });
+  }
+  return beamEnd;
 }
 
 // ── AoE explosion (called from updateProjectiles on impact) ──────

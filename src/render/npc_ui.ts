@@ -3,6 +3,7 @@
 import { type Entity, type GameState, Faction } from '../core/types';
 import { ITEMS } from '../data/catalog';
 import { FACTION_NAMES, OCCUPATION_NAMES } from '../data/relations';
+import { drawNeuroPanel, drawGlitchText, textJitter, flicker } from './hud_fx';
 
 export function drawNpcMenu(
   ctx: CanvasRenderingContext2D,
@@ -19,22 +20,20 @@ export function drawNpcMenu(
   const pw = 220 * sx, ph = 160 * sy;
   const px = (w - pw) / 2;
   const py = (h - ph) / 2;
+  const time = state.time;
 
-  // Background
-  ctx.fillStyle = 'rgba(0,0,0,0.9)';
-  ctx.fillRect(px, py, pw, ph);
-  ctx.strokeStyle = '#664';
-  ctx.strokeRect(px, py, pw, ph);
+  // Background — neuro-panel
+  drawNeuroPanel(ctx, px, py, pw, ph, time, 90);
 
   // NPC name header
   const fName = npc.faction !== undefined ? FACTION_NAMES[npc.faction as Faction] : '';
   const oName = npc.occupation !== undefined ? OCCUPATION_NAMES[npc.occupation] : '';
-  ctx.fillStyle = '#ee4';
+  drawGlitchText(ctx, npc.name ?? '???', px + 8 * sx, py + 10 * sy, time, 900, '#0fa', 10 * sy);
   ctx.font = `${10 * sy}px monospace`;
-  ctx.fillText(npc.name ?? '???', px + 8 * sx, py + 10 * sy);
-  ctx.fillStyle = '#888';
+  ctx.fillStyle = '#688';
   ctx.font = `${7 * sy}px monospace`;
-  ctx.fillText(`${fName} · ${oName}`, px + 8 * sx, py + 22 * sy);
+  const fj = textJitter(time, 901);
+  ctx.fillText(`${fName} · ${oName}`, px + 8 * sx + fj.dx, py + 22 * sy + fj.dy);
 
   if (state.npcMenuTab === 'main') {
     // Main menu: Talk, Quest, Trade
@@ -43,10 +42,11 @@ export function drawNpcMenu(
     for (let i = 0; i < items.length; i++) {
       const selected = i === state.npcMenuSel;
       const yy = py + 40 * sy + i * 16 * sy;
-      ctx.fillStyle = selected ? '#ee4' : '#aaa';
-      ctx.fillText(`${selected ? '▶ ' : '  '}${items[i]}`, px + 16 * sx, yy);
+      const mj = textJitter(time, 910 + i);
+      ctx.fillStyle = selected ? `rgba(0,255,170,${flicker(time, 920 + i)})` : '#688';
+      ctx.fillText(`${selected ? '▶ ' : '  '}${items[i]}`, px + 16 * sx + mj.dx, yy + mj.dy);
     }
-    ctx.fillStyle = '#555';
+    ctx.fillStyle = '#456';
     ctx.font = `${7 * sy}px monospace`;
     ctx.fillText('W/S — выбор  |  [E] выбрать  |  ENTER — закрыть', px + 8 * sx, py + ph - 8 * sy);
 

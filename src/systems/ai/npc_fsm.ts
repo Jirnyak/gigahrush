@@ -6,6 +6,7 @@ import {
   type GameClock,
 } from '../../core/types';
 import { World } from '../../core/world';
+import { stampMark, MarkType } from '../../render/marks';
 import { followPath, findNearest, findFamilyRoom, gotoRoom, wanderNearby, wanderFar } from './pathfinding';
 import {
   bark,
@@ -125,7 +126,7 @@ export function updateNPC(world: World, _entities: Entity[], e: Entity, dt: numb
       if (n.pee > 15 && Math.random() < 0.3) {
         const fx = ((e.x % 1) + 1) % 1;
         const fy = ((e.y % 1) + 1) % 1;
-        world.stamp(Math.floor(e.x), Math.floor(e.y), fx, fy, 0.1, 40, Math.floor(e.id * 1000 + n.pee), 200, 180, 30);
+        stampMark(world, Math.floor(e.x), Math.floor(e.y), fx, fy, 0.1, MarkType.DRIP, Math.floor(e.id * 1000 + n.pee), 200, 180, 30, 40);
       }
       n.pee = Math.max(0, n.pee - 20 * dt);
       n.poo = Math.max(0, n.poo - 15 * dt);

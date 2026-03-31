@@ -1,6 +1,7 @@
 /* ── Toroidal world grid ──────────────────────────────────────── */
 
 import { W, Cell, DoorState, Feature, type Room, type Door, type Zone } from './types';
+import { stampMark, MarkType } from '../render/marks';
 
 export class World {
   cells:     Uint8Array;
@@ -115,47 +116,11 @@ export class World {
     return id >= 0 ? this.rooms[id] ?? null : null;
   }
 
-  /* paint RGBA onto sparse 16×16 canvas — spills across cell boundaries.
-     wallOk=true allows painting on wall/solid cells (for bullet holes, wall blood) */
+  /* Legacy stamp — delegates to the new procedural mark system.
+     Kept for callers that still use the old (cx, cy, fx, fy, radius, intensity, seed, r, g, b, wallOk) signature.
+     Uses MarkType.SPLAT for general blobs, which produces organic irregular shapes. */
   stamp(cx: number, cy: number, fx: number, fy: number, radius: number, intensity: number, seed: number, cr: number, cg: number, cb: number, wallOk = false): void {
-    const bx = Math.floor(fx * 16);
-    const by = Math.floor(fy * 16);
-    const r = Math.max(1, Math.floor(radius * 16));
-    for (let dy = -r; dy <= r; dy++) {
-      for (let dx = -r; dx <= r; dx++) {
-        const d2 = dx * dx + dy * dy;
-        if (d2 > r * r) continue;
-        let px = bx + dx, py = by + dy;
-        let cellDx = 0, cellDy = 0;
-        while (px < 0)  { px += 16; cellDx--; }
-        while (px >= 16) { px -= 16; cellDx++; }
-        while (py < 0)  { py += 16; cellDy--; }
-        while (py >= 16) { py -= 16; cellDy++; }
-        const ncx = this.wrap(cx + cellDx);
-        const ncy = this.wrap(cy + cellDy);
-        const ci = ncy * W + ncx;
-        if (!wallOk && this.cells[ci] === Cell.WALL) continue;
-        const absPx = bx + dx, absPy = by + dy;
-        const h = ((seed * 2654435761 + absPx * 73856093 + absPy * 19349663) >>> 0) & 0xFF;
-        if (d2 > r * r * 0.4 && h > 160) continue;
-        const fall = 1 - d2 / (r * r + 1);
-        const newA = Math.min(255, Math.floor(intensity * fall));
-        if (newA <= 0) continue;
-        let cell = this.surfaceMap.get(ci);
-        if (!cell) { cell = new Uint8Array(1024); this.surfaceMap.set(ci, cell); }
-        const idx = (py * 16 + px) << 2;
-        const curA = cell[idx + 3];
-        if (curA === 0) {
-          cell[idx] = cr; cell[idx + 1] = cg; cell[idx + 2] = cb; cell[idx + 3] = newA;
-        } else {
-          const total = curA + newA;
-          cell[idx]     = Math.floor((cell[idx]     * curA + cr * newA) / total);
-          cell[idx + 1] = Math.floor((cell[idx + 1] * curA + cg * newA) / total);
-          cell[idx + 2] = Math.floor((cell[idx + 2] * curA + cb * newA) / total);
-          cell[idx + 3] = Math.min(255, total);
-        }
-      }
-    }
+    stampMark(this, cx, cy, fx, fy, radius, MarkType.SPLAT, seed, cr, cg, cb, intensity, wallOk);
   }
 
   /* carve a floor cell */

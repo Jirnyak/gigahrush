@@ -2,11 +2,14 @@
 
 import { W, Cell, type Entity, EntityType } from '../core/types';
 import { World } from '../core/world';
+import { stampMark, MarkType } from './marks';
 
 /* ── Screen-space blood particles ─────────────────────────────── */
 export interface BloodParticle {
   x: number; y: number;      // world position
+  z: number;                 // height: 0=floor, 0.5=mid, 1=ceiling
   vx: number; vy: number;    // velocity (cells/sec)
+  vz: number;                // vertical velocity (units/sec)
   life: number;              // remaining seconds
   size: number;              // 1-3 px
   r: number; g: number; b: number;
@@ -27,6 +30,7 @@ function splatAdjacentWalls(
   world: World, ex: number, ey: number,
   radius: number, intensity: number, seed: number,
   cr: number, cg: number, cb: number,
+  dvx = 0, dvy = 0, hitZ = 0.5,
 ): void {
   const ecx = Math.floor(ex), ecy = Math.floor(ey);
   const fracX = ((ex % 1) + 1) % 1;
@@ -38,44 +42,58 @@ function splatAdjacentWalls(
     [0, -1, fracX],  // North wall: horizontal on face = entity X
     [0, +1, fracX],  // South wall
   ];
+  const hasDir = dvx !== 0 || dvy !== 0;
   for (const [dx, dy, faceU] of dirs) {
     const wx = world.wrap(ecx + dx);
     const wy = world.wrap(ecy + dy);
     if (world.cells[wy * W + wx] !== Cell.WALL) continue;
-    // Near-floor level on wall face (bottom ~20%)
-    const faceV = 0.78 + Math.random() * 0.17;
+    // Directional bias: skip walls behind projectile travel direction
+    if (hasDir) {
+      const dot = dx * dvx + dy * dvy;
+      if (dot < -0.1) continue;
+    }
+    // Wall face V at impact height: spriteZ 0=floor→faceV 1.0, spriteZ 0.5=mid→faceV 0.5
+    const faceV = Math.max(0.05, Math.min(0.95, 1.0 - hitZ + (Math.random() - 0.5) * 0.12));
     const u = Math.max(0, Math.min(0.999, faceU + (Math.random() - 0.5) * 0.15));
-    world.stamp(wx, wy, u, faceV, radius, intensity, seed + dx * 7 + dy * 13, cr, cg, cb, true);
+    stampMark(world, wx, wy, u, faceV, radius, MarkType.SPLAT, seed + dx * 7 + dy * 13, cr, cg, cb, intensity, true);
   }
 }
 
 /* ── Spawn blood particles on hit ─────────────────────────────── */
-export function spawnBloodHit(world: World, ex: number, ey: number, fromAngle: number, dmg: number, gore = false): void {
+export function spawnBloodHit(world: World, ex: number, ey: number, fromAngle: number, dmg: number, gore = false, pvx = 0, pvy = 0, hitZ = 0.5): void {
   const seed = ++_splatterSeed;
   const [sr, sg, sb] = gore ? GORE : BLOOD;
-  // Floor blood stamp at entity position
-  const cx = Math.floor(ex), cy = Math.floor(ey);
-  const fx = ex - cx, fy = ey - cy;
+  // Offset floor splat in projectile travel direction
+  const spd = Math.sqrt(pvx * pvx + pvy * pvy);
+  const offMag = spd > 0.1 ? Math.min(0.3, spd * 0.012) : 0;
+  const offX = spd > 0.1 ? (pvx / spd) * offMag : 0;
+  const offY = spd > 0.1 ? (pvy / spd) * offMag : 0;
+  const sx = ex + offX, sy = ey + offY;
+  const cx = Math.floor(sx), cy = Math.floor(sy);
+  const fx = ((sx % 1) + 1) % 1, fy = ((sy % 1) + 1) % 1;
   const radius = Math.min(0.35, 0.08 + dmg * 0.004);
   const intensity = Math.min(220, 80 + dmg * 3);
-  world.stamp(cx, cy, fx, fy, radius, intensity, seed, sr, sg, sb);
+  stampMark(world, cx, cy, fx, fy, radius, MarkType.SPLAT, seed, sr, sg, sb, intensity);
 
-  // Splatter on adjacent walls
-  splatAdjacentWalls(world, ex, ey, radius * 0.6, Math.floor(intensity * 0.7), seed, sr, sg, sb);
+  // Directional wall splatter at impact height
+  splatAdjacentWalls(world, ex, ey, radius * 0.6, Math.floor(intensity * 0.7), seed, sr, sg, sb, pvx, pvy, hitZ);
 
-  // Spray some blood in hit direction (away from attacker)
+  // Spray some blood in hit direction (away from attacker) + projectile momentum
   const count = Math.min(24, 4 + Math.floor(dmg * 0.3));
+  const pMomentum = spd > 0.1 ? 0.15 : 0;
   for (let i = 0; i < count && particles.length < MAX_PARTICLES; i++) {
     const spread = (Math.random() - 0.5) * 1.6;
     const ang = fromAngle + Math.PI + spread;
-    const spd = 1.5 + Math.random() * 3;
+    const baseSpd = 1.5 + Math.random() * 3;
     // Unique color per particle — dark red / crimson / maroon
     const h = (seed * 7 + i * 31) & 0xFF;
     particles.push({
       x: ex, y: ey,
-      vx: Math.cos(ang) * spd,
-      vy: Math.sin(ang) * spd,
-      life: 0.15 + Math.random() * 0.25,
+      z: hitZ,
+      vx: Math.cos(ang) * baseSpd + pvx * pMomentum,
+      vy: Math.sin(ang) * baseSpd + pvy * pMomentum,
+      vz: (Math.random() - 0.3) * 1.5,  // slight upward bias then fall
+      life: 1.5,  // generous life — gravity landing will kill them
       size: 1 + (h & 1),
       r: gore ? 20 + (h & 31) : 120 + (h & 63),
       g: gore ? 25 + (h & 15) : 5 + (h & 15),
@@ -85,23 +103,64 @@ export function spawnBloodHit(world: World, ex: number, ey: number, fromAngle: n
 }
 
 /* ── Large blood pool on death ────────────────────────────────── */
-export function spawnDeathPool(world: World, ex: number, ey: number, gore = false): void {
+export function spawnDeathPool(world: World, ex: number, ey: number, gore = false, goreLevel = 1, pvx = 0, pvy = 0): void {
   const seed = ++_splatterSeed;
   const [sr, sg, sb] = gore ? GORE : BLOOD;
-  const cx = Math.floor(ex), cy = Math.floor(ey);
-  const fx = ex - cx, fy = ey - cy;
-  // Large central pool
-  world.stamp(cx, cy, fx, fy, 0.45, 255, seed, sr, sg, sb);
-  // Blood on adjacent walls
-  splatAdjacentWalls(world, ex, ey, 0.25, 200, seed, sr, sg, sb);
-  // Secondary splatters around
-  for (let i = 0; i < 5; i++) {
-    const ox = (((seed * 73856093 + i * 19349663) >>> 0) % 100 - 50) / 100;
-    const oy = (((seed * 19349663 + i * 83492791) >>> 0) % 100 - 50) / 100;
-    const sx = ex + ox * 0.6;
-    const sy = ey + oy * 0.6;
-    const scx = Math.floor(sx), scy = Math.floor(sy);
-    world.stamp(scx, scy, sx - scx, sy - scy, 0.2, 180, seed + i + 1, sr, sg, sb);
+  // Offset pool in projectile travel direction
+  const spd = Math.sqrt(pvx * pvx + pvy * pvy);
+  const offMag = spd > 0.1 ? Math.min(0.4, spd * 0.015) : 0;
+  const dirX = spd > 0.1 ? pvx / spd : 0;
+  const dirY = spd > 0.1 ? pvy / spd : 0;
+  const px = ex + dirX * offMag, py = ey + dirY * offMag;
+  const cx = Math.floor(px), cy = Math.floor(py);
+  const fx = ((px % 1) + 1) % 1, fy = ((py % 1) + 1) % 1;
+  // Pool size scales with gore level
+  const poolRadius = 0.35 + goreLevel * 0.08;
+  stampMark(world, cx, cy, fx, fy, poolRadius, MarkType.POOL, seed, sr, sg, sb, 255);
+  // Directional wall splatter at mid-body height
+  splatAdjacentWalls(world, ex, ey, 0.25 + goreLevel * 0.05, 200, seed, sr, sg, sb, pvx, pvy, 0.5);
+  // Large gore splatters spraying outward across multiple cells
+  const splatCount = 3 + goreLevel * 3;
+  for (let i = 0; i < splatCount; i++) {
+    const ang = (i / splatCount) * Math.PI * 2 + (Math.random() - 0.5) * 1.2;
+    // Spray distance: 0.5 to 2.5 cells from center, further with higher gore
+    const dist = 0.3 + Math.random() * (0.6 + goreLevel * 0.5);
+    // Bias toward projectile direction
+    const biasX = dirX * 0.4, biasY = dirY * 0.4;
+    const sx = ex + Math.cos(ang) * dist + biasX;
+    const sy = ey + Math.sin(ang) * dist + biasY;
+    const scx = Math.floor(((sx % W) + W) % W);
+    const scy = Math.floor(((sy % W) + W) % W);
+    if (world.solid(scx, scy)) continue;
+    const splatRadius = 0.12 + goreLevel * 0.06 + Math.random() * 0.08;
+    const splatIntensity = 160 + Math.floor(Math.random() * 60);
+    stampMark(world, scx, scy, ((sx % 1) + 1) % 1, ((sy % 1) + 1) % 1, splatRadius, MarkType.SPLAT, seed + i + 1, sr, sg, sb, splatIntensity);
+    // Wall splats at spray endpoints
+    if (goreLevel >= 2 && Math.random() < 0.5) {
+      splatAdjacentWalls(world, sx, sy, splatRadius * 0.5, splatIntensity - 40, seed + i + 50, sr, sg, sb, Math.cos(ang), Math.sin(ang), 0.3 + Math.random() * 0.5);
+    }
+  }
+  // Gore spray particles for messy deaths (shotgun / explosion)
+  if (goreLevel >= 2) {
+    const particleCount = Math.min(48, goreLevel * 12);
+    for (let i = 0; i < particleCount && particles.length < MAX_PARTICLES; i++) {
+      const ang = Math.random() * Math.PI * 2;
+      const baseSpd = 3 + Math.random() * 6;
+      const pM = spd > 0.1 ? 0.25 : 0;
+      const h = (seed * 7 + i * 31) & 0xFF;
+      particles.push({
+        x: ex, y: ey,
+        z: 0.3 + Math.random() * 0.4,  // mid-body height
+        vx: Math.cos(ang) * baseSpd + pvx * pM,
+        vy: Math.sin(ang) * baseSpd + pvy * pM,
+        vz: (Math.random() - 0.2) * 2.0,  // mostly upward spray
+        life: 1.5,
+        size: 1 + (h & 1),
+        r: gore ? 20 + (h & 31) : 100 + (h & 63),
+        g: gore ? 25 + (h & 15) : 5 + (h & 15),
+        b: gore ? 5 + (h & 7) : 5 + (h & 7),
+      });
+    }
   }
 }
 
@@ -122,12 +181,13 @@ export function updateBloodTrails(world: World, entities: Entity[], dt: number):
     const fy = e.y - cy + (Math.random() - 0.5) * 0.3;
     const isGore = e.type === EntityType.MONSTER;
     const [sr, sg, sb] = isGore ? GORE : BLOOD;
-    world.stamp(cx, cy,
+    stampMark(world, cx, cy,
       Math.max(0, Math.min(0.999, fx)),
       Math.max(0, Math.min(0.999, fy)),
       0.06 + Math.random() * 0.04,
-      60 + Math.floor(Math.random() * 40),
-      ++_splatterSeed, sr, sg, sb);
+      MarkType.DRIP,
+      ++_splatterSeed, sr, sg, sb,
+      60 + Math.floor(Math.random() * 40));
   }
 }
 
@@ -136,68 +196,28 @@ export function updateParticles(world: World, dt: number): void {
   for (let i = particles.length - 1; i >= 0; i--) {
     const p = particles[i];
     p.life -= dt;
-    if (p.life <= 0) {
-      // Particle lands → stamp a tiny blood dot on the floor
+    // 3D gravity: pull particles down
+    p.vz -= 3.5 * dt;
+    p.z += p.vz * dt;
+    // Hit floor → stamp blood and die
+    if (p.z <= 0) {
+      p.z = 0;
       const cx = Math.floor(p.x), cy = Math.floor(p.y);
       const fx = ((p.x % 1) + 1) % 1;
       const fy = ((p.y % 1) + 1) % 1;
-      world.stamp(cx, cy, fx, fy, 0.04, 100, ++_splatterSeed, ...BLOOD);
+      stampMark(world, cx, cy, fx, fy, 0.04 + p.size * 0.02, MarkType.SPLAT, ++_splatterSeed, p.r, p.g, p.b, 120);
       particles.splice(i, 1);
       continue;
     }
-    // Gravity + friction
-    p.vy += 0.5 * dt; // slight world-space drift
-    p.vx *= 0.92;
-    p.vy *= 0.92;
+    // Time-expired (safety)
+    if (p.life <= 0) {
+      particles.splice(i, 1);
+      continue;
+    }
+    // XY friction (no world-space gravity on XY — the 3D vz handles vertical)
+    p.vx *= 0.95;
+    p.vy *= 0.95;
     p.x = ((p.x + p.vx * dt) % W + W) % W;
     p.y = ((p.y + p.vy * dt) % W + W) % W;
-  }
-}
-
-/* ── Render particles into screen buffer ──────────────────────── */
-export function renderParticles(
-  buf: Uint32Array, scrW: number, scrH: number,
-  px: number, py: number, _pAngle: number,
-  dirX: number, dirY: number, planeX: number, planeY: number,
-  halfH: number,
-  columnDepth: Float64Array,
-): void {
-  if (particles.length === 0) return;
-  const invDet = 1.0 / (planeX * dirY - dirX * planeY);
-
-  for (const p of particles) {
-    let dx = p.x - px;
-    let dy = p.y - py;
-    if (dx >  W / 2) dx -= W;
-    if (dx < -W / 2) dx += W;
-    if (dy >  W / 2) dy -= W;
-    if (dy < -W / 2) dy += W;
-
-    const txf = invDet * (dirY * dx - dirX * dy);
-    const tyf = invDet * (-planeY * dx + planeX * dy);
-    if (tyf <= 0.1) continue;
-
-    const sx = Math.floor((scrW / 2) * (1 + txf / tyf));
-    if (sx < 0 || sx >= scrW) continue;
-    // Z-buffer: don't render particles behind walls
-    if (tyf >= columnDepth[sx]) continue;
-    const sy = Math.floor(halfH + scrH / (tyf * 2));  // at floor level
-    if (sy < 0 || sy >= scrH) continue;
-
-    const alpha = Math.min(1, p.life * 5);  // fade out
-    const sz = p.size;
-    for (let oy = -sz; oy <= sz; oy++) {
-      for (let ox = -sz; ox <= sz; ox++) {
-        const px2 = sx + ox, py2 = sy + oy;
-        if (px2 < 0 || px2 >= scrW || py2 < 0 || py2 >= scrH) continue;
-        const idx = py2 * scrW + px2;
-        const bg = buf[idx];
-        const br = (bg & 0xFF), bgg = ((bg >> 8) & 0xFF), bb = ((bg >> 16) & 0xFF);
-        const nr = Math.min(255, Math.floor(br * (1 - alpha) + p.r * alpha));
-        const ng = Math.min(255, Math.floor(bgg * (1 - alpha) + p.g * alpha));
-        const nb = Math.min(255, Math.floor(bb * (1 - alpha) + p.b * alpha));
-        buf[idx] = ((0xFF << 24) | (nb << 16) | (ng << 8) | nr) >>> 0;
-      }
-    }
   }
 }

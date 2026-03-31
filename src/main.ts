@@ -4,7 +4,7 @@ import './index.css';
 import {
   W, Cell, DoorState, FloorLevel, Feature, Tex, RoomType, LiftDirection,
   type Entity, type GameState,
-  EntityType, Faction, MonsterKind,
+  EntityType, Faction, MonsterKind, ProjType,
 } from './core/types';
 import { World } from './core/world';
 import { generateWorld } from './gen/living';
@@ -13,9 +13,10 @@ import { generateHell, updateHellPopulation, resetHellPopulationState } from './
 import { generateTextures } from './render/textures';
 import { generateSprites } from './render/sprites';
 import { Spr } from './render/sprite_index';
-import { renderScene, SCR_W, SCR_H, HALF_FOV, zBuf } from './render/engine';
+import { SCR_W, SCR_H, initWebGL, renderSceneGL, updateWorldData, updateDynamicData, disposeWebGL } from './render/webgl';
 import { drawHUD } from './render/hud';
-import { spawnBloodHit, spawnDeathPool, updateBloodTrails, updateParticles, renderParticles } from './render/blood';
+import { spawnBloodHit, spawnDeathPool, updateBloodTrails, updateParticles, particles } from './render/blood';
+import { stampMark, MarkType } from './render/marks';
 import { updateNeeds } from './systems/needs';
 import { updateAI } from './systems/ai';
 import { generateTalkText, generateNpcTradeItems } from './data/dialogue';
@@ -30,6 +31,8 @@ import {
   playFootstep, playAttack, playDoor,
   playGunshot, playShotgun, playNailgun, playBreak,
   playFleshHit, playPsiCast,
+  playPPSh, playChainsaw, playMachinegun, playExplosion,
+  playGauss, playPlasma, playBFG, playFlame, playPsiBeam,
   startAmbientDrone, setListenerPos,
 } from './systems/audio';
 import { offerQuest, checkQuests, checkTalkQuest, notifyKill } from './systems/quests';
@@ -53,18 +56,17 @@ import { type DeathCam, initDeathCam, updateDeathCam, getDeathCamAngle, getDeath
 
 /* ── Canvas setup ─────────────────────────────────────────────── */
 const canvas = document.getElementById('game') as HTMLCanvasElement;
-const ctx = canvas.getContext('2d')!;
+const hudCanvas = document.getElementById('hud') as HTMLCanvasElement;
+const ctx = hudCanvas.getContext('2d')!;
 
 function resize() {
   canvas.width = window.innerWidth;
   canvas.height = window.innerHeight;
+  hudCanvas.width = window.innerWidth;
+  hudCanvas.height = window.innerHeight;
 }
 window.addEventListener('resize', resize);
 resize();
-
-// Low-res buffer for raycaster output
-const screen = ctx.createImageData(SCR_W, SCR_H);
-const buf32 = new Uint32Array(screen.data.buffer);
 
 /* ── Generate assets ──────────────────────────────────────────── */
 const textures = generateTextures();
@@ -83,11 +85,11 @@ let pendingLoadDrawn = false; // true = loading screen was painted, next frame r
 
 function drawLoading(): void {
   ctx.fillStyle = '#000';
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.fillRect(0, 0, hudCanvas.width, hudCanvas.height);
   ctx.fillStyle = '#aaa';
-  ctx.font = `${Math.round(canvas.height / 20)}px monospace`;
+  ctx.font = `${Math.round(hudCanvas.height / 20)}px monospace`;
   ctx.textAlign = 'center';
-  ctx.fillText('ЗАГРУЗКА...', canvas.width / 2, canvas.height / 2);
+  ctx.fillText('ЗАГРУЗКА...', hudCanvas.width / 2, hudCanvas.height / 2);
   ctx.textAlign = 'left';
 }
 
@@ -166,8 +168,16 @@ function initGame(): void {
     dmgSeed: 0,
     deathTimer: 0,
     sleeping: false,
+    beamFx: 0,
+    beamAngle: 0,
+    beamLen: 0,
   };
   resetPsiState();
+
+  // Initialize / reinitialize WebGL with current world data
+  disposeWebGL();
+  initWebGL(canvas, textures, sprites, world);
+  updateWorldData(world);
 }
 
 drawLoading();
@@ -283,6 +293,24 @@ function movePlayer(dt: number): void {
   }
 }
 
+/* ── Weapon sound dispatch ─────────────────────────────────────── */
+function playWeaponSound(weaponId: string, ws: import('./data/weapons').WeaponStats): void {
+  const sid = ws.soundId ?? weaponId;
+  switch (sid) {
+    case 'shotgun':    playShotgun(); break;
+    case 'nailgun':    playNailgun(); break;
+    case 'ppsh':       playPPSh(); break;
+    case 'chainsaw':   playChainsaw(); break;
+    case 'machinegun': playMachinegun(); break;
+    case 'grenade':    playGunshot(); break; // throw sound; explosion plays on impact
+    case 'gauss':      playGauss(); break;
+    case 'plasma':     playPlasma(); break;
+    case 'bfg':        playBFG(); break;
+    case 'flame':      playFlame(); break;
+    default:           playGunshot(); break;
+  }
+}
+
 /* ── Player actions ───────────────────────────────────────────── */
 function playerActions(_dt: number): void {
   if (!player.alive) return;
@@ -392,6 +420,7 @@ function playerActions(_dt: number): void {
             sprite: ws.projSprite ?? Spr.PSI_BOLT,
             vx: Math.cos(player.angle) * spd,
             vy: Math.sin(player.angle) * spd,
+            vz: player.pitch * spd * 0.5,
             projDmg: ws.dmg,
             projLife: 3.0,
             ownerId: player.id,
@@ -405,13 +434,18 @@ function playerActions(_dt: number): void {
           entities.push(proj);
         } else {
           // Instant PSI spell
-          castInstantSpell(
+          const psiResult = castInstantSpell(
             ws.psiEffect ?? '', player, entities, world,
             state.msgs, state.time,
             (e) => handleKill(e, true),
           );
+          if (psiResult.beamLen) {
+            state.beamFx = 0.35;
+            state.beamAngle = player.angle;
+            state.beamLen = psiResult.beamLen;
+          }
         }
-        playPsiCast();
+        if (ws.psiEffect === 'beam') playPsiBeam(); else playPsiCast();
         player.attackCd = ws.speed * atkSpeedMod;
       }
     } else if (ws.isRanged) {
@@ -421,10 +455,11 @@ function playerActions(_dt: number): void {
         const sin = Math.sin(player.angle);
         const pellets = ws.pellets ?? 1;
         const spread = ws.spread ?? 0;
+        const pt = ws.projType ?? ProjType.NORMAL;
         for (let p = 0; p < pellets; p++) {
           const ang = player.angle + (Math.random() - 0.5) * spread;
           const spd = ws.projSpeed ?? 15;
-          entities.push({
+          const proj: Entity = {
             id: nextEntityId.v++,
             type: EntityType.PROJECTILE,
             x: player.x + cos * 0.5,
@@ -436,17 +471,26 @@ function playerActions(_dt: number): void {
             sprite: ws.projSprite ?? Spr.BULLET,
             vx: Math.cos(ang) * spd,
             vy: Math.sin(ang) * spd,
+            vz: player.pitch * spd * 0.5 + (pt === ProjType.FLAME ? (Math.random() - 0.5) * 0.8 : 0),
             projDmg: ws.dmg,
-            projLife: 3.0,
+            projLife: pt === ProjType.GRENADE ? 1.5 : pt === ProjType.FLAME ? 0.7 : 3.0,
             ownerId: player.id,
-            spriteScale: 0.25,
+            spriteScale: pt === ProjType.BFG ? 0.6 : pt === ProjType.FLAME ? (0.55 + Math.random() * 0.25) : pt === ProjType.GRENADE ? 0.35 : 0.25,
             spriteZ: 0.5,
-          });
+            projType: pt,
+            projGore: pt === ProjType.GRENADE || pt === ProjType.BFG ? 3
+              : (player.weapon === 'shotgun' || player.weapon === 'chainsaw') ? 3
+              : (player.weapon === 'ak47' || player.weapon === 'machinegun' || player.weapon === 'nailgun' || player.weapon === 'gauss' || player.weapon === 'plasma') ? 2
+              : pt === ProjType.FLAME ? 1 : 1,
+          };
+          if (ws.aoeRadius) {
+            proj.aoeRadius = ws.aoeRadius;
+            proj.aoeDmg = ws.dmg;
+          }
+          entities.push(proj);
         }
         // Play weapon-specific sound
-        if (player.weapon === 'shotgun') playShotgun();
-        else if (player.weapon === 'nailgun') playNailgun();
-        else playGunshot();
+        playWeaponSound(player.weapon ?? '', ws);
         player.attackCd = ws.speed * atkSpeedMod;
       } else {
         state.msgs.push({ text: 'Нет патронов!', time: state.time, color: '#f84' });
@@ -474,19 +518,24 @@ function playerActions(_dt: number): void {
             if (e.type === EntityType.NPC) {
               applyDamageRelationPenalty(player.faction, e.faction, dmg);
             }
-            // Blood splatter on hit
-            spawnBloodHit(world, e.x, e.y, player.angle, dmg, e.type === EntityType.MONSTER);
+            // Blood splatter on hit — use player facing as velocity direction
+            const meleeSpd = 6;
+            const mVx = Math.cos(player.angle) * meleeSpd;
+            const mVy = Math.sin(player.angle) * meleeSpd;
+            spawnBloodHit(world, e.x, e.y, player.angle, dmg, e.type === EntityType.MONSTER, mVx, mVy, 0.5);
             state.msgs.push({ text: `Удар! ${e.name} -${dmg}`, time: state.time, color: '#fc4' });
             if (e.hp <= 0) {
               e.alive = false;
-              handleKill(e, true);
+              const meleeGore = (player.weapon === 'chainsaw' || player.weapon === 'axe') ? 3
+                : (player.weapon === 'rebar' || player.weapon === 'pipe') ? 2 : 1;
+              handleKill(e, true, mVx, mVy, meleeGore);
             }
           }
           hitSomething = true;
           break;
         }
       }
-      playAttack();
+      if (player.weapon === 'chainsaw') playChainsaw(); else playAttack();
       // Consume durability on melee hit
       if (hitSomething) {
         const broke = consumeDurability(player, state.msgs, state.time);
@@ -514,9 +563,9 @@ function dropEntityInventory(e: Entity): void {
 }
 
 /* ── Shared kill handling (melee + projectile) ────────────────── */
-function handleKill(e: Entity, killerIsPlayer: boolean): void {
-  // Death blood pool
-  spawnDeathPool(world, e.x, e.y, e.type === EntityType.MONSTER);
+function handleKill(e: Entity, killerIsPlayer: boolean, pvx = 0, pvy = 0, goreLevel = 1): void {
+  // Death blood pool — directional + gore-scaled
+  spawnDeathPool(world, e.x, e.y, e.type === EntityType.MONSTER, goreLevel, pvx, pvy);
   state.msgs.push({ text: `${e.name ?? 'Цель'} ${e.isFemale ? 'повержена' : 'повержен'}!`, time: state.time, color: '#4f4' });
   // Drop NPC inventory as loot
   if (e.type === EntityType.NPC) dropEntityInventory(e);
@@ -552,7 +601,69 @@ function updateProjectiles(dt: number): void {
   for (const p of entities) {
     if (p.type !== EntityType.PROJECTILE || !p.alive) continue;
     p.projLife = (p.projLife ?? 0) - dt;
-    if (p.projLife! <= 0) { p.alive = false; continue; }
+    const pt = p.projType ?? ProjType.NORMAL;
+
+    // Grenade explodes on timer expiry
+    if (p.projLife! <= 0) {
+      if (pt === ProjType.GRENADE || pt === ProjType.BFG) {
+        triggerExplosion(p, pt);
+      }
+      p.alive = false;
+      continue;
+    }
+
+    // ── 3D vertical physics: update vz → spriteZ ──
+    const vz = p.vz ?? 0;
+    const gravity = pt === ProjType.FLAME ? 1.8 : pt === ProjType.GRENADE ? 2.5 : pt === ProjType.BFG ? 0.3 : 1.2;
+    p.vz = vz - gravity * dt;
+    p.spriteZ = (p.spriteZ ?? 0.5) + vz * dt;
+
+    // Floor impact (spriteZ ≤ 0)
+    if ((p.spriteZ ?? 0) <= 0) {
+      p.spriteZ = 0;
+      const fx = Math.floor(p.x), fy = Math.floor(p.y);
+      if (pt === ProjType.GRENADE || pt === ProjType.BFG) {
+        triggerExplosion(p, pt);
+      } else if (pt === ProjType.FLAME) {
+        if (!world.solid(fx, fy)) {
+          const seed = Math.floor(Math.random() * 99999);
+          stampMark(world, fx, fy, (p.x % 1 + 1) % 1, (p.y % 1 + 1) % 1,
+            0.3, MarkType.BURN, seed, 8, 5, 2, 180);
+        }
+      } else {
+        if (!world.solid(fx, fy)) {
+          const seed = Math.floor(Math.random() * 99999);
+          stampMark(world, fx, fy, (p.x % 1 + 1) % 1, (p.y % 1 + 1) % 1,
+            0.08, MarkType.BULLET, seed, 20, 18, 14, 140);
+        }
+      }
+      if (p.aoeRadius)
+        psiAoeExplosion(p, entities, world, state.msgs, state.time, (e) => handleKill(e, p.ownerId === player.id));
+      p.alive = false;
+      continue;
+    }
+    // Ceiling impact (spriteZ ≥ 1)
+    if ((p.spriteZ ?? 0) >= 1.0) {
+      p.spriteZ = 1.0;
+      p.vz = 0;
+      if (pt === ProjType.GRENADE || pt === ProjType.BFG) {
+        triggerExplosion(p, pt);
+        p.alive = false;
+        continue;
+      }
+      // Bounce off ceiling — reverse vz with damping
+      p.vz = -Math.abs(vz) * 0.3;
+    }
+
+    // Flame: leave charred burn marks on floor while flying low
+    if (pt === ProjType.FLAME && (p.spriteZ ?? 0.5) < 0.2) {
+      const fx = Math.floor(p.x), fy = Math.floor(p.y);
+      if (!world.solid(fx, fy)) {
+        const seed = Math.floor(Math.random() * 99999);
+        stampMark(world, fx, fy, (p.x % 1 + 1) % 1, (p.y % 1 + 1) % 1,
+          0.25, MarkType.BURN, seed, 8, 5, 2, 160);
+      }
+    }
 
     const nx = p.x + (p.vx ?? 0) * dt;
     const ny = p.y + (p.vy ?? 0) * dt;
@@ -566,7 +677,6 @@ function updateProjectiles(dt: number): void {
       const cellX = Math.floor(wx), cellY = Math.floor(wy);
       const bvx = p.vx ?? 0, bvy = p.vy ?? 0;
       const avx = Math.abs(bvx), avy = Math.abs(bvy);
-      // Precise impact U: step back from penetration to the wall face boundary
       let impactU: number;
       if (avx > avy) {
         const faceX = bvx > 0 ? cellX : cellX + 1;
@@ -577,14 +687,22 @@ function updateProjectiles(dt: number): void {
         const t = avy > 0.01 ? (wy - faceY) / bvy : 0;
         impactU = ((wx - bvx * t) % 1 + 1) % 1;
       }
-      // V = projectile flight height mapped to wall face (spriteZ 0.5 = mid-wall)
       const impactV = 1.0 - (p.spriteZ ?? 0.5);
-      // Two-layer stamp: scorch ring + dark center
-      const seed = Math.floor(Math.random() * 99999);
-      world.stamp(cellX, cellY, impactU, impactV, 0.08, 120, seed, 25, 22, 18, true);
-      world.stamp(cellX, cellY, impactU, impactV, 0.04, 255, seed + 1, 8, 8, 8, true);
-      // AoE explosion on wall impact
-      if (p.aoeRadius) psiAoeExplosion(p, entities, world, state.msgs, state.time, (e) => handleKill(e, p.ownerId === player.id));
+      if (pt === ProjType.GRENADE || pt === ProjType.BFG) {
+        // Explode on wall impact
+        triggerExplosion(p, pt);
+      } else if (pt === ProjType.FLAME) {
+        // Flame: charred burn mark on wall
+        const seed = Math.floor(Math.random() * 99999);
+        stampMark(world, cellX, cellY, impactU, impactV, 0.25, MarkType.BURN, seed, 5, 3, 1, 190, true);
+      } else {
+        // Normal bullet hole decal
+        const seed = Math.floor(Math.random() * 99999);
+        stampMark(world, cellX, cellY, impactU, impactV, 0.1, MarkType.BULLET, seed, 30, 25, 18, 160, true);
+        stampMark(world, cellX, cellY, impactU, impactV, 0.05, MarkType.BULLET, seed + 1, 8, 8, 8, 255, true);
+      }
+      if (p.aoeRadius && pt !== ProjType.GRENADE && pt !== ProjType.BFG)
+        psiAoeExplosion(p, entities, world, state.msgs, state.time, (e) => handleKill(e, p.ownerId === player.id));
       p.alive = false;
       continue;
     }
@@ -597,28 +715,112 @@ function updateProjectiles(dt: number): void {
     for (const e of entities) {
       if (!e.alive || e.id === p.ownerId) continue;
       if (e.type !== EntityType.MONSTER && e.type !== EntityType.NPC && e.type !== EntityType.PLAYER) continue;
-      if (world.dist(p.x, p.y, e.x, e.y) < 0.6) {
+      const hitRadius = pt === ProjType.FLAME ? 0.8 : 0.6;
+      if (world.dist(p.x, p.y, e.x, e.y) < hitRadius) {
         if (e.hp !== undefined) {
           e.hp -= dmg;
-          // Relation penalty for projectile hits on non-hostile NPCs
           if (e.type === EntityType.NPC && p.ownerId === player.id) {
             applyDamageRelationPenalty(player.faction, e.faction, dmg);
           }
-          // Blood splatter on projectile hit
           const hitAngle = Math.atan2(p.vy ?? 0, p.vx ?? 0);
-          spawnBloodHit(world, e.x, e.y, hitAngle, dmg, e.type === EntityType.MONSTER);
+          // Use projectile position as blood origin — blood at impact point, not feet
+          const bloodX = (p.x + e.x) * 0.5;  // midpoint between projectile and entity
+          const bloodY = (p.y + e.y) * 0.5;
+          const hitZ = p.spriteZ ?? 0.5;
+          spawnBloodHit(world, bloodX, bloodY, hitAngle, dmg, e.type === EntityType.MONSTER, p.vx ?? 0, p.vy ?? 0, hitZ);
           if (e.hp <= 0) {
             e.alive = false;
             e.hp = 0;
-            handleKill(e, p.ownerId === player.id);
+            handleKill(e, p.ownerId === player.id, p.vx ?? 0, p.vy ?? 0, p.projGore ?? 1);
           }
         }
-        // AoE explosion on entity impact
-        if (p.aoeRadius) psiAoeExplosion(p, entities, world, state.msgs, state.time, (e2) => handleKill(e2, p.ownerId === player.id));
-        p.alive = false;
-        break;
+        if (pt === ProjType.GRENADE || pt === ProjType.BFG) {
+          triggerExplosion(p, pt);
+        } else if (p.aoeRadius) {
+          psiAoeExplosion(p, entities, world, state.msgs, state.time, (e2) => handleKill(e2, p.ownerId === player.id));
+        }
+        // Flame projectiles pierce through (don't die on hit)
+        if (pt !== ProjType.FLAME) {
+          p.alive = false;
+          break;
+        }
       }
     }
+  }
+}
+
+/* ── Explosion (grenade / BFG) — AoE damage + scorch decals ──── */
+function triggerExplosion(p: Entity, pt: ProjType): void {
+  const radius = p.aoeRadius ?? 4;
+  const dmg = p.aoeDmg ?? p.projDmg ?? 80;
+  const isPlayer = p.ownerId === player.id;
+
+  // AoE damage to all entities in radius
+  let hits = 0;
+  for (const e of entities) {
+    if (!e.alive || e.id === p.ownerId) continue;
+    if (e.type !== EntityType.NPC && e.type !== EntityType.MONSTER && e.type !== EntityType.PLAYER) continue;
+    const dx = ((e.x - p.x + W / 2) % W + W) % W - W / 2;
+    const dy = ((e.y - p.y + W / 2) % W + W) % W - W / 2;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    if (dist > radius) continue;
+    if (e.hp !== undefined) {
+      const falloff = 1 - (dist / radius) * 0.6;
+      const finalDmg = Math.round(dmg * falloff);
+      e.hp -= finalDmg;
+      // Explosion blast pushes blood outward from epicenter
+      const blastVx = dist > 0.1 ? (dx / dist) * 12 : 0;
+      const blastVy = dist > 0.1 ? (dy / dist) * 12 : 0;
+      spawnBloodHit(world, e.x, e.y, Math.atan2(dy, dx), finalDmg, e.type === EntityType.MONSTER, blastVx, blastVy, 0.4);
+      if (e.type === EntityType.NPC && isPlayer) {
+        applyDamageRelationPenalty(player.faction, e.faction, finalDmg);
+      }
+      if (e.hp <= 0) {
+        e.alive = false;
+        handleKill(e, isPlayer, blastVx, blastVy, 3);
+      }
+      hits++;
+    }
+  }
+
+  // Scorch: one large coherent mark centered at explosion
+  const cx = Math.floor(p.x), cy = Math.floor(p.y);
+  const fx = (p.x % 1 + 1) % 1, fy = (p.y % 1 + 1) % 1;
+  const seed = Math.floor(Math.random() * 99999);
+  stampMark(world, cx, cy, fx, fy, radius * 1.2, MarkType.SCORCH, seed, 15, 10, 5, 230);
+
+  // Radial debris marks around explosion center
+  const debrisCount = pt === ProjType.BFG ? 12 : 8;
+  for (let i = 0; i < debrisCount; i++) {
+    const ang = (i / debrisCount) * Math.PI * 2 + (Math.random() - 0.5) * 0.5;
+    const dist = 0.5 + Math.random() * (radius * 0.5);
+    const debX = p.x + Math.cos(ang) * dist;
+    const debY = p.y + Math.sin(ang) * dist;
+    const dcx = Math.floor(((debX % W) + W) % W);
+    const dcy = Math.floor(((debY % W) + W) % W);
+    if (!world.solid(dcx, dcy)) {
+      const dfx = ((debX % 1) + 1) % 1, dfy = ((debY % 1) + 1) % 1;
+      const markType = pt === ProjType.BFG ? MarkType.PSI : MarkType.BURN;
+      const debrisR = pt === ProjType.BFG ? 10 : 15;
+      const debrisG = pt === ProjType.BFG ? 30 : 10;
+      const debrisB = pt === ProjType.BFG ? 10 : 5;
+      stampMark(world, dcx, dcy, dfx, dfy, 0.12 + Math.random() * 0.15, markType,
+        seed + i + 100, debrisR, debrisG, debrisB, 150 + Math.floor(Math.random() * 60));
+    }
+  }
+
+  // Sounds
+  playExplosion();
+
+  // Screen flash for ALL explosions
+  if (pt === ProjType.BFG) {
+    state.dmgFlash = 0.8;
+    state.dmgSeed = 2; // green tint marker
+    state.msgs.push({ text: `БФГ! Уничтожено целей: ${hits}`, time: state.time, color: '#4f4' });
+  } else {
+    state.dmgFlash = Math.max(state.dmgFlash, 0.4);
+    state.dmgSeed = 3; // orange tint marker for explosions
+    state.msgs.push({ text: `Взрыв! Поражено: ${hits}`, time: state.time, color: '#fa0' });
   }
 }
 
@@ -754,6 +956,9 @@ function switchFloor(direction: LiftDirection): void {
       time: state.time,
       color: nextFloor === FloorLevel.HELL ? '#f44' : '#4af',
     });
+
+    // Update WebGL world data after floor change
+    updateWorldData(world);
   };
 }
 
@@ -873,6 +1078,9 @@ function loadGame(): boolean {
       state.showMenu = false;
 
       state.msgs.push({ text: 'Игра загружена', time: state.time, color: '#4af' });
+
+      // Update WebGL world data after load
+      updateWorldData(world);
     };
     return true;
   } catch {
@@ -1173,11 +1381,17 @@ function handleMenuInput(): void {
             state.npcTalkText = npc ? generateTalkText(npc) : '...';
             break;
           case 1: // Quest
-            state.npcMenuTab = 'quest';
-            state.questPage = 0;
             if (npc) {
               checkTalkQuest(npc, player, entities, state, state.msgs);
               offerQuest(npc, player, world, entities, state, state.msgs, nextEntityId);
+              // Only switch to quest tab if this NPC has an active quest
+              const active = state.quests.filter(q => !q.done);
+              const npcQIdx = active.findIndex(q => q.giverId === npc.id);
+              if (npcQIdx >= 0) {
+                state.npcMenuTab = 'quest';
+                state.questPage = npcQIdx;
+              }
+              // Otherwise stay on 'main' — message already shown in HUD
             }
             break;
           case 2: // Trade
@@ -1355,6 +1569,8 @@ function gameLoop(now: number): void {
   // ── Update ───────────────────────────────────────────────
   // Decay damage flash
   if (state.dmgFlash > 0) state.dmgFlash = Math.max(0, state.dmgFlash - dt * 1.2);
+  // Decay beam visual
+  if (state.beamFx > 0) state.beamFx = Math.max(0, state.beamFx - dt * 2.5);
 
   // Rolling head physics after death
   if (state.gameOver && deathCam) {
@@ -1395,7 +1611,7 @@ function gameLoop(now: number): void {
       if (!world.solid(cx, cy)) {
         const fx = ((ux % 1) + 1) % 1;
         const fy = ((uy % 1) + 1) % 1;
-        world.stamp(cx, cy, fx, fy, 0.15, 60, Math.floor(state.time * 100), 200, 180, 30);
+        stampMark(world, cx, cy, fx, fy, 0.15, MarkType.DRIP, Math.floor(state.time * 100), 200, 180, 30, 60);
         // Faction penalty for urinating outside bathroom
         applyUrinationPenalty(dt);
         player.needs.pee = Math.max(0, player.needs.pee - 12 * dt);
@@ -1422,6 +1638,7 @@ function gameLoop(now: number): void {
           spawnPatrolSquads(world, entities, nextEntityId, fStats);
           spawnTerritoryReinforcements(world, entities, nextEntityId, fStats);
         }
+        updateWorldData(world);
       };
       requestAnimationFrame(gameLoop);
       return;
@@ -1511,6 +1728,7 @@ function gameLoop(now: number): void {
           spawnPatrolSquads(world, entities, nextEntityId, fStats);
           spawnTerritoryReinforcements(world, entities, nextEntityId, fStats);
         }
+        updateWorldData(world);
       };
       requestAnimationFrame(gameLoop);
       return;
@@ -1557,36 +1775,18 @@ function gameLoop(now: number): void {
     const d = getEquippedToolDurability(player);
     if (d && d.max > 0 && d.cur > 0) flashlight = Math.max(0.25, Math.min(1, d.cur / d.max));
   }
-  renderScene(buf32, world, textures, sprites, entities,
+
+  // Update dynamic world data (fog, door states, wallTex for slides)
+  updateDynamicData(world, camX, camY);
+
+  // WebGL raycaster + sprites
+  renderSceneGL(world, textures, sprites, entities,
     camX, camY, camAngle, camPitch,
-    fogDensity, glitch, camH, flashlight, state.time);
+    fogDensity, glitch, camH, flashlight, state.time, particles, state.samosborActive);
 
-  // Blood particles on top of scene
-  {
-    const dirX = Math.cos(camAngle);
-    const dirY = Math.sin(camAngle);
-    const planeLen = Math.tan(HALF_FOV);
-    const planeX = -dirY * planeLen;
-    const planeY =  dirX * planeLen;
-    const horizonShift = Math.floor(camPitch * SCR_H);
-    const halfH = Math.floor(SCR_H / 2) + horizonShift;
-    renderParticles(buf32, SCR_W, SCR_H, camX, camY, camAngle,
-      dirX, dirY, planeX, planeY, halfH, zBuf);
-  }
-
-  // Blit low-res buffer to canvas (pixel-perfect upscale)
-  screen.data.set(new Uint8ClampedArray(buf32.buffer));
-
-  // Use drawImage for fast upscale
-  const offscreen = new OffscreenCanvas(SCR_W, SCR_H);
-  const offCtx = offscreen.getContext('2d')!;
-  offCtx.putImageData(screen, 0, 0);
-
-  ctx.imageSmoothingEnabled = false;
-  ctx.drawImage(offscreen, 0, 0, canvas.width, canvas.height);
-
-  // Draw HUD on top
-  drawHUD(ctx, canvas.width / SCR_W, canvas.height / SCR_H, player, state, world, entities);
+  // Draw HUD on 2D overlay canvas
+  ctx.clearRect(0, 0, hudCanvas.width, hudCanvas.height);
+  drawHUD(ctx, hudCanvas.width / SCR_W, hudCanvas.height / SCR_H, player, state, world, entities);
 
   requestAnimationFrame(gameLoop);
 }
@@ -1594,19 +1794,19 @@ function gameLoop(now: number): void {
 /* ── Title screen ─────────────────────────────────────────────── */
 function showTitle(): void {
   ctx.fillStyle = '#0a0a0a';
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.fillRect(0, 0, hudCanvas.width, hudCanvas.height);
   ctx.fillStyle = '#c00';
   ctx.font = 'bold 48px monospace';
   ctx.textAlign = 'center';
-  ctx.fillText('ГИГАХРУЩ', canvas.width / 2, canvas.height / 2 - 40);
+  ctx.fillText('ГИГАХРУЩ', hudCanvas.width / 2, hudCanvas.height / 2 - 40);
   ctx.fillStyle = '#666';
   ctx.font = '16px monospace';
-  ctx.fillText('бесконечный бетонный лабиринт', canvas.width / 2, canvas.height / 2 + 10);
+  ctx.fillText('бесконечный бетонный лабиринт', hudCanvas.width / 2, hudCanvas.height / 2 + 10);
   ctx.fillStyle = '#888';
-  ctx.fillText('Нажмите ENTER чтобы войти', canvas.width / 2, canvas.height / 2 + 50);
+  ctx.fillText('Нажмите ENTER чтобы войти', hudCanvas.width / 2, hudCanvas.height / 2 + 50);
   ctx.fillStyle = '#555';
   ctx.font = '12px monospace';
-  ctx.fillText('WASD — движение  |  Мышь — обзор  |  E — действие  |  R — инструмент  |  F — фракции  |  I — инвентарь  |  M — карта  |  Пробел — удар', canvas.width / 2, canvas.height / 2 + 90);
+  ctx.fillText('WASD — движение  |  Мышь — обзор  |  E — действие  |  R — инструмент  |  F — фракции  |  I — инвентарь  |  M — карта  |  Пробел — удар', hudCanvas.width / 2, hudCanvas.height / 2 + 90);
   ctx.textAlign = 'left';
 }
 

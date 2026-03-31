@@ -4,6 +4,7 @@ import { type Entity, type GameState, ItemType } from '../core/types';
 import { ITEMS, WEAPON_STATS } from '../data/catalog';
 import { getEquippedDurability, getEquippedToolDurability, countAmmo } from '../systems/inventory';
 import { xpForLevel, strMeleeDmgMult } from '../systems/rpg';
+import { drawNeuroPanel, drawGlitchText, textJitter, flicker } from './hud_fx';
 
 export function drawInventory(
   ctx: CanvasRenderingContext2D,
@@ -14,18 +15,18 @@ export function drawInventory(
   const GRID = 5;
   const cw = ctx.canvas.width;
   const ch = ctx.canvas.height;
+  const time = state.time;
 
-  // Fullscreen background
-  ctx.fillStyle = 'rgba(0,0,0,0.92)';
-  ctx.fillRect(0, 0, cw, ch);
+  // Fullscreen neuro-panel background
+  drawNeuroPanel(ctx, 0, 0, cw, ch, time, 80);
 
   // Title + money + close hint
-  ctx.fillStyle = '#aaa';
+  drawGlitchText(ctx, 'ИНВЕНТАРЬ', 8 * sx, 6 * sy, time, 800, '#6cf', 9 * sy);
   ctx.font = `${9 * sy}px monospace`;
-  ctx.fillText('ИНВЕНТАРЬ', 8 * sx, 6 * sy);
-  ctx.fillStyle = '#ee4';
-  ctx.fillText(`₽${player.money ?? 0}`, 88 * sx, 6 * sy);
-  ctx.fillStyle = '#555';
+  const mj = textJitter(time, 801);
+  ctx.fillStyle = `rgba(238,238,68,${flicker(time, 802)})`;
+  ctx.fillText(`₽${player.money ?? 0}`, 88 * sx + mj.dx, 6 * sy + mj.dy);
+  ctx.fillStyle = '#456';
   ctx.font = `${7 * sy}px monospace`;
   ctx.textAlign = 'right';
   ctx.fillText('[I] закрыть', cw - 8 * sx, 6 * sy);
@@ -45,20 +46,20 @@ export function drawInventory(
       const cy = gridY + row * cellSz;
       const selected = idx === state.invSel;
 
-      ctx.fillStyle = selected ? 'rgba(120,120,50,0.5)' : 'rgba(30,30,30,0.8)';
+      ctx.fillStyle = selected ? 'rgba(0,60,50,0.6)' : 'rgba(5,15,20,0.8)';
       ctx.fillRect(cx, cy, cellSz - 2, cellSz - 2);
-      ctx.strokeStyle = selected ? '#ee4' : '#444';
+      ctx.strokeStyle = selected ? 'rgba(0,255,200,0.6)' : 'rgba(0,100,80,0.25)';
       ctx.strokeRect(cx, cy, cellSz - 2, cellSz - 2);
 
       if (idx < inv.length) {
         const item = inv[idx];
         const def = ITEMS[item.defId];
-        ctx.fillStyle = selected ? '#ee4' : '#ccc';
+        ctx.fillStyle = selected ? '#0fa' : '#8aa';
         ctx.font = `${6 * sy}px monospace`;
         const name = (def?.name ?? item.defId).slice(0, 6);
         ctx.fillText(name, cx + 2 * sx, cy + 10 * sy);
         if (item.count > 1) {
-          ctx.fillStyle = '#8a8';
+          ctx.fillStyle = '#6a8';
           ctx.font = `${5 * sy}px monospace`;
           ctx.fillText(`×${item.count}`, cx + cellSz - 16 * sx, cy + cellSz - 5 * sy);
         }

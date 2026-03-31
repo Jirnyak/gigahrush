@@ -349,7 +349,8 @@ function seedHellPopulation(
 }
 
 function seedLoot(world: World, entities: Entity[], nextId: { v: number }): void {
-  const drops = ['canned', 'bandage', 'pills', 'pipe', 'knife', 'water', 'ammo_9mm', 'ammo_nails', 'rebar', 'antidep'];
+  const drops = ['canned', 'bandage', 'pills', 'pipe', 'knife', 'water', 'ammo_9mm', 'ammo_nails', 'rebar', 'antidep',
+    'ammo_belt', 'ammo_energy', 'ammo_fuel', 'grenade'];
   for (let i = 0; i < 280; i++) {
     const cell = randomFloorCell(world);
     if (cell < 0) continue;
@@ -460,15 +461,27 @@ function createHellLiquidator(world: World, nextId: { v: number }, cell: number)
   const roll = Math.random();
   let weapon = 'rebar';
   let inventory = [{ defId: 'rebar', count: 1 }];
-  if (roll < 0.45) {
+  if (roll < 0.25) {
     weapon = 'makarov';
     inventory = [{ defId: 'makarov', count: 1 }, { defId: 'ammo_9mm', count: 24 }];
-  } else if (roll < 0.7) {
+  } else if (roll < 0.40) {
     weapon = 'shotgun';
     inventory = [{ defId: 'shotgun', count: 1 }, { defId: 'ammo_shells', count: 10 }];
-  } else if (roll < 0.85) {
+  } else if (roll < 0.55) {
     weapon = 'nailgun';
     inventory = [{ defId: 'nailgun', count: 1 }, { defId: 'ammo_nails', count: 30 }];
+  } else if (roll < 0.65) {
+    weapon = 'ppsh';
+    inventory = [{ defId: 'ppsh', count: 1 }, { defId: 'ammo_9mm', count: 60 }];
+  } else if (roll < 0.75) {
+    weapon = 'machinegun';
+    inventory = [{ defId: 'machinegun', count: 1 }, { defId: 'ammo_belt', count: 100 }];
+  } else if (roll < 0.82) {
+    weapon = 'plasma';
+    inventory = [{ defId: 'plasma', count: 1 }, { defId: 'ammo_energy', count: 20 }];
+  } else if (roll < 0.87) {
+    weapon = 'gauss';
+    inventory = [{ defId: 'gauss', count: 1 }, { defId: 'ammo_energy', count: 10 }];
   }
   return {
     id: nextId.v++,

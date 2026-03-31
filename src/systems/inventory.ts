@@ -5,6 +5,7 @@ import {
   EntityType,
 } from '../core/types';
 import { ITEMS, WEAPON_STATS, type WeaponStats } from '../data/catalog';
+import { getStack } from '../data/items';
 import { World } from '../core/world';
 import { playPickup } from './audio';
 
@@ -18,8 +19,8 @@ export function addItem(e: Entity, defId: string, count = 1): boolean {
 
   // Try stacking
   for (const slot of e.inventory) {
-    if (slot.defId === defId && slot.count < def.stack) {
-      const add = Math.min(count, def.stack - slot.count);
+    if (slot.defId === defId && slot.count < getStack(def)) {
+      const add = Math.min(count, getStack(def) - slot.count);
       slot.count += add;
       count -= add;
       if (count <= 0) return true;
@@ -28,7 +29,7 @@ export function addItem(e: Entity, defId: string, count = 1): boolean {
 
   // New slot — init durability for melee weapons
   while (count > 0 && e.inventory.length < MAX_SLOTS) {
-    const add = Math.min(count, def.stack);
+    const add = Math.min(count, getStack(def));
     const ws = WEAPON_STATS[defId];
     let data: { dur: number } | undefined;
     if (ws && !ws.isRanged && ws.durability > 0) data = { dur: ws.durability };

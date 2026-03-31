@@ -3,7 +3,9 @@
 /*   monster.ts registry. All sprite indices adjust automatically.*/
 /*                                                                 */
 /*   Layout: [NPCs | Travelers | ItemDrop | Monsters | EyeBolt | */
-/*            Desk | Bullet | Pellet | Nail | PsiBolt]            */
+/*            Desk | Bullet | Pellet | Nail | PsiBolt |          */
+/*            PlasmaBolt | GaussBolt | BfgBolt | FlameBolt |     */
+/*            Grenade ]                                           */
 
 import { MonsterKind } from '../core/types';
 import { NPC_SPRITE_GENERATORS } from '../entities/npc';
@@ -24,6 +26,11 @@ const _BULLET    = _i++;
 const _PELLET    = _i++;
 const _NAIL      = _i++;
 const _PSI_BOLT  = _i++;
+const _PLASMA_BOLT = _i++;
+const _GAUSS_BOLT  = _i++;
+const _BFG_BOLT    = _i++;
+const _FLAME_BOLT  = _i++;
+const _GRENADE     = _i++;
 
 /** Named sprite indices — import these instead of magic numbers */
 export const Spr = {
@@ -34,6 +41,11 @@ export const Spr = {
   PELLET:    _PELLET,
   NAIL:      _NAIL,
   PSI_BOLT:  _PSI_BOLT,
+  PLASMA_BOLT: _PLASMA_BOLT,
+  GAUSS_BOLT:  _GAUSS_BOLT,
+  BFG_BOLT:    _BFG_BOLT,
+  FLAME_BOLT:  _FLAME_BOLT,
+  GRENADE:     _GRENADE,
   TOTAL:     _i,
 };
 
