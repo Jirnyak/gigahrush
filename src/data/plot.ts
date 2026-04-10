@@ -6,7 +6,7 @@
 /*   4. Add room spec to plot_rooms.ts (optional)                  */
 
 import {
-  type Entity, type Quest, QuestType, Faction, Occupation, MonsterKind,
+  type Entity, type Quest, QuestType, Faction, Occupation, MonsterKind, FloorLevel,
 } from '../core/types';
 
 /* ── Story NPC definition ─────────────────────────────────────── */
@@ -157,6 +157,18 @@ export const PLOT_NPCS: Record<string, PlotNpcDef> = {
     ],
     talkQuestResponse: 'Яков прислал? Слышал о теневиках. Поможешь отбиться от тварей — расскажу всё, что знаю.',
   },
+
+  voice: {
+    name: 'Таинственный голос',
+    isFemale: false,
+    faction: Faction.CITIZEN,
+    occupation: Occupation.SCIENTIST,
+    sprite: Occupation.SCIENTIST,
+    hp: 1, maxHp: 1, money: 0, speed: 0,
+    inventory: [],
+    talkLines: [],
+    talkLinesPost: [],
+  },
 };
 
 /* ── Linear quest chain ──────────────────────────────────────── */
@@ -252,6 +264,27 @@ export const PLOT_CHAIN: PlotStep[] = [
     relationDelta: 25, xpReward: 80, moneyReward: 100,
     spawnMonstersOnAccept: 8,
   },
+  // Step 9: Major Grom → storm — kill the Mancobus
+  {
+    giverNpcId: 'major_grom',
+    type: QuestType.KILL,
+    desc: 'Майор Громный: «Отлично, мы укрепили наши позиции. Пора контратаковать. Наши детекторы засекли особые вибрации {dir} — судя по всему, тварями кто-то управляет. Уничтожь эту тварь.»',
+    targetMonsterKind: MonsterKind.MANCOBUS, killNeeded: 1,
+    rewardItem: 'psi_storm', rewardCount: 1,
+    extraRewards: [{ defId: 'bandage', count: 5 }, { defId: 'ammo_762', count: 30 }],
+    relationDelta: 30, xpReward: 150, moneyReward: 200,
+  },
+  // Step 10: Major Grom → go to Hell
+  {
+    giverNpcId: 'major_grom',
+    type: QuestType.VISIT,
+    desc: 'Майор Громный: «Ты молодец — в одиночку завалил Манкобуса. Ну что ж, сейчас или никогда. Отправляйся на нижний уровень и узнай, что там творится. Лифт ведёт вниз.»',
+    targetRoomType: undefined as unknown as number, // auto-completes when entering Hell
+    rewardItem: 'bandage', rewardCount: 5,
+    extraRewards: [{ defId: 'antidep', count: 2 }],
+    relationDelta: 20, xpReward: 100,
+    visitFloor: FloorLevel.HELL,
+  },
 ];
 
 /* ── A single step in the linear story quest chain ───────────── */
@@ -273,6 +306,8 @@ export interface PlotStep {
   moneyReward?: number;
   /** Spawn N hostile monsters around the quest giver when quest is accepted */
   spawnMonstersOnAccept?: number;
+  /** Auto-complete VISIT quest when player enters this floor */
+  visitFloor?: FloorLevel;
 }
 
 /* ── Side quest definition (independent, no prerequisite chain) ─ */

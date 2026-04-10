@@ -38,6 +38,9 @@ export function generateTextures(): TexData[] {
   gen_hermoWall(textures[Tex.HERMO_WALL]);
   gen_gutWall(textures[Tex.GUT]);
   gen_gutFloor(textures[Tex.F_GUT]);
+  gen_voidWall(textures[Tex.VOID_WALL]);
+  gen_voidFloor(textures[Tex.F_VOID]);
+  gen_portal(textures[Tex.PORTAL]);
   generateSlideTextures(textures);
   generateHintTextures(textures);
 
@@ -405,5 +408,60 @@ function gen_target(t: TexData) {
       r = Math.min(r, 60 + n); g = Math.min(g, 60 + n); b = Math.min(b, 60 + n);
     }
     t[y * S + x] = rgba(clamp(r), clamp(g), clamp(b));
+  }
+}
+
+/* ── VOID_WALL: abstract fractal green-black wall ─────────────── */
+function gen_voidWall(t: TexData) {
+  for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) {
+    const n1 = noise(x * 3, y * 3, 900) * 0.5;
+    const n2 = noise(x * 7, y * 7, 901) * 0.3;
+    const n3 = noise(x * 15, y * 15, 902) * 0.2;
+    const fractal = n1 + n2 + n3;
+    const glow = fractal > 0.55 ? (fractal - 0.55) * 4 : 0;
+    const line = (noise(x, y * 5, 903) > 0.92 || noise(x * 5, y, 904) > 0.92) ? 30 : 0;
+    const r = clamp(Math.floor(5 + glow * 20 + line * 0.3));
+    const g = clamp(Math.floor(15 + glow * 120 + line));
+    const b = clamp(Math.floor(8 + glow * 30 + line * 0.4));
+    t[y * S + x] = rgba(r, g, b);
+  }
+}
+
+/* ── F_VOID: abstract fractal green-black floor ───────────────── */
+function gen_voidFloor(t: TexData) {
+  for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) {
+    const n1 = noise(x * 2, y * 2, 910) * 0.4;
+    const n2 = noise(x * 6, y * 6, 911) * 0.35;
+    const n3 = noise(x * 13, y * 13, 912) * 0.25;
+    const fractal = n1 + n2 + n3;
+    const pulse = Math.sin(x * 0.15 + y * 0.15) * 0.15 + 0.5;
+    const glow = fractal > 0.45 ? (fractal - 0.45) * 3 * pulse : 0;
+    const grid = ((x % 16 === 0) || (y % 16 === 0)) ? 15 : 0;
+    const r = clamp(Math.floor(3 + glow * 10 + grid * 0.2));
+    const g = clamp(Math.floor(10 + glow * 80 + grid));
+    const b = clamp(Math.floor(5 + glow * 15 + grid * 0.3));
+    t[y * S + x] = rgba(r, g, b);
+  }
+}
+
+/* ── PORTAL: swirling bright portal texture (green-white) ─────── */
+function gen_portal(t: TexData) {
+  const cx = S / 2, cy = S / 2;
+  for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) {
+    const dx = x - cx, dy = y - cy;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    const angle = Math.atan2(dy, dx);
+    const swirl = Math.sin(angle * 3 + dist * 0.3) * 0.5 + 0.5;
+    const ring = Math.abs(Math.sin(dist * 0.4)) * swirl;
+    const n = noise(x, y, 920) * 0.2;
+    const bright = ring + n;
+    if (dist > 28) {
+      t[y * S + x] = rgba(10, 30, 15);
+    } else {
+      const r = clamp(Math.floor(bright * 180 + 40));
+      const g = clamp(Math.floor(bright * 255 + 60));
+      const b = clamp(Math.floor(bright * 200 + 50));
+      t[y * S + x] = rgba(r, g, b);
+    }
   }
 }

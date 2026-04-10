@@ -27,6 +27,9 @@ import { DEF as SHADOW_DEF, generateSprite as genShadow } from './shadow';
 import { DEF as REBAR_DEF, generateSprite as genRebar } from './rebar';
 import { DEF as MATKA_DEF, generateSprite as genMatka } from './matka';
 import { DEF as IDOL_DEF, generateSprite as genIdol } from './idol';
+import { DEF as MANCOBUS_DEF, generateSprite as genMancobus } from './mancobus';
+import { DEF as HERALD_DEF, generateSprite as genHerald } from './herald';
+import { DEF as CREATOR_DEF, generateSprite as genCreator } from './creator';
 
 export const MONSTERS: Record<MonsterKind, MonsterDef> = {
   [MonsterKind.SBORKA]:    SBORKA_DEF,
@@ -40,6 +43,9 @@ export const MONSTERS: Record<MonsterKind, MonsterDef> = {
   [MonsterKind.REBAR]:     REBAR_DEF,
   [MonsterKind.MATKA]:     MATKA_DEF,
   [MonsterKind.IDOL]:      IDOL_DEF,
+  [MonsterKind.MANCOBUS]:  MANCOBUS_DEF,
+  [MonsterKind.HERALD]:    HERALD_DEF,
+  [MonsterKind.CREATOR]:   CREATOR_DEF,
 };
 
 export const MONSTER_SPRITES: Record<MonsterKind, () => Uint32Array> = {
@@ -54,6 +60,9 @@ export const MONSTER_SPRITES: Record<MonsterKind, () => Uint32Array> = {
   [MonsterKind.REBAR]:     genRebar,
   [MonsterKind.MATKA]:     genMatka,
   [MonsterKind.IDOL]:      genIdol,
+  [MonsterKind.MANCOBUS]:  genMancobus,
+  [MonsterKind.HERALD]:    genHerald,
+  [MonsterKind.CREATOR]:   genCreator,
 };
 
 export const EYE_BOLT_SPRITE: () => Uint32Array = genEyeBolt;

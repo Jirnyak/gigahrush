@@ -4,12 +4,13 @@ import './index.css';
 import {
   W, Cell, DoorState, FloorLevel, Feature, Tex, RoomType, LiftDirection,
   type Entity, type GameState,
-  EntityType, Faction, MonsterKind, ProjType,
+  EntityType, Faction, MonsterKind, ProjType, QuestType,
 } from './core/types';
 import { World } from './core/world';
 import { generateWorld } from './gen/living';
 import { generateMaintenance } from './gen/maintenance';
 import { generateHell, updateHellPopulation, resetHellPopulationState } from './gen/hell';
+import { generateVoid } from './gen/void';
 import { generateTextures } from './render/textures';
 import { generateSprites } from './render/sprites';
 import { Spr } from './render/sprite_index';
@@ -591,6 +592,19 @@ function handleKill(e: Entity, killerIsPlayer: boolean, pvx = 0, pvy = 0, goreLe
     if (killerIsPlayer) {
       awardXP(player, xpForMonsterKill(e.monsterKind, e.rpg?.level ?? 1), state.msgs, state.time);
     }
+    // Herald killed — check if voice quest (kill 3 heralds) is now complete → spawn portal
+    if (e.monsterKind === MonsterKind.HERALD && killerIsPlayer && state.currentFloor === FloorLevel.HELL) {
+      const voiceQuest = state.quests.find(q => q.plotStepIndex === 11 && !q.done && q.type === QuestType.KILL);
+      if (voiceQuest && (voiceQuest.killCount ?? 0) >= (voiceQuest.killNeeded ?? 3)) {
+        // Place a portal at the kill location
+        const px = Math.floor(e.x), py = Math.floor(e.y);
+        const ci = world.idx(px, py);
+        world.floorTex[ci] = Tex.PORTAL;
+        state.msgs.push({ text: '̸̨̛̟̟̹̠̓ Таинственный голос: «Путь открыт. Шагни в бездну.»', time: state.time, color: '#0f8' });
+        state.msgs.push({ text: 'Портал открылся на месте последнего Вестника!', time: state.time, color: '#0ff' });
+        updateWorldData(world);
+      }
+    }
   } else if (e.type === EntityType.NPC && killerIsPlayer) {
     awardXP(player, xpForNpcKill(e.rpg?.level ?? 1), state.msgs, state.time);
   }
@@ -838,6 +852,7 @@ const FLOOR_NAMES: Record<FloorLevel, string> = {
   [FloorLevel.LIVING]:      'Жилая зона',
   [FloorLevel.MAINTENANCE]: 'Коллекторы',
   [FloorLevel.HELL]:        'Преисподняя',
+  [FloorLevel.VOID]:        'Пустота',
 };
 
 function switchFloor(direction: LiftDirection): void {
@@ -877,6 +892,8 @@ function switchFloor(direction: LiftDirection): void {
       gen = generateWorld();
     } else if (nextFloor === FloorLevel.MAINTENANCE) {
       gen = generateMaintenance();
+    } else if (nextFloor === FloorLevel.VOID) {
+      gen = generateVoid();
     } else {
       gen = generateHell();
     }
@@ -942,6 +959,8 @@ function switchFloor(direction: LiftDirection): void {
 
     if (nextFloor === FloorLevel.HELL) {
       state.samosborTimer = 60 + Math.random() * 240;
+    } else if (nextFloor === FloorLevel.VOID) {
+      state.samosborTimer = 40 + Math.random() * 120;
     } else if (nextFloor === FloorLevel.MAINTENANCE) {
       state.samosborTimer = 180 + Math.random() * 240;
     } else {
@@ -954,10 +973,93 @@ function switchFloor(direction: LiftDirection): void {
     state.msgs.push({
       text: `Лифт прибыл: ${FLOOR_NAMES[nextFloor]}`,
       time: state.time,
-      color: nextFloor === FloorLevel.HELL ? '#f44' : '#4af',
+      color: nextFloor === FloorLevel.HELL ? '#f44' : nextFloor === FloorLevel.VOID ? '#0f8' : '#4af',
     });
 
+    // Auto-trigger voice quest when entering Hell with step 10 done
+    if (nextFloor === FloorLevel.HELL) {
+      const step10Done = state.quests.some(q => q.plotStepIndex === 10 && q.done);
+      const voiceQuestExists = state.quests.some(q => q.plotStepIndex === 11);
+      if (step10Done && !voiceQuestExists) {
+        const qid = state.nextQuestId++;
+        state.quests.push({
+          id: qid, type: QuestType.KILL,
+          giverId: -1, giverName: 'Таинственный голос',
+          desc: 'Таинственный голос: «Ищущий… Я чувствую тебя. Уничтожь трёх Вестников — и путь откроется.»',
+          targetMonsterKind: MonsterKind.HERALD,
+          killCount: 0, killNeeded: 3,
+          rewardItem: 'psi_brainburn', rewardCount: 1,
+          extraRewards: [{ defId: 'antidep', count: 3 }],
+          relationDelta: 0, xpReward: 200, moneyReward: 0,
+          plotStepIndex: 11,
+          done: false,
+        });
+        state.msgs.push({ text: '̸̨̛̟̟̜̹̠̓ Таинственный голос: «Ищущий… Я чувствую тебя…»', time: state.time, color: '#0f8' });
+        state.msgs.push({ text: 'Таинственный голос: «Уничтожь трёх Вестников — и путь откроется.»', time: state.time, color: '#0f8' });
+        state.msgs.push({ text: 'Новое задание: Уничтожить 3-х Вестников', time: state.time, color: '#4af' });
+      }
+    }
+
     // Update WebGL world data after floor change
+    updateWorldData(world);
+  };
+}
+
+/* ── Portal transition to Void floor ──────────────────────────── */
+function enterVoidFloor(): void {
+  const savedInventory = player.inventory ? [...player.inventory] : [];
+  const savedNeeds = player.needs ? { ...player.needs } : freshNeeds();
+  const savedHp = player.hp ?? 100;
+  const savedMaxHp = player.maxHp ?? 100;
+  const savedWeapon = player.weapon ?? '';
+  const savedTool = player.tool ?? '';
+  const savedRpg = player.rpg ? { ...player.rpg } : freshRPG(1);
+  const savedMoney = player.money ?? 100;
+  const savedAngle = player.angle;
+
+  state.currentFloor = FloorLevel.VOID;
+
+  pendingLoad = () => {
+    resetHellPopulationState();
+    const gen = generateVoid();
+    world = gen.world;
+    entities = gen.entities;
+    nextEntityId.v = entities.reduce((mx, e) => Math.max(mx, e.id), 0) + 1;
+
+    player = {
+      id: nextEntityId.v++,
+      type: EntityType.PLAYER,
+      x: gen.spawnX,
+      y: gen.spawnY,
+      angle: savedAngle,
+      pitch: 0,
+      alive: true,
+      speed: 3.0,
+      sprite: 0,
+      needs: savedNeeds,
+      hp: savedHp,
+      maxHp: savedMaxHp,
+      inventory: savedInventory,
+      weapon: savedWeapon,
+      tool: savedTool,
+      money: savedMoney,
+      rpg: savedRpg,
+      name: 'Вы',
+      faction: Faction.PLAYER,
+    };
+    entities.push(player);
+    prevPlayerHp = player.hp ?? 100;
+
+    initFactionRelations();
+    initFactionControl(world);
+    resetPsiState();
+
+    state.samosborTimer = 40 + Math.random() * 120;
+    state.samosborActive = false;
+
+    state.msgs.push({ text: 'Портал перенёс вас в… Пустоту.', time: state.time, color: '#0f8' });
+    state.msgs.push({ text: 'Таинственный голос: «Ты пришёл. Найди Творца. Уничтожь его — или будь уничтожен.»', time: state.time, color: '#0f8' });
+
     updateWorldData(world);
   };
 }
@@ -1665,6 +1767,15 @@ function gameLoop(now: number): void {
     // Check quest completion
     if (state.tick % 30 === 0) {
       checkQuests(player, world, entities, state, state.msgs);
+    }
+
+    // Portal step-on check — teleport to Void floor
+    if (state.currentFloor === FloorLevel.HELL && state.tick % 10 === 0) {
+      const pci = world.idx(Math.floor(player.x), Math.floor(player.y));
+      if (world.floorTex[pci] === Tex.PORTAL) {
+        // Transition to Void — use switchFloor-like mechanism
+        enterVoidFloor();
+      }
     }
 
     // Auto-pickup when walking

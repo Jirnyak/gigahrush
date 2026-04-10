@@ -8,6 +8,7 @@ import {
 import { World } from '../../core/world';
 import { randomName, freshNeeds, monsterName } from '../../data/catalog';
 import { rng, pick, ensureConnectivity, placeLifts, generateZones } from '../shared';
+import { MONSTERS } from '../../entities/monster';
 import { calcZoneLevel, randomRPG, scaleMonsterHp, scaleMonsterSpeed, gaussianLevel, getMaxHp } from '../../systems/rpg';
 import { monsterSpr } from '../../render/sprite_index';
 
@@ -42,6 +43,7 @@ const HELL_MONSTER_BASE: Record<number, { hp: number; speed: number; sprite: num
   [MonsterKind.SHADOW]:    { hp: 70, speed: 2.6, sprite: monsterSpr(MonsterKind.SHADOW) },
   [MonsterKind.REBAR]:     { hp: 130, speed: 1.15, sprite: monsterSpr(MonsterKind.REBAR) },
   [MonsterKind.MATKA]:     { hp: 340, speed: 0.45, sprite: monsterSpr(MonsterKind.MATKA) },
+  [MonsterKind.HERALD]:    { hp: 800, speed: 1.4, sprite: monsterSpr(MonsterKind.HERALD) },
 };
 
 export function resetHellPopulationState(): void {
@@ -81,6 +83,11 @@ export function generateHell(): { world: World; entities: Entity[]; spawnX: numb
   nextId = entities.reduce((mx, e) => Math.max(mx, e.id), nextId) + 1;
 
   seedLoot(world, entities, { v: nextId });
+
+  // Spawn exactly 3 Herald (Вестник) monsters at distant positions
+  const heraldNextId = { v: entities.reduce((mx, e) => Math.max(mx, e.id), 0) + 1 };
+  spawnHeralds(world, entities, heraldNextId, spawnX, spawnY);
+  nextId = entities.reduce((mx, e) => Math.max(mx, e.id), nextId) + 1;
 
   return { world, entities, spawnX, spawnY };
 }
@@ -571,4 +578,47 @@ function hash2(x: number, y: number, seed: number): number {
 
 function wrapCoord(v: number): number {
   return ((v % W) + W) % W;
+}
+
+function spawnHeralds(world: World, entities: Entity[], nextId: { v: number }, spawnX: number, spawnY: number): void {
+  const heraldDef = MONSTERS[MonsterKind.HERALD];
+  if (!heraldDef) return;
+  const sx = Math.floor(spawnX), sy = Math.floor(spawnY);
+
+  for (let i = 0; i < 3; i++) {
+    for (let attempt = 0; attempt < 5000; attempt++) {
+      const cell = rng(0, W * W - 1);
+      if (world.cells[cell] !== Cell.FLOOR) continue;
+      const cx = cell % W, cy = (cell / W) | 0;
+      const dist = world.dist(sx, sy, cx, cy);
+      if (dist < 150 || dist > 400) continue;
+      // Keep heralds apart from each other
+      let tooClose = false;
+      for (const e of entities) {
+        if (e.monsterKind === MonsterKind.HERALD && e.alive) {
+          if (world.dist(cx, cy, Math.floor(e.x), Math.floor(e.y)) < 80) { tooClose = true; break; }
+        }
+      }
+      if (tooClose) continue;
+
+      const zid = world.zoneMap[cell];
+      const zoneLevel = (zid >= 0 && world.zones[zid]) ? (world.zones[zid].level ?? 12) : 12;
+      const rpg = randomRPG(zoneLevel + 4);
+      const hp = Math.round(scaleMonsterHp(heraldDef.hp, zoneLevel + 4));
+      entities.push({
+        id: nextId.v++, type: EntityType.MONSTER,
+        x: cx + 0.5, y: cy + 0.5,
+        angle: Math.random() * Math.PI * 2, pitch: 0,
+        alive: true,
+        speed: scaleMonsterSpeed(heraldDef.speed, zoneLevel + 2),
+        sprite: monsterSpr(MonsterKind.HERALD),
+        name: 'Вестник',
+        hp, maxHp: hp,
+        monsterKind: MonsterKind.HERALD, attackCd: 0,
+        ai: { goal: AIGoal.WANDER, tx: 0, ty: 0, path: [], pi: 0, stuck: 0, timer: 0 },
+        rpg,
+      });
+      break;
+    }
+  }
 }

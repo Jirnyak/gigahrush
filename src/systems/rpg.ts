@@ -141,6 +141,10 @@ const MONSTER_BASE_XP: Record<MonsterKind, number> = {
   [MonsterKind.SHADOW]:    35,
   [MonsterKind.REBAR]:     55,
   [MonsterKind.MATKA]:    150,
+  [MonsterKind.MANCOBUS]: 200,
+  [MonsterKind.HERALD]:   180,
+  [MonsterKind.CREATOR]:  500,
+  [MonsterKind.IDOL]:      10,
 };
 
 export function xpForMonsterKill(kind: MonsterKind, monsterLevel: number): number {
@@ -169,6 +173,7 @@ export function calcZoneLevel(zoneId: number, floor: FloorLevel): number {
     [FloorLevel.LIVING]: 0,
     [FloorLevel.MAINTENANCE]: 4,
     [FloorLevel.HELL]: 9,
+    [FloorLevel.VOID]: 15,
   };
 
   return baseLevel + (floorBonus[floor] ?? 0);

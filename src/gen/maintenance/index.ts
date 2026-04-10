@@ -12,6 +12,7 @@ import { rng, pick, placeLifts, generateZones } from '../shared';
 import { randomName, freshNeeds, monsterName } from '../../data/catalog';
 import { calcZoneLevel, randomRPG, scaleMonsterHp, scaleMonsterSpeed, gaussianLevel, getMaxHp } from '../../systems/rpg';
 import { generateForpost } from './forpost';
+import { generateMancobusRoom } from './mancobus_room';
 import { monsterSpr } from '../../render/sprite_index';
 
 /* ── Coarse grid parameters ───────────────────────────────────── */
@@ -477,6 +478,12 @@ export function generateMaintenance(): { world: World; entities: Entity[]; spawn
      Phase 13: Forpost (Major Grom's outpost — story room)
      ══════════════════════════════════════════════════════════════ */
   generateForpost(world, world.rooms.length, entities, { v: nextId }, spawnX, spawnY);
+  nextId = entities.reduce((mx, e) => Math.max(mx, e.id), nextId) + 1;
+
+  /* ══════════════════════════════════════════════════════════════
+     Phase 14: Mancobus room (boss arena)
+     ══════════════════════════════════════════════════════════════ */
+  generateMancobusRoom(world, world.rooms.length, entities, { v: nextId }, spawnX, spawnY);
   nextId = entities.reduce((mx, e) => Math.max(mx, e.id), nextId) + 1;
 
   return { world, entities, spawnX, spawnY };

@@ -2,7 +2,7 @@
 
 import {
   type Entity, type Quest, type GameState, type Msg,
-  QuestType, EntityType, Occupation, MonsterKind, Faction,
+  QuestType, EntityType, Occupation, MonsterKind, Faction, FloorLevel,
   RoomType, Cell, AIGoal, W,
 } from '../core/types';
 import { World } from '../core/world';
@@ -150,7 +150,9 @@ export function checkQuests(
         break;
 
       case QuestType.VISIT:
-        if (q.targetRoom !== undefined) {
+        if (q.visitFloor !== undefined) {
+          if (state.currentFloor === q.visitFloor) complete = true;
+        } else if (q.targetRoom !== undefined) {
           const room = world.roomAt(player.x, player.y);
           if (room && room.id === q.targetRoom) complete = true;
         }
@@ -188,15 +190,17 @@ export function checkTalkQuest(
 ): void {
   for (const q of state.quests) {
     if (q.done || q.type !== QuestType.TALK) continue;
-    if (q.targetNpcId === targetNpc.id) {
-      const plotDef = targetNpc.plotNpcId ? PLOT_NPCS[targetNpc.plotNpcId] : undefined;
-      if (plotDef?.talkQuestResponse) {
-        msgs.push({ text: `${targetNpc.name}: «${plotDef.talkQuestResponse}»`, time: state.time, color: '#aaf' });
-      } else {
-        msgs.push({ text: `${targetNpc.name}: «Передам, спасибо.»`, time: state.time, color: '#aaf' });
-      }
-      completeQuest(q, player, entities, state, msgs);
+    // Match by entity id OR by plot NPC id (cross-floor quests)
+    const matchById = q.targetNpcId === targetNpc.id;
+    const matchByPlotId = q.targetPlotNpcId && targetNpc.plotNpcId === q.targetPlotNpcId;
+    if (!matchById && !matchByPlotId) continue;
+    const plotDef = targetNpc.plotNpcId ? PLOT_NPCS[targetNpc.plotNpcId] : undefined;
+    if (plotDef?.talkQuestResponse) {
+      msgs.push({ text: `${targetNpc.name}: «${plotDef.talkQuestResponse}»`, time: state.time, color: '#aaf' });
+    } else {
+      msgs.push({ text: `${targetNpc.name}: «Передам, спасибо.»`, time: state.time, color: '#aaf' });
     }
+    completeQuest(q, player, entities, state, msgs);
   }
 }
 
@@ -287,15 +291,19 @@ function generatePlotQuest(
 
     if (step.type === QuestType.TALK && step.targetNpcId) {
       const target = entities.find(e => e.plotNpcId === step.targetNpcId && e.alive);
-      if (!target) continue;
-      if (desc.includes('{dir}')) {
+      if (target && desc.includes('{dir}')) {
         desc = desc.replace('{dir}', toroidalDirection(world, npc.x, npc.y, target.x, target.y));
+      } else if (!target) {
+        // Target NPC on a different floor — strip {dir} placeholder
+        desc = desc.replace('{dir}', 'на другом уровне');
       }
+      const targetDef = PLOT_NPCS[step.targetNpcId];
       return {
         id, type: step.type,
         giverId: npc.id, giverName: npc.name ?? '???',
         desc,
-        targetNpcId: target.id, targetNpcName: target.name,
+        targetNpcId: target?.id, targetNpcName: target?.name ?? targetDef?.name,
+        targetPlotNpcId: step.targetNpcId,
         rewardItem: step.rewardItem, rewardCount: step.rewardCount,
         extraRewards: step.extraRewards,
         relationDelta: step.relationDelta, xpReward: step.xpReward,
@@ -321,6 +329,12 @@ function generatePlotQuest(
     }
 
     if (step.type === QuestType.KILL && step.targetMonsterKind !== undefined) {
+      if (desc.includes('{dir}')) {
+        const targetMon = entities.find(e => e.type === EntityType.MONSTER && e.alive && e.monsterKind === step.targetMonsterKind);
+        desc = desc.replace('{dir}', targetMon
+          ? toroidalDirection(world, npc.x, npc.y, targetMon.x, targetMon.y)
+          : 'где-то в глубине');
+      }
       return {
         id, type: step.type,
         giverId: npc.id, giverName: npc.name ?? '???',
@@ -343,6 +357,21 @@ function generatePlotQuest(
         giverId: npc.id, giverName: npc.name ?? '???',
         desc,
         targetRoom: room?.id,
+        rewardItem: step.rewardItem, rewardCount: step.rewardCount,
+        extraRewards: step.extraRewards,
+        relationDelta: step.relationDelta, xpReward: step.xpReward,
+        moneyReward: step.moneyReward,
+        plotStepIndex: i,
+        done: false,
+      };
+    }
+
+    if (step.type === QuestType.VISIT && (step as { visitFloor?: number }).visitFloor !== undefined) {
+      return {
+        id, type: step.type,
+        giverId: npc.id, giverName: npc.name ?? '???',
+        desc,
+        visitFloor: (step as { visitFloor: number }).visitFloor,
         rewardItem: step.rewardItem, rewardCount: step.rewardCount,
         extraRewards: step.extraRewards,
         relationDelta: step.relationDelta, xpReward: step.xpReward,

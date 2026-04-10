@@ -65,7 +65,10 @@ export const enum Tex {
   HERMO_WALL = 40,
   GUT        = 41,
   F_GUT      = 42,
-  COUNT      = 43,
+  VOID_WALL  = 43,
+  F_VOID     = 44,
+  PORTAL     = 45,
+  COUNT      = 46,
 }
 
 // ── Floor levels (Z-axis) ────────────────────────────────────────
@@ -73,6 +76,7 @@ export enum FloorLevel {
   LIVING       = 0,   // жилая зона — квартиры, цеха, залы
   MAINTENANCE  = 1,   // коллекторы — трубы, туннели, каналы с водой
   HELL         = 2,   // ад — мясо, постоянный самосбор, культисты
+  VOID         = 3,   // пустота — абстрактный фрактальный уровень, финальный босс
 }
 
 // ── Lift direction ───────────────────────────────────────────────
@@ -168,6 +172,9 @@ export enum MonsterKind {
   REBAR,      // inorganic rebar monster  — арматура
   MATKA,      // spawner boss             — матка
   IDOL,       // immobile psi monolith    — идол
+  MANCOBUS,   // fat boss controller      — манкобус (управляет тварями)
+  HERALD,     // thin tree-like watcher   — вестник (свисающие глаза)
+  CREATOR,    // final boss               — творец (белый силуэт)
 }
 
 // ── Factions ─────────────────────────────────────────────────────
@@ -366,6 +373,7 @@ export interface Quest {
   // TALK: targetNpcId
   targetNpcId?: number;
   targetNpcName?: string;
+  targetPlotNpcId?: string;  // plot NPC key for cross-floor TALK quests
   // reward
   rewardItem?: string;
   rewardCount?: number;
@@ -376,6 +384,7 @@ export interface Quest {
   moneyReward?: number;       // money reward on completion
   plotStepIndex?: number;     // index into PLOT_CHAIN (story quests only)
   sideQuestId?: string;       // id from SIDE_QUESTS (hand-designed side quests)
+  visitFloor?: FloorLevel;    // auto-complete VISIT quest when entering this floor
   done: boolean;
 }
 
