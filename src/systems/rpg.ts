@@ -2,7 +2,7 @@
 
 import {
   type Entity, type RPGStats, type Msg,
-  MonsterKind, FloorLevel,
+  W, MonsterKind, FloorLevel,
 } from '../core/types';
 
 // ── XP formula: soft quadratic — looks linear at 1-10, quadratic long-term ──
@@ -144,6 +144,7 @@ const MONSTER_BASE_XP: Record<MonsterKind, number> = {
   [MonsterKind.MANCOBUS]: 200,
   [MonsterKind.HERALD]:   180,
   [MonsterKind.CREATOR]:  500,
+  [MonsterKind.SPIRIT]:   40,
   [MonsterKind.IDOL]:      10,
 };
 
@@ -158,11 +159,12 @@ export function xpForNpcKill(npcLevel: number): number {
 }
 
 // ── Zone level calculation ───────────────────────────────────────
-// Zones are 0-63, distributed on 8x8 grid. Level depends on distance from center + floor.
-export function calcZoneLevel(zoneId: number, floor: FloorLevel): number {
-  // Base: 1-8 spread across zones by grid position (distance from center)
-  const zx = zoneId % 8;
-  const zy = Math.floor(zoneId / 8);
+// Level depends on distance from center of the zone grid + floor bonus.
+const ZONE_CELL = Math.floor(W / 8); // ~128; must match shared.ts ZONE_CELL
+export function calcZoneLevel(zoneCx: number, zoneCy: number, floor: FloorLevel): number {
+  // Convert world-space center to grid coordinates (0-7)
+  const zx = zoneCx / ZONE_CELL;
+  const zy = zoneCy / ZONE_CELL;
   const dx = Math.abs(zx - 3.5);
   const dy = Math.abs(zy - 3.5);
   const distFromCenter = Math.sqrt(dx * dx + dy * dy);

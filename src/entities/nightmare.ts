@@ -120,11 +120,4 @@ export function generateNightmareSprite(seed: number): Uint32Array {
   return t;
 }
 
-/* ── Generate a unique sprite seed from monster name ──────────── */
-export function nightmareSeedFromName(name: string): number {
-  let h = 0;
-  for (let i = 0; i < name.length; i++) {
-    h = ((h << 5) - h + name.charCodeAt(i)) | 0;
-  }
-  return (h >>> 0) % 100000;
-}
+

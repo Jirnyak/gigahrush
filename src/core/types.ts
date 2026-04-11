@@ -175,6 +175,7 @@ export enum MonsterKind {
   MANCOBUS,   // fat boss controller      — манкобус (управляет тварями)
   HERALD,     // thin tree-like watcher   — вестник (свисающие глаза)
   CREATOR,    // final boss               — творец (белый силуэт)
+  SPIRIT,     // ghostly skull face       — дух (летает сквозь стены)
 }
 
 // ── Factions ─────────────────────────────────────────────────────
@@ -328,6 +329,7 @@ export interface Entity {
   matkaTimer?: number;         // матка spawn timer (seconds until next spawn)
   psiMadness?: number;         // remaining seconds of PSI madness (attacks everyone)
   psiControlledBy?: number;    // entity id of PSI controller (ally override)
+  phasing?: boolean;           // can move through walls (spirit)
 }
 
 // ── Items ────────────────────────────────────────────────────────
@@ -442,6 +444,7 @@ export interface GameState {
   beamFx: number;            // PSI beam visual timer (seconds remaining)
   beamAngle: number;         // beam direction (radians)
   beamLen: number;           // beam length (cells)
+  gameWon: boolean;          // player killed Creator and entered return portal
 }
 
 export interface Msg { text: string; time: number; color: string; }

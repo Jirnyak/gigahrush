@@ -2,12 +2,12 @@
 
 import {
   type Entity, type Quest, type GameState, type Msg,
-  QuestType, EntityType, Occupation, MonsterKind, Faction, FloorLevel,
+  QuestType, EntityType, Occupation, MonsterKind, Faction,
   RoomType, Cell, AIGoal, W,
 } from '../core/types';
 import { World } from '../core/world';
 import { ITEMS } from '../data/catalog';
-import { monsterName } from '../data/names';
+
 import { addFactionRelMutual, getFactionRel } from '../data/relations';
 import { PLOT_CHAIN, PLOT_NPCS, SIDE_QUESTS, isPlotNpc } from '../data/plot';
 import { addItem, hasItem, removeItem } from './inventory';
@@ -87,13 +87,13 @@ function spawnQuestMonsters(
 ): void {
   let spawned = 0;
   for (let i = 0; i < count; i++) {
-    // Pick random floor cell in radius 8-14 from NPC
+    // Pick random floor cell in radius 3-8 from NPC (tight corridors)
     const angle = (Math.PI * 2 * i) / count + (Math.random() - 0.5) * 0.5;
-    const dist = 8 + Math.random() * 6;
+    const dist = 3 + Math.random() * 5;
     let found = false;
     let mx = 0, my = 0;
-    for (let attempt = 0; attempt < 20; attempt++) {
-      const a = angle + (attempt > 0 ? (Math.random() - 0.5) * 1.0 : 0);
+    for (let attempt = 0; attempt < 60; attempt++) {
+      const a = angle + (attempt > 0 ? (Math.random() - 0.5) * 1.5 : 0);
       const d = dist + (attempt > 0 ? (Math.random() - 0.5) * 4 : 0);
       const tx = ((Math.floor(npc.x) + Math.round(Math.cos(a) * d)) % W + W) % W;
       const ty = ((Math.floor(npc.y) + Math.round(Math.sin(a) * d)) % W + W) % W;
@@ -118,7 +118,6 @@ function spawnQuestMonsters(
       pitch: 0, alive: true,
       speed: scaleMonsterSpeed(mdef.speed, zoneLevel),
       sprite: mdef.sprite,
-      name: monsterName(),
       hp: scaleMonsterHp(mdef.hp, zoneLevel),
       maxHp: scaleMonsterHp(mdef.hp, zoneLevel),
       monsterKind: kind, attackCd: 0,
@@ -177,7 +176,7 @@ export function checkQuests(
 export function notifyKill(kind: MonsterKind, state: GameState): void {
   for (const q of state.quests) {
     if (q.done || q.type !== QuestType.KILL) continue;
-    if (q.targetMonsterKind === kind) {
+    if (q.targetMonsterKind === kind || q.targetMonsterKind === undefined) {
       q.killCount = (q.killCount ?? 0) + 1;
     }
   }
@@ -328,8 +327,8 @@ function generatePlotQuest(
       };
     }
 
-    if (step.type === QuestType.KILL && step.targetMonsterKind !== undefined) {
-      if (desc.includes('{dir}')) {
+    if (step.type === QuestType.KILL) {
+      if (desc.includes('{dir}') && step.targetMonsterKind !== undefined) {
         const targetMon = entities.find(e => e.type === EntityType.MONSTER && e.alive && e.monsterKind === step.targetMonsterKind);
         desc = desc.replace('{dir}', targetMon
           ? toroidalDirection(world, npc.x, npc.y, targetMon.x, targetMon.y)

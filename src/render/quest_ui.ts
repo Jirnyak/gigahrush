@@ -1,7 +1,7 @@
 /* ── Quest log panel — paginated, one quest per page ──────────── */
 
 import { type GameState } from '../core/types';
-import { drawNeuroPanel, drawGlitchText, textJitter, flicker } from './hud_fx';
+import { drawNeuroPanel, drawGlitchText } from './hud_fx';
 
 export function drawQuestLog(
   ctx: CanvasRenderingContext2D,

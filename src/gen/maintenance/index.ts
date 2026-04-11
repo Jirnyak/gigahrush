@@ -8,8 +8,8 @@ import {
   EntityType, AIGoal, MonsterKind, FloorLevel,
 } from '../../core/types';
 import { World } from '../../core/world';
-import { rng, pick, placeLifts, generateZones } from '../shared';
-import { randomName, freshNeeds, monsterName } from '../../data/catalog';
+import { rng, pick, placeLifts, generateZones, ensureConnectivity } from '../shared';
+import { randomName, freshNeeds } from '../../data/catalog';
 import { calcZoneLevel, randomRPG, scaleMonsterHp, scaleMonsterSpeed, gaussianLevel, getMaxHp } from '../../systems/rpg';
 import { generateForpost } from './forpost';
 import { generateMancobusRoom } from './mancobus_room';
@@ -334,7 +334,7 @@ export function generateMaintenance(): { world: World; entities: Entity[]; spawn
      Phase 8: Zones + zone levels
      ══════════════════════════════════════════════════════════════ */
   generateZones(world);
-  for (const z of world.zones) z.level = calcZoneLevel(z.id, FloorLevel.MAINTENANCE);
+  for (const z of world.zones) z.level = calcZoneLevel(z.cx, z.cy, FloorLevel.MAINTENANCE);
 
   /* ══════════════════════════════════════════════════════════════
      Phase 9: Lights (sparse — at room centers + rare tunnel lamps)
@@ -385,7 +385,9 @@ export function generateMaintenance(): { world: World; entities: Entity[]; spawn
     const ci = rng(0, W * W - 1);
     if (world.cells[ci] !== Cell.FLOOR) continue;
     const mx = (ci % W) + 0.5, my = ((ci / W) | 0) + 0.5;
-    const kind = pick([
+    const kind = Math.random() < 0.10
+      ? pick([MonsterKind.EYE, MonsterKind.NIGHTMARE, MonsterKind.REBAR, MonsterKind.BETONNIK, MonsterKind.MATKA])
+      : pick([
       MonsterKind.SBORKA, MonsterKind.SBORKA,
       MonsterKind.POLZUN,
       MonsterKind.ZOMBIE,
@@ -398,6 +400,11 @@ export function generateMaintenance(): { world: World; entities: Entity[]; spawn
       [MonsterKind.POLZUN]: { hp: 80, speed: 1.0, sprite: monsterSpr(MonsterKind.POLZUN) },
       [MonsterKind.ZOMBIE]: { hp: 25, speed: 1.4, sprite: monsterSpr(MonsterKind.ZOMBIE) },
       [MonsterKind.SHADOW]: { hp: 45, speed: 2.4, sprite: monsterSpr(MonsterKind.SHADOW) },
+      [MonsterKind.EYE]:       { hp: 30,  speed: 2.0, sprite: monsterSpr(MonsterKind.EYE) },
+      [MonsterKind.NIGHTMARE]: { hp: 60,  speed: 2.2, sprite: monsterSpr(MonsterKind.NIGHTMARE) },
+      [MonsterKind.REBAR]:     { hp: 55,  speed: 1.6, sprite: monsterSpr(MonsterKind.REBAR) },
+      [MonsterKind.BETONNIK]:  { hp: 120, speed: 1.2, sprite: monsterSpr(MonsterKind.BETONNIK) },
+      [MonsterKind.MATKA]:     { hp: 100, speed: 1.0, sprite: monsterSpr(MonsterKind.MATKA) },
     };
     const def = mstats[kind];
     if (!def) continue;
@@ -408,7 +415,7 @@ export function generateMaintenance(): { world: World; entities: Entity[]; spawn
       id: nextId++, type: EntityType.MONSTER,
       x: mx, y: my, angle: Math.random() * Math.PI * 2, pitch: 0,
       alive: true, speed: scaleMonsterSpeed(def.speed, zoneLevel), sprite: def.sprite,
-      name: monsterName(), hp: scaleMonsterHp(def.hp, zoneLevel), maxHp: scaleMonsterHp(def.hp, zoneLevel),
+      hp: scaleMonsterHp(def.hp, zoneLevel), maxHp: scaleMonsterHp(def.hp, zoneLevel),
       monsterKind: kind, attackCd: 0,
       ai: { goal: AIGoal.WANDER, tx: 0, ty: 0, path: [], pi: 0, stuck: 0, timer: 0 },
       rpg,
@@ -485,6 +492,11 @@ export function generateMaintenance(): { world: World; entities: Entity[]; spawn
      ══════════════════════════════════════════════════════════════ */
   generateMancobusRoom(world, world.rooms.length, entities, { v: nextId }, spawnX, spawnY);
   nextId = entities.reduce((mx, e) => Math.max(mx, e.id), nextId) + 1;
+
+  /* ══════════════════════════════════════════════════════════════
+     Phase 15: Ensure all rooms are reachable (connectivity fix)
+     ══════════════════════════════════════════════════════════════ */
+  ensureConnectivity(world, spawnX, spawnY);
 
   return { world, entities, spawnX, spawnY };
 }

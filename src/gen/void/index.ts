@@ -9,7 +9,7 @@ import {
   EntityType, AIGoal, MonsterKind, FloorLevel,
 } from '../../core/types';
 import { World } from '../../core/world';
-import { monsterName } from '../../data/catalog';
+
 import { rng, ensureConnectivity, generateZones } from '../shared';
 import { calcZoneLevel, randomRPG, scaleMonsterHp, scaleMonsterSpeed } from '../../systems/rpg';
 import { MONSTERS } from '../../entities/monster';
@@ -145,7 +145,7 @@ export function generateVoid(): { world: World; entities: Entity[]; spawnX: numb
      Phase 3: Zones
      ══════════════════════════════════════════════════════════════ */
   generateZones(world);
-  for (const z of world.zones) z.level = calcZoneLevel(z.id, FloorLevel.VOID) + 5;
+  for (const z of world.zones) z.level = calcZoneLevel(z.cx, z.cy, FloorLevel.VOID) + 5;
 
   /* ══════════════════════════════════════════════════════════════
      Phase 4: Sparse eerie lighting
@@ -210,7 +210,7 @@ export function generateVoid(): { world: World; entities: Entity[]; spawnX: numb
      ══════════════════════════════════════════════════════════════ */
   const voidKinds = [
     MonsterKind.SHADOW, MonsterKind.NIGHTMARE, MonsterKind.EYE,
-    MonsterKind.REBAR, MonsterKind.BETONNIK,
+    MonsterKind.REBAR, MonsterKind.BETONNIK, MonsterKind.SPIRIT,
   ];
   for (let i = 0; i < 120; i++) {
     const cell = randomFloorCell(world);
@@ -231,11 +231,11 @@ export function generateVoid(): { world: World; entities: Entity[]; spawnX: numb
       alive: true,
       speed: scaleMonsterSpeed(mdef.speed, zoneLevel),
       sprite: monsterSpr(kind),
-      name: monsterName(),
       hp: mHp, maxHp: mHp,
       monsterKind: kind, attackCd: 0,
       ai: { goal: AIGoal.WANDER, tx: 0, ty: 0, path: [], pi: 0, stuck: 0, timer: 0 },
       rpg: mRpg,
+      phasing: kind === MonsterKind.SPIRIT,
     });
   }
 

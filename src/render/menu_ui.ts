@@ -1,7 +1,7 @@
 /* ── Game menu (ESC) ──────────────────────────────────────────── */
 
 import { type GameState } from '../core/types';
-import { drawNeuroPanel, drawGlitchText, textJitter, flicker } from './hud_fx';
+import { drawNeuroPanel, textJitter, flicker } from './hud_fx';
 
 export function drawGameMenu(
   ctx: CanvasRenderingContext2D,
@@ -40,7 +40,6 @@ export function drawGameMenu(
     const selected = i === state.menuSel;
     const yy = h / 2 - 20 * sy + i * 20 * sy;
     const mj = textJitter(time, 710 + i);
-    const color = selected ? '#0fa' : '#688';
     const alpha = flicker(time, 720 + i);
     ctx.fillStyle = selected ? `rgba(0,255,170,${alpha})` : `rgba(100,136,136,${alpha})`;
     ctx.fillText(`${selected ? '▶ ' : '  '}${items[i]}`, w / 2 + mj.dx, yy + mj.dy);

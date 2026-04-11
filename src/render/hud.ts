@@ -37,7 +37,7 @@ const ZONE_FACTION_NAMES: Record<ZoneFaction, string> = {
   [ZoneFaction.SAMOSBOR]: 'Самосбор',
   [ZoneFaction.WILD]: 'Дикие',
 };
-const MSG_MAX = 6;
+const MSG_MAX = 5;
 
 
 
@@ -181,7 +181,7 @@ export function drawHUD(
   // ── Messages (with jitter) ────────────────────────────────
   const now = state.time;
   let my = 4 * sy;
-  ctx.font = `${8 * sy}px monospace`;
+  ctx.font = `${7 * sy}px monospace`;
   const _day = Math.floor(state.clock.totalMinutes / 1440);
   const _hh = String(state.clock.hour).padStart(2, '0');
   const _mm = String(state.clock.minute).padStart(2, '0');
@@ -197,7 +197,7 @@ export function drawHUD(
     ctx.fillText(_stamp, 4 * sx + mj.dx, my + mj.dy);
     ctx.fillStyle = m.color;
     ctx.fillText(m.text, 4 * sx + ctx.measureText(_stamp).width + mj.dx, my + mj.dy);
-    my += 10 * sy;
+    my += 9 * sy;
   }
   ctx.globalAlpha = 1;
 
@@ -320,7 +320,33 @@ export function drawHUD(
   }
 
   // ── Game over (neuro-interface death) ─────────────────────
-  if (state.gameOver) {
+  if (state.gameOver && state.gameWon) {
+    // Victory end screen — black fade-in
+    const winAlpha = Math.min(1, state.deathTimer * 0.4);
+    ctx.fillStyle = `rgba(0,0,0,${winAlpha})`;
+    ctx.fillRect(0, 0, w, h);
+
+    if (state.deathTimer > 1) {
+      const textAlpha = Math.min(1, (state.deathTimer - 1) * 0.5);
+      const dj = textJitter(time * 0.5, 999);
+      ctx.save();
+      ctx.textAlign = 'center';
+      ctx.shadowColor = 'rgba(0,255,128,0.4)';
+      ctx.shadowBlur = 20;
+      ctx.fillStyle = `rgba(200,255,200,${textAlpha})`;
+      ctx.font = `bold ${28 * sy}px monospace`;
+      ctx.fillText('КОНЕЦ ИГРЫ', w / 2 + dj.dx, h / 2 - 20 * sy + dj.dy);
+      ctx.fillStyle = `rgba(0,200,100,${textAlpha * 0.15})`;
+      ctx.fillText('КОНЕЦ ИГРЫ', w / 2 + dj.dx + 3, h / 2 - 20 * sy + dj.dy + 1);
+      ctx.shadowBlur = 0;
+      ctx.fillStyle = `rgba(136,170,136,${Math.min(1, (state.deathTimer - 2) * 0.4)})`;
+      ctx.font = `${10 * sy}px monospace`;
+      ctx.fillText('Творец повержен. Хрущ отпустил вас.', w / 2, h / 2 + 10 * sy);
+      ctx.fillText('[R] — заново', w / 2, h / 2 + 30 * sy);
+      ctx.textAlign = 'left';
+      ctx.restore();
+    }
+  } else if (state.gameOver) {
     const deathAlpha = Math.min(0.5, state.deathTimer * 0.15);
     const grd = ctx.createRadialGradient(w / 2, h / 2, Math.min(w, h) * 0.15, w / 2, h / 2, Math.min(w, h) * 0.7);
     grd.addColorStop(0, `rgba(0,0,0,0)`);

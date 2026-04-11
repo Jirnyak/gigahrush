@@ -2,7 +2,7 @@
 
 import {
   type Entity, type Quest, EntityType, Cell, RoomType, W, QuestType,
-  LiftDirection,
+  LiftDirection, MonsterKind,
 } from '../core/types';
 import { World } from '../core/world';
 import { hasAvailableQuest } from '../data/plot';
@@ -183,6 +183,35 @@ function drawMap(
       ctx.stroke();
       ctx.fillStyle = '#fc4';
       ctx.fill();
+    }
+    // KILL quest markers — show target monsters as red diamonds
+    const killKinds = new Set<MonsterKind>();
+    for (const q of quests) {
+      if (q.done || q.type !== QuestType.KILL || q.targetMonsterKind === undefined) continue;
+      killKinds.add(q.targetMonsterKind);
+    }
+    if (killKinds.size > 0) {
+      for (const e of entities) {
+        if (!e.alive || e.type !== EntityType.MONSTER) continue;
+        if (e.monsterKind === undefined || !killKinds.has(e.monsterKind)) continue;
+        const edx = world.delta(pxI, Math.floor(e.x));
+        const edy = world.delta(pyI, Math.floor(e.y));
+        if (Math.abs(edx) > radius || Math.abs(edy) > radius) continue;
+        const qsx = mapX + (edx + radius) * cellW;
+        const qsy = mapY + (edy + radius) * cellH;
+        const sz = 5, sw = 3;
+        ctx.strokeStyle = '#600';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(qsx, qsy - sz);
+        ctx.lineTo(qsx + sw, qsy);
+        ctx.lineTo(qsx, qsy + sz);
+        ctx.lineTo(qsx - sw, qsy);
+        ctx.closePath();
+        ctx.stroke();
+        ctx.fillStyle = '#f44';
+        ctx.fill();
+      }
     }
   }
 

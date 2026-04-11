@@ -7,6 +7,7 @@ import { World } from '../core/world';
 import { stampMark, MarkType } from '../render/marks';
 import { WEAPON_STATS } from '../data/catalog';
 import { spawnBloodHit, spawnDeathPool } from '../render/blood';
+import { entityDisplayName } from '../entities/monster';
 
 // ── Module state (player-only transient effects) ─────────────────
 let phaseTimer = 0;                              // phase shift remaining seconds
@@ -181,7 +182,7 @@ function castBrainBurn(
   const playerLevel = player.rpg?.level ?? 1;
   const targetLevel = target.rpg?.level ?? 1;
   if (targetLevel > playerLevel) {
-    msgs.push({ text: `${target.name ?? 'Цель'} слишком сильна для выжига!`, time, color: '#f84' });
+    msgs.push({ text: `${entityDisplayName(target)} слишком сильна для выжига!`, time, color: '#f84' });
     return;
   }
   // Instant kill
@@ -190,7 +191,7 @@ function castBrainBurn(
     target.alive = false;
     spawnDeathPool(world, target.x, target.y, target.type === EntityType.MONSTER);
     handleKill(target);
-    msgs.push({ text: `Выжиг мозга! ${target.name ?? 'Цель'} уничтожена`, time, color: '#f4f' });
+    msgs.push({ text: `Выжиг мозга! ${entityDisplayName(target)} уничтожена`, time, color: '#f4f' });
   }
 }
 
@@ -211,12 +212,12 @@ function castTargeted(
   if (mode === 'madness') {
     target.psiMadness = PSI_EFFECT_DURATION;
     if (target.ai) target.ai.combatTargetId = undefined;
-    msgs.push({ text: `Безумие! ${target.name ?? 'Цель'} сходит с ума`, time, color: '#f4f' });
+    msgs.push({ text: `Безумие! ${entityDisplayName(target)} сходит с ума`, time, color: '#f4f' });
   } else {
     target.psiControlledBy = player.id;
     controlTimers.set(target.id, PSI_EFFECT_DURATION);
     if (target.ai) target.ai.combatTargetId = undefined;
-    msgs.push({ text: `Контроль! ${target.name ?? 'Цель'} подчинена`, time, color: '#4ff' });
+    msgs.push({ text: `Контроль! ${entityDisplayName(target)} подчинена`, time, color: '#4ff' });
   }
 }
 

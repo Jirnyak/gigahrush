@@ -8,8 +8,8 @@ import {
   EntityType, AIGoal,
 } from '../../core/types';
 import { World } from '../../core/world';
-import { monsterName } from '../../data/catalog';
-import { stampRoom, protectRoom, findClearArea } from '../shared';
+
+import { stampRoom, protectRoom, connectProtectedRoom, findClearArea } from '../shared';
 import { randomRPG, scaleMonsterHp, scaleMonsterSpeed } from '../../systems/rpg';
 import { MONSTERS } from '../../entities/monster';
 import { monsterSpr } from '../../render/sprite_index';
@@ -36,6 +36,7 @@ export function generateMancobusRoom(
   room.wallTex = Tex.MEAT;
   room.floorTex = Tex.F_MEAT;
   protectRoom(world, roomX, roomY, ROOM_W, ROOM_H, Tex.MEAT, Tex.F_MEAT);
+  connectProtectedRoom(world, roomX, roomY, ROOM_W, ROOM_H);
 
   // Dark lamps — minimal lighting
   const rcx = roomX + Math.floor(ROOM_W / 2);
@@ -64,14 +65,26 @@ export function generateMancobusRoom(
     rpg,
   });
 
-  // A few guardian monsters around the boss
-  const guards: MonsterKind[] = [MonsterKind.TVAR, MonsterKind.TVAR, MonsterKind.SHADOW, MonsterKind.POLZUN];
-  for (let g = 0; g < guards.length; g++) {
-    const gx = roomX + 2 + (g % 2) * (ROOM_W - 4);
-    const gy = roomY + 2 + Math.floor(g / 2) * (ROOM_H - 4);
-    const ci = world.idx(gx, gy);
-    if (world.cells[ci] !== Cell.FLOOR) continue;
-    const gdef = MONSTERS[guards[g]];
+  // 10 random guardian monsters around the boss
+  const guardPool: MonsterKind[] = [
+    MonsterKind.TVAR, MonsterKind.SHADOW, MonsterKind.POLZUN,
+    MonsterKind.ZOMBIE, MonsterKind.SBORKA, MonsterKind.EYE,
+    MonsterKind.NIGHTMARE, MonsterKind.REBAR, MonsterKind.BETONNIK,
+  ];
+  for (let g = 0; g < 10; g++) {
+    let gx = -1, gy = -1;
+    for (let attempt = 0; attempt < 30; attempt++) {
+      const tx = roomX + 1 + Math.floor(Math.random() * (ROOM_W - 2));
+      const ty = roomY + 1 + Math.floor(Math.random() * (ROOM_H - 2));
+      // Avoid center where boss is
+      if (Math.abs(tx - rcx) <= 1 && Math.abs(ty - rcy) <= 1) continue;
+      const ci = world.idx(tx, ty);
+      if (world.cells[ci] !== Cell.FLOOR) continue;
+      gx = tx; gy = ty; break;
+    }
+    if (gx < 0) continue;
+    const gKind = guardPool[Math.floor(Math.random() * guardPool.length)];
+    const gdef = MONSTERS[gKind];
     if (!gdef) continue;
     const gRpg = randomRPG(zoneLevel + 3);
     const gHp = Math.round(scaleMonsterHp(gdef.hp, zoneLevel + 3));
@@ -80,10 +93,9 @@ export function generateMancobusRoom(
       x: gx + 0.5, y: gy + 0.5,
       angle: Math.random() * Math.PI * 2, pitch: 0, alive: true,
       speed: scaleMonsterSpeed(gdef.speed, zoneLevel + 2),
-      sprite: monsterSpr(guards[g]),
-      name: monsterName(),
+      sprite: monsterSpr(gKind),
       hp: gHp, maxHp: gHp,
-      monsterKind: guards[g], attackCd: 0,
+      monsterKind: gKind, attackCd: 0,
       ai: { goal: AIGoal.WANDER, tx: 0, ty: 0, path: [], pi: 0, stuck: 0, timer: 0 },
       rpg: gRpg,
     });

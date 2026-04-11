@@ -6,8 +6,7 @@ import {
   EntityType, AIGoal, MonsterKind,
 } from '../../core/types';
 import { World } from '../../core/world';
-import { monsterName } from '../../data/catalog';
-import { MONSTERS } from '../../entities/monster';
+import { MONSTERS, entityDisplayName } from '../../entities/monster';
 import { playGrowl, playSoundAt } from '../audio';
 import { isHostile } from '../factions';
 import { scaleMonsterDmg, strMeleeDmgMult, scaleMonsterHp, scaleMonsterSpeed, randomRPG } from '../rpg';
@@ -116,7 +115,7 @@ export function updateMonster(world: World, entities: Entity[], e: Entity, dt: n
             alive: true,
             speed: scaleMonsterSpeed(def.speed, zoneLevel),
             sprite: def.sprite,
-            name: monsterName(),
+
             hp: hpFinal, maxHp: hpFinal,
             monsterKind: kind,
             attackCd: def.attackRate,
@@ -155,10 +154,23 @@ export function updateMonster(world: World, entities: Entity[], e: Entity, dt: n
     ai.combatTargetId = undefined;
     ai.timer -= dt;
     if (ai.path.length === 0 || ai.pi >= ai.path.length || ai.timer <= 0) {
-      wanderNearby(world, e);
+      // Phasing monsters: random direction wander
+      if (e.phasing) {
+        ai.timer = 2 + Math.random() * 3;
+        (e as any)._wanderAngle = Math.random() * Math.PI * 2;
+      } else {
+        wanderNearby(world, e);
+      }
       ai.timer = 1.5 + Math.random() * 2.5;
     }
-    followPath(world, e, dt);
+    if (e.phasing) {
+      const a = (e as any)._wanderAngle ?? 0;
+      const spd = e.speed * 0.4 * dt;
+      e.x = ((e.x + Math.cos(a) * spd) % W + W) % W;
+      e.y = ((e.y + Math.sin(a) * spd) % W + W) % W;
+    } else {
+      followPath(world, e, dt);
+    }
     return;
   }
   ai.combatTargetId = target.id;
@@ -219,7 +231,7 @@ export function updateMonster(world: World, entities: Entity[], e: Entity, dt: n
         if (target.hp <= 0) {
           spawnDeathPool(world, target.x, target.y, target.type === EntityType.MONSTER);
           if (target.type === EntityType.NPC) dropNpcInventory(target, entities, nextId);
-          msgs.push({ text: `${e.name ?? 'Монстр'} ${e.isFemale ? 'убила' : 'убил'} ${target.name ?? 'цель'}`, time, color: '#f44' });
+          msgs.push({ text: `${entityDisplayName(e)} убил ${entityDisplayName(target)}`, time, color: '#f44' });
         }
       }
       playSoundAt(playGrowl, e.x, e.y);
@@ -237,6 +249,19 @@ export function updateMonster(world: World, entities: Entity[], e: Entity, dt: n
     ai.path = bfsPath(world, Math.floor(e.x), Math.floor(e.y), Math.floor(target.x), Math.floor(target.y));
     ai.pi = 0;
     ai.timer = 2;
+  }
+
+  // Phasing monsters (Spirit) move directly through walls
+  if (e.phasing) {
+    const ddx = world.delta(e.x, target.x);
+    const ddy = world.delta(e.y, target.y);
+    const dd = Math.sqrt(ddx * ddx + ddy * ddy);
+    if (dd > 0.1) {
+      const spd = e.speed * dt;
+      e.x = ((e.x + (ddx / dd) * spd) % W + W) % W;
+      e.y = ((e.y + (ddy / dd) * spd) % W + W) % W;
+    }
+    return;
   }
 
   followPath(world, e, dt);

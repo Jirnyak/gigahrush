@@ -58,7 +58,7 @@ export function generateWorld(): { world: World; entities: Entity[]; spawnX: num
 
   /* ── A2: Permanent zones (64 macro-regions) ─────── */
   generateZones(world);  // Assign zone levels for living floor
-  for (const z of world.zones) z.level = calcZoneLevel(z.id, FloorLevel.LIVING);
+  for (const z of world.zones) z.level = calcZoneLevel(z.cx, z.cy, FloorLevel.LIVING);
 
   /* ── A3: HQ rooms for faction zones ─────────────── */
   stampHQRooms(world);

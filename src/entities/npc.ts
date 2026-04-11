@@ -207,7 +207,142 @@ export const NPC_SPRITE_GENERATORS: (() => Uint32Array)[] = [
   genDirector,    // 12 DIRECTOR
 ];
 
-/** Traveler sprite (reused for TRAVELER/PILGRIM/HUNTER — indices 13,14,15) */
-export function generateTravelerSprite(seed: number, shirtR: number, shirtG: number, shirtB: number): Uint32Array {
-  return genHumanoid(175, 155, 135, shirtR, shirtG, shirtB, 60, 55, 50, seed, H_TOP, H_BOT, B_TOP, B_BOT, L_BOT);
+/** Traveler sprite: Путник (citizen) — civilian with backpack */
+export function generateTravelerSprite(): Uint32Array {
+  const t = genHumanoid(175, 155, 135, 100, 120, 80, 60, 55, 50, 130, H_TOP, H_BOT, B_TOP, B_BOT, L_BOT);
+  // Backpack on back (visible as side bump)
+  const cx = S / 2;
+  for (let y = B_TOP + 2; y < B_TOP + 14; y++) {
+    for (let x = cx + 8; x < cx + 12; x++) {
+      if (x < S) {
+        const n = noise(x, y, 131) * 8;
+        t[y * S + x] = rgba(clamp(80 + n), clamp(70 + n), clamp(50 + n));
+      }
+    }
+  }
+  return t;
+}
+
+/** Pilgrim sprite: Паломник (cultist) — hooded robe, no face visible */
+export function generatePilgrimSprite(): Uint32Array {
+  const t = new Uint32Array(S * S).fill(CLEAR);
+  const cx = S / 2;
+  const headCy = Math.floor((H_TOP + H_BOT) / 2);
+  const headRad = Math.floor((H_BOT - H_TOP) / 2);
+  // Robe body — long flowing dark purple/black
+  for (let y = H_TOP - 2; y < L_BOT; y++) {
+    const robeProgress = (y - H_TOP) / (L_BOT - H_TOP);
+    const halfW = y < B_TOP ? headRad + 3 : 8 + robeProgress * 3;
+    for (let x = Math.floor(cx - halfW); x < Math.floor(cx + halfW); x++) {
+      if (x < 0 || x >= S) continue;
+      const n = noise(x, y, 140) * 12;
+      const base = y < B_TOP + 6 ? 35 : 30;
+      t[y * S + x] = rgba(clamp(base + n), clamp(base - 5 + n), clamp(base + 15 + n));
+    }
+  }
+  // Pointed hood — covers head entirely
+  for (let y = H_TOP - 6; y < H_BOT + 2; y++) {
+    const hoodProgress = Math.max(0, (y - (H_TOP - 6))) / ((H_BOT + 2) - (H_TOP - 6));
+    const hw = Math.floor(1 + hoodProgress * (headRad + 4));
+    for (let x = cx - hw; x <= cx + hw; x++) {
+      if (x < 0 || x >= S || y < 0) continue;
+      const n = noise(x, y, 141) * 8;
+      t[y * S + x] = rgba(clamp(25 + n), clamp(20 + n), clamp(35 + n));
+    }
+  }
+  // Dark shadow where face would be — just void
+  for (let y = headCy - 2; y < H_BOT - 1; y++) {
+    for (let x = cx - 3; x <= cx + 3; x++) {
+      t[y * S + x] = rgba(8, 5, 12);
+    }
+  }
+  // Faint glowing eyes deep in hood
+  t[headCy * S + (cx - 2)] = rgba(120, 60, 160);
+  t[headCy * S + (cx + 2)] = rgba(120, 60, 160);
+  // Purple rune/symbol on chest
+  for (let dy = 0; dy < 5; dy++) {
+    t[(B_TOP + 4 + dy) * S + cx] = rgba(100, 40, 130);
+  }
+  t[(B_TOP + 6) * S + (cx - 2)] = rgba(100, 40, 130);
+  t[(B_TOP + 6) * S + (cx + 2)] = rgba(100, 40, 130);
+  return t;
+}
+
+/** Hunter sprite: Охотник (liquidator) — military uniform, gas mask, no face */
+export function generateHunterSprite(): Uint32Array {
+  const t = new Uint32Array(S * S).fill(CLEAR);
+  const cx = S / 2;
+  const headCy = Math.floor((H_TOP + H_BOT) / 2);
+  const headRad = Math.floor((H_BOT - H_TOP) / 2);
+  // Head — gas mask (olive/dark rubber)
+  for (let y = H_TOP; y < H_BOT; y++) for (let x = cx - headRad; x < cx + headRad; x++) {
+    const dx = x - cx, dy = y - headCy;
+    if (dx * dx + dy * dy < headRad * headRad) {
+      const n = noise(x, y, 150) * 8;
+      // Rubber gas mask — dark olive
+      t[y * S + x] = rgba(clamp(45 + n), clamp(50 + n), clamp(35 + n));
+    }
+  }
+  // Gas mask eye lenses — large, round, reflective
+  const lensY = headCy - 1;
+  for (let dy = -2; dy <= 1; dy++) {
+    for (let dx = -2; dx <= -1; dx++) {
+      const x = cx + dx;
+      if (x >= 0 && x < S && lensY + dy >= 0) {
+        t[(lensY + dy) * S + x] = rgba(80, 120, 100);
+      }
+    }
+    for (let dx = 1; dx <= 2; dx++) {
+      const x = cx + dx;
+      if (x >= 0 && x < S && lensY + dy >= 0) {
+        t[(lensY + dy) * S + x] = rgba(80, 120, 100);
+      }
+    }
+  }
+  // Filter canister below (center bottom of head)
+  for (let y = H_BOT - 3; y < H_BOT + 1; y++) {
+    for (let x = cx - 2; x <= cx + 2; x++) {
+      if (x >= 0 && x < S) {
+        t[y * S + x] = rgba(55, 55, 45);
+      }
+    }
+  }
+  // Helmet — military olive with strap
+  for (let y = H_TOP - 3; y < H_TOP + 3; y++) {
+    for (let x = cx - headRad - 1; x <= cx + headRad + 1; x++) {
+      if (x >= 0 && x < S && y >= 0) {
+        const n = noise(x, y, 151) * 6;
+        t[y * S + x] = rgba(clamp(60 + n), clamp(70 + n), clamp(40 + n));
+      }
+    }
+  }
+  // Body — military camo (olive/dark green pattern)
+  for (let y = B_TOP; y < B_BOT; y++) {
+    const halfW = 7 + (y < B_TOP + 8 ? (y - B_TOP) / 3 : 3);
+    for (let x = Math.floor(cx - halfW); x < Math.floor(cx + halfW); x++) {
+      if (x < 0 || x >= S) continue;
+      const n = noise(x, y, 152) * 10;
+      const camo = noise(x * 3, y * 3, 153) > 0.6 ? 15 : 0;
+      t[y * S + x] = rgba(clamp(55 + n - camo), clamp(70 + n - camo), clamp(40 + n));
+    }
+  }
+  // Legs — military cargo pants
+  for (let y = B_BOT; y < L_BOT; y++) {
+    for (let leg = -1; leg <= 1; leg += 2) {
+      for (let x = cx + leg * 2 - 3; x < cx + leg * 2 + 3; x++) {
+        if (x < 0 || x >= S) continue;
+        const n = noise(x, y, 154) * 6;
+        t[y * S + x] = rgba(clamp(50 + n), clamp(55 + n), clamp(35 + n));
+      }
+    }
+  }
+  // Ammo belt across chest
+  for (let y = B_TOP + 2; y < B_TOP + 4; y++) {
+    for (let x = cx - 6; x <= cx + 4; x++) {
+      if (x >= 0 && x < S) {
+        t[y * S + x] = rgba(70, 60, 40);
+      }
+    }
+  }
+  return t;
 }

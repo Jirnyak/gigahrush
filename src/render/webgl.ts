@@ -6,7 +6,7 @@
  * ────────────────────────────────────────────────────────────── */
 
 import {
-  W, Cell, DoorState, TEX, Tex, MAX_DRAW, Feature,
+  W, Cell, TEX, Tex, MAX_DRAW, Feature,
   type Entity, EntityType, ProjType,
 } from '../core/types';
 import { World } from '../core/world';
@@ -20,8 +20,7 @@ export const SCR_H = 200;
 const FOV = Math.PI / 3;
 const HALF_FOV = FOV / 2;
 
-/** Per-column depth buffer — filled by GPU readback for sprite clipping */
-const zBuf = new Float64Array(SCR_W);
+/** Per-column depth buffer — unused (GPU depth test handles sprite clipping) */
 
 /* ── Texture atlas layout ─────────────────────────────────────── *
  * All game textures (64×64 each) are packed into a single 2D     *
@@ -815,9 +814,6 @@ interface GLState {
   // Surface marks
   surfaceAtlasTex: WebGLTexture;    // 512×512 RGBA atlas of 16×16 overlays
   surfaceIdxTex: WebGLTexture;      // W×W R16UI cell→slot mapping
-  // Readback
-  depthReadBuf: Float32Array;
-  pixelReadBuf: Uint8Array;
   // Uniforms cache
   rayUniforms: Record<string, WebGLUniformLocation | null>;
   blitUniforms: Record<string, WebGLUniformLocation | null>;
@@ -1143,8 +1139,6 @@ export function initWebGL(
     doorStatesTex, atlasTex,
     spriteProgram, spriteVAO, spriteTextures,
     surfaceAtlasTex, surfaceIdxTex,
-    depthReadBuf: new Float32Array(SCR_W * SCR_H * 4),
-    pixelReadBuf: new Uint8Array(SCR_W * SCR_H * 4),
     rayUniforms, blitUniforms, spriteUniforms,
   };
 
@@ -1296,16 +1290,6 @@ export function renderSceneGL(
   gl.bindVertexArray(glState.rayVAO);
   gl.drawArrays(gl.TRIANGLES, 0, 6);
 
-  // ── Read back alpha for CPU zBuf BEFORE sprites overwrite it ──
-  gl.readPixels(0, 0, SCR_W, SCR_H, gl.RGBA, gl.UNSIGNED_BYTE, glState.pixelReadBuf);
-  const horizonRow = Math.floor(SCR_H / 2 + pPitch * SCR_H);
-  const clampedRow = Math.max(0, Math.min(SCR_H - 1, horizonRow));
-  for (let col = 0; col < SCR_W; col++) {
-    const idx = (clampedRow * SCR_W + col) * 4;
-    const normDist = glState.pixelReadBuf[idx + 3] / 255.0;
-    zBuf[col] = normDist * MAX_DRAW;
-  }
-
   // ── Render sprites into FBO (with depth test against raycaster) ──
   gl.depthFunc(gl.LESS);
   renderSpritesGL(world, sprites, entities, px, py, pAngle, pPitch, fogDensity, purpleFog, camHeight, time);
@@ -1335,8 +1319,8 @@ export function renderSceneGL(
 
 /* ── Sprite rendering (GL) ────────────────────────────────────── */
 function renderSpritesGL(
-  world: World,
-  sprites: SpriteData[],
+  _world: World,
+  _sprites: SpriteData[],
   entities: Entity[],
   px: number, py: number, pAngle: number, pPitch: number,
   fogDensity: number, purpleFog: number,
@@ -1453,7 +1437,7 @@ function renderSpritesGL(
 function renderParticlesGL(
   particles: BloodParticle[],
   px: number, py: number, pAngle: number, pPitch: number,
-  camHeight: number,
+  _camHeight: number,
 ): void {
   if (!glState || particles.length === 0) return;
   const { gl } = glState;

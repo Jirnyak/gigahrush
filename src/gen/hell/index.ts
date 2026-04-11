@@ -6,7 +6,7 @@ import {
   EntityType, AIGoal, MonsterKind, FloorLevel, ZoneFaction,
 } from '../../core/types';
 import { World } from '../../core/world';
-import { randomName, freshNeeds, monsterName } from '../../data/catalog';
+import { randomName, freshNeeds } from '../../data/catalog';
 import { rng, pick, ensureConnectivity, placeLifts, generateZones } from '../shared';
 import { MONSTERS } from '../../entities/monster';
 import { calcZoneLevel, randomRPG, scaleMonsterHp, scaleMonsterSpeed, gaussianLevel, getMaxHp } from '../../systems/rpg';
@@ -44,6 +44,7 @@ const HELL_MONSTER_BASE: Record<number, { hp: number; speed: number; sprite: num
   [MonsterKind.REBAR]:     { hp: 130, speed: 1.15, sprite: monsterSpr(MonsterKind.REBAR) },
   [MonsterKind.MATKA]:     { hp: 340, speed: 0.45, sprite: monsterSpr(MonsterKind.MATKA) },
   [MonsterKind.HERALD]:    { hp: 800, speed: 1.4, sprite: monsterSpr(MonsterKind.HERALD) },
+  [MonsterKind.SPIRIT]:    { hp: 50, speed: 2.0, sprite: monsterSpr(MonsterKind.SPIRIT) },
 };
 
 export function resetHellPopulationState(): void {
@@ -70,7 +71,7 @@ export function generateHell(): { world: World; entities: Entity[]; spawnX: numb
   placeLifts(world, 12, LiftDirection.UP);
   generateZones(world);
   retuneHellZones(world);
-  for (const z of world.zones) z.level = calcZoneLevel(z.id, FloorLevel.HELL) + 2;
+  for (const z of world.zones) z.level = calcZoneLevel(z.cx, z.cy, FloorLevel.HELL) + 2;
 
   for (let i = 0; i < W * W; i++) {
     if (world.cells[i] === Cell.FLOOR && Math.random() < 0.0035) {
@@ -412,13 +413,13 @@ function createHellMonster(world: World, nextId: { v: number }, kind: MonsterKin
     alive: true,
     speed: scaleMonsterSpeed(def.speed, zoneLevel + Math.max(1, bonus - 1)),
     sprite: def.sprite,
-    name: monsterName(),
     hp,
     maxHp: hp,
     monsterKind: kind,
     attackCd: 0,
     ai: { goal: AIGoal.WANDER, tx: 0, ty: 0, path: [], pi: 0, stuck: 0, timer: 0 },
     rpg,
+    phasing: kind === MonsterKind.SPIRIT,
   };
 }
 
@@ -527,6 +528,7 @@ function pickHellMonsterKind(samosborCount: number): MonsterKind {
     MonsterKind.NIGHTMARE, MonsterKind.NIGHTMARE,
     MonsterKind.REBAR,
     MonsterKind.BETONNIK,
+    MonsterKind.SPIRIT,
   ];
   if (samosborCount >= 3 && Math.random() < 0.05) pool.push(MonsterKind.MATKA);
   return pick(pool);
@@ -586,6 +588,11 @@ function spawnHeralds(world: World, entities: Entity[], nextId: { v: number }, s
   const sx = Math.floor(spawnX), sy = Math.floor(spawnY);
 
   for (let i = 0; i < 3; i++) {
+    // Third herald is sealed in an isolated chamber (reachable only via psi_noclip)
+    if (i === 2) {
+      spawnSealedHerald(world, entities, nextId, sx, sy, heraldDef);
+      continue;
+    }
     for (let attempt = 0; attempt < 5000; attempt++) {
       const cell = rng(0, W * W - 1);
       if (world.cells[cell] !== Cell.FLOOR) continue;
@@ -620,5 +627,73 @@ function spawnHeralds(world: World, entities: Entity[], nextId: { v: number }, s
       });
       break;
     }
+  }
+}
+
+/** Spawn 3rd Herald in a sealed 5×5 chamber (no doors, only noclip can reach) */
+function spawnSealedHerald(
+  world: World, entities: Entity[], nextId: { v: number },
+  sx: number, sy: number,
+  heraldDef: { hp: number; speed: number },
+): void {
+  const SIZE = 5;
+  // Find a WALL-only area at 100-300 tiles from spawn
+  for (let attempt = 0; attempt < 5000; attempt++) {
+    const angle = Math.random() * Math.PI * 2;
+    const dist = 100 + Math.random() * 200;
+    const bx = wrapCoord(sx + Math.round(Math.cos(angle) * dist));
+    const by = wrapCoord(sy + Math.round(Math.sin(angle) * dist));
+
+    // Check: all SIZE×SIZE + border must be wall (no floor)
+    let ok = true;
+    for (let dy = -1; dy <= SIZE && ok; dy++) {
+      for (let dx = -1; dx <= SIZE && ok; dx++) {
+        const ci = world.idx(bx + dx, by + dy);
+        if (world.cells[ci] !== Cell.WALL) ok = false;
+      }
+    }
+    if (!ok) continue;
+
+    // Carve interior as floor, keep walls sealed (no openings)
+    for (let dy = 0; dy < SIZE; dy++) {
+      for (let dx = 0; dx < SIZE; dx++) {
+        const ci = world.idx(bx + dx, by + dy);
+        world.cells[ci] = Cell.FLOOR;
+        world.floorTex[ci] = Tex.F_GUT;
+        world.wallTex[ci] = 0;
+      }
+    }
+    // Re-wall the border to make sure it's sealed
+    for (let dy = -1; dy <= SIZE; dy++) {
+      for (let dx = -1; dx <= SIZE; dx++) {
+        if (dx >= 0 && dx < SIZE && dy >= 0 && dy < SIZE) continue;
+        const ci = world.idx(bx + dx, by + dy);
+        world.cells[ci] = Cell.WALL;
+        world.wallTex[ci] = Tex.GUT;
+      }
+    }
+
+    // Add a lamp
+    const ccx = bx + Math.floor(SIZE / 2);
+    const ccy = by + Math.floor(SIZE / 2);
+    world.features[world.idx(ccx, ccy)] = Feature.LAMP;
+
+    // Spawn the sealed Herald
+    const rpg = randomRPG(16);
+    const hp = Math.round(scaleMonsterHp(heraldDef.hp, 16));
+    entities.push({
+      id: nextId.v++, type: EntityType.MONSTER,
+      x: ccx + 0.5, y: ccy + 0.5,
+      angle: 0, pitch: 0,
+      alive: true,
+      speed: scaleMonsterSpeed(heraldDef.speed, 14),
+      sprite: monsterSpr(MonsterKind.HERALD),
+      name: 'Неизвестный Вестник',
+      hp, maxHp: hp,
+      monsterKind: MonsterKind.HERALD, attackCd: 0,
+      ai: { goal: AIGoal.IDLE, tx: 0, ty: 0, path: [], pi: 0, stuck: 0, timer: 0 },
+      rpg,
+    });
+    return;
   }
 }

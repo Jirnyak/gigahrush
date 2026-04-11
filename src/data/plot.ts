@@ -37,7 +37,7 @@ export const PLOT_NPCS: Record<string, PlotNpcDef> = {
     faction: Faction.SCIENTIST,
     occupation: Occupation.DOCTOR,
     sprite: Occupation.DOCTOR,
-    hp: 100, maxHp: 100, money: 50, speed: 1.2,
+    hp: 500, maxHp: 500, money: 50, speed: 1.2,
     inventory: [
       { defId: 'bandage', count: 3 },
       { defId: 'pills', count: 1 },
@@ -67,7 +67,7 @@ export const PLOT_NPCS: Record<string, PlotNpcDef> = {
     faction: Faction.LIQUIDATOR,
     occupation: Occupation.HUNTER,
     sprite: Occupation.HUNTER,
-    hp: 120, maxHp: 120, money: 80, speed: 1.4,
+    hp: 600, maxHp: 600, money: 80, speed: 1.4,
     inventory: [
       { defId: 'makarov', count: 1 },
       { defId: 'ammo_9mm', count: 8 },
@@ -90,7 +90,7 @@ export const PLOT_NPCS: Record<string, PlotNpcDef> = {
     faction: Faction.SCIENTIST,
     occupation: Occupation.SCIENTIST,
     sprite: Occupation.SCIENTIST,
-    hp: 80, maxHp: 80, money: 60, speed: 1.0,
+    hp: 400, maxHp: 400, money: 60, speed: 1.0,
     inventory: [
       { defId: 'psi_strike', count: 1 },
       { defId: 'antidep', count: 1 },
@@ -110,7 +110,7 @@ export const PLOT_NPCS: Record<string, PlotNpcDef> = {
     faction: Faction.CULTIST,
     occupation: Occupation.ALCOHOLIC,
     sprite: Occupation.ALCOHOLIC,
-    hp: 60, maxHp: 60, money: 5, speed: 0.9,
+    hp: 300, maxHp: 300, money: 5, speed: 0.9,
     inventory: [
       { defId: 'bread', count: 1 },
       { defId: 'cigs', count: 2 },
@@ -137,7 +137,7 @@ export const PLOT_NPCS: Record<string, PlotNpcDef> = {
     faction: Faction.LIQUIDATOR,
     occupation: Occupation.HUNTER,
     sprite: Occupation.HUNTER,
-    hp: 180, maxHp: 180, money: 120, speed: 1.5,
+    hp: 10000, maxHp: 10000, money: 120, speed: 1.5,
     inventory: [
       { defId: 'makarov', count: 1 },
       { defId: 'ammo_9mm', count: 12 },
@@ -248,7 +248,7 @@ export const PLOT_CHAIN: PlotStep[] = [
   {
     giverNpcId: 'yakov',
     type: QuestType.TALK,
-    desc: 'Яков Давидович: «Теневик — что-то новое. О них слышали в докладах с нижних уровней. Спустись в коллекторы и найди моего знакомого — Майора Громного. Он дядька простой, но хороший, что редко среди ликвидаторов. Его форпост {dir}.»',
+    desc: 'Яков Давидович: «Теневик — что-то новое. О них слышали в докладах с нижних уровней. Спустись в коллекторы и найди моего знакомого — Майора Громного. Его форпост должен быть где-то под стрельбищем и моей лабораторией, на уровень ниже. Поищи ближайший лифт.»',
     targetNpcId: 'major_grom',
     rewardItem: 'psi_rupture', rewardCount: 1,
     relationDelta: 20, xpReward: 60, moneyReward: 80,
@@ -257,8 +257,8 @@ export const PLOT_CHAIN: PlotStep[] = [
   {
     giverNpcId: 'major_grom',
     type: QuestType.KILL,
-    desc: 'Майор Громный: «Помоги отбиться — тварей тут полно. Убей хотя бы троих, и я расскажу что знаю о теневиках.»',
-    targetMonsterKind: MonsterKind.TVAR, killNeeded: 3,
+    desc: 'Майор Громный: «Помоги отбиться — тварей тут полно. Убей хотя бы десять, и я расскажу что знаю о теневиках.»',
+    killNeeded: 10,
     rewardItem: 'ak47', rewardCount: 1,
     extraRewards: [{ defId: 'ammo_762', count: 30 }],
     relationDelta: 25, xpReward: 80, moneyReward: 100,

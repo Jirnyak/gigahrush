@@ -26,6 +26,54 @@ export function protectRoom(world: World, rx: number, ry: number, w: number, h: 
       world.floorTex[world.idx(rx + dx, ry + dy)] = floorTex;
 }
 
+/* ── Punch through aptMask border walls to connect room to maze  */
+export function connectProtectedRoom(world: World, rx: number, ry: number, w: number, h: number): void {
+  // Phase 1: find border wall cells adjacent to non-protected FLOOR (maze passages)
+  const openings: number[] = [];
+  for (let dy = -1; dy <= h; dy++) {
+    for (let dx = -1; dx <= w; dx++) {
+      if (dx >= 0 && dx < w && dy >= 0 && dy < h) continue; // skip interior
+      const bx = world.wrap(rx + dx);
+      const by = world.wrap(ry + dy);
+      const bi = world.idx(bx, by);
+      if (world.cells[bi] !== Cell.WALL) continue;
+      for (const [ox, oy] of [[1,0],[-1,0],[0,1],[0,-1]] as const) {
+        const ni = world.idx(world.wrap(bx + ox), world.wrap(by + oy));
+        if (world.cells[ni] === Cell.FLOOR && !world.aptMask[ni]) { openings.push(bi); break; }
+      }
+    }
+  }
+  if (openings.length > 0) {
+    const bi = openings[Math.floor(Math.random() * openings.length)];
+    world.cells[bi] = Cell.FLOOR;
+    world.aptMask[bi] = 0;
+    return;
+  }
+
+  // Phase 2: walk outward from each side until hitting maze floor
+  const midX = rx + Math.floor(w / 2), midY = ry + Math.floor(h / 2);
+  const probes: [number, number, number, number][] = [
+    [midX, ry - 1, 0, -1], [midX, ry + h, 0, 1],
+    [rx - 1, midY, -1, 0], [rx + w, midY, 1, 0],
+  ];
+  let bestPath: number[] = [], bestLen = Infinity;
+  for (const [sx, sy, ddx, ddy] of probes) {
+    const path: number[] = [];
+    let cx = world.wrap(sx), cy = world.wrap(sy);
+    for (let s = 0; s < 30; s++) {
+      const ci = world.idx(cx, cy);
+      if (world.cells[ci] === Cell.FLOOR && !world.aptMask[ci]) {
+        if (path.length < bestLen) { bestLen = path.length; bestPath = [...path]; }
+        break;
+      }
+      path.push(ci);
+      cx = world.wrap(cx + ddx);
+      cy = world.wrap(cy + ddy);
+    }
+  }
+  for (const ci of bestPath) { world.cells[ci] = Cell.FLOOR; world.aptMask[ci] = 0; }
+}
+
 /* ── Find clear rectangular area (all WALL, no aptMask) ──────── */
 export function findClearArea(
   world: World, cx: number, cy: number, w: number, h: number,
@@ -972,6 +1020,19 @@ export function generateZones(world: World): void {
     }
   }
 
+  // Snake (boustrophedon) traversal: row 0 L→R, row 1 R→L, …
+  // Use original grid position (from id) to avoid jitter-induced row/col swaps
+  zones.sort((a, b) => {
+    const agy = Math.floor(a.id / ZONE_GRID);
+    const bgy = Math.floor(b.id / ZONE_GRID);
+    if (agy !== bgy) return agy - bgy;
+    const agx = a.id % ZONE_GRID;
+    const bgx = b.id % ZONE_GRID;
+    return (agy % 2 === 0) ? agx - bgx : bgx - agx;
+  });
+  // Reassign IDs to match new order
+  for (let i = 0; i < zones.length; i++) zones[i].id = i;
+
   // Voronoi assignment: each cell → nearest zone center
   for (let y = 0; y < W; y++) {
     for (let x = 0; x < W; x++) {
@@ -1131,7 +1192,7 @@ export function stampHQRooms(world: World): void {
       // Stamp HQ room
       const roomId = world.rooms.length;
       const room = stampRoom(world, roomId, RoomType.HQ, rx, ry, HQ_W, HQ_H, -1);
-      room.name = `Штаб зоны ${zone.id}`;
+      room.name = `Штаб зоны ${zone.id + 1}`;
       room.wallTex = ZONE_FACTION_TEX[zone.faction] ?? Tex.METAL;
       // Apply wall/floor texture to all cells in the room
       for (let dy = -1; dy <= HQ_H; dy++) {

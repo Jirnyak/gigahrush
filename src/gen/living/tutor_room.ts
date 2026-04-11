@@ -13,7 +13,7 @@
 import {
   W, Cell, Tex, RoomType, Feature,
   type Room, type Entity,
-  EntityType, AIGoal, Faction, Occupation,
+  EntityType, AIGoal,
 } from '../../core/types';
 import { World } from '../../core/world';
 import { freshNeeds } from '../../data/catalog';

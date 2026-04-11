@@ -8,7 +8,7 @@ import {
   EntityType, AIGoal, MonsterKind,
 } from '../core/types';
 import { World } from '../core/world';
-import { ITEMS, NOTES, monsterName } from '../data/catalog';
+import { ITEMS, NOTES } from '../data/catalog';
 import { spawnCount } from '../data/items';
 import { MONSTERS } from '../entities/monster';
 import { forceHide } from './ai';
@@ -269,6 +269,7 @@ function getKindsForWave(samosborCount: number): MonsterKind[] {
   const kinds = [MonsterKind.SBORKA, MonsterKind.TVAR, MonsterKind.POLZUN];
   if (samosborCount >= 2) kinds.push(MonsterKind.ZOMBIE, MonsterKind.SHADOW);
   if (samosborCount >= 3) kinds.push(MonsterKind.BETONNIK, MonsterKind.EYE, MonsterKind.NIGHTMARE, MonsterKind.IDOL);
+  if (samosborCount >= 4) kinds.push(MonsterKind.SPIRIT);
   if (samosborCount >= 5) kinds.push(MonsterKind.REBAR);
   return kinds;
 }
@@ -290,13 +291,13 @@ function createMonster(world: World, nextId: { v: number }, kind: MonsterKind, x
     alive: true,
     speed: scaleMonsterSpeed(def.speed, zoneLevel),
     sprite: def.sprite,
-    name: monsterName(),
     hp: hpFinal,
     maxHp: hpFinal,
     monsterKind: kind,
     attackCd: def.attackRate,
     ai: { goal: AIGoal.HUNT, tx: 0, ty: 0, path: [], pi: 0, stuck: 0, timer: 0 },
     rpg,
+    phasing: kind === MonsterKind.SPIRIT,
   };
 }
 
@@ -412,7 +413,7 @@ function captureZone(world: World, entities: Entity[], nextId: { v: number }, st
     speed: scaleMonsterSpeed(bossDef.speed, zoneLevel),
     sprite: bossDef.sprite,
     spriteScale: 1.5,
-    name: '⚡ ' + monsterName(),
+
     hp: hpFinal,
     maxHp: hpFinal,
     monsterKind: bossKind,
@@ -428,11 +429,11 @@ function captureZone(world: World, entities: Entity[], nextId: { v: number }, st
   zoneNames[ZoneFaction.LIQUIDATOR] = 'ликвидаторской';
   zoneNames[ZoneFaction.CULTIST] = 'культистской';
   state.msgs.push({
-    text: `☠ Зона ${zone.id} захвачена самосбором! Фиолетовый туман распространяется...`,
+    text: `☠ Зона ${zone.id + 1} захвачена самосбором! Фиолетовый туман распространяется...`,
     time: state.time, color: '#a3f',
   });
   state.msgs.push({
-    text: `Босс тумана появился в зоне ${zone.id}! Убейте его чтобы остановить туман.`,
+    text: `Босс тумана появился в зоне ${zone.id + 1}! Убейте его чтобы остановить туман.`,
     time: state.time, color: '#f4a',
   });
 }

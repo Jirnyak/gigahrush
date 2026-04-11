@@ -6,11 +6,11 @@
 import {
   W, Cell, RoomType, Feature, ZoneFaction, MonsterKind,
   type Room, type Entity,
-  EntityType, AIGoal, Faction, Occupation,
+  EntityType, AIGoal,
 } from '../../core/types';
 import { World } from '../../core/world';
 import { freshNeeds } from '../../data/catalog';
-import { monsterName } from '../../data/names';
+
 import { PLOT_NPCS } from '../../data/plot';
 import { PLOT_ROOMS } from '../../data/plot_rooms';
 import { MONSTERS } from '../../entities/monster';
@@ -85,7 +85,7 @@ export function generateVankaDen(
   return { room, nextRoomId };
 }
 
-function spawnVanka(world: World, room: Room, entities: Entity[], nextId: { v: number }): void {
+function spawnVanka(_world: World, room: Room, entities: Entity[], nextId: { v: number }): void {
   const vankaDef = PLOT_NPCS['vanka'];
   const rcx = room.x + Math.floor(room.w / 2);
   const rcy = room.y + Math.floor(room.h / 2);
@@ -128,7 +128,7 @@ export function spawnVankaShadows(
       x: mx + 0.5, y: my + 0.5,
       angle: Math.random() * Math.PI * 2, pitch: 0,
       alive: true, speed: scaleMonsterSpeed(def.speed, zoneLevel), sprite: def.sprite,
-      name: monsterName(), hp, maxHp: hp,
+      hp, maxHp: hp,
       monsterKind: MonsterKind.SHADOW, attackCd: 0,
       ai: { goal: AIGoal.WANDER, tx: 0, ty: 0, path: [], pi: 0, stuck: 0, timer: 0 },
       rpg,

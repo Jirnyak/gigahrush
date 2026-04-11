@@ -30,6 +30,7 @@ import { DEF as IDOL_DEF, generateSprite as genIdol } from './idol';
 import { DEF as MANCOBUS_DEF, generateSprite as genMancobus } from './mancobus';
 import { DEF as HERALD_DEF, generateSprite as genHerald } from './herald';
 import { DEF as CREATOR_DEF, generateSprite as genCreator } from './creator';
+import { DEF as SPIRIT_DEF, generateSprite as genSpirit } from './spirit';
 
 export const MONSTERS: Record<MonsterKind, MonsterDef> = {
   [MonsterKind.SBORKA]:    SBORKA_DEF,
@@ -46,6 +47,7 @@ export const MONSTERS: Record<MonsterKind, MonsterDef> = {
   [MonsterKind.MANCOBUS]:  MANCOBUS_DEF,
   [MonsterKind.HERALD]:    HERALD_DEF,
   [MonsterKind.CREATOR]:   CREATOR_DEF,
+  [MonsterKind.SPIRIT]:    SPIRIT_DEF,
 };
 
 export const MONSTER_SPRITES: Record<MonsterKind, () => Uint32Array> = {
@@ -63,6 +65,20 @@ export const MONSTER_SPRITES: Record<MonsterKind, () => Uint32Array> = {
   [MonsterKind.MANCOBUS]:  genMancobus,
   [MonsterKind.HERALD]:    genHerald,
   [MonsterKind.CREATOR]:   genCreator,
+  [MonsterKind.SPIRIT]:    genSpirit,
 };
 
 export const EYE_BOLT_SPRITE: () => Uint32Array = genEyeBolt;
+
+/** Get generic type name for a monster kind (e.g. "Бетонник", "Тварь") */
+export function monsterTypeName(kind: MonsterKind | undefined): string {
+  if (kind === undefined) return 'Монстр';
+  return MONSTERS[kind]?.name ?? 'Монстр';
+}
+
+/** Display name: NPC uses e.name, monsters use generic type name */
+export function entityDisplayName(e: { name?: string; monsterKind?: MonsterKind }): string {
+  if (e.name) return e.name;
+  if (e.monsterKind !== undefined) return monsterTypeName(e.monsterKind);
+  return 'Цель';
+}

@@ -59,7 +59,7 @@ export function execDebugCommand(
       const kinds = [
         MonsterKind.SBORKA, MonsterKind.TVAR, MonsterKind.POLZUN, MonsterKind.BETONNIK,
         MonsterKind.ZOMBIE, MonsterKind.EYE, MonsterKind.NIGHTMARE, MonsterKind.SHADOW,
-        MonsterKind.REBAR, MonsterKind.MATKA, MonsterKind.IDOL,
+        MonsterKind.REBAR, MonsterKind.MATKA, MonsterKind.IDOL, MonsterKind.SPIRIT,
       ];
       for (let i = 0; i < kinds.length; i++) {
         const k = kinds[i];
@@ -75,6 +75,7 @@ export function execDebugCommand(
           monsterKind: k, attackCd: 0,
           ai: { goal: AIGoal.IDLE, tx: 0, ty: 0, path: [], pi: 0, stuck: 0, timer: 0 },
           rpg: randomRPG(player.rpg?.level ?? 1),
+          phasing: k === MonsterKind.SPIRIT,
         });
       }
       state.msgs.push({ text: 'Все монстры заспавнены', time: state.time, color: '#ff0' });

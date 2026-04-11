@@ -4,7 +4,7 @@ import './index.css';
 import {
   W, Cell, DoorState, FloorLevel, Feature, Tex, RoomType, LiftDirection,
   type Entity, type GameState,
-  EntityType, Faction, MonsterKind, ProjType, QuestType,
+  EntityType, Faction, MonsterKind, ProjType, QuestType, AIGoal,
 } from './core/types';
 import { World } from './core/world';
 import { generateWorld } from './gen/living';
@@ -13,7 +13,7 @@ import { generateHell, updateHellPopulation, resetHellPopulationState } from './
 import { generateVoid } from './gen/void';
 import { generateTextures } from './render/textures';
 import { generateSprites } from './render/sprites';
-import { Spr } from './render/sprite_index';
+import { Spr, monsterSpr } from './render/sprite_index';
 import { SCR_W, SCR_H, initWebGL, renderSceneGL, updateWorldData, updateDynamicData, disposeWebGL } from './render/webgl';
 import { drawHUD } from './render/hud';
 import { spawnBloodHit, spawnDeathPool, updateBloodTrails, updateParticles, particles } from './render/blood';
@@ -28,6 +28,7 @@ import {
 } from './systems/inventory';
 import { createInput, bindInput } from './input';
 import { freshNeeds, ITEMS } from './data/catalog';
+import { entityDisplayName } from './entities/monster';
 import {
   playFootstep, playAttack, playDoor,
   playGunshot, playShotgun, playNailgun, playBreak,
@@ -54,6 +55,7 @@ import {
 } from './systems/factions';
 import { addFactionRel, addFactionRelMutual, initFactionRelations } from './data/relations';
 import { type DeathCam, initDeathCam, updateDeathCam, getDeathCamAngle, getDeathCamPitch } from './systems/death';
+import { onHeraldKilled, onCreatorKilled, onHellArrival, tryCreateVoiceQuest, onVoidEntry } from './data/plot_events';
 
 /* ── Canvas setup ─────────────────────────────────────────────── */
 const canvas = document.getElementById('game') as HTMLCanvasElement;
@@ -172,6 +174,7 @@ function initGame(): void {
     beamFx: 0,
     beamAngle: 0,
     beamLen: 0,
+    gameWon: false,
   };
   resetPsiState();
 
@@ -524,7 +527,7 @@ function playerActions(_dt: number): void {
             const mVx = Math.cos(player.angle) * meleeSpd;
             const mVy = Math.sin(player.angle) * meleeSpd;
             spawnBloodHit(world, e.x, e.y, player.angle, dmg, e.type === EntityType.MONSTER, mVx, mVy, 0.5);
-            state.msgs.push({ text: `Удар! ${e.name} -${dmg}`, time: state.time, color: '#fc4' });
+            state.msgs.push({ text: `Удар! ${entityDisplayName(e)} -${dmg}`, time: state.time, color: '#fc4' });
             if (e.hp <= 0) {
               e.alive = false;
               const meleeGore = (player.weapon === 'chainsaw' || player.weapon === 'axe') ? 3
@@ -563,11 +566,76 @@ function dropEntityInventory(e: Entity): void {
   e.inventory = [];
 }
 
+/* ── Defense quest continuous monster spawner (step 8) ─────────── */
+let _defenseSpawnAccum = 0;
+function updateDefenseQuestSpawn(dt: number): void {
+  const quest = state.quests.find(q => q.plotStepIndex === 8 && !q.done && q.type === QuestType.KILL);
+  if (!quest) { _defenseSpawnAccum = 0; return; }
+
+  // Find Major Grom's position as spawn anchor
+  const grom = entities.find(e => e.plotNpcId === 'major_grom' && e.alive);
+  if (!grom) return;
+
+  _defenseSpawnAccum += dt;
+  if (_defenseSpawnAccum < 3.0) return; // spawn wave every 3 seconds
+  _defenseSpawnAccum -= 3.0;
+
+  // Count active monsters near Grom
+  let nearbyMonsters = 0;
+  for (const e of entities) {
+    if (e.type === EntityType.MONSTER && e.alive) {
+      if (world.dist(grom.x, grom.y, e.x, e.y) < 25) nearbyMonsters++;
+    }
+  }
+  if (nearbyMonsters >= 8) return; // enough already
+
+  // Spawn 2-3 monsters at ~3-8 cells from Grom (tight corridors)
+  const kinds = [MonsterKind.TVAR, MonsterKind.SBORKA, MonsterKind.ZOMBIE, MonsterKind.SHADOW, MonsterKind.POLZUN];
+  const count = 2 + Math.floor(Math.random() * 2);
+  for (let i = 0; i < count; i++) {
+    const angle = Math.random() * Math.PI * 2;
+    const dist = 3 + Math.random() * 5;
+    let mx = -1, my = -1;
+    for (let attempt = 0; attempt < 60; attempt++) {
+      const a = angle + (attempt > 0 ? (Math.random() - 0.5) * 1.5 : 0);
+      const d = dist + (attempt > 0 ? (Math.random() - 0.5) * 4 : 0);
+      const tx = ((Math.floor(grom.x) + Math.round(Math.cos(a) * d)) % W + W) % W;
+      const ty = ((Math.floor(grom.y) + Math.round(Math.sin(a) * d)) % W + W) % W;
+      if (world.cells[world.idx(tx, ty)] === Cell.FLOOR) {
+        mx = tx; my = ty; break;
+      }
+    }
+    if (mx < 0) continue;
+    const kind = kinds[Math.floor(Math.random() * kinds.length)];
+    const ci = world.idx(mx, my);
+    const zid = world.zoneMap[ci];
+    const zoneLevel = (zid >= 0 && world.zones[zid]) ? (world.zones[zid].level ?? 6) : 6;
+    const mRpg = freshRPG(zoneLevel);
+    const baseHp: Record<number, number> = {
+      [MonsterKind.TVAR]: 40, [MonsterKind.SBORKA]: 5,
+      [MonsterKind.ZOMBIE]: 25, [MonsterKind.SHADOW]: 45, [MonsterKind.POLZUN]: 80,
+    };
+    const hp = Math.round((baseHp[kind] ?? 40) * (1 + 0.12 * (zoneLevel - 1)));
+    entities.push({
+      id: nextEntityId.v++, type: EntityType.MONSTER,
+      x: mx + 0.5, y: my + 0.5,
+      angle: Math.atan2(grom.y - my - 0.5, grom.x - mx - 0.5),
+      pitch: 0, alive: true,
+      speed: 1.5 + Math.random() * 0.8,
+      sprite: monsterSpr(kind),
+      hp, maxHp: hp,
+      monsterKind: kind, attackCd: 0,
+      ai: { goal: AIGoal.WANDER, tx: Math.floor(grom.x), ty: Math.floor(grom.y), path: [], pi: 0, stuck: 0, timer: 0 },
+      rpg: mRpg,
+    });
+  }
+}
+
 /* ── Shared kill handling (melee + projectile) ────────────────── */
 function handleKill(e: Entity, killerIsPlayer: boolean, pvx = 0, pvy = 0, goreLevel = 1): void {
   // Death blood pool — directional + gore-scaled
   spawnDeathPool(world, e.x, e.y, e.type === EntityType.MONSTER, goreLevel, pvx, pvy);
-  state.msgs.push({ text: `${e.name ?? 'Цель'} ${e.isFemale ? 'повержена' : 'повержен'}!`, time: state.time, color: '#4f4' });
+  state.msgs.push({ text: `${entityDisplayName(e)} ${e.isFemale ? 'повержена' : 'повержен'}!`, time: state.time, color: '#4f4' });
   // Drop NPC inventory as loot
   if (e.type === EntityType.NPC) dropEntityInventory(e);
   if (e.isFogBoss && e.fogBossZone !== undefined) {
@@ -594,16 +662,11 @@ function handleKill(e: Entity, killerIsPlayer: boolean, pvx = 0, pvy = 0, goreLe
     }
     // Herald killed — check if voice quest (kill 3 heralds) is now complete → spawn portal
     if (e.monsterKind === MonsterKind.HERALD && killerIsPlayer && state.currentFloor === FloorLevel.HELL) {
-      const voiceQuest = state.quests.find(q => q.plotStepIndex === 11 && !q.done && q.type === QuestType.KILL);
-      if (voiceQuest && (voiceQuest.killCount ?? 0) >= (voiceQuest.killNeeded ?? 3)) {
-        // Place a portal at the kill location
-        const px = Math.floor(e.x), py = Math.floor(e.y);
-        const ci = world.idx(px, py);
-        world.floorTex[ci] = Tex.PORTAL;
-        state.msgs.push({ text: '̸̨̛̟̟̹̠̓ Таинственный голос: «Путь открыт. Шагни в бездну.»', time: state.time, color: '#0f8' });
-        state.msgs.push({ text: 'Портал открылся на месте последнего Вестника!', time: state.time, color: '#0ff' });
-        updateWorldData(world);
-      }
+      if (onHeraldKilled(e, world, state)) updateWorldData(world);
+    }
+    // Creator killed — spawn return portal
+    if (e.monsterKind === MonsterKind.CREATOR && killerIsPlayer && state.currentFloor === FloorLevel.VOID) {
+      if (onCreatorKilled(e, world, state)) updateWorldData(world);
     }
   } else if (e.type === EntityType.NPC && killerIsPlayer) {
     awardXP(player, xpForNpcKill(e.rpg?.level ?? 1), state.msgs, state.time);
@@ -976,28 +1039,10 @@ function switchFloor(direction: LiftDirection): void {
       color: nextFloor === FloorLevel.HELL ? '#f44' : nextFloor === FloorLevel.VOID ? '#0f8' : '#4af',
     });
 
-    // Auto-trigger voice quest when entering Hell with step 10 done
+    // Auto-trigger voice quest when entering Hell with step 9 (kill Mancobus) done
     if (nextFloor === FloorLevel.HELL) {
-      const step10Done = state.quests.some(q => q.plotStepIndex === 10 && q.done);
-      const voiceQuestExists = state.quests.some(q => q.plotStepIndex === 11);
-      if (step10Done && !voiceQuestExists) {
-        const qid = state.nextQuestId++;
-        state.quests.push({
-          id: qid, type: QuestType.KILL,
-          giverId: -1, giverName: 'Таинственный голос',
-          desc: 'Таинственный голос: «Ищущий… Я чувствую тебя. Уничтожь трёх Вестников — и путь откроется.»',
-          targetMonsterKind: MonsterKind.HERALD,
-          killCount: 0, killNeeded: 3,
-          rewardItem: 'psi_brainburn', rewardCount: 1,
-          extraRewards: [{ defId: 'antidep', count: 3 }],
-          relationDelta: 0, xpReward: 200, moneyReward: 0,
-          plotStepIndex: 11,
-          done: false,
-        });
-        state.msgs.push({ text: '̸̨̛̟̟̜̹̠̓ Таинственный голос: «Ищущий… Я чувствую тебя…»', time: state.time, color: '#0f8' });
-        state.msgs.push({ text: 'Таинственный голос: «Уничтожь трёх Вестников — и путь откроется.»', time: state.time, color: '#0f8' });
-        state.msgs.push({ text: 'Новое задание: Уничтожить 3-х Вестников', time: state.time, color: '#4af' });
-      }
+      onHellArrival(player, state);
+      tryCreateVoiceQuest(world, entities, state);
     }
 
     // Update WebGL world data after floor change
@@ -1057,8 +1102,7 @@ function enterVoidFloor(): void {
     state.samosborTimer = 40 + Math.random() * 120;
     state.samosborActive = false;
 
-    state.msgs.push({ text: 'Портал перенёс вас в… Пустоту.', time: state.time, color: '#0f8' });
-    state.msgs.push({ text: 'Таинственный голос: «Ты пришёл. Найди Творца. Уничтожь его — или будь уничтожен.»', time: state.time, color: '#0f8' });
+    onVoidEntry(state);
 
     updateWorldData(world);
   };
@@ -1750,6 +1794,10 @@ function gameLoop(now: number): void {
     if (state.currentFloor === FloorLevel.HELL) {
       updateHellPopulation(world, entities, nextEntityId, dt, state.samosborCount);
     }
+    // Continuous monster spawn for Grom's defense quest (step 8)
+    if (state.currentFloor === FloorLevel.MAINTENANCE) {
+      updateDefenseQuestSpawn(dt);
+    }
     // PSI does NOT auto-regenerate — only restored via items (pills, antidepressant)
     // Update ongoing PSI spell effects (phase shift, madness, control)
     updatePsiEffects(entities, dt);
@@ -1775,6 +1823,20 @@ function gameLoop(now: number): void {
       if (world.floorTex[pci] === Tex.PORTAL) {
         // Transition to Void — use switchFloor-like mechanism
         enterVoidFloor();
+        // Bail out: currentFloor is already VOID but old world still has the portal;
+        // continuing would trigger the "return portal" check and freeze the game.
+        requestAnimationFrame(gameLoop);
+        return;
+      }
+    }
+
+    // Return portal in Void — end game
+    if (state.currentFloor === FloorLevel.VOID && state.tick % 10 === 0) {
+      const pci = world.idx(Math.floor(player.x), Math.floor(player.y));
+      if (world.floorTex[pci] === Tex.PORTAL) {
+        state.gameWon = true;
+        state.gameOver = true;
+        state.deathTimer = 0;
       }
     }
 

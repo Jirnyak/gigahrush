@@ -12,6 +12,7 @@ import { clearFogInZone } from '../samosbor';
 import { strMeleeDmgMult, agiAttackSpeedMult } from '../rpg';
 import { spawnBloodHit, spawnDeathPool } from '../../render/blood';
 import { consumeAmmo, consumeDurability } from '../inventory';
+import { entityDisplayName } from '../../entities/monster';
 import { bfsPath, followPath } from './pathfinding';
 import { Spr } from '../../render/sprite_index';
 import { findCombatTarget, dropNpcInventory } from './monster';
@@ -215,7 +216,7 @@ export function tryFactionCombat(
         target.alive = false;
         spawnDeathPool(world, target.x, target.y, target.type === EntityType.MONSTER);
         if (target.type === EntityType.NPC) dropNpcInventory(target, entities, nextId);
-        msgs.push({ text: `${e.name ?? 'NPC'} ${e.isFemale ? 'убила' : 'убил'} ${target.name ?? 'цель'}`, time: _time, color: '#fa4' });
+        msgs.push({ text: `${e.name ?? 'NPC'} ${e.isFemale ? 'убила' : 'убил'} ${entityDisplayName(target)}`, time: _time, color: '#fa4' });
         bark(e, msgs, _time, BARK_KILL, BARK_KILL_F, BARK_CHANCE_KILL, '#da4');
         if (target.isFogBoss && target.fogBossZone !== undefined) {
           clearFogInZone(world, target.fogBossZone, msgs, _time);

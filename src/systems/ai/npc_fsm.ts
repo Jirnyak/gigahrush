@@ -118,11 +118,6 @@ export function updateNPC(world: World, _entities: Entity[], e: Entity, dt: numb
     if (currentRoom.type === RoomType.BATHROOM) {
       n.water = Math.min(100, n.water + 12 * dt);
       n.pendingPee = (n.pendingPee ?? 0) + 12 * 0.6 * dt;
-    }
-    if (currentRoom.type === RoomType.LIVING && ai.npcState === NpcState.SLEEPING) {
-      n.sleep = Math.min(100, n.sleep + 6 * dt);
-    }
-    if (currentRoom.type === RoomType.BATHROOM) {
       if (n.pee > 15 && Math.random() < 0.3) {
         const fx = ((e.x % 1) + 1) % 1;
         const fy = ((e.y % 1) + 1) % 1;
@@ -130,6 +125,9 @@ export function updateNPC(world: World, _entities: Entity[], e: Entity, dt: numb
       }
       n.pee = Math.max(0, n.pee - 20 * dt);
       n.poo = Math.max(0, n.poo - 15 * dt);
+    }
+    if (currentRoom.type === RoomType.LIVING && ai.npcState === NpcState.SLEEPING) {
+      n.sleep = Math.min(100, n.sleep + 6 * dt);
     }
     if (currentRoom.type === RoomType.MEDICAL && e.hp !== undefined && e.maxHp !== undefined) {
       e.hp = Math.min(e.maxHp, e.hp + 3 * dt);
