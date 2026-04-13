@@ -79,6 +79,7 @@ export const OCCUPATION_NAMES: Record<Occupation, string> = {
   [Occupation.TRAVELER]:    'Путник',
   [Occupation.PILGRIM]:     'Паломник',
   [Occupation.HUNTER]:      'Охотник',
+  [Occupation.PRIEST]:      'Священник',
 };
 
 /* ── Weighted faction/occupation assignment ────────────────────── */

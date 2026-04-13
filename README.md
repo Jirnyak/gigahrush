@@ -928,6 +928,184 @@ myitem: { id:'myitem', name:'Мой предмет', type:ItemType.MISC, stack:3
 
 По аналогии с `living/` — создай файл в `src/gen/hell/` или `src/gen/maintenance/`, вызови из соответствующего `index.ts`.
 
+### Добавить контент-зону (Zone Content Module)
+
+Контент-зоны — **модульная система для кастомизации целых зон**. Дизайнер выбирает номер зоны (как на HUD) и описывает, что в ней будет: комнаты, NPC, предметы, квесты. Модуль автоматически размещается в центре выбранной зоны **после генерации лабиринта** — бульдозит коридоры и штампует свой контент.
+
+**Архитектура:**
+
+| Файл | Роль |
+|------|------|
+| `src/gen/living/zone_content.ts` | **Реестр** — `registerZoneContent()`, `runZoneContentModules()`, тип `ZoneContentGenerator` |
+| `src/gen/living/my_zone.ts` | **Контент-модуль** — определение комнат, NPC, квестов, auto-register через `registerZoneContent()` |
+| `src/gen/living/index.ts` | **Оркестратор** — импортирует модуль (side-effect), вызывает `runZoneContentModules()` |
+
+**Принцип работы:**
+1. Модуль импортируется в `index.ts` как side-effect (`import './my_zone'`)
+2. При импорте вызывается `registerZoneContent(zoneHudId, label, generatorFn)` — регистрирует генератор для зоны
+3. После генерации лабиринта оркестратор вызывает `runZoneContentModules()` — передаёт каждому модулю координаты центра его зоны
+4. Модуль бульдозит область (WALL поверх не-aptMask), вырезает свои комнаты, ставит aptMask, прокладывает коридор к лабиринту
+
+**Порядок генерации:** Квартиры → Зоны → HQ → Лабиринт → **Контент-зоны** → Тени → Сайд-квесты → Предметы → NPC
+
+**Пошагово — создать контент-зону:**
+
+1. **Создай файл** `src/gen/living/my_zone.ts`:
+
+```typescript
+/* ── My Zone — zone content module ──────────────────────────── */
+import {
+  W, Cell, Tex, Feature, RoomType,
+  type Room, type Entity, EntityType, AIGoal, Faction, Occupation,
+} from '../../core/types';
+import { World } from '../../core/world';
+import { freshNeeds } from '../../data/catalog';
+import { registerZoneContent } from './zone_content';
+
+/* ── Room dimensions ─────────────────────────────────────────── */
+const ROOM_W = 9;
+const ROOM_H = 9;
+
+/* ── Generator function ──────────────────────────────────────── */
+function generateMyZone(
+  world: World, nextRoomId: number, entities: Entity[], nextId: { v: number },
+  zoneCx: number, zoneCy: number,
+): { nextRoomId: number } {
+  // 1. Pick position near zone center
+  const rx = world.wrap(zoneCx + Math.floor(Math.random() * 20) - 10);
+  const ry = world.wrap(zoneCy + Math.floor(Math.random() * 20) - 10);
+
+  // 2. Bulldoze area — overwrite non-apartment cells with WALL
+  for (let dy = -2; dy < ROOM_H + 2; dy++) {
+    for (let dx = -2; dx < ROOM_W + 2; dx++) {
+      const ci = world.idx(rx + dx, ry + dy);
+      if (!world.aptMask[ci]) {
+        world.cells[ci] = Cell.WALL;
+        world.wallTex[ci] = Tex.CONCRETE;  // выбери текстуру стен
+        world.floorTex[ci] = Tex.F_LINO;   // выбери текстуру пола
+        world.roomMap[ci] = -1;
+        world.features[ci] = 0;
+      }
+    }
+  }
+
+  // 3. Carve room interior
+  const roomId = nextRoomId++;
+  const room: Room = {
+    id: roomId, type: RoomType.HALL,           // тип комнаты для миникарты
+    x: rx, y: ry, w: ROOM_W, h: ROOM_H,
+    name: 'Моя комната',
+    wallTex: Tex.CONCRETE, floorTex: Tex.F_LINO,
+    doors: [], sealed: false, apartmentId: -1,
+  };
+  world.rooms[roomId] = room;
+
+  for (let dy = -1; dy < ROOM_H + 1; dy++) {
+    for (let dx = -1; dx < ROOM_W + 1; dx++) {
+      const ci = world.idx(rx + dx, ry + dy);
+      if (world.aptMask[ci]) continue;
+      const interior = dx >= 0 && dx < ROOM_W && dy >= 0 && dy < ROOM_H;
+      if (interior) {
+        world.cells[ci] = Cell.FLOOR;
+        world.floorTex[ci] = room.floorTex;
+        world.roomMap[ci] = roomId;
+      } else {
+        world.cells[ci] = Cell.WALL;
+        world.wallTex[ci] = room.wallTex;
+      }
+    }
+  }
+
+  // 4. Protect — aptMask survives samosbor
+  for (let dy = -1; dy <= ROOM_H; dy++)
+    for (let dx = -1; dx <= ROOM_W; dx++)
+      world.aptMask[world.idx(rx + dx, ry + dy)] = 1;
+
+  // 5. Door + corridor to maze
+  const doorX = rx + Math.floor(ROOM_W / 2);
+  const doorY = ry + ROOM_H; // south wall
+  world.cells[world.idx(doorX, doorY)] = Cell.DOOR;
+  world.aptMask[world.idx(doorX, doorY)] = 1;
+
+  // Carve south corridor until hitting existing maze FLOOR
+  let cy = world.wrap(doorY + 1);
+  for (let s = 0; s < 60; s++) {
+    const ci = world.idx(doorX, cy);
+    if (world.cells[ci] === Cell.FLOOR && !world.aptMask[ci]) break;
+    if (!world.aptMask[ci]) {
+      world.cells[ci] = Cell.FLOOR;
+      world.roomMap[ci] = -1;
+    }
+    cy = world.wrap(cy + 1);
+  }
+
+  // 6. Interior: лампы, мебель
+  world.features[world.idx(rx + Math.floor(ROOM_W / 2), ry + Math.floor(ROOM_H / 2))] = Feature.LAMP;
+
+  // 7. NPC (опционально)
+  entities.push({
+    id: nextId.v++, type: EntityType.NPC,
+    x: rx + Math.floor(ROOM_W / 2) + 0.5,
+    y: ry + Math.floor(ROOM_H / 2) + 0.5,
+    angle: Math.PI, pitch: 0,
+    alive: true, speed: 1.0, sprite: Occupation.WORKER,
+    name: 'Мой NPC', isFemale: false,
+    needs: freshNeeds(), hp: 60, maxHp: 60, money: 50,
+    ai: { goal: AIGoal.IDLE, tx: 0, ty: 0, path: [], pi: 0, stuck: 0, timer: 0 },
+    inventory: [],
+    faction: Faction.CITIZEN, occupation: Occupation.WORKER,
+  });
+
+  return { nextRoomId };
+}
+
+/* ── Register in target zone ─────────────────────────────────── */
+registerZoneContent(
+  5,                    // номер зоны на HUD (1-64)
+  'Моя зона',          // debug-лейбл
+  generateMyZone,       // функция-генератор
+);
+```
+
+2. **Подключи одной строкой** в `src/gen/living/index.ts`:
+
+```typescript
+import './my_zone'; // side-effect: registers zone content for zone 5
+```
+
+**Готово.** Зона автоматически заполнится при генерации мира. Комната защищена от самосбора, коридор прорыт к лабиринту.
+
+> **Советы:**
+> - **Несколько комнат** — генерируй несколько roomId в одном модуле, каждой со своим `rx,ry`
+> - **Сложная планировка** — используй helper-функции `insideShape(dx,dy)` + `onBorder(dx,dy)` как в `temple.ts` (крест)
+> - **NPC с квестами** — используй `registerSideQuest()` из `src/data/plot.ts` для добавления квестов (по образцу `temple.ts`)
+> - **Текстуры стен** — доступные: `Tex.CONCRETE`, `Tex.BRICK`, `Tex.PANEL`, `Tex.TILE`, `Tex.METAL`, `Tex.DECAY`, `Tex.PIPE`, `Tex.MEAT`; для пола: `Tex.F_LINO`, `Tex.F_TILE`, `Tex.F_PARQUET`, `Tex.F_CARPET`
+> - **Типы комнат** (цвет на миникарте): `RoomType.LIVING`, `KITCHEN`, `BATHROOM`, `STORAGE`, `MEDICAL`, `HALL`, `WORKSHOP`, `SMOKEROOM`, `OFFICE`
+> - **Features** (мебель): `Feature.LAMP`, `TABLE`, `CHAIR`, `BED`, `STOVE`, `SINK`, `SHELF`, `MACHINE`, `CANDLE`
+> - **Не забудь `aptMask`!** Без неё комната разрушится при самосборе
+> - **Не забудь коридор!** Без явного коридора от двери к лабиринту комната будет изолированной
+
+#### Сигнатура ZoneContentGenerator
+
+```typescript
+type ZoneContentGenerator = (
+  world: World,
+  nextRoomId: number,    // первый свободный room ID
+  entities: Entity[],     // массив энтити (push NPC/монстров)
+  nextId: { v: number },  // счётчик entity ID (инкрементируй .v)
+  zoneCx: number,         // X центра зоны (cell coords)
+  zoneCy: number,         // Y центра зоны (cell coords)
+) => { nextRoomId: number };
+```
+
+#### Пример: Православный храм (zone 3)
+
+Файл `src/gen/living/temple.ts` — полный пример zone content module:
+- Крестообразная планировка (неф + трансепт)
+- Батюшка NPC с квестом на пасхальные яйца
+- Текстуры: кресты у входа, иконы на стенах
+- Проклятие смерти: 666 монстров в форме пентаграммы
+
 ### Принципы
 
 - **Один файл = один контент-модуль.** Всё своё: планировка, текстуры, NPC, предметы, квесты.
@@ -935,6 +1113,7 @@ myitem: { id:'myitem', name:'Мой предмет', type:ItemType.MISC, stack:3
 - **Никогда не меняй `shared.ts`** — это общие утилиты. Используй `stampRoom`, `placeDoor`, `carveCorridor`.
 - **`aptMask = 1`** — комната не разрушается при самосборе. Без маски — перестроится вместе с лабиринтом.
 - **Подключение: одна строка в `index.ts`** оркестраторе этажа. Сигнатура: `(world, nextRoomId, entities, nextId, ...)` → `{ room, nextRoomId }`.
+- **Контент-зоны — через `registerZoneContent()`**. Один файл = одна зона. Импорт как side-effect в `index.ts`.
 
 ## Сборка
 

@@ -17,6 +17,7 @@ import { World } from '../../core/world';
 import { freshNeeds } from '../../data/catalog';
 import { PLOT_NPCS } from '../../data/plot';
 import { stampRoom, protectRoom, findClearArea } from '../shared';
+import { Spr } from '../../render/sprite_index';
 
 const LAB_MIN_DIST = 10;
 const LAB_MAX_DIST = 50;
@@ -96,7 +97,7 @@ export function generateYakovLab(
     if (world.dist(labCx, labCy, wx, wy) > IDOL_SEARCH_R) continue;
     entities.push({
       id: nextId.v++, type: EntityType.ITEM_DROP,
-      x: wx + 0.5, y: wy + 0.5, angle: 0, pitch: 0, alive: true, speed: 0, sprite: 16,
+      x: wx + 0.5, y: wy + 0.5, angle: 0, pitch: 0, alive: true, speed: 0, sprite: Spr.ITEM_DROP,
       inventory: [{ defId: 'idol_chernobog', count: 1 }],
     });
     idolPlaced = true;

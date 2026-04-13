@@ -68,7 +68,9 @@ export const enum Tex {
   VOID_WALL  = 43,
   F_VOID     = 44,
   PORTAL     = 45,
-  COUNT      = 46,
+  CROSS      = 46,
+  ICON       = 47,
+  COUNT      = 48,
 }
 
 // ── Floor levels (Z-axis) ────────────────────────────────────────
@@ -128,6 +130,7 @@ export const enum Feature {
   LIFT_BUTTON  = 11,
   DESK         = 12,
   SLIDE        = 13,
+  CANDLE       = 14,
 }
 
 // ── Doors ────────────────────────────────────────────────────────
@@ -226,6 +229,7 @@ export enum Occupation {
   TRAVELER,    // путник — бродит по лабиринту
   PILGRIM,     // паломник — бродит по лабиринту (культист)
   HUNTER,      // охотник — бродит по лабиринту (ликвидатор)
+  PRIEST,      // батюшка — священник в храме
 }
 
 export interface Needs {
@@ -447,8 +451,19 @@ export interface GameState {
   gameWon: boolean;          // player killed Creator and entered return portal
 }
 
-export interface Msg { text: string; time: number; color: string; }
+export interface Msg { text: string; time: number; color: string; day: number; hour: number; minute: number; }
 export interface LogEntry { text: string; color: string; day: number; hour: number; minute: number; }
+
+/* ── Global msg factory — stores current clock, call setMsgClock each frame ── */
+let _msgDay = 0, _msgHour = 8, _msgMin = 0;
+export function setMsgClock(clock: GameClock): void {
+  _msgDay = Math.floor(clock.totalMinutes / 1440);
+  _msgHour = clock.hour;
+  _msgMin = clock.minute;
+}
+export function msg(text: string, time: number, color: string): Msg {
+  return { text, time, color, day: _msgDay, hour: _msgHour, minute: _msgMin };
+}
 
 // ── Input ────────────────────────────────────────────────────────
 export interface InputState {

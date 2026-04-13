@@ -44,7 +44,7 @@ export class World {
     this.light.fill(0);
     const R = 8;  // lamp radius in cells
     for (let i = 0; i < W * W; i++) {
-      if (this.features[i] !== Feature.LAMP) continue;
+      if (this.features[i] !== Feature.LAMP && this.features[i] !== Feature.CANDLE) continue;
       const lx = i % W;
       const ly = (i / W) | 0;
       for (let dy = -R; dy <= R; dy++) {

@@ -3,6 +3,7 @@
 import {
   type Entity, type RPGStats, type Msg,
   W, MonsterKind, FloorLevel,
+  msg,
 } from '../core/types';
 
 // ── XP formula: soft quadratic — looks linear at 1-10, quadratic long-term ──
@@ -89,7 +90,7 @@ export function awardXP(e: Entity, amount: number, msgs: Msg[], time: number): v
   const adjusted = Math.round(amount * intXpMult(e.rpg));
   e.rpg.xp += adjusted;
 
-  msgs.push({ text: `+${adjusted} XP`, time, color: '#af4' });
+  msgs.push(msg(`+${adjusted} XP`, time, '#af4'));
 
   // Check for level up(s)
   while (e.rpg.xp >= xpForLevel(e.rpg.level + 1)) {
@@ -106,7 +107,7 @@ export function awardXP(e: Entity, amount: number, msgs: Msg[], time: number): v
       e.maxHp = newMax;
       if (e.hp !== undefined) e.hp = Math.min(e.maxHp, e.hp + diff);
     }
-    msgs.push({ text: `УРОВЕНЬ ${e.rpg.level}! +1 очко атрибутов`, time, color: '#ff4' });
+    msgs.push(msg(`УРОВЕНЬ ${e.rpg.level}! +1 очко атрибутов`, time, '#ff4'));
   }
 }
 

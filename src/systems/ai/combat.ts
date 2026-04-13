@@ -3,6 +3,7 @@
 import {
   type Entity, type Msg,
   EntityType, AIGoal, Occupation, Faction,
+  msg,
 } from '../../core/types';
 import { World } from '../../core/world';
 import { WEAPON_STATS } from '../../data/catalog';
@@ -216,7 +217,7 @@ export function tryFactionCombat(
         target.alive = false;
         spawnDeathPool(world, target.x, target.y, target.type === EntityType.MONSTER);
         if (target.type === EntityType.NPC) dropNpcInventory(target, entities, nextId);
-        msgs.push({ text: `${e.name ?? 'NPC'} ${e.isFemale ? 'убила' : 'убил'} ${entityDisplayName(target)}`, time: _time, color: '#fa4' });
+        msgs.push(msg(`${e.name ?? 'NPC'} ${e.isFemale ? 'убила' : 'убил'} ${entityDisplayName(target)}`, _time, '#fa4'));
         bark(e, msgs, _time, BARK_KILL, BARK_KILL_F, BARK_CHANCE_KILL, '#da4');
         if (target.isFogBoss && target.fogBossZone !== undefined) {
           clearFogInZone(world, target.fogBossZone, msgs, _time);

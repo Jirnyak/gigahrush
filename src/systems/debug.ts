@@ -4,12 +4,14 @@ import {
   W, Cell, RoomType, Faction, ZoneFaction, LiftDirection,
   EntityType, MonsterKind, Occupation, AIGoal,
   type Entity, type GameState,
+  msg,
 } from '../core/types';
 import { World } from '../core/world';
 import { freshNeeds, randomName, ITEMS } from '../data/catalog';
 import { getStack } from '../data/items';
 import { FACTION_NAMES } from '../data/relations';
 import { MONSTERS } from '../entities/monster';
+import { Spr } from '../render/sprite_index';
 import { awardXP, randomRPG, getMaxHp } from './rpg';
 import { isDebugNoClipEnabled, toggleDebugNoClip } from './psi';
 
@@ -48,11 +50,11 @@ export function execDebugCommand(
           id: nextEntityId.v++, type: EntityType.ITEM_DROP,
           x: player.x + Math.cos(ang) * 2,
           y: player.y + Math.sin(ang) * 2,
-          angle: 0, pitch: 0, alive: true, speed: 0, sprite: 16,
+          angle: 0, pitch: 0, alive: true, speed: 0, sprite: Spr.ITEM_DROP,
           inventory: [allItems[i]],
         });
       }
-      state.msgs.push({ text: 'Все оружия + сгустки заспавнены', time: state.time, color: '#ff0' });
+      state.msgs.push(msg('Все оружия + сгустки заспавнены', state.time, '#ff0'));
       break;
     }
     case 1: { // Spawn one of each monster nearby
@@ -78,7 +80,7 @@ export function execDebugCommand(
           phasing: k === MonsterKind.SPIRIT,
         });
       }
-      state.msgs.push({ text: 'Все монстры заспавнены', time: state.time, color: '#ff0' });
+      state.msgs.push(msg('Все монстры заспавнены', state.time, '#ff0'));
       break;
     }
     case 2: { // Spawn random NPC nearby
@@ -99,7 +101,7 @@ export function execDebugCommand(
         inventory: [], faction, occupation: Occupation.TRAVELER, isTraveler: true,
         rpg, money: 20 + Math.floor(Math.random() * 80),
       });
-      state.msgs.push({ text: `NPC ${nm.name} заспавнен`, time: state.time, color: '#ff0' });
+      state.msgs.push(msg(`NPC ${nm.name} заспавнен`, state.time, '#ff0'));
       break;
     }
     case 3: { // Spawn all items nearby
@@ -111,30 +113,30 @@ export function execDebugCommand(
           id: nextEntityId.v++, type: EntityType.ITEM_DROP,
           x: player.x + Math.cos(ang) * 2,
           y: player.y + Math.sin(ang) * 2,
-          angle: 0, pitch: 0, alive: true, speed: 0, sprite: 16,
+          angle: 0, pitch: 0, alive: true, speed: 0, sprite: Spr.ITEM_DROP,
           inventory: [{ defId: def.id, count: getStack(def) }],
         });
       }
-      state.msgs.push({ text: 'Все предметы заспавнены', time: state.time, color: '#ff0' });
+      state.msgs.push(msg('Все предметы заспавнены', state.time, '#ff0'));
       break;
     }
     case 4: { // Give 1M XP
       awardXP(player, 1_000_000, state.msgs, state.time);
-      state.msgs.push({ text: '+1 000 000 XP', time: state.time, color: '#ff0' });
+      state.msgs.push(msg('+1 000 000 XP', state.time, '#ff0'));
       break;
     }
     case 5: { // Force samosbor
       state.samosborTimer = 0;
-      state.msgs.push({ text: '[DEBUG] Самосбор форсирован', time: state.time, color: '#ff0' });
+      state.msgs.push(msg('[DEBUG] Самосбор форсирован', state.time, '#ff0'));
       break;
     }
     case 6: { // Toggle noclip
       const enabled = toggleDebugNoClip();
-      state.msgs.push({
-        text: `[DEBUG] Noclip ${enabled ? 'включён' : 'выключен'}`,
-        time: state.time,
-        color: '#ff0',
-      });
+      state.msgs.push(msg(
+        `[DEBUG] Noclip ${enabled ? 'включён' : 'выключен'}`,
+        state.time,
+        '#ff0',
+      ));
       break;
     }
   }

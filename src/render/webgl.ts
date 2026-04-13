@@ -455,6 +455,10 @@ void main() {
             float glow = max(0.0, 1.0 - currentDist * 0.15);
             pixel = applyFogV(vec3(220.0/255.0 * glow, 180.0/255.0 * glow, 80.0/255.0 * glow), ff);
             pixelDepth = min(1.0, currentDist / MAX_DIST);
+          } else if (feat == ${Feature.CANDLE}u) {
+            float glow = max(0.0, 1.0 - currentDist * 0.18);
+            pixel = applyFogV(vec3(240.0/255.0 * glow, 180.0/255.0 * glow, 50.0/255.0 * glow), ff);
+            pixelDepth = min(1.0, currentDist / MAX_DIST);
           } else {
             vec3 cc = sampleAtlas(${Tex.CEIL}u, ftx, fty).rgb;
             cc *= cLit;

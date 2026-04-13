@@ -40,6 +40,11 @@ export const ITEMS: Record<string, ItemDef> = {
   pills:     { id:'pills',     name:'Таблетки',     type:ItemType.MEDICINE, desc:'Обезболивающее. Лечит 25 HP, +5 ПСИ',   spawnRooms:[RoomType.MEDICAL],                  spawnW:1, value:40, use:psiMedicine(25, 5) },
   antidep:   { id:'antidep',   name:'Антидепрессант',type:ItemType.MEDICINE, desc:'Помогает с психикой. +20 ПСИ',           spawnRooms:[RoomType.MEDICAL],                  spawnW:1, value:80, use:psiMedicine(0, 20) },
 
+  // ── Пасхальное (церковные припасы) ──
+  holy_water:{ id:'holy_water', name:'Святая вода',  type:ItemType.MEDICINE, desc:'Освящённая вода. Лечит 20 HP, +15 ПСИ', spawnRooms:[], spawnW:0, value:60, use:psiMedicine(20, 15) },
+  kulich:    { id:'kulich',     name:'Кулич',        type:ItemType.FOOD,     desc:'Пасхальный кулич. Сытно и благодатно',  spawnRooms:[], spawnW:0, value:40, use:(e: Entity) => { if (e.needs) { e.needs.food = Math.min(100, e.needs.food + 35); e.needs.pendingPoo = (e.needs.pendingPoo ?? 0) + 25; } if (e.rpg) e.rpg.psi = Math.min(e.rpg.maxPsi, e.rpg.psi + 10); return 'Христос Воскресе! +35 еда, +10 ПСИ'; } },
+  easter_egg:{ id:'easter_egg', name:'Пасхальное яйцо',type:ItemType.FOOD,  desc:'Крашеное яйцо. Восстанавливает 10 HP, +5 ПСИ', spawnRooms:[], spawnW:0, value:20, use:(e: Entity) => { e.hp = Math.min((e.maxHp ?? 100), (e.hp ?? 0) + 10); if (e.rpg) e.rpg.psi = Math.min(e.rpg.maxPsi, e.rpg.psi + 5); return 'Воистину Воскресе! +10 HP, +5 ПСИ'; } },
+
   // ── Оружие ближний бой ──
   pipe:      { id:'pipe',      name:'Труба',        type:ItemType.WEAPON,    desc:'Тяжёлая труба. Урон 18. Прочность 50', spawnRooms:[RoomType.PRODUCTION,RoomType.STORAGE], spawnW:1, value:35 },
   wrench:    { id:'wrench',    name:'Ключ гаечный', type:ItemType.WEAPON,    desc:'Увесистый. Урон 12. Прочность 60',     spawnRooms:[RoomType.PRODUCTION,RoomType.STORAGE], spawnW:1, value:25 },
@@ -88,6 +93,7 @@ export const ITEMS: Record<string, ItemDef> = {
   door_kit:  { id:'door_kit',   name:'Дверь комплект', type:ItemType.TOOL,   desc:'Установка одной двери в проходе', spawnRooms:[RoomType.STORAGE,RoomType.PRODUCTION], spawnW:1, value:400, durability:1 },
   block_kit: { id:'block_kit',  name:'Блок комплект', type:ItemType.TOOL,    desc:'Установка одного блока стены', spawnRooms:[RoomType.STORAGE,RoomType.PRODUCTION], spawnW:1, value:400, durability:1 },
   cleaning_kit:{ id:'cleaning_kit', name:'Чистящий комплект', type:ItemType.TOOL, desc:'Зажмите R: очищает кровь/грязь в радиусе клетки и улучшает отношения', spawnRooms:[RoomType.BATHROOM,RoomType.STORAGE,RoomType.LIVING], spawnW:1, value:80, durability:240 },
+  vacuum:      { id:'vacuum',    name:'Пылесос',     type:ItemType.TOOL,      desc:'Всасывает фиолетовый туман самосбора. R: очистить клетку перед вами', spawnRooms:[RoomType.STORAGE,RoomType.LIVING,RoomType.PRODUCTION], spawnW:1, value:500, durability:50 },
   toiletpaper:{id:'toiletpaper',name:'Туал. бумага', type:ItemType.MISC,      desc:'Рулон',                  spawnRooms:[RoomType.BATHROOM,RoomType.STORAGE],spawnW:1, value:1 },
   cigs:      { id:'cigs',      name:'Сигареты',     type:ItemType.MISC,      desc:'Пачка «Прима»',          spawnRooms:[RoomType.LIVING,RoomType.COMMON,RoomType.SMOKING],   spawnW:1, value:5 },
   book:      { id:'book',      name:'Книга',        type:ItemType.MISC,     desc:'Потрёпанный том',        spawnRooms:[RoomType.LIVING,RoomType.COMMON,RoomType.OFFICE],   spawnW:1, value:3 },

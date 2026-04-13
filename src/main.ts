@@ -5,9 +5,11 @@ import {
   W, Cell, DoorState, FloorLevel, Feature, Tex, RoomType, LiftDirection,
   type Entity, type GameState,
   EntityType, Faction, MonsterKind, ProjType, QuestType, AIGoal,
+  msg, setMsgClock,
 } from './core/types';
 import { World } from './core/world';
 import { generateWorld } from './gen/living';
+import { priestDeathCurse } from './gen/living/temple';
 import { generateMaintenance } from './gen/maintenance';
 import { generateHell, updateHellPopulation, resetHellPopulationState } from './gen/hell';
 import { generateVoid } from './gen/void';
@@ -145,7 +147,7 @@ function initGame(): void {
     mapMode: 0,
     showQuests: false,
     invSel: 0,
-    msgs: [{ text: 'Добро пожаловать в ГИГАХРУЩ. Закройте дверь.', time: 0, color: '#aaa' }],
+    msgs: [msg('Добро пожаловать в ГИГАХРУЩ. Закройте дверь.', 0, '#aaa')],
     quests: [],
     nextQuestId: 1,
     currentFloor: FloorLevel.LIVING,
@@ -203,14 +205,13 @@ let _prevMsgCount = 0; // for syncing msgs → msgLog
 function syncMsgLog(): void {
   const msgs = state.msgs;
   if (msgs.length > _prevMsgCount) {
-    const day = Math.floor(state.clock.totalMinutes / 1440);
     for (let i = _prevMsgCount; i < msgs.length; i++) {
       state.msgLog.push({
         text: msgs[i].text,
         color: msgs[i].color,
-        day,
-        hour: state.clock.hour,
-        minute: state.clock.minute,
+        day: msgs[i].day,
+        hour: msgs[i].hour,
+        minute: msgs[i].minute,
       });
     }
     if (state.msgLog.length > 500) state.msgLog.splice(0, state.msgLog.length - 500);
@@ -365,24 +366,24 @@ function playerActions(_dt: number): void {
         if (door) {
           if (door.state === DoorState.CLOSED || door.state === DoorState.HERMETIC_CLOSED) {
             if (door.state === DoorState.HERMETIC_CLOSED && state.samosborActive) {
-              state.msgs.push({ text: 'Дверь герметично заперта!', time: state.time, color: '#f44' });
+              state.msgs.push(msg('Дверь герметично заперта!', state.time, '#f44'));
             } else {
               door.state = door.state === DoorState.HERMETIC_CLOSED ? DoorState.HERMETIC_OPEN : DoorState.OPEN;
               door.timer = 0;
-              state.msgs.push({ text: 'Дверь открыта', time: state.time, color: '#aaa' });
+              state.msgs.push(msg('Дверь открыта', state.time, '#aaa'));
               playDoor();
             }
           } else if (door.state === DoorState.OPEN || door.state === DoorState.HERMETIC_OPEN) {
             door.state = door.state === DoorState.HERMETIC_OPEN ? DoorState.HERMETIC_CLOSED : DoorState.CLOSED;
-            state.msgs.push({ text: 'Дверь закрыта', time: state.time, color: '#aaa' });
+            state.msgs.push(msg('Дверь закрыта', state.time, '#aaa'));
             playDoor();
           } else if (door.state === DoorState.LOCKED) {
             // Check for key
             if (door.keyId && player.inventory?.some(i => i.defId === 'key')) {
               door.state = DoorState.OPEN;
-              state.msgs.push({ text: 'Дверь отперта ключом', time: state.time, color: '#4a4' });
+              state.msgs.push(msg('Дверь отперта ключом', state.time, '#4a4'));
             } else {
-              state.msgs.push({ text: 'Заперто. Нужен ключ.', time: state.time, color: '#f84' });
+              state.msgs.push(msg('Заперто. Нужен ключ.', state.time, '#f84'));
             }
           }
         }
@@ -403,7 +404,7 @@ function playerActions(_dt: number): void {
     if (ws.psiCost) {
       // ── PSI spell: consume PSI instead of ammo ──────────
       if (!player.rpg || player.rpg.psi < ws.psiCost) {
-        state.msgs.push({ text: 'Недостаточно ПСИ!', time: state.time, color: '#f84' });
+        state.msgs.push(msg('Недостаточно ПСИ!', state.time, '#f84'));
         player.attackCd = 0.5;
       } else {
         player.rpg.psi -= ws.psiCost;
@@ -497,7 +498,7 @@ function playerActions(_dt: number): void {
         playWeaponSound(player.weapon ?? '', ws);
         player.attackCd = ws.speed * atkSpeedMod;
       } else {
-        state.msgs.push({ text: 'Нет патронов!', time: state.time, color: '#f84' });
+        state.msgs.push(msg('Нет патронов!', state.time, '#f84'));
         player.attackCd = 0.5;
       }
     } else {
@@ -527,7 +528,7 @@ function playerActions(_dt: number): void {
             const mVx = Math.cos(player.angle) * meleeSpd;
             const mVy = Math.sin(player.angle) * meleeSpd;
             spawnBloodHit(world, e.x, e.y, player.angle, dmg, e.type === EntityType.MONSTER, mVx, mVy, 0.5);
-            state.msgs.push({ text: `Удар! ${entityDisplayName(e)} -${dmg}`, time: state.time, color: '#fc4' });
+            state.msgs.push(msg(`Удар! ${entityDisplayName(e)} -${dmg}`, state.time, '#fc4'));
             if (e.hp <= 0) {
               e.alive = false;
               const meleeGore = (player.weapon === 'chainsaw' || player.weapon === 'axe') ? 3
@@ -559,7 +560,7 @@ function dropEntityInventory(e: Entity): void {
       id: nextEntityId.v++, type: EntityType.ITEM_DROP,
       x: e.x + (Math.random() - 0.5) * 0.5,
       y: e.y + (Math.random() - 0.5) * 0.5,
-      angle: 0, pitch: 0, alive: true, speed: 0, sprite: 16,
+      angle: 0, pitch: 0, alive: true, speed: 0, sprite: Spr.ITEM_DROP,
       inventory: [{ defId: item.defId, count: item.count, data: item.data }],
     });
   }
@@ -635,7 +636,7 @@ function updateDefenseQuestSpawn(dt: number): void {
 function handleKill(e: Entity, killerIsPlayer: boolean, pvx = 0, pvy = 0, goreLevel = 1): void {
   // Death blood pool — directional + gore-scaled
   spawnDeathPool(world, e.x, e.y, e.type === EntityType.MONSTER, goreLevel, pvx, pvy);
-  state.msgs.push({ text: `${entityDisplayName(e)} ${e.isFemale ? 'повержена' : 'повержен'}!`, time: state.time, color: '#4f4' });
+  state.msgs.push(msg(`${entityDisplayName(e)} ${e.isFemale ? 'повержена' : 'повержен'}!`, state.time, '#4f4'));
   // Drop NPC inventory as loot
   if (e.type === EntityType.NPC) dropEntityInventory(e);
   if (e.isFogBoss && e.fogBossZone !== undefined) {
@@ -651,10 +652,10 @@ function handleKill(e: Entity, killerIsPlayer: boolean, pvx = 0, pvy = 0, goreLe
           id: nextEntityId.v++, type: EntityType.ITEM_DROP,
           x: e.x + (Math.random() - 0.5) * 0.3,
           y: e.y + (Math.random() - 0.5) * 0.3,
-          angle: 0, pitch: 0, alive: true, speed: 0, sprite: 16,
+          angle: 0, pitch: 0, alive: true, speed: 0, sprite: Spr.ITEM_DROP,
           inventory: [{ defId: 'strange_clot', count: 1 }],
         });
-        state.msgs.push({ text: 'Теневик выронил странный пульсирующий сгусток!', time: state.time, color: '#c8f' });
+        state.msgs.push(msg('Теневик выронил странный пульсирующий сгусток!', state.time, '#c8f'));
       }
     }
     if (killerIsPlayer) {
@@ -670,6 +671,13 @@ function handleKill(e: Entity, killerIsPlayer: boolean, pvx = 0, pvy = 0, goreLe
     }
   } else if (e.type === EntityType.NPC && killerIsPlayer) {
     awardXP(player, xpForNpcKill(e.rpg?.level ?? 1), state.msgs, state.time);
+    // Priest death curse: killing Батюшка spawns 666 monsters in pentagram
+    if (e.plotNpcId === 'batushka') {
+      priestDeathCurse(world, entities, nextEntityId, e.x, e.y);
+      state.msgs.push(msg('☠ ПРОКЛЯТИЕ БАТЮШКИ! 666 тварей вырвались из ада!', state.time, '#f00'));
+      state.msgs.push(msg('На миникарте проступает пентаграмма...', state.time, '#a00'));
+      updateWorldData(world);
+    }
   }
 }
 
@@ -893,11 +901,11 @@ function triggerExplosion(p: Entity, pt: ProjType): void {
   if (pt === ProjType.BFG) {
     state.dmgFlash = 0.8;
     state.dmgSeed = 2; // green tint marker
-    state.msgs.push({ text: `БФГ! Уничтожено целей: ${hits}`, time: state.time, color: '#4f4' });
+    state.msgs.push(msg(`БФГ! Уничтожено целей: ${hits}`, state.time, '#4f4'));
   } else {
     state.dmgFlash = Math.max(state.dmgFlash, 0.4);
     state.dmgSeed = 3; // orange tint marker for explosions
-    state.msgs.push({ text: `Взрыв! Поражено: ${hits}`, time: state.time, color: '#fa0' });
+    state.msgs.push(msg(`Взрыв! Поражено: ${hits}`, state.time, '#fa0'));
   }
 }
 
@@ -1033,11 +1041,11 @@ function switchFloor(direction: LiftDirection): void {
 
     resetPsiState();
 
-    state.msgs.push({
-      text: `Лифт прибыл: ${FLOOR_NAMES[nextFloor]}`,
-      time: state.time,
-      color: nextFloor === FloorLevel.HELL ? '#f44' : nextFloor === FloorLevel.VOID ? '#0f8' : '#4af',
-    });
+    state.msgs.push(msg(
+      `Лифт прибыл: ${FLOOR_NAMES[nextFloor]}`,
+      state.time,
+      nextFloor === FloorLevel.HELL ? '#f44' : nextFloor === FloorLevel.VOID ? '#0f8' : '#4af',
+    ));
 
     // Auto-trigger voice quest when entering Hell with step 9 (kill Mancobus) done
     if (nextFloor === FloorLevel.HELL) {
@@ -1152,9 +1160,9 @@ function saveGame(): void {
       },
     };
     localStorage.setItem(SAVE_KEY, JSON.stringify(data));
-    state.msgs.push({ text: 'Игра сохранена', time: state.time, color: '#4f4' });
+    state.msgs.push(msg('Игра сохранена', state.time, '#4f4'));
   } catch {
-    state.msgs.push({ text: 'Ошибка сохранения!', time: state.time, color: '#f44' });
+    state.msgs.push(msg('Ошибка сохранения!', state.time, '#f44'));
   }
 }
 
@@ -1162,7 +1170,7 @@ function loadGame(): boolean {
   try {
     const raw = localStorage.getItem(SAVE_KEY);
     if (!raw) {
-      state.msgs.push({ text: 'Нет сохранения', time: state.time, color: '#f84' });
+      state.msgs.push(msg('Нет сохранения', state.time, '#f84'));
       return false;
     }
     const data = JSON.parse(raw);
@@ -1223,14 +1231,14 @@ function loadGame(): boolean {
       state.gameOver = false;
       state.showMenu = false;
 
-      state.msgs.push({ text: 'Игра загружена', time: state.time, color: '#4af' });
+      state.msgs.push(msg('Игра загружена', state.time, '#4af'));
 
       // Update WebGL world data after load
       updateWorldData(world);
     };
     return true;
   } catch {
-    state.msgs.push({ text: 'Ошибка загрузки!', time: state.time, color: '#f44' });
+    state.msgs.push(msg('Ошибка загрузки!', state.time, '#f44'));
     return false;
   }
 }
@@ -1258,7 +1266,7 @@ function applyUrinationPenalty(dt: number): void {
     _urinePenaltyStarted = true;
     addFactionRel(ownerFaction, Faction.PLAYER, -1);
     addFactionRel(Faction.PLAYER, ownerFaction, -1);
-    state.msgs.push({ text: 'Местные недовольны...', time: state.time, color: '#f84' });
+    state.msgs.push(msg('Местные недовольны...', state.time, '#f84'));
   }
 
   // Ongoing penalty: -1 per game minute (= per real second)
@@ -1344,18 +1352,18 @@ function updateEquippedTool(dt: number): void {
   if (toolId === 'jackhammer') {
     if (!input.use || _toolActionCd > 0) return;
     if (world.hermoWall[ci] || world.aptMask[ci]) {
-      state.msgs.push({ text: 'Гермостена неразрушима', time: state.time, color: '#f44' });
+      state.msgs.push(msg('Гермостена неразрушима', state.time, '#f44'));
       _toolActionCd = 0.2;
       return;
     }
     if (world.cells[ci] !== Cell.WALL) {
-      state.msgs.push({ text: 'Отбойнику нужна стена перед вами', time: state.time, color: '#f84' });
+      state.msgs.push(msg('Отбойнику нужна стена перед вами', state.time, '#f84'));
       _toolActionCd = 0.25;
       return;
     }
     setCellToFloor(cx, cy);
     consumeToolDurability(player, 1, state.msgs, state.time);
-    state.msgs.push({ text: 'Стена разрушена', time: state.time, color: '#fc4' });
+    state.msgs.push(msg('Стена разрушена', state.time, '#fc4'));
     playBreak();
     _toolActionCd = 0.2;
     return;
@@ -1364,11 +1372,11 @@ function updateEquippedTool(dt: number): void {
   if (toolId === 'door_kit') {
     if (!useEdge) return;
     if (world.aptMask[ci]) {
-      state.msgs.push({ text: 'В защищенных укрытиях строительство запрещено', time: state.time, color: '#f44' });
+      state.msgs.push(msg('В защищенных укрытиях строительство запрещено', state.time, '#f44'));
       return;
     }
     if (world.cells[ci] !== Cell.FLOOR) {
-      state.msgs.push({ text: 'Дверь ставится на проход (пол)', time: state.time, color: '#f84' });
+      state.msgs.push(msg('Дверь ставится на проход (пол)', state.time, '#f84'));
       return;
     }
     const l = world.cells[world.idx(cx - 1, cy)];
@@ -1378,7 +1386,7 @@ function updateEquippedTool(dt: number): void {
     const horizontal = (l === Cell.WALL && r === Cell.WALL && u !== Cell.WALL && d !== Cell.WALL);
     const vertical = (u === Cell.WALL && d === Cell.WALL && l !== Cell.WALL && r !== Cell.WALL);
     if (!horizontal && !vertical) {
-      state.msgs.push({ text: 'Нужен проём типа стена-дверь-стена', time: state.time, color: '#f84' });
+      state.msgs.push(msg('Нужен проём типа стена-дверь-стена', state.time, '#f84'));
       return;
     }
     const roomA = world.roomMap[world.idx(cx - 1, cy)] >= 0 ? world.roomMap[world.idx(cx - 1, cy)] : world.roomMap[world.idx(cx, cy - 1)];
@@ -1386,7 +1394,7 @@ function updateEquippedTool(dt: number): void {
     world.cells[ci] = Cell.DOOR;
     world.doors.set(ci, { idx: ci, state: DoorState.CLOSED, roomA, roomB, keyId: '', timer: 0 });
     consumeToolDurability(player, 1, state.msgs, state.time);
-    state.msgs.push({ text: 'Дверь установлена', time: state.time, color: '#6cf' });
+    state.msgs.push(msg('Дверь установлена', state.time, '#6cf'));
     playDoor();
     return;
   }
@@ -1395,15 +1403,15 @@ function updateEquippedTool(dt: number): void {
     if (!useEdge) return;
     const pci = world.idx(Math.floor(player.x), Math.floor(player.y));
     if (ci === pci) {
-      state.msgs.push({ text: 'Нельзя замуровать себя', time: state.time, color: '#f84' });
+      state.msgs.push(msg('Нельзя замуровать себя', state.time, '#f84'));
       return;
     }
     if (world.cells[ci] !== Cell.FLOOR && world.cells[ci] !== Cell.DOOR) {
-      state.msgs.push({ text: 'Блок ставится на пол/дверь', time: state.time, color: '#f84' });
+      state.msgs.push(msg('Блок ставится на пол/дверь', state.time, '#f84'));
       return;
     }
     if (world.aptMask[ci] || world.hermoWall[ci]) {
-      state.msgs.push({ text: 'В защищенных укрытиях строительство запрещено', time: state.time, color: '#f44' });
+      state.msgs.push(msg('В защищенных укрытиях строительство запрещено', state.time, '#f44'));
       return;
     }
     if (world.cells[ci] === Cell.DOOR) world.doors.delete(ci);
@@ -1411,7 +1419,7 @@ function updateEquippedTool(dt: number): void {
     const room = world.roomAt(player.x, player.y);
     world.wallTex[ci] = room?.wallTex ?? Tex.CONCRETE;
     consumeToolDurability(player, 1, state.msgs, state.time);
-    state.msgs.push({ text: 'Блок стены установлен', time: state.time, color: '#6cf' });
+    state.msgs.push(msg('Блок стены установлен', state.time, '#6cf'));
     return;
   }
 
@@ -1427,11 +1435,24 @@ function updateEquippedTool(dt: number): void {
         const owner = z ? zoneFactionToFaction(z.faction) : null;
         if (owner !== null) {
           addFactionRelMutual(Faction.PLAYER, owner, 1);
-          state.msgs.push({ text: 'Местные ценят вашу уборку (+отношения)', time: state.time, color: '#8f8' });
+          state.msgs.push(msg('Местные ценят вашу уборку (+отношения)', state.time, '#8f8'));
         }
       }
     }
     _toolActionCd = 0.08;
+  }
+
+  if (toolId === 'vacuum') {
+    if (!input.use || _toolActionCd > 0) return;
+    const fi = world.idx(cx, cy);
+    if (world.fog[fi] > 0) {
+      world.fog[fi] = 0;
+      consumeToolDurability(player, 1, state.msgs, state.time);
+      state.msgs.push(msg('Туман всосан пылесосом', state.time, '#c8f'));
+    } else {
+      state.msgs.push(msg('Тут нет тумана', state.time, '#888'));
+    }
+    _toolActionCd = 0.15;
   }
 }
 
@@ -1492,17 +1513,17 @@ function handleMenuInput(): void {
       // Attribute spending (1=STR, 2=AGI, 3=INT)
       if (input.attrStr && player.rpg && player.rpg.attrPoints > 0) {
         if (spendAttrPoint(player, 'str'))
-          state.msgs.push({ text: `Сила +1 (${player.rpg.str})`, time: state.time, color: '#f84' });
+          state.msgs.push(msg(`Сила +1 (${player.rpg.str})`, state.time, '#f84'));
         input.attrStr = false;
       }
       if (input.attrAgi && player.rpg && player.rpg.attrPoints > 0) {
         if (spendAttrPoint(player, 'agi'))
-          state.msgs.push({ text: `Ловкость +1 (${player.rpg.agi})`, time: state.time, color: '#4af' });
+          state.msgs.push(msg(`Ловкость +1 (${player.rpg.agi})`, state.time, '#4af'));
         input.attrAgi = false;
       }
       if (input.attrInt && player.rpg && player.rpg.attrPoints > 0) {
         if (spendAttrPoint(player, 'int'))
-          state.msgs.push({ text: `Интеллект +1 (${player.rpg.int})`, time: state.time, color: '#a4f' });
+          state.msgs.push(msg(`Интеллект +1 (${player.rpg.int})`, state.time, '#a4f'));
         input.attrInt = false;
       }
     }
@@ -1594,9 +1615,9 @@ function handleMenuInput(): void {
               npc.money = (npc.money ?? 0) + price;
               slot.count--;
               if (slot.count <= 0) npcInv.splice(idx, 1);
-              state.msgs.push({ text: `Куплено: ${def?.name ?? slot.defId} (−${price}₽)`, time: state.time, color: '#4f4' });
+              state.msgs.push(msg(`Куплено: ${def?.name ?? slot.defId} (−${price}₽)`, state.time, '#4f4'));
             } else {
-              state.msgs.push({ text: 'Не хватает денег', time: state.time, color: '#f84' });
+              state.msgs.push(msg('Не хватает денег', state.time, '#f84'));
             }
           } else if (state.tradeSide === 'player' && idx < plrInv.length) {
             // Sell to NPC
@@ -1609,9 +1630,9 @@ function handleMenuInput(): void {
               player.money = (player.money ?? 0) + price;
               slot.count--;
               if (slot.count <= 0) plrInv.splice(idx, 1);
-              state.msgs.push({ text: `Продано: ${def?.name ?? slot.defId} (+${price}₽)`, time: state.time, color: '#4f4' });
+              state.msgs.push(msg(`Продано: ${def?.name ?? slot.defId} (+${price}₽)`, state.time, '#4f4'));
             } else {
-              state.msgs.push({ text: 'У торговца нет денег', time: state.time, color: '#f84' });
+              state.msgs.push(msg('У торговца нет денег', state.time, '#f84'));
             }
           }
         }
@@ -1733,12 +1754,13 @@ function gameLoop(now: number): void {
     const totalMins = Math.floor(state.clock.totalMinutes);
     state.clock.hour = (8 + Math.floor(totalMins / 60)) % 24;  // start at 8:00
     state.clock.minute = totalMins % 60;
+    setMsgClock(state.clock);
 
     // ── Sleep restoration while holding Z ──
     if (state.sleeping && player.needs) {
       player.needs.sleep = Math.min(100, player.needs.sleep + SLEEP_RESTORE_RATE * dt);
       if (player.needs.sleep >= 100) {
-        state.msgs.push({ text: 'Вы выспались.', time: state.time, color: '#a8f' });
+        state.msgs.push(msg('Вы выспались.', state.time, '#a8f'));
       }
     }
 
@@ -1762,7 +1784,7 @@ function gameLoop(now: number): void {
         applyUrinationPenalty(dt);
         player.needs.pee = Math.max(0, player.needs.pee - 12 * dt);
         if (player.needs.pee <= 5) {
-          state.msgs.push({ text: 'Полегчало.', time: state.time, color: '#da4' });
+          state.msgs.push(msg('Полегчало.', state.time, '#da4'));
         }
       }
     } else {

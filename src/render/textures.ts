@@ -41,6 +41,8 @@ export function generateTextures(): TexData[] {
   gen_voidWall(textures[Tex.VOID_WALL]);
   gen_voidFloor(textures[Tex.F_VOID]);
   gen_portal(textures[Tex.PORTAL]);
+  gen_cross(textures[Tex.CROSS]);
+  gen_icon(textures[Tex.ICON]);
   generateSlideTextures(textures);
   generateHintTextures(textures);
 
@@ -463,5 +465,83 @@ function gen_portal(t: TexData) {
       const b = clamp(Math.floor(bright * 200 + 50));
       t[y * S + x] = rgba(r, g, b);
     }
+  }
+}
+
+/* ── CROSS: golden Orthodox cross on dark wall ────────────────── */
+function gen_cross(t: TexData) {
+  // Dark wall background
+  for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) {
+    const n = noise(x, y, 710) * 12;
+    t[y * S + x] = rgba(clamp(30 + n), clamp(25 + n), clamp(20 + n));
+  }
+  const cx = S / 2;
+  // Vertical beam (full height cross)
+  for (let y = 8; y < 56; y++) for (let x = cx - 2; x <= cx + 2; x++) {
+    const n = noise(x, y, 711) * 15;
+    t[y * S + x] = rgba(clamp(200 + n), clamp(170 + n), clamp(40 + n));
+  }
+  // Horizontal beam (upper)
+  for (let y = 18; y < 24; y++) for (let x = cx - 12; x <= cx + 12; x++) {
+    const n = noise(x, y, 712) * 15;
+    t[y * S + x] = rgba(clamp(200 + n), clamp(170 + n), clamp(40 + n));
+  }
+  // Diagonal bottom bar (Orthodox cross slanted footrest)
+  for (let y = 42; y < 46; y++) for (let x = cx - 8; x <= cx + 8; x++) {
+    const slant = Math.round((x - cx) * 0.25);
+    const sy = y + slant;
+    if (sy >= 0 && sy < S) {
+      const n = noise(x, sy, 713) * 15;
+      t[sy * S + x] = rgba(clamp(200 + n), clamp(170 + n), clamp(40 + n));
+    }
+  }
+  // Small top bar
+  for (let y = 12; y < 15; y++) for (let x = cx - 5; x <= cx + 5; x++) {
+    const n = noise(x, y, 714) * 15;
+    t[y * S + x] = rgba(clamp(210 + n), clamp(180 + n), clamp(50 + n));
+  }
+}
+
+/* ── ICON: Jesus icon with halo on dark wood background ──────── */
+function gen_icon(t: TexData) {
+  // Dark wood background
+  for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) {
+    const grain = Math.sin(y * 0.8 + noise(x, y, 720) * 5) * 8;
+    t[y * S + x] = rgba(clamp(50 + grain), clamp(35 + grain), clamp(20 + grain));
+  }
+  // Gold frame border
+  for (let y = 2; y < S - 2; y++) for (let x = 2; x < S - 2; x++) {
+    if (y < 4 || y >= S - 4 || x < 4 || x >= S - 4) {
+      const n = noise(x, y, 721) * 10;
+      t[y * S + x] = rgba(clamp(190 + n), clamp(160 + n), clamp(40 + n));
+    }
+  }
+  // Dark inner background (old paint)
+  for (let y = 5; y < S - 5; y++) for (let x = 5; x < S - 5; x++) {
+    const n = noise(x, y, 722) * 10;
+    t[y * S + x] = rgba(clamp(60 + n), clamp(40 + n), clamp(25 + n));
+  }
+  const cx = S / 2, headY = 20;
+  // Halo (golden circle behind head)
+  for (let y = headY - 10; y < headY + 10; y++) for (let x = cx - 10; x < cx + 10; x++) {
+    const dx = x - cx, dy = y - headY;
+    const d2 = dx * dx + dy * dy;
+    if (d2 < 100 && d2 > 64) {
+      const n = noise(x, y, 723) * 15;
+      t[y * S + x] = rgba(clamp(220 + n), clamp(190 + n), clamp(50 + n));
+    }
+  }
+  // Face (faded brown)
+  for (let y = headY - 5; y < headY + 6; y++) for (let x = cx - 4; x < cx + 4; x++) {
+    const dx = x - cx, dy = y - headY;
+    if (dx * dx + dy * dy < 25) {
+      const n = noise(x, y, 724) * 8;
+      t[y * S + x] = rgba(clamp(160 + n), clamp(130 + n), clamp(90 + n));
+    }
+  }
+  // Body/robe (dark red)
+  for (let y = headY + 7; y < S - 8; y++) for (let x = cx - 8; x < cx + 8; x++) {
+    const n = noise(x, y, 725) * 10;
+    t[y * S + x] = rgba(clamp(120 + n), clamp(30 + n), clamp(20 + n));
   }
 }

@@ -1,6 +1,6 @@
 /* ── A-Life barks: contextual NPC dialogue lines ─────────────── */
 
-import { type Entity, type Msg } from '../../core/types';
+import { type Entity, type Msg, msg } from '../../core/types';
 
 /* ── Phrase pools ─────────────────────────────────────────────── */
 
@@ -1365,5 +1365,5 @@ export function bark(e: Entity, msgs: Msg[], time: number, pool: string[], poolF
   if (Math.random() > chance) return;
   if (!e.name) return;
   const line = pick(e.isFemale ? poolF : pool);
-  msgs.push({ text: `${e.name}: ${line}`, time, color });
+  msgs.push(msg(`${e.name}: ${line}`, time, color));
 }

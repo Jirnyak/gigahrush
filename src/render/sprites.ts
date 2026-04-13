@@ -1,6 +1,6 @@
 /* ── Procedural sprite generator ──────────────────────────────── */
 
-import { NPC_SPRITE_GENERATORS, generateTravelerSprite, generatePilgrimSprite, generateHunterSprite } from '../entities/npc';
+import { NPC_SPRITE_GENERATORS, generateTravelerSprite, generatePilgrimSprite, generateHunterSprite, generatePriestSprite } from '../entities/npc';
 import { MONSTERS, MONSTER_SPRITES, EYE_BOLT_SPRITE } from '../entities/monster';
 import { MonsterKind } from '../core/types';
 import { S, rgba, noise, clamp, CLEAR } from './pixutil';
@@ -19,6 +19,8 @@ export function generateSprites(): SpriteData[] {
   sprites.push(generateTravelerSprite());
   sprites.push(generatePilgrimSprite());
   sprites.push(generateHunterSprite());
+  // Priest: Батюшка
+  sprites.push(generatePriestSprite());
   // Item drop
   sprites.push(gen_itemDrop());
   // Monsters (keyed by MonsterKind — auto-indexed)

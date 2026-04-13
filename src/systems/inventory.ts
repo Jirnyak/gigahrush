@@ -3,10 +3,12 @@
 import {
   type Entity, type Msg, ItemType,
   EntityType,
+  msg,
 } from '../core/types';
 import { ITEMS, WEAPON_STATS, type WeaponStats } from '../data/catalog';
 import { getStack } from '../data/items';
 import { World } from '../core/world';
+import { Spr } from '../render/sprite_index';
 import { playPickup } from './audio';
 
 const MAX_SLOTS = 25;
@@ -72,21 +74,21 @@ export function useItem(e: Entity, slotIdx: number, msgs: Msg[], time: number): 
   // Weapons: equip
   if (def.type === ItemType.WEAPON) {
     e.weapon = def.id;
-    msgs.push({ text: `Экипировано: ${def.name}`, time, color: '#ccc' });
+    msgs.push(msg(`Экипировано: ${def.name}`, time, '#ccc'));
     return;
   }
 
   // Tools: equip to utility slot
   if (def.type === ItemType.TOOL) {
     e.tool = def.id;
-    msgs.push({ text: `Инструмент: ${def.name}`, time, color: '#8cf' });
+    msgs.push(msg(`Инструмент: ${def.name}`, time, '#8cf'));
     return;
   }
 
   // Usable items
   if (def.use) {
-    const msg = def.use(e);
-    msgs.push({ text: msg, time, color: '#6a6' });
+    const useText = def.use(e);
+    msgs.push(msg(useText, time, '#6a6'));
     slot.count--;
     if (slot.count <= 0) e.inventory.splice(slotIdx, 1);
     return;
@@ -94,7 +96,7 @@ export function useItem(e: Entity, slotIdx: number, msgs: Msg[], time: number): 
 
   // Notes
   if (def.type === ItemType.NOTE && slot.data) {
-    msgs.push({ text: String(slot.data), time, color: '#aa8' });
+    msgs.push(msg(String(slot.data), time, '#aa8'));
     return;
   }
 }
@@ -119,7 +121,7 @@ export function dropItem(
 
   entities.push({
     id: nextId.v++, type: EntityType.ITEM_DROP,
-    x: dropX, y: dropY, angle: 0, pitch: 0, alive: true, speed: 0, sprite: 16,
+    x: dropX, y: dropY, angle: 0, pitch: 0, alive: true, speed: 0, sprite: Spr.ITEM_DROP,
     inventory: [{ defId: slot.defId, count: dropCount, data: slot.data }],
   });
 
@@ -133,7 +135,7 @@ export function dropItem(
 
   player.inventory.splice(slotIdx, 1);
 
-  msgs.push({ text: `Выброшено: ${def.name}${dropCount > 1 ? ' ×' + dropCount : ''}`, time, color: '#aa6' });
+  msgs.push(msg(`Выброшено: ${def.name}${dropCount > 1 ? ' ×' + dropCount : ''}`, time, '#aa6'));
 }
 
 /* ── Pickup nearby item drops ─────────────────────────────────── */
@@ -150,7 +152,7 @@ export function pickupNearby(world: World, entities: Entity[], player: Entity, m
     for (const item of inv) {
       if (addItem(player, item.defId, item.count)) {
         const def = ITEMS[item.defId];
-        msgs.push({ text: `Подобрано: ${def?.name ?? item.defId}`, time, color: '#dd4' });
+        msgs.push(msg(`Подобрано: ${def?.name ?? item.defId}`, time, '#dd4'));
         pickedAny = true;
       }
     }
@@ -206,9 +208,9 @@ export function consumeDurability(e: Entity, msgs: Msg[], time: number): boolean
     if (e.type === EntityType.NPC && e.name) {
       const pool = e.isFemale ? BREAK_EXCLAIM_F : BREAK_EXCLAIM;
       const excl = pool[Math.floor(Math.random() * pool.length)];
-      msgs.push({ text: `${e.name}: ${excl} ${name} ${e.isFemale ? 'сломалась' : 'сломался'}!`, time, color: '#f84' });
+      msgs.push(msg(`${e.name}: ${excl} ${name} ${e.isFemale ? 'сломалась' : 'сломался'}!`, time, '#f84'));
     } else {
-      msgs.push({ text: `${name} сломался!`, time, color: '#f84' });
+      msgs.push(msg(`${name} сломался!`, time, '#f84'));
     }
     return true;
   }
@@ -245,7 +247,7 @@ export function consumeToolDurability(e: Entity, amount: number, msgs: Msg[], ti
     const name = ITEMS[slot.defId]?.name ?? slot.defId;
     inv.splice(idx, 1);
     e.tool = '';
-    msgs.push({ text: `${name} изношен и сломан!`, time, color: '#f84' });
+    msgs.push(msg(`${name} изношен и сломан!`, time, '#f84'));
     return true;
   }
   return false;

@@ -182,14 +182,14 @@ export function drawHUD(
   const now = state.time;
   let my = 4 * sy;
   ctx.font = `${7 * sy}px monospace`;
-  const _day = Math.floor(state.clock.totalMinutes / 1440);
-  const _hh = String(state.clock.hour).padStart(2, '0');
-  const _mm = String(state.clock.minute).padStart(2, '0');
-  const _stamp = `[Д${_day} ${_hh}:${_mm}] `;
   for (let i = state.msgs.length - 1; i >= Math.max(0, state.msgs.length - MSG_MAX); i--) {
     const m = state.msgs[i];
     const age = now - m.time;
     if (age > 8) continue;
+    const _mday = m.day;
+    const _mhh = String(m.hour).padStart(2, '0');
+    const _mmm = String(m.minute).padStart(2, '0');
+    const _stamp = `[Д${_mday} ${_mhh}:${_mmm}] `;
     const alpha = age > 6 ? 1 - (age - 6) / 2 : 1;
     const mj = textJitter(time, i * 17 + 300);
     ctx.globalAlpha = alpha * flicker(time, i + 300);

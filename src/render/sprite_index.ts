@@ -12,12 +12,14 @@ import { NPC_SPRITE_GENERATORS } from '../entities/npc';
 
 const NPC_COUNT     = NPC_SPRITE_GENERATORS.length;
 const TRAVELER_COUNT = 3;
+const PRIEST_COUNT   = 1;
 // MonsterKind is a regular enum — Object.values has both string keys and numeric values
 const MONSTER_COUNT  = Object.values(MonsterKind).filter(v => typeof v === 'number').length;
 
 let _i = 0;
 _i += NPC_COUNT;          // occupation NPC sprites
 _i += TRAVELER_COUNT;     // traveler sprites
+_i += PRIEST_COUNT;       // priest sprite
 const _ITEM_DROP = _i++;
 const _MON_BASE  = _i; _i += MONSTER_COUNT;
 const _EYE_BOLT  = _i++;

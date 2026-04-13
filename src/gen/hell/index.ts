@@ -10,7 +10,7 @@ import { randomName, freshNeeds } from '../../data/catalog';
 import { rng, pick, ensureConnectivity, placeLifts, generateZones } from '../shared';
 import { MONSTERS } from '../../entities/monster';
 import { calcZoneLevel, randomRPG, scaleMonsterHp, scaleMonsterSpeed, gaussianLevel, getMaxHp } from '../../systems/rpg';
-import { monsterSpr } from '../../render/sprite_index';
+import { Spr, monsterSpr } from '../../render/sprite_index';
 
 const PSI_IDS = ['psi_strike', 'psi_rupture', 'psi_madness', 'psi_storm', 'psi_brainburn'];
 
@@ -371,7 +371,7 @@ function seedLoot(world: World, entities: Entity[], nextId: { v: number }): void
       pitch: 0,
       alive: true,
       speed: 0,
-      sprite: 16,
+      sprite: Spr.ITEM_DROP,
       inventory: [{ defId: pick(drops), count: rng(1, 2) }],
     });
   }

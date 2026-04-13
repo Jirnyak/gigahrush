@@ -14,6 +14,8 @@
 /*     slides.ts      — slide texture generation                 */
 /*     npcs.ts        — NPC & item spawning                      */
 /*     side_quests.ts — side quest NPC registry & spawning       */
+/*     zone_content.ts — zone content module registry            */
+/*     temple.ts      — Orthodox temple (zone 3 content module)  */
 /*                                                               */
 /*   To add a new hand-crafted room, create a .ts file here      */
 /*   and call it from generateWorld() below.                     */
@@ -28,6 +30,8 @@ import { generateVolatileMaze, wipeVolatile } from './volatile';
 import { generateTutorRoom } from './tutor_room';
 import { generateYakovLab } from './yakov_lab';
 import { generateVankaDen, spawnVankaShadows } from './vanka_den';
+import './temple'; // side-effect: registers zone content for zone 3
+import { runZoneContentModules } from './zone_content';
 import { spawnRoomItems, spawnFamilies, spawnTravelers } from './npcs';
 import { spawnSideQuestNpcs } from './side_quests';
 
@@ -54,17 +58,28 @@ export function generateWorld(): { world: World; entities: Entity[]; spawnX: num
   /* ── A1c: Vanka's den (cultist zone) ────────── */
   generateVankaDen(world, world.rooms.length, entities, { v: nextId }, startRoom.spawnX, startRoom.spawnY);
   nextId = entities.reduce((mx, e) => Math.max(mx, e.id), nextId) + 1;
+
   world.apartmentRoomCount = world.rooms.length;
 
   /* ── A2: Permanent zones (64 macro-regions) ─────── */
   generateZones(world);  // Assign zone levels for living floor
   for (const z of world.zones) z.level = calcZoneLevel(z.cx, z.cy, FloorLevel.LIVING);
 
+  /* Update apartmentRoomCount to include all permanent rooms */
+  world.apartmentRoomCount = world.rooms.length;
+
   /* ── A3: HQ rooms for faction zones ─────────────── */
   stampHQRooms(world);
 
   /* ── B: Volatile gigastructure ─────────────────────── */
   generateVolatileMaze(world);
+
+  /* ── B0: Zone content modules (after maze — bulldoze & stamp over corridors) ── */
+  {
+    const nid = { v: nextId };
+    runZoneContentModules(world, entities, nid);
+    nextId = nid.v;
+  }
 
   /* ── B1: Shadows near Vanka (needs corridors to exist) */
   spawnVankaShadows(world, entities, { v: nextId });

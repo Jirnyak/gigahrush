@@ -14,6 +14,7 @@ import { PLOT_NPCS } from '../../data/plot';
 import { PLOT_ROOMS } from '../../data/plot_rooms';
 import { stampRoom, protectRoom, connectProtectedRoom, findClearArea } from '../shared';
 import { randomRPG, getMaxHp } from '../../systems/rpg';
+import { Spr } from '../../render/sprite_index';
 
 export function generateForpost(
   world: World, nextRoomId: number, entities: Entity[], nextId: { v: number },
@@ -129,7 +130,7 @@ export function generateForpost(
   entities.push({
     id: nextId.v++, type: EntityType.ITEM_DROP,
     x: room.x + room.w - 2 + 0.5, y: room.y + room.h - 2 + 0.5,
-    angle: 0, pitch: 0, alive: true, speed: 0, sprite: 16,
+    angle: 0, pitch: 0, alive: true, speed: 0, sprite: Spr.ITEM_DROP,
     inventory: [{ defId: 'ammo_9mm', count: 6 }, { defId: 'bandage', count: 2 }],
   });
 

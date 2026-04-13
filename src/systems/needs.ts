@@ -1,6 +1,7 @@
 /* ── Needs system: food, water, sleep, pee, poo ──────────────── */
 
-import { type Entity, type Msg, EntityType } from '../core/types';
+import { type Entity, type Msg, EntityType, msg } from '../core/types';
+import { Spr } from '../render/sprite_index';
 
 // Rates per second
 const FOOD_RATE  = 0.08;
@@ -66,7 +67,7 @@ export function updateNeeds(entities: Entity[], dt: number, time: number, msgs: 
             id: nextId.v++, type: EntityType.ITEM_DROP,
             x: e.x + (Math.random() - 0.5) * 0.5,
             y: e.y + (Math.random() - 0.5) * 0.5,
-            angle: 0, pitch: 0, alive: true, speed: 0, sprite: 16,
+            angle: 0, pitch: 0, alive: true, speed: 0, sprite: Spr.ITEM_DROP,
             inventory: [{ defId: item.defId, count: item.count, data: item.data }],
           });
         }
@@ -78,5 +79,5 @@ export function updateNeeds(entities: Entity[], dt: number, time: number, msgs: 
 
 function addMsg(msgs: Msg[], text: string, time: number, color: string) {
   if (msgs.length > 0 && msgs[msgs.length - 1].text === text) return;
-  msgs.push({ text, time, color });
+  msgs.push(msg(text, time, color));
 }

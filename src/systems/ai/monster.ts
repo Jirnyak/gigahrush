@@ -4,6 +4,7 @@ import {
   W,
   type Entity, type Msg,
   EntityType, AIGoal, MonsterKind,
+  msg,
 } from '../../core/types';
 import { World } from '../../core/world';
 import { MONSTERS, entityDisplayName } from '../../entities/monster';
@@ -72,7 +73,7 @@ export function dropNpcInventory(e: Entity, entities: Entity[], nextId: { v: num
       id: nextId.v++, type: EntityType.ITEM_DROP,
       x: e.x + (Math.random() - 0.5) * 0.5,
       y: e.y + (Math.random() - 0.5) * 0.5,
-      angle: 0, pitch: 0, alive: true, speed: 0, sprite: 16,
+      angle: 0, pitch: 0, alive: true, speed: 0, sprite: Spr.ITEM_DROP,
       inventory: [{ defId: item.defId, count: item.count, data: item.data }],
     });
   }
@@ -122,7 +123,7 @@ export function updateMonster(world: World, entities: Entity[], e: Entity, dt: n
             ai: { goal: AIGoal.HUNT, tx: 0, ty: 0, path: [], pi: 0, stuck: 0, timer: 0 },
             rpg,
           });
-          msgs.push({ text: `Матка родила ${def.name}!`, time, color: '#f4a' });
+          msgs.push(msg(`Матка родила ${def.name}!`, time, '#f4a'));
         }
       }
     }
@@ -231,7 +232,7 @@ export function updateMonster(world: World, entities: Entity[], e: Entity, dt: n
         if (target.hp <= 0) {
           spawnDeathPool(world, target.x, target.y, target.type === EntityType.MONSTER);
           if (target.type === EntityType.NPC) dropNpcInventory(target, entities, nextId);
-          msgs.push({ text: `${entityDisplayName(e)} убил ${entityDisplayName(target)}`, time, color: '#f44' });
+          msgs.push(msg(`${entityDisplayName(e)} убил ${entityDisplayName(target)}`, time, '#f44'));
         }
       }
       playSoundAt(playGrowl, e.x, e.y);

@@ -11,6 +11,7 @@ import { spawnCount } from '../../data/items';
 import { randomFaction, randomOccupation } from '../../data/relations';
 import { rng, pick, weightedPick } from '../shared';
 import { gaussianLevel, randomRPG, getMaxHp } from '../../systems/rpg';
+import { Spr } from '../../render/sprite_index';
 import type { AptPlan } from './apartments';
 
 /* ── Weapon loadout by occupation ─────────────────────────────── */
@@ -76,7 +77,7 @@ export function spawnRoomItems(
       const iy = room.y + rng(1, Math.max(1, room.h - 2));
       entities.push({
         id: nextId++, type: EntityType.ITEM_DROP,
-        x: ix + 0.5, y: iy + 0.5, angle: 0, pitch: 0, alive: true, speed: 0, sprite: 16,
+        x: ix + 0.5, y: iy + 0.5, angle: 0, pitch: 0, alive: true, speed: 0, sprite: Spr.ITEM_DROP,
         inventory: [{ defId: def.id, count: rng(1, spawnCount(def)), data: def.id === 'note' ? pick(NOTES) : undefined }],
       });
     }
@@ -91,7 +92,7 @@ export function spawnRoomItems(
     const iy = room.y + rng(1, Math.max(1, room.h - 2));
     entities.push({
       id: nextId++, type: EntityType.ITEM_DROP,
-      x: ix + 0.5, y: iy + 0.5, angle: 0, pitch: 0, alive: true, speed: 0, sprite: 16,
+      x: ix + 0.5, y: iy + 0.5, angle: 0, pitch: 0, alive: true, speed: 0, sprite: Spr.ITEM_DROP,
       inventory: [{ defId: 'idol_chernobog', count: 1 }],
     });
   }

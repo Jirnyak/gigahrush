@@ -170,7 +170,7 @@ export function generateTutorRoom(
     id: nextId.v++, type: EntityType.ITEM_DROP,
     x: armX + 3 + 0.5, y: armY + 1 + 0.5,
     angle: 0, pitch: 0, alive: true, speed: 0,
-    sprite: 16, spriteScale: 1.0,
+    sprite: Spr.ITEM_DROP, spriteScale: 1.0,
     inventory: [{ defId: 'ammo_9mm', count: 16 }],
   });
 

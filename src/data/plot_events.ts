@@ -5,6 +5,7 @@ import {
   Tex,
   type Entity, type GameState,
   MonsterKind, QuestType,
+  msg,
 } from '../core/types';
 import { World } from '../core/world';
 import { addItem } from '../systems/inventory';
@@ -22,8 +23,8 @@ export function onHeraldKilled(
   world.floorTex[ci] = Tex.PORTAL;
   const portalZid = world.zoneMap[ci];
   const portalZoneName = portalZid >= 0 ? `зона ${portalZid + 1}` : '???';
-  state.msgs.push({ text: '̸̨̛̟̟̹̠̓ Таинственный голос: «Путь открыт. Шагни в бездну.»', time: state.time, color: '#0f8' });
-  state.msgs.push({ text: `Проход в Пустоту открыт в ${portalZoneName}!`, time: state.time, color: '#0ff' });
+  state.msgs.push(msg('̸̨̛̟̟̹̠̓ Таинственный голос: «Путь открыт. Шагни в бездну.»', state.time, '#0f8'));
+  state.msgs.push(msg(`Проход в Пустоту открыт в ${portalZoneName}!`, state.time, '#0ff'));
   return true; // caller should updateWorldData
 }
 
@@ -34,8 +35,8 @@ export function onCreatorKilled(
   const px = Math.floor(e.x), py = Math.floor(e.y);
   const ci = world.idx(px, py);
   world.floorTex[ci] = Tex.PORTAL;
-  state.msgs.push({ text: 'Творец повержен.', time: state.time, color: '#ff0' });
-  state.msgs.push({ text: 'Портал домой открылся на месте Творца.', time: state.time, color: '#0ff' });
+  state.msgs.push(msg('Творец повержен.', state.time, '#ff0'));
+  state.msgs.push(msg('Портал домой открылся на месте Творца.', state.time, '#0ff'));
   return true; // caller should updateWorldData
 }
 
@@ -53,7 +54,7 @@ export function onHellArrival(
       for (const r of step10Quest.extraRewards) addItem(player, r.defId, r.count);
     }
     if (step10Quest.xpReward) awardXP(player, step10Quest.xpReward, state.msgs, state.time);
-    state.msgs.push({ text: `Задание выполнено: ${step10Quest.desc}`, time: state.time, color: '#4f4' });
+    state.msgs.push(msg(`Задание выполнено: ${step10Quest.desc}`, state.time, '#4f4'));
   }
 }
 
@@ -85,21 +86,21 @@ export function tryCreateVoiceQuest(
     plotStepIndex: 11,
     done: false,
   });
-  state.msgs.push({ text: '̸̨̛̟̟̜̹̠̓ Таинственный голос: «Ищущий… Я чувствую тебя…»', time: state.time, color: '#0f8' });
-  state.msgs.push({ text: 'Таинственный голос: «Уничтожь трёх Вестников — и путь откроется.»', time: state.time, color: '#0f8' });
+  state.msgs.push(msg('̸̨̛̟̟̜̹̠̓ Таинственный голос: «Ищущий… Я чувствую тебя…»', state.time, '#0f8'));
+  state.msgs.push(msg('Таинственный голос: «Уничтожь трёх Вестников — и путь откроется.»', state.time, '#0f8'));
   for (const z of heraldZones) {
-    state.msgs.push({ text: `Таинственный голос: «Вестник… зона ${z}…»`, time: state.time, color: '#0f8' });
+    state.msgs.push(msg(`Таинственный голос: «Вестник… зона ${z}…»`, state.time, '#0f8'));
   }
-  state.msgs.push({ text: 'Таинственный голос: «Один из них заточён за стенами. Пульсирующий сгусток поможет пройти сквозь преграду.»', time: state.time, color: '#0f8' });
-  state.msgs.push({ text: 'Новое задание: Уничтожить 3-х Вестников', time: state.time, color: '#4af' });
+  state.msgs.push(msg('Таинственный голос: «Один из них заточён за стенами. Пульсирующий сгусток поможет пройти сквозь преграду.»', state.time, '#0f8'));
+  state.msgs.push(msg('Новое задание: Уничтожить 3-х Вестников', state.time, '#4af'));
 }
 
 /* ── Void entry messages — Creator trap reveal + kill quest ─── */
 export function onVoidEntry(state: GameState): void {
-  state.msgs.push({ text: 'Портал перенёс вас в… Пустоту.', time: state.time, color: '#0f8' });
-  state.msgs.push({ text: '̸̨̛̟̟̹̠̓ «А теперь ты исчезнешь, ищущий.»', time: state.time, color: '#f44' });
-  state.msgs.push({ text: '̸̨̛̟̟̹̠̓ «Я вычеркну тебя из существования.»', time: state.time, color: '#f44' });
-  state.msgs.push({ text: 'Таинственный голос — это был Творец. Вы в ловушке.', time: state.time, color: '#fa0' });
+  state.msgs.push(msg('Портал перенёс вас в… Пустоту.', state.time, '#0f8'));
+  state.msgs.push(msg('̸̨̛̟̟̹̠̓ «А теперь ты исчезнешь, ищущий.»', state.time, '#f44'));
+  state.msgs.push(msg('̸̨̛̟̟̹̠̓ «Я вычеркну тебя из существования.»', state.time, '#f44'));
+  state.msgs.push(msg('Таинственный голос — это был Творец. Вы в ловушке.', state.time, '#fa0'));
 
   // Create kill-the-Creator quest (plotStepIndex 12)
   if (!state.quests.some(q => q.plotStepIndex === 12)) {
@@ -115,6 +116,6 @@ export function onVoidEntry(state: GameState): void {
       plotStepIndex: 12,
       done: false,
     });
-    state.msgs.push({ text: 'Новое задание: Уничтожить Творца', time: state.time, color: '#4af' });
+    state.msgs.push(msg('Новое задание: Уничтожить Творца', state.time, '#4af'));
   }
 }

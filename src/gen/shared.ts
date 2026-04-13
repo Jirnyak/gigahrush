@@ -1051,8 +1051,8 @@ export function generateZones(world: World): void {
   world.zones = zones;
 }
 
-/* ── Place шлюзы (airlocks) at zone boundaries ────────────── */
-// Pattern: DOOR — FLOOR — DOOR (3 cells in a corridor across zone boundary)
+/* ── Place шлюзы (airlocks) at zone boundaries + corridors ──── */
+// Pattern: DOOR — FLOOR — DOOR (3 cells in a corridor)
 export function placeAirlocks(world: World): void {
   const used = new Set<number>(); // avoid duplicate / too-close airlocks
 
@@ -1072,8 +1072,9 @@ export function placeAirlocks(world: World): void {
         if (world.cells[pi] !== Cell.FLOOR || world.aptMask[pi]) continue;
         if (world.cells[ni] !== Cell.FLOOR || world.aptMask[ni]) continue;
 
-        // Zone boundary: prev and next must be different zones
-        if (world.zoneMap[pi] === world.zoneMap[ni]) continue;
+        // Zone boundary OR 1% chance in any corridor (rare inter-room airlocks)
+        const crossesZone = world.zoneMap[pi] !== world.zoneMap[ni];
+        if (!crossesZone && Math.random() > 0.01) continue;
 
         // Corridor check: perpendicular walls on all 3 cells
         let corridor = true;
@@ -1086,7 +1087,7 @@ export function placeAirlocks(world: World): void {
         }
         if (!corridor) continue;
 
-        // Anti-clustering
+        // Anti-clustering (tighter for zone boundaries, wider for random)
         if (used.has(pi) || used.has(mi) || used.has(ni)) continue;
 
         // No existing doors nearby
@@ -1109,8 +1110,8 @@ export function placeAirlocks(world: World): void {
           roomA: -1, roomB: -1, keyId: '', timer: 0,
         });
 
-        // Mark area as used
-        for (let r = -4; r <= 4; r++) {
+        // Mark area as used (prevent consecutive airlocks)
+        for (let r = -3; r <= 3; r++) {
           used.add(world.idx(world.wrap(x + r * dx), world.wrap(y + r * dy)));
         }
       }

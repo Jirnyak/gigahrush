@@ -13,7 +13,7 @@ import { World } from '../../core/world';
 import { rng, ensureConnectivity, generateZones } from '../shared';
 import { calcZoneLevel, randomRPG, scaleMonsterHp, scaleMonsterSpeed } from '../../systems/rpg';
 import { MONSTERS } from '../../entities/monster';
-import { monsterSpr } from '../../render/sprite_index';
+import { Spr, monsterSpr } from '../../render/sprite_index';
 
 /* ── Hash utility ─────────────────────────────────────────────── */
 function hash2(x: number, y: number, seed: number): number {
@@ -249,7 +249,7 @@ export function generateVoid(): { world: World; entities: Entity[]; spawnX: numb
     entities.push({
       id: nextId++, type: EntityType.ITEM_DROP,
       x: (cell % W) + 0.5, y: ((cell / W) | 0) + 0.5,
-      angle: 0, pitch: 0, alive: true, speed: 0, sprite: 16,
+      angle: 0, pitch: 0, alive: true, speed: 0, sprite: Spr.ITEM_DROP,
       inventory: [{ defId: drops[rng(0, drops.length - 1)], count: rng(1, 3) }],
     });
   }

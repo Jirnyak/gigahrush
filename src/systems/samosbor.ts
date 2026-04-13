@@ -6,11 +6,13 @@ import {
   W, Cell, DoorState, ZoneFaction, FloorLevel,
   type Entity, type GameState, type Msg,
   EntityType, AIGoal, MonsterKind,
+  msg,
 } from '../core/types';
 import { World } from '../core/world';
 import { ITEMS, NOTES } from '../data/catalog';
 import { spawnCount } from '../data/items';
 import { MONSTERS } from '../entities/monster';
+import { Spr } from '../render/sprite_index';
 import { forceHide } from './ai';
 import { playSamosborAlarm } from './audio';
 import { reassignQuestGivers } from './quests';
@@ -32,8 +34,8 @@ function samosborInterval(floor: FloorLevel): number {
 const SAMOSBOR_DUR_MIN = 12;      // min duration (0.2 game hours = 12 real sec)
 const SAMOSBOR_DUR_MAX = 90;      // max duration (1.5 game hours = 90 real sec)
 const MONSTERS_PER_SAMOSBOR = 6;
-const FOG_SPREAD_INTERVAL = 0.15; // seconds between fog spread ticks
-const FOG_SPAWN_INTERVAL  = 1.0;  // seconds between monster spawns in fog (~100 at max 90s samosbor)
+const FOG_SAMPLES_PER_TICK = 64;  // random cells sampled per tick for fog spread
+const FOG_SPAWN_INTERVAL  = 1.0;  // seconds between monster spawns in fog
 const MONSTER_CAP = 10_000;       // soft cap for auto-spawned monsters on the map
 
 /* ── Update samosbor timer and trigger ────────────────────────── */
@@ -49,9 +51,8 @@ export function updateSamosbor(
     state.samosborActive = true;
     state.samosborTimer = SAMOSBOR_DUR_MIN + Math.random() * (SAMOSBOR_DUR_MAX - SAMOSBOR_DUR_MIN);
     state.samosborCount++;
-    state.fogSpreadTimer = 0;
     fogSpawnAccum = 0;
-    state.msgs.push({ text: '⚠ САМОСБОР НАЧАЛСЯ ⚠', time: state.time, color: '#f44' });
+    state.msgs.push(msg('⚠ САМОСБОР НАЧАЛСЯ ⚠', state.time, '#f44'));
     playSamosborAlarm();
 
     // NPCs hide (citizens/scientists only — handled by forceHide)
@@ -70,13 +71,14 @@ export function updateSamosbor(
     spawnRandomMapMonsters(world, entities, nextId, state.samosborCount);
   }
 
-  // ── Fog spread tick (during active samosbor) ──
+  // ── Fog spread — universal, every tick, even outside samosbor ──
+  spreadFog(world);
+
+  // ── Spawn monsters in fogged areas during samosbor ──
   if (state.samosborActive) {
-    state.fogSpreadTimer -= dt;
-    if (state.fogSpreadTimer <= 0) {
-      state.fogSpreadTimer = FOG_SPREAD_INTERVAL;
-      spreadFog(world);
-      // Spawn monsters in fogged areas periodically
+    fogSpawnAccum += dt;
+    if (fogSpawnAccum >= FOG_SPAWN_INTERVAL) {
+      fogSpawnAccum -= FOG_SPAWN_INTERVAL;
       spawnFogMonsters(world, entities, nextId, state.samosborCount);
     }
   }
@@ -85,7 +87,7 @@ export function updateSamosbor(
     // ── END samosbor: unseal, mark for rebuild ──
     state.samosborActive = false;
     state.samosborTimer = samosborInterval(state.currentFloor);
-    state.msgs.push({ text: 'Самосбор закончился... мир перестраивается.', time: state.time, color: '#aa4' });
+    state.msgs.push(msg('Самосбор закончился... мир перестраивается.', state.time, '#aa4'));
 
     // Unseal apartment doors
     unsealApartments(world);
@@ -256,7 +258,7 @@ export function rebuildWorld(
       const iy = room.y + rng(1, Math.max(1, room.h - 2));
       entities.push({
         id: nextId.v++, type: EntityType.ITEM_DROP,
-        x: ix + 0.5, y: iy + 0.5, angle: 0, pitch: 0, alive: true, speed: 0, sprite: 16,
+        x: ix + 0.5, y: iy + 0.5, angle: 0, pitch: 0, alive: true, speed: 0, sprite: Spr.ITEM_DROP,
         inventory: [{ defId: def.id, count: rng(1, spawnCount(def)), data: def.id === 'note' ? pick(NOTES) : undefined }],
       });
       itemCount++;
@@ -428,46 +430,40 @@ function captureZone(world: World, entities: Entity[], nextId: { v: number }, st
   zoneNames[ZoneFaction.CITIZEN] = 'гражданской';
   zoneNames[ZoneFaction.LIQUIDATOR] = 'ликвидаторской';
   zoneNames[ZoneFaction.CULTIST] = 'культистской';
-  state.msgs.push({
-    text: `☠ Зона ${zone.id + 1} захвачена самосбором! Фиолетовый туман распространяется...`,
-    time: state.time, color: '#a3f',
-  });
-  state.msgs.push({
-    text: `Босс тумана появился в зоне ${zone.id + 1}! Убейте его чтобы остановить туман.`,
-    time: state.time, color: '#f4a',
-  });
+  state.msgs.push(msg(
+    `☠ Зона ${zone.id + 1} захвачена самосбором! Фиолетовый туман распространяется...`,
+    state.time, '#a3f',
+  ));
+  state.msgs.push(msg(
+    `Босс тумана появился в зоне ${zone.id + 1}! Убейте его чтобы остановить туман.`,
+    state.time, '#f4a',
+  ));
 }
 
-/* ── Spread fog one tick — BFS-like expansion, blocked by doors ── */
+/* ── Spread fog one tick — cheap random-cell approach ────────── */
+/* Pick N random cells; if a cell has fog, spread to a random    */
+/* walkable neighbour. Runs every frame, universally.            */
 function spreadFog(world: World): void {
   const dirs: [number, number][] = [[1,0],[-1,0],[0,1],[0,-1]];
+  const total = W * W;
 
-  // Collect fog frontier cells (cells with fog that have non-fogged walkable neighbors)
-  const frontier: number[] = [];
-  for (let i = 0; i < W * W; i++) {
-    if (world.fog[i] < 50) continue;
-    const x = i % W, y = (i / W) | 0;
-    for (const [dx, dy] of dirs) {
-      const ni = world.idx(x + dx, y + dy);
-      if (world.fog[ni] > 0) continue;
-      if (world.cells[ni] === Cell.DOOR) continue;  // doors block fog
-      if (world.cells[ni] !== Cell.FLOOR) continue;
-      frontier.push(ni);
-    }
-  }
+  for (let s = 0; s < FOG_SAMPLES_PER_TICK; s++) {
+    const ci = (Math.random() * total) | 0;
+    if (world.fog[ci] < 50) continue;
 
-  // Spread to a random subset of frontier cells (organic spread)
-  for (const fi of frontier) {
-    if (Math.random() < 0.3) {
-      world.fog[fi] = 128 + Math.floor(Math.random() * 127);
-    }
-  }
+    // Strengthen this cell a bit
+    if (world.fog[ci] < 255) world.fog[ci] = Math.min(255, world.fog[ci] + 2) as number;
 
-  // Strengthen existing fog
-  for (let i = 0; i < W * W; i++) {
-    if (world.fog[i] > 0 && world.fog[i] < 255) {
-      world.fog[i] = Math.min(255, world.fog[i] + 2);
-    }
+    // Pick a random neighbour
+    const [dx, dy] = dirs[(Math.random() * 4) | 0];
+    const x = ci % W, y = (ci / W) | 0;
+    const ni = world.idx(x + dx, y + dy);
+
+    if (world.fog[ni] > 0) continue;          // already fogged
+    if (world.cells[ni] === Cell.DOOR) continue; // doors block fog
+    if (world.cells[ni] !== Cell.FLOOR) continue;
+
+    world.fog[ni] = 128 + ((Math.random() * 127) | 0);
   }
 }
 
@@ -482,19 +478,15 @@ export function clearFogInZone(world: World, zoneId: number, msgs: Msg[], time: 
       world.fog[i] = 0;
     }
   }
-  msgs.push({
-    text: `Туман в зоне ${zoneId} рассеялся! Босс повержен.`,
-    time, color: '#4f4',
-  });
+  msgs.push(msg(
+    `Туман в зоне ${zoneId} рассеялся! Босс повержен.`,
+    time, '#4f4',
+  ));
 }
 
 /* ── Spawn monsters in fogged areas during samosbor ──────────── */
 let fogSpawnAccum = 0;
 function spawnFogMonsters(world: World, entities: Entity[], nextId: { v: number }, samosborCount: number): void {
-  fogSpawnAccum += FOG_SPREAD_INTERVAL;
-  if (fogSpawnAccum < FOG_SPAWN_INTERVAL) return;
-  fogSpawnAccum -= FOG_SPAWN_INTERVAL;
-
   if (countMonsters(entities) >= MONSTER_CAP) return;
 
   // Find a random fogged floor cell

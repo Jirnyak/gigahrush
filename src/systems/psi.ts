@@ -2,6 +2,7 @@
 
 import {
   W, type Entity, type Msg, EntityType,
+  msg,
 } from '../core/types';
 import { World } from '../core/world';
 import { stampMark, MarkType } from '../render/marks';
@@ -162,9 +163,9 @@ function castStorm(
     }
   }
   if (hits > 0) {
-    msgs.push({ text: `Пси буря! Поражено целей: ${hits}`, time, color: '#c4f' });
+    msgs.push(msg(`Пси буря! Поражено целей: ${hits}`, time, '#c4f'));
   } else {
-    msgs.push({ text: 'Пси буря — целей нет', time, color: '#a4f' });
+    msgs.push(msg('Пси буря — целей нет', time, '#a4f'));
   }
 }
 
@@ -176,13 +177,13 @@ function castBrainBurn(
 ): void {
   const target = findLookTarget(player, entities, world, 12);
   if (!target) {
-    msgs.push({ text: 'Выжиг мозга — цель не найдена', time, color: '#a4f' });
+    msgs.push(msg('Выжиг мозга — цель не найдена', time, '#a4f'));
     return;
   }
   const playerLevel = player.rpg?.level ?? 1;
   const targetLevel = target.rpg?.level ?? 1;
   if (targetLevel > playerLevel) {
-    msgs.push({ text: `${entityDisplayName(target)} слишком сильна для выжига!`, time, color: '#f84' });
+    msgs.push(msg(`${entityDisplayName(target)} слишком сильна для выжига!`, time, '#f84'));
     return;
   }
   // Instant kill
@@ -191,7 +192,7 @@ function castBrainBurn(
     target.alive = false;
     spawnDeathPool(world, target.x, target.y, target.type === EntityType.MONSTER);
     handleKill(target);
-    msgs.push({ text: `Выжиг мозга! ${entityDisplayName(target)} уничтожена`, time, color: '#f4f' });
+    msgs.push(msg(`Выжиг мозга! ${entityDisplayName(target)} уничтожена`, time, '#f4f'));
   }
 }
 
@@ -205,43 +206,43 @@ function castTargeted(
 ): void {
   const target = findLookTarget(player, entities, world, 12);
   if (!target) {
-    msgs.push({ text: `${mode === 'madness' ? 'Безумие' : 'Контроль'} — цель не найдена`, time, color: '#a4f' });
+    msgs.push(msg(`${mode === 'madness' ? 'Безумие' : 'Контроль'} — цель не найдена`, time, '#a4f'));
     return;
   }
 
   if (mode === 'madness') {
     target.psiMadness = PSI_EFFECT_DURATION;
     if (target.ai) target.ai.combatTargetId = undefined;
-    msgs.push({ text: `Безумие! ${entityDisplayName(target)} сходит с ума`, time, color: '#f4f' });
+    msgs.push(msg(`Безумие! ${entityDisplayName(target)} сходит с ума`, time, '#f4f'));
   } else {
     target.psiControlledBy = player.id;
     controlTimers.set(target.id, PSI_EFFECT_DURATION);
     if (target.ai) target.ai.combatTargetId = undefined;
-    msgs.push({ text: `Контроль! ${entityDisplayName(target)} подчинена`, time, color: '#4ff' });
+    msgs.push(msg(`Контроль! ${entityDisplayName(target)} подчинена`, time, '#4ff'));
   }
 }
 
 // ── Фазовый сдвиг: walk through walls ───────────────────────────
 function castPhase(_player: Entity, msgs: Msg[], time: number): void {
   phaseTimer = PSI_EFFECT_DURATION;
-  msgs.push({ text: 'Фазовый сдвиг! Вы проходите сквозь материю', time, color: '#4af' });
+  msgs.push(msg('Фазовый сдвиг! Вы проходите сквозь материю', time, '#4af'));
 }
 
 // ── Метка: save current position ─────────────────────────────────
 function castMark(player: Entity, msgs: Msg[], time: number): void {
   markPos = { x: player.x, y: player.y };
-  msgs.push({ text: 'Метка установлена', time, color: '#4af' });
+  msgs.push(msg('Метка установлена', time, '#4af'));
 }
 
 // ── Возврат: teleport to saved mark ──────────────────────────────
 function castRecall(player: Entity, msgs: Msg[], time: number): void {
   if (!markPos) {
-    msgs.push({ text: 'Метка не установлена!', time, color: '#f84' });
+    msgs.push(msg('Метка не установлена!', time, '#f84'));
     return;
   }
   player.x = markPos.x;
   player.y = markPos.y;
-  msgs.push({ text: 'Телепорт к метке!', time, color: '#4af' });
+  msgs.push(msg('Телепорт к метке!', time, '#4af'));
 }
 
 // ── Пси Хамехамеха: wide beam that burns everything on path ─────
@@ -322,9 +323,9 @@ function castBeam(
     }
   }
   if (hits > 0) {
-    msgs.push({ text: `ПСИ ХАМЕХАМЕХА! Поражено: ${hits}`, time, color: '#f0f' });
+    msgs.push(msg(`ПСИ ХАМЕХАМЕХА! Поражено: ${hits}`, time, '#f0f'));
   } else {
-    msgs.push({ text: 'ПСИ ХАМЕХАМЕХА!', time, color: '#c0f' });
+    msgs.push(msg('ПСИ ХАМЕХАМЕХА!', time, '#c0f'));
   }
   return beamEnd;
 }
@@ -362,7 +363,7 @@ export function psiAoeExplosion(
     }
   }
   if (hits > 0) {
-    msgs.push({ text: `Разрыв связности! Поражено: ${hits}`, time, color: '#c4f' });
+    msgs.push(msg(`Разрыв связности! Поражено: ${hits}`, time, '#c4f'));
   }
 }
 

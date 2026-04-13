@@ -13,7 +13,7 @@ import { randomName, freshNeeds } from '../../data/catalog';
 import { calcZoneLevel, randomRPG, scaleMonsterHp, scaleMonsterSpeed, gaussianLevel, getMaxHp } from '../../systems/rpg';
 import { generateForpost } from './forpost';
 import { generateMancobusRoom } from './mancobus_room';
-import { monsterSpr } from '../../render/sprite_index';
+import { Spr, monsterSpr } from '../../render/sprite_index';
 
 /* ── Coarse grid parameters ───────────────────────────────────── */
 const CELL = 6;                   // world-tiles per maze cell (walls between = 1-wide passage)
@@ -371,7 +371,7 @@ export function generateMaintenance(): { world: World; entities: Entity[]; spawn
       entities.push({
         id: nextId++, type: EntityType.ITEM_DROP,
         x: ix + 0.5, y: iy + 0.5, angle: 0, pitch: 0,
-        alive: true, speed: 0, sprite: 16,
+        alive: true, speed: 0, sprite: Spr.ITEM_DROP,
         inventory: [{ defId, count: 1 }],
       });
     }

@@ -190,6 +190,29 @@ function genDirector(): Uint32Array {
   return t;
 }
 
+function genPriest(): Uint32Array {
+  // Black robe with golden cross on chest
+  const t = genHumanoid(175, 150, 130, 20, 20, 22, 20, 20, 22, 160, H_TOP, H_BOT, B_TOP, B_BOT, L_BOT);
+  const cx = S / 2;
+  // Golden cross on chest
+  for (let y = B_TOP + 4; y < B_TOP + 16; y++) t[y * S + cx] = rgba(210, 180, 50);
+  for (let x = cx - 3; x <= cx + 3; x++) t[(B_TOP + 7) * S + x] = rgba(210, 180, 50);
+  // Black kamilavka (cylindrical hat)
+  for (let y = H_TOP - 5; y < H_TOP; y++)
+    for (let x = cx - 5; x <= cx + 5; x++)
+      if (x >= 0 && x < S && y >= 0) t[y * S + x] = rgba(15, 15, 18);
+  // Beard (dark brown)
+  for (let y = H_BOT - 2; y < B_TOP + 3; y++)
+    for (let x = cx - 4; x <= cx + 4; x++) {
+      const n = noise(x, y, 161) * 10;
+      t[y * S + x] = rgba(clamp(50 + n), clamp(35 + n), clamp(20 + n));
+    }
+  return t;
+}
+
+/** Priest sprite: Батюшка (black robe + golden cross) */
+export function generatePriestSprite(): Uint32Array { return genPriest(); }
+
 /** Sprite generators indexed by Occupation enum value (0..12 = resident occupations) */
 export const NPC_SPRITE_GENERATORS: (() => Uint32Array)[] = [
   genHousewife,   // 0  HOUSEWIFE

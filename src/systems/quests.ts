@@ -4,6 +4,7 @@ import {
   type Entity, type Quest, type GameState, type Msg,
   QuestType, EntityType, Occupation, MonsterKind, Faction,
   RoomType, Cell, AIGoal, W,
+  msg,
 } from '../core/types';
 import { World } from '../core/world';
 import { ITEMS } from '../data/catalog';
@@ -32,16 +33,16 @@ export function offerQuest(
 ): void {
   if (!npc.alive || npc.type !== EntityType.NPC) return;
   if (!npc.canGiveQuest) {
-    msgs.push({ text: `${npc.name}: «Мне нечего тебе поручить.»`, time: state.time, color: '#888' });
+    msgs.push(msg(`${npc.name}: «Мне нечего тебе поручить.»`, state.time, '#888'));
     return;
   }
   if (state.quests.filter(q => !q.done).length >= MAX_ACTIVE_QUESTS) {
-    msgs.push({ text: 'Слишком много активных заданий.', time: state.time, color: '#a84' });
+    msgs.push(msg('Слишком много активных заданий.', state.time, '#a84'));
     return;
   }
   // Don't give quest if already has one active from this NPC
   if (state.quests.some(q => q.giverId === npc.id && !q.done)) {
-    msgs.push({ text: `${npc.name}: «Ещё не выполнил прошлое задание?»`, time: state.time, color: '#aaa' });
+    msgs.push(msg(`${npc.name}: «Ещё не выполнил прошлое задание?»`, state.time, '#aaa'));
     return;
   }
   // Plot NPCs always give quests — they are not in the relation matrix
@@ -49,20 +50,20 @@ export function offerQuest(
     const npcFaction = npc.faction ?? Faction.CITIZEN;
     const rel = getFactionRel(Faction.PLAYER, npcFaction);
     if (rel < -10) {
-      msgs.push({ text: `${npc.name} не хочет с вами разговаривать.`, time: state.time, color: '#a44' });
+      msgs.push(msg(`${npc.name} не хочет с вами разговаривать.`, state.time, '#a44'));
       return;
     }
   }
 
   const quest = generateQuest(npc, world, entities, state);
   if (!quest) {
-    msgs.push({ text: `${npc.name}: «Пока ничего не нужно.»`, time: state.time, color: '#888' });
+    msgs.push(msg(`${npc.name}: «Пока ничего не нужно.»`, state.time, '#888'));
     return;
   }
 
   state.quests.push(quest);
   npc.questId = quest.id;
-  msgs.push({ text: `Новое задание: ${quest.desc}`, time: state.time, color: '#4af' });
+  msgs.push(msg(`Новое задание: ${quest.desc}`, state.time, '#4af'));
 
   // Spawn monsters around quest giver when plot step has spawnMonstersOnAccept
   if (quest.plotStepIndex !== undefined && nextEntityId) {
@@ -127,7 +128,7 @@ function spawnQuestMonsters(
     spawned++;
   }
   if (spawned > 0) {
-    msgs.push({ text: `\u0412\u044b \u0441\u043b\u044b\u0448\u0438\u0442\u0435 \u0440\u044b\u043a \u0438 \u0441\u043a\u0440\u0435\u0436\u0435\u0442 \u2014 \u043c\u043e\u043d\u0441\u0442\u0440\u044b \u043f\u0440\u0443\u0442 \u043a \u0444\u043e\u0440\u043f\u043e\u0441\u0442\u0443!`, time, color: '#f44' });
+    msgs.push(msg(`\u0412\u044b \u0441\u043b\u044b\u0448\u0438\u0442\u0435 \u0440\u044b\u043a \u0438 \u0441\u043a\u0440\u0435\u0436\u0435\u0442 \u2014 \u043c\u043e\u043d\u0441\u0442\u0440\u044b \u043f\u0440\u0443\u0442 \u043a \u0444\u043e\u0440\u043f\u043e\u0441\u0442\u0443!`, time, '#f44'));
   }
 }
 
@@ -195,9 +196,9 @@ export function checkTalkQuest(
     if (!matchById && !matchByPlotId) continue;
     const plotDef = targetNpc.plotNpcId ? PLOT_NPCS[targetNpc.plotNpcId] : undefined;
     if (plotDef?.talkQuestResponse) {
-      msgs.push({ text: `${targetNpc.name}: «${plotDef.talkQuestResponse}»`, time: state.time, color: '#aaf' });
+      msgs.push(msg(`${targetNpc.name}: «${plotDef.talkQuestResponse}»`, state.time, '#aaf'));
     } else {
-      msgs.push({ text: `${targetNpc.name}: «Передам, спасибо.»`, time: state.time, color: '#aaf' });
+      msgs.push(msg(`${targetNpc.name}: «Передам, спасибо.»`, state.time, '#aaf'));
     }
     completeQuest(q, player, entities, state, msgs);
   }
@@ -219,13 +220,13 @@ function completeQuest(
   if (q.rewardItem) {
     addItem(player, q.rewardItem, q.rewardCount ?? 1);
     const def = ITEMS[q.rewardItem];
-    msgs.push({ text: `Награда: ${def?.name ?? q.rewardItem} ×${q.rewardCount ?? 1}`, time: state.time, color: '#4f4' });
+    msgs.push(msg(`Награда: ${def?.name ?? q.rewardItem} ×${q.rewardCount ?? 1}`, state.time, '#4f4'));
   }
   if (q.extraRewards) {
     for (const r of q.extraRewards) {
       addItem(player, r.defId, r.count);
       const def = ITEMS[r.defId];
-      msgs.push({ text: `Награда: ${def?.name ?? r.defId} ×${r.count}`, time: state.time, color: '#4f4' });
+      msgs.push(msg(`Награда: ${def?.name ?? r.defId} ×${r.count}`, state.time, '#4f4'));
     }
   }
 
@@ -237,7 +238,7 @@ function completeQuest(
   // Money reward
   if (q.moneyReward) {
     player.money = (player.money ?? 0) + q.moneyReward;
-    msgs.push({ text: `+${q.moneyReward}₽`, time: state.time, color: '#ee4' });
+    msgs.push(msg(`+${q.moneyReward}₽`, state.time, '#ee4'));
   }
 
   // Relation boost
@@ -253,7 +254,7 @@ function completeQuest(
     if (q.sideQuestId) giver.plotDone = true;
   }
 
-  msgs.push({ text: `Задание выполнено: ${q.desc}`, time: state.time, color: '#4f4' });
+  msgs.push(msg(`Задание выполнено: ${q.desc}`, state.time, '#4f4'));
 }
 /* ── Toroidal direction name (from → to) ─────────────────────── */
 function toroidalDirection(world: World, fromX: number, fromY: number, toX: number, toY: number): string {
