@@ -18,6 +18,7 @@ import { playSamosborAlarm } from './audio';
 import { reassignQuestGivers } from './quests';
 import { regrowMaze } from '../gen/living';
 import { generateMaintenance } from '../gen/maintenance';
+import { generateMinistry } from '../gen/ministry';
 import { generateHell } from '../gen/hell';
 import { rng, pick, weightedPick } from '../gen/shared';
 import { scaleMonsterHp, scaleMonsterSpeed, randomRPG } from './rpg';
@@ -25,6 +26,7 @@ import { scaleMonsterHp, scaleMonsterSpeed, randomRPG } from './rpg';
 // Floor-dependent samosbor intervals (seconds)
 function samosborInterval(floor: FloorLevel): number {
   switch (floor) {
+    case FloorLevel.MINISTRY:    return 600 + Math.random() * 600;  // 10-20 min (very rare)
     case FloorLevel.LIVING:      return 300 + Math.random() * 300;  // 5-10 min
     case FloorLevel.MAINTENANCE: return 180 + Math.random() * 240;  // 3-7 min
     case FloorLevel.HELL:        return 60  + Math.random() * 240;  // 1-5 min
@@ -37,6 +39,9 @@ const MONSTERS_PER_SAMOSBOR = 6;
 const FOG_SAMPLES_PER_TICK = 64;  // random cells sampled per tick for fog spread
 const FOG_SPAWN_INTERVAL  = 1.0;  // seconds between monster spawns in fog
 const MONSTER_CAP = 10_000;       // soft cap for auto-spawned monsters on the map
+const SEAL_BEFORE_END = 10;       // seal apartments 10 seconds before samosbor ends
+
+let samosborSealed = false;       // track whether apartments were sealed this samosbor
 
 /* ── Update samosbor timer and trigger ────────────────────────── */
 export function updateSamosbor(
@@ -47,19 +52,17 @@ export function updateSamosbor(
   state.samosborTimer -= dt;
 
   if (!state.samosborActive && state.samosborTimer <= 0) {
-    // ── START samosbor: seal + capture zone + spawn mobs ──
+    // ── START samosbor: capture zone + spawn mobs (doors stay open!) ──
     state.samosborActive = true;
     state.samosborTimer = SAMOSBOR_DUR_MIN + Math.random() * (SAMOSBOR_DUR_MAX - SAMOSBOR_DUR_MIN);
     state.samosborCount++;
     fogSpawnAccum = 0;
+    samosborSealed = false;
     state.msgs.push(msg('⚠ САМОСБОР НАЧАЛСЯ ⚠', state.time, '#f44'));
     playSamosborAlarm();
 
     // NPCs hide (citizens/scientists only — handled by forceHide)
     forceHide(entities, state.msgs, state.time);
-
-    // Seal apartment living rooms
-    sealApartments(world, entities);
 
     // Capture a zone with фиолетовый туман + spawn fog boss
     captureZone(world, entities, nextId, state);
@@ -69,6 +72,13 @@ export function updateSamosbor(
 
     // Spawn ~10 monsters at random map locations (scaled by zone level)
     spawnRandomMapMonsters(world, entities, nextId, state.samosborCount);
+  }
+
+  // ── Seal apartments 10 seconds before samosbor ends ──
+  if (state.samosborActive && !samosborSealed && state.samosborTimer <= SEAL_BEFORE_END) {
+    sealApartments(world, entities);
+    samosborSealed = true;
+    state.msgs.push(msg('⚠ Гермодвери закрываются! ⚠', state.time, '#fa0'));
   }
 
   // ── Fog spread — universal, every tick, even outside samosbor ──
@@ -154,7 +164,7 @@ export function rebuildWorld(
   world: World, entities: Entity[], nextId: { v: number }, _samosborCount: number,
   floor: FloorLevel = FloorLevel.LIVING,
 ): void {
-  if (floor === FloorLevel.MAINTENANCE || floor === FloorLevel.HELL) {
+  if (floor === FloorLevel.MINISTRY || floor === FloorLevel.MAINTENANCE || floor === FloorLevel.HELL) {
     // Non-living floors: full regeneration, preserve alive monsters + NPCs + player
     const kept: Entity[] = [];
     for (const e of entities) {
@@ -164,7 +174,8 @@ export function rebuildWorld(
       }
     }
     entities.length = 0;
-    const gen = floor === FloorLevel.MAINTENANCE ? generateMaintenance() : generateHell();
+    const gen = floor === FloorLevel.MINISTRY ? generateMinistry()
+      : floor === FloorLevel.MAINTENANCE ? generateMaintenance() : generateHell();
     // Overwrite world arrays in-place
     world.cells.set(gen.world.cells);
     world.wallTex.set(gen.world.wallTex);

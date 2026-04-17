@@ -7,9 +7,9 @@ import { S, rgba, noise, clamp, CLEAR } from '../render/pixutil';
 export const DEF: MonsterDef = {
   kind: MonsterKind.SBORKA,
   name: 'Сборка',
-  hp: 5,
+  hp: 10,
   speed: 2.8,
-  dmg: 5,
+  dmg: 4,
   attackRate: 0.8,
   sprite: 0,   // auto-assigned by generateSprites()
 };

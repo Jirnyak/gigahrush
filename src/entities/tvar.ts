@@ -7,7 +7,7 @@ import { S, rgba, noise, clamp, CLEAR } from '../render/pixutil';
 export const DEF: MonsterDef = {
   kind: MonsterKind.TVAR,
   name: 'Тварь',
-  hp: 40,
+  hp: 60,
   speed: 1.8,
   dmg: 12,
   attackRate: 1.2,

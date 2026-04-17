@@ -9,7 +9,7 @@ import { S, rgba, noise, clamp, CLEAR } from '../render/pixutil';
 export const DEF: MonsterDef = {
   kind: MonsterKind.REBAR,
   name: 'Арматура',
-  hp: 90,
+  hp: 200,
   speed: 0.9,
   dmg: 22,
   attackRate: 2.2,

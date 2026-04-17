@@ -7,9 +7,9 @@ import { S, rgba, noise, clamp, CLEAR } from '../render/pixutil';
 export const DEF: MonsterDef = {
   kind: MonsterKind.BETONNIK,
   name: 'Бетонник',
-  hp: 1500,
+  hp: 1000,
   speed: 0.8,
-  dmg: 40,
+  dmg: 35,
   attackRate: 3.0,
   sprite: 0,   // auto-assigned by generateSprites()
 };

@@ -636,16 +636,6 @@ float hash21(vec2 p) {
   p3 += dot(p3, p3.yzx + 33.33);
   return fract((p3.x + p3.y) * p3.z);
 }
-float valueNoise(vec2 p) {
-  vec2 i = floor(p);
-  vec2 f = fract(p);
-  f = f * f * (3.0 - 2.0 * f);
-  float a = hash21(i);
-  float b = hash21(i + vec2(1.0, 0.0));
-  float c = hash21(i + vec2(0.0, 1.0));
-  float d = hash21(i + vec2(1.0, 1.0));
-  return mix(mix(a, b, f.x), mix(c, d, f.x), f.y);
-}
 
 void main() {
   vec2 uv = vUV;
@@ -683,16 +673,21 @@ void main() {
     }
   }
 
-  /* ── Chromatic aberration ───────────────────────────────────── */
+  /* ── Chromatic aberration + VHS color bleed (combined for fewer texture reads) ── */
   float caBase = 0.0008;
   float caGlitch = uGlitch * 0.004;
   float caPulse = sin(t * 1.3) * 0.0002;
   float ca = caBase + caGlitch + caPulse;
   vec2 caOff = vec2(ca, ca * 0.3);
-  float r = texture(uTex, uv + caOff).r;
-  float g = texture(uTex, uv).g;
-  float b = texture(uTex, uv - caOff).b;
-  vec3 color = vec3(r, g, b);
+  vec4 cL = texture(uTex, uv + caOff);
+  vec4 cC = texture(uTex, uv);
+  vec4 cR = texture(uTex, uv - caOff);
+  vec3 color = vec3(cL.r, cC.g, cR.b);
+
+  /* VHS color bleed: approximate horizontal chroma smear using same 3 samples */
+  float bleedStr = 0.12 + uGlitch * 0.1;
+  vec3 bleed = (cL.rgb + cC.rgb + cR.rgb) / 3.0;
+  color = mix(color, bleed, bleedStr);
 
   /* ── Scanlines (subtle CRT) ─────────────────────────────────── */
   float scanY = gl_FragCoord.y;
@@ -712,13 +707,6 @@ void main() {
   float grain = hash21(vUV * 800.0 + fract(t * 11.3)) * 0.07 - 0.035;
   grain += (hash21(vUV * 400.0 + fract(t * 7.7 + 1.0)) - 0.5) * 0.02;
   color += grain;
-
-  /* ── VHS color bleed (horizontal chroma smear) ──────────────── */
-  float bleedStr = 0.12 + uGlitch * 0.1;
-  vec3 lSample = texture(uTex, uv - vec2(2.0 / 320.0, 0.0)).rgb;
-  vec3 rSample = texture(uTex, uv + vec2(2.0 / 320.0, 0.0)).rgb;
-  vec3 bleed = (lSample + color + rSample) / 3.0;
-  color = mix(color, bleed, bleedStr);
 
   /* ── VHS tracking line (moving horizontal bright bar) ───────── */
   float trackSpeed = 0.025 + uGlitch * 0.04;
@@ -741,7 +729,7 @@ void main() {
 
   /* ── Samosbor: extra purple tint + noise burst ──────────────── */
   if (uSamosborActive > 0.5) {
-    float noiseBurst = valueNoise(vUV * 60.0 + t * 5.0) * 0.06;
+    float noiseBurst = hash21(floor(vUV * 60.0 + t * 5.0)) * 0.06;
     color.r += noiseBurst * 0.5;
     color.b += noiseBurst;
     // Occasional white flash lines

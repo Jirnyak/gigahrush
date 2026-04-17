@@ -7,7 +7,7 @@ import { S, rgba, noise, clamp, CLEAR } from '../render/pixutil';
 export const DEF: MonsterDef = {
   kind: MonsterKind.ZOMBIE,
   name: 'Мертвяк',
-  hp: 25,
+  hp: 35,
   speed: 1.4,
   dmg: 8,
   attackRate: 1.5,

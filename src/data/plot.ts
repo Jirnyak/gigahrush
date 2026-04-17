@@ -293,6 +293,7 @@ export interface PlotStep {
   type: QuestType;
   desc: string;
   targetNpcId?: string;
+  targetPlotNpcId?: string;   // plot NPC key for cross-floor KILL quests targeting NPCs
   targetItem?: string;
   targetCount?: number;
   targetRoomType?: number;

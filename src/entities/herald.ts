@@ -9,9 +9,9 @@ import { S, rgba, noise, clamp, CLEAR } from '../render/pixutil';
 export const DEF: MonsterDef = {
   kind: MonsterKind.HERALD,
   name: 'Вестник',
-  hp: 800,
+  hp: 250,
   speed: 1.4,
-  dmg: 25,
+  dmg: 30,
   attackRate: 2.0,
   sprite: 0,   // auto-assigned by generateSprites()
   isRanged: true,

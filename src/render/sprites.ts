@@ -34,7 +34,9 @@ export function generateSprites(): SpriteData[] {
     def.sprite = monsterSpr(k as MonsterKind);
     // Auto-assign projSprite for ranged monsters
     if (def.isRanged && (def.projSprite === undefined || def.projSprite === 0)) {
-      def.projSprite = k === MonsterKind.EYE ? Spr.EYE_BOLT : Spr.PSI_BOLT;
+      def.projSprite = k === MonsterKind.EYE ? Spr.EYE_BOLT
+                     : k === MonsterKind.ROBOT ? Spr.PLASMA_BOLT
+                     : Spr.PSI_BOLT;
     }
   }
   // Eye bolt projectile

@@ -111,7 +111,7 @@ function drawText(
 }
 
 /** Measure pixel width of a text string. */
-function measureText(text: string): number {
+export function measureText(text: string): number {
   return text.length > 0 ? text.length * CELL_W - 1 : 0;
 }
 

@@ -6,6 +6,7 @@ import {
 } from '../../core/types';
 import { World } from '../../core/world';
 import { ROOM_DEFS } from '../../data/catalog';
+import { pickPosterTex } from './posters';
 import {
   rng, pick, shuffle,
   connectRoomsMST, canPlaceRoom, stampRoom,
@@ -301,8 +302,25 @@ export function generateVolatileMaze(world: World): void {
     }
   }
 
+  /* ── Agitprop posters on corridor walls ─────────────── */
+  for (let i = 0; i < W * W; i++) {
+    if (world.cells[i] !== Cell.WALL || world.aptMask[i]) continue;
+    if (world.wallTex[i] !== Tex.CONCRETE && world.wallTex[i] !== Tex.BRICK && world.wallTex[i] !== Tex.PANEL) continue;
+    // Only walls adjacent to corridor floor (not room interiors)
+    const x = i % W, y = (i / W) | 0;
+    let adjCorridor = false;
+    for (const [dx, dy] of [[1,0],[-1,0],[0,1],[0,-1]]) {
+      const ni = world.idx(x + dx, y + dy);
+      if (world.cells[ni] === Cell.FLOOR && world.roomMap[ni] < 0) { adjCorridor = true; break; }
+    }
+    if (adjCorridor && Math.random() < 0.02) {
+      world.wallTex[i] = pickPosterTex(x, y);
+    }
+  }
+
   /* ── Lifts + lightmap ──────────────────────────────── */
-  placeLifts(world, 16, LiftDirection.DOWN);
+  placeLifts(world, 8, LiftDirection.DOWN);  // half go down to maintenance
+  placeLifts(world, 8, LiftDirection.UP);    // half go up to ministry
   world.bakeLights();
 }
 

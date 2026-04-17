@@ -9,9 +9,9 @@ import { S, rgba, noise, clamp, CLEAR } from '../render/pixutil';
 export const DEF: MonsterDef = {
   kind: MonsterKind.MANCOBUS,
   name: 'Манкобус',
-  hp: 2000,
+  hp: 400,
   speed: 0.7,
-  dmg: 35,
+  dmg: 40,
   attackRate: 3.0,
   sprite: 0,   // auto-assigned by generateSprites()
   isRanged: true,

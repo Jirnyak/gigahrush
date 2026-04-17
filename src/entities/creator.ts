@@ -9,7 +9,7 @@ import { S, rgba, noise, clamp, CLEAR } from '../render/pixutil';
 export const DEF: MonsterDef = {
   kind: MonsterKind.CREATOR,
   name: 'Творец',
-  hp: 5000,
+  hp: 9999,
   speed: 1.2,
   dmg: 50,
   attackRate: 1.5,

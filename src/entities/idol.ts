@@ -10,9 +10,9 @@ import { S, rgba, noise, clamp, CLEAR } from '../render/pixutil';
 export const DEF: MonsterDef = {
   kind: MonsterKind.IDOL,
   name: 'Идол',
-  hp: 200,
+  hp: 100,
   speed: 0,            // immobile — does not move
-  dmg: 25,
+  dmg: 30,
   attackRate: 2.0,
   sprite: 0,           // auto-assigned by generateSprites()
   isRanged: true,

@@ -37,6 +37,7 @@ import { spawnSideQuestNpcs } from './side_quests';
 
 export { generateSlideTextures } from './slides';
 export { generateHintTextures } from './tutor_room';
+export { generatePosterTextures, pickPosterTex } from './posters';
 
 /* ── generateWorld — called once at game start ───────────────── */
 export function generateWorld(): { world: World; entities: Entity[]; spawnX: number; spawnY: number } {

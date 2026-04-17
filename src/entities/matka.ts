@@ -7,7 +7,7 @@ import { S, rgba, noise, clamp, CLEAR } from '../render/pixutil';
 export const DEF: MonsterDef = {
   kind: MonsterKind.MATKA,
   name: 'Матка',
-  hp: 300,
+  hp: 350,
   speed: 0.4,
   dmg: 12,
   attackRate: 3.5,

@@ -8,9 +8,9 @@ import { S, rgba, noise, clamp, CLEAR } from '../render/pixutil';
 export const DEF: MonsterDef = {
   kind: MonsterKind.SHADOW,
   name: 'Теневик',
-  hp: 45,
+  hp: 50,
   speed: 2.4,
-  dmg: 14,
+  dmg: 12,
   attackRate: 1.0,
   sprite: 0,   // auto-assigned by generateSprites()
 };

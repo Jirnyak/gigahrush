@@ -62,6 +62,7 @@ export function execDebugCommand(
         MonsterKind.SBORKA, MonsterKind.TVAR, MonsterKind.POLZUN, MonsterKind.BETONNIK,
         MonsterKind.ZOMBIE, MonsterKind.EYE, MonsterKind.NIGHTMARE, MonsterKind.SHADOW,
         MonsterKind.REBAR, MonsterKind.MATKA, MonsterKind.IDOL, MonsterKind.SPIRIT,
+        MonsterKind.ROBOT,
       ];
       for (let i = 0; i < kinds.length; i++) {
         const k = kinds[i];

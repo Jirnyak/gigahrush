@@ -144,7 +144,9 @@ export function checkQuests(
 
     switch (q.type) {
       case QuestType.FETCH:
-        if (q.targetItem && hasItem(player, q.targetItem)) {
+        if (q.targetItem === 'money') {
+          if ((player.money ?? 0) >= (q.targetCount ?? 1)) complete = true;
+        } else if (q.targetItem && hasItem(player, q.targetItem)) {
           complete = true;
         }
         break;
@@ -183,6 +185,16 @@ export function notifyKill(kind: MonsterKind, state: GameState): void {
   }
 }
 
+/* ── Notify NPC kill for KILL quests targeting plotNpcId ───────── */
+export function notifyNpcKill(plotNpcId: string, state: GameState): void {
+  for (const q of state.quests) {
+    if (q.done || q.type !== QuestType.KILL) continue;
+    if (q.targetPlotNpcId === plotNpcId) {
+      q.killCount = (q.killCount ?? 0) + 1;
+    }
+  }
+}
+
 /* ── Check if talking to target NPC completes a TALK quest ────── */
 export function checkTalkQuest(
   targetNpc: Entity, player: Entity, entities: Entity[],
@@ -213,7 +225,11 @@ function completeQuest(
 
   // FETCH: take the item from player
   if (q.type === QuestType.FETCH && q.targetItem) {
-    removeItem(player, q.targetItem, q.targetCount ?? 1);
+    if (q.targetItem === 'money') {
+      player.money = (player.money ?? 0) - (q.targetCount ?? 1);
+    } else {
+      removeItem(player, q.targetItem, q.targetCount ?? 1);
+    }
   }
 
   // Reward
@@ -340,6 +356,7 @@ function generatePlotQuest(
         giverId: npc.id, giverName: npc.name ?? '???',
         desc,
         targetMonsterKind: step.targetMonsterKind,
+        targetPlotNpcId: step.targetPlotNpcId,
         killCount: 0, killNeeded: step.killNeeded ?? 1,
         rewardItem: step.rewardItem, rewardCount: step.rewardCount,
         extraRewards: step.extraRewards,
@@ -394,6 +411,22 @@ function generatePlotQuest(
         giverId: npc.id, giverName: npc.name ?? '???',
         desc: sq.desc,
         targetItem: sq.targetItem, targetCount: sq.targetCount,
+        rewardItem: sq.rewardItem, rewardCount: sq.rewardCount,
+        extraRewards: sq.extraRewards,
+        relationDelta: sq.relationDelta, xpReward: sq.xpReward,
+        moneyReward: sq.moneyReward,
+        sideQuestId: sq.id,
+        done: false,
+      };
+    }
+    if (sq.type === QuestType.KILL) {
+      return {
+        id, type: sq.type,
+        giverId: npc.id, giverName: npc.name ?? '???',
+        desc: sq.desc,
+        targetMonsterKind: sq.targetMonsterKind,
+        targetPlotNpcId: sq.targetPlotNpcId,
+        killCount: 0, killNeeded: sq.killNeeded ?? 1,
         rewardItem: sq.rewardItem, rewardCount: sq.rewardCount,
         extraRewards: sq.extraRewards,
         relationDelta: sq.relationDelta, xpReward: sq.xpReward,

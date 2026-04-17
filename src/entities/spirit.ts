@@ -9,9 +9,9 @@ import { S, rgba, noise, clamp, CLEAR } from '../render/pixutil';
 export const DEF: MonsterDef = {
   kind: MonsterKind.SPIRIT,
   name: 'Дух',
-  hp: 30,
+  hp: 40,
   speed: 2.0,
-  dmg: 18,
+  dmg: 15,
   attackRate: 1.5,
   sprite: 0,   // auto-assigned by generateSprites()
 };

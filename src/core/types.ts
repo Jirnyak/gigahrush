@@ -70,15 +70,29 @@ export const enum Tex {
   PORTAL     = 45,
   CROSS      = 46,
   ICON       = 47,
-  COUNT      = 48,
+  // ministry (stalinist empire)
+  MARBLE          = 48,
+  F_RED_CARPET    = 49,
+  F_GREEN_CARPET  = 50,
+  F_MARBLE_TILE   = 51,
+  // portraits — 64 procedural variants (coordinate-hash like posters)
+  PORTRAIT_BASE   = 52,  // 64 procedural portraits: 52..115
+  // agitprop posters — 64 procedural variants
+  POSTER_BASE     = 116, // 64 procedural posters: 116..179
+  // parquet floor
+  F_PARQUET       = 180,
+  // red carpet edge-aware tiling: 16 variants by 4-bit edge mask (NESW)
+  F_CARPET_EDGE_BASE = 181, // 16 variants: 181..196
+  COUNT           = 197,
 }
 
 // ── Floor levels (Z-axis) ────────────────────────────────────────
 export enum FloorLevel {
-  LIVING       = 0,   // жилая зона — квартиры, цеха, залы
-  MAINTENANCE  = 1,   // коллекторы — трубы, туннели, каналы с водой
-  HELL         = 2,   // ад — мясо, постоянный самосбор, культисты
-  VOID         = 3,   // пустота — абстрактный фрактальный уровень, финальный босс
+  MINISTRY     = 0,   // министерство — сталинский ампир, чиновники, ковры
+  LIVING       = 1,   // жилая зона — квартиры, цеха, залы
+  MAINTENANCE  = 2,   // коллекторы — трубы, туннели, каналы с водой
+  HELL         = 3,   // ад — мясо, постоянный самосбор, культисты
+  VOID         = 4,   // пустота — абстрактный фрактальный уровень, финальный босс
 }
 
 // ── Lift direction ───────────────────────────────────────────────
@@ -179,6 +193,7 @@ export enum MonsterKind {
   HERALD,     // thin tree-like watcher   — вестник (свисающие глаза)
   CREATOR,    // final boss               — творец (белый силуэт)
   SPIRIT,     // ghostly skull face       — дух (летает сквозь стены)
+  ROBOT,      // industrial automaton     — робот (стреляет плазмой)
 }
 
 // ── Factions ─────────────────────────────────────────────────────
@@ -267,6 +282,9 @@ export enum NpcState {
   FREE_TIME,   // 18-22: свободное время — курилка, кухня, бродит
   HIDING,      // самосбор — сидит в жилой
   TRAVELING,   // путники — бродят по лабиринту постоянно
+  MEETING,     // заседание в зале (министерство)
+  PATROL,      // патруль коридоров (ликвидаторы)
+  BREAK,       // перекур / перерыв
 }
 
 export interface AIState {
@@ -307,6 +325,7 @@ export interface Entity {
   faction?: Faction;
   occupation?: Occupation;
   isTraveler?: boolean;       // путник/паломник/охотник — бродит по лабиринту
+  assignedRoomId?: number;    // назначенный кабинет (министерство)
   questId?: number;           // active quest given by this NPC (-1 = none)
   canGiveQuest?: boolean;     // only ~10% NPCs can give quests
   money?: number;             // рубли

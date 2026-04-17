@@ -13,6 +13,7 @@ import { randomName, freshNeeds } from '../../data/catalog';
 import { calcZoneLevel, randomRPG, scaleMonsterHp, scaleMonsterSpeed, gaussianLevel, getMaxHp } from '../../systems/rpg';
 import { generateForpost } from './forpost';
 import { generateMancobusRoom } from './mancobus_room';
+import { spawnMakhno } from './makhno';
 import { Spr, monsterSpr } from '../../render/sprite_index';
 
 /* ── Coarse grid parameters ───────────────────────────────────── */
@@ -20,7 +21,7 @@ const CELL = 6;                   // world-tiles per maze cell (walls between = 
 const GRID = Math.floor(W / CELL);// 1024/6 = 170 coarse cells
 const EXTRA_CONN = 0.08;          // fraction of extra random connections (loops)
 const MONSTER_CAP = 1000;
-const NPC_CAP = 100;
+const NPC_CAP = 500;
 
 /* Room type pool for maintenance floor */
 const MAINT_ROOM_TYPES: { type: RoomType; name: string; weight: number }[] = [
@@ -424,7 +425,7 @@ export function generateMaintenance(): { world: World; entities: Entity[]; spawn
   }
 
   /* ══════════════════════════════════════════════════════════════
-     Phase 12: Faction NPC squads (up to NPC_CAP=100)
+     Phase 12: Faction NPC squads (up to NPC_CAP=500)
      ══════════════════════════════════════════════════════════════ */
   const factions: { faction: Faction; occupation: Occupation }[] = [
     { faction: Faction.LIQUIDATOR, occupation: Occupation.HUNTER },
@@ -434,51 +435,56 @@ export function generateMaintenance(): { world: World; entities: Entity[]; spawn
     { faction: Faction.SCIENTIST,  occupation: Occupation.SCIENTIST },
   ];
   let npcCount = 0;
-  for (const zone of world.zones) {
-    if (npcCount >= NPC_CAP) break;
-    const squadSize = rng(1, 4);
-    const fDef = pick(factions);
-    for (let s = 0; s < squadSize && npcCount < NPC_CAP; s++) {
-      let sx = -1, sy = -1;
-      for (let r = 0; r < 30; r++) {
-        const tx = world.wrap(zone.cx + rng(-r * 3, r * 3));
-        const ty = world.wrap(zone.cy + rng(-r * 3, r * 3));
-        const tci = world.idx(tx, ty);
-        if (world.cells[tci] === Cell.FLOOR) {
-          sx = tx; sy = ty;
-          break;
+  while (npcCount < NPC_CAP) {
+    const prevCount = npcCount;
+    for (const zone of world.zones) {
+      if (npcCount >= NPC_CAP) break;
+      const squadSize = rng(1, 4);
+      const fDef = pick(factions);
+      for (let s = 0; s < squadSize && npcCount < NPC_CAP; s++) {
+        let sx = -1, sy = -1;
+        for (let r = 0; r < 30; r++) {
+          const tx = world.wrap(zone.cx + rng(-r * 3, r * 3));
+          const ty = world.wrap(zone.cy + rng(-r * 3, r * 3));
+          const tci = world.idx(tx, ty);
+          if (world.cells[tci] === Cell.FLOOR) {
+            sx = tx; sy = ty;
+            break;
+          }
         }
+        if (sx < 0) continue;
+        const zoneLevel = zone.level ?? 5;
+        const npcLevel = gaussianLevel(zoneLevel + 3, 3);
+        const rpg = randomRPG(npcLevel);
+        const maxHp = Math.round(getMaxHp(rpg) * 1.5);
+        const nm = randomName(fDef.faction);
+        const hasPsi = fDef.faction === Faction.CULTIST && Math.random() < 0.4;
+        entities.push({
+          id: nextId++, type: EntityType.NPC,
+          x: sx + 0.5, y: sy + 0.5,
+          angle: Math.random() * Math.PI * 2, pitch: 0,
+          alive: true,
+          speed: 1.4 + Math.random() * 0.4,
+          sprite: fDef.occupation,
+          name: nm.name,
+          isFemale: nm.female,
+          needs: freshNeeds(),
+          hp: maxHp, maxHp,
+          money: rng(10, 80),
+          ai: { goal: AIGoal.IDLE, tx: 0, ty: 0, path: [], pi: 0, stuck: 0, timer: 0 },
+          inventory: hasPsi ? [{ defId: pickPsi(), count: 1 }] : [],
+          weapon: hasPsi ? pickPsi() : undefined,
+          faction: fDef.faction,
+          occupation: fDef.occupation,
+          isTraveler: true,
+          questId: -1,
+          rpg,
+        });
+        npcCount++;
       }
-      if (sx < 0) continue;
-      const zoneLevel = zone.level ?? 5;
-      const npcLevel = gaussianLevel(zoneLevel + 3, 3);
-      const rpg = randomRPG(npcLevel);
-      const maxHp = Math.round(getMaxHp(rpg) * 1.5);
-      const nm = randomName(fDef.faction);
-      const hasPsi = fDef.faction === Faction.CULTIST && Math.random() < 0.4;
-      entities.push({
-        id: nextId++, type: EntityType.NPC,
-        x: sx + 0.5, y: sy + 0.5,
-        angle: Math.random() * Math.PI * 2, pitch: 0,
-        alive: true,
-        speed: 1.4 + Math.random() * 0.4,
-        sprite: fDef.occupation,
-        name: nm.name,
-        isFemale: nm.female,
-        needs: freshNeeds(),
-        hp: maxHp, maxHp,
-        money: rng(10, 80),
-        ai: { goal: AIGoal.IDLE, tx: 0, ty: 0, path: [], pi: 0, stuck: 0, timer: 0 },
-        inventory: hasPsi ? [{ defId: pickPsi(), count: 1 }] : [],
-        weapon: hasPsi ? pickPsi() : undefined,
-        faction: fDef.faction,
-        occupation: fDef.occupation,
-        isTraveler: true,
-        questId: -1,
-        rpg,
-      });
-      npcCount++;
     }
+    // Safety: if no NPCs were placed this pass, stop to avoid infinite loop
+    if (npcCount === prevCount) break;
   }
 
   /* ══════════════════════════════════════════════════════════════
@@ -491,6 +497,12 @@ export function generateMaintenance(): { world: World; entities: Entity[]; spawn
      Phase 14: Mancobus room (boss arena)
      ══════════════════════════════════════════════════════════════ */
   generateMancobusRoom(world, world.rooms.length, entities, { v: nextId }, spawnX, spawnY);
+  nextId = entities.reduce((mx, e) => Math.max(mx, e.id), nextId) + 1;
+
+  /* ══════════════════════════════════════════════════════════════
+     Phase 14b: Makhno — Wild faction leader (quest target)
+     ══════════════════════════════════════════════════════════════ */
+  spawnMakhno(world, entities, { v: nextId });
   nextId = entities.reduce((mx, e) => Math.max(mx, e.id), nextId) + 1;
 
   /* ══════════════════════════════════════════════════════════════

@@ -11,6 +11,7 @@ import { World } from './core/world';
 import { generateWorld } from './gen/living';
 import { priestDeathCurse } from './gen/living/temple';
 import { generateMaintenance } from './gen/maintenance';
+import { generateMinistry } from './gen/ministry';
 import { generateHell, updateHellPopulation, resetHellPopulationState } from './gen/hell';
 import { generateVoid } from './gen/void';
 import { generateTextures } from './render/textures';
@@ -39,7 +40,7 @@ import {
   playGauss, playPlasma, playBFG, playFlame, playPsiBeam,
   startAmbientDrone, setListenerPos,
 } from './systems/audio';
-import { offerQuest, checkQuests, checkTalkQuest, notifyKill } from './systems/quests';
+import { offerQuest, checkQuests, checkTalkQuest, notifyKill, notifyNpcKill } from './systems/quests';
 import {
   freshRPG, awardXP, xpForMonsterKill, xpForNpcKill,
   strMeleeDmgMult, agiSpeedMult, agiAttackSpeedMult,
@@ -58,6 +59,7 @@ import {
 import { addFactionRel, addFactionRelMutual, initFactionRelations } from './data/relations';
 import { type DeathCam, initDeathCam, updateDeathCam, getDeathCamAngle, getDeathCamPitch } from './systems/death';
 import { onHeraldKilled, onCreatorKilled, onHellArrival, tryCreateVoiceQuest, onVoidEntry } from './data/plot_events';
+import { randomTip } from './data/tips';
 
 /* ── Canvas setup ─────────────────────────────────────────────── */
 const canvas = document.getElementById('game') as HTMLCanvasElement;
@@ -87,14 +89,38 @@ let prevPlayerHp = 100; // track HP changes for damage flash
 let deathCam: DeathCam | null = null;
 let pendingLoad: (() => void) | null = null; // deferred heavy generation callback
 let pendingLoadDrawn = false; // true = loading screen was painted, next frame runs the callback
+let currentTip = randomTip();
 
 function drawLoading(): void {
+  currentTip = randomTip();
   ctx.fillStyle = '#000';
   ctx.fillRect(0, 0, hudCanvas.width, hudCanvas.height);
   ctx.fillStyle = '#aaa';
   ctx.font = `${Math.round(hudCanvas.height / 20)}px monospace`;
   ctx.textAlign = 'center';
   ctx.fillText('ЗАГРУЗКА...', hudCanvas.width / 2, hudCanvas.height / 2);
+  const tipSize = Math.max(14, Math.round(hudCanvas.height / 40));
+  ctx.font = `${tipSize}px monospace`;
+  ctx.fillStyle = '#777';
+  const maxW = hudCanvas.width * 0.85;
+  const words = currentTip.split(' ');
+  const lines: string[] = [];
+  let line = words[0];
+  for (let i = 1; i < words.length; i++) {
+    const test = line + ' ' + words[i];
+    if (ctx.measureText(test).width > maxW) {
+      lines.push(line);
+      line = words[i];
+    } else {
+      line = test;
+    }
+  }
+  lines.push(line);
+  const lineH = tipSize * 1.3;
+  const startY = hudCanvas.height / 2 + Math.round(hudCanvas.height / 12);
+  for (let i = 0; i < lines.length; i++) {
+    ctx.fillText(lines[i], hudCanvas.width / 2, startY + i * lineH);
+  }
   ctx.textAlign = 'left';
 }
 
@@ -132,6 +158,7 @@ function initGame(): void {
   initFactionControl(world);
   const fStats = countFactionTerritory(world);
   spawnPatrolSquads(world, entities, nextEntityId, fStats);
+  spawnTerritoryReinforcements(world, entities, nextEntityId, fStats);
   resetHellPopulationState();
 
   state = {
@@ -671,6 +698,7 @@ function handleKill(e: Entity, killerIsPlayer: boolean, pvx = 0, pvy = 0, goreLe
     }
   } else if (e.type === EntityType.NPC && killerIsPlayer) {
     awardXP(player, xpForNpcKill(e.rpg?.level ?? 1), state.msgs, state.time);
+    if (e.plotNpcId) notifyNpcKill(e.plotNpcId, state);
     // Priest death curse: killing Батюшка spawns 666 monsters in pentagram
     if (e.plotNpcId === 'batushka') {
       priestDeathCurse(world, entities, nextEntityId, e.x, e.y);
@@ -920,6 +948,7 @@ function checkRestart(): void {
 
 /* ── Floor switching via lift ─────────────────────────────────── */
 const FLOOR_NAMES: Record<FloorLevel, string> = {
+  [FloorLevel.MINISTRY]:    'Министерство',
   [FloorLevel.LIVING]:      'Жилая зона',
   [FloorLevel.MAINTENANCE]: 'Коллекторы',
   [FloorLevel.HELL]:        'Преисподняя',
@@ -933,7 +962,7 @@ function switchFloor(direction: LiftDirection): void {
     if (state.currentFloor >= FloorLevel.HELL) return; // already at bottom
     nextFloor = (state.currentFloor + 1) as FloorLevel;
   } else {
-    if (state.currentFloor <= FloorLevel.LIVING) return; // already at top
+    if (state.currentFloor <= FloorLevel.MINISTRY) return; // already at top
     nextFloor = (state.currentFloor - 1) as FloorLevel;
   }
 
@@ -959,7 +988,9 @@ function switchFloor(direction: LiftDirection): void {
     resetHellPopulationState();
     // Generate new floor
     let gen: { world: World; entities: Entity[]; spawnX: number; spawnY: number };
-    if (nextFloor === FloorLevel.LIVING) {
+    if (nextFloor === FloorLevel.MINISTRY) {
+      gen = generateMinistry();
+    } else if (nextFloor === FloorLevel.LIVING) {
       gen = generateWorld();
     } else if (nextFloor === FloorLevel.MAINTENANCE) {
       gen = generateMaintenance();
@@ -1026,7 +1057,9 @@ function switchFloor(direction: LiftDirection): void {
     const fStats = countFactionTerritory(world);
     if (nextFloor !== FloorLevel.HELL) {
       spawnPatrolSquads(world, entities, nextEntityId, fStats);
+      spawnTerritoryReinforcements(world, entities, nextEntityId, fStats);
     }
+    _npcReinforcementAccum = 0;
 
     if (nextFloor === FloorLevel.HELL) {
       state.samosborTimer = 60 + Math.random() * 240;
@@ -1034,6 +1067,8 @@ function switchFloor(direction: LiftDirection): void {
       state.samosborTimer = 40 + Math.random() * 120;
     } else if (nextFloor === FloorLevel.MAINTENANCE) {
       state.samosborTimer = 180 + Math.random() * 240;
+    } else if (nextFloor === FloorLevel.MINISTRY) {
+      state.samosborTimer = 600 + Math.random() * 600; // very rare: 10-20 min
     } else {
       state.samosborTimer = 300 + Math.random() * 300;
     }
@@ -1044,7 +1079,7 @@ function switchFloor(direction: LiftDirection): void {
     state.msgs.push(msg(
       `Лифт прибыл: ${FLOOR_NAMES[nextFloor]}`,
       state.time,
-      nextFloor === FloorLevel.HELL ? '#f44' : nextFloor === FloorLevel.VOID ? '#0f8' : '#4af',
+      nextFloor === FloorLevel.HELL ? '#f44' : nextFloor === FloorLevel.VOID ? '#0f8' : nextFloor === FloorLevel.MINISTRY ? '#fc4' : '#4af',
     ));
 
     // Auto-trigger voice quest when entering Hell with step 9 (kill Mancobus) done
@@ -1180,7 +1215,8 @@ function loadGame(): boolean {
     pendingLoad = () => {
       resetHellPopulationState();
       let gen: { world: World; entities: Entity[]; spawnX: number; spawnY: number };
-      if (floor === FloorLevel.LIVING) gen = generateWorld();
+      if (floor === FloorLevel.MINISTRY) gen = generateMinistry();
+      else if (floor === FloorLevel.LIVING) gen = generateWorld();
       else if (floor === FloorLevel.MAINTENANCE) gen = generateMaintenance();
       else gen = generateHell();
 
@@ -1217,6 +1253,7 @@ function loadGame(): boolean {
       const fStats = countFactionTerritory(world);
       if (floor !== FloorLevel.HELL) {
         spawnPatrolSquads(world, entities, nextEntityId, fStats);
+        spawnTerritoryReinforcements(world, entities, nextEntityId, fStats);
       }
 
       state.time = data.state.time ?? 0;
@@ -1245,6 +1282,7 @@ function loadGame(): boolean {
 
 /* ── Urination faction penalty ─────────────────────────────────── */
 let _urinePenaltyAccum = 0;
+let _npcReinforcementAccum = 0;
 let _urinePenaltyStarted = false;
 let _prevToolUse = false;
 let _toolActionCd = 0;
@@ -1796,7 +1834,7 @@ function gameLoop(now: number): void {
     updateDoors(dt);
     updateNeeds(entities, dt, state.time, state.msgs, player.id, nextEntityId);
     setListenerPos(player.x, player.y, (ax, ay, bx, by) => world.dist2(ax, ay, bx, by));
-    updateAI(world, entities, dt, state.time, state.msgs, player.id, state.clock, state.samosborActive, nextEntityId);
+    updateAI(world, entities, dt, state.time, state.msgs, player.id, state.clock, state.samosborActive, nextEntityId, state.currentFloor);
     if (updateSamosbor(world, entities, state, dt, nextEntityId)) {
       pendingLoad = () => {
         rebuildWorld(world, entities, nextEntityId, state.samosborCount, state.currentFloor);
@@ -1815,6 +1853,15 @@ function gameLoop(now: number): void {
     updateFactionCapture(world, entities, dt);
     if (state.currentFloor === FloorLevel.HELL) {
       updateHellPopulation(world, entities, nextEntityId, dt, state.samosborCount);
+    }
+    // Periodic NPC reinforcement for non-hell floors (every ~30 seconds)
+    if (state.currentFloor !== FloorLevel.HELL) {
+      _npcReinforcementAccum += dt;
+      if (_npcReinforcementAccum >= 30) {
+        _npcReinforcementAccum -= 30;
+        const fStats = countFactionTerritory(world);
+        spawnTerritoryReinforcements(world, entities, nextEntityId, fStats);
+      }
     }
     // Continuous monster spawn for Grom's defense quest (step 8)
     if (state.currentFloor === FloorLevel.MAINTENANCE) {
@@ -1913,7 +1960,7 @@ function gameLoop(now: number): void {
     updateDoors(dt);
     updateNeeds(entities, dt, state.time, state.msgs, player.id, nextEntityId);
     setListenerPos(player.x, player.y, (ax, ay, bx, by) => world.dist2(ax, ay, bx, by));
-    updateAI(world, entities, dt, state.time, state.msgs, player.id, state.clock, state.samosborActive, nextEntityId);
+    updateAI(world, entities, dt, state.time, state.msgs, player.id, state.clock, state.samosborActive, nextEntityId, state.currentFloor);
     if (updateSamosbor(world, entities, state, dt, nextEntityId)) {
       pendingLoad = () => {
         rebuildWorld(world, entities, nextEntityId, state.samosborCount, state.currentFloor);
@@ -1931,6 +1978,15 @@ function gameLoop(now: number): void {
     updateFactionCapture(world, entities, dt);
     if (state.currentFloor === FloorLevel.HELL) {
       updateHellPopulation(world, entities, nextEntityId, dt, state.samosborCount);
+    }
+    // Periodic NPC reinforcement for non-hell floors (death loop)
+    if (state.currentFloor !== FloorLevel.HELL) {
+      _npcReinforcementAccum += dt;
+      if (_npcReinforcementAccum >= 30) {
+        _npcReinforcementAccum -= 30;
+        const fStats2 = countFactionTerritory(world);
+        spawnTerritoryReinforcements(world, entities, nextEntityId, fStats2);
+      }
     }
     updateBloodTrails(world, entities, dt);
     updateParticles(world, dt);

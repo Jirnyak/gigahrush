@@ -7,7 +7,7 @@ import { S, rgba, noise, clamp, CLEAR } from '../render/pixutil';
 export const DEF: MonsterDef = {
   kind: MonsterKind.POLZUN,
   name: 'Ползун',
-  hp: 80,
+  hp: 150,
   speed: 1.0,
   dmg: 18,
   attackRate: 2.0,

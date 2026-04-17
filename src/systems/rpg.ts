@@ -147,6 +147,7 @@ const MONSTER_BASE_XP: Record<MonsterKind, number> = {
   [MonsterKind.CREATOR]:  500,
   [MonsterKind.SPIRIT]:   40,
   [MonsterKind.IDOL]:      10,
+  [MonsterKind.ROBOT]:     35,
 };
 
 export function xpForMonsterKill(kind: MonsterKind, monsterLevel: number): number {
@@ -173,6 +174,7 @@ export function calcZoneLevel(zoneCx: number, zoneCy: number, floor: FloorLevel)
 
   // Floor bonus
   const floorBonus: Record<FloorLevel, number> = {
+    [FloorLevel.MINISTRY]: 0,
     [FloorLevel.LIVING]: 0,
     [FloorLevel.MAINTENANCE]: 4,
     [FloorLevel.HELL]: 9,

@@ -111,19 +111,7 @@ export function dropItem(
   const def = ITEMS[slot.defId];
   if (!def) return;
 
-  // Place drop 3 cells in front of player (far enough to avoid auto-pickup)
-  const dx = Math.cos(player.angle);
-  const dy = Math.sin(player.angle);
-  const dropX = player.x + dx * 3.0;
-  const dropY = player.y + dy * 3.0;
-
   const dropCount = slot.count;
-
-  entities.push({
-    id: nextId.v++, type: EntityType.ITEM_DROP,
-    x: dropX, y: dropY, angle: 0, pitch: 0, alive: true, speed: 0, sprite: Spr.ITEM_DROP,
-    inventory: [{ defId: slot.defId, count: dropCount, data: slot.data }],
-  });
 
   // If dropping equipped weapon, unequip
   if (def.type === ItemType.WEAPON && player.weapon === def.id) {
@@ -132,6 +120,25 @@ export function dropItem(
   if (def.type === ItemType.TOOL && player.tool === def.id) {
     player.tool = '';
   }
+
+  // Tools are destroyed on drop (picking up would reset charge)
+  if (def.type === ItemType.TOOL) {
+    player.inventory.splice(slotIdx, 1);
+    msgs.push(msg(`${def.name} выброшен и сломан`, time, '#f84'));
+    return;
+  }
+
+  // Place drop 3 cells in front of player (far enough to avoid auto-pickup)
+  const dx = Math.cos(player.angle);
+  const dy = Math.sin(player.angle);
+  const dropX = player.x + dx * 3.0;
+  const dropY = player.y + dy * 3.0;
+
+  entities.push({
+    id: nextId.v++, type: EntityType.ITEM_DROP,
+    x: dropX, y: dropY, angle: 0, pitch: 0, alive: true, speed: 0, sprite: Spr.ITEM_DROP,
+    inventory: [{ defId: slot.defId, count: dropCount, data: slot.data }],
+  });
 
   player.inventory.splice(slotIdx, 1);
 

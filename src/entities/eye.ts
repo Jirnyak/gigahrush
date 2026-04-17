@@ -8,9 +8,9 @@ import { S, rgba, noise, clamp, CLEAR } from '../render/pixutil';
 export const DEF: MonsterDef = {
   kind: MonsterKind.EYE,
   name: 'Глаз',
-  hp: 35,
+  hp: 20,
   speed: 2.2,
-  dmg: 10,
+  dmg: 14,
   attackRate: 2.5,
   sprite: 0,   // auto-assigned by generateSprites()
   isRanged: true,

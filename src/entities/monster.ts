@@ -31,6 +31,7 @@ import { DEF as MANCOBUS_DEF, generateSprite as genMancobus } from './mancobus';
 import { DEF as HERALD_DEF, generateSprite as genHerald } from './herald';
 import { DEF as CREATOR_DEF, generateSprite as genCreator } from './creator';
 import { DEF as SPIRIT_DEF, generateSprite as genSpirit } from './spirit';
+import { DEF as ROBOT_DEF, generateSprite as genRobot } from './robot';
 
 export const MONSTERS: Record<MonsterKind, MonsterDef> = {
   [MonsterKind.SBORKA]:    SBORKA_DEF,
@@ -48,6 +49,7 @@ export const MONSTERS: Record<MonsterKind, MonsterDef> = {
   [MonsterKind.HERALD]:    HERALD_DEF,
   [MonsterKind.CREATOR]:   CREATOR_DEF,
   [MonsterKind.SPIRIT]:    SPIRIT_DEF,
+  [MonsterKind.ROBOT]:     ROBOT_DEF,
 };
 
 export const MONSTER_SPRITES: Record<MonsterKind, () => Uint32Array> = {
@@ -66,6 +68,7 @@ export const MONSTER_SPRITES: Record<MonsterKind, () => Uint32Array> = {
   [MonsterKind.HERALD]:    genHerald,
   [MonsterKind.CREATOR]:   genCreator,
   [MonsterKind.SPIRIT]:    genSpirit,
+  [MonsterKind.ROBOT]:     genRobot,
 };
 
 export const EYE_BOLT_SPRITE: () => Uint32Array = genEyeBolt;
