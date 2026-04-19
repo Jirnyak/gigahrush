@@ -1,0 +1,700 @@
+/* ── Kvartiry floor generator (Floor -1) — КВАРТИРЫ ──────────── */
+/*   Dense residential maze with wall_l=4 grid pattern.           */
+/*   1000 citizens + 1000 wild + 500 liquidators.                 */
+/*   Groups spawn in random locations — eternal riots.            */
+/*   Uprising mechanic: civilians rally → become WILD.            */
+/*   Rooms by zone: living, kitchen, smoking, bathroom, etc.      */
+
+import {
+  W, Cell, Tex, RoomType, Feature, LiftDirection, DoorState,
+  Faction, Occupation,
+  type Room, type Entity,
+  EntityType, AIGoal, FloorLevel,
+} from '../../core/types';
+import { World } from '../../core/world';
+import { rng, placeLifts, generateZones, ensureConnectivity } from '../shared';
+import { randomName, freshNeeds } from '../../data/catalog';
+import { calcZoneLevel, randomRPG, gaussianLevel, getMaxHp } from '../../systems/rpg';
+import { Spr } from '../../render/sprite_index';
+import { randomOccupation } from '../../data/relations';
+import { spawnNavelny } from './navelny';
+
+/* ── Constants ────────────────────────────────────────────────── */
+const WALL_L = 4;  // grid spacing for wall sources
+const CITIZEN_CAP = 1000;
+const WILD_CAP = 1000;
+const LIQUIDATOR_CAP = 500;
+const INITIAL_CITIZENS = 300;
+const INITIAL_WILD = 200;
+const INITIAL_LIQUIDATORS = 100;
+const UPRISING_CHECK_INTERVAL = 30; // seconds between uprising checks
+const UPRISING_RADIUS = 50;  // civilian rally radius
+const LIQUIDATOR_RESPONSE_RADIUS = 100;  // liquidator response radius
+
+/* Population update accumulators */
+let kvCitizenAccum = 0;
+let kvWildAccum = 0;
+let kvLiquidatorAccum = 0;
+let kvUprisingAccum = 0;
+
+const SPAWN_INTERVAL = 2.0;  // seconds between group spawn checks
+
+/* ── Room type definitions for kvartiry floor ─────────────────── */
+const KV_ROOM_TYPES: { type: RoomType; name: string; weight: number }[] = [
+  { type: RoomType.LIVING,     name: 'Жилая',       weight: 30 },
+  { type: RoomType.KITCHEN,    name: 'Кухня',        weight: 20 },
+  { type: RoomType.BATHROOM,   name: 'Санузел',      weight: 12 },
+  { type: RoomType.SMOKING,    name: 'Курилка',      weight: 10 },
+  { type: RoomType.STORAGE,    name: 'Кладовая',     weight: 10 },
+  { type: RoomType.COMMON,     name: 'Зал',          weight: 8 },
+  { type: RoomType.CORRIDOR,   name: 'Коридор',      weight: 5 },
+  { type: RoomType.OFFICE,     name: 'Бухгалтерия',  weight: 5 },
+];
+
+let lastPickedIdx = -1;
+function pickKvRoomType(): { type: RoomType; name: string } {
+  // Avoid picking the same type twice in a row
+  let total = 0;
+  for (let i = 0; i < KV_ROOM_TYPES.length; i++) {
+    if (i === lastPickedIdx) continue;
+    total += KV_ROOM_TYPES[i].weight;
+  }
+  let roll = Math.random() * total;
+  for (let i = 0; i < KV_ROOM_TYPES.length; i++) {
+    if (i === lastPickedIdx) continue;
+    roll -= KV_ROOM_TYPES[i].weight;
+    if (roll <= 0) {
+      lastPickedIdx = i;
+      return { type: KV_ROOM_TYPES[i].type, name: KV_ROOM_TYPES[i].name };
+    }
+  }
+  lastPickedIdx = 0;
+  return KV_ROOM_TYPES[0];
+}
+
+/* ── Room wall/floor textures by type ─────────────────────────── */
+function roomTextures(type: RoomType): { wall: Tex; floor: Tex } {
+  switch (type) {
+    case RoomType.LIVING:     return { wall: Tex.PANEL,    floor: Tex.F_WOOD };
+    case RoomType.KITCHEN:    return { wall: Tex.TILE_W,   floor: Tex.F_LINO };
+    case RoomType.BATHROOM:   return { wall: Tex.TILE_W,   floor: Tex.F_TILE };
+    case RoomType.STORAGE:    return { wall: Tex.CONCRETE, floor: Tex.F_CONCRETE };
+    case RoomType.COMMON:     return { wall: Tex.PANEL,    floor: Tex.F_CARPET };
+    case RoomType.SMOKING:    return { wall: Tex.CONCRETE, floor: Tex.F_CONCRETE };
+    case RoomType.CORRIDOR:   return { wall: Tex.CONCRETE, floor: Tex.F_LINO };
+    case RoomType.OFFICE:     return { wall: Tex.PANEL,    floor: Tex.F_LINO };
+    default:                  return { wall: Tex.PANEL,    floor: Tex.F_WOOD };
+  }
+}
+
+/* ── Room features by type ────────────────────────────────────── */
+function placeRoomFeatures(world: World, room: Room): void {
+  const feats: Feature[] = [];
+  switch (room.type) {
+    case RoomType.LIVING:   feats.push(Feature.BED, Feature.TABLE, Feature.LAMP, Feature.SHELF); break;
+    case RoomType.KITCHEN:  feats.push(Feature.STOVE, Feature.SINK, Feature.TABLE, Feature.LAMP); break;
+    case RoomType.BATHROOM: feats.push(Feature.TOILET, Feature.SINK); break;
+    case RoomType.SMOKING:  feats.push(Feature.CHAIR, Feature.LAMP); break;
+    case RoomType.STORAGE:  feats.push(Feature.SHELF, Feature.SHELF); break;
+    case RoomType.COMMON:   feats.push(Feature.LAMP, Feature.TABLE, Feature.CHAIR, Feature.CHAIR); break;
+    case RoomType.CORRIDOR: feats.push(Feature.LAMP); break;
+    case RoomType.OFFICE:   feats.push(Feature.TABLE, Feature.CHAIR, Feature.LAMP); break;
+  }
+  for (const f of feats) {
+    for (let attempt = 0; attempt < 20; attempt++) {
+      const fx = room.x + rng(1, Math.max(1, room.w - 2));
+      const fy = room.y + rng(1, Math.max(1, room.h - 2));
+      const fi = world.idx(fx, fy);
+      if (world.cells[fi] === Cell.FLOOR && world.features[fi] === Feature.NONE) {
+        world.features[fi] = f;
+        break;
+      }
+    }
+  }
+}
+
+/* ── Weapon loadout ───────────────────────────────────────────── */
+function npcWeapon(faction: Faction, occupation: Occupation): { weapon: string; inv: { defId: string; count: number }[] } {
+  if (faction === Faction.LIQUIDATOR || occupation === Occupation.HUNTER) {
+    const roll = Math.random();
+    if (roll < 0.20) return { weapon: 'makarov', inv: [{ defId: 'makarov', count: 1 }, { defId: 'ammo_9mm', count: rng(6, 16) }] };
+    if (roll < 0.32) return { weapon: 'shotgun', inv: [{ defId: 'shotgun', count: 1 }, { defId: 'ammo_shells', count: rng(4, 8) }] };
+    if (roll < 0.40) return { weapon: 'ppsh', inv: [{ defId: 'ppsh', count: 1 }, { defId: 'ammo_9mm', count: rng(20, 40) }] };
+    if (roll < 0.55) return { weapon: 'axe', inv: [{ defId: 'axe', count: 1 }] };
+    if (roll < 0.75) return { weapon: 'pipe', inv: [{ defId: 'pipe', count: 1 }] };
+    return { weapon: 'knife', inv: [{ defId: 'knife', count: 1 }] };
+  }
+  if (faction === Faction.WILD) {
+    const roll = Math.random();
+    if (roll < 0.15) return { weapon: 'makarov', inv: [{ defId: 'makarov', count: 1 }, { defId: 'ammo_9mm', count: rng(4, 10) }] };
+    if (roll < 0.35) return { weapon: 'rebar', inv: [{ defId: 'rebar', count: 1 }] };
+    if (roll < 0.55) return { weapon: 'pipe', inv: [{ defId: 'pipe', count: 1 }] };
+    if (roll < 0.75) return { weapon: 'wrench', inv: [{ defId: 'wrench', count: 1 }] };
+    return { weapon: 'knife', inv: [{ defId: 'knife', count: 1 }] };
+  }
+  if (Math.random() < 0.15) return { weapon: 'knife', inv: [{ defId: 'knife', count: 1 }] };
+  return { weapon: '', inv: [] };
+}
+
+/* ── Spawn a single NPC at a random floor cell ───────────────── */
+function spawnNpcAt(
+  world: World, entities: Entity[], nextId: { v: number },
+  faction: Faction, occupation: Occupation,
+): boolean {
+  for (let i = 0; i < 100; i++) {
+    const x = Math.floor(Math.random() * W);
+    const y = Math.floor(Math.random() * W);
+    const ci = world.idx(x, y);
+    if (world.cells[ci] !== Cell.FLOOR) continue;
+    const zoneId = world.zoneMap[ci];
+    const zoneLevel = world.zones[zoneId]?.level ?? 1;
+    const npcLevel = gaussianLevel(zoneLevel, 2);
+    const rpg = randomRPG(npcLevel);
+    const maxHp = getMaxHp(rpg);
+    const nm = randomName(faction);
+    const loadout = npcWeapon(faction, occupation);
+    entities.push({
+      id: nextId.v++, type: EntityType.NPC,
+      x: x + 0.5, y: y + 0.5,
+      angle: Math.random() * Math.PI * 2, pitch: 0,
+      alive: true,
+      speed: occupation === Occupation.CHILD ? 0.8 : 1.2,
+      sprite: occupation,
+      spriteScale: occupation === Occupation.CHILD ? 0.6 : 1.0,
+      name: nm.name, isFemale: nm.female,
+      needs: freshNeeds(), hp: maxHp, maxHp,
+      money: rng(5, 60),
+      ai: { goal: AIGoal.IDLE, tx: 0, ty: 0, path: [], pi: 0, stuck: 0, timer: 0 },
+      inventory: loadout.inv.map(i => ({ ...i })),
+      weapon: loadout.weapon || undefined,
+      faction, occupation,
+      questId: -1, isTraveler: true,
+      rpg,
+    });
+    return true;
+  }
+  return false;
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   Main generator — kvartiry dense residential maze
+   Port of the C++ wall-grid generation algorithm.
+   World starts as FLOOR; walls grow from a regular grid of sources.
+   Each source grows exactly 2 wall segments, creating small rooms.
+   ══════════════════════════════════════════════════════════════════ */
+export function generateKvartiry(): { world: World; entities: Entity[]; spawnX: number; spawnY: number } {
+  const world = new World();
+  const entities: Entity[] = [];
+  let nextId = 1;
+  let nextRoomId = 0;
+  lastPickedIdx = -1; // reset room type picker
+
+  const DX = [1, 0, -1, 0];
+  const DY = [0, 1, 0, -1];
+
+  // ── Phase 0: All cells start as FLOOR (empty space) ───────────
+  for (let i = 0; i < W * W; i++) {
+    world.cells[i] = Cell.FLOOR;
+    world.wallTex[i] = Tex.PANEL;
+    world.floorTex[i] = Tex.F_LINO;
+  }
+
+  // ── Phase 1: Place source grid points ─────────────────────────
+  // Sources are on a regular WALL_L grid. They are marked via isSource
+  // but kept as FLOOR so they don't interfere with wallSum checks.
+  const sources: number[] = [];
+  const isSource = new Uint8Array(W * W);
+  for (let y = 0; y < W; y++) {
+    for (let x = 0; x < W; x++) {
+      if (x % WALL_L === 0 && y % WALL_L === 0) {
+        const ci = world.idx(x, y);
+        sources.push(ci);
+        isSource[ci] = 1;
+      }
+    }
+  }
+
+  // ── Phase 2: Build walls from sources ─────────────────────────
+  // Each source grows wall segments until it has 2+ WALL neighbors.
+  // Doors are placed at the midpoint of each segment.
+  let activeSources = [...sources];
+  while (activeSources.length > 0) {
+    const nextSources: number[] = [];
+    for (const idx of activeSources) {
+      const sx = idx % W;
+      const sy = (idx / W) | 0;
+      // Count WALL neighbors (sources don't count as WALL)
+      let wallSum = 0;
+      for (let s = 0; s < 4; s++) {
+        const ni = world.idx(world.wrap(sx + DX[s]), world.wrap(sy + DY[s]));
+        if (world.cells[ni] === Cell.WALL) wallSum++;
+      }
+      if (wallSum < 2) {
+        let drop = rng(0, 3);
+        // If chosen direction already has a wall, rotate
+        const nCheck = world.idx(world.wrap(sx + DX[drop]), world.wrap(sy + DY[drop]));
+        if (world.cells[nCheck] === Cell.WALL) drop = (drop + 1) & 3;
+
+        let cx = sx, cy = sy;
+        for (let j = 0; j < WALL_L - 1; j++) {
+          cx = world.wrap(cx + DX[drop]);
+          cy = world.wrap(cy + DY[drop]);
+          const ni = world.idx(cx, cy);
+          // Don't overwrite another source
+          if (isSource[ni]) continue;
+          if (j + 1 === Math.floor(WALL_L / 2)) {
+            world.cells[ni] = Cell.DOOR;
+          } else {
+            world.cells[ni] = Cell.WALL;
+          }
+        }
+        nextSources.push(idx);
+      }
+    }
+    activeSources = nextSources;
+  }
+
+  // Convert source positions to WALL
+  for (const idx of sources) {
+    world.cells[idx] = Cell.WALL;
+  }
+
+  // ── Phase 3: C++ door connectivity — flood-fill + open doors ──
+  // Find a random FLOOR cell and flood-fill through FLOOR + DOOR
+  let startCell = -1;
+  for (let i = 0; i < W * W; i++) {
+    if (world.cells[i] === Cell.FLOOR) { startCell = i; break; }
+  }
+
+  if (startCell >= 0) {
+    const visited = new Uint8Array(W * W);
+    const queue: number[] = [startCell];
+    visited[startCell] = 1;
+    let head = 0;
+
+    while (head < queue.length) {
+      const ci = queue[head++];
+      const cx = ci % W, cy = (ci / W) | 0;
+      for (let s = 0; s < 4; s++) {
+        const nx = world.wrap(cx + DX[s]);
+        const ny = world.wrap(cy + DY[s]);
+        const ni = world.idx(nx, ny);
+        if (visited[ni]) continue;
+        if (world.cells[ni] === Cell.FLOOR) {
+          visited[ni] = 1;
+          queue.push(ni);
+        } else if (world.cells[ni] === Cell.DOOR) {
+          visited[ni] = 1;
+          queue.push(ni);
+          // Also reach through door to the other side
+          const fx = world.wrap(nx + DX[s]);
+          const fy = world.wrap(ny + DY[s]);
+          const fi = world.idx(fx, fy);
+          if (!visited[fi] && (world.cells[fi] === Cell.FLOOR || world.cells[fi] === Cell.DOOR)) {
+            visited[fi] = 1;
+            queue.push(fi);
+          }
+        }
+      }
+    }
+
+    // Open doors between unreached and reached areas to improve connectivity
+    let changed = true;
+    while (changed) {
+      changed = false;
+      for (let i = 0; i < W * W; i++) {
+        if (visited[i]) continue;
+        if (world.cells[i] !== Cell.DOOR && world.cells[i] !== Cell.FLOOR) continue;
+        const ix = i % W, iy = (i / W) | 0;
+        for (let s = 0; s < 4; s++) {
+          const ni = world.idx(world.wrap(ix + DX[s]), world.wrap(iy + DY[s]));
+          if (visited[ni]) {
+            // Convert door to floor to open passage
+            if (world.cells[i] === Cell.DOOR) world.cells[i] = Cell.FLOOR;
+            visited[i] = 1;
+            queue.push(i);
+            changed = true;
+            break;
+          }
+        }
+      }
+      // Re-flood from newly connected cells
+      while (head < queue.length) {
+        const ci = queue[head++];
+        const cx = ci % W, cy = (ci / W) | 0;
+        for (let s = 0; s < 4; s++) {
+          const nx = world.wrap(cx + DX[s]);
+          const ny = world.wrap(cy + DY[s]);
+          const ni = world.idx(nx, ny);
+          if (visited[ni]) continue;
+          if (world.cells[ni] === Cell.FLOOR) {
+            visited[ni] = 1;
+            queue.push(ni);
+          } else if (world.cells[ni] === Cell.DOOR) {
+            visited[ni] = 1;
+            queue.push(ni);
+          }
+        }
+      }
+    }
+
+    // C++ phase: convert remaining unvisited DOORs to WALL
+    for (let i = 0; i < W * W; i++) {
+      if (world.cells[i] === Cell.DOOR && !visited[i]) {
+        world.cells[i] = Cell.WALL;
+      }
+    }
+  }
+
+  // ── Phase 4: Additional doors — FLOOR between opposite walls ──
+  for (let i = 0; i < W * W; i++) {
+    if (world.cells[i] !== Cell.FLOOR) continue;
+    const x = i % W, y = (i / W) | 0;
+    const northIdx = world.idx(x, world.wrap(y - 1));
+    const southIdx = world.idx(x, world.wrap(y + 1));
+    const eastIdx  = world.idx(world.wrap(x + 1), y);
+    const westIdx  = world.idx(world.wrap(x - 1), y);
+    const ns = world.cells[northIdx] === Cell.WALL && world.cells[southIdx] === Cell.WALL;
+    const ew = world.cells[eastIdx] === Cell.WALL && world.cells[westIdx] === Cell.WALL;
+    if ((ns || ew) && Math.random() < 0.12) {
+      world.cells[i] = Cell.DOOR;
+    }
+  }
+
+  // Register all doors in world.doors map
+  for (let i = 0; i < W * W; i++) {
+    if (world.cells[i] === Cell.DOOR) {
+      world.doors.set(i, {
+        idx: i,
+        state: DoorState.CLOSED,
+        roomA: -1,
+        roomB: -1,
+        keyId: '',
+        timer: 0,
+      });
+      world.wallTex[i] = Tex.DOOR_WOOD;
+    }
+  }
+
+  // ── Phase 5: Fill rooms (BFS flood-fill) ──────────────────────
+  const roomZones = new Int32Array(W * W).fill(-1);
+  let roomN = 0;
+
+  for (let i = 0; i < W * W; i++) {
+    if (world.cells[i] !== Cell.FLOOR || roomZones[i] >= 0) continue;
+    const roomCells: number[] = [];
+    roomZones[i] = roomN;
+    const frontier = [i];
+    let fHead = 0;
+    while (fHead < frontier.length) {
+      const ci = frontier[fHead++];
+      roomCells.push(ci);
+      const cx = ci % W, cy = (ci / W) | 0;
+      for (let s = 0; s < 4; s++) {
+        const ni = world.idx(world.wrap(cx + DX[s]), world.wrap(cy + DY[s]));
+        if (world.cells[ni] === Cell.FLOOR && roomZones[ni] < 0) {
+          roomZones[ni] = roomN;
+          frontier.push(ni);
+        }
+      }
+    }
+
+    if (roomCells.length < 1) { roomN++; continue; }
+
+    // Compute bounding box for room
+    let minX = W, maxX = 0, minY = W, maxY = 0;
+    for (const ci of roomCells) {
+      const x = ci % W, y = (ci / W) | 0;
+      if (x < minX) minX = x;
+      if (x > maxX) maxX = x;
+      if (y < minY) minY = y;
+      if (y > maxY) maxY = y;
+    }
+
+    // Assign a room type
+    const rt = pickKvRoomType();
+    const tex = roomTextures(rt.type);
+
+    const room: Room = {
+      id: nextRoomId++,
+      type: rt.type,
+      x: minX, y: minY,
+      w: maxX - minX + 1,
+      h: maxY - minY + 1,
+      doors: [],
+      sealed: false,
+      name: rt.name,
+      apartmentId: -1,
+      wallTex: tex.wall,
+      floorTex: tex.floor,
+    };
+    world.rooms.push(room);
+
+    // Apply textures
+    for (const ci of roomCells) {
+      world.roomMap[ci] = room.id;
+      world.floorTex[ci] = tex.floor;
+    }
+    // Set wall textures around room cells
+    for (const ci of roomCells) {
+      const cx = ci % W, cy = (ci / W) | 0;
+      for (let s = 0; s < 4; s++) {
+        const ni = world.idx(world.wrap(cx + DX[s]), world.wrap(cy + DY[s]));
+        if (world.cells[ni] === Cell.WALL) world.wallTex[ni] = tex.wall;
+      }
+    }
+
+    // Place features in rooms large enough
+    if (roomCells.length >= 2) {
+      placeRoomFeatures(world, room);
+    }
+
+    roomN++;
+  }
+
+  // ── Phase 6: Zones (64 macro-regions) ─────────────────────────
+  generateZones(world);
+  for (const z of world.zones) z.level = calcZoneLevel(z.cx, z.cy, FloorLevel.KVARTIRY);
+
+  // ── Phase 6b: Ensure connectivity ─────────────────────────────
+  const spawnCenterX = W / 2, spawnCenterY = W / 2;
+  ensureConnectivity(world, spawnCenterX, spawnCenterY);
+
+  // ── Phase 7: Lifts (BEFORE room assignment eats all floor cells) ──
+  // placeLifts requires roomMap[ci] < 0, so we place them early and
+  // clear roomMap around lifts to satisfy the check.
+  // Actually we must clear roomMap for cells we want lifts on:
+  // Reset roomMap to -1 for corridor-type rooms (to allow lift placement)
+  for (let i = 0; i < W * W; i++) {
+    const rid = world.roomMap[i];
+    if (rid >= 0) {
+      const room = world.rooms[rid];
+      if (room && (room.type === RoomType.CORRIDOR || room.type === RoomType.COMMON)) {
+        world.roomMap[i] = -1;
+      }
+    }
+  }
+  placeLifts(world, 16, LiftDirection.UP);    // up to жилая
+  placeLifts(world, 16, LiftDirection.DOWN);  // down to министерство
+  // Restore roomMap for cells that didn't become lifts
+  for (let i = 0; i < W * W; i++) {
+    if (world.cells[i] === Cell.FLOOR && world.roomMap[i] < 0) {
+      // Re-find room by checking neighbors
+      const ix = i % W, iy = (i / W) | 0;
+      for (let s = 0; s < 4; s++) {
+        const ni = world.idx(world.wrap(ix + DX[s]), world.wrap(iy + DY[s]));
+        if (world.roomMap[ni] >= 0) {
+          world.roomMap[i] = world.roomMap[ni];
+          break;
+        }
+      }
+    }
+  }
+
+  // ── Phase 8: Light map ────────────────────────────────────────
+  world.bakeLights();
+
+  // ── Phase 9: Spawn NPCs (groups scattered across the map) ────
+  const nid = { v: nextId };
+  // Citizens: spawn in groups of 1-100
+  for (let spawned = 0; spawned < INITIAL_CITIZENS; ) {
+    const groupSize = Math.min(rng(1, 100), INITIAL_CITIZENS - spawned);
+    // Pick a random anchor position
+    let ax = 0, ay = 0, found = false;
+    for (let t = 0; t < 200; t++) {
+      ax = Math.floor(Math.random() * W);
+      ay = Math.floor(Math.random() * W);
+      if (world.cells[world.idx(ax, ay)] === Cell.FLOOR) { found = true; break; }
+    }
+    if (!found) break;
+    for (let g = 0; g < groupSize; g++) {
+      const occ = randomOccupation(Faction.CITIZEN);
+      spawnNpcAt(world, entities, nid, Faction.CITIZEN, occ);
+    }
+    spawned += groupSize;
+  }
+  // Wild: spawn in groups of 1-100
+  for (let spawned = 0; spawned < INITIAL_WILD; ) {
+    const groupSize = Math.min(rng(1, 100), INITIAL_WILD - spawned);
+    for (let g = 0; g < groupSize; g++) {
+      const occ = randomOccupation(Faction.WILD);
+      spawnNpcAt(world, entities, nid, Faction.WILD, occ);
+    }
+    spawned += groupSize;
+  }
+  // Liquidators: spawn in groups of 1-50
+  for (let spawned = 0; spawned < INITIAL_LIQUIDATORS; ) {
+    const groupSize = Math.min(rng(1, 50), INITIAL_LIQUIDATORS - spawned);
+    for (let g = 0; g < groupSize; g++) {
+      spawnNpcAt(world, entities, nid, Faction.LIQUIDATOR, Occupation.HUNTER);
+    }
+    spawned += groupSize;
+  }
+  nextId = nid.v;
+
+  // ── Phase 10: Spawn items (ballots scattered everywhere) ─────
+  for (let i = 0; i < 500; i++) {
+    for (let attempt = 0; attempt < 50; attempt++) {
+      const x = Math.floor(Math.random() * W);
+      const y = Math.floor(Math.random() * W);
+      const ci = world.idx(x, y);
+      if (world.cells[ci] !== Cell.FLOOR) continue;
+      entities.push({
+        id: nextId++, type: EntityType.ITEM_DROP,
+        x: x + 0.5, y: y + 0.5, angle: 0, pitch: 0,
+        alive: true, speed: 0, sprite: Spr.ITEM_DROP,
+        inventory: [{ defId: 'ballot', count: rng(1, 3) }],
+      });
+      break;
+    }
+  }
+
+  // ── Phase 11: Spawn Navelny NPC ──────────────────────────────
+  spawnNavelny(world, entities, { v: nextId });
+  nextId = entities.reduce((mx, e) => Math.max(mx, e.id), nextId) + 1;
+
+  // ── Phase 12: Find spawn point ────────────────────────────────
+  let spawnX = W / 2 + 0.5, spawnY = W / 2 + 0.5;
+  for (let r = 0; r < 50; r++) {
+    for (let dy = -r; dy <= r; dy++) {
+      for (let dx = -r; dx <= r; dx++) {
+        if (Math.abs(dx) !== r && Math.abs(dy) !== r) continue;
+        const ci = world.idx(world.wrap(Math.floor(W / 2) + dx), world.wrap(Math.floor(W / 2) + dy));
+        if (world.cells[ci] === Cell.FLOOR) {
+          spawnX = world.wrap(Math.floor(W / 2) + dx) + 0.5;
+          spawnY = world.wrap(Math.floor(W / 2) + dy) + 0.5;
+          r = 999;
+          break;
+        }
+      }
+    }
+  }
+
+  return { world, entities, spawnX, spawnY };
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   Population update — called every frame from main.ts
+   Maintains 1000 citizens, 1000 wild, 500 liquidators.
+   Groups spawn in random locations for "eternal riots" feel.
+   ══════════════════════════════════════════════════════════════════ */
+export function resetKvPopulationState(): void {
+  kvCitizenAccum = 0;
+  kvWildAccum = 0;
+  kvLiquidatorAccum = 0;
+  kvUprisingAccum = 0;
+}
+
+function countFactionNPCs(entities: Entity[], faction: Faction): number {
+  let n = 0;
+  for (const e of entities) {
+    if (e.type === EntityType.NPC && e.alive && e.faction === faction) n++;
+  }
+  return n;
+}
+
+export function updateKvPopulation(
+  world: World, entities: Entity[], nextId: { v: number }, dt: number,
+): void {
+  kvCitizenAccum += dt;
+  kvWildAccum += dt;
+  kvLiquidatorAccum += dt;
+  kvUprisingAccum += dt;
+
+  // ── Replenish citizens in groups of 1-100 ─────────────────────
+  if (kvCitizenAccum >= SPAWN_INTERVAL) {
+    kvCitizenAccum -= SPAWN_INTERVAL;
+    const deficit = CITIZEN_CAP - countFactionNPCs(entities, Faction.CITIZEN);
+    if (deficit > 0) {
+      const batch = Math.min(rng(1, 100), deficit);
+      for (let i = 0; i < batch; i++) {
+        const occ = randomOccupation(Faction.CITIZEN);
+        if (!spawnNpcAt(world, entities, nextId, Faction.CITIZEN, occ)) break;
+      }
+    }
+  }
+
+  // ── Replenish wild in groups of 1-100 ─────────────────────────
+  if (kvWildAccum >= SPAWN_INTERVAL) {
+    kvWildAccum -= SPAWN_INTERVAL;
+    const deficit = WILD_CAP - countFactionNPCs(entities, Faction.WILD);
+    if (deficit > 0) {
+      const batch = Math.min(rng(1, 100), deficit);
+      for (let i = 0; i < batch; i++) {
+        const occ = randomOccupation(Faction.WILD);
+        if (!spawnNpcAt(world, entities, nextId, Faction.WILD, occ)) break;
+      }
+    }
+  }
+
+  // ── Replenish liquidators in groups of 1-50 ───────────────────
+  if (kvLiquidatorAccum >= SPAWN_INTERVAL) {
+    kvLiquidatorAccum -= SPAWN_INTERVAL;
+    const deficit = LIQUIDATOR_CAP - countFactionNPCs(entities, Faction.LIQUIDATOR);
+    if (deficit > 0) {
+      const batch = Math.min(rng(1, 50), deficit);
+      for (let i = 0; i < batch; i++) {
+        if (!spawnNpcAt(world, entities, nextId, Faction.LIQUIDATOR, Occupation.HUNTER)) break;
+      }
+    }
+  }
+
+  // ── Uprising trigger ──────────────────────────────────────────
+  if (kvUprisingAccum >= UPRISING_CHECK_INTERVAL) {
+    kvUprisingAccum -= UPRISING_CHECK_INTERVAL;
+    // Random chance of uprising (30% per check)
+    if (Math.random() < 0.3) {
+      triggerUprising(world, entities);
+    }
+  }
+}
+
+/* ── Uprising mechanic ────────────────────────────────────────── */
+function triggerUprising(world: World, entities: Entity[]): void {
+  // Pick a random living citizen as rally center
+  const citizens = entities.filter(e => e.type === EntityType.NPC && e.alive && e.faction === Faction.CITIZEN);
+  if (citizens.length < 50) return;
+
+  const leader = citizens[Math.floor(Math.random() * citizens.length)];
+  const rallyX = leader.x, rallyY = leader.y;
+
+  // Gather citizens within UPRISING_RADIUS
+  const rallied: Entity[] = [];
+  for (const e of entities) {
+    if (e.type !== EntityType.NPC || !e.alive || e.faction !== Faction.CITIZEN) continue;
+    if (e.plotNpcId) continue; // don't convert plot NPCs
+    const d = world.dist(e.x, e.y, rallyX, rallyY);
+    if (d <= UPRISING_RADIUS) {
+      rallied.push(e);
+    }
+  }
+
+  if (rallied.length < 20) return; // not enough for uprising
+
+  // Move all rallied citizens toward center (set AI goal)
+  for (const e of rallied) {
+    if (e.ai) {
+      e.ai.goal = AIGoal.GOTO;
+      e.ai.tx = rallyX + (Math.random() - 0.5) * 10;
+      e.ai.ty = rallyY + (Math.random() - 0.5) * 10;
+    }
+  }
+
+  // Convert rallied citizens to WILD faction (uprising!)
+  for (const e of rallied) {
+    e.faction = Faction.WILD;
+  }
+
+  // Gather liquidators within response radius and set them to hunt
+  for (const e of entities) {
+    if (e.type !== EntityType.NPC || !e.alive || e.faction !== Faction.LIQUIDATOR) continue;
+    const d = world.dist(e.x, e.y, rallyX, rallyY);
+    if (d <= LIQUIDATOR_RESPONSE_RADIUS) {
+      if (e.ai) {
+        e.ai.goal = AIGoal.GOTO;
+        e.ai.tx = rallyX + (Math.random() - 0.5) * 20;
+        e.ai.ty = rallyY + (Math.random() - 0.5) * 20;
+      }
+    }
+  }
+}

@@ -14,6 +14,7 @@ import { generateMaintenance } from './gen/maintenance';
 import { generateMinistry } from './gen/ministry';
 import { generateHell, updateHellPopulation, resetHellPopulationState } from './gen/hell';
 import { generateVoid } from './gen/void';
+import { generateKvartiry, updateKvPopulation, resetKvPopulationState } from './gen/kvartiry';
 import { generateTextures } from './render/textures';
 import { generateSprites } from './render/sprites';
 import { Spr, monsterSpr } from './render/sprite_index';
@@ -160,6 +161,7 @@ function initGame(): void {
   spawnPatrolSquads(world, entities, nextEntityId, fStats);
   spawnTerritoryReinforcements(world, entities, nextEntityId, fStats);
   resetHellPopulationState();
+  resetKvPopulationState();
 
   state = {
     tick: 0,
@@ -949,6 +951,7 @@ function checkRestart(): void {
 /* ── Floor switching via lift ─────────────────────────────────── */
 const FLOOR_NAMES: Record<FloorLevel, string> = {
   [FloorLevel.MINISTRY]:    'Министерство',
+  [FloorLevel.KVARTIRY]:    'Квартиры',
   [FloorLevel.LIVING]:      'Жилая зона',
   [FloorLevel.MAINTENANCE]: 'Коллекторы',
   [FloorLevel.HELL]:        'Преисподняя',
@@ -986,10 +989,13 @@ function switchFloor(direction: LiftDirection): void {
   // Defer heavy generation — game loop will show loading screen first
   pendingLoad = () => {
     resetHellPopulationState();
+    resetKvPopulationState();
     // Generate new floor
     let gen: { world: World; entities: Entity[]; spawnX: number; spawnY: number };
     if (nextFloor === FloorLevel.MINISTRY) {
       gen = generateMinistry();
+    } else if (nextFloor === FloorLevel.KVARTIRY) {
+      gen = generateKvartiry();
     } else if (nextFloor === FloorLevel.LIVING) {
       gen = generateWorld();
     } else if (nextFloor === FloorLevel.MAINTENANCE) {
@@ -1069,6 +1075,8 @@ function switchFloor(direction: LiftDirection): void {
       state.samosborTimer = 180 + Math.random() * 240;
     } else if (nextFloor === FloorLevel.MINISTRY) {
       state.samosborTimer = 600 + Math.random() * 600; // very rare: 10-20 min
+    } else if (nextFloor === FloorLevel.KVARTIRY) {
+      state.samosborTimer = 240 + Math.random() * 360; // 4-10 min
     } else {
       state.samosborTimer = 300 + Math.random() * 300;
     }
@@ -1079,7 +1087,7 @@ function switchFloor(direction: LiftDirection): void {
     state.msgs.push(msg(
       `Лифт прибыл: ${FLOOR_NAMES[nextFloor]}`,
       state.time,
-      nextFloor === FloorLevel.HELL ? '#f44' : nextFloor === FloorLevel.VOID ? '#0f8' : nextFloor === FloorLevel.MINISTRY ? '#fc4' : '#4af',
+      nextFloor === FloorLevel.HELL ? '#f44' : nextFloor === FloorLevel.VOID ? '#0f8' : nextFloor === FloorLevel.MINISTRY ? '#fc4' : nextFloor === FloorLevel.KVARTIRY ? '#fa4' : '#4af',
     ));
 
     // Auto-trigger voice quest when entering Hell with step 9 (kill Mancobus) done
@@ -1854,8 +1862,11 @@ function gameLoop(now: number): void {
     if (state.currentFloor === FloorLevel.HELL) {
       updateHellPopulation(world, entities, nextEntityId, dt, state.samosborCount);
     }
+    if (state.currentFloor === FloorLevel.KVARTIRY) {
+      updateKvPopulation(world, entities, nextEntityId, dt);
+    }
     // Periodic NPC reinforcement for non-hell floors (every ~30 seconds)
-    if (state.currentFloor !== FloorLevel.HELL) {
+    if (state.currentFloor !== FloorLevel.HELL && state.currentFloor !== FloorLevel.KVARTIRY) {
       _npcReinforcementAccum += dt;
       if (_npcReinforcementAccum >= 30) {
         _npcReinforcementAccum -= 30;
@@ -1979,8 +1990,11 @@ function gameLoop(now: number): void {
     if (state.currentFloor === FloorLevel.HELL) {
       updateHellPopulation(world, entities, nextEntityId, dt, state.samosborCount);
     }
+    if (state.currentFloor === FloorLevel.KVARTIRY) {
+      updateKvPopulation(world, entities, nextEntityId, dt);
+    }
     // Periodic NPC reinforcement for non-hell floors (death loop)
-    if (state.currentFloor !== FloorLevel.HELL) {
+    if (state.currentFloor !== FloorLevel.HELL && state.currentFloor !== FloorLevel.KVARTIRY) {
       _npcReinforcementAccum += dt;
       if (_npcReinforcementAccum >= 30) {
         _npcReinforcementAccum -= 30;

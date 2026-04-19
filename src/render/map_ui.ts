@@ -2,10 +2,11 @@
 
 import {
   type Entity, type Quest, EntityType, Cell, RoomType, W, QuestType,
-  LiftDirection, MonsterKind,
+  LiftDirection, MonsterKind, Faction,
 } from '../core/types';
 import { World } from '../core/world';
 import { hasAvailableQuest } from '../data/plot';
+import { areFactionsHostile } from '../systems/factions';
 
 const MAP_SIZE = 80;
 
@@ -121,7 +122,8 @@ function drawMap(
     const edy = world.delta(pyI, Math.floor(e.y));
     if (Math.abs(edx) > radius || Math.abs(edy) > radius) continue;
 
-    ctx.fillStyle = e.type === EntityType.NPC ? '#4a4'
+    ctx.fillStyle = e.type === EntityType.NPC
+                  ? (e.faction !== undefined && areFactionsHostile(Faction.PLAYER, e.faction) ? '#e44' : '#4a4')
                   : e.type === EntityType.MONSTER ? '#e33'
                   : '#dd4';
     const esx = mapX + (edx + radius) * cellW;

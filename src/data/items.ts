@@ -105,4 +105,5 @@ export const ITEMS: Record<string, ItemDef> = {
   // ── Сюжетные предметы ──
   idol_chernobog: { id:'idol_chernobog', name:'Идол Чернобога', type:ItemType.MISC, desc:'Тёмная фигурка из неизвестного камня. Холодная на ощупь.', spawnRooms:[RoomType.COMMON,RoomType.STORAGE,RoomType.OFFICE,RoomType.SMOKING], spawnW:1, value:200 },
   strange_clot: { id:'strange_clot', name:'Странный сгусток', type:ItemType.MISC, desc:'Тёмный пульсирующий сгусток, изъятый из теневика. Излучает холод.', spawnRooms:[], spawnW:0, value:500 },
+  ballot: { id:'ballot', name:'Бюллетень', type:ItemType.MISC, desc:'Избирательный бюллетень. Кто-то уже поставил галочку.', spawnRooms:[RoomType.OFFICE,RoomType.COMMON,RoomType.LIVING,RoomType.CORRIDOR], spawnW:1, value:1 },
 };

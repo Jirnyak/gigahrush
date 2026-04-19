@@ -20,6 +20,7 @@ import { regrowMaze } from '../gen/living';
 import { generateMaintenance } from '../gen/maintenance';
 import { generateMinistry } from '../gen/ministry';
 import { generateHell } from '../gen/hell';
+import { generateKvartiry } from '../gen/kvartiry';
 import { rng, pick, weightedPick } from '../gen/shared';
 import { scaleMonsterHp, scaleMonsterSpeed, randomRPG } from './rpg';
 
@@ -27,6 +28,7 @@ import { scaleMonsterHp, scaleMonsterSpeed, randomRPG } from './rpg';
 function samosborInterval(floor: FloorLevel): number {
   switch (floor) {
     case FloorLevel.MINISTRY:    return 600 + Math.random() * 600;  // 10-20 min (very rare)
+    case FloorLevel.KVARTIRY:    return 240 + Math.random() * 360;  // 4-10 min
     case FloorLevel.LIVING:      return 300 + Math.random() * 300;  // 5-10 min
     case FloorLevel.MAINTENANCE: return 180 + Math.random() * 240;  // 3-7 min
     case FloorLevel.HELL:        return 60  + Math.random() * 240;  // 1-5 min
@@ -164,7 +166,7 @@ export function rebuildWorld(
   world: World, entities: Entity[], nextId: { v: number }, _samosborCount: number,
   floor: FloorLevel = FloorLevel.LIVING,
 ): void {
-  if (floor === FloorLevel.MINISTRY || floor === FloorLevel.MAINTENANCE || floor === FloorLevel.HELL) {
+  if (floor === FloorLevel.MINISTRY || floor === FloorLevel.MAINTENANCE || floor === FloorLevel.HELL || floor === FloorLevel.KVARTIRY) {
     // Non-living floors: full regeneration, preserve alive monsters + NPCs + player
     const kept: Entity[] = [];
     for (const e of entities) {
@@ -175,6 +177,7 @@ export function rebuildWorld(
     }
     entities.length = 0;
     const gen = floor === FloorLevel.MINISTRY ? generateMinistry()
+      : floor === FloorLevel.KVARTIRY ? generateKvartiry()
       : floor === FloorLevel.MAINTENANCE ? generateMaintenance() : generateHell();
     // Overwrite world arrays in-place
     world.cells.set(gen.world.cells);

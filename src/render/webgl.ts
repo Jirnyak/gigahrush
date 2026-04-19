@@ -708,14 +708,43 @@ void main() {
   grain += (hash21(vUV * 400.0 + fract(t * 7.7 + 1.0)) - 0.5) * 0.02;
   color += grain;
 
-  /* ── VHS tracking line (moving horizontal bright bar) ───────── */
-  float trackSpeed = 0.025 + uGlitch * 0.04;
-  float trackY = fract(t * trackSpeed);
-  float trackDist = abs(uv.y - trackY);
-  if (trackDist < 0.008) {
-    float trackStr = (1.0 - trackDist / 0.008) * 0.12;
-    color += trackStr;
-    uv.x += trackStr * 0.01; // slight horizontal shift near tracking line
+  /* ── Procedural glitch bursts (rare pixel displacement) ─────── */
+  {
+    // Spawn rare glitch events — each has a random position and short lifetime
+    float glitchTick = floor(t * 1.8);
+    for (int i = 0; i < 3; i++) {
+      float seed = float(i) * 137.0 + glitchTick * 31.7;
+      float chance = hash11(seed);
+      if (chance > 0.65) continue; // ~35% chance each slot is active
+
+      // Glitch band position & size
+      float gy = hash11(seed + 1.0);                  // vertical pos 0..1
+      float gx = hash11(seed + 2.0);                  // horizontal center 0..1
+      float gw = 0.06 + hash11(seed + 3.0) * 0.18;    // width
+      float gh = 0.004 + hash11(seed + 4.0) * 0.012;  // height (thin band)
+
+      // Animate: slide quickly across in sub-frame
+      float life = fract(t * 1.8);  // 0..1 within tick
+      float slideDir = hash11(seed + 5.0) > 0.5 ? 1.0 : -1.0;
+      float slideOff = slideDir * life * 0.3;
+      gy = fract(gy + slideOff);
+
+      float dy = abs(uv.y - gy);
+      float dx = abs(uv.x - gx);
+      if (dy < gh && dx < gw * 0.5) {
+        // Inside glitch band — shift pixels
+        float intensity = (1.0 - dy / gh) * (1.0 - dx / (gw * 0.5));
+        intensity *= intensity;
+        float shift = (hash11(seed + 6.0 + floor(uv.y * 200.0)) - 0.5) * 0.04 * intensity;
+        vec2 displaced = uv + vec2(shift, (hash11(seed + 7.0) - 0.5) * 0.006 * intensity);
+        vec3 glitchCol = texture(uTex, displaced).rgb;
+        // Chromatic split in glitch region
+        float csplit = 0.003 * intensity;
+        glitchCol.r = texture(uTex, displaced + vec2(csplit, 0.0)).r;
+        glitchCol.b = texture(uTex, displaced - vec2(csplit, 0.0)).b;
+        color = mix(color, glitchCol, intensity * 0.85);
+      }
+    }
   }
 
   /* ── Subtle vignette ────────────────────────────────────────── */

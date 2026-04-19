@@ -11,7 +11,7 @@ import { ITEMS } from '../data/catalog';
 
 import { addFactionRelMutual, getFactionRel } from '../data/relations';
 import { PLOT_CHAIN, PLOT_NPCS, SIDE_QUESTS, isPlotNpc } from '../data/plot';
-import { addItem, hasItem, removeItem } from './inventory';
+import { addItem, removeItem } from './inventory';
 import { questDifficulty, questXpReward, questMoneyReward, awardXP, randomRPG, scaleMonsterHp, scaleMonsterSpeed } from './rpg';
 import { MONSTERS } from '../entities/monster';
 
@@ -146,8 +146,12 @@ export function checkQuests(
       case QuestType.FETCH:
         if (q.targetItem === 'money') {
           if ((player.money ?? 0) >= (q.targetCount ?? 1)) complete = true;
-        } else if (q.targetItem && hasItem(player, q.targetItem)) {
-          complete = true;
+        } else if (q.targetItem) {
+          const needed = q.targetCount ?? 1;
+          const have = (player.inventory ?? []).reduce(
+            (sum, s) => s.defId === q.targetItem ? sum + s.count : sum, 0,
+          );
+          if (have >= needed) complete = true;
         }
         break;
 

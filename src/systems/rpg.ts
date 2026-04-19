@@ -175,6 +175,7 @@ export function calcZoneLevel(zoneCx: number, zoneCy: number, floor: FloorLevel)
   // Floor bonus
   const floorBonus: Record<FloorLevel, number> = {
     [FloorLevel.MINISTRY]: 0,
+    [FloorLevel.KVARTIRY]: 0,
     [FloorLevel.LIVING]: 0,
     [FloorLevel.MAINTENANCE]: 4,
     [FloorLevel.HELL]: 9,

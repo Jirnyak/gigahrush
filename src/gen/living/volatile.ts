@@ -320,7 +320,7 @@ export function generateVolatileMaze(world: World): void {
 
   /* ── Lifts + lightmap ──────────────────────────────── */
   placeLifts(world, 8, LiftDirection.DOWN);  // half go down to maintenance
-  placeLifts(world, 8, LiftDirection.UP);    // half go up to ministry
+  placeLifts(world, 8, LiftDirection.UP);    // half go up to kvartiry
   world.bakeLights();
 }
 
