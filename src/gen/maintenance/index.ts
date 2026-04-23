@@ -14,6 +14,11 @@ import { calcZoneLevel, randomRPG, scaleMonsterHp, scaleMonsterSpeed, gaussianLe
 import { generateForpost } from './forpost';
 import { generateMancobusRoom } from './mancobus_room';
 import { spawnMakhno } from './makhno';
+import { spawnIvanych } from './sant_ivanych';
+import { spawnRadistGleb } from './radist_gleb';
+import { spawnDiverKot } from './diver_kot';
+import { spawnGordonFreeman } from './gordon';
+import { generateFloodedLab } from './flooded_lab';
 import { Spr, monsterSpr } from '../../render/sprite_index';
 
 /* ── Coarse grid parameters ───────────────────────────────────── */
@@ -503,6 +508,27 @@ export function generateMaintenance(): { world: World; entities: Entity[]; spawn
      Phase 14b: Makhno — Wild faction leader (quest target)
      ══════════════════════════════════════════════════════════════ */
   spawnMakhno(world, entities, { v: nextId });
+  nextId = entities.reduce((mx, e) => Math.max(mx, e.id), nextId) + 1;
+
+  /* ══════════════════════════════════════════════════════════════
+     Phase 14c: Затопленная лаборатория — Профессор Тесла (room)
+     ══════════════════════════════════════════════════════════════ */
+  {
+    const r = generateFloodedLab(world, world.rooms.length, entities, { v: nextId }, spawnX, spawnY);
+    nextId = entities.reduce((mx, e) => Math.max(mx, e.id), nextId) + 1;
+    void r;
+  }
+
+  /* ══════════════════════════════════════════════════════════════
+     Phase 14d: Wandering side-quest NPCs (Иваныч, Глеб, Кот)
+     ══════════════════════════════════════════════════════════════ */
+  spawnIvanych(world, entities, { v: nextId });
+  nextId = entities.reduce((mx, e) => Math.max(mx, e.id), nextId) + 1;
+  spawnRadistGleb(world, entities, { v: nextId });
+  nextId = entities.reduce((mx, e) => Math.max(mx, e.id), nextId) + 1;
+  spawnDiverKot(world, entities, { v: nextId });
+  nextId = entities.reduce((mx, e) => Math.max(mx, e.id), nextId) + 1;
+  spawnGordonFreeman(world, entities, { v: nextId });
   nextId = entities.reduce((mx, e) => Math.max(mx, e.id), nextId) + 1;
 
   /* ══════════════════════════════════════════════════════════════

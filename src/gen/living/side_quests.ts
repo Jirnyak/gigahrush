@@ -13,11 +13,17 @@ import { World } from '../../core/world';
 // ── Side quest content modules ──────────────────────────────────
 // ↓ Import triggers NPC + quest registration into SIDE_QUESTS
 import { spawnViktor } from './viktor';
+import { spawnVeteran } from './veteran';
+import { spawnBabkaZina } from './babka_zina';
+import { spawnStalkerMecheny } from './stalker_mecheny';
 
 /* ── Spawn all side quest NPCs (called from orchestrator) ─────── */
 export function spawnSideQuestNpcs(
   world: World, entities: Entity[], nextId: { v: number },
 ): void {
   spawnViktor(world, entities, nextId);
+  spawnVeteran(world, entities, nextId);
+  spawnBabkaZina(world, entities, nextId);
+  spawnStalkerMecheny(world, entities, nextId);
   // ↑ Add new side quest spawns here
 }

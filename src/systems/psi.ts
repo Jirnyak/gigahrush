@@ -5,6 +5,7 @@ import {
   msg,
 } from '../core/types';
 import { World } from '../core/world';
+import { randSeed } from '../core/rand';
 import { stampMark, MarkType } from '../render/marks';
 import { WEAPON_STATS } from '../data/catalog';
 import { spawnBloodHit, spawnDeathPool } from '../render/blood';
@@ -62,7 +63,7 @@ export function updatePsiEffects(entities: Entity[], dt: number): void {
     phaseTimer = Math.max(0, phaseTimer - dt);
   }
 
-  // Decay madness / control on all entities
+  // Decay madness on all entities (control timers tracked separately below)
   for (const e of entities) {
     if (!e.alive) continue;
     if (e.psiMadness !== undefined && e.psiMadness > 0) {
@@ -72,11 +73,6 @@ export function updatePsiEffects(entities: Entity[], dt: number): void {
         // Reset combat target so AI re-evaluates
         if (e.ai) e.ai.combatTargetId = undefined;
       }
-    }
-    if (e.psiControlledBy !== undefined) {
-      // Control uses a hidden timer stored as negative psiMadness (hack) —
-      // instead, we store it directly. Use a parallel field:
-      // Actually, let's track control duration via a module-level map.
     }
   }
 
@@ -292,9 +288,8 @@ function castBeam(
     const fx = ((Math.floor(sx) % W) + W) % W;
     const fy = ((Math.floor(sy) % W) + W) % W;
     if (!world.solid(fx, fy)) {
-      const seed = Math.floor(Math.random() * 99999);
       stampMark(world, fx, fy, sx - Math.floor(sx), sy - Math.floor(sy),
-        0.45, MarkType.PSI, seed, 80, 20, 120, 200); // bright purple scorch
+        0.45, MarkType.PSI, randSeed(), 80, 20, 120, 200); // bright purple scorch
     }
   }
 

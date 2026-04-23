@@ -8,6 +8,7 @@ import {
   msg, setMsgClock,
 } from './core/types';
 import { World } from './core/world';
+import { randSeed } from './core/rand';
 import { generateWorld } from './gen/living';
 import { priestDeathCurse } from './gen/living/temple';
 import { generateMaintenance } from './gen/maintenance';
@@ -56,6 +57,7 @@ import {
   applyDamageRelationPenalty,
   updateFactionCapture, initFactionControl, countFactionTerritory, spawnPatrolSquads,
   zoneFactionToFaction, spawnTerritoryReinforcements,
+  isHostile,
 } from './systems/factions';
 import { addFactionRel, addFactionRelMutual, initFactionRelations } from './data/relations';
 import { type DeathCam, initDeathCam, updateDeathCam, getDeathCamAngle, getDeathCamPitch } from './systems/death';
@@ -367,6 +369,8 @@ function playerActions(_dt: number): void {
     for (const e of entities) {
       if (e.type !== EntityType.NPC || !e.alive) continue;
       if (world.dist(player.x, player.y, e.x, e.y) < 2.0) {
+        // Don't open dialog with hostile NPCs — they want to fight, not chat
+        if (isHostile(e, player) || isHostile(player, e)) continue;
         openNpcMenu(e);
         interactedNpc = true;
         break;
@@ -741,15 +745,13 @@ function updateProjectiles(dt: number): void {
         triggerExplosion(p, pt);
       } else if (pt === ProjType.FLAME) {
         if (!world.solid(fx, fy)) {
-          const seed = Math.floor(Math.random() * 99999);
           stampMark(world, fx, fy, (p.x % 1 + 1) % 1, (p.y % 1 + 1) % 1,
-            0.3, MarkType.BURN, seed, 8, 5, 2, 180);
+            0.3, MarkType.BURN, randSeed(), 8, 5, 2, 180);
         }
       } else {
         if (!world.solid(fx, fy)) {
-          const seed = Math.floor(Math.random() * 99999);
           stampMark(world, fx, fy, (p.x % 1 + 1) % 1, (p.y % 1 + 1) % 1,
-            0.08, MarkType.BULLET, seed, 20, 18, 14, 140);
+            0.08, MarkType.BULLET, randSeed(), 20, 18, 14, 140);
         }
       }
       if (p.aoeRadius)
@@ -774,9 +776,8 @@ function updateProjectiles(dt: number): void {
     if (pt === ProjType.FLAME && (p.spriteZ ?? 0.5) < 0.2) {
       const fx = Math.floor(p.x), fy = Math.floor(p.y);
       if (!world.solid(fx, fy)) {
-        const seed = Math.floor(Math.random() * 99999);
         stampMark(world, fx, fy, (p.x % 1 + 1) % 1, (p.y % 1 + 1) % 1,
-          0.25, MarkType.BURN, seed, 8, 5, 2, 160);
+          0.25, MarkType.BURN, randSeed(), 8, 5, 2, 160);
       }
     }
 
@@ -808,11 +809,10 @@ function updateProjectiles(dt: number): void {
         triggerExplosion(p, pt);
       } else if (pt === ProjType.FLAME) {
         // Flame: charred burn mark on wall
-        const seed = Math.floor(Math.random() * 99999);
-        stampMark(world, cellX, cellY, impactU, impactV, 0.25, MarkType.BURN, seed, 5, 3, 1, 190, true);
+        stampMark(world, cellX, cellY, impactU, impactV, 0.25, MarkType.BURN, randSeed(), 5, 3, 1, 190, true);
       } else {
         // Normal bullet hole decal
-        const seed = Math.floor(Math.random() * 99999);
+        const seed = randSeed();
         stampMark(world, cellX, cellY, impactU, impactV, 0.1, MarkType.BULLET, seed, 30, 25, 18, 160, true);
         stampMark(world, cellX, cellY, impactU, impactV, 0.05, MarkType.BULLET, seed + 1, 8, 8, 8, 255, true);
       }
@@ -901,7 +901,7 @@ function triggerExplosion(p: Entity, pt: ProjType): void {
   // Scorch: one large coherent mark centered at explosion
   const cx = Math.floor(p.x), cy = Math.floor(p.y);
   const fx = (p.x % 1 + 1) % 1, fy = (p.y % 1 + 1) % 1;
-  const seed = Math.floor(Math.random() * 99999);
+  const seed = randSeed();
   stampMark(world, cx, cy, fx, fy, radius * 1.2, MarkType.SCORCH, seed, 15, 10, 5, 230);
 
   // Radial debris marks around explosion center
@@ -1510,6 +1510,31 @@ let prevFactionMenu = false;
 let prevLogMenu = false;
 
 function handleMenuInput(): void {
+  // ── On death: lock out all menus / inventory / interactions ──
+  // Only the restart prompt (checkRestart) responds to input.
+  if (state.gameOver) {
+    state.showMenu = false;
+    state.showInventory = false;
+    state.showQuests = false;
+    state.showNpcMenu = false;
+    state.showFactions = false;
+    state.showLog = false;
+    // Keep edge-detection prev states in sync so first frame after
+    // respawn doesn't fire a stale edge.
+    prevEsc = input.escape;
+    prevMenuUp = input.invUp;
+    prevMenuDn = input.invDn;
+    prevMenuLeft = input.invLeft;
+    prevMenuRight = input.invRight;
+    prevMenuInteract = input.interact;
+    prevDrop = input.drop;
+    prevInvMenu = input.inv;
+    prevQuestMenu = input.questLog;
+    prevFactionMenu = input.factionMenu;
+    prevLogMenu = input.logMenu;
+    return;
+  }
+
   const escEdge = input.escape && !prevEsc;
   const upEdge = input.invUp && !prevMenuUp;
   const dnEdge = input.invDn && !prevMenuDn;

@@ -6,6 +6,7 @@ import {
   type Entity, EntityType, AIGoal, Faction, Occupation,
 } from '../../core/types';
 import { World } from '../../core/world';
+import { irand } from '../../core/rand';
 import { freshNeeds } from '../../data/catalog';
 import { type PlotNpcDef, registerSideQuest } from '../../data/plot';
 import { randomRPG, getMaxHp } from '../../systems/rpg';
@@ -79,7 +80,7 @@ export function spawnMakhno(
           angle: Math.random() * Math.PI * 2, pitch: 0,
           alive: true, speed: 1.6 + Math.random() * 0.3, sprite: Occupation.TRAVELER,
           name: 'Дикий боец', isFemale: false,
-          needs: freshNeeds(), hp: gMaxHp, maxHp: gMaxHp, money: rng(5, 30),
+          needs: freshNeeds(), hp: gMaxHp, maxHp: gMaxHp, money: irand(5, 30),
           ai: { goal: AIGoal.WANDER, tx: 0, ty: 0, path: [], pi: 0, stuck: 0, timer: 0 },
           inventory: [{ defId: 'pipe', count: 1 }],
           weapon: 'pipe',
@@ -92,8 +93,4 @@ export function spawnMakhno(
     }
     return;
   }
-}
-
-function rng(a: number, b: number): number {
-  return a + Math.floor(Math.random() * (b - a + 1));
 }

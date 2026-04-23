@@ -31,6 +31,8 @@ import { generateTutorRoom } from './tutor_room';
 import { generateYakovLab } from './yakov_lab';
 import { generateVankaDen, spawnVankaShadows } from './vanka_den';
 import './temple'; // side-effect: registers zone content for zone 3
+import './library'; // side-effect: registers zone content for zone 7
+import './market';  // side-effect: registers zone content for zone 12
 import { runZoneContentModules } from './zone_content';
 import { spawnRoomItems, spawnFamilies, spawnTravelers } from './npcs';
 import { spawnSideQuestNpcs } from './side_quests';

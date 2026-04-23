@@ -17,6 +17,7 @@
 ```
 src/
   core/       types.ts  world.ts          ← типы, тороидальный мир (1024×1024 тор)
+              rand.ts                     ← общие хелперы рандома (randSeed, irand)
   data/       catalog.ts  relations.ts    ← данные: комнаты, предметы, монстры; NxN матрица отношений
               plot.ts  dialogue.ts       ← PLOT_NPCS, PLOT_CHAIN (сюжетная цепочка), генерация диалога/торговли
               plot_rooms.ts               ← PLOT_ROOMS — спецификации сюжетных комнат

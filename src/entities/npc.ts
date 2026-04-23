@@ -369,3 +369,212 @@ export function generateHunterSprite(): Uint32Array {
   }
   return t;
 }
+
+/** Veteran sprite: Ветеран Степаныч — old soldier with beret, grey beard, medals */
+export function generateVeteranSprite(): Uint32Array {
+  // Faded camo jacket + dark brown trousers, ruddy weathered skin
+  const t = genHumanoid(195, 165, 140, 75, 85, 55, 55, 45, 35, 170, H_TOP, H_BOT, B_TOP, B_BOT, L_BOT);
+  const cx = S / 2;
+  // Maroon paratrooper beret tilted to the side
+  for (let y = H_TOP - 4; y < H_TOP + 2; y++) {
+    for (let x = cx - 6; x <= cx + 6; x++) {
+      if (x < 0 || x >= S || y < 0) continue;
+      const n = noise(x, y, 171) * 8;
+      t[y * S + x] = rgba(clamp(110 + n), clamp(35 + n), clamp(35 + n));
+    }
+  }
+  // Beret tail/flap leaning right
+  for (let y = H_TOP - 3; y < H_TOP + 1; y++) {
+    for (let x = cx + 5; x < cx + 8; x++) {
+      if (x < S && y >= 0) t[y * S + x] = rgba(90, 25, 25);
+    }
+  }
+  // Grey beard
+  for (let y = H_BOT - 3; y < B_TOP + 4; y++) {
+    for (let x = cx - 5; x <= cx + 5; x++) {
+      if (x < 0 || x >= S) continue;
+      const n = noise(x, y, 172) * 12;
+      t[y * S + x] = rgba(clamp(180 + n), clamp(180 + n), clamp(175 + n));
+    }
+  }
+  // Eye patch over right eye
+  const eyeY = Math.floor((H_TOP + H_BOT) / 2);
+  for (let dy = -1; dy <= 1; dy++) {
+    for (let dx = 1; dx <= 4; dx++) {
+      if (cx + dx < S) t[(eyeY + dy) * S + (cx + dx)] = rgba(15, 15, 15);
+    }
+  }
+  // Eye patch strap
+  for (let x = cx + 4; x < cx + 8; x++) if (x < S) t[eyeY * S + x] = rgba(20, 20, 20);
+  // Two medals on chest (golden + red ribbon)
+  for (let dy = 0; dy < 3; dy++) for (let dx = 0; dx < 3; dx++) {
+    t[(B_TOP + 5 + dy) * S + (cx - 5 + dx)] = rgba(220, 180, 40);
+    t[(B_TOP + 5 + dy) * S + (cx + 3 + dx)] = rgba(200, 50, 50);
+  }
+  // Walking cane on right side
+  for (let y = B_BOT - 4; y < L_BOT; y++) {
+    const cxc = cx + 9;
+    if (cxc < S) t[y * S + cxc] = rgba(80, 55, 35);
+  }
+  return t;
+}
+
+/** Gordon sprite: orange HEV-style suit, dark glasses, brown beard */
+export function generateGordonSprite(): Uint32Array {
+  // Orange jumpsuit + dark grey trousers, weathered skin
+  const t = genHumanoid(195, 165, 145, 215, 110, 35, 60, 60, 65, 180, H_TOP, H_BOT, B_TOP, B_BOT, L_BOT);
+  const cx = S / 2;
+  const eyeY = Math.floor((H_TOP + H_BOT) / 2);
+  // Brown hair (short)
+  for (let y = H_TOP - 2; y < H_TOP + 3; y++) {
+    for (let x = cx - 6; x <= cx + 6; x++) {
+      if (x < 0 || x >= S || y < 0) continue;
+      const n = noise(x, y, 181) * 8;
+      t[y * S + x] = rgba(clamp(85 + n), clamp(55 + n), clamp(30 + n));
+    }
+  }
+  // Brown beard
+  for (let y = H_BOT - 4; y < B_TOP + 3; y++) {
+    for (let x = cx - 4; x <= cx + 4; x++) {
+      if (x < 0 || x >= S) continue;
+      const n = noise(x, y, 182) * 10;
+      t[y * S + x] = rgba(clamp(85 + n), clamp(55 + n), clamp(30 + n));
+    }
+  }
+  // Black-rimmed glasses (two thick rectangles)
+  for (let dy = -1; dy <= 1; dy++) {
+    for (let dx = -3; dx <= -1; dx++) t[(eyeY + dy) * S + (cx + dx)] = rgba(15, 15, 15);
+    for (let dx = 1; dx <= 3; dx++)   t[(eyeY + dy) * S + (cx + dx)] = rgba(15, 15, 15);
+  }
+  // Reflective lens fill
+  t[eyeY * S + (cx - 2)] = rgba(120, 180, 220);
+  t[eyeY * S + (cx + 2)] = rgba(120, 180, 220);
+  // Bridge
+  t[eyeY * S + cx] = rgba(15, 15, 15);
+  // HEV chest plate — light grey rectangle with cyan light
+  for (let y = B_TOP + 4; y < B_TOP + 12; y++) {
+    for (let x = cx - 4; x <= cx + 4; x++) {
+      if (x < 0 || x >= S) continue;
+      t[y * S + x] = rgba(160, 160, 165);
+    }
+  }
+  // Cyan indicator
+  t[(B_TOP + 7) * S + cx] = rgba(80, 220, 240);
+  t[(B_TOP + 8) * S + cx] = rgba(80, 220, 240);
+  return t;
+}
+
+/** Madoka sprite: pink-haired anime magical girl with twintails + bow + white dress */
+export function generateMadokaSprite(): Uint32Array {
+  // Pale skin + white dress + dark pink trim
+  const t = genHumanoid(240, 220, 215, 245, 245, 250, 245, 220, 230, 190, H_TOP, H_BOT, B_TOP, B_BOT, L_BOT);
+  const cx = S / 2;
+  const eyeY = Math.floor((H_TOP + H_BOT) / 2);
+  // Big pink anime eyes (overwrite default dark eyes)
+  for (let dy = -1; dy <= 1; dy++) {
+    for (let dx = -1; dx <= 0; dx++) t[(eyeY + dy) * S + (cx - 2 + dx)] = rgba(230, 80, 140);
+    for (let dx = 0; dx <= 1; dx++)  t[(eyeY + dy) * S + (cx + 2 + dx)] = rgba(230, 80, 140);
+  }
+  // Eye highlights
+  t[(eyeY - 1) * S + (cx - 2)] = rgba(255, 255, 255);
+  t[(eyeY - 1) * S + (cx + 3)] = rgba(255, 255, 255);
+  // Pink hair — bangs over forehead
+  for (let y = H_TOP - 3; y < H_TOP + 5; y++) {
+    for (let x = cx - 7; x <= cx + 7; x++) {
+      if (x < 0 || x >= S || y < 0) continue;
+      const n = noise(x, y, 191) * 10;
+      t[y * S + x] = rgba(clamp(245 + n), clamp(160 + n), clamp(195 + n));
+    }
+  }
+  // Side locks framing face
+  for (let y = H_TOP + 2; y < H_BOT + 2; y++) {
+    for (let side = -1; side <= 1; side += 2) {
+      for (let w = 0; w < 2; w++) {
+        const x = cx + side * (7 - w);
+        if (x >= 0 && x < S) {
+          const n = noise(x, y, 191) * 10;
+          t[y * S + x] = rgba(clamp(245 + n), clamp(160 + n), clamp(195 + n));
+        }
+      }
+    }
+  }
+  // Twin-tails bows (red ribbons on top)
+  for (let dy = 0; dy < 3; dy++) {
+    for (let dx = -2; dx <= 2; dx++) {
+      t[(H_TOP - 4 + dy) * S + (cx - 7 + dx)] = rgba(220, 50, 70);
+      t[(H_TOP - 4 + dy) * S + (cx + 7 + dx)] = rgba(220, 50, 70);
+    }
+  }
+  // Pink trim along chest (dress collar)
+  for (let x = cx - 6; x <= cx + 6; x++) {
+    if (x < 0 || x >= S) continue;
+    t[(B_TOP + 1) * S + x] = rgba(230, 80, 140);
+    t[(B_TOP + 2) * S + x] = rgba(230, 80, 140);
+  }
+  // Red bow at neck
+  for (let dy = 0; dy < 3; dy++) for (let dx = -3; dx <= 3; dx++) {
+    t[(B_TOP + 3 + dy) * S + (cx + dx)] = rgba(220, 50, 70);
+  }
+  // Dress puff sleeves (lighter pink)
+  for (let y = B_TOP + 2; y < B_TOP + 8; y++) {
+    for (let side = -1; side <= 1; side += 2) {
+      for (let w = 0; w < 3; w++) {
+        const x = cx + side * (8 - w);
+        if (x >= 0 && x < S) {
+          t[y * S + x] = rgba(255, 200, 220);
+        }
+      }
+    }
+  }
+  return t;
+}
+
+/** Pakhom sprite: bald skinhead in white tank top, dirty trousers, mean expression */
+export function generatePakhomSprite(): Uint32Array {
+  // Pale weathered skin, dirty white tank top, brown trousers
+  const t = genHumanoid(205, 175, 155, 230, 225, 215, 90, 75, 55, 200, H_TOP, H_BOT, B_TOP, B_BOT, L_BOT);
+  const cx = S / 2;
+  const headCy = Math.floor((H_TOP + H_BOT) / 2);
+  const headRad = Math.floor((H_BOT - H_TOP) / 2);
+  // Bald head — no hair, just slight shading on top
+  for (let y = H_TOP; y < H_TOP + 3; y++) {
+    for (let x = cx - headRad + 1; x <= cx + headRad - 1; x++) {
+      if (x < 0 || x >= S) continue;
+      const n = noise(x, y, 201) * 8;
+      t[y * S + x] = rgba(clamp(195 + n), clamp(165 + n), clamp(145 + n));
+    }
+  }
+  // Dark stubble shadow (chin + cheeks)
+  for (let y = H_BOT - 4; y < H_BOT; y++) {
+    for (let x = cx - 4; x <= cx + 4; x++) {
+      if (x < 0 || x >= S) continue;
+      if (noise(x, y, 202) > 0.5) {
+        t[y * S + x] = rgba(70, 55, 45);
+      }
+    }
+  }
+  // Heavy brow / mean look
+  for (let x = cx - 4; x <= cx + 4; x++) {
+    if (x >= 0 && x < S) t[(headCy - 2) * S + x] = rgba(70, 55, 45);
+  }
+  // Tank-top straps (skin showing on shoulders)
+  for (let y = B_TOP; y < B_TOP + 3; y++) {
+    for (let side = -1; side <= 1; side += 2) {
+      for (let w = 0; w < 2; w++) {
+        const x = cx + side * (7 - w);
+        if (x >= 0 && x < S) {
+          const n = noise(x, y, 203) * 10;
+          t[y * S + x] = rgba(clamp(205 + n), clamp(175 + n), clamp(155 + n));
+        }
+      }
+    }
+  }
+  // Dirt stains on tank top
+  for (let i = 0; i < 6; i++) {
+    const sx = cx - 4 + Math.floor(noise(i, 0, 204) * 8);
+    const sy = B_TOP + 4 + Math.floor(noise(i, 1, 204) * 12);
+    if (sx >= 0 && sx < S) t[sy * S + sx] = rgba(120, 90, 60);
+  }
+  return t;
+}
+

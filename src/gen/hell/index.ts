@@ -11,6 +11,7 @@ import { rng, pick, ensureConnectivity, placeLifts, generateZones } from '../sha
 import { MONSTERS } from '../../entities/monster';
 import { calcZoneLevel, randomRPG, scaleMonsterHp, scaleMonsterSpeed, gaussianLevel, getMaxHp } from '../../systems/rpg';
 import { Spr, monsterSpr } from '../../render/sprite_index';
+import { spawnMedukaMeguku } from './madoka';
 
 const PSI_IDS = ['psi_strike', 'psi_rupture', 'psi_madness', 'psi_storm', 'psi_brainburn'];
 
@@ -88,6 +89,10 @@ export function generateHell(): { world: World; entities: Entity[]; spawnX: numb
   // Spawn exactly 3 Herald (Вестник) monsters at distant positions
   const heraldNextId = { v: entities.reduce((mx, e) => Math.max(mx, e.id), 0) + 1 };
   spawnHeralds(world, entities, heraldNextId, spawnX, spawnY);
+  nextId = entities.reduce((mx, e) => Math.max(mx, e.id), nextId) + 1;
+
+  // Side-quest wandering NPC: Медука Мегуку
+  spawnMedukaMeguku(world, entities, { v: nextId });
   nextId = entities.reduce((mx, e) => Math.max(mx, e.id), nextId) + 1;
 
   return { world, entities, spawnX, spawnY };

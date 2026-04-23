@@ -1,0 +1,175 @@
+/* ── Красный уголок — permanent room (kvartiry floor) ─────────── */
+/* Bolshie Stalin'ist common room with portraits, lamps, desk and  */
+/* a teacher NPC. Hand-crafted, protected with aptMask.            */
+
+import {
+  Cell, Tex, Feature, RoomType,
+  type Room, type Entity,
+  EntityType, AIGoal, Faction, Occupation, QuestType,
+} from '../../core/types';
+import { World } from '../../core/world';
+import { freshNeeds } from '../../data/catalog';
+import { type PlotNpcDef, registerSideQuest } from '../../data/plot';
+import { stampRoom, protectRoom, connectProtectedRoom, findClearArea } from '../shared';
+import { Spr } from '../../render/sprite_index';
+
+const NPC_DEF: PlotNpcDef = {
+  name: 'Учительница Зоя',
+  isFemale: true,
+  faction: Faction.SCIENTIST,
+  occupation: Occupation.SCIENTIST,
+  sprite: Occupation.SCIENTIST,
+  hp: 100, maxHp: 100, money: 50, speed: 0.8,
+  inventory: [
+    { defId: 'book', count: 6 },
+    { defId: 'note', count: 4 },
+    { defId: 'tea', count: 2 },
+    { defId: 'antidep', count: 1 },
+  ],
+  talkLines: [
+    'Здравствуйте! Я Зоя Аркадьевна. Веду политинформацию в Красном уголке.',
+    'Дети сюда больше не ходят. Самосбор унёс почти всех. Но я продолжаю.',
+    'У меня осталось мало бюллетеней — для класса нужно. Принесите 25 штук, я отдам редкую запись.',
+    'Не верьте ни Навэльному, ни Жириновскому. Думайте сами. Читайте.',
+  ],
+  talkLinesPost: [
+    'Спасибо. Класс сможет провести экзамен.',
+    'Возьмите чая. Холодный, но настоящий.',
+    'Если найдёте старые учебники — несите. Я систематизирую.',
+  ],
+};
+
+registerSideQuest('uchitelnitsa_zoya', NPC_DEF, [
+  {
+    id: 'zoya_ballots',
+    giverNpcId: 'uchitelnitsa_zoya',
+    type: QuestType.FETCH,
+    desc: 'Зоя Аркадьевна: «Принесите 25 бюллетеней. Для школьного экзамена.»',
+    targetItem: 'ballot', targetCount: 25,
+    rewardItem: 'psi_strike', rewardCount: 1,
+    extraRewards: [
+      { defId: 'book', count: 4 },
+      { defId: 'note', count: 5 },
+      { defId: 'antidep', count: 2 },
+    ],
+    relationDelta: 22, xpReward: 70, moneyReward: 120,
+  },
+]);
+
+const ROOM_W = 13;
+const ROOM_H = 9;
+
+export function generateRedCorner(
+  world: World, nextRoomId: number, entities: Entity[], nextId: { v: number },
+  spawnX: number, spawnY: number,
+): { nextRoomId: number } {
+  const cx = Math.floor(spawnX);
+  const cy = Math.floor(spawnY);
+  const pos = findClearArea(world, cx, cy, ROOM_W, ROOM_H, 25, 90);
+  const rx = pos ? pos.x : world.wrap(cx + 40);
+  const ry = pos ? pos.y : world.wrap(cy + 40);
+
+  const room: Room = stampRoom(world, nextRoomId, RoomType.COMMON, rx, ry, ROOM_W, ROOM_H, -1);
+  room.name = 'Красный уголок';
+  room.wallTex = Tex.PANEL;
+  room.floorTex = Tex.F_CARPET;
+  protectRoom(world, rx, ry, ROOM_W, ROOM_H, Tex.PANEL, Tex.F_CARPET);
+  connectProtectedRoom(world, rx, ry, ROOM_W, ROOM_H);
+
+  // Pure red carpet floor
+  for (let dy = 0; dy < ROOM_H; dy++) {
+    for (let dx = 0; dx < ROOM_W; dx++) {
+      world.floorTex[world.idx(rx + dx, ry + dy)] = Tex.F_CARPET;
+    }
+  }
+
+  // Lamps in corners + center
+  world.features[world.idx(rx + 1, ry + 1)] = Feature.LAMP;
+  world.features[world.idx(rx + ROOM_W - 2, ry + 1)] = Feature.LAMP;
+  world.features[world.idx(rx + 1, ry + ROOM_H - 2)] = Feature.LAMP;
+  world.features[world.idx(rx + ROOM_W - 2, ry + ROOM_H - 2)] = Feature.LAMP;
+
+  // Lectern (DESK + CHAIR) at the front
+  const fcx = rx + Math.floor(ROOM_W / 2);
+  world.features[world.idx(fcx, ry + 1)] = Feature.DESK;
+  world.features[world.idx(fcx, ry + 2)] = Feature.CHAIR;
+
+  // Two rows of student "chairs" (3 per row)
+  for (let row = 0; row < 2; row++) {
+    const cy2 = ry + 4 + row * 2;
+    for (let col = 0; col < 3; col++) {
+      const cx2 = rx + 3 + col * 3;
+      const ci = world.idx(cx2, cy2);
+      if (world.cells[ci] === Cell.FLOOR && world.features[ci] === 0) {
+        world.features[ci] = Feature.CHAIR;
+      }
+    }
+  }
+
+  // Bookshelves along the back wall
+  for (let dx = 1; dx < ROOM_W - 1; dx++) {
+    if (dx === Math.floor(ROOM_W / 2)) continue;
+    const ci = world.idx(rx + dx, ry + ROOM_H - 2);
+    if (world.cells[ci] === Cell.FLOOR && world.features[ci] === 0) {
+      world.features[ci] = Feature.SHELF;
+    }
+  }
+
+  // Loot scattered: ballots, books, notes — thematically rich
+  const lootPool = [
+    'ballot', 'ballot', 'ballot', 'ballot',
+    'book', 'book', 'note', 'note', 'tea', 'antidep',
+  ];
+  for (const defId of lootPool) {
+    for (let attempt = 0; attempt < 30; attempt++) {
+      const lx = rx + 1 + Math.floor(Math.random() * (ROOM_W - 2));
+      const ly = ry + 1 + Math.floor(Math.random() * (ROOM_H - 2));
+      const ci = world.idx(lx, ly);
+      if (world.cells[ci] !== Cell.FLOOR || world.features[ci]) continue;
+      entities.push({
+        id: nextId.v++, type: EntityType.ITEM_DROP,
+        x: lx + 0.5, y: ly + 0.5, angle: 0, pitch: 0, alive: true, speed: 0, sprite: Spr.ITEM_DROP,
+        inventory: [{ defId, count: 1 }],
+      });
+      break;
+    }
+  }
+
+  // Teacher NPC at the lectern
+  entities.push({
+    id: nextId.v++, type: EntityType.NPC,
+    x: fcx + 0.5, y: ry + 2 + 0.5,
+    angle: Math.PI / 2, pitch: 0,
+    alive: true, speed: NPC_DEF.speed, sprite: NPC_DEF.sprite,
+    name: NPC_DEF.name, isFemale: NPC_DEF.isFemale,
+    needs: freshNeeds(), hp: NPC_DEF.hp, maxHp: NPC_DEF.maxHp, money: NPC_DEF.money,
+    ai: { goal: AIGoal.IDLE, tx: 0, ty: 0, path: [], pi: 0, stuck: 0, timer: 0 },
+    inventory: NPC_DEF.inventory.map(i => ({ ...i })),
+    faction: NPC_DEF.faction, occupation: NPC_DEF.occupation,
+    plotNpcId: 'uchitelnitsa_zoya', canGiveQuest: true, questId: -1,
+  });
+
+  // Two student NPCs (children)
+  const studentPositions = [
+    { x: rx + 3, y: ry + 4, name: 'Ученик Петя' },
+    { x: rx + 9, y: ry + 4, name: 'Ученица Маша' },
+  ];
+  for (const s of studentPositions) {
+    entities.push({
+      id: nextId.v++, type: EntityType.NPC,
+      x: s.x + 0.5, y: s.y + 0.5,
+      angle: -Math.PI / 2, pitch: 0,
+      alive: true, speed: 0.8, sprite: Occupation.CHILD,
+      spriteScale: 0.6,
+      name: s.name, isFemale: s.name === 'Ученица Маша',
+      needs: freshNeeds(), hp: 30, maxHp: 30, money: 5,
+      ai: { goal: AIGoal.IDLE, tx: 0, ty: 0, path: [], pi: 0, stuck: 0, timer: 0 },
+      inventory: [{ defId: 'note', count: 1 }, { defId: 'bread', count: 1 }],
+      faction: Faction.CITIZEN, occupation: Occupation.CHILD,
+      questId: -1,
+    });
+  }
+
+  console.log(`[RED_CORNER] at (${rx}, ${ry}) room #${room.id}`);
+  return { nextRoomId: Math.max(nextRoomId, room.id + 1) };
+}

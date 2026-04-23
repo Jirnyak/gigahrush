@@ -18,6 +18,11 @@ import { calcZoneLevel, randomRPG, gaussianLevel, getMaxHp } from '../../systems
 import { Spr } from '../../render/sprite_index';
 import { randomOccupation } from '../../data/relations';
 import { spawnNavelny } from './navelny';
+import { spawnZhirinovsky } from './zhirinovsky';
+import { spawnTyotyaKlava } from './tyotya_klava';
+import { spawnSeryGopnik } from './sery_gopnik';
+import { spawnPahomBratishka } from './pakhom';
+import { generateRedCorner } from './red_corner';
 
 /* ── Constants ────────────────────────────────────────────────── */
 const WALL_L = 4;  // grid spacing for wall sources
@@ -553,6 +558,16 @@ export function generateKvartiry(): { world: World; entities: Entity[]; spawnX: 
   spawnNavelny(world, entities, { v: nextId });
   nextId = entities.reduce((mx, e) => Math.max(mx, e.id), nextId) + 1;
 
+  // ── Phase 11b: Side-quest NPCs (Жириновский, Клава, Серый) ───
+  spawnZhirinovsky(world, entities, { v: nextId });
+  nextId = entities.reduce((mx, e) => Math.max(mx, e.id), nextId) + 1;
+  spawnTyotyaKlava(world, entities, { v: nextId });
+  nextId = entities.reduce((mx, e) => Math.max(mx, e.id), nextId) + 1;
+  spawnSeryGopnik(world, entities, { v: nextId });
+  nextId = entities.reduce((mx, e) => Math.max(mx, e.id), nextId) + 1;
+  spawnPahomBratishka(world, entities, { v: nextId });
+  nextId = entities.reduce((mx, e) => Math.max(mx, e.id), nextId) + 1;
+
   // ── Phase 12: Find spawn point ────────────────────────────────
   let spawnX = W / 2 + 0.5, spawnY = W / 2 + 0.5;
   for (let r = 0; r < 50; r++) {
@@ -568,6 +583,13 @@ export function generateKvartiry(): { world: World; entities: Entity[]; spawnX: 
         }
       }
     }
+  }
+
+  // ── Phase 13: Permanent themed rooms (Красный уголок) ────────
+  {
+    const r = generateRedCorner(world, world.rooms.length, entities, { v: nextId }, spawnX, spawnY);
+    nextId = entities.reduce((mx, e) => Math.max(mx, e.id), nextId) + 1;
+    void r;
   }
 
   return { world, entities, spawnX, spawnY };

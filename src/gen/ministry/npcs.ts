@@ -11,6 +11,9 @@ import { freshNeeds, randomName } from '../../data/catalog';
 import { rng } from '../shared';
 import { gaussianLevel, randomRPG, getMaxHp } from '../../systems/rpg';
 import { type PlotNpcDef, registerSideQuest } from '../../data/plot';
+import { spawnArkhivariusKafkin } from './arkhivarius';
+import { spawnPolkovnikStreltsov } from './streltsov';
+import { spawnBufetchitsaGlafira } from './glafira';
 
 /* ── Weapon loadout for ministry NPCs ─────────────────────────── */
 function ministryWeaponLoadout(faction: Faction, occupation: Occupation): { weapon: string; inv: { defId: string; count: number }[] } {
@@ -192,6 +195,11 @@ export function spawnMinistryNpcs(
 
   /* ── Spawn Министр Ротенбергов ──────────────────────────────── */
   spawnPlotNpc(world, entities, nextId, 'rotenbergov', ROTENBERGOV_DEF);
+
+  /* ── Side-quest wandering NPCs ─────────────────────────────── */
+  spawnArkhivariusKafkin(world, entities, nextId);
+  spawnPolkovnikStreltsov(world, entities, nextId);
+  spawnBufetchitsaGlafira(world, entities, nextId);
 
   /* ── Assign offices/rooms to NPCs ──────────────────────────── */
   assignMinistryRooms(world, entities);

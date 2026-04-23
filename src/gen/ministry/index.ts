@@ -14,6 +14,7 @@ import { calcZoneLevel, randomRPG, scaleMonsterHp, scaleMonsterSpeed } from '../
 import { Spr, monsterSpr } from '../../render/sprite_index';
 import { MonsterKind } from '../../core/types';
 import { spawnMinistryNpcs } from './npcs';
+import { generateSecretSmokingRoom } from './secret_smoking';
 
 /* ── Portrait picker — coordinate-hash like posters ───────────── */
 const PORTRAIT_COUNT = 64;
@@ -563,6 +564,15 @@ export function generateMinistry(): { world: World; entities: Entity[]; spawnX: 
       rpg,
     });
     monsterCount++;
+  }
+
+  /* ══════════════════════════════════════════════════════════════
+     Phase 12b: Тайная курилка — hand-crafted side-quest room
+     ══════════════════════════════════════════════════════════════ */
+  {
+    const r = generateSecretSmokingRoom(world, nextRoomId, entities, { v: nextId }, spawnX, spawnY);
+    nextRoomId = r.nextRoomId;
+    nextId = entities.reduce((mx, e) => Math.max(mx, e.id), nextId) + 1;
   }
 
   /* ══════════════════════════════════════════════════════════════
