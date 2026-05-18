@@ -10,9 +10,19 @@ import {
   type Entity, EntityType, ProjType,
 } from '../core/types';
 import { World } from '../core/world';
+import { getActiveSamosborVariant } from '../data/samosbor_variants';
+import { entityUsesProceduralSprite, generateProceduralEntitySprite, proceduralEntitySpriteKey } from '../entities/procedural_visuals';
 import type { TexData } from './textures';
 import type { SpriteData } from './sprites';
 import type { BloodParticle } from './blood';
+
+export interface DynamicSkyTexture {
+  readonly width: number;
+  readonly height: number;
+  readonly pixels: Uint32Array;
+  readonly ambientTint?: { r: number; g: number; b: number };
+  dirty: boolean;
+}
 
 /* ── Constants ─────────────────────────────────────────────────── */
 export const SCR_W = 320;
@@ -27,6 +37,9 @@ const HALF_FOV = FOV / 2;
  * texture atlas. Layout: ATLAS_COLS textures per row.             */
 const ATLAS_COLS = 8;             // 8 textures per row
 const ATLAS_TEX_SIZE = TEX;       // 64px each texture
+const PARTICLE_INSTANCE_CAP = 256;
+const PROCEDURAL_SPRITE_CACHE_MAX = 384;
+const PROCEDURAL_SPRITE_CACHE_TARGET = 288;
 
 /* ── GLSL Shaders ─────────────────────────────────────────────── */
 
@@ -56,6 +69,7 @@ uniform float uCamHeight;        // 0..1 (0.5 = default)
 uniform float uFlashlight;       // 0..1
 uniform float uTime;
 uniform int   uPurpleFog;        // 1 if player is in fogged area
+uniform vec3  uFogColor;         // active samosbor variant fog tint
 
 /* ── Data textures ────────────────────────────────────────────── */
 uniform highp usampler2D uCells;      // W×W: cell type (uint8)
@@ -69,6 +83,9 @@ uniform highp usampler2D uDoorStates; // W×W: door states (0=open, 1=closed, 2=
 /* ── Texture atlas ────────────────────────────────────────────── */
 uniform sampler2D uAtlas;             // packed texture atlas
 uniform vec2  uAtlasSize;             // atlas dimensions in pixels
+uniform int   uUseDynamicSky;         // roof/open-air ceiling override
+uniform sampler2D uDynamicSky;        // 1024×1024 dynamic sky/cloud texture
+uniform vec3  uDynamicSkyTint;
 
 /* ── Surface marks overlay (blood, bullet holes, etc.) ────────── */
 uniform sampler2D uSurfaceAtlas;      // 512×512 RGBA atlas of 16×16 cell overlays
@@ -155,7 +172,7 @@ vec3 blendSurface(vec3 base, ivec2 cell, int subX, int subY) {
 }
 
 vec3 fogColor() {
-  return uPurpleFog == 1 ? vec3(20.0/255.0, 5.0/255.0, 30.0/255.0)
+  return uPurpleFog == 1 ? uFogColor
                          : vec3(5.0/255.0, 5.0/255.0, 8.0/255.0);
 }
 
@@ -289,24 +306,27 @@ void main() {
     if (sdx < sdy) { sdx += ddx; mapX += stepX; side = 0; }
     else            { sdy += ddy; mapY += stepY; side = 1; }
 
+    float stepDist = side == 0 ? sdx - ddx : sdy - ddy;
+    if (stepDist > MAX_DIST) break;
+
     ivec2 wp = ivec2(wrapI(mapX), wrapI(mapY));
     uint cell = texelFetch(uCells, wp, 0).r;
 
     if (cell == ${Cell.WALL}u) {
-      dist = side == 0 ? sdx - ddx : sdy - ddy;
+      dist = stepDist;
       wallTexId = texelFetch(uWallTex, wp, 0).r;
       if (wallTexId == 0u) wallTexId = ${Tex.CONCRETE}u;
       hit = true;
       break;
     }
     if (cell == ${Cell.LIFT}u) {
-      dist = side == 0 ? sdx - ddx : sdy - ddy;
+      dist = stepDist;
       wallTexId = ${Tex.LIFT_DOOR}u;
       hit = true;
       break;
     }
     if (cell == ${Cell.ABYSS}u) {
-      dist = side == 0 ? sdx - ddx : sdy - ddy;
+      dist = stepDist;
       wallTexId = ${Tex.DARK}u;
       hit = true;
       hitAbyss = true;
@@ -316,7 +336,7 @@ void main() {
       uint doorState = texelFetch(uDoorStates, wp, 0).r;
       // 0=OPEN, 3=HERMETIC_OPEN — these are passable
       if (doorState != 0u && doorState != 3u) {
-        dist = side == 0 ? sdx - ddx : sdy - ddy;
+        dist = stepDist;
         wallTexId = doorState == 2u ? ${Tex.DOOR_METAL}u : ${Tex.DOOR_WOOD}u;
         hit = true;
         break;
@@ -363,16 +383,21 @@ void main() {
       pixel = vec3(v, v, v);
     } else {
       float upF = (edgeStart - row) / max(1.0, edgeStart);
-      float v = max(0.0, 3.0 * (1.0 - upF)) / 255.0;
-      pixel = vec3(v, v + 2.0/255.0, v);
+      if (uUseDynamicSky == 1) {
+        vec2 skyUv = wrapF(uPos + vec2(rayDX, rayDY) * (18.0 + upF * 120.0)) / float(W_SIZE);
+        vec3 sky = texture(uDynamicSky, skyUv).rgb * uDynamicSkyTint;
+        sky *= 0.55 + 0.35 * (1.0 - upF);
+        pixel = applyFogV(sky, min(0.45, dist * uFogDensity));
+      } else {
+        float v = max(0.0, 3.0 * (1.0 - upF)) / 255.0;
+        pixel = vec3(v, v + 2.0/255.0, v);
+      }
     }
   } else {
-    // Compute hit cell for lighting
-    ivec2 hitCell = ivec2(wrapI(mapX), wrapI(mapY));
-    float cellLit = min(1.0, AMBIENT + sampleLight(hitCell) * (1.0 - AMBIENT) + flashlightBoost(dist));
-
-    if (row >= drawStart && row <= drawEnd) {
+    if (hit && row >= drawStart && row <= drawEnd) {
       // ── Wall ──
+      ivec2 hitCell = ivec2(wrapI(mapX), wrapI(mapY));
+      float cellLit = min(1.0, AMBIENT + sampleLight(hitCell) * (1.0 - AMBIENT) + flashlightBoost(dist));
       float d = row - (HALF_H - lineH * (1.0 - uCamHeight));
       int texYi = int(floor(d / lineH * TEX_F)) & (TEX_I - 1);
       vec3 c = sampleAtlas(wallTexId, texXi, texYi).rgb;
@@ -386,84 +411,83 @@ void main() {
       c *= cellLit;
       pixel = applyFogV(c, fogF);
       pixelDepth = min(1.0, dist / MAX_DIST);
-    } else if (row > drawEnd) {
+    } else if (row > (hit ? drawEnd : HALF_H)) {
       // ── Floor ──
       float rowDist = row - HALF_H;
       if (rowDist > 0.0) {
         float currentDist = (uResolution.y * uCamHeight) / rowDist;
-        float weight = min(currentDist / dist, 1.0);
-        float fwx, fwy;
-        if (side == 0 && rayDX > 0.0)      { fwx = float(mapX);     fwy = float(mapY) + wallHitX; }
-        else if (side == 0 && rayDX < 0.0)  { fwx = float(mapX) + 1.0; fwy = float(mapY) + wallHitX; }
-        else if (side == 1 && rayDY > 0.0)  { fwx = float(mapX) + wallHitX; fwy = float(mapY); }
-        else                                { fwx = float(mapX) + wallHitX; fwy = float(mapY) + 1.0; }
-        float floorX = weight * fwx + (1.0 - weight) * uPos.x;
-        float floorY = weight * fwy + (1.0 - weight) * uPos.y;
+        if (currentDist <= MAX_DIST) {
+          float floorX = uPos.x + rayDX * currentDist;
+          float floorY = uPos.y + rayDY * currentDist;
 
-        ivec2 fCell = ivec2(wrapI(int(floor(floorX))), wrapI(int(floor(floorY))));
-        int ftx = int(floor(floorX * TEX_F)) & (TEX_I - 1);
-        int fty = int(floor(floorY * TEX_F)) & (TEX_I - 1);
-        float ff = min(1.0, currentDist * uFogDensity);
-        float fLit = min(1.0, AMBIENT + sampleLight(fCell) * (1.0 - AMBIENT) + flashlightBoost(currentDist));
+          ivec2 fCell = ivec2(wrapI(int(floor(floorX))), wrapI(int(floor(floorY))));
+          int ftx = int(floor(floorX * TEX_F)) & (TEX_I - 1);
+          int fty = int(floor(floorY * TEX_F)) & (TEX_I - 1);
+          float ff = min(1.0, currentDist * uFogDensity);
+          float fLit = min(1.0, AMBIENT + sampleLight(fCell) * (1.0 - AMBIENT) + flashlightBoost(currentDist));
 
-        uint fCellType = texelFetch(uCells, fCell, 0).r;
-        if (fCellType == ${Cell.ABYSS}u) {
-          float voidF = min(1.0, currentDist * 0.12);
-          float v = 3.0 * (1.0 - voidF) / 255.0;
-          pixel = vec3(v, v, v);
-        } else {
-          uint floorTexId = fCellType == ${Cell.WATER}u
-            ? ${Tex.F_WATER}u
-            : texelFetch(uFloorTex, fCell, 0).r;
-          if (floorTexId == 0u) floorTexId = ${Tex.F_CONCRETE}u;
-          vec3 fc = sampleAtlas(floorTexId, ftx, fty).rgb;
-          // Surface overlay (blood, urine, etc.)
-          fc = blendSurface(fc, fCell, ftx >> 2, fty >> 2);
-          fc *= fLit;
-          pixel = applyFogV(fc, ff);
-          pixelDepth = min(1.0, currentDist / MAX_DIST);
+          uint fCellType = texelFetch(uCells, fCell, 0).r;
+          if (fCellType == ${Cell.ABYSS}u) {
+            float voidF = min(1.0, currentDist * 0.12);
+            float v = 3.0 * (1.0 - voidF) / 255.0;
+            pixel = vec3(v, v, v);
+          } else {
+            uint floorTexId = fCellType == ${Cell.WATER}u
+              ? ${Tex.F_WATER}u
+              : texelFetch(uFloorTex, fCell, 0).r;
+            if (floorTexId == 0u) floorTexId = ${Tex.F_CONCRETE}u;
+            vec3 fc = sampleAtlas(floorTexId, ftx, fty).rgb;
+            // Surface overlay (blood, urine, etc.)
+            fc = blendSurface(fc, fCell, ftx >> 2, fty >> 2);
+            fc *= fLit;
+            pixel = applyFogV(fc, ff);
+            pixelDepth = min(1.0, currentDist / MAX_DIST);
+          }
         }
       }
-    } else {
+    } else if (row < (hit ? drawStart : HALF_H)) {
       // ── Ceiling ──
       float rowDist = HALF_H - row;
       if (rowDist > 0.0) {
         float currentDist = (uResolution.y * (1.0 - uCamHeight)) / rowDist;
-        float weight = min(currentDist / dist, 1.0);
-        float fwx, fwy;
-        if (side == 0 && rayDX > 0.0)      { fwx = float(mapX);     fwy = float(mapY) + wallHitX; }
-        else if (side == 0 && rayDX < 0.0)  { fwx = float(mapX) + 1.0; fwy = float(mapY) + wallHitX; }
-        else if (side == 1 && rayDY > 0.0)  { fwx = float(mapX) + wallHitX; fwy = float(mapY); }
-        else                                { fwx = float(mapX) + wallHitX; fwy = float(mapY) + 1.0; }
-        float floorX = weight * fwx + (1.0 - weight) * uPos.x;
-        float floorY = weight * fwy + (1.0 - weight) * uPos.y;
+        if (currentDist <= MAX_DIST) {
+          float floorX = uPos.x + rayDX * currentDist;
+          float floorY = uPos.y + rayDY * currentDist;
 
-        ivec2 cCell = ivec2(wrapI(int(floor(floorX))), wrapI(int(floor(floorY))));
-        int ftx = int(floor(floorX * TEX_F)) & (TEX_I - 1);
-        int fty = int(floor(floorY * TEX_F)) & (TEX_I - 1);
-        float ff = min(1.0, currentDist * uFogDensity);
-        float cLit = min(1.0, AMBIENT + sampleLight(cCell) * (1.0 - AMBIENT) + flashlightBoost(currentDist));
+          ivec2 cCell = ivec2(wrapI(int(floor(floorX))), wrapI(int(floor(floorY))));
+          int ftx = int(floor(floorX * TEX_F)) & (TEX_I - 1);
+          int fty = int(floor(floorY * TEX_F)) & (TEX_I - 1);
+          float ff = min(1.0, currentDist * uFogDensity);
+          float cLit = min(1.0, AMBIENT + sampleLight(cCell) * (1.0 - AMBIENT) + flashlightBoost(currentDist));
 
-        uint cCellType = texelFetch(uCells, cCell, 0).r;
-        if (cCellType == ${Cell.ABYSS}u) {
-          float voidF = min(1.0, currentDist * 0.12);
-          float v = 4.0 * (1.0 - voidF) / 255.0;
-          pixel = vec3(v, v + 1.0/255.0, v);
-        } else {
-          uint feat = texelFetch(uFeatures, cCell, 0).r;
-          if (feat == ${Feature.LAMP}u) {
-            float glow = max(0.0, 1.0 - currentDist * 0.15);
-            pixel = applyFogV(vec3(220.0/255.0 * glow, 180.0/255.0 * glow, 80.0/255.0 * glow), ff);
-            pixelDepth = min(1.0, currentDist / MAX_DIST);
-          } else if (feat == ${Feature.CANDLE}u) {
-            float glow = max(0.0, 1.0 - currentDist * 0.18);
-            pixel = applyFogV(vec3(240.0/255.0 * glow, 180.0/255.0 * glow, 50.0/255.0 * glow), ff);
-            pixelDepth = min(1.0, currentDist / MAX_DIST);
+          uint cCellType = texelFetch(uCells, cCell, 0).r;
+          if (cCellType == ${Cell.ABYSS}u) {
+            float voidF = min(1.0, currentDist * 0.12);
+            float v = 4.0 * (1.0 - voidF) / 255.0;
+            pixel = vec3(v, v + 1.0/255.0, v);
           } else {
-            vec3 cc = sampleAtlas(${Tex.CEIL}u, ftx, fty).rgb;
-            cc *= cLit;
-            pixel = applyFogV(cc, ff);
-            pixelDepth = min(1.0, currentDist / MAX_DIST);
+            uint feat = texelFetch(uFeatures, cCell, 0).r;
+            if (feat == ${Feature.LAMP}u) {
+              float glow = max(0.0, 1.0 - currentDist * 0.15);
+              pixel = applyFogV(vec3(220.0/255.0 * glow, 180.0/255.0 * glow, 80.0/255.0 * glow), ff);
+              pixelDepth = min(1.0, currentDist / MAX_DIST);
+            } else if (feat == ${Feature.CANDLE}u) {
+              float glow = max(0.0, 1.0 - currentDist * 0.18);
+              pixel = applyFogV(vec3(240.0/255.0 * glow, 180.0/255.0 * glow, 50.0/255.0 * glow), ff);
+              pixelDepth = min(1.0, currentDist / MAX_DIST);
+            } else {
+              vec3 cc;
+              if (uUseDynamicSky == 1) {
+                vec2 skyUv = wrapF(vec2(floorX, floorY)) / float(W_SIZE);
+                cc = texture(uDynamicSky, skyUv).rgb * uDynamicSkyTint;
+                cc *= 0.45 + cLit * 0.55;
+              } else {
+                cc = sampleAtlas(${Tex.CEIL}u, ftx, fty).rgb;
+                cc *= cLit;
+              }
+              pixel = applyFogV(cc, ff);
+              pixelDepth = min(1.0, currentDist / MAX_DIST);
+            }
           }
         }
       }
@@ -622,6 +646,7 @@ uniform sampler2D uTex;
 uniform float uGlitch;
 uniform float uTime;
 uniform float uSamosborActive; // 1.0 during samosbor
+uniform int uSamosborStyle; // 3 = Veretar dry overexposure
 out vec4 fragColor;
 
 /* ── Noise helpers ────────────────────────────────────────────── */
@@ -756,15 +781,24 @@ void main() {
   color.g *= 1.02;
   color.b *= 0.98;
 
-  /* ── Samosbor: extra purple tint + noise burst ──────────────── */
+  /* ── Samosbor: variant-shaped post noise ────────────────────── */
   if (uSamosborActive > 0.5) {
     float noiseBurst = hash21(floor(vUV * 60.0 + t * 5.0)) * 0.06;
-    color.r += noiseBurst * 0.5;
-    color.b += noiseBurst;
-    // Occasional white flash lines
-    float flashLine = hash21(vec2(floor(uv.y * 100.0), floor(t * 8.0)));
-    if (flashLine > 0.993) {
-      color += 0.15;
+    if (uSamosborStyle == 3) {
+      float luma = dot(color, vec3(0.299, 0.587, 0.114));
+      color = mix(color, vec3(luma), 0.58);
+      color = mix(color, vec3(0.96, 0.94, 0.84), 0.12);
+      color += (hash21(vUV * 500.0 + floor(t * 9.0)) - 0.5) * 0.045;
+      float whiteLine = hash21(vec2(floor(uv.y * 120.0), floor(t * 5.0)));
+      if (whiteLine > 0.985) color += vec3(0.08, 0.075, 0.055);
+    } else {
+      color.r += noiseBurst * 0.5;
+      color.b += noiseBurst;
+      // Occasional white flash lines
+      float flashLine = hash21(vec2(floor(uv.y * 100.0), floor(t * 8.0)));
+      if (flashLine > 0.993) {
+        color += 0.15;
+      }
     }
   }
 
@@ -776,30 +810,30 @@ void main() {
 const PARTICLE_VERT_SRC = /* glsl */ `#version 300 es
 precision highp float;
 in vec2 aPos;       // quad corner (-0.5..0.5)
+in vec4 aParticle;  // screenX, screenY, size, depth
+in vec4 aColor;
 uniform vec2  uResolution;
-uniform float uScreenX;
-uniform float uScreenY;
-uniform float uSize;
-uniform float uDepth;
 out float vDepth;
+out vec4 vColor;
 void main() {
-  float px = uScreenX + aPos.x * uSize;
-  float py = uScreenY + aPos.y * uSize;
+  float px = aParticle.x + aPos.x * aParticle.z;
+  float py = aParticle.y + aPos.y * aParticle.z;
   float ndcX = (px / uResolution.x) * 2.0 - 1.0;
   float ndcY = 1.0 - (py / uResolution.y) * 2.0;
   gl_Position = vec4(ndcX, ndcY, 0.0, 1.0);
-  vDepth = uDepth;
+  vDepth = aParticle.w;
+  vColor = aColor;
 }
 `;
 
 const PARTICLE_FRAG_SRC = /* glsl */ `#version 300 es
 precision highp float;
 in float vDepth;
-uniform vec4 uColor;
+in vec4 vColor;
 out vec4 fragColor;
 void main() {
   gl_FragDepth = vDepth;
-  fragColor = uColor;
+  fragColor = vColor;
 }
 `;
 
@@ -818,6 +852,10 @@ interface GLState {
   // Particle rendering
   particleProgram: WebGLProgram;
   particleVAO: WebGLVertexArrayObject;
+  particleInstanceBuffer: WebGLBuffer;
+  particleColorBuffer: WebGLBuffer;
+  particleInstanceData: Float32Array;
+  particleColorData: Float32Array;
   particleUniforms: Record<string, WebGLUniformLocation | null>;
   // Data textures
   cellsTex: WebGLTexture;
@@ -828,20 +866,45 @@ interface GLState {
   fogTex: WebGLTexture;
   doorStatesTex: WebGLTexture;
   atlasTex: WebGLTexture;
+  dynamicSkyTex: WebGLTexture;
+  dynamicSkyW: number;
+  dynamicSkyH: number;
   // Sprite rendering
   spriteProgram: WebGLProgram;
   spriteVAO: WebGLVertexArrayObject;
   spriteTextures: WebGLTexture[];   // individual sprite textures
+  proceduralSpriteTextures: Map<number, ProceduralSpriteCacheEntry>;
+  proceduralSpriteUseTick: number;
   // Surface marks
   surfaceAtlasTex: WebGLTexture;    // 512×512 RGBA atlas of 16×16 overlays
   surfaceIdxTex: WebGLTexture;      // W×W R16UI cell→slot mapping
+  surfacePixels: Uint8Array;
+  surfaceIndex: Uint16Array;
+  surfaceVersion: number;
+  surfaceCamTileX: number;
+  surfaceCamTileY: number;
+  wallTexVersion: number;
+  floorTexVersion: number;
+  fogVersion: number;
+  doorStatesData: Uint8Array;
   // Uniforms cache
   rayUniforms: Record<string, WebGLUniformLocation | null>;
   blitUniforms: Record<string, WebGLUniformLocation | null>;
   spriteUniforms: Record<string, WebGLUniformLocation | null>;
 }
 
+interface ProceduralSpriteCacheEntry {
+  texture: WebGLTexture;
+  usedAt: number;
+}
+
 let glState: GLState | null = null;
+let activeDynamicSky: DynamicSkyTexture | null = null;
+const visibleEntities: Entity[] = [];
+const visibleDx: number[] = [];
+const visibleDy: number[] = [];
+const visibleDist: number[] = [];
+const visibleOrder: number[] = [];
 
 /* ── Shader compilation helpers ───────────────────────────────── */
 function compileShader(gl: WebGL2RenderingContext, type: number, src: string): WebGLShader {
@@ -925,6 +988,53 @@ function createDataTexR32F(gl: WebGL2RenderingContext, w: number, h: number, dat
   return tex;
 }
 
+function bindTextureUnit(gl: WebGL2RenderingContext, tex: WebGLTexture, loc: WebGLUniformLocation | null, unit: number): void {
+  gl.activeTexture(gl.TEXTURE0 + unit);
+  gl.bindTexture(gl.TEXTURE_2D, tex);
+  gl.uniform1i(loc, unit);
+}
+
+function createDynamicSkyTex(gl: WebGL2RenderingContext): WebGLTexture {
+  const tex = gl.createTexture()!;
+  gl.bindTexture(gl.TEXTURE_2D, tex);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.REPEAT);
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array([9, 12, 20, 255]));
+  return tex;
+}
+
+function uploadDynamicSkyTexture(): void {
+  if (!glState) return;
+  const { gl } = glState;
+  gl.bindTexture(gl.TEXTURE_2D, glState.dynamicSkyTex);
+  const sky = activeDynamicSky;
+  if (!sky) {
+    if (glState.dynamicSkyW !== 1 || glState.dynamicSkyH !== 1) {
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array([9, 12, 20, 255]));
+      glState.dynamicSkyW = 1;
+      glState.dynamicSkyH = 1;
+    }
+    return;
+  }
+
+  const pixels = new Uint8Array(sky.pixels.buffer, sky.pixels.byteOffset, sky.pixels.byteLength);
+  if (glState.dynamicSkyW !== sky.width || glState.dynamicSkyH !== sky.height) {
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, sky.width, sky.height, 0, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
+    glState.dynamicSkyW = sky.width;
+    glState.dynamicSkyH = sky.height;
+  } else {
+    gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, sky.width, sky.height, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
+  }
+  sky.dirty = false;
+}
+
+export function setDynamicSkyTexture(sky: DynamicSkyTexture | null): void {
+  activeDynamicSky = sky;
+  uploadDynamicSkyTexture();
+}
+
 /* ── Build texture atlas from TexData[] ───────────────────────── */
 function buildAtlas(gl: WebGL2RenderingContext, textures: TexData[]): WebGLTexture {
   const count = textures.length;
@@ -960,39 +1070,90 @@ function buildAtlas(gl: WebGL2RenderingContext, textures: TexData[]): WebGLTextu
   return tex;
 }
 
+function createSpriteTexture(gl: WebGL2RenderingContext, spr: SpriteData): WebGLTexture {
+  const pixels = new Uint8Array(ATLAS_TEX_SIZE * ATLAS_TEX_SIZE * 4);
+  for (let i = 0; i < ATLAS_TEX_SIZE * ATLAS_TEX_SIZE; i++) {
+    const c = spr[i];
+    pixels[i * 4 + 0] = c & 0xFF;
+    pixels[i * 4 + 1] = (c >> 8) & 0xFF;
+    pixels[i * 4 + 2] = (c >> 16) & 0xFF;
+    pixels[i * 4 + 3] = (c >>> 24) & 0xFF;
+  }
+  const tex = gl.createTexture()!;
+  gl.bindTexture(gl.TEXTURE_2D, tex);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, ATLAS_TEX_SIZE, ATLAS_TEX_SIZE, 0,
+    gl.RGBA, gl.UNSIGNED_BYTE, pixels);
+  return tex;
+}
+
 /* ── Build individual sprite textures ─────────────────────────── */
 function buildSpriteTextures(gl: WebGL2RenderingContext, sprites: SpriteData[]): WebGLTexture[] {
   const result: WebGLTexture[] = [];
-  for (const spr of sprites) {
-    const pixels = new Uint8Array(ATLAS_TEX_SIZE * ATLAS_TEX_SIZE * 4);
-    for (let i = 0; i < ATLAS_TEX_SIZE * ATLAS_TEX_SIZE; i++) {
-      const c = spr[i];
-      pixels[i * 4 + 0] = c & 0xFF;
-      pixels[i * 4 + 1] = (c >> 8) & 0xFF;
-      pixels[i * 4 + 2] = (c >> 16) & 0xFF;
-      pixels[i * 4 + 3] = (c >>> 24) & 0xFF;
-    }
-    const tex = gl.createTexture()!;
-    gl.bindTexture(gl.TEXTURE_2D, tex);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, ATLAS_TEX_SIZE, ATLAS_TEX_SIZE, 0,
-      gl.RGBA, gl.UNSIGNED_BYTE, pixels);
-    result.push(tex);
-  }
+  for (const spr of sprites) result.push(createSpriteTexture(gl, spr));
   return result;
 }
 
+function trimProceduralSpriteCache(): void {
+  if (!glState || glState.proceduralSpriteTextures.size <= PROCEDURAL_SPRITE_CACHE_MAX) return;
+  const { gl, proceduralSpriteTextures } = glState;
+  while (proceduralSpriteTextures.size > PROCEDURAL_SPRITE_CACHE_TARGET) {
+    let oldestKey = 0;
+    let oldestUse = Number.MAX_SAFE_INTEGER;
+    for (const [key, entry] of proceduralSpriteTextures) {
+      if (entry.usedAt < oldestUse) {
+        oldestUse = entry.usedAt;
+        oldestKey = key;
+      }
+    }
+    const oldest = proceduralSpriteTextures.get(oldestKey);
+    if (!oldest) break;
+    gl.deleteTexture(oldest.texture);
+    proceduralSpriteTextures.delete(oldestKey);
+  }
+}
+
+function proceduralEntityTexture(e: Entity): WebGLTexture | null {
+  if (!glState || !entityUsesProceduralSprite(e)) return null;
+  const key = proceduralEntitySpriteKey(e);
+  const cached = glState.proceduralSpriteTextures.get(key);
+  glState.proceduralSpriteUseTick++;
+  if (cached) {
+    cached.usedAt = glState.proceduralSpriteUseTick;
+    return cached.texture;
+  }
+  const sprite = generateProceduralEntitySprite(e);
+  if (!sprite) return null;
+  const texture = createSpriteTexture(glState.gl, sprite);
+  glState.proceduralSpriteTextures.set(key, { texture, usedAt: glState.proceduralSpriteUseTick });
+  trimProceduralSpriteCache();
+  return texture;
+}
+
 /* ── Build door state map from World ──────────────────────────── */
-function buildDoorStates(world: World): Uint8Array {
+function rebuildDoorStates(world: World, out?: Uint8Array): Uint8Array {
   // Default: 0 = OPEN (passable). Cells without doors stay 0.
-  const ds = new Uint8Array(W * W);
+  const ds = out ?? new Uint8Array(W * W);
+  ds.fill(0);
   for (const [ci, door] of world.doors) {
     ds[ci] = door.state;
   }
   return ds;
+}
+
+function syncDoorStates(world: World, out: Uint8Array): boolean {
+  let dirty = false;
+  for (const [ci, door] of world.doors) {
+    const state = door.state;
+    if (out[ci] !== state) {
+      out[ci] = state;
+      dirty = true;
+    }
+  }
+  return dirty;
 }
 
 /* ── Surface marks atlas ─────────────────────────────────────── *
@@ -1002,9 +1163,16 @@ const SURF_ATLAS_SIZE = 512;         // 512×512 total
 const SURF_ATLAS_COLS = 32;          // 32 tiles per row
 const SURF_MAX_SLOTS = SURF_ATLAS_COLS * SURF_ATLAS_COLS; // 1024
 
-function buildSurfaceData(world: World, camX: number, camY: number): { pixels: Uint8Array; index: Uint16Array } {
-  const pixels = new Uint8Array(SURF_ATLAS_SIZE * SURF_ATLAS_SIZE * 4);
-  const index = new Uint16Array(W * W); // 0 = no mark
+interface SurfaceUploadData {
+  pixels: Uint8Array;
+  index: Uint16Array;
+}
+
+function buildSurfaceData(world: World, camX: number, camY: number, out?: SurfaceUploadData): SurfaceUploadData {
+  const pixels = out?.pixels ?? new Uint8Array(SURF_ATLAS_SIZE * SURF_ATLAS_SIZE * 4);
+  const index = out?.index ?? new Uint16Array(W * W); // 0 = no mark
+  pixels.fill(0);
+  index.fill(0);
 
   // Sort cells by toroidal distance to camera — nearest 1024 get atlas slots
   const entries = Array.from(world.surfaceMap.entries());
@@ -1054,6 +1222,56 @@ function createDataTexR16UI(gl: WebGL2RenderingContext, w: number, h: number, da
   return tex;
 }
 
+function createParticleVAO(
+  gl: WebGL2RenderingContext,
+  prog: WebGLProgram,
+  capacity: number,
+): {
+  vao: WebGLVertexArrayObject;
+  instanceBuffer: WebGLBuffer;
+  colorBuffer: WebGLBuffer;
+  instanceData: Float32Array;
+  colorData: Float32Array;
+} {
+  const vao = gl.createVertexArray()!;
+  gl.bindVertexArray(vao);
+
+  const quadBuffer = gl.createBuffer()!;
+  gl.bindBuffer(gl.ARRAY_BUFFER, quadBuffer);
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([
+    -0.5, -0.5,
+     0.5, -0.5,
+    -0.5,  0.5,
+    -0.5,  0.5,
+     0.5, -0.5,
+     0.5,  0.5,
+  ]), gl.STATIC_DRAW);
+  const posLoc = gl.getAttribLocation(prog, 'aPos');
+  gl.enableVertexAttribArray(posLoc);
+  gl.vertexAttribPointer(posLoc, 2, gl.FLOAT, false, 0, 0);
+
+  const instanceData = new Float32Array(capacity * 4);
+  const instanceBuffer = gl.createBuffer()!;
+  gl.bindBuffer(gl.ARRAY_BUFFER, instanceBuffer);
+  gl.bufferData(gl.ARRAY_BUFFER, instanceData.byteLength, gl.DYNAMIC_DRAW);
+  const particleLoc = gl.getAttribLocation(prog, 'aParticle');
+  gl.enableVertexAttribArray(particleLoc);
+  gl.vertexAttribPointer(particleLoc, 4, gl.FLOAT, false, 0, 0);
+  gl.vertexAttribDivisor(particleLoc, 1);
+
+  const colorData = new Float32Array(capacity * 4);
+  const colorBuffer = gl.createBuffer()!;
+  gl.bindBuffer(gl.ARRAY_BUFFER, colorBuffer);
+  gl.bufferData(gl.ARRAY_BUFFER, colorData.byteLength, gl.DYNAMIC_DRAW);
+  const colorLoc = gl.getAttribLocation(prog, 'aColor');
+  gl.enableVertexAttribArray(colorLoc);
+  gl.vertexAttribPointer(colorLoc, 4, gl.FLOAT, false, 0, 0);
+  gl.vertexAttribDivisor(colorLoc, 1);
+
+  gl.bindVertexArray(null);
+  return { vao, instanceBuffer, colorBuffer, instanceData, colorData };
+}
+
 /* ── Initialize WebGL ─────────────────────────────────────────── */
 export function initWebGL(
   canvas: HTMLCanvasElement,
@@ -1081,15 +1299,16 @@ export function initWebGL(
   const rayVAO = createQuadVAO(gl, rayProgram);
   const rayUniforms = getUniforms(gl, rayProgram, [
     'uResolution', 'uPos', 'uAngle', 'uPitch', 'uFogDensity',
-    'uGlitch', 'uCamHeight', 'uFlashlight', 'uTime', 'uPurpleFog',
+    'uGlitch', 'uCamHeight', 'uFlashlight', 'uTime', 'uPurpleFog', 'uFogColor',
     'uCells', 'uWallTex', 'uFloorTex', 'uFeatures', 'uLight', 'uFog',
-    'uDoorStates', 'uAtlas', 'uAtlasSize', 'uSurfaceAtlas', 'uSurfaceIdx',
+    'uDoorStates', 'uAtlas', 'uAtlasSize', 'uUseDynamicSky', 'uDynamicSky',
+    'uDynamicSkyTint', 'uSurfaceAtlas', 'uSurfaceIdx',
   ]);
 
   // ── Blit program ──
   const blitProgram = createProgram(gl, BLIT_VERT_SRC, BLIT_FRAG_SRC);
   const blitVAO = createQuadVAO(gl, blitProgram);
-  const blitUniforms = getUniforms(gl, blitProgram, ['uTex', 'uGlitch', 'uTime', 'uSamosborActive']);
+  const blitUniforms = getUniforms(gl, blitProgram, ['uTex', 'uGlitch', 'uTime', 'uSamosborActive', 'uSamosborStyle']);
 
   // ── Sprite program ──
   const spriteProgram = createProgram(gl, SPRITE_VERT_SRC, SPRITE_FRAG_SRC);
@@ -1101,11 +1320,8 @@ export function initWebGL(
 
   // ── Particle program ──
   const particleProgram = createProgram(gl, PARTICLE_VERT_SRC, PARTICLE_FRAG_SRC);
-  // Reuse the sprite VAO (same quad geometry, only uses aPos)
-  const particleVAO = createSpriteVAO(gl, particleProgram);
-  const particleUniforms = getUniforms(gl, particleProgram, [
-    'uResolution', 'uScreenX', 'uScreenY', 'uSize', 'uDepth', 'uColor',
-  ]);
+  const particleBuffers = createParticleVAO(gl, particleProgram, PARTICLE_INSTANCE_CAP);
+  const particleUniforms = getUniforms(gl, particleProgram, ['uResolution']);
 
   // ── FBO for low-res raycaster output ──
   const rayColorTex = gl.createTexture()!;
@@ -1131,7 +1347,8 @@ export function initWebGL(
   const featuresTex = createDataTexR8UI(gl, W, W, world.features);
   const lightTex = createDataTexR32F(gl, W, W, world.light);
   const fogTex = createDataTexR8UI(gl, W, W, world.fog);
-  const doorStatesTex = createDataTexR8UI(gl, W, W, buildDoorStates(world));
+  const doorStatesData = rebuildDoorStates(world);
+  const doorStatesTex = createDataTexR8UI(gl, W, W, doorStatesData);
 
   // ── Surface marks atlas & index ──
   const surfData = buildSurfaceData(world, 0, 0);
@@ -1147,6 +1364,7 @@ export function initWebGL(
 
   // ── Texture atlas ──
   const atlasTex = buildAtlas(gl, textures);
+  const dynamicSkyTex = createDynamicSkyTex(gl);
 
   // ── Sprite textures ──
   const spriteTextures = buildSpriteTextures(gl, sprites);
@@ -1155,13 +1373,34 @@ export function initWebGL(
     gl,
     rayProgram, rayVAO, rayFBO, rayColorTex, rayDepthBuf,
     blitProgram, blitVAO,
-    particleProgram, particleVAO, particleUniforms,
+    particleProgram,
+    particleVAO: particleBuffers.vao,
+    particleInstanceBuffer: particleBuffers.instanceBuffer,
+    particleColorBuffer: particleBuffers.colorBuffer,
+    particleInstanceData: particleBuffers.instanceData,
+    particleColorData: particleBuffers.colorData,
+    particleUniforms,
     cellsTex, wallTexTex, floorTexTex, featuresTex, lightTex, fogTex,
     doorStatesTex, atlasTex,
+    dynamicSkyTex,
+    dynamicSkyW: 1,
+    dynamicSkyH: 1,
     spriteProgram, spriteVAO, spriteTextures,
+    proceduralSpriteTextures: new Map(),
+    proceduralSpriteUseTick: 0,
     surfaceAtlasTex, surfaceIdxTex,
+    surfacePixels: surfData.pixels,
+    surfaceIndex: surfData.index,
+    surfaceVersion: world.surfaceVersion,
+    surfaceCamTileX: 0,
+    surfaceCamTileY: 0,
+    wallTexVersion: world.wallTexVersion,
+    floorTexVersion: world.floorTexVersion,
+    fogVersion: world.fogVersion,
+    doorStatesData,
     rayUniforms, blitUniforms, spriteUniforms,
   };
+  uploadDynamicSkyTexture();
 
   return gl;
 }
@@ -1204,15 +1443,28 @@ export function updateWorldData(world: World): void {
 
   gl.bindTexture(gl.TEXTURE_2D, glState.wallTexTex);
   gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, W, W, gl.RED_INTEGER, gl.UNSIGNED_BYTE, world.wallTex);
+  glState.wallTexVersion = world.wallTexVersion;
 
   gl.bindTexture(gl.TEXTURE_2D, glState.floorTexTex);
   gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, W, W, gl.RED_INTEGER, gl.UNSIGNED_BYTE, world.floorTex);
+  glState.floorTexVersion = world.floorTexVersion;
 
   gl.bindTexture(gl.TEXTURE_2D, glState.featuresTex);
   gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, W, W, gl.RED_INTEGER, gl.UNSIGNED_BYTE, world.features);
 
   gl.bindTexture(gl.TEXTURE_2D, glState.lightTex);
   gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, W, W, gl.RED, gl.FLOAT, world.light);
+
+  gl.bindTexture(gl.TEXTURE_2D, glState.fogTex);
+  gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, W, W, gl.RED_INTEGER, gl.UNSIGNED_BYTE, world.fog);
+  glState.fogVersion = world.fogVersion;
+
+  gl.bindTexture(gl.TEXTURE_2D, glState.doorStatesTex);
+  gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, W, W, gl.RED_INTEGER, gl.UNSIGNED_BYTE, rebuildDoorStates(world, glState.doorStatesData));
+
+  glState.surfaceVersion = -1;
+  glState.surfaceCamTileX = Number.NaN;
+  glState.surfaceCamTileY = Number.NaN;
 
   // Also update dynamic data
   updateDynamicData(world);
@@ -1223,22 +1475,48 @@ export function updateDynamicData(world: World, camX = 0, camY = 0): void {
   if (!glState) return;
   const { gl } = glState;
 
-  gl.bindTexture(gl.TEXTURE_2D, glState.wallTexTex);
-  gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, W, W, gl.RED_INTEGER, gl.UNSIGNED_BYTE, world.wallTex);
+  if (world.wallTexVersion !== glState.wallTexVersion) {
+    gl.bindTexture(gl.TEXTURE_2D, glState.wallTexTex);
+    gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, W, W, gl.RED_INTEGER, gl.UNSIGNED_BYTE, world.wallTex);
+    glState.wallTexVersion = world.wallTexVersion;
+  }
 
-  gl.bindTexture(gl.TEXTURE_2D, glState.fogTex);
-  gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, W, W, gl.RED_INTEGER, gl.UNSIGNED_BYTE, world.fog);
+  if (world.floorTexVersion !== glState.floorTexVersion) {
+    gl.bindTexture(gl.TEXTURE_2D, glState.floorTexTex);
+    gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, W, W, gl.RED_INTEGER, gl.UNSIGNED_BYTE, world.floorTex);
+    glState.floorTexVersion = world.floorTexVersion;
+  }
+
+  if (world.fogVersion !== glState.fogVersion) {
+    gl.bindTexture(gl.TEXTURE_2D, glState.fogTex);
+    gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, W, W, gl.RED_INTEGER, gl.UNSIGNED_BYTE, world.fog);
+    glState.fogVersion = world.fogVersion;
+  }
 
   // Door states
-  gl.bindTexture(gl.TEXTURE_2D, glState.doorStatesTex);
-  gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, W, W, gl.RED_INTEGER, gl.UNSIGNED_BYTE, buildDoorStates(world));
+  if (syncDoorStates(world, glState.doorStatesData)) {
+    gl.bindTexture(gl.TEXTURE_2D, glState.doorStatesTex);
+    gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, W, W, gl.RED_INTEGER, gl.UNSIGNED_BYTE, glState.doorStatesData);
+  }
 
   // Surface marks (blood, bullet holes, etc.)
-  const surfData = buildSurfaceData(world, camX, camY);
-  gl.bindTexture(gl.TEXTURE_2D, glState.surfaceAtlasTex);
-  gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, SURF_ATLAS_SIZE, SURF_ATLAS_SIZE, gl.RGBA, gl.UNSIGNED_BYTE, surfData.pixels);
-  gl.bindTexture(gl.TEXTURE_2D, glState.surfaceIdxTex);
-  gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, W, W, gl.RED_INTEGER, gl.UNSIGNED_SHORT, surfData.index);
+  const surfaceCamTileX = Math.floor(camX / 4);
+  const surfaceCamTileY = Math.floor(camY / 4);
+  const surfaceCameraDirty = world.surfaceMap.size > SURF_MAX_SLOTS
+    && (surfaceCamTileX !== glState.surfaceCamTileX || surfaceCamTileY !== glState.surfaceCamTileY);
+  if (world.surfaceVersion !== glState.surfaceVersion || surfaceCameraDirty) {
+    const surfData = buildSurfaceData(world, camX, camY, {
+      pixels: glState.surfacePixels,
+      index: glState.surfaceIndex,
+    });
+    gl.bindTexture(gl.TEXTURE_2D, glState.surfaceAtlasTex);
+    gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, SURF_ATLAS_SIZE, SURF_ATLAS_SIZE, gl.RGBA, gl.UNSIGNED_BYTE, surfData.pixels);
+    gl.bindTexture(gl.TEXTURE_2D, glState.surfaceIdxTex);
+    gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, W, W, gl.RED_INTEGER, gl.UNSIGNED_SHORT, surfData.index);
+    glState.surfaceVersion = world.surfaceVersion;
+    glState.surfaceCamTileX = surfaceCamTileX;
+    glState.surfaceCamTileY = surfaceCamTileY;
+  }
 }
 
 /* ── Render scene via WebGL ───────────────────────────────────── */
@@ -1262,6 +1540,10 @@ export function renderSceneGL(
   // Check if player is in purple fog
   const pci = world.idx(Math.floor(px), Math.floor(py));
   const purpleFog = world.fog[pci] > 50 ? 1 : 0;
+  const activeVariant = getActiveSamosborVariant();
+  const defaultFogRgb: [number, number, number] = [20, 5, 30];
+  const fogRgb: readonly [number, number, number] = activeVariant?.fogColor ?? defaultFogRgb;
+  const samosborStyle = activeVariant?.def.id === 'veretar' ? 3 : 0;
 
   // ── Pass 1: Raycaster into FBO ──
   gl.bindFramebuffer(gl.FRAMEBUFFER, glState.rayFBO);
@@ -1281,25 +1563,26 @@ export function renderSceneGL(
   gl.uniform1f(ru['uFlashlight']!, flashlight);
   gl.uniform1f(ru['uTime']!, time);
   gl.uniform1i(ru['uPurpleFog']!, purpleFog);
+  gl.uniform3f(ru['uFogColor']!, fogRgb[0] / 255, fogRgb[1] / 255, fogRgb[2] / 255);
+  const skyTint = activeDynamicSky?.ambientTint;
+  const skyR = skyTint ? Math.max(0.65, Math.min(1.25, skyTint.r / 112)) : 1;
+  const skyG = skyTint ? Math.max(0.65, Math.min(1.25, skyTint.g / 120)) : 1;
+  const skyB = skyTint ? Math.max(0.65, Math.min(1.25, skyTint.b / 136)) : 1;
+  gl.uniform1i(ru['uUseDynamicSky']!, activeDynamicSky ? 1 : 0);
+  gl.uniform3f(ru['uDynamicSkyTint']!, skyR, skyG, skyB);
 
-  // Bind data textures to texture units
-  const texUnits = [
-    { tex: glState.cellsTex,     loc: ru['uCells']!,     unit: 0 },
-    { tex: glState.wallTexTex,   loc: ru['uWallTex']!,   unit: 1 },
-    { tex: glState.floorTexTex,  loc: ru['uFloorTex']!,  unit: 2 },
-    { tex: glState.featuresTex,  loc: ru['uFeatures']!,  unit: 3 },
-    { tex: glState.lightTex,     loc: ru['uLight']!,     unit: 4 },
-    { tex: glState.fogTex,       loc: ru['uFog']!,       unit: 5 },
-    { tex: glState.doorStatesTex,loc: ru['uDoorStates']!, unit: 6 },
-    { tex: glState.atlasTex,     loc: ru['uAtlas']!,     unit: 7 },
-    { tex: glState.surfaceAtlasTex, loc: ru['uSurfaceAtlas']!, unit: 8 },
-    { tex: glState.surfaceIdxTex,   loc: ru['uSurfaceIdx']!,  unit: 9 },
-  ];
-  for (const { tex, loc, unit } of texUnits) {
-    gl.activeTexture(gl.TEXTURE0 + unit);
-    gl.bindTexture(gl.TEXTURE_2D, tex);
-    gl.uniform1i(loc, unit);
-  }
+  // Bind data textures to texture units.
+  bindTextureUnit(gl, glState.cellsTex, ru['uCells']!, 0);
+  bindTextureUnit(gl, glState.wallTexTex, ru['uWallTex']!, 1);
+  bindTextureUnit(gl, glState.floorTexTex, ru['uFloorTex']!, 2);
+  bindTextureUnit(gl, glState.featuresTex, ru['uFeatures']!, 3);
+  bindTextureUnit(gl, glState.lightTex, ru['uLight']!, 4);
+  bindTextureUnit(gl, glState.fogTex, ru['uFog']!, 5);
+  bindTextureUnit(gl, glState.doorStatesTex, ru['uDoorStates']!, 6);
+  bindTextureUnit(gl, glState.atlasTex, ru['uAtlas']!, 7);
+  bindTextureUnit(gl, glState.surfaceAtlasTex, ru['uSurfaceAtlas']!, 8);
+  bindTextureUnit(gl, glState.surfaceIdxTex, ru['uSurfaceIdx']!, 9);
+  bindTextureUnit(gl, glState.dynamicSkyTex, ru['uDynamicSky']!, 10);
 
   // Atlas size
   const atlasRows = Math.ceil(textures.length / ATLAS_COLS);
@@ -1313,7 +1596,7 @@ export function renderSceneGL(
 
   // ── Render sprites into FBO (with depth test against raycaster) ──
   gl.depthFunc(gl.LESS);
-  renderSpritesGL(world, sprites, entities, px, py, pAngle, pPitch, fogDensity, purpleFog, camHeight, time);
+  renderSpritesGL(world, sprites, entities, px, py, pAngle, pPitch, fogDensity, purpleFog, camHeight, time, fogRgb);
 
   // ── Render blood particles into FBO ──
   if (bloodParticles.length > 0) {
@@ -1333,6 +1616,7 @@ export function renderSceneGL(
   gl.uniform1f(glState.blitUniforms['uGlitch']!, glitch);
   gl.uniform1f(glState.blitUniforms['uTime']!, time);
   gl.uniform1f(glState.blitUniforms['uSamosborActive']!, samosborActive ? 1.0 : 0.0);
+  gl.uniform1i(glState.blitUniforms['uSamosborStyle']!, samosborStyle);
 
   gl.bindVertexArray(glState.blitVAO);
   gl.drawArrays(gl.TRIANGLES, 0, 6);
@@ -1347,6 +1631,7 @@ function renderSpritesGL(
   fogDensity: number, purpleFog: number,
   camHeight: number,
   time: number,
+  activeFogRgb: readonly [number, number, number],
 ): void {
   if (!glState) return;
   const { gl } = glState;
@@ -1361,12 +1646,12 @@ function renderSpritesGL(
   const invDet = 1.0 / (planeX * dirY - dirX * planeY);
 
   // Fog color
-  const fogR = purpleFog ? 20 / 255 : 5 / 255;
-  const fogG = purpleFog ? 5 / 255 : 5 / 255;
-  const fogB = purpleFog ? 30 / 255 : 8 / 255;
+  const fogR = purpleFog ? activeFogRgb[0] / 255 : 5 / 255;
+  const fogG = purpleFog ? activeFogRgb[1] / 255 : 5 / 255;
+  const fogB = purpleFog ? activeFogRgb[2] / 255 : 8 / 255;
 
-  // Collect visible entities
-  const visible: { e: Entity; dx: number; dy: number; dist: number }[] = [];
+  // Collect visible entities without per-frame record allocation.
+  let visibleCount = 0;
   for (const e of entities) {
     if (!e.alive || e.type === EntityType.PLAYER) continue;
     let dx = e.x - px;
@@ -1377,11 +1662,21 @@ function renderSpritesGL(
     if (dy < -W / 2) dy += W;
     const dist = dx * dx + dy * dy;
     if (dist < MAX_DRAW * MAX_DRAW) {
-      visible.push({ e, dx, dy, dist });
+      visibleEntities[visibleCount] = e;
+      visibleDx[visibleCount] = dx;
+      visibleDy[visibleCount] = dy;
+      visibleDist[visibleCount] = dist;
+      visibleOrder[visibleCount] = visibleCount;
+      visibleCount++;
     }
   }
+  visibleEntities.length = visibleCount;
+  visibleDx.length = visibleCount;
+  visibleDy.length = visibleCount;
+  visibleDist.length = visibleCount;
+  visibleOrder.length = visibleCount;
   // Sort far to near
-  visible.sort((a, b) => b.dist - a.dist);
+  visibleOrder.sort((a, b) => visibleDist[b] - visibleDist[a]);
 
   gl.useProgram(glState.spriteProgram);
   // Depth test is already enabled by caller with LESS func
@@ -1395,7 +1690,12 @@ function renderSpritesGL(
   gl.uniform1f(su['uTime']!, time);
   gl.bindVertexArray(glState.spriteVAO);
 
-  for (const { e, dx, dy, dist } of visible) {
+  for (let oi = 0; oi < visibleCount; oi++) {
+    const vi = visibleOrder[oi];
+    const e = visibleEntities[vi];
+    const dx = visibleDx[vi];
+    const dy = visibleDy[vi];
+    const dist = visibleDist[vi];
     const txf = invDet * (dirY * dx - dirX * dy);
     const tyf = invDet * (-planeY * dx + planeX * dy);
     if (tyf <= 0.1) continue;
@@ -1437,13 +1737,17 @@ function renderSpritesGL(
       gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
     }
 
-    // Bind sprite texture
+    // Bind sprite texture. NPCs and monsters use per-entity procedural
+    // textures keyed by their seed; atlas sprites remain for drops/projectiles.
+    let spriteTex = proceduralEntityTexture(e);
     const sprIdx = e.sprite ?? 0;
-    if (sprIdx >= 0 && sprIdx < glState.spriteTextures.length) {
-      gl.activeTexture(gl.TEXTURE0);
-      gl.bindTexture(gl.TEXTURE_2D, glState.spriteTextures[sprIdx]);
-      gl.uniform1i(su['uSpriteTex']!, 0);
+    if (!spriteTex && sprIdx >= 0 && sprIdx < glState.spriteTextures.length) {
+      spriteTex = glState.spriteTextures[sprIdx];
     }
+    if (!spriteTex) continue;
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, spriteTex);
+    gl.uniform1i(su['uSpriteTex']!, 0);
 
     gl.drawArrays(gl.TRIANGLES, 0, 6);
 
@@ -1472,16 +1776,11 @@ function renderParticlesGL(
   const halfH = Math.floor(SCR_H / 2) + horizonShift;
   const invDet = 1.0 / (planeX * dirY - dirX * planeY);
 
-  gl.useProgram(glState.particleProgram);
-  // Depth test already enabled by caller
-  gl.enable(gl.BLEND);
-  gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
-
-  const pu = glState.particleUniforms;
-  gl.uniform2f(pu['uResolution']!, SCR_W, SCR_H);
-  gl.bindVertexArray(glState.particleVAO);
-
+  let visibleCount = 0;
+  const instanceData = glState.particleInstanceData;
+  const colorData = glState.particleColorData;
   for (const p of particles) {
+    if (visibleCount >= PARTICLE_INSTANCE_CAP) break;
     let dx = p.x - px;
     let dy = p.y - py;
     if (dx > W / 2) dx -= W;
@@ -1501,15 +1800,36 @@ function renderParticlesGL(
 
     const alpha = Math.min(1, p.life * 5);
     const normDepth = Math.min(0.999, tyf / MAX_DRAW);
-
-    gl.uniform1f(pu['uScreenX']!, sx);
-    gl.uniform1f(pu['uScreenY']!, sy);
-    gl.uniform1f(pu['uSize']!, p.size * 2);
-    gl.uniform1f(pu['uDepth']!, normDepth);
-    gl.uniform4f(pu['uColor']!, p.r / 255, p.g / 255, p.b / 255, alpha);
-
-    gl.drawArrays(gl.TRIANGLES, 0, 6);
+    const di = visibleCount << 2;
+    instanceData[di] = sx;
+    instanceData[di + 1] = sy;
+    instanceData[di + 2] = p.size * 2;
+    instanceData[di + 3] = normDepth;
+    colorData[di] = p.r / 255;
+    colorData[di + 1] = p.g / 255;
+    colorData[di + 2] = p.b / 255;
+    colorData[di + 3] = alpha;
+    visibleCount++;
   }
+
+  if (visibleCount === 0) return;
+
+  gl.useProgram(glState.particleProgram);
+  // Depth test already enabled by caller
+  gl.enable(gl.BLEND);
+  gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+
+  const pu = glState.particleUniforms;
+  gl.uniform2f(pu['uResolution']!, SCR_W, SCR_H);
+  gl.bindVertexArray(glState.particleVAO);
+
+  const uploadFloats = visibleCount * 4;
+  gl.bindBuffer(gl.ARRAY_BUFFER, glState.particleInstanceBuffer);
+  gl.bufferSubData(gl.ARRAY_BUFFER, 0, instanceData, 0, uploadFloats);
+  gl.bindBuffer(gl.ARRAY_BUFFER, glState.particleColorBuffer);
+  gl.bufferSubData(gl.ARRAY_BUFFER, 0, colorData, 0, uploadFloats);
+
+  gl.drawArraysInstanced(gl.TRIANGLES, 0, 6, visibleCount);
 
   gl.disable(gl.BLEND);
 }
@@ -1533,8 +1853,10 @@ export function disposeWebGL(): void {
   gl.deleteTexture(glState.fogTex);
   gl.deleteTexture(glState.doorStatesTex);
   gl.deleteTexture(glState.atlasTex);
+  gl.deleteTexture(glState.dynamicSkyTex);
   gl.deleteTexture(glState.surfaceAtlasTex);
   gl.deleteTexture(glState.surfaceIdxTex);
   for (const t of glState.spriteTextures) gl.deleteTexture(t);
+  for (const entry of glState.proceduralSpriteTextures.values()) gl.deleteTexture(entry.texture);
   glState = null;
 }

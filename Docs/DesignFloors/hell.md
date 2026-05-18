@@ -1,0 +1,53 @@
+# Design Floor: Ад
+
+Status: planning artifact for expanded design-floor version. Current code already has `FloorLevel.HELL`; README remains source of truth.
+
+Future route id: `hell`. Future anchor: `z=28`. Existing reference: `src/gen/hell/`.
+
+## Role
+
+Hell is high-threat combat and PSI survival: meat architecture, cultists, heralds, arenas, thin chapels, dangerous caches and short brutal routes. It is not a place to loiter.
+
+Primary decisions: fight, flee, sacrifice resource, break ritual, use PSI, take rare cache, seal route.
+
+## Generation
+
+Use current Hell generator as base:
+
+- meat rooms, cult spaces, altar arena, PSI meat cache, thin-wall chapel, Herald threshold;
+- compact routes with strong encounter identity;
+- more set pieces, not endless meat corridors.
+
+## NPCs
+
+Existing plot NPCs remain anchors. Expanded route-scale NPCs:
+
+- `hell_burned_guide_arseny`: knows one safe but costly path.
+- `hell_cult_taxman`: demands item/life/document tribute.
+- `hell_liquidator_last`: wants extraction or final shot.
+- `hell_meat_choir_trace`: non-NPC sound/readable trace.
+
+## Quests
+
+- `hell_break_altar`: combat wave or stealth sabotage.
+- `hell_extract_liquidator`: escort wounded NPC through meat route.
+- `hell_take_psi_cache`: choose rare reward versus backlash.
+- `hell_stop_cult_signal`: affects Chthonic Attic/Ministry cult evidence.
+
+## Samosbor
+
+Hell should feel near-constant but still structured: warning is short, shelters are corrupt, aftermath leaves meat marks and stronger monsters. Do not remove shelter choice; make it costly.
+
+## Cross-Floor Hooks
+
+- Chthonic Attic foreshadows roots/cult marks.
+- Underhell opens after Hell choices.
+- Void portal remains late route.
+- Ministry/Liquidators react to proof from Hell.
+
+## DoD
+
+- One major encounter has multiple approaches.
+- Rare rewards are one-shot or costly.
+- Player can exit without farming infinite monster spawns.
+

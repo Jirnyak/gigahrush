@@ -1,6 +1,7 @@
 /* ── A-Life barks: contextual NPC dialogue lines ─────────────── */
 
 import { type Entity, type Msg, msg } from '../../core/types';
+import { CONTEXT_BARK_FACTION, CONTEXT_BARK_FEAR, CONTEXT_BARK_WOUNDED } from '../../data/context_lines';
 
 /* ── Phrase pools ─────────────────────────────────────────────── */
 
@@ -884,7 +885,7 @@ export const BARK_ARRIVE = [
   'Так, проверим углы.',
   'Ничего, жить ещё можно.',
   'Значит, сюда меня и занесло.',
-  'Маршрут старый, ноги новые нет.',
+  'Маршрут старый, ноги уже не новые.',
   'Дошёл и ладно.',
   'Пока спокойно.',
   'Тихо, даже странно.',
@@ -986,7 +987,7 @@ export const BARK_ARRIVE_F = [
   'Так, проверим углы.',
   'Ничего, жить ещё можно.',
   'Значит, сюда меня и занесло.',
-  'Маршрут старый, ноги уже нет.',
+  'Маршрут старый, ноги уже не новые.',
   'Дошла и ладно.',
   'Пока спокойно.',
   'Тихо, даже подозрительно.',
@@ -1241,21 +1242,21 @@ export const BARK_HIDE_F = [
 ];
 
 export const BARK_GENERIC = [
-  'Опять сыростью тянет.',
-  'Трубы всю ночь стонали.',
-  'Свет моргал у соседей.',
-  'Бетон сегодня какой-то злой.',
-  'Опять дверь разбухла от влаги.',
-  'Чай бы сейчас, а не это всё.',
-  'Коридор будто длиннее стал.',
-  'Ночью кто-то ходил за стеной.',
-  'В этом блоке никогда тихо не бывает.',
-  'Смены идут, а хрущ всё тот же.',
-  'Запах железа с утра не к добру.',
-  'Люди тут быстро учатся молчать.',
-  'Потолок опять крошится.',
-  'Сырость в кости лезет.',
-  'Лампочку бы поменять, да страшно.',
+  'Опять сыростью тянет, будто стояк курит за углом.',
+  'Трубы всю ночь стонали. Сантехник сказал: значит, живые.',
+  'Свет моргал у соседей, и соседи моргали в ответ.',
+  'Бетон сегодня злой. Вчера был канцелярский.',
+  'Опять дверь разбухла от влаги и собственного мнения.',
+  'Чай бы сейчас, а не этот коммунальный конец света.',
+  'Коридор будто длиннее стал. Или мы короче.',
+  'Ночью кто-то ходил за стеной и не наступал на пол.',
+  'В этом блоке тихо бывает только в отчётах.',
+  'Смены идут, а хрущ всё тот же, только переставленный.',
+  'Запах железа с утра — к проверке, крови или ремонту.',
+  'Люди тут быстро учатся молчать и ещё быстрее шептать.',
+  'Потолок опять крошится. Домком скажет: осадки в норме.',
+  'Сырость в кости лезет, как родственник без талона.',
+  'Лампочку бы поменять, да страшно будить потолок.',
   'Опять в коридоре кто-то спорил.',
   'Хлеб черствеет быстрее, чем день проходит.',
   'Здесь даже воздух уставший.',
@@ -1312,7 +1313,7 @@ export const BARK_GENERIC = [
   'Смены меняются, а тоска нет.',
   'Здесь все научились слушать стены.',
   'Пахнет мокрым бетоном и людьми.',
-  'Опять кто-то кашлял за тонкой стеной.',
+  'Опять кто-то кашлял за тонкой стеной. Стена кашляла следом.',
   'В таком месте легко забыть число.',
   'Лампам тут доверия нет.',
   'Если тихо, значит что-то ждёт.',
@@ -1334,13 +1335,13 @@ export const BARK_GENERIC = [
   'Люди тут быстро учатся не задавать лишнего.',
   'Иногда стены будто ближе, чем были вчера.',
   'Опять дверь заедает.',
-  'Живём как умеем, пока хрущ терпит.',
-  'Здесь каждый день немного одинаковый и немного хуже.',
-  'Иногда кажется, что дом нас пересчитывает.',
-  'Тут даже молчание имеет вес.',
-  'День идёт, а легче не становится.',
-  'Главное дожить до отбоя.',
-  'Всё держится на привычке и страхе.',
+  'Живём как умеем, пока хрущ терпит и бухгалтерия не заметила.',
+  'Здесь каждый день одинаковый, пока не станет хуже новым способом.',
+  'Иногда кажется, что дом нас пересчитывает и не сходится.',
+  'Тут даже молчание имеет вес, особенно у гермодвери.',
+  'День идёт, а легче не становится. Значит, день настоящий.',
+  'Главное дожить до отбоя и не поверить первому отбою.',
+  'Всё держится на привычке, страхе и мокрой резинке уплотнителя.',
 ];
 
 export const BARK_GENERIC_F = BARK_GENERIC;
@@ -1361,9 +1362,42 @@ export function pick(arr: string[]): string {
   return arr[Math.floor(Math.random() * arr.length)];
 }
 
+const BARK_ENTITY_COOLDOWN_S = 6;
+const MAX_BARK_COOLDOWNS = 1536;
+const lastBarkByEntity = new Map<number, { time: number; text: string }>();
+
 export function bark(e: Entity, msgs: Msg[], time: number, pool: string[], poolF: string[], chance: number, color = '#cca'): void {
   if (Math.random() > chance) return;
   if (!e.name) return;
-  const line = pick(e.isFemale ? poolF : pool);
+  const selected = selectContextBarkPool(e, pool, poolF);
+  const line = pickReadonly(selected);
+  const last = lastBarkByEntity.get(e.id);
+  if (last && time - last.time < BARK_ENTITY_COOLDOWN_S && last.text === line) return;
+  lastBarkByEntity.set(e.id, { time, text: line });
+  if (lastBarkByEntity.size > MAX_BARK_COOLDOWNS) pruneBarkCooldowns();
   msgs.push(msg(`${e.name}: ${line}`, time, color));
+}
+
+function selectContextBarkPool(e: Entity, pool: string[], poolF: string[]): readonly string[] {
+  const hpRatio = e.hp !== undefined && e.maxHp ? e.hp / Math.max(1, e.maxHp) : 1;
+  if (pool === BARK_WOUNDED && hpRatio < 0.35) return CONTEXT_BARK_WOUNDED;
+  if (pool === BARK_FLEE && ((e.needs?.sleep ?? 100) < 20 || hpRatio < 0.6)) return CONTEXT_BARK_FEAR;
+  if (pool === BARK_COMBAT_START && e.faction !== undefined) return CONTEXT_BARK_FACTION[e.faction] ?? (e.isFemale ? poolF : pool);
+  return e.isFemale ? poolF : pool;
+}
+
+function pickReadonly(arr: readonly string[]): string {
+  return arr[Math.floor(Math.random() * arr.length)];
+}
+
+function pruneBarkCooldowns(): void {
+  let oldestId = -1;
+  let oldestTime = Infinity;
+  for (const [id, entry] of lastBarkByEntity) {
+    if (entry.time < oldestTime) {
+      oldestTime = entry.time;
+      oldestId = id;
+    }
+  }
+  if (oldestId >= 0) lastBarkByEntity.delete(oldestId);
 }

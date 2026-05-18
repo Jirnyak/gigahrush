@@ -2,6 +2,7 @@
 
 import { Tex } from '../core/types';
 import { generateSlideTextures, generateHintTextures, generatePosterTextures } from '../gen/living';
+import { generateProceduralScreenTextures } from '../gen/procedural_screens';
 import { S, rgba, noise, clamp } from './pixutil';
 
 export type TexData = Uint32Array; // S*S RGBA pixels (0xAABBGGRR little-endian)
@@ -53,6 +54,7 @@ export function generateTextures(): TexData[] {
   generateSlideTextures(textures);
   generateHintTextures(textures);
   generatePosterTextures(textures);
+  generateProceduralScreenTextures(textures);
 
   return textures;
 }

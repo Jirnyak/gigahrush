@@ -12,6 +12,7 @@ import { freshNeeds } from '../../data/catalog';
 import { type PlotNpcDef, registerSideQuest } from '../../data/plot';
 import { stampRoom, protectRoom, connectProtectedRoom, findClearArea } from '../shared';
 import { Spr } from '../../render/sprite_index';
+import { genLog } from '../log';
 
 const NPC_DEF: PlotNpcDef = {
   name: 'Учительница Зоя',
@@ -170,6 +171,6 @@ export function generateRedCorner(
     });
   }
 
-  console.log(`[RED_CORNER] at (${rx}, ${ry}) room #${room.id}`);
+  genLog(`[RED_CORNER] at (${rx}, ${ry}) room #${room.id}`);
   return { nextRoomId: Math.max(nextRoomId, room.id + 1) };
 }

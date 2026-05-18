@@ -8,10 +8,11 @@ import {
 import { World } from '../../core/world';
 import { randomName, freshNeeds } from '../../data/catalog';
 import { rng, pick, ensureConnectivity, placeLifts, generateZones } from '../shared';
+import { placeProceduralScreens } from '../procedural_screens';
 import { MONSTERS } from '../../entities/monster';
 import { calcZoneLevel, randomRPG, scaleMonsterHp, scaleMonsterSpeed, gaussianLevel, getMaxHp } from '../../systems/rpg';
 import { Spr, monsterSpr } from '../../render/sprite_index';
-import { spawnMedukaMeguku } from './madoka';
+import { runHellContent } from './content_manifest';
 
 const PSI_IDS = ['psi_strike', 'psi_rupture', 'psi_madness', 'psi_storm', 'psi_brainburn'];
 
@@ -91,9 +92,10 @@ export function generateHell(): { world: World; entities: Entity[]; spawnX: numb
   spawnHeralds(world, entities, heraldNextId, spawnX, spawnY);
   nextId = entities.reduce((mx, e) => Math.max(mx, e.id), nextId) + 1;
 
-  // Side-quest wandering NPC: Медука Мегуку
-  spawnMedukaMeguku(world, entities, { v: nextId });
-  nextId = entities.reduce((mx, e) => Math.max(mx, e.id), nextId) + 1;
+  // Manifest-owned side content
+  nextId = runHellContent(world, entities, nextId);
+
+  placeProceduralScreens(world, FloorLevel.HELL);
 
   return { world, entities, spawnX, spawnY };
 }

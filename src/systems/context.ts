@@ -1,0 +1,181 @@
+/* ── Cheap NPC context snapshot builder ───────────────────────── */
+
+import {
+  type Entity,
+  type GameState,
+  type Needs,
+  type Faction,
+  type ZoneFaction,
+  type WorldEventType,
+  FloorLevel,
+  RoomType,
+  W,
+} from '../core/types';
+import { World } from '../core/world';
+
+export interface ContextSnapshot {
+  floor?: FloorLevel;
+  zoneId?: number;
+  zoneFaction?: ZoneFaction;
+  zoneLevel?: number;
+  roomType?: RoomType;
+  roomName?: string;
+  npcFaction?: Faction;
+  npcOccupation?: number;
+  npcNeeds?: Needs;
+  npcHpRatio?: number;
+  playerDistance?: number;
+  samosborActive?: boolean;
+  hasActiveContract: boolean;
+  hasRecentPlayerTheft: boolean;
+  hasRecentMetroEvent: boolean;
+  hasRecentFactionClash: boolean;
+  hasRecentMonsterKill: boolean;
+  hasRecentContainerOpen: boolean;
+  hasRecentSamosborAftermath: boolean;
+  hasRecentProductionOutput: boolean;
+  hasRecentProductionShortage: boolean;
+  nearbyContainer: boolean;
+  nearbyProduction: boolean;
+  isDangerousZone: boolean;
+  isSafeOwnZone: boolean;
+  isHungry: boolean;
+  isThirsty: boolean;
+  isTired: boolean;
+  isWounded: boolean;
+  isCritical: boolean;
+}
+
+export interface ContextBuildOptions {
+  world?: World;
+  state?: Pick<GameState, 'currentFloor' | 'samosborActive'> & Partial<Pick<GameState, 'quests' | 'time' | 'worldEvents'>>;
+  player?: Entity;
+  time?: number;
+}
+
+const FACTION_TO_ZONE = [0, 1, 2, -1, 4, -1] as const;
+
+export function buildContextSnapshot(npc: Entity, options: ContextBuildOptions = {}): ContextSnapshot {
+  const n = npc.needs;
+  let zoneId: number | undefined;
+  let zoneFaction: ZoneFaction | undefined;
+  let zoneLevel: number | undefined;
+  let roomType: RoomType | undefined;
+  let roomName: string | undefined;
+  let playerDistance: number | undefined;
+  let nearbyContainer = false;
+
+  const world = options.world;
+  if (world) {
+    const x = Math.floor(npc.x);
+    const y = Math.floor(npc.y);
+    const idx = world.idx(x, y);
+    zoneId = world.zoneMap[idx];
+    const zone = world.zones[zoneId];
+    if (zone) {
+      zoneFaction = zone.faction;
+      zoneLevel = zone.level;
+    }
+    const room = world.roomAt(npc.x, npc.y);
+    if (room) {
+      roomType = room.type;
+      roomName = room.name;
+    }
+    nearbyContainer = hasNearbyContainer(world, x, y);
+    if (options.player) playerDistance = world.dist(npc.x, npc.y, options.player.x, options.player.y);
+  } else if (options.player) {
+    const dx = shortestDelta(npc.x, options.player.x);
+    const dy = shortestDelta(npc.y, options.player.y);
+    playerDistance = Math.sqrt(dx * dx + dy * dy);
+  }
+
+  const hp = npc.hp ?? npc.maxHp ?? 100;
+  const maxHp = Math.max(1, npc.maxHp ?? hp);
+  const hpRatio = hp / maxHp;
+  const ownZone = npc.faction === undefined ? -1 : FACTION_TO_ZONE[npc.faction] ?? -1;
+  const isSafeOwnZone = zoneFaction !== undefined && ownZone === zoneFaction && (zoneLevel ?? 1) <= 3;
+  const state = options.state;
+  const now = options.time ?? state?.time ?? 0;
+  const playerId = options.player?.id;
+
+  return {
+    floor: options.state?.currentFloor,
+    zoneId,
+    zoneFaction,
+    zoneLevel,
+    roomType,
+    roomName,
+    npcFaction: npc.faction,
+    npcOccupation: npc.occupation,
+    npcNeeds: n,
+    npcHpRatio: hpRatio,
+    playerDistance,
+    samosborActive: state?.samosborActive,
+    hasActiveContract: state?.quests?.some(q => !q.done && q.contractId !== undefined) ?? false,
+    hasRecentPlayerTheft: hasRecentEvent(state, 'item_stolen', now, playerId, 10),
+    hasRecentSamosborAftermath: hasRecentEvent(state, 'samosbor_ended', now, undefined, 8),
+    hasRecentProductionOutput: hasRecentEvent(state, 'room_produced_items', now, undefined, 12),
+    hasRecentProductionShortage: hasRecentEvent(state, 'room_lacked_resources', now, undefined, 12)
+      || hasRecentEvent(state, 'room_blocked_production', now, undefined, 12),
+    hasRecentMetroEvent: hasRecentEvent(state, 'metro_route_taken', now, undefined, 12)
+      || hasRecentEvent(state, 'metro_wrong_stop', now, undefined, 12)
+      || hasRecentEvent(state, 'elevator_anomaly', now, undefined, 12)
+      || hasRecentEvent(state, 'elevator_loop_exit', now, undefined, 12),
+    hasRecentFactionClash: hasRecentEvent(state, 'faction_patrol_clash', now, undefined, 12)
+      || hasRecentEvent(state, 'faction_relation_changed', now, undefined, 12),
+    hasRecentMonsterKill: hasRecentEvent(state, 'player_kill_monster', now, undefined, 12)
+      || hasRecentEvent(state, 'npc_kill_monster', now, undefined, 12)
+      || hasRecentEvent(state, 'fog_boss_killed', now, undefined, 12),
+    hasRecentContainerOpen: hasRecentEvent(state, 'container_opened', now, playerId, 12)
+      || hasRecentEvent(state, 'container_looted', now, undefined, 12)
+      || hasRecentEvent(state, 'item_stolen', now, undefined, 12),
+    nearbyContainer,
+    nearbyProduction: roomType === RoomType.PRODUCTION,
+    isDangerousZone: (zoneLevel ?? 0) >= 6 || zoneFaction === 3 || state?.samosborActive === true,
+    isSafeOwnZone,
+    isHungry: (n?.food ?? 100) < 20,
+    isThirsty: (n?.water ?? 100) < 20,
+    isTired: (n?.sleep ?? 100) < 20,
+    isWounded: hpRatio < 0.5,
+    isCritical: hpRatio < 0.25,
+  };
+}
+
+function hasNearbyContainer(world: World, x: number, y: number): boolean {
+  const cx = Math.floor(x);
+  const cy = Math.floor(y);
+  for (let dy = -2; dy <= 2; dy++) {
+    for (let dx = -2; dx <= 2; dx++) {
+      if (world.containerMap.has(world.idx(cx + dx, cy + dy))) return true;
+    }
+  }
+  return false;
+}
+
+function hasRecentEvent(
+  state: ContextBuildOptions['state'] | undefined,
+  type: WorldEventType,
+  now: number,
+  actorId: number | undefined,
+  limit: number,
+): boolean {
+  const buffer = state?.worldEvents?.recentEvents;
+  if (!buffer || buffer.capacity <= 0) return false;
+  const total = Math.min(buffer.count, limit);
+  for (let i = 0; i < total; i++) {
+    const idx = (buffer.start + buffer.count - 1 - i + buffer.capacity) % buffer.capacity;
+    const event = buffer.items[idx];
+    if (!event || event.type !== type) continue;
+    if (actorId !== undefined && event.actorId !== actorId) continue;
+    if (now > 0 && event.time > 0 && now - event.time > 360) continue;
+    return true;
+  }
+  return false;
+}
+
+function shortestDelta(a: number, b: number): number {
+  let d = b - a;
+  if (d > W / 2) d -= W;
+  if (d < -W / 2) d += W;
+  return d;
+}

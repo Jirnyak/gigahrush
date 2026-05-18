@@ -10,7 +10,7 @@
  * ────────────────────────────────────────────────────────────────── */
 
 import { W, Cell } from '../core/types';
-import { World } from '../core/world';
+import type { World } from '../core/world';
 
 /* ── Fast hash (same family as pixutil.noise) ─────────────────── */
 function hash(n: number): number {
@@ -58,8 +58,22 @@ export const enum MarkType {
   DRIP,     // urine / fluid drip — elongated, gravity-pulled
   POOL,     // death pool — large, irregular outline, high coverage
   PSI,      // psi-energy mark — purple, crystalline, angular
+  MARONARY, // green proof/source mark — hard ring with impossible scan lines
+  BLACK_HAND, // cult route warning — readable palm + fingers
+  SEROBURMALINE, // visual-risk slime — gray/magenta crystalline residue
   BURN,     // fire burn — torn/wispy charred patches, semi-transparent
 }
+
+export interface BlackHandMarkCell {
+  x: number;
+  y: number;
+  order: number;
+}
+
+export const BLACK_HAND_TRAIL_MAX_MARKS = 12;
+const BLACK_HAND_MARK_CELL_CAP = 48;
+const EMPTY_BLACK_HAND_MARKS: readonly BlackHandMarkCell[] = [];
+const blackHandMarksByWorld = new WeakMap<World, BlackHandMarkCell[]>();
 
 /* ── Fragment shader per mark type ────────────────────────────── *
  * Returns alpha 0..1 for a normalized coordinate (u,v) in [-1..1].
@@ -168,6 +182,46 @@ function shaderPsi(u: number, v: number, seed: number): number {
   return 0.7 + n * 0.3;
 }
 
+function shaderMaronary(u: number, v: number, seed: number): number {
+  const r = Math.sqrt(u * u + v * v);
+  if (r > 1.15) return 0;
+  const ring = Math.abs(r - 0.62) < 0.075 ? 1 - Math.abs(r - 0.62) / 0.075 : 0;
+  const core = r < 0.16 ? 0.95 : 0;
+  const vertical = Math.abs(u) < 0.035 && Math.abs(v) < 0.95 ? (1 - r / 1.15) * 0.65 : 0;
+  const diagonal = Math.abs(v - u * 0.55) < 0.04 && r < 1 ? (1 - r) * 0.7 : 0;
+  const scan = Math.abs(Math.sin((v + hash(seed + 17) * 0.2) * 34)) > 0.94 && r < 0.88 ? 0.34 : 0;
+  return Math.max(core, ring, vertical, diagonal, scan) * (0.78 + snoise(u * 9, v * 9, seed + 900) * 0.22);
+}
+
+function ellipseAlpha(u: number, v: number, cx: number, cy: number, rx: number, ry: number): number {
+  const dx = (u - cx) / rx;
+  const dy = (v - cy) / ry;
+  const q = dx * dx + dy * dy;
+  if (q >= 1.12) return 0;
+  if (q > 1) return (1.12 - q) / 0.12;
+  return 1;
+}
+
+function shaderBlackHand(u: number, v: number, seed: number): number {
+  const palm = ellipseAlpha(u, v, 0, 0.18, 0.38, 0.42);
+  const wrist = ellipseAlpha(u, v, 0, 0.72, 0.22, 0.25) * 0.85;
+  const thumb = Math.max(
+    ellipseAlpha(u, v, -0.40, 0.17, 0.17, 0.30),
+    ellipseAlpha(u, v, -0.50, 0.02, 0.13, 0.23),
+  );
+  let fingers = 0;
+  const fingerX = [-0.25, -0.08, 0.09, 0.25];
+  const fingerLen = [0.34, 0.46, 0.43, 0.31];
+  for (let i = 0; i < fingerX.length; i++) {
+    const jitter = (hash(seed + i * 19) - 0.5) * 0.035;
+    fingers = Math.max(fingers, ellipseAlpha(u, v, fingerX[i] + jitter, -0.27 - fingerLen[i] * 0.2, 0.075, fingerLen[i]));
+  }
+  const base = Math.max(palm, wrist, thumb, fingers);
+  if (base <= 0) return 0;
+  const worn = fbm(u * 5.5 + 12, v * 5.5 - 7, seed + 880);
+  return Math.max(0, Math.min(1, base * (0.78 + worn * 0.25) - (worn < 0.18 ? 0.25 : 0)));
+}
+
 function shaderBurn(u: number, v: number, seed: number): number {
   const r = Math.sqrt(u * u + v * v);
   if (r > 1.25) return 0;
@@ -192,10 +246,102 @@ function shaderBurn(u: number, v: number, seed: number): number {
   return 0.3 + charPat * 0.45;
 }
 
+function shaderSeroburmaline(u: number, v: number, seed: number): number {
+  const r = Math.sqrt(u * u + v * v);
+  if (r > 1.15) return 0;
+  const angle = Math.atan2(v, u);
+  const ringNoise = fbm(u * 4 + hash(seed) * 5, v * 4 + hash(seed + 1) * 5, seed + 700);
+  const edge = 0.48 + ringNoise * 0.28;
+  const radial = r < edge ? 0.72 + (1 - r / Math.max(0.01, edge)) * 0.22 : Math.max(0, (1.15 - r) * 0.28);
+
+  const spokeCount = 7 + Math.floor(hash(seed + 3) * 5);
+  let spoke = 0;
+  for (let i = 0; i < spokeCount; i++) {
+    const a = i * (Math.PI * 2 / spokeCount) + hash(seed + 20 + i) * 0.45;
+    let da = Math.abs(angle - a);
+    if (da > Math.PI) da = Math.PI * 2 - da;
+    const width = 0.025 + hash(seed + 40 + i) * 0.035;
+    if (da < width && r < 1.05) spoke = Math.max(spoke, (1 - da / width) * (1 - r * 0.35));
+  }
+
+  const grit = snoise(u * 18 + seed, v * 18 - seed, seed + 900) > 0.58 ? 0.22 : 0;
+  return Math.min(1, Math.max(radial, spoke * 0.86) + grit);
+}
+
 /* ── Shader dispatch ──────────────────────────────────────────── */
 const SHADERS: ((u: number, v: number, seed: number) => number)[] = [
-  shaderSplat, shaderBullet, shaderScorch, shaderDrip, shaderPool, shaderPsi, shaderBurn,
+  shaderSplat, shaderBullet, shaderScorch, shaderDrip, shaderPool, shaderPsi, shaderMaronary, shaderBlackHand,
+  shaderSeroburmaline, shaderBurn,
 ];
+
+function blackHandCells(world: World): BlackHandMarkCell[] {
+  let cells = blackHandMarksByWorld.get(world);
+  if (!cells) {
+    cells = [];
+    blackHandMarksByWorld.set(world, cells);
+  }
+  return cells;
+}
+
+function hasBlackHandCell(cells: readonly BlackHandMarkCell[], x: number, y: number): boolean {
+  for (const cell of cells) if (cell.x === x && cell.y === y) return true;
+  return false;
+}
+
+function recordBlackHandCell(world: World, x: number, y: number): boolean {
+  const cells = blackHandCells(world);
+  const wx = world.wrap(x);
+  const wy = world.wrap(y);
+  if (hasBlackHandCell(cells, wx, wy)) return true;
+  if (cells.length >= BLACK_HAND_MARK_CELL_CAP) return false;
+  cells.push({ x: wx, y: wy, order: cells.length });
+  return true;
+}
+
+function canStampBlackHandCell(cell: number): boolean {
+  return cell === Cell.FLOOR || cell === Cell.DOOR || cell === Cell.WATER || cell === Cell.WALL;
+}
+
+export function getBlackHandMarkCells(world: World): readonly BlackHandMarkCell[] {
+  return blackHandMarksByWorld.get(world) ?? EMPTY_BLACK_HAND_MARKS;
+}
+
+export function stampBlackHandMark(
+  world: World,
+  x: number,
+  y: number,
+  seed: number,
+  intensity = 230,
+  wallOk = false,
+): boolean {
+  const wx = world.wrap(Math.floor(x));
+  const wy = world.wrap(Math.floor(y));
+  const ci = world.idx(wx, wy);
+  if (!canStampBlackHandCell(world.cells[ci])) return false;
+  if (!recordBlackHandCell(world, wx, wy)) return false;
+  stampMark(world, wx, wy, 0.5, 0.5, 0.46, MarkType.BLACK_HAND, seed, 5, 5, 4, intensity, wallOk || world.cells[ci] === Cell.WALL);
+  return true;
+}
+
+export function stampBlackHandTrail(
+  world: World,
+  cells: readonly { x: number; y: number }[],
+  seed: number,
+  maxMarks = BLACK_HAND_TRAIL_MAX_MARKS,
+): number {
+  const limit = Math.max(0, Math.min(maxMarks, BLACK_HAND_TRAIL_MAX_MARKS));
+  let placed = 0;
+  for (const cell of cells) {
+    if (placed >= limit) break;
+    const x = world.wrap(Math.floor(cell.x));
+    const y = world.wrap(Math.floor(cell.y));
+    const ci = world.idx(x, y);
+    if (!canStampBlackHandCell(world.cells[ci])) continue;
+    const wallOk = world.cells[ci] === Cell.WALL;
+    if (stampBlackHandMark(world, x, y, seed + placed * 101, 205 + (placed % 3) * 14, wallOk)) placed++;
+  }
+  return placed;
+}
 
 /* ── Generate & stamp a mark onto the world surface grid ──────── *
  *
@@ -224,6 +370,7 @@ export function stampMark(
   const centerPx = fx * 16;
   const centerPy = fy * 16;
   const radiusPx = Math.max(1, radius * 16);
+  let touched = false;
 
   // Scan bounding box of the mark in surface-pixel space
   const r2 = radiusPx + 1;
@@ -272,6 +419,8 @@ export function stampMark(
         cell[idx + 2] = Math.floor((cell[idx + 2] * curA + b * newA) / total);
         cell[idx + 3] = Math.min(255, total);
       }
+      touched = true;
     }
   }
+  if (touched) world.surfaceVersion++;
 }

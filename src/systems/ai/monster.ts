@@ -2,18 +2,29 @@
 
 import {
   W,
-  type Entity, type Msg,
+  type Entity, type GameState, type Msg,
+  Cell, Feature, ItemType,
   EntityType, AIGoal, MonsterKind,
   msg,
 } from '../../core/types';
 import { World } from '../../core/world';
 import { MONSTERS, entityDisplayName } from '../../entities/monster';
+import { ITEMS } from '../../data/items';
 import { playGrowl, playSoundAt } from '../audio';
 import { isHostile } from '../factions';
 import { scaleMonsterDmg, strMeleeDmgMult, scaleMonsterHp, scaleMonsterSpeed, randomRPG } from '../rpg';
+import { zhelemishIncomingMeleeDamage } from '../status';
 import { spawnBloodHit, spawnDeathPool } from '../../render/blood';
 import { bfsPath, followPath, wanderNearby } from './pathfinding';
 import { Spr } from '../../render/sprite_index';
+import { publishEvent } from '../events';
+import {
+  MONSTER_BAIT_COMBAT_LOCK_SQ,
+  MONSTER_BAIT_CONSUME_RADIUS_SQ,
+  clearDeadBaitDrop,
+  consumeMonsterBait,
+  findMonsterBaitTarget,
+} from '../monster_bait';
 
 /* ── Shared combat target finder ──────────────────────────────── */
 const MONSTER_DETECT = 20;
@@ -21,10 +32,91 @@ const MONSTER_DETECT_SQ = MONSTER_DETECT * MONSTER_DETECT;
 const PREFER_PLAYER = 15;
 const PREFER_SQ = PREFER_PLAYER * PREFER_PLAYER;
 const MATKA_MAX_CHILDREN = 100;
+const PECHATEED_DETECT_SQ = 24 * 24;
+const PECHATEED_FALLBACK_SQ = 10 * 10;
+const NELYUD_REVEAL_SQ = 6 * 6;
+const KOSTOREZ_DETECT_SQ = 22 * 22;
+const KOSTOREZ_WINDUP_RANGE = 2.25;
+const KOSTOREZ_BURST_RANGE = 2.85;
+const KOSTOREZ_WINDUP_SEC = 1.35;
+const KOSTOREZ_STAGGER_SEC = 1.15;
+const KOSTOREZ_ESCAPE_DIST = 4.0;
+const KOSTOREZ_RUMOR_IDS = [
+  'monster_kostorez_cuts',
+  'ecology_kostorez_windup',
+  'ecology_kostorez_shotgun',
+  'lead_maintenance_kostorez_locker',
+] as const;
 
 /** Entity lookup map — set by updateAI each frame */
 let _entityById = new Map<number, Entity>();
 export function setEntityMap(m: Map<number, Entity>): void { _entityById = m; }
+
+function zoneIdAt(world: World, x: number, y: number): number | undefined {
+  const zid = world.zoneMap[world.idx(Math.floor(x), Math.floor(y))];
+  return zid >= 0 ? zid : undefined;
+}
+
+function kostorezEventData(extra?: Record<string, unknown>): Record<string, unknown> {
+  return { rumorIds: [...KOSTOREZ_RUMOR_IDS], ...extra };
+}
+
+function publishKostorezEvent(
+  state: GameState | undefined,
+  world: World,
+  e: Entity,
+  target: Entity | undefined,
+  type: 'monster_sighted' | 'monster_windup_interrupted' | 'monster_armor_cut' | 'monster_escaped',
+  severity: 3 | 4 | 5,
+  tags: string[],
+  data?: Record<string, unknown>,
+): void {
+  if (!state) return;
+  publishEvent(state, {
+    type,
+    zoneId: zoneIdAt(world, e.x, e.y),
+    x: e.x,
+    y: e.y,
+    actorId: e.id,
+    actorName: entityDisplayName(e),
+    actorFaction: e.faction,
+    targetId: target?.id,
+    targetName: target ? entityDisplayName(target) : undefined,
+    targetFaction: target?.faction,
+    monsterKind: MonsterKind.KOSTOREZ,
+    severity,
+    privacy: target?.type === EntityType.PLAYER ? 'local' : 'witnessed',
+    tags: ['monster', 'kostorez', ...tags],
+    data: kostorezEventData(data),
+  });
+}
+
+function hasClearLine(world: World, e: Entity, target: Entity, maxDist: number): boolean {
+  const dx = world.delta(e.x, target.x);
+  const dy = world.delta(e.y, target.y);
+  const dist = Math.sqrt(dx * dx + dy * dy);
+  if (dist > maxDist) return false;
+  const steps = Math.max(2, Math.ceil(dist * 2));
+  for (let i = 1; i < steps; i++) {
+    const t = i / steps;
+    const x = Math.floor(e.x + dx * t);
+    const y = Math.floor(e.y + dy * t);
+    if (world.solid(x, y)) return false;
+  }
+  return true;
+}
+
+function cutMetalSheet(target: Entity): boolean {
+  if (!target.inventory) return false;
+  for (let i = 0; i < target.inventory.length; i++) {
+    const slot = target.inventory[i];
+    if (slot.defId !== 'metal_sheet' || slot.count <= 0) continue;
+    slot.count--;
+    if (slot.count <= 0) target.inventory.splice(i, 1);
+    return true;
+  }
+  return false;
+}
 
 export function findCombatTarget(
   world: World, entities: Entity[], e: Entity, dt: number,
@@ -64,6 +156,353 @@ export function findCombatTarget(
   return target;
 }
 
+function canBeMonsterTarget(other: Entity): boolean {
+  return other.type !== EntityType.MONSTER && other.type !== EntityType.PROJECTILE && other.type !== EntityType.ITEM_DROP;
+}
+
+function fixedScanCd(kind: MonsterKind | undefined): number | undefined {
+  switch (kind) {
+    case MonsterKind.SHOVNIK: return 1.1;
+    case MonsterKind.LAMPOVY: return 1.2;
+    case MonsterKind.TUBE_EEL: return 1.3;
+    case MonsterKind.PARAGRAPH: return 1.4;
+    default: return undefined;
+  }
+}
+
+export function deterministicScanCd(id: number, base: number, spread: number): number {
+  const h = Math.imul(id ^ 0x9E3779B9, 0x85EBCA6B) >>> 0;
+  return base + ((h & 1023) / 1023) * spread;
+}
+
+function hasDocumentLikeItem(e: Entity): boolean {
+  if (!e.inventory || e.inventory.length === 0) return false;
+  for (const item of e.inventory) {
+    const def = ITEMS[item.defId];
+    if (!def) continue;
+    if (def.type === ItemType.NOTE || def.type === ItemType.KEY) return true;
+    const text = `${def.name} ${def.desc}`.toLowerCase();
+    if (
+      text.includes('документ') || text.includes('записк') || text.includes('ключ') ||
+      text.includes('бюллет') || text.includes('пропуск') || text.includes('печать') ||
+      text.includes('приказ') || text.includes('справк')
+    ) return true;
+  }
+  return false;
+}
+
+function nearFeature(world: World, e: Entity, feature: Feature, radius: number): boolean {
+  const ex = Math.floor(e.x);
+  const ey = Math.floor(e.y);
+  for (let dy = -radius; dy <= radius; dy++) {
+    for (let dx = -radius; dx <= radius; dx++) {
+      if (dx * dx + dy * dy > radius * radius) continue;
+      const ci = world.idx(ex + dx, ey + dy);
+      if (world.features[ci] === feature) return true;
+    }
+  }
+  return false;
+}
+
+function adjacentWall(world: World, e: Entity): boolean {
+  const x = Math.floor(e.x);
+  const y = Math.floor(e.y);
+  return world.cells[world.idx(x - 1, y)] === Cell.WALL ||
+    world.cells[world.idx(x + 1, y)] === Cell.WALL ||
+    world.cells[world.idx(x, y - 1)] === Cell.WALL ||
+    world.cells[world.idx(x, y + 1)] === Cell.WALL;
+}
+
+function monsterMoveMult(world: World, e: Entity): number {
+  switch (e.monsterKind) {
+    case MonsterKind.SHOVNIK:
+      return adjacentWall(world, e) ? 1.18 : 0.92;
+    case MonsterKind.TUBE_EEL:
+      return world.cells[world.idx(Math.floor(e.x), Math.floor(e.y))] === Cell.WATER ? 1.45 : 0.72;
+    default:
+      return 1;
+  }
+}
+
+function monsterDmgMult(world: World, e: Entity): number {
+  switch (e.monsterKind) {
+    case MonsterKind.SHOVNIK:
+      return adjacentWall(world, e) ? 1.2 : 1;
+    case MonsterKind.LAMPOVY:
+      return nearFeature(world, e, Feature.LAMP, 3) ? 1.35 : 0.9;
+    default:
+      return 1;
+  }
+}
+
+function followMonsterPath(world: World, e: Entity, dt: number): void {
+  const mult = monsterMoveMult(world, e);
+  if (mult === 1) {
+    followPath(world, e, dt);
+    return;
+  }
+  const baseSpeed = e.speed;
+  e.speed = baseSpeed * mult;
+  followPath(world, e, dt);
+  e.speed = baseSpeed;
+}
+
+function tryFollowMonsterBait(
+  world: World,
+  e: Entity,
+  target: Entity | null,
+  dt: number,
+  time: number,
+  msgs: Msg[],
+  state?: GameState,
+): boolean {
+  if (target && world.dist2(e.x, e.y, target.x, target.y) <= MONSTER_BAIT_COMBAT_LOCK_SQ) return false;
+  const bait = findMonsterBaitTarget(world, e, dt, time, state);
+  if (!bait) return false;
+
+  const ai = e.ai!;
+  ai.goal = AIGoal.HUNT;
+  ai.combatTargetId = undefined;
+  const baitD2 = world.dist2(e.x, e.y, bait.x, bait.y);
+  if (baitD2 <= MONSTER_BAIT_CONSUME_RADIUS_SQ) {
+    const dropId = consumeMonsterBait(state, bait, e, time);
+    if (dropId !== undefined) {
+      const drop = _entityById.get(dropId);
+      if (drop) clearDeadBaitDrop(drop);
+    }
+    ai.path = [];
+    ai.pi = 0;
+    msgs.push(msg(`${entityDisplayName(e)} сожрал приманку`, time, '#ca6'));
+    return true;
+  }
+
+  const tx = Math.floor(bait.x);
+  const ty = Math.floor(bait.y);
+  ai.timer -= dt;
+  if (ai.path.length === 0 || ai.timer <= 0 || ai.tx !== tx || ai.ty !== ty) {
+    ai.tx = tx;
+    ai.ty = ty;
+    ai.path = bfsPath(world, Math.floor(e.x), Math.floor(e.y), tx, ty);
+    ai.pi = 0;
+    ai.timer = 1.4;
+  }
+  if (ai.path.length === 0) return false;
+  followMonsterPath(world, e, dt);
+  return true;
+}
+
+function findPechateedTarget(world: World, entities: Entity[], e: Entity, dt: number): Entity | null {
+  const ai = e.ai!;
+  let target: Entity | null = null;
+
+  ai.combatScanCd = (ai.combatScanCd ?? 0) - dt;
+  if (ai.combatTargetId !== undefined) {
+    const cached = _entityById.get(ai.combatTargetId);
+    if (cached && cached.alive && canBeMonsterTarget(cached)) {
+      const d2 = world.dist2(e.x, e.y, cached.x, cached.y);
+      const documentRange = hasDocumentLikeItem(cached) && d2 < PECHATEED_DETECT_SQ;
+      const fallbackRange = d2 < PECHATEED_FALLBACK_SQ;
+      if ((documentRange || fallbackRange) && isHostile(e, cached)) target = cached;
+    }
+    if (!target) ai.combatTargetId = undefined;
+  }
+
+  if (ai.combatScanCd! <= 0) {
+    ai.combatScanCd = 1.5;
+    let docTarget: Entity | null = null;
+    let docBest = PECHATEED_DETECT_SQ;
+    let fallbackTarget: Entity | null = null;
+    let fallbackBest = PECHATEED_FALLBACK_SQ;
+    for (const other of entities) {
+      if (!other.alive || other.id === e.id || !canBeMonsterTarget(other)) continue;
+      if (!isHostile(e, other)) continue;
+      const d2 = world.dist2(e.x, e.y, other.x, other.y);
+      if (hasDocumentLikeItem(other) && d2 < docBest) {
+        docBest = d2;
+        docTarget = other;
+      } else if (d2 < fallbackBest) {
+        fallbackBest = d2;
+        fallbackTarget = other;
+      }
+    }
+    target = docTarget ?? fallbackTarget;
+    if (target) ai.combatTargetId = target.id;
+  }
+
+  return target;
+}
+
+function publishKostorezEscape(
+  world: World,
+  e: Entity,
+  target: Entity | undefined,
+  playerId: number,
+  state: GameState | undefined,
+  reason: string,
+): void {
+  const ai = e.ai!;
+  if (target?.id !== playerId && ai.lastSeenTargetId !== playerId) return;
+  publishKostorezEvent(state, world, e, target, 'monster_escaped', 4, ['escaped'], { reason });
+  ai.lastSeenTargetId = undefined;
+}
+
+function finishKostorezWindup(
+  world: World,
+  entities: Entity[],
+  e: Entity,
+  target: Entity,
+  time: number,
+  msgs: Msg[],
+  nextId: { v: number },
+  state: GameState | undefined,
+  playerId: number,
+): void {
+  const def = MONSTERS[MonsterKind.KOSTOREZ];
+  const level = e.rpg?.level ?? 1;
+  const strMult = e.rpg ? strMeleeDmgMult(e.rpg) : 1;
+  let dmg = Math.round(scaleMonsterDmg(def.dmg, level) * strMult * (e.monsterDmgMult ?? 1));
+  const armorCut = cutMetalSheet(target);
+  if (armorCut) dmg = Math.max(7, Math.round(dmg * 0.55));
+
+  if (target.hp !== undefined) {
+    target.hp -= dmg;
+    if (target.hp <= 0) {
+      target.alive = false;
+      target.hp = 0;
+    }
+    const hitAng = Math.atan2(target.y - e.y, target.x - e.x);
+    spawnBloodHit(world, target.x, target.y, hitAng, dmg, target.type === EntityType.MONSTER);
+    const targetLabel = target.type === EntityType.PLAYER ? 'тебя' : entityDisplayName(target);
+    msgs.push(msg(
+      armorCut
+        ? `Косторез срезал бронелист и задел ${targetLabel}: -${dmg}`
+        : `Косторез режет ${targetLabel}: -${dmg}`,
+      time,
+      armorCut ? '#fc4' : '#f44',
+    ));
+    publishKostorezEvent(state, world, e, target, 'monster_armor_cut', armorCut ? 5 : 4, ['hit', armorCut ? 'armor_cut' : 'burst'], {
+      damage: dmg,
+      armorCut,
+      itemId: armorCut ? 'metal_sheet' : undefined,
+      itemName: armorCut ? ITEMS.metal_sheet?.name : undefined,
+    });
+    if (target.hp <= 0) {
+      spawnDeathPool(world, target.x, target.y, target.type === EntityType.MONSTER);
+      if (target.type === EntityType.NPC) dropNpcInventory(target, entities, nextId);
+      msgs.push(msg(`${entityDisplayName(e)} убил ${entityDisplayName(target)}`, time, '#f44'));
+    }
+  }
+
+  e.attackCd = def.attackRate;
+  e.spriteScale = undefined;
+  e.ai!.windupTimer = undefined;
+  e.ai!.windupTargetId = undefined;
+  if (target.id === playerId) e.ai!.lastSeenTargetId = playerId;
+  playSoundAt(playGrowl, e.x, e.y);
+}
+
+function updateKostorez(
+  world: World,
+  entities: Entity[],
+  e: Entity,
+  target: Entity,
+  dt: number,
+  time: number,
+  msgs: Msg[],
+  playerId: number,
+  nextId: { v: number },
+  state?: GameState,
+): boolean {
+  const ai = e.ai!;
+  const dist = Math.sqrt(world.dist2(e.x, e.y, target.x, target.y));
+
+  if (target.id === playerId && ai.lastSeenTargetId !== playerId) {
+    ai.lastSeenTargetId = playerId;
+    publishKostorezEvent(state, world, e, target, 'monster_sighted', 4, ['sighted', 'warning'], {
+      counterplay: 'distance, obstacle, shotgun stagger, metal_sheet armor',
+    });
+    msgs.push(msg('Косторез увидел тебя. Держи дистанцию: замах читается.', time, '#fa4'));
+    playSoundAt(playGrowl, e.x, e.y);
+  }
+
+  if ((ai.staggerTimer ?? 0) > 0) {
+    ai.staggerTimer = Math.max(0, (ai.staggerTimer ?? 0) - dt);
+    e.spriteScale = 0.95;
+    e.attackCd = Math.max(e.attackCd ?? 0, 0.35);
+    return true;
+  }
+
+  e.spriteScale = undefined;
+  e.attackCd = Math.max(0, (e.attackCd ?? 0) - dt);
+
+  if ((ai.windupTimer ?? 0) > 0) {
+    ai.windupTimer = Math.max(0, (ai.windupTimer ?? 0) - dt);
+    e.angle = Math.atan2(world.delta(e.y, target.y), world.delta(e.x, target.x));
+    e.spriteScale = 1.1 + Math.max(0, ai.windupTimer) * 0.08;
+
+    if (!target.alive || dist > KOSTOREZ_BURST_RANGE || !hasClearLine(world, e, target, KOSTOREZ_BURST_RANGE)) {
+      publishKostorezEscape(world, e, target, playerId, state, dist > KOSTOREZ_BURST_RANGE ? 'distance' : 'obstacle');
+      msgs.push(msg('Косторез сорвал замах о пустой воздух.', time, '#fc4'));
+      ai.windupTimer = undefined;
+      ai.windupTargetId = undefined;
+      e.spriteScale = undefined;
+      e.attackCd = 0.75;
+      return true;
+    }
+
+    if (ai.windupTimer <= 0) finishKostorezWindup(world, entities, e, target, time, msgs, nextId, state, playerId);
+    return true;
+  }
+
+  if (dist <= KOSTOREZ_WINDUP_RANGE && e.attackCd <= 0 && hasClearLine(world, e, target, KOSTOREZ_BURST_RANGE)) {
+    ai.windupTimer = KOSTOREZ_WINDUP_SEC;
+    ai.windupTargetId = target.id;
+    e.spriteScale = 1.18;
+    msgs.push(msg('Косторез заносит пилы. Отходи за угол или бей дробью!', time, '#fa4'));
+    playSoundAt(playGrowl, e.x, e.y);
+    return true;
+  }
+
+  if (dist > KOSTOREZ_ESCAPE_DIST) ai.windupTargetId = undefined;
+  if (ai.path.length === 0 || ai.timer <= 0) {
+    ai.path = bfsPath(world, Math.floor(e.x), Math.floor(e.y), Math.floor(target.x), Math.floor(target.y));
+    ai.pi = 0;
+    ai.timer = 1.4;
+  }
+  ai.timer -= dt;
+  followMonsterPath(world, e, dt);
+  return true;
+}
+
+export function tryMonsterProjectileStagger(
+  world: World,
+  state: GameState,
+  monster: Entity,
+  projectile: Entity,
+  playerId: number,
+): boolean {
+  if (monster.type !== EntityType.MONSTER || monster.monsterKind !== MonsterKind.KOSTOREZ || !monster.ai) return false;
+  if ((monster.hp ?? 1) <= 0) return false;
+  if (projectile.ownerId !== playerId || projectile.sprite !== Spr.PELLET) return false;
+
+  const ai = monster.ai;
+  const wasWindup = (ai.windupTimer ?? 0) > 0;
+  ai.staggerTimer = Math.max(ai.staggerTimer ?? 0, KOSTOREZ_STAGGER_SEC);
+  ai.windupTimer = undefined;
+  ai.windupTargetId = undefined;
+  monster.attackCd = Math.max(monster.attackCd ?? 0, 0.95);
+  monster.spriteScale = 0.95;
+
+  if (wasWindup) {
+    const target = ai.combatTargetId !== undefined ? _entityById.get(ai.combatTargetId) : undefined;
+    publishKostorezEvent(state, world, monster, target, 'monster_windup_interrupted', 4, ['windup', 'interrupted', 'shotgun'], {
+      reason: 'shotgun_stagger',
+    });
+    state.msgs.push(msg('Дробь сбила замах Костореза.', state.time, '#4f4'));
+  }
+  return true;
+}
+
 /* ── Drop NPC inventory as ITEM_DROP entities ─────────────────── */
 export function dropNpcInventory(e: Entity, entities: Entity[], nextId: { v: number }): void {
   if (!e.inventory || e.inventory.length === 0) return;
@@ -81,7 +520,7 @@ export function dropNpcInventory(e: Entity, entities: Entity[], nextId: { v: num
 }
 
 /* ── Monster AI update ────────────────────────────────────────── */
-export function updateMonster(world: World, entities: Entity[], e: Entity, dt: number, time: number, msgs: Msg[], playerId: number, nextId: { v: number }): void {
+export function updateMonster(world: World, entities: Entity[], e: Entity, dt: number, time: number, msgs: Msg[], playerId: number, nextId: { v: number }, state?: GameState): void {
   const ai = e.ai!;
 
   // Матка: spawn a random monster every 60 real seconds (1 game hour)
@@ -129,26 +568,51 @@ export function updateMonster(world: World, entities: Entity[], e: Entity, dt: n
     }
   }
 
-  let target = findCombatTarget(
-    world, entities, e, dt,
-    MONSTER_DETECT_SQ, 1.0 + Math.random() * 0.5,
-    o => o.type !== EntityType.MONSTER && o.type !== EntityType.PROJECTILE && o.type !== EntityType.ITEM_DROP,
-  );
+  let detectSq = MONSTER_DETECT_SQ;
+  let target: Entity | null;
+  if (e.monsterKind === MonsterKind.PECHATEED) {
+    detectSq = PECHATEED_DETECT_SQ;
+    target = findPechateedTarget(world, entities, e, dt);
+  } else if (e.monsterKind === MonsterKind.NELYUD) {
+    detectSq = NELYUD_REVEAL_SQ;
+    target = findCombatTarget(world, entities, e, dt, detectSq, 1.25, canBeMonsterTarget);
+  } else if (e.monsterKind === MonsterKind.KOSTOREZ) {
+    detectSq = KOSTOREZ_DETECT_SQ;
+    target = findCombatTarget(world, entities, e, dt, detectSq, deterministicScanCd(e.id, 0.7, 0.3), canBeMonsterTarget);
+  } else {
+    const scanCd = fixedScanCd(e.monsterKind) ?? deterministicScanCd(e.id, 1.0, 0.5);
+    target = findCombatTarget(
+      world, entities, e, dt,
+      detectSq, scanCd,
+      canBeMonsterTarget,
+    );
+  }
 
   // Prefer player only if player is closer than current target
   const player = _entityById.get(playerId);
-  if (player?.alive && target && target.id !== playerId) {
+  if (player?.alive) {
     const pd2 = world.dist2(e.x, e.y, player.x, player.y);
-    const td2 = world.dist2(e.x, e.y, target.x, target.y);
-    if (pd2 < td2 && pd2 < PREFER_SQ) { target = player; ai.combatTargetId = player.id; }
-  } else if (player?.alive && !target) {
-    const pd2 = world.dist2(e.x, e.y, player.x, player.y);
-    if (pd2 < MONSTER_DETECT_SQ) { target = player; ai.combatTargetId = player.id; }
+    const playerHasDocs = hasDocumentLikeItem(player);
+    const targetHasDocs = target ? hasDocumentLikeItem(target) : false;
+    const playerAllowed = e.monsterKind !== MonsterKind.PECHATEED ||
+      playerHasDocs ||
+      (!targetHasDocs && pd2 < PECHATEED_FALLBACK_SQ);
+    if (playerAllowed && target && target.id !== playerId) {
+      const td2 = world.dist2(e.x, e.y, target.x, target.y);
+      if (pd2 < td2 && pd2 < Math.min(PREFER_SQ, detectSq)) { target = player; ai.combatTargetId = player.id; }
+    } else if (playerAllowed && !target) {
+      if (pd2 < detectSq) { target = player; ai.combatTargetId = player.id; }
+    }
   }
 
   const def = e.monsterKind !== undefined ? MONSTERS[e.monsterKind] : null;
 
+  if (tryFollowMonsterBait(world, e, target, dt, time, msgs, state)) return;
+
   if (!target) {
+    if (e.monsterKind === MonsterKind.KOSTOREZ && ai.lastSeenTargetId === playerId) {
+      publishKostorezEscape(world, e, player, playerId, state, 'lost_target');
+    }
     // Immobile monsters (Idol) just idle — no wandering
     if (def?.speed === 0) return;
     ai.goal = AIGoal.WANDER;
@@ -158,25 +622,30 @@ export function updateMonster(world: World, entities: Entity[], e: Entity, dt: n
       // Phasing monsters: random direction wander
       if (e.phasing) {
         ai.timer = 2 + Math.random() * 3;
-        (e as any)._wanderAngle = Math.random() * Math.PI * 2;
+        ai.wanderAngle = Math.random() * Math.PI * 2;
       } else {
         wanderNearby(world, e);
       }
       ai.timer = 1.5 + Math.random() * 2.5;
     }
     if (e.phasing) {
-      const a = (e as any)._wanderAngle ?? 0;
+      const a = ai.wanderAngle ?? 0;
       const spd = e.speed * 0.4 * dt;
       e.x = ((e.x + Math.cos(a) * spd) % W + W) % W;
       e.y = ((e.y + Math.sin(a) * spd) % W + W) % W;
     } else {
-      followPath(world, e, dt);
+      followMonsterPath(world, e, dt);
     }
     return;
   }
   ai.combatTargetId = target.id;
 
   const bestDist = Math.sqrt(world.dist2(e.x, e.y, target.x, target.y));
+
+  if (e.monsterKind === MonsterKind.KOSTOREZ) {
+    updateKostorez(world, entities, e, target, dt, time, msgs, playerId, nextId, state);
+    return;
+  }
 
   // Ranged attack: shoot projectile if in range but not too close
   // Immobile ranged monsters (Idol) fire at any distance within detection range
@@ -187,7 +656,7 @@ export function updateMonster(world: World, entities: Entity[], e: Entity, dt: n
       const baseDmg = def.dmg ?? 10;
       const level = e.rpg?.level ?? 1;
       const strMult = e.rpg ? strMeleeDmgMult(e.rpg) : 1;
-      const dmg = Math.round(scaleMonsterDmg(baseDmg, level) * strMult);
+      const dmg = Math.round(scaleMonsterDmg(baseDmg, level) * strMult * monsterDmgMult(world, e) * (e.monsterDmgMult ?? 1));
       const ang = Math.atan2(target.y - e.y, target.x - e.x);
       const spd = def.projSpeed ?? 8;
       const cos = Math.cos(ang);
@@ -223,7 +692,8 @@ export function updateMonster(world: World, entities: Entity[], e: Entity, dt: n
       const baseDmg = def?.dmg ?? 10;
       const level = e.rpg?.level ?? 1;
       const strMult = e.rpg ? strMeleeDmgMult(e.rpg) : 1;
-      const dmg = Math.round(scaleMonsterDmg(baseDmg, level) * strMult);
+      const rawDmg = Math.round(scaleMonsterDmg(baseDmg, level) * strMult * monsterDmgMult(world, e) * (e.monsterDmgMult ?? 1));
+      const dmg = zhelemishIncomingMeleeDamage(target, time, rawDmg);
       if (target.hp !== undefined) {
         target.hp -= dmg;
         if (target.hp <= 0) { target.alive = false; target.hp = 0; }
@@ -265,5 +735,5 @@ export function updateMonster(world: World, entities: Entity[], e: Entity, dt: n
     return;
   }
 
-  followPath(world, e, dt);
+  followMonsterPath(world, e, dt);
 }

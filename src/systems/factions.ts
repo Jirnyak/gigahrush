@@ -4,7 +4,7 @@
 
 import {
   W, Cell,
-  type Entity,
+  type Entity, type GameState,
   EntityType, AIGoal, Faction, ZoneFaction, Occupation,
 } from '../core/types';
 import { World } from '../core/world';
@@ -12,6 +12,7 @@ import { freshNeeds, randomName } from '../data/catalog';
 import { gaussianLevel, randomRPG, getMaxHp } from './rpg';
 import { getFactionRel, addFactionRelMutual } from '../data/relations';
 import { isPsiMad, isPsiAlly } from './psi';
+import { updateFactionEvents } from './faction_events';
 
 const _PSI_IDS = ['psi_strike','psi_rupture','psi_madness','psi_storm','psi_brainburn'];
 function _pickPsi(): string { return _PSI_IDS[Math.floor(Math.random() * _PSI_IDS.length)]; }
@@ -133,6 +134,7 @@ const CAPTURE_RADIUS = 3;
 const CAPTURE_INTERVAL = 2.0; // seconds between capture ticks
 
 let captureAccum = 0;
+let activityAccum = 0;
 
 export function updateFactionCapture(world: World, entities: Entity[], dt: number): void {
   captureAccum += dt;
@@ -175,6 +177,21 @@ export function updateFactionCapture(world: World, entities: Entity[], dt: numbe
 
   // Recalculate ownership only for affected zones
   recalcZoneOwnership(world, affectedZones);
+}
+
+export function updateFactionActivity(
+  world: World,
+  entities: Entity[],
+  player: Entity,
+  state: GameState,
+  nextId: { v: number },
+  dt: number,
+): void {
+  activityAccum += dt;
+  if (activityAccum < 1) return;
+  const elapsed = activityAccum;
+  activityAccum = 0;
+  updateFactionEvents(state, world, player, entities, nextId, elapsed);
 }
 
 /** Recalculate which faction owns each zone based on cell majority.
@@ -393,4 +410,18 @@ export function applyDamageRelationPenalty(
   // Penalty proportional to damage: -1 per 5 damage, min -1
   const penalty = -Math.max(1, Math.floor(damage / 5));
   addFactionRelMutual(attackerFaction, targetFaction, penalty);
+}
+
+/* ── Apply narrow social penalty for witnessed/audited theft ─── */
+export function applyTheftRelationPenalty(
+  victimFaction: Faction | undefined,
+  witnessed: boolean,
+  audited: boolean,
+): number {
+  if (victimFaction === undefined || victimFaction === Faction.PLAYER) return 0;
+  if (!witnessed && !audited) return 0;
+
+  const penalty = witnessed ? -4 : -2;
+  addFactionRelMutual(victimFaction, Faction.PLAYER, penalty);
+  return penalty;
 }

@@ -1,0 +1,692 @@
+/* -- Design floor: Морг регистраций ----------------------------
+ * Future route id registry_morgue, z=-16. Self-contained authored
+ * generator; an integrator can wire it into FloorRun later.
+ */
+
+import {
+  W,
+  AIGoal,
+  Cell,
+  ContainerKind,
+  DoorState,
+  EntityType,
+  Faction,
+  Feature,
+  FloorLevel,
+  LiftDirection,
+  MonsterKind,
+  Occupation,
+  QuestType,
+  RoomType,
+  Tex,
+  ZoneFaction,
+  type Entity,
+  type Room,
+  type WorldContainer,
+} from '../../core/types';
+import { World } from '../../core/world';
+import { freshNeeds } from '../../data/catalog';
+import { type PlotNpcDef, registerSideQuest } from '../../data/plot';
+import { MONSTERS } from '../../entities/monster';
+import { monsterSpr, Spr } from '../../render/sprite_index';
+import {
+  generateZones,
+  placeDoor,
+  sanitizeDoors,
+  stampRoom,
+} from '../shared';
+import { genLog } from '../log';
+import type { FloorGeneration } from '../floor_manifest';
+
+export const REGISTRY_MORGUE_ROUTE_ID = 'registry_morgue' as const;
+export const REGISTRY_MORGUE_FUTURE_Z = -16 as const;
+export const REGISTRY_MORGUE_BASE_FLOOR = FloorLevel.MINISTRY;
+export const REGISTRY_MORGUE_DEBUG_ENTRY = 'design_floor.registry_morgue' as const;
+
+type NextId = { v: number };
+
+const NPC_DEFS: Record<string, PlotNpcDef> = {
+  morgue_registrar_faina: {
+    name: 'Фаина Реестровая',
+    isFemale: true,
+    faction: Faction.SCIENTIST,
+    occupation: Occupation.SECRETARY,
+    sprite: Occupation.SECRETARY,
+    hp: 105, maxHp: 105, money: 90, speed: 0.7,
+    inventory: [
+      { defId: 'official_quarantine_clearance', count: 1 },
+      { defId: 'blank_form', count: 2 },
+      { defId: 'ink_bottle', count: 1 },
+    ],
+    talkLines: [
+      'Здесь не умирают. Здесь меняют строку учета.',
+      'Бирка без книги ничего не значит. Книга без бирки значит слишком много.',
+      'Холодильная камера держит туман лучше людей, но внутри всегда есть цена.',
+      'Если запись исправить правильно, Райсовет признает новый факт раньше человека.',
+    ],
+    talkLinesPost: [
+      'Запись легла ровно. Теперь дверь спорит уже с другим именем.',
+      'Не носите две справки рядом. Они начинают сверять вас между собой.',
+    ],
+  },
+
+  morgue_orderly_stepan: {
+    name: 'Степан Носильный',
+    isFemale: false,
+    faction: Faction.CITIZEN,
+    occupation: Occupation.LOCKSMITH,
+    sprite: Occupation.LOCKSMITH,
+    hp: 140, maxHp: 140, money: 35, speed: 0.8,
+    inventory: [
+      { defId: 'crowbar', count: 1 },
+      { defId: 'container_key_label', count: 1 },
+    ],
+    talkLines: [
+      'Я тележки считаю по колесам. Сегодня одно колесо вернулось без тележки.',
+      'В грязной камере человек попросил свою бирку слишком вежливо.',
+      'Не подходите близко к тому, кто сам знает номер ящика.',
+    ],
+    talkLinesPost: [
+      'Теперь хотя бы ясно, кого не было.',
+      'Бирки снова молчат. Для морга это хороший звук.',
+    ],
+  },
+
+  morgue_relative_ira: {
+    name: 'Ира Заименованная',
+    isFemale: true,
+    faction: Faction.CITIZEN,
+    occupation: Occupation.HOUSEWIFE,
+    sprite: Occupation.HOUSEWIFE,
+    hp: 70, maxHp: 70, money: 18, speed: 0.65,
+    inventory: [
+      { defId: 'tea', count: 1 },
+      { defId: 'sealed_complaint', count: 1 },
+    ],
+    talkLines: [
+      'Мне не нужны лекарства. Мне нужна фамилия, которую не вычеркнули.',
+      'Если найдете личное дело, я узнаю, кого мне оплакивать в очереди.',
+      'Пустая бирка хуже пустого ящика. Ящик хотя бы честно молчит.',
+    ],
+    talkLinesPost: [
+      'Имя вернулось. Этого мало, но теперь хотя бы есть кому молчать.',
+      'Возьмите копию дела. Я больше не хочу быть единственным свидетелем.',
+    ],
+  },
+
+  morgue_quarantine_sanitar: {
+    name: 'Санитар Крутов',
+    isFemale: false,
+    faction: Faction.LIQUIDATOR,
+    occupation: Occupation.HUNTER,
+    sprite: Occupation.HUNTER,
+    hp: 220, maxHp: 220, money: 75, speed: 0.95,
+    inventory: [
+      { defId: 'pipe', count: 1 },
+      { defId: 'bandage', count: 1 },
+      { defId: 'denunciation', count: 1 },
+    ],
+    talkLines: [
+      'Медицинский шкаф открывается справкой, ключом или преступлением.',
+      'Мне нужна чистая карантинная бумага. Тогда выдача станет законной.',
+      'Если полезете в шкаф сами, журнал назовет это кражей. Я назову громче.',
+    ],
+    talkLinesPost: [
+      'Справка чистая. Лекарства теперь грязнятся только руками.',
+      'Не тратьте ампулу на смелость. Смелость плохо документируется.',
+    ],
+  },
+};
+
+registerSideQuest('morgue_registrar_faina', NPC_DEFS.morgue_registrar_faina, [
+  {
+    id: 'morgue_find_tag',
+    giverNpcId: 'morgue_registrar_faina',
+    type: QuestType.FETCH,
+    desc: 'Фаина Реестровая: «Верните бирку из холодной камеры. Без нее живого человека можно закрыть бумагой.»',
+    targetItem: 'container_key_label', targetCount: 1,
+    rewardItem: 'official_quarantine_clearance', rewardCount: 1,
+    extraRewards: [{ defId: 'clean_health_cert', count: 1 }],
+    relationDelta: 14, xpReward: 65, moneyReward: 55,
+  },
+  {
+    id: 'morgue_swap_certificate',
+    giverNpcId: 'morgue_registrar_faina',
+    type: QuestType.FETCH,
+    desc: 'Фаина Реестровая: «Принесите акт о пропавшей записи. Я оформлю смерть так, что Райсовет выдаст допуск живому.»',
+    targetItem: 'record_exposure_notice', targetCount: 1,
+    rewardItem: 'archive_access_permit', rewardCount: 1,
+    extraRewards: [{ defId: 'passport_stub', count: 1 }],
+    relationDelta: -4, xpReward: 80, moneyReward: 95,
+  },
+]);
+
+registerSideQuest('morgue_orderly_stepan', NPC_DEFS.morgue_orderly_stepan, [
+  {
+    id: 'morgue_missing_body',
+    giverNpcId: 'morgue_orderly_stepan',
+    type: QuestType.KILL,
+    desc: 'Степан Носильный: «В зараженной камере ходит человек с чужой биркой. Проверьте дистанцией и уберите подмену.»',
+    targetMonsterKind: MonsterKind.NELYUD,
+    killNeeded: 1,
+    rewardItem: 'personal_file_copy', rewardCount: 1,
+    extraRewards: [{ defId: 'filter_receipt', count: 1 }],
+    relationDelta: 16, xpReward: 95, moneyReward: 90,
+  },
+]);
+
+registerSideQuest('morgue_relative_ira', NPC_DEFS.morgue_relative_ira, [
+  {
+    id: 'morgue_name_return',
+    giverNpcId: 'morgue_relative_ira',
+    type: QuestType.FETCH,
+    desc: 'Ира Заименованная: «Найдите пропавшее личное дело. Мне нужен не ящик, а имя.»',
+    targetItem: 'missing_record_file', targetCount: 1,
+    rewardItem: 'sealed_complaint', rewardCount: 1,
+    extraRewards: [{ defId: 'tea', count: 1 }],
+    relationDelta: 18, xpReward: 70, moneyReward: 35,
+  },
+]);
+
+registerSideQuest('morgue_quarantine_sanitar', NPC_DEFS.morgue_quarantine_sanitar, [
+  {
+    id: 'morgue_medicine_lock',
+    giverNpcId: 'morgue_quarantine_sanitar',
+    type: QuestType.FETCH,
+    desc: 'Санитар Крутов: «Принесите чистую карантинную справку. Открою медшкаф законно. Иначе это будет кража.»',
+    targetItem: 'official_quarantine_clearance', targetCount: 1,
+    rewardItem: 'sanitary_kit', rewardCount: 1,
+    extraRewards: [{ defId: 'antibiotic', count: 1 }],
+    relationDelta: 12, xpReward: 75, moneyReward: 60,
+  },
+]);
+
+function setCellFeature(world: World, x: number, y: number, feature: Feature): void {
+  const ci = world.idx(x, y);
+  if (world.cells[ci] === Cell.FLOOR) world.features[ci] = feature;
+}
+
+function createDesignRoom(
+  world: World,
+  id: number,
+  type: RoomType,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  name: string,
+  wallTex: Tex,
+  floorTex: Tex,
+  sealed = false,
+): Room {
+  const room = stampRoom(world, id, type, x, y, w, h, -1);
+  room.name = name;
+  room.wallTex = wallTex;
+  room.floorTex = floorTex;
+  room.sealed = sealed;
+
+  for (let dy = -1; dy <= h; dy++) {
+    for (let dx = -1; dx <= w; dx++) {
+      const ci = world.idx(x + dx, y + dy);
+      if (world.cells[ci] === Cell.WALL) {
+        world.wallTex[ci] = wallTex;
+        if (sealed) world.hermoWall[ci] = 1;
+      }
+    }
+  }
+  for (let dy = 0; dy < h; dy++) {
+    for (let dx = 0; dx < w; dx++) {
+      const ci = world.idx(x + dx, y + dy);
+      world.floorTex[ci] = floorTex;
+    }
+  }
+  return room;
+}
+
+function linkRooms(world: World, a: Room, b: Room, state: DoorState): void {
+  const before = a.doors.length;
+  const hermetic = state === DoorState.HERMETIC_OPEN || state === DoorState.HERMETIC_CLOSED;
+  placeDoor(world, a, b, '', hermetic);
+  if (a.doors.length <= before) return;
+  const doorIdx = a.doors[a.doors.length - 1];
+  const door = world.doors.get(doorIdx);
+  if (!door) return;
+  door.state = state;
+}
+
+function placeDesignLift(world: World, x: number, y: number, direction: LiftDirection): void {
+  const ci = world.idx(x, y);
+  world.cells[ci] = Cell.LIFT;
+  world.wallTex[ci] = Tex.LIFT_DOOR;
+  world.liftDir[ci] = direction;
+  const bi = world.idx(x + 1, y);
+  if (world.cells[bi] === Cell.FLOOR) {
+    world.features[bi] = Feature.LIFT_BUTTON;
+    world.liftDir[bi] = direction;
+  }
+}
+
+function addDrop(
+  entities: Entity[],
+  nextId: NextId,
+  x: number,
+  y: number,
+  defId: string,
+  count = 1,
+  data?: unknown,
+): void {
+  entities.push({
+    id: nextId.v++, type: EntityType.ITEM_DROP,
+    x: x + 0.5, y: y + 0.5,
+    angle: 0, pitch: 0,
+    alive: true, speed: 0, sprite: Spr.ITEM_DROP,
+    inventory: [{ defId, count, data }],
+  });
+}
+
+function spawnMorgueNpc(
+  entities: Entity[],
+  nextId: NextId,
+  def: PlotNpcDef,
+  plotNpcId: string,
+  x: number,
+  y: number,
+  canGiveQuest = true,
+  weapon?: string,
+): Entity {
+  const npc: Entity = {
+    id: nextId.v++, type: EntityType.NPC,
+    x: x + 0.5, y: y + 0.5,
+    angle: Math.random() * Math.PI * 2, pitch: 0,
+    alive: true, speed: def.speed, sprite: def.sprite,
+    name: def.name, isFemale: def.isFemale,
+    needs: freshNeeds(), hp: def.hp, maxHp: def.maxHp, money: def.money,
+    ai: { goal: AIGoal.IDLE, tx: 0, ty: 0, path: [], pi: 0, stuck: 0, timer: 0 },
+    inventory: def.inventory.map(i => ({ ...i })),
+    weapon,
+    faction: def.faction, occupation: def.occupation,
+    plotNpcId, canGiveQuest, questId: -1,
+    isTraveler: false,
+  };
+  entities.push(npc);
+  return npc;
+}
+
+function spawnMorgueMonster(
+  world: World,
+  entities: Entity[],
+  nextId: NextId,
+  x: number,
+  y: number,
+  kind: MonsterKind,
+  name: string,
+): void {
+  const def = MONSTERS[kind];
+  if (!def) return;
+  entities.push({
+    id: nextId.v++, type: EntityType.MONSTER,
+    x: x + 0.5, y: y + 0.5,
+    angle: Math.random() * Math.PI * 2, pitch: 0,
+    alive: true, speed: def.speed,
+    sprite: monsterSpr(kind),
+    name,
+    hp: def.hp, maxHp: def.hp,
+    monsterKind: kind, attackCd: 0,
+    ai: { goal: AIGoal.WANDER, tx: x, ty: y, path: [], pi: 0, stuck: 0, timer: 0 },
+  });
+  world.stamp(x, y, 0.5, 0.5, 3, 0.22, 7100 + kind, 82, 88, 94, false);
+}
+
+function addMorgueContainer(
+  world: World,
+  room: Room,
+  x: number,
+  y: number,
+  kind: ContainerKind,
+  name: string,
+  access: WorldContainer['access'],
+  inventory: WorldContainer['inventory'],
+  tags: string[],
+  faction: Faction,
+  owner?: Entity,
+): void {
+  world.addContainer({
+    id: world.containers.length + 1,
+    x,
+    y,
+    floor: REGISTRY_MORGUE_BASE_FLOOR,
+    roomId: room.id,
+    zoneId: world.zoneMap[world.idx(x, y)],
+    kind,
+    name,
+    inventory,
+    capacitySlots: Math.max(6, inventory.length + 3),
+    ownerNpcId: owner?.id,
+    ownerName: owner?.name,
+    faction,
+    access,
+    lockDifficulty: access === 'locked' || access === 'owner' ? 4 : undefined,
+    discovered: true,
+    tags: [REGISTRY_MORGUE_ROUTE_ID, 'morgue', ...tags],
+  });
+}
+
+function decorateRegistryMorgue(
+  world: World,
+  rooms: {
+    reception: Room;
+    washing: Room;
+    tagRoom: Room;
+    cold: Room;
+    ledger: Room;
+    contaminated: Room;
+  },
+): void {
+  const { reception, washing, tagRoom, cold, ledger, contaminated } = rooms;
+
+  for (let dx = 2; dx < reception.w - 2; dx++) setCellFeature(world, reception.x + dx, reception.y + 3, Feature.DESK);
+  for (let dx = 2; dx < reception.w - 2; dx += 3) setCellFeature(world, reception.x + dx, reception.y + 4, Feature.CHAIR);
+  setCellFeature(world, reception.x + reception.w - 2, reception.y + 1, Feature.LAMP);
+  setCellFeature(world, reception.x + 2, reception.y + reception.h - 2, Feature.SCREEN);
+
+  for (let dx = 2; dx < washing.w - 2; dx += 4) {
+    setCellFeature(world, washing.x + dx, washing.y + 2, Feature.SINK);
+    setCellFeature(world, washing.x + dx, washing.y + washing.h - 3, Feature.APPARATUS);
+  }
+  setCellFeature(world, washing.x + washing.w - 2, washing.y + 1, Feature.LAMP);
+
+  for (let dy = 1; dy < tagRoom.h - 1; dy++) setCellFeature(world, tagRoom.x + 1, tagRoom.y + dy, Feature.SHELF);
+  for (let dx = 3; dx < tagRoom.w - 2; dx += 3) setCellFeature(world, tagRoom.x + dx, tagRoom.y + 2, Feature.DESK);
+  setCellFeature(world, tagRoom.x + tagRoom.w - 2, tagRoom.y + tagRoom.h - 2, Feature.LAMP);
+
+  for (let dx = 2; dx < cold.w - 2; dx += 4) {
+    setCellFeature(world, cold.x + dx, cold.y + 2, Feature.SHELF);
+    setCellFeature(world, cold.x + dx, cold.y + cold.h - 3, Feature.SHELF);
+  }
+  for (let dx = 4; dx < cold.w - 3; dx += 5) setCellFeature(world, cold.x + dx, cold.y + Math.floor(cold.h / 2), Feature.BED);
+  setCellFeature(world, cold.x + cold.w - 3, cold.y + 1, Feature.LAMP);
+
+  for (let dy = 1; dy < ledger.h - 1; dy++) {
+    setCellFeature(world, ledger.x + 1, ledger.y + dy, Feature.SHELF);
+    setCellFeature(world, ledger.x + ledger.w - 2, ledger.y + dy, Feature.SHELF);
+  }
+  for (let dx = 4; dx < ledger.w - 3; dx += 4) setCellFeature(world, ledger.x + dx, ledger.y + 3, Feature.DESK);
+  setCellFeature(world, ledger.x + Math.floor(ledger.w / 2), ledger.y + 1, Feature.LAMP);
+
+  setCellFeature(world, contaminated.x + 2, contaminated.y + 2, Feature.APPARATUS);
+  setCellFeature(world, contaminated.x + contaminated.w - 3, contaminated.y + 2, Feature.SINK);
+  setCellFeature(world, contaminated.x + 3, contaminated.y + contaminated.h - 3, Feature.SHELF);
+  setCellFeature(world, contaminated.x + contaminated.w - 3, contaminated.y + contaminated.h - 3, Feature.LAMP);
+
+  world.wallTex[world.idx(reception.x + reception.w - 1, reception.y - 1)] = Tex.SCREEN_BASE + 3;
+  world.wallTex[world.idx(ledger.x + Math.floor(ledger.w / 2), ledger.y - 1)] = Tex.POSTER_BASE + 9;
+}
+
+function seedRegistryMorgueContainers(
+  world: World,
+  rooms: {
+    tagRoom: Room;
+    cold: Room;
+    ledger: Room;
+    contaminated: Room;
+  },
+  npcs: {
+    faina: Entity;
+    stepan: Entity;
+    sanitar: Entity;
+    ira: Entity;
+  },
+): void {
+  addMorgueContainer(
+    world, rooms.tagRoom,
+    rooms.tagRoom.x + 2, rooms.tagRoom.y + 2,
+    ContainerKind.FILING_CABINET,
+    'Бирочная стойка N-16',
+    'faction',
+    [
+      { defId: 'container_key_label', count: 1 },
+      { defId: 'blank_form', count: 2 },
+      { defId: 'ink_bottle', count: 1 },
+    ],
+    ['tags', 'identity', 'paper'],
+    Faction.SCIENTIST,
+    npcs.faina,
+  );
+
+  addMorgueContainer(
+    world, rooms.cold,
+    rooms.cold.x + 5, rooms.cold.y + 2,
+    ContainerKind.METAL_CABINET,
+    'Холодная картотека без номера',
+    'locked',
+    [
+      { defId: 'missing_record_file', count: 1 },
+      { defId: 'container_key_label', count: 1 },
+      { defId: 'emergency_roster', count: 1 },
+    ],
+    ['cold_storage', 'identity', 'locked'],
+    Faction.SCIENTIST,
+    npcs.stepan,
+  );
+
+  addMorgueContainer(
+    world, rooms.ledger,
+    rooms.ledger.x + rooms.ledger.w - 3, rooms.ledger.y + 2,
+    ContainerKind.SAFE,
+    'Сейф свидетельств о смерти',
+    'locked',
+    [
+      { defId: 'record_exposure_notice', count: 1 },
+      { defId: 'official_quarantine_clearance', count: 1 },
+      { defId: 'archive_access_permit', count: 1 },
+    ],
+    ['death_record', 'certificate', 'archive_hook'],
+    Faction.SCIENTIST,
+    npcs.faina,
+  );
+
+  addMorgueContainer(
+    world, rooms.contaminated,
+    rooms.contaminated.x + 3, rooms.contaminated.y + rooms.contaminated.h - 3,
+    ContainerKind.MEDICAL_CABINET,
+    'Опечатанный медицинский шкаф Крутова',
+    'owner',
+    [
+      { defId: 'sanitary_kit', count: 1 },
+      { defId: 'antibiotic', count: 1 },
+      { defId: 'morphine_ampoule', count: 1 },
+      { defId: 'bandage', count: 2 },
+    ],
+    ['medical', 'scarcity', 'owner', 'theft_risk'],
+    Faction.LIQUIDATOR,
+    npcs.sanitar,
+  );
+
+  addMorgueContainer(
+    world, rooms.ledger,
+    rooms.ledger.x + 2, rooms.ledger.y + rooms.ledger.h - 2,
+    ContainerKind.SECRET_STASH,
+    'Папка Иры под пустым ящиком',
+    'secret',
+    [
+      { defId: 'personal_file_copy', count: 1 },
+      { defId: 'sealed_complaint', count: 1 },
+      { defId: 'tea', count: 1 },
+    ],
+    ['relative', 'name', 'secret'],
+    Faction.CITIZEN,
+    npcs.ira,
+  );
+}
+
+function seedRegistryMorgueReadables(world: World, entities: Entity[], nextId: NextId, rooms: {
+  reception: Room;
+  tagRoom: Room;
+  cold: Room;
+  ledger: Room;
+  contaminated: Room;
+}): void {
+  addDrop(
+    entities,
+    nextId,
+    rooms.reception.x + 3,
+    rooms.reception.y + rooms.reception.h - 2,
+    'note',
+    1,
+    'Прием ведется по двум спискам: кто умер и кто может это доказать.',
+  );
+  addDrop(
+    entities,
+    nextId,
+    rooms.tagRoom.x + rooms.tagRoom.w - 3,
+    rooms.tagRoom.y + 3,
+    'note',
+    1,
+    'Бирка N-16 совпала с живой очередью Райсовета. До выяснения считать фамилию холодной.',
+  );
+  addDrop(
+    entities,
+    nextId,
+    rooms.cold.x + rooms.cold.w - 4,
+    rooms.cold.y + rooms.cold.h - 2,
+    'siren_instruction',
+    1,
+  );
+  addDrop(
+    entities,
+    nextId,
+    rooms.ledger.x + 4,
+    rooms.ledger.y + rooms.ledger.h - 2,
+    'note',
+    1,
+    'Свидетельство о смерти открывает архив быстрее пропуска, если подпись поставлена до вопроса.',
+  );
+  addDrop(
+    entities,
+    nextId,
+    rooms.contaminated.x + rooms.contaminated.w - 4,
+    rooms.contaminated.y + 3,
+    'note',
+    1,
+    'Если человек сам просит свою бирку, проверьте дистанцию. Нелюдь любит чужой порядок.',
+  );
+
+  world.stamp(rooms.ledger.x + 5, rooms.ledger.y + 5, 0.5, 0.5, 2, 0.18, 7161, 35, 35, 42, false);
+  world.stamp(rooms.cold.x + 7, rooms.cold.y + 5, 0.5, 0.5, 4, 0.2, 7162, 120, 140, 150, false);
+  world.stamp(rooms.tagRoom.x + 5, rooms.tagRoom.y + 5, 0.5, 0.5, 2, 0.18, 7163, 50, 45, 32, false);
+}
+
+export function generateRegistryMorgueDesignFloor(): FloorGeneration {
+  const world = new World();
+  const entities: Entity[] = [];
+  const nextId: NextId = { v: 1 };
+  let nextRoomId = 0;
+
+  for (let i = 0; i < W * W; i++) {
+    world.wallTex[i] = Tex.TILE_W;
+    world.floorTex[i] = Tex.F_TILE;
+  }
+  generateZones(world);
+  for (const zone of world.zones) {
+    zone.faction = zone.id % 5 === 0 ? ZoneFaction.LIQUIDATOR : ZoneFaction.CITIZEN;
+    zone.level = zone.id % 7 === 0 ? 3 : 2;
+    zone.fogged = false;
+  }
+
+  const ox = 488;
+  const oy = 500;
+  const washing = createDesignRoom(
+    world, nextRoomId++, RoomType.MEDICAL,
+    ox, oy, 16, 11,
+    'Моечный коридор регистрации',
+    Tex.TILE_W, Tex.F_TILE,
+  );
+  const cold = createDesignRoom(
+    world, nextRoomId++, RoomType.STORAGE,
+    ox + 17, oy, 28, 11,
+    'Холодная камера-укрытие',
+    Tex.HERMO_WALL, Tex.F_TILE,
+    true,
+  );
+  const contaminated = createDesignRoom(
+    world, nextRoomId++, RoomType.MEDICAL,
+    ox + 46, oy, 13, 11,
+    'Зараженная камера сверки',
+    Tex.HERMO_WALL, Tex.F_TILE,
+    true,
+  );
+  const reception = createDesignRoom(
+    world, nextRoomId++, RoomType.OFFICE,
+    ox, oy + 12, 16, 10,
+    'Окно приема смертей',
+    Tex.TILE_W, Tex.F_LINO,
+  );
+  const tagRoom = createDesignRoom(
+    world, nextRoomId++, RoomType.OFFICE,
+    ox + 17, oy + 12, 12, 10,
+    'Бирочная',
+    Tex.TILE_W, Tex.F_LINO,
+  );
+  const ledger = createDesignRoom(
+    world, nextRoomId++, RoomType.OFFICE,
+    ox + 30, oy + 12, 16, 10,
+    'Кабинет книги умерших',
+    Tex.MARBLE, Tex.F_PARQUET,
+  );
+
+  linkRooms(world, washing, reception, DoorState.CLOSED);
+  linkRooms(world, reception, tagRoom, DoorState.CLOSED);
+  linkRooms(world, tagRoom, ledger, DoorState.CLOSED);
+  linkRooms(world, tagRoom, cold, DoorState.HERMETIC_CLOSED);
+  linkRooms(world, cold, contaminated, DoorState.HERMETIC_CLOSED);
+  sanitizeDoors(world);
+
+  placeDesignLift(world, reception.x + 1, reception.y + 1, LiftDirection.UP);
+  placeDesignLift(world, reception.x + 1, reception.y + 3, LiftDirection.DOWN);
+
+  decorateRegistryMorgue(world, { reception, washing, tagRoom, cold, ledger, contaminated });
+
+  const faina = spawnMorgueNpc(
+    entities, nextId, NPC_DEFS.morgue_registrar_faina,
+    'morgue_registrar_faina', reception.x + 8, reception.y + 2,
+  );
+  const stepan = spawnMorgueNpc(
+    entities, nextId, NPC_DEFS.morgue_orderly_stepan,
+    'morgue_orderly_stepan', washing.x + 5, washing.y + 6,
+    true, 'crowbar',
+  );
+  const ira = spawnMorgueNpc(
+    entities, nextId, NPC_DEFS.morgue_relative_ira,
+    'morgue_relative_ira', reception.x + 4, reception.y + 7,
+  );
+  const sanitar = spawnMorgueNpc(
+    entities, nextId, NPC_DEFS.morgue_quarantine_sanitar,
+    'morgue_quarantine_sanitar', contaminated.x + 2, contaminated.y + 2,
+    true, 'pipe',
+  );
+
+  seedRegistryMorgueContainers(world, { tagRoom, cold, ledger, contaminated }, { faina, stepan, sanitar, ira });
+  seedRegistryMorgueReadables(world, entities, nextId, { reception, tagRoom, cold, ledger, contaminated });
+
+  spawnMorgueMonster(
+    world, entities, nextId,
+    contaminated.x + contaminated.w - 4,
+    contaminated.y + contaminated.h - 4,
+    MonsterKind.NELYUD,
+    'Человек с чужой биркой',
+  );
+  spawnMorgueMonster(
+    world, entities, nextId,
+    ledger.x + ledger.w - 5,
+    ledger.y + Math.floor(ledger.h / 2),
+    MonsterKind.PECHATEED,
+    'Печатеед свидетельств',
+  );
+
+  world.bakeLights();
+
+  const spawnX = reception.x + 6.5;
+  const spawnY = reception.y + 5.5;
+  genLog(`[DESIGN_FLOOR] ${REGISTRY_MORGUE_ROUTE_ID} z=${REGISTRY_MORGUE_FUTURE_Z} at (${ox}, ${oy}) rooms=${nextRoomId}`);
+  return { world, entities, spawnX, spawnY };
+}

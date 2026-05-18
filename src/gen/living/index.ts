@@ -16,6 +16,7 @@
 /*     side_quests.ts — side quest NPC registry & spawning       */
 /*     zone_content.ts — zone content module registry            */
 /*     temple.ts      — Orthodox temple (zone 3 content module)  */
+/*     soviet_housing_pack.ts — concierge/radio/kitchen POIs      */
 /*                                                               */
 /*   To add a new hand-crafted room, create a .ts file here      */
 /*   and call it from generateWorld() below.                     */
@@ -25,14 +26,13 @@ import { World } from '../../core/world';
 import { reassignQuestGivers } from '../../systems/quests';
 import { calcZoneLevel } from '../../systems/rpg';
 import { generateZones, stampHQRooms } from '../shared';
+import { placeProceduralScreens } from '../procedural_screens';
 import { generateApartments } from './apartments';
 import { generateVolatileMaze, wipeVolatile } from './volatile';
 import { generateTutorRoom } from './tutor_room';
 import { generateYakovLab } from './yakov_lab';
 import { generateVankaDen, spawnVankaShadows } from './vanka_den';
-import './temple'; // side-effect: registers zone content for zone 3
-import './library'; // side-effect: registers zone content for zone 7
-import './market';  // side-effect: registers zone content for zone 12
+import './content_manifest';
 import { runZoneContentModules } from './zone_content';
 import { spawnRoomItems, spawnFamilies, spawnTravelers } from './npcs';
 import { spawnSideQuestNpcs } from './side_quests';
@@ -92,6 +92,9 @@ export function generateWorld(): { world: World; entities: Entity[]; spawnX: num
   spawnSideQuestNpcs(world, entities, { v: nextId });
   nextId = entities.reduce((mx, e) => Math.max(mx, e.id), nextId) + 1;
 
+  /* ── B3: Rare procedural TV/monitor walls in suitable rooms ─── */
+  placeProceduralScreens(world, FloorLevel.LIVING);
+
   /* ── C: Items in all rooms ─────────────────────────── */
   nextId = spawnRoomItems(world, entities, nextId);
 
@@ -112,4 +115,5 @@ export function generateWorld(): { world: World; entities: Entity[]; spawnX: num
 export function regrowMaze(world: World): void {
   wipeVolatile(world);
   generateVolatileMaze(world);
+  placeProceduralScreens(world, FloorLevel.LIVING);
 }

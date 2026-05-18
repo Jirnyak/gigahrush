@@ -6,6 +6,7 @@ import {
   EntityType, AIGoal, RoomType,
 } from '../../core/types';
 import { World } from '../../core/world';
+import { getCellHazardMoveMultiplier } from '../cell_hazards';
 import { bark, BARK_ARRIVE, BARK_ARRIVE_F, BARK_CHANCE_ARRIVE } from './barks';
 
 let _barkMsgs: Msg[] = [];
@@ -49,11 +50,15 @@ export function bfsPath(world: World, sx: number, sy: number, ex: number, ey: nu
     if (cur === end) { found = true; break; }
 
     const cx = cur % W;
-    const cy = (cur - cx) / W;
+    const cy = (cur / W) | 0;
 
     for (let d = 0; d < 4; d++) {
-      const nx = ((cx + (d === 0 ? -1 : d === 1 ? 1 : 0)) % W + W) % W;
-      const ny = ((cy + (d === 2 ? -1 : d === 3 ? 1 : 0)) % W + W) % W;
+      let nx = cx;
+      let ny = cy;
+      if (d === 0) nx = cx === 0 ? W - 1 : cx - 1;
+      else if (d === 1) nx = cx === W - 1 ? 0 : cx + 1;
+      else if (d === 2) ny = cy === 0 ? W - 1 : cy - 1;
+      else ny = cy === W - 1 ? 0 : cy + 1;
       const ni = ny * W + nx;
       if (_bfsVisitGen[ni] === _bfsGen) continue;
 
@@ -130,7 +135,7 @@ export function followPath(world: World, e: Entity, dt: number): void {
   }
 
   // Move toward target
-  const speed = e.speed * dt;
+  const speed = e.speed * getCellHazardMoveMultiplier(world, e) * dt;
   const nx = e.x + (dx / dist) * speed;
   const ny = e.y + (dy / dist) * speed;
 

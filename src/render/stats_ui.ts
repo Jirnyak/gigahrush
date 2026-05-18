@@ -1,21 +1,31 @@
 /* ── Inventory panel (fullscreen) ──────────────────────────────── */
 
 import { type Entity, type GameState, ItemType } from '../core/types';
-import { ITEMS, WEAPON_STATS } from '../data/catalog';
-import { getEquippedDurability, getEquippedToolDurability, countAmmo } from '../systems/inventory';
-import { xpForLevel, strMeleeDmgMult } from '../systems/rpg';
+import { ITEMS } from '../data/catalog';
+import { getEquippedToolDurability, getWeaponReadiness } from '../systems/inventory';
+import { xpForLevel } from '../systems/rpg';
+import { zhelemishStatsLine } from '../systems/status';
 import { drawNeuroPanel, drawGlitchText, textJitter, flicker } from './hud_fx';
+
+function fitStatText(ctx: CanvasRenderingContext2D, text: string, maxW: number): string {
+  if (maxW <= 0) return '';
+  if (ctx.measureText(text).width <= maxW) return text;
+  let end = text.length - 3;
+  while (end > 1 && ctx.measureText(text.slice(0, end) + '...').width > maxW) end--;
+  return text.slice(0, Math.max(1, end)) + '...';
+}
 
 export function drawInventory(
   ctx: CanvasRenderingContext2D,
   player: Entity, state: GameState,
   sx: number, sy: number,
+  uiTime = state.time,
 ): void {
   const inv = player.inventory ?? [];
   const GRID = 5;
   const cw = ctx.canvas.width;
   const ch = ctx.canvas.height;
-  const time = state.time;
+  const time = uiTime;
 
   // Fullscreen neuro-panel background
   drawNeuroPanel(ctx, 0, 0, cw, ch, time, 80);
@@ -99,7 +109,7 @@ export function drawInventory(
 
   // ── RIGHT COLUMN: stats ──────────────────────────────────
   const stX = gridX + gridW + 16 * sx;
-  const barW = cw - stX - 16 * sx;
+  const barW = Math.max(24 * sx, cw - stX - 16 * sx);
   let stY = gridY;
 
   // Name + Level + Attributes on same row
@@ -183,32 +193,38 @@ export function drawInventory(
     ];
     for (const [label, val, color] of needs) {
       ctx.fillStyle = '#aaa';
-      ctx.font = `${7 * sy}px monospace`;
+      ctx.font = `${6 * sy}px monospace`;
       ctx.fillText(`${label}: ${Math.round(val)}`, stX, stY);
-      stY += 9 * sy;
-      drawStatBar(ctx, stX, stY, barW, 4 * sy, val / 100, color);
-      stY += 8 * sy;
+      stY += 7 * sy;
+      drawStatBar(ctx, stX, stY, barW, 3 * sy, val / 100, color);
+      stY += 6 * sy;
     }
   }
 
-  // Equipped weapon info — one line, right side
-  stY += 4 * sy;
-  const wpn2 = player.weapon ? ITEMS[player.weapon]?.name : 'Кулаки';
-  const ws2 = WEAPON_STATS[player.weapon ?? ''] ?? WEAPON_STATS[''];
-  let durLabel: string;
-  if (ws2.isRanged) {
-    const ammo = countAmmo(player);
-    durLabel = `Патроны:${ammo}`;
-  } else {
-    const dur2 = getEquippedDurability(player);
-    durLabel = dur2 ? `Прочн:${dur2.cur}/${dur2.max}` : 'Прочн:∞';
+  const zhelemishLine = zhelemishStatsLine(player, time);
+  if (zhelemishLine) {
+    stY += 3 * sy;
+    ctx.fillStyle = '#9c6';
+    ctx.font = `${6 * sy}px monospace`;
+    ctx.fillText(fitStatText(ctx, zhelemishLine, barW), stX, stY);
+    stY += 9 * sy;
   }
-  // Fist base dmg = player level; other melee uses ws2.dmg; all melee × STR
-  const baseDmg2 = (!player.weapon && player.rpg) ? player.rpg.level : ws2.dmg;
-  const effectiveDmg2 = ws2.isRanged ? ws2.dmg : Math.round(baseDmg2 * (player.rpg ? strMeleeDmgMult(player.rpg) : 1));
+
+  // Equipped weapon info — compact facts, right side
+  stY += 4 * sy;
+  const weapon = getWeaponReadiness(player);
   ctx.fillStyle = '#ccc';
   ctx.font = `${7 * sy}px monospace`;
-  ctx.fillText(`${wpn2}  Урон:${effectiveDmg2}  ${durLabel}`, stX, stY);
+  ctx.fillText(
+    fitStatText(ctx, `Оружие: ${weapon.name}  ${weapon.role}  Урон:${weapon.damageLabel}`, barW),
+    stX, stY,
+  );
+  stY += 9 * sy;
+  ctx.fillStyle = weapon.warning ? '#f84' : '#9d9';
+  const weaponState = weapon.cannotFireReason
+    ? `${weapon.resourceLabel}  ${weapon.cannotFireReason}`
+    : `${weapon.resourceLabel}  ${weapon.cooldownLabel}`;
+  ctx.fillText(fitStatText(ctx, weaponState, barW), stX, stY);
   stY += 12 * sy;
 
   const toolName = player.tool ? (ITEMS[player.tool]?.name ?? player.tool) : 'нет';

@@ -1,0 +1,921 @@
+/* ── Future design floor: Хтонический чердак ─────────────────── */
+
+import {
+  W, Cell, Tex, Feature, DoorState, LiftDirection,
+  FloorLevel, RoomType, EntityType, AIGoal, Faction, Occupation,
+  QuestType, ContainerKind, MonsterKind, ZoneFaction,
+  type Entity, type GameState, type Room, type WorldContainer,
+} from '../../core/types';
+import { World } from '../../core/world';
+import { type PlotNpcDef, registerSideQuest } from '../../data/plot';
+import { monsterSpr, Spr } from '../../render/sprite_index';
+import { publishEvent } from '../../systems/events';
+import { generateZones } from '../shared';
+import { genLog } from '../log';
+
+export const DESIGN_FLOOR_ID = 'chthonic_attic' as const;
+export const DESIGN_FLOOR_Z = -36;
+
+export type ChthonicAtticRootChoice = 'cut' | 'feed' | 'burn';
+
+export interface ChthonicAtticShelterCost {
+  kind: 'item' | 'hp' | 'reputation' | 'delay';
+  itemId?: string;
+  count?: number;
+  amount?: number;
+  seconds?: number;
+}
+
+export interface ChthonicAtticRootState {
+  choice: ChthonicAtticRootChoice;
+  shelterCost: ChthonicAtticShelterCost;
+  shelterRoomIds: number[];
+  sealedRoomIds: number[];
+  burntRoomIds: number[];
+  blockedDoorIdxs: number[];
+  oneWayDoorIdxs: number[];
+  crossFloorFlag: string;
+}
+
+export interface ChthonicAtticExit {
+  id: 'ministry_return' | 'roof_service' | 'crawl_hatch';
+  idx: number;
+}
+
+export interface ChthonicAtticRouteCheck {
+  choice: ChthonicAtticRootChoice;
+  exitId: ChthonicAtticExit['id'];
+  reachable: boolean;
+  distance: number;
+}
+
+export interface ChthonicAtticLayout {
+  routeId: typeof DESIGN_FLOOR_ID;
+  z: typeof DESIGN_FLOOR_Z;
+  spawnRoomId: number;
+  combatLaneCells: number[];
+  crawlRouteCells: number[];
+  exitCells: ChthonicAtticExit[];
+  npcRoomIds: Record<'rootkeeper' | 'deacon' | 'yura' | 'masha', number>;
+  rootRoomId: number;
+  shrineRoomId: number;
+  shelterRoomId: number;
+  evidenceRoomId: number;
+  rootDoorIdx: number;
+  shrineDoorIdx: number;
+  shelterDoorIdx: number;
+  crawlDoorIdxs: number[];
+}
+
+export interface ChthonicAtticGeneration {
+  world: World;
+  entities: Entity[];
+  spawnX: number;
+  spawnY: number;
+  layout: ChthonicAtticLayout;
+  rootState: ChthonicAtticRootState;
+  routeChecks: ChthonicAtticRouteCheck[];
+  debug: {
+    routeId: typeof DESIGN_FLOOR_ID;
+    z: typeof DESIGN_FLOOR_Z;
+    entry: string;
+  };
+}
+
+const ATTIC_BASE_X = (W >> 1) - 104;
+const ATTIC_BASE_Y = (W >> 1) - 64;
+const MAIN_Y = ATTIC_BASE_Y + 58;
+
+const DIRS: readonly [number, number][] = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+
+const ATTIC_NPCS: Record<string, PlotNpcDef> = {
+  attic_agrafena_rootkeeper: {
+    name: 'Аграфена Корневая',
+    isFemale: true,
+    faction: Faction.CITIZEN,
+    occupation: Occupation.STOREKEEPER,
+    sprite: Occupation.STOREKEEPER,
+    hp: 140, maxHp: 140, money: 45, speed: 0.75,
+    inventory: [
+      { defId: 'gear', count: 2 },
+      { defId: 'wire_coil', count: 2 },
+      { defId: 'hermo_gasket', count: 1 },
+    ],
+    talkLines: [
+      'Корень держит плиту не хуже балки. Рубите чужой - крыша вспомнит вес.',
+      'Накормить корень дешевле, чем чинить пролёт. Только потом он попросит фамилию.',
+      'Сервисный этаж любит детали. Ад любит реликвии. Чердак любит, когда выбирают быстро.',
+    ],
+    talkLinesPost: [
+      'Теперь ход открыт. Если потолок вздохнет, не отвечайте.',
+      'Срез сухой - значит, ниже кто-то будет ругаться на щель.',
+    ],
+  },
+  attic_deacon_ostap: {
+    name: 'Дьякон Остап',
+    isFemale: false,
+    faction: Faction.CULTIST,
+    occupation: Occupation.PRIEST,
+    sprite: Occupation.PRIEST,
+    hp: 160, maxHp: 160, money: 30, speed: 0.7,
+    inventory: [
+      { defId: 'denunciation', count: 1 },
+      { defId: 'meat_rune', count: 1 },
+      { defId: 'holy_water', count: 1 },
+    ],
+    talkLines: [
+      'В нише тесно, зато самосбор считает нас частью стены.',
+      'Свидетельство оставите - дверь подумает, что вы свой.',
+      'Не всякий культ молится. Некоторые просто правильно оформляют страх.',
+    ],
+    talkLinesPost: [
+      'Укрытие примет вас медленно. Медленная дверь честнее быстрой.',
+      'Черная ладонь уже на стене. Осталось выбрать, кому она будет уликой.',
+    ],
+  },
+  attic_cable_boy_yura: {
+    name: 'Юра Кабельный',
+    isFemale: false,
+    faction: Faction.CITIZEN,
+    occupation: Occupation.CHILD,
+    sprite: Occupation.CHILD,
+    hp: 80, maxHp: 80, money: 7, speed: 1.55,
+    inventory: [
+      { defId: 'fuse', count: 1 },
+      { defId: 'siren_instruction', count: 1 },
+    ],
+    talkLines: [
+      'По большому коридору стреляют. По маленькому - ползут и молчат.',
+      'Я знаю лаз, где кабели теплые. Если сирена начнет считать, идем сразу.',
+      'Не берите рюкзак. Корень рюкзак слышит первым.',
+    ],
+    talkLinesPost: [
+      'Лаз еще дышит. Значит, мы прошли вовремя.',
+      'Если дверь стала уже, идите боком и не спорьте.',
+    ],
+  },
+  attic_liquidator_masha: {
+    name: 'Маша Прожиг',
+    isFemale: true,
+    faction: Faction.LIQUIDATOR,
+    occupation: Occupation.HUNTER,
+    sprite: Occupation.HUNTER,
+    hp: 240, maxHp: 240, money: 90, speed: 1.0,
+    inventory: [
+      { defId: 'ammo_fuel', count: 1 },
+      { defId: 'makarov', count: 1 },
+      { defId: 'ammo_9mm', count: 10 },
+    ],
+    talkLines: [
+      'Жечь надо контуром, а не верой. Иначе дым пойдет вниз по лифту.',
+      'Ниша не храм, а пробка. Прожжем - получим проход и злых соседей.',
+      'Корень после огня не растет. Он помнит.',
+    ],
+    talkLinesPost: [
+      'Обуглилось ровно. Почти без крика бетона.',
+      'Если снизу спросят, это была профилактика, не крестовый поход.',
+    ],
+  },
+};
+
+let contentRegistered = false;
+
+export function registerChthonicAtticContent(): void {
+  if (contentRegistered) return;
+  contentRegistered = true;
+
+  registerSideQuest('attic_agrafena_rootkeeper', ATTIC_NPCS.attic_agrafena_rootkeeper, [
+    {
+      id: 'attic_cut_or_feed_root',
+      giverNpcId: 'attic_agrafena_rootkeeper',
+      type: QuestType.FETCH,
+      desc: 'Аграфена Корневая: «Две шестерни. Срежем несущий корень аккуратно; детали уйдут на сервисный этаж, реликвия останется за бетоном.»',
+      targetItem: 'gear', targetCount: 2,
+      rewardItem: 'hermo_gasket', rewardCount: 1,
+      extraRewards: [{ defId: 'wire_coil', count: 1 }],
+      relationDelta: 10, xpReward: 70, moneyReward: 80,
+    },
+  ]);
+
+  registerSideQuest('attic_deacon_ostap', ATTIC_NPCS.attic_deacon_ostap, [
+    {
+      id: 'attic_black_hand_report',
+      giverNpcId: 'attic_deacon_ostap',
+      type: QuestType.FETCH,
+      desc: 'Дьякон Остап: «Принесите донос или акт о черной ладони. Министерство назовет это уликой, мы - платой за укрытие.»',
+      targetItem: 'denunciation', targetCount: 1,
+      rewardItem: 'meat_rune', rewardCount: 1,
+      extraRewards: [{ defId: 'holy_water', count: 1 }],
+      relationDelta: 8, xpReward: 65, moneyReward: 40,
+    },
+  ]);
+
+  registerSideQuest('attic_cable_boy_yura', ATTIC_NPCS.attic_cable_boy_yura, [
+    {
+      id: 'attic_crawl_escort',
+      giverNpcId: 'attic_cable_boy_yura',
+      type: QuestType.VISIT,
+      desc: 'Юра Кабельный: «Проведите меня через низкий кабельный лаз во время предупреждения. Большой коридор пусть шумит без нас.»',
+      targetRoomType: RoomType.CORRIDOR,
+      targetRoomName: 'Низкий кабельный лаз',
+      rewardItem: 'fuse', rewardCount: 1,
+      extraRewards: [{ defId: 'siren_instruction', count: 1 }],
+      relationDelta: 12, xpReward: 75, moneyReward: 35,
+    },
+  ]);
+
+  registerSideQuest('attic_liquidator_masha', ATTIC_NPCS.attic_liquidator_masha, [
+    {
+      id: 'attic_burn_niche',
+      giverNpcId: 'attic_liquidator_masha',
+      type: QuestType.FETCH,
+      desc: 'Маша Прожиг: «Канистру топлива. Сожжем нишу по контуру: дым, вражда культистов, зато проход не затянет.»',
+      targetItem: 'ammo_fuel', targetCount: 1,
+      rewardItem: 'ammo_9mm', rewardCount: 12,
+      extraRewards: [{ defId: 'bandage', count: 2 }],
+      relationDelta: 14, xpReward: 90, moneyReward: 110,
+      spawnMonstersOnAccept: 2,
+    },
+  ]);
+}
+
+registerChthonicAtticContent();
+
+export function generateChthonicAtticDesignFloor(
+  rootChoice: ChthonicAtticRootChoice = 'cut',
+): ChthonicAtticGeneration {
+  const world = new World();
+  const entities: Entity[] = [];
+  let nextRoomId = 0;
+  let nextEntityId = 1;
+
+  fillBaseTextures(world);
+
+  const spawn = stampRoom(world, nextRoomId++, RoomType.COMMON, ATTIC_BASE_X + 2, ATTIC_BASE_Y + 48, 18, 18, 'Предчердачный тамбур', Tex.CONCRETE, Tex.F_CONCRETE);
+  const rootkeeper = stampRoom(world, nextRoomId++, RoomType.STORAGE, ATTIC_BASE_X + 32, ATTIC_BASE_Y + 30, 18, 12, 'Комната хранительницы корней', Tex.CONCRETE, Tex.F_WOOD);
+  const crawlA = stampRoom(world, nextRoomId++, RoomType.CORRIDOR, ATTIC_BASE_X + 42, ATTIC_BASE_Y + 8, 15, 8, 'Низкий кабельный лаз A', Tex.PANEL, Tex.F_CONCRETE);
+  const crawlB = stampRoom(world, nextRoomId++, RoomType.CORRIDOR, ATTIC_BASE_X + 88, ATTIC_BASE_Y + 10, 20, 7, 'Низкий кабельный лаз B', Tex.PANEL, Tex.F_CONCRETE);
+  const crawlC = stampRoom(world, nextRoomId++, RoomType.CORRIDOR, ATTIC_BASE_X + 138, ATTIC_BASE_Y + 12, 18, 8, 'Низкий кабельный лаз C', Tex.PANEL, Tex.F_CONCRETE);
+  const rootNursery = stampRoom(world, nextRoomId++, RoomType.PRODUCTION, ATTIC_BASE_X + 108, ATTIC_BASE_Y + 28, 24, 16, 'Гнездо бетонного корня', Tex.GUT, Tex.F_GUT);
+  const deacon = stampRoom(world, nextRoomId++, RoomType.OFFICE, ATTIC_BASE_X + 72, ATTIC_BASE_Y + 72, 22, 14, 'Ниша свидетельских ведомостей', Tex.MARBLE, Tex.F_RED_CARPET);
+  const evidence = stampRoom(world, nextRoomId++, RoomType.STORAGE, ATTIC_BASE_X + 112, ATTIC_BASE_Y + 76, 18, 12, 'Запертая кладовая черной ладони', Tex.DARK, Tex.F_CONCRETE);
+  const shrine = stampRoom(world, nextRoomId++, RoomType.COMMON, ATTIC_BASE_X + 148, ATTIC_BASE_Y + 74, 20, 14, 'Корневая молельная ниша', Tex.GUT, Tex.F_GUT);
+  const masha = stampRoom(world, nextRoomId++, RoomType.HQ, ATTIC_BASE_X + 174, ATTIC_BASE_Y + 30, 22, 13, 'Пост контролируемого прожига', Tex.METAL, Tex.F_CONCRETE);
+  const exitRoom = stampRoom(world, nextRoomId++, RoomType.CORRIDOR, ATTIC_BASE_X + 206, ATTIC_BASE_Y + 50, 17, 17, 'Служебная развязка крыши', Tex.METAL, Tex.F_CONCRETE);
+
+  const combatLaneCells = carveCombatLane(world, ATTIC_BASE_X + 20, ATTIC_BASE_X + 206, MAIN_Y);
+  const crawlRouteCells = carveCrawlRoute(world, spawn, crawlA, crawlB, crawlC, masha, exitRoom);
+
+  const spawnDoor = placeDoor(world, spawn.x + spawn.w, MAIN_Y, spawn.id, DoorState.OPEN);
+  const rootkeeperDoor = connectRoomToLane(world, rootkeeper, rootkeeper.x + 8, 1);
+  const rootDoorIdx = connectRoomToLane(world, rootNursery, rootNursery.x + 12, 1);
+  const deaconDoor = connectRoomToLane(world, deacon, deacon.x + 11, -1);
+  connectRoomToLane(world, evidence, evidence.x + 8, -1);
+  const shrineDoorIdx = connectRoomToLane(world, shrine, shrine.x + 10, -1);
+  const mashaDoor = connectRoomToLane(world, masha, masha.x + 11, 1);
+  const exitDoor = placeDoor(world, exitRoom.x - 1, MAIN_Y, exitRoom.id, DoorState.OPEN);
+
+  const crawlDoorIdxs = [
+    placeDoor(world, spawn.x + 9, spawn.y - 1, spawn.id, DoorState.OPEN),
+    placeDoor(world, crawlA.x - 1, crawlA.y + 4, crawlA.id, DoorState.CLOSED),
+    placeDoor(world, crawlA.x + crawlA.w, crawlA.y + 4, crawlA.id, DoorState.CLOSED),
+    placeDoor(world, crawlB.x - 1, crawlB.y + 3, crawlB.id, DoorState.CLOSED),
+    placeDoor(world, crawlB.x + crawlB.w, crawlB.y + 3, crawlB.id, DoorState.CLOSED),
+    placeDoor(world, crawlC.x - 1, crawlC.y + 4, crawlC.id, DoorState.CLOSED),
+    placeDoor(world, crawlC.x + crawlC.w, crawlC.y + 4, crawlC.id, DoorState.CLOSED),
+    placeDoor(world, masha.x + 11, masha.y - 1, masha.id, DoorState.CLOSED),
+    spawnDoor,
+    rootkeeperDoor,
+    mashaDoor,
+    exitDoor,
+  ];
+
+  const exits: ChthonicAtticExit[] = [
+    { id: 'ministry_return', idx: placeExitLift(world, spawn.x + 3, spawn.y + 9, LiftDirection.DOWN) },
+    { id: 'roof_service', idx: placeExitLift(world, exitRoom.x + exitRoom.w - 3, exitRoom.y + 8, LiftDirection.UP) },
+    { id: 'crawl_hatch', idx: placeExitLift(world, crawlC.x + crawlC.w - 3, crawlC.y + 3, LiftDirection.UP) },
+  ];
+
+  decorateAttic(world, {
+    spawn, rootkeeper, crawlA, crawlB, crawlC, rootNursery, deacon, evidence, shrine, masha, exitRoom,
+  });
+  stampRootObstacles(world, MAIN_Y);
+
+  generateZones(world);
+  retuneAtticZones(world, [rootNursery, deacon, shrine, masha]);
+
+  addAtticContainers(world, rootkeeper, deacon, evidence, shrine, masha, rootChoice);
+
+  nextEntityId = spawnNpc(entities, nextEntityId, 'attic_agrafena_rootkeeper', ATTIC_NPCS.attic_agrafena_rootkeeper, rootkeeper.x + 8.5, rootkeeper.y + 6.5);
+  nextEntityId = spawnNpc(entities, nextEntityId, 'attic_deacon_ostap', ATTIC_NPCS.attic_deacon_ostap, deacon.x + 11.5, deacon.y + 7.5);
+  nextEntityId = spawnNpc(entities, nextEntityId, 'attic_cable_boy_yura', ATTIC_NPCS.attic_cable_boy_yura, crawlA.x + 4.5, crawlA.y + 4.5);
+  nextEntityId = spawnNpc(entities, nextEntityId, 'attic_liquidator_masha', ATTIC_NPCS.attic_liquidator_masha, masha.x + 11.5, masha.y + 6.5);
+
+  nextEntityId = addItemDrop(entities, nextEntityId, 'wire_coil', 1, crawlB.x + 10.5, crawlB.y + 3.5);
+  nextEntityId = addItemDrop(entities, nextEntityId, 'denunciation', 1, evidence.x + 9.5, evidence.y + 6.5);
+  nextEntityId = addItemDrop(entities, nextEntityId, 'ammo_fuel', 1, masha.x + 16.5, masha.y + 6.5);
+
+  nextEntityId = spawnMonster(entities, nextEntityId, MonsterKind.REBAR, rootNursery.x + 12.5, rootNursery.y + 8.5);
+  nextEntityId = spawnMonster(entities, nextEntityId, MonsterKind.SHADOW, shrine.x + 10.5, shrine.y + 7.5);
+  nextEntityId = spawnMonster(entities, nextEntityId, MonsterKind.SBORKA, ATTIC_BASE_X + 154.5, MAIN_Y + 0.5);
+  nextEntityId = spawnMonster(entities, nextEntityId, MonsterKind.EYE, ATTIC_BASE_X + 188.5, MAIN_Y - 2.5);
+  void nextEntityId;
+
+  const layout: ChthonicAtticLayout = {
+    routeId: DESIGN_FLOOR_ID,
+    z: DESIGN_FLOOR_Z,
+    spawnRoomId: spawn.id,
+    combatLaneCells,
+    crawlRouteCells,
+    exitCells: exits,
+    npcRoomIds: {
+      rootkeeper: rootkeeper.id,
+      deacon: deacon.id,
+      yura: crawlA.id,
+      masha: masha.id,
+    },
+    rootRoomId: rootNursery.id,
+    shrineRoomId: shrine.id,
+    shelterRoomId: deacon.id,
+    evidenceRoomId: evidence.id,
+    rootDoorIdx,
+    shrineDoorIdx,
+    shelterDoorIdx: deaconDoor,
+    crawlDoorIdxs,
+  };
+
+  const rootState = applyChthonicAtticRootChoice(world, layout, rootChoice);
+  world.bakeLights();
+
+  const spawnX = spawn.x + 9.5;
+  const spawnY = spawn.y + 9.5;
+  const routeChecks = traceChthonicAtticExitPaths(world, spawnX, spawnY, layout, rootChoice);
+
+  genLog(`[FLOOR02_CHTHONIC_ATTIC] ${DESIGN_FLOOR_ID} z=${DESIGN_FLOOR_Z} choice=${rootChoice} at (${spawn.x}, ${spawn.y})`);
+
+  return {
+    world,
+    entities,
+    spawnX,
+    spawnY,
+    layout,
+    rootState,
+    routeChecks,
+    debug: {
+      routeId: DESIGN_FLOOR_ID,
+      z: DESIGN_FLOOR_Z,
+      entry: `debug:${DESIGN_FLOOR_ID}:z${DESIGN_FLOOR_Z}:${rootChoice}`,
+    },
+  };
+}
+
+export function applyChthonicAtticRootChoice(
+  world: World,
+  layout: ChthonicAtticLayout,
+  choice: ChthonicAtticRootChoice,
+): ChthonicAtticRootState {
+  const blockedDoorIdxs: number[] = [];
+  const oneWayDoorIdxs: number[] = [];
+  const sealedRoomIds: number[] = [];
+  const burntRoomIds: number[] = [];
+  let shelterCost: ChthonicAtticShelterCost;
+  let crossFloorFlag: string;
+
+  setDoorState(world, layout.rootDoorIdx, DoorState.CLOSED);
+  setDoorState(world, layout.shrineDoorIdx, DoorState.CLOSED);
+  setDoorState(world, layout.shelterDoorIdx, DoorState.CLOSED);
+  for (const idx of layout.crawlDoorIdxs) setDoorState(world, idx, DoorState.CLOSED);
+
+  if (choice === 'cut') {
+    setDoorState(world, layout.rootDoorIdx, DoorState.OPEN);
+    setDoorState(world, layout.shrineDoorIdx, DoorState.HERMETIC_CLOSED);
+    blockedDoorIdxs.push(layout.shrineDoorIdx);
+    sealedRoomIds.push(layout.shrineRoomId);
+    world.rooms[layout.shrineRoomId].sealed = true;
+    shelterCost = { kind: 'delay', seconds: 18 };
+    crossFloorFlag = 'attic_roots_cut_service_parts';
+  } else if (choice === 'feed') {
+    setDoorState(world, layout.shrineDoorIdx, DoorState.OPEN);
+    setDoorState(world, layout.shelterDoorIdx, DoorState.HERMETIC_OPEN);
+    setDoorState(world, layout.rootDoorIdx, DoorState.HERMETIC_CLOSED);
+    blockedDoorIdxs.push(layout.rootDoorIdx);
+    sealedRoomIds.push(layout.rootRoomId, layout.shelterRoomId);
+    world.rooms[layout.rootRoomId].sealed = true;
+    world.rooms[layout.shelterRoomId].sealed = true;
+    shelterCost = { kind: 'item', itemId: 'meat_rune', count: 1 };
+    crossFloorFlag = 'attic_roots_fed_hell_relic';
+  } else {
+    setDoorState(world, layout.rootDoorIdx, DoorState.OPEN);
+    setDoorState(world, layout.shrineDoorIdx, DoorState.OPEN);
+    const tighteningDoor = layout.crawlDoorIdxs[4];
+    setDoorState(world, tighteningDoor, DoorState.HERMETIC_CLOSED);
+    blockedDoorIdxs.push(tighteningDoor);
+    oneWayDoorIdxs.push(layout.crawlDoorIdxs[2], layout.crawlDoorIdxs[5]);
+    burntRoomIds.push(layout.shrineRoomId);
+    scorchRoom(world, world.rooms[layout.shrineRoomId]);
+    shelterCost = { kind: 'hp', amount: 12 };
+    crossFloorFlag = 'attic_shrine_burned_smoke';
+  }
+
+  return {
+    choice,
+    shelterCost,
+    shelterRoomIds: [layout.shelterRoomId],
+    sealedRoomIds,
+    burntRoomIds,
+    blockedDoorIdxs,
+    oneWayDoorIdxs,
+    crossFloorFlag,
+  };
+}
+
+export function publishChthonicAtticRootChoice(
+  state: GameState,
+  rootState: ChthonicAtticRootState,
+  roomId?: number,
+  actorId?: number,
+): void {
+  publishEvent(state, {
+    type: 'room_regrown',
+    roomId,
+    actorId,
+    severity: 4,
+    privacy: 'local',
+    tags: [
+      'design_floor',
+      DESIGN_FLOOR_ID,
+      `attic_${rootState.choice}`,
+      rootState.crossFloorFlag,
+    ],
+    data: {
+      routeId: DESIGN_FLOOR_ID,
+      z: DESIGN_FLOOR_Z,
+      choice: rootState.choice,
+      crossFloorFlag: rootState.crossFloorFlag,
+      sealedRoomIds: rootState.sealedRoomIds,
+      burntRoomIds: rootState.burntRoomIds,
+      shelterCost: rootState.shelterCost,
+    },
+  });
+}
+
+export function traceChthonicAtticExitPaths(
+  world: World,
+  spawnX: number,
+  spawnY: number,
+  layout: ChthonicAtticLayout,
+  choice: ChthonicAtticRootChoice,
+): ChthonicAtticRouteCheck[] {
+  const start = world.idx(Math.floor(spawnX), Math.floor(spawnY));
+  return layout.exitCells.map(exit => {
+    const distance = shortestPathDistance(world, start, exit.idx);
+    return {
+      choice,
+      exitId: exit.id,
+      reachable: distance >= 0,
+      distance,
+    };
+  });
+}
+
+function fillBaseTextures(world: World): void {
+  for (let i = 0; i < W * W; i++) {
+    world.wallTex[i] = Tex.CONCRETE;
+    world.floorTex[i] = Tex.F_CONCRETE;
+  }
+}
+
+function stampRoom(
+  world: World,
+  id: number,
+  type: RoomType,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  name: string,
+  wallTex: Tex,
+  floorTex: Tex,
+): Room {
+  const room: Room = {
+    id, type,
+    x: world.wrap(x), y: world.wrap(y), w, h,
+    doors: [],
+    sealed: false,
+    name,
+    apartmentId: -1,
+    wallTex,
+    floorTex,
+  };
+
+  for (let dy = -1; dy <= h; dy++) {
+    for (let dx = -1; dx <= w; dx++) {
+      const idx = world.idx(room.x + dx, room.y + dy);
+      world.cells[idx] = Cell.WALL;
+      world.roomMap[idx] = -1;
+      world.wallTex[idx] = wallTex;
+    }
+  }
+  for (let dy = 0; dy < h; dy++) {
+    for (let dx = 0; dx < w; dx++) {
+      const idx = world.idx(room.x + dx, room.y + dy);
+      world.cells[idx] = Cell.FLOOR;
+      world.roomMap[idx] = id;
+      world.floorTex[idx] = floorTex;
+    }
+  }
+  world.rooms[id] = room;
+  return room;
+}
+
+function carveCombatLane(world: World, x0: number, x1: number, y: number): number[] {
+  const cells: number[] = [];
+  for (let x = x0; x <= x1; x++) {
+    for (let dy = -4; dy <= 4; dy++) {
+      const idx = world.idx(x, y + dy);
+      world.cells[idx] = Cell.FLOOR;
+      world.roomMap[idx] = -1;
+      world.floorTex[idx] = Math.abs(dy) <= 1 ? Tex.F_MARBLE_TILE : Tex.F_CONCRETE;
+      cells.push(idx);
+    }
+  }
+  return cells;
+}
+
+function carveCrawlRoute(
+  world: World,
+  spawn: Room,
+  crawlA: Room,
+  crawlB: Room,
+  crawlC: Room,
+  masha: Room,
+  exitRoom: Room,
+): number[] {
+  const cells: number[] = [];
+  carveLine(world, spawn.x + 9, spawn.y - 2, spawn.x + 9, crawlA.y + 4, 0, Tex.F_CONCRETE, cells);
+  carveLine(world, spawn.x + 9, crawlA.y + 4, crawlA.x - 2, crawlA.y + 4, 0, Tex.F_CONCRETE, cells);
+  carveLine(world, crawlA.x + crawlA.w + 1, crawlA.y + 4, crawlB.x - 2, crawlA.y + 4, 0, Tex.F_CONCRETE, cells);
+  carveLine(world, crawlB.x - 2, crawlA.y + 4, crawlB.x - 2, crawlB.y + 3, 0, Tex.F_CONCRETE, cells);
+  carveLine(world, crawlB.x + crawlB.w + 1, crawlB.y + 3, crawlC.x - 2, crawlB.y + 3, 0, Tex.F_CONCRETE, cells);
+  carveLine(world, crawlC.x - 2, crawlB.y + 3, crawlC.x - 2, crawlC.y + 4, 0, Tex.F_CONCRETE, cells);
+  carveLine(world, crawlC.x + crawlC.w + 1, crawlC.y + 4, masha.x + 11, crawlC.y + 4, 0, Tex.F_CONCRETE, cells);
+  carveLine(world, masha.x + 11, crawlC.y + 4, masha.x + 11, masha.y - 2, 0, Tex.F_CONCRETE, cells);
+  carveLine(world, masha.x + 11, masha.y - 2, exitRoom.x + 5, masha.y - 2, 0, Tex.F_CONCRETE, cells);
+  carveLine(world, exitRoom.x + 5, masha.y - 2, exitRoom.x + 5, exitRoom.y - 2, 0, Tex.F_CONCRETE, cells);
+  carveLine(world, exitRoom.x + 5, exitRoom.y - 2, exitRoom.x + 5, exitRoom.y + 8, 0, Tex.F_CONCRETE, cells);
+  return cells;
+}
+
+function carveLine(
+  world: World,
+  x0: number,
+  y0: number,
+  x1: number,
+  y1: number,
+  halfWidth: number,
+  floorTex: Tex,
+  cells?: number[],
+): void {
+  let x = x0;
+  let y = y0;
+  const dx = x1 === x0 ? 0 : (x1 > x0 ? 1 : -1);
+  const dy = y1 === y0 ? 0 : (y1 > y0 ? 1 : -1);
+  const steps = Math.max(Math.abs(x1 - x0), Math.abs(y1 - y0));
+  for (let step = 0; step <= steps; step++) {
+    for (let oy = -halfWidth; oy <= halfWidth; oy++) {
+      for (let ox = -halfWidth; ox <= halfWidth; ox++) {
+        const idx = world.idx(x + ox, y + oy);
+        world.cells[idx] = Cell.FLOOR;
+        world.roomMap[idx] = -1;
+        world.floorTex[idx] = floorTex;
+        cells?.push(idx);
+      }
+    }
+    x += dx;
+    y += dy;
+  }
+}
+
+function placeDoor(world: World, x: number, y: number, roomId: number, state: DoorState): number {
+  const idx = world.idx(x, y);
+  world.cells[idx] = Cell.DOOR;
+  world.roomMap[idx] = -1;
+  world.wallTex[idx] = Tex.DOOR_METAL;
+  world.doors.set(idx, { idx, state, roomA: roomId, roomB: -1, keyId: '', timer: 0 });
+  const room = world.rooms[roomId];
+  if (room && !room.doors.includes(idx)) room.doors.push(idx);
+  return idx;
+}
+
+function connectRoomToLane(world: World, room: Room, doorX: number, side: 1 | -1): number {
+  const doorY = side > 0 ? room.y + room.h : room.y - 1;
+  const startY = side > 0 ? doorY + 1 : doorY - 1;
+  const endY = side > 0 ? MAIN_Y - 5 : MAIN_Y + 5;
+  carveLine(world, doorX, startY, doorX, endY, 1, Tex.F_CONCRETE);
+  return placeDoor(world, doorX, doorY, room.id, DoorState.CLOSED);
+}
+
+function placeExitLift(world: World, x: number, y: number, direction: LiftDirection): number {
+  const idx = world.idx(x, y);
+  world.cells[idx] = Cell.LIFT;
+  world.wallTex[idx] = Tex.LIFT_DOOR;
+  world.roomMap[idx] = -1;
+  world.liftDir[idx] = direction;
+  const buttonIdx = world.idx(x + 1, y);
+  if (world.cells[buttonIdx] === Cell.FLOOR) {
+    world.features[buttonIdx] = Feature.LIFT_BUTTON;
+    world.liftDir[buttonIdx] = direction;
+  }
+  return idx;
+}
+
+function decorateAttic(
+  world: World,
+  rooms: Record<string, Room>,
+): void {
+  for (const room of Object.values(rooms)) {
+    for (let dy = 1; dy < room.h - 1; dy += 3) {
+      const left = world.idx(room.x + 1, room.y + dy);
+      const right = world.idx(room.x + room.w - 2, room.y + dy);
+      if (room.type === RoomType.STORAGE) {
+        world.features[left] = Feature.SHELF;
+        world.features[right] = Feature.SHELF;
+      } else if (room.type === RoomType.OFFICE || room.type === RoomType.HQ) {
+        world.features[left] = Feature.DESK;
+        world.features[right] = Feature.CHAIR;
+      }
+    }
+  }
+
+  for (const room of [rooms.deacon, rooms.shrine]) {
+    const cx = room.x + Math.floor(room.w / 2);
+    const cy = room.y + Math.floor(room.h / 2);
+    world.features[world.idx(cx, cy)] = Feature.CANDLE;
+    world.features[world.idx(cx - 2, cy)] = Feature.CANDLE;
+    world.features[world.idx(cx + 2, cy)] = Feature.CANDLE;
+  }
+
+  for (const room of [rooms.spawn, rooms.exitRoom, rooms.masha]) {
+    world.features[world.idx(room.x + Math.floor(room.w / 2), room.y + 2)] = Feature.LAMP;
+  }
+
+  stampBlackHand(world, rooms.evidence.x + 9, rooms.evidence.y + 6);
+  stampVerticalServiceHoles(world, rooms.crawlB.x + 6, rooms.crawlB.y + 3);
+}
+
+function stampRootObstacles(world: World, y: number): void {
+  for (let x = ATTIC_BASE_X + 118; x <= ATTIC_BASE_X + 138; x++) {
+    for (let dy = -4; dy <= 4; dy++) {
+      if (Math.abs(dy) <= 1 || ((x + dy) & 3) === 0) continue;
+      const idx = world.idx(x, y + dy);
+      world.cells[idx] = Cell.WALL;
+      world.wallTex[idx] = (dy & 1) === 0 ? Tex.GUT : Tex.MEAT;
+      world.roomMap[idx] = -1;
+    }
+  }
+  for (let x = ATTIC_BASE_X + 50; x <= ATTIC_BASE_X + 180; x += 13) {
+    const idx = world.idx(x, ATTIC_BASE_Y + 17);
+    world.wallTex[idx] = Tex.GUT;
+    world.stamp(x, ATTIC_BASE_Y + 17, 0.5, 0.5, 0.35, 0.55, x * 17, 60, 42, 30, true);
+  }
+}
+
+function stampBlackHand(world: World, x: number, y: number): void {
+  for (let dy = -1; dy <= 1; dy++) {
+    for (let dx = -1; dx <= 1; dx++) {
+      world.stamp(x + dx, y + dy, 0.5, 0.5, 0.18, 0.75, 7000 + dx * 31 + dy, 12, 8, 6, true);
+    }
+  }
+}
+
+function stampVerticalServiceHoles(world: World, x: number, y: number): void {
+  for (let dx = -1; dx <= 1; dx++) {
+    const idx = world.idx(x + dx, y);
+    if (world.cells[idx] !== Cell.FLOOR) continue;
+    world.cells[idx] = Cell.ABYSS;
+    world.floorTex[idx] = Tex.F_ABYSS;
+  }
+}
+
+function retuneAtticZones(world: World, rooms: Room[]): void {
+  for (const zone of world.zones) {
+    zone.level = 4;
+    zone.faction = ZoneFaction.CULTIST;
+  }
+  for (const room of rooms) {
+    const idx = world.idx(room.x + Math.floor(room.w / 2), room.y + Math.floor(room.h / 2));
+    const zone = world.zones[world.zoneMap[idx]];
+    if (!zone) continue;
+    zone.level = room.type === RoomType.HQ ? 5 : 4;
+    zone.faction = room.type === RoomType.HQ ? ZoneFaction.LIQUIDATOR : ZoneFaction.CULTIST;
+    zone.hqRoomId = room.type === RoomType.HQ ? room.id : zone.hqRoomId;
+  }
+}
+
+function addAtticContainers(
+  world: World,
+  rootkeeper: Room,
+  deacon: Room,
+  evidence: Room,
+  shrine: Room,
+  masha: Room,
+  rootChoice: ChthonicAtticRootChoice,
+): void {
+  addContainer(world, rootkeeper, rootkeeper.x + 3, rootkeeper.y + 5, ContainerKind.TOOL_LOCKER, 'Ящик несущих корней', 'owner', [
+    { defId: 'gear', count: 2 },
+    { defId: 'wire_coil', count: 2 },
+    { defId: 'sealant_tube', count: 1 },
+  ], ['attic', 'root', 'cut'], Faction.CITIZEN);
+
+  addContainer(world, deacon, deacon.x + 4, deacon.y + 6, ContainerKind.FILING_CABINET, 'Ведомость укрытия Остапа', 'owner', [
+    { defId: 'denunciation', count: 1 },
+    { defId: 'voluntary_receipt', count: 1 },
+    { defId: 'holy_water', count: 1 },
+  ], ['attic', 'shelter', 'witness'], Faction.CULTIST);
+
+  addContainer(world, evidence, evidence.x + 9, evidence.y + 6, ContainerKind.SAFE, 'Кладовая черной ладони', 'locked', [
+    { defId: 'denunciation', count: 1 },
+    { defId: 'official_permit_slip', count: 1 },
+    { defId: 'note', count: 1 },
+  ], ['attic', 'ministry', 'evidence'], Faction.CITIZEN);
+
+  addContainer(world, shrine, shrine.x + 10, shrine.y + 7, ContainerKind.SECRET_STASH, 'Реликварий корневой ниши', rootChoice === 'feed' ? 'public' : 'secret', [
+    { defId: 'idol_chernobog', count: 1 },
+    { defId: 'meat_rune', count: 1 },
+    { defId: 'psi_dust', count: 1 },
+  ], ['attic', 'hell', 'relic', rootChoice], Faction.CULTIST);
+
+  addContainer(world, masha, masha.x + 16, masha.y + 6, ContainerKind.WEAPON_CRATE, 'Контур прожига Маши', 'faction', [
+    { defId: 'ammo_fuel', count: 1 },
+    { defId: 'ammo_9mm', count: 12 },
+    { defId: 'bandage', count: 2 },
+  ], ['attic', 'burn', 'liquidator'], Faction.LIQUIDATOR);
+}
+
+function addContainer(
+  world: World,
+  room: Room,
+  x: number,
+  y: number,
+  kind: ContainerKind,
+  name: string,
+  access: WorldContainer['access'],
+  inventory: WorldContainer['inventory'],
+  tags: string[],
+  faction: Faction,
+): void {
+  world.addContainer({
+    id: world.containers.length + 1,
+    x,
+    y,
+    floor: FloorLevel.MINISTRY,
+    roomId: room.id,
+    zoneId: world.zoneMap[world.idx(x, y)],
+    kind,
+    name,
+    inventory,
+    capacitySlots: 8,
+    faction,
+    access,
+    lockDifficulty: access === 'locked' ? 5 : undefined,
+    discovered: access !== 'secret',
+    tags,
+  });
+}
+
+function spawnNpc(
+  entities: Entity[],
+  id: number,
+  plotNpcId: string,
+  def: PlotNpcDef,
+  x: number,
+  y: number,
+): number {
+  entities.push({
+    id,
+    type: EntityType.NPC,
+    x, y,
+    angle: 0,
+    pitch: 0,
+    alive: true,
+    speed: def.speed,
+    sprite: def.sprite,
+    hp: def.hp,
+    maxHp: def.maxHp,
+    ai: { goal: AIGoal.IDLE, tx: x, ty: y, path: [], pi: 0, stuck: 0, timer: 0 },
+    inventory: def.inventory.map(item => ({ ...item })),
+    name: def.name,
+    faction: def.faction,
+    occupation: def.occupation,
+    money: def.money,
+    isFemale: def.isFemale,
+    plotNpcId,
+    questId: -1,
+    canGiveQuest: true,
+  });
+  return id + 1;
+}
+
+function addItemDrop(
+  entities: Entity[],
+  id: number,
+  defId: string,
+  count: number,
+  x: number,
+  y: number,
+): number {
+  entities.push({
+    id,
+    type: EntityType.ITEM_DROP,
+    x, y,
+    angle: 0,
+    pitch: 0,
+    alive: true,
+    speed: 0,
+    sprite: Spr.ITEM_DROP,
+    inventory: [{ defId, count }],
+  });
+  return id + 1;
+}
+
+function spawnMonster(
+  entities: Entity[],
+  id: number,
+  kind: MonsterKind,
+  x: number,
+  y: number,
+): number {
+  const hp = kind === MonsterKind.REBAR ? 130 : kind === MonsterKind.SHADOW ? 75 : kind === MonsterKind.EYE ? 60 : 18;
+  const speed = kind === MonsterKind.REBAR ? 1.1 : kind === MonsterKind.SHADOW ? 2.3 : kind === MonsterKind.EYE ? 2.0 : 2.8;
+  entities.push({
+    id,
+    type: EntityType.MONSTER,
+    x, y,
+    angle: 0,
+    pitch: 0,
+    alive: true,
+    speed,
+    sprite: monsterSpr(kind),
+    hp,
+    maxHp: hp,
+    ai: { goal: AIGoal.HUNT, tx: x, ty: y, path: [], pi: 0, stuck: 0, timer: 0 },
+    monsterKind: kind,
+    attackCd: 0,
+    faction: Faction.WILD,
+  });
+  return id + 1;
+}
+
+function setDoorState(world: World, idx: number, state: DoorState): void {
+  const door = world.doors.get(idx);
+  if (door) door.state = state;
+}
+
+function scorchRoom(world: World, room: Room): void {
+  for (let dy = 0; dy < room.h; dy++) {
+    for (let dx = 0; dx < room.w; dx++) {
+      const idx = world.idx(room.x + dx, room.y + dy);
+      world.floorTex[idx] = Tex.F_ABYSS;
+      if (((dx + dy) & 3) === 0) world.fog[idx] = 35;
+      if (dx === 0 || dy === 0 || dx === room.w - 1 || dy === room.h - 1) world.wallTex[idx] = Tex.DARK;
+    }
+  }
+  world.markWallTexDirty();
+  world.markFloorTexDirty();
+  world.markFogDirty();
+}
+
+function shortestPathDistance(world: World, start: number, target: number): number {
+  if (start === target) return 0;
+  const visited = new Uint8Array(W * W);
+  const dist = new Int32Array(W * W).fill(-1);
+  const queue = new Int32Array(W * W);
+  let head = 0;
+  let tail = 0;
+  visited[start] = 1;
+  dist[start] = 0;
+  queue[tail++] = start;
+
+  while (head < tail) {
+    const idx = queue[head++];
+    const x = idx % W;
+    const y = (idx / W) | 0;
+    for (const [dx, dy] of DIRS) {
+      const next = world.idx(x + dx, y + dy);
+      if (visited[next] || !isTracePassable(world, next)) continue;
+      visited[next] = 1;
+      dist[next] = dist[idx] + 1;
+      if (next === target) return dist[next];
+      queue[tail++] = next;
+    }
+  }
+  return -1;
+}
+
+function isTracePassable(world: World, idx: number): boolean {
+  const cell = world.cells[idx];
+  if (cell === Cell.FLOOR || cell === Cell.WATER || cell === Cell.LIFT) return true;
+  if (cell !== Cell.DOOR) return false;
+  const door = world.doors.get(idx);
+  return !door || (door.state !== DoorState.LOCKED && door.state !== DoorState.HERMETIC_CLOSED);
+}

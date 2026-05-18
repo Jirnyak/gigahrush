@@ -3,6 +3,8 @@
 import { type Entity, type GameState, Faction } from '../core/types';
 import { ITEMS } from '../data/catalog';
 import { FACTION_NAMES, OCCUPATION_NAMES } from '../data/relations';
+import { getAdjustedItemPrice } from '../systems/economy';
+import { formatQuestMinutes, questRemainingMinutes } from '../systems/quest_deadlines';
 import { drawNeuroPanel, drawGlitchText, textJitter, flicker } from './hud_fx';
 
 export function drawNpcMenu(
@@ -11,16 +13,18 @@ export function drawNpcMenu(
   state: GameState,
   entities: Entity[],
   sx: number, sy: number,
+  uiTime = state.time,
 ): void {
   const npc = entities.find(e => e.id === state.npcMenuTarget);
   if (!npc) return;
 
   const w = ctx.canvas.width;
   const h = ctx.canvas.height;
-  const pw = 220 * sx, ph = 160 * sy;
+  const pw = Math.min(440 * sx, w - 24 * sx);
+  const ph = Math.min(320 * sy, h - 24 * sy);
   const px = (w - pw) / 2;
   const py = (h - ph) / 2;
-  const time = state.time;
+  const time = uiTime;
 
   // Background — neuro-panel
   drawNeuroPanel(ctx, px, py, pw, ph, time, 90);
@@ -117,6 +121,13 @@ export function drawNpcMenu(
         ctx.fillStyle = '#aaa';
         ctx.fillText(`Прогресс: ${q.killCount ?? 0}/${q.killNeeded}`, px + 8 * sx, ly);
       }
+      const remaining = questRemainingMinutes(q, state.clock.totalMinutes);
+      if (remaining !== undefined) {
+        ly += 12 * sy;
+        ctx.fillStyle = remaining <= 120 ? '#f66' : remaining <= 360 ? '#fa6' : '#8cf';
+        ctx.font = `${7 * sy}px monospace`;
+        ctx.fillText(`Срок: ${formatQuestMinutes(remaining)}`, px + 8 * sx, ly);
+      }
     }
     ctx.fillStyle = '#555';
     ctx.font = `${7 * sy}px monospace`;
@@ -207,7 +218,7 @@ export function drawNpcMenu(
         ctx.font = `${7 * sy}px monospace`;
         ctx.fillText(def.desc, cw / 2, descY + 10 * sy);
         ctx.fillStyle = '#da4';
-        ctx.fillText(`Цена: ${def.value ?? 0}₽`, cw / 2, descY + 20 * sy);
+        ctx.fillText(`Цена: ${getAdjustedItemPrice(state, item.defId)}₽`, cw / 2, descY + 20 * sy);
         ctx.fillStyle = '#6a6';
         ctx.fillText(state.tradeSide === 'npc' ? '[E] купить' : '[E] продать', cw / 2, descY + 30 * sy);
       }

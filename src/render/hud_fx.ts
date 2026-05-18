@@ -13,6 +13,64 @@ function hash2(a: number, b: number): number {
   return hash(a * 12.9898 + b * 78.233);
 }
 
+function hashByte(n: number): number {
+  n = (n ^ 61) ^ (n >>> 16);
+  n = (n + (n << 3)) | 0;
+  n ^= n >>> 4;
+  n = (n * 0x27d4eb2d) | 0;
+  n ^= n >>> 15;
+  return n & 255;
+}
+
+interface StaticNoiseCache {
+  canvas: HTMLCanvasElement;
+  ctx: CanvasRenderingContext2D;
+  image: ImageData;
+  w: number;
+  h: number;
+  seed: number;
+}
+
+const STATIC_NOISE_MAX_W = 160;
+const STATIC_NOISE_MAX_H = 100;
+const STATIC_NOISE_PIXEL_SCALE = 6;
+let staticNoiseCache: StaticNoiseCache | null = null;
+
+function getStaticNoiseCache(w: number, h: number): StaticNoiseCache {
+  if (staticNoiseCache && staticNoiseCache.w === w && staticNoiseCache.h === h) {
+    return staticNoiseCache;
+  }
+  const canvas = document.createElement('canvas');
+  canvas.width = w;
+  canvas.height = h;
+  const noiseCtx = canvas.getContext('2d', { alpha: true })!;
+  staticNoiseCache = {
+    canvas,
+    ctx: noiseCtx,
+    image: noiseCtx.createImageData(w, h),
+    w,
+    h,
+    seed: -1,
+  };
+  return staticNoiseCache;
+}
+
+function updateStaticNoise(cache: StaticNoiseCache, seed: number): void {
+  if (cache.seed === seed) return;
+  cache.seed = seed;
+  const data = cache.image.data;
+  const count = cache.w * cache.h;
+  for (let i = 0; i < count; i++) {
+    const v = hashByte(seed * 374761393 + i * 668265263);
+    const di = i << 2;
+    data[di] = v;
+    data[di + 1] = v;
+    data[di + 2] = v;
+    data[di + 3] = 255;
+  }
+  cache.ctx.putImageData(cache.image, 0, 0);
+}
+
 /* ── Text jitter: small XY offset that varies over time ───────── *
  * Each text element gets a unique `seed` for distinct motion.     */
 export function textJitter(time: number, seed: number): { dx: number; dy: number } {
@@ -179,19 +237,80 @@ export function drawStaticNoise(
   x: number, y: number, w: number, h: number,
   time: number, intensity = 0.03,
 ): void {
+  if (intensity <= 0 || w <= 0 || h <= 0) return;
+  const noiseW = Math.max(8, Math.min(STATIC_NOISE_MAX_W, Math.ceil(w / STATIC_NOISE_PIXEL_SCALE)));
+  const noiseH = Math.max(8, Math.min(STATIC_NOISE_MAX_H, Math.ceil(h / STATIC_NOISE_PIXEL_SCALE)));
+  const cache = getStaticNoiseCache(noiseW, noiseH);
+  updateStaticNoise(cache, Math.floor(time * 12));
+
   ctx.save();
-  const step = 4; // pixel block size for performance
-  const timeSeed = Math.floor(time * 15);
   ctx.globalAlpha = intensity;
-  for (let py = 0; py < h; py += step) {
-    for (let px = 0; px < w; px += step) {
-      const n = hash2(timeSeed + py * 317 + px, timeSeed * 7);
-      const v = Math.floor(n * 255);
-      ctx.fillStyle = `rgb(${v},${v},${v})`;
-      ctx.fillRect(x + px, y + py, step, step);
-    }
+  ctx.imageSmoothingEnabled = false;
+  ctx.drawImage(cache.canvas, x, y, w, h);
+  ctx.restore();
+}
+
+/* ── Cheap brown-grey smog veil for bounded procedural anomaly ── */
+export function drawSmogVeil(
+  ctx: CanvasRenderingContext2D,
+  w: number,
+  h: number,
+  time: number,
+  intensity: number,
+): void {
+  const a = Math.max(0, Math.min(1, intensity));
+  if (a <= 0) return;
+  ctx.save();
+  const edge = Math.min(0.24, 0.07 + a * 0.16);
+  const grd = ctx.createRadialGradient(w * 0.5, h * 0.48, Math.min(w, h) * 0.18, w * 0.5, h * 0.5, Math.max(w, h) * 0.72);
+  grd.addColorStop(0, `rgba(66,60,48,${a * 0.05})`);
+  grd.addColorStop(0.72, `rgba(76,68,52,${a * 0.11})`);
+  grd.addColorStop(1, `rgba(28,24,18,${edge})`);
+  ctx.fillStyle = grd;
+  ctx.fillRect(0, 0, w, h);
+
+  const rows = 5;
+  for (let i = 0; i < rows; i++) {
+    const y = ((hash2(Math.floor(time * 0.7), i + 71) + i / rows) % 1) * h;
+    const bh = (5 + hash2(i, Math.floor(time)) * 12) * (0.7 + a);
+    ctx.fillStyle = `rgba(118,106,76,${a * 0.035})`;
+    ctx.fillRect(0, y, w, bh);
   }
-  ctx.globalAlpha = 1;
+  drawStaticNoise(ctx, 0, 0, w, h, time * 0.55, a * 0.018);
+  ctx.restore();
+}
+
+/* ── Veretar overexposure: dry white HUD veil, not blankout ───── */
+export function drawVeretarVeil(
+  ctx: CanvasRenderingContext2D,
+  w: number, h: number,
+  time: number,
+  intensity = 1,
+): void {
+  const strength = Math.max(0, Math.min(1, intensity));
+  if (strength <= 0 || w <= 0 || h <= 0) return;
+
+  ctx.save();
+  ctx.globalCompositeOperation = 'screen';
+  ctx.fillStyle = `rgba(244,241,223,${0.035 * strength})`;
+  ctx.fillRect(0, 0, w, h);
+
+  const bandSeed = Math.floor(time * 3);
+  for (let i = 0; i < 5; i++) {
+    const y = hash2(bandSeed, i * 17) * h;
+    const bandH = 1 + hash2(bandSeed + 11, i) * 2;
+    ctx.fillStyle = `rgba(248,245,226,${(0.018 + hash2(bandSeed, i + 91) * 0.025) * strength})`;
+    ctx.fillRect(0, y, w, bandH);
+  }
+
+  ctx.globalCompositeOperation = 'source-over';
+  ctx.fillStyle = `rgba(59,59,54,${0.045 * strength})`;
+  for (let i = 0; i < 18; i++) {
+    const sx = hash2(bandSeed + 31, i) * w;
+    const sy = hash2(bandSeed + 53, i) * h;
+    const sw = 1 + hash2(bandSeed + 71, i) * 2;
+    ctx.fillRect(sx, sy, sw, 1);
+  }
   ctx.restore();
 }
 
@@ -212,5 +331,126 @@ export function drawGlitchLine(
   ctx.save();
   ctx.fillStyle = `rgba(0,255,200,${alpha})`;
   ctx.fillRect(0, ly, w, lineH);
+  ctx.restore();
+}
+
+export interface SeroburmalineHudFxView {
+  intensity: number;
+  exposure: number;
+  looking: boolean;
+  warning: string;
+}
+
+export function drawSeroburmalineNoLookFx(
+  ctx: CanvasRenderingContext2D,
+  w: number,
+  h: number,
+  time: number,
+  fx: SeroburmalineHudFxView,
+): void {
+  const intensity = Math.max(0, Math.min(0.78, fx.intensity));
+  if (intensity <= 0.01) return;
+
+  ctx.save();
+  const grd = ctx.createRadialGradient(w * 0.5, h * 0.5, Math.min(w, h) * 0.16, w * 0.5, h * 0.5, Math.max(w, h) * 0.64);
+  grd.addColorStop(0, 'rgba(0,0,0,0)');
+  grd.addColorStop(0.58, `rgba(76,52,68,${0.04 * intensity})`);
+  grd.addColorStop(1, `rgba(96,54,82,${0.22 * intensity})`);
+  ctx.fillStyle = grd;
+  ctx.fillRect(0, 0, w, h);
+
+  const bandCount = 6;
+  ctx.lineWidth = 1;
+  for (let i = 0; i < bandCount; i++) {
+    const phase = time * 1.7 + i * 8.13;
+    const y = h * (0.22 + i * 0.105) + Math.sin(phase) * 4;
+    const skew = Math.sin(phase * 0.7) * 18;
+    ctx.strokeStyle = `rgba(185,132,158,${(0.035 + i * 0.006) * intensity})`;
+    ctx.beginPath();
+    ctx.moveTo(w * 0.18 + skew, y);
+    ctx.lineTo(w * 0.82 - skew, y + Math.sin(phase + 1.7) * 3);
+    ctx.stroke();
+  }
+
+  if (fx.looking || fx.exposure > 0.28) {
+    const fontSize = Math.max(10, Math.min(18, Math.floor(Math.min(w, h) * 0.034)));
+    const x = w * 0.5;
+    const y = h * 0.5 - fontSize * 3.1;
+    const pulse = 0.76 + Math.sin(time * 9) * 0.12;
+    ctx.textAlign = 'center';
+    ctx.font = `bold ${fontSize}px monospace`;
+    ctx.shadowColor = `rgba(190,110,150,${0.45 * intensity})`;
+    ctx.shadowBlur = 8;
+    ctx.fillStyle = `rgba(235,205,218,${pulse * intensity})`;
+    ctx.fillText(fx.warning, x + (hash2(Math.floor(time * 18), 870) - 0.5) * 2.2, y);
+    ctx.shadowBlur = 0;
+    ctx.font = `${Math.max(8, Math.floor(fontSize * 0.62))}px monospace`;
+    ctx.fillStyle = `rgba(190,215,205,${0.56 * intensity})`;
+    ctx.fillText('в сторону / вниз / закрыть', x, y + fontSize * 1.15);
+  }
+
+  ctx.restore();
+}
+
+/* ── Compact route-cue waveform for actionable HUD hints ─────── */
+export function drawRouteCueWave(
+  ctx: CanvasRenderingContext2D,
+  x: number, y: number, w: number, h: number,
+  time: number,
+  color: string,
+): void {
+  if (w <= 0 || h <= 0) return;
+  ctx.save();
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 1;
+  ctx.globalAlpha = 0.35 + Math.sin(time * 7) * 0.12;
+  ctx.beginPath();
+  const mid = y + h * 0.5;
+  const amp = h * 0.24;
+  const steps = Math.max(8, Math.floor(w / 5));
+  for (let i = 0; i <= steps; i++) {
+    const t = i / steps;
+    const px = x + t * w;
+    const py = mid + Math.sin(t * Math.PI * 6 + time * 4.5) * amp * (0.35 + 0.65 * Math.sin(t * Math.PI));
+    if (i === 0) ctx.moveTo(px, py);
+    else ctx.lineTo(px, py);
+  }
+  ctx.stroke();
+  ctx.globalAlpha = 0.12;
+  ctx.fillStyle = color;
+  ctx.fillRect(x, mid - 0.5, w, 1);
+  ctx.restore();
+}
+
+/* ── Maronary overlay: bounded green proof/door repeat noise ─── */
+export function drawMaronaryProofNoise(
+  ctx: CanvasRenderingContext2D,
+  w: number, h: number,
+  time: number,
+  intensity = 1,
+): void {
+  const k = Math.max(0, Math.min(1, intensity));
+  if (k <= 0) return;
+
+  ctx.save();
+  ctx.globalAlpha = 0.1 * k;
+  ctx.strokeStyle = '#35ff66';
+  ctx.lineWidth = 1;
+  const seed = Math.floor(time * 3);
+  const count = 2 + Math.floor(hash2(seed, 91) * 3);
+  for (let i = 0; i < count; i++) {
+    const rw = (18 + hash2(seed, i + 10) * 54) * k;
+    const rh = (22 + hash2(seed, i + 20) * 38) * k;
+    const x = hash2(seed, i + 30) * Math.max(0, w - rw);
+    const y = hash2(seed, i + 40) * Math.max(0, h - rh);
+    ctx.strokeRect(x + 0.5, y + 0.5, rw, rh);
+  }
+
+  ctx.globalAlpha = 0.045 * k;
+  ctx.fillStyle = '#6cff88';
+  for (let i = 0; i < 5; i++) {
+    const y = hash2(seed, i + 70) * h;
+    ctx.fillRect(0, y, w, 1);
+  }
   ctx.restore();
 }

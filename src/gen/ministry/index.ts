@@ -10,11 +10,11 @@ import {
 } from '../../core/types';
 import { World } from '../../core/world';
 import { rng, pick, placeLifts, generateZones, ensureConnectivity } from '../shared';
+import { placeProceduralScreens } from '../procedural_screens';
 import { calcZoneLevel, randomRPG, scaleMonsterHp, scaleMonsterSpeed } from '../../systems/rpg';
 import { Spr, monsterSpr } from '../../render/sprite_index';
 import { MonsterKind } from '../../core/types';
-import { spawnMinistryNpcs } from './npcs';
-import { generateSecretSmokingRoom } from './secret_smoking';
+import { runMinistryContent } from './content_manifest';
 
 /* ── Portrait picker — coordinate-hash like posters ───────────── */
 const PORTRAIT_COUNT = 64;
@@ -567,24 +567,23 @@ export function generateMinistry(): { world: World; entities: Entity[]; spawnX: 
   }
 
   /* ══════════════════════════════════════════════════════════════
-     Phase 12b: Тайная курилка — hand-crafted side-quest room
+     Phase 12b-13: Manifest-owned administrative content
      ══════════════════════════════════════════════════════════════ */
   {
-    const r = generateSecretSmokingRoom(world, nextRoomId, entities, { v: nextId }, spawnX, spawnY);
+    const r = runMinistryContent(world, entities, nextRoomId, nextId, spawnX, spawnY);
     nextRoomId = r.nextRoomId;
-    nextId = entities.reduce((mx, e) => Math.max(mx, e.id), nextId) + 1;
+    nextId = r.nextId;
   }
-
-  /* ══════════════════════════════════════════════════════════════
-     Phase 13: NPCs
-     ══════════════════════════════════════════════════════════════ */
-  spawnMinistryNpcs(world, entities, { v: nextId });
-  nextId = entities.reduce((mx, e) => Math.max(mx, e.id), nextId) + 1;
 
   /* ══════════════════════════════════════════════════════════════
      Phase 14: Connectivity
      ══════════════════════════════════════════════════════════════ */
   ensureConnectivity(world, spawnX, spawnY);
+
+  /* ══════════════════════════════════════════════════════════════
+     Phase 15: Rare procedural ministry monitors
+     ══════════════════════════════════════════════════════════════ */
+  placeProceduralScreens(world, FloorLevel.MINISTRY);
 
   return { world, entities, spawnX, spawnY };
 }

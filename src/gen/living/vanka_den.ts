@@ -108,7 +108,7 @@ export function spawnVankaShadows(
   world: World, entities: Entity[], nextId: { v: number },
 ): void {
   // Find Vanka's room by plotNpcId
-  const vanka = entities.find(e => (e as any).plotNpcId === 'vanka');
+  const vanka = entities.find(e => e.plotNpcId === 'vanka');
   if (!vanka) return;
   const denCx = Math.floor(vanka.x);
   const denCy = Math.floor(vanka.y);

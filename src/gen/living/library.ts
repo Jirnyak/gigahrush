@@ -9,6 +9,7 @@ import {
 import { World } from '../../core/world';
 import { freshNeeds } from '../../data/catalog';
 import { type PlotNpcDef, registerSideQuest } from '../../data/plot';
+import { genLog } from '../log';
 import { registerZoneContent } from './zone_content';
 import { Spr } from '../../render/sprite_index';
 
@@ -177,7 +178,7 @@ function generateLibrary(
     plotNpcId: 'margarita_librarian', canGiveQuest: true, questId: -1,
   });
 
-  console.log(`[LIBRARY] Информаторий at (${rx}, ${ry}) room #${roomId}`);
+  genLog(`[LIBRARY] Информаторий at (${rx}, ${ry}) room #${roomId}`);
   return { nextRoomId };
 }
 

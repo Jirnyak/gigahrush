@@ -13,6 +13,8 @@ import {
   BARK_HIDE, BARK_HIDE_F, BARK_CHANCE_HIDE,
   BARK_GENERIC, BARK_GENERIC_F, BARK_CHANCE_GENERIC,
 } from './barks';
+import { tickNpcMemoryLowFrequency } from '../npc_memory';
+import { tickNpcRumorLowFrequency } from '../rumor';
 
 let _barkMsgs: Msg[] = [];
 let _barkTime = 0;
@@ -145,6 +147,8 @@ export function updateNPC(world: World, _entities: Entity[], e: Entity, dt: numb
     case NpcState.TRAVELING: handleTraveling(world, e, dt); break;
   }
 
+  tickNpcMemoryLowFrequency(e, _time, clock.totalMinutes, samosborActive);
+  tickNpcRumorLowFrequency(e, _time, clock.totalMinutes, samosborActive);
   tryAmbientBark(e, dt, samosborActive);
 }
 

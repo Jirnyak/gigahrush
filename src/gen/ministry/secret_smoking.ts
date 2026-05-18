@@ -12,6 +12,7 @@ import { freshNeeds } from '../../data/catalog';
 import { type PlotNpcDef, registerSideQuest } from '../../data/plot';
 import { stampRoom, protectRoom, connectProtectedRoom, findClearArea } from '../shared';
 import { Spr } from '../../render/sprite_index';
+import { genLog } from '../log';
 
 /* ── NPC definition ──────────────────────────────────────────── */
 const NPC_DEF: PlotNpcDef = {
@@ -175,7 +176,7 @@ export function generateSecretSmokingRoom(
     });
   }
 
-  console.log(`[SECRET_SMOKING] at (${rx}, ${ry}) room #${room.id}`);
+  genLog(`[SECRET_SMOKING] at (${rx}, ${ry}) room #${room.id}`);
   const usedId = Math.max(nextRoomId, room.id + 1);
   return { nextRoomId: usedId };
 }

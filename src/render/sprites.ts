@@ -5,6 +5,7 @@ import { MONSTERS, MONSTER_SPRITES, EYE_BOLT_SPRITE } from '../entities/monster'
 import { MonsterKind } from '../core/types';
 import { S, rgba, noise, clamp, CLEAR } from './pixutil';
 import { Spr, monsterSpr } from './sprite_index';
+import { ART_NUDE_VARIANTS, F69_FEMALE_NPC_VARIANTS, generateArtNudeSprite, generateFloor69FemaleNpcSprite } from './art_sprites';
 
 export type SpriteData = Uint32Array; // S*S RGBA with alpha
 
@@ -43,8 +44,9 @@ export function generateSprites(): SpriteData[] {
     // Auto-assign projSprite for ranged monsters
     if (def.isRanged && (def.projSprite === undefined || def.projSprite === 0)) {
       def.projSprite = k === MonsterKind.EYE ? Spr.EYE_BOLT
-                     : k === MonsterKind.ROBOT ? Spr.PLASMA_BOLT
-                     : Spr.PSI_BOLT;
+                     : k === MonsterKind.ROBOT ? Spr.HOSTILE_PLASMA_BOLT
+                     : k === MonsterKind.MANCOBUS ? Spr.HOSTILE_FLAME_BOLT
+                     : Spr.HOSTILE_PSI_BOLT;
     }
   }
   // Eye bolt projectile
@@ -57,12 +59,25 @@ export function generateSprites(): SpriteData[] {
   sprites.push(gen_nailSprite());
   // PSI bolt
   sprites.push(gen_psiBoltSprite());
-  // New projectiles
   sprites.push(gen_plasmaBoltSprite());
+  // Hostile projectile variants
+  sprites.push(gen_hostileBulletSprite());
+  sprites.push(gen_hostilePelletSprite());
+  sprites.push(gen_hostileNailSprite());
+  sprites.push(gen_hostilePsiBoltSprite());
+  sprites.push(gen_hostilePlasmaBoltSprite());
+  sprites.push(gen_hostileFlameBoltSprite());
+  // New projectiles
   sprites.push(gen_gaussBoltSprite());
   sprites.push(gen_bfgBoltSprite());
   sprites.push(gen_flameBoltSprite());
   sprites.push(gen_grenadeSprite());
+  for (let i = 0; i < ART_NUDE_VARIANTS; i++) {
+    sprites.push(generateArtNudeSprite(i));
+  }
+  for (let i = 0; i < F69_FEMALE_NPC_VARIANTS; i++) {
+    sprites.push(generateFloor69FemaleNpcSprite(i));
+  }
   return sprites;
 }
 
@@ -218,6 +233,151 @@ function gen_plasmaBoltSprite(): SpriteData {
       const b = clamp(Math.floor(220 * core + 180 * f * 0.6 + n * 20));
       const a = clamp(Math.floor(255 * f * f + 230 * core));
       t[y * S + x] = rgba(r, g, b, a);
+    }
+  }
+  return t;
+}
+
+/* ── Hostile bullet: red-white tracer orb ────────────────────── */
+function gen_hostileBulletSprite(): SpriteData {
+  const t = new Uint32Array(S * S).fill(CLEAR);
+  const cx = S / 2, cy = S / 2;
+  const R = 7;
+  for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) {
+    const dx = (x - cx) * 1.35, dy = (y - cy) * 0.75;
+    const d = Math.sqrt(dx * dx + dy * dy);
+    if (d < R * 2.4) {
+      const f = 1 - d / (R * 2.4);
+      const core = d < R ? 1 : 0;
+      const a = clamp(Math.floor(255 * f * f + 210 * core));
+      t[y * S + x] = rgba(
+        clamp(Math.floor(255 * core + 250 * f * 0.85)),
+        clamp(Math.floor(90 * core + 60 * f * 0.45)),
+        clamp(Math.floor(55 * core + 35 * f * 0.3)),
+        a,
+      );
+    }
+  }
+  return t;
+}
+
+/* ── Hostile pellet: small red-orange shrapnel spark ─────────── */
+function gen_hostilePelletSprite(): SpriteData {
+  const t = new Uint32Array(S * S).fill(CLEAR);
+  const cx = S / 2, cy = S / 2;
+  const R = 4;
+  for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) {
+    const dx = x - cx, dy = y - cy;
+    const d = Math.sqrt(dx * dx + dy * dy);
+    const cross = Math.abs(dx) < 1.3 || Math.abs(dy) < 1.3;
+    if (d < R * 2 || (cross && d < R * 2.8)) {
+      const f = 1 - Math.min(1, d / (R * 2.8));
+      const core = d < R ? 1 : 0;
+      const a = clamp(Math.floor((cross ? 210 : 150) * f * f + 200 * core));
+      t[y * S + x] = rgba(
+        clamp(Math.floor(255 * core + 230 * f * 0.8)),
+        clamp(Math.floor(70 * core + 55 * f * 0.45)),
+        clamp(Math.floor(25 * core + 20 * f * 0.25)),
+        a,
+      );
+    }
+  }
+  return t;
+}
+
+/* ── Hostile nail: rusty hot metal sliver ────────────────────── */
+function gen_hostileNailSprite(): SpriteData {
+  const t = new Uint32Array(S * S).fill(CLEAR);
+  const cx = S / 2, cy = S / 2;
+  for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) {
+    const dx = Math.abs(x - cx), dy = Math.abs(y - cy);
+    if (dx < 2 && dy < 10) {
+      const f = 1 - dy / 10;
+      t[y * S + x] = rgba(
+        clamp(220 + 35 * f),
+        clamp(90 + 60 * f),
+        clamp(45 + 30 * f),
+      );
+    } else if (dx < 5 && dy < 12) {
+      const d = Math.sqrt(dx * dx + dy * dy);
+      const f = Math.max(0, 1 - d / 12);
+      const a = clamp(Math.floor(105 * f));
+      if (a > 8) t[y * S + x] = rgba(160, 55, 35, a);
+    }
+  }
+  return t;
+}
+
+/* ── Hostile PSI bolt: crimson-violet unstable knot ──────────── */
+function gen_hostilePsiBoltSprite(): SpriteData {
+  const t = new Uint32Array(S * S).fill(CLEAR);
+  const cx = S / 2, cy = S / 2;
+  const R = 8;
+  for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) {
+    const dx = x - cx, dy = y - cy;
+    const d = Math.sqrt(dx * dx + dy * dy);
+    if (d < R * 3) {
+      const f = 1 - d / (R * 3);
+      const core = d < R ? 1 : 0;
+      const n = noise(x * 3, y * 3, 911) * 0.45;
+      const ring = Math.sin(d * 1.6 + n * 6) > 0.15 ? 1 : 0.65;
+      const a = clamp(Math.floor(255 * f * f * ring + 230 * core));
+      t[y * S + x] = rgba(
+        clamp(Math.floor(255 * core + 220 * f * 0.75 + n * 40)),
+        clamp(Math.floor(45 * core + 35 * f * 0.3)),
+        clamp(Math.floor(150 * core + 170 * f * 0.75 + n * 45)),
+        a,
+      );
+    }
+  }
+  return t;
+}
+
+/* ── Hostile plasma bolt: orange-cyan industrial arc ─────────── */
+function gen_hostilePlasmaBoltSprite(): SpriteData {
+  const t = new Uint32Array(S * S).fill(CLEAR);
+  const cx = S / 2, cy = S / 2;
+  const R = 9;
+  for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) {
+    const dx = x - cx, dy = y - cy;
+    const d = Math.sqrt(dx * dx + dy * dy);
+    if (d < R * 2.5) {
+      const f = 1 - d / (R * 2.5);
+      const core = d < R ? 1 : 0;
+      const n = noise(x * 4, y * 4, 4242) * 0.4;
+      const arc = Math.sin(Math.atan2(dy, dx) * 5 + d * 1.2 + n * 4) > 0.25 ? 1 : 0.7;
+      const a = clamp(Math.floor(255 * f * f * arc + 230 * core));
+      t[y * S + x] = rgba(
+        clamp(Math.floor(255 * core + 230 * f * 0.8 + n * 30)),
+        clamp(Math.floor(135 * core + 120 * f * 0.55 + n * 35)),
+        clamp(Math.floor(45 * core + 95 * f * 0.45 + n * 40)),
+        a,
+      );
+    }
+  }
+  return t;
+}
+
+/* ── Hostile flame bolt: dark red fireball with hot core ─────── */
+function gen_hostileFlameBoltSprite(): SpriteData {
+  const t = new Uint32Array(S * S).fill(CLEAR);
+  const cx = S / 2, cy = S / 2;
+  const R = 9;
+  for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) {
+    const dx = x - cx, dy = y - cy;
+    const d = Math.sqrt(dx * dx + dy * dy);
+    if (d < R * 2.6) {
+      const f = 1 - d / (R * 2.6);
+      const core = d < R ? 1 : 0;
+      const n = noise(x * 5, y * 5, 1555) * 0.5;
+      const heat = core + f * 0.75 + n * 0.45;
+      const a = clamp(Math.floor(255 * f * f + 235 * core));
+      t[y * S + x] = rgba(
+        clamp(Math.floor(255 * Math.min(1, heat * 1.5))),
+        clamp(Math.floor(120 * Math.min(1, heat * 0.9))),
+        clamp(Math.floor(35 * Math.min(1, heat * 0.6))),
+        a,
+      );
     }
   }
   return t;

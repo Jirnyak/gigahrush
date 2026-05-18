@@ -1,0 +1,99 @@
+import { test } from 'node:test';
+import * as assert from 'node:assert/strict';
+
+import { AIGoal, Cell, EntityType, FloorLevel, MonsterKind, type Entity } from '../src/core/types';
+import { World } from '../src/core/world';
+import { isBaitAttractedMonster } from '../src/data/monster_ecology';
+import {
+  MONSTER_BAIT_MAX_ACTIVE,
+  expireMonsterBaits,
+  findMonsterBaitTarget,
+  getActiveMonsterBaits,
+  isMonsterBaitItem,
+  isMonsterBaitUseItem,
+  placeMonsterBait,
+  resetMonsterBaits,
+} from '../src/systems/monster_bait';
+import { getRecentEvents } from '../src/systems/events';
+import { makeGameState } from './helpers';
+
+function openWorld(): World {
+  const world = new World();
+  world.cells.fill(Cell.FLOOR);
+  return world;
+}
+
+function actor(): Entity {
+  return {
+    id: 1,
+    type: EntityType.PLAYER,
+    x: 10,
+    y: 10,
+    angle: 0,
+    pitch: 0,
+    alive: true,
+    speed: 3,
+    sprite: 0,
+    name: 'Вы',
+  };
+}
+
+function monster(kind: MonsterKind, x: number, y: number, id = 2): Entity {
+  return {
+    id,
+    type: EntityType.MONSTER,
+    x,
+    y,
+    angle: 0,
+    pitch: 0,
+    alive: true,
+    speed: 2,
+    sprite: 0,
+    monsterKind: kind,
+    ai: { goal: AIGoal.HUNT, tx: 0, ty: 0, path: [], pi: 0, stuck: 0, timer: 0 },
+  };
+}
+
+test('food drops and govnyak use are explicit bait inputs', () => {
+  assert.equal(isMonsterBaitItem('bread'), true);
+  assert.equal(isMonsterBaitItem('govnyak_roll'), true);
+  assert.equal(isMonsterBaitUseItem('govnyak_roll'), true);
+  assert.equal(isMonsterBaitUseItem('bread'), false);
+  assert.equal(isMonsterBaitItem('water'), false);
+  assert.equal(isBaitAttractedMonster(MonsterKind.KRYSNOZHKA), true);
+  assert.equal(isBaitAttractedMonster(MonsterKind.SBORKA), true);
+  assert.equal(isBaitAttractedMonster(MonsterKind.EYE), false);
+});
+
+test('small monsters claim nearby bait through a capped marker scan', () => {
+  resetMonsterBaits();
+  const world = openWorld();
+  const state = makeGameState({ time: 10, currentFloor: FloorLevel.LIVING });
+
+  assert.equal(placeMonsterBait(state, world, actor(), 10, 10, 'bread', 1, 'drop', 99), true);
+  const sborka = monster(MonsterKind.SBORKA, 13, 10);
+  const bait = findMonsterBaitTarget(world, sborka, 0.2, state.time, state);
+  assert.equal(bait?.itemId, 'bread');
+  assert.equal(sborka.ai?.baitMarkerId, bait?.id);
+  assert.equal(getRecentEvents(state, { type: 'monster_bait_attracted', limit: 1 })[0]?.monsterKind, MonsterKind.SBORKA);
+
+  const eye = monster(MonsterKind.EYE, 13, 10, 3);
+  assert.equal(findMonsterBaitTarget(world, eye, 0.2, state.time, state), null);
+});
+
+test('bait markers expire and stay under the active cap', () => {
+  resetMonsterBaits();
+  const world = openWorld();
+  const state = makeGameState({ time: 20, currentFloor: FloorLevel.LIVING });
+  const player = actor();
+
+  for (let i = 0; i < MONSTER_BAIT_MAX_ACTIVE + 3; i++) {
+    state.time = 20 + i;
+    assert.equal(placeMonsterBait(state, world, player, 20 + i, 10, 'bread', 1, 'drop', 200 + i), true);
+  }
+  assert.equal(getActiveMonsterBaits().length, MONSTER_BAIT_MAX_ACTIVE);
+
+  expireMonsterBaits(state, 100);
+  assert.equal(getActiveMonsterBaits().length, 0);
+  assert.equal(getRecentEvents(state, { type: 'monster_bait_expired', limit: 1 })[0]?.data?.source, 'drop');
+});

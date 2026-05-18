@@ -1,17 +1,100 @@
 /* ── Quest log panel — paginated, one quest per page ──────────── */
 
-import { type GameState } from '../core/types';
+import { FloorLevel, RoomType, type GameState, type Quest, QuestType } from '../core/types';
+import { getRecentRumorLead } from '../systems/npc_memory';
+import { formatQuestMinutes, questRemainingMinutes } from '../systems/quest_deadlines';
 import { drawNeuroPanel, drawGlitchText } from './hud_fx';
+
+const FLOOR_NAMES: Record<FloorLevel, string> = {
+  [FloorLevel.MINISTRY]: 'Министерство',
+  [FloorLevel.KVARTIRY]: 'Квартиры',
+  [FloorLevel.LIVING]: 'Жилая зона',
+  [FloorLevel.MAINTENANCE]: 'Коллекторы',
+  [FloorLevel.HELL]: 'Преисподняя',
+  [FloorLevel.VOID]: 'Пустота',
+};
+
+const ROOM_TYPE_NAMES: Record<RoomType, string> = {
+  [RoomType.LIVING]: 'жилые комнаты',
+  [RoomType.KITCHEN]: 'кухни',
+  [RoomType.BATHROOM]: 'санузлы',
+  [RoomType.STORAGE]: 'кладовые',
+  [RoomType.MEDICAL]: 'медпункты',
+  [RoomType.COMMON]: 'общие залы',
+  [RoomType.PRODUCTION]: 'цеха',
+  [RoomType.CORRIDOR]: 'коридоры',
+  [RoomType.SMOKING]: 'курилки',
+  [RoomType.OFFICE]: 'кабинеты',
+  [RoomType.HQ]: 'штабы',
+};
+
+function routeFloor(q: Quest): FloorLevel | undefined {
+  return q.visitFloor ?? q.targetFloor;
+}
+
+function routeDetail(q: Quest): string {
+  if (q.targetHint) return q.targetHint;
+  if (q.targetRoomType !== undefined) return `Ищите ${ROOM_TYPE_NAMES[q.targetRoomType]}.`;
+  return '';
+}
+
+function questRouteHint(q: Quest, state: GameState): string {
+  if (q.done) return '';
+  const floor = routeFloor(q);
+  const detail = routeDetail(q);
+  if (floor !== undefined) {
+    if (floor === state.currentFloor) return detail ? `Цель на этом этаже. ${detail}` : 'Цель на этом этаже.';
+    const dir = floor > state.currentFloor ? '↓' : '↑';
+    return detail
+      ? `Цель: ${FLOOR_NAMES[floor]}. Лифт ${dir}. ${detail}`
+      : `Цель: ${FLOOR_NAMES[floor]}. Ищите лифт ${dir}.`;
+  }
+  if (q.type === QuestType.TALK && q.targetPlotNpcId && q.targetNpcId === undefined) {
+    return 'Собеседник на другом уровне. Ищите лифт.';
+  }
+  if (q.type === QuestType.VISIT && q.targetRoom === undefined) {
+    return 'Комната отметится на карте, когда этаж будет найден.';
+  }
+  return detail;
+}
+
+function drawWrappedText(
+  ctx: CanvasRenderingContext2D,
+  text: string,
+  x: number, y: number,
+  maxW: number, lineH: number,
+): number {
+  const words = text.split(' ');
+  let line = '';
+  let ly = y;
+  for (const word of words) {
+    const test = line ? line + ' ' + word : word;
+    if (line && ctx.measureText(test).width > maxW) {
+      ctx.fillText(line, x, ly);
+      line = word;
+      ly += lineH;
+    } else {
+      line = test;
+    }
+  }
+  if (line) {
+    ctx.fillText(line, x, ly);
+    ly += lineH;
+  }
+  return ly;
+}
 
 export function drawQuestLog(
   ctx: CanvasRenderingContext2D,
   state: GameState,
   sx: number, sy: number,
+  uiTime = state.time,
 ): void {
-  const pw = 200 * sx, ph = 140 * sy;
+  const pw = Math.min(400 * sx, ctx.canvas.width - 24 * sx);
+  const ph = Math.min(280 * sy, ctx.canvas.height - 24 * sy);
   const px = (ctx.canvas.width - pw) / 2;
   const py = (ctx.canvas.height - ph) / 2;
-  const time = state.time;
+  const time = uiTime;
 
   drawNeuroPanel(ctx, px, py, pw, ph, time, 50);
 
@@ -44,32 +127,50 @@ export function drawQuestLog(
   ctx.fillText(`От: ${q.giverName ?? '???'}`, px + 8 * sx, py + 24 * sy);
 
   // Status badge
-  const isDone = q.done;
-  ctx.fillStyle = isDone ? '#484' : '#dda';
+  const isFailed = q.failed === true;
+  const isDone = q.done && !isFailed;
+  ctx.fillStyle = isFailed ? '#f66' : isDone ? '#484' : '#dda';
   ctx.font = `${8 * sy}px monospace`;
 
   // Word-wrapped description
-  const prefix = isDone ? '✓ ' : '• ';
-  const words = (prefix + q.desc).split(' ');
-  let line = '';
+  const prefix = isFailed ? '× ' : isDone ? '✓ ' : '• ';
   let ly = py + 40 * sy;
-  for (const word of words) {
-    const test = line ? line + ' ' + word : word;
-    if (ctx.measureText(test).width > maxW) {
-      ctx.fillText(line, px + 8 * sx, ly);
-      line = word;
-      ly += 12 * sy;
-    } else {
-      line = test;
-    }
-  }
-  if (line) { ctx.fillText(line, px + 8 * sx, ly); ly += 12 * sy; }
+  ly = drawWrappedText(ctx, prefix + q.desc, px + 8 * sx, ly, maxW, 12 * sy);
 
   // Progress for KILL quests
-  if (!isDone && q.killNeeded !== undefined) {
+  if (!q.done && q.killNeeded !== undefined) {
     ly += 4 * sy;
     ctx.fillStyle = '#aaa';
     ctx.fillText(`Прогресс: ${q.killCount ?? 0}/${q.killNeeded}`, px + 8 * sx, ly);
+  }
+
+  const remaining = questRemainingMinutes(q, state.clock.totalMinutes);
+  if (!q.done && remaining !== undefined) {
+    ly += 12 * sy;
+    ctx.fillStyle = remaining <= 120 ? '#f66' : remaining <= 360 ? '#fa6' : '#8cf';
+    ctx.font = `${7 * sy}px monospace`;
+    ctx.fillText(`Срок: ${formatQuestMinutes(remaining)}`, px + 8 * sx, ly);
+  } else if (isFailed) {
+    ly += 12 * sy;
+    ctx.fillStyle = '#f66';
+    ctx.font = `${7 * sy}px monospace`;
+    ctx.fillText('Провалено: срок вышел', px + 8 * sx, ly);
+  }
+
+  const routeHint = questRouteHint(q, state);
+  if (routeHint) {
+    ly += 12 * sy;
+    ctx.fillStyle = '#8cf';
+    ctx.font = `${7 * sy}px monospace`;
+    ly = drawWrappedText(ctx, routeHint, px + 8 * sx, ly, maxW, 9 * sy);
+  }
+
+  const rumorLead = getRecentRumorLead(state.time);
+  if (rumorLead && ly < py + ph - 28 * sy) {
+    ly += 8 * sy;
+    ctx.fillStyle = '#d9a';
+    ctx.font = `${7 * sy}px monospace`;
+    drawWrappedText(ctx, `Слух: ${rumorLead.text}`, px + 8 * sx, ly, maxW, 9 * sy);
   }
 
   // Bottom hint

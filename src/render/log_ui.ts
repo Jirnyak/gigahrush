@@ -7,10 +7,11 @@ export function drawLogMenu(
   ctx: CanvasRenderingContext2D,
   state: GameState,
   sx: number, sy: number,
+  uiTime = state.time,
 ): void {
   const w = ctx.canvas.width;
   const h = ctx.canvas.height;
-  const time = state.time;
+  const time = uiTime;
 
   // Fullscreen neuro-panel background
   drawNeuroPanel(ctx, 4 * sx, 4 * sy, w - 8 * sx, h - 8 * sy, time, 60);

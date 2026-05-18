@@ -171,7 +171,7 @@ export function generateTutorRoom(
     x: armX + 3 + 0.5, y: armY + 1 + 0.5,
     angle: 0, pitch: 0, alive: true, speed: 0,
     sprite: Spr.ITEM_DROP, spriteScale: 1.0,
-    inventory: [{ defId: 'ammo_9mm', count: 16 }],
+    inventory: [{ defId: 'ammo_9mm', count: 8 }],
   });
 
   // ── NPC: Барни — armory instructor ──
@@ -230,7 +230,7 @@ const PAIRS: [string, string, string, string][] = [
   ['ЛКМ',   'АТАКА',     'E',     'ДЕЙСТВИЕ'],
   ['F',     'ФРАКЦИИ',   'I',     'ИНВЕНТАРЬ'],
   ['M',     'КАРТА',     'Q',     'ЗАДАНИЯ'],
-  ['L',     'ЖУРНАЛ',    'Z',     'СОН'],
+  ['L',     'ЖУРНАЛ',    'N',     'НЕТ-СФЕРА'],
   ['P',     'ТУАЛЕТ',    'ENTER', 'МЕНЮ'],
   ['G',     'ИНСТРУМ.',  '1 2 3', 'АТРИБУТЫ'],
 ];

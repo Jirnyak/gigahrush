@@ -1,0 +1,770 @@
+/* ── Design floor: dark_metro / Темная пересадка ─────────────── */
+
+import {
+  AIGoal,
+  Cell,
+  ContainerKind,
+  DoorState,
+  EntityType,
+  Faction,
+  Feature,
+  FloorLevel,
+  LiftDirection,
+  MonsterKind,
+  Occupation,
+  QuestType,
+  RoomType,
+  Tex,
+  W,
+  ZoneFaction,
+  type Entity,
+  type GameState,
+  type Room,
+  type WorldContainer,
+} from '../../core/types';
+import { World } from '../../core/world';
+import { hashSeed, withSeededRandom } from '../../core/rand';
+import { freshNeeds } from '../../data/catalog';
+import { type PlotNpcDef, registerSideQuest } from '../../data/plot';
+import { MONSTERS, applyMonsterVariant } from '../../entities/monster';
+import { Spr } from '../../render/sprite_index';
+import { publishEvent } from '../../systems/events';
+import { randomRPG, scaleMonsterHp, scaleMonsterSpeed } from '../../systems/rpg';
+import { ensureConnectivity, generateZones, sanitizeDoors, stampRoom } from '../shared';
+import type { FloorGeneration } from '../floor_manifest';
+
+export const DESIGN_FLOOR_ID = 'dark_metro' as const;
+export const DARK_METRO_DISPLAY_NAME = 'Темная пересадка';
+export const DARK_METRO_FUTURE_Z = 24;
+export const DARK_METRO_DEFAULT_SEED = 0x17da_4b0d;
+
+const DARK_METRO_BASE_FLOOR = FloorLevel.MAINTENANCE;
+
+const enum PlatformLightState {
+  OFF = 0,
+  WEAK = 1,
+  ON = 2,
+}
+
+const enum SignalBoxState {
+  WORN = 0,
+  REPAIRED = 1,
+  SABOTAGED = 2,
+}
+
+const enum StrandedNpcState {
+  STRANDED = 0,
+  GUIDED = 1,
+  LEFT_BEHIND = 2,
+}
+
+export type DarkMetroPackedState = number;
+
+export interface DarkMetroStateParts {
+  platformLight: 'off' | 'weak' | 'on';
+  wrongRouteArmed: DarkMetroRouteId;
+  signalBox: 'worn' | 'repaired' | 'sabotaged';
+  strandedNpc: 'stranded' | 'guided' | 'left_behind';
+}
+
+export type DarkMetroRouteId =
+  | 'dark_metro_market_88_smuggle'
+  | 'dark_metro_service_floor_shortcut'
+  | 'dark_metro_red_lower_wrong'
+  | 'dark_metro_platform_fallback';
+
+export interface DarkMetroRouteDef {
+  id: DarkMetroRouteId;
+  label: string;
+  panelSlot: number;
+  costItem?: string;
+  costCount?: number;
+  destinationHook: string;
+  clue: string;
+  fallbackRouteId: DarkMetroRouteId;
+  tags: readonly string[];
+}
+
+const ROUTE_BITS = 2;
+const SIGNAL_BITS = 4;
+const STRANDED_BITS = 6;
+
+export const DARK_METRO_ROUTES: readonly DarkMetroRouteDef[] = [
+  {
+    id: 'dark_metro_market_88_smuggle',
+    label: 'Черный рынок 88: служебный ход',
+    panelSlot: 0,
+    costItem: 'metro_ticket',
+    costCount: 1,
+    destinationHook: 'future.market_88.underpass_entry',
+    clue: 'Над табло мигает зеленая лампа, а на полу к тоннелю ведут три желтых пятна.',
+    fallbackRouteId: 'dark_metro_platform_fallback',
+    tags: ['dark_metro', 'market_88', 'smuggle', 'shortcut'],
+  },
+  {
+    id: 'dark_metro_service_floor_shortcut',
+    label: 'Служебный этаж: стрелочный коридор',
+    panelSlot: 1,
+    costItem: 'fuse',
+    costCount: 1,
+    destinationHook: 'future.service_floor.signal_hatch',
+    clue: 'Табло щелкает в такт реле; стрелка горит только при живом предохранителе.',
+    fallbackRouteId: 'dark_metro_platform_fallback',
+    tags: ['dark_metro', 'service_floor', 'signal', 'shortcut'],
+  },
+  {
+    id: 'dark_metro_red_lower_wrong',
+    label: 'Красная нижняя: чужая остановка',
+    panelSlot: 2,
+    costItem: 'metro_ticket',
+    costCount: 2,
+    destinationHook: 'future.hell.red_platform_edge',
+    clue: 'Красное табло показывает номер вагона без станции; безопасный обход подписан мелом у подземного хода.',
+    fallbackRouteId: 'dark_metro_platform_fallback',
+    tags: ['dark_metro', 'hell', 'wrong_route', 'red_line'],
+  },
+  {
+    id: 'dark_metro_platform_fallback',
+    label: 'Петля платформы: вернуться к свету',
+    panelSlot: 3,
+    destinationHook: 'dark_metro.station_hall',
+    clue: 'Белые лампы вдоль стены ведут обратно в зал даже после неверного объявления.',
+    fallbackRouteId: 'dark_metro_platform_fallback',
+    tags: ['dark_metro', 'fallback', 'safe_return'],
+  },
+];
+
+const NORA_DEF: PlotNpcDef = {
+  name: 'Нора Диспетчерская',
+  isFemale: true,
+  faction: Faction.CITIZEN,
+  occupation: Occupation.SECRETARY,
+  sprite: Occupation.SECRETARY,
+  hp: 150, maxHp: 150, money: 70, speed: 0.9,
+  inventory: [
+    { defId: 'metro_ticket', count: 3 },
+    { defId: 'relay_diagram', count: 1 },
+    { defId: 'tea', count: 1 },
+  ],
+  talkLines: [
+    'Поезд здесь не ходит. Он соглашается. Разница важная.',
+    'Если табло говорит ровно, проверь лампу. Ровные объявления у нас чаще всего чужие.',
+    'Не садись туда, где красный номер появился раньше станции. Возвратная петля отмечена белым светом.',
+  ],
+  talkLinesPost: [
+    'Стрелка снова отвечает на ручку. Это не значит, что ей можно верить без билета.',
+    'Платформа стала светлее. Тени теперь хотя бы вынуждены притворяться людьми.',
+  ],
+};
+
+const VENDOR_DEF: PlotNpcDef = {
+  name: 'Ламповщик Гена',
+  isFemale: false,
+  faction: Faction.CITIZEN,
+  occupation: Occupation.STOREKEEPER,
+  sprite: Occupation.STOREKEEPER,
+  hp: 120, maxHp: 120, money: 110, speed: 0.85,
+  inventory: [
+    { defId: 'flashlight', count: 1 },
+    { defId: 'lamp_bulb', count: 2 },
+    { defId: 'metro_ticket', count: 2 },
+    { defId: 'cigs', count: 3 },
+  ],
+  talkLines: [
+    'Свет продается дешевле, чем темнота забирает.',
+    'Платформу можно зажечь. Можно не зажигать. В темноте меньше видят и свои, и чужие.',
+    'Фонарик не делает маршрут безопасным. Он только показывает, где платить.',
+  ],
+  talkLinesPost: [
+    'Горит? Значит, кто-то еще не украл лампу.',
+    'Теперь тень хотя бы отбрасывает квитанцию.',
+  ],
+};
+
+const STRANDED_DEF: PlotNpcDef = {
+  name: 'Сержант Барсуков',
+  isFemale: false,
+  faction: Faction.LIQUIDATOR,
+  occupation: Occupation.HUNTER,
+  sprite: Occupation.HUNTER,
+  hp: 95, maxHp: 180, money: 28, speed: 0.75,
+  inventory: [
+    { defId: 'bandage', count: 1 },
+    { defId: 'ammo_9mm', count: 10 },
+    { defId: 'gasmask_filter', count: 1 },
+  ],
+  talkLines: [
+    'Я не заблудился. Я занял неправильную станцию до приказа.',
+    'До света дойду. До голоса диспетчера - не уверен.',
+    'Если объявят мою фамилию, не отвечай. Это не эвакуация.',
+  ],
+  talkLinesPost: [
+    'Свет вижу. Значит, живые пока выигрывают у расписания.',
+    'Возьми фильтр. Внизу воздух тоже любит проверять документы.',
+  ],
+  talkQuestResponse: 'Барсуков дошел? Хорошо. Пусть сидит у белой лампы и не спорит с объявлениями.',
+};
+
+const MISHA_DEF: PlotNpcDef = {
+  name: 'Миша с повтором',
+  isFemale: false,
+  faction: Faction.CITIZEN,
+  occupation: Occupation.CHILD,
+  sprite: Occupation.CHILD,
+  hp: 80, maxHp: 80, money: 0, speed: 1.0,
+  inventory: [
+    { defId: 'child_map', count: 1 },
+  ],
+  talkLines: [
+    'Не красный. Белый путь назад.',
+    'Если поезд спросит имя, молчи.',
+    'Я уже сказал это. Значит, еще не поздно.',
+  ],
+  talkLinesPost: [
+    'Белый путь назад.',
+  ],
+};
+
+let contentRegistered = false;
+
+export function registerDarkMetroContent(): void {
+  if (contentRegistered) return;
+  contentRegistered = true;
+
+  registerSideQuest('dark_metro_dispatcher_nora', NORA_DEF, [
+    {
+      id: 'dark_metro_wrong_train',
+      giverNpcId: 'dark_metro_dispatcher_nora',
+      type: QuestType.FETCH,
+      desc: 'Нора: «Принеси билет метро и выбери табло с подсказкой. Неверная посадка должна стоить жетон, а не жизнь.»',
+      targetItem: 'metro_ticket', targetCount: 1,
+      rewardItem: 'lift_scheme', rewardCount: 1,
+      extraRewards: [{ defId: 'clean_health_cert', count: 1 }],
+      relationDelta: 10, xpReward: 65, moneyReward: 35,
+    },
+    {
+      id: 'dark_metro_signal_box',
+      giverNpcId: 'dark_metro_dispatcher_nora',
+      type: QuestType.FETCH,
+      desc: 'Нора: «Два предохранителя в сигнальный ящик - и стрелка хотя бы начнет врать одинаково.»',
+      targetItem: 'fuse', targetCount: 2,
+      rewardItem: 'metro_ticket', rewardCount: 2,
+      extraRewards: [{ defId: 'relay_diagram', count: 1 }],
+      relationDelta: 12, xpReward: 80, moneyReward: 50,
+    },
+  ]);
+
+  registerSideQuest('dark_metro_lamp_vendor', VENDOR_DEF, [
+    {
+      id: 'dark_metro_light_platform',
+      giverNpcId: 'dark_metro_lamp_vendor',
+      type: QuestType.FETCH,
+      desc: 'Гена: «Три целые лампы - и платформа станет слабой, но честной. Не принесешь - тени будут дешевле.»',
+      targetItem: 'lamp_bulb', targetCount: 3,
+      rewardItem: 'flashlight', rewardCount: 1,
+      extraRewards: [{ defId: 'metro_ticket', count: 1 }],
+      relationDelta: 10, xpReward: 70, moneyReward: 30,
+    },
+  ]);
+
+  registerSideQuest('dark_metro_stranded_liquidator', STRANDED_DEF, [
+    {
+      id: 'dark_metro_rescue_stranded',
+      giverNpcId: 'dark_metro_stranded_liquidator',
+      type: QuestType.TALK,
+      desc: 'Барсуков: «Проведи меня до Норы {dir}. Если белые лампы кончатся, идем назад, не героим.»',
+      targetNpcId: 'dark_metro_dispatcher_nora',
+      rewardItem: 'gasmask_filter', rewardCount: 1,
+      extraRewards: [{ defId: 'ammo_9mm', count: 12 }, { defId: 'bandage', count: 1 }],
+      relationDelta: 12, xpReward: 75, moneyReward: 40,
+    },
+  ]);
+
+  registerSideQuest('dark_metro_child_omen_misha', MISHA_DEF, []);
+}
+
+registerDarkMetroContent();
+
+export function packDarkMetroState(parts: DarkMetroStateParts): DarkMetroPackedState {
+  const light = parts.platformLight === 'on' ? PlatformLightState.ON
+    : parts.platformLight === 'off' ? PlatformLightState.OFF
+      : PlatformLightState.WEAK;
+  const route = Math.max(0, DARK_METRO_ROUTES.findIndex(r => r.id === parts.wrongRouteArmed));
+  const signal = parts.signalBox === 'repaired' ? SignalBoxState.REPAIRED
+    : parts.signalBox === 'sabotaged' ? SignalBoxState.SABOTAGED
+      : SignalBoxState.WORN;
+  const stranded = parts.strandedNpc === 'guided' ? StrandedNpcState.GUIDED
+    : parts.strandedNpc === 'left_behind' ? StrandedNpcState.LEFT_BEHIND
+      : StrandedNpcState.STRANDED;
+  return light | (route << ROUTE_BITS) | (signal << SIGNAL_BITS) | (stranded << STRANDED_BITS);
+}
+
+export function unpackDarkMetroState(packed: DarkMetroPackedState): DarkMetroStateParts {
+  const light = packed & 3;
+  const routeIndex = (packed >> ROUTE_BITS) & 3;
+  const signal = (packed >> SIGNAL_BITS) & 3;
+  const stranded = (packed >> STRANDED_BITS) & 3;
+  return {
+    platformLight: light === PlatformLightState.ON ? 'on' : light === PlatformLightState.OFF ? 'off' : 'weak',
+    wrongRouteArmed: DARK_METRO_ROUTES[Math.min(routeIndex, DARK_METRO_ROUTES.length - 1)].id,
+    signalBox: signal === SignalBoxState.REPAIRED ? 'repaired' : signal === SignalBoxState.SABOTAGED ? 'sabotaged' : 'worn',
+    strandedNpc: stranded === StrandedNpcState.GUIDED ? 'guided'
+      : stranded === StrandedNpcState.LEFT_BEHIND ? 'left_behind'
+        : 'stranded',
+  };
+}
+
+export function initialDarkMetroState(seed = DARK_METRO_DEFAULT_SEED): DarkMetroPackedState {
+  const routeIndex = hashSeed(DESIGN_FLOOR_ID, seed) % (DARK_METRO_ROUTES.length - 1);
+  return packDarkMetroState({
+    platformLight: 'weak',
+    wrongRouteArmed: DARK_METRO_ROUTES[routeIndex].id,
+    signalBox: 'worn',
+    strandedNpc: 'stranded',
+  });
+}
+
+export function publishDarkMetroRouteEvent(
+  state: GameState,
+  world: World,
+  actor: Entity,
+  routeId: DarkMetroRouteId,
+  packedState = initialDarkMetroState(),
+): void {
+  const route = DARK_METRO_ROUTES.find(r => r.id === routeId) ?? DARK_METRO_ROUTES[3];
+  const parts = unpackDarkMetroState(packedState);
+  const wrongStop = route.id === parts.wrongRouteArmed && route.id !== 'dark_metro_platform_fallback';
+  const px = Math.floor(actor.x);
+  const py = Math.floor(actor.y);
+  const zoneId = world.zoneMap[world.idx(px, py)];
+  publishEvent(state, {
+    type: wrongStop ? 'metro_wrong_stop' : 'metro_route_taken',
+    zoneId: zoneId >= 0 ? zoneId : undefined,
+    x: actor.x,
+    y: actor.y,
+    actorId: actor.id,
+    actorName: actor.name ?? 'Вы',
+    actorFaction: actor.faction,
+    severity: wrongStop ? 4 : 3,
+    privacy: 'local',
+    tags: ['metro', 'dark_metro', route.id, wrongStop ? 'wrong_route' : 'route_taken'],
+    data: {
+      routeId: route.id,
+      routeLabel: route.label,
+      routeCostItem: route.costItem,
+      routeCostCount: route.costCount,
+      destinationHook: route.destinationHook,
+      fallbackRouteId: route.fallbackRouteId,
+      clue: route.clue,
+      platformLight: parts.platformLight,
+      signalBox: parts.signalBox,
+      strandedNpc: parts.strandedNpc,
+      futureHooks: route.tags,
+    },
+  });
+}
+
+interface DarkMetroLayout {
+  hall: Room;
+  platform: Room;
+  underpass: Room;
+  kiosk: Room;
+  signal: Room;
+  blindTunnel: Room;
+  exit: Room;
+}
+
+interface BuildCtx {
+  world: World;
+  entities: Entity[];
+  nextId: { v: number };
+  nextContainerId: { v: number };
+  packedState: DarkMetroPackedState;
+}
+
+export function generateDarkMetroDesignFloor(seed = DARK_METRO_DEFAULT_SEED): FloorGeneration {
+  return withSeededRandom(seed, () => {
+    const world = new World();
+    const entities: Entity[] = [];
+    const ctx: BuildCtx = {
+      world,
+      entities,
+      nextId: { v: 1 },
+      nextContainerId: { v: 1 },
+      packedState: initialDarkMetroState(seed),
+    };
+
+    const layout = stampDarkMetroLayout(ctx);
+    generateZones(world);
+    tuneDarkMetroZones(world);
+    dressDarkMetro(ctx, layout);
+    spawnDarkMetroNpcs(ctx, layout);
+    spawnDarkMetroLoot(ctx, layout);
+    spawnDarkMetroThreats(ctx, layout);
+
+    const spawnX = layout.hall.x + Math.floor(layout.hall.w / 2) + 0.5;
+    const spawnY = layout.hall.y + Math.floor(layout.hall.h / 2) + 0.5;
+    ensureConnectivity(world, spawnX, spawnY);
+    sanitizeDoors(world);
+    world.bakeLights();
+    applyDarkMetroAmbientLight(world, layout, ctx.packedState);
+    world.markFogDirty();
+
+    return { world, entities, spawnX, spawnY };
+  });
+}
+
+function stampDarkMetroLayout(ctx: BuildCtx): DarkMetroLayout {
+  const bx = Math.floor(W / 2) - 32;
+  const by = Math.floor(W / 2) - 12;
+  const { world } = ctx;
+
+  const hall = styledRoom(world, RoomType.COMMON, bx, by, 30, 18, 'Вестибюль темной пересадки', Tex.DARK, Tex.F_CONCRETE);
+  const platform = styledRoom(world, RoomType.CORRIDOR, bx - 4, by + 22, 42, 9, 'Платформа без расписания', Tex.METAL, Tex.F_CONCRETE);
+  const underpass = styledRoom(world, RoomType.CORRIDOR, bx + 12, by + 33, 8, 25, 'Подземный переход белых ламп', Tex.CONCRETE, Tex.F_TILE);
+  const kiosk = styledRoom(world, RoomType.STORAGE, bx - 16, by + 6, 10, 8, 'Киоск ламп и жетонов', Tex.PANEL, Tex.F_LINO);
+  const signal = styledRoom(world, RoomType.PRODUCTION, bx + 42, by + 8, 14, 10, 'Сигнальная будка стрелки', Tex.PIPE, Tex.F_CONCRETE);
+  const blindTunnel = styledRoom(world, RoomType.CORRIDOR, bx + 20, by + 61, 34, 5, 'Слепой тоннель чужой станции', Tex.DARK, Tex.F_CONCRETE);
+  const exit = styledRoom(world, RoomType.PRODUCTION, bx + 58, by + 57, 12, 9, 'Служебный выход к лифтам', Tex.METAL, Tex.F_CONCRETE);
+
+  connectWithDoors(world, hall, platform, bx + 14, by + 18, bx + 14, by + 21);
+  connectWithDoors(world, platform, underpass, bx + 16, by + 31, bx + 16, by + 32);
+  connectWithDoors(world, kiosk, hall, bx - 6, by + 10, bx - 1, by + 10);
+  connectWithDoors(world, hall, signal, bx + 30, by + 13, bx + 41, by + 13);
+  connectWithDoors(world, underpass, blindTunnel, bx + 16, by + 58, bx + 19, by + 64);
+  connectWithDoors(world, blindTunnel, exit, bx + 54, by + 64, bx + 57, by + 64);
+
+  return { hall, platform, underpass, kiosk, signal, blindTunnel, exit };
+}
+
+function styledRoom(
+  world: World,
+  type: RoomType,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  name: string,
+  wallTex: Tex,
+  floorTex: Tex,
+): Room {
+  const room = stampRoom(world, world.rooms.length, type, x, y, w, h, -1);
+  room.name = name;
+  room.wallTex = wallTex;
+  room.floorTex = floorTex;
+  for (let dy = -1; dy <= h; dy++) {
+    for (let dx = -1; dx <= w; dx++) {
+      const ci = world.idx(x + dx, y + dy);
+      if (world.cells[ci] === Cell.WALL) world.wallTex[ci] = wallTex;
+    }
+  }
+  for (let dy = 0; dy < h; dy++) {
+    for (let dx = 0; dx < w; dx++) {
+      world.floorTex[world.idx(x + dx, y + dy)] = floorTex;
+    }
+  }
+  return room;
+}
+
+function connectWithDoors(world: World, a: Room, b: Room, ax: number, ay: number, bx: number, by: number): void {
+  carveLine(world, ax, ay, bx, by);
+  placeDoor(world, ax, ay, a.id, -1);
+  placeDoor(world, bx, by, b.id, -1);
+}
+
+function carveLine(world: World, ax: number, ay: number, bx: number, by: number): void {
+  let x = ax;
+  let y = ay;
+  const sx = world.delta(ax, bx) >= 0 ? 1 : -1;
+  const sy = world.delta(ay, by) >= 0 ? 1 : -1;
+  while (x !== bx) {
+    openTile(world, x, y);
+    x = world.wrap(x + sx);
+  }
+  while (y !== by) {
+    openTile(world, x, y);
+    y = world.wrap(y + sy);
+  }
+  openTile(world, x, y);
+}
+
+function openTile(world: World, x: number, y: number, floorTex = Tex.F_CONCRETE): void {
+  const ci = world.idx(x, y);
+  if (world.cells[ci] === Cell.LIFT) return;
+  world.cells[ci] = Cell.FLOOR;
+  world.roomMap[ci] = -1;
+  world.floorTex[ci] = floorTex;
+}
+
+function placeDoor(world: World, x: number, y: number, roomA: number, roomB: number): void {
+  const ci = world.idx(x, y);
+  world.cells[ci] = Cell.DOOR;
+  world.roomMap[ci] = -1;
+  world.doors.set(ci, { idx: ci, state: DoorState.CLOSED, roomA, roomB, keyId: '', timer: 0 });
+  const a = world.rooms[roomA];
+  if (a && !a.doors.includes(ci)) a.doors.push(ci);
+  const b = roomB >= 0 ? world.rooms[roomB] : undefined;
+  if (b && !b.doors.includes(ci)) b.doors.push(ci);
+}
+
+function setFeature(world: World, x: number, y: number, feature: Feature): void {
+  const ci = world.idx(x, y);
+  if (world.cells[ci] === Cell.WALL || world.cells[ci] === Cell.LIFT) return;
+  world.features[ci] = feature;
+}
+
+function setWater(world: World, x: number, y: number): void {
+  const ci = world.idx(x, y);
+  if (world.cells[ci] === Cell.LIFT) return;
+  world.cells[ci] = Cell.WATER;
+  world.floorTex[ci] = Tex.F_WATER;
+}
+
+function tuneDarkMetroZones(world: World): void {
+  for (const zone of world.zones) {
+    const roll = hashSeed(`${DESIGN_FLOOR_ID}.${zone.id}`) % 10;
+    zone.level = roll >= 7 ? 5 : roll >= 3 ? 4 : 3;
+    zone.faction = roll === 0 ? ZoneFaction.CULTIST : roll <= 4 ? ZoneFaction.LIQUIDATOR : ZoneFaction.WILD;
+    zone.fogged = false;
+    zone.hasLift = zone.id % 11 === 0;
+  }
+  for (let i = 0; i < W * W; i++) {
+    const zone = world.zones[world.zoneMap[i]];
+    world.factionControl[i] = zone?.faction ?? ZoneFaction.WILD;
+  }
+}
+
+function dressDarkMetro(ctx: BuildCtx, layout: DarkMetroLayout): void {
+  const { world } = ctx;
+  const state = unpackDarkMetroState(ctx.packedState);
+
+  for (let x = layout.platform.x + 1; x < layout.platform.x + layout.platform.w - 1; x++) {
+    setWater(world, x, layout.platform.y + layout.platform.h - 2);
+    if ((x - layout.platform.x) % 5 === 0) setFeature(world, x, layout.platform.y + 1, Feature.LAMP);
+  }
+
+  for (let i = 0; i < DARK_METRO_ROUTES.length; i++) {
+    const route = DARK_METRO_ROUTES[i];
+    const x = layout.platform.x + 4 + route.panelSlot * 9;
+    setFeature(world, x, layout.platform.y + 2, Feature.SCREEN);
+    setFeature(world, x, layout.platform.y + 3, Feature.APPARATUS);
+    if (route.id === state.wrongRouteArmed) setFeature(world, x + 1, layout.platform.y + 4, Feature.CANDLE);
+  }
+
+  for (let y = layout.underpass.y + 2; y < layout.underpass.y + layout.underpass.h - 1; y += 4) {
+    setFeature(world, layout.underpass.x + 1, y, Feature.LAMP);
+  }
+  for (let x = layout.blindTunnel.x + 2; x < layout.blindTunnel.x + layout.blindTunnel.w - 2; x += 7) {
+    setFeature(world, x, layout.blindTunnel.y + 2, Feature.CANDLE);
+    world.fog[world.idx(x, layout.blindTunnel.y + 2)] = 32;
+  }
+
+  setFeature(world, layout.hall.x + 4, layout.hall.y + 4, Feature.LAMP);
+  setFeature(world, layout.hall.x + layout.hall.w - 5, layout.hall.y + 4, Feature.LAMP);
+  setFeature(world, layout.hall.x + 8, layout.hall.y + layout.hall.h - 3, Feature.CHAIR);
+  setFeature(world, layout.hall.x + 14, layout.hall.y + layout.hall.h - 4, Feature.TABLE);
+  setFeature(world, layout.kiosk.x + 3, layout.kiosk.y + 2, Feature.SHELF);
+  setFeature(world, layout.kiosk.x + 6, layout.kiosk.y + 4, Feature.TABLE);
+  setFeature(world, layout.signal.x + 3, layout.signal.y + 3, Feature.MACHINE);
+  setFeature(world, layout.signal.x + 7, layout.signal.y + 4, Feature.APPARATUS);
+  setFeature(world, layout.signal.x + 10, layout.signal.y + 2, Feature.SCREEN);
+  setFeature(world, layout.exit.x + 8, layout.exit.y + 3, Feature.LIFT_BUTTON);
+
+  const liftUp = world.idx(layout.exit.x + 10, layout.exit.y + 2);
+  world.cells[liftUp] = Cell.LIFT;
+  world.wallTex[liftUp] = Tex.LIFT_DOOR;
+  world.liftDir[liftUp] = LiftDirection.UP;
+  const liftDown = world.idx(layout.exit.x + 10, layout.exit.y + 5);
+  world.cells[liftDown] = Cell.LIFT;
+  world.wallTex[liftDown] = Tex.LIFT_DOOR;
+  world.liftDir[liftDown] = LiftDirection.DOWN;
+
+  for (let i = 0; i < 9; i++) {
+    const x = layout.blindTunnel.x + 4 + i * 3;
+    world.stamp(x, layout.blindTunnel.y + 2, 0.5, 0.5, 2.5, 0.24, hashSeed(`dark_metro_mark.${i}`), 55, 45, 70, false);
+  }
+}
+
+function spawnDarkMetroNpcs(ctx: BuildCtx, layout: DarkMetroLayout): void {
+  spawnPlotNpc(ctx, 'dark_metro_dispatcher_nora', NORA_DEF, layout.signal.x + 5, layout.signal.y + 5, Math.PI);
+  spawnPlotNpc(ctx, 'dark_metro_lamp_vendor', VENDOR_DEF, layout.kiosk.x + 4, layout.kiosk.y + 5, 0);
+  spawnPlotNpc(ctx, 'dark_metro_stranded_liquidator', STRANDED_DEF, layout.blindTunnel.x + 7, layout.blindTunnel.y + 2, 0);
+  spawnPlotNpc(ctx, 'dark_metro_child_omen_misha', MISHA_DEF, layout.hall.x + 23, layout.hall.y + 13, Math.PI * 0.5, {
+    canGiveQuest: false,
+    spriteScale: 0.65,
+  });
+}
+
+function spawnPlotNpc(
+  ctx: BuildCtx,
+  npcId: string,
+  def: PlotNpcDef,
+  x: number,
+  y: number,
+  angle: number,
+  extra?: Partial<Entity>,
+): void {
+  ctx.entities.push({
+    id: ctx.nextId.v++,
+    type: EntityType.NPC,
+    x: x + 0.5,
+    y: y + 0.5,
+    angle,
+    pitch: 0,
+    alive: true,
+    speed: def.speed,
+    sprite: def.sprite,
+    name: def.name,
+    isFemale: def.isFemale,
+    needs: freshNeeds(),
+    hp: def.hp,
+    maxHp: def.maxHp,
+    money: def.money,
+    ai: { goal: AIGoal.IDLE, tx: x + 0.5, ty: y + 0.5, path: [], pi: 0, stuck: 0, timer: 0 },
+    inventory: def.inventory.map(i => ({ ...i })),
+    faction: def.faction,
+    occupation: def.occupation,
+    plotNpcId: npcId,
+    canGiveQuest: true,
+    questId: -1,
+    ...extra,
+  });
+}
+
+function spawnDarkMetroLoot(ctx: BuildCtx, layout: DarkMetroLayout): void {
+  dropItem(ctx, layout.platform.x + 5, layout.platform.y + 5, 'metro_ticket', 1);
+  dropItem(ctx, layout.platform.x + 13, layout.platform.y + 4, 'note', 1, DARK_METRO_ROUTES[2].clue);
+  dropItem(ctx, layout.underpass.x + 5, layout.underpass.y + 10, 'lamp_bulb', 1);
+  dropItem(ctx, layout.blindTunnel.x + 19, layout.blindTunnel.y + 2, 'bandage', 1);
+  dropItem(ctx, layout.exit.x + 4, layout.exit.y + 4, 'fuse', 1);
+
+  addContainer(ctx, layout.kiosk, layout.kiosk.x + 2, layout.kiosk.y + 2, ContainerKind.CASHBOX, 'Касса ламповщика', [
+    { defId: 'metro_ticket', count: 4 },
+    { defId: 'lamp_bulb', count: 3 },
+    { defId: 'cigs', count: 2 },
+  ], 'owner', Faction.CITIZEN, VENDOR_DEF.name, ['dark_metro', 'tickets', 'light']);
+
+  addContainer(ctx, layout.signal, layout.signal.x + 11, layout.signal.y + 5, ContainerKind.TOOL_LOCKER, 'Шкаф сигнальной будки', [
+    { defId: 'fuse', count: 2 },
+    { defId: 'relay_diagram', count: 1 },
+    { defId: 'circuit_board', count: 1 },
+    { defId: 'inspection_mirror', count: 1 },
+  ], 'locked', Faction.CITIZEN, NORA_DEF.name, ['dark_metro', 'signal', 'repair']);
+
+  addContainer(ctx, layout.hall, layout.hall.x + 3, layout.hall.y + layout.hall.h - 3, ContainerKind.EMERGENCY_BOX, 'Аварийный ящик белой петли', [
+    { defId: 'water', count: 1 },
+    { defId: 'bandage', count: 1 },
+    { defId: 'flashlight', count: 1 },
+  ], 'public', undefined, undefined, ['dark_metro', 'fallback', 'light']);
+}
+
+function addContainer(
+  ctx: BuildCtx,
+  room: Room,
+  x: number,
+  y: number,
+  kind: ContainerKind,
+  name: string,
+  inventory: WorldContainer['inventory'],
+  access: WorldContainer['access'],
+  faction: Faction | undefined,
+  ownerName: string | undefined,
+  tags: string[],
+): void {
+  const ci = ctx.world.idx(x, y);
+  ctx.world.addContainer({
+    id: ctx.nextContainerId.v++,
+    x,
+    y,
+    floor: DARK_METRO_BASE_FLOOR,
+    roomId: room.id,
+    zoneId: ctx.world.zoneMap[ci],
+    kind,
+    name,
+    inventory,
+    capacitySlots: 8,
+    ownerName,
+    faction,
+    access,
+    lockDifficulty: access === 'locked' ? 3 : undefined,
+    discovered: true,
+    tags,
+  });
+  setFeature(ctx.world, x, y, Feature.SHELF);
+}
+
+function dropItem(ctx: BuildCtx, x: number, y: number, defId: string, count = 1, noteText?: string): void {
+  ctx.entities.push({
+    id: ctx.nextId.v++,
+    type: EntityType.ITEM_DROP,
+    x: x + 0.5,
+    y: y + 0.5,
+    angle: 0,
+    pitch: 0,
+    alive: true,
+    speed: 0,
+    sprite: Spr.ITEM_DROP,
+    inventory: [{
+      defId,
+      count,
+      data: noteText,
+    }],
+  });
+}
+
+function spawnDarkMetroThreats(ctx: BuildCtx, layout: DarkMetroLayout): void {
+  spawnMonster(ctx, MonsterKind.SHADOW, layout.blindTunnel.x + 26, layout.blindTunnel.y + 2, layout.hall);
+  spawnMonster(ctx, MonsterKind.LAMPOVY, layout.platform.x + 31, layout.platform.y + 5, layout.hall);
+  spawnMonster(ctx, MonsterKind.REBAR, layout.underpass.x + 4, layout.underpass.y + 16, layout.hall);
+  spawnMonster(ctx, MonsterKind.TUBE_EEL, layout.platform.x + 20, layout.platform.y + 7, layout.hall);
+}
+
+function spawnMonster(ctx: BuildCtx, kind: MonsterKind, x: number, y: number, anchor: Room): void {
+  const def = MONSTERS[kind];
+  if (!def) return;
+  const ci = ctx.world.idx(x, y);
+  const zone = ctx.world.zones[ctx.world.zoneMap[ci]];
+  const zoneLevel = zone?.level ?? 4;
+  const hp = scaleMonsterHp(def.hp, zoneLevel);
+  const monster: Entity = {
+    id: ctx.nextId.v++,
+    type: EntityType.MONSTER,
+    x: x + 0.5,
+    y: y + 0.5,
+    angle: Math.atan2(anchor.y + anchor.h / 2 - y, anchor.x + anchor.w / 2 - x),
+    pitch: 0,
+    alive: true,
+    speed: scaleMonsterSpeed(def.speed, zoneLevel),
+    sprite: def.sprite,
+    hp,
+    maxHp: hp,
+    monsterKind: kind,
+    attackCd: 0,
+    ai: { goal: AIGoal.WANDER, tx: anchor.x + Math.floor(anchor.w / 2), ty: anchor.y + Math.floor(anchor.h / 2), path: [], pi: 0, stuck: 0, timer: 0 },
+    rpg: randomRPG(zoneLevel),
+  };
+  applyMonsterVariant(monster, DARK_METRO_BASE_FLOOR, true);
+  ctx.entities.push(monster);
+}
+
+function applyDarkMetroAmbientLight(world: World, layout: DarkMetroLayout, packedState: DarkMetroPackedState): void {
+  const state = unpackDarkMetroState(packedState);
+  const platformMin = state.platformLight === 'on' ? 0.38 : state.platformLight === 'weak' ? 0.18 : 0.1;
+  raiseRoomLight(world, layout.hall, 0.34);
+  raiseRoomLight(world, layout.platform, platformMin);
+  raiseRoomLight(world, layout.underpass, 0.2);
+  raiseRoomLight(world, layout.kiosk, 0.3);
+  raiseRoomLight(world, layout.signal, 0.28);
+  raiseRoomLight(world, layout.blindTunnel, 0.08);
+  raiseRoomLight(world, layout.exit, 0.22);
+}
+
+function raiseRoomLight(world: World, room: Room, minLight: number): void {
+  for (let dy = 0; dy < room.h; dy++) {
+    for (let dx = 0; dx < room.w; dx++) {
+      const ci = world.idx(room.x + dx, room.y + dy);
+      if (world.cells[ci] === Cell.WALL) continue;
+      world.light[ci] = Math.max(world.light[ci], minLight);
+    }
+  }
+}

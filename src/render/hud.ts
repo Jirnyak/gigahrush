@@ -6,10 +6,11 @@ import {
   ZoneFaction, LiftDirection,
 } from '../core/types';
 import { World } from '../core/world';
-import { ITEMS, WEAPON_STATS } from '../data/catalog';
-import { getEquippedDurability, getEquippedToolDurability, countAmmo } from '../systems/inventory';
-import { strMeleeDmgMult } from '../systems/rpg';
+import { ITEMS } from '../data/catalog';
+import { getEquippedToolDurability, getWeaponReadiness } from '../systems/inventory';
+import { getPlayerHazardWarning } from '../systems/cell_hazards';
 import { xpForLevel } from '../systems/rpg';
+import { zhelemishHudLine } from '../systems/status';
 import { drawDebugOverlay } from '../systems/debug';
 import { ZONE_COLORS, drawMinimap, drawFullMap } from './map_ui';
 import { drawInventory } from './stats_ui';
@@ -18,9 +19,28 @@ import { drawLogMenu } from './log_ui';
 import { drawFactionMenu } from './factions_ui';
 import { drawGameMenu } from './menu_ui';
 import { drawNpcMenu } from './npc_ui';
+import { drawContainerMenu } from './container_ui';
+import { drawNetSphereMenu } from './net_sphere_ui';
+import { getActiveSamosborVariant } from '../data/samosbor_variants';
+import { getSamosborShelterRoomIds, getSamosborWarningSnapshot, type SamosborWarningSnapshot } from '../systems/samosbor';
+import { currentFloorInstanceLabel } from '../systems/floor_instances';
+import { currentFloorRunLabel } from '../systems/procedural_floors';
+import { getLiftArachnaWarningSnapshot, type LiftArachnaWarningSnapshot } from '../systems/lift_arachna';
+import {
+  getProceduralSmogStatus,
+  proceduralAnomalyInteractionTargetId,
+  type ProceduralSmogStatus,
+} from '../systems/procedural_anomalies';
+import { hladonInteractionTargetId } from '../systems/hladon';
+import { getActiveRouteCueHud, isRouteCueTarget, type RouteCueHud } from '../systems/route_cues';
+import { getCultProcessionPrompt } from '../systems/faction_events';
+import { getSeroburmalineHudFx } from '../systems/seroburmaline';
+import { getNetSphereSnapshot, isNetSphereOpen } from '../systems/net_sphere';
+import { isParitelSteamValveTarget } from '../gen/maintenance/paritel_steam_bridge';
 import {
   textJitter, flicker, drawHoloBar, drawGlitchText,
-  drawNeuroPanel, drawGlitchLine, drawStaticNoise,
+  drawNeuroPanel, drawGlitchLine, drawStaticNoise, drawVeretarVeil, drawRouteCueWave, drawMaronaryProofNoise, drawSmogVeil,
+  drawSeroburmalineNoLookFx,
 } from './hud_fx';
 
 const BAR_W = 50, BAR_H = 5;
@@ -39,6 +59,199 @@ const ZONE_FACTION_NAMES: Record<ZoneFaction, string> = {
 };
 const MSG_MAX = 5;
 
+function drawSamosborPrewarning(
+  ctx: CanvasRenderingContext2D,
+  w: number,
+  _h: number,
+  sx: number,
+  sy: number,
+  time: number,
+  warning: SamosborWarningSnapshot,
+): void {
+  const panelW = Math.min(w - 12 * sx, 218 * sx);
+  const panelH = 34 * sy;
+  const x = (w - panelW) * 0.5;
+  const y = 6 * sy;
+  const title = warning.variantId === 'istotit'
+    ? `ИСТОТИТ: ${warning.secondsLeft}s`
+    : warning.variantId === 'maronary'
+    ? `МАРОНАРИЙ: ${warning.secondsLeft}s`
+    : warning.variantId === 'veretar'
+    ? `ВЕРЕТАР: ${warning.secondsLeft}s`
+    : `САМОСБОР: ${warning.secondsLeft}s`;
+  const zone = warning.zoneId >= 0 ? `Зона ${warning.zoneId + 1}` : 'Локальная зона';
+  const action = warning.variantId === 'istotit'
+    ? (warning.shelterRoomIds.length > 0 ? 'Золотой контур на карте; дверь примет не всех' : 'К укрытию, не отвечайте хору')
+    : warning.variantId === 'maronary'
+    ? (warning.wrongDoorX !== undefined ? 'Повтор двери отмечен; источник не проверять взглядом' : 'Не смотрите в зелёный источник')
+    : warning.variantId === 'veretar'
+    ? 'Закрыть белую щель, не смотреть, выйти из зоны'
+    : 'К гермодвери или выйдите из зоны';
+
+  ctx.save();
+  ctx.fillStyle = warning.variantId === 'veretar' ? 'rgba(31,31,28,0.84)' : 'rgba(18,6,24,0.82)';
+  ctx.fillRect(x, y, panelW, panelH);
+  ctx.strokeStyle = warning.tint;
+  ctx.lineWidth = 1;
+  ctx.strokeRect(x + 0.5, y + 0.5, panelW - 1, panelH - 1);
+  drawStaticNoise(ctx, x, y, panelW, panelH, time, 0.018);
+  if (warning.variantId === 'maronary') {
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(x, y, panelW, panelH);
+    ctx.clip();
+    ctx.translate(x, y);
+    drawMaronaryProofNoise(ctx, panelW, panelH, time, 0.45);
+    ctx.restore();
+  }
+  if (warning.variantId === 'veretar') {
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(x, y, panelW, panelH);
+    ctx.clip();
+    ctx.translate(x, y);
+    drawVeretarVeil(ctx, panelW, panelH, time, 0.7);
+    ctx.restore();
+  }
+
+  ctx.textAlign = 'center';
+  ctx.shadowColor = warning.tint;
+  ctx.shadowBlur = 8;
+  drawGlitchText(ctx, title, w * 0.5, y + 4 * sy, time * 2, 730, warning.tint, 10 * sy);
+  ctx.shadowBlur = 0;
+  drawGlitchText(ctx, `${warning.variantName} / ${warning.floorName} / ${zone}`, w * 0.5, y + 16 * sy, time, 731, '#ffd36a', 7 * sy);
+  drawGlitchText(ctx, action, w * 0.5, y + 25 * sy, time, 732, '#ddd', 7 * sy);
+  ctx.textAlign = 'left';
+  ctx.restore();
+}
+
+function drawLiftArachnaWarning(
+  ctx: CanvasRenderingContext2D,
+  w: number,
+  sx: number,
+  sy: number,
+  time: number,
+  warning: LiftArachnaWarningSnapshot,
+  y: number,
+): void {
+  const panelW = Math.min(w - 12 * sx, 210 * sx);
+  const panelH = 32 * sy;
+  const x = (w - panelW) * 0.5;
+  const tint = warning.baited ? '#f44' : warning.secondWarning ? '#f4a' : '#fa0';
+  const title = warning.baited
+    ? `АРАХНА ПАДАЕТ: ${warning.secondsLeft}s`
+    : `ШАХТА НАД ЛИФТОМ: ${warning.secondsLeft}s`;
+  const action = warning.baited
+    ? 'Отходите от лифта, цель сбита шумом'
+    : warning.secondWarning
+      ? 'Смотрите вверх или уходите от шахты'
+      : 'Скрежет сверху, проверьте потолок';
+  const zone = warning.zoneId >= 0 ? `Зона ${warning.zoneId + 1}` : 'Лифтовой узел';
+
+  ctx.save();
+  ctx.fillStyle = 'rgba(22,8,8,0.84)';
+  ctx.fillRect(x, y, panelW, panelH);
+  ctx.strokeStyle = tint;
+  ctx.lineWidth = 1;
+  ctx.strokeRect(x + 0.5, y + 0.5, panelW - 1, panelH - 1);
+  drawStaticNoise(ctx, x, y, panelW, panelH, time, 0.022);
+
+  ctx.textAlign = 'center';
+  ctx.shadowColor = tint;
+  ctx.shadowBlur = 8;
+  drawGlitchText(ctx, title, w * 0.5, y + 5 * sy, time * 2.3, 812, tint, 10 * sy);
+  ctx.shadowBlur = 0;
+  drawGlitchText(ctx, fitHudText(ctx, `${zone} / ${action}`, panelW - 12 * sx), w * 0.5, y + 20 * sy, time, 813, '#ddd', 7 * sy);
+  ctx.textAlign = 'left';
+  ctx.restore();
+}
+
+function drawSmogIndicator(
+  ctx: CanvasRenderingContext2D,
+  w: number,
+  sx: number,
+  sy: number,
+  time: number,
+  status: ProceduralSmogStatus,
+): void {
+  const panelW = 154 * sx;
+  const panelH = 30 * sy;
+  const x = w - panelW - 6 * sx;
+  const y = 50 * sy;
+  const title = status.handled
+    ? 'СМОГ: ИСТОЧНИК ЗАКРЫТ'
+    : status.sourceDistance <= 7
+      ? 'ИСТОЧНИК СМОГА'
+      : `СМОГ ${Math.round(status.intensity * 100)}%`;
+  const action = status.prompt || 'обходите плотные комнаты';
+
+  ctx.save();
+  ctx.fillStyle = 'rgba(24,20,14,0.78)';
+  ctx.fillRect(x, y, panelW, panelH);
+  ctx.strokeStyle = status.handled ? '#8cf' : '#b98';
+  ctx.lineWidth = 1;
+  ctx.strokeRect(x + 0.5, y + 0.5, panelW - 1, panelH - 1);
+  drawStaticNoise(ctx, x, y, panelW, panelH, time, status.handled ? 0.008 : 0.018);
+  drawGlitchText(ctx, title, x + 6 * sx, y + 5 * sy, time, 941, status.handled ? '#8cf' : '#d8b56a', 8 * sy);
+  drawGlitchText(ctx, fitHudText(ctx, action, panelW - 12 * sx), x + 6 * sx, y + 17 * sy, time, 942, '#d7d0bd', 7 * sy);
+  ctx.restore();
+}
+
+function drawRouteCueHint(
+  ctx: CanvasRenderingContext2D,
+  w: number,
+  sx: number,
+  sy: number,
+  time: number,
+  player: Entity,
+  world: World,
+  cue: RouteCueHud,
+): void {
+  const panelW = Math.min(w - 12 * sx, 176 * sx);
+  const panelH = 35 * sy;
+  const x = w - panelW - 6 * sx;
+  const y = 6 * sy;
+  const dx = world.delta(player.x, cue.targetX);
+  const dy = world.delta(player.y, cue.targetY);
+  const dist = Math.max(0, Math.round(Math.sqrt(dx * dx + dy * dy)));
+  let rel = Math.atan2(dy, dx) - player.angle;
+  while (rel > Math.PI) rel -= Math.PI * 2;
+  while (rel < -Math.PI) rel += Math.PI * 2;
+  const arrow = Math.abs(rel) < Math.PI * 0.25 ? '>' : Math.abs(rel) > Math.PI * 0.75 ? '<' : rel > 0 ? 'v' : '^';
+  const alpha = Math.max(0, Math.min(1, (cue.expiresAt - time) / 1.2));
+
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  drawNeuroPanel(ctx, x, y, panelW, panelH, time, 760);
+  drawRouteCueWave(ctx, x + 6 * sx, y + 4 * sy, panelW - 12 * sx, 7 * sy, time - cue.startedAt, cue.color);
+  ctx.textAlign = 'left';
+  drawGlitchText(ctx, fitHudText(ctx, cue.label, panelW - 12 * sx), x + 6 * sx, y + 12 * sy, time, 761, cue.color, 7 * sy);
+  drawGlitchText(ctx, fitHudText(ctx, `${arrow} ${cue.targetName} ${dist}м`, panelW - 12 * sx), x + 6 * sx, y + 21 * sy, time, 762, '#ddd', 7 * sy);
+  drawGlitchText(ctx, fitHudText(ctx, cue.hint, panelW - 12 * sx), x + 6 * sx, y + 29 * sy, time, 763, '#9a8', 6 * sy);
+  ctx.restore();
+}
+
+function activeVisitLiftHint(state: GameState, direction: LiftDirection): string {
+  for (const q of state.quests) {
+    if (q.done || q.visitFloor === undefined || q.visitFloor === state.currentFloor) continue;
+    const desired = q.visitFloor > state.currentFloor ? LiftDirection.DOWN : LiftDirection.UP;
+    if (desired === direction) return ' ЦЕЛЬ';
+  }
+  return '';
+}
+
+function fitHudText(ctx: CanvasRenderingContext2D, text: string, maxW: number): string {
+  if (maxW <= 0) return '';
+  if (ctx.measureText(text).width <= maxW) return text;
+  let end = text.length - 3;
+  while (end > 1 && ctx.measureText(text.slice(0, end) + '...').width > maxW) end--;
+  return text.slice(0, Math.max(1, end)) + '...';
+}
+
+function hudWeaponName(name: string): string {
+  return name.replace(/^Сгусток:\s*/, '');
+}
+
 
 
 /* ── The HUD is drawn on the 2D canvas overlaying the 3D view ── */
@@ -49,6 +262,7 @@ export function drawHUD(
   state: GameState,
   world: World,
   entities: Entity[],
+  uiTime = state.time,
 ): void {
   ctx.save();
   ctx.imageSmoothingEnabled = false;
@@ -58,11 +272,16 @@ export function drawHUD(
   const h = ctx.canvas.height;
   const sx = w / SCR_W;
   const sy = h / SCR_H;
+  const menuScale = Math.max(0.8, Math.min(2, Math.min(sx, sy)));
+  const msx = menuScale;
+  const msy = menuScale;
 
   ctx.font = `${10 * sy}px monospace`;
   ctx.textBaseline = 'top';
 
-  const time = state.time;
+  const time = uiTime;
+  const smogStatus = getProceduralSmogStatus(world, player, state);
+  if (smogStatus.inside) drawSmogVeil(ctx, w, h, time, smogStatus.intensity);
 
   // ── Bottom status bar (neuro-interface) ─────────────────
   const barY = h - 32 * sy;
@@ -98,43 +317,69 @@ export function drawHUD(
     });
   }
 
-  // Weapon display with durability/ammo — right side, above status bar
-  const wpn = player.weapon ? ITEMS[player.weapon]?.name : 'Кулаки';
-  const ws = WEAPON_STATS[player.weapon ?? ''] ?? WEAPON_STATS[''];
-  ctx.fillStyle = '#ccc';
-  ctx.font = `${8 * sy}px monospace`;
-  ctx.textAlign = 'right';
-  const weaponY = barY - 14 * sy;
-  if (ws.isRanged) {
-    const ammo = countAmmo(player);
+  const netSphereOpen = isNetSphereOpen();
+  const showCompactPanels = state.mapMode !== 2 &&
+    !state.showInventory && !state.showQuests && !state.showLog &&
+    !state.showFactions && !state.showMenu && !state.showNpcMenu && !state.showContainerMenu &&
+    !netSphereOpen;
+
+  const zhelemishLine = showCompactPanels ? zhelemishHudLine(player, time) : null;
+  if (zhelemishLine) {
+    const panelW = Math.min(180 * sx, w - 12 * sx);
+    const panelH = 14 * sy;
+    const panelX = 4 * sx;
+    const panelY = barY - panelH - 4 * sy;
+    drawNeuroPanel(ctx, panelX, panelY, panelW, panelH, time, 185);
+    ctx.font = `${7 * sy}px monospace`;
+    ctx.fillStyle = '#9c6';
+    ctx.fillText(fitHudText(ctx, zhelemishLine, panelW - 10 * sx), panelX + 5 * sx, panelY + 4 * sy);
+  }
+
+  // Weapon state — compact bottom-right panel, hidden under fullscreen overlays.
+  if (showCompactPanels) {
+    const weapon = getWeaponReadiness(player);
+    const panelW = 132 * sx;
+    const panelH = 25 * sy;
+    const panelX = w - panelW - 4 * sx;
+    const panelY = barY - panelH - 4 * sy;
+    drawNeuroPanel(ctx, panelX, panelY, panelW, panelH, time, 190);
+
     const wj = textJitter(time, 200);
+    ctx.font = `${7 * sy}px monospace`;
+    ctx.textAlign = 'left';
     ctx.fillStyle = `rgba(200,230,255,${flicker(time, 201)})`;
-    ctx.fillText(`${wpn} (${ws.dmg}) 🔫${ammo}`, w - 8 * sx + wj.dx, weaponY + wj.dy);
-  } else {
-    // Fist base dmg = player level; other melee uses ws.dmg; all × STR
-    const baseDmg = (!player.weapon && player.rpg) ? player.rpg.level : ws.dmg;
-    const strMult = player.rpg ? strMeleeDmgMult(player.rpg) : 1;
-    const effectiveDmg = Math.round(baseDmg * strMult);
-    const dur = getEquippedDurability(player);
-    const wj = textJitter(time, 202);
-    ctx.fillStyle = `rgba(200,230,255,${flicker(time, 203)})`;
-    if (dur) {
-      ctx.fillText(`${wpn} (${effectiveDmg}) [${dur.cur}/${dur.max}]`, w - 8 * sx + wj.dx, weaponY + wj.dy);
-    } else {
-      ctx.fillText(`${wpn} (${effectiveDmg})`, w - 8 * sx + wj.dx, weaponY + wj.dy);
+    const leftMax = panelW - 58 * sx;
+    ctx.fillText(fitHudText(ctx, hudWeaponName(weapon.name), leftMax), panelX + 6 * sx + wj.dx, panelY + 5 * sy + wj.dy);
+
+    ctx.textAlign = 'right';
+    ctx.fillStyle = '#8cf';
+    const roleLine = fitHudText(ctx, `${weapon.role} ${weapon.damageLabel}`, 50 * sx);
+    ctx.fillText(roleLine, panelX + panelW - 6 * sx + wj.dx, panelY + 5 * sy + wj.dy);
+
+    const stateLine = weapon.cannotFireReason
+      ? `${weapon.resourceLabel} | ${weapon.cannotFireReason}`
+      : `${weapon.resourceLabel} | ${weapon.cooldownLabel}`;
+    ctx.textAlign = 'left';
+    ctx.fillStyle = weapon.warning ? '#f84' : '#9d9';
+    ctx.fillText(fitHudText(ctx, stateLine, panelW - 12 * sx), panelX + 6 * sx, panelY + 15 * sy);
+
+    if (player.tool) {
+      const toolName = ITEMS[player.tool]?.name ?? player.tool;
+      const toolDur = getEquippedToolDurability(player);
+      const toolLabel = toolDur ? `${toolName} [${Math.max(0, Math.ceil(toolDur.cur))}/${toolDur.max}]` : toolName;
+      const tj = textJitter(time, 210);
+      ctx.textAlign = 'right';
+      ctx.fillStyle = `rgba(136,200,255,${flicker(time, 211)})`;
+      ctx.fillText(fitHudText(ctx, toolLabel, panelW), w - 8 * sx + tj.dx, panelY - 10 * sy + tj.dy);
+      ctx.fillStyle = '#ccc';
     }
+    ctx.textAlign = 'left';
   }
-  const toolY = weaponY - 10 * sy;
-  if (player.tool) {
-    const toolName = ITEMS[player.tool]?.name ?? player.tool;
-    const toolDur = getEquippedToolDurability(player);
-    const toolLabel = toolDur ? `${toolName} [${Math.max(0, Math.ceil(toolDur.cur))}/${toolDur.max}]` : toolName;
-    const tj = textJitter(time, 210);
-    ctx.fillStyle = `rgba(136,200,255,${flicker(time, 211)})`;
-    ctx.fillText(toolLabel, w - 8 * sx + tj.dx, toolY + tj.dy);
-    ctx.fillStyle = '#ccc';
+
+  const routeCue = getActiveRouteCueHud(state.time, state.currentFloor);
+  if (routeCue && showCompactPanels && !state.samosborActive) {
+    drawRouteCueHint(ctx, w, sx, sy, time, player, world, routeCue);
   }
-  ctx.textAlign = 'left';
 
   // Universal [E] interaction prompt (color changes per target object)
   {
@@ -145,17 +390,36 @@ export function drawHUD(
     let targetId = 0; // unique id for color hashing
     let canInteract = false;
     let liftHint = '';
-    if (cell === Cell.DOOR && world.doors.has(lci)) { canInteract = true; targetId = lci + 100000; }
+    const processionHint = getCultProcessionPrompt(world, state, player);
+    if (processionHint) {
+      canInteract = true;
+      targetId = 850000 + processionHint.length;
+    } else if (cell === Cell.DOOR && world.doors.has(lci)) { canInteract = true; targetId = lci + 100000; }
     else if (cell === Cell.LIFT || world.features[lci] === Feature.LIFT_BUTTON) {
       canInteract = true; targetId = lci + 200000;
-      liftHint = world.liftDir[lci] === LiftDirection.UP ? ' ↑' : ' ↓';
+      const dir = world.liftDir[lci] as LiftDirection;
+      liftHint = `${dir === LiftDirection.UP ? ' ↑' : ' ↓'}${activeVisitLiftHint(state, dir)}`;
+    }
+    else if (isParitelSteamValveTarget(world, lookX, lookY)) { canInteract = true; targetId = lci + 450000; }
+    else if (isRouteCueTarget(world, player, lookX, lookY)) { canInteract = true; targetId = lci + 470000; }
+    else {
+      const anomalyTargetId = hladonInteractionTargetId(world, lookX, lookY) ?? proceduralAnomalyInteractionTargetId(world, state, lookX, lookY);
+      if (anomalyTargetId !== null) { canInteract = true; targetId = anomalyTargetId; }
     }
     if (!canInteract) {
-      let bestD = 2.0;
+      let bestD2 = 4.0;
       for (const e of entities) {
         if (!e.alive || e.type !== EntityType.NPC) continue;
-        const d = world.dist(lookX, lookY, e.x, e.y);
-        if (d < bestD) { bestD = d; canInteract = true; targetId = e.id; }
+        const d2 = world.dist2(lookX, lookY, e.x, e.y);
+        if (d2 < bestD2) { bestD2 = d2; canInteract = true; targetId = e.id; }
+      }
+    }
+    if (!canInteract) {
+      const container = world.containersAt(Math.floor(lookX), Math.floor(lookY))
+        .find(c => c.discovered || c.access !== 'secret');
+      if (container) {
+        canInteract = true;
+        targetId = container.id + 300000;
       }
     }
     if (canInteract) {
@@ -172,10 +436,28 @@ export function drawHUD(
       // Subtle glow behind
       ctx.shadowColor = `rgba(${er},${eg},${eb},0.4)`;
       ctx.shadowBlur = 6;
-      ctx.fillText(`[E]${liftHint}`, w / 2 + ej.dx, h / 2 + 30 * sy + ej.dy);
+      ctx.fillText(`[E]${processionHint || liftHint}`, w / 2 + ej.dx, h / 2 + 30 * sy + ej.dy);
       ctx.shadowBlur = 0;
       ctx.textAlign = 'left';
     }
+  }
+
+  const hazardWarning = getPlayerHazardWarning(world, player);
+  if (hazardWarning && state.mapMode !== 2 && !state.showInventory && !state.showQuests && !state.showLog && !netSphereOpen) {
+    const panelW = Math.min(w - 16 * sx, 230 * sx);
+    const panelH = 28 * sy;
+    const panelX = (w - panelW) * 0.5;
+    const panelY = h * 0.5 + 42 * sy;
+    drawNeuroPanel(ctx, panelX, panelY, panelW, panelH, time, 520);
+    ctx.textAlign = 'center';
+    ctx.shadowColor = hazardWarning.color;
+    ctx.shadowBlur = hazardWarning.trapped ? 9 : 4;
+    drawGlitchText(ctx, hazardWarning.title, w * 0.5, panelY + 4 * sy, time * 2, 521, hazardWarning.color, 10 * sy);
+    ctx.shadowBlur = 0;
+    ctx.font = `${7 * sy}px monospace`;
+    ctx.fillStyle = '#f0c8c8';
+    ctx.fillText(fitHudText(ctx, hazardWarning.detail, panelW - 12 * sx), w * 0.5, panelY + 17 * sy);
+    ctx.textAlign = 'left';
   }
 
   // ── Messages (with jitter) ────────────────────────────────
@@ -201,6 +483,9 @@ export function drawHUD(
   }
   ctx.globalAlpha = 1;
 
+  const seroburmalineFx = getSeroburmalineHudFx(state);
+  if (seroburmalineFx) drawSeroburmalineNoLookFx(ctx, w, h, time, seroburmalineFx);
+
   // ── Crosshair (neuro-style) ──────────────────────────────
   const cj = textJitter(time, 999);
   const cAlpha = 0.4 + Math.sin(time * 2) * 0.08;
@@ -217,43 +502,6 @@ export function drawHUD(
   ctx.fillStyle = `rgba(0,255,220,${cAlpha * 0.6})`;
   ctx.fillRect(cx - 0.5, cy - 0.5, 1, 1);
 
-  // ── Minimap (if toggled) ─────────────────────────────────
-  if (state.mapMode === 1) {
-    drawMinimap(ctx, world, entities, player, sx, sy, state.quests);
-  } else if (state.mapMode === 2) {
-    drawFullMap(ctx, world, entities, player, sx, sy, state.quests);
-  }
-
-  // ── Inventory (if toggled) ───────────────────────────────
-  if (state.showInventory) {
-    drawInventory(ctx, player, state, sx, sy);
-  }
-
-  // ── Quest log (if toggled) ───────────────────────────────
-  if (state.showQuests) {
-    drawQuestLog(ctx, state, sx, sy);
-  }
-
-  // ── Faction relations matrix (F) ─────────────────────────
-  if (state.showFactions) {
-    drawFactionMenu(ctx, player, entities, sx, sy, time);
-  }
-
-  // ── Message log (L) ─────────────────────────────────────
-  if (state.showLog) {
-    drawLogMenu(ctx, state, sx, sy);
-  }
-
-  // ── Game menu (ESC) ──────────────────────────────────────
-  if (state.showMenu) {
-    drawGameMenu(ctx, state, sx, sy);
-  }
-
-  // ── NPC interaction menu ─────────────────────────────────
-  if (state.showNpcMenu) {
-    drawNpcMenu(ctx, player, state, entities, sx, sy);
-  }
-
   // ── Zone info + time + room (neuro-interface left panel) ──
   {
     const pci = world.idx(Math.floor(player.x), Math.floor(player.y));
@@ -264,6 +512,10 @@ export function drawHUD(
     const hh = String(state.clock.hour).padStart(2, '0');
     const mm = String(state.clock.minute).padStart(2, '0');
     const day = Math.floor(state.clock.totalMinutes / 1440);
+    const floorInstance = currentFloorInstanceLabel(state);
+    const floorRun = currentFloorRunLabel(state);
+    if (floorRun) drawGlitchText(ctx, floorRun, 4 * sx, barY - 62 * sy, time, 398, '#8cf', 7 * sy);
+    if (floorInstance) drawGlitchText(ctx, `Лифт ${floorInstance}`, 4 * sx, barY - 52 * sy, time, 404, '#f4a', 8 * sy);
     drawGlitchText(ctx, `День ${day}  ${hh}:${mm}`, 4 * sx, barY - 42 * sy, time, 400, '#8ac', 9 * sy);
     ctx.font = `${9 * sy}px monospace`;
 
@@ -288,35 +540,113 @@ export function drawHUD(
     }
   }
 
+  // ── Minimap (if toggled) ─────────────────────────────────
+  if (state.mapMode === 1) {
+    drawMinimap(ctx, world, entities, player, sx, sy, state.quests, currentFloorInstanceLabel(state), state.currentFloor, state, time);
+  } else if (state.mapMode === 2) {
+    drawFullMap(ctx, world, entities, player, sx, sy, state.quests, currentFloorInstanceLabel(state), state.currentFloor, state, time);
+  }
+
+  // ── Inventory (if toggled) ───────────────────────────────
+  if (state.showInventory) {
+    drawInventory(ctx, player, state, sx, sy, time);
+  }
+
+  // ── Quest log (if toggled) ───────────────────────────────
+  if (state.showQuests) {
+    drawQuestLog(ctx, state, msx, msy, time);
+  }
+
+  // ── Faction relations matrix (F) ─────────────────────────
+  if (state.showFactions) {
+    drawFactionMenu(ctx, player, entities, msx, msy, time);
+  }
+
+  // ── Message log (L) ─────────────────────────────────────
+  if (state.showLog) {
+    drawLogMenu(ctx, state, msx, msy, time);
+  }
+
+  // ── Game menu (ESC) ──────────────────────────────────────
+  if (state.showMenu) {
+    drawGameMenu(ctx, state, msx, msy, time);
+  }
+
+  // ── NPC interaction menu ─────────────────────────────────
+  if (state.showNpcMenu) {
+    drawNpcMenu(ctx, player, state, entities, msx, msy, time);
+  }
+
+  // ── Container menu ──────────────────────────────────────
+  if (state.showContainerMenu) {
+    drawContainerMenu(ctx, player, state, world, msx, msy);
+  }
+
   // ── SAMOSBOR warning (intense glitch) ──────────────────────
+  const samosborWarning = getSamosborWarningSnapshot(state);
+  if (samosborWarning && !state.samosborActive) {
+    drawSamosborPrewarning(ctx, w, h, sx, sy, time, samosborWarning);
+    if (samosborWarning.variantId === 'veretar') drawVeretarVeil(ctx, w, h, time, 0.45);
+  }
+  const liftArachnaWarning = getLiftArachnaWarningSnapshot(state);
+  if (liftArachnaWarning && !state.gameOver) {
+    drawLiftArachnaWarning(ctx, w, sx, sy, time, liftArachnaWarning, (samosborWarning && !state.samosborActive ? 43 : 6) * sy);
+  }
   if (state.samosborActive) {
+    const activeVariant = getActiveSamosborVariant();
+    const activeTitle = activeVariant?.def.id === 'istotit'
+      ? '☩ ИСТОТИТ ☩'
+      : activeVariant?.def.id === 'maronary'
+      ? 'МАРОНАРИЙ'
+      : activeVariant?.def.id === 'veretar'
+      ? 'ВЕРЕТАР'
+      : '⚠ САМОСБОР ⚠';
     const sj = textJitter(time * 3, 666);
-    const sAlpha = 0.5 + Math.sin(now * 8) * 0.3;
+    const sAlpha = 0.5 + Math.sin(time * 8) * 0.3;
     ctx.save();
-    ctx.shadowColor = 'rgba(255,0,40,0.6)';
+    ctx.shadowColor = activeVariant ? activeVariant.def.tint : 'rgba(255,0,40,0.6)';
     ctx.shadowBlur = 12;
-    ctx.fillStyle = `rgba(255,40,40,${sAlpha})`;
+    ctx.fillStyle = activeVariant ? activeVariant.def.tint : `rgba(255,40,40,${sAlpha})`;
     ctx.font = `bold ${16 * sy}px monospace`;
     ctx.textAlign = 'center';
-    ctx.fillText('⚠ САМОСБОР ⚠', w / 2 + sj.dx * 3, 20 * sy + sj.dy * 2);
+    ctx.fillText(activeTitle, w / 2 + sj.dx * 3, 20 * sy + sj.dy * 2);
+    if (activeVariant) {
+      ctx.font = `${8 * sy}px monospace`;
+      ctx.fillText(activeVariant.def.displayName, w / 2 + sj.dx, 38 * sy + sj.dy);
+      if (activeVariant.def.id === 'istotit') {
+        const room = world.roomAt(player.x, player.y);
+        const inShelter = room ? getSamosborShelterRoomIds(state).includes(room.id) : false;
+        ctx.font = `${7 * sy}px monospace`;
+        ctx.fillText(inShelter ? '[E] впустить / закрыть' : '[E] идти на колокол', w / 2 + sj.dx, 48 * sy + sj.dy);
+      }
+    }
     // Doubled glitch offset copy
     ctx.fillStyle = `rgba(0,255,200,${sAlpha * 0.2})`;
-    ctx.fillText('⚠ САМОСБОР ⚠', w / 2 + sj.dx * 3 + 2, 20 * sy + sj.dy * 2 + 1);
+    ctx.fillText(activeTitle, w / 2 + sj.dx * 3 + 2, 20 * sy + sj.dy * 2 + 1);
     ctx.textAlign = 'left';
     ctx.shadowBlur = 0;
     ctx.restore();
     // Extra static noise during samosbor
     drawStaticNoise(ctx, 0, 0, w, h, time, 0.04);
+    if (activeVariant?.def.id === 'maronary') drawMaronaryProofNoise(ctx, w, h, time, 0.85);
+    if (activeVariant?.def.id === 'veretar') drawVeretarVeil(ctx, w, h, time, 0.85);
+  }
+
+  if (smogStatus.active && (smogStatus.inside || smogStatus.sourceFound || smogStatus.handled)) {
+    drawSmogIndicator(ctx, w, sx, sy, time, smogStatus);
   }
 
   // ── Damage vignette (procedural blood edges) ──────────────
   if (state.dmgFlash > 0) {
-    drawDamageVignette(ctx, w, h, state.dmgFlash, state.dmgSeed, state.time);
+    drawDamageVignette(ctx, w, h, state.dmgFlash, state.dmgSeed, time);
   }
 
   // ── PSI Beam visual (Kamehameha) ──────────────────────────
   if (state.beamFx > 0) {
-    drawBeamFx(ctx, w, h, state.beamFx, state.beamAngle, state.beamLen, player.angle, state.time);
+    drawBeamFx(ctx, w, h, state.beamFx, state.beamAngle, state.beamLen, player.angle, time);
+  }
+  if (state.uvBeamFx > 0) {
+    drawUvSpotlightFx(ctx, w, h, state.uvBeamFx, state.uvBeamLen, time);
   }
 
   // ── Game over (neuro-interface death) ─────────────────────
@@ -357,7 +687,7 @@ export function drawHUD(
     // Intense static noise
     drawStaticNoise(ctx, 0, 0, w, h, time, 0.06 * Math.min(1, state.deathTimer * 0.3));
 
-    const textAlpha = 0.6 + Math.sin(state.time * 3) * 0.3;
+    const textAlpha = 0.6 + Math.sin(time * 3) * 0.3;
     const dj = textJitter(time * 2, 777);
     ctx.save();
     ctx.shadowColor = 'rgba(255,0,0,0.5)';
@@ -380,7 +710,12 @@ export function drawHUD(
 
   // ── Debug screen (~) ─────────────────────────────────────
   if (state.showDebug) {
-    drawDebugOverlay(ctx, sx, sy, w, h, world, entities, state.debugSel);
+    drawDebugOverlay(ctx, sx, sy, w, h, world, entities, state, state.debugSel);
+  }
+
+  // ── NET Sphere terminal (N) ──────────────────────────────
+  if (netSphereOpen) {
+    drawNetSphereMenu(ctx, msx, msy, time, getNetSphereSnapshot());
   }
 
   // ── Sleep overlay (Z held) ───────────────────────────────
@@ -497,6 +832,63 @@ function drawDamageVignette(
     }
   }
 
+  ctx.restore();
+}
+
+/* ── UV spotlight visual — narrow cyan/violet utility cone ────── */
+function drawUvSpotlightFx(
+  ctx: CanvasRenderingContext2D,
+  w: number, h: number,
+  intensity: number,
+  beamLen: number,
+  time: number,
+): void {
+  ctx.save();
+  const alpha = Math.min(1, intensity * 4);
+  const cx = w / 2;
+  const cy = h / 2;
+  const reach = Math.min(w * 0.47, w * (0.22 + Math.min(1, beamLen / 10) * 0.3));
+  const endX = cx + reach;
+  const nearW = h * (0.012 + intensity * 0.018);
+  const farW = h * (0.052 + intensity * 0.04);
+  const wobble = Math.sin(time * 42) * h * 0.004;
+
+  ctx.globalCompositeOperation = 'lighter';
+  for (let i = 0; i < 3; i++) {
+    const layer = i / 2;
+    const grd = ctx.createLinearGradient(cx, cy, endX, cy);
+    grd.addColorStop(0, `rgba(230,255,255,${alpha * (0.42 - layer * 0.08)})`);
+    grd.addColorStop(0.45, `rgba(120,190,255,${alpha * (0.24 - layer * 0.04)})`);
+    grd.addColorStop(1, `rgba(120,70,255,0)`);
+    ctx.fillStyle = grd;
+    ctx.beginPath();
+    ctx.moveTo(cx, cy - nearW * (1 + layer) + wobble);
+    ctx.lineTo(endX, cy - farW * (1 + layer * 0.45));
+    ctx.lineTo(endX, cy + farW * (1 + layer * 0.45));
+    ctx.lineTo(cx, cy + nearW * (1 + layer) + wobble);
+    ctx.closePath();
+    ctx.fill();
+  }
+
+  ctx.strokeStyle = `rgba(210,250,255,${alpha * 0.75})`;
+  ctx.lineWidth = Math.max(1, h * 0.003);
+  ctx.beginPath();
+  ctx.moveTo(cx - 2, cy + wobble);
+  ctx.lineTo(endX, cy + Math.sin(time * 58) * h * 0.01);
+  ctx.stroke();
+
+  for (let i = 0; i < 5; i++) {
+    const t0 = (i + 1) / 6;
+    const x = cx + reach * t0;
+    const y = cy + Math.sin(time * 24 + i * 1.7) * farW * 0.36 * t0;
+    ctx.strokeStyle = `rgba(170,120,255,${alpha * 0.24})`;
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(x - reach * 0.06, y);
+    ctx.lineTo(x + reach * 0.05, y + Math.cos(time * 31 + i) * farW * 0.18);
+    ctx.stroke();
+  }
+  ctx.globalCompositeOperation = 'source-over';
   ctx.restore();
 }
 

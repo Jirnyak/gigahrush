@@ -83,7 +83,9 @@ export const enum Tex {
   F_PARQUET       = 180,
   // red carpet edge-aware tiling: 16 variants by 4-bit edge mask (NESW)
   F_CARPET_EDGE_BASE = 181, // 16 variants: 181..196
-  COUNT           = 197,
+  // procedural wall-mounted screens: 8 program variants × 4 animation frames
+  SCREEN_BASE     = 197, // 32 variants: 197..228
+  COUNT           = 229,
 }
 
 // ── Floor levels (Z-axis) ────────────────────────────────────────
@@ -146,6 +148,7 @@ export const enum Feature {
   DESK         = 12,
   SLIDE        = 13,
   CANDLE       = 14,
+  SCREEN       = 15,
 }
 
 // ── Doors ────────────────────────────────────────────────────────
@@ -195,6 +198,14 @@ export enum MonsterKind {
   CREATOR,    // final boss               — творец (белый силуэт)
   SPIRIT,     // ghostly skull face       — дух (летает сквозь стены)
   ROBOT,      // industrial automaton     — робот (стреляет плазмой)
+  SHOVNIK,    // seam hunter              — шовник (сильнее у стен)
+  LAMPOVY,    // light-fed threat         — ламповый (сильнее у ламп)
+  PECHATEED,  // document eater           — печатеед (чует бумаги)
+  TUBE_EEL,   // water/pipe ambusher      — трубный угорь (быстрее в воде)
+  PARAGRAPH,  // hostile document         — параграф (дальний бой)
+  NELYUD,     // false human              — нелюдь (ждёт близкой дистанции)
+  KRYSNOZHKA, // food/garbage swarm       — крысоножка (идёт на приманку)
+  KOSTOREZ,   // melee elite              — косторез (читабельный рывок)
 }
 
 // ── Factions ─────────────────────────────────────────────────────
@@ -270,6 +281,25 @@ export interface RPGStats {
   maxPsi: number;          // base max PSI (scaled by INT)
 }
 
+export type PlayerStatusId = 'zhelemish_skin' | 'govnyak_relief' | 'govnyak_cough' | 'govnyak_debt';
+export type PlayerStatusSource =
+  | 'zhelemish_raw'
+  | 'zhelemish_treated'
+  | 'govnyak_roll'
+  | 'govnyak_brick'
+  | 'govnyak_sample'
+  | 'govnyak_bad_batch'
+  | 'debug';
+
+export interface PlayerStatus {
+  id: PlayerStatusId;
+  source: PlayerStatusSource;
+  startedAt: number;
+  expiresAt: number;
+  intensity?: number;
+  badReaction?: boolean;
+}
+
 export enum AIGoal {
   IDLE, GOTO, EAT, DRINK, SLEEP, TOILET, WORK, HIDE, HUNT, FLEE, WANDER,
 }
@@ -299,7 +329,14 @@ export interface AIState {
   stateTimer?: number;        // time remaining in current sub-activity
   combatTargetId?: number;    // cached hostile target entity id
   combatScanCd?: number;      // cooldown until next full hostile scan
+  windupTimer?: number;       // generic readable attack windup countdown
+  windupTargetId?: number;    // target locked by current windup
+  staggerTimer?: number;      // temporary interrupt / stagger lockout
+  lastSeenTargetId?: number;  // event throttle for first sight / escape beats
+  baitMarkerId?: number;      // cached monster bait marker id
+  baitScanCd?: number;        // cooldown until next bounded bait scan
   ambientBarkCd?: number;     // cooldown for rare generic A-Life chatter
+  wanderAngle?: number;        // phasing monster drift direction
 }
 
 export interface Entity {
@@ -311,6 +348,7 @@ export interface Entity {
   alive: boolean;
   speed: number;
   sprite: number;             // sprite sheet index
+  spriteSeed?: number;        // deterministic per-entity procedural visual seed
   // optional components
   needs?: Needs;
   hp?: number;
@@ -319,6 +357,8 @@ export interface Entity {
   inventory?: Item[];
   name?: string;
   monsterKind?: MonsterKind;
+  monsterVariantId?: string;   // optional cheap modifier from data/monster_variants
+  monsterDmgMult?: number;     // cached damage multiplier from variant
   attackCd?: number;
   familyId?: number;
   weapon?: string;            // equipped item def id
@@ -347,6 +387,7 @@ export interface Entity {
   projGore?: number;          // gore intensity 1-3 (1=clean, 3=messy)
   burnTimer?: number;         // fire: remaining burn time on floor cell
   rpg?: RPGStats;             // RPG stats (level, XP, attributes)
+  statuses?: PlayerStatus[];  // bounded timed player/NPC conditions
   isFemale?: boolean;          // gender for kill message grammar
   isFogBoss?: boolean;         // fog boss — killing stops fog in zone
   fogBossZone?: number;        // zone id this boss guards
@@ -367,6 +408,7 @@ export interface ItemDef {
   spawnRooms: RoomType[];
   spawnW: number;             // spawn weight
   value: number;              // price in рубли (0 = worthless)
+  tags?: string[];            // small content labels for events/economy hooks
   stack?: number;             // override max stack size
   durability?: number;        // max durability for tools/consumable kits
   use?: (e: Entity) => string; // returns message
@@ -376,6 +418,53 @@ export interface Item {
   defId: string;
   count: number;
   data?: unknown;              // key roomId, note text, etc.
+}
+
+// ── Containers ──────────────────────────────────────────────────
+export enum ContainerKind {
+  WOODEN_CHEST,
+  METAL_CABINET,
+  MEDICAL_CABINET,
+  WEAPON_CRATE,
+  FRIDGE,
+  SAFE,
+  FILING_CABINET,
+  CASHBOX,
+  SECRET_STASH,
+  EMERGENCY_BOX,
+  TRASH_BIN,
+  TOOL_LOCKER,
+}
+
+export type ContainerAccess = 'public' | 'room' | 'faction' | 'owner' | 'locked' | 'secret';
+
+export interface WorldContainer {
+  id: number;
+  x: number;
+  y: number;
+  floor: FloorLevel;
+  roomId: number;
+  zoneId: number;
+  kind: ContainerKind;
+  name: string;
+  inventory: Item[];
+  capacitySlots: number;
+  ownerNpcId?: number;
+  ownerName?: string;
+  faction?: Faction;
+  access: ContainerAccess;
+  lockDifficulty?: number;
+  discovered: boolean;
+  stolenItemIds?: string[];
+  lastOpenedBy?: number;
+  lastOpenedAt?: number;
+  lastAuditAt?: number;
+  factoryId?: string;
+  lastProducedAt?: number;
+  lastProducedItemId?: string;
+  lastProducedCount?: number;
+  productionBlockedReason?: 'no_inputs' | 'container_full' | 'no_container';
+  tags: string[];
 }
 
 // ── Quests ────────────────────────────────────────────────────────
@@ -392,6 +481,11 @@ export interface Quest {
   targetCount?: number;
   // VISIT: targetRoom
   targetRoom?: number;        // room id
+  // Generic route target metadata; unlike visitFloor, targetFloor is only a hint.
+  targetFloor?: FloorLevel;
+  targetRoomType?: RoomType;
+  targetZoneTag?: string;
+  targetHint?: string;
   // KILL: targetMonsterKind + killCount/killNeeded
   targetMonsterKind?: MonsterKind;
   killCount?: number;
@@ -410,8 +504,220 @@ export interface Quest {
   moneyReward?: number;       // money reward on completion
   plotStepIndex?: number;     // index into PLOT_CHAIN (story quests only)
   sideQuestId?: string;       // id from SIDE_QUESTS (hand-designed side quests)
+  contractId?: string;        // AG10 contract wrapper id
+  contractFaction?: Faction;  // issuer faction for generated contracts
+  contractRank?: number;      // license/difficulty tier
   visitFloor?: FloorLevel;    // auto-complete VISIT quest when entering this floor
+  eventTags?: string[];       // extra tags for authored quest events
+  eventData?: Record<string, unknown>; // extra compact data for authored quest events
+  eventPrivacy?: WorldEventPrivacy; // privacy override for authored quest events
+  eventSeverity?: WorldEventSeverity; // severity override for authored quest events
+  eventTargetName?: string;   // completed event summary override
+  failOnNpcDeathPlotId?: string; // fail when this plot NPC dies
+  abandonsSideQuestIds?: string[]; // completing this quest fails these active side quests
+  timeLimitMinutes?: number;  // procedural quests, or authored quests that explicitly opt into a deadline
+  expiresAtMinutes?: number;  // absolute GameClock.totalMinutes deadline
+  failed?: boolean;           // true when a timed procedural quest expired
   done: boolean;
+}
+
+// ── World events / context facts ────────────────────────────────
+export const WORLD_EVENT_RECENT_CAPACITY = 512;
+export const WORLD_EVENT_IMPORTANT_CAPACITY = 128;
+export const WORLD_EVENT_ZONE_CAPACITY = 32;
+export const WORLD_EVENT_ZONE_COUNT = 64;
+
+export type WorldEventType =
+  | 'npc_enter_zone'
+  | 'npc_leave_zone'
+  | 'npc_enter_room'
+  | 'npc_need_low'
+  | 'npc_pick_item'
+  | 'npc_drop_item'
+  | 'npc_store_item'
+  | 'npc_take_from_container'
+  | 'container_looted'
+  | 'container_opened'
+  | 'item_stolen'
+  | 'item_deposited'
+  | 'room_produced_items'
+  | 'room_lacked_resources'
+  | 'room_blocked_production'
+  | 'npc_kill_monster'
+  | 'npc_kill_npc'
+  | 'player_kill_monster'
+  | 'player_kill_npc'
+  | 'player_hurt_npc'
+  | 'player_pick_item'
+  | 'player_drop_item'
+  | 'player_use_item'
+  | 'player_sell_item'
+  | 'player_handoff_item'
+  | 'player_destroy_item'
+  | 'player_status_applied'
+  | 'player_status_expired'
+  | 'player_status_cured'
+  | 'player_status_bad_reaction'
+  | 'tool_broke'
+  | 'ammo_consumed'
+  | 'uv_spotlight_used'
+  | 'uv_spotlight_target_affected'
+  | 'uv_spotlight_depleted'
+  | 'monster_bait_placed'
+  | 'monster_bait_attracted'
+  | 'monster_bait_consumed'
+  | 'monster_bait_expired'
+  | 'samosbor_warning'
+  | 'samosbor_started'
+  | 'samosbor_zone_captured'
+  | 'samosbor_ended'
+  | 'hermodoor_borer_detected'
+  | 'hermodoor_borer_damage'
+  | 'hermodoor_borer_repaired'
+  | 'hermodoor_borer_compromised'
+  | 'fog_boss_spawned'
+  | 'fog_boss_killed'
+  | 'monster_sighted'
+  | 'monster_windup_interrupted'
+  | 'monster_armor_cut'
+  | 'monster_escaped'
+  | 'smog_entered'
+  | 'smog_source_found'
+  | 'smog_source_handled'
+  | 'metro_route_taken'
+  | 'metro_wrong_stop'
+  | 'quest_created'
+  | 'quest_completed'
+  | 'quest_failed'
+  | 'contract_created'
+  | 'contract_completed'
+  | 'contract_failed'
+  | 'ration_coupon_spent'
+  | 'ration_coupon_stolen'
+  | 'ration_coupon_forged'
+  | 'ration_coupon_reported'
+  | 'ration_audit_resolved'
+  | 'shelter_tally_handled'
+  | 'rumor_observed'
+  | 'rumor_spread'
+  | 'faction_patrol_clash'
+  | 'floor_transition'
+  | 'elevator_anomaly'
+  | 'elevator_loop_exit'
+  | 'lift_arachna_warned'
+  | 'lift_arachna_sprung'
+  | 'lift_arachna_avoided'
+  | 'lift_arachna_cleared'
+  | 'paritel_valve_changed'
+  | 'paritel_bridge_crossed'
+  | 'paritel_threat_neutralized'
+  | 'paritel_steam_injury'
+  | 'paritel_steam_avoided'
+  | 'faction_relation_changed'
+  | 'door_opened'
+  | 'door_sealed'
+  | 'room_regrown'
+  | 'hazard_trapped'
+  | 'hazard_escaped'
+  | 'hazard_cleaned'
+  | 'burn_cleanup'
+  | 'fuel_empty'
+  | 'collateral_damage'
+  | 'krysnozhka_swarm_triggered'
+  | 'krysnozhka_baited'
+  | 'krysnozhka_dispersed'
+  | 'krysnozhka_nest_cleared'
+  | 'death_seen';
+
+export type WorldEventSeverity = 0 | 1 | 2 | 3 | 4 | 5;
+export type WorldEventPrivacy = 'public' | 'local' | 'witnessed' | 'private' | 'secret';
+
+export interface WorldEvent {
+  id: number;
+  type: WorldEventType;
+  time: number;
+  day: number;
+  hour: number;
+  minute: number;
+  floor: FloorLevel;
+  zoneId?: number;
+  roomId?: number;
+  x?: number;
+  y?: number;
+  actorId?: number;
+  actorName?: string;
+  actorFaction?: Faction;
+  targetId?: number;
+  targetName?: string;
+  targetFaction?: Faction;
+  itemId?: string;
+  itemName?: string;
+  itemCount?: number;
+  itemValue?: number;
+  monsterKind?: MonsterKind;
+  containerId?: number;
+  containerOwnerId?: number;
+  containerFaction?: Faction;
+  severity: WorldEventSeverity;
+  privacy: WorldEventPrivacy;
+  truth: 'fact';
+  tags: string[];
+  data?: Record<string, unknown>;
+}
+
+export type WorldEventDraft = Omit<WorldEvent, 'id' | 'time' | 'day' | 'hour' | 'minute' | 'floor' | 'truth'> & {
+  time?: number;
+  day?: number;
+  hour?: number;
+  minute?: number;
+  floor?: FloorLevel;
+  truth?: 'fact';
+};
+
+export interface ContextFact {
+  id: number;
+  eventId: number;
+  kind: 'danger' | 'shortage' | 'theft' | 'death' | 'production' | 'need' | 'quest_hook' | 'social' | 'territory';
+  subjectId?: number;
+  subjectName?: string;
+  zoneId?: number;
+  roomId?: number;
+  itemId?: string;
+  faction?: Faction;
+  score: number;
+  expiresAt?: number;
+  tags: string[];
+}
+
+export interface EventFilter {
+  type?: WorldEventType;
+  zoneId?: number;
+  floor?: FloorLevel;
+  minSeverity?: WorldEventSeverity;
+  privacy?: WorldEventPrivacy;
+  actorId?: number;
+  targetId?: number;
+  sinceId?: number;
+  tags?: string[];
+  limit?: number;
+}
+
+export interface WorldEventBuffer {
+  capacity: number;
+  start: number;
+  count: number;
+  items: (WorldEvent | null)[];
+}
+
+export interface WorldEventState {
+  nextId: number;
+  recentEvents: WorldEventBuffer;
+  importantEvents: WorldEventBuffer;
+  zoneEvents: WorldEventBuffer[];
+  facts: ContextFact[];
+  nextFactId: number;
+  lastLogKey: string;
+  lastLogTime: number;
 }
 
 // ── Game state ───────────────────────────────────────────────────
@@ -455,6 +761,12 @@ export interface GameState {
   tradeCursorX: number;       // 0..4 column in trade grid
   tradeCursorY: number;       // 0..4 row in trade grid
   tradeSide: string;          // 'player'|'npc'
+  // ── Container interaction menu ──
+  showContainerMenu: boolean;
+  containerMenuTarget: number; // world container id
+  containerCursorX: number;    // 0..4 column in container grid
+  containerCursorY: number;    // 0..4 row in container grid
+  containerSide: string;       // 'player'|'container'
   showDebug: boolean;
   debugSel: number;
   showFactions: boolean;       // faction relations matrix (F key)
@@ -468,7 +780,10 @@ export interface GameState {
   beamFx: number;            // PSI beam visual timer (seconds remaining)
   beamAngle: number;         // beam direction (radians)
   beamLen: number;           // beam length (cells)
+  uvBeamFx: number;          // UV spotlight visual timer (seconds remaining)
+  uvBeamLen: number;         // UV spotlight reach (cells)
   gameWon: boolean;          // player killed Creator and entered return portal
+  worldEvents?: WorldEventState; // bounded structured event history; old saves may omit it
 }
 
 export interface Msg { text: string; time: number; color: string; day: number; hour: number; minute: number; }

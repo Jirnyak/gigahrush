@@ -1,6 +1,6 @@
 /* ── Toroidal world grid ──────────────────────────────────────── */
 
-import { W, Cell, DoorState, Feature, type Room, type Door, type Zone } from './types';
+import { W, Cell, DoorState, Feature, type Room, type Door, type Zone, type WorldContainer } from './types';
 import { stampMark, MarkType } from '../render/marks';
 
 export class World {
@@ -20,8 +20,20 @@ export class World {
   factionControl: Uint8Array;      // per-cell faction control (ZoneFaction enum)
   fog:       Uint8Array;           // purple fog density per cell (0 = clear, 255 = full)
   slideCells: number[] = [];       // cell indices of slide walls (cycle textures)
+  screenCells: number[] = [];      // cell indices of procedural screen/TV walls
   surfaceMap: Map<number, Uint8Array> = new Map(); // sparse RGBA canvas, 16×16×4 per cell (floors + walls)
+  anomalyTeleports: Map<number, number> = new Map(); // rare floor-anomaly cell links
+  anomalySmogSource = -1;       // procedural smog source cell, -1 = none
+  anomalySmogCells: number[] = []; // bounded cells affected by procedural smog
+  anomalySmogHandled = false;
+  surfaceVersion = 0;              // bumped when surfaceMap pixels change
+  wallTexVersion = 0;              // bumped when runtime wall texture data changes
+  floorTexVersion = 0;             // bumped when runtime floor texture data changes
+  fogVersion = 0;                  // bumped when runtime fog data changes
   liftDir:   Uint8Array;           // LiftDirection per cell (only meaningful where cells[i] === Cell.LIFT)
+  containers: WorldContainer[] = [];
+  containerMap: Map<number, number[]> = new Map(); // cell idx -> container ids
+  containerById: Map<number, WorldContainer> = new Map();
 
   constructor() {
     const n = W * W;
@@ -37,6 +49,38 @@ export class World {
     this.factionControl = new Uint8Array(n);        // per-cell faction (ZoneFaction)
     this.fog      = new Uint8Array(n);              // fog density
     this.liftDir  = new Uint8Array(n);              // LiftDirection (0=DOWN, 1=UP)
+  }
+
+  addContainer(container: WorldContainer): void {
+    this.containers.push(container);
+    this.containerById.set(container.id, container);
+    const i = this.idx(container.x, container.y);
+    const ids = this.containerMap.get(i);
+    if (ids) ids.push(container.id);
+    else this.containerMap.set(i, [container.id]);
+  }
+
+  rebuildContainerMap(): void {
+    this.containerMap.clear();
+    this.containerById.clear();
+    for (const c of this.containers) {
+      this.containerById.set(c.id, c);
+      const i = this.idx(c.x, c.y);
+      const ids = this.containerMap.get(i);
+      if (ids) ids.push(c.id);
+      else this.containerMap.set(i, [c.id]);
+    }
+  }
+
+  containersAt(x: number, y: number): WorldContainer[] {
+    const ids = this.containerMap.get(this.idx(x, y));
+    if (!ids) return [];
+    const out: WorldContainer[] = [];
+    for (const id of ids) {
+      const c = this.containerById.get(id);
+      if (c) out.push(c);
+    }
+    return out;
   }
 
   /* rebuild lightmap from lamp features */
@@ -75,6 +119,12 @@ export class World {
   set(x: number, y: number, v: Cell): void {
     this.cells[this.idx(x, y)] = v;
   }
+
+  markWallTexDirty(): void { this.wallTexVersion = (this.wallTexVersion + 1) | 0; }
+
+  markFloorTexDirty(): void { this.floorTexVersion = (this.floorTexVersion + 1) | 0; }
+
+  markFogDirty(): void { this.fogVersion = (this.fogVersion + 1) | 0; }
 
   solid(x: number, y: number): boolean {
     const i = this.idx(x, y);

@@ -1,0 +1,663 @@
+import {
+  AIGoal,
+  Cell,
+  ContainerKind,
+  DoorState,
+  EntityType,
+  Faction,
+  Feature,
+  FloorLevel,
+  LiftDirection,
+  MonsterKind,
+  Occupation,
+  QuestType,
+  RoomType,
+  Tex,
+  W,
+  ZoneFaction,
+  type Entity,
+  type Item,
+  type Room,
+  type WorldContainer,
+} from '../../core/types';
+import { World } from '../../core/world';
+import { hashSeed, withSeededRandom } from '../../core/rand';
+import { freshNeeds } from '../../data/catalog';
+import { type PlotNpcDef, registerSideQuest } from '../../data/plot';
+import { MONSTERS } from '../../entities/monster';
+import { monsterSpr, Spr } from '../../render/sprite_index';
+import { ensureConnectivity, generateZones, sanitizeDoors, stampRoom } from '../shared';
+import type { FloorGeneration } from '../floor_manifest';
+
+export const COMMUNAL_RING_DESIGN_FLOOR_ID = 'communal_ring' as const;
+export const COMMUNAL_RING_ROUTE_Z = -4;
+
+const BASE_FLOOR = FloorLevel.KVARTIRY;
+const RING_SEED = hashSeed(COMMUNAL_RING_DESIGN_FLOOR_ID);
+
+const NPC_IDS = {
+  luba: 'communal_laundry_luba',
+  viktor: 'communal_shower_viktor',
+  tamara: 'communal_notice_tamara',
+  sasha: 'communal_panhandler_sasha',
+} as const;
+
+const NPC_DEFS: Record<(typeof NPC_IDS)[keyof typeof NPC_IDS], PlotNpcDef> = {
+  communal_laundry_luba: {
+    name: 'Люба Прачечная',
+    isFemale: true,
+    faction: Faction.CITIZEN,
+    occupation: Occupation.HOUSEWIFE,
+    sprite: Occupation.HOUSEWIFE,
+    hp: 90, maxHp: 90, money: 24, speed: 0.8,
+    inventory: [{ defId: 'cloth_roll', count: 2 }, { defId: 'bandage', count: 2 }, { defId: 'cleaning_kit', count: 1 }],
+    talkLines: [
+      'Кольцо держится на чистой ткани. Грязная ткань держит только слухи.',
+      'Принесёшь рулоны - отдам бинты. Не святые, но сухие.',
+      'После самосбора машинка сама открылась. Внутри был список, а не бельё.',
+      'У прачечной общий вход, но у шкафчика есть глаза. Саша видит даже через очередь.',
+    ],
+    talkLinesPost: [
+      'Бинты вывешены. Кто первый снял - тот потом первый объясняет.',
+      'Ползун под сливом притих. Значит, слушает.',
+    ],
+  },
+  communal_shower_viktor: {
+    name: 'Виктор Напорный',
+    isFemale: false,
+    faction: Faction.LIQUIDATOR,
+    occupation: Occupation.LOCKSMITH,
+    sprite: Occupation.LOCKSMITH,
+    hp: 130, maxHp: 130, money: 45, speed: 0.9,
+    inventory: [{ defId: 'wrench', count: 1 }, { defId: 'valve_tag', count: 1 }, { defId: 'filtered_water', count: 1 }],
+    talkLines: [
+      'Душ не моет. Душ голосует давлением.',
+      'Две бирки вентиля - и я решу, кому сегодня достанется вода.',
+      'Можно пустить напор вниз, в коллекторы. Тогда здесь сухо, зато снизу злые.',
+      'Не стой босиком у третьей кабинки. Там вода помнит сирену.',
+    ],
+    talkLinesPost: [
+      'Напор ровный. Слишком ровный, если слушать трубу.',
+      'Чистая вода - это временное соглашение с нижним этажом.',
+    ],
+  },
+  communal_notice_tamara: {
+    name: 'Тамара Объявление',
+    isFemale: true,
+    faction: Faction.SCIENTIST,
+    occupation: Occupation.SECRETARY,
+    sprite: Occupation.SECRETARY,
+    hp: 85, maxHp: 85, money: 62, speed: 0.85,
+    inventory: [{ defId: 'neighbor_complaint', count: 2 }, { defId: 'sealed_complaint', count: 1 }, { defId: 'water_coupon', count: 2 }],
+    talkLines: [
+      'На кольце правда появляется только после кнопки и подписи.',
+      'Две бумажки спорят за одну доску. Принеси запечатанную жалобу - решим, чья очередь станет законом.',
+      'Сорвать объявление можно быстро. Потом оно догоняет медленно.',
+      'Кухня хочет кипяток, прачечная - ткань, кладовая - тишину. Доска не выдержит всех.',
+    ],
+    talkLinesPost: [
+      'Объявление принято. Теперь оно официально мешает жить.',
+      'Если доска изменилась после сирены, значит кто-то спрятался рядом с кнопками.',
+    ],
+  },
+  communal_panhandler_sasha: {
+    name: 'Саша У Очереди',
+    isFemale: false,
+    faction: Faction.WILD,
+    occupation: Occupation.TRAVELER,
+    sprite: Occupation.TRAVELER,
+    hp: 105, maxHp: 105, money: 12, speed: 1.05,
+    inventory: [{ defId: 'bread', count: 1 }, { defId: 'cigs', count: 2 }, { defId: 'container_key_label', count: 1 }],
+    talkLines: [
+      'Кладовая общая, пока дверь закрыта. Открытая кладовая сразу чья-то.',
+      'Я не сторож. Я свидетель с хорошей памятью.',
+      'Бирку от ключа принесёшь - скажу, какой шкаф пищит тише.',
+      'Можешь украсть тушёнку. Можешь купить. Можешь заслужить. Все три способа пахнут по-разному.',
+    ],
+    talkLinesPost: [
+      'Пайки выдали. Теперь спорят, кому выдали взглядом больше.',
+      'Я видел меньше, чем мог. Это тоже услуга.',
+    ],
+  },
+};
+
+registerSideQuest(NPC_IDS.luba, NPC_DEFS.communal_laundry_luba, [{
+  id: 'communal_clean_bandages',
+  giverNpcId: NPC_IDS.luba,
+  type: QuestType.FETCH,
+  desc: 'Люба Прачечная: «Два рулона ткани - и я отстираю из них бинты, пока машинка не вспомнила самосбор.»',
+  targetItem: 'cloth_roll',
+  targetCount: 2,
+  rewardItem: 'bandage',
+  rewardCount: 4,
+  extraRewards: [{ defId: 'cleaning_kit', count: 1 }],
+  relationDelta: 12,
+  xpReward: 35,
+  moneyReward: 20,
+}]);
+
+registerSideQuest(NPC_IDS.viktor, NPC_DEFS.communal_shower_viktor, [{
+  id: 'communal_shower_pressure',
+  giverNpcId: NPC_IDS.viktor,
+  type: QuestType.FETCH,
+  desc: 'Виктор Напорный: «Две бирки вентиля. Починим душ или спустим воду коллекторам - но решение будет твоё.»',
+  targetItem: 'valve_tag',
+  targetCount: 2,
+  rewardItem: 'filtered_water',
+  rewardCount: 2,
+  extraRewards: [{ defId: 'pressure_logbook', count: 1 }],
+  relationDelta: 10,
+  xpReward: 40,
+  moneyReward: 25,
+}]);
+
+registerSideQuest(NPC_IDS.tamara, NPC_DEFS.communal_notice_tamara, [{
+  id: 'communal_notice_dispute',
+  giverNpcId: NPC_IDS.tamara,
+  type: QuestType.FETCH,
+  desc: 'Тамара Объявление: «Запечатанная жалоба решит, чьё объявление станет официальным: кухня, душ или кладовая.»',
+  targetItem: 'sealed_complaint',
+  targetCount: 1,
+  rewardItem: 'water_coupon',
+  rewardCount: 2,
+  extraRewards: [{ defId: 'neighbor_complaint', count: 2 }],
+  relationDelta: 14,
+  xpReward: 35,
+  moneyReward: 30,
+}]);
+
+registerSideQuest(NPC_IDS.sasha, NPC_DEFS.communal_panhandler_sasha, [{
+  id: 'communal_pantry_theft',
+  giverNpcId: NPC_IDS.sasha,
+  type: QuestType.FETCH,
+  desc: 'Саша У Очереди: «Бирку от ключа принеси. Тогда кладовая откроется как услуга, а не как кража при свидетелях.»',
+  targetItem: 'container_key_label',
+  targetCount: 1,
+  rewardItem: 'canned',
+  rewardCount: 2,
+  extraRewards: [{ defId: 'bread', count: 3 }, { defId: 'water_coupon', count: 1 }],
+  relationDelta: 8,
+  xpReward: 35,
+  moneyReward: 12,
+}]);
+
+interface RingLayout {
+  left: number;
+  right: number;
+  top: number;
+  bottom: number;
+  width: number;
+  spawnX: number;
+  spawnY: number;
+}
+
+interface CommunalRooms {
+  laundry: Room;
+  kitchen: Room;
+  shower: Room;
+  pantry: Room;
+  notice: Room;
+}
+
+type OwnerKey = keyof typeof NPC_IDS;
+
+export function generateCommunalRingDesignFloor(seed = RING_SEED): FloorGeneration {
+  return withSeededRandom(seed, () => {
+    const world = new World();
+    const entities: Entity[] = [];
+    const nextId = { v: 1 };
+    const containerId = { v: 1 };
+
+    const ring = carveRing(world);
+    const rooms = buildServiceRooms(world, ring);
+    generateZones(world);
+    applyCommunalZones(world);
+    placeRingLifts(world, ring);
+    decorateRing(world, ring, rooms);
+    const owners = spawnCommunalNpcSet(entities, nextId, rooms);
+    spawnWitnesses(entities, nextId, rooms);
+    placeServiceContainers(world, containerId, rooms, owners);
+    placeLooseSupplies(world, entities, nextId, rooms);
+    applySamosborAftermath(world, entities, nextId, rooms);
+
+    sanitizeDoors(world);
+    ensureConnectivity(world, ring.spawnX, ring.spawnY);
+    world.bakeLights();
+
+    return { world, entities, spawnX: ring.spawnX, spawnY: ring.spawnY };
+  });
+}
+
+function carveRing(world: World): RingLayout {
+  const cx = W / 2;
+  const cy = W / 2;
+  const width = 4;
+  const left = cx - 60;
+  const right = cx + 56;
+  const top = cy - 44;
+  const bottom = cy + 40;
+
+  for (let x = left; x <= right + width - 1; x++) {
+    carveCorridorCell(world, x, top, width);
+    carveCorridorCell(world, x, bottom, width);
+  }
+  for (let y = top; y <= bottom + width - 1; y++) {
+    carveCorridorCell(world, left, y, width, true);
+    carveCorridorCell(world, right, y, width, true);
+  }
+
+  return {
+    left,
+    right,
+    top,
+    bottom,
+    width,
+    spawnX: left + 9.5,
+    spawnY: top + 1.5,
+  };
+}
+
+function carveCorridorCell(world: World, x: number, y: number, width: number, vertical = false): void {
+  for (let n = 0; n < width; n++) {
+    const wx = vertical ? x + n : x;
+    const wy = vertical ? y : y + n;
+    const i = world.idx(wx, wy);
+    world.cells[i] = Cell.FLOOR;
+    world.roomMap[i] = -1;
+    world.floorTex[i] = Tex.F_LINO;
+    world.factionControl[i] = ZoneFaction.CITIZEN;
+  }
+}
+
+function buildServiceRooms(world: World, ring: RingLayout): CommunalRooms {
+  let id = 0;
+  const kitchen = createRoom(world, id++, RoomType.KITCHEN, W / 2 - 31, ring.top - 11, 21, 10, 'Общая кухня с двумя плитами', Tex.TILE_W, Tex.F_TILE);
+  connectRoomToCorridor(world, kitchen, kitchen.x + 10, kitchen.y + kitchen.h, DoorState.CLOSED);
+
+  const laundry = createRoom(world, id++, RoomType.PRODUCTION, ring.left - 17, W / 2 - 22, 16, 12, 'Прачечная после самосбора', Tex.TILE_W, Tex.F_TILE);
+  connectRoomToCorridor(world, laundry, laundry.x + laundry.w, laundry.y + 6, DoorState.CLOSED);
+
+  const shower = createRoom(world, id++, RoomType.BATHROOM, ring.right + ring.width + 1, W / 2 - 20, 15, 13, 'Душевая слабого напора', Tex.TILE_W, Tex.F_WATER);
+  connectRoomToCorridor(world, shower, shower.x - 1, shower.y + 6, DoorState.CLOSED);
+
+  const pantry = createRoom(world, id++, RoomType.STORAGE, W / 2 - 9, ring.bottom + ring.width + 1, 22, 10, 'Паёчная кладовая', Tex.PANEL, Tex.F_CONCRETE);
+  connectRoomToCorridor(world, pantry, pantry.x + 11, pantry.y - 1, DoorState.LOCKED, 'container_key_label');
+
+  const notice = createRoom(world, id++, RoomType.OFFICE, ring.right - 34, ring.top + 11, 18, 9, 'Бюро доски объявлений', Tex.PANEL, Tex.F_LINO);
+  carveShortCorridor(world, notice.x + 9, ring.top + ring.width, notice.x + 9, notice.y - 2);
+  connectRoomToCorridor(world, notice, notice.x + 9, notice.y - 1, DoorState.CLOSED);
+
+  return { laundry, kitchen, shower, pantry, notice };
+}
+
+function createRoom(
+  world: World,
+  id: number,
+  type: RoomType,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  name: string,
+  wallTex: Tex,
+  floorTex: Tex,
+): Room {
+  const room = stampRoom(world, id, type, Math.floor(x), Math.floor(y), w, h, -1);
+  room.name = name;
+  room.wallTex = wallTex;
+  room.floorTex = floorTex;
+  for (let dy = -1; dy <= h; dy++) {
+    for (let dx = -1; dx <= w; dx++) {
+      const i = world.idx(room.x + dx, room.y + dy);
+      if (world.cells[i] === Cell.WALL) world.wallTex[i] = wallTex;
+    }
+  }
+  for (let dy = 0; dy < h; dy++) {
+    for (let dx = 0; dx < w; dx++) {
+      world.floorTex[world.idx(room.x + dx, room.y + dy)] = floorTex;
+    }
+  }
+  return room;
+}
+
+function connectRoomToCorridor(world: World, room: Room, x: number, y: number, state: DoorState, keyId = ''): void {
+  const idx = world.idx(x, y);
+  world.cells[idx] = Cell.DOOR;
+  world.doors.set(idx, {
+    idx,
+    state,
+    roomA: room.id,
+    roomB: -1,
+    keyId,
+    timer: 0,
+  });
+  room.doors.push(idx);
+}
+
+function carveShortCorridor(world: World, ax: number, ay: number, bx: number, by: number): void {
+  const stepX = ax === bx ? 0 : ax < bx ? 1 : -1;
+  const stepY = ay === by ? 0 : ay < by ? 1 : -1;
+  let x = ax;
+  let y = ay;
+  for (let guard = 0; guard < 80; guard++) {
+    const i = world.idx(x, y);
+    if (world.cells[i] === Cell.WALL) {
+      world.cells[i] = Cell.FLOOR;
+      world.roomMap[i] = -1;
+      world.floorTex[i] = Tex.F_LINO;
+    }
+    if (x === bx && y === by) break;
+    x += stepX;
+    y += stepY;
+  }
+}
+
+function applyCommunalZones(world: World): void {
+  for (const zone of world.zones) {
+    zone.faction = ZoneFaction.CITIZEN;
+    zone.level = 2;
+    zone.fogged = false;
+    zone.hasLift = zone.id % 17 === 0;
+  }
+  for (let i = 0; i < world.factionControl.length; i++) {
+    world.factionControl[i] = world.zones[world.zoneMap[i]]?.faction ?? ZoneFaction.CITIZEN;
+  }
+}
+
+function placeRingLifts(world: World, ring: RingLayout): void {
+  placeLift(world, ring.left + 2, ring.top + 1, ring.left + 5, ring.top + 1, LiftDirection.UP);
+  placeLift(world, ring.right + 1, ring.bottom + 2, ring.right - 2, ring.bottom + 2, LiftDirection.DOWN);
+}
+
+function placeLift(world: World, x: number, y: number, buttonX: number, buttonY: number, direction: LiftDirection): void {
+  const li = world.idx(x, y);
+  world.cells[li] = Cell.LIFT;
+  world.wallTex[li] = Tex.LIFT_DOOR;
+  world.liftDir[li] = direction;
+  const bi = world.idx(buttonX, buttonY);
+  if (world.cells[bi] === Cell.FLOOR) world.features[bi] = Feature.LIFT_BUTTON;
+  world.liftDir[bi] = direction;
+}
+
+function decorateRing(world: World, ring: RingLayout, rooms: CommunalRooms): void {
+  placeFeature(world, ring.left + 7, ring.top + 1, Feature.SCREEN);
+  placeFeature(world, ring.right - 4, ring.top + 1, Feature.LAMP);
+  placeFeature(world, ring.left + 1, ring.bottom + 1, Feature.TABLE);
+  placeFeature(world, ring.right + 2, ring.bottom + 2, Feature.SHELF);
+
+  for (let x = rooms.kitchen.x + 2; x < rooms.kitchen.x + rooms.kitchen.w - 2; x += 4) placeFeature(world, x, rooms.kitchen.y + 2, Feature.STOVE);
+  for (let x = rooms.kitchen.x + 3; x < rooms.kitchen.x + rooms.kitchen.w - 2; x += 5) placeFeature(world, x, rooms.kitchen.y + 6, Feature.TABLE);
+  placeFeature(world, rooms.kitchen.x + 1, rooms.kitchen.y + 1, Feature.SINK);
+
+  for (let y = rooms.laundry.y + 2; y < rooms.laundry.y + rooms.laundry.h - 2; y += 3) placeFeature(world, rooms.laundry.x + 3, y, Feature.MACHINE);
+  placeFeature(world, rooms.laundry.x + rooms.laundry.w - 3, rooms.laundry.y + 2, Feature.SINK);
+  placeFeature(world, rooms.laundry.x + rooms.laundry.w - 4, rooms.laundry.y + rooms.laundry.h - 3, Feature.SHELF);
+
+  for (let x = rooms.shower.x + 2; x < rooms.shower.x + rooms.shower.w - 2; x += 4) placeFeature(world, x, rooms.shower.y + 2, Feature.SINK);
+  for (let x = rooms.shower.x + 3; x < rooms.shower.x + rooms.shower.w - 2; x += 4) placeFeature(world, x, rooms.shower.y + rooms.shower.h - 3, Feature.TOILET);
+
+  for (let x = rooms.pantry.x + 2; x < rooms.pantry.x + rooms.pantry.w - 2; x += 3) placeFeature(world, x, rooms.pantry.y + 2, Feature.SHELF);
+  for (let x = rooms.pantry.x + 3; x < rooms.pantry.x + rooms.pantry.w - 2; x += 4) placeFeature(world, x, rooms.pantry.y + 6, Feature.SHELF);
+
+  placeFeature(world, rooms.notice.x + 3, rooms.notice.y + 2, Feature.DESK);
+  placeFeature(world, rooms.notice.x + 9, rooms.notice.y + 2, Feature.SCREEN);
+  placeFeature(world, rooms.notice.x + 14, rooms.notice.y + 5, Feature.SHELF);
+
+  markPosterWall(world, rooms.notice.x + 7, rooms.notice.y - 1, 8);
+  markPosterWall(world, rooms.kitchen.x + 8, rooms.kitchen.y + rooms.kitchen.h, 12);
+  markPosterWall(world, rooms.pantry.x + 9, rooms.pantry.y - 1, 17);
+}
+
+function placeFeature(world: World, x: number, y: number, feature: Feature): void {
+  const i = world.idx(x, y);
+  if (world.cells[i] === Cell.FLOOR || world.cells[i] === Cell.WATER) world.features[i] = feature;
+}
+
+function markPosterWall(world: World, x: number, y: number, n: number): void {
+  const i = world.idx(x, y);
+  if (world.cells[i] === Cell.WALL) world.wallTex[i] = (Tex.POSTER_BASE + (n % 64)) as Tex;
+}
+
+function spawnCommunalNpcSet(entities: Entity[], nextId: { v: number }, rooms: CommunalRooms): Record<OwnerKey, number> {
+  const owners = {
+    luba: spawnNpc(entities, nextId, NPC_DEFS.communal_laundry_luba, NPC_IDS.luba, rooms.laundry.x + 6, rooms.laundry.y + 5),
+    viktor: spawnNpc(entities, nextId, NPC_DEFS.communal_shower_viktor, NPC_IDS.viktor, rooms.shower.x + 5, rooms.shower.y + 6, 'wrench'),
+    tamara: spawnNpc(entities, nextId, NPC_DEFS.communal_notice_tamara, NPC_IDS.tamara, rooms.notice.x + 4, rooms.notice.y + 4),
+    sasha: spawnNpc(entities, nextId, NPC_DEFS.communal_panhandler_sasha, NPC_IDS.sasha, rooms.pantry.x + 11, rooms.pantry.y - 3, 'knife'),
+  };
+  return owners;
+}
+
+function spawnNpc(
+  entities: Entity[],
+  nextId: { v: number },
+  npc: PlotNpcDef,
+  plotNpcId: string,
+  x: number,
+  y: number,
+  weapon?: string,
+): number {
+  const id = nextId.v++;
+  entities.push({
+    id,
+    type: EntityType.NPC,
+    x: x + 0.5,
+    y: y + 0.5,
+    angle: Math.random() * Math.PI * 2,
+    pitch: 0,
+    alive: true,
+    speed: npc.speed,
+    sprite: npc.sprite,
+    name: npc.name,
+    isFemale: npc.isFemale,
+    needs: freshNeeds(),
+    hp: npc.hp,
+    maxHp: npc.maxHp,
+    money: npc.money,
+    ai: { goal: AIGoal.IDLE, tx: x + 0.5, ty: y + 0.5, path: [], pi: 0, stuck: 0, timer: 0 },
+    inventory: npc.inventory.map(item => ({ ...item })),
+    weapon,
+    faction: npc.faction,
+    occupation: npc.occupation,
+    plotNpcId,
+    canGiveQuest: true,
+    questId: -1,
+  });
+  return id;
+}
+
+function spawnWitnesses(entities: Entity[], nextId: { v: number }, rooms: CommunalRooms): void {
+  spawnAmbientNpc(entities, nextId, 'Дежурная у кладовой', Faction.CITIZEN, Occupation.STOREKEEPER, rooms.pantry.x + 2, rooms.pantry.y - 3, [{ defId: 'note', count: 1 }]);
+  spawnAmbientNpc(entities, nextId, 'Очередник с тазом', Faction.CITIZEN, Occupation.TRAVELER, rooms.laundry.x + rooms.laundry.w + 3, rooms.laundry.y + 6, [{ defId: 'cloth_roll', count: 1 }]);
+  spawnAmbientNpc(entities, nextId, 'Повар у второй плиты', Faction.CITIZEN, Occupation.COOK, rooms.kitchen.x + 15, rooms.kitchen.y + 5, [{ defId: 'kasha', count: 2 }], 'knife');
+  spawnAmbientNpc(entities, nextId, 'Слесарь душевой очереди', Faction.LIQUIDATOR, Occupation.MECHANIC, rooms.shower.x - 3, rooms.shower.y + 7, [{ defId: 'valve_tag', count: 1 }], 'wrench');
+}
+
+function spawnAmbientNpc(
+  entities: Entity[],
+  nextId: { v: number },
+  name: string,
+  faction: Faction,
+  occupation: Occupation,
+  x: number,
+  y: number,
+  inventory: Item[],
+  weapon?: string,
+): void {
+  entities.push({
+    id: nextId.v++,
+    type: EntityType.NPC,
+    x: x + 0.5,
+    y: y + 0.5,
+    angle: Math.random() * Math.PI * 2,
+    pitch: 0,
+    alive: true,
+    speed: 0.85,
+    sprite: occupation,
+    name,
+    needs: freshNeeds(),
+    hp: 80,
+    maxHp: 80,
+    money: 5 + Math.floor(Math.random() * 16),
+    ai: { goal: AIGoal.IDLE, tx: x + 0.5, ty: y + 0.5, path: [], pi: 0, stuck: 0, timer: 0 },
+    inventory: inventory.map(item => ({ ...item })),
+    weapon,
+    faction,
+    occupation,
+    questId: -1,
+  });
+}
+
+function placeServiceContainers(
+  world: World,
+  containerId: { v: number },
+  rooms: CommunalRooms,
+  owners: Record<OwnerKey, number>,
+): void {
+  addContainer(world, containerId, rooms.laundry, 11, 8, ContainerKind.METAL_CABINET, 'Шкаф чистой ткани', [
+    { defId: 'cloth_roll', count: 3 },
+    { defId: 'bandage', count: 2 },
+    { defId: 'cleaning_kit', count: 1 },
+  ], 'owner', owners.luba, NPC_DEFS.communal_laundry_luba.name, ['laundry', 'cloth']);
+
+  addContainer(world, containerId, rooms.kitchen, 17, 2, ContainerKind.FRIDGE, 'Общий холодильник с подписанными полками', [
+    { defId: 'kasha', count: 3 },
+    { defId: 'water', count: 3 },
+    { defId: 'tea', count: 2 },
+  ], 'room', undefined, undefined, ['kitchen', 'shared']);
+
+  addContainer(world, containerId, rooms.shower, 11, 7, ContainerKind.TOOL_LOCKER, 'Ящик вентильных бирок', [
+    { defId: 'valve_tag', count: 2 },
+    { defId: 'wrench', count: 1 },
+    { defId: 'pressure_logbook', count: 1 },
+  ], 'owner', owners.viktor, NPC_DEFS.communal_shower_viktor.name, ['shower', 'pressure', 'tools']);
+
+  addContainer(world, containerId, rooms.pantry, 17, 6, ContainerKind.METAL_CABINET, 'Паёчный шкаф под взглядом очереди', [
+    { defId: 'canned', count: 4 },
+    { defId: 'bread', count: 5 },
+    { defId: 'water_coupon', count: 2 },
+    { defId: 'ration_registry_extract', count: 1 },
+  ], 'owner', owners.sasha, NPC_DEFS.communal_panhandler_sasha.name, ['pantry', 'food', 'witnessed']);
+
+  addContainer(world, containerId, rooms.notice, 13, 5, ContainerKind.FILING_CABINET, 'Картотека спорных объявлений', [
+    { defId: 'sealed_complaint', count: 2 },
+    { defId: 'neighbor_complaint', count: 3 },
+    { defId: 'samosbor_tally', count: 1 },
+  ], 'owner', owners.tamara, NPC_DEFS.communal_notice_tamara.name, ['notice', 'paper']);
+}
+
+function addContainer(
+  world: World,
+  containerId: { v: number },
+  room: Room,
+  dx: number,
+  dy: number,
+  kind: ContainerKind,
+  name: string,
+  inventory: Item[],
+  access: WorldContainer['access'],
+  ownerNpcId: number | undefined,
+  ownerName: string | undefined,
+  tags: string[],
+): void {
+  const x = world.wrap(room.x + dx);
+  const y = world.wrap(room.y + dy);
+  const container: WorldContainer = {
+    id: containerId.v++,
+    x,
+    y,
+    floor: BASE_FLOOR,
+    roomId: room.id,
+    zoneId: world.zoneMap[world.idx(x, y)],
+    kind,
+    name,
+    inventory: inventory.map(item => ({ ...item })),
+    capacitySlots: 10,
+    ownerNpcId,
+    ownerName,
+    faction: ownerNpcId === undefined ? Faction.CITIZEN : undefined,
+    access,
+    discovered: true,
+    tags,
+  };
+  world.addContainer(container);
+}
+
+function placeLooseSupplies(world: World, entities: Entity[], nextId: { v: number }, rooms: CommunalRooms): void {
+  placeDrop(world, entities, nextId, rooms.kitchen, 4, 4, 'kasha', 1);
+  placeDrop(world, entities, nextId, rooms.kitchen, 8, 6, 'tea', 1);
+  placeDrop(world, entities, nextId, rooms.laundry, 5, 8, 'cloth_roll', 1);
+  placeDrop(world, entities, nextId, rooms.shower, 3, 9, 'toiletpaper', 1);
+  placeDrop(world, entities, nextId, rooms.notice, 7, 6, 'neighbor_complaint', 1);
+}
+
+function placeDrop(
+  world: World,
+  entities: Entity[],
+  nextId: { v: number },
+  room: Room,
+  dx: number,
+  dy: number,
+  defId: string,
+  count: number,
+): void {
+  const x = world.wrap(room.x + dx);
+  const y = world.wrap(room.y + dy);
+  const i = world.idx(x, y);
+  if (world.cells[i] !== Cell.FLOOR && world.cells[i] !== Cell.WATER) return;
+  entities.push({
+    id: nextId.v++,
+    type: EntityType.ITEM_DROP,
+    x: x + 0.5,
+    y: y + 0.5,
+    angle: 0,
+    pitch: 0,
+    alive: true,
+    speed: 0,
+    sprite: Spr.ITEM_DROP,
+    inventory: [{ defId, count }],
+  });
+}
+
+function applySamosborAftermath(world: World, entities: Entity[], nextId: { v: number }, rooms: CommunalRooms): void {
+  rooms.laundry.sealed = true;
+  const washCabinet = world.containers.find(container => container.roomId === rooms.laundry.id);
+  if (washCabinet) {
+    washCabinet.stolenItemIds = ['cloth_roll'];
+    washCabinet.lastAuditAt = 0;
+    washCabinet.tags = [...washCabinet.tags, 'samosbor_aftermath'];
+  }
+
+  for (let dx = 2; dx < rooms.laundry.w - 2; dx++) {
+    const i = world.idx(rooms.laundry.x + dx, rooms.laundry.y + rooms.laundry.h - 2);
+    world.cells[i] = Cell.WATER;
+    world.floorTex[i] = Tex.F_WATER;
+  }
+  for (let dy = 3; dy < rooms.shower.h - 2; dy += 2) {
+    const i = world.idx(rooms.shower.x + 7, rooms.shower.y + dy);
+    world.cells[i] = Cell.WATER;
+    world.floorTex[i] = Tex.F_WATER;
+  }
+
+  world.stamp(rooms.laundry.x + 6, rooms.laundry.y + 8, 0, 0, 4, 0.55, 2718, 40, 80, 90, false);
+  spawnMonster(entities, nextId, MonsterKind.POLZUN, rooms.laundry.x + 9, rooms.laundry.y + 8);
+}
+
+function spawnMonster(entities: Entity[], nextId: { v: number }, kind: MonsterKind, x: number, y: number): void {
+  const def = MONSTERS[kind];
+  entities.push({
+    id: nextId.v++,
+    type: EntityType.MONSTER,
+    x: x + 0.5,
+    y: y + 0.5,
+    angle: 0,
+    pitch: 0,
+    alive: true,
+    speed: def.speed * 0.85,
+    sprite: monsterSpr(kind),
+    hp: Math.round(def.hp * 0.85),
+    maxHp: Math.round(def.hp * 0.85),
+    monsterKind: kind,
+    ai: { goal: AIGoal.HUNT, tx: x + 0.5, ty: y + 0.5, path: [], pi: 0, stuck: 0, timer: 0 },
+  });
+}

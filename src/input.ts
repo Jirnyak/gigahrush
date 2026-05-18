@@ -2,6 +2,10 @@
 
 import { type InputState } from './core/types';
 
+type BooleanInputKey = {
+  [K in keyof InputState]: InputState[K] extends boolean ? K : never;
+}[keyof InputState];
+
 export function createInput(): InputState {
   return {
     fwd: false, back: false, left: false, right: false,
@@ -23,7 +27,7 @@ export function createInput(): InputState {
 }
 
 export function bindInput(input: InputState, canvas: HTMLCanvasElement): () => void {
-  const keyMap: Record<string, keyof InputState> = {
+  const keyMap: Record<string, BooleanInputKey> = {
     KeyW: 'fwd', KeyS: 'back',
     ArrowUp: 'fwd', ArrowDown: 'back',
     ArrowLeft: 'left', ArrowRight: 'right',
@@ -44,7 +48,7 @@ export function bindInput(input: InputState, canvas: HTMLCanvasElement): () => v
 
   const onDown = (e: KeyboardEvent) => {
     const k = keyMap[e.code];
-    if (k && k in input && typeof (input as unknown as Record<string, unknown>)[k] === 'boolean') (input as unknown as Record<string, unknown>)[k] = true;
+    if (k) input[k] = true;
     // Inventory / menu navigation
     if (e.code === 'ArrowUp' || e.code === 'KeyW') input.invUp = true;
     if (e.code === 'ArrowDown' || e.code === 'KeyS') input.invDn = true;
@@ -63,7 +67,7 @@ export function bindInput(input: InputState, canvas: HTMLCanvasElement): () => v
 
   const onUp = (e: KeyboardEvent) => {
     const k = keyMap[e.code];
-    if (k && k in input && typeof (input as unknown as Record<string, unknown>)[k] === 'boolean') (input as unknown as Record<string, unknown>)[k] = false;
+    if (k) input[k] = false;
     input.invUp = false;
     input.invDn = false;
     input.invLeft = false;

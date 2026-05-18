@@ -1,0 +1,778 @@
+import {
+  Cell, ContainerKind, EntityType, Faction, Feature, FloorLevel, ItemType, RoomType,
+  type ContainerAccess, type Entity, type GameState, type Item, type Room, type WorldContainer,
+} from '../core/types';
+import { World } from '../core/world';
+import { CONTAINER_DEFS, containerKindsForRoom } from '../data/container_defs';
+import { ITEMS } from '../data/catalog';
+import {
+  chernobogDocketContainerEventTags,
+  chernobogDocketContainerRumorIds,
+  isChernobogDocketItem,
+} from '../data/chernobog_docket';
+import { getStack } from '../data/items';
+import { addFactionRelMutual } from '../data/relations';
+import { publishEvent } from './events';
+import { applyTheftRelationPenalty } from './factions';
+import { publishMaronaryShavingAcquired } from './maronary_shaving';
+import { observeRumorEvent } from './rumor';
+import {
+  SHELTER_TALLY_ID,
+  isShelterTallyItem,
+  publishShelterTallyEvent,
+} from './shelter_tally';
+
+const MAX_ENTITY_INVENTORY_SLOTS = 25;
+const THEFT_WITNESS_RADIUS = 7;
+const THEFT_WITNESS_SCAN_CAP = 160;
+const THEFT_WITNESS_REPORT_CAP = 4;
+
+export interface ContainerAccessInfo {
+  label: string;
+  detail: string;
+  color: string;
+  canTake: boolean;
+  canPut: boolean;
+  theft: boolean;
+}
+
+export interface ContainerInteractionContext {
+  state?: GameState;
+  world?: World;
+  entities?: readonly Entity[];
+}
+
+export interface ContainerTheftStatus {
+  label: string;
+  detail: string;
+  color: string;
+}
+
+function containerSeed(roomId: number, kind: ContainerKind, n: number): number {
+  let x = (roomId + 1) * 1103515245 + (kind + 3) * 12345 + n * 2654435761;
+  x ^= x >>> 16;
+  return x >>> 0;
+}
+
+function roll(seed: number, max: number): number {
+  return max <= 0 ? 0 : (seed % max);
+}
+
+function findContainerCell(world: World, room: Room, n: number): { x: number; y: number } | null {
+  for (let a = 0; a < 16; a++) {
+    const x = world.wrap(room.x + 1 + ((n * 3 + a * 5) % Math.max(1, room.w - 2)));
+    const y = world.wrap(room.y + 1 + ((n * 5 + a * 7) % Math.max(1, room.h - 2)));
+    const i = world.idx(x, y);
+    if (world.cells[i] === Cell.FLOOR && world.features[i] === Feature.NONE && world.roomMap[i] === room.id) return { x, y };
+  }
+  return null;
+}
+
+function seedInventory(kind: ContainerKind, roomId: number): Item[] {
+  const def = CONTAINER_DEFS[kind];
+  const inv: Item[] = [];
+  let slot = 0;
+  for (const item of def.itemPool) {
+    if (!ITEMS[item.defId]) continue;
+    const seed = containerSeed(roomId, kind, slot);
+    if (item.chance !== undefined) {
+      const chance = Math.max(0, Math.min(1, item.chance));
+      if ((seed % 10_000) / 10_000 >= chance) {
+        slot++;
+        continue;
+      }
+    }
+    const count = item.min + roll(seed >>> 8, item.max - item.min + 1);
+    if (count > 0) inv.push({ defId: item.defId, count: Math.min(count, getStack(ITEMS[item.defId])) });
+    slot++;
+    if (inv.length >= def.capacitySlots) break;
+  }
+  return inv;
+}
+
+function tallyFloorAllowsStaticSeed(floor: FloorLevel): boolean {
+  return floor === FloorLevel.LIVING || floor === FloorLevel.KVARTIRY || floor === FloorLevel.MINISTRY;
+}
+
+function hasShelterTallyStaticPath(world: World, floor: FloorLevel): boolean {
+  for (const container of world.containers) {
+    if (container.floor !== floor) continue;
+    if (!container.tags.includes('istotit_tally_source')) continue;
+    if (container.inventory.some(item => isShelterTallyItem(item.defId))) return true;
+  }
+  return false;
+}
+
+function ensureShelterTallyStaticPath(world: World, floor: FloorLevel): void {
+  if (!tallyFloorAllowsStaticSeed(floor) || !ITEMS[SHELTER_TALLY_ID]) return;
+  if (hasShelterTallyStaticPath(world, floor)) return;
+  const target = world.containers.find(c => c.floor === floor
+    && c.inventory.length < c.capacitySlots
+    && (c.tags.includes('samosbor') || c.tags.includes('paper'))
+    && c.access !== 'locked')
+    ?? world.containers.find(c => c.floor === floor && c.inventory.length < c.capacitySlots && c.access !== 'locked');
+  if (!target) return;
+  if (!target.inventory.some(item => isShelterTallyItem(item.defId))) target.inventory.push({ defId: SHELTER_TALLY_ID, count: 1 });
+  if (!target.tags.includes('istotit_tally_source')) target.tags.push('istotit_tally_source');
+}
+
+function normalizeContainerInventory(input: unknown, capacitySlots: number): Item[] {
+  if (!Array.isArray(input)) return [];
+  const inv: Item[] = [];
+  for (const raw of input) {
+    if (!raw || typeof raw !== 'object') continue;
+    const item = raw as Partial<Item>;
+    if (typeof item.defId !== 'string') continue;
+    const def = ITEMS[item.defId];
+    if (!def) continue;
+    const count = Math.floor(Number(item.count) || 0);
+    if (count <= 0) continue;
+    inv.push({
+      defId: item.defId,
+      count: Math.min(count, getStack(def)),
+      data: item.data,
+    });
+    if (inv.length >= capacitySlots) break;
+  }
+  return inv;
+}
+
+function validContainerAccess(input: unknown): input is ContainerAccess {
+  return input === 'public'
+    || input === 'room'
+    || input === 'faction'
+    || input === 'owner'
+    || input === 'locked'
+    || input === 'secret';
+}
+
+function containerCellValid(world: World, floor: FloorLevel, container: WorldContainer): boolean {
+  if (container.floor !== floor) return false;
+  if (!Number.isFinite(container.x) || !Number.isFinite(container.y)) return false;
+  const x = world.wrap(Math.floor(container.x));
+  const y = world.wrap(Math.floor(container.y));
+  const room = world.rooms[container.roomId];
+  if (!room) return false;
+  const ci = world.idx(x, y);
+  if (world.roomMap[ci] !== room.id) return false;
+  const cell = world.cells[ci];
+  return cell === Cell.FLOOR || cell === Cell.WATER;
+}
+
+function normalizeSavedContainer(
+  world: World,
+  floor: FloorLevel,
+  raw: unknown,
+  usedIds: Set<number>,
+): WorldContainer | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const src = raw as Partial<WorldContainer>;
+  const id = Math.floor(Number(src.id) || 0);
+  const rawX = Math.floor(Number(src.x));
+  const rawY = Math.floor(Number(src.y));
+  const roomId = Math.floor(Number(src.roomId));
+  const kind = Math.floor(Number(src.kind));
+  if (id <= 0 || usedIds.has(id)) return null;
+  if (!Number.isFinite(rawX) || !Number.isFinite(rawY)) return null;
+  const def = CONTAINER_DEFS[kind as ContainerKind];
+  if (!Number.isFinite(roomId) || !def) return null;
+  const x = world.wrap(rawX);
+  const y = world.wrap(rawY);
+  const savedCapacity = Math.floor(Number(src.capacitySlots));
+  const capacitySlots = Number.isFinite(savedCapacity) && savedCapacity > 0
+    ? Math.max(1, Math.min(25, savedCapacity))
+    : def.capacitySlots;
+  const container: WorldContainer = {
+    id,
+    x,
+    y,
+    floor,
+    roomId,
+    zoneId: world.zoneMap[world.idx(x, y)],
+    kind: kind as ContainerKind,
+    name: typeof src.name === 'string' ? src.name.slice(0, 96) : def.name,
+    inventory: normalizeContainerInventory(src.inventory, capacitySlots),
+    capacitySlots,
+    ownerNpcId: typeof src.ownerNpcId === 'number' ? src.ownerNpcId : undefined,
+    ownerName: typeof src.ownerName === 'string' ? src.ownerName.slice(0, 64) : undefined,
+    faction: typeof src.faction === 'number' ? src.faction : undefined,
+    access: validContainerAccess(src.access) ? src.access : def.defaultAccess,
+    lockDifficulty: typeof src.lockDifficulty === 'number' ? src.lockDifficulty : undefined,
+    discovered: src.discovered === true,
+    stolenItemIds: Array.isArray(src.stolenItemIds)
+      ? src.stolenItemIds.filter((id): id is string => typeof id === 'string' && !!ITEMS[id]).slice(0, 16)
+      : undefined,
+    lastOpenedBy: typeof src.lastOpenedBy === 'number' ? src.lastOpenedBy : undefined,
+    lastOpenedAt: typeof src.lastOpenedAt === 'number' ? src.lastOpenedAt : undefined,
+    lastAuditAt: typeof src.lastAuditAt === 'number' ? src.lastAuditAt : undefined,
+    factoryId: typeof src.factoryId === 'string' ? src.factoryId : undefined,
+    lastProducedAt: typeof src.lastProducedAt === 'number' ? src.lastProducedAt : undefined,
+    lastProducedItemId: typeof src.lastProducedItemId === 'string' ? src.lastProducedItemId : undefined,
+    lastProducedCount: typeof src.lastProducedCount === 'number' ? src.lastProducedCount : undefined,
+    productionBlockedReason: src.productionBlockedReason,
+    tags: Array.isArray(src.tags)
+      ? src.tags.filter((tag): tag is string => typeof tag === 'string').slice(0, 12)
+      : [...def.tags],
+  };
+  if (!containerCellValid(world, floor, container)) return null;
+  usedIds.add(id);
+  return container;
+}
+
+export function pruneContainersForWorld(world: World, floor: FloorLevel): number {
+  const usedIds = new Set<number>();
+  const kept: WorldContainer[] = [];
+  for (const container of world.containers) {
+    if (!containerCellValid(world, floor, container)) continue;
+    if (usedIds.has(container.id)) continue;
+    container.x = world.wrap(Math.floor(container.x));
+    container.y = world.wrap(Math.floor(container.y));
+    container.zoneId = world.zoneMap[world.idx(container.x, container.y)];
+    kept.push(container);
+    usedIds.add(container.id);
+  }
+  const removed = world.containers.length - kept.length;
+  world.containers = kept;
+  world.rebuildContainerMap();
+  return removed;
+}
+
+export function restoreValidContainers(world: World, floor: FloorLevel, saved: unknown, maxContainers = 128): number {
+  world.containers = [];
+  world.rebuildContainerMap();
+  if (!Array.isArray(saved)) return 0;
+  const usedIds = new Set<number>();
+  for (const raw of saved) {
+    if (world.containers.length >= maxContainers) break;
+    const container = normalizeSavedContainer(world, floor, raw, usedIds);
+    if (!container) continue;
+    world.addContainer(container);
+  }
+  return world.containers.length;
+}
+
+function accessForRoom(room: Room, kind: ContainerKind): ContainerAccess {
+  const base = CONTAINER_DEFS[kind].defaultAccess;
+  if (room.type === RoomType.HQ && base !== 'public') return 'faction';
+  if (room.type === RoomType.OFFICE && kind === ContainerKind.SAFE) return 'locked';
+  return base;
+}
+
+function factionForRoom(world: World, room: Room): Faction | undefined {
+  const ci = world.idx(room.x + Math.floor(room.w / 2), room.y + Math.floor(room.h / 2));
+  const zone = world.zones[world.zoneMap[ci]];
+  if (!zone) return undefined;
+  if (zone.faction === 0) return Faction.CITIZEN;
+  if (zone.faction === 1) return Faction.LIQUIDATOR;
+  if (zone.faction === 2) return Faction.CULTIST;
+  if (zone.faction === 4) return Faction.WILD;
+  return undefined;
+}
+
+export function ensureRoomContainers(world: World, floor: FloorLevel, maxContainers = 128): number {
+  pruneContainersForWorld(world, floor);
+  if (world.containers.length >= maxContainers) {
+    ensureShelterTallyStaticPath(world, floor);
+    return 0;
+  }
+  let created = 0;
+  for (const room of world.rooms) {
+    if (world.containers.length >= maxContainers) break;
+    if (!room || room.type === RoomType.CORRIDOR || room.w < 3 || room.h < 3) continue;
+    if (world.containers.some(c => c.floor === floor && c.roomId === room.id)) continue;
+    const kinds = containerKindsForRoom(room.type);
+    const count = room.type === RoomType.STORAGE ? Math.min(3, kinds.length) : room.type === RoomType.PRODUCTION ? 2 : 1;
+    for (let n = 0; n < count; n++) {
+      if (world.containers.length >= maxContainers) break;
+      const kind = kinds[(room.id + n) % kinds.length];
+      const def = CONTAINER_DEFS[kind];
+      const pos = findContainerCell(world, room, n);
+      if (!pos) continue;
+      const container: WorldContainer = {
+        id: world.containers.reduce((mx, c) => Math.max(mx, c.id), 0) + 1,
+        x: pos.x,
+        y: pos.y,
+        floor,
+        roomId: room.id,
+        zoneId: world.zoneMap[world.idx(pos.x, pos.y)],
+        kind,
+        name: `${def.name}: ${room.name}`,
+        inventory: seedInventory(kind, room.id),
+        capacitySlots: def.capacitySlots,
+        faction: factionForRoom(world, room),
+        access: accessForRoom(room, kind),
+        lockDifficulty: def.defaultAccess === 'locked' ? 2 + (room.id % 4) : undefined,
+        discovered: def.defaultAccess !== 'secret',
+        tags: [...def.tags],
+      };
+      world.addContainer(container);
+      created++;
+    }
+  }
+  ensureShelterTallyStaticPath(world, floor);
+  return created;
+}
+
+export function nearbyContainers(world: World, player: Entity, radius = 2.0): WorldContainer[] {
+  const out: WorldContainer[] = [];
+  const px = Math.floor(player.x);
+  const py = Math.floor(player.y);
+  const r = Math.ceil(radius);
+  const radiusSq = radius * radius;
+  for (let dy = -r; dy <= r; dy++) {
+    for (let dx = -r; dx <= r; dx++) {
+      const x = world.wrap(px + dx);
+      const y = world.wrap(py + dy);
+      if (world.dist2(player.x, player.y, x + 0.5, y + 0.5) > radiusSq) continue;
+      for (const c of world.containersAt(x, y)) if (c.discovered || c.access !== 'secret') out.push(c);
+    }
+  }
+  return out;
+}
+
+export function firstNearbyContainer(world: World, player: Entity): WorldContainer | null {
+  const list = nearbyContainers(world, player, 2.0);
+  return list.length > 0 ? list[0] : null;
+}
+
+export function canAccessContainer(container: WorldContainer, actor: Entity): boolean {
+  if (container.access === 'public' || container.access === 'room') return true;
+  if (container.access === 'faction') return actor.faction !== undefined && actor.faction === container.faction;
+  if (container.access === 'owner') return actor.id === container.ownerNpcId;
+  if (container.access === 'locked') return actor.faction === container.faction && actor.faction !== undefined;
+  if (container.access === 'secret') return container.discovered;
+  return false;
+}
+
+export function containerAccessInfo(container: WorldContainer, actor: Entity): ContainerAccessInfo {
+  const hasAccess = canAccessContainer(container, actor);
+  switch (container.access) {
+    case 'public':
+      return { label: 'ОБЩИЙ', detail: 'Можно брать и класть без последствий.', color: '#8f8', canTake: true, canPut: true, theft: false };
+    case 'room':
+      return { label: 'КОМНАТНЫЙ', detail: 'Комнатный запас. Доступ открыт.', color: '#8cf', canTake: true, canPut: true, theft: false };
+    case 'faction':
+      return hasAccess
+        ? { label: 'ФРАКЦИЯ', detail: 'Доступ вашей фракции.', color: '#8cf', canTake: true, canPut: true, theft: false }
+        : { label: 'ЧУЖАЯ ФРАКЦИЯ', detail: 'Кража: свидетели поблизости или ревизия фракции.', color: '#f84', canTake: true, canPut: true, theft: true };
+    case 'owner':
+      return hasAccess
+        ? { label: 'ВЛАДЕЛЕЦ', detail: `Владелец: ${container.ownerName ?? 'вы'}.`, color: '#8f8', canTake: true, canPut: true, theft: false }
+        : { label: 'ЧУЖОЕ', detail: `Владелец: ${container.ownerName ?? 'неизвестен'}. Свидетели и ревизия поднимут слух.`, color: '#f84', canTake: true, canPut: true, theft: true };
+    case 'locked':
+      return hasAccess
+        ? { label: 'ОТПЕРТО', detail: 'Замок признаёт ваш доступ.', color: '#8cf', canTake: true, canPut: true, theft: false }
+        : { label: 'ЗАПЕРТО', detail: 'Нужен ключ, код или фракционный доступ.', color: '#f84', canTake: false, canPut: false, theft: false };
+    case 'secret':
+      return container.discovered
+        ? { label: 'ТАЙНИК', detail: 'Тайник найден. Свидетелей нет.', color: '#c8f', canTake: true, canPut: true, theft: false }
+        : { label: 'СКРЫТО', detail: 'Тайник ещё не найден.', color: '#555', canTake: false, canPut: false, theft: false };
+  }
+}
+
+export function containerTheftStatus(container: WorldContainer): ContainerTheftStatus | null {
+  const stolenCount = container.stolenItemIds?.length ?? 0;
+  if (stolenCount <= 0) return null;
+  if (container.lastAuditAt !== undefined) {
+    return {
+      label: 'РЕВИЗИЯ',
+      detail: `Пропажа записана: ${stolenCount} вид(а) предметов.`,
+      color: '#fa0',
+    };
+  }
+  return {
+    label: 'ПРОПАЖА',
+    detail: `Не хватает ${stolenCount} вид(а) предметов; владелец может заметить.`,
+    color: '#f84',
+  };
+}
+
+function inventoryFitCount(inv: Item[], defId: string, capacitySlots: number): number {
+  const def = ITEMS[defId];
+  if (!def) return 0;
+  const maxStack = getStack(def);
+  let free = 0;
+  for (const slot of inv) {
+    if (slot.defId === defId && slot.count < maxStack) free += maxStack - slot.count;
+  }
+  free += Math.max(0, capacitySlots - inv.length) * maxStack;
+  return free;
+}
+
+function addToInventory(inv: Item[], item: Item, count: number, capacitySlots: number): number {
+  const def = ITEMS[item.defId];
+  if (!def || count <= 0) return 0;
+  const maxStack = getStack(def);
+  let left = Math.min(count, inventoryFitCount(inv, item.defId, capacitySlots));
+  const moved = left;
+  for (const slot of inv) {
+    if (left <= 0) break;
+    if (slot.defId !== item.defId || slot.count >= maxStack) continue;
+    const add = Math.min(left, maxStack - slot.count);
+    slot.count += add;
+    left -= add;
+  }
+  while (left > 0 && inv.length < capacitySlots) {
+    const add = Math.min(left, maxStack);
+    inv.push({ defId: item.defId, count: add, data: item.data });
+    left -= add;
+  }
+  return moved - left;
+}
+
+function removeFromInventorySlot(inv: Item[], slotIdx: number, count: number): boolean {
+  const slot = inv[slotIdx];
+  if (!slot || count <= 0 || slot.count < count) return false;
+  slot.count -= count;
+  if (slot.count <= 0) inv.splice(slotIdx, 1);
+  return true;
+}
+
+function markStolen(container: WorldContainer, item: Item): boolean {
+  if (!container.stolenItemIds) container.stolenItemIds = [];
+  if (container.stolenItemIds.includes(item.defId)) return false;
+  container.stolenItemIds.push(item.defId);
+  if (container.stolenItemIds.length > 16) container.stolenItemIds.splice(0, container.stolenItemIds.length - 16);
+  return true;
+}
+
+function normalizeContext(input?: GameState | ContainerInteractionContext): ContainerInteractionContext {
+  if (!input) return {};
+  if ('clock' in input && 'msgs' in input) return { state: input };
+  return input;
+}
+
+function markAuditIfNeeded(container: WorldContainer, state: GameState): boolean {
+  if (container.lastAuditAt !== undefined) return false;
+  if (!container.stolenItemIds || container.stolenItemIds.length === 0) return false;
+  if (container.access !== 'owner' && container.access !== 'faction') return false;
+  container.lastAuditAt = state.time;
+  return true;
+}
+
+function addContainerTag(container: WorldContainer, tag: string): void {
+  if (!container.tags.includes(tag)) container.tags.push(tag);
+}
+
+function isEvidenceItem(defId: string): boolean {
+  return isChernobogDocketItem(defId)
+    || defId === 'cult_supply_list'
+    || defId === 'denunciation'
+    || defId === 'sealed_complaint'
+    || defId === 'record_exposure_notice'
+    || defId === 'voluntary_receipt'
+    || defId === 'ration_registry_extract'
+    || defId === 'zhelemish_raw';
+}
+
+function isSabotageItem(defId: string): boolean {
+  return defId === 'infected_mushroom'
+    || defId === 'rawmeat'
+    || defId === 'acid_bottle'
+    || defId === 'ammo_fuel'
+    || defId === 'sealant_tube'
+    || defId === 'glass_shard';
+}
+
+function containerDepositOutcome(container: WorldContainer, item: Item): {
+  outcome: string;
+  relationDelta: number;
+  severity: 1 | 2 | 3 | 4;
+  tags: string[];
+  rumorIds: string[];
+} {
+  const def = ITEMS[item.defId];
+  if (container.tags.includes('resident_relief') && !container.tags.includes('resident_relief_done')
+    && (def?.type === ItemType.FOOD || def?.type === ItemType.DRINK || item.defId === 'water_coupon' || item.defId === 'concentrate_coupon')) {
+    addContainerTag(container, 'resident_relief_done');
+    addFactionRelMutual(Faction.PLAYER, Faction.CITIZEN, 1);
+    return {
+      outcome: 'resident_relief',
+      relationDelta: 1,
+      severity: 3,
+      tags: ['resident_relief', 'relief'],
+      rumorIds: ['faction_citizen_food'],
+    };
+  }
+  if (container.tags.includes('evidence_drop') && !container.tags.includes('evidence_drop_done') && isEvidenceItem(item.defId)) {
+    addContainerTag(container, 'evidence_drop_done');
+    addFactionRelMutual(Faction.PLAYER, Faction.LIQUIDATOR, 1);
+    addFactionRelMutual(Faction.PLAYER, Faction.CULTIST, -2);
+    return {
+      outcome: 'evidence_planted',
+      relationDelta: -2,
+      severity: 4,
+      tags: ['evidence', 'expose'],
+      rumorIds: ['faction_cultist_after_fog'],
+    };
+  }
+  if (container.tags.includes('sabotage_drop') && !container.tags.includes('sabotage_drop_done') && isSabotageItem(item.defId)) {
+    addContainerTag(container, 'sabotage_drop_done');
+    addFactionRelMutual(Faction.PLAYER, Faction.CULTIST, -1);
+    return {
+      outcome: 'supply_sabotage',
+      relationDelta: -1,
+      severity: 4,
+      tags: ['sabotage', 'shortage'],
+      rumorIds: ['faction_cultist_after_fog'],
+    };
+  }
+  if (
+    item.defId === 'maronary_shaving'
+    && (container.access === 'secret' || container.tags.includes('secret') || container.tags.includes('trash'))
+  ) {
+    addContainerTag(container, 'maronary_hidden');
+    return {
+      outcome: 'maronary_hidden',
+      relationDelta: 0,
+      severity: 3,
+      tags: ['maronary', 'hidden', 'contraband'],
+      rumorIds: ['samosbor_maronary_shaving_hidden'],
+    };
+  }
+  return { outcome: 'deposit', relationDelta: 0, severity: 1, tags: [], rumorIds: [] };
+}
+
+function findTheftWitnesses(
+  world: World | undefined,
+  entities: readonly Entity[] | undefined,
+  actor: Entity,
+  container: WorldContainer,
+): { witnesses: Entity[]; scannedNpcs: number; capped: boolean } {
+  if (!world || !entities) return { witnesses: [], scannedNpcs: 0, capped: false };
+
+  const witnesses: Entity[] = [];
+  const radiusSq = THEFT_WITNESS_RADIUS * THEFT_WITNESS_RADIUS;
+  let scannedNpcs = 0;
+  let capped = false;
+  for (const entity of entities) {
+    if (witnesses.length >= THEFT_WITNESS_REPORT_CAP) break;
+    if (!entity.alive || entity.type !== EntityType.NPC || entity.id === actor.id) continue;
+    scannedNpcs++;
+    if (scannedNpcs > THEFT_WITNESS_SCAN_CAP) {
+      capped = true;
+      break;
+    }
+    if (!Number.isFinite(entity.x) || !Number.isFinite(entity.y)) continue;
+    if (world.dist2(container.x + 0.5, container.y + 0.5, entity.x, entity.y) > radiusSq) continue;
+    witnesses.push(entity);
+  }
+  return { witnesses, scannedNpcs, capped };
+}
+
+export function takeFromContainer(
+  container: WorldContainer,
+  actor: Entity,
+  slotIdx: number,
+  count: number,
+  input?: GameState | ContainerInteractionContext,
+): boolean {
+  const slot = container.inventory[slotIdx];
+  const def = slot ? ITEMS[slot.defId] : undefined;
+  if (!slot || count <= 0 || !def) return false;
+  const access = containerAccessInfo(container, actor);
+  if (!access.canTake) return false;
+  if (!actor.inventory) actor.inventory = [];
+  const take = Math.min(count, slot.count, inventoryFitCount(actor.inventory, slot.defId, MAX_ENTITY_INVENTORY_SLOTS));
+  if (take <= 0) return false;
+  const defId = slot.defId;
+  const itemName = def.name;
+  const item: Item = { defId, count: take, data: take === slot.count ? slot.data : undefined };
+  if (!removeFromInventorySlot(container.inventory, slotIdx, take)) return false;
+  const moved = addToInventory(actor.inventory, item, take, MAX_ENTITY_INVENTORY_SLOTS);
+  if (moved !== take) {
+    addToInventory(container.inventory, item, take - moved, container.capacitySlots);
+    return false;
+  }
+  const stolen = access.theft;
+  container.lastOpenedBy = actor.id;
+  const context = normalizeContext(input);
+  const state = context.state;
+  container.lastOpenedAt = state?.time;
+  if (state) {
+    const quarantine = container.tags.includes('quarantine');
+    const theftWitness = stolen ? findTheftWitnesses(context.world, context.entities, actor, container) : { witnesses: [], scannedNpcs: 0, capped: false };
+    const stolenItemKnown = stolen ? markStolen(container, { defId, count: moved }) : false;
+    const auditMarked = stolen ? markAuditIfNeeded(container, state) : false;
+    const auditActive = auditMarked || (stolen && container.lastAuditAt !== undefined);
+    const relationPenalty = stolen
+      ? applyTheftRelationPenalty(container.faction, theftWitness.witnesses.length > 0, auditMarked)
+      : 0;
+    const evidenceTags = chernobogDocketContainerEventTags(container.tags, defId);
+    const rumorIds = chernobogDocketContainerRumorIds(container.tags, defId);
+    const eventTags = [
+      'container',
+      stolen ? 'theft' : 'open',
+      ...evidenceTags,
+      ...(stolen && theftWitness.witnesses.length > 0 ? ['witnessed'] : []),
+      ...(auditMarked ? ['audit'] : []),
+      ...(def.tags ?? []),
+      ...container.tags,
+    ]
+      .filter((tag, idx, all) => all.indexOf(tag) === idx);
+    const firstWitness = theftWitness.witnesses[0];
+    const event = publishEvent(state, {
+      type: stolen ? 'item_stolen' : 'container_opened',
+      zoneId: container.zoneId,
+      roomId: container.roomId,
+      x: container.x,
+      y: container.y,
+      actorId: actor.id,
+      actorName: actor.name,
+      actorFaction: actor.faction,
+      targetId: firstWitness?.id ?? container.ownerNpcId,
+      targetName: firstWitness?.name ?? container.ownerName,
+      targetFaction: firstWitness?.faction ?? container.faction,
+      itemId: defId,
+      itemName,
+      itemCount: moved,
+      itemValue: def.value ?? 0,
+      containerId: container.id,
+      containerOwnerId: container.ownerNpcId,
+      containerFaction: container.faction,
+      severity: stolen ? theftWitness.witnesses.length > 0 ? 5 : auditActive ? 4 : 3 : quarantine ? 3 : 1,
+      privacy: stolen ? theftWitness.witnesses.length > 0 ? 'witnessed' : auditActive ? 'local' : 'private' : quarantine ? 'local' : 'private',
+      tags: eventTags,
+      data: {
+        containerName: container.name,
+        containerAccess: container.access,
+        containerTags: container.tags,
+        ownerName: container.ownerName,
+        witnessCount: theftWitness.witnesses.length,
+        witnessIds: theftWitness.witnesses.map(w => w.id),
+        witnessNames: theftWitness.witnesses.map(w => w.name ?? `NPC ${w.id}`),
+        auditMarked,
+        auditAt: container.lastAuditAt,
+        relationPenalty,
+        stolenItemKnown,
+        ...(rumorIds.length > 0 ? { rumorIds } : {}),
+      },
+    });
+    if (stolen) {
+      for (const witness of theftWitness.witnesses) observeRumorEvent(witness, event, state.time);
+      if (actor.type === EntityType.PLAYER && isShelterTallyItem(defId)) {
+        publishShelterTallyEvent(state, actor, defId, 'stolen', {
+          targetId: firstWitness?.id ?? container.ownerNpcId,
+          targetName: firstWitness?.name ?? container.ownerName,
+          targetFaction: firstWitness?.faction ?? container.faction,
+          container,
+        });
+      }
+    }
+    if (defId === 'maronary_shaving') {
+      publishMaronaryShavingAcquired(actor, state, stolen ? 'container_theft' : 'container');
+    }
+  }
+  return true;
+}
+
+function isShelterTallyHideContainer(container: WorldContainer): boolean {
+  return container.access === 'secret' || container.tags.includes('secret') || container.tags.includes('trash');
+}
+
+export function putIntoContainer(
+  container: WorldContainer,
+  actor: Entity,
+  slotIdx: number,
+  count: number,
+  input?: GameState | ContainerInteractionContext,
+): boolean {
+  const inv = actor.inventory;
+  if (!inv) return false;
+  const source = inv[slotIdx];
+  const def = source ? ITEMS[source.defId] : undefined;
+  if (!source || count <= 0 || !def) return false;
+  if (!containerAccessInfo(container, actor).canPut) return false;
+  const defId = source.defId;
+  const itemName = def.name;
+  const moved = Math.min(count, source.count, inventoryFitCount(container.inventory, source.defId, container.capacitySlots));
+  if (moved <= 0) return false;
+  const item: Item = { defId, count: moved, data: moved === source.count ? source.data : undefined };
+  if (!removeFromInventorySlot(inv, slotIdx, moved)) return false;
+  const added = addToInventory(container.inventory, item, moved, container.capacitySlots);
+  if (added !== moved) {
+    addToInventory(inv, item, moved - added, MAX_ENTITY_INVENTORY_SLOTS);
+    return false;
+  }
+  container.lastOpenedBy = actor.id;
+  const context = normalizeContext(input);
+  const state = context.state;
+  container.lastOpenedAt = state?.time;
+  if (state) {
+    const outcome = containerDepositOutcome(container, { defId, count: moved, data: item.data });
+    const witnesses = findTheftWitnesses(context.world, context.entities, actor, container);
+    const firstWitness = witnesses.witnesses[0];
+    const primaryTags = ['cult', 'supply', 'witness', 'kvartiry'].filter(tag => container.tags.includes(tag));
+    const eventTags = [
+      'container',
+      'deposit',
+      ...(witnesses.witnesses.length > 0 ? ['witnessed'] : []),
+      ...primaryTags,
+      ...outcome.tags,
+      ...(def.tags ?? []),
+      ...container.tags,
+    ].filter((tag, idx, all) => all.indexOf(tag) === idx);
+    const event = publishEvent(state, {
+      type: 'item_deposited',
+      zoneId: container.zoneId,
+      roomId: container.roomId,
+      x: container.x,
+      y: container.y,
+      actorId: actor.id,
+      actorName: actor.name,
+      actorFaction: actor.faction,
+      targetId: firstWitness?.id ?? container.ownerNpcId,
+      targetName: firstWitness?.name ?? container.ownerName,
+      targetFaction: firstWitness?.faction ?? container.faction,
+      itemId: defId,
+      itemName,
+      itemCount: moved,
+      itemValue: def.value ?? 0,
+      containerId: container.id,
+      containerOwnerId: container.ownerNpcId,
+      containerFaction: container.faction,
+      severity: witnesses.witnesses.length > 0 ? Math.max(outcome.severity, 3) as 3 | 4 : outcome.severity,
+      privacy: witnesses.witnesses.length > 0 ? 'witnessed' : outcome.severity >= 3 ? 'local' : 'private',
+      tags: eventTags,
+      data: {
+        containerName: container.name,
+        containerAccess: container.access,
+        containerTags: container.tags,
+        ownerName: container.ownerName,
+        depositOutcome: outcome.outcome,
+        relationDelta: outcome.relationDelta,
+        witnessCount: witnesses.witnesses.length,
+        witnessIds: witnesses.witnesses.map(w => w.id),
+        witnessNames: witnesses.witnesses.map(w => w.name ?? `NPC ${w.id}`),
+        rumorIds: outcome.rumorIds,
+      },
+    });
+    for (const witness of witnesses.witnesses) observeRumorEvent(witness, event, state.time);
+    if (actor.type === EntityType.PLAYER && isShelterTallyItem(defId) && isShelterTallyHideContainer(container)
+      && !container.tags.includes('shelter_tally_hidden')) {
+      container.tags.push('shelter_tally_hidden');
+      publishShelterTallyEvent(state, actor, defId, 'hide', { container });
+    }
+  }
+  return true;
+}
+
+export function describeContainer(container: WorldContainer): string {
+  const access = container.access === 'public' ? 'общий' : container.access === 'locked' ? 'заперт' : container.access === 'secret' ? 'тайник' : container.access;
+  return `#${container.id} ${container.name} ${container.inventory.length}/${container.capacitySlots} ${access}`;
+}
+
+export function countContainerItems(world: World): number {
+  let n = 0;
+  for (const c of world.containers) for (const i of c.inventory) n += i.count;
+  return n;
+}
+
+export function storeNpcItemInRoomContainer(world: World, npc: Entity): boolean {
+  if (npc.type !== EntityType.NPC || !npc.inventory || npc.inventory.length === 0) return false;
+  const room = world.roomAt(npc.x, npc.y);
+  if (!room) return false;
+  const container = world.containers.find(c => c.roomId === room.id && canAccessContainer(c, npc));
+  if (!container) return false;
+  return putIntoContainer(container, npc, 0, npc.inventory[0].count);
+}

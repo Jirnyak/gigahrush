@@ -138,6 +138,184 @@ export function playSamosborAlarm(): void {
   src.start();
 }
 
+/* ── Maronary cue: thin green-screen beep and distant chord ───── */
+export function playMaronarySignal(): void {
+  const ac = ensureContext();
+  const len = 3.2;
+  const g = ac.createGain();
+  g.gain.setValueAtTime(0.001, ac.currentTime);
+  g.gain.exponentialRampToValueAtTime(0.18, ac.currentTime + 0.12);
+  g.gain.exponentialRampToValueAtTime(0.001, ac.currentTime + len);
+  g.connect(gain());
+
+  const beep = ac.createOscillator();
+  beep.type = 'sine';
+  beep.frequency.setValueAtTime(1480, ac.currentTime);
+  beep.frequency.linearRampToValueAtTime(1660, ac.currentTime + len);
+  beep.connect(g);
+  beep.start();
+  beep.stop(ac.currentTime + len);
+
+  const choir = ac.createOscillator();
+  choir.type = 'triangle';
+  choir.frequency.setValueAtTime(247, ac.currentTime);
+  choir.frequency.linearRampToValueAtTime(233, ac.currentTime + len);
+  choir.connect(g);
+  choir.start(ac.currentTime + 0.35);
+  choir.stop(ac.currentTime + len);
+}
+
+/* ── Maronary active ping: short wall-borne proof tick ────────── */
+export function playMaronaryPing(): void {
+  const ac = ensureContext();
+  const now = ac.currentTime;
+  const len = 0.42;
+  const bus = ac.createGain();
+  bus.gain.setValueAtTime(0.001, now);
+  bus.gain.exponentialRampToValueAtTime(0.11, now + 0.025);
+  bus.gain.exponentialRampToValueAtTime(0.001, now + len);
+  bus.connect(gain());
+
+  const ping = ac.createOscillator();
+  ping.type = 'sine';
+  ping.frequency.setValueAtTime(1720, now);
+  ping.frequency.linearRampToValueAtTime(1510, now + len);
+  ping.connect(bus);
+  ping.start(now);
+  ping.stop(now + len);
+
+  const undertone = ac.createOscillator();
+  undertone.type = 'triangle';
+  undertone.frequency.setValueAtTime(196, now + 0.08);
+  undertone.frequency.linearRampToValueAtTime(185, now + len);
+  const underGain = ac.createGain();
+  underGain.gain.setValueAtTime(0.001, now);
+  underGain.gain.exponentialRampToValueAtTime(0.035, now + 0.12);
+  underGain.gain.exponentialRampToValueAtTime(0.001, now + len);
+  undertone.connect(underGain).connect(bus);
+  undertone.start(now + 0.08);
+  undertone.stop(now + len);
+}
+
+/* ── Veretar cue: far outdoor alarm with dry low drone ────────── */
+export function playVeretarSignal(): void {
+  const ac = ensureContext();
+  const now = ac.currentTime;
+  const len = 3.6;
+  const bus = ac.createGain();
+  bus.gain.setValueAtTime(0.001, now);
+  bus.gain.exponentialRampToValueAtTime(0.16, now + 0.18);
+  bus.gain.exponentialRampToValueAtTime(0.001, now + len);
+  bus.connect(gain());
+
+  const farAlarm = ac.createOscillator();
+  farAlarm.type = 'sine';
+  farAlarm.frequency.setValueAtTime(520, now);
+  farAlarm.frequency.linearRampToValueAtTime(460, now + len);
+  farAlarm.connect(bus);
+  farAlarm.start(now);
+  farAlarm.stop(now + len);
+
+  const drone = ac.createOscillator();
+  drone.type = 'sawtooth';
+  drone.frequency.setValueAtTime(78, now);
+  drone.frequency.linearRampToValueAtTime(66, now + len);
+  const droneGain = ac.createGain();
+  droneGain.gain.setValueAtTime(0.035, now);
+  droneGain.gain.exponentialRampToValueAtTime(0.001, now + len);
+  drone.connect(droneGain).connect(bus);
+  drone.start(now + 0.25);
+  drone.stop(now + len);
+}
+
+/* ── Istotit cue: distant bell with low wordless choir ─────────── */
+export function playIstotitBell(): void {
+  const ac = ensureContext();
+  const now = ac.currentTime;
+  const len = 3.4;
+  const bus = ac.createGain();
+  bus.gain.setValueAtTime(0.001, now);
+  bus.gain.exponentialRampToValueAtTime(0.2, now + 0.08);
+  bus.gain.exponentialRampToValueAtTime(0.001, now + len);
+  bus.connect(gain());
+
+  const bellFreqs = [392, 523.25, 659.25];
+  for (let i = 0; i < bellFreqs.length; i++) {
+    const osc = ac.createOscillator();
+    const g = ac.createGain();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(bellFreqs[i], now + i * 0.11);
+    g.gain.setValueAtTime(0.12 / (i + 1), now + i * 0.11);
+    g.gain.exponentialRampToValueAtTime(0.001, now + len - i * 0.2);
+    osc.connect(g).connect(bus);
+    osc.start(now + i * 0.11);
+    osc.stop(now + len);
+  }
+
+  const choir = ac.createOscillator();
+  choir.type = 'triangle';
+  choir.frequency.setValueAtTime(130.81, now + 0.35);
+  choir.frequency.linearRampToValueAtTime(123.47, now + len);
+  const choirGain = ac.createGain();
+  choirGain.gain.setValueAtTime(0.001, now);
+  choirGain.gain.exponentialRampToValueAtTime(0.055, now + 0.55);
+  choirGain.gain.exponentialRampToValueAtTime(0.001, now + len);
+  choir.connect(choirGain).connect(bus);
+  choir.start(now + 0.35);
+  choir.stop(now + len);
+}
+
+/* ── Route cue: short pipe-song hint, procedural and non-looping ─ */
+export function playRouteCueTone(seed = 0, intensity = 1): void {
+  const ac = ensureContext();
+  const now = ac.currentTime;
+  const len = 2.35;
+  const amp = Math.max(0.06, Math.min(0.2, 0.15 * intensity));
+  const base = 118 + Math.abs(seed % 37);
+
+  const bus = ac.createGain();
+  bus.gain.setValueAtTime(0.001, now);
+  bus.gain.exponentialRampToValueAtTime(amp, now + 0.18);
+  bus.gain.exponentialRampToValueAtTime(0.001, now + len);
+  bus.connect(gain());
+
+  for (let i = 0; i < 3; i++) {
+    const osc = ac.createOscillator();
+    const g = ac.createGain();
+    const bend = 1 + ((seed + i * 17) % 9) * 0.006;
+    osc.type = i === 1 ? 'sine' : 'triangle';
+    osc.frequency.setValueAtTime(base * (1 + i * 0.52) * bend, now + i * 0.08);
+    osc.frequency.linearRampToValueAtTime(base * (0.92 + i * 0.48), now + len - i * 0.12);
+    g.gain.setValueAtTime(0.001, now + i * 0.08);
+    g.gain.exponentialRampToValueAtTime(0.09 / (i + 1), now + 0.28 + i * 0.05);
+    g.gain.exponentialRampToValueAtTime(0.001, now + len);
+    osc.connect(g).connect(bus);
+    osc.start(now + i * 0.08);
+    osc.stop(now + len);
+  }
+
+  const noiseLen = 0.42;
+  const buf = ac.createBuffer(1, Math.max(1, Math.floor(ac.sampleRate * noiseLen)), ac.sampleRate);
+  const d = buf.getChannelData(0);
+  for (let i = 0; i < d.length; i++) {
+    const t = i / d.length;
+    const gate = Math.sin(t * Math.PI);
+    d[i] = (Math.random() * 2 - 1) * gate * (0.12 + 0.08 * Math.sin(i * 0.021 + seed));
+  }
+  const src = ac.createBufferSource();
+  src.buffer = buf;
+  const hp = ac.createBiquadFilter();
+  hp.type = 'bandpass';
+  hp.frequency.value = 740;
+  hp.Q.value = 1.8;
+  const g = ac.createGain();
+  g.gain.setValueAtTime(0.001, now + 0.55);
+  g.gain.exponentialRampToValueAtTime(0.045 * intensity, now + 0.66);
+  g.gain.exponentialRampToValueAtTime(0.001, now + 1.12);
+  src.connect(hp).connect(g).connect(bus);
+  src.start(now + 0.55);
+}
+
 /* ── Pickup ding ─────────────────────────────────────────────── */
 export function playPickup(): void {
   const ac = ensureContext();
@@ -211,6 +389,52 @@ export function playNailgun(): void {
   g.gain.exponentialRampToValueAtTime(0.001, ac.currentTime + 0.06);
   osc.connect(g).connect(gain());
   osc.start(); osc.stop(ac.currentTime + 0.06);
+}
+
+/* ── Projectile impact: short concrete/metal tick ────────────── */
+export function playProjectileImpact(): void {
+  const ac = ensureContext();
+  const len = 0.08;
+  const buf = ac.createBuffer(1, ac.sampleRate * len, ac.sampleRate);
+  const d = buf.getChannelData(0);
+  for (let i = 0; i < d.length; i++) {
+    const t = i / d.length;
+    const env = Math.exp(-t * 35);
+    d[i] = ((Math.random() * 2 - 1) * 0.55 + Math.sin(i * 0.18) * 0.25) * env;
+  }
+  const src = ac.createBufferSource();
+  src.buffer = buf;
+  const g = ac.createGain();
+  g.gain.value = 0.12;
+  const hp = ac.createBiquadFilter();
+  hp.type = 'highpass';
+  hp.frequency.value = 700;
+  src.connect(hp).connect(g).connect(gain());
+  src.start();
+}
+
+/* ── Energy impact: compact zap/sizzle cue ───────────────────── */
+export function playEnergyImpact(): void {
+  const ac = ensureContext();
+  const len = 0.12;
+  const buf = ac.createBuffer(1, ac.sampleRate * len, ac.sampleRate);
+  const d = buf.getChannelData(0);
+  for (let i = 0; i < d.length; i++) {
+    const t = i / d.length;
+    const env = Math.exp(-t * 20);
+    d[i] = Math.sin(i * 0.12 + Math.sin(i * 0.03) * 2) * 0.35 * env;
+    d[i] += (Math.random() * 2 - 1) * 0.25 * env;
+  }
+  const src = ac.createBufferSource();
+  src.buffer = buf;
+  const g = ac.createGain();
+  g.gain.value = 0.14;
+  const bp = ac.createBiquadFilter();
+  bp.type = 'bandpass';
+  bp.frequency.value = 1200;
+  bp.Q.value = 1.4;
+  src.connect(bp).connect(g).connect(gain());
+  src.start();
 }
 
 /* ── Weapon break: crunch ────────────────────────────────────── */

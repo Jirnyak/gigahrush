@@ -7,10 +7,11 @@ export function drawGameMenu(
   ctx: CanvasRenderingContext2D,
   state: GameState,
   _sx: number, sy: number,
+  uiTime = state.time,
 ): void {
   const w = ctx.canvas.width;
   const h = ctx.canvas.height;
-  const time = state.time;
+  const time = uiTime;
 
   // Darken background
   ctx.fillStyle = 'rgba(0,0,4,0.85)';

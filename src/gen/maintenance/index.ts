@@ -9,16 +9,10 @@ import {
 } from '../../core/types';
 import { World } from '../../core/world';
 import { rng, pick, placeLifts, generateZones, ensureConnectivity } from '../shared';
+import { placeProceduralScreens } from '../procedural_screens';
 import { randomName, freshNeeds } from '../../data/catalog';
 import { calcZoneLevel, randomRPG, scaleMonsterHp, scaleMonsterSpeed, gaussianLevel, getMaxHp } from '../../systems/rpg';
-import { generateForpost } from './forpost';
-import { generateMancobusRoom } from './mancobus_room';
-import { spawnMakhno } from './makhno';
-import { spawnIvanych } from './sant_ivanych';
-import { spawnRadistGleb } from './radist_gleb';
-import { spawnDiverKot } from './diver_kot';
-import { spawnGordonFreeman } from './gordon';
-import { generateFloodedLab } from './flooded_lab';
+import { runMaintenanceContent } from './content_manifest';
 import { Spr, monsterSpr } from '../../render/sprite_index';
 
 /* ── Coarse grid parameters ───────────────────────────────────── */
@@ -493,48 +487,19 @@ export function generateMaintenance(): { world: World; entities: Entity[]; spawn
   }
 
   /* ══════════════════════════════════════════════════════════════
-     Phase 13: Forpost (Major Grom's outpost — story room)
+     Phase 13-14e: Manifest-owned maintenance content
      ══════════════════════════════════════════════════════════════ */
-  generateForpost(world, world.rooms.length, entities, { v: nextId }, spawnX, spawnY);
-  nextId = entities.reduce((mx, e) => Math.max(mx, e.id), nextId) + 1;
-
-  /* ══════════════════════════════════════════════════════════════
-     Phase 14: Mancobus room (boss arena)
-     ══════════════════════════════════════════════════════════════ */
-  generateMancobusRoom(world, world.rooms.length, entities, { v: nextId }, spawnX, spawnY);
-  nextId = entities.reduce((mx, e) => Math.max(mx, e.id), nextId) + 1;
-
-  /* ══════════════════════════════════════════════════════════════
-     Phase 14b: Makhno — Wild faction leader (quest target)
-     ══════════════════════════════════════════════════════════════ */
-  spawnMakhno(world, entities, { v: nextId });
-  nextId = entities.reduce((mx, e) => Math.max(mx, e.id), nextId) + 1;
-
-  /* ══════════════════════════════════════════════════════════════
-     Phase 14c: Затопленная лаборатория — Профессор Тесла (room)
-     ══════════════════════════════════════════════════════════════ */
-  {
-    const r = generateFloodedLab(world, world.rooms.length, entities, { v: nextId }, spawnX, spawnY);
-    nextId = entities.reduce((mx, e) => Math.max(mx, e.id), nextId) + 1;
-    void r;
-  }
-
-  /* ══════════════════════════════════════════════════════════════
-     Phase 14d: Wandering side-quest NPCs (Иваныч, Глеб, Кот)
-     ══════════════════════════════════════════════════════════════ */
-  spawnIvanych(world, entities, { v: nextId });
-  nextId = entities.reduce((mx, e) => Math.max(mx, e.id), nextId) + 1;
-  spawnRadistGleb(world, entities, { v: nextId });
-  nextId = entities.reduce((mx, e) => Math.max(mx, e.id), nextId) + 1;
-  spawnDiverKot(world, entities, { v: nextId });
-  nextId = entities.reduce((mx, e) => Math.max(mx, e.id), nextId) + 1;
-  spawnGordonFreeman(world, entities, { v: nextId });
-  nextId = entities.reduce((mx, e) => Math.max(mx, e.id), nextId) + 1;
+  nextId = runMaintenanceContent(world, entities, nextId, spawnX, spawnY);
 
   /* ══════════════════════════════════════════════════════════════
      Phase 15: Ensure all rooms are reachable (connectivity fix)
      ══════════════════════════════════════════════════════════════ */
   ensureConnectivity(world, spawnX, spawnY);
+
+  /* ══════════════════════════════════════════════════════════════
+     Phase 16: Rare procedural monitor/gauge walls
+     ══════════════════════════════════════════════════════════════ */
+  placeProceduralScreens(world, FloorLevel.MAINTENANCE);
 
   return { world, entities, spawnX, spawnY };
 }

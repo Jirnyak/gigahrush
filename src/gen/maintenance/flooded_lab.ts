@@ -12,6 +12,7 @@ import { freshNeeds } from '../../data/catalog';
 import { type PlotNpcDef, registerSideQuest } from '../../data/plot';
 import { stampRoom, protectRoom, connectProtectedRoom, findClearArea } from '../shared';
 import { Spr } from '../../render/sprite_index';
+import { genLog } from '../log';
 
 /* ── NPC definition ──────────────────────────────────────────── */
 const NPC_DEF: PlotNpcDef = {
@@ -171,7 +172,7 @@ export function generateFloodedLab(
     });
   }
 
-  console.log(`[FLOODED_LAB] at (${labX}, ${labY}) room #${room.id}`);
+  genLog(`[FLOODED_LAB] at (${labX}, ${labY}) room #${room.id}`);
   const usedId = Math.max(nextRoomId, room.id + 1);
   return { nextRoomId: usedId };
 }

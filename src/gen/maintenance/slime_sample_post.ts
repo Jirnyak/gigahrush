@@ -1,0 +1,289 @@
+/* ── AG62 NII slime sample post: field containers and liability ─ */
+
+import {
+  ContainerKind, Faction, Feature, FloorLevel, Occupation, QuestType, RoomType, Tex,
+  type GameState, type Room, type WorldContainer, type WorldEvent,
+} from '../../core/types';
+import { type PlotNpcDef, registerSideQuest } from '../../data/plot';
+import { publishEvent, registerWorldEventObserver } from '../../systems/events';
+import { genLog } from '../log';
+import {
+  type MaintContentCtx, dropItems, findMaintArea, openTile, setFeature,
+  setWater, spawnPlotNpc, stampMaintRoom,
+} from './content_helpers';
+
+const ROOM_NAME = 'Полевой пост НИИ: тара и ответственность';
+const CONTENT_TAG = 'ag62_nii_sample_post';
+const SAMPLE_ITEM = 'slime_sample_brown';
+const GREEN_SAMPLE_ITEM = 'slime_sample_green';
+const SILVER_SAMPLE_ITEM = 'slime_sample_silver';
+const EMPTY_CONTAINER_ITEM = 'nii_sample_container';
+const SCIENCE_QUEST = 'ag62_nii_science_return';
+const LIQUIDATOR_QUEST = 'ag62_nii_liquidator_burn';
+const MARKET_QUEST = 'ag62_nii_market_sale';
+const RETURN_EVENT_TAG = 'ag62_sample_return';
+
+const BOKOVA_ID = 'ag62_nii_bokova';
+const LIQUIDATOR_ID = 'ag62_nii_sereda';
+const MARKET_ID = 'ag62_nii_senya';
+
+const BOKOVA_DEF: PlotNpcDef = {
+  name: 'Инженер Бокова',
+  isFemale: true,
+  faction: Faction.SCIENTIST,
+  occupation: Occupation.SCIENTIST,
+  sprite: Occupation.SCIENTIST,
+  hp: 120, maxHp: 120, money: 95, speed: 0.95,
+  inventory: [
+    { defId: EMPTY_CONTAINER_ITEM, count: 2 },
+    { defId: 'filter_layer', count: 2 },
+    { defId: 'seal_wax', count: 1 },
+  ],
+  talkLines: [
+    'Инженер Бокова, НИИ слизи. Пост полевой, поэтому чистым считается всё, что ещё подписывается.',
+    'Пустую тару продаю по журналу. Бесплатная банка бывает только с ответственностью за содержимое.',
+    'Коричневую пробу сдаёшь мне — НИИ получает факт. Отдаёшь ликвидаторам — факт горит. Несёшь на рынок — факт дорожает.',
+  ],
+  talkLinesPost: [
+    'Проба принята. Если она начнёт пахнуть фамилией, это уже не моя смена.',
+    'Следующую тару не вскрывай в коридоре. Коридор не указан как лаборатория.',
+  ],
+};
+
+const SEREDA_DEF: PlotNpcDef = {
+  name: 'Сержант Середа',
+  isFemale: false,
+  faction: Faction.LIQUIDATOR,
+  occupation: Occupation.HUNTER,
+  sprite: Occupation.HUNTER,
+  hp: 170, maxHp: 170, money: 70, speed: 1.05,
+  inventory: [
+    { defId: 'ammo_fuel', count: 2 },
+    { defId: 'gasmask_filter', count: 1 },
+    { defId: 'makarov', count: 1 },
+  ],
+  talkLines: [
+    'Середа. Приставлен к НИИ, чтобы наука не перепутала любопытство с эвакуацией.',
+    'Проба нужна? Нужна. Но если она шевелится, я голосую горелкой, а не протоколом.',
+    'Сдашь пломбу мне — получишь фильтр и топливо. Учёные обидятся бумажно, рынок обидится денежно.',
+  ],
+  talkLinesPost: [
+    'Пломбу списали под прожиг. Если НИИ спросит, я видел только нарушение хранения.',
+    'Банки не жалко. Людей жалко, когда они начинают банкам верить.',
+  ],
+};
+
+const SENYA_DEF: PlotNpcDef = {
+  name: 'Сеня Пробирка',
+  isFemale: false,
+  faction: Faction.WILD,
+  occupation: Occupation.STOREKEEPER,
+  sprite: Occupation.STOREKEEPER,
+  hp: 95, maxHp: 95, money: 180, speed: 1.0,
+  inventory: [
+    { defId: 'cigs', count: 5 },
+    { defId: 'forged_permit_slip', count: 1 },
+    { defId: EMPTY_CONTAINER_ITEM, count: 1 },
+  ],
+  talkLines: [
+    'Сеня Пробирка. Я тут не рынок, я временное окно без вывески.',
+    'Запечатанная проба стоит дороже, пока её не назвали уликой. Пломбу не трогай, цену не порть.',
+    'Учёным достанется вывод, ликвидаторам дым, а тебе могут достаться деньги. Риск входит в тару.',
+  ],
+  talkLinesPost: [
+    'Проба ушла без накладной. Значит, накладная никого не предала.',
+    'Если спросят, мы торговали пустыми банками и плохими советами.',
+  ],
+};
+
+registerSideQuest(BOKOVA_ID, BOKOVA_DEF, [{
+  id: SCIENCE_QUEST,
+  giverNpcId: BOKOVA_ID,
+  type: QuestType.FETCH,
+  desc: 'Бокова: «Принеси коричневую пробу в пломбе. НИИ запишет её как факт, а тебя как ответственного за факт.»',
+  targetItem: SAMPLE_ITEM, targetCount: 1,
+  rewardItem: EMPTY_CONTAINER_ITEM, rewardCount: 1,
+  extraRewards: [{ defId: 'filtered_water', count: 1 }],
+  relationDelta: 12, xpReward: 70, moneyReward: 90,
+}]);
+
+registerSideQuest(LIQUIDATOR_ID, SEREDA_DEF, [{
+  id: LIQUIDATOR_QUEST,
+  giverNpcId: LIQUIDATOR_ID,
+  type: QuestType.FETCH,
+  desc: 'Середа: «Ту же коричневую пробу отдашь мне. Запишем как опасный остаток и сожжём без научной гордости.»',
+  targetItem: SAMPLE_ITEM, targetCount: 1,
+  rewardItem: 'ammo_fuel', rewardCount: 2,
+  extraRewards: [{ defId: 'gasmask_filter', count: 1 }],
+  relationDelta: 10, xpReward: 65, moneyReward: 70,
+}]);
+
+registerSideQuest(MARKET_ID, SENYA_DEF, [{
+  id: MARKET_QUEST,
+  giverNpcId: MARKET_ID,
+  type: QuestType.FETCH,
+  desc: 'Сеня: «Пробу мне, пломбу целой. В журнале будет недостача, у тебя — деньги и лишний повод не задерживаться.»',
+  targetItem: SAMPLE_ITEM, targetCount: 1,
+  rewardItem: 'forged_permit_slip', rewardCount: 1,
+  extraRewards: [{ defId: 'cigs', count: 4 }],
+  relationDelta: 6, xpReward: 60, moneyReward: 140,
+}]);
+
+const RETURN_ENDPOINTS: Record<string, { endpoint: string; label: string; faction: Faction }> = {
+  [SCIENCE_QUEST]: {
+    endpoint: 'science',
+    label: 'Проба сдана НИИ по журналу',
+    faction: Faction.SCIENTIST,
+  },
+  [LIQUIDATOR_QUEST]: {
+    endpoint: 'liquidator',
+    label: 'Проба передана ликвидаторам под прожиг',
+    faction: Faction.LIQUIDATOR,
+  },
+  [MARKET_QUEST]: {
+    endpoint: 'black_market',
+    label: 'Проба ушла на рынок без накладной',
+    faction: Faction.WILD,
+  },
+};
+
+function handleSampleReturn(state: GameState, event: WorldEvent): void {
+  if (event.type !== 'quest_completed' || event.tags.includes(RETURN_EVENT_TAG)) return;
+  const sideQuestId = event.data?.sideQuestId;
+  if (typeof sideQuestId !== 'string') return;
+  const endpoint = RETURN_ENDPOINTS[sideQuestId];
+  if (!endpoint) return;
+
+  publishEvent(state, {
+    type: 'quest_completed',
+    floor: event.floor,
+    zoneId: event.zoneId,
+    roomId: event.roomId,
+    x: event.x,
+    y: event.y,
+    actorId: event.actorId,
+    actorName: event.actorName,
+    actorFaction: endpoint.faction,
+    targetName: endpoint.label,
+    itemId: SAMPLE_ITEM,
+    itemCount: 1,
+    severity: 4,
+    privacy: 'local',
+    tags: [RETURN_EVENT_TAG, CONTENT_TAG, 'nii', 'slime', 'sample', 'returned', endpoint.endpoint],
+    data: {
+      sideQuestId,
+      endpoint: endpoint.endpoint,
+      sourceEventId: event.id,
+      sampleItem: SAMPLE_ITEM,
+    },
+  });
+}
+
+registerWorldEventObserver(handleSampleReturn);
+
+function nextContainerId(ctx: MaintContentCtx): number {
+  let id = ctx.world.containers.length + 1;
+  while (ctx.world.containerById.has(id) || ctx.world.containers.some(c => c.id === id)) id++;
+  return id;
+}
+
+function addContainer(
+  ctx: MaintContentCtx,
+  room: Room,
+  x: number,
+  y: number,
+  container: Omit<WorldContainer, 'id' | 'x' | 'y' | 'floor' | 'roomId' | 'zoneId'>,
+): void {
+  const wx = ctx.world.wrap(x);
+  const wy = ctx.world.wrap(y);
+  const ci = ctx.world.idx(wx, wy);
+  openTile(ctx.world, wx, wy, room.floorTex);
+  setFeature(ctx.world, wx, wy, Feature.SHELF);
+  ctx.world.addContainer({
+    id: nextContainerId(ctx),
+    x: wx,
+    y: wy,
+    floor: FloorLevel.MAINTENANCE,
+    roomId: room.id,
+    zoneId: ctx.world.zoneMap[ci],
+    ...container,
+  });
+}
+
+function dressPost(ctx: MaintContentCtx, room: Room): void {
+  for (let dx = 2; dx < room.w - 2; dx += 3) {
+    setFeature(ctx.world, room.x + dx, room.y + 2, Feature.APPARATUS);
+  }
+  for (let dx = 3; dx < room.w - 3; dx += 4) {
+    setFeature(ctx.world, room.x + dx, room.y + room.h - 3, Feature.CHAIR);
+  }
+  setFeature(ctx.world, room.x + 3, room.y + 5, Feature.DESK);
+  setFeature(ctx.world, room.x + 4, room.y + 5, Feature.SCREEN);
+  setFeature(ctx.world, room.x + 8, room.y + 6, Feature.LAMP);
+  setFeature(ctx.world, room.x + room.w - 6, room.y + 4, Feature.LAMP);
+  setFeature(ctx.world, room.x + room.w - 4, room.y + room.h - 4, Feature.MACHINE);
+  setWater(ctx.world, room.x + 1, room.y + room.h - 2);
+  setWater(ctx.world, room.x + room.w - 2, room.y + room.h - 2);
+}
+
+function addSampleContainers(ctx: MaintContentCtx, room: Room, ownerNpcId: number): void {
+  addContainer(ctx, room, room.x + 2, room.y + room.h - 4, {
+    kind: ContainerKind.MEDICAL_CABINET,
+    name: 'Выдачный ящик порожней тары НИИ',
+    inventory: [
+      { defId: EMPTY_CONTAINER_ITEM, count: 1 },
+      { defId: SAMPLE_ITEM, count: 1 },
+      { defId: 'filter_layer', count: 1 },
+    ],
+    capacitySlots: 7,
+    faction: Faction.SCIENTIST,
+    access: 'public',
+    discovered: true,
+    tags: [CONTENT_TAG, 'nii', 'slime', 'sample', 'equipment', 'public', 'issue'],
+  });
+
+  addContainer(ctx, room, room.x + room.w - 3, room.y + 3, {
+    kind: ContainerKind.MEDICAL_CABINET,
+    name: 'Опломбированный шкаф проб Боковой',
+    inventory: [
+      { defId: GREEN_SAMPLE_ITEM, count: 1 },
+      { defId: SILVER_SAMPLE_ITEM, count: 1 },
+      { defId: EMPTY_CONTAINER_ITEM, count: 1 },
+      { defId: 'seal_wax', count: 2 },
+    ],
+    capacitySlots: 8,
+    ownerNpcId,
+    ownerName: BOKOVA_DEF.name,
+    faction: Faction.SCIENTIST,
+    access: 'owner',
+    discovered: true,
+    tags: [CONTENT_TAG, 'nii', 'slime', 'sample', 'equipment', 'theft', 'science', 'contraband'],
+  });
+}
+
+export function generateSlimeSamplePost(ctx: MaintContentCtx): void {
+  const cx = Math.floor(ctx.spawnX);
+  const cy = Math.floor(ctx.spawnY);
+  const pos = findMaintArea(ctx.world, cx, cy, 28, 15, 85, 210);
+  const room = stampMaintRoom(
+    ctx.world, ctx.world.rooms.length, RoomType.MEDICAL,
+    pos.x, pos.y, 25, 13,
+    ROOM_NAME,
+    Tex.METAL, Tex.F_TILE,
+  );
+
+  for (const doorIdx of room.doors) ctx.world.wallTex[doorIdx] = Tex.DOOR_METAL;
+  dressPost(ctx, room);
+
+  const bokovaId = ctx.nextId.v;
+  spawnPlotNpc(ctx, BOKOVA_ID, BOKOVA_DEF, room.x + 5, room.y + 7, Math.PI);
+  spawnPlotNpc(ctx, LIQUIDATOR_ID, SEREDA_DEF, room.x + 17, room.y + 5, -Math.PI / 2, {
+    weapon: 'makarov',
+  });
+  spawnPlotNpc(ctx, MARKET_ID, SENYA_DEF, room.x + 19, room.y + 9, Math.PI / 2);
+
+  addSampleContainers(ctx, room, bokovaId);
+  dropItems(ctx, room, ['sealant_tube', 'inspection_mirror', 'water', 'note']);
+
+  genLog(`[AG62_NII_SAMPLE] ${room.name} at (${room.x}, ${room.y}) room #${room.id}`);
+}

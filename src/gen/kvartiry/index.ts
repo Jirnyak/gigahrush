@@ -13,16 +13,17 @@ import {
 } from '../../core/types';
 import { World } from '../../core/world';
 import { rng, placeLifts, generateZones, ensureConnectivity } from '../shared';
+import { placeProceduralScreens } from '../procedural_screens';
 import { randomName, freshNeeds } from '../../data/catalog';
 import { calcZoneLevel, randomRPG, gaussianLevel, getMaxHp } from '../../systems/rpg';
 import { Spr } from '../../render/sprite_index';
 import { randomOccupation } from '../../data/relations';
-import { spawnNavelny } from './navelny';
-import { spawnZhirinovsky } from './zhirinovsky';
-import { spawnTyotyaKlava } from './tyotya_klava';
-import { spawnSeryGopnik } from './sery_gopnik';
-import { spawnPahomBratishka } from './pakhom';
-import { generateRedCorner } from './red_corner';
+import {
+  resetKvartiryContentState,
+  runKvartiryPermanentContent,
+  spawnKvartiryNamedNpcs,
+  tryKvartiryContentUprising,
+} from './content_manifest';
 
 /* ── Constants ────────────────────────────────────────────────── */
 const WALL_L = 4;  // grid spacing for wall sources
@@ -193,6 +194,7 @@ export function generateKvartiry(): { world: World; entities: Entity[]; spawnX: 
   let nextId = 1;
   let nextRoomId = 0;
   lastPickedIdx = -1; // reset room type picker
+  resetKvartiryContentState();
 
   const DX = [1, 0, -1, 0];
   const DY = [0, 1, 0, -1];
@@ -554,19 +556,8 @@ export function generateKvartiry(): { world: World; entities: Entity[]; spawnX: 
     }
   }
 
-  // ── Phase 11: Spawn Navelny NPC ──────────────────────────────
-  spawnNavelny(world, entities, { v: nextId });
-  nextId = entities.reduce((mx, e) => Math.max(mx, e.id), nextId) + 1;
-
-  // ── Phase 11b: Side-quest NPCs (Жириновский, Клава, Серый) ───
-  spawnZhirinovsky(world, entities, { v: nextId });
-  nextId = entities.reduce((mx, e) => Math.max(mx, e.id), nextId) + 1;
-  spawnTyotyaKlava(world, entities, { v: nextId });
-  nextId = entities.reduce((mx, e) => Math.max(mx, e.id), nextId) + 1;
-  spawnSeryGopnik(world, entities, { v: nextId });
-  nextId = entities.reduce((mx, e) => Math.max(mx, e.id), nextId) + 1;
-  spawnPahomBratishka(world, entities, { v: nextId });
-  nextId = entities.reduce((mx, e) => Math.max(mx, e.id), nextId) + 1;
+  // ── Phase 11: Manifest-owned named NPCs ──────────────────────
+  nextId = spawnKvartiryNamedNpcs(world, entities, nextId);
 
   // ── Phase 12: Find spawn point ────────────────────────────────
   let spawnX = W / 2 + 0.5, spawnY = W / 2 + 0.5;
@@ -585,12 +576,11 @@ export function generateKvartiry(): { world: World; entities: Entity[]; spawnX: 
     }
   }
 
-  // ── Phase 13: Permanent themed rooms (Красный уголок) ────────
-  {
-    const r = generateRedCorner(world, world.rooms.length, entities, { v: nextId }, spawnX, spawnY);
-    nextId = entities.reduce((mx, e) => Math.max(mx, e.id), nextId) + 1;
-    void r;
-  }
+  // ── Phase 13: Manifest-owned permanent themed rooms ──────────
+  nextId = runKvartiryPermanentContent(world, entities, nextId, spawnX, spawnY);
+
+  // ── Phase 14: Rare procedural TVs/monitors on suitable room walls
+  placeProceduralScreens(world, FloorLevel.KVARTIRY);
 
   return { world, entities, spawnX, spawnY };
 }
@@ -605,6 +595,7 @@ export function resetKvPopulationState(): void {
   kvWildAccum = 0;
   kvLiquidatorAccum = 0;
   kvUprisingAccum = 0;
+  resetKvartiryContentState();
 }
 
 function countFactionNPCs(entities: Entity[], faction: Faction): number {
@@ -664,6 +655,7 @@ export function updateKvPopulation(
   // ── Uprising trigger ──────────────────────────────────────────
   if (kvUprisingAccum >= UPRISING_CHECK_INTERVAL) {
     kvUprisingAccum -= UPRISING_CHECK_INTERVAL;
+    if (tryKvartiryContentUprising(world, entities)) return;
     // Random chance of uprising (30% per check)
     if (Math.random() < 0.3) {
       triggerUprising(world, entities);

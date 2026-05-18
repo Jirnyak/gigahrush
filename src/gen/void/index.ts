@@ -14,6 +14,7 @@ import { rng, ensureConnectivity, generateZones } from '../shared';
 import { calcZoneLevel, randomRPG, scaleMonsterHp, scaleMonsterSpeed } from '../../systems/rpg';
 import { MONSTERS } from '../../entities/monster';
 import { Spr, monsterSpr } from '../../render/sprite_index';
+import { runVoidContent } from './content_manifest';
 
 /* ── Hash utility ─────────────────────────────────────────────── */
 function hash2(x: number, y: number, seed: number): number {
@@ -146,6 +147,8 @@ export function generateVoid(): { world: World; entities: Entity[]; spawnX: numb
      ══════════════════════════════════════════════════════════════ */
   generateZones(world);
   for (const z of world.zones) z.level = calcZoneLevel(z.cx, z.cy, FloorLevel.VOID) + 5;
+
+  nextId = runVoidContent(world, entities, nextId, spawnX, spawnY);
 
   /* ══════════════════════════════════════════════════════════════
      Phase 4: Sparse eerie lighting

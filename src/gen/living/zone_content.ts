@@ -9,6 +9,7 @@
 
 import { type Entity } from '../../core/types';
 import { World } from '../../core/world';
+import { genLog } from '../log';
 
 /* ── Generator function signature ────────────────────────────── */
 export type ZoneContentGenerator = (
@@ -34,6 +35,11 @@ interface ZoneContentEntry {
 
 const registry: ZoneContentEntry[] = [];
 
+export interface ZoneContentRegistrySnapshot {
+  zoneHudId: number;
+  label: string;
+}
+
 /* ── Register a zone content module ──────────────────────────── */
 /**
  * Call at module top-level (side-effect import).
@@ -46,7 +52,17 @@ export function registerZoneContent(
   label: string,
   generate: ZoneContentGenerator,
 ): void {
+  if (registry.some(entry => entry.zoneHudId === zoneHudId)) {
+    console.warn(`[ZONE_CONTENT] duplicate zone HUD #${zoneHudId} while registering "${label}"`);
+  }
+  if (registry.some(entry => entry.label === label)) {
+    console.warn(`[ZONE_CONTENT] duplicate label "${label}"`);
+  }
   registry.push({ zoneHudId, label, generate });
+}
+
+export function getZoneContentRegistrySnapshot(): readonly ZoneContentRegistrySnapshot[] {
+  return registry.map(({ zoneHudId, label }) => ({ zoneHudId, label }));
 }
 
 /* ── Run all registered zone content modules ─────────────────── */
@@ -66,7 +82,7 @@ export function runZoneContentModules(
       console.warn(`[ZONE_CONTENT] zone HUD #${entry.zoneHudId} (idx ${zoneIdx}) not found, skipping "${entry.label}"`);
       continue;
     }
-    console.log(`[ZONE_CONTENT] running "${entry.label}" in zone HUD #${entry.zoneHudId} center=(${zone.cx}, ${zone.cy})`);
+    genLog(`[ZONE_CONTENT] running "${entry.label}" in zone HUD #${entry.zoneHudId} center=(${zone.cx}, ${zone.cy})`);
     const result = entry.generate(
       world, world.rooms.length, entities, nextId,
       zone.cx, zone.cy,

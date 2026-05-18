@@ -1,0 +1,1017 @@
+/* -- Design floor: Крыша ---------------------------------------
+ * Route id roof, z=-40. Self-contained authored generator with a
+ * dynamic sky provider consumed through the generic WebGL ceiling slot.
+ */
+
+import {
+  W,
+  AIGoal,
+  Cell,
+  ContainerKind,
+  DoorState,
+  EntityType,
+  Faction,
+  Feature,
+  FloorLevel,
+  LiftDirection,
+  MonsterKind,
+  Occupation,
+  QuestType,
+  RoomType,
+  Tex,
+  ZoneFaction,
+  type Entity,
+  type GameState,
+  type Room,
+  type WorldContainer,
+  type WorldEvent,
+} from '../../core/types';
+import { World } from '../../core/world';
+import { freshNeeds } from '../../data/catalog';
+import { type PlotNpcDef, registerSideQuest } from '../../data/plot';
+import { MONSTERS } from '../../entities/monster';
+import { monsterSpr, Spr } from '../../render/sprite_index';
+import { publishEvent } from '../../systems/events';
+import {
+  connectRoomsMST,
+  ensureConnectivity,
+  generateZones,
+  placeDoor,
+  sanitizeDoors,
+  stampRoom,
+} from '../shared';
+import { genLog } from '../log';
+import type { FloorGeneration } from '../floor_manifest';
+
+export const DESIGN_FLOOR_ID = 'roof' as const;
+export const ROOF_ROUTE_ID = DESIGN_FLOOR_ID;
+export const ROOF_FUTURE_Z = -40 as const;
+export const ROOF_BASE_FLOOR = FloorLevel.MINISTRY;
+export const ROOF_SKY_WIDTH = 1024 as const;
+export const ROOF_SKY_HEIGHT = 1024 as const;
+
+export const ROOF_DEBUG_ENTRY = {
+  routeId: ROOF_ROUTE_ID,
+  z: ROOF_FUTURE_Z,
+  baseFloor: ROOF_BASE_FLOOR,
+  generator: 'generateRoofDesignFloor',
+  skyProvider: 'createRoofSkyTextureProvider',
+  smokePath: 'spawn -> main slab antenna landmark -> ventilation shelter -> rigger mast -> hatch/lift exit',
+} as const;
+
+const CX = W >> 1;
+const CY = W >> 1;
+const CONTAINER_ID_BASE = 400_100;
+const SKY_CELL = 16;
+const SKY_GRID_W = ROOF_SKY_WIDTH / SKY_CELL;
+const SKY_GRID_H = Math.ceil(ROOF_SKY_HEIGHT / SKY_CELL);
+const SKY_UPDATE_INTERVAL = 0.75;
+
+export type RoofWeatherAction =
+  | 'repair_signal'
+  | 'false_weather_exposed'
+  | 'false_weather_forged'
+  | 'sniper_lane_darkened'
+  | 'cloud_frame_printed'
+  | 'clean_water_collected';
+
+export interface RoofWeatherState {
+  signalQuality: number;
+  antennaRepaired: boolean;
+  falseWeatherExposed: boolean;
+  falseWeatherForged: boolean;
+  sniperLaneDarkened: boolean;
+  cloudFramePrinted: boolean;
+  cleanWaterCollected: boolean;
+  skyTimeOfDay: number;
+  skySeed: number;
+}
+
+export interface RoofWeatherResult {
+  action: RoofWeatherAction;
+  label: string;
+  logLine: string;
+  signalQuality: number;
+  tags: string[];
+}
+
+export interface RoofSkyTint {
+  r: number;
+  g: number;
+  b: number;
+}
+
+export interface RoofSkyTextureProvider {
+  readonly width: typeof ROOF_SKY_WIDTH;
+  readonly height: typeof ROOF_SKY_HEIGHT;
+  readonly pixels: Uint32Array;
+  readonly updateInterval: number;
+  dirty: boolean;
+  timeOfDay: number;
+  ambientTint: RoofSkyTint;
+  fogTint: RoofSkyTint;
+  update(deltaSeconds: number): boolean;
+  cycleTime(hours: number): void;
+}
+
+export interface RoofGeneration extends FloorGeneration {
+  routeId: typeof ROOF_ROUTE_ID;
+  z: typeof ROOF_FUTURE_Z;
+  weatherState: RoofWeatherState;
+  skyProvider: RoofSkyTextureProvider;
+  debug: string[];
+}
+
+const NPC_DEFS: Record<string, PlotNpcDef> = {
+  roof_meteorologist_varvara: {
+    name: 'Варвара Метеоролог',
+    isFemale: true,
+    faction: Faction.SCIENTIST,
+    occupation: Occupation.SCIENTIST,
+    sprite: Occupation.SCIENTIST,
+    hp: 105, maxHp: 105, money: 130, speed: 0.75,
+    inventory: [
+      { defId: 'radio', count: 1 },
+      { defId: 'blank_form', count: 2 },
+      { defId: 'tea', count: 1 },
+    ],
+    talkLines: [
+      'Небо над крышей повторяется с ошибкой в сорок семь секунд. Это не погода, это расписание.',
+      'Министерство просит писать "ясно". Граждане просят писать правду. Облака не просят ничего.',
+      'Если нужен честный прогноз самосбора, чините мачту или крадите мой бланк.',
+    ],
+    talkLinesPost: [
+      'Сводка ушла. Теперь небо будет врать уже под подпись.',
+      'Когда облака становятся квадратными, бегите в вентиляцию, не в лифт.',
+    ],
+  },
+  roof_rigger_senya: {
+    name: 'Сеня Верхолаз',
+    isFemale: false,
+    faction: Faction.CITIZEN,
+    occupation: Occupation.ELECTRICIAN,
+    sprite: Occupation.ELECTRICIAN,
+    hp: 135, maxHp: 135, money: 55, speed: 0.9,
+    inventory: [
+      { defId: 'wire_coil', count: 1 },
+      { defId: 'wrench', count: 1 },
+      { defId: 'bandage', count: 1 },
+    ],
+    talkLines: [
+      'Антенна держится на проволоке, молитве и чужих ошибках. Проволока закончилась первой.',
+      'Дашь моток и ячейку - подниму сигнал. Дашь бинт - поднимусь сам.',
+      'На открытом бетоне не геройствуют. Две перебежки, укрытие, потом мачта.',
+    ],
+    talkLinesPost: [
+      'Мачта ожила. Теперь верхние этажи услышат нас раньше, чем съедят.',
+      'Если реле снова щелкнет три раза подряд, значит прогноз пришел не отсюда.',
+    ],
+  },
+  roof_sniper_kadyr: {
+    name: 'Кадыр Линия',
+    isFemale: false,
+    faction: Faction.LIQUIDATOR,
+    occupation: Occupation.HUNTER,
+    sprite: Occupation.HUNTER,
+    hp: 260, maxHp: 260, money: 95, speed: 0.95,
+    inventory: [
+      { defId: 'gauss', count: 1 },
+      { defId: 'ammo_energy', count: 2 },
+      { defId: 'cigs', count: 1 },
+    ],
+    talkLines: [
+      'Открытая крыша принадлежит тому, кто раньше увидел движение.',
+      'Две пачки сигарет - и я десять минут смотрю на облака, а не на проход.',
+      'Можно стрелять. Можно темнить гнездо. Можно ползти через вентиляцию. Все варианты шумят по-разному.',
+    ],
+    talkLinesPost: [
+      'Линия снята. Идите, пока я не передумал смотреть на небо.',
+      'Если кто спросит, проход был пустой. Так проще всем живым.',
+    ],
+  },
+  roof_cloud_witness: {
+    name: 'Тихон Повторный',
+    isFemale: false,
+    faction: Faction.CITIZEN,
+    occupation: Occupation.TRAVELER,
+    sprite: Occupation.TRAVELER,
+    hp: 80, maxHp: 80, money: 12, speed: 0.75,
+    inventory: [
+      { defId: 'note', count: 2 },
+      { defId: 'bread', count: 1 },
+    ],
+    talkLines: [
+      'Я видел, как одно облако прошло дважды. Второй раз оно знало, где я стою.',
+      'Распечатку можно снять у метеобудки, когда небо дернется. Яков такое поймет.',
+      'Не называйте это улицей. У улицы есть конец, а здесь только повтор.',
+    ],
+    talkLinesPost: [
+      'Кадр у вас. Теперь облако будет помнить уже не только меня.',
+      'Если Яков спросит, я не спал. Спящие не считают повторы.',
+    ],
+    talkQuestResponse: 'Скажите Якову: небо не над нами. Оно перед нами, как экран.',
+  },
+};
+
+registerSideQuest('roof_rigger_senya', NPC_DEFS.roof_rigger_senya, [
+  {
+    id: 'roof_repair_antenna',
+    giverNpcId: 'roof_rigger_senya',
+    type: QuestType.FETCH,
+    desc: 'Сеня Верхолаз: «Принеси два мотка проволоки. С ячейкой будет лучше, но без проволоки мачта даже не услышит саму себя.»',
+    targetItem: 'wire_coil', targetCount: 2,
+    rewardItem: 'relay_diagram', rewardCount: 1,
+    extraRewards: [{ defId: 'radio', count: 1 }, { defId: 'ammo_energy', count: 1 }],
+    relationDelta: 14, xpReward: 75, moneyReward: 65,
+  },
+]);
+
+registerSideQuest('roof_meteorologist_varvara', NPC_DEFS.roof_meteorologist_varvara, [
+  {
+    id: 'roof_false_weather_report',
+    giverNpcId: 'roof_meteorologist_varvara',
+    type: QuestType.FETCH,
+    desc: 'Варвара Метеоролог: «Нужен пустой бланк. Я напишу сводку для Министерства или правду для жильцов - решите, кому верить опаснее.»',
+    targetItem: 'blank_form', targetCount: 1,
+    rewardItem: 'forged_permit_slip', rewardCount: 1,
+    extraRewards: [{ defId: 'siren_instruction', count: 1 }],
+    relationDelta: 8, xpReward: 65, moneyReward: 90,
+  },
+]);
+
+registerSideQuest('roof_sniper_kadyr', NPC_DEFS.roof_sniper_kadyr, [
+  {
+    id: 'roof_sniper_line',
+    giverNpcId: 'roof_sniper_kadyr',
+    type: QuestType.FETCH,
+    desc: 'Кадыр Линия: «Две пачки сигарет - и открытая полоса станет коридором. Нет сигарет: темните гнездо, бейте первым или идите через вентиляцию.»',
+    targetItem: 'cigs', targetCount: 2,
+    rewardItem: 'key', rewardCount: 1,
+    extraRewards: [{ defId: 'ammo_9mm', count: 10 }],
+    relationDelta: 6, xpReward: 60, moneyReward: 20,
+  },
+]);
+
+registerSideQuest('roof_cloud_witness', NPC_DEFS.roof_cloud_witness, [
+  {
+    id: 'roof_cloud_sample',
+    giverNpcId: 'roof_cloud_witness',
+    type: QuestType.FETCH,
+    desc: 'Тихон Повторный: «Принеси распечатку облачного кадра из метеобудки. Якову нужен не прогноз, а доказательство повторения.»',
+    targetItem: 'note', targetCount: 1,
+    rewardItem: 'bottled_voice', rewardCount: 1,
+    extraRewards: [{ defId: 'antidep', count: 1 }],
+    relationDelta: 12, xpReward: 70, moneyReward: 45,
+  },
+]);
+
+export function createRoofWeatherState(seed = 0, skyTimeOfDay = 0.42): RoofWeatherState {
+  return {
+    signalQuality: 1 + (Math.abs(seed) % 2),
+    antennaRepaired: false,
+    falseWeatherExposed: false,
+    falseWeatherForged: false,
+    sniperLaneDarkened: false,
+    cloudFramePrinted: false,
+    cleanWaterCollected: false,
+    skyTimeOfDay: wrap01(skyTimeOfDay),
+    skySeed: seed | 0,
+  };
+}
+
+export function repairRoofSignal(state: RoofWeatherState): RoofWeatherResult {
+  state.antennaRepaired = true;
+  state.signalQuality = clampSignalQuality(state.signalQuality + 3);
+  return {
+    action: 'repair_signal',
+    label: 'Мачта починена',
+    logLine: 'Крыша дала чистую частоту: слухи о погоде и верхних этажах стали надежнее.',
+    signalQuality: state.signalQuality,
+    tags: ['repair', 'signal', 'antenna'],
+  };
+}
+
+export function exposeRoofFalseWeather(state: RoofWeatherState, forged = false): RoofWeatherResult {
+  state.falseWeatherExposed = !forged;
+  state.falseWeatherForged = forged;
+  state.signalQuality = clampSignalQuality(state.signalQuality + (forged ? 0 : 1));
+  return {
+    action: forged ? 'false_weather_forged' : 'false_weather_exposed',
+    label: forged ? 'Ложная сводка подписана' : 'Ложная погода раскрыта',
+    logLine: forged
+      ? 'Метеосводка ушла в Министерство: небо осталось прежним, бумага стала опаснее.'
+      : 'Жильцы узнали, что прогноз был приказом, а не погодой.',
+    signalQuality: state.signalQuality,
+    tags: ['weather', forged ? 'ministry' : 'citizens', 'report'],
+  };
+}
+
+export function darkenRoofSniperLane(state: RoofWeatherState): RoofWeatherResult {
+  state.sniperLaneDarkened = true;
+  return {
+    action: 'sniper_lane_darkened',
+    label: 'Снайперская линия погашена',
+    logLine: 'Открытый проход под мачтами стал короче: гнездо Кадыра больше не держит всю плиту.',
+    signalQuality: state.signalQuality,
+    tags: ['sniper', 'route', 'stealth'],
+  };
+}
+
+export function printRoofCloudFrame(state: RoofWeatherState): RoofWeatherResult {
+  state.cloudFramePrinted = true;
+  return {
+    action: 'cloud_frame_printed',
+    label: 'Облачный кадр распечатан',
+    logLine: 'Кадр неба зафиксировал повтор: это улика для Якова и приманка для Пустоты.',
+    signalQuality: state.signalQuality,
+    tags: ['sky', 'cloud', 'yakov'],
+  };
+}
+
+export function collectRoofCleanWater(state: RoofWeatherState): RoofWeatherResult {
+  state.cleanWaterCollected = true;
+  return {
+    action: 'clean_water_collected',
+    label: 'Чистая вода собрана',
+    logLine: 'После верхнего самосбора на крыше осталась редкая чистая вода.',
+    signalQuality: state.signalQuality,
+    tags: ['water', 'aftermath', 'samosbor'],
+  };
+}
+
+export function publishRoofWeatherEvent(
+  game: GameState,
+  state: RoofWeatherState,
+  result: RoofWeatherResult,
+  room?: Room,
+): WorldEvent {
+  return publishEvent(game, {
+    type: 'rumor_observed',
+    floor: game.currentFloor,
+    roomId: room?.id,
+    x: room ? room.x + (room.w >> 1) : undefined,
+    y: room ? room.y + (room.h >> 1) : undefined,
+    severity: result.action === 'repair_signal' || result.action === 'false_weather_exposed' ? 4 : 3,
+    privacy: result.action === 'false_weather_forged' ? 'secret' : 'local',
+    targetName: result.label,
+    tags: [ROOF_ROUTE_ID, 'roof_weather', ...result.tags],
+    data: {
+      routeId: ROOF_ROUTE_ID,
+      z: ROOF_FUTURE_Z,
+      action: result.action,
+      signalQuality: state.signalQuality,
+      antennaRepaired: state.antennaRepaired,
+      falseWeatherExposed: state.falseWeatherExposed,
+      falseWeatherForged: state.falseWeatherForged,
+      sniperLaneDarkened: state.sniperLaneDarkened,
+      cloudFramePrinted: state.cloudFramePrinted,
+      cleanWaterCollected: state.cleanWaterCollected,
+      skyTimeOfDay: state.skyTimeOfDay,
+      logLine: result.logLine,
+    },
+  });
+}
+
+export function roofDebugLines(state: RoofWeatherState): string[] {
+  return [
+    `route=${ROOF_ROUTE_ID}`,
+    `z=${ROOF_FUTURE_Z}`,
+    `baseFloor=${FloorLevel[ROOF_BASE_FLOOR]}`,
+    `signal=${state.signalQuality}/5`,
+    `skyTime=${state.skyTimeOfDay.toFixed(2)}`,
+    `antenna=${state.antennaRepaired ? 'repaired' : 'broken'}`,
+    `weather=${state.falseWeatherExposed ? 'exposed' : state.falseWeatherForged ? 'forged' : 'unresolved'}`,
+    `sniper=${state.sniperLaneDarkened ? 'darkened' : 'active'}`,
+  ];
+}
+
+export function createRoofSkyTextureProvider(seed = 0, timeOfDay = 0.42): RoofSkyTextureProvider {
+  const pixels = new Uint32Array(ROOF_SKY_WIDTH * ROOF_SKY_HEIGHT);
+  const cloud = new Float32Array(SKY_GRID_W * SKY_GRID_H);
+  const scratch = new Float32Array(cloud.length);
+  let phase = 0;
+  let accum = SKY_UPDATE_INTERVAL;
+
+  for (let y = 0; y < SKY_GRID_H; y++) {
+    for (let x = 0; x < SKY_GRID_W; x++) {
+      const n = hash01(x, y, seed);
+      const band = Math.sin((x + seed * 0.01) * 0.055) * 0.18 + Math.sin((y - seed * 0.02) * 0.09) * 0.12;
+      cloud[y * SKY_GRID_W + x] = clamp01(n * 0.72 + band + 0.18);
+    }
+  }
+
+  const provider: RoofSkyTextureProvider = {
+    width: ROOF_SKY_WIDTH,
+    height: ROOF_SKY_HEIGHT,
+    pixels,
+    updateInterval: SKY_UPDATE_INTERVAL,
+    dirty: true,
+    timeOfDay: wrap01(timeOfDay),
+    ambientTint: skyAmbientTint(timeOfDay),
+    fogTint: skyFogTint(timeOfDay),
+    update(deltaSeconds: number): boolean {
+      accum += Math.max(0, deltaSeconds);
+      if (accum < SKY_UPDATE_INTERVAL) return false;
+      accum = 0;
+      phase += 1;
+      diffuseRoofClouds(cloud, scratch, seed + phase * 17);
+      rebuildRoofSkyPixels(provider, cloud, seed + phase * 31);
+      provider.dirty = true;
+      return true;
+    },
+    cycleTime(hours: number): void {
+      provider.timeOfDay = wrap01(provider.timeOfDay + hours / 24);
+      provider.ambientTint = skyAmbientTint(provider.timeOfDay);
+      provider.fogTint = skyFogTint(provider.timeOfDay);
+      rebuildRoofSkyPixels(provider, cloud, seed + phase * 31);
+      provider.dirty = true;
+    },
+  };
+
+  rebuildRoofSkyPixels(provider, cloud, seed);
+  return provider;
+}
+
+export function paintRoofSkyToCanvas(provider: RoofSkyTextureProvider, canvas: HTMLCanvasElement): void {
+  canvas.width = provider.width;
+  canvas.height = provider.height;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return;
+  const image = ctx.createImageData(provider.width, provider.height);
+  new Uint32Array(image.data.buffer).set(provider.pixels);
+  ctx.putImageData(image, 0, 0);
+  provider.dirty = false;
+}
+
+export function generateRoofDesignFloor(seed = 0): RoofGeneration {
+  const world = new World();
+  const entities: Entity[] = [];
+  const nextId = { v: 1 };
+  let nextContainerId = CONTAINER_ID_BASE;
+
+  world.wallTex.fill(Tex.CONCRETE);
+  world.floorTex.fill(Tex.F_CONCRETE);
+
+  const rooms = stampRoofRooms(world);
+  connectRoomsMST(world, [
+    rooms.entry,
+    rooms.mainSlab,
+    rooms.meteorology,
+    rooms.riggerMast,
+    rooms.ventShelter,
+    rooms.waterTanks,
+    rooms.sniperNest,
+    rooms.cloudCamp,
+    rooms.maintenanceHatch,
+  ]);
+  placeDoor(world, rooms.mainSlab, rooms.meteorology, '', false);
+  placeDoor(world, rooms.mainSlab, rooms.ventShelter, '', true);
+  placeDoor(world, rooms.riggerMast, rooms.waterTanks, '', false);
+  sanitizeDoors(world);
+  closeShelterDoors(world, rooms.ventShelter);
+
+  generateZones(world);
+  retuneRoofZones(world, rooms);
+  decorateRoof(world, rooms);
+
+  const varvara = spawnRoofNpc(entities, nextId, 'roof_meteorologist_varvara', rooms.meteorology, 4, 4, 0);
+  const senya = spawnRoofNpc(entities, nextId, 'roof_rigger_senya', rooms.riggerMast, 4, 5, Math.PI / 2, { weapon: 'wrench' });
+  const kadyr = spawnRoofNpc(entities, nextId, 'roof_sniper_kadyr', rooms.sniperNest, 6, 4, Math.PI, { weapon: 'gauss' });
+  const witness = spawnRoofNpc(entities, nextId, 'roof_cloud_witness', rooms.cloudCamp, 3, 4, -Math.PI / 2);
+
+  spawnRoofGuard(entities, nextId, rooms.entry.x + 8, rooms.entry.y + 4, 'Дежурный люка');
+  spawnRoofMonsters(world, entities, nextId, rooms);
+
+  addRoofContainer(world, nextContainerId++, rooms.meteorology, 3, 2, ContainerKind.FILING_CABINET, 'Шкаф ложных прогнозов', 'owner', [
+    { defId: 'blank_form', count: 2 },
+    { defId: 'siren_instruction', count: 1 },
+    { defId: 'note', count: 1, data: 'Прогноз N-40: ясно, пока Министерству выгодно видеть далеко.' },
+  ], varvara, ['weather', 'ministry_report']);
+  addRoofContainer(world, nextContainerId++, rooms.riggerMast, 3, 3, ContainerKind.TOOL_LOCKER, 'Ящик верхолаза Сени', 'room', [
+    { defId: 'wire_coil', count: 2 },
+    { defId: 'fuse', count: 1 },
+    { defId: 'bandage', count: 1 },
+  ], senya, ['repair', 'antenna']);
+  addRoofContainer(world, nextContainerId++, rooms.sniperNest, 4, 2, ContainerKind.WEAPON_CRATE, 'Сухой ящик Кадыра', 'owner', [
+    { defId: 'ammo_energy', count: 2 },
+    { defId: 'ammo_762', count: 18 },
+    { defId: 'cigs', count: 1 },
+  ], kadyr, ['sniper', 'theft']);
+  addRoofContainer(world, nextContainerId++, rooms.waterTanks, 6, 4, ContainerKind.EMERGENCY_BOX, 'Сборник чистой воды', 'locked', [
+    { defId: 'filtered_water', count: 2 },
+    { defId: 'gasmask_filter', count: 1 },
+  ], undefined, ['water', 'aftermath']);
+
+  dropItem(entities, nextId, rooms.entry.x + 4, rooms.entry.y + 5, 'siren_instruction', 1);
+  dropItem(entities, nextId, rooms.mainSlab.x + 12, rooms.mainSlab.y + 8, 'wire_coil', 1);
+  dropItem(entities, nextId, rooms.meteorology.x + 9, rooms.meteorology.y + 6, 'note', 1, 'Распечатка облачного кадра: облако повторилось, но тень под ним сместилась.');
+  dropItem(entities, nextId, rooms.cloudCamp.x + 5, rooms.cloudCamp.y + 3, 'note', 1, 'Тихон считает не облака, а секунды между одинаковыми облаками.');
+  void witness;
+
+  placeFixedLift(world, rooms.entry.x + 2, rooms.entry.y + 2, LiftDirection.DOWN);
+  placeFixedLift(world, rooms.maintenanceHatch.x + rooms.maintenanceHatch.w - 3, rooms.maintenanceHatch.y + 2, LiftDirection.DOWN);
+
+  const spawnX = rooms.entry.x + 5.5;
+  const spawnY = rooms.entry.y + 5.5;
+  ensureConnectivity(world, spawnX, spawnY);
+  world.bakeLights();
+
+  const weatherState = createRoofWeatherState(seed);
+  const skyProvider = createRoofSkyTextureProvider(seed, weatherState.skyTimeOfDay);
+  genLog(`[DESIGN_FLOOR] ${ROOF_ROUTE_ID} z=${ROOF_FUTURE_Z} rooms=${Object.keys(rooms).length} seed=${seed}`);
+  return {
+    world,
+    entities,
+    spawnX,
+    spawnY,
+    routeId: ROOF_ROUTE_ID,
+    z: ROOF_FUTURE_Z,
+    weatherState,
+    skyProvider,
+    debug: roofDebugLines(weatherState),
+  };
+}
+
+function clampSignalQuality(value: number): number {
+  return Math.max(0, Math.min(5, value | 0));
+}
+
+function wrap01(value: number): number {
+  return ((value % 1) + 1) % 1;
+}
+
+function clamp01(value: number): number {
+  return value < 0 ? 0 : value > 1 ? 1 : value;
+}
+
+function packRgba(r: number, g: number, b: number, a = 255): number {
+  const rr = r < 0 ? 0 : r > 255 ? 255 : r | 0;
+  const gg = g < 0 ? 0 : g > 255 ? 255 : g | 0;
+  const bb = b < 0 ? 0 : b > 255 ? 255 : b | 0;
+  const aa = a < 0 ? 0 : a > 255 ? 255 : a | 0;
+  return ((aa << 24) | (bb << 16) | (gg << 8) | rr) >>> 0;
+}
+
+function hash01(x: number, y: number, seed: number): number {
+  let n = (x * 374761393 + y * 668265263 + seed * 1274126177) | 0;
+  n = (n ^ (n >> 13)) * 1103515245;
+  n ^= n >> 16;
+  return (n & 0x7fff) / 0x7fff;
+}
+
+function skyAmbientTint(timeOfDay: number): RoofSkyTint {
+  const day = Math.max(0, Math.sin(Math.PI * wrap01(timeOfDay)));
+  const dusk = Math.max(0, Math.sin(Math.PI * 2 * wrap01(timeOfDay) - Math.PI * 0.15));
+  return {
+    r: Math.round(44 + day * 92 + dusk * 24),
+    g: Math.round(52 + day * 98 + dusk * 10),
+    b: Math.round(70 + day * 108 - dusk * 18),
+  };
+}
+
+function skyFogTint(timeOfDay: number): RoofSkyTint {
+  const ambient = skyAmbientTint(timeOfDay);
+  return {
+    r: Math.round(ambient.r * 0.42),
+    g: Math.round(ambient.g * 0.45),
+    b: Math.round(ambient.b * 0.58),
+  };
+}
+
+function diffuseRoofClouds(cloud: Float32Array, scratch: Float32Array, seed: number): void {
+  for (let y = 0; y < SKY_GRID_H; y++) {
+    const ym = y > 0 ? y - 1 : SKY_GRID_H - 1;
+    const yp = y + 1 < SKY_GRID_H ? y + 1 : 0;
+    for (let x = 0; x < SKY_GRID_W; x++) {
+      const xm = x > 0 ? x - 1 : SKY_GRID_W - 1;
+      const xp = x + 1 < SKY_GRID_W ? x + 1 : 0;
+      const i = y * SKY_GRID_W + x;
+      const avg = (
+        cloud[ym * SKY_GRID_W + x] +
+        cloud[yp * SKY_GRID_W + x] +
+        cloud[y * SKY_GRID_W + xm] +
+        cloud[y * SKY_GRID_W + xp]
+      ) * 0.25;
+      const wind = cloud[y * SKY_GRID_W + xm] * 0.06;
+      const spark = hash01(x, y, seed) > 0.985 ? 0.28 : 0;
+      scratch[i] = clamp01(cloud[i] * 0.82 + avg * 0.1 + wind + spark - 0.015);
+    }
+  }
+  cloud.set(scratch);
+}
+
+function rebuildRoofSkyPixels(provider: RoofSkyTextureProvider, cloud: Float32Array, seed: number): void {
+  const ambient = skyAmbientTint(provider.timeOfDay);
+  provider.ambientTint = ambient;
+  provider.fogTint = skyFogTint(provider.timeOfDay);
+  const day = Math.max(0.08, Math.sin(Math.PI * provider.timeOfDay));
+  const horizon = Math.max(0, 1 - Math.abs(provider.timeOfDay - 0.5) * 3.2);
+
+  for (let y = 0; y < ROOF_SKY_HEIGHT; y++) {
+    const gy = Math.min(SKY_GRID_H - 1, (y / SKY_CELL) | 0);
+    const vertical = y / Math.max(1, ROOF_SKY_HEIGHT - 1);
+    for (let x = 0; x < ROOF_SKY_WIDTH; x++) {
+      const gx = (x / SKY_CELL) | 0;
+      const c = cloud[gy * SKY_GRID_W + gx];
+      const hardEdge = hash01(gx, gy, seed) > 0.58 ? 0.06 : -0.04;
+      const density = clamp01((c + hardEdge - 0.42) * 2.35);
+      const skyR = ambient.r * (0.62 + vertical * 0.22) + horizon * 18;
+      const skyG = ambient.g * (0.64 + vertical * 0.18) + horizon * 10;
+      const skyB = ambient.b * (0.72 + vertical * 0.16) + horizon * 5;
+      const cloudR = 158 + day * 72;
+      const cloudG = 166 + day * 66;
+      const cloudB = 178 + day * 52;
+      const r = skyR * (1 - density) + cloudR * density;
+      const g = skyG * (1 - density) + cloudG * density;
+      const b = skyB * (1 - density) + cloudB * density;
+      provider.pixels[y * ROOF_SKY_WIDTH + x] = packRgba(r, g, b);
+    }
+  }
+}
+
+function stampRoofRooms(world: World): Record<string, Room> {
+  return {
+    entry: stampRoofRoom(world, RoomType.CORRIDOR, CX - 9, CY + 34, 15, 10, 'Лифтовая голова крыши', Tex.CONCRETE, Tex.F_CONCRETE, true),
+    mainSlab: stampRoofRoom(world, RoomType.COMMON, CX - 30, CY - 15, 60, 38, 'Главная плита крыши', Tex.CONCRETE, Tex.F_CONCRETE),
+    meteorology: stampRoofRoom(world, RoomType.OFFICE, CX - 51, CY - 10, 16, 12, 'Метеобудка Варвары', Tex.PANEL, Tex.F_LINO),
+    riggerMast: stampRoofRoom(world, RoomType.PRODUCTION, CX + 35, CY - 14, 18, 14, 'Мачта верхолаза', Tex.METAL, Tex.F_CONCRETE),
+    ventShelter: stampRoofRoom(world, RoomType.STORAGE, CX - 9, CY + 26, 20, 13, 'Вентиляционное укрытие', Tex.HERMO_WALL, Tex.F_CONCRETE, true),
+    waterTanks: stampRoofRoom(world, RoomType.STORAGE, CX + 16, CY + 25, 17, 13, 'Баковая площадка', Tex.PIPE, Tex.F_WATER),
+    sniperNest: stampRoofRoom(world, RoomType.HQ, CX + 39, CY + 7, 14, 11, 'Снайперское гнездо Кадыра', Tex.METAL, Tex.F_CONCRETE),
+    cloudCamp: stampRoofRoom(world, RoomType.LIVING, CX - 47, CY - 28, 13, 9, 'Лежанка свидетеля облаков', Tex.PANEL, Tex.F_CARPET),
+    maintenanceHatch: stampRoofRoom(world, RoomType.CORRIDOR, CX - 49, CY + 20, 13, 9, 'Сервисный люк вниз', Tex.CONCRETE, Tex.F_CONCRETE, true),
+  };
+}
+
+function stampRoofRoom(
+  world: World,
+  type: RoomType,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  name: string,
+  wallTex: Tex,
+  floorTex: Tex,
+  sealed = false,
+): Room {
+  const room = stampRoom(world, world.rooms.length, type, x, y, w, h, -1);
+  room.name = name;
+  room.wallTex = wallTex;
+  room.floorTex = floorTex;
+  room.sealed = sealed;
+
+  for (let dy = -1; dy <= h; dy++) {
+    for (let dx = -1; dx <= w; dx++) {
+      const ci = world.idx(x + dx, y + dy);
+      if (dx >= 0 && dx < w && dy >= 0 && dy < h) {
+        world.floorTex[ci] = floorTex;
+      } else if (world.cells[ci] === Cell.WALL) {
+        world.wallTex[ci] = wallTex;
+        if (sealed) world.hermoWall[ci] = 1;
+      }
+    }
+  }
+  return room;
+}
+
+function closeShelterDoors(world: World, room: Room): void {
+  for (const doorIdx of room.doors) {
+    const door = world.doors.get(doorIdx);
+    if (!door) continue;
+    door.state = DoorState.HERMETIC_CLOSED;
+    const ci = door.idx;
+    world.wallTex[ci] = Tex.DOOR_METAL;
+  }
+}
+
+function retuneRoofZones(world: World, rooms: Record<string, Room>): void {
+  world.factionControl.fill(ZoneFaction.CITIZEN);
+  for (const zone of world.zones) {
+    const d = world.dist(zone.cx, zone.cy, CX, CY);
+    zone.level = d < 80 ? 4 : 3;
+    zone.faction = ZoneFaction.CITIZEN;
+    zone.fogged = false;
+  }
+  paintRoomFaction(world, rooms.sniperNest, ZoneFaction.LIQUIDATOR);
+  paintRoomFaction(world, rooms.riggerMast, ZoneFaction.CITIZEN);
+  paintRoomFaction(world, rooms.meteorology, ZoneFaction.CITIZEN);
+  paintRoomFaction(world, rooms.cloudCamp, ZoneFaction.WILD);
+  paintRoomFaction(world, rooms.waterTanks, ZoneFaction.CITIZEN);
+}
+
+function paintRoomFaction(world: World, room: Room, faction: ZoneFaction): void {
+  const zid = world.zoneMap[world.idx(room.x + (room.w >> 1), room.y + (room.h >> 1))];
+  if (world.zones[zid]) world.zones[zid].faction = faction;
+  for (let dy = 0; dy < room.h; dy++) {
+    for (let dx = 0; dx < room.w; dx++) {
+      world.factionControl[world.idx(room.x + dx, room.y + dy)] = faction;
+    }
+  }
+}
+
+function decorateRoof(world: World, rooms: Record<string, Room>): void {
+  placeSlabLandmarks(world, rooms.mainSlab);
+  decorateMeteorology(world, rooms.meteorology);
+  decorateRiggerMast(world, rooms.riggerMast);
+  decorateVentShelter(world, rooms.ventShelter);
+  decorateWaterTanks(world, rooms.waterTanks);
+  decorateSniperNest(world, rooms.sniperNest);
+  decorateCloudCamp(world, rooms.cloudCamp);
+
+  setFeatureIfFloor(world, rooms.entry.x + 5, rooms.entry.y + 2, Feature.LAMP);
+  setFeatureIfFloor(world, rooms.entry.x + 8, rooms.entry.y + 2, Feature.SCREEN);
+  setFeatureIfFloor(world, rooms.maintenanceHatch.x + 3, rooms.maintenanceHatch.y + 2, Feature.LAMP);
+}
+
+function placeSlabLandmarks(world: World, room: Room): void {
+  for (let dx = 5; dx < room.w - 4; dx += 9) placeAntennaMast(world, room.x + dx, room.y + 5);
+  for (let dx = 7; dx < room.w - 4; dx += 11) placeVentBlock(world, room.x + dx, room.y + room.h - 8);
+  for (let dx = 4; dx < room.w - 4; dx += 8) setFeatureIfFloor(world, room.x + dx, room.y + 2, Feature.APPARATUS);
+  for (let dx = 8; dx < room.w - 7; dx += 13) setFeatureIfFloor(world, room.x + dx, room.y + room.h - 3, Feature.LAMP);
+  placeBrokenSkylight(world, room.x + 18, room.y + 16, 4, 3);
+  placeBrokenSkylight(world, room.x + 41, room.y + 20, 3, 3);
+  world.stamp(room.x + 12, room.y + 9, 0.5, 0.5, 5, 0.18, 4099, 55, 62, 66, false);
+  world.stamp(room.x + 43, room.y + 9, 0.5, 0.5, 4, 0.18, 4101, 80, 82, 78, false);
+}
+
+function decorateMeteorology(world: World, room: Room): void {
+  for (let dx = 2; dx < room.w - 2; dx += 3) setFeatureIfFloor(world, room.x + dx, room.y + 2, Feature.DESK);
+  setFeatureIfFloor(world, room.x + 2, room.y + room.h - 3, Feature.SCREEN);
+  setFeatureIfFloor(world, room.x + room.w - 3, room.y + 2, Feature.LAMP);
+  setFeatureIfFloor(world, room.x + room.w - 4, room.y + room.h - 3, Feature.APPARATUS);
+  world.wallTex[world.idx(room.x + 8, room.y - 1)] = Tex.SCREEN_BASE + 7;
+  if (!world.screenCells.includes(world.idx(room.x + 8, room.y - 1))) world.screenCells.push(world.idx(room.x + 8, room.y - 1));
+}
+
+function decorateRiggerMast(world: World, room: Room): void {
+  for (let dy = 3; dy < room.h - 2; dy += 4) placeAntennaMast(world, room.x + 9, room.y + dy);
+  for (let dx = 2; dx < room.w - 2; dx += 4) setFeatureIfFloor(world, room.x + dx, room.y + room.h - 2, Feature.MACHINE);
+  setFeatureIfFloor(world, room.x + 2, room.y + 2, Feature.LAMP);
+  setFeatureIfFloor(world, room.x + room.w - 3, room.y + 2, Feature.APPARATUS);
+}
+
+function decorateVentShelter(world: World, room: Room): void {
+  for (let dx = 2; dx < room.w - 2; dx += 4) {
+    setFeatureIfFloor(world, room.x + dx, room.y + 2, Feature.MACHINE);
+    setFeatureIfFloor(world, room.x + dx, room.y + room.h - 3, Feature.SHELF);
+  }
+  setFeatureIfFloor(world, room.x + 2, room.y + room.h - 2, Feature.LAMP);
+  setFeatureIfFloor(world, room.x + room.w - 3, room.y + 2, Feature.LAMP);
+}
+
+function decorateWaterTanks(world: World, room: Room): void {
+  for (let dx = 2; dx < room.w - 2; dx += 5) {
+    for (let dy = 2; dy < room.h - 2; dy += 4) {
+      setWaterTank(world, room.x + dx, room.y + dy);
+    }
+  }
+  setFeatureIfFloor(world, room.x + room.w - 3, room.y + room.h - 3, Feature.SINK);
+  setFeatureIfFloor(world, room.x + 2, room.y + 2, Feature.LAMP);
+}
+
+function decorateSniperNest(world: World, room: Room): void {
+  for (let dx = 2; dx < room.w - 2; dx++) setFeatureIfFloor(world, room.x + dx, room.y + 2, Feature.TABLE);
+  setFeatureIfFloor(world, room.x + 2, room.y + room.h - 3, Feature.SHELF);
+  setFeatureIfFloor(world, room.x + room.w - 3, room.y + 2, Feature.LAMP);
+  setFeatureIfFloor(world, room.x + room.w - 4, room.y + room.h - 3, Feature.CHAIR);
+  world.stamp(room.x + 6, room.y + 4, 0.5, 0.5, 3, 0.24, 4112, 30, 30, 32, false);
+}
+
+function decorateCloudCamp(world: World, room: Room): void {
+  setFeatureIfFloor(world, room.x + 2, room.y + 2, Feature.BED);
+  setFeatureIfFloor(world, room.x + 5, room.y + 3, Feature.TABLE);
+  setFeatureIfFloor(world, room.x + 8, room.y + 2, Feature.LAMP);
+  setFeatureIfFloor(world, room.x + room.w - 3, room.y + room.h - 3, Feature.SHELF);
+}
+
+function placeAntennaMast(world: World, x: number, y: number): void {
+  const ci = world.idx(x, y);
+  if (world.cells[ci] !== Cell.FLOOR) return;
+  world.cells[ci] = Cell.WALL;
+  world.roomMap[ci] = -1;
+  world.wallTex[ci] = Tex.METAL;
+  for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]] as const) {
+    setFeatureIfFloor(world, x + dx, y + dy, Feature.APPARATUS);
+  }
+}
+
+function placeVentBlock(world: World, x: number, y: number): void {
+  for (let dy = 0; dy < 2; dy++) {
+    for (let dx = 0; dx < 3; dx++) {
+      const ci = world.idx(x + dx, y + dy);
+      if (world.cells[ci] !== Cell.FLOOR) continue;
+      world.cells[ci] = Cell.WALL;
+      world.roomMap[ci] = -1;
+      world.wallTex[ci] = Tex.PIPE;
+    }
+  }
+}
+
+function placeBrokenSkylight(world: World, x: number, y: number, w: number, h: number): void {
+  for (let dy = 0; dy < h; dy++) {
+    for (let dx = 0; dx < w; dx++) {
+      const ci = world.idx(x + dx, y + dy);
+      if (world.cells[ci] !== Cell.FLOOR) continue;
+      world.cells[ci] = Cell.ABYSS;
+      world.floorTex[ci] = Tex.F_ABYSS;
+      world.roomMap[ci] = -1;
+      world.features[ci] = Feature.NONE;
+    }
+  }
+  world.stamp(x + (w >> 1), y + (h >> 1), 0.5, 0.5, Math.max(w, h) + 1, 0.2, x * 17 + y * 31, 120, 128, 134, false);
+}
+
+function setWaterTank(world: World, x: number, y: number): void {
+  const ci = world.idx(x, y);
+  if (world.cells[ci] !== Cell.FLOOR && world.cells[ci] !== Cell.WATER) return;
+  world.cells[ci] = Cell.WATER;
+  world.floorTex[ci] = Tex.F_WATER;
+  world.features[ci] = Feature.SINK;
+}
+
+function setFeatureIfFloor(world: World, x: number, y: number, feature: Feature): void {
+  const ci = world.idx(x, y);
+  if (world.cells[ci] === Cell.FLOOR || world.cells[ci] === Cell.WATER) world.features[ci] = feature;
+}
+
+function spawnRoofNpc(
+  entities: Entity[],
+  nextId: { v: number },
+  plotNpcId: string,
+  room: Room,
+  dx: number,
+  dy: number,
+  angle: number,
+  extra?: Partial<Entity>,
+): Entity {
+  const def = NPC_DEFS[plotNpcId];
+  const npc: Entity = {
+    id: nextId.v++,
+    type: EntityType.NPC,
+    x: room.x + dx + 0.5,
+    y: room.y + dy + 0.5,
+    angle,
+    pitch: 0,
+    alive: true,
+    speed: def.speed,
+    sprite: def.sprite,
+    name: def.name,
+    isFemale: def.isFemale,
+    needs: freshNeeds(),
+    hp: def.hp,
+    maxHp: def.maxHp,
+    money: def.money,
+    ai: { goal: AIGoal.IDLE, tx: room.x + dx + 0.5, ty: room.y + dy + 0.5, path: [], pi: 0, stuck: 0, timer: 0 },
+    inventory: def.inventory.map(i => ({ ...i })),
+    faction: def.faction,
+    occupation: def.occupation,
+    plotNpcId,
+    canGiveQuest: true,
+    questId: -1,
+    ...extra,
+  };
+  entities.push(npc);
+  return npc;
+}
+
+function spawnRoofGuard(entities: Entity[], nextId: { v: number }, x: number, y: number, name: string): void {
+  entities.push({
+    id: nextId.v++,
+    type: EntityType.NPC,
+    x: x + 0.5,
+    y: y + 0.5,
+    angle: Math.PI / 2,
+    pitch: 0,
+    alive: true,
+    speed: 0.95,
+    sprite: Occupation.HUNTER,
+    name,
+    isFemale: false,
+    needs: freshNeeds(),
+    hp: 150,
+    maxHp: 150,
+    money: 40,
+    ai: { goal: AIGoal.IDLE, tx: x + 0.5, ty: y + 0.5, path: [], pi: 0, stuck: 0, timer: 0 },
+    inventory: [{ defId: 'makarov', count: 1 }, { defId: 'ammo_9mm', count: 8 }],
+    weapon: 'makarov',
+    faction: Faction.LIQUIDATOR,
+    occupation: Occupation.HUNTER,
+    canGiveQuest: false,
+    questId: -1,
+  });
+}
+
+function spawnRoofMonsters(
+  world: World,
+  entities: Entity[],
+  nextId: { v: number },
+  rooms: Record<string, Room>,
+): void {
+  spawnRoofMonster(world, entities, nextId, MonsterKind.EYE, rooms.mainSlab.x + 28, rooms.mainSlab.y + 8, 'Глаз верхнего ветра');
+  spawnRoofMonster(world, entities, nextId, MonsterKind.EYE, rooms.mainSlab.x + 43, rooms.mainSlab.y + 25, 'Глаз повторного облака');
+  spawnRoofMonster(world, entities, nextId, MonsterKind.REBAR, rooms.riggerMast.x + 12, rooms.riggerMast.y + 8, 'Арматура мачтовая');
+  spawnRoofMonster(world, entities, nextId, MonsterKind.SHADOW, rooms.cloudCamp.x + 9, rooms.cloudCamp.y + 5, 'Тень под облаком');
+}
+
+function spawnRoofMonster(
+  world: World,
+  entities: Entity[],
+  nextId: { v: number },
+  kind: MonsterKind,
+  x: number,
+  y: number,
+  name: string,
+): void {
+  const def = MONSTERS[kind];
+  if (!def || world.cells[world.idx(x, y)] !== Cell.FLOOR) return;
+  entities.push({
+    id: nextId.v++,
+    type: EntityType.MONSTER,
+    x: x + 0.5,
+    y: y + 0.5,
+    angle: Math.random() * Math.PI * 2,
+    pitch: 0,
+    alive: true,
+    speed: def.speed,
+    sprite: monsterSpr(kind),
+    name,
+    hp: def.hp,
+    maxHp: def.hp,
+    monsterKind: kind,
+    attackCd: 0,
+    ai: { goal: AIGoal.WANDER, tx: CX, ty: CY, path: [], pi: 0, stuck: 0, timer: 0 },
+  });
+}
+
+function addRoofContainer(
+  world: World,
+  id: number,
+  room: Room,
+  dx: number,
+  dy: number,
+  kind: ContainerKind,
+  name: string,
+  access: WorldContainer['access'],
+  inventory: WorldContainer['inventory'],
+  owner: Entity | undefined,
+  tags: string[],
+): void {
+  const x = room.x + dx;
+  const y = room.y + dy;
+  world.addContainer({
+    id,
+    x,
+    y,
+    floor: ROOF_BASE_FLOOR,
+    roomId: room.id,
+    zoneId: world.zoneMap[world.idx(x, y)],
+    kind,
+    name,
+    inventory,
+    capacitySlots: Math.max(8, inventory.length + 4),
+    ownerNpcId: owner?.id,
+    ownerName: owner?.name,
+    faction: owner?.faction,
+    access,
+    lockDifficulty: access === 'locked' || access === 'owner' ? 4 : undefined,
+    discovered: true,
+    tags: [ROOF_ROUTE_ID, 'roof', ...tags],
+  });
+}
+
+function dropItem(
+  entities: Entity[],
+  nextId: { v: number },
+  x: number,
+  y: number,
+  defId: string,
+  count: number,
+  data?: unknown,
+): void {
+  entities.push({
+    id: nextId.v++,
+    type: EntityType.ITEM_DROP,
+    x: x + 0.5,
+    y: y + 0.5,
+    angle: 0,
+    pitch: 0,
+    alive: true,
+    speed: 0,
+    sprite: Spr.ITEM_DROP,
+    inventory: [{ defId, count, data }],
+  });
+}
+
+function placeFixedLift(world: World, x: number, y: number, direction: LiftDirection): void {
+  const ci = world.idx(x, y);
+  world.cells[ci] = Cell.LIFT;
+  world.roomMap[ci] = -1;
+  world.wallTex[ci] = Tex.LIFT_DOOR;
+  world.liftDir[ci] = direction;
+  const bi = world.idx(x + 1, y);
+  if (world.cells[bi] === Cell.FLOOR) {
+    world.features[bi] = Feature.LIFT_BUTTON;
+    world.liftDir[bi] = direction;
+  }
+}

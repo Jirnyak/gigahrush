@@ -16,14 +16,23 @@ import { spawnViktor } from './viktor';
 import { spawnVeteran } from './veteran';
 import { spawnBabkaZina } from './babka_zina';
 import { spawnStalkerMecheny } from './stalker_mecheny';
+import { spawnSovietHousingPackNpcs } from './soviet_housing_pack';
+import { spawnDomkomLaundryPackNpcs } from './domkom_laundry_pack';
+
+type SideQuestSpawner = (world: World, entities: Entity[], nextId: { v: number }) => void;
+
+const SIDE_QUEST_SPAWNERS: readonly SideQuestSpawner[] = [
+  spawnViktor,
+  spawnVeteran,
+  spawnBabkaZina,
+  spawnStalkerMecheny,
+  spawnSovietHousingPackNpcs,
+  spawnDomkomLaundryPackNpcs,
+];
 
 /* ── Spawn all side quest NPCs (called from orchestrator) ─────── */
 export function spawnSideQuestNpcs(
   world: World, entities: Entity[], nextId: { v: number },
 ): void {
-  spawnViktor(world, entities, nextId);
-  spawnVeteran(world, entities, nextId);
-  spawnBabkaZina(world, entities, nextId);
-  spawnStalkerMecheny(world, entities, nextId);
-  // ↑ Add new side quest spawns here
+  for (const spawn of SIDE_QUEST_SPAWNERS) spawn(world, entities, nextId);
 }

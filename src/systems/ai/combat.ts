@@ -2,21 +2,22 @@
 
 import {
   type Entity, type Msg,
-  EntityType, AIGoal, Occupation, Faction,
+  EntityType, AIGoal, Occupation, Faction, ProjType,
   msg,
 } from '../../core/types';
 import { World } from '../../core/world';
 import { WEAPON_STATS } from '../../data/catalog';
-import { playGunshot, playShotgun, playNailgun, playAttack, playSoundAt } from '../audio';
+import { playGunshot, playShotgun, playNailgun, playAttack, playFlame, playSoundAt } from '../audio';
 import { applyDamageRelationPenalty } from '../factions';
 import { clearFogInZone } from '../samosbor';
 import { strMeleeDmgMult, agiAttackSpeedMult } from '../rpg';
+import { zhelemishIncomingMeleeDamage } from '../status';
 import { spawnBloodHit, spawnDeathPool } from '../../render/blood';
 import { consumeAmmo, consumeDurability } from '../inventory';
 import { entityDisplayName } from '../../entities/monster';
 import { bfsPath, followPath } from './pathfinding';
-import { Spr } from '../../render/sprite_index';
-import { findCombatTarget, dropNpcInventory } from './monster';
+import { Spr, hostileProjectileSprite } from '../../render/sprite_index';
+import { findCombatTarget, dropNpcInventory, deterministicScanCd } from './monster';
 import {
   bark,
   BARK_COMBAT_START, BARK_COMBAT_START_F, BARK_CHANCE_COMBAT,
@@ -141,7 +142,7 @@ export function tryFactionCombat(
   const prevTarget = ai.combatTargetId;
   const target = findCombatTarget(
     world, entities, e, dt,
-    detectRange * detectRange, 0.8 + Math.random() * 0.4,
+    detectRange * detectRange, deterministicScanCd(e.id, 0.8, 0.4),
     o => o.type === EntityType.NPC || o.type === EntityType.MONSTER || o.type === EntityType.PLAYER,
   );
 
@@ -173,6 +174,7 @@ export function tryFactionCombat(
           npcFireProjectile(e, target, ws, entities, nextId);
           if (e.weapon === 'shotgun') playSoundAt(playShotgun, e.x, e.y);
           else if (e.weapon === 'nailgun') playSoundAt(playNailgun, e.x, e.y);
+          else if (e.weapon === 'flamethrower') playSoundAt(playFlame, e.x, e.y);
           else playSoundAt(playGunshot, e.x, e.y);
           e.attackCd = ws.speed * atkSpeedMod;
           return true;
@@ -202,7 +204,8 @@ export function tryFactionCombat(
   if (e.attackCd! <= 0) {
     const strMult = e.rpg ? strMeleeDmgMult(e.rpg) : 1;
     const baseDmg = meleeWs.dmg > 0 ? meleeWs.dmg : (5 + Math.floor(Math.random() * 8));
-    const dmg = Math.round(baseDmg * strMult);
+    const rawDmg = Math.round(baseDmg * strMult);
+    const dmg = zhelemishIncomingMeleeDamage(target, _time, rawDmg);
     if (target.hp !== undefined) {
       target.hp -= dmg;
       if (target.type === EntityType.NPC) {
@@ -256,14 +259,15 @@ function npcFireProjectile(
       pitch: 0,
       alive: true,
       speed: 0,
-      sprite: ws.projSprite ?? Spr.BULLET,
+      sprite: hostileProjectileSprite(ws.projSprite ?? Spr.BULLET),
       vx: cos * spd,
       vy: sin * spd,
       projDmg: ws.dmg,
-      projLife: 3.0,
+      projLife: ws.projType === ProjType.FLAME ? 0.7 : 3.0,
       ownerId: e.id,
-      spriteScale: 0.25,
+      spriteScale: ws.projType === ProjType.FLAME ? 0.55 : 0.25,
       spriteZ: 0.5,
+      projType: ws.projType,
     };
     if (ws.aoeRadius) {
       proj.aoeRadius = ws.aoeRadius;

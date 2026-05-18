@@ -1,0 +1,666 @@
+/* ── Hell choir tax: capped PSI combat/trade/extraction POI ───── */
+
+import {
+  W, Cell, ContainerKind, DoorState, EntityType, AIGoal, Faction, Feature,
+  FloorLevel, MonsterKind, Occupation, QuestType, RoomType, Tex,
+  type Entity, type GameState, type Room, type WorldContainer, type WorldEvent,
+} from '../../core/types';
+import { World } from '../../core/world';
+import { freshNeeds } from '../../data/catalog';
+import { type PlotNpcDef, registerSideQuest } from '../../data/plot';
+import { MONSTERS, applyMonsterVariant } from '../../entities/monster';
+import { monsterSpr, Spr } from '../../render/sprite_index';
+import { publishEvent, registerWorldEventObserver } from '../../systems/events';
+import { randomRPG, scaleMonsterHp, scaleMonsterSpeed } from '../../systems/rpg';
+import {
+  connectProtectedRoom, connectToNetwork, findClearArea, protectRoom, rng, stampRoom,
+} from '../shared';
+import { genLog } from '../log';
+
+const ROOM_W = 31;
+const ROOM_H = 25;
+const ROUTE_MAX = 96;
+
+const GUIDE_ID = 'hell18_burned_guide_arseny';
+const TAXMAN_ID = 'hell18_cult_taxman';
+const LIQUIDATOR_ID = 'hell18_last_liquidator';
+const OUTCOME_EVENT_TAG = 'hell18_outcome';
+
+export const HELL18_CHOIR_MONSTER_CAP = 8;
+export const HELL18_CHOIR_CULTIST_CAP = 3;
+export const HELL18_CHOIR_REWARD_CLAIM_CAP = 5;
+
+const GUIDE_DEF: PlotNpcDef = {
+  name: 'Арсений Обгорелый',
+  isFemale: false,
+  faction: Faction.CITIZEN,
+  occupation: Occupation.TRAVELER,
+  sprite: Occupation.TRAVELER,
+  hp: 260, maxHp: 260, money: 35, speed: 0.9,
+  inventory: [
+    { defId: 'holy_water', count: 1 },
+    { defId: 'bandage', count: 1 },
+  ],
+  talkLines: [
+    'Не стой под хором. Он считает вдохи и берёт налог с выхода.',
+    'Две лампы подряд - мой ход наружу. Третья уже врёт, там алтарь.',
+    'Можно платить мясом. Можно бить идол. Можно унести раненого. Нельзя ждать.',
+  ],
+  talkLinesPost: [
+    'Если хор стих, не слушай паузу. Пауза тоже берёт плату.',
+    'Ликвидатора вывели словом, не ногами. В Аду это иногда одно и то же.',
+  ],
+  talkQuestResponse: 'Принял. Веду его по горячему ходу, пока хор занят тобой.',
+};
+
+const TAXMAN_DEF: PlotNpcDef = {
+  name: 'Пахом Мясной Налог',
+  isFemale: false,
+  faction: Faction.CULTIST,
+  occupation: Occupation.STOREKEEPER,
+  sprite: Occupation.STOREKEEPER,
+  hp: 420, maxHp: 420, money: 210, speed: 0.75,
+  inventory: [
+    { defId: 'psi_meat_hook', count: 1 },
+    { defId: 'meat_rune', count: 1 },
+    { defId: 'rawmeat', count: 2 },
+  ],
+  talkLines: [
+    'Три куска мяса - и хор делает вид, что ты не проходил.',
+    'Голос в банке можно сдать мне. Можно оставить себе. Оба выбора шумят.',
+    'Касса рядом. Воруй аккуратно: здесь даже пол свидетель.',
+  ],
+  talkLinesPost: [
+    'Налог закрыт. Дальше плати ногами.',
+    'Не открывай голос при идоле. Он начнёт считать заново.',
+  ],
+};
+
+const LIQUIDATOR_DEF: PlotNpcDef = {
+  name: 'Капрал Шрамко',
+  isFemale: false,
+  faction: Faction.LIQUIDATOR,
+  occupation: Occupation.HUNTER,
+  sprite: Occupation.HUNTER,
+  hp: 160, maxHp: 160, money: 18, speed: 0.55,
+  inventory: [
+    { defId: 'makarov', count: 1 },
+    { defId: 'ammo_9mm', count: 5 },
+    { defId: 'liquidator_ration', count: 1 },
+  ],
+  talkLines: [
+    'Группа кончилась. Я остался последним, потому что лежал ниже остальных.',
+    'Арсений знает горячий ход. Передай ему, что я живой, пока не доказано обратное.',
+    'Хор держит сигнал на идоле. Урони его - ликвидаторы поверят бумаге без печати.',
+  ],
+  talkLinesPost: [
+    'Если выберусь, скажу наверху: Ад берёт налог, но сдачу даёт телами.',
+    'Я слышал, как хор репетирует наши фамилии. Пора уходить.',
+  ],
+};
+
+registerSideQuest(GUIDE_ID, GUIDE_DEF, [
+  {
+    id: 'hell18_break_altar_signal',
+    giverNpcId: GUIDE_ID,
+    type: QuestType.KILL,
+    desc: 'Арсений Обгорелый: «Сломай сигнальный идол мясного хора. Один идол, один выход, без второй волны.»',
+    targetMonsterKind: MonsterKind.IDOL,
+    killNeeded: 1,
+    rewardItem: 'holy_water',
+    rewardCount: 1,
+    extraRewards: [{ defId: 'psi_dust', count: 1 }],
+    relationDelta: 8,
+    xpReward: 140,
+    moneyReward: 55,
+  },
+]);
+
+registerSideQuest(TAXMAN_ID, TAXMAN_DEF, [
+  {
+    id: 'hell18_pay_cult_tax',
+    giverNpcId: TAXMAN_ID,
+    type: QuestType.FETCH,
+    desc: 'Пахом Мясной Налог: «Три куска сырого мяса в кассу хора. Заплатишь ресурсом - сбережёшь патроны.»',
+    targetItem: 'rawmeat',
+    targetCount: 3,
+    rewardItem: 'meat_rune',
+    rewardCount: 1,
+    extraRewards: [{ defId: 'psi_dust', count: 1 }],
+    relationDelta: 6,
+    xpReward: 80,
+    moneyReward: 0,
+  },
+  {
+    id: 'hell18_take_psi_cache',
+    giverNpcId: TAXMAN_ID,
+    type: QuestType.FETCH,
+    desc: 'Пахом Мясной Налог: «Принеси голос в банке из кассы. Себе оставишь - будет награда без меня, отдашь - стабилизатор.»',
+    targetItem: 'bottled_voice',
+    targetCount: 1,
+    rewardItem: 'psi_stabilizer',
+    rewardCount: 1,
+    extraRewards: [{ defId: 'holy_water', count: 1 }],
+    relationDelta: 4,
+    xpReward: 95,
+    moneyReward: 30,
+  },
+]);
+
+registerSideQuest(LIQUIDATOR_ID, LIQUIDATOR_DEF, [
+  {
+    id: 'hell18_extract_last_liquidator',
+    giverNpcId: LIQUIDATOR_ID,
+    type: QuestType.TALK,
+    desc: 'Капрал Шрамко: «Дай Арсению знак на выход. Он {dir}. Не геройствуй: это эвакуация, не зачистка.»',
+    targetNpcId: GUIDE_ID,
+    rewardItem: 'liquidator_ration',
+    rewardCount: 1,
+    extraRewards: [{ defId: 'ammo_762', count: 10 }],
+    relationDelta: 10,
+    xpReward: 120,
+    moneyReward: 70,
+  },
+]);
+
+const OUTCOME_BY_QUEST: Record<string, { name: string; tags: string[]; severity: 3 | 4 | 5 }> = {
+  hell18_break_altar_signal: {
+    name: 'Доказательство Ада: сигнальный алтарь мясного хора сломан.',
+    tags: ['hell18', 'ritual_break', 'cult_signal', 'proof'],
+    severity: 5,
+  },
+  hell18_extract_last_liquidator: {
+    name: 'Исход Ада: последний ликвидатор получил путь к выходу.',
+    tags: ['hell18', 'extraction', 'liquidator', 'proof'],
+    severity: 4,
+  },
+  hell18_pay_cult_tax: {
+    name: 'Исход Ада: культовый налог уплачен ресурсом, бой отложен.',
+    tags: ['hell18', 'cult_tax', 'resource_sacrifice'],
+    severity: 3,
+  },
+  hell18_take_psi_cache: {
+    name: 'Доказательство Ада: голос из ПСИ-кассы вынесен из хора.',
+    tags: ['hell18', 'psi_cache', 'proof'],
+    severity: 4,
+  },
+};
+
+registerWorldEventObserver(handleHell18QuestOutcome);
+
+export function generateHell18ChoirTax(world: World, entities: Entity[], nextId: { v: number }): void {
+  const site = findChoirSite(world);
+  const room = stampRoom(world, world.rooms.length, RoomType.HQ, site.x, site.y, ROOM_W, ROOM_H, -1);
+  room.name = 'Налоговый хор мясного порога';
+  room.wallTex = Tex.GUT;
+  room.floorTex = Tex.F_MEAT;
+  protectRoom(world, room.x, room.y, room.w, room.h, Tex.GUT, Tex.F_MEAT);
+  connectProtectedRoom(world, room.x, room.y, room.w, room.h);
+  connectToNetwork(world, room);
+  forceChoirConnection(world, room);
+  addFleeExit(world, room);
+
+  decorateChoir(world, room);
+  const taxmanId = spawnQuestNpc(world, entities, nextId, room, TAXMAN_ID, TAXMAN_DEF, 4, 12, 0, 'psi_meat_hook');
+  spawnQuestNpc(world, entities, nextId, room, GUIDE_ID, GUIDE_DEF, ROOM_W - 5, ROOM_H - 4, Math.PI, 'knife');
+  spawnQuestNpc(world, entities, nextId, room, LIQUIDATOR_ID, LIQUIDATOR_DEF, ROOM_W - 7, 5, Math.PI / 2, 'makarov');
+
+  spawnChoirCultists(world, room, entities, nextId);
+  spawnChoirMonsters(world, room, entities, nextId);
+  addChoirCache(world, room, taxmanId);
+  dropChoirTraces(world, room, entities, nextId);
+
+  genLog(`[FLOOR18_HELL] ${room.name} at (${room.x}, ${room.y}) room #${room.id}; enemies ${HELL18_CHOIR_MONSTER_CAP + HELL18_CHOIR_CULTIST_CAP}, reward claims ${HELL18_CHOIR_REWARD_CLAIM_CAP}`);
+}
+
+function handleHell18QuestOutcome(state: GameState, event: WorldEvent): void {
+  if (event.type !== 'quest_completed' || event.tags.includes(OUTCOME_EVENT_TAG)) return;
+  const sideQuestId = event.data?.sideQuestId;
+  if (typeof sideQuestId !== 'string') return;
+  const outcome = OUTCOME_BY_QUEST[sideQuestId];
+  if (!outcome) return;
+
+  publishEvent(state, {
+    type: 'quest_completed',
+    floor: event.floor,
+    actorId: event.actorId,
+    actorName: event.actorName,
+    actorFaction: event.actorFaction,
+    targetName: outcome.name,
+    severity: outcome.severity,
+    privacy: 'local',
+    tags: [OUTCOME_EVENT_TAG, ...outcome.tags],
+    data: {
+      sideQuestId,
+      sourceEventId: event.id,
+      cappedMonsters: HELL18_CHOIR_MONSTER_CAP,
+      cappedCultists: HELL18_CHOIR_CULTIST_CAP,
+      cappedRewardClaims: HELL18_CHOIR_REWARD_CLAIM_CAP,
+    },
+  });
+}
+
+function findChoirSite(world: World): { x: number; y: number } {
+  const cx = W >> 1;
+  const cy = W >> 1;
+  const clear = findClearArea(world, cx, cy, ROOM_W, ROOM_H, 180, 360);
+  if (clear) return clear;
+
+  for (let attempt = 0; attempt < 2600; attempt++) {
+    const angle = Math.random() * Math.PI * 2;
+    const dist = rng(150, 380);
+    const x = world.wrap(cx + Math.round(Math.cos(angle) * dist) - (ROOM_W >> 1));
+    const y = world.wrap(cy + Math.round(Math.sin(angle) * dist) - (ROOM_H >> 1));
+    if (canReserveChoir(world, x, y)) return { x, y };
+  }
+
+  for (let attempt = 0; attempt < 1800; attempt++) {
+    const x = rng(8, W - ROOM_W - 8);
+    const y = rng(8, W - ROOM_H - 8);
+    if (canReserveChoir(world, x, y)) return { x, y };
+  }
+
+  return { x: world.wrap(cx + 230), y: world.wrap(cy - 190) };
+}
+
+function canReserveChoir(world: World, x: number, y: number): boolean {
+  for (let dy = -3; dy <= ROOM_H + 3; dy++) {
+    for (let dx = -3; dx <= ROOM_W + 3; dx++) {
+      const ci = world.idx(x + dx, y + dy);
+      if (world.aptMask[ci] || world.cells[ci] === Cell.LIFT || world.roomMap[ci] >= 0) return false;
+    }
+  }
+  return true;
+}
+
+function forceChoirConnection(world: World, room: Room): void {
+  if (hasExternalOpening(world, room)) return;
+  const midX = room.x + Math.floor(room.w / 2);
+  const midY = room.y + Math.floor(room.h / 2);
+  const probes: [number, number, number, number][] = [
+    [midX, room.y - 1, 0, -1],
+    [midX, room.y + room.h, 0, 1],
+    [room.x - 1, midY, -1, 0],
+    [room.x + room.w, midY, 1, 0],
+  ];
+  let bestPath: number[] | null = null;
+
+  for (const [sx, sy, dx, dy] of probes) {
+    const path: number[] = [];
+    let x = world.wrap(sx);
+    let y = world.wrap(sy);
+    for (let step = 0; step < ROUTE_MAX; step++) {
+      const ci = world.idx(x, y);
+      if (world.cells[ci] === Cell.LIFT || (step > 0 && world.aptMask[ci])) break;
+      const walkable = world.cells[ci] === Cell.FLOOR || world.cells[ci] === Cell.DOOR || world.cells[ci] === Cell.WATER;
+      if (step > 0 && walkable && world.roomMap[ci] !== room.id) {
+        if (!bestPath || path.length < bestPath.length) bestPath = [...path];
+        break;
+      }
+      path.push(ci);
+      x = world.wrap(x + dx);
+      y = world.wrap(y + dy);
+    }
+  }
+
+  if (!bestPath) return;
+  for (const ci of bestPath) carveRouteCell(world, ci, Tex.F_MEAT);
+}
+
+function hasExternalOpening(world: World, room: Room): boolean {
+  for (let dy = -1; dy <= room.h; dy++) {
+    for (let dx = -1; dx <= room.w; dx++) {
+      if (dx >= 0 && dx < room.w && dy >= 0 && dy < room.h) continue;
+      const ci = world.idx(room.x + dx, room.y + dy);
+      if (world.cells[ci] !== Cell.FLOOR && world.cells[ci] !== Cell.DOOR) continue;
+      if (world.aptMask[ci]) continue;
+      for (const [ox, oy] of [[1, 0], [-1, 0], [0, 1], [0, -1]] as const) {
+        if (world.roomMap[world.idx(room.x + dx + ox, room.y + dy + oy)] === room.id) return true;
+      }
+    }
+  }
+  return false;
+}
+
+function addFleeExit(world: World, room: Room): void {
+  const doorX = world.wrap(room.x + room.w);
+  const doorY = world.wrap(room.y + room.h - 5);
+  const doorI = world.idx(doorX, doorY);
+  world.aptMask[doorI] = 0;
+  world.cells[doorI] = Cell.DOOR;
+  world.wallTex[doorI] = Tex.DOOR_METAL;
+  world.doors.set(doorI, {
+    idx: doorI,
+    state: DoorState.CLOSED,
+    roomA: room.id,
+    roomB: -1,
+    keyId: '',
+    timer: 0,
+  });
+  if (!room.doors.includes(doorI)) room.doors.push(doorI);
+
+  for (let step = 1; step <= ROUTE_MAX; step++) {
+    let touchesOpenFloor = false;
+    const x = room.x + room.w + step;
+    for (let side = -1; side <= 1; side++) {
+      const y = doorY + side;
+      const ci = world.idx(x, y);
+      if (world.cells[ci] === Cell.LIFT || world.aptMask[ci] || world.roomMap[ci] >= 0) continue;
+      if (step > 3 && (world.cells[ci] === Cell.FLOOR || world.cells[ci] === Cell.DOOR)) touchesOpenFloor = true;
+      carveRouteCell(world, ci, Tex.F_MEAT);
+      if (side === 0 && (step === 3 || step === 9 || step === 15)) {
+        world.features[ci] = Feature.LAMP;
+        addLocalLight(world, x, y, 6);
+      }
+    }
+    if (touchesOpenFloor) return;
+  }
+}
+
+function carveRouteCell(world: World, ci: number, floorTex: Tex): void {
+  if (world.cells[ci] === Cell.LIFT) return;
+  world.cells[ci] = Cell.FLOOR;
+  world.floorTex[ci] = floorTex;
+  world.wallTex[ci] = 0;
+  world.aptMask[ci] = 0;
+  world.roomMap[ci] = -1;
+  world.features[ci] = Feature.NONE;
+}
+
+function decorateChoir(world: World, room: Room): void {
+  const rx = room.x;
+  const ry = room.y;
+  const cx = rx + Math.floor(room.w / 2);
+  const cy = ry + Math.floor(room.h / 2);
+
+  for (let dy = 2; dy < room.h - 2; dy++) {
+    const gap = Math.abs(dy - Math.floor(room.h / 2)) <= 2;
+    if (gap) continue;
+    makeInteriorWall(world, rx + 10, ry + dy);
+    makeInteriorWall(world, rx + 21, ry + dy);
+  }
+
+  for (let dx = 11; dx <= 20; dx++) {
+    if (dx === 15) continue;
+    const ci = world.idx(rx + dx, cy + 4);
+    if (world.cells[ci] !== Cell.FLOOR) continue;
+    world.floorTex[ci] = Tex.F_GUT;
+  }
+
+  placeFeature(world, cx, cy, Feature.APPARATUS, 7);
+  placeFeature(world, rx + 4, ry + 4, Feature.SHELF, 4);
+  placeFeature(world, rx + 5, ry + 12, Feature.TABLE, 4);
+  placeFeature(world, rx + room.w - 5, ry + room.h - 5, Feature.LAMP, 8);
+  placeFeature(world, rx + room.w - 7, ry + 5, Feature.TABLE, 5);
+  placeFeature(world, rx + room.w - 4, ry + room.h - 7, Feature.SCREEN, 5);
+
+  for (const [dx, dy] of [[0, -6], [5, -4], [6, 0], [5, 4], [0, 6], [-5, 4], [-6, 0], [-5, -4]] as const) {
+    placeFeature(world, cx + dx, cy + dy, Feature.CANDLE, 5);
+  }
+
+  world.wallTex[world.idx(cx, room.y - 1)] = Tex.ICON;
+  world.stamp(cx, cy, 0.5, 0.5, 6, 0.55, 18180, 150, 24, 70, false);
+  world.stamp(rx + room.w - 5, ry + room.h - 5, 0.5, 0.5, 4, 0.35, 18181, 220, 120, 35, false);
+}
+
+function makeInteriorWall(world: World, x: number, y: number): void {
+  const ci = world.idx(x, y);
+  if (world.cells[ci] !== Cell.FLOOR) return;
+  world.cells[ci] = Cell.WALL;
+  world.wallTex[ci] = Tex.GUT;
+  world.floorTex[ci] = 0;
+  world.roomMap[ci] = -1;
+  world.features[ci] = Feature.NONE;
+}
+
+function placeFeature(world: World, x: number, y: number, feature: Feature, lightRadius: number): void {
+  const ci = world.idx(x, y);
+  if (world.cells[ci] !== Cell.FLOOR) return;
+  world.features[ci] = feature;
+  addLocalLight(world, x, y, lightRadius);
+}
+
+function addLocalLight(world: World, lx: number, ly: number, radius: number): void {
+  for (let dy = -radius; dy <= radius; dy++) {
+    for (let dx = -radius; dx <= radius; dx++) {
+      const d2 = dx * dx + dy * dy;
+      if (d2 > radius * radius) continue;
+      const ci = world.idx(lx + dx, ly + dy);
+      const brightness = 1 - Math.sqrt(d2) / radius;
+      if (brightness > world.light[ci]) world.light[ci] = brightness;
+    }
+  }
+}
+
+function spawnQuestNpc(
+  world: World,
+  entities: Entity[],
+  nextId: { v: number },
+  room: Room,
+  plotNpcId: string,
+  def: PlotNpcDef,
+  dx: number,
+  dy: number,
+  angle: number,
+  weapon: string,
+): number {
+  const x = world.wrap(room.x + dx);
+  const y = world.wrap(room.y + dy);
+  const id = nextId.v++;
+  entities.push({
+    id,
+    type: EntityType.NPC,
+    x: x + 0.5,
+    y: y + 0.5,
+    angle,
+    pitch: 0,
+    alive: true,
+    speed: def.speed,
+    sprite: def.sprite,
+    name: def.name,
+    isFemale: def.isFemale,
+    needs: freshNeeds(),
+    hp: def.hp,
+    maxHp: def.maxHp,
+    money: def.money,
+    ai: { goal: AIGoal.IDLE, tx: x + 0.5, ty: y + 0.5, path: [], pi: 0, stuck: 0, timer: 0 },
+    inventory: def.inventory.map(i => ({ ...i })),
+    weapon,
+    faction: def.faction,
+    occupation: def.occupation,
+    plotNpcId,
+    canGiveQuest: true,
+    questId: -1,
+    rpg: randomRPG(def.faction === Faction.CULTIST ? 9 : 7),
+  });
+  return id;
+}
+
+function spawnChoirCultists(world: World, room: Room, entities: Entity[], nextId: { v: number }): void {
+  const placements: readonly [number, number, string, string][] = [
+    [12, 6, 'Певчий налога', 'rebar'],
+    [18, 6, 'Певчий выхода', 'psi_strike'],
+    [15, 18, 'Певчий сдачи', 'psi_meat_hook'],
+  ];
+  for (const [dx, dy, name, weapon] of placements) {
+    const x = world.wrap(room.x + dx);
+    const y = world.wrap(room.y + dy);
+    const ci = world.idx(x, y);
+    if (world.cells[ci] !== Cell.FLOOR) continue;
+    entities.push({
+      id: nextId.v++,
+      type: EntityType.NPC,
+      x: x + 0.5,
+      y: y + 0.5,
+      angle: Math.random() * Math.PI * 2,
+      pitch: 0,
+      alive: true,
+      speed: 1.05,
+      sprite: Occupation.PILGRIM,
+      name,
+      needs: freshNeeds(),
+      hp: 210,
+      maxHp: 210,
+      money: 12,
+      ai: { goal: AIGoal.IDLE, tx: x + 0.5, ty: y + 0.5, path: [], pi: 0, stuck: 0, timer: 0 },
+      inventory: [{ defId: weapon, count: 1 }],
+      weapon,
+      faction: Faction.CULTIST,
+      occupation: Occupation.PILGRIM,
+      questId: -1,
+      canGiveQuest: false,
+      rpg: randomRPG(8),
+    });
+  }
+}
+
+function spawnChoirMonsters(world: World, room: Room, entities: Entity[], nextId: { v: number }): void {
+  const placements: readonly { kind: MonsterKind; dx: number; dy: number; bonus: number; name?: string; phasing?: boolean }[] = [
+    { kind: MonsterKind.IDOL, dx: 15, dy: 12, bonus: 5, name: 'Сигнальный идол хора' },
+    { kind: MonsterKind.EYE, dx: 13, dy: 8, bonus: 3, name: 'Глаз первой ноты' },
+    { kind: MonsterKind.EYE, dx: 17, dy: 8, bonus: 3, name: 'Глаз второй ноты' },
+    { kind: MonsterKind.SHADOW, dx: 12, dy: 16, bonus: 2 },
+    { kind: MonsterKind.SHADOW, dx: 18, dy: 16, bonus: 2 },
+    { kind: MonsterKind.TVAR, dx: 11, dy: 12, bonus: 1 },
+    { kind: MonsterKind.TVAR, dx: 19, dy: 12, bonus: 1 },
+    { kind: MonsterKind.POLZUN, dx: 15, dy: 20, bonus: 2, name: 'Ползун под кассой' },
+  ];
+  for (const p of placements) spawnChoirMonster(world, room, entities, nextId, p);
+}
+
+function spawnChoirMonster(
+  world: World,
+  room: Room,
+  entities: Entity[],
+  nextId: { v: number },
+  placement: { kind: MonsterKind; dx: number; dy: number; bonus: number; name?: string; phasing?: boolean },
+): void {
+  const x = world.wrap(room.x + placement.dx);
+  const y = world.wrap(room.y + placement.dy);
+  const ci = world.idx(x, y);
+  if (world.cells[ci] !== Cell.FLOOR) return;
+  const def = MONSTERS[placement.kind];
+  const zoneLevel = world.zones[world.zoneMap[ci]]?.level ?? 12;
+  const level = zoneLevel + placement.bonus;
+  const hp = Math.max(1, Math.round(scaleMonsterHp(def.hp, level)));
+  const monster: Entity = {
+    id: nextId.v++,
+    type: EntityType.MONSTER,
+    x: x + 0.5,
+    y: y + 0.5,
+    angle: Math.random() * Math.PI * 2,
+    pitch: 0,
+    alive: true,
+    speed: scaleMonsterSpeed(def.speed, level),
+    sprite: monsterSpr(placement.kind),
+    name: placement.name,
+    hp,
+    maxHp: hp,
+    monsterKind: placement.kind,
+    attackCd: def.attackRate,
+    ai: { goal: AIGoal.WANDER, tx: x + 0.5, ty: y + 0.5, path: [], pi: 0, stuck: 0, timer: 0 },
+    rpg: randomRPG(level),
+    phasing: placement.phasing,
+  };
+  applyMonsterVariant(monster, FloorLevel.HELL, placement.kind === MonsterKind.IDOL);
+  entities.push(monster);
+}
+
+function addChoirCache(world: World, room: Room, ownerNpcId: number): void {
+  const x = world.wrap(room.x + 4);
+  const y = world.wrap(room.y + 4);
+  const inventory: WorldContainer['inventory'] = [
+    { defId: 'bottled_voice', count: 1 },
+    { defId: 'psi_dust', count: 1 },
+    { defId: 'holy_water', count: 1 },
+    { defId: 'ammo_energy', count: 1 },
+    { defId: 'meat_rune', count: 1 },
+    { defId: 'bandage', count: 1 },
+  ];
+  world.addContainer({
+    id: nextContainerId(world),
+    x,
+    y,
+    floor: FloorLevel.HELL,
+    roomId: room.id,
+    zoneId: world.zoneMap[world.idx(x, y)],
+    kind: ContainerKind.CASHBOX,
+    name: 'Касса мясного хора',
+    inventory,
+    capacitySlots: 8,
+    ownerNpcId,
+    ownerName: TAXMAN_DEF.name,
+    faction: Faction.CULTIST,
+    access: 'owner',
+    lockDifficulty: 5,
+    discovered: true,
+    tags: ['hell18', 'choir_tax', 'psi_cache', 'owner', 'one_shot'],
+  });
+}
+
+function nextContainerId(world: World): number {
+  let id = world.containers.length + 1;
+  while (world.containerById.has(id) || world.containers.some(c => c.id === id)) id++;
+  return id;
+}
+
+function dropChoirTraces(world: World, room: Room, entities: Entity[], nextId: { v: number }): void {
+  dropItem(world, entities, nextId, room.x + 6, room.y + 15, 'rawmeat', 2);
+  dropNote(world, entities, nextId, room.x + room.w - 6, room.y + room.h - 7,
+    'Уголь Арсения: две лампы подряд ведут к выходу. Если слышишь третью, ты снова у алтаря.');
+  dropNote(world, entities, nextId, room.x + 14, room.y + 5,
+    'Партитура мясного хора: налог берётся мясом, голосом или тишиной. Идол держит сигнал, пока видит кассу.');
+  dropNote(world, entities, nextId, room.x + room.w - 8, room.y + 6,
+    'Журнал Шрамко: группа списана, патроны почти списаны, но доказательство ада ещё можно вынести наверх.');
+}
+
+function dropItem(
+  world: World,
+  entities: Entity[],
+  nextId: { v: number },
+  x: number,
+  y: number,
+  defId: string,
+  count: number,
+): void {
+  const wx = world.wrap(x);
+  const wy = world.wrap(y);
+  if (world.cells[world.idx(wx, wy)] !== Cell.FLOOR) return;
+  entities.push({
+    id: nextId.v++,
+    type: EntityType.ITEM_DROP,
+    x: wx + 0.5,
+    y: wy + 0.5,
+    angle: 0,
+    pitch: 0,
+    alive: true,
+    speed: 0,
+    sprite: Spr.ITEM_DROP,
+    inventory: [{ defId, count }],
+  });
+}
+
+function dropNote(
+  world: World,
+  entities: Entity[],
+  nextId: { v: number },
+  x: number,
+  y: number,
+  data: string,
+): void {
+  const wx = world.wrap(x);
+  const wy = world.wrap(y);
+  if (world.cells[world.idx(wx, wy)] !== Cell.FLOOR) return;
+  entities.push({
+    id: nextId.v++,
+    type: EntityType.ITEM_DROP,
+    x: wx + 0.5,
+    y: wy + 0.5,
+    angle: 0,
+    pitch: 0,
+    alive: true,
+    speed: 0,
+    sprite: Spr.ITEM_DROP,
+    inventory: [{ defId: 'note', count: 1, data }],
+  });
+}

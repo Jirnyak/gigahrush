@@ -82,6 +82,23 @@ export function strMeleeDmgMult(rpg: RPGStats): number { return 1 + 0.1 * rpg.st
 export function agiSpeedMult(rpg: RPGStats): number { return 1 + 0.1 * rpg.agi; }
 export function agiAttackSpeedMult(rpg: RPGStats): number { return 1 / (1 + 0.1 * rpg.agi); } // lower cooldown
 export function intXpMult(rpg: RPGStats): number { return 1 + 0.1 * rpg.int; }
+export function strDurabilityWearMult(rpg: RPGStats): number { return 1 / (1 + 0.08 * rpg.str); }
+export function strHeavyWeaponSpeedMult(rpg: RPGStats, baseCooldown: number): number {
+  return baseCooldown >= 0.65 ? 1 / (1 + 0.05 * rpg.str) : 1;
+}
+export function agiRangedSpreadMult(rpg: RPGStats): number { return 1 / (1 + 0.12 * rpg.agi); }
+export function intPsiCostMult(rpg: RPGStats): number { return 1 / (1 + 0.08 * rpg.int); }
+export function intContractRewardMult(rpg: RPGStats): number {
+  return 1 + Math.min(0.35, 0.05 * rpg.int);
+}
+export function intDocumentRewardMult(rpg: RPGStats): number {
+  return 1 + Math.min(0.5, 0.08 * rpg.int);
+}
+
+export function adjustedPsiCost(baseCost: number, rpg?: RPGStats): number {
+  if (!rpg || baseCost <= 0) return baseCost;
+  return Math.max(1, Math.round(baseCost * intPsiCostMult(rpg) * 10) / 10);
+}
 
 // ── Award XP and handle level-ups ────────────────────────────────
 export function awardXP(e: Entity, amount: number, msgs: Msg[], time: number): void {
@@ -148,6 +165,14 @@ const MONSTER_BASE_XP: Record<MonsterKind, number> = {
   [MonsterKind.SPIRIT]:   40,
   [MonsterKind.IDOL]:      10,
   [MonsterKind.ROBOT]:     35,
+  [MonsterKind.SHOVNIK]:   32,
+  [MonsterKind.LAMPOVY]:   28,
+  [MonsterKind.PECHATEED]: 38,
+  [MonsterKind.TUBE_EEL]:  55,
+  [MonsterKind.PARAGRAPH]: 45,
+  [MonsterKind.NELYUD]:    70,
+  [MonsterKind.KRYSNOZHKA]: 24,
+  [MonsterKind.KOSTOREZ]:  95,
 };
 
 export function xpForMonsterKill(kind: MonsterKind, monsterLevel: number): number {
