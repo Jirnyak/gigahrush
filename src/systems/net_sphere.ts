@@ -332,26 +332,32 @@ function statusText(status: NetSphereStatus): string {
 }
 
 function netFailureText(err: unknown, channel: NetSphereChannel): string {
+  const market = channel === 'market' || channel === 'market_post';
   if (err instanceof NetSphereApiError) {
     if (err.status === 429) return 'Слишком часто. Пакет не принят.';
+    if (err.status === 404 || err.status === 502) {
+      return market
+        ? `Маркет offline (${err.status}). Цены всё равно растут.`
+        : `API offline (${err.status}). Игра локальна.`;
+    }
     if (err.status === 503) {
-      return channel === 'market' || channel === 'market_post'
-        ? 'Маркет offline. Цены всё равно растут.'
-        : 'Сервер без базы. Канал offline.';
+      return market
+        ? 'Маркет offline (503). Цены всё равно растут.'
+        : 'Cloudflare 503: база не привязана. Игра локальна.';
     }
     if (err.status >= 500) {
-      return channel === 'market' || channel === 'market_post'
-        ? 'Маркет молчит. Цены всё равно растут.'
-        : 'Сервер слышит сирену. Пакет ждёт.';
+      return market
+        ? `Маркет offline (${err.status}). Цены всё равно растут.`
+        : `Сервер ${err.status}. Канал offline, игра локальна.`;
     }
     if (channel === 'chat') return 'Сообщение не доставлено: пакет битый.';
     if (channel === 'event') return 'Событие не принято: пакет битый.';
     return 'Пакет не принят. Проверь НЕТ-ГЕН.';
   }
   if (channel === 'chat') return 'Сообщение не доставлено: маршрут ушёл в самосбор.';
-  if (channel === 'market' || channel === 'market_post') return 'Маркет молчит. Цены всё равно растут.';
+  if (market) return 'Маркет offline. Цены всё равно растут.';
   if (channel === 'event') return 'Событие не доставлено: сервер слышит сирену.';
-  return 'Пакет ушёл в соседний этаж.';
+  return 'Канал offline. Игра локальна.';
 }
 
 function progressFromState(state: GameState, player: Entity): NetSphereProgress {
@@ -423,7 +429,7 @@ function serverErrorMessage(data: unknown, fallback: string): string {
 }
 
 function sendFailureKeepsConnection(err: unknown): boolean {
-  return err instanceof NetSphereApiError && err.status >= 400 && err.status < 500;
+  return err instanceof NetSphereApiError && err.status >= 400 && err.status < 500 && err.status !== 404;
 }
 
 async function postJson(path: string, body: unknown): Promise<unknown> {
@@ -495,7 +501,6 @@ async function pollOpenStats(): Promise<void> {
 async function pollMarketSnapshot(): Promise<void> {
   if (runtime.marketBusy) return;
   runtime.marketBusy = true;
-  runtime.error = '';
   try {
     const res = await fetch(`${API_ROOT}/market`);
     const data = await res.json().catch(() => null);
@@ -508,7 +513,7 @@ async function pollMarketSnapshot(): Promise<void> {
     runtime.nextMarketPollAt = performance.now() + MARKET_POLL_MS;
   } catch (err) {
     runtime.status = 'offline';
-    runtime.error = netFailureText(err, 'market');
+    if (!runtime.error || runtime.error.startsWith('Маркет')) runtime.error = netFailureText(err, 'market');
     runtime.nextMarketPollAt = performance.now() + 10_000;
   } finally {
     runtime.marketBusy = false;
@@ -520,7 +525,6 @@ async function postMarketImpulses(impulses: readonly NetMarketImpulse[], progres
   const cleanImpulses = normalizeMarketImpulses(impulses);
   if (cleanImpulses.length === 0) return;
   runtime.marketBusy = true;
-  runtime.error = '';
   try {
     const data = await postJson('/market', {
       netGen: runtime.netGen,
@@ -533,7 +537,7 @@ async function postMarketImpulses(impulses: readonly NetMarketImpulse[], progres
     runtime.nextMarketPollAt = performance.now() + MARKET_POLL_MS;
   } catch (err) {
     runtime.status = 'offline';
-    runtime.error = netFailureText(err, 'market_post');
+    if (!runtime.error || runtime.error.startsWith('Маркет')) runtime.error = netFailureText(err, 'market_post');
   } finally {
     runtime.marketBusy = false;
   }

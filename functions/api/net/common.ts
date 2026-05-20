@@ -64,10 +64,22 @@ export interface MarketSnapshotPayload {
 
 const ONLINE_WINDOW_MS = 90_000;
 const CHAT_LIMIT = 60;
+const JSON_BODY_LIMIT_BYTES = 4096;
 const NET_GEN_NICK_RE = /^NET-[A-Z0-9-]{4,28}$/;
 const MARKET_MAX_IMPULSES = 16;
 const MARKET_MAX_ROWS = 64;
 const MARKET_MAX_MAGNITUDE = 100;
+const MAX_PUBLIC_ID = 2_147_483_647;
+
+export class ApiError extends Error {
+  readonly status: number;
+
+  constructor(message: string, status = 400) {
+    super(message);
+    this.name = 'ApiError';
+    this.status = status;
+  }
+}
 
 export function json(data: unknown, status = 200): Response {
   return Response.json(data, {
@@ -78,17 +90,72 @@ export function json(data: unknown, status = 200): Response {
   });
 }
 
+function cleanErrorText(value: string): string {
+  return value
+    .replace(/[\u0000-\u001f\u007f<>`\\]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 96) || 'bad request';
+}
+
+export function apiError(error: string, status = 400): Response {
+  return json({ ok: false, error: cleanErrorText(error) }, status);
+}
+
+export function handleApiError(err: unknown): Response {
+  if (err instanceof ApiError) return apiError(err.message, err.status);
+  return apiError('database error', 500);
+}
+
+export function requireMethod(request: Request, method: string): Response | null {
+  return request.method === method ? null : apiError('method not allowed', 405);
+}
+
+export function badRequest(message: string): never {
+  throw new ApiError(message, 400);
+}
+
 export function requireDb(env: Env): D1Database | Response {
-  if (!env.GIGA_NET) return json({ error: 'D1 binding GIGA_NET is not configured' }, 503);
+  if (!env.GIGA_NET) return apiError('D1 binding GIGA_NET is not configured', 503);
   return env.GIGA_NET;
 }
 
 export async function readBody(request: Request): Promise<Record<string, unknown>> {
-  const text = await request.text();
-  if (text.length > 4096) throw new Error('payload too large');
+  const length = Number(request.headers.get('content-length') ?? 0);
+  if (Number.isFinite(length) && length > JSON_BODY_LIMIT_BYTES) {
+    badRequest('payload too large');
+  }
+  const chunks: Uint8Array[] = [];
+  let size = 0;
+  if (request.body) {
+    const reader = request.body.getReader();
+    for (;;) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      if (!value) continue;
+      size += value.byteLength;
+      if (size > JSON_BODY_LIMIT_BYTES) badRequest('payload too large');
+      chunks.push(value);
+    }
+  }
+  const bytes = new Uint8Array(size);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  const text = new TextDecoder().decode(bytes);
   if (!text) return {};
-  const data = JSON.parse(text);
-  return data && typeof data === 'object' ? data as Record<string, unknown> : {};
+  let data: unknown;
+  try {
+    data = JSON.parse(text);
+  } catch {
+    throw new ApiError('malformed json', 400);
+  }
+  if (!data || typeof data !== 'object' || Array.isArray(data)) {
+    throw new ApiError('bad request', 400);
+  }
+  return data as Record<string, unknown>;
 }
 
 export function cleanNetGen(value: unknown): string {
@@ -112,6 +179,15 @@ export function cleanMessage(value: unknown): string {
     .replace(/\s+/g, ' ')
     .trim()
     .slice(0, 160);
+}
+
+function cleanPublicText(value: unknown, limit: number): string {
+  if (typeof value !== 'string') return '';
+  return value
+    .replace(/[\u0000-\u001f\u007f<>`\\]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, limit);
 }
 
 function looksLikeNetGen(value: string): boolean {
@@ -158,8 +234,8 @@ function cleanMarketMagnitude(value: unknown): number | null {
 
 export function normalizeMarketImpulses(value: unknown): MarketImpulsePayload[] {
   if (value === undefined || value === null) return [];
-  if (!Array.isArray(value)) throw new Error('bad market impulses');
-  if (value.length > MARKET_MAX_IMPULSES) throw new Error('too many market impulses');
+  if (!Array.isArray(value)) badRequest('bad market impulses');
+  if (value.length > MARKET_MAX_IMPULSES) badRequest('too many market impulses');
   const impulses: MarketImpulsePayload[] = [];
   for (const item of value) {
     const input = item && typeof item === 'object' ? item as Record<string, unknown> : {};
@@ -167,7 +243,7 @@ export function normalizeMarketImpulses(value: unknown): MarketImpulsePayload[] 
     const corpId = cleanMarketCorpId(input.corpId);
     const kind = cleanMarketKind(input.kind);
     const magnitude = cleanMarketMagnitude(input.magnitude);
-    if (!eventKey || !corpId || !kind || magnitude === null) throw new Error('bad market impulse');
+    if (!eventKey || !corpId || !kind || magnitude === null) badRequest('bad market impulse');
     impulses.push({ eventKey, corpId, kind, magnitude });
   }
   return impulses;
@@ -212,6 +288,37 @@ function progressSignal(progress: ProgressPayload | null, createdAt: unknown): s
   if (!progress) return eventDate(createdAt);
   const floor = progress.floorName || `этаж ${progress.floorId}`;
   return `${floor}, д${progress.day} ${two(progress.hour)}:${two(progress.minute)}`;
+}
+
+function cleanPublicEventIdPart(value: string): string {
+  return value.replace(/[^A-Za-z0-9:_-]/g, '').slice(0, 96);
+}
+
+function publicEventKeyHash(value: string): string {
+  let hash = 0xcbf29ce484222325n;
+  for (let i = 0; i < value.length; i++) {
+    hash ^= BigInt(value.charCodeAt(i));
+    hash = BigInt.asUintN(64, hash * 0x100000001b3n);
+  }
+  return hash.toString(36);
+}
+
+function publicEventId(row: Record<string, unknown>): string {
+  const id = Number(row.id);
+  if (Number.isSafeInteger(id) && id > 0) return `event:${id}`;
+
+  const eventKey = cleanEventKey(row.event_key);
+  if (eventKey) {
+    const withoutNetGen = eventKey
+      .replace(/^NET-[A-Z0-9-]{4,28}:/i, '')
+      .replace(/NET-[A-Z0-9-]{4,28}/gi, 'NET');
+    const publicPart = cleanPublicEventIdPart(withoutNetGen);
+    const hash = publicEventKeyHash(eventKey);
+    if (publicPart) return `event:${publicPart}:${hash}`;
+    return `event:${hash}`;
+  }
+
+  return `${num(row.created_at, 0, 0, 9_999_999_999_999)}:${cleanEventType(row.type) || 'samosbor'}`;
 }
 
 export function netEventSummary(
@@ -311,10 +418,10 @@ export async function readStats(db: D1Database, now: number): Promise<Record<str
     .prepare("SELECT COUNT(*) AS value FROM net_events WHERE type = 'death'")
     .first<{ value: number }>();
   return {
-    onlineUsers: Number(online?.value ?? 0),
-    totalPlayers: Number(players?.value ?? 0),
-    totalSamosbors: Number(samosbors?.value ?? 0),
-    totalDeaths: Number(deaths?.value ?? 0),
+    onlineUsers: num(online?.value, 0, 0, 1_000_000_000),
+    totalPlayers: num(players?.value, 0, 0, 1_000_000_000),
+    totalSamosbors: num(samosbors?.value, 0, 0, 1_000_000_000),
+    totalDeaths: num(deaths?.value, 0, 0, 1_000_000_000),
     updatedAt: now,
   };
 }
@@ -328,34 +435,36 @@ export async function readProfile(db: D1Database, netGen: string): Promise<Recor
   `).bind(netGen).first<Record<string, unknown>>();
   if (!row) return null;
   return {
-    netGen: row.net_gen,
+    netGen: cleanNetGen(row.net_gen),
     nickname: publicNickname(row.nickname),
-    createdAt: row.created_at,
-    lastSeenAt: row.last_seen_at,
-    runs: row.runs,
-    totalSamosbors: row.total_samosbors,
-    deaths: row.deaths,
-    bestLevel: row.best_level,
-    bestSamosborCount: row.best_samosbor_count,
-    lastFloor: row.last_floor,
+    createdAt: num(row.created_at, 0, 0, 9_999_999_999_999),
+    lastSeenAt: num(row.last_seen_at, 0, 0, 9_999_999_999_999),
+    runs: num(row.runs, 0, 0, 1_000_000_000),
+    totalSamosbors: num(row.total_samosbors, 0, 0, 1_000_000_000),
+    deaths: num(row.deaths, 0, 0, 1_000_000_000),
+    bestLevel: num(row.best_level, 1, 1, 999),
+    bestSamosborCount: num(row.best_samosbor_count, 0, 0, 1_000_000),
+    lastFloor: cleanPublicText(row.last_floor, 64),
   };
 }
 
 export async function readEvents(db: D1Database): Promise<Record<string, unknown>[]> {
   const result = await db.prepare(`
-    SELECT nickname, type, summary, created_at, payload_json
+    SELECT rowid AS id, event_key, nickname, type, summary, created_at, payload_json
     FROM net_events
-    ORDER BY created_at DESC
+    ORDER BY created_at DESC, rowid DESC
     LIMIT 20
   `).all<Record<string, unknown>>();
   return (result.results ?? []).map(row => {
     const nickname = publicNickname(row.nickname);
+    const type = cleanEventType(row.type) || 'samosbor';
+    const createdAt = num(row.created_at, 0, 0, 9_999_999_999_999);
     return {
-      eventKey: `${row.created_at}:${row.type}`,
+      eventKey: publicEventId(row),
       nickname,
-      type: row.type,
-      summary: netEventSummary(row.type, nickname, row.created_at, progressFromStoredPayload(row.payload_json)),
-      createdAt: row.created_at,
+      type,
+      summary: netEventSummary(type, nickname, createdAt, progressFromStoredPayload(row.payload_json)),
+      createdAt,
     };
   });
 }
@@ -371,17 +480,29 @@ export async function readChat(db: D1Database, sinceChatId: number): Promise<Rec
     LIMIT ?
   `).bind(since, CHAT_LIMIT).all<Record<string, unknown>>();
   return (result.results ?? []).reverse().map(row => ({
-    id: row.id,
+    id: num(row.id, 0, 0, MAX_PUBLIC_ID),
     nickname: publicNickname(row.nickname),
-    body: row.body,
-    createdAt: row.created_at,
+    body: cleanMessage(row.body),
+    createdAt: num(row.created_at, 0, 0, 9_999_999_999_999),
   }));
 }
 
+export function sinceChatIdFromValue(value: unknown, fallback = 0): number {
+  if (value === undefined || value === null) return fallback;
+  let id: number;
+  if (typeof value === 'number') {
+    id = value;
+  } else if (typeof value === 'string' && /^[0-9]+$/.test(value)) {
+    id = Number(value);
+  } else {
+    badRequest('bad sinceChatId');
+  }
+  if (!Number.isSafeInteger(id) || id < 0 || id > MAX_PUBLIC_ID) badRequest('bad sinceChatId');
+  return id;
+}
+
 export function sinceChatIdFromUrl(request: Request): number {
-  const raw = new URL(request.url).searchParams.get('sinceChatId') ?? '0';
-  const id = Number(raw);
-  return Number.isFinite(id) ? Math.max(0, Math.floor(id)) : 0;
+  return sinceChatIdFromValue(new URL(request.url).searchParams.get('sinceChatId'), 0);
 }
 
 export async function readMarketSnapshot(db: D1Database, limit = MARKET_MAX_ROWS): Promise<MarketSnapshotPayload> {

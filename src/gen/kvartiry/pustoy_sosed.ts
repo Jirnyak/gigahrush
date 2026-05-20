@@ -84,7 +84,7 @@ const OUTCOMES: Record<string, OutcomeDef> = {
     targetName: 'Свидетельские показания о Пустом Соседе ушли ликвидаторам',
     severity: 4,
     privacy: 'public',
-    tags: ['exposed', 'liquidator_report'],
+    tags: ['exposed', 'liquidator_report', 'denunciation'],
     rumorIds: [...PUSTOY_SOSED_RUMOR_IDS],
     relationDeltas: [
       { faction: Faction.LIQUIDATOR, delta: 10 },
@@ -197,7 +197,7 @@ registerSideQuest(WITNESS_ID, WITNESS, [
     eventSeverity: 4,
     eventPrivacy: 'witnessed',
     eventTargetName: 'Фальшивый пропуск Пустого Соседа сверили при свидетеле.',
-    eventTags: ['monster', 'false_neighbor', 'witness', 'infected', 'exposed', 'expose_choice'],
+    eventTags: ['monster', 'false_neighbor', 'witness', 'infected', 'exposed', 'expose_choice', 'denunciation'],
     eventData: {
       monsterId: CONTENT_ID,
       ruName: 'Пустой Сосед',
@@ -224,7 +224,7 @@ registerSideQuest(WITNESS_ID, WITNESS, [
     eventSeverity: 4,
     eventPrivacy: 'public',
     eventTargetName: 'Пустого Соседа передали ликвидаторам до близкого раскрытия.',
-    eventTags: ['monster', 'false_neighbor', 'witness', 'infected', 'exposed', 'expose_choice'],
+    eventTags: ['monster', 'false_neighbor', 'witness', 'infected', 'exposed', 'expose_choice', 'denunciation'],
     eventData: {
       monsterId: CONTENT_ID,
       ruName: 'Пустой Сосед',
@@ -316,7 +316,7 @@ function handlePustoySosedOutcome(state: GameState, event: WorldEvent): void {
     targetName: outcome.targetName,
     severity: outcome.severity,
     privacy: outcome.privacy,
-    tags: [OUTCOME_TAG, 'monster', 'false_neighbor', 'witness', 'infected', outcome.outcome],
+    tags: [OUTCOME_TAG, 'faction_event', 'monster', 'false_neighbor', 'witness', 'infected', outcome.outcome],
     data: {
       sourceEventId: event.id,
       sideQuestId,
@@ -324,6 +324,7 @@ function handlePustoySosedOutcome(state: GameState, event: WorldEvent): void {
       ruName: 'Пустой Сосед',
       outcome: outcome.outcome,
       outcomeTags: outcome.tags,
+      localTrace: outcome.outcome === 'revealed' ? 'black_slime' : 'neighbor_complaint',
       rumorIds: outcome.rumorIds,
     },
   });

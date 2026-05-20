@@ -23,6 +23,10 @@ export const particles: BloodParticle[] = [];
 // Incrementing counter ensures every splatter is unique
 let _splatterSeed = 0;
 
+const PROJECTILE_MARK_CELL_CAP = 768;
+const PROJECTILE_MARKS_PER_CELL = 8;
+const projectileMarkCounts = new WeakMap<World, Map<number, number>>();
+
 // Substance colors (R, G, B)
 const BLOOD: [number, number, number] = [140, 10, 10];
 const GORE:  [number, number, number] = [30, 40, 10];
@@ -33,12 +37,42 @@ export function isEnergyProjectileImpact(sprite: number | undefined, pt = ProjTy
     sprite === Spr.PSI_BOLT ||
     sprite === Spr.HOSTILE_PSI_BOLT ||
     sprite === Spr.EYE_BOLT ||
+    sprite === Spr.PARAGRAPH_BOLT ||
     sprite === Spr.PLASMA_BOLT ||
     sprite === Spr.HOSTILE_PLASMA_BOLT ||
     sprite === Spr.GAUSS_BOLT ||
     sprite === Spr.BFG_BOLT ||
     sprite === Spr.FLAME_BOLT ||
     sprite === Spr.HOSTILE_FLAME_BOLT;
+}
+
+function canStampProjectileMark(world: World, cx: number, cy: number): boolean {
+  const idx = world.idx(world.wrap(cx), world.wrap(cy));
+  let counts = projectileMarkCounts.get(world);
+  if (!counts) {
+    counts = new Map();
+    projectileMarkCounts.set(world, counts);
+  }
+  const prev = counts.get(idx) ?? 0;
+  if (prev >= PROJECTILE_MARKS_PER_CELL) return false;
+  if (prev === 0 && counts.size >= PROJECTILE_MARK_CELL_CAP) return false;
+  counts.set(idx, prev + 1);
+  return true;
+}
+
+function stampProjectileMark(
+  world: World,
+  cx: number, cy: number,
+  fx: number, fy: number,
+  radius: number,
+  type: MarkType,
+  seed: number,
+  r: number, g: number, b: number,
+  intensity: number,
+  wallOk = false,
+): void {
+  if (!canStampProjectileMark(world, cx, cy)) return;
+  stampMark(world, cx, cy, fx, fy, radius, type, seed, r, g, b, intensity, wallOk);
 }
 
 function stampEnergyMark(
@@ -50,23 +84,27 @@ function stampEnergyMark(
   wallOk = false,
 ): void {
   if (sprite === Spr.EYE_BOLT) {
-    stampMark(world, cx, cy, fx, fy, radius, MarkType.PSI, ++_splatterSeed, 120, 220, 35, 190, wallOk);
+    stampProjectileMark(world, cx, cy, fx, fy, radius, MarkType.PSI, ++_splatterSeed, 120, 220, 35, 190, wallOk);
+  } else if (sprite === Spr.PARAGRAPH_BOLT) {
+    stampProjectileMark(world, cx, cy, fx, fy, radius * 0.9, MarkType.PSI, ++_splatterSeed, 235, 42, 96, 205, wallOk);
+    stampProjectileMark(world, cx, cy, fx, fy, radius * 0.45, MarkType.BULLET, ++_splatterSeed, 28, 22, 16, 185, wallOk);
   } else if (sprite === Spr.HOSTILE_PSI_BOLT) {
-    stampMark(world, cx, cy, fx, fy, radius, MarkType.PSI, ++_splatterSeed, 230, 35, 140, 205, wallOk);
+    stampProjectileMark(world, cx, cy, fx, fy, radius, MarkType.PSI, ++_splatterSeed, 230, 35, 140, 205, wallOk);
   } else if (sprite === Spr.PLASMA_BOLT) {
-    stampMark(world, cx, cy, fx, fy, radius, MarkType.PSI, ++_splatterSeed, 40, 230, 210, 185, wallOk);
+    stampProjectileMark(world, cx, cy, fx, fy, radius, MarkType.PSI, ++_splatterSeed, 40, 230, 210, 185, wallOk);
   } else if (sprite === Spr.HOSTILE_PLASMA_BOLT) {
-    stampMark(world, cx, cy, fx, fy, radius, MarkType.SCORCH, ++_splatterSeed, 210, 95, 30, 190, wallOk);
+    stampProjectileMark(world, cx, cy, fx, fy, radius, MarkType.SCORCH, ++_splatterSeed, 210, 95, 30, 190, wallOk);
   } else if (sprite === Spr.GAUSS_BOLT) {
-    stampMark(world, cx, cy, fx, fy, radius * 0.75, MarkType.PSI, ++_splatterSeed, 170, 210, 255, 180, wallOk);
+    stampProjectileMark(world, cx, cy, fx, fy, radius * 0.75, MarkType.PSI, ++_splatterSeed, 170, 210, 255, 180, wallOk);
   } else {
-    stampMark(world, cx, cy, fx, fy, radius, MarkType.PSI, ++_splatterSeed, 180, 80, 230, 185, wallOk);
+    stampProjectileMark(world, cx, cy, fx, fy, radius, MarkType.PSI, ++_splatterSeed, 180, 80, 230, 185, wallOk);
   }
 }
 
 function projectileImpactColor(sprite: number | undefined, pt = ProjType.NORMAL): [number, number, number] {
   if (pt === ProjType.FLAME || sprite === Spr.FLAME_BOLT || sprite === Spr.HOSTILE_FLAME_BOLT) return [255, 92, 24];
   if (sprite === Spr.EYE_BOLT) return [150, 240, 52];
+  if (sprite === Spr.PARAGRAPH_BOLT) return [248, 42, 104];
   if (sprite === Spr.HOSTILE_PSI_BOLT) return [248, 36, 132];
   if (sprite === Spr.PSI_BOLT) return [204, 96, 255];
   if (sprite === Spr.PLASMA_BOLT || sprite === Spr.GAUSS_BOLT) return [110, 232, 255];
@@ -108,6 +146,24 @@ function spawnProjectileImpactParticles(
   }
 }
 
+export function spawnProjectileBodyImpact(
+  world: World,
+  x: number, y: number,
+  sprite: number | undefined,
+  pt = ProjType.NORMAL,
+  z = 0.5,
+): void {
+  spawnProjectileImpactParticles(x, y, z, sprite, pt);
+  const cx = Math.floor(x), cy = Math.floor(y);
+  if (world.solid(cx, cy)) return;
+  const fx = (x % 1 + 1) % 1, fy = (y % 1 + 1) % 1;
+  if (pt === ProjType.FLAME || sprite === Spr.FLAME_BOLT || sprite === Spr.HOSTILE_FLAME_BOLT) {
+    stampProjectileMark(world, cx, cy, fx, fy, 0.18, MarkType.BURN, ++_splatterSeed, 10, 5, 2, 145);
+  } else if (isEnergyProjectileImpact(sprite, pt)) {
+    stampEnergyMark(world, cx, cy, fx, fy, 0.12, sprite);
+  }
+}
+
 export function spawnProjectileFloorImpact(
   world: World,
   x: number, y: number,
@@ -119,11 +175,11 @@ export function spawnProjectileFloorImpact(
   const fx = (x % 1 + 1) % 1, fy = (y % 1 + 1) % 1;
   spawnProjectileImpactParticles(x, y, 0.08, sprite, pt);
   if (pt === ProjType.FLAME || sprite === Spr.FLAME_BOLT || sprite === Spr.HOSTILE_FLAME_BOLT) {
-    stampMark(world, cx, cy, fx, fy, 0.3, MarkType.BURN, ++_splatterSeed, 8, 5, 2, 180);
+    stampProjectileMark(world, cx, cy, fx, fy, 0.3, MarkType.BURN, ++_splatterSeed, 8, 5, 2, 180);
   } else if (isEnergyProjectileImpact(sprite, pt)) {
     stampEnergyMark(world, cx, cy, fx, fy, 0.18, sprite);
   } else {
-    stampMark(world, cx, cy, fx, fy, 0.08, MarkType.BULLET, ++_splatterSeed, 20, 18, 14, 140);
+    stampProjectileMark(world, cx, cy, fx, fy, 0.08, MarkType.BULLET, ++_splatterSeed, 20, 18, 14, 140);
   }
 }
 
@@ -135,13 +191,13 @@ export function spawnProjectileWallImpact(
   pt = ProjType.NORMAL,
 ): void {
   if (pt === ProjType.FLAME || sprite === Spr.FLAME_BOLT || sprite === Spr.HOSTILE_FLAME_BOLT) {
-    stampMark(world, cx, cy, u, v, 0.25, MarkType.BURN, ++_splatterSeed, 5, 3, 1, 190, true);
+    stampProjectileMark(world, cx, cy, u, v, 0.25, MarkType.BURN, ++_splatterSeed, 5, 3, 1, 190, true);
   } else if (isEnergyProjectileImpact(sprite, pt)) {
     stampEnergyMark(world, cx, cy, u, v, 0.16, sprite, true);
   } else {
     const seed = ++_splatterSeed;
-    stampMark(world, cx, cy, u, v, 0.1, MarkType.BULLET, seed, 30, 25, 18, 160, true);
-    stampMark(world, cx, cy, u, v, 0.05, MarkType.BULLET, seed + 1, 8, 8, 8, 255, true);
+    stampProjectileMark(world, cx, cy, u, v, 0.1, MarkType.BULLET, seed, 30, 25, 18, 160, true);
+    stampProjectileMark(world, cx, cy, u, v, 0.05, MarkType.BULLET, seed + 1, 8, 8, 8, 255, true);
   }
 }
 

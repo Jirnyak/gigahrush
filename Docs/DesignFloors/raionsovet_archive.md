@@ -1,8 +1,8 @@
-# Design Floor: Райсовет и Живой архив
+# Design Floor: Райсовет и архив картотек
 
-Status: planning artifact. Future route id: `raionsovet_archive`. Future anchor: `z=-20`.
+Status: implemented authored route floor. Route id: `raionsovet_archive`. Anchor: `z=-20`. Base floor: `MINISTRY`. Shipped HUD name: `Райсовет и архив картотек`.
 
-Planned owned file: `src/gen/design_floors/raionsovet_archive.ts`. Existing design reference: `Docs/Expansions/03_raionsovet_archive/`.
+Owned file: `src/gen/design_floors/raionsovet_archive.ts`. Existing design reference: `Docs/Expansions/03_raionsovet_archive/`. Planning sections below preserve the older `Живой архив` name and may predate the routed implementation.
 
 ## Role
 
@@ -54,4 +54,3 @@ Potential flags:
 - At least two records can be obtained by different methods.
 - One record change has a visible NPC/door/container consequence.
 - Debug lists active archive flags by route id.
-

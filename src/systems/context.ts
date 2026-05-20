@@ -14,6 +14,7 @@ import {
 } from '../core/types';
 import { World } from '../core/world';
 import { screenSignalForTexture } from '../data/screen_signals';
+import { ROOM_MEMORY_BITS, getRoomMemory, roomMemoryHas, type RoomMemoryRecord } from './room_memory';
 
 export interface ContextSnapshot {
   floor?: FloorLevel;
@@ -36,6 +37,14 @@ export interface ContextSnapshot {
   hasRecentFactionClash: boolean;
   hasRecentMonsterKill: boolean;
   hasRecentContainerOpen: boolean;
+  roomMemoryBits: number;
+  roomMemorySeverity: number;
+  hasRoomMemoryTheft: boolean;
+  hasRoomMemoryHelp: boolean;
+  hasRoomMemoryInform: boolean;
+  hasRoomMemoryCombat: boolean;
+  hasRoomMemoryRepair: boolean;
+  hasRoomMemorySamosbor: boolean;
   hasRecentSamosborAftermath: boolean;
   hasRecentProductionOutput: boolean;
   hasRecentProductionShortage: boolean;
@@ -69,6 +78,7 @@ export function buildContextSnapshot(npc: Entity, options: ContextBuildOptions =
   let zoneLevel: number | undefined;
   let roomType: RoomType | undefined;
   let roomName: string | undefined;
+  let roomMemory: RoomMemoryRecord | undefined;
   let playerDistance: number | undefined;
   let nearbyContainer = false;
   let nearbyScreenRumorIds: readonly string[] = [];
@@ -88,6 +98,7 @@ export function buildContextSnapshot(npc: Entity, options: ContextBuildOptions =
     if (room) {
       roomType = room.type;
       roomName = room.name;
+      roomMemory = getRoomMemory(options.state?.currentFloor, room.id);
     }
     nearbyContainer = hasNearbyContainer(world, x, y);
     nearbyScreenRumorIds = screenRumorsNear(world, x, y);
@@ -155,6 +166,14 @@ export function buildContextSnapshot(npc: Entity, options: ContextBuildOptions =
     hasRecentContainerOpen: hasRecentEvent(state, 'container_opened', now, playerId, 12)
       || hasRecentEvent(state, 'container_looted', now, undefined, 12)
       || hasRecentEvent(state, 'item_stolen', now, undefined, 12),
+    roomMemoryBits: roomMemory?.bits ?? 0,
+    roomMemorySeverity: roomMemory?.severity ?? 0,
+    hasRoomMemoryTheft: roomMemoryHas(roomMemory, ROOM_MEMORY_BITS.THEFT),
+    hasRoomMemoryHelp: roomMemoryHas(roomMemory, ROOM_MEMORY_BITS.HELP),
+    hasRoomMemoryInform: roomMemoryHas(roomMemory, ROOM_MEMORY_BITS.INFORM),
+    hasRoomMemoryCombat: roomMemoryHas(roomMemory, ROOM_MEMORY_BITS.COMBAT),
+    hasRoomMemoryRepair: roomMemoryHas(roomMemory, ROOM_MEMORY_BITS.REPAIR),
+    hasRoomMemorySamosbor: roomMemoryHas(roomMemory, ROOM_MEMORY_BITS.SAMOSBOR),
     nearbyContainer,
     nearbyScreenRumorIds,
     nearbyProduction: roomType === RoomType.PRODUCTION,

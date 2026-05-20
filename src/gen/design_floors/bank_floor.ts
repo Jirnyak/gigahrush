@@ -134,6 +134,7 @@ const CREDIT_DEF: PlotNpcDef = {
   hp: 120, maxHp: 120, money: 320, speed: 0.7,
   inventory: [
     { defId: 'voluntary_receipt', count: 1 },
+    { defId: 'bank_debt_paper', count: 1 },
     { defId: 'forged_stamp_sheet', count: 1 },
     { defId: 'ink_bottle', count: 1 },
   ],
@@ -179,6 +180,7 @@ const DEBTOR_DEF: PlotNpcDef = {
   sprite: Occupation.TRAVELER,
   hp: 80, maxHp: 80, money: 9, speed: 0.9,
   inventory: [
+    { defId: 'forged_bank_debt_paper', count: 1 },
     { defId: 'forged_stamp_sheet', count: 1 },
     { defId: 'cigs', count: 1 },
   ],
@@ -199,7 +201,7 @@ registerSideQuest('bank_director_zinaida', DIRECTOR_DEF, [
     giverNpcId: 'bank_director_zinaida',
     type: QuestType.FETCH,
     desc: 'Зинаида Балансовна: «Найдете липовую долговую бумагу - сдайте в окно управляющей. Лучше пусть банк злится на бумагу, а не на вас.»',
-    targetItem: 'forged_stamp_sheet', targetCount: 1,
+    targetItem: 'forged_bank_debt_paper', targetCount: 1,
     rewardItem: 'official_permit_slip', rewardCount: 1,
     extraRewards: [{ defId: 'seal_wax', count: 1 }],
     relationDelta: 10, xpReward: 55, moneyReward: 35,
@@ -262,8 +264,8 @@ registerSideQuest('bank_debtor_mitya', DEBTOR_DEF, [
     id: 'bank_cash_forged_debt_paper',
     giverNpcId: 'bank_debtor_mitya',
     type: QuestType.FETCH,
-    desc: 'Митя Просрочка: «Отдай мне лист с поддельной печатью. Я подсуну его в хвост очереди, а ты получишь деньги раньше, чем касса проснется.»',
-    targetItem: 'forged_stamp_sheet', targetCount: 1,
+    desc: 'Митя Просрочка: «Отдай мне липовую долговую бумагу. Я подсуну ее в хвост очереди, а ты получишь деньги раньше, чем касса проснется.»',
+    targetItem: 'forged_bank_debt_paper', targetCount: 1,
     rewardItem: 'fake_pass', rewardCount: 1,
     extraRewards: [{ defId: 'cigs', count: 2 }],
     relationDelta: -6, xpReward: 35, moneyReward: 90,
@@ -644,6 +646,7 @@ function addBankContainers(
     inventory: [
       { defId: 'official_permit_slip', count: 1 },
       { defId: 'ration_registry_extract', count: 1 },
+      { defId: 'debt_settlement_receipt', count: 1 },
     ],
     tags: ['deposit', 'account', 'paper_in', 'banking_drop'],
   });
@@ -658,6 +661,7 @@ function addBankContainers(
     faction: Faction.CITIZEN,
     inventory: [
       { defId: 'voluntary_receipt', count: 1 },
+      { defId: 'bank_debt_paper', count: 1 },
       { defId: 'forged_stamp_sheet', count: 1 },
       { defId: 'ink_bottle', count: 1 },
     ],
@@ -674,6 +678,7 @@ function addBankContainers(
     inventory: [
       { defId: 'official_permit_slip', count: 2 },
       { defId: 'weapon_permit_signed', count: 1 },
+      { defId: 'confiscation_warrant', count: 1 },
       { defId: 'ammo_9mm', count: 18 },
     ],
     tags: ['vault', 'safe', 'cashbox', 'theft_risk', 'liquidator_audit'],
@@ -689,6 +694,7 @@ function addBankContainers(
     inventory: [
       { defId: 'voluntary_receipt', count: 3 },
       { defId: 'elevator_access_order', count: 1 },
+      { defId: 'debt_settlement_receipt', count: 1 },
       { defId: 'fake_pass', count: 1 },
     ],
     tags: ['vault', 'cashbox', 'theft_risk', 'debt_paper', 'liquidator_audit'],
@@ -704,6 +710,8 @@ function addBankContainers(
     ownerName: undefined,
     faction: Faction.CITIZEN,
     inventory: [
+      { defId: 'forged_bank_debt_paper', count: 1 },
+      { defId: 'bank_debt_paper', count: 1 },
       { defId: 'forged_stamp_sheet', count: 1 },
       { defId: 'blank_form', count: 2 },
       { defId: 'cigs', count: 1 },

@@ -1,8 +1,8 @@
-# Design Floor: Ниже ада
+# Design Floor: Нижний пропускник
 
-Status: planning artifact. Future route id: `underhell`. Future anchor: `z=32`.
+Status: implemented authored route floor. Route id: `underhell`. Anchor: `z=32`. Base floor: `HELL`. Shipped HUD name: `Нижний пропускник`.
 
-Planned owned file: `src/gen/design_floors/underhell.ts`.
+Owned file: `src/gen/design_floors/underhell.ts`. Planning sections below preserve the older `Ниже ада` brief and may predate the routed implementation.
 
 ## Role
 
@@ -56,4 +56,3 @@ No global morality system. Consequences publish events and affect relevant floor
 - One ritual gate has at least three costs.
 - Debt/identity manipulation has visible cross-floor backlash.
 - Void route opens deterministically and cannot softlock.
-

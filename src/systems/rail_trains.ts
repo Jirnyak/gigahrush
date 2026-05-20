@@ -1,6 +1,7 @@
 /* ── Fixed-route rail trains for metro floors and anomalies ───── */
 
 import {
+  Cell,
   EntityType,
   Faction,
   W,
@@ -29,6 +30,24 @@ export interface RailTrainSpawnOptions {
   initialOffset?: number;
   direction?: 1 | -1;
   stopSeconds?: number;
+}
+
+interface RailTrainRuntimeSnapshot {
+  id: string;
+  trackId: string;
+  offset: number;
+  direction: 1 | -1;
+  stopUntil: number;
+  passengerId: number;
+  passengerSeat: number;
+  lastStopOffset: number;
+  nextWarnAt: number;
+  nextCrushAt: number;
+  nextDoorMsgAt: number;
+}
+
+export interface RailTrainRebuildSnapshot {
+  trains: RailTrainRuntimeSnapshot[];
 }
 
 function wrapOffset(track: RailTrainTrack, offset: number): number {
@@ -148,6 +167,25 @@ function positionTrainEntities(world: World, entities: Entity[], track: RailTrai
   }
 }
 
+function createTrainSegmentEntity(id: number, train: RailTrain, segment: number): Entity {
+  return {
+    id,
+    type: EntityType.ITEM_DROP,
+    x: 0,
+    y: 0,
+    angle: 0,
+    pitch: 0,
+    alive: true,
+    speed: 0,
+    sprite: Spr.TRAIN_CAR,
+    spriteScale: segment === 0 ? 1.85 : 1.55,
+    spriteZ: 0,
+    name: segment === 0 ? train.label : `${train.label} вагон`,
+    faction: Faction.WILD,
+    inventory: [],
+  };
+}
+
 function bindPassenger(player: Entity, track: RailTrainTrack, train: RailTrain): void {
   const ci = trainCellAt(track, train, Math.max(0, Math.min(train.length - 1, train.passengerSeat)));
   const p = cellCenter(ci);
@@ -243,6 +281,189 @@ function boardableTrain(world: World, player: Entity, state: GameState, lookX: n
     return train;
   }
   return undefined;
+}
+
+function passableExitCell(world: World, ci: number): boolean {
+  const x = ci % W;
+  const y = (ci / W) | 0;
+  const c = world.cells[ci];
+  return (c === Cell.FLOOR || c === Cell.WATER) && !world.solid(x, y) && !world.railTrainCells.has(ci);
+}
+
+function findSafeExitNear(world: World, x: number, y: number, radius: number): number {
+  const sx = world.wrap(Math.floor(x));
+  const sy = world.wrap(Math.floor(y));
+  const current = world.idx(sx, sy);
+  if (passableExitCell(world, current)) return current;
+  for (let r = 1; r <= radius; r++) {
+    for (let dy = -r; dy <= r; dy++) {
+      for (let dx = -r; dx <= r; dx++) {
+        if (Math.abs(dx) !== r && Math.abs(dy) !== r) continue;
+        const ci = world.idx(sx + dx, sy + dy);
+        if (passableExitCell(world, ci)) return ci;
+      }
+    }
+  }
+  return current;
+}
+
+function passengerExitCell(world: World, passenger: Entity, track: RailTrainTrack | undefined, train: RailTrain | undefined): number {
+  if (track && train) {
+    const seatCell = trainCellAt(track, train, Math.max(0, Math.min(train.length - 1, train.passengerSeat)));
+    const seat = cellCenter(seatCell);
+    const platform = nearestPlatformCell(world, track, seat.x + 0.5, seat.y + 0.5, 96 * 96);
+    if (platform >= 0 && passableExitCell(world, platform)) return platform;
+  }
+  if (track) {
+    for (const ci of track.platformCells) if (passableExitCell(world, ci)) return ci;
+  }
+  return findSafeExitNear(world, passenger.x, passenger.y, 24);
+}
+
+function exitInterruptedPassenger(world: World, passenger: Entity, track: RailTrainTrack | undefined, train: RailTrain | undefined): void {
+  const ci = passengerExitCell(world, passenger, track, train);
+  const p = cellCenter(ci);
+  passenger.x = p.x + 0.5;
+  passenger.y = p.y + 0.5;
+}
+
+function cloneRailTrack(track: RailTrainTrack): RailTrainTrack {
+  return {
+    id: track.id,
+    label: track.label,
+    cells: track.cells.slice(),
+    stationOffsets: track.stationOffsets.slice(),
+    platformCells: track.platformCells.slice(),
+    loop: track.loop,
+  };
+}
+
+function remapTrainEntityIds(
+  entities: Entity[],
+  nextId: { v: number },
+  sourceTrain: RailTrain,
+  generatedIdMap: ReadonlyMap<number, number>,
+): number[] {
+  const ids: number[] = [];
+  for (let i = 0; i < sourceTrain.length; i++) {
+    const sourceId = sourceTrain.entityIds[i];
+    const mappedId = generatedIdMap.get(sourceId);
+    if (mappedId !== undefined && entityById(entities, mappedId)) {
+      ids.push(mappedId);
+      continue;
+    }
+    const id = nextId.v++;
+    ids.push(id);
+    entities.push(createTrainSegmentEntity(id, sourceTrain, i));
+  }
+  return ids;
+}
+
+function cloneRailTrainForRebuild(
+  entities: Entity[],
+  nextId: { v: number },
+  sourceTrain: RailTrain,
+  track: RailTrainTrack,
+  generatedIdMap: ReadonlyMap<number, number>,
+  runtime: RailTrainRuntimeSnapshot | undefined,
+): RailTrain | null {
+  const entityIds = remapTrainEntityIds(entities, nextId, sourceTrain, generatedIdMap);
+  if (entityIds.length === 0) return null;
+  const train: RailTrain = {
+    id: sourceTrain.id,
+    label: sourceTrain.label,
+    trackId: sourceTrain.trackId,
+    offset: wrapOffset(track, sourceTrain.offset),
+    speed: sourceTrain.speed,
+    length: entityIds.length,
+    direction: sourceTrain.direction,
+    stopSeconds: sourceTrain.stopSeconds,
+    stopUntil: sourceTrain.stopUntil,
+    passengerId: -1,
+    passengerSeat: Math.max(0, Math.min(entityIds.length - 1, sourceTrain.passengerSeat)),
+    entityIds,
+    lastStopOffset: sourceTrain.lastStopOffset >= 0 ? wrapOffset(track, sourceTrain.lastStopOffset) : -1,
+    nextWarnAt: sourceTrain.nextWarnAt,
+    nextCrushAt: sourceTrain.nextCrushAt,
+    nextDoorMsgAt: sourceTrain.nextDoorMsgAt,
+  };
+  if (runtime && runtime.trackId === sourceTrain.trackId) {
+    train.offset = wrapOffset(track, runtime.offset);
+    train.direction = runtime.direction;
+    train.stopUntil = runtime.stopUntil;
+    train.passengerSeat = Math.max(0, Math.min(entityIds.length - 1, runtime.passengerSeat));
+    train.lastStopOffset = runtime.lastStopOffset >= 0 ? wrapOffset(track, runtime.lastStopOffset) : -1;
+    train.nextWarnAt = runtime.nextWarnAt;
+    train.nextCrushAt = runtime.nextCrushAt;
+    train.nextDoorMsgAt = runtime.nextDoorMsgAt;
+  }
+  return train;
+}
+
+export function snapshotRailTrainsForRebuild(world: World): RailTrainRebuildSnapshot {
+  return {
+    trains: world.railTrains.map(train => ({
+      id: train.id,
+      trackId: train.trackId,
+      offset: train.offset,
+      direction: train.direction,
+      stopUntil: train.stopUntil,
+      passengerId: train.passengerId,
+      passengerSeat: train.passengerSeat,
+      lastStopOffset: train.lastStopOffset,
+      nextWarnAt: train.nextWarnAt,
+      nextCrushAt: train.nextCrushAt,
+      nextDoorMsgAt: train.nextDoorMsgAt,
+    })),
+  };
+}
+
+export function installRailTrainsFromGeneration(
+  world: World,
+  entities: Entity[],
+  nextId: { v: number },
+  generatedWorld: World,
+  generatedIdMap: ReadonlyMap<number, number>,
+  snapshot: RailTrainRebuildSnapshot,
+): void {
+  const runtimeById = new Map<string, RailTrainRuntimeSnapshot>();
+  const interruptedPassengers: RailTrainRuntimeSnapshot[] = [];
+  for (const train of snapshot.trains) {
+    runtimeById.set(train.id, train);
+    if (train.passengerId >= 0) interruptedPassengers.push(train);
+  }
+
+  world.railTracks = generatedWorld.railTracks.map(cloneRailTrack);
+  world.railTrains = [];
+  world.railTrainCells.clear();
+
+  for (const sourceTrain of generatedWorld.railTrains) {
+    const track = trackById(world, sourceTrain.trackId);
+    if (!track || track.cells.length === 0) continue;
+    const train = cloneRailTrainForRebuild(
+      entities,
+      nextId,
+      sourceTrain,
+      track,
+      generatedIdMap,
+      runtimeById.get(sourceTrain.id),
+    );
+    if (train) world.railTrains.push(train);
+  }
+
+  for (let i = 0; i < world.railTrains.length; i++) {
+    const train = world.railTrains[i];
+    const track = trackById(world, train.trackId);
+    if (track) positionTrainEntities(world, entities, track, train, i);
+  }
+
+  for (const ride of interruptedPassengers) {
+    const passenger = entityById(entities, ride.passengerId);
+    if (!passenger || !passenger.alive) continue;
+    const train = world.railTrains.find(t => t.id === ride.id);
+    const track = train ? trackById(world, train.trackId) : world.railTracks.find(t => t.id === ride.trackId);
+    exitInterruptedPassenger(world, passenger, track, train);
+  }
 }
 
 export function addRailTrainRoute(

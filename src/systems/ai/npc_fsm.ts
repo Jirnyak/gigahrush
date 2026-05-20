@@ -7,7 +7,15 @@ import {
 } from '../../core/types';
 import { World } from '../../core/world';
 import { stampMark, MarkType } from '../../render/marks';
-import { followPath, findNearest, findFamilyRoom, gotoRoom, wanderNearby, wanderFar } from './pathfinding';
+import {
+  followPath,
+  findFamilyRoom,
+  gotoNearestRoomOfTypes,
+  gotoNearestRoomType,
+  gotoRoom,
+  wanderNearby,
+  wanderFar,
+} from './pathfinding';
 import {
   bark,
   BARK_HIDE, BARK_HIDE_F, BARK_CHANCE_HIDE,
@@ -37,6 +45,30 @@ function getScheduledState(hour: number, samosborActive: boolean, e?: Entity): N
   if (hour >= 12 && hour < 13) return NpcState.LUNCH;
   if (hour >= 13 && hour < 18) return NpcState.WORKING;
   return NpcState.FREE_TIME; // 18-22
+}
+
+function defaultGoalForState(state: NpcState): AIGoal {
+  switch (state) {
+    case NpcState.SLEEPING: return AIGoal.SLEEP;
+    case NpcState.WORKING: return AIGoal.WORK;
+    case NpcState.LUNCH: return AIGoal.EAT;
+    case NpcState.HIDING: return AIGoal.HIDE;
+    case NpcState.TRAVELING: return AIGoal.WANDER;
+    default: return AIGoal.WANDER;
+  }
+}
+
+export function primeNpcAlifeState(e: Entity, clock: GameClock, samosborActive: boolean): void {
+  const ai = e.ai;
+  if (!ai) return;
+  if (e.plotNpcId === 'olga' && !e.plotDone) return;
+  if (ai.npcState === undefined) {
+    ai.npcState = getScheduledState(clock.hour, samosborActive, e);
+    ai.stateTimer = 0;
+  }
+  if (ai.goal === AIGoal.IDLE && ai.combatTargetId === undefined && ai.timer <= 0) {
+    ai.goal = defaultGoalForState(ai.npcState);
+  }
 }
 
 /* ── Work room types by occupation ────────────────────────────── */
@@ -200,16 +232,13 @@ function handleMorning(world: World, e: Entity, dt: number): void {
   if (ai.timer <= 0 || ai.goal === AIGoal.IDLE) {
     if (n && (n.pee > 50 || n.poo > 50)) {
       ai.goal = AIGoal.TOILET;
-      const r = findNearest(world, e, RoomType.BATHROOM);
-      if (r >= 0) gotoRoom(world, e, r);
+      gotoNearestRoomType(world, e, RoomType.BATHROOM);
     } else if (n && n.food < 60) {
       ai.goal = AIGoal.EAT;
-      const r = findNearest(world, e, RoomType.KITCHEN);
-      if (r >= 0) gotoRoom(world, e, r);
+      gotoNearestRoomType(world, e, RoomType.KITCHEN);
     } else if (n && n.water < 60) {
       ai.goal = AIGoal.DRINK;
-      const r = findNearest(world, e, RoomType.KITCHEN);
-      if (r >= 0) gotoRoom(world, e, r);
+      gotoNearestRoomType(world, e, RoomType.KITCHEN);
     } else {
       ai.goal = AIGoal.WANDER;
       wanderNearby(world, e);
@@ -240,23 +269,16 @@ function handleWorking(world: World, e: Entity, dt: number): void {
   if (ai.timer <= 0 || ai.goal === AIGoal.IDLE) {
     if (n && (n.pee > 80 || n.poo > 80)) {
       ai.goal = AIGoal.TOILET;
-      const r = findNearest(world, e, RoomType.BATHROOM);
-      if (r >= 0) gotoRoom(world, e, r);
+      gotoNearestRoomType(world, e, RoomType.BATHROOM);
       ai.timer = 10;
     } else if (n && e.hp !== undefined && e.maxHp !== undefined && e.hp < e.maxHp * 0.5) {
       ai.goal = AIGoal.GOTO;
-      const r = findNearest(world, e, RoomType.MEDICAL);
-      if (r >= 0) gotoRoom(world, e, r);
+      gotoNearestRoomType(world, e, RoomType.MEDICAL);
       ai.timer = 15;
     } else {
       ai.goal = AIGoal.WORK;
       const workTypes = getWorkRoomTypes(e.occupation);
-      let bestRoom = -1;
-      for (const rt of workTypes) {
-        bestRoom = findNearest(world, e, rt);
-        if (bestRoom >= 0) break;
-      }
-      if (bestRoom >= 0) gotoRoom(world, e, bestRoom);
+      gotoNearestRoomOfTypes(world, e, workTypes);
       ai.timer = 15 + Math.random() * 20;
     }
   }
@@ -276,8 +298,7 @@ function handleLunch(world: World, e: Entity, dt: number): void {
 
   if (ai.timer <= 0 || ai.goal === AIGoal.IDLE) {
     ai.goal = AIGoal.EAT;
-    const r = findNearest(world, e, RoomType.KITCHEN);
-    if (r >= 0) gotoRoom(world, e, r);
+    gotoNearestRoomType(world, e, RoomType.KITCHEN);
     ai.timer = 20 + Math.random() * 10;
   }
 
@@ -291,33 +312,24 @@ function handleFreeTime(world: World, e: Entity, dt: number): void {
   if (ai.timer <= 0 || ai.goal === AIGoal.IDLE) {
     if (n && (n.pee > 70 || n.poo > 70)) {
       ai.goal = AIGoal.TOILET;
-      const r = findNearest(world, e, RoomType.BATHROOM);
-      if (r >= 0) gotoRoom(world, e, r);
+      gotoNearestRoomType(world, e, RoomType.BATHROOM);
     } else if (n && n.food < 40) {
       ai.goal = AIGoal.EAT;
-      const r = findNearest(world, e, RoomType.KITCHEN);
-      if (r >= 0) gotoRoom(world, e, r);
+      gotoNearestRoomType(world, e, RoomType.KITCHEN);
     } else if (n && e.hp !== undefined && e.maxHp !== undefined && e.hp < e.maxHp * 0.7) {
       ai.goal = AIGoal.GOTO;
-      const r = findNearest(world, e, RoomType.MEDICAL);
-      if (r >= 0) gotoRoom(world, e, r);
+      gotoNearestRoomType(world, e, RoomType.MEDICAL);
     } else {
       const roll = Math.random();
       if (roll < 0.3) {
         ai.goal = AIGoal.WANDER;
-        const r = findNearest(world, e, RoomType.SMOKING);
-        if (r >= 0) gotoRoom(world, e, r);
-        else wanderNearby(world, e);
+        if (!gotoNearestRoomType(world, e, RoomType.SMOKING)) wanderNearby(world, e);
       } else if (roll < 0.55) {
         ai.goal = AIGoal.WANDER;
-        const r = findNearest(world, e, RoomType.KITCHEN);
-        if (r >= 0) gotoRoom(world, e, r);
-        else wanderNearby(world, e);
+        if (!gotoNearestRoomType(world, e, RoomType.KITCHEN)) wanderNearby(world, e);
       } else if (roll < 0.7) {
         ai.goal = AIGoal.WANDER;
-        const r = findNearest(world, e, RoomType.COMMON);
-        if (r >= 0) gotoRoom(world, e, r);
-        else wanderNearby(world, e);
+        if (!gotoNearestRoomType(world, e, RoomType.COMMON)) wanderNearby(world, e);
       } else {
         ai.goal = AIGoal.WANDER;
         wanderNearby(world, e);
@@ -344,8 +356,7 @@ function handleHiding(world: World, e: Entity, dt: number): void {
   }
   if (ai.path.length === 0 && ai.timer <= 0) {
     if (e.isTraveler) {
-      const r = findNearest(world, e, RoomType.LIVING);
-      if (r >= 0) gotoRoom(world, e, r);
+      gotoNearestRoomType(world, e, RoomType.LIVING);
     } else {
       const targetRoom = findFamilyRoom(world, e, RoomType.LIVING);
       if (targetRoom >= 0) gotoRoom(world, e, targetRoom);
@@ -362,16 +373,13 @@ function handleTraveling(world: World, e: Entity, dt: number): void {
   if (ai.timer <= 0 || ai.goal === AIGoal.IDLE) {
     if (n && (n.pee > 70 || n.poo > 70)) {
       ai.goal = AIGoal.TOILET;
-      const r = findNearest(world, e, RoomType.BATHROOM);
-      if (r >= 0) gotoRoom(world, e, r);
+      gotoNearestRoomType(world, e, RoomType.BATHROOM);
     } else if (n && n.food < 30) {
       ai.goal = AIGoal.EAT;
-      const r = findNearest(world, e, RoomType.KITCHEN);
-      if (r >= 0) gotoRoom(world, e, r);
+      gotoNearestRoomType(world, e, RoomType.KITCHEN);
     } else if (n && e.hp !== undefined && e.maxHp !== undefined && e.hp < e.maxHp * 0.5) {
       ai.goal = AIGoal.GOTO;
-      const r = findNearest(world, e, RoomType.MEDICAL);
-      if (r >= 0) gotoRoom(world, e, r);
+      gotoNearestRoomType(world, e, RoomType.MEDICAL);
     } else {
       ai.goal = AIGoal.WANDER;
       wanderFar(world, e);

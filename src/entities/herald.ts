@@ -20,6 +20,20 @@ export const DEF: MonsterDef = {
   floors: [FloorLevel.HELL],
   counterplay: 'Держите дверь, угол или колонну между залпами: Вестник сторожит открытую линию, а не охотится за героем.',
   lootHint: 'осколок сирены, бирка порога, запечатанный голос',
+  boss: {
+    warningLine: 'Вестник слушает открытую линию. Дверь, угол или колонна срывают его голосовой залп.',
+    windupLine: 'Вестник втягивает воздух в рога: закройте линию до вспышки.',
+    interruptLine: 'Голос Вестника захлебнулся о преграду.',
+    deathCause: 'Вестник убил вас открытой линией порога',
+    counterplay: 'break_threshold_line_between_siren_bolts',
+    windupSec: 0.9,
+    range: 16,
+    minRange: 1.8,
+    phases: [
+      { hpPct: 0.66, tag: 'horns_cracked', line: 'У Вестника треснули рога. Он держит дистанцию: не выходите в длинный коридор.' },
+      { hpPct: 0.33, tag: 'threshold_scream', line: 'Вестник срывается на пороговый крик. Добивайте из-за укрытия или отходите.' },
+    ],
+  },
 };
 
 export function generateSprite(): Uint32Array {

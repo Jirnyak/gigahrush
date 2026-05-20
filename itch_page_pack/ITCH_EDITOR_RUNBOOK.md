@@ -20,6 +20,7 @@ Tags:
 Description:
 - Primary paste: `description_ru_overkill.html`
 - Fallback paste if itch strips HTML: `description_ru_overkill.md`
+- Public version marker, keep visible in the final description text: `MACRO2_73-public-live-2026-05-20`
 
 ## 2. Theme
 
@@ -71,9 +72,62 @@ Cover alternatives, if the default cover crops badly:
 - Make the screenshot/sidebar column visible. Current public page hides it with `.right_col { display: none; }`; remove that if visible in the editor.
 - If custom CSS is available, paste `custom_css.css`. It is now paste-safe and contains no local URL placeholder.
 
-## 5. Verification
+## 5. Editor Preview Check
 
-After saving, open the public page in an incognito or logged-out browser and check:
+The editor preview only proves that authenticated editor state looks right. It does not prove that the public page has the saved page, latest upload, or uncached copy.
+
+Before saving, use preview/editor UI only for these checks:
+
+- title, short description, genre, tags, colors, screenshots, and embed settings match this runbook;
+- the version marker is present in the description: `MACRO2_73-public-live-2026-05-20`;
+- the screenshot/sidebar column is visible in the editor preview;
+- the game embed is still first and set to `1280 x 720`.
+
+Do not report a live-page update from editor preview alone.
+
+## 6. Public Logged-Out Verification
+
+After saving, verify the page that itch actually serves while logged out. The normal probe path is a public `GET`; it does not need itch credentials and does not send cookies.
+
+Dry-run the configured URL and required markers:
+
+```bash
+node itch_page_pack/probe_itch_editor.js --dry-run
+```
+
+Probe the public page from `upload_manifest.json`:
+
+```bash
+node itch_page_pack/probe_itch_editor.js
+```
+
+Override the URL if checking a staging or renamed itch page:
+
+```bash
+node itch_page_pack/probe_itch_editor.js --url https://tenevik.itch.io/gigahrush
+```
+
+If a browser/cache mismatch is suspected, save the logged-out HTML and check the exact file:
+
+```bash
+curl -L https://tenevik.itch.io/gigahrush -o /tmp/gigahrush-itch.html
+node itch_page_pack/probe_itch_editor.js --html /tmp/gigahrush-itch.html
+```
+
+For a quick manual marker scan:
+
+```bash
+curl -L https://tenevik.itch.io/gigahrush | rg "GIGAH\\|RUSH|ГИГАХРУЩ - это вылазки|gigahrush_screen_01_combat|MACRO2_73-public-live-2026-05-20"
+```
+
+The script asserts:
+
+- title marker: `GIGAH|RUSH`;
+- copy markers: short description, first description sentence, and `https://gigahrush.bileter.workers.dev`;
+- key image markers: cover plus all four enhanced screenshot filenames;
+- version marker: `MACRO2_73-public-live-2026-05-20`.
+
+Also open the public page in an incognito or logged-out browser and check:
 
 - the public page is no longer white/default;
 - the description starts with `ГИГАХРУЩ - это вылазки...`;
@@ -82,4 +136,4 @@ After saving, open the public page in an incognito or logged-out browser and che
 - mobile width does not overflow;
 - `https://gigahrush.bileter.workers.dev` is clickable.
 
-Do not report the live page as updated until this public check passes.
+Do not report the live page as updated until the logged-out public probe and the manual public check both pass.

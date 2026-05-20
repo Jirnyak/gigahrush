@@ -1,8 +1,8 @@
 # Design Floor: Производственный пояс
 
-Status: planning artifact. Future route id: `production_belt`. Future anchor: `z=12`.
+Status: implemented authored route floor. Route id: `production_belt`. Anchor: `z=12`. Base floor: `MAINTENANCE`. Shipped HUD name: `Производственный пояс`.
 
-Planned owned file: `src/gen/design_floors/production_belt.ts`. Existing references: `src/systems/production.ts`, `src/data/factories.ts`, `src/gen/maintenance/concentrate_press.ts`.
+Owned file: `src/gen/design_floors/production_belt.ts`. Existing references: `src/systems/production.ts`, `src/data/factories.ts`, `src/gen/maintenance/concentrate_press.ts`. Planning sections below may predate the routed implementation; verify exact factory behavior against source.
 
 ## Role
 
@@ -59,4 +59,3 @@ Production aftermath can create defects, machine jams, robot hostility, fire/ste
 - One factory line produces tangible output into a container.
 - Player can choose legal work, theft or sabotage.
 - Production state changes economy/rumor/quest in a bounded way.
-

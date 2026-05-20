@@ -9,6 +9,15 @@ import {
 import { World } from '../../core/world';
 import type { ProceduralFloorSpec } from '../../data/procedural_floors';
 import { Spr } from '../../render/sprite_index';
+import {
+  buildWalkablePlacementMap,
+  isProtectedPlacementCell,
+  isValidWalkablePlacementCell,
+  isWalkablePlacementCell,
+  pickWalkablePlacement,
+  type WalkablePlacementMap,
+} from '../shared';
+import { canSpawnEntityType } from '../../systems/entity_limits';
 
 export interface ProceduralAnomalyGenContext {
   world: World;
@@ -18,6 +27,17 @@ export interface ProceduralAnomalyGenContext {
   spec: ProceduralFloorSpec;
   spawnX: number;
   spawnY: number;
+  placement: WalkablePlacementMap;
+}
+
+const placementByWorld = new WeakMap<World, WalkablePlacementMap>();
+
+export function registerProceduralAnomalyPlacement(world: World, placement: WalkablePlacementMap): void {
+  placementByWorld.set(world, placement);
+}
+
+function placementForWorld(world: World): WalkablePlacementMap | null {
+  return placementByWorld.get(world) ?? null;
 }
 
 export function irng(lo: number, hi: number): number {
@@ -49,6 +69,19 @@ export function roomCell(world: World, room: Room, dx: number, dy: number, requi
 }
 
 export function randomRoomCell(world: World, room: Room, requireEmpty = false): { x: number; y: number } | null {
+  const placement = placementForWorld(world);
+  if (placement) {
+    const center = roomCenter(room);
+    const picked = pickWalkablePlacement(world, placement, {
+      roomId: room.id,
+      requireEmptyFeature: requireEmpty,
+      centerX: center.x + 0.5,
+      centerY: center.y + 0.5,
+      bias: 'near',
+    });
+    if (picked) return picked;
+  }
+
   if (room.w < 3 || room.h < 3) return null;
   for (let attempt = 0; attempt < 48; attempt++) {
     const pos = roomCell(world, room, irng(1, Math.max(1, room.w - 2)), irng(1, Math.max(1, room.h - 2)), requireEmpty);
@@ -58,6 +91,16 @@ export function randomRoomCell(world: World, room: Room, requireEmpty = false): 
 }
 
 export function randomFloorCell(world: World, sx: number, sy: number, minDist2: number, attempts = 4000): { x: number; y: number } | null {
+  const placement = placementForWorld(world);
+  if (placement) {
+    return pickWalkablePlacement(world, placement, {
+      centerX: sx,
+      centerY: sy,
+      minDist2,
+      attempts: Math.min(attempts, 256),
+    });
+  }
+
   for (let attempt = 0; attempt < attempts; attempt++) {
     const x = irng(4, W - 5);
     const y = irng(4, W - 5);
@@ -71,24 +114,43 @@ export function randomFloorCell(world: World, sx: number, sy: number, minDist2: 
 }
 
 export function isProtectedCell(world: World, ci: number): boolean {
-  return world.cells[ci] === Cell.LIFT ||
-    world.features[ci] === Feature.LIFT_BUTTON ||
-    world.hermoWall[ci] !== 0 ||
-    world.aptMask[ci] !== 0 ||
-    world.doors.has(ci) ||
-    world.containerMap.has(ci);
+  return isProtectedPlacementCell(world, ci);
 }
 
 export function isWalkableCell(world: World, ci: number): boolean {
-  return (world.cells[ci] === Cell.FLOOR || world.cells[ci] === Cell.WATER) && !isProtectedCell(world, ci);
+  const placement = placementForWorld(world);
+  if (placement) return isValidWalkablePlacementCell(world, placement, ci);
+  return isWalkablePlacementCell(world, ci);
+}
+
+function resolveItemDropCell(ctx: ProceduralAnomalyGenContext, x: number, y: number): { x: number; y: number } | null {
+  const px = Math.floor(x);
+  const py = Math.floor(y);
+  const ci = ctx.world.idx(px, py);
+  if (isValidWalkablePlacementCell(ctx.world, ctx.placement, ci)) return { x: px, y: py };
+  return pickWalkablePlacement(ctx.world, ctx.placement, {
+    centerX: px + 0.5,
+    centerY: py + 0.5,
+    maxRadius: 8,
+    bias: 'near',
+    attempts: 96,
+  }) ?? pickWalkablePlacement(ctx.world, ctx.placement, {
+    centerX: ctx.spawnX,
+    centerY: ctx.spawnY,
+    minRadius: 12,
+    bias: 'far',
+  }) ?? pickWalkablePlacement(ctx.world, ctx.placement);
 }
 
 export function addItemDrop(ctx: ProceduralAnomalyGenContext, x: number, y: number, defId: string, count = 1): void {
+  if (!canSpawnEntityType(ctx.entities, EntityType.ITEM_DROP)) return;
+  const pos = resolveItemDropCell(ctx, x, y);
+  if (!pos) return;
   ctx.entities.push({
     id: ctx.nextId.v++,
     type: EntityType.ITEM_DROP,
-    x: x + 0.5,
-    y: y + 0.5,
+    x: pos.x + 0.5,
+    y: pos.y + 0.5,
     angle: 0,
     pitch: 0,
     alive: true,
@@ -96,4 +158,9 @@ export function addItemDrop(ctx: ProceduralAnomalyGenContext, x: number, y: numb
     sprite: Spr.ITEM_DROP,
     inventory: [{ defId, count }],
   });
+}
+
+export function rebuildProceduralAnomalyPlacement(ctx: ProceduralAnomalyGenContext): void {
+  ctx.placement = buildWalkablePlacementMap(ctx.world, ctx.spawnX, ctx.spawnY);
+  registerProceduralAnomalyPlacement(ctx.world, ctx.placement);
 }

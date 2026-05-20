@@ -17,6 +17,8 @@ import {
   PROCEDURAL_FLOOR_ZS,
   anomalyById,
   floorRunZAllowsNpcs,
+  geometryById,
+  majorityById,
   type FloorAnomalyId,
   type FloorGeometryId,
   type FloorMajorityId,
@@ -29,6 +31,7 @@ import {
 } from '../data/procedural_floors';
 import {
   designFloorAtZ,
+  designFloorById,
   type DesignFloorId,
 } from '../data/design_floors';
 
@@ -50,6 +53,16 @@ export interface FloorRunEntry {
   color: string;
 }
 
+export interface FloorRunEntrySnapshot {
+  key: string;
+  z: number;
+  baseFloor: FloorLevel;
+  storyFloor?: FloorLevel;
+  designFloorId?: DesignFloorId;
+  spec?: ProceduralFloorSpec;
+  procedural: boolean;
+}
+
 type FloorRunHost = GameState & { floorRun?: FloorRunState };
 
 const STORY_NAMES: Record<FloorLevel, string> = {
@@ -59,6 +72,33 @@ const STORY_NAMES: Record<FloorLevel, string> = {
   [FloorLevel.MAINTENANCE]: 'Коллекторы',
   [FloorLevel.HELL]: 'Мясной низ',
   [FloorLevel.VOID]: 'Пустота',
+};
+
+const STORY_ROUTE_IDS: Record<FloorLevel, string> = {
+  [FloorLevel.MINISTRY]: 'story:ministry',
+  [FloorLevel.KVARTIRY]: 'story:kvartiry',
+  [FloorLevel.LIVING]: 'story:living',
+  [FloorLevel.MAINTENANCE]: 'story:maintenance',
+  [FloorLevel.HELL]: 'story:hell',
+  [FloorLevel.VOID]: 'story:void',
+};
+
+const STORY_ROLES: Record<FloorLevel, string> = {
+  [FloorLevel.MINISTRY]: 'документы, пропуска, бюрократия',
+  [FloorLevel.KVARTIRY]: 'социальный riot-floor, вода, очереди',
+  [FloorLevel.LIVING]: 'домашний hub, подготовка, возврат',
+  [FloorLevel.MAINTENANCE]: 'ремонт, давление, тех-лут',
+  [FloorLevel.HELL]: 'высокая угроза, мясо, ПСИ',
+  [FloorLevel.VOID]: 'финальная аномалия и выход',
+};
+
+const STORY_DANGERS: Record<FloorLevel, 1 | 2 | 3 | 4 | 5> = {
+  [FloorLevel.MINISTRY]: 3,
+  [FloorLevel.KVARTIRY]: 3,
+  [FloorLevel.LIVING]: 1,
+  [FloorLevel.MAINTENANCE]: 4,
+  [FloorLevel.HELL]: 5,
+  [FloorLevel.VOID]: 5,
 };
 
 const MAX_RUN_SEED = 0x7fffffff;
@@ -148,6 +188,7 @@ function normalizeSpec(input: unknown, runSeed: number, z: number): ProceduralFl
   const title = typeof src.title === 'string' && src.title.trim()
     ? src.title.trim().slice(0, MAX_SAVED_TITLE)
     : fallback.title;
+  const monsterBiasTags = cleanStringArray(src.monsterBiasTags, fallback.monsterBiasTags.length || 5);
   return {
     key: proceduralFloorKey(z),
     z,
@@ -162,6 +203,78 @@ function normalizeSpec(input: unknown, runSeed: number, z: number): ProceduralFl
     title,
     lootBiasIds: cleanStringArray(src.lootBiasIds, 5),
     monsterBiasKinds: cleanMonsterKinds(src.monsterBiasKinds, fallback.monsterBiasKinds),
+    monsterBiasTags: monsterBiasTags.length > 0 ? monsterBiasTags : fallback.monsterBiasTags,
+  };
+}
+
+function cloneSpec(spec: ProceduralFloorSpec): ProceduralFloorSpec {
+  return {
+    ...spec,
+    lootBiasIds: [...spec.lootBiasIds],
+    monsterBiasKinds: [...spec.monsterBiasKinds],
+  };
+}
+
+function floorRunEntryKey(entry: Pick<FloorRunEntry, 'z' | 'storyFloor' | 'designFloorId' | 'spec'>): string {
+  if (entry.spec) return entry.spec.key;
+  if (entry.designFloorId) return entry.designFloorId;
+  if (entry.storyFloor !== undefined) return `story:${entry.storyFloor}`;
+  return `z${entry.z}`;
+}
+
+export function snapshotFloorRunEntry(entry: FloorRunEntry): FloorRunEntrySnapshot {
+  return {
+    key: floorRunEntryKey(entry),
+    z: entry.z,
+    baseFloor: entry.baseFloor,
+    storyFloor: entry.storyFloor,
+    designFloorId: entry.designFloorId,
+    spec: entry.spec ? cloneSpec(entry.spec) : undefined,
+    procedural: entry.procedural,
+  };
+}
+
+export function normalizeFloorRunEntrySnapshot(input: unknown): FloorRunEntrySnapshot | undefined {
+  if (!isRecord(input)) return undefined;
+  const zInput = input.z;
+  if (typeof zInput !== 'number' || !Number.isFinite(zInput)) return undefined;
+  const z = Math.trunc(zInput);
+  if (z < FLOOR_RUN_MIN_Z || z > FLOOR_RUN_MAX_Z) return undefined;
+
+  const storyFloor = storyFloorAtZ(z);
+  if (storyFloor !== undefined) {
+    return {
+      key: `story:${storyFloor}`,
+      z,
+      baseFloor: storyFloor,
+      storyFloor,
+      procedural: false,
+    };
+  }
+
+  const designFloor = designFloorAtZ(z);
+  if (designFloor) {
+    const savedDesignId = typeof input.designFloorId === 'string' ? input.designFloorId : undefined;
+    if (savedDesignId && savedDesignId !== designFloor.id) return undefined;
+    return {
+      key: designFloor.id,
+      z,
+      baseFloor: designFloor.baseFloor,
+      designFloorId: designFloor.id,
+      procedural: false,
+    };
+  }
+
+  if (!isProceduralFloorZ(z)) return undefined;
+  const specInput = input.spec;
+  const specSeed = isRecord(specInput) ? specInput.seed : undefined;
+  const spec = normalizeSpec(specInput, normalizeRunSeed(specSeed), z);
+  return {
+    key: spec.key,
+    z,
+    baseFloor: spec.baseFloor,
+    spec: cloneSpec(spec),
+    procedural: true,
   };
 }
 
@@ -288,6 +401,23 @@ export function commitFloorRunEntry(state: GameState, entry: FloorRunEntry): voi
   if (entry.spec) run.visited[entry.spec.key] = true;
 }
 
+export function floorRunEntryFromSnapshot(state: GameState, input: unknown): FloorRunEntry | null {
+  const snapshot = normalizeFloorRunEntrySnapshot(input);
+  if (!snapshot) return null;
+  if (snapshot.spec) {
+    const run = ensureFloorRunState(state, snapshot.baseFloor);
+    run.specs[snapshot.spec.key] = cloneSpec(snapshot.spec);
+  }
+  return entryForZ(state, snapshot.z);
+}
+
+export function commitFloorRunEntrySnapshot(state: GameState, input: unknown): FloorRunEntry | null {
+  const entry = floorRunEntryFromSnapshot(state, input);
+  if (!entry) return null;
+  commitFloorRunEntry(state, entry);
+  return entry;
+}
+
 export function forceFloorRunStory(state: GameState, floor: FloorLevel): void {
   const run = ensureFloorRunState(state, floor);
   run.currentZ = zForStoryFloor(floor);
@@ -307,12 +437,84 @@ export function isCurrentStoryFloor(state: GameState, floor: FloorLevel): boolea
 }
 
 export function currentFloorRunLabel(state: GameState): string | undefined {
-  const entry = currentFloorRunEntry(state);
-  if (entry.designFloorId) return `Z${formatFloorZ(entry.z)} ${entry.label.replace(/^Этаж [^:]+: /, '')}`;
-  if (!entry.procedural) return undefined;
-  const spec = entry.spec;
-  if (!spec) return undefined;
-  return `Z${formatFloorZ(entry.z)} №${spec.ordinal}/${PROCEDURAL_FLOOR_COUNT} ур.${spec.danger} ${spec.title}`;
+  return floorRunEntryMapLabel(currentFloorRunEntry(state));
+}
+
+export function floorRunEntryKindLabel(entry: FloorRunEntry): string {
+  if (entry.procedural) return 'вылазка';
+  if (entry.designFloorId) return 'ручной маршрут';
+  return 'сюжетный якорь';
+}
+
+export function floorRunEntryRouteId(entry: FloorRunEntry): string {
+  if (entry.designFloorId) return entry.designFloorId;
+  if (entry.spec) return entry.spec.key;
+  return STORY_ROUTE_IDS[entry.storyFloor ?? entry.baseFloor];
+}
+
+export function floorRunEntryDanger(entry: FloorRunEntry): 1 | 2 | 3 | 4 | 5 {
+  if (entry.spec) return entry.spec.danger;
+  if (entry.designFloorId) return designFloorById(entry.designFloorId)?.danger ?? STORY_DANGERS[entry.baseFloor];
+  return STORY_DANGERS[entry.storyFloor ?? entry.baseFloor];
+}
+
+export function floorRunEntryRole(entry: FloorRunEntry): string {
+  if (entry.spec) {
+    const geometry = geometryById(entry.spec.geometryId);
+    const majority = majorityById(entry.spec.majorityId);
+    const anomaly = anomalyById(entry.spec.anomalyId);
+    return `${geometry.title}, ${majority.title}, ${anomaly.title}`;
+  }
+  if (entry.designFloorId) return designFloorById(entry.designFloorId)?.role ?? STORY_ROLES[entry.baseFloor];
+  return STORY_ROLES[entry.storyFloor ?? entry.baseFloor];
+}
+
+export function floorRunEntryMapLabel(entry: FloorRunEntry): string {
+  const z = formatFloorZ(entry.z);
+  const danger = floorRunEntryDanger(entry);
+  if (entry.spec) {
+    const anomaly = anomalyById(entry.spec.anomalyId);
+    return `Z${z} ${entry.spec.key} риск ${danger}/5 ${anomaly.title}`;
+  }
+  if (entry.designFloorId) {
+    const design = designFloorById(entry.designFloorId);
+    return `Z${z} ${entry.designFloorId} риск ${danger}/5 ${design?.displayName ?? entry.label}`;
+  }
+  const story = entry.storyFloor ?? entry.baseFloor;
+  return `Z${z} ${STORY_ROUTE_IDS[story]} риск ${danger}/5 ${STORY_NAMES[story]}`;
+}
+
+export function floorRunEntryLiftLabel(entry: FloorRunEntry): string {
+  const kind = floorRunEntryKindLabel(entry).toUpperCase();
+  const routeId = floorRunEntryRouteId(entry);
+  const danger = floorRunEntryDanger(entry);
+  const name = entry.designFloorId
+    ? designFloorById(entry.designFloorId)?.displayName ?? entry.label
+    : entry.storyFloor !== undefined
+      ? STORY_NAMES[entry.storyFloor]
+      : entry.spec?.title ?? entry.label;
+  return `${kind} Z${formatFloorZ(entry.z)} ${routeId} риск ${danger}/5: ${name}`;
+}
+
+export function floorRunEntryRouteCard(entry: FloorRunEntry): string {
+  return `${floorRunEntryLiftLabel(entry)}. ${floorRunEntryRole(entry)}.`;
+}
+
+export function floorRunLiftPrompt(state: GameState, direction: LiftDirection): string {
+  const entry = resolveFloorRunRoute(state, direction);
+  if (!entry) return direction === LiftDirection.DOWN ? '↓ маршрута ниже нет' : '↑ маршрута выше нет';
+  return `${direction === LiftDirection.DOWN ? '↓' : '↑'} ${floorRunEntryLiftLabel(entry)}`;
+}
+
+export function floorRunArrivalLead(entry: FloorRunEntry, returnDirection: LiftDirection): string {
+  const back = returnDirection === LiftDirection.DOWN ? '↓' : '↑';
+  return `Зацепка: ${floorRunEntryRouteCard(entry)} Возврат: лифт ${back} к предыдущему Z.`;
+}
+
+export function floorRunEntryKind(entry: FloorRunEntry): 'story' | 'design' | 'procedural' {
+  if (entry.spec) return 'procedural';
+  if (entry.designFloorId) return 'design';
+  return 'story';
 }
 
 export function floorRunEntryAllowsNpcs(entry: FloorRunEntry): boolean {
@@ -402,6 +604,6 @@ export function summarizeFloorRun(state: GameState): string[] {
   return out;
 }
 
-function formatFloorZ(z: number): string {
-  return z > 0 ? `+${z}` : `${z}`;
+export function formatFloorZ(z: number): string {
+  return z >= 0 ? `+${z}` : `${z}`;
 }

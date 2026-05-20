@@ -1,9 +1,19 @@
 import {
-  Cell, ContainerKind, Faction, Feature,
-  type ContainerAccess, type Entity, type FloorLevel, type GameState, type Room, type WorldContainer, msg,
+  Cell, ContainerKind, Faction, Feature, FloorLevel,
+  type ContainerAccess, type Entity, type GameState, type Room, type WorldContainer,
+  type WorldEventPrivacy, type WorldEventSeverity, msg,
 } from '../core/types';
 import { World } from '../core/world';
-import { FACTORIES, factoryForRoom, type FactoryBadBatchDef, type FactoryDef, type FactoryRecipeDef, type ItemStackDef } from '../data/factories';
+import {
+  FACTORIES,
+  factoryForRoom,
+  productionRecipeImportant,
+  productionRewardTargetTags,
+  type FactoryBadBatchDef,
+  type FactoryDef,
+  type FactoryRecipeDef,
+  type ItemStackDef,
+} from '../data/factories';
 import { ITEMS } from '../data/catalog';
 import { CONTAINER_DEFS } from '../data/container_defs';
 import { ensureRoomContainers } from './containers';
@@ -23,16 +33,123 @@ export interface ProductionState {
   blockedReason?: 'no_inputs' | 'container_full' | 'no_container';
 }
 
+export interface ProductionRewardTargetQuery {
+  factoryId?: string;
+  recipeId?: string;
+  itemId?: string;
+  resourceId?: string;
+  preferBlocked?: boolean;
+}
+
+export interface ProductionRewardTarget {
+  production: ProductionState;
+  container: WorldContainer;
+  factory: FactoryDef;
+  recipe: FactoryRecipeDef;
+  score: number;
+}
+
 type ProductionGameState = GameState & { production?: ProductionState[] };
 const MAX_PRODUCTION_ROOMS = 64;
 const MAX_PRODUCTION_STATES = 128;
+export const PRODUCTION_SAVE_STATE_CAP = MAX_PRODUCTION_STATES;
 const MAX_OUTPUT_CONTAINERS = 128;
 const AUTO_OUTPUT_TAG = 'auto_production_output';
+const MAX_SAVED_TIME = 365 * 24 * 60 * 60;
+const BLOCKED_REASONS = ['no_inputs', 'container_full', 'no_container'] as const;
+type ProductionBlockedReason = typeof BLOCKED_REASONS[number];
+
+function isFloorLevel(value: unknown): value is FloorLevel {
+  return typeof value === 'number' && Number.isInteger(value) && FloorLevel[value] !== undefined;
+}
+
+function cleanFinite(value: unknown, fallback: number, min = 0, max = MAX_SAVED_TIME): number {
+  const n = Number(value);
+  return Number.isFinite(n) ? Math.max(min, Math.min(max, n)) : fallback;
+}
+
+function cleanInt(value: unknown, fallback: number, min = 0, max = 1_000_000): number {
+  return Math.floor(cleanFinite(value, fallback, min, max));
+}
+
+function cleanBlockedReason(value: unknown): ProductionState['blockedReason'] | undefined {
+  const reason = value as ProductionBlockedReason;
+  return BLOCKED_REASONS.includes(reason)
+    ? reason
+    : undefined;
+}
+
+function normalizeProductionEntry(raw: unknown, fallbackFloor: FloorLevel): ProductionState | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const src = raw as Partial<ProductionState>;
+  const factory = typeof src.factoryId === 'string'
+    ? FACTORIES.find(f => f.id === src.factoryId)
+    : undefined;
+  const recipe = factory && typeof src.recipeId === 'string'
+    ? factory.recipes.find(r => r.id === src.recipeId)
+    : undefined;
+  if (!factory || !recipe) return null;
+  const cycleSec = Math.max(30, recipe.cycleSec);
+  const out: ProductionState = {
+    floor: isFloorLevel(src.floor) ? src.floor : fallbackFloor,
+    roomId: cleanInt(src.roomId, -1, 0, 100_000),
+    factoryId: factory.id,
+    recipeId: recipe.id,
+    progressSec: cleanFinite(src.progressSec, 0, 0, cycleSec),
+    nextTickAt: cleanFinite(src.nextTickAt, 0),
+    outputContainerId: cleanInt(src.outputContainerId, 0, 0),
+  };
+  const cycleCount = cleanInt(src.cycleCount, 0, 0, 1_000_000);
+  if (cycleCount > 0) out.cycleCount = cycleCount;
+  if (src.jammed === true) out.jammed = true;
+  const blockedReason = cleanBlockedReason(src.blockedReason);
+  if (blockedReason) out.blockedReason = blockedReason;
+  return out;
+}
+
+export function setProductionState(
+  state: GameState,
+  input: unknown,
+  fallbackFloor = state.currentFloor,
+): ProductionState[] {
+  const normalized = normalizeProductionStateList(input, fallbackFloor);
+  (state as ProductionGameState).production = normalized;
+  return normalized;
+}
 
 function productionList(state: GameState): ProductionState[] {
   const s = state as ProductionGameState;
   if (!s.production) s.production = [];
   return s.production;
+}
+
+export function normalizeProductionStateList(
+  input: unknown,
+  fallbackFloor: FloorLevel,
+  cap = PRODUCTION_SAVE_STATE_CAP,
+): ProductionState[] {
+  if (!Array.isArray(input)) return [];
+  const out: ProductionState[] = [];
+  const used = new Set<string>();
+  for (const raw of input) {
+    const normalized = normalizeProductionEntry(raw, fallbackFloor);
+    if (!normalized) continue;
+    const key = `${normalized.floor}:${normalized.roomId}:${normalized.factoryId}`;
+    if (used.has(key)) continue;
+    used.add(key);
+    out.push(normalized);
+  }
+  const max = Math.max(0, Math.floor(cap));
+  if (max <= 0) return [];
+  if (out.length <= max) return out;
+  const currentFloor = out.filter(p => p.floor === fallbackFloor).slice(-max);
+  const slotsLeft = Math.max(0, max - currentFloor.length);
+  const otherFloors = out.filter(p => p.floor !== fallbackFloor).slice(-slotsLeft);
+  return [...otherFloors, ...currentFloor];
+}
+
+export function productionForSave(state: GameState): ProductionState[] {
+  return normalizeProductionStateList(productionList(state), state.currentFloor);
 }
 
 function productionFloor(state: GameState, p: ProductionState): FloorLevel {
@@ -95,7 +212,14 @@ function addTag(tags: string[], tag: string | undefined): void {
 
 function recipeOutputTags(factory: FactoryDef, recipe: FactoryRecipeDef): string[] {
   const tags: string[] = [];
-  for (const tag of ['production_output', factory.id, recipe.id, ...factory.outputTags, ...recipe.outputTags]) addTag(tags, tag);
+  for (const tag of [
+    'production_output',
+    factory.id,
+    recipe.id,
+    ...factory.outputTags,
+    ...recipe.outputTags,
+    ...productionRewardTargetTags(factory, recipe),
+  ]) addTag(tags, tag);
   return tags;
 }
 
@@ -412,6 +536,40 @@ function badBatchTags(base: string[], recipe: FactoryRecipeDef, badBatch: Factor
   return productionTags(base, recipe, [...(badBatch.eventTags ?? []), ...extra]);
 }
 
+function productionSeverity(
+  world: World,
+  observer: Entity | undefined,
+  container: WorldContainer | undefined,
+  factory: FactoryDef,
+  recipe: FactoryRecipeDef,
+  minSeverity: WorldEventSeverity = 2,
+  urgent = false,
+): WorldEventSeverity {
+  let severity = minSeverity;
+  if (container && observerNearContainer(world, observer, container)) severity = Math.max(severity, 3) as WorldEventSeverity;
+  if (productionRecipeImportant(factory, recipe)) severity = Math.max(severity, urgent ? 4 : 3) as WorldEventSeverity;
+  return Math.min(5, severity) as WorldEventSeverity;
+}
+
+function productionPrivacy(factory: FactoryDef, recipe: FactoryRecipeDef, severity: WorldEventSeverity): WorldEventPrivacy {
+  return productionRecipeImportant(factory, recipe) && severity >= 4 ? 'public' : 'local';
+}
+
+function productionEventData(
+  factory: FactoryDef,
+  recipe: FactoryRecipeDef,
+  container: WorldContainer | undefined,
+  data: Record<string, unknown> = {},
+): Record<string, unknown> {
+  return {
+    factoryId: factory.id,
+    recipeId: recipe.id,
+    recipeName: recipe.name,
+    containerName: container?.name,
+    ...data,
+  };
+}
+
 function shouldMakeBadBatch(p: ProductionState, recipe: FactoryRecipeDef): FactoryBadBatchDef | undefined {
   const badBatch = recipe.badBatch;
   if (!badBatch || badBatch.everyCycles <= 0) return undefined;
@@ -432,29 +590,32 @@ function publishProductionOutput(
   state: GameState,
   world: World,
   p: ProductionState,
+  factory: FactoryDef,
   recipe: FactoryRecipeDef,
   container: WorldContainer,
   outputs: readonly ItemStackDef[],
   tags: string[],
   data: Record<string, unknown>,
   observer?: Entity,
-  minSeverity: 2 | 3 | 4 = 2,
+  minSeverity: WorldEventSeverity = 2,
 ): void {
   const first = firstOutput(outputs);
-  const nearObserver = observerNearContainer(world, observer, container);
-  const severity = Math.max(nearObserver ? 3 : 2, minSeverity) as 2 | 3 | 4;
+  const severity = productionSeverity(world, observer, container, factory, recipe, minSeverity, minSeverity >= 4);
   publishEvent(state, {
     type: 'room_produced_items',
     zoneId: container.zoneId,
     roomId: p.roomId,
     containerId: container.id,
+    x: container.x + 0.5,
+    y: container.y + 0.5,
+    targetName: `${factory.name}: ${recipe.name}`,
     severity,
-    privacy: 'local',
+    privacy: productionPrivacy(factory, recipe, severity),
     itemId: first?.defId,
     itemName: first ? ITEMS[first.defId]?.name : undefined,
     itemCount: first?.count,
     tags,
-    data: { recipeId: recipe.id, ...data },
+    data: productionEventData(factory, recipe, container, data),
   });
 }
 
@@ -495,14 +656,16 @@ export function tickProduction(state: GameState, world: World, force = false, ob
     const container = outputContainer(world, p.outputContainerId);
     if (!container) {
       p.blockedReason = 'no_container';
+      const severity = productionSeverity(world, observer, undefined, factory, recipe, 2);
       publishEvent(state, {
         type: 'room_blocked_production',
         zoneId: roomZoneId(world, p.roomId),
         roomId: p.roomId,
-        severity: 2,
-        privacy: 'local',
+        targetName: `${factory.name}: ${recipe.name}`,
+        severity,
+        privacy: productionPrivacy(factory, recipe, severity),
         tags: ['production', 'blocked', factory.id, 'no_container'],
-        data: { recipeId: recipe.id, blockedReason: 'no_container' },
+        data: productionEventData(factory, recipe, undefined, { blockedReason: 'no_container' }),
       });
       p.nextTickAt = state.time + 60;
       continue;
@@ -531,6 +694,7 @@ export function tickProduction(state: GameState, world: World, force = false, ob
             state,
             world,
             p,
+            factory,
             recipe,
             container,
             repairOutputs,
@@ -650,6 +814,7 @@ export function tickProduction(state: GameState, world: World, force = false, ob
       state,
       world,
       p,
+      factory,
       recipe,
       container,
       outputs,

@@ -1,8 +1,8 @@
-# Design Floor: Ад
+# Story Anchor Brief: Мясной низ
 
-Status: planning artifact for expanded design-floor version. Current code already has `FloorLevel.HELL`; README remains source of truth.
+Status: historical expansion brief for the existing story anchor. Current route stop: `FloorLevel.HELL` at `z=28`. There is no shipped design-floor route id `hell`; README and `src/data/procedural_floors.ts` remain source of truth.
 
-Future route id: `hell`. Future anchor: `z=28`. Existing reference: `src/gen/hell/`.
+Existing generator reference: `src/gen/hell/`. Planning sections below describe possible route-scale expansion, not shipped design-floor route data.
 
 ## Role
 
@@ -50,4 +50,3 @@ Hell should feel near-constant but still structured: warning is short, shelters 
 - One major encounter has multiple approaches.
 - Rare rewards are one-shot or costly.
 - Player can exit without farming infinite monster spawns.
-

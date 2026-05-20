@@ -21,9 +21,9 @@ import { getMaxHp, randomRPG, scaleMonsterHp, scaleMonsterSpeed } from './rpg';
 import { changeResourceStock } from './economy';
 import { publishEvent, getRecentEvents } from './events';
 import { observeRumorEvent } from './rumor';
+import { canSpawnEntityType, entitySpawnSlots } from './entity_limits';
 
 const TRACE_CAP = 300;
-const MONSTER_SOFT_CAP = 10_000;
 
 export type SamosborDirectorTickReason =
   | 'pre_samosbor'
@@ -414,9 +414,11 @@ function countAliveByType(entities: Entity[], type: EntityType): number {
 }
 
 function spawnPatrol(world: World, entities: Entity[], nextId: { v: number }, snapshot: SamosborDirectorSnapshot): number {
-  if (countAliveByType(entities, EntityType.NPC) >= 1100) return 0;
+  const localSlots = 1100 - countAliveByType(entities, EntityType.NPC);
+  if (localSlots <= 0) return 0;
+  const slots = entitySpawnSlots(entities, EntityType.NPC, Math.min(2, localSlots));
   let spawned = 0;
-  for (let i = 0; i < 2; i++) {
+  for (let i = 0; i < slots; i++) {
     const pos = findWalkableNear(world, snapshot.playerX, snapshot.playerY, 5, 12);
     if (!pos) continue;
     const rpg = randomRPG(Math.max(1, snapshot.zoneLevel));
@@ -526,7 +528,7 @@ function spawnAftershockMonster(
   nextId: { v: number },
   snapshot: SamosborDirectorSnapshot,
 ): number {
-  if (countAliveByType(entities, EntityType.MONSTER) >= MONSTER_SOFT_CAP) return 0;
+  if (!canSpawnEntityType(entities, EntityType.MONSTER)) return 0;
   const pos = findWalkableNear(world, snapshot.playerX, snapshot.playerY, 7, 14);
   if (!pos) return 0;
   const kinds = [MonsterKind.SBORKA, MonsterKind.POLZUN, MonsterKind.SHADOW];

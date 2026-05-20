@@ -25,7 +25,18 @@ const FLOOR_NAMES: Record<FloorLevel, string> = {
   5: 'Пустота',
 };
 
-export type RouteCueMapRevealKind = 'zone_danger' | 'route_floor_hint' | 'contract_target' | 'shelter_mark';
+export type RouteCueMapRevealKind = 'zone_danger' | 'route_floor_hint' | 'contract_target' | 'shelter_mark' | 'route_group';
+
+export interface RouteCueGroup {
+  id: string;
+  lead: string;
+  risk: string;
+  decision: string;
+  reward: string;
+  mapLabel?: string;
+  mapHint?: string;
+  logLine?: string;
+}
 
 export interface PaidRouteReveal {
   priceRubles: number;
@@ -61,6 +72,8 @@ export interface RouteCueMarker {
   followedText?: string;
   ignoredText?: string;
   paidReveal?: PaidRouteReveal;
+  routeGroup?: RouteCueGroup;
+  routeGroupRevealTtlSec?: number;
 }
 
 export interface RouteCueHud {
@@ -74,6 +87,7 @@ export interface RouteCueHud {
   targetY: number;
   startedAt: number;
   expiresAt: number;
+  routeGroup?: RouteCueGroup;
 }
 
 export interface RouteCueMapReveal {
@@ -93,6 +107,7 @@ export interface RouteCueMapReveal {
   dangerLevel?: number;
   paidRubles?: number;
   debtRubles?: number;
+  routeGroup?: RouteCueGroup;
 }
 
 interface RouteCueWorldState {
@@ -108,20 +123,30 @@ interface RouteCueWorldState {
 
 const cueByWorld = new WeakMap<World, RouteCueWorldState>();
 let activeHud: RouteCueHud | null = null;
+const emptyMarkers: readonly RouteCueMarker[] = [];
+
+/* Cue lifetime is tied to one concrete World geometry. New story, design,
+ * procedural and floor-instance worlds register their own markers during
+ * generation. When samosbor rebuilds a floor in-place, the live World must
+ * receive the replacement world's markers and drop all transient state because
+ * old room ids, map reveals and heard/followed flags belong to vanished rooms. */
+function emptyState(markers: RouteCueMarker[] = []): RouteCueWorldState {
+  return {
+    markers,
+    mapReveals: [],
+    nextScanAt: 0,
+    nextRevealCleanupAt: 0,
+    heardAt: new Map(),
+    lastPlayedAt: new Map(),
+    followed: new Set(),
+    ignored: new Set(),
+  };
+}
 
 function cueState(world: World): RouteCueWorldState {
   let state = cueByWorld.get(world);
   if (!state) {
-    state = {
-      markers: [],
-      mapReveals: [],
-      nextScanAt: 0,
-      nextRevealCleanupAt: 0,
-      heardAt: new Map(),
-      lastPlayedAt: new Map(),
-      followed: new Set(),
-      ignored: new Set(),
-    };
+    state = emptyState();
     cueByWorld.set(world, state);
   }
   return state;
@@ -172,16 +197,129 @@ export function registerRouteCue(world: World, marker: RouteCueMarker): void {
   else state.markers.push(next);
 }
 
+export function replaceRouteCueStateForRebuild(target: World, source?: World): void {
+  const sourceState = source ? cueByWorld.get(source) : undefined;
+  if (sourceState && sourceState.markers.length > 0) {
+    cueByWorld.set(target, emptyState(sourceState.markers.map(marker => normalizedMarker(marker))));
+  } else {
+    cueByWorld.delete(target);
+  }
+  if (source && source !== target) cueByWorld.delete(source);
+  activeHud = null;
+}
+
+export function pruneRouteCuesInCells(world: World, cells: readonly number[] | Set<number>): number {
+  const state = cueByWorld.get(world);
+  if (!state) return 0;
+  const touched = cells instanceof Set ? cells : new Set(cells);
+  if (touched.size === 0) return 0;
+  const markerHitsCell = (marker: RouteCueMarker): boolean => {
+    if (touched.has(world.idx(Math.floor(marker.x), Math.floor(marker.y)))) return true;
+    if (touched.has(world.idx(Math.floor(marker.targetX), Math.floor(marker.targetY)))) return true;
+    if (marker.roomId !== undefined && !world.rooms[marker.roomId]) return true;
+    if (marker.targetRoomId !== undefined && !world.rooms[marker.targetRoomId]) return true;
+    return false;
+  };
+  const revealHitsCell = (reveal: RouteCueMapReveal): boolean => {
+    if (reveal.x !== undefined && reveal.y !== undefined && touched.has(world.idx(Math.floor(reveal.x), Math.floor(reveal.y)))) return true;
+    if (reveal.roomId !== undefined && !world.rooms[reveal.roomId]) return true;
+    return false;
+  };
+  const beforeMarkers = state.markers.length;
+  const beforeReveals = state.mapReveals.length;
+  state.markers = state.markers.filter(marker => !markerHitsCell(marker));
+  state.mapReveals = state.mapReveals.filter(reveal => !revealHitsCell(reveal));
+  const removed = beforeMarkers - state.markers.length + beforeReveals - state.mapReveals.length;
+  if (removed > 0) {
+    if (activeHud && !state.markers.some(marker => marker.id === activeHud?.id)) activeHud = null;
+    for (const id of Array.from(state.heardAt.keys())) if (!state.markers.some(marker => marker.id === id)) state.heardAt.delete(id);
+    for (const id of Array.from(state.lastPlayedAt.keys())) if (!state.markers.some(marker => marker.id === id)) state.lastPlayedAt.delete(id);
+    for (const id of Array.from(state.followed.values())) if (!state.markers.some(marker => marker.id === id)) state.followed.delete(id);
+    for (const id of Array.from(state.ignored.values())) if (!state.markers.some(marker => marker.id === id)) state.ignored.delete(id);
+  }
+  return removed;
+}
+
 export function routeCueCount(world: World): number {
   return cueByWorld.get(world)?.markers.length ?? 0;
 }
 
-function nearestMarker(world: World, player: Entity): RouteCueMarker | undefined {
+export function getRouteCueMarkers(world: World): readonly RouteCueMarker[] {
+  return cueByWorld.get(world)?.markers ?? emptyMarkers;
+}
+
+function protectedCellAt(world: World, x: number | undefined, y: number | undefined): boolean {
+  if (x === undefined || y === undefined || !Number.isFinite(x) || !Number.isFinite(y)) return false;
+  return world.aptMask[world.idx(Math.floor(x), Math.floor(y))] !== 0;
+}
+
+function protectedRoom(world: World, roomId: number | undefined): boolean {
+  if (roomId === undefined) return true;
+  const room = world.rooms[roomId];
+  if (!room) return false;
+  for (let y = room.y; y < room.y + room.h; y++) {
+    for (let x = room.x; x < room.x + room.w; x++) {
+      if (world.aptMask[world.idx(x, y)]) return true;
+    }
+  }
+  return false;
+}
+
+function protectedRouteCueMarker(world: World, marker: RouteCueMarker): boolean {
+  return protectedCellAt(world, marker.x, marker.y)
+    && protectedCellAt(world, marker.targetX, marker.targetY)
+    && protectedRoom(world, marker.roomId)
+    && protectedRoom(world, marker.targetRoomId);
+}
+
+function protectedMapReveal(world: World, reveal: RouteCueMapReveal, keptMarkerIds: ReadonlySet<string>): boolean {
+  if (!keptMarkerIds.has(reveal.sourceId)) return false;
+  if (!protectedRoom(world, reveal.roomId)) return false;
+  if (reveal.x !== undefined || reveal.y !== undefined) return protectedCellAt(world, reveal.x, reveal.y);
+  return true;
+}
+
+export function pruneRouteCuesForVolatileRebuild(world: World, floor: FloorLevel): number {
+  const state = cueByWorld.get(world);
+  if (!state) return 0;
+
+  const keptMarkers: RouteCueMarker[] = [];
+  const keptMarkerIds = new Set<string>();
+  const removedMarkerIds = new Set<string>();
+  for (const marker of state.markers) {
+    if (marker.floor !== floor || protectedRouteCueMarker(world, marker)) {
+      keptMarkers.push(marker);
+      keptMarkerIds.add(marker.id);
+    } else {
+      removedMarkerIds.add(marker.id);
+    }
+  }
+  const removed = state.markers.length - keptMarkers.length;
+  state.markers = keptMarkers;
+
+  for (const id of removedMarkerIds) {
+    state.heardAt.delete(id);
+    state.lastPlayedAt.delete(id);
+    state.followed.delete(id);
+    state.ignored.delete(id);
+  }
+  for (let i = state.mapReveals.length - 1; i >= 0; i--) {
+    const reveal = state.mapReveals[i];
+    if (reveal.floor === floor && !protectedMapReveal(world, reveal, keptMarkerIds)) {
+      state.mapReveals.splice(i, 1);
+    }
+  }
+  if (activeHud?.floor === floor && !keptMarkerIds.has(activeHud.id)) activeHud = null;
+  return removed;
+}
+
+function nearestMarker(world: World, player: Entity, requiredTag?: string): RouteCueMarker | undefined {
   const state = cueByWorld.get(world);
   if (!state || state.markers.length === 0) return undefined;
   let best: RouteCueMarker | undefined;
   let bestD2 = Infinity;
   for (const marker of state.markers) {
+    if (requiredTag && !marker.tags.includes(requiredTag)) continue;
     const d2 = world.dist2(player.x, player.y, marker.x, marker.y);
     if (d2 < bestD2) {
       bestD2 = d2;
@@ -403,6 +541,33 @@ function routeFloorReveal(
   };
 }
 
+function routeGroupReveal(
+  marker: RouteCueMarker,
+  expiresAt: number,
+  paidRubles?: number,
+  debtRubles?: number,
+): RouteCueMapReveal | undefined {
+  const group = marker.routeGroup;
+  if (!group) return undefined;
+  return {
+    id: `${marker.id}:route_group`,
+    sourceId: marker.id,
+    kind: 'route_group',
+    floor: marker.floor,
+    x: marker.targetX,
+    y: marker.targetY,
+    roomId: marker.targetRoomId,
+    label: group.mapLabel ?? marker.label,
+    hint: group.mapHint ?? `${group.risk} / ${group.decision} / ${group.reward}`,
+    targetName: marker.targetName,
+    color: marker.color,
+    expiresAt,
+    paidRubles,
+    debtRubles,
+    routeGroup: group,
+  };
+}
+
 function activeDebtQuest(state: GameState, debtQuestId: string): Quest | undefined {
   return state.quests.find(q => !q.done && q.sideQuestId === debtQuestId && q.targetItem === 'money');
 }
@@ -484,6 +649,7 @@ function buildPaidMapReveals(
       kind === 'contract_target' ? activeQuestReveal(world, player, state, marker, expiresAt, paidRubles, debtRubles)
       : kind === 'route_floor_hint' ? routeFloorReveal(state, marker, expiresAt, paidRubles, debtRubles)
       : kind === 'shelter_mark' ? shelterReveal(world, player, state, marker, expiresAt, paidRubles, debtRubles)
+      : kind === 'route_group' ? routeGroupReveal(marker, expiresAt, paidRubles, debtRubles)
       : nearestDangerZoneReveal(world, player, state, marker, expiresAt, paidRubles, debtRubles);
     if (reveal) out.push(reveal);
   }
@@ -520,6 +686,8 @@ function publishCueEvent(
       label: marker.label,
       hint: marker.hint,
       targetName: marker.targetName,
+      routeGroup: marker.routeGroup,
+      logLine: marker.routeGroup?.logLine,
       targetX: Math.round(marker.targetX),
       targetY: Math.round(marker.targetY),
       distanceCells: Math.round(world.dist(player.x, player.y, marker.targetX, marker.targetY)),
@@ -633,8 +801,14 @@ function triggerPaidReveal(
 }
 
 function cueMessage(marker: RouteCueMarker, action: string): string {
-  if (action === 'followed') return marker.followedText ?? `Метка вывела к цели: ${marker.targetName}. Проверьте отход перед лутом.`;
-  if (action === 'ignored') return marker.ignoredText ?? `Метка осталась за спиной: ${marker.targetName} не проверена.`;
+  const group = marker.routeGroup;
+  if (action === 'followed') return marker.followedText ?? (group
+    ? `${group.reward} Цель маршрута: ${marker.targetName}.`
+    : `Метка вывела к цели: ${marker.targetName}. Проверьте отход перед лутом.`);
+  if (action === 'ignored') return marker.ignoredText ?? (group
+    ? `Маршрут отложен: ${group.lead} Риск остался: ${group.risk}`
+    : `Метка осталась за спиной: ${marker.targetName} не проверена.`);
+  if (group) return marker.heardText ?? `${group.lead} Риск: ${group.risk} Решение: ${group.decision} Награда: ${group.reward}`;
   return marker.heardText ?? `Меловая стрелка и шум стены дают маршрут: ${marker.hint}`;
 }
 
@@ -650,6 +824,7 @@ function setCueHud(state: GameState, marker: RouteCueMarker): void {
     targetY: marker.targetY,
     startedAt: state.time,
     expiresAt: state.time + 7,
+    routeGroup: marker.routeGroup,
   };
 }
 
@@ -671,6 +846,8 @@ function triggerCue(
       playSoundAt(() => playRouteCueTone(marker.toneSeed, action === 'debug' ? 1.15 : 1), marker.x, marker.y);
     }
     setCueHud(state, marker);
+    const reveal = routeGroupReveal(marker, now + (marker.routeGroupRevealTtlSec ?? DEFAULT_REVEAL_TTL_SEC));
+    if (reveal) upsertMapReveal(cueWorld, reveal);
   }
 
   if (action === 'followed') cueWorld.followed.add(marker.id);
@@ -751,8 +928,8 @@ export function tryUseRouteCue(
   return true;
 }
 
-export function debugTriggerRouteCue(world: World, player: Entity, state: GameState): string[] {
-  const marker = nearestMarker(world, player);
+export function debugTriggerRouteCue(world: World, player: Entity, state: GameState, requiredTag?: string): string[] {
+  const marker = nearestMarker(world, player, requiredTag);
   if (!marker) {
     playSoundAt(() => playRouteCueTone(75075, 1.15), player.x, player.y);
     activeHud = {
@@ -780,14 +957,18 @@ export function debugTriggerRouteCue(world: World, player: Entity, state: GameSt
       tags: ['route_cue', 'debug', 'audio_smoke'],
       data: { cueId: 'debug_route_cue', action: 'debug_no_marker' },
     });
-    return ['no registered route cue; played local route-cue smoke'];
+    return [requiredTag
+      ? `no registered route cue with tag "${requiredTag}"; played local route-cue smoke`
+      : 'no registered route cue; played local route-cue smoke'];
   }
 
   triggerCue(world, player, state, marker, 'debug', true);
   return [
     `${marker.id}: ${Math.round(world.dist(player.x, player.y, marker.x, marker.y))} cells to cue`,
     `target: ${marker.targetName}, ${Math.round(world.dist(player.x, player.y, marker.targetX, marker.targetY))} cells`,
-  ];
+    marker.routeGroup ? `decision: ${marker.routeGroup.decision}` : '',
+    marker.routeGroup ? `reward: ${marker.routeGroup.reward}` : '',
+  ].filter(Boolean);
 }
 
 export function getActiveRouteCueHud(time: number, floor: FloorLevel): RouteCueHud | null {

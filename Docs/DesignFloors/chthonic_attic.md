@@ -1,8 +1,8 @@
-# Design Floor: Хтонический чердак
+# Design Floor: Чердак техслужб
 
-Status: planning artifact. Future route id: `chthonic_attic`. Future anchor: `z=-36`.
+Status: implemented authored route floor. Route id: `chthonic_attic`. Anchor: `z=-40`. Base floor: `MINISTRY`. Shipped HUD name: `Чердак техслужб`.
 
-Planned owned file: `src/gen/design_floors/chthonic_attic.ts`.
+Owned file: `src/gen/design_floors/chthonic_attic.ts`. Planning sections below preserve the original brief; shipped z differs from the old `z=-36` plan because `roof` moved to `z=-44`, `antenna_court` occupies `z=-36`, and `pioneer_camp` occupies `z=-32`.
 
 ## Role
 
@@ -53,4 +53,3 @@ No per-cell growth simulation. Choose affected rooms at event start and store co
 - One meaningful choice changes later floor state by flag/event.
 - Root sealing is deterministic and cannot softlock the player.
 - Cult content remains gameplay, not exposition.
-

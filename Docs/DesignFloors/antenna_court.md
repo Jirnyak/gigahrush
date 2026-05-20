@@ -1,6 +1,6 @@
 # Design Floor: Антенный двор
 
-Status: implemented route floor. Route id: `antenna_court`. Anchor: `z=-36`. Base floor: `MINISTRY`.
+Status: implemented authored route floor. Route id: `antenna_court`. Anchor: `z=-36`. Base floor: `MINISTRY`. Shipped HUD name: `Антенный двор`.
 
 Owned file: `src/gen/design_floors/antenna_court.ts`. Route integration: `src/data/design_floors.ts`, `src/gen/design_floors/manifest.ts`, `src/gen/design_floors/full_floor.ts`.
 

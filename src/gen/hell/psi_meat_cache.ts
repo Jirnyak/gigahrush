@@ -231,6 +231,7 @@ function applyPsiCacheBranch(state: GameState, source: WorldEvent, branch: PsiCa
   const spec = BRANCH_SPECS[branch];
   const drain = drainPlayerForCache(entities, spec.psiLoss, spec.hpPerMissingPsi);
   const spawned = spawnCacheBranchBacklash(world, entities, site, spec.threats);
+  const warning = psiCacheWarningText(spec, drain, spawned);
   state.msgs.push(msg(spec.message, state.time, spec.color));
 
   publishEvent(state, {
@@ -249,16 +250,28 @@ function applyPsiCacheBranch(state: GameState, source: WorldEvent, branch: PsiCa
     containerId: source.containerId,
     severity: spec.severity,
     privacy: 'local',
-    tags: [CACHE_EVENT_TAG, 'hell_psi_cache', `cache_${branch}`, 'cult_attention', branch, 'psi', 'medicine', 'backlash'],
+    tags: [CACHE_EVENT_TAG, 'hell_psi_cache', `cache_${branch}`, 'cult_attention', branch, 'psi', 'meat', 'backlash'],
     data: {
       sourceEventId: source.id,
       branch,
+      warning,
       psiLost: drain.psiLost,
       hpLost: drain.hpLost,
       spawned,
       backlashCap: AG54_PSI_CACHE_BACKLASH_CAP,
     },
   });
+}
+
+function psiCacheWarningText(
+  spec: PsiCacheBranchSpec,
+  drain: { psiLost: number; hpLost: number },
+  spawned: number,
+): string {
+  const psi = drain.psiLost > 0 ? `ПСИ -${drain.psiLost}` : 'ПСИ не ушло';
+  const hp = drain.hpLost > 0 ? `, HP -${drain.hpLost}` : '';
+  const guards = spawned > 0 ? `, сторожа ${spawned}` : ', сторожа не вышли';
+  return `Мясной ПСИ-склад: ${spec.label}; ${psi}${hp}${guards}. Отход через вход.`;
 }
 
 function drainPlayerForCache(

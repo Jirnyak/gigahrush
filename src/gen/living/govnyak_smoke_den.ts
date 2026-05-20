@@ -8,6 +8,8 @@ import {
 import { World } from '../../core/world';
 import { freshNeeds } from '../../data/catalog';
 import { type PlotNpcDef, registerSideQuest } from '../../data/plot';
+import { ITEMS } from '../../data/items';
+import { changeResourceStock } from '../../systems/economy';
 import { publishEvent, registerWorldEventObserver } from '../../systems/events';
 import { protectRoom } from '../shared';
 import { genLog } from '../log';
@@ -19,6 +21,12 @@ const ROOM_H = 10;
 const MODULE_TAG = 'govnyak_den';
 const OUTCOME_EVENT_TAG = 'ag97_govnyak_outcome';
 
+interface DenEconomyDelta {
+  resourceId: string;
+  count: number;
+  floor: FloorLevel;
+}
+
 interface DenOutcome {
   targetName: string;
   outcome: string;
@@ -27,6 +35,9 @@ interface DenOutcome {
   rumorIds: string[];
   severity: 3 | 4 | 5;
   privacy: 'local' | 'public' | 'witnessed';
+  itemId?: string;
+  itemCount?: number;
+  economyDeltas: readonly DenEconomyDelta[];
 }
 
 const QUEST_OUTCOMES: Record<string, DenOutcome> = {
@@ -38,6 +49,9 @@ const QUEST_OUTCOMES: Record<string, DenOutcome> = {
     rumorIds: ['event_govnyak_den_purchase', 'lead_living_govnyak_smoke_den'],
     severity: 3,
     privacy: 'local',
+    itemId: 'govnyak_roll',
+    itemCount: 3,
+    economyDeltas: [{ resourceId: 'contraband', count: -3, floor: FloorLevel.LIVING }],
   },
   ag97_settle_debt: {
     targetName: 'Чужой долг в дымной комнате закрыт деньгами',
@@ -47,6 +61,12 @@ const QUEST_OUTCOMES: Record<string, DenOutcome> = {
     rumorIds: ['event_govnyak_den_debt'],
     severity: 4,
     privacy: 'local',
+    itemId: 'voluntary_receipt',
+    itemCount: 1,
+    economyDeltas: [
+      { resourceId: 'contraband', count: -1, floor: FloorLevel.LIVING },
+      { resourceId: 'documents', count: 1, floor: FloorLevel.LIVING },
+    ],
   },
   ag97_refuse_credit: {
     targetName: 'Должника вывели из кредитного дыма разговором',
@@ -56,6 +76,7 @@ const QUEST_OUTCOMES: Record<string, DenOutcome> = {
     rumorIds: ['event_govnyak_den_refusal'],
     severity: 4,
     privacy: 'local',
+    economyDeltas: [{ resourceId: 'contraband', count: -1, floor: FloorLevel.LIVING }],
   },
   ag97_report_den: {
     targetName: 'Дымная комната сдана по ведомости ликвидаторам',
@@ -65,6 +86,12 @@ const QUEST_OUTCOMES: Record<string, DenOutcome> = {
     rumorIds: ['event_govnyak_den_report'],
     severity: 5,
     privacy: 'public',
+    itemId: 'denunciation',
+    itemCount: 1,
+    economyDeltas: [
+      { resourceId: 'contraband', count: -5, floor: FloorLevel.LIVING },
+      { resourceId: 'documents', count: 1, floor: FloorLevel.MINISTRY },
+    ],
   },
   ag97_turn_dealer_science: {
     targetName: 'Дилера перевели под научный учет вместо рейда',
@@ -74,10 +101,41 @@ const QUEST_OUTCOMES: Record<string, DenOutcome> = {
     rumorIds: ['event_govnyak_den_report', 'event_govnyak_den_debt'],
     severity: 4,
     privacy: 'public',
+    itemId: 'voluntary_receipt',
+    itemCount: 1,
+    economyDeltas: [
+      { resourceId: 'contraband', count: -4, floor: FloorLevel.LIVING },
+      { resourceId: 'slime_samples', count: 1, floor: FloorLevel.LIVING },
+    ],
   },
 };
 
+function economyDeltaSummary(outcome: DenOutcome): string[] {
+  const out: string[] = [];
+  for (const delta of outcome.economyDeltas) {
+    out.push(`${delta.floor}:${delta.resourceId}${delta.count >= 0 ? '+' : ''}${delta.count}`);
+  }
+  return out;
+}
+
+function applyDenEconomy(state: GameState, outcome: DenOutcome, event: WorldEvent): string[] {
+  const applied: string[] = [];
+  for (const delta of outcome.economyDeltas) {
+    if (!changeResourceStock(state, delta.resourceId, delta.count, delta.floor, {
+      zoneId: event.zoneId,
+      roomId: event.roomId,
+      reason: `govnyak_den_${outcome.outcome}`,
+      tags: [MODULE_TAG, 'govnyak', 'contraband', outcome.outcome],
+    })) continue;
+    applied.push(`${delta.floor}:${delta.resourceId}${delta.count >= 0 ? '+' : ''}${delta.count}`);
+  }
+  return applied;
+}
+
 function publishDenOutcome(state: GameState, event: WorldEvent, sideQuestId: string, outcome: DenOutcome): void {
+  const appliedEconomyDeltas = applyDenEconomy(state, outcome, event);
+  const itemId = outcome.itemId ?? event.itemId;
+  const itemDef = itemId ? ITEMS[itemId] : undefined;
   publishEvent(state, {
     type: 'faction_relation_changed',
     floor: FloorLevel.LIVING,
@@ -89,6 +147,10 @@ function publishDenOutcome(state: GameState, event: WorldEvent, sideQuestId: str
     actorName: event.actorName,
     actorFaction: event.actorFaction,
     targetName: outcome.targetName,
+    itemId,
+    itemName: itemDef?.name,
+    itemCount: outcome.itemCount,
+    itemValue: itemDef?.value,
     severity: outcome.severity,
     privacy: outcome.privacy,
     tags: [OUTCOME_EVENT_TAG, MODULE_TAG, 'faction_event', ...outcome.tags],
@@ -97,6 +159,7 @@ function publishDenOutcome(state: GameState, event: WorldEvent, sideQuestId: str
       sideQuestId,
       govnyakOutcome: outcome.outcome,
       denState: outcome.denState,
+      economyDeltas: appliedEconomyDeltas.length > 0 ? appliedEconomyDeltas : economyDeltaSummary(outcome),
       rumorIds: outcome.rumorIds,
     },
   });
@@ -112,6 +175,12 @@ function handleGovnyakOutcome(state: GameState, event: WorldEvent): void {
   }
   if (event.type !== 'item_stolen' || !event.tags.includes(MODULE_TAG)) return;
   const witnessed = event.tags.includes('witnessed');
+  const economyDeltas = changeResourceStock(state, 'contraband', -1, FloorLevel.LIVING, {
+    zoneId: event.zoneId,
+    roomId: event.roomId,
+    reason: 'govnyak_den_theft',
+    tags: [MODULE_TAG, 'govnyak', 'contraband', 'theft'],
+  }) ? [`${FloorLevel.LIVING}:contraband-1`] : [];
   publishEvent(state, {
     type: 'faction_relation_changed',
     floor: FloorLevel.LIVING,
@@ -138,6 +207,7 @@ function handleGovnyakOutcome(state: GameState, event: WorldEvent): void {
       sourceEventId: event.id,
       govnyakOutcome: 'theft',
       denState: 'pressured',
+      economyDeltas,
       rumorIds: ['event_govnyak_den_theft', 'lead_living_govnyak_smoke_den'],
     },
   });

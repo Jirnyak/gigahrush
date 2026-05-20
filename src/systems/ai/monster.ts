@@ -10,7 +10,15 @@ import {
 import { World } from '../../core/world';
 import { MONSTERS, entityDisplayName, type MonsterAIFlag, type MonsterDef } from '../../entities/monster';
 import { ITEMS, ITEM_TAGS } from '../../data/items';
-import { playGrowl, playSoundAt } from '../audio';
+import {
+  playGrowl,
+  playHostileEnergyShot,
+  playHostileEyeShot,
+  playHostileFlame,
+  playHostileParagraphShot,
+  playHostilePsiCast,
+  playSoundAt,
+} from '../audio';
 import { isHostile } from '../factions';
 import { scaleMonsterDmg, strMeleeDmgMult, scaleMonsterHp, scaleMonsterSpeed, randomRPG } from '../rpg';
 import { zhelemishIncomingMeleeDamage } from '../status';
@@ -19,6 +27,7 @@ import { followPath, tryAssignPathToCell, wanderNearby } from './pathfinding';
 import { Spr } from '../../render/sprite_index';
 import { publishEvent } from '../events';
 import { recordPlayerDamage } from '../damage';
+import { findNoiseInvestigationTarget } from '../noise';
 import {
   MONSTER_BAIT_COMBAT_LOCK_SQ,
   MONSTER_BAIT_CONSUME_RADIUS_SQ,
@@ -33,10 +42,12 @@ import {
   isZombieApocalypseActive,
   tryZombieApocalypseInfection,
 } from '../procedural_anomalies/zombie_apocalypse';
+import { canSpawnEntityType, entitySpawnSlots } from '../entity_limits';
 
 /* ── Shared combat target finder ──────────────────────────────── */
 const MONSTER_DETECT = 20;
 const MONSTER_DETECT_SQ = MONSTER_DETECT * MONSTER_DETECT;
+const IMMEDIATE_THREAT_RADIUS_SQ = 10 * 10;
 const PREFER_PLAYER = 15;
 const PREFER_SQ = PREFER_PLAYER * PREFER_PLAYER;
 const MATKA_MAX_CHILDREN = 100;
@@ -51,10 +62,21 @@ const KOSTOREZ_BURST_RANGE = 2.85;
 const KOSTOREZ_WINDUP_SEC = 1.35;
 const KOSTOREZ_STAGGER_SEC = 1.15;
 const KOSTOREZ_ESCAPE_DIST = 4.0;
-const EYE_SHOT_RANGE = 15;
+const SAFEGUARD_DETECT_SQ = 24 * 24;
+const SAFEGUARD_WINDUP_RANGE = 2.1;
+const SAFEGUARD_BURST_RANGE = 2.6;
+const SAFEGUARD_WINDUP_SEC = 0.85;
+const SAFEGUARD_STAGGER_SEC = 0.9;
+const SAFEGUARD_ESCAPE_DIST = 4.4;
 const EYE_MIN_RANGE = 1.5;
 const EYE_WINDUP_SEC = 0.85;
-const EYE_LOS_BREAK_COOLDOWN = 0.75;
+const RANGED_SHOT_RANGE = 15;
+const RANGED_LOS_BREAK_COOLDOWN = 0.75;
+const PARAGRAPH_WINDUP_SEC = 0.8;
+const IDOL_WINDUP_SEC = 1.05;
+const ROBOT_WINDUP_SEC = 0.62;
+const HEAVY_RANGED_WINDUP_SEC = 0.95;
+const GENERIC_RANGED_WINDUP_SEC = 0.7;
 const SHADOW_WARNING_RANGE_SQ = 5.5 * 5.5;
 const SHADOW_WINDUP_SEC = 0.55;
 const SHADOW_STRIKE_BREAK_RANGE = 1.65;
@@ -67,7 +89,15 @@ const KOSTOREZ_RUMOR_IDS = [
   'ecology_kostorez_shotgun',
   'lead_maintenance_kostorez_locker',
 ] as const;
+const SAFEGUARD_RUMOR_IDS = [
+  'monster_safeguard_access_denied',
+  'ecology_safeguard_windup',
+  'ecology_safeguard_shotgun',
+] as const;
 const EYE_RUMOR_IDS = ['monster_eye_lamps', 'ecology_eye_line'] as const;
+const PARAGRAPH_RUMOR_IDS = ['ecology_paragraph_clause'] as const;
+const IDOL_RUMOR_IDS = ['monster_idol_static', 'ecology_idol_stares'] as const;
+const ROBOT_RUMOR_IDS = ['ecology_robot_plasma'] as const;
 const SHADOW_RUMOR_IDS = ['monster_shadow_silence', 'ecology_shadow_afterimage'] as const;
 const DOCUMENT_ITEM_TAGS = [
   'document',
@@ -85,6 +115,23 @@ const DOCUMENT_ITEM_TAGS = [
   'coupon',
 ] as const;
 
+interface BladeEliteTuning {
+  kind: MonsterKind.KOSTOREZ | MonsterKind.SAFEGUARD;
+  tag: string;
+  rumorIds: readonly string[];
+  windupRange: number;
+  burstRange: number;
+  windupSec: number;
+  staggerSec: number;
+  escapeDist: number;
+  coverBlocks: boolean;
+  sightMsg: string;
+  windupMsg: string;
+  staggerMsg: string;
+  strikeVerb: string;
+  counterplay: string;
+}
+
 /** Entity lookup map — set by updateAI each frame */
 let _entityById = new Map<number, Entity>();
 export function setEntityMap(m: Map<number, Entity>): void { _entityById = m; }
@@ -98,13 +145,57 @@ function zoneIdAt(world: World, x: number, y: number): number | undefined {
   return zid >= 0 ? zid : undefined;
 }
 
-function kostorezEventData(extra?: Record<string, unknown>): Record<string, unknown> {
-  return { rumorIds: [...KOSTOREZ_RUMOR_IDS], ...extra };
+function bladeEliteTuning(kind: MonsterKind | undefined): BladeEliteTuning | undefined {
+  switch (kind) {
+    case MonsterKind.KOSTOREZ:
+      return {
+        kind,
+        tag: 'kostorez',
+        rumorIds: KOSTOREZ_RUMOR_IDS,
+        windupRange: KOSTOREZ_WINDUP_RANGE,
+        burstRange: KOSTOREZ_BURST_RANGE,
+        windupSec: KOSTOREZ_WINDUP_SEC,
+        staggerSec: KOSTOREZ_STAGGER_SEC,
+        escapeDist: KOSTOREZ_ESCAPE_DIST,
+        coverBlocks: false,
+        sightMsg: 'Косторез увидел тебя. Держи дистанцию: замах читается.',
+        windupMsg: 'Косторез заносит пилы. Отходи за угол или бей дробью!',
+        staggerMsg: 'Дробь сбила замах Костореза.',
+        strikeVerb: 'режет',
+        counterplay: 'distance, obstacle, shotgun stagger, metal_sheet armor',
+      };
+    case MonsterKind.SAFEGUARD:
+      return {
+        kind,
+        tag: 'safeguard',
+        rumorIds: SAFEGUARD_RUMOR_IDS,
+        windupRange: SAFEGUARD_WINDUP_RANGE,
+        burstRange: SAFEGUARD_BURST_RANGE,
+        windupSec: SAFEGUARD_WINDUP_SEC,
+        staggerSec: SAFEGUARD_STAGGER_SEC,
+        escapeDist: SAFEGUARD_ESCAPE_DIST,
+        coverBlocks: true,
+        sightMsg: 'Сейфгард взял тебя в отказ. Ломай линию: белый замах короткий.',
+        windupMsg: 'Сейфгард разводит клинки. За дверь, аппарат или дробью!',
+        staggerMsg: 'Дробь сбила белый замах Сейфгарда.',
+        strikeVerb: 'режет',
+        counterplay: 'line break by wall, door, machine, apparatus; shotgun stagger',
+      };
+    default:
+      return undefined;
+  }
+}
+
+function bladeEliteEventData(tuning: BladeEliteTuning, extra?: Record<string, unknown>): Record<string, unknown> {
+  return { rumorIds: [...tuning.rumorIds], ...extra };
 }
 
 function monsterReadabilityRumorIds(kind: MonsterKind | undefined): readonly string[] {
   switch (kind) {
     case MonsterKind.EYE: return EYE_RUMOR_IDS;
+    case MonsterKind.PARAGRAPH: return PARAGRAPH_RUMOR_IDS;
+    case MonsterKind.IDOL: return IDOL_RUMOR_IDS;
+    case MonsterKind.ROBOT: return ROBOT_RUMOR_IDS;
     case MonsterKind.SHADOW: return SHADOW_RUMOR_IDS;
     default: return [];
   }
@@ -148,7 +239,8 @@ function publishMonsterReadabilityEvent(
   });
 }
 
-function publishKostorezEvent(
+function publishBladeEliteEvent(
+  tuning: BladeEliteTuning,
   state: GameState | undefined,
   world: World,
   e: Entity,
@@ -170,15 +262,23 @@ function publishKostorezEvent(
     targetId: target?.id,
     targetName: target ? entityDisplayName(target) : undefined,
     targetFaction: target?.faction,
-    monsterKind: MonsterKind.KOSTOREZ,
+    monsterKind: tuning.kind,
     severity,
     privacy: target?.type === EntityType.PLAYER ? 'local' : 'witnessed',
-    tags: ['monster', 'kostorez', ...tags],
-    data: kostorezEventData(data),
+    tags: ['monster', tuning.tag, ...tags],
+    data: bladeEliteEventData(tuning, data),
   });
 }
 
-function hasClearLine(world: World, e: Entity, target: Entity, maxDist: number): boolean {
+function isLineOfFireCover(feature: Feature): boolean {
+  return feature === Feature.SHELF ||
+    feature === Feature.MACHINE ||
+    feature === Feature.APPARATUS ||
+    feature === Feature.DESK ||
+    feature === Feature.TABLE;
+}
+
+function traceClearLine(world: World, e: Entity, target: Entity, maxDist: number, coverBlocks: boolean): boolean {
   const dx = world.delta(e.x, target.x);
   const dy = world.delta(e.y, target.y);
   const dist = Math.sqrt(dx * dx + dy * dy);
@@ -186,11 +286,20 @@ function hasClearLine(world: World, e: Entity, target: Entity, maxDist: number):
   const steps = Math.max(2, Math.ceil(dist * 2));
   for (let i = 1; i < steps; i++) {
     const t = i / steps;
-    const x = Math.floor(e.x + dx * t);
-    const y = Math.floor(e.y + dy * t);
+    const x = Math.floor(world.wrap(e.x + dx * t));
+    const y = Math.floor(world.wrap(e.y + dy * t));
     if (world.solid(x, y)) return false;
+    if (coverBlocks && isLineOfFireCover(world.features[world.idx(x, y)] as Feature)) return false;
   }
   return true;
+}
+
+function hasClearLine(world: World, e: Entity, target: Entity, maxDist: number): boolean {
+  return traceClearLine(world, e, target, maxDist, false);
+}
+
+export function hasClearLineOfFire(world: World, e: Entity, target: Entity, maxDist: number): boolean {
+  return traceClearLine(world, e, target, maxDist, true);
 }
 
 function cutMetalSheet(target: Entity): boolean {
@@ -223,6 +332,16 @@ export function findCombatTarget(
     if (!target) ai.combatTargetId = undefined;
   }
 
+  if (!target && ai.combatScanCd! > 0) {
+    target = findImmediateCombatTarget(world, e, Math.min(rangeSq, IMMEDIATE_THREAT_RADIUS_SQ), typeFilter);
+    if (target) {
+      ai.combatTargetId = target.id;
+      ai.goal = AIGoal.HUNT;
+      ai.combatScanCd = Math.min(ai.combatScanCd!, 0.15);
+      return target;
+    }
+  }
+
   // Always rescan periodically to switch to closer targets
   if (ai.combatScanCd! <= 0) {
     ai.combatScanCd = scanCd;
@@ -242,6 +361,27 @@ export function findCombatTarget(
     if (newTarget) { target = newTarget; ai.combatTargetId = newTarget.id; }
   }
 
+  return target;
+}
+
+function findImmediateCombatTarget(
+  world: World,
+  e: Entity,
+  rangeSq: number,
+  typeFilter: (other: Entity) => boolean,
+): Entity | null {
+  let target: Entity | null = null;
+  let best = rangeSq;
+  getEntityIndex().queryRadius(e.x, e.y, Math.sqrt(rangeSq), combatQuery, ENTITY_MASK_ACTOR);
+  for (const other of combatQuery) {
+    if (!other.alive || other.id === e.id) continue;
+    if (!typeFilter(other)) continue;
+    if (!isHostile(e, other)) continue;
+    const d2 = world.dist2(e.x, e.y, other.x, other.y);
+    if (d2 >= best) continue;
+    best = d2;
+    target = other;
+  }
   return target;
 }
 
@@ -498,6 +638,31 @@ function tryFollowMonsterBait(
   return true;
 }
 
+function tryFollowNoise(
+  world: World,
+  e: Entity,
+  dt: number,
+  time: number,
+  state?: GameState,
+): boolean {
+  const noise = findNoiseInvestigationTarget(world, state, e, time);
+  if (!noise) return false;
+
+  const ai = e.ai!;
+  ai.goal = AIGoal.HUNT;
+  ai.combatTargetId = undefined;
+  const tx = Math.floor(noise.x);
+  const ty = Math.floor(noise.y);
+  ai.timer -= dt;
+  if (ai.path.length === 0 || ai.timer <= 0 || ai.tx !== world.wrap(tx) || ai.ty !== world.wrap(ty)) {
+    tryAssignPathToCell(world, e, tx, ty);
+    ai.timer = 1.25;
+  }
+  if (ai.path.length === 0) return false;
+  followMonsterPath(world, e, dt);
+  return true;
+}
+
 function findDocumentHunterTarget(world: World, _entities: Entity[], e: Entity, dt: number): Entity | null {
   const ai = e.ai!;
   let target: Entity | null = null;
@@ -540,7 +705,14 @@ function findDocumentHunterTarget(world: World, _entities: Entity[], e: Entity, 
   return target;
 }
 
-function publishKostorezEscape(
+function bladeEliteHasLine(world: World, e: Entity, target: Entity, tuning: BladeEliteTuning): boolean {
+  return tuning.coverBlocks
+    ? hasClearLineOfFire(world, e, target, tuning.burstRange)
+    : hasClearLine(world, e, target, tuning.burstRange);
+}
+
+function publishBladeEliteEscape(
+  tuning: BladeEliteTuning,
   world: World,
   e: Entity,
   target: Entity | undefined,
@@ -550,11 +722,12 @@ function publishKostorezEscape(
 ): void {
   const ai = e.ai!;
   if (target?.id !== playerId && ai.lastSeenTargetId !== playerId) return;
-  publishKostorezEvent(state, world, e, target, 'monster_escaped', 4, ['escaped'], { reason });
+  publishBladeEliteEvent(tuning, state, world, e, target, 'monster_escaped', 4, ['escaped'], { reason });
   ai.lastSeenTargetId = undefined;
 }
 
-function finishKostorezWindup(
+function finishBladeEliteWindup(
+  tuning: BladeEliteTuning,
   world: World,
   entities: Entity[],
   e: Entity,
@@ -565,7 +738,7 @@ function finishKostorezWindup(
   state: GameState | undefined,
   playerId: number,
 ): void {
-  const def = MONSTERS[MonsterKind.KOSTOREZ];
+  const def = MONSTERS[tuning.kind];
   const level = e.rpg?.level ?? 1;
   const strMult = e.rpg ? strMeleeDmgMult(e.rpg) : 1;
   let dmg = Math.round(scaleMonsterDmg(def.dmg, level) * strMult * (e.monsterDmgMult ?? 1));
@@ -578,7 +751,7 @@ function finishKostorezWindup(
       keepDebugOnePunchManAlive(target);
     } else {
       target.hp -= dmg;
-      if (target.id === playerId) recordPlayerDamage(state, e, dmg, `${entityDisplayName(e)} режет тебя: -${dmg}`);
+      if (target.id === playerId) recordPlayerDamage(state, e, dmg, `${entityDisplayName(e)} ${tuning.strikeVerb} тебя: -${dmg}`);
       if (target.hp <= 0) {
         target.alive = false;
         target.hp = 0;
@@ -588,12 +761,12 @@ function finishKostorezWindup(
       const targetLabel = target.type === EntityType.PLAYER ? 'тебя' : entityDisplayName(target);
       msgs.push(msg(
         armorCut
-          ? `Косторез срезал бронелист и задел ${targetLabel}: -${dmg}`
-          : `Косторез режет ${targetLabel}: -${dmg}`,
+          ? `${entityDisplayName(e)} срезал бронелист и задел ${targetLabel}: -${dmg}`
+          : `${entityDisplayName(e)} ${tuning.strikeVerb} ${targetLabel}: -${dmg}`,
         time,
         armorCut ? '#fc4' : '#f44',
       ));
-      publishKostorezEvent(state, world, e, target, 'monster_armor_cut', armorCut ? 5 : 4, ['hit', armorCut ? 'armor_cut' : 'burst'], {
+      publishBladeEliteEvent(tuning, state, world, e, target, 'monster_armor_cut', armorCut ? 5 : 4, ['hit', armorCut ? 'armor_cut' : 'burst'], {
         damage: dmg,
         armorCut,
         itemId: armorCut ? 'metal_sheet' : undefined,
@@ -615,7 +788,7 @@ function finishKostorezWindup(
   playSoundAt(playGrowl, e.x, e.y);
 }
 
-function updateKostorez(
+function updateBladeElite(
   world: World,
   entities: Entity[],
   e: Entity,
@@ -627,15 +800,17 @@ function updateKostorez(
   nextId: { v: number },
   state?: GameState,
 ): boolean {
+  const tuning = bladeEliteTuning(e.monsterKind);
+  if (!tuning) return false;
   const ai = e.ai!;
   const dist = Math.sqrt(world.dist2(e.x, e.y, target.x, target.y));
 
   if (target.id === playerId && ai.lastSeenTargetId !== playerId) {
     ai.lastSeenTargetId = playerId;
-    publishKostorezEvent(state, world, e, target, 'monster_sighted', 4, ['sighted', 'warning'], {
-      counterplay: 'distance, obstacle, shotgun stagger, metal_sheet armor',
+    publishBladeEliteEvent(tuning, state, world, e, target, 'monster_sighted', 4, ['sighted', 'warning'], {
+      counterplay: tuning.counterplay,
     });
-    msgs.push(msg('Косторез увидел тебя. Держи дистанцию: замах читается.', time, '#fa4'));
+    msgs.push(msg(tuning.sightMsg, time, '#fa4'));
     playSoundAt(playGrowl, e.x, e.y);
   }
 
@@ -654,9 +829,9 @@ function updateKostorez(
     e.angle = Math.atan2(world.delta(e.y, target.y), world.delta(e.x, target.x));
     e.spriteScale = 1.1 + Math.max(0, ai.windupTimer) * 0.08;
 
-    if (!target.alive || dist > KOSTOREZ_BURST_RANGE || !hasClearLine(world, e, target, KOSTOREZ_BURST_RANGE)) {
-      publishKostorezEscape(world, e, target, playerId, state, dist > KOSTOREZ_BURST_RANGE ? 'distance' : 'obstacle');
-      msgs.push(msg('Косторез промахнулся: цель вышла из замаха.', time, '#fc4'));
+    if (!target.alive || dist > tuning.burstRange || !bladeEliteHasLine(world, e, target, tuning)) {
+      publishBladeEliteEscape(tuning, world, e, target, playerId, state, dist > tuning.burstRange ? 'distance' : 'obstacle');
+      msgs.push(msg(`${entityDisplayName(e)} промахнулся: цель вышла из замаха.`, time, '#fc4'));
       ai.windupTimer = undefined;
       ai.windupTargetId = undefined;
       e.spriteScale = undefined;
@@ -664,20 +839,20 @@ function updateKostorez(
       return true;
     }
 
-    if (ai.windupTimer <= 0) finishKostorezWindup(world, entities, e, target, time, msgs, nextId, state, playerId);
+    if (ai.windupTimer <= 0) finishBladeEliteWindup(tuning, world, entities, e, target, time, msgs, nextId, state, playerId);
     return true;
   }
 
-  if (dist <= KOSTOREZ_WINDUP_RANGE && e.attackCd <= 0 && hasClearLine(world, e, target, KOSTOREZ_BURST_RANGE)) {
-    ai.windupTimer = KOSTOREZ_WINDUP_SEC;
+  if (dist <= tuning.windupRange && e.attackCd <= 0 && bladeEliteHasLine(world, e, target, tuning)) {
+    ai.windupTimer = tuning.windupSec;
     ai.windupTargetId = target.id;
     e.spriteScale = 1.18;
-    msgs.push(msg('Косторез заносит пилы. Отходи за угол или бей дробью!', time, '#fa4'));
+    msgs.push(msg(tuning.windupMsg, time, '#fa4'));
     playSoundAt(playGrowl, e.x, e.y);
     return true;
   }
 
-  if (dist > KOSTOREZ_ESCAPE_DIST) ai.windupTargetId = undefined;
+  if (dist > tuning.escapeDist) ai.windupTargetId = undefined;
   if (ai.path.length === 0 || ai.timer <= 0) {
     tryAssignPathToCell(world, e, Math.floor(target.x), Math.floor(target.y));
     ai.timer = 1.4;
@@ -694,13 +869,15 @@ export function tryMonsterProjectileStagger(
   projectile: Entity,
   playerId: number,
 ): boolean {
-  if (monster.type !== EntityType.MONSTER || monster.monsterKind !== MonsterKind.KOSTOREZ || !monster.ai) return false;
+  if (monster.type !== EntityType.MONSTER || !monster.ai) return false;
+  const tuning = bladeEliteTuning(monster.monsterKind);
+  if (!tuning) return false;
   if ((monster.hp ?? 1) <= 0) return false;
   if (projectile.ownerId !== playerId || projectile.sprite !== Spr.PELLET) return false;
 
   const ai = monster.ai;
   const wasWindup = (ai.windupTimer ?? 0) > 0;
-  ai.staggerTimer = Math.max(ai.staggerTimer ?? 0, KOSTOREZ_STAGGER_SEC);
+  ai.staggerTimer = Math.max(ai.staggerTimer ?? 0, tuning.staggerSec);
   ai.windupTimer = undefined;
   ai.windupTargetId = undefined;
   monster.attackCd = Math.max(monster.attackCd ?? 0, 0.95);
@@ -708,10 +885,10 @@ export function tryMonsterProjectileStagger(
 
   if (wasWindup) {
     const target = ai.combatTargetId !== undefined ? _entityById.get(ai.combatTargetId) : undefined;
-    publishKostorezEvent(state, world, monster, target, 'monster_windup_interrupted', 4, ['windup', 'interrupted', 'shotgun'], {
+    publishBladeEliteEvent(tuning, state, world, monster, target, 'monster_windup_interrupted', 4, ['windup', 'interrupted', 'shotgun'], {
       reason: 'shotgun_stagger',
     });
-    state.msgs.push(msg('Дробь сбила замах Костореза.', state.time, '#4f4'));
+    state.msgs.push(msg(tuning.staggerMsg, state.time, '#4f4'));
   }
   return true;
 }
@@ -734,6 +911,7 @@ function fireMonsterProjectile(
   const spd = def.projSpeed ?? 8;
   const cos = Math.cos(ang);
   const sin = Math.sin(ang);
+  const sprite = def.projSprite || Spr.EYE_BOLT;
   entities.push({
     id: nextId.v++,
     type: EntityType.PROJECTILE,
@@ -743,20 +921,102 @@ function fireMonsterProjectile(
     pitch: 0,
     alive: true,
     speed: 0,
-    sprite: def.projSprite || Spr.EYE_BOLT,
+    sprite,
     vx: cos * spd,
     vy: sin * spd,
     projDmg: dmg,
     projLife: 3.0,
     ownerId: e.id,
-    spriteScale: 0.3,
+    spriteScale: monsterProjectileScale(e.monsterKind, sprite),
     spriteZ: 0.5,
+    projGore: sprite === Spr.PARAGRAPH_BOLT ? 1 : 2,
   });
-  playSoundAt(playGrowl, e.x, e.y);
+  playSoundAt(monsterProjectileSound(e.monsterKind, sprite), e.x, e.y);
   e.attackCd = def.attackRate ?? 2;
 }
 
-function updateEyeRanged(
+function monsterProjectileScale(kind: MonsterKind | undefined, sprite: number): number {
+  if (sprite === Spr.PARAGRAPH_BOLT) return 0.34;
+  if (sprite === Spr.HOSTILE_FLAME_BOLT) return 0.52;
+  if (sprite === Spr.HOSTILE_PLASMA_BOLT) return 0.34;
+  if (kind === MonsterKind.IDOL) return 0.4;
+  return 0.3;
+}
+
+function monsterProjectileSound(kind: MonsterKind | undefined, sprite: number): () => void {
+  if (kind === MonsterKind.EYE || sprite === Spr.EYE_BOLT) return playHostileEyeShot;
+  if (kind === MonsterKind.PARAGRAPH || sprite === Spr.PARAGRAPH_BOLT) return playHostileParagraphShot;
+  if (sprite === Spr.HOSTILE_FLAME_BOLT) return playHostileFlame;
+  if (sprite === Spr.HOSTILE_PLASMA_BOLT) return playHostileEnergyShot;
+  if (sprite === Spr.HOSTILE_PSI_BOLT) return playHostilePsiCast;
+  return playGrowl;
+}
+
+function rangedMonsterWindupSec(kind: MonsterKind | undefined): number {
+  switch (kind) {
+    case MonsterKind.EYE: return EYE_WINDUP_SEC;
+    case MonsterKind.PARAGRAPH: return PARAGRAPH_WINDUP_SEC;
+    case MonsterKind.IDOL: return IDOL_WINDUP_SEC;
+    case MonsterKind.ROBOT: return ROBOT_WINDUP_SEC;
+    case MonsterKind.MANCOBUS:
+    case MonsterKind.HERALD:
+    case MonsterKind.CREATOR:
+      return HEAVY_RANGED_WINDUP_SEC;
+    default: return GENERIC_RANGED_WINDUP_SEC;
+  }
+}
+
+function rangedMonsterMinRange(kind: MonsterKind | undefined): number {
+  if (kind === MonsterKind.IDOL) return 1.25;
+  return EYE_MIN_RANGE;
+}
+
+function rangedMonsterColor(kind: MonsterKind | undefined): string {
+  switch (kind) {
+    case MonsterKind.EYE: return '#cf6';
+    case MonsterKind.PARAGRAPH: return '#f6c';
+    case MonsterKind.IDOL: return '#c8f';
+    case MonsterKind.ROBOT: return '#6cf';
+    default: return '#fc6';
+  }
+}
+
+function rangedMonsterTag(kind: MonsterKind | undefined): string {
+  return kind === undefined ? 'ranged' : MonsterKind[kind].toLowerCase();
+}
+
+function rangedMonsterWindupMessage(kind: MonsterKind | undefined, name: string): string {
+  switch (kind) {
+    case MonsterKind.EYE: return 'Глаз разогревает зелёную линию огня. Угол, дверь или шкаф сорвут выстрел.';
+    case MonsterKind.PARAGRAPH: return 'Параграф дописывает прямую строку. Ломайте видимость или врывайтесь после залпа.';
+    case MonsterKind.IDOL: return 'Идол собирает ПСИ-луч. Стена, дверь или упорный заход гасят источник.';
+    case MonsterKind.ROBOT: return 'Робот раскручивает плазму. Сойдите с линии и бейте после вспышки.';
+    default: return `${name} целится по прямой. Укрытие или угол ломают линию огня.`;
+  }
+}
+
+function rangedMonsterSightMessage(kind: MonsterKind | undefined, name: string): string {
+  switch (kind) {
+    case MonsterKind.EYE: return 'Глаз держит прямую линию. Зеленый разогрев читается до выстрела.';
+    case MonsterKind.PARAGRAPH: return 'Параграф заметил вас: его пункт летит только по видимой прямой.';
+    case MonsterKind.IDOL: return 'Идол не двигается: режьте угол и входите в упор между ПСИ-залпами.';
+    case MonsterKind.ROBOT: return 'Робот взял линию плазмы. После залпа у него есть пауза.';
+    default: return `${name} держит линию огня. Выстрел будет с разогревом.`;
+  }
+}
+
+function rangedMonsterInterruptedMessage(kind: MonsterKind | undefined, reason: string): string {
+  if (reason === 'range') return 'Дистанция сломала выстрел: источник потерял линию.';
+  switch (kind) {
+    case MonsterKind.EYE: return 'Выстрел Глаза сорвался о стену или укрытие. Держите угол до вспышки.';
+    case MonsterKind.PARAGRAPH: return 'Пункт Параграфа уперся в укрытие. Сейчас можно сближаться.';
+    case MonsterKind.IDOL: return 'ПСИ-луч Идола погас за геометрией. Источник открыт для захода.';
+    case MonsterKind.ROBOT: return 'Плазменная линия Робота сорвалась. Пауза короткая, сближайтесь.';
+    default: return 'Линия огня сорвана укрытием или углом.';
+  }
+}
+
+function updateReadableMonsterRanged(
   world: World,
   entities: Entity[],
   e: Entity,
@@ -771,20 +1031,25 @@ function updateEyeRanged(
   state?: GameState,
 ): boolean {
   const ai = e.ai!;
-  const inShotRange = bestDist < EYE_SHOT_RANGE && bestDist > EYE_MIN_RANGE;
+  const shotRange = RANGED_SHOT_RANGE;
+  const minRange = rangedMonsterMinRange(e.monsterKind);
+  const windupSec = rangedMonsterWindupSec(e.monsterKind);
+  const inShotRange = bestDist < shotRange && bestDist > minRange;
   const currentTarget = ai.windupTargetId === undefined || ai.windupTargetId === target.id;
 
   if ((ai.windupTimer ?? 0) > 0) {
     ai.windupTimer = Math.max(0, (ai.windupTimer ?? 0) - dt);
-    const lineClear = currentTarget && inShotRange && target.alive && hasClearLine(world, e, target, EYE_SHOT_RANGE);
+    const lineClear = currentTarget && inShotRange && target.alive && hasClearLineOfFire(world, e, target, shotRange);
     if (!lineClear) {
       ai.windupTimer = undefined;
       ai.windupTargetId = undefined;
-      e.attackCd = Math.max(e.attackCd ?? 0, EYE_LOS_BREAK_COOLDOWN);
+      e.spriteScale = undefined;
+      e.attackCd = Math.max(e.attackCd ?? 0, RANGED_LOS_BREAK_COOLDOWN);
       if (target.id === playerId) {
-        msgs.push(msg('Выстрел Глаза сорвался о стену. Держите угол до вспышки.', time, '#9cf'));
-        publishMonsterReadabilityEvent(state, world, e, target, 'monster_windup_interrupted', 3, ['eye', 'windup', 'line_of_sight', 'interrupted'], {
-          reason: !inShotRange ? 'range' : 'line_of_sight',
+        const reason = !inShotRange ? 'range' : 'line_of_sight';
+        msgs.push(msg(rangedMonsterInterruptedMessage(e.monsterKind, reason), time, '#9cf'));
+        publishMonsterReadabilityEvent(state, world, e, target, 'monster_windup_interrupted', 3, [rangedMonsterTag(e.monsterKind), 'windup', 'line_of_sight', 'interrupted'], {
+          reason,
           counterplay: 'break_line_before_bolt',
         });
       }
@@ -794,30 +1059,37 @@ function updateEyeRanged(
     const dx = world.delta(e.x, target.x);
     const dy = world.delta(e.y, target.y);
     e.angle = Math.atan2(dy, dx);
+    e.spriteScale = 1.05 + Math.max(0, ai.windupTimer / windupSec) * 0.12;
     if (ai.windupTimer <= 0) {
       fireMonsterProjectile(world, entities, e, target, def, nextId);
       ai.windupTimer = undefined;
       ai.windupTargetId = undefined;
+      e.spriteScale = undefined;
     }
     return true;
   }
 
   if (!inShotRange) return false;
-  if (!hasClearLine(world, e, target, EYE_SHOT_RANGE)) return false;
+  if (!hasClearLineOfFire(world, e, target, shotRange)) return false;
 
   if (target.id === playerId && ai.lastSeenTargetId !== playerId) {
     ai.lastSeenTargetId = playerId;
-    msgs.push(msg('Глаз заряжает зелёный выстрел. Угол или дверь сорвут линию.', time, '#cf6'));
-    publishMonsterReadabilityEvent(state, world, e, target, 'monster_sighted', 4, ['eye', 'ranged', 'line_of_sight', 'warning'], {
-      windupSec: EYE_WINDUP_SEC,
+    msgs.push(msg(rangedMonsterSightMessage(e.monsterKind, entityDisplayName(e)), time, rangedMonsterColor(e.monsterKind)));
+    publishMonsterReadabilityEvent(state, world, e, target, 'monster_sighted', 4, [rangedMonsterTag(e.monsterKind), 'ranged', 'line_of_sight', 'warning'], {
+      windupSec,
       counterplay: 'corner_or_door_breaks_line',
     });
   }
 
   e.attackCd = (e.attackCd ?? 0) - dt;
   if (e.attackCd <= 0) {
-    ai.windupTimer = EYE_WINDUP_SEC;
+    ai.windupTimer = windupSec;
     ai.windupTargetId = target.id;
+    e.spriteScale = 1.14;
+    if (target.id === playerId) {
+      msgs.push(msg(rangedMonsterWindupMessage(e.monsterKind, entityDisplayName(e)), time, rangedMonsterColor(e.monsterKind)));
+      playSoundAt(playGrowl, e.x, e.y);
+    }
   }
   return true;
 }
@@ -888,7 +1160,10 @@ function updateShadowAmbushReadability(
 /* ── Drop NPC inventory as ITEM_DROP entities ─────────────────── */
 export function dropNpcInventory(e: Entity, entities: Entity[], nextId: { v: number }): void {
   if (!e.inventory || e.inventory.length === 0) return;
+  const slots = entitySpawnSlots(entities, EntityType.ITEM_DROP, e.inventory.length);
+  let dropped = 0;
   for (const item of e.inventory) {
+    if (dropped >= slots) break;
     if (!item || item.count <= 0) continue;
     entities.push({
       id: nextId.v++, type: EntityType.ITEM_DROP,
@@ -897,6 +1172,7 @@ export function dropNpcInventory(e: Entity, entities: Entity[], nextId: { v: num
       angle: 0, pitch: 0, alive: true, speed: 0, sprite: Spr.ITEM_DROP,
       inventory: [{ defId: item.defId, count: item.count, data: item.data }],
     });
+    dropped++;
   }
   e.inventory = [];
 }
@@ -915,7 +1191,7 @@ export function updateMonster(world: World, entities: Entity[], e: Entity, dt: n
       for (const o of matkaChildrenQuery) {
         if (o.type === EntityType.MONSTER && o.alive && o.id !== e.id && world.dist2(e.x, e.y, o.x, o.y) < 400) nearby++;
       }
-      if (nearby < MATKA_MAX_CHILDREN) {
+      if (nearby < MATKA_MAX_CHILDREN && canSpawnEntityType(entities, EntityType.MONSTER)) {
         const spawnKinds = [MonsterKind.SBORKA, MonsterKind.TVAR, MonsterKind.ZOMBIE, MonsterKind.SHADOW, MonsterKind.POLZUN];
         const kind = spawnKinds[Math.floor(Math.random() * spawnKinds.length)];
         const def = MONSTERS[kind];
@@ -960,8 +1236,8 @@ export function updateMonster(world: World, entities: Entity[], e: Entity, dt: n
     target = findDocumentHunterTarget(world, entities, e, dt);
   } else if (hasAIFlag(e, 'closeReveal')) {
     target = findCombatTarget(world, entities, e, dt, detectSq, 1.25, canBeMonsterTarget);
-  } else if (e.monsterKind === MonsterKind.KOSTOREZ) {
-    detectSq = KOSTOREZ_DETECT_SQ;
+  } else if (e.monsterKind === MonsterKind.KOSTOREZ || e.monsterKind === MonsterKind.SAFEGUARD) {
+    detectSq = e.monsterKind === MonsterKind.SAFEGUARD ? SAFEGUARD_DETECT_SQ : KOSTOREZ_DETECT_SQ;
     target = findCombatTarget(world, entities, e, dt, detectSq, deterministicScanCd(e.id, 0.7, 0.3), canBeMonsterTarget);
   } else {
     const scanCd = fixedScanCd(e) ?? deterministicScanCd(e.id, 1.0, 0.5);
@@ -984,9 +1260,9 @@ export function updateMonster(world: World, entities: Entity[], e: Entity, dt: n
       (!targetHasDocs && pd2 < PECHATEED_FALLBACK_SQ);
     if (playerAllowed && target && target.id !== playerId) {
       const td2 = world.dist2(e.x, e.y, target.x, target.y);
-      if (pd2 < td2 && pd2 < Math.min(PREFER_SQ, detectSq)) { target = player; ai.combatTargetId = player.id; }
+      if (pd2 < td2 && pd2 < Math.min(PREFER_SQ, detectSq)) { target = player; ai.combatTargetId = player.id; ai.goal = AIGoal.HUNT; }
     } else if (playerAllowed && !target) {
-      if (pd2 < detectSq) { target = player; ai.combatTargetId = player.id; }
+      if (pd2 < detectSq) { target = player; ai.combatTargetId = player.id; ai.goal = AIGoal.HUNT; }
     }
   }
 
@@ -995,8 +1271,10 @@ export function updateMonster(world: World, entities: Entity[], e: Entity, dt: n
   if (tryFollowMonsterBait(world, e, target, dt, time, msgs, state)) return;
 
   if (!target) {
-    if (e.monsterKind === MonsterKind.KOSTOREZ && ai.lastSeenTargetId === playerId) {
-      publishKostorezEscape(world, e, player, playerId, state, 'lost_target');
+    if (tryFollowNoise(world, e, dt, time, state)) return;
+    const tuning = bladeEliteTuning(e.monsterKind);
+    if (tuning && ai.lastSeenTargetId === playerId) {
+      publishBladeEliteEscape(tuning, world, e, player, playerId, state, 'lost_target');
     }
     // Immobile monsters (Idol) just idle — no wandering
     if (def?.speed === 0) return;
@@ -1024,11 +1302,12 @@ export function updateMonster(world: World, entities: Entity[], e: Entity, dt: n
     return;
   }
   ai.combatTargetId = target.id;
+  ai.goal = AIGoal.HUNT;
 
   const bestDist = Math.sqrt(world.dist2(e.x, e.y, target.x, target.y));
 
-  if (e.monsterKind === MonsterKind.KOSTOREZ) {
-    updateKostorez(world, entities, e, target, dt, time, msgs, playerId, nextId, state);
+  if (bladeEliteTuning(e.monsterKind)) {
+    updateBladeElite(world, entities, e, target, dt, time, msgs, playerId, nextId, state);
     return;
   }
 
@@ -1037,18 +1316,11 @@ export function updateMonster(world: World, entities: Entity[], e: Entity, dt: n
     return;
   }
 
-  // Ranged attack: shoot projectile if in range but not too close
-  // Immobile ranged monsters (Idol) fire at any distance within detection range
-  const minRange = def?.speed === 0 ? 0 : 1.5;
-  if (e.monsterKind === MonsterKind.EYE && def?.isRanged) {
-    if (updateEyeRanged(world, entities, e, target, def, bestDist, dt, time, msgs, playerId, nextId, state)) return;
-  } else if (def?.isRanged && bestDist < 15 && bestDist > minRange) {
-    e.attackCd = (e.attackCd ?? 0) - dt;
-    if (e.attackCd! <= 0) {
-      fireMonsterProjectile(world, entities, e, target, def, nextId);
-    }
-    return;
-  }
+  // Ranged monsters telegraph, require a clear toroidal line of fire, and can be denied by cover.
+  if (def?.isRanged && updateReadableMonsterRanged(world, entities, e, target, def, bestDist, dt, time, msgs, playerId, nextId, state)) return;
+
+  // Immobile monsters don't pathfind or melee: once their line/source is denied, they are disabled until it opens again.
+  if (def?.speed === 0) return;
 
   // Melee attack if close enough
   if (bestDist < monsterMeleeRange(e)) {
@@ -1088,9 +1360,6 @@ export function updateMonster(world: World, entities: Entity[], e: Entity, dt: n
     }
     return;
   }
-
-  // Immobile monsters don't pathfind or melee — only ranged
-  if (def?.speed === 0) return;
 
   // Hunt: pathfind to target
   ai.timer -= dt;

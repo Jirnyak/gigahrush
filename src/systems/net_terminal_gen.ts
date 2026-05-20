@@ -26,6 +26,7 @@ import {
   NET_TERMINAL_GEN_DENIED_TEXT,
   NET_TERMINAL_GEN_ITEM_ID,
   NET_TERMINAL_GEN_ITEM_NAME,
+  NET_TERMINAL_GEN_FLOOR_PROFILES,
   NET_TERMINAL_GEN_NORMAL_MIN_TERMINALS,
   NET_TERMINAL_GEN_NORMAL_MAX_TERMINALS,
   NET_TERMINAL_GEN_OPEN_TEXT,
@@ -34,6 +35,7 @@ import {
   NET_TERMINAL_GEN_TERMINAL_COUNT_WEIGHTS,
   NET_TERMINAL_GEN_TERMINALS,
   type NetTerminalGenTerminalDef,
+  type NetTerminalGenFloorProfile,
 } from '../data/net_terminal_gen';
 import { Spr } from '../render/sprite_index';
 import {
@@ -47,6 +49,9 @@ import {
   ensureFloorRunState,
   type FloorRunEntry,
 } from './procedural_floors';
+import { floorInstanceLabel, floorInstanceWorldKey, getActiveFloorInstance } from './floor_instances';
+import { spawnSafeguardHackBacklash } from './safeguard';
+import { canSpawnEntityType } from './entity_limits';
 
 export interface NetTerminalGenState {
   runSeed: number;
@@ -59,6 +64,7 @@ export interface NetTerminalGenState {
   found: boolean;
   pickupClaimed: boolean;
   firstTerminalDenied: boolean;
+  hackCooldowns: Record<string, number>;
 }
 
 export interface NetTerminalGenTarget {
@@ -148,6 +154,11 @@ export interface NetTerminalGenUseResult {
   text?: string;
 }
 
+export interface NetTerminalGenHackContext {
+  entities: Entity[];
+  nextId: { v: number };
+}
+
 type NetTerminalGenHost = GameState & { netTerminalGen?: Partial<NetTerminalGenState> };
 
 const terminalRegistry = new Map<number, NetTerminalGenTerminal>();
@@ -172,6 +183,16 @@ function cleanCoord(value: unknown): number | undefined {
   return ((Math.trunc(value) % W) + W) % W;
 }
 
+function cleanHackCooldowns(input: unknown, now: number): Record<string, number> {
+  const out: Record<string, number> = {};
+  if (!input || typeof input !== 'object' || Array.isArray(input)) return out;
+  for (const [key, value] of Object.entries(input as Record<string, unknown>)) {
+    if (typeof value !== 'number' || !Number.isFinite(value) || value <= now) continue;
+    out[key.slice(0, 96)] = value;
+  }
+  return out;
+}
+
 function routeKeyForStory(floor: FloorLevel): string {
   return `story:${FloorLevel[floor]}`;
 }
@@ -189,6 +210,12 @@ function routeKeyForEntry(entry: FloorRunEntry): string {
   if (entry.designFloorId) return `design:${entry.designFloorId}`;
   if (entry.spec) return `procedural:${entry.spec.key}`;
   return routeKeyForZ(entry.z);
+}
+
+export function currentNetTerminalGenFloorKey(state: GameState): string {
+  const active = getActiveFloorInstance(state);
+  if (active) return floorInstanceWorldKey(active);
+  return routeKeyForEntry(currentFloorRunEntry(state));
 }
 
 function buildRouteDeck(state: GameState): NetTerminalGenRouteTarget[] {
@@ -269,6 +296,7 @@ export function normalizeNetTerminalGenState(
     found: sameRun ? !!input?.found : false,
     pickupClaimed: sameRun ? !!input?.pickupClaimed : false,
     firstTerminalDenied: sameRun ? !!input?.firstTerminalDenied : false,
+    hackCooldowns: sameRun ? cleanHackCooldowns(input?.hackCooldowns, state.time) : {},
   };
 }
 
@@ -298,6 +326,7 @@ export function netTerminalGenStateForSave(state: GameState): NetTerminalGenStat
 
 export function isCurrentNetTerminalGenTargetFloor(state: GameState): boolean {
   const ntg = ensureNetTerminalGenState(state);
+  if (getActiveFloorInstance(state)) return false;
   const entry = currentFloorRunEntry(state);
   return entry.z === ntg.targetZ && routeKeyForEntry(entry) === ntg.targetKey;
 }
@@ -410,6 +439,7 @@ export function ensureNetTerminalGenFleshDrop(
 
   const existing = existingFleshDrop(entities, target);
   if (existing) return existing;
+  if (!canSpawnEntityType(entities, EntityType.ITEM_DROP)) return null;
 
   const drop: Entity = {
     id: nextEntityId.v++,
@@ -496,6 +526,11 @@ function chooseTerminalDef(rng: () => number): NetTerminalGenTerminalDef {
     if (roll <= 0) return def;
   }
   return NET_TERMINAL_GEN_TERMINALS[0];
+}
+
+function floorProfileForCurrentFloor(state: GameState): NetTerminalGenFloorProfile | undefined {
+  const key = currentNetTerminalGenFloorKey(state);
+  return NET_TERMINAL_GEN_FLOOR_PROFILES.find(profile => profile.floorKey === key);
 }
 
 function hasAdjacentPassable(world: World, x: number, y: number): boolean {
@@ -612,22 +647,25 @@ export function placeNetTerminalGenTerminalsForCurrentFloor(
   options: NetTerminalGenPlacementOptions = {},
 ): number {
   if (options.clearExisting ?? true) clearNetTerminalGenTerminals();
-  const entry = currentFloorRunEntry(state);
-  const seed = options.seed ?? hashSeed(`net_terminal_gen:terminals:${routeKeyForEntry(entry)}`, ensureFloorRunState(state).runSeed);
+  const seed = options.seed ?? hashSeed(`net_terminal_gen:terminals:${currentNetTerminalGenFloorKey(state)}`, ensureFloorRunState(state).runSeed);
   const rng = seededRandom(seed);
-  const max = Math.max(0, Math.floor(options.max ?? (options.debug ? NET_TERMINAL_GEN_DEBUG_MAX_TERMINALS : NET_TERMINAL_GEN_NORMAL_MAX_TERMINALS)));
+  const profile = options.debug ? undefined : floorProfileForCurrentFloor(state);
+  const maxDefault = profile?.maxTerminals ?? (options.debug ? NET_TERMINAL_GEN_DEBUG_MAX_TERMINALS : NET_TERMINAL_GEN_NORMAL_MAX_TERMINALS);
+  const max = Math.max(0, Math.floor(options.max ?? maxDefault));
   const desired = options.debug
     ? Math.max(1, max)
-    : Math.max(
-      Math.min(max, NET_TERMINAL_GEN_NORMAL_MIN_TERMINALS),
-      Math.min(max, chooseWeightedCount(rng)),
-    );
+    : profile
+      ? Math.max(0, Math.min(max, profile.minTerminals + Math.floor(rng() * Math.max(1, profile.maxTerminals - profile.minTerminals + 1))))
+      : Math.max(
+        Math.min(max, NET_TERMINAL_GEN_NORMAL_MIN_TERMINALS),
+        Math.min(max, chooseWeightedCount(rng)),
+      );
   let placed = 0;
 
   for (let attempt = 0; attempt < desired * 24 && placed < desired; attempt++) {
     const idx = findTerminalCandidate(world, rng);
     if (idx < 0 || terminalRegistry.has(idx)) continue;
-    const def = chooseTerminalDef(rng);
+    const def = profile?.terminalDef ?? chooseTerminalDef(rng);
     if (placeNetTerminalGenTerminal(world, idx % W, (idx / W) | 0, def, options.source ?? (options.debug ? 'debug' : 'generated'))) placed++;
   }
   return placed;
@@ -788,18 +826,99 @@ export function getNetTerminalBankSnapshot(state: GameState, player: Entity): Ne
   };
 }
 
+function terminalDefById(defId: string): NetTerminalGenTerminalDef | undefined {
+  for (const def of NET_TERMINAL_GEN_TERMINALS) if (def.id === defId) return def;
+  for (const profile of NET_TERMINAL_GEN_FLOOR_PROFILES) if (profile.terminalDef.id === defId) return profile.terminalDef;
+  return undefined;
+}
+
+function terminalHackKey(state: GameState, terminal: NetTerminalGenTerminal): string {
+  return `${currentNetTerminalGenFloorKey(state)}:${terminal.idx}:${terminal.defId}`;
+}
+
+function routeTagFromKey(key: string): string | undefined {
+  const prefix = 'design:';
+  return key.startsWith(prefix) ? key.slice(prefix.length) : undefined;
+}
+
+function resolveTerminalHack(
+  world: World,
+  player: Entity,
+  state: GameState,
+  terminal: NetTerminalGenTerminal,
+  entities: Entity[] | undefined,
+  nextId: { v: number } | undefined,
+): 'none' | 'success' | 'failed' | 'cooldown' {
+  const def = terminalDefById(terminal.defId);
+  if (!entities || !nextId) return 'none';
+  if (!def || def.hackDifficulty === undefined) return 'none';
+  const difficulty = def.hackDifficulty;
+
+  const ntg = ensureNetTerminalGenState(state);
+  const hackKey = terminalHackKey(state, terminal);
+  const cooldownUntil = ntg.hackCooldowns[hackKey] ?? 0;
+  if (cooldownUntil > state.time) {
+    state.msgs.push(msg(`Терминал в карантине: ${Math.ceil(cooldownUntil - state.time)}с.`, state.time, '#f84'));
+    return 'cooldown';
+  }
+
+  const floorKey = currentNetTerminalGenFloorKey(state);
+  const routeTag = routeTagFromKey(floorKey);
+  const successChance = Math.max(0.08, Math.min(0.55, 0.28 + (player.rpg?.int ?? 0) * 0.045 - difficulty * 0.045));
+  if (Math.random() < successChance) {
+    grantNetTerminalGenAccess(state);
+    state.msgs.push(msg('НЕТ-колодец принял обход. Доступ открыт.', state.time, NET_TERMINAL_GEN_PALETTE.open));
+    publishEvent(state, {
+      type: 'net_terminal_hacked',
+      x: terminal.x,
+      y: terminal.y,
+      zoneId: world.zoneMap[terminal.idx],
+      actorId: player.id,
+      actorName: player.name ?? 'Вы',
+      actorFaction: player.faction,
+      severity: 4,
+      privacy: 'secret',
+      tags: ['net', 'terminal', 'hack_success', terminal.defId, ...(routeTag ? [routeTag] : [])],
+      data: { terminalIdx: terminal.idx, terminalDef: terminal.defId, floorKey, difficulty, successChance },
+    });
+    return 'success';
+  }
+
+  ntg.hackCooldowns[hackKey] = state.time + (def?.hackCooldownS ?? 90);
+  state.msgs.push(msg('НЕТ-колодец отверг взлом. Протокол охраны поднимается рядом.', state.time, '#f84'));
+  spawnSafeguardHackBacklash(world, entities, nextId, state, terminal.x + 0.5, terminal.y + 0.5, 'net_terminal_hack_failed', {
+    terminalIdx: terminal.idx,
+    floorKey,
+  });
+  return 'failed';
+}
+
 export function tryUseNetTerminalGen(
   world: World,
   player: Entity,
   state: GameState,
   lookX: number,
   lookY: number,
+  entities?: Entity[],
+  nextId?: { v: number },
 ): NetTerminalGenUseResult {
   const terminal = getNetTerminalGenTerminalAt(world, lookX, lookY);
   if (!terminal) return { handled: false, access: false, mode: 'closed' };
   if (hasNetTerminalGen(state, player)) {
     openNetTerminalGenEditor(state, terminal);
     return { handled: true, access: true, mode: 'editor', terminal, text: NET_TERMINAL_GEN_OPEN_TEXT };
+  }
+  const hackResult = resolveTerminalHack(world, player, state, terminal, entities, nextId);
+  if (hackResult === 'success') {
+    openNetTerminalGenEditor(state, terminal);
+    return { handled: true, access: true, mode: 'editor', terminal, text: NET_TERMINAL_GEN_OPEN_TEXT };
+  }
+  if (hackResult === 'failed' || hackResult === 'cooldown') {
+    if (terminalDefById(terminal.defId)?.hackDifficulty !== undefined) {
+      return { handled: true, access: false, mode: 'closed', terminal, text: hackResult };
+    }
+    openNetTerminalBank(state, terminal);
+    return { handled: true, access: false, mode: 'bank', terminal, text: 'НЕТ-БАНК' };
   }
   openNetTerminalBank(state, terminal);
   return { handled: true, access: false, mode: 'bank', terminal, text: 'НЕТ-БАНК' };
@@ -808,10 +927,12 @@ export function tryUseNetTerminalGen(
 export function summarizeNetTerminalGen(state: GameState, player?: Entity): string[] {
   const ntg = ensureNetTerminalGenState(state);
   const entry = currentFloorRunEntry(state);
+  const active = getActiveFloorInstance(state);
+  const currentKey = currentNetTerminalGenFloorKey(state);
   const resolved = ntg.resolvedX !== undefined && ntg.resolvedY !== undefined ? `${ntg.resolvedX},${ntg.resolvedY}` : 'none';
   return [
     `seed=${ntg.runSeed} target=${ntg.targetKey} z=${ntg.targetZ} raw=${ntg.rawX},${ntg.rawY} resolved=${resolved}`,
-    `current=${routeKeyForEntry(entry)} z=${entry.z} targetFloor=${isCurrentNetTerminalGenTargetFloor(state) ? 'yes' : 'no'}`,
+    `current=${currentKey} z=${active ? 'instance' : entry.z} ${active ? floorInstanceLabel(active) : entry.label} targetFloor=${isCurrentNetTerminalGenTargetFloor(state) ? 'yes' : 'no'}`,
     `found=${ntg.found ? 'yes' : 'no'} claimed=${ntg.pickupClaimed ? 'yes' : 'no'} access=${hasNetTerminalGen(state, player) ? 'yes' : 'no'} denied=${ntg.firstTerminalDenied ? 'yes' : 'no'}`,
     `terminals=${terminalRegistry.size} overlay=${runtime.mode}${runtime.terminalIdx >= 0 ? ` idx=${runtime.terminalIdx}` : ''}`,
   ];

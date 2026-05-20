@@ -1,8 +1,8 @@
 /* ── Комната чужой очереди — Kvartiry close-reveal encounter ─── */
 
 import {
-  AIGoal, EntityType, Faction, FloorLevel, MonsterKind, Occupation, QuestType,
-  RoomType, Tex, Feature, type Entity,
+  AIGoal, Cell, ContainerKind, EntityType, Faction, FloorLevel, MonsterKind, Occupation, QuestType,
+  RoomType, Tex, Feature, type Entity, type WorldContainer,
 } from '../../core/types';
 import { World } from '../../core/world';
 import { type PlotNpcDef, registerSideQuest } from '../../data/plot';
@@ -10,11 +10,13 @@ import { MONSTERS, applyMonsterVariant } from '../../entities/monster';
 import { monsterSpr } from '../../render/sprite_index';
 import { randomRPG, scaleMonsterHp, scaleMonsterSpeed } from '../../systems/rpg';
 import {
-  createSocialPoiRoom, placeDropNear, setFeatureIfFloor, spawnAmbientNpc, spawnSocialNpc,
+  createSocialPoiRoom, placeDropNear, roomCell, setFeatureIfFloor, spawnAmbientNpc, spawnSocialNpc,
   type SocialPoiRoom,
 } from './social_helpers';
 
 const FALSE_NEIGHBOR_ROOM_NAME = 'Комната чужой очереди';
+export const FALSE_NEIGHBOR_TAG = 'false_neighbor';
+export const FALSE_NEIGHBOR_QUEST_ID = 'kv_false_neighbor_nelyud';
 const FALSE_NEIGHBOR_RUMOR_IDS = ['ecology_nelyud_close', 'lead_kvartiry_false_neighbor_nelyud'] as const;
 
 const RAYA: PlotNpcDef = {
@@ -38,7 +40,7 @@ const RAYA: PlotNpcDef = {
 };
 
 registerSideQuest('kv_raya_podozritelnaya', RAYA, [{
-  id: 'kv_false_neighbor_nelyud',
+  id: FALSE_NEIGHBOR_QUEST_ID,
   giverNpcId: 'kv_raya_podozritelnaya',
   type: QuestType.KILL,
   desc: 'Рая Подозрительная: «Убейте тихого соседа в комнате чужой очереди. Близко не подходите, пока не готовы бежать.»',
@@ -50,17 +52,19 @@ registerSideQuest('kv_raya_podozritelnaya', RAYA, [{
   relationDelta: 14, xpReward: 85, moneyReward: 45,
   targetFloor: FloorLevel.KVARTIRY,
   targetRoomType: RoomType.LIVING,
+  targetZoneTag: FALSE_NEIGHBOR_TAG,
   targetRoomName: FALSE_NEIGHBOR_ROOM_NAME,
-  targetHint: 'найдите экран без отражения у входа, держите проход свободным и не подпускайте тихого соседа ближе шести шагов',
+  targetHint: 'Квартиры: комната чужой очереди, экран без отражения и коробка доноса у входа; держите выход свободным.',
   eventSeverity: 4,
   eventPrivacy: 'witnessed',
   eventTargetName: 'Тихого соседа из чужой очереди раскрыли и убили.',
-  eventTags: ['monster', 'false_neighbor', 'witness', 'infected', 'fight_choice'],
+  eventTags: ['monster', 'false_neighbor', 'witness', 'infected', 'fight_choice', 'denunciation'],
   eventData: {
     monsterId: 'kv_false_neighbor_nelyud',
     ruName: 'Тихий сосед',
     clue: 'missing_screen_reflection_at_queue_door',
     counterplay: 'keep_exit_open_before_close_reveal',
+    localTrace: 'false_neighbor_denunciation_box',
     rumorIds: [...FALSE_NEIGHBOR_RUMOR_IDS],
   },
 }]);
@@ -97,6 +101,55 @@ function placeQueueTell(world: World, poi: SocialPoiRoom): void {
   world.stamp(poi.x + poi.w - 3, poi.y + poi.h - 3, 0.5, 0.5, 1.4, 0.42, 44016, 4, 5, 5, false);
 }
 
+function nextContainerId(world: World): number {
+  let id = world.containers.length + 1;
+  while (world.containerById.has(id) || world.containers.some(c => c.id === id)) id++;
+  return id;
+}
+
+function findEvidenceCell(world: World, poi: SocialPoiRoom, dx: number, dy: number): { x: number; y: number } | null {
+  const preferred = roomCell(poi, dx, dy);
+  if (world.cells[world.idx(preferred.x, preferred.y)] === Cell.FLOOR) return preferred;
+  for (let y = 1; y < poi.h - 1; y++) {
+    for (let x = 1; x < poi.w - 1; x++) {
+      const wx = world.wrap(poi.x + x);
+      const wy = world.wrap(poi.y + y);
+      const ci = world.idx(wx, wy);
+      if (world.roomMap[ci] === poi.room.id && world.cells[ci] === Cell.FLOOR) return { x: wx, y: wy };
+    }
+  }
+  return null;
+}
+
+function addFalseNeighborEvidenceBox(world: World, poi: SocialPoiRoom, ownerId: number): void {
+  const pos = findEvidenceCell(world, poi, 2, 1);
+  if (!pos) return;
+  const inventory: WorldContainer['inventory'] = [
+    { defId: 'fake_pass', count: 1 },
+    { defId: 'denunciation', count: 1 },
+    { defId: 'inspection_mirror', count: 1 },
+    { defId: 'note', count: 1 },
+  ];
+  world.addContainer({
+    id: nextContainerId(world),
+    x: pos.x,
+    y: pos.y,
+    floor: FloorLevel.KVARTIRY,
+    roomId: poi.room.id,
+    zoneId: world.zoneMap[world.idx(pos.x, pos.y)],
+    kind: ContainerKind.FILING_CABINET,
+    name: 'Коробка доноса на тихого соседа',
+    inventory,
+    capacitySlots: 8,
+    ownerNpcId: ownerId,
+    ownerName: RAYA.name,
+    faction: Faction.CITIZEN,
+    access: 'owner',
+    discovered: true,
+    tags: [FALSE_NEIGHBOR_TAG, 'denunciation', 'paper', 'witness', 'theft'],
+  });
+}
+
 export function generateFalseNeighborRoom(
   world: World, nextRoomId: number, entities: Entity[], nextId: { v: number }, spawnX: number, spawnY: number,
 ): number {
@@ -121,11 +174,13 @@ export function generateFalseNeighborRoom(
   world.wallTex[world.idx(poi.x + Math.floor(poi.w / 2), poi.y - 1)] = Tex.POSTER_BASE + 28;
   placeQueueTell(world, poi);
 
+  const rayaId = nextId.v;
   spawnSocialNpc(entities, nextId, RAYA, 'kv_raya_podozritelnaya', poi.x + 2, poi.y + 2);
   spawnAmbientNpc(entities, nextId, 'Леня Очередной', Faction.CITIZEN, Occupation.LOCKSMITH, poi.x + 4, poi.y + 5, [{ defId: 'bread', count: 1 }]);
   spawnNelyud(world, entities, nextId, poi.x + poi.w - 3, poi.y + poi.h - 3);
+  addFalseNeighborEvidenceBox(world, poi, rayaId);
 
-  for (const defId of ['note', 'fake_pass', 'inspection_mirror', 'unpeople_detector', 'bread']) {
+  for (const defId of ['note', 'fake_pass', 'inspection_mirror', 'denunciation', 'unpeople_detector', 'bread']) {
     placeDropNear(world, entities, nextId, poi, defId, 1);
   }
 

@@ -229,6 +229,8 @@ export function publishKvSocialPressureUprising(state: GameState, result: KvSoci
     tags: ['kvartiry', 'social_pressure', 'uprising', 'faction_event', ...result.tags],
     data: {
       poiId: result.poiId,
+      name: `Толпа: ${result.label}`,
+      text: result.message,
       outcome: result.outcome,
       converted: result.converted,
       responders: result.responders,

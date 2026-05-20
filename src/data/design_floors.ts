@@ -15,6 +15,7 @@ export type DesignFloorId =
   | 'black_market_88'
   | 'production_belt'
   | 'service_floor'
+  | 'silicon_net_well'
   | 'dark_metro'
   | 'underhell'
   | 'darkness';
@@ -25,26 +26,29 @@ export interface DesignFloorRouteDef {
   displayName: string;
   baseFloor: FloorLevel;
   color: string;
+  role: string;
+  danger: 1 | 2 | 3 | 4 | 5;
 }
 
 export const DESIGN_FLOOR_ROUTES: readonly DesignFloorRouteDef[] = [
-  { id: 'roof', z: -44, displayName: 'Крыша', baseFloor: FloorLevel.MINISTRY, color: '#9cf' },
-  { id: 'chthonic_attic', z: -40, displayName: 'Чердак техслужб', baseFloor: FloorLevel.MINISTRY, color: '#c8f' },
-  { id: 'antenna_court', z: -36, displayName: 'Антенный двор', baseFloor: FloorLevel.MINISTRY, color: '#8ff' },
-  { id: 'pioneer_camp', z: -32, displayName: 'Пионерлагерь', baseFloor: FloorLevel.LIVING, color: '#6d8' },
-  { id: 'upper_bureau', z: -28, displayName: 'Верхнее бюро', baseFloor: FloorLevel.MINISTRY, color: '#fc4' },
-  { id: 'bank_floor', z: -22, displayName: 'Банковский этаж', baseFloor: FloorLevel.MINISTRY, color: '#fd6' },
-  { id: 'raionsovet_archive', z: -20, displayName: 'Райсовет и архив картотек', baseFloor: FloorLevel.MINISTRY, color: '#fc4' },
-  { id: 'registry_morgue', z: -16, displayName: 'Морг регистраций', baseFloor: FloorLevel.MINISTRY, color: '#ccc' },
-  { id: 'manhattan_crossroads', z: -8, displayName: 'Перекрестки', baseFloor: FloorLevel.KVARTIRY, color: '#fa4' },
-  { id: 'communal_ring', z: -4, displayName: 'Коммунальное кольцо', baseFloor: FloorLevel.KVARTIRY, color: '#fa4' },
-  { id: 'floor_69', z: 4, displayName: 'Этаж 69', baseFloor: FloorLevel.MAINTENANCE, color: '#f8a' },
-  { id: 'black_market_88', z: 8, displayName: 'Черный рынок 88', baseFloor: FloorLevel.LIVING, color: '#fd4' },
-  { id: 'production_belt', z: 12, displayName: 'Производственный пояс', baseFloor: FloorLevel.MAINTENANCE, color: '#fd6' },
-  { id: 'service_floor', z: 16, displayName: 'Служебный этаж', baseFloor: FloorLevel.MAINTENANCE, color: '#8cf' },
-  { id: 'dark_metro', z: 24, displayName: 'Темная пересадка', baseFloor: FloorLevel.MAINTENANCE, color: '#79f' },
-  { id: 'underhell', z: 32, displayName: 'Нижний пропускник', baseFloor: FloorLevel.HELL, color: '#f44' },
-  { id: 'darkness', z: 40, displayName: 'Темный отсек', baseFloor: FloorLevel.VOID, color: '#88f' },
+  { id: 'roof', z: -44, displayName: 'Крыша', baseFloor: FloorLevel.MINISTRY, color: '#9cf', role: 'воздух, антенны, видимость', danger: 2 },
+  { id: 'chthonic_attic', z: -40, displayName: 'Чердак техслужб', baseFloor: FloorLevel.MINISTRY, color: '#c8f', role: 'техчердак, тайники, старые шахты', danger: 3 },
+  { id: 'antenna_court', z: -36, displayName: 'Антенный двор', baseFloor: FloorLevel.MINISTRY, color: '#8ff', role: 'связь, наружный ветер, обзор', danger: 2 },
+  { id: 'pioneer_camp', z: -32, displayName: 'Пионерлагерь', baseFloor: FloorLevel.LIVING, color: '#6d8', role: 'социальный лагерь, детские запасы', danger: 2 },
+  { id: 'upper_bureau', z: -28, displayName: 'Верхнее бюро', baseFloor: FloorLevel.MINISTRY, color: '#fc4', role: 'документы и доступ', danger: 3 },
+  { id: 'bank_floor', z: -22, displayName: 'Банковский этаж', baseFloor: FloorLevel.MINISTRY, color: '#fd6', role: 'деньги, долги, сейфы', danger: 3 },
+  { id: 'raionsovet_archive', z: -20, displayName: 'Райсовет и архив картотек', baseFloor: FloorLevel.MINISTRY, color: '#fc4', role: 'архивы, картотеки, пропуска', danger: 3 },
+  { id: 'registry_morgue', z: -16, displayName: 'Морг регистраций', baseFloor: FloorLevel.MINISTRY, color: '#ccc', role: 'мертвые записи и проверки', danger: 4 },
+  { id: 'manhattan_crossroads', z: -8, displayName: 'Перекрестки', baseFloor: FloorLevel.KVARTIRY, color: '#fa4', role: 'городской обход и развилки', danger: 3 },
+  { id: 'communal_ring', z: -4, displayName: 'Коммунальное кольцо', baseFloor: FloorLevel.KVARTIRY, color: '#fa4', role: 'социальный обход', danger: 2 },
+  { id: 'floor_69', z: 4, displayName: 'Этаж 69', baseFloor: FloorLevel.MAINTENANCE, color: '#f8a', role: 'населенный сбой, сделки, слухи', danger: 3 },
+  { id: 'black_market_88', z: 8, displayName: 'Черный рынок 88', baseFloor: FloorLevel.LIVING, color: '#fd4', role: 'торговля, контрабанда, долги', danger: 3 },
+  { id: 'production_belt', z: 12, displayName: 'Производственный пояс', baseFloor: FloorLevel.MAINTENANCE, color: '#fd6', role: 'лут и ремонт', danger: 4 },
+  { id: 'service_floor', z: 16, displayName: 'Служебный этаж', baseFloor: FloorLevel.MAINTENANCE, color: '#8cf', role: 'служебный обход и ремонт', danger: 3 },
+  { id: 'silicon_net_well', z: 18, displayName: 'Кремниевый НЕТ-колодец', baseFloor: FloorLevel.MAINTENANCE, color: '#63f6ff', role: 'НЕТ-доступ, кремниевая жизнь, редкое оружие', danger: 4 },
+  { id: 'dark_metro', z: 24, displayName: 'Темная пересадка', baseFloor: FloorLevel.MAINTENANCE, color: '#79f', role: 'опасный короткий ход', danger: 4 },
+  { id: 'underhell', z: 32, displayName: 'Нижний пропускник', baseFloor: FloorLevel.HELL, color: '#f44', role: 'боевой порог мясного низа', danger: 5 },
+  { id: 'darkness', z: 40, displayName: 'Темный отсек', baseFloor: FloorLevel.VOID, color: '#88f', role: 'позднее давление', danger: 5 },
 ];
 
 export const DESIGN_FLOOR_ZS: readonly number[] = DESIGN_FLOOR_ROUTES.map(def => def.z);

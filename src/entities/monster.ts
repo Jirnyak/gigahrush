@@ -1,7 +1,7 @@
 /* ── Monster shared types & registry ──────────────────────────── */
 
 import { FloorLevel, MonsterKind } from '../core/types';
-import { MONSTER_VARIANT_BY_ID, chooseMonsterVariant } from '../data/monster_variants';
+import { MONSTER_VARIANT_BY_ID, chooseMonsterVariant, type MonsterVariantDef } from '../data/monster_variants';
 import type { Entity } from '../core/types';
 
 export type MonsterAIFlag =
@@ -29,6 +29,25 @@ export interface MonsterDef {
   floors?: readonly FloorLevel[];
   counterplay?: string;
   lootHint?: string;
+  boss?: MonsterBossReadability;
+}
+
+export interface MonsterBossPhaseCue {
+  hpPct: number;
+  tag: string;
+  line: string;
+}
+
+export interface MonsterBossReadability {
+  warningLine: string;
+  windupLine: string;
+  interruptLine: string;
+  deathCause: string;
+  counterplay: string;
+  windupSec: number;
+  range: number;
+  minRange: number;
+  phases: readonly MonsterBossPhaseCue[];
 }
 
 // Import all monsters
@@ -56,6 +75,7 @@ import { DEF as PARAGRAPH_DEF, generateSprite as genParagraph } from './paragrap
 import { DEF as NELYUD_DEF, generateSprite as genNelyud } from './nelyud';
 import { DEF as KRYSNOZHKA_DEF, generateSprite as genKrysnozhka } from './krysnozhka';
 import { DEF as KOSTOREZ_DEF, generateSprite as genKostorez } from './kostorez';
+import { DEF as SAFEGUARD_DEF, generateSprite as genSafeguard } from './safeguard';
 
 export const MONSTERS: Record<MonsterKind, MonsterDef> = {
   [MonsterKind.SBORKA]:    SBORKA_DEF,
@@ -82,6 +102,7 @@ export const MONSTERS: Record<MonsterKind, MonsterDef> = {
   [MonsterKind.NELYUD]:    NELYUD_DEF,
   [MonsterKind.KRYSNOZHKA]: KRYSNOZHKA_DEF,
   [MonsterKind.KOSTOREZ]:  KOSTOREZ_DEF,
+  [MonsterKind.SAFEGUARD]: SAFEGUARD_DEF,
 };
 
 export const MONSTER_SPRITES: Record<MonsterKind, () => Uint32Array> = {
@@ -109,6 +130,7 @@ export const MONSTER_SPRITES: Record<MonsterKind, () => Uint32Array> = {
   [MonsterKind.NELYUD]:    genNelyud,
   [MonsterKind.KRYSNOZHKA]: genKrysnozhka,
   [MonsterKind.KOSTOREZ]:  genKostorez,
+  [MonsterKind.SAFEGUARD]: genSafeguard,
 };
 
 export const EYE_BOLT_SPRITE: () => Uint32Array = genEyeBolt;
@@ -122,15 +144,16 @@ export const NEW_MONSTER_KINDS: readonly MonsterKind[] = [
   MonsterKind.NELYUD,
   MonsterKind.KRYSNOZHKA,
   MonsterKind.KOSTOREZ,
+  MonsterKind.SAFEGUARD,
 ];
 
 export const NEW_MONSTERS_BY_FLOOR: Record<FloorLevel, readonly MonsterKind[]> = {
   [FloorLevel.MINISTRY]: [MonsterKind.SHOVNIK, MonsterKind.LAMPOVY, MonsterKind.PECHATEED, MonsterKind.PARAGRAPH, MonsterKind.NELYUD],
   [FloorLevel.KVARTIRY]: [MonsterKind.SHOVNIK, MonsterKind.LAMPOVY, MonsterKind.PECHATEED, MonsterKind.NELYUD, MonsterKind.KRYSNOZHKA],
   [FloorLevel.LIVING]: [MonsterKind.SHOVNIK, MonsterKind.LAMPOVY, MonsterKind.PECHATEED, MonsterKind.NELYUD, MonsterKind.KRYSNOZHKA],
-  [FloorLevel.MAINTENANCE]: [MonsterKind.LAMPOVY, MonsterKind.TUBE_EEL, MonsterKind.KRYSNOZHKA, MonsterKind.KOSTOREZ],
+  [FloorLevel.MAINTENANCE]: [MonsterKind.LAMPOVY, MonsterKind.TUBE_EEL, MonsterKind.KRYSNOZHKA, MonsterKind.KOSTOREZ, MonsterKind.SAFEGUARD],
   [FloorLevel.HELL]: [MonsterKind.KOSTOREZ],
-  [FloorLevel.VOID]: [MonsterKind.PARAGRAPH],
+  [FloorLevel.VOID]: [MonsterKind.PARAGRAPH, MonsterKind.SAFEGUARD],
 };
 
 /** Get generic type name for a monster kind (e.g. "Бетонник", "Тварь") */
@@ -155,7 +178,12 @@ export function applyMonsterVariant(e: Entity, floor: FloorLevel, force = false)
   if (!force && Math.random() > 0.35) return;
   const variant = chooseMonsterVariant(e.monsterKind, floor);
   if (!variant) return;
+  applyMonsterVariantDef(e, variant);
+}
 
+export function applyMonsterVariantDef(e: Entity, variant: MonsterVariantDef): void {
+  if (e.monsterKind === undefined || e.monsterVariantId) return;
+  if (variant.baseKind !== e.monsterKind) return;
   e.monsterVariantId = variant.id;
   e.monsterDmgMult = variant.dmgMult;
   e.speed *= variant.speedMult;
@@ -167,4 +195,9 @@ export function applyMonsterVariant(e: Entity, floor: FloorLevel, force = false)
     e.maxHp = Math.max(1, Math.round(oldMax * variant.hpMult));
     e.hp = Math.max(1, Math.round(e.maxHp * ratio));
   }
+}
+
+export function applyMonsterVariantById(e: Entity, variantId: string): void {
+  const variant = MONSTER_VARIANT_BY_ID[variantId];
+  if (variant) applyMonsterVariantDef(e, variant);
 }

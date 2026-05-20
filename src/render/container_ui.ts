@@ -3,7 +3,7 @@
 import { type Entity, type GameState } from '../core/types';
 import { World } from '../core/world';
 import { ITEMS } from '../data/catalog';
-import { containerAccessInfo, containerTheftStatus } from '../systems/containers';
+import { containerAccessInfo, containerItemActionInfo, containerTheftStatus } from '../systems/containers';
 import {
   itemValueDisplay,
   questItemStateColor,
@@ -41,7 +41,7 @@ export function drawContainerMenu(
   const containerX = startX + gridTotal + gap;
   const playerInv = player.inventory ?? [];
   const containerInv = container.inventory;
-  const access = containerAccessInfo(container, player);
+  const access = containerAccessInfo(container, player, state);
 
   ctx.fillStyle = '#aaa';
   ctx.font = `${9.5 * sy}px monospace`;
@@ -154,25 +154,27 @@ export function drawContainerMenu(
     ctx.fillStyle = '#888';
     ctx.font = `${7.4 * sy}px monospace`;
     let actionY = drawCenteredWrappedText(ctx, def?.desc ?? '', cw / 2, descY + 10 * sy, descW, 9 * sy, 2);
-    const action = state.containerSide === 'container'
-      ? access.canTake ? access.theft ? '[E] украсть' : '[E] взять' : 'нет доступа'
-      : access.canPut ? '[E] положить' : 'нет доступа';
-    ctx.fillStyle = state.containerSide === 'container' && access.theft ? '#f84' : access.color;
+    const side = state.containerSide === 'player' ? 'player' : 'container';
+    const actionInfo = containerItemActionInfo(container, player, side, item, state);
+    const actionDetail = actionInfo.detail && (actionInfo.mode === 'steal' || actionInfo.mode === 'buy' || actionInfo.mode === 'unlock' || actionInfo.mode === 'service')
+      ? actionInfo.detail
+      : '';
+    ctx.fillStyle = actionInfo.enabled ? actionInfo.color : '#f84';
     actionY = Math.min(actionY + 3 * sy, ch - 52 * sy);
     const value = itemValueDisplay(state, item.defId);
     ctx.fillStyle = value.scarcityColor;
     ctx.fillText(fitText(ctx, value.line, descW), cw / 2, actionY);
     ctx.fillStyle = '#888';
-    ctx.fillText(fitText(ctx, value.detail, descW), cw / 2, actionY + 9 * sy);
-    ctx.fillStyle = state.containerSide === 'container' && access.theft ? '#f84' : access.color;
+    ctx.fillText(fitText(ctx, actionDetail || value.detail, descW), cw / 2, actionY + 9 * sy);
+    ctx.fillStyle = actionInfo.enabled ? actionInfo.color : '#f84';
     if (value.questState) {
       const questLabel = value.questState === 'target' ? 'Квестовая цель' : 'Квестовая награда';
       ctx.fillStyle = questItemStateColor(value.questState);
       ctx.fillText(fitText(ctx, questLabel, descW), cw / 2, actionY + 18 * sy);
-      ctx.fillStyle = state.containerSide === 'container' && access.theft ? '#f84' : access.color;
-      ctx.fillText(action, cw / 2, Math.min(actionY + 27 * sy, ch - 34 * sy));
+      ctx.fillStyle = actionInfo.enabled ? actionInfo.color : '#f84';
+      ctx.fillText(fitText(ctx, actionInfo.label, descW), cw / 2, Math.min(actionY + 27 * sy, ch - 34 * sy));
     } else {
-      ctx.fillText(action, cw / 2, Math.min(actionY + 18 * sy, ch - 34 * sy));
+      ctx.fillText(fitText(ctx, actionInfo.label, descW), cw / 2, Math.min(actionY + 18 * sy, ch - 34 * sy));
     }
   } else {
     ctx.fillStyle = '#555';

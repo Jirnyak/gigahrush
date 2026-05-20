@@ -1,9 +1,9 @@
 import { test } from 'node:test';
 import * as assert from 'node:assert/strict';
 
-import { AIGoal, Cell, EntityType, RoomType, Tex, type Entity } from '../src/core/types';
+import { AIGoal, Cell, DoorState, EntityType, RoomType, Tex, type Entity } from '../src/core/types';
 import { World } from '../src/core/world';
-import { bfsPath, getPathfindingBudgetStats, gotoRoom, setPathContext } from '../src/systems/ai/pathfinding';
+import { bfsPath, getPathfindingBudgetStats, gotoNearestRoomType, gotoRoom, setPathContext } from '../src/systems/ai/pathfinding';
 
 function makeCorridorWorld(): World {
   const world = new World();
@@ -46,7 +46,19 @@ function npc(id: number, x: number): Entity {
   };
 }
 
-test('bfsPath reuses same-frame path cache for identical endpoints', () => {
+function assertContiguous(path: readonly number[]): void {
+  for (let i = 1; i < path.length; i++) {
+    const ax = path[i - 1] % 1024;
+    const ay = (path[i - 1] / 1024) | 0;
+    const bx = path[i] % 1024;
+    const by = (path[i] / 1024) | 0;
+    const dx = Math.abs(ax - bx);
+    const dy = Math.abs(ay - by);
+    assert.equal((dx === 1 || dx === 1023) && dy === 0 || (dy === 1 || dy === 1023) && dx === 0, true);
+  }
+}
+
+test('bfsPath reuses the baked navigation tree for identical endpoints', () => {
   const world = makeCorridorWorld();
   setPathContext([], 0);
 
@@ -54,11 +66,32 @@ test('bfsPath reuses same-frame path cache for identical endpoints', () => {
   const second = bfsPath(world, 0, 10, 21, 10);
 
   assert.ok(first.length > 0);
+  assertContiguous(first);
   assert.deepEqual(second, first);
   assert.equal(getPathfindingBudgetStats().cacheHits, 1);
 });
 
-test('routine gotoRoom is token-capped and deferred during samosbor', () => {
+test('ordinary closed doors are routeable while locked and hermetic doors block navigation', () => {
+  const world = makeCorridorWorld();
+  const doorIdx = world.idx(10, 10);
+  world.cells[doorIdx] = Cell.DOOR;
+  world.doors.set(doorIdx, { idx: doorIdx, state: DoorState.CLOSED, roomA: -1, roomB: 0, keyId: '', timer: 0 });
+
+  setPathContext([], 0);
+  assert.equal(bfsPath(world, 0, 10, 21, 10).length > 0, true);
+
+  world.doors.get(doorIdx)!.state = DoorState.LOCKED;
+  world.markCellsDirty();
+  setPathContext([], 1);
+  assert.deepEqual(bfsPath(world, 0, 10, 21, 10), []);
+
+  world.doors.get(doorIdx)!.state = DoorState.HERMETIC_CLOSED;
+  world.markCellsDirty();
+  setPathContext([], 2, true);
+  assert.deepEqual(bfsPath(world, 0, 10, 21, 10), []);
+});
+
+test('routine gotoRoom assigns every caller from baked navigation during samosbor', () => {
   const world = makeCorridorWorld();
   const npcs = [0, 1, 2, 3, 4, 5].map((x, i) => npc(i + 1, x));
 
@@ -66,20 +99,41 @@ test('routine gotoRoom is token-capped and deferred during samosbor', () => {
   for (const e of npcs) gotoRoom(world, e, 0);
 
   let stats = getPathfindingBudgetStats();
-  assert.equal(stats.routineBurst, 4);
-  assert.equal(stats.routineUsed, 4);
-  assert.equal(stats.routineDenied, 2);
-  assert.equal(npcs.filter(e => e.ai!.path.length > 0).length, 4);
+  assert.equal(stats.routineBurst, 0);
+  assert.equal(stats.routineUsed, 0);
+  assert.equal(stats.routineDenied, 0);
+  assert.equal(stats.bfsCalls, 1);
+  assert.equal(npcs.filter(e => e.ai!.path.length > 0).length, 6);
 
   setPathContext([], 0.1, true);
   gotoRoom(world, npcs[4], 0);
   stats = getPathfindingBudgetStats();
-  assert.equal(stats.routineUsed, 0);
-  assert.equal(stats.routineDeferred, 1);
-
-  setPathContext([], 2, true);
-  gotoRoom(world, npcs[4], 0);
-  stats = getPathfindingBudgetStats();
-  assert.equal(stats.routineUsed, 1);
+  assert.equal(stats.routineDenied, 0);
+  assert.equal(stats.routineDeferred, 0);
+  assert.equal(stats.bfsCalls, 0);
+  assert.equal(stats.cacheHits >= 1, true);
   assert.ok(npcs[4].ai!.path.length > 0);
+});
+
+test('behavior room flow field assigns many actors from one baked field', () => {
+  const world = makeCorridorWorld();
+  const npcs = [0, 1, 2, 3, 4, 5].map((x, i) => npc(i + 10, x));
+
+  setPathContext([], 0);
+  for (const e of npcs) {
+    assert.equal(gotoNearestRoomType(world, e, RoomType.LIVING), true);
+    assertContiguous(e.ai!.path);
+  }
+
+  let stats = getPathfindingBudgetStats();
+  assert.equal(stats.routineDenied, 0);
+  assert.equal(stats.routineDeferred, 0);
+  assert.equal(stats.bfsCalls, 1);
+  assert.equal(npcs.filter(e => e.ai!.path.length > 0).length, 6);
+
+  setPathContext([], 0.1);
+  assert.equal(gotoNearestRoomType(world, npcs[0], RoomType.LIVING), true);
+  stats = getPathfindingBudgetStats();
+  assert.equal(stats.bfsCalls, 0);
+  assert.equal(stats.cacheHits >= 1, true);
 });

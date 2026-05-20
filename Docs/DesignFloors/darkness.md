@@ -1,8 +1,8 @@
-# Design Floor: Тьма
+# Design Floor: Темный отсек
 
-Status: planning artifact. Future route id: `darkness`. Future anchor: `z=40`.
+Status: implemented authored route floor. Route id: `darkness`. Anchor: `z=40`. Base floor: `VOID`. Shipped HUD name: `Темный отсек`.
 
-Planned owned file: `src/gen/design_floors/darkness.ts`.
+Owned file: `src/gen/design_floors/darkness.ts`. Planning sections below preserve the original `Тьма` brief; shipped route display is `Темный отсек`.
 
 ## Role
 
@@ -60,4 +60,3 @@ Darkness samosbor is inverted: siren may be silent, and light failure is the war
 - Darkness is playable without making the screen blank.
 - Light is a resource with at least two uses.
 - One preserved/revealed thing changes a later floor fact.
-

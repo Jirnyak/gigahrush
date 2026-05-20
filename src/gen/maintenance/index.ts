@@ -15,13 +15,14 @@ import { calcZoneLevel, randomRPG, scaleMonsterHp, scaleMonsterSpeed, gaussianLe
 import { runMaintenanceContent } from './content_manifest';
 import { Spr, monsterSpr } from '../../render/sprite_index';
 import { applyCollectorMacroGeometry } from './geometry';
+import { entitySpawnSlots } from '../../systems/entity_limits';
 
 /* ── Coarse grid parameters ───────────────────────────────────── */
 const CELL = 6;                   // world-tiles per maze cell (walls between = 1-wide passage)
 const GRID = Math.floor(W / CELL);// 1024/6 = 170 coarse cells
 const EXTRA_CONN = 0.08;          // fraction of extra random connections (loops)
-const MONSTER_CAP = 1000;
-const NPC_CAP = 500;
+const MAINTENANCE_MONSTER_TARGET = 1000;
+const MAINTENANCE_NPC_TARGET = 500;
 
 /* Room type pool for maintenance floor */
 const MAINT_ROOM_TYPES: { type: RoomType; name: string; weight: number }[] = [
@@ -381,10 +382,11 @@ export function generateMaintenance(): { world: World; entities: Entity[]; spawn
   }
 
   /* ══════════════════════════════════════════════════════════════
-     Phase 11: Monsters (up to MONSTER_CAP=1000)
+     Phase 11: Monsters
      ══════════════════════════════════════════════════════════════ */
   let monsterCount = 0;
-  for (let attempt = 0; attempt < 50_000 && monsterCount < MONSTER_CAP; attempt++) {
+  const monsterTarget = entitySpawnSlots(entities, EntityType.MONSTER, MAINTENANCE_MONSTER_TARGET);
+  for (let attempt = 0; attempt < 50_000 && monsterCount < monsterTarget; attempt++) {
     const ci = rng(0, W * W - 1);
     if (world.cells[ci] !== Cell.FLOOR) continue;
     const mx = (ci % W) + 0.5, my = ((ci / W) | 0) + 0.5;
@@ -427,7 +429,7 @@ export function generateMaintenance(): { world: World; entities: Entity[]; spawn
   }
 
   /* ══════════════════════════════════════════════════════════════
-     Phase 12: Faction NPC squads (up to NPC_CAP=500)
+     Phase 12: Faction NPC squads
      ══════════════════════════════════════════════════════════════ */
   const factions: { faction: Faction; occupation: Occupation }[] = [
     { faction: Faction.LIQUIDATOR, occupation: Occupation.HUNTER },
@@ -437,13 +439,14 @@ export function generateMaintenance(): { world: World; entities: Entity[]; spawn
     { faction: Faction.SCIENTIST,  occupation: Occupation.SCIENTIST },
   ];
   let npcCount = 0;
-  while (npcCount < NPC_CAP) {
+  const npcTarget = entitySpawnSlots(entities, EntityType.NPC, MAINTENANCE_NPC_TARGET);
+  while (npcCount < npcTarget) {
     const prevCount = npcCount;
     for (const zone of world.zones) {
-      if (npcCount >= NPC_CAP) break;
+      if (npcCount >= npcTarget) break;
       const squadSize = rng(1, 4);
       const fDef = pick(factions);
-      for (let s = 0; s < squadSize && npcCount < NPC_CAP; s++) {
+      for (let s = 0; s < squadSize && npcCount < npcTarget; s++) {
         let sx = -1, sy = -1;
         for (let r = 0; r < 30; r++) {
           const tx = world.wrap(zone.cx + rng(-r * 3, r * 3));

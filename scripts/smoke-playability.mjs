@@ -16,6 +16,7 @@ const chromePath = process.env.CHROME_BIN
     : 'google-chrome');
 const perfFrameCount = Math.max(0, Math.min(600, Number.parseInt(process.env.SMOKE_PERF_FRAMES ?? '0', 10) || 0));
 const smokeScenario = (process.env.SMOKE_SCENARIO ?? '').toLowerCase();
+const runMobile = envFlag('SMOKE_MOBILE') || smokeScenario === 'mobile' || smokeScenario === 'touch';
 const runThirdWave = envFlag('SMOKE_THIRD_WAVE')
   || smokeScenario === 'third-wave'
   || smokeScenario === 'third_wave'
@@ -26,25 +27,43 @@ const runExpedition = envFlag('SMOKE_EXPEDITION')
   || smokeScenario === 'expedition'
   || smokeScenario === 'long';
 const runStress = smokeScenario === 'stress' || envFlag('SMOKE_STRESS');
+const runNetSphere = smokeScenario === 'net' || smokeScenario === 'net-sphere' || smokeScenario === 'net_sphere' || envFlag('SMOKE_NET');
 const stressEntities = Math.max(0, Math.min(12000, Number.parseInt(process.env.SMOKE_STRESS_ENTITIES ?? '10000', 10) || 0));
+const mobileViewportWidth = Math.max(640, Math.min(1200, Number.parseInt(process.env.SMOKE_MOBILE_WIDTH ?? '844', 10) || 844));
+const mobileViewportHeight = Math.max(320, Math.min(700, Number.parseInt(process.env.SMOKE_MOBILE_HEIGHT ?? '390', 10) || 390));
+const mobileDeviceScaleFactor = Math.max(1, Math.min(4, Number.parseFloat(process.env.SMOKE_MOBILE_DSF ?? '2') || 2));
+const mobileUserAgent = process.env.SMOKE_MOBILE_UA
+  ?? 'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Mobile Safari/537.36';
 
 const KEY = {
   enter: ['Enter', 'Enter', 13],
+  escape: ['Escape', 'Escape', 27],
   w: ['KeyW', 'w', 87],
   e: ['KeyE', 'e', 69],
   i: ['KeyI', 'i', 73],
+  m: ['KeyM', 'm', 77],
+  n: ['KeyN', 'n', 78],
   q: ['KeyQ', 'q', 81],
+  l: ['KeyL', 'l', 76],
   backquote: ['Backquote', '`', 192],
   arrowDown: ['ArrowDown', 'ArrowDown', 40],
   space: ['Space', ' ', 32],
 };
 
-const DEBUG_INDEX = {
-  forceFactionEvent: 17,
-  teleportLiving: 24,
-  teleportMaintenance: 25,
-  smokeExpeditionSetup: 29,
-  forceVeretarSamosbor: 30,
+const SMOKE_HOOK_ID = {
+  teleportLiving: 'teleport_living',
+  teleportMaintenance: 'teleport_maintenance',
+  forceFactionEvent: 'force_faction_event',
+  rareSamosbor: 'rare_samosbor',
+  expeditionSetup: 'smoke_expedition_setup',
+  expeditionProofPrep: 'expedition_proof_prep',
+  expeditionProofLiftReady: 'expedition_proof_lift_ready',
+  expeditionProofCollectorsArrival: 'expedition_proof_collectors_arrival',
+  expeditionProofRisk: 'expedition_proof_risk',
+  expeditionProofContainer: 'expedition_proof_container',
+  expeditionProofSamosborWarning: 'expedition_proof_samosbor_warning',
+  expeditionProofReturn: 'expedition_proof_return',
+  stressSpawn: 'stress_spawn',
 };
 
 function envFlag(name) {
@@ -238,7 +257,16 @@ async function readGameDebug(client) {
 }
 
 async function spawnStressPopulation(client, count) {
-  return evaluate(client, `window.__gigahrushStressSpawn?.(${JSON.stringify(count)}) ?? null`);
+  return runSmokeHook(client, SMOKE_HOOK_ID.stressSpawn, count);
+}
+
+async function runSmokeHook(client, id, value) {
+  switch (id) {
+    case SMOKE_HOOK_ID.stressSpawn:
+      return evaluate(client, `window.__gigahrushStressSpawn?.(${JSON.stringify(value)}) ?? null`);
+    default:
+      throw new Error(`Unknown smoke hook id: ${id}`);
+  }
 }
 
 async function waitForGameDebug(client, label, predicate, timeoutMs = 2000) {
@@ -270,6 +298,96 @@ async function waitFrames(client, frames = 2) {
   })`);
 }
 
+async function configureMobileEmulation(client) {
+  await client.send('Emulation.setUserAgentOverride', {
+    userAgent: mobileUserAgent,
+    platform: /iphone|ipad|ipod/i.test(mobileUserAgent) ? 'iOS' : 'Android',
+  });
+  await client.send('Emulation.setDeviceMetricsOverride', {
+    width: mobileViewportWidth,
+    height: mobileViewportHeight,
+    deviceScaleFactor: mobileDeviceScaleFactor,
+    mobile: true,
+    screenWidth: mobileViewportWidth,
+    screenHeight: mobileViewportHeight,
+    positionX: 0,
+    positionY: 0,
+    scale: 1,
+  });
+  await client.send('Emulation.setTouchEmulationEnabled', {
+    enabled: true,
+    maxTouchPoints: 5,
+  });
+  await client.send('Emulation.setEmitTouchEventsForMouse', {
+    enabled: true,
+    configuration: 'mobile',
+  }).catch(() => undefined);
+}
+
+async function configureDesktopEmulation(client) {
+  await client.send('Emulation.setDeviceMetricsOverride', {
+    width: 1280,
+    height: 720,
+    deviceScaleFactor: 1,
+    mobile: false,
+    screenWidth: 1280,
+    screenHeight: 720,
+    positionX: 0,
+    positionY: 0,
+    scale: 1,
+  });
+  await client.send('Emulation.setTouchEmulationEnabled', {
+    enabled: false,
+    maxTouchPoints: 0,
+  }).catch(() => undefined);
+}
+
+async function settleViewport(client) {
+  await evaluate(client, `(() => {
+    window.dispatchEvent(new Event('resize'));
+    window.visualViewport?.dispatchEvent(new Event('resize'));
+    return true;
+  })()`);
+  await waitPage(client, 500);
+  await waitFrames(client, 3);
+}
+
+async function installNetSphereOfflineApi(client) {
+  const state = {
+    requests: 0,
+    paths: new Map(),
+  };
+  const body = Buffer.from(JSON.stringify({ error: 'D1 binding GIGA_NET is not configured' })).toString('base64');
+
+  client.on('Fetch.requestPaused', params => {
+    void (async () => {
+      const url = params.request?.url ?? '';
+      if (!url.includes('/api/net/')) {
+        await client.send('Fetch.continueRequest', { requestId: params.requestId }).catch(() => undefined);
+        return;
+      }
+      const pathName = new URL(url).pathname;
+      state.requests++;
+      state.paths.set(pathName, (state.paths.get(pathName) ?? 0) + 1);
+      await client.send('Fetch.fulfillRequest', {
+        requestId: params.requestId,
+        responseCode: 503,
+        responsePhrase: 'Service Unavailable',
+        responseHeaders: [
+          { name: 'Content-Type', value: 'application/json; charset=utf-8' },
+          { name: 'Cache-Control', value: 'no-store' },
+        ],
+        body,
+      }).catch(() => undefined);
+    })();
+  });
+
+  await client.send('Fetch.enable', {
+    patterns: [{ urlPattern: '*://*/api/net/*', requestStage: 'Request' }],
+  });
+  return state;
+}
+
 async function dispatchKey(client, type, code, key, windowsVirtualKeyCode) {
   await client.send('Input.dispatchKeyEvent', {
     type,
@@ -293,6 +411,79 @@ async function tapKeyImmediate(client, keySpec, settleMs = 90) {
   await dispatchKey(client, 'rawKeyDown', code, key, vk);
   await dispatchKey(client, 'keyUp', code, key, vk);
   if (settleMs > 0) await waitPage(client, settleMs);
+}
+
+async function dispatchTouch(client, type, points) {
+  await client.send('Input.dispatchTouchEvent', {
+    type,
+    touchPoints: points,
+    modifiers: 0,
+  });
+}
+
+async function tapPoint(client, x, y, holdMs = 55, settleMs = 120) {
+  const point = { x, y, radiusX: 5, radiusY: 5, force: 1, id: 1 };
+  await dispatchTouch(client, 'touchStart', [point]);
+  await waitPage(client, holdMs);
+  await dispatchTouch(client, 'touchEnd', []);
+  if (settleMs > 0) await waitPage(client, settleMs);
+}
+
+async function elementBox(client, selector, frameSelector = '') {
+  return evaluate(client, `(() => {
+    const frame = ${JSON.stringify(frameSelector)} ? document.querySelector(${JSON.stringify(frameSelector)}) : null;
+    const doc = frame instanceof HTMLIFrameElement ? frame.contentDocument : document;
+    if (!doc) return null;
+    const el = doc.querySelector(${JSON.stringify(selector)});
+    if (!(el instanceof HTMLElement)) return null;
+    const rect = el.getBoundingClientRect();
+    const frameRect = frame instanceof HTMLIFrameElement ? frame.getBoundingClientRect() : { left: 0, top: 0 };
+    const style = doc.defaultView?.getComputedStyle(el);
+    const hidden = el.hidden || style?.display === 'none' || style?.visibility === 'hidden';
+    return {
+      x: frameRect.left + rect.left + rect.width / 2,
+      y: frameRect.top + rect.top + rect.height / 2,
+      left: frameRect.left + rect.left,
+      top: frameRect.top + rect.top,
+      right: frameRect.left + rect.right,
+      bottom: frameRect.top + rect.bottom,
+      width: rect.width,
+      height: rect.height,
+      hidden,
+      text: el.textContent ?? '',
+    };
+  })()`);
+}
+
+async function tapSelector(client, selector, label, settleMs = 140, frameSelector = '') {
+  const box = await elementBox(client, selector, frameSelector);
+  if (!box || box.hidden || box.width <= 0 || box.height <= 0) {
+    throw new Error(`${label}: selector ${selector} is not visible`);
+  }
+  await tapPoint(client, box.x, box.y, 55, settleMs);
+  return box;
+}
+
+async function dragSelector(client, selector, dx, dy, holdMs = 360) {
+  const box = await elementBox(client, selector);
+  if (!box || box.hidden || box.width <= 0 || box.height <= 0) {
+    throw new Error(`drag ${selector}: control is not visible`);
+  }
+  const id = 2;
+  const start = { x: box.x, y: box.y, radiusX: 7, radiusY: 7, force: 1, id };
+  await dispatchTouch(client, 'touchStart', [start]);
+  for (let i = 1; i <= 4; i++) {
+    await waitPage(client, Math.max(16, Math.floor(holdMs / 8)));
+    await dispatchTouch(client, 'touchMove', [{
+      ...start,
+      x: box.x + dx * (i / 4),
+      y: box.y + dy * (i / 4),
+    }]);
+  }
+  await waitPage(client, Math.max(40, Math.floor(holdMs / 2)));
+  await dispatchTouch(client, 'touchEnd', []);
+  await waitFrames(client, 2);
+  return box;
 }
 
 async function holdKey(client, keySpec, holdMs) {
@@ -335,6 +526,14 @@ async function selectDebugCommand(client, index, label) {
     throw new Error(`${label}: expected debugSel ${index}, got ${state.debugSel}`);
   }
   return state;
+}
+
+async function resolveDebugCommandIndex(client, id, label) {
+  const index = await evaluate(client, `window.__gigahrushDebugCommandIndex?.(${JSON.stringify(id)}) ?? -1`);
+  if (!Number.isInteger(index) || index < 0) {
+    throw new Error(`${label}: debug command id "${id}" is not registered`);
+  }
+  return index;
 }
 
 async function clickCanvasCenter(client) {
@@ -558,29 +757,26 @@ async function auditThirdWaveContent() {
 
   const rareVariantIds = ['maronary', 'istotit', 'veretar'].filter(id => quotedId(samosborVariants, id));
   const hasDirectVeretarForce = debugSystem.includes("forceNextSamosborVariant('veretar')")
-    && debugSystem.includes(`case ${DEBUG_INDEX.forceVeretarSamosbor}:`);
-  const hasCycleVariantForce = debugSystem.includes('cycleForcedSamosborVariant') && debugSystem.includes('case 5');
+    && quotedId(debugSystem, SMOKE_HOOK_ID.rareSamosbor);
   if (rareVariantIds.length === 0) {
     skips.push('rare samosbor variants missing; rare variant browser path skipped');
-  } else if (!hasDirectVeretarForce && !hasCycleVariantForce) {
+  } else if (!hasDirectVeretarForce) {
     failures.push(`rare variants present (${rareVariantIds.join(', ')}) but no debug force command was found`);
   } else {
-    coverage.push(`rare samosbor variants: ${rareVariantIds.join(', ')}; force=${hasDirectVeretarForce ? 'veretar command' : 'cycle command'}`);
+    coverage.push(`rare samosbor variants: ${rareVariantIds.join(', ')}; force=${SMOKE_HOOK_ID.rareSamosbor}`);
   }
 
-  const debugHas = index => debugSystem.includes(`case ${index}:`);
   const runtime = {
-    sampleRoute: sampleRoutes.length > 0 && debugHas(DEBUG_INDEX.teleportMaintenance),
+    sampleRoute: sampleRoutes.length > 0 && quotedId(debugSystem, SMOKE_HOOK_ID.teleportMaintenance),
     sampleRouteLabel: sampleRoutes[0] ?? '',
-    cultForce: cultIds.length > 0 && factionEventSystem.includes('forceFactionEvent') && debugHas(DEBUG_INDEX.forceFactionEvent),
-    rareForce: rareVariantIds.length > 0 && (hasDirectVeretarForce || hasCycleVariantForce),
-    rareForceMode: hasDirectVeretarForce ? 'direct_veretar' : 'cycle',
-    recoveryTeleport: debugHas(DEBUG_INDEX.teleportLiving),
+    cultForce: cultIds.length > 0 && factionEventSystem.includes('forceFactionEvent') && quotedId(debugSystem, SMOKE_HOOK_ID.forceFactionEvent),
+    rareForce: rareVariantIds.length > 0 && hasDirectVeretarForce,
+    recoveryTeleport: quotedId(debugSystem, SMOKE_HOOK_ID.teleportLiving),
   };
 
-  if (sampleRoutes.length > 0 && !debugHas(DEBUG_INDEX.teleportMaintenance)) skips.push(`slime/sample route present but Maintenance teleport debug command is missing (case ${DEBUG_INDEX.teleportMaintenance})`);
-  if (cultIds.length > 0 && !debugHas(DEBUG_INDEX.forceFactionEvent)) skips.push(`cult event defs present but force faction debug command is missing (case ${DEBUG_INDEX.forceFactionEvent})`);
-  if (!debugHas(DEBUG_INDEX.teleportLiving)) failures.push(`debug recovery teleport to Living (case ${DEBUG_INDEX.teleportLiving}) is missing`);
+  if (sampleRoutes.length > 0 && !quotedId(debugSystem, SMOKE_HOOK_ID.teleportMaintenance)) skips.push(`slime/sample route present but Maintenance teleport debug command id is missing (${SMOKE_HOOK_ID.teleportMaintenance})`);
+  if (cultIds.length > 0 && !quotedId(debugSystem, SMOKE_HOOK_ID.forceFactionEvent)) skips.push(`cult event defs present but force faction debug command id is missing (${SMOKE_HOOK_ID.forceFactionEvent})`);
+  if (!quotedId(debugSystem, SMOKE_HOOK_ID.teleportLiving)) failures.push(`debug recovery teleport to Living id is missing (${SMOKE_HOOK_ID.teleportLiving})`);
 
   return { failures, skips, coverage, runtime };
 }
@@ -785,6 +981,230 @@ function requirePanelTelemetry(before, after, label, failures) {
   }
 }
 
+async function readMobileLayout(client, frameSelector = '') {
+  return evaluate(client, `(() => {
+    const frame = ${JSON.stringify(frameSelector)} ? document.querySelector(${JSON.stringify(frameSelector)}) : null;
+    const doc = frame instanceof HTMLIFrameElement ? frame.contentDocument : document;
+    const win = doc?.defaultView;
+    if (!doc || !win) return { missingDocument: true };
+    const frameRect = frame instanceof HTMLIFrameElement ? frame.getBoundingClientRect() : { left: 0, top: 0 };
+    const viewport = {
+      width: frame instanceof HTMLIFrameElement ? frameRect.width : win.innerWidth,
+      height: frame instanceof HTMLIFrameElement ? frameRect.height : win.innerHeight,
+    };
+    const root = doc.querySelector('.mobile-controls');
+    const meta = doc.querySelector('meta[name="viewport"]')?.getAttribute('content') ?? '';
+    const rectFor = selector => {
+      const el = doc.querySelector(selector);
+      if (!(el instanceof HTMLElement)) return { exists: false };
+      const rect = el.getBoundingClientRect();
+      const style = win.getComputedStyle(el);
+      const hidden = el.hidden || style.display === 'none' || style.visibility === 'hidden';
+      const text = el.textContent ?? '';
+      const textFits = !text.trim() || hidden ||
+        (el.scrollWidth <= el.clientWidth + 1 && el.scrollHeight <= el.clientHeight + 1);
+      return {
+        exists: true,
+        hidden,
+        text,
+        mode: el.dataset.fullscreenMode ?? '',
+        left: frameRect.left + rect.left,
+        top: frameRect.top + rect.top,
+        right: frameRect.left + rect.right,
+        bottom: frameRect.top + rect.bottom,
+        width: rect.width,
+        height: rect.height,
+        clientWidth: el.clientWidth,
+        clientHeight: el.clientHeight,
+        scrollWidth: el.scrollWidth,
+        scrollHeight: el.scrollHeight,
+        textFits,
+      };
+    };
+    return {
+      missingDocument: false,
+      viewport,
+      dpr: win.devicePixelRatio,
+      meta,
+      maxTouchPoints: win.navigator.maxTouchPoints,
+      hasOntouch: 'ontouchstart' in win,
+      bodyMobileControlsOn: doc.body.classList.contains('mobile-controls-on'),
+      root: root instanceof HTMLElement ? {
+        exists: true,
+        hidden: root.hidden || win.getComputedStyle(root).display === 'none',
+        classes: root.className,
+      } : { exists: false },
+      controls: {
+        move: rectFor('.mobile-pad--move'),
+        look: rectFor('.mobile-pad--look'),
+        fire: rectFor('.mobile-fire-zone'),
+        interact: rectFor('.mobile-interact'),
+        rail: rectFor('.mobile-menu-rail'),
+        up: rectFor('.mobile-menu-rail .mobile-menu-btn:first-child'),
+        select: rectFor('.mobile-menu-select'),
+        down: rectFor('.mobile-menu-rail .mobile-menu-btn:last-child'),
+        fullscreen: rectFor('.mobile-fullscreen'),
+        rotate: rectFor('.mobile-rotate'),
+      },
+    };
+  })()`);
+}
+
+function rectInsideViewport(rect, viewport, label, failures, owner) {
+  if (!rect.exists) {
+    failures.push(`${owner}: missing ${label}`);
+    return;
+  }
+  if (rect.hidden) {
+    failures.push(`${owner}: ${label} is hidden`);
+    return;
+  }
+  if (rect.width < 8 || rect.height < 8) failures.push(`${owner}: ${label} has invalid size ${rect.width}x${rect.height}`);
+  const eps = 1.5;
+  if (rect.left < -eps || rect.top < -eps || rect.right > viewport.width + eps || rect.bottom > viewport.height + eps) {
+    failures.push(`${owner}: ${label} is outside viewport ${JSON.stringify({ left: rect.left, top: rect.top, right: rect.right, bottom: rect.bottom, viewport })}`);
+  }
+}
+
+function requireMobileLayout(layout, label, failures, options = {}) {
+  if (layout.missingDocument) {
+    failures.push(`${label}: mobile document was not readable`);
+    return;
+  }
+  if (!layout.meta.includes('viewport-fit=cover')) failures.push(`${label}: viewport meta is missing viewport-fit=cover`);
+  if (layout.maxTouchPoints < 1 && !layout.hasOntouch) failures.push(`${label}: touch emulation is not visible to the page`);
+  if (!layout.root.exists || layout.root.hidden) failures.push(`${label}: mobile controls root is missing or hidden`);
+  if (!layout.bodyMobileControlsOn) failures.push(`${label}: body is missing mobile-controls-on`);
+
+  const controls = layout.controls;
+  for (const [name, rect] of Object.entries({
+    'move pad': controls.move,
+    'look pad': controls.look,
+    'menu rail': controls.rail,
+    'menu up': controls.up,
+    'menu select': controls.select,
+    'menu down': controls.down,
+  })) {
+    rectInsideViewport(rect, layout.viewport, name, failures, label);
+  }
+
+  if (controls.rotate.exists && !controls.rotate.hidden) {
+    failures.push(`${label}: portrait rotation blocker is visible in landscape viewport`);
+  }
+
+  if (options.requireFullscreenVisible) {
+    rectInsideViewport(controls.fullscreen, layout.viewport, 'fullscreen/direct-launch button', failures, label);
+  }
+  if (options.requireDirectLauncher && controls.fullscreen.mode !== 'direct') {
+    failures.push(`${label}: expected embedded fullscreen mode "direct", got "${controls.fullscreen.mode}" with text "${controls.fullscreen.text}"`);
+  }
+  if (options.requireNativeFullscreen && controls.fullscreen.mode !== 'native' && controls.fullscreen.mode !== 'exit') {
+    failures.push(`${label}: expected native fullscreen mode, got "${controls.fullscreen.mode}" with text "${controls.fullscreen.text}"`);
+  }
+
+  for (const [name, rect] of Object.entries(controls)) {
+    if (rect.exists && !rect.hidden && rect.text?.trim() && !rect.textFits) {
+      failures.push(`${label}: ${name} text clips "${rect.text}" (${rect.scrollWidth}x${rect.scrollHeight} > ${rect.clientWidth}x${rect.clientHeight})`);
+    }
+  }
+
+  if (controls.look.exists && controls.rail.exists && !controls.look.hidden && !controls.rail.hidden) {
+    const gap = controls.rail.left - controls.look.right;
+    if (gap < 8) failures.push(`${label}: look pad is too close to menu rail (gap ${gap.toFixed(1)}px)`);
+  }
+  if (controls.move.exists && controls.look.exists && !controls.move.hidden && !controls.look.hidden) {
+    const overlap = !(controls.move.right < controls.look.left || controls.look.right < controls.move.left ||
+      controls.move.bottom < controls.look.top || controls.look.bottom < controls.move.top);
+    if (overlap) failures.push(`${label}: movement and look pads overlap`);
+  }
+}
+
+async function waitForMobileLayout(client, frameSelector = '') {
+  const startedAt = Date.now();
+  let last = null;
+  while (Date.now() - startedAt < 5000) {
+    last = await readMobileLayout(client, frameSelector);
+    if (!last.missingDocument && last.root?.exists && !last.root.hidden) return last;
+    await waitPage(client, 80);
+  }
+  return last ?? await readMobileLayout(client, frameSelector);
+}
+
+async function tapMobileMenuSelect(client, settleMs = 180) {
+  return tapSelector(client, '.mobile-menu-select', 'mobile menu select', settleMs);
+}
+
+async function tapMobileMenuDown(client, settleMs = 120) {
+  return tapSelector(client, '.mobile-menu-rail .mobile-menu-btn:last-child', 'mobile menu down', settleMs);
+}
+
+async function runMobilePanelChecks(client, running, failures) {
+  const closeCurrentPanel = async (label, predicate) => {
+    await tapMobileMenuSelect(client, 160);
+    await waitForGameDebug(client, `${label} close`, predicate);
+    await waitFrames(client, 2);
+    running = await sampleRunning(client);
+    requireRunningTelemetry(running, `after ${label} close`, failures);
+  };
+
+  await tapMobileMenuSelect(client, 180);
+  await waitForGameDebug(client, 'mobile inventory panel open', state => state.showInventory);
+  await waitFrames(client, 2);
+  const inventory = await sampleCanvases(client);
+  requirePanelTelemetry(running, inventory, 'mobile inventory panel', failures);
+  requireMobileLayout(await readMobileLayout(client), 'mobile layout with inventory panel', failures, { requireFullscreenVisible: true });
+  await closeCurrentPanel('mobile inventory panel', state => !state.showInventory);
+
+  await tapMobileMenuDown(client);
+  const beforeMap = running;
+  await tapMobileMenuSelect(client, 140);
+  await waitForGameDebug(client, 'mobile minimap open', state => state.mapMode === 1);
+  await tapMobileMenuSelect(client, 180);
+  await waitForGameDebug(client, 'mobile full map open', state => state.mapMode === 2);
+  await waitFrames(client, 2);
+  const mapPanel = await sampleCanvases(client);
+  requirePanelTelemetry(beforeMap, mapPanel, 'mobile full map panel', failures);
+  requireMobileLayout(await readMobileLayout(client), 'mobile layout with map panel', failures, { requireFullscreenVisible: true });
+  await closeCurrentPanel('mobile full map panel', state => state.mapMode === 0);
+
+  await tapMobileMenuDown(client);
+  await tapMobileMenuSelect(client, 180);
+  await waitForGameDebug(client, 'mobile quest panel open', state => state.showQuests);
+  await waitFrames(client, 2);
+  const questPanel = await sampleCanvases(client);
+  requirePanelTelemetry(running, questPanel, 'mobile quest panel', failures);
+  requireMobileLayout(await readMobileLayout(client), 'mobile layout with quest panel', failures, { requireFullscreenVisible: true });
+  await closeCurrentPanel('mobile quest panel', state => !state.showQuests);
+
+  await tapMobileMenuDown(client);
+  await tapMobileMenuSelect(client, 180);
+  await waitForGameDebug(client, 'mobile log panel open', state => state.showLog);
+  await waitFrames(client, 2);
+  const logPanel = await sampleCanvases(client);
+  requirePanelTelemetry(running, logPanel, 'mobile log panel', failures);
+  requireMobileLayout(await readMobileLayout(client), 'mobile layout with log panel', failures, { requireFullscreenVisible: true });
+  await closeCurrentPanel('mobile log panel', state => !state.showLog);
+
+  return running;
+}
+
+async function runEmbeddedDirectLaunchCheck(client, gameUrl, failures) {
+  await evaluate(client, `(() => {
+    document.getElementById('mobile-smoke-frame')?.remove();
+    const frame = document.createElement('iframe');
+    frame.id = 'mobile-smoke-frame';
+    frame.src = ${JSON.stringify(`${gameUrl}&embeddedSmoke=1`)};
+    frame.setAttribute('title', 'mobile embedded smoke');
+    frame.style.cssText = 'position:fixed;inset:0;width:100vw;height:100dvh;border:0;z-index:20;background:#000';
+    document.body.append(frame);
+  })()`);
+  const layout = await waitForMobileLayout(client, '#mobile-smoke-frame');
+  requireMobileLayout(layout, 'embedded mobile direct-launch path', failures, {
+    requireFullscreenVisible: true,
+    requireDirectLauncher: true,
+  });
+}
+
 async function runDebugCommand(client, index, label, failures, options = {}) {
   const repeat = Math.max(1, Math.min(12, Math.floor(options.repeat ?? 1)));
   const closesOverlay = options.closesOverlay === true;
@@ -806,20 +1226,13 @@ async function runDebugCommand(client, index, label, failures, options = {}) {
   await waitFrames(client, 2);
 }
 
-async function forceRareVariant(client, audit, failures) {
-  if (audit.runtime.rareForceMode === 'direct_veretar') {
-    await runDebugCommand(client, DEBUG_INDEX.forceVeretarSamosbor, 'force veretar samosbor', failures, { settleMs: 400 });
-    return;
-  }
-  const before = await sampleCanvases(client);
-  await toggleDebugOverlay(client);
-  await waitForGameDebug(client, 'cycle rare samosbor debug open', state => state.showDebug);
-  const debugPanel = await sampleCanvases(client);
-  requirePanelTelemetry(before, debugPanel, 'cycle rare samosbor debug overlay', failures);
-  await selectDebugCommand(client, 5, 'cycle rare samosbor');
-  for (let i = 0; i < 8; i++) await tapDebugMenuSelect(client);
-  await toggleDebugOverlay(client);
-  await waitForGameDebug(client, 'cycle rare samosbor debug close', state => !state.showDebug);
+async function runDebugCommandById(client, id, label, failures, options = {}) {
+  const index = await resolveDebugCommandIndex(client, id, label);
+  await runDebugCommand(client, index, label, failures, options);
+}
+
+async function forceRareVariant(client, failures) {
+  await runDebugCommandById(client, SMOKE_HOOK_ID.rareSamosbor, 'force rare samosbor', failures, { settleMs: 400 });
 }
 
 function describeException(details) {
@@ -869,7 +1282,7 @@ async function main() {
       '--no-default-browser-check',
       `--remote-debugging-port=${debugPort}`,
       `--user-data-dir=${profileDir}`,
-      '--window-size=1280,720',
+      `--window-size=${runMobile ? `${mobileViewportWidth},${mobileViewportHeight}` : '1280,720'}`,
       'about:blank',
     ], 'chrome');
     await waitForHttp(`http://127.0.0.1:${debugPort}/json/version`, 15000);
@@ -893,6 +1306,7 @@ async function main() {
     await client.send('Page.enable');
     await client.send('Runtime.enable');
     await client.send('Log.enable');
+    if (runMobile) await configureMobileEmulation(client);
     const loaded = client.once('Page.loadEventFired', 15000).catch(() => undefined);
     await client.send('Page.navigate', { url: gameUrl });
     await loaded;
@@ -916,41 +1330,71 @@ async function main() {
       await installInputTrace(client);
       const title = await sampleCanvases(client);
       requireTitleTelemetry(title, failures);
+      if (runMobile) {
+        const layout = await waitForMobileLayout(client);
+        requireMobileLayout(layout, 'mobile title layout', failures, {
+          requireFullscreenVisible: true,
+          requireNativeFullscreen: true,
+        });
+        return { title, layout };
+      }
       return title;
     });
 
     let running;
     await runStep('start and move', async () => {
-      await clickCanvasCenter(client);
-      await tapKeyImmediate(client, KEY.enter);
-      await waitPage(client, 500);
-      await tapKey(client, KEY.e, 90, 200);
-      await waitPage(client, 1800);
-      await holdKey(client, KEY.w, 350);
+      if (runMobile) {
+        await tapSelector(client, '#hud', 'mobile title canvas start', 350);
+        await waitForGameDebug(client, 'mobile title start', state => state.started === true);
+        await waitPage(client, 1200);
+        await dragSelector(client, '.mobile-pad--move', 0, -42, 420);
+        requireMobileLayout(await readMobileLayout(client), 'mobile gameplay layout', failures, {
+          requireFullscreenVisible: true,
+          requireNativeFullscreen: true,
+        });
+      } else {
+        await clickCanvasCenter(client);
+        await tapKeyImmediate(client, KEY.enter);
+        await waitPage(client, 500);
+        await tapKey(client, KEY.e, 90, 200);
+        await waitPage(client, 1800);
+        await holdKey(client, KEY.w, 350);
+      }
       running = await sampleRunning(client);
       requireRunningTelemetry(running, 'after movement', failures);
       return running;
     });
 
-    await runStep('inventory panel', async () => {
-      const before = running ?? await sampleCanvases(client);
-      await tapKey(client, KEY.i);
-      await waitForGameDebug(client, 'inventory panel open', state => state.showInventory);
-      await waitFrames(client, 2);
-      const inventory = await sampleCanvases(client);
-      requirePanelTelemetry(before, inventory, 'inventory panel', failures);
-      await tapKey(client, KEY.i);
-      await waitForGameDebug(client, 'inventory panel close', state => !state.showInventory);
-      await waitFrames(client, 2);
-      running = await sampleRunning(client);
-      requireRunningTelemetry(running, 'after inventory close', failures);
-      return inventory;
-    });
+    if (runMobile) {
+      await runStep('mobile controls and panels', async () => {
+        running = await runMobilePanelChecks(client, running ?? await sampleRunning(client), failures);
+        return running;
+      });
+      await runStep('embedded direct-launch control', async () => {
+        await runEmbeddedDirectLaunchCheck(client, gameUrl, failures);
+        return await readMobileLayout(client, '#mobile-smoke-frame');
+      });
+    } else {
+      await runStep('inventory panel', async () => {
+        const before = running ?? await sampleCanvases(client);
+        await tapKey(client, KEY.i);
+        await waitForGameDebug(client, 'inventory panel open', state => state.showInventory);
+        await waitFrames(client, 2);
+        const inventory = await sampleCanvases(client);
+        requirePanelTelemetry(before, inventory, 'inventory panel', failures);
+        await tapKey(client, KEY.i);
+        await waitForGameDebug(client, 'inventory panel close', state => !state.showInventory);
+        await waitFrames(client, 2);
+        running = await sampleRunning(client);
+        requireRunningTelemetry(running, 'after inventory close', failures);
+        return inventory;
+      });
+    }
 
     if (runThirdWave && thirdWaveAudit) {
       if (thirdWaveAudit.runtime.sampleRoute) {
         await runStep('third-wave slime/sample floor generation', async () => {
-          await runDebugCommand(client, DEBUG_INDEX.teleportMaintenance, 'teleport maintenance for slime/sample route', failures, { closesOverlay: true, settleMs: 3500 });
+          await runDebugCommandById(client, SMOKE_HOOK_ID.teleportMaintenance, 'teleport maintenance for slime/sample route', failures, { closesOverlay: true, settleMs: 3500 });
           running = await sampleRunning(client);
           requireRunningTelemetry(running, `after Maintenance sample route (${thirdWaveAudit.runtime.sampleRouteLabel})`, failures);
           return running;
@@ -961,7 +1405,7 @@ async function main() {
 
       if (thirdWaveAudit.runtime.cultForce) {
         await runStep('third-wave cult/faction force', async () => {
-          await runDebugCommand(client, DEBUG_INDEX.forceFactionEvent, 'force cult/faction event', failures, { repeat: 4, settleMs: 700 });
+          await runDebugCommandById(client, SMOKE_HOOK_ID.forceFactionEvent, 'force cult/faction event', failures, { repeat: 4, settleMs: 700 });
           running = await sampleRunning(client);
           requireRunningTelemetry(running, 'after forced faction events', failures);
           return running;
@@ -972,7 +1416,7 @@ async function main() {
 
       if (thirdWaveAudit.runtime.rareForce) {
         await runStep('third-wave rare samosbor force', async () => {
-          await forceRareVariant(client, thirdWaveAudit, failures);
+          await forceRareVariant(client, failures);
           await waitPage(client, 2600);
           running = await sampleRunning(client);
           requireRunningTelemetry(running, 'during forced rare samosbor variant', failures);
@@ -984,7 +1428,7 @@ async function main() {
 
       if (thirdWaveAudit.runtime.recoveryTeleport) {
         await runStep('third-wave recovery return', async () => {
-          await runDebugCommand(client, DEBUG_INDEX.teleportLiving, 'return to Living after third-wave path', failures, { closesOverlay: true, settleMs: 3500 });
+          await runDebugCommandById(client, SMOKE_HOOK_ID.teleportLiving, 'return to Living after third-wave path', failures, { closesOverlay: true, settleMs: 3500 });
           await holdKey(client, KEY.w, 260);
           running = await sampleRunning(client);
           requireRunningTelemetry(running, 'after third-wave recovery return', failures);
@@ -995,7 +1439,7 @@ async function main() {
 
     if (runExpedition) {
       await runStep('debug expedition setup', async () => {
-        await runDebugCommand(client, DEBUG_INDEX.smokeExpeditionSetup, 'smoke expedition setup', failures, { settleMs: 250 });
+        await runDebugCommandById(client, SMOKE_HOOK_ID.expeditionSetup, 'smoke expedition setup', failures, { settleMs: 250 });
         running = await sampleRunning(client);
         requireRunningTelemetry(running, 'after debug setup', failures);
         return running;
@@ -1076,7 +1520,8 @@ async function main() {
     const scenarioText = runExpedition ? '; expedition=on' : '; expedition=off';
     const thirdWaveText = runThirdWave ? '; thirdWave=on' : '; thirdWave=off';
     const stressText = runStress ? `; stress=${stressEntities}` : '; stress=off';
-    console.log(`Smoke playability passed at ${gameUrl}${scenarioText}${thirdWaveText}${stressText}; hudLit=${running.hudLit}, hudCenterLit=${running.hudCenterLit}, sceneLit=${running.sceneLit}${perfText}`);
+    const mobileText = runMobile ? `; mobile=${mobileViewportWidth}x${mobileViewportHeight}@${mobileDeviceScaleFactor}` : '; mobile=off';
+    console.log(`Smoke playability passed at ${gameUrl}${scenarioText}${thirdWaveText}${stressText}${mobileText}; hudLit=${running.hudLit}, hudCenterLit=${running.hudCenterLit}, sceneLit=${running.sceneLit}${perfText}`);
   } finally {
     client?.close();
     await stopProcess(chrome);

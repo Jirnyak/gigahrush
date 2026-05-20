@@ -1075,6 +1075,7 @@ export function generateRaionsovetArchiveDesignFloor(): FloorGeneration {
     'faction',
     [
       { defId: 'archive_access_permit', count: 1 },
+      { defId: 'raionsovet_floor_pass', count: 1 },
       { defId: 'elevator_access_order', count: 1 },
       { defId: 'temp_pass', count: 1 },
     ],
@@ -1102,6 +1103,7 @@ export function generateRaionsovetArchiveDesignFloor(): FloorGeneration {
     [
       { defId: 'personal_file_copy', count: 1 },
       { defId: 'permanent_pass', count: 1 },
+      { defId: 'confiscation_warrant', count: 1 },
       { defId: 'record_exposure_notice', count: 1 },
     ],
     ['visible_consequence', 'locked', 'apartment_rights'],
@@ -1114,6 +1116,7 @@ export function generateRaionsovetArchiveDesignFloor(): FloorGeneration {
     'secret',
     [
       { defId: 'forged_stamp_sheet', count: 1 },
+      { defId: 'forged_raionsovet_pass', count: 1 },
       { defId: 'fake_pass', count: 1 },
       { defId: 'ink_bottle', count: 2 },
     ],
@@ -1126,6 +1129,7 @@ export function generateRaionsovetArchiveDesignFloor(): FloorGeneration {
     'locked',
     [
       { defId: 'official_permit_slip', count: 1 },
+      { defId: 'debt_settlement_receipt', count: 1 },
       { defId: 'ration_registry_extract', count: 1 },
       { defId: 'fake_pass', count: 1 },
     ],

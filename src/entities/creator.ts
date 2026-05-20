@@ -8,17 +8,32 @@ import { S, rgba, noise, clamp, CLEAR } from '../render/pixutil';
 export const DEF: MonsterDef = {
   kind: MonsterKind.CREATOR,
   name: 'Творец',
-  hp: 9999,
-  speed: 1.2,
-  dmg: 50,
-  attackRate: 1.5,
+  hp: 520,
+  speed: 1.05,
+  dmg: 44,
+  attackRate: 2.35,
   sprite: 0,   // auto-assigned by generateSprites()
   isRanged: true,
-  projSpeed: 9,
+  projSpeed: 7.5,
   projSprite: 0,
   floors: [FloorLevel.VOID],
   counterplay: 'Входите с полным запасом: держите укрытие между залпами, уходите из зелёного света и не тратьте рывок без выхода.',
   lootHint: 'пустотные шипы и квитанция контура без владельца',
+  boss: {
+    warningLine: 'Творец считает только открытый контур. Держите укрытие между залпами и не стойте в зеленой разметке.',
+    windupLine: 'Контур Творца замкнулся: уходите за стену до зеленого разряда.',
+    interruptLine: 'Контур Творца потерял доказательство: укрытие разорвало линию.',
+    deathCause: 'Творец убил вас зеленым контуром без укрытия',
+    counterplay: 'cover_between_green_bursts_leave_contour',
+    windupSec: 1.25,
+    range: 18,
+    minRange: 2.4,
+    phases: [
+      { hpPct: 0.7, tag: 'proof_rewrites', line: 'Творец переписал первую строку. Залпы медленные: меняйте укрытие, не стойте в свете.' },
+      { hpPct: 0.4, tag: 'return_clause', line: 'Творец открыл возвратную ошибку. Добивайте только из-за укрытия: портал будет на его месте.' },
+      { hpPct: 0.18, tag: 'last_contour', line: 'Последний контур Творца дрожит. Отступить можно; жадность держит линию открытой.' },
+    ],
+  },
 };
 
 export function generateSprite(): Uint32Array {

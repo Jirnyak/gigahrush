@@ -12,9 +12,11 @@ import {
   type Room,
 } from '../../core/types';
 import { freshNeeds, randomName } from '../../data/catalog';
+import { PROCEDURAL_POPULATION_PROFILES } from '../../data/population_profiles';
 import { floorRunZAllowsNpcs } from '../../data/procedural_floors';
 import { MONSTERS } from '../../entities/monster';
 import { monsterSpr } from '../../render/sprite_index';
+import { canSpawnEntityType, entitySpawnSlots } from '../../systems/entity_limits';
 import { gaussianLevel, getMaxHp, randomRPG } from '../../systems/rpg';
 import {
   addItemDrop,
@@ -25,8 +27,6 @@ import {
   type ProceduralAnomalyGenContext,
 } from './common';
 
-const MIN_CROWD = 9000;
-const CROWD_PER_DANGER = 120;
 const CROWD_OCCUPATIONS = [
   Occupation.HOUSEWIFE,
   Occupation.LOCKSMITH,
@@ -40,7 +40,7 @@ const CROWD_OCCUPATIONS = [
 ] as const;
 
 function crowdCount(ctx: ProceduralAnomalyGenContext): number {
-  return Math.min(9800, MIN_CROWD + ctx.spec.danger * CROWD_PER_DANGER + Math.floor(ctx.rooms.length * 0.7));
+  return entitySpawnSlots(ctx.entities, EntityType.NPC, PROCEDURAL_POPULATION_PROFILES.highDensity.npcs.cap);
 }
 
 function crowdRooms(rooms: readonly Room[]): Room[] {
@@ -152,6 +152,7 @@ function markOutbreakRoom(ctx: ProceduralAnomalyGenContext, room: Room): void {
 }
 
 function spawnPatientZero(ctx: ProceduralAnomalyGenContext, room: Room): void {
+  if (!canSpawnEntityType(ctx.entities, EntityType.MONSTER)) return;
   const pos = randomRoomCell(ctx.world, room, false) ??
     randomFloorCell(ctx.world, ctx.spawnX, ctx.spawnY, 36 * 36) ??
     { x: Math.floor(ctx.spawnX), y: Math.floor(ctx.spawnY) };

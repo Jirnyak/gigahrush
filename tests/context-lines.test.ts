@@ -18,8 +18,12 @@ import {
   CONTEXT_SAMOSBOR_WARNING_LINES,
   CONTEXT_STOLEN_GOODS_LINES,
 } from '../src/data/context_lines';
+import { RUMORS, type RumorDef, type RumorReveal } from '../src/data/rumors';
+import { SCREEN_SIGNAL_DEFS } from '../src/data/screen_signals';
 import { buildContextSnapshot } from '../src/systems/context';
 import { createWorldEventState } from '../src/systems/events';
+import { getRecentRumorLead } from '../src/systems/npc_memory';
+import { observeRecentRumorEventsForNpc, recordRumorEvent, selectRumorForNpc } from '../src/systems/rumor';
 import { makeGameState } from './helpers';
 
 test('recent event context flags are derived from bounded world event history', () => {
@@ -39,6 +43,72 @@ test('context line pools cover recent event floors and factions', () => {
   assert.ok(CONTEXT_FACTION_EVENT_FACTION_LINES[Faction.LIQUIDATOR]?.length);
   assert.ok(CONTEXT_MONSTER_KILL_FLOOR_LINES[FloorLevel.HELL]?.length);
 });
+
+test('screen signal rumor pools point to gameplay surfaces', () => {
+  const rumors = new Map(RUMORS.map(rumor => [rumor.id, rumor]));
+  const weak: string[] = [];
+  for (const signal of SCREEN_SIGNAL_DEFS) {
+    for (const rumorId of signal.rumorIds) {
+      const rumor = rumors.get(rumorId);
+      if (!rumor || rumorHasGameplaySurface(rumor)) continue;
+      weak.push(`${signal.id}:${rumorId}`);
+    }
+  }
+  assert.deepEqual(weak, []);
+});
+
+test('runtime event rumors keep floor zone and room context in leads', () => {
+  const now = 9_500;
+  const npc = { ...makeNpc(), id: 9301 };
+  const state = makeGameState({ currentFloor: FloorLevel.MAINTENANCE, time: now });
+  const snapshot = buildContextSnapshot(npc, { state, player: makePlayer(), time: now });
+  assert.equal(recordRumorEvent({
+    id: 9_100_001,
+    type: 'room_produced_items',
+    time: now - 5,
+    floor: FloorLevel.MAINTENANCE,
+    zoneId: 12,
+    roomId: 44,
+    severity: 4,
+    privacy: 'public',
+    tags: ['production'],
+    data: {
+      roomName: 'Брикетный цех: линия концентрата',
+      resourceName: 'Концентрат',
+    },
+  }), true);
+
+  assert.equal(observeRecentRumorEventsForNpc(npc, snapshot, now), 1);
+  const line = selectRumorForNpc(npc, snapshot, now);
+  assert.ok(line);
+  assert.match(line, /Коллекторы/);
+  assert.match(line, /зона 12/);
+  assert.match(line, /Брикетный цех: линия концентрата/);
+  assert.match(line, /концентрат/i);
+
+  const lead = getRecentRumorLead(now);
+  assert.equal(lead?.floor, FloorLevel.MAINTENANCE);
+  assert.equal(lead?.roomName, 'Брикетный цех: линия концентрата');
+});
+
+function rumorHasGameplaySurface(rumor: RumorDef): boolean {
+  if (rumor.lead) return true;
+  return rumorReveals(rumor.reveals).some(revealHasGameplaySurface);
+}
+
+function rumorReveals(input: RumorDef['reveals']): readonly RumorReveal[] {
+  if (!input) return [];
+  return Array.isArray(input) ? input : [input];
+}
+
+function revealHasGameplaySurface(reveal: RumorReveal): boolean {
+  if (reveal.kind === 'danger' || reveal.kind === 'container') return true;
+  if (reveal.kind === 'item' || reveal.kind === 'monster' || reveal.kind === 'floor') return reveal.confidence >= 4;
+  if (reveal.kind === 'room') return reveal.confidence >= 4 && (reveal.roomName !== undefined || reveal.roomType !== undefined);
+  if (reveal.kind === 'zone') return reveal.confidence >= 4 && (reveal.zoneId !== undefined || reveal.faction !== undefined);
+  if (reveal.kind === 'warning') return reveal.confidence >= 4;
+  return reveal.kind === 'faction' && reveal.confidence >= 4 && reveal.faction !== undefined;
+}
 
 function snapshotFor(type: WorldEvent['type'], overrides: Partial<WorldEvent> = {}) {
   const state = makeGameState({

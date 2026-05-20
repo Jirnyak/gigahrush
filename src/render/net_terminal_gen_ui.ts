@@ -1,5 +1,5 @@
 import { drawGlitchText, drawNeuroPanel, drawStaticNoise, textJitter } from './hud_fx';
-import { fitText } from './ui_text';
+import { fitText, wrapTextLines } from './ui_text';
 
 export type NetTerminalGenDeniedStatus = 'missing' | 'denied' | 'offline' | 'searching' | 'locked' | string;
 
@@ -12,25 +12,6 @@ export interface NetTerminalGenDeniedSnapshot {
 }
 
 export type NetTerminalGenDeniedInput = readonly string[] | NetTerminalGenDeniedSnapshot | undefined;
-
-function wrapText(ctx: CanvasRenderingContext2D, text: string, maxW: number, maxLines: number): string[] {
-  if (maxW <= 0 || maxLines <= 0) return [];
-  const words = text.split(/\s+/);
-  const lines: string[] = [];
-  let line = '';
-  for (const word of words) {
-    const next = line ? `${line} ${word}` : word;
-    if (ctx.measureText(next).width <= maxW) {
-      line = next;
-      continue;
-    }
-    if (line) lines.push(line);
-    line = word;
-    if (lines.length >= maxLines) break;
-  }
-  if (line && lines.length < maxLines) lines.push(fitText(ctx, line, maxW));
-  return lines;
-}
 
 function normalizeDeniedInput(input: NetTerminalGenDeniedInput): NetTerminalGenDeniedSnapshot {
   if (Array.isArray(input)) return { lines: input as readonly string[] };
@@ -104,7 +85,7 @@ export function drawNetTerminalGenDenied(
   const maxRows = Math.max(1, Math.floor((y + panelH - ly - 22 * s) / lineH));
   let rows = 0;
   for (const line of lines) {
-    for (const wrapped of wrapText(ctx, line, maxTextW, maxRows - rows)) {
+    for (const wrapped of wrapTextLines(ctx, line, maxTextW, maxRows - rows)) {
       ctx.fillText(wrapped, x + pad, ly);
       ly += lineH;
       rows++;

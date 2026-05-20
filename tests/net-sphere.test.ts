@@ -1,12 +1,35 @@
 import { test } from 'node:test';
 import * as assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 
+import worker from '../functions/worker';
 import { onRequestPost as postChat } from '../functions/api/net/chat';
 import { cleanMessage, cleanNickname, type D1Database, type D1PreparedStatement } from '../functions/api/net/common';
 import { onRequestPost as postEvent } from '../functions/api/net/event';
 import { onRequestPost as postHello } from '../functions/api/net/hello';
 import { onRequestGet as getStats } from '../functions/api/net/stats';
+
+const D1_SQL_FILES = [
+  'cloudflare/d1/net_sphere.sql',
+  'cloudflare/d1/net_sphere_names.sql',
+  'cloudflare/d1/net_sphere_market.sql',
+];
+
+const EXPECTED_D1_TABLE_COLUMNS: Record<string, string[]> = {
+  net_players: [
+    'net_gen', 'nickname', 'created_at', 'last_seen_at', 'runs', 'total_samosbors',
+    'deaths', 'best_level', 'best_samosbor_count', 'last_floor', 'progress_json',
+  ],
+  net_sessions: ['session_id', 'net_gen', 'last_seen_at'],
+  net_events: ['event_key', 'net_gen', 'nickname', 'type', 'summary', 'created_at', 'payload_json'],
+  net_chat: ['id', 'net_gen', 'body', 'created_at'],
+  net_market_impulses: ['id', 'net_gen', 'corp_id', 'kind', 'magnitude', 'created_at', 'event_key'],
+  net_market_budgets: [
+    'identity_key', 'net_gen', 'session_id', 'window_started_at',
+    'impulse_count', 'magnitude_sum', 'updated_at',
+  ],
+  net_market_snapshots: ['corp_id', 'price', 'last_delta', 'volume', 'updated_at'],
+};
 
 interface PlayerRow {
   net_gen: string;
@@ -67,6 +90,7 @@ class FakeD1 implements D1Database {
   chat: ChatRow[] = [];
   events: Record<string, unknown>[] = [];
   nextChatId = 1;
+  nextEventId = 1;
 
   prepare(query: string): D1PreparedStatement {
     return new FakeStatement(this, query);
@@ -114,7 +138,13 @@ class FakeD1 implements D1Database {
         }));
     }
     if (query.includes('FROM net_events')) {
-      return this.events.slice(0, 20);
+      return this.events
+        .slice()
+        .sort((a, b) => {
+          const createdDelta = Number(b.created_at ?? 0) - Number(a.created_at ?? 0);
+          return createdDelta || Number(b.id ?? 0) - Number(a.id ?? 0);
+        })
+        .slice(0, 20);
     }
     throw new Error(`Unhandled fake all query: ${query}`);
   }
@@ -172,7 +202,9 @@ class FakeD1 implements D1Database {
     if (query.includes('INSERT OR IGNORE INTO net_events')) {
       const eventKey = String(values[0]);
       if (this.events.some(row => row.event_key === eventKey)) return { meta: { changes: 0 } };
+      const id = this.nextEventId++;
       this.events.unshift({
+        id,
         event_key: eventKey,
         net_gen: String(values[1]),
         nickname: String(values[2]),
@@ -181,7 +213,7 @@ class FakeD1 implements D1Database {
         created_at: Number(values[5]),
         payload_json: String(values[6]),
       });
-      return { meta: { changes: 1 } };
+      return { meta: { changes: 1, last_row_id: id } };
     }
     if (query.includes('UPDATE net_players SET total_samosbors = total_samosbors + 1')) {
       const row = this.players.get(String(values[0]));
@@ -204,8 +236,28 @@ function postRequest(body: Record<string, unknown>): Request {
   });
 }
 
+function workerRequest(path: string, init: RequestInit = {}): Request {
+  return new Request(`https://game.test${path}`, init);
+}
+
 async function responseJson(response: Response): Promise<Record<string, unknown>> {
   return await response.json() as Record<string, unknown>;
+}
+
+function makeAssets(body = 'asset fallback') {
+  const requests: Request[] = [];
+  return {
+    requests,
+    binding: {
+      async fetch(request: Request): Promise<Response> {
+        requests.push(request);
+        return new Response(body, {
+          status: 203,
+          headers: { 'Cache-Control': 'public, max-age=60' },
+        });
+      },
+    },
+  };
 }
 
 function identityBody(overrides: Record<string, unknown> = {}): Record<string, unknown> {
@@ -239,24 +291,57 @@ function readJsonc(path: string): Record<string, unknown> {
   return JSON.parse(text) as Record<string, unknown>;
 }
 
+function escapeRegExp(text: string): string {
+  return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function stripSqlComments(sql: string): string {
+  return sql.replace(/^\s*--.*$/gm, '');
+}
+
+function d1SqlFiles(): string[] {
+  return readdirSync('cloudflare/d1')
+    .filter(file => file.endsWith('.sql'))
+    .map(file => `cloudflare/d1/${file}`)
+    .sort();
+}
+
+function setupSqlFiles(script: string): string[] {
+  return [...script.matchAll(/path:\s*'([^']+\.sql)'/g)].map(match => match[1]);
+}
+
+function tableNames(sql: string): string[] {
+  const names: string[] = [];
+  const re = /CREATE TABLE IF NOT EXISTS\s+([a-z_][a-z0-9_]*)\s*\(/gi;
+  for (const match of stripSqlComments(sql).matchAll(re)) names.push(match[1]);
+  return names;
+}
+
 function tableColumns(sql: string, table: string): Set<string> {
-  const match = new RegExp(`CREATE TABLE IF NOT EXISTS ${table} \\(([\\s\\S]*?)\\);`).exec(sql);
+  const match = new RegExp(`CREATE TABLE IF NOT EXISTS\\s+${table}\\s+\\(([\\s\\S]*?)\\);`).exec(stripSqlComments(sql));
   assert.ok(match, `${table} must exist in base schema`);
   const columns = match[1]
     .split('\n')
-    .map(line => /^([a-z_]+)\s/i.exec(line.trim())?.[1] ?? '')
+    .map(line => /^([a-z_][a-z0-9_]*)\s/i.exec(line.trim())?.[1] ?? '')
     .filter(Boolean);
   return new Set(columns);
 }
 
+function indexNames(sql: string): string[] {
+  const names: string[] = [];
+  const re = /CREATE INDEX IF NOT EXISTS\s+([a-z_][a-z0-9_]*)\s/gi;
+  for (const match of stripSqlComments(sql).matchAll(re)) names.push(match[1]);
+  return names;
+}
+
 function migrationColumns(sql: string): string[] {
   const columns: string[] = [];
-  const re = /ALTER TABLE\s+([a-z_]+)\s+ADD COLUMN\s+([a-z_]+)\s/gi;
-  for (const match of sql.matchAll(re)) columns.push(`${match[1]}.${match[2]}`);
+  const re = /ALTER TABLE\s+([a-z_][a-z0-9_]*)\s+ADD COLUMN\s+([a-z_][a-z0-9_]*)\s/gi;
+  for (const match of stripSqlComments(sql).matchAll(re)) columns.push(`${match[1]}.${match[2]}`);
   return columns;
 }
 
-test('Net Sphere Cloudflare config keeps concrete D1 binding and guarded schema script', () => {
+test('Net Sphere Cloudflare config keeps concrete D1 binding and covers every D1 SQL file', () => {
   const pkg = readJsonc('package.json');
   const scripts = pkg.scripts as Record<string, string>;
   assert.equal(scripts['cf:schema'], 'node scripts/cloudflare-net-setup.mjs --schema-only');
@@ -276,24 +361,31 @@ test('Net Sphere Cloudflare config keeps concrete D1 binding and guarded schema 
   assert.match(d1.database_id, /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i);
 
   const setup = readFileSync('scripts/cloudflare-net-setup.mjs', 'utf8');
+  assert.deepEqual(d1SqlFiles(), [...D1_SQL_FILES].sort());
+  assert.deepEqual(setupSqlFiles(setup), D1_SQL_FILES);
   assert.match(setup, /schemaOnly/);
-  assert.match(setup, /applySchema\(\);\s*applyMigrations\(\);/);
+  assert.match(setup, /cloudflare\/d1\/net_sphere_names\.sql', mode: 'guarded'/);
+  assert.match(setup, /function applyGuardedSqlFile/);
+  assert.match(setup, /applySchema\(\);/);
 });
 
-test('Net Sphere D1 base schema and historical migration stay aligned with API columns', () => {
+test('Net Sphere docs describe migration order, optional D1 tables, and local build boundary', () => {
+  const docs = readFileSync('cloudflare.md', 'utf8');
+
+  assert.match(docs, /## D1 Schema Files/);
+  D1_SQL_FILES.forEach((path, index) => {
+    assert.match(docs, new RegExp(`${index + 1}\\. \`${escapeRegExp(path)}\``));
+  });
+  assert.match(docs, /net_market_impulses[\s\S]*net_market_budgets[\s\S]*net_market_snapshots[\s\S]*опциональны/);
+  assert.match(docs, /локальная игра не требуют Cloudflare credentials/);
+});
+
+test('Net Sphere D1 base schema and historical names migration stay aligned with API columns', () => {
   const schema = readFileSync('cloudflare/d1/net_sphere.sql', 'utf8');
   const migration = readFileSync('cloudflare/d1/net_sphere_names.sql', 'utf8');
-  const required: Record<string, string[]> = {
-    net_players: [
-      'net_gen', 'nickname', 'created_at', 'last_seen_at', 'runs', 'total_samosbors',
-      'deaths', 'best_level', 'best_samosbor_count', 'last_floor', 'progress_json',
-    ],
-    net_sessions: ['session_id', 'net_gen', 'last_seen_at'],
-    net_events: ['event_key', 'net_gen', 'nickname', 'type', 'summary', 'created_at', 'payload_json'],
-    net_chat: ['id', 'net_gen', 'body', 'created_at'],
-  };
 
-  for (const [table, columns] of Object.entries(required)) {
+  assert.deepEqual(tableNames(schema), Object.keys(EXPECTED_D1_TABLE_COLUMNS));
+  for (const [table, columns] of Object.entries(EXPECTED_D1_TABLE_COLUMNS)) {
     const existing = tableColumns(schema, table);
     assert.deepEqual(columns.filter(column => !existing.has(column)), [], `${table} columns must match API use`);
   }
@@ -309,11 +401,125 @@ test('Net Sphere D1 base schema and historical migration stay aligned with API c
   }
 });
 
+test('Net Sphere market migration mirrors canonical market tables and indexes', () => {
+  const schema = readFileSync('cloudflare/d1/net_sphere.sql', 'utf8');
+  const migration = readFileSync('cloudflare/d1/net_sphere_market.sql', 'utf8');
+  const marketTables = ['net_market_impulses', 'net_market_budgets', 'net_market_snapshots'];
+  const baseIndexes = new Set(indexNames(schema));
+
+  assert.deepEqual(tableNames(migration), marketTables);
+  for (const table of marketTables) {
+    assert.deepEqual([...tableColumns(migration, table)], EXPECTED_D1_TABLE_COLUMNS[table]);
+    assert.deepEqual([...tableColumns(schema, table)], EXPECTED_D1_TABLE_COLUMNS[table]);
+  }
+  for (const index of indexNames(migration)) {
+    assert.equal(baseIndexes.has(index), true, `${index} migration index must be present in base schema`);
+  }
+});
+
 test('Net Sphere endpoints return 503 when D1 binding is missing', async () => {
   const response = await getStats({ request: new Request('https://game.test/api/net/stats'), env: {} });
 
   assert.equal(response.status, 503);
   assert.equal((await responseJson(response)).error, 'D1 binding GIGA_NET is not configured');
+});
+
+test('Net Sphere worker routes GET and POST API requests without touching assets', async () => {
+  const db = new FakeD1();
+  const assets = makeAssets();
+
+  const statsResponse = await worker.fetch(workerRequest('/api/net/stats'), {
+    GIGA_NET: db,
+    ASSETS: assets.binding,
+  });
+  const statsData = await responseJson(statsResponse);
+
+  assert.equal(statsResponse.status, 200);
+  assert.equal(statsResponse.headers.get('Cache-Control'), 'no-store');
+  assert.match(statsResponse.headers.get('Content-Type') ?? '', /^application\/json/);
+  assert.equal(statsData.ok, true);
+
+  const helloResponse = await worker.fetch(workerRequest('/api/net/hello', {
+    method: 'POST',
+    body: JSON.stringify(identityBody()),
+  }), {
+    GIGA_NET: db,
+    ASSETS: assets.binding,
+  });
+  const helloData = await responseJson(helloResponse);
+  const profile = helloData.profile as Record<string, unknown>;
+
+  assert.equal(helloResponse.status, 200);
+  assert.equal(helloResponse.headers.get('Cache-Control'), 'no-store');
+  assert.equal(helloData.ok, true);
+  assert.equal(profile.netGen, 'NET-ABCD-1234');
+  assert.equal(assets.requests.length, 0);
+});
+
+test('Net Sphere worker returns 405 with Allow header for unsupported API methods', async () => {
+  const assets = makeAssets();
+
+  const statsResponse = await worker.fetch(workerRequest('/api/net/stats', { method: 'POST' }), {
+    GIGA_NET: new FakeD1(),
+    ASSETS: assets.binding,
+  });
+  const chatResponse = await worker.fetch(workerRequest('/api/net/chat', { method: 'PATCH' }), {
+    GIGA_NET: new FakeD1(),
+    ASSETS: assets.binding,
+  });
+
+  assert.equal(statsResponse.status, 405);
+  assert.equal(statsResponse.headers.get('Allow'), 'GET');
+  assert.equal(statsResponse.headers.get('Cache-Control'), 'no-store');
+  assert.equal((await responseJson(statsResponse)).error, 'method not allowed');
+
+  assert.equal(chatResponse.status, 405);
+  assert.equal(chatResponse.headers.get('Allow'), 'GET, POST');
+  assert.equal(chatResponse.headers.get('Cache-Control'), 'no-store');
+  assert.equal((await responseJson(chatResponse)).error, 'method not allowed');
+  assert.equal(assets.requests.length, 0);
+});
+
+test('Net Sphere worker returns no-store 404 for unknown Net API paths', async () => {
+  const assets = makeAssets();
+  const env = { GIGA_NET: new FakeD1(), ASSETS: assets.binding };
+
+  const missingResponse = await worker.fetch(workerRequest('/api/net/missing'), env);
+  const baseResponse = await worker.fetch(workerRequest('/api/net'), env);
+
+  assert.equal(missingResponse.status, 404);
+  assert.equal(missingResponse.headers.get('Cache-Control'), 'no-store');
+  assert.equal((await responseJson(missingResponse)).error, 'not found');
+
+  assert.equal(baseResponse.status, 404);
+  assert.equal(baseResponse.headers.get('Cache-Control'), 'no-store');
+  assert.equal((await responseJson(baseResponse)).error, 'not found');
+  assert.equal(assets.requests.length, 0);
+});
+
+test('Net Sphere worker falls back to assets outside Net API even when D1 is absent', async () => {
+  const assets = makeAssets('single file game');
+
+  const response = await worker.fetch(workerRequest('/floor/2?from=test'), { ASSETS: assets.binding });
+  const body = await response.text();
+
+  assert.equal(response.status, 203);
+  assert.equal(body, 'single file game');
+  assert.equal(response.headers.get('Cache-Control'), 'public, max-age=60');
+  assert.equal(assets.requests.length, 1);
+  assert.equal(new URL(assets.requests[0].url).pathname, '/floor/2');
+});
+
+test('Net Sphere worker fails API softly when D1 is missing', async () => {
+  const assets = makeAssets();
+
+  const response = await worker.fetch(workerRequest('/api/net/stats'), { ASSETS: assets.binding });
+  const data = await responseJson(response);
+
+  assert.equal(response.status, 503);
+  assert.equal(response.headers.get('Cache-Control'), 'no-store');
+  assert.equal(data.error, 'D1 binding GIGA_NET is not configured');
+  assert.equal(assets.requests.length, 0);
 });
 
 test('Net Sphere sanitizers remove unsafe text and truncate bounded fields', () => {
@@ -411,6 +617,50 @@ test('Net Sphere event summaries stay short and use last progress signal', async
   }
 });
 
+test('Net Sphere public event ids stay unique for duplicate timestamp and type', async () => {
+  const realNow = Date.now;
+  const db = new FakeD1();
+  const now = Date.UTC(2026, 4, 18, 2, 42);
+
+  Date.now = () => now;
+  try {
+    const first = await postEvent({
+      request: postRequest(identityBody({
+        netGen: 'NET-AAAA-1111',
+        sessionId: 'SES-AAAA-1111',
+        type: 'death',
+        eventKey: 'NET-AAAA-1111:death:same-ms',
+      })),
+      env: { GIGA_NET: db },
+    });
+    const second = await postEvent({
+      request: postRequest(identityBody({
+        netGen: 'NET-BBBB-2222',
+        sessionId: 'SES-BBBB-2222',
+        type: 'death',
+        eventKey: 'NET-BBBB-2222:death:same-ms',
+      })),
+      env: { GIGA_NET: db },
+    });
+    const data = await responseJson(second);
+    const stats = data.stats as Record<string, unknown>;
+    const events = data.events as Record<string, unknown>[];
+    const publicIds = events.map(event => String(event.eventKey));
+
+    assert.equal(first.status, 200);
+    assert.equal(second.status, 200);
+    assert.equal(stats.totalDeaths, 2);
+    assert.equal(events.length, 2);
+    assert.deepEqual(events.map(event => event.createdAt), [now, now]);
+    assert.deepEqual(events.map(event => event.type), ['death', 'death']);
+    assert.deepEqual(publicIds, ['event:2', 'event:1']);
+    assert.equal(new Set(publicIds).size, 2);
+    assert.equal(publicIds.some(id => id.includes('NET-')), false);
+  } finally {
+    Date.now = realNow;
+  }
+});
+
 test('Net Sphere does not expose NET-GEN-shaped legacy nicknames as public names', async () => {
   const db = new FakeD1();
   const now = Date.UTC(2026, 4, 18, 2, 42);
@@ -429,6 +679,7 @@ test('Net Sphere does not expose NET-GEN-shaped legacy nicknames as public names
   });
   db.chat.push({ id: 1, net_gen: 'NET-LEAK-1234', body: 'эхо', created_at: now });
   db.events.push({
+    event_key: 'NET-LEAK-1234:death:legacy',
     nickname: 'NET-LEAK-1234',
     type: 'death',
     summary: '[NET-LEAK-1234] умер старой строкой',
@@ -448,5 +699,7 @@ test('Net Sphere does not expose NET-GEN-shaped legacy nicknames as public names
   assert.equal(profile.nickname, 'Жилец');
   assert.equal(chat[0].nickname, 'Жилец');
   assert.equal(events[0].nickname, 'Жилец');
+  assert.match(String(events[0].eventKey), /^event:death:legacy:/);
+  assert.equal(String(events[0].eventKey).includes('NET-LEAK-1234'), false);
   assert.equal(events[0].summary, 'Жилец умер. Последний сигнал: 2026-05-18 02:42 UTC.');
 });

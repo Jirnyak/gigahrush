@@ -17,12 +17,15 @@ import { areFactionsHostile, getFactionUiSnapshot, type FactionUiSnapshot } from
 import { getActiveSamosborVariant } from '../data/samosbor_variants';
 import { getSamosborShelterRoomIds, getSamosborWarningSnapshot } from '../systems/samosbor';
 import { getRecentRumorLead } from '../systems/npc_memory';
-import { getWrongDoorMapCues } from '../systems/wrong_door';
+import { getWrongDoorMapCues, wrongDoorCueActionLabel, wrongDoorCueSecondsLeft } from '../systems/wrong_door';
 import { getActiveCultProcessionSnapshots } from '../systems/faction_events';
 import { seroburmalineSourceCellState } from '../systems/seroburmaline';
 import { formatQuestMinutes, questRemainingMinutes } from '../systems/quest_deadlines';
 import { getRouteCueMapReveals, type RouteCueMapReveal } from '../systems/route_cues';
+import { getNearestSmallCaravan } from '../systems/caravans';
 import { ENTITY_MASK_VISIBLE, getEntityIndex } from '../systems/entity_index';
+import { floorInstanceLabel as formatFloorInstanceLabel, getActiveFloorInstance } from '../systems/floor_instances';
+import { currentFloorRunEntry, floorRunEntryMapLabel } from '../systems/procedural_floors';
 import { getBlackHandMarkCells } from './marks';
 import { fitText as fitMapText } from './ui_text';
 
@@ -39,6 +42,27 @@ const activeFetchItems = new Map<string, QuestKind>();
 const drawnTargetRooms = new Set<number>();
 const MAX_CONCRETE_QUEST_ROOM_MARKERS = 8;
 const mapEntityQuery: Entity[] = [];
+const MAP_MINIMAP_ENTITY_DOT_BUDGET = 220;
+const MAP_FULL_ENTITY_DOT_BUDGET = 900;
+const MAP_ENTITY_QUERY_BUDGET_MULT = 3;
+const MAP_CROWD_BIN_HASH_CAP = 2048;
+const MAP_CROWD_EMPTY_KEY = -1;
+const MAP_CROWD_GROUP_NPC = 0;
+const MAP_CROWD_GROUP_HOSTILE_NPC = 1;
+const MAP_CROWD_GROUP_MONSTER = 2;
+const MAP_CROWD_GROUP_ITEM = 3;
+const mapCrowdHashKeys = new Int32Array(MAP_CROWD_BIN_HASH_CAP);
+const mapCrowdHashBins = new Int16Array(MAP_CROWD_BIN_HASH_CAP);
+const mapCrowdX = new Float32Array(MAP_FULL_ENTITY_DOT_BUDGET);
+const mapCrowdY = new Float32Array(MAP_FULL_ENTITY_DOT_BUDGET);
+const mapCrowdTotal = new Uint16Array(MAP_FULL_ENTITY_DOT_BUDGET);
+const mapCrowdNpc = new Uint16Array(MAP_FULL_ENTITY_DOT_BUDGET);
+const mapCrowdHostileNpc = new Uint16Array(MAP_FULL_ENTITY_DOT_BUDGET);
+const mapCrowdMonster = new Uint16Array(MAP_FULL_ENTITY_DOT_BUDGET);
+const mapCrowdItem = new Uint16Array(MAP_FULL_ENTITY_DOT_BUDGET);
+let mapCrowdBinCount = 0;
+let mapCrowdBinLimit = MAP_MINIMAP_ENTITY_DOT_BUDGET;
+mapCrowdHashKeys.fill(MAP_CROWD_EMPTY_KEY);
 
 const QUEST_KIND_PRIORITY: Record<QuestKind, number> = { plot: 3, side: 2, system: 1 };
 const QUEST_MARKERS: Record<QuestKind, { label: string; stroke: string; fill: string; text: string }> = {
@@ -79,6 +103,98 @@ const FACTION_SHORT: Record<ZoneFaction, string> = {
 
 function routeFloor(q: Quest): FloorLevel | undefined {
   return questRouteFloor(q);
+}
+
+export function mapEntityDotBudget(mapW: number, mapH: number, radius: number): number {
+  if (radius <= 48 || mapW <= 180 || mapH <= 180) return MAP_MINIMAP_ENTITY_DOT_BUDGET;
+  const areaBudget = Math.floor((mapW * mapH) / 1800);
+  return Math.max(MAP_MINIMAP_ENTITY_DOT_BUDGET, Math.min(MAP_FULL_ENTITY_DOT_BUDGET, areaBudget));
+}
+
+function mapEntityQueryBudget(mapW: number, mapH: number, radius: number): number {
+  return mapEntityDotBudget(mapW, mapH, radius) * MAP_ENTITY_QUERY_BUDGET_MULT;
+}
+
+function mapCrowdBinPixels(mapW: number, mapH: number): number {
+  return mapW <= 180 || mapH <= 180 ? 4 : 5;
+}
+
+function resetMapCrowdBins(limit: number): void {
+  mapCrowdBinCount = 0;
+  mapCrowdBinLimit = Math.max(0, Math.min(MAP_FULL_ENTITY_DOT_BUDGET, limit));
+  mapCrowdHashKeys.fill(MAP_CROWD_EMPTY_KEY);
+}
+
+function mapCrowdBinForKey(key: number): number {
+  let slot = (Math.imul(key, 0x9e3779b1) >>> 0) & (MAP_CROWD_BIN_HASH_CAP - 1);
+  for (let probe = 0; probe < MAP_CROWD_BIN_HASH_CAP; probe++) {
+    const existing = mapCrowdHashKeys[slot];
+    if (existing === key) return mapCrowdHashBins[slot];
+    if (existing === MAP_CROWD_EMPTY_KEY) {
+      if (mapCrowdBinCount >= mapCrowdBinLimit) return -1;
+      const bin = mapCrowdBinCount++;
+      mapCrowdHashKeys[slot] = key;
+      mapCrowdHashBins[slot] = bin;
+      mapCrowdX[bin] = 0;
+      mapCrowdY[bin] = 0;
+      mapCrowdTotal[bin] = 0;
+      mapCrowdNpc[bin] = 0;
+      mapCrowdHostileNpc[bin] = 0;
+      mapCrowdMonster[bin] = 0;
+      mapCrowdItem[bin] = 0;
+      return bin;
+    }
+    slot = (slot + 1) & (MAP_CROWD_BIN_HASH_CAP - 1);
+  }
+  return -1;
+}
+
+function mapEntityCrowdGroup(e: Entity): number {
+  if (e.type === EntityType.MONSTER) return MAP_CROWD_GROUP_MONSTER;
+  if (e.type === EntityType.ITEM_DROP || e.type === EntityType.PROJECTILE) return MAP_CROWD_GROUP_ITEM;
+  if (e.type === EntityType.NPC && e.faction !== undefined && areFactionsHostile(Faction.PLAYER, e.faction)) {
+    return MAP_CROWD_GROUP_HOSTILE_NPC;
+  }
+  return MAP_CROWD_GROUP_NPC;
+}
+
+function addMapCrowdDot(x: number, y: number, key: number, group: number): void {
+  const bin = mapCrowdBinForKey(key);
+  if (bin < 0) return;
+  mapCrowdX[bin] += x;
+  mapCrowdY[bin] += y;
+  mapCrowdTotal[bin]++;
+  if (group === MAP_CROWD_GROUP_MONSTER) mapCrowdMonster[bin]++;
+  else if (group === MAP_CROWD_GROUP_HOSTILE_NPC) mapCrowdHostileNpc[bin]++;
+  else if (group === MAP_CROWD_GROUP_ITEM) mapCrowdItem[bin]++;
+  else mapCrowdNpc[bin]++;
+}
+
+function mapCrowdColor(bin: number): string {
+  if (mapCrowdMonster[bin] > 0) return '#e33';
+  if (mapCrowdHostileNpc[bin] > 0) return '#e44';
+  if (mapCrowdNpc[bin] > 0) return '#4a4';
+  return '#dd4';
+}
+
+function drawMapCrowdBins(ctx: CanvasRenderingContext2D, mapW: number, mapH: number): void {
+  const compact = mapW <= 180 || mapH <= 180;
+  for (let i = 0; i < mapCrowdBinCount; i++) {
+    const total = mapCrowdTotal[i];
+    if (total <= 0) continue;
+    const x = mapCrowdX[i] / total;
+    const y = mapCrowdY[i] / total;
+    const size = total === 1 ? 3 : Math.min(compact ? 6 : 8, 3 + Math.floor(Math.log2(total)));
+    ctx.fillStyle = mapCrowdColor(i);
+    ctx.globalAlpha = total === 1 ? 1 : Math.min(0.92, 0.58 + total * 0.025);
+    ctx.fillRect(Math.round(x - size * 0.5), Math.round(y - size * 0.5), size, size);
+    if (total >= 8 && !compact) {
+      ctx.strokeStyle = 'rgba(255,255,255,0.28)';
+      ctx.lineWidth = 1;
+      ctx.strokeRect(Math.round(x - size * 0.5) + 0.5, Math.round(y - size * 0.5) + 0.5, size - 1, size - 1);
+    }
+  }
+  ctx.globalAlpha = 1;
 }
 
 function questKind(q: Quest): QuestKind {
@@ -169,6 +285,17 @@ function primaryObjective(quests: Quest[] | undefined, state: GameState | undefi
     }
   }
   return best;
+}
+
+function currentRouteLabel(state: GameState | undefined): string | undefined {
+  return state ? floorRunEntryMapLabel(currentFloorRunEntry(state)) : undefined;
+}
+
+function numberedLiftRouteLabel(state: GameState | undefined, fallback: string | undefined): string | undefined {
+  if (!state) return fallback;
+  const active = getActiveFloorInstance(state);
+  if (!active) return fallback;
+  return `${formatFloorInstanceLabel(active)} риск ${active.risk}/5 -> ${floorRunEntryMapLabel(currentFloorRunEntry(state))}`;
 }
 
 function activeVisitLiftDirection(
@@ -269,6 +396,18 @@ function eventColor(severity: number): string {
   return severity >= 5 ? '#f35' : severity >= 4 ? '#fa4' : severity >= 3 ? '#fc6' : '#8cf';
 }
 
+function compactFactionEventLabel(event: FactionUiSnapshot['recentEvents'][number]): string {
+  const name = event.name || String(event.type);
+  if (!name.startsWith('Толпа: ')) return name;
+  const place = name.slice('Толпа: '.length)
+    .replace('Пункт выдачи талонов', 'пайки')
+    .replace('Водораздача у стояка', 'вода')
+    .replace('Коммунальная кухня раздора', 'кухня')
+    .replace('Баррикадированный пролёт', 'барр.')
+    .replace('Нелегальная типография', 'печать');
+  return `ТОЛПА ${place}`;
+}
+
 function drawSamosborWarningRisk(
   ctx: CanvasRenderingContext2D,
   world: World,
@@ -290,31 +429,82 @@ function drawSamosborWarningRisk(
   if (!warning || warning.floor !== currentFloor) return;
   const dx = world.delta(pxI, warning.zoneX);
   const dy = world.delta(pyI, warning.zoneY);
-  if (Math.abs(dx) > radius || Math.abs(dy) > radius) return;
+  const innerRadius = Math.max(1, radius - 1);
+  const inView = Math.abs(dx) <= radius && Math.abs(dy) <= radius;
+  const markerDx = inView ? dx : Math.max(-innerRadius, Math.min(innerRadius, dx));
+  const markerDy = inView ? dy : Math.max(-innerRadius, Math.min(innerRadius, dy));
 
-  const x = mapX + (dx + radius) * cellW;
-  const y = mapY + (dy + radius) * cellH;
+  const x = mapX + (markerDx + radius) * cellW;
+  const y = mapY + (markerDy + radius) * cellH;
   const pulse = 0.55 + 0.35 * Math.sin(uiTime * 8);
-  const riskR = Math.max(5, Math.min(18, Math.max(cellW, cellH) * 11));
+  const riskR = Math.max(6, Math.min(20, Math.max(cellW, cellH) * (inView ? 11 : 13)));
 
   ctx.save();
-  ctx.globalAlpha = 0.25 + pulse * 0.22;
+  ctx.globalAlpha = 0.28 + pulse * 0.24;
   ctx.fillStyle = warning.tint;
-  ctx.beginPath();
-  ctx.arc(x, y, riskR, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.globalAlpha = 0.75;
   ctx.strokeStyle = warning.tint;
   ctx.lineWidth = Math.max(1, Math.min(3, cellW * 2));
-  ctx.beginPath();
-  ctx.arc(x, y, riskR + 2, 0, Math.PI * 2);
-  ctx.stroke();
-  ctx.beginPath();
-  ctx.moveTo(x - riskR - 3, y);
-  ctx.lineTo(x + riskR + 3, y);
-  ctx.moveTo(x, y - riskR - 3);
-  ctx.lineTo(x, y + riskR + 3);
-  ctx.stroke();
+  if (!inView) {
+    const angle = Math.atan2(dy, dx);
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate(angle);
+    ctx.beginPath();
+    ctx.moveTo(riskR + 3, 0);
+    ctx.lineTo(-riskR * 0.55, -riskR * 0.62);
+    ctx.lineTo(-riskR * 0.28, 0);
+    ctx.lineTo(-riskR * 0.55, riskR * 0.62);
+    ctx.closePath();
+    ctx.fill();
+    ctx.globalAlpha = 0.95;
+    ctx.stroke();
+    ctx.restore();
+  } else if (warning.variantId === 'istotit') {
+    ctx.fillRect(x - riskR, y - riskR, riskR * 2, riskR * 2);
+    ctx.globalAlpha = 0.82;
+    ctx.strokeRect(x - riskR - 2, y - riskR - 2, riskR * 2 + 4, riskR * 2 + 4);
+    ctx.beginPath();
+    ctx.moveTo(x - riskR, y);
+    ctx.lineTo(x + riskR, y);
+    ctx.moveTo(x, y - riskR);
+    ctx.lineTo(x, y + riskR);
+    ctx.stroke();
+  } else if (warning.variantId === 'veretar') {
+    ctx.beginPath();
+    ctx.moveTo(x, y - riskR - 3);
+    ctx.lineTo(x + riskR + 3, y);
+    ctx.lineTo(x, y + riskR + 3);
+    ctx.lineTo(x - riskR - 3, y);
+    ctx.closePath();
+    ctx.fill();
+    ctx.globalAlpha = 0.88;
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(x - riskR, y - riskR);
+    ctx.lineTo(x + riskR, y + riskR);
+    ctx.moveTo(x + riskR, y - riskR);
+    ctx.lineTo(x - riskR, y + riskR);
+    ctx.stroke();
+  } else {
+    ctx.beginPath();
+    ctx.arc(x, y, riskR, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.globalAlpha = 0.78;
+    if (warning.variantId === 'maronary') {
+      ctx.strokeRect(x - riskR * 0.75, y - riskR, riskR * 1.5, riskR * 2);
+      ctx.strokeRect(x - riskR * 0.48, y - riskR * 0.64, riskR * 0.96, riskR * 1.28);
+    } else {
+      ctx.beginPath();
+      ctx.arc(x, y, riskR + 2, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+    ctx.beginPath();
+    ctx.moveTo(x - riskR - 3, y);
+    ctx.lineTo(x + riskR + 3, y);
+    ctx.moveTo(x, y - riskR - 3);
+    ctx.lineTo(x, y + riskR + 3);
+    ctx.stroke();
+  }
   if (warning.variantId === 'maronary' && warning.wrongDoorX !== undefined && warning.wrongDoorY !== undefined) {
     const ddx = world.delta(pxI, warning.wrongDoorX);
     const ddy = world.delta(pyI, warning.wrongDoorY);
@@ -346,7 +536,7 @@ function drawSamosborWarningRisk(
     ctx.strokeRect(panelX + 0.5, panelY + 0.5, panelW - 1, panelH - 1);
     ctx.fillStyle = warning.variantId === 'veretar' ? '#f4f1df' : '#ffd36a';
     ctx.font = '8px monospace';
-    ctx.fillText(`${warning.signals.mapCode} ${warning.secondsLeft}s`, panelX + 4, panelY + 9);
+    ctx.fillText(`${warning.signals.mapCode} ${warning.secondsLeft}s${inView ? '' : ' ->'}`, panelX + 4, panelY + 9);
     ctx.fillStyle = '#ddd';
     ctx.font = '7px monospace';
     ctx.fillText(fitMapText(ctx, warning.signals.audioLine, panelW - 8), panelX + 4, panelY + 18);
@@ -555,26 +745,40 @@ function drawFactionEventMarkers(
     const color = eventColor(event.severity);
     const age = Math.max(0, snapshot.time - event.time);
     const pulse = 0.45 + 0.35 * Math.sin(uiTime * 8 + event.id);
+    const isCrowdPressure = event.name.startsWith('Толпа: ');
     const r = Math.max(4, Math.min(10, Math.max(cellW, cellH) * (4 + event.severity)));
 
     ctx.globalAlpha = Math.max(0.35, 0.9 - age / 180) + pulse * 0.08;
     ctx.strokeStyle = color;
     ctx.lineWidth = Math.max(1, Math.min(3, cellW * 2));
-    ctx.beginPath();
-    ctx.moveTo(x, y - r);
-    ctx.lineTo(x + r, y);
-    ctx.lineTo(x, y + r);
-    ctx.lineTo(x - r, y);
-    ctx.closePath();
-    ctx.stroke();
-    ctx.globalAlpha = 0.5;
-    ctx.fillStyle = color;
-    ctx.fill();
+    if (isCrowdPressure) {
+      ctx.beginPath();
+      ctx.arc(x, y, r * 0.9, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.globalAlpha = 0.42;
+      ctx.beginPath();
+      ctx.arc(x, y, r * 1.45, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.globalAlpha = 0.5;
+      ctx.fillStyle = color;
+      ctx.fillRect(x - r * 0.45, y - r * 0.45, r * 0.9, r * 0.9);
+    } else {
+      ctx.beginPath();
+      ctx.moveTo(x, y - r);
+      ctx.lineTo(x + r, y);
+      ctx.lineTo(x, y + r);
+      ctx.lineTo(x - r, y);
+      ctx.closePath();
+      ctx.stroke();
+      ctx.globalAlpha = 0.5;
+      ctx.fillStyle = color;
+      ctx.fill();
+    }
 
     if (!showText) continue;
-    const name = event.name || String(event.type);
+    const name = compactFactionEventLabel(event);
     const phase = event.phase === 'aftermath' ? ' итог' : event.phase === 'start' ? ' старт' : '';
-    const label = fitMapText(ctx, `${name}${phase}`, 120);
+    const label = fitMapText(ctx, `${name}${isCrowdPressure ? '' : phase}`, isCrowdPressure ? 88 : 120);
     const tw = ctx.measureText(label).width;
     ctx.globalAlpha = 0.82;
     ctx.fillStyle = 'rgba(0,0,0,0.66)';
@@ -671,6 +875,21 @@ function drawWrongDoorCues(
       ctx.arc(tx, ty, 4, 0, Math.PI * 2);
       ctx.stroke();
     }
+    if (mapX >= 0 && cellW > 0 && cellH > 0) {
+      const secondsLeft = wrongDoorCueSecondsLeft(cue, state?.time ?? uiTime);
+      const label = wrongDoorCueActionLabel(cue, state?.time ?? uiTime);
+      if (secondsLeft > 0) {
+        ctx.globalAlpha = 0.9;
+        ctx.font = '7px monospace';
+        ctx.fillStyle = '#35ff66';
+        ctx.fillText(fitMapText(ctx, `${label} ${secondsLeft}s`, 68), sx + 6, sy - 5);
+      }
+      if (targetVisible) {
+        ctx.globalAlpha = 0.78;
+        ctx.fillStyle = '#fc4';
+        ctx.fillText('РИСК', tx + 5, ty + 8);
+      }
+    }
   }
   ctx.restore();
 }
@@ -754,6 +973,52 @@ function drawCartographerMapReveals(
       ctx.fillStyle = reveal.color;
       ctx.fillText(fitMapText(ctx, reveal.label, 74), x + 6, y - 5);
     }
+  }
+  ctx.restore();
+}
+
+function drawSmallCaravanMapMarker(
+  ctx: CanvasRenderingContext2D,
+  world: World,
+  state: GameState | undefined,
+  player: Entity,
+  pxI: number,
+  pyI: number,
+  mapX: number,
+  mapY: number,
+  mapW: number,
+  mapH: number,
+  radius: number,
+  cellW: number,
+  cellH: number,
+): void {
+  if (!state) return;
+  const caravan = getNearestSmallCaravan(state, world, player, radius * 1.35);
+  if (!caravan) return;
+  const dx = world.delta(pxI, Math.floor(caravan.x));
+  const dy = world.delta(pyI, Math.floor(caravan.y));
+  if (Math.abs(dx) > radius || Math.abs(dy) > radius) return;
+  const x = mapX + (dx + radius + 0.5) * cellW;
+  const y = mapY + (dy + radius + 0.5) * cellH;
+  const size = Math.max(4, Math.min(8, Math.max(cellW, cellH) * 2.2));
+
+  ctx.save();
+  ctx.strokeStyle = caravan.color;
+  ctx.fillStyle = '#111812';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(x, y - size);
+  ctx.lineTo(x + size, y);
+  ctx.lineTo(x, y + size);
+  ctx.lineTo(x - size, y);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+  ctx.fillStyle = caravan.color;
+  ctx.fillRect(x - 1.5, y - 1.5, 3, 3);
+  if (mapW > 140 && mapH > 120) {
+    ctx.font = '7px monospace';
+    ctx.fillText(fitMapText(ctx, `КАР ${caravan.statusText}`, 80), x + 7, y - 5);
   }
   ctx.restore();
 }
@@ -970,26 +1235,64 @@ function drawMap(
   drawCultProcessionOverlays(ctx, world, state, currentFloor, uiTime, pxI, pyI, mapX, mapY, mapW, mapH, radius, cellW, cellH);
   drawBlackHandMarks(ctx, world, pxI, pyI, mapX, mapY, radius, cellW, cellH);
   drawCartographerMapReveals(ctx, world, state, currentFloor, uiTime, pxI, pyI, mapX, mapY, mapW, mapH, radius, cellW, cellH);
+  drawSmallCaravanMapMarker(ctx, world, state, player, pxI, pyI, mapX, mapY, mapW, mapH, radius, cellW, cellH);
   drawFactionZoneMarkers(ctx, world, factionSnapshot, currentFloor, pxI, pyI, mapX, mapY, mapW, mapH, radius, cellW, cellH, uiTime);
   drawFactionEventMarkers(ctx, world, factionSnapshot, currentFloor, pxI, pyI, mapX, mapY, mapW, mapH, radius, cellW, cellH, uiTime);
 
-  // Entities
-  getEntityIndex().queryRadius(player.x, player.y, radius * Math.SQRT2 + 2, mapEntityQuery, ENTITY_MASK_VISIBLE);
+  // Entities: bounded local query, then screen-bin compression for dense crowds.
+  const entityDotBudget = mapEntityDotBudget(mapW, mapH, radius);
+  const crowdBinPx = mapCrowdBinPixels(mapW, mapH);
+  getEntityIndex().queryRadiusCapped(
+    player.x,
+    player.y,
+    radius * Math.SQRT2 + 2,
+    mapEntityQuery,
+    ENTITY_MASK_VISIBLE,
+    mapEntityQueryBudget(mapW, mapH, radius),
+  );
+  resetMapCrowdBins(entityDotBudget);
   for (const e of mapEntityQuery) {
     if (!e.alive || e.type === EntityType.PLAYER) continue;
     const edx = world.delta(pxI, Math.floor(e.x));
     const edy = world.delta(pyI, Math.floor(e.y));
     if (Math.abs(edx) > radius || Math.abs(edy) > radius) continue;
 
-    ctx.fillStyle = e.type === EntityType.NPC
-                  ? (e.faction !== undefined && areFactionsHostile(Faction.PLAYER, e.faction) ? '#e44' : '#4a4')
-                  : e.type === EntityType.MONSTER ? '#e33'
-                  : '#dd4';
     const esx = mapX + (edx + radius) * cellW;
     const esy = mapY + (edy + radius) * cellH;
-    ctx.fillRect(esx - 1, esy - 1, 3, 3);
+    const bx = Math.floor((esx - mapX) / crowdBinPx);
+    const by = Math.floor((esy - mapY) / crowdBinPx);
+    addMapCrowdDot(esx, esy, by * 2048 + bx, mapEntityCrowdGroup(e));
+  }
+  drawMapCrowdBins(ctx, mapW, mapH);
+
+  for (const e of mapEntityQuery) {
+    if (!e.alive || e.type !== EntityType.ITEM_DROP) continue;
+    const edx = world.delta(pxI, Math.floor(e.x));
+    const edy = world.delta(pyI, Math.floor(e.y));
+    if (Math.abs(edx) > radius || Math.abs(edy) > radius) continue;
+
+    const esx = mapX + (edx + radius) * cellW;
+    const esy = mapY + (edy + radius) * cellH;
+    const maronaryResidue = e.type === EntityType.ITEM_DROP && e.inventory?.some(slot => slot.defId === 'maronary_shaving') === true;
+    if (maronaryResidue) {
+      const pulse = 0.55 + 0.35 * Math.sin(uiTime * 8 + e.id);
+      ctx.save();
+      ctx.globalAlpha = 0.68 + pulse * 0.22;
+      ctx.strokeStyle = '#35ff66';
+      ctx.fillStyle = '#fc4';
+      ctx.lineWidth = Math.max(1, Math.min(2, cellW * 1.5));
+      ctx.beginPath();
+      ctx.arc(esx, esy, Math.max(4, Math.min(9, Math.max(cellW, cellH) * 3.4)), 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.fillRect(esx - 1.5, esy - 1.5, 3, 3);
+      if (mapW > 140 && mapH > 120) {
+        ctx.font = '7px monospace';
+        ctx.fillStyle = '#fc4';
+        ctx.fillText('СТРУЖКА', esx + 6, esy - 5);
+      }
+      ctx.restore();
+    }
     if (
-      e.type === EntityType.ITEM_DROP &&
       activeFetchItems.size > 0 &&
       e.inventory
     ) {
@@ -1131,12 +1434,24 @@ export function drawMinimap(
   const mx = ctx.canvas.width - mw - 4 * sx;
   const my = 4 * sy;
   drawMap(ctx, world, entities, player, sx, sy, mx, my, mw, mh, 40, 0.75, quests, currentFloor, state, uiTime);
-  if (floorInstanceLabel) {
+  let infoRows = 0;
+  const routeLabel = currentRouteLabel(state);
+  if (routeLabel) {
+    ctx.fillStyle = '#8cf';
+    ctx.font = `${7 * sy}px monospace`;
+    ctx.textAlign = 'right';
+    ctx.fillText(fitMapText(ctx, routeLabel, mw), mx + mw, my + mh + 3 * sy + infoRows * 9 * sy);
+    ctx.textAlign = 'left';
+    infoRows++;
+  }
+  const numberedLiftLabel = numberedLiftRouteLabel(state, floorInstanceLabel);
+  if (numberedLiftLabel) {
     ctx.fillStyle = '#f4a';
     ctx.font = `${7 * sy}px monospace`;
     ctx.textAlign = 'right';
-    ctx.fillText(floorInstanceLabel, mx + mw, my + mh + 3 * sy);
+    ctx.fillText(fitMapText(ctx, numberedLiftLabel, mw), mx + mw, my + mh + 3 * sy + infoRows * 9 * sy);
     ctx.textAlign = 'left';
+    infoRows++;
   }
   const objective = primaryObjective(quests, state);
   if (objective) {
@@ -1144,7 +1459,7 @@ export function drawMinimap(
     ctx.fillStyle = marker.text;
     ctx.font = `${7 * sy}px monospace`;
     ctx.textAlign = 'right';
-    const oy = my + mh + (floorInstanceLabel ? 12 * sy : 3 * sy);
+    const oy = my + mh + 3 * sy + infoRows * 9 * sy;
     ctx.fillText(fitMapText(ctx, objectiveSummary(objective, currentFloor, state), mw), mx + mw, oy);
     ctx.textAlign = 'left';
   }
@@ -1162,14 +1477,24 @@ export function drawFullMap(
   const mapW = cw - pad * 2;
   const mapH = ch - pad * 2;
   drawMap(ctx, world, entities, player, sx, sy, pad, pad, mapW, mapH, 200, 0.85, quests, currentFloor, state, uiTime);
-  drawFactionMapLegend(ctx, getFactionUiSnapshot(), currentFloor, pad + 4, pad + 16 * sy, mapW - 8 * sx);
+  const routeLabel = currentRouteLabel(state);
+  const numberedLiftLabel = numberedLiftRouteLabel(state, floorInstanceLabel);
+  const topRows = (routeLabel ? 1 : 0) + (numberedLiftLabel ? 1 : 0);
+  drawFactionMapLegend(ctx, getFactionUiSnapshot(), currentFloor, pad + 4, pad + (topRows > 1 ? 28 : 16) * sy, mapW - 8 * sx);
   drawObjectiveStrip(ctx, quests, currentFloor, state, pad + mapW - Math.min(360 * sx, mapW - 12 * sx), pad + 8 * sy, Math.min(360 * sx, mapW - 12 * sx), sx, sy, 4);
 
   ctx.fillStyle = '#666';
   ctx.font = `${8 * sy}px monospace`;
-  if (floorInstanceLabel) {
+  let topY = pad + 4;
+  if (routeLabel) {
+    ctx.fillStyle = '#8cf';
+    ctx.fillText(fitMapText(ctx, `Маршрут: ${routeLabel}`, mapW - 16 * sx), pad + 4, topY);
+    topY += 10 * sy;
+    ctx.fillStyle = '#666';
+  }
+  if (numberedLiftLabel) {
     ctx.fillStyle = '#f4a';
-    ctx.fillText(`Лифт: ${floorInstanceLabel}`, pad + 4, pad + 4);
+    ctx.fillText(fitMapText(ctx, `Лифт: ${numberedLiftLabel}`, mapW - 16 * sx), pad + 4, topY);
     ctx.fillStyle = '#666';
   }
   const rumorLead = state ? getRecentRumorLead(state.time) : undefined;

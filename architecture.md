@@ -2,7 +2,7 @@
 
 Purpose: turn the current TypeScript/Vite raycaster game into a content factory where many agents can add rooms, NPCs, quests, events, monsters, documents, economy hooks, and floor variants without fighting over the same files.
 
-This document is based on the current code, `README.md`, and `desdoc.md` as of 2026-05-17. It is not a rewrite plan. The project is already playable; architecture work must protect that.
+This document is based on the current code, `README.md`, `plans.md`, and `desdoc.md` as of 2026-05-20. It is not a rewrite plan. The project is already playable; architecture work must protect that.
 
 ## 1. Current Fact Map
 
@@ -11,11 +11,11 @@ The real project shape is:
 ```txt
 src/
   core/       low-level constants, enums, World, shared state shapes
-  data/       definition registries: items, weapons, plot, notes, relations, variants
+  data/       definition registries: items, weapons, plot, economy, permits, terminals, variants
   entities/   monster definitions and procedural sprite generators
   gen/        floor generators and hand-made content modules
-  systems/    runtime logic: AI, quests, samosbor, factions, events, inventory
-  render/     raycaster/WebGL/HUD/map/log rendering
+  systems/    runtime logic: AI, quests, samosbor, factions, events, inventory, save/runtime state
+  render/     raycaster/WebGL/HUD/map/log/canvas overlay rendering
   input.ts    input state
   main.ts     browser entry point, game loop, floor switching
 ```
@@ -26,10 +26,12 @@ Critical runtime facts:
 - `entities` is a flat array of plain objects with optional component fields. There are no entity subclasses.
 - The world is a 1024x1024 torus. All coordinate work must use `world.idx`, `world.wrap`, `world.delta`, or `world.dist`.
 - Floor generators return `{ world, entities, spawnX, spawnY }`.
-- Normal lift travel uses `systems/procedural_floors.ts` as a per-run vertical route. Existing `FloorLevel` values remain story/base floors; authored design floors are string-id route stops from `src/data/design_floors.ts`; procedural interstitial floors are string-id specs with `z`, seed, geometry, main faction, anomaly and danger.
+- Normal lift travel uses `systems/procedural_floors.ts` as a per-run vertical route across `z=-44..40`. Existing `FloorLevel` values remain 6 story/base floors; authored design floors are 18 string-id route stops from `src/data/design_floors.ts`; procedural interstitial floors are 61 string-id specs with `z`, seed, geometry, main faction, anomaly and danger.
 - `main.ts` owns the game loop and calls systems in fixed order.
 - `systems/events.ts` is the current EventBus analogue: fixed-size ring buffers, public event publication, and query filters.
-- Existing content extensibility already exists in `registerSideQuest`, `registerZoneContent`, `SAMOSBOR_VARIANTS`, `PLOT_NPCS`, and module-level floor content files.
+- Shared `E` interaction goes through `systems/interactions.ts`; generated gambling machines, local computers, NET-hack terminals, emergency panels, Net Terminal Gen and special floor interactions plug into that dispatcher.
+- Save/load uses `systems/save_runtime.ts` and `systems/save_payload.ts`. Current save shape version is `3`; old or unversioned saves are rejected rather than migrated.
+- Existing content extensibility already exists in `registerSideQuest`, `registerZoneContent`, floor content manifests, `SAMOSBOR_VARIANTS`, `getSamosborBeatDefs()`, contract/economy registries, route/design-floor ids and `publishEvent`.
 
 ## 2. Non-Negotiable Invariants
 
@@ -43,7 +45,8 @@ These are the rules every new module must preserve.
 - No coordinate math that ignores toroidal wrap.
 - No generator that seals a room without proving it is reachable.
 - No permanent POI on LIVING without `aptMask` protection and a corridor/door connection.
-- README is implementation fact. `desdoc.md` is roadmap and tone. This file is the engineering contract.
+- README is implementation fact. `plans.md` is the consolidated unresolved-plan index. `desdoc.md` is roadmap and tone. This file is the engineering contract.
+- Save compatibility is not sacred. Breaking save shape changes should bump the save shape version and reject stale saves explicitly instead of carrying legacy migrations.
 
 ## 3. Layer Contract
 
@@ -74,18 +77,33 @@ Definitions  ->  Generation  ->  Runtime Systems  ->  Render/UI
 - Owns construction: rooms, corridors, POIs, initial NPC/item placement, floor-specific content.
 - Content modules mutate `World` once during generation or samosbor rebuild.
 - Agents should mostly add new files here.
+- Floor-wide placement should use the shared placement field in `src/gen/population_placement.ts` instead of choosing ad hoc clusters.
 
 `systems/`
 
 - Owns generic runtime behavior.
 - Systems must consume definitions, not hardcode one module.
 - Systems must publish important state changes through `publishEvent`.
+- Shared AI navigation should stay field-based at runtime: `systems/ai/pathfinding.ts` bakes the current 1024x1024 world geometry into a reusable BFS navigation tree, then layers cached behavior flow fields over target source sets such as kitchens, toilets, workplaces or shelters. New generic AI behaviors should provide a source set and reuse that field layer instead of queuing per-actor BFS jobs.
 
 `render/`
 
 - Reads state and draws.
 - Visual feature additions should be data-indexed: texture id, sprite id, mark type, HUD flag.
 - Do not put gameplay decisions here.
+
+### Field Generation Contract
+
+The 1024x1024 floor is a toroidal field. Floor generation should first build the designed structure, rooms, zones, lifts, POIs and authored anchors, then derive one or more smooth placement fields from that completed world state.
+
+Use `src/gen/population_placement.ts` for floor-wide scattering:
+
+- A `PlacementFieldProfile` combines room weights, zone weights, optional anchors and procedural value noise.
+- The field is a dense 1024x1024 `Float32Array` over floor cells and is smoothed locally through neighboring floor cells.
+- Sampling uses coverage strata over the whole floor so high weights create broad density gradients instead of hard piles.
+- This is generation-time field sampling, not runtime buckets, not per-cell spawn caps, and not a content-specific exception.
+
+Special rooms and authored POIs should influence the field with weights or anchors. They should not own broad population placement by directly pushing hundreds of entities into a small room or arena. Local scripted encounters can still spawn bounded local groups when that group is the gameplay object.
 
 ## 4. Parallel Agent Ownership
 
@@ -295,7 +313,7 @@ Every new runtime system needs:
 - A bounded update cadence.
 - A debug way to inspect it.
 - Event publication for important changes.
-- Save compatibility if it stores persistent state.
+- A current-shape serializer/sanitizer if it stores persistent state. Cross-version save migration is not required by default; shape breaks should include a stale-version rejection test.
 - A low-tier behavior that is cheap and a high-tier path that buys visuals/content, not raw simulation complexity.
 
 ## 10. Cross-System Communication
@@ -348,23 +366,26 @@ Content module responsibilities:
 - Never change population caps outside its floor owner task.
 - Never assume another module ran first unless the manifest explicitly orders them.
 
-## 12. Definition Domains To Standardize Next
+## 12. Definition Domains
 
-The following domains should move toward registry/data-first growth.
+The project now has several data-first domains that should be extended in place instead of reimplemented locally:
 
 ```txt
-src/data/events.ts             EventDef[]
 src/data/contracts.ts          ContractDef[]
 src/data/resources.ts          ResourceDef[]
-src/data/factories.ts          FactoryDef[]
-src/data/economy.ts            Economy constants and price rules
+src/data/factories.ts          FactoryDef[] with recipes
+src/data/economy_rules.ts      price/scarcity rules
 src/data/rumors.ts             RumorDef[]
-src/data/documents_*.ts        DocumentDef[] by faction/theme
 src/data/monster_variants.ts   MonsterVariantDef[]
-src/data/floor_catalog.ts      FloorDef[] for future floor expansion
+src/data/floor_catalog.ts      data-only future floor catalog
+src/data/permits.ts            access papers and spoilage defs
+src/data/computers.ts          generated computer defs
+src/data/gambling.ts           generated gambling machine defs
+src/data/net_hack.ts           local NET-hack terminal defs
+src/data/emergency_panels.ts   panel defs
 ```
 
-Do not implement all of this in one pass. Each domain gets:
+Remaining candidates for future standardization are document pools by faction/theme, a data-only event-type catalog if `systems/events.ts` needs more static validation, and richer cross-expansion director hook definitions. Do not implement all of this in one pass. Each domain gets:
 
 1. Definition file.
 2. Minimal generic system.
@@ -436,7 +457,7 @@ System telemetry entry:
   last action flags
 ```
 
-Store the last 300 relevant samples, not infinite history. In browser runtime, dumps should go to debug UI, console, downloadable blob, or save data. In Node-side tooling, dumps may write under `Docs/AgentLogs/`.
+Store the last 300 relevant samples, not infinite history. In browser runtime, dumps should go to debug UI, console, downloadable blob, or save data. In Node-side tooling, durable dumps should stay outside active docs unless an explicit orchestration/debug task asks for an archived `gatbage/Docs/AgentLogs/` record.
 
 Historical `Docs/AgentLogs`, task statuses and prompts were consolidated into `appendix.md` and archived under `gatbage/`. Recreate those directories only for an explicit orchestration/debug-dump task; routine patches should keep their durable notes compact and update `appendix.md` only when the context will be useful later.
 
@@ -450,14 +471,16 @@ Every agent patch must answer:
 - How does it react to samosbor or why is it exempt?
 - How does it touch A-Life, factions, economy, quests, or events?
 - What caps prevent frame-time growth?
-- Did `npm run build` pass?
+- Which check passed?
 - Was README updated only if implementation facts changed?
 
 Minimum local verification:
 
 ```txt
-npm run build
+npm run typecheck
 ```
+
+Use `npm run check:readonly` for most data/content changes. Use `npm run check` for systems, generation, save/load, AI, economy, quests or rendering changes. Use `npm run check:browser` or `npm run check:full` when browser/render/mobile behavior needs smoke coverage and Chrome is available.
 
 For content:
 
@@ -505,7 +528,7 @@ Phase 3: Runtime systems.
 
 - Add only generic slow-tick systems.
 - Publish events for every important consequence.
-- Preserve save compatibility.
+- Bump save shape and invalidate stale data when persistent state changes incompatibly.
 
 Phase 4: Visual overkill.
 

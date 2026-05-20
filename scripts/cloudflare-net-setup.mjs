@@ -5,9 +5,10 @@ import { resolve } from 'node:path';
 const databaseName = 'gigahrush-net';
 const binding = 'GIGA_NET';
 const configPath = resolve('wrangler.jsonc');
-const schemaPaths = [
-  'cloudflare/d1/net_sphere.sql',
-  'cloudflare/d1/net_sphere_market.sql',
+const schemaFiles = [
+  { path: 'cloudflare/d1/net_sphere.sql', mode: 'execute' },
+  { path: 'cloudflare/d1/net_sphere_names.sql', mode: 'guarded' },
+  { path: 'cloudflare/d1/net_sphere_market.sql', mode: 'execute' },
 ];
 const schemaOnly = process.argv.includes('--schema-only');
 
@@ -88,9 +89,17 @@ function ensureBinding(id) {
 }
 
 function applySchema() {
-  for (const schemaPath of schemaPaths) {
-    console.log(`Applying ${schemaPath} to ${databaseName}...`);
-    run(['d1', 'execute', databaseName, '--remote', '--file', schemaPath, '--yes'], { stdio: 'inherit' });
+  for (const schema of schemaFiles) {
+    if (schema.mode === 'execute') {
+      console.log(`Applying ${schema.path} to ${databaseName}...`);
+      run(['d1', 'execute', databaseName, '--remote', '--file', schema.path, '--yes'], { stdio: 'inherit' });
+    } else if (schema.mode === 'guarded') {
+      console.log(`Applying ${schema.path} to ${databaseName} with guards...`);
+      applyGuardedSqlFile(schema.path);
+    } else {
+      console.error(`Unsupported schema mode for ${schema.path}: ${schema.mode}`);
+      process.exit(1);
+    }
   }
 }
 
@@ -108,18 +117,37 @@ function ensureColumn(table, column, definition) {
   run(['d1', 'execute', databaseName, '--remote', '--command', `ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`], { stdio: 'inherit' });
 }
 
-function applyMigrations() {
-  ensureColumn('net_players', 'nickname', "TEXT NOT NULL DEFAULT ''");
-  ensureColumn('net_events', 'nickname', "TEXT NOT NULL DEFAULT ''");
-  ensureColumn('net_events', 'summary', "TEXT NOT NULL DEFAULT ''");
-  run(['d1', 'execute', databaseName, '--remote', '--command', 'CREATE INDEX IF NOT EXISTS idx_net_events_created ON net_events (created_at)'], { stdio: 'inherit' });
+function sqlStatements(sql) {
+  return sql
+    .replace(/^\s*--.*$/gm, '')
+    .split(';')
+    .map(statement => statement.trim())
+    .filter(Boolean);
+}
+
+function applyGuardedSqlFile(schemaPath) {
+  const sql = readFileSync(schemaPath, 'utf8');
+  for (const statement of sqlStatements(sql)) {
+    const alter = /^ALTER TABLE\s+([a-z_][a-z0-9_]*)\s+ADD COLUMN\s+([a-z_][a-z0-9_]*)\s+([\s\S]+)$/i.exec(statement);
+    if (alter) {
+      ensureColumn(alter[1], alter[2], alter[3].trim());
+      continue;
+    }
+
+    if (/^CREATE\s+INDEX\s+IF\s+NOT\s+EXISTS\s+/i.test(statement)) {
+      run(['d1', 'execute', databaseName, '--remote', '--command', statement], { stdio: 'inherit' });
+      continue;
+    }
+
+    console.error(`Unsupported guarded SQL in ${schemaPath}: ${statement}`);
+    process.exit(1);
+  }
 }
 
 ensureLogin();
 const id = schemaOnly ? '' : ensureDatabase();
 if (!schemaOnly) ensureBinding(id);
 applySchema();
-applyMigrations();
 console.log(schemaOnly
   ? `Cloudflare Net Sphere schema is ready: ${databaseName}`
   : `Cloudflare Net Sphere is ready: ${binding} -> ${databaseName} (${id})`);

@@ -44,6 +44,7 @@ const PARTICLE_INSTANCE_CAP = 256;
 const PROCEDURAL_SPRITE_CACHE_MAX = 384;
 const PROCEDURAL_SPRITE_CACHE_TARGET = 288;
 const VISIBLE_SPRITE_CAP = 1024;
+const VISIBLE_ENTITY_QUERY_CAP = VISIBLE_SPRITE_CAP * 2;
 const visibleEntityQuery: Entity[] = [];
 const STATIC_OBJECT_RADIUS = MAX_DRAW;
 
@@ -1500,6 +1501,8 @@ export function updateDynamicData(world: World, camX = 0, camY = 0): void {
   if (world.cellVersion !== glState.cellVersion) {
     gl.bindTexture(gl.TEXTURE_2D, glState.cellsTex);
     gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, W, W, gl.RED_INTEGER, gl.UNSIGNED_BYTE, world.cells);
+    gl.bindTexture(gl.TEXTURE_2D, glState.featuresTex);
+    gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, W, W, gl.RED_INTEGER, gl.UNSIGNED_BYTE, world.features);
     glState.cellVersion = world.cellVersion;
   }
 
@@ -1839,7 +1842,7 @@ function renderSpritesGL(
 
   // Collect visible entities without per-frame record allocation.
   let visibleCount = 0;
-  getEntityIndex().queryRadius(px, py, MAX_DRAW, visibleEntityQuery, ENTITY_MASK_VISIBLE);
+  getEntityIndex().queryRadiusCapped(px, py, MAX_DRAW, visibleEntityQuery, ENTITY_MASK_VISIBLE, VISIBLE_ENTITY_QUERY_CAP);
   for (const e of visibleEntityQuery) {
     if (!e.alive || e.type === EntityType.PLAYER) continue;
     const dx = toroidalDelta(e.x, px);

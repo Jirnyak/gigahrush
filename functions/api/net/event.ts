@@ -1,9 +1,11 @@
 import {
   type PagesContext,
+  apiError,
   cleanEventKey,
   cleanEventType,
   cleanNetGen,
   cleanSessionId,
+  handleApiError,
   json,
   netEventSummary,
   normalizeProgress,
@@ -12,10 +14,14 @@ import {
   readProfile,
   readStats,
   requireDb,
+  requireMethod,
   upsertPresence,
 } from './common';
 
 export async function onRequestPost(context: PagesContext): Promise<Response> {
+  const methodError = requireMethod(context.request, 'POST');
+  if (methodError) return methodError;
+
   const db = requireDb(context.env);
   if (db instanceof Response) return db;
 
@@ -25,7 +31,7 @@ export async function onRequestPost(context: PagesContext): Promise<Response> {
     const sessionId = cleanSessionId(body.sessionId);
     const type = cleanEventType(body.type);
     const eventKey = cleanEventKey(body.eventKey);
-    if (!netGen || !sessionId || !type || !eventKey) return json({ error: 'bad event' }, 400);
+    if (!netGen || !sessionId || !type || !eventKey) return apiError('bad event', 400);
 
     const now = Date.now();
     const progress = normalizeProgress(body.progress);
@@ -56,6 +62,6 @@ export async function onRequestPost(context: PagesContext): Promise<Response> {
     ]);
     return json({ ok: true, stats, profile, events });
   } catch (err) {
-    return json({ error: err instanceof Error ? err.message : 'bad request' }, 400);
+    return handleApiError(err);
   }
 }

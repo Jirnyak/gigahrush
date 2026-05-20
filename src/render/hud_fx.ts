@@ -438,21 +438,83 @@ export function drawSignalRows(
   ctx.beginPath();
   ctx.rect(x, y, w, h);
   ctx.clip();
-  ctx.font = `${fontSize}px monospace`;
+  const textSize = Math.max(6, fontSize);
+  const labels = ['ЗВУК', 'КАРТ', 'ЛЮДИ'];
+  ctx.font = `bold ${textSize}px monospace`;
   ctx.textAlign = 'left';
   ctx.textBaseline = 'middle';
   for (let i = 0; i < count; i++) {
     const cy = y + rowH * (i + 0.5);
-    const pulse = 0.62 + Math.sin(time * 5 + i * 1.7) * 0.12;
-    ctx.fillStyle = `rgba(255,255,255,${0.035 + i * 0.012})`;
+    const pulse = 0.72 + Math.sin(time * 5 + i * 1.7) * 0.16;
+    const labelW = Math.max(27, textSize * 4.8);
+    ctx.fillStyle = `rgba(255,255,255,${0.06 + i * 0.016})`;
     ctx.fillRect(x, y + i * rowH, w, Math.max(1, rowH - 1));
     ctx.fillStyle = color;
     ctx.globalAlpha = pulse;
-    ctx.fillRect(x + 1, cy - rowH * 0.32, 2, Math.max(2, rowH * 0.64));
-    ctx.globalAlpha = 0.9;
-    ctx.fillStyle = i === 0 ? color : '#d7d7d7';
-    ctx.fillText(lines[i], x + 7, cy);
+    ctx.fillRect(x + 1, cy - rowH * 0.36, 3, Math.max(2, rowH * 0.72));
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = color;
+    ctx.fillText(labels[i] ?? 'СИГН', x + 7, cy);
+    ctx.font = `${textSize}px monospace`;
+    ctx.shadowColor = i === 0 ? color : 'rgba(0,0,0,0)';
+    ctx.shadowBlur = i === 0 ? 5 : 0;
+    ctx.fillStyle = i === 0 ? '#fff4c2' : '#e4e4e4';
+    ctx.fillText(lines[i], x + labelW + 8, cy);
+    ctx.shadowBlur = 0;
+    ctx.font = `bold ${textSize}px monospace`;
   }
+  ctx.restore();
+}
+
+export interface RangedThreatCueView {
+  label: string;
+  color: string;
+  progress: number;
+  side: number;
+}
+
+export function drawRangedThreatCue(
+  ctx: CanvasRenderingContext2D,
+  w: number,
+  h: number,
+  time: number,
+  cue: RangedThreatCueView,
+): void {
+  const progress = Math.max(0, Math.min(1, cue.progress));
+  const panelW = Math.min(w * 0.78, 210);
+  const panelH = 28;
+  const x = (w - panelW) * 0.5;
+  const y = h * 0.5 - 48;
+  const pulse = 0.72 + Math.sin(time * 18) * 0.14;
+  const side = Math.max(-1, Math.min(1, cue.side));
+
+  ctx.save();
+  ctx.globalAlpha = 0.82;
+  ctx.fillStyle = 'rgba(10,5,8,0.72)';
+  ctx.fillRect(x, y, panelW, panelH);
+  ctx.globalAlpha = 1;
+  ctx.strokeStyle = cue.color;
+  ctx.lineWidth = 1;
+  ctx.strokeRect(x + 0.5, y + 0.5, panelW - 1, panelH - 1);
+
+  const meterX = x + 9;
+  const meterY = y + panelH - 7;
+  const meterW = panelW - 18;
+  ctx.fillStyle = 'rgba(255,255,255,0.13)';
+  ctx.fillRect(meterX, meterY, meterW, 2);
+  ctx.fillStyle = cue.color;
+  ctx.globalAlpha = 0.6 + progress * 0.35;
+  ctx.fillRect(meterX, meterY, meterW * progress, 2);
+  ctx.globalAlpha = pulse;
+
+  ctx.textAlign = 'center';
+  ctx.font = 'bold 10px monospace';
+  ctx.shadowColor = cue.color;
+  ctx.shadowBlur = 8;
+  const arrow = side < -0.2 ? '< ' : side > 0.2 ? ' >' : '';
+  ctx.fillStyle = cue.color;
+  ctx.fillText(`ЛИНИЯ ОГНЯ ${cue.label}${arrow}`, w * 0.5 + (hash2(Math.floor(time * 20), 805) - 0.5) * 1.5, y + 6);
+  ctx.shadowBlur = 0;
   ctx.restore();
 }
 

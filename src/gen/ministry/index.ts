@@ -16,6 +16,7 @@ import { Spr, monsterSpr } from '../../render/sprite_index';
 import { MonsterKind } from '../../core/types';
 import { runMinistryContent } from './content_manifest';
 import { applyMinistryMacroGeometry } from './geometry';
+import { entitySpawnSlots } from '../../systems/entity_limits';
 
 /* ── Portrait picker — coordinate-hash like posters ───────────── */
 const PORTRAIT_COUNT = 64;
@@ -556,8 +557,8 @@ export function generateMinistry(): { world: World; entities: Entity[]; spawnX: 
      Phase 12: Monsters — very few
      ══════════════════════════════════════════════════════════════ */
   let monsterCount = 0;
-  const MONSTER_CAP = 30;
-  for (let attempt = 0; attempt < 10_000 && monsterCount < MONSTER_CAP; attempt++) {
+  const monsterTarget = entitySpawnSlots(entities, EntityType.MONSTER, 30);
+  for (let attempt = 0; attempt < 10_000 && monsterCount < monsterTarget; attempt++) {
     const ci = rng(0, W * W - 1);
     if (world.cells[ci] !== Cell.FLOOR) continue;
     if (world.roomMap[ci] >= 0) continue;

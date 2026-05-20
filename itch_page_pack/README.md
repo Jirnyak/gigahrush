@@ -33,6 +33,7 @@ Status: ready for upload, live itch edit blocked by auth/Cloudflare in current n
 
 ## Verification Artifacts
 
+- `npm run itch:verify` - read-only local verifier for manifest paths, required asset dimensions, HTML copy shape, stale preview/screenshot artifacts, and ZIP root structure.
 - `local_preview_desktop.png` - desktop preview screenshot.
 - `local_preview_mobile.png` - mobile-width preview screenshot.
 - `local_preview_v3.html` - v3 preview including clean header, GIF, and contact sheet.

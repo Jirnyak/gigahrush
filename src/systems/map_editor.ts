@@ -24,7 +24,9 @@ import { MONSTERS, applyMonsterVariant } from '../entities/monster';
 import { Spr } from '../render/sprite_index';
 import { getMaxHp, randomRPG } from './rpg';
 import { currentFloorRunEntry } from './procedural_floors';
+import { activeFloorInstanceWorldKey, floorInstanceLabel, getActiveFloorInstance } from './floor_instances';
 import { mapEditorContainerBrushes, mapEditorEntityBrushes } from './map_editor_catalog';
+import { canSpawnEntityType } from './entity_limits';
 
 export type MapEditorToolId = 'cell' | 'door' | 'texture' | 'feature' | 'entity' | 'container' | 'inspect';
 export type MapEditorMode = 'map' | 'menu' | 'brush' | 'details' | 'objects';
@@ -232,6 +234,8 @@ export function mapEditorPatchStateForSave(state: GameState): MapEditorPatchStat
 }
 
 export function currentMapEditorFloorKey(state: GameState): string {
+  const activeKey = activeFloorInstanceWorldKey(state);
+  if (activeKey) return activeKey;
   const entry = currentFloorRunEntry(state);
   if (entry.storyFloor !== undefined) return `story:${FloorLevel[entry.storyFloor]}`;
   if (entry.designFloorId) return `design:${entry.designFloorId}`;
@@ -240,11 +244,14 @@ export function currentMapEditorFloorKey(state: GameState): string {
 }
 
 function currentFloorLabel(state: GameState): string {
+  const active = getActiveFloorInstance(state);
+  if (active) return floorInstanceLabel(active);
   const entry = currentFloorRunEntry(state);
   return entry.label;
 }
 
 function currentFloorZ(state: GameState): number | undefined {
+  if (getActiveFloorInstance(state)) return undefined;
   return currentFloorRunEntry(state).z;
 }
 
@@ -539,6 +546,7 @@ function spawnEditorEntity(world: World, entities: Entity[], state: GameState, n
   if (!passable(world.cells[idx])) return setError('Нужен проход');
   const def = op.entityDef;
   if (def.kind === 'item') {
+    if (!canSpawnEntityType(entities, EntityType.ITEM_DROP)) return setError('Лимит предметов достигнут');
     const itemId = def.itemId ?? 'water';
     if (!ITEMS[itemId]) return setError(`Нет предмета ${itemId}`);
     entities.push({
@@ -554,6 +562,7 @@ function spawnEditorEntity(world: World, entities: Entity[], state: GameState, n
       inventory: [{ defId: itemId, count: Math.max(1, Math.floor(def.count ?? 1)) }],
     });
   } else if (def.kind === 'monster') {
+    if (!canSpawnEntityType(entities, EntityType.MONSTER)) return setError('Лимит мобов достигнут');
     const kind = def.monsterKind ?? MonsterKind.SBORKA;
     const monsterDef = MONSTERS[kind];
     if (!monsterDef) return setError(`Нет монстра ${kind}`);
@@ -579,6 +588,7 @@ function spawnEditorEntity(world: World, entities: Entity[], state: GameState, n
     applyMonsterVariant(monster, state.currentFloor, true);
     entities.push(monster);
   } else {
+    if (!canSpawnEntityType(entities, EntityType.NPC)) return setError('Лимит NPC достигнут');
     const faction = def.faction ?? Faction.CITIZEN;
     const occupation = randomOccupation(faction);
     const name = randomName(faction);

@@ -40,6 +40,19 @@ export interface MonsterBaitMarker {
   maxAttractions: number;
 }
 
+export interface MonsterBaitPreview {
+  kind: MonsterBaitKind;
+  itemName: string;
+  baitTags: readonly string[];
+  strength: number;
+  risk: number;
+  radius: number;
+  ttlSeconds: number;
+  maxAttractions: number;
+  activeCap: number;
+  markerLabel: string;
+}
+
 export const MONSTER_BAIT_MAX_ACTIVE = 8;
 export const MONSTER_BAIT_MAX_CANDIDATES = 8;
 export const MONSTER_BAIT_RADIUS_CAP = 22;
@@ -151,6 +164,41 @@ function baitProfileForItem(defId: string, source: MonsterBaitSource, count: num
   };
 }
 
+function baitKindLabel(kind: MonsterBaitKind): string {
+  if (kind === 'govnyak') return 'говняк';
+  if (kind === 'meat') return 'мясо';
+  if (kind === 'fungal') return 'гриб';
+  return 'еда';
+}
+
+function baitMarkerLabel(
+  kind: MonsterBaitKind,
+  radius: number,
+  ttlSeconds: number,
+  maxAttractions: number,
+  risk: number,
+): string {
+  return `приманка:${baitKindLabel(kind)} ${Math.round(radius)}кл/${Math.ceil(ttlSeconds)}с до ${maxAttractions}, риск ${risk}/3`;
+}
+
+export function monsterBaitPreviewForItem(defId: string, source: MonsterBaitSource, count: number): MonsterBaitPreview | null {
+  const def = ITEMS[defId];
+  const profile = baitProfileForItem(defId, source, count);
+  if (!def || !profile) return null;
+  return {
+    kind: profile.kind,
+    itemName: def.name,
+    baitTags: profile.baitTags,
+    strength: profile.strength,
+    risk: profile.risk,
+    radius: profile.radius,
+    ttlSeconds: profile.expiresAt,
+    maxAttractions: profile.maxAttractions,
+    activeCap: MONSTER_BAIT_MAX_ACTIVE,
+    markerLabel: baitMarkerLabel(profile.kind, profile.radius, profile.expiresAt, profile.maxAttractions, profile.risk),
+  };
+}
+
 function baitScanCooldown(entityId: number): number {
   const h = Math.imul(entityId ^ 0x27D4EB2D, 0x85EBCA6B) >>> 0;
   return 1.1 + ((h & 255) / 255) * 0.45;
@@ -167,7 +215,7 @@ function markerZone(world: World | undefined, x: number, y: number): { zoneId?: 
 }
 
 function baitEventTags(marker: MonsterBaitMarker, action: string, extraTags: readonly string[] = []): string[] {
-  const tags = ['monster', 'bait', marker.kind, action];
+  const tags = ['monster', 'bait', 'bait_marker', marker.kind, action];
   if (marker.risk >= 2) addUnique(tags, 'risky_attraction');
   if (marker.baitTags.includes('bait_trap')) addUnique(tags, 'trap_bait');
   for (const tag of extraTags) addUnique(tags, tag);
@@ -218,6 +266,8 @@ function publishBaitEnd(
       risk: marker.risk,
       attractedCount: marker.attractedCount,
       maxAttractions: marker.maxAttractions,
+      activeCap: MONSTER_BAIT_MAX_ACTIVE,
+      markerLabel: baitMarkerLabel(marker.kind, marker.radius, Math.max(0, marker.expiresAt - time), marker.maxAttractions, marker.risk),
     },
   });
 }
@@ -309,6 +359,9 @@ export function placeMonsterBait(
       radius: marker.radius,
       expiresAt: marker.expiresAt,
       maxAttractions: marker.maxAttractions,
+      activeCount: activeBaits.length,
+      activeCap: MONSTER_BAIT_MAX_ACTIVE,
+      markerLabel: baitMarkerLabel(marker.kind, marker.radius, Math.max(0, marker.expiresAt - state.time), marker.maxAttractions, marker.risk),
     },
   });
   return true;
@@ -425,6 +478,8 @@ export function findMonsterBaitTarget(
         risk: best.risk,
         attractedCount: best.attractedCount,
         maxAttractions: best.maxAttractions,
+        activeCap: MONSTER_BAIT_MAX_ACTIVE,
+        markerLabel: baitMarkerLabel(best.kind, best.radius, Math.max(0, best.expiresAt - time), best.maxAttractions, best.risk),
       },
     });
   }

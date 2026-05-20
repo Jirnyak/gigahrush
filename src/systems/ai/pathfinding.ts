@@ -16,40 +16,60 @@ let _barkTime = 0;
 export function setPathContext(msgs: Msg[], time: number, samosborActive = false): void {
   _barkMsgs = msgs;
   _barkTime = time;
-  beginRoutinePathBudget(time, samosborActive);
+  beginPathFrame(time, samosborActive);
 }
 
-/* ── BFS pathfinding (toroidal, avoids closed doors) ──────────── */
+/* ── Baked navigation tree (toroidal, ordinary doors are openable) */
 
-const BFS_LIMIT = 800;
-const PATH_CACHE_MAX = 512;
-const PATH_KEY_MOD = W * W;
-const ROUTINE_PATH_RATE = 18;
-const ROUTINE_PATH_BURST = 10;
-const ROUTINE_PATH_SAMOSBOR_RATE = 6;
-const ROUTINE_PATH_SAMOSBOR_BURST = 4;
-const ROUTINE_PATH_DEFER_SEC = 0.85;
-const ROUTINE_PATH_FAIL_SEC = 2.5;
+const NAV_UNKNOWN = -3;
+const NAV_BLOCKED = -2;
+const FLOW_UNREACHED = -1;
+const FLOW_BLOCKED = -2;
+const PATH_CHUNK_LIMIT = 256;
+const PATH_DESCEND_SEARCH_LIMIT = 2048;
+const BEHAVIOR_FLOW_FIELD_CACHE_MAX = 16;
 const ROUTINE_WANDER_ATTEMPTS = 4;
 const ROUTINE_FAR_ATTEMPTS = 5;
-const _bfsVisitGen = new Uint16Array(W * W);
-let _bfsGen = 0;
-const _bfsPrev = new Int32Array(W * W);
-const _bfsQueue = new Int32Array(BFS_LIMIT);
-const _pathCache = new Map<number, number[]>();
-const _routinePathBackoff = new WeakMap<Entity, { target: number; until: number }>();
-let _pathCacheWorld: World | null = null;
-let _pathCacheCellVersion = -1;
-let _pathTime = 0;
-let _routinePathTokens = ROUTINE_PATH_BURST;
-let _routinePathBurst = ROUTINE_PATH_BURST;
-let _routinePathRate = ROUTINE_PATH_RATE;
-let _routinePathLastTime = -1;
-let _routinePathSamosbor = false;
+const _navParent = new Int32Array(W * W);
+const _navDepth = new Int32Array(W * W);
+const _navComponent = new Int32Array(W * W);
+const _navQueue = new Int32Array(W * W);
+const _flowSourceScratch: number[] = [];
+let _pathSamosborActive = false;
+let _navWorld: World | null = null;
+let _navCellVersion = -1;
+let _navSamosborActive = false;
+let _navComponents = 0;
+let _navReachable = 0;
+let _flowFieldTouch = 0;
 let _routinePathUsed = 0;
 let _routinePathDenied = 0;
 let _routinePathDeferred = 0;
 let _pathCacheHits = 0;
+let _bfsCalls = 0;
+let _bfsFound = 0;
+let _bfsMiss = 0;
+let _bfsLimitHits = 0;
+let _bfsVisited = 0;
+
+export type BehaviorFlowFieldSourceProvider = (world: World, out: number[]) => void;
+
+interface BehaviorFlowField {
+  key: string;
+  world: World;
+  cellVersion: number;
+  samosborActive: boolean;
+  roomCount: number;
+  next: Int32Array;
+  sourceCount: number;
+  reachable: number;
+  lastUsed: number;
+}
+
+interface FlowPathAssignment {
+  key: string;
+  sourceProvider: BehaviorFlowFieldSourceProvider;
+}
 
 export interface PathfindingBudgetStats {
   routineUsed: number;
@@ -59,82 +79,64 @@ export interface PathfindingBudgetStats {
   routineBurst: number;
   routineRate: number;
   cacheHits: number;
+  cacheSize: number;
+  bfsCalls: number;
+  bfsFound: number;
+  bfsMiss: number;
+  bfsLimitHits: number;
+  bfsVisited: number;
 }
 
-type AssignPathStatus = 'assigned' | 'same' | 'deferred' | 'not_found';
+type AssignPathStatus = 'assigned' | 'same' | 'not_found';
 
-function beginRoutinePathBudget(time: number, samosborActive: boolean): void {
-  _pathTime = time;
+const _behaviorFlowFields = new Map<string, BehaviorFlowField>();
+const _flowPathAssignments = new WeakMap<Entity, FlowPathAssignment>();
+const _roomTypeSourceProviders = new Map<string, BehaviorFlowFieldSourceProvider>();
+
+function beginPathFrame(time: number, samosborActive: boolean): void {
+  void time;
+  _pathSamosborActive = samosborActive;
   _routinePathUsed = 0;
   _routinePathDenied = 0;
   _routinePathDeferred = 0;
   _pathCacheHits = 0;
-  const burst = samosborActive ? ROUTINE_PATH_SAMOSBOR_BURST : ROUTINE_PATH_BURST;
-  const rate = samosborActive ? ROUTINE_PATH_SAMOSBOR_RATE : ROUTINE_PATH_RATE;
-  if (_routinePathLastTime < 0 || time < _routinePathLastTime || samosborActive !== _routinePathSamosbor) {
-    _routinePathTokens = burst;
-  } else {
-    _routinePathTokens = Math.min(burst, _routinePathTokens + (time - _routinePathLastTime) * rate);
-  }
-  _routinePathLastTime = time;
-  _routinePathSamosbor = samosborActive;
-  _routinePathBurst = burst;
-  _routinePathRate = rate;
+  _bfsCalls = 0;
+  _bfsFound = 0;
+  _bfsMiss = 0;
+  _bfsLimitHits = 0;
+  _bfsVisited = 0;
 }
 
-export function getPathfindingBudgetStats(): PathfindingBudgetStats {
-  return {
-    routineUsed: _routinePathUsed,
-    routineDenied: _routinePathDenied,
-    routineDeferred: _routinePathDeferred,
-    routineTokens: _routinePathTokens,
-    routineBurst: _routinePathBurst,
-    routineRate: _routinePathRate,
-    cacheHits: _pathCacheHits,
+export function getPathfindingBudgetStats(out?: PathfindingBudgetStats): PathfindingBudgetStats {
+  const stats = out ?? {
+    routineUsed: 0,
+    routineDenied: 0,
+    routineDeferred: 0,
+    routineTokens: 0,
+    routineBurst: 0,
+    routineRate: 0,
+    cacheHits: 0,
+    cacheSize: 0,
+    bfsCalls: 0,
+    bfsFound: 0,
+    bfsMiss: 0,
+    bfsLimitHits: 0,
+    bfsVisited: 0,
   };
-}
-
-function consumeRoutinePathBudget(e: Entity, target: number): boolean {
-  if (_routinePathTokens >= 1) {
-    _routinePathTokens -= 1;
-    _routinePathUsed++;
-    return true;
-  }
-  _routinePathDenied++;
-  _routinePathBackoff.set(e, { target, until: _pathTime + ROUTINE_PATH_DEFER_SEC + pathJitter(e) });
-  return false;
-}
-
-function pathJitter(e: Entity): number {
-  return ((e.id * 17) % 11) * 0.025;
-}
-
-function pathKey(start: number, end: number): number {
-  return start * PATH_KEY_MOD + end;
-}
-
-function preparePathCache(world: World): void {
-  if (_pathCacheWorld === world && _pathCacheCellVersion === world.cellVersion) return;
-  _pathCache.clear();
-  _pathCacheWorld = world;
-  _pathCacheCellVersion = world.cellVersion;
-}
-
-function readCachedPath(world: World, start: number, end: number): number[] | null {
-  preparePathCache(world);
-  const cached = _pathCache.get(pathKey(start, end));
-  if (cached === undefined) return null;
-  _pathCacheHits++;
-  return cached;
-}
-
-function storeCachedPath(world: World, start: number, end: number, path: number[]): void {
-  preparePathCache(world);
-  if (_pathCache.size >= PATH_CACHE_MAX) {
-    const first = _pathCache.keys().next().value;
-    if (first !== undefined) _pathCache.delete(first);
-  }
-  _pathCache.set(pathKey(start, end), path);
+  stats.routineUsed = _routinePathUsed;
+  stats.routineDenied = _routinePathDenied;
+  stats.routineDeferred = _routinePathDeferred;
+  stats.routineTokens = 0;
+  stats.routineBurst = 0;
+  stats.routineRate = 0;
+  stats.cacheHits = _pathCacheHits;
+  stats.cacheSize = _navComponents;
+  stats.bfsCalls = _bfsCalls;
+  stats.bfsFound = _bfsFound;
+  stats.bfsMiss = _bfsMiss;
+  stats.bfsLimitHits = _bfsLimitHits;
+  stats.bfsVisited = _bfsVisited;
+  return stats;
 }
 
 export function bfsPath(world: World, sx: number, sy: number, ex: number, ey: number): number[] {
@@ -145,67 +147,318 @@ export function bfsPath(world: World, sx: number, sy: number, ex: number, ey: nu
 
   const start = world.idx(sx, sy);
   const end = world.idx(ex, ey);
-  const cached = readCachedPath(world, start, end);
-  if (cached !== null) return cached;
-  const path = computeBfsPath(world, start, end);
-  storeCachedPath(world, start, end, path);
+  return buildBakedTreePath(world, start, end);
+}
+
+function isNavPassable(world: World, i: number): boolean {
+  const cell = world.cells[i];
+  if (cell === Cell.FLOOR || cell === Cell.WATER) return true;
+  if (cell !== Cell.DOOR) return false;
+  const door = world.doors.get(i);
+  return !door || (door.state !== DoorState.LOCKED && door.state !== DoorState.HERMETIC_CLOSED);
+}
+
+function bakeNavigationTree(world: World): void {
+  _bfsCalls++;
+  _navParent.fill(NAV_UNKNOWN);
+  _navDepth.fill(0);
+  _navComponent.fill(-1);
+  _navWorld = world;
+  _navCellVersion = world.cellVersion;
+  _navSamosborActive = _pathSamosborActive;
+  _navComponents = 0;
+  _navReachable = 0;
+
+  for (let root = 0; root < W * W; root++) {
+    if (_navParent[root] !== NAV_UNKNOWN) continue;
+    if (!isNavPassable(world, root)) {
+      _navParent[root] = NAV_BLOCKED;
+      continue;
+    }
+
+    const componentId = _navComponents++;
+    _navParent[root] = root;
+    _navComponent[root] = componentId;
+    _navDepth[root] = 0;
+    _navQueue[0] = root;
+    let head = 0;
+    let tail = 1;
+
+    while (head < tail) {
+      const cur = _navQueue[head++];
+      const cx = cur % W;
+      const cy = (cur / W) | 0;
+      const west = cy * W + (cx === 0 ? W - 1 : cx - 1);
+      const east = cy * W + (cx === W - 1 ? 0 : cx + 1);
+      const north = (cy === 0 ? W - 1 : cy - 1) * W + cx;
+      const south = (cy === W - 1 ? 0 : cy + 1) * W + cx;
+      tail = visitNavNeighbor(world, west, cur, componentId, tail);
+      tail = visitNavNeighbor(world, east, cur, componentId, tail);
+      tail = visitNavNeighbor(world, north, cur, componentId, tail);
+      tail = visitNavNeighbor(world, south, cur, componentId, tail);
+    }
+    _navReachable += tail;
+  }
+
+  _bfsVisited += _navReachable;
+}
+
+function visitNavNeighbor(world: World, cell: number, parent: number, componentId: number, tail: number): number {
+  if (_navParent[cell] !== NAV_UNKNOWN) return tail;
+  if (!isNavPassable(world, cell)) {
+    _navParent[cell] = NAV_BLOCKED;
+    return tail;
+  }
+  _navParent[cell] = parent;
+  _navDepth[cell] = _navDepth[parent] + 1;
+  _navComponent[cell] = componentId;
+  _navQueue[tail] = cell;
+  return tail + 1;
+}
+
+function ensureNavigationTree(world: World): void {
+  if (_navWorld === world && _navCellVersion === world.cellVersion && _navSamosborActive === _pathSamosborActive) {
+    _pathCacheHits++;
+    return;
+  }
+  bakeNavigationTree(world);
+}
+
+function flowFieldValid(field: BehaviorFlowField, world: World): boolean {
+  return field.world === world &&
+    field.cellVersion === world.cellVersion &&
+    field.samosborActive === _pathSamosborActive &&
+    field.roomCount === world.rooms.length;
+}
+
+function ensureBehaviorFlowField(
+  world: World,
+  key: string,
+  sourceProvider: BehaviorFlowFieldSourceProvider,
+): BehaviorFlowField | null {
+  const cached = _behaviorFlowFields.get(key);
+  if (cached && flowFieldValid(cached, world)) {
+    cached.lastUsed = ++_flowFieldTouch;
+    _pathCacheHits++;
+    return cached;
+  }
+
+  _flowSourceScratch.length = 0;
+  sourceProvider(world, _flowSourceScratch);
+  if (_flowSourceScratch.length === 0) {
+    _behaviorFlowFields.delete(key);
+    return null;
+  }
+
+  const next = cached?.next ?? new Int32Array(W * W);
+  next.fill(FLOW_UNREACHED);
+  let head = 0;
+  let tail = 0;
+  for (const source of _flowSourceScratch) {
+    if (source < 0 || source >= W * W) continue;
+    if (next[source] === source) continue;
+    if (!isNavPassable(world, source)) continue;
+    next[source] = source;
+    _navQueue[tail++] = source;
+  }
+
+  while (head < tail) {
+    const cur = _navQueue[head++];
+    const cx = cur % W;
+    const cy = (cur / W) | 0;
+    const west = cy * W + (cx === 0 ? W - 1 : cx - 1);
+    const east = cy * W + (cx === W - 1 ? 0 : cx + 1);
+    const north = (cy === 0 ? W - 1 : cy - 1) * W + cx;
+    const south = (cy === W - 1 ? 0 : cy + 1) * W + cx;
+    tail = visitFlowNeighbor(world, next, west, cur, tail);
+    tail = visitFlowNeighbor(world, next, east, cur, tail);
+    tail = visitFlowNeighbor(world, next, north, cur, tail);
+    tail = visitFlowNeighbor(world, next, south, cur, tail);
+  }
+
+  _bfsCalls++;
+  _bfsVisited += tail;
+  const field: BehaviorFlowField = {
+    key,
+    world,
+    cellVersion: world.cellVersion,
+    samosborActive: _pathSamosborActive,
+    roomCount: world.rooms.length,
+    next,
+    sourceCount: _flowSourceScratch.length,
+    reachable: tail,
+    lastUsed: ++_flowFieldTouch,
+  };
+  _behaviorFlowFields.set(key, field);
+  trimBehaviorFlowFieldCache();
+  return field;
+}
+
+function visitFlowNeighbor(world: World, next: Int32Array, cell: number, parent: number, tail: number): number {
+  if (next[cell] !== FLOW_UNREACHED) return tail;
+  if (!isNavPassable(world, cell)) {
+    next[cell] = FLOW_BLOCKED;
+    return tail;
+  }
+  next[cell] = parent;
+  _navQueue[tail] = cell;
+  return tail + 1;
+}
+
+function trimBehaviorFlowFieldCache(): void {
+  while (_behaviorFlowFields.size > BEHAVIOR_FLOW_FIELD_CACHE_MAX) {
+    let oldestKey = '';
+    let oldestUsed = Infinity;
+    for (const field of _behaviorFlowFields.values()) {
+      if (field.lastUsed >= oldestUsed) continue;
+      oldestUsed = field.lastUsed;
+      oldestKey = field.key;
+    }
+    if (!oldestKey) return;
+    _behaviorFlowFields.delete(oldestKey);
+  }
+}
+
+function buildBakedTreePath(world: World, start: number, end: number): number[] {
+  ensureNavigationTree(world);
+  if (start === end) return [];
+  if (_navParent[start] < 0 || _navParent[end] < 0 || _navComponent[start] !== _navComponent[end]) {
+    _bfsMiss++;
+    return [];
+  }
+
+  let a = start;
+  let b = end;
+  const forward: number[] = [];
+  const reverse: number[] = [];
+
+  let descendSearch = 0;
+  while (_navDepth[b] > _navDepth[a] && descendSearch < PATH_DESCEND_SEARCH_LIMIT) {
+    reverse.push(b);
+    b = _navParent[b];
+    descendSearch++;
+  }
+
+  if (_navDepth[b] > _navDepth[a]) {
+    const path = climbFromStart(start);
+    if (path.length > 0) _bfsFound++;
+    else _bfsMiss++;
+    _bfsLimitHits++;
+    return path;
+  }
+
+  if (a === b) {
+    for (let i = reverse.length - 1; i >= 0 && forward.length < PATH_CHUNK_LIMIT; i--) {
+      forward.push(reverse[i]);
+    }
+    if (forward.length > 0) _bfsFound++;
+    else _bfsMiss++;
+    if (reverse.length > PATH_CHUNK_LIMIT) _bfsLimitHits++;
+    return forward;
+  }
+
+  while (_navDepth[a] > _navDepth[b] && forward.length < PATH_CHUNK_LIMIT) {
+    a = _navParent[a];
+    forward.push(a);
+  }
+  while (a !== b && forward.length < PATH_CHUNK_LIMIT) {
+    a = _navParent[a];
+    forward.push(a);
+    reverse.push(b);
+    b = _navParent[b];
+  }
+
+  let chunked = false;
+  if (a === b) {
+    chunked = forward.length + reverse.length > PATH_CHUNK_LIMIT;
+    for (let i = reverse.length - 1; i >= 0 && forward.length < PATH_CHUNK_LIMIT; i--) {
+      forward.push(reverse[i]);
+    }
+  } else {
+    chunked = true;
+  }
+  if (forward.length > 0) _bfsFound++;
+  else _bfsMiss++;
+  if (chunked) _bfsLimitHits++;
+  return forward;
+}
+
+function climbFromStart(start: number): number[] {
+  const path: number[] = [];
+  let cell = start;
+  while (path.length < PATH_CHUNK_LIMIT) {
+    const parent = _navParent[cell];
+    if (parent < 0 || parent === cell) break;
+    path.push(parent);
+    cell = parent;
+  }
   return path;
 }
 
-function computeBfsPath(world: World, start: number, end: number): number[] {
-  _bfsGen = (_bfsGen + 1) & 0xFFFF;
-  if (_bfsGen === 0) { _bfsGen = 1; _bfsVisitGen.fill(0); }
-
-  _bfsVisitGen[start] = _bfsGen;
-  _bfsQueue[0] = start;
-  let head = 0, tail = 1;
-  let found = false;
-
-  while (head < tail && head < BFS_LIMIT) {
-    const cur = _bfsQueue[head++];
-    if (cur === end) { found = true; break; }
-
-    const cx = cur % W;
-    const cy = (cur / W) | 0;
-
-    for (let d = 0; d < 4; d++) {
-      let nx = cx;
-      let ny = cy;
-      if (d === 0) nx = cx === 0 ? W - 1 : cx - 1;
-      else if (d === 1) nx = cx === W - 1 ? 0 : cx + 1;
-      else if (d === 2) ny = cy === 0 ? W - 1 : cy - 1;
-      else ny = cy === W - 1 ? 0 : cy + 1;
-      const ni = ny * W + nx;
-      if (_bfsVisitGen[ni] === _bfsGen) continue;
-
-      const cell = world.cells[ni];
-      if (cell === Cell.WALL) continue;
-      if (cell === Cell.DOOR) {
-        const door = world.doors.get(ni);
-        if (door && (door.state === DoorState.LOCKED || door.state === DoorState.HERMETIC_CLOSED)) continue;
-      }
-
-      _bfsVisitGen[ni] = _bfsGen;
-      _bfsPrev[ni] = cur;
-      if (tail < BFS_LIMIT) _bfsQueue[tail++] = ni;
-    }
-  }
-
-  if (!found) return [];
-
+function buildFlowFieldPath(field: BehaviorFlowField, start: number): number[] {
+  let cell = start;
   const path: number[] = [];
-  let c = end;
-  while (c !== start) {
-    path.push(c);
-    c = _bfsPrev[c];
-    if (_bfsVisitGen[c] !== _bfsGen && c !== start) return [];
+  while (path.length < PATH_CHUNK_LIMIT) {
+    const next = field.next[cell];
+    if (next < 0) break;
+    if (next === cell) break;
+    path.push(next);
+    cell = next;
   }
-  path.reverse();
+  if (path.length > 0) _bfsFound++;
+  else _bfsMiss++;
+  if (path.length >= PATH_CHUNK_LIMIT) _bfsLimitHits++;
   return path;
+}
+
+export function tryAssignBehaviorFlowPath(
+  world: World,
+  e: Entity,
+  key: string,
+  sourceProvider: BehaviorFlowFieldSourceProvider,
+): AssignPathStatus {
+  const ai = e.ai!;
+  const sx = world.wrap(Math.floor(e.x));
+  const sy = world.wrap(Math.floor(e.y));
+  const start = world.idx(sx, sy);
+  const field = ensureBehaviorFlowField(world, key, sourceProvider);
+  if (!field || field.next[start] < 0) {
+    ai.path = [];
+    ai.pi = 0;
+    _flowPathAssignments.delete(e);
+    return 'not_found';
+  }
+
+  const path = buildFlowFieldPath(field, start);
+  if (path.length === 0) {
+    ai.path = [];
+    ai.pi = 0;
+    ai.stuck = 0;
+    ai.tx = sx;
+    ai.ty = sy;
+    _flowPathAssignments.delete(e);
+    return 'same';
+  }
+
+  const target = path[path.length - 1];
+  ai.path = path;
+  ai.pi = 0;
+  ai.stuck = 0;
+  ai.tx = target % W;
+  ai.ty = (target / W) | 0;
+  _flowPathAssignments.set(e, { key, sourceProvider });
+  return 'assigned';
+}
+
+function continueBehaviorFlowPath(world: World, e: Entity): AssignPathStatus {
+  const flow = _flowPathAssignments.get(e);
+  if (!flow) return 'not_found';
+  return tryAssignBehaviorFlowPath(world, e, flow.key, flow.sourceProvider);
 }
 
 export function tryAssignPathToCell(world: World, e: Entity, tx: number, ty: number): AssignPathStatus {
   const ai = e.ai!;
+  _flowPathAssignments.delete(e);
   const sx = world.wrap(Math.floor(e.x));
   const sy = world.wrap(Math.floor(e.y));
   tx = world.wrap(tx);
@@ -219,27 +472,16 @@ export function tryAssignPathToCell(world: World, e: Entity, tx: number, ty: num
     ai.stuck = 0;
     ai.tx = tx;
     ai.ty = ty;
-    _routinePathBackoff.delete(e);
     return 'same';
   }
 
-  const backoff = _routinePathBackoff.get(e);
-  if (backoff && backoff.target === target && backoff.until > _pathTime) {
-    _routinePathDeferred++;
-    return 'deferred';
-  }
-
-  let path = readCachedPath(world, start, target);
-  if (path === null) {
-    if (!consumeRoutinePathBudget(e, target)) return 'deferred';
-    path = computeBfsPath(world, start, target);
-    storeCachedPath(world, start, target, path);
-  }
+  const path = buildBakedTreePath(world, start, target);
 
   if (path.length === 0) {
     ai.path = [];
     ai.pi = 0;
-    _routinePathBackoff.set(e, { target, until: _pathTime + ROUTINE_PATH_FAIL_SEC + pathJitter(e) });
+    ai.tx = tx;
+    ai.ty = ty;
     return 'not_found';
   }
 
@@ -248,7 +490,6 @@ export function tryAssignPathToCell(world: World, e: Entity, tx: number, ty: num
   ai.stuck = 0;
   ai.tx = tx;
   ai.ty = ty;
-  _routinePathBackoff.delete(e);
   return 'assigned';
 }
 
@@ -256,13 +497,22 @@ export function tryAssignPathToCell(world: World, e: Entity, tx: number, ty: num
 export function followPath(world: World, e: Entity, dt: number): void {
   const ai = e.ai!;
   if (ai.pi >= ai.path.length) {
-    // Path finished — clear and roam within room if NPC
     if (ai.path.length > 0) {
+      const current = world.idx(Math.floor(e.x), Math.floor(e.y));
+      const destination = world.idx(Math.floor(ai.tx), Math.floor(ai.ty));
+      ai.path = []; ai.pi = 0; ai.stuck = 0;
+      if (_flowPathAssignments.has(e)) {
+        const status = continueBehaviorFlowPath(world, e);
+        if (status === 'assigned') return;
+      }
+      if (current !== destination) {
+        const status = tryAssignPathToCell(world, e, ai.tx, ai.ty);
+        if (status === 'assigned') return;
+      }
       // Bark: arrived at destination (very rare)
       if (e.type === EntityType.NPC && ai.goal === AIGoal.WORK) {
         bark(e, _barkMsgs, _barkTime, BARK_ARRIVE, BARK_ARRIVE_F, BARK_CHANCE_ARRIVE, '#aac');
       }
-      ai.path = []; ai.pi = 0; ai.stuck = 0;
     }
     if (e.type === EntityType.NPC && ai.goal !== AIGoal.HIDE && ai.goal !== AIGoal.FLEE) {
       ai.stuck += dt;
@@ -354,6 +604,47 @@ export function findNearest(world: World, e: Entity, type: RoomType): number {
     if (d < bestD) { bestD = d; best = room.id; }
   }
   return best;
+}
+
+function roomTypeFieldKey(types: readonly RoomType[]): string {
+  const unique = [...new Set(types)].sort((a, b) => a - b);
+  return `room:${unique.join(',')}`;
+}
+
+function roomTypeSourceProvider(types: readonly RoomType[]): BehaviorFlowFieldSourceProvider {
+  const unique = [...new Set(types)].sort((a, b) => a - b);
+  const key = roomTypeFieldKey(unique);
+  const cached = _roomTypeSourceProviders.get(key);
+  if (cached) return cached;
+  const provider = (world: World, out: number[]): void => {
+    for (const type of unique) {
+      for (const roomId of roomsOfType(world, type)) {
+        const room = world.rooms[roomId];
+        if (!room) continue;
+        for (let dy = 0; dy < room.h; dy++) {
+          for (let dx = 0; dx < room.w; dx++) {
+            const x = world.wrap(room.x + dx);
+            const y = world.wrap(room.y + dy);
+            const idx = y * W + x;
+            if (isNavPassable(world, idx)) out.push(idx);
+          }
+        }
+      }
+    }
+  };
+  _roomTypeSourceProviders.set(key, provider);
+  return provider;
+}
+
+export function gotoNearestRoomType(world: World, e: Entity, type: RoomType): boolean {
+  return gotoNearestRoomOfTypes(world, e, [type]);
+}
+
+export function gotoNearestRoomOfTypes(world: World, e: Entity, types: readonly RoomType[]): boolean {
+  if (types.length === 0) return false;
+  const key = roomTypeFieldKey(types);
+  const status = tryAssignBehaviorFlowPath(world, e, key, roomTypeSourceProvider(types));
+  return status !== 'not_found';
 }
 
 /* ── Find family's room of type ───────────────────────────────── */

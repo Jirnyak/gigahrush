@@ -65,6 +65,30 @@ function fittingTextSlice(
   return from < to ? text.slice(from, to) : '';
 }
 
+function maxFittingUnits(ctx: CanvasRenderingContext2D, units: readonly string[], start: number, maxW: number): number {
+  let lo = 0;
+  let hi = units.length - start;
+  while (lo < hi) {
+    const mid = Math.ceil((lo + hi + 1) / 2);
+    if (ctx.measureText(units.slice(start, start + mid).join('')).width <= maxW) lo = mid;
+    else hi = mid - 1;
+  }
+  return lo;
+}
+
+function splitOverwideToken(ctx: CanvasRenderingContext2D, token: string, maxW: number): string[] {
+  const units = Array.from(token);
+  const lines: string[] = [];
+  let start = 0;
+  while (start < units.length) {
+    const count = maxFittingUnits(ctx, units, start, maxW);
+    if (count <= 0) break;
+    lines.push(units.slice(start, start + count).join(''));
+    start += count;
+  }
+  return lines;
+}
+
 export function fitText(ctx: CanvasRenderingContext2D, text: string, maxW: number): string {
   if (maxW <= 0 || text.length === 0) return '';
   if (ctx.measureText(text).width <= maxW) return text;
@@ -88,6 +112,13 @@ export function wrapTextLines(
     lines.push(fitText(ctx, line, maxW));
     return lines.length < maxLines;
   };
+  const pushOverwideWord = (word: string): boolean => {
+    const parts = splitOverwideToken(ctx, word, maxW);
+    for (const part of parts) {
+      if (!pushLine(part)) return false;
+    }
+    return true;
+  };
 
   const paragraphs = text.split('\n');
   for (let p = 0; p < paragraphs.length; p++) {
@@ -108,7 +139,7 @@ export function wrapTextLines(
       }
 
       if (ctx.measureText(line).width > maxW) {
-        if (!pushLine(line)) return lines;
+        if (!pushOverwideWord(line)) return lines;
         line = '';
       }
     }

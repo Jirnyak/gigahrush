@@ -9,12 +9,14 @@ import { World } from '../../core/world';
 import { randomName, freshNeeds } from '../../data/catalog';
 import { rng, pick, ensureConnectivity, placeLifts, generateZones } from '../shared';
 import { placeProceduralScreens } from '../procedural_screens';
-import { HELL_POPULATION_PROFILE, type MonsterPopulationBucket } from '../../data/population_profiles';
+import { HELL_POPULATION_PROFILE, type MonsterPopulationProfile } from '../../data/population_profiles';
+import { sampleNaturalPopulationCells } from '../population_placement';
 import { MONSTERS } from '../../entities/monster';
 import { calcZoneLevel, randomRPG, scaleMonsterHp, scaleMonsterSpeed, gaussianLevel, getMaxHp } from '../../systems/rpg';
+import { entitySpawnSlots } from '../../systems/entity_limits';
 import { Spr, monsterSpr } from '../../render/sprite_index';
 import { runHellContent } from './content_manifest';
-import { buildHellGeometry, type HellGeometry } from './geometry';
+import { buildHellGeometry } from './geometry';
 
 const PSI_IDS = ['psi_strike', 'psi_rupture', 'psi_madness', 'psi_storm', 'psi_brainburn'];
 
@@ -44,7 +46,6 @@ let hellLiquidatorAccum = 0;
 let hellMonsterReinforcementBudget = HELL_MONSTER_REINFORCEMENT_BUDGET;
 let hellCultistReinforcementBudget = HELL_CULTIST_REINFORCEMENT_BUDGET;
 let hellLiquidatorReinforcementBudget = HELL_LIQUIDATOR_REINFORCEMENT_BUDGET;
-let hellGeometry: HellGeometry = { monsterCells: [], cultistCells: [], liquidatorCells: [], safeCells: [] };
 
 type SpawnFaction = Faction.CULTIST | Faction.LIQUIDATOR;
 
@@ -70,7 +71,6 @@ export function resetHellPopulationState(): void {
   hellMonsterReinforcementBudget = HELL_MONSTER_REINFORCEMENT_BUDGET;
   hellCultistReinforcementBudget = HELL_CULTIST_REINFORCEMENT_BUDGET;
   hellLiquidatorReinforcementBudget = HELL_LIQUIDATOR_REINFORCEMENT_BUDGET;
-  hellGeometry = { monsterCells: [], cultistCells: [], liquidatorCells: [], safeCells: [] };
 }
 
 export function generateHell(): { world: World; entities: Entity[]; spawnX: number; spawnY: number } {
@@ -81,7 +81,7 @@ export function generateHell(): { world: World; entities: Entity[]; spawnX: numb
 
   const field = buildIsingCaveField();
   paintHellTerrain(world, field);
-  hellGeometry = buildHellGeometry(world);
+  buildHellGeometry(world);
 
   const spawnCell = findNearestFloor(world, W >> 1, W >> 1) ?? world.idx(W >> 1, W >> 1);
   const spawnX = (spawnCell % W) + 0.5;
@@ -134,10 +134,7 @@ export function updateHellPopulation(
     const deficit = HELL_MONSTER_SOFT_CAP - countLivingMonsters(entities);
     if (deficit > 0 && hellMonsterReinforcementBudget > 0) {
       const batch = Math.min(hellMonsterReinforcementBudget, populationBatchSize(HELL_MONSTER_PROFILE, deficit));
-      for (let i = 0; i < batch; i++) {
-        if (!spawnHellMonster(world, entities, nextId, samosborCount)) break;
-        hellMonsterReinforcementBudget--;
-      }
+      hellMonsterReinforcementBudget -= spawnHellMonsterBatch(world, entities, nextId, batch, samosborCount);
     }
   }
 
@@ -146,10 +143,7 @@ export function updateHellPopulation(
     const deficit = HELL_CULTIST_SOFT_CAP - countFactionNPCs(entities, Faction.CULTIST);
     if (deficit > 0 && hellCultistReinforcementBudget > 0) {
       const batch = Math.min(hellCultistReinforcementBudget, populationBatchSize(HELL_CULTIST_PROFILE, deficit));
-      for (let i = 0; i < batch; i++) {
-        if (!spawnFactionAgent(world, entities, nextId, Faction.CULTIST)) break;
-        hellCultistReinforcementBudget--;
-      }
+      hellCultistReinforcementBudget -= spawnFactionAgentBatch(world, entities, nextId, Faction.CULTIST, batch);
     }
   }
 
@@ -158,15 +152,12 @@ export function updateHellPopulation(
     const deficit = HELL_LIQUIDATOR_SOFT_CAP - countFactionNPCs(entities, Faction.LIQUIDATOR);
     if (deficit > 0 && hellLiquidatorReinforcementBudget > 0) {
       const squad = Math.min(hellLiquidatorReinforcementBudget, populationBatchSize(HELL_LIQUIDATOR_PROFILE, deficit));
-      for (let i = 0; i < squad; i++) {
-        if (!spawnFactionAgent(world, entities, nextId, Faction.LIQUIDATOR)) break;
-        hellLiquidatorReinforcementBudget--;
-      }
+      hellLiquidatorReinforcementBudget -= spawnFactionAgentBatch(world, entities, nextId, Faction.LIQUIDATOR, squad);
     }
   }
 }
 
-function populationBatchSize(profile: MonsterPopulationBucket, deficit: number): number {
+function populationBatchSize(profile: MonsterPopulationProfile, deficit: number): number {
   const pressureBatch = Math.max(profile.batchMin, Math.ceil(deficit / profile.refillDeficitDivisor));
   return Math.min(deficit, pressureBatch, rng(profile.batchMin, profile.batchMax));
 }
@@ -406,15 +397,16 @@ function seedHellPopulation(
   liquidators: number,
   samosborCount: number,
 ): void {
-  for (let i = 0; i < monsters; i++) spawnHellMonster(world, entities, nextId, samosborCount);
-  for (let i = 0; i < cultists; i++) spawnFactionAgent(world, entities, nextId, Faction.CULTIST);
-  for (let i = 0; i < liquidators; i++) spawnFactionAgent(world, entities, nextId, Faction.LIQUIDATOR);
+  spawnHellMonsterBatch(world, entities, nextId, monsters, samosborCount);
+  spawnFactionAgentBatch(world, entities, nextId, Faction.CULTIST, cultists);
+  spawnFactionAgentBatch(world, entities, nextId, Faction.LIQUIDATOR, liquidators);
 }
 
 function seedLoot(world: World, entities: Entity[], nextId: { v: number }): void {
   const drops = ['canned', 'bandage', 'pills', 'pipe', 'knife', 'water', 'ammo_9mm', 'ammo_nails', 'rebar', 'antidep',
     'ammo_belt', 'ammo_energy', 'ammo_fuel', 'grenade'];
-  for (let i = 0; i < 280; i++) {
+  const dropSlots = entitySpawnSlots(entities, EntityType.ITEM_DROP, 280);
+  for (let i = 0; i < dropSlots; i++) {
     const cell = randomFloorCell(world);
     if (cell < 0) continue;
     entities.push({
@@ -432,22 +424,70 @@ function seedLoot(world: World, entities: Entity[], nextId: { v: number }): void
   }
 }
 
-function spawnHellMonster(world: World, entities: Entity[], nextId: { v: number }, samosborCount: number): boolean {
-  const cell = randomFloorCell(world, hellGeometry.monsterCells, HELL_MONSTER_PROFILE.geometryBias);
-  if (cell < 0) return false;
+function spawnHellMonsterBatch(
+  world: World,
+  entities: Entity[],
+  nextId: { v: number },
+  requested: number,
+  samosborCount: number,
+): number {
+  const count = entitySpawnSlots(entities, EntityType.MONSTER, requested);
+  const cells = sampleHellPopulationCells(world, count, HELL_MONSTER_PROFILE, hellPopulationSeed(11, nextId.v));
+  let spawned = 0;
+  for (const cell of cells) {
+    spawnHellMonsterAtCell(world, entities, nextId, cell, samosborCount);
+    spawned++;
+  }
+  return spawned;
+}
+
+function spawnHellMonsterAtCell(
+  world: World,
+  entities: Entity[],
+  nextId: { v: number },
+  cell: number,
+  samosborCount: number,
+): void {
   const x = (cell % W) + 0.5;
   const y = ((cell / W) | 0) + 0.5;
   entities.push(createHellMonster(world, nextId, pickHellMonsterKind(samosborCount), x, y));
-  return true;
 }
 
-function spawnFactionAgent(world: World, entities: Entity[], nextId: { v: number }, faction: SpawnFaction): boolean {
-  const cell = pickFactionSpawnCell(world, faction);
-  if (cell < 0) return false;
-  entities.push(faction === Faction.CULTIST
-    ? createHellCultist(world, nextId, cell)
-    : createHellLiquidator(world, nextId, cell));
-  return true;
+function spawnFactionAgentBatch(
+  world: World,
+  entities: Entity[],
+  nextId: { v: number },
+  faction: SpawnFaction,
+  requested: number,
+): number {
+  const count = entitySpawnSlots(entities, EntityType.NPC, requested);
+  const seed = hellPopulationSeed(faction === Faction.CULTIST ? 23 : 37, nextId.v);
+  const cells = sampleHellPopulationCells(world, count, profileForFaction(faction), seed);
+  let spawned = 0;
+  for (const cell of cells) {
+    entities.push(faction === Faction.CULTIST
+      ? createHellCultist(world, nextId, cell)
+      : createHellLiquidator(world, nextId, cell));
+    spawned++;
+  }
+  return spawned;
+}
+
+function profileForFaction(faction: SpawnFaction): MonsterPopulationProfile {
+  return faction === Faction.CULTIST ? HELL_CULTIST_PROFILE : HELL_LIQUIDATOR_PROFILE;
+}
+
+function sampleHellPopulationCells(
+  world: World,
+  count: number,
+  profile: MonsterPopulationProfile,
+  seed: number,
+): number[] {
+  return sampleNaturalPopulationCells(world, count, profile, seed);
+}
+
+function hellPopulationSeed(kind: number, nextId: number): number {
+  return 4003 + kind * 10007 + nextId * 17;
 }
 
 function createHellMonster(world: World, nextId: { v: number }, kind: MonsterKind, x: number, y: number): Entity {
@@ -605,55 +645,12 @@ function countFactionNPCs(entities: Entity[], faction: Faction): number {
   return count;
 }
 
-function randomFloorCell(world: World, preferred?: readonly number[], preferredChance = 0): number {
-  return preferred && Math.random() < preferredChance ? pickSpawnCell(world, preferred) : pickAnySpawnCell(world);
-}
-
-function pickSpawnCell(world: World, preferred: readonly number[] | undefined): number {
-  const cell = pickPreferredSpawnCell(world, preferred);
-  return cell >= 0 ? cell : pickAnySpawnCell(world);
-}
-
-function pickPreferredSpawnCell(world: World, preferred: readonly number[] | undefined): number {
-  if (preferred && preferred.length > 0) {
-    for (let attempt = 0; attempt < 256; attempt++) {
-      const cell = preferred[rng(0, preferred.length - 1)];
-      if (isSpawnableFloor(world, cell)) return cell;
-    }
-  }
-  return -1;
-}
-
-function pickAnySpawnCell(world: World): number {
+function randomFloorCell(world: World): number {
   for (let attempt = 0; attempt < 2048; attempt++) {
     const cell = rng(0, W * W - 1);
-    if (isSpawnableFloor(world, cell)) return cell;
+    if (world.cells[cell] === Cell.FLOOR) return cell;
   }
   return -1;
-}
-
-function isSpawnableFloor(world: World, cell: number): boolean {
-  return world.cells[cell] === Cell.FLOOR && !world.aptMask[cell] && world.roomMap[cell] < 0;
-}
-
-function pickFactionSpawnCell(world: World, faction: SpawnFaction): number {
-  const geometryCells = faction === Faction.CULTIST ? hellGeometry.cultistCells : hellGeometry.liquidatorCells;
-  const profile = faction === Faction.CULTIST ? HELL_CULTIST_PROFILE : HELL_LIQUIDATOR_PROFILE;
-  if (Math.random() < profile.geometryBias) {
-    const geometryCell = pickPreferredSpawnCell(world, geometryCells);
-    if (geometryCell >= 0) return geometryCell;
-  }
-
-  const target = faction === Faction.CULTIST ? ZoneFaction.CULTIST : ZoneFaction.LIQUIDATOR;
-  for (let attempt = 0; attempt < 768; attempt++) {
-    const zone = world.zones[rng(0, world.zones.length - 1)];
-    if (!zone || zone.faction !== target) continue;
-    for (let inner = 0; inner < 48; inner++) {
-      const cell = world.idx(zone.cx + rng(-44, 44), zone.cy + rng(-44, 44));
-      if (isSpawnableFloor(world, cell)) return cell;
-    }
-  }
-  return randomFloorCell(world, geometryCells, profile.geometryBias * 0.35);
 }
 
 function hash2(x: number, y: number, seed: number): number {
@@ -670,12 +667,14 @@ function wrapCoord(v: number): number {
 function spawnHeralds(world: World, entities: Entity[], nextId: { v: number }, spawnX: number, spawnY: number): void {
   const heraldDef = MONSTERS[MonsterKind.HERALD];
   if (!heraldDef) return;
+  let heraldSlots = entitySpawnSlots(entities, EntityType.MONSTER, 3);
   const sx = Math.floor(spawnX), sy = Math.floor(spawnY);
 
   for (let i = 0; i < 3; i++) {
+    if (heraldSlots <= 0) return;
     // Third herald is sealed in an isolated chamber (reachable only via psi_noclip)
     if (i === 2) {
-      spawnSealedHerald(world, entities, nextId, sx, sy, heraldDef);
+      if (spawnSealedHerald(world, entities, nextId, sx, sy, heraldDef)) heraldSlots--;
       continue;
     }
     for (let attempt = 0; attempt < 5000; attempt++) {
@@ -710,6 +709,7 @@ function spawnHeralds(world: World, entities: Entity[], nextId: { v: number }, s
         ai: { goal: AIGoal.WANDER, tx: 0, ty: 0, path: [], pi: 0, stuck: 0, timer: 0 },
         rpg,
       });
+      heraldSlots--;
       break;
     }
   }
@@ -720,7 +720,7 @@ function spawnSealedHerald(
   world: World, entities: Entity[], nextId: { v: number },
   sx: number, sy: number,
   heraldDef: { hp: number; speed: number },
-): void {
+): boolean {
   const SIZE = 5;
   // Find a WALL-only area at 100-300 tiles from spawn
   for (let attempt = 0; attempt < 5000; attempt++) {
@@ -779,6 +779,7 @@ function spawnSealedHerald(
       ai: { goal: AIGoal.IDLE, tx: 0, ty: 0, path: [], pi: 0, stuck: 0, timer: 0 },
       rpg,
     });
-    return;
+    return true;
   }
+  return false;
 }

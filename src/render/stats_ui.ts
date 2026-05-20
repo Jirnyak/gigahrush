@@ -3,7 +3,12 @@
 import { type Entity, type GameState, ItemType } from '../core/types';
 import { ITEMS } from '../data/catalog';
 import { getEquippedToolDurability, getWeaponReadiness } from '../systems/inventory';
-import { xpForLevel } from '../systems/rpg';
+import {
+  rpgStatEffects,
+  rpgStatEffectsAfterSpend,
+  xpForLevel,
+  type RPGStatEffects,
+} from '../systems/rpg';
 import { zhelemishStatsLine } from '../systems/status';
 import { drawNeuroPanel, drawGlitchText, textJitter, flicker } from './hud_fx';
 import { drawCenteredWrappedText, fitText as fitStatText } from './ui_text';
@@ -169,6 +174,7 @@ export function drawInventory(
     ctx.font = `${8 * sy}px monospace`;
     ctx.fillText(`Очков характеристик: ${player.rpg.attrPoints}`, stX, stY);
     stY += 12 * sy;
+    stY = drawRpgEffectBlock(ctx, player, stX, stY, barW, sy);
   }
 
   // XP bar
@@ -251,6 +257,11 @@ export function drawInventory(
     ctx.fillText(fitStatText(ctx, weaponState, barW), stX, stY);
     stY += 12 * sy;
   }
+  if (weapon.statLabel && stY + 8 * sy <= contentBottom) {
+    ctx.fillStyle = '#8ad';
+    ctx.fillText(fitStatText(ctx, weapon.statLabel, barW), stX, stY);
+    stY += 9 * sy;
+  }
 
   const toolName = player.tool ? (ITEMS[player.tool]?.name ?? player.tool) : 'нет';
   const toolDur = getEquippedToolDurability(player);
@@ -268,6 +279,66 @@ export function drawInventory(
     const day = Math.floor(state.clock.totalMinutes / 1440);
     ctx.fillText(fitStatText(ctx, `Выжил дней: ${day}  |  Самосборов: ${state.samosborCount}`, barW), stX, stY);
   }
+}
+
+function signedPct(mult: number): string {
+  const pct = Math.round((mult - 1) * 100);
+  return `${pct >= 0 ? '+' : ''}${pct}%`;
+}
+
+function reducedPct(mult: number): string {
+  return `-${Math.max(0, Math.round((1 - mult) * 100))}%`;
+}
+
+function statDelta(current: RPGStatEffects, next: RPGStatEffects, key: keyof RPGStatEffects): string {
+  const diff = next[key] - current[key];
+  if (Math.abs(diff) < 0.005) return '';
+  if (key === 'maxHp' || key === 'maxPsi') return `+${Math.round(diff)}`;
+  return diff > 0 ? signedPct(next[key] / current[key]) : reducedPct(next[key] / current[key]);
+}
+
+function drawRpgEffectBlock(
+  ctx: CanvasRenderingContext2D,
+  player: Entity,
+  x: number, y: number, w: number, sy: number,
+): number {
+  const rpg = player.rpg;
+  if (!rpg) return y;
+  const current = rpgStatEffects(rpg);
+  const strNext = rpg.attrPoints > 0 ? rpgStatEffectsAfterSpend(rpg, 'str') : undefined;
+  const agiNext = rpg.attrPoints > 0 ? rpgStatEffectsAfterSpend(rpg, 'agi') : undefined;
+  const intNext = rpg.attrPoints > 0 ? rpgStatEffectsAfterSpend(rpg, 'int') : undefined;
+  const suffix = (delta: string) => delta ? ` (${delta})` : '';
+  const lines: [string, string][] = [
+    [
+      '#e84',
+      `СИЛ HP ${current.maxHp}${suffix(strNext ? statDelta(current, strNext, 'maxHp') : '')}  ` +
+      `ближ ${signedPct(current.meleeDamageMult)}  тяж ${reducedPct(current.heavyWeaponSpeedMult)}`,
+    ],
+    [
+      '#4e8',
+      `ЛОВ ход ${signedPct(current.moveSpeedMult)}  темп ${reducedPct(current.attackCooldownMult)}  ` +
+      `разброс ${reducedPct(current.rangedSpreadMult)}${suffix(agiNext ? statDelta(current, agiNext, 'attackCooldownMult') : '')}`,
+    ],
+    [
+      '#68f',
+      `ИНТ ПСИ ${current.maxPsi}${suffix(intNext ? statDelta(current, intNext, 'maxPsi') : '')}  ` +
+      `цена ${reducedPct(current.psiCostMult)}  контр ${signedPct(current.contractRewardMult)}  док ${signedPct(current.documentRewardMult)}`,
+    ],
+  ];
+
+  ctx.font = `${6 * sy}px monospace`;
+  for (const [color, line] of lines) {
+    ctx.fillStyle = color;
+    ctx.fillText(fitStatText(ctx, line, w), x, y);
+    y += 7 * sy;
+  }
+  if (rpg.attrPoints > 0) {
+    ctx.fillStyle = '#ee4';
+    ctx.fillText(fitStatText(ctx, '[1]/[2]/[3] меняют стиль следующей вылазки', w), x, y);
+    y += 8 * sy;
+  }
+  return y + 2 * sy;
 }
 
 function drawStatBar(

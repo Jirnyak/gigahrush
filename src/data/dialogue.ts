@@ -78,6 +78,36 @@ const OLD_WORLD_MEMORY_LINES = [
   'Если найдёшь фото с небом, не показывай толпе. Начнут спорить, чей потолок подделали.',
 ];
 
+const ROOM_MEMORY_THEFT_LINES = [
+  'В этой комнате после пропажи даже кружку берут двумя руками и при свидетелях.',
+  'Тут уже считали чужие карманы. Если полезешь в шкаф, услышит весь подъезд.',
+  'Комната помнит тихую руку. Хороший разговор теперь начинается с пустых ладоней.',
+];
+
+const ROOM_MEMORY_HELP_LINES = [
+  'Здесь помнят, кто принёс пользу, а не только шум. Спросишь тихо - покажут запас.',
+  'После твоей помощи тут не улыбаются, но цену называют мягче.',
+  'Комната запомнила добро. Тайники от этого не становятся честными, зато становятся ближе.',
+];
+
+const ROOM_MEMORY_COMBAT_LINES = [
+  'После драки здесь дверь слушает громче людей.',
+  'Тут недавно стреляли или били. Соседи теперь говорят коротко и из-за угла.',
+  'Комната помнит бой. Даже табуретка стоит так, будто ждёт повторения.',
+];
+
+const ROOM_MEMORY_REPAIR_LINES = [
+  'Ремонт тут заметили. За сухой шов иногда платят не деньгами, а подсказкой.',
+  'Если чинил здесь, не стесняйся спросить про ящик. Мастера помнят лучше героев.',
+  'Комната держится лучше после ремонта. Люди тоже чуть меньше держат зубы.',
+];
+
+const ROOM_MEMORY_SAMOSBOR_LINES = [
+  'После самосбора тут сначала считают дыхание, потом людей, потом долги.',
+  'Эта комната пережила герму. Теперь каждый знает, кто стоял у двери.',
+  'Список укрытых тут не бумага, а память. Не шуми рядом с ней.',
+];
+
 const FACTION_LINES: Record<number, string[]> = {
   0: [
     'Главное - не открывать во время сирены, даже если зовут голосом мамы.',
@@ -260,7 +290,7 @@ const OCC_LINES: Record<number, string[]> = {
     'Свечу возьми. Не для веры, для темноты. Про веру потом поговорите у двери.',
     'Ты ел сегодня? У нас хлеб режут тонко, но не считают первый кусок долгом.',
     'Не бойся тумана один. Вдвоём хотя бы есть кому сказать, что дверь держит.',
-    'Хор тихий, если не спорить. Он как очередь: слышно только ближних.',
+    'У двери тише, если не спорить. Слышно только, кто держит хлеб и кто смотрит на список.',
     'После отбоя приходи к батарее. Там вода теплее и люди меньше спрашивают.',
     'Если знак на ладони смущает, держи хлеб другой рукой.',
     'Мы никого не тащим. Просто оставляем место там, где люди обычно замерзают.',
@@ -392,7 +422,7 @@ const MEDICAL_ROOM_LINES = [
   'Кто последний к журналу? Мне не к врачу, мне печать на живого.',
   'Санитарка сказала не кашлять на журнал. Пятна потом примут за диагноз.',
   'Талон не туда, рана сюда. Очередь теперь решает, что важнее.',
-  'Мать у двери шепчет ребёнку обед, а ребёнок уже за ширмой.',
+  'За дверью маминым голосом зовут к обеду, а ребёнок уже за ширмой с чашкой воды.',
   'Если у тебя бинт лишний, не показывай всем. Тут лишнего сразу становится общего.',
   'Без очереди только мёртвые. И начальство, но это почти одно окно.',
 ] as const;
@@ -409,7 +439,7 @@ const MINISTRY_OCC_LINES: Record<number, readonly string[]> = {
     'Канцелярский нож не оружие. Пока им режут формы, а не фамилии.',
   ],
   [Occupation.DIRECTOR]: [
-    'Порядок - это когда человек выбирает маршрут из трех плохих форм и благодарит за выбор.',
+    'Порядок - это когда человек приносит три формы и сам выбирает, в каком окне его развернут.',
     'Списки не ошибаются. Они заставляют живых бегать по окнам до совпадения.',
     'Очередь - лучший фильтр: слабые уходят, виновные остаются, нужные платят.',
     'Жестокость без печати называется самоуправством. С печатью - процедурой.',
@@ -514,6 +544,12 @@ function pickContextLine(snapshot: ContextSnapshot, memory: NpcMemory): string |
   if (snapshot.isSafeOwnZone) return pickContext(CONTEXT_SAFE_OWN_ZONE_LINES, memory);
   if (memory.helpedByPlayer >= 2 && memory.trustPlayer > 25) return pickContext(CONTEXT_REPEATED_HELP_LINES, memory);
   if (snapshot.hasActiveContract && Math.random() < 0.45) return pickContext(CONTEXT_ACTIVE_CONTRACT_LINES, memory);
+  if (snapshot.roomMemorySeverity >= 3 && (snapshot.hasRoomMemoryTheft || snapshot.hasRoomMemoryCombat)) {
+    return pickContext(snapshot.hasRoomMemoryTheft ? ROOM_MEMORY_THEFT_LINES : ROOM_MEMORY_COMBAT_LINES, memory);
+  }
+  if (snapshot.roomMemorySeverity >= 3 && snapshot.hasRoomMemoryRepair) return pickContext(ROOM_MEMORY_REPAIR_LINES, memory);
+  if (snapshot.roomMemorySeverity >= 3 && snapshot.hasRoomMemoryHelp) return pickContext(ROOM_MEMORY_HELP_LINES, memory);
+  if (snapshot.roomMemorySeverity >= 3 && snapshot.hasRoomMemorySamosbor) return pickContext(ROOM_MEMORY_SAMOSBOR_LINES, memory);
   if (snapshot.hasRecentPlayerTheft) return pickContext(CONTEXT_STOLEN_GOODS_LINES, memory);
   if (snapshot.hasRecentProductionShortage && Math.random() < 0.55) return pickContext(CONTEXT_PRODUCTION_SHORTAGE_LINES, memory);
   if (snapshot.hasRecentProductionOutput && Math.random() < 0.45) return pickContext(CONTEXT_PRODUCTION_OUTPUT_LINES, memory);

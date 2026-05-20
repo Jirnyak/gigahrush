@@ -1,8 +1,8 @@
-# Design Floor: Пустота
+# Story Anchor Brief: Пустота
 
-Status: planning artifact for expanded design-floor version. Current code already has `FloorLevel.VOID`; README remains source of truth.
+Status: historical expansion brief for the existing story anchor. Current route stop: `FloorLevel.VOID` at `z=36`. There is no shipped design-floor route id `void`; README and `src/data/procedural_floors.ts` remain source of truth.
 
-Future route id: `void`. Future anchor: `z=36`. Existing references: `src/gen/void/`, `Docs/Expansions/10_void_afterprotocol/`.
+Existing generator references: `src/gen/void/`, `Docs/Expansions/10_void_afterprotocol/`. Planning sections below describe possible route-scale expansion, not shipped design-floor route data.
 
 ## Role
 
@@ -59,4 +59,3 @@ No unbounded search for targets. Targets must come from recent interaction, debu
 - One protocol has clear local benefit and clear backlash.
 - Debug can dump active protocols and target keys.
 - Return route is deterministic and safe.
-

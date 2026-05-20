@@ -1,6 +1,7 @@
 /* ── Procedural floor combinatorics definitions ──────────────── */
 
 import {
+  ContainerKind,
   Faction,
   FloorLevel,
   MonsterKind,
@@ -14,8 +15,12 @@ import { designFloorAtZ } from './design_floors';
 export type FloorGeometryId =
   | 'living_blocks'
   | 'apartment_pressure'
+  | 'communal_knots'
+  | 'attic_weatherworks'
+  | 'archive_warrens'
   | 'collectors'
   | 'workshops'
+  | 'sump_causeways'
   | 'admin_pockets'
   | 'service_spines';
 
@@ -99,6 +104,77 @@ export interface ProceduralFloorSpec {
   title: string;
   lootBiasIds: string[];
   monsterBiasKinds: MonsterKind[];
+  monsterBiasTags: string[];
+}
+
+export const PROCEDURAL_LOOT_VALUE_CAP_BY_DANGER: Readonly<Record<1 | 2 | 3 | 4 | 5, number>> = {
+  1: 55,
+  2: 85,
+  3: 125,
+  4: 180,
+  5: 260,
+};
+
+export const PROCEDURAL_LOOT_FACTION_TAGS: Readonly<Record<FloorMajorityId, readonly string[]>> = {
+  citizens: ['civil_stock'],
+  liquidators: ['liquidator_stock', 'audit_risk'],
+  cultists: ['cult_cache', 'theft_risk'],
+  wild: ['wild_cache', 'theft_risk'],
+  scientists: ['nii_cache', 'sample_audit'],
+};
+
+export const PROCEDURAL_LOOT_ANOMALY_TAGS: Readonly<Record<FloorAnomalyId, readonly string[]>> = {
+  none: [],
+  teleport_cells: ['topology', 'access_cache'],
+  smog: ['smog', 'contaminated'],
+  samosbor_seed: ['samosbor', 'contaminated'],
+  mushroom_mycelium: ['mushroom', 'contaminated'],
+  hladon: ['hladon', 'cold_cache'],
+  false_safe_block: [FALSE_SAFE_BLOCK_TAG, 'audit_risk'],
+  fractal_floor: ['fractal', 'document_cache'],
+  mirror_run: ['mirror', 'audit_risk'],
+  radio_chess: ['radio', 'timing_cache'],
+  cement_memory: ['cement_memory', 'route_pressure'],
+  conveyor_sorter: ['conveyor', 'industrial_cache'],
+  wall_snake: ['moving_walls', 'crush_risk'],
+  section_shift: ['section_shift', 'topology'],
+  conway_life: ['conway_life', 'cellular'],
+  rail_trains: ['rail', 'transit_cache'],
+  bad_apple_world: ['bad_apple_world', 'media_cache'],
+  zombie_apocalypse: ['zombie', 'quarantine', 'contaminated'],
+};
+
+export const PROCEDURAL_LOOT_FACTION_KIND_BIAS: Readonly<Record<FloorMajorityId, readonly ContainerKind[]>> = {
+  citizens: [ContainerKind.WOODEN_CHEST, ContainerKind.FRIDGE, ContainerKind.EMERGENCY_BOX, ContainerKind.CASHBOX],
+  liquidators: [ContainerKind.WEAPON_CRATE, ContainerKind.METAL_CABINET, ContainerKind.TOOL_LOCKER, ContainerKind.EMERGENCY_BOX],
+  cultists: [ContainerKind.SECRET_STASH, ContainerKind.SAFE, ContainerKind.CASHBOX, ContainerKind.WEAPON_CRATE],
+  wild: [ContainerKind.SECRET_STASH, ContainerKind.TRASH_BIN, ContainerKind.WOODEN_CHEST, ContainerKind.WEAPON_CRATE],
+  scientists: [ContainerKind.FILING_CABINET, ContainerKind.SAFE, ContainerKind.MEDICAL_CABINET, ContainerKind.METAL_CABINET],
+};
+
+export const PROCEDURAL_LOOT_ANOMALY_KIND_BIAS: Readonly<Record<FloorAnomalyId, readonly ContainerKind[]>> = {
+  none: [],
+  teleport_cells: [ContainerKind.SECRET_STASH, ContainerKind.FILING_CABINET],
+  smog: [ContainerKind.TOOL_LOCKER, ContainerKind.METAL_CABINET, ContainerKind.SECRET_STASH],
+  samosbor_seed: [ContainerKind.EMERGENCY_BOX, ContainerKind.SECRET_STASH, ContainerKind.MEDICAL_CABINET],
+  mushroom_mycelium: [ContainerKind.FRIDGE, ContainerKind.TRASH_BIN, ContainerKind.SECRET_STASH],
+  hladon: [ContainerKind.EMERGENCY_BOX, ContainerKind.TOOL_LOCKER, ContainerKind.MEDICAL_CABINET],
+  false_safe_block: [ContainerKind.EMERGENCY_BOX, ContainerKind.SECRET_STASH, ContainerKind.SAFE],
+  fractal_floor: [ContainerKind.FILING_CABINET, ContainerKind.SAFE, ContainerKind.SECRET_STASH],
+  mirror_run: [ContainerKind.SECRET_STASH, ContainerKind.SAFE, ContainerKind.FILING_CABINET],
+  radio_chess: [ContainerKind.FILING_CABINET, ContainerKind.METAL_CABINET, ContainerKind.TOOL_LOCKER],
+  cement_memory: [ContainerKind.FILING_CABINET, ContainerKind.EMERGENCY_BOX, ContainerKind.SECRET_STASH],
+  conveyor_sorter: [ContainerKind.METAL_CABINET, ContainerKind.TOOL_LOCKER, ContainerKind.WEAPON_CRATE],
+  wall_snake: [ContainerKind.SECRET_STASH, ContainerKind.METAL_CABINET, ContainerKind.EMERGENCY_BOX],
+  section_shift: [ContainerKind.SECRET_STASH, ContainerKind.TOOL_LOCKER, ContainerKind.FILING_CABINET],
+  conway_life: [ContainerKind.METAL_CABINET, ContainerKind.FILING_CABINET, ContainerKind.SECRET_STASH],
+  rail_trains: [ContainerKind.TOOL_LOCKER, ContainerKind.METAL_CABINET, ContainerKind.EMERGENCY_BOX],
+  bad_apple_world: [ContainerKind.FILING_CABINET, ContainerKind.SECRET_STASH, ContainerKind.METAL_CABINET],
+  zombie_apocalypse: [ContainerKind.MEDICAL_CABINET, ContainerKind.EMERGENCY_BOX, ContainerKind.SECRET_STASH],
+};
+
+export function proceduralLootValueCap(danger: 1 | 2 | 3 | 4 | 5): number {
+  return PROCEDURAL_LOOT_VALUE_CAP_BY_DANGER[danger];
 }
 
 export const FLOOR_RUN_MIN_Z = -44;
@@ -133,7 +209,8 @@ export const FLOOR_GEOMETRIES: readonly FloorGeometryDef[] = [
     weight: 42,
     roomCount: 86,
     dangerBias: 0,
-    maxZ: 4,
+    minZ: -3,
+    maxZ: 7,
     wallTex: Tex.PANEL,
     floorTex: Tex.F_LINO,
     roomTypes: [RoomType.LIVING, RoomType.KITCHEN, RoomType.BATHROOM, RoomType.STORAGE, RoomType.COMMON],
@@ -146,11 +223,54 @@ export const FLOOR_GEOMETRIES: readonly FloorGeometryDef[] = [
     weight: 30,
     roomCount: 104,
     dangerBias: 1,
+    minZ: -15,
     maxZ: 3,
     wallTex: Tex.BRICK,
     floorTex: Tex.F_LINO,
     roomTypes: [RoomType.LIVING, RoomType.KITCHEN, RoomType.BATHROOM, RoomType.COMMON, RoomType.STORAGE, RoomType.SMOKING],
     tags: ['residential', 'crowd', 'riot'],
+  },
+  {
+    id: 'communal_knots',
+    title: 'коммунальные узлы',
+    baseFloor: FloorLevel.KVARTIRY,
+    weight: 26,
+    roomCount: 112,
+    dangerBias: 0,
+    minZ: -11,
+    maxZ: 11,
+    wallTex: Tex.BRICK,
+    floorTex: Tex.F_LINO,
+    roomTypes: [RoomType.COMMON, RoomType.COMMON, RoomType.KITCHEN, RoomType.LIVING, RoomType.STORAGE, RoomType.SMOKING, RoomType.CORRIDOR],
+    tags: ['residential', 'crowd', 'queue', 'canteen', 'civil'],
+  },
+  {
+    id: 'attic_weatherworks',
+    title: 'чердачные венткамеры',
+    baseFloor: FloorLevel.MINISTRY,
+    weight: 30,
+    roomCount: 58,
+    dangerBias: 1,
+    minZ: -43,
+    maxZ: -29,
+    wallTex: Tex.PIPE,
+    floorTex: Tex.F_CONCRETE,
+    roomTypes: [RoomType.CORRIDOR, RoomType.CORRIDOR, RoomType.PRODUCTION, RoomType.STORAGE, RoomType.OFFICE, RoomType.COMMON],
+    tags: ['admin', 'roofline', 'antenna', 'wind', 'documents'],
+  },
+  {
+    id: 'archive_warrens',
+    title: 'архивные норы',
+    baseFloor: FloorLevel.MINISTRY,
+    weight: 28,
+    roomCount: 92,
+    dangerBias: 0,
+    minZ: -31,
+    maxZ: -13,
+    wallTex: Tex.MARBLE,
+    floorTex: Tex.F_PARQUET,
+    roomTypes: [RoomType.OFFICE, RoomType.STORAGE, RoomType.STORAGE, RoomType.CORRIDOR, RoomType.COMMON, RoomType.SMOKING],
+    tags: ['admin', 'documents', 'archive', 'paper_dust', 'maze'],
   },
   {
     id: 'collectors',
@@ -160,10 +280,11 @@ export const FLOOR_GEOMETRIES: readonly FloorGeometryDef[] = [
     roomCount: 72,
     dangerBias: 1,
     minZ: 1,
+    maxZ: 35,
     wallTex: Tex.PIPE,
     floorTex: Tex.F_CONCRETE,
     roomTypes: [RoomType.CORRIDOR, RoomType.PRODUCTION, RoomType.STORAGE, RoomType.COMMON],
-    tags: ['industrial', 'water', 'pipes'],
+    tags: ['industrial', 'water', 'pipes', 'maintenance', 'emergency_panels'],
   },
   {
     id: 'workshops',
@@ -172,11 +293,12 @@ export const FLOOR_GEOMETRIES: readonly FloorGeometryDef[] = [
     weight: 26,
     roomCount: 64,
     dangerBias: 1,
-    minZ: 1,
+    minZ: 5,
+    maxZ: 27,
     wallTex: Tex.METAL,
     floorTex: Tex.F_CONCRETE,
     roomTypes: [RoomType.PRODUCTION, RoomType.PRODUCTION, RoomType.STORAGE, RoomType.OFFICE, RoomType.CORRIDOR],
-    tags: ['industrial', 'workshop', 'machines'],
+    tags: ['industrial', 'workshop', 'machines', 'maintenance', 'emergency_panels'],
   },
   {
     id: 'service_spines',
@@ -190,7 +312,21 @@ export const FLOOR_GEOMETRIES: readonly FloorGeometryDef[] = [
     wallTex: Tex.METAL,
     floorTex: Tex.F_CONCRETE,
     roomTypes: [RoomType.CORRIDOR, RoomType.CORRIDOR, RoomType.CORRIDOR, RoomType.PRODUCTION, RoomType.STORAGE, RoomType.OFFICE, RoomType.COMMON],
-    tags: ['industrial', 'service', 'transit', 'power', 'pressure'],
+    tags: ['industrial', 'service', 'transit', 'power', 'pressure', 'maintenance', 'emergency_panels'],
+  },
+  {
+    id: 'sump_causeways',
+    title: 'затопленные эстакады',
+    baseFloor: FloorLevel.MAINTENANCE,
+    weight: 34,
+    roomCount: 56,
+    dangerBias: 2,
+    minZ: 21,
+    maxZ: 39,
+    wallTex: Tex.PIPE,
+    floorTex: Tex.F_CONCRETE,
+    roomTypes: [RoomType.CORRIDOR, RoomType.CORRIDOR, RoomType.PRODUCTION, RoomType.STORAGE, RoomType.COMMON],
+    tags: ['industrial', 'water', 'sump', 'blackwater', 'transit', 'abyss'],
   },
   {
     id: 'admin_pockets',
@@ -199,7 +335,8 @@ export const FLOOR_GEOMETRIES: readonly FloorGeometryDef[] = [
     weight: 16,
     roomCount: 70,
     dangerBias: 0,
-    maxZ: -1,
+    minZ: -43,
+    maxZ: -13,
     wallTex: Tex.MARBLE,
     floorTex: Tex.F_PARQUET,
     roomTypes: [RoomType.OFFICE, RoomType.COMMON, RoomType.STORAGE, RoomType.SMOKING, RoomType.CORRIDOR],
@@ -277,13 +414,25 @@ export const FLOOR_ANOMALIES: readonly FloorAnomalyDef[] = [
 const LOOT_BY_TAG: Record<string, readonly string[]> = {
   residential: ['bread', 'water', 'tea', 'book', 'cigs', 'cloth_roll', 'neighbor_complaint'],
   crowd: ['ballot', 'ration_registry_extract', 'forged_ration_card', 'bandage'],
+  queue: ['ballot', 'ration_registry_extract', 'forged_ration_card', 'siren_instruction'],
+  canteen: ['grey_briquette', 'green_briquette', 'kasha', 'kompot', 'ration_stamp_pad'],
   industrial: ['pipe', 'wrench', 'gear', 'spring', 'metal_sheet', 'ammo_nails', 'pressure_logbook'],
+  maintenance: ['fuse', 'wire_coil', 'relay_diagram', 'valve_tag', 'sealant_tube', 'gasmask_filter'],
+  emergency_panels: ['fuse', 'wire_coil', 'relay_diagram', 'door_kit', 'lamp_bulb'],
   workshop: ['nailgun', 'ammo_nails', 'circuit_board', 'barrel_part', 'rubber_strip'],
   service: ['fuse', 'relay_diagram', 'duct_tape', 'wire_coil', 'door_kit', 'flashlight'],
   power: ['fuse', 'relay_diagram', 'circuit_board', 'lamp_bulb', 'wire_coil'],
   water: ['metal_water', 'filter_layer', 'sealant_tube', 'harpoon_gun'],
+  sump: ['harpoon_gun', 'metal_water', 'filter_layer', 'sealant_tube', 'valve_tag'],
+  blackwater: ['metal_water', 'harpoon_gun', 'overexposed_photo', 'void_archive_warrant'],
+  abyss: ['void_archive_warrant', 'istotit_candle', 'overexposed_photo', 'psi_dust'],
   admin: ['blank_form', 'temp_pass', 'official_permit_slip', 'seal_wax', 'ink_bottle'],
   documents: ['note', 'lift_scheme', 'elevator_access_order', 'missing_record_file'],
+  archive: ['personal_file_copy', 'record_exposure_notice', 'passport_stub', 'void_archive_warrant'],
+  paper_dust: ['gasmask_filter', 'cloth_roll', 'ink_bottle', 'seal_wax'],
+  roofline: ['wire_coil', 'relay_diagram', 'gasmask_filter', 'overexposed_photo'],
+  antenna: ['wire_coil', 'circuit_board', 'relay_diagram', 'lamp_bulb'],
+  wind: ['cloth_roll', 'gasmask_filter', 'filter_layer', 'duct_tape'],
   mushroom: ['mushroom_mass', 'infected_mushroom', 'spore_print', 'substrate_sack', 'antifungal_ointment'],
   cold: ['boiler_water', 'asbestos_cord', 'sealant_tube', 'cloth_roll', 'valve_tag'],
   samosbor: ['siren_shard', 'samosbor_tally', 'hermodoor_journal', 'meat_rune'],
@@ -325,17 +474,29 @@ const MONSTERS_BY_TAG: Record<string, readonly MonsterKind[]> = {
   civil: [MonsterKind.SHOVNIK, MonsterKind.LAMPOVY, MonsterKind.SBORKA],
   crowd: [MonsterKind.ZOMBIE, MonsterKind.KRYSNOZHKA, MonsterKind.NELYUD, MonsterKind.SHADOW],
   riot: [MonsterKind.ZOMBIE, MonsterKind.SHOVNIK, MonsterKind.PECHATEED, MonsterKind.NELYUD],
-  industrial: [MonsterKind.REBAR, MonsterKind.POLZUN, MonsterKind.ROBOT, MonsterKind.LAMPOVY],
+  queue: [MonsterKind.ZOMBIE, MonsterKind.NELYUD, MonsterKind.KRYSNOZHKA, MonsterKind.SHOVNIK],
+  canteen: [MonsterKind.KRYSNOZHKA, MonsterKind.ZOMBIE, MonsterKind.TVAR],
+  industrial: [MonsterKind.REBAR, MonsterKind.POLZUN, MonsterKind.ROBOT, MonsterKind.LAMPOVY, MonsterKind.SAFEGUARD],
+  maintenance: [MonsterKind.LAMPOVY, MonsterKind.ROBOT, MonsterKind.REBAR, MonsterKind.TUBE_EEL],
+  emergency_panels: [MonsterKind.LAMPOVY, MonsterKind.ROBOT, MonsterKind.EYE],
   workshop: [MonsterKind.REBAR, MonsterKind.ROBOT, MonsterKind.SBORKA],
   service: [MonsterKind.LAMPOVY, MonsterKind.ROBOT, MonsterKind.REBAR, MonsterKind.TUBE_EEL],
   power: [MonsterKind.LAMPOVY, MonsterKind.ROBOT, MonsterKind.EYE],
-  machines: [MonsterKind.ROBOT, MonsterKind.LAMPOVY, MonsterKind.REBAR],
+  machines: [MonsterKind.ROBOT, MonsterKind.LAMPOVY, MonsterKind.REBAR, MonsterKind.SAFEGUARD],
   pipes: [MonsterKind.TUBE_EEL, MonsterKind.POLZUN, MonsterKind.REBAR],
   water: [MonsterKind.TUBE_EEL, MonsterKind.POLZUN, MonsterKind.TVAR],
+  sump: [MonsterKind.TUBE_EEL, MonsterKind.POLZUN, MonsterKind.REBAR, MonsterKind.TVAR],
+  blackwater: [MonsterKind.SHADOW, MonsterKind.NIGHTMARE, MonsterKind.NELYUD, MonsterKind.POLZUN],
+  abyss: [MonsterKind.SHADOW, MonsterKind.NIGHTMARE, MonsterKind.SPIRIT, MonsterKind.BETONNIK],
   admin: [MonsterKind.PECHATEED, MonsterKind.SHOVNIK, MonsterKind.PARAGRAPH],
   documents: [MonsterKind.PECHATEED, MonsterKind.PARAGRAPH, MonsterKind.EYE],
+  archive: [MonsterKind.PECHATEED, MonsterKind.PARAGRAPH, MonsterKind.SHOVNIK, MonsterKind.EYE],
+  paper_dust: [MonsterKind.PECHATEED, MonsterKind.PARAGRAPH, MonsterKind.SHADOW],
+  roofline: [MonsterKind.LAMPOVY, MonsterKind.EYE, MonsterKind.SHADOW],
+  antenna: [MonsterKind.EYE, MonsterKind.LAMPOVY, MonsterKind.ROBOT],
+  wind: [MonsterKind.SHADOW, MonsterKind.NIGHTMARE, MonsterKind.SPIRIT],
   armed: [MonsterKind.EYE, MonsterKind.ROBOT, MonsterKind.SHOVNIK],
-  patrol: [MonsterKind.EYE, MonsterKind.LAMPOVY, MonsterKind.ROBOT],
+  patrol: [MonsterKind.EYE, MonsterKind.LAMPOVY, MonsterKind.ROBOT, MonsterKind.SAFEGUARD],
   raiders: [MonsterKind.NELYUD, MonsterKind.SBORKA, MonsterKind.SHADOW],
   lab: [MonsterKind.EYE, MonsterKind.LAMPOVY, MonsterKind.PARAGRAPH],
   fog: [MonsterKind.EYE, MonsterKind.SHADOW, MonsterKind.NIGHTMARE],
@@ -352,7 +513,7 @@ const MONSTERS_BY_TAG: Record<string, readonly MonsterKind[]> = {
   [FALSE_SAFE_BLOCK_TAG]: [MonsterKind.IDOL, MonsterKind.SHADOW, MonsterKind.SPIRIT],
   mirror: [MonsterKind.SHADOW, MonsterKind.SPIRIT, MonsterKind.EYE],
   duality: [MonsterKind.SHADOW, MonsterKind.NELYUD],
-  teleport: [MonsterKind.SPIRIT, MonsterKind.PARAGRAPH],
+  teleport: [MonsterKind.SPIRIT, MonsterKind.PARAGRAPH, MonsterKind.SAFEGUARD],
   pattern: [MonsterKind.ROBOT, MonsterKind.EYE, MonsterKind.LAMPOVY],
   radio: [MonsterKind.LAMPOVY, MonsterKind.ROBOT],
   conveyor: [MonsterKind.REBAR, MonsterKind.ROBOT, MonsterKind.POLZUN],
@@ -362,14 +523,14 @@ const MONSTERS_BY_TAG: Record<string, readonly MonsterKind[]> = {
   trail: [MonsterKind.NELYUD, MonsterKind.SHADOW, MonsterKind.ZOMBIE],
   pressure: [MonsterKind.REBAR, MonsterKind.POLZUN],
   moving_walls: [MonsterKind.REBAR, MonsterKind.SBORKA],
-  predator: [MonsterKind.TVAR, MonsterKind.KOSTOREZ, MonsterKind.POLZUN],
-  crush: [MonsterKind.REBAR, MonsterKind.KOSTOREZ],
+  predator: [MonsterKind.TVAR, MonsterKind.KOSTOREZ, MonsterKind.POLZUN, MonsterKind.SAFEGUARD],
+  crush: [MonsterKind.REBAR, MonsterKind.KOSTOREZ, MonsterKind.SAFEGUARD],
   rail: [MonsterKind.REBAR, MonsterKind.ROBOT, MonsterKind.TUBE_EEL],
   transit: [MonsterKind.NELYUD, MonsterKind.POLZUN],
   cellular: [MonsterKind.SBORKA, MonsterKind.PARAGRAPH, MonsterKind.EYE],
   math: [MonsterKind.PARAGRAPH, MonsterKind.PECHATEED],
   video: [MonsterKind.EYE, MonsterKind.LAMPOVY, MonsterKind.PARAGRAPH],
-  screen: [MonsterKind.EYE, MonsterKind.ROBOT, MonsterKind.LAMPOVY],
+  screen: [MonsterKind.EYE, MonsterKind.ROBOT, MonsterKind.LAMPOVY, MonsterKind.SAFEGUARD],
   cult_media: [MonsterKind.SHADOW, MonsterKind.SPIRIT, MonsterKind.IDOL],
   zombie: [MonsterKind.ZOMBIE, MonsterKind.NELYUD, MonsterKind.KRYSNOZHKA],
   infection: [MonsterKind.ZOMBIE, MonsterKind.TVAR, MonsterKind.NELYUD],
@@ -378,6 +539,20 @@ const MONSTERS_BY_TAG: Record<string, readonly MonsterKind[]> = {
 
 function clampDanger(v: number): 1 | 2 | 3 | 4 | 5 {
   return Math.max(1, Math.min(5, Math.round(v))) as 1 | 2 | 3 | 4 | 5;
+}
+
+function routeDangerScore(z: number): number {
+  // Route pressure is banded so far-up bureaucracy, housing, industrial descent
+  // and hell/void gaps keep different rhythms instead of all maxing by |z|.
+  if (z <= -13) return 2.05 + Math.min(1, (-13 - z) / 30) * 0.75;
+  if (z <= 8) return 1.25 + Math.min(1, Math.abs(z) / 12) * 0.8 + (z > 0 ? 0.2 : 0);
+  if (z <= 27) return 2.35 + Math.min(1, (z - 9) / 18) * 0.85;
+  return 3.15 + Math.min(1, (z - 29) / 10) * 0.35;
+}
+
+function anomalyDangerPressure(anomaly: FloorAnomalyDef): number {
+  if (anomaly.dangerBias <= 0) return 0;
+  return 0.65 + (anomaly.dangerBias - 1) * 0.55;
 }
 
 function zAllowed(def: { minZ?: number; maxZ?: number }, z: number): boolean {
@@ -407,6 +582,14 @@ function uniquePicks<T>(pool: readonly T[], rng: () => number, count: number): T
   for (let i = 0; i < count * 3 && out.length < count; i++) {
     const picked = pool[Math.floor(rng() * pool.length)];
     if (!out.includes(picked)) out.push(picked);
+  }
+  return out;
+}
+
+function uniqueStrings(values: readonly string[]): string[] {
+  const out: string[] = [];
+  for (const value of values) {
+    if (value && !out.includes(value)) out.push(value);
   }
   return out;
 }
@@ -448,6 +631,47 @@ export function proceduralOrdinal(z: number): number {
   return idx >= 0 ? idx + 1 : PROCEDURAL_FLOOR_COUNT + Math.abs(z);
 }
 
+export function proceduralFloorSourceTags(spec: Pick<ProceduralFloorSpec, 'geometryId' | 'majorityId' | 'anomalyId'>): string[] {
+  return uniqueStrings([
+    ...geometryById(spec.geometryId).tags,
+    ...majorityById(spec.majorityId).tags,
+    ...anomalyById(spec.anomalyId).tags,
+  ]);
+}
+
+export function proceduralFloorMonsterBiasTags(spec: Pick<ProceduralFloorSpec, 'geometryId' | 'majorityId' | 'anomalyId'>): string[] {
+  return proceduralFloorSourceTags(spec).filter(tag => MONSTERS_BY_TAG[tag]?.length);
+}
+
+export function proceduralMonsterFloor(spec: Pick<ProceduralFloorSpec, 'z' | 'baseFloor'>): FloorLevel {
+  if (spec.z >= FLOOR_RUN_VOID_Z) return FloorLevel.VOID;
+  if (spec.z >= 25) return FloorLevel.HELL;
+  if (spec.z >= 13) return FloorLevel.MAINTENANCE;
+  if (spec.z <= -17) return FloorLevel.MINISTRY;
+  if (spec.z <= -5) return FloorLevel.KVARTIRY;
+  return spec.baseFloor;
+}
+
+export function proceduralFloorAnomalyRoutePressure(spec: Pick<ProceduralFloorSpec, 'anomalyId'>): number {
+  if (spec.anomalyId === 'samosbor_seed' || spec.anomalyId === 'wall_snake' || spec.anomalyId === 'section_shift' || spec.anomalyId === 'zombie_apocalypse') return 2;
+  if (
+    spec.anomalyId === 'smog' ||
+    spec.anomalyId === 'hladon' ||
+    spec.anomalyId === 'cement_memory' ||
+    spec.anomalyId === 'conway_life' ||
+    spec.anomalyId === 'rail_trains'
+  ) return 1;
+  return 0;
+}
+
+export function proceduralFloorRoutePressureLevel(spec: Pick<ProceduralFloorSpec, 'anomalyId' | 'danger' | 'z' | 'majorityId'>): number {
+  let pressure = proceduralFloorAnomalyRoutePressure(spec);
+  if (spec.danger >= 4) pressure++;
+  if (spec.z >= 25 || spec.z <= -24) pressure++;
+  if (spec.majorityId === 'cultists' || spec.majorityId === 'wild') pressure++;
+  return Math.min(4, pressure);
+}
+
 export function makeProceduralFloorSpec(runSeed: number, z: number): ProceduralFloorSpec {
   const seed = hashSeed(`floor:${runSeed}:${z}`, runSeed);
   const rng = seededRandom(seed);
@@ -462,7 +686,8 @@ export function makeProceduralFloorSpec(runSeed: number, z: number): ProceduralF
       return w;
     },
   );
-  const earlyDanger = clampDanger(1 + Math.floor(depth / 2) + (z > 0 ? 1 : 0) + geometry.dangerBias + Math.floor(rng() * 3) - 1);
+  const baseDangerScore = routeDangerScore(z) + geometry.dangerBias * 0.55 + rng() - 0.5;
+  const earlyDanger = clampDanger(baseDangerScore);
   const majority = pickWeighted(
     FLOOR_MAJORITY_FACTIONS.filter(def => (def.minDanger ?? 1) <= earlyDanger),
     rng,
@@ -473,7 +698,7 @@ export function makeProceduralFloorSpec(runSeed: number, z: number): ProceduralF
     rng,
     def => def.weight * (earlyDanger >= 4 && def.id !== 'none' ? 1.35 : 1),
   );
-  const danger = clampDanger(earlyDanger + anomaly.dangerBias);
+  const danger = clampDanger(baseDangerScore + anomalyDangerPressure(anomaly));
   const tags = [...geometry.tags, ...majority.tags, ...anomaly.tags];
   const lootPool = collectTagged(tags, LOOT_BY_TAG);
   const monsterPool = collectTagged(tags, MONSTERS_BY_TAG);
@@ -481,6 +706,7 @@ export function makeProceduralFloorSpec(runSeed: number, z: number): ProceduralF
   const monsterBiasKinds = anomaly.id === 'zombie_apocalypse'
     ? [MonsterKind.ZOMBIE]
     : uniquePicks(monsterPool, rng, 4);
+  const monsterBiasTags = uniqueStrings(tags).filter(tag => MONSTERS_BY_TAG[tag]?.length);
   const anomalyPrefix = anomaly.id === 'none' ? '' : `${anomaly.title}: `;
 
   return {
@@ -497,6 +723,7 @@ export function makeProceduralFloorSpec(runSeed: number, z: number): ProceduralF
     title: `${anomalyPrefix}${geometry.title}, ${majority.title}`,
     lootBiasIds,
     monsterBiasKinds,
+    monsterBiasTags,
   };
 }
 

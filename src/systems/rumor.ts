@@ -26,7 +26,10 @@ export interface RumorEventLike {
   severity?: number;
   floor?: FloorLevel;
   zoneId?: number;
+  zoneName?: string;
   roomId?: number;
+  roomType?: RoomType;
+  roomName?: string;
   x?: number;
   y?: number;
   itemId?: string;
@@ -63,15 +66,20 @@ export function selectRumorForNpc(npc: Entity, snapshot: ContextSnapshot, now: n
   if (now - memory.lastRumorAt < RUMOR_TALK_COOLDOWN_S && memory.knownRumorIds.length > 0) return undefined;
 
   if (memory.lastEventRumorId) {
-    const eventRumor = findRumor(memory.lastEventRumorId);
+    const eventRumorId = memory.lastEventRumorId;
+    const eventRumor = findRumor(eventRumorId);
     const eventRecord = rumorEvents.find(e => e.eventId === memory.lastRumorEventId && e.rumorId === eventRumor?.id);
-    memory.lastEventRumorId = '';
     if (eventRumor && rumorAllowed(eventRumor, snapshot, memory)) {
+      memory.lastEventRumorId = '';
       if (eventRecord && !rumorEventFresh(eventRecord, now)) return undefined;
       markRumorSpoken(npc, memory, eventRumor.id, now);
       return renderRumor(eventRumor, snapshot, memory, now, eventRecord);
     }
+    if (memory.lastEventRumorId === eventRumorId) memory.lastEventRumorId = '';
   }
+
+  const roomMemoryRumor = selectRoomMemoryRumor(npc, snapshot, memory, now);
+  if (roomMemoryRumor) return roomMemoryRumor;
 
   const screenRumor = selectScreenRumor(snapshot, memory);
   if (screenRumor) {
@@ -132,7 +140,8 @@ export function observeRecentRumorEventsForNpc(npc: Entity, snapshot: ContextSna
     scanned++;
     if (!rumorEventFresh(event, now)) continue;
     if (!eventRelevantToNpc(event, snapshot)) continue;
-    const score = event.priority + Math.min(8, rumorEvents.length - i);
+    const recency = MAX_RUMOR_EVENTS_PER_TALK - scanned + 1;
+    const score = event.priority + recency * 100;
     if (score > bestScore) {
       best = event;
       bestScore = score;
@@ -273,6 +282,10 @@ function rumorAllowed(rumor: RumorDef, snapshot: ContextSnapshot, memory: NpcMem
 
 function preferredTopics(snapshot: ContextSnapshot, memory: NpcMemory): RumorTopic[] {
   if (snapshot.samosborActive) return ['samosbor', 'monster', 'room'];
+  if (snapshot.hasRoomMemoryTheft || snapshot.hasRoomMemoryCombat) return ['container', 'player_action', 'faction'];
+  if (snapshot.hasRoomMemoryHelp || snapshot.hasRoomMemoryRepair) return ['room', 'container', 'economy'];
+  if (snapshot.hasRoomMemoryInform) return ['faction', 'player_action', 'room'];
+  if (snapshot.hasRoomMemorySamosbor) return ['samosbor', 'room', 'faction'];
   if (snapshot.hasRecentPlayerTheft) return ['container', 'player_action', 'faction'];
   if (snapshot.hasRecentMetroEvent) return ['floor', 'room', 'rare_item'];
   if (snapshot.hasRecentFactionClash) return ['faction', 'monster', 'container'];
@@ -285,6 +298,32 @@ function preferredTopics(snapshot: ContextSnapshot, memory: NpcMemory): RumorTop
   if (snapshot.isWounded || snapshot.isHungry || snapshot.isThirsty) return ['rare_item', 'room', 'faction'];
   if (memory.trustPlayer > 35) return ['player_action', 'floor', 'rare_item'];
   return ['room', 'faction', 'floor'];
+}
+
+function selectRoomMemoryRumor(npc: Entity, snapshot: ContextSnapshot, memory: NpcMemory, now: number): string | undefined {
+  if (snapshot.roomMemorySeverity < 3) return undefined;
+  const rumorId = roomMemoryRumorId(snapshot);
+  if (!rumorId || memory.knownRumorIds.includes(rumorId)) return undefined;
+  rememberRumor(npc, rumorId, now);
+  const room = snapshot.roomName ?? 'эта комната';
+  const zone = snapshot.zoneId === undefined ? '' : `, зона ${snapshot.zoneId + 1}`;
+  if (snapshot.hasRoomMemoryTheft) return `${room}${zone}: тут помнят кражу. Зацепка: чужие контейнеры теперь ведут к ревизии.`;
+  if (snapshot.hasRoomMemoryCombat) return `${room}${zone}: после боя жильцы слушают шаги. Зацепка: разговоры и цены стали жестче.`;
+  if (snapshot.hasRoomMemoryRepair) return `${room}${zone}: ремонт записали в добрую строку. Зацепка: спроси про тайник или скидку.`;
+  if (snapshot.hasRoomMemoryHelp) return `${room}${zone}: помощь не забыли. Зацепка: общий запас отвечает мягче.`;
+  if (snapshot.hasRoomMemoryInform) return `${room}${zone}: кто-то сдал бумагу дальше. Зацепка: фракции будут сверять имена.`;
+  if (snapshot.hasRoomMemorySamosbor) return `${room}${zone}: после гермы считают, кто выжил. Зацепка: тайники и долги рядом.`;
+  return undefined;
+}
+
+function roomMemoryRumorId(snapshot: ContextSnapshot): string {
+  if (snapshot.hasRoomMemoryTheft) return 'room_memory_theft';
+  if (snapshot.hasRoomMemoryCombat) return 'room_memory_combat';
+  if (snapshot.hasRoomMemoryRepair) return 'room_memory_repair';
+  if (snapshot.hasRoomMemoryHelp) return 'room_memory_help';
+  if (snapshot.hasRoomMemoryInform) return 'room_memory_inform';
+  if (snapshot.hasRoomMemorySamosbor) return 'room_memory_samosbor';
+  return '';
 }
 
 function scoreRumor(rumor: RumorDef, snapshot: ContextSnapshot, memory: NpcMemory, preferred: RumorTopic[]): number {
@@ -420,18 +459,46 @@ function formatStaticLead(lead: RumorLead): string {
   return `${prefix}${lead.action}`;
 }
 
+function eventDataString(event: RumorEventRecord, keys: readonly string[]): string {
+  const data = event.data;
+  if (!data) return '';
+  for (const key of keys) {
+    const value = data[key];
+    if (typeof value === 'string' && value.trim().length > 0) return value.trim();
+  }
+  return '';
+}
+
+function pushLeadPart(parts: string[], value: string): void {
+  const clean = value.trim();
+  if (clean.length > 0 && !parts.includes(clean)) parts.push(clean);
+}
+
+function eventZoneName(event: RumorEventRecord): string {
+  return event.zoneName ?? eventDataString(event, ['zoneName', 'zoneLabel', 'zoneTitle', 'zoneHint']);
+}
+
+function eventRoomName(event: RumorEventRecord): string {
+  return event.roomName ?? eventDataString(event, ['roomName', 'destinationRoomName', 'targetRoomName', 'sourceRoomName']);
+}
+
 function formatEventLead(event: RumorEventRecord): string {
   const parts: string[] = [];
-  if (event.floor !== undefined) parts.push(FLOOR_NAMES[event.floor]);
-  if (event.zoneId !== undefined) parts.push(`зона ${event.zoneId}`);
-  if (event.roomId !== undefined) parts.push(`комната ${event.roomId}`);
+  if (event.floor !== undefined) pushLeadPart(parts, FLOOR_NAMES[event.floor]);
+  const zoneName = eventZoneName(event);
+  if (zoneName) pushLeadPart(parts, zoneName);
+  else if (event.zoneId !== undefined) pushLeadPart(parts, `зона ${event.zoneId}`);
+  const roomName = eventRoomName(event);
+  if (roomName) pushLeadPart(parts, roomName);
+  else if (event.roomType !== undefined) pushLeadPart(parts, ROOM_TYPE_NAMES[event.roomType]);
+  else if (event.roomId !== undefined) pushLeadPart(parts, `комната ${event.roomId}`);
   const resourceName = typeof event.data?.resourceName === 'string' ? event.data.resourceName : '';
-  if (resourceName) parts.push(resourceName.toLowerCase());
+  if (resourceName) pushLeadPart(parts, resourceName.toLowerCase());
   if (event.itemId) {
     const itemName = ITEMS[event.itemId]?.name.toLowerCase();
-    if (itemName) parts.push(itemName);
+    if (itemName) pushLeadPart(parts, itemName);
   }
-  if (event.monsterKind !== undefined) parts.push(monsterTypeName(event.monsterKind).toLowerCase());
+  if (event.monsterKind !== undefined) pushLeadPart(parts, monsterTypeName(event.monsterKind).toLowerCase());
 
   const action = eventLeadAction(event);
   if (!action && parts.length === 0) return '';
@@ -470,7 +537,7 @@ function rememberRecentLead(rumor: RumorDef, text: string, now: number, event?: 
     text,
     heardAt: now,
     floor: rumor.lead?.floor ?? event?.floor,
-    roomName: rumor.lead?.roomName,
+    roomName: rumor.lead?.roomName ?? (event ? eventRoomName(event) : undefined),
     itemId: rumor.lead?.itemId ?? event?.itemId,
     monsterKind: rumor.lead?.monsterKind ?? event?.monsterKind,
   });
@@ -575,6 +642,7 @@ const TAG_WORDS: Record<string, string> = {
   recovery: 'восстановление',
   report: 'рапорт',
   rescue: 'спасение',
+  safeguard: 'сейфгард',
   samosbor: 'самосбор',
   school: 'школа',
   seal: 'пломба',
@@ -717,7 +785,8 @@ function isHighSignalRumorEvent(event: RumorEventLike): boolean {
   if (type === 'room_produced_items' || type === 'room_lacked_resources' || type === 'room_blocked_production') return true;
   if (type === 'quest_completed') return (event.severity ?? 0) >= 4;
   if (type.includes('contract') && (type.includes('complete') || type.includes('fail'))) return true;
-  if (type.startsWith('monster_') && event.monsterKind === MonsterKind.KOSTOREZ) return true;
+  if (type.startsWith('monster_') && (event.monsterKind === MonsterKind.KOSTOREZ || event.monsterKind === MonsterKind.SAFEGUARD)) return true;
+  if (type === 'net_terminal_hack_failed') return true;
   if ((type === 'player_kill_monster' || event.tags?.includes('kill')) && isRareMonsterKind(event.monsterKind)) return true;
   if (type.includes('floor') || event.tags?.includes('floor_transition')) return true;
   return false;
@@ -861,7 +930,8 @@ function isRareMonsterKind(kind: MonsterKind | undefined): boolean {
     || kind === MonsterKind.TUBE_EEL
     || kind === MonsterKind.PARAGRAPH
     || kind === MonsterKind.NELYUD
-    || kind === MonsterKind.KOSTOREZ;
+    || kind === MonsterKind.KOSTOREZ
+    || kind === MonsterKind.SAFEGUARD;
 }
 
 function eventRelevantToNpc(event: RumorEventRecord, snapshot: ContextSnapshot): boolean {

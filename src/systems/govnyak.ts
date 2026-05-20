@@ -11,6 +11,7 @@ import {
 } from '../core/types';
 import { ITEMS } from '../data/items';
 import { publishEvent } from './events';
+import { monsterBaitPreviewForItem } from './monster_bait';
 
 export const GOVNYAK_ITEM_IDS = [
   'govnyak_roll',
@@ -20,6 +21,15 @@ export const GOVNYAK_ITEM_IDS = [
 ] as const;
 
 export type GovnyakItemId = typeof GOVNYAK_ITEM_IDS[number];
+
+export const GOVNYAK_ACTIVE_STATUS_CAP = 3;
+const GOVNYAK_STATUS_INTENSITY_CAP = 3;
+const GOVNYAK_STATUS_IDS: readonly PlayerStatusId[] = ['govnyak_relief', 'govnyak_cough', 'govnyak_debt'];
+const GOVNYAK_STATUS_DURATION_CAPS: Partial<Record<PlayerStatusId, number>> = {
+  govnyak_relief: 70,
+  govnyak_cough: 210,
+  govnyak_debt: 480,
+};
 
 interface GovnyakUseDef {
   psiRelief: number;
@@ -77,6 +87,45 @@ function getStatus(e: Entity, id: PlayerStatusId): PlayerStatus | undefined {
   return idx >= 0 ? e.statuses?.[idx] : undefined;
 }
 
+function isGovnyakStatusId(id: PlayerStatusId): boolean {
+  return (GOVNYAK_STATUS_IDS as readonly PlayerStatusId[]).includes(id);
+}
+
+function govnyakStatusDurationCap(id: PlayerStatusId, duration: number): number {
+  return GOVNYAK_STATUS_DURATION_CAPS[id] ?? duration;
+}
+
+function capGovnyakStatuses(e: Entity, now: number): void {
+  if (!e.statuses) return;
+  const merged: PlayerStatus[] = [];
+  const others: PlayerStatus[] = [];
+  for (const status of e.statuses) {
+    if (!isGovnyakStatusId(status.id)) {
+      others.push(status);
+      continue;
+    }
+    const capped: PlayerStatus = {
+      ...status,
+      expiresAt: Math.min(status.expiresAt, now + govnyakStatusDurationCap(status.id, status.expiresAt - now)),
+      intensity: status.intensity === undefined ? undefined : Math.min(GOVNYAK_STATUS_INTENSITY_CAP, Math.max(0, status.intensity)),
+    };
+    const existing = merged.find(s => s.id === capped.id);
+    if (!existing) {
+      merged.push(capped);
+      continue;
+    }
+    existing.startedAt = Math.min(existing.startedAt, capped.startedAt);
+    existing.expiresAt = Math.max(existing.expiresAt, capped.expiresAt);
+    existing.intensity = Math.max(existing.intensity ?? 0, capped.intensity ?? 0);
+    existing.badReaction = existing.badReaction === true || capped.badReaction === true;
+  }
+  if (merged.length > GOVNYAK_ACTIVE_STATUS_CAP) {
+    merged.sort((a, b) => b.expiresAt - a.expiresAt);
+    merged.length = GOVNYAK_ACTIVE_STATUS_CAP;
+  }
+  e.statuses = others.concat(merged);
+}
+
 function upsertStatus(
   e: Entity,
   id: PlayerStatusId,
@@ -93,12 +142,13 @@ function upsertStatus(
     id,
     source,
     startedAt: prev?.startedAt ?? now,
-    expiresAt: Math.max(prev?.expiresAt ?? 0, now + duration),
-    intensity,
+    expiresAt: Math.min(now + govnyakStatusDurationCap(id, duration), Math.max(prev?.expiresAt ?? 0, now + duration)),
+    intensity: Math.min(GOVNYAK_STATUS_INTENSITY_CAP, Math.max(0, intensity)),
     badReaction: badReaction || prev?.badReaction,
   };
   if (idx >= 0) e.statuses[idx] = status;
   else e.statuses.push(status);
+  capGovnyakStatuses(e, now);
   return status;
 }
 
@@ -130,6 +180,8 @@ function publishGovnyakStatusEvent(
       source: status.source,
       intensity: status.intensity ?? 0,
       expiresAt: status.expiresAt,
+      remainingSeconds: Math.max(0, status.expiresAt - (state?.time ?? 0)),
+      statusCap: GOVNYAK_ACTIVE_STATUS_CAP,
       badReaction: status.badReaction === true,
       rumorIds: tags.includes('bad_batch')
         ? ['govnyak_bad_batch']
@@ -146,6 +198,7 @@ export function useGovnyakItem(actor: Entity, defId: string, state?: GameState):
   const now = state?.time ?? 0;
   const source = defId as PlayerStatusSource;
   const badBatch = def.badChance >= 1 || Math.random() < def.badChance;
+  const baitPreview = monsterBaitPreviewForItem(defId, 'use', 1);
 
   if (actor.rpg) actor.rpg.psi = Math.min(actor.rpg.maxPsi, actor.rpg.psi + def.psiRelief);
   if (actor.needs) {
@@ -156,14 +209,14 @@ export function useGovnyakItem(actor: Entity, defId: string, state?: GameState):
   actor.attackCd = Math.max(actor.attackCd ?? 0, def.attackDelay);
   if (badBatch && def.badMadness > 0) actor.psiMadness = Math.max(actor.psiMadness ?? 0, def.badMadness);
 
-  upsertStatus(actor, 'govnyak_relief', source, now, def.reliefSeconds, 1);
+  const relief = upsertStatus(actor, 'govnyak_relief', source, now, def.reliefSeconds, 1);
   const cough = upsertStatus(
     actor,
     'govnyak_cough',
     source,
     now,
     badBatch ? def.coughSeconds * 1.4 : def.coughSeconds,
-    Math.min(3, statusIntensity(actor, 'govnyak_cough') + (badBatch ? 1.1 : 0.65)),
+    Math.min(GOVNYAK_STATUS_INTENSITY_CAP, statusIntensity(actor, 'govnyak_cough') + (badBatch ? 1.1 : 0.65)),
     badBatch,
   );
   const debt = upsertStatus(
@@ -172,7 +225,7 @@ export function useGovnyakItem(actor: Entity, defId: string, state?: GameState):
     source,
     now,
     def.debtSeconds,
-    Math.min(3, statusIntensity(actor, 'govnyak_debt') + def.debt),
+    Math.min(GOVNYAK_STATUS_INTENSITY_CAP, statusIntensity(actor, 'govnyak_debt') + def.debt),
     badBatch,
   );
 
@@ -188,16 +241,19 @@ export function useGovnyakItem(actor: Entity, defId: string, state?: GameState):
       itemValue: ITEMS[defId]?.value ?? 0,
       severity: badBatch ? 4 : 3,
       privacy: badBatch ? 'local' : 'private',
-      tags: ['player', 'inventory', 'govnyak', 'contraband', 'use', badBatch ? 'bad_batch' : 'relief'],
+      tags: ['player', 'inventory', 'govnyak', 'contraband', 'use', badBatch ? 'bad_batch' : 'relief', 'cough_debt', 'bait_marker'],
       data: {
         psiRelief: def.psiRelief,
-        thirstCost: def.thirstCost,
-        sleepCost: def.sleepCost,
-        hpCost: def.hpCost,
+        costText: `water-${def.thirstCost} sleep-${def.sleepCost}${def.hpCost > 0 ? ` hp-${def.hpCost}` : ''}`,
         debtIntensity: debt.intensity ?? 0,
         coughIntensity: cough.intensity ?? 0,
-        reliefSeconds: def.reliefSeconds,
+        reliefSeconds: relief.expiresAt - now,
         coughSeconds: cough.expiresAt - now,
+        debtSeconds: debt.expiresAt - now,
+        baitRadius: baitPreview?.radius,
+        baitSeconds: baitPreview?.ttlSeconds,
+        baitMaxAttractions: baitPreview?.maxAttractions,
+        baitMarker: baitPreview?.markerLabel,
         rumorIds: [badBatch ? 'govnyak_bad_batch' : 'govnyak_trade'],
       },
     });
@@ -206,16 +262,24 @@ export function useGovnyakItem(actor: Entity, defId: string, state?: GameState):
   }
 
   const debtLabel = Math.ceil((debt.intensity ?? 0) * 10) / 10;
+  const coughLabel = Math.ceil((cough.intensity ?? 0) * 10) / 10;
+  const reliefSeconds = Math.ceil(relief.expiresAt - now);
+  const coughSeconds = Math.ceil(cough.expiresAt - now);
+  const debtSeconds = Math.ceil(debt.expiresAt - now);
   const cost = `вода -${def.thirstCost}${def.hpCost > 0 ? `, HP -${def.hpCost}` : ''}`;
+  const statusText = `облегчение ${reliefSeconds}с, кашель ${coughSeconds}с x${coughLabel}, долг ${debtLabel}/3 ${debtSeconds}с`;
+  const baitText = baitPreview
+    ? ` Дымовая метка: ${Math.round(baitPreview.radius)}кл/${Math.ceil(baitPreview.ttlSeconds)}с, до ${baitPreview.maxAttractions}, активных <=${baitPreview.activeCap}.`
+    : '';
   if (badBatch) {
     return {
-      text: `Говняк сорвался: ПСИ +${def.psiRelief}, ${cost}. Кашель и долг ${debtLabel}/3`,
+      text: `Говняк сорвался: ПСИ +${def.psiRelief}, ${cost}. ${statusText}.${baitText}`,
       severity: 4,
       badBatch,
     };
   }
   return {
-    text: `Говняк притушил шум: ПСИ +${def.psiRelief}, ${cost}. Кашель держит прицел, долг ${debtLabel}/3`,
+    text: `Говняк притушил шум: ПСИ +${def.psiRelief}, ${cost}. ${statusText}.${baitText}`,
     severity: 3,
     badBatch,
   };

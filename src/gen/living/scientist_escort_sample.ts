@@ -27,6 +27,17 @@ const BROKER_ID = 'ag72_market_lera_sample';
 const FORGER_ID = 'ag72_forger_egor_sample';
 
 const EVENT_TAGS = ['ag72', 'escort', 'sample', 'science'];
+const CHECKPOINT_QUEST = 'ag72_checkpoint_trust_route';
+const DELIVER_QUEST = 'ag72_deliver_sealed_sample';
+const SELL_QUEST = 'ag72_sell_sealed_sample_elsewhere';
+const FAKE_QUEST = 'ag72_sell_fake_sample';
+const REPORT_QUEST = 'ag72_report_unsealed_sample';
+const HIDE_QUEST = 'ag72_hide_unsealed_sample';
+const SAMPLE_BRANCH_QUESTS = [DELIVER_QUEST, SELL_QUEST, FAKE_QUEST, REPORT_QUEST, HIDE_QUEST] as const;
+
+function branchBlockers(current: string): string[] {
+  return SAMPLE_BRANCH_QUESTS.filter(id => id !== current);
+}
 
 const NPC_DEFS: Record<string, PlotNpcDef> = {
   [SCIENTIST_ID]: {
@@ -49,6 +60,7 @@ const NPC_DEFS: Record<string, PlotNpcDef> = {
       'Павел на пропуске даст ключ, если поверит, что вы не тащите меня в коридор как приманку.',
       'Чистая проба нужна НИИ. Грязная нужна рынку. Поддельная нужна тем, кто путает премию с наукой.',
       'Если меня срежут по дороге, маршрут закрывайте. Образец без свидетеля быстро становится вещдоком без хозяина.',
+      'Белая проба в целой пломбе идёт ко мне. Кривая пломба идёт Павлу рапортом или Егору в тайник, если вы решили испортить себе ночь.',
     ],
     talkLinesPost: [
       'Доверие в НИИ измеряют не словами, а тем, кто вернулся с пробой, пломбой и живым свидетелем.',
@@ -75,6 +87,7 @@ const NPC_DEFS: Record<string, PlotNpcDef> = {
       'Пропуск к пробной не выдают за любопытство. Учёная идёт только после зачистки маршрута.',
       'Ключ один. Потеряешь - дверь станет умнее нас обоих.',
       'Если сирена завоет, не тащи Иру геройствовать. Живая учёная дороже полной пробирки.',
+      'Если найдёшь пробу с сорванной пломбой, не продавай её как чистую. Несёшь мне - будет рапорт, несёшь Егору - будет липовый акт.',
     ],
     talkLinesPost: [
       'Проход отмечен. Ключ у тебя, ответственность тоже.',
@@ -100,6 +113,7 @@ const NPC_DEFS: Record<string, PlotNpcDef> = {
     talkLines: [
       'Настоящую белую пробу НИИ ждёт долго, рынок - молча и сразу.',
       'Если принесёшь запечатанную пробу мне, учёная назовёт это предательством. Я назову это оплатой риска.',
+      'Кривую тару я не беру как белую. Сорванная пломба продаёт не пробу, а твоё имя.',
     ],
     talkLinesPost: [
       'Расписка сухая. У НИИ теперь мокро в журнале.',
@@ -124,6 +138,7 @@ const NPC_DEFS: Record<string, PlotNpcDef> = {
     talkLines: [
       'Фальшивая проба - это не ложь, а экономия на веществе.',
       'Бирка важнее содержимого, пока пробирку не трясут и не задают ей вопросы.',
+      'Повреждённую белую пробу можно спрятать под аудитом. Это не спасает науку, зато спасает маршрут до следующей проверки.',
     ],
     talkLinesPost: [
       'Подделку приняли? Значит, не трясли.',
@@ -134,7 +149,7 @@ const NPC_DEFS: Record<string, PlotNpcDef> = {
 
 registerSideQuest(SCIENTIST_ID, NPC_DEFS[SCIENTIST_ID], [
   {
-    id: 'ag72_checkpoint_trust_route',
+    id: CHECKPOINT_QUEST,
     giverNpcId: SCIENTIST_ID,
     type: QuestType.TALK,
     desc: 'Ира Пробиркина: «Доведите меня до Павла у пробной. Сначала его допуск и зачистка коридора, потом ключ и пробирки.»',
@@ -154,7 +169,7 @@ registerSideQuest(SCIENTIST_ID, NPC_DEFS[SCIENTIST_ID], [
     eventTags: EVENT_TAGS,
   },
   {
-    id: 'ag72_deliver_sealed_sample',
+    id: DELIVER_QUEST,
     giverNpcId: SCIENTIST_ID,
     type: QuestType.FETCH,
     desc: 'Ира Пробиркина: «Теперь ключ есть. Вынесите белую пробу из запертой комнаты и верните мне запечатанной. Грязную или липовую можно сдать, но доверие не вернётся.»',
@@ -170,16 +185,44 @@ registerSideQuest(SCIENTIST_ID, NPC_DEFS[SCIENTIST_ID], [
     relationDelta: 18,
     xpReward: 95,
     moneyReward: 180,
+    requiresSideQuestDone: CHECKPOINT_QUEST,
+    blockedBySideQuestIds: branchBlockers(DELIVER_QUEST),
+    abandonsSideQuestIds: branchBlockers(DELIVER_QUEST),
     failOnNpcDeathPlotId: SCIENTIST_ID,
     eventTags: EVENT_TAGS,
+    eventData: { branch: 'deliver_white_to_nii', sealed: true, witnessRequired: true, rumorIds: ['lead_living_white_sample_shift'] },
   },
 ]);
 
-registerSideQuest(CHECKPOINT_ID, NPC_DEFS[CHECKPOINT_ID], []);
+registerSideQuest(CHECKPOINT_ID, NPC_DEFS[CHECKPOINT_ID], [
+  {
+    id: REPORT_QUEST,
+    giverNpcId: CHECKPOINT_ID,
+    type: QuestType.FETCH,
+    desc: 'Павел Пропускной: «Кривая белая проба не товар. Несите её мне, я закрою доступ рапортом о нарушении хранения, пока коридор не начал спорить голосами.»',
+    targetItem: 'slime_sample_contaminated',
+    targetCount: 1,
+    targetFloor: FloorLevel.LIVING,
+    targetRoomType: RoomType.MEDICAL,
+    targetZoneTag: 'ag72_sample_site',
+    targetHint: 'Жилая зона: запертая пробная НИИ. Криво запечатанную пробу сдайте Павлу как нарушение, не держите под лампой.',
+    rewardItem: 'official_quarantine_clearance',
+    rewardCount: 1,
+    extraRewards: [{ defId: 'seal_wax', count: 1 }],
+    requiresSideQuestDone: CHECKPOINT_QUEST,
+    blockedBySideQuestIds: branchBlockers(REPORT_QUEST),
+    abandonsSideQuestIds: branchBlockers(REPORT_QUEST),
+    relationDelta: 9,
+    xpReward: 60,
+    moneyReward: 70,
+    eventTags: ['ag72', 'sample', 'report', 'unsealed', 'white_slime', 'quarantine'],
+    eventData: { branch: 'report_unsealed_white', sealed: false, rumorIds: ['nii_white_unsealed_report'] },
+  },
+]);
 
 registerSideQuest(BROKER_ID, NPC_DEFS[BROKER_ID], [
   {
-    id: 'ag72_sell_sealed_sample_elsewhere',
+    id: SELL_QUEST,
     giverNpcId: BROKER_ID,
     type: QuestType.FETCH,
     desc: 'Лера Тихая Проба: «Принесёшь белую пробу мне, а не Ире, получишь деньги и расписку. НИИ потом назовёт это пропажей.»',
@@ -192,17 +235,20 @@ registerSideQuest(BROKER_ID, NPC_DEFS[BROKER_ID], [
     rewardItem: 'nii_market_receipt',
     rewardCount: 1,
     extraRewards: [{ defId: 'fake_pass', count: 1 }],
+    requiresSideQuestDone: CHECKPOINT_QUEST,
+    blockedBySideQuestIds: branchBlockers(SELL_QUEST),
     relationDelta: 5,
     xpReward: 70,
     moneyReward: 260,
-    abandonsSideQuestIds: ['ag72_deliver_sealed_sample'],
+    abandonsSideQuestIds: branchBlockers(SELL_QUEST),
     eventTags: ['ag72', 'sample', 'black_market', 'abandonment'],
+    eventData: { branch: 'sell_white_black_market', sealed: true, rumorIds: ['market88_white_sample_no_lamp'] },
   },
 ]);
 
 registerSideQuest(FORGER_ID, NPC_DEFS[FORGER_ID], [
   {
-    id: 'ag72_sell_fake_sample',
+    id: FAKE_QUEST,
     giverNpcId: FORGER_ID,
     type: QuestType.FETCH,
     desc: 'Егор Бирочник: «Принеси липовую пробу с правильной биркой. Я закрою акт так, будто риск был научным.»',
@@ -215,10 +261,36 @@ registerSideQuest(FORGER_ID, NPC_DEFS[FORGER_ID], [
     rewardItem: 'nii_forged_audit',
     rewardCount: 1,
     extraRewards: [{ defId: 'cigs', count: 2 }],
+    blockedBySideQuestIds: branchBlockers(FAKE_QUEST),
+    abandonsSideQuestIds: branchBlockers(FAKE_QUEST),
     relationDelta: 3,
     xpReward: 35,
     moneyReward: 60,
     eventTags: ['ag72', 'sample', 'fake', 'black_market'],
+    eventData: { branch: 'fake_sample_audit', sealed: false, rumorIds: ['nii_sample_hide_or_report'] },
+  },
+  {
+    id: HIDE_QUEST,
+    giverNpcId: FORGER_ID,
+    type: QuestType.FETCH,
+    desc: 'Егор Бирочник: «Кривую белую пробу можно спрятать под аудитом. НИИ увидит бумагу, рынок увидит тишину, а вы увидите, как быстро кончается доверие.»',
+    targetItem: 'slime_sample_contaminated',
+    targetCount: 1,
+    targetFloor: FloorLevel.LIVING,
+    targetRoomType: RoomType.MEDICAL,
+    targetZoneTag: 'ag72_sample_site',
+    targetHint: 'Жилая зона: запертая пробная НИИ. Криво запечатанную пробу можно скрыть у Егора вместо рапорта Павла.',
+    rewardItem: 'nii_forged_audit',
+    rewardCount: 1,
+    extraRewards: [{ defId: 'cigs', count: 3 }],
+    requiresSideQuestDone: CHECKPOINT_QUEST,
+    blockedBySideQuestIds: branchBlockers(HIDE_QUEST),
+    abandonsSideQuestIds: branchBlockers(HIDE_QUEST),
+    relationDelta: 2,
+    xpReward: 50,
+    moneyReward: 90,
+    eventTags: ['ag72', 'sample', 'hide', 'concealment', 'unsealed', 'white_slime', 'forgery'],
+    eventData: { branch: 'hide_unsealed_white', sealed: false, rumorIds: ['nii_white_unsealed_report'] },
   },
 ]);
 
@@ -496,9 +568,9 @@ function seedContainers(world: World, lab: Room, sample: Room, scientist: Entity
   );
   addContainer(
     world, sample, sample.w - 3, 3, ContainerKind.METAL_CABINET,
-    'Холодный бокс белой пробы', 'owner',
+    'Холодный бокс белой пломбы', 'owner',
     [{ defId: 'slime_sample_white', count: 1 }, { defId: 'slime_sample_contaminated', count: 1 }, { defId: 'slime_sample_brown', count: 1 }],
-    ['sample_site', 'white_slime', 'contamination'],
+    ['sample_site', 'white_slime', 'sealed', 'unsealed_risk', 'contamination'],
     scientist,
     Faction.SCIENTIST,
   );

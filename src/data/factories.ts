@@ -1,4 +1,5 @@
 import { Faction, Occupation, RoomType, type ContainerAccess } from '../core/types';
+import { RESOURCE_BY_ID, resourceForItem } from './resources';
 
 export interface ResourceStack {
   id: string;
@@ -42,6 +43,100 @@ export interface FactoryDef {
   ownerFaction?: Faction;
   outputTags: string[];
   recipes: FactoryRecipeDef[];
+}
+
+export type ProductionRouteGoal = 'visit' | 'guard' | 'steal' | 'repair';
+
+function addUnique<T>(out: T[], value: T | undefined): void {
+  if (value !== undefined && !out.includes(value)) out.push(value);
+}
+
+function factoryRecipeTags(factory: FactoryDef, recipe: FactoryRecipeDef): string[] {
+  const out: string[] = [];
+  for (const tag of [...factory.outputTags, ...recipe.outputTags, ...(recipe.eventTags ?? [])]) {
+    addUnique(out, tag);
+  }
+  return out;
+}
+
+export function productionItemRewardTag(defId: string): string {
+  return `prod_item_${defId}`;
+}
+
+export function productionResourceRewardTag(resourceId: string): string {
+  return `prod_res_${resourceId}`;
+}
+
+export function productionRouteGoalTags(factory: FactoryDef, recipe: FactoryRecipeDef): string[] {
+  return productionRouteGoals(factory, recipe).map(goal => `prod_goal_${goal}`);
+}
+
+export function productionOutputResourceIds(factory: FactoryDef, recipe: FactoryRecipeDef): string[] {
+  const out: string[] = [];
+  for (const output of recipe.outputs) addUnique(out, resourceForItem(output.defId)?.id);
+  for (const tag of factoryRecipeTags(factory, recipe)) {
+    if (RESOURCE_BY_ID[tag]) addUnique(out, tag);
+  }
+  return out;
+}
+
+export function productionRewardTargetTags(factory: FactoryDef, recipe: FactoryRecipeDef): string[] {
+  const tags: string[] = [];
+  for (const output of recipe.outputs) addUnique(tags, productionItemRewardTag(output.defId));
+  for (const resourceId of productionOutputResourceIds(factory, recipe)) addUnique(tags, productionResourceRewardTag(resourceId));
+  for (const tag of productionRouteGoalTags(factory, recipe)) addUnique(tags, tag);
+  return tags;
+}
+
+export function productionRouteGoals(factory: FactoryDef, recipe: FactoryRecipeDef): ProductionRouteGoal[] {
+  const tags = factoryRecipeTags(factory, recipe);
+  const goals: ProductionRouteGoal[] = [];
+  if (recipe.outputAccess === 'public' || tags.includes('public')) addUnique(goals, 'visit');
+  if (
+    factory.ownerFaction !== undefined
+    || recipe.outputAccess === 'faction'
+    || recipe.outputAccess === 'owner'
+    || recipe.outputAccess === 'locked'
+    || tags.includes('faction')
+    || tags.includes('locked')
+  ) addUnique(goals, 'guard');
+  if (
+    recipe.outputAccess === 'faction'
+    || recipe.outputAccess === 'owner'
+    || recipe.outputAccess === 'locked'
+    || recipe.outputAccess === 'secret'
+    || tags.includes('illegal')
+    || tags.includes('weapon')
+    || tags.includes('ammo')
+    || tags.includes('contested_output')
+  ) addUnique(goals, 'steal');
+  if (
+    (recipe.inputItems?.length ?? 0) > 0
+    || recipe.badBatch !== undefined
+    || tags.includes('repair')
+    || tags.includes('repair_input')
+    || tags.includes('limited_output')
+  ) addUnique(goals, 'repair');
+  if (goals.length === 0) addUnique(goals, 'visit');
+  return goals;
+}
+
+export function productionRecipeImportant(factory: FactoryDef, recipe: FactoryRecipeDef): boolean {
+  if (productionRouteGoals(factory, recipe).some(goal => goal !== 'visit')) return true;
+  if ((recipe.eventTags?.length ?? 0) > 0 || recipe.maxOutputItemCount !== undefined) return true;
+  const tags = factoryRecipeTags(factory, recipe);
+  return tags.some(tag =>
+    tag === 'medical'
+    || tag === 'weapon'
+    || tag === 'ammo'
+    || tag === 'illegal'
+    || tag === 'energy'
+    || tag === 'cleanup'
+    || tag === 'slime'
+    || tag === 'quarantine'
+    || tag === 'volatile_energy'
+    || tag === 'authorized_output'
+  );
 }
 
 export const FACTORIES: FactoryDef[] = [

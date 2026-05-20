@@ -110,6 +110,7 @@ export function generateTutorRoom(
     x: hallX + Math.floor(hallW / 2) + 0.5, y: hallY + 1 + 0.5,
     angle: Math.PI / 2, pitch: 0, alive: true, speed: olgaDef.speed,
     sprite: olgaDef.sprite,
+    spriteSeed: 90, // authored visual seed for the starting doctor
     name: olgaDef.name, isFemale: olgaDef.isFemale,
     needs: freshNeeds(), hp: olgaDef.hp, maxHp: olgaDef.maxHp, money: olgaDef.money,
     ai: { goal: AIGoal.IDLE, tx: 0, ty: 0, path: [], pi: 0, stuck: 0, timer: 0 },

@@ -25,6 +25,14 @@ const BASE_HP = 100;
 const HP_PER_LEVEL = 10;
 const BASE_PSI = 10;
 const PSI_PER_LEVEL = 1;
+const STR_BONUS_CAP = 0.75;
+const AGI_MOVE_BONUS_CAP = 0.45;
+const AGI_ATTACK_SPEED_FLOOR = 0.62;
+const AGI_SPREAD_FLOOR = 0.55;
+const INT_PSI_BONUS_CAP = 0.75;
+const INT_XP_BONUS_CAP = 0.5;
+const HEAVY_WEAPON_COOLDOWN = 0.65;
+const HEAVY_WEAPON_SPEED_FLOOR = 0.75;
 
 export function getLevelHp(level: number): number { return BASE_HP + HP_PER_LEVEL * (level - 1); }
 export function getLevelPsi(level: number): number { return BASE_PSI + PSI_PER_LEVEL * (level - 1); }
@@ -54,7 +62,7 @@ export function randomRPG(level: number): RPGStats {
     else if (r < 0.67) agi++;
     else int_++;
   }
-  const maxPsi = Math.round(getLevelPsi(level) * (1 + 0.1 * int_));
+  const maxPsi = getMaxPsi({ level, xp: 0, attrPoints: 0, str, agi, int: int_, psi: 0, maxPsi: 0 });
   return {
     level,
     xp: 0,
@@ -67,26 +75,38 @@ export function randomRPG(level: number): RPGStats {
   };
 }
 
+function statBonus(points: number, perPoint: number, cap: number): number {
+  return Math.min(cap, Math.max(0, points) * perPoint);
+}
+
 // ── Compute effective max PSI (level base + INT multiplier) ──────
 export function getMaxPsi(rpg: RPGStats): number {
-  return Math.round(getLevelPsi(rpg.level) * (1 + 0.1 * rpg.int));
+  return Math.round(getLevelPsi(rpg.level) * (1 + statBonus(rpg.int, 0.1, INT_PSI_BONUS_CAP)));
 }
 
 // ── Compute effective max HP (level base + STR multiplier) ───────
 export function getMaxHp(rpg: RPGStats): number {
-  return Math.round(getLevelHp(rpg.level) * (1 + 0.1 * rpg.str));
+  return Math.round(getLevelHp(rpg.level) * (1 + statBonus(rpg.str, 0.1, STR_BONUS_CAP)));
 }
 
 // ── Attribute multipliers ────────────────────────────────────────
-export function strMeleeDmgMult(rpg: RPGStats): number { return 1 + 0.1 * rpg.str; }
-export function agiSpeedMult(rpg: RPGStats): number { return 1 + 0.1 * rpg.agi; }
-export function agiAttackSpeedMult(rpg: RPGStats): number { return 1 / (1 + 0.1 * rpg.agi); } // lower cooldown
-export function intXpMult(rpg: RPGStats): number { return 1 + 0.1 * rpg.int; }
-export function strDurabilityWearMult(rpg: RPGStats): number { return 1 / (1 + 0.08 * rpg.str); }
-export function strHeavyWeaponSpeedMult(rpg: RPGStats, baseCooldown: number): number {
-  return baseCooldown >= 0.65 ? 1 / (1 + 0.05 * rpg.str) : 1;
+export function strMeleeDmgMult(rpg: RPGStats): number { return 1 + statBonus(rpg.str, 0.1, STR_BONUS_CAP); }
+export function agiSpeedMult(rpg: RPGStats): number { return 1 + statBonus(rpg.agi, 0.1, AGI_MOVE_BONUS_CAP); }
+export function agiAttackSpeedMult(rpg: RPGStats): number {
+  return Math.max(AGI_ATTACK_SPEED_FLOOR, 1 / (1 + 0.1 * Math.max(0, rpg.agi)));
+} // lower cooldown
+export function intXpMult(rpg: RPGStats): number { return 1 + statBonus(rpg.int, 0.1, INT_XP_BONUS_CAP); }
+export function strDurabilityWearMult(rpg: RPGStats): number {
+  return 1 / (1 + statBonus(rpg.str, 0.08, 0.64));
 }
-export function agiRangedSpreadMult(rpg: RPGStats): number { return 1 / (1 + 0.12 * rpg.agi); }
+export function strHeavyWeaponSpeedMult(rpg: RPGStats, baseCooldown: number): number {
+  return baseCooldown >= HEAVY_WEAPON_COOLDOWN
+    ? Math.max(HEAVY_WEAPON_SPEED_FLOOR, 1 / (1 + 0.05 * Math.max(0, rpg.str)))
+    : 1;
+}
+export function agiRangedSpreadMult(rpg: RPGStats): number {
+  return Math.max(AGI_SPREAD_FLOOR, 1 / (1 + 0.12 * Math.max(0, rpg.agi)));
+}
 export function intPsiCostMult(rpg: RPGStats): number { return Math.max(0.75, 1 - 0.035 * rpg.int); }
 export function intContractRewardMult(rpg: RPGStats): number {
   return 1 + Math.min(0.35, 0.05 * rpg.int);
@@ -98,6 +118,42 @@ export function intDocumentRewardMult(rpg: RPGStats): number {
 export function adjustedPsiCost(baseCost: number, rpg?: RPGStats): number {
   if (!rpg || baseCost <= 0) return baseCost;
   return Math.max(1, Math.round(baseCost * intPsiCostMult(rpg) * 10) / 10);
+}
+
+export interface RPGStatEffects {
+  maxHp: number;
+  maxPsi: number;
+  meleeDamageMult: number;
+  heavyWeaponSpeedMult: number;
+  durabilityWearMult: number;
+  moveSpeedMult: number;
+  attackCooldownMult: number;
+  rangedSpreadMult: number;
+  xpMult: number;
+  psiCostMult: number;
+  contractRewardMult: number;
+  documentRewardMult: number;
+}
+
+export function rpgStatEffects(rpg: RPGStats): RPGStatEffects {
+  return {
+    maxHp: getMaxHp(rpg),
+    maxPsi: getMaxPsi(rpg),
+    meleeDamageMult: strMeleeDmgMult(rpg),
+    heavyWeaponSpeedMult: strHeavyWeaponSpeedMult(rpg, HEAVY_WEAPON_COOLDOWN),
+    durabilityWearMult: strDurabilityWearMult(rpg),
+    moveSpeedMult: agiSpeedMult(rpg),
+    attackCooldownMult: agiAttackSpeedMult(rpg),
+    rangedSpreadMult: agiRangedSpreadMult(rpg),
+    xpMult: intXpMult(rpg),
+    psiCostMult: intPsiCostMult(rpg),
+    contractRewardMult: intContractRewardMult(rpg),
+    documentRewardMult: intDocumentRewardMult(rpg),
+  };
+}
+
+export function rpgStatEffectsAfterSpend(rpg: RPGStats, attr: 'str' | 'agi' | 'int'): RPGStatEffects {
+  return rpgStatEffects({ ...rpg, [attr]: rpg[attr] + 1 });
 }
 
 // ── Award XP and handle level-ups ────────────────────────────────
@@ -142,7 +198,9 @@ export function spendAttrPoint(e: Entity, attr: 'str' | 'agi' | 'int'): boolean 
     if (e.hp !== undefined) e.hp = Math.min(e.maxHp, e.hp + Math.max(0, diff));
   }
   if (attr === 'int') {
+    const oldMax = e.rpg.maxPsi;
     e.rpg.maxPsi = getMaxPsi(e.rpg);
+    e.rpg.psi = Math.min(e.rpg.maxPsi, e.rpg.psi + Math.max(0, e.rpg.maxPsi - oldMax));
   }
   return true;
 }
@@ -173,6 +231,7 @@ const MONSTER_BASE_XP: Record<MonsterKind, number> = {
   [MonsterKind.NELYUD]:    70,
   [MonsterKind.KRYSNOZHKA]: 24,
   [MonsterKind.KOSTOREZ]:  95,
+  [MonsterKind.SAFEGUARD]: 125,
 };
 
 export function xpForMonsterKill(kind: MonsterKind, monsterLevel: number): number {

@@ -11,6 +11,61 @@ import {
 } from './types';
 import { stampMark, MarkType } from '../render/marks';
 
+export interface WorldGenerationLike {
+  world: World;
+}
+
+export type ReachabilityReason =
+  | 'open'
+  | 'water'
+  | 'door_open'
+  | 'door_closed'
+  | 'door_locked'
+  | 'door_hermetic_open'
+  | 'door_hermetic_closed'
+  | 'door_missing'
+  | 'lift'
+  | 'wall'
+  | 'abyss'
+  | 'blocked';
+
+export const REACH_GATE_NONE = 0;
+export const REACH_GATE_KEY = 1 << 0;
+export const REACH_GATE_HERMETIC = 1 << 1;
+export const REACH_UNREACHED = 255;
+
+export interface ReachabilityCell {
+  passable: boolean;
+  reason: ReachabilityReason;
+  gateMask: number;
+}
+
+export type ReachabilityReasonCounts = Partial<Record<ReachabilityReason, number>>;
+
+export interface ReachabilityAudit {
+  reachable: Uint8Array;
+  gateMask: Uint8Array;
+  reasonCounts: ReachabilityReasonCounts;
+}
+
+function nextVersion(version: number): number {
+  return (version + 1) | 0;
+}
+
+function markWorldReplaced(world: World, versions: {
+  cellVersion: number;
+  surfaceVersion: number;
+  wallTexVersion: number;
+  floorTexVersion: number;
+  fogVersion: number;
+}): void {
+  world.cellVersion = nextVersion(versions.cellVersion);
+  world.surfaceVersion = nextVersion(versions.surfaceVersion);
+  world.wallTexVersion = nextVersion(versions.wallTexVersion);
+  world.floorTexVersion = nextVersion(versions.floorTexVersion);
+  world.fogVersion = nextVersion(versions.fogVersion);
+}
+
 export class World {
   cells:     Uint8Array;
   roomMap:   Int16Array;   // room id per cell (-1 = none)
@@ -204,4 +259,155 @@ export class World {
       }
     }
   }
+}
+
+export function classifyReachabilityCell(world: World, idx: number): ReachabilityCell {
+  const cell = world.cells[idx];
+  if (cell === Cell.FLOOR) return { passable: true, reason: 'open', gateMask: REACH_GATE_NONE };
+  if (cell === Cell.WATER) return { passable: true, reason: 'water', gateMask: REACH_GATE_NONE };
+  if (cell === Cell.LIFT) return { passable: false, reason: 'lift', gateMask: REACH_GATE_NONE };
+  if (cell === Cell.WALL) return { passable: false, reason: 'wall', gateMask: REACH_GATE_NONE };
+  if (cell === Cell.ABYSS) return { passable: false, reason: 'abyss', gateMask: REACH_GATE_NONE };
+  if (cell !== Cell.DOOR) return { passable: false, reason: 'blocked', gateMask: REACH_GATE_NONE };
+
+  const door = world.doors.get(idx);
+  if (!door) return { passable: false, reason: 'door_missing', gateMask: REACH_GATE_NONE };
+  if (door.state === DoorState.OPEN) return { passable: true, reason: 'door_open', gateMask: REACH_GATE_NONE };
+  if (door.state === DoorState.CLOSED) return { passable: true, reason: 'door_closed', gateMask: REACH_GATE_NONE };
+  if (door.state === DoorState.LOCKED) return { passable: true, reason: 'door_locked', gateMask: REACH_GATE_KEY };
+  if (door.state === DoorState.HERMETIC_OPEN) return { passable: true, reason: 'door_hermetic_open', gateMask: REACH_GATE_NONE };
+  return { passable: true, reason: 'door_hermetic_closed', gateMask: REACH_GATE_HERMETIC };
+}
+
+function reachabilityGateRank(mask: number): number {
+  if (mask === REACH_GATE_NONE) return 0;
+  if (mask === REACH_GATE_KEY) return 1;
+  if (mask === REACH_GATE_HERMETIC) return 2;
+  if (mask === REACH_UNREACHED) return 4;
+  return 3;
+}
+
+export function reachabilityGateLabel(mask: number): string {
+  if (mask === REACH_UNREACHED) return 'unreachable';
+  if (mask === REACH_GATE_NONE) return 'reachable';
+  if (mask === REACH_GATE_KEY) return 'gated by key';
+  if (mask === REACH_GATE_HERMETIC) return 'gated by hermetic door';
+  return 'gated by key and hermetic door';
+}
+
+export function auditReachability(world: World, startIdx: number): ReachabilityAudit {
+  const n = W * W;
+  const reachable = new Uint8Array(n);
+  const gateMask = new Uint8Array(n).fill(REACH_UNREACHED);
+  const reasonCounts: ReachabilityReasonCounts = {};
+  const queues: number[][] = [[], [], [], []];
+  const heads = [0, 0, 0, 0];
+
+  const start = classifyReachabilityCell(world, startIdx);
+  if (!start.passable) return { reachable, gateMask, reasonCounts };
+
+  reachable[startIdx] = 1;
+  gateMask[startIdx] = start.gateMask;
+  reasonCounts[start.reason] = 1;
+  queues[reachabilityGateRank(start.gateMask)].push(startIdx);
+
+  for (let rank = 0; rank < queues.length; rank++) {
+    while (heads[rank] < queues[rank].length) {
+      const ci = queues[rank][heads[rank]++];
+      const currentGate = gateMask[ci];
+      if (reachabilityGateRank(currentGate) !== rank) continue;
+
+      const x = ci % W;
+      const y = (ci / W) | 0;
+      for (const [dx, dy] of [[1,0],[-1,0],[0,1],[0,-1]] as const) {
+        const ni = world.idx(x + dx, y + dy);
+        const next = classifyReachabilityCell(world, ni);
+        if (!next.passable) continue;
+
+        const nextGate = currentGate | next.gateMask;
+        const nextRank = reachabilityGateRank(nextGate);
+        if (nextRank >= reachabilityGateRank(gateMask[ni])) continue;
+
+        if (!reachable[ni]) {
+          reasonCounts[next.reason] = (reasonCounts[next.reason] ?? 0) + 1;
+        }
+        reachable[ni] = 1;
+        gateMask[ni] = nextGate;
+        queues[nextRank].push(ni);
+      }
+    }
+  }
+
+  return { reachable, gateMask, reasonCounts };
+}
+
+export function hasReachableAdjacentCell(world: World, audit: ReachabilityAudit, idx: number): boolean {
+  const x = idx % W;
+  const y = (idx / W) | 0;
+  return !!(
+    audit.reachable[world.idx(x + 1, y)] ||
+    audit.reachable[world.idx(x - 1, y)] ||
+    audit.reachable[world.idx(x, y + 1)] ||
+    audit.reachable[world.idx(x, y - 1)]
+  );
+}
+
+export function describeReachability(audit: ReachabilityAudit, world: World, idx: number): string {
+  if (audit.reachable[idx]) return reachabilityGateLabel(audit.gateMask[idx]);
+  return `unreachable (${classifyReachabilityCell(world, idx).reason})`;
+}
+
+export function replaceWorldFromGeneration(target: World | null | undefined, generation: WorldGenerationLike): World {
+  const source = generation.world;
+  if (!target) {
+    markWorldReplaced(source, {
+      cellVersion: source.cellVersion,
+      surfaceVersion: source.surfaceVersion,
+      wallTexVersion: source.wallTexVersion,
+      floorTexVersion: source.floorTexVersion,
+      fogVersion: source.fogVersion,
+    });
+    return source;
+  }
+
+  const versions = {
+    cellVersion: target.cellVersion,
+    surfaceVersion: target.surfaceVersion,
+    wallTexVersion: target.wallTexVersion,
+    floorTexVersion: target.floorTexVersion,
+    fogVersion: target.fogVersion,
+  };
+
+  target.cells.set(source.cells);
+  target.roomMap.set(source.roomMap);
+  target.wallTex.set(source.wallTex);
+  target.floorTex.set(source.floorTex);
+  target.features.set(source.features);
+  target.light.set(source.light);
+  target.aptMask.set(source.aptMask);
+  target.hermoWall.set(source.hermoWall);
+  target.zoneMap.set(source.zoneMap);
+  target.factionControl.set(source.factionControl);
+  target.fog.set(source.fog);
+  target.liftDir.set(source.liftDir);
+
+  target.rooms = source.rooms.slice();
+  target.doors = new Map(source.doors);
+  target.apartmentRoomCount = source.apartmentRoomCount;
+  target.zones = source.zones.slice();
+  target.slideCells = source.slideCells.slice();
+  target.screenCells = source.screenCells.slice();
+  target.surfaceMap = new Map(source.surfaceMap);
+  target.anomalyTeleports = new Map(source.anomalyTeleports);
+  target.anomalySmogSource = source.anomalySmogSource;
+  target.anomalySmogCells = source.anomalySmogCells.slice();
+  target.anomalySmogHandled = source.anomalySmogHandled;
+  target.railTracks = source.railTracks.slice();
+  target.railTrains = source.railTrains.slice();
+  target.railTrainCells = new Map(source.railTrainCells);
+  target.containers = source.containers.slice();
+  target.rebuildContainerMap();
+
+  markWorldReplaced(target, versions);
+  return target;
 }

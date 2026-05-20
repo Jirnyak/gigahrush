@@ -13,9 +13,11 @@ import {
 } from '../data/void_protocols';
 import { MONSTERS } from '../entities/monster';
 import { monsterSpr, Spr } from '../render/sprite_index';
+import { recordPlayerDamage } from './damage';
 import { addItem, removeItem } from './inventory';
 import { randomRPG, scaleMonsterHp, scaleMonsterSpeed } from './rpg';
 import { publishEvent, registerWorldEventObserver as observeWorldEvents } from './events';
+import { canSpawnEntityType, entitySpawnSlots } from './entity_limits';
 
 type ProtocolPhase = 'obtained' | 'started' | 'ended' | 'backlash' | 'rejected';
 
@@ -44,6 +46,7 @@ interface VoidProtocolTrace {
 
 const TRACE_CAP = 64;
 const MARK_CAP = 32;
+const VOID_PROTOCOL_RUMOR_ID = 'void_protocol_names';
 const ownedProtocols = new Set<string>();
 const cooldownUntil = new Map<string, number>();
 const activeMarks: VoidProtocolMark[] = [];
@@ -193,8 +196,14 @@ function publishProtocolEvent(
     data: {
       protocolId: def.id,
       protocolName: def.name,
+      action: phase,
+      publicText: line,
+      ruleText: def.ruleLine,
+      costText: def.costLine,
+      backlashCause: def.backlashCauseLine,
       targetKey,
       expiresAt: mark?.expiresAt,
+      rumorIds: phase === 'backlash' ? [VOID_PROTOCOL_RUMOR_ID] : undefined,
       ...extraData,
     },
   });
@@ -202,6 +211,36 @@ function publishProtocolEvent(
 
 function pushHud(state: GameState, line: string, color = '#8ff'): void {
   state.msgs.push(msg(line, state.time, color));
+}
+
+function applyProtocolPlayerDamage(
+  state: GameState,
+  player: Entity,
+  amount: number,
+  detail: string,
+  flash: number,
+): number {
+  if (player.hp === undefined || amount <= 0) return 0;
+  const before = player.hp;
+  player.hp = Math.max(1, player.hp - amount);
+  const applied = Math.max(0, before - player.hp);
+  if (applied > 0) {
+    state.dmgFlash = Math.max(state.dmgFlash, flash);
+    recordPlayerDamage(state, undefined, applied, detail, 'hazard');
+  }
+  return applied;
+}
+
+function obtainedProtocolLine(def: VoidProtocolDef): string {
+  return `Получен протокол: ${def.name}. ${def.ruleLine} ${def.costLine}`;
+}
+
+function acceptedProtocolLine(def: VoidProtocolDef, action: string): string {
+  return `Принято: ${def.name}. ${action} ${def.costLine} Отдача: ${def.backlashCauseLine}`;
+}
+
+function rejectedProtocolLine(def: VoidProtocolDef, reason: string): string {
+  return `Отклонено: ${def.name}. Причина: ${reason}. ${def.ruleLine}`;
 }
 
 function currentTarget(world: World, player: Entity, state: GameState, def: VoidProtocolDef): VoidProtocolMark {
@@ -370,6 +409,7 @@ function spawnProtocolMonster(
   y: number,
   level: number,
 ): void {
+  if (!canSpawnEntityType(entities, EntityType.MONSTER)) return;
   const def = MONSTERS[kind];
   const hp = Math.round(scaleMonsterHp(def.hp, level));
   entities.push({
@@ -445,7 +485,9 @@ function applyFalseSave(
     'П-46: сохранено локально. Не предъявлять лифту.',
     'П-46: запись принята до первого вопроса.',
   ];
-  for (let i = 0; i < lines.length; i++) {
+  const slots = entitySpawnSlots(entities, EntityType.ITEM_DROP, lines.length);
+  if (slots <= 0) return false;
+  for (let i = 0; i < slots; i++) {
     entities.push({
       id: nextEntityId.v++,
       type: EntityType.ITEM_DROP,
@@ -483,8 +525,7 @@ function applyPsiBacklash(world: World, player: Entity, entities: Entity[], stat
     hits++;
   }
   if (player.hp !== undefined) {
-    player.hp = Math.max(1, player.hp - 3);
-    state.dmgFlash = Math.max(state.dmgFlash, 0.25);
+    applyProtocolPlayerDamage(state, player, 3, 'Протокол ПСИ-отдачи прошел через вас: -3', 0.25);
   }
   return hits > 0 || player.hp !== undefined;
 }
@@ -562,8 +603,7 @@ function applyBorrowedLightBacklash(
   mark: VoidProtocolMark,
 ): void {
   if (player.hp !== undefined) {
-    player.hp = Math.max(1, player.hp - 2);
-    state.dmgFlash = Math.max(state.dmgFlash, 0.2);
+    applyProtocolPlayerDamage(state, player, 2, 'Отдача заемного света: -2', 0.2);
   }
   for (const e of entities) {
     if (!e.alive || e.id === player.id) continue;
@@ -594,6 +634,11 @@ function resolveBacklash(
   def: VoidProtocolDef,
   mark: VoidProtocolMark,
 ): void {
+  publishProtocolEvent(state, def, 'backlash', def.backlashLine, mark, 4, [], {
+    cause: def.backlashCauseLine,
+  });
+  pushHud(state, `${def.backlashLine} ${def.backlashCauseLine}`, '#f8c');
+
   switch (def.effect) {
     case 'false_save':
       spawnProtocolMonster(entities, nextEntityId, MonsterKind.PARAGRAPH, 'Ложная строка', mark.x, mark.y + 1, nearestLevel(world, mark));
@@ -612,8 +657,7 @@ function resolveBacklash(
       break;
     case 'inverted_access':
       if (player.hp !== undefined) {
-        player.hp = Math.max(1, player.hp - 1);
-        state.dmgFlash = Math.max(state.dmgFlash, 0.15);
+        applyProtocolPlayerDamage(state, player, 1, 'Отдача обратного допуска дернула руку: -1', 0.15);
       }
       break;
     case 'borrowed_light':
@@ -621,8 +665,7 @@ function resolveBacklash(
       break;
     case 'psi_backlash':
       if (player.hp !== undefined) {
-        player.hp = Math.max(1, player.hp - 4);
-        state.dmgFlash = Math.max(state.dmgFlash, 0.35);
+        applyProtocolPlayerDamage(state, player, 4, 'ОТДАЧА: ПСИ-импульс вернулся вторым ударом: -4', 0.35);
       }
       break;
     case 'floor_name_corruption': {
@@ -631,9 +674,6 @@ function resolveBacklash(
       break;
     }
   }
-
-  publishProtocolEvent(state, def, 'backlash', def.backlashLine, mark, 4);
-  pushHud(state, def.backlashLine, '#f8c');
 }
 
 function endMark(world: World, state: GameState, mark: VoidProtocolMark): void {
@@ -659,8 +699,9 @@ export function grantVoidProtocol(state: GameState, protocolId: string, source =
   const def = getVoidProtocolDef(protocolId);
   if (!def || ownedProtocols.has(protocolId)) return false;
   ownedProtocols.add(protocolId);
-  publishProtocolEvent(state, def, 'obtained', `Получен протокол: ${def.name}`, null, 3);
-  pushHud(state, `Получен протокол: ${def.name}`, '#8ff');
+  const line = obtainedProtocolLine(def);
+  publishProtocolEvent(state, def, 'obtained', line, null, 3, [], { source });
+  pushHud(state, line, '#8ff');
   pushTrace(state, def.id, 'obtained', source, `${state.currentFloor}:grant:${source}`);
   return true;
 }
@@ -678,8 +719,10 @@ export function applyVoidProtocol(
   if (!ownedProtocols.has(protocolId)) grantVoidProtocol(state, protocolId, 'auto');
   const cooldown = cooldownUntil.get(protocolId) ?? 0;
   if (cooldown > state.time) {
-    publishProtocolEvent(state, def, 'rejected', `Кулдаун ${Math.ceil(cooldown - state.time)}с`, null, 2);
-    pushHud(state, `[VOID] ${def.name}: кулдаун ${Math.ceil(cooldown - state.time)}с`, '#888');
+    const seconds = Math.ceil(cooldown - state.time);
+    const line = rejectedProtocolLine(def, `кулдаун ${seconds}с`);
+    publishProtocolEvent(state, def, 'rejected', line, null, 2, [], { rejectReason: 'cooldown', cooldownRemainingSec: seconds });
+    pushHud(state, `[VOID] ${line}`, '#888');
     return false;
   }
 
@@ -713,16 +756,18 @@ export function applyVoidProtocol(
   }
 
   if (!applied) {
-    publishProtocolEvent(state, def, 'rejected', 'Нет локальной цели', mark, 2);
-    pushHud(state, `[VOID] ${def.name}: нет локальной цели`, '#888');
+    const line = rejectedProtocolLine(def, 'нет локальной цели');
+    publishProtocolEvent(state, def, 'rejected', line, mark, 2, [], { rejectReason: 'invalid_target' });
+    pushHud(state, `[VOID] ${line}`, '#888');
     return false;
   }
 
   activeMarks.push(mark);
   if (activeMarks.length > MARK_CAP) activeMarks.splice(0, activeMarks.length - MARK_CAP);
   cooldownUntil.set(protocolId, state.time + def.cooldownSec);
-  publishProtocolEvent(state, def, 'started', def.startLine, mark, 4);
-  pushHud(state, def.startLine, '#8ff');
+  const line = acceptedProtocolLine(def, def.startLine);
+  publishProtocolEvent(state, def, 'started', line, mark, 4, [], { resultLine: def.startLine });
+  pushHud(state, line, '#8ff');
   resolveBacklash(world, player, entities, state, nextEntityId, def, mark);
   return true;
 }
@@ -814,8 +859,12 @@ function startSpiritTollChoice(
   grantVoidProtocol(state, def.id, 'protocol_chamber_p46');
   const mark = markFromEvent(ctx, state, event, def);
   pushActiveMark(state, def, mark);
-  publishSpiritTollChoice(state, def, 'started', choice, line, mark, severity, extraData);
-  pushHud(state, line, severity >= 4 ? '#8ff' : '#8cf');
+  const publicLine = acceptedProtocolLine(def, line);
+  publishSpiritTollChoice(state, def, 'started', choice, publicLine, mark, severity, {
+    resultLine: line,
+    ...extraData,
+  });
+  pushHud(state, publicLine, severity >= 4 ? '#8ff' : '#8cf');
   return mark;
 }
 
@@ -831,8 +880,8 @@ function paySpiritTollRule(ctx: VoidSpiritTollChamberContext, state: GameState, 
   const paid = paySpiritToll(player);
   const mark = markFromEvent(ctx, state, event, def);
   if (!paid) {
-    const line = 'П-46 не нашла патронов или денег для пошлины.';
-    publishSpiritTollChoice(state, def, 'rejected', PAY_TAG, line, mark, 2, { outcome: 'missing_payment' });
+    const line = rejectedProtocolLine(def, 'не хватает патронов или денег для пошлины');
+    publishSpiritTollChoice(state, def, 'rejected', PAY_TAG, line, mark, 2, { outcome: 'missing_payment', rejectReason: 'missing_payment' });
     pushHud(state, line, '#888');
     return;
   }
@@ -854,15 +903,15 @@ function breakSpiritTollRule(ctx: VoidSpiritTollChamberContext, state: GameState
     rewardItemId: 'void_spike',
     cost: 'backlash_fight',
   });
-  spawnTollBacklash(ctx, mark, MonsterKind.PARAGRAPH, 'Параграф сорванной пошлины');
-  if (player.hp !== undefined) {
-    player.hp = Math.max(1, player.hp - 2);
-    state.dmgFlash = Math.max(state.dmgFlash, 0.2);
-  }
   publishSpiritTollChoice(state, def, 'backlash', BREAK_TAG, def.backlashLine, mark, 4, {
+    cause: def.backlashCauseLine,
     spawned: 'paragraph',
   });
   pushHud(state, def.backlashLine, '#f8c');
+  spawnTollBacklash(ctx, mark, MonsterKind.PARAGRAPH, 'Параграф сорванной пошлины');
+  if (player.hp !== undefined) {
+    applyProtocolPlayerDamage(state, player, 2, 'Отдача сорванной пошлины закрыла вход: -2', 0.2);
+  }
 }
 
 function rerouteSpiritTollRule(ctx: VoidSpiritTollChamberContext, state: GameState, event: WorldEvent, def: VoidProtocolDef): void {
@@ -893,15 +942,15 @@ function exploitSpiritTollRule(ctx: VoidSpiritTollChamberContext, state: GameSta
   );
   if (collectorAlive) {
     setDoor(ctx, ctx.entranceDoorIdx, DoorState.HERMETIC_CLOSED, 12);
-    spawnTollBacklash(ctx, mark, MonsterKind.SPIRIT, 'Счетчик подмены');
-    if (player.hp !== undefined) {
-      player.hp = Math.max(1, player.hp - 2);
-      state.dmgFlash = Math.max(state.dmgFlash, 0.22);
-    }
     publishSpiritTollChoice(state, def, 'backlash', EXPLOIT_TAG, def.backlashLine, mark, 4, {
+      cause: def.backlashCauseLine,
       spawned: 'spirit',
     });
     pushHud(state, def.backlashLine, '#f8c');
+    spawnTollBacklash(ctx, mark, MonsterKind.SPIRIT, 'Счетчик подмены');
+    if (player.hp !== undefined) {
+      applyProtocolPlayerDamage(state, player, 2, 'Отдача подменной квитанции: -2', 0.22);
+    }
     return;
   }
   setDoor(ctx, ctx.tollDoorIdx, DoorState.OPEN, 0);
@@ -938,19 +987,22 @@ function consumeBorrowedLightRule(ctx: VoidRuleChamberContext, state: GameState,
 
   applyBorrowedLight(ctx.world, mark);
   markBorrowedLightReceipt(ctx.world, mark, false);
-  publishProtocolEvent(state, def, 'started', def.startLine, mark, 4, [CONSUME_TAG], {
+  const accepted = acceptedProtocolLine(def, def.startLine);
+  publishProtocolEvent(state, def, 'started', accepted, mark, 4, [CONSUME_TAG], {
     branch: CONSUME_TAG,
     rewardItemIds: ['psi_stabilizer', 'ammo_energy'],
     cost: 'door_psi_debt',
+    resultLine: def.startLine,
   });
-  pushHud(state, def.startLine, '#8ff');
+  pushHud(state, accepted, '#8ff');
 
-  applyBorrowedLightBacklash(ctx.world, player, ctx.entities, state, mark);
   publishProtocolEvent(state, def, 'backlash', def.backlashLine, mark, 4, [CONSUME_TAG], {
     branch: CONSUME_TAG,
+    cause: def.backlashCauseLine,
     debt: 'local_door_closure',
   });
   pushHud(state, def.backlashLine, '#f8c');
+  applyBorrowedLightBacklash(ctx.world, player, ctx.entities, state, mark);
 }
 
 function keepBorrowedLightRule(ctx: VoidRuleChamberContext, state: GameState, event: WorldEvent): void {
@@ -961,11 +1013,13 @@ function keepBorrowedLightRule(ctx: VoidRuleChamberContext, state: GameState, ev
   const mark = markFromEvent(ctx, state, event, def);
   keepBorrowedLightEvidence(ctx.world, mark);
   const line = 'Заемный свет оставлен уликой. Награды нет, двери не берут проценты.';
-  publishProtocolEvent(state, def, 'started', line, mark, 3, [KEEP_TAG, 'evidence'], {
+  const accepted = acceptedProtocolLine(def, line);
+  publishProtocolEvent(state, def, 'started', accepted, mark, 3, [KEEP_TAG, 'evidence'], {
     branch: KEEP_TAG,
     counterplay: 'evidence_lamp_open_doors',
+    resultLine: line,
   });
-  pushHud(state, line, '#8cf');
+  pushHud(state, accepted, '#8cf');
 }
 
 function handleVoidLocalRuleEvent(state: GameState, event: WorldEvent): void {

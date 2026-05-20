@@ -1,15 +1,11 @@
 import { FloorLevel, RoomType, ZoneFaction } from '../core/types';
 
-export interface NpcPopulationBucket {
+export interface NpcPopulationProfile {
   initial: number;
   softCap: number;
-  groupMin: number;
-  groupMax: number;
   refillMin: number;
   refillMax: number;
   refillDeficitDivisor: number;
-  spreadRadius: number;
-  scatterShare: number;
   noiseScale: number;
   noiseStrength: number;
   openWeight: number;
@@ -17,7 +13,7 @@ export interface NpcPopulationBucket {
   zoneWeights: Partial<Record<ZoneFaction, number>>;
 }
 
-export interface MonsterPopulationBucket {
+export interface MonsterPopulationProfile {
   initial: number;
   softCap: number;
   batchMin: number;
@@ -25,7 +21,11 @@ export interface MonsterPopulationBucket {
   refillDeficitDivisor: number;
   intervalSec: number;
   reinforcementBudget: number;
-  geometryBias: number;
+  noiseScale: number;
+  noiseStrength: number;
+  openWeight: number;
+  roomWeights?: Partial<Record<RoomType, number>>;
+  zoneWeights?: Partial<Record<ZoneFaction, number>>;
 }
 
 export const KVARTIRY_POPULATION_PROFILE = {
@@ -35,15 +35,11 @@ export const KVARTIRY_POPULATION_PROFILE = {
   citizens: {
     initial: 3000,
     softCap: 6000,
-    groupMin: 40,
-    groupMax: 180,
     refillMin: 60,
     refillMax: 180,
     refillDeficitDivisor: 20,
-    spreadRadius: 10,
-    scatterShare: 0.86,
     noiseScale: 96,
-    noiseStrength: 0.28,
+    noiseStrength: 0.2,
     openWeight: 0.95,
     roomWeights: {
       [RoomType.LIVING]: 1.75,
@@ -66,15 +62,11 @@ export const KVARTIRY_POPULATION_PROFILE = {
   wild: {
     initial: 1700,
     softCap: 3200,
-    groupMin: 35,
-    groupMax: 160,
     refillMin: 50,
     refillMax: 160,
     refillDeficitDivisor: 18,
-    spreadRadius: 12,
-    scatterShare: 0.72,
     noiseScale: 72,
-    noiseStrength: 0.42,
+    noiseStrength: 0.26,
     openWeight: 1.15,
     roomWeights: {
       [RoomType.CORRIDOR]: 1.65,
@@ -97,15 +89,11 @@ export const KVARTIRY_POPULATION_PROFILE = {
   liquidators: {
     initial: 400,
     softCap: 800,
-    groupMin: 10,
-    groupMax: 60,
     refillMin: 10,
     refillMax: 50,
     refillDeficitDivisor: 16,
-    spreadRadius: 8,
-    scatterShare: 0.58,
     noiseScale: 128,
-    noiseStrength: 0.32,
+    noiseStrength: 0.18,
     openWeight: 1.1,
     roomWeights: {
       [RoomType.HQ]: 2.6,
@@ -147,7 +135,19 @@ export const HELL_POPULATION_PROFILE = {
     refillDeficitDivisor: 80,
     intervalSec: 1.1,
     reinforcementBudget: 6200,
-    geometryBias: 0.45,
+    noiseScale: 160,
+    noiseStrength: 0.05,
+    openWeight: 1.0,
+    roomWeights: {
+      [RoomType.HQ]: 0.9,
+      [RoomType.STORAGE]: 0.9,
+    },
+    zoneWeights: {
+      [ZoneFaction.WILD]: 1.06,
+      [ZoneFaction.CULTIST]: 1.03,
+      [ZoneFaction.LIQUIDATOR]: 0.97,
+      [ZoneFaction.CITIZEN]: 1.0,
+    },
   },
   cultists: {
     initial: 700,
@@ -157,7 +157,19 @@ export const HELL_POPULATION_PROFILE = {
     refillDeficitDivisor: 55,
     intervalSec: 3.2,
     reinforcementBudget: 1100,
-    geometryBias: 0.55,
+    noiseScale: 128,
+    noiseStrength: 0.08,
+    openWeight: 1.0,
+    roomWeights: {
+      [RoomType.HQ]: 1.05,
+      [RoomType.STORAGE]: 0.95,
+    },
+    zoneWeights: {
+      [ZoneFaction.CULTIST]: 1.24,
+      [ZoneFaction.WILD]: 1.04,
+      [ZoneFaction.LIQUIDATOR]: 0.86,
+      [ZoneFaction.CITIZEN]: 0.95,
+    },
   },
   liquidators: {
     initial: 100,
@@ -167,7 +179,19 @@ export const HELL_POPULATION_PROFILE = {
     refillDeficitDivisor: 30,
     intervalSec: 7.0,
     reinforcementBudget: 220,
-    geometryBias: 0.45,
+    noiseScale: 144,
+    noiseStrength: 0.06,
+    openWeight: 1.0,
+    roomWeights: {
+      [RoomType.HQ]: 1.08,
+      [RoomType.STORAGE]: 0.95,
+    },
+    zoneWeights: {
+      [ZoneFaction.LIQUIDATOR]: 1.28,
+      [ZoneFaction.CULTIST]: 1.08,
+      [ZoneFaction.WILD]: 0.9,
+      [ZoneFaction.CITIZEN]: 0.96,
+    },
   },
 } as const;
 
@@ -178,15 +202,189 @@ export const VOID_POPULATION_PROFILE = {
   lootDrops: 160,
 } as const;
 
-export const PROCEDURAL_POPULATION_PROFILE = {
-  id: 'procedural_lively',
-  npcBase: 3500,
-  npcPerDanger: 300,
-  npcCap: 5000,
-  monsterBase: 350,
-  monsterPerDanger: 180,
-  monsterCap: 1500,
-  deepFloorMonsterBonus: 200,
-  industrialMonsterBonus: 90,
-  anomalyPressureMonsterBonus: 80,
+export type ProceduralPopulationProfileId = 'normal' | 'highDensity';
+export type ProceduralPopulationBand = 'shallow' | 'middle' | 'deep' | 'voidRoute';
+
+export interface ProceduralPopulationScale {
+  base: number;
+  perDanger: number;
+  perAnomalyPressure: number;
+  bandBonus: Readonly<Record<ProceduralPopulationBand, number>>;
+  cap: number;
+}
+
+export interface ProceduralMonsterPopulationScale extends ProceduralPopulationScale {
+  industrialBonus: number;
+}
+
+export interface ProceduralPopulationProfile {
+  id: ProceduralPopulationProfileId;
+  npcs: ProceduralPopulationScale;
+  monsters: ProceduralMonsterPopulationScale;
+}
+
+export interface ProceduralPopulationBudgetInput {
+  z: number;
+  danger: number;
+  anomalyPressure: number;
+  industrial: boolean;
+  npcAllowed: boolean;
+  profileId: ProceduralPopulationProfileId;
+}
+
+export interface ProceduralPopulationBudget {
+  profileId: ProceduralPopulationProfileId;
+  band: ProceduralPopulationBand;
+  npcs: number;
+  monsters: number;
+  npcCap: number;
+  monsterCap: number;
+}
+
+export const PROCEDURAL_HIGH_DENSITY_ANOMALIES = ['zombie_apocalypse'] as const;
+
+export const PROCEDURAL_POPULATION_PROFILES = {
+  normal: {
+    id: 'normal',
+    npcs: {
+      base: 260,
+      perDanger: 150,
+      perAnomalyPressure: 80,
+      bandBonus: {
+        shallow: 0,
+        middle: 120,
+        deep: 220,
+        voidRoute: 0,
+      },
+      cap: 1250,
+    },
+    monsters: {
+      base: 120,
+      perDanger: 110,
+      perAnomalyPressure: 70,
+      bandBonus: {
+        shallow: 0,
+        middle: 80,
+        deep: 140,
+        voidRoute: 220,
+      },
+      industrialBonus: 70,
+      cap: 1100,
+    },
+  },
+  highDensity: {
+    id: 'highDensity',
+    npcs: {
+      base: 3400,
+      perDanger: 180,
+      perAnomalyPressure: 140,
+      bandBonus: {
+        shallow: 0,
+        middle: 160,
+        deep: 300,
+        voidRoute: 0,
+      },
+      cap: 5000,
+    },
+    monsters: {
+      base: 260,
+      perDanger: 130,
+      perAnomalyPressure: 90,
+      bandBonus: {
+        shallow: 0,
+        middle: 80,
+        deep: 160,
+        voidRoute: 240,
+      },
+      industrialBonus: 80,
+      cap: 1500,
+    },
+  },
+} as const satisfies Readonly<Record<ProceduralPopulationProfileId, ProceduralPopulationProfile>>;
+
+export const PROCEDURAL_POPULATION_PROFILE = PROCEDURAL_POPULATION_PROFILES.normal;
+
+export function proceduralPopulationProfileId(anomalyId: string): ProceduralPopulationProfileId {
+  for (const id of PROCEDURAL_HIGH_DENSITY_ANOMALIES) {
+    if (id === anomalyId) return 'highDensity';
+  }
+  return 'normal';
+}
+
+export function proceduralAnomalyPressure(anomalyId: string): number {
+  if (anomalyId === 'samosbor_seed' || anomalyId === 'wall_snake' || anomalyId === 'section_shift' || anomalyId === 'zombie_apocalypse') return 2;
+  if (
+    anomalyId === 'smog' ||
+    anomalyId === 'hladon' ||
+    anomalyId === 'cement_memory' ||
+    anomalyId === 'conway_life' ||
+    anomalyId === 'rail_trains'
+  ) return 1;
+  return 0;
+}
+
+export function proceduralPopulationBand(z: number): ProceduralPopulationBand {
+  if (z >= 36) return 'voidRoute';
+  const depth = Math.abs(z);
+  if (depth >= 25) return 'deep';
+  if (depth >= 13) return 'middle';
+  return 'shallow';
+}
+
+function scaledPopulationCount(
+  scale: ProceduralPopulationScale,
+  band: ProceduralPopulationBand,
+  danger: number,
+  anomalyPressure: number,
+): number {
+  const boundedDanger = Math.max(1, Math.min(5, Math.round(danger)));
+  const boundedPressure = Math.max(0, Math.min(4, Math.round(anomalyPressure)));
+  const raw = scale.base +
+    boundedDanger * scale.perDanger +
+    boundedPressure * scale.perAnomalyPressure +
+    scale.bandBonus[band];
+  return Math.min(scale.cap, Math.max(0, Math.round(raw)));
+}
+
+export function proceduralPopulationBudget(input: ProceduralPopulationBudgetInput): ProceduralPopulationBudget {
+  const profile = PROCEDURAL_POPULATION_PROFILES[input.profileId];
+  const band = proceduralPopulationBand(input.z);
+  const monsterRaw = scaledPopulationCount(profile.monsters, band, input.danger, input.anomalyPressure);
+  const monsters = Math.min(profile.monsters.cap, monsterRaw + (input.industrial ? profile.monsters.industrialBonus : 0));
+  return {
+    profileId: profile.id,
+    band,
+    npcs: input.npcAllowed ? scaledPopulationCount(profile.npcs, band, input.danger, input.anomalyPressure) : 0,
+    monsters,
+    npcCap: profile.npcs.cap,
+    monsterCap: profile.monsters.cap,
+  };
+}
+
+export const AI_LOD_SCHEDULER_PROFILE = {
+  id: 'ai_hot_warm_cold',
+  hotRadius: 36,
+  warmRadius: 128,
+  recentDamageHotSec: 4.0,
+  maxAccumulatedDt: 1.25,
+  activeAttackerHotRange: 8,
+  hotPromotionCaps: {
+    activeAttackers: 64,
+    projectileOwners: 16,
+    recentlyDamaged: 24,
+  },
+  intervals: {
+    warm: {
+      monster: { base: 0.35, spread: 0.25 },
+      npc: { base: 0.55, spread: 0.35 },
+      traveler: { base: 0.7, spread: 0.4 },
+      combat: { base: 0.24, spread: 0.18 },
+    },
+    cold: {
+      monster: { base: 1.45, spread: 0.85 },
+      npc: { base: 2.35, spread: 1.25 },
+      traveler: { base: 2.8, spread: 1.4 },
+      combat: { base: 0.85, spread: 0.45 },
+    },
+  },
 } as const;

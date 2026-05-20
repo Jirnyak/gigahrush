@@ -1,8 +1,8 @@
-# Design Floor: Коллекторы
+# Story Anchor Brief: Коллекторы
 
-Status: planning artifact for expanded design-floor version. Current code already has `FloorLevel.MAINTENANCE`; README remains source of truth.
+Status: historical expansion brief for the existing story anchor. Current route stop: `FloorLevel.MAINTENANCE` at `z=20`. There is no shipped design-floor route id `collectors`; README and `src/data/procedural_floors.ts` remain source of truth.
 
-Future route id: `collectors`. Future anchor: `z=20`. Existing reference: `src/gen/maintenance/`.
+Existing generator reference: `src/gen/maintenance/`. Planning sections below describe possible route-scale expansion, not shipped design-floor route data.
 
 ## Role
 
@@ -54,4 +54,3 @@ Collectors samosbor is pressure and water: valves shut, rooms flood, steam block
 - One water/pressure choice changes another floor's scarcity or access.
 - Water hazards are bounded and visible.
 - Floor remains navigable after samosbor.
-

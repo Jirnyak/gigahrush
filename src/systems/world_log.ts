@@ -43,6 +43,7 @@ function monsterName(kind?: MonsterKind): string {
     case MonsterKind.SPIRIT: return 'дух';
     case MonsterKind.ROBOT: return 'робот';
     case MonsterKind.KOSTOREZ: return 'косторез';
+    case MonsterKind.SAFEGUARD: return 'сейфгард';
     default: return 'монстр';
   }
 }
@@ -58,7 +59,18 @@ function samosborWarningText(e: WorldEvent): string {
     return `Последствие самосбора: ${title}${e.itemName ? `, ${e.itemName}` : ''}.`;
   }
   const warning = e.data?.warning;
-  if (typeof warning === 'string' && warning.length > 0) return warning;
+  const signals = e.data?.signals;
+  if (typeof warning === 'string' && warning.length > 0) {
+    if (signals && typeof signals === 'object' && !Array.isArray(signals)) {
+      const signalMap = signals as Record<string, unknown>;
+      const audio = typeof signalMap.audio === 'string' ? signalMap.audio : '';
+      const map = typeof signalMap.map === 'string' ? signalMap.map : '';
+      const npc = typeof signalMap.npc === 'string' ? signalMap.npc : '';
+      const stack = [warning, audio, map, npc].filter(line => line.length > 0);
+      if (stack.length > 1) return stack.join(' / ');
+    }
+    return warning;
+  }
   const floorName = typeof e.data?.floorName === 'string' ? e.data.floorName : '';
   const variantName = typeof e.data?.variantName === 'string' ? e.data.variantName : '';
   const zone = e.zoneId !== undefined ? `зона ${e.zoneId + 1}` : 'локальная зона';
@@ -114,6 +126,20 @@ function pneumomailText(e: WorldEvent): string {
   return 'Пневмопочта: событие в журнале.';
 }
 
+function shelterTallyText(e: WorldEvent): string {
+  const target = e.targetName ? ` -> ${e.targetName}` : '';
+  const consequence = typeof e.data?.consequence === 'string' ? e.data.consequence : '';
+  if (e.tags.includes('forgery')) return `Ведомость укрытых подделана${target}. ${consequence}`;
+  if (e.tags.includes('submit')) return `Ведомость укрытых сдана${target}. ${consequence}`;
+  if (e.tags.includes('handoff')) return `Ведомость укрытых передана${target}. ${consequence}`;
+  if (e.tags.includes('trade')) return `Ведомость укрытых продана${target}. ${consequence}`;
+  if (e.tags.includes('hide')) return `Ведомость укрытых спрятана${target}. ${consequence}`;
+  if (e.tags.includes('theft') || e.tags.includes('stolen')) return `Ведомость укрытых украдена${target}. ${consequence}`;
+  if (e.tags.includes('admit')) return `Истотит: лишняя строка у гермы вписана${target}. ${consequence}`;
+  if (e.tags.includes('refuse')) return `Истотит: строка у гермы осталась пустой${target}. ${consequence}`;
+  return `Ведомость укрытых обработана${target}. ${consequence}`;
+}
+
 function eventText(e: WorldEvent): string {
   const pneumomail = pneumomailText(e);
   if (pneumomail) return pneumomail;
@@ -128,6 +154,8 @@ function eventText(e: WorldEvent): string {
       return `Зона ${e.zoneId !== undefined ? e.zoneId + 1 : '?'} под самосбором. Карта устарела.`;
     case 'samosbor_ended':
       return 'Отбой самосбора. Проверьте карту и двери.';
+    case 'shelter_tally_handled':
+      return shelterTallyText(e);
     case 'hermodoor_borer_detected':
       return `Гермоточильщик у двери: ${String(e.data?.roomName ?? 'укрытие')}. Есть время среагировать.`;
     case 'hermodoor_borer_damage':
@@ -155,7 +183,11 @@ function eventText(e: WorldEvent): string {
         ? `${e.actorName ?? 'Косторез'} срезал бронелист.`
         : `${e.actorName ?? 'Косторез'} провел режущий удар.`;
     case 'monster_escaped':
-      return `${e.targetName ?? 'Цель'} ушла из-под замаха Костореза.`;
+      return `${e.targetName ?? 'Цель'} ушла из-под замаха ${monsterName(e.monsterKind)}.`;
+    case 'net_terminal_hack_failed':
+      return e.tags.includes('safeguard_spawned')
+        ? 'НЕТ-терминал отклонил взлом. Сейфгард вышел на отказ.'
+        : 'НЕТ-терминал отклонил взлом. Белый след уже отмечен.';
     case 'metro_route_taken':
       return `Метро: ${String(e.data?.routeLabel ?? 'маршрут')} -> ${String(e.data?.destinationLabel ?? 'остановка')}.`;
     case 'metro_wrong_stop':
@@ -166,6 +198,8 @@ function eventText(e: WorldEvent): string {
       return `Поезд: выход из ${String(e.data?.trainLabel ?? 'состава')}.`;
     case 'rail_train_crush':
       return `Поезд задавил: ${e.actorName ?? 'цель'}.`;
+    case 'emergency_panel_used':
+      return `Аварийный щиток: ${String(e.data?.action ?? 'контур')} в зоне ${e.zoneId !== undefined ? e.zoneId + 1 : '?'}.`;
     case 'rumor_observed':
       if (e.tags.includes('false_safe_block')) return 'Тихий блок раскрыт: нет сирены, есть культовая метка.';
       return `${e.actorName ?? 'Кто-то'} заметил слух.`;
@@ -244,6 +278,7 @@ function eventText(e: WorldEvent): string {
       if (e.tags.includes('false_safe_block')) return `Чужой запас тихого блока взят: ${e.itemName ?? e.itemId ?? 'предмет'}. Метка активна.`;
       if (e.tags.includes('quarantine')) return `Карантин нарушен: ${e.itemName ?? e.itemId ?? 'предмет'} вынесли из ${containerName(e)}.`;
       if (e.tags.includes('witnessed')) return `Кражу заметили: ${e.itemName ?? e.itemId ?? 'предмет'} из ${containerName(e)}.`;
+      if (e.tags.includes('audit') && e.data?.auditOnly) return `Ревизия выявила кражу: ${e.itemName ?? e.itemId ?? 'предмет'} из ${containerName(e)}.`;
       if (e.tags.includes('audit')) return `Кража попадёт в ревизию: ${e.itemName ?? e.itemId ?? 'предмет'} из ${containerName(e)}.`;
       return `Кража: ${e.itemName ?? e.itemId ?? 'предмет'}.`;
     case 'item_deposited':

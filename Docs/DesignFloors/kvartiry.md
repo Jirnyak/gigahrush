@@ -1,8 +1,8 @@
-# Design Floor: Квартиры
+# Story Anchor Brief: Квартиры
 
-Status: planning artifact for expanded design-floor version. Current code already has `FloorLevel.KVARTIRY`; README remains source of truth.
+Status: historical expansion brief for the existing story anchor. Current route stop: `FloorLevel.KVARTIRY` at `z=-12`. There is no shipped design-floor route id `kvartiry`; README and `src/data/procedural_floors.ts` remain source of truth.
 
-Future route id: `kvartiry`. Future anchor: `z=-12`. Existing reference: `src/gen/kvartiry/`.
+Existing generator reference: `src/gen/kvartiry/`. Planning sections below describe possible route-scale expansion, not shipped design-floor route data.
 
 ## Role
 
@@ -53,4 +53,3 @@ Kvartiry aftermath should be social: missing neighbor, container accusation, sea
 - One social conflict has at least three outcomes.
 - At least one route to another design floor is changed by a Kvartiry decision.
 - NPC pressure stays bounded by room/zone cooldowns.
-

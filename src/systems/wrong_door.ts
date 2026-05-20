@@ -7,6 +7,8 @@ import {
 import { World } from '../core/world';
 import { publishEvent } from './events';
 
+export { ContainerKind, Faction, FloorLevel, Occupation } from '../core/types';
+
 export const WRONG_DOOR_MIN_DIST2 = 18 * 18;
 export const WRONG_DOOR_MAX_DIST2 = 96 * 96;
 
@@ -16,6 +18,7 @@ const WRONG_DOOR_USED_COOLDOWN = 180;
 const WRONG_DOOR_EXPIRE_COOLDOWN = 45;
 const WRONG_DOOR_TARGET_DOOR_TIMER = 18;
 const WRONG_DOOR_MAX_SOURCES = 10;
+const WRONG_DOOR_WAIT_THRESHOLD = 12;
 
 export interface WrongDoorRouteOption {
   sourceIdx: number;
@@ -112,6 +115,17 @@ export function chooseWrongDoorRouteOption(
     }
   }
   return best;
+}
+
+export function wrongDoorCueSecondsLeft(cue: Pick<WrongDoorMapCue, 'expiresAt'>, now: number): number {
+  return Math.max(0, Math.ceil(cue.expiresAt - now));
+}
+
+export function wrongDoorCueActionLabel(cue: Pick<WrongDoorMapCue, 'expiresAt'>, now: number): string {
+  const secondsLeft = wrongDoorCueSecondsLeft(cue, now);
+  if (secondsLeft <= 0) return 'СБРОШЕНО';
+  if (secondsLeft <= WRONG_DOOR_WAIT_THRESHOLD) return 'ЖДИ';
+  return 'НЕ ВЕРЬ';
 }
 
 function doorRoomId(door: { roomA: number; roomB: number }): number {
@@ -260,6 +274,12 @@ function publishWrongDoorEvent(
       targetY,
       expiresIn: Math.max(0, Math.round(remap.expiresAt - state.time)),
       createdAt: remap.createdAt,
+      choices: ['distrust_route', 'risk_shortcut'],
+      counterplay: phase === 'created'
+        ? 'check_door_number_or_wait_for_expiry'
+        : phase === 'used'
+          ? 'shortcut_taken_once_trace_recorded'
+          : 'route_distrusted_or_expired',
     },
   });
 }

@@ -20,6 +20,20 @@ export const DEF: MonsterDef = {
   floors: [FloorLevel.MAINTENANCE, FloorLevel.HELL],
   counterplay: 'Не входите в прямой сектор: сначала снимите охрану, затем бейте из-за углов между залпами. Стены и колонны режут огненный темп.',
   lootHint: 'жирный металл, командная органика, энергоячейка, закупоренный голос',
+  boss: {
+    warningLine: 'Манкобус развел пушки. Уберите охрану, держите колонну и бейте только между залпами.',
+    windupLine: 'Манкобус набирает жирный залп: выходите из прямого сектора за угол.',
+    interruptLine: 'Залп Манкобуса ушел в бетон: укрытие сработало.',
+    deathCause: 'Манкобус поймал вас в прямом секторе залпа',
+    counterplay: 'guard_clear_corner_reload_window',
+    windupSec: 1.05,
+    range: 14,
+    minRange: 2.2,
+    phases: [
+      { hpPct: 0.66, tag: 'guards_thinning', line: 'Манкобус потерял строй охраны и стреляет реже, но тяжелее. Не стойте на оси пушек.' },
+      { hpPct: 0.33, tag: 'last_barrage', line: 'Манкобус хрипит перед последней третью. Отход доступен: угол важнее добивания.' },
+    ],
+  },
 };
 
 export function generateSprite(): Uint32Array {

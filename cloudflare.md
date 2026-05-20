@@ -8,9 +8,9 @@
 - `functions/api/net/event.ts` - игровые события: `samosbor`, `death`.
 - `functions/api/net/chat.ts` - короткий общий текстовый терминал.
 - `functions/api/net/market.ts` - глобальная НЕТ-биржа: компактные импульсы игроков и агрегированный snapshot котировок.
-- `cloudflare/d1/net_sphere.sql` - D1-схема.
-- `cloudflare/d1/net_sphere_names.sql` - миграция для ника и человекочитаемой сводки событий.
-- `cloudflare/d1/net_sphere_market.sql` - миграция для таблиц НЕТ-биржи.
+- `cloudflare/d1/net_sphere.sql` - каноническая D1-схема для свежей базы.
+- `cloudflare/d1/net_sphere_names.sql` - историческая guarded-миграция для ника и человекочитаемой сводки событий.
+- `cloudflare/d1/net_sphere_market.sql` - историческая идемпотентная миграция для опциональных таблиц НЕТ-биржи.
 
 Клиент остается без runtime-зависимостей: только `fetch` к same-origin `/api/net/*`.
 
@@ -22,7 +22,7 @@
 Build command: npm run build
 ```
 
-Статика обслуживается через `assets.directory` в `wrangler.jsonc`, а API через `functions/worker.ts`.
+`npm run build` перезаписывает `dist/`. Статика обслуживается через `assets.directory` в `wrangler.jsonc`, а API через `functions/worker.ts`.
 В репозитории есть `.node-version` с Node `22.16.0`; это фиксирует build image на версии, совместимой с Vite 7 и Wrangler 4, даже если проект в Cloudflare использует старые настройки.
 
 2. Один раз залогинь Wrangler на этой машине:
@@ -37,7 +37,7 @@ npx wrangler login
 npm run cf:setup
 ```
 
-Скрипт сам создаст или найдет D1 `gigahrush-net`, пропишет binding `GIGA_NET` в `wrangler.jsonc` с реальным `database_id`, применит `cloudflare/d1/net_sphere.sql` и добавит недостающие колонки/индекс для старых баз через защищенные миграции.
+Скрипт требует Cloudflare auth/Wrangler, сам создаст или найдет D1 `gigahrush-net`, пропишет binding `GIGA_NET` в `wrangler.jsonc` с реальным `database_id` и применит все SQL-файлы из `cloudflare/d1/` в фиксированном порядке ниже. `net_sphere_names.sql` исполняется через PRAGMA guards, чтобы старые базы получили недостающие колонки, а свежие базы не падали на duplicate column.
 
 4. Если Cloudflare Workers уже привязан к GitHub, просто redeploy Worker. `wrangler.jsonc` теперь источник правды: `name`, `main`, `assets`, `compatibility_date`, D1 binding.
 
@@ -56,22 +56,46 @@ Cloudflare docs:
 - Workers static assets: https://developers.cloudflare.com/workers/static-assets/
 - Workers D1 bindings: https://developers.cloudflare.com/d1/worker-api/
 
+## D1 Schema Files
+
+Порядок миграций в `scripts/cloudflare-net-setup.mjs` - источник правды для setup/schema:
+
+1. `cloudflare/d1/net_sphere.sql` - каноническая полная схема для свежей D1 базы. В ней должны быть все таблицы, которые текущий Worker может читать или писать.
+2. `cloudflare/d1/net_sphere_names.sql` - историческая миграция для баз, созданных до `nickname`, `net_events.nickname` и `net_events.summary`. Файл содержит обычные `ALTER TABLE`, но setup применяет их только если колонок еще нет.
+3. `cloudflare/d1/net_sphere_market.sql` - идемпотентная миграция для таблиц НЕТ-биржи. Таблицы `net_market_impulses`, `net_market_budgets` и `net_market_snapshots` опциональны для локального билда игры, но обязательны для hosted `/api/net/market`; setup применяет их по умолчанию.
+
+`npm run dev`, `npm run build`, `npm run test:unit` и локальная игра не требуют Cloudflare credentials. Cloudflare нужен только для `npm run cf:setup`, `npm run cf:schema`, `npm run cf:dev` и деплоя Worker.
+
 ## Local Cloudflare Test
 
 Обычный `npm run dev` не поднимает Worker API. Для проверки API локально:
 
 ```bash
-npm run build
 npm run cf:dev
 ```
 
-`cf:dev` использует `wrangler.jsonc`. Перед ним нужен `npm run cf:setup`, чтобы в конфиге был реальный D1 `database_id`. Это не секрет: Cloudflare Worker нужен конкретный UUID базы для binding, а `cf:setup` перезаписывает его под текущий аккаунт.
+`cf:dev` сначала перезаписывает `dist/`, затем запускает `wrangler dev` с `wrangler.jsonc`. Перед ним нужен `npm run cf:setup`, чтобы в конфиге был реальный D1 `database_id`. Это не секрет: Cloudflare Worker нужен конкретный UUID базы для binding, а `cf:setup` перезаписывает его под текущий аккаунт.
 
 Чтобы только повторно применить схему и защищенные миграции к уже настроенной базе:
 
 ```bash
 npm run cf:schema
 ```
+
+`cf:schema` требует Cloudflare auth/Wrangler и пишет только в удаленную D1. Для CLI-деплоя используй:
+
+```bash
+npm run cf:deploy
+```
+
+`cf:deploy` перезаписывает `dist/` и деплоит Worker в Cloudflare.
+
+## Routing And Cache Headers
+
+- `functions/worker.ts` обрабатывает только namespace `/api/net` и `/api/net/*`; неизвестные Net API пути возвращают JSON `404`.
+- Поддержанные endpoint-ы возвращают JSON `405` с `Allow` для неподдержанного метода.
+- Все ответы Net API, включая `200`, `400`, `404`, `405`, `429` и `503`, идут с `Cache-Control: no-store`, потому что содержат живые счетчики, чат, профиль или состояние binding-а.
+- Остальные пути передаются в Worker Assets. Если `GIGA_NET` не настроен, API возвращает мягкий `503`, но статический билд игры продолжает обслуживаться через assets.
 
 ## In Game
 

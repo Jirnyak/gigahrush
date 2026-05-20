@@ -38,6 +38,8 @@ export interface NetTerminalGenTerminalDef {
   feature: Feature.SCREEN | Feature.APPARATUS;
   wallTex: Tex;
   glow: string;
+  hackDifficulty?: number;
+  hackCooldownS?: number;
 }
 
 const SCREEN_FRAMES = 4;
@@ -66,6 +68,33 @@ export const NET_TERMINAL_GEN_TERMINALS: readonly NetTerminalGenTerminalDef[] = 
     feature: Feature.SCREEN,
     wallTex: (Tex.SCREEN_BASE + 5 * SCREEN_FRAMES) as Tex,
     glow: '#8f8',
+  },
+];
+
+export const SILICON_NET_WELL_TERMINAL_DEF: NetTerminalGenTerminalDef = {
+  id: 'silicon_net_well_console',
+  label: 'НЕТ-КОЛОДЕЦ',
+  weight: 1,
+  feature: Feature.SCREEN,
+  wallTex: (Tex.SCREEN_BASE + 6 * SCREEN_FRAMES) as Tex,
+  glow: '#63f6ff',
+  hackDifficulty: 4,
+  hackCooldownS: 90,
+};
+
+export interface NetTerminalGenFloorProfile {
+  floorKey: string;
+  minTerminals: number;
+  maxTerminals: number;
+  terminalDef: NetTerminalGenTerminalDef;
+}
+
+export const NET_TERMINAL_GEN_FLOOR_PROFILES: readonly NetTerminalGenFloorProfile[] = [
+  {
+    floorKey: 'design:silicon_net_well',
+    minTerminals: 7,
+    maxTerminals: 9,
+    terminalDef: SILICON_NET_WELL_TERMINAL_DEF,
   },
 ];
 

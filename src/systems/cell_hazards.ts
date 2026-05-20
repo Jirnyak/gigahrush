@@ -5,6 +5,7 @@ import {
   type Entity, type GameState, type WorldEventSeverity,
 } from '../core/types';
 import { World } from '../core/world';
+import { recordPlayerDamage } from './damage';
 import { publishEvent } from './events';
 
 export type CellHazardCleanReason = 'fire' | 'solvent' | 'tool' | 'debug';
@@ -519,9 +520,13 @@ function applyHazardDamage(
 
   subject.damageCarry -= amount;
   if (e.type === EntityType.PLAYER) {
+    const before = e.hp;
     e.hp = Math.max(1, e.hp - amount);
+    const actual = before - e.hp;
+    if (actual <= 0) return false;
     const maxHp = Math.max(1, e.maxHp ?? 100);
-    state.dmgFlash = Math.max(state.dmgFlash, Math.min(1, 0.22 + amount / maxHp));
+    state.dmgFlash = Math.max(state.dmgFlash, Math.min(1, 0.22 + actual / maxHp));
+    recordPlayerDamage(state, undefined, actual, `${site.displayName}: -${actual}. ${site.warning}`, 'hazard');
   } else {
     e.hp = Math.max(0, e.hp - amount);
     if (e.hp <= 0) {

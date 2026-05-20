@@ -1,10 +1,23 @@
-import { Faction, FloorLevel, MonsterKind, QuestType, RoomType, type Quest } from '../core/types';
+import { Faction, FloorLevel, MonsterKind, QuestType, RoomType, type Quest, type QuestTargetMarker } from '../core/types';
+import { DESIGN_FLOOR_ROUTES, type DesignFloorId } from './design_floors';
+import type { FloorAnomalyId } from './procedural_floors';
 import { METRO_DEPOT_ROOM_NAME, METRO_STATION_ROOM_NAME } from './metro';
 import { PNEUMOMAIL_CONTRACT_ID, PNEUMOMAIL_SORTER_ROOM_NAME } from './pneumomail';
 import { SILVER_SLIME_SEALED_ID } from './items';
 
+export interface QuestRouteTarget {
+  designFloorId?: DesignFloorId;
+  z?: number;
+  anomalyId?: FloorAnomalyId;
+  proceduralTag?: string;
+  tags?: readonly string[];
+  label?: string;
+  risk?: number;
+}
+
 export interface ContractTarget {
   floor: FloorLevel;
+  route?: QuestRouteTarget;
   roomType?: RoomType;
   roomName?: string;
   zoneTag?: string;
@@ -47,6 +60,90 @@ export const NII_AUDIT_SCIENCE_CONTRACT_ID = 'exp_ministry_nii_science_sealed_sa
 export const NII_AUDIT_LIQUIDATOR_CONTRACT_ID = 'exp_ministry_nii_liquidator_manifest';
 export const NII_AUDIT_MARKET_CONTRACT_ID = 'exp_ministry_nii_market_silver_sample';
 
+const FLOOR_69_ROUTE_TARGET = { designFloorId: 'floor_69' } satisfies QuestRouteTarget;
+
+type RouteQuest = Quest & { targetRoute?: QuestRouteTarget };
+
+function cloneRouteTarget(route: QuestRouteTarget | undefined): QuestRouteTarget | undefined {
+  if (!route) return undefined;
+  const out: QuestRouteTarget = {};
+  if (route.designFloorId) out.designFloorId = route.designFloorId;
+  if (typeof route.z === 'number' && Number.isFinite(route.z)) out.z = Math.trunc(route.z);
+  if (route.anomalyId) out.anomalyId = route.anomalyId;
+  if (route.proceduralTag) out.proceduralTag = route.proceduralTag;
+  if (route.tags?.length) out.tags = [...route.tags];
+  if (route.label) out.label = route.label;
+  if (route.risk !== undefined) out.risk = Math.max(1, Math.min(5, Math.round(route.risk)));
+  return out;
+}
+
+export function questTargetRoute(q: Quest): QuestRouteTarget | undefined {
+  return cloneRouteTarget((q as RouteQuest).targetRoute);
+}
+
+export function setQuestTargetRoute(q: Quest, route: QuestRouteTarget | undefined): void {
+  const quest = q as RouteQuest;
+  const cloned = cloneRouteTarget(route);
+  if (cloned) quest.targetRoute = cloned;
+  else delete quest.targetRoute;
+}
+
+function routeHasData(route: QuestRouteTarget): boolean {
+  return route.designFloorId !== undefined
+    || route.z !== undefined
+    || route.anomalyId !== undefined
+    || route.proceduralTag !== undefined
+    || route.tags !== undefined
+    || route.label !== undefined
+    || route.risk !== undefined;
+}
+
+function inferredDesignFloorId(def: ContractDef): DesignFloorId | undefined {
+  if (def.target.route?.designFloorId) return def.target.route.designFloorId;
+  const tag = def.target.zoneTag;
+  return DESIGN_FLOOR_ROUTES.find(route => route.id === tag || def.tags.includes(route.id))?.id;
+}
+
+function inferredProceduralTag(route: QuestRouteTarget | undefined): string | undefined {
+  return route?.proceduralTag ?? route?.anomalyId ?? route?.tags?.[0];
+}
+
+function contractTargetRisk(def: ContractDef, route: QuestRouteTarget | undefined): number {
+  if (route?.risk !== undefined) return Math.max(1, Math.min(5, Math.round(route.risk)));
+  const pressure = def.type === QuestType.KILL || def.tags.includes('combat') || def.tags.includes('risk') ? 1 : 0;
+  return Math.max(1, Math.min(5, Math.round(def.rank + pressure)));
+}
+
+function routeTargetForContract(def: ContractDef): QuestRouteTarget | undefined {
+  const route = cloneRouteTarget(def.target.route) ?? {};
+  const designFloorId = inferredDesignFloorId(def);
+  if (designFloorId) {
+    route.designFloorId = designFloorId;
+    const designFloor = DESIGN_FLOOR_ROUTES.find(item => item.id === designFloorId);
+    if (designFloor) {
+      route.z = route.z ?? designFloor.z;
+      route.label = route.label ?? designFloor.displayName;
+    }
+  }
+  route.proceduralTag = inferredProceduralTag(route);
+  route.risk = contractTargetRisk(def, route);
+  return routeHasData(route) ? route : undefined;
+}
+
+export function contractTargetMarker(def: ContractDef): QuestTargetMarker {
+  const route = routeTargetForContract(def);
+  return {
+    floor: def.target.floor,
+    roomType: def.target.roomType,
+    roomName: def.target.roomName,
+    zoneTag: def.target.zoneTag,
+    designFloorId: route?.designFloorId,
+    proceduralTag: route?.proceduralTag,
+    routeZ: route?.z,
+    risk: route?.risk,
+  };
+}
+
 export const COMPACT_EXPEDITION_CONTRACT_IDS = [
   'compact_living_shelter_retrieve',
   'compact_kvartiry_water_delivery',
@@ -64,7 +161,7 @@ const EXPEDITION_CONTRACTS: ContractDef[] = [
     faction: Faction.SCIENTIST, rank: 3, type: QuestType.FETCH,
     desc: 'Окно проб НИИ ждёт живой желемыш в пломбе без пыли и чужой кожи. Банку не вскрывать; чистый комок оплатят тарой и стабилизатором.',
     target: {
-      floor: FloorLevel.LIVING, roomType: RoomType.PRODUCTION, roomName: 'Грибная прачечная первой смены',
+      floor: FloorLevel.LIVING, route: { anomalyId: 'mushroom_mycelium', tags: ['mushroom'] }, roomType: RoomType.PRODUCTION, roomName: 'Грибная прачечная первой смены',
       zoneTag: 'zhelemish_sample_site', hint: 'Маркер НИИ уточнит цель после выдачи: грибница, мокрый погреб или процедурный этаж с мицелием.',
     },
     targetItem: 'zhelemish_sample_sealed', targetCount: 1,
@@ -75,7 +172,7 @@ const EXPEDITION_CONTRACTS: ContractDef[] = [
   {
     id: 'compact_living_shelter_retrieve', title: 'Малый список укрытия', issuer: 'Домком у гермы',
     faction: Faction.CITIZEN, rank: 1, type: QuestType.FETCH,
-    desc: 'Домком у гермы просит список из малого аварийного ящика до отбоя. Плата талонами и бинтом; если ящик пустой, фамилии начнут искать людей сами.',
+    desc: 'Домком у гермы просит список из малого аварийного ящика до отбоя. Плата талонами и бинтом; если ящик пустой, старшая пойдет искать людей по коридорам.',
     target: { floor: FloorLevel.LIVING, roomType: RoomType.COMMON, zoneTag: 'emergency_box', hint: 'Жилая зона: общий коридор или комната укрытия; ищите публичный аварийный ящик со списком.' },
     targetItem: 'emergency_roster', targetCount: 1,
     rewardItem: 'water_coupon', rewardCount: 2, extraRewards: [{ defId: 'bandage', count: 1 }],
@@ -115,7 +212,7 @@ const EXPEDITION_CONTRACTS: ContractDef[] = [
   {
     id: 'compact_ministry_archive_visit', title: 'Сверить живую картотеку', issuer: 'Инспекционное окно',
     faction: Faction.CITIZEN, rank: 1, type: QuestType.VISIT,
-    desc: 'Войди в картотеку и проверь, стоят ли шкафы на месте. Корешок пропуска дадут за отметку до того, как шкафы начнут читать людей.',
+    desc: 'Войди в картотеку и проверь, стоят ли шкафы на месте. Корешок пропуска дадут за отметку до того, как шкафы начнут хлопать дверцами по рукам.',
     target: { floor: FloorLevel.MINISTRY, roomType: RoomType.STORAGE, zoneTag: 'archive', hint: 'Министерство: архивная картотека, закрытые шкафы и зеленые учетные лампы.' },
     rewardItem: 'official_permit_slip', rewardCount: 1,
     moneyReward: 105, rewardResourceId: 'documents', rewardScarcityMax: 2.2,
@@ -124,12 +221,12 @@ const EXPEDITION_CONTRACTS: ContractDef[] = [
   {
     id: 'compact_ministry_pechateed_kill', title: 'Печатеед у описи', issuer: 'Архивная охрана',
     faction: Faction.LIQUIDATOR, rank: 2, type: QuestType.KILL,
-    desc: 'Убей печатееда у архивной описи. Плата - патроны и пропуск; журналы должны остаться целыми.',
+    desc: 'Убей печатееда у архивной описи. Не неси лишние бланки: он чует корешки раньше крови. Плата - патроны и пропуск, журналы должны остаться целыми.',
     target: { floor: FloorLevel.MINISTRY, roomType: RoomType.STORAGE, zoneTag: 'archive_combat', hint: 'Министерство: архивные стеллажи и картотека; держите дистанцию от бумажной пасти.' },
     targetMonsterKind: MonsterKind.PECHATEED, killNeeded: 1,
     rewardItem: 'ammo_nagant', rewardCount: 12, extraRewards: [{ defId: 'temp_pass', count: 1 }],
     moneyReward: 150, rewardResourceId: 'ammo', rewardScarcityMax: 2.3,
-    xpReward: 85, relationDelta: 11, tags: ['compact_expedition', 'kill', 'floor_ministry', 'room_storage', 'archive_combat', 'combat', 'documents'],
+    xpReward: 85, relationDelta: 11, tags: ['compact_expedition', 'kill', 'floor_ministry', 'room_storage', 'archive_combat', 'combat', 'documents', 'document_threat'],
   },
   {
     id: 'compact_hell_voice_retrieve', title: 'Банка из мясного тайника', issuer: 'Тихий приемщик',
@@ -144,8 +241,8 @@ const EXPEDITION_CONTRACTS: ContractDef[] = [
   {
     id: 'compact_void_protocol_visit', title: 'Проверить зеленый протокол', issuer: 'Нулевая канцелярия',
     faction: Faction.SCIENTIST, rank: 4, type: QuestType.VISIT,
-    desc: 'Отметь протокольную Пустоту для нулевой канцелярии. Пыль ПСИ дадут за стену, которая перестала быть стеной.',
-    target: { floor: FloorLevel.VOID, roomType: RoomType.COMMON, zoneTag: 'void_protocol', hint: 'Пустота: зеленые протокольные проходы; не стойте на линии текста дольше пары вдохов.' },
+    desc: 'Отметь протокольную Пустоту для нулевой канцелярии. Пыль ПСИ дадут за отметку на зелёной стене и маршрут обратно.',
+    target: { floor: FloorLevel.VOID, roomType: RoomType.COMMON, zoneTag: 'void_protocol', hint: 'Пустота: зеленые протокольные проходы; не стойте в зелёной линии дольше пары вдохов.' },
     rewardItem: 'psi_dust', rewardCount: 1,
     moneyReward: 210, rewardResourceId: 'psi', rewardScarcityMax: 2.6,
     xpReward: 125, relationDelta: 10, tags: ['compact_expedition', 'visit', 'floor_void', 'room_anomaly', 'void_protocol', 'psi', 'inspect'],
@@ -153,7 +250,7 @@ const EXPEDITION_CONTRACTS: ContractDef[] = [
   {
     id: 'exp_hunter_return_arrow_route', title: 'Маршрут с обратной стрелкой', issuer: 'Старший вылазки',
     faction: Faction.CITIZEN, rank: 1, type: QuestType.FETCH,
-    desc: 'Старший вылазки платит водой и 9мм за маршрут с обратной стрелкой. Без пути назад это не разведка, а просьба к стене; лист нужен сухим.',
+    desc: 'Старший вылазки платит водой и 9мм за маршрут с обратной стрелкой. Без пути назад проводник не выйдет за тобой; лист нужен сухим.',
     target: { floor: FloorLevel.LIVING, roomType: RoomType.OFFICE, zoneTag: 'cartographer_map', hint: 'Жилая зона: комната карты, курилка или офисный стол с маршрутной бумагой; проверьте, что на листе есть обратная стрелка.' },
     targetItem: 'caravan_route', targetCount: 1,
     rewardItem: 'water', rewardCount: 3, extraRewards: [{ defId: 'ammo_9mm', count: 10 }],
@@ -262,12 +359,12 @@ const EXPEDITION_CONTRACTS: ContractDef[] = [
   {
     id: 'exp_ministry_paragraph_audit', title: 'Параграф на входящем', issuer: 'Архивная охрана',
     faction: Faction.LIQUIDATOR, rank: 3, type: QuestType.KILL,
-    desc: 'Убери оживший параграф в кабинетах. Награда - патроны и временный пропуск; цель стреляет текстом и переписывает владельцев.',
+    desc: 'Убери оживший параграф в кабинетах входящих. Держи шкаф между собой и формулировкой, сближайся после залпа: цель стреляет текстом и переписывает владельцев пропусков.',
     target: { floor: FloorLevel.MINISTRY, roomType: RoomType.OFFICE, zoneTag: 'archive_combat', hint: 'Министерство: архивные кабинеты, где текст держит линию огня.' },
     targetMonsterKind: MonsterKind.PARAGRAPH, killNeeded: 1,
     rewardItem: 'ammo_nagant', rewardCount: 18, extraRewards: [{ defId: 'temp_pass', count: 1 }],
     moneyReward: 180, rewardResourceId: 'ammo', rewardScarcityMax: 2.2,
-    xpReward: 95, relationDelta: 11, tags: ['expedition', 'floor_ministry', 'room_office', 'combat', 'kill', 'documents', 'ammo'],
+    xpReward: 95, relationDelta: 11, tags: ['expedition', 'floor_ministry', 'room_office', 'combat', 'kill', 'documents', 'ammo', 'document_threat', 'counterplay'],
   },
   {
     id: 'exp_ministry_archive_inspection', title: 'Осмотр картотеки', issuer: 'Инспекционный архив',
@@ -455,7 +552,7 @@ const EXPEDITION_CONTRACTS: ContractDef[] = [
     desc: 'Полевой научный просит серобурмалиновую пробу из обхода Серого Смотрителя. Смотреть прямо запрещено: НИИ платит за соскоб, а не за акт потери глаза.',
     target: {
       floor: FloorLevel.VOID, roomType: RoomType.STORAGE,
-      zoneTag: 'seryy_smotritel', hint: 'Пустота: узел Серого Смотрителя. Иди нижним обходом по памяти, не держи источник в прямой линии и забери слепую пробу.',
+      zoneTag: 'seryy_smotritel', hint: 'Пустота: узел Серого Смотрителя. Иди нижним обходом по меловым меткам, не держи источник в прямой линии и забери слепую пробу.',
     },
     targetItem: 'slime_sample_seroburmaline', targetCount: 1,
     rewardItem: 'psi_void_needle', rewardCount: 1, extraRewards: [{ defId: 'psi_stabilizer', count: 1 }],
@@ -625,7 +722,7 @@ const EXPEDITION_CONTRACTS: ContractDef[] = [
   {
     id: 'exp_void_jean_message', title: 'Сообщение Пустотнику', issuer: 'Зеленый экран',
     faction: Faction.SCIENTIST, rank: 4, type: QuestType.TALK,
-    desc: 'Зелёный экран просит дойти до Жана Пустотника и сверить подпись в пустом ордере. Платят стабилизатором; не стойте на линии текста.',
+    desc: 'Зелёный экран просит дойти до Жана Пустотника и сверить подпись в пустом ордере. Платят стабилизатором; не стойте в зелёной линии под экраном.',
     target: { floor: FloorLevel.VOID, roomType: RoomType.COMMON, zoneTag: 'void_warning_cell', hint: 'Пустота: камера Жана Пустотника у зеленых стен.' },
     targetPlotNpcId: 'void_warning', targetNpcName: 'Жан Пустотник',
     rewardItem: 'psi_stabilizer', rewardCount: 1, extraRewards: [{ defId: 'antidep', count: 2 }],
@@ -635,7 +732,7 @@ const EXPEDITION_CONTRACTS: ContractDef[] = [
   {
     id: 'exp_void_paragraph_cleanup', title: 'Параграф после конца', issuer: 'Последняя редакция',
     faction: Faction.LIQUIDATOR, rank: 4, type: QuestType.KILL,
-    desc: 'Последняя редакция ставит две пустотные поправки под уничтожение. Награда энергоячейками и осколком сирены; параграфы стреляют из зелёных стен.',
+    desc: 'Последняя редакция ставит двух Параграфов в зелёном проходе под зачистку. Награда энергоячейками и осколком сирены; держите шкафы между собой и стеной.',
     target: { floor: FloorLevel.VOID, roomType: RoomType.COMMON, zoneTag: 'void_protocol', hint: 'Пустота: зеленые стены и протокольные проходы.' },
     targetMonsterKind: MonsterKind.PARAGRAPH, killNeeded: 2,
     rewardItem: 'ammo_energy', rewardCount: 2, extraRewards: [{ defId: 'siren_shard', count: 1 }],
@@ -664,7 +761,7 @@ const EXPEDITION_CONTRACTS: ContractDef[] = [
   {
     id: 'exp_gpvm_loop_override_form', title: 'Бланк для петли', issuer: 'ГПВМ, стол коротких путей',
     faction: Faction.SCIENTIST, rank: 3, type: QuestType.FETCH,
-    desc: 'Стол коротких путей ГПВМ просит бланк обхода лифта. За ордер и схему реле вынесите его до петли: без бланка она возвращает объяснение, не человека.',
+    desc: 'Стол коротких путей ГПВМ просит бланк обхода лифта. За ордер и схему реле вынесите его до петли: без бланка кабина гоняет исполнителя по кругу.',
     target: { floor: FloorLevel.MINISTRY, roomType: RoomType.OFFICE, zoneTag: 'elevator_commission', hint: 'Министерство: лифтовая комиссия, сейф с бланками обхода и кабинеты, где маршрут считают задним числом.' },
     targetItem: 'elevator_override_form', targetCount: 1,
     rewardItem: 'elevator_access_order', rewardCount: 1, extraRewards: [{ defId: 'relay_diagram', count: 1 }],
@@ -673,8 +770,119 @@ const EXPEDITION_CONTRACTS: ContractDef[] = [
   },
 ];
 
+const CARAVAN_CONTRACTS: ContractDef[] = [
+  {
+    id: 'caravan_escort_queue_porters', title: 'Довести малую очередь', issuer: 'Караванная касса',
+    faction: Faction.CITIZEN, rank: 1, type: QuestType.VISIT,
+    desc: 'Малый караван очередников идет к жилой кассе с водой и хлебом. Дойди до кассы раньше шума: если мешки дойдут, очередь станет дешевле.',
+    target: { floor: FloorLevel.LIVING, roomType: RoomType.OFFICE, zoneTag: 'caravan_exchange', hint: 'Жилая зона: караванная касса, лифтовой рынок или очередь у водно-хлебного окна.' },
+    rewardItem: 'water_coupon', rewardCount: 2,
+    moneyReward: 85, rewardResourceId: 'drink_water', rewardScarcityMax: 2.2,
+    xpReward: 55, relationDelta: 8, tags: ['caravan', 'escort', 'supply', 'food', 'water', 'floor_living', 'decision_escort'],
+  },
+  {
+    id: 'caravan_raid_queue_cargo', title: 'Снять мешок с очереди', issuer: 'Голодный рейдер',
+    faction: Faction.WILD, rank: 1, type: QuestType.FETCH,
+    desc: 'Рейдеру нужен талонный мешок с малого каравана. Товар забираешь себе и сдаешь часть; очередь потом будет платить дороже.',
+    target: { floor: FloorLevel.KVARTIRY, roomType: RoomType.KITCHEN, zoneTag: 'ration_queue', hint: 'Квартиры: коммунальная кухня, пайковый стол или боковая очередь с чужими мешками.' },
+    targetItem: 'water_coupon', targetCount: 1,
+    rewardItem: 'bread', rewardCount: 2,
+    moneyReward: 70, rewardResourceId: 'food', rewardScarcityMax: 2.1,
+    xpReward: 50, relationDelta: 7, tags: ['caravan', 'raid', 'supply', 'theft', 'food', 'water', 'floor_kvartiry', 'decision_raid'],
+  },
+  {
+    id: 'caravan_buy_queue_seat', title: 'Место в водном караване', issuer: 'Нина Тарифная',
+    faction: Faction.CITIZEN, rank: 0, type: QuestType.FETCH,
+    desc: 'Оплати место у малого водно-хлебного каравана. Это не билет в лифт, а право идти в середине и не объяснять, чей у тебя бидон.',
+    target: { floor: FloorLevel.LIVING, roomType: RoomType.OFFICE, zoneTag: 'caravan_exchange', hint: 'Жилая зона: караванная касса и очередь; деньги принимают до выхода группы.' },
+    targetItem: 'money', targetCount: 24,
+    rewardItem: 'water_coupon', rewardCount: 1,
+    moneyReward: 0, rewardResourceId: 'drink_water', rewardScarcityMax: 1.8,
+    xpReward: 20, relationDelta: 4, tags: ['caravan', 'seat', 'tariff', 'water', 'floor_living', 'decision_seat'],
+  },
+  {
+    id: 'caravan_escort_repair_crew', title: 'Прикрыть ремонтную тройку', issuer: 'Лифтовой диспетчер',
+    faction: Faction.CITIZEN, rank: 2, type: QuestType.KILL,
+    desc: 'Ремонтная тройка лифтовиков несет металл и инструмент. Убери сборок у шахты: без тройки гермы чинят слухами.',
+    target: { floor: FloorLevel.MAINTENANCE, roomType: RoomType.CORRIDOR, zoneTag: 'lift_repair_shaft', hint: 'Коллекторы: шахта ремонта лифтов, сухая перемычка или служебный карман у пульта.' },
+    targetMonsterKind: MonsterKind.SBORKA, killNeeded: 2,
+    rewardItem: 'fuse', rewardCount: 1, extraRewards: [{ defId: 'sealant_tube', count: 1 }],
+    moneyReward: 130, rewardResourceId: 'tools', rewardScarcityMax: 2.4,
+    xpReward: 85, relationDelta: 10, tags: ['caravan', 'escort', 'repair', 'maintenance', 'combat', 'tools', 'floor_maintenance', 'decision_escort'],
+  },
+  {
+    id: 'caravan_reroute_repair_crew', title: 'Рискованный обход ремонтников', issuer: 'Серый проводник',
+    faction: Faction.WILD, rank: 2, type: QuestType.FETCH,
+    desc: 'Проводник просит релейную схему, чтобы пустить ремонтников через короткий, мокрый ход. Инструменты придут быстрее, но тариф поднимется.',
+    target: { floor: FloorLevel.MAINTENANCE, roomType: RoomType.PRODUCTION, zoneTag: 'service_node', hint: 'Коллекторы: цех, служебный пульт или шкаф с релейными схемами у трубы.' },
+    targetItem: 'relay_diagram', targetCount: 1,
+    rewardItem: 'filtered_water', rewardCount: 1,
+    moneyReward: 115, rewardResourceId: 'tools', rewardScarcityMax: 2.2,
+    xpReward: 70, relationDelta: 7, tags: ['caravan', 'reroute', 'repair', 'maintenance', 'risk', 'tools', 'floor_maintenance', 'decision_reroute'],
+  },
+  {
+    id: 'caravan_raid_market88_smugglers', title: 'Развязать серый тюк 88', issuer: 'Чужой покупатель',
+    faction: Faction.WILD, rank: 2, type: QuestType.FETCH,
+    desc: 'Контрабандный караван 88 идет малым составом. Нужен один сверток говняка из тюка: рынок потеряет груз, а патронная цена дернется.',
+    target: { floor: FloorLevel.LIVING, roomType: RoomType.SMOKING, zoneTag: 'black_market_88', hint: 'Жилая зона: черный рынок 88, курилка или сервисный люк с серым тюком.' },
+    targetItem: 'govnyak_roll', targetCount: 1,
+    rewardItem: 'cigs', rewardCount: 2,
+    moneyReward: 125, rewardResourceId: 'contraband', rewardScarcityMax: 2.5,
+    xpReward: 80, relationDelta: 8, tags: ['caravan', 'raid', 'black_market', 'contraband', 'theft', 'floor_living', 'decision_raid'],
+  },
+  {
+    id: 'caravan_report_market88_smugglers', title: 'Сдать серый маршрут', issuer: 'Потап Ревизор',
+    faction: Faction.LIQUIDATOR, rank: 2, type: QuestType.FETCH,
+    desc: 'Потапу нужен маршрут контрабандного каравана 88. Сдашь бумагу - линию прижмут, рынок взвоет, ликвидаторы запишут плюс.',
+    target: { floor: FloorLevel.LIVING, roomType: RoomType.OFFICE, zoneTag: 'black_market_88', hint: 'Жилая зона: долговое окно 88, караванная касса или стол с чужими маршрутами.' },
+    targetItem: 'caravan_route', targetCount: 1,
+    rewardItem: 'ammo_9mm', rewardCount: 8,
+    moneyReward: 105, rewardResourceId: 'ammo', rewardScarcityMax: 2.1,
+    xpReward: 75, relationDelta: 9, tags: ['caravan', 'report', 'black_market', 'liquidator', 'contraband', 'floor_living', 'decision_report'],
+  },
+  {
+    id: 'caravan_escort_ministry_forms', title: 'Папки до рынка бумаг', issuer: 'Охрана описи',
+    faction: Faction.LIQUIDATOR, rank: 2, type: QuestType.VISIT,
+    desc: 'Бумажный караван канцелярии несет папки к рынку бумаг. Дойди до архивного выхода и не дай папкам стать слухом.',
+    target: { floor: FloorLevel.MINISTRY, roomType: RoomType.STORAGE, zoneTag: 'archive', hint: 'Министерство: архивная картотека, зеленые лампы и проход к лифтовой сверке.' },
+    rewardItem: 'official_permit_slip', rewardCount: 1,
+    moneyReward: 145, rewardResourceId: 'documents', rewardScarcityMax: 2.4,
+    xpReward: 80, relationDelta: 9, tags: ['caravan', 'escort', 'documents', 'paper', 'ministry', 'floor_ministry', 'decision_escort'],
+  },
+  {
+    id: 'caravan_reroute_ministry_forms', title: 'Обход для красных папок', issuer: 'ГПВМ, стол коротких путей',
+    faction: Faction.SCIENTIST, rank: 3, type: QuestType.FETCH,
+    desc: 'ГПВМ просит схему лифта для бумажного каравана. Маршрут станет короче и опаснее; бумаги доедут, тарифы подпрыгнут.',
+    target: { floor: FloorLevel.MINISTRY, roomType: RoomType.OFFICE, zoneTag: 'elevator_commission', hint: 'Министерство: лифтовая комиссия, кабинет обходных схем или архив с зелеными отметками.' },
+    targetItem: 'lift_scheme', targetCount: 1,
+    rewardItem: 'blank_form', rewardCount: 2,
+    moneyReward: 155, rewardResourceId: 'documents', rewardScarcityMax: 2.6,
+    xpReward: 90, relationDelta: 8, tags: ['caravan', 'reroute', 'documents', 'paper', 'risk', 'floor_ministry', 'decision_reroute'],
+  },
+  {
+    id: 'caravan_escort_net_signalers', title: 'Проводить НЕТ-сигнальщиков', issuer: 'Ира НЕТ-маршрут',
+    faction: Faction.SCIENTIST, rank: 3, type: QuestType.VISIT,
+    desc: 'Сигнальный караван НЕТ-терминала несет задержки и схемы. Проведи их до обменной точки: линия данных откроется шире.',
+    target: { floor: FloorLevel.LIVING, roomType: RoomType.OFFICE, zoneTag: 'caravan_exchange', hint: 'Жилая зона: караванная касса, терминальный стол или рыночный узел с антенной.' },
+    rewardItem: 'relay_diagram', rewardCount: 1,
+    moneyReward: 150, rewardResourceId: 'electronics', rewardScarcityMax: 2.5,
+    xpReward: 90, relationDelta: 10, tags: ['caravan', 'escort', 'net', 'electronics', 'science', 'floor_living', 'decision_escort'],
+  },
+  {
+    id: 'caravan_reroute_net_signalers', title: 'Пустить сигнал через петлю', issuer: 'НЕТ-терминал, сухой порт',
+    faction: Faction.SCIENTIST, rank: 3, type: QuestType.FETCH,
+    desc: 'Терминал просит схему реле для петлевого маршрута. Сигнал пройдет рискованно, зато документы и электроника дойдут без очереди.',
+    target: { floor: FloorLevel.MINISTRY, roomType: RoomType.OFFICE, zoneTag: 'net_terminal', hint: 'Министерство: терминальный стол, архивный кабель или окно с задержкой в журнале.' },
+    targetItem: 'relay_diagram', targetCount: 1,
+    rewardItem: 'radio', rewardCount: 1,
+    moneyReward: 165, rewardResourceId: 'electronics', rewardScarcityMax: 2.6,
+    xpReward: 95, relationDelta: 9, tags: ['caravan', 'reroute', 'net', 'electronics', 'science', 'risk', 'decision_reroute'],
+  },
+];
+
 export const CONTRACTS: ContractDef[] = [
   ...EXPEDITION_CONTRACTS,
+  ...CARAVAN_CONTRACTS,
   {
     id: 'bm88_medicine_bid', title: 'Ставка на антибиотик', issuer: 'Счетная 88',
     faction: Faction.CITIZEN, rank: 1, type: QuestType.FETCH,
@@ -806,7 +1014,7 @@ export const CONTRACTS: ContractDef[] = [
     id: 'f69_debt_receipts_buyout', title: 'Погасить строку 69', issuer: 'Картотека долгов 69',
     faction: Faction.CITIZEN, rank: 1, type: QuestType.FETCH,
     desc: 'Вынеси две расписки из долговой картотеки 69. Выкупи, укради, подделай или сожги; строка должна отпустить жильца.',
-    target: { floor: FloorLevel.MAINTENANCE, roomType: RoomType.OFFICE, zoneTag: 'ledger', hint: 'Этаж 69: картотека долгов за красным коридором, запертые шкафы с расписками.' },
+    target: { floor: FloorLevel.MAINTENANCE, route: FLOOR_69_ROUTE_TARGET, roomType: RoomType.OFFICE, zoneTag: 'ledger', hint: 'Этаж 69: картотека долгов за красным коридором, запертые шкафы с расписками.' },
     targetItem: 'voluntary_receipt', targetCount: 2, rewardItem: 'official_permit_slip', rewardCount: 1,
     moneyReward: 115, rewardResourceId: 'documents', rewardScarcityMax: 2.2,
     xpReward: 65, relationDelta: 8, tags: ['floor_69', 'debt', 'ledger', 'admin', 'paper', 'documents'],
@@ -815,7 +1023,7 @@ export const CONTRACTS: ContractDef[] = [
     id: 'f69_blackmail_safe_copy', title: 'Копия из сейфа 69', issuer: 'Тихая жалоба',
     faction: Faction.CITIZEN, rank: 2, type: QuestType.FETCH,
     desc: 'Тихая жалоба просит копию личного дела из сейфа компромата. Продать её можно быстро, но свидетелю она открывает служебный выход и закрывает рот охране.',
-    target: { floor: FloorLevel.MAINTENANCE, roomType: RoomType.OFFICE, zoneTag: 'blackmail', hint: 'Этаж 69: долговая контора и сейф компромата у служебного хода.' },
+    target: { floor: FloorLevel.MAINTENANCE, route: FLOOR_69_ROUTE_TARGET, roomType: RoomType.OFFICE, zoneTag: 'blackmail', hint: 'Этаж 69: долговая контора и сейф компромата у служебного хода.' },
     targetItem: 'personal_file_copy', targetCount: 1, rewardItem: 'clean_health_cert', rewardCount: 1,
     moneyReward: 145, rewardResourceId: 'documents', rewardScarcityMax: 2.4,
     xpReward: 80, relationDelta: 9, tags: ['floor_69', 'blackmail', 'evidence', 'paper', 'documents', 'stealth'],
@@ -824,7 +1032,7 @@ export const CONTRACTS: ContractDef[] = [
     id: 'f69_raid_roster_warning', title: 'Предупредить тихие комнаты', issuer: 'Пост досмотра 69',
     faction: Faction.LIQUIDATOR, rank: 2, type: QuestType.FETCH,
     desc: 'Пост досмотра 69 просит вынести список рейда до вечерней проверки. За девятку и ключ предупреди тихие комнаты, пока двери не закрыли людей по фамилиям.',
-    target: { floor: FloorLevel.MAINTENANCE, roomType: RoomType.HQ, zoneTag: 'raid', hint: 'Этаж 69: пост досмотра, рейдовый ящик и тарелка входных расписок.' },
+    target: { floor: FloorLevel.MAINTENANCE, route: FLOOR_69_ROUTE_TARGET, roomType: RoomType.HQ, zoneTag: 'raid', hint: 'Этаж 69: пост досмотра, рейдовый ящик и тарелка входных расписок.' },
     targetItem: 'emergency_roster', targetCount: 1, rewardItem: 'ammo_9mm', rewardCount: 12,
     extraRewards: [{ defId: 'key', count: 1 }],
     moneyReward: 95, rewardResourceId: 'ammo', rewardScarcityMax: 2.0,
@@ -834,7 +1042,7 @@ export const CONTRACTS: ContractDef[] = [
     id: 'f69_checkpoint_token_audit', title: 'Жетон для закрытого обхода', issuer: 'Веня Шлагбаум',
     faction: Faction.LIQUIDATOR, rank: 2, type: QuestType.FETCH,
     desc: 'Веня Шлагбаум ждёт жетон ликвидатора с поста досмотра. За ключ даст закрытый обход; рейдовая книга после этого запишет владельца жетона и того, кто принёс его без акта.',
-    target: { floor: FloorLevel.MAINTENANCE, roomType: RoomType.HQ, zoneTag: 'security', hint: 'Этаж 69: оружейный ящик поста досмотра и люди, которые считают проходящих.' },
+    target: { floor: FloorLevel.MAINTENANCE, route: FLOOR_69_ROUTE_TARGET, roomType: RoomType.HQ, zoneTag: 'security', hint: 'Этаж 69: оружейный ящик поста досмотра и люди, которые считают проходящих.' },
     targetItem: 'liquidator_token', targetCount: 1, rewardItem: 'key', rewardCount: 1,
     moneyReward: 125, rewardResourceId: 'documents', rewardScarcityMax: 2.0,
     xpReward: 75, relationDelta: 8, tags: ['floor_69', 'raid', 'security', 'liquidator', 'access', 'document_gate'],
@@ -843,7 +1051,7 @@ export const CONTRACTS: ContractDef[] = [
     id: 'f69_refuge_supply_witness', title: 'Вода для свидетеля', issuer: 'Тихая комната 69',
     faction: Faction.SCIENTIST, rank: 1, type: QuestType.FETCH,
     desc: 'Тихая комната просит две бутылки воды для свидетеля. Сначала он должен дышать и пить, потом уже решать, кому отдавать жалобу.',
-    target: { floor: FloorLevel.MAINTENANCE, roomType: RoomType.LIVING, zoneTag: 'refuge', hint: 'Этаж 69: тихая комната у красного коридора, публичный аварийный ящик и служебный выход.' },
+    target: { floor: FloorLevel.MAINTENANCE, route: FLOOR_69_ROUTE_TARGET, roomType: RoomType.LIVING, zoneTag: 'refuge', hint: 'Этаж 69: тихая комната у красного коридора, публичный аварийный ящик и служебный выход.' },
     targetItem: 'water', targetCount: 2, rewardItem: 'sealed_complaint', rewardCount: 1,
     extraRewards: [{ defId: 'bandage', count: 1 }],
     moneyReward: 70, rewardResourceId: 'drink_water', rewardScarcityMax: 2.2,
@@ -853,7 +1061,7 @@ export const CONTRACTS: ContractDef[] = [
     id: 'f69_worker_clinic_supply', title: 'Антибиотик без вопросов', issuer: 'Клиника Сима 69',
     faction: Faction.SCIENTIST, rank: 1, type: QuestType.FETCH,
     desc: 'Клиника Симы просит антибиотик без вопросов к пациентам. Сима лечит взрослых без лишних профессий в журнале; охрана считает такие таблетки долгом.',
-    target: { floor: FloorLevel.MAINTENANCE, roomType: RoomType.MEDICAL, zoneTag: 'floor_69', hint: 'Этаж 69: клиника Сима за красным коридором и постом досмотра.' },
+    target: { floor: FloorLevel.MAINTENANCE, route: FLOOR_69_ROUTE_TARGET, roomType: RoomType.MEDICAL, zoneTag: 'floor_69', hint: 'Этаж 69: клиника Сима за красным коридором и постом досмотра.' },
     targetItem: 'antibiotic', targetCount: 1, rewardItem: 'sanitary_kit', rewardCount: 1,
     extraRewards: [{ defId: 'clean_health_cert', count: 1 }],
     moneyReward: 115, rewardResourceId: 'medicine', rewardScarcityMax: 2.4,
@@ -863,7 +1071,7 @@ export const CONTRACTS: ContractDef[] = [
     id: 'f69_hide_worker_route', title: 'Тихая комната для Иры', issuer: 'Ира Сцена',
     faction: Faction.CITIZEN, rank: 1, type: QuestType.VISIT,
     desc: 'Ира Сцена просит проверить тихую комнату при клинике Симы до рейда. Ей нужна дверь, служебный вход и таблетка; разговоры охрана пишет отдельно.',
-    target: { floor: FloorLevel.MAINTENANCE, roomType: RoomType.MEDICAL, zoneTag: 'floor_69', hint: 'Этаж 69: найти доктора Симу в клинике и подтвердить служебный вход.' },
+    target: { floor: FloorLevel.MAINTENANCE, route: FLOOR_69_ROUTE_TARGET, roomType: RoomType.MEDICAL, zoneTag: 'floor_69', hint: 'Этаж 69: найти доктора Симу в клинике и подтвердить служебный вход.' },
     rewardItem: 'pills', rewardCount: 1, extraRewards: [{ defId: 'water', count: 1 }],
     moneyReward: 70, rewardResourceId: 'medicine', rewardScarcityMax: 1.8,
     xpReward: 60, relationDelta: 12, tags: ['floor_69', 'protect', 'hide', 'talk', 'medicine', 'adult_only'],
@@ -872,7 +1080,7 @@ export const CONTRACTS: ContractDef[] = [
     id: 'f69_denunciation_burn_or_sell', title: 'Донос без владельца', issuer: 'Нил Расписочный',
     faction: Faction.CITIZEN, rank: 2, type: QuestType.FETCH,
     desc: 'Нил Расписочный платит за донос из сейфа компромата. Его можно продать, сдать наверх или сжечь, но пока он в конторе, охрана решает чужие двери.',
-    target: { floor: FloorLevel.MAINTENANCE, roomType: RoomType.OFFICE, zoneTag: 'evidence', hint: 'Этаж 69: сейф компромата в долговой конторе, рядом с картотекой расписок.' },
+    target: { floor: FloorLevel.MAINTENANCE, route: FLOOR_69_ROUTE_TARGET, roomType: RoomType.OFFICE, zoneTag: 'evidence', hint: 'Этаж 69: сейф компромата в долговой конторе, рядом с картотекой расписок.' },
     targetItem: 'denunciation', targetCount: 1, rewardItem: 'blank_form', rewardCount: 2,
     extraRewards: [{ defId: 'ink_bottle', count: 1 }],
     moneyReward: 105, rewardResourceId: 'documents', rewardScarcityMax: 2.5,
@@ -1088,7 +1296,7 @@ export const CONTRACTS: ContractDef[] = [
   {
     id: 'ministry_paper_eater_warrant', title: 'Ордер на печатееда', issuer: 'Пост архивной охраны',
     faction: Faction.LIQUIDATOR, rank: 2, type: QuestType.KILL,
-    desc: 'Пост архивной охраны ставит печатееда под зачистку. Убей его между стеллажами за жетон; если он доест пропуска, начнёт выдавать людей обратно.',
+    desc: 'Пост архивной охраны ставит печатееда под зачистку. Убей его между стеллажами за жетон; если он доест пропуска, полезет к живым делам.',
     target: { floor: FloorLevel.MINISTRY, roomType: RoomType.STORAGE, zoneTag: 'archive_combat', hint: 'Министерство: архив, где бумаги шевелятся сами.' },
     targetMonsterKind: MonsterKind.PECHATEED, killNeeded: 1, rewardItem: 'liquidator_token', rewardCount: 1,
     moneyReward: 150, xpReward: 70, relationDelta: 10, tags: ['ministry', 'admin', 'combat', 'paper'],
@@ -1097,7 +1305,7 @@ export const CONTRACTS: ContractDef[] = [
     id: 'ministry_paragraph_counterpoint', title: 'Пункт без возражений', issuer: 'Кабинет отказных параграфов',
     faction: Faction.LIQUIDATOR, rank: 2, type: QuestType.KILL,
     desc: 'Кабинет отказных параграфов платит неподписанным ордером за уничтожение Параграфа. Держи шкаф между собой и текстом, сближайся после залпа и не дай ему переписать пропуск.',
-    target: { floor: FloorLevel.MINISTRY, roomType: RoomType.OFFICE, zoneTag: 'archive_combat', hint: 'Министерство: кабинет отказных параграфов; стены-бланки дают укрытие от прямой формулировки.' },
+    target: { floor: FloorLevel.MINISTRY, roomType: RoomType.OFFICE, zoneTag: 'archive_combat', hint: 'Министерство: кабинет отказных параграфов; шкафы и столы дают укрытие от прямого выстрела Параграфа.' },
     targetMonsterKind: MonsterKind.PARAGRAPH, killNeeded: 1, rewardItem: 'unsigned_order', rewardCount: 1,
     moneyReward: 160, xpReward: 80, relationDelta: 11, tags: ['ministry', 'admin', 'combat', 'paragraph', 'counterplay', 'paper'],
   },
@@ -1122,7 +1330,7 @@ export const CONTRACTS: ContractDef[] = [
   {
     id: 'ministry_second_copy_stamp', title: 'Второй экземпляр', issuer: 'Стол вторых экземпляров',
     faction: Faction.CITIZEN, rank: 1, type: QuestType.FETCH,
-    desc: 'Стол вторых экземпляров: принести два пустых бланка и сургуч. Без второго экземпляра первый документ начинает спорить с дверью.',
+    desc: 'Стол вторых экземпляров: принести два пустых бланка и сургуч. Без второго экземпляра пост разворачивает тебя у двери.',
     target: { floor: FloorLevel.MINISTRY, roomType: RoomType.OFFICE, zoneTag: 'blank_forms', hint: 'Министерство: стол вторых экземпляров, шкафы бланков и комната печатей.' },
     targetItem: 'blank_form', targetCount: 2, rewardItem: 'official_permit_slip', rewardCount: 1,
     extraRewards: [{ defId: 'seal_wax', count: 1 }],
@@ -1196,7 +1404,7 @@ export const CONTRACTS: ContractDef[] = [
   {
     id: 'liq_archive_case_inspection', title: 'Дело Л-47', issuer: 'Архив ликвидаторских дел',
     faction: Faction.LIQUIDATOR, rank: 2, type: QuestType.VISIT,
-    desc: 'Архив ликвидаторских дел просит осмотреть Л-47 и сверить маршрут выезда до новой зачистки. Плата 7.62ТТ; бумага там стреляет раньше охраны.',
+    desc: 'Архив ликвидаторских дел просит осмотреть Л-47 и сверить маршрут выезда до новой зачистки. Плата 7.62ТТ; Параграф там стреляет раньше охраны.',
     target: {
       floor: FloorLevel.MINISTRY, roomType: RoomType.OFFICE, roomName: 'Архив ликвидаторских дел',
       zoneTag: 'liquidator_archive', hint: 'Министерство: архив ликвидаторских дел, запертая картотека Л-47.',
@@ -1220,7 +1428,7 @@ export const CONTRACTS: ContractDef[] = [
   {
     id: 'liq_archive_paragraph_l47', title: 'Параграф Л-47', issuer: 'Архивная охрана',
     faction: Faction.LIQUIDATOR, rank: 3, type: QuestType.KILL,
-    desc: 'Архивная охрана ставит Параграф Л-47 под зачистку в запертой картотеке. Награда фильтром и деньгами; цель стреляет формулировками через стеллажи.',
+    desc: 'Архивная охрана ставит Параграф Л-47 под зачистку в запертой картотеке. Награда фильтром и деньгами; цель стреляет по прямой через стеллажи.',
     target: {
       floor: FloorLevel.MINISTRY, roomType: RoomType.OFFICE, roomName: 'Архив ликвидаторских дел',
       zoneTag: 'liquidator_archive', hint: 'Министерство: задняя картотека архива Л-47, держите укрытие между стеллажами.',
@@ -1232,7 +1440,7 @@ export const CONTRACTS: ContractDef[] = [
   {
     id: 'liq_archive_sealed_report', title: 'Рапорт под сургучом', issuer: 'Скрытая опись Л-47',
     faction: Faction.LIQUIDATOR, rank: 2, type: QuestType.FETCH,
-    desc: 'Скрытая опись Л-47 просит рапорт под сургучом с запечатанной полки. Плата санитарным набором; охрана смотрит на руки, не на формулировки.',
+    desc: 'Скрытая опись Л-47 просит рапорт под сургучом с запечатанной полки. Плата санитарным набором; охрана смотрит на руки и сургуч.',
     target: {
       floor: FloorLevel.MINISTRY, roomType: RoomType.OFFICE, roomName: 'Архив ликвидаторских дел',
       zoneTag: 'liquidator_archive', hint: 'Министерство: запечатанная полка рапортов в архиве Л-47.',
@@ -1244,10 +1452,10 @@ export const CONTRACTS: ContractDef[] = [
   {
     id: 'ministry_document_gate_n3', title: 'Проверка коридора N3', issuer: 'Окно N3',
     faction: Faction.CITIZEN, rank: 1, type: QuestType.FETCH,
-    desc: 'Окно N3 просит официальный корешок пропуска для проверки коридора. За ключ покажи сухую бумагу на посту; без нее охрана запишет тебя как лишнее дыхание у шкафа.',
-    target: { floor: FloorLevel.MINISTRY, roomType: RoomType.OFFICE, zoneTag: 'document_gate', hint: 'Министерство: проверочный коридор, пост N3 и стол, где сначала сверяют корешок.' },
+    desc: 'Окно N3 просит официальный корешок, но пост принимает разные риски: законный пропуск, кованую печать, краденую карточку, расписку ускорительного сбора или акт о пропавшей записи. Всё, кроме чистого корешка, оставляет след ревизии.',
+    target: { floor: FloorLevel.MINISTRY, roomType: RoomType.OFFICE, zoneTag: 'document_gate', hint: 'Министерство: проверочный коридор N3, касса ускорительного сбора, шкаф карточек и стол актов разоблачения.' },
     targetItem: 'official_permit_slip', targetCount: 1, rewardItem: 'key', rewardCount: 1,
-    moneyReward: 100, xpReward: 55, relationDelta: 8, tags: ['ministry', 'admin', 'paper', 'documents', 'official', 'access', 'document_gate'],
+    moneyReward: 100, xpReward: 55, relationDelta: 8, tags: ['ministry', 'admin', 'paper', 'documents', 'official', 'access', 'document_gate', 'forgery', 'theft', 'bribe', 'expose', 'audit_risk'],
   },
   {
     id: 'ministry_weapon_permit_packet', title: 'Пакет на короткоствол', issuer: 'Бюро оружразрешений',
@@ -1889,7 +2097,7 @@ export const CONTRACTS: ContractDef[] = [
 ];
 
 export function contractToQuest(def: ContractDef, questId: number, giver?: { id: number; name?: string }, moneyReward = def.moneyReward): Quest {
-  return {
+  const quest: RouteQuest = {
     id: questId,
     type: def.type,
     giverId: giver?.id ?? -1000 - questId,
@@ -1900,6 +2108,7 @@ export function contractToQuest(def: ContractDef, questId: number, giver?: { id:
     targetFloor: def.target.floor,
     targetRoomType: def.target.roomType,
     targetZoneTag: def.target.zoneTag,
+    targetMarker: contractTargetMarker(def),
     targetHint: def.target.hint,
     targetMonsterKind: def.targetMonsterKind,
     killCount: def.type === QuestType.KILL ? 0 : undefined,
@@ -1918,6 +2127,9 @@ export function contractToQuest(def: ContractDef, questId: number, giver?: { id:
     visitFloor: def.type === QuestType.VISIT ? def.target.floor : undefined,
     done: false,
   };
+  const route = routeTargetForContract(def);
+  if (route) quest.targetRoute = route;
+  return quest;
 }
 
 export function questTargetEventData(q: Quest): Record<string, unknown> {
@@ -1926,5 +2138,24 @@ export function questTargetEventData(q: Quest): Record<string, unknown> {
   if (q.targetRoomType !== undefined) data.targetRoomType = q.targetRoomType;
   if (q.targetZoneTag) data.targetZoneTag = q.targetZoneTag;
   if (q.targetHint) data.targetHint = q.targetHint;
+  if (q.targetMarker) {
+    data.targetMarker = { ...q.targetMarker };
+    if (q.targetMarker.roomName) data.targetRoomName = q.targetMarker.roomName;
+    if (q.targetMarker.designFloorId) data.targetDesignFloorId = q.targetMarker.designFloorId;
+    if (q.targetMarker.proceduralTag) data.targetProceduralTag = q.targetMarker.proceduralTag;
+    if (q.targetMarker.routeZ !== undefined) data.targetZ = q.targetMarker.routeZ;
+    if (q.targetMarker.risk !== undefined) data.targetRisk = q.targetMarker.risk;
+  }
+  const route = questTargetRoute(q);
+  if (route) {
+    data.targetRoute = route;
+    if (route.z !== undefined) data.targetZ = route.z;
+    if (route.designFloorId) data.targetDesignFloorId = route.designFloorId;
+    if (route.anomalyId) data.targetAnomalyId = route.anomalyId;
+    if (route.proceduralTag) data.targetProceduralTag = route.proceduralTag;
+    if (route.tags?.length) data.targetRouteTags = [...route.tags];
+    if (route.label) data.targetRouteLabel = route.label;
+    if (route.risk !== undefined) data.targetRisk = route.risk;
+  }
   return data;
 }

@@ -8,7 +8,7 @@ import {
   EntityType, AIGoal, MonsterKind,
   msg,
 } from '../core/types';
-import { World } from '../core/world';
+import { World, replaceWorldFromGeneration } from '../core/world';
 import { ITEMS, NOTES } from '../data/catalog';
 import { addFactionRelMutual } from '../data/relations';
 import { spawnCount } from '../data/items';
@@ -17,7 +17,16 @@ import { MONSTERS, applyMonsterVariant } from '../entities/monster';
 import { Spr } from '../render/sprite_index';
 import { stampMark, MarkType } from '../render/marks';
 import { forceHide } from './ai';
-import { playIstotitBell, playMaronaryPing, playMaronarySignal, playSamosborAlarm, playVeretarSignal } from './audio';
+import {
+  playIstotitBell,
+  playMaronaryPing,
+  playMaronarySignal,
+  playSamosborAlarm,
+  playVeretarSignal,
+  setAmbientDroneMode,
+  type AmbientDroneMode,
+} from './audio';
+import { recordPlayerDamage } from './damage';
 import { reassignQuestGivers } from './quests';
 import { regrowMaze } from '../gen/living';
 import { floorLevelDisplayName, generateFloor, nextPostSamosborTimer, type FloorGeneration } from '../gen/floor_manifest';
@@ -29,17 +38,31 @@ import { getSamosborLocalShelters } from './samosbor_hooks';
 import { replaceCellHazards } from './cell_hazards';
 import { tickSamosborDirector } from './samosbor_director';
 import { ensureRoomContainers } from './containers';
+import { replaceRouteCueStateForRebuild } from './route_cues';
+import { replaceEmergencyPanelStateForRebuild } from './emergency_panels';
 import { changeResourceStock } from './economy';
 import { observeRumorEvent } from './rumor';
 import { getNpcMemory } from './npc_memory';
 import { bfsPath } from './ai/pathfinding';
 import { createMaronaryWrongDoorRemap } from './wrong_door';
+import { canSpawnEntityType, entitySpawnSlots } from './entity_limits';
 import {
   blocksHermodoorBorerSeal,
   clearHermodoorBorerForRebuild,
   queuePostSamosborHermodoorBorer,
   updateHermodoorBorer,
 } from './hermodoor_borer';
+import {
+  cancelSamosborWave,
+  chooseSamosborScale,
+  finishSamosborWave,
+  getSamosborWaveDebugLines,
+  isSamosborWaveActive,
+  isSamosborWaveDebugActive,
+  startSamosborWave,
+  tickSamosborWave,
+  type SamosborWaveScale,
+} from './samosbor_wave';
 import {
   type ActiveSamosborVariant,
   type SamosborAftermathBeatDef,
@@ -57,7 +80,6 @@ const SAMOSBOR_DUR_MAX = 90;      // max duration (1.5 game hours = 90 real sec)
 const MONSTERS_PER_SAMOSBOR = 6;
 const FOG_SAMPLES_PER_TICK = 64;  // random cells sampled per tick for fog spread
 const FOG_SPAWN_INTERVAL  = 1.0;  // seconds between monster spawns in fog
-const MONSTER_CAP = 10_000;       // soft cap for auto-spawned monsters on the map
 const SEAL_BEFORE_END = 10;       // seal apartments 10 seconds before samosbor ends
 const SAMOSBOR_DIRECTOR_ACTIVE_INTERVAL = 12;
 const SAMOSBOR_WARNING_WINDOW = 18;
@@ -78,6 +100,7 @@ const UNSHELTERED_FOG_RADIUS = 4;
 const UNSHELTERED_FOG_STRENGTH = 155;
 const UNSHELTERED_HP_DAMAGE = 4;
 const UNSHELTERED_PSI_DAMAGE = 3;
+const AFTERMATH_FACTION_CONTROL_CAP = 96;
 const FOG_DIRS_X = [1, -1, 0, 0];
 const FOG_DIRS_Y = [0, 0, 1, -1];
 
@@ -86,6 +109,7 @@ let activeSamosborZoneId = -1;
 let knownSamosborTime = 0;
 let samosborDirectorAccum = 0;
 let maronaryPingAccum = 0;
+let activeSamosborScale: SamosborWaveScale = 'full';
 let istotitShelterRoomIds: number[] = [];
 let istotitShelterCycle = -1;
 let istotitShelterFloor = FloorLevel.LIVING;
@@ -174,8 +198,9 @@ function clearIstotitShelters(): void {
   istotitSupplyContainerIds = [];
 }
 
-function clearSamosborWarning(clearVariant: boolean): void {
+function clearSamosborWarning(clearVariant: boolean, resetDrone = true): void {
   samosborWarning = null;
+  if (resetDrone) setAmbientDroneMode('normal');
   if (clearVariant) {
     clearActiveSamosborVariant();
     clearIstotitShelters();
@@ -196,6 +221,8 @@ export function resetSamosborRuntimeForTests(): void {
   lastVeretarAreaLeaks = 0;
   lastVeretarAreaLeakAt = -Infinity;
   fogSpawnAccum = 0;
+  activeSamosborScale = 'full';
+  cancelSamosborWave();
   aftermathRuntime.clear();
   clearSamosborWarning(true);
   istotitDecisionCycle = -1;
@@ -281,7 +308,7 @@ function seedUnshelteredFog(world: World, x: number, y: number): number {
   return changed;
 }
 
-function applyUnshelteredPressure(player: Entity, state: GameState): { hpDamage: number; psiDamage: number } {
+function applyUnshelteredPressure(player: Entity, state: GameState, detail: string): { hpDamage: number; psiDamage: number } {
   let hpDamage = 0;
   let psiDamage = 0;
   if (player.hp !== undefined) {
@@ -291,6 +318,7 @@ function applyUnshelteredPressure(player: Entity, state: GameState): { hpDamage:
     if (hpDamage > 0) {
       state.dmgFlash = Math.max(state.dmgFlash, 0.3);
       state.dmgSeed = (state.dmgSeed + 23) | 0;
+      recordPlayerDamage(state, undefined, hpDamage, `${detail}: -${hpDamage}`, 'samosbor');
     }
   }
   if (player.rpg) {
@@ -334,8 +362,9 @@ function resolvePlayerShelterAtSeal(
       targetName: 'Гермодверь',
       severity: 3,
       privacy: 'local',
-      tags: ['samosbor', 'shelter', 'success', `variant_${variant.def.id}`],
+      tags: ['samosbor', 'shelter', 'success', 'prepared', `variant_${variant.def.id}`],
       data: {
+        outcome: 'prepared_shelter',
         roomName: room.name,
         roomId: room.id,
         doorCount: Math.min(room.doors.length, PLAYER_SHELTER_DOOR_CAP),
@@ -348,7 +377,7 @@ function resolvePlayerShelterAtSeal(
   }
 
   const fogCells = seedUnshelteredFog(world, px, py);
-  const pressure = applyUnshelteredPressure(player, state);
+  const pressure = applyUnshelteredPressure(player, state, `${variant.def.displayName}: вне рабочей гермы`);
   state.msgs.push(msg('Вы остались снаружи рабочей гермы. Через щель пошёл туман; стало больно дышать.', state.time, '#f66'));
   publishEvent(state, {
     type: 'samosbor_warning',
@@ -361,8 +390,9 @@ function resolvePlayerShelterAtSeal(
     actorFaction: player.faction,
     severity: 4,
     privacy: 'local',
-    tags: ['samosbor', 'shelter', 'failure', `variant_${variant.def.id}`],
+    tags: ['samosbor', 'shelter', 'failure', 'unprepared', `variant_${variant.def.id}`],
     data: {
+      outcome: 'unprepared_shelter',
       warning: 'Укрытие сорвано: игрок остался вне рабочей гермы.',
       roomName: room?.name,
       roomId: room?.id,
@@ -710,6 +740,8 @@ function guideNpcToShelter(world: World, npc: Entity, roomId: number): void {
   const ty = world.wrap(room.y + Math.floor(room.h / 2));
   npc.ai.path = bfsPath(world, Math.floor(npc.x), Math.floor(npc.y), tx, ty);
   npc.ai.pi = 0;
+  npc.ai.tx = tx;
+  npc.ai.ty = ty;
   npc.ai.goal = npc.ai.path.length > 0 ? AIGoal.FLEE : AIGoal.IDLE;
   npc.ai.timer = 6;
 }
@@ -785,14 +817,17 @@ function istotitFollowBell(
   const dust = stampIstotitGoldDust(world, x, y, 5, 84_000 + state.samosborCount * 101);
   const fogCells = seedIstotitBacklashFog(world, x, y, 3, 95);
   if (player.hp !== undefined) {
+    const before = player.hp;
     player.hp = Math.max(1, player.hp - 6);
+    const hpDamage = before - player.hp;
     state.dmgFlash = Math.max(state.dmgFlash, 0.22);
     state.dmgSeed = (state.dmgSeed + 17) | 0;
+    if (hpDamage > 0) recordPlayerDamage(state, undefined, hpDamage, `Истотит: пошли на колокол -${hpDamage}`, 'samosbor');
   }
   if (player.rpg) player.rpg.psi = Math.max(0, player.rpg.psi - 8);
   const pos = Math.random() < 0.45 ? findWalkableNear(world, x, y, 4, 9) : null;
   let spawned = 0;
-  if (pos && countMonsters(entities) < MONSTER_CAP) {
+  if (pos && canSpawnEntityType(entities, EntityType.MONSTER)) {
     entities.push(createMonster(world, nextId, MonsterKind.EYE, pos.x + 0.5, pos.y + 0.5, state.currentFloor, true));
     spawned = 1;
   }
@@ -825,7 +860,7 @@ function istotitDisruptRite(
   const fogCells = seedIstotitBacklashFog(world, x, y, 4, 135);
   const pos = findWalkableNear(world, x, y, 3, 7);
   let spawned = 0;
-  if (pos && countMonsters(entities) < MONSTER_CAP) {
+  if (pos && canSpawnEntityType(entities, EntityType.MONSTER)) {
     entities.push(createMonster(world, nextId, MonsterKind.SBORKA, pos.x + 0.5, pos.y + 0.5, state.currentFloor, true));
     spawned = 1;
   }
@@ -1004,10 +1039,18 @@ function warningMapCode(variant: ActiveSamosborVariant): string {
 
 function warningAudioLine(variant: ActiveSamosborVariant): string {
   if (variant.def.audioCue === 'bell') return 'звук: колокол вместо сирены';
-  if (variant.def.audioCue === 'maronary') return 'звук: высокий писк; не идти на источник';
-  if (variant.def.audioCue === 'veretar') return 'звук: внешняя тревога за белым окном';
+  if (variant.def.audioCue === 'beep') return 'звук: высокий писк; не идти на источник';
+  if (variant.def.audioCue === 'distant_alarm') return 'звук: внешняя тревога за белым окном';
+  if (variant.def.audioCue === 'siren') return 'звук: штатная сирена';
   if (variant.noSiren) return 'звук: штатной сирены нет';
   return 'звук: штатная сирена';
+}
+
+function ambientDroneModeForVariant(variant: ActiveSamosborVariant): AmbientDroneMode {
+  if (variant.def.audioCue === 'bell') return 'istotit';
+  if (variant.def.audioCue === 'beep') return 'maronary';
+  if (variant.def.audioCue === 'distant_alarm') return 'veretar';
+  return variant.noSiren ? 'samosbor' : 'samosbor';
 }
 
 function warningMapLine(
@@ -1059,19 +1102,20 @@ function buildWarningSignals(
 }
 
 function playVariantWarningCue(variant: ActiveSamosborVariant): void {
+  setAmbientDroneMode(ambientDroneModeForVariant(variant));
   if (variant.def.audioCue === 'bell') {
     playIstotitBell();
     return;
   }
-  if (variant.def.audioCue === 'maronary') {
+  if (variant.def.audioCue === 'beep') {
     playMaronarySignal();
     return;
   }
-  if (variant.def.audioCue === 'veretar') {
+  if (variant.def.audioCue === 'distant_alarm') {
     playVeretarSignal();
     return;
   }
-  if (!variant.noSiren) playSamosborAlarm();
+  if (variant.def.audioCue === 'siren' || !variant.noSiren) playSamosborAlarm();
 }
 
 function warningBarkForVariant(variant: ActiveSamosborVariant, isFemale: boolean): string {
@@ -1251,6 +1295,10 @@ export function updateSamosbor(
 
   knownSamosborTime = state.time;
   state.samosborTimer -= dt;
+  if (!state.samosborActive && isSamosborWaveActive() && !isSamosborWaveDebugActive()) {
+    cancelSamosborWave();
+    activeSamosborScale = 'full';
+  }
 
   if (!state.samosborActive && state.samosborTimer > SAMOSBOR_WARNING_WINDOW + 0.5 && samosborWarning) {
     clearSamosborWarning(true);
@@ -1271,6 +1319,7 @@ export function updateSamosbor(
     fogSpawnAccum = 0;
     samosborSealed = false;
     activeSamosborZoneId = -1;
+    activeSamosborScale = 'full';
     samosborDirectorAccum = 0;
     maronaryPingAccum = 0;
     samosborPlayerShelterRoomId = -1;
@@ -1303,7 +1352,29 @@ export function updateSamosbor(
 
     // Capture a zone with фиолетовый туман + spawn fog boss
     activeSamosborZoneId = captureZone(world, entities, nextId, state, variant, warningZoneId, warning.greenSourceCount, warning.wrongDoorIdx);
-    clearSamosborWarning(false);
+    const scale = chooseSamosborScale(state);
+    activeSamosborScale = scale;
+    if (scale !== 'full') {
+      const zone = activeSamosborZoneId >= 0 ? world.zones[activeSamosborZoneId] : undefined;
+      const player = findPlayer(entities);
+      const playerRoom = player ? world.roomAt(player.x, player.y) : null;
+      const protectedRooms = playerRoom
+        ? mergeRoomIds(getSamosborShelterRoomIds(state), [playerRoom.id])
+        : getSamosborShelterRoomIds(state);
+      const started = startSamosborWave(
+        world,
+        entities,
+        state,
+        scale,
+        zone?.cx ?? warning.zoneX,
+        zone?.cy ?? warning.zoneY,
+        { protectedRoomIds: protectedRooms },
+      );
+      if (!started) activeSamosborScale = 'full';
+    } else {
+      cancelSamosborWave();
+    }
+    clearSamosborWarning(false, false);
 
     // Spawn monsters in corridors
     spawnMonsters(world, entities, nextId, state.samosborCount, variant, state.currentFloor);
@@ -1330,6 +1401,9 @@ export function updateSamosbor(
 
   // ── Fog spread — universal, every tick, even outside samosbor ──
   spreadFog(world);
+  if ((state.samosborActive || isSamosborWaveDebugActive()) && isSamosborWaveActive()) {
+    tickSamosborWave(world, entities, state);
+  }
 
   // ── Spawn monsters in fogged areas during samosbor ──
   if (state.samosborActive) {
@@ -1360,6 +1434,7 @@ export function updateSamosbor(
   if (state.samosborActive && state.samosborTimer <= 0) {
     // ── END samosbor: unseal, mark for rebuild ──
     const endedVariant = getActiveSamosborVariant();
+    const endedScale = activeSamosborScale;
     const aftermathZone = activeSamosborZoneId >= 0 ? world.zones[activeSamosborZoneId] : undefined;
     const endedIstotitDecision = endedVariant?.def.id === 'istotit'
       ? activeIstotitDecision(state) ?? 'none'
@@ -1423,6 +1498,13 @@ export function updateSamosbor(
     // Re-roll contextual NPC assignment givers after the shock.
     reassignQuestGivers(entities);
     queuePostSamosborHermodoorBorer(world, state);
+
+    activeSamosborScale = 'full';
+    if (endedScale !== 'full') {
+      finishSamosborWave(world, entities, state);
+      applyPendingSamosborAftermathAfterWave(world, entities, nextId, state.currentFloor);
+      return false;
+    }
 
     return true; // signal: heavy rebuild needed
   }
@@ -1513,13 +1595,6 @@ function unsealRooms(world: World, roomIds: readonly number[]): void {
 }
 
 /* ── Full world rebuild (except apartments) — runs AFTER samosbor ends ── */
-const ITEM_SOFT_CAP = 10_000;  // soft cap: only spawn new items up to this count
-
-function countItemDrops(entities: Entity[]): number {
-  let n = 0;
-  for (const e of entities) if (e.type === EntityType.ITEM_DROP && e.alive) n++;
-  return n;
-}
 
 export function rebuildWorld(
   world: World, entities: Entity[], nextId: { v: number }, _samosborCount: number,
@@ -1538,30 +1613,12 @@ export function rebuildWorld(
     }
     entities.length = 0;
     const gen = replacement ?? generateFloor(floor);
-    // Overwrite world arrays in-place
-    world.cells.set(gen.world.cells);
-    world.wallTex.set(gen.world.wallTex);
-    world.floorTex.set(gen.world.floorTex);
-    world.roomMap.set(gen.world.roomMap);
-    world.features.set(gen.world.features);
-    world.light.set(gen.world.light);
-    world.zoneMap.set(gen.world.zoneMap);
-    world.aptMask.fill(0);
-    world.hermoWall.fill(0);
-    world.factionControl.set(gen.world.factionControl);
-    world.fog.fill(0);
-    world.rooms = gen.world.rooms;
-    world.zones = gen.world.zones;
-    world.doors = gen.world.doors;
-    world.liftDir.set(gen.world.liftDir);
-    world.surfaceMap = gen.world.surfaceMap;
-    world.anomalyTeleports = gen.world.anomalyTeleports;
-    world.slideCells = gen.world.slideCells;
-    world.screenCells = gen.world.screenCells;
-    world.apartmentRoomCount = 0;
-    world.containers = gen.world.containers;
-    world.rebuildContainerMap();
+    // Full-floor rebuilds use the fresh generator-owned masks exactly:
+    // authored shelters may keep aptMask/hermoWall, while unmarked volatile cells lose stale protection.
+    replaceWorldFromGeneration(world, gen);
     replaceCellHazards(world, gen.world);
+    replaceRouteCueStateForRebuild(world, gen.world);
+    replaceEmergencyPanelStateForRebuild(world, gen.world);
     // Restore kept entities + merge new entities from generator
     for (const e of kept) entities.push(e);
     for (const e of gen.entities) {
@@ -1593,13 +1650,15 @@ export function rebuildWorld(
   }
 
   // Regenerate the entire volatile maze
+  replaceRouteCueStateForRebuild(world);
+  replaceEmergencyPanelStateForRebuild(world);
   regrowMaze(world);
   relocateBlockedEntities(world, entities);
 
-  // Spawn new items in volatile rooms (zone-level dependent, soft cap 10k)
-  let itemCount = countItemDrops(entities);
+  // Spawn new items in volatile rooms within the shared item soft limit.
+  let itemSlots = entitySpawnSlots(entities, EntityType.ITEM_DROP, Number.MAX_SAFE_INTEGER);
   for (let ri = aptCount; ri < world.rooms.length; ri++) {
-    if (itemCount >= ITEM_SOFT_CAP) break;
+    if (itemSlots <= 0) break;
     const room = world.rooms[ri];
     if (!room || room.w < 3 || room.h < 3) continue;
     const ci = world.idx(room.x + Math.floor(room.w / 2), room.y + Math.floor(room.h / 2));
@@ -1612,7 +1671,7 @@ export function rebuildWorld(
       .filter(it => it.spawnW >= 0.01);
     const numItems = rng(0, 1);
     for (let n = 0; n < numItems; n++) {
-      if (itemCount >= ITEM_SOFT_CAP) break;
+      if (itemSlots <= 0) break;
       const def = weightedPick(adjusted);
       if (!def) continue;
       const ix = room.x + rng(1, Math.max(1, room.w - 2));
@@ -1622,7 +1681,7 @@ export function rebuildWorld(
         x: ix + 0.5, y: iy + 0.5, angle: 0, pitch: 0, alive: true, speed: 0, sprite: Spr.ITEM_DROP,
         inventory: [{ defId: def.id, count: rng(1, spawnCount(def)), data: def.id === 'note' ? pick(NOTES) : undefined }],
       });
-      itemCount++;
+      itemSlots--;
     }
   }
   ensureRoomContainers(world, floor);
@@ -1737,6 +1796,15 @@ function applyPendingSamosborAftermath(
   tickSamosborDirector(world, entities, state, nextId, pending.variant, 'post_samosbor');
 }
 
+export function applyPendingSamosborAftermathAfterWave(
+  world: World,
+  entities: Entity[],
+  nextId: { v: number },
+  floor: FloorLevel,
+): void {
+  applyPendingSamosborAftermath(world, entities, nextId, floor);
+}
+
 function eventTypeForAftermath(def: SamosborAftermathBeatDef): WorldEventType {
   switch (def.effect) {
     case 'production_shortage':
@@ -1830,6 +1898,7 @@ function applySamosborAftermathBeat(
     case 'item_residue':
       return applyItemResidue(def, pending, world, entities, nextId);
   }
+  return false;
 }
 
 function applyFogResidue(
@@ -1900,6 +1969,34 @@ function findRouteScarDoor(world: World, x: number, y: number, radius: number): 
   return bestIdx;
 }
 
+function stampAftermathDoorMark(
+  world: World,
+  di: number,
+  pending: PendingAftermath,
+  def: SamosborAftermathBeatDef,
+): string {
+  const x = di % W;
+  const y = (di / W) | 0;
+  if (pending.variant.def.id === 'maronary') {
+    stampMaronarySourceMark(world, di, 86_000 + di, 0.52);
+    return 'maronary_ring';
+  }
+  if (pending.variant.def.id === 'istotit') {
+    stampMark(world, x, y, 0.5, 0.5, 0.38, MarkType.PSI, 86_000 + di, 214, 166, 75, 150);
+    return 'gold_dust';
+  }
+  if (pending.variant.def.id === 'veretar') {
+    stampMark(world, x, y, 0.5, 0.5, 0.38, MarkType.SPLAT, 86_000 + di, 244, 241, 223, 150);
+    return 'white_scar';
+  }
+  if (def.tags.includes('water') || pending.variant.def.id === 'wet') {
+    stampMark(world, x, y, 0.5, 0.5, 0.42, MarkType.DRIP, 86_000 + di, 70, 100, 120, 120);
+    return 'wet_drag';
+  }
+  stampMark(world, x, y, 0.5, 0.5, 0.38, MarkType.SCORCH, 86_000 + di, 94, 82, 70, 135, true);
+  return 'scorch';
+}
+
 function applyDoorFault(
   def: SamosborAftermathBeatDef,
   pending: PendingAftermath,
@@ -1919,13 +2016,13 @@ function applyDoorFault(
     ? DoorState.HERMETIC_OPEN
     : DoorState.OPEN;
   door.timer = Math.max(door.timer, 45);
-  if (pending.variant.def.id === 'maronary') {
-    stampMaronarySourceMark(world, di, 86_000 + di, 0.52);
-  }
+  const doorMark = stampAftermathDoorMark(world, di, pending, def);
   publishAftermath(def, pending, di % W, (di / W) | 0, {
     doorIdx: di,
     oldState,
     newState: door.state,
+    doorMarked: true,
+    doorMark,
     wrongDoor: pending.variant.def.id === 'maronary' || def.tags.includes('wrong_door'),
   });
   return true;
@@ -1990,7 +2087,7 @@ function applyMonsterAftershock(
   entities: Entity[],
   nextId: { v: number },
 ): boolean {
-  if (countMonsters(entities) >= MONSTER_CAP) return false;
+  if (!canSpawnEntityType(entities, EntityType.MONSTER)) return false;
   const c = aftermathCenter(world, entities, pending, true);
   const pos = findWalkableNear(world, c.x, c.y, 5, Math.max(7, def.radius));
   if (!pos) return false;
@@ -2059,7 +2156,10 @@ function applyRumorSeed(
     const zc = aftermathCenter(world, entities, pending, false);
     npcs = localNpcs(world, entities, zc.x, zc.y, def.radius, 8);
   }
-  if (npcs.length === 0) return false;
+  if (npcs.length === 0) {
+    publishAftermath(def, pending, c.x, c.y, { npcCount: 0, rumorSpawned: true, rumorCarrier: 'world_event' });
+    return true;
+  }
   for (const npc of npcs) {
     observeRumorEvent(npc, {
       type: 'samosbor_warning',
@@ -2071,7 +2171,7 @@ function applyRumorSeed(
       monsterKind: def.monsterKind,
     }, pending.state.time);
   }
-  publishAftermath(def, pending, c.x, c.y, { npcCount: npcs.length });
+  publishAftermath(def, pending, c.x, c.y, { npcCount: npcs.length, rumorSpawned: true, rumorCarrier: 'npc_memory' });
   return true;
 }
 
@@ -2090,6 +2190,58 @@ function applyProductionShortage(
   return true;
 }
 
+function factionToAftermathControl(faction: Faction | undefined): ZoneFaction | null {
+  if (faction === Faction.LIQUIDATOR) return ZoneFaction.LIQUIDATOR;
+  if (faction === Faction.CULTIST) return ZoneFaction.CULTIST;
+  if (faction === Faction.WILD) return ZoneFaction.WILD;
+  if (faction === Faction.CITIZEN || faction === Faction.SCIENTIST || faction === Faction.PLAYER) return ZoneFaction.CITIZEN;
+  return null;
+}
+
+function defaultAftermathControlFaction(pending: PendingAftermath): ZoneFaction {
+  if (pending.variant.def.id === 'meat') return ZoneFaction.CULTIST;
+  if (pending.variant.def.id === 'electric' || pending.variant.def.id === 'wet') return ZoneFaction.LIQUIDATOR;
+  return ZoneFaction.CITIZEN;
+}
+
+function pickAftermathControlFaction(pending: PendingAftermath, npcs: readonly Entity[]): ZoneFaction {
+  for (const npc of npcs) {
+    const zf = factionToAftermathControl(npc.faction);
+    if (zf !== null && zf !== ZoneFaction.CITIZEN) return zf;
+  }
+  return defaultAftermathControlFaction(pending);
+}
+
+function applyAftermathFactionControl(
+  world: World,
+  cx: number,
+  cy: number,
+  zoneId: number,
+  zf: ZoneFaction,
+  radius: number,
+): number {
+  if (zoneId < 0) return 0;
+  const r = Math.max(2, Math.min(10, radius));
+  const r2 = r * r;
+  let changed = 0;
+  for (let dy = -r; dy <= r; dy++) {
+    for (let dx = -r; dx <= r; dx++) {
+      if (changed >= AFTERMATH_FACTION_CONTROL_CAP) return changed;
+      if (dx * dx + dy * dy > r2) continue;
+      const x = world.wrap(cx + dx);
+      const y = world.wrap(cy + dy);
+      const i = world.idx(x, y);
+      if (world.zoneMap[i] !== zoneId) continue;
+      const cell = world.cells[i];
+      if (cell === Cell.WALL || cell === Cell.ABYSS || cell === Cell.LIFT) continue;
+      if (world.factionControl[i] === ZoneFaction.SAMOSBOR || world.factionControl[i] === zf) continue;
+      world.factionControl[i] = zf;
+      changed++;
+    }
+  }
+  return changed;
+}
+
 function applyFactionPanic(
   def: SamosborAftermathBeatDef,
   pending: PendingAftermath,
@@ -2098,7 +2250,6 @@ function applyFactionPanic(
 ): boolean {
   const c = aftermathCenter(world, entities, pending, true);
   const npcs = localNpcs(world, entities, c.x, c.y, def.radius, 12).filter(e => e.ai);
-  if (npcs.length === 0) return false;
   for (const npc of npcs) {
     const ai = npc.ai!;
     const dx = world.delta(c.x + 0.5, npc.x);
@@ -2108,12 +2259,125 @@ function applyFactionPanic(
     const ty = world.wrap(Math.floor(npc.y + dy / len * 14));
     ai.path = bfsPath(world, Math.floor(npc.x), Math.floor(npc.y), tx, ty);
     ai.pi = 0;
+    ai.tx = tx;
+    ai.ty = ty;
     ai.goal = ai.path.length > 0 ? AIGoal.FLEE : AIGoal.WANDER;
     ai.timer = 5;
     getNpcMemory(npc, pending.state.time).fear = 100;
   }
-  publishAftermath(def, pending, c.x, c.y, { npcCount: npcs.length });
+  const zoneId = world.zoneMap[world.idx(c.x, c.y)];
+  const controlFaction = pickAftermathControlFaction(pending, npcs);
+  const controlCells = applyAftermathFactionControl(world, c.x, c.y, zoneId, controlFaction, Math.min(10, def.radius));
+  if (npcs.length === 0 && controlCells === 0) return false;
+  publishAftermath(def, pending, c.x, c.y, {
+    npcCount: npcs.length,
+    controlCells,
+    controlFaction,
+    factionStateAltered: controlCells > 0,
+  });
   return true;
+}
+
+function addAftermathContainerTag(container: WorldContainer, tag: string): void {
+  if (!container.tags.includes(tag)) container.tags.push(tag);
+}
+
+function canReceiveContainerItem(container: WorldContainer, itemId: string): boolean {
+  if (!ITEMS[itemId]) return false;
+  return container.inventory.some(item => item.defId === itemId) || container.inventory.length < container.capacitySlots;
+}
+
+function addOneContainerItem(container: WorldContainer, itemId: string, data?: unknown): boolean {
+  if (!ITEMS[itemId]) return false;
+  for (const item of container.inventory) {
+    if (item.defId !== itemId) continue;
+    item.count++;
+    return true;
+  }
+  if (container.inventory.length >= container.capacitySlots) return false;
+  container.inventory.push({ defId: itemId, count: 1, data });
+  return true;
+}
+
+function chooseContainerLoot(container: WorldContainer, preferredItemId?: string): { slotIdx: number; itemId: string; data?: unknown } | null {
+  if (preferredItemId) {
+    const preferredIdx = container.inventory.findIndex(item => item.defId === preferredItemId && item.count > 0 && !!ITEMS[item.defId]);
+    if (preferredIdx >= 0) {
+      const item = container.inventory[preferredIdx];
+      return { slotIdx: preferredIdx, itemId: item.defId, data: item.count === 1 ? item.data : undefined };
+    }
+  }
+  for (let slotIdx = 0; slotIdx < container.inventory.length; slotIdx++) {
+    const item = container.inventory[slotIdx];
+    if (item.count > 0 && ITEMS[item.defId]) return { slotIdx, itemId: item.defId, data: item.count === 1 ? item.data : undefined };
+  }
+  return null;
+}
+
+function removeOneContainerItem(container: WorldContainer, slotIdx: number): boolean {
+  const item = container.inventory[slotIdx];
+  if (!item || item.count <= 0) return false;
+  item.count--;
+  if (item.count <= 0) container.inventory.splice(slotIdx, 1);
+  return true;
+}
+
+function findLootReceiver(
+  world: World,
+  pending: PendingAftermath,
+  source: WorldContainer,
+  itemId: string,
+  radius: number,
+): WorldContainer | null {
+  const r2 = radius * radius;
+  let best: WorldContainer | null = null;
+  let bestScore = Infinity;
+  for (const container of world.containers) {
+    if (container.id === source.id || container.floor !== pending.floor) continue;
+    if (!canReceiveContainerItem(container, itemId)) continue;
+    const d2 = world.dist2(source.x + 0.5, source.y + 0.5, container.x + 0.5, container.y + 0.5);
+    if (d2 > r2 && container.zoneId !== source.zoneId && container.zoneId !== pending.zoneId) continue;
+    const accessBias = container.access === 'public' ? -60 : container.access === 'room' ? -30 : 0;
+    const seenBias = container.discovered ? -20 : 0;
+    const zoneBias = container.zoneId === source.zoneId ? -20 : 0;
+    const score = d2 + accessBias + seenBias + zoneBias;
+    if (score < bestScore) {
+      bestScore = score;
+      best = container;
+    }
+  }
+  return best;
+}
+
+function moveAftermathLoot(
+  world: World,
+  pending: PendingAftermath,
+  source: WorldContainer,
+  def: SamosborAftermathBeatDef,
+): Record<string, unknown> {
+  const loot = chooseContainerLoot(source, def.itemId);
+  if (!loot) return { lootMoved: false };
+  const receiver = findLootReceiver(world, pending, source, loot.itemId, Math.max(6, def.radius));
+  if (!receiver || !removeOneContainerItem(source, loot.slotIdx)) return { lootMoved: false };
+  if (!addOneContainerItem(receiver, loot.itemId, loot.data)) {
+    addOneContainerItem(source, loot.itemId, loot.data);
+    return { lootMoved: false };
+  }
+  source.stolenItemIds ??= [];
+  source.stolenItemIds.push(loot.itemId);
+  source.lastAuditAt = pending.state.time;
+  source.discovered = true;
+  receiver.discovered = true;
+  addAftermathContainerTag(source, 'aftermath_loot_source');
+  addAftermathContainerTag(receiver, 'aftermath_loot_receiver');
+  return {
+    lootMoved: true,
+    itemId: loot.itemId,
+    itemCount: 1,
+    sourceContainerId: source.id,
+    receiverContainerId: receiver.id,
+    receiverAccess: receiver.access,
+  };
 }
 
 function applyContainerTheft(
@@ -2143,15 +2407,18 @@ function applyContainerTheft(
   const oldAccess = best.access;
   best.discovered = true;
   if (best.access === 'locked') best.access = 'faction';
-  if (!best.tags.includes('aftermath_unsealed')) best.tags.push('aftermath_unsealed');
-  if (def.itemId && ITEMS[def.itemId] && !best.inventory.some(i => i.defId === def.itemId) && best.inventory.length < best.capacitySlots) {
-    best.inventory.push({ defId: def.itemId, count: 1 });
+  addAftermathContainerTag(best, 'aftermath_unsealed');
+  const moved = moveAftermathLoot(world, pending, best, def);
+  if (moved.lootMoved !== true && def.itemId && ITEMS[def.itemId] && addOneContainerItem(best, def.itemId)) {
+    moved.itemId = def.itemId;
+    moved.itemCount = 1;
+    moved.lootSeeded = true;
   }
   publishAftermath(def, pending, best.x, best.y, {
     containerId: best.id,
     oldAccess,
     newAccess: best.access,
-    itemId: def.itemId,
+    ...moved,
   });
   return true;
 }
@@ -2183,6 +2450,7 @@ export function getSamosborDebugLines(): string[] {
     `Прошлый вариант: ${getSamosborVariantName(last)}`,
     `Следующий вариант: ${getSamosborVariantName(forced)}`,
     istotitLine,
+    ...getSamosborWaveDebugLines(),
     ...localShelterLines,
     `Веретар: area_leak=${lastVeretarAreaLeaks} ${veretarLeakAge}`,
     `Последствия: ${beats}  cd ${hasCooldown ? cooldown : 0}s${pendingAftermath ? ' pending' : ''}`,
@@ -2309,13 +2577,6 @@ function collectVeretarLeakCandidates(world: World, cx: number, cy: number, maxR
   return out;
 }
 
-/* ── Count alive monsters ─────────────────────────────────────── */
-function countMonsters(entities: Entity[]): number {
-  let n = 0;
-  for (const e of entities) if (e.type === EntityType.MONSTER && e.alive) n++;
-  return n;
-}
-
 /* ── Spawn monsters in corridors ──────────────────────────────── */
 function spawnMonsters(
   world: World,
@@ -2325,9 +2586,6 @@ function spawnMonsters(
   variant: ActiveSamosborVariant,
   floor: FloorLevel,
 ): void {
-  let mc = countMonsters(entities);
-  if (mc >= MONSTER_CAP) return;
-
   const corridorCells: number[] = [];
   for (let i = 0; i < 5000; i++) {
     const ci = Math.floor(Math.random() * W * W);
@@ -2337,12 +2595,11 @@ function spawnMonsters(
   }
 
   const count = Math.max(1, Math.round((MONSTERS_PER_SAMOSBOR + Math.floor(samosborCount * 1.5)) * variant.spawnMult));
-  for (let i = 0; i < count && corridorCells.length > 0; i++) {
-    if (mc >= MONSTER_CAP) break;
+  const slots = entitySpawnSlots(entities, EntityType.MONSTER, count);
+  for (let i = 0; i < slots && corridorCells.length > 0; i++) {
     const ci = corridorCells.splice(Math.floor(Math.random() * corridorCells.length), 1)[0];
     const kind = pickMonsterKindForWave(floor, samosborCount);
     entities.push(createMonster(world, nextId, kind, (ci % W) + 0.5, Math.floor(ci / W) + 0.5, floor));
-    mc++;
   }
 }
 
@@ -2355,13 +2612,12 @@ function spawnRandomMapMonsters(
   variant: ActiveSamosborVariant,
   floor: FloorLevel,
 ): void {
-  let mc = countMonsters(entities);
-  if (mc >= MONSTER_CAP) return;
-
   const target = Math.max(1, Math.round(10 * variant.spawnMult));
+  const slots = entitySpawnSlots(entities, EntityType.MONSTER, target);
+  if (slots <= 0) return;
   let spawned = 0;
 
-  for (let attempt = 0; attempt < 5000 && spawned < target; attempt++) {
+  for (let attempt = 0; attempt < 5000 && spawned < slots; attempt++) {
     const ci = Math.floor(Math.random() * W * W);
     if (world.cells[ci] !== Cell.FLOOR) continue;
     // Skip apartment rooms
@@ -2371,8 +2627,6 @@ function spawnRandomMapMonsters(
     const kind = pickMonsterKindForWave(floor, samosborCount);
     entities.push(createMonster(world, nextId, kind, (ci % W) + 0.5, Math.floor(ci / W) + 0.5, floor));
     spawned++;
-    mc++;
-    if (mc >= MONSTER_CAP) break;
   }
 }
 
@@ -2501,6 +2755,7 @@ function captureZone(
       if (r >= 99) break;
     }
   }
+  if (!canSpawnEntityType(entities, EntityType.MONSTER)) return zone.id;
   const bossId = nextId.v++;
   const boss: Entity = {
     id: bossId,
@@ -2525,7 +2780,8 @@ function captureZone(
   applyMonsterVariant(boss, state.currentFloor, true);
   entities.push(boss);
 
-  for (let i = 0; i < variant.extraEyes; i++) {
+  const extraEyeSlots = entitySpawnSlots(entities, EntityType.MONSTER, variant.extraEyes);
+  for (let i = 0; i < extraEyeSlots; i++) {
     for (let attempt = 0; attempt < 20; attempt++) {
       const ex = world.wrap(zone.cx + rng(-8, 8));
       const ey = world.wrap(zone.cy + rng(-8, 8));
@@ -2664,7 +2920,7 @@ function spawnFogMonsters(
   variant: ActiveSamosborVariant,
   floor: FloorLevel,
 ): void {
-  if (countMonsters(entities) >= MONSTER_CAP) return;
+  if (!canSpawnEntityType(entities, EntityType.MONSTER)) return;
 
   // Find a random fogged floor cell
   const foggedCells: number[] = [];

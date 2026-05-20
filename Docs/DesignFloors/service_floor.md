@@ -1,8 +1,8 @@
 # Design Floor: Служебный этаж
 
-Status: planning artifact. Future route id: `service_floor`. Future anchor: `z=16`.
+Status: implemented authored route floor. Route id: `service_floor`. Anchor: `z=16`. Base floor: `MAINTENANCE`. Shipped HUD name: `Служебный этаж`.
 
-Planned owned file: `src/gen/design_floors/service_floor.ts`.
+Owned file: `src/gen/design_floors/service_floor.ts`. Planning sections below may predate the routed implementation; verify exact lift, power and access behavior against source.
 
 ## Role
 
@@ -60,4 +60,3 @@ Service Floor samosbor disables doors/lights and may trap the player between sta
 - One repair changes a route or access flag visible outside the floor.
 - Master key cannot open everything; it must be scoped.
 - No direct `main.ts` lift hack by content agent.
-

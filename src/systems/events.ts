@@ -19,6 +19,7 @@ import {
 import { getMonsterEcology, monsterEcologyEventData, monsterEcologyTags } from '../data/monster_ecology';
 import { recordWorldLogEvent } from './world_log';
 import { recordRumorEvent } from './rumor';
+import { recordRoomMemoryEvent } from './room_memory';
 
 const MAX_EVENT_TAGS = 8;
 const MAX_EVENT_TAG_LEN = 32;
@@ -354,28 +355,111 @@ function enrichMonsterKillDraft(draft: WorldEventDraft): WorldEventDraft {
 }
 
 function contextFactKind(event: WorldEvent): ContextFact['kind'] | undefined {
+  if (event.type === 'room_lacked_resources' || event.type === 'room_blocked_production' || event.tags.includes('resource_shortage')) return 'shortage';
+  if (event.type === 'room_produced_items' || event.tags.includes('resource_recovery')) return 'production';
   if (event.type === 'item_stolen' || event.tags.includes('theft')) return 'theft';
+  if (
+    event.type === 'permit_forged' ||
+    event.type === 'permit_exposed' ||
+    event.type === 'access_granted' ||
+    event.tags.includes('permit')
+  ) return 'social';
   if (event.type === 'contract_created' || event.type === 'contract_completed' || event.type === 'contract_failed') return 'quest_hook';
-  if (event.type === 'player_kill_monster' || event.type === 'npc_kill_monster' || event.type === 'fog_boss_killed') return 'death';
+  if (
+    event.type === 'player_kill_monster' ||
+    event.type === 'npc_kill_monster' ||
+    event.type === 'fog_boss_killed' ||
+    event.type === 'player_kill_npc' ||
+    event.type === 'npc_kill_npc' ||
+    event.type === 'death_seen'
+  ) return 'death';
+  if (event.type === 'monster_sighted' && isRareMonsterEvent(event)) return 'danger';
+  if (event.type === 'emergency_panel_used') {
+    if (event.tags.includes('repair')) return 'production';
+    if (event.tags.includes('overload') || event.tags.includes('shutdown')) return 'danger';
+    return 'territory';
+  }
   if (
     event.type === 'samosbor_warning' ||
     event.type === 'samosbor_started' ||
     event.type === 'samosbor_zone_captured' ||
     event.type === 'samosbor_ended' ||
+    event.type === 'net_terminal_hack_failed' ||
+    event.type === 'gravity_beam_fired' ||
+    event.tags.includes('hack_failed') ||
+    event.tags.includes('safeguard') ||
+    event.tags.includes('deletion_beam') ||
     event.tags.includes('samosbor')
   ) return 'danger';
   if (event.type === 'faction_event' || event.type === 'faction_patrol_clash' || event.type === 'faction_relation_changed' || event.tags.includes('faction_event')) return 'territory';
   return undefined;
 }
 
+function dataNumber(data: Record<string, unknown> | undefined, key: string): number {
+  const value = data?.[key];
+  return typeof value === 'number' && Number.isFinite(value) ? value : 0;
+}
+
+function dataArrayHasItems(data: Record<string, unknown> | undefined, key: string): boolean {
+  const value = data?.[key];
+  return Array.isArray(value) && value.length > 0;
+}
+
+function isRareMonsterEvent(event: WorldEvent): boolean {
+  return event.monsterKind !== undefined && getMonsterEcology(event.monsterKind)?.rare === true;
+}
+
+function contextFactResidueTags(event: WorldEvent): string[] {
+  const tags: string[] = [];
+  if (dataNumber(event.data, 'marksPlaced') > 0 || dataArrayHasItems(event.data, 'markKinds')) tags.push('residue_mark');
+  if (
+    event.type === 'item_stolen' ||
+    event.type === 'container_looted' ||
+    dataNumber(event.data, 'spawnedDrops') > 0 ||
+    dataNumber(event.data, 'deposited') > 0 ||
+    event.containerId !== undefined
+  ) tags.push('residue_moved_loot');
+  if (
+    event.type === 'samosbor_warning' ||
+    event.type === 'samosbor_started' ||
+    event.type === 'samosbor_ended' ||
+    event.type === 'player_kill_npc' ||
+    event.type === 'npc_kill_npc' ||
+    event.type === 'monster_sighted' ||
+    event.tags.includes('faction_event')
+  ) tags.push('residue_scared_npc');
+  if (
+    event.type === 'room_lacked_resources' ||
+    event.type === 'room_blocked_production' ||
+    event.tags.includes('resource_shortage') ||
+    event.tags.includes('resource_recovery') ||
+    dataArrayHasItems(event.data, 'economyDeltas')
+  ) tags.push('residue_price');
+  if (
+    event.type === 'samosbor_zone_captured' ||
+    dataNumber(event.data, 'pressureCells') > 0 ||
+    event.type === 'faction_relation_changed' ||
+    event.type === 'faction_patrol_clash'
+  ) tags.push('residue_zone');
+  return tags;
+}
+
 function contextFactTags(event: WorldEvent, kind: ContextFact['kind']): string[] {
   const tags: string[] = [kind, event.type];
   if (kind === 'quest_hook') tags.push('contract');
-  if (kind === 'death') tags.push('monster', 'kill');
+  if (kind === 'death') {
+    tags.push('kill');
+    if (event.type === 'player_kill_npc' || event.type === 'npc_kill_npc' || event.type === 'death_seen') tags.push('murder');
+    else tags.push('monster');
+  }
+  if (kind === 'shortage') tags.push('shortage', 'production_shortage');
+  if (kind === 'production') tags.push('production');
+  if (event.type === 'monster_sighted' && isRareMonsterEvent(event)) tags.push('rare_monster');
   if (kind === 'theft') tags.push('theft');
   if (event.type === 'samosbor_ended') tags.push('samosbor', 'aftermath');
   else if (event.type.includes('samosbor') || event.tags.includes('samosbor')) tags.push('samosbor');
   if (event.type === 'faction_event' || event.type === 'faction_patrol_clash' || event.type === 'faction_relation_changed' || event.tags.includes('faction_event')) tags.push('faction_event');
+  for (const tag of contextFactResidueTags(event)) tags.push(tag);
   for (const tag of event.tags) tags.push(tag);
   return cleanTags(tags);
 }
@@ -385,6 +469,8 @@ function contextFactTtl(event: WorldEvent, kind: ContextFact['kind']): number {
     case 'theft': return 720;
     case 'quest_hook': return event.type === 'contract_created' ? 900 : 600;
     case 'death': return 600;
+    case 'shortage': return 900;
+    case 'production': return 600;
     case 'danger': return event.type === 'samosbor_ended' ? 900 : 480;
     case 'territory': return 720;
     default: return 480;
@@ -459,6 +545,7 @@ export function publishEvent(state: GameState, draft: WorldEventDraft): WorldEve
     pushBuffer(store.zoneEvents[event.zoneId], event);
   }
   recordContextFact(store, event);
+  recordRoomMemoryEvent(event);
   recordWorldLogEvent(state, event);
   recordRumorEvent(event);
   for (const observer of eventObservers) observer(state, event);

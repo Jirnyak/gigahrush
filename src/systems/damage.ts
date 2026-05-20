@@ -1,5 +1,5 @@
 import { EntityType, type Entity, type GameState, type PlayerDamageRecord, type PlayerDamageSourceKind } from '../core/types';
-import { entityDisplayName } from '../entities/monster';
+import { MONSTERS, entityDisplayName } from '../entities/monster';
 
 const DEATH_CAUSE_LOOKBACK_SEC = 4;
 const DEATH_CAUSE_LOOKAHEAD_SEC = 1.5;
@@ -17,13 +17,25 @@ function damageSourceKind(source: Entity | undefined): PlayerDamageSourceKind {
 }
 
 function sourceName(source: Entity | undefined, kind: PlayerDamageSourceKind): string {
-  if (source) return entityDisplayName(source);
   switch (kind) {
+    case 'monster':
+    case 'npc':
+      if (source) return entityDisplayName(source);
+      return kind === 'monster' ? 'монстр' : 'жилец';
+    case 'projectile':
+      return source?.name ?? 'снаряд';
     case 'hazard': return 'опасная зона';
     case 'need': return 'истощение';
     case 'samosbor': return 'самосбор';
+    case 'void': return 'правило Пустоты';
     default: return 'неизвестный источник';
   }
+}
+
+function explicitFailureDetail(source: Entity | undefined, amount: number): string | undefined {
+  if (source?.monsterKind === undefined) return undefined;
+  const cause = MONSTERS[source.monsterKind]?.boss?.deathCause;
+  return cause ? `${cause}: -${amount}` : undefined;
 }
 
 export function recordPlayerDamage(
@@ -36,6 +48,7 @@ export function recordPlayerDamage(
   if (!state || !Number.isFinite(amount) || amount <= 0) return;
   const rounded = roundDamage(amount);
   const name = sourceName(source, sourceKind);
+  const failureDetail = explicitFailureDetail(source, rounded);
   state.lastDamage = {
     time: state.time,
     tick: state.tick,
@@ -45,7 +58,7 @@ export function recordPlayerDamage(
     sourceName: name,
     monsterKind: source?.monsterKind,
     weaponId: source?.weapon,
-    detail: detail && detail.length > 0 ? detail : `${name}: -${rounded}`,
+    detail: failureDetail ?? (detail && detail.length > 0 ? detail : `${name}: -${rounded}`),
   };
 }
 
@@ -57,4 +70,9 @@ export function formatLastPlayerDamageCause(
   if (!last) return undefined;
   if (last.time < deathTime - DEATH_CAUSE_LOOKBACK_SEC || last.time > deathTime + DEATH_CAUSE_LOOKAHEAD_SEC) return undefined;
   return last.detail || `${last.sourceName}: -${last.amount}`;
+}
+
+export function hasFreshPlayerDamageRecord(state: GameState, tick: number, time: number): boolean {
+  const last = state.lastDamage;
+  return !!last && last.tick === tick && Math.abs(last.time - time) <= 0.05;
 }

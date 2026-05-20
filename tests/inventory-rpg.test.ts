@@ -22,14 +22,17 @@ import {
   adjustedPsiCost,
   freshRPG,
   getMaxHp,
+  getMaxPsi,
   intPsiCostMult,
   questDifficulty,
   questMoneyReward,
   questXpReward,
+  rpgStatEffects,
   regenPsi,
   scaleMonsterDmg,
   scaleMonsterHp,
   spendAttrPoint,
+  strHeavyWeaponSpeedMult,
   xpForLevel,
   xpForMonsterKill,
 } from '../src/systems/rpg';
@@ -295,6 +298,13 @@ test('RPG rewards, attribute spend, and scaling formulas remain stable', () => {
   assert.equal(player.rpg?.str, 1);
   assert.equal(player.maxHp, getMaxHp(player.rpg!));
 
+  const psiPlanner = makePlayer();
+  psiPlanner.rpg!.attrPoints = 1;
+  psiPlanner.rpg!.psi = 5;
+  assert.equal(spendAttrPoint(psiPlanner, 'int'), true);
+  assert.equal(psiPlanner.rpg?.maxPsi, getMaxPsi(psiPlanner.rpg!));
+  assert.equal(psiPlanner.rpg?.psi, 6);
+
   assert.equal(xpForMonsterKill(MonsterKind.SBORKA, 1), 15);
   assert.equal(scaleMonsterHp(100, 3), 124);
   assert.equal(scaleMonsterDmg(10, 3), 12);
@@ -304,6 +314,46 @@ test('RPG rewards, attribute spend, and scaling formulas remain stable', () => {
   assert.equal(questXpReward(difficulty), 160);
   assert.equal(questMoneyReward(difficulty), 40);
   assert.equal(ITEMS.water.type, ItemType.DRINK);
+});
+
+test('RPG stat effects stay bounded and appear in weapon readiness', () => {
+  const capped = freshRPG(30);
+  capped.str = 50;
+  capped.agi = 50;
+  capped.int = 50;
+  const effects = rpgStatEffects(capped);
+  assert.equal(effects.meleeDamageMult, 1.75);
+  assert.equal(effects.heavyWeaponSpeedMult, 0.75);
+  assert.equal(effects.moveSpeedMult, 1.45);
+  assert.equal(effects.attackCooldownMult, 0.62);
+  assert.equal(effects.rangedSpreadMult, 0.55);
+  assert.equal(effects.xpMult, 1.5);
+  assert.equal(effects.psiCostMult, 0.75);
+
+  const bruiser = makePlayer();
+  bruiser.rpg!.str = 3;
+  bruiser.rpg!.agi = 2;
+  bruiser.weapon = 'sledgehammer';
+  addItem(bruiser, 'sledgehammer', 1);
+  const heavyStats = getWeaponStats(bruiser);
+  assert.equal(
+    Math.round(heavyStats.speed * 1000) / 1000,
+    Math.round(WEAPON_STATS.sledgehammer.speed * strHeavyWeaponSpeedMult(bruiser.rpg!, WEAPON_STATS.sledgehammer.speed) * 1000) / 1000,
+  );
+  const heavyReadiness = getWeaponReadiness(bruiser);
+  assert.equal(heavyReadiness.damage, 68);
+  assert.match(heavyReadiness.statLabel, /СИЛ урон \+30%/);
+  assert.match(heavyReadiness.statLabel, /тяж\. темп -13%/);
+  assert.match(heavyReadiness.statLabel, /ЛОВ КД -17%/);
+
+  const psiUser = makePlayer();
+  psiUser.rpg!.int = 2;
+  psiUser.rpg!.maxPsi = getMaxPsi(psiUser.rpg!);
+  psiUser.rpg!.psi = psiUser.rpg!.maxPsi;
+  psiUser.weapon = 'psi_rupture';
+  const psiReadiness = getWeaponReadiness(psiUser);
+  assert.equal(psiReadiness.resourceLabel, 'ПСИ 12/12 -7.4');
+  assert.match(psiReadiness.statLabel, /ИНТ ПСИ -7%/);
 });
 
 test('INT improves PSI economy but keeps casts resource-bound', () => {

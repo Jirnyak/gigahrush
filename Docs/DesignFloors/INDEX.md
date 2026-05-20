@@ -4,37 +4,42 @@ Status: historical planning artifact that seeded the authored-floor wave. Curren
 
 ## Purpose
 
-This folder turns the requested large floor wave into implementable slices for separate GPT-5.5 agents. Each `.md` is a floor brief with its own route id, intended TS ownership, gameplay role, NPC/quest surface, cross-floor hooks and Definition of Done.
+This folder turns the requested large floor wave into implementable slices for separate GPT-5.5 agents. Many `.md` files are historical floor briefs with intended TS ownership, gameplay role, NPC/quest surface, cross-floor hooks and Definition of Done. Shipped route ids and z anchors are listed below and remain subordinate to source.
 
-The current game has 6 coded base floors, 15 routed authored design floors and procedural interstitial floors. This folder preserves the original agent briefs; do not treat the table below as the source of truth when it conflicts with shipped route data.
+The current game has 6 coded base floors, 18 routed authored design floors and procedural interstitial floors. This folder preserves original agent briefs; treat planning sections below each doc as historical when they conflict with `README.md` or shipped route data.
 
-## Original Planned Vertical Route
+## Current Shipped Vertical Route
 
-Negative z is "up" by current project convention; positive z is "down". Each anchor below is separated from the next by three procedural floors.
+Negative z is "up" by current project convention; positive z is "down". Design-floor rows mirror `src/data/design_floors.ts`. Story-anchor rows mirror `src/data/procedural_floors.ts` and are not design-floor route ids. Procedural floors fill every z in `-44..40` that is not listed here.
 
-| z | Route id | Display name | Main role | Doc |
-| ---: | --- | --- | --- | --- |
-| -40 | `roof` | Крыша | open sky, dynamic cloud ceiling, antennas | [roof.md](roof.md) |
-| -36 | `chthonic_attic` | Хтонический чердак | upper occult concrete roots | [chthonic_attic.md](chthonic_attic.md) |
-| -32 | `antenna_court` | Антенный двор | radio, weather lies, floor signals | [antenna_court.md](antenna_court.md) |
-| -28 | `upper_bureau` | Верхнее бюро | elite paperwork, permits before Ministry | [upper_bureau.md](upper_bureau.md) |
-| -24 | `ministry` | Министерство | full bureaucratic stealth/combat anchor | [ministry.md](ministry.md) |
-| -20 | `raionsovet_archive` | Райсовет и Живой архив | access, records, identity | [raionsovet_archive.md](raionsovet_archive.md) |
-| -16 | `registry_morgue` | Морг регистраций | body tags, deaths, legal identity | [registry_morgue.md](registry_morgue.md) |
-| -12 | `kvartiry` | Квартиры | dense social riot floor | [kvartiry.md](kvartiry.md) |
-| -8 | `manhattan_crossroads` | Перекрестки | asphalt roads, lanes, crossings | [manhattan_crossroads.md](manhattan_crossroads.md) |
-| -4 | `communal_ring` | Коммунальное кольцо | apartment-like floors, shared services | [communal_ring.md](communal_ring.md) |
-| 0 | `living` | Жилой | player hub and everyday survival | [living.md](living.md) |
-| 4 | `floor_69` | Этаж 69 | adult vice, debt, blackmail, refuge | [floor_69.md](floor_69.md) |
-| 8 | `black_market_88` | Черный рынок 88 | illegal economy, contracts, raids | [black_market_88.md](black_market_88.md) |
-| 12 | `production_belt` | Производственный пояс | factories, shifts, output containers | [production_belt.md](production_belt.md) |
-| 16 | `service_floor` | Служебный этаж | maintenance access, lift machines, staff routes | [service_floor.md](service_floor.md) |
-| 20 | `collectors` | Коллекторы | water, pipes, pressure, tube monsters | [collectors.md](collectors.md) |
-| 24 | `dark_metro` | Темная пересадка | мрачные маршруты, wrong station, darkness | [dark_metro.md](dark_metro.md) |
-| 28 | `hell` | Ад | high-threat meat/cult combat | [hell.md](hell.md) |
-| 32 | `underhell` | Ниже ада | stronger chthonic layer, sacrifice rules | [underhell.md](underhell.md) |
-| 36 | `void` | Пустота | late anomaly protocol and final space | [void.md](void.md) |
-| 40 | `darkness` | Тьма | post-void anti-floor, light as resource | [darkness.md](darkness.md) |
+| z | Kind | Route/anchor id | Display name | Base floor | Doc |
+| ---: | --- | --- | --- | --- | --- |
+| -44 | design | `roof` | Крыша | `MINISTRY` | [roof.md](roof.md) |
+| -40 | design | `chthonic_attic` | Чердак техслужб | `MINISTRY` | [chthonic_attic.md](chthonic_attic.md) |
+| -36 | design | `antenna_court` | Антенный двор | `MINISTRY` | [antenna_court.md](antenna_court.md) |
+| -32 | design | `pioneer_camp` | Пионерлагерь | `LIVING` | [pioneer_camp.md](pioneer_camp.md) |
+| -28 | design | `upper_bureau` | Верхнее бюро | `MINISTRY` | [upper_bureau.md](upper_bureau.md) |
+| -24 | story | `FloorLevel.MINISTRY` | Министерство | `MINISTRY` | [ministry.md](ministry.md) |
+| -22 | design | `bank_floor` | Банковский этаж | `MINISTRY` | [bank_floor.md](bank_floor.md) |
+| -20 | design | `raionsovet_archive` | Райсовет и архив картотек | `MINISTRY` | [raionsovet_archive.md](raionsovet_archive.md) |
+| -16 | design | `registry_morgue` | Морг регистраций | `MINISTRY` | [registry_morgue.md](registry_morgue.md) |
+| -12 | story | `FloorLevel.KVARTIRY` | Квартиры | `KVARTIRY` | [kvartiry.md](kvartiry.md) |
+| -8 | design | `manhattan_crossroads` | Перекрестки | `KVARTIRY` | [manhattan_crossroads.md](manhattan_crossroads.md) |
+| -4 | design | `communal_ring` | Коммунальное кольцо | `KVARTIRY` | [communal_ring.md](communal_ring.md) |
+| 0 | story | `FloorLevel.LIVING` | Жилая зона | `LIVING` | [living.md](living.md) |
+| 4 | design | `floor_69` | Этаж 69 | `MAINTENANCE` | [floor_69.md](floor_69.md) |
+| 8 | design | `black_market_88` | Черный рынок 88 | `LIVING` | [black_market_88.md](black_market_88.md) |
+| 12 | design | `production_belt` | Производственный пояс | `MAINTENANCE` | [production_belt.md](production_belt.md) |
+| 16 | design | `service_floor` | Служебный этаж | `MAINTENANCE` | [service_floor.md](service_floor.md) |
+| 18 | design | `silicon_net_well` | Кремниевый НЕТ-колодец | `MAINTENANCE` | [silicon_net_well.md](silicon_net_well.md) |
+| 20 | story | `FloorLevel.MAINTENANCE` | Коллекторы | `MAINTENANCE` | [collectors.md](collectors.md) |
+| 24 | design | `dark_metro` | Темная пересадка | `MAINTENANCE` | [dark_metro.md](dark_metro.md) |
+| 28 | story | `FloorLevel.HELL` | Мясной низ | `HELL` | [hell.md](hell.md) |
+| 32 | design | `underhell` | Нижний пропускник | `HELL` | [underhell.md](underhell.md) |
+| 36 | story | `FloorLevel.VOID` | Пустота | `VOID` | [void.md](void.md) |
+| 40 | design | `darkness` | Темный отсек | `VOID` | [darkness.md](darkness.md) |
+
+Historical differences now called out explicitly: the original plan put `roof` at `z=-40`, `chthonic_attic` at `z=-36`, `antenna_court` at `z=-32`, omitted `pioneer_camp`, and had no `bank_floor` stop in the Ministry/Raionsovet gap. Shipped route data has `roof` at `z=-44`, `pioneer_camp` at `z=-32`, and `bank_floor` at `z=-22`.
 
 ## Cross-Floor Spine
 
@@ -43,7 +48,7 @@ Negative z is "up" by current project convention; positive z is "down". Each anc
 - Floor 69 and Market 88 share vice/debt/blackmail state, but Floor 69 must stay non-graphic and adult-only.
 - Production feeds Market 88, Living scarcity, Ministry quotas and Collector repair parts.
 - Service Floor and Collectors control lifts, pressure and water consequences for all lower floors.
-- Hell, Underhell, Void and Darkness form the late descent: combat, ritual, protocol, then light failure.
+- Hell, Underhell, Void and Darkness form the late descent: combat, ritual, protocol, then light failure. `hell` and `void` are story anchors, not design-floor route ids.
 - Roof, Antenna Court and Chthonic Attic make the upward route useful: sky, signal, weather, dangerous shortcuts and false safety.
 
 ## Agent Use

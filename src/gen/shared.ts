@@ -13,6 +13,563 @@ export const rng  = (lo: number, hi: number) => lo + Math.floor(Math.random() * 
 export const pick = <T>(a: T[]): T => a[Math.floor(Math.random() * a.length)];
 export const shuffle = <T>(a: T[]): T[] => { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
 
+export type ArrivalSpawnReason =
+  | 'matched_lift'
+  | 'matched_button'
+  | 'fallback_any_lift'
+  | 'fallback_any_button'
+  | 'fallback_same_xy'
+  | 'fallback_near_same_xy'
+  | 'fallback_generator_spawn'
+  | 'fallback_near_generator_spawn'
+  | 'fallback_first_passable'
+  | 'fallback_forced_generator_spawn';
+
+export interface ArrivalSpawnResolution {
+  x: number;
+  y: number;
+  angle?: number;
+  reason: ArrivalSpawnReason;
+  fallback: boolean;
+  debug: string;
+  preferredLiftDirection?: LiftDirection;
+  liftDirection?: LiftDirection;
+  anchorX?: number;
+  anchorY?: number;
+  spawnCell: number;
+  anchorCell?: number;
+}
+
+export interface ArrivalSpawnOptions {
+  preferredLiftDirection?: LiftDirection;
+  referenceX?: unknown;
+  referenceY?: unknown;
+  fallbackX: number;
+  fallbackY: number;
+  searchRadius?: number;
+}
+
+interface ArrivalCandidate {
+  x: number;
+  y: number;
+  anchorX: number;
+  anchorY: number;
+  anchorCell: number;
+  liftDirection: LiftDirection;
+  kind: 'lift' | 'button';
+  score: number;
+}
+
+interface AnchorSearch {
+  candidate: ArrivalCandidate | null;
+  anchors: number;
+  passableAdjacent: number;
+  unreachableAdjacent: number;
+}
+
+export function oppositeLiftDirection(direction: LiftDirection): LiftDirection {
+  return direction === LiftDirection.DOWN ? LiftDirection.UP : LiftDirection.DOWN;
+}
+
+export function routeArrivalLiftDirection(travelDirection: LiftDirection, canContinueRoute: boolean): LiftDirection {
+  return canContinueRoute ? travelDirection : oppositeLiftDirection(travelDirection);
+}
+
+function liftDirectionName(direction: LiftDirection | undefined): string {
+  if (direction === LiftDirection.UP) return 'up';
+  if (direction === LiftDirection.DOWN) return 'down';
+  return 'any';
+}
+
+function finiteNumber(value: unknown): number | undefined {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : undefined;
+}
+
+function passableArrivalCell(world: World, x: number, y: number): boolean {
+  const ci = world.idx(x, y);
+  const cell = world.cells[ci];
+  return (cell === Cell.FLOOR || cell === Cell.WATER) && !world.solid(x, y);
+}
+
+function walkableArrivalPathCell(world: World, x: number, y: number): boolean {
+  const ci = world.idx(x, y);
+  const cell = world.cells[ci];
+  return (cell === Cell.FLOOR || cell === Cell.WATER || cell === Cell.DOOR) && !world.solid(x, y);
+}
+
+function findFirstPassableCell(world: World): number {
+  for (let i = 0; i < W * W; i++) {
+    if (passableArrivalCell(world, i % W, (i / W) | 0)) return i;
+  }
+  return -1;
+}
+
+function nearestPassableCell(world: World, x: number, y: number, radius: number): number {
+  const sx = world.wrap(Math.floor(x));
+  const sy = world.wrap(Math.floor(y));
+  if (passableArrivalCell(world, sx, sy)) return world.idx(sx, sy);
+
+  for (let r = 1; r <= radius; r++) {
+    for (let dy = -r; dy <= r; dy++) {
+      for (let dx = -r; dx <= r; dx++) {
+        if (Math.abs(dx) !== r && Math.abs(dy) !== r) continue;
+        const px = world.wrap(sx + dx);
+        const py = world.wrap(sy + dy);
+        if (passableArrivalCell(world, px, py)) return world.idx(px, py);
+      }
+    }
+  }
+
+  return -1;
+}
+
+function reachableArrivalCells(world: World, fallbackX: number, fallbackY: number, radius: number): Uint8Array | null {
+  let seed = nearestPassableCell(world, fallbackX, fallbackY, radius);
+  if (seed < 0) seed = findFirstPassableCell(world);
+  if (seed < 0) return null;
+
+  const reachable = new Uint8Array(W * W);
+  const queue = new Int32Array(W * W);
+  let head = 0;
+  let tail = 0;
+  reachable[seed] = 1;
+  queue[tail++] = seed;
+
+  while (head < tail) {
+    const ci = queue[head++];
+    const x = ci % W;
+    const y = (ci / W) | 0;
+    for (const [dx, dy] of [[1,0],[-1,0],[0,1],[0,-1]] as const) {
+      const nx = world.wrap(x + dx);
+      const ny = world.wrap(y + dy);
+      const ni = world.idx(nx, ny);
+      if (reachable[ni] || !walkableArrivalPathCell(world, nx, ny)) continue;
+      reachable[ni] = 1;
+      queue[tail++] = ni;
+    }
+  }
+
+  return reachable;
+}
+
+function candidateAngle(world: World, x: number, y: number, anchorX: number, anchorY: number): number {
+  const dx = world.delta(x + 0.5, anchorX + 0.5);
+  const dy = world.delta(y + 0.5, anchorY + 0.5);
+  return Math.atan2(dy, dx);
+}
+
+function resolveFromCell(
+  _world: World,
+  cell: number,
+  reason: ArrivalSpawnReason,
+  debug: string,
+  fallback: boolean,
+  preferredLiftDirection?: LiftDirection,
+): ArrivalSpawnResolution {
+  const x = cell % W;
+  const y = (cell / W) | 0;
+  return {
+    x: x + 0.5,
+    y: y + 0.5,
+    reason,
+    fallback,
+    debug,
+    preferredLiftDirection,
+    spawnCell: cell,
+  };
+}
+
+function resolveFromCandidate(
+  world: World,
+  candidate: ArrivalCandidate,
+  reason: ArrivalSpawnReason,
+  debug: string,
+  fallback: boolean,
+  preferredLiftDirection?: LiftDirection,
+): ArrivalSpawnResolution {
+  const spawnCell = world.idx(candidate.x, candidate.y);
+  return {
+    x: candidate.x + 0.5,
+    y: candidate.y + 0.5,
+    angle: candidateAngle(world, candidate.x, candidate.y, candidate.anchorX, candidate.anchorY),
+    reason,
+    fallback,
+    debug,
+    preferredLiftDirection,
+    liftDirection: candidate.liftDirection,
+    anchorX: candidate.anchorX,
+    anchorY: candidate.anchorY,
+    spawnCell,
+    anchorCell: candidate.anchorCell,
+  };
+}
+
+function searchArrivalAnchors(
+  world: World,
+  reachable: Uint8Array | null,
+  referenceX: number,
+  referenceY: number,
+  direction?: LiftDirection,
+): AnchorSearch {
+  let best: ArrivalCandidate | null = null;
+  const out: AnchorSearch = { candidate: null, anchors: 0, passableAdjacent: 0, unreachableAdjacent: 0 };
+
+  for (let i = 0; i < W * W; i++) {
+    const isLift = world.cells[i] === Cell.LIFT;
+    const isButton = world.features[i] === Feature.LIFT_BUTTON;
+    if (!isLift && !isButton) continue;
+    const liftDirection = world.liftDir[i] as LiftDirection;
+    if (direction !== undefined && liftDirection !== direction) continue;
+
+    out.anchors++;
+    const anchorX = i % W;
+    const anchorY = (i / W) | 0;
+    const kind = isLift ? 'lift' : 'button';
+
+    for (const [dx, dy] of [[1,0],[-1,0],[0,1],[0,-1]] as const) {
+      const x = world.wrap(anchorX + dx);
+      const y = world.wrap(anchorY + dy);
+      const ci = world.idx(x, y);
+      if (!passableArrivalCell(world, x, y)) continue;
+      out.passableAdjacent++;
+      if (reachable && !reachable[ci]) {
+        out.unreachableAdjacent++;
+        continue;
+      }
+
+      const anchorD2 = world.dist2(referenceX, referenceY, anchorX + 0.5, anchorY + 0.5);
+      const spawnD2 = world.dist2(referenceX, referenceY, x + 0.5, y + 0.5);
+      const score = anchorD2 * 4 + spawnD2 + (kind === 'button' ? 0.25 : 0);
+      if (!best || score < best.score) {
+        best = { x, y, anchorX, anchorY, anchorCell: i, liftDirection, kind, score };
+      }
+    }
+  }
+
+  out.candidate = best;
+  return out;
+}
+
+export function resolveArrivalSpawn(world: World, options: ArrivalSpawnOptions): ArrivalSpawnResolution {
+  const radius = options.searchRadius ?? 48;
+  const fallbackX = Number.isFinite(options.fallbackX) ? options.fallbackX : W / 2 + 0.5;
+  const fallbackY = Number.isFinite(options.fallbackY) ? options.fallbackY : W / 2 + 0.5;
+  const referenceX = finiteNumber(options.referenceX) ?? fallbackX;
+  const referenceY = finiteNumber(options.referenceY) ?? fallbackY;
+  const reachable = reachableArrivalCells(world, fallbackX, fallbackY, radius);
+  const preferred = options.preferredLiftDirection;
+
+  if (preferred !== undefined) {
+    const match = searchArrivalAnchors(world, reachable, referenceX, referenceY, preferred);
+    if (match.candidate) {
+      const reason: ArrivalSpawnReason = match.candidate.kind === 'lift' ? 'matched_lift' : 'matched_button';
+      return resolveFromCandidate(
+        world,
+        match.candidate,
+        reason,
+        `matched ${liftDirectionName(preferred)} ${match.candidate.kind}`,
+        false,
+        preferred,
+      );
+    }
+  }
+
+  const any = searchArrivalAnchors(world, reachable, referenceX, referenceY);
+  if (any.candidate) {
+    const reason: ArrivalSpawnReason = any.candidate.kind === 'lift' ? 'fallback_any_lift' : 'fallback_any_button';
+    return resolveFromCandidate(
+      world,
+      any.candidate,
+      reason,
+      `no reachable ${liftDirectionName(preferred)} lift/button; used ${liftDirectionName(any.candidate.liftDirection)} ${any.candidate.kind}`,
+      true,
+      preferred,
+    );
+  }
+
+  const savedX = finiteNumber(options.referenceX);
+  const savedY = finiteNumber(options.referenceY);
+  if (savedX !== undefined && savedY !== undefined) {
+    const sx = world.wrap(Math.floor(savedX));
+    const sy = world.wrap(Math.floor(savedY));
+    if (passableArrivalCell(world, sx, sy)) {
+      return resolveFromCell(
+        world,
+        world.idx(sx, sy),
+        'fallback_same_xy',
+        'no lift/button anchors; used same cell near saved xy',
+        true,
+        preferred,
+      );
+    }
+    const nearSaved = nearestPassableCell(world, savedX, savedY, radius);
+    if (nearSaved >= 0) {
+      return resolveFromCell(
+        world,
+        nearSaved,
+        'fallback_near_same_xy',
+        'no lift/button anchors; used nearest passable cell near saved xy',
+        true,
+        preferred,
+      );
+    }
+  }
+
+  const fx = world.wrap(Math.floor(fallbackX));
+  const fy = world.wrap(Math.floor(fallbackY));
+  if (passableArrivalCell(world, fx, fy)) {
+    return resolveFromCell(
+      world,
+      world.idx(fx, fy),
+      'fallback_generator_spawn',
+      'no lift/button anchors; used generator spawn',
+      true,
+      preferred,
+    );
+  }
+  const nearFallback = nearestPassableCell(world, fallbackX, fallbackY, radius);
+  if (nearFallback >= 0) {
+    return resolveFromCell(
+      world,
+      nearFallback,
+      'fallback_near_generator_spawn',
+      'no lift/button anchors; used nearest passable cell near generator spawn',
+      true,
+      preferred,
+    );
+  }
+  const first = findFirstPassableCell(world);
+  if (first >= 0) {
+    return resolveFromCell(
+      world,
+      first,
+      'fallback_first_passable',
+      'no lift/button anchors or generator spawn; used first passable cell',
+      true,
+      preferred,
+    );
+  }
+
+  const forcedX = world.wrap(Math.floor(fallbackX));
+  const forcedY = world.wrap(Math.floor(fallbackY));
+  return resolveFromCell(
+    world,
+    world.idx(forcedX, forcedY),
+    'fallback_forced_generator_spawn',
+    'no passable cells found; forced generator spawn cell',
+    true,
+    preferred,
+  );
+}
+
+/* ── Reachable placement map for generation-time content drops ── */
+export type WalkablePlacementBias = 'any' | 'near' | 'far' | 'door';
+
+export interface WalkablePlacementMap {
+  reachable: Uint8Array;
+  doorAdjacent: Uint8Array;
+  candidates: number[];
+  doorCandidates: number[];
+  byRoom: Map<number, number[]>;
+  seedIdx: number;
+}
+
+export interface WalkablePlacementPickOptions {
+  centerX?: number;
+  centerY?: number;
+  minRadius?: number;
+  maxRadius?: number;
+  minDist2?: number;
+  maxDist2?: number;
+  roomId?: number;
+  requireEmptyFeature?: boolean;
+  allowWater?: boolean;
+  doorAdjacent?: boolean;
+  bias?: WalkablePlacementBias;
+  avoidCells?: ReadonlySet<number>;
+  attempts?: number;
+}
+
+function isPlacementTraversalCell(world: World, ci: number): boolean {
+  const c = world.cells[ci];
+  return c === Cell.FLOOR || c === Cell.WATER || c === Cell.DOOR;
+}
+
+export function isProtectedPlacementCell(world: World, ci: number): boolean {
+  return world.cells[ci] === Cell.LIFT ||
+    world.features[ci] === Feature.LIFT_BUTTON ||
+    world.hermoWall[ci] !== 0 ||
+    world.aptMask[ci] !== 0 ||
+    world.doors.has(ci) ||
+    world.containerMap.has(ci);
+}
+
+export function isWalkablePlacementCell(world: World, ci: number): boolean {
+  const c = world.cells[ci];
+  return (c === Cell.FLOOR || c === Cell.WATER) && !isProtectedPlacementCell(world, ci);
+}
+
+function findPlacementSeed(world: World, spawnX: number, spawnY: number): number {
+  const sx = Math.floor(spawnX);
+  const sy = Math.floor(spawnY);
+  const start = world.idx(sx, sy);
+  if (isPlacementTraversalCell(world, start)) return start;
+
+  for (let r = 1; r <= 64; r++) {
+    for (let dy = -r; dy <= r; dy++) {
+      for (let dx = -r; dx <= r; dx++) {
+        if (Math.abs(dx) !== r && Math.abs(dy) !== r) continue;
+        const ci = world.idx(sx + dx, sy + dy);
+        if (isPlacementTraversalCell(world, ci)) return ci;
+      }
+    }
+  }
+
+  for (let i = 0; i < W * W; i++) {
+    if (isPlacementTraversalCell(world, i)) return i;
+  }
+  return start;
+}
+
+function markDoorAdjacent(world: World, out: Uint8Array): void {
+  for (let i = 0; i < W * W; i++) {
+    if (world.cells[i] !== Cell.DOOR) continue;
+    const x = i % W;
+    const y = (i / W) | 0;
+    for (const [dx, dy] of [[1,0],[-1,0],[0,1],[0,-1]] as const) {
+      const ni = world.idx(x + dx, y + dy);
+      if (world.cells[ni] === Cell.FLOOR || world.cells[ni] === Cell.WATER) out[ni] = 1;
+    }
+  }
+}
+
+export function buildWalkablePlacementMap(world: World, spawnX: number, spawnY: number): WalkablePlacementMap {
+  const n = W * W;
+  const reachable = new Uint8Array(n);
+  const doorAdjacent = new Uint8Array(n);
+  const candidates: number[] = [];
+  const doorCandidates: number[] = [];
+  const byRoom = new Map<number, number[]>();
+  const queue = new Int32Array(n);
+  let head = 0;
+  let tail = 0;
+  const seedIdx = findPlacementSeed(world, spawnX, spawnY);
+
+  reachable[seedIdx] = 1;
+  queue[tail++] = seedIdx;
+  while (head < tail) {
+    const ci = queue[head++];
+    const x = ci % W;
+    const y = (ci / W) | 0;
+    for (const [dx, dy] of [[1,0],[-1,0],[0,1],[0,-1]] as const) {
+      const ni = world.idx(x + dx, y + dy);
+      if (reachable[ni] || !isPlacementTraversalCell(world, ni)) continue;
+      reachable[ni] = 1;
+      queue[tail++] = ni;
+    }
+  }
+
+  markDoorAdjacent(world, doorAdjacent);
+
+  for (let i = 0; i < n; i++) {
+    if (!reachable[i] || !isWalkablePlacementCell(world, i)) continue;
+    candidates.push(i);
+    if (doorAdjacent[i]) doorCandidates.push(i);
+    const roomId = world.roomMap[i];
+    if (roomId >= 0) {
+      const roomCells = byRoom.get(roomId);
+      if (roomCells) roomCells.push(i);
+      else byRoom.set(roomId, [i]);
+    }
+  }
+
+  return { reachable, doorAdjacent, candidates, doorCandidates, byRoom, seedIdx };
+}
+
+export function isValidWalkablePlacementCell(
+  world: World,
+  placement: WalkablePlacementMap,
+  ci: number,
+  opts: WalkablePlacementPickOptions = {},
+): boolean {
+  if (!placement.reachable[ci] || !isWalkablePlacementCell(world, ci)) return false;
+  if (opts.allowWater === false && world.cells[ci] === Cell.WATER) return false;
+  if (opts.requireEmptyFeature && world.features[ci] !== Feature.NONE) return false;
+  if (opts.roomId !== undefined && world.roomMap[ci] !== opts.roomId) return false;
+  if (opts.doorAdjacent && !placement.doorAdjacent[ci]) return false;
+  if (opts.avoidCells?.has(ci)) return false;
+
+  const hasCenter = opts.centerX !== undefined && opts.centerY !== undefined;
+  if (hasCenter) {
+    const x = ci % W;
+    const y = (ci / W) | 0;
+    const d2 = world.dist2(opts.centerX!, opts.centerY!, x + 0.5, y + 0.5);
+    const minD2 = opts.minDist2 ?? (opts.minRadius !== undefined ? opts.minRadius * opts.minRadius : undefined);
+    const maxD2 = opts.maxDist2 ?? (opts.maxRadius !== undefined ? opts.maxRadius * opts.maxRadius : undefined);
+    if (minD2 !== undefined && d2 < minD2) return false;
+    if (maxD2 !== undefined && d2 > maxD2) return false;
+  }
+
+  return true;
+}
+
+function placementScore(world: World, placement: WalkablePlacementMap, ci: number, opts: WalkablePlacementPickOptions): number {
+  const bias = opts.bias ?? 'any';
+  if (bias === 'door') return placement.doorAdjacent[ci] ? 0 : 1;
+  if ((bias === 'near' || bias === 'far') && opts.centerX !== undefined && opts.centerY !== undefined) {
+    const x = ci % W;
+    const y = (ci / W) | 0;
+    const d2 = world.dist2(opts.centerX, opts.centerY, x + 0.5, y + 0.5);
+    return bias === 'near' ? d2 : -d2;
+  }
+  return 0;
+}
+
+function placementSource(placement: WalkablePlacementMap, opts: WalkablePlacementPickOptions): readonly number[] {
+  if (opts.roomId !== undefined) return placement.byRoom.get(opts.roomId) ?? [];
+  if (opts.doorAdjacent) return placement.doorCandidates;
+  return placement.candidates;
+}
+
+export function pickWalkablePlacement(
+  world: World,
+  placement: WalkablePlacementMap,
+  opts: WalkablePlacementPickOptions = {},
+): { x: number; y: number } | null {
+  const source = placementSource(placement, opts);
+  if (source.length === 0) return null;
+  const bias = opts.bias ?? 'any';
+  const attempts = opts.attempts ?? (opts.roomId !== undefined ? 48 : 96);
+  let best = -1;
+  let bestScore = Infinity;
+
+  for (let a = 0; a < attempts; a++) {
+    const ci = source[Math.floor(Math.random() * source.length)];
+    if (!isValidWalkablePlacementCell(world, placement, ci, opts)) continue;
+    if (bias === 'any') return { x: ci % W, y: (ci / W) | 0 };
+    const score = placementScore(world, placement, ci, opts);
+    if (score < bestScore) {
+      bestScore = score;
+      best = ci;
+    }
+  }
+
+  if (best >= 0) return { x: best % W, y: (best / W) | 0 };
+
+  for (const ci of source) {
+    if (!isValidWalkablePlacementCell(world, placement, ci, opts)) continue;
+    if (bias === 'any') return { x: ci % W, y: (ci / W) | 0 };
+    const score = placementScore(world, placement, ci, opts);
+    if (score < bestScore) {
+      bestScore = score;
+      best = ci;
+    }
+  }
+
+  return best >= 0 ? { x: best % W, y: (best / W) | 0 } : null;
+}
+
 /* ── Protect room with aptMask + set wall/floor textures ─────── */
 export function protectRoom(world: World, rx: number, ry: number, w: number, h: number, wallTex: Tex, floorTex: Tex): void {
   for (let dy = -1; dy <= h; dy++)
@@ -607,15 +1164,21 @@ export function connectToNetwork(world: World, room: Room): void {
   }
 }
 
+export function isConnectivityWalkable(world: World, idx: number): boolean {
+  const cell = world.cells[idx];
+  return cell === Cell.FLOOR || cell === Cell.DOOR || cell === Cell.WATER;
+}
+
 /* ── Percolation: ensure entire world is one connected graph ── */
 export function ensureConnectivity(world: World, spawnX: number, spawnY: number): void {
   const N = W * W;
   const dirs: [number, number][] = [[1,0],[-1,0],[0,1],[0,-1]];
+  const si = world.idx(Math.floor(spawnX), Math.floor(spawnY));
+  if (!isConnectivityWalkable(world, si)) return;
 
   for (let pass = 0; pass < 4; pass++) {
     const label = new Int32Array(N).fill(-1);
 
-    const si = world.idx(Math.floor(spawnX), Math.floor(spawnY));
     label[si] = 0;
     const bfsQ: number[] = [si];
     let bh = 0;
@@ -624,7 +1187,7 @@ export function ensureConnectivity(world: World, spawnX: number, spawnY: number)
       const cx = ci % W, cy = (ci / W) | 0;
       for (const [dx, dy] of dirs) {
         const ni = world.idx(cx + dx, cy + dy);
-        if (label[ni] < 0 && (world.cells[ni] === Cell.FLOOR || world.cells[ni] === Cell.DOOR)) {
+        if (label[ni] < 0 && isConnectivityWalkable(world, ni)) {
           label[ni] = 0;
           bfsQ.push(ni);
         }
@@ -640,7 +1203,7 @@ export function ensureConnectivity(world: World, spawnX: number, spawnY: number)
     let compId = 1;
     for (let i = 0; i < N; i++) {
       if (label[i] >= 0) continue;
-      if (world.cells[i] !== Cell.FLOOR && world.cells[i] !== Cell.DOOR) continue;
+      if (!isConnectivityWalkable(world, i)) continue;
 
       const comp: number[] = [i];
       label[i] = compId;
@@ -650,7 +1213,7 @@ export function ensureConnectivity(world: World, spawnX: number, spawnY: number)
         const cx = ci % W, cy = (ci / W) | 0;
         for (const [dx, dy] of dirs) {
           const ni = world.idx(cx + dx, cy + dy);
-          if (label[ni] < 0 && (world.cells[ni] === Cell.FLOOR || world.cells[ni] === Cell.DOOR)) {
+          if (label[ni] < 0 && isConnectivityWalkable(world, ni)) {
             label[ni] = compId;
             comp.push(ni);
           }
@@ -682,7 +1245,7 @@ export function ensureConnectivity(world: World, spawnX: number, spawnY: number)
           const cx = ci % W, cy = (ci / W) | 0;
           for (const [dx, dy] of dirs) {
             const ni = world.idx(cx + dx, cy + dy);
-            if (label[ni] !== 0 && (world.cells[ni] === Cell.FLOOR || world.cells[ni] === Cell.DOOR)) {
+            if (label[ni] !== 0 && isConnectivityWalkable(world, ni)) {
               label[ni] = 0;
               rq.push(ni);
             }
@@ -843,7 +1406,7 @@ export function repairRoomWalls(world: World): void {
 
 /* ── Sanitize doors: validate APARTMENT doors only ───────────── */
 export function sanitizeDoors(world: World): void {
-  const walkable = (c: number) => c === Cell.FLOOR || c === Cell.DOOR;
+  const walkable = (c: number) => c === Cell.FLOOR || c === Cell.DOOR || c === Cell.WATER;
 
   for (let pass = 0; pass < 3; pass++) {
     const toRemove: number[] = [];
@@ -955,32 +1518,334 @@ export function weightedPick<T extends { spawnW: number }>(defs: T[]): T | null 
   return defs[defs.length - 1];
 }
 
-/* ── Place lift cells in corridors ───────────────────────────── */
-export function placeLifts(world: World, count: number, direction: LiftDirection = LiftDirection.DOWN): void {
-  let placed = 0;
-  for (let attempt = 0; attempt < 2000 && placed < count; attempt++) {
-    const x = rng(20, W - 20);
-    const y = rng(20, W - 20);
-    const ci = world.idx(x, y);
-    if (world.cells[ci] !== Cell.FLOOR || world.roomMap[ci] >= 0) continue;
-    let adjFloor = 0;
-    let btnX = x, btnY = y;
-    for (const [dx, dy] of [[1,0],[-1,0],[0,1],[0,-1]] as const) {
-      const ni = world.idx(x + dx, y + dy);
-      if (world.cells[ni] === Cell.FLOOR && world.roomMap[ni] < 0) {
-        adjFloor++;
-        btnX = world.wrap(x + dx);
-        btnY = world.wrap(y + dy);
+const CARDINAL_DIRS = [[1,0],[-1,0],[0,1],[0,-1]] as const;
+const LIFT_CONNECTOR_MAX = 96;
+
+interface ReachableSet {
+  cells: Int32Array;
+  count: number;
+  seen: Uint8Array;
+}
+
+function isLiftWalkable(world: World, idx: number): boolean {
+  const cell = world.cells[idx];
+  return cell === Cell.FLOOR || cell === Cell.WATER || cell === Cell.DOOR;
+}
+
+function findNearestLiftWalkable(world: World, x: number, y: number, radius: number): number {
+  const start = world.idx(x, y);
+  if (isLiftWalkable(world, start)) return start;
+  for (let r = 1; r <= radius; r++) {
+    for (let dy = -r; dy <= r; dy++) {
+      for (let dx = -r; dx <= r; dx++) {
+        if (Math.abs(dx) !== r && Math.abs(dy) !== r) continue;
+        const idx = world.idx(x + dx, y + dy);
+        if (isLiftWalkable(world, idx)) return idx;
       }
     }
-    if (adjFloor < 2) continue;
-    world.cells[ci] = Cell.LIFT;
-    world.wallTex[ci] = Tex.LIFT_DOOR;
-    world.liftDir[ci] = direction;
-    const bi = world.idx(btnX, btnY);
-    world.features[bi] = Feature.LIFT_BUTTON;
-    // Store same direction on the button cell for easy lookup
-    world.liftDir[bi] = direction;
+  }
+  return -1;
+}
+
+function collectReachable(world: World, startIdx: number): ReachableSet {
+  const seen = new Uint8Array(W * W);
+  const cells = new Int32Array(W * W);
+  if (startIdx < 0 || !isLiftWalkable(world, startIdx)) return { cells, count: 0, seen };
+
+  let head = 0;
+  let tail = 0;
+  seen[startIdx] = 1;
+  cells[tail++] = startIdx;
+  while (head < tail) {
+    const ci = cells[head++];
+    const x = ci % W;
+    const y = (ci / W) | 0;
+    for (const [dx, dy] of CARDINAL_DIRS) {
+      const ni = world.idx(x + dx, y + dy);
+      if (seen[ni] || !isLiftWalkable(world, ni)) continue;
+      seen[ni] = 1;
+      cells[tail++] = ni;
+    }
+  }
+  return { cells, count: tail, seen };
+}
+
+function reachableFromPoint(world: World, x: number, y: number): ReachableSet {
+  return collectReachable(world, findNearestLiftWalkable(world, Math.floor(x), Math.floor(y), 64));
+}
+
+function firstWalkableComponent(world: World): ReachableSet {
+  for (let i = 0; i < W * W; i++) {
+    if (isLiftWalkable(world, i)) return collectReachable(world, i);
+  }
+  return collectReachable(world, -1);
+}
+
+function canCarveLiftConnectorCell(world: World, idx: number): boolean {
+  return !world.aptMask[idx] && !world.hermoWall[idx] && world.cells[idx] !== Cell.LIFT;
+}
+
+function clearDoorAt(world: World, idx: number): void {
+  const door = world.doors.get(idx);
+  if (!door) return;
+  const roomA = world.rooms[door.roomA];
+  if (roomA) roomA.doors = roomA.doors.filter(d => d !== idx);
+  const roomB = world.rooms[door.roomB];
+  if (roomB) roomB.doors = roomB.doors.filter(d => d !== idx);
+  world.doors.delete(idx);
+}
+
+function setConnectorFloor(world: World, idx: number, floorTex: Tex): boolean {
+  if (!canCarveLiftConnectorCell(world, idx)) return false;
+  if (world.cells[idx] === Cell.DOOR) clearDoorAt(world, idx);
+  if (world.cells[idx] !== Cell.FLOOR && world.cells[idx] !== Cell.WATER) {
+    world.cells[idx] = Cell.FLOOR;
+    world.floorTex[idx] = floorTex;
+    world.roomMap[idx] = -1;
+    world.features[idx] = Feature.NONE;
+  }
+  return true;
+}
+
+function carveBoundedLiftConnector(world: World, fromIdx: number, toIdx: number, floorTex: Tex): boolean {
+  const ax = fromIdx % W;
+  const ay = (fromIdx / W) | 0;
+  const bx = toIdx % W;
+  const by = (toIdx / W) | 0;
+  const dx = world.delta(ax, bx);
+  const dy = world.delta(ay, by);
+  if (Math.abs(dx) + Math.abs(dy) > LIFT_CONNECTOR_MAX) return false;
+
+  const touched: number[] = [];
+  let x = ax;
+  let y = ay;
+  const stepX = dx === 0 ? 0 : dx > 0 ? 1 : -1;
+  const stepY = dy === 0 ? 0 : dy > 0 ? 1 : -1;
+
+  for (let s = 0; s < Math.abs(dx); s++) {
+    const idx = world.idx(x, y);
+    if (!canCarveLiftConnectorCell(world, idx)) return false;
+    touched.push(idx);
+    x = world.wrap(x + stepX);
+  }
+  for (let s = 0; s < Math.abs(dy); s++) {
+    const idx = world.idx(x, y);
+    if (!canCarveLiftConnectorCell(world, idx)) return false;
+    touched.push(idx);
+    y = world.wrap(y + stepY);
+  }
+  const last = world.idx(x, y);
+  if (!canCarveLiftConnectorCell(world, last)) return false;
+  touched.push(last);
+
+  for (const idx of touched) setConnectorFloor(world, idx, floorTex);
+  return true;
+}
+
+function nearestReachableCell(world: World, fromIdx: number, reachable: ReachableSet, maxDist: number): number {
+  const fx = fromIdx % W;
+  const fy = (fromIdx / W) | 0;
+  let best = -1;
+  let bestD = maxDist + 1;
+  const step = Math.max(1, reachable.count >> 11);
+  for (let i = 0; i < reachable.count; i += step) {
+    const ci = reachable.cells[i];
+    const d = Math.abs(world.delta(fx, ci % W)) + Math.abs(world.delta(fy, (ci / W) | 0));
+    if (d < bestD) {
+      bestD = d;
+      best = ci;
+    }
+  }
+  return bestD <= maxDist ? best : -1;
+}
+
+function routeLiftButtonReachable(world: World, liftIdx: number, direction: LiftDirection, reachable: ReachableSet): boolean {
+  const x = liftIdx % W;
+  const y = (liftIdx / W) | 0;
+  for (const [dx, dy] of CARDINAL_DIRS) {
+    const ni = world.idx(x + dx, y + dy);
+    if (
+      reachable.seen[ni] &&
+      world.features[ni] === Feature.LIFT_BUTTON &&
+      world.liftDir[ni] === direction
+    ) return true;
+  }
+  return false;
+}
+
+function placeLiftButton(world: World, idx: number, direction: LiftDirection): boolean {
+  if (!isLiftWalkable(world, idx) || world.cells[idx] === Cell.LIFT) return false;
+  world.features[idx] = Feature.LIFT_BUTTON;
+  world.liftDir[idx] = direction;
+  return true;
+}
+
+function reachableAdjacentLiftCell(world: World, liftIdx: number, reachable: ReachableSet): number {
+  const x = liftIdx % W;
+  const y = (liftIdx / W) | 0;
+  for (const [dx, dy] of CARDINAL_DIRS) {
+    const ni = world.idx(x + dx, y + dy);
+    if (reachable.seen[ni] && isLiftWalkable(world, ni)) return ni;
+  }
+  return -1;
+}
+
+function ensureLiftButton(world: World, liftIdx: number, direction: LiftDirection, reachable: ReachableSet): boolean {
+  if (routeLiftButtonReachable(world, liftIdx, direction, reachable)) return true;
+  const adj = reachableAdjacentLiftCell(world, liftIdx, reachable);
+  return adj >= 0 && placeLiftButton(world, adj, direction);
+}
+
+function adjacentLiftAccess(world: World, liftIdx: number, floorTex: Tex): number {
+  const x = liftIdx % W;
+  const y = (liftIdx / W) | 0;
+  for (const [dx, dy] of CARDINAL_DIRS) {
+    const ni = world.idx(x + dx, y + dy);
+    if (isLiftWalkable(world, ni)) return ni;
+  }
+  for (const [dx, dy] of CARDINAL_DIRS) {
+    const ni = world.idx(x + dx, y + dy);
+    if (setConnectorFloor(world, ni, floorTex)) return ni;
+  }
+  return -1;
+}
+
+function setLiftCell(world: World, idx: number, direction: LiftDirection): void {
+  if (world.cells[idx] === Cell.DOOR) clearDoorAt(world, idx);
+  world.cells[idx] = Cell.LIFT;
+  world.roomMap[idx] = -1;
+  world.wallTex[idx] = Tex.LIFT_DOOR;
+  world.features[idx] = Feature.NONE;
+  world.liftDir[idx] = direction;
+}
+
+function demoteLiftCell(world: World, idx: number, floorTex: Tex): void {
+  world.cells[idx] = Cell.FLOOR;
+  world.roomMap[idx] = -1;
+  world.floorTex[idx] = floorTex;
+  world.wallTex[idx] = Tex.CONCRETE;
+  world.features[idx] = Feature.NONE;
+}
+
+function canPlaceReachableLift(world: World, idx: number, reachable: ReachableSet): number {
+  if (!reachable.seen[idx] || world.cells[idx] !== Cell.FLOOR || world.roomMap[idx] >= 0) return -1;
+  if (world.aptMask[idx] || world.hermoWall[idx] || world.features[idx] !== Feature.NONE || world.containerMap.has(idx)) return -1;
+  const x = idx % W;
+  const y = (idx / W) | 0;
+  let adj = 0;
+  let button = -1;
+  for (const [dx, dy] of CARDINAL_DIRS) {
+    const ni = world.idx(x + dx, y + dy);
+    if (!reachable.seen[ni] || world.cells[ni] !== Cell.FLOOR || world.containerMap.has(ni)) continue;
+    adj++;
+    if (world.features[ni] === Feature.NONE) button = ni;
+  }
+  return adj >= 2 ? button : -1;
+}
+
+function placeReachableLift(world: World, reachable: ReachableSet, direction: LiftDirection, blockedIdx = -1): boolean {
+  if (reachable.count <= 0) return false;
+  const start = direction === LiftDirection.UP
+    ? Math.floor(reachable.count * 0.37)
+    : Math.floor(reachable.count * 0.63);
+  for (let n = 0; n < reachable.count; n++) {
+    const idx = reachable.cells[(start + n) % reachable.count];
+    if (idx === blockedIdx) continue;
+    const button = canPlaceReachableLift(world, idx, reachable);
+    if (button < 0) continue;
+    setLiftCell(world, idx, direction);
+    placeLiftButton(world, button, direction);
+    return true;
+  }
+  return false;
+}
+
+function ensureExistingLiftReachable(
+  world: World,
+  liftIdx: number,
+  direction: LiftDirection,
+  reachable: ReachableSet,
+  floorTex: Tex,
+): boolean {
+  if (ensureLiftButton(world, liftIdx, direction, reachable)) return true;
+  const access = adjacentLiftAccess(world, liftIdx, floorTex);
+  if (access < 0) return false;
+  const target = nearestReachableCell(world, access, reachable, LIFT_CONNECTOR_MAX);
+  if (target < 0 || !carveBoundedLiftConnector(world, access, target, floorTex)) return false;
+  const updated = collectReachable(world, target);
+  return ensureLiftButton(world, liftIdx, direction, updated);
+}
+
+function directionExpected(direction: LiftDirection, expected: readonly LiftDirection[]): boolean {
+  return expected.includes(direction);
+}
+
+function cleanUnexpectedRouteLifts(world: World, expected: readonly LiftDirection[], floorTex: Tex): void {
+  for (let i = 0; i < W * W; i++) {
+    if (world.cells[i] === Cell.LIFT && !directionExpected(world.liftDir[i] as LiftDirection, expected)) {
+      demoteLiftCell(world, i, floorTex);
+    }
+    if (world.features[i] === Feature.LIFT_BUTTON && !directionExpected(world.liftDir[i] as LiftDirection, expected)) {
+      world.features[i] = Feature.NONE;
+    }
+  }
+}
+
+export function routeLiftDirections(z: number, minZ: number, maxZ: number): LiftDirection[] {
+  const directions: LiftDirection[] = [];
+  if (z > minZ) directions.push(LiftDirection.UP);
+  if (z < maxZ) directions.push(LiftDirection.DOWN);
+  return directions;
+}
+
+export function ensureReachableRouteLifts(
+  world: World,
+  spawnX: number,
+  spawnY: number,
+  expectedDirections: readonly LiftDirection[],
+  floorTex: Tex = Tex.F_CONCRETE,
+): void {
+  const expected = Array.from(new Set(expectedDirections));
+  cleanUnexpectedRouteLifts(world, expected, floorTex);
+  const spawnIdx = world.idx(Math.floor(spawnX), Math.floor(spawnY));
+  let reachable = reachableFromPoint(world, spawnX, spawnY);
+
+  for (const direction of expected) {
+    let usable = 0;
+    for (let i = 0; i < W * W; i++) {
+      if (world.cells[i] !== Cell.LIFT || world.liftDir[i] !== direction) continue;
+      if (!ensureExistingLiftReachable(world, i, direction, reachable, floorTex)) {
+        demoteLiftCell(world, i, floorTex);
+        continue;
+      }
+      reachable = reachableFromPoint(world, spawnX, spawnY);
+      if (routeLiftButtonReachable(world, i, direction, reachable)) usable++;
+    }
+    if (usable === 0 && placeReachableLift(world, reachable, direction, spawnIdx)) {
+      reachable = reachableFromPoint(world, spawnX, spawnY);
+    }
+  }
+}
+
+/* ── Place lift cells in corridors ───────────────────────────── */
+export function placeLifts(
+  world: World,
+  count: number,
+  direction: LiftDirection = LiftDirection.DOWN,
+  origin?: { x: number; y: number },
+): void {
+  let placed = 0;
+  const reachable = origin ? reachableFromPoint(world, origin.x, origin.y) : firstWalkableComponent(world);
+  const blockedIdx = origin ? world.idx(Math.floor(origin.x), Math.floor(origin.y)) : -1;
+  for (let attempt = 0; attempt < 4000 && placed < count; attempt++) {
+    const ci = reachable.count > 0
+      ? reachable.cells[rng(0, reachable.count - 1)]
+      : world.idx(rng(20, W - 20), rng(20, W - 20));
+    if (ci === blockedIdx) continue;
+    const bi = canPlaceReachableLift(world, ci, reachable);
+    if (bi < 0) continue;
+    setLiftCell(world, ci, direction);
+    placeLiftButton(world, bi, direction);
     placed++;
   }
 }

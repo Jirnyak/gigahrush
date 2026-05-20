@@ -1,7 +1,7 @@
 /* ── Kvartiry floor generator (Floor -1) — КВАРТИРЫ ──────────── */
 /*   Dense residential maze with wall_l=4 grid pattern.           */
 /*   Data-driven crowd profile: larger resident/wild/response caps. */
-/*   Natural resident field plus local groups — eternal riots.    */
+/*   Whole-floor natural resident field — eternal riots.          */
 /*   Uprising mechanic: civilians rally → become WILD.            */
 /*   Rooms by zone: living, kitchen, smoking, bathroom, etc.      */
 
@@ -15,9 +15,10 @@ import { World } from '../../core/world';
 import { rng, placeLifts, generateZones, ensureConnectivity } from '../shared';
 import { placeProceduralScreens } from '../procedural_screens';
 import { randomName, freshNeeds } from '../../data/catalog';
-import { KVARTIRY_POPULATION_PROFILE, type NpcPopulationBucket } from '../../data/population_profiles';
+import { KVARTIRY_POPULATION_PROFILE, type NpcPopulationProfile } from '../../data/population_profiles';
 import { sampleNaturalPopulationCells } from '../population_placement';
 import { calcZoneLevel, randomRPG, gaussianLevel, getMaxHp } from '../../systems/rpg';
+import { entitySpawnSlots } from '../../systems/entity_limits';
 import { Spr } from '../../render/sprite_index';
 import { randomOccupation } from '../../data/relations';
 import {
@@ -187,51 +188,7 @@ function spawnNpcAtCell(
   return true;
 }
 
-/* ── Spawn a single NPC at a random floor cell ───────────────── */
-function spawnNpcAt(
-  world: World, entities: Entity[], nextId: { v: number },
-  faction: Faction, occupation: Occupation,
-  anchorX = -1, anchorY = -1, radius = 0,
-): boolean {
-  const anchored = radius > 0 && anchorX >= 0 && anchorY >= 0;
-  for (let i = 0; i < 100; i++) {
-    let x: number;
-    let y: number;
-    if (anchored && i < 70) {
-      x = world.wrap(Math.floor(anchorX) + rng(-radius, radius));
-      y = world.wrap(Math.floor(anchorY) + rng(-radius, radius));
-    } else {
-      x = Math.floor(Math.random() * W);
-      y = Math.floor(Math.random() * W);
-    }
-    const ci = world.idx(x, y);
-    if (world.cells[ci] !== Cell.FLOOR) continue;
-    if (spawnNpcAtCell(world, entities, nextId, faction, occupation, x, y)) return true;
-  }
-  return false;
-}
-
-function pickNpcGroupAnchor(world: World, profile?: NpcPopulationBucket, seed = 0): { x: number; y: number } | null {
-  if (profile) {
-    const cells = sampleNaturalPopulationCells(world, 1, profile, seed);
-    const cell = cells[0];
-    if (cell !== undefined) return { x: cell % W, y: (cell / W) | 0 };
-  }
-  for (let t = 0; t < 200; t++) {
-    const x = Math.floor(Math.random() * W);
-    const y = Math.floor(Math.random() * W);
-    if (world.cells[world.idx(x, y)] === Cell.FLOOR) return { x, y };
-  }
-  return null;
-}
-
-function npcSeedGroupSize(profile: NpcPopulationBucket, remaining: number): number {
-  const hi = Math.min(profile.groupMax, remaining);
-  const lo = Math.min(profile.groupMin, hi);
-  return rng(lo, hi);
-}
-
-function npcRefillBatchSize(profile: NpcPopulationBucket, deficit: number): number {
+function npcRefillBatchSize(profile: NpcPopulationProfile, deficit: number): number {
   const pressureBatch = Math.max(profile.refillMin, Math.ceil(deficit / profile.refillDeficitDivisor));
   return Math.min(deficit, pressureBatch, rng(profile.refillMin, profile.refillMax));
 }
@@ -245,7 +202,7 @@ function spawnNaturalNpcBatch(
   entities: Entity[],
   nextId: { v: number },
   faction: Faction,
-  profile: NpcPopulationBucket,
+  profile: NpcPopulationProfile,
   count: number,
   fixedOccupation?: Occupation,
 ): number {
@@ -258,40 +215,18 @@ function spawnNaturalNpcBatch(
   return spawned;
 }
 
-function spawnNpcGroup(
-  world: World,
-  entities: Entity[],
-  nextId: { v: number },
-  faction: Faction,
-  profile: NpcPopulationBucket,
-  count: number,
-  fixedOccupation?: Occupation,
-): number {
-  const anchor = pickNpcGroupAnchor(world, profile, npcPopulationSeed(faction, nextId.v));
-  let spawned = 0;
-  for (let i = 0; i < count; i++) {
-    const occ = fixedOccupation ?? randomOccupation(faction);
-    if (spawnNpcAt(world, entities, nextId, faction, occ, anchor?.x ?? -1, anchor?.y ?? -1, profile.spreadRadius)) spawned++;
-  }
-  return spawned;
-}
-
 function spawnNpcPopulationBatch(
   world: World,
   entities: Entity[],
   nextId: { v: number },
   faction: Faction,
-  profile: NpcPopulationBucket,
+  profile: NpcPopulationProfile,
   count: number,
   fixedOccupation?: Occupation,
 ): number {
-  const naturalTarget = Math.min(count, Math.max(1, Math.round(count * profile.scatterShare)));
-  let spawned = spawnNaturalNpcBatch(world, entities, nextId, faction, profile, naturalTarget, fixedOccupation);
-  const groupedTarget = count - spawned;
-  if (groupedTarget > 0) {
-    spawned += spawnNpcGroup(world, entities, nextId, faction, profile, groupedTarget, fixedOccupation);
-  }
-  return spawned;
+  const slots = entitySpawnSlots(entities, EntityType.NPC, count);
+  if (slots <= 0) return 0;
+  return spawnNaturalNpcBatch(world, entities, nextId, faction, profile, slots, fixedOccupation);
 }
 
 function seedNpcPopulation(
@@ -299,19 +234,10 @@ function seedNpcPopulation(
   entities: Entity[],
   nextId: { v: number },
   faction: Faction,
-  profile: NpcPopulationBucket,
+  profile: NpcPopulationProfile,
   fixedOccupation?: Occupation,
 ): void {
-  const naturalTarget = Math.min(profile.initial, Math.round(profile.initial * profile.scatterShare));
-  let spawned = spawnNaturalNpcBatch(world, entities, nextId, faction, profile, naturalTarget, fixedOccupation);
-  let groups = 0;
-  while (spawned < profile.initial && groups < 256) {
-    const groupSize = npcSeedGroupSize(profile, profile.initial - spawned);
-    const added = spawnNpcGroup(world, entities, nextId, faction, profile, groupSize, fixedOccupation);
-    if (added <= 0) break;
-    spawned += added;
-    groups++;
-  }
+  spawnNpcPopulationBatch(world, entities, nextId, faction, profile, profile.initial, fixedOccupation);
 }
 
 /* ══════════════════════════════════════════════════════════════════
@@ -638,7 +564,7 @@ export function generateKvartiry(): { world: World; entities: Entity[]; spawnX: 
   // ── Phase 8: Light map ────────────────────────────────────────
   world.bakeLights();
 
-  // ── Phase 9: Spawn NPCs (whole-floor baseline plus local unrest groups)
+  // ── Phase 9: Spawn NPCs (whole-floor natural baseline)
   const nid = { v: nextId };
   seedNpcPopulation(world, entities, nid, Faction.CITIZEN, CITIZEN_PROFILE);
   seedNpcPopulation(world, entities, nid, Faction.WILD, WILD_PROFILE);
@@ -693,7 +619,7 @@ export function generateKvartiry(): { world: World; entities: Entity[]; spawnX: 
 
 /* ══════════════════════════════════════════════════════════════════
    Population update — called every frame from main.ts
-   Maintains the data profile caps with a whole-floor baseline plus groups.
+   Maintains the data profile caps with a whole-floor natural baseline.
    ══════════════════════════════════════════════════════════════════ */
 export function resetKvPopulationState(): void {
   kvCitizenAccum = 0;
@@ -719,7 +645,7 @@ export function updateKvPopulation(
   kvLiquidatorAccum += dt;
   kvUprisingAccum += dt;
 
-  // ── Replenish citizens as background residents plus local groups
+  // ── Replenish citizens as background residents across the whole floor
   if (kvCitizenAccum >= SPAWN_INTERVAL) {
     kvCitizenAccum -= SPAWN_INTERVAL;
     const deficit = CITIZEN_CAP - countFactionNPCs(entities, Faction.CITIZEN);
@@ -728,7 +654,7 @@ export function updateKvPopulation(
     }
   }
 
-  // ── Replenish wild as background unrest plus denser local packs
+  // ── Replenish wild as background unrest across the whole floor
   if (kvWildAccum >= SPAWN_INTERVAL) {
     kvWildAccum -= SPAWN_INTERVAL;
     const deficit = WILD_CAP - countFactionNPCs(entities, Faction.WILD);

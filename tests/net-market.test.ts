@@ -48,6 +48,16 @@ interface MarketSnapshotRow {
   updated_at: number;
 }
 
+interface MarketBudgetRow {
+  identity_key: string;
+  net_gen: string;
+  session_id: string;
+  window_started_at: number;
+  impulse_count: number;
+  magnitude_sum: number;
+  updated_at: number;
+}
+
 type MarketStateHost = GameState & { stockMarket?: StockMarketState };
 
 class FakeStatement implements D1PreparedStatement {
@@ -80,6 +90,7 @@ class FakeD1 implements D1Database {
   players = new Map<string, PlayerRow>();
   sessions = new Map<string, SessionRow>();
   impulses = new Map<string, MarketImpulseRow>();
+  budgets = new Map<string, MarketBudgetRow>();
   snapshots = new Map<string, MarketSnapshotRow>();
   nextImpulseId = 1;
 
@@ -90,6 +101,10 @@ class FakeD1 implements D1Database {
   first(query: string, values: unknown[]): Record<string, unknown> | null {
     if (query.includes('FROM net_sessions WHERE session_id = ?')) {
       return this.sessions.get(String(values[0])) ?? null;
+    }
+    if (query.includes('FROM net_market_impulses') && query.includes('WHERE event_key = ?')) {
+      const eventKey = String(values[0]);
+      return this.impulses.has(eventKey) ? { event_key: eventKey } : null;
     }
     throw new Error(`Unhandled fake first query: ${query}`);
   }
@@ -142,6 +157,40 @@ class FakeD1 implements D1Database {
       const row = this.players.get(String(values[0]));
       if (row) row.runs += 1;
       return { meta: { changes: row ? 1 : 0 } };
+    }
+    if (query.includes('INSERT INTO net_market_budgets')) {
+      const identityKey = String(values[0]);
+      const next: MarketBudgetRow = {
+        identity_key: identityKey,
+        net_gen: String(values[1]),
+        session_id: String(values[2]),
+        window_started_at: Number(values[3]),
+        impulse_count: Number(values[4]),
+        magnitude_sum: Number(values[5]),
+        updated_at: Number(values[6]),
+      };
+      const maxImpulses = Number(values[7]);
+      const maxMagnitude = Number(values[8]);
+      const existing = this.budgets.get(identityKey);
+      if (!existing || existing.window_started_at !== next.window_started_at) {
+        if (next.impulse_count > maxImpulses || next.magnitude_sum > maxMagnitude) {
+          return { meta: { changes: 0 } };
+        }
+        this.budgets.set(identityKey, next);
+        return { meta: { changes: 1 } };
+      }
+      if (
+        existing.impulse_count + next.impulse_count > maxImpulses ||
+        existing.magnitude_sum + next.magnitude_sum > maxMagnitude
+      ) {
+        return { meta: { changes: 0 } };
+      }
+      existing.net_gen = next.net_gen;
+      existing.session_id = next.session_id;
+      existing.impulse_count += next.impulse_count;
+      existing.magnitude_sum = Math.round((existing.magnitude_sum + next.magnitude_sum) * 100) / 100;
+      existing.updated_at = next.updated_at;
+      return { meta: { changes: 1 } };
     }
     if (query.includes('INSERT OR IGNORE INTO net_market_impulses')) {
       const eventKey = String(values[5]);
@@ -234,13 +283,19 @@ test('Net market schema and setup include D1 impulse and snapshot tables', () =>
   assert.deepEqual([...tableColumns(schema, 'net_market_impulses')], [
     'id', 'net_gen', 'corp_id', 'kind', 'magnitude', 'created_at', 'event_key',
   ]);
+  assert.deepEqual([...tableColumns(schema, 'net_market_budgets')], [
+    'identity_key', 'net_gen', 'session_id', 'window_started_at', 'impulse_count', 'magnitude_sum', 'updated_at',
+  ]);
   assert.deepEqual([...tableColumns(schema, 'net_market_snapshots')], [
     'corp_id', 'price', 'last_delta', 'volume', 'updated_at',
   ]);
   assert.match(schema, /idx_net_market_impulses_created/);
   assert.match(schema, /idx_net_market_impulses_corp/);
   assert.match(schema, /idx_net_market_impulses_event_key/);
+  assert.match(schema, /idx_net_market_budgets_net_gen/);
+  assert.match(schema, /idx_net_market_budgets_window/);
   assert.match(migration, /CREATE TABLE IF NOT EXISTS net_market_impulses/);
+  assert.match(migration, /CREATE TABLE IF NOT EXISTS net_market_budgets/);
   assert.match(setup, /net_sphere_market\.sql/);
 });
 
@@ -286,9 +341,89 @@ test('Net market POST inserts impulses idempotently by event key', async () => {
     assert.equal(first.status, 200);
     assert.equal(second.status, 200);
     assert.equal(db.impulses.size, 1);
+    assert.equal(db.budgets.get('NET-ABCD-1234:SES-ABCD-1234')?.impulse_count, 1);
+    assert.equal(db.budgets.get('NET-ABCD-1234:SES-ABCD-1234')?.magnitude_sum, 10);
     assert.equal(db.snapshots.get('toha_heavy_industries')?.volume, 10);
     assert.equal(firstQuote.lastDelta, 2.5);
     assert.deepEqual(secondQuote, firstQuote);
+  } finally {
+    Date.now = realNow;
+  }
+});
+
+test('Net market POST rejects bursts above identity window budget', async () => {
+  const realNow = Date.now;
+  const db = new FakeD1();
+  const burst = Array.from({ length: 8 }, (_, i) => ({
+    eventKey: `burst:${i}`,
+    corpId: `corp_${i}`,
+    kind: 'buy',
+    magnitude: 1,
+  }));
+
+  Date.now = () => 40_000;
+  try {
+    const first = await postMarket({
+      request: postRequest(identityBody({ impulses: burst })),
+      env: { GIGA_NET: db },
+    });
+    const second = await postMarket({
+      request: postRequest(identityBody({
+        impulses: [{ eventKey: 'burst:overflow', corpId: 'corp_overflow', kind: 'buy', magnitude: 1 }],
+      })),
+      env: { GIGA_NET: db },
+    });
+    const rejected = await responseJson(second);
+
+    assert.equal(first.status, 200);
+    assert.equal(second.status, 429);
+    assert.equal(rejected.error, 'market rate limit');
+    assert.equal(typeof rejected.retryAfterMs, 'number');
+    assert.equal(db.impulses.size, 8);
+    assert.equal(db.impulses.has('NET-ABCD-1234:burst:overflow'), false);
+
+    Date.now = () => 61_000;
+    const afterWindow = await postMarket({
+      request: postRequest(identityBody({
+        impulses: [{ eventKey: 'burst:next-window', corpId: 'corp_overflow', kind: 'buy', magnitude: 1 }],
+      })),
+      env: { GIGA_NET: db },
+    });
+
+    assert.equal(afterWindow.status, 200);
+    assert.equal(db.impulses.size, 9);
+  } finally {
+    Date.now = realNow;
+  }
+});
+
+test('Net market POST applies bounded aggregate quote snapshots', async () => {
+  const realNow = Date.now;
+  const db = new FakeD1();
+
+  Date.now = () => 50_000;
+  try {
+    const response = await postMarket({
+      request: postRequest(identityBody({
+        impulses: [
+          { eventKey: 'agg:1', corpId: 'toha_heavy_industries', kind: 'buy', magnitude: 80 },
+          { eventKey: 'agg:2', corpId: 'toha_heavy_industries', kind: 'buy', magnitude: 80 },
+          { eventKey: 'agg:3', corpId: 'toha_heavy_industries', kind: 'buy', magnitude: 80 },
+        ],
+      })),
+      env: { GIGA_NET: db },
+    });
+    const data = await responseJson(response);
+    const market = data.market as { rows: Record<string, unknown>[] };
+    const quote = market.rows[0];
+    const stored = db.snapshots.get('toha_heavy_industries');
+
+    assert.equal(response.status, 200);
+    assert.equal(db.impulses.size, 3);
+    assert.equal(stored?.last_delta, 25);
+    assert.equal(stored?.volume, 240);
+    assert.equal(quote.lastDelta, 25);
+    assert.equal(quote.volume, 240);
   } finally {
     Date.now = realNow;
   }

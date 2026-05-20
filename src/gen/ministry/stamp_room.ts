@@ -112,6 +112,7 @@ function addStampAuditContainer(
 ): void {
   const inventory: WorldContainer['inventory'] = [
     { defId: FORGED_STAMP_SHEET, count: 1 },
+    { defId: 'ministry_clean_stamp', count: 1 },
     { defId: 'seal_wax', count: 2 },
     { defId: 'blank_form', count: 1 },
     { defId: 'ink_bottle', count: 1 },

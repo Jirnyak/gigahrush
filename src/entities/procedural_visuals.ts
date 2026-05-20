@@ -1,10 +1,10 @@
 import { EntityType, Faction, MonsterKind, Occupation, type Entity } from '../core/types';
+import { MONSTER_VARIANT_BY_ID } from '../data/monster_variants';
 import { S, rgba, noise, clamp, CLEAR } from '../render/pixutil';
 import { MONSTER_SPRITES } from './monster';
 import { generateIdolSprite } from './idol';
 import { generateNightmareSprite } from './nightmare';
 import { generateRobotSprite } from './robot';
-import { generateFloor69FemaleNpcSprite } from '../render/art_sprites';
 import { Spr } from '../render/sprite_index';
 
 type RGB = readonly [number, number, number];
@@ -23,6 +23,18 @@ const CIVILIAN_TOPS: readonly RGB[] = [
 ];
 const CIVILIAN_PANTS: readonly RGB[] = [
   [54, 52, 58], [62, 56, 46], [48, 62, 82], [74, 66, 58], [36, 42, 52],
+];
+const FLOOR69_STAGE_TOPS: readonly RGB[] = [
+  [112, 34, 58], [42, 58, 112], [38, 106, 98], [48, 44, 54],
+  [132, 105, 54], [124, 72, 96], [70, 82, 110], [116, 116, 108],
+];
+const FLOOR69_STAGE_BOTTOMS: readonly RGB[] = [
+  [30, 28, 34], [58, 44, 62], [42, 48, 62], [72, 54, 44],
+  [88, 70, 42], [38, 66, 60], [96, 50, 72],
+];
+const FLOOR69_STAGE_ACCENTS: readonly RGB[] = [
+  [220, 178, 78], [214, 92, 142], [92, 190, 184], [196, 208, 214],
+  [168, 118, 208], [238, 128, 78],
 ];
 
 function mix32(v: number): number {
@@ -265,6 +277,101 @@ function addNpcEquipment(
   }
 }
 
+function paintFloor69StageOutfit(t: Uint32Array, seed: number): void {
+  const cx = 32 + Math.floor((rnd(seed, 2) - 0.5) * 3);
+  const top = rgbJitter(pickRgb(FLOOR69_STAGE_TOPS, seed, 801), seed, 802, 24);
+  const bottom = rgbJitter(pickRgb(FLOOR69_STAGE_BOTTOMS, seed, 811), seed, 812, 18);
+  const accent = rgbJitter(pickRgb(FLOOR69_STAGE_ACCENTS, seed, 821), seed, 822, 22);
+  const coat = rnd(seed, 831) > 0.42;
+  const yTop = 23;
+  const yMid = 42 + Math.floor(rnd(seed, 832) * 3);
+  const yBot = 55;
+
+  for (let y = yTop; y < yMid; y++) {
+    const k = (y - yTop) / Math.max(1, yMid - yTop);
+    const hw = Math.floor(7 + k * (coat ? 4 : 3));
+    for (let x = cx - hw; x <= cx + hw; x++) {
+      if (x < 0 || x >= S || y < 0 || y >= S || t[y * S + x] === CLEAR) continue;
+      const side = Math.abs(x - cx) / Math.max(1, hw);
+      const n = Math.floor((noise(x, y, seed + 840) - 0.5) * 18 - side * 10);
+      t[y * S + x] = col(top, n);
+    }
+  }
+
+  for (let y = yMid - 2; y < yBot; y++) {
+    const k = (y - yMid + 2) / Math.max(1, yBot - yMid + 2);
+    const hw = Math.floor((coat ? 9 : 7) + k * (coat ? 3 : 5));
+    for (let x = cx - hw; x <= cx + hw; x++) {
+      if (x < 0 || x >= S || y < 0 || y >= S || t[y * S + x] === CLEAR) continue;
+      const n = Math.floor((noise(x, y, seed + 850) - 0.5) * 16);
+      t[y * S + x] = col(bottom, n);
+    }
+  }
+
+  const sashY = 31 + Math.floor(rnd(seed, 861) * 7);
+  for (let x = cx - 8; x <= cx + 8; x++) {
+    const y = sashY + Math.floor((x - cx) * (rnd(seed, 862) > 0.5 ? 0.18 : -0.18));
+    if (x >= 0 && x < S && y >= 0 && y < S && t[y * S + x] !== CLEAR) t[y * S + x] = col(accent);
+  }
+  if (rnd(seed, 870) > 0.5) {
+    paintRect(t, cx + 8, 35, 4, 11, accent, seed + 871, 245);
+    paintLine(t, cx + 7, 32, cx + 11, 45, accent, seed + 872, 0);
+  } else {
+    paintRect(t, cx - 11, 28, 4, 8, accent, seed + 873, 238);
+  }
+}
+
+function generateFloor69ClothedNpcSprite(seed: number): Uint32Array {
+  const bodySeed = mix32(seed ^ 0xf69c0de);
+  const occupations = [
+    Occupation.TRAVELER,
+    Occupation.SECRETARY,
+    Occupation.STOREKEEPER,
+    Occupation.HOUSEWIFE,
+  ] as const;
+  const occ = occupations[Math.floor(rnd(bodySeed, 790) * occupations.length) % occupations.length];
+  const t = generateProceduralNpcSprite(bodySeed, occ, Faction.CITIZEN, true, occ);
+  paintFloor69StageOutfit(t, bodySeed);
+  return t;
+}
+
+function paintMatch(t: Uint32Array, x0: number, y0: number, x1: number, y1: number, seed: number, headAtEnd = true): void {
+  paintLine(t, x0 + 1, y0 + 1, x1 + 1, y1 + 1, [58, 40, 28], seed + 1, 1);
+  paintLine(t, x0, y0, x1, y1, [174, 128, 72], seed + 2, 1);
+  paintLine(t, x0, y0, x1, y1, [218, 174, 102], seed + 3, 0);
+  if (!headAtEnd) return;
+  paintEllipse(t, x1, y1, 2.2, 2.2, (d, x, y) => rgba(176, 38, 32, clamp(255 - d * 28 + noise(x, y, seed + 4) * 20)));
+}
+
+function generateVankaMatchSprite(seed: number): Uint32Array {
+  const t = new Uint32Array(S * S).fill(CLEAR);
+  const cx = 32;
+  const skin = rgbJitter([194, 154, 128], seed, 1200, 18);
+  const hair = rgbJitter([46, 34, 24], seed, 1210, 14);
+
+  paintEllipse(t, cx, 11, 6.5, 7.5, (d, x, y) => col(skin, Math.floor((noise(x, y, seed + 1201) - 0.45) * 16 - d * 5)));
+  paintRect(t, cx - 6, 4, 12, 4, hair, seed + 1202);
+  paintLine(t, cx - 5, 7, cx + 5, 7, hair, seed + 1203, 1);
+  t[11 * S + cx - 2] = rgba(18, 18, 18);
+  t[11 * S + cx + 2] = rgba(18, 18, 18);
+  t[14 * S + cx] = rgba(204, 62, 62);
+
+  paintMatch(t, cx, 18, cx, 48, seed + 1220, false);
+  paintMatch(t, cx - 11, 20, cx + 11, 20, seed + 1221);
+  paintMatch(t, cx - 9, 22, cx - 11, 43, seed + 1222);
+  paintMatch(t, cx + 9, 22, cx + 11, 43, seed + 1223);
+  for (let y = 25; y <= 41; y += 4) {
+    paintMatch(t, cx - 1, y, cx - 10, y + 2, seed + 1230 + y);
+    paintMatch(t, cx + 1, y, cx + 10, y + 2, seed + 1240 + y);
+  }
+  paintMatch(t, cx - 8, 23, cx - 18, 37, seed + 1250);
+  paintMatch(t, cx + 8, 23, cx + 18, 36, seed + 1251);
+  paintMatch(t, cx - 4, 48, cx - 12, 58, seed + 1252);
+  paintMatch(t, cx + 4, 48, cx + 12, 58, seed + 1253);
+  paintEllipse(t, cx, 49, 5, 3, (d, x, y) => rgba(104, 70, 42, clamp(150 * (1 - d) + noise(x, y, seed + 1254) * 30)));
+  return t;
+}
+
 export function generateProceduralNpcSprite(
   seed: number,
   occupation: Occupation | undefined,
@@ -317,6 +424,8 @@ function component(c: number, shift: number): number {
 }
 
 function monsterTint(kind: MonsterKind, seed: number, variantId: string | undefined): RGB {
+  const cue = variantId ? MONSTER_VARIANT_BY_ID[variantId]?.cue : undefined;
+  if (cue) return cue.tint;
   const variantSeed = variantId ? hashText(variantId, seed) : seed;
   const palettes: Partial<Record<MonsterKind, readonly RGB[]>> = {
     [MonsterKind.SBORKA]: [[118, 48, 62], [84, 60, 92], [110, 78, 48]],
@@ -329,6 +438,7 @@ function monsterTint(kind: MonsterKind, seed: number, variantId: string | undefi
     [MonsterKind.REBAR]: [[118, 72, 48], [92, 90, 84], [132, 58, 42]],
     [MonsterKind.SPIRIT]: [[128, 166, 186], [136, 118, 184], [188, 196, 202]],
     [MonsterKind.KOSTOREZ]: [[136, 92, 78], [120, 116, 102], [148, 68, 58]],
+    [MonsterKind.SAFEGUARD]: [[214, 224, 232], [184, 202, 214], [240, 242, 238]],
   };
   const list = palettes[kind] ?? [[110, 72, 78], [78, 88, 96], [112, 104, 74]];
   return rgbJitter(pickRgb(list, variantSeed, 1), variantSeed, 2, 34);
@@ -336,8 +446,9 @@ function monsterTint(kind: MonsterKind, seed: number, variantId: string | undefi
 
 function mutateMonsterSprite(base: Uint32Array, kind: MonsterKind, seed: number, variantId?: string): Uint32Array {
   const out = new Uint32Array(S * S).fill(CLEAR);
+  const cue = variantId ? MONSTER_VARIANT_BY_ID[variantId]?.cue : undefined;
   const tint = monsterTint(kind, seed, variantId);
-  const strength = 0.18 + rnd(seed, 401) * 0.28;
+  const strength = cue ? 0.42 + rnd(seed, 401) * 0.14 : 0.18 + rnd(seed, 401) * 0.28;
   const alphaMul = kind === MonsterKind.SPIRIT ? 0.62 + rnd(seed, 402) * 0.22 : 1;
   const dark = kind === MonsterKind.SHADOW ? 0.48 : 1;
 
@@ -360,6 +471,80 @@ function mutateMonsterSprite(base: Uint32Array, kind: MonsterKind, seed: number,
     );
   }
   return out;
+}
+
+function addMonsterVariantCueMarks(t: Uint32Array, variantId: string | undefined, seed: number): void {
+  const cue = variantId ? MONSTER_VARIANT_BY_ID[variantId]?.cue : undefined;
+  if (!cue) return;
+  const tint = cue.tint;
+
+  switch (cue.mark) {
+    case 'cracks':
+      for (let i = 0; i < 5; i++) {
+        const x = 20 + Math.floor(rnd(seed, 730 + i) * 24);
+        const y = 14 + Math.floor(rnd(seed, 740 + i) * 34);
+        paintLine(t, x, y, x + 4 - Math.floor(rnd(seed, 750 + i) * 9), y + 8, [236, 74, 70], seed + 760 + i, i === 0 ? 1 : 0);
+      }
+      break;
+    case 'wet_drips':
+      for (let i = 0; i < 7; i++) {
+        const x = 18 + Math.floor(rnd(seed, 770 + i) * 28);
+        const y = 24 + Math.floor(rnd(seed, 780 + i) * 20);
+        paintLine(t, x, y, x + Math.floor(rnd(seed, 790 + i) * 3) - 1, y + 8 + Math.floor(rnd(seed, 800 + i) * 7), [76, 196, 210], seed + 810 + i, 0);
+      }
+      paintEllipse(t, 32, 53, 16, 3, (d, x, y) => rgba(50, 130, 148, clamp(130 * (1 - d) + noise(x, y, seed + 811) * 60)));
+      break;
+    case 'silence_stitches':
+      paintLine(t, 20, 24, 44, 24, [196, 196, 188], seed + 820, 0);
+      for (let x = 23; x <= 41; x += 4) paintLine(t, x, 21, x, 27, [58, 58, 58], seed + 821 + x, 0);
+      paintEllipse(t, 32, 17, 13, 4, (d) => rgba(210, 210, 202, clamp(65 * (1 - d))));
+      break;
+    case 'panel_edges':
+      paintLine(t, 18, 16, 46, 16, [196, 188, 158], seed + 830, 1);
+      paintLine(t, 18, 33, 48, 32, [92, 86, 74], seed + 831, 0);
+      paintLine(t, 24, 13, 22, 48, [184, 178, 158], seed + 832, 0);
+      paintLine(t, 40, 14, 42, 47, [70, 66, 58], seed + 833, 0);
+      break;
+    case 'wild_rags':
+      paintRect(t, 17, 29, 11, 5, [184, 52, 34], seed + 840);
+      paintRect(t, 36, 35, 10, 6, [132, 64, 42], seed + 841);
+      paintLine(t, 20, 17, 43, 39, [226, 92, 46], seed + 842, 0);
+      break;
+    case 'lamp_halo':
+      paintEllipse(t, 32, 18, 21, 12, (d, x, y) => rgba(244, 208, 84, clamp((1 - d) * 110 + noise(x, y, seed + 850) * 25)));
+      paintEllipse(t, 32, 18, 8, 5, (d) => rgba(255, 232, 126, clamp(230 * (1 - d))));
+      paintLine(t, 21, 12, 43, 12, [255, 214, 72], seed + 851, 0);
+      break;
+    case 'black_slime':
+      for (let i = 0; i < 8; i++) {
+        const x = 18 + Math.floor(rnd(seed, 860 + i) * 30);
+        const y = 18 + Math.floor(rnd(seed, 870 + i) * 27);
+        paintLine(t, x, y, x + Math.floor(rnd(seed, 880 + i) * 5) - 2, y + 7 + Math.floor(rnd(seed, 890 + i) * 7), [4, 8, 10], seed + 900 + i, rnd(seed, 910 + i) > 0.62 ? 1 : 0);
+      }
+      paintEllipse(t, 32, 42, 17, 7, (d, x, y) => rgba(8, 10, 12, clamp(220 * (1 - d) + noise(x, y, seed + 901) * 30)));
+      paintLine(t, 19, 20, 46, 45, [92, 64, 124], seed + 902, 0);
+      break;
+    case 'pipe_bands':
+      paintLine(t, 18, 21, 48, 21, [78, 210, 224], seed + 920, 1);
+      paintLine(t, 17, 36, 46, 37, [58, 170, 190], seed + 921, 1);
+      paintLine(t, 24, 12, 24, 49, [174, 106, 58], seed + 922, 0);
+      paintLine(t, 42, 16, 41, 50, [174, 106, 58], seed + 923, 0);
+      break;
+    case 'garbage_flecks':
+      for (let i = 0; i < 22; i++) {
+        const x = 13 + Math.floor(rnd(seed, 930 + i) * 38);
+        const y = 18 + Math.floor(rnd(seed, 960 + i) * 35);
+        const c: RGB = rnd(seed, 990 + i) > 0.5 ? [176, 132, 48] : [72, 110, 58];
+        paintRect(t, x, y, 1 + Math.floor(rnd(seed, 1020 + i) * 3), 1 + Math.floor(rnd(seed, 1050 + i) * 2), c, seed + 1080 + i, 235);
+      }
+      break;
+    case 'concrete_bite':
+      paintEllipse(t, 32, 20, 13, 5, (d, x, y) => rgba(tint[0], tint[1], tint[2], clamp(190 * (1 - d) + noise(x, y, seed + 1090) * 40)));
+      paintLine(t, 19, 19, 45, 47, [66, 60, 50], seed + 1091, 1);
+      paintLine(t, 43, 18, 21, 45, [66, 60, 50], seed + 1092, 0);
+      for (let i = 0; i < 6; i++) paintRect(t, 21 + i * 4, 24 + (i % 2), 2, 4, [236, 226, 188], seed + 1100 + i);
+      break;
+  }
 }
 
 function addMonsterEyes(t: Uint32Array, kind: MonsterKind, seed: number): void {
@@ -409,14 +594,18 @@ function corruptFalseHuman(seed: number): Uint32Array {
 }
 
 export function generateProceduralMonsterSprite(kind: MonsterKind, seed: number, variantId?: string): Uint32Array {
-  if (kind === MonsterKind.NIGHTMARE) return generateNightmareSprite(seed);
-  if (kind === MonsterKind.ROBOT) return generateRobotSprite(seed);
-  if (kind === MonsterKind.IDOL) return generateIdolSprite(seed);
   if (kind === MonsterKind.NELYUD) return corruptFalseHuman(seed);
 
+  const special = kind === MonsterKind.NIGHTMARE ? generateNightmareSprite(seed)
+    : kind === MonsterKind.ROBOT ? generateRobotSprite(seed)
+    : kind === MonsterKind.IDOL ? generateIdolSprite(seed)
+    : undefined;
+  if (special && !variantId) return special;
+
   const gen = MONSTER_SPRITES[kind] ?? MONSTER_SPRITES[MonsterKind.SBORKA];
-  const out = mutateMonsterSprite(gen(), kind, seed, variantId);
+  const out = mutateMonsterSprite(special ?? gen(), kind, seed, variantId);
   addMonsterMarks(out, kind, seed);
+  addMonsterVariantCueMarks(out, variantId, seed);
   addMonsterEyes(out, kind, seed);
   return out;
 }
@@ -465,7 +654,10 @@ export function proceduralEntitySpriteKey(e: Entity): number {
 export function generateProceduralEntitySprite(e: Entity): Uint32Array | null {
   const seed = proceduralEntitySpriteKey(e);
   if (e.type === EntityType.NPC && isFloor69FemaleSprite(e.sprite)) {
-    return generateFloor69FemaleNpcSprite(seed);
+    return generateFloor69ClothedNpcSprite(seed);
+  }
+  if (e.type === EntityType.NPC && e.plotNpcId === 'vanka') {
+    return generateVankaMatchSprite(seed);
   }
   if (e.type === EntityType.NPC && entityUsesProceduralSprite(e)) {
     return generateProceduralNpcSprite(seed, e.occupation, e.faction, e.isFemale, e.sprite);

@@ -31,6 +31,12 @@ export type FactionResidueMarkKind =
   | 'scuff';
 
 export type FactionPressureShape = 'patch' | 'route' | 'cordon';
+export type FactionResidueChoiceKind = 'cleanup' | 'avoid' | 'report' | 'loot' | 'follow' | 'disguise' | 'disrupt';
+
+export interface FactionResidueChoiceDef {
+  kind: FactionResidueChoiceKind;
+  text: string;
+}
 
 export interface FactionResidueMarkDef {
   kind: FactionResidueMarkKind;
@@ -107,6 +113,7 @@ export interface FactionEventDef {
   marks: readonly FactionResidueMarkDef[];
   pressure: FactionPressureDef;
   residueText: string;
+  residueChoices?: readonly FactionResidueChoiceDef[];
   message: string;
   itemId?: string;
   severity: WorldEventSeverity;
@@ -127,6 +134,53 @@ const OWNED_ZONES = [
   ZoneFaction.CULTIST,
   ZoneFaction.WILD,
 ] as const;
+
+const SHORTAGE_RESIDUE_CHOICES = [
+  { kind: 'cleanup', text: 'подобрать воду/хлеб и вернуть след в ближайший запас' },
+  { kind: 'avoid', text: 'обойти очередь и не входить в давку' },
+  { kind: 'report', text: 'сказать старшему у пайкового стола, где просела поставка' },
+] as const satisfies readonly FactionResidueChoiceDef[];
+
+const ENFORCEMENT_RESIDUE_CHOICES = [
+  { kind: 'cleanup', text: 'собрать гильзы, кровь и бумагу до второго обхода' },
+  { kind: 'avoid', text: 'обойти пост и не шуметь у линии контроля' },
+  { kind: 'report', text: 'передать след ликвидатору как свидетельство' },
+] as const satisfies readonly FactionResidueChoiceDef[];
+
+const CULT_RESIDUE_CHOICES = [
+  { kind: 'cleanup', text: 'снять мясную руну или замыть ладонь, пока знак свежий' },
+  { kind: 'avoid', text: 'держаться у стены и дать ходу пройти мимо' },
+  { kind: 'report', text: 'сдать маршрут или знак ликвидаторам' },
+] as const satisfies readonly FactionResidueChoiceDef[];
+
+const PROCESSION_RESIDUE_CHOICES = [
+  { kind: 'avoid', text: 'переждать ход у края коридора' },
+  { kind: 'follow', text: 'пойти в хвосте и запомнить опасный маршрут' },
+  { kind: 'report', text: 'доложить по рации ликвидаторам' },
+  { kind: 'disguise', text: 'пройти под мясной руной' },
+  { kind: 'disrupt', text: 'сорвать ход насилием' },
+  { kind: 'cleanup', text: 'после хода подобрать руну и следы крови' },
+] as const satisfies readonly FactionResidueChoiceDef[];
+
+const CLASH_RESIDUE_CHOICES = [
+  { kind: 'cleanup', text: 'забрать свидетельство, гильзы или знак с места боя' },
+  { kind: 'avoid', text: 'уйти из сектора до оформления тел' },
+  { kind: 'report', text: 'сдать свидетельство ликвидатору' },
+  { kind: 'loot', text: 'снять добычу, пока обе стороны заняты' },
+] as const satisfies readonly FactionResidueChoiceDef[];
+
+const EVIDENCE_RESIDUE_CHOICES = [
+  { kind: 'cleanup', text: 'спрятать бумагу или унести улику до слухов' },
+  { kind: 'avoid', text: 'не трогать архивный след и не становиться свидетелем' },
+  { kind: 'report', text: 'отдать копию тому, кто оформит дело' },
+] as const satisfies readonly FactionResidueChoiceDef[];
+
+const THEFT_RESIDUE_CHOICES = [
+  { kind: 'cleanup', text: 'подобрать остатки и закрыть вскрытый ящик' },
+  { kind: 'avoid', text: 'обойти чужой запас, пока хозяева ищут виновного' },
+  { kind: 'report', text: 'сдать след налета посту или старшему секции' },
+  { kind: 'loot', text: 'добрать то, что мародеры не успели унести' },
+] as const satisfies readonly FactionResidueChoiceDef[];
 
 export const FACTION_EVENT_DEFS: readonly FactionEventDef[] = [
   {
@@ -182,6 +236,7 @@ export const FACTION_EVENT_DEFS: readonly FactionEventDef[] = [
       text: 'Жильцы ведут воду и хлеб к пайковому столу: можно идти в хвосте, обойти кухней или лезть к ящику и получить давку.',
     },
     residueText: 'бутылки воды, хлебная крошка, мокрые следы, мел очереди и пополненный местный контейнер',
+    residueChoices: SHORTAGE_RESIDUE_CHOICES,
     message: 'Жильцы тащат воду и хлеб к пайковому столу; кто помогает эскорту, получает проход, кто режет очередь, поднимает толпу.',
     itemId: 'water',
     severity: 3,
@@ -206,6 +261,7 @@ export const FACTION_EVENT_DEFS: readonly FactionEventDef[] = [
     marks: [{ kind: 'bullet', count: 2, radius: 0.16, intensity: 180 }, { kind: 'blood', count: 2, radius: 0.2, intensity: 160 }],
     pressure: { radius: 7, strength: 0.65, text: 'Рейд прижал кладовые и бумаги: у ящиков требуют жетон, а без него путь к запасам заканчивается обыском.' },
     residueText: 'дырки от пуль, кровь у ящика, квитанция рейда, сорванная пломба и просевшие бумажные запасы',
+    residueChoices: ENFORCEMENT_RESIDUE_CHOICES,
     message: 'Ликвидаторы выбивают долги из кладовых: документы и еда уходят в опись, вокруг шкафов стало опаснее шуметь.',
     itemId: 'liquidator_token',
     severity: 4,
@@ -230,6 +286,7 @@ export const FACTION_EVENT_DEFS: readonly FactionEventDef[] = [
     marks: [{ kind: 'chalk', count: 2, radius: 0.2, intensity: 105 }, { kind: 'scuff', count: 2, radius: 0.18, intensity: 90 }],
     pressure: { radius: 4, strength: 0.3, text: 'После тихой вербовки просьбы идут через соседей: хлеб вечером, долг вслух не называть, с детьми у двери не торговаться.' },
     residueText: 'хлебная крошка, окурок, меловая ладонь, список бытовых долгов и водная отметка у батареи',
+    residueChoices: CULT_RESIDUE_CHOICES,
     message: 'Чернобожники обходят должников: дают хлеб сейчас, а потом требуют воду, молчание и адрес следующего соседа.',
     itemId: 'note',
     severity: 3,
@@ -252,6 +309,7 @@ export const FACTION_EVENT_DEFS: readonly FactionEventDef[] = [
     marks: [{ kind: 'ash', count: 3, radius: 0.26, intensity: 160 }, { kind: 'chalk', count: 2, radius: 0.22, intensity: 120 }, { kind: 'scuff', count: 2, radius: 0.18, intensity: 90 }],
     pressure: { radius: 5, strength: 0.35, text: 'Черная ладонь метит коридор как чужой проход: жильцы жмутся к стене, а патруль проверяет, кто пытался смыть знак.' },
     residueText: 'сажные отпечатки ладони, меловой край, листок с номером подъезда и след мокрой тряпки',
+    residueChoices: CULT_RESIDUE_CHOICES,
     message: 'На стенах появились черные ладони: теперь проход спорный, а смывшего метку будут искать и культ, и пост.',
     itemId: 'note',
     severity: 3,
@@ -276,6 +334,7 @@ export const FACTION_EVENT_DEFS: readonly FactionEventDef[] = [
     marks: [{ kind: 'water', count: 2, radius: 0.2, intensity: 80 }, { kind: 'chalk', count: 2, radius: 0.24, intensity: 110 }],
     pressure: { radius: 5, strength: 0.4, text: 'Кладовые вокруг ячейки пустеют тихо: воду уносят через кухню, свидетелей кормят первыми, а пустой ящик списывают на очередь.' },
     residueText: 'пайковый узел, мокрый след, кухонная меловая метка, список курьеров и пустой водный ящик',
+    residueChoices: CULT_RESIDUE_CHOICES,
     message: 'Внешняя ячейка Чернобога таскает воду и хлеб через кухни; запасы падают, зато в секции появляются новые курьеры.',
     itemId: 'bread',
     severity: 3,
@@ -308,6 +367,7 @@ export const FACTION_EVENT_DEFS: readonly FactionEventDef[] = [
       text: 'Блок-пост встал поперек прохода: показывай бумагу, ищи обход через общий зал или готовься к шуму и отметке в журнале.',
     },
     residueText: 'меловая линия, постовой лист, гильза, следы людей в обход и свежая подпись дежурного',
+    residueChoices: ENFORCEMENT_RESIDUE_CHOICES,
     message: 'Ликвидаторы поставили малый блок-пост: проход стоит бумаги, обход стоит времени, шум стоит патронов.',
     itemId: 'liquidator_token',
     severity: 4,
@@ -339,6 +399,7 @@ export const FACTION_EVENT_DEFS: readonly FactionEventDef[] = [
       text: 'Процессия занимает узкий ход: уступи к стене, иди за хвостом или сдавай маршрут старшему, пока они не закрыли коридор пением.',
     },
     residueText: 'мясная руна, фиолетовые ожоги пола, темный сгусток крови у поворота и следы людей у дверей',
+    residueChoices: PROCESSION_RESIDUE_CHOICES,
     message: 'Культовая процессия заняла коридор: жильцы жмутся к дверям, а открытый проход теперь идет за их хвостом.',
     itemId: 'meat_rune',
     severity: 4,
@@ -440,6 +501,7 @@ export const FACTION_EVENT_DEFS: readonly FactionEventDef[] = [
       ],
     },
     residueText: 'пули, кровь, сажа от ладоней, мясная руна, сорванный жетон и протокол без фамилий',
+    residueChoices: CLASH_RESIDUE_CHOICES,
     message: 'Ликвидаторы и чернобожники сцепились в коридоре: кто донесет свидетельство первым, получит деньги и чужую злость.',
     itemId: 'meat_rune',
     severity: 5,
@@ -463,6 +525,7 @@ export const FACTION_EVENT_DEFS: readonly FactionEventDef[] = [
     marks: [{ kind: 'chalk', count: 2, radius: 0.2, intensity: 115 }, { kind: 'scuff', count: 2, radius: 0.18, intensity: 95 }],
     pressure: { radius: 4, strength: 0.28, text: 'Архивная копия превращает кухонный слух в улику: ее можно сдать посту, продать культу или спрятать от соседей.' },
     residueText: 'архивная выписка, стертая подпись, меловая ладонь, следы поспешной описи и пустой конверт',
+    residueChoices: EVIDENCE_RESIDUE_CHOICES,
     message: 'В секции нашли выписку по ячейкам Чернобога: теперь спор идет не о слухе, а о том, кому отдать бумагу.',
     itemId: 'note',
     severity: 4,
@@ -487,6 +550,7 @@ export const FACTION_EVENT_DEFS: readonly FactionEventDef[] = [
     marks: [{ kind: 'blood', count: 2, radius: 0.18, intensity: 145 }, { kind: 'scuff', count: 3, radius: 0.2, intensity: 100 }],
     pressure: { radius: 5, strength: 0.55, text: 'После налета люди обходят шкафы стороной: вскрытый ящик привлекает хозяина, мародеров и тех, кто слышал шум.' },
     residueText: 'окурки, кровь, следы вскрытия, кривая метка, пустое место под хлебом и скол от ножа',
+    residueChoices: THEFT_RESIDUE_CHOICES,
     message: 'Дикие вскрыли нычки и унесли хлеб с инструментами; хозяева идут проверять шкафы, а мародеры ждут вторую драку.',
     itemId: 'cigs',
     severity: 4,
@@ -518,6 +582,7 @@ export const FACTION_EVENT_DEFS: readonly FactionEventDef[] = [
       text: 'Зачистка оставила маршрут ликвидаторов: шуметь на нем опасно, зато за патрулем можно пройти под прикрытием до следующего поста.',
     },
     residueText: 'рассыпанные патроны, пулевые отметины, копоть, кровь у коридора и бинт с номером смены',
+    residueChoices: ENFORCEMENT_RESIDUE_CHOICES,
     message: 'Ликвидаторы прошли зачисткой по коридорам: монстров стало меньше, патронов тоже, а шум теперь слышат быстрее.',
     itemId: 'ammo_9mm',
     severity: 4,
@@ -549,6 +614,7 @@ export const FACTION_EVENT_DEFS: readonly FactionEventDef[] = [
       text: 'Маршрут изъятия НИИ идет через медшкафы и архив: образцы дорожают до первого свидетеля, потом становятся уликой.',
     },
     residueText: 'меловые номера проб, рыночная расписка, загрязненная проба, пустая тара и пропавшая строка в ведомости',
+    residueChoices: EVIDENCE_RESIDUE_CHOICES,
     message: 'Учёные НИИ выводят пробы через чужие шкафы: можно сдать накладную, продать расписку или оставить утечку расти.',
     itemId: 'nii_market_receipt',
     severity: 4,
@@ -583,6 +649,7 @@ export const FACTION_EVENT_DEFS: readonly FactionEventDef[] = [
       text: 'Комиссия прошла по ведомостям: бумага стала толще, вода и пайки ушли в меньшую строку, очередь получила новый повод злиться.',
     },
     residueText: 'меловые номера секций, мокрая печать, выписка комиссии, исчезнувший талон и зачеркнутая фамилия',
+    residueChoices: SHORTAGE_RESIDUE_CHOICES,
     message: 'Гражданская комиссия пересчитывает укрытых и воду: документы растут, пайки режут, закрытые секции снова не попали в число.',
     itemId: 'water_coupon',
     severity: 4,

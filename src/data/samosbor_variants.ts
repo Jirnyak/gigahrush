@@ -1,7 +1,7 @@
 import { FloorLevel, MonsterKind } from '../core/types';
 
 export type SamosborVariantId = 'classic' | 'quiet' | 'wet' | 'electric' | 'meat' | 'maronary' | 'istotit' | 'veretar';
-export type SamosborAudioCueId = 'siren' | 'maronary' | 'bell' | 'veretar';
+export type SamosborAudioCueId = 'siren' | 'bell' | 'beep' | 'distant_alarm';
 
 export type SamosborAftermathEffectId =
   | 'fog_residue'
@@ -13,7 +13,8 @@ export type SamosborAftermathEffectId =
   | 'container_theft'
   | 'false_all_clear'
   | 'item_residue'
-  | 'route_block';
+  | 'route_block'
+  | 'route_residue';
 
 export type SamosborModifierId =
   | 'no_siren'
@@ -191,13 +192,13 @@ export const SAMOSBOR_MODIFIERS: Record<SamosborModifierId, SamosborModifierDef>
   },
   bell_warning: {
     id: 'bell_warning',
-    warningLine: 'Сирена сорвалась в колокола. Укрытие по церковной ведомости: к жёлтой герме, воду держи при себе.',
+    warningLine: 'Сирена сорвалась в колокола. Укрытие по церковной ведомости: к золотому контуру, воду держи при себе.',
     noSiren: true,
     sealTimingDelta: 2,
   },
   golden_light: {
     id: 'golden_light',
-    warningLine: 'Жёлтая метка легла на герму как пломба ЖЭКа. Мест меньше, чем людей в коридоре.',
+    warningLine: 'Золотой контур лег на герму как пломба ЖЭКа. Мест меньше, чем людей в коридоре.',
     fogSeedMult: 0.55,
     fogSpawnIntervalMult: 1.65,
     spawnMult: 0.55,
@@ -211,23 +212,23 @@ export const SAMOSBOR_MODIFIERS: Record<SamosborModifierId, SamosborModifierDef>
   },
   white_area: {
     id: 'white_area',
-    warningLine: 'Дверная щель стала белым окном. Из-под рамы сыпется сухой песок; отведи людей от двери.',
+    warningLine: 'Дверная щель стала белым окном. Из-под рамы сыпется сухой песок; занавесь и отведи людей от рамы.',
     fogSeedMult: 0.45,
     fogSpawnIntervalMult: 1.2,
     spawnMult: 0.9,
   },
   no_sun: {
     id: 'no_sun',
-    warningLine: 'Сирена звучит снаружи, хотя окна нет. Не подпускай соседей к раме.',
+    warningLine: 'Сирена звучит снаружи, хотя выхода нет. У белого окна не ищи двор, ищи ткань и тёмную герму.',
     noSiren: true,
   },
   photo_distortion: {
     id: 'photo_distortion',
-    warningLine: 'Фотография засветилась до щелчка. Кто всматривается, забывает номер своей двери.',
+    warningLine: 'Фотография засветилась до щелчка. Засвеченный кадр держи отдельно от карты и свидетеля.',
   },
   area_leak: {
     id: 'area_leak',
-    warningLine: 'Карта показала белое пятно там, где была кухня. Сосед вошёл туда за чайником и не вернулся.',
+    warningLine: 'Карта показала область там, где была кухня. Белый обход короче, но после него спрашивают фамилии.',
     sealTimingDelta: -2,
   },
 };
@@ -246,6 +247,7 @@ export const SAMOSBOR_VARIANTS: readonly SamosborVariantDef[] = [
     warningLines: ['Штатная сирена. Фиолетовый туман пошёл по зоне: к герме или за границу зоны.'],
     modifiers: ['dense_fog'],
     gameplaySignal: 'штатная сирена, фиолетовый туман, гермы закрываются по регламенту',
+    audioCue: 'siren',
     startLine: 'САМОСБОР НАЧАЛСЯ: зона закрывается, туман пошёл по щелям.',
   },
   {
@@ -276,6 +278,7 @@ export const SAMOSBOR_VARIANTS: readonly SamosborVariantDef[] = [
     warningLines: ['На линолеуме выступает вода. Ищи сухой обход до гермы, мокрый пол сдаёт шаги.'],
     modifiers: ['wet_floor_message', 'dense_fog', 'door_twitch'],
     gameplaySignal: 'синий туман, мокрый пол, плотнее спавн из тумана, безопаснее сухие коридоры и закрываемые шлюзы',
+    audioCue: 'siren',
     startLine: 'МОКРЫЙ САМОСБОР НАЧАЛСЯ: вода уводит туман под двери.',
   },
   {
@@ -291,6 +294,7 @@ export const SAMOSBOR_VARIANTS: readonly SamosborVariantDef[] = [
     warningLines: ['Гермоуплотнитель пахнет озоном. Не стой под лампами, закрывайся до раннего щелчка.'],
     modifiers: ['light_flicker', 'early_seal', 'extra_eyes'],
     gameplaySignal: 'циановый туман, раннее запирание, больше глаз в тумане, уходи от света и готовь дверь заранее',
+    audioCue: 'siren',
     startLine: 'ЭЛЕКТРОСБОР НАЧАЛСЯ: гермы закрываются раньше, лампы смотрят.',
   },
   {
@@ -310,6 +314,7 @@ export const SAMOSBOR_VARIANTS: readonly SamosborVariantDef[] = [
     ],
     modifiers: ['meat_walls_hell', 'false_safe_zone', 'sparse_fog'],
     gameplaySignal: 'красный туман, теплеющие швы, ложная безопасность, усиленный спавн тварей, держись середины прохода',
+    audioCue: 'siren',
     startLine: 'МЯСНОЙ САМОСБОР НАЧАЛСЯ: швы тёплые, уходи от стен.',
   },
   {
@@ -331,10 +336,13 @@ export const SAMOSBOR_VARIANTS: readonly SamosborVariantDef[] = [
       'Документ в кармане сменил владельца. Стружку держи отдельно от бумаг.',
       'Из трубы зовут голосом соседа, которого вчера внесли в пропавшие. Уходи от источника, а не к нему.',
       'Маронарий путает дверь. Если номер сменился, разворачивайся до щелчка.',
+      'Зелёный источник пищит ровно. Обойди свет; если проход отрезан, бей экран или лампу и уходи от осколков.',
+      'Карта предлагает короткий путь на писк. Не доверяй стрелке: ставь метку и выбирай длинный обход.',
+      'Стружка лежит как улика. Продай НИИ, культу или Министерству, либо спрячь отдельно от бумаг.',
     ],
     modifiers: ['green_source', 'high_beep', 'wrong_door_hint'],
-    gameplaySignal: 'зелёный источник, высокий писк, повтор двери, ненадёжный короткий путь, стружку не держать с документами',
-    audioCue: 'maronary',
+    gameplaySignal: 'зелёный источник, высокий писк, повтор двери, ненадёжный короткий путь, источник можно обойти/сломать, стружку продать или спрятать отдельно от документов',
+    audioCue: 'beep',
     startLine: 'ПРОИЗОШЁЛ МАРОНАРИЙ: двери путают номера, документы не держи у зелёной стружки.',
   },
   {
@@ -348,21 +356,22 @@ export const SAMOSBOR_VARIANTS: readonly SamosborVariantDef[] = [
     spawnMult: 0.52,
     sealTimingDelta: 3,
     warningLines: [
-      'Колокола пошли вместо сирены. К жёлтой герме; в ведомость всех не впишут.',
-      'Жёлтая метка легла на дверь, а воды осталось на троих.',
-      'Жёлтая герма держит комнату. Ведомость потом спросит, кто остался без строки.',
+      'Колокол пошёл вместо сирены. К золотому контуру; в ведомость всех не впишут.',
+      'Золотой контур лег на дверь, а воды осталось на троих.',
+      'Золотая герма держит комнату. Ведомость потом спросит, кто остался без строки.',
+      'Хор тянет одну букву. Внутри считают укрытых, снаружи считают стук.',
     ],
     modifiers: ['bell_warning', 'golden_light', 'choir_mask'],
-    gameplaySignal: 'церковные колокола вместо сирены, жёлтая герма, чужие голоса за стеной, укрытые комнаты и тесная ведомость',
+    gameplaySignal: 'церковные колокола вместо сирены, золотой контур гермы, чужие голоса за стеной, укрытые комнаты и тесная ведомость',
     audioCue: 'bell',
-    startLine: 'ПРОИЗОШЁЛ ИСТОТИТ: жёлтые гермы открыты, мест меньше, чем фамилий.',
+    startLine: 'ПРОИЗОШЁЛ ИСТОТИТ: золотые контуры открыты, мест меньше, чем фамилий.',
   },
   {
     id: 'veretar',
     displayName: 'Веретар',
     floors: ALL_FLOORS,
     weight: 4,
-    fogColor: [238, 234, 214],
+    fogColor: [226, 222, 202],
     tint: '#f4f1df',
     durationMult: 0.96,
     spawnMult: 0.78,
@@ -373,11 +382,16 @@ export const SAMOSBOR_VARIANTS: readonly SamosborVariantDef[] = [
       'На полу сухой песок. Там была кухня; теперь старшая не может досчитаться кастрюль и людей.',
       'Фотография засветилась до щелчка. На ней лишняя комната; не сверяй по ней маршрут.',
       'Короткий белый проход экономит шаги. После него в перекличке не хватает фамилии.',
+      'Белый источник не трогай взглядом. Сначала ткань на раму, потом герметик в щель.',
+      'Песок сухой даже на мокром полу. Бери как улику, но не клади к пайкам и пропускам.',
+      'Занавеску держи двумя руками. Если ткань тянет наружу, зови свидетеля по имени и отходи.',
+      'Карта показывает область прямой линией. Длинный коридор безопаснее белого сокращения.',
+      'Фото с белого порога не доказывает выход. Оно доказывает, что окно стало источником.',
     ],
     modifiers: ['no_sun', 'white_area', 'area_leak', 'photo_distortion'],
-    gameplaySignal: 'белое пятно, сухой песок, дальняя тревога, ненадёжная карта, занавеска или герметик важнее короткого пути',
-    audioCue: 'veretar',
-    startLine: 'НАСТУПИЛ ВЕРЕТАР: белые окна не открывать, людей от рам уводить.',
+    gameplaySignal: 'белый источник, сухой песок, дальняя тревога, засвеченное фото, спасение свидетеля, занавеска или герметик важнее короткого пути',
+    audioCue: 'distant_alarm',
+    startLine: 'НАСТУПИЛ ВЕРЕТАР: белые окна закрывать, людей от рам уводить, фото и песок держать отдельно.',
   },
 ];
 
@@ -424,6 +438,21 @@ export const SAMOSBOR_AFTERMATH_BEATS: readonly SamosborAftermathBeatDef[] = [
     effect: 'route_block',
     message: 'Короткий проход после отбоя сел плитой. Обход длиннее; дверь открыть можно, но старый маршрут не вернулся.',
     tags: ['door', 'route', 'blocked_shortcut'],
+  },
+  {
+    id: 'aftermath_route_entry_residue',
+    title: 'Маршрут пережил отбой',
+    variants: ['classic', 'quiet', 'wet', 'electric', 'meat', 'maronary', 'istotit', 'veretar'],
+    floors: ALL_FLOORS,
+    weight: 18,
+    cooldownSec: 180,
+    maxRuns: 12,
+    radius: 16,
+    severity: 3,
+    effect: 'route_residue',
+    message: 'Маршрут пережил самосбор криво: метка на полу, закрытая створка и чужой припас показывают новый обход.',
+    tags: ['route', 'residue', 'blocked_shortcut', 'rumor'],
+    itemId: 'water',
   },
   {
     id: 'aftermath_aftershock_tvar',
@@ -798,14 +827,15 @@ export const SAMOSBOR_AFTERMATH_BEATS: readonly SamosborAftermathBeatDef[] = [
     title: 'Ведомость укрытых',
     variants: ['istotit'],
     floors: CIVIL_FLOORS,
-    weight: 16,
+    weight: 22,
     cooldownSec: 720,
     maxRuns: 4,
-    radius: 18,
-    severity: 2,
-    effect: 'rumor_seed',
-    message: 'После Истотита соседи спорят, кого внесли в список укрытых, а кого просто не досчитались.',
-    tags: ['istotit', 'witness', 'social'],
+    radius: 9,
+    severity: 3,
+    effect: 'item_residue',
+    message: 'После Истотита у золотого контура лежит ведомость: внутри, снаружи, свидетели и долг за закрытую ручку.',
+    tags: ['istotit', 'shelter_tally', 'witness', 'social'],
+    itemId: 'shelter_tally',
   },
   {
     id: 'aftermath_istotit_church_cache',
@@ -818,9 +848,23 @@ export const SAMOSBOR_AFTERMATH_BEATS: readonly SamosborAftermathBeatDef[] = [
     radius: 18,
     severity: 3,
     effect: 'container_theft',
-    message: 'Жёлтая герма оставила свечи и воду без присмотра. Церковный запас кончился раньше жажды.',
+    message: 'Золотая герма оставила свечи и воду без присмотра. Церковный запас кончился раньше жажды.',
     tags: ['istotit', 'container', 'theft'],
     itemId: 'istotit_candle',
+  },
+  {
+    id: 'aftermath_istotit_social_debt',
+    title: 'Долг у батареи',
+    variants: ['istotit'],
+    floors: CIVIL_FLOORS,
+    weight: 16,
+    cooldownSec: 840,
+    maxRuns: 4,
+    radius: 18,
+    severity: 3,
+    effect: 'rumor_seed',
+    message: 'У батареи считают не чудо, а бытовой долг: кто был внутри, кто остался снаружи и кто это видел.',
+    tags: ['istotit', 'debt', 'witness', 'social'],
   },
   {
     id: 'aftermath_istotit_golden_false_clear',
@@ -895,6 +939,20 @@ export const SAMOSBOR_AFTERMATH_BEATS: readonly SamosborAftermathBeatDef[] = [
     effect: 'door_fault',
     message: 'Одна дверь осталась с сухой белой щелью. Замажь её или обходи; возле неё уже пропал сосед с ведром.',
     tags: ['veretar', 'door', 'area_leak', 'route'],
+  },
+  {
+    id: 'aftermath_veretar_shortcut_cost',
+    title: 'Цена белого обхода',
+    variants: ['veretar'],
+    floors: ALL_FLOORS,
+    weight: 10,
+    cooldownSec: 900,
+    maxRuns: 3,
+    radius: 14,
+    severity: 4,
+    effect: 'route_block',
+    message: 'Белый обход остался на карте короче обычного пути. Рядом молчит свидетель; путь сэкономил шаги и забрал объяснение.',
+    tags: ['veretar', 'shortcut', 'route', 'witness', 'cost'],
   },
   {
     id: 'aftermath_veretar_pale_eye',

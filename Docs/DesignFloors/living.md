@@ -1,8 +1,8 @@
-# Design Floor: Жилой
+# Story Anchor Brief: Жилая зона
 
-Status: planning artifact for expanded design-floor version. Current code already has `FloorLevel.LIVING`; README remains source of truth.
+Status: historical expansion brief for the existing story anchor. Current route stop: `FloorLevel.LIVING` at `z=0`. There is no shipped design-floor route id `living`; README and `src/data/procedural_floors.ts` remain source of truth.
 
-Future route id: `living`. Future anchor: `z=0`. Existing reference: `src/gen/living/`.
+Existing generator reference: `src/gen/living/`. Planning sections below describe possible route-scale expansion, not shipped design-floor route data.
 
 ## Role
 
@@ -51,4 +51,3 @@ Living samosbor should teach without trivializing: shelter choice, door repair, 
 - Player can choose an expedition target and receive concrete preparation hints.
 - Return from another floor creates visible log/NPC/consequence.
 - Hub remains playable after multiple samosbor events.
-

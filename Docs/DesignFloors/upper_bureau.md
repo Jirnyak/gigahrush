@@ -1,6 +1,6 @@
 # Design Floor: Верхнее бюро
 
-Status: implemented route floor. Route id: `upper_bureau`. Anchor: `z=-28`. Base floor: `MINISTRY`.
+Status: implemented authored route floor. Route id: `upper_bureau`. Anchor: `z=-28`. Base floor: `MINISTRY`. Shipped HUD name: `Верхнее бюро`.
 
 Owned file: `src/gen/design_floors/upper_bureau.ts`. Route integration: `src/data/design_floors.ts`, `src/gen/design_floors/manifest.ts`, `src/gen/design_floors/full_floor.ts`.
 

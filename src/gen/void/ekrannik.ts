@@ -84,10 +84,6 @@ function registerEkrannikContext(ctx: EkrannikContext): void {
   if (contexts.length > CONTEXT_CAP) contexts.splice(0, contexts.length - CONTEXT_CAP);
 }
 
-function eventHasTag(event: WorldEvent, tag: string): boolean {
-  return event.tags.includes(tag);
-}
-
 function contextContainers(ctx: EkrannikContext): (WorldContainer | undefined)[] {
   return [
     ctx.world.containerById.get(ctx.readContainerId),
@@ -257,12 +253,11 @@ function followDanger(ctx: EkrannikContext, state: GameState, event: WorldEvent,
 
 function handleEkrannikEvent(state: GameState, event: WorldEvent): void {
   if (event.type === 'container_opened' || event.type === 'item_stolen') {
-    if (!eventHasTag(event, EKRANNIK_ID)) return;
     const ctx = findContextForContainer(event);
     if (!ctx) return;
-    if (eventHasTag(event, TAG_READ)) readFalseSignal(ctx, state, event);
-    if (eventHasTag(event, TAG_DANGER)) followDanger(ctx, state, event, 'wrong_marker');
-    if (eventHasTag(event, TAG_DISABLE)) disableEkrannik(ctx, state, event, 'fuse');
+    if (event.containerId === ctx.readContainerId) readFalseSignal(ctx, state, event);
+    if (event.containerId === ctx.dangerContainerId) followDanger(ctx, state, event, 'wrong_marker');
+    if (event.containerId === ctx.fuseContainerId) disableEkrannik(ctx, state, event, 'fuse');
     return;
   }
 

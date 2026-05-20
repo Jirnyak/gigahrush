@@ -1,4 +1,4 @@
-import { Faction, FloorLevel } from '../core/types';
+import { Faction, FloorLevel, Occupation } from '../core/types';
 import { RESOURCE_BY_ID } from './resources';
 
 export interface CaravanResourceDelta {
@@ -18,6 +18,27 @@ export interface CaravanLaneDef {
   corpIds?: readonly string[];
   faction: Faction;
   startsOpen?: boolean;
+}
+
+export type SmallCaravanRole = 'porters' | 'repair' | 'smugglers' | 'clerks' | 'signalers';
+
+export interface SmallCaravanTemplateDef {
+  id: string;
+  laneId: string;
+  name: string;
+  role: SmallCaravanRole;
+  originTags: readonly string[];
+  destinationTags: readonly string[];
+  cargo: readonly CaravanResourceDelta[];
+  risk: number;
+  memberCount: number;
+  memberNames: readonly string[];
+  faction: Faction;
+  occupation: Occupation;
+  escortContractId?: string;
+  raidContractId?: string;
+  rerouteContractId?: string;
+  seatFeeRubles?: number;
 }
 
 const FLOOR_IDS = new Set(
@@ -101,6 +122,98 @@ export const CARAVAN_LANE_BY_ID: Record<string, CaravanLaneDef> = Object.fromEnt
   CARAVAN_LANES.map(lane => [lane.id, lane]),
 );
 
+export const SMALL_CARAVAN_TEMPLATES: readonly SmallCaravanTemplateDef[] = [
+  {
+    id: 'queue_lift_porters',
+    laneId: 'kvartiry_living_food_water',
+    name: 'малый караван очередников',
+    role: 'porters',
+    originTags: ['ration_queue', 'kitchen', 'lift'],
+    destinationTags: ['caravan_exchange', 'living_market', 'shelter'],
+    cargo: [{ resourceId: 'food', count: 2 }, { resourceId: 'drink_water', count: 2 }],
+    risk: 2,
+    memberCount: 3,
+    memberNames: ['Носильщик с хлебным мешком', 'Очередница с бидоном', 'Счетчик талонов'],
+    faction: Faction.CITIZEN,
+    occupation: Occupation.STOREKEEPER,
+    escortContractId: 'caravan_escort_queue_porters',
+    raidContractId: 'caravan_raid_queue_cargo',
+    seatFeeRubles: 24,
+  },
+  {
+    id: 'repair_lift_crew',
+    laneId: 'maintenance_living_tools',
+    name: 'ремонтная тройка лифтовиков',
+    role: 'repair',
+    originTags: ['service_node', 'lift_repair_shaft', 'production'],
+    destinationTags: ['hermodoor', 'living_service', 'market'],
+    cargo: [{ resourceId: 'metal', count: 2 }, { resourceId: 'tools', count: 2 }],
+    risk: 3,
+    memberCount: 3,
+    memberNames: ['Слесарь с катушкой', 'Лифтовик без каски', 'Молчаливый сварщик'],
+    faction: Faction.CITIZEN,
+    occupation: Occupation.MECHANIC,
+    escortContractId: 'caravan_escort_repair_crew',
+    rerouteContractId: 'caravan_reroute_repair_crew',
+    seatFeeRubles: 32,
+  },
+  {
+    id: 'market88_smugglers',
+    laneId: 'production_black_market_88',
+    name: 'контрабандный малый караван 88',
+    role: 'smugglers',
+    originTags: ['production_belt', 'black_market', 'service_hatch'],
+    destinationTags: ['black_market_88', 'smoking', 'debt_window'],
+    cargo: [{ resourceId: 'contraband', count: 2 }, { resourceId: 'ammo', count: 2 }],
+    risk: 4,
+    memberCount: 2,
+    memberNames: ['Серый проводник 88', 'Мешочник с глухим тюком'],
+    faction: Faction.WILD,
+    occupation: Occupation.TRAVELER,
+    raidContractId: 'caravan_raid_market88_smugglers',
+    rerouteContractId: 'caravan_report_market88_smugglers',
+    seatFeeRubles: 44,
+  },
+  {
+    id: 'ministry_form_carriers',
+    laneId: 'ministry_market_docs',
+    name: 'бумажный караван канцелярии',
+    role: 'clerks',
+    originTags: ['archive', 'permit_window', 'lift'],
+    destinationTags: ['market_docs', 'caravan_exchange', 'bank_window'],
+    cargo: [{ resourceId: 'documents', count: 2 }, { resourceId: 'paper', count: 2 }],
+    risk: 3,
+    memberCount: 3,
+    memberNames: ['Курьер с красной папкой', 'Канцелярская носильщица', 'Охранник описи'],
+    faction: Faction.LIQUIDATOR,
+    occupation: Occupation.SECRETARY,
+    escortContractId: 'caravan_escort_ministry_forms',
+    rerouteContractId: 'caravan_reroute_ministry_forms',
+    seatFeeRubles: 36,
+  },
+  {
+    id: 'net_signalers',
+    laneId: 'net_exchange_data',
+    name: 'сигнальный караван НЕТ-терминала',
+    role: 'signalers',
+    originTags: ['net_terminal', 'archive', 'signal'],
+    destinationTags: ['caravan_exchange', 'terminal_bank', 'living_market'],
+    cargo: [{ resourceId: 'electronics', count: 2 }, { resourceId: 'documents', count: 1 }],
+    risk: 3,
+    memberCount: 2,
+    memberNames: ['Идущий с антенной', 'НЕТ-счетчица задержек'],
+    faction: Faction.SCIENTIST,
+    occupation: Occupation.SCIENTIST,
+    escortContractId: 'caravan_escort_net_signalers',
+    rerouteContractId: 'caravan_reroute_net_signalers',
+    seatFeeRubles: 40,
+  },
+];
+
+export const SMALL_CARAVAN_TEMPLATE_BY_ID: Record<string, SmallCaravanTemplateDef> = Object.fromEntries(
+  SMALL_CARAVAN_TEMPLATES.map(template => [template.id, template]),
+);
+
 export function validateCaravanLanes(lanes: readonly CaravanLaneDef[] = CARAVAN_LANES): string[] {
   const errors: string[] = [];
   const seen = new Set<string>();
@@ -118,6 +231,27 @@ export function validateCaravanLanes(lanes: readonly CaravanLaneDef[] = CARAVAN_
       if (!RESOURCE_BY_ID[resourceId]) errors.push(`${lane.id}:tariffResource:${resourceId}`);
     }
     if (!Number.isFinite(lane.feeRubles) || lane.feeRubles < 0) errors.push(`${lane.id}:feeRubles`);
+  }
+  return errors;
+}
+
+export function validateSmallCaravanTemplates(
+  templates: readonly SmallCaravanTemplateDef[] = SMALL_CARAVAN_TEMPLATES,
+): string[] {
+  const errors: string[] = [];
+  const seen = new Set<string>();
+  for (const template of templates) {
+    if (!template.id || seen.has(template.id)) errors.push(`small:${template.id || '<empty>'}:duplicate`);
+    seen.add(template.id);
+    if (!CARAVAN_LANE_BY_ID[template.laneId]) errors.push(`${template.id}:lane:${template.laneId}`);
+    if (!Number.isFinite(template.risk) || template.risk < 1 || template.risk > 5) errors.push(`${template.id}:risk`);
+    if (!Number.isFinite(template.memberCount) || template.memberCount < 1 || template.memberCount > 5) errors.push(`${template.id}:memberCount`);
+    if (template.memberNames.length < template.memberCount) errors.push(`${template.id}:memberNames`);
+    if (template.cargo.length === 0) errors.push(`${template.id}:cargo`);
+    for (const cargo of template.cargo) {
+      if (!RESOURCE_BY_ID[cargo.resourceId]) errors.push(`${template.id}:resource:${cargo.resourceId}`);
+      if (!Number.isFinite(cargo.count) || cargo.count <= 0) errors.push(`${template.id}:count:${cargo.resourceId}`);
+    }
   }
   return errors;
 }

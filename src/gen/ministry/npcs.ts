@@ -10,6 +10,7 @@ import { World } from '../../core/world';
 import { freshNeeds, randomName } from '../../data/catalog';
 import { rng } from '../shared';
 import { gaussianLevel, randomRPG, getMaxHp } from '../../systems/rpg';
+import { canSpawnEntityType, entitySpawnSlots } from '../../systems/entity_limits';
 import { type PlotNpcDef, registerSideQuest } from '../../data/plot';
 import { spawnArkhivariusKafkin } from './arkhivarius';
 import { spawnPolkovnikStreltsov } from './streltsov';
@@ -113,7 +114,7 @@ registerSideQuest('rotenbergov', ROTENBERGOV_DEF, [
 export function spawnMinistryNpcs(
   world: World, entities: Entity[], nextId: { v: number },
 ): void {
-  const NPC_CAP = 1000;
+  const npcTarget = entitySpawnSlots(entities, EntityType.NPC, 1000);
   let npcCount = 0;
 
   /* ── Regular NPCs: directors, secretaries, scientists, liquidators ── */
@@ -138,13 +139,13 @@ export function spawnMinistryNpcs(
     return npcTypes[0];
   }
 
-  while (npcCount < NPC_CAP) {
+  while (npcCount < npcTarget) {
     const prevCount = npcCount;
     for (const zone of world.zones) {
-      if (npcCount >= NPC_CAP) break;
+      if (npcCount >= npcTarget) break;
       const squadSize = rng(1, 3);
       const fDef = pickNpcType();
-      for (let s = 0; s < squadSize && npcCount < NPC_CAP; s++) {
+      for (let s = 0; s < squadSize && npcCount < npcTarget; s++) {
         let sx = -1, sy = -1;
         for (let r = 0; r < 30; r++) {
           const tx = world.wrap(zone.cx + rng(-r * 3, r * 3));
@@ -210,6 +211,7 @@ function spawnPlotNpc(
   world: World, entities: Entity[], nextId: { v: number },
   plotNpcId: string, def: PlotNpcDef,
 ): void {
+  if (!canSpawnEntityType(entities, EntityType.NPC)) return;
   for (let i = 0; i < 2000; i++) {
     const x = Math.floor(Math.random() * W);
     const y = Math.floor(Math.random() * W);

@@ -178,8 +178,11 @@ export function createMobileControls(input: InputState, options: MobileControlsO
     const standalone = isStandaloneDisplay();
     const embedded = isEmbeddedViewport();
     const nativeFullscreen = canUseMobileFullscreen();
+    const active = isMobileFullscreenActive();
+    const mode = standalone ? 'standalone' : embedded ? 'direct' : nativeFullscreen ? (active ? 'exit' : 'native') : 'hidden';
+    fullscreen.dataset.fullscreenMode = mode;
     fullscreen.hidden = standalone || (!embedded && !nativeFullscreen);
-    fullscreen.textContent = embedded ? '↗' : (isMobileFullscreenActive() ? 'EXIT' : 'FULL');
+    fullscreen.textContent = embedded ? '↗' : (active ? 'EXIT' : 'FULL');
     fullscreen.setAttribute(
       'aria-label',
       embedded ? 'Открыть игру отдельной страницей' : (isMobileFullscreenActive() ? 'Выйти из полного экрана' : 'Полный экран'),

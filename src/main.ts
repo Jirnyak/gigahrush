@@ -3,13 +3,13 @@ import './index.css';
 import { registerPwaServiceWorker } from './pwa';
 
 import {
-  W, Cell, DoorState, FloorLevel, Feature, Tex, RoomType, LiftDirection, ItemType,
+  W, Cell, DoorState, FloorLevel, Tex, RoomType, LiftDirection, ItemType,
   type Entity, type GameClock, type GameState, type Item, type Needs, type Quest, type RPGStats, type WorldContainer,
-  type WorldEventPrivacy, type WorldEventSeverity,
+  type PlayerDamageSourceKind, type WorldEventPrivacy, type WorldEventSeverity,
   EntityType, Faction, MonsterKind, Occupation, ProjType, QuestType, AIGoal,
   msg, setMsgClock,
 } from './core/types';
-import { World } from './core/world';
+import { World, replaceWorldFromGeneration } from './core/world';
 import { randSeed } from './core/rand';
 import { priestDeathCurse } from './gen/living/temple';
 import { updateProceduralScreens } from './gen/procedural_screens';
@@ -38,13 +38,13 @@ import {
 import { drawHUD } from './render/hud';
 import {
   spawnBloodHit, spawnDeathPool, updateBloodTrails, updateParticles, particles,
-  spawnProjectileFloorImpact, spawnProjectileWallImpact, isEnergyProjectileImpact,
+  spawnProjectileBodyImpact, spawnProjectileFloorImpact, spawnProjectileWallImpact, isEnergyProjectileImpact,
 } from './render/blood';
 import { stampMark, MarkType } from './render/marks';
 import { updateNeeds } from './systems/needs';
-import { updateAI, tryMonsterProjectileStagger } from './systems/ai';
+import { updateAI, tryMonsterProjectileStagger, getAiSchedulerStats, type AiSchedulerStats } from './systems/ai';
 import { generateTalkText, generateNpcTradeItems } from './data/dialogue';
-import { updateSamosbor, rebuildWorld, clearFogInZone, tryUseSamosborVariantInteraction } from './systems/samosbor';
+import { updateSamosbor, rebuildWorld, clearFogInZone } from './systems/samosbor';
 import { cleanCellHazardsNear, getCellHazardMoveMultiplier, tickCellHazards } from './systems/cell_hazards';
 import {
   pickupNearby, useItem, dropItem, getWeaponStats,
@@ -65,7 +65,7 @@ import {
   playFleshHit, playPsiCast,
   playPPSh, playChainsaw, playMachinegun, playExplosion,
   playGauss, playPlasma, playBFG, playFlame, playPsiBeam,
-  playProjectileImpact, playEnergyImpact,
+  playProjectileImpact, playEnergyImpact, playProjectileBodyHit,
   startAmbientDrone, setListenerPos, playSoundAt,
 } from './systems/audio';
 import { offerQuest, checkQuests, checkTalkQuest, notifyKill, notifyNpcKill } from './systems/quests';
@@ -82,34 +82,38 @@ import {
 } from './systems/status';
 import { DEBUG_COMMAND_COUNT, execDebugCommand, type DebugCommandAction } from './systems/debug';
 import { debugOnePunchMeleeDamage, isDebugOnePunchManEnabled, keepDebugOnePunchManAlive } from './systems/debug_cheats';
-import { recordPlayerDamage } from './systems/damage';
-import { createWorldEventState, normalizeWorldEventState, publishEvent, trimEventHistoryForSave } from './systems/events';
+import { formatLastPlayerDamageCause, hasFreshPlayerDamageRecord, recordPlayerDamage } from './systems/damage';
+import { createWorldEventState, normalizeWorldEventState, publishEvent } from './systems/events';
+import {
+  publishExplosionNoise,
+  publishFootstepNoise,
+  publishWeaponNoise,
+  resetNoiseRecords,
+} from './systems/noise';
+import { entitySpawnSlots } from './systems/entity_limits';
+import { clearRoomMemory, tickRoomMemory } from './systems/room_memory';
 import { UV_SPOTLIGHT_ID, useUvSpotlight } from './systems/uv_spotlight';
-import { tryUseMetroRoute } from './systems/metro';
-import { isRidingRailTrain, tryUseRailTrain, updateRailTrains } from './systems/rail_trains';
-import { tryUseHeatlinePressure } from './systems/heatline';
-import { tryUseCarnivorousFungus, updateCarnivorousFungus } from './systems/carnivorous_fungus';
-import { tryRepairHermodoorBorerDamage } from './systems/hermodoor_borer';
-import { tryUsePneumomailTube } from './systems/pneumomail';
-import { hladonColdMoveMultiplier, tryUseHladonColdPocketCounter, updateHladonColdPocket } from './systems/hladon';
-import { hladonInteractionTargetId } from './systems/hladon';
+import { isRidingRailTrain, updateRailTrains } from './systems/rail_trains';
+import { updateCarnivorousFungus } from './systems/carnivorous_fungus';
+import { hladonColdMoveMultiplier, updateHladonColdPocket } from './systems/hladon';
 import { tryCoverSeroburmalineSource, updateSeroburmalineExposure } from './systems/seroburmaline';
-import { tryUseRouteCue, updateRouteCues } from './systems/route_cues';
-import { isRouteCueTarget } from './systems/route_cues';
-import { isParitelSteamValveTarget, tryUseParitelSteamBridge, updateParitelSteamBridge } from './gen/maintenance/paritel_steam_bridge';
-import { tryUseBetonoedShortcut, updateBetonoedShortcut } from './gen/maintenance/betonoed_shortcut';
+import { updateRouteCues } from './systems/route_cues';
+import { updateParitelSteamBridge } from './gen/maintenance/paritel_steam_bridge';
+import { updateBetonoedShortcut } from './gen/maintenance/betonoed_shortcut';
+import {
+  closeEmergencyPanelMenu,
+  handleEmergencyPanelMenuInput,
+  isEmergencyPanelMenuOpen,
+} from './systems/emergency_panels';
 import {
   proceduralSmogFogDensityBonus,
   proceduralAnomalyEventData,
   proceduralAnomalyEventTags,
-  proceduralAnomalyInteractionTargetId,
-  tryUseProceduralFloorAnomaly,
   updateProceduralAnomalies,
 } from './systems/procedural_anomalies';
 import {
   ensureFloorInstanceState,
   floorInstanceLabel,
-  floorInstanceStateForSave,
   getActiveFloorInstance,
   resolveElevatorRoute,
   setFloorInstanceState,
@@ -120,9 +124,14 @@ import {
   commitFloorRunEntry,
   currentFloorRunEntry,
   ensureFloorRunState,
+  floorRunArrivalLead,
+  floorRunEntryDanger,
   floorRunSaveHasRestorableRoute,
   floorRunEntryAllowsNpcs,
-  floorRunStateForSave,
+  floorRunEntryKindLabel,
+  floorRunEntryLiftLabel,
+  floorRunEntryRole,
+  floorRunEntryRouteId,
   forceFloorRunStory,
   forceProceduralFloorAnomaly,
   resolveFloorRunRoute,
@@ -131,7 +140,6 @@ import {
 import {
   clearLiftArachnaActive,
   ensureLiftArachnaState,
-  liftArachnaStateForSave,
   notifyLiftArachnaNoise,
   resolveLiftArachnaDeparture,
   setLiftArachnaState,
@@ -142,20 +150,15 @@ import { clearWrongDoorRemaps, tryUseWrongDoorRemap, updateWrongDoorRemaps } fro
 import {
   containerAccessInfo,
   ensureRoomContainers,
-  firstNearbyContainer,
   putIntoContainer,
   restoreValidContainers,
   takeFromContainer,
+  tickContainerAudits,
 } from './systems/containers';
 import { isShelterTallyItem, publishShelterTallyEvent } from './systems/shelter_tally';
-import {
-  economyForSave,
-  normalizeGameEconomy,
-  primeTradePriceCache,
-} from './systems/economy';
+import { normalizeGameEconomy, primeTradePriceCache } from './systems/economy';
 import { buyFromNpc, sellToNpc, type TradeResult } from './systems/trade';
 import {
-  bankingForSave,
   ensureBankingState,
   normalizeBankingState,
   tickBankingInterest,
@@ -164,52 +167,60 @@ import {
 import {
   ensureStockMarketState,
   normalizeGameStockMarket,
-  stockMarketForSave,
   tickStockMarket,
 } from './systems/stock_market';
-import { ensureProductionRooms, tickProduction, type ProductionState } from './systems/production';
+import { ensureProductionRooms, setProductionState, tickProduction } from './systems/production';
 import {
   castInstantSpell, updatePsiEffects, psiAoeExplosion,
   isNoClipActive, resetPsiState,
 } from './systems/psi';
-import { ENTITY_MASK_ACTOR, ENTITY_MASK_ITEM_DROP, ENTITY_MASK_NPC, rebuildEntityIndex, getEntityIndex } from './systems/entity_index';
+import { fireDeletionBeam } from './systems/weapon_beams';
+import {
+  ENTITY_MASK_ACTOR,
+  ENTITY_MASK_ITEM_DROP,
+  rebuildEntityIndex,
+  rebuildEntityIndexAfterSpawnCleanup,
+  rebuildEntityIndexForSimulation,
+  getEntityIndex,
+  type EntityIndexDebugStats,
+} from './systems/entity_index';
 import {
   applyDamageRelationPenalty,
   updateFactionCapture, initFactionControl, countFactionTerritory, spawnPatrolSquads,
   zoneFactionToFaction, spawnTerritoryReinforcements,
-  isHostile, updateFactionActivity,
+  updateFactionActivity,
 } from './systems/factions';
 import {
   recordFactionClashPlayerHit,
   recordFactionEventLootTaken,
   tryReportLiquidatorCultClashAftermath,
-  getCultProcessionPrompt,
-  tryInteractCultProcession,
 } from './systems/faction_events';
 import {
   bindNetSphereInput,
   closeNetSphere,
+  getNetSphereSnapshot,
   isNetSphereOpen,
   openNetSphere,
   reportNetSphereEvent,
   tickNetSphere,
 } from './systems/net_sphere';
 import {
-  activateNetTerminalBank,
   claimNetTerminalGenFleshDrop,
   closeNetTerminalGen,
   ensureNetTerminalGenFleshDrop,
   ensureNetTerminalGenState,
-  isNetTerminalBankOpen,
   isNetTerminalGenOpen,
-  isNetTerminalGenTarget,
-  moveNetTerminalBankAction,
-  moveNetTerminalBankPreset,
-  netTerminalGenStateForSave,
   placeNetTerminalGenTerminalsForCurrentFloor,
   setNetTerminalGenState,
-  tryUseNetTerminalGen,
 } from './systems/net_terminal_gen';
+import {
+  activateInteraction,
+  closeInteractableOverlay,
+  findInteractionTarget,
+  handleInteractableOverlayInput,
+  isInteractableOverlayOpen,
+  placeGeneratedInteractablesForCurrentFloor,
+} from './systems/interactions';
 import {
   adjustMapEditorZoom,
   applyCurrentMapEditorBrush,
@@ -218,17 +229,22 @@ import {
   closeMapEditor,
   ensureMapEditorPatchState,
   isMapEditorOpen,
-  mapEditorPatchStateForSave,
   moveMapEditorMode,
   openMapEditor,
   replayMapEditorPatchForCurrentFloor,
   setMapEditorPatchState,
 } from './systems/map_editor';
+import { createGameSavePayload, saveShapeVersionStatus } from './systems/save_runtime';
 import { addFactionRel, addFactionRelMutual, initFactionRelations } from './data/relations';
 import { type DeathCam, initDeathCam, updateDeathCam, getDeathCamAngle, getDeathCamPitch } from './systems/death';
 import { onHeraldKilled, onCreatorKilled, onHellArrival, tryCreateVoiceQuest, onVoidEntry } from './data/plot_events';
 import { randomTip } from './data/tips';
-import { PROCEDURAL_FLOOR_ZS, proceduralFloorKey, type FloorAnomalyId, type ProceduralFloorSpec } from './data/procedural_floors';
+import {
+  PROCEDURAL_FLOOR_ZS,
+  proceduralFloorKey,
+  type FloorAnomalyId,
+  type ProceduralFloorSpec,
+} from './data/procedural_floors';
 import { type DesignFloorId } from './data/design_floors';
 
 /* ── Canvas setup ─────────────────────────────────────────────── */
@@ -599,7 +615,7 @@ function returnFromVoidPortalToLiving(portal: VoidReturnPortalState): void {
   pendingLoad = () => {
     resetGeneratedFloorPopulationState();
     const gen = generateFloor(FloorLevel.LIVING);
-    world = gen.world;
+    world = replaceWorldFromGeneration(null, gen);
     entities = gen.entities;
     nextEntityId.v = entities.reduce((mx, e) => Math.max(mx, e.id), 0) + 1;
 
@@ -704,22 +720,37 @@ function tryUseVoidReturnPortal(playerCell: number): boolean {
 }
 
 interface SmokeDebugSnapshot {
+  started: boolean;
   showDebug: boolean;
   debugSel: number;
   showQuests: boolean;
   showInventory: boolean;
+  showLog: boolean;
+  mapMode: number;
+  mobileControlsEnabled: boolean;
   currentFloor: FloorLevel;
   questCount: number;
   playerWeapon: string;
   gameOver: boolean;
   playerAlive: boolean;
   playerHp: number;
+  paused: boolean;
+  playerX: number;
+  playerY: number;
   samosborActive: boolean;
+  netSphereOpen: boolean;
+  netSphereStatus: string;
+  netSphereStatusText: string;
+  netSphereError: string;
+  netSphereBusy: boolean;
+  netSphereDraftLength: number;
   entityCount: number;
   liveActorCount: number;
   liveAiCount: number;
   npcCount: number;
   monsterCount: number;
+  entityIndex: EntityIndexDebugStats;
+  aiScheduler: AiSchedulerStats;
 }
 
 declare global {
@@ -740,7 +771,7 @@ function installSmokeDebugHook(): void {
   window.__gigahrushStressSpawn = (count: number) => {
     if (typeof state === 'undefined' || typeof player === 'undefined') return null;
     spawnSmokeStressPopulation(Math.max(0, Math.min(12_000, Math.floor(count))));
-    rebuildEntityIndex(entities);
+    rebuildEntityIndex(entities, 'smoke_stress');
     return smokeSnapshot();
   };
 }
@@ -757,37 +788,68 @@ function smokeSnapshot(): SmokeDebugSnapshot {
     if (e.type === EntityType.NPC) npcCount++;
     else monsterCount++;
   }
+  const netSphere = getNetSphereSnapshot();
   return {
+      started,
       showDebug: state.showDebug,
       debugSel: state.debugSel,
       showQuests: state.showQuests,
       showInventory: state.showInventory,
+      showLog: state.showLog,
+      mapMode: state.mapMode,
+      mobileControlsEnabled: mobileControls?.isEnabled() === true,
       currentFloor: state.currentFloor,
       questCount: state.quests.length,
       playerWeapon: player.weapon ?? '',
       gameOver: state.gameOver,
       playerAlive: player.alive,
       playerHp: player.hp ?? 0,
+      paused: state.paused,
+      playerX: player.x,
+      playerY: player.y,
       samosborActive: state.samosborActive,
+      netSphereOpen: netSphere.open,
+      netSphereStatus: netSphere.status,
+      netSphereStatusText: netSphere.statusText,
+      netSphereError: netSphere.error,
+      netSphereBusy: netSphere.busy,
+      netSphereDraftLength: netSphere.draft.length,
       entityCount: entities.length,
       liveActorCount,
       liveAiCount,
       npcCount,
       monsterCount,
+      entityIndex: getEntityIndex().getDebugStats(),
+      aiScheduler: getAiSchedulerStats(),
   };
 }
 
 function spawnSmokeStressPopulation(count: number): void {
   if (count <= 0) return;
+  const requested = Math.max(0, Math.floor(count));
+  const npcAvailable = entitySpawnSlots(entities, EntityType.NPC, requested);
+  const monsterAvailable = entitySpawnSlots(entities, EntityType.MONSTER, requested);
+  let npcBudget = Math.min(npcAvailable, Math.floor(requested * 0.7));
+  let monsterBudget = Math.min(monsterAvailable, requested - npcBudget);
+  if (npcBudget + monsterBudget < requested) {
+    const extraNpc = Math.min(npcAvailable - npcBudget, requested - npcBudget - monsterBudget);
+    npcBudget += extraNpc;
+  }
+  if (npcBudget + monsterBudget < requested) {
+    const extraMonster = Math.min(monsterAvailable - monsterBudget, requested - npcBudget - monsterBudget);
+    monsterBudget += extraMonster;
+  }
+  const target = npcBudget + monsterBudget;
+  if (target <= 0) return;
   const monsterKinds = [MonsterKind.ZOMBIE, MonsterKind.TVAR, MonsterKind.SBORKA, MonsterKind.SHADOW];
   let spawned = 0;
-  for (let attempt = 0; attempt < count * 24 && spawned < count; attempt++) {
+  for (let attempt = 0; attempt < target * 24 && spawned < target; attempt++) {
     const x = Math.floor(Math.random() * W);
     const y = Math.floor(Math.random() * W);
     const ci = world.idx(x, y);
     if (world.cells[ci] !== Cell.FLOOR && world.cells[ci] !== Cell.WATER) continue;
     if (world.dist2(player.x, player.y, x + 0.5, y + 0.5) < 8 * 8) continue;
-    if (spawned % 10 < 7) {
+    if (npcBudget > 0 && (monsterBudget <= 0 || npcBudget >= monsterBudget)) {
       entities.push({
         id: nextEntityId.v++,
         type: EntityType.NPC,
@@ -812,6 +874,7 @@ function spawnSmokeStressPopulation(count: number): void {
         inventory: [],
         rpg: randomRPG(2),
       });
+      npcBudget--;
     } else {
       const kind = monsterKinds[spawned % monsterKinds.length];
       entities.push({
@@ -832,6 +895,7 @@ function spawnSmokeStressPopulation(count: number): void {
         ai: { goal: AIGoal.WANDER, tx: x, ty: y, path: [], pi: 0, stuck: 0, timer: Math.random() * 4, combatScanCd: Math.random() * 1.5 },
         rpg: randomRPG(2),
       });
+      monsterBudget--;
     }
     spawned++;
   }
@@ -858,6 +922,7 @@ function placeNetTerminalGenContentForCurrentFloor(): void {
   ensureNetTerminalGenState(state);
   placeNetTerminalGenTerminalsForCurrentFloor(world, state);
   ensureNetTerminalGenFleshDrop(world, entities, nextEntityId, state);
+  placeGeneratedInteractablesForCurrentFloor(world, state);
 }
 
 function prepareEditableFloor(): void {
@@ -899,8 +964,9 @@ function drawLoading(): void {
 }
 
 function initGame(): void {
+  resetNoiseRecords();
   const gen = generateFloor(FloorLevel.LIVING);
-  world = gen.world;
+  world = replaceWorldFromGeneration(null, gen);
   entities = gen.entities;
   nextEntityId.v = entities.reduce((mx, e) => Math.max(mx, e.id), 0) + 1;
 
@@ -935,6 +1001,7 @@ function initGame(): void {
   spawnTerritoryReinforcements(world, entities, nextEntityId, fStats);
   ensureProceduralSpriteSeeds(entities);
   resetGeneratedFloorPopulationState();
+  clearRoomMemory();
 
   state = {
     tick: 0,
@@ -1013,7 +1080,7 @@ function initGame(): void {
   initWebGL(canvas, textures, sprites, world);
   setGeneratedDynamicSky(gen);
   updateWorldData(world);
-  rebuildEntityIndex(entities);
+  rebuildEntityIndex(entities, 'load');
 }
 
 drawLoading();
@@ -1075,6 +1142,31 @@ function reportNetSphereProgressEvents(): void {
   } else if (!state.gameOver) {
     netDeathReported = false;
   }
+}
+
+function roundPlayerDamage(amount: number): number {
+  return Math.max(0, Math.round(amount * 10) / 10);
+}
+
+function unattributedPlayerDamageSource(): { kind: PlayerDamageSourceKind; label: string } {
+  if (state.currentFloor === FloorLevel.VOID) return { kind: 'void', label: 'Правило Пустоты' };
+  if (state.samosborActive) return { kind: 'samosbor', label: 'Самосбор' };
+  return { kind: 'hazard', label: 'Неопознанная опасность' };
+}
+
+function recordUnattributedPlayerDamage(amount: number): void {
+  if (amount <= 0 || hasFreshPlayerDamageRecord(state, state.tick, state.time)) return;
+  const source = unattributedPlayerDamageSource();
+  recordPlayerDamage(state, undefined, amount, `${source.label}: -${roundPlayerDamage(amount)}`, source.kind);
+}
+
+function handlePlayerDeath(): void {
+  const deathTime = state.time;
+  const cause = formatLastPlayerDamageCause(state, deathTime);
+  state.gameOver = true;
+  state.deathTimer = 0;
+  deathCam = initDeathCam(player.x, player.y, player.angle);
+  state.msgs.push(msg(cause ? `Вы погибли: ${cause}` : 'Вы погибли: источник урона не распознан', state.time, '#f66'));
 }
 
 /* ── Door auto-close update ───────────────────────────────────── */
@@ -1174,6 +1266,7 @@ function movePlayer(dt: number): void {
     if (stepAccum > 1.8) {
       stepAccum = 0;
       playFootstep();
+      publishFootstepNoise(state, player, moveMod * len > 1.08);
     }
   }
 }
@@ -1201,6 +1294,7 @@ function projectileThreatLabel(p: Entity): string {
   if (pt === ProjType.FLAME || p.sprite === Spr.FLAME_BOLT || p.sprite === Spr.HOSTILE_FLAME_BOLT) return 'Ожог';
   if (pt === ProjType.BFG || p.sprite === Spr.BFG_BOLT) return 'Энергия';
   if (p.sprite === Spr.EYE_BOLT) return 'Глаз';
+  if (p.sprite === Spr.PARAGRAPH_BOLT) return 'Параграф';
   if (p.sprite === Spr.PSI_BOLT || p.sprite === Spr.HOSTILE_PSI_BOLT) return 'ПСИ-удар';
   if (p.sprite === Spr.PLASMA_BOLT || p.sprite === Spr.HOSTILE_PLASMA_BOLT || p.sprite === Spr.GAUSS_BOLT) return 'Разряд';
   if (p.sprite === Spr.PELLET || p.sprite === Spr.HOSTILE_PELLET) return 'Дробь';
@@ -1214,7 +1308,7 @@ function reportPlayerProjectileHit(p: Entity, dmg: number): void {
   const detail = actor && actor.id !== player.id
     ? `${threat} от ${entityDisplayName(actor)}: -${dmg}`
     : `${threat}: -${dmg}`;
-  recordPlayerDamage(state, actor ?? p, dmg, detail);
+  recordPlayerDamage(state, p, dmg, detail, 'projectile');
   if (state.tick - lastProjectileHitMsgTick < 18) return;
   state.msgs.push(msg(detail, state.time, '#f66'));
   lastProjectileHitMsgTick = state.tick;
@@ -1228,8 +1322,8 @@ function playProjectileImpactCue(p: Entity, x: number, y: number): void {
 function playProjectileBodyHitCue(p: Entity, x: number, y: number, isPlayerTarget: boolean): void {
   if (isEnergyProjectileImpact(p.sprite, p.projType ?? ProjType.NORMAL)) {
     playSoundAt(playEnergyImpact, x, y);
-  } else if (!isPlayerTarget) {
-    playSoundAt(playFleshHit, x, y);
+  } else {
+    playSoundAt(isPlayerTarget ? playProjectileBodyHit : playFleshHit, x, y);
   }
 }
 
@@ -1265,215 +1359,25 @@ function playerActions(_dt: number): void {
   if (input.interact) {
     const lookX = player.x + Math.cos(player.angle) * 1.5;
     const lookY = player.y + Math.sin(player.angle) * 1.5;
-
-    if (tryInteractCultProcession(state, world, player, entities)) {
-      input.interact = false;
-      return;
-    }
-
-    const netTerminal = tryUseNetTerminalGen(world, player, state, lookX, lookY);
-    if (netTerminal.handled) {
-      if (netTerminal.access) openMapEditor(world, player, state, netTerminal.terminal);
-      syncPauseState();
-      input.interact = false;
-      return;
-    }
-
-    // Check for NPC nearby → open NPC interaction menu
-    let interactedNpc = false;
-    let handledWorldInteraction = false;
-    if (tryUseRailTrain(world, player, state, lookX, lookY)) {
-      input.interact = false;
-      return;
-    }
-    for (const e of entities) {
-      if (e.type !== EntityType.NPC || !e.alive) continue;
-      if (world.dist(player.x, player.y, e.x, e.y) < 2.0) {
-        // Don't open dialog with hostile NPCs — they want to fight, not chat
-        if (isHostile(e, player) || isHostile(player, e)) continue;
-        openNpcMenu(e);
-        interactedNpc = true;
-        break;
-      }
-    }
-
-    // Check for lift interaction (LIFT cell or LIFT_BUTTON feature nearby)
-    if (!interactedNpc) {
-      const lx = Math.floor(lookX), ly = Math.floor(lookY);
-      const lci = world.idx(lx, ly);
-      const isLiftCell = world.cells[lci] === Cell.LIFT;
-      const isLiftButton = world.features[lci] === Feature.LIFT_BUTTON;
-      if (isLiftCell || isLiftButton) {
-        const dir = world.liftDir[lci] as LiftDirection;
-        switchFloor(dir);
-        input.interact = false;
-        return;
-      }
-    }
-
-    if (!interactedNpc) {
-      const metro = tryUseMetroRoute(world, player, state, lookX, lookY);
-      if (metro) {
-        handledWorldInteraction = true;
-        if (!metro.destination) {
-          state.msgs.push(msg(metro.message, state.time, metro.color));
-        } else if (metro.destination.kind === 'local') {
-          if (movePlayerToMetroRoom(metro.destination.roomName)) {
-            state.msgs.push(msg(metro.message, state.time, metro.color));
-          } else {
-            state.msgs.push(msg('Метро дернулось, но карман не найден.', state.time, '#f84'));
-          }
-        } else {
-          const delta = metro.destination.floor - state.currentFloor;
-          if (delta === 1) {
-            switchFloor(LiftDirection.DOWN, metro.message, metro.color, false);
-          } else if (delta === -1) {
-            switchFloor(LiftDirection.UP, metro.message, metro.color, false);
-          } else {
-            state.msgs.push(msg('Эта линия пока берет только соседние этажи.', state.time, '#888'));
-          }
-        }
-        input.interact = false;
-        return;
-      }
-    }
-
-    if (!interactedNpc) {
-      const heatline = tryUseHeatlinePressure(world, player, state, lookX, lookY);
-      if (heatline) {
-        handledWorldInteraction = true;
-        input.interact = false;
-        return;
-      }
-    }
-
-    if (!interactedNpc) {
-      const fungus = tryUseCarnivorousFungus(world, entities, nextEntityId, player, state, lookX, lookY);
-      if (fungus) {
-        handledWorldInteraction = true;
-        input.interact = false;
-        return;
-      }
-    }
-
-    if (!interactedNpc) {
-      const pneumomail = tryUsePneumomailTube(world, player, state, lookX, lookY);
-      if (pneumomail) {
-        handledWorldInteraction = true;
-        input.interact = false;
-        return;
-      }
-    }
-
-    if (!interactedNpc) {
-      const seroburmaline = tryCoverSeroburmalineSource(world, player, state, lookX, lookY);
-      if (seroburmaline) {
-        handledWorldInteraction = true;
-        updateWorldData(world);
-        input.interact = false;
-        return;
-      }
-    }
-
-    if (!interactedNpc) {
-      const hladon = tryUseHladonColdPocketCounter(world, player, state, lookX, lookY);
-      if (hladon) {
-        handledWorldInteraction = true;
-        input.interact = false;
-        return;
-      }
-    }
-
-    if (!interactedNpc) {
-      const paritel = tryUseParitelSteamBridge(world, player, state, lookX, lookY);
-      if (paritel) {
-        handledWorldInteraction = true;
-        input.interact = false;
-        return;
-      }
-    }
-
-    if (!interactedNpc) {
-      const betonoed = tryUseBetonoedShortcut(world, player, state, lookX, lookY);
-      if (betonoed.handled) {
-        handledWorldInteraction = true;
-        if (betonoed.worldChanged) updateWorldData(world);
-        input.interact = false;
-        return;
-      }
-    }
-
-    if (!interactedNpc) {
-      const routeCue = tryUseRouteCue(world, player, state, lookX, lookY);
-      if (routeCue) {
-        handledWorldInteraction = true;
-        input.interact = false;
-        return;
-      }
-    }
-
-    if (!interactedNpc) {
-      if (tryUseProceduralFloorAnomaly(world, player, state, lookX, lookY)) {
-        handledWorldInteraction = true;
-        input.interact = false;
-        return;
-      }
-    }
-
-    if (!interactedNpc) {
-      handledWorldInteraction = tryUseSamosborVariantInteraction(world, entities, player, state, nextEntityId, lookX, lookY);
-      if (handledWorldInteraction) {
-        input.interact = false;
-        return;
-      }
-    }
-
-    if (!interactedNpc) {
-      if (tryRepairHermodoorBorerDamage(world, player, state, lookX, lookY)) {
-        handledWorldInteraction = true;
-        input.interact = false;
-        return;
-      }
-    }
-
-    if (!interactedNpc) {
-      const ci = world.idx(Math.floor(lookX), Math.floor(lookY));
-
-      if (world.cells[ci] === Cell.DOOR) {
-        const door = world.doors.get(ci);
-        if (door) {
-          handledWorldInteraction = true;
-          if (door.state === DoorState.CLOSED || door.state === DoorState.HERMETIC_CLOSED) {
-            if (door.state === DoorState.HERMETIC_CLOSED && state.samosborActive) {
-              state.msgs.push(msg('Дверь герметично заперта!', state.time, '#f44'));
-            } else {
-              door.state = door.state === DoorState.HERMETIC_CLOSED ? DoorState.HERMETIC_OPEN : DoorState.OPEN;
-              door.timer = 0;
-              state.msgs.push(msg('Дверь открыта', state.time, '#aaa'));
-              playDoor();
-            }
-          } else if (door.state === DoorState.OPEN || door.state === DoorState.HERMETIC_OPEN) {
-            door.state = door.state === DoorState.HERMETIC_OPEN ? DoorState.HERMETIC_CLOSED : DoorState.CLOSED;
-            state.msgs.push(msg('Дверь закрыта', state.time, '#aaa'));
-            playDoor();
-          } else if (door.state === DoorState.LOCKED) {
-            // Check for key
-            if (door.keyId && player.inventory?.some(i => i.defId === 'key')) {
-              door.state = DoorState.OPEN;
-              state.msgs.push(msg('Дверь отперта ключом', state.time, '#4a4'));
-            } else {
-              state.msgs.push(msg('Заперто. Нужен ключ.', state.time, '#f84'));
-            }
-          }
-        }
-      }
-    }
-
-    if (!interactedNpc && !handledWorldInteraction) {
-      const container = findInteractiveContainer(lookX, lookY);
-      if (container) openContainerMenu(container);
-    }
+    const result = activateInteraction({
+      world,
+      state,
+      player,
+      entities,
+      nextEntityId,
+      lookX,
+      lookY,
+      switchFloor,
+      movePlayerToMetroRoom,
+      openNpcMenu,
+      openContainerMenu,
+      openMapEditor,
+      playDoor,
+    });
+    if (result.worldChanged) updateWorldData(world);
+    if (result.openedOverlay) syncPauseState();
     input.interact = false;
+    return;
   }
 
   // Attack (cooldown-based: hold to auto-fire)
@@ -1535,51 +1439,60 @@ function playerActions(_dt: number): void {
           }
         }
         if (ws.psiEffect === 'beam') playPsiBeam(); else playPsiCast();
+        publishWeaponNoise(state, player, player.weapon ?? '', ws);
         player.attackCd = ws.speed * atkSpeedMod;
       }
     } else if (ws.isRanged) {
       // ── Ranged attack: spawn projectile(s) ──────────────
       if (consumeAmmo(player, state)) {
-        const cos = Math.cos(player.angle);
-        const sin = Math.sin(player.angle);
-        const pellets = ws.pellets ?? 1;
-        const spread = ws.spread ?? 0;
-        const pt = ws.projType ?? ProjType.NORMAL;
-        for (let p = 0; p < pellets; p++) {
-          const ang = player.angle + (Math.random() - 0.5) * spread;
-          const spd = ws.projSpeed ?? 15;
-          const proj: Entity = {
-            id: nextEntityId.v++,
-            type: EntityType.PROJECTILE,
-            x: player.x + cos * 0.5,
-            y: player.y + sin * 0.5,
-            angle: ang,
-            pitch: 0,
-            alive: true,
-            speed: 0,
-            sprite: ws.projSprite ?? Spr.BULLET,
-            vx: Math.cos(ang) * spd,
-            vy: Math.sin(ang) * spd,
-            vz: player.pitch * spd * 0.5 + (pt === ProjType.FLAME ? (Math.random() - 0.5) * 0.8 : 0),
-            projDmg: ws.dmg,
-            projLife: pt === ProjType.GRENADE ? 1.5 : pt === ProjType.FLAME ? 0.7 : 3.0,
-            ownerId: player.id,
-            spriteScale: pt === ProjType.BFG ? 0.6 : pt === ProjType.FLAME ? (0.55 + Math.random() * 0.25) : pt === ProjType.GRENADE ? 0.35 : 0.25,
-            spriteZ: 0.5,
-            projType: pt,
-            projGore: pt === ProjType.GRENADE || pt === ProjType.BFG ? 3
-              : (player.weapon === 'shotgun' || player.weapon === 'chainsaw') ? 3
-              : (player.weapon === 'ak47' || player.weapon === 'machinegun' || player.weapon === 'nailgun' || player.weapon === 'gauss' || player.weapon === 'plasma') ? 2
-              : pt === ProjType.FLAME ? 1 : 1,
-          };
-          if (ws.aoeRadius) {
-            proj.aoeRadius = ws.aoeRadius;
-            proj.aoeDmg = ws.dmg;
+        if (ws.deletionBeam) {
+          const result = fireDeletionBeam(world, entities, player, state, player.weapon ?? '', ws, handleKill);
+          state.beamFx = 0.45;
+          state.beamAngle = player.angle;
+          state.beamLen = result.beamLen;
+        } else {
+          const cos = Math.cos(player.angle);
+          const sin = Math.sin(player.angle);
+          const pellets = ws.pellets ?? 1;
+          const spread = ws.spread ?? 0;
+          const pt = ws.projType ?? ProjType.NORMAL;
+          for (let p = 0; p < pellets; p++) {
+            const ang = player.angle + (Math.random() - 0.5) * spread;
+            const spd = ws.projSpeed ?? 15;
+            const proj: Entity = {
+              id: nextEntityId.v++,
+              type: EntityType.PROJECTILE,
+              x: player.x + cos * 0.5,
+              y: player.y + sin * 0.5,
+              angle: ang,
+              pitch: 0,
+              alive: true,
+              speed: 0,
+              sprite: ws.projSprite ?? Spr.BULLET,
+              vx: Math.cos(ang) * spd,
+              vy: Math.sin(ang) * spd,
+              vz: player.pitch * spd * 0.5 + (pt === ProjType.FLAME ? (Math.random() - 0.5) * 0.8 : 0),
+              projDmg: ws.dmg,
+              projLife: pt === ProjType.GRENADE ? 1.5 : pt === ProjType.FLAME ? 0.7 : 3.0,
+              ownerId: player.id,
+              spriteScale: pt === ProjType.BFG ? 0.6 : pt === ProjType.FLAME ? (0.55 + Math.random() * 0.25) : pt === ProjType.GRENADE ? 0.35 : 0.25,
+              spriteZ: 0.5,
+              projType: pt,
+              projGore: pt === ProjType.GRENADE || pt === ProjType.BFG ? 3
+                : (player.weapon === 'shotgun' || player.weapon === 'chainsaw') ? 3
+                : (player.weapon === 'ak47' || player.weapon === 'machinegun' || player.weapon === 'nailgun' || player.weapon === 'gauss' || player.weapon === 'plasma') ? 2
+                : pt === ProjType.FLAME ? 1 : 1,
+            };
+            if (ws.aoeRadius) {
+              proj.aoeRadius = ws.aoeRadius;
+              proj.aoeDmg = ws.dmg;
+            }
+            entities.push(proj);
           }
-          entities.push(proj);
         }
         // Play weapon-specific sound
         playWeaponSound(player.weapon ?? '', ws);
+        publishWeaponNoise(state, player, player.weapon ?? '', ws);
         notifyLiftArachnaNoise(world, player, state, player.weapon ?? '');
         player.attackCd = ws.speed * atkSpeedMod;
       } else {
@@ -1633,6 +1546,7 @@ function playerActions(_dt: number): void {
         }
       }
       if (player.weapon === 'chainsaw') playChainsaw(); else playAttack();
+      publishWeaponNoise(state, player, player.weapon ?? '', ws);
       notifyLiftArachnaNoise(world, player, state, player.weapon ?? '');
       // Consume durability on melee hit
       if (hitSomething) {
@@ -1791,10 +1705,13 @@ function handleKill(e: Entity, killerIsPlayer: boolean, pvx = 0, pvy = 0, goreLe
     state.msgs.push(msg(playerKillMessage(e), state.time, '#4f4'));
   }
   if (killerIsPlayer && (e.type === EntityType.MONSTER || e.type === EntityType.NPC)) {
-    const zoneId = world.zoneMap[world.idx(Math.floor(e.x), Math.floor(e.y))];
+    const eventCell = world.idx(Math.floor(e.x), Math.floor(e.y));
+    const zoneId = world.zoneMap[eventCell];
+    const roomId = world.roomMap[eventCell];
     publishEvent(state, {
       type: e.type === EntityType.MONSTER ? 'player_kill_monster' : 'player_kill_npc',
       zoneId,
+      roomId: roomId >= 0 ? roomId : undefined,
       x: e.x,
       y: e.y,
       actorId: player.id,
@@ -1957,9 +1874,32 @@ function resolveFlameCleanup(p: Entity, x: number, y: number, radius: number): v
 const projectileHitQuery: Entity[] = [];
 const explosionHitQuery: Entity[] = [];
 
+function projectilePathDelta(from: number, to: number): number {
+  return ((to - from + W / 2) % W + W) % W - W / 2;
+}
+
+function projectilePathPoint(from: number, to: number, t: number): number {
+  return ((from + projectilePathDelta(from, to) * t) % W + W) % W;
+}
+
+function projectilePathHitT(x0: number, y0: number, x1: number, y1: number, e: Entity, radius: number): number {
+  const dx = projectilePathDelta(x0, x1);
+  const dy = projectilePathDelta(y0, y1);
+  const len2 = dx * dx + dy * dy;
+  const ex = projectilePathDelta(x0, e.x);
+  const ey = projectilePathDelta(y0, e.y);
+  let t = len2 > 0.000001 ? (ex * dx + ey * dy) / len2 : 1;
+  if (t < 0) t = 0;
+  else if (t > 1) t = 1;
+  const px = ex - dx * t;
+  const py = ey - dy * t;
+  return px * px + py * py <= radius * radius ? t : Infinity;
+}
+
 /* ── Projectile update: move, collide walls + entities ────────── */
 function updateProjectiles(dt: number): void {
-  for (const p of getEntityIndex().projectiles) {
+  const entityIndex = getEntityIndex();
+  for (const p of entityIndex.projectiles) {
     if (p.type !== EntityType.PROJECTILE || !p.alive) continue;
     p.projLife = (p.projLife ?? 0) - dt;
     const pt = p.projType ?? ProjType.NORMAL;
@@ -2017,8 +1957,10 @@ function updateProjectiles(dt: number): void {
       }
     }
 
-    const nx = p.x + (p.vx ?? 0) * dt;
-    const ny = p.y + (p.vy ?? 0) * dt;
+    const prevX = p.x;
+    const prevY = p.y;
+    const nx = prevX + (p.vx ?? 0) * dt;
+    const ny = prevY + (p.vy ?? 0) * dt;
 
     // Wrap toroidal
     const wx = ((nx % W) + W) % W;
@@ -2059,12 +2001,29 @@ function updateProjectiles(dt: number): void {
 
     // Entity collision — check monsters and NPCs
     const dmg = p.projDmg ?? 0;
-    getEntityIndex().queryRadius(p.x, p.y, pt === ProjType.FLAME ? 0.8 : 0.6, projectileHitQuery, ENTITY_MASK_ACTOR);
+    const hitRadius = pt === ProjType.FLAME ? 0.8 : 0.6;
+    entityIndex.queryPathRadius(prevX, prevY, p.x, p.y, hitRadius, projectileHitQuery, ENTITY_MASK_ACTOR);
+    let nearestHit: Entity | undefined;
+    let nearestHitT = Infinity;
+    if (pt !== ProjType.FLAME) {
+      for (const e of projectileHitQuery) {
+        if (!e.alive || e.id === p.ownerId) continue;
+        if (e.type !== EntityType.MONSTER && e.type !== EntityType.NPC && e.type !== EntityType.PLAYER) continue;
+        const hitT = projectilePathHitT(prevX, prevY, p.x, p.y, e, hitRadius);
+        if (hitT < nearestHitT) {
+          nearestHit = e;
+          nearestHitT = hitT;
+        }
+      }
+    }
     for (const e of projectileHitQuery) {
       if (!e.alive || e.id === p.ownerId) continue;
       if (e.type !== EntityType.MONSTER && e.type !== EntityType.NPC && e.type !== EntityType.PLAYER) continue;
-      const hitRadius = pt === ProjType.FLAME ? 0.8 : 0.6;
-      if (world.dist(p.x, p.y, e.x, e.y) < hitRadius) {
+      if (pt !== ProjType.FLAME && e !== nearestHit) continue;
+      const hitT = pt === ProjType.FLAME ? projectilePathHitT(prevX, prevY, p.x, p.y, e, hitRadius) : nearestHitT;
+      if (hitT < Infinity) {
+        const hitX = projectilePathPoint(prevX, p.x, hitT);
+        const hitY = projectilePathPoint(prevY, p.y, hitT);
         if (e.hp !== undefined) {
           const debugImmortalPlayerHit = e.id === player.id && isDebugOnePunchManEnabled();
           if (debugImmortalPlayerHit) {
@@ -2077,11 +2036,9 @@ function updateProjectiles(dt: number): void {
               recordFactionClashPlayerHit(state, world, player, e, dmg);
             }
             const hitAngle = Math.atan2(p.vy ?? 0, p.vx ?? 0);
-            // Use projectile position as blood origin — blood at impact point, not feet
-            const bloodX = (p.x + e.x) * 0.5;  // midpoint between projectile and entity
-            const bloodY = (p.y + e.y) * 0.5;
             const hitZ = p.spriteZ ?? 0.5;
-            spawnBloodHit(world, bloodX, bloodY, hitAngle, dmg, e.type === EntityType.MONSTER, p.vx ?? 0, p.vy ?? 0, hitZ);
+            spawnBloodHit(world, hitX, hitY, hitAngle, dmg, e.type === EntityType.MONSTER, p.vx ?? 0, p.vy ?? 0, hitZ);
+            spawnProjectileBodyImpact(world, hitX, hitY, p.sprite, pt, hitZ);
           }
           const playerHit = e.id === player.id;
           if (playerHit && !debugImmortalPlayerHit) reportPlayerProjectileHit(p, dmg);
@@ -2093,8 +2050,12 @@ function updateProjectiles(dt: number): void {
           }
         }
         if (pt === ProjType.GRENADE || pt === ProjType.BFG) {
+          p.x = hitX;
+          p.y = hitY;
           triggerExplosion(p, pt);
         } else if (p.aoeRadius) {
+          p.x = hitX;
+          p.y = hitY;
           psiAoeExplosion(p, entities, world, state.msgs, state.time, (e2) => handleKill(e2, p.ownerId === player.id));
         }
         // Flame projectiles pierce through (don't die on hit)
@@ -2137,7 +2098,7 @@ function triggerExplosion(p: Entity, pt: ProjType): void {
         const detail = actor && actor.id !== player.id
           ? `Взрыв от ${entityDisplayName(actor)}: -${finalDmg}`
           : `Взрыв: -${finalDmg}`;
-        recordPlayerDamage(state, actor ?? p, finalDmg, detail);
+        recordPlayerDamage(state, p, finalDmg, detail, 'projectile');
       }
       // Explosion blast pushes blood outward from epicenter
       const blastVx = dist > 0.1 ? (dx / dist) * 12 : 0;
@@ -2183,6 +2144,7 @@ function triggerExplosion(p: Entity, pt: ProjType): void {
 
   // Sounds
   playExplosion();
+  publishExplosionNoise(state, actor, p.x, p.y, radius, pt === ProjType.BFG ? 'bfg' : 'grenade');
 
   // Screen flash for ALL explosions
   if (pt === ProjType.BFG) {
@@ -2306,6 +2268,8 @@ function switchFloor(
     commitFloorRunEntry(state, runEntry);
   }
   const generatedRunEntry = route.activeInstance ? null : runEntry;
+  const intendedRunEntry = route.activeInstance ? currentFloorRunEntry(state) : generatedRunEntry;
+  const returnDirection = direction === LiftDirection.DOWN ? LiftDirection.UP : LiftDirection.DOWN;
   if (route.activeInstance) {
     spreadElevatorInstanceRumor(world, entities, player, state, route.activeInstance);
   }
@@ -2332,6 +2296,7 @@ function switchFloor(
 
   // Defer heavy generation — game loop will show loading screen first
   pendingLoad = () => {
+    resetNoiseRecords();
     resetGeneratedFloorPopulationState();
     // Generate new floor
     const gen = generatedRunEntry?.spec
@@ -2340,7 +2305,7 @@ function switchFloor(
         ? generateDesignFloor(generatedRunEntry.designFloorId)
         : generateFloor(nextFloor);
 
-    world = gen.world;
+    world = replaceWorldFromGeneration(null, gen);
     entities = gen.entities;
     nextEntityId.v = entities.reduce((mx, e) => Math.max(mx, e.id), 0) + 1;
 
@@ -2399,6 +2364,12 @@ function switchFloor(
       state.time,
       overrideArrivalColor ?? (route.activeInstance ? '#f4a' : route.exitedInstance ? '#8cf' : generatedRunEntry?.color ?? FLOOR_MESSAGE_COLORS[nextFloor]),
     ));
+    const arrivalLead = route.activeInstance
+      ? `Маршрут прерван: номерной лифт ${floorInstanceLabel(route.activeInstance)}, риск ${route.activeInstance.risk}/5. Возврат: следующий лифт ведет к ${intendedRunEntry ? floorRunEntryLiftLabel(intendedRunEntry) : 'плановому маршруту'}.`
+      : generatedRunEntry
+        ? floorRunArrivalLead(generatedRunEntry, returnDirection)
+        : undefined;
+    if (arrivalLead) state.msgs.push(msg(arrivalLead, state.time, route.activeInstance ? '#f4a' : generatedRunEntry?.color ?? '#8cf'));
     const transitionTags = ['floor', 'floor_transition', 'lift', route.activeInstance ? 'elevator_anomaly' : 'normal'];
     if (generatedRunEntry?.designFloorId) transitionTags.push('design_floor', generatedRunEntry.designFloorId);
     if (generatedRunEntry?.spec) transitionTags.push('procedural');
@@ -2429,6 +2400,11 @@ function switchFloor(
         proceduralFloor: generatedRunEntry?.spec?.key,
         proceduralSeed: generatedRunEntry?.spec?.seed,
         proceduralDanger: generatedRunEntry?.spec?.danger,
+        routeKind: intendedRunEntry ? floorRunEntryKindLabel(intendedRunEntry) : undefined,
+        routeId: intendedRunEntry ? floorRunEntryRouteId(intendedRunEntry) : undefined,
+        routeDanger: intendedRunEntry ? floorRunEntryDanger(intendedRunEntry) : undefined,
+        routeRole: intendedRunEntry ? floorRunEntryRole(intendedRunEntry) : undefined,
+        returnDirection: returnDirection === LiftDirection.DOWN ? 'down' : 'up',
         ...anomalyData,
       },
     });
@@ -2485,7 +2461,7 @@ function enterVoidFloor(): void {
   pendingLoad = () => {
     resetHellPopulationState();
     const gen = generateFloor(FloorLevel.VOID);
-    world = gen.world;
+    world = replaceWorldFromGeneration(null, gen);
     entities = gen.entities;
     nextEntityId.v = entities.reduce((mx, e) => Math.max(mx, e.id), 0) + 1;
 
@@ -2603,7 +2579,7 @@ function debugTeleportTo(target: DebugTeleportTarget): void {
         ? generateDesignFloor(target.designFloorId)
         : generateFloor(target.floor);
 
-    world = gen.world;
+    world = replaceWorldFromGeneration(null, gen);
     entities = gen.entities;
     nextEntityId.v = entities.reduce((mx, e) => Math.max(mx, e.id), 0) + 1;
 
@@ -2771,30 +2747,13 @@ function openNpcMenu(npc: Entity): void {
   if (report) state.msgs.push(msg(report, state.time, '#8cf'));
 }
 
-function findInteractiveContainer(lookX: number, lookY: number): WorldContainer | null {
-  ensureRoomContainers(world, state.currentFloor);
-  const lx = Math.floor(lookX);
-  const ly = Math.floor(lookY);
-  const exact = world.containersAt(lx, ly);
-  const looked = exact.find(c => c.discovered || c.access !== 'secret');
-  if (!looked) {
-    const secret = exact.find(c => c.access === 'secret' && !c.discovered);
-    if (secret && world.dist2(player.x, player.y, secret.x + 0.5, secret.y + 0.5) <= 2.25) {
-      secret.discovered = true;
-      state.msgs.push(msg('Вы нашли тайник.', state.time, '#c8f'));
-      return secret;
-    }
-  }
-  return looked ?? firstNearbyContainer(world, player);
-}
-
 function openContainerMenu(container: WorldContainer): void {
   state.showContainerMenu = true;
   state.containerMenuTarget = container.id;
   state.containerCursorX = 0;
   state.containerCursorY = 0;
   state.containerSide = 'container';
-  const access = containerAccessInfo(container, player);
+  const access = containerAccessInfo(container, player, state);
   if (!access.canTake && !access.canPut) {
     state.msgs.push(msg(access.detail, state.time, '#f84'));
   } else if (access.theft) {
@@ -3105,42 +3064,10 @@ function normalizeQuestList(input: unknown, nextQuestIdInput: unknown, nowMinute
 
 function saveGame(): void {
   try {
-    const data = {
-      player: {
-        x: player.x, y: player.y, angle: player.angle,
-        hp: player.hp, maxHp: player.maxHp,
-        needs: player.needs,
-        inventory: player.inventory,
-        weapon: player.weapon,
-        tool: player.tool,
-        rpg: player.rpg,
-        statuses: player.statuses,
-        money: player.money,
-      },
-      state: {
-        time: state.time,
-        tick: state.tick,
-        clock: state.clock,
-        samosborCount: state.samosborCount,
-        samosborTimer: state.samosborTimer,
-        quests: state.quests,
-        nextQuestId: state.nextQuestId,
-        currentFloor: state.currentFloor,
-        floorRun: floorRunStateForSave(state),
-        floorInstances: floorInstanceStateForSave(state),
-        voidReturnPortal: voidReturnPortalStateForSave(state),
-        voidEntryFromFloor: (state as VoidReturnPortalHost).voidEntryFromFloor,
-        liftArachna: liftArachnaStateForSave(state),
-        netTerminalGen: netTerminalGenStateForSave(state),
-        mapEditorPatches: mapEditorPatchStateForSave(state),
-        worldEvents: trimEventHistoryForSave(state),
-        economy: economyForSave(state),
-        banking: bankingForSave(state),
-        stockMarket: stockMarketForSave(state),
-        production: (state as GameState & { production?: ProductionState[] }).production ?? [],
-        containers: world.containers,
-      },
-    };
+    const data = createGameSavePayload(player, state, world.containers, {
+      voidReturnPortal: voidReturnPortalStateForSave(state),
+      voidEntryFromFloor: (state as VoidReturnPortalHost).voidEntryFromFloor,
+    });
     localStorage.setItem(SAVE_KEY, JSON.stringify(data));
     state.msgs.push(msg('Игра сохранена', state.time, '#4f4'));
   } catch {
@@ -3156,6 +3083,16 @@ function loadGame(): boolean {
       return false;
     }
     const parsed = JSON.parse(raw);
+    const versionStatus = saveShapeVersionStatus(parsed);
+    if (versionStatus !== 'current') {
+      const text = versionStatus === 'newer'
+        ? 'Сохранение новее этой сборки: загрузка отменена'
+        : versionStatus === 'invalid'
+          ? 'Сохранение повреждено: загрузка отменена'
+          : 'Сохранение старой версии: начните новую игру';
+      state.msgs.push(msg(text, state.time, '#f44'));
+      return false;
+    }
     const data = isRecord(parsed) ? parsed : {};
     const dataPlayer = isRecord(data.player) ? data.player : {};
     const dataState = isRecord(data.state) ? data.state : {};
@@ -3185,14 +3122,16 @@ function loadGame(): boolean {
     closeNetTerminalGen();
     closeMapEditor();
     pendingLoad = () => {
+      resetNoiseRecords();
       resetGeneratedFloorPopulationState();
+      clearRoomMemory();
       const gen: FloorGeneration = generatedRunEntry?.spec
         ? generateProceduralFloor(generatedRunEntry.spec)
         : generatedRunEntry?.designFloorId
           ? generateDesignFloor(generatedRunEntry.designFloorId)
           : generateFloor(floor);
 
-      world = gen.world;
+      world = replaceWorldFromGeneration(null, gen);
       entities = gen.entities;
       nextEntityId.v = entities.reduce((mx, e) => Math.max(mx, e.id), 0) + 1;
       const spawn = safeSpawnNear(
@@ -3243,6 +3182,7 @@ function loadGame(): boolean {
       state.samosborCount = clampInt(dataState.samosborCount, 0, 0, 100_000);
       netReportedSamosborCount = state.samosborCount;
       netDeathReported = false;
+      const savedSamosborActive = dataState.samosborActive === true;
       state.samosborTimer = clampNumber(dataState.samosborTimer, 120, 0, 24 * 60 * 60);
       state.quests = normalizedQuests.quests;
       state.nextQuestId = normalizedQuests.nextQuestId;
@@ -3254,10 +3194,12 @@ function loadGame(): boolean {
       normalizeGameEconomy(state, dataState.economy);
       (state as GameState & { banking?: BankingState }).banking = normalizeBankingState(dataState.banking);
       normalizeGameStockMarket(state, dataState.stockMarket);
-      (state as GameState & { production?: ProductionState[] }).production = Array.isArray(dataState.production)
-        ? dataState.production as ProductionState[]
-        : [];
+      setProductionState(state, dataState.production, floor);
       state.samosborActive = false;
+      if (savedSamosborActive) {
+        state.samosborTimer = Math.max(state.samosborTimer, 45);
+        state.msgs.push(msg('Активный самосбор из сохранения сброшен: маршрут восстановлен, следующий цикл пересчитан.', state.time, '#fa4'));
+      }
       state.uvBeamFx = 0;
       state.uvBeamLen = 0;
       floorTeleportCd = 0;
@@ -3599,14 +3541,14 @@ function syncPauseState(): void {
   if (typeof state === 'undefined') return;
   state.paused = state.showMenu || state.showInventory || state.showNpcMenu || state.showContainerMenu ||
     state.showQuests || state.showDebug || state.showFactions || state.showLog ||
-    isNetSphereOpen() || isNetTerminalGenOpen() || isMapEditorOpen();
+    isNetSphereOpen() || isNetTerminalGenOpen() || isInteractableOverlayOpen() || isEmergencyPanelMenuOpen() || isMapEditorOpen();
 }
 
 function isMobileMenuOpen(): boolean {
   if (typeof state === 'undefined') return false;
   return state.showMenu || state.showInventory || state.showNpcMenu || state.showContainerMenu ||
     state.showQuests || state.showDebug || state.showFactions || state.showLog ||
-    state.mapMode === 2 || isNetSphereOpen() || isNetTerminalGenOpen() || isMapEditorOpen();
+    state.mapMode === 2 || isNetSphereOpen() || isNetTerminalGenOpen() || isInteractableOverlayOpen() || isEmergencyPanelMenuOpen() || isMapEditorOpen();
 }
 
 function closeMobilePanels(includeMap = true): void {
@@ -3622,6 +3564,8 @@ function closeMobilePanels(includeMap = true): void {
   if (includeMap) state.mapMode = 0;
   closeNetSphere();
   closeNetTerminalGen();
+  closeInteractableOverlay();
+  closeEmergencyPanelMenu();
   closeMapEditor();
   syncPauseState();
   updateMobileContext();
@@ -3670,7 +3614,7 @@ function openMobileMenu(menu: MobileMenuId): void {
 }
 
 function confirmActiveMobileSelection(): void {
-  if (!started || typeof state === 'undefined' || state.gameOver || isNetSphereOpen() || isNetTerminalGenOpen() || isMapEditorOpen()) return;
+  if (!started || typeof state === 'undefined' || state.gameOver || isNetSphereOpen() || isNetTerminalGenOpen() || isInteractableOverlayOpen() || isMapEditorOpen()) return;
   if (state.showMenu) {
     runGameMenuSelection(state.menuSel);
   } else if (state.showInventory) {
@@ -3696,34 +3640,20 @@ function confirmActiveMobileSelection(): void {
   updateMobileContext();
 }
 
-const interactNpcQuery: Entity[] = [];
-
 function canInteractAhead(): boolean {
   if (!started || typeof state === 'undefined' || typeof world === 'undefined' || typeof player === 'undefined') return false;
   if (state.gameOver || state.sleeping || isMobileMenuOpen()) return false;
   const lookX = player.x + Math.cos(player.angle) * 1.5;
   const lookY = player.y + Math.sin(player.angle) * 1.5;
-  const lci = world.idx(Math.floor(lookX), Math.floor(lookY));
-  const cell = world.cells[lci];
-
-  if (getCultProcessionPrompt(world, state, player)) return true;
-  if (isNetTerminalGenTarget(world, state, lookX, lookY)) return true;
-  if (cell === Cell.DOOR && world.doors.has(lci)) return true;
-  if (cell === Cell.LIFT || world.features[lci] === Feature.LIFT_BUTTON) return true;
-  if (isParitelSteamValveTarget(world, lookX, lookY)) return true;
-  if (isRouteCueTarget(world, player, lookX, lookY)) return true;
-  if (hladonInteractionTargetId(world, lookX, lookY) !== null) return true;
-  if (proceduralAnomalyInteractionTargetId(world, state, lookX, lookY) !== null) return true;
-
-  getEntityIndex().queryRadius(lookX, lookY, 2, interactNpcQuery, ENTITY_MASK_NPC);
-  for (const e of interactNpcQuery) {
-    if (!e.alive || e.type !== EntityType.NPC) continue;
-    if (isHostile(e, player) || isHostile(player, e)) continue;
-    if (world.dist2(lookX, lookY, e.x, e.y) < 4.0) return true;
-  }
-
-  return world.containersAt(Math.floor(lookX), Math.floor(lookY))
-    .some(c => c.discovered || c.access !== 'secret');
+  return findInteractionTarget({
+    world,
+    state,
+    player,
+    entities,
+    nextEntityId,
+    lookX,
+    lookY,
+  }) !== null;
 }
 
 function updateMobileContext(): void {
@@ -3776,7 +3706,7 @@ function spendMobileAttr(attr: 'str' | 'agi' | 'int'): void {
 function activateContainerSelection(container: WorldContainer): void {
   const GRID = 5;
   const idx = state.containerCursorY * GRID + state.containerCursorX;
-  const access = containerAccessInfo(container, player);
+    const access = containerAccessInfo(container, player, state);
   if (state.containerSide === 'container') {
     const slot = container.inventory[idx];
     const itemName = slot ? ITEMS[slot.defId]?.name ?? slot.defId : '';
@@ -4095,6 +4025,8 @@ function handleMenuInput(): void {
     state.showLog = false;
     closeNetSphere();
     closeNetTerminalGen();
+    closeInteractableOverlay();
+    closeEmergencyPanelMenu();
     closeMapEditor();
     resetMenuRepeats();
     // Keep edge-detection prev states in sync so first frame after
@@ -4180,7 +4112,7 @@ function handleMenuInput(): void {
     return;
   }
 
-  if (isNetTerminalBankOpen()) {
+  if (isInteractableOverlayOpen()) {
     state.showMenu = false;
     state.showInventory = false;
     state.showQuests = false;
@@ -4202,20 +4134,17 @@ function handleMenuInput(): void {
     const dnNav = menuRepeatStep('down', input.invDn, dnEdge);
     const leftNav = menuRepeatStep('left', input.invLeft, leftEdge);
     const rightNav = menuRepeatStep('right', input.invRight || input.drop, rightEdge);
-
-    if (escEdge) {
-      closeNetTerminalGen();
-      syncPauseState();
-    } else {
-      if (upNav) moveNetTerminalBankAction(-1);
-      if (dnNav) moveNetTerminalBankAction(1);
-      if (leftNav) moveNetTerminalBankPreset(-1);
-      if (rightNav) moveNetTerminalBankPreset(1);
-      if (interactEdge) {
-        activateNetTerminalBank(state, player);
-        input.interact = false;
-      }
-    }
+    const result = handleInteractableOverlayInput({
+      escEdge,
+      interactEdge,
+      upNav,
+      dnNav,
+      leftNav,
+      rightNav,
+    }, { world, state, player });
+    if (result.worldChanged) updateWorldData(world);
+    if (interactEdge) input.interact = false;
+    if (!isInteractableOverlayOpen()) syncPauseState();
 
     prevEsc = input.escape;
     prevMenuUp = input.invUp;
@@ -4233,7 +4162,7 @@ function handleMenuInput(): void {
     return;
   }
 
-  if (isNetTerminalGenOpen()) {
+  if (isEmergencyPanelMenuOpen()) {
     state.showMenu = false;
     state.showInventory = false;
     state.showQuests = false;
@@ -4246,13 +4175,20 @@ function handleMenuInput(): void {
     state.paused = true;
 
     const escEdge = input.escape && !prevEsc;
+    const upEdge = input.invUp && !prevMenuUp;
+    const dnEdge = input.invDn && !prevMenuDn;
     const interactEdge = input.interact && !prevMenuInteract;
-    resetMenuRepeats();
-    if (escEdge || interactEdge) {
-      closeNetTerminalGen();
-      if (interactEdge) input.interact = false;
-      syncPauseState();
-    }
+    const upNav = menuRepeatStep('up', input.invUp, upEdge);
+    const dnNav = menuRepeatStep('down', input.invDn, dnEdge);
+    const result = handleEmergencyPanelMenuInput({
+      up: upNav,
+      down: dnNav,
+      confirm: interactEdge,
+      close: escEdge,
+    }, world, player, entities, state, nextEntityId);
+    if (result.worldChanged) updateWorldData(world);
+    if (interactEdge) input.interact = false;
+    if (!isEmergencyPanelMenuOpen()) syncPauseState();
 
     prevEsc = input.escape;
     prevMenuUp = input.invUp;
@@ -4413,7 +4349,7 @@ function handleMenuInput(): void {
       }
       if (interactEdge) {
         const idx = state.containerCursorY * GRID + state.containerCursorX;
-        const access = containerAccessInfo(container, player);
+        const access = containerAccessInfo(container, player, state);
         if (state.containerSide === 'container') {
           const slot = container.inventory[idx];
           const itemName = slot ? ITEMS[slot.defId]?.name ?? slot.defId : '';
@@ -4585,15 +4521,21 @@ let lastSlideCellB = -1;
 let needsTickAccum = 0;
 let bloodTrailAccum = 0;
 let deadCleanupAccum = 0;
+let entityIndexFrame = 0;
 
-function cleanupDeadEntities(dt: number): void {
+function cleanupDeadEntities(dt: number): number {
   deadCleanupAccum += dt;
-  if (deadCleanupAccum < 0.5) return;
+  if (deadCleanupAccum < 0.5) return 0;
   deadCleanupAccum = 0;
+  let removed = 0;
   for (let i = entities.length - 1; i >= 0; i--) {
     const e = entities[i];
-    if (!e.alive && e.type !== EntityType.PLAYER) entities.splice(i, 1);
+    if (!e.alive && e.type !== EntityType.PLAYER) {
+      entities.splice(i, 1);
+      removed++;
+    }
   }
+  return removed;
 }
 
 function gameLoop(now: number): void {
@@ -4613,7 +4555,7 @@ function gameLoop(now: number): void {
     pendingLoad = null;
     pendingLoadDrawn = false;
     fn();
-    rebuildEntityIndex(entities);
+    rebuildEntityIndex(entities, 'load');
     lastTime = performance.now(); // reset dt so we don't get a huge spike
     requestAnimationFrame(gameLoop);
     return;
@@ -4641,6 +4583,11 @@ function gameLoop(now: number): void {
   // If menu triggered new game / load, bail out to show loading screen
   if (pendingLoad) { requestAnimationFrame(gameLoop); return; }
 
+  if (!state.paused) {
+    entityIndexFrame = (entityIndexFrame + 1) & 0x3fffffff;
+    rebuildEntityIndexForSimulation(entities, entityIndexFrame);
+  }
+
   // ── Update ───────────────────────────────────────────────
   // Decay damage flash
   if (state.dmgFlash > 0) state.dmgFlash = Math.max(0, state.dmgFlash - dt * 1.2);
@@ -4664,6 +4611,7 @@ function gameLoop(now: number): void {
     state.clock.hour = (8 + Math.floor(totalMins / 60)) % 24;  // start at 8:00
     state.clock.minute = totalMins % 60;
     setMsgClock(state.clock);
+    tickRoomMemory(state.time, dt);
     updateZhelemishSkinStatus(player, state, dt);
     updateInventoryConditions(player, state);
 
@@ -4712,7 +4660,7 @@ function gameLoop(now: number): void {
     if (needsTickAccum >= 0.25) {
       const needsDt = needsTickAccum;
       needsTickAccum = 0;
-      updateNeeds(entities, needsDt, state.time, state.msgs, player.id, nextEntityId);
+      updateNeeds(entities, needsDt, state.time, state.msgs, player.id, nextEntityId, state);
     }
     if (updateBetonoedShortcut(world, entities, player, state, dt)) updateWorldData(world);
     setListenerPos(player.x, player.y, (ax, ay, bx, by) => world.dist2(ax, ay, bx, by));
@@ -4838,6 +4786,7 @@ function gameLoop(now: number): void {
       });
     }
     if (state.tick % 60 === 0) {
+      tickContainerAudits(state, world, player, entities);
       tickProduction(state, world, false, player);
       tickBankingInterest(state);
       tickStockMarket(state);
@@ -4852,19 +4801,21 @@ function gameLoop(now: number): void {
       const maxHp = player.maxHp ?? 100;
       state.dmgFlash = Math.min(1, 0.3 + (lost / maxHp) * 1.5);
       state.dmgSeed = Math.random() * 10000;
+      recordUnattributedPlayerDamage(lost);
       playFleshHit();
     }
     prevPlayerHp = curHp;
 
     // Check player death
     if (!player.alive && !state.gameOver) {
-      state.gameOver = true;
-      state.deathTimer = 0;
-      deathCam = initDeathCam(player.x, player.y, player.angle);
+      handlePlayerDeath();
     }
     reportNetSphereProgressEvents();
 
-    cleanupDeadEntities(dt);
+    if (cleanupDeadEntities(dt) > 0) {
+      // Exception to the one planned rebuild: splice cleanup changes the flat array after spawns/deaths.
+      rebuildEntityIndexAfterSpawnCleanup(entities);
+    }
 
     // Sync new messages to persistent log, then trim
     syncMsgLog();
@@ -4880,6 +4831,7 @@ function gameLoop(now: number): void {
     const totalMins = Math.floor(state.clock.totalMinutes);
     state.clock.hour = (8 + Math.floor(totalMins / 60)) % 24;
     state.clock.minute = totalMins % 60;
+    tickRoomMemory(state.time, dt);
     updateProjectiles(dt);
     updateDoors(dt);
     updateWrongDoorRemaps(world, state);
@@ -4887,7 +4839,7 @@ function gameLoop(now: number): void {
     if (needsTickAccum >= 0.25) {
       const needsDt = needsTickAccum;
       needsTickAccum = 0;
-      updateNeeds(entities, needsDt, state.time, state.msgs, player.id, nextEntityId);
+      updateNeeds(entities, needsDt, state.time, state.msgs, player.id, nextEntityId, state);
     }
     if (updateBetonoedShortcut(world, entities, player, state, dt)) updateWorldData(world);
     setListenerPos(player.x, player.y, (ax, ay, bx, by) => world.dist2(ax, ay, bx, by));
@@ -4942,7 +4894,10 @@ function gameLoop(now: number): void {
       updateBloodTrails(world, entities, bloodDt);
     }
     updateParticles(world, dt);
-    cleanupDeadEntities(dt);
+    if (cleanupDeadEntities(dt) > 0) {
+      // Exception to the one planned rebuild: splice cleanup changes the flat array after spawns/deaths.
+      rebuildEntityIndexAfterSpawnCleanup(entities);
+    }
     syncMsgLog();
     while (state.msgs.length > 50) state.msgs.shift();
     _prevMsgCount = state.msgs.length;
@@ -4977,7 +4932,6 @@ function gameLoop(now: number): void {
   }
 
   // Update dynamic world data (fog, door states, wallTex for slides)
-  rebuildEntityIndex(entities);
   updateGeneratedDynamicSky(dt);
   updateDynamicData(world, camX, camY);
 

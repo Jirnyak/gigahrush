@@ -9,6 +9,7 @@ import {
 import { World } from '../core/world';
 import { freshNeeds, randomName, ITEMS } from '../data/catalog';
 import { getStack } from '../data/items';
+import { getPermitDef, type PermitAccessTag } from '../data/permits';
 import { FACTION_NAMES } from '../data/relations';
 import { MONSTERS, applyMonsterVariant, monsterTypeName } from '../entities/monster';
 import { Spr } from '../render/sprite_index';
@@ -21,10 +22,12 @@ import {
   summarizeSamosborDirector,
 } from './samosbor_director';
 import { ensureWorldEventState, getImportantEvents, publishEvent, summarizeImportantEventsByFloorZone } from './events';
+import { summarizeRoomMemoryForRoom } from './room_memory';
 import { describeContainer, ensureRoomContainers, firstNearbyContainer, nearbyContainers, takeFromContainer } from './containers';
 import { changeResourceStock, getAdjustedItemPrice, getResourceScarcity, summarizeEconomy } from './economy';
 import { tickProduction, summarizeProduction } from './production';
-import { addItem } from './inventory';
+import { addItem, removeItem } from './inventory';
+import { findActorPermit, recordPermitAccess, recordPermitExposure } from './permits';
 import { publishMaronaryShavingAcquired } from './maronary_shaving';
 import { spawnContract, spawnContractById, spawnGovnyakCourierContract, summarizeContracts } from './contracts';
 import { debugForcePneumomailCapsule } from './pneumomail';
@@ -34,8 +37,14 @@ import { floorCatalogDebugLines } from './floor_catalog';
 import { summarizeHeatline } from './heatline';
 import { summarizeCarnivorousFungus } from './carnivorous_fungus';
 import { summarizeHladonColdPockets } from './hladon';
-import { ensureFloorInstanceState, floorInstanceLabel, summarizeFloorInstances } from './floor_instances';
-import { currentFloorRunEntry, resolveFloorRunRoute, summarizeFloorRun } from './procedural_floors';
+import { ensureFloorInstanceState, floorInstanceIdentityLine, floorInstanceLabel, summarizeFloorInstances } from './floor_instances';
+import {
+  currentFloorRunEntry,
+  floorRunEntryKind,
+  floorRunEntryRouteId,
+  resolveFloorRunRoute,
+  summarizeFloorRun,
+} from './procedural_floors';
 import { summarizeProceduralSmog } from './procedural_anomalies';
 import { debugSpawnBadAppleWorld, summarizeBadAppleWorld } from './procedural_anomalies/bad_apple_world';
 import { debugForceVoidProtocol } from './void_protocols';
@@ -43,6 +52,7 @@ import { forceFactionEvent, summarizeFactionEvents } from './faction_events';
 import { debugTriggerRouteCue, routeCueCount } from './route_cues';
 import { debugCreateWrongDoorRemap } from './wrong_door';
 import { debugForceHermodoorBorer } from './hermodoor_borer';
+import { debugStartSamosborWaveAtPlayer } from './samosbor_wave';
 import { DESIGN_FLOOR_ROUTES, type DesignFloorId } from '../data/design_floors';
 import { FLOOR_INSTANCES } from '../data/floor_instances';
 import { type FloorAnomalyId } from '../data/procedural_floors';
@@ -60,6 +70,8 @@ import {
   replayMapEditorPatchForCurrentFloor,
   summarizeMapEditor,
 } from './map_editor';
+import { getAiSchedulerStats } from './ai';
+import { canSpawnEntityType, entitySpawnSlots } from './entity_limits';
 
 /* ── Command execution ───────────────────────────────────────── */
 
@@ -68,6 +80,13 @@ const DEBUG_FORCED_VERETAR_LEAD_SECONDS = 30;
 const DEBUG_SAMOSBOR_WARNING_SECONDS = 12;
 const DEBUG_MONSTER_SCAN_CAP = 192;
 const DEBUG_CONTAINER_ROUTE_RADIUS = 2;
+const EXPEDITION_PROOF_CONTRACT_ID = 'exp_maint_pressure_repair';
+const DEBUG_ROUTE_FLOOD_DIRS = [
+  [1, 0],
+  [-1, 0],
+  [0, 1],
+  [0, -1],
+] as const;
 const DEBUG_VERIFICATION_CONTRACT_IDS = [
   'exp_living_emergency_roster',
   'exp_ministry_safe_override',
@@ -81,18 +100,138 @@ const DEBUG_ECONOMY_PULSES = [
   { resourceId: 'medicine', itemId: 'bandage', delta: -55, label: 'медицина' },
   { resourceId: 'ammo', itemId: 'ammo_9mm', delta: -65, label: 'патроны' },
 ] as const;
+export const SMOKE_STRESS_HOOK_ID = 'stress_spawn' as const;
+export const SMOKE_DEBUG_COMMAND_IDS = {
+  teleportLiving: 'teleport_living',
+  teleportMaintenance: 'teleport_maintenance',
+  forceFactionEvent: 'force_faction_event',
+  rareSamosbor: 'rare_samosbor',
+  expeditionSetup: 'smoke_expedition_setup',
+  expeditionProofPrep: 'expedition_proof_prep',
+  expeditionProofLiftReady: 'expedition_proof_lift_ready',
+  expeditionProofCollectorsArrival: 'expedition_proof_collectors_arrival',
+  expeditionProofRisk: 'expedition_proof_risk',
+  expeditionProofContainer: 'expedition_proof_container',
+  expeditionProofSamosborWarning: 'expedition_proof_samosbor_warning',
+  expeditionProofReturn: 'expedition_proof_return',
+} as const;
 const DEBUG_MONSTER_PACKS: Record<FloorLevel, readonly MonsterKind[]> = {
   [FloorLevel.MINISTRY]: [MonsterKind.PECHATEED, MonsterKind.PARAGRAPH, MonsterKind.SHOVNIK],
   [FloorLevel.KVARTIRY]: [MonsterKind.REBAR, MonsterKind.NELYUD, MonsterKind.KRYSNOZHKA],
   [FloorLevel.LIVING]: [MonsterKind.SBORKA, MonsterKind.SHADOW, MonsterKind.NELYUD],
-  [FloorLevel.MAINTENANCE]: [MonsterKind.TUBE_EEL, MonsterKind.POLZUN, MonsterKind.KOSTOREZ],
+  [FloorLevel.MAINTENANCE]: [MonsterKind.TUBE_EEL, MonsterKind.POLZUN, MonsterKind.KOSTOREZ, MonsterKind.SAFEGUARD],
   [FloorLevel.HELL]: [MonsterKind.HERALD, MonsterKind.KOSTOREZ, MonsterKind.TVAR],
-  [FloorLevel.VOID]: [MonsterKind.PARAGRAPH, MonsterKind.EYE, MonsterKind.SPIRIT],
+  [FloorLevel.VOID]: [MonsterKind.PARAGRAPH, MonsterKind.EYE, MonsterKind.SPIRIT, MonsterKind.SAFEGUARD],
 };
+const DEBUG_PERMIT_PACK = [
+  'official_permit_slip',
+  'forged_permit_slip',
+  'raionsovet_floor_pass',
+  'forged_raionsovet_pass',
+  'bank_debt_paper',
+  'forged_bank_debt_paper',
+  'debt_settlement_receipt',
+  'confiscation_warrant',
+  'ministry_clean_stamp',
+  'blank_form',
+  'ink_bottle',
+] as const;
 let catalogDebugSearchIndex = 0;
 let debugVerificationContractIndex = 0;
 let debugEconomyPulseIndex = 0;
 let debugFloorInstanceCursor = 0;
+
+type BaseDebugCommandId =
+  | 'spawn_all_weapons'
+  | 'spawn_monsters'
+  | 'spawn_npc'
+  | 'spawn_items'
+  | 'grant_xp'
+  | 'cycle_samosbor_variant'
+  | 'toggle_noclip'
+  | 'recent_events'
+  | 'economy_prices'
+  | 'nearby_containers'
+  | 'take_from_container'
+  | 'force_production_tick'
+  | 'spawn_system_contract'
+  | 'balance_catalog'
+  | 'elevator_instances'
+  | 'void_protocols'
+  | 'faction_events'
+  | 'force_faction_event'
+  | 'force_cult_procession'
+  | 'samosbor_director_state'
+  | 'force_samosbor_director_beat'
+  | 'clear_samosbor_director_cooldowns'
+  | 'teleport_ministry'
+  | 'teleport_kvartiry'
+  | 'teleport_living'
+  | 'teleport_maintenance'
+  | 'teleport_hell'
+  | 'teleport_void'
+  | 'teleport_random_procedural'
+  | 'smoke_expedition_setup'
+  | 'rare_samosbor'
+  | 'force_maronary_samosbor'
+  | 'route_cue_nearest'
+  | 'force_maronary_wrong_door'
+  | 'grant_maronary_shaving'
+  | 'force_istotit_samosbor'
+  | 'teleport_smog'
+  | 'teleport_false_safe_block'
+  | 'teleport_hladon'
+  | 'govnyak_courier_contract'
+  | 'force_pneumomail_capsule'
+  | 'force_hermodoor_borer'
+  | 'force_liquidator_cult_clash'
+  | 'toggle_onepunchman'
+  | 'grant_net_terminal_gen_access'
+  | 'place_net_terminal_gen_terminals'
+  | 'place_net_terminal_gen_in_front'
+  | 'open_map_editor'
+  | 'net_terminal_gen_status'
+  | 'replay_current_map_patch'
+  | 'clear_current_map_patch'
+  | 'teleport_fractal_floor'
+  | 'teleport_mirror_run'
+  | 'teleport_radio_chess'
+  | 'teleport_cement_memory'
+  | 'teleport_conveyor_sorter'
+  | 'teleport_wall_snake'
+  | 'teleport_section_shift'
+  | 'teleport_conway_life'
+  | 'teleport_rail_trains'
+  | 'spawn_bad_apple_world'
+  | 'verification_contract_route'
+  | 'publish_verification_event'
+  | 'route_floor_summary'
+  | 'arm_floor_instance'
+  | 'samosbor_warning_window'
+  | 'economy_scarcity_pulse'
+  | 'floor_monster_pack'
+  | 'route_to_container'
+  | 'teleport_zombie_apocalypse'
+  | 'expedition_proof_prep'
+  | 'expedition_proof_lift_ready'
+  | 'expedition_proof_collectors_arrival'
+  | 'expedition_proof_risk'
+  | 'expedition_proof_container'
+  | 'expedition_proof_samosbor_warning'
+  | 'expedition_proof_return'
+  | 'grant_permit_pack'
+  | 'check_permit_access'
+  | 'spoil_permit'
+  | 'debug_samosbor_small_wave';
+
+const DESIGN_FLOOR_COMMAND_ID_PREFIX = 'teleport_design_floor:';
+
+export type DebugCommandId = BaseDebugCommandId | `${typeof DESIGN_FLOOR_COMMAND_ID_PREFIX}${DesignFloorId}`;
+
+interface DebugCommandDef {
+  id: DebugCommandId;
+  label: string;
+}
 
 export type DebugCommandAction =
   | { type: 'teleport_story_floor'; floor: FloorLevel }
@@ -191,6 +330,167 @@ function debugRouteWindowLines(state: GameState): string[] {
     routeEntryLine('up', resolveFloorRunRoute(state, LiftDirection.UP)),
     routeEntryLine('down', resolveFloorRunRoute(state, LiftDirection.DOWN)),
   ];
+}
+
+interface DebugRouteFloorMetrics {
+  passableCells: number;
+  reachableCells: number;
+  rooms: number;
+  reachableRooms: number;
+  functionalRooms: number;
+  reachableFunctionalRooms: number;
+  lifts: number;
+  liftsUp: number;
+  liftsDown: number;
+  reachableLifts: number;
+  reachableLiftsUp: number;
+  reachableLiftsDown: number;
+  playerBad: number;
+  entityBad: number;
+  containerBad: number;
+}
+
+function isDebugPassableCell(cell: number): boolean {
+  return cell === Cell.FLOOR || cell === Cell.WATER || cell === Cell.DOOR;
+}
+
+function addDebugReachableRoom(world: World, roomSeen: Uint8Array, ci: number): void {
+  const roomId = world.roomMap[ci];
+  if (roomId >= 0 && roomId < roomSeen.length) roomSeen[roomId] = 1;
+}
+
+function countDebugBadPlacements(world: World, player: Entity, entities: Entity[]): Pick<DebugRouteFloorMetrics, 'playerBad' | 'entityBad' | 'containerBad'> {
+  const playerBad = world.solid(Math.floor(player.x), Math.floor(player.y)) ? 1 : 0;
+  let entityBad = 0;
+  for (const e of entities) {
+    if (!e.alive || e.type === EntityType.PLAYER || e.type === EntityType.PROJECTILE || e.phasing) continue;
+    if (world.solid(Math.floor(e.x), Math.floor(e.y))) entityBad++;
+  }
+  let containerBad = 0;
+  for (const c of world.containers) {
+    if (world.solid(c.x, c.y)) containerBad++;
+  }
+  return { playerBad, entityBad, containerBad };
+}
+
+function debugRouteFloorMetrics(world: World, player: Entity, entities: Entity[]): DebugRouteFloorMetrics {
+  const reachable = new Uint8Array(W * W);
+  const queue = new Int32Array(W * W);
+  const roomSeen = new Uint8Array(world.rooms.length);
+  let passableCells = 0;
+  let lifts = 0;
+  let liftsUp = 0;
+  let liftsDown = 0;
+
+  for (let i = 0; i < W * W; i++) {
+    const cell = world.cells[i];
+    if (isDebugPassableCell(cell)) passableCells++;
+    if (cell !== Cell.LIFT) continue;
+    lifts++;
+    if (world.liftDir[i] === LiftDirection.UP) liftsUp++;
+    else liftsDown++;
+  }
+
+  let head = 0;
+  let tail = 0;
+  let reachableCells = 0;
+  const start = world.idx(Math.floor(player.x), Math.floor(player.y));
+  if (isDebugPassableCell(world.cells[start])) {
+    reachable[start] = 1;
+    queue[tail++] = start;
+    reachableCells = 1;
+    addDebugReachableRoom(world, roomSeen, start);
+  }
+
+  while (head < tail) {
+    const ci = queue[head++];
+    const x = ci % W;
+    const y = (ci / W) | 0;
+    for (const [dx, dy] of DEBUG_ROUTE_FLOOD_DIRS) {
+      const ni = world.idx(x + dx, y + dy);
+      if (reachable[ni] || !isDebugPassableCell(world.cells[ni])) continue;
+      reachable[ni] = 1;
+      queue[tail++] = ni;
+      reachableCells++;
+      addDebugReachableRoom(world, roomSeen, ni);
+    }
+  }
+
+  let reachableLifts = 0;
+  let reachableLiftsUp = 0;
+  let reachableLiftsDown = 0;
+  for (let i = 0; i < W * W; i++) {
+    if (world.cells[i] !== Cell.LIFT) continue;
+    const x = i % W;
+    const y = (i / W) | 0;
+    let ok = false;
+    for (const [dx, dy] of DEBUG_ROUTE_FLOOD_DIRS) {
+      if (reachable[world.idx(x + dx, y + dy)]) {
+        ok = true;
+        break;
+      }
+    }
+    if (!ok) continue;
+    reachableLifts++;
+    if (world.liftDir[i] === LiftDirection.UP) reachableLiftsUp++;
+    else reachableLiftsDown++;
+  }
+
+  let reachableRooms = 0;
+  let functionalRooms = 0;
+  let reachableFunctionalRooms = 0;
+  for (const room of world.rooms) {
+    if (roomSeen[room.id]) reachableRooms++;
+    if (room.type === RoomType.CORRIDOR) continue;
+    functionalRooms++;
+    if (roomSeen[room.id]) reachableFunctionalRooms++;
+  }
+
+  return {
+    passableCells,
+    reachableCells,
+    rooms: world.rooms.length,
+    reachableRooms,
+    functionalRooms,
+    reachableFunctionalRooms,
+    lifts,
+    liftsUp,
+    liftsDown,
+    reachableLifts,
+    reachableLiftsUp,
+    reachableLiftsDown,
+    ...countDebugBadPlacements(world, player, entities),
+  };
+}
+
+function debugRouteFloorSummaryLines(world: World, player: Entity, entities: Entity[], state: GameState): string[] {
+  const entry = currentFloorRunEntry(state);
+  const metrics = debugRouteFloorMetrics(world, player, entities);
+  const badPlacements = metrics.playerBad + metrics.entityBad + metrics.containerBad;
+  const story = entry.storyFloor !== undefined ? FloorLevel[entry.storyFloor] : 'none';
+  const design = entry.designFloorId ?? 'none';
+  const procedural = entry.spec?.key ?? 'none';
+  const anomaly = entry.spec?.anomalyId ?? 'none';
+  const out = [
+    `identity z=${formatDebugZ(entry.z)} route=${floorRunEntryRouteId(entry)} kind=${floorRunEntryKind(entry)} base=${FloorLevel[entry.baseFloor]} story=${story} design=${design} procedural=${procedural}`,
+    `label=${entry.label}`,
+    floorInstanceIdentityLine(state),
+    `reach cells=${metrics.reachableCells}/${metrics.passableCells} rooms=${metrics.reachableRooms}/${metrics.rooms} functional=${metrics.reachableFunctionalRooms}/${metrics.functionalRooms}`,
+    `lifts reachable=${metrics.reachableLifts}/${metrics.lifts} up=${metrics.reachableLiftsUp}/${metrics.liftsUp} down=${metrics.reachableLiftsDown}/${metrics.liftsDown}`,
+    `anomaly spec=${anomaly} teleports=${world.anomalyTeleports.size} smogCells=${world.anomalySmogCells.length} smogHandled=${world.anomalySmogHandled ? 1 : 0} railTracks=${world.railTracks.length} railTrains=${world.railTrains.length}`,
+    `bad placements=${badPlacements} player=${metrics.playerBad} entities=${metrics.entityBad} containers=${metrics.containerBad}`,
+  ];
+  if (entry.spec) {
+    out.push(`procedural geom=${entry.spec.geometryId} faction=${entry.spec.majorityId} danger=${entry.spec.danger} seed=${entry.spec.seed}`);
+  }
+  for (const line of debugRouteWindowLines(state)) out.push(line);
+  for (const line of summarizeFloorRun(state).slice(0, 4)) out.push(`run ${line}`);
+  for (const line of summarizeFloorInstances(state).slice(0, 3)) out.push(`lift ${line}`);
+  for (const line of summarizeProceduralSmog(world, state).slice(0, 2)) out.push(line);
+  for (const line of summarizeCarnivorousFungus(world, 2)) out.push(line);
+  for (const line of summarizeHladonColdPockets(world, player, 2)) out.push(line);
+  for (const line of summarizeBadAppleWorld(world).slice(0, 2)) out.push(line);
+  return out;
 }
 
 function spawnDebugVerificationContract(state: GameState): string[] {
@@ -312,9 +612,10 @@ function spawnDebugMonsterPack(
   nextEntityId: { v: number },
 ): string[] {
   const kinds = DEBUG_MONSTER_PACKS[state.currentFloor];
+  const slots = entitySpawnSlots(entities, EntityType.MONSTER, kinds.length);
   let spawned = 0;
   const names: string[] = [];
-  for (let i = 0; i < kinds.length; i++) {
+  for (let i = 0; i < kinds.length && spawned < slots; i++) {
     const kind = kinds[i];
     const def = MONSTERS[kind];
     const spot = findDebugMonsterSpot(world, player, entities, i, kinds.length);
@@ -466,6 +767,7 @@ function setSamosborWarningWindow(state: GameState): string {
 }
 
 function spawnSmokeTarget(world: World, player: Entity, entities: Entity[], state: GameState, nextEntityId: { v: number }): boolean {
+  if (!canSpawnEntityType(entities, EntityType.MONSTER)) return false;
   const def = MONSTERS[MonsterKind.SBORKA];
   const baseAngles = [player.angle, player.angle + 0.45, player.angle - 0.45, player.angle + Math.PI];
   for (const angle of baseAngles) {
@@ -489,6 +791,43 @@ function spawnSmokeTarget(world: World, player: Entity, entities: Entity[], stat
     }
   }
   return false;
+}
+
+function grantDebugPermitPack(player: Entity): string[] {
+  const granted: string[] = [];
+  for (const id of DEBUG_PERMIT_PACK) {
+    if (addItem(player, id, 1)) granted.push(ITEMS[id]?.name ?? id);
+  }
+  return granted.length > 0
+    ? [`выдано: ${granted.slice(0, 6).join(', ')}${granted.length > 6 ? ` +${granted.length - 6}` : ''}`]
+    : ['нет места под документы'];
+}
+
+function debugPermitTagForFloor(floor: FloorLevel): PermitAccessTag {
+  if (floor === FloorLevel.MINISTRY) return 'ministry_n3';
+  if (floor === FloorLevel.KVARTIRY) return 'quarantine';
+  return 'general_admin';
+}
+
+function checkDebugPermitAccess(world: World, player: Entity, state: GameState): string[] {
+  const preferred = debugPermitTagForFloor(state.currentFloor);
+  const permit = findActorPermit(player, [preferred, 'general_admin', 'archive', 'bank_debt', 'bank_vault']);
+  if (!permit) return ['нет пропуска с подходящим access tag'];
+  const tag = permit.accessTags.includes(preferred) ? preferred : permit.accessTags[0];
+  recordPermitAccess(state, player, world, permit, `debug:${tag}`, tag);
+  return [`${ITEMS[permit.itemId]?.name ?? permit.itemId}: ${tag}`];
+}
+
+function spoilDebugPermit(world: World, player: Entity, state: GameState): string[] {
+  for (const slot of player.inventory ?? []) {
+    const permit = getPermitDef(slot.defId);
+    if (!permit || slot.count <= 0) continue;
+    removeItem(player, slot.defId, 1);
+    addItem(player, 'bleached_document', 1);
+    recordPermitExposure(state, player, world, permit, 'debug:spoiled_permit', 'debug_spoil');
+    return [`испорчен: ${ITEMS[permit.itemId]?.name ?? permit.itemId}`];
+  }
+  return ['нет пропуска для порчи'];
 }
 
 export function execDebugCommand(
@@ -534,7 +873,8 @@ export function execDebugCommand(
           'psi_control', 'psi_phase', 'psi_mark', 'psi_recall', 'psi_beam']
           .map(s => ({ defId: s, count: 1 })),
       ];
-      for (let i = 0; i < allItems.length; i++) {
+      const slots = entitySpawnSlots(entities, EntityType.ITEM_DROP, allItems.length);
+      for (let i = 0; i < slots; i++) {
         const ang = (i / allItems.length) * Math.PI * 2;
         entities.push({
           id: nextEntityId.v++, type: EntityType.ITEM_DROP,
@@ -549,7 +889,8 @@ export function execDebugCommand(
     }
     case 1: { // Spawn one of each monster nearby
       const kinds = Object.values(MonsterKind).filter((v): v is MonsterKind => typeof v === 'number');
-      for (let i = 0; i < kinds.length; i++) {
+      const slots = entitySpawnSlots(entities, EntityType.MONSTER, kinds.length);
+      for (let i = 0; i < slots; i++) {
         const k = kinds[i];
         const def = MONSTERS[k];
         const ang = (i / kinds.length) * Math.PI * 2;
@@ -572,6 +913,10 @@ export function execDebugCommand(
       break;
     }
     case 2: { // Spawn random NPC nearby
+      if (!canSpawnEntityType(entities, EntityType.NPC)) {
+        state.msgs.push(msg('Лимит NPC достигнут', state.time, '#f88'));
+        break;
+      }
       const nm = randomName();
       const rpg = randomRPG(player.rpg?.level ?? 1);
       const maxHp = getMaxHp(rpg);
@@ -594,7 +939,8 @@ export function execDebugCommand(
     }
     case 3: { // Spawn all items nearby
       const ids = Object.keys(ITEMS);
-      for (let i = 0; i < ids.length; i++) {
+      const slots = entitySpawnSlots(entities, EntityType.ITEM_DROP, ids.length);
+      for (let i = 0; i < slots; i++) {
         const def = ITEMS[ids[i]];
         const ang = (i / ids.length) * Math.PI * 2;
         entities.push({
@@ -910,8 +1256,8 @@ export function execDebugCommand(
       state.msgs.push(msg(`[EVENTS-DEBUG] ${publishDebugVerificationEvent(world, player, state)}`, state.time, '#ff0'));
       break;
     }
-    case 63: { // Floor route window
-      for (const line of debugRouteWindowLines(state)) state.msgs.push(msg(`[ROUTE] ${line}`, state.time, '#8cf'));
+    case 63: { // Route floor summary
+      for (const line of debugRouteFloorSummaryLines(world, player, entities, state)) state.msgs.push(msg(`[ROUTE] ${line}`, state.time, '#8cf'));
       break;
     }
     case 64: { // Arm current-floor numbered lift anomaly
@@ -937,6 +1283,54 @@ export function execDebugCommand(
       break;
     }
     case 69: return { type: 'teleport_procedural_anomaly', anomalyId: 'zombie_apocalypse' };
+    case 70: { // Expedition proof prep
+      addItem(player, 'makarov', 1);
+      addItem(player, 'ammo_9mm', 40);
+      addItem(player, 'water', 2);
+      addItem(player, 'bread', 2);
+      addItem(player, 'bandage', 2);
+      player.weapon = 'makarov';
+      const created = spawnContractById(state, EXPEDITION_PROOF_CONTRACT_ID, ['debug_route', 'expedition_proof']);
+      state.msgs.push(msg(`[EXPEDITION] prep kit=${player.weapon} contract=${created ? 'created' : 'existing'}`, state.time, '#6cf'));
+      break;
+    }
+    case 71: { // Expedition proof lift ready
+      const moved = movePlayerToSmokeLift(world, player, entities);
+      state.msgs.push(msg(`[EXPEDITION] lift=${moved ? 'ready' : 'missing'}`, state.time, moved ? '#4f4' : '#f84'));
+      break;
+    }
+    case 72: return { type: 'teleport_story_floor', floor: FloorLevel.MAINTENANCE };
+    case 73: {
+      state.msgs.push(msg(forceFactionEvent(state, world, player, entities, nextEntityId), state.time, '#ff0'));
+      break;
+    }
+    case 74: {
+      for (const line of routePlayerToNearestContainer(world, player, state)) state.msgs.push(msg(`[EXPEDITION] ${line}`, state.time, '#ccf'));
+      break;
+    }
+    case 75: {
+      state.msgs.push(msg(`[EXPEDITION] ${setSamosborWarningWindow(state)}`, state.time, '#fa4'));
+      break;
+    }
+    case 76: return { type: 'teleport_story_floor', floor: FloorLevel.LIVING };
+    case 77: {
+      for (const line of debugStartSamosborWaveAtPlayer(world, player, entities, state, 'small')) {
+        state.msgs.push(msg(`[SAMOSBOR-WAVE] ${line}`, state.time, '#c8f'));
+      }
+      return { type: 'refresh_world_data' };
+    }
+    case 78: {
+      for (const line of grantDebugPermitPack(player)) state.msgs.push(msg(`[PERMIT] ${line}`, state.time, '#fc6'));
+      break;
+    }
+    case 79: {
+      for (const line of checkDebugPermitAccess(world, player, state)) state.msgs.push(msg(`[PERMIT] ${line}`, state.time, '#fc6'));
+      break;
+    }
+    case 80: {
+      for (const line of spoilDebugPermit(world, player, state)) state.msgs.push(msg(`[PERMIT] ${line}`, state.time, '#f84'));
+      break;
+    }
   }
   return null;
 }
@@ -951,86 +1345,127 @@ const ZONE_FACTION_NAMES: Record<ZoneFaction, string> = {
   [ZoneFaction.WILD]: 'Дикие',
 };
 
-const BASE_CMD_LABELS = [
-  'Все оружия + сгустки',
-  'Спавн монстров',
-  'Спавн NPC',
-  'Спавн предметов',
-  '1 000 000 XP',
-  'Цикл варианта + самосбор',
-  'Noclip',
-  'Последние события',
-  'Цены экономики',
-  'Контейнеры рядом',
-  'Взять из контейнера',
-  'Тик производства',
-  'Системное задание: создать/список',
-  'Баланс + каталог карманов',
-  'Лифтовые инстансы',
-  'VOID: форс/список',
-  'Фракционные события',
-  'Форсировать событие фракции',
-  'Форсировать культовую процессию',
-  'Директор: состояние',
-  'Директор: force beat',
-  'Директор: clear cooldown',
-  'ТП: Министерство',
-  'ТП: Квартиры',
-  'ТП: Жилая зона',
-  'ТП: Коллекторы',
-  'ТП: Мясной низ',
-  'ТП: Пустота',
-  'ТП: случайный процедурный',
-  'Smoke: expedition setup',
-  'ВЕРЕТАР: force + самосбор',
-  'МАРОНАРИЙ: force + самосбор',
-  'Route cue: trigger nearest',
-  'МАРОНАРИЙ: wrong door',
-  'МАРОНАРИЙ: выдать стружку',
-  'ИСТОТИТ: force + самосбор',
-  'ТП: говнячный смог',
-  'ТП: тихий блок',
-  'ТП: хладон',
-  'ГОВНЯК: курьерский пакет',
-  'ПНЕВМОПОЧТА: капсула',
-  'ГЕРМО: точильщик QA',
-  'Форсировать стычку ликвидаторов и культа',
-  'ONEPUNCHMAN',
-  'НЕТ-ГЕН: выдать доступ',
-  'НЕТ-ГЕН: расставить терминалы',
-  'НЕТ-ГЕН: терминал перед игроком',
-  'НЕТ-ГЕН: открыть редактор карты',
-  'НЕТ-ГЕН: статус',
-  'MAPEDIT: replay current patch',
-  'MAPEDIT: clear current patch',
-  'ТП: фрактал',
-  'ТП: зеркало',
-  'ТП: радио-шахматы',
-  'ТП: цементная память',
-  'ТП: конвейер',
-  'ТП: змейка',
-  'ТП: секционный сдвиг',
-  'ТП: игра жизнь',
-  'ТП: поезда',
-  'BAD APPLE: экран рядом',
-  'VERIFY: контрактный маршрут',
-  'VERIFY: событие в лог/слух',
-  'VERIFY: окно лифтового маршрута',
-  'VERIFY: номерная петля лифта',
-  'VERIFY: окно предупреждения самосбора',
-  'VERIFY: дефицит экономики',
-  'VERIFY: монстры этажа',
-  'VERIFY: маршрут к контейнеру',
-  'ТП: зомби-апокалипсис',
-];
+const BASE_CMD_DEFS = [
+  { id: 'spawn_all_weapons', label: 'Все оружия + сгустки' },
+  { id: 'spawn_monsters', label: 'Спавн монстров' },
+  { id: 'spawn_npc', label: 'Спавн NPC' },
+  { id: 'spawn_items', label: 'Спавн предметов' },
+  { id: 'grant_xp', label: '1 000 000 XP' },
+  { id: 'cycle_samosbor_variant', label: 'Цикл варианта + самосбор' },
+  { id: 'toggle_noclip', label: 'Noclip' },
+  { id: 'recent_events', label: 'Последние события' },
+  { id: 'economy_prices', label: 'Цены экономики' },
+  { id: 'nearby_containers', label: 'Контейнеры рядом' },
+  { id: 'take_from_container', label: 'Взять из контейнера' },
+  { id: 'force_production_tick', label: 'Тик производства' },
+  { id: 'spawn_system_contract', label: 'Системное задание: создать/список' },
+  { id: 'balance_catalog', label: 'Баланс + каталог карманов' },
+  { id: 'elevator_instances', label: 'Лифтовые инстансы' },
+  { id: 'void_protocols', label: 'VOID: форс/список' },
+  { id: 'faction_events', label: 'Фракционные события' },
+  { id: 'force_faction_event', label: 'Форсировать событие фракции' },
+  { id: 'force_cult_procession', label: 'Форсировать культовую процессию' },
+  { id: 'samosbor_director_state', label: 'Директор: состояние' },
+  { id: 'force_samosbor_director_beat', label: 'Директор: force beat' },
+  { id: 'clear_samosbor_director_cooldowns', label: 'Директор: clear cooldown' },
+  { id: 'teleport_ministry', label: 'ТП: Министерство' },
+  { id: 'teleport_kvartiry', label: 'ТП: Квартиры' },
+  { id: 'teleport_living', label: 'ТП: Жилая зона' },
+  { id: 'teleport_maintenance', label: 'ТП: Коллекторы' },
+  { id: 'teleport_hell', label: 'ТП: Мясной низ' },
+  { id: 'teleport_void', label: 'ТП: Пустота' },
+  { id: 'teleport_random_procedural', label: 'ТП: случайный процедурный' },
+  { id: 'smoke_expedition_setup', label: 'Smoke: expedition setup' },
+  { id: 'rare_samosbor', label: 'ВЕРЕТАР: force + самосбор' },
+  { id: 'force_maronary_samosbor', label: 'МАРОНАРИЙ: force + самосбор' },
+  { id: 'route_cue_nearest', label: 'Route cue: trigger nearest' },
+  { id: 'force_maronary_wrong_door', label: 'МАРОНАРИЙ: wrong door' },
+  { id: 'grant_maronary_shaving', label: 'МАРОНАРИЙ: выдать стружку' },
+  { id: 'force_istotit_samosbor', label: 'ИСТОТИТ: force + самосбор' },
+  { id: 'teleport_smog', label: 'ТП: говнячный смог' },
+  { id: 'teleport_false_safe_block', label: 'ТП: тихий блок' },
+  { id: 'teleport_hladon', label: 'ТП: хладон' },
+  { id: 'govnyak_courier_contract', label: 'ГОВНЯК: курьерский пакет' },
+  { id: 'force_pneumomail_capsule', label: 'ПНЕВМОПОЧТА: капсула' },
+  { id: 'force_hermodoor_borer', label: 'ГЕРМО: точильщик QA' },
+  { id: 'force_liquidator_cult_clash', label: 'Форсировать стычку ликвидаторов и культа' },
+  { id: 'toggle_onepunchman', label: 'ONEPUNCHMAN' },
+  { id: 'grant_net_terminal_gen_access', label: 'НЕТ-ГЕН: выдать доступ' },
+  { id: 'place_net_terminal_gen_terminals', label: 'НЕТ-ГЕН: расставить терминалы' },
+  { id: 'place_net_terminal_gen_in_front', label: 'НЕТ-ГЕН: терминал перед игроком' },
+  { id: 'open_map_editor', label: 'НЕТ-ГЕН: открыть редактор карты' },
+  { id: 'net_terminal_gen_status', label: 'НЕТ-ГЕН: статус' },
+  { id: 'replay_current_map_patch', label: 'MAPEDIT: replay current patch' },
+  { id: 'clear_current_map_patch', label: 'MAPEDIT: clear current patch' },
+  { id: 'teleport_fractal_floor', label: 'ТП: фрактал' },
+  { id: 'teleport_mirror_run', label: 'ТП: зеркало' },
+  { id: 'teleport_radio_chess', label: 'ТП: радио-шахматы' },
+  { id: 'teleport_cement_memory', label: 'ТП: цементная память' },
+  { id: 'teleport_conveyor_sorter', label: 'ТП: конвейер' },
+  { id: 'teleport_wall_snake', label: 'ТП: змейка' },
+  { id: 'teleport_section_shift', label: 'ТП: секционный сдвиг' },
+  { id: 'teleport_conway_life', label: 'ТП: игра жизнь' },
+  { id: 'teleport_rail_trains', label: 'ТП: поезда' },
+  { id: 'spawn_bad_apple_world', label: 'BAD APPLE: экран рядом' },
+  { id: 'verification_contract_route', label: 'VERIFY: контрактный маршрут' },
+  { id: 'publish_verification_event', label: 'VERIFY: событие в лог/слух' },
+  { id: 'route_floor_summary', label: 'ROUTE: floor summary' },
+  { id: 'arm_floor_instance', label: 'VERIFY: номерная петля лифта' },
+  { id: 'samosbor_warning_window', label: 'VERIFY: окно предупреждения самосбора' },
+  { id: 'economy_scarcity_pulse', label: 'VERIFY: дефицит экономики' },
+  { id: 'floor_monster_pack', label: 'VERIFY: монстры этажа' },
+  { id: 'route_to_container', label: 'VERIFY: маршрут к контейнеру' },
+  { id: 'teleport_zombie_apocalypse', label: 'ТП: зомби-апокалипсис' },
+  { id: 'expedition_proof_prep', label: 'EXPEDITION: подготовка' },
+  { id: 'expedition_proof_lift_ready', label: 'EXPEDITION: лифт готов' },
+  { id: 'expedition_proof_collectors_arrival', label: 'EXPEDITION: прибытие в Коллекторы' },
+  { id: 'expedition_proof_risk', label: 'EXPEDITION: риск маршрута' },
+  { id: 'expedition_proof_container', label: 'EXPEDITION: контейнер маршрута' },
+  { id: 'expedition_proof_samosbor_warning', label: 'EXPEDITION: предупреждение самосбора' },
+  { id: 'expedition_proof_return', label: 'EXPEDITION: возврат домой' },
+  { id: 'debug_samosbor_small_wave', label: 'SAMOSBOR: малая волна у игрока' },
+  { id: 'grant_permit_pack', label: 'PERMIT: выдать пакет' },
+  { id: 'check_permit_access', label: 'PERMIT: проверить доступ' },
+  { id: 'spoil_permit', label: 'PERMIT: испортить пропуск' },
+] as const satisfies readonly DebugCommandDef[];
 
-const DESIGN_FLOOR_COMMAND_START = BASE_CMD_LABELS.length;
-const CMD_LABELS = [
-  ...BASE_CMD_LABELS,
-  ...DESIGN_FLOOR_ROUTES.map(def => `ТП: ${def.displayName} (${def.z > 0 ? `+${def.z}` : def.z})`),
+function designFloorCommandId(id: DesignFloorId): DebugCommandId {
+  return `${DESIGN_FLOOR_COMMAND_ID_PREFIX}${id}` as DebugCommandId;
+}
+
+const DESIGN_FLOOR_COMMAND_START = BASE_CMD_DEFS.length;
+const CMD_DEFS: readonly DebugCommandDef[] = [
+  ...BASE_CMD_DEFS,
+  ...DESIGN_FLOOR_ROUTES.map(def => ({
+    id: designFloorCommandId(def.id),
+    label: `ТП: ${def.displayName} (${def.z > 0 ? `+${def.z}` : def.z})`,
+  })),
 ];
+const CMD_LABELS = CMD_DEFS.map(def => def.label);
+const DEBUG_COMMAND_INDEX_BY_ID = new Map<DebugCommandId, number>();
+for (let i = 0; i < CMD_DEFS.length; i++) DEBUG_COMMAND_INDEX_BY_ID.set(CMD_DEFS[i].id, i);
 
 export const DEBUG_COMMAND_COUNT = CMD_LABELS.length;
+
+export function getDebugCommandIds(): readonly DebugCommandId[] {
+  return CMD_DEFS.map(def => def.id);
+}
+
+export function getDebugCommandIndex(id: DebugCommandId): number {
+  return DEBUG_COMMAND_INDEX_BY_ID.get(id) ?? -1;
+}
+
+declare global {
+  interface Window {
+    __gigahrushDebugCommandIndex?: (id: DebugCommandId) => number;
+    __gigahrushDebugCommandIds?: () => readonly DebugCommandId[];
+  }
+}
+
+if (typeof window !== 'undefined') {
+  window.__gigahrushDebugCommandIndex = getDebugCommandIndex;
+  window.__gigahrushDebugCommandIds = getDebugCommandIds;
+}
 
 export function drawDebugOverlay(
   ctx: CanvasRenderingContext2D,
@@ -1128,7 +1563,12 @@ export function drawDebugOverlay(
   row(`Комнаты: ${funcRooms}  Лифты: ${lifts} (↑${liftsUp} ↓${liftsDown})`, '#aaa');
   row(`Noclip: ${isDebugNoClipEnabled() ? 'ON' : 'OFF'}`, isDebugNoClipEnabled() ? '#ff0' : '#666');
   row(`ONEPUNCHMAN: ${isDebugOnePunchManEnabled() ? 'ON' : 'OFF'}`, isDebugOnePunchManEnabled() ? '#ff0' : '#666');
+  const ai = getAiSchedulerStats();
+  row(`AI LOD: H${ai.hot}/${ai.updatedHot} W${ai.warm}/${ai.updatedWarm} C${ai.cold}/${ai.updatedCold} skip ${ai.skipped}`, '#9cf');
+  row(`AI важн: plot ${ai.plot} boss ${ai.bosses} atk ${ai.activeAttackers} dmg ${ai.recentlyDamaged} proj ${ai.projectileOwners}/${ai.projectiles}`, '#9cf');
   for (const line of summarizeFloorRun(state).slice(0, 2)) row(`Этажи: ${line}`, '#8cf');
+  const playerEntity = entities.find(e => e.type === EntityType.PLAYER);
+  for (const line of summarizeRoomMemoryForRoom(state.currentFloor, playerEntity ? currentPlayerRoom(world, playerEntity) : undefined)) row(line, '#dc9');
   for (const line of summarizeProceduralSmog(world, state).slice(0, 2)) row(`Смог: ${line}`, '#b98');
   for (const line of summarizeBadAppleWorld(world).slice(0, 2)) row(`BadApple: ${line}`, '#eee');
   for (const line of summarizeFloorInstances(state).slice(0, 2)) row(`Лифт: ${line}`, '#f4a');

@@ -43,6 +43,7 @@ export function generateSprites(): SpriteData[] {
     // Auto-assign projSprite for ranged monsters
     if (def.isRanged && (def.projSprite === undefined || def.projSprite === 0)) {
       def.projSprite = kind === MonsterKind.EYE ? Spr.EYE_BOLT
+                     : kind === MonsterKind.PARAGRAPH ? Spr.PARAGRAPH_BOLT
                      : kind === MonsterKind.ROBOT ? Spr.HOSTILE_PLASMA_BOLT
                      : kind === MonsterKind.MANCOBUS ? Spr.HOSTILE_FLAME_BOLT
                      : Spr.HOSTILE_PSI_BOLT;
@@ -50,6 +51,7 @@ export function generateSprites(): SpriteData[] {
   }
   // Eye bolt projectile
   sprites.push(EYE_BOLT_SPRITE());
+  sprites.push(gen_paragraphBoltSprite());
   // Desk
   sprites.push(gen_deskSprite());
   for (const feature of SPRITE_FEATURES) sprites.push(gen_featureSprite(feature));
@@ -436,6 +438,53 @@ function gen_nailSprite(): SpriteData {
       if (a > 10) t[y * S + x] = rgba(180, 160, 100, a);
     }
   }
+  return t;
+}
+
+/* ── Paragraph bolt: stamped paper clause with red hostile aura ─ */
+function gen_paragraphBoltSprite(): SpriteData {
+  const t = new Uint32Array(S * S).fill(CLEAR);
+  const cx = S / 2, cy = S / 2;
+
+  for (let y = 6; y < 58; y++) for (let x = 11; x < 53; x++) {
+    const dx = x - cx;
+    const dy = y - cy;
+    const shear = Math.sin(y * 0.22) * 2.4 + dy * 0.16;
+    const px = dx - shear;
+    const paper = Math.abs(px) < 7.5 && Math.abs(dy) < 23;
+    const fold = Math.abs(px - 5.5) < 1.1 && Math.abs(dy) < 19;
+    const edge = Math.abs(px) > 6.2 || Math.abs(dy) > 21;
+    const aura = Math.abs(px) < 14 && Math.abs(dy) < 29 && noise(x * 2, y * 2, 6401) > 0.38;
+    if (paper) {
+      const n = noise(x, y, 6402) * 18 - 9;
+      t[y * S + x] = edge || fold
+        ? rgba(clamp(178 + n), clamp(158 + n), clamp(115 + n), 245)
+        : rgba(clamp(230 + n), clamp(220 + n), clamp(175 + n), 250);
+    } else if (aura) {
+      const dist = Math.max(Math.abs(px) / 14, Math.abs(dy) / 29);
+      const a = clamp(Math.floor((1 - dist) * 120));
+      if (a > 12) t[y * S + x] = rgba(235, 36, 118, a);
+    }
+  }
+
+  for (let y = 16; y <= 45; y += 6) {
+    const len = 8 + Math.floor(noise(y, 1, 6403) * 8);
+    const off = Math.floor(Math.sin(y * 0.22) * 2.4);
+    for (let x = cx - 7; x < cx - 7 + len; x++) {
+      const px = x + off;
+      if (px >= 0 && px < S) t[y * S + px] = rgba(24, 20, 17, 235);
+    }
+  }
+
+  for (let y = 33; y <= 45; y++) for (let x = 34; x <= 45; x++) {
+    const dx = (x - 39.5) / 5.5;
+    const dy = (y - 39) / 5.5;
+    if (dx * dx + dy * dy < 1) {
+      const rim = dx * dx + dy * dy > 0.55;
+      t[y * S + x] = rim ? rgba(245, 48, 72, 240) : rgba(138, 12, 28, 220);
+    }
+  }
+
   return t;
 }
 

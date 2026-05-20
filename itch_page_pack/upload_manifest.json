@@ -2,6 +2,32 @@
   "project": "GIGAH|RUSH",
   "public_url": "https://tenevik.itch.io/gigahrush",
   "editor_url": "https://itch.io/game/edit/4587160",
+  "public_probe": {
+    "mode": "logged_out_public_get",
+    "url": "https://tenevik.itch.io/gigahrush",
+    "release_marker": "MACRO2_73-public-live-2026-05-20",
+    "assertions": {
+      "title_markers": [
+        "GIGAH|RUSH"
+      ],
+      "copy_markers": [
+        "Вылазки, патроны и самосбор",
+        "ГИГАХРУЩ - это вылазки",
+        "https://gigahrush.bileter.workers.dev"
+      ],
+      "key_image_markers": [
+        "gigahrush_cover_630x500",
+        "gigahrush_screen_01_combat",
+        "gigahrush_screen_02_contract",
+        "gigahrush_screen_03_inventory",
+        "gigahrush_screen_04_act_hall"
+      ],
+      "version_markers": [
+        "MACRO2_73-public-live-2026-05-20"
+      ]
+    },
+    "credential_policy": "No credentials are required or sent by the normal public probe path."
+  },
   "default_description": "description_ru_overkill.html",
   "fallback_description": "description_ru_overkill.md",
   "core_fields": {

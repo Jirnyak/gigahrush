@@ -21,9 +21,10 @@ import { isDebugOnePunchManEnabled, keepDebugOnePunchManAlive } from '../debug_c
 import { entityDisplayName } from '../../entities/monster';
 import { bfsPath, followPath, tryAssignPathToCell } from './pathfinding';
 import { Spr, hostileProjectileSprite } from '../../render/sprite_index';
-import { findCombatTarget, dropNpcInventory, deterministicScanCd } from './monster';
+import { findCombatTarget, dropNpcInventory, deterministicScanCd, hasClearLineOfFire } from './monster';
 import { recordPlayerDamage } from '../damage';
 import { ENTITY_MASK_MONSTER, getEntityIndex } from '../entity_index';
+import { publishWeaponNoise } from '../noise';
 import {
   bark,
   BARK_COMBAT_START, BARK_COMBAT_START_F, BARK_CHANCE_COMBAT,
@@ -114,6 +115,8 @@ export function tryFleeFromMonster(
   const fleeY = world.wrap(Math.floor(e.y + ny * NPC_FLEE_DIST));
   ai.path = bfsPath(world, Math.floor(e.x), Math.floor(e.y), fleeX, fleeY);
   ai.pi = 0;
+  ai.tx = fleeX;
+  ai.ty = fleeY;
   ai.timer = 3;
 
   const savedSpeed = e.speed;
@@ -128,6 +131,8 @@ const NPC_COMBAT_RANGE = 8;
 const NPC_ATTACK_RANGE = 1.3;
 const NPC_COMBAT_CD = 1.2;
 const NPC_RANGED_MAX = 12;
+const NPC_RANGED_MIN = 1.5;
+const NPC_RANGED_LOS_BREAK_CD = 0.45;
 const MELEE_KNOCKBACK_CAP = 0.65;
 const MELEE_STAGGER_CAP = 0.35;
 
@@ -166,36 +171,54 @@ export function tryFactionCombat(
     bark(e, msgs, _time, BARK_COMBAT_START, BARK_COMBAT_START_F, BARK_CHANCE_COMBAT, '#fa8');
   }
   ai.combatTargetId = target.id;
+  ai.goal = AIGoal.HUNT;
 
   const bestDist = Math.sqrt(world.dist2(e.x, e.y, target.x, target.y));
   const atkSpeedMod = e.rpg ? agiAttackSpeedMult(e.rpg) : 1;
 
-  // Ranged NPC: fire projectile if in range
-  if (ws.isRanged && bestDist < NPC_RANGED_MAX && bestDist > 1.5) {
-    e.attackCd = (e.attackCd ?? 0) - dt;
-    if (e.attackCd! <= 0) {
-      if (ws.psiCost) {
-        if (!e.rpg || e.rpg.psi < ws.psiCost) {
-          npcAutoEquipBestWeapon(e);
-          // Out of PSI — fall through to melee
-        } else {
-          e.rpg.psi -= ws.psiCost;
-          npcFireProjectile(e, target, ws, entities, nextId);
-          playSoundAt(playHostilePsiCast, e.x, e.y);
-          e.attackCd = ws.speed * atkSpeedMod;
-          return true;
+  // Ranged NPC: telegraph line-of-fire before committing the shot.
+  if (ws.isRanged && bestDist < NPC_RANGED_MAX && bestDist > NPC_RANGED_MIN) {
+    const currentTarget = ai.windupTargetId === undefined || ai.windupTargetId === target.id;
+    const lineClear = currentTarget && target.alive && hasClearLineOfFire(world, e, target, NPC_RANGED_MAX);
+
+    if ((ai.windupTimer ?? 0) > 0) {
+      ai.windupTimer = Math.max(0, (ai.windupTimer ?? 0) - dt);
+      const dx = world.delta(e.x, target.x);
+      const dy = world.delta(e.y, target.y);
+      e.angle = Math.atan2(dy, dx);
+      if (!lineClear) {
+        ai.windupTimer = undefined;
+        ai.windupTargetId = undefined;
+        e.attackCd = Math.max(e.attackCd ?? 0, NPC_RANGED_LOS_BREAK_CD);
+        if (target.type === EntityType.PLAYER) {
+          msgs.push(msg(`${entityDisplayName(e)} потерял линию огня. Укрытие сработало.`, _time, '#9cf'));
         }
-      } else if (ws.ammoType) {
-        if (consumeAmmo(e)) {
-          npcFireProjectile(e, target, ws, entities, nextId);
-          playSoundAt(hostileWeaponSound(e.weapon ?? ''), e.x, e.y);
-          e.attackCd = ws.speed * atkSpeedMod;
+        return true;
+      }
+
+      if (ai.windupTimer <= 0) {
+        if (npcCommitRangedShot(world, e, target, ws, entities, nextId, atkSpeedMod, state)) return true;
+        npcAutoEquipBestWeapon(e);
+        e.attackCd = Math.max(e.attackCd ?? 0, 0.35);
+      }
+      return true;
+    }
+
+    if (lineClear) {
+      e.attackCd = (e.attackCd ?? 0) - dt;
+      if (e.attackCd! <= 0) {
+        if (npcCanStartRangedWindup(e, ws)) {
+          ai.windupTimer = npcRangedWindupSec(ws);
+          ai.windupTargetId = target.id;
+          if (target.type === EntityType.PLAYER && npcRangedShouldLog(ws)) {
+            msgs.push(msg(`${entityDisplayName(e)} целится: ${npcRangedThreatLabel(ws)}. Сбейте линию или дождитесь залпа.`, _time, npcRangedCueColor(ws)));
+          }
           return true;
         }
         npcAutoEquipBestWeapon(e);
+      } else {
+        return true;
       }
-    } else {
-      return true;
     }
   }
 
@@ -251,6 +274,7 @@ export function tryFactionCombat(
       if (!e.weapon || e.weapon === '') npcAutoEquipBestWeapon(e);
     }
     playSoundAt(playAttack, e.x, e.y);
+    publishWeaponNoise(state, e, e.weapon ?? '', meleeWs);
     e.attackCd = (meleeWs.speed || NPC_COMBAT_CD) * atkSpeedMod;
   }
   return true;
@@ -279,6 +303,75 @@ function applyMeleeKnockback(world: World, source: Entity, target: Entity, ws: W
   if (target.type !== EntityType.PLAYER) target.attackCd = Math.max(target.attackCd ?? 0, stagger);
 }
 
+function npcRangedDamageScore(ws: WeaponStats): number {
+  return ws.dmg * (ws.pellets ?? 1) + (ws.aoeRadius ? 45 : 0);
+}
+
+function npcRangedWindupSec(ws: WeaponStats): number {
+  const score = npcRangedDamageScore(ws);
+  if (ws.aoeRadius || score >= 70) return 0.62;
+  if (ws.psiCost || score >= 35) return 0.42;
+  if (ws.speed <= 0.2) return 0.06;
+  return 0.22;
+}
+
+function npcRangedShouldLog(ws: WeaponStats): boolean {
+  return ws.psiCost !== undefined || ws.aoeRadius !== undefined || npcRangedDamageScore(ws) >= 20 || ws.speed > 0.2;
+}
+
+function npcRangedThreatLabel(ws: WeaponStats): string {
+  if (ws.psiCost) return 'ПСИ';
+  if (ws.aoeRadius) return 'взрыв';
+  if ((ws.pellets ?? 1) > 1) return 'дробь';
+  if (ws.projType === ProjType.FLAME) return 'огонь';
+  if (ws.projType === ProjType.BFG || (ws.projSprite === Spr.GAUSS_BOLT || ws.projSprite === Spr.PLASMA_BOLT)) return 'энергия';
+  return 'выстрел';
+}
+
+function npcRangedCueColor(ws: WeaponStats): string {
+  if (ws.psiCost) return '#c8f';
+  if (ws.aoeRadius) return '#fa4';
+  if (ws.projSprite === Spr.PLASMA_BOLT || ws.projSprite === Spr.GAUSS_BOLT) return '#6cf';
+  return '#fc8';
+}
+
+function npcCanStartRangedWindup(e: Entity, ws: WeaponStats): boolean {
+  if (ws.psiCost) return !!e.rpg && e.rpg.psi >= ws.psiCost;
+  if (!ws.ammoType) return true;
+  return e.inventory?.some(slot => slot.defId === ws.ammoType && slot.count > 0) === true;
+}
+
+function npcCommitRangedShot(
+  world: World,
+  e: Entity,
+  target: Entity,
+  ws: WeaponStats,
+  entities: Entity[],
+  nextId: { v: number },
+  atkSpeedMod: number,
+  state?: GameState,
+): boolean {
+  if (ws.psiCost) {
+    if (!e.rpg || e.rpg.psi < ws.psiCost) return false;
+    e.rpg.psi -= ws.psiCost;
+    npcFireProjectile(world, e, target, ws, entities, nextId);
+    playSoundAt(playHostilePsiCast, e.x, e.y);
+    publishWeaponNoise(state, e, e.weapon ?? '', ws);
+    e.attackCd = ws.speed * atkSpeedMod;
+    e.ai!.windupTimer = undefined;
+    e.ai!.windupTargetId = undefined;
+    return true;
+  }
+  if (ws.ammoType && !consumeAmmo(e)) return false;
+  npcFireProjectile(world, e, target, ws, entities, nextId);
+  playSoundAt(hostileWeaponSound(e.weapon ?? ''), e.x, e.y);
+  publishWeaponNoise(state, e, e.weapon ?? '', ws);
+  e.attackCd = ws.speed * atkSpeedMod;
+  e.ai!.windupTimer = undefined;
+  e.ai!.windupTargetId = undefined;
+  return true;
+}
+
 function hostileWeaponSound(weaponId: string): () => void {
   switch (weaponId) {
     case 'shotgun':
@@ -300,10 +393,12 @@ function hostileWeaponSound(weaponId: string): () => void {
 
 /* ── NPC: fire ranged projectile ──────────────────────────────── */
 function npcFireProjectile(
-  e: Entity, target: Entity, ws: typeof WEAPON_STATS[string],
+  world: World, e: Entity, target: Entity, ws: typeof WEAPON_STATS[string],
   entities: Entity[], nextId: { v: number },
 ): void {
-  const ang = Math.atan2(target.y - e.y, target.x - e.x);
+  const dx = world.delta(e.x, target.x);
+  const dy = world.delta(e.y, target.y);
+  const ang = Math.atan2(dy, dx);
   const pellets = ws.pellets ?? 1;
   const spread = ws.spread ?? 0;
   const spd = ws.projSpeed ?? 15;
@@ -314,8 +409,8 @@ function npcFireProjectile(
     const proj: Entity = {
       id: nextId.v++,
       type: EntityType.PROJECTILE,
-      x: e.x + Math.cos(ang) * 0.5,
-      y: e.y + Math.sin(ang) * 0.5,
+      x: world.wrap(e.x + Math.cos(ang) * 0.5),
+      y: world.wrap(e.y + Math.sin(ang) * 0.5),
       angle: a,
       pitch: 0,
       alive: true,

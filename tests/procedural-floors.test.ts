@@ -1,4 +1,4 @@
-import { test } from 'node:test';
+import { after, test } from 'node:test';
 import * as assert from 'node:assert/strict';
 
 import { Cell, EntityType, Feature, FloorLevel, LiftDirection, MonsterKind, W } from '../src/core/types';
@@ -10,10 +10,12 @@ import {
   PROCEDURAL_FLOOR_COUNT,
   PROCEDURAL_FLOOR_ZS,
   makeProceduralFloorSpec,
+  type ProceduralFloorSpec,
   zForStoryFloor,
 } from '../src/data/procedural_floors';
 import { DESIGN_FLOOR_ROUTES } from '../src/data/design_floors';
-import { PROCEDURAL_POPULATION_PROFILE } from '../src/data/population_profiles';
+import { ENTITY_SOFT_LIMITS } from '../src/data/entity_limits';
+import { PROCEDURAL_POPULATION_PROFILES } from '../src/data/population_profiles';
 import {
   BAD_APPLE_HEIGHT,
   BAD_APPLE_WIDTH,
@@ -21,17 +23,45 @@ import {
 } from '../src/data/bad_apple_frames';
 import {
   commitFloorRunEntry,
+  currentFloorRunEntry,
+  currentFloorRunLabel,
+  floorRunArrivalLead,
+  floorRunEntryKind,
+  floorRunEntryLiftLabel,
+  floorRunEntryMapLabel,
+  floorRunEntryRouteCard,
+  floorRunStateForSave,
   resolveFloorRunRoute,
   setFloorRunState,
 } from '../src/systems/procedural_floors';
+import {
+  floorInstanceStateForSave,
+  floorInstanceWorldKey,
+  setFloorInstanceState,
+} from '../src/systems/floor_instances';
+import {
+  currentMapEditorFloorKey,
+  getMapEditorSnapshot,
+  replayMapEditorPatchForCurrentFloor,
+  setMapEditorPatchState,
+} from '../src/systems/map_editor';
+import { currentNetTerminalGenFloorKey } from '../src/systems/net_terminal_gen';
 import { updateBadAppleWorldAnomaly } from '../src/systems/procedural_anomalies/bad_apple_world';
 import { tryZombieApocalypseInfection } from '../src/systems/procedural_anomalies/zombie_apocalypse';
 import { routeCueCount } from '../src/systems/route_cues';
+import { getEmergencyPanels } from '../src/systems/emergency_panels';
 import { generateProceduralFloor } from '../src/gen/procedural_floor';
 import { generateDesignFloor } from '../src/gen/design_floors/manifest';
 import { generateFloor } from '../src/gen/floor_manifest';
-import type { World } from '../src/core/world';
-import { makeGameState } from './helpers';
+import {
+  World,
+  auditReachability,
+  describeReachability,
+  hasReachableAdjacentCell,
+  type ReachabilityAudit,
+} from '../src/core/world';
+import { printSlowestFloorGenerators, timeFloorGeneration } from './generator_helpers';
+import { makeGameState, makeTestPlayer } from './helpers';
 
 function playableBounds(world: World): { count: number; minX: number; minY: number; maxX: number; maxY: number } {
   const out = { count: 0, minX: W, minY: W, maxX: -1, maxY: -1 };
@@ -49,6 +79,20 @@ function playableBounds(world: World): { count: number; minX: number; minY: numb
   return out;
 }
 
+function maxEntitiesInArea(entities: readonly { alive: boolean; type: EntityType; x: number; y: number }[], type: EntityType, areaSize: number): number {
+  const side = Math.ceil(W / areaSize);
+  const counts = new Int32Array(side * side);
+  let max = 0;
+  for (const entity of entities) {
+    if (!entity.alive || entity.type !== type) continue;
+    const bx = Math.min(side - 1, Math.max(0, Math.floor(entity.x / areaSize)));
+    const by = Math.min(side - 1, Math.max(0, Math.floor(entity.y / areaSize)));
+    const next = ++counts[by * side + bx];
+    if (next > max) max = next;
+  }
+  return max;
+}
+
 function assertFullFootprint(world: World, label: string): void {
   const bounds = playableBounds(world);
   assert.equal(bounds.minX, 0, `${label} minX`);
@@ -58,43 +102,140 @@ function assertFullFootprint(world: World, label: string): void {
   assert.equal(bounds.count >= 18_000, true, `${label} playable cells`);
 }
 
-function reachableCells(gen: ReturnType<typeof generateProceduralFloor>): Uint8Array {
+function reachabilityAudit(gen: ReturnType<typeof generateProceduralFloor>): ReachabilityAudit {
   const world = gen.world;
-  const out = new Uint8Array(W * W);
-  const queue = new Int32Array(W * W);
-  let head = 0;
-  let tail = 0;
   const start = world.idx(Math.floor(gen.spawnX), Math.floor(gen.spawnY));
-  out[start] = 1;
-  queue[tail++] = start;
-
-  while (head < tail) {
-    const ci = queue[head++];
-    const x = ci % W;
-    const y = (ci / W) | 0;
-    for (const [dx, dy] of [[1,0],[-1,0],[0,1],[0,-1]] as const) {
-      const ni = world.idx(x + dx, y + dy);
-      if (out[ni]) continue;
-      if (world.cells[ni] !== Cell.FLOOR && world.cells[ni] !== Cell.DOOR && world.cells[ni] !== Cell.WATER) continue;
-      out[ni] = 1;
-      queue[tail++] = ni;
-    }
-  }
-
-  return out;
+  return auditReachability(world, start);
 }
 
-function hasReachableLift(gen: ReturnType<typeof generateProceduralFloor>, reachable: Uint8Array, direction: LiftDirection): boolean {
+function hasReachableLift(gen: ReturnType<typeof generateProceduralFloor>, audit: ReachabilityAudit, direction: LiftDirection): boolean {
   const world = gen.world;
   for (let i = 0; i < world.cells.length; i++) {
     if (world.cells[i] !== Cell.LIFT || world.liftDir[i] !== direction) continue;
-    const x = i % W;
-    const y = (i / W) | 0;
-    for (const [dx, dy] of [[1,0],[-1,0],[0,1],[0,-1]] as const) {
-      if (reachable[world.idx(x + dx, y + dy)]) return true;
-    }
+    if (hasReachableAdjacentCell(world, audit, i)) return true;
   }
   return false;
+}
+
+function assertAuditReachable(world: World, audit: ReachabilityAudit, idx: number, label: string): void {
+  assert.equal(audit.reachable[idx], 1, `${label}: ${describeReachability(audit, world, idx)}`);
+}
+
+const RUN_GENERATION_MATRIX = process.env.GIGAHRUSH_GENERATION_MATRIX === '1';
+const GENERATION_SKIP_REASON = 'run npm run test:generation for the full generation matrix';
+const P0_REACHABILITY_FAST_CASES = [
+  { runSeed: 96, z: 1 },
+  { runSeed: 321, z: 9 },
+  { runSeed: 42, z: 25 },
+] as const;
+const P0_REACHABILITY_RUN_SEEDS = [42, 96, 321] as const;
+const P0_REACHABILITY_ZS = [-43, -35, -27, -23, -19, -11, -3, 1, 9, 17, 21, 25, 33, 39] as const;
+
+after(() => printSlowestFloorGenerators());
+
+function testGenerationMatrix(name: string, fn: () => void): void {
+  test(name, { skip: RUN_GENERATION_MATRIX ? false : GENERATION_SKIP_REASON }, fn);
+}
+
+function timedProceduralFloor(runSeed: number, z: number, prefix: string): ReturnType<typeof generateProceduralFloor> {
+  const spec = makeProceduralFloorSpec(runSeed, z);
+  return timedProceduralSpec(spec, `${prefix} seed=${runSeed}`);
+}
+
+function timedProceduralSpec(spec: ProceduralFloorSpec, prefix: string): ReturnType<typeof generateProceduralFloor> {
+  return timeFloorGeneration(
+    `${prefix} z=${spec.z} ${spec.geometryId}/${spec.majorityId}/${spec.anomalyId} d${spec.danger}`,
+    () => generateProceduralFloor(spec),
+  );
+}
+
+type DangerBandId = 'upper' | 'residential' | 'industrial' | 'hellVoid';
+
+interface DangerBandSummary {
+  slots: number;
+  averageTimes100: number;
+  dangerCounts: number[];
+}
+
+const DANGER_SNAPSHOT_SEEDS = [41, 4101, 4102, 4103, 4104] as const;
+
+function dangerBandForZ(z: number): DangerBandId {
+  if (z <= -13) return 'upper';
+  if (z <= 8) return 'residential';
+  if (z <= 27) return 'industrial';
+  return 'hellVoid';
+}
+
+function summarizeDangerDeck(): Record<DangerBandId, DangerBandSummary> {
+  const rows: Record<DangerBandId, { slots: number; sum: number; dangerCounts: number[] }> = {
+    upper: { slots: 0, sum: 0, dangerCounts: [0, 0, 0, 0, 0] },
+    residential: { slots: 0, sum: 0, dangerCounts: [0, 0, 0, 0, 0] },
+    industrial: { slots: 0, sum: 0, dangerCounts: [0, 0, 0, 0, 0] },
+    hellVoid: { slots: 0, sum: 0, dangerCounts: [0, 0, 0, 0, 0] },
+  };
+
+  for (const seed of DANGER_SNAPSHOT_SEEDS) {
+    for (const z of PROCEDURAL_FLOOR_ZS) {
+      const spec = makeProceduralFloorSpec(seed, z);
+      const row = rows[dangerBandForZ(z)];
+      row.slots++;
+      row.sum += spec.danger;
+      row.dangerCounts[spec.danger - 1]++;
+    }
+  }
+
+  return {
+    upper: {
+      slots: rows.upper.slots,
+      averageTimes100: Math.round(rows.upper.sum * 100 / rows.upper.slots),
+      dangerCounts: rows.upper.dangerCounts,
+    },
+    residential: {
+      slots: rows.residential.slots,
+      averageTimes100: Math.round(rows.residential.sum * 100 / rows.residential.slots),
+      dangerCounts: rows.residential.dangerCounts,
+    },
+    industrial: {
+      slots: rows.industrial.slots,
+      averageTimes100: Math.round(rows.industrial.sum * 100 / rows.industrial.slots),
+      dangerCounts: rows.industrial.dangerCounts,
+    },
+    hellVoid: {
+      slots: rows.hellVoid.slots,
+      averageTimes100: Math.round(rows.hellVoid.sum * 100 / rows.hellVoid.slots),
+      dangerCounts: rows.hellVoid.dangerCounts,
+    },
+  };
+}
+
+function summarizeAnomalyPressure(): Record<'none' | 'anomaly', { slots: number; averageTimes100: number; danger5: number }> {
+  const rows = {
+    none: { slots: 0, sum: 0, danger5: 0 },
+    anomaly: { slots: 0, sum: 0, danger5: 0 },
+  };
+
+  for (const seed of DANGER_SNAPSHOT_SEEDS) {
+    for (const z of PROCEDURAL_FLOOR_ZS) {
+      const spec = makeProceduralFloorSpec(seed, z);
+      const row = spec.anomalyId === 'none' ? rows.none : rows.anomaly;
+      row.slots++;
+      row.sum += spec.danger;
+      if (spec.danger === 5) row.danger5++;
+    }
+  }
+
+  return {
+    none: {
+      slots: rows.none.slots,
+      averageTimes100: Math.round(rows.none.sum * 100 / rows.none.slots),
+      danger5: rows.none.danger5,
+    },
+    anomaly: {
+      slots: rows.anomaly.slots,
+      averageTimes100: Math.round(rows.anomaly.sum * 100 / rows.anomaly.slots),
+      danger5: rows.anomaly.danger5,
+    },
+  };
 }
 
 test('floor run inserts three procedural floors before the next lower authored floor', () => {
@@ -122,7 +263,35 @@ test('floor run inserts three procedural floors before the next lower authored f
   assert.equal(authored?.baseFloor, FloorLevel.MAINTENANCE);
 });
 
-test('floor run keeps default authored cadence with the bank procedural-gap exception', () => {
+test('floor run UX labels expose z, route id, danger, anomaly and return path', () => {
+  const state = makeGameState({ currentFloor: FloorLevel.LIVING });
+  setFloorRunState(state, { runSeed: 123, currentZ: 0, specs: {}, visited: {} }, FloorLevel.LIVING);
+
+  assert.match(currentFloorRunLabel(state) ?? '', /Z\+0 story:living риск 1\/5/);
+  assert.equal(floorRunEntryKind(currentFloorRunEntry(state)), 'story');
+  assert.match(floorRunEntryRouteCard(currentFloorRunEntry(state)), /СЮЖЕТНЫЙ ЯКОРЬ Z\+0 story:living риск 1\/5: Жилая зона\. домашний hub, подготовка, возврат\./);
+
+  const first = resolveFloorRunRoute(state, LiftDirection.DOWN);
+  assert.equal(first?.procedural, true);
+  assert.equal(floorRunEntryKind(first!), 'procedural');
+  assert.match(floorRunEntryLiftLabel(first!), /ВЫЛАЗКА Z\+1 z1 риск \d\/5:/);
+  assert.match(floorRunEntryMapLabel(first!), /Z\+1 z1 риск \d\/5/);
+  assert.match(floorRunEntryRouteCard(first!), /ВЫЛАЗКА Z\+1 z1 риск \d\/5: .+\. .+, .+, .+\./);
+  assert.match(floorRunArrivalLead(first!, LiftDirection.UP), /Зацепка: ВЫЛАЗКА Z\+1 z1 риск \d\/5: .+\. .+ Возврат: лифт ↑ к предыдущему Z\./);
+
+  commitFloorRunEntry(state, first!);
+  commitFloorRunEntry(state, resolveFloorRunRoute(state, LiftDirection.DOWN)!);
+  commitFloorRunEntry(state, resolveFloorRunRoute(state, LiftDirection.DOWN)!);
+  const authored = resolveFloorRunRoute(state, LiftDirection.DOWN);
+  assert.equal(authored?.designFloorId, 'floor_69');
+  assert.equal(floorRunEntryKind(authored!), 'design');
+  assert.match(floorRunEntryLiftLabel(authored!), /РУЧНОЙ МАРШРУТ Z\+4 floor_69 риск 3\/5/);
+  assert.match(floorRunEntryRouteCard(authored!), /РУЧНОЙ МАРШРУТ Z\+4 floor_69 риск 3\/5: .+\. населенный сбой, сделки, слухи\./);
+  assert.match(floorRunArrivalLead(authored!, LiftDirection.UP), /населенный сбой, сделки, слухи/);
+  assert.match(floorRunArrivalLead(authored!, LiftDirection.UP), /Возврат: лифт ↑ к предыдущему Z/);
+});
+
+test('floor run keeps authored cadence with compact bank and silicon well exceptions', () => {
   const anchors = [
     zForStoryFloor(FloorLevel.MINISTRY),
     zForStoryFloor(FloorLevel.KVARTIRY),
@@ -139,7 +308,8 @@ test('floor run keeps default authored cadence with the bank procedural-gap exce
     const prev = anchors[i - 1];
     const curr = anchors[i];
     const bankGap = (prev === -24 && curr === -22) || (prev === -22 && curr === -20);
-    assert.equal(curr - prev, bankGap ? 2 : 4);
+    const siliconGap = (prev === 16 && curr === 18) || (prev === 18 && curr === 20);
+    assert.equal(curr - prev, bankGap || siliconGap ? 2 : 4);
   }
 });
 
@@ -173,13 +343,14 @@ test('floor run places pioneer camp one authored step above upper bureau', () =>
 });
 
 test('floor run exposes seeded procedural slots across the normal lift span', () => {
-  assert.equal(PROCEDURAL_FLOOR_COUNT, 62);
+  assert.equal(PROCEDURAL_FLOOR_COUNT, 61);
   assert.equal(PROCEDURAL_FLOOR_ZS[0], -43);
   assert.equal(PROCEDURAL_FLOOR_ZS.at(-1), 39);
   assert.equal(PROCEDURAL_FLOOR_ZS.includes(1), true);
   assert.equal(PROCEDURAL_FLOOR_ZS.includes(-25), true);
   assert.equal(PROCEDURAL_FLOOR_ZS.includes(-22), false);
   assert.equal(PROCEDURAL_FLOOR_ZS.includes(-32), false);
+  assert.equal(PROCEDURAL_FLOOR_ZS.includes(18), false);
 
   const state = makeGameState({ currentFloor: FloorLevel.LIVING });
   setFloorRunState(state, { runSeed: 456, currentZ: 0, specs: {}, visited: {} }, FloorLevel.LIVING);
@@ -229,9 +400,120 @@ test('procedural floor specs are deterministic from run seed and z', () => {
   assert.notEqual(a.seed, c.seed);
 });
 
+test('active numbered floor instances key editor and runtime state by anomaly id', () => {
+  const state = makeGameState({ currentFloor: FloorLevel.LIVING, time: 12 });
+  setFloorRunState(state, { runSeed: 404, currentZ: 1, specs: {}, visited: {} }, FloorLevel.LIVING);
+
+  const intendedKey = currentMapEditorFloorKey(state);
+  assert.match(intendedKey, /^procedural:/);
+
+  const savedRun = floorRunStateForSave(state);
+  setFloorInstanceState(state, {
+    current: {
+      id: 'loop_404',
+      fromFloor: FloorLevel.LIVING,
+      intendedFloor: FloorLevel.MAINTENANCE,
+      returnFloor: FloorLevel.MAINTENANCE,
+      direction: LiftDirection.DOWN,
+    },
+  }, FloorLevel.LIVING);
+
+  const anomalyKey = floorInstanceWorldKey('loop_404');
+  assert.equal(floorInstanceStateForSave(state).current?.worldKey, anomalyKey);
+  assert.equal(currentMapEditorFloorKey(state), anomalyKey);
+  assert.equal(currentNetTerminalGenFloorKey(state), anomalyKey);
+  assert.equal(currentFloorRunEntry(state).z, 1);
+
+  const loaded = makeGameState({ currentFloor: FloorLevel.LIVING });
+  setFloorRunState(loaded, savedRun, FloorLevel.LIVING);
+  setFloorInstanceState(loaded, floorInstanceStateForSave(state), FloorLevel.LIVING);
+  assert.equal(currentMapEditorFloorKey(loaded), anomalyKey);
+  assert.equal(currentNetTerminalGenFloorKey(loaded), anomalyKey);
+});
+
+test('active numbered floor editor replay does not leak patches to intended route floor', () => {
+  const state = makeGameState({ currentFloor: FloorLevel.LIVING, time: 20 });
+  setFloorRunState(state, { runSeed: 405, currentZ: 1, specs: {}, visited: {} }, FloorLevel.LIVING);
+  const intendedKey = currentMapEditorFloorKey(state);
+  const anomalyKey = floorInstanceWorldKey('loop_404');
+  setFloorInstanceState(state, {
+    current: {
+      id: 'loop_404',
+      fromFloor: FloorLevel.LIVING,
+      intendedFloor: FloorLevel.MAINTENANCE,
+      returnFloor: FloorLevel.MAINTENANCE,
+      direction: LiftDirection.DOWN,
+    },
+  }, FloorLevel.LIVING);
+
+  const world = new World();
+  const player = makeTestPlayer({ id: 1, x: 2.5, y: 2.5 });
+  const entities = [player];
+  const nextEntityId = { v: 2 };
+  world.cells[world.idx(10, 10)] = Cell.FLOOR;
+  world.cells[world.idx(11, 11)] = Cell.FLOOR;
+
+  setMapEditorPatchState(state, {
+    patches: {
+      [intendedKey]: {
+        floorKey: intendedKey,
+        baseFloor: FloorLevel.MAINTENANCE,
+        z: 1,
+        createdAt: 1,
+        opCount: 1,
+        ops: [{ kind: 'set_cell', x: 10, y: 10, cell: Cell.WALL }],
+      },
+      [anomalyKey]: {
+        floorKey: anomalyKey,
+        baseFloor: FloorLevel.LIVING,
+        createdAt: 2,
+        opCount: 1,
+        ops: [{ kind: 'set_cell', x: 11, y: 11, cell: Cell.WATER }],
+      },
+    },
+    skipped: [],
+  });
+
+  const snapshot = getMapEditorSnapshot(state);
+  assert.equal(snapshot.floorKey, anomalyKey);
+  assert.equal(snapshot.patchOps, 1);
+
+  const applied = replayMapEditorPatchForCurrentFloor(world, entities, player, state, nextEntityId);
+  assert.equal(applied, 1);
+  assert.equal(world.cells[world.idx(10, 10)], Cell.FLOOR);
+  assert.equal(world.cells[world.idx(11, 11)], Cell.WATER);
+});
+
+test('procedural floor danger deck keeps route-band pressure rhythm', () => {
+  assert.deepEqual(summarizeDangerDeck(), {
+    upper: { slots: 115, averageTimes100: 313, dangerCounts: [0, 18, 65, 31, 1] },
+    residential: { slots: 75, averageTimes100: 236, dangerCounts: [10, 30, 33, 2, 0] },
+    industrial: { slots: 70, averageTimes100: 381, dangerCounts: [0, 3, 21, 32, 14] },
+    hellVoid: { slots: 45, averageTimes100: 467, dangerCounts: [0, 0, 1, 13, 31] },
+  });
+  assert.deepEqual(summarizeAnomalyPressure(), {
+    none: { slots: 95, averageTimes100: 269, danger5: 4 },
+    anomaly: { slots: 210, averageTimes100: 361, danger5: 42 },
+  });
+});
+
+test('procedural floor danger snapshot is deterministic by z and seed', () => {
+  const snapshot = PROCEDURAL_FLOOR_ZS
+    .map(z => `${z}:${makeProceduralFloorSpec(41, z).danger}`)
+    .join(' ');
+
+  assert.equal(snapshot, [
+    '-43:3 -42:3 -41:4 -39:4 -38:4 -37:3 -35:3 -34:4 -33:3 -31:4 -30:3 -29:3',
+    '-27:3 -26:4 -25:4 -23:3 -21:3 -19:3 -18:2 -17:2 -15:3 -14:4 -13:2',
+    '-11:2 -10:4 -9:3 -7:3 -6:2 -5:2 -3:1 -2:1 -1:3 1:1 2:2 3:3',
+    '5:3 6:3 7:2 9:4 10:4 11:3 13:4 14:3 15:4 17:4 19:4',
+    '21:4 22:4 23:5 25:3 26:4 27:5 29:5 30:5 31:4 33:4 34:5 35:4 37:5 38:5 39:5',
+  ].join(' '));
+});
+
 test('procedural floor generator returns a playable non-story floor', () => {
   const spec = makeProceduralFloorSpec(321, 2);
-  const gen = generateProceduralFloor(spec);
+  const gen = timedProceduralSpec(spec, 'procedural smoke seed=321');
   const spawnCell = gen.world.cells[gen.world.idx(Math.floor(gen.spawnX), Math.floor(gen.spawnY))];
   const liftUp = gen.world.liftDir.some((dir, idx) => dir === LiftDirection.UP && gen.world.cells[idx] === Cell.LIFT);
   const liftDown = gen.world.liftDir.some((dir, idx) => dir === LiftDirection.DOWN && gen.world.cells[idx] === Cell.LIFT);
@@ -241,7 +523,32 @@ test('procedural floor generator returns a playable non-story floor', () => {
   assert.equal(liftDown, true);
   assert.equal(gen.entities.some(e => e.type === EntityType.NPC), true);
   assert.equal(gen.entities.some(e => e.type === EntityType.MONSTER), true);
-  assert.equal(gen.entities.some(e => e.type === EntityType.ITEM_DROP), true);
+  assert.equal(gen.world.containers.some(container => container.inventory.length > 0), true);
+});
+
+test('P0 procedural reachability fast subset keeps route lifts usable', () => {
+  for (const { runSeed, z } of P0_REACHABILITY_FAST_CASES) {
+    assert.equal(PROCEDURAL_FLOOR_ZS.includes(z), true, `z=${z} is procedural`);
+    const gen = timedProceduralFloor(runSeed, z, 'P0 fast reachability');
+    const audit = reachabilityAudit(gen);
+    assert.equal(hasReachableLift(gen, audit, LiftDirection.UP), true, `seed=${runSeed} z=${z} up lift`);
+    assert.equal(hasReachableLift(gen, audit, LiftDirection.DOWN), true, `seed=${runSeed} z=${z} down lift`);
+  }
+});
+
+testGenerationMatrix('P0 procedural reachability matrix keeps sampled route lifts usable', () => {
+  for (const z of P0_REACHABILITY_ZS) {
+    assert.equal(PROCEDURAL_FLOOR_ZS.includes(z), true, `z=${z} is procedural`);
+  }
+
+  for (const runSeed of P0_REACHABILITY_RUN_SEEDS) {
+    for (const z of P0_REACHABILITY_ZS) {
+      const gen = timedProceduralFloor(runSeed, z, 'P0 matrix reachability');
+      const audit = reachabilityAudit(gen);
+      assert.equal(hasReachableLift(gen, audit, LiftDirection.UP), true, `seed=${runSeed} z=${z} up lift`);
+      assert.equal(hasReachableLift(gen, audit, LiftDirection.DOWN), true, `seed=${runSeed} z=${z} down lift`);
+    }
+  }
 });
 
 test('service spine geometry carves connected maintenance trunks with usable lifts', () => {
@@ -251,29 +558,37 @@ test('service spine geometry carves connected maintenance trunks with usable lif
   assert.equal(def?.tags.includes('service'), true);
 
   const base = makeProceduralFloorSpec(9127, 17);
-  const gen = generateProceduralFloor({
+  const gen = timedProceduralSpec({
     ...base,
     geometryId: 'service_spines',
     baseFloor: FloorLevel.MAINTENANCE,
     anomalyId: 'none',
     title: `сервисные штреки: ${base.title}`,
-  });
-  const reachable = reachableCells(gen);
+  }, 'forced service_spines seed=9127');
+  const audit = reachabilityAudit(gen);
   const spineRooms = gen.world.rooms.filter(room => room.name.includes('сервисного штрека'));
 
   assert.equal(spineRooms.length >= 2, true);
   for (const room of spineRooms) {
     const ci = gen.world.idx(room.x + Math.floor(room.w / 2), room.y + Math.floor(room.h / 2));
-    assert.equal(reachable[ci], 1);
+    assertAuditReachable(gen.world, audit, ci, `${room.name} center`);
   }
-  assert.equal(hasReachableLift(gen, reachable, LiftDirection.UP), true);
-  assert.equal(hasReachableLift(gen, reachable, LiftDirection.DOWN), true);
+  assert.equal(hasReachableLift(gen, audit, LiftDirection.UP), true);
+  assert.equal(hasReachableLift(gen, audit, LiftDirection.DOWN), true);
+
+  const panels = getEmergencyPanels(gen.world);
+  assert.equal(panels.length >= 1 && panels.length <= 3, true);
+  for (const panel of panels) {
+    assertAuditReachable(gen.world, audit, panel.idx, 'emergency panel');
+    assert.equal(panel.zoneId >= 0, true);
+    assert.equal(panel.roomId >= 0, true);
+  }
 
   let serviceFixtures = 0;
   for (let i = 0; i < gen.world.cells.length; i++) {
     const feature = gen.world.features[i];
     if (
-      reachable[i] &&
+      audit.reachable[i] &&
       gen.world.roomMap[i] < 0 &&
       (feature === Feature.SCREEN || feature === Feature.APPARATUS || feature === Feature.MACHINE)
     ) {
@@ -285,17 +600,17 @@ test('service spine geometry carves connected maintenance trunks with usable lif
 
 test('procedural monster pressure stays capped and registers a route cue', () => {
   const base = makeProceduralFloorSpec(2468, 29);
-  const gen = generateProceduralFloor({
+  const gen = timedProceduralSpec({
     ...base,
     danger: 5,
     anomalyId: 'samosbor_seed',
     title: `поражение самосбором: ${base.title}`,
     monsterBiasKinds: [MonsterKind.HERALD, MonsterKind.MANCOBUS, MonsterKind.KOSTOREZ, MonsterKind.NIGHTMARE],
-  });
+  }, 'forced monster pressure seed=2468');
   const monsters = gen.entities.filter(e => e.type === EntityType.MONSTER);
   const rareKinds = new Set([MonsterKind.HERALD, MonsterKind.MANCOBUS, MonsterKind.KOSTOREZ, MonsterKind.NIGHTMARE]);
 
-  assert.equal(monsters.length <= PROCEDURAL_POPULATION_PROFILE.monsterCap, true);
+  assert.equal(monsters.length <= PROCEDURAL_POPULATION_PROFILES.normal.monsters.cap, true);
   assert.equal(monsters.length >= 1000, true);
   assert.equal(monsters.every(e => e.ai), true);
   assert.equal(monsters.filter(e => e.monsterKind !== undefined && rareKinds.has(e.monsterKind)).length <= 2, true);
@@ -303,20 +618,20 @@ test('procedural monster pressure stays capped and registers a route cue', () =>
 });
 
 test('zombie apocalypse procedural specs bias monster pressure to мертвяки', () => {
-  const spec = makeProceduralFloorSpec(1, 14);
+  const spec = makeProceduralFloorSpec(2, -35);
   assert.equal(spec.anomalyId, 'zombie_apocalypse');
   assert.deepEqual(spec.monsterBiasKinds, [MonsterKind.ZOMBIE]);
 });
 
 test('deep procedural route floors use route floor identity for monster mix', () => {
   const base = makeProceduralFloorSpec(1357, 29);
-  const gen = generateProceduralFloor({
+  const gen = timedProceduralSpec({
     ...base,
     danger: 4,
     anomalyId: 'none',
     title: base.title,
     monsterBiasKinds: [MonsterKind.PECHATEED, MonsterKind.PARAGRAPH, MonsterKind.SHOVNIK],
-  });
+  }, 'forced deep monster mix seed=1357');
   const monsters = gen.entities.filter(e => e.type === EntityType.MONSTER);
   const bureaucratic = new Set([MonsterKind.PECHATEED, MonsterKind.PARAGRAPH, MonsterKind.SHOVNIK]);
 
@@ -325,29 +640,30 @@ test('deep procedural route floors use route floor identity for monster mix', ()
 });
 
 test('void and lower route floors do not generate NPCs', () => {
-  const voidGen = generateFloor(FloorLevel.VOID);
+  const voidGen = timeFloorGeneration('story VOID', () => generateFloor(FloorLevel.VOID));
   assert.equal(voidGen.entities.some(e => e.type === EntityType.NPC), false);
   assert.equal(voidGen.entities.some(e => e.type === EntityType.MONSTER), true);
   assertFullFootprint(voidGen.world, 'VOID story floor');
 
   const base = makeProceduralFloorSpec(321, FLOOR_RUN_VOID_Z + 1);
-  const procGen = generateProceduralFloor({
+  const procGen = timedProceduralSpec({
     ...base,
     anomalyId: 'smog',
     title: `говнячный смог: ${base.title}`,
-  });
+  }, 'void lower procedural seed=321');
   assert.equal(procGen.entities.some(e => e.type === EntityType.NPC), false);
   assert.equal(procGen.entities.some(e => e.type === EntityType.MONSTER), true);
 
-  const darknessGen = generateDesignFloor('darkness');
+  const darknessGen = timeFloorGeneration('design darkness', () => generateDesignFloor('darkness'));
   assert.equal(darknessGen.entities.some(e => e.type === EntityType.NPC), false);
   assert.equal(darknessGen.entities.some(e => e.type === EntityType.MONSTER), true);
   assertFullFootprint(darknessGen.world, 'darkness design floor');
 });
 
-test('authored design floors occupy the full 1024x1024 route footprint', () => {
+testGenerationMatrix('authored design floors occupy the full 1024x1024 route footprint', () => {
   for (const route of DESIGN_FLOOR_ROUTES) {
-    assertFullFootprint(generateDesignFloor(route.id).world, route.id);
+    const gen = timeFloorGeneration(`design ${route.id}`, () => generateDesignFloor(route.id));
+    assertFullFootprint(gen.world, route.id);
   }
 });
 
@@ -359,7 +675,7 @@ test('rail train anomaly generates tracks, trains, and rideable train entities',
     danger: Math.max(2, base.danger) as typeof base.danger,
     title: `поезда: ${base.title}`,
   };
-  const gen = generateProceduralFloor(spec);
+  const gen = timedProceduralSpec(spec, 'forced rail trains seed=654');
 
   assert.equal(gen.world.railTracks.length > 0, true);
   assert.equal(gen.world.railTrains.length > 0, true);
@@ -391,7 +707,7 @@ test('bad apple anomaly stamps an honest 144x108 map rectangle', () => {
     danger: Math.max(3, base.danger) as typeof base.danger,
     title: `bad apple!: ${base.title}`,
   };
-  const gen = generateProceduralFloor(spec);
+  const gen = timedProceduralSpec(spec, 'forced bad apple stamp seed=777');
   const room = gen.world.rooms.find(r => r.name.startsWith('Bad Apple!'));
 
   assert.equal(!!room, true);
@@ -417,7 +733,7 @@ test('bad apple runtime advances the map rectangle into white floor cells', () =
     danger: Math.max(3, base.danger) as typeof base.danger,
     title: `bad apple!: ${base.title}`,
   };
-  const gen = generateProceduralFloor(spec);
+  const gen = timedProceduralSpec(spec, 'forced bad apple runtime seed=778');
   const room = gen.world.rooms.find(r => r.name.startsWith('Bad Apple!'));
   assert.equal(!!room, true);
 
@@ -461,12 +777,14 @@ test('zombie apocalypse anomaly seeds a dense crowd and patient zero infection',
     monsterBiasKinds: [MonsterKind.SHADOW],
     title: `зомби-апокалипсис: ${base.title}`,
   };
-  const gen = generateProceduralFloor(spec);
+  const gen = timedProceduralSpec(spec, 'forced zombie apocalypse seed=779');
   const npcs = gen.entities.filter(e => e.type === EntityType.NPC);
   const zombiesBeforeInfection = gen.entities.filter(e => e.type === EntityType.MONSTER && e.monsterKind === MonsterKind.ZOMBIE);
   const patientZero = gen.entities.find(e => e.type === EntityType.MONSTER && e.monsterKind === MonsterKind.ZOMBIE && e.name === 'Пациент зеро');
 
-  assert.equal(npcs.length >= 10_000, true);
+  assert.equal(npcs.length, ENTITY_SOFT_LIMITS[EntityType.NPC]);
+  assert.equal(npcs.length >= PROCEDURAL_POPULATION_PROFILES.highDensity.npcs.cap, true);
+  assert.equal(maxEntitiesInArea(gen.entities, EntityType.NPC, 32) <= 20, true);
   assert.equal(npcs.every(e => e.ai), true);
   assert.equal(!!patientZero, true);
   assert.equal(gen.entities.some(e => e.type === EntityType.MONSTER && e.monsterKind === MonsterKind.SHADOW), false);

@@ -1,25 +1,6 @@
 import { type NetSphereSnapshot } from '../systems/net_sphere';
 import { drawGlitchText, drawNeuroPanel, drawStaticNoise } from './hud_fx';
-import { fitText } from './ui_text';
-
-function wrapText(ctx: CanvasRenderingContext2D, text: string, maxW: number, maxLines: number): string[] {
-  if (maxW <= 0 || maxLines <= 0) return [];
-  const words = text.split(/\s+/);
-  const lines: string[] = [];
-  let line = '';
-  for (const word of words) {
-    const next = line ? `${line} ${word}` : word;
-    if (ctx.measureText(next).width <= maxW) {
-      line = next;
-      continue;
-    }
-    if (line) lines.push(line);
-    line = word;
-    if (lines.length >= maxLines) break;
-  }
-  if (line && lines.length < maxLines) lines.push(fitText(ctx, line, maxW));
-  return lines;
-}
+import { fitText, wrapTextLines } from './ui_text';
 
 function two(value: number): string {
   return String(value).padStart(2, '0');
@@ -61,14 +42,14 @@ export function drawNetSphereMenu(
   const pad = 8 * s;
   const x = 5 * s;
   const y = 5 * s;
-  const panelW = w - 10 * s;
-  const panelH = h - 10 * s;
+  const panelW = Math.max(1, w - 10 * s);
+  const panelH = Math.max(1, h - 10 * s);
   const leftW = Math.min(210 * s, panelW * 0.38);
   const chatX = x + pad + leftW + 8 * s;
-  const chatW = Math.max(80 * s, x + panelW - chatX - pad);
+  const chatW = Math.max(1, x + panelW - chatX - pad);
   const headerY = y + 10 * s;
   const chatY = headerY + 2 * s;
-  const chatH = Math.max(80 * s, y + panelH - chatY - 18 * s);
+  const chatH = Math.max(1, y + panelH - chatY - 18 * s);
   const commandY = y + panelH - 29 * s;
   const valueOffset = Math.max(58 * s, Math.min(132 * s, leftW * 0.5));
   const lineH = 9 * s;
@@ -78,6 +59,9 @@ export function drawNetSphereMenu(
   ctx.fillRect(0, 0, w, h);
   drawNeuroPanel(ctx, x, y, panelW, panelH, time, 820);
   drawStaticNoise(ctx, x, y, panelW, panelH, time, net.status === 'online' ? 0.012 : 0.026);
+  ctx.beginPath();
+  ctx.rect(x, y, panelW, panelH);
+  ctx.clip();
 
   ctx.textBaseline = 'top';
   ctx.font = `bold ${12 * s}px monospace`;
@@ -92,6 +76,10 @@ export function drawNetSphereMenu(
 
   const leftX = x + pad;
   let ly = headerY + 34 * s;
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(leftX, ly - 2 * s, Math.max(1, leftW), Math.max(1, commandY + 22 * s - ly));
+  ctx.clip();
   ctx.font = `${8 * s}px monospace`;
   statLine(ctx, 'НЕТ-ИМЯ', net.nickname, leftX, ly, leftW, valueOffset, '#d8f6ff'); ly += 12 * s;
   statLine(ctx, 'НЕТ-ГЕН', net.netGen, leftX, ly, leftW, valueOffset, '#7da3ad'); ly += 10 * s;
@@ -124,7 +112,7 @@ export function drawNetSphereMenu(
     ly += 6 * s;
     ctx.fillStyle = '#f86';
     const maxErrorRows = Math.max(0, Math.floor((commandY - ly) / lineH));
-    for (const line of wrapText(ctx, net.error, leftW - pad, Math.min(4, maxErrorRows))) {
+    for (const line of wrapTextLines(ctx, net.error, leftW - pad, Math.min(4, maxErrorRows))) {
       ctx.fillText(line, leftX, ly);
       ly += lineH;
     }
@@ -134,6 +122,7 @@ export function drawNetSphereMenu(
   ctx.fillText(fitText(ctx, '/netgen NET-...  /new  /clear', leftW), leftX, commandY);
   ctx.fillStyle = '#607080';
   ctx.fillText(fitText(ctx, '[N] открыть  [Esc] закрыть  [Enter] отправить', leftW), leftX, commandY + 10 * s);
+  ctx.restore();
 
   ctx.strokeStyle = 'rgba(92,246,255,0.34)';
   ctx.strokeRect(chatX, chatY, chatW, chatH);
@@ -144,12 +133,16 @@ export function drawNetSphereMenu(
   ctx.fillStyle = '#9cf';
   ctx.fillText('ТЕРМИНАЛ', chatX + 6 * s, chatY + 5 * s);
 
-  const promptH = 18 * s;
+  const promptH = Math.min(18 * s, Math.max(10 * s, chatH * 0.42));
   const msgTop = chatY + 20 * s;
-  const msgBottom = chatY + chatH - promptH - 4 * s;
+  const msgBottom = Math.max(msgTop, chatY + chatH - promptH - 4 * s);
   let cy = msgBottom - 9 * s;
   ctx.font = `${7 * s}px monospace`;
   const compactChat = chatW < 180 * s;
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(chatX + 2 * s, msgTop, Math.max(1, chatW - 4 * s), Math.max(1, msgBottom - msgTop));
+  ctx.clip();
   for (let i = net.chat.length - 1; i >= 0 && cy >= msgTop; i--) {
     const line = net.chat[i];
     const stamp = timeLabel(line.createdAt);
@@ -158,7 +151,7 @@ export function drawNetSphereMenu(
     const label = `[${stamp} ${fitText(ctx, name, nameW)}]`;
     if (compactChat) {
       const bodyW = Math.max(20 * s, chatW - 16 * s);
-      const wrapped = wrapText(ctx, line.body, bodyW, 3);
+      const wrapped = wrapTextLines(ctx, line.body, bodyW, 3);
       for (let j = wrapped.length - 1; j >= 0 && cy >= msgTop; j--) {
         ctx.fillStyle = '#d6f6ee';
         ctx.fillText(wrapped[j], chatX + 10 * s, cy);
@@ -172,7 +165,7 @@ export function drawNetSphereMenu(
       continue;
     }
     const bodyW = Math.max(20 * s, chatW - 16 * s - ctx.measureText(label).width);
-    const wrapped = wrapText(ctx, line.body, bodyW, 3);
+    const wrapped = wrapTextLines(ctx, line.body, bodyW, 3);
     for (let j = wrapped.length - 1; j >= 0 && cy >= msgTop; j--) {
       ctx.fillStyle = j === 0 ? '#6b7f8a' : '#253844';
       if (j === 0) ctx.fillText(label, chatX + 6 * s, cy);
@@ -181,12 +174,19 @@ export function drawNetSphereMenu(
       cy -= lineH;
     }
   }
+  ctx.restore();
 
+  const promptY = Math.max(chatY + 2 * s, chatY + chatH - promptH);
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(chatX + 2 * s, promptY, Math.max(1, chatW - 4 * s), Math.max(1, chatY + chatH - promptY));
+  ctx.clip();
   ctx.fillStyle = 'rgba(0,0,0,0.42)';
-  ctx.fillRect(chatX + 2 * s, chatY + chatH - promptH, chatW - 4 * s, promptH - 2 * s);
+  ctx.fillRect(chatX + 2 * s, promptY, Math.max(1, chatW - 4 * s), Math.max(1, promptH - 2 * s));
   ctx.fillStyle = '#63f6ff';
   const cursor = Math.floor(time * 2) % 2 === 0 ? '_' : '';
-  ctx.fillText(`> ${fitText(ctx, net.draft + cursor, chatW - 14 * s)}`, chatX + 6 * s, chatY + chatH - promptH + 5 * s);
+  ctx.fillText(`> ${fitText(ctx, net.draft + cursor, chatW - 14 * s)}`, chatX + 6 * s, promptY + 5 * s);
+  ctx.restore();
 
   ctx.restore();
 }

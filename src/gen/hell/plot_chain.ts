@@ -1,14 +1,15 @@
 /* ── Hell main plot rooms — contact + Herald threshold ───────── */
 
 import {
-  W, Cell, Feature,
-  type Room, type Entity,
+  W, Cell, Feature, FloorLevel,
+  type Room, type Entity, type Item,
   EntityType, AIGoal,
 } from '../../core/types';
 import { World } from '../../core/world';
 import { freshNeeds } from '../../data/catalog';
 import { PLOT_NPCS } from '../../data/plot';
 import { PLOT_ROOMS } from '../../data/plot_rooms';
+import { registerRouteCue } from '../../systems/route_cues';
 import { stampRoom, protectRoom, connectProtectedRoom, findClearArea } from '../shared';
 import { Spr } from '../../render/sprite_index';
 
@@ -29,10 +30,42 @@ export function generateHellPlotChain(
   const thresholdRoom = stampPlotRoom(world, 'herald_threshold', sx, sy, 55, 120, 76);
   decorateThresholdRoom(world, thresholdRoom);
   spawnPlotNpc(world, thresholdRoom, 'herald_clue', entities, nextId);
+  registerHeraldThresholdCue(world, contactRoom, thresholdRoom);
+  dropRoomNote(world, contactRoom, entities, nextId, 1, contactRoom.h - 2,
+    'Порог Вестников впереди: проверь обратный ход от контактной клетки, держи дверь между залпами и забирай награду с края, не из центра.');
   dropRoomItem(world, thresholdRoom, entities, nextId, 1, thresholdRoom.h - 2, [
     { defId: 'holy_water', count: 1 },
     { defId: 'antidep', count: 1 },
   ]);
+}
+
+function registerHeraldThresholdCue(world: World, contactRoom: Room, thresholdRoom: Room): void {
+  const x = world.wrap(contactRoom.x + Math.floor(contactRoom.w / 2)) + 0.5;
+  const y = world.wrap(contactRoom.y + Math.floor(contactRoom.h / 2)) + 0.5;
+  const targetX = world.wrap(thresholdRoom.x + Math.floor(thresholdRoom.w / 2)) + 0.5;
+  const targetY = world.wrap(thresholdRoom.y + Math.floor(thresholdRoom.h / 2)) + 0.5;
+  registerRouteCue(world, {
+    id: 'hell_herald_threshold_retreat',
+    x,
+    y,
+    targetX,
+    targetY,
+    floor: FloorLevel.HELL,
+    roomId: contactRoom.id,
+    targetRoomId: thresholdRoom.id,
+    label: 'порог Вестников',
+    hint: 'входи только с отмеченным отходом; награда лежит у края',
+    targetName: 'Порог Вестников',
+    color: '#f88',
+    tags: ['hell', 'herald_threshold', 'retreat', 'reward', 'warning'],
+    toneSeed: contactRoom.id * 7301 + thresholdRoom.id,
+    radius: 9,
+    targetRadius: 5,
+    cooldownSec: 45,
+    heardText: 'Контактная клетка предупреждает: у порога Вестников сначала найди обратный ход.',
+    followedText: 'Порог Вестников отмечен. Держи дверь между залпами и забирай награду с края.',
+    ignoredText: 'Порог Вестников остался впереди без проверенного отхода.',
+  });
 }
 
 function stampPlotRoom(
@@ -103,7 +136,7 @@ function dropRoomItem(
   nextId: { v: number },
   ox: number,
   oy: number,
-  inventory: { defId: string; count: number }[],
+  inventory: Item[],
 ): void {
   const x = world.wrap(room.x + ox);
   const y = world.wrap(room.y + oy);
@@ -114,4 +147,16 @@ function dropRoomItem(
     angle: 0, pitch: 0, alive: true, speed: 0, sprite: Spr.ITEM_DROP,
     inventory,
   });
+}
+
+function dropRoomNote(
+  world: World,
+  room: Room,
+  entities: Entity[],
+  nextId: { v: number },
+  ox: number,
+  oy: number,
+  text: string,
+): void {
+  dropRoomItem(world, room, entities, nextId, ox, oy, [{ defId: 'note', count: 1, data: { text } }]);
 }

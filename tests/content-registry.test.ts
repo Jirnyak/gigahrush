@@ -199,11 +199,22 @@ test('contracts, rumors, rooms, and variants reference existing ids', () => {
   }
 
   for (const def of SCREEN_SIGNAL_DEFS) {
+    assertTrimmedText(def.label, `SCREEN_SIGNAL_DEFS.${def.id}.label`);
     assert.ok(def.rumorIds.length > 0, `SCREEN_SIGNAL_DEFS.${def.id} needs at least one rumor hook`);
+    let hasRoomLead = !def.roomTypes;
     for (const rumorId of def.rumorIds) {
-      assert.ok(RUMORS_BY_ID.has(rumorId), `SCREEN_SIGNAL_DEFS.${def.id} references missing rumor "${rumorId}"`);
+      const rumor = RUMORS_BY_ID.get(rumorId);
+      assert.ok(rumor, `SCREEN_SIGNAL_DEFS.${def.id} references missing rumor "${rumorId}"`);
+      assert.equal(
+        rumor.floors.some(floor => def.floors.includes(floor)),
+        true,
+        `SCREEN_SIGNAL_DEFS.${def.id} rumor "${rumorId}" has no valid floor overlap`,
+      );
+      if (rumor.lead?.roomType !== undefined && def.roomTypes?.includes(rumor.lead.roomType)) hasRoomLead = true;
     }
+    assert.equal(hasRoomLead, true, `SCREEN_SIGNAL_DEFS.${def.id} needs a rumor lead matching one of its screen room types`);
   }
+  assertUnique(SCREEN_SIGNAL_DEFS.map(def => def.label), 'SCREEN_SIGNAL_DEFS label');
 });
 
 test('monster ecology covers every registered monster and resolves tactical references', () => {

@@ -1,10 +1,11 @@
 /* ── Hell macro geometry: arena chains, flee loops and scars ─── */
 
 import {
-  W, Cell, DoorState, Feature, RoomType, Tex,
+  W, Cell, DoorState, Feature, FloorLevel, RoomType, Tex,
   type Room,
 } from '../../core/types';
 import { World } from '../../core/world';
+import { registerRouteCue } from '../../systems/route_cues';
 import { protectRoom, stampRoom } from '../shared';
 
 export interface HellGeometry {
@@ -154,10 +155,36 @@ function buildArenaChain(world: World, origin: Pos, spec: ChainSpec, geometry: H
   carveMeatTunnel(world, arena, exit, 2, spec.motif === 'scar' ? Tex.F_CONCRETE : Tex.F_MEAT);
   carveFallbackLoop(world, entry, fallback, exit, spec, geometry);
   stampRitualRoom(world, reward, arena, spec);
+  registerHellThresholdCue(world, spec, entry, fallback, reward);
 
   if (spec.motif === 'barricade') {
     stampCultBarricade(world, midpoint(entry, arena), fallback, geometry);
   }
+}
+
+function registerHellThresholdCue(world: World, spec: ChainSpec, entry: Pos, fallback: Pos, reward: Pos): void {
+  setFeature(world, entry.x, entry.y, Feature.SCREEN);
+  setFeature(world, reward.x, reward.y, Feature.SHELF);
+  registerRouteCue(world, {
+    id: `hell_threshold_${spec.id}_retreat`,
+    x: entry.x + 0.5,
+    y: entry.y + 0.5,
+    targetX: fallback.x + 0.5,
+    targetY: fallback.y + 0.5,
+    floor: FloorLevel.HELL,
+    label: `${spec.name}: отход`,
+    hint: 'перед карманом есть петля отхода и отдельная полка награды',
+    targetName: `${spec.name}: обратная петля`,
+    color: spec.motif === 'scar' ? '#9cf' : spec.motif === 'barricade' ? '#fc8' : '#f88',
+    tags: ['hell', 'threshold', 'retreat', 'reward', spec.id, spec.faction],
+    toneSeed: spec.id.length * 451 + entry.x * 7 + entry.y,
+    radius: 10,
+    targetRadius: 4,
+    cooldownSec: 48,
+    heardText: `${spec.name}: у входа видна обратная петля. Проверь отход до боя.`,
+    followedText: `${spec.name}: петля отхода найдена. Наградная полка стоит отдельно от мясного кармана.`,
+    ignoredText: `${spec.name}: порог остался без проверенного отхода.`,
+  });
 }
 
 function carveThreatPocket(world: World, center: Pos, spec: ChainSpec, geometry: HellGeometry): void {

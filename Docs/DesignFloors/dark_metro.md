@@ -1,8 +1,8 @@
 # Design Floor: Темная пересадка
 
-Status: planning artifact. Future route id: `dark_metro`. Future anchor: `z=24`.
+Status: implemented authored route floor. Route id: `dark_metro`. Anchor: `z=24`. Base floor: `MAINTENANCE`. Shipped HUD name: `Темная пересадка`.
 
-Planned owned file: `src/gen/design_floors/dark_metro.ts`. Existing references: `Docs/Expansions/02_metro_error_line/`, `src/gen/maintenance/metro_error_line.ts`.
+Owned file: `src/gen/design_floors/dark_metro.ts`. Existing references: `Docs/Expansions/02_metro_error_line/`, `src/gen/maintenance/metro_error_line.ts`. Planning sections below may predate the routed train implementation; verify exact train behavior against source.
 
 ## Role
 
@@ -56,4 +56,3 @@ No moving train simulation in MVP. A train is a room/transition event.
 - Darkness is scary but readable.
 - Wrong route has a clue and a safe fallback.
 - At least one shortcut has real cost/consequence.
-

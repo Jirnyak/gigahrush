@@ -24,6 +24,8 @@ const MOVE_MULT = 0.82;
 const HEAL_MULT = 0.55;
 const WATER_DRAIN = 0.045;
 const BAD_WATER_DRAIN = 0.075;
+const RAW_USE_RUMOR_ID = 'zhelemish_raw_use_reaction';
+const TREATED_USE_RUMOR_ID = 'zhelemish_treated_use_tradeoff';
 const GOVNYAK_STATUS_IDS = new Set<PlayerStatusId>(['govnyak_relief', 'govnyak_cough', 'govnyak_debt']);
 const GOVNYAK_STATUS_SOURCES = new Set<PlayerStatusSource>([
   'govnyak_roll',
@@ -50,6 +52,16 @@ function sourceLabel(source: PlayerStatusSource): string {
   return 'отладочный';
 }
 
+function sourceTags(source: PlayerStatusSource): string[] {
+  if (source === 'zhelemish_raw') return ['raw_use', 'sample_spoiled'];
+  if (source === 'zhelemish_treated') return ['treated_use', 'survival_tradeoff'];
+  return ['debug'];
+}
+
+function useRumorIds(source: PlayerStatusSource): string[] {
+  return source === 'zhelemish_raw' ? [RAW_USE_RUMOR_ID] : [TREATED_USE_RUMOR_ID];
+}
+
 function statusEvent(
   state: GameState | undefined,
   actor: Entity,
@@ -59,6 +71,10 @@ function statusEvent(
   data?: Record<string, unknown>,
 ): void {
   if (!state || actor.type !== EntityType.PLAYER) return;
+  const source = typeof data?.source === 'string' ? data.source as PlayerStatusSource : undefined;
+  const tags = ['player', 'status', 'zhelemish', 'condition'];
+  if (source) tags.push(...sourceTags(source));
+  if (data?.npcReaction) tags.push('npc_reaction');
   publishEvent(state, {
     type,
     actorId: actor.id,
@@ -66,7 +82,7 @@ function statusEvent(
     actorFaction: actor.faction,
     severity,
     privacy,
-    tags: ['player', 'status', 'zhelemish', 'condition'],
+    tags,
     data: { statusId: ZHELEMISH_SKIN_ID, ...data },
   });
 }
@@ -153,12 +169,24 @@ export function applyZhelemishSkin(
     source,
     duration,
     refreshed,
-    meleeDamageMult: MELEE_DAMAGE_MULT,
+    incomingMeleeDamageMult: MELEE_DAMAGE_MULT,
     moveMult: MOVE_MULT,
     healMult: HEAL_MULT,
+    waterDrainPerSecond: WATER_DRAIN,
+    badWaterDrainPerSecond: BAD_WATER_DRAIN,
+    outcome: source === 'zhelemish_raw' ? 'raw_eaten_sample_spoiled' : 'treated_survival_use',
+    bounded: true,
+    rumorIds: useRumorIds(source),
   });
   if (badReaction) {
-    statusEvent(state, entity, 'player_status_bad_reaction', 4, 'witnessed', { source, waterLoss: 8, psiLoss: 2 });
+    statusEvent(state, entity, 'player_status_bad_reaction', 4, 'witnessed', {
+      source,
+      waterLoss: 8,
+      psiLoss: 2,
+      outcome: 'raw_bad_reaction',
+      npcReaction: 'sanitary_witness',
+      rumorIds: [RAW_USE_RUMOR_ID],
+    });
   }
   return { status: existing ?? status, refreshed, badReaction };
 }
@@ -173,8 +201,11 @@ export function applyZhelemishSkinWithMessage(
 ): ZhelemishApplyResult {
   const result = applyZhelemishSkin(entity, time, source, state, rng);
   const verb = result.refreshed ? 'обновился' : 'сел на кожу';
+  const tradeoff = source === 'zhelemish_raw'
+    ? 'еда сейчас, проба испорчена'
+    : 'обработанный запас, но не настоящее лечение';
   msgs.push(msg(
-    `Желемыш ${sourceLabel(source)} ${verb}: удары глушит, ход вязнет, лечение хуже.`,
+    `Желемыш ${sourceLabel(source)} ${verb}: ${tradeoff}; ход вязнет, лечение хуже, вода уходит.`,
     time,
     '#9c6',
   ));
@@ -243,7 +274,7 @@ export function zhelemishHudLine(entity: Entity, time: number): string | null {
   const left = Math.max(0, Math.ceil(status.expiresAt - time));
   const raw = status.source === 'zhelemish_raw' ? 'сыр' : 'дуб';
   const bad = status.badReaction ? '!' : '';
-  return `ЖЕЛЕМЫШ${bad} ${raw} ${left}s  удар -30%  ход -18%`;
+  return `ЖЕЛЕМЫШ${bad} ${raw} ${left}s  вход.удар -30%  ход -18%  вода`;
 }
 
 export function zhelemishStatsLine(entity: Entity, time: number): string | null {
@@ -251,5 +282,5 @@ export function zhelemishStatsLine(entity: Entity, time: number): string | null 
   if (!status) return null;
   const left = Math.max(0, Math.ceil(status.expiresAt - time));
   const reaction = status.badReaction ? ' реакция: вода/ПСИ хуже' : '';
-  return `Желемыш ${sourceLabel(status.source)}: ${left}s, melee -30%, ход -18%, лечение -45%, вода уходит${reaction}`;
+  return `Желемыш ${sourceLabel(status.source)}: ${left}s из ${zhelemishDuration(status.source)}s, входящий удар -30%, ход -18%, лечение -45%, вода уходит${reaction}`;
 }

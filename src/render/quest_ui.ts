@@ -2,9 +2,11 @@
 
 import { FloorLevel, LiftDirection, RoomType, type GameState, type Quest, QuestType } from '../core/types';
 import { ITEMS } from '../data/catalog';
+import { zForStoryFloor } from '../data/procedural_floors';
 import { isQuestTargetOnCurrentFloor, questRouteFloor, questTargetLiftDirection } from '../systems/contracts';
 import { getRecentEvents } from '../systems/events';
 import { getRecentRumorLead } from '../systems/npc_memory';
+import { currentFloorRunEntry, floorRunEntryMapLabel, formatFloorZ } from '../systems/procedural_floors';
 import { formatQuestMinutes, questDeadlineText, questHasDeadline, questRemainingMinutes } from '../systems/quest_deadlines';
 import { drawNeuroPanel, drawGlitchText } from './hud_fx';
 import { drawWrappedText, fitText } from './ui_text';
@@ -189,9 +191,11 @@ function questRouteHint(q: Quest, state: GameState): string {
   if (floor !== undefined) {
     if (isQuestTargetOnCurrentFloor(q, state)) return detail ? `Цель здесь. ${detail}` : 'Цель здесь.';
     const dir = questTargetLiftDirection(q, state) === LiftDirection.DOWN ? '↓' : '↑';
+    const currentZ = currentFloorRunEntry(state).z;
+    const targetZ = zForStoryFloor(floor);
     return detail
-      ? `Цель: ${FLOOR_NAMES[floor]}. Лифт ${dir}. ${detail}`
-      : `Цель: ${FLOOR_NAMES[floor]}. Лифт ${dir}.`;
+      ? `Цель: ${FLOOR_NAMES[floor]} Z${formatFloorZ(targetZ)}. Лифт ${dir} от Z${formatFloorZ(currentZ)}. ${detail}`
+      : `Цель: ${FLOOR_NAMES[floor]} Z${formatFloorZ(targetZ)}. Лифт ${dir} от Z${formatFloorZ(currentZ)}.`;
   }
   if (q.type === QuestType.TALK && q.targetPlotNpcId && q.targetNpcId === undefined) {
     return 'Собеседник на другом уровне. Нужен лифт.';
@@ -317,6 +321,12 @@ export function drawQuestLog(
       9 * sy,
       Math.max(1, Math.floor((contentBottom - ly) / (9 * sy))),
     );
+  }
+  if (ly < contentBottom) {
+    ly += 8 * sy;
+    ctx.fillStyle = '#7ad';
+    ctx.font = `${7 * sy}px monospace`;
+    ctx.fillText(fitText(ctx, `Маршрут: ${floorRunEntryMapLabel(currentFloorRunEntry(state))}`, maxW), px + 8 * sx, ly);
   }
 
   const rumorLead = getRecentRumorLead(state.time);

@@ -21,6 +21,7 @@ import { generateRaionsovetArchiveDesignFloor } from './raionsovet_archive';
 import { generateRegistryMorgueDesignFloor } from './registry_morgue';
 import { generateRoofDesignFloor } from './roof';
 import { generateServiceFloorDesignFloor } from './service_floor';
+import { generateSiliconNetWellDesignFloor } from './silicon_net_well';
 import { generateUnderhellDesignFloor } from './underhell';
 import { generateUpperBureauDesignFloor } from './upper_bureau';
 import { expandDesignFloorGeneration } from './full_floor';
@@ -40,6 +41,7 @@ const DESIGN_FLOOR_GENERATORS: Record<DesignFloorId, () => FloorGeneration> = {
   black_market_88: generateBlackMarket88DesignFloor,
   production_belt: generateProductionBeltDesignFloor,
   service_floor: generateServiceFloorDesignFloor,
+  silicon_net_well: generateSiliconNetWellDesignFloor,
   dark_metro: generateDarkMetroDesignFloor,
   underhell: generateUnderhellDesignFloor,
   darkness: generateDarknessDesignFloor,

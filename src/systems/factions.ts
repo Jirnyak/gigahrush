@@ -9,13 +9,16 @@ import {
   type FloorLevel, type WorldEventSeverity, type WorldEventType,
 } from '../core/types';
 import { World } from '../core/world';
-import { freshNeeds, randomName } from '../data/catalog';
+import { freshNeeds, ITEMS, randomName } from '../data/catalog';
 import { gaussianLevel, randomRPG, getMaxHp } from './rpg';
 import { getFactionRel, addFactionRelMutual } from '../data/relations';
 import { isPsiMad, isPsiAlly } from './psi';
 import { updateFactionEvents } from './faction_events';
-import { tickCaravans } from './caravans';
-import { getRecentEvents } from './events';
+import { MAX_CARAVAN_LANES_PER_TICK, tickCaravans } from './caravans';
+import { getRecentEvents, publishEvent } from './events';
+import { getRecentNoiseRecords, type NoiseRecord } from './noise';
+import { tryAssignPathToCell } from './ai/pathfinding';
+import { canSpawnEntityType, entitySpawnSlots } from './entity_limits';
 
 const _PSI_IDS = ['psi_strike','psi_rupture','psi_madness','psi_storm','psi_brainburn'];
 function _pickPsi(): string { return _PSI_IDS[Math.floor(Math.random() * _PSI_IDS.length)]; }
@@ -325,6 +328,12 @@ const CAPTURE_INTERVAL = 2.0; // seconds between capture ticks
 
 let captureAccum = 0;
 let activityAccum = 0;
+const NOISE_PATROL_EVENT_LIMIT = 6;
+const NOISE_PATROL_COOLDOWN_S = 8;
+const NOISE_PATROL_RADIUS_SQ = 44 * 44;
+const NOISE_PATROL_RESPONDERS_PER_EVENT = 3;
+const NOISE_PATROL_ENTITY_SCAN_CAP = 360;
+const lastNoisePatrolResponseAt = new Map<string, number>();
 
 export function updateFactionCapture(world: World, entities: Entity[], dt: number): void {
   captureAccum += dt;
@@ -382,9 +391,84 @@ export function updateFactionActivity(
   if (activityAccum < 1) return;
   const elapsed = activityAccum;
   activityAccum = 0;
+  updateNoisePatrolResponse(world, entities, state);
   updateFactionEvents(state, world, player, entities, nextId, elapsed, allowSpawns);
-  tickCaravans(state, elapsed);
+  tickCaravans(state, elapsed, false, MAX_CARAVAN_LANES_PER_TICK, world, entities, player, nextId);
   refreshFactionUiSnapshot(world, state);
+}
+
+function canRespondToNoise(e: Entity): boolean {
+  if (!e.alive || e.type !== EntityType.NPC || !e.ai || e.faction === undefined) return false;
+  return e.faction === Faction.LIQUIDATOR ||
+    e.faction === Faction.CULTIST ||
+    e.faction === Faction.WILD ||
+    e.occupation === Occupation.HUNTER ||
+    e.isTraveler === true;
+}
+
+function noiseZoneId(world: World, record: NoiseRecord): number {
+  return world.zoneMap[world.idx(Math.floor(record.x), Math.floor(record.y))];
+}
+
+function shouldRespondToNoise(state: GameState, zoneId: number, record: NoiseRecord): boolean {
+  const key = `${state.currentFloor}:${zoneId}:${record.source}`;
+  const last = lastNoisePatrolResponseAt.get(key) ?? -Infinity;
+  if (state.time - last < NOISE_PATROL_COOLDOWN_S) return false;
+  lastNoisePatrolResponseAt.set(key, state.time);
+  return true;
+}
+
+function sendNoisePatrol(world: World, entities: Entity[], record: NoiseRecord): number {
+  let responders = 0;
+  let scanned = 0;
+  const tx = Math.floor(record.x);
+  const ty = Math.floor(record.y);
+  for (const e of entities) {
+    if (responders >= NOISE_PATROL_RESPONDERS_PER_EVENT || scanned >= NOISE_PATROL_ENTITY_SCAN_CAP) break;
+    scanned++;
+    if (!canRespondToNoise(e)) continue;
+    if (record.actorId !== undefined && e.id === record.actorId) continue;
+    if (world.dist2(e.x, e.y, record.x, record.y) > NOISE_PATROL_RADIUS_SQ) continue;
+    const ai = e.ai!;
+    ai.goal = AIGoal.HUNT;
+    ai.combatScanCd = 0;
+    ai.timer = 4 + responders;
+    tryAssignPathToCell(world, e, tx, ty);
+    responders++;
+  }
+  return responders;
+}
+
+function updateNoisePatrolResponse(world: World, entities: Entity[], state: GameState): void {
+  const records = getRecentNoiseRecords(state, { minSeverity: 3, limit: NOISE_PATROL_EVENT_LIMIT }, state.time);
+  for (const record of records) {
+    if (record.source === 'footstep') continue;
+    const zoneId = noiseZoneId(world, record);
+    if (!shouldRespondToNoise(state, zoneId, record)) continue;
+    const responders = sendNoisePatrol(world, entities, record);
+    if (responders <= 0) continue;
+    publishEvent(state, {
+      type: 'faction_event',
+      zoneId,
+      x: record.x,
+      y: record.y,
+      actorId: record.actorId,
+      actorFaction: record.actorFaction,
+      itemId: record.itemId,
+      itemName: record.itemId ? ITEMS[record.itemId]?.name ?? record.itemId : undefined,
+      severity: record.severity,
+      privacy: 'local',
+      tags: ['faction_event', 'noise_response', record.source, 'patrol'],
+      data: {
+        name: 'noise_response',
+        phase: 'patrol_response',
+        text: 'Патруль пошёл на шум.',
+        source: record.source,
+        responders,
+        noiseId: record.id,
+      },
+    });
+  }
 }
 
 /** Recalculate which faction owns each zone based on cell majority.
@@ -553,6 +637,7 @@ function spawnAmbientNpcInRoom(
   occupation: Occupation,
   room: Room,
 ): boolean {
+  if (!canSpawnEntityType(entities, EntityType.NPC)) return false;
   const sx = room.x + 1 + Math.floor(Math.random() * Math.max(1, room.w - 2));
   const sy = room.y + 1 + Math.floor(Math.random() * Math.max(1, room.h - 2));
   if (world.solid(sx, sy)) return false;
@@ -563,7 +648,7 @@ function spawnAmbientNpcInRoom(
 export function spawnPatrolSquads(
   world: World, entities: Entity[], nextId: { v: number }, stats: Map<ZoneFaction, FactionStats>,
 ): void {
-  let spawnSlots = Math.min(PATROL_SPAWN_BURST_CAP, AMBIENT_NPC_SOFT_CAP - countAliveNpcs(entities));
+  let spawnSlots = entitySpawnSlots(entities, EntityType.NPC, Math.min(PATROL_SPAWN_BURST_CAP, AMBIENT_NPC_SOFT_CAP - countAliveNpcs(entities)));
   if (spawnSlots <= 0 || world.zones.length === 0) return;
 
   const counts = countZoneFactionNpcs(world, entities);
@@ -606,7 +691,7 @@ export function spawnPatrolSquads(
 export function spawnTerritoryReinforcements(
   world: World, entities: Entity[], nextId: { v: number }, stats: Map<ZoneFaction, FactionStats>,
 ): void {
-  const spawnBudget = Math.min(REINFORCEMENT_SPAWN_BURST_CAP, AMBIENT_NPC_SOFT_CAP - countAliveNpcs(entities));
+  const spawnBudget = entitySpawnSlots(entities, EntityType.NPC, Math.min(REINFORCEMENT_SPAWN_BURST_CAP, AMBIENT_NPC_SOFT_CAP - countAliveNpcs(entities)));
   if (spawnBudget <= 0 || world.zones.length === 0) return;
 
   // Calculate total controlled zones across all factions
@@ -685,4 +770,27 @@ export function applyTheftRelationPenalty(
   const penalty = witnessed ? -4 : -2;
   addFactionRelMutual(victimFaction, Faction.PLAYER, penalty);
   return penalty;
+}
+
+export function applyRoomMemoryRelationPenalty(victimFaction: Faction | undefined, severity: number): number {
+  if (victimFaction === undefined || victimFaction === Faction.PLAYER) return 0;
+  const penalty = severity >= 5 ? -2 : -1;
+  addFactionRelMutual(victimFaction, Faction.PLAYER, penalty);
+  return penalty;
+}
+
+export function applyInfrastructureRelationResponse(
+  ownerFaction: Faction | null | undefined,
+  action: 'repair' | 'shutdown' | 'force' | 'overload',
+): number {
+  if (ownerFaction === null || ownerFaction === undefined || ownerFaction === Faction.PLAYER) return 0;
+  const delta = action === 'repair'
+    ? (ownerFaction === Faction.WILD ? 0 : 1)
+    : action === 'shutdown'
+      ? -1
+      : action === 'force'
+        ? -2
+        : -4;
+  if (delta !== 0) addFactionRelMutual(Faction.PLAYER, ownerFaction, delta);
+  return delta;
 }

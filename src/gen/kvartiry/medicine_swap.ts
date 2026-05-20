@@ -23,7 +23,8 @@ import {
 } from './social_helpers';
 
 const MEDICINE_SWAP_ROOM_NAME = 'Аптечный разменник';
-const MEDICINE_SWAP_TAG = 'kv_medicine_swap';
+export const MEDICINE_SWAP_TAG = 'kv_medicine_swap';
+const MEDICINE_ROUTE_TAG = 'medicine_trust';
 const MEDICINE_CHILDREN_QUEST_ID = 'kv_medicine_children';
 const LIQUIDATOR_BANDAGES_QUEST_ID = 'kv_liquidator_bandages';
 const WILD_ANTIDEP_QUEST_ID = 'kv_wild_antidep_swap';
@@ -34,6 +35,12 @@ const MEDICINE_DECISION_QUEST_IDS = [
   WILD_ANTIDEP_QUEST_ID,
   CULTIST_PILLS_QUEST_ID,
 ];
+export const MEDICINE_SWAP_QUEST_IDS = {
+  children: MEDICINE_CHILDREN_QUEST_ID,
+  liquidators: LIQUIDATOR_BANDAGES_QUEST_ID,
+  wild: WILD_ANTIDEP_QUEST_ID,
+  cult: CULTIST_PILLS_QUEST_ID,
+} as const;
 
 function branchBlockers(id: string): string[] {
   return MEDICINE_DECISION_QUEST_IDS.filter(q => q !== id);
@@ -257,9 +264,10 @@ registerSideQuest('kv_nina_tabletkina', NINA, [{
   requiresSideQuestDone: LOST_CHILD_MEDICINE_TRUST_QUEST_ID,
   blockedBySideQuestIds: branchBlockers(MEDICINE_CHILDREN_QUEST_ID),
   abandonsSideQuestIds: branchBlockers(MEDICINE_CHILDREN_QUEST_ID),
-  targetFloor: FloorLevel.KVARTIRY,
-  targetRoomName: MEDICINE_SWAP_ROOM_NAME,
-  targetZoneTag: KV_MEDICINE_TRUST_TAG,
+	  targetFloor: FloorLevel.KVARTIRY,
+	  targetRoomType: RoomType.MEDICAL,
+	  targetRoomName: MEDICINE_SWAP_ROOM_NAME,
+	  targetZoneTag: MEDICINE_ROUTE_TAG,
   targetHint: 'Квартиры: Нина доверяет детский запрос только после воды у Веры и личной передачи.',
   eventPrivacy: 'witnessed',
   eventSeverity: 4,
@@ -283,9 +291,10 @@ registerSideQuest('kv_rudnev_perevyazochny', RUDNEV, [{
   relationDelta: 12, xpReward: 50, moneyReward: 45,
   blockedBySideQuestIds: branchBlockers(LIQUIDATOR_BANDAGES_QUEST_ID),
   abandonsSideQuestIds: [...branchBlockers(LIQUIDATOR_BANDAGES_QUEST_ID), LOST_CHILD_MEDICINE_TRUST_QUEST_ID],
-  targetFloor: FloorLevel.KVARTIRY,
-  targetRoomName: MEDICINE_SWAP_ROOM_NAME,
-  targetZoneTag: KV_MEDICINE_TRUST_TAG,
+	  targetFloor: FloorLevel.KVARTIRY,
+	  targetRoomType: RoomType.MEDICAL,
+	  targetRoomName: MEDICINE_SWAP_ROOM_NAME,
+	  targetZoneTag: MEDICINE_ROUTE_TAG,
   targetHint: 'Квартиры: Руднев у аптечного шкафа принимает бинты в обмен на патроны и учет.',
   eventPrivacy: 'local',
   eventSeverity: 4,
@@ -309,9 +318,10 @@ registerSideQuest('kv_lekha_menyala', LEKHA, [{
   relationDelta: 10, xpReward: 40, moneyReward: 20,
   blockedBySideQuestIds: branchBlockers(WILD_ANTIDEP_QUEST_ID),
   abandonsSideQuestIds: [...branchBlockers(WILD_ANTIDEP_QUEST_ID), LOST_CHILD_MEDICINE_TRUST_QUEST_ID],
-  targetFloor: FloorLevel.KVARTIRY,
-  targetRoomName: MEDICINE_SWAP_ROOM_NAME,
-  targetZoneTag: KV_MEDICINE_TRUST_TAG,
+	  targetFloor: FloorLevel.KVARTIRY,
+	  targetRoomType: RoomType.MEDICAL,
+	  targetRoomName: MEDICINE_SWAP_ROOM_NAME,
+	  targetZoneTag: MEDICINE_ROUTE_TAG,
   targetHint: 'Квартиры: Лёха держит черный обмен у двери Аптечного разменника.',
   eventPrivacy: 'local',
   eventSeverity: 4,
@@ -335,9 +345,10 @@ registerSideQuest('kv_serafima_sheptunya', SERAFIMA, [{
   relationDelta: 8, xpReward: 55, moneyReward: 10,
   blockedBySideQuestIds: branchBlockers(CULTIST_PILLS_QUEST_ID),
   abandonsSideQuestIds: [...branchBlockers(CULTIST_PILLS_QUEST_ID), LOST_CHILD_MEDICINE_TRUST_QUEST_ID],
-  targetFloor: FloorLevel.KVARTIRY,
-  targetRoomName: MEDICINE_SWAP_ROOM_NAME,
-  targetZoneTag: KV_MEDICINE_TRUST_TAG,
+	  targetFloor: FloorLevel.KVARTIRY,
+	  targetRoomType: RoomType.MEDICAL,
+	  targetRoomName: MEDICINE_SWAP_ROOM_NAME,
+	  targetZoneTag: MEDICINE_ROUTE_TAG,
   targetHint: 'Квартиры: Серафима просит таблетки в стороне от Нины и ликвидаторского учета.',
   eventPrivacy: 'secret',
   eventSeverity: 4,
@@ -400,7 +411,7 @@ function addMedicineContainer(
     faction: opts.faction,
     access,
     discovered: true,
-    tags: [KV_MEDICINE_TRUST_TAG, MEDICINE_SWAP_TAG, 'medical', ...opts.tags],
+    tags: [KV_MEDICINE_TRUST_TAG, MEDICINE_ROUTE_TAG, MEDICINE_SWAP_TAG, 'medical', ...opts.tags],
   });
 }
 

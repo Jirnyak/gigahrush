@@ -10,6 +10,7 @@ import { withSeededRandom } from '../../core/rand';
 import { freshNeeds } from '../../data/catalog';
 import { type PlotNpcDef, registerSideQuest } from '../../data/plot';
 import { Spr } from '../../render/sprite_index';
+import { registerRouteCue } from '../../systems/route_cues';
 import { calcZoneLevel } from '../../systems/rpg';
 import {
   carveCorridor,
@@ -250,16 +251,33 @@ const NPC_DEFS: Record<string, PlotNpcDef> = {
   },
 };
 
+function floor69EventTags(...tags: string[]): string[] {
+  return ['floor_69', 'route_risk', 'route_reward', 'adult_only', ...tags];
+}
+
+function floor69RouteEventData(choice: string, risk: string, reward: string): Record<string, unknown> {
+  return { routeId: DESIGN_FLOOR_ID, z: DESIGN_FLOOR_Z, choice, risk, reward };
+}
+
 registerSideQuest('f69_madam_roza', NPC_DEFS.f69_madam_roza, [
   {
     id: 'f69_blackmail_profit',
     giverNpcId: 'f69_madam_roza',
     type: QuestType.FETCH,
-    desc: 'Роза: «В сейфе лежит донос на чиновника. Принесешь мне - долг этажа станет твоей премией, а не чужим поводком.»',
+    desc: 'Роза: «В сейфе лежит донос на чиновника. Принесешь мне - риск поста станет твоей премией, а не чужим поводком.»',
     targetItem: 'denunciation', targetCount: 1,
     rewardItem: 'fake_pass', rewardCount: 1,
     extraRewards: [{ defId: 'cigs', count: 3 }],
     relationDelta: -3, xpReward: 65, moneyReward: 190,
+    targetFloor: FLOOR_69_BASE_FLOOR,
+    targetRoomType: RoomType.OFFICE,
+    targetZoneTag: 'blackmail',
+    targetHint: 'Этаж 69: сейф компромата за постом. Риск: охрана и рейдовая строка. Награда: фальшивый пропуск, деньги или рычаг защиты.',
+    eventTargetName: 'Донос из сейфа компромата 69',
+    eventSeverity: 4,
+    eventPrivacy: 'local',
+    eventTags: floor69EventTags('blackmail', 'profit', 'evidence'),
+    eventData: floor69RouteEventData('profit_blackmail', 'locked safe and guard checkpoint', 'fake pass, cash and leverage'),
   },
 ]);
 
@@ -268,21 +286,39 @@ registerSideQuest('f69_guard_venya', NPC_DEFS.f69_guard_venya, [
     id: 'f69_raid_choice',
     giverNpcId: 'f69_guard_venya',
     type: QuestType.FETCH,
-    desc: 'Веня: «В посту лежит список рейда. Заберешь его - предупредим тихие комнаты. Продашь или сдашь инспекторам - это уже твоя сторона.»',
+    desc: 'Веня: «В посту лежит список рейда. Заберешь его - предупредим тихие комнаты. Продашь или сдашь инспекторам - это уже твой риск и твоя награда.»',
     targetItem: 'emergency_roster', targetCount: 1,
     rewardItem: 'key', rewardCount: 1,
     extraRewards: [{ defId: 'ammo_9mm', count: 10 }],
     relationDelta: 8, xpReward: 60, moneyReward: 55,
+    targetFloor: FLOOR_69_BASE_FLOOR,
+    targetRoomType: RoomType.HQ,
+    targetZoneTag: 'raid',
+    targetHint: 'Этаж 69: ящик поста досмотра. Риск: ликвидаторы узнают, кто держал список. Награда: ключ и время для тихих комнат.',
+    eventTargetName: 'Список рейда 69',
+    eventSeverity: 4,
+    eventPrivacy: 'local',
+    eventTags: floor69EventTags('raid', 'security', 'refuge'),
+    eventData: floor69RouteEventData('warn_or_sell_roster', 'liquidator audit and checkpoint violence', 'key, ammo and refuge warning'),
   },
   {
     id: 'f69_guard_key_deposit',
     giverNpcId: 'f69_guard_venya',
     type: QuestType.FETCH,
-    desc: 'Веня: «Нужен ключ из тарелки расписок. Вернешь на пост - черный вход откроется по делу, а не по слуху.»',
+    desc: 'Веня: «Нужен ключ из тарелки расписок. Вернешь на пост - черный вход откроется по делу, но долг запомнит руку.»',
     targetItem: 'key', targetCount: 1,
     rewardItem: 'ammo_9mm', rewardCount: 8,
     extraRewards: [{ defId: 'water_coupon', count: 1 }],
     relationDelta: 6, xpReward: 45, moneyReward: 45,
+    targetFloor: FLOOR_69_BASE_FLOOR,
+    targetRoomType: RoomType.HQ,
+    targetZoneTag: 'toll',
+    targetHint: 'Этаж 69: тарелка входных расписок у поста. Риск: кража у очереди. Награда: черный вход, патроны и водный талон.',
+    eventTargetName: 'Ключ из тарелки расписок 69',
+    eventSeverity: 3,
+    eventPrivacy: 'local',
+    eventTags: floor69EventTags('checkpoint', 'debt', 'access'),
+    eventData: floor69RouteEventData('checkpoint_key', 'theft witness and checkpoint debt', 'service route access and supplies'),
   },
 ]);
 
@@ -291,21 +327,39 @@ registerSideQuest('f69_performer_ira', NPC_DEFS.f69_performer_ira, [
     id: 'f69_blackmail_protect',
     giverNpcId: 'f69_performer_ira',
     type: QuestType.FETCH,
-    desc: 'Ира: «Найди донос из сейфа и отдай мне. Я сожгу копию до рейда, пока ей не торгуют людьми.»',
+    desc: 'Ира: «Найди донос из сейфа и отдай мне. Риск - охрана и чиновник. Награда - одна дверь перестанет держать человека строкой.»',
     targetItem: 'denunciation', targetCount: 1,
     rewardItem: 'clean_health_cert', rewardCount: 1,
     extraRewards: [{ defId: 'bandage', count: 2 }],
     relationDelta: 16, xpReward: 75, moneyReward: 35,
+    targetFloor: FLOOR_69_BASE_FLOOR,
+    targetRoomType: RoomType.OFFICE,
+    targetZoneTag: 'blackmail',
+    targetHint: 'Этаж 69: сейф компромата в долговой конторе. Риск: охрана и чиновничий хвост. Награда: доверие Иры, справка и меньше власти у сейфа.',
+    eventTargetName: 'Донос передан Ире',
+    eventSeverity: 4,
+    eventPrivacy: 'secret',
+    eventTags: floor69EventTags('blackmail', 'protect', 'evidence'),
+    eventData: floor69RouteEventData('protect_worker_from_blackmail', 'guard checkpoint and official retaliation', 'trust, clean health certificate and safer door'),
   },
   {
     id: 'f69_hide_worker',
     giverNpcId: 'f69_performer_ira',
     type: QuestType.TALK,
-    desc: 'Ира: «Договорись с доктором Симой о тихой комнате. Если рейд начнется, мне нужен безопасный вход через служебный ход.»',
+    desc: 'Ира: «Договорись с доктором Симой о тихой комнате. Риск - рейдовый список. Награда - безопасный вход через служебный ход.»',
     targetPlotNpcId: 'f69_doctor_sima',
     rewardItem: 'pills', rewardCount: 1,
     extraRewards: [{ defId: 'water', count: 1 }],
     relationDelta: 12, xpReward: 50, moneyReward: 40,
+    targetFloor: FLOOR_69_BASE_FLOOR,
+    targetRoomType: RoomType.MEDICAL,
+    targetZoneTag: 'clinic',
+    targetHint: 'Этаж 69: клиника Сима и тихая комната рядом. Риск: рейд придет по списку. Награда: убежище, таблетки и доверие.',
+    eventTargetName: 'Тихая комната для Иры',
+    eventSeverity: 4,
+    eventPrivacy: 'secret',
+    eventTags: floor69EventTags('refuge', 'protect', 'clinic'),
+    eventData: floor69RouteEventData('secure_refuge_route', 'raid roster and witness exposure', 'clinic refuge and service access'),
   },
 ]);
 
@@ -314,11 +368,20 @@ registerSideQuest('f69_doctor_sima', NPC_DEFS.f69_doctor_sima, [
     id: 'f69_clinic_supply',
     giverNpcId: 'f69_doctor_sima',
     type: QuestType.FETCH,
-    desc: 'Доктор Сима: «Нужен антибиотик. Не спрашиваю, купишь, выкрадешь или выменяешь. Тут сначала лечат.»',
+    desc: 'Доктор Сима: «Нужен антибиотик. Не спрашиваю, купишь, выкрадешь или выменяешь. Риск - дефицит, награда - дверь, где сначала лечат.»',
     targetItem: 'antibiotic', targetCount: 1,
     rewardItem: 'sanitary_kit', rewardCount: 1,
     extraRewards: [{ defId: 'gasmask_filter', count: 1 }],
     relationDelta: 14, xpReward: 70, moneyReward: 45,
+    targetFloor: FLOOR_69_BASE_FLOOR,
+    targetRoomType: RoomType.MEDICAL,
+    targetZoneTag: 'clinic',
+    targetHint: 'Этаж 69: тихая клиника Симы. Риск: лекарство считают долгом. Награда: санитарный набор, фильтр и медицинское доверие.',
+    eventTargetName: 'Запас тихой клиники 69',
+    eventSeverity: 3,
+    eventPrivacy: 'local',
+    eventTags: floor69EventTags('clinic', 'medicine', 'harm_reduction'),
+    eventData: floor69RouteEventData('supply_clinic', 'medicine scarcity and debt pressure', 'sanitary kit, filter and clinic trust'),
   },
 ]);
 
@@ -327,31 +390,58 @@ registerSideQuest('f69_accountant_nil', NPC_DEFS.f69_accountant_nil, [
     id: 'f69_debt_ledger',
     giverNpcId: 'f69_accountant_nil',
     type: QuestType.FETCH,
-    desc: 'Нил: «Две добровольные расписки из долговой картотеки. После этого строку можно оплатить, переписать или потерять.»',
+    desc: 'Нил: «Две добровольные расписки из долговой картотеки. Риск - книга заметит пустую клетку. Награда - строку можно оплатить, переписать или потерять.»',
     targetItem: 'voluntary_receipt', targetCount: 2,
     rewardItem: 'official_permit_slip', rewardCount: 1,
     extraRewards: [{ defId: 'blank_form', count: 1 }],
     relationDelta: 6, xpReward: 65, moneyReward: 80,
+    targetFloor: FLOOR_69_BASE_FLOOR,
+    targetRoomType: RoomType.OFFICE,
+    targetZoneTag: 'ledger',
+    targetHint: 'Этаж 69: картотека долгов. Риск: пустая строка зовет охрану. Награда: официальный корешок, бланк и снятый поводок.',
+    eventTargetName: 'Расписки из картотеки 69',
+    eventSeverity: 4,
+    eventPrivacy: 'local',
+    eventTags: floor69EventTags('debt', 'ledger', 'documents'),
+    eventData: floor69RouteEventData('clear_or_forge_debt_line', 'locked ledger and witness debt', 'permit slip, blank form and cleared line'),
   },
   {
     id: 'f69_debt_forgery_kit',
     giverNpcId: 'f69_accountant_nil',
     type: QuestType.FETCH,
-    desc: 'Нил: «Принеси пустой бланк и чернила. Одну строку можно сделать похожей на погашенную, если рука не дрогнет.»',
+    desc: 'Нил: «Принеси пустой бланк и чернила. Риск - подделка держится до первой проверки. Награда - одна строка станет похожей на погашенную.»',
     targetItem: 'blank_form', targetCount: 1,
     rewardItem: 'voluntary_receipt', rewardCount: 1,
     extraRewards: [{ defId: 'fake_pass', count: 1 }],
     relationDelta: 3, xpReward: 55, moneyReward: 70,
+    targetFloor: FLOOR_69_BASE_FLOOR,
+    targetRoomType: RoomType.OFFICE,
+    targetZoneTag: 'ledger',
+    targetHint: 'Этаж 69: картотека и стол Нила. Риск: проверка бумаги у поста. Награда: расписка, фальшивый пропуск и проход через долг.',
+    eventTargetName: 'Поддельная строка долга 69',
+    eventSeverity: 3,
+    eventPrivacy: 'secret',
+    eventTags: floor69EventTags('debt', 'forgery', 'access'),
+    eventData: floor69RouteEventData('forge_debt_line', 'paper audit and checkpoint suspicion', 'receipt, fake pass and debt access'),
   },
   {
     id: 'f69_blackmail_expose',
     giverNpcId: 'f69_accountant_nil',
     type: QuestType.FETCH,
-    desc: 'Нил: «Принеси акт о пропавшей записи. Если бумагу показать наверху, компромат перестанет быть товаром.»',
+    desc: 'Нил: «Принеси акт о пропавшей записи. Риск - наверху спросят свидетеля. Награда - компромат перестанет быть товаром.»',
     targetItem: 'record_exposure_notice', targetCount: 1,
     rewardItem: 'blank_form', rewardCount: 2,
     extraRewards: [{ defId: 'ink_bottle', count: 1 }],
     relationDelta: 4, xpReward: 70, moneyReward: 60,
+    targetFloor: FLOOR_69_BASE_FLOOR,
+    targetRoomType: RoomType.OFFICE,
+    targetZoneTag: 'evidence',
+    targetHint: 'Этаж 69: сейф компромата. Риск: акт потянет свидетелей наверх. Награда: бланки, чернила и меньше шантажа у охраны.',
+    eventTargetName: 'Акт о пропавшей записи 69',
+    eventSeverity: 4,
+    eventPrivacy: 'local',
+    eventTags: floor69EventTags('blackmail', 'expose', 'documents'),
+    eventData: floor69RouteEventData('expose_blackmail_record', 'official witness audit', 'blank forms, ink and weaker blackmail'),
   },
 ]);
 
@@ -394,11 +484,12 @@ function addRoom(
   name: string,
   wallTex: Tex,
   floorTex: Tex,
+  protectedRoom = false,
 ): Room {
   const room = stampRoom(world, world.rooms.length, type, x, y, w, h, -1);
   room.name = name;
   applyRoomTextures(world, room, wallTex, floorTex);
-  protectRoom(world, room.x, room.y, room.w, room.h, wallTex, floorTex);
+  if (protectedRoom) protectRoom(world, room.x, room.y, room.w, room.h, wallTex, floorTex);
   return room;
 }
 
@@ -524,12 +615,19 @@ function carveRouteLine(
 }
 
 function doorWalkable(cell: number): boolean {
-  return cell === Cell.FLOOR || cell === Cell.DOOR || cell === Cell.LIFT;
+  return cell === Cell.FLOOR || cell === Cell.DOOR || cell === Cell.WATER || cell === Cell.LIFT;
 }
 
-function placeRoomDoor(world: World, room: Room, wx: number, wy: number, state: DoorState, keyId = ''): void {
+function doorHasStableJamb(world: World, wx: number, wy: number, insideDx: number, insideDy: number): boolean {
+  const fx = insideDy;
+  const fy = insideDx;
+  return world.cells[world.idx(wx + fx, wy + fy)] === Cell.WALL
+    && world.cells[world.idx(wx - fx, wy - fy)] === Cell.WALL;
+}
+
+function placeRoomDoor(world: World, room: Room, wx: number, wy: number, state: DoorState, keyId = ''): boolean {
   const idx = world.idx(wx, wy);
-  if (world.cells[idx] !== Cell.WALL && world.cells[idx] !== Cell.DOOR) return;
+  if (world.cells[idx] !== Cell.WALL && world.cells[idx] !== Cell.DOOR) return false;
   let roomB = -1;
   for (const [ox, oy] of [[1, 0], [-1, 0], [0, 1], [0, -1]] as const) {
     const otherRoomId = world.roomMap[world.idx(wx + ox, wy + oy)];
@@ -547,11 +645,14 @@ function placeRoomDoor(world: World, room: Room, wx: number, wy: number, state: 
     const other = world.rooms[roomB];
     if (other && !other.doors.includes(idx)) other.doors.push(idx);
   }
+  return true;
 }
 
 function openRoomToNearestRoute(world: World, room: Room, tx: number, ty: number, state = DoorState.CLOSED, keyId = ''): void {
   let bestX = 0;
   let bestY = 0;
+  let bestDx = 0;
+  let bestDy = 0;
   let bestD = Infinity;
   for (let dy = -1; dy <= room.h; dy++) {
     for (let dx = -1; dx <= room.w; dx++) {
@@ -564,16 +665,48 @@ function openRoomToNearestRoute(world: World, room: Room, tx: number, ty: number
         const inside = world.idx(wx + ox, wy + oy);
         const outside = world.idx(wx - ox, wy - oy);
         if (world.roomMap[inside] !== room.id || !doorWalkable(world.cells[outside])) continue;
+        if (!doorHasStableJamb(world, wx, wy, ox, oy)) continue;
         const d = world.dist2(wx, wy, tx, ty);
         if (d < bestD) {
           bestD = d;
           bestX = wx;
           bestY = wy;
+          bestDx = ox;
+          bestDy = oy;
         }
       }
     }
   }
-  if (bestD < Infinity) placeRoomDoor(world, room, bestX, bestY, state, keyId);
+  if (bestD < Infinity && placeRoomDoor(world, room, bestX, bestY, state, keyId)) return;
+
+  bestD = Infinity;
+  for (let dy = -1; dy <= room.h; dy++) {
+    for (let dx = -1; dx <= room.w; dx++) {
+      if (dx >= 0 && dx < room.w && dy >= 0 && dy < room.h) continue;
+      const wx = world.wrap(room.x + dx);
+      const wy = world.wrap(room.y + dy);
+      if (world.cells[world.idx(wx, wy)] !== Cell.WALL) continue;
+      for (const [ox, oy] of [[1, 0], [-1, 0], [0, 1], [0, -1]] as const) {
+        const inside = world.idx(wx + ox, wy + oy);
+        const outside = world.idx(wx - ox, wy - oy);
+        if (world.roomMap[inside] !== room.id || world.aptMask[outside]) continue;
+        if (!doorHasStableJamb(world, wx, wy, ox, oy)) continue;
+        const d = world.dist2(wx, wy, tx, ty);
+        if (d < bestD) {
+          bestD = d;
+          bestX = wx;
+          bestY = wy;
+          bestDx = ox;
+          bestDy = oy;
+        }
+      }
+    }
+  }
+
+  if (bestD < Infinity) {
+    carveRouteLine(world, bestX - bestDx, bestY - bestDy, tx, ty, 1, room.floorTex, room.wallTex);
+    placeRoomDoor(world, room, bestX, bestY, state, keyId);
+  }
 }
 
 function addRouteGate(
@@ -673,6 +806,7 @@ function addRouteRoom(
         ? Tex.F_LINO
         : Tex.F_CARPET;
   const room = addRoom(world, pickRouteRoomType(rng, motif), x, y, w, h, name, wallTex, floorTex);
+  if (motif === 'refuge') protectRoom(world, room.x, room.y, room.w, room.h, wallTex, floorTex);
   openRoomToNearestRoute(world, room, doorTargetX, doorTargetY, state, keyId);
   decorateRouteRoom(world, room, motif, rng);
   return room;
@@ -803,7 +937,7 @@ function buildLayout(world: World): Floor69Rooms {
   const hall = addRoom(world, RoomType.COMMON, 496, 488, 27, 19, 'Зал ламп и сцены 69', Tex.CURTAIN, Tex.F_CARPET);
   const clinic = addRoom(world, RoomType.MEDICAL, 530, 496, 17, 11, 'Клиника Сима: тихий прием', Tex.TILE_W, Tex.F_TILE);
   const debtOffice = addRoom(world, RoomType.OFFICE, 530, 515, 17, 12, 'Долговая контора 69', Tex.PANEL, Tex.F_PARQUET);
-  const refuge = addRoom(world, RoomType.LIVING, 498, 515, 12, 10, 'Тихая комната 69', Tex.PANEL, Tex.F_LINO);
+  const refuge = addRoom(world, RoomType.LIVING, 498, 515, 12, 10, 'Тихая комната 69', Tex.PANEL, Tex.F_LINO, true);
   const ledger = addRoom(world, RoomType.OFFICE, 514, 515, 12, 10, 'Картотека долгов 69', Tex.MARBLE, Tex.F_PARQUET);
   const staffRoute = addRoom(world, RoomType.CORRIDOR, 553, 500, 5, 49, 'Служебный ход 69', Tex.DARK, Tex.F_CONCRETE);
   const staffLift = addRoom(world, RoomType.CORRIDOR, 548, 550, 13, 9, 'Черная лестница 69', Tex.METAL, Tex.F_CONCRETE);
@@ -886,6 +1020,66 @@ function placeNonExplicitRouteSignals(world: World, rooms: Floor69Rooms): void {
   addPosterWall(world, rooms.debtOffice.x + 5, rooms.debtOffice.y - 1, 46);
 }
 
+function roomMidX(room: Room): number {
+  return room.x + room.w / 2;
+}
+
+function roomMidY(room: Room): number {
+  return room.y + room.h / 2;
+}
+
+function registerFloor69RouteCues(world: World, rooms: Floor69Rooms): void {
+  const refugeCueX = rooms.checkpoint.x + 9.5;
+  const refugeCueY = rooms.checkpoint.y + 5.5;
+  registerRouteCue(world, {
+    id: 'floor_69_debt_refuge_route',
+    x: refugeCueX,
+    y: refugeCueY,
+    targetX: roomMidX(rooms.refuge),
+    targetY: roomMidY(rooms.refuge),
+    floor: FLOOR_69_BASE_FLOOR,
+    label: '69: долг/убежище',
+    hint: 'пост, ключ и расписка дают риск рейда; тихая комната дает воду, бинт и жалобу',
+    targetName: rooms.refuge.name,
+    color: '#f8a',
+    tags: floor69EventTags('debt', 'refuge', 'raid', 'map_hint'),
+    toneSeed: FLOOR_69_DEFAULT_SEED + 69,
+    radius: 12,
+    targetRadius: 3.8,
+    roomId: rooms.checkpoint.id,
+    targetRoomId: rooms.refuge.id,
+    zoneId: world.zoneMap[world.idx(Math.floor(refugeCueX), Math.floor(refugeCueY))],
+    heardText: 'Карта у поста шепчет маршрут 69: ключ и расписка рискнут рейдом, зато тихая комната даст воду, бинт и жалобу.',
+    followedText: 'Метка вывела к тихой комнате 69: проверь воду, жалобу и служебный выход до рейда.',
+    ignoredText: 'Тихая комната осталась за спиной: свидетель и долг снова зависят от поста.',
+  });
+
+  const blackmailCueX = rooms.debtOffice.x + 2.5;
+  const blackmailCueY = rooms.debtOffice.y + 1.5;
+  registerRouteCue(world, {
+    id: 'floor_69_blackmail_service_route',
+    x: blackmailCueX,
+    y: blackmailCueY,
+    targetX: roomMidX(rooms.staffLift),
+    targetY: roomMidY(rooms.staffLift),
+    floor: FLOOR_69_BASE_FLOOR,
+    label: '69: сейф/черный ход',
+    hint: 'сейф компромата опасен охраной; награда - пропуск, рычаг или служебный выход',
+    targetName: rooms.staffLift.name,
+    color: '#f6c34a',
+    tags: floor69EventTags('blackmail', 'service_route', 'access', 'map_hint'),
+    toneSeed: FLOOR_69_DEFAULT_SEED + 169,
+    radius: 10,
+    targetRadius: 4,
+    roomId: rooms.debtOffice.id,
+    targetRoomId: rooms.staffLift.id,
+    zoneId: world.zoneMap[world.idx(Math.floor(blackmailCueX), Math.floor(blackmailCueY))],
+    heardText: 'У долговой конторы отмечен выбор: сейф дает пропуск или рычаг, но охрана записывает путь к черному ходу.',
+    followedText: 'Черный ход найден: теперь решай, чем платить за маршрут - ключом, бумагой или молчанием.',
+    ignoredText: 'Сейф и черный ход остались позади: короткий маршрут 69 снова проходит через пост.',
+  });
+}
+
 export function expandFloor69FullFloor(generation: FloorGeneration, rng: () => number): void {
   const counts: Floor69MacroCounts = {
     hotelRooms: 0,
@@ -902,7 +1096,6 @@ export function expandFloor69FullFloor(generation: FloorGeneration, rng: () => n
   buildFloor69DebtBlock(generation.world, rng, counts);
   buildFloor69RefugeClosets(generation.world, rng, counts);
   buildFloor69SecurityChokes(generation.world, counts);
-  spawnFloor69Population(generation, rng);
 
   genLog(
     `[F69] full geometry rooms=${counts.hotelRooms + counts.dressingRooms + counts.debtRooms + counts.refugeRooms}`
@@ -912,24 +1105,55 @@ export function expandFloor69FullFloor(generation: FloorGeneration, rng: () => n
   );
 }
 
-function randomFloor69FloorCell(world: World, rng: () => number): { x: number; y: number } | null {
-  for (let attempt = 0; attempt < 2000; attempt++) {
+function floor69ReachableCells(world: World, spawnX: number, spawnY: number): Uint8Array {
+  const out = new Uint8Array(W * W);
+  const queue = new Int32Array(W * W);
+  let head = 0;
+  let tail = 0;
+  const start = world.idx(Math.floor(spawnX), Math.floor(spawnY));
+  out[start] = 1;
+  queue[tail++] = start;
+
+  while (head < tail) {
+    const ci = queue[head++];
+    const x = ci % W;
+    const y = (ci / W) | 0;
+    for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]] as const) {
+      const ni = world.idx(x + dx, y + dy);
+      if (out[ni]) continue;
+      if (!doorWalkable(world.cells[ni])) continue;
+      out[ni] = 1;
+      queue[tail++] = ni;
+    }
+  }
+
+  return out;
+}
+
+function randomFloor69FloorCell(world: World, rng: () => number, reachable: Uint8Array): { x: number; y: number } | null {
+  for (let attempt = 0; attempt < 3000; attempt++) {
     const x = Math.floor(rng() * W);
     const y = Math.floor(rng() * W);
     const ci = world.idx(x, y);
-    if (world.cells[ci] === Cell.FLOOR && world.features[ci] !== Feature.LIFT_BUTTON) return { x, y };
+    if (reachable[ci] && world.cells[ci] === Cell.FLOOR && world.features[ci] !== Feature.LIFT_BUTTON) return { x, y };
+  }
+  for (let i = 0; i < W * W; i++) {
+    if (reachable[i] && world.cells[i] === Cell.FLOOR && world.features[i] !== Feature.LIFT_BUTTON) {
+      return { x: i % W, y: (i / W) | 0 };
+    }
   }
   return null;
 }
 
-function spawnFloor69Population(generation: FloorGeneration, rng: () => number): void {
+export function spawnFloor69ReachablePopulation(generation: FloorGeneration, rng: () => number): void {
   let nextId = generation.entities.reduce((mx, e) => Math.max(mx, e.id), 0) + 1;
   const existingAmbient = generation.entities
     .filter(e => e.type === EntityType.NPC && e.canGiveQuest !== true)
     .length;
   const target = Math.max(0, FLOOR_69_FULL_POP_CAP - existingAmbient);
+  const reachable = floor69ReachableCells(generation.world, generation.spawnX, generation.spawnY);
   for (let i = 0; i < target; i++) {
-    const p = randomFloor69FloorCell(generation.world, rng);
+    const p = randomFloor69FloorCell(generation.world, rng, reachable);
     if (!p) break;
     const female = i < Math.ceil(target * 0.56);
     generation.entities.push(makeFloor69Npc(nextId++, p.x + 0.5, p.y + 0.5, female, i, rng));
@@ -1258,6 +1482,7 @@ export function generateFloor69DesignFloor(seed = FLOOR_69_DEFAULT_SEED): Floor6
     seedContainers(world, rooms);
     spawnFloor69Npcs(world, entities, nextId, rooms);
     seedLooseItems(entities, nextId, rooms);
+    registerFloor69RouteCues(world, rooms);
 
     const spawnX = rooms.publicCorridor.x + 8.5;
     const spawnY = rooms.publicCorridor.y + 3.5;

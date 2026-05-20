@@ -28,7 +28,7 @@ import { RESOURCES } from '../src/data/resources';
 import { getSamosborBeatDefs, registerSamosborBeat } from '../src/data/samosbor_director';
 import { SAMOSBOR_VARIANTS, type ActiveSamosborVariant } from '../src/data/samosbor_variants';
 import { spawnContract } from '../src/systems/contracts';
-import { putIntoContainer, restoreValidContainers, takeFromContainer } from '../src/systems/containers';
+import { putIntoContainer, restoreValidContainers, takeFromContainer, tickContainerAudits } from '../src/systems/containers';
 import {
   changeResourceStock,
   economyForSave,
@@ -578,6 +578,65 @@ test('unseen container theft stays private until a nearby owner faction audit', 
   assert.equal(getNpcMemory(auditor, state.time).hurtByPlayer, 1);
   assert.equal(getNpcMemory(auditor, state.time).trustPlayer, -8);
   assert.equal(getFactionRel(Faction.CITIZEN, Faction.PLAYER), 48);
+});
+
+test('container audit tick surfaces unseen owner theft without reopening the box', () => {
+  initFactionRelations();
+  const state = makeGameState({
+    time: 20,
+    currentFloor: FloorLevel.LIVING,
+    worldEvents: createWorldEventState(),
+  });
+  const world = new World();
+  addTestRoom(world, {
+    type: RoomType.STORAGE,
+    x: 10, y: 10, w: 6, h: 6,
+    name: 'Чужая кладовка',
+  });
+
+  const player = makeTestEntity({ id: 0, x: 11, y: 11, faction: Faction.PLAYER });
+  const owner = makeTestEntity({
+    id: 66,
+    type: EntityType.NPC,
+    x: 13.5,
+    y: 12.5,
+    name: 'Хозяин ящика',
+    faction: Faction.CITIZEN,
+    inventory: [],
+  });
+  const box = makeTestContainer({
+    id: 24,
+    x: 12,
+    y: 12,
+    roomId: 0,
+    zoneId: 0,
+    access: 'owner',
+    ownerNpcId: owner.id,
+    ownerName: owner.name,
+    faction: Faction.CITIZEN,
+    inventory: [{ defId: 'water', count: 1 }],
+    capacitySlots: 4,
+    tags: ['food'],
+  });
+  world.addContainer(box);
+
+  assert.equal(takeFromContainer(box, player, 0, 1, { state, world, entities: [player] }), true);
+  assert.equal(getRecentEvents(state, { type: 'item_stolen', tags: ['audit'], limit: 1 }).length, 0);
+
+  state.time += 121;
+  assert.equal(tickContainerAudits(state, world, player, [player, owner], 1), 1);
+  assert.equal(tickContainerAudits(state, world, player, [player, owner], 1), 0);
+
+  const audit = getRecentEvents(state, { type: 'item_stolen', tags: ['audit'], limit: 1 })[0];
+  assert.ok(audit);
+  assert.equal(audit.targetId, owner.id);
+  assert.equal(audit.privacy, 'local');
+  assert.equal(audit.data?.auditOnly, true);
+  assert.deepEqual(audit.data?.auditorIds, [66]);
+  assert.equal(box.lastAuditAt, 141);
+  assert.equal(getNpcMemory(owner, state.time).trustPlayer, -8);
+  assert.equal(getFactionRel(Faction.CITIZEN, Faction.PLAYER), 48);
+  assert.match(state.msgLog.at(-1)?.text ?? '', /Ревизия выявила кражу/);
 });
 
 test('saved containers outside regenerated topology are dropped on restore', () => {

@@ -4,7 +4,7 @@
 
 import { type Entity } from '../../core/types';
 import { World } from '../../core/world';
-import { syncNextEntityId } from '../content_manifest_utils';
+import { syncNextEntityId, withPoiGenerationMetadata } from '../content_manifest_utils';
 import { generateForpost } from './forpost';
 import { generateMancobusRoom } from './mancobus_room';
 import { spawnMakhno } from './makhno';
@@ -82,7 +82,16 @@ export function runMaintenanceContent(
   spawnGordonFreeman(world, entities, { v: nextId });
   nextId = syncNextEntityId(entities, nextId);
 
-  generatePressureStation({ world, entities, nextId: { v: nextId }, spawnX, spawnY });
+  withPoiGenerationMetadata(world, entities, {
+    id: 'maint_pressure_station',
+    floor: 'maintenance',
+    debugLabel: 'Коллекторы: станция давления',
+    decisionHooks: [
+      { kind: 'quest', id: 'ag04_pressure_wrenches', label: 'принести ключи диспетчеру давления' },
+      { kind: 'quest', id: 'ag04_pressure_rebar', label: 'убрать арматуру у насосов' },
+      { kind: 'repair', id: 'pressure_valves_manual', label: 'выйти к коридору ручных вентилей' },
+    ],
+  }, () => generatePressureStation({ world, entities, nextId: { v: nextId }, spawnX, spawnY }));
   nextId = syncNextEntityId(entities, nextId);
 
   generateSteamValves({ world, entities, nextId: { v: nextId }, spawnX, spawnY });

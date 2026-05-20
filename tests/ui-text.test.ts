@@ -1,6 +1,11 @@
 import { test } from 'node:test';
 import * as assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 
+import { ITEMS } from '../src/data/items';
+import { RUMORS } from '../src/data/rumors';
+import { SAMOSBOR_MODIFIERS, SAMOSBOR_VARIANTS } from '../src/data/samosbor_variants';
+import { combatWeaponHudLines } from '../src/render/hud';
 import { fitText, setUiTextTime, wrapTextLines } from '../src/render/ui_text';
 
 const ctx = {
@@ -27,4 +32,113 @@ test('wrapped text does not append ellipsis when line budget is exhausted', () =
   const lines = wrapTextLines(ctx, 'alpha beta gamma delta', 50, 1);
 
   assert.deepEqual(lines, ['alpha']);
+});
+
+test('Veretar UI text stays a white external-area route with explicit choices', () => {
+  const variant = SAMOSBOR_VARIANTS.find(v => v.id === 'veretar');
+  assert.ok(variant, 'Veretar variant must exist');
+
+  const routeSource = readFileSync(new URL('../src/gen/living/veretar_window_rescue.ts', import.meta.url), 'utf8');
+  const veretarRumors = RUMORS.filter(rumor => rumor.id.startsWith('samosbor_veretar_'));
+  const playerActionRumors = veretarRumors.filter(rumor => rumor.topic === 'player_action');
+  const modifierLines = variant.modifiers.map(id => SAMOSBOR_MODIFIERS[id].warningLine);
+  const text = [
+    variant.displayName,
+    ...variant.warningLines,
+    variant.gameplaySignal,
+    variant.startLine ?? '',
+    ...modifierLines,
+    ITEMS.veretar_sand.desc,
+    ITEMS.overexposed_photo.desc,
+    ...veretarRumors.flatMap(rumor => [...rumor.text, rumor.lead?.action ?? '']),
+    routeSource,
+  ].join('\n').toLowerCase();
+
+  for (const required of ['белое окно', 'область', 'песок', 'засвеч', 'свидетел', 'занавес', 'герметик', 'обход']) {
+    assert.ok(text.includes(required), `Veretar text should contain ${required}`);
+  }
+  for (const forbidden of ['зелён', 'зелен', 'свят', 'чудо', 'ангел', 'истин']) {
+    assert.equal(text.includes(forbidden), false, `Veretar text must not drift into ${forbidden}`);
+  }
+
+  assert.ok(playerActionRumors.length >= 5, 'Veretar needs multiple player-action aftermath rumors');
+  assert.ok(variant.fogColor.every(channel => channel < 235), 'Veretar fog tint should desaturate without blank white fill');
+  assert.ok(routeSource.includes('veretar_window_sample'), 'route exposes sand sample choice');
+  assert.ok(routeSource.includes('veretar_window_seal'), 'route exposes close/seal choice');
+  assert.ok(routeSource.includes('cover_target'), 'route exposes cover choice');
+  assert.ok(routeSource.includes('overexposed_photo'), 'route exposes photo aftermath');
+  assert.ok(routeSource.includes('costly_shortcut'), 'route exposes shortcut cost');
+});
+
+test('wrapped text splits long Russian words into fitting lines', () => {
+  const text = 'электрогидродинамическийпереподключатель';
+  const lines = wrapTextLines(ctx, text, 80, 12);
+
+  assert.ok(lines.length > 1);
+  assert.equal(lines.join(''), text);
+  for (const line of lines) {
+    assert.ok(ctx.measureText(line).width <= 80);
+    assert.equal(line.includes('...'), false);
+  }
+});
+
+test('wrapped Russian action phrase keeps every visible line inside bounds', () => {
+  const text = '[E] перенести сверхдлинноенаименованиепредмета без потери действия';
+  const lines = wrapTextLines(ctx, text, 90, 10);
+
+  assert.ok(lines.length > 2);
+  for (const line of lines) {
+    assert.ok(ctx.measureText(line).width <= 90);
+    assert.equal(line.includes('...'), false);
+  }
+});
+
+test('overwide Russian fitted text scrolls without ellipsis', () => {
+  const text = 'Ржавыйэлектромагнитныйпереподключатель';
+  setUiTextTime(0);
+  const first = fitText(ctx, text, 90);
+  setUiTextTime(1.3);
+  const moved = fitText(ctx, text, 90);
+
+  assert.ok(ctx.measureText(first).width <= 90);
+  assert.ok(ctx.measureText(moved).width <= 90);
+  assert.notEqual(moved, first);
+  assert.equal(`${first}${moved}`.includes('...'), false);
+});
+
+test('combat weapon HUD copy keeps ammo, cooldown and pellet damage compact', () => {
+  const shotgunLines = combatWeaponHudLines({
+    name: 'ТОЗ-34',
+    role: 'стоппер',
+    damageLabel: '8x8',
+    reachLabel: '',
+    controlLabel: '',
+    cooldownLabel: 'КД 1.6с',
+    cannotFireReason: '',
+    resourceKind: 'ammo',
+    resourceLabel: 'дробь 12',
+  });
+
+  assert.equal(shotgunLines.fact, 'стоппер УРН 8x8');
+  assert.equal(shotgunLines.resource, 'БОЕП дробь 12');
+  assert.equal(shotgunLines.fact.includes('/8'), false);
+  for (const line of Object.values(shotgunLines)) {
+    assert.ok(ctx.measureText(line).width <= 160, `combat HUD line too wide: ${line}`);
+  }
+
+  const psiLines = combatWeaponHudLines({
+    name: 'Сгусток: Разрыв',
+    role: 'ПСИ-снаряд',
+    damageLabel: '18',
+    reachLabel: '',
+    controlLabel: '',
+    cooldownLabel: 'ГОТОВ',
+    cannotFireReason: 'нет ПСИ',
+    resourceKind: 'psi',
+    resourceLabel: 'ПСИ 1/10 -8',
+  });
+
+  assert.equal(psiLines.title, 'Разрыв');
+  assert.equal(psiLines.state, 'НЕТ ПСИ');
+  assert.equal(psiLines.resource, 'ПСИ 1/10 -8');
 });

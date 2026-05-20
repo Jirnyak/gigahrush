@@ -251,6 +251,19 @@ function from first mobile interactions:
 
 Do not start new audio systems for mobile.
 
+## Fullscreen And Embedded Hosts
+
+The mobile `FULL` button is only a native fullscreen request on compatible
+non-iOS top-level pages. Browser fullscreen is disabled for embedded hosts and
+iPhone/WebKit. Embedded portals such as itch.io should show a direct-page launch
+button instead, then the standalone page can use the full viewport.
+
+iOS Safari and iOS WebViews do not provide the same reliable forced fullscreen
+path as Android/desktop Chromium. Treat Home Screen standalone launch, viewport
+resizing, and `viewport-fit=cover` safe-area layout as the supported iOS path.
+Do not force a fullscreen request on iPhone/WebKit; it can fail or reload the
+web view depending on the host.
+
 ## Browser Compatibility
 
 Do not assume `OffscreenCanvas` exists. Some iOS/Safari/WebView environments may
@@ -275,26 +288,46 @@ Use the same fallback for temporary image canvases used by effects.
 
 ## Itch.io Package
 
-For a single-file Vite build with copied public assets, zip the contents of
-`dist`, not the `dist` folder itself:
+For this project, build the itch package through the checked-in script:
 
 ```bash
-npm run build
-rm theater-itch.zip
-(cd dist && zip -r -X ../theater-itch.zip index.html assets)
-unzip -l theater-itch.zip
+npm run itch:build
+unzip -l itch/gigahrush-itch.zip | rg "index.html|manifest.webmanifest|sw.js|icon-192.png|icon-512.png|apple-touch-icon.png"
 ```
+
+`npm run itch:build` runs the production build, verifies the PWA shell files,
+rewrites `dist/`, then rewrites `itch/` with `index.html`,
+`gigahrush-itch.zip` and upload notes. For a release gate with read-only checks
+first, run `npm run check:release`; it also runs `npm run itch:verify`.
 
 Expected shape:
 
 ```text
 index.html
-assets/
-assets/sound/...
+manifest.webmanifest
+sw.js
+icon-192.png
+icon-512.png
+apple-touch-icon.png
 ```
 
 If `index.html` is nested inside `dist/` in the zip, itch.io may not open the
 game correctly.
+
+Required itch.io HTML5 settings:
+
+- Kind of game: HTML
+- Upload: `itch/gigahrush-itch.zip`
+- File setting: This file will be played in the browser
+- Embed option for mobile: Mobile Friendly enabled
+- Launch mode: Click to launch in fullscreen
+- Scrollbars: disabled
+
+The itch game still runs inside an iframe. The in-game `FULL` button must not
+call native browser fullscreen from that iframe. On embedded mobile hosts it is
+a direct-page launcher (`↗`) that opens the same build with `?standalone=1`.
+The itch fullscreen setting gives the iframe a usable fill-window viewport; the
+direct-page launcher is the escape path for fragile mobile WebViews.
 
 ## Cloudflare Workers / Static Host
 
@@ -304,29 +337,95 @@ served HTML.
 Useful checks:
 
 ```bash
-curl -L https://your-worker.workers.dev/?check=1 | rg "mobile-controls|viewport-fit"
+curl -L https://your-worker.workers.dev/?check=1 | rg "manifest.webmanifest|viewport-fit|apple-touch-icon"
 curl -I -L https://your-worker.workers.dev/?check=1
+curl -fsS https://your-worker.workers.dev/manifest.webmanifest | rg "start_url|display|icons"
+curl -I -L https://your-worker.workers.dev/sw.js
+curl -I -L https://your-worker.workers.dev/icon-192.png
+curl -I -L https://your-worker.workers.dev/icon-512.png
+curl -I -L https://your-worker.workers.dev/apple-touch-icon.png
 ```
 
-Deploy static assets with Wrangler when appropriate:
+Deploy static assets with Wrangler when appropriate. For this repository,
+prefer the configured script so `wrangler.jsonc` stays the source of truth:
 
 ```bash
-npm run build
-npx wrangler deploy --name theater --assets dist --compatibility-date 2026-05-18
+npm run cf:deploy
 ```
+
+`npm run cf:deploy` rewrites `dist/` and requires Cloudflare auth/config for
+Wrangler. Use `npm run build` alone only for static hosts that upload `dist/`
+without the Worker API.
 
 After deploy, re-check the live URL. Cloudflare may report cache hits even after
 deploy; the content is what matters.
+
+## Fullscreen And PWA Launch
+
+Keep the launch paths separate:
+
+- Direct HTTPS/static/Cloudflare page: manifest and icons are served from the
+  root, `sw.js` registers on secure origins, and the mobile `FULL` control
+  requests native fullscreen only when the browser exposes a compatible
+  Fullscreen API.
+- Embedded host or itch iframe: native fullscreen is not requested. The control
+  is a direct-page launcher (`↗`) that opens `?standalone=1` in a top-level tab
+  or page.
+- iPhone/iPad WebKit browser tab: forced fullscreen is disabled because it can
+  reload or destabilize the web view. The `FULL` control should be hidden on a
+  direct iOS page and should only act as the direct-page launcher while embedded.
+- iOS Home Screen launch: use Add to Home Screen. The Apple web-app meta tags
+  and manifest provide standalone launch; do not add a JavaScript fullscreen
+  fallback for iOS.
+- Desktop: no mobile controls on a normal desktop viewport. Canvas click still
+  owns pointer lock and keyboard/mouse startup.
+
+## PWA Smoke Checks
+
+Run local artifact checks after every PWA/deploy edit:
+
+```bash
+npm run check:browser
+npm run itch:build
+npm run itch:verify
+unzip -l itch/gigahrush-itch.zip | rg "index.html|manifest.webmanifest|sw.js|icon-192.png|icon-512.png|apple-touch-icon.png"
+```
+
+Then run the live-host checks from the Cloudflare/static section against the
+actual deployed URL. In browser DevTools Application panel, verify:
+
+- Manifest loads without icon errors.
+- `start_url` is `./?standalone=1`, scope is `./`, display is fullscreen or
+  standalone, and orientation is landscape.
+- Service worker is registered from `sw.js` on HTTPS, with same-origin scope.
+- The service worker does not intercept `/api/net/*`; Net Sphere endpoints must
+  stay network-only.
+- Offline reload of the direct static page shows the cached shell after one
+  successful online visit.
+
+Manual device checks:
+
+- Android Chrome direct page: mobile pads appear, `FULL` enters/exits native
+  fullscreen without reloading, and the game keeps input after exit.
+- iPhone Safari direct page: no native fullscreen control is shown, Add to Home
+  Screen opens standalone, and there is no reload loop.
+- itch/mobile iframe: launch through itch fullscreen, press `↗`, confirm a
+  direct page opens with `?standalone=1`, and input is not trapped in the iframe.
+- Desktop browser: mobile controls are absent, click-to-start still requests
+  pointer lock, and keyboard/mouse movement still works.
 
 ## Testing Checklist
 
 Run local checks:
 
 ```bash
-npm test
-npm run build
-npm run preview
+npm run check:readonly
+npm run check:browser
 ```
+
+`check:readonly` does not write repo artifacts. `check:browser` rewrites
+`dist/`, starts Vite preview, and requires Chrome or `CHROME_BIN`. For manual
+phone testing after that, keep serving the built game with `npm run preview`.
 
 Verify at least:
 

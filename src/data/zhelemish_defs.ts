@@ -2,6 +2,7 @@ import { Faction, FloorLevel, RoomType } from '../core/types';
 
 export type ZhelemishItemId = 'zhelemish_raw' | 'zhelemish_dried' | 'zhelemish_boiled';
 export type ZhelemishForm = 'raw' | 'dried' | 'boiled';
+export type ZhelemishChoice = 'eat_raw' | 'use_treated' | 'treat' | 'sell' | 'surrender' | 'burn';
 export type ZhelemishTradeRole =
   | 'food'
   | 'medicine_counterfeit'
@@ -19,10 +20,14 @@ export interface ZhelemishDef {
   sourceFloors: readonly FloorLevel[];
   sourceRooms: readonly RoomType[];
   baseValue: number;
+  choices: readonly ZhelemishChoice[];
+  choiceHint: string;
   useHint: string;
   riskHint: string;
   questHooks: readonly string[];
 }
+
+const VALID_ZHELEMISH_CHOICES = new Set<ZhelemishChoice>(['eat_raw', 'use_treated', 'treat', 'sell', 'surrender', 'burn']);
 
 export const ZHELEMISH_DEFS: readonly ZhelemishDef[] = [
   {
@@ -35,9 +40,11 @@ export const ZHELEMISH_DEFS: readonly ZhelemishDef[] = [
     sourceFloors: [FloorLevel.KVARTIRY, FloorLevel.LIVING],
     sourceRooms: [RoomType.STORAGE, RoomType.BATHROOM],
     baseValue: 5,
-    useHint: 'Съесть только от голода или сдать как свежий образец.',
-    riskHint: 'Сырой желемыш кормит, но может снять кожу вместе с уверенностью.',
-    questHooks: ['cellar_harvest', 'fresh_sample', 'surrender_sample', 'cult_argument'],
+    choices: ['eat_raw', 'treat', 'sell', 'surrender', 'burn'],
+    choiceHint: 'Сырой комок: съесть от голода, отдать Мавре на варку, сдать Никите, продать Климу или сжечь мокрый угол.',
+    useHint: 'Съесть только от голода; лучший сырой путь - свежая проба, варка или грязная продажа с последствиями.',
+    riskHint: 'Сырой желемыш кормит, портит образец, сушит горло и даёт санитарный след при свидетелях.',
+    questHooks: ['cellar_harvest', 'fresh_sample', 'surrender_sample', 'raw_sale', 'cult_argument'],
   },
   {
     itemId: 'zhelemish_dried',
@@ -49,8 +56,10 @@ export const ZHELEMISH_DEFS: readonly ZhelemishDef[] = [
     sourceFloors: [FloorLevel.KVARTIRY, FloorLevel.LIVING],
     sourceRooms: [RoomType.STORAGE, RoomType.KITCHEN],
     baseValue: 11,
-    useHint: 'Носить как бедный сухпай или отдавать тем, кто верит в дублёную кожу.',
-    riskHint: 'Сушёный безопаснее сырого, но после него люди держатся дальше.',
+    choices: ['use_treated', 'sell'],
+    choiceHint: 'Сушёный: бедный сухпай для вылазки или дешёвая продажа тем, кто покупает не спрашивая пломбу.',
+    useHint: 'Носить как бедный сухпай; пользоваться только понимая, что вода, ход и лечение станут хуже.',
+    riskHint: 'Сушёный безопаснее сырого, но дублёная кожа всё равно оставляет запах беды и очередь держится дальше.',
     questHooks: ['ration_substitute', 'cult_bait', 'cellar_trade', 'expedition_food'],
   },
   {
@@ -63,8 +72,10 @@ export const ZHELEMISH_DEFS: readonly ZhelemishDef[] = [
     sourceFloors: [FloorLevel.KVARTIRY, FloorLevel.LIVING],
     sourceRooms: [RoomType.KITCHEN, RoomType.MEDICAL],
     baseValue: 16,
-    useHint: 'Использовать как дешёвую повязку-обманку, пока настоящей медицины нет.',
-    riskHint: 'Варка снимает главный риск, но не делает это лекарством.',
+    choices: ['use_treated', 'sell'],
+    choiceHint: 'Варёный: дешёвая припарка для себя или рискованная продажа как липовая медицина.',
+    useHint: 'Использовать как дешёвую повязку-обманку, пока настоящей медицины нет, а воду ещё можно потерять.',
+    riskHint: 'Варка снимает главный риск, но не делает это лекарством и не очищает продажу пациенту.',
     questHooks: ['fake_medpost', 'medicine_counterfeit', 'triage_shortage', 'nii_comparison'],
   },
 ];
@@ -96,6 +107,11 @@ export function validateZhelemishDefs(): string[] {
     if (def.preferredFactions.length === 0) problems.push(`${def.itemId}:preferredFactions`);
     if (def.sourceFloors.length === 0) problems.push(`${def.itemId}:sourceFloors`);
     if (def.sourceRooms.length === 0) problems.push(`${def.itemId}:sourceRooms`);
+    if (def.choices.length === 0) problems.push(`${def.itemId}:choices`);
+    for (const choice of def.choices) {
+      if (!VALID_ZHELEMISH_CHOICES.has(choice)) problems.push(`${def.itemId}:choice:${choice}`);
+    }
+    if (def.choiceHint.trim().length < 30) problems.push(`${def.itemId}:choiceHint`);
     if (def.useHint.trim().length < 20) problems.push(`${def.itemId}:useHint`);
     if (def.riskHint.trim().length < 20) problems.push(`${def.itemId}:riskHint`);
     if (def.questHooks.length === 0) problems.push(`${def.itemId}:questHooks`);

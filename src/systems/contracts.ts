@@ -24,8 +24,11 @@ import {
   GOVNYAK_COURIER_CONTRACT_IDS,
   GOVNYAK_COURIER_PACKAGE_ITEM,
   type ContractDef,
+  type QuestRouteTarget,
   contractToQuest,
+  questTargetRoute,
   questTargetEventData,
+  setQuestTargetRoute,
 } from '../data/contracts';
 import { addFactionRelMutual } from '../data/relations';
 import { MONSTERS } from '../entities/monster';
@@ -33,9 +36,22 @@ import { monsterSpr, Spr } from '../render/sprite_index';
 import { getItemPriceMultiplier, getScarcityAdjustedReward } from './economy';
 import { publishEvent } from './events';
 import { addItem, removeItem } from './inventory';
-import { currentFloorRunEntry, ensureFloorRunState, isCurrentStoryFloor } from './procedural_floors';
-import { zForStoryFloor } from '../data/procedural_floors';
+import { currentFloorRunEntry, ensureFloorRunState, isCurrentStoryFloor, type FloorRunEntry } from './procedural_floors';
+import {
+  FLOOR_ANOMALIES,
+  FLOOR_GEOMETRIES,
+  FLOOR_MAJORITY_FACTIONS,
+  FLOOR_RUN_MAX_Z,
+  FLOOR_RUN_MIN_Z,
+  isProceduralFloorZ,
+  proceduralFloorKey,
+  storyFloorAtZ,
+  zForStoryFloor,
+  type ProceduralFloorSpec,
+} from '../data/procedural_floors';
+import { designFloorAtZ, designFloorById } from '../data/design_floors';
 import { assignProceduralQuestDeadline } from './quest_deadlines';
+import { canSpawnEntityType, entitySpawnSlots } from './entity_limits';
 
 const CLEANUP_SURFACE_THRESHOLD = 480;
 const ZHELEMISH_NII_CONTRACT_ID = 'nii_zhelemish_pure_sample';
@@ -116,6 +132,192 @@ function formatFloorZ(z: number): string {
   return z > 0 ? `+${z}` : `${z}`;
 }
 
+function routeZ(value: number | undefined): number | undefined {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return undefined;
+  const z = Math.trunc(value);
+  return z >= FLOOR_RUN_MIN_Z && z <= FLOOR_RUN_MAX_Z ? z : undefined;
+}
+
+function proceduralSpecRouteTags(spec: ProceduralFloorSpec): Set<string> {
+  const tags = new Set<string>([
+    spec.key,
+    spec.geometryId,
+    spec.majorityId,
+    spec.anomalyId,
+    `danger_${spec.danger}`,
+    `z_${spec.z}`,
+  ]);
+  const geometry = FLOOR_GEOMETRIES.find(def => def.id === spec.geometryId);
+  const majority = FLOOR_MAJORITY_FACTIONS.find(def => def.id === spec.majorityId);
+  const anomaly = FLOOR_ANOMALIES.find(def => def.id === spec.anomalyId);
+  for (const tag of geometry?.tags ?? []) tags.add(tag);
+  for (const tag of majority?.tags ?? []) tags.add(tag);
+  for (const tag of anomaly?.tags ?? []) tags.add(tag);
+  return tags;
+}
+
+function proceduralSpecMatchesRoute(spec: ProceduralFloorSpec, route: QuestRouteTarget, baseFloor?: FloorLevel): boolean {
+  if (baseFloor !== undefined && spec.baseFloor !== baseFloor) return false;
+  if (route.z !== undefined && spec.z !== route.z) return false;
+  if (route.anomalyId !== undefined && spec.anomalyId !== route.anomalyId) return false;
+  if (route.tags?.length) {
+    const specTags = proceduralSpecRouteTags(spec);
+    for (const tag of route.tags) if (!specTags.has(tag)) return false;
+  }
+  return route.anomalyId !== undefined || route.tags !== undefined || route.z !== undefined;
+}
+
+function resolveProceduralRouteTarget(
+  state: GameState,
+  route: QuestRouteTarget,
+  baseFloor?: FloorLevel,
+): ProceduralFloorSpec | undefined {
+  const run = ensureFloorRunState(state);
+  if (route.z !== undefined && isProceduralFloorZ(route.z)) {
+    const spec = run.specs[proceduralFloorKey(route.z)];
+    return spec && proceduralSpecMatchesRoute(spec, route, baseFloor) ? spec : undefined;
+  }
+
+  let best: ProceduralFloorSpec | undefined;
+  let bestScore = -Infinity;
+  for (const spec of Object.values(run.specs)) {
+    if (!proceduralSpecMatchesRoute(spec, route, baseFloor)) continue;
+    const visitedPenalty = run.visited[spec.key] ? 12 : 0;
+    const score = spec.danger * 20 - Math.abs(spec.z - run.currentZ) - visitedPenalty;
+    if (score > bestScore || (score === bestScore && (!best || spec.z < best.z))) {
+      best = spec;
+      bestScore = score;
+    }
+  }
+  return best;
+}
+
+function routeBaseFloor(state: GameState, route: QuestRouteTarget, fallback?: FloorLevel): FloorLevel | undefined {
+  const z = routeZ(route.z) ?? (route.designFloorId ? designFloorById(route.designFloorId)?.z : undefined);
+  if (z !== undefined) {
+    const storyFloor = storyFloorAtZ(z);
+    if (storyFloor !== undefined) return storyFloor;
+    const designFloor = designFloorAtZ(z);
+    if (designFloor) return designFloor.baseFloor;
+    const spec = ensureFloorRunState(state).specs[proceduralFloorKey(z)];
+    if (spec) return spec.baseFloor;
+  }
+  return fallback;
+}
+
+function routeTargetFromSpec(route: QuestRouteTarget, spec: ProceduralFloorSpec): QuestRouteTarget {
+  return {
+    ...route,
+    z: spec.z,
+    anomalyId: route.anomalyId ?? (spec.anomalyId === 'none' ? undefined : spec.anomalyId),
+    label: route.label ?? proceduralRouteLabel(spec),
+  };
+}
+
+function normalizeQuestRouteTarget(q: Quest, state: GameState): QuestRouteTarget | undefined {
+  const route = questTargetRoute(q);
+  if (!route) return undefined;
+
+  let normalized: QuestRouteTarget = { ...route };
+  const design = route.designFloorId ? designFloorById(route.designFloorId) : undefined;
+  const z = routeZ(route.z) ?? design?.z;
+  if (z !== undefined) {
+    normalized.z = z;
+    const atZ = designFloorAtZ(z);
+    if (atZ) {
+      normalized.designFloorId = route.designFloorId ?? atZ.id;
+      normalized.label = route.label ?? `Z${formatFloorZ(z)} ${atZ.displayName}`;
+    } else if (isProceduralFloorZ(z)) {
+      const spec = ensureFloorRunState(state).specs[proceduralFloorKey(z)];
+      if (spec) normalized = routeTargetFromSpec(normalized, spec);
+      else normalized.label = route.label ?? `Z${formatFloorZ(z)}`;
+    } else {
+      const storyFloor = storyFloorAtZ(z);
+      normalized.label = route.label ?? (storyFloor !== undefined ? `Z${formatFloorZ(z)} ${CONTRACT_FLOOR_NAMES[storyFloor]}` : `Z${formatFloorZ(z)}`);
+    }
+  } else {
+    const spec = resolveProceduralRouteTarget(state, route, q.targetFloor);
+    if (spec) normalized = routeTargetFromSpec(normalized, spec);
+  }
+
+  const baseFloor = routeBaseFloor(state, normalized, q.targetFloor);
+  if (baseFloor !== undefined) {
+    q.targetFloor = baseFloor;
+    if (q.type === QuestType.VISIT) q.visitFloor = baseFloor;
+  }
+  setQuestTargetRoute(q, normalized);
+  return normalized;
+}
+
+function proceduralRouteLabel(spec: ProceduralFloorSpec): string {
+  const geometry = FLOOR_GEOMETRIES.find(def => def.id === spec.geometryId)?.title ?? spec.geometryId;
+  const majority = FLOOR_MAJORITY_FACTIONS.find(def => def.id === spec.majorityId)?.title ?? spec.majorityId;
+  const anomaly = FLOOR_ANOMALIES.find(def => def.id === spec.anomalyId)?.title ?? spec.anomalyId;
+  return `Z${formatFloorZ(spec.z)} ${geometry}, ${majority}, ${anomaly}, опасность ${spec.danger}/5`;
+}
+
+function routeLabelFromTarget(route: QuestRouteTarget | undefined, state?: GameState): string {
+  if (!route) return '';
+  if (route.label) return route.label;
+  const z = routeZ(route.z) ?? (route.designFloorId ? designFloorById(route.designFloorId)?.z : undefined);
+  if (z !== undefined) {
+    const design = designFloorAtZ(z);
+    if (design) return `Z${formatFloorZ(z)} ${design.displayName}`;
+    if (state && isProceduralFloorZ(z)) {
+      const spec = ensureFloorRunState(state).specs[proceduralFloorKey(z)];
+      if (spec) return proceduralRouteLabel(spec);
+    }
+    return `Z${formatFloorZ(z)}`;
+  }
+  const parts: string[] = [];
+  if (route.designFloorId) parts.push(route.designFloorId);
+  if (route.anomalyId) parts.push(route.anomalyId);
+  if (route.tags?.length) parts.push(route.tags.join('+'));
+  return parts.length > 0 ? parts.join(' ') : '';
+}
+
+function routeShortLabelFromTarget(route: QuestRouteTarget | undefined): string {
+  if (!route) return '';
+  const z = routeZ(route.z) ?? (route.designFloorId ? designFloorById(route.designFloorId)?.z : undefined);
+  if (z !== undefined) return `Z${formatFloorZ(z)}`;
+  if (route.designFloorId) return 'ROUTE';
+  if (route.anomalyId) return 'ANOM';
+  if (route.tags?.length) return 'TAG';
+  return '';
+}
+
+export function questRouteTargetLabel(q: Quest, state?: GameState): string {
+  return routeLabelFromTarget(questTargetRoute(q), state);
+}
+
+export function questRouteTargetShortLabel(q: Quest): string {
+  return routeShortLabelFromTarget(questTargetRoute(q));
+}
+
+function entryMatchesRouteTarget(entry: FloorRunEntry, route: QuestRouteTarget, state: GameState): boolean {
+  const normalizedZ = routeZ(route.z) ?? (route.designFloorId ? designFloorById(route.designFloorId)?.z : undefined);
+  if (normalizedZ !== undefined && entry.z !== normalizedZ) return false;
+  if (route.designFloorId !== undefined && entry.designFloorId !== route.designFloorId) return false;
+  if (route.anomalyId !== undefined && entry.spec?.anomalyId !== route.anomalyId) return false;
+  if (route.tags?.length) {
+    if (!entry.spec) return false;
+    const tags = proceduralSpecRouteTags(entry.spec);
+    for (const tag of route.tags) if (!tags.has(tag)) return false;
+  }
+  if (normalizedZ === undefined && route.designFloorId === undefined && route.anomalyId === undefined && !route.tags?.length) {
+    const baseFloor = routeBaseFloor(state, route);
+    return baseFloor === undefined || entry.baseFloor === baseFloor;
+  }
+  return true;
+}
+
+function enrichRouteHint(q: Quest, state: GameState): void {
+  const label = questRouteTargetLabel(q, state);
+  if (!label) return;
+  if (q.targetHint?.includes(label)) return;
+  q.targetHint = q.targetHint ? `Маршрут ${label}. ${q.targetHint}` : `Маршрут ${label}.`;
+}
+
 function zhelemishSampleData(data: unknown): ZhelemishSampleData | undefined {
   if (!data || typeof data !== 'object') return undefined;
   const sample = data as Partial<ZhelemishSampleData>;
@@ -178,6 +380,8 @@ function zhelemishTargetHint(target: ZhelemishNiiTarget): string {
 }
 
 export function prepareAcceptedContract(q: Quest, state: GameState): void {
+  normalizeQuestRouteTarget(q, state);
+  enrichRouteHint(q, state);
   if (q.contractId !== ZHELEMISH_NII_CONTRACT_ID) return;
   const target = ensureZhelemishTarget(state);
   q.targetItem = ZHELEMISH_SAMPLE_SEALED;
@@ -186,6 +390,15 @@ export function prepareAcceptedContract(q: Quest, state: GameState): void {
   q.targetRoomType = target.roomType;
   q.targetZoneTag = ZHELEMISH_SAMPLE_ZONE_TAG;
   q.targetHint = zhelemishTargetHint(target);
+  setQuestTargetRoute(q, target.kind === 'procedural_mushroom'
+    ? {
+      z: target.z,
+      anomalyId: 'mushroom_mycelium',
+      tags: ['mushroom'],
+      label: `Z${formatFloorZ(target.z ?? 0)} грибница, опасность ${target.danger}/5`,
+    }
+    : undefined);
+  enrichRouteHint(q, state);
 }
 
 function publishContractFailure(state: GameState, reason: string): void {
@@ -222,16 +435,25 @@ export function questRouteFloor(q: Quest): FloorLevel | undefined {
 }
 
 export function isQuestTargetOnCurrentFloor(q: Quest, state: GameState): boolean {
+  const route = questTargetRoute(q);
+  if (route) return entryMatchesRouteTarget(currentFloorRunEntry(state), route, state);
   const floor = questRouteFloor(q);
   if (floor === undefined) return true;
   return isCurrentStoryFloor(state, floor);
 }
 
+export function questRequiresRouteTravel(q: Quest, state: GameState): boolean {
+  if (questRouteFloor(q) === undefined && !questTargetRoute(q)) return false;
+  return !isQuestTargetOnCurrentFloor(q, state);
+}
+
 export function questTargetLiftDirection(q: Quest, state: GameState): LiftDirection | undefined {
   const floor = questRouteFloor(q);
-  if (floor === undefined || isQuestTargetOnCurrentFloor(q, state)) return undefined;
+  const route = questTargetRoute(q);
+  if ((floor === undefined && !route) || isQuestTargetOnCurrentFloor(q, state)) return undefined;
   const currentZ = currentFloorRunEntry(state).z;
-  const targetZ = zForStoryFloor(floor);
+  const targetZ = routeZ(route?.z) ?? (route?.designFloorId ? designFloorById(route.designFloorId)?.z : undefined) ?? (floor !== undefined ? zForStoryFloor(floor) : undefined);
+  if (targetZ === undefined) return undefined;
   if (currentZ === targetZ) return undefined;
   return targetZ > currentZ ? LiftDirection.DOWN : LiftDirection.UP;
 }
@@ -493,6 +715,7 @@ function dropContractSample(
   defId: string,
   data: ZhelemishSampleData,
 ): void {
+  if (!canSpawnEntityType(entities, EntityType.ITEM_DROP)) return;
   entities.push({
     id: nextId.v++,
     type: EntityType.ITEM_DROP,
@@ -529,7 +752,7 @@ function guardCell(world: World, room: Room, sampleX: number, sampleY: number, o
 
 function spawnZhelemishGuards(world: World, room: Room, entities: Entity[], nextId: { v: number }, target: ZhelemishNiiTarget, x: number, y: number): void {
   const kinds = [MonsterKind.POLZUN, MonsterKind.SBORKA, MonsterKind.ZOMBIE, MonsterKind.TVAR];
-  const count = Math.min(4, Math.max(2, target.danger));
+  const count = entitySpawnSlots(entities, EntityType.MONSTER, Math.min(4, Math.max(2, target.danger)));
   for (let i = 0; i < count; i++) {
     const kind = kinds[i % kinds.length];
     const def = MONSTERS[kind];
@@ -682,7 +905,7 @@ export function canCompleteGovnyakCourierEndpoint(
   state: GameState,
 ): boolean | undefined {
   if (isGovnyakCourierContractId(q.contractId)) {
-    if (q.targetFloor !== undefined && q.targetFloor !== state.currentFloor) return false;
+    if (!isQuestTargetOnCurrentFloor(q, state)) return false;
     if (inventoryCount(player, GOVNYAK_COURIER_PACKAGE_ITEM) < 1) return false;
 
     if (q.targetRoomType !== undefined) {
@@ -697,7 +920,7 @@ export function canCompleteGovnyakCourierEndpoint(
   const def = CONTRACTS.find(c => c.id === q.contractId);
   if (!def || def.type !== QuestType.VISIT) return undefined;
   if (q.targetRoomType === undefined && !def.target.roomName) return undefined;
-  if (q.targetFloor !== undefined && q.targetFloor !== state.currentFloor) return false;
+  if (!isQuestTargetOnCurrentFloor(q, state)) return false;
 
   const room = world.roomAt(player.x, player.y);
   if (!room) return false;

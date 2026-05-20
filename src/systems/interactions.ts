@@ -1,0 +1,587 @@
+import {
+  Cell,
+  DoorState,
+  EntityType,
+  Feature,
+  LiftDirection,
+  W,
+  msg,
+  type Entity,
+  type GameState,
+  type WorldContainer,
+} from '../core/types';
+import { World } from '../core/world';
+import { hashSeed, seededRandom } from '../core/rand';
+import { getComputerDef } from '../data/computers';
+import { getGamblingMachineDef } from '../data/gambling';
+import { getNetHackTerminalDef } from '../data/net_hack';
+import { isParitelSteamValveTarget, tryUseParitelSteamBridge } from '../gen/maintenance/paritel_steam_bridge';
+import { tryUseBetonoedShortcut } from '../gen/maintenance/betonoed_shortcut';
+import { tryUseCarnivorousFungus } from './carnivorous_fungus';
+import { ensureRoomContainers } from './containers';
+import {
+  clearComputers,
+  closeComputer,
+  copyComputerData,
+  getComputerAt,
+  isComputerOverlayOpen,
+  moveComputerPage,
+  openComputer,
+  placeComputer,
+} from './computers';
+import { questTargetLiftDirection } from './contracts';
+import { getCultProcessionPrompt, tryInteractCultProcession } from './faction_events';
+import { isHostile } from './factions';
+import { getActiveFloorInstance } from './floor_instances';
+import {
+  activateGamblingBet,
+  clearGamblingMachines,
+  closeGamblingMachine,
+  getGamblingMachineAt,
+  isGamblingOverlayOpen,
+  moveGamblingPreset,
+  openGamblingMachine,
+  placeGamblingMachine,
+} from './gambling';
+import { tryUseHeatlinePressure } from './heatline';
+import { tryRepairHermodoorBorerDamage } from './hermodoor_borer';
+import { hladonInteractionTargetId, tryUseHladonColdPocketCounter } from './hladon';
+import { getEmergencyPanelAt, tryUseEmergencyPanel } from './emergency_panels';
+import { ENTITY_MASK_NPC, ensureEntityIndex } from './entity_index';
+import { tryUseMetroRoute } from './metro';
+import {
+  attemptNetHack,
+  clearNetHackTerminals,
+  closeNetHackTerminal,
+  getNetHackTerminalAt,
+  isNetHackOverlayOpen,
+  openNetHackTerminal,
+  placeNetHackTerminal,
+} from './net_hack';
+import { consumeQuietDoorCharge, publishDoorNoise } from './noise';
+import {
+  activateNetTerminalBank,
+  closeNetTerminalGen,
+  isNetTerminalBankOpen,
+  isNetTerminalGenDeniedOpen,
+  isNetTerminalGenTarget,
+  moveNetTerminalBankAction,
+  moveNetTerminalBankPreset,
+  tryUseNetTerminalGen,
+} from './net_terminal_gen';
+import { tryUsePneumomailTube } from './pneumomail';
+import { floorRunLiftPrompt, currentFloorRunLabel } from './procedural_floors';
+import { proceduralAnomalyInteractionTargetId, tryUseProceduralFloorAnomaly } from './procedural_anomalies';
+import { railTrainInteractionTargetId, tryUseRailTrain } from './rail_trains';
+import { isRouteCueTarget, tryUseRouteCue } from './route_cues';
+import { tryUseSamosborVariantInteraction } from './samosbor';
+import { tryCoverSeroburmalineSource } from './seroburmaline';
+
+export type InteractableKind =
+  | 'instant'
+  | 'door'
+  | 'lift'
+  | 'npc'
+  | 'container'
+  | 'rail_train'
+  | 'gambling'
+  | 'computer'
+  | 'net_hack'
+  | 'emergency_panel';
+
+export interface InteractionContext {
+  world: World;
+  state: GameState;
+  player: Entity;
+  entities: Entity[];
+  nextEntityId: { v: number };
+  lookX: number;
+  lookY: number;
+  switchFloor?: (direction: LiftDirection, message?: string, color?: string, allowElevatorAnomaly?: boolean) => void;
+  movePlayerToMetroRoom?: (roomName: string) => boolean;
+  openNpcMenu?: (npc: Entity) => void;
+  openContainerMenu?: (container: WorldContainer) => void;
+  openMapEditor?: (world: World, player: Entity, state: GameState, terminal?: { x: number; y: number }) => void;
+  playDoor?: () => void;
+}
+
+export interface InteractionTarget {
+  id: number;
+  defId: string;
+  kind: InteractableKind;
+  x: number;
+  y: number;
+  priority: number;
+  prompt: string;
+  colorSeed: number;
+  disabledReason?: string;
+}
+
+export interface InteractionResult {
+  handled: boolean;
+  openedOverlay?: boolean;
+  worldChanged?: boolean;
+  message?: string;
+}
+
+export interface InteractableOverlayInput {
+  escEdge: boolean;
+  interactEdge: boolean;
+  upNav: boolean;
+  dnNav: boolean;
+  leftNav: boolean;
+  rightNav: boolean;
+}
+
+export type InteractableOverlayKind = 'none' | 'gambling' | 'computer' | 'net_hack' | 'net_terminal';
+
+export interface InteractableOverlaySnapshot {
+  open: boolean;
+  kind: InteractableOverlayKind;
+}
+
+const INTERACTABLE_ROOM_ATTEMPTS = 384;
+const INTERACTABLE_RANDOM_ATTEMPTS = 1024;
+const NPC_INTERACTION_RANGE = 2.25;
+const NPC_INTERACTION_MIN_FORWARD = 0.35;
+const NPC_INTERACTION_BODY_RADIUS = 0.33;
+const NPC_INTERACTION_QUERY_CAP = 48;
+const NPC_INTERACTION_RAY_STEP_CAP = 12;
+const npcInteractionQuery: Entity[] = [];
+
+function target(
+  kind: InteractableKind,
+  id: number,
+  defId: string,
+  x: number,
+  y: number,
+  priority: number,
+  prompt: string,
+): InteractionTarget {
+  return { id, defId, kind, x, y, priority, prompt, colorSeed: id };
+}
+
+function activeVisitLiftHint(state: GameState, direction: LiftDirection): string {
+  for (const q of state.quests) {
+    if (q.done || q.failed) continue;
+    if (questTargetLiftDirection(q, state) === direction) return ' ЦЕЛЬ';
+  }
+  return '';
+}
+
+function liftPrompt(ctx: InteractionContext, idx: number): string {
+  const dir = ctx.world.liftDir[idx] as LiftDirection;
+  const activeInstance = getActiveFloorInstance(ctx.state);
+  if (activeInstance) {
+    const route = currentFloorRunLabel(ctx.state) ?? 'плановый маршрут';
+    return ` ${dir === LiftDirection.UP ? '↑' : '↓'} НОМЕРНОЙ №${activeInstance.displayNumber} риск ${activeInstance.risk}/5 -> ${route}`;
+  }
+  return ` ${floorRunLiftPrompt(ctx.state, dir)}${activeVisitLiftHint(ctx.state, dir)}`;
+}
+
+function interactionSpriteScale(e: Entity): number {
+  return Math.max(0.35, Math.min(1.6, e.spriteScale ?? 1));
+}
+
+function interactionRayBlocked(world: World, px: number, py: number, dirX: number, dirY: number, maxDist: number): boolean {
+  if (maxDist <= 0) return false;
+  let mapX = Math.floor(px);
+  let mapY = Math.floor(py);
+  const ddx = dirX === 0 ? Infinity : Math.abs(1 / dirX);
+  const ddy = dirY === 0 ? Infinity : Math.abs(1 / dirY);
+  const stepX = dirX < 0 ? -1 : 1;
+  const stepY = dirY < 0 ? -1 : 1;
+  let sdx = dirX < 0 ? (px - mapX) * ddx : (mapX + 1 - px) * ddx;
+  let sdy = dirY < 0 ? (py - mapY) * ddy : (mapY + 1 - py) * ddy;
+
+  for (let step = 0; step < NPC_INTERACTION_RAY_STEP_CAP; step++) {
+    const dist = Math.min(sdx, sdy);
+    if (dist >= maxDist) return false;
+    if (sdx < sdy) {
+      sdx += ddx;
+      mapX += stepX;
+    } else {
+      sdy += ddy;
+      mapY += stepY;
+    }
+    if (world.solid(mapX, mapY)) return true;
+  }
+  return false;
+}
+
+function findFriendlyNpc(ctx: InteractionContext): Entity | null {
+  const dirX = Math.cos(ctx.player.angle);
+  const dirY = Math.sin(ctx.player.angle);
+  let best: Entity | null = null;
+  let bestScore = Infinity;
+  ensureEntityIndex(ctx.entities).queryRadiusCapped(
+    ctx.player.x,
+    ctx.player.y,
+    NPC_INTERACTION_RANGE,
+    npcInteractionQuery,
+    ENTITY_MASK_NPC,
+    NPC_INTERACTION_QUERY_CAP,
+  );
+  for (const e of npcInteractionQuery) {
+    if (e.type !== EntityType.NPC || !e.alive) continue;
+    if (isHostile(e, ctx.player) || isHostile(ctx.player, e)) continue;
+    const dx = ctx.world.delta(ctx.player.x, e.x);
+    const dy = ctx.world.delta(ctx.player.y, e.y);
+    const forward = dx * dirX + dy * dirY;
+    if (forward <= NPC_INTERACTION_MIN_FORWARD || forward > NPC_INTERACTION_RANGE) continue;
+    const side = -dx * dirY + dy * dirX;
+    const bodyRadius = Math.max(0.18, Math.min(0.5, NPC_INTERACTION_BODY_RADIUS * interactionSpriteScale(e)));
+    if (Math.abs(side) > bodyRadius) continue;
+    if (interactionRayBlocked(ctx.world, ctx.player.x, ctx.player.y, dirX, dirY, forward - bodyRadius)) continue;
+    const score = forward + Math.abs(side) * 0.5;
+    if (score < bestScore) {
+      best = e;
+      bestScore = score;
+    }
+  }
+  return best;
+}
+
+function findContainer(ctx: InteractionContext, discoverSecret: boolean): WorldContainer | null {
+  const lx = Math.floor(ctx.lookX);
+  const ly = Math.floor(ctx.lookY);
+  const exact = ctx.world.containersAt(lx, ly);
+  const visible = exact.find(c => c.discovered || c.access !== 'secret');
+  if (visible) return visible;
+  if (discoverSecret) {
+    const secret = exact.find(c => c.access === 'secret' && !c.discovered);
+    if (secret && ctx.world.dist2(ctx.player.x, ctx.player.y, secret.x + 0.5, secret.y + 0.5) <= 2.25) {
+      secret.discovered = true;
+      ctx.state.msgs.push(msg('Вы нашли тайник.', ctx.state.time, '#c8f'));
+      return secret;
+    }
+  }
+  return null;
+}
+
+function lookIdx(ctx: InteractionContext): number {
+  return ctx.world.idx(Math.floor(ctx.lookX), Math.floor(ctx.lookY));
+}
+
+export function findInteractionTarget(ctx: InteractionContext): InteractionTarget | null {
+  const idx = lookIdx(ctx);
+  const processionHint = getCultProcessionPrompt(ctx.world, ctx.state, ctx.player);
+  if (processionHint) return target('instant', 850000 + processionHint.length, 'cult_procession', ctx.player.x, ctx.player.y, 10, processionHint);
+
+  if (isNetTerminalGenTarget(ctx.world, ctx.state, ctx.lookX, ctx.lookY)) {
+    return target('computer', idx + 910000, 'net_terminal_gen', Math.floor(ctx.lookX), Math.floor(ctx.lookY), 20, ' НЕТ');
+  }
+
+  const railId = railTrainInteractionTargetId(ctx.world, ctx.player, ctx.state, ctx.lookX, ctx.lookY);
+  if (railId !== null) return target('rail_train', railId, 'rail_train', ctx.lookX, ctx.lookY, 30, ' поезд');
+
+  const gambling = getGamblingMachineAt(ctx.world, ctx.lookX, ctx.lookY);
+  if (gambling) {
+    const def = getGamblingMachineDef(gambling.defId);
+    return target('gambling', gambling.idx + 960000, gambling.defId, gambling.x, gambling.y, 40, ` ${def?.prompt ?? 'ставка'}`);
+  }
+
+  const computer = getComputerAt(ctx.world, ctx.lookX, ctx.lookY);
+  if (computer) {
+    const def = getComputerDef(computer.defId);
+    return target('computer', computer.idx + 970000, computer.defId, computer.x, computer.y, 45, ` ${def?.prompt ?? 'компьютер'}`);
+  }
+
+  const hack = getNetHackTerminalAt(ctx.world, ctx.lookX, ctx.lookY);
+  if (hack) {
+    const def = getNetHackTerminalDef(hack.defId);
+    return target('net_hack', hack.idx + 980000, hack.defId, hack.x, hack.y, 48, ` ${def?.prompt ?? 'взлом'}`);
+  }
+
+  const panel = getEmergencyPanelAt(ctx.world, ctx.lookX, ctx.lookY);
+  if (panel) {
+    return target('emergency_panel', panel.idx + 620000, panel.defId, panel.x, panel.y, 49, ' аварийный щиток');
+  }
+
+  const npc = findFriendlyNpc(ctx);
+  if (npc) return target('npc', npc.id, 'npc', npc.x, npc.y, 50, ' разговор');
+
+  const cell = ctx.world.cells[idx];
+  if (cell === Cell.LIFT || ctx.world.features[idx] === Feature.LIFT_BUTTON) {
+    return target('lift', idx + 200000, 'lift', idx % W, (idx / W) | 0, 60, liftPrompt(ctx, idx));
+  }
+
+  if (isParitelSteamValveTarget(ctx.world, ctx.lookX, ctx.lookY)) {
+    return target('instant', idx + 450000, 'paritel_steam_valve', idx % W, (idx / W) | 0, 70, ' вентиль');
+  }
+  if (isRouteCueTarget(ctx.world, ctx.player, ctx.lookX, ctx.lookY)) {
+    return target('instant', idx + 470000, 'route_cue', idx % W, (idx / W) | 0, 80, ' маршрут');
+  }
+  const anomalyTargetId = hladonInteractionTargetId(ctx.world, ctx.lookX, ctx.lookY)
+    ?? proceduralAnomalyInteractionTargetId(ctx.world, ctx.state, ctx.lookX, ctx.lookY);
+  if (anomalyTargetId !== null) {
+    return target('instant', anomalyTargetId, 'anomaly', idx % W, (idx / W) | 0, 90, ' аномалия');
+  }
+
+  if (cell === Cell.DOOR && ctx.world.doors.has(idx)) {
+    return target('door', idx + 100000, 'door', idx % W, (idx / W) | 0, 100, ' дверь');
+  }
+
+  const container = findContainer(ctx, false);
+  if (container) {
+    return target('container', container.id + 300000, 'container', container.x, container.y, 110, ' контейнер');
+  }
+
+  return null;
+}
+
+function activateDoor(ctx: InteractionContext, idx: number): InteractionResult {
+  const door = ctx.world.doors.get(idx);
+  if (!door) return { handled: false };
+  const hermeticDoor = door.state === DoorState.HERMETIC_CLOSED || door.state === DoorState.HERMETIC_OPEN;
+  if (door.state === DoorState.CLOSED || door.state === DoorState.HERMETIC_CLOSED) {
+    if (door.state === DoorState.HERMETIC_CLOSED && ctx.state.samosborActive) {
+      ctx.state.msgs.push(msg('Дверь герметично заперта!', ctx.state.time, '#f44'));
+    } else {
+      const quietDoor = consumeQuietDoorCharge(ctx.player, ctx.state.time);
+      door.state = door.state === DoorState.HERMETIC_CLOSED ? DoorState.HERMETIC_OPEN : DoorState.OPEN;
+      door.timer = 0;
+      ctx.state.msgs.push(msg(quietDoor ? 'Дверь открыта тихо' : 'Дверь открыта', ctx.state.time, quietDoor ? '#8cf' : '#aaa'));
+      ctx.playDoor?.();
+      publishDoorNoise(ctx.state, ctx.player, idx, hermeticDoor, quietDoor);
+    }
+  } else if (door.state === DoorState.OPEN || door.state === DoorState.HERMETIC_OPEN) {
+    const quietDoor = consumeQuietDoorCharge(ctx.player, ctx.state.time);
+    door.state = door.state === DoorState.HERMETIC_OPEN ? DoorState.HERMETIC_CLOSED : DoorState.CLOSED;
+    ctx.state.msgs.push(msg(quietDoor ? 'Дверь закрыта тихо' : 'Дверь закрыта', ctx.state.time, quietDoor ? '#8cf' : '#aaa'));
+    ctx.playDoor?.();
+    publishDoorNoise(ctx.state, ctx.player, idx, hermeticDoor, quietDoor);
+  } else if (door.state === DoorState.LOCKED) {
+    if (door.keyId && ctx.player.inventory?.some(i => i.defId === 'key')) {
+      const quietDoor = consumeQuietDoorCharge(ctx.player, ctx.state.time);
+      door.state = DoorState.OPEN;
+      ctx.state.msgs.push(msg(quietDoor ? 'Дверь отперта тихо' : 'Дверь отперта ключом', ctx.state.time, quietDoor ? '#8cf' : '#4a4'));
+      publishDoorNoise(ctx.state, ctx.player, idx, false, quietDoor);
+    } else {
+      ctx.state.msgs.push(msg('Заперто. Нужен ключ.', ctx.state.time, '#f84'));
+    }
+  }
+  return { handled: true };
+}
+
+function activateMetro(ctx: InteractionContext): InteractionResult {
+  const metro = tryUseMetroRoute(ctx.world, ctx.player, ctx.state, ctx.lookX, ctx.lookY);
+  if (!metro) return { handled: false };
+  if (!metro.destination) {
+    ctx.state.msgs.push(msg(metro.message, ctx.state.time, metro.color));
+  } else if (metro.destination.kind === 'local') {
+    if (ctx.movePlayerToMetroRoom?.(metro.destination.roomName)) {
+      ctx.state.msgs.push(msg(metro.message, ctx.state.time, metro.color));
+    } else {
+      ctx.state.msgs.push(msg('Метро дернулось, но карман не найден.', ctx.state.time, '#f84'));
+    }
+  } else {
+    const delta = metro.destination.floor - ctx.state.currentFloor;
+    if (delta === 1) ctx.switchFloor?.(LiftDirection.DOWN, metro.message, metro.color, false);
+    else if (delta === -1) ctx.switchFloor?.(LiftDirection.UP, metro.message, metro.color, false);
+    else ctx.state.msgs.push(msg('Эта линия пока берет только соседние этажи.', ctx.state.time, '#888'));
+  }
+  return { handled: true };
+}
+
+export function activateInteraction(ctx: InteractionContext): InteractionResult {
+  const idx = lookIdx(ctx);
+
+  if (tryInteractCultProcession(ctx.state, ctx.world, ctx.player, ctx.entities)) return { handled: true };
+
+  const netTerminal = tryUseNetTerminalGen(ctx.world, ctx.player, ctx.state, ctx.lookX, ctx.lookY, ctx.entities, ctx.nextEntityId);
+  if (netTerminal.handled) {
+    if (netTerminal.access) ctx.openMapEditor?.(ctx.world, ctx.player, ctx.state, netTerminal.terminal);
+    return { handled: true, openedOverlay: true };
+  }
+
+  if (tryUseRailTrain(ctx.world, ctx.player, ctx.state, ctx.lookX, ctx.lookY)) return { handled: true };
+
+  const gambling = getGamblingMachineAt(ctx.world, ctx.lookX, ctx.lookY);
+  if (gambling) {
+    openGamblingMachine(ctx.state, gambling);
+    return { handled: true, openedOverlay: true };
+  }
+
+  const computer = getComputerAt(ctx.world, ctx.lookX, ctx.lookY);
+  if (computer) {
+    openComputer(ctx.state, computer);
+    return { handled: true, openedOverlay: true };
+  }
+
+  const hack = getNetHackTerminalAt(ctx.world, ctx.lookX, ctx.lookY);
+  if (hack) {
+    openNetHackTerminal(ctx.state, hack);
+    return { handled: true, openedOverlay: true };
+  }
+
+  if (tryUseEmergencyPanel(ctx.world, ctx.player, ctx.state, ctx.lookX, ctx.lookY)) {
+    return { handled: true, openedOverlay: true };
+  }
+
+  const npc = findFriendlyNpc(ctx);
+  if (npc) {
+    ctx.openNpcMenu?.(npc);
+    return { handled: true, openedOverlay: true };
+  }
+
+  if (ctx.world.cells[idx] === Cell.LIFT || ctx.world.features[idx] === Feature.LIFT_BUTTON) {
+    ctx.switchFloor?.(ctx.world.liftDir[idx] as LiftDirection);
+    return { handled: true, worldChanged: true };
+  }
+
+  const metro = activateMetro(ctx);
+  if (metro.handled) return metro;
+
+  if (tryUseHeatlinePressure(ctx.world, ctx.player, ctx.state, ctx.lookX, ctx.lookY)) return { handled: true };
+  if (tryUseCarnivorousFungus(ctx.world, ctx.entities, ctx.nextEntityId, ctx.player, ctx.state, ctx.lookX, ctx.lookY)) return { handled: true };
+  if (tryUsePneumomailTube(ctx.world, ctx.player, ctx.state, ctx.lookX, ctx.lookY)) return { handled: true };
+  if (tryCoverSeroburmalineSource(ctx.world, ctx.player, ctx.state, ctx.lookX, ctx.lookY)) return { handled: true, worldChanged: true };
+  if (tryUseHladonColdPocketCounter(ctx.world, ctx.player, ctx.state, ctx.lookX, ctx.lookY)) return { handled: true };
+  if (tryUseParitelSteamBridge(ctx.world, ctx.player, ctx.state, ctx.lookX, ctx.lookY)) return { handled: true };
+
+  const betonoed = tryUseBetonoedShortcut(ctx.world, ctx.player, ctx.state, ctx.lookX, ctx.lookY);
+  if (betonoed.handled) return { handled: true, worldChanged: betonoed.worldChanged };
+
+  if (tryUseRouteCue(ctx.world, ctx.player, ctx.state, ctx.lookX, ctx.lookY)) return { handled: true };
+  if (tryUseProceduralFloorAnomaly(ctx.world, ctx.player, ctx.state, ctx.lookX, ctx.lookY)) return { handled: true };
+  if (tryUseSamosborVariantInteraction(ctx.world, ctx.entities, ctx.player, ctx.state, ctx.nextEntityId, ctx.lookX, ctx.lookY)) return { handled: true };
+  if (tryRepairHermodoorBorerDamage(ctx.world, ctx.player, ctx.state, ctx.lookX, ctx.lookY)) return { handled: true };
+
+  if (ctx.world.cells[idx] === Cell.DOOR) {
+    const door = activateDoor(ctx, idx);
+    if (door.handled) return door;
+  }
+
+  ensureRoomContainers(ctx.world, ctx.state.currentFloor);
+  const container = findContainer(ctx, true);
+  if (container) {
+    ctx.openContainerMenu?.(container);
+    return { handled: true, openedOverlay: true };
+  }
+
+  return { handled: false };
+}
+
+export function isInteractableOverlayOpen(): boolean {
+  return isGamblingOverlayOpen()
+    || isComputerOverlayOpen()
+    || isNetHackOverlayOpen()
+    || isNetTerminalBankOpen()
+    || isNetTerminalGenDeniedOpen();
+}
+
+export function getInteractableOverlaySnapshot(): InteractableOverlaySnapshot {
+  if (isGamblingOverlayOpen()) return { open: true, kind: 'gambling' };
+  if (isComputerOverlayOpen()) return { open: true, kind: 'computer' };
+  if (isNetHackOverlayOpen()) return { open: true, kind: 'net_hack' };
+  if (isNetTerminalBankOpen() || isNetTerminalGenDeniedOpen()) return { open: true, kind: 'net_terminal' };
+  return { open: false, kind: 'none' };
+}
+
+export function closeInteractableOverlay(): void {
+  closeGamblingMachine();
+  closeComputer();
+  closeNetHackTerminal();
+  closeNetTerminalGen();
+}
+
+export function handleInteractableOverlayInput(input: InteractableOverlayInput, ctx: Pick<InteractionContext, 'world' | 'state' | 'player'>): InteractionResult {
+  if (input.escEdge) {
+    closeInteractableOverlay();
+    return { handled: true };
+  }
+
+  if (isNetTerminalBankOpen()) {
+    if (input.upNav) moveNetTerminalBankAction(-1);
+    if (input.dnNav) moveNetTerminalBankAction(1);
+    if (input.leftNav) moveNetTerminalBankPreset(-1);
+    if (input.rightNav) moveNetTerminalBankPreset(1);
+    if (input.interactEdge) activateNetTerminalBank(ctx.state, ctx.player);
+    return { handled: true };
+  }
+
+  if (isNetTerminalGenDeniedOpen()) {
+    if (input.interactEdge) closeNetTerminalGen();
+    return { handled: true };
+  }
+
+  if (isGamblingOverlayOpen()) {
+    if (input.upNav || input.leftNav) moveGamblingPreset(-1);
+    if (input.dnNav || input.rightNav) moveGamblingPreset(1);
+    if (input.interactEdge) activateGamblingBet(ctx.world, ctx.state, ctx.player);
+    return { handled: true };
+  }
+
+  if (isComputerOverlayOpen()) {
+    if (input.upNav || input.leftNav) moveComputerPage(-1);
+    if (input.dnNav || input.rightNav) moveComputerPage(1);
+    if (input.interactEdge) copyComputerData(ctx.world, ctx.state, ctx.player);
+    return { handled: true };
+  }
+
+  if (isNetHackOverlayOpen()) {
+    if (input.interactEdge) attemptNetHack(ctx.world, ctx.state, ctx.player);
+    return { handled: true };
+  }
+
+  return { handled: false };
+}
+
+function isCandidateCell(world: World, idx: number): boolean {
+  return !world.aptMask[idx]
+    && !world.hermoWall[idx]
+    && (world.cells[idx] === Cell.FLOOR || world.cells[idx] === Cell.WATER)
+    && world.features[idx] === Feature.NONE;
+}
+
+function findGeneratedInteractableCell(world: World, rng: () => number, used: Set<number>): number {
+  for (let attempt = 0; attempt < INTERACTABLE_ROOM_ATTEMPTS; attempt++) {
+    if (world.rooms.length === 0) break;
+    const room = world.rooms[Math.floor(rng() * world.rooms.length)];
+    if (!room || room.w < 3 || room.h < 3) continue;
+    const x = world.wrap(room.x + 1 + Math.floor(rng() * Math.max(1, room.w - 2)));
+    const y = world.wrap(room.y + 1 + Math.floor(rng() * Math.max(1, room.h - 2)));
+    const idx = world.idx(x, y);
+    if (!used.has(idx) && isCandidateCell(world, idx)) return idx;
+  }
+  for (let attempt = 0; attempt < INTERACTABLE_RANDOM_ATTEMPTS; attempt++) {
+    const idx = world.idx(Math.floor(rng() * W), Math.floor(rng() * W));
+    if (!used.has(idx) && isCandidateCell(world, idx)) return idx;
+  }
+  return -1;
+}
+
+export function placeGeneratedInteractablesForCurrentFloor(world: World, state: GameState): number {
+  clearComputers();
+  closeComputer();
+  closeInteractableOverlay();
+
+  clearGamblingMachines();
+  clearNetHackTerminals();
+
+  const seed = hashSeed(`interactables:${state.currentFloor}:${world.rooms.length}`, state.currentFloor * 4099 + world.rooms.length + 1777);
+  const rng = seededRandom(seed);
+  const used = new Set<number>();
+  let placed = 0;
+
+  const gamblingCell = findGeneratedInteractableCell(world, rng, used);
+  if (gamblingCell >= 0) {
+    used.add(gamblingCell);
+    if (placeGamblingMachine(world, gamblingCell % W, (gamblingCell / W) | 0, rng() < 0.5 ? 'roulette' : 'slots')) placed++;
+  }
+
+  const computerCell = findGeneratedInteractableCell(world, rng, used);
+  if (computerCell >= 0) {
+    used.add(computerCell);
+    if (placeComputer(world, computerCell % W, (computerCell / W) | 0, rng() < 0.5 ? 'floor_archive' : 'dispatch_terminal')) placed++;
+  }
+
+  const hackCell = findGeneratedInteractableCell(world, rng, used);
+  if (hackCell >= 0) {
+    used.add(hackCell);
+    if (placeNetHackTerminal(world, hackCell % W, (hackCell / W) | 0, rng() < 0.65 ? 'service_gate' : 'archive_gate')) placed++;
+  }
+
+  return placed;
+}

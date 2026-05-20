@@ -5,15 +5,17 @@ import {
   MonsterKind, Occupation, QuestType, RoomType, Tex, AIGoal,
   msg,
   type Door, type Entity, type GameState, type ItemDef, type Room, type WorldContainer, type WorldEvent,
-  type WorldEventType,
+  type WorldEventPrivacy, type WorldEventType,
 } from '../../core/types';
 import { World } from '../../core/world';
 import { type PlotNpcDef, registerSideQuest } from '../../data/plot';
 import { ITEMS, freshNeeds } from '../../data/catalog';
 import { ITEM_TAGS } from '../../data/items';
+import { getPermitDef, type PermitAccessTag } from '../../data/permits';
 import { chernobogDocketGateItems } from '../../data/chernobog_docket';
 import { publishEvent, registerWorldEventObserver } from '../../systems/events';
 import { registerInventoryUseHandler, type InventoryUseHandlerContext } from '../../systems/inventory';
+import { recordPermitAccess, recordPermitExposure } from '../../systems/permits';
 import {
   type NextId, addItemDrop, setFeature, spawnAdminMonster, spawnAdminNpc, spawnNamedCivilian,
 } from './admin_common';
@@ -29,7 +31,7 @@ const ACCESS_SCAN_RADIUS = 10;
 const ACCESS_SCAN_RADIUS2 = ACCESS_SCAN_RADIUS * ACCESS_SCAN_RADIUS;
 const MAX_CONTEXTS = 4;
 
-type DocumentGateAccessMethod = 'legal' | 'forged' | 'stolen' | 'key' | 'violent';
+type DocumentGateAccessMethod = 'legal' | 'forged' | 'stolen' | 'bribe' | 'debt' | 'expose' | 'key' | 'violent';
 type DocumentGateAccessOutcome = 'success' | 'failure' | 'theft';
 
 interface DocumentGateAccessDef {
@@ -37,7 +39,7 @@ interface DocumentGateAccessDef {
   method: DocumentGateAccessMethod;
   legal: boolean;
   severity: 3 | 4 | 5;
-  privacy: 'private' | 'local' | 'witnessed';
+  privacy: WorldEventPrivacy;
   line: string;
 }
 
@@ -101,6 +103,70 @@ export const DOCUMENT_GATE_ACCESS_ITEMS: readonly DocumentGateAccessDef[] = [
     line: 'Краденая карточка открыла N3 чужим делом. Пальцы попали в журнал.',
   },
   {
+    itemId: 'raionsovet_floor_pass',
+    method: 'legal',
+    legal: true,
+    severity: 3,
+    privacy: 'private',
+    line: 'Пропуск райсовета прошел как старшая бумага. N3 уступил архивной линии.',
+  },
+  {
+    itemId: 'forged_raionsovet_pass',
+    method: 'forged',
+    legal: false,
+    severity: 4,
+    privacy: 'local',
+    line: 'Липовый пропуск райсовета дрогнул, но дверь решила не спорить при очереди.',
+  },
+  {
+    itemId: 'bank_debt_paper',
+    method: 'debt',
+    legal: true,
+    severity: 3,
+    privacy: 'private',
+    line: 'Долговая бумага стала основанием для прохода: долг тоже документ.',
+  },
+  {
+    itemId: 'forged_bank_debt_paper',
+    method: 'forged',
+    legal: false,
+    severity: 5,
+    privacy: 'witnessed',
+    line: 'Липовая долговая бумага прошла, но очередь услышала, как в ней скрипит чужая фамилия.',
+  },
+  {
+    itemId: 'debt_settlement_receipt',
+    method: 'debt',
+    legal: true,
+    severity: 3,
+    privacy: 'private',
+    line: 'Квитанция о погашении закрыла вопрос быстрее печати.',
+  },
+  {
+    itemId: 'confiscation_warrant',
+    method: 'expose',
+    legal: true,
+    severity: 4,
+    privacy: 'witnessed',
+    line: 'Ордер на изъятие заставил N3 открыть проход для ревизии.',
+  },
+  {
+    itemId: 'voluntary_receipt',
+    method: 'bribe',
+    legal: false,
+    severity: 4,
+    privacy: 'local',
+    line: 'Расписка об ускорительном сборе легла вместо дела. N3 открылся, а кассовый журнал оставил строку без фамилии.',
+  },
+  {
+    itemId: 'record_exposure_notice',
+    method: 'expose',
+    legal: true,
+    severity: 4,
+    privacy: 'witnessed',
+    line: 'Акт о пропавшей записи заставил пост искать виновного в архиве. N3 открылся, чтобы спор ушел выше.',
+  },
+  {
     itemId: 'key',
     method: 'key',
     legal: false,
@@ -134,6 +200,7 @@ const GALINA_DEF: PlotNpcDef = {
     'Официальный корешок пропуска кладите сухой стороной вверх.',
     'С документом проход тихий. Без документа проход тоже бывает, но потом шумит журнал.',
     'Если у вас подделка, не показывайте ее мне. Я вижу старый сургуч по краю.',
+    'Расписка, краденая карточка и акт о пропаже тоже проходят. Просто потом идут не туда, куда вы.',
   ],
   talkLinesPost: [
     'Коридор признал вас временно проходящим.',
@@ -178,12 +245,12 @@ const BORIS_DEF: PlotNpcDef = {
   ],
   talkLines: [
     'Никаких взяток. Только ускорительный сбор без квитанции.',
-    'Сто двадцать рублей делают очередь короче ровно на одну дверь.',
-    'Деньги не заменяют документ. Они заменяют вопрос, где документ.',
+    'Сто двадцать рублей делают очередь короче ровно на одну расписку.',
+    'Деньги не заменяют документ. Они становятся документом, который стесняется дела.',
   ],
   talkLinesPost: [
-    'Сбор принят. Если кто спросит, вы стояли здесь вчера.',
-    'Дверь любит наличные меньше бумаги, но быстрее.',
+    'Сбор принят. Если кто спросит, расписка стояла здесь вчера.',
+    'Дверь любит наличные меньше бумаги, но расписку читает быстрее.',
   ],
 };
 
@@ -218,10 +285,21 @@ registerSideQuest('boris_bezchekovy', BORIS_DEF, [
     id: 'document_gate_quiet_bribe',
     giverNpcId: 'boris_bezchekovy',
     type: QuestType.FETCH,
-    desc: 'Борис Безчековый: «Сто двадцать рублей ускорительного сбора - и дверь считает вас вчерашним посетителем.»',
+    desc: 'Борис Безчековый: «Сто двадцать рублей ускорительного сбора - и получите расписку, которую N3 постесняется читать вслух.»',
     targetItem: 'money', targetCount: 120,
-    rewardItem: 'key', rewardCount: 1,
+    rewardItem: 'voluntary_receipt', rewardCount: 1,
     relationDelta: -6, xpReward: 45, moneyReward: 0,
+    eventTargetName: 'Касса N3 приняла ускорительный сбор; расписка стала проходом с ревизионным хвостом.',
+    eventSeverity: 4,
+    eventPrivacy: 'local',
+    eventTags: ['ministry', 'document_gate', 'bribe', 'receipt', 'audit_risk', 'access'],
+    eventData: {
+      permitOutcome: 'bribe',
+      permitDocument: 'voluntary_receipt',
+      gateMethod: 'bribe',
+      auditRisk: 'accelerator_fee_without_case',
+      rumorIds: ['ministry_document_gate_n3'],
+    },
   },
 ]);
 
@@ -336,19 +414,63 @@ function isRelevantRejectedDocument(defId: string, def: ItemDef): boolean {
   return itemTags(defId, def).some(tag => DOCUMENT_GATE_REJECT_HINT_TAGS.has(tag));
 }
 
+function methodIsLegal(method: DocumentGateAccessMethod): boolean {
+  return method === 'legal' || method === 'debt' || method === 'expose';
+}
+
+function auditRiskForMethod(method: DocumentGateAccessMethod): string | undefined {
+  switch (method) {
+    case 'forged': return 'stamp_shape_and_ink_time_mismatch';
+    case 'stolen': return 'card_owner_and_fingerprint_mismatch';
+    case 'bribe': return 'accelerator_fee_without_case';
+    case 'key': return 'control_key_without_attached_file';
+    case 'violent': return 'guard_absence_and_open_gate';
+    default: return undefined;
+  }
+}
+
+function tagsForMethod(method: DocumentGateAccessMethod): string[] {
+  switch (method) {
+    case 'forged': return ['forgery', 'audit_risk'];
+    case 'stolen': return ['audit_risk'];
+    case 'bribe': return ['bribe', 'audit_risk'];
+    case 'debt': return ['debt', 'banking'];
+    case 'expose': return ['expose', 'evidence'];
+    case 'key': return ['audit_risk'];
+    case 'violent': return ['violent', 'audit_risk'];
+    default: return [];
+  }
+}
+
+function rumorIdsForMethod(method: DocumentGateAccessMethod): string[] {
+  if (method === 'forged') return ['player_forged_stamp_risk', 'ministry_document_gate_n3'];
+  if (method === 'stolen') return ['player_stole_archive_card', 'ministry_document_gate_n3'];
+  if (method === 'debt') return ['smoking_debt_notebook', 'ministry_document_gate_n3'];
+  return ['ministry_document_gate_n3'];
+}
+
+function permitAccessTagForGate(itemId: string, method: DocumentGateAccessMethod): PermitAccessTag {
+  if (itemId.includes('raionsovet')) return 'raionsovet';
+  if (itemId.includes('debt')) return 'bank_debt';
+  if (itemId === 'confiscation_warrant') return 'bank_vault';
+  if (itemId.includes('archive') || method === 'stolen') return 'archive';
+  return 'ministry_n3';
+}
+
 function publishDocumentGateAccessEvent(
   state: GameState,
   target: DocumentGateTarget,
   outcome: DocumentGateAccessOutcome,
   method: DocumentGateAccessMethod,
   severity: 2 | 3 | 4 | 5,
-  privacy: 'private' | 'local' | 'witnessed',
+  privacy: WorldEventPrivacy,
   data: Record<string, unknown> = {},
   actor?: Entity,
   sourceEvent?: WorldEvent,
   itemId?: string,
 ): void {
   const itemName = itemId ? ITEMS[itemId]?.name ?? itemId : undefined;
+  const auditRisk = data.auditRisk ?? auditRiskForMethod(method);
   publishEvent(state, {
     type: `document_gate_access_${outcome}` as WorldEventType,
     floor: FloorLevel.MINISTRY,
@@ -372,20 +494,18 @@ function publishDocumentGateAccessEvent(
       'access',
       outcome === 'success' ? 'access_granted' : outcome === 'failure' ? 'access_denied' : 'theft',
       method,
-      ...(method === 'forged' ? ['forgery'] : []),
-      ...(method === 'stolen' ? ['stolen'] : []),
-      ...(method === 'violent' ? ['violent'] : []),
+      ...tagsForMethod(method),
     ],
     data: {
       roomName: GATE_ROOM_NAME,
       gateDoorIdx: target.doorIdx,
       method,
-      legal: method === 'legal',
+      legal: methodIsLegal(method),
       sourceEventId: sourceEvent?.id,
       requiredItems: DOCUMENT_GATE_ACCESS_ITEMS.map(def => def.itemId),
-      rumorIds: method === 'stolen'
-        ? ['player_stole_archive_card', 'ministry_document_gate_n3']
-        : ['ministry_document_gate_n3'],
+      rumorIds: rumorIdsForMethod(method),
+      auditRisk,
+      auditConsequence: auditRisk ? 'event_log_and_ministry_context_fact' : undefined,
       ...data,
     },
   });
@@ -401,7 +521,7 @@ function handleDocumentGateUse(ctx: InventoryUseHandlerContext): boolean {
   if (!access) {
     if (!isRelevantRejectedDocument(ctx.def.id, ctx.def)) return false;
     ctx.msgs.push(msg(
-      `${GATE_ROOM_NAME} отверг ${ctx.def.name}: нужен официальный корешок, допуск архива, подделка, краденая карточка или ключ инспектора.`,
+      `${GATE_ROOM_NAME} отверг ${ctx.def.name}: нужен корешок, допуск, подделка, краденая карточка, расписка, акт разоблачения или ключ инспектора.`,
       ctx.time,
       '#f84',
     ));
@@ -427,11 +547,18 @@ function handleDocumentGateUse(ctx: InventoryUseHandlerContext): boolean {
     access.method,
     access.severity,
     access.privacy,
-    { itemTags: itemTags(access.itemId, ctx.def) },
+    { itemTags: itemTags(access.itemId, ctx.def), legal: access.legal },
     ctx.actor,
     undefined,
     access.itemId,
   );
+  const permit = getPermitDef(access.itemId);
+  if (permit) {
+    recordPermitAccess(ctx.state, ctx.actor, ctx.world, permit, GATE_ROOM_NAME, permitAccessTagForGate(access.itemId, access.method), undefined);
+    if (access.method === 'expose') {
+      recordPermitExposure(ctx.state, ctx.actor, ctx.world, permit, GATE_ROOM_NAME, 'document_gate_exposure', undefined);
+    }
+  }
   return true;
 }
 
@@ -603,9 +730,11 @@ function addGateContainer(
       { defId: 'key', count: 1 },
       { defId: 'forged_permit_slip', count: 1 },
       { defId: 'stolen_archive_card', count: 1 },
+      { defId: 'voluntary_receipt', count: 1 },
+      { defId: 'record_exposure_notice', count: 1 },
       ...chernobogDocketGateItems(),
     ],
-    capacitySlots: 5,
+    capacitySlots: 7,
     ownerNpcId,
     ownerName,
     faction: Faction.CITIZEN,
@@ -676,6 +805,7 @@ export function generateDocumentGate(
 
   addItemDrop(entities, nextId, room.x + 2, room.y + room.h - 2, 'blank_form', 1);
   addItemDrop(entities, nextId, room.x + 4, room.y + room.h - 2, 'note', 1);
+  addItemDrop(entities, nextId, room.x + 6, room.y + room.h - 2, 'record_exposure_notice', 1);
   addItemDrop(entities, nextId, gateX + 2, room.y + 2, 'temp_pass', 1);
   addItemDrop(entities, nextId, gateX + 4, room.y + 2, 'elevator_access_order', 1);
   addItemDrop(entities, nextId, gateX + 2, room.y + room.h - 3, 'chernobog_external_cell_index', 1);

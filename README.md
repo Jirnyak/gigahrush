@@ -4,20 +4,35 @@
 
 Procedural textures, procedural sprites, procedural sound, WebGL raycasting, canvas HUD, flat entity arrays, typed-array world storage. No runtime frameworks, no asset pipeline, one browser build.
 
+Core engineering taste: no hardcoding, no crutches. Keep systems elegant, universal, minimal, modular, data-oriented and emergent.
+
 This README is the factual implementation map. Design priorities for the next iteration are in [desdoc.md](desdoc.md). Engineering ownership and module rules are in [architecture.md](architecture.md).
+
+## Save And Legacy Policy
+
+The browser save lives in `localStorage` under `gigahrush_save` and carries the shape version from `src/systems/save_runtime.ts`. ГИГАХРУЩ is in active development: old saves and legacy runtime paths are not a product contract. When a gameplay/system update breaks save shape, bump the save shape version and reject stale saves explicitly instead of adding cross-version migration code.
+
+Runtime sanitizers are still expected for the current save shape so corrupted local storage cannot crash loading. They are not a promise to load older development builds.
 
 ## Documentation Map
 
-Active docs are intentionally narrow:
+Active docs are intentionally narrow. Use them by role:
 
 - `README.md`: shipped implementation facts only.
 - `desdoc.md`: current planning snapshot and next-iteration priorities.
+- `plans.md`: consolidated unimplemented/partial plans extracted from current planning docs.
 - `architecture.md`: layer contracts, ownership rules and integration patterns.
+- `scaling.md`: shipped high-density population, entity-index and smoke baseline facts.
 - `cloudflare.md`: optional Cloudflare Net Sphere deployment notes.
+- `commit.md`: release commit/deploy runbook for explicit commit requests.
 - `Docs/DesignFloors/`, `Docs/ProceduralFloors/` and `Docs/Expansions/`: active design/reference packets.
-- `monsters.md`, `expansion.md`, `anomalies.md` and `mobile.md`: small stable compatibility entrypoints for older task references and broad planning packets.
+- `scenarist.md`: active project-wide tone brief for player-facing text passes. It does not document shipped behavior.
+- `Docs/ScenarioWriters/`: active subordinate voice/domain packets for text passes. It is active, not archive; read `Docs/ScenarioWriters/README.md` before using it.
+- `monsters.md`, `expansion.md`, `anomalies.md` and `mobile.md`: stable compatibility entrypoints for older task references and broad planning packets.
 
-Historical agent prompts, statuses, logs, batch files and retired root planning passes are consolidated into [appendix.md](appendix.md). Their original files live under `gatbage/` with paths preserved, including root `macro_*.md`, `Monster_*.md`, `economics_*.md`, `tester.md`, and historical `Docs/Tasks` / `Docs/AgentLogs` output. Do not recreate `Docs/Tasks`, `Docs/AgentLogs`, `Docs/AgentPrompts` or `Docs/DesignFloors/AgentPrompts` for routine work; append a compact note to `appendix.md` only when historical context genuinely needs to be kept.
+Root `MACRO2_*.md` files were orchestration prompts, not documentation source of truth. They now live under `gatbage/MACRO2/` with the old parallel contract. Verify any archived prompt against the active docs and current `src/` before implementation.
+
+Historical agent prompts, statuses, logs, batch files, retired root planning passes, root itch-page ZIP archives and scratch notes are consolidated into [appendix.md](appendix.md) or archived under `gatbage/` with paths preserved. `gatbage/**` is archive-only context unless a task explicitly asks for historical comparison. Do not recreate `Docs/Tasks`, `Docs/AgentLogs`, `Docs/AgentPrompts` or `Docs/DesignFloors/AgentPrompts` for routine work; append a compact note to `appendix.md` only when historical context genuinely needs to be kept.
 
 ## Build And Commands
 
@@ -26,11 +41,18 @@ npm install
 npm run dev
 npm run typecheck
 npm run test:unit
+npm run test:generation
 npm run build
+npm run build:size
 npm run itch:build
+npm run itch:verify
+npm run artifacts:verify
 npm run preview
 npm run smoke
 npm run content:audit
+npm run check:readonly
+npm run check:browser
+npm run check:release
 npm run cf:setup
 npm run cf:schema
 npm run cf:dev
@@ -39,13 +61,36 @@ npm run check
 npm run check:full
 ```
 
-Stack: TypeScript, Vite, `vite-plugin-singlefile`, WebGL/canvas, browser APIs. `npm run build` emits the playable single-file build under `dist/`.
+Stack: TypeScript, Vite, `vite-plugin-singlefile`, WebGL/canvas, browser APIs. `npm run check` semantics are unchanged: typecheck, unit tests, content audit and production build.
 
-`npm run itch:build` emits an itch.io HTML5 upload under `itch/`: `index.html` for direct single-file upload and `gigahrush-itch.zip` with `index.html` at the archive root plus PWA manifest, icons and service worker metadata for direct mobile launch.
+| Command | Writes repo artifacts | Requires | Use |
+| --- | --- | --- | --- |
+| `npm run typecheck` | none | none | TypeScript preflight. |
+| `npm run test:unit` | none | none | Node unit tests via `tsx --test`; no separate emitted Node build. |
+| `npm run test:generation` | none | none | Expanded procedural/design generation matrix enabled by `GIGAHRUSH_GENERATION_MATRIX=1`. |
+| `npm run content:audit` | none | none | Static source/content audit. |
+| `npm run check:readonly` | none | none | Safe preflight for agents: typecheck, unit tests and content audit. |
+| `npm run build` | `dist/` | none | Production single-file browser build. |
+| `npm run build:size` | `dist/build-size-report.json` | existing `dist/` | Warning-only size report for single-file HTML, gzip, generated frame data and source/render buckets. |
+| `npm run check` | `dist/` | none | Default CI gate: readonly checks plus production build. |
+| `npm run preview` | none | existing `dist/` | Serve the current production build locally. |
+| `npm run smoke` | none in repo | Chrome or `CHROME_BIN`; existing `dist/` | Browser playability smoke through Vite preview and headless Chrome. |
+| `npm run check:browser` | `dist/` | Chrome or `CHROME_BIN` | Self-contained browser gate: build, then smoke. |
+| `npm run check:full` | `dist/` | Chrome or `CHROME_BIN` | Full validation: `check`, then smoke. |
+| `npm run itch:build` | `dist/`, `itch/` | none | Rebuild, verify PWA shell files and emit itch.io HTML5 upload files. |
+| `npm run itch:verify` | none | existing `dist/`, `itch/`, `itch_page_pack/` | Read-only itch.io upload pack verification. |
+| `npm run artifacts:verify` | none | existing `dist/`, `itch/` | Read-only release artifact sanity check. |
+| `npm run check:release` | `dist/`, `itch/` | existing `itch_page_pack/` | Release artifact gate: readonly checks, itch.io package build, artifact verification and itch pack verification. |
+| `npm run cf:setup` | `wrangler.jsonc`; remote D1 | Cloudflare auth/Wrangler | Create/find D1, write binding, apply schema and migrations. |
+| `npm run cf:schema` | remote D1 | Cloudflare auth/Wrangler | Reapply schema and guarded migrations to the configured D1 database. |
+| `npm run cf:dev` | `dist/` | Cloudflare auth/config; Wrangler | Build, then run the Worker locally. |
+| `npm run cf:deploy` | `dist/`; remote Worker | Cloudflare auth/config; Wrangler | Build, then deploy the Worker. |
 
-`npm run check` runs typecheck, unit tests, content audit and production build. `npm run check:full` adds the slower browser smoke pass.
+`npm run itch:build` emits an itch.io HTML5 upload under `itch/`: `index.html` for direct single-file upload, `gigahrush-itch.zip` with `index.html` at the archive root, and upload notes for PWA manifest, icons and service worker metadata.
 
-Cloudflare scripts are optional and only matter for Net Sphere deployment: `cf:setup`/`cf:schema` prepare D1 schema, `cf:dev` builds then runs Wrangler locally, and `cf:deploy` builds then deploys the Worker.
+`npm run build:size` reads the latest `dist/index.html` and reports raw HTML size, gzip size, Bad Apple generated frame data, approximate sprite/texture source buckets, Rollup rendered module buckets from `dist/build-size-manifest.json`, and itch ZIP upload weight when a current `itch/gigahrush-itch.zip` exists. Current warning thresholds are 9.5 MB HTML, 4.5 MB HTML gzip, 4.5 MB itch ZIP, 5.8 MB Bad Apple frame source and 3.3 MB Bad Apple frame gzip. These are warning-only on the first pass: acceptable growth is small content growth that stays under the warning lines. If a release crosses one, do not remove content just to pass the report; record the reason in release notes and compress generated frames or sprite/texture code before adding more heavy data.
+
+Cloudflare scripts are optional and only matter for Net Sphere deployment.
 
 ## Cloudflare Net Sphere
 
@@ -60,35 +105,41 @@ Current shipped-data scale, counted from source registries:
 | Domain | Current count |
 | --- | ---: |
 | Story `FloorLevel` values | 6 |
-| Authored routed design floors | 17 |
-| Seeded procedural interstitial floors per run | 62 |
-| Procedural floor anomaly profiles | 18 |
+| Authored routed design floors | 18 |
+| Seeded procedural interstitial floors per run | 61 |
+| Procedural floor geometry / majority / anomaly profiles | 10 / 5 / 18 |
 | Numbered lift anomalies | 8 |
 | Main plot steps | 16 |
-| Plot/side NPC ids after manifests load | 303 |
-| Side quest steps after manifests load | 346 |
-| System assignment templates | 133 |
-| Item ids | 242 |
-| Physical weapon stat entries | 31 |
+| Plot/side NPC ids after production manifests load | 313 |
+| Side quest steps after production manifests load | 372 |
+| System assignment templates | 201 |
+| Item ids | 253 |
+| Physical weapon stat entries | 32 |
 | PSI weapon stat entries | 16 |
-| Base monster kinds | 24 |
-| Monster ecology entries | 24 |
+| Base monster kinds | 25 |
+| Monster ecology entries | 25 |
 | Monster modifier variants | 23 |
-| Static rumors | 492 |
-| Samosbor variants / modifiers / aftermath beats | 8 / 21 / 37 |
+| Static rumors | 515 |
+| Samosbor variants / modifiers / aftermath beats | 8 / 21 / 40 |
 | Samosbor director beats | 34 |
 | Economy resources | 17 |
-| Caravan supply lanes | 6 |
-| Factory definitions / recipes | 10 / 17 |
+| Caravan supply lanes / small caravan templates | 6 / 5 |
+| Factory definitions / recipes | 12 / 19 |
 | LIVING manifest entries | 31 |
 | Manifest imports checked by content audit | 128 |
-| Debug commands, including routed teleports | 87 |
+| Debug commands, including routed teleports | 99 |
+
+`npm run content:audit` is intentionally conservative and reports static literal registrations: currently 303 plot NPC ids, 348 side quest steps and 133 literal contract entries. The runtime counts above include production manifest imports, dynamic route-floor side-quest registration and spread/composed contract arrays used by the running game.
 
 ## НЕТ-ТЕРМИНАЛ ГЕН
 
 The current build includes an optional debug/diegetic current-floor map editor. Rare in-world `НЕТ-ТЕРМИНАЛЫ` can be used with `E`; without access they show `НЕТ-ТЕРМИНАЛ ГЕН НЕ ОБНАРУЖЕН`. A seed-fixed `Странный кусок плоти` appears once per run on one route floor, survives floor rebuild logic through run state, and unlocks terminal access when picked up. The debug menu can also grant access, place terminals, open the editor, replay the current floor patch, and clear the current patch.
 
 The editor is a canvas HUD overlay over the live `World`: it can paint cells, doors, textures and features, spawn/delete entities and containers from live game registries, choose NPC faction variants, and replay compact current-floor patches after floor transitions, save/load and samosbor rebuilds.
+
+`E` interaction now routes through a shared dispatcher used by desktop, HUD prompts and mobile context. Generated floors also seed sparse interactable registries for gambling machines, local computers and НЕТ-hack terminals; these open canvas overlays, publish world events and mutate only local player/runtime state.
+
+`silicon_net_well` is a routed design floor at `z=18`: a кремниевый НЕТ-колодец with Sibo, administrators, a cyborg scientist, special НЕТ-КОЛОДЕЦ terminals, Safeguard hack backlash and the rare `gravity_beam_emitter`. Failed special-console hacks publish `net_terminal_hack_failed` and spawn one Safeguard subject to cooldown; the GBE is a generic energy weapon that deletes a bounded beam line of cells, doors, containers and entities.
 
 ## Concept
 
@@ -123,6 +174,13 @@ src/
     resources.ts    economy resources
     caravans.ts     caravan lane definitions
     factories.ts    production definitions and recipes
+    banking.ts      bank route definitions and credit/deposit data
+    stock_market.ts global/local quote definitions
+    permits.ts      access papers and permit spoilage rules
+    computers.ts    generated local computer definitions
+    gambling.ts     generated gambling machine definitions
+    net_hack.ts     local hack terminal definitions
+    emergency_panels.ts emergency panel definitions
     rumors.ts       static rumor definitions
     relations.ts    faction and occupation text/relations
     monster_*.ts    ecology, variants, slime/zhelemish data
@@ -133,7 +191,7 @@ src/
     void_protocols.ts
   entities/
     monster.ts      monster registry and variant application
-    *.ts            24 monster definitions + sprite generators
+    *.ts            25 monster definitions + sprite generators
   gen/
     floor_manifest.ts        FloorLevel -> generator map
     living/                  apartments, volatile maze, tutor room, hub geometry, zone POIs
@@ -155,23 +213,33 @@ src/
     inventory.ts   inventory, trade, item use, weapons
     factions.ts    zone capture, patrols, reinforcements
     economy.ts     resource stocks and scarcity prices
+    banking.ts     deposits, loans, interest and route bank state
+    stock_market.ts quote ticks and global market impulses
     caravans.ts    supply lane slow ticks and tariff state
     production.ts  factory ticks into containers
     containers.ts  world containers and theft/access rules
+    interactions.ts shared E-interaction dispatcher
+    computers.ts, gambling.ts, net_hack.ts generated local overlays
+    emergency_panels.ts emergency panels and repair/report actions
+    permits.ts     access checks, exposure and spoiled documents
     procedural_floors.ts per-run vertical route and floor specs
     floor_instances.ts numbered lift anomaly state
     route_cues.ts  bounded audio/HUD path hints from generated markers
+    room_memory.ts local room facts from noise, violence and witnesses
+    noise.ts       bounded sound records for doors, shots and footsteps
     rumor.ts       rumors from static data and events
     context.ts     dialogue context snapshot
     rpg.ts         levels, XP, stat scaling
     psi.ts         PSI effects
+    weapon_beams.ts deletion beam weapon effects
+    save_payload.ts / save_runtime.ts save payload and shape version
     debug.ts       debug menu
     debug_cheats.ts explicit debug-only cheats
   render/
     webgl.ts        raycaster and shader effects
     hud.ts          canvas HUD
     net_sphere_ui.ts Cloudflare stats/chat terminal overlay
-    *_ui.ts         maps, quests, logs, containers, NPC menu, factions
+    *_ui.ts         maps, quests, logs, containers, NPC menu, factions, computers, gambling, hacks, emergency panels
     sprites.ts      procedural sprite atlas
     textures.ts     procedural texture atlas
   input.ts
@@ -193,7 +261,7 @@ The authoritative floor map is `FloorLevel` in `src/core/types.ts`, story-floor 
 | `HELL = 4` | Мясной низ | `src/gen/hell/` | high-threat meat/cult floor | story anchor `z=28` |
 | `VOID = 5` | Пустота | `src/gen/void/` | final anomaly/boss floor | story anchor `z=36`, portal from Hell/Underhell |
 
-Normal lifts move through a per-run vertical `FloorRun` route rather than directly through adjacent enum values. The player starts on `LIVING` at `z=0`. Authored/story route stops are spaced every four z-levels by default, and the three levels between each authored/story stop are seeded procedural floors unless an authored stop explicitly occupies a gap. `pioneer_camp` sits above Ministry after the upper office stop: `MINISTRY` at `z=-24`, `upper_bureau` at `z=-28`, `pioneer_camp` at `z=-32`. `bank_floor` occupies the Ministry-to-Raionsovet procedural gap at `z=-22`. The current normal lift span is `z=-44..40` with 23 authored/story stops and 62 procedural floors:
+Normal lifts move through a per-run vertical `FloorRun` route rather than directly through adjacent enum values. The player starts on `LIVING` at `z=0`. Authored/story route stops are spaced every four z-levels by default, and the three levels between each authored/story stop are seeded procedural floors unless an authored stop explicitly occupies a gap. `pioneer_camp` sits above Ministry after the upper office stop: `MINISTRY` at `z=-24`, `upper_bureau` at `z=-28`, `pioneer_camp` at `z=-32`. `bank_floor` occupies the Ministry-to-Raionsovet procedural gap at `z=-22`; `silicon_net_well` occupies the service-to-Maintenance gap at `z=18`. The current normal lift span is `z=-44..40` with 24 authored/story stops and 61 procedural floors:
 
 ```txt
 z=-44 roof
@@ -229,7 +297,9 @@ z=  9.. 11 procedural
 z= 12 production_belt
 z= 13.. 15 procedural
 z= 16 service_floor
-z= 17.. 19 procedural
+z= 17 procedural
+z= 18 silicon_net_well
+z= 19 procedural
 z= 20 MAINTENANCE
 z= 21.. 23 procedural
 z= 24 dark_metro
@@ -253,17 +323,17 @@ When switching floors, the floor is regenerated and the player preserves HP, nee
 
 These are routed string-id floors, not new `FloorLevel` enum values. Each one is generated by `src/gen/design_floors/<id>.ts`; runtime systems use its `baseFloor` for mood, economy, monsters and faction defaults.
 
-`src/gen/design_floors/full_floor.ts` expands these authored modules into full 1024x1024 route floors with route-specific secondary layout algorithms, zone retuning, lights, doors and connectivity. The small authored rooms remain as named POIs inside the larger floor. `roof` also exposes a 1024x1024 dynamic sky provider backed by 16x16 cloud chunks; `render/webgl.ts` consumes it through a generic dynamic ceiling texture slot, and roof light comes from a uniform sky lightmap instead of placed lamps. `bank_floor` adds cash desks, a deposit row, credit window, debtor queue, staffed vault and a service bypass; banking choices currently use existing NPC quest and container systems with `banking` tags for deposits, loans, repayments, forged debt paper and vault theft. `floor_69` seeds an ambient adult population using the F69 procedural sprite bank, with female NPC variants forming a majority of that floor's added crowd. `dark_metro` has fixed-route moving trains: they stop at platforms, allow `E` boarding/exit, carry the player between stops and crush living entities on active rails.
+`src/gen/design_floors/full_floor.ts` expands these authored modules into full 1024x1024 route floors with route-specific secondary layout algorithms, zone retuning, lights, doors and connectivity. The small authored rooms remain as named POIs inside the larger floor. `roof` also exposes a 1024x1024 dynamic sky provider backed by 16x16 cloud chunks; `render/webgl.ts` consumes it through a generic dynamic ceiling texture slot, and roof light comes from a uniform sky lightmap instead of placed lamps. `bank_floor` adds cash desks, a deposit row, credit window, debtor queue, staffed vault and a service bypass; banking choices currently use existing NPC quest and container systems with `banking` tags for deposits, loans, repayments, forged debt paper and vault theft. `floor_69` seeds an ambient adult population using the F69 procedural sprite bank, with female NPC variants forming a majority of that floor's added crowd. `silicon_net_well` is a Maintenance route floor for NЕТ access, silicon life and hackable NЕТ-колодец terminals. `dark_metro` has fixed-route moving trains: they stop at platforms, allow `E` boarding/exit, carry the player between stops and crush living entities on active rails.
 
 | z | Route id | HUD name | Base floor |
 | ---: | --- | --- | --- |
 | -44 | `roof` | Крыша | `MINISTRY` |
-| -40 | `chthonic_attic` | Хтонический чердак | `MINISTRY` |
+| -40 | `chthonic_attic` | Чердак техслужб | `MINISTRY` |
 | -36 | `antenna_court` | Антенный двор | `MINISTRY` |
 | -32 | `pioneer_camp` | Пионерлагерь | `LIVING` |
 | -28 | `upper_bureau` | Верхнее бюро | `MINISTRY` |
 | -22 | `bank_floor` | Банковский этаж | `MINISTRY` |
-| -20 | `raionsovet_archive` | Райсовет и Живой архив | `MINISTRY` |
+| -20 | `raionsovet_archive` | Райсовет и архив картотек | `MINISTRY` |
 | -16 | `registry_morgue` | Морг регистраций | `MINISTRY` |
 | -8 | `manhattan_crossroads` | Перекрестки | `KVARTIRY` |
 | -4 | `communal_ring` | Коммунальное кольцо | `KVARTIRY` |
@@ -271,23 +341,24 @@ These are routed string-id floors, not new `FloorLevel` enum values. Each one is
 | 8 | `black_market_88` | Черный рынок 88 | `LIVING` |
 | 12 | `production_belt` | Производственный пояс | `MAINTENANCE` |
 | 16 | `service_floor` | Служебный этаж | `MAINTENANCE` |
+| 18 | `silicon_net_well` | Кремниевый НЕТ-колодец | `MAINTENANCE` |
 | 24 | `dark_metro` | Темная пересадка | `MAINTENANCE` |
-| 32 | `underhell` | Подпорог | `HELL` |
-| 40 | `darkness` | Тьма | `VOID` |
+| 32 | `underhell` | Нижний пропускник | `HELL` |
+| 40 | `darkness` | Темный отсек | `VOID` |
 
 ### Procedural Floor Combinatorics
 
 `src/data/procedural_floors.ts` defines the data deck for random interstitial floors:
 
-- geometry type: `living_blocks`, `apartment_pressure`, `collectors`, `workshops`, `admin_pockets`;
+- geometry type: `living_blocks`, `apartment_pressure`, `communal_knots`, `attic_weatherworks`, `archive_warrens`, `collectors`, `workshops`, `service_spines`, `sump_causeways`, `admin_pockets`;
 - main faction: citizens, liquidators, cultists, wild or scientists, with citizens weighted highest and cultists lowest;
-- anomaly: none, teleport cells, smog, samosbor seed, mushroom mycelium, false safe block, Hladon cold pocket, rail trains, Bad Apple world, zombie apocalypse and topology/route anomalies;
+- anomaly: none, teleport cells, smog, samosbor seed, mushroom mycelium, Hladon cold pocket, false safe block, mirror run, radio chess, conveyor sorter, fractal floor, cement memory, wall snake, rail trains, Bad Apple world, zombie apocalypse, section shift and Conway life;
 - danger level: `1..5`, derived from vertical depth, direction and random seed;
 - per-floor loot and monster bias ids derived from the same seed.
 
 `src/systems/procedural_floors.ts` owns save/load state for the run seed, current `z`, visited procedural specs, authored route entry resolution and lift route resolution. `src/gen/procedural_floor.ts` builds procedural floors without spawning authored story NPCs: rooms/corridors, both lift directions, zone danger, faction majority, seed-biased loot, seed-biased monsters and anomaly effects.
 
-Teleport-cell anomaly pairs are stored sparsely in `world.anomalyTeleports`. Stepping on one paired cell moves the player to the paired cell after a short cooldown. Mushroom-mycelium floors also seed bounded carnivorous fungus rooms with corpse/bait feeding, salt neutralization, fire burn-off and risky zhelemish harvests. False safe blocks stamp quiet corridors, a too-clean shelter, black-hand marks, a missing-siren panel and cult-owned supplies; investigating, reporting, looting or breaking the marker publish events, while samosbor pressure is only partially delayed. Hladon cold pockets are bounded procedural rooms with pale frost marks; they slow and drain needs only inside/near the marked cells, and heat items, valve/steam tools or alternate routing counter them. Rail-train anomalies cut fixed rail routes through the floor, add platforms with schedule screens, spawn moving train segments, allow `E` boarding/exit while stopped and publish rail events when trains crush NPCs, monsters or the player. Bad Apple world stamps a 144x108 map rectangle from packed black/white RLE frames; black pixels become dark walls, white pixels become pale floor, and the projector can be paused/resumed with `E`. Zombie apocalypse floors seed roughly 10k active resident NPCs plus patient zero, and any NPC bitten by a zombie becomes another zombie.
+Teleport-cell anomaly pairs are stored sparsely in `world.anomalyTeleports`. Stepping on one paired cell moves the player to the paired cell after a short cooldown. Mushroom-mycelium floors also seed bounded carnivorous fungus rooms with corpse/bait feeding, salt neutralization, fire burn-off and risky zhelemish harvests. False safe blocks stamp quiet corridors, a too-clean shelter, black-hand marks, a missing-siren panel and cult-owned supplies; investigating, reporting, looting or breaking the marker publish events, while samosbor pressure is only partially delayed. Hladon cold pockets are bounded procedural rooms with pale frost marks; they slow and drain needs only inside/near the marked cells, and heat items, valve/steam tools or alternate routing counter them. Rail-train anomalies cut fixed rail routes through the floor, add platforms with schedule screens, spawn moving train segments, allow `E` boarding/exit while stopped and publish rail events when trains crush NPCs, monsters or the player. Bad Apple world stamps a 144x108 map rectangle from packed black/white RLE frames; black pixels become dark walls, white pixels become pale floor, and the projector can be paused/resumed with `E`. Zombie apocalypse floors seed up to the shared 5k active resident NPC ceiling plus patient zero, and any NPC bitten by a zombie becomes another zombie.
 
 Floor VISIT quests only complete on story anchors, not on procedural or design floors that happen to use the same base `FloorLevel` for system mood.
 
@@ -339,7 +410,7 @@ The main plot is data-driven through `PLOT_NPCS` and `PLOT_CHAIN` in `src/data/p
 | 2 | Барни | TALK | report back to Olga | bandages, water, bread |
 | 3 | Ольга Дмитриевна | TALK | visit Yakov Davidovich | `psi_strike` |
 | 4 | Яков Давидович | FETCH | bring an idol of Chernobog | `psi_mark`, medicine, money |
-| 5 | Яков Давидович | TALK | find Vanka Banchiny | antidepressant |
+| 5 | Яков Давидович | TALK | find Vanka Banchiny / Ivan Zakharov | antidepressant |
 | 6 | Ванька Банчиный | KILL | kill a Shadow | `psi_recall` |
 | 7 | Ванька Банчиный | FETCH | bring strange clot to Yakov | medicine |
 | 8 | Яков Давидович | TALK | go to Major Grom in Maintenance | `psi_rupture`, money |
@@ -358,7 +429,7 @@ Procedural NPC assignments have deadlines instead of a global active-quest cap. 
 
 ## Side Quests And System Assignments
 
-Side quests use `registerSideQuest()` from `src/data/plot.ts`. Content modules register NPC definitions and quest steps at module import time. With all floor manifests loaded, the current registry has 302 plot NPC ids: 9 built-in story NPC ids plus 293 content registrations. `SIDE_QUESTS` has 346 steps across base data and `src/gen/`.
+Side quests use `registerSideQuest()` from `src/data/plot.ts`. Content modules register NPC definitions and quest steps at module import time. With production floor and design-floor manifests loaded, the current runtime registry has 313 plot NPC ids: 9 built-in story NPC ids plus 304 content registrations. `SIDE_QUESTS` has 372 steps across base data and `src/gen/`.
 
 Major side-content locations include:
 
@@ -369,7 +440,7 @@ Major side-content locations include:
 - `hell/`: Nikanor/Marfa plot rooms, Meduka, altar arena, choir tax, PSI meat cache, thin wall chapel and Myasomer.
 - `void/`: Jean's warning cell, bottled voice, protocol chamber, borrowed light rule chamber, trace seal protocol, Maronary Signalshchik, Pristav Pustoty, Perestanovshchik, Seryy Smotritel and Ekrannik.
 
-System assignment templates live in `src/data/contracts.ts`; quest generation treats them as normal system-assignment templates with scarcity-adjusted rewards and deadlines. The current deck has 133 templates, including expedition, scarcity, monster cleanup, civil-minister directives, Ministry document-window work, minor-cult errands, govnyak courier and pneumomail-linked work. Debug can create/list system assignments, but the player-facing NPC action remains `Задание`.
+System assignment templates live in `src/data/contracts.ts`; quest generation treats them as normal system-assignment templates with scarcity-adjusted rewards and deadlines. The current deck has 201 templates, including expedition, small-caravan escort/raid/reroute work, scarcity, monster cleanup, civil-minister directives, Ministry document-window work, minor-cult errands, govnyak courier and pneumomail-linked work. Debug can create/list system assignments, but the player-facing NPC action remains `Задание`.
 
 On `KVARTIRY`, the false-neighbor/Pustoy Sosed content uses a screen-reflection tell and local side-quest branches: expose by checking papers/reporting to liquidators, flee by taking the complaint and leaving, or force a close reveal and fight. Resolved branches publish `false_neighbor` world-event data and rumor hooks.
 
@@ -379,6 +450,8 @@ On `KVARTIRY`, the false-neighbor/Pustoy Sosed content uses a screen-reflection 
 - Dense per-cell state is typed arrays on `World`: cells, wall/floor textures, features, light, fog, room map, zone map, masks and marks.
 - Sparse per-cell data is reserved for rare state: doors, containers, surface marks, decals and anomaly teleport links.
 - Entities are flat plain objects in one array. There are no entity subclasses.
+- Entity population soft limits live in `src/data/entity_limits.ts`: 5k NPCs, 10k monsters and 100k item drops. Generation, quest/event, editor and debug spawns use `src/systems/entity_limits.ts` before adding more.
+- Floor-wide population/content placement goes through `src/gen/population_placement.ts`: generation builds a dense 1024x1024 placement field from room weights, zone weights, optional anchors and value noise, smooths it locally over neighboring floor cells, then samples the field with coverage strata. This is generation-time scattering, not a runtime bucket cap. Current high-density NPC/monster paths for Kvartiry, Hell and procedural floors use this field approach.
 - Use `world.idx`, `world.wrap`, `world.delta`, `world.dist` and `world.dist2` for all toroidal coordinate work.
 - Prefer `dist2` when only comparing range.
 
@@ -416,7 +489,7 @@ Ministry content is grouped behind `src/gen/ministry/content_manifest.ts` to kee
 
 ### Kvartiry
 
-`generateKvartiry()` creates a dense residential riot floor from a wall-source grid and keeps that percolation layout intact. Initial population comes from `KVARTIRY_POPULATION_PROFILE`: 3000 citizens, 1700 wild residents and 400 liquidators, all with AI. Spawn placement is context-weighted: rooms, public corridors, zone factions and smooth density noise bias independent floor-cell picks, then local groups add riots and response squads. Runtime caps are 6000 citizens, 3200 wild and 800 liquidators, with a 10k active-population ceiling. Social-pressure POIs and ambient unrest can trigger local uprising checks on the existing profile cadence.
+`generateKvartiry()` creates a dense residential riot floor from a wall-source grid and keeps that percolation layout intact. Initial population comes from `KVARTIRY_POPULATION_PROFILE`: 3000 citizens, 1700 wild residents and 400 liquidators, all with AI. Spawn placement is context-weighted: rooms, public corridors, zone factions and smooth density noise bias independent floor-cell picks across the whole floor. Runtime caps are 6000 citizens, 3200 wild and 800 liquidators inside the shared 5k NPC ceiling. Social-pressure POIs and ambient unrest can trigger local uprising checks on the existing profile cadence.
 
 ### Communal Ring
 
@@ -432,7 +505,7 @@ The pneumomail station is a static Maintenance POI with intake, intercept, jam a
 
 ### Hell
 
-`generateHell()` builds organic meat caves through an Ising-style field plus Hell macro geometry, Hell-tuned zones, cultists, liquidators, monsters, 3 Heralds, Hell plot rooms and faster population pressure. Initial counts come from `HELL_POPULATION_PROFILE`: 4200 monsters, 700 cultists and 100 liquidators, all with AI. Runtime soft caps are 8200 monsters, 1500 cultists and 300 liquidators, with bounded reinforcement budgets and a roughly 10k active-population ceiling.
+`generateHell()` builds organic meat caves through an Ising-style field plus Hell macro geometry, Hell-tuned zones, cultists, liquidators, monsters, 3 Heralds, Hell plot rooms and faster population pressure. Initial counts come from `HELL_POPULATION_PROFILE`: 4200 monsters, 700 cultists and 100 liquidators, all with AI. Spawn placement uses the shared smoothed whole-floor placement field with zone/noise weights; route arenas remain anchors, but initial population is not piled into arena cells. Runtime soft caps are 8200 monsters, 1500 cultists and 300 liquidators with bounded reinforcement budgets, inside the shared entity ceilings.
 
 ### Void
 
@@ -446,7 +519,7 @@ The pneumomail station is a static Maintenance POI with intake, intercept, jam a
 2. Connect rooms with toroidal corridors and ensure connectivity.
 3. Generate 64 zones, danger levels and main faction control.
 4. Place up/down lifts.
-5. Spawn NPCs from the main faction mix, except on NPC-free endgame route floors at `z>=36`.
+5. Spawn NPCs from the main faction mix through the shared smoothed whole-floor placement field, except on NPC-free endgame route floors at `z>=36`.
 6. Spawn loot and monsters with seed-biased weights.
 7. Apply the anomaly: fog, teleport pairs, samosbor-tainted zones/marks, mushroom growth with carnivorous fungus rooms, cold pockets, false safe blocks or zombie-apocalypse crowd/infection.
 
@@ -473,11 +546,15 @@ Current behavior:
 7. Fog boss and corridor/map monsters spawn.
 8. Near the end, hermodoor sealing occurs with variant timing.
 9. Fog spreads and can spawn monsters during active phase.
-10. After end, doors reopen, aftermath may apply, and relevant floor geometry is rebuilt.
+10. On the story `LIVING` floor, small/medium scale rolls start `systems/samosbor_wave.ts`: a bounded frontier mutates volatile cells during the active phase, preserving apartments, hermowalls, lifts and the player's shelter.
+11. Full scale, route/design/procedural floors and wave start failures keep the old deferred `pendingLoad` rebuild path.
+12. After end, doors reopen, aftermath may apply, and either the local wave is finalized or relevant floor geometry is rebuilt.
 
-`data/samosbor_variants.ts` currently has 8 variants, 21 modifiers and 37 aftermath beats. Rare replacement variants include Maronary with green fog/high beep/wrong-door residue, Istotit with a bell cue, golden fog, marked shelter rooms and social aftermath, and Veretar with white-area leakage. `data/samosbor_director.ts` currently registers 26 bounded director beats for warnings, patrols, shortages, door malfunctions, aftershocks and rumor seeds.
+`data/samosbor_variants.ts` currently has 8 variants, 21 modifiers and 40 aftermath beats. Rare replacement variants include Maronary with green fog/high beep/wrong-door residue, Istotit with a bell cue, golden fog, marked shelter rooms and social aftermath, and Veretar with white-area leakage. `data/samosbor_director.ts` currently registers 34 bounded director beats for warnings, patrols, shortages, door malfunctions, aftershocks and rumor seeds.
 
 Timers by story floor come from `src/gen/floor_manifest.ts`: Ministry is slowest, Kvartiry/Living/Maintenance are progressively more pressured, Hell and Void are fastest. Procedural floors additionally shorten the timer by danger level and anomaly pressure.
+
+Route cues live on the concrete `World` that registered them. Story, design, procedural and floor-instance loads keep their generated cue state with that world object. Samosbor rebuilds are in-place, so full story/design/procedural replacements copy only the replacement world's fresh markers into the live world and drop old heard/followed/map-reveal state; Living's volatile regrow clears old cue state before the maze is regenerated. Runtime samosbor waves prune only cues whose source/target cells were touched by the wave.
 
 ## Events, Memory And Rumors
 
@@ -491,7 +568,7 @@ Events cover samosbor, zone capture, fog bosses, floor transitions, elevator ano
 
 `systems/world_log.ts` turns important public facts into HUD/log messages. `systems/npc_memory.ts`, `systems/context.ts` and `systems/rumor.ts` let NPC dialogue and rumor spreading react to those facts.
 
-`data/rumors.ts` contains 318 static rumor definitions, and runtime events can become observed/spread rumors.
+`data/rumors.ts` contains 515 static rumor definitions, and runtime events can become observed/spread rumors.
 
 ## NPC, A-Life And Factions
 
@@ -525,11 +602,11 @@ Factions:
 
 The world has 64 macro-zones. `systems/factions.ts` controls zone ownership, patrol clashes, territory capture, reinforcements and hostile target logic. `data/faction_events.ts` adds discrete faction events. Cult processions are rare timed faction events with capped pilgrims, residue marks, temporary local control pressure, map/log warnings, and player responses: avoid, follow, report by equipped radio, use a meat rune as disguise, or disrupt by violence. Active processions publish aftermath and end when a samosbor cycle starts.
 
-NPC and monster broadphase uses `systems/entity_index.ts`: a 16-cell toroidal bucket index with live id, actor, needs and projectile lists. Combat scans are cached through `combatTargetId` / `combatScanCd` and query nearby buckets instead of scanning every entity. All live AI actors remain active; far routine actors tick on deterministic accumulated cadences, while near-player actors and active threats stay responsive. Combat pathfinding uses the shared pathfinding token budget so 5k-10k crowds cannot launch unbounded BFS waves in one frame.
+NPC and monster broadphase uses `systems/entity_index.ts`: a 16-cell toroidal bucket index with live id, actor, needs and projectile lists. Combat scans are cached through `combatTargetId` / `combatScanCd` and query nearby buckets instead of scanning every entity. All live AI actors remain active; far routine actors tick on deterministic accumulated cadences, while near-player actors and player-targeting threats stay responsive. NPCs are primed with an A-Life state/task before LOD cadence can skip them, moving monsters default to wandering, and actors with a combat target use `HUNT`. Pathfinding uses `systems/ai/pathfinding.ts`: a baked whole-floor BFS navigation tree over the 1024x1024 toroidal field, rebuilt when `world.cellVersion` or samosbor phase changes. Routine and combat path assignment read bounded chunks from that tree instead of launching per-actor BFS queues; ordinary closed doors are routeable and opened by movement, while locked and hermetic-closed doors block navigation. Shared A-Life destinations, such as nearest kitchen, toilet, workplace or shelter class, use cached behavior flow fields layered over the same geometry: each behavior supplies a source set, the field is baked once per geometry version, and many actors follow bounded chunks from it. The AI LOD profile also caps far hot-promotions for active attackers, projectile owners and recently damaged actors, so large NPC/monster fights continue on combat cadence without making every distant participant frame-rate hot.
 
 ## Items, Weapons And PSI
 
-`src/data/items.ts` currently defines 242 item ids:
+`src/data/items.ts` currently defines 253 item ids:
 
 - food and drinks: bread, canned food, kasha, briquettes, water, tea, kompot, coffee, etc.
 - medicine: bandage, pills, antidepressant, antibiotic, morphine, PSI stabilizer, sanitary kit.
@@ -539,15 +616,15 @@ NPC and monster broadphase uses `systems/entity_index.ts`: a 16-cell toroidal bu
 - documents and components: permits, forms, denunciations, seals, tickets, manometer, filters, wire, metal, electronics.
 - plot and rare items: idol, strange clot, bottled voice, void spike, Maronary shaving, Veretar sand, overexposed photo and govnyak contraband.
 
-Physical weapon stats live in `src/data/weapons.ts` and include 31 entries, including fists, melee tools, Soviet firearms, improvised firearms, energy weapons, grenade, flamethrower and harpoon gun. PSI weapon stats live in `src/data/psi.ts` and include 16 entries.
+Physical weapon stats live in `src/data/weapons.ts` and include 32 entries, including fists, melee tools, Soviet firearms, improvised firearms, energy weapons, grenade, flamethrower, harpoon gun and the deletion-beam emitter. PSI weapon stats live in `src/data/psi.ts` and include 16 entries.
 
 PSI does not regenerate passively. It is restored by medicine/items and scales with INT through RPG stats.
 
 ## Monsters
 
-24 base monster kinds are registered in `src/entities/monster.ts`:
+25 base monster kinds are registered in `src/entities/monster.ts`:
 
-`SBORKA`, `TVAR`, `POLZUN`, `BETONNIK`, `ZOMBIE`, `EYE`, `NIGHTMARE`, `SHADOW`, `REBAR`, `MATKA`, `IDOL`, `MANCOBUS`, `HERALD`, `CREATOR`, `SPIRIT`, `ROBOT`, `SHOVNIK`, `LAMPOVY`, `PECHATEED`, `TUBE_EEL`, `PARAGRAPH`, `NELYUD`, `KRYSNOZHKA`, `KOSTOREZ`.
+`SBORKA`, `TVAR`, `POLZUN`, `BETONNIK`, `ZOMBIE`, `EYE`, `NIGHTMARE`, `SHADOW`, `REBAR`, `MATKA`, `IDOL`, `MANCOBUS`, `HERALD`, `CREATOR`, `SPIRIT`, `ROBOT`, `SHOVNIK`, `LAMPOVY`, `PECHATEED`, `TUBE_EEL`, `PARAGRAPH`, `NELYUD`, `KRYSNOZHKA`, `KOSTOREZ`, `SAFEGUARD`.
 
 Monster supporting data:
 
@@ -560,7 +637,7 @@ Fog bosses can clear fog when killed. Matka is a spawner boss. Heralds open the 
 
 Krysnozhka, Sborka, Tvar, Polzun and Tube Eel can be distracted by explicit bait: dropped food or used/dropped govnyak creates a temporary capped marker. Bait attraction uses active marker caps and cooldowns, not item-drop scans. Tube Eel route set pieces combine water cells, dry-edge counterplay, harpoon ammo and non-cleanable wet-route HUD warnings instead of fluid simulation.
 
-Kostorez is a rare Maintenance/Hell melee elite with a visible blade windup. Distance, a corner/obstacle, or shotgun pellets interrupt the burst; a carried `metal_sheet` can absorb part of one cut.
+Kostorez is a rare Maintenance/Hell melee elite with a visible blade windup. Distance, a corner/obstacle, or shotgun pellets interrupt the burst; a carried `metal_sheet` can absorb part of one cut. Safeguard is a fast NET/BLAME blade guard used by `silicon_net_well` terminals and late-route NET backlash.
 
 Several newer monster ideas are implemented as reachable floor content modules rather than new `MonsterKind` enum values. Examples: Golos za dveryu and Plombirovshchik on Living, Ocherednik and Pustoy Sosed on Kvartiry, Pressovik/Nasosnaya Matka/Hladonets/Kabelnik/Ventshun/Filtronos on Maintenance, Myasomer in Hell, and Ekrannik/Perestanovshchik/Pristav Pustoty/Seryy Smotritel in Void. These modules use existing entities, items, events, room marks, route cues and local mechanics instead of expanding the core enum for every named encounter.
 
@@ -594,11 +671,13 @@ Economy:
 
 - `src/data/resources.ts`: 17 resources.
 - `src/systems/economy.ts`: per-floor stock, scarcity multiplier, adjusted price cache.
+- `src/data/banking.ts` and `src/systems/banking.ts`: bank deposits, credit, repayment and interest state.
+- `src/data/stock_market.ts` and `src/systems/stock_market.ts`: local quote ticks and optional Net Sphere market impulses.
 - `src/data/caravans.ts` and `src/systems/caravans.ts`: 6 supply lanes, bounded slow ticks, tariff pressure and route actions.
 - Scarcity affects item prices and some contract rewards.
 - Money is currently carried as entity cash (`Entity.money`) and used by NPC trade.
 - NPC trade moves one stack unit at the current scarcity-adjusted item price, transfers cash between buyer/seller and publishes trade or item-sale events.
-- Economy save data is normalized on load, including old saves with missing floor/resource rows.
+- Current-version economy save data is sanitized on load, including missing floor/resource rows inside the accepted save shape.
 - The debug menu has an economy prices summary for current stock and adjusted prices.
 
 Containers:
@@ -609,7 +688,7 @@ Containers:
 
 Production:
 
-- `src/data/factories.ts`: 10 production definitions and 17 recipes.
+- `src/data/factories.ts`: 12 production definitions and 19 recipes.
 - `src/systems/production.ts`: up to 64 production rooms per floor, outputs deposited into room containers.
 - Production publishes `room_produced_items`, `room_lacked_resources` and `room_blocked_production`.
 
@@ -637,6 +716,7 @@ HUD/UI modules:
 - `stats_ui.ts`: RPG/stat view.
 - `menu_ui.ts`: save/load menu.
 - `net_sphere_ui.ts`: optional Cloudflare stats/chat terminal.
+- `computer_ui.ts`, `gambling_ui.ts`, `net_hack_ui.ts`, `emergency_panel_ui.ts`: generated local interaction overlays.
 
 Screens show active floor/zone context, quest markers, fog overlay, NPC/monster/drop pips and current player status.
 
@@ -665,13 +745,13 @@ Screens show active floor/zone context, quest markers, fog overlay, NPC/monster/
 
 On touch devices the game shows a landscape mobile overlay: left virtual joystick for movement, right virtual joystick for camera rotation, center tap zone for attack/shoot, left `[E]` popup for nearby interaction targets, a top-left `FULL`/direct-page control when the browser can use it safely, and a right-side menu rail. The rail's up/down buttons choose inventory, map, quests, log, factions, Net Sphere, save/load menu or debug menu; the center button opens the selected panel or closes the current panel. The canvas resizes to the host viewport/fullscreen iframe, including itch.io mobile launch/fullscreen resizing. Canvas UI panels accept taps for selection, transfer, buy/sell, use/drop and close actions.
 
-Debug menu currently has 70 base commands plus 17 routed design-floor teleports: weapons/PSI, spawn monsters/NPC/items, XP, samosbor variant cycle, noclip, event log, economy prices, containers, production tick, system assignments, balance/catalog, lift instances, VOID protocols, faction events, route cues, samosbor director controls, story/design/procedural/anomaly teleports, Maronary/Istotit/Veretar forcing, govnyak courier, pneumomail, hermodoor borer QA, liquidator-cult clash, `ONEPUNCHMAN`, Net Terminal Gen/map editor commands, rail-train anomaly teleport, Bad Apple screen spawn near the player, zombie-apocalypse anomaly teleport, smoke expedition setup, and verification commands for contracts, events, lift route windows, numbered lift loops, samosbor warning, economy scarcity, floor monster packs and container routing.
+Debug menu currently has 81 base commands plus 18 routed design-floor teleports: weapons/PSI, spawn monsters/NPC/items, XP, samosbor variant cycle and small wave trigger, noclip, event log, economy prices, containers, production tick, system assignments, balance/catalog, lift instances, VOID protocols, faction events, route cues, samosbor director controls, story/design/procedural/anomaly teleports, Maronary/Istotit/Veretar forcing, govnyak courier, pneumomail, hermodoor borer QA, liquidator-cult clash, `ONEPUNCHMAN`, Net Terminal Gen/map editor commands, rail-train anomaly teleport, Bad Apple screen spawn near the player, zombie-apocalypse anomaly teleport, smoke expedition setup, expedition proof commands, permit debug commands and verification commands for contracts, events, lift route windows, numbered lift loops, samosbor warning, economy scarcity, floor monster packs and container routing.
 
 ## Save And Load
 
-Save/load goes through browser `localStorage`. Saves include player state, game clock, quests, current base floor, `FloorRun` state, numbered lift anomaly state, lift arachna state, trimmed world events, economy, production and valid containers. On load the target story/design/procedural/floor-instance world is regenerated, then player state and supported runtime state are restored.
+Save/load goes through browser `localStorage`. Saves include player state, game clock, quests, current base floor, `FloorRun` state, numbered lift anomaly state, lift arachna state, Net Terminal Gen access, map-editor patches, trimmed world events, economy, banking, stock market, production and valid containers. On load the target story/design/procedural/floor-instance world is regenerated, then player state and supported runtime state are restored.
 
-Old save shapes are normalized by the relevant systems when fields are optional.
+Only the current save shape version is accepted. Current-version sections are sanitized by their systems so malformed `localStorage` data cannot crash loading, but old or unversioned save shapes are rejected instead of migrated.
 
 ## Performance Rules
 
@@ -683,7 +763,7 @@ Old save shapes are normalized by the relevant systems when fields are optional.
 - Use toroidal helper methods for coordinates.
 - Render reads state; gameplay decisions stay in systems.
 
-Current optimizations include preallocated BFS/pathfinding buffers, cached combat target scans, `dist2` range checks, entity id maps and bounded event/ring buffers.
+Current optimizations include baked whole-floor navigation, cached combat target scans, `dist2` range checks, entity id maps and bounded event/ring buffers.
 
 ## Content Extension Guide
 
@@ -829,5 +909,6 @@ Do not add a new `FloorLevel` for a catalog entry or numbered lift instance.
 - Keep Russian player-facing text unless there is a specific reason.
 - Use existing ids, registries and events before adding new global state.
 - Publish meaningful facts through `systems/events.ts`.
-- For systems/render/save/load/generation changes, run `npm run check` unless blocked.
-- For narrow data/content changes, run at least `npm run typecheck`.
+- For systems/render/save/load/generation changes, run `npm run check` unless blocked; it writes `dist/`.
+- For browser/render smoke coverage, run `npm run check:browser` or `npm run check:full`; both need Chrome or `CHROME_BIN`.
+- For narrow data/content changes, run `npm run check:readonly` when possible, or at least `npm run typecheck`.

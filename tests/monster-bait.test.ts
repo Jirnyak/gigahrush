@@ -6,12 +6,14 @@ import { World } from '../src/core/world';
 import { isBaitAttractedMonster } from '../src/data/monster_ecology';
 import {
   MONSTER_BAIT_MAX_ACTIVE,
+  MONSTER_BAIT_MAX_ATTRACTIONS_CAP,
   MONSTER_BAIT_RADIUS_CAP,
   expireMonsterBaits,
   findMonsterBaitTarget,
   getActiveMonsterBaits,
   isMonsterBaitItem,
   isMonsterBaitUseItem,
+  monsterBaitPreviewForItem,
   placeMonsterBait,
   resetMonsterBaits,
 } from '../src/systems/monster_bait';
@@ -85,6 +87,29 @@ test('bait profile uses item tags, item cost caps, and risky event tags', () => 
   const placed = getRecentEvents(state, { type: 'monster_bait_placed', limit: 1 })[0];
   assert.ok(placed.tags.includes('risky_attraction'));
   assert.equal(placed.data?.itemValue, 1);
+});
+
+test('govnyak use bait exposes marker clarity and bounded attraction caps', () => {
+  resetMonsterBaits();
+  const world = openWorld();
+  const state = makeGameState({ time: 8, currentFloor: FloorLevel.LIVING });
+  const preview = monsterBaitPreviewForItem('govnyak_bad_batch', 'use', 1);
+
+  assert.equal(preview?.kind, 'govnyak');
+  assert.ok(preview?.markerLabel.includes('приманка:говняк'));
+  assert.equal(preview?.activeCap, MONSTER_BAIT_MAX_ACTIVE);
+
+  assert.equal(placeMonsterBait(state, world, actor(), 11, 10, 'govnyak_bad_batch', 1, 'use'), true);
+  const marker = getActiveMonsterBaits()[0];
+  assert.equal(marker.kind, 'govnyak');
+  assert.ok(marker.risk >= 3);
+  assert.ok(marker.maxAttractions <= MONSTER_BAIT_MAX_ATTRACTIONS_CAP);
+
+  const placed = getRecentEvents(state, { type: 'monster_bait_placed', limit: 1 })[0];
+  assert.ok(placed.tags.includes('bait_marker'));
+  assert.equal(placed.data?.activeCap, MONSTER_BAIT_MAX_ACTIVE);
+  assert.equal(placed.data?.activeCount, 1);
+  assert.ok(String(placed.data?.markerLabel).includes('приманка:говняк'));
 });
 
 test('bait attraction prefers ecology-tagged food over a closer generic lure', () => {

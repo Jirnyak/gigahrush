@@ -999,6 +999,7 @@ export function generateUpperBureauDesignFloor(): { world: World; entities: Enti
     'locked',
     [
       { defId: 'official_permit_slip', count: 1 },
+      { defId: 'raionsovet_floor_pass', count: 1 },
       { defId: 'permanent_pass', count: 1 },
       { defId: 'elevator_access_order', count: 1 },
     ],
@@ -1041,6 +1042,7 @@ export function generateUpperBureauDesignFloor(): { world: World; entities: Enti
       { defId: 'denunciation', count: 2 },
       { defId: 'record_exposure_notice', count: 1 },
       { defId: 'official_permit_slip', count: 1 },
+      { defId: 'confiscation_warrant', count: 1 },
     ],
     ['audit', 'black_market_88', 'paper'],
     { id: levId, name: LEV_DEF.name, faction: Faction.LIQUIDATOR },
@@ -1052,6 +1054,7 @@ export function generateUpperBureauDesignFloor(): { world: World; entities: Enti
     'owner',
     [
       { defId: 'archive_access_permit', count: 1 },
+      { defId: 'debt_settlement_receipt', count: 1 },
       { defId: 'elevator_access_order', count: 1 },
       { defId: 'blank_form', count: 2 },
     ],
@@ -1065,6 +1068,7 @@ export function generateUpperBureauDesignFloor(): { world: World; entities: Enti
     'faction',
     [
       { defId: 'forged_permit_slip', count: 1 },
+      { defId: 'forged_raionsovet_pass', count: 1 },
       { defId: 'record_exposure_notice', count: 1 },
       { defId: 'denunciation', count: 1 },
     ],

@@ -2,9 +2,109 @@
 
 let ctx: AudioContext | null = null;
 let mainGain: GainNode | null = null;
+let scopedGain: GainNode | null = null;
+
+export type AudioCueBudgetId =
+  | 'footstep'
+  | 'melee_attack'
+  | 'door'
+  | 'monster_growl'
+  | 'samosbor_siren'
+  | 'samosbor_bell'
+  | 'samosbor_beep'
+  | 'samosbor_distant_alarm'
+  | 'maronary_ping'
+  | 'route_cue'
+  | 'player_weapon'
+  | 'hostile_ranged'
+  | 'projectile_impact'
+  | 'energy_impact'
+  | 'flesh_hit'
+  | 'break'
+  | 'psi_cast'
+  | 'flame';
+
+export type AmbientDroneMode = 'normal' | 'samosbor' | 'maronary' | 'istotit' | 'veretar';
+
+interface AudioBudgetDef {
+  cooldownSec: number;
+  windowSec: number;
+  maxPerWindow: number;
+}
+
+interface AudioBudgetRuntime {
+  lastAt: number;
+  windowStart: number;
+  count: number;
+}
+
+const AUDIO_BUDGETS: Record<AudioCueBudgetId, AudioBudgetDef> = {
+  footstep: { cooldownSec: 0.07, windowSec: 0.5, maxPerWindow: 7 },
+  melee_attack: { cooldownSec: 0.045, windowSec: 0.45, maxPerWindow: 8 },
+  door: { cooldownSec: 0.12, windowSec: 0.8, maxPerWindow: 5 },
+  monster_growl: { cooldownSec: 0.18, windowSec: 1.0, maxPerWindow: 5 },
+  samosbor_siren: { cooldownSec: 6.0, windowSec: 8.0, maxPerWindow: 1 },
+  samosbor_bell: { cooldownSec: 5.0, windowSec: 7.0, maxPerWindow: 1 },
+  samosbor_beep: { cooldownSec: 4.0, windowSec: 6.0, maxPerWindow: 1 },
+  samosbor_distant_alarm: { cooldownSec: 5.0, windowSec: 7.0, maxPerWindow: 1 },
+  maronary_ping: { cooldownSec: 1.4, windowSec: 5.0, maxPerWindow: 2 },
+  route_cue: { cooldownSec: 0.75, windowSec: 4.0, maxPerWindow: 3 },
+  player_weapon: { cooldownSec: 0.025, windowSec: 0.35, maxPerWindow: 14 },
+  hostile_ranged: { cooldownSec: 0.055, windowSec: 0.5, maxPerWindow: 8 },
+  projectile_impact: { cooldownSec: 0.035, windowSec: 0.35, maxPerWindow: 9 },
+  energy_impact: { cooldownSec: 0.045, windowSec: 0.45, maxPerWindow: 7 },
+  flesh_hit: { cooldownSec: 0.05, windowSec: 0.4, maxPerWindow: 6 },
+  break: { cooldownSec: 0.16, windowSec: 1.0, maxPerWindow: 4 },
+  psi_cast: { cooldownSec: 0.07, windowSec: 0.5, maxPerWindow: 6 },
+  flame: { cooldownSec: 0.04, windowSec: 0.35, maxPerWindow: 8 },
+};
+
+const audioBudgetRuntime = new Map<AudioCueBudgetId, AudioBudgetRuntime>();
+
+const AMBIENT_DRONE_SETTINGS: Record<AmbientDroneMode, {
+  primaryHz: number;
+  secondaryHz: number;
+  gain: number;
+  cutoffHz: number;
+  detuneCents: number;
+}> = {
+  normal: { primaryHz: 28, secondaryHz: 41, gain: 0.028, cutoffHz: 82, detuneCents: -5 },
+  samosbor: { primaryHz: 34, secondaryHz: 52, gain: 0.038, cutoffHz: 118, detuneCents: 18 },
+  maronary: { primaryHz: 31, secondaryHz: 97, gain: 0.034, cutoffHz: 150, detuneCents: 42 },
+  istotit: { primaryHz: 25, secondaryHz: 66, gain: 0.032, cutoffHz: 130, detuneCents: -18 },
+  veretar: { primaryHz: 21, secondaryHz: 37, gain: 0.036, cutoffHz: 96, detuneCents: 26 },
+};
+
+function claimAudioCue(id: AudioCueBudgetId, now: number): boolean {
+  const budget = AUDIO_BUDGETS[id];
+  const runtime = audioBudgetRuntime.get(id);
+  if (!runtime || now - runtime.windowStart >= budget.windowSec || now < runtime.windowStart) {
+    audioBudgetRuntime.set(id, { lastAt: now, windowStart: now, count: 1 });
+    return true;
+  }
+  if (now - runtime.lastAt < budget.cooldownSec || runtime.count >= budget.maxPerWindow) return false;
+  runtime.lastAt = now;
+  runtime.count++;
+  return true;
+}
+
+function beginCue(id: AudioCueBudgetId): AudioContext | null {
+  if (!hasAudioContext()) return null;
+  const ac = ensureContext();
+  return claimAudioCue(id, ac.currentTime) ? ac : null;
+}
+
+export function resetAudioBudgetForTests(): void {
+  audioBudgetRuntime.clear();
+}
+
+export function claimAudioCueForTests(id: AudioCueBudgetId, now: number): boolean {
+  return claimAudioCue(id, now);
+}
 
 /* ── Distance-based volume attenuation ────────────────────────── */
 const SOUND_MAX_DIST = 25;  // beyond this, sound is silent
+const POSITIONAL_SOUND_MAX_GAIN = 0.78;
 let _playerX = 0, _playerY = 0;
 let _worldDist2: ((ax: number, ay: number, bx: number, by: number) => number) | null = null;
 
@@ -31,16 +131,22 @@ function volumeAt(x: number, y: number): number {
 /** Play a sound at a world position (volume depends on distance to player) */
 export function playSoundAt(fn: () => void, x: number, y: number): void {
   if (!hasAudioContext()) return;
-  const vol = volumeAt(x, y);
+  const vol = Math.min(POSITIONAL_SOUND_MAX_GAIN, volumeAt(x, y));
   if (vol < 0.01) return;  // too far, skip entirely
-  if (mainGain) {
-    const saved = mainGain.gain.value;
-    mainGain.gain.value = saved * vol;
+  const ac = ensureContext();
+  const bus = ac.createGain();
+  bus.gain.value = vol;
+  bus.connect(mainGain!);
+  const prev = scopedGain;
+  scopedGain = bus;
+  try {
     fn();
-    mainGain.gain.value = saved;
-  } else {
-    fn();
+  } finally {
+    scopedGain = prev;
   }
+  globalThis.setTimeout(() => {
+    try { bus.disconnect(); } catch { /* already disconnected */ }
+  }, 4000);
 }
 
 function ensureContext(): AudioContext {
@@ -54,11 +160,12 @@ function ensureContext(): AudioContext {
   return ctx;
 }
 
-function gain(): GainNode { return mainGain!; }
+function gain(): GainNode { return scopedGain ?? mainGain!; }
 
 /* ── Footstep: short low thump ───────────────────────────────── */
 export function playFootstep(): void {
-  const ac = ensureContext();
+  const ac = beginCue('footstep');
+  if (!ac) return;
   const osc = ac.createOscillator();
   const g = ac.createGain();
   osc.type = 'sine';
@@ -71,7 +178,8 @@ export function playFootstep(): void {
 
 /* ── Attack swing: quick noise burst ─────────────────────────── */
 export function playAttack(): void {
-  const ac = ensureContext();
+  const ac = beginCue('melee_attack');
+  if (!ac) return;
   const len = 0.15;
   const buf = ac.createBuffer(1, ac.sampleRate * len, ac.sampleRate);
   const d = buf.getChannelData(0);
@@ -89,7 +197,8 @@ export function playAttack(): void {
 
 /* ── Door open/close: creaky tone ────────────────────────────── */
 export function playDoor(): void {
-  const ac = ensureContext();
+  const ac = beginCue('door');
+  if (!ac) return;
   const osc = ac.createOscillator();
   const g = ac.createGain();
   osc.type = 'sawtooth';
@@ -103,7 +212,8 @@ export function playDoor(): void {
 
 /* ── Monster growl: distorted buffer ─────────────────────────── */
 export function playGrowl(): void {
-  const ac = ensureContext();
+  const ac = beginCue('monster_growl');
+  if (!ac) return;
   const len = 0.6;
   const buf = ac.createBuffer(1, ac.sampleRate * len, ac.sampleRate);
   const d = buf.getChannelData(0);
@@ -123,7 +233,8 @@ export function playGrowl(): void {
 
 /* ── Samosbor alarm: rising distorted siren ──────────────────── */
 export function playSamosborAlarm(): void {
-  const ac = ensureContext();
+  const ac = beginCue('samosbor_siren');
+  if (!ac) return;
   const len = 3;
   const buf = ac.createBuffer(1, ac.sampleRate * len, ac.sampleRate);
   const d = buf.getChannelData(0);
@@ -145,7 +256,8 @@ export function playSamosborAlarm(): void {
 
 /* ── Maronary cue: thin green-screen beep and distant chord ───── */
 export function playMaronarySignal(): void {
-  const ac = ensureContext();
+  const ac = beginCue('samosbor_beep');
+  if (!ac) return;
   const len = 3.2;
   const g = ac.createGain();
   g.gain.setValueAtTime(0.001, ac.currentTime);
@@ -172,7 +284,8 @@ export function playMaronarySignal(): void {
 
 /* ── Maronary active ping: short wall-borne proof tick ────────── */
 export function playMaronaryPing(): void {
-  const ac = ensureContext();
+  const ac = beginCue('maronary_ping');
+  if (!ac) return;
   const now = ac.currentTime;
   const len = 0.42;
   const bus = ac.createGain();
@@ -204,7 +317,8 @@ export function playMaronaryPing(): void {
 
 /* ── Veretar cue: far outdoor alarm with dry low drone ────────── */
 export function playVeretarSignal(): void {
-  const ac = ensureContext();
+  const ac = beginCue('samosbor_distant_alarm');
+  if (!ac) return;
   const now = ac.currentTime;
   const len = 3.6;
   const bus = ac.createGain();
@@ -235,7 +349,8 @@ export function playVeretarSignal(): void {
 
 /* ── Istotit cue: distant bell with low wordless choir ─────────── */
 export function playIstotitBell(): void {
-  const ac = ensureContext();
+  const ac = beginCue('samosbor_bell');
+  if (!ac) return;
   const now = ac.currentTime;
   const len = 3.4;
   const bus = ac.createGain();
@@ -272,7 +387,8 @@ export function playIstotitBell(): void {
 
 /* ── Route cue: short pipe-song hint, procedural and non-looping ─ */
 export function playRouteCueTone(seed = 0, intensity = 1): void {
-  const ac = ensureContext();
+  const ac = beginCue('route_cue');
+  if (!ac) return;
   const now = ac.currentTime;
   const len = 2.35;
   const amp = Math.max(0.06, Math.min(0.2, 0.15 * intensity));
@@ -337,7 +453,8 @@ export function playPickup(): void {
 
 /* ── Gunshot: sharp percussive bang ───────────────────────────── */
 export function playGunshot(): void {
-  const ac = ensureContext();
+  const ac = beginCue('player_weapon');
+  if (!ac) return;
   const len = 0.2;
   const buf = ac.createBuffer(1, ac.sampleRate * len, ac.sampleRate);
   const d = buf.getChannelData(0);
@@ -360,7 +477,8 @@ export function playGunshot(): void {
 
 /* ── Hostile shot: sharper incoming crack, distinct from player ─ */
 export function playHostileGunshot(): void {
-  const ac = ensureContext();
+  const ac = beginCue('hostile_ranged');
+  if (!ac) return;
   const len = 0.16;
   const buf = ac.createBuffer(1, ac.sampleRate * len, ac.sampleRate);
   const d = buf.getChannelData(0);
@@ -384,7 +502,8 @@ export function playHostileGunshot(): void {
 
 /* ── Shotgun: heavy boom ─────────────────────────────────────── */
 export function playShotgun(): void {
-  const ac = ensureContext();
+  const ac = beginCue('player_weapon');
+  if (!ac) return;
   const len = 0.35;
   const buf = ac.createBuffer(1, ac.sampleRate * len, ac.sampleRate);
   const d = buf.getChannelData(0);
@@ -408,7 +527,8 @@ export function playShotgun(): void {
 
 /* ── Hostile shotgun: dry double slap with less low-end weight ── */
 export function playHostileShotgun(): void {
-  const ac = ensureContext();
+  const ac = beginCue('hostile_ranged');
+  if (!ac) return;
   const len = 0.28;
   const buf = ac.createBuffer(1, ac.sampleRate * len, ac.sampleRate);
   const d = buf.getChannelData(0);
@@ -433,7 +553,8 @@ export function playHostileShotgun(): void {
 
 /* ── Nailgun: rapid metallic clack ───────────────────────────── */
 export function playNailgun(): void {
-  const ac = ensureContext();
+  const ac = beginCue('player_weapon');
+  if (!ac) return;
   const osc = ac.createOscillator();
   const g = ac.createGain();
   osc.type = 'square';
@@ -447,7 +568,8 @@ export function playNailgun(): void {
 
 /* ── Hostile nailgun: brittle high metal tick ────────────────── */
 export function playHostileNailgun(): void {
-  const ac = ensureContext();
+  const ac = beginCue('hostile_ranged');
+  if (!ac) return;
   const now = ac.currentTime;
   const osc = ac.createOscillator();
   const g = ac.createGain();
@@ -466,7 +588,8 @@ export function playHostileNailgun(): void {
 
 /* ── Projectile impact: short concrete/metal tick ────────────── */
 export function playProjectileImpact(): void {
-  const ac = ensureContext();
+  const ac = beginCue('projectile_impact');
+  if (!ac) return;
   const len = 0.11;
   const buf = ac.createBuffer(1, ac.sampleRate * len, ac.sampleRate);
   const d = buf.getChannelData(0);
@@ -489,7 +612,8 @@ export function playProjectileImpact(): void {
 
 /* ── Energy/PSI impact: compact zap plus psychic after-ring ───── */
 export function playEnergyImpact(): void {
-  const ac = ensureContext();
+  const ac = beginCue('energy_impact');
+  if (!ac) return;
   const len = 0.2;
   const now = ac.currentTime;
   const buf = ac.createBuffer(1, ac.sampleRate * len, ac.sampleRate);
@@ -529,7 +653,8 @@ export function playEnergyImpact(): void {
 
 /* ── Weapon break: crunch ────────────────────────────────────── */
 export function playBreak(): void {
-  const ac = ensureContext();
+  const ac = beginCue('break');
+  if (!ac) return;
   const len = 0.25;
   const buf = ac.createBuffer(1, ac.sampleRate * len, ac.sampleRate);
   const d = buf.getChannelData(0);
@@ -548,7 +673,8 @@ export function playBreak(): void {
 
 /* ── Fleshy damage hit: wet organic impact ───────────────────── */
 export function playFleshHit(): void {
-  const ac = ensureContext();
+  const ac = beginCue('flesh_hit');
+  if (!ac) return;
   const len = 0.35;
   const buf = ac.createBuffer(1, ac.sampleRate * len, ac.sampleRate);
   const d = buf.getChannelData(0);
@@ -572,9 +698,35 @@ export function playFleshHit(): void {
   src.start();
 }
 
+/* ── Projectile body hit: readable but lighter than melee gore ── */
+export function playProjectileBodyHit(): void {
+  const ac = beginCue('flesh_hit');
+  if (!ac) return;
+  const len = 0.16;
+  const buf = ac.createBuffer(1, Math.max(1, Math.floor(ac.sampleRate * len)), ac.sampleRate);
+  const d = buf.getChannelData(0);
+  for (let i = 0; i < d.length; i++) {
+    const t = i / d.length;
+    const env = Math.exp(-t * 18);
+    d[i] = Math.sin(i * 0.018 + Math.sin(i * 0.004) * 2.4) * 0.28 * env;
+    d[i] += (Math.random() * 2 - 1) * 0.38 * env;
+  }
+  const src = ac.createBufferSource();
+  src.buffer = buf;
+  const g = ac.createGain();
+  g.gain.value = 0.14;
+  const bp = ac.createBiquadFilter();
+  bp.type = 'bandpass';
+  bp.frequency.value = 720;
+  bp.Q.value = 0.7;
+  src.connect(bp).connect(g).connect(gain());
+  src.start();
+}
+
 /* ── PSI cast: eerie ethereal whoosh ─────────────────────────── */
 export function playPsiCast(): void {
-  const ac = ensureContext();
+  const ac = beginCue('psi_cast');
+  if (!ac) return;
   const len = 0.4;
   const buf = ac.createBuffer(1, ac.sampleRate * len, ac.sampleRate);
   const d = buf.getChannelData(0);
@@ -602,7 +754,8 @@ export function playPsiCast(): void {
 
 /* ── Hostile PSI cast: thinner warning shriek before impact ───── */
 export function playHostilePsiCast(): void {
-  const ac = ensureContext();
+  const ac = beginCue('hostile_ranged');
+  if (!ac) return;
   const now = ac.currentTime;
   const len = 0.32;
   const buf = ac.createBuffer(1, Math.max(1, Math.floor(ac.sampleRate * len)), ac.sampleRate);
@@ -627,9 +780,56 @@ export function playHostilePsiCast(): void {
   src.start(now);
 }
 
+/* ── Eye bolt launch: short green glass chirp, no siren masking ─ */
+export function playHostileEyeShot(): void {
+  const ac = beginCue('hostile_ranged');
+  if (!ac) return;
+  const now = ac.currentTime;
+  const bus = ac.createGain();
+  bus.gain.setValueAtTime(0.001, now);
+  bus.gain.exponentialRampToValueAtTime(0.12, now + 0.025);
+  bus.gain.exponentialRampToValueAtTime(0.001, now + 0.19);
+  bus.connect(gain());
+
+  const chirp = ac.createOscillator();
+  chirp.type = 'triangle';
+  chirp.frequency.setValueAtTime(980 + Math.random() * 90, now);
+  chirp.frequency.exponentialRampToValueAtTime(360, now + 0.18);
+  chirp.connect(bus);
+  chirp.start(now);
+  chirp.stop(now + 0.19);
+}
+
+/* ── Paragraph bolt launch: paper snap plus stamped psychic hiss ─ */
+export function playHostileParagraphShot(): void {
+  const ac = beginCue('hostile_ranged');
+  if (!ac) return;
+  const now = ac.currentTime;
+  const len = 0.18;
+  const buf = ac.createBuffer(1, Math.max(1, Math.floor(ac.sampleRate * len)), ac.sampleRate);
+  const d = buf.getChannelData(0);
+  for (let i = 0; i < d.length; i++) {
+    const t = i / d.length;
+    const env = Math.exp(-t * 12);
+    const crackle = Math.sin(i * 0.071) * 0.25 + Math.sin(i * 0.019) * 0.22;
+    d[i] = ((Math.random() * 2 - 1) * 0.34 + crackle) * env;
+  }
+  const src = ac.createBufferSource();
+  src.buffer = buf;
+  const g = ac.createGain();
+  g.gain.value = 0.13;
+  const bp = ac.createBiquadFilter();
+  bp.type = 'bandpass';
+  bp.frequency.value = 1580;
+  bp.Q.value = 1.4;
+  src.connect(bp).connect(g).connect(gain());
+  src.start(now);
+}
+
 /* ── Hostile energy shot: electrical snap before red/orange bolts ─ */
 export function playHostileEnergyShot(): void {
-  const ac = ensureContext();
+  const ac = beginCue('hostile_ranged');
+  if (!ac) return;
   const now = ac.currentTime;
   const osc = ac.createOscillator();
   const g = ac.createGain();
@@ -649,25 +849,62 @@ export function playHostileEnergyShot(): void {
 
 /* ── Ambient drone (looping) ─────────────────────────────────── */
 let droneOsc: OscillatorNode | null = null;
+let droneSecondOsc: OscillatorNode | null = null;
+let droneGain: GainNode | null = null;
+let droneFilter: BiquadFilterNode | null = null;
+let droneMode: AmbientDroneMode = 'normal';
+
+function applyAmbientDroneMode(ac: AudioContext, mode: AmbientDroneMode, immediate = false): void {
+  if (!droneOsc || !droneSecondOsc || !droneGain || !droneFilter) return;
+  const setting = AMBIENT_DRONE_SETTINGS[mode];
+  const now = ac.currentTime;
+  const tau = immediate ? 0.01 : 0.9;
+  if (immediate) {
+    droneOsc.frequency.value = setting.primaryHz;
+    droneOsc.detune.value = setting.detuneCents;
+    droneSecondOsc.frequency.value = setting.secondaryHz;
+    droneSecondOsc.detune.value = -setting.detuneCents * 0.5;
+    droneGain.gain.value = setting.gain;
+    droneFilter.frequency.value = setting.cutoffHz;
+    return;
+  }
+  droneOsc.frequency.setTargetAtTime(setting.primaryHz, now, tau);
+  droneOsc.detune.setTargetAtTime(setting.detuneCents, now, tau);
+  droneSecondOsc.frequency.setTargetAtTime(setting.secondaryHz, now, tau);
+  droneSecondOsc.detune.setTargetAtTime(-setting.detuneCents * 0.5, now, tau);
+  droneGain.gain.setTargetAtTime(setting.gain, now, immediate ? 0.02 : 1.2);
+  droneFilter.frequency.setTargetAtTime(setting.cutoffHz, now, tau);
+}
 
 export function startAmbientDrone(): void {
+  if (!hasAudioContext()) return;
   const ac = ensureContext();
   if (droneOsc) return;
   droneOsc = ac.createOscillator();
-  const g = ac.createGain();
+  droneSecondOsc = ac.createOscillator();
+  droneGain = ac.createGain();
+  droneFilter = ac.createBiquadFilter();
   droneOsc.type = 'sawtooth';
-  droneOsc.frequency.value = 28;
-  g.gain.value = 0.03;
-  const lp = ac.createBiquadFilter();
-  lp.type = 'lowpass';
-  lp.frequency.value = 80;
-  droneOsc.connect(lp).connect(g).connect(gain());
+  droneSecondOsc.type = 'triangle';
+  droneFilter.type = 'lowpass';
+  droneOsc.connect(droneFilter);
+  droneSecondOsc.connect(droneFilter);
+  droneFilter.connect(droneGain).connect(gain());
+  applyAmbientDroneMode(ac, droneMode, true);
   droneOsc.start();
+  droneSecondOsc.start();
+}
+
+export function setAmbientDroneMode(mode: AmbientDroneMode): void {
+  droneMode = mode;
+  if (!droneOsc || !hasAudioContext()) return;
+  applyAmbientDroneMode(ensureContext(), mode);
 }
 
 /* ── PPSh: rapid buzzing rattle ──────────────────────────────── */
 export function playPPSh(): void {
-  const ac = ensureContext();
+  const ac = beginCue('player_weapon');
+  if (!ac) return;
   const len = 0.06;
   const buf = ac.createBuffer(1, ac.sampleRate * len, ac.sampleRate);
   const d = buf.getChannelData(0);
@@ -689,7 +926,8 @@ export function playPPSh(): void {
 
 /* ── Chainsaw: grinding buzz ─────────────────────────────────── */
 export function playChainsaw(): void {
-  const ac = ensureContext();
+  const ac = beginCue('melee_attack');
+  if (!ac) return;
   const osc = ac.createOscillator();
   const g = ac.createGain();
   osc.type = 'sawtooth';
@@ -706,7 +944,8 @@ export function playChainsaw(): void {
 
 /* ── Machinegun: heavy rapid banging ──────────────────────────── */
 export function playMachinegun(): void {
-  const ac = ensureContext();
+  const ac = beginCue('player_weapon');
+  if (!ac) return;
   const len = 0.08;
   const buf = ac.createBuffer(1, ac.sampleRate * len, ac.sampleRate);
   const d = buf.getChannelData(0);
@@ -730,7 +969,8 @@ export function playMachinegun(): void {
 
 /* ── Grenade explosion: deep rumbling boom ────────────────────── */
 export function playExplosion(): void {
-  const ac = ensureContext();
+  const ac = beginCue('projectile_impact');
+  if (!ac) return;
   const len = 0.6;
   const buf = ac.createBuffer(1, ac.sampleRate * len, ac.sampleRate);
   const d = buf.getChannelData(0);
@@ -755,7 +995,8 @@ export function playExplosion(): void {
 
 /* ── Gauss: electric whip crack ──────────────────────────────── */
 export function playGauss(): void {
-  const ac = ensureContext();
+  const ac = beginCue('player_weapon');
+  if (!ac) return;
   const len = 0.3;
   const buf = ac.createBuffer(1, ac.sampleRate * len, ac.sampleRate);
   const d = buf.getChannelData(0);
@@ -779,7 +1020,8 @@ export function playGauss(): void {
 
 /* ── Plasma: electronic zap ──────────────────────────────────── */
 export function playPlasma(): void {
-  const ac = ensureContext();
+  const ac = beginCue('player_weapon');
+  if (!ac) return;
   const osc = ac.createOscillator();
   const g = ac.createGain();
   osc.type = 'sawtooth';
@@ -793,7 +1035,8 @@ export function playPlasma(): void {
 
 /* ── BFG: deep resonant charge + release ─────────────────────── */
 export function playBFG(): void {
-  const ac = ensureContext();
+  const ac = beginCue('player_weapon');
+  if (!ac) return;
   const len = 0.8;
   const buf = ac.createBuffer(1, ac.sampleRate * len, ac.sampleRate);
   const d = buf.getChannelData(0);
@@ -819,7 +1062,8 @@ export function playBFG(): void {
 
 /* ── Flamethrower: roaring whoosh ─────────────────────────────── */
 export function playFlame(): void {
-  const ac = ensureContext();
+  const ac = beginCue('flame');
+  if (!ac) return;
   const len = 0.1;
   const buf = ac.createBuffer(1, ac.sampleRate * len, ac.sampleRate);
   const d = buf.getChannelData(0);
@@ -843,7 +1087,8 @@ export function playFlame(): void {
 
 /* ── Hostile flame: shorter warning cough in the low band ─────── */
 export function playHostileFlame(): void {
-  const ac = ensureContext();
+  const ac = beginCue('hostile_ranged');
+  if (!ac) return;
   const len = 0.13;
   const buf = ac.createBuffer(1, ac.sampleRate * len, ac.sampleRate);
   const d = buf.getChannelData(0);
@@ -867,7 +1112,8 @@ export function playHostileFlame(): void {
 
 /* ── PSI Beam: continuous howling energy ──────────────────────── */
 export function playPsiBeam(): void {
-  const ac = ensureContext();
+  const ac = beginCue('psi_cast');
+  if (!ac) return;
   const len = 0.15;
   const buf = ac.createBuffer(1, ac.sampleRate * len, ac.sampleRate);
   const d = buf.getChannelData(0);

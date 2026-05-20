@@ -1,8 +1,8 @@
 # Design Floor: Перекрестки
 
-Status: planning artifact. Future route id: `manhattan_crossroads`. Future anchor: `z=-8`.
+Status: implemented authored route floor. Route id: `manhattan_crossroads`. Anchor: `z=-8`. Base floor: `KVARTIRY`. Shipped HUD name: `Перекрестки`.
 
-Planned owned file: `src/gen/design_floors/manhattan_crossroads.ts`.
+Owned file: `src/gen/design_floors/manhattan_crossroads.ts`. Planning sections below may predate the routed implementation; verify exact NPC, quest and route-blocker claims against source.
 
 ## Role
 
@@ -69,4 +69,3 @@ Use cinematic fakes:
 - At least one intersection has three valid approaches.
 - Escort/crossing quest is playable without crowd simulation.
 - Debug can print junction states and route blockers.
-

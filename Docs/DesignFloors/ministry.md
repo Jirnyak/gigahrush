@@ -1,8 +1,8 @@
-# Design Floor: Министерство
+# Story Anchor Brief: Министерство
 
-Status: planning artifact for expanded design-floor version. Current code already has `FloorLevel.MINISTRY`; README remains source of truth.
+Status: historical expansion brief for the existing story anchor. Current route stop: `FloorLevel.MINISTRY` at `z=-24`. There is no shipped design-floor route id `ministry`; README and `src/data/procedural_floors.ts` remain source of truth.
 
-Future route id: `ministry`. Future anchor: `z=-24`. Existing reference: `src/gen/ministry/`.
+Existing generator reference: `src/gen/ministry/`. Planning sections below describe possible route-scale expansion, not shipped design-floor route data.
 
 ## Role
 
@@ -56,4 +56,3 @@ Use bureaucratic threats:
 - Player can pass one gate three ways: document, social/economy, combat/stealth.
 - At least one Ministry quest points to another design floor.
 - Paper monsters have readable counterplay and rumor/document hints.
-

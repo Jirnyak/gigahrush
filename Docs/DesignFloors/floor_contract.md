@@ -8,7 +8,7 @@ These docs defined the authored design-floor wave. They are not interstitial pro
 
 - One design floor starts as one owned TypeScript module: `src/gen/design_floors/<id>.ts`.
 - If a floor grows beyond one real responsibility, convert it to `src/gen/<id>/index.ts` plus `content_manifest.ts`; do not scatter content through `main.ts`.
-- Between any two design floors the future `FloorRun` must insert exactly three procedural floors.
+- The original brief assumed anchors every four z-levels with three procedural floors between them. Shipped route data can insert authored stops into those gaps, such as `bank_floor` at `z=-22`; use `README.md` and source for the current gap count.
 - Design floor route ids are lowercase snake case and stable. Use them in quests, rumors, debug and save data.
 - Every floor must have its own NPCs, at least three playable decisions and one debug entry path.
 - Use existing registries and hooks first: `registerSideQuest`, content manifests, containers, contracts, rumors, events, faction/economy state.
@@ -31,7 +31,7 @@ export function register<FloorName>Content(): void {
 }
 ```
 
-The eventual integrator can adapt this to `FloorLevel` or a string-id floor route. Floor agents should not block on that integration. They should make their floor self-contained and provide a debug generator hook.
+The routed implementation uses string-id floor stops from `src/data/design_floors.ts`; story anchors remain `FloorLevel` stops from `src/data/procedural_floors.ts`. New floor agents should make content self-contained and provide a debug generator hook instead of adding new `FloorLevel` enum values.
 
 ## Required Gameplay Loop
 
@@ -55,7 +55,7 @@ Every floor implementation must expose:
 
 ## Route Scale
 
-The design docs use future z anchors spaced by 4. The three numbers between anchors are procedural floors.
+The historical examples below use planned z anchors spaced by 4. They are not the shipped source of truth: the current route spans `z=-44..40`, includes `pioneer_camp` at `z=-32`, and inserts `bank_floor` at `z=-22`.
 
 Example:
 
@@ -67,4 +67,4 @@ z=-17 procedural
 z=-16 DESIGN: registry_morgue
 ```
 
-The exact current game route is still the README source of truth until code changes.
+The exact current game route is `README.md`, `src/data/design_floors.ts` and `src/data/procedural_floors.ts`.

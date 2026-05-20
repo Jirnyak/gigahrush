@@ -32,6 +32,7 @@ import {
 } from './rpg';
 import { MONSTERS } from '../entities/monster';
 import { publishEvent } from './events';
+import { entitySpawnSlots } from './entity_limits';
 import {
   assignProceduralQuestDeadline,
   deadlineMessageSuffix,
@@ -218,10 +219,11 @@ function spawnQuestMonsters(
   nextEntityId: { v: number }, count: number,
   msgs: Msg[], time: number,
 ): void {
+  const slots = entitySpawnSlots(entities, EntityType.MONSTER, count);
   let spawned = 0;
-  for (let i = 0; i < count; i++) {
+  for (let i = 0; i < slots; i++) {
     // Pick random floor cell in radius 3-8 from NPC (tight corridors)
-    const angle = (Math.PI * 2 * i) / count + (Math.random() - 0.5) * 0.5;
+    const angle = (Math.PI * 2 * i) / slots + (Math.random() - 0.5) * 0.5;
     const dist = 3 + Math.random() * 5;
     let found = false;
     let mx = 0, my = 0;

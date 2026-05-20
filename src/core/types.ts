@@ -206,9 +206,10 @@ export enum MonsterKind {
   NELYUD,     // false human              — нелюдь (ждёт близкой дистанции)
   KRYSNOZHKA, // food/garbage swarm       — крысоножка (идёт на приманку)
   KOSTOREZ,   // melee elite              — косторез (читабельный рывок)
+  SAFEGUARD,  // NET/BLAME blade guard    — сейфгард (быстрый охранитель)
 }
 
-export type PlayerDamageSourceKind = 'monster' | 'npc' | 'projectile' | 'hazard' | 'need' | 'samosbor' | 'unknown';
+export type PlayerDamageSourceKind = 'monster' | 'npc' | 'projectile' | 'hazard' | 'need' | 'samosbor' | 'void' | 'unknown';
 
 export interface PlayerDamageRecord {
   time: number;
@@ -347,6 +348,7 @@ export interface AIState {
   windupTargetId?: number;    // target locked by current windup
   staggerTimer?: number;      // temporary interrupt / stagger lockout
   lastSeenTargetId?: number;  // event throttle for first sight / escape beats
+  bossPhaseIndex?: number;    // last announced boss phase cue
   baitMarkerId?: number;      // cached monster bait marker id
   baitScanCd?: number;        // cooldown until next bounded bait scan
   ambientBarkCd?: number;     // cooldown for rare generic A-Life chatter
@@ -516,6 +518,17 @@ export interface RailTrain {
 // ── Quests ────────────────────────────────────────────────────────
 export enum QuestType { FETCH, VISIT, KILL, TALK }
 
+export interface QuestTargetMarker {
+  floor?: FloorLevel;
+  roomType?: RoomType;
+  roomName?: string;
+  zoneTag?: string;
+  designFloorId?: string;
+  proceduralTag?: string;
+  routeZ?: number;
+  risk?: number;
+}
+
 export interface Quest {
   id: number;
   type: QuestType;
@@ -531,6 +544,7 @@ export interface Quest {
   targetFloor?: FloorLevel;
   targetRoomType?: RoomType;
   targetZoneTag?: string;
+  targetMarker?: QuestTargetMarker;
   targetHint?: string;
   // KILL: targetMonsterKind + killCount/killNeeded
   targetMonsterKind?: MonsterKind;
@@ -600,12 +614,16 @@ export const WORLD_EVENT_TYPES = [
   'player_sell_item',
   'player_handoff_item',
   'player_destroy_item',
+  'permit_forged',
+  'permit_exposed',
+  'access_granted',
   'player_status_applied',
   'player_status_expired',
   'player_status_cured',
   'player_status_bad_reaction',
   'tool_broke',
   'ammo_consumed',
+  'gravity_beam_fired',
   'uv_spotlight_used',
   'uv_spotlight_target_affected',
   'uv_spotlight_depleted',
@@ -637,6 +655,13 @@ export const WORLD_EVENT_TYPES = [
   'rail_train_boarded',
   'rail_train_exited',
   'rail_train_crush',
+  'emergency_panel_used',
+  'gambling_bet',
+  'gambling_win',
+  'gambling_loss',
+  'computer_data_stolen',
+  'net_terminal_hacked',
+  'net_terminal_hack_failed',
   'quest_created',
   'quest_completed',
   'quest_failed',
@@ -675,6 +700,11 @@ export const WORLD_EVENT_TYPES = [
   'burn_cleanup',
   'fuel_empty',
   'collateral_damage',
+  'void_protocol_obtained',
+  'void_protocol_started',
+  'void_protocol_ended',
+  'void_protocol_backlash',
+  'void_protocol_rejected',
   'krysnozhka_swarm_triggered',
   'krysnozhka_baited',
   'krysnozhka_dispersed',

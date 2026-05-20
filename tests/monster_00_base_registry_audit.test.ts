@@ -47,6 +47,7 @@ const EXPECTED_BASE_MONSTER_IDS = [
   'NELYUD',
   'KRYSNOZHKA',
   'KOSTOREZ',
+  'SAFEGUARD',
 ] as const;
 
 interface TacticalAudit {
@@ -88,7 +89,7 @@ function opaquePixels(sprite: Uint32Array): number {
 test('base monster registry keeps stable enum ids, ecology tags, and floor data', () => {
   const kinds = monsterKinds();
   assert.deepEqual(kinds.map(kind => MonsterKind[kind]), EXPECTED_BASE_MONSTER_IDS);
-  assert.equal(kinds.length, 24);
+  assert.equal(kinds.length, 25);
 
   for (const kind of kinds) {
     const def = MONSTERS[kind];
@@ -238,6 +239,18 @@ test('uncovered common monsters keep their tactical counterplay roles', () => {
         assert.equal(def.hp >= 120 && def.hp <= 190, true, 'KOSTOREZ should stay an elite, not a boss sponge');
         assert.equal(def.attackRate >= 2.4, true, 'KOSTOREZ windup should stay readable');
         assert.equal(def.speed >= 1.3 && def.speed <= 1.8, true, 'KOSTOREZ should threaten but preserve corner counterplay');
+      },
+    },
+    {
+      kind: MonsterKind.SAFEGUARD,
+      floors: [FloorLevel.MAINTENANCE, FloorLevel.VOID],
+      rare: true,
+      defCounterplay: /Белый замах|машин|дроб/,
+      ecologyCounterplay: /прямом коридоре|машин|дроб/,
+      statGuard: def => {
+        assert.equal(def.hp >= 170 && def.hp <= 220, true, 'SAFEGUARD should stay elite but below boss durability');
+        assert.equal(def.attackRate >= 2.2, true, 'SAFEGUARD should preserve a readable recovery window');
+        assert.equal(def.speed >= 2.0 && def.speed <= 2.4, true, 'SAFEGUARD should be faster than Kostorez but still kiteable by line breaks');
       },
     },
   ];

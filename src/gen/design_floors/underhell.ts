@@ -45,7 +45,9 @@ export type UnderhellWitnessState = 'sealed' | 'rescued' | 'silenced';
 export type UnderhellVoidGateState = 'sealed' | 'anchored' | 'open';
 export type UnderhellLateWarningId =
   | 'underhell_threshold_price_echo'
-  | 'underhell_void_cut_darkness_trace';
+  | 'underhell_void_cut_darkness_trace'
+  | 'underhell_root_retreat_ledge'
+  | 'underhell_lower_retreat_ledge';
 
 export interface UnderhellLateWarning {
   id: UnderhellLateWarningId;
@@ -141,6 +143,22 @@ export const UNDERHELL_LATE_WARNINGS: readonly UnderhellLateWarning[] = [
     targetRoomName: 'Разрез к Пустоте',
     warning: 'Открытый разрез ведет к Пустоте, а позже может оставить мокрый след в темном отсеке.',
     tags: ['underhell', 'void_gate', 'darkness', 'warning'],
+  },
+  {
+    id: 'underhell_root_retreat_ledge',
+    label: 'Верхний обратный уступ виден до платы',
+    sourceRoomName: 'Корневой вход',
+    targetRoomName: 'Обратный уступ',
+    warning: 'Обратный уступ и корневая лестница остаются открытыми: если пост слишком громкий, уходи к лифту тем же светом.',
+    tags: ['underhell', 'retreat', 'threshold', 'warning'],
+  },
+  {
+    id: 'underhell_lower_retreat_ledge',
+    label: 'Нижний уступ не запирает разрез',
+    sourceRoomName: 'Культовая пошлинная палата',
+    targetRoomName: 'Нижний обратный уступ',
+    warning: 'Нижний обратный уступ связывает долг, якорь и разрез: награду можно взять и уйти без прямого боя у створки.',
+    tags: ['underhell', 'retreat', 'reward', 'warning'],
   },
 ];
 
@@ -352,6 +370,7 @@ export function payUnderhellThreshold(
     actorId: player.id,
     actorName: player.name,
     actorFaction: player.faction,
+    targetName: `Подпорог: ${cost.label}`,
     itemId: cost.item?.defId,
     itemCount: cost.item?.count,
     severity: 3,
@@ -363,6 +382,7 @@ export function payUnderhellThreshold(
       cost: cost.label,
       hpCost: cost.hp ?? 0,
       flags: ritual.flags,
+      warning: 'Порог оплачен. Проверь свидетелей и держи обратный уступ открытым до разреза.',
     },
   });
 
@@ -399,6 +419,7 @@ export function resolveUnderhellWitness(
     actorId: actor?.id,
     actorName: actor?.name,
     actorFaction: actor?.faction,
+    targetName: outcome === 'rescued' ? 'Свидетельская клетка открыта' : 'Свидетельская клетка замолчала',
     severity: outcome === 'rescued' ? 3 : 4,
     privacy: outcome === 'rescued' ? 'witnessed' : 'secret',
     tags: ['underhell', 'witness', outcome],
@@ -407,6 +428,9 @@ export function resolveUnderhellWitness(
       z: ritual.z,
       flags: ritual.flags,
       consequence: outcome === 'rescued' ? 'witness_can_testify' : 'witness_silenced_backlash',
+      warning: outcome === 'rescued'
+        ? 'Свидетель вышел. Слух станет публичнее, но клетки больше не держат маршрут.'
+        : 'Свидетель замолчал. Цена порога станет тайным поздним слухом.',
     },
   });
 }
@@ -440,6 +464,7 @@ export function burnUnderhellDebt(
       flags: ritual.flags,
       relationDelta: -6,
       note: 'Debt erased locally; backlash is published for later market/floor hooks.',
+      warning: 'Долг сожжен. Рынок и этаж 69 получат слух, но нижний уступ остается путем отхода.',
     },
   });
   return true;
@@ -470,6 +495,9 @@ export function breakUnderhellVoidAnchor(
       z: ritual.z,
       thresholdPaid: snapshotUnderhellFlags(ritual.flags).thresholdPaid,
       flags: ritual.flags,
+      warning: opened
+        ? 'Разрез открыт. Забери награду и уходи через нижний уступ или к Пустоте.'
+        : 'Якорь сломан, но пост еще не оплачен. Возвращайся к трем платам, отход открыт.',
     },
   });
   return opened;
@@ -525,6 +553,9 @@ export function publishUnderhellBacklash(
     data: {
       routeId: UNDERHELL_ROUTE_ID,
       z: UNDERHELL_Z,
+      warning: kind === 'identity'
+        ? 'Паспортный корешок сгорел в цене порога. Следующий слух спросит фамилию.'
+        : 'Сожженный долг ушел слухом наверх. Это отсрочка, не чистый выход.',
       ...data,
     },
   });
@@ -633,10 +664,14 @@ function generateUnderhellDesignFloorSeeded(seed: number, forceOpenVoidGate: boo
 
   addItemDrop(entities, nextId, threshold.x + 3, threshold.y + threshold.h - 3, 'holy_water', 1);
   addItemDrop(entities, nextId, threshold.x + threshold.w - 4, threshold.y + threshold.h - 3, 'passport_stub', 1);
+  addItemDrop(entities, nextId, fallback.x + 3, fallback.y + fallback.h - 3, 'bandage', 1);
+  addItemDrop(entities, nextId, lowerFallback.x + lowerFallback.w - 4, lowerFallback.y + lowerFallback.h - 3, 'filtered_water', 1);
   addItemDrop(entities, nextId, gate.x + 2, gate.y + gate.h - 3, 'bottled_voice', 1);
-  addNote(entities, nextId, entry.x + 3, entry.y + 3, 'Нижний пропускник берет одну явную плату: holy_water, passport_stub или blood_35hp. После оплаты проверь свидетелей.');
-  addNote(entities, nextId, threshold.x + 5, threshold.y + 3, UNDERHELL_LATE_WARNINGS[0].warning);
+  addNote(entities, nextId, entry.x + 3, entry.y + 3, 'Нижний пропускник берет одну явную плату: holy_water, passport_stub или blood_35hp. Обратный уступ и корневая лестница ведут к лифту, пока вы не полезли глубже.');
+  addNote(entities, nextId, fallback.x + 2, fallback.y + 2, UNDERHELL_LATE_WARNINGS[2].warning);
+  addNote(entities, nextId, threshold.x + 5, threshold.y + 3, `${UNDERHELL_LATE_WARNINGS[0].warning} У поста есть боковой отход к обратному уступу.`);
   addNote(entities, nextId, witnessB.x + 4, witnessB.y + 4, 'Свидетель Б молчит. Клетку можно открыть, но можно и оставить его без показаний.');
+  addNote(entities, nextId, lowerFallback.x + 3, lowerFallback.y + 2, UNDERHELL_LATE_WARNINGS[3].warning);
   addNote(entities, nextId, sacrifice.x + 4, sacrifice.y + 4, UNDERHELL_LATE_WARNINGS[1].warning);
 
   spawnUnderhellMonster(world, entities, nextId, MonsterKind.SHADOW, threshold.x + 5, threshold.y + 3, 'Тень у платы', 4);
@@ -660,7 +695,7 @@ function generateUnderhellDesignFloorSeeded(seed: number, forceOpenVoidGate: boo
     lateWarningIds: UNDERHELL_LATE_WARNINGS.map(warning => warning.id),
   };
   if (forceOpenVoidGate) tryOpenUnderhellVoidGate(world, ritualState);
-  registerUnderhellRouteCues(world, ritualState, threshold, witnessA, sacrifice, gate);
+  registerUnderhellRouteCues(world, ritualState, entry, fallback, threshold, witnessA, toll, lowerFallback, sacrifice, gate);
 
   world.bakeLights();
   genLog(`[FLOOR19_UNDERHELL] generated ${UNDERHELL_ROUTE_ID} seed ${seed} rooms=${world.rooms.length} gate=${voidGateCell}`);
@@ -677,11 +712,44 @@ function generateUnderhellDesignFloorSeeded(seed: number, forceOpenVoidGate: boo
 function registerUnderhellRouteCues(
   world: World,
   ritual: UnderhellRitualState,
+  entry: Room,
+  fallback: Room,
   threshold: Room,
   witness: Room,
+  toll: Room,
+  lowerFallback: Room,
   sacrifice: Room,
   gate: Room,
 ): void {
+  const entryMarkerX = entry.x + (entry.w >> 1) + 0.5;
+  const entryMarkerY = entry.y + (entry.h >> 1) + 0.5;
+  const fallbackTargetX = fallback.x + (fallback.w >> 1) + 0.5;
+  const fallbackTargetY = fallback.y + (fallback.h >> 1) + 0.5;
+  const entryCell = world.idx(Math.floor(entryMarkerX), Math.floor(entryMarkerY));
+  registerRouteCue(world, {
+    id: 'underhell_root_retreat_ledge',
+    x: entryMarkerX,
+    y: entryMarkerY,
+    targetX: fallbackTargetX,
+    targetY: fallbackTargetY,
+    floor: UNDERHELL_FLOOR,
+    roomId: entry.id,
+    targetRoomId: fallback.id,
+    zoneId: world.zoneMap[entryCell],
+    label: 'верхний отход',
+    hint: 'обратный уступ и корневая лестница ведут назад к лифту',
+    targetName: 'обратный уступ',
+    color: '#9cf',
+    tags: ['underhell', 'retreat', 'threshold', 'warning'],
+    toneSeed: ritual.seed + entry.id * 19 + fallback.id,
+    radius: 10,
+    targetRadius: 4,
+    cooldownSec: 42,
+    heardText: 'Корневой вход показывает обратный уступ: до платы отметь путь к лифту.',
+    followedText: 'Обратный уступ найден. Тут есть перевязка и короткий возврат к корневому входу.',
+    ignoredText: 'Пост трех оплат впереди, но верхний отход не проверен.',
+  });
+
   const thresholdMarkerX = threshold.x + (threshold.w >> 1) + 0.5;
   const thresholdMarkerY = threshold.y + 3.5;
   const witnessTargetX = witness.x + 4.5;
@@ -709,6 +777,35 @@ function registerUnderhellRouteCues(
     heardText: 'У поста скребет решетка: после оплаты реши, что делать со свидетелем.',
     followedText: 'Свидетельская клетка найдена. Ее можно открыть, замолчать или оставить долг расти.',
     ignoredText: 'Цена пропуска ушла в журнал. Свидетель останется чужим поздним слухом.',
+  });
+
+  const lowerMarkerX = toll.x + (toll.w >> 1) + 0.5;
+  const lowerMarkerY = toll.y + (toll.h >> 1) + 0.5;
+  const lowerTargetX = lowerFallback.x + (lowerFallback.w >> 1) + 0.5;
+  const lowerTargetY = lowerFallback.y + (lowerFallback.h >> 1) + 0.5;
+  const lowerCell = world.idx(Math.floor(lowerMarkerX), Math.floor(lowerMarkerY));
+  registerRouteCue(world, {
+    id: 'underhell_lower_retreat_ledge',
+    x: lowerMarkerX,
+    y: lowerMarkerY,
+    targetX: lowerTargetX,
+    targetY: lowerTargetY,
+    floor: UNDERHELL_FLOOR,
+    roomId: toll.id,
+    targetRoomId: lowerFallback.id,
+    zoneId: world.zoneMap[lowerCell],
+    label: 'нижний отход',
+    hint: 'долг, якорь и разрез сходятся через уступ с водой',
+    targetName: 'нижний обратный уступ',
+    color: '#9fd',
+    tags: ['underhell', 'retreat', 'reward', 'warning'],
+    toneSeed: ritual.seed + toll.id * 23 + lowerFallback.id,
+    radius: 10,
+    targetRadius: 4,
+    cooldownSec: 44,
+    heardText: 'Пошлинная палата шуршит списком: нижний уступ связывает долг, якорь и отход.',
+    followedText: 'Нижний обратный уступ найден. Вода здесь не победа, а право развернуться.',
+    ignoredText: 'Долг, якорь и разрез остались впереди без проверенного нижнего отхода.',
   });
 
   const gateMarkerX = sacrifice.x + (sacrifice.w >> 1) + 0.5;

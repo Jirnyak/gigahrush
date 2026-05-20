@@ -10,6 +10,8 @@ import {
   type FactionClashSideDef,
   type FactionEventDef,
   type FactionEventKind,
+  type FactionResidueChoiceDef,
+  type FactionResidueChoiceKind,
   type FactionResidueMarkDef,
 } from '../data/faction_events';
 import { freshNeeds, ITEMS, randomName } from '../data/catalog';
@@ -23,6 +25,7 @@ import { publishEvent } from './events';
 import { addItem, hasItem } from './inventory';
 import { observeRumorEvent } from './rumor';
 import { gaussianLevel, getMaxHp, randomRPG } from './rpg';
+import { entitySpawnSlots } from './entity_limits';
 
 const SCHEDULER_TICK_SEC = 10;
 const MIN_EVENT_GAP_SEC = 45;
@@ -42,6 +45,14 @@ const CLASH_AVOID_DIST2 = 38 * 38;
 const CLASH_TIMEOUT_SEC = 95;
 const CLASH_REPORT_WINDOW_SEC = 14 * 60;
 const CLASH_REPORT_DIST2 = 96 * 96;
+const MAX_ACTIVE_RESIDUE_SITES = 16;
+const RESIDUE_SITE_TTL_SEC = 12 * 60;
+const RESIDUE_CLEANUP_DIST2 = 16 * 16;
+const RESIDUE_REPORT_WINDOW_SEC = 12 * 60;
+const RESIDUE_REPORT_DIST2 = 72 * 72;
+const RESIDUE_PRESSURE_RELIEF_CELLS = 36;
+const RESIDUE_NPC_REACT_DIST2 = 32 * 32;
+const MAX_RESIDUE_NPC_REACTIONS = 16;
 
 interface FactionEventRecord {
   time: number;
@@ -129,6 +140,21 @@ interface FactionClashAftermath {
   rumorIds: readonly string[];
 }
 
+interface ActiveFactionResidueSite {
+  key: string;
+  floor: number;
+  zoneId: number;
+  x: number;
+  y: number;
+  createdAt: number;
+  expiresAt: number;
+  eventId: number;
+  def: FactionEventDef;
+  cleaned: boolean;
+  reported: boolean;
+  pressureCells: number;
+}
+
 export interface CultProcessionMapSnapshot {
   id: number;
   floor: number;
@@ -156,7 +182,192 @@ const cultProcessionSnapshots: CultProcessionMapSnapshot[] = [];
 const activeFactionClashes: ActiveFactionClash[] = [];
 const spawnedFactionClashKeys = new Set<string>();
 const factionClashAftermaths: FactionClashAftermath[] = [];
+const activeFactionResidueSites: ActiveFactionResidueSite[] = [];
 let lastFactionEventTime = 0;
+
+function residueProfile(def: FactionEventDef): string {
+  if (def.clash) return 'clash';
+  if (def.procession) return 'procession';
+  if (def.tags.includes('cult') || def.tags.includes('chernobog')) return 'cult';
+  if (def.tags.includes('theft') || def.tags.includes('looters')) return 'theft';
+  if (def.tags.includes('raid') || def.tags.includes('liquidator')) return 'enforcement';
+  if (def.tags.includes('caravan') || def.tags.includes('shortage_escort')) return 'shortage';
+  return def.tags[0] ?? def.id;
+}
+
+function serializeResidueChoices(choices: readonly FactionResidueChoiceDef[] | undefined): string[] {
+  return (choices ?? []).map(choice => `${choice.kind}:${choice.text}`).slice(0, 8);
+}
+
+function residueAllowsChoice(def: FactionEventDef, choice: FactionResidueChoiceKind): boolean {
+  const choices = def.residueChoices;
+  return !choices || choices.length === 0 || choices.some(item => item.kind === choice);
+}
+
+function rememberResidueSite(
+  state: GameState,
+  def: FactionEventDef,
+  zoneId: number,
+  x: number,
+  y: number,
+  eventId: number,
+  pressureCells: number,
+): void {
+  activeFactionResidueSites.unshift({
+    key: `${state.currentFloor}:${eventId}:${def.id}`,
+    floor: state.currentFloor,
+    zoneId,
+    x,
+    y,
+    createdAt: state.time,
+    expiresAt: state.time + RESIDUE_SITE_TTL_SEC,
+    eventId,
+    def,
+    cleaned: false,
+    reported: false,
+    pressureCells,
+  });
+  if (activeFactionResidueSites.length > MAX_ACTIVE_RESIDUE_SITES) {
+    activeFactionResidueSites.length = MAX_ACTIVE_RESIDUE_SITES;
+  }
+}
+
+function pruneResidueSites(state: GameState): void {
+  for (let i = activeFactionResidueSites.length - 1; i >= 0; i--) {
+    const site = activeFactionResidueSites[i];
+    if (site.floor !== state.currentFloor || state.time >= site.expiresAt) activeFactionResidueSites.splice(i, 1);
+  }
+}
+
+function nearestResidueSiteForChoice(
+  state: GameState,
+  world: World,
+  player: Entity,
+  choice: FactionResidueChoiceKind,
+  maxDist2: number,
+): ActiveFactionResidueSite | null {
+  pruneResidueSites(state);
+  let best: ActiveFactionResidueSite | null = null;
+  let bestD2 = maxDist2;
+  for (const site of activeFactionResidueSites) {
+    if (site.floor !== state.currentFloor || !residueAllowsChoice(site.def, choice)) continue;
+    if (choice === 'cleanup' && site.cleaned) continue;
+    if (choice === 'report' && site.reported) continue;
+    const d2 = world.dist2(player.x, player.y, site.x, site.y);
+    if (d2 > bestD2) continue;
+    best = site;
+    bestD2 = d2;
+  }
+  return best;
+}
+
+function relieveResiduePressure(world: World, site: ActiveFactionResidueSite): number {
+  const zone = world.zones[site.zoneId];
+  if (!zone) return 0;
+  const radius = Math.max(2, Math.min(10, Math.ceil(Math.sqrt(Math.max(1, site.pressureCells)))));
+  const ix = Math.floor(site.x);
+  const iy = Math.floor(site.y);
+  let changed = 0;
+  for (let dy = -radius; dy <= radius; dy++) {
+    for (let dx = -radius; dx <= radius; dx++) {
+      if (changed >= RESIDUE_PRESSURE_RELIEF_CELLS) return changed;
+      if (dx * dx + dy * dy > radius * radius) continue;
+      const i = world.idx(ix + dx, iy + dy);
+      if (world.zoneMap[i] !== site.zoneId) continue;
+      if (world.factionControl[i] === ZoneFaction.SAMOSBOR || world.factionControl[i] === zone.faction) continue;
+      world.factionControl[i] = zone.faction;
+      changed++;
+    }
+  }
+  return changed;
+}
+
+function applyResidueChoiceRelations(def: FactionEventDef, choice: FactionResidueChoiceKind, reportFaction?: Faction): void {
+  const actor = reportFaction ?? def.actorFaction;
+  if (choice === 'cleanup' && actor !== undefined) addFactionRelMutual(Faction.PLAYER, actor, 1);
+  if (choice === 'report' && reportFaction !== undefined) addFactionRelMutual(Faction.PLAYER, reportFaction, 2);
+  if (choice === 'loot' && actor !== undefined) addFactionRelMutual(Faction.PLAYER, actor, -1);
+}
+
+function publishResidueChoiceEvent(
+  state: GameState,
+  site: ActiveFactionResidueSite,
+  actor: Entity,
+  choice: FactionResidueChoiceKind,
+  data: Record<string, unknown> = {},
+): number {
+  const event = publishEvent(state, {
+    type: 'faction_event',
+    zoneId: site.zoneId,
+    x: site.x,
+    y: site.y,
+    actorId: actor.id,
+    actorName: actor.name,
+    actorFaction: actor.faction,
+    targetFaction: site.def.actorFaction,
+    itemId: site.def.itemId,
+    itemName: site.def.itemId ? ITEMS[site.def.itemId]?.name : undefined,
+    severity: Math.max(1, Math.min(5, site.def.severity - 1)) as 1 | 2 | 3 | 4 | 5,
+    privacy: site.def.privacy,
+    tags: ['faction_event', site.def.id, 'residue', choice, ...site.def.tags],
+    data: {
+      factionEventId: site.def.id,
+      sourceEventId: site.eventId,
+      residueChoice: choice,
+      residueProfile: residueProfile(site.def),
+      residueText: site.def.residueText,
+      ...data,
+    },
+  });
+  return event.id;
+}
+
+function tryReportGenericResidueSite(
+  state: GameState,
+  world: World,
+  player: Entity,
+  npc: Entity,
+): string | null {
+  const site = nearestResidueSiteForChoice(state, world, player, 'report', RESIDUE_REPORT_DIST2);
+  if (!site || site.reported || state.time - site.createdAt > RESIDUE_REPORT_WINDOW_SEC) return null;
+  site.reported = true;
+  const reportFaction = npc.faction ?? site.def.actorFaction;
+  applyResidueChoiceRelations(site.def, 'report', reportFaction);
+  publishResidueChoiceEvent(state, site, player, 'report', {
+    reportNpcId: npc.id,
+    reportNpcName: npc.name,
+    reportFaction,
+  });
+  return `Доклад принят: ${site.def.residueText}`;
+}
+
+function reactNearbyNpcsToResidue(
+  world: World,
+  entities: Entity[],
+  x: number,
+  y: number,
+  zoneId: number,
+  def: FactionEventDef,
+  phase: 'start' | 'aftermath',
+): number {
+  let reacted = 0;
+  for (const npc of entities) {
+    if (reacted >= MAX_RESIDUE_NPC_REACTIONS) break;
+    if (!npc.alive || npc.type !== EntityType.NPC || !npc.ai) continue;
+    if (world.zoneMap[world.idx(Math.floor(npc.x), Math.floor(npc.y))] !== zoneId) continue;
+    if (world.dist2(x, y, npc.x, npc.y) > RESIDUE_NPC_REACT_DIST2) continue;
+    npc.ai.ambientBarkCd = Math.min(npc.ai.ambientBarkCd ?? 0, phase === 'start' ? 2 : 5);
+    if (phase === 'start' && def.severity >= 4 && npc.faction !== def.actorFaction) {
+      npc.ai.goal = AIGoal.FLEE;
+      npc.ai.tx = Math.floor(npc.x + world.delta(x, npc.x));
+      npc.ai.ty = Math.floor(npc.y + world.delta(y, npc.y));
+      npc.ai.path = [];
+      npc.ai.pi = 0;
+    }
+    reacted++;
+  }
+  return reacted;
+}
 
 export function updateFactionEvents(
   state: GameState,
@@ -168,7 +379,8 @@ export function updateFactionEvents(
   allowSpawns = true,
 ): void {
   resetFactionEventRuntimeIfNeeded(state);
-  updateActiveCultProcessions(state, world, player, entities, dt);
+  pruneResidueSites(state);
+  updateActiveCultProcessions(state, world, player, entities, nextId, dt);
   updateActiveFactionClashes(state, world, player, entities, nextId);
   if (!allowSpawns) {
     schedulerAccum = 0;
@@ -409,6 +621,17 @@ export function recordFactionEventLootTaken(
   drop: Entity,
 ): void {
   if (!state || drop.questId !== FACTION_EVENT_QUEST_ID) return;
+  const residue = nearestResidueSiteForChoice(state, world, player, 'cleanup', RESIDUE_CLEANUP_DIST2);
+  if (residue && !residue.cleaned) {
+    residue.cleaned = true;
+    const pressureCleared = relieveResiduePressure(world, residue);
+    applyResidueChoiceRelations(residue.def, 'cleanup');
+    publishResidueChoiceEvent(state, residue, player, 'cleanup', {
+      pickedItemId: drop.inventory?.[0]?.defId,
+      pressureCleared,
+    });
+    if (pressureCleared > 0) state.msgs.push(msg('След события разобран: местный нажим немного спал.', state.time, '#9d9'));
+  }
   const clash = activeFactionClashes.find(c =>
     c.floor === state.currentFloor
     && !c.aftermathDone
@@ -426,7 +649,7 @@ export function tryReportLiquidatorCultClashAftermath(
 ): string | null {
   resetFactionClashRuntimeIfNeeded(state);
   const def = factionClashDef();
-  if (!def?.clash || npc.faction !== def.clash.reportFaction) return null;
+  if (!def?.clash || npc.faction !== def.clash.reportFaction) return tryReportGenericResidueSite(state, world, player, npc);
   const hasEvidence = playerHasClashEvidence(player);
   const aftermath = factionClashAftermaths.find(a =>
     !a.reported
@@ -434,7 +657,7 @@ export function tryReportLiquidatorCultClashAftermath(
     && state.time - a.time <= CLASH_REPORT_WINDOW_SEC
     && (hasEvidence || world.dist2(player.x, player.y, a.x, a.y) <= CLASH_REPORT_DIST2)
   );
-  if (!aftermath) return null;
+  if (!aftermath) return tryReportGenericResidueSite(state, world, player, npc);
 
   aftermath.reported = true;
   player.money = (player.money ?? 0) + def.clash.reportRewardMoney;
@@ -476,6 +699,7 @@ function triggerFactionClash(
   const totalNpcs = sideCounts[0] + sideCounts[1];
   if (totalNpcs <= 1) return blocked('стороны стычки не собрались');
   if (taggedNpcs + totalNpcs > MAX_EVENT_NPCS) return blocked('достигнут лимит NPC событий');
+  if (entitySpawnSlots(entities, EntityType.NPC, totalNpcs) < totalNpcs) return blocked('достигнут общий лимит NPC');
 
   const center = spawnCenter(world, player, zoneId);
   const angle = Math.random() * Math.PI * 2;
@@ -511,13 +735,14 @@ function triggerFactionClash(
     entities.push(npc);
   }
 
-  const availableDrops = Math.max(0, MAX_EVENT_DROPS - taggedDrops);
+  const availableDrops = entitySpawnSlots(entities, EntityType.ITEM_DROP, Math.max(0, MAX_EVENT_DROPS - taggedDrops));
   const spawnedDrops = spawnFactionEventDrops(world, entities, nextId, center.x, center.y, zoneId, def.drops, availableDrops);
   const marksPlaced = placeResidueMarks(world, center.x, center.y, zoneId, def);
   const consequences = applyConsequences(state, world, zoneId, def);
   if (staged.length === 0 && spawnedDrops === 0 && marksPlaced === 0 && consequences.deposited === 0 && consequences.economyDeltas === 0) {
     return blocked('не найдено место для видимой стычки');
   }
+  const npcReactions = reactNearbyNpcsToResidue(world, entities, center.x, center.y, zoneId, def, 'start');
 
   spawnedFactionClashKeys.add(key);
   zoneCooldownUntil.set(key, state.time + def.cooldownSec);
@@ -527,8 +752,10 @@ function triggerFactionClash(
     spawnedDrops,
     marksPlaced,
     deposited: consequences.deposited,
+    npcReactions,
     text: def.message,
   });
+  rememberResidueSite(state, def, zoneId, center.x, center.y, startEventId, 0);
   seedNearbyRumors(world, entities, state, zoneId, def, Faction.LIQUIDATOR, startEventId, center.x, center.y);
 
   activeFactionClashes.push({
@@ -613,7 +840,7 @@ function finishFactionClash(
         ? 'mutual_ruin'
         : 'unresolved';
   const outcomeDef = clashOutcomeDef(clash.def, outcome);
-  const availableDrops = Math.max(0, MAX_EVENT_DROPS - countTagged(entities, EntityType.ITEM_DROP));
+  const availableDrops = entitySpawnSlots(entities, EntityType.ITEM_DROP, Math.max(0, MAX_EVENT_DROPS - countTagged(entities, EntityType.ITEM_DROP)));
   const spawnedDrops = spawnFactionEventDrops(
     world,
     entities,
@@ -628,6 +855,7 @@ function finishFactionClash(
   const pressureCells = outcomeDef?.winnerFaction !== undefined
     ? applyLocalPressure(world, clash.x, clash.y, clash.zoneId, outcomeDef.winnerFaction, clash.def)
     : 0;
+  const npcReactions = reactNearbyNpcsToResidue(world, entities, clash.x, clash.y, clash.zoneId, clash.def, 'aftermath');
   const eventId = publishClashPhaseEvent(state, clash.def, clash.zoneId, clash.x, clash.y, 'aftermath', {
     actorFaction: outcomeDef?.winnerFaction,
     outcome,
@@ -636,9 +864,11 @@ function finishFactionClash(
     spawnedDrops,
     marksPlaced,
     pressureCells,
+    npcReactions,
     rumorIds: outcomeDef?.rumorIds,
     text: outcomeDef?.text ?? clash.def.residueText,
   });
+  rememberResidueSite(state, clash.def, clash.zoneId, clash.x, clash.y, eventId, pressureCells);
   if (outcomeDef) seedClashOutcomeRumors(world, entities, state, clash, outcomeDef, eventId, outcome);
   factionClashAftermaths.unshift({
     key: clash.key,
@@ -711,8 +941,9 @@ function spawnFactionEventDrops(
   maxDrops: number,
 ): number {
   let spawned = 0;
+  const dropSlots = entitySpawnSlots(entities, EntityType.ITEM_DROP, maxDrops);
   for (const item of items ?? []) {
-    if (spawned >= maxDrops) break;
+    if (spawned >= dropSlots) break;
     const pos = findSpawnCell(world, cx, cy, zoneId, 1, 9);
     if (!pos) continue;
     entities.push({
@@ -752,6 +983,7 @@ function publishClashPhaseEvent(
     spawnedDrops?: number;
     marksPlaced?: number;
     pressureCells?: number;
+    npcReactions?: number;
     deposited?: number;
     severity?: 3 | 4 | 5;
     rumorIds?: readonly string[];
@@ -783,9 +1015,12 @@ function publishClashPhaseEvent(
       spawnedDrops: detail.spawnedDrops,
       marksPlaced: detail.marksPlaced,
       pressureCells: detail.pressureCells,
+      npcReactions: detail.npcReactions,
       deposited: detail.deposited,
       rumorIds: detail.rumorIds,
       residueText: detail.text ?? def.residueText,
+      residueProfile: residueProfile(def),
+      residueChoices: serializeResidueChoices(def.residueChoices),
     },
   });
   return event.id;
@@ -914,7 +1149,11 @@ function triggerFactionEvent(
   const taggedNpcs = countTagged(entities, EntityType.NPC);
   const taggedDrops = countTagged(entities, EntityType.ITEM_DROP);
   if (taggedNpcs >= MAX_EVENT_NPCS) return blocked('достигнут лимит NPC событий');
+  const eventNpcSlots = entitySpawnSlots(entities, EntityType.NPC, MAX_EVENT_NPCS - taggedNpcs);
+  if (eventNpcSlots <= 0 && def.minGroup > 0) return blocked('достигнут общий лимит NPC');
   if (taggedDrops >= MAX_EVENT_DROPS && def.drops && def.drops.length > 0) return blocked('достигнут лимит трофеев событий');
+  const eventDropSlots = entitySpawnSlots(entities, EntityType.ITEM_DROP, MAX_EVENT_DROPS - taggedDrops);
+  if (eventDropSlots <= 0 && def.drops && def.drops.length > 0) return blocked('достигнут общий лимит предметов');
   if (def.clash) {
     return triggerFactionClash(state, world, player, entities, nextId, zoneId, def, force, taggedNpcs, taggedDrops, key);
   }
@@ -923,7 +1162,7 @@ function triggerFactionEvent(
   if (faction === null) return blocked('нет фракции-исполнителя');
 
   const eventNpcCap = def.procession ? Math.min(MAX_PROCESSION_PILGRIMS, def.maxGroup) : def.maxGroup;
-  const groupCap = Math.min(eventNpcCap, MAX_EVENT_NPCS - taggedNpcs);
+  const groupCap = Math.min(eventNpcCap, MAX_EVENT_NPCS - taggedNpcs, eventNpcSlots);
   const groupSize = Math.max(0, Math.min(groupCap, def.minGroup + Math.floor(Math.random() * (def.maxGroup - def.minGroup + 1))));
   const center = spawnCenter(world, player, zoneId);
   let spawnedNpcs = 0;
@@ -938,7 +1177,7 @@ function triggerFactionEvent(
   }
 
   let spawnedDrops = 0;
-  const availableDrops = Math.max(0, MAX_EVENT_DROPS - taggedDrops);
+  const availableDrops = eventDropSlots;
   for (const item of def.drops ?? []) {
     if (spawnedDrops >= availableDrops) break;
     const pos = findSpawnCell(world, center.x, center.y, zoneId, 2, 10);
@@ -976,10 +1215,12 @@ function triggerFactionEvent(
     if (activeProcession) cancelCultProcession(world, activeProcession);
     return blocked('не найдено место для видимого события');
   }
+  const npcReactions = reactNearbyNpcsToResidue(world, entities, center.x, center.y, zoneId, def, 'start');
 
   zoneCooldownUntil.set(key, state.time + def.cooldownSec);
-  const eventId = publishFactionEvent(state, zoneId, def, faction, center.x, center.y, spawnedNpcs, spawnedDrops, marksPlaced, pressureCells, consequences);
+  const eventId = publishFactionEvent(state, zoneId, def, faction, center.x, center.y, spawnedNpcs, spawnedDrops, marksPlaced, pressureCells, consequences, npcReactions);
   if (activeProcession) activeProcession.eventId = eventId;
+  rememberResidueSite(state, def, zoneId, center.x, center.y, eventId, pressureCells);
   seedNearbyRumors(world, entities, state, zoneId, def, faction, eventId, center.x, center.y);
   state.msgs.push(msg(def.message, state.time, '#fc6'));
   if (pressureCells > 0) state.msgs.push(msg(def.pressure.text, state.time, '#c96'));
@@ -1184,6 +1425,7 @@ function updateActiveCultProcessions(
   world: World,
   player: Entity,
   entities: Entity[],
+  nextId: { v: number },
   _dt: number,
 ): void {
   const def = cultProcessionDef();
@@ -1195,7 +1437,7 @@ function updateActiveCultProcessions(
       continue;
     }
     if (p.samosborCount !== state.samosborCount) {
-      finishCultProcession(state, world, p, 'смыта самосбором');
+      finishCultProcession(state, world, entities, nextId, p, 'смыта самосбором');
       continue;
     }
     if (!p.disrupted && processionDisrupted(p, entities)) {
@@ -1206,11 +1448,11 @@ function updateActiveCultProcessions(
         actionText: 'Процессия сорвана: часть паломников не дошла до метки.',
       });
       state.msgs.push(msg('Процессия сбилась. Культ это запомнит, ликвидаторы тоже.', state.time, '#fa0'));
-      finishCultProcession(state, world, p, 'сорвана');
+      finishCultProcession(state, world, entities, nextId, p, 'сорвана');
       continue;
     }
     if (state.time >= p.expiresAt) {
-      finishCultProcession(state, world, p, p.reported ? 'доложена' : 'затихла');
+      finishCultProcession(state, world, entities, nextId, p, p.reported ? 'доложена' : 'затихла');
       continue;
     }
     applyProcessionFearTick(state, world, player, p, def);
@@ -1271,16 +1513,34 @@ function applyProcessionFearTick(
   }
 }
 
-function finishCultProcession(state: GameState, world: World, p: ActiveCultProcession, outcome: string): void {
+function finishCultProcession(
+  state: GameState,
+  world: World,
+  entities: Entity[],
+  nextId: { v: number },
+  p: ActiveCultProcession,
+  outcome: string,
+): void {
+  const def = cultProcessionDef();
+  const availableDrops = entitySpawnSlots(entities, EntityType.ITEM_DROP, Math.max(0, MAX_EVENT_DROPS - countTagged(entities, EntityType.ITEM_DROP)));
+  const spawnedDrops = def
+    ? spawnFactionEventDrops(world, entities, nextId, p.x, p.y, p.zoneId, def.drops, Math.min(1, availableDrops))
+    : 0;
+  const marksPlaced = def ? placeResidueMarks(world, p.x, p.y, p.zoneId, def) : 0;
+  const npcReactions = def ? reactNearbyNpcsToResidue(world, entities, p.x, p.y, p.zoneId, def, 'aftermath') : 0;
   restoreTemporaryControl(world, p);
-  publishProcessionAction(state, p, undefined, 'aftermath', p.disrupted ? 5 : 4, {
+  const eventId = publishProcessionAction(state, p, undefined, 'aftermath', p.disrupted ? 5 : 4, {
     actionText: `Процессия ${outcome}; временное давление коридора спало.`,
     processionOutcome: outcome,
     avoided: p.avoided,
     followed: p.followed,
     reported: p.reported,
     disguised: p.disguised,
+    spawnedDrops,
+    marksPlaced,
+    npcReactions,
   });
+  if (def) rememberResidueSite(state, def, p.zoneId, p.x, p.y, eventId, 0);
   const idx = activeCultProcessions.indexOf(p);
   if (idx >= 0) activeCultProcessions.splice(idx, 1);
 }
@@ -1292,8 +1552,9 @@ function publishProcessionAction(
   action: CultProcessionAction,
   severity: 3 | 4 | 5,
   data: Record<string, unknown>,
-): void {
-  publishEvent(state, {
+): number {
+  const def = cultProcessionDef();
+  const event = publishEvent(state, {
     type: 'faction_relation_changed',
     zoneId: p.zoneId,
     x: p.x,
@@ -1313,9 +1574,13 @@ function publishProcessionAction(
       sourceEventId: p.eventId,
       processionAction: action,
       temporaryControlCells: p.tempCells.length,
+      residueText: def?.residueText,
+      residueProfile: def ? residueProfile(def) : 'procession',
+      residueChoices: serializeResidueChoices(def?.residueChoices),
       ...data,
     },
   });
+  return event.id;
 }
 
 function createFactionNpc(
@@ -1533,6 +1798,7 @@ function publishFactionEvent(
   marksPlaced: number,
   pressureCells: number,
   consequences: ConsequenceResult,
+  npcReactions: number,
 ): number {
   const event = publishEvent(state, {
     type: 'faction_relation_changed',
@@ -1555,9 +1821,12 @@ function publishFactionEvent(
       deposited: consequences.deposited,
       containersTouched: consequences.containersTouched,
       economyDeltas: economyDeltaSummary(def),
+      npcReactions,
       residueText: def.residueText,
       pressureText: def.pressure.text,
       markKinds: def.marks.map(m => m.kind),
+      residueProfile: residueProfile(def),
+      residueChoices: serializeResidueChoices(def.residueChoices),
     },
   });
   return event.id;

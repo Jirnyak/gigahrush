@@ -1,8 +1,8 @@
 # Design Floor: Морг регистраций
 
-Status: planning artifact. Future route id: `registry_morgue`. Future anchor: `z=-16`.
+Status: implemented authored route floor. Route id: `registry_morgue`. Anchor: `z=-16`. Base floor: `MINISTRY`. Shipped HUD name: `Морг регистраций`.
 
-Planned owned file: `src/gen/design_floors/registry_morgue.ts`. Catalog reference: `pocket_morgue_registry`.
+Owned file: `src/gen/design_floors/registry_morgue.ts`. Catalog reference: `pocket_morgue_registry`. Planning sections below may predate the routed implementation; verify exact identity/death mechanics against source.
 
 ## Role
 
@@ -47,4 +47,3 @@ Use rare, readable threats: `NELYUD`, `ZOMBIE`, `SHADOW`, `PECHATEED`. Monsters 
 - One quest changes identity/death state outside this floor.
 - Medical loot is container-gated with owner/access risk.
 - No graphic sexual or gore content; horror stays procedural/systemic.
-

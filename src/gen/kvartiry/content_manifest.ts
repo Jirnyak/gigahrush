@@ -4,7 +4,7 @@
 
 import { type Entity } from '../../core/types';
 import { World } from '../../core/world';
-import { syncNextEntityId } from '../content_manifest_utils';
+import { syncNextEntityId, withPoiGenerationMetadata } from '../content_manifest_utils';
 import { spawnNavelny } from './navelny';
 import { spawnZhirinovsky } from './zhirinovsky';
 import { spawnTyotyaKlava } from './tyotya_klava';
@@ -86,7 +86,16 @@ export function runKvartiryPermanentContent(
   let socialRoomId = world.rooms.length;
   const redCorner = generateRedCorner(world, socialRoomId, entities, socialNext, spawnX, spawnY);
   socialRoomId = Math.max(socialRoomId + 1, redCorner.nextRoomId);
-  socialRoomId = runTaggedPressurePoi('ration_queue', () => generateRationQueue(world, socialRoomId, entities, socialNext, spawnX, spawnY));
+  socialRoomId = runTaggedPressurePoi('ration_queue', () => withPoiGenerationMetadata(world, entities, {
+    id: 'kvartiry_ration_queue',
+    floor: 'kvartiry',
+    debugLabel: 'Квартиры: пункт выдачи талонов',
+    decisionHooks: [
+      { kind: 'quest', id: 'kv_ration_water', label: 'принести воду очереди' },
+      { kind: 'quest', id: 'kv_coupon_audit_registry', label: 'добыть выписку пайкового реестра' },
+      { kind: 'steal', id: 'kv_ration_ledger_box', label: 'вскрыть кассу талонов' },
+    ],
+  }, () => generateRationQueue(world, socialRoomId, entities, socialNext, spawnX, spawnY)));
   socialRoomId = generateOcherednik(world, socialRoomId, entities, socialNext, spawnX, spawnY);
   socialRoomId = runTaggedPressurePoi('water_riot', () => generateWaterRiot(world, socialRoomId, entities, socialNext, spawnX, spawnY));
   socialRoomId = runTaggedPressurePoi('print_room', () => generatePrintRoom(world, socialRoomId, entities, socialNext, spawnX, spawnY));

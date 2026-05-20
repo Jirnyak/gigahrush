@@ -43,12 +43,16 @@ const WITNESS: PlotNpcDef = {
     'Там белое окно. Не двор. Пятно света на раме, от него сложно отвернуться.',
     'Не дай мне досмотреть. Тяни за плечо, не спорь со мной.',
     'Белое не светит. Оно выедает фото и сушит кожу на пальцах.',
+    'Ткань на столе - для рамы. Герметик - для нижней щели. Песок руками не бери.',
+    'Справа от окна белый обход. Он короче, но после него люди говорят не все.',
+    'Если поднимешь фото у порога, не смотри на него как на карту.',
     'Если оттащишь меня - я буду злиться. Если не оттащишь - меня потом не будет кому злиться.',
   ],
   talkLinesPost: [
     'Я стояла у окна и думала, что меня зовут по имени. Теперь помню только занавеску.',
     'Если кто спросит, окна не было. Но песок под ногтями есть.',
     'Заклейте раму без меня. Я больше не буду стоять там вместо пломбы.',
+    'Белый обход пусть берут те, кто уже решил, кого не будет объяснять.',
   ],
   talkQuestResponse: 'Не тяните за руку. Тяните за плечо. Глаза сами потом догонят.',
 };
@@ -71,6 +75,7 @@ registerSideQuest(WITNESS_ID, WITNESS, [
     eventTags: ['variant_veretar', 'veretar_window_rescue', 'witness', 'rescued'],
     eventData: {
       outcome: 'rescued',
+      readableChoices: ['cover', 'seal', 'sand', 'photo', 'shortcut'],
       rumorIds: ['samosbor_veretar_window_rescue'],
     },
   },
@@ -78,21 +83,23 @@ registerSideQuest(WITNESS_ID, WITNESS, [
     id: 'ag95_mark_white_shortcut',
     giverNpcId: WITNESS_ID,
     type: QuestType.VISIT,
-    desc: 'Лида Белооконная: «Белый обход справа от окна короче обычного коридора. Проверь его после того, как отведешь меня от рамы.»',
+    desc: 'Лида Белооконная: «Белый обход справа от окна короче обычного коридора. Если выберешь его до пломбы, фото заберёшь, а свидетель замолчит.»',
     targetRoomName: SHORTCUT_NAME,
     rewardItem: 'overexposed_photo',
     rewardCount: 1,
-    relationDelta: -2,
-    xpReward: 35,
+    relationDelta: -6,
+    xpReward: 40,
     targetFloor: FloorLevel.LIVING,
-    targetHint: 'Жилая зона: белый проход рядом с комнатой окна; песок лежит полосой у рамы и дальше по проходу.',
-    eventTargetName: 'Игрок прошел белый обход Веретара и оставил свидетеля у окна.',
+    targetHint: 'Жилая зона: белый проход рядом с комнатой окна; песок лежит полосой у рамы, засвеченный кадр ждёт на пороге.',
+    eventTargetName: 'Игрок выбрал белый обход Веретара: путь стал короче, свидетель после окна замолчал.',
     eventSeverity: 4,
     eventPrivacy: 'local',
-    eventTags: ['variant_veretar', 'veretar_window_shortcut', 'veretar_window_lost', 'shortcut', 'witness'],
+    eventTags: ['variant_veretar', 'veretar_window_shortcut', 'veretar_window_lost', 'costly_shortcut', 'overexposed_photo', 'shortcut', 'witness'],
     eventData: {
       outcome: 'shortcut_used',
-      witnessOutcome: 'lost',
+      routeCost: 'silent_witness',
+      witnessOutcome: 'silent',
+      contaminatedItem: 'overexposed_photo',
       rumorIds: ['samosbor_veretar_window_lost'],
     },
   },
@@ -385,7 +392,7 @@ function generateVeretarWindowRescue(
     sampleY,
     'Песок на белом подоконнике',
     [{ defId: 'veretar_sand', count: 1 }],
-    ['veretar_window_sample', 'white_sand', 'sample', 'evidence'],
+    ['veretar_window_sample', 'white_sand', 'sample', 'evidence', 'contaminant'],
     witnessId,
   );
   addContainer(
@@ -395,7 +402,7 @@ function generateVeretarWindowRescue(
     sealY,
     'Белая щель под рамой',
     [],
-    ['veretar_window_seal', 'seal_target', 'witness'],
+    ['veretar_window_seal', 'seal_target', 'cover_target', 'witness'],
     witnessId,
   );
   addContainer(
@@ -405,7 +412,7 @@ function generateVeretarWindowRescue(
     shortcutY,
     'Засвеченный порог обхода',
     [{ defId: 'overexposed_photo', count: 1 }],
-    ['veretar_window_shortcut', 'veretar_window_lost', 'shortcut', 'outside'],
+    ['veretar_window_shortcut', 'veretar_window_lost', 'costly_shortcut', 'contaminated_item', 'photo', 'shortcut', 'outside'],
     witnessId,
   );
 

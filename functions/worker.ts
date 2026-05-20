@@ -3,7 +3,7 @@ import { onRequestGet as getChat, onRequestPost as postChat } from './api/net/ch
 import { onRequestPost as postEvent } from './api/net/event';
 import { onRequestPost as postHello } from './api/net/hello';
 import { onRequestGet as getMarket, onRequestPost as postMarket } from './api/net/market';
-import { type Env as NetEnv, type PagesContext } from './api/net/common';
+import { apiError, type Env as NetEnv, type PagesContext } from './api/net/common';
 
 interface AssetBinding {
   fetch(request: Request): Promise<Response>;
@@ -14,53 +14,38 @@ interface WorkerEnv extends NetEnv {
 }
 
 type Handler = (context: PagesContext) => Promise<Response>;
-const NET_API_PATHS = new Set([
-  '/api/net/stats',
-  '/api/net/hello',
-  '/api/net/event',
-  '/api/net/chat',
-  '/api/net/market',
-]);
+type Method = 'GET' | 'POST';
 
-function methodNotAllowed(): Response {
-  return Response.json({ error: 'method not allowed' }, {
-    status: 405,
-    headers: { 'Cache-Control': 'no-store' },
-  });
+const NET_ROUTES: Record<string, Partial<Record<Method, Handler>>> = {
+  '/api/net/stats': { GET: getStats },
+  '/api/net/hello': { POST: postHello },
+  '/api/net/event': { POST: postEvent },
+  '/api/net/chat': { GET: getChat, POST: postChat },
+  '/api/net/market': { GET: getMarket, POST: postMarket },
+};
+
+function methodNotAllowed(allowed: string[]): Response {
+  const response = apiError('method not allowed', 405);
+  response.headers.set('Allow', allowed.join(', '));
+  return response;
 }
 
 function notFound(): Response {
-  return Response.json({ error: 'not found' }, {
-    status: 404,
-    headers: { 'Cache-Control': 'no-store' },
-  });
+  return apiError('not found', 404);
 }
 
-function handlerFor(pathname: string, method: string): Handler | null {
-  if (pathname === '/api/net/stats') return method === 'GET' ? getStats : null;
-  if (pathname === '/api/net/hello') return method === 'POST' ? postHello : null;
-  if (pathname === '/api/net/event') return method === 'POST' ? postEvent : null;
-  if (pathname === '/api/net/market') {
-    if (method === 'GET') return getMarket;
-    if (method === 'POST') return postMarket;
-    return null;
-  }
-  if (pathname === '/api/net/chat') {
-    if (method === 'GET') return getChat;
-    if (method === 'POST') return postChat;
-    return null;
-  }
-  return null;
+function isNetApiPath(pathname: string): boolean {
+  return pathname === '/api/net' || pathname.startsWith('/api/net/');
 }
 
 export default {
   async fetch(request: Request, env: WorkerEnv): Promise<Response> {
     const url = new URL(request.url);
-    if (url.pathname.startsWith('/api/net/')) {
-      const handler = handlerFor(url.pathname, request.method);
-      if (!handler) return NET_API_PATHS.has(url.pathname)
-        ? methodNotAllowed()
-        : notFound();
+    if (isNetApiPath(url.pathname)) {
+      const route = NET_ROUTES[url.pathname];
+      if (!route) return notFound();
+      const handler = route[request.method.toUpperCase() as Method];
+      if (!handler) return methodNotAllowed(Object.keys(route).sort());
       return handler({ request, env });
     }
     return env.ASSETS.fetch(request);

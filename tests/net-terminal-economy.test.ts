@@ -3,11 +3,13 @@ import * as assert from 'node:assert/strict';
 
 import {
   Cell,
+  EntityType,
   FloorLevel,
+  MonsterKind,
   RoomType,
 } from '../src/core/types';
 import { World } from '../src/core/world';
-import { NET_TERMINAL_GEN_NORMAL_MIN_TERMINALS } from '../src/data/net_terminal_gen';
+import { NET_TERMINAL_GEN_NORMAL_MIN_TERMINALS, SILICON_NET_WELL_TERMINAL_DEF } from '../src/data/net_terminal_gen';
 import { ensureBankingState } from '../src/systems/banking';
 import { createWorldEventState, getRecentEvents } from '../src/systems/events';
 import {
@@ -20,6 +22,7 @@ import {
   isNetTerminalBankOpen,
   isNetTerminalGenEditorOpen,
   moveNetTerminalBankAction,
+  placeNetTerminalGenTerminal,
   placeNetTerminalGenTerminalsForCurrentFloor,
   tryUseNetTerminalGen,
 } from '../src/systems/net_terminal_gen';
@@ -94,6 +97,42 @@ test('net terminal bank can deposit cash and withdraw account rubles', () => {
   assert.equal(events.length, 2);
   assert.equal(events[0].tags.includes('withdraw'), true);
   assert.equal(events[1].tags.includes('deposit'), true);
+
+  closeNetTerminalGen();
+  clearNetTerminalGenTerminals();
+});
+
+test('missing GEN terminal access spawns one cooldowned Safeguard backlash when live entities are provided', () => {
+  clearNetTerminalGenTerminals();
+  const world = makeTerminalWorld();
+  const state = makeGameState({ currentFloor: FloorLevel.MAINTENANCE, worldEvents: createWorldEventState() });
+  const player = makeTestPlayer({ id: 1, x: 100, y: 100, money: 100 });
+  const entities = [player];
+  const nextId = { v: 2 };
+  const terminal = placeNetTerminalGenTerminal(world, 96, 100, SILICON_NET_WELL_TERMINAL_DEF);
+  assert.ok(terminal);
+
+  const originalRandom = Math.random;
+  let result: ReturnType<typeof tryUseNetTerminalGen>;
+  try {
+    Math.random = () => 0.99;
+    result = tryUseNetTerminalGen(world, player, state, terminal.x, terminal.y, entities, nextId);
+  } finally {
+    Math.random = originalRandom;
+  }
+
+  assert.equal(result.handled, true);
+  assert.equal(result.mode, 'closed');
+  assert.equal(entities.filter(entity => entity.type === EntityType.MONSTER && entity.monsterKind === MonsterKind.SAFEGUARD).length, 1);
+  assert.equal(nextId.v, 3);
+
+  tryUseNetTerminalGen(world, player, state, terminal.x, terminal.y, entities, nextId);
+  assert.equal(entities.filter(entity => entity.type === EntityType.MONSTER && entity.monsterKind === MonsterKind.SAFEGUARD).length, 1);
+  assert.equal(nextId.v, 3);
+
+  const events = getRecentEvents(state, { type: 'net_terminal_hack_failed', tags: ['safeguard'], limit: 2 });
+  assert.equal(events.length, 1);
+  assert.equal(events[0].monsterKind, MonsterKind.SAFEGUARD);
 
   closeNetTerminalGen();
   clearNetTerminalGenTerminals();

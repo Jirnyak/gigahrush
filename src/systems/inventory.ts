@@ -6,7 +6,7 @@ import {
   EntityType, Faction, FloorLevel,
   msg,
 } from '../core/types';
-import { ITEMS, WEAPON_STATS, type WeaponStats } from '../data/catalog';
+import { ITEMS, WEAPON_ROLE_LABELS, WEAPON_ROLE_TIERS, WEAPON_STATS, type WeaponStats } from '../data/catalog';
 import { GOVNYAK_COURIER_CONTRACT_IDS, GOVNYAK_COURIER_PACKAGE_ITEM } from '../data/contracts';
 import { addFactionRelMutual } from '../data/relations';
 import {
@@ -15,6 +15,7 @@ import {
   SILVER_SLIME_OPENED_ID,
   SILVER_SLIME_SEALED_ID,
 } from '../data/items';
+import { getPermitDef, getPermitForgeryRecipe } from '../data/permits';
 import { World } from '../core/world';
 import { Spr } from '../render/sprite_index';
 import { playPickup } from './audio';
@@ -22,6 +23,7 @@ import { changeResourceStock } from './economy';
 import { publishEvent } from './events';
 import { placeMonsterBait, removeMonsterBaitForEntity } from './monster_bait';
 import { handleRationCouponUse } from './ration_coupons';
+import { recordPermitAccess, recordPermitExposure, recordPermitForged } from './permits';
 import {
   govnyakAimSpreadMult,
   isGovnyakItem,
@@ -74,6 +76,9 @@ const VERETAR_DOCUMENT_TARGETS = new Set([
   'weapon_permit_forged', 'ammo_issue_order', 'official_quarantine_clearance',
   'forged_quarantine_clearance', 'ration_registry_extract', 'forged_ration_card',
   'elevator_access_order', 'void_archive_warrant', 'ministry_audit_forgery',
+  'ministry_clean_stamp', 'raionsovet_floor_pass', 'forged_raionsovet_pass',
+  'bank_debt_paper', 'forged_bank_debt_paper', 'debt_settlement_receipt',
+  'confiscation_warrant',
 ]);
 
 const AMMO_LABELS: Record<string, string> = {
@@ -96,18 +101,29 @@ const DOCUMENT_GATE_ITEMS = new Set([
   'fake_pass',
   'ministry_audit_forgery',
   'stolen_archive_card',
+  'raionsovet_floor_pass',
+  'forged_raionsovet_pass',
+  'bank_debt_paper',
+  'forged_bank_debt_paper',
+  'debt_settlement_receipt',
+  'confiscation_warrant',
 ]);
 const DOCUMENT_MARKET_VALUES: Record<string, number> = {
   forged_permit_slip: 38,
   fake_pass: 35,
   ministry_audit_forgery: 64,
   stolen_archive_card: 55,
+  forged_raionsovet_pass: 54,
+  forged_bank_debt_paper: 62,
+  bank_debt_paper: 50,
+  debt_settlement_receipt: 70,
 };
 
 export interface WeaponReadiness {
   id: string;
   name: string;
   role: string;
+  statLabel: string;
   damage: number;
   damageLabel: string;
   range: number;
@@ -129,6 +145,34 @@ export interface WeaponReadiness {
   cannotFireReason: string;
   lowResource: boolean;
   warning: boolean;
+}
+
+export type InventoryPrepTone = 'ok' | 'warn' | 'bad' | 'muted';
+export type InventoryItemCategory = 'weapon' | 'tool' | 'ammo' | 'medicine' | 'water' | 'food' | 'documents' | 'psi' | 'trade' | 'other';
+
+export interface InventoryPrepLine {
+  id: 'weapon' | 'tool' | 'ammo' | 'medicine' | 'water' | 'food' | 'documents' | 'psi';
+  label: string;
+  value: string;
+  detail: string;
+  tone: InventoryPrepTone;
+}
+
+export interface InventorySlotActionInfo {
+  defId: string;
+  name: string;
+  count: number;
+  stackMax: number;
+  category: InventoryItemCategory;
+  categoryLabel: string;
+  equippedLabel: string;
+  useLabel: string;
+  dropLabel: string;
+  sellLabel: string;
+  canUse: boolean;
+  canDrop: boolean;
+  isEquippedWeapon: boolean;
+  isEquippedTool: boolean;
 }
 
 export interface InventoryUseHandlerContext {
@@ -695,6 +739,197 @@ function inventoryCount(e: Entity, defId: string): number {
   return total;
 }
 
+function itemHasTag(defId: string, tag: string): boolean {
+  const def = ITEMS[defId];
+  return (ITEM_TAGS[defId]?.includes(tag) ?? false) || (def?.tags?.includes(tag) ?? false);
+}
+
+function isDocumentLike(defId: string, def: ItemDef): boolean {
+  return def.type === ItemType.NOTE
+    || def.type === ItemType.KEY
+    || itemHasTag(defId, 'document')
+    || itemHasTag(defId, 'permit')
+    || itemHasTag(defId, 'coupon')
+    || itemHasTag(defId, 'document_gate');
+}
+
+export function inventoryItemCategory(defId: string): InventoryItemCategory {
+  const def = ITEMS[defId];
+  if (!def) return 'other';
+  if (def.type === ItemType.WEAPON) return 'weapon';
+  if (def.type === ItemType.TOOL) return 'tool';
+  if (def.type === ItemType.AMMO || itemHasTag(defId, 'ammo')) return 'ammo';
+  if (def.type === ItemType.MEDICINE) return 'medicine';
+  if (def.type === ItemType.DRINK) return 'water';
+  if (def.type === ItemType.FOOD) return 'food';
+  if (isDocumentLike(defId, def)) return 'documents';
+  if (defId.startsWith('psi_') || itemHasTag(defId, 'psi') || itemHasTag(defId, 'psi_restore')) return 'psi';
+  if (itemHasTag(defId, 'trade') || itemHasTag(defId, 'contraband') || itemHasTag(defId, 'evidence')) return 'trade';
+  return 'other';
+}
+
+function inventoryCategoryLabel(category: InventoryItemCategory): string {
+  switch (category) {
+    case 'weapon': return 'оружие';
+    case 'tool': return 'инструмент';
+    case 'ammo': return 'боеприпас';
+    case 'medicine': return 'медицина';
+    case 'water': return 'вода';
+    case 'food': return 'еда';
+    case 'documents': return 'документ';
+    case 'psi': return 'ПСИ';
+    case 'trade': return 'товар';
+    default: return 'прочее';
+  }
+}
+
+function inventorySpecialUseLabel(defId: string, def: ItemDef, slot: Item): string {
+  if (def.type === ItemType.NOTE && slot.data) return 'E прочесть';
+  if (itemHasTag(defId, 'coupon') || itemHasTag(defId, 'single_use')) return 'E погасить';
+  if (itemHasTag(defId, 'permit') || itemHasTag(defId, 'document_gate')) return 'E предъявить';
+  if (itemHasTag(defId, 'sealed') || itemHasTag(defId, 'sample') || itemHasTag(defId, 'veretar')) return 'E проверить';
+  if (itemHasTag(defId, 'govnyak') || itemHasTag(defId, 'zhelemish')) return 'E применить';
+  if (itemHasTag(defId, 'noise')) return 'E применить';
+  if (itemHasTag(defId, 'document') || def.type === ItemType.KEY) return 'E проверить';
+  return '';
+}
+
+export function getInventorySlotActionInfo(e: Entity, slotIdx: number): InventorySlotActionInfo | null {
+  const slot = e.inventory?.[slotIdx];
+  if (!slot) return null;
+  const def = ITEMS[slot.defId];
+  if (!def) return null;
+  const category = inventoryItemCategory(def.id);
+  const isEquippedWeapon = def.type === ItemType.WEAPON && e.weapon === def.id;
+  const isEquippedTool = def.type === ItemType.TOOL && e.tool === def.id;
+  let useLabel = '';
+  let canUse = true;
+
+  if (def.type === ItemType.WEAPON) useLabel = isEquippedWeapon ? 'E уже оружие' : 'E экипировать';
+  else if (def.type === ItemType.TOOL) useLabel = isEquippedTool ? 'E уже инструмент' : 'E в инструмент';
+  else if (def.use) useLabel = 'E применить';
+  else useLabel = inventorySpecialUseLabel(def.id, def, slot);
+
+  if (!useLabel) {
+    canUse = false;
+    useLabel = 'E нет действия';
+  }
+
+  const value = Math.max(0, def.value ?? 0);
+  return {
+    defId: def.id,
+    name: def.name,
+    count: slot.count,
+    stackMax: getStack(def),
+    category,
+    categoryLabel: inventoryCategoryLabel(category),
+    equippedLabel: isEquippedWeapon ? 'оружие выбрано' : isEquippedTool ? 'инструмент выбран' : inventoryCategoryLabel(category),
+    useLabel,
+    dropLabel: def.type === ItemType.TOOL
+      ? 'D выкинуть: сломать'
+      : slot.count > 1
+        ? `D выкинуть ×${slot.count}`
+        : 'D выкинуть',
+    sellLabel: value > 0
+      ? `Торг: база ${value}₽${slot.count > 1 ? `/шт · ${value * slot.count}₽` : ''}`
+      : 'Торг: почти даром',
+    canUse,
+    canDrop: true,
+    isEquippedWeapon,
+    isEquippedTool,
+  };
+}
+
+export function getInventoryPrepSummary(e: Entity): InventoryPrepLine[] {
+  const inv = e.inventory ?? [];
+  let ammo = 0;
+  let medicine = 0;
+  let water = 0;
+  let food = 0;
+  let documents = 0;
+  let psiReserve = 0;
+
+  for (const slot of inv) {
+    const category = inventoryItemCategory(slot.defId);
+    if (category === 'ammo' || WEAPON_STATS[slot.defId]?.ammoType === slot.defId) ammo += slot.count;
+    else if (category === 'medicine') medicine += slot.count;
+    else if (category === 'water') water += slot.count;
+    else if (category === 'food') food += slot.count;
+    else if (category === 'documents') documents += slot.count;
+    if (itemHasTag(slot.defId, 'psi_restore') || category === 'psi') psiReserve += slot.count;
+  }
+
+  const weapon = getWeaponReadiness(e);
+  const toolDur = getEquippedToolDurability(e);
+  const toolName = e.tool ? (ITEMS[e.tool]?.name ?? e.tool) : 'нет';
+  const toolDetail = toolDur ? `${Math.max(0, Math.ceil(toolDur.cur))}/${toolDur.max}` : e.tool ? 'готов' : 'пусто';
+  const needs = e.needs;
+  const waterNeed = needs ? Math.round(needs.water) : 0;
+  const foodNeed = needs ? Math.round(needs.food) : 0;
+  const psi = e.rpg ? `${Math.floor(e.rpg.psi)}/${e.rpg.maxPsi}` : '--';
+
+  return [
+    {
+      id: 'weapon',
+      label: 'Оруж',
+      value: weapon.name,
+      detail: weapon.cannotFireReason || weapon.resourceLabel,
+      tone: weapon.cannotFireReason ? 'bad' : weapon.lowResource || !weapon.id ? 'warn' : 'ok',
+    },
+    {
+      id: 'tool',
+      label: 'Инстр',
+      value: toolName,
+      detail: toolDetail,
+      tone: e.tool ? 'ok' : 'muted',
+    },
+    {
+      id: 'ammo',
+      label: 'Патр',
+      value: String(ammo),
+      detail: weapon.resourceKind === 'ammo' ? weapon.resourceLabel : 'всего',
+      tone: weapon.resourceKind === 'ammo'
+        ? weapon.cannotFireReason ? 'bad' : weapon.lowResource ? 'warn' : 'ok'
+        : ammo > 0 ? 'ok' : 'muted',
+    },
+    {
+      id: 'medicine',
+      label: 'Мед',
+      value: String(medicine),
+      detail: e.hp !== undefined && e.maxHp !== undefined ? `HP ${Math.round(e.hp)}/${Math.round(e.maxHp)}` : 'аптечка',
+      tone: medicine > 0 ? 'ok' : (e.hp ?? 100) < (e.maxHp ?? 100) ? 'bad' : 'warn',
+    },
+    {
+      id: 'water',
+      label: 'Вода',
+      value: String(water),
+      detail: needs ? `жажда ${waterNeed}` : 'запас',
+      tone: water > 0 ? 'ok' : needs && needs.water < 35 ? 'bad' : 'warn',
+    },
+    {
+      id: 'food',
+      label: 'Еда',
+      value: String(food),
+      detail: needs ? `сытость ${foodNeed}` : 'запас',
+      tone: food > 0 ? 'ok' : needs && needs.food < 35 ? 'bad' : 'warn',
+    },
+    {
+      id: 'documents',
+      label: 'Док',
+      value: String(documents),
+      detail: documents > 0 ? 'доступ' : 'нет бумаг',
+      tone: documents > 0 ? 'ok' : 'muted',
+    },
+    {
+      id: 'psi',
+      label: 'ПСИ',
+      value: psi,
+      detail: psiReserve > 0 ? `резерв ${psiReserve}` : 'резерв 0',
+      tone: e.rpg ? (e.rpg.psi < Math.max(4, e.rpg.maxPsi * 0.25) && psiReserve <= 0 ? 'warn' : 'ok') : 'muted',
+    },
+  ];
+}
+
 function hasRoomForOutputAfterConsuming(e: Entity, outputId: string, consumedIds: readonly string[]): boolean {
   const def = ITEMS[outputId];
   if (!def) return false;
@@ -777,7 +1012,11 @@ function publishDocumentActionEvent(
 }
 
 function documentGateOutput(defId: string): string {
-  return defId === 'ministry_audit_forgery' || defId === 'stolen_archive_card'
+  return defId === 'ministry_audit_forgery'
+    || defId === 'stolen_archive_card'
+    || defId === 'raionsovet_floor_pass'
+    || defId === 'forged_raionsovet_pass'
+    || defId === 'confiscation_warrant'
     ? 'archive_access_permit'
     : 'key';
 }
@@ -844,6 +1083,12 @@ function useDocumentAtMinistryGate(
     world,
     roomName,
   );
+  const permit = getPermitDef(defId);
+  if (permit) {
+    const tag = outputId === 'archive_access_permit' ? 'archive' : 'ministry_n3';
+    recordPermitAccess(state, e, world, permit, roomName, tag, zoneId);
+    if (stolen) recordPermitExposure(state, e, world, permit, roomName, 'stolen_card_reported', zoneId);
+  }
   return true;
 }
 
@@ -874,6 +1119,8 @@ function forgePermitFromStampSheet(
     addFactionRelMutual(Faction.PLAYER, Faction.WILD, 1);
   }
   msgs.push(msg('Поддельный корешок готов: бланк, чернила, поддельная печать. Несите к N3.', time, '#fa6'));
+  const recipe = getPermitForgeryRecipe('forged_permit_slip');
+  if (recipe) recordPermitForged(state, e, world, recipe, zoneId);
   publishDocumentActionEvent(
     state,
     e,
@@ -1098,6 +1345,8 @@ export function useItem(e: Entity, slotIdx: number, msgs: Msg[], time: number, s
     publishPlayerItemEvent(state, e, 'player_use_item', def.id, 1, 2, zoneId);
     return;
   }
+
+  msgs.push(msg(`${def.name}: сейчас нет прямого применения. Можно продать или выбросить.`, time, '#888'));
 }
 
 /* ── Drop item from inventory onto the ground ─────────────────── */
@@ -1227,7 +1476,7 @@ export function getWeaponStats(e: Entity): WeaponStats {
   let psiCost = ws.psiCost;
   let changed = false;
 
-  if (e.rpg && !ws.isRanged && !ws.psiCost) {
+  if (e.rpg && !ws.psiCost) {
     const nextSpeed = ws.speed * strHeavyWeaponSpeedMult(e.rpg, ws.speed);
     if (nextSpeed !== ws.speed) { speed = nextSpeed; changed = true; }
   }
@@ -1368,7 +1617,9 @@ function compactAmmoName(ammoType: string | undefined): string {
 }
 
 function weaponRole(id: string, ws: WeaponStats): string {
+  const roleTier = WEAPON_ROLE_TIERS[id];
   if (ws.psiCost) return ws.isRanged ? 'ПСИ-снаряд' : 'ПСИ-эффект';
+  if (roleTier) return WEAPON_ROLE_LABELS[roleTier];
   if (ws.isRanged) {
     if (ws.aoeRadius) return 'взрыв';
     if (id === 'flamethrower' || ws.ammoType === 'ammo_fuel') return 'зачистка';
@@ -1383,6 +1634,37 @@ function weaponRole(id: string, ws: WeaponStats): string {
   if (ws.range >= 1.65) return 'длинный ближ.';
   if (ws.speed >= 0.7 || ws.dmg >= 35) return 'тяж. ближ.';
   return 'ближний';
+}
+
+function statPercent(mult: number): number {
+  return Math.round((mult - 1) * 100);
+}
+
+function statReductionPercent(mult: number): number {
+  return Math.round((1 - mult) * 100);
+}
+
+function weaponStatLabel(e: Entity, base: WeaponStats, effective: WeaponStats): string {
+  const rpg = e.rpg;
+  if (!rpg) return '';
+  const parts: string[] = [];
+  if (!base.isRanged && !base.psiCost && rpg.str > 0) {
+    parts.push(`СИЛ урон +${statPercent(strMeleeDmgMult(rpg))}%`);
+  }
+  const heavyMult = strHeavyWeaponSpeedMult(rpg, base.speed);
+  if (!base.psiCost && heavyMult < 1) {
+    parts.push(`тяж. темп -${statReductionPercent(heavyMult)}%`);
+  }
+  if (rpg.agi > 0) {
+    parts.push(`ЛОВ КД -${statReductionPercent(agiAttackSpeedMult(rpg))}%`);
+    if (base.isRanged && (base.spread ?? 0) > 0 && effective.spread !== undefined) {
+      parts.push(`разброс -${statReductionPercent(agiRangedSpreadMult(rpg))}%`);
+    }
+  }
+  if (base.psiCost && effective.psiCost !== undefined && effective.psiCost < base.psiCost) {
+    parts.push(`ИНТ ПСИ -${statReductionPercent(effective.psiCost / base.psiCost)}%`);
+  }
+  return parts.slice(0, 3).join('  ');
 }
 
 function weaponReachLabel(ws: WeaponStats): string {
@@ -1409,6 +1691,7 @@ function weaponDamageLabel(e: Entity, ws: WeaponStats): { damage: number; label:
 /* ── Bounded current weapon display state for HUD/inventory ───── */
 export function getWeaponReadiness(e: Entity): WeaponReadiness {
   const id = e.weapon ?? '';
+  const baseWs = WEAPON_STATS[id] ?? WEAPON_STATS[''];
   const ws = getWeaponStats(e);
   const name = id ? (ITEMS[id]?.name ?? id) : 'Кулаки';
   const cooldown = Math.max(0, e.attackCd ?? 0);
@@ -1425,7 +1708,7 @@ export function getWeaponReadiness(e: Entity): WeaponReadiness {
   let lowResource = false;
 
   if (ws.psiCost) {
-    const cost = adjustedPsiCost(ws.psiCost, e.rpg);
+    const cost = ws.psiCost;
     const costLabel = Number.isInteger(cost) ? String(cost) : cost.toFixed(1);
     const psi = Math.floor(e.rpg?.psi ?? 0);
     const maxPsi = e.rpg?.maxPsi ?? 0;
@@ -1467,14 +1750,15 @@ export function getWeaponReadiness(e: Entity): WeaponReadiness {
   return {
     id,
     name,
-    role: weaponRole(id, ws),
+    role: weaponRole(id, baseWs),
+    statLabel: weaponStatLabel(e, baseWs, ws),
     damage: damage.damage,
     damageLabel: damage.label,
     range: ws.range,
     pellets: ws.pellets ?? 1,
     knockback: ws.knockback ?? 0,
-    reachLabel: weaponReachLabel(ws),
-    controlLabel: weaponControlLabel(ws),
+    reachLabel: weaponReachLabel(baseWs),
+    controlLabel: weaponControlLabel(baseWs),
     cooldown,
     cooldownMax,
     cooldownPct,

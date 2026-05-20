@@ -14,6 +14,12 @@ import {
   spawnSocialNpc,
 } from './social_helpers';
 
+export const RATION_QUEUE_TAG = 'ration_queue';
+export const RATION_QUEUE_QUEST_IDS = {
+  water: 'kv_ration_water',
+  audit: 'kv_coupon_audit_registry',
+} as const;
+
 const GALINA: PlotNpcDef = {
   name: 'Галина Талонница',
   isFemale: true,
@@ -43,7 +49,7 @@ const GALINA: PlotNpcDef = {
 };
 
 registerSideQuest('kv_galina_talonnitsa', GALINA, [{
-  id: 'kv_ration_water',
+  id: RATION_QUEUE_QUEST_IDS.water,
   giverNpcId: 'kv_galina_talonnitsa',
   type: QuestType.FETCH,
   desc: 'Галина Талонница: «Принесите пять бутылок воды, пока очередь не стала бунтом.»',
@@ -51,8 +57,21 @@ registerSideQuest('kv_galina_talonnitsa', GALINA, [{
   rewardItem: 'bread', rewardCount: 4,
   extraRewards: [{ defId: 'canned', count: 1 }, { defId: 'ballot', count: 6 }],
   relationDelta: 12, xpReward: 35, moneyReward: 25,
+  targetFloor: FloorLevel.KVARTIRY,
+  targetRoomType: RoomType.OFFICE,
+  targetZoneTag: RATION_QUEUE_TAG,
+  targetHint: 'Квартиры: Пункт выдачи талонов, очередь Галины и касса пайкового реестра.',
+  eventSeverity: 4,
+  eventPrivacy: 'public',
+  eventTargetName: 'Пайковую очередь удержали водой до бунта.',
+  eventTags: ['ration_queue', 'water', 'queue', 'resident_relief', 'faction_event'],
+  eventData: {
+    crisisRoute: 'ration_water_relief',
+    localTrace: 'ration_ledger_box',
+    rumorIds: ['smoking_water_queue_price', 'kvartiry_queue_unrest', 'floor_kvartiry_riot'],
+  },
 }, {
-  id: 'kv_coupon_audit_registry',
+  id: RATION_QUEUE_QUEST_IDS.audit,
   giverNpcId: 'kv_galina_talonnitsa',
   type: QuestType.FETCH,
   desc: 'Галина Талонница: «Принесите выписку из пайкового реестра. Если список врёт, очередь начнёт есть друг друга.»',
@@ -60,6 +79,19 @@ registerSideQuest('kv_galina_talonnitsa', GALINA, [{
   rewardItem: 'concentrate_coupon', rewardCount: 2,
   extraRewards: [{ defId: 'water_coupon', count: 2 }, { defId: 'bread', count: 2 }],
   relationDelta: 14, xpReward: 55, moneyReward: 35,
+  targetFloor: FloorLevel.KVARTIRY,
+  targetRoomType: RoomType.OFFICE,
+  targetZoneTag: 'ration_coupon_audit',
+  targetHint: 'Квартиры: касса Галины у пайковой очереди хранит выписку, талоны и поддельную карточку.',
+  eventSeverity: 4,
+  eventPrivacy: 'witnessed',
+  eventTargetName: 'Пайковый реестр сверили при очереди.',
+  eventTags: ['ration_queue', 'ration_audit', 'paper', 'queue', 'faction_event'],
+  eventData: {
+    crisisRoute: 'ration_coupon_audit',
+    localTrace: 'ration_registry_extract',
+    rumorIds: ['lead_kvartiry_ration_queue_registry', 'ration_coupon_audit_reported', 'ration_coupon_forgery_risk'],
+  },
 }]);
 
 function nextContainerId(world: World): number {
@@ -98,7 +130,7 @@ function addRationLedgerBox(
     faction: Faction.CITIZEN,
     access: 'owner',
     discovered: true,
-    tags: ['ration_queue', 'ration_coupon_audit', 'paper', 'theft'],
+    tags: [RATION_QUEUE_TAG, 'ration_coupon_audit', 'paper', 'theft'],
   });
 }
 

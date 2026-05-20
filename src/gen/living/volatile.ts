@@ -324,8 +324,31 @@ export function generateVolatileMaze(world: World): void {
   world.bakeLights();
 }
 
+export function pruneVolatileSideArrays(world: World): { screenCells: number; surfaceCells: number } {
+  let write = 0;
+  const seenScreens = new Set<number>();
+  for (const ci of world.screenCells) {
+    if (!world.aptMask[ci] || seenScreens.has(ci)) continue;
+    world.screenCells[write++] = ci;
+    seenScreens.add(ci);
+  }
+  const removedScreens = world.screenCells.length - write;
+  world.screenCells.length = write;
+
+  let removedSurfaces = 0;
+  for (const [ci] of world.surfaceMap) {
+    if (world.aptMask[ci]) continue;
+    world.surfaceMap.delete(ci);
+    removedSurfaces++;
+  }
+  if (removedSurfaces > 0) world.surfaceVersion++;
+
+  return { screenCells: removedScreens, surfaceCells: removedSurfaces };
+}
+
 /* ── Wipe all volatile (non-apartment) data ──────────────────── */
 export function wipeVolatile(world: World): void {
+  pruneVolatileSideArrays(world);
   for (let i = 0; i < W * W; i++) {
     if (world.aptMask[i]) continue;
     world.cells[i] = Cell.WALL;

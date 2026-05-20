@@ -79,3 +79,58 @@ test('entity index type masks filter query results', () => {
   index.queryRadius(20, 20, 6, out, ENTITY_MASK_MONSTER);
   assert.deepEqual(out.map(e => e.id), [2]);
 });
+
+test('entity index capped radius queries stop at the requested count', () => {
+  const index = new EntityIndex();
+  const entities: Entity[] = [];
+  for (let i = 0; i < 24; i++) {
+    entities.push(entity(i + 1, EntityType.NPC, 40 + (i % 4) * 0.5, 40 + ((i / 4) | 0) * 0.5));
+  }
+  index.rebuild(entities);
+
+  const out: Entity[] = [];
+  const count = index.queryRadiusCapped(40, 40, 8, out, ENTITY_MASK_NPC, 5);
+
+  assert.equal(count, 5);
+  assert.equal(out.length, 5);
+  assert.ok(out.every(e => e.type === EntityType.NPC));
+});
+
+test('entity index exposes debug version, entity counts and bucket stats', () => {
+  const index = new EntityIndex();
+  index.rebuild([
+    entity(1, EntityType.NPC, 20, 20),
+    entity(2, EntityType.MONSTER, 21, 20),
+    entity(3, EntityType.ITEM_DROP, 200, 200, false),
+  ], 'load');
+
+  const stats = index.getDebugStats();
+  assert.equal(stats.version, 1);
+  assert.equal(stats.rebuildReason, 'load');
+  assert.equal(stats.entityCount, 3);
+  assert.equal(stats.liveEntityCount, 2);
+  assert.equal(stats.actorCount, 2);
+  assert.ok(stats.buckets.bucketCount > 0);
+  assert.equal(stats.buckets.usedBucketCount, 1);
+  assert.equal(stats.buckets.maxBucketSize, 2);
+  assert.equal(stats.buckets.meanUsedBucketSize, 2);
+});
+
+test('planned simulation rebuild is idempotent per frame token', () => {
+  const index = new EntityIndex();
+  const entities = [
+    entity(1, EntityType.NPC, 20, 20),
+    entity(2, EntityType.MONSTER, 40, 40),
+  ];
+
+  index.rebuildForSimulation(entities, 7);
+  assert.equal(index.getVersion(), 1);
+  assert.equal(index.getDebugStats().simulationFrame, 7);
+
+  index.rebuildForSimulation(entities, 7);
+  assert.equal(index.getVersion(), 1);
+
+  index.rebuildForSimulation(entities, 8);
+  assert.equal(index.getVersion(), 2);
+  assert.equal(index.getDebugStats().simulationFrame, 8);
+});

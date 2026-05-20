@@ -2,17 +2,41 @@
 
 Status: consolidated historical appendix generated on 2026-05-18.
 
-This file keeps useful but already-worked documentation out of the active docs tree: old root planning passes, agent task statuses, agent logs/rationales and prompt batches. Active source-of-truth docs remain `README.md`, `desdoc.md`, `architecture.md`, `cloudflare.md`, `Docs/DesignFloors/`, `Docs/ProceduralFloors/` and `Docs/Expansions/`.
+This file keeps useful but already-worked documentation out of the active docs tree: old root planning passes, agent task statuses, agent logs/rationales and prompt batches. The active documentation map lives in `README.md`; this appendix and `gatbage/**` are archive-only context unless a task explicitly asks for historical comparison.
 
 Original source files were moved under `gatbage/` with their relative paths preserved unless the file was pure scratch output.
 
 ## Recent Agent Notes
 
+### DOC_REALITY_SYNC_AND_ROOT_CLEANUP - 2026-05-20
+
+Synced active documentation to the dirty working tree after the large current-state pass. Added `plans.md` as the consolidated unresolved-plan index, updated README/architecture/desdoc/scaling facts, and archived root orchestration/scratch artifacts:
+
+- `MACRO2_*.md` and `MACRO2_PARALLEL_CONTRACT.md` -> `gatbage/MACRO2/`
+- root itch-page ZIP archives -> `gatbage/itch_page_archives/`
+- `text.txt` -> `gatbage/scratch/text.txt`
+
+The active root should stay limited to source-of-truth docs, stable runbooks, compatibility entrypoints and project files. Future large batch prompts should go straight to `gatbage/` unless the user explicitly wants them active.
+
+### MACRO2_5_DOC_FACT_SYNC - 2026-05-20
+
+Synced active documentation facts after high-density/population/entity-index changes. `README.md`, `desdoc.md` and `scaling.md` now point at the current `content:audit` counts: 303 plot/side NPC ids, 346 side quest steps, 133 system assignment templates, 492 static rumors, 6/5/18 procedural geometry/majority/anomaly profiles and 128 manifest imports. `Docs/ScenarioWriters/` is explicitly active, not archive.
+
+### MACRO2_78_DOC_MAP - 2026-05-20
+
+Clarified documentation status without deleting historical material:
+
+- `README.md` now names `scenarist.md` and `Docs/ScenarioWriters/` as active subordinate references for player-facing text passes.
+- `Docs/ScenarioWriters/README.md` records that all current ScenarioWriters packets are active reference, while `01_glavred_tone_bible.md` is only an active pointer to `scenarist.md`.
+- `gatbage/**` remains archive-only context with preserved paths.
+- Root `MACRO2_*.md` files are orchestration prompts, not source-of-truth docs.
+- Scenario docs may guide wording and voice, but cannot override README facts, architecture rules, current source behavior or task scope.
+
 ### AUDIT_DOC_CLEANUP - 2026-05-19
 
 Conservative markdown cleanup moved historical working artifacts out of the active root/docs tree while preserving names and paths under `gatbage/`: root `macro_*.md`, `Monster_*.md`, `economics_*.md`, root `tester.md`, current monster task statuses from `Docs/Tasks/`, and current monster/itch logs from `Docs/AgentLogs/`.
 
-Active source-of-truth docs remain `README.md`, `desdoc.md`, `architecture.md`, `cloudflare.md`, the stable root entrypoints, `Docs/DesignFloors/`, `Docs/ProceduralFloors/`, and `Docs/Expansions/`. Routine future work should not recreate `Docs/Tasks` or `Docs/AgentLogs`; keep durable conclusions in this appendix only when they are worth retaining.
+Active docs are mapped in `README.md`. `scenarist.md` and `Docs/ScenarioWriters/` are active text-pass references, not shipped-behavior source of truth. Routine future work should not recreate `Docs/Tasks`, `Docs/AgentLogs` or `Docs/AgentPrompts`; keep durable conclusions in this appendix only when they are worth retaining.
 
 ### FLOOR17_DARK_METRO_GEOMETRY - 2026-05-18
 

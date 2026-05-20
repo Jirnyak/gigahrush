@@ -21,7 +21,7 @@ import {
   type SocialPoiRoom,
 } from './social_helpers';
 
-const WATER_RIOT_TAG = 'water_riot';
+export const WATER_RIOT_TAG = 'water_riot';
 const OUTCOME_TAG = 'water_riot_outcome';
 const ZOYA_ID = 'kv_zoya_stoyak';
 const SERGIN_ID = 'kv_sergin_vodouchet';
@@ -222,7 +222,7 @@ registerSideQuest('kv_sergin_vodouchet', SERGIN, [{
   eventSeverity: 4,
   eventPrivacy: 'local',
   eventTargetName: 'Водные талоны закреплены за ведомостью ликвидаторов.',
-  eventTags: [WATER_RIOT_TAG, 'liquidators', 'water_coupon', 'ledger'],
+    eventTags: [WATER_RIOT_TAG, 'liquidators', 'water', 'water_coupon', 'ledger'],
   eventData: { branch: 'liquidators', couponDelta: 6, accessOutcome: 'liquidator_token_accounting', rumorIds: RUMOR_IDS },
   abandonsSideQuestIds: rivalQuestIds(WATER_RIOT_QUEST_IDS.liquidators),
   blockedBySideQuestIds: rivalQuestIds(WATER_RIOT_QUEST_IDS.liquidators),
@@ -244,7 +244,7 @@ registerSideQuest('kv_kostyl_kanistrovy', KOSTYL, [{
   eventSeverity: 5,
   eventPrivacy: 'witnessed',
   eventTargetName: 'Водные талоны ушли диким лутерам.',
-  eventTags: [WATER_RIOT_TAG, 'wild_looters', 'water_coupon', 'theft'],
+  eventTags: [WATER_RIOT_TAG, 'wild_looters', 'water', 'water_coupon', 'theft'],
   eventData: { branch: 'wild_looters', couponDelta: -4, accessOutcome: 'wild_looter_shortcut', rumorIds: RUMOR_IDS },
   abandonsSideQuestIds: rivalQuestIds(WATER_RIOT_QUEST_IDS.wild),
   blockedBySideQuestIds: rivalQuestIds(WATER_RIOT_QUEST_IDS.wild),
@@ -286,7 +286,7 @@ registerSideQuest(SURVIVAL_ID, SURVIVALIST, [{
   eventSeverity: 4,
   eventPrivacy: 'secret',
   eventTargetName: 'Водные талоны ушли в личный сухой тайник.',
-  eventTags: [WATER_RIOT_TAG, 'survival', 'selfish', 'private_access'],
+  eventTags: [WATER_RIOT_TAG, 'survival', 'water', 'selfish', 'private_access'],
   eventData: { branch: 'survival', couponDelta: -2, accessOutcome: 'private_survival_cache', rumorIds: RUMOR_IDS },
   abandonsSideQuestIds: rivalQuestIds(WATER_RIOT_QUEST_IDS.survival),
   blockedBySideQuestIds: rivalQuestIds(WATER_RIOT_QUEST_IDS.survival),
@@ -339,7 +339,7 @@ function publishWaterRiotOutcome(
     itemCount: event.itemCount,
     severity: outcome.severity,
     privacy: outcome.privacy,
-    tags: [OUTCOME_TAG, WATER_RIOT_TAG, outcome.outcome, 'water', 'coupons', 'access', ...outcome.tags].slice(0, 8),
+    tags: [OUTCOME_TAG, 'faction_event', WATER_RIOT_TAG, outcome.outcome, 'water', 'coupons', 'access', ...outcome.tags].slice(0, 8),
     data: {
       sourceEventId: event.id,
       sideQuestId,

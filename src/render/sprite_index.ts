@@ -3,7 +3,8 @@
 /*   monster.ts registry. All sprite indices adjust automatically.*/
 /*                                                                 */
 /*   Layout: [NPCs | Travelers | Priest | named NPCs | ItemDrop | */
-/*            Monsters | EyeBolt | Desk | Feature objects |       */
+/*            Monsters | EyeBolt | ParagraphBolt | Desk |        */
+/*            Feature objects |                                    */
 /*            Container objects |                                 */
 /*            Bullet | Pellet | Nail | PsiBolt | PlasmaBolt |     */
 /*            Hostile projectile variants | GaussBolt | BfgBolt | */
@@ -46,6 +47,7 @@ const _PAKHOM    = _i++;  // Пахом Братишка (kvartiry)
 const _ITEM_DROP = _i++;
 const _MON_BASE  = _i; _i += MONSTER_COUNT;
 const _EYE_BOLT  = _i++;
+const _PARAGRAPH_BOLT = _i++;
 const _DESK      = _i++;
 const _FEATURE_BASE = _i; _i += FEATURE_SPRITE_COUNT;
 const _CONTAINER_BASE = _i; _i += CONTAINER_SPRITE_COUNT;
@@ -76,6 +78,7 @@ export const Spr = {
   PAKHOM:    _PAKHOM,
   ITEM_DROP: _ITEM_DROP,
   EYE_BOLT:  _EYE_BOLT,
+  PARAGRAPH_BOLT: _PARAGRAPH_BOLT,
   DESK:      _DESK,
   FEATURE_BASE: _FEATURE_BASE,
   CONTAINER_BASE: _CONTAINER_BASE,

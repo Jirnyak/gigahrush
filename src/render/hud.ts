@@ -2,12 +2,12 @@
 
 import { SCR_W, SCR_H } from './webgl';
 import {
-  W, type Entity, type GameState, EntityType, Cell, Feature, FloorLevel, Tex,
-  ZoneFaction, LiftDirection,
+  W, type Entity, type GameState, EntityType, FloorLevel, Tex,
+  ZoneFaction,
 } from '../core/types';
 import { World } from '../core/world';
 import { ITEMS } from '../data/catalog';
-import { getEquippedToolDurability, getWeaponReadiness } from '../systems/inventory';
+import { getEquippedToolDurability, getWeaponReadiness, type WeaponReadiness } from '../systems/inventory';
 import { getPlayerHazardWarning } from '../systems/cell_hazards';
 import { formatLastPlayerDamageCause } from '../systems/damage';
 import { xpForLevel } from '../systems/rpg';
@@ -21,7 +21,11 @@ import { drawFactionMenu } from './factions_ui';
 import { drawGameMenu } from './menu_ui';
 import { drawNpcMenu } from './npc_ui';
 import { drawContainerMenu } from './container_ui';
+import { drawEmergencyPanelMenu } from './emergency_panel_ui';
+import { drawComputerOverlay } from './computer_ui';
+import { drawGamblingOverlay } from './gambling_ui';
 import { drawNetSphereMenu } from './net_sphere_ui';
+import { drawNetHackOverlay } from './net_hack_ui';
 import { drawNetTerminalBank } from './net_terminal_bank_ui';
 import { drawNetTerminalGenDenied } from './net_terminal_gen_ui';
 import { drawMapEditor } from './map_editor_ui';
@@ -29,19 +33,15 @@ import { entityDisplayName } from '../entities/monster';
 import { getActiveSamosborVariant } from '../data/samosbor_variants';
 import { getSamosborShelterRoomIds, getSamosborWarningSnapshot, type SamosborWarningSnapshot } from '../systems/samosbor';
 import { currentFloorInstanceLabel } from '../systems/floor_instances';
-import { currentFloorRunLabel } from '../systems/procedural_floors';
 import { getLiftArachnaWarningSnapshot, type LiftArachnaWarningSnapshot } from '../systems/lift_arachna';
 import {
   getProceduralSmogStatus,
-  proceduralAnomalyInteractionTargetId,
   type ProceduralSmogStatus,
 } from '../systems/procedural_anomalies';
-import { hladonInteractionTargetId } from '../systems/hladon';
-import { railTrainInteractionTargetId } from '../systems/rail_trains';
-import { getActiveRouteCueHud, isRouteCueTarget, type RouteCueHud } from '../systems/route_cues';
-import { getCultProcessionPrompt } from '../systems/faction_events';
+import { getActiveRouteCueHud, type RouteCueHud } from '../systems/route_cues';
+import { getNearestSmallCaravan, type SmallCaravanHudSnapshot } from '../systems/caravans';
 import { getSeroburmalineHudFx } from '../systems/seroburmaline';
-import { ENTITY_MASK_ACTOR, ENTITY_MASK_NPC, getEntityIndex } from '../systems/entity_index';
+import { ENTITY_MASK_ACTOR, ENTITY_MASK_PROJECTILE, getEntityIndex } from '../systems/entity_index';
 import { getNetSphereSnapshot, isNetSphereOpen } from '../systems/net_sphere';
 import {
   getNetTerminalBankSnapshot,
@@ -50,10 +50,13 @@ import {
   isNetTerminalBankOpen,
   isNetTerminalGenDeniedOpen,
   isNetTerminalGenOpen,
-  isNetTerminalGenTarget,
 } from '../systems/net_terminal_gen';
+import { getComputerOverlaySnapshot } from '../systems/computers';
+import { getGamblingOverlaySnapshot } from '../systems/gambling';
+import { findInteractionTarget } from '../systems/interactions';
+import { getNetHackOverlaySnapshot } from '../systems/net_hack';
 import { getMapEditorSnapshot, isMapEditorOpen } from '../systems/map_editor';
-import { isParitelSteamValveTarget } from '../gen/maintenance/paritel_steam_bridge';
+import { isEmergencyPanelMenuOpen } from '../systems/emergency_panels';
 import {
   textJitter, flicker, drawHoloBar, drawGlitchText,
   drawNeuroPanel, drawGlitchLine, drawStaticNoise, drawVeretarVeil, drawRouteCueWave, drawMaronaryProofNoise, drawSmogVeil,
@@ -64,12 +67,14 @@ import { fitText as fitUiText, setUiTextTime } from './ui_text';
 const BAR_W = 50, BAR_H = 4;
 const NEEDS_PANEL_H = 20;
 const COMBAT_TARGET_SCAN_CAP = 160;
+const COMBAT_TARGET_QUERY_CAP = COMBAT_TARGET_SCAN_CAP * 2;
 const COMBAT_TARGET_MAX_D2 = 18 * 18;
 const COMBAT_TARGET_BODY_RADIUS = 0.3;
 const COMBAT_TARGET_RAY_STEP_CAP = 48;
 const COMBAT_TARGET_PLANE_LEN = Math.tan(Math.PI / 6);
+const DEATH_NEARBY_QUERY_CAP = 96;
 const aimTargetQuery: Entity[] = [];
-const interactionNpcQuery: Entity[] = [];
+const deathNearbyQuery: Entity[] = [];
 
 function toPercent(current: number, max: number): number {
   if (max <= 0) return 0;
@@ -324,13 +329,26 @@ function drawRouteCueHint(
   ctx.restore();
 }
 
-function activeVisitLiftHint(state: GameState, direction: LiftDirection): string {
-  for (const q of state.quests) {
-    if (q.done || q.visitFloor === undefined || q.visitFloor === state.currentFloor) continue;
-    const desired = q.visitFloor > state.currentFloor ? LiftDirection.DOWN : LiftDirection.UP;
-    if (desired === direction) return ' ЦЕЛЬ';
-  }
-  return '';
+function drawSmallCaravanHint(
+  ctx: CanvasRenderingContext2D,
+  w: number,
+  sx: number,
+  sy: number,
+  time: number,
+  caravan: SmallCaravanHudSnapshot,
+  yOffset: number,
+): void {
+  const panelW = Math.min(w - 12 * sx, 176 * sx);
+  const panelH = 29 * sy;
+  const x = w - panelW - 6 * sx;
+  const y = 6 * sy + yOffset;
+  ctx.save();
+  drawNeuroPanel(ctx, x, y, panelW, panelH, time, 815);
+  ctx.textAlign = 'left';
+  drawGlitchText(ctx, fitHudText(ctx, `КАРАВАН ${caravan.statusText}`, panelW - 12 * sx), x + 6 * sx, y + 5 * sy, time, 816, caravan.color, 8 * sy);
+  drawGlitchText(ctx, fitHudText(ctx, `${caravan.name} ${caravan.dist}м`, panelW - 12 * sx), x + 6 * sx, y + 15 * sy, time, 817, '#ddd', 7 * sy);
+  drawGlitchText(ctx, fitHudText(ctx, caravan.detail, panelW - 12 * sx), x + 6 * sx, y + 23 * sy, time, 818, '#9a8', 6 * sy);
+  ctx.restore();
 }
 
 function fitHudText(ctx: CanvasRenderingContext2D, text: string, maxW: number): string {
@@ -339,6 +357,21 @@ function fitHudText(ctx: CanvasRenderingContext2D, text: string, maxW: number): 
 
 function hudWeaponName(name: string): string {
   return name.replace(/^Сгусток:\s*/, '');
+}
+
+export function combatWeaponHudLines(weapon: Pick<
+  WeaponReadiness,
+  'name' | 'role' | 'damageLabel' | 'reachLabel' | 'controlLabel' | 'cooldownLabel' | 'cannotFireReason' | 'resourceKind' | 'resourceLabel'
+>): { title: string; fact: string; state: string; resource: string } {
+  const reach = weapon.reachLabel ? ` ${weapon.reachLabel}` : '';
+  const control = weapon.controlLabel ? ` ${weapon.controlLabel}` : '';
+  const resource = weapon.resourceKind === 'ammo' ? `БОЕП ${weapon.resourceLabel}` : weapon.resourceLabel;
+  return {
+    title: hudWeaponName(weapon.name),
+    fact: `${weapon.role} УРН ${weapon.damageLabel}${reach}${control}`,
+    state: weapon.cannotFireReason ? weapon.cannotFireReason.toUpperCase() : weapon.cooldownLabel,
+    resource,
+  };
 }
 
 function compactHudBottomReserve(w: number, h: number, panelH: number, sy: number): number {
@@ -436,7 +469,7 @@ function aimTargetHit(world: World, player: Entity, e: Entity, ca: number, sa: n
   return { dist: Math.sqrt(d2), forward, side };
 }
 
-function findAimTarget(world: World, entities: Entity[], player: Entity): CombatTargetHud | null {
+function findAimTarget(world: World, player: Entity): CombatTargetHud | null {
   const ca = Math.cos(player.angle);
   const sa = Math.sin(player.angle);
   let best: Entity | null = null;
@@ -444,9 +477,15 @@ function findAimTarget(world: World, entities: Entity[], player: Entity): Combat
   let bestDist = 0;
   let checked = 0;
 
-  getEntityIndex().queryRadius(player.x, player.y, Math.sqrt(COMBAT_TARGET_MAX_D2), aimTargetQuery, ENTITY_MASK_ACTOR);
-  const candidates = aimTargetQuery.length > 0 ? aimTargetQuery : entities;
-  for (const e of candidates) {
+  getEntityIndex().queryRadiusCapped(
+    player.x,
+    player.y,
+    Math.sqrt(COMBAT_TARGET_MAX_D2),
+    aimTargetQuery,
+    ENTITY_MASK_ACTOR,
+    COMBAT_TARGET_QUERY_CAP,
+  );
+  for (const e of aimTargetQuery) {
     if (!e.alive || e.id === player.id) continue;
     if (e.type !== EntityType.MONSTER && e.type !== EntityType.NPC) continue;
     if (world.dist2(player.x, player.y, e.x, e.y) > COMBAT_TARGET_MAX_D2) continue;
@@ -487,7 +526,7 @@ function recentCombatSignal(state: GameState, time: number): CombatSignalHud | n
   return null;
 }
 
-function inferDeathCause(state: GameState, player: Entity, world: World, entities: Entity[]): { title: string; detail: string } {
+function inferDeathCause(state: GameState, player: Entity, world: World): { title: string; detail: string } {
   const deathTime = state.time - state.deathTimer;
   const lastDamageCause = formatLastPlayerDamageCause(state, deathTime);
   if (lastDamageCause) return { title: 'Причина смерти', detail: lastDamageCause };
@@ -512,8 +551,15 @@ function inferDeathCause(state: GameState, player: Entity, world: World, entitie
 
   let nearest: Entity | null = null;
   let nearestD2 = 6 * 6;
-  let checked = 0;
-  for (const e of entities) {
+  getEntityIndex().queryRadiusCapped(
+    player.x,
+    player.y,
+    6,
+    deathNearbyQuery,
+    ENTITY_MASK_ACTOR | ENTITY_MASK_PROJECTILE,
+    DEATH_NEARBY_QUERY_CAP,
+  );
+  for (const e of deathNearbyQuery) {
     if (!e.alive || e.id === player.id) continue;
     if (e.type !== EntityType.MONSTER && e.type !== EntityType.NPC && e.type !== EntityType.PROJECTILE) continue;
     const d2 = world.dist2(player.x, player.y, e.x, e.y);
@@ -521,8 +567,6 @@ function inferDeathCause(state: GameState, player: Entity, world: World, entitie
       nearestD2 = d2;
       nearest = e;
     }
-    checked++;
-    if (checked >= 96) break;
   }
   if (nearest) {
     const dist = Math.max(1, Math.round(Math.sqrt(nearestD2)));
@@ -555,25 +599,22 @@ function drawCombatWeaponPanel(
   }
 
   const wj = textJitter(time, 200);
+  const lines = combatWeaponHudLines(weapon);
   ctx.textAlign = 'left';
   ctx.font = `${6.2 * s}px monospace`;
   ctx.fillStyle = `rgba(220,240,255,${flicker(time, 201)})`;
-  ctx.fillText(fitHudText(ctx, hudWeaponName(weapon.name), panelW - 9 * s), panelX + 4.5 * s + wj.dx, panelY + 2 * s + wj.dy);
+  ctx.fillText(fitHudText(ctx, lines.title, panelW - 9 * s), panelX + 4.5 * s + wj.dx, panelY + 2 * s + wj.dy);
 
   ctx.font = `${5.2 * s}px monospace`;
   ctx.fillStyle = '#8cf';
-  const control = weapon.controlLabel ? ` ${weapon.controlLabel}` : '';
-  const reach = weapon.reachLabel ? ` ${weapon.reachLabel}` : '';
-  const factLine = `${weapon.role} УРН ${weapon.damageLabel}${weapon.pellets > 1 ? `/${weapon.pellets}` : ''}${reach}${control}`;
-  ctx.fillText(fitHudText(ctx, factLine, panelW - 9 * s), panelX + 4.5 * s, panelY + 9.5 * s);
+  ctx.fillText(fitHudText(ctx, lines.fact, panelW - 9 * s), panelX + 4.5 * s, panelY + 9.5 * s);
 
   ctx.font = `${6.4 * s}px monospace`;
   ctx.fillStyle = statusColor;
-  const stateLine = weapon.cannotFireReason ? weapon.cannotFireReason.toUpperCase() : weapon.cooldownLabel;
-  ctx.fillText(fitHudText(ctx, stateLine, 42 * s), panelX + 4.5 * s, panelY + 16 * s);
+  ctx.fillText(fitHudText(ctx, lines.state, 42 * s), panelX + 4.5 * s, panelY + 16 * s);
   ctx.textAlign = 'right';
   ctx.fillStyle = weapon.cannotFireReason ? '#f84' : weapon.lowResource ? '#fc4' : '#d7ffd7';
-  ctx.fillText(fitHudText(ctx, weapon.resourceLabel, panelW - 51 * s), panelX + panelW - 4.5 * s, panelY + 16 * s);
+  ctx.fillText(fitHudText(ctx, lines.resource, panelW - 51 * s), panelX + panelW - 4.5 * s, panelY + 16 * s);
   ctx.textAlign = 'left';
 
   drawHoloBar(ctx, panelX + 4.5 * s, panelY + panelH - 3.2 * s, panelW - 9 * s, 1.8 * s, weapon.cannotFireReason ? 0 : weapon.readyPct * 100, statusColor, time, 193);
@@ -695,13 +736,14 @@ export function drawHUD(
 
   const netSphereOpen = isNetSphereOpen();
   const netTerminalGenOpen = isNetTerminalGenOpen();
+  const emergencyPanelOpen = isEmergencyPanelMenuOpen();
   const mapEditorOpen = isMapEditorOpen();
   const showCompactPanels = state.mapMode !== 2 &&
     !state.showInventory && !state.showQuests && !state.showLog &&
     !state.showFactions && !state.showMenu && !state.showNpcMenu && !state.showContainerMenu &&
-    !netSphereOpen && !netTerminalGenOpen && !mapEditorOpen;
+    !netSphereOpen && !netTerminalGenOpen && !emergencyPanelOpen && !mapEditorOpen;
   const combatWeapon = showCompactPanels ? getWeaponReadiness(player) : null;
-  const combatTarget = showCompactPanels ? findAimTarget(world, entities, player) : null;
+  const combatTarget = showCompactPanels ? findAimTarget(world, player) : null;
   const combatSignal = showCompactPanels ? recentCombatSignal(state, time) : null;
 
   const zhelemishLine = showCompactPanels ? zhelemishHudLine(player, time) : null;
@@ -718,6 +760,7 @@ export function drawHUD(
 
   const routeCue = getActiveRouteCueHud(state.time, state.currentFloor);
   const routeCueVisible = !!routeCue && showCompactPanels && !state.samosborActive;
+  const smallCaravan = showCompactPanels ? getNearestSmallCaravan(state, world, player) : undefined;
   const smogIndicatorVisible = smogStatus.active && (smogStatus.inside || smogStatus.sourceFound || smogStatus.handled);
 
   // Weapon state — compact bottom-right panel, hidden under fullscreen overlays.
@@ -743,58 +786,29 @@ export function drawHUD(
   if (routeCueVisible) {
     drawRouteCueHint(ctx, w, sx, sy, time, player, world, routeCue);
   }
+  if (smallCaravan) {
+    const yOffset = smogIndicatorVisible ? 78 * sy : routeCueVisible ? 39 * sy : 0;
+    drawSmallCaravanHint(ctx, w, sx, sy, time, smallCaravan, yOffset);
+  }
   if (showCompactPanels) {
     drawVoidReturnPortalHint(ctx, w, sx, sy, time, player, state, world);
   }
 
   // Universal [E] interaction prompt (color changes per target object)
-  {
+  if (!emergencyPanelOpen) {
     const lookX = player.x + Math.cos(player.angle) * 1.5;
     const lookY = player.y + Math.sin(player.angle) * 1.5;
-    const lci = world.idx(Math.floor(lookX), Math.floor(lookY));
-    const cell = world.cells[lci];
-    let targetId = 0; // unique id for color hashing
-    let canInteract = false;
-    let liftHint = '';
-    const processionHint = getCultProcessionPrompt(world, state, player);
-    if (processionHint) {
-      canInteract = true;
-      targetId = 850000 + processionHint.length;
-    } else if (isNetTerminalGenTarget(world, state, lookX, lookY)) {
-      canInteract = true;
-      targetId = lci + 910000;
-    } else if (cell === Cell.DOOR && world.doors.has(lci)) { canInteract = true; targetId = lci + 100000; }
-    else if (cell === Cell.LIFT || world.features[lci] === Feature.LIFT_BUTTON) {
-      canInteract = true; targetId = lci + 200000;
-      const dir = world.liftDir[lci] as LiftDirection;
-      liftHint = `${dir === LiftDirection.UP ? ' ↑' : ' ↓'}${activeVisitLiftHint(state, dir)}`;
-    }
-    else if (isParitelSteamValveTarget(world, lookX, lookY)) { canInteract = true; targetId = lci + 450000; }
-    else if (isRouteCueTarget(world, player, lookX, lookY)) { canInteract = true; targetId = lci + 470000; }
-    else {
-      const anomalyTargetId = railTrainInteractionTargetId(world, player, state, lookX, lookY)
-        ?? hladonInteractionTargetId(world, lookX, lookY)
-        ?? proceduralAnomalyInteractionTargetId(world, state, lookX, lookY);
-      if (anomalyTargetId !== null) { canInteract = true; targetId = anomalyTargetId; }
-    }
-    if (!canInteract) {
-      let bestD2 = 4.0;
-      getEntityIndex().queryRadius(lookX, lookY, 2, interactionNpcQuery, ENTITY_MASK_NPC);
-      for (const e of interactionNpcQuery) {
-        if (!e.alive || e.type !== EntityType.NPC) continue;
-        const d2 = world.dist2(lookX, lookY, e.x, e.y);
-        if (d2 < bestD2) { bestD2 = d2; canInteract = true; targetId = e.id; }
-      }
-    }
-    if (!canInteract) {
-      const container = world.containersAt(Math.floor(lookX), Math.floor(lookY))
-        .find(c => c.discovered || c.access !== 'secret');
-      if (container) {
-        canInteract = true;
-        targetId = container.id + 300000;
-      }
-    }
-    if (canInteract) {
+    const interaction = findInteractionTarget({
+      world,
+      state,
+      player,
+      entities,
+      nextEntityId: { v: 0 },
+      lookX,
+      lookY,
+    });
+    if (interaction) {
+      const targetId = interaction.colorSeed;
       // Deterministic color from targetId — shifted to cyan/teal palette
       const h0 = ((targetId * 2654435761) >>> 0) % 360;
       const er = Math.round(100 + 80 * Math.cos(h0 * Math.PI / 180));
@@ -808,7 +822,7 @@ export function drawHUD(
       // Subtle glow behind
       ctx.shadowColor = `rgba(${er},${eg},${eb},0.4)`;
       ctx.shadowBlur = 6;
-      const prompt = fitHudText(ctx, `[E]${processionHint || liftHint}`, w - 24 * sx);
+      const prompt = fitHudText(ctx, `[E]${interaction.prompt}`, w - 24 * sx);
       ctx.fillText(prompt, w / 2 + ej.dx, h / 2 + 30 * sy + ej.dy);
       ctx.shadowBlur = 0;
       ctx.textAlign = 'left';
@@ -816,7 +830,7 @@ export function drawHUD(
   }
 
   const hazardWarning = getPlayerHazardWarning(world, player);
-  if (hazardWarning && state.mapMode !== 2 && !state.showInventory && !state.showQuests && !state.showLog && !netSphereOpen && !netTerminalGenOpen && !mapEditorOpen) {
+  if (hazardWarning && state.mapMode !== 2 && !state.showInventory && !state.showQuests && !state.showLog && !netSphereOpen && !netTerminalGenOpen && !emergencyPanelOpen && !mapEditorOpen) {
     const panelW = Math.min(w - 16 * sx, 230 * sx);
     const panelH = 28 * sy;
     const panelX = (w - panelW) * 0.5;
@@ -902,9 +916,7 @@ export function drawHUD(
     const mm = String(state.clock.minute).padStart(2, '0');
     const day = Math.floor(state.clock.totalMinutes / 1440);
     const floorInstance = currentFloorInstanceLabel(state);
-    const floorRun = currentFloorRunLabel(state);
     const leftInfoW = Math.max(70 * sx, Math.min(220 * sx, w - 150 * sx));
-    if (floorRun) drawGlitchText(ctx, fitHudText(ctx, floorRun, leftInfoW), 4 * sx, barY - 62 * sy, time, 398, '#8cf', 7 * sy);
     if (floorInstance) drawGlitchText(ctx, fitHudText(ctx, `Лифт ${floorInstance}`, leftInfoW), 4 * sx, barY - 52 * sy, time, 404, '#f4a', 8 * sy);
     drawGlitchText(ctx, `День ${day}  ${hh}:${mm}`, 4 * sx, barY - 42 * sy, time, 400, '#8ac', 9 * sy);
     ctx.font = `${9 * sy}px monospace`;
@@ -970,6 +982,10 @@ export function drawHUD(
   // ── Container menu ──────────────────────────────────────
   if (state.showContainerMenu) {
     drawContainerMenu(ctx, player, state, world, msx, msy);
+  }
+
+  if (emergencyPanelOpen) {
+    drawEmergencyPanelMenu(ctx, player, msx, msy, time);
   }
 
   // ── SAMOSBOR warning (intense glitch) ──────────────────────
@@ -1092,7 +1108,7 @@ export function drawHUD(
     ctx.fillText('ВЫ ПОГИБЛИ', w / 2 + dj.dx * 2 + 3, h / 2 - 20 * sy + dj.dy + 1);
     ctx.shadowBlur = 0;
     ctx.fillStyle = `rgba(136,136,136,${Math.min(1, state.deathTimer * 0.5)})`;
-    const deathCause = inferDeathCause(state, player, world, entities);
+    const deathCause = inferDeathCause(state, player, world);
     ctx.font = `${10 * sy}px monospace`;
     ctx.fillText(deathCause.title, w / 2, h / 2 + 10 * sy);
     ctx.font = `${8 * sy}px monospace`;
@@ -1111,6 +1127,21 @@ export function drawHUD(
   // ── NET Sphere terminal (N) ──────────────────────────────
   if (netSphereOpen) {
     drawNetSphereMenu(ctx, msx, msy, time, getNetSphereSnapshot());
+  }
+
+  const gambling = getGamblingOverlaySnapshot(player);
+  if (gambling.open) {
+    drawGamblingOverlay(ctx, msx, msy, time, gambling);
+  }
+
+  const computer = getComputerOverlaySnapshot(world, state);
+  if (computer.open) {
+    drawComputerOverlay(ctx, msx, msy, time, computer);
+  }
+
+  const hack = getNetHackOverlaySnapshot(world, state, player);
+  if (hack.open) {
+    drawNetHackOverlay(ctx, msx, msy, time, hack);
   }
 
   if (isNetTerminalGenDeniedOpen()) {

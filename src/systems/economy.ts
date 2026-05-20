@@ -21,7 +21,12 @@ import {
 } from '../data/economy_rules';
 import { isSilverSlimeItem, SILVER_SLIME_SEALED_ID } from '../data/items';
 import { RESOURCES, RESOURCE_BY_ID, type ResourceDef, resourceForItem, resourceForItemType } from '../data/resources';
-import { publishEvent, publishResourceScarcityEvent, type ResourceScarcityBand, type ResourceScarcityTrend } from './events';
+import {
+  publishEvent,
+  publishResourceScarcityEvent,
+  type ResourceScarcityBand,
+  type ResourceScarcityTrend,
+} from './events';
 import { isGovnyakItem } from './govnyak';
 import { intContractRewardMult } from './rpg';
 

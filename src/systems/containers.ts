@@ -6,6 +6,11 @@ import { World } from '../core/world';
 import { CONTAINER_DEFS, containerKindsForRoom } from '../data/container_defs';
 import { ITEMS } from '../data/catalog';
 import {
+  getPermitDef,
+  permitAccessTagsFromContainerTags,
+  resolvePermitAccess,
+} from '../data/permits';
+import {
   chernobogDocketContainerEventTags,
   chernobogDocketContainerRumorIds,
   isChernobogDocketItem,
@@ -14,8 +19,20 @@ import { getStack } from '../data/items';
 import { addFactionRelMutual } from '../data/relations';
 import { changeResourceStock, getEconomyQuote, type EconomyQuote } from './economy';
 import { publishEvent } from './events';
-import { applyTheftRelationPenalty } from './factions';
+import { recordPermitAccess } from './permits';
+import { applyRoomMemoryRelationPenalty, applyTheftRelationPenalty } from './factions';
 import { publishMaronaryShavingAcquired } from './maronary_shaving';
+import {
+  ROOM_MEMORY_BITS,
+  getRoomMemoryForContainer,
+  roomMemoryHas,
+  roomMemoryIsHelpful,
+  roomMemoryPriceMultiplier,
+  roomMemoryRevealsStash,
+  roomMemoryShouldRefuseService,
+  roomMemoryShouldReportTouch,
+  type RoomMemoryRecord,
+} from './room_memory';
 import { observeRumorEvent } from './rumor';
 import {
   SHELTER_TALLY_ID,
@@ -31,6 +48,7 @@ const THEFT_AUDIT_COOLDOWN_S = 120;
 const THEFT_AUDIT_RADIUS = 12;
 const THEFT_AUDIT_SCAN_CAP = 160;
 const THEFT_AUDIT_REPORT_CAP = 2;
+const THEFT_AUDIT_TICK_CONTAINER_CAP = 8;
 const CONTAINER_BUY_TARIFF = 1.12;
 const CONTAINER_UNLOCK_ITEM_IDS = [
   'container_key_label',
@@ -39,6 +57,8 @@ const CONTAINER_UNLOCK_ITEM_IDS = [
   'official_quarantine_clearance',
   'elevator_access_order',
 ] as const;
+
+let theftAuditCursor = 0;
 
 export type ContainerAccessMode = 'free' | 'steal' | 'buy' | 'unlock' | 'locked' | 'secret';
 
@@ -174,6 +194,12 @@ function validContainerAccess(input: unknown): input is ContainerAccess {
     || input === 'secret';
 }
 
+function validProductionBlockedReason(input: unknown): WorldContainer['productionBlockedReason'] | undefined {
+  return input === 'no_inputs' || input === 'container_full' || input === 'no_container'
+    ? input
+    : undefined;
+}
+
 function containerCellValid(world: World, floor: FloorLevel, container: WorldContainer): boolean {
   if (container.floor !== floor) return false;
   if (!Number.isFinite(container.x) || !Number.isFinite(container.y)) return false;
@@ -237,7 +263,7 @@ function normalizeSavedContainer(
     lastProducedAt: typeof src.lastProducedAt === 'number' ? src.lastProducedAt : undefined,
     lastProducedItemId: typeof src.lastProducedItemId === 'string' ? src.lastProducedItemId : undefined,
     lastProducedCount: typeof src.lastProducedCount === 'number' ? src.lastProducedCount : undefined,
-    productionBlockedReason: src.productionBlockedReason,
+    productionBlockedReason: validProductionBlockedReason(src.productionBlockedReason),
     tags: Array.isArray(src.tags)
       ? src.tags.filter((tag): tag is string => typeof tag === 'string').slice(0, 12)
       : [...def.tags],
@@ -262,6 +288,24 @@ export function pruneContainersForWorld(world: World, floor: FloorLevel): number
   const removed = world.containers.length - kept.length;
   world.containers = kept;
   world.rebuildContainerMap();
+  return removed;
+}
+
+export function pruneVolatileContainersForRebuild(world: World, floor: FloorLevel): number {
+  const kept: WorldContainer[] = [];
+  for (const container of world.containers) {
+    if (container.floor === floor && Number.isFinite(container.x) && Number.isFinite(container.y)) {
+      const x = world.wrap(Math.floor(container.x));
+      const y = world.wrap(Math.floor(container.y));
+      if (!world.aptMask[world.idx(x, y)]) continue;
+    }
+    kept.push(container);
+  }
+  const removed = world.containers.length - kept.length;
+  if (removed > 0) {
+    world.containers = kept;
+    world.rebuildContainerMap();
+  }
   return removed;
 }
 
@@ -341,7 +385,20 @@ export function ensureRoomContainers(world: World, floor: FloorLevel, maxContain
   return created;
 }
 
-export function nearbyContainers(world: World, player: Entity, radius = 2.0): WorldContainer[] {
+function containerMemory(container: WorldContainer, state?: GameState): RoomMemoryRecord | undefined {
+  if (state && container.floor !== state.currentFloor) return undefined;
+  return getRoomMemoryForContainer(container);
+}
+
+function revealSecretByRoomMemory(container: WorldContainer, state?: GameState): boolean {
+  if (container.access !== 'secret' || container.discovered) return false;
+  if (!roomMemoryRevealsStash(containerMemory(container, state))) return false;
+  container.discovered = true;
+  if (!container.tags.includes('room_memory_revealed')) container.tags.push('room_memory_revealed');
+  return true;
+}
+
+export function nearbyContainers(world: World, player: Entity, radius = 2.0, state?: GameState): WorldContainer[] {
   const out: WorldContainer[] = [];
   const px = Math.floor(player.x);
   const py = Math.floor(player.y);
@@ -352,14 +409,16 @@ export function nearbyContainers(world: World, player: Entity, radius = 2.0): Wo
       const x = world.wrap(px + dx);
       const y = world.wrap(py + dy);
       if (world.dist2(player.x, player.y, x + 0.5, y + 0.5) > radiusSq) continue;
-      for (const c of world.containersAt(x, y)) if (c.discovered || c.access !== 'secret') out.push(c);
+      for (const c of world.containersAt(x, y)) {
+        if (c.discovered || c.access !== 'secret' || revealSecretByRoomMemory(c, state)) out.push(c);
+      }
     }
   }
   return out;
 }
 
-export function firstNearbyContainer(world: World, player: Entity): WorldContainer | null {
-  const list = nearbyContainers(world, player, 2.0);
+export function firstNearbyContainer(world: World, player: Entity, state?: GameState): WorldContainer | null {
+  const list = nearbyContainers(world, player, 2.0, state);
   return list.length > 0 ? list[0] : null;
 }
 
@@ -374,6 +433,12 @@ function inventoryHasAny(actor: Entity, defIds: readonly string[]): string | und
 
 function containerUnlockItemId(container: WorldContainer, actor: Entity): string | undefined {
   if (container.access !== 'locked' || container.tags.includes('unlocked')) return undefined;
+  const permitTags = permitAccessTagsFromContainerTags(container.tags);
+  if (permitTags.length > 0) {
+    const itemIds = actor.inventory?.filter(item => item.count > 0).map(item => item.defId) ?? [];
+    const permit = resolvePermitAccess(itemIds, permitTags);
+    if (permit) return permit.itemId;
+  }
   if (container.tags.includes('quarantine')) {
     const quarantine = inventoryHasAny(actor, ['official_quarantine_clearance', 'key', 'container_key_label']);
     if (quarantine) return quarantine;
@@ -409,39 +474,59 @@ export function canAccessContainer(container: WorldContainer, actor: Entity): bo
   return false;
 }
 
-export function containerAccessInfo(container: WorldContainer, actor: Entity): ContainerAccessInfo {
+function roomMemoryAccessDetail(container: WorldContainer, state?: GameState): string {
+  const memory = containerMemory(container, state);
+  if (!memory) return '';
+  if (roomMemoryHas(memory, ROOM_MEMORY_BITS.THEFT)) return 'Комната помнит пропажу; соседи проверяют руки.';
+  if (roomMemoryHas(memory, ROOM_MEMORY_BITS.COMBAT)) return 'После боя здесь отвечают через список и свидетелей.';
+  if (roomMemoryIsHelpful(memory)) return 'Здесь помнят помощь; цена мягче, тайники вспоминаются охотнее.';
+  if (roomMemoryHas(memory, ROOM_MEMORY_BITS.SAMOSBOR)) return 'После самосбора тут говорят шепотом и считают, кто был у гермы.';
+  return '';
+}
+
+export function containerAccessInfo(container: WorldContainer, actor: Entity, state?: GameState): ContainerAccessInfo {
   const hasAccess = canAccessContainer(container, actor);
   const service = containerServiceHint(container) !== null;
   const unlockItemId = containerUnlockItemId(container, actor);
+  const memory = containerMemory(container, state);
+  const memoryDetail = roomMemoryAccessDetail(container, state);
+  const playerRememberedBad = actor.faction === Faction.PLAYER && roomMemoryShouldRefuseService(memory);
+  const memorySuffix = memoryDetail ? ` ${memoryDetail}` : '';
   switch (container.access) {
     case 'public':
-      return { label: 'ОБЩИЙ', detail: 'Можно брать и класть без последствий.', color: '#8f8', canTake: true, canPut: true, theft: false, mode: 'free', service };
+      return { label: 'ОБЩИЙ', detail: `Можно брать и класть без последствий.${memorySuffix}`, color: '#8f8', canTake: true, canPut: true, theft: false, mode: 'free', service };
     case 'room':
-      return { label: 'КОМНАТНЫЙ', detail: 'Комнатный запас. Доступ открыт.', color: '#8cf', canTake: true, canPut: true, theft: false, mode: 'free', service };
+      return { label: 'КОМНАТНЫЙ', detail: `Комнатный запас. Доступ открыт.${memorySuffix}`, color: '#8cf', canTake: true, canPut: true, theft: false, mode: 'free', service };
     case 'faction':
+      if (playerRememberedBad && isBuyableContainer(container)) {
+        return { label: 'ОТКАЗ ФРАКЦИИ', detail: `Покупку закрыли до разговора с жильцами.${memorySuffix}`, color: '#f84', canTake: false, canPut: false, theft: false, mode: 'locked', service };
+      }
       if (!hasAccess && isBuyableContainer(container)) {
-        return { label: 'ПОКУПКА ФРАКЦИИ', detail: 'Можно купить по цене дефицита; взлом не нужен.', color: '#ee4', canTake: true, canPut: true, theft: false, mode: 'buy', purchase: true, service };
+        return { label: 'ПОКУПКА ФРАКЦИИ', detail: `Можно купить по цене дефицита; взлом не нужен.${memorySuffix}`, color: '#ee4', canTake: true, canPut: true, theft: false, mode: 'buy', purchase: true, service };
       }
       return hasAccess
-        ? { label: 'ФРАКЦИЯ', detail: 'Доступ вашей фракции.', color: '#8cf', canTake: true, canPut: true, theft: false, mode: 'free', service }
-        : { label: 'ЧУЖАЯ ФРАКЦИЯ', detail: 'Кража: свидетели поблизости или ревизия фракции.', color: '#f84', canTake: true, canPut: true, theft: true, mode: 'steal', service };
+        ? { label: 'ФРАКЦИЯ', detail: `Доступ вашей фракции.${memorySuffix}`, color: '#8cf', canTake: true, canPut: true, theft: false, mode: 'free', service }
+        : { label: 'ЧУЖАЯ ФРАКЦИЯ', detail: `Кража: свидетели до ${THEFT_WITNESS_RADIUS} м или ревизия фракции через ${Math.round(THEFT_AUDIT_COOLDOWN_S / 60)} мин.${memorySuffix}`, color: '#f84', canTake: true, canPut: true, theft: true, mode: 'steal', service };
     case 'owner':
+      if (playerRememberedBad && isBuyableContainer(container)) {
+        return { label: 'ОТКАЗ ВЛАДЕЛЬЦА', detail: `Владелец не продает после комнатного слуха.${memorySuffix}`, color: '#f84', canTake: false, canPut: false, theft: false, mode: 'locked', service };
+      }
       if (!hasAccess && isBuyableContainer(container)) {
-        return { label: 'ПОКУПКА У ВЛАДЕЛЬЦА', detail: `Владелец: ${container.ownerName ?? 'неизвестен'}. Деньги оставят след вместо кражи.`, color: '#ee4', canTake: true, canPut: true, theft: false, mode: 'buy', purchase: true, service };
+        return { label: 'ПОКУПКА У ВЛАДЕЛЬЦА', detail: `Владелец: ${container.ownerName ?? 'неизвестен'}. Деньги оставят след вместо кражи.${memorySuffix}`, color: '#ee4', canTake: true, canPut: true, theft: false, mode: 'buy', purchase: true, service };
       }
       return hasAccess
-        ? { label: 'ВЛАДЕЛЕЦ', detail: `Владелец: ${container.ownerName ?? 'вы'}.`, color: '#8f8', canTake: true, canPut: true, theft: false, mode: 'free', service }
-        : { label: 'ЧУЖОЕ', detail: `Владелец: ${container.ownerName ?? 'неизвестен'}. Свидетели и ревизия поднимут слух.`, color: '#f84', canTake: true, canPut: true, theft: true, mode: 'steal', service };
+        ? { label: 'ВЛАДЕЛЕЦ', detail: `Владелец: ${container.ownerName ?? 'вы'}.${memorySuffix}`, color: '#8f8', canTake: true, canPut: true, theft: false, mode: 'free', service }
+        : { label: 'ЧУЖОЕ', detail: `Владелец: ${container.ownerName ?? 'неизвестен'}. Свидетели до ${THEFT_WITNESS_RADIUS} м или ревизия через ${Math.round(THEFT_AUDIT_COOLDOWN_S / 60)} мин поднимут слух.${memorySuffix}`, color: '#f84', canTake: true, canPut: true, theft: true, mode: 'steal', service };
     case 'locked':
       if (!hasAccess && unlockItemId) {
-        return { label: 'МОЖНО ОТПЕРЕТЬ', detail: `Подойдёт: ${ITEMS[unlockItemId]?.name ?? unlockItemId}. Открытие будет записано.`, color: '#ee4', canTake: true, canPut: true, theft: false, mode: 'unlock', unlock: true, service };
+        return { label: 'МОЖНО ОТПЕРЕТЬ', detail: `Подойдёт: ${ITEMS[unlockItemId]?.name ?? unlockItemId}. Открытие будет записано.${memorySuffix}`, color: '#ee4', canTake: true, canPut: true, theft: false, mode: 'unlock', unlock: true, service };
       }
       return hasAccess
-        ? { label: 'ОТПЕРТО', detail: 'Замок признаёт ваш доступ.', color: '#8cf', canTake: true, canPut: true, theft: false, mode: 'free', service }
-        : { label: 'ЗАПЕРТО', detail: 'Нужен ключ, код или фракционный доступ.', color: '#f84', canTake: false, canPut: false, theft: false, mode: 'locked', service };
+        ? { label: 'ОТПЕРТО', detail: `Замок признаёт ваш доступ.${memorySuffix}`, color: '#8cf', canTake: true, canPut: true, theft: false, mode: 'free', service }
+        : { label: 'ЗАПЕРТО', detail: `Нужен ключ, код или фракционный доступ.${memorySuffix}`, color: '#f84', canTake: false, canPut: false, theft: false, mode: 'locked', service };
     case 'secret':
       return container.discovered
-        ? { label: 'ТАЙНИК', detail: 'Тайник найден. Свидетелей нет.', color: '#c8f', canTake: true, canPut: true, theft: false, mode: 'secret', service }
+        ? { label: container.tags.includes('room_memory_revealed') ? 'ТАЙНИК ПО СЛУХУ' : 'ТАЙНИК', detail: `Тайник найден. Свидетелей нет.${memorySuffix}`, color: '#c8f', canTake: true, canPut: true, theft: false, mode: 'secret', service }
         : { label: 'СКРЫТО', detail: 'Тайник ещё не найден.', color: '#555', canTake: false, canPut: false, theft: false, mode: 'secret', service };
   }
 }
@@ -641,11 +726,12 @@ function containerPurchaseQuote(
   defId: string,
   count: number,
 ): { unitPrice: number; totalPrice: number; quote?: EconomyQuote } {
-  const fallback = Math.max(1, Math.round((ITEMS[defId]?.value ?? 1) * CONTAINER_BUY_TARIFF));
+  const memoryMultiplier = roomMemoryPriceMultiplier(containerMemory(container, state));
+  const fallback = Math.max(1, Math.round((ITEMS[defId]?.value ?? 1) * CONTAINER_BUY_TARIFF * memoryMultiplier));
   if (!state) return { unitPrice: fallback, totalPrice: fallback * count };
   const quote = getEconomyQuote(state, defId, {
     traderFaction: container.faction,
-    tariffMultiplier: CONTAINER_BUY_TARIFF,
+    tariffMultiplier: CONTAINER_BUY_TARIFF * memoryMultiplier,
     tags: ['container_purchase'],
     reason: 'container_owner_stock',
   });
@@ -684,7 +770,7 @@ export function containerItemActionInfo(
   state?: GameState,
 ): ContainerItemActionInfo {
   if (!item) return { label: 'Пустой слот', detail: '', color: '#555', enabled: false, mode: 'free' };
-  const access = containerAccessInfo(container, actor);
+  const access = containerAccessInfo(container, actor, state);
   if (side === 'player') {
     if (!access.canPut) return { label: 'нет доступа', detail: access.detail, color: '#f84', enabled: false, mode: access.mode ?? 'locked' };
     const action = depositActionLabel(container, item);
@@ -841,6 +927,67 @@ function publishTheftAuditIfDue(container: WorldContainer, actor: Entity, contex
   return true;
 }
 
+export function tickContainerAudits(
+  state: GameState,
+  world: World,
+  actor: Entity,
+  entities: readonly Entity[],
+  maxContainers = THEFT_AUDIT_TICK_CONTAINER_CAP,
+): number {
+  const total = world.containers.length;
+  if (total <= 0 || maxContainers <= 0) {
+    theftAuditCursor = 0;
+    return 0;
+  }
+
+  theftAuditCursor %= total;
+  let published = 0;
+  const scanCount = Math.min(total, Math.max(1, Math.floor(maxContainers)));
+  for (let scanned = 0; scanned < scanCount; scanned++) {
+    const container = world.containers[theftAuditCursor];
+    theftAuditCursor = (theftAuditCursor + 1) % total;
+    if (!container || container.floor !== state.currentFloor) continue;
+    if (publishTheftAuditIfDue(container, actor, { state, world, entities })) published++;
+  }
+  return published;
+}
+
+function publishRoomMemoryReportIfNeeded(container: WorldContainer, actor: Entity, state: GameState | undefined): number {
+  if (!state || actor.faction !== Faction.PLAYER || container.tags.includes('room_memory_reported')) return 0;
+  if (container.access === 'public' || container.access === 'secret') return 0;
+  const memory = containerMemory(container, state);
+  if (!roomMemoryShouldReportTouch(memory)) return 0;
+  addContainerTag(container, 'room_memory_reported');
+  const relationPenalty = applyRoomMemoryRelationPenalty(container.faction, memory?.severity ?? 3);
+  publishEvent(state, {
+    type: 'faction_relation_changed',
+    zoneId: container.zoneId,
+    roomId: container.roomId,
+    x: container.x,
+    y: container.y,
+    actorId: actor.id,
+    actorName: actor.name,
+    actorFaction: actor.faction,
+    targetName: container.ownerName ?? container.name,
+    targetFaction: container.faction,
+    containerId: container.id,
+    containerOwnerId: container.ownerNpcId,
+    containerFaction: container.faction,
+    severity: Math.min(4, Math.max(3, memory?.severity ?? 3)) as 3 | 4,
+    privacy: 'local',
+    tags: ['room_memory', 'denunciation', 'container', 'faction_event', ...container.tags]
+      .filter((tag, idx, all) => all.indexOf(tag) === idx),
+    data: {
+      containerName: container.name,
+      roomMemoryBits: memory?.bits ?? 0,
+      roomMemorySeverity: memory?.severity ?? 0,
+      roomMemoryLastEventId: memory?.lastEventId ?? 0,
+      relationPenalty,
+    },
+  });
+  return relationPenalty;
+}
+
 function unlockContainerForActor(container: WorldContainer, actor: Entity, state: GameState | undefined): { itemId: string } | null {
   const itemId = containerUnlockItemId(container, actor);
   if (!itemId) return null;
@@ -878,6 +1025,11 @@ function unlockContainerForActor(container: WorldContainer, actor: Entity, state
         unlockItemName: ITEMS[itemId]?.name ?? itemId,
       },
     });
+    const permit = getPermitDef(itemId);
+    const permitTags = permitAccessTagsFromContainerTags(container.tags);
+    if (permit && permitTags.length > 0) {
+      recordPermitAccess(state, actor, undefined, permit, container.name, permitTags[0], container.zoneId);
+    }
   }
   return { itemId };
 }
@@ -892,13 +1044,13 @@ export function takeFromContainer(
   const slot = container.inventory[slotIdx];
   const def = slot ? ITEMS[slot.defId] : undefined;
   if (!slot || count <= 0 || !def) return false;
-  const access = containerAccessInfo(container, actor);
+  const context = normalizeContext(input);
+  const state = context.state;
+  const access = containerAccessInfo(container, actor, state);
   if (!access.canTake) return false;
   if (!actor.inventory) actor.inventory = [];
   const take = Math.min(count, slot.count, inventoryFitCount(actor.inventory, slot.defId, MAX_ENTITY_INVENTORY_SLOTS));
   if (take <= 0) return false;
-  const context = normalizeContext(input);
-  const state = context.state;
   const purchase = access.purchase === true;
   const purchaseQuote = purchase ? containerPurchaseQuote(state, container, slot.defId, take) : undefined;
   if (purchaseQuote && (actor.money ?? 0) < purchaseQuote.totalPrice) return false;
@@ -997,6 +1149,8 @@ export function takeFromContainer(
           container,
         });
       }
+    } else {
+      publishRoomMemoryReportIfNeeded(container, actor, state);
     }
     if (defId === 'maronary_shaving') {
       publishMaronaryShavingAcquired(actor, state, stolen ? 'container_theft' : 'container');
@@ -1021,14 +1175,14 @@ export function putIntoContainer(
   const source = inv[slotIdx];
   const def = source ? ITEMS[source.defId] : undefined;
   if (!source || count <= 0 || !def) return false;
-  const access = containerAccessInfo(container, actor);
+  const context = normalizeContext(input);
+  const state = context.state;
+  const access = containerAccessInfo(container, actor, state);
   if (!access.canPut) return false;
   const defId = source.defId;
   const itemName = def.name;
   const moved = Math.min(count, source.count, inventoryFitCount(container.inventory, source.defId, container.capacitySlots));
   if (moved <= 0) return false;
-  const context = normalizeContext(input);
-  const state = context.state;
   publishTheftAuditIfDue(container, actor, context);
   const item: Item = { defId, count: moved, data: moved === source.count ? source.data : undefined };
   if (!removeFromInventorySlot(inv, slotIdx, moved)) return false;

@@ -1,3 +1,6 @@
+-- Canonical fresh D1 schema for the hosted Net Sphere Worker.
+-- Historical migration files remain in cloudflare/d1/ and are applied by
+-- scripts/cloudflare-net-setup.mjs so older remote D1 databases converge here.
 CREATE TABLE IF NOT EXISTS net_players (
   net_gen TEXT PRIMARY KEY,
   nickname TEXT NOT NULL DEFAULT '',
@@ -71,6 +74,22 @@ ON net_market_impulses (corp_id);
 
 CREATE INDEX IF NOT EXISTS idx_net_market_impulses_event_key
 ON net_market_impulses (event_key);
+
+CREATE TABLE IF NOT EXISTS net_market_budgets (
+  identity_key TEXT PRIMARY KEY,
+  net_gen TEXT NOT NULL,
+  session_id TEXT NOT NULL,
+  window_started_at INTEGER NOT NULL,
+  impulse_count INTEGER NOT NULL DEFAULT 0,
+  magnitude_sum REAL NOT NULL DEFAULT 0,
+  updated_at INTEGER NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_net_market_budgets_net_gen
+ON net_market_budgets (net_gen);
+
+CREATE INDEX IF NOT EXISTS idx_net_market_budgets_window
+ON net_market_budgets (window_started_at);
 
 CREATE TABLE IF NOT EXISTS net_market_snapshots (
   corp_id TEXT PRIMARY KEY,

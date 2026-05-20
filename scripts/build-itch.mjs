@@ -21,8 +21,27 @@ const uploadNotes = `Required itch.io HTML5 settings:
 - Scrollbars: disabled
 
 Why: itch.io runs HTML5 games inside an iframe. On mobile, Mobile Friendly makes itch.io launch the game into a fullscreen/fill-window viewport. The game canvas is built to resize to that viewport.
-The in-game FULL control requests browser fullscreen only where it is safe; from embedded mobile hosts it opens the direct game page. iPhone/WebKit forced fullscreen is disabled because it can reload the web view. The ZIP includes PWA manifest, icons, and service worker metadata for standalone launch.
+Launch distinctions:
+- Direct HTTPS/static/Cloudflare page: FULL requests native browser fullscreen only when the browser exposes a compatible Fullscreen API.
+- Embedded itch/mobile iframe: FULL is a direct-page launcher and opens ?standalone=1 instead of requesting iframe fullscreen.
+- iPhone/iPad WebKit: forced fullscreen is disabled because it can reload the web view. Use the direct page or Add to Home Screen standalone launch.
+
+The ZIP includes PWA manifest, icons, and service worker metadata for direct mobile launch. Before upload, verify manifest.webmanifest, sw.js, icon-192.png, icon-512.png, and apple-touch-icon.png are at the archive root next to index.html.
+
+Release size notes:
+- Run npm run build:size after npm run build for the single-file HTML/gzip report.
+- npm run itch:build runs the same warning-only report after packaging, including current ZIP upload weight.
+- Current warning thresholds: 9.5 MB HTML, 4.5 MB HTML gzip, 4.5 MB itch ZIP, 5.8 MB Bad Apple frame source, 3.3 MB Bad Apple frame gzip.
+- Warnings do not block this first budget pass. If a release crosses one, keep the content, note the reason, and compact generated frames/sprite/texture code before adding more heavy data.
 `;
+const requiredDistFiles = [
+  'index.html',
+  'manifest.webmanifest',
+  'sw.js',
+  'icon-192.png',
+  'icon-512.png',
+  'apple-touch-icon.png',
+];
 
 function run(command, args) {
   return new Promise((resolve, reject) => {
@@ -77,6 +96,67 @@ async function collectFiles(dir, prefix = '') {
     }
   }
   return entries;
+}
+
+function distPath(rel) {
+  return path.resolve(root, 'dist', rel);
+}
+
+function normalizeAssetPath(src) {
+  if (typeof src !== 'string' || src.length === 0) return '';
+  if (/^[a-z]+:/i.test(src) || src.startsWith('/')) return '';
+  return src.replace(/^\.\//, '');
+}
+
+async function assertDistFile(rel) {
+  const abs = distPath(rel);
+  const meta = await stat(abs);
+  if (!meta.isFile()) throw new Error(`dist/${rel} is not a file`);
+  return abs;
+}
+
+async function verifyPwaShell() {
+  for (const rel of requiredDistFiles) await assertDistFile(rel);
+
+  const html = await readFile(distHtml, 'utf8');
+  const requiredHtmlNeedles = [
+    'href="./manifest.webmanifest"',
+    'href="./apple-touch-icon.png"',
+    'name="apple-mobile-web-app-capable"',
+    'name="mobile-web-app-capable"',
+  ];
+  for (const needle of requiredHtmlNeedles) {
+    if (!html.includes(needle)) throw new Error(`dist/index.html missing ${needle}`);
+  }
+
+  const manifest = JSON.parse(await readFile(distPath('manifest.webmanifest'), 'utf8'));
+  if (manifest.start_url !== './?standalone=1') throw new Error(`manifest start_url must be ./?standalone=1, got ${manifest.start_url}`);
+  if (manifest.scope !== './') throw new Error(`manifest scope must be ./, got ${manifest.scope}`);
+  if (manifest.display !== 'fullscreen') throw new Error(`manifest display must be fullscreen, got ${manifest.display}`);
+  if (!Array.isArray(manifest.display_override) || !manifest.display_override.includes('standalone')) {
+    throw new Error('manifest display_override must include standalone');
+  }
+  if (manifest.orientation !== 'landscape') throw new Error(`manifest orientation must be landscape, got ${manifest.orientation}`);
+  if (!Array.isArray(manifest.icons) || manifest.icons.length < 2) throw new Error('manifest must include 192 and 512 icons');
+
+  const iconSizes = new Set();
+  for (const icon of manifest.icons) {
+    const rel = normalizeAssetPath(icon.src);
+    if (!rel) throw new Error(`manifest icon has unsupported src ${icon.src}`);
+    await assertDistFile(rel);
+    iconSizes.add(icon.sizes);
+  }
+  for (const size of ['192x192', '512x512']) {
+    if (!iconSizes.has(size)) throw new Error(`manifest missing ${size} icon`);
+  }
+
+  const sw = await readFile(distPath('sw.js'), 'utf8');
+  for (const needle of ['./manifest.webmanifest', './icon-192.png', './icon-512.png', './apple-touch-icon.png']) {
+    if (!sw.includes(needle)) throw new Error(`sw.js cache shell missing ${needle}`);
+  }
+  if (!sw.includes("url.pathname.includes('/api/')")) {
+    throw new Error('sw.js must leave /api/ requests on the network');
+  }
 }
 
 async function zipFiles(entries, target) {
@@ -204,6 +284,7 @@ async function zipSingleFile(source, archiveName, target) {
 
 const npm = process.platform === 'win32' ? 'npm.cmd' : 'npm';
 await run(npm, ['run', 'build']);
+await verifyPwaShell();
 
 await rm(outDir, { recursive: true, force: true });
 await mkdir(outDir, { recursive: true });
@@ -222,3 +303,5 @@ console.log(`Itch.io build ready:`);
 console.log(`- ${path.relative(root, itchHtml)} (${htmlSize} bytes)`);
 console.log(`- ${path.relative(root, itchZip)} (${zipSize} bytes, upload this ZIP)`);
 console.log(`- ${path.relative(root, itchNotes)} (required project settings)`);
+console.log('');
+await run(process.execPath, [path.resolve(root, 'scripts', 'build-size-report.mjs')]);
