@@ -8,16 +8,15 @@ import {
   Faction,
   ItemType,
   MonsterKind,
-  RoomType,
   msg,
   type Entity,
   type GameState,
   type Item,
   type Msg,
-  type Room,
 } from '../core/types';
 import { World } from '../core/world';
 import { ITEMS } from '../data/items';
+import { slimeRoomAttractionWeight, slimeSampleIdForRoomName } from '../data/slime_defs';
 import { MONSTERS, entityDisplayName } from '../entities/monster';
 import { Spr } from '../render/sprite_index';
 import { cleanCellHazardsNear } from './cell_hazards';
@@ -108,19 +107,10 @@ function hasSlimevikProtection(player: Entity): boolean {
   return false;
 }
 
-function roomSlimeWeight(room: Room | null): number {
-  if (!room) return 0;
-  const name = (room.name ?? '').toLowerCase();
-  let weight = 0;
-  if (name.includes('слиз') || name.includes('остат') || name.includes('проб')) weight += 8;
-  if (name.includes('гриб') || name.includes('самосбор')) weight += 4;
-  if (room.type === RoomType.PRODUCTION || room.type === RoomType.BATHROOM) weight += 1;
-  return weight;
-}
-
 function cellSlimeWeight(world: World, x: number, y: number): number {
   const ci = world.idx(x, y);
-  let weight = roomSlimeWeight(world.rooms[world.roomMap[ci]] ?? null);
+  const room = world.rooms[world.roomMap[ci]];
+  let weight = room ? slimeRoomAttractionWeight(room.name, room.type) : 0;
   if (world.cells[ci] === Cell.WATER) weight += 3;
   const feature = world.features[ci];
   if (feature === Feature.SINK || feature === Feature.TOILET) weight += 2;
@@ -355,11 +345,7 @@ export function findSlimevikInteractionTarget(
 
 function dropSampleNear(world: World, entities: Entity[], nextId: { v: number }, slimevik: Entity): string | null {
   const room = world.roomAt(slimevik.x, slimevik.y);
-  const name = (room?.name ?? '').toLowerCase();
-  const sampleId = name.includes('зел') || name.includes('кисл') ? 'slime_sample_green'
-    : name.includes('бел') ? 'slime_sample_white'
-      : name.includes('черн') ? 'slime_sample_black'
-        : 'slime_sample_brown';
+  const sampleId = slimeSampleIdForRoomName(room?.name ?? '');
   for (let attempt = 0; attempt < 24; attempt++) {
     const a = attempt * 2.399;
     const d = 1 + (attempt % 4);

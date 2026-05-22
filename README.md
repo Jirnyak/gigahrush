@@ -109,7 +109,7 @@ Cloudflare scripts are optional and only matter for Net Sphere deployment.
 
 When deployed as a Cloudflare Worker with Assets and the D1 binding described in [cloudflare.md](cloudflare.md), the game exposes an optional in-game `НЕТ-СФЕРА` terminal on `N`. The title screen asks for a persistent `НЕТ-ИМЯ`; each browser also gets a persistent private `НЕТ-ГЕН` id in `localStorage` and a session id in `sessionStorage`. `/netgen NET-...` switches back to an existing cloud profile, `/new` creates a new `НЕТ-ГЕН`, and `/clear` clears local chat history. The terminal polls while open, sends a 30-second heartbeat, records active sessions, samosbor events, deaths, compact progress, recent dry event summaries such as `Жилец умер. Последний сигнал: Жилая зона, д2 08:30.`, and short sanitized chat messages labeled by nickname. The Worker also exposes an optional `/api/net/market` endpoint for compact global market impulses and bounded aggregate quote snapshots. If the binding is missing or the API is offline, the game continues as a local single-file build.
 
-Direct HTTPS builds also expose PWA metadata. The mobile `FULL` control requests browser fullscreen only on compatible non-iOS browsers. Embedded mobile hosts show a direct-page launcher instead. iPhone/WebKit does not get the forced fullscreen path because it can reload the web view; iOS standalone Home Screen launch remains supported through the manifest and Apple web-app meta tags.
+Direct HTTPS builds also expose PWA metadata. Desktop play has a remappable `F11` fullscreen action that requests browser fullscreen with hidden navigation UI and never auto-opens on load. The mobile `FULL` control requests browser fullscreen only on compatible non-iOS browsers. Embedded mobile hosts show a direct-page launcher instead. iPhone/WebKit does not get the forced fullscreen path because it can reload the web view; iOS standalone Home Screen launch remains supported through the manifest and Apple web-app meta tags.
 
 ## Implementation Snapshot
 
@@ -252,6 +252,7 @@ src/
     procedural_floors.ts per-run vertical route and floor specs
     floor_instances.ts numbered lift anomaly state
     route_cues.ts  bounded audio/HUD path hints from generated markers
+    map_exploration.ts UI-only minimap/full-map fog-of-war memory
     room_memory.ts local room facts from noise, violence and witnesses
     noise.ts       bounded sound records for doors, shots and footsteps
     rumor.ts       rumors from static data and events
@@ -452,6 +453,8 @@ The main plot is data-driven through `PLOT_NPCS` and `PLOT_CHAIN` in `src/data/p
 
 Quest markers appear on minimap/full map. TALK points to target NPC, VISIT to room/floor target, FETCH generally back to the giver unless the quest has a specific target.
 
+The minimap and `M` full map use UI-only exploration memory from `src/systems/map_exploration.ts`. A new/current floor starts with walkable geometry in the player's starting macro-zone revealed, including rooms, corridors, doors, lifts, water and abyss cells; entering a room reveals that room, movement adds a small local trail, and cartographer/route-cue knowledge or samosbor shelter signals can reveal target rooms, zones or nearby areas. Unexplored geometry is dark on both map modes, with a short visual-only feather on non-wall cells at explored borders so unknown passages fade into darkness while hidden wall mass stays black, and hidden cells do not show ordinary entity dots. This does not modify `World` solidity, raycaster visibility, AI vision, BFS, pathfinding or faction logic.
+
 Procedural NPC assignments have deadlines instead of a global active-quest cap. The shortest rare urgent tasks, such as a nearby danger cleanup during samosbor, get at least 1 in-game hour. Normal procedural work is usually around a day. Cross-floor, high-rank, multi-kill or high-count assignments can run for several days. Plot-chain quests and most hand-authored side quests registered through content modules do not expire unless a module explicitly sets a deadline.
 
 ## Side Quests And System Assignments
@@ -582,6 +585,8 @@ Current behavior:
 Timers by story floor come from `src/gen/floor_manifest.ts`: Ministry is slowest, Kvartiry/Living/Maintenance are progressively more pressured, Hell and Void are fastest. Procedural floors additionally shorten the timer by danger level and anomaly pressure.
 
 Route cues live on the concrete `World` that registered them. Story, design, procedural and floor-instance loads keep their generated cue state with that world object. Samosbor rebuilds are in-place, so full story/design/procedural replacements copy only the replacement world's fresh markers into the live world and drop old heard/followed/map-reveal state; Living's volatile regrow clears old cue state before the maze is regenerated. Runtime samosbor waves prune cues whose source/target cells fall inside the final local rebuild field.
+
+Map exploration follows the rebuild boundary visually only: full samosbor rebuilds clear the current map memory and reveal the player's new starting sector again, while Living's local samosbor wave covers the rebuilt field area back with map fog-of-war. This is separate from purple fog density and from simulation visibility.
 
 ## Events, Memory And Rumors
 
@@ -777,11 +782,12 @@ Screens show active floor/zone context, quest markers, fog overlay, NPC/monster/
 | `P` | pee |
 | `Z` | sleep when allowed |
 | `Enter` | save/load menu or close menu |
+| `F11` | browser fullscreen |
 | `~` | debug menu |
 
-On touch devices the game shows a landscape mobile overlay: left virtual joystick for movement, right virtual joystick for camera rotation, center tap zone for attack/shoot, left `[E]` popup for nearby interaction targets, a top-left `FULL`/direct-page control when the browser can use it safely, and a right-side menu rail. The rail's up/down buttons choose inventory, map, quests, log, factions, Net Sphere, save/load menu or debug menu; the center button opens the selected panel or closes the current panel. The canvas resizes to the host viewport/fullscreen iframe, including itch.io mobile launch/fullscreen resizing. Canvas UI panels accept taps for selection, transfer, buy/sell, use/drop and close actions.
+On touch devices the game shows a landscape mobile overlay: left virtual joystick for movement, right virtual joystick for camera rotation, center tap zone for attack/shoot, left `[E]` popup for nearby interaction targets, a top-left `FULL`/direct-page control when the browser can use it safely, and a right-side menu rail. Desktop fullscreen is the same browser fullscreen path through the remappable `F11` action. The rail's up/down buttons choose inventory, map, quests, log, factions, Net Sphere, save/load menu or debug menu; the center button opens the selected panel or closes the current panel. The canvas resizes to the host viewport/fullscreen iframe, including itch.io mobile launch/fullscreen resizing. Canvas UI panels accept taps for selection, transfer, buy/sell, use/drop and close actions.
 
-Debug menu currently has 81 base commands plus 18 routed design-floor teleports: weapons/PSI, spawn monsters/NPC/items, XP, samosbor variant cycle and small wave trigger, noclip, event log, economy prices, containers, production tick, system assignments, balance/catalog, lift instances, VOID protocols, faction events, route cues, samosbor director controls, story/design/procedural/anomaly teleports, Maronary/Istotit/Veretar forcing, govnyak courier, pneumomail, hermodoor borer QA, liquidator-cult clash, `ONEPUNCHMAN`, Net Terminal Gen/map editor commands, rail-train anomaly teleport, Bad Apple screen spawn near the player, zombie-apocalypse anomaly teleport, smoke expedition setup, expedition proof commands, permit debug commands and verification commands for contracts, events, lift route windows, numbered lift loops, samosbor warning, economy scarcity, floor monster packs and container routing.
+Debug menu currently has 85 base commands plus 18 routed design-floor teleports (103 total): weapons/PSI, spawn monsters/NPC/items, XP, samosbor variant cycle and small wave trigger, noclip, event log, economy prices, containers, production tick, system assignments, balance/catalog, lift instances, VOID protocols, faction events, route cues, samosbor director controls, story/design/procedural/anomaly teleports, Maronary/Istotit/Veretar forcing, govnyak courier, pneumomail, hermodoor borer QA, liquidator-cult clash, `ONEPUNCHMAN`, Net Terminal Gen/map editor commands, rail-train anomaly teleport, Bad Apple screen spawn near the player, zombie-apocalypse anomaly teleport, smoke expedition setup, expedition proof commands, permit debug commands and verification commands for contracts, events, lift route windows, numbered lift loops, samosbor warning, economy scarcity, floor monster packs and container routing.
 
 ## Save And Load
 

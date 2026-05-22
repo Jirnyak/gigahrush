@@ -1,8 +1,8 @@
 # GIGAHRUSH Design Doc: Current Planning Snapshot
 
-Версия: 4.6
-Дата: 2026-05-20
-Статус: planning/design snapshot after root doc cleanup; не authoritative факт-карта билда
+Версия: 4.7
+Дата: 2026-05-22
+Статус: planning/design snapshot after map exploration pass; не authoritative факт-карта билда
 Жанровая цель: **S.T.A.L.K.E.R.-like survival ARPG sim shooter в самосборной мегаструктуре**
 
 `README.md` фиксирует факт текущего билда. `plans.md` теперь собирает нереализованные и частично реализованные планы из этого файла, `Docs/Expansions/**`, `anomalies.md` и старых batch-документов. Этот документ отвечает на другой вопрос: **что делать дальше в первую очередь, чтобы игра стала сильнее именно как survival ARPG sim shooter, а не просто больше по объему**. Фактические счетчики в секции 1 сверены через `scripts/content-audit.mjs`, runtime import-счеты production manifests и текущую структуру `src/`; остальные секции остаются planning/backlog, а не описанием гарантированно shipped behavior. В версии 4.6 `npm run content:audit` проходит без Errors и без unimported modules.
@@ -18,6 +18,7 @@
 - `src/` содержит 415 TypeScript-файлов и 214 897 строк TypeScript без `dist/` и `node_modules`; без generated `src/data/bad_apple_frames.ts` это 414 файлов и 171 789 строк.
 - Есть 73 `*.test.ts` `node:test` файла; `tests/` содержит 75 файлов с учетом вспомогательных файлов. `tests/net-sphere.test.ts` покрывает optional Cloudflare Net Sphere config/schema/API path, procedural anomaly/rail train/zombie paths получили focused tests.
 - Optional Cloudflare Net Sphere уже в текущем билде: клиент `src/systems/net_sphere.ts`, canvas overlay `src/render/net_sphere_ui.ts`, Pages Functions `functions/api/net/`, D1 schema `cloudflare/d1/net_sphere.sql`, guarded setup/schema scripts `cf:setup` и `cf:schema`.
+- Миникарта и `M`-карта больше не являются полной схемой этажа: `src/systems/map_exploration.ts` хранит UI-only fog-of-war по текущему `World`, старт раскрывает проходимую геометрию стартовой макро-зоны вместе с комнатами и коридорами, вход в комнату раскрывает ее, route-cue/картографические знания могут раскрывать цели, зоны и участки, не-стены на границе открытого участка визуально затухают в неизвестность, а самосборный rebuild снова закрывает перестроенный участок.
 - 253 item ids.
 - `PHYS_WEAPON_STATS`: 32 записи, включая пустой unarmed fallback и deletion-beam tier.
 - `PSI_WEAPON_STATS`: 16 ПСИ-оружий.
@@ -291,6 +292,14 @@ Definition of Done:
 
 Проблема: вертикальный маршрут уже большой (`z=-44..40`), но игрок не должен воспринимать лифт как случайную телепортацию между названиями. Ему нужна карта намерений: куда он едет, зачем, какой риск берет и где может вернуться.
 
+Уже приземлено:
+
+- Карта стала exploration-поверхностью, а не полной схемой: неизвестная геометрия скрыта на миникарте и `M`, обычные entity dots не рисуются в закрытых клетках.
+- Неизвестные не-стены на границе открытой карты имеют короткое визуальное затухание в темноту, чтобы игрок считывал продолжение комнат/коридоров/дверей без подсветки скрытой массы стен.
+- Стартовый сектор раскрывается как зона проходимой геометрии, а не список комнат: комнаты, коридоры, двери, лифты, вода и пропасти стартовой макро-зоны попадают на карту сразу.
+- Вход в комнату, локальная тропа движения, route-cue/картографические reveal и предупреждения убежищ используют один UI-only слой раскрытия.
+- Самосборная перестройка визуально отнимает знание о перестроенном месте: full rebuild сбрасывает текущую карту, local wave снова закрывает поле перестройки.
+
 Сделать:
 
 - В лифтовом/карточном тексте различать четыре типа stop: story anchor, authored design floor, procedural expedition floor, numbered lift anomaly.
@@ -407,7 +416,7 @@ Definition of Done:
 3. **Monster counterplay audit**: проверить ecology/rumors/encounter readability для 24 monster kinds и 23 variants.
 4. **Ranged readability**: projectile sprite, impact, sound, HUD damage cue.
 5. **Samosbor UX pass**: warning, shelter, aftermath and log/map clarity across 8 variants.
-6. **Contract target markers**: системные контракты должны быть читаемыми как plot quests, включая procedural `FloorRun` targets.
+6. **Contract target markers**: системные контракты должны быть читаемыми как plot quests, включая procedural `FloorRun` targets; карта должна раскрывать только известный игроку участок или явную полученную наводку.
 7. **Container ownership consequences**: witness/audit для owner/faction контейнеров.
 8. **Production/container audit**: 12 factories and 19 recipes should create reachable trade/steal/reward decisions.
 9. **Rumor-to-place pass**: слух у NPC ведет в конкретный POI/контейнер/монстра или опасный floor spec.

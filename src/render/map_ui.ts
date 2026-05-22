@@ -26,6 +26,7 @@ import { getNearestSmallCaravan } from '../systems/caravans';
 import { ENTITY_MASK_VISIBLE, getEntityIndex } from '../systems/entity_index';
 import { floorInstanceLabel as formatFloorInstanceLabel, getActiveFloorInstance } from '../systems/floor_instances';
 import { currentFloorRunEntry, floorRunEntryMapLabel } from '../systems/procedural_floors';
+import { isMapCellExplored } from '../systems/map_exploration';
 import { getBlackHandMarkCells } from './marks';
 import { fitText as fitMapText } from './ui_text';
 
@@ -51,6 +52,7 @@ const MAP_CROWD_GROUP_NPC = 0;
 const MAP_CROWD_GROUP_HOSTILE_NPC = 1;
 const MAP_CROWD_GROUP_MONSTER = 2;
 const MAP_CROWD_GROUP_ITEM = 3;
+const MAP_UNEXPLORED_FADE_RADIUS = 3;
 const mapCrowdHashKeys = new Int32Array(MAP_CROWD_BIN_HASH_CAP);
 const mapCrowdHashBins = new Int16Array(MAP_CROWD_BIN_HASH_CAP);
 const mapCrowdX = new Float32Array(MAP_FULL_ENTITY_DOT_BUDGET);
@@ -62,6 +64,9 @@ const mapCrowdMonster = new Uint16Array(MAP_FULL_ENTITY_DOT_BUDGET);
 const mapCrowdItem = new Uint16Array(MAP_FULL_ENTITY_DOT_BUDGET);
 let mapCrowdBinCount = 0;
 let mapCrowdBinLimit = MAP_MINIMAP_ENTITY_DOT_BUDGET;
+let mapExploredGrid = new Uint8Array(0);
+let mapExploredGridW = 0;
+let mapExploredGridH = 0;
 mapCrowdHashKeys.fill(MAP_CROWD_EMPTY_KEY);
 
 const QUEST_KIND_PRIORITY: Record<QuestKind, number> = { plot: 3, side: 2, system: 1 };
@@ -392,6 +397,67 @@ function tintFactionColor(cr: number, cg: number, cb: number, faction: ZoneFacti
   ];
 }
 
+function wrapMapCoord(v: number): number {
+  return ((v % W) + W) % W;
+}
+
+function prepareMapExploredGrid(world: World, px: number, py: number, radius: number): void {
+  const pad = MAP_UNEXPLORED_FADE_RADIUS;
+  mapExploredGridW = radius * 2 + pad * 2;
+  mapExploredGridH = mapExploredGridW;
+  const needed = mapExploredGridW * mapExploredGridH;
+  if (mapExploredGrid.length < needed) mapExploredGrid = new Uint8Array(needed);
+  const startX = px - radius - pad;
+  const startY = py - radius - pad;
+  let wy = wrapMapCoord(startY);
+  let out = 0;
+  for (let gy = 0; gy < mapExploredGridH; gy++) {
+    let wx = wrapMapCoord(startX);
+    const row = wy * W;
+    for (let gx = 0; gx < mapExploredGridW; gx++) {
+      mapExploredGrid[out++] = isMapCellExplored(world, row + wx) ? 1 : 0;
+      wx++;
+      if (wx >= W) wx = 0;
+    }
+    wy++;
+    if (wy >= W) wy = 0;
+  }
+}
+
+function unexploredFadeBand(gx: number, gy: number, gridW: number): number {
+  for (let dist = 1; dist <= MAP_UNEXPLORED_FADE_RADIUS; dist++) {
+    const x0 = gx - dist;
+    const x1 = gx + dist;
+    const top = (gy - dist) * gridW;
+    const bottom = (gy + dist) * gridW;
+    for (let x = x0; x <= x1; x++) {
+      if (mapExploredGrid[top + x] || mapExploredGrid[bottom + x]) return MAP_UNEXPLORED_FADE_RADIUS - dist + 1;
+    }
+    for (let y = gy - dist + 1; y <= gy + dist - 1; y++) {
+      const row = y * gridW;
+      if (mapExploredGrid[row + x0] || mapExploredGrid[row + x1]) return MAP_UNEXPLORED_FADE_RADIUS - dist + 1;
+    }
+  }
+  return 0;
+}
+
+function drawUnexploredMapCell(
+  ctx: CanvasRenderingContext2D,
+  wx: number,
+  wy: number,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  fadeBand: number,
+): void {
+  const hash = (Math.imul(wx + 17, 1103515245) ^ Math.imul(wy + 31, 12345)) >>> 0;
+  const shade = 5 + (hash & 7);
+  const edge = Math.max(0, Math.min(MAP_UNEXPLORED_FADE_RADIUS, fadeBand));
+  ctx.fillStyle = `rgb(${(shade >> 1) + edge * 3},${shade + edge * 8},${shade + 3 + edge * 9})`;
+  ctx.fillRect(x, y, w + 0.5, h + 0.5);
+}
+
 function eventColor(severity: number): string {
   return severity >= 5 ? '#f35' : severity >= 4 ? '#fa4' : severity >= 3 ? '#fc6' : '#8cf';
 }
@@ -630,6 +696,7 @@ function drawBlackHandMarks(
     const dx = world.delta(pxI, mark.x);
     const dy = world.delta(pyI, mark.y);
     if (Math.abs(dx) > radius || Math.abs(dy) > radius) continue;
+    if (!isMapCellExplored(world, world.idx(mark.x, mark.y))) continue;
 
     const x = mapX + (dx + radius + 0.5) * cellW;
     const y = mapY + (dy + radius + 0.5) * cellH;
@@ -1039,6 +1106,9 @@ function drawMap(
   const pyI = Math.floor(player.y);
   const cellW = mapW / (radius * 2);
   const cellH = mapH / (radius * 2);
+  prepareMapExploredGrid(world, pxI, pyI, radius);
+  const exploredGridW = mapExploredGridW;
+  const exploredGridPad = MAP_UNEXPLORED_FADE_RADIUS;
   const activeVariant = getActiveSamosborVariant();
   const questLiftDir = activeVisitLiftDirection(quests, currentFloor, state);
   const [fogR, fogG, fogB] = activeVariant?.fogColor ?? [80, 20, 120];
@@ -1082,28 +1152,37 @@ function drawMap(
       const wx = ((pxI + dx) % W + W) % W;
       const wy = ((pyI + dy) % W + W) % W;
       const ci = wy * W + wx;
+      const sx0 = mapX + (dx + radius) * cellW;
+      const sy0 = mapY + (dy + radius) * cellH;
+      const gridX = dx + radius + exploredGridPad;
+      const gridY = dy + radius + exploredGridPad;
+      if (!mapExploredGrid[gridY * exploredGridW + gridX]) {
+        const fadeBand = world.cells[ci] === Cell.WALL ? 0 : unexploredFadeBand(gridX, gridY, exploredGridW);
+        drawUnexploredMapCell(ctx, wx, wy, sx0, sy0, cellW, cellH, fadeBand);
+        continue;
+      }
       const cell = world.cells[ci];
       if (cell === Cell.WALL) {
         // Hermetic shelter walls: special unbreakable wall marker.
         if (world.hermoWall[ci]) {
           ctx.fillStyle = '#6ec3ff';
-          ctx.fillRect(mapX + (dx + radius) * cellW, mapY + (dy + radius) * cellH, cellW + 0.5, cellH + 0.5);
+          ctx.fillRect(sx0, sy0, cellW + 0.5, cellH + 0.5);
         }
         continue;
       }
       if (cell === Cell.ABYSS) {
         ctx.fillStyle = '#100810';
-        ctx.fillRect(mapX + (dx + radius) * cellW, mapY + (dy + radius) * cellH, cellW + 0.5, cellH + 0.5);
+        ctx.fillRect(sx0, sy0, cellW + 0.5, cellH + 0.5);
         continue;
       }
       if (cell === Cell.LIFT) {
         ctx.fillStyle = '#cc0';
-        ctx.fillRect(mapX + (dx + radius) * cellW, mapY + (dy + radius) * cellH, cellW + 0.5, cellH + 0.5);
+        ctx.fillRect(sx0, sy0, cellW + 0.5, cellH + 0.5);
         continue;
       }
       if (cell === Cell.WATER) {
         ctx.fillStyle = '#235';
-        ctx.fillRect(mapX + (dx + radius) * cellW, mapY + (dy + radius) * cellH, cellW + 0.5, cellH + 0.5);
+        ctx.fillRect(sx0, sy0, cellW + 0.5, cellH + 0.5);
         continue;
       }
 
@@ -1152,11 +1231,11 @@ function drawMap(
       }
 
       ctx.fillStyle = `rgb(${cr},${cg},${cb})`;
-      ctx.fillRect(mapX + (dx + radius) * cellW, mapY + (dy + radius) * cellH, cellW + 0.5, cellH + 0.5);
+      ctx.fillRect(sx0, sy0, cellW + 0.5, cellH + 0.5);
       if (isSamosborShelter) {
         ctx.strokeStyle = '#d6a64b';
         ctx.lineWidth = Math.max(1, Math.min(2, cellW));
-        ctx.strokeRect(mapX + (dx + radius) * cellW, mapY + (dy + radius) * cellH, cellW + 0.5, cellH + 0.5);
+        ctx.strokeRect(sx0, sy0, cellW + 0.5, cellH + 0.5);
       }
 
       if (currentFloor === FloorLevel.MAINTENANCE) {
@@ -1219,6 +1298,8 @@ function drawMap(
   resetMapCrowdBins(entityDotBudget);
   for (const e of mapEntityQuery) {
     if (!e.alive || e.type === EntityType.PLAYER) continue;
+    const eCell = world.idx(Math.floor(e.x), Math.floor(e.y));
+    if (!isMapCellExplored(world, eCell)) continue;
     const edx = world.delta(pxI, Math.floor(e.x));
     const edy = world.delta(pyI, Math.floor(e.y));
     if (Math.abs(edx) > radius || Math.abs(edy) > radius) continue;
@@ -1233,6 +1314,8 @@ function drawMap(
 
   for (const e of mapEntityQuery) {
     if (!e.alive || e.type !== EntityType.ITEM_DROP) continue;
+    const eCell = world.idx(Math.floor(e.x), Math.floor(e.y));
+    if (!isMapCellExplored(world, eCell)) continue;
     const edx = world.delta(pxI, Math.floor(e.x));
     const edy = world.delta(pyI, Math.floor(e.y));
     if (Math.abs(edx) > radius || Math.abs(edy) > radius) continue;
@@ -1276,6 +1359,8 @@ function drawMap(
     // Mark all plot NPCs (gold if active quest / new quest available, blue otherwise)
     for (const e of mapEntityQuery) {
       if (!e.alive || !e.plotNpcId) continue;
+      const eCell = world.idx(Math.floor(e.x), Math.floor(e.y));
+      if (!isMapCellExplored(world, eCell)) continue;
       const edx = world.delta(pxI, Math.floor(e.x));
       const edy = world.delta(pyI, Math.floor(e.y));
       if (Math.abs(edx) > radius || Math.abs(edy) > radius) continue;
@@ -1327,6 +1412,8 @@ function drawMap(
     if (activeKillKinds.size > 0) {
       for (const e of mapEntityQuery) {
         if (!e.alive || e.type !== EntityType.MONSTER) continue;
+        const eCell = world.idx(Math.floor(e.x), Math.floor(e.y));
+        if (!isMapCellExplored(world, eCell)) continue;
         const markerKind = e.monsterKind === undefined ? undefined : activeKillKinds.get(e.monsterKind);
         if (!markerKind) continue;
         const edx = world.delta(pxI, Math.floor(e.x));
@@ -1352,6 +1439,7 @@ function drawMap(
       const wy = ((pyI + dy) % W + W) % W;
       const ci = wy * W + wx;
       if (world.cells[ci] !== Cell.LIFT) continue;
+      if (!isMapCellExplored(world, ci)) continue;
       const lsx = mapX + (dx + radius) * cellW;
       const lsy = mapY + (dy + radius) * cellH;
       const isUp = world.liftDir[ci] === LiftDirection.UP;

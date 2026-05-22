@@ -26,6 +26,7 @@ export const CONTROL_ACTIONS = [
   { id: 'pee', group: 'Состояние', label: 'Пописать', input: 'pee', defaultKeys: ['KeyP'] },
   { id: 'gameMenu', group: 'Экраны', label: 'Меню / назад / закрыть', input: 'escape', defaultKeys: ['Enter'] },
   { id: 'controlsMenu', group: 'Экраны', label: 'Все клавиши', input: 'controls', defaultKeys: ['Tab'] },
+  { id: 'fullscreen', group: 'Экраны', label: 'Полный экран', defaultKeys: ['F11'] },
   { id: 'inventory', group: 'Экраны', label: 'Инвентарь', input: 'inv', defaultKeys: ['KeyI'] },
   { id: 'map', group: 'Экраны', label: 'Карта: мини / полная / выкл.', input: 'map', defaultKeys: ['KeyM'] },
   { id: 'quests', group: 'Экраны', label: 'Задания', input: 'questLog', defaultKeys: ['KeyQ'] },

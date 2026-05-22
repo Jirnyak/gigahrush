@@ -6,6 +6,7 @@ import {
   clearControlInputs,
   consumeControlCaptureCode,
   getControlCaptureAction,
+  matchesControlAction,
 } from './systems/controls';
 
 export function createInput(): InputState {
@@ -31,11 +32,20 @@ export function createInput(): InputState {
   };
 }
 
-export function bindInput(input: InputState, canvas: HTMLCanvasElement): () => void {
+interface InputBindOptions {
+  onFullscreenToggle?: () => void;
+}
+
+export function bindInput(input: InputState, canvas: HTMLCanvasElement, options: InputBindOptions = {}): () => void {
   const onDown = (e: KeyboardEvent) => {
     if (getControlCaptureAction()) {
       if (!e.metaKey && !e.ctrlKey && !e.altKey) consumeControlCaptureCode(e.code);
       e.preventDefault();
+      return;
+    }
+    if (matchesControlAction('fullscreen', e.code)) {
+      e.preventDefault();
+      options.onFullscreenToggle?.();
       return;
     }
     applyControlCode(input, e.code, true);

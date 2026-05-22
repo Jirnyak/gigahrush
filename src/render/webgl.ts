@@ -142,9 +142,24 @@ uint sampleFeature(ivec2 p) {
   return texelFetch(uFeatures, wp, 0).r;
 }
 
+bool organicLightCell(ivec2 p) {
+  ivec2 wp = ivec2(wrapI(p.x), wrapI(p.y));
+  uint wallTex = texelFetch(uWallTex, wp, 0).r;
+  uint floorTex = texelFetch(uFloorTex, wp, 0).r;
+  return wallTex == ${Tex.MEAT}u || wallTex == ${Tex.GUT}u ||
+         floorTex == ${Tex.F_MEAT}u || floorTex == ${Tex.F_GUT}u;
+}
+
+float organicLightPulse(ivec2 p) {
+  if (!organicLightCell(p)) return 1.0;
+  ivec2 wp = ivec2(wrapI(p.x), wrapI(p.y));
+  float phase = float((wp.x * 13 + wp.y * 17) & 63) * 0.09817477;
+  return 0.78 + 0.22 * (0.5 + 0.5 * sin(uTime * 0.72 + phase));
+}
+
 float sampleLight(ivec2 p) {
   ivec2 wp = ivec2(wrapI(p.x), wrapI(p.y));
-  return texelFetch(uLight, wp, 0).r;
+  return texelFetch(uLight, wp, 0).r * organicLightPulse(wp);
 }
 
 uint sampleFog(ivec2 p) {
@@ -271,6 +286,31 @@ vec3 applyHellEye(vec3 base, int texXi, int texYi, int cellX, int cellY) {
     }
   }
   return color;
+}
+
+vec3 applyHellLamp(vec3 base, int texXi, int texYi, int cellX, int cellY, float dist) {
+  float tx = (float(texXi) - 31.5) / 32.0;
+  float ty = (float(texYi) - 31.5) / 32.0;
+  float r = sqrt(tx * tx + ty * ty);
+  float a = atan(ty, tx);
+  float seed = noiseI(cellX, cellY, 941);
+  float breathe = 0.5 + 0.5 * sin(uTime * 0.72 + seed * 6.2831853);
+  float aperture = 0.16 + breathe * 0.075;
+  float fold = sin(a * 9.0 + seed * 11.0 + uTime * 0.26) * 0.026 +
+               sin(a * 17.0 - seed * 7.0) * 0.012;
+  float edge = aperture + fold;
+  float hole = 1.0 - smoothstep(edge * 0.72, edge, r);
+  float rim = 1.0 - smoothstep(0.018, 0.074, abs(r - edge));
+  float flesh = 1.0 - smoothstep(0.31, 0.66, r);
+  float wet = noiseI(cellX + texXi, cellY + texYi, 947) * 0.18;
+  vec3 meat = vec3(95.0/255.0 + wet, 23.0/255.0 + wet * 0.35, 18.0/255.0 + wet * 0.22);
+  vec3 ring = vec3(154.0/255.0 + wet, 42.0/255.0 + wet * 0.4, 25.0/255.0 + wet * 0.25);
+  vec3 light = vec3(1.0, 172.0/255.0, 42.0/255.0);
+  float distGlow = max(0.0, 1.0 - dist * 0.14);
+  vec3 color = mix(base, meat, flesh * 0.82);
+  color = mix(color, ring, rim * 0.78);
+  color += light * distGlow * (hole * 1.25 + rim * 0.34);
+  return min(color, vec3(1.0));
 }
 
 /* ── Main fragment shader ─────────────────────────────────────── */
@@ -494,7 +534,12 @@ void main() {
             uint feat = texelFetch(uFeatures, cCell, 0).r;
             if (feat == ${Feature.LAMP}u) {
               float glow = max(0.0, 1.0 - currentDist * 0.15);
-              pixel = applyFogV(vec3(220.0/255.0 * glow, 180.0/255.0 * glow, 80.0/255.0 * glow), ff);
+              if (organicLightCell(cCell)) {
+                vec3 cc = sampleAtlas(${Tex.CEIL}u, ftx, fty).rgb * (0.25 + cLit * 0.35);
+                pixel = applyFogV(applyHellLamp(cc, ftx, fty, cCell.x, cCell.y, currentDist), ff);
+              } else {
+                pixel = applyFogV(vec3(220.0/255.0 * glow, 180.0/255.0 * glow, 80.0/255.0 * glow), ff);
+              }
               pixelDepth = min(1.0, currentDist / MAX_DIST);
             } else if (feat == ${Feature.CANDLE}u) {
               float glow = max(0.0, 1.0 - currentDist * 0.18);
@@ -1808,7 +1853,7 @@ function collectStaticObjectSprites(world: World, px: number, py: number, count:
       const x = world.wrap(cx + ox);
       const idx = world.idx(x, y);
       const feature = world.features[idx] as Feature;
-      if (feature === Feature.NONE || feature === Feature.LAMP) continue;
+      if (feature === Feature.NONE || feature === Feature.LAMP || feature === Feature.CANDLE) continue;
       const cell = world.cells[idx];
       if (cell !== Cell.FLOOR && cell !== Cell.WATER) continue;
       const off = featureOffset(feature, x, y);

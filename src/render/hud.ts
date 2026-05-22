@@ -382,7 +382,6 @@ function samosborCrawlLines(variantId: string | undefined, resistHint: string): 
       ];
     default:
       return [
-        'САМОСБОР ИДЕТ',
         'СТЕНЫ МЕНЯЮТ МЕСТА',
         'ДЫШИ НИЖЕ ДЫМА',
         'БЕГИ К ГЕРМЕ',

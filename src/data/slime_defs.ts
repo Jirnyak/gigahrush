@@ -1,4 +1,4 @@
-import { Faction } from '../core/types';
+import { Faction, RoomType } from '../core/types';
 
 export type SlimeId =
   | 'slime_brown'
@@ -27,6 +27,7 @@ export interface SlimeDef {
   preferredFactions: readonly Faction[];
   routeChoices: readonly SlimeRouteChoice[];
   textHandles: readonly string[];
+  roomTokens?: readonly string[];
 }
 
 export const SLIME_DEFS: readonly SlimeDef[] = [
@@ -59,6 +60,7 @@ export const SLIME_DEFS: readonly SlimeDef[] = [
     preferredFactions: [Faction.SCIENTIST, Faction.LIQUIDATOR],
     routeChoices: ['deliver', 'burn', 'report'],
     textHandles: ['slime_green_acid_sample', 'nii_green_containment'],
+    roomTokens: ['зел', 'кисл'],
   },
   {
     id: 'slime_white',
@@ -74,6 +76,7 @@ export const SLIME_DEFS: readonly SlimeDef[] = [
     preferredFactions: [Faction.SCIENTIST, Faction.CULTIST],
     routeChoices: ['deliver', 'sell', 'hide', 'report'],
     textHandles: ['slime_white_look_away', 'lead_living_white_sample_shift', 'nii_white_unsealed_report'],
+    roomTokens: ['бел'],
   },
   {
     id: 'slime_red',
@@ -104,6 +107,7 @@ export const SLIME_DEFS: readonly SlimeDef[] = [
     preferredFactions: [Faction.SCIENTIST, Faction.LIQUIDATOR, Faction.CULTIST],
     routeChoices: ['deliver', 'sell', 'burn', 'report'],
     textHandles: ['slime_black_uv_sample', 'lead_maint_black_slime_false_jar', 'betonov_black_burn_order'],
+    roomTokens: ['черн'],
   },
   {
     id: 'slime_blue',
@@ -157,6 +161,46 @@ export const SLIME_SAMPLE_IDS: readonly string[] = SLIME_DEFS.map(def => def.sam
 export const SLIME_DEF_BY_ID = Object.fromEntries(SLIME_DEFS.map(def => [def.id, def])) as Record<SlimeId, SlimeDef>;
 export const SLIME_DEF_BY_SAMPLE_ID: Record<string, SlimeDef> = Object.fromEntries(SLIME_DEFS.map(def => [def.sampleId, def]));
 
+const SLIME_ROOM_CORE_TOKENS = ['слиз', 'остат', 'проб'] as const;
+const SLIME_ROOM_FEED_TOKENS = ['гриб', 'самосбор'] as const;
+
+function hasAnyToken(text: string, tokens: readonly string[]): boolean {
+  return tokens.some(token => text.includes(token));
+}
+
+export function slimeDefForRoomName(roomName: string): SlimeDef {
+  const name = roomName.toLowerCase();
+  let best: SlimeDef | undefined;
+  let bestScore = 0;
+  for (const def of SLIME_DEFS) {
+    const tokens = def.roomTokens ?? [];
+    let score = 0;
+    for (const token of tokens) {
+      if (name.includes(token)) score += 10 + def.rewardTier;
+    }
+    if (score > bestScore) {
+      best = def;
+      bestScore = score;
+    }
+  }
+  return best ?? SLIME_DEF_BY_ID.slime_brown;
+}
+
+export function slimeSampleIdForRoomName(roomName: string): string {
+  return slimeDefForRoomName(roomName).sampleId;
+}
+
+export function slimeRoomAttractionWeight(roomName: string, roomType: RoomType): number {
+  const name = roomName.toLowerCase();
+  let weight = 0;
+  if (hasAnyToken(name, SLIME_ROOM_CORE_TOKENS)) weight += 8;
+  if (hasAnyToken(name, SLIME_ROOM_FEED_TOKENS)) weight += 4;
+  const colored = slimeDefForRoomName(name);
+  if (colored.id !== 'slime_brown') weight += Math.min(4, colored.danger);
+  if (roomType === RoomType.PRODUCTION || roomType === RoomType.BATHROOM) weight += 1;
+  return weight;
+}
+
 function duplicateStrings(values: readonly string[]): string[] {
   const counts = new Map<string, number>();
   for (const value of values) counts.set(value, (counts.get(value) ?? 0) + 1);
@@ -189,6 +233,9 @@ export function validateSlimeDefs(): string[] {
     if (def.preferredFactions.length === 0) problems.push(`${def.id}:preferredFactions`);
     if (def.routeChoices.length === 0) problems.push(`${def.id}:routeChoices`);
     if (def.textHandles.length === 0) problems.push(`${def.id}:textHandles`);
+    for (const token of def.roomTokens ?? []) {
+      if (token.trim().length === 0) problems.push(`${def.id}:roomTokens`);
+    }
   }
 
   return problems;

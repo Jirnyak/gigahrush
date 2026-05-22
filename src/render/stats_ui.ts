@@ -12,7 +12,7 @@ import {
 } from '../systems/rpg';
 import { zhelemishStatsLine } from '../systems/status';
 import { drawNeuroPanel, drawGlitchText, textJitter, flicker } from './hud_fx';
-import { drawCenteredWrappedText, fitText as fitStatText } from './ui_text';
+import { fitText as fitStatText } from './ui_text';
 import { drawInventoryFinanceBlock, readFinanceSnapshot } from './economy_ui';
 
 export function drawInventory(
@@ -100,7 +100,8 @@ export function drawInventory(
       ctx.fillStyle = '#888';
       ctx.font = `${7 * sy}px monospace`;
       let infoY = descY + 10 * sy;
-      infoY = drawCenteredWrappedText(ctx, def.desc, descX, infoY, gridW + 8 * sx, 8 * sy, 2);
+      ctx.fillText(fitStatText(ctx, def.desc, gridW + 8 * sx), descX, infoY);
+      infoY += 8 * sy;
       const actionBaseY = Math.min(infoY + 2 * sy, ch - 42 * sy);
       ctx.fillStyle = '#da4';
       ctx.fillText(`Цена: ${def.value ?? 0}₽`, descX, actionBaseY);

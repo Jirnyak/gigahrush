@@ -32,7 +32,7 @@ import {
   getSamosborVariantWeight,
 } from '../src/data/samosbor_variants';
 import { SCREEN_SIGNAL_DEFS } from '../src/data/screen_signals';
-import { SLIME_DEFS, SLIME_SAMPLE_IDS, validateSlimeDefs } from '../src/data/slime_defs';
+import { SLIME_DEFS, SLIME_SAMPLE_IDS, slimeRoomAttractionWeight, slimeSampleIdForRoomName, validateSlimeDefs } from '../src/data/slime_defs';
 import { ZHELEMISH_DEFS, ZHELEMISH_ITEM_IDS, validateZhelemishDefs } from '../src/data/zhelemish_defs';
 import { MONSTERS } from '../src/entities/monster';
 import { BLACK_MARKET_88_CONTRACT_ROWS } from '../src/gen/design_floors/black_market_88';
@@ -560,6 +560,12 @@ test('slime definitions expose stable sample ids and text handles', () => {
       if (!rumorIds.has(handle)) missing.push(dataRef('slime', def.id, 'textHandles', handle));
     }
   }
+
+  assert.equal(slimeSampleIdForRoomName('Зелёная кислотная пробная'), 'slime_sample_green');
+  assert.equal(slimeSampleIdForRoomName('Белый остаток'), 'slime_sample_white');
+  assert.equal(slimeSampleIdForRoomName('Черная слизь: остаток смотрит назад'), 'slime_sample_black');
+  assert.equal(slimeSampleIdForRoomName('Кормовая ванна слизневика'), 'slime_sample_brown');
+  assert.ok(slimeRoomAttractionWeight('Слизевой пробный отсек', RoomType.PRODUCTION) > 0);
 
   assert.deepEqual(missing, [], 'slime sample ids must resolve through items, resources, and rumors');
 });

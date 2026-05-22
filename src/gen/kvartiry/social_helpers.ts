@@ -49,14 +49,39 @@ export function getKvSocialMapCues(world: World): readonly KvSocialMapCue[] {
   return socialMapCues.get(world) ?? [];
 }
 
-function hasClearWallArea(world: World, x: number, y: number, w: number, h: number): boolean {
+function socialPoiAreaScore(world: World, x: number, y: number, w: number, h: number): number {
+  let score = 0;
+  let interiorFloor = 0;
+  const interior = w * h;
+  const perimeter = (w + 2) * (h + 2) - interior;
+
   for (let dy = -1; dy <= h; dy++) {
     for (let dx = -1; dx <= w; dx++) {
       const ci = world.idx(x + dx, y + dy);
-      if (world.cells[ci] !== Cell.WALL || world.aptMask[ci]) return false;
+      if (world.aptMask[ci] || world.hermoWall[ci]) return -Infinity;
+      if (world.cells[ci] === Cell.LIFT || world.features[ci] === Feature.LIFT_BUTTON) return -Infinity;
+      const border = dx < 0 || dx >= w || dy < 0 || dy >= h;
+      const cell = world.cells[ci] as Cell;
+      if (border) {
+        if (cell === Cell.WALL) score += 5;
+        else if (cell === Cell.DOOR) score += 2;
+        else if (cell === Cell.FLOOR) score -= 3;
+        else score -= 12;
+        continue;
+      }
+      if (cell === Cell.FLOOR || cell === Cell.DOOR) {
+        interiorFloor++;
+        score += cell === Cell.FLOOR ? 3 : 1;
+      } else if (cell === Cell.WALL) {
+        score += 1;
+      } else {
+        score -= 12;
+      }
+      if (world.features[ci] !== Feature.NONE) score -= 2;
     }
   }
-  return true;
+  if (interiorFloor < Math.max(4, Math.floor(interior * 0.28))) return -Infinity;
+  return score + Math.min(perimeter, interiorFloor);
 }
 
 function findSocialPoiArea(
@@ -72,6 +97,7 @@ function findSocialPoiArea(
   const maxD2 = maxDist * maxDist;
   const baseX = Math.floor(cx);
   const baseY = Math.floor(cy);
+  let best: { x: number; y: number; score: number } | null = null;
 
   for (let radius = minDist; radius <= maxDist; radius += 8) {
     const samples = Math.max(32, Math.floor(radius / 3));
@@ -81,10 +107,12 @@ function findSocialPoiArea(
       const ty = world.wrap(baseY + Math.round(Math.sin(angle) * radius) - (h >> 1));
       const d2 = world.dist2(baseX, baseY, tx + w / 2, ty + h / 2);
       if (d2 < minD2 || d2 > maxD2) continue;
-      if (hasClearWallArea(world, tx, ty, w, h)) return { x: tx, y: ty };
+      const score = socialPoiAreaScore(world, tx, ty, w, h);
+      if (!Number.isFinite(score)) continue;
+      if (!best || score > best.score) best = { x: tx, y: ty, score };
     }
   }
-  return null;
+  return best ? { x: best.x, y: best.y } : null;
 }
 
 export function createSocialPoiRoom(

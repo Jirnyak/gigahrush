@@ -20,6 +20,11 @@ function fullscreenElement(): Element | null {
   return document.fullscreenElement || doc.webkitFullscreenElement || doc.msFullscreenElement || null;
 }
 
+function canRequestFullscreen(target: HTMLElement): boolean {
+  const prefixed = target as PrefixedFullscreenElement;
+  return Boolean(target.requestFullscreen || prefixed.webkitRequestFullscreen || prefixed.webkitRequestFullScreen || prefixed.msRequestFullscreen);
+}
+
 function lockLandscape(): void {
   const orientation = screen.orientation as (ScreenOrientation & {
     lock?: (orientation: 'landscape') => Promise<void>;
@@ -83,18 +88,17 @@ export function openStandalonePage(): void {
   }
 }
 
-export function canUseMobileFullscreen(): boolean {
-  if (isEmbeddedViewport() || isIosWebKit()) return false;
-  const target = document.documentElement as PrefixedFullscreenElement;
-  return Boolean(target.requestFullscreen || target.webkitRequestFullscreen || target.webkitRequestFullScreen || target.msRequestFullscreen);
+export function canUseNativeFullscreen(target: HTMLElement = document.documentElement): boolean {
+  if (isIosWebKit()) return false;
+  return canRequestFullscreen(target);
 }
 
-export async function enterMobileFullscreen(target: HTMLElement = document.documentElement): Promise<boolean> {
-  if (!canUseMobileFullscreen()) return false;
+export async function enterNativeFullscreen(target: HTMLElement = document.documentElement): Promise<boolean> {
+  if (!canUseNativeFullscreen(target)) return false;
   return requestNativeFullscreen(target);
 }
 
-export async function exitMobileFullscreen(): Promise<void> {
+export async function exitNativeFullscreen(): Promise<void> {
   const doc = fullscreenDocument();
   try {
     if (document.fullscreenElement) {
@@ -109,6 +113,32 @@ export async function exitMobileFullscreen(): Promise<void> {
   }
 }
 
-export function isMobileFullscreenActive(): boolean {
+export function isNativeFullscreenActive(): boolean {
   return fullscreenElement() !== null;
+}
+
+export async function toggleNativeFullscreen(target: HTMLElement = document.documentElement): Promise<boolean> {
+  if (isNativeFullscreenActive()) {
+    await exitNativeFullscreen();
+    return true;
+  }
+  return enterNativeFullscreen(target);
+}
+
+export function canUseMobileFullscreen(): boolean {
+  if (isEmbeddedViewport() || isIosWebKit()) return false;
+  return canRequestFullscreen(document.documentElement);
+}
+
+export async function enterMobileFullscreen(target: HTMLElement = document.documentElement): Promise<boolean> {
+  if (!canUseMobileFullscreen()) return false;
+  return requestNativeFullscreen(target);
+}
+
+export async function exitMobileFullscreen(): Promise<void> {
+  await exitNativeFullscreen();
+}
+
+export function isMobileFullscreenActive(): boolean {
+  return isNativeFullscreenActive();
 }

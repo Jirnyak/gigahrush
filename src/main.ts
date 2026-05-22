@@ -53,6 +53,7 @@ import {
 import { tryHandleMaronaryShavingHandoff } from './systems/maronary_shaving';
 import { createInput, bindInput } from './input';
 import { createMobileControls, type MobileControls, type MobileMenuId } from './mobile';
+import { isNativeFullscreenActive, toggleNativeFullscreen } from './fullscreen';
 import {
   CONTROL_ACTIONS,
   beginControlCapture,
@@ -112,6 +113,11 @@ import { updateCarnivorousFungus } from './systems/carnivorous_fungus';
 import { hladonColdMoveMultiplier, updateHladonColdPocket } from './systems/hladon';
 import { tryCoverSeroburmalineSource, updateSeroburmalineExposure } from './systems/seroburmaline';
 import { updateRouteCues } from './systems/route_cues';
+import {
+  resetMapExploration,
+  syncMapExplorationAfterSamosborWave,
+  updateMapExploration,
+} from './systems/map_exploration';
 import { updateParitelSteamBridge } from './gen/maintenance/paritel_steam_bridge';
 import { updateBetonoedShortcut } from './gen/maintenance/betonoed_shortcut';
 import {
@@ -763,6 +769,8 @@ function returnFromVoidPortalToLiving(portal: VoidReturnPortalState): void {
     ensureRoomContainers(world, state.currentFloor);
     ensureProductionRooms(state, world);
     prepareEditableFloor();
+    resetMapExploration(world);
+    updateMapExploration(world, player, state);
     ensureProceduralSpriteSeeds(entities);
     setGeneratedDynamicSky(gen);
     updateWorldData(world);
@@ -1148,6 +1156,8 @@ function initGame(): void {
   ensureRoomContainers(world, state.currentFloor);
   ensureProductionRooms(state, world);
   prepareEditableFloor();
+  resetMapExploration(world);
+  updateMapExploration(world, player, state);
   ensureProceduralSpriteSeeds(entities);
   resetPsiState();
 
@@ -1167,7 +1177,7 @@ setTimeout(() => {
 
 /* ── Input ────────────────────────────────────────────────────── */
 const input = createInput();
-bindInput(input, canvas);
+bindInput(input, canvas, { onFullscreenToggle: toggleGameFullscreen });
 mobileControls = createMobileControls(input, {
   onGesture: mobileGestureUnlock,
   onMenu: openMobileMenu,
@@ -2561,6 +2571,8 @@ function switchFloor(
     ensureRoomContainers(world, state.currentFloor);
     ensureProductionRooms(state, world);
     prepareEditableFloor();
+    resetMapExploration(world);
+    updateMapExploration(world, player, state);
     ensureProceduralSpriteSeeds(entities);
     restoreVoidReturnPortalForCurrentWorld();
     if (allowElevatorAnomaly) {
@@ -2662,6 +2674,8 @@ function enterVoidFloor(): void {
     ensureRoomContainers(world, state.currentFloor);
     ensureProductionRooms(state, world);
     prepareEditableFloor();
+    resetMapExploration(world);
+    updateMapExploration(world, player, state);
     ensureProceduralSpriteSeeds(entities);
     restoreVoidReturnPortalForCurrentWorld();
 
@@ -2804,6 +2818,8 @@ function debugTeleportTo(target: DebugTeleportTarget): void {
     ensureRoomContainers(world, state.currentFloor);
     ensureProductionRooms(state, world);
     prepareEditableFloor();
+    resetMapExploration(world);
+    updateMapExploration(world, player, state);
     ensureProceduralSpriteSeeds(entities);
     restoreVoidReturnPortalForCurrentWorld();
     setGeneratedDynamicSky(gen);
@@ -3361,6 +3377,8 @@ function loadGame(): boolean {
       ensureRoomContainers(world, state.currentFloor);
       ensureProductionRooms(state, world);
       placeNetTerminalGenContentForCurrentFloor();
+      resetMapExploration(world);
+      updateMapExploration(world, player, state);
       ensureProceduralSpriteSeeds(entities);
       restoreVoidReturnPortalForCurrentWorld();
 
@@ -3675,6 +3693,17 @@ function requestPointerLockIfDesktop(): void {
   } catch {
     // Some embedded browsers reject pointer lock; desktop mouse still works without crashing.
   }
+}
+
+function toggleGameFullscreen(): void {
+  const entering = !isNativeFullscreenActive();
+  const pending = toggleNativeFullscreen(document.documentElement);
+  if (entering && started) requestPointerLockIfDesktop();
+  void pending.then(ok => {
+    if (!ok && started && typeof state !== 'undefined') {
+      state.msgs.push(msg('Полный экран недоступен в этом браузере или контейнере.', state.time, '#fa8'));
+    }
+  }).finally(scheduleResize);
 }
 
 function mobileGestureUnlock(): void {
@@ -4981,6 +5010,7 @@ function gameLoop(now: number): void {
     if (updateBetonoedShortcut(world, entities, player, state, dt)) updateWorldData(world);
     setListenerPos(player.x, player.y, (ax, ay, bx, by) => world.dist2(ax, ay, bx, by));
     updateRouteCues(world, player, state);
+    updateMapExploration(world, player, state);
     updateAI(world, entities, dt, state.time, state.msgs, player.id, state.clock, state.samosborActive, nextEntityId, state.currentFloor, state);
     updateRailTrains(world, entities, player, state, dt);
     updateParitelSteamBridge(world, entities, player, state, dt);
@@ -5001,6 +5031,8 @@ function gameLoop(now: number): void {
         ensureRoomContainers(world, state.currentFloor);
         ensureProductionRooms(state, world);
         prepareEditableFloor();
+        resetMapExploration(world);
+        updateMapExploration(world, player, state);
         ensureProceduralSpriteSeeds(entities);
         clearLiftArachnaActive(state);
         restoreVoidReturnPortalForCurrentWorld();
@@ -5010,6 +5042,7 @@ function gameLoop(now: number): void {
       requestAnimationFrame(gameLoop);
       return;
     }
+    syncMapExplorationAfterSamosborWave(world, state);
     // Faction zone capture (cell-based territory control)
     updateFactionCapture(world, entities, dt);
     updateFactionActivity(world, entities, player, state, nextEntityId, dt, currentFloorAllowsNpcPopulation());
@@ -5144,6 +5177,7 @@ function gameLoop(now: number): void {
     }
     if (updateBetonoedShortcut(world, entities, player, state, dt)) updateWorldData(world);
     setListenerPos(player.x, player.y, (ax, ay, bx, by) => world.dist2(ax, ay, bx, by));
+    updateMapExploration(world, player, state);
     updatePseudolifts(world, entities, player, state);
     updateAI(world, entities, dt, state.time, state.msgs, player.id, state.clock, state.samosborActive, nextEntityId, state.currentFloor, state);
     tickCellHazards(world, entities, state, dt, player, false);
@@ -5161,6 +5195,8 @@ function gameLoop(now: number): void {
         ensureRoomContainers(world, state.currentFloor);
         ensureProductionRooms(state, world);
         prepareEditableFloor();
+        resetMapExploration(world);
+        updateMapExploration(world, player, state);
         ensureProceduralSpriteSeeds(entities);
         clearLiftArachnaActive(state);
         setGeneratedDynamicSky(replacement);
@@ -5169,6 +5205,7 @@ function gameLoop(now: number): void {
       requestAnimationFrame(gameLoop);
       return;
     }
+    syncMapExplorationAfterSamosborWave(world, state);
     updateFactionCapture(world, entities, dt);
     updateFactionActivity(world, entities, player, state, nextEntityId, dt, currentFloorAllowsNpcPopulation());
     if (state.currentFloor === FloorLevel.KVARTIRY) {

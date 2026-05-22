@@ -53,7 +53,7 @@ export function drawGameMenu(
   ctx.fillStyle = '#456';
   ctx.font = `${7 * sy}px monospace`;
   ctx.fillText(
-    fitText(ctx, `${controlBindingLabel('menuUp')}/${controlBindingLabel('menuDown')} — выбор  |  ${controlBindingLabel('interact')} — подтвердить  |  ${controlBindingLabel('gameMenu')} — закрыть`, pw - 12 * _sx),
+    fitText(ctx, `${controlBindingLabel('controlsMenu')} — клавиши  |  ${controlBindingLabel('menuUp')}/${controlBindingLabel('menuDown')} — выбор  |  ${controlBindingLabel('interact')} — подтвердить  |  ${controlBindingLabel('gameMenu')} — закрыть`, pw - 12 * _sx),
     w / 2,
     py + ph - 10 * sy,
   );

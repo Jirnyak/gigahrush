@@ -28,7 +28,7 @@ export const TITLE_LANGUAGES: readonly TitleLanguageDef[] = [
     startPrompt: 'Введите имя и нажмите ENTER',
     languageHint: '←/→ язык',
     mobileHint: 'Тап — начать  |  левый джойстик — ходьба  |  правый — камера  |  центр — атака',
-    desktopHint: (move, interact, controls) => `${move} — движение  |  Мышь — обзор  |  ${interact} — действие  |  ${controls} — все клавиши`,
+    desktopHint: (move, interact, controls) => `${controls} — клавиши  |  ${move} — движение  |  Мышь — обзор  |  ${interact} — действие`,
     flag: 'soviet',
   },
   {
@@ -42,7 +42,7 @@ export const TITLE_LANGUAGES: readonly TitleLanguageDef[] = [
     startPrompt: 'Enter name and press ENTER',
     languageHint: '←/→ language',
     mobileHint: 'Tap — start  |  left stick — walk  |  right stick — camera  |  center — attack',
-    desktopHint: (move, interact, controls) => `${move} — move  |  Mouse — look  |  ${interact} — action  |  ${controls} — all keys`,
+    desktopHint: (move, interact, controls) => `${controls} — keys  |  ${move} — move  |  Mouse — look  |  ${interact} — action`,
     flag: 'british_empire',
   },
 ];
