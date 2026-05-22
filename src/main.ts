@@ -57,7 +57,6 @@ import {
   CONTROL_ACTIONS,
   beginControlCapture,
   cancelControlCapture,
-  controlBindingLabel,
   getControlCaptureAction,
   resetControlBinding,
 } from './systems/controls';
@@ -281,6 +280,12 @@ import {
   type ProceduralFloorSpec,
 } from './data/procedural_floors';
 import { type DesignFloorId } from './data/design_floors';
+import {
+  nextTitleLanguageId,
+  normalizeTitleLanguageId,
+  type TitleLanguageId,
+} from './data/languages';
+import { drawTitleScreen, hitTitleLanguage, type TitleLanguageHit } from './render/title_ui';
 
 /* ── Canvas setup ─────────────────────────────────────────────── */
 const canvas = document.getElementById('game') as HTMLCanvasElement;
@@ -288,9 +293,12 @@ const hudCanvas = document.getElementById('hud') as HTMLCanvasElement;
 const ctx = hudCanvas.getContext('2d')!;
 registerPwaServiceWorker();
 const PLAYER_NAME_KEY = 'gigahrush_player_name';
+const TITLE_LANGUAGE_KEY = 'gigahrush_title_language';
 const NET_GEN_NAME_RE = /^NET-[A-Z0-9-]{4,28}$/;
 let started = false;
 let playerNickname = loadPlayerNickname();
+let titleLanguageId = loadTitleLanguageId();
+let titleLanguageHits: TitleLanguageHit[] = [];
 let mobileControls: MobileControls | null = null;
 
 function looksLikeNetGenName(value: string): boolean {
@@ -328,6 +336,28 @@ function savePlayerNickname(value: string): string {
 
 function playerDisplayName(): string {
   return playerNickname || 'Жилец';
+}
+
+function loadTitleLanguageId(): TitleLanguageId {
+  try {
+    return normalizeTitleLanguageId(localStorage.getItem(TITLE_LANGUAGE_KEY));
+  } catch {
+    return 'ru';
+  }
+}
+
+function saveTitleLanguageId(id: TitleLanguageId): void {
+  titleLanguageId = normalizeTitleLanguageId(id);
+  try {
+    localStorage.setItem(TITLE_LANGUAGE_KEY, titleLanguageId);
+  } catch {
+    // Local storage can be blocked; the selected title language still works for this run.
+  }
+}
+
+function cycleTitleLanguage(dir: number): void {
+  saveTitleLanguageId(nextTitleLanguageId(titleLanguageId, dir));
+  showTitle();
 }
 
 function playerAlifeFields(source: Partial<Entity> = {}): Pick<Entity, 'persistentNpcId' | 'playerRelation' | 'karma' | 'kills' | 'npcKills' | 'monsterKills'> {
@@ -4174,6 +4204,15 @@ function handleHudPointerUp(e: PointerEvent): void {
   e.stopPropagation();
   mobileGestureUnlock();
   if (!started) {
+    const rect = hudCanvas.getBoundingClientRect();
+    const x = (e.clientX - rect.left) * (hudCanvas.width / Math.max(1, rect.width));
+    const y = (e.clientY - rect.top) * (hudCanvas.height / Math.max(1, rect.height));
+    const language = hitTitleLanguage(titleLanguageHits, x, y);
+    if (language) {
+      saveTitleLanguageId(language);
+      showTitle();
+      return;
+    }
     startGameFromTitle();
     return;
   }
@@ -4185,6 +4224,30 @@ function handleHudPointerUp(e: PointerEvent): void {
 }
 
 hudCanvas.addEventListener('pointerup', handleHudPointerUp);
+
+let suppressNextTitleClick = false;
+
+function handleTitleCanvasPointerUp(e: PointerEvent): void {
+  if (started || mobileControls?.isEnabled()) return;
+  const rect = canvas.getBoundingClientRect();
+  const x = (e.clientX - rect.left) * (hudCanvas.width / Math.max(1, rect.width));
+  const y = (e.clientY - rect.top) * (hudCanvas.height / Math.max(1, rect.height));
+  const language = hitTitleLanguage(titleLanguageHits, x, y);
+  if (!language) return;
+  saveTitleLanguageId(language);
+  showTitle();
+  suppressNextTitleClick = true;
+  e.preventDefault();
+  e.stopPropagation();
+}
+
+canvas.addEventListener('pointerup', handleTitleCanvasPointerUp);
+canvas.addEventListener('click', e => {
+  if (!suppressNextTitleClick) return;
+  suppressNextTitleClick = false;
+  e.preventDefault();
+  e.stopImmediatePropagation();
+}, true);
 
 function handleMenuInput(): void {
   // ── On death: lock out all menus / inventory / interactions ──
@@ -5174,35 +5237,12 @@ function gameLoop(now: number): void {
 
 /* ── Title screen ─────────────────────────────────────────────── */
 function showTitle(): void {
-  const w = hudCanvas.width;
-  const h = hudCanvas.height;
-  const name = playerNickname;
-  const shownName = name || 'введите имя';
-  ctx.fillStyle = '#0a0a0a';
-  ctx.fillRect(0, 0, w, h);
-  ctx.fillStyle = '#c00';
-  ctx.font = 'bold 48px monospace';
-  ctx.textAlign = 'center';
-  ctx.fillText('ГИГАХРУЩ', w / 2, h / 2 - 72);
-  ctx.fillStyle = '#666';
-  ctx.font = '16px monospace';
-  ctx.fillText('бесконечный бетонный лабиринт', w / 2, h / 2 - 22);
-  ctx.fillStyle = '#6cf';
-  ctx.font = '14px monospace';
-  ctx.fillText(`НЕТ-ИМЯ: ${shownName}${Math.floor(performance.now() / 500) % 2 === 0 ? '_' : ''}`, w / 2, h / 2 + 20);
-  ctx.fillStyle = '#888';
-  ctx.font = '16px monospace';
-  ctx.fillText('Введите имя и нажмите ENTER', w / 2, h / 2 + 56);
-  ctx.fillStyle = '#555';
-  ctx.font = '12px monospace';
-  ctx.fillText(
-    mobileControls?.isEnabled()
-      ? 'Тап — начать  |  левый джойстик — ходьба  |  правый — камера  |  центр — атака'
-      : `${controlBindingLabel('moveForward')} — движение  |  Мышь — обзор  |  ${controlBindingLabel('interact')} — действие  |  ${controlBindingLabel('controlsMenu')} — все клавиши`,
-    w / 2,
-    h / 2 + 96,
-  );
-  ctx.textAlign = 'left';
+  titleLanguageHits = drawTitleScreen(ctx, {
+    languageId: titleLanguageId,
+    playerName: playerNickname,
+    cursorOn: Math.floor(performance.now() / 500) % 2 === 0,
+    mobile: mobileControls?.isEnabled() === true,
+  });
   updateMobileContext();
 }
 
@@ -5223,6 +5263,11 @@ function startGameFromTitle(): void {
 
 function startHandler(e: KeyboardEvent): void {
   if (started || e.metaKey || e.ctrlKey || e.altKey) return;
+  if (e.code === 'ArrowLeft' || e.code === 'ArrowRight') {
+    cycleTitleLanguage(e.code === 'ArrowRight' ? 1 : -1);
+    e.preventDefault();
+    return;
+  }
   if (e.code === 'Enter') {
     e.preventDefault();
     startGameFromTitle();

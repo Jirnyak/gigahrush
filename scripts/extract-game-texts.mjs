@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import { pathToFileURL } from 'node:url';
 import ts from 'typescript';
 
 const ROOT = process.cwd();
@@ -437,6 +438,19 @@ function writeMarkdown(entries) {
   fs.writeFileSync(OUT_FILE, `${lines.join('\n')}\n`, 'utf8');
 }
 
-const entries = collect();
-writeMarkdown(entries);
-console.log(`Wrote ${rel(OUT_FILE)} with ${entries.length} text entries.`);
+export function collectGameTextEntries() {
+  return collect();
+}
+
+export function writeGameTextInventory(entries = collectGameTextEntries()) {
+  writeMarkdown(entries);
+  return OUT_FILE;
+}
+
+function main() {
+  const entries = collectGameTextEntries();
+  writeGameTextInventory(entries);
+  console.log(`Wrote ${rel(OUT_FILE)} with ${entries.length} text entries.`);
+}
+
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) main();

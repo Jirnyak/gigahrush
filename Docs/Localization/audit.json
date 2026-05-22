@@ -1,0 +1,18 @@
+{
+  "generatedAt": "2026-05-22T17:26:14.727Z",
+  "sourceLocale": "ru",
+  "totalCanonicalStrings": 15936,
+  "locales": [
+    {
+      "locale": "en",
+      "file": "locales/en.json",
+      "total": 15936,
+      "translated": 2041,
+      "missing": 0,
+      "todo": 13895,
+      "sourceMismatches": 0,
+      "placeholderErrors": 0,
+      "orphan": 0
+    }
+  ]
+}

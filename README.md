@@ -28,6 +28,7 @@ Active docs are intentionally narrow. Use them by role:
 - `commit.md`: release commit/deploy runbook for explicit commit requests.
 - `LICENSE.md`: source-available non-commercial license for the game and repository.
 - `Docs/DesignFloors/`, `Docs/ProceduralFloors/` and `Docs/Expansions/`: active design/reference packets.
+- `Docs/Localization/`: localization pipeline notes and generated missing-translation reports.
 - `scenarist.md`: active project-wide tone brief for player-facing text passes. It does not document shipped behavior.
 - `Docs/ScenarioWriters/`: active subordinate voice/domain packets for text passes. It is active, not archive; read `Docs/ScenarioWriters/README.md` before using it.
 - `monsters.md`, `expansion.md`, `anomalies.md` and `mobile.md`: stable compatibility entrypoints for older task references and broad planning packets.
@@ -52,6 +53,11 @@ npm run artifacts:verify
 npm run preview
 npm run smoke
 npm run content:audit
+npm run l10n:extract
+npm run l10n:audit
+npm run l10n:report
+npm run l10n:seed
+npm run l10n:apply
 npm run check:readonly
 npm run check:browser
 npm run check:release
@@ -71,6 +77,11 @@ Stack: TypeScript, Vite, `vite-plugin-singlefile`, WebGL/canvas, browser APIs. `
 | `npm run test:unit` | none | none | Node unit tests via `tsx --test`; no separate emitted Node build. |
 | `npm run test:generation` | none | none | Expanded procedural/design generation matrix enabled by `GIGAHRUSH_GENERATION_MATRIX=1`. |
 | `npm run content:audit` | none | none | Static source/content audit. |
+| `npm run l10n:extract` | `Docs/ScenarioWriters/game_text_inventory.md` | none | Writes the scenario-writer player-facing text inventory from source strings. |
+| `npm run l10n:audit` | none | none | Localization coverage audit: extracts canonical Russian player-facing text and compares it with `locales/*.json`. |
+| `npm run l10n:report` | `Docs/Localization/audit.json`, `Docs/Localization/missing-<locale>.md` | none | Writes localization coverage reports for missing/todo/orphan translations. |
+| `npm run l10n:seed` | `locales/<locale>.json` | existing translations | Merges missing canonical strings into a locale as `todo` records; pass `-- --locale <code>` for non-English locales. |
+| `npm run l10n:apply` | `locales/<locale>.json` | translation batch file | Applies a reviewed batch such as `locales/_en_core.json` and fails on placeholder/source errors. |
 | `npm run check:readonly` | none | none | Safe preflight for agents: typecheck, unit tests and content audit. |
 | `npm run build` | `dist/` | none | Production single-file browser build. |
 | `npm run build:size` | `dist/build-size-report.json` | existing `dist/` | Warning-only size report for single-file HTML, gzip, generated frame data and source/render buckets. |
