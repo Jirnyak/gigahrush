@@ -36,11 +36,12 @@ function socialProceduralSpec(): ProceduralFloorSpec {
 
 function stateForSpec(spec: ProceduralFloorSpec): GameState {
   const state = { currentFloor: spec.baseFloor } as GameState;
+  const floorKey = `procedural:${spec.key}`;
   setFloorRunState(state, {
     runSeed: 17,
     currentZ: spec.z,
     specs: { [spec.key]: spec },
-    visited: { [spec.key]: true },
+    visited: { [floorKey]: true },
   }, spec.baseFloor);
   setAlifeState(state, { seed: 12345, total: 100_000 });
   return state;
@@ -66,7 +67,7 @@ test('procedural route NPC templates materialize through A-Life and keep dead sl
   assert.equal(templateCount > 0, true, 'procedural generation should provide ordinary NPC slots');
 
   let nextId = { v: generated.entities.reduce((max, entity) => Math.max(max, entity.id), 0) + 1 };
-  materializeAlifeFloorPopulation(state, generated.world, generated.entities, nextId, spec.key);
+  materializeAlifeFloorPopulation(state, generated.world, generated.entities, nextId, `procedural:${spec.key}`);
   const materialized = generated.entities.filter(entity => entity.type === EntityType.NPC && entity.alifeId !== undefined);
   assert.equal(materialized.length > 0, true, 'procedural NPC slots should receive A-Life records');
   assert.equal(ordinaryNpcCount(generated.entities), 0, 'ordinary templates should not survive activation');
@@ -78,10 +79,28 @@ test('procedural route NPC templates materialize through A-Life and keep dead sl
 
   const regenerated = generateProceduralFloor(spec);
   nextId = { v: regenerated.entities.reduce((max, entity) => Math.max(max, entity.id), 0) + 1 };
-  materializeAlifeFloorPopulation(state, regenerated.world, regenerated.entities, nextId, spec.key);
+  materializeAlifeFloorPopulation(state, regenerated.world, regenerated.entities, nextId, `procedural:${spec.key}`);
   const rematerialized = regenerated.entities.filter(entity => entity.type === EntityType.NPC && entity.alifeId !== undefined);
   assert.equal(rematerialized.some(entity => entity.alifeId === killedId), false, 'killed procedural A-Life record must stay dead');
   assert.equal(rematerialized.length, materialized.length - 1, 'dead procedural slot should stay empty until explicit migration');
+});
+
+test('procedural route templates are suppressed when the active floor has no A-Life records', () => {
+  const spec = socialProceduralSpec();
+  const state = stateForSpec(spec);
+  const floorKey = `procedural:${spec.key}`;
+  const alife = setAlifeState(state, { seed: 12345, total: 1 }) as {
+    floorIndex: Record<string, number[]>;
+  };
+  alife.floorIndex[floorKey] = [];
+  const generated = generateProceduralFloor(spec);
+  assert.equal(ordinaryNpcCount(generated.entities) > 0, true, 'procedural generation should provide ordinary NPC slots');
+
+  const nextId = { v: generated.entities.reduce((max, entity) => Math.max(max, entity.id), 0) + 1 };
+  materializeAlifeFloorPopulation(state, generated.world, generated.entities, nextId, floorKey);
+
+  assert.equal(ordinaryNpcCount(generated.entities), 0, 'ordinary templates must not survive without A-Life records');
+  assert.equal(generated.entities.some(entity => entity.type === EntityType.NPC && entity.alifeId !== undefined), false);
 });
 
 test('floor 69 adult sprite templates survive A-Life materialization', () => {
@@ -112,7 +131,7 @@ test('floor 69 adult sprite templates survive A-Life materialization', () => {
   assert.equal(templateSprites.length >= 300, true, 'floor_69 generation should expose adult sprite templates');
 
   const nextId = { v: generated.entities.reduce((max, entity) => Math.max(max, entity.id), 0) + 1 };
-  materializeAlifeFloorPopulation(state, generated.world, generated.entities, nextId, 'floor_69');
+  materializeAlifeFloorPopulation(state, generated.world, generated.entities, nextId, 'design:floor_69');
   const materializedSprites = generated.entities.filter(entity =>
     entity.type === EntityType.NPC &&
     entity.alifeId !== undefined &&

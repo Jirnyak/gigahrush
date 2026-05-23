@@ -24,6 +24,7 @@ import {
   snapshotFloorRunEntry,
   type FloorRunEntrySnapshot,
 } from './procedural_floors';
+import { floorKeyForFloorInstance } from './floor_keys';
 
 export interface ActiveFloorInstance {
   id: string;
@@ -71,8 +72,6 @@ const BASE_FLOORS = [
   FloorLevel.HELL,
   FloorLevel.VOID,
 ] as const;
-
-const FLOOR_INSTANCE_WORLD_KEY_PREFIX = 'floor_instance:';
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === 'object' && !Array.isArray(value);
@@ -127,7 +126,7 @@ export function createFloorInstanceState(stableFloor = FloorLevel.LIVING): Floor
 
 export function floorInstanceWorldKey(instance: Pick<ActiveFloorInstance, 'id'> | FloorInstanceDef | string): string {
   const id = typeof instance === 'string' ? instance : instance.id;
-  return `${FLOOR_INSTANCE_WORLD_KEY_PREFIX}${id}`;
+  return floorKeyForFloorInstance(id);
 }
 
 function normalizeActive(input: Partial<ActiveFloorInstance> | null | undefined): ActiveFloorInstance | null {

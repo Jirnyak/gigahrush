@@ -27,11 +27,12 @@ Critical runtime facts:
 - The world is a 1024x1024 torus. All coordinate work must use `world.idx`, `world.wrap`, `world.delta`, or `world.dist`.
 - Floor generators return `{ world, entities, spawnX, spawnY }`.
 - Normal lift travel uses `systems/procedural_floors.ts` as a per-run vertical route across `z=-50..+50`. Existing `FloorLevel` values remain 6 story/base floors; authored design floors are 20 string-id route stops from `src/data/design_floors.ts`; unoccupied route positions are 75 seeded procedural/fallback specs with `z`, seed, geometry, main faction, anomaly and danger. Down decreases `z`; `VOID` is the final lowest stop at `z=-50`, `darkness` is the dark endgame route floor at `z=-48`, `podad` is the Herald-gated Hell route floor at `z=-40`, `underhell` is at `z=-38`, and `roof` is the highest stop at `z=+50`.
+- `systems/floor_memory.ts` keeps visited route stops alive by stable floor key. Hot entries keep their own live `World` object plus non-player/non-projectile entities; older entries are packed into RLE snapshots instead of being lost, so decals, bullet/blood marks, containers, opened doors, monsters and map exploration survive ordinary floor travel for that exact floor. Browser saves include the packed floor-memory section and restore it before selecting the active floor; samosbor/rebuild paths update the active `World` and drop only stale parked memory for that same key.
 - `main.ts` owns the game loop and calls systems in fixed order.
 - `systems/events.ts` is the current EventBus analogue: fixed-size ring buffers, public event publication, and query filters.
 - Shared `E` interaction goes through `systems/interactions.ts`; generated gambling machines, local computers, NET-hack terminals, emergency panels, Net Terminal Gen and special floor interactions plug into that dispatcher.
 - `systems/alife.ts` owns persistent procedural NPC identity. A run creates an adaptive compact NPC pool (`1_000_000` when runtime memory allows it, otherwise `100_000`), materializes only the active floor into live `entities`, folds live state back on transitions/rebuilds/saves, and records permanent deaths. `systems/npc_relations.ts` owns compact personal relation-to-player math shared by A-Life, quests and hostility. `alife.md` is the detailed design contract for this feature.
-- Save/load uses `systems/save_runtime.ts` and `systems/save_payload.ts`. Current save shape version is `8`; old or unversioned saves are rejected rather than migrated.
+- Save/load uses `systems/save_runtime.ts` and `systems/save_payload.ts`. Current save shape version is `9`; old or unversioned saves are rejected rather than migrated.
 - Existing content extensibility already exists in `registerSideQuest`, `registerZoneContent`, floor content manifests, `SAMOSBOR_VARIANTS`, `getSamosborBeatDefs()`, contract/economy registries, route/design-floor ids and `publishEvent`.
 
 ## 2. Non-Negotiable Invariants
@@ -86,6 +87,7 @@ Definitions  ->  Generation  ->  Runtime Systems  ->  Render/UI
 - Owns generic runtime behavior.
 - Systems must consume definitions, not hardcode one module.
 - Systems must publish important state changes through `publishEvent`.
+- Runtime floor memory is a systems concern. Route stop identity, visited keys and lift anchors are generic route facts; generators provide initial worlds, and route lift normalization may carve a bounded access connector when that is needed to preserve same-coordinate lift continuity between adjacent floors.
 - A-Life population is a system concern, not generator state: generators may create ambient NPC templates, but `systems/alife.ts` assigns persistent procedural NPC identity and decides which live NPCs exist on the active floor.
 - Shared AI navigation should stay field-based at runtime: `systems/ai/pathfinding.ts` bakes the current 1024x1024 world geometry into a reusable BFS navigation tree, then layers cached behavior flow fields over target source sets such as kitchens, toilets, workplaces or shelters. New generic AI behaviors should provide a source set and reuse that field layer instead of queuing per-actor BFS jobs.
 
@@ -161,6 +163,23 @@ The save model is deterministic pool reconstruction plus sparse state:
 - Do not serialize the full live `entities` array.
 - Do not serialize every full NPC record when seed reconstruction is enough.
 - Any change to population allocation, route floor keys, required identity fields or plot/reserved id mapping must bump save shape or explicitly reject stale saves.
+
+### Floor Memory Contract
+
+Route stop identity is string-keyed and shared by floor memory, A-Life, map-editor patches, route cues, events and debug:
+
+- Story anchors use `story:<id>`.
+- Authored design route floors use their `DesignFloorId`.
+- Procedural route stops use their `ProceduralFloorSpec.key`.
+- Numbered lift anomalies use `floor_instance:<id>`.
+
+Ordinary lift travel must not regenerate an already visited route stop during the same runtime session. On departure, `main.ts` captures the current floor after departure-side effects and before replacing the active world. On arrival, `main.ts` first asks `systems/floor_memory.ts` for that route key; if present, the stored world/entity array for that exact key becomes active again, otherwise the normal generator runs from the route seed. Memory is not a global decal/entity layer: a mark, opened door or monster on `story:living` cannot appear on a design or procedural route stop unless that stop separately produced it.
+
+Samosbor semantics are update-in-place from the memory system's point of view. Local samosbor waves keep the active `World` and splice/regrow only the affected generated area. Full design/procedural/story rebuilds replace or stitch the active `World` through the existing samosbor rebuild pipeline. In both cases, floor memory only removes a stale parked copy for the active key if one exists; the post-samosbor active world is the new floor state that will be captured when the player leaves.
+
+The memory store is byte-aware. The active floor is always a full live `World`; hot inactive floors stay as live `World` objects while the memory budget allows it, and older visited floors are converted to packed RLE snapshots. Browser saves persist that packed floor-memory section with the rest of the current save shape, so save/load restores visited floors before choosing the active target floor. If the floor snapshot format changes, bump `SAVE_SHAPE_VERSION` and reject stale saves explicitly.
+
+Normal route transitions also maintain lift topology after generation or memory restoration. Most route floors are normalized to 8 down and 8 up lifts; `roof` has only 8 down, `VOID` has only 8 up, and `podad` lower down lifts are withheld until the Herald gate opens. When a normal lift creates or restores the adjacent floor, the arrival floor mirrors the departure lift group as the opposite return direction at the same coordinates, then fills any other expected direction to eight reachable lifts. Content modules must not depend on a specific hardcoded lift coordinate; they should publish route facts through ids and generated marks.
 
 Future fields such as family edges, friends, rank, kills, quest seed, home/work anchors and exact inventory are allowed only with a measured storage plan. Prefer ids, small numeric fields, typed arrays and sparse overrides over large object graphs.
 

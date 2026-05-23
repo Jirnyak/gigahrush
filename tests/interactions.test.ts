@@ -1,11 +1,11 @@
 import { test } from 'node:test';
 import * as assert from 'node:assert/strict';
 
-import { Cell, DoorState } from '../src/core/types';
+import { Cell, DoorState, Feature, LiftDirection } from '../src/core/types';
 import { World } from '../src/core/world';
 import { GAMBLING_MACHINES } from '../src/data/gambling';
 import { clearGamblingMachines, resolveGamblingBet, placeGamblingMachine } from '../src/systems/gambling';
-import { findInteractionTarget } from '../src/systems/interactions';
+import { activateInteraction, findInteractionTarget } from '../src/systems/interactions';
 import { netHackChance, netHackDifficultyTotal, netHackSkill } from '../src/systems/net_hack';
 import { addTestRoom, makeGameState, makeTestNpc, makeTestPlayer } from './helpers';
 
@@ -57,6 +57,30 @@ test('interaction dispatcher reports generated gambling machines as E targets', 
 
   assert.equal(target?.kind, 'gambling');
   assert.equal(target?.defId, 'slots');
+});
+
+test('lift button feature alone is not a route transition target', () => {
+  clearGamblingMachines();
+  const world = new World();
+  addTestRoom(world, { id: 0, x: 4, y: 4, w: 8, h: 8 });
+  const idx = world.idx(6, 6);
+  world.cells[idx] = Cell.FLOOR;
+  world.features[idx] = Feature.LIFT_BUTTON;
+  world.liftDir[idx] = LiftDirection.DOWN;
+
+  const state = makeGameState();
+  const player = makeTestPlayer({ x: 5, y: 6, angle: 0 });
+  const target = findInteractionTarget({
+    world,
+    state,
+    player,
+    entities: [player],
+    nextEntityId: { v: 2 },
+    lookX: 6,
+    lookY: 6,
+  });
+
+  assert.equal(target, null);
 });
 
 test('interaction dispatcher only reports NPCs when the crosshair is on the sprite', () => {
@@ -115,4 +139,76 @@ test('off-crosshair nearby NPC does not mask an aimed door', () => {
   });
 
   assert.equal(target?.kind, 'door');
+});
+
+function makeLockedDoorWorld(keyId: string): { world: World; doorIdx: number } {
+  const world = new World();
+  addTestRoom(world, { id: 0, x: 4, y: 4, w: 8, h: 8 });
+  const doorIdx = world.idx(6, 6);
+  world.cells[doorIdx] = Cell.DOOR;
+  world.doors.set(doorIdx, { idx: doorIdx, state: DoorState.LOCKED, roomA: -1, roomB: -1, keyId, timer: 0 });
+  return { world, doorIdx };
+}
+
+test('locked custom keyed door opens with matching custom key', () => {
+  clearGamblingMachines();
+  const { world, doorIdx } = makeLockedDoorWorld('borrowed_kitchen_key');
+  const state = makeGameState();
+  const player = makeTestPlayer({ id: 1, x: 5, y: 6, angle: 0, inventory: [{ defId: 'borrowed_kitchen_key', count: 1 }] });
+
+  const result = activateInteraction({
+    world,
+    state,
+    player,
+    entities: [player],
+    nextEntityId: { v: 2 },
+    lookX: 6,
+    lookY: 6,
+  });
+
+  assert.equal(result.handled, true);
+  assert.equal(world.doors.get(doorIdx)?.state, DoorState.OPEN);
+  assert.equal(state.msgs.at(-1)?.text, 'Дверь отперта ключом');
+});
+
+test('generic key does not open custom keyed locked door', () => {
+  clearGamblingMachines();
+  const { world, doorIdx } = makeLockedDoorWorld('borrowed_kitchen_key');
+  const state = makeGameState();
+  const player = makeTestPlayer({ id: 1, x: 5, y: 6, angle: 0, inventory: [{ defId: 'key', count: 1 }] });
+
+  const result = activateInteraction({
+    world,
+    state,
+    player,
+    entities: [player],
+    nextEntityId: { v: 2 },
+    lookX: 6,
+    lookY: 6,
+  });
+
+  assert.equal(result.handled, true);
+  assert.equal(world.doors.get(doorIdx)?.state, DoorState.LOCKED);
+  assert.equal(state.msgs.at(-1)?.text, 'Заперто. Нужен ключ.');
+});
+
+test('generic key opens empty-key generic locked door', () => {
+  clearGamblingMachines();
+  const { world, doorIdx } = makeLockedDoorWorld('');
+  const state = makeGameState();
+  const player = makeTestPlayer({ id: 1, x: 5, y: 6, angle: 0, inventory: [{ defId: 'key', count: 1 }] });
+
+  const result = activateInteraction({
+    world,
+    state,
+    player,
+    entities: [player],
+    nextEntityId: { v: 2 },
+    lookX: 6,
+    lookY: 6,
+  });
+
+  assert.equal(result.handled, true);
+  assert.equal(world.doors.get(doorIdx)?.state, DoorState.OPEN);
+  assert.equal(state.msgs.at(-1)?.text, 'Дверь отперта ключом');
 });

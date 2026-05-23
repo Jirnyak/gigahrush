@@ -30,10 +30,17 @@ import {
   zForStoryFloor,
 } from '../data/procedural_floors';
 import {
+  DESIGN_FLOOR_ROUTES,
   designFloorAtZ,
   designFloorById,
   type DesignFloorId,
 } from '../data/design_floors';
+import {
+  floorKeyForDesign,
+  floorKeyForEntry,
+  floorKeyForProcedural,
+  floorKeyForStory,
+} from './floor_keys';
 
 export interface FloorRunState {
   runSeed: number;
@@ -75,12 +82,12 @@ const STORY_NAMES: Record<FloorLevel, string> = {
 };
 
 const STORY_ROUTE_IDS: Record<FloorLevel, string> = {
-  [FloorLevel.MINISTRY]: 'story:ministry',
-  [FloorLevel.KVARTIRY]: 'story:kvartiry',
-  [FloorLevel.LIVING]: 'story:living',
-  [FloorLevel.MAINTENANCE]: 'story:maintenance',
-  [FloorLevel.HELL]: 'story:hell',
-  [FloorLevel.VOID]: 'story:void',
+  [FloorLevel.MINISTRY]: floorKeyForStory(FloorLevel.MINISTRY),
+  [FloorLevel.KVARTIRY]: floorKeyForStory(FloorLevel.KVARTIRY),
+  [FloorLevel.LIVING]: floorKeyForStory(FloorLevel.LIVING),
+  [FloorLevel.MAINTENANCE]: floorKeyForStory(FloorLevel.MAINTENANCE),
+  [FloorLevel.HELL]: floorKeyForStory(FloorLevel.HELL),
+  [FloorLevel.VOID]: floorKeyForStory(FloorLevel.VOID),
 };
 
 const STORY_ROLES: Record<FloorLevel, string> = {
@@ -104,6 +111,7 @@ const STORY_DANGERS: Record<FloorLevel, 1 | 2 | 3 | 4 | 5> = {
 const MAX_RUN_SEED = 0x7fffffff;
 const MAX_SAVED_TITLE = 96;
 const MAX_SAVED_ID = 64;
+export const ROUTE_LIFTS_PER_DIRECTION = 8;
 const VALID_GEOMETRY_IDS = new Set<FloorGeometryId>(FLOOR_GEOMETRIES.map(def => def.id));
 const VALID_MAJORITY_IDS = new Set<FloorMajorityId>(FLOOR_MAJORITY_FACTIONS.map(def => def.id));
 const VALID_ANOMALY_IDS = new Set<FloorAnomalyId>(FLOOR_ANOMALIES.map(def => def.id));
@@ -120,6 +128,10 @@ function normalizeRunSeed(value: unknown): number {
   if (typeof value !== 'number' || !Number.isFinite(value)) return randomRunSeed();
   const seed = Math.abs(Math.trunc(value)) % MAX_RUN_SEED;
   return seed;
+}
+
+export function normalizeFloorRunSeed(value: unknown): number {
+  return normalizeRunSeed(value);
 }
 
 function isFloorGeometryId(value: unknown): value is FloorGeometryId {
@@ -215,11 +227,22 @@ function cloneSpec(spec: ProceduralFloorSpec): ProceduralFloorSpec {
   };
 }
 
+function validVisitedKeys(runSeed: number): Set<string> {
+  const keys = new Set<string>(Object.values(STORY_ROUTE_IDS));
+  for (const route of DESIGN_FLOOR_ROUTES) keys.add(floorKeyForDesign(route.id));
+  for (const z of PROCEDURAL_FLOOR_ZS) keys.add(floorKeyForProcedural(proceduralFloorKey(z)));
+  for (const spec of Object.values(createSpecDeck(runSeed))) keys.add(floorKeyForProcedural(spec.key));
+  return keys;
+}
+
 function floorRunEntryKey(entry: Pick<FloorRunEntry, 'z' | 'storyFloor' | 'designFloorId' | 'spec'>): string {
-  if (entry.spec) return entry.spec.key;
-  if (entry.designFloorId) return entry.designFloorId;
-  if (entry.storyFloor !== undefined) return `story:${entry.storyFloor}`;
-  return `z${entry.z}`;
+  return floorKeyForEntry({
+    z: entry.z,
+    baseFloor: FloorLevel.LIVING,
+    storyFloor: entry.storyFloor,
+    designFloorId: entry.designFloorId,
+    spec: entry.spec,
+  });
 }
 
 export function snapshotFloorRunEntry(entry: FloorRunEntry): FloorRunEntrySnapshot {
@@ -244,7 +267,7 @@ export function normalizeFloorRunEntrySnapshot(input: unknown): FloorRunEntrySna
   const storyFloor = storyFloorAtZ(z);
   if (storyFloor !== undefined) {
     return {
-      key: `story:${storyFloor}`,
+      key: floorKeyForStory(storyFloor),
       z,
       baseFloor: storyFloor,
       storyFloor,
@@ -257,7 +280,7 @@ export function normalizeFloorRunEntrySnapshot(input: unknown): FloorRunEntrySna
     const savedDesignId = typeof input.designFloorId === 'string' ? input.designFloorId : undefined;
     if (savedDesignId && savedDesignId !== designFloor.id) return undefined;
     return {
-      key: designFloor.id,
+      key: floorKeyForDesign(designFloor.id),
       z,
       baseFloor: designFloor.baseFloor,
       designFloorId: designFloor.id,
@@ -270,7 +293,7 @@ export function normalizeFloorRunEntrySnapshot(input: unknown): FloorRunEntrySna
   const specSeed = isRecord(specInput) ? specInput.seed : undefined;
   const spec = normalizeSpec(specInput, normalizeRunSeed(specSeed), z);
   return {
-    key: spec.key,
+    key: floorKeyForProcedural(spec.key),
     z,
     baseFloor: spec.baseFloor,
     spec: cloneSpec(spec),
@@ -305,9 +328,9 @@ export function normalizeFloorRunState(
     out.specs[key] = normalizeSpec(savedSpecs[key], runSeed, z);
   }
   const visited = input?.visited ?? {};
-  for (const z of PROCEDURAL_FLOOR_ZS) {
-    const key = proceduralFloorKey(z);
-    if (visited[key]) out.visited[key] = true;
+  const validVisited = validVisitedKeys(runSeed);
+  for (const [key, value] of Object.entries(visited)) {
+    if (value && validVisited.has(key)) out.visited[key] = true;
   }
   return out;
 }
@@ -407,7 +430,7 @@ export function resolveFloorRunRoute(state: GameState, direction: LiftDirection)
 export function commitFloorRunEntry(state: GameState, entry: FloorRunEntry): void {
   const run = ensureFloorRunState(state);
   run.currentZ = entry.z;
-  if (entry.spec) run.visited[entry.spec.key] = true;
+  run.visited[floorRunEntryFloorKey(entry)] = true;
 }
 
 export function floorRunEntryFromSnapshot(state: GameState, input: unknown): FloorRunEntry | null {
@@ -461,6 +484,10 @@ export function floorRunEntryRouteId(entry: FloorRunEntry): string {
   return STORY_ROUTE_IDS[entry.storyFloor ?? entry.baseFloor];
 }
 
+export function floorRunEntryFloorKey(entry: FloorRunEntry): string {
+  return floorKeyForEntry(entry);
+}
+
 export function floorRunEntryDanger(entry: FloorRunEntry): 1 | 2 | 3 | 4 | 5 {
   if (entry.spec) return entry.spec.danger;
   if (entry.designFloorId) return designFloorById(entry.designFloorId)?.danger ?? STORY_DANGERS[entry.baseFloor];
@@ -503,6 +530,15 @@ export function floorRunEntryLiftLabel(entry: FloorRunEntry): string {
       ? STORY_NAMES[entry.storyFloor]
       : entry.spec?.title ?? entry.label;
   return `${kind} Z${formatFloorZ(entry.z)} ${routeId} риск ${danger}/5: ${name}`;
+}
+
+export function floorRunEntryLiftDirections(entry: FloorRunEntry, podadDownOpen = false): LiftDirection[] {
+  const directions: LiftDirection[] = [];
+  if (entry.z > FLOOR_RUN_MIN_Z && (entry.designFloorId !== 'podad' || podadDownOpen)) {
+    directions.push(LiftDirection.DOWN);
+  }
+  if (entry.z < FLOOR_RUN_MAX_Z) directions.push(LiftDirection.UP);
+  return directions;
 }
 
 export function floorRunEntryRouteCard(entry: FloorRunEntry): string {

@@ -135,7 +135,8 @@ Rating note:
 Upload / build notes:
 
 - HTML5 ZIP upload should have `index.html` in the archive root.
-- Existing `itch/gigahrush-itch.zip` already has root `index.html`; current checklist records ZIP size as `4,445,484` bytes and HTML size as `9,252,746` bytes.
+- Existing `itch/gigahrush-itch.zip` already has root `index.html`; current 2026-05-23 artifact is `4 992 192` bytes and `dist/index.html` is `10 652 640` bytes.
+- Newgrounds blocker as of 2026-05-23: existing project `7759223` is editable, but both the normal browser upload flow and direct `/parkfile` attach save the current ZIP as `9B`. Do not publish until preview shows the real archive size and playable game.
 - Before publishing, prepare or test a Newgrounds-specific ZIP without unnecessary PWA/service-worker files if the portal iframe has issues.
 - Preview before publishing and check iframe viewport, canvas scaling, fullscreen behavior, audio start/mute behavior and console errors.
 - Touchscreen-friendly setting should be decided after portal smoke testing; current documented controls are keyboard and mouse, with mobile controls present in the browser build.
@@ -239,18 +240,16 @@ CrazyGames form tags / keywords:
 CrazyGames Basic notes:
 
 - Basic Launch does not require SDK integration, but Full Launch / monetization would need a separate SDK task.
-- Current recorded artifact sizes fit the checklist limits: `dist/index.html` / `itch/index.html` at `9,252,746` bytes and `itch/gigahrush-itch.zip` at `4,445,484` bytes.
+- Current recorded artifact sizes for the 2026-05-23 release: `dist/index.html` at `10 652 640` bytes and `itch/gigahrush-itch.zip` at `4 992 192` bytes. Recheck CrazyGames limits before upload; this is a candidate, not a cleared submission.
 - Prepare a clean CrazyGames ZIP candidate without external self-promotion, external ads or portal-incompatible links in the playable frame.
 - Run iframe QA before submission: first load, canvas scaling, fullscreen behavior, pause/audio behavior on blur, no critical console errors, keyboard/mouse capture, mobile declaration and English usability.
 - CrazyGames-specific page copy should avoid outbound links in the description unless the portal form explicitly permits them.
 
 ## Shared Build Notes
 
-- Current production browser build: `dist/index.html`, single-file HTML, recorded size `9,252,746` bytes.
-- Current itch HTML build: `itch/index.html`, recorded size `9,252,746` bytes.
-- Current HTML5 ZIP: `itch/gigahrush-itch.zip`, recorded size `4,445,484` bytes, with `index.html`, `manifest.webmanifest`, `sw.js`, PWA icons and build-size manifest at archive root.
+- Current production browser build: `dist/index.html`, single-file HTML, recorded size `10 652 640` bytes.
+- Current itch HTML5 ZIP: `itch/gigahrush-itch.zip`, recorded size `4 992 192` bytes, with `index.html`, `manifest.webmanifest`, `sw.js`, PWA icons and build-size manifest at archive root.
 - `npm run itch:build` emits the itch.io HTML5 upload files.
 - `npm run build` emits the production single-file browser build.
 - `npm run smoke` requires Chrome or `CHROME_BIN` and an existing `dist/`.
 - Before any portal publication, run portal-specific smoke checks for iframe embedding, fullscreen/mobile behavior, pause/audio on blur, readable HUD scaling and console cleanliness.
-

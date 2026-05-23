@@ -14,7 +14,7 @@ import { randSeed } from './core/rand';
 import { priestDeathCurse } from './gen/living/temple';
 import { updateProceduralScreens } from './gen/procedural_screens';
 import { generateProceduralFloor } from './gen/procedural_floor';
-import { generateDesignFloor } from './gen/design_floors/manifest';
+import { generateDesignFloor, isDesignFloorId } from './gen/design_floors/manifest';
 import { updateKvPopulation } from './gen/kvartiry';
 import {
   FLOOR_MESSAGE_COLORS,
@@ -142,6 +142,21 @@ import {
   spreadElevatorInstanceRumor,
 } from './systems/floor_instances';
 import {
+  captureFloorMemory,
+  clearFloorMemory,
+  collectFloorLiftAnchors,
+  ensureFloorRouteLiftLayout,
+  floorMemoryStateForSave,
+  floorMemoryKeyForStoryFloor,
+  floorMemoryStats,
+  invalidateFloorMemory,
+  restoreFloorMemoryFromSave,
+  takeFloorMemory,
+  type FloorLiftAnchor,
+  type FloorMemoryLoad,
+  type FloorRouteLiftMirror,
+} from './systems/floor_memory';
+import {
   adjustFloorRunSamosborTimer,
   commitFloorRunEntry,
   currentFloorRunEntry,
@@ -150,14 +165,20 @@ import {
   floorRunEntryDanger,
   floorRunSaveHasRestorableRoute,
   floorRunEntryAllowsNpcs,
+  floorRunEntryFloorKey,
+  floorRunEntryLiftDirections,
   floorRunEntryKindLabel,
   floorRunEntryLiftLabel,
   floorRunEntryRole,
   floorRunEntryRouteId,
   forceFloorRunStory,
   forceProceduralFloorAnomaly,
+  normalizeFloorRunSeed,
+  podadLowerRouteOpen,
   resolveFloorRunRoute,
+  ROUTE_LIFTS_PER_DIRECTION,
   setFloorRunState,
+  type FloorRunEntry,
 } from './systems/procedural_floors';
 import {
   clearLiftArachnaActive,
@@ -291,9 +312,10 @@ import { DESIGN_FLOOR_ROUTES, type DesignFloorId } from './data/design_floors';
 import {
   nextTitleLanguageId,
   normalizeTitleLanguageId,
+  titleLanguageDef,
   type TitleLanguageId,
 } from './data/languages';
-import { drawTitleScreen, hitTitleLanguage, type TitleLanguageHit } from './render/title_ui';
+import { drawTitleScreen, hitTitleField, hitTitleLanguage, type TitleLanguageHit } from './render/title_ui';
 import { installCanvasLocalization, setLocalizationLanguage } from './systems/localization';
 
 /* ── Canvas setup ─────────────────────────────────────────────── */
@@ -304,8 +326,12 @@ registerPwaServiceWorker();
 const PLAYER_NAME_KEY = 'gigahrush_player_name';
 const TITLE_LANGUAGE_KEY = 'gigahrush_title_language';
 const NET_GEN_NAME_RE = /^NET-[A-Z0-9-]{4,28}$/;
+type TitleInputField = 'name' | 'seed';
 let started = false;
 let playerNickname = loadPlayerNickname();
+let titleRunSeedText = '';
+let titleStartNeedsInit = false;
+let titleInputField: TitleInputField = 'name';
 let titleLanguageId = loadTitleLanguageId();
 let titleLanguageHits: TitleLanguageHit[] = [];
 let mobileControls: MobileControls | null = null;
@@ -349,6 +375,30 @@ function playerDisplayName(): string {
   return playerNickname || 'Жилец';
 }
 
+function cleanTitleRunSeedText(value: string): string {
+  return value
+    .trim()
+    .toUpperCase()
+    .replace(/[^A-Z0-9_-]/g, '')
+    .slice(0, 24);
+}
+
+function hashSeedText(value: string): number {
+  let hash = 0x811c9dc5;
+  for (let i = 0; i < value.length; i++) {
+    hash ^= value.charCodeAt(i);
+    hash = Math.imul(hash, 0x01000193) >>> 0;
+  }
+  return hash & 0x7fffffff;
+}
+
+function titleRunSeedOverride(): number | undefined {
+  const clean = cleanTitleRunSeedText(titleRunSeedText);
+  if (!clean) return undefined;
+  if (/^[0-9]+$/.test(clean)) return normalizeFloorRunSeed(Number(clean));
+  return normalizeFloorRunSeed(hashSeedText(clean));
+}
+
 function loadTitleLanguageId(): TitleLanguageId {
   try {
     return normalizeTitleLanguageId(localStorage.getItem(TITLE_LANGUAGE_KEY));
@@ -369,6 +419,19 @@ function saveTitleLanguageId(id: TitleLanguageId): void {
 
 function cycleTitleLanguage(dir: number): void {
   saveTitleLanguageId(nextTitleLanguageId(titleLanguageId, dir));
+  showTitle();
+}
+
+function editTitleFieldFromPointer(field: TitleInputField): void {
+  titleInputField = field;
+  const lang = titleLanguageDef(titleLanguageId);
+  const label = field === 'seed' ? lang.seedLabel : lang.nameLabel;
+  const current = field === 'seed' ? titleRunSeedText : playerNickname;
+  const next = typeof window !== 'undefined' ? window.prompt(label, current) : null;
+  if (next !== null) {
+    if (field === 'seed') titleRunSeedText = cleanTitleRunSeedText(next);
+    else playerNickname = cleanPlayerNickname(next).slice(0, 24);
+  }
   showTitle();
 }
 
@@ -680,6 +743,7 @@ function returnFromVoidPortalToLiving(portal: VoidReturnPortalState): void {
   const voidSpikeWasCarried = portal.voidSpikeCarried;
   const voidSpikeWasResolved = portal.voidSpikeResolved;
   const voidSpikeTag = voidSpikeWasResolved ? 'void_spike_left' : voidSpikeWasCarried ? 'void_spike_carried' : 'void_spike_absent';
+  captureCurrentFloorMemory();
 
   state.currentFloor = FloorLevel.LIVING;
   state.gameWon = false;
@@ -703,7 +767,8 @@ function returnFromVoidPortalToLiving(portal: VoidReturnPortalState): void {
 
   pendingLoad = () => {
     resetGeneratedFloorPopulationState();
-    const gen = generateFloor(FloorLevel.LIVING);
+    const loaded = loadFloorForTarget(FloorLevel.LIVING, null);
+    const gen = loaded.generation;
     world = replaceWorldFromGeneration(null, gen);
     entities = gen.entities;
     nextEntityId.v = entities.reduce((mx, e) => Math.max(mx, e.id), 0) + 1;
@@ -744,7 +809,7 @@ function returnFromVoidPortalToLiving(portal: VoidReturnPortalState): void {
     floorTeleportCd = 0;
     resetPsiState();
     clearLiftArachnaActive(state);
-    clearPseudoliftActive(state);
+    clearPseudoliftActive(state, entities);
 
     publishEvent(state, {
       type: 'floor_transition',
@@ -775,7 +840,7 @@ function returnFromVoidPortalToLiving(portal: VoidReturnPortalState): void {
     ensureRoomContainers(world, state.currentFloor);
     ensureProductionRooms(state, world);
     prepareEditableFloor();
-    resetMapExploration(world);
+    resetMapForLoadedFloor(loaded);
     updateMapExploration(world, player, state);
     ensureProceduralSpriteSeeds(entities);
     setGeneratedDynamicSky(gen);
@@ -836,6 +901,8 @@ interface SmokeDebugSnapshot {
   liveAiCount: number;
   npcCount: number;
   monsterCount: number;
+  floorMemoryCount: number;
+  floorMemoryCap: number;
   entityIndex: EntityIndexDebugStats;
   aiScheduler: AiSchedulerStats;
 }
@@ -876,6 +943,7 @@ function smokeSnapshot(): SmokeDebugSnapshot {
     else monsterCount++;
   }
   const netSphere = getNetSphereSnapshot();
+  const memory = floorMemoryStats();
   return {
       started,
       showDebug: state.showDebug,
@@ -906,6 +974,8 @@ function smokeSnapshot(): SmokeDebugSnapshot {
       liveAiCount,
       npcCount,
       monsterCount,
+      floorMemoryCount: memory.count,
+      floorMemoryCap: memory.cap,
       entityIndex: getEntityIndex().getDebugStats(),
       aiScheduler: getAiSchedulerStats(),
   };
@@ -1012,9 +1082,23 @@ function placeNetTerminalGenContentForCurrentFloor(): void {
   placeGeneratedInteractablesForCurrentFloor(world, state);
 }
 
-function prepareEditableFloor(): void {
-  replayMapEditorForCurrentFloor();
+function currentRouteLiftDirections(): LiftDirection[] {
+  const entry = currentFloorRunEntry(state);
+  return floorRunEntryLiftDirections(entry, podadLowerRouteOpen(state));
+}
+
+function ensureCurrentRouteLiftLayout(mirror?: FloorRouteLiftMirror): void {
+  if (getActiveFloorInstance(state)) return;
+  ensureFloorRouteLiftLayout(world, player.x, player.y, currentRouteLiftDirections(), {
+    countPerDirection: ROUTE_LIFTS_PER_DIRECTION,
+    mirror,
+  });
+}
+
+function prepareEditableFloor(mirror?: FloorRouteLiftMirror, normalizeRouteLifts = true, replayEditorPatch = true): void {
+  if (replayEditorPatch) replayMapEditorForCurrentFloor();
   placeNetTerminalGenContentForCurrentFloor();
+  if (normalizeRouteLifts) ensureCurrentRouteLiftLayout(mirror);
   preparePseudoliftForCurrentFloor(world, state);
 }
 
@@ -1051,7 +1135,8 @@ function drawLoading(): void {
   ctx.textAlign = 'left';
 }
 
-function initGame(): void {
+function initGame(runSeedOverride?: number): void {
+  clearFloorMemory();
   resetNoiseRecords();
   const gen = generateFloor(FloorLevel.LIVING);
   world = replaceWorldFromGeneration(null, gen);
@@ -1153,7 +1238,12 @@ function initGame(): void {
   closeNetSphere();
   closeNetTerminalGen();
   closeMapEditor();
-  ensureFloorRunState(state, FloorLevel.LIVING);
+  if (runSeedOverride !== undefined) {
+    setFloorRunState(state, { runSeed: runSeedOverride }, FloorLevel.LIVING);
+    setAlifeState(state, { seed: runSeedOverride });
+  } else {
+    ensureFloorRunState(state, FloorLevel.LIVING);
+  }
   ensureFloorInstanceState(state, FloorLevel.LIVING);
   ensureLiftArachnaState(state);
   ensureNetTerminalGenState(state);
@@ -2373,6 +2463,7 @@ function safeSpawnNear(savedX: unknown, savedY: unknown, fallbackX: number, fall
 }
 
 function currentRouteRebuildGeneration(): FloorGeneration | undefined {
+  invalidateFloorMemory(currentFloorMemoryKey());
   if (getActiveFloorInstance(state)) return undefined;
   const entry = currentFloorRunEntry(state);
   if (entry.spec) return generateProceduralFloor(entry.spec);
@@ -2396,6 +2487,78 @@ function materializeCurrentAlifeFloor(floorKey = currentAlifeFloorKey(state)): v
   materializeAlifeFloorPopulation(state, world, entities, nextEntityId, floorKey);
 }
 
+function currentFloorMemoryKey(): string {
+  const active = getActiveFloorInstance(state);
+  if (active?.worldKey) return active.worldKey;
+  return floorRunEntryFloorKey(currentFloorRunEntry(state));
+}
+
+function floorMemoryKeyForTarget(floor: FloorLevel, entry: FloorRunEntry | null | undefined): string {
+  const active = getActiveFloorInstance(state);
+  if (!entry && active?.worldKey && active.baseFloor === floor) return active.worldKey;
+  return entry ? floorRunEntryFloorKey(entry) : floorMemoryKeyForStoryFloor(floor);
+}
+
+function captureCurrentFloorMemory(): void {
+  captureFloorMemory(
+    currentFloorMemoryKey(),
+    world,
+    entities,
+    player.x,
+    player.y,
+    state.time,
+    state.samosborCount,
+    activeSkyProvider ? { skyProvider: activeSkyProvider } : undefined,
+  );
+}
+
+function captureFloorMemoryByKey(key: string): void {
+  captureFloorMemory(
+    key,
+    world,
+    entities,
+    player.x,
+    player.y,
+    state.time,
+    state.samosborCount,
+    activeSkyProvider ? { skyProvider: activeSkyProvider } : undefined,
+  );
+}
+
+function generateFloorForTarget(floor: FloorLevel, entry: FloorRunEntry | null | undefined): FloorGeneration {
+  if (entry?.spec) return generateProceduralFloor(entry.spec);
+  if (entry?.designFloorId) return generateDesignFloor(entry.designFloorId);
+  return generateFloor(floor);
+}
+
+function floorMemoryGenerationExtrasForKey(key: string): Record<string, unknown> | undefined {
+  const designPrefix = 'design:';
+  if (!key.startsWith(designPrefix)) return undefined;
+  const designId = key.slice(designPrefix.length);
+  if (!isDesignFloorId(designId)) return undefined;
+  const gen = generateDesignFloor(designId) as FloorGeneration & Record<string, unknown>;
+  const extras: Record<string, unknown> = {};
+  for (const [extraKey, value] of Object.entries(gen)) {
+    if (extraKey === 'world' || extraKey === 'entities' || extraKey === 'spawnX' || extraKey === 'spawnY') continue;
+    extras[extraKey] = value;
+  }
+  return Object.keys(extras).length > 0 ? extras : undefined;
+}
+
+function loadFloorForTarget(floor: FloorLevel, entry: FloorRunEntry | null | undefined): FloorMemoryLoad {
+  const memoryKey = floorMemoryKeyForTarget(floor, entry);
+  const restored = takeFloorMemory(memoryKey);
+  if (restored) return restored;
+  return {
+    fromMemory: false,
+    generation: generateFloorForTarget(floor, entry),
+  };
+}
+
+function resetMapForLoadedFloor(loaded: FloorMemoryLoad): void {
+  if (!loaded.fromMemory) resetMapExploration(world);
+}
+
 function switchFloor(
   direction: LiftDirection,
   overrideArrivalText?: string,
@@ -2404,6 +2567,7 @@ function switchFloor(
 ): void {
   const fromFloor = state.currentFloor;
   captureCurrentAlifeFloor();
+  const departingMemoryKey = currentFloorMemoryKey();
   let nextFloor: FloorLevel;
   const activeFloorInstance = allowElevatorAnomaly ? getActiveFloorInstance(state) : null;
   let runEntry = allowElevatorAnomaly
@@ -2423,7 +2587,7 @@ function switchFloor(
     }
   }
   resolveLiftArachnaDeparture(world, player, state);
-  clearPseudoliftActive(state);
+  clearPseudoliftActive(state, entities);
   const liftZoneId = world.zoneMap[world.idx(Math.floor(player.x), Math.floor(player.y))];
   const route = allowElevatorAnomaly
     ? resolveElevatorRoute(state, fromFloor, nextFloor, direction, liftZoneId)
@@ -2437,6 +2601,11 @@ function switchFloor(
   const returnDirection = direction === LiftDirection.DOWN ? LiftDirection.UP : LiftDirection.DOWN;
   if (route.activeInstance) {
     spreadElevatorInstanceRumor(world, entities, player, state, route.activeInstance);
+  }
+  let departureLiftAnchors: FloorLiftAnchor[] = [];
+  if (allowElevatorAnomaly && !activeFloorInstance && runEntry) {
+    ensureCurrentRouteLiftLayout();
+    departureLiftAnchors = collectFloorLiftAnchors(world, direction, ROUTE_LIFTS_PER_DIRECTION);
   }
 
   // Save player position for same-xy spawn
@@ -2454,6 +2623,7 @@ function switchFloor(
   const savedRpg = player.rpg ? { ...player.rpg } : freshRPG(1);
   const savedStatuses = player.statuses?.map(s => ({ ...s }));
   const savedMoney = player.money ?? 100;
+  captureFloorMemoryByKey(departingMemoryKey);
 
   state.currentFloor = nextFloor;
   if (nextFloor === FloorLevel.VOID) setVoidEntryFromFloor(state, fromFloor);
@@ -2463,18 +2633,23 @@ function switchFloor(
   pendingLoad = () => {
     resetNoiseRecords();
     resetGeneratedFloorPopulationState();
-    // Generate new floor
-    const gen = generatedRunEntry?.spec
-      ? generateProceduralFloor(generatedRunEntry.spec)
-      : generatedRunEntry?.designFloorId
-        ? generateDesignFloor(generatedRunEntry.designFloorId)
-        : generateFloor(nextFloor);
+    const loaded = loadFloorForTarget(nextFloor, generatedRunEntry);
+    const gen = loaded.generation;
 
     world = replaceWorldFromGeneration(null, gen);
     entities = gen.entities;
     nextEntityId.v = entities.reduce((mx, e) => Math.max(mx, e.id), 0) + 1;
     materializeCurrentAlifeFloor();
 
+    const routeLiftMirror = !activeFloorInstance && !route.activeInstance && generatedRunEntry && departureLiftAnchors.length > 0
+      ? { direction: returnDirection, anchors: departureLiftAnchors }
+      : undefined;
+    if (!route.activeInstance && allowElevatorAnomaly) {
+      ensureFloorRouteLiftLayout(world, savedX, savedY, currentRouteLiftDirections(), {
+        countPerDirection: ROUTE_LIFTS_PER_DIRECTION,
+        mirror: routeLiftMirror,
+      });
+    }
     const spawn = safeSpawnNear(savedX, savedY, gen.spawnX, gen.spawnY);
     player = {
       id: nextEntityId.v++,
@@ -2583,8 +2758,8 @@ function switchFloor(
     if (!route.activeInstance && enteredStoryVoid) onVoidEntry(state);
     ensureRoomContainers(world, state.currentFloor);
     ensureProductionRooms(state, world);
-    prepareEditableFloor();
-    resetMapExploration(world);
+    prepareEditableFloor(routeLiftMirror, false, !loaded.fromMemory);
+    resetMapForLoadedFloor(loaded);
     updateMapExploration(world, player, state);
     ensureProceduralSpriteSeeds(entities);
     restoreVoidReturnPortalForCurrentWorld();
@@ -2631,16 +2806,17 @@ function debugTeleportTo(target: DebugTeleportTarget): void {
   const savedStatuses = player.statuses?.map(s => ({ ...s }));
   const savedMoney = player.money ?? 100;
   const savedAngle = player.angle;
+  captureCurrentFloorMemory();
 
   state.showDebug = false;
   state.currentFloor = target.floor;
-  clearPseudoliftActive(state);
+  clearPseudoliftActive(state, entities);
   if (target.floor === FloorLevel.VOID) setVoidEntryFromFloor(state, fromFloor);
   else setVoidEntryFromFloor(state, undefined);
   if (target.spec) {
     const run = ensureFloorRunState(state, target.floor);
     run.currentZ = target.spec.z;
-    run.visited[target.spec.key] = true;
+    run.visited[floorRunEntryFloorKey(currentFloorRunEntry(state))] = true;
   } else if (target.designFloorId && target.z !== undefined) {
     const run = ensureFloorRunState(state, target.floor);
     run.currentZ = target.z;
@@ -2653,11 +2829,11 @@ function debugTeleportTo(target: DebugTeleportTarget): void {
 
   pendingLoad = () => {
     resetGeneratedFloorPopulationState();
-    const gen = target.spec
-      ? generateProceduralFloor(target.spec)
-      : target.designFloorId
-        ? generateDesignFloor(target.designFloorId)
-        : generateFloor(target.floor);
+    const targetEntry = target.spec || target.designFloorId
+      ? currentFloorRunEntry(state)
+      : null;
+    const loaded = loadFloorForTarget(target.floor, targetEntry);
+    const gen = loaded.generation;
 
     world = replaceWorldFromGeneration(null, gen);
     entities = gen.entities;
@@ -2739,7 +2915,7 @@ function debugTeleportTo(target: DebugTeleportTarget): void {
     ensureRoomContainers(world, state.currentFloor);
     ensureProductionRooms(state, world);
     prepareEditableFloor();
-    resetMapExploration(world);
+    resetMapForLoadedFloor(loaded);
     updateMapExploration(world, player, state);
     ensureProceduralSpriteSeeds(entities);
     restoreVoidReturnPortalForCurrentWorld();
@@ -3171,9 +3347,11 @@ function normalizeQuestList(input: unknown, nextQuestIdInput: unknown, nowMinute
 function saveGame(): void {
   try {
     captureCurrentAlifeFloor();
+    captureCurrentFloorMemory();
     const data = createGameSavePayload(player, state, world.containers, {
       voidReturnPortal: voidReturnPortalStateForSave(state),
       voidEntryFromFloor: (state as VoidReturnPortalHost).voidEntryFromFloor,
+      floorMemory: floorMemoryStateForSave(),
     });
     localStorage.setItem(SAVE_KEY, JSON.stringify(data));
     state.msgs.push(msg('Игра сохранена', state.time, '#4f4'));
@@ -3232,20 +3410,20 @@ function loadGame(): boolean {
     cancelControlCapture();
     closeNetTerminalGen();
     closeMapEditor();
+    restoreFloorMemoryFromSave(dataState.floorMemory, {
+      generationExtrasForKey: floorMemoryGenerationExtrasForKey,
+    });
     pendingLoad = () => {
       resetNoiseRecords();
       resetGeneratedFloorPopulationState();
       clearRoomMemory();
-      const gen: FloorGeneration = generatedRunEntry?.spec
-        ? generateProceduralFloor(generatedRunEntry.spec)
-        : generatedRunEntry?.designFloorId
-          ? generateDesignFloor(generatedRunEntry.designFloorId)
-          : generateFloor(floor);
+      const loaded = loadFloorForTarget(floor, generatedRunEntry);
+      const gen = loaded.generation;
 
       world = replaceWorldFromGeneration(null, gen);
       entities = gen.entities;
       nextEntityId.v = entities.reduce((mx, e) => Math.max(mx, e.id), 0) + 1;
-      materializeCurrentAlifeFloor(generatedRunEntry ? floorRunEntryRouteId(generatedRunEntry) : currentAlifeFloorKey(state));
+      materializeCurrentAlifeFloor(generatedRunEntry ? floorRunEntryFloorKey(generatedRunEntry) : currentAlifeFloorKey(state));
       const spawn = safeSpawnNear(
         finiteNumber(dataPlayer.x, gen.spawnX),
         finiteNumber(dataPlayer.y, gen.spawnY),
@@ -3323,12 +3501,12 @@ function loadGame(): boolean {
       state.containerMenuTarget = -1;
       setVoidReturnPortalState(state, dataState.voidReturnPortal);
       setVoidEntryFromFloor(state, dataState.voidEntryFromFloor);
-      replayMapEditorForCurrentFloor();
-      if (Array.isArray(dataState.containers)) restoreValidContainers(world, state.currentFloor, dataState.containers);
+      if (!loaded.fromMemory) replayMapEditorForCurrentFloor();
+      if (!loaded.fromMemory && Array.isArray(dataState.containers)) restoreValidContainers(world, state.currentFloor, dataState.containers);
       ensureRoomContainers(world, state.currentFloor);
       ensureProductionRooms(state, world);
       placeNetTerminalGenContentForCurrentFloor();
-      resetMapExploration(world);
+      resetMapForLoadedFloor(loaded);
       updateMapExploration(world, player, state);
       ensureProceduralSpriteSeeds(entities);
       restoreVoidReturnPortalForCurrentWorld();
@@ -3812,9 +3990,8 @@ function runGameMenuSelection(sel: number): void {
       state.showMenu = false;
       break;
     case 1:
-      state.showMenu = false;
-      pendingLoad = () => { initGame(); };
-      break;
+      returnToTitleScreen();
+      return;
     case 2:
       saveGame();
       state.showMenu = false;
@@ -4203,7 +4380,12 @@ function handleHudPointerUp(e: PointerEvent): void {
       showTitle();
       return;
     }
-    startGameFromTitle();
+    const titleField = hitTitleField(titleLanguageHits, x, y);
+    if (titleField === 'name' || titleField === 'seed') {
+      editTitleFieldFromPointer(titleField);
+      return;
+    }
+    if (titleField === 'start' || !titleField) startGameFromTitle();
     return;
   }
   if (pendingLoad) return;
@@ -4223,9 +4405,14 @@ function handleTitleCanvasPointerUp(e: PointerEvent): void {
   const x = (e.clientX - rect.left) * (hudCanvas.width / Math.max(1, rect.width));
   const y = (e.clientY - rect.top) * (hudCanvas.height / Math.max(1, rect.height));
   const language = hitTitleLanguage(titleLanguageHits, x, y);
-  if (!language) return;
-  saveTitleLanguageId(language);
-  showTitle();
+  if (language) {
+    saveTitleLanguageId(language);
+    showTitle();
+  } else {
+    const titleField = hitTitleField(titleLanguageHits, x, y);
+    if (titleField === 'name' || titleField === 'seed') editTitleFieldFromPointer(titleField);
+    else return;
+  }
   suppressNextTitleClick = true;
   e.preventDefault();
   e.stopPropagation();
@@ -4549,6 +4736,8 @@ function handleMenuInput(): void {
     else if (state.showQuests) { state.showQuests = false; }
     else if (state.showFactions) { state.showFactions = false; }
     else if (state.showLog) { state.showLog = false; }
+    else if (state.showMenu && state.menuSel === 1) { runGameMenuSelection(state.menuSel); }
+    else if (state.showMenu) { state.showMenu = false; }
     else { state.showMenu = !state.showMenu; state.menuSel = 0; }
   }
 
@@ -4559,12 +4748,7 @@ function handleMenuInput(): void {
     if (upNav) state.menuSel = Math.max(0, state.menuSel - 1);
     if (dnNav) state.menuSel = Math.min(3, state.menuSel + 1);
     if (interactEdge) {
-      switch (state.menuSel) {
-        case 0: state.showMenu = false; break;                // Continue
-        case 1: state.showMenu = false; pendingLoad = () => { initGame(); }; break;    // New Game
-        case 2: saveGame(); state.showMenu = false; break;    // Save
-        case 3: loadGame(); break;                            // Load
-      }
+      runGameMenuSelection(state.menuSel);
     }
   }
   // ── Inventory toggle + navigation ────────────────────────
@@ -4844,6 +5028,10 @@ function cleanupDeadEntities(dt: number): number {
 }
 
 function gameLoop(now: number): void {
+  if (!started) {
+    showTitle();
+    return;
+  }
   // Two-phase deferred loading:
   // Phase 1: pendingLoad exists but not drawn yet → draw loading screen, yield to browser
   // Phase 2: pendingLoad exists and was drawn → execute heavy generation
@@ -4885,6 +5073,7 @@ function gameLoop(now: number): void {
 
   // Menu input always processed (even when paused)
   handleMenuInput();
+  if (!started) return;
   // If menu triggered new game / load, bail out to show loading screen
   if (pendingLoad) { requestAnimationFrame(gameLoop); return; }
 
@@ -4983,7 +5172,7 @@ function gameLoop(now: number): void {
       pendingLoad = () => {
         captureCurrentAlifeFloor();
         clearWrongDoorRemaps(world, state, 'world_rebuild');
-        clearPseudoliftActive(state);
+        clearPseudoliftActive(state, entities);
         const replacement = currentRouteRebuildGeneration();
         rebuildWorld(world, entities, nextEntityId, state.samosborCount, state.currentFloor, replacement);
         initFactionControl(world);
@@ -5138,7 +5327,7 @@ function gameLoop(now: number): void {
       pendingLoad = () => {
         captureCurrentAlifeFloor();
         clearWrongDoorRemaps(world, state, 'world_rebuild');
-        clearPseudoliftActive(state);
+        clearPseudoliftActive(state, entities);
         const replacement = currentRouteRebuildGeneration();
         rebuildWorld(world, entities, nextEntityId, state.samosborCount, state.currentFloor, replacement);
         initFactionControl(world);
@@ -5229,16 +5418,45 @@ function showTitle(): void {
   titleLanguageHits = drawTitleScreen(ctx, {
     languageId: titleLanguageId,
     playerName: playerNickname,
+    runSeedText: titleRunSeedText,
+    activeField: titleInputField,
     cursorOn: Math.floor(performance.now() / 500) % 2 === 0,
     mobile: mobileControls?.isEnabled() === true,
   });
   updateMobileContext();
 }
 
+function returnToTitleScreen(): void {
+  pendingLoad = null;
+  pendingLoadDrawn = false;
+  started = false;
+  titleRunSeedText = '';
+  titleInputField = 'name';
+  titleStartNeedsInit = true;
+  closeMobilePanels(true);
+  input.escape = false;
+  input.interact = false;
+  input.interactHeld = false;
+  input.invUp = false;
+  input.invDn = false;
+  input.invLeft = false;
+  input.invRight = false;
+  input.drop = false;
+  resetMenuRepeats();
+  if (document.pointerLockElement) document.exitPointerLock();
+  document.addEventListener('keydown', startHandler);
+  showTitle();
+}
+
 function startGameFromTitle(): void {
   if (started) return;
   mobileGestureUnlock();
   savePlayerNickname(playerNickname);
+  const seedOverride = titleRunSeedOverride();
+  if (seedOverride !== undefined || titleStartNeedsInit) {
+    initGame(seedOverride);
+    titleStartNeedsInit = false;
+  }
   player.name = playerDisplayName();
   started = true;
   input.escape = false;
@@ -5252,6 +5470,12 @@ function startGameFromTitle(): void {
 
 function startHandler(e: KeyboardEvent): void {
   if (started || e.metaKey || e.ctrlKey || e.altKey) return;
+  if (e.code === 'Tab' || e.code === 'ArrowUp' || e.code === 'ArrowDown') {
+    titleInputField = titleInputField === 'name' ? 'seed' : 'name';
+    showTitle();
+    e.preventDefault();
+    return;
+  }
   if (e.code === 'ArrowLeft' || e.code === 'ArrowRight') {
     cycleTitleLanguage(e.code === 'ArrowRight' ? 1 : -1);
     e.preventDefault();
@@ -5263,16 +5487,25 @@ function startHandler(e: KeyboardEvent): void {
     return;
   }
   if (e.code === 'Backspace') {
-    playerNickname = playerNickname.slice(0, -1);
+    if (titleInputField === 'seed') titleRunSeedText = titleRunSeedText.slice(0, -1);
+    else playerNickname = playerNickname.slice(0, -1);
     showTitle();
     e.preventDefault();
     return;
   }
-  if (e.key.length === 1 && playerNickname.length < 24) {
-    const next = cleanPlayerNickname(playerNickname + e.key);
-    if (next !== playerNickname) {
-      playerNickname = next;
-      showTitle();
+  if (e.key.length === 1) {
+    if (titleInputField === 'seed') {
+      const next = cleanTitleRunSeedText(titleRunSeedText + e.key);
+      if (next !== titleRunSeedText) {
+        titleRunSeedText = next;
+        showTitle();
+      }
+    } else if (playerNickname.length < 24) {
+      const next = cleanPlayerNickname(playerNickname + e.key);
+      if (next !== playerNickname) {
+        playerNickname = next;
+        showTitle();
+      }
     }
     e.preventDefault();
   }

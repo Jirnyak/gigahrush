@@ -32,7 +32,9 @@ import {
   currentFloorRunEntry,
   currentFloorRunLabel,
   floorRunArrivalLead,
+  floorRunEntryFloorKey,
   floorRunEntryKind,
+  floorRunEntryLiftDirections,
   floorRunEntryLiftLabel,
   floorRunEntryMapLabel,
   floorRunEntryRouteCard,
@@ -308,11 +310,13 @@ test('floor run UX labels expose z, route id, danger, anomaly and return path', 
 
   assert.match(currentFloorRunLabel(state) ?? '', /Z\+0 story:living риск 1\/5/);
   assert.equal(floorRunEntryKind(currentFloorRunEntry(state)), 'story');
+  assert.equal(floorRunEntryFloorKey(currentFloorRunEntry(state)), 'story:living');
   assert.match(floorRunEntryRouteCard(currentFloorRunEntry(state)), /СЮЖЕТНЫЙ ЯКОРЬ Z\+0 story:living риск 1\/5: Жилая зона\. домашний hub, подготовка, возврат\./);
 
   const first = resolveFloorRunRoute(state, LiftDirection.DOWN);
   assert.equal(first?.procedural, true);
   assert.equal(floorRunEntryKind(first!), 'procedural');
+  assert.equal(floorRunEntryFloorKey(first!), 'procedural:z-1');
   assert.match(floorRunEntryLiftLabel(first!), /ВЫЛАЗКА Z-1 z-1 риск \d\/5:/);
   assert.match(floorRunEntryMapLabel(first!), /Z-1 z-1 риск \d\/5/);
   assert.match(floorRunEntryRouteCard(first!), /ВЫЛАЗКА Z-1 z-1 риск \d\/5: .+\. .+, .+, .+\./);
@@ -324,6 +328,7 @@ test('floor run UX labels expose z, route id, danger, anomaly and return path', 
   const authored = resolveFloorRunRoute(state, LiftDirection.DOWN);
   assert.equal(authored?.designFloorId, 'floor_69');
   assert.equal(floorRunEntryKind(authored!), 'design');
+  assert.equal(floorRunEntryFloorKey(authored!), 'design:floor_69');
   assert.match(floorRunEntryLiftLabel(authored!), /РУЧНОЙ МАРШРУТ Z-4 floor_69 риск 3\/5/);
   assert.match(floorRunEntryRouteCard(authored!), /РУЧНОЙ МАРШРУТ Z-4 floor_69 риск 3\/5: .+\. населенный сбой, сделки, слухи\./);
   assert.match(floorRunArrivalLead(authored!, LiftDirection.UP), /населенный сбой, сделки, слухи/);
@@ -438,6 +443,22 @@ test('floor run exposes seeded procedural slots across the normal lift span', ()
   const kvartiry = resolveFloorRunRoute(state, LiftDirection.UP);
   assert.equal(kvartiry?.z, 14);
   assert.equal(kvartiry?.storyFloor, FloorLevel.KVARTIRY);
+});
+
+test('floor run lift directions respect roof void and Podad lower gate', () => {
+  const state = makeGameState();
+
+  setFloorRunState(state, { runSeed: 123, currentZ: FLOOR_RUN_MAX_Z, specs: {}, visited: {} }, FloorLevel.MINISTRY);
+  assert.deepEqual(floorRunEntryLiftDirections(currentFloorRunEntry(state)), [LiftDirection.DOWN]);
+
+  setFloorRunState(state, { runSeed: 123, currentZ: FLOOR_RUN_MIN_Z, specs: {}, visited: {} }, FloorLevel.VOID);
+  assert.deepEqual(floorRunEntryLiftDirections(currentFloorRunEntry(state)), [LiftDirection.UP]);
+
+  setFloorRunState(state, { runSeed: 123, currentZ: -40, specs: {}, visited: {} }, FloorLevel.HELL);
+  const podad = currentFloorRunEntry(state);
+  assert.equal(podad.designFloorId, 'podad');
+  assert.deepEqual(floorRunEntryLiftDirections(podad, false), [LiftDirection.UP]);
+  assert.deepEqual(floorRunEntryLiftDirections(podad, true), [LiftDirection.DOWN, LiftDirection.UP]);
 });
 
 test('procedural floor specs are deterministic from run seed and z', () => {

@@ -29,6 +29,9 @@ export interface ProgressPayload {
   floorId: number;
   nickname: string;
   floorName: string;
+  runSeed?: number;
+  routeId?: string;
+  floorZ?: number;
   samosborCount: number;
   level: number;
   xp: number;
@@ -63,6 +66,11 @@ export interface MarketSnapshotPayload {
 }
 
 const ONLINE_WINDOW_MS = 90_000;
+const NET_PRUNE_INTERVAL_MS = 60 * 60 * 1000;
+const SESSION_RETENTION_MS = 24 * 60 * 60 * 1000;
+const CHAT_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
+const EVENT_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
+const MARKET_RETENTION_MS = 14 * 24 * 60 * 60 * 1000;
 const CHAT_LIMIT = 60;
 const JSON_BODY_LIMIT_BYTES = 4096;
 const NET_GEN_NICK_RE = /^NET-[A-Z0-9-]{4,28}$/;
@@ -70,6 +78,7 @@ const MARKET_MAX_IMPULSES = 16;
 const MARKET_MAX_ROWS = 64;
 const MARKET_MAX_MAGNITUDE = 100;
 const MAX_PUBLIC_ID = 2_147_483_647;
+let lastPruneAttemptAt = 0;
 
 export class ApiError extends Error {
   readonly status: number;
@@ -263,6 +272,11 @@ function publicNickname(value: unknown): string {
   return cleanNickname(value) || 'Жилец';
 }
 
+function cleanRouteId(value: unknown): string {
+  if (typeof value !== 'string') return '';
+  return value.replace(/[^A-Za-z0-9:_-]/g, '').slice(0, 96);
+}
+
 function eventDate(value: unknown): string {
   const now = typeof value === 'number' ? value : 0;
   return new Date(now).toISOString().replace('T', ' ').slice(0, 16) + ' UTC';
@@ -338,10 +352,16 @@ export function normalizeProgress(value: unknown): ProgressPayload {
   const floorName = typeof input.floorName === 'string'
     ? input.floorName.replace(/[\u0000-\u001f\u007f<>`\\]/g, '').slice(0, 64)
     : '';
+  const routeId = cleanRouteId(input.routeId);
+  const runSeed = input.runSeed === undefined ? undefined : num(input.runSeed, 0, 0, 0x7fffffff);
+  const floorZ = input.floorZ === undefined ? undefined : num(input.floorZ, 0, -50, 50);
   return {
     floorId: num(input.floorId, 2, 0, 999),
     nickname: cleanNickname(input.nickname),
     floorName,
+    runSeed,
+    routeId: routeId || undefined,
+    floorZ,
     samosborCount: num(input.samosborCount, 0, 0, 1_000_000),
     level: num(input.level, 1, 1, 999),
     xp: num(input.xp, 0, 0, 2_000_000_000),
@@ -354,6 +374,32 @@ export function normalizeProgress(value: unknown): ProgressPayload {
     hour: num(input.hour, 0, 0, 23),
     minute: num(input.minute, 0, 0, 59),
   };
+}
+
+async function runPrune(db: D1Database, query: string, cutoff: number): Promise<void> {
+  try {
+    await db.prepare(query).bind(cutoff).run();
+  } catch {
+    // Optional cleanup must never take Net Sphere offline.
+  }
+}
+
+export async function maybePruneNetStorage(db: D1Database, now: number): Promise<void> {
+  if (
+    lastPruneAttemptAt > 0 &&
+    now >= lastPruneAttemptAt &&
+    now - lastPruneAttemptAt < NET_PRUNE_INTERVAL_MS
+  ) {
+    return;
+  }
+  lastPruneAttemptAt = now;
+  await Promise.all([
+    runPrune(db, 'DELETE FROM net_sessions WHERE last_seen_at < ?', now - SESSION_RETENTION_MS),
+    runPrune(db, 'DELETE FROM net_chat WHERE created_at < ?', now - CHAT_RETENTION_MS),
+    runPrune(db, 'DELETE FROM net_events WHERE created_at < ?', now - EVENT_RETENTION_MS),
+    runPrune(db, 'DELETE FROM net_market_impulses WHERE created_at < ?', now - MARKET_RETENTION_MS),
+    runPrune(db, 'DELETE FROM net_market_budgets WHERE updated_at < ?', now - MARKET_RETENTION_MS),
+  ]);
 }
 
 export async function upsertPresence(
@@ -403,6 +449,7 @@ export async function upsertPresence(
   if (!existingSession) {
     await db.prepare('UPDATE net_players SET runs = runs + 1 WHERE net_gen = ?').bind(netGen).run();
   }
+  await maybePruneNetStorage(db, now);
 }
 
 export async function readStats(db: D1Database, now: number): Promise<Record<string, number>> {
@@ -412,10 +459,10 @@ export async function readStats(db: D1Database, now: number): Promise<Record<str
     .first<{ value: number }>();
   const players = await db.prepare('SELECT COUNT(*) AS value FROM net_players').first<{ value: number }>();
   const samosbors = await db
-    .prepare("SELECT COUNT(*) AS value FROM net_events WHERE type = 'samosbor'")
+    .prepare('SELECT COALESCE(SUM(total_samosbors), 0) AS value FROM net_players')
     .first<{ value: number }>();
   const deaths = await db
-    .prepare("SELECT COUNT(*) AS value FROM net_events WHERE type = 'death'")
+    .prepare('SELECT COALESCE(SUM(deaths), 0) AS value FROM net_players')
     .first<{ value: number }>();
   return {
     onlineUsers: num(online?.value, 0, 0, 1_000_000_000),
@@ -429,11 +476,12 @@ export async function readStats(db: D1Database, now: number): Promise<Record<str
 export async function readProfile(db: D1Database, netGen: string): Promise<Record<string, unknown> | null> {
   const row = await db.prepare(`
     SELECT net_gen, nickname, created_at, last_seen_at, runs, total_samosbors, deaths,
-           best_level, best_samosbor_count, last_floor
+           best_level, best_samosbor_count, last_floor, progress_json
     FROM net_players
     WHERE net_gen = ?
   `).bind(netGen).first<Record<string, unknown>>();
   if (!row) return null;
+  const progress = progressFromStoredPayload(row.progress_json);
   return {
     netGen: cleanNetGen(row.net_gen),
     nickname: publicNickname(row.nickname),
@@ -445,6 +493,9 @@ export async function readProfile(db: D1Database, netGen: string): Promise<Recor
     bestLevel: num(row.best_level, 1, 1, 999),
     bestSamosborCount: num(row.best_samosbor_count, 0, 0, 1_000_000),
     lastFloor: cleanPublicText(row.last_floor, 64),
+    runSeed: progress?.runSeed,
+    routeId: progress?.routeId,
+    floorZ: progress?.floorZ,
   };
 }
 

@@ -23,7 +23,7 @@ import { randomOccupation } from '../data/relations';
 import { MONSTERS } from '../entities/monster';
 import { Spr } from '../render/sprite_index';
 import { getMaxHp, randomRPG } from './rpg';
-import { currentFloorRunEntry } from './procedural_floors';
+import { currentFloorRunEntry, floorRunEntryFloorKey } from './procedural_floors';
 import { activeFloorInstanceWorldKey, floorInstanceLabel, getActiveFloorInstance } from './floor_instances';
 import { controlBindingLabel, controlHint } from './controls';
 import { mapEditorContainerBrushes, mapEditorEntityBrushes } from './map_editor_catalog';
@@ -238,10 +238,7 @@ export function currentMapEditorFloorKey(state: GameState): string {
   const activeKey = activeFloorInstanceWorldKey(state);
   if (activeKey) return activeKey;
   const entry = currentFloorRunEntry(state);
-  if (entry.storyFloor !== undefined) return `story:${FloorLevel[entry.storyFloor]}`;
-  if (entry.designFloorId) return `design:${entry.designFloorId}`;
-  if (entry.spec) return `procedural:${entry.spec.key}`;
-  return `floor:${FloorLevel[state.currentFloor]}`;
+  return floorRunEntryFloorKey(entry);
 }
 
 function currentFloorLabel(state: GameState): string {

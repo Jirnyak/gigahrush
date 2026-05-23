@@ -47,11 +47,13 @@ import { publishEvent } from './events';
 import {
   currentFloorRunEntry,
   ensureFloorRunState,
+  floorRunEntryFloorKey,
   type FloorRunEntry,
 } from './procedural_floors';
 import { floorInstanceLabel, floorInstanceWorldKey, getActiveFloorInstance } from './floor_instances';
 import { spawnSafeguardHackBacklash } from './safeguard';
 import { canSpawnEntityType } from './entity_limits';
+import { floorKeyForDesign, floorKeyForProcedural, floorKeyForStory } from './floor_keys';
 
 export interface NetTerminalGenState {
   runSeed: number;
@@ -194,22 +196,11 @@ function cleanHackCooldowns(input: unknown, now: number): Record<string, number>
 }
 
 function routeKeyForStory(floor: FloorLevel): string {
-  return `story:${FloorLevel[floor]}`;
-}
-
-function routeKeyForZ(z: number): string {
-  const story = storyFloorAtZ(z);
-  if (story !== undefined) return routeKeyForStory(story);
-  const design = designFloorAtZ(z);
-  if (design) return `design:${design.id}`;
-  return `procedural:${proceduralFloorKey(z)}`;
+  return floorKeyForStory(floor);
 }
 
 function routeKeyForEntry(entry: FloorRunEntry): string {
-  if (entry.storyFloor !== undefined) return routeKeyForStory(entry.storyFloor);
-  if (entry.designFloorId) return `design:${entry.designFloorId}`;
-  if (entry.spec) return `procedural:${entry.spec.key}`;
-  return routeKeyForZ(entry.z);
+  return floorRunEntryFloorKey(entry);
 }
 
 export function currentNetTerminalGenFloorKey(state: GameState): string {
@@ -238,7 +229,7 @@ function buildRouteDeck(state: GameState): NetTerminalGenRouteTarget[] {
     if (design) {
       deck.push({
         z,
-        key: `design:${design.id}`,
+        key: floorKeyForDesign(design.id),
         kind: 'design',
         baseFloor: design.baseFloor,
         label: design.displayName,
@@ -251,7 +242,7 @@ function buildRouteDeck(state: GameState): NetTerminalGenRouteTarget[] {
     const spec = run.specs[key];
     deck.push({
       z,
-      key: `procedural:${key}`,
+      key: floorKeyForProcedural(key),
       kind: 'procedural',
       baseFloor: spec?.baseFloor ?? state.currentFloor,
       label: spec?.title ?? key,

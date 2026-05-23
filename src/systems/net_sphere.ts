@@ -1,5 +1,6 @@
 import { FloorLevel, type Entity, type GameState } from '../core/types';
-import { matchesControlAction } from './controls';
+import { getControlCaptureAction, matchesControlAction } from './controls';
+import { currentFloorRunEntry, ensureFloorRunState, floorRunEntryRouteId } from './procedural_floors';
 
 type NetSphereStatus = 'idle' | 'syncing' | 'online' | 'offline';
 export type NetSphereEventType = 'samosbor' | 'death';
@@ -45,6 +46,9 @@ export interface NetSphereProfile {
   bestLevel: number;
   bestSamosborCount: number;
   lastFloor: string;
+  runSeed?: number;
+  routeId?: string;
+  floorZ?: number;
 }
 
 export interface NetSphereChatLine {
@@ -77,12 +81,16 @@ export interface NetSphereSnapshot {
   events: readonly NetSphereEventLine[];
   draft: string;
   busy: boolean;
+  currentRunSeed?: number;
 }
 
 interface NetSphereProgress {
   floorId: number;
   nickname: string;
   floorName: string;
+  runSeed: number;
+  routeId: string;
+  floorZ: number;
   samosborCount: number;
   level: number;
   xp: number;
@@ -136,6 +144,7 @@ const NET_GEN_NICK_RE = /^NET-[A-Z0-9-]{4,28}$/;
 const HEARTBEAT_MS = 30_000;
 const OPEN_POLL_MS = 5_000;
 const MARKET_POLL_MS = 30_000;
+const NET_FETCH_TIMEOUT_MS = 10_000;
 const CHAT_LIMIT = 60;
 const DRAFT_LIMIT = 160;
 const MARKET_IMPULSE_LIMIT = 16;
@@ -170,6 +179,7 @@ const runtime: NetSphereRuntime = {
   lastProgress: null,
   bound: false,
 };
+let inputUnbind: (() => void) | null = null;
 
 function storageGet(storage: Storage, key: string): string {
   try {
@@ -363,10 +373,15 @@ function netFailureText(err: unknown, channel: NetSphereChannel): string {
 
 function progressFromState(state: GameState, player: Entity): NetSphereProgress {
   const totalMinutes = Math.floor(state.clock.totalMinutes);
+  const run = ensureFloorRunState(state);
+  const entry = currentFloorRunEntry(state);
   return {
     floorId: state.currentFloor,
     nickname: cleanNickname(player.name ?? '') || 'Жилец',
     floorName: FLOOR_NAMES[state.currentFloor] ?? `Этаж ${state.currentFloor}`,
+    runSeed: run.runSeed,
+    routeId: floorRunEntryRouteId(entry),
+    floorZ: entry.z,
     samosborCount: state.samosborCount,
     level: Math.max(1, Math.floor(player.rpg?.level ?? 1)),
     xp: Math.max(0, Math.floor(player.rpg?.xp ?? 0)),
@@ -433,8 +448,19 @@ function sendFailureKeepsConnection(err: unknown): boolean {
   return err instanceof NetSphereApiError && err.status >= 400 && err.status < 500 && err.status !== 404;
 }
 
+async function fetchWithTimeout(input: RequestInfo | URL, init: RequestInit = {}): Promise<Response> {
+  if (typeof AbortController === 'undefined') return fetch(input, init);
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), NET_FETCH_TIMEOUT_MS);
+  try {
+    return await fetch(input, { ...init, signal: controller.signal });
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
 async function postJson(path: string, body: unknown): Promise<unknown> {
-  const res = await fetch(`${API_ROOT}${path}`, {
+  const res = await fetchWithTimeout(`${API_ROOT}${path}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
@@ -481,7 +507,7 @@ async function pollOpenStats(): Promise<void> {
       netGen: runtime.netGen,
       sinceChatId: String(runtime.lastChatId),
     });
-    const res = await fetch(`${API_ROOT}/stats?${query.toString()}`);
+    const res = await fetchWithTimeout(`${API_ROOT}/stats?${query.toString()}`);
     const data = await res.json().catch(() => null);
     if (!res.ok) {
       throw new NetSphereApiError(serverErrorMessage(data, `HTTP ${res.status}`), res.status);
@@ -503,7 +529,7 @@ async function pollMarketSnapshot(): Promise<void> {
   if (runtime.marketBusy) return;
   runtime.marketBusy = true;
   try {
-    const res = await fetch(`${API_ROOT}/market`);
+    const res = await fetchWithTimeout(`${API_ROOT}/market`);
     const data = await res.json().catch(() => null);
     if (!res.ok) {
       throw new NetSphereApiError(serverErrorMessage(data, `HTTP ${res.status}`), res.status);
@@ -614,13 +640,19 @@ function submitDraft(): void {
 }
 
 export function bindNetSphereInput(): () => void {
-  if (runtime.bound) return () => {};
+  if (runtime.bound && inputUnbind) return inputUnbind;
   runtime.bound = true;
   ensureIdentity();
 
   const onDown = (e: KeyboardEvent) => {
     if (!runtime.open) {
-      if (!e.ctrlKey && !e.metaKey && !e.altKey && matchesControlAction('netSphere', e.code)) {
+      if (
+        !getControlCaptureAction() &&
+        !e.ctrlKey &&
+        !e.metaKey &&
+        !e.altKey &&
+        matchesControlAction('netSphere', e.code)
+      ) {
         openNetSphere();
         e.preventDefault();
       }
@@ -660,11 +692,14 @@ export function bindNetSphereInput(): () => void {
 
   document.addEventListener('keydown', onDown);
   document.addEventListener('paste', onPaste);
-  return () => {
+  inputUnbind = () => {
+    if (!runtime.bound) return;
     runtime.bound = false;
+    inputUnbind = null;
     document.removeEventListener('keydown', onDown);
     document.removeEventListener('paste', onPaste);
   };
+  return inputUnbind;
 }
 
 export function isNetSphereOpen(): boolean {
@@ -724,7 +759,7 @@ export function reportNetSphereEvent(
     eventKey: `${runtime.netGen}:${eventKey}`,
     progress: progressFromState(state, player),
   };
-  void fetch(`${API_ROOT}/event`, {
+  void fetchWithTimeout(`${API_ROOT}/event`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
@@ -763,5 +798,6 @@ export function getNetSphereSnapshot(): NetSphereSnapshot {
     events: runtime.events,
     draft: runtime.draft,
     busy: runtime.busy || runtime.chatBusy || runtime.marketBusy,
+    currentRunSeed: runtime.lastProgress?.runSeed,
   };
 }

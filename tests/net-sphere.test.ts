@@ -2,9 +2,16 @@ import { test } from 'node:test';
 import * as assert from 'node:assert/strict';
 import { readFileSync, readdirSync } from 'node:fs';
 
+import { FloorLevel, type Entity, type GameState } from '../src/core/types';
 import worker from '../functions/worker';
 import { onRequestPost as postChat } from '../functions/api/net/chat';
-import { cleanMessage, cleanNickname, type D1Database, type D1PreparedStatement } from '../functions/api/net/common';
+import {
+  cleanMessage,
+  cleanNickname,
+  maybePruneNetStorage,
+  type D1Database,
+  type D1PreparedStatement,
+} from '../functions/api/net/common';
 import { onRequestPost as postEvent } from '../functions/api/net/event';
 import { onRequestPost as postHello } from '../functions/api/net/hello';
 import { onRequestGet as getStats } from '../functions/api/net/stats';
@@ -107,11 +114,11 @@ class FakeD1 implements D1Database {
     if (query.includes('COUNT(*) AS value FROM net_players')) {
       return { value: this.players.size };
     }
-    if (query.includes("COUNT(*) AS value FROM net_events WHERE type = 'samosbor'")) {
-      return { value: this.events.filter(row => row.type === 'samosbor').length };
+    if (query.includes('SUM(total_samosbors)')) {
+      return { value: [...this.players.values()].reduce((sum, row) => sum + row.total_samosbors, 0) };
     }
-    if (query.includes("COUNT(*) AS value FROM net_events WHERE type = 'death'")) {
-      return { value: this.events.filter(row => row.type === 'death').length };
+    if (query.includes('SUM(deaths)')) {
+      return { value: [...this.players.values()].reduce((sum, row) => sum + row.deaths, 0) };
     }
     if (query.includes('FROM net_players') && query.includes('WHERE net_gen = ?')) {
       return this.players.get(String(values[0])) ?? null;
@@ -225,6 +232,32 @@ class FakeD1 implements D1Database {
       if (row) row.deaths += 1;
       return { meta: { changes: row ? 1 : 0 } };
     }
+    if (query.includes('DELETE FROM net_sessions')) {
+      const cutoff = Number(values[0]);
+      let changes = 0;
+      for (const [key, row] of [...this.sessions.entries()]) {
+        if (row.last_seen_at < cutoff) {
+          this.sessions.delete(key);
+          changes++;
+        }
+      }
+      return { meta: { changes } };
+    }
+    if (query.includes('DELETE FROM net_chat')) {
+      const cutoff = Number(values[0]);
+      const before = this.chat.length;
+      this.chat = this.chat.filter(row => row.created_at >= cutoff);
+      return { meta: { changes: before - this.chat.length } };
+    }
+    if (query.includes('DELETE FROM net_events')) {
+      const cutoff = Number(values[0]);
+      const before = this.events.length;
+      this.events = this.events.filter(row => Number(row.created_at ?? 0) >= cutoff);
+      return { meta: { changes: before - this.events.length } };
+    }
+    if (query.includes('DELETE FROM net_market_impulses') || query.includes('DELETE FROM net_market_budgets')) {
+      return { meta: { changes: 0 } };
+    }
     throw new Error(`Unhandled fake run query: ${query}`);
   }
 }
@@ -258,6 +291,136 @@ function makeAssets(body = 'asset fallback') {
       },
     },
   };
+}
+
+class FakeBrowserStorage implements Storage {
+  private readonly values = new Map<string, string>();
+
+  get length(): number {
+    return this.values.size;
+  }
+
+  clear(): void {
+    this.values.clear();
+  }
+
+  getItem(key: string): string | null {
+    return this.values.get(key) ?? null;
+  }
+
+  key(index: number): string | null {
+    return [...this.values.keys()][index] ?? null;
+  }
+
+  removeItem(key: string): void {
+    this.values.delete(key);
+  }
+
+  setItem(key: string, value: string): void {
+    this.values.set(key, value);
+  }
+}
+
+class FakeKeyboardEvent {
+  readonly code: string;
+  readonly key: string;
+  readonly ctrlKey: boolean;
+  readonly metaKey: boolean;
+  readonly altKey: boolean;
+  defaultPrevented = false;
+
+  constructor(code: string, key = '', flags: Partial<Pick<KeyboardEvent, 'ctrlKey' | 'metaKey' | 'altKey'>> = {}) {
+    this.code = code;
+    this.key = key;
+    this.ctrlKey = flags.ctrlKey ?? false;
+    this.metaKey = flags.metaKey ?? false;
+    this.altKey = flags.altKey ?? false;
+  }
+
+  preventDefault(): void {
+    this.defaultPrevented = true;
+  }
+}
+
+class FakeBrowserDocument {
+  pointerLockElement: Element | null = null;
+  private readonly listeners = new Map<string, Set<EventListenerOrEventListenerObject>>();
+
+  addEventListener(type: string, listener: EventListenerOrEventListenerObject | null): void {
+    if (!listener) return;
+    let bucket = this.listeners.get(type);
+    if (!bucket) {
+      bucket = new Set();
+      this.listeners.set(type, bucket);
+    }
+    bucket.add(listener);
+  }
+
+  removeEventListener(type: string, listener: EventListenerOrEventListenerObject | null): void {
+    if (!listener) return;
+    this.listeners.get(type)?.delete(listener);
+  }
+
+  exitPointerLock(): void {
+    this.pointerLockElement = null;
+  }
+
+  dispatch(type: string, event: unknown): void {
+    for (const listener of [...(this.listeners.get(type) ?? [])]) {
+      if (typeof listener === 'function') listener(event as Event);
+      else listener.handleEvent(event as Event);
+    }
+  }
+
+  listenerCount(type: string): number {
+    return this.listeners.get(type)?.size ?? 0;
+  }
+}
+
+function installNetSphereBrowser(): { document: FakeBrowserDocument; restore: () => void } {
+  const previousDocument = globalThis.document;
+  const previousLocalStorage = globalThis.localStorage;
+  const previousSessionStorage = globalThis.sessionStorage;
+  const document = new FakeBrowserDocument();
+  globalThis.document = document as unknown as Document;
+  globalThis.localStorage = new FakeBrowserStorage();
+  globalThis.sessionStorage = new FakeBrowserStorage();
+  return {
+    document,
+    restore: () => {
+      globalThis.document = previousDocument;
+      globalThis.localStorage = previousLocalStorage;
+      globalThis.sessionStorage = previousSessionStorage;
+    },
+  };
+}
+
+function minimalNetSphereState(): GameState {
+  return {
+    currentFloor: FloorLevel.LIVING,
+    clock: { totalMinutes: 8 * 60, hour: 8, minute: 0 },
+    samosborCount: 0,
+    time: 0,
+    gameOver: false,
+    quests: [],
+  } as GameState;
+}
+
+function minimalNetSpherePlayer(): Entity {
+  return {
+    id: 1,
+    x: 1,
+    y: 1,
+    angle: 0,
+    pitch: 0,
+    alive: true,
+    speed: 0,
+    sprite: 0,
+    name: 'Жилец',
+    hp: 90,
+    maxHp: 100,
+    rpg: { level: 2, xp: 10, str: 1, agi: 1, int: 1, attrPts: 0 },
+  } as Entity;
 }
 
 function identityBody(overrides: Record<string, unknown> = {}): Record<string, unknown> {
@@ -530,6 +693,107 @@ test('Net Sphere sanitizers remove unsafe text and truncate bounded fields', () 
   assert.equal(cleanNickname('я'.repeat(40)).length, 24);
 });
 
+test('Net Sphere input binding opens after game input prevention but ignores control capture', async () => {
+  const browser = installNetSphereBrowser();
+  try {
+    const controls = await import('../src/systems/controls');
+    const net = await import('../src/systems/net_sphere');
+    controls.cancelControlCapture();
+    net.closeNetSphere();
+
+    const unbind = net.bindNetSphereInput();
+    const repeatedUnbind = net.bindNetSphereInput();
+    assert.equal(browser.document.listenerCount('keydown'), 1);
+    assert.equal(browser.document.listenerCount('paste'), 1);
+
+    const prevented = new FakeKeyboardEvent('KeyN', 'n');
+    prevented.preventDefault();
+    browser.document.dispatch('keydown', prevented);
+    assert.equal(net.isNetSphereOpen(), true);
+    net.closeNetSphere();
+
+    controls.beginControlCapture('netSphere');
+    browser.document.dispatch('keydown', new FakeKeyboardEvent('KeyN', 'n'));
+    assert.equal(net.isNetSphereOpen(), false);
+    controls.cancelControlCapture();
+
+    const open = new FakeKeyboardEvent('KeyN', 'n');
+    browser.document.dispatch('keydown', open);
+    assert.equal(net.isNetSphereOpen(), true);
+    assert.equal(open.defaultPrevented, true);
+
+    net.closeNetSphere();
+    repeatedUnbind();
+    assert.equal(browser.document.listenerCount('keydown'), 0);
+    assert.equal(browser.document.listenerCount('paste'), 0);
+    unbind();
+    assert.equal(browser.document.listenerCount('keydown'), 0);
+  } finally {
+    browser.restore();
+  }
+});
+
+test('Net Sphere aborts stalled client fetches and releases busy flags', async () => {
+  const browser = installNetSphereBrowser();
+  const realFetch = globalThis.fetch;
+  const realSetTimeout = globalThis.setTimeout;
+  const realClearTimeout = globalThis.clearTimeout;
+  const requests: string[] = [];
+  const aborted: string[] = [];
+
+  globalThis.fetch = ((input: RequestInfo | URL, init?: RequestInit) => {
+    const url = String(input);
+    requests.push(url);
+    return new Promise<Response>((_resolve, reject) => {
+      const signal = init?.signal;
+      assert.ok(signal, `${url} must receive an AbortSignal`);
+      signal.addEventListener('abort', () => {
+        aborted.push(url);
+        reject(new Error('aborted'));
+      }, { once: true });
+    });
+  }) as typeof fetch;
+  globalThis.setTimeout = ((handler: TimerHandler, _timeout?: number, ...args: unknown[]) => {
+    queueMicrotask(() => {
+      if (typeof handler === 'function') handler(...args);
+      else Function(handler)();
+    });
+    return 1 as unknown as ReturnType<typeof setTimeout>;
+  }) as typeof setTimeout;
+  globalThis.clearTimeout = (() => {}) as typeof clearTimeout;
+
+  try {
+    const net = await import('../src/systems/net_sphere');
+    net.closeNetSphere();
+    const unbind = net.bindNetSphereInput();
+    net.openNetSphere();
+
+    browser.document.dispatch('keydown', new FakeKeyboardEvent('KeyH', 'h'));
+    browser.document.dispatch('keydown', new FakeKeyboardEvent('Enter', 'Enter'));
+    net.tickNetSphere(minimalNetSphereState(), minimalNetSpherePlayer());
+    assert.equal(net.getNetSphereSnapshot().busy, true);
+
+    await new Promise<void>(resolve => setImmediate(resolve));
+    await new Promise<void>(resolve => setImmediate(resolve));
+
+    const snapshot = net.getNetSphereSnapshot();
+    assert.equal(snapshot.busy, false);
+    assert.equal(snapshot.status, 'offline');
+    assert.equal(requests.some(url => url.endsWith('/chat')), true);
+    assert.equal(requests.some(url => url.endsWith('/hello')), true);
+    assert.equal(requests.some(url => url.endsWith('/market')), true);
+    assert.equal(aborted.length, requests.length);
+
+    unbind();
+    net.closeNetSphere();
+  } finally {
+    globalThis.fetch = realFetch;
+    globalThis.setTimeout = realSetTimeout;
+    globalThis.clearTimeout = realClearTimeout;
+    browser.restore();
+  }
+});
+
 test('Net Sphere hello upserts presence and returns profile stats with fake D1', async () => {
   const db = new FakeD1();
   const response = await postHello({ request: postRequest(identityBody()), env: { GIGA_NET: db } });
@@ -545,6 +809,46 @@ test('Net Sphere hello upserts presence and returns profile stats with fake D1',
   assert.equal(profile.nickname, 'Жилец');
   assert.equal(profile.runs, 1);
   assert.equal(profile.bestLevel, 3);
+});
+
+test('Net Sphere storage prune drops stale volatile rows without changing aggregate totals', async () => {
+  const db = new FakeD1();
+  const now = 9_000_000_000_000;
+  db.players.set('NET-OLD-1111', {
+    net_gen: 'NET-OLD-1111',
+    nickname: 'Жилец',
+    created_at: now - 90 * 24 * 60 * 60 * 1000,
+    last_seen_at: now - 90 * 24 * 60 * 60 * 1000,
+    runs: 1,
+    total_samosbors: 4,
+    deaths: 2,
+    best_level: 8,
+    best_samosbor_count: 4,
+    last_floor: 'Жилая зона',
+    progress_json: '{}',
+  });
+  db.sessions.set('SES-OLD-1111', { session_id: 'SES-OLD-1111', net_gen: 'NET-OLD-1111', last_seen_at: now - 2 * 24 * 60 * 60 * 1000 });
+  db.sessions.set('SES-NEW-1111', { session_id: 'SES-NEW-1111', net_gen: 'NET-OLD-1111', last_seen_at: now });
+  db.chat.push(
+    { id: 1, net_gen: 'NET-OLD-1111', body: 'old', created_at: now - 8 * 24 * 60 * 60 * 1000 },
+    { id: 2, net_gen: 'NET-OLD-1111', body: 'new', created_at: now },
+  );
+  db.events.push(
+    { id: 1, event_key: 'old', net_gen: 'NET-OLD-1111', nickname: 'Жилец', type: 'death', created_at: now - 31 * 24 * 60 * 60 * 1000, payload_json: '{}' },
+    { id: 2, event_key: 'new', net_gen: 'NET-OLD-1111', nickname: 'Жилец', type: 'samosbor', created_at: now, payload_json: '{}' },
+  );
+
+  await maybePruneNetStorage(db, now);
+  const stats = await getStats({ request: new Request('https://game.test/api/net/stats'), env: { GIGA_NET: db } });
+  const data = await responseJson(stats);
+  const totals = data.stats as Record<string, unknown>;
+
+  assert.equal(db.sessions.has('SES-OLD-1111'), false);
+  assert.equal(db.sessions.has('SES-NEW-1111'), true);
+  assert.deepEqual(db.chat.map(row => row.body), ['new']);
+  assert.deepEqual(db.events.map(row => row.event_key), ['new']);
+  assert.equal(totals.totalSamosbors, 4);
+  assert.equal(totals.totalDeaths, 2);
 });
 
 test('Net Sphere chat stores sanitized body and rate-limits same NET-GEN', async () => {

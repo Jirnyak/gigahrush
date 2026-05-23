@@ -314,7 +314,7 @@ export function findInteractionTarget(ctx: InteractionContext): InteractionTarge
   if (pseudoLift) return target('lift', idx + 205000, 'pseudolift', idx % W, (idx / W) | 0, 58, pseudoLift);
 
   const cell = ctx.world.cells[idx];
-  if (cell === Cell.LIFT || ctx.world.features[idx] === Feature.LIFT_BUTTON) {
+  if (cell === Cell.LIFT) {
     return target('lift', idx + 200000, 'lift', idx % W, (idx / W) | 0, 60, liftPrompt(ctx, idx));
   }
 
@@ -364,7 +364,8 @@ function activateDoor(ctx: InteractionContext, idx: number): InteractionResult {
     ctx.playDoor?.();
     publishDoorNoise(ctx.state, ctx.player, idx, hermeticDoor, quietDoor);
   } else if (door.state === DoorState.LOCKED) {
-    if (door.keyId && ctx.player.inventory?.some(i => i.defId === 'key')) {
+    const keyId = door.keyId || 'key';
+    if (ctx.player.inventory?.some(i => i.defId === keyId)) {
       const quietDoor = consumeQuietDoorCharge(ctx.player, ctx.state.time);
       door.state = DoorState.OPEN;
       ctx.state.msgs.push(msg(quietDoor ? 'Дверь отперта тихо' : 'Дверь отперта ключом', ctx.state.time, quietDoor ? '#8cf' : '#4a4'));
@@ -444,7 +445,7 @@ export function activateInteraction(ctx: InteractionContext): InteractionResult 
     return { handled: true, worldChanged: true };
   }
 
-  if (ctx.world.cells[idx] === Cell.LIFT || ctx.world.features[idx] === Feature.LIFT_BUTTON) {
+  if (ctx.world.cells[idx] === Cell.LIFT) {
     ctx.switchFloor?.(ctx.world.liftDir[idx] as LiftDirection);
     return { handled: true, worldChanged: true };
   }

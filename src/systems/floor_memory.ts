@@ -1,0 +1,1251 @@
+/* ── Runtime floor memory for visited route stops ─────────────── */
+
+import {
+  Cell,
+  EntityType,
+  Feature,
+  FloorLevel,
+  LiftDirection,
+  Tex,
+  W,
+  type Entity,
+} from '../core/types';
+import { World } from '../core/world';
+import { type FloorGeneration } from '../gen/floor_manifest';
+import { cleanFloorKey, floorKeyForStory } from './floor_keys';
+
+export interface FloorMemoryEntry {
+  key: string;
+  world: World;
+  entities: Entity[];
+  spawnX: number;
+  spawnY: number;
+  capturedAt: number;
+  samosborCount: number;
+  estimatedBytes: number;
+  generationExtras?: FloorMemoryGenerationExtras;
+}
+
+export interface FloorMemoryLoad {
+  generation: FloorGeneration;
+  fromMemory: boolean;
+}
+
+export interface FloorLiftAnchor {
+  liftIdx: number;
+  liftX: number;
+  liftY: number;
+}
+
+export interface FloorRouteLiftMirror {
+  direction: LiftDirection;
+  anchors: readonly FloorLiftAnchor[];
+}
+
+export interface FloorRouteLiftLayoutResult {
+  down: number;
+  up: number;
+  placed: number;
+  demoted: number;
+  mirrored: number;
+}
+
+export type FloorMemoryGenerationExtras = Record<string, unknown>;
+
+type RleArrayType = 'u8' | 'i16';
+type WorldArrayField =
+  | 'cells'
+  | 'roomMap'
+  | 'wallTex'
+  | 'floorTex'
+  | 'features'
+  | 'aptMask'
+  | 'hermoWall'
+  | 'zoneMap'
+  | 'factionControl'
+  | 'fog'
+  | 'liftDir';
+
+interface RleArraySave {
+  field: WorldArrayField;
+  type: RleArrayType;
+  length: number;
+  data: string;
+}
+
+interface FloorMemoryWorldSave {
+  arrays: RleArraySave[];
+  rooms: unknown[];
+  zones: unknown[];
+  doors: Array<[number, unknown]>;
+  containers: unknown[];
+  surfaceMap: Array<[number, string]>;
+  anomalyTeleports: Array<[number, number]>;
+  anomalySmogSource: number;
+  anomalySmogCells: number[];
+  anomalySmogHandled: boolean;
+  railTracks: unknown[];
+  railTrains: unknown[];
+  railTrainCells: Array<[number, number]>;
+  slideCells: number[];
+  screenCells: number[];
+}
+
+export interface FloorMemorySaveEntry {
+  key: string;
+  spawnX: number;
+  spawnY: number;
+  capturedAt: number;
+  samosborCount: number;
+  world: FloorMemoryWorldSave;
+  entities: Entity[];
+  estimatedBytes: number;
+}
+
+export interface FloorMemorySaveState {
+  version: 1;
+  entries: FloorMemorySaveEntry[];
+  bytes: number;
+  byteBudget: number;
+}
+
+export interface FloorMemoryRestoreResult {
+  restored: number;
+  skipped: number;
+  keys: string[];
+}
+
+const MAX_FLOOR_MEMORY_ENTRIES = 128;
+const MAX_FLOOR_MEMORY_SAVE_ENTRIES = 24;
+const BYTES_PER_MIB = 1024 * 1024;
+const FLOOR_MEMORY_DEFAULT_BUDGET_BYTES = 1024 * BYTES_PER_MIB;
+const FLOOR_MEMORY_MIN_BUDGET_BYTES = 384 * BYTES_PER_MIB;
+const FLOOR_MEMORY_MAX_BUDGET_BYTES = 3072 * BYTES_PER_MIB;
+const FLOOR_MEMORY_SAVE_BUDGET_BYTES = 1536 * 1024;
+const FLOOR_MEMORY_DEVICE_MEMORY_FRACTION = 0.5;
+const FLOOR_MEMORY_ENTRY_OVERHEAD_BYTES = 64 * 1024;
+const DEFAULT_ROUTE_LIFTS_PER_DIRECTION = 8;
+
+const CARDINALS = [[1, 0], [-1, 0], [0, 1], [0, -1]] as const;
+const ROUTE_LIFT_CONNECTOR_MAX = W;
+const WORLD_ARRAY_FIELDS: readonly { field: WorldArrayField; type: RleArrayType }[] = [
+  { field: 'cells', type: 'u8' },
+  { field: 'roomMap', type: 'i16' },
+  { field: 'wallTex', type: 'u8' },
+  { field: 'floorTex', type: 'u8' },
+  { field: 'features', type: 'u8' },
+  { field: 'aptMask', type: 'u8' },
+  { field: 'hermoWall', type: 'u8' },
+  { field: 'zoneMap', type: 'u8' },
+  { field: 'factionControl', type: 'u8' },
+  { field: 'fog', type: 'u8' },
+  { field: 'liftDir', type: 'u8' },
+];
+
+const floorMemory = new Map<string, FloorMemoryEntry>();
+const packedFloorMemory = new Map<string, {
+  save: FloorMemorySaveEntry;
+  estimatedBytes: number;
+  generationExtras?: FloorMemoryGenerationExtras;
+}>();
+let floorMemoryBytes = 0;
+let packedFloorMemoryBytes = 0;
+let floorMemoryBudgetOverride: number | undefined;
+let floorMemorySaveBudgetOverride: number | undefined;
+
+export function floorMemoryKeyForStoryFloor(floor: FloorLevel): string {
+  return floorKeyForStory(floor);
+}
+
+function storableEntity(entity: Entity): boolean {
+  return entity.type !== EntityType.PLAYER && entity.type !== EntityType.PROJECTILE;
+}
+
+function clampBytes(value: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, Math.floor(value)));
+}
+
+function defaultFloorMemoryByteBudget(): number {
+  const nav = typeof navigator !== 'undefined'
+    ? navigator as Navigator & { deviceMemory?: number }
+    : undefined;
+  const deviceMemoryGb = typeof nav?.deviceMemory === 'number' && Number.isFinite(nav.deviceMemory)
+    ? nav.deviceMemory
+    : undefined;
+  if (deviceMemoryGb !== undefined && deviceMemoryGb > 0) {
+    return clampBytes(
+      deviceMemoryGb * 1024 * BYTES_PER_MIB * FLOOR_MEMORY_DEVICE_MEMORY_FRACTION,
+      FLOOR_MEMORY_MIN_BUDGET_BYTES,
+      FLOOR_MEMORY_MAX_BUDGET_BYTES,
+    );
+  }
+  const perf = typeof performance !== 'undefined'
+    ? performance as Performance & { memory?: { jsHeapSizeLimit?: number } }
+    : undefined;
+  const heapLimit = perf?.memory?.jsHeapSizeLimit;
+  if (typeof heapLimit === 'number' && Number.isFinite(heapLimit) && heapLimit > 0) {
+    return clampBytes(heapLimit * 0.35, FLOOR_MEMORY_MIN_BUDGET_BYTES, FLOOR_MEMORY_MAX_BUDGET_BYTES);
+  }
+  return FLOOR_MEMORY_DEFAULT_BUDGET_BYTES;
+}
+
+function floorMemoryByteBudget(): number {
+  return floorMemoryBudgetOverride ?? defaultFloorMemoryByteBudget();
+}
+
+function floorMemorySaveByteBudget(): number {
+  return floorMemorySaveBudgetOverride ?? FLOOR_MEMORY_SAVE_BUDGET_BYTES;
+}
+
+function estimateJsonBytes(value: unknown): number {
+  try {
+    return new TextEncoder().encode(JSON.stringify(value)).length;
+  } catch {
+    return 0;
+  }
+}
+
+function estimateWorldBytes(world: World): number {
+  let bytes =
+    world.cells.byteLength +
+    world.roomMap.byteLength +
+    world.wallTex.byteLength +
+    world.floorTex.byteLength +
+    world.features.byteLength +
+    world.light.byteLength +
+    world.aptMask.byteLength +
+    world.hermoWall.byteLength +
+    world.zoneMap.byteLength +
+    world.factionControl.byteLength +
+    world.fog.byteLength +
+    world.liftDir.byteLength;
+  for (const surface of world.surfaceMap.values()) bytes += surface.byteLength + 16;
+  bytes += world.rooms.length * 192;
+  bytes += world.zones.length * 96;
+  bytes += world.doors.size * 80;
+  bytes += world.containers.length * 256;
+  bytes += world.anomalyTeleports.size * 16;
+  bytes += world.anomalySmogCells.length * 4;
+  bytes += world.slideCells.length * 4;
+  bytes += world.screenCells.length * 4;
+  bytes += world.railTracks.length * 256;
+  bytes += world.railTrains.length * 256;
+  bytes += world.railTrainCells.size * 16;
+  return bytes + FLOOR_MEMORY_ENTRY_OVERHEAD_BYTES;
+}
+
+function estimateFloorMemoryEntryBytes(world: World, entities: readonly Entity[]): number {
+  return estimateWorldBytes(world) + entities.length * 384 + estimateJsonBytes(entities);
+}
+
+function cloneJson<T>(value: T): T {
+  return JSON.parse(JSON.stringify(value)) as T;
+}
+
+function bytesToBase64(bytes: Uint8Array): string {
+  const maybeBuffer = (globalThis as { Buffer?: { from(input: Uint8Array): { toString(encoding: 'base64'): string } } }).Buffer;
+  if (maybeBuffer) return maybeBuffer.from(bytes).toString('base64');
+  let binary = '';
+  const chunk = 0x8000;
+  for (let i = 0; i < bytes.length; i += chunk) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + chunk));
+  }
+  return btoa(binary);
+}
+
+function base64ToBytes(data: string): Uint8Array {
+  const maybeBuffer = (globalThis as { Buffer?: { from(input: string, encoding: 'base64'): Uint8Array } }).Buffer;
+  if (maybeBuffer) return new Uint8Array(maybeBuffer.from(data, 'base64'));
+  const binary = atob(data);
+  const out = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) out[i] = binary.charCodeAt(i);
+  return out;
+}
+
+function tryBase64ToBytes(data: unknown): Uint8Array | null {
+  if (typeof data !== 'string') return null;
+  try {
+    return base64ToBytes(data);
+  } catch {
+    return null;
+  }
+}
+
+function pushVarUint(out: number[], value: number): void {
+  let n = Math.max(0, Math.floor(value)) >>> 0;
+  while (n >= 0x80) {
+    out.push((n & 0x7f) | 0x80);
+    n >>>= 7;
+  }
+  out.push(n);
+}
+
+function readVarUint(bytes: Uint8Array, offset: { v: number }): number {
+  let shift = 0;
+  let value = 0;
+  while (offset.v < bytes.length && shift <= 28) {
+    const b = bytes[offset.v++];
+    value |= (b & 0x7f) << shift;
+    if ((b & 0x80) === 0) return value >>> 0;
+    shift += 7;
+  }
+  return 0;
+}
+
+function worldArray(world: World, field: WorldArrayField): Uint8Array | Int16Array {
+  return world[field];
+}
+
+function pushRleValue(out: number[], type: RleArrayType, value: number): void {
+  if (type === 'u8') {
+    out.push(value & 0xff);
+  } else {
+    out.push(value & 0xff, (value >> 8) & 0xff);
+  }
+}
+
+function readRleValue(bytes: Uint8Array, offset: { v: number }, type: RleArrayType): number | null {
+  if (type === 'u8') {
+    if (offset.v >= bytes.length) return null;
+    return bytes[offset.v++];
+  }
+  if (offset.v + 1 >= bytes.length) return null;
+  const lo = bytes[offset.v++] ?? 0;
+  const hi = bytes[offset.v++] ?? 0;
+  const value = lo | (hi << 8);
+  return value & 0x8000 ? value - 0x10000 : value;
+}
+
+function encodeRleArray(array: Uint8Array | Int16Array, field: WorldArrayField, type: RleArrayType): RleArraySave {
+  const out: number[] = [];
+  let i = 0;
+  while (i < array.length) {
+    const value = array[i];
+    let len = 1;
+    while (i + len < array.length && array[i + len] === value) len++;
+    pushVarUint(out, len);
+    pushRleValue(out, type, value);
+    i += len;
+  }
+  return {
+    field,
+    type,
+    length: array.length,
+    data: bytesToBase64(new Uint8Array(out)),
+  };
+}
+
+function applyRleArray(world: World, saved: RleArraySave): boolean {
+  if (!saved || !WORLD_ARRAY_FIELDS.some(def => def.field === saved.field && def.type === saved.type)) return false;
+  const target = worldArray(world, saved.field);
+  if (saved.length !== target.length || typeof saved.data !== 'string') return false;
+  const bytes = tryBase64ToBytes(saved.data);
+  if (!bytes) return false;
+  const offset = { v: 0 };
+  let i = 0;
+  while (i < target.length && offset.v < bytes.length) {
+    const len = readVarUint(bytes, offset);
+    const value = readRleValue(bytes, offset, saved.type);
+    if (value === null) return false;
+    if (len <= 0 || i + len > target.length) return false;
+    target.fill(value, i, i + len);
+    i += len;
+  }
+  return i === target.length;
+}
+
+function surfaceMapForSave(world: World): Array<[number, string]> {
+  const out: Array<[number, string]> = [];
+  for (const [idx, pixels] of world.surfaceMap) out.push([idx, bytesToBase64(pixels)]);
+  return out;
+}
+
+function restoreSurfaceMap(input: unknown): Map<number, Uint8Array> {
+  const out = new Map<number, Uint8Array>();
+  if (!Array.isArray(input)) return out;
+  for (const entry of input) {
+    if (!Array.isArray(entry) || entry.length !== 2) continue;
+    const idx = Math.floor(Number(entry[0]));
+    if (!Number.isFinite(idx) || idx < 0 || idx >= W * W || typeof entry[1] !== 'string') continue;
+    const pixels = tryBase64ToBytes(entry[1]);
+    if (!pixels) continue;
+    if (pixels.length !== 16 * 16 * 4) continue;
+    out.set(idx, pixels);
+  }
+  return out;
+}
+
+function numberListForSave(input: readonly number[]): number[] {
+  return input
+    .filter(value => Number.isFinite(value))
+    .map(value => Math.floor(value));
+}
+
+function numberEntryListForSave(input: Iterable<readonly [number, number]>): Array<[number, number]> {
+  const out: Array<[number, number]> = [];
+  for (const [a, b] of input) {
+    if (Number.isFinite(a) && Number.isFinite(b)) out.push([Math.floor(a), Math.floor(b)]);
+  }
+  return out;
+}
+
+function worldForSave(world: World): FloorMemoryWorldSave {
+  return {
+    arrays: WORLD_ARRAY_FIELDS.map(def => encodeRleArray(worldArray(world, def.field), def.field, def.type)),
+    rooms: cloneJson(world.rooms),
+    zones: cloneJson(world.zones),
+    doors: [...world.doors.entries()].map(([idx, door]) => [idx, cloneJson(door)]),
+    containers: cloneJson(world.containers),
+    surfaceMap: surfaceMapForSave(world),
+    anomalyTeleports: numberEntryListForSave(world.anomalyTeleports.entries()),
+    anomalySmogSource: Number.isFinite(world.anomalySmogSource) ? Math.floor(world.anomalySmogSource) : -1,
+    anomalySmogCells: numberListForSave(world.anomalySmogCells),
+    anomalySmogHandled: world.anomalySmogHandled === true,
+    railTracks: cloneJson(world.railTracks),
+    railTrains: cloneJson(world.railTrains),
+    railTrainCells: numberEntryListForSave(world.railTrainCells.entries()),
+    slideCells: numberListForSave(world.slideCells),
+    screenCells: numberListForSave(world.screenCells),
+  };
+}
+
+function restoreNumberEntries(input: unknown): Array<[number, number]> {
+  const out: Array<[number, number]> = [];
+  if (!Array.isArray(input)) return out;
+  for (const entry of input) {
+    if (!Array.isArray(entry) || entry.length !== 2) continue;
+    const a = Math.floor(Number(entry[0]));
+    const b = Math.floor(Number(entry[1]));
+    if (Number.isFinite(a) && Number.isFinite(b)) out.push([a, b]);
+  }
+  return out;
+}
+
+function restoreNumberList(input: unknown, min = 0, max = W * W - 1): number[] {
+  const out: number[] = [];
+  if (!Array.isArray(input)) return out;
+  for (const value of input) {
+    const n = Math.floor(Number(value));
+    if (Number.isFinite(n) && n >= min && n <= max) out.push(n);
+  }
+  return out;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return !!value && typeof value === 'object' && !Array.isArray(value);
+}
+
+function cloneJsonOr<T>(value: unknown, fallback: T): T {
+  try {
+    return cloneJson(value) as T;
+  } catch {
+    return fallback;
+  }
+}
+
+function worldFromSave(input: unknown): World | null {
+  if (!isRecord(input) || !Array.isArray(input.arrays)) return null;
+  const world = new World();
+  for (const def of WORLD_ARRAY_FIELDS) {
+    const saved = input.arrays.find(candidate => isRecord(candidate) && candidate.field === def.field && candidate.type === def.type) as RleArraySave | undefined;
+    if (!saved) return null;
+    if (!applyRleArray(world, saved)) return null;
+  }
+  world.rooms = Array.isArray(input.rooms) ? cloneJsonOr<World['rooms']>(input.rooms, []) : [];
+  world.zones = Array.isArray(input.zones) ? cloneJsonOr<World['zones']>(input.zones, []) : [];
+  world.doors = new Map(
+    Array.isArray(input.doors)
+      ? input.doors
+        .filter(entry => Array.isArray(entry) && Number.isFinite(Number(entry[0])))
+        .map(entry => [Math.floor(Number(entry[0])), cloneJsonOr<World['doors'] extends Map<number, infer D> ? D : never>(entry[1], {} as World['doors'] extends Map<number, infer D> ? D : never)] as [number, World['doors'] extends Map<number, infer D> ? D : never])
+      : [],
+  );
+  world.containers = Array.isArray(input.containers) ? cloneJsonOr<World['containers']>(input.containers, []) : [];
+  world.rebuildContainerMap();
+  world.surfaceMap = restoreSurfaceMap(input.surfaceMap);
+  world.anomalyTeleports = new Map(restoreNumberEntries(input.anomalyTeleports));
+  const anomalySmogSource = Number(input.anomalySmogSource);
+  world.anomalySmogSource = Number.isFinite(anomalySmogSource) ? Math.floor(anomalySmogSource) : -1;
+  world.anomalySmogCells = restoreNumberList(input.anomalySmogCells);
+  world.anomalySmogHandled = input.anomalySmogHandled === true;
+  world.railTracks = Array.isArray(input.railTracks) ? cloneJsonOr<World['railTracks']>(input.railTracks, []) : [];
+  world.railTrains = Array.isArray(input.railTrains) ? cloneJsonOr<World['railTrains']>(input.railTrains, []) : [];
+  world.railTrainCells = new Map(restoreNumberEntries(input.railTrainCells));
+  world.slideCells = restoreNumberList(input.slideCells);
+  world.screenCells = restoreNumberList(input.screenCells);
+  world.bakeLights();
+  world.markCellsDirty();
+  world.surfaceVersion = (world.surfaceVersion + 1) | 0;
+  world.markWallTexDirty();
+  world.markFloorTexDirty();
+  world.markFeaturesDirty(true);
+  world.markFogDirty();
+  return world;
+}
+
+function removePackedFloorMemoryEntry(key: string): boolean {
+  const existing = packedFloorMemory.get(key);
+  if (!existing) return false;
+  packedFloorMemory.delete(key);
+  packedFloorMemoryBytes = Math.max(0, packedFloorMemoryBytes - existing.estimatedBytes);
+  return true;
+}
+
+function archiveFloorMemoryEntry(entry: FloorMemoryEntry): void {
+  removePackedFloorMemoryEntry(entry.key);
+  const save = entryForSave(entry);
+  const estimatedBytes = estimateJsonBytes(save);
+  packedFloorMemory.set(entry.key, {
+    save,
+    estimatedBytes,
+    generationExtras: entry.generationExtras,
+  });
+  packedFloorMemoryBytes += estimatedBytes;
+}
+
+function removeFloorMemoryEntry(key: string, archive = false): boolean {
+  const existing = floorMemory.get(key);
+  if (!existing) return false;
+  if (archive) archiveFloorMemoryEntry(existing);
+  floorMemory.delete(key);
+  floorMemoryBytes = Math.max(0, floorMemoryBytes - existing.estimatedBytes);
+  return true;
+}
+
+function trimFloorMemory(): void {
+  const budget = floorMemoryByteBudget();
+  while (floorMemory.size > MAX_FLOOR_MEMORY_ENTRIES || (floorMemoryBytes > budget && floorMemory.size > 1)) {
+    const first = floorMemory.keys().next().value;
+    if (typeof first !== 'string') break;
+    removeFloorMemoryEntry(first, true);
+  }
+}
+
+function routeLiftWalkable(world: World, idx: number): boolean {
+  const cell = world.cells[idx];
+  return cell === Cell.FLOOR || cell === Cell.WATER || cell === Cell.DOOR;
+}
+
+function collectReachableRouteCells(world: World, startIdx: number): { cells: Int32Array; count: number; seen: Uint8Array } {
+  const seen = new Uint8Array(W * W);
+  const cells = new Int32Array(W * W);
+  if (startIdx < 0 || !routeLiftWalkable(world, startIdx)) return { cells, count: 0, seen };
+
+  let head = 0;
+  let tail = 0;
+  seen[startIdx] = 1;
+  cells[tail++] = startIdx;
+  while (head < tail) {
+    const ci = cells[head++];
+    const x = ci % W;
+    const y = (ci / W) | 0;
+    for (const [dx, dy] of CARDINALS) {
+      const ni = world.idx(x + dx, y + dy);
+      if (seen[ni] || !routeLiftWalkable(world, ni)) continue;
+      seen[ni] = 1;
+      cells[tail++] = ni;
+    }
+  }
+  return { cells, count: tail, seen };
+}
+
+function nearestRouteLiftWalkable(world: World, x: number, y: number, radius: number): number {
+  const sx = world.wrap(Math.floor(Number.isFinite(x) ? x : W / 2));
+  const sy = world.wrap(Math.floor(Number.isFinite(y) ? y : W / 2));
+  const start = world.idx(sx, sy);
+  if (routeLiftWalkable(world, start)) return start;
+  for (let r = 1; r <= radius; r++) {
+    for (let dy = -r; dy <= r; dy++) {
+      for (let dx = -r; dx <= r; dx++) {
+        if (Math.abs(dx) !== r && Math.abs(dy) !== r) continue;
+        const idx = world.idx(sx + dx, sy + dy);
+        if (routeLiftWalkable(world, idx)) return idx;
+      }
+    }
+  }
+  return -1;
+}
+
+function reachableRouteCellsFromPoint(world: World, x: number, y: number): { cells: Int32Array; count: number; seen: Uint8Array } {
+  return collectReachableRouteCells(world, nearestRouteLiftWalkable(world, x, y, 64));
+}
+
+export function collectFloorLiftAnchors(
+  world: World,
+  direction: LiftDirection,
+  limit = Number.MAX_SAFE_INTEGER,
+): FloorLiftAnchor[] {
+  const out: FloorLiftAnchor[] = [];
+  for (let i = 0; i < world.cells.length; i++) {
+    if (world.cells[i] !== Cell.LIFT || world.liftDir[i] !== direction) continue;
+    out.push({
+      liftIdx: i,
+      liftX: i % W,
+      liftY: (i / W) | 0,
+    });
+    if (out.length >= limit) break;
+  }
+  return out;
+}
+
+function clearAdjacentLiftButtons(world: World, liftIdx: number): boolean {
+  let changed = false;
+  const x = liftIdx % W;
+  const y = (liftIdx / W) | 0;
+  for (const [dx, dy] of CARDINALS) {
+    const bi = world.idx(x + dx, y + dy);
+    if (world.features[bi] !== Feature.LIFT_BUTTON) continue;
+    world.features[bi] = Feature.NONE;
+    world.liftDir[bi] = LiftDirection.DOWN;
+    changed = true;
+  }
+  return changed;
+}
+
+function adjacentToLift(world: World, idx: number): boolean {
+  const x = idx % W;
+  const y = (idx / W) | 0;
+  for (const [dx, dy] of CARDINALS) {
+    if (world.cells[world.idx(x + dx, y + dy)] === Cell.LIFT) return true;
+  }
+  return false;
+}
+
+function demoteRouteLiftCell(world: World, idx: number, floorTex: Tex): boolean {
+  if (world.cells[idx] !== Cell.LIFT) return false;
+  clearAdjacentLiftButtons(world, idx);
+  world.cells[idx] = Cell.FLOOR;
+  world.roomMap[idx] = -1;
+  world.floorTex[idx] = floorTex;
+  world.wallTex[idx] = Tex.CONCRETE;
+  world.features[idx] = Feature.NONE;
+  world.liftDir[idx] = LiftDirection.DOWN;
+  return true;
+}
+
+function clearRouteLiftButton(world: World, idx: number): boolean {
+  if (world.features[idx] !== Feature.LIFT_BUTTON) return false;
+  world.features[idx] = Feature.NONE;
+  world.liftDir[idx] = LiftDirection.DOWN;
+  return true;
+}
+
+function canOccupyRouteLift(world: World, idx: number, accessIdx: number): boolean {
+  if (idx === accessIdx) return false;
+  if (world.aptMask[idx] || world.hermoWall[idx] || world.containerMap.has(idx)) return false;
+  return world.cells[idx] !== Cell.ABYSS;
+}
+
+function canUseRouteAccess(world: World, idx: number, liftIdx: number): boolean {
+  if (idx === liftIdx) return false;
+  if (world.aptMask[idx] || world.hermoWall[idx] || world.containerMap.has(idx)) return false;
+  if (world.features[idx] !== Feature.NONE && world.features[idx] !== Feature.LIFT_BUTTON) return false;
+  return world.cells[idx] !== Cell.LIFT && world.cells[idx] !== Cell.ABYSS;
+}
+
+function setRouteAccessFloor(world: World, idx: number, floorTex: Tex): boolean {
+  let changed = false;
+  if (world.cells[idx] === Cell.DOOR) {
+    world.removeDoorAt(idx);
+    changed = true;
+  }
+  if (world.cells[idx] !== Cell.FLOOR && world.cells[idx] !== Cell.WATER) {
+    world.cells[idx] = Cell.FLOOR;
+    world.roomMap[idx] = -1;
+    world.floorTex[idx] = floorTex;
+    world.wallTex[idx] = Tex.CONCRETE;
+    changed = true;
+  }
+  if (world.features[idx] !== Feature.NONE) {
+    world.features[idx] = Feature.NONE;
+    changed = true;
+  }
+  if (world.liftDir[idx] !== LiftDirection.DOWN) {
+    world.liftDir[idx] = LiftDirection.DOWN;
+    changed = true;
+  }
+  return changed;
+}
+
+function setRouteLiftCell(world: World, idx: number, direction: LiftDirection): void {
+  if (world.cells[idx] === Cell.DOOR) world.removeDoorAt(idx);
+  world.cells[idx] = Cell.LIFT;
+  world.roomMap[idx] = -1;
+  world.wallTex[idx] = Tex.LIFT_DOOR;
+  world.features[idx] = Feature.NONE;
+  world.liftDir[idx] = direction;
+}
+
+function routeLiftAccessCandidates(
+  world: World,
+  liftIdx: number,
+  reachable: { cells: Int32Array; count: number; seen: Uint8Array },
+): number[] {
+  const candidates: number[] = [];
+  const x = liftIdx % W;
+  const y = (liftIdx / W) | 0;
+  for (const [dx, dy] of CARDINALS) {
+    const idx = world.idx(x + dx, y + dy);
+    if (reachable.seen[idx] && canUseRouteAccess(world, idx, liftIdx)) candidates.push(idx);
+  }
+  for (const [dx, dy] of CARDINALS) {
+    const idx = world.idx(x + dx, y + dy);
+    if (!candidates.includes(idx) && canUseRouteAccess(world, idx, liftIdx)) candidates.push(idx);
+  }
+  return candidates;
+}
+
+function nearestReachableRouteCell(
+  world: World,
+  fromIdx: number,
+  reachable: { cells: Int32Array; count: number; seen: Uint8Array },
+  maxDist: number,
+): number {
+  const fx = fromIdx % W;
+  const fy = (fromIdx / W) | 0;
+  let best = -1;
+  let bestD = maxDist + 1;
+  const step = Math.max(1, reachable.count >> 11);
+  for (let i = 0; i < reachable.count; i += step) {
+    const ci = reachable.cells[i];
+    const d = Math.abs(world.delta(fx, ci % W)) + Math.abs(world.delta(fy, (ci / W) | 0));
+    if (d < bestD) {
+      bestD = d;
+      best = ci;
+    }
+  }
+  return bestD <= maxDist ? best : -1;
+}
+
+function carveRouteLiftConnector(world: World, fromIdx: number, toIdx: number, floorTex: Tex): { connected: boolean; changed: boolean } {
+  let x = fromIdx % W;
+  let y = (fromIdx / W) | 0;
+  const tx = toIdx % W;
+  const ty = (toIdx / W) | 0;
+  const dx = world.delta(x, tx);
+  const dy = world.delta(y, ty);
+  const stepX = Math.sign(dx);
+  const stepY = Math.sign(dy);
+  const touched: number[] = [fromIdx];
+
+  for (let s = 0; s < Math.abs(dx); s++) {
+    x = world.wrap(x + stepX);
+    const idx = world.idx(x, y);
+    if (!canUseRouteAccess(world, idx, -1)) return { connected: false, changed: false };
+    touched.push(idx);
+  }
+  for (let s = 0; s < Math.abs(dy); s++) {
+    y = world.wrap(y + stepY);
+    const idx = world.idx(x, y);
+    if (!canUseRouteAccess(world, idx, -1)) return { connected: false, changed: false };
+    touched.push(idx);
+  }
+
+  let changed = false;
+  for (const idx of touched) {
+    if (setRouteAccessFloor(world, idx, floorTex)) changed = true;
+  }
+  return { connected: true, changed };
+}
+
+function ensureRouteAccessReachable(
+  world: World,
+  accessIdx: number,
+  reachable: { cells: Int32Array; count: number; seen: Uint8Array },
+  floorTex: Tex,
+): { connected: boolean; changed: boolean } {
+  if (reachable.seen[accessIdx]) return { connected: true, changed: false };
+  const target = nearestReachableRouteCell(world, accessIdx, reachable, ROUTE_LIFT_CONNECTOR_MAX);
+  if (target < 0) return { connected: false, changed: false };
+  return carveRouteLiftConnector(world, accessIdx, target, floorTex);
+}
+
+function ensureRouteLiftUsable(
+  world: World,
+  liftIdx: number,
+  direction: LiftDirection,
+  reachable: { cells: Int32Array; count: number; seen: Uint8Array },
+  floorTex: Tex,
+): { usable: boolean; changed: boolean } {
+  if (world.cells[liftIdx] !== Cell.LIFT || world.liftDir[liftIdx] !== direction) {
+    return { usable: false, changed: false };
+  }
+  let changed = clearAdjacentLiftButtons(world, liftIdx);
+  for (const accessIdx of routeLiftAccessCandidates(world, liftIdx, reachable)) {
+    const connected = ensureRouteAccessReachable(world, accessIdx, reachable, floorTex);
+    if (!connected.connected) continue;
+    if (setRouteAccessFloor(world, accessIdx, floorTex)) changed = true;
+    return { usable: true, changed: changed || connected.changed };
+  }
+  return { usable: false, changed };
+}
+
+function placeMirroredRouteLift(
+  world: World,
+  anchor: FloorLiftAnchor,
+  direction: LiftDirection,
+  reachable: { cells: Int32Array; count: number; seen: Uint8Array },
+  floorTex: Tex,
+): boolean {
+  const liftIdx = world.idx(anchor.liftX, anchor.liftY);
+  for (const accessIdx of routeLiftAccessCandidates(world, liftIdx, reachable)) {
+    if (!canOccupyRouteLift(world, liftIdx, accessIdx)) continue;
+    if (!canUseRouteAccess(world, accessIdx, liftIdx)) continue;
+    setRouteLiftCell(world, liftIdx, direction);
+    clearAdjacentLiftButtons(world, liftIdx);
+    const connected = ensureRouteAccessReachable(world, accessIdx, reachable, floorTex);
+    if (connected.connected) {
+      setRouteAccessFloor(world, accessIdx, floorTex);
+      return true;
+    }
+    demoteRouteLiftCell(world, liftIdx, floorTex);
+  }
+  return false;
+}
+
+function fillRouteLift(
+  world: World,
+  reachable: { cells: Int32Array; count: number; seen: Uint8Array },
+  direction: LiftDirection,
+  floorTex: Tex,
+  blockedIdx = -1,
+): boolean {
+  if (reachable.count <= 0) return false;
+  const start = direction === LiftDirection.UP
+    ? Math.floor(reachable.count * 0.37)
+    : Math.floor(reachable.count * 0.63);
+  for (let n = 0; n < reachable.count; n++) {
+    const idx = reachable.cells[(start + n) % reachable.count];
+    if (idx === blockedIdx) continue;
+    if (!canOccupyRouteLift(world, idx, -1)) continue;
+    if (world.cells[idx] !== Cell.FLOOR || world.features[idx] !== Feature.NONE) continue;
+    const x = idx % W;
+    const y = (idx / W) | 0;
+    let adjacentWalkable = 0;
+    let accessIdx = -1;
+    for (const [dx, dy] of CARDINALS) {
+      const bi = world.idx(x + dx, y + dy);
+      if (!reachable.seen[bi] || !canUseRouteAccess(world, bi, idx) || world.cells[bi] === Cell.LIFT) continue;
+      adjacentWalkable++;
+      if (accessIdx < 0) accessIdx = bi;
+    }
+    if (adjacentWalkable < 2 || accessIdx < 0) continue;
+    setRouteLiftCell(world, idx, direction);
+    setRouteAccessFloor(world, accessIdx, floorTex);
+    return true;
+  }
+  return false;
+}
+
+function routeLiftCount(world: World, direction: LiftDirection): number {
+  let count = 0;
+  for (let i = 0; i < world.cells.length; i++) {
+    if (world.cells[i] === Cell.LIFT && world.liftDir[i] === direction) count++;
+  }
+  return count;
+}
+
+function markRouteLiftLayoutDirty(world: World): void {
+  world.markCellsDirty();
+  world.markWallTexDirty();
+  world.markFloorTexDirty();
+  world.markFeaturesDirty(true);
+}
+
+export function ensureFloorRouteLiftLayout(
+  world: World,
+  spawnX: number,
+  spawnY: number,
+  expectedDirections: readonly LiftDirection[],
+  options: {
+    countPerDirection?: number;
+    mirror?: FloorRouteLiftMirror;
+    floorTex?: Tex;
+  } = {},
+): FloorRouteLiftLayoutResult {
+  const targetCount = Math.max(0, Math.floor(options.countPerDirection ?? DEFAULT_ROUTE_LIFTS_PER_DIRECTION));
+  const expected = new Set(expectedDirections);
+  const floorTex = options.floorTex ?? Tex.F_CONCRETE;
+  let placed = 0;
+  let demoted = 0;
+  let mirrored = 0;
+  let changed = false;
+
+  for (let i = 0; i < world.cells.length; i++) {
+    const dir = world.liftDir[i] as LiftDirection;
+    if (world.cells[i] === Cell.LIFT && !expected.has(dir)) {
+      if (demoteRouteLiftCell(world, i, floorTex)) {
+        demoted++;
+        changed = true;
+      }
+    }
+    if (
+      world.features[i] === Feature.LIFT_BUTTON &&
+      (!expected.has(dir) || adjacentToLift(world, i))
+    ) {
+      if (clearRouteLiftButton(world, i)) changed = true;
+    }
+  }
+
+  const mirror = options.mirror && expected.has(options.mirror.direction) ? options.mirror : undefined;
+  if (mirror) {
+    for (const anchor of collectFloorLiftAnchors(world, mirror.direction)) {
+      if (demoteRouteLiftCell(world, anchor.liftIdx, floorTex)) {
+        demoted++;
+        changed = true;
+      }
+    }
+    let reachable = reachableRouteCellsFromPoint(world, spawnX, spawnY);
+    for (const anchor of mirror.anchors.slice(0, targetCount)) {
+      if (placeMirroredRouteLift(world, anchor, mirror.direction, reachable, floorTex)) {
+        placed++;
+        mirrored++;
+        changed = true;
+        reachable = reachableRouteCellsFromPoint(world, spawnX, spawnY);
+      }
+    }
+  }
+
+  const blockedIdx = world.idx(Math.floor(spawnX), Math.floor(spawnY));
+  for (const direction of expected) {
+    let reachable = reachableRouteCellsFromPoint(world, spawnX, spawnY);
+    for (const anchor of collectFloorLiftAnchors(world, direction)) {
+      const usable = ensureRouteLiftUsable(world, anchor.liftIdx, direction, reachable, floorTex);
+      if (usable.usable) {
+        if (usable.changed) changed = true;
+        reachable = reachableRouteCellsFromPoint(world, spawnX, spawnY);
+      } else if (demoteRouteLiftCell(world, anchor.liftIdx, floorTex)) {
+        demoted++;
+        changed = true;
+      }
+    }
+
+    let anchors = collectFloorLiftAnchors(world, direction);
+    while (anchors.length > targetCount) {
+      const anchor = anchors.pop();
+      if (!anchor) break;
+      if (demoteRouteLiftCell(world, anchor.liftIdx, floorTex)) {
+        demoted++;
+        changed = true;
+      }
+    }
+
+    reachable = reachableRouteCellsFromPoint(world, spawnX, spawnY);
+    while (collectFloorLiftAnchors(world, direction).length < targetCount) {
+      if (!fillRouteLift(world, reachable, direction, floorTex, blockedIdx)) break;
+      placed++;
+      changed = true;
+      reachable = reachableRouteCellsFromPoint(world, spawnX, spawnY);
+    }
+
+    for (const anchor of collectFloorLiftAnchors(world, direction)) {
+      const usable = ensureRouteLiftUsable(world, anchor.liftIdx, direction, reachableRouteCellsFromPoint(world, spawnX, spawnY), floorTex);
+      if (usable.changed) changed = true;
+    }
+  }
+
+  if (changed) {
+    for (let i = 0; i < world.cells.length; i++) {
+      if (world.cells[i] !== Cell.LIFT) continue;
+      const zone = world.zones[world.zoneMap[i]];
+      if (zone) zone.hasLift = true;
+    }
+    markRouteLiftLayoutDirty(world);
+  }
+
+  return {
+    down: routeLiftCount(world, LiftDirection.DOWN),
+    up: routeLiftCount(world, LiftDirection.UP),
+    placed,
+    demoted,
+    mirrored,
+  };
+}
+
+export function captureFloorMemory(
+  keyInput: string,
+  world: World,
+  entities: readonly Entity[],
+  spawnX: number,
+  spawnY: number,
+  capturedAt: number,
+  samosborCount: number,
+  generationExtras?: FloorMemoryGenerationExtras,
+): boolean {
+  const key = cleanFloorKey(keyInput);
+  if (!key) return false;
+  const storedEntities = entities.filter(storableEntity);
+  removeFloorMemoryEntry(key);
+  removePackedFloorMemoryEntry(key);
+  const estimatedBytes = estimateFloorMemoryEntryBytes(world, storedEntities);
+  floorMemory.set(key, {
+    key,
+    world,
+    entities: storedEntities,
+    spawnX,
+    spawnY,
+    capturedAt,
+    samosborCount,
+    estimatedBytes,
+    generationExtras,
+  });
+  floorMemoryBytes += estimatedBytes;
+  trimFloorMemory();
+  return true;
+}
+
+export function takeFloorMemory(keyInput: string): FloorMemoryLoad | null {
+  const key = cleanFloorKey(keyInput);
+  if (!key) return null;
+  const entry = floorMemory.get(key);
+  if (entry) {
+    removeFloorMemoryEntry(key);
+    return {
+      fromMemory: true,
+      generation: {
+        world: entry.world,
+        entities: entry.entities,
+        spawnX: entry.spawnX,
+        spawnY: entry.spawnY,
+        ...(entry.generationExtras ?? {}),
+      } as FloorGeneration,
+    };
+  }
+  const packed = packedFloorMemory.get(key);
+  if (!packed) return null;
+  removePackedFloorMemoryEntry(key);
+  const world = worldFromSave(packed.save.world);
+  if (!world) return null;
+  return {
+    fromMemory: true,
+    generation: {
+      world,
+      entities: restoreEntities(packed.save.entities),
+      spawnX: packed.save.spawnX,
+      spawnY: packed.save.spawnY,
+      ...(packed.generationExtras ?? {}),
+    } as FloorGeneration,
+  };
+}
+
+function entryForSave(entry: FloorMemoryEntry): FloorMemorySaveEntry {
+  return {
+    key: entry.key,
+    spawnX: Number.isFinite(entry.spawnX) ? entry.spawnX : W / 2,
+    spawnY: Number.isFinite(entry.spawnY) ? entry.spawnY : W / 2,
+    capturedAt: Number.isFinite(entry.capturedAt) ? entry.capturedAt : 0,
+    samosborCount: Number.isFinite(entry.samosborCount) ? Math.max(0, Math.floor(entry.samosborCount)) : 0,
+    world: worldForSave(entry.world),
+    entities: cloneJson(entry.entities),
+    estimatedBytes: entry.estimatedBytes,
+  };
+}
+
+interface FloorMemorySaveCandidate {
+  save: FloorMemorySaveEntry;
+  bytes: number;
+  importance: number;
+}
+
+function floorMemorySaveImportance(save: FloorMemorySaveEntry): number {
+  let score = 0;
+  if (save.key.startsWith('story:')) score += 10_000;
+  if (save.key.startsWith('design:')) score += 5_000;
+  score += Math.min(4_000, save.samosborCount * 64);
+  score += Math.min(8_000, save.entities.length * 32);
+  score += Math.min(8_000, save.world.containers.length * 24);
+  score += Math.min(4_000, save.world.surfaceMap.length * 8);
+  score += Math.min(4_000, save.world.doors.length * 4);
+  return score;
+}
+
+function floorMemorySaveStateBytes(
+  entries: readonly FloorMemorySaveEntry[],
+  byteBudget: number,
+  bytes = 0,
+): number {
+  return estimateJsonBytes({
+    version: 1 as const,
+    entries,
+    bytes,
+    byteBudget,
+  });
+}
+
+function floorMemorySaveCandidates(): FloorMemorySaveCandidate[] {
+  const candidates: FloorMemorySaveCandidate[] = [];
+  for (const packed of packedFloorMemory.values()) {
+    candidates.push({
+      save: packed.save,
+      bytes: Math.max(0, packed.estimatedBytes),
+      importance: floorMemorySaveImportance(packed.save),
+    });
+  }
+  for (const entry of floorMemory.values()) {
+    const save = entryForSave(entry);
+    candidates.push({
+      save,
+      bytes: estimateJsonBytes(save),
+      importance: floorMemorySaveImportance(save),
+    });
+  }
+  candidates.sort((a, b) => {
+    const captured = b.save.capturedAt - a.save.capturedAt;
+    if (captured !== 0) return captured;
+    const important = b.importance - a.importance;
+    if (important !== 0) return important;
+    const compact = a.bytes - b.bytes;
+    if (compact !== 0) return compact;
+    return a.save.key.localeCompare(b.save.key);
+  });
+  return candidates;
+}
+
+export function floorMemoryStateForSave(): FloorMemorySaveState {
+  const byteBudget = floorMemorySaveByteBudget();
+  const entries: FloorMemorySaveEntry[] = [];
+  for (const candidate of floorMemorySaveCandidates()) {
+    if (entries.length >= MAX_FLOOR_MEMORY_SAVE_ENTRIES) break;
+    if (candidate.bytes <= 0) continue;
+    const nextEntries = [...entries, candidate.save];
+    if (floorMemorySaveStateBytes(nextEntries, byteBudget) > byteBudget - 64) continue;
+    entries.push(candidate.save);
+  }
+  let bytes = floorMemorySaveStateBytes(entries, byteBudget);
+  bytes = floorMemorySaveStateBytes(entries, byteBudget, bytes);
+  while (entries.length > 0 && bytes > byteBudget) {
+    entries.pop();
+    bytes = floorMemorySaveStateBytes(entries, byteBudget);
+    bytes = floorMemorySaveStateBytes(entries, byteBudget, bytes);
+  }
+  return {
+    version: 1,
+    entries,
+    bytes,
+    byteBudget,
+  };
+}
+
+function finiteCoord(value: unknown, fallback: number): number {
+  return typeof value === 'number' && Number.isFinite(value)
+    ? value
+    : fallback;
+}
+
+function finiteNonNegativeInt(value: unknown, fallback = 0): number {
+  return typeof value === 'number' && Number.isFinite(value)
+    ? Math.max(0, Math.floor(value))
+    : fallback;
+}
+
+function restoreEntities(input: unknown): Entity[] {
+  if (!Array.isArray(input)) return [];
+  const out: Entity[] = [];
+  for (const raw of input) {
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) continue;
+    let entity: Entity;
+    try {
+      entity = cloneJson(raw) as Entity;
+    } catch {
+      continue;
+    }
+    if (typeof entity.id !== 'number' || !Number.isFinite(entity.id)) continue;
+    if (!storableEntity(entity)) continue;
+    out.push(entity);
+  }
+  return out;
+}
+
+export function restoreFloorMemoryFromSave(
+  input: unknown,
+  options: {
+    generationExtrasForKey?: (key: string) => FloorMemoryGenerationExtras | undefined;
+  } = {},
+): FloorMemoryRestoreResult {
+  clearFloorMemory();
+  const result: FloorMemoryRestoreResult = { restored: 0, skipped: 0, keys: [] };
+  if (!input || typeof input !== 'object' || Array.isArray(input)) return result;
+  const state = input as Partial<FloorMemorySaveState>;
+  if (state.version !== 1 || !Array.isArray(state.entries)) return result;
+  for (const raw of state.entries.slice(0, MAX_FLOOR_MEMORY_ENTRIES)) {
+    try {
+      const key = cleanFloorKey(raw?.key);
+      if (!key || !raw?.world) {
+        result.skipped++;
+        continue;
+      }
+      const world = worldFromSave(raw.world);
+      if (!world) {
+        result.skipped++;
+        continue;
+      }
+      const entities = restoreEntities(raw.entities);
+      const ok = captureFloorMemory(
+        key,
+        world,
+        entities,
+        finiteCoord(raw.spawnX, W / 2),
+        finiteCoord(raw.spawnY, W / 2),
+        finiteCoord(raw.capturedAt, 0),
+        finiteNonNegativeInt(raw.samosborCount),
+        options.generationExtrasForKey?.(key),
+      );
+      if (ok) {
+        result.restored++;
+        result.keys.push(key);
+      } else {
+        result.skipped++;
+      }
+    } catch {
+      result.skipped++;
+    }
+  }
+  return result;
+}
+
+export function invalidateFloorMemory(keyInput: string): boolean {
+  const key = cleanFloorKey(keyInput);
+  return key ? (removeFloorMemoryEntry(key) || removePackedFloorMemoryEntry(key)) : false;
+}
+
+export function clearFloorMemory(): void {
+  floorMemory.clear();
+  packedFloorMemory.clear();
+  floorMemoryBytes = 0;
+  packedFloorMemoryBytes = 0;
+}
+
+export function setFloorMemoryByteBudgetForTests(bytes: number | undefined): void {
+  floorMemoryBudgetOverride = bytes === undefined
+    ? undefined
+    : Math.max(1, Math.floor(bytes));
+  trimFloorMemory();
+}
+
+export function setFloorMemorySaveByteBudgetForTests(bytes: number | undefined): void {
+  floorMemorySaveBudgetOverride = bytes === undefined
+    ? undefined
+    : Math.max(1024, Math.floor(bytes));
+}
+
+export function floorMemoryStats(): {
+  count: number;
+  fullCount: number;
+  packedCount: number;
+  cap: number;
+  bytes: number;
+  packedBytes: number;
+  byteBudget: number;
+  keys: string[];
+} {
+  return {
+    count: floorMemory.size + packedFloorMemory.size,
+    fullCount: floorMemory.size,
+    packedCount: packedFloorMemory.size,
+    cap: MAX_FLOOR_MEMORY_ENTRIES,
+    bytes: floorMemoryBytes,
+    packedBytes: packedFloorMemoryBytes,
+    byteBudget: floorMemoryByteBudget(),
+    keys: [...packedFloorMemory.keys(), ...floorMemory.keys()],
+  };
+}

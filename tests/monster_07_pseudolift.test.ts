@@ -19,6 +19,7 @@ import { getRecentEvents } from '../src/systems/events';
 import { getActiveMonsterBaits, placeMonsterBait, resetMonsterBaits } from '../src/systems/monster_bait';
 import {
   choosePseudoliftCandidate,
+  clearPseudoliftActive,
   debugForcePseudoliftNearPlayer,
   ensurePseudoliftState,
   tryUsePseudolift,
@@ -130,4 +131,33 @@ test('nearby bait feeds the dormant pseudolift without spawning a roaming monste
   const fed = getRecentEvents(state, { type: 'pseudolift_fed', limit: 1 })[0];
   assert.equal(fed?.itemId, 'bread');
   assert.ok(fed?.tags.includes('baited'));
+});
+
+test('clearing an active revealed pseudolift kills its live monster when entities are provided', () => {
+  resetMonsterBaits();
+  const world = worldWithLifts([{ x: 10, y: 10 }, { x: 20, y: 20 }]);
+  const state = makeGameState({ currentFloor: FloorLevel.LIVING, time: 32 });
+  const player = makeTestPlayer({ id: 1, x: 9.5, y: 10.5, angle: 0 });
+  const entities: Entity[] = [player];
+  const nextEntityId = { v: 2 };
+
+  debugForcePseudoliftNearPlayer(world, player, state);
+  const site = Object.values(ensurePseudoliftState(state).sites)[0];
+  const siteKey = site.key;
+
+  assert.equal(tryUsePseudolift(world, entities, nextEntityId, player, state, site.liftX, site.liftY), true);
+  assert.equal(tryUsePseudolift(world, entities, nextEntityId, player, state, site.liftX, site.liftY), true);
+  const monster = entities.find(e => e.monsterKind === MonsterKind.PSEUDOLIFT);
+  assert.ok(monster);
+  assert.equal(monster.alive, true);
+  assert.equal(ensurePseudoliftState(state).activeSiteKey, siteKey);
+
+  clearPseudoliftActive(state, entities);
+
+  const clearedSite = ensurePseudoliftState(state).sites[siteKey];
+  assert.equal(clearedSite.status, 'escaped');
+  assert.equal(clearedSite.monsterId, undefined);
+  assert.equal(ensurePseudoliftState(state).activeSiteKey, undefined);
+  assert.equal(monster.alive, false);
+  assert.equal(monster.hp, 0);
 });

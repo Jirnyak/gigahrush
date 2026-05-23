@@ -7,8 +7,13 @@ import {
   type GameState,
 } from '../core/types';
 import { World } from '../core/world';
-import { ensureReachableRouteLifts } from '../gen/shared';
-import { currentFloorRunEntry, podadLowerRouteOpen } from './procedural_floors';
+import { ensureFloorRouteLiftLayout } from './floor_memory';
+import {
+  currentFloorRunEntry,
+  floorRunEntryLiftDirections,
+  podadLowerRouteOpen,
+  ROUTE_LIFTS_PER_DIRECTION,
+} from './procedural_floors';
 
 function hasUsableLift(world: World, direction: LiftDirection): boolean {
   for (let i = 0; i < world.cells.length; i++) {
@@ -21,6 +26,8 @@ export function applyStoryRouteGates(world: World, player: Entity, state: GameSt
   const entry = currentFloorRunEntry(state);
   if (entry.designFloorId !== 'podad' || !podadLowerRouteOpen(state)) return false;
   const hadDownLift = hasUsableLift(world, LiftDirection.DOWN);
-  ensureReachableRouteLifts(world, player.x, player.y, [LiftDirection.UP, LiftDirection.DOWN]);
+  ensureFloorRouteLiftLayout(world, player.x, player.y, floorRunEntryLiftDirections(entry, true), {
+    countPerDirection: ROUTE_LIFTS_PER_DIRECTION,
+  });
   return !hadDownLift && hasUsableLift(world, LiftDirection.DOWN);
 }

@@ -24,6 +24,7 @@ globalThis.__GIGAHRUSH_EN_LOCALE__ = [
     exact('Идол', 'Idol'),
     exact('Этаж 69: работница', 'Floor 69: worker'),
     exact('на северо-востоке', 'to the north-east'),
+    exact('сид мира', 'world seed'),
   ],
   [
     ['Снято ${moved} руб.', 'Withdrew ${moved} rub.'],
@@ -32,6 +33,7 @@ globalThis.__GIGAHRUSH_EN_LOCALE__ = [
     ['${name} вписан в ведомость.', '${name} was entered in the roster.'],
     ['Этаж ${label}', 'Floor ${label}'],
     ['Найди его {dir}.', 'Find him {dir}.'],
+    ['СИД МИРА: ${currentRunSeedLabel(state)}', 'WORLD SEED: ${currentRunSeedLabel(state)}'],
   ],
 ];
 
@@ -58,6 +60,12 @@ test('localization prefers specific decorated procedural names over broad templa
 test('localization handles authored brace placeholders with generated directions', () => {
   setLocalizationLanguage('en');
   assert.equal(translateText('Найди его на северо-востоке.'), 'Find him to the north-east.');
+});
+
+test('localization translates world seed labels', () => {
+  setLocalizationLanguage('en');
+  assert.equal(translateText('сид мира'), 'world seed');
+  assert.equal(translateText('СИД МИРА: 424242'), 'WORLD SEED: 424242');
 });
 
 test('localization keeps Russian text when Russian is active', () => {

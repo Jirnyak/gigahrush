@@ -333,10 +333,26 @@ export function tunePioneerCampPopulationZones(world: World): void {
   for (let i = 0; i < W * W; i++) {
     world.factionControl[i] = world.zones[world.zoneMap[i]]?.faction ?? ZoneFaction.CITIZEN;
   }
+  stampCampFaction(world, CX, CY, 58, ZoneFaction.CITIZEN);
+  stampCampFaction(world, CX - 197, CY - 137, 58, ZoneFaction.WILD);
+  stampCampFaction(world, CX, CY - 380, 64, ZoneFaction.WILD);
+  stampCampFaction(world, CX, CY + 376, 64, ZoneFaction.WILD);
+  stampCampFaction(world, CX - 352, CY, 64, ZoneFaction.WILD);
+  stampCampFaction(world, CX + 352, CY, 64, ZoneFaction.WILD);
   for (let i = 0; i < W * W; i++) {
     if (world.cells[i] !== Cell.LIFT) continue;
     const zone = world.zones[world.zoneMap[i]];
     if (zone) zone.hasLift = true;
+  }
+}
+
+function stampCampFaction(world: World, cx: number, cy: number, radius: number, faction: ZoneFaction): void {
+  const r2 = radius * radius;
+  for (let dy = -radius; dy <= radius; dy++) {
+    for (let dx = -radius; dx <= radius; dx++) {
+      if (dx * dx + dy * dy > r2) continue;
+      world.factionControl[world.idx(cx + dx, cy + dy)] = faction;
+    }
   }
 }
 

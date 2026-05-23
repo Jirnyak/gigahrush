@@ -96,6 +96,8 @@ export function drawNetSphereMenu(
   statLine(ctx, 'запусков', String(profile?.runs ?? '-'), leftX, ly, leftW, valueOffset, '#8cf'); ly += 10 * s;
   statLine(ctx, 'лучшее', profile ? `ур.${profile.bestLevel} / ${profile.bestSamosborCount} сб.` : '-', leftX, ly, leftW, valueOffset, '#fd8'); ly += 10 * s;
   statLine(ctx, 'мой этаж', profile?.lastFloor || '-', leftX, ly, leftW, valueOffset, '#9df'); ly += 10 * s;
+  const runSeed = profile?.runSeed ?? net.currentRunSeed;
+  statLine(ctx, 'сид мира', runSeed !== undefined ? String(runSeed) : '-', leftX, ly, leftW, valueOffset, '#8fb'); ly += 10 * s;
   statLine(ctx, 'мои смерти', String(profile?.deaths ?? '-'), leftX, ly, leftW, valueOffset, '#f98'); ly += 16 * s;
 
   ctx.fillStyle = '#9cf';

@@ -25,13 +25,58 @@ export interface AdminRoomSpec {
   floorTex?: Tex;
 }
 
+function adminFallbackAreaScore(world: World, x: number, y: number, w: number, h: number): number {
+  let score = 0;
+  for (let dy = -1; dy <= h; dy++) {
+    for (let dx = -1; dx <= w; dx++) {
+      const ci = world.idx(x + dx, y + dy);
+      if (world.aptMask[ci] || world.hermoWall[ci] || world.cells[ci] === Cell.LIFT || world.containerMap.has(ci)) return Infinity;
+      if (world.cells[ci] === Cell.ABYSS) return Infinity;
+      if (world.cells[ci] !== Cell.WALL) score += 4;
+      if (world.roomMap[ci] >= 0) score += 3;
+      if (world.features[ci] !== Feature.NONE) score += 2;
+    }
+  }
+  return score;
+}
+
+function findAdminFallbackArea(
+  world: World,
+  cx: number,
+  cy: number,
+  w: number,
+  h: number,
+  minDist: number,
+  maxDist: number,
+): { x: number; y: number } | null {
+  let best: { x: number; y: number; score: number } | null = null;
+  const maxR = Math.max(maxDist, Math.floor(W / 2));
+  const startR = Math.max(0, Math.min(minDist, maxR));
+  for (let r = startR; r <= maxR; r += 8) {
+    for (let side = 0; side < 4; side++) {
+      for (let step = -r; step <= r; step += 8) {
+        const ox = side < 2 ? step : (side === 2 ? -r : r);
+        const oy = side < 2 ? (side === 0 ? -r : r) : step;
+        const x = world.wrap(cx + ox);
+        const y = world.wrap(cy + oy);
+        const score = adminFallbackAreaScore(world, x, y, w, h);
+        if (!Number.isFinite(score)) continue;
+        if (!best || score < best.score) best = { x, y, score };
+        if (score === 0) return { x, y };
+      }
+    }
+  }
+  return best ? { x: best.x, y: best.y } : null;
+}
+
 export function createAdminRoom(
   world: World, nextRoomId: number, spawnX: number, spawnY: number, spec: AdminRoomSpec,
 ): Room | null {
   const cx = Math.floor(spawnX);
   const cy = Math.floor(spawnY);
   const pos = findClearArea(world, cx, cy, spec.w, spec.h, spec.minDist, spec.maxDist)
-    ?? findClearArea(world, cx, cy, spec.w, spec.h, 0, Math.floor(world.dist(0, 0, 512, 512)));
+    ?? findClearArea(world, cx, cy, spec.w, spec.h, 0, Math.floor(world.dist(0, 0, 512, 512)))
+    ?? findAdminFallbackArea(world, cx, cy, spec.w, spec.h, spec.minDist, spec.maxDist);
   if (!pos) {
     console.warn(`[MINISTRY_ADMIN] failed to place ${spec.name}`);
     return null;

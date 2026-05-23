@@ -4,7 +4,6 @@ import {
   AIGoal,
   Cell,
   EntityType,
-  Feature,
   FloorLevel,
   LiftDirection,
   MonsterKind,
@@ -94,7 +93,6 @@ interface PseudoliftCandidate {
 type PseudoliftHost = GameState & { pseudolift?: PseudoliftState };
 
 const MAX_SAVED_PSEUDOLIFTS = 48;
-const TARGET_RADIUS_SQ = 2.05 * 2.05;
 const BAIT_RADIUS_SQ = 3.35 * 3.35;
 const ESCAPE_RADIUS_SQ = 6.5 * 6.5;
 const MONSTER_ANCHOR_RADIUS_SQ = 4.25 * 4.25;
@@ -358,8 +356,7 @@ function targetSite(world: World, state: GameState, lookX: number, lookY: number
   const y = Math.floor(lookY);
   const idx = world.idx(x, y);
   if (idx === site.liftIdx) return site;
-  if (world.features[idx] !== Feature.LIFT_BUTTON && world.cells[idx] !== Cell.LIFT) return null;
-  return world.dist2(x + 0.5, y + 0.5, site.liftX + 0.5, site.liftY + 0.5) <= TARGET_RADIUS_SQ ? site : null;
+  return null;
 }
 
 export function pseudoliftPrompt(world: World, state: GameState, lookX: number, lookY: number): string | null {
@@ -533,11 +530,20 @@ function resolveRevealed(world: World, state: GameState, site: PseudoliftSite, s
   publishPseudoliftEvent(state, site, status === 'cleared' ? 'pseudolift_revealed' : 'monster_escaped', status === 'cleared' ? 4 : 3, status);
 }
 
-export function clearPseudoliftActive(state: GameState): void {
+function killActivePseudoliftMonster(site: PseudoliftSite, entities: Entity[] | undefined): void {
+  if (!entities || site.monsterId === undefined) return;
+  const monster = entities.find(e => e.id === site.monsterId && e.type === EntityType.MONSTER && e.monsterKind === MonsterKind.PSEUDOLIFT);
+  if (!monster) return;
+  monster.alive = false;
+  monster.hp = 0;
+}
+
+export function clearPseudoliftActive(state: GameState, entities?: Entity[]): void {
   const store = ensurePseudoliftState(state);
   if (!store.activeSiteKey) return;
   const site = store.sites[store.activeSiteKey];
   if (site?.status === 'revealed') {
+    killActivePseudoliftMonster(site, entities);
     site.status = 'escaped';
     site.resolvedAt = state.time;
     site.monsterId = undefined;
@@ -599,9 +605,8 @@ export function debugForcePseudoliftNearPlayer(world: World, player: Entity, sta
     world.cells[liftIdx] = Cell.LIFT;
     world.wallTex[liftIdx] = Tex.LIFT_DOOR;
     world.liftDir[liftIdx] = LiftDirection.DOWN;
-    const buttonIdx = world.idx(px, py);
-    world.setFeatureAt(buttonIdx, Feature.LIFT_BUTTON);
-    world.liftDir[buttonIdx] = LiftDirection.DOWN;
+    world.markCellsDirty();
+    world.markWallTexDirty();
     madeFake = true;
   }
 

@@ -378,6 +378,16 @@ For Net Sphere work:
 - Preserve local identity/session fallback behavior.
 - Use Cloudflare scripts only when the task needs them.
 
+## PR Campaign And KPI Continuity
+
+For PR, media, portal submission or KPI monitoring work, treat `KPI.md` and `Docs/PRCampaign/` as active operational docs, not scratch notes.
+
+- Before acting, read `KPI.md`, `Docs/PRCampaign/campaign_plan_ru.md`, the latest dated `Docs/PRCampaign/kpi_report_*.md`, and the current queue such as `Docs/PRCampaign/next_wave_targets_*.md` or `Docs/PRCampaign/next_wave_schedule_ru.md`.
+- After every campaign/KPI pass, update durable docs in the same turn: `KPI.md` for global surfaces/KPIs/blockers, `campaign_plan_ru.md` for campaign status and next actions, and a dated report/target file under `Docs/PRCampaign/` for fresh facts. Do not leave progress only in chat, browser state, subagent output or local memory.
+- Record exact dates, URLs, visible statuses, owner-needed actions, sent/submitted/live/removed states, moderation/account blockers, and what the next agent should watch or avoid.
+- Mark outdated schedules or stale targets explicitly instead of deleting useful context. Keep anti-spam rules, clear developer affiliation and no-vote/no-bump/no-blind-final-click constraints intact.
+- Do not create separate agent-log, task-status or archive folders for campaign continuity; keep continuity in the active PR/KPI docs above.
+
 ## Documentation Discipline
 
 Update docs only when facts change.

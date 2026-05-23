@@ -1,6 +1,6 @@
 # GIGAHRUSH Plans
 
-Статус: consolidated backlog from active planning docs as of 2026-05-20.
+Статус: consolidated backlog from active planning docs as of 2026-05-23.
 
 `README.md` remains the source of truth for shipped behavior. This file is only for plans that are not fully proven in game yet, or are implemented as a thin slice but still have documented expansion debt. Historical prompts and old batch plans live under `gatbage/`.
 
@@ -8,10 +8,11 @@
 
 These are no longer pure plans; update `README.md` instead when their behavior changes:
 
-- 6 story `FloorLevel` floors and the `z=-44..40` `FloorRun`.
-- 18 routed authored design floors and 61 procedural interstitial floors.
-- 18 procedural anomaly ids in data/generation/runtime surface, including rail trains, Bad Apple, zombie apocalypse, Conway, section shift and samosbor seed.
+- 6 story `FloorLevel` floors and the `z=-50..+50` `FloorRun`.
+- 20 routed authored design floors and 75 procedural/fallback interstitial floors.
+- 19 procedural anomaly ids in data/generation/runtime surface, including rail trains, Bad Apple, zombie apocalypse, Conway, section shift and samosbor seed.
 - 8 numbered lift instance definitions with runtime interruption state.
+- Runtime floor memory for visited route stops in the current session: ordinary lift travel restores the stored `World`/entities for the exact floor key, while first visits and save loads regenerate from route seed/data. Samosbor changes the active world and the stitched result becomes the next stored state for that same key.
 - Net Sphere optional Cloudflare/D1 terminal and Net Terminal Gen current-floor editor.
 - High-density active AI profiles, entity index broadphase and pathfinding budget.
 - Save shape versioning with current-shape rejection of stale saves.
@@ -24,7 +25,7 @@ These are the main unfinished design debts from `desdoc.md`:
 | --- | --- | --- |
 | One complete expedition slice | Debug command ids and route helpers exist. | Prove a normal player-readable route: Living prep -> assignment/rumor -> lift -> fight/steal/repair -> container/reward -> samosbor warning -> return consequence. |
 | Combat readability | Weapon/PSI data, damage records, HUD, particles, audio and monster counterplay data exist. | Make ammo/cooldown/weapon roles and projectile/impact causes readable without reading tables. |
-| Route legibility | `FloorRun`, route cues, maps, design-floor teleports and procedural specs exist. | Show route id, danger, target reason and return path consistently in lift/map/quest/log language. |
+| Route legibility | `FloorRun`, route cues, maps, design-floor teleports, procedural specs, optional title seed and runtime floor memory exist. | Show route seed/id, danger, target reason and return path consistently in lift/map/quest/log language. |
 | Samosbor as expedition drama | Variants, modifiers, director beats, local Living wave and aftermath events exist. | Tie warning, shelter, active phase and aftermath to visible route changes, residue, rumors, containers or contracts. |
 | Consequences that stick | Events, room memory, NPC memory, rumors, containers, faction events, economy and production exist. | Make stealing, reporting, repairing, trading and sheltering leave more visible aftereffects. |
 

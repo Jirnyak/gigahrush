@@ -43,7 +43,7 @@ export function drawGameMenu(
   ctx.textAlign = 'center';
   for (let i = 0; i < items.length; i++) {
     const selected = i === state.menuSel;
-    const yy = py + 60 * sy + i * 20 * sy;
+    const yy = py + 52 * sy + i * 20 * sy;
     const mj = textJitter(time, 710 + i);
     const alpha = flicker(time, 720 + i);
     ctx.fillStyle = selected ? `rgba(0,255,170,${alpha})` : `rgba(100,136,136,${alpha})`;

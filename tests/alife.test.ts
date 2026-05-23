@@ -117,6 +117,69 @@ test('event-created ordinary NPC receives persistent A-Life identity', () => {
   assert.equal(override.canGiveQuest, true);
 });
 
+test('event-created ordinary NPC does not inherit an existing A-Life identity or death slot', () => {
+  const state = minimalState();
+  const alife = setAlifeState(state, { seed: 12345, total: 1_000 }) as {
+    npcs: Array<{
+      id: number;
+      floorKey: string;
+      playerRelation?: number;
+      karma: number;
+      kills?: number;
+      npcKills?: number;
+      dead?: boolean;
+    }>;
+    floorIndex: Record<string, number[]>;
+  };
+  const reserved = alife.npcs[0];
+  reserved.floorKey = 'story:living';
+  reserved.playerRelation = -88;
+  reserved.karma = -123;
+  reserved.kills = 17;
+  reserved.npcKills = 9;
+  alife.floorIndex['story:living'] = [0];
+
+  const npc = ambientTemplate(60, 18.5, 18.5);
+  npc.name = 'Прибытие без прошлого';
+  npc.kills = undefined;
+  npc.npcKills = undefined;
+  npc.monsterKills = undefined;
+  npc.playerRelation = undefined;
+  npc.karma = undefined;
+
+  assert.equal(assignPersistentAlifeNpcFromEntity(state, npc, []), true);
+
+  assert.ok(npc.alifeId);
+  assert.notEqual(npc.alifeId, reserved.id);
+  assert.equal(reserved.playerRelation, -88);
+  assert.equal(reserved.karma, -123);
+  assert.equal(reserved.kills, 17);
+  assert.equal(reserved.npcKills, 9);
+  assert.notEqual(npc.playerRelation, -88);
+  assert.notEqual(npc.karma, -123);
+  assert.equal(npc.kills, 0);
+  assert.equal(npc.npcKills, 0);
+
+  recordAlifeNpcDeath(state, npc);
+  const save = alifeForSave(state);
+  assert.equal(save.deadIds.includes(npc.alifeId), true);
+  assert.equal(save.deadIds.includes(reserved.id), false);
+});
+
+test('A-Life caps sanitized and saved dead ids', () => {
+  const state = minimalState();
+  const deadIds = Array.from({ length: 70_000 }, (_, index) => index + 1);
+  const alife = setAlifeState(state, { seed: 12345, total: 100_000, deadIds }) as {
+    npcs: Array<{ dead?: boolean }>;
+  };
+
+  assert.equal(alife.npcs.filter(npc => npc.dead).length, 65_536);
+  const save = alifeForSave(state);
+  assert.equal(save.deadIds.length, 65_536);
+  assert.equal(save.deadIds[0], 1);
+  assert.equal(save.deadIds[save.deadIds.length - 1], 65_536);
+});
+
 test('A-Life quest candidates are bounded instead of every persistent NPC offering work', () => {
   const state = minimalState();
   const alife = setAlifeState(state, { seed: 12345, total: 100_000 }) as {
@@ -133,7 +196,7 @@ test('A-Life design-floor records use Floor 69 social population mix', () => {
   const alife = setAlifeState(state, { seed: 12345, total: 100_000 }) as {
     npcs: Array<{ floorKey: string; faction: Faction; occupation: Occupation }>;
   };
-  const floor69 = alife.npcs.filter(npc => npc.floorKey === 'floor_69');
+  const floor69 = alife.npcs.filter(npc => npc.floorKey === 'design:floor_69');
   const industrialTrades = floor69.filter(npc =>
     npc.occupation === Occupation.ELECTRICIAN ||
     npc.occupation === Occupation.TURNER,

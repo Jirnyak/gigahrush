@@ -34,6 +34,7 @@ export interface SavePayloadSections {
   voidEntryFromFloor?: unknown;
   liftArachna: unknown;
   pseudolift: unknown;
+  floorMemory: unknown;
   alife: unknown;
   netTerminalGen: unknown;
   mapEditorPatches: unknown;
@@ -87,6 +88,7 @@ export interface SavePayload {
     voidEntryFromFloor?: unknown;
     liftArachna: unknown;
     pseudolift: unknown;
+    floorMemory: unknown;
     alife: unknown;
     netTerminalGen: unknown;
     mapEditorPatches: unknown;
@@ -261,6 +263,7 @@ export function buildSavePayload(input: SavePayloadBuildInput): SavePayload {
       voidEntryFromFloor: sections.voidEntryFromFloor,
       liftArachna: sections.liftArachna,
       pseudolift: sections.pseudolift,
+      floorMemory: sections.floorMemory,
       alife: sections.alife,
       netTerminalGen: sections.netTerminalGen,
       mapEditorPatches: sections.mapEditorPatches,
@@ -327,6 +330,7 @@ export function summarizeSavePayload(
     { label: 'floorInstances', value: payload.state.floorInstances },
     { label: 'liftArachna', value: payload.state.liftArachna },
     { label: 'pseudolift', value: payload.state.pseudolift },
+    { label: 'floorMemory', value: payload.state.floorMemory },
     { label: 'voidReturnPortal', value: payload.state.voidReturnPortal },
     { label: 'voidEntryFromFloor', value: payload.state.voidEntryFromFloor },
   ];

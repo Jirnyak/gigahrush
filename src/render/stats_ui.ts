@@ -338,11 +338,6 @@ function drawRpgEffectBlock(
     ctx.fillText(fitStatText(ctx, line, w), x, y);
     y += 7 * sy;
   }
-  if (rpg.attrPoints > 0) {
-    ctx.fillStyle = '#ee4';
-    ctx.fillText(fitStatText(ctx, '[1]/[2]/[3] меняют стиль следующей вылазки', w), x, y);
-    y += 8 * sy;
-  }
   return y + 2 * sy;
 }
 

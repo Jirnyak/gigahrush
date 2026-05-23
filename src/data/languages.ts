@@ -9,6 +9,8 @@ export interface TitleLanguageDef {
   subtitle: string;
   nameLabel: string;
   namePlaceholder: string;
+  seedLabel: string;
+  seedPlaceholder: string;
   startPrompt: string;
   languageHint: string;
   mobileHint: string;
@@ -25,8 +27,10 @@ export const TITLE_LANGUAGES: readonly TitleLanguageDef[] = [
     subtitle: 'бесконечный бетонный лабиринт',
     nameLabel: 'НЕТ-ИМЯ',
     namePlaceholder: 'введите имя',
+    seedLabel: 'СИД',
+    seedPlaceholder: 'пусто = случайный',
     startPrompt: 'Введите имя и нажмите ENTER',
-    languageHint: '←/→ язык',
+    languageHint: 'TAB поле  |  ←/→ язык',
     mobileHint: 'Тап — начать  |  левый джойстик — ходьба  |  правый — камера  |  центр — атака',
     desktopHint: (move, interact, controls) => `${controls} — клавиши  |  ${move} — движение  |  Мышь — обзор  |  ${interact} — действие`,
     flag: 'soviet',
@@ -39,8 +43,10 @@ export const TITLE_LANGUAGES: readonly TitleLanguageDef[] = [
     subtitle: 'endless concrete labyrinth',
     nameLabel: 'NET-NAME',
     namePlaceholder: 'enter name',
+    seedLabel: 'SEED',
+    seedPlaceholder: 'blank = random',
     startPrompt: 'Enter name and press ENTER',
-    languageHint: '←/→ language',
+    languageHint: 'TAB field  |  ←/→ language',
     mobileHint: 'Tap — start  |  left stick — walk  |  right stick — camera  |  center — attack',
     desktopHint: (move, interact, controls) => `${controls} — keys  |  ${move} — move  |  Mouse — look  |  ${interact} — action`,
     flag: 'british_empire',

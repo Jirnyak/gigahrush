@@ -3,7 +3,8 @@ import { controlBindingLabel } from '../systems/controls';
 import { fitText } from './ui_text';
 
 export interface TitleLanguageHit {
-  id: TitleLanguageId;
+  id?: TitleLanguageId;
+  field?: 'name' | 'seed' | 'start';
   x: number;
   y: number;
   w: number;
@@ -13,13 +14,24 @@ export interface TitleLanguageHit {
 export interface DrawTitleOptions {
   languageId: TitleLanguageId;
   playerName: string;
+  runSeedText: string;
+  activeField: 'name' | 'seed';
   cursorOn: boolean;
   mobile: boolean;
 }
 
 export function hitTitleLanguage(hits: readonly TitleLanguageHit[], x: number, y: number): TitleLanguageId | null {
   for (const hit of hits) {
+    if (!hit.id) continue;
     if (x >= hit.x && x <= hit.x + hit.w && y >= hit.y && y <= hit.y + hit.h) return hit.id;
+  }
+  return null;
+}
+
+export function hitTitleField(hits: readonly TitleLanguageHit[], x: number, y: number): 'name' | 'seed' | 'start' | null {
+  for (const hit of hits) {
+    if (!hit.field) continue;
+    if (x >= hit.x && x <= hit.x + hit.w && y >= hit.y && y <= hit.y + hit.h) return hit.field;
   }
   return null;
 }
@@ -27,12 +39,16 @@ export function hitTitleLanguage(hits: readonly TitleLanguageHit[], x: number, y
 export function drawTitleScreen(ctx: CanvasRenderingContext2D, options: DrawTitleOptions): TitleLanguageHit[] {
   const w = ctx.canvas.width;
   const h = ctx.canvas.height;
-  const s = Math.max(0.72, Math.min(1.35, Math.min(w / 720, h / 520)));
+  const viewportScale = Math.min(w / 720, h / 520);
+  const minScale = Math.min(0.72, Math.max(0.42, Math.min(w / 640, h / 360)));
+  const s = Math.max(minScale, Math.min(1.35, viewportScale));
   const cx = w / 2;
   const cy = h / 2;
   const lang = titleLanguageDef(options.languageId);
   const shownName = options.playerName || lang.namePlaceholder;
-  const cursor = options.cursorOn ? '_' : '';
+  const nameCursor = options.cursorOn && options.activeField === 'name' ? '_' : '';
+  const seedCursor = options.cursorOn && options.activeField === 'seed' ? '_' : '';
+  const shownSeed = options.runSeedText || lang.seedPlaceholder;
 
   ctx.fillStyle = '#090909';
   ctx.fillRect(0, 0, w, h);
@@ -53,15 +69,22 @@ export function drawTitleScreen(ctx: CanvasRenderingContext2D, options: DrawTitl
   ctx.fillText(lang.subtitle, cx, cy - 76 * s);
 
   const hits = drawLanguageSwitch(ctx, cx, cy - 44 * s, s, options.languageId);
+  const fieldW = Math.min(w * 0.9, 460 * s);
+  const fieldH = Math.max(20, 22 * s);
 
   ctx.textAlign = 'center';
   ctx.fillStyle = '#6cf';
   ctx.font = `${Math.round(14 * s)}px monospace`;
-  ctx.fillText(fitText(ctx, `${lang.nameLabel}: ${shownName}${cursor}`, w * 0.9), cx, cy + 38 * s);
+  ctx.fillText(fitText(ctx, `${lang.nameLabel}: ${shownName}${nameCursor}`, w * 0.9), cx, cy + 30 * s);
+  hits.push({ field: 'name', x: cx - fieldW / 2, y: cy + 30 * s - fieldH + 5 * s, w: fieldW, h: fieldH });
+  ctx.fillStyle = '#8fb';
+  ctx.fillText(fitText(ctx, `${lang.seedLabel}: ${shownSeed}${seedCursor}`, w * 0.9), cx, cy + 50 * s);
+  hits.push({ field: 'seed', x: cx - fieldW / 2, y: cy + 50 * s - fieldH + 5 * s, w: fieldW, h: fieldH });
 
   ctx.fillStyle = '#888';
   ctx.font = `${Math.round(16 * s)}px monospace`;
-  ctx.fillText(fitText(ctx, lang.startPrompt, w * 0.9), cx, cy + 74 * s);
+  ctx.fillText(fitText(ctx, lang.startPrompt, w * 0.9), cx, cy + 82 * s);
+  hits.push({ field: 'start', x: cx - fieldW / 2, y: cy + 82 * s - 20 * s, w: fieldW, h: 28 * s });
 
   ctx.fillStyle = '#555';
   ctx.font = `${Math.round(12 * s)}px monospace`;
@@ -72,11 +95,11 @@ export function drawTitleScreen(ctx: CanvasRenderingContext2D, options: DrawTitl
       controlBindingLabel('interact'),
       controlBindingLabel('controlsMenu'),
     );
-  ctx.fillText(fitText(ctx, hint, w * 0.92), cx, cy + 112 * s);
+  ctx.fillText(fitText(ctx, hint, w * 0.92), cx, cy + 118 * s);
 
   ctx.fillStyle = '#705858';
   ctx.font = `${Math.round(11 * s)}px monospace`;
-  ctx.fillText(fitText(ctx, lang.languageHint, w * 0.9), cx, cy + 138 * s);
+  ctx.fillText(fitText(ctx, lang.languageHint, w * 0.9), cx, cy + 142 * s);
 
   ctx.textAlign = 'left';
   return hits;
