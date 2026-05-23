@@ -14,6 +14,8 @@ Primary decisions: repair lift, reroute floor access, steal keys, hide in staff 
 
 - Long staff corridors with locked side rooms.
 - Lift machine hall, breaker room, janitor depot, ventilation junction, staff canteen.
+- Full-route expansion adds machine cores, control booths, pump alcoves, cable trenches and duct bypasses.
+- Emergency panels on the route expose bounded water, power, vent and door decisions through the shared panel UI.
 - Multiple lift exits can be physically near but access-gated.
 - Doors and keys matter; avoid huge open arenas.
 
@@ -23,6 +25,7 @@ Primary decisions: repair lift, reroute floor access, steal keys, hide in staff 
 - `service_janitor_nadya`: knows hidden doors and cleaning supply containers.
 - `service_electrician_roma`: breaker repairs, electric samosbor hints.
 - `service_locked_out_clerk`: ties back to Ministry/Bureau.
+- `service_trapped_pump_worker`: rescue pressure worker in the west pump alcove.
 
 ## Quests
 
@@ -30,6 +33,7 @@ Primary decisions: repair lift, reroute floor access, steal keys, hide in staff 
 - `service_steal_master_key`: steal/earn key with witness risk.
 - `service_reroute_raid`: change which floor a raid reaches first.
 - `service_restore_lights`: power up one dark route, attracting light-fed monsters.
+- `service_rescue_pump_worker`: reach the west pump alcove, clear the pressure pocket and recover a valve tag/filter kit.
 
 ## Systems
 

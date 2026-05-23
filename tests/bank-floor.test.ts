@@ -4,14 +4,18 @@ import * as assert from 'node:assert/strict';
 import {
   Cell,
   EntityType,
+  Faction,
   FloorLevel,
   LiftDirection,
+  MonsterKind,
+  Occupation,
 } from '../src/core/types';
 import {
   DESIGN_FLOOR_ROUTES,
   designFloorAtZ,
   designFloorById,
 } from '../src/data/design_floors';
+import { designFloorPopulationProfile } from '../src/data/design_floor_population';
 import { PROCEDURAL_FLOOR_ZS } from '../src/data/procedural_floors';
 import { getSideQuestRegistrySnapshot } from '../src/data/plot';
 import {
@@ -21,7 +25,7 @@ import {
 } from '../src/systems/procedural_floors';
 import { getRecentEvents } from '../src/systems/events';
 import { putIntoContainer, takeFromContainer } from '../src/systems/containers';
-import { generateDesignFloor, validateDesignFloorGenerators } from '../src/gen/design_floors/manifest';
+import { generateDesignFloor } from '../src/gen/design_floors/manifest';
 import {
   BANK_FLOOR_BASE_FLOOR,
   BANK_FLOOR_ROUTE_ID,
@@ -30,9 +34,23 @@ import {
 } from '../src/gen/design_floors/bank_floor';
 import { makeGameState, makeTestPlayer } from './helpers';
 
-test('bank_floor is registered as an authored Ministry-band route', () => {
-  validateDesignFloorGenerators();
+function countEntitiesNear(
+  gen: ReturnType<typeof generateDesignFloor>,
+  type: EntityType,
+  x: number,
+  y: number,
+  radius: number,
+): number {
+  const r2 = radius * radius;
+  let count = 0;
+  for (const entity of gen.entities) {
+    if (!entity.alive || entity.type !== type) continue;
+    if (gen.world.dist2(entity.x, entity.y, x, y) <= r2) count++;
+  }
+  return count;
+}
 
+test('bank_floor is registered as an authored Ministry-band route', () => {
   const route = designFloorById(BANK_FLOOR_ROUTE_ID);
   assert.equal(route?.z, BANK_FLOOR_Z);
   assert.equal(route?.baseFloor, BANK_FLOOR_BASE_FLOOR);
@@ -71,6 +89,22 @@ test('normal lift route reaches bank_floor between Ministry and Raionsovet archi
   assert.equal(archive?.designFloorId, 'raionsovet_archive');
 });
 
+test('bank_floor population profile targets bank crowds, guards and paper monsters', () => {
+  const route = designFloorById(BANK_FLOOR_ROUTE_ID);
+  assert.ok(route);
+  const profile = designFloorPopulationProfile(route);
+
+  assert.equal(profile.npcTarget, 1400);
+  assert.equal(profile.monsterTarget, 650);
+  assert.equal(profile.npcFactions.some(v => v.value === Faction.LIQUIDATOR && v.weight >= 20), true);
+  assert.equal(profile.npcFactions.some(v => v.value === Faction.WILD && v.weight >= 10), true);
+  assert.equal(profile.npcOccupations.some(v => v.value === Occupation.SECRETARY && v.weight >= 25), true);
+  assert.equal(profile.npcOccupations.some(v => v.value === Occupation.ALCOHOLIC && v.weight > 0), true);
+  assert.equal(profile.monsterBiasKinds.includes(MonsterKind.PROTOKOLNIK), true);
+  assert.equal(profile.npcPlacement.anchors?.some(a => a.x === 506 && a.y === 548 && a.weight > 2), true);
+  assert.equal(profile.monsterPlacement.anchors?.some(a => a.x === 603 && a.y === 515 && a.weight > 2), true);
+});
+
 test('bank_floor generator creates named banking rooms, NPCs, containers and passable spawn', () => {
   const gen = generateDesignFloor(BANK_FLOOR_ROUTE_ID);
   const spawnCell = gen.world.cells[gen.world.idx(Math.floor(gen.spawnX), Math.floor(gen.spawnY))];
@@ -90,6 +124,11 @@ test('bank_floor generator creates named banking rooms, NPCs, containers and pas
     BANK_ROOM_NAMES.vault,
     BANK_ROOM_NAMES.queue,
     BANK_ROOM_NAMES.bypass,
+    'Очередной зал вкладчиков Б-22',
+    'Очередной зал должников Б-22',
+    'Сейфовый пост ликвидаторов Б-22',
+    'Архив испорченных депозитов Б-22',
+    'Черная кассовая перемычка Б-22',
   ]) {
     assert.equal(names.has(roomName), true, roomName);
   }
@@ -98,6 +137,23 @@ test('bank_floor generator creates named banking rooms, NPCs, containers and pas
   assert.equal(npcs.some(e => e.plotNpcId === 'bank_credit_prokhor'), true);
   assert.equal(gen.world.containers.some(c => c.tags.includes('banking') && c.tags.includes('deposit')), true);
   assert.equal(gen.world.containers.some(c => c.tags.includes('banking') && c.tags.includes('vault')), true);
+});
+
+test('bank_floor full route keeps crowd density and guarded vault pressure in playable bands', () => {
+  const gen = generateDesignFloor(BANK_FLOOR_ROUTE_ID);
+  const npcs = gen.entities.filter(e => e.type === EntityType.NPC);
+  const monsters = gen.entities.filter(e => e.type === EntityType.MONSTER);
+  const vaultContainers = gen.world.containers.filter(c => c.tags.includes('banking') && c.tags.includes('vault'));
+
+  assert.equal(npcs.length >= 800 && npcs.length <= 1800, true);
+  assert.equal(monsters.length >= 300 && monsters.length <= 900, true);
+  assert.equal(countEntitiesNear(gen, EntityType.NPC, 514, 512, 130) >= 100, true);
+  assert.equal(countEntitiesNear(gen, EntityType.NPC, 506, 548, 70) >= 35, true);
+  assert.equal(countEntitiesNear(gen, EntityType.NPC, 610, 512, 70) >= 30, true);
+  assert.equal(countEntitiesNear(gen, EntityType.MONSTER, 603, 515, 90) >= 20, true);
+  assert.equal(countEntitiesNear(gen, EntityType.MONSTER, 573, 540, 80) >= 16, true);
+  assert.equal(vaultContainers.length >= 2, true);
+  assert.equal(vaultContainers.every(c => c.access !== 'public' && (c.lockDifficulty ?? 0) >= 4), true);
 });
 
 test('bank_floor exposes legal deposit and risky vault interactions through existing systems', () => {

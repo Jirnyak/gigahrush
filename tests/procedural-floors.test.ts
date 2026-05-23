@@ -1,7 +1,7 @@
 import { after, test } from 'node:test';
 import * as assert from 'node:assert/strict';
 
-import { Cell, EntityType, Feature, FloorLevel, LiftDirection, MonsterKind, Tex, W } from '../src/core/types';
+import { Cell, DoorState, EntityType, Faction, Feature, FloorLevel, LiftDirection, MonsterKind, Occupation, RoomType, Tex, W, ZoneFaction } from '../src/core/types';
 import {
   FLOOR_GEOMETRIES,
   FLOOR_RUN_MAX_Z,
@@ -10,13 +10,17 @@ import {
   PROCEDURAL_FLOOR_COUNT,
   PROCEDURAL_FLOOR_ZS,
   floorRunProfileZ,
+  floorRunZAllowsNpcs,
   makeProceduralFloorSpec,
   type ProceduralFloorSpec,
   zForStoryFloor,
 } from '../src/data/procedural_floors';
 import { DESIGN_FLOOR_ROUTES } from '../src/data/design_floors';
+import { designFloorPopulationProfile } from '../src/data/design_floor_population';
 import { ENTITY_SOFT_LIMITS } from '../src/data/entity_limits';
-import { HELL_POPULATION_PROFILE, PROCEDURAL_POPULATION_PROFILES } from '../src/data/population_profiles';
+import { getMonsterEcology } from '../src/data/monster_ecology';
+import { SIDE_QUESTS } from '../src/data/plot';
+import { PROCEDURAL_POPULATION_PROFILES } from '../src/data/population_profiles';
 import {
   BAD_APPLE_HEIGHT,
   BAD_APPLE_WIDTH,
@@ -94,6 +98,36 @@ function maxEntitiesInArea(entities: readonly { alive: boolean; type: EntityType
     if (next > max) max = next;
   }
   return max;
+}
+
+function countNear(entities: readonly { alive: boolean; x: number; y: number }[], x: number, y: number, radius: number): number {
+  const r2 = radius * radius;
+  let count = 0;
+  for (const entity of entities) {
+    if (!entity.alive) continue;
+    const dx = entity.x - x;
+    const dy = entity.y - y;
+    if (dx * dx + dy * dy <= r2) count++;
+  }
+  return count;
+}
+
+function reachableRoomCount(gen: ReturnType<typeof generateDesignFloor>, roomNames: readonly string[]): number {
+  const audit = auditReachability(gen.world, gen.world.idx(Math.floor(gen.spawnX), Math.floor(gen.spawnY)));
+  let count = 0;
+  for (const name of roomNames) {
+    const room = gen.world.rooms.find(candidate => candidate.name === name);
+    if (!room) continue;
+    let reachable = false;
+    for (let i = 0; i < gen.world.cells.length; i++) {
+      if (gen.world.roomMap[i] === room.id && audit.reachable[i]) {
+        reachable = true;
+        break;
+      }
+    }
+    if (reachable) count++;
+  }
+  return count;
 }
 
 function assertFullFootprint(world: World, label: string): void {
@@ -344,13 +378,14 @@ test('floor run places pioneer camp one authored step above upper bureau', () =>
 });
 
 test('floor run exposes seeded procedural slots across the normal lift span', () => {
-  assert.equal(PROCEDURAL_FLOOR_COUNT, 76);
+  assert.equal(PROCEDURAL_FLOOR_COUNT, 75);
   assert.equal(PROCEDURAL_FLOOR_ZS[0], -49);
   assert.equal(PROCEDURAL_FLOOR_ZS.at(-1), 49);
   assert.equal(PROCEDURAL_FLOOR_ZS.includes(1), true);
   assert.equal(PROCEDURAL_FLOOR_ZS.includes(-25), true);
   assert.equal(PROCEDURAL_FLOOR_ZS.includes(-22), false);
   assert.equal(PROCEDURAL_FLOOR_ZS.includes(2), true);
+  assert.equal(PROCEDURAL_FLOOR_ZS.includes(12), false);
   assert.equal(PROCEDURAL_FLOOR_ZS.includes(26), false);
   assert.equal(PROCEDURAL_FLOOR_ZS.includes(38), false);
 
@@ -381,12 +416,23 @@ test('floor run exposes seeded procedural slots across the normal lift span', ()
   assert.equal(crossroads?.designFloorId, 'manhattan_crossroads');
   commitFloorRunEntry(state, crossroads!);
 
-  for (const expectedZ of [9, 10, 11, 12, 13]) {
+  for (const expectedZ of [9, 10, 11]) {
     const entry = resolveFloorRunRoute(state, LiftDirection.UP);
     assert.equal(entry?.z, expectedZ);
     assert.equal(entry?.procedural, true);
     commitFloorRunEntry(state, entry!);
   }
+
+  const slimeNii = resolveFloorRunRoute(state, LiftDirection.UP);
+  assert.equal(slimeNii?.z, 12);
+  assert.equal(slimeNii?.designFloorId, 'slime_nii');
+  assert.equal(slimeNii?.baseFloor, FloorLevel.KVARTIRY);
+  commitFloorRunEntry(state, slimeNii!);
+
+  const z13 = resolveFloorRunRoute(state, LiftDirection.UP);
+  assert.equal(z13?.z, 13);
+  assert.equal(z13?.procedural, true);
+  commitFloorRunEntry(state, z13!);
 
   const kvartiry = resolveFloorRunRoute(state, LiftDirection.UP);
   assert.equal(kvartiry?.z, 14);
@@ -489,13 +535,13 @@ test('active numbered floor editor replay does not leak patches to intended rout
 test('procedural floor danger deck keeps route-band pressure rhythm', () => {
   assert.deepEqual(summarizeDangerDeck(), {
     upper: { slots: 135, averageTimes100: 313, dangerCounts: [0, 33, 54, 46, 2] },
-    residential: { slots: 95, averageTimes100: 241, dangerCounts: [10, 39, 43, 3, 0] },
+    residential: { slots: 90, averageTimes100: 240, dangerCounts: [10, 37, 40, 3, 0] },
     industrial: { slots: 95, averageTimes100: 376, dangerCounts: [0, 7, 24, 49, 15] },
     hellVoid: { slots: 55, averageTimes100: 471, dangerCounts: [0, 0, 2, 12, 41] },
   });
   assert.deepEqual(summarizeAnomalyPressure(), {
-    none: { slots: 104, averageTimes100: 259, danger5: 2 },
-    anomaly: { slots: 276, averageTimes100: 362, danger5: 56 },
+    none: { slots: 103, averageTimes100: 259, danger5: 2 },
+    anomaly: { slots: 272, averageTimes100: 363, danger5: 56 },
   });
 });
 
@@ -508,7 +554,7 @@ test('procedural floor danger snapshot is deterministic by z and seed', () => {
     '-49:5 -47:5 -46:5 -45:5 -44:5 -43:5 -42:5 -41:5 -39:5 -37:4 -35:5 -34:5',
     '-33:5 -31:5 -30:4 -29:3 -28:4 -27:4 -25:4 -24:5 -23:3 -21:4 -20:4 -19:4',
     '-17:3 -16:2 -15:3 -13:3 -12:2 -11:2 -9:3 -8:2 -7:2 -6:3 -5:3 -3:3 -2:1 -1:3',
-    '1:1 2:1 3:2 5:2 6:3 7:2 9:3 10:3 11:3 12:3 13:2 15:2 16:4 17:2',
+    '1:1 2:1 3:2 5:2 6:3 7:2 9:3 10:3 11:3 13:2 15:2 16:4 17:2',
     '19:3 20:2 21:2 23:3 24:3 25:2 27:3 28:3 29:3 31:2 32:2 33:2 35:3 36:3',
     '37:3 39:5 40:4 41:4 43:4 44:3 45:4 47:4 48:4 49:4',
   ].join(' '));
@@ -661,10 +707,18 @@ test('void and lower route floors do not generate NPCs', () => {
   assert.equal(procGen.entities.some(e => e.type === EntityType.MONSTER), true);
 
   const darknessGen = timeFloorGeneration('design darkness', () => generateDesignFloor('darkness'));
+  const darknessMonsters = darknessGen.entities.filter(e => e.type === EntityType.MONSTER);
+  const darknessMonsterKinds = new Set(darknessMonsters.map(e => e.monsterKind));
   assert.equal(darknessGen.entities.some(e => e.type === EntityType.NPC), false);
-  assert.equal(darknessGen.entities.some(e => e.type === EntityType.MONSTER), true);
+  assert.equal(darknessMonsters.length >= 3000 && darknessMonsters.length <= 7000, true);
+  assert.equal(darknessMonsterKinds.has(MonsterKind.LISHENNYY), true);
+  assert.equal(darknessMonsterKinds.has(MonsterKind.SLEPOGLAZ), true);
+  assert.equal(darknessMonsterKinds.has(MonsterKind.PROTOKOLNIK), true);
+  assert.equal(darknessMonsters.filter(e => e.monsterKind === MonsterKind.SBORKA).length < darknessMonsters.length / 3, true);
+  assert.equal(darknessMonsters.filter(e => darknessGen.world.dist2(e.x, e.y, darknessGen.spawnX, darknessGen.spawnY) <= 32 * 32).length <= Math.max(64, Math.floor(darknessMonsters.length * 0.02)), true);
   assert.equal(darknessGen.world.features.some(feature => feature === Feature.LAMP || feature === Feature.CANDLE), false);
   assert.equal(darknessGen.world.light.some(value => value > 0), false);
+  assert.equal(routeCueCount(darknessGen.world) >= 3, true);
   assertFullFootprint(darknessGen.world, 'darkness design floor');
 
   const rawDarknessGen = timeFloorGeneration('raw design darkness', () => generateDarknessDesignFloor());
@@ -673,14 +727,454 @@ test('void and lower route floors do not generate NPCs', () => {
 });
 
 test('podad ships as a denser-than-Hell monster floor with gated lower lifts', () => {
+  const route = DESIGN_FLOOR_ROUTES.find(def => def.id === 'podad');
+  assert.ok(route);
+  const profile = designFloorPopulationProfile(route);
   const gen = timeFloorGeneration('design podad population', () => generateDesignFloor('podad'));
+  const npcs = gen.entities.filter(e => e.type === EntityType.NPC);
+  const ambientNpcs = npcs.filter(e => !e.plotNpcId && !e.persistentNpcId && e.alifeId === undefined);
   const monsters = gen.entities.filter(e => e.type === EntityType.MONSTER);
   const heralds = monsters.filter(e => e.monsterKind === MonsterKind.HERALD);
+  const nonHeraldRareMonsters = monsters.filter(e => e.monsterKind !== MonsterKind.HERALD && getMonsterEcology(e.monsterKind)?.rare);
   const hasDownLift = gen.world.cells.some((cell, idx) => cell === Cell.LIFT && gen.world.liftDir[idx] === LiftDirection.DOWN);
 
-  assert.equal(monsters.length > HELL_POPULATION_PROFILE.monsters.initial, true);
+  assert.equal(ambientNpcs.length, 0);
+  assert.equal(npcs.length <= 60, true);
+  assert.equal(monsters.length, profile.monsterTarget);
+  assert.equal(monsters.length >= 6500, true);
+  assert.equal(monsters.length <= 9500, true);
+  assert.equal(monsters.length <= ENTITY_SOFT_LIMITS[EntityType.MONSTER], true);
   assert.equal(heralds.length, 3);
+  assert.equal(nonHeraldRareMonsters.length, 0);
   assert.equal(hasDownLift, false);
+});
+
+test('design floor population profiles follow route density curve and caps', () => {
+  const profiles = Object.fromEntries(DESIGN_FLOOR_ROUTES.map(route => [route.id, designFloorPopulationProfile(route)]));
+
+  assert.equal(profiles.roof.npcTarget, 0);
+  assert.equal(profiles.chthonic_attic.npcTarget, 0);
+  assert.equal(profiles.chthonic_attic.monsterTarget, 4300);
+  assert.equal(profiles.chthonic_attic.monsterTags.includes('fog'), true);
+  assert.equal((profiles.chthonic_attic.monsterPlacement.maxPerBucket ?? 0) <= 8, true);
+  assert.equal(profiles.roof.monsterTarget > profiles.bank_floor.monsterTarget, true);
+  assert.equal(profiles.communal_ring.npcTarget > profiles.upper_bureau.npcTarget, true);
+  assert.equal(profiles.manhattan_crossroads.npcTarget > profiles.raionsovet_archive.npcTarget, true);
+  assert.equal((profiles.manhattan_crossroads.npcPlacement.anchors?.length ?? 0) >= 6, true);
+  assert.equal((profiles.manhattan_crossroads.monsterPlacement.anchors?.length ?? 0) >= 5, true);
+  assert.equal((profiles.manhattan_crossroads.monsterPlacement.roomWeights?.[RoomType.STORAGE] ?? 0) > 1.5, true);
+  assert.equal(profiles.pioneer_camp.npcTarget > profiles.antenna_court.npcTarget, true);
+  assert.equal(profiles.floor_69.npcTarget, 2200);
+  assert.equal(profiles.floor_69.monsterTarget, 380);
+  assert.equal(profiles.floor_69.npcNoun, 'посетитель');
+  assert.equal(profiles.floor_69.npcOccupations.some(item => item.value === Occupation.CHILD), false);
+  assert.equal((profiles.floor_69.npcPlacement.roomWeights?.[RoomType.MEDICAL] ?? 0) > 1, true);
+  assert.equal((profiles.floor_69.npcPlacement.roomWeights?.[RoomType.OFFICE] ?? 0) > 1, true);
+  assert.equal((profiles.floor_69.npcPlacement.roomWeights?.[RoomType.HQ] ?? 0) > 1, true);
+  assert.equal((profiles.floor_69.npcPlacement.anchors?.length ?? 0) >= 4, true);
+  assert.equal(profiles.antenna_court.npcTarget >= 20 && profiles.antenna_court.npcTarget <= 80, true);
+  assert.equal(profiles.antenna_court.monsterTarget >= 2200 && profiles.antenna_court.monsterTarget <= 4500, true);
+  assert.equal(profiles.antenna_court.npcFactions.some(entry => entry.value === Faction.CITIZEN), false);
+  assert.equal(profiles.antenna_court.monsterBiasKinds.includes(MonsterKind.LAMPOVY), true);
+  assert.equal(profiles.antenna_court.monsterTags.includes('signal'), true);
+  assert.equal(profiles.silicon_net_well.npcTarget >= 350 && profiles.silicon_net_well.npcTarget <= 900, true);
+  assert.equal(profiles.silicon_net_well.monsterTarget >= 1200 && profiles.silicon_net_well.monsterTarget <= 2600, true);
+  assert.equal(profiles.silicon_net_well.npcNoun, 'специалист');
+  assert.equal(profiles.silicon_net_well.monsterBiasKinds.includes(MonsterKind.CHERNOSLIZ), true);
+  assert.equal(profiles.silicon_net_well.monsterTags.includes('silicon'), true);
+  assert.equal(profiles.slime_nii.npcTarget, 1300);
+  assert.equal(profiles.slime_nii.monsterTarget, 1700);
+  assert.equal(profiles.slime_nii.npcNoun, 'сотрудник НИИ');
+  assert.equal(profiles.slime_nii.monsterBiasKinds.includes(MonsterKind.CHERNOSLIZ), true);
+  assert.equal(profiles.slime_nii.monsterTags.includes('quarantine'), true);
+  assert.equal((profiles.slime_nii.npcPlacement.roomWeights?.[RoomType.MEDICAL] ?? 0) > 1.5, true);
+  assert.equal((profiles.slime_nii.monsterPlacement.anchors?.length ?? 0) >= 4, true);
+  assert.equal(profiles.dark_metro.npcTarget >= 80 && profiles.dark_metro.npcTarget <= 300, true);
+  assert.equal(profiles.dark_metro.monsterTarget >= 2500 && profiles.dark_metro.monsterTarget <= 4500, true);
+  assert.equal(profiles.dark_metro.npcNoun, 'ветеран');
+  assert.equal(profiles.dark_metro.npcFactions.some(entry => entry.value === Faction.CITIZEN), false);
+  assert.equal(profiles.dark_metro.monsterTags.includes('rail'), true);
+  assert.equal((profiles.dark_metro.npcPlacement.anchors?.length ?? 0) >= 12, true);
+  assert.equal((profiles.dark_metro.npcPlacement.roomWeights?.[RoomType.HQ] ?? 0) > 4, true);
+  assert.equal(profiles.podad.npcTarget, 0);
+  assert.equal(profiles.darkness.npcTarget, 0);
+  assert.equal(profiles.darkness.monsterTarget >= 3000 && profiles.darkness.monsterTarget <= 7000, true);
+  assert.equal((profiles.darkness.monsterPlacement.anchors?.length ?? 0) >= 4, true);
+  assert.equal(profiles.darkness.monsterTags.includes('sound'), true);
+  assert.equal(profiles.underhell.npcTarget >= 0 && profiles.underhell.npcTarget <= 120, true);
+  assert.equal(profiles.underhell.monsterTarget >= 4500 && profiles.underhell.monsterTarget <= 8000, true);
+  assert.equal(profiles.underhell.npcNoun, 'ветеран');
+  assert.deepEqual(profiles.underhell.npcFactions.map(item => item.value), [Faction.LIQUIDATOR, Faction.CULTIST]);
+  assert.equal(profiles.podad.monsterTarget, 8200);
+  assert.equal((profiles.podad.monsterPlacement.anchors?.length ?? 0) >= 5, true);
+  assert.equal(profiles.podad.monsterTags.includes('living_tunnels'), true);
+  assert.equal(profiles.podad.monsterTags.includes('section_shift'), true);
+
+  for (const route of DESIGN_FLOOR_ROUTES) {
+    const profile = profiles[route.id];
+    assert.equal(profile.npcTarget <= (ENTITY_SOFT_LIMITS[EntityType.NPC] ?? 0), true, `${route.id} npc cap`);
+    assert.equal(profile.monsterTarget <= (ENTITY_SOFT_LIMITS[EntityType.MONSTER] ?? 0), true, `${route.id} monster cap`);
+    if (!floorRunZAllowsNpcs(route.z)) assert.equal(profile.npcTarget, 0, `${route.id} npc-free route`);
+  }
+});
+
+test('slime NII route ships containment cameras, samples, and slime pressure', () => {
+  const route = DESIGN_FLOOR_ROUTES.find(def => def.id === 'slime_nii');
+  assert.ok(route);
+  assert.equal(route.z, 12);
+  assert.equal(route.baseFloor, FloorLevel.KVARTIRY);
+
+  const gen = timeFloorGeneration('design slime_nii containment', () => generateDesignFloor('slime_nii'));
+  const cameraRooms = gen.world.rooms.filter(room => room.name.startsWith('Гермокамера НИИ слизи'));
+  const hermeticDoors = [...gen.world.doors.values()].filter(door =>
+    door.state === DoorState.HERMETIC_CLOSED || door.state === DoorState.HERMETIC_OPEN);
+  const monsters = gen.entities.filter(e => e.type === EntityType.MONSTER);
+  const slimeKinds = new Set([MonsterKind.SLIMEVIK, MonsterKind.SLIME_WOMAN, MonsterKind.CHERNOSLIZ, MonsterKind.HEAD_SLUG, MonsterKind.BEZEKHIY]);
+
+  assert.equal(cameraRooms.length >= 8, true);
+  assert.equal(hermeticDoors.length >= 4, true);
+  assert.equal(gen.world.containers.some(c => c.tags.includes('slime_nii') && c.inventory.some(i => i.defId === 'slime_sample_green')), true);
+  assert.equal(gen.entities.some(e => e.type === EntityType.NPC && e.plotNpcId === 'slime_nii_volunteer_mitya'), true);
+  assert.equal(monsters.some(e => e.monsterKind !== undefined && slimeKinds.has(e.monsterKind)), true);
+  assert.equal(gen.world.cells.some((cell, idx) => cell === Cell.LIFT && gen.world.liftDir[idx] === LiftDirection.UP), true);
+  assert.equal(gen.world.cells.some((cell, idx) => cell === Cell.LIFT && gen.world.liftDir[idx] === LiftDirection.DOWN), true);
+});
+
+test('manhattan crossroads ships as dense road traffic with gang and wrong-exit pressure', () => {
+  const gen = timeFloorGeneration('design manhattan_crossroads population field', () => generateDesignFloor('manhattan_crossroads'));
+  const npcs = gen.entities.filter(e => e.type === EntityType.NPC);
+  const monsters = gen.entities.filter(e => e.type === EntityType.MONSTER);
+  const wildNpcs = npcs.filter(e => e.faction === Faction.WILD);
+  const liquidatorNpcs = npcs.filter(e => e.faction === Faction.LIQUIDATOR);
+  const wildZones = gen.world.zones.filter(zone => zone.faction === ZoneFaction.WILD);
+  const liquidatorZones = gen.world.zones.filter(zone => zone.faction === ZoneFaction.LIQUIDATOR);
+  const routeChoices = reachableRoomCount(gen, [
+    'Платная перемычка центральной зебры',
+    'Низкий тоннель под Восточной авеню',
+    'Магазин под эстакадой',
+    'Съезд Неправильный поворот',
+    'Безопасный бордюр у зебры',
+  ]);
+
+  assert.equal(npcs.length >= 2200 && npcs.length <= 4200, true, `npc count ${npcs.length}`);
+  assert.equal(monsters.length >= 500 && monsters.length <= 1200, true, `monster count ${monsters.length}`);
+  assert.equal(countNear(wildNpcs, 696.5, 602.5, 38) >= 5, true);
+  assert.equal(countNear(wildNpcs, 564.5, 574.5, 34) >= 4, true);
+  assert.equal(countNear(liquidatorNpcs, 512.5, 512.5, 74) >= 5, true);
+  assert.equal(countNear(monsters, 790.5, 622.5, 140) >= 10, true);
+  assert.equal(routeChoices >= 3, true);
+  assert.equal(wildZones.length > 0, true);
+  assert.equal(liquidatorZones.length > 0, true);
+  assert.equal(maxEntitiesInArea(gen.entities, EntityType.NPC, 32) <= 40, true);
+});
+
+test('underhell ships as a monster-owned veteran threshold', () => {
+  const gen = timeFloorGeneration('design underhell population field', () => generateDesignFloor('underhell'));
+  const npcs = gen.entities.filter(e => e.type === EntityType.NPC);
+  const ambientNpcs = npcs.filter(e => !e.plotNpcId && !e.persistentNpcId && e.alifeId === undefined);
+  const monsters = gen.entities.filter(e => e.type === EntityType.MONSTER);
+  const lowerSamosborZones = gen.world.zones.filter(zone => zone.cy > W * 0.62 && zone.faction === ZoneFaction.SAMOSBOR);
+  const legalNpcFactions = new Set([Faction.LIQUIDATOR, Faction.CULTIST]);
+
+  assert.equal(npcs.length >= 4 && npcs.length <= 120, true);
+  assert.equal(ambientNpcs.length <= 80, true);
+  assert.equal(ambientNpcs.every(e => e.name?.includes('ветеран')), true);
+  assert.equal(npcs.every(e => e.faction !== undefined && legalNpcFactions.has(e.faction)), true);
+  assert.equal(monsters.length >= 4500 && monsters.length <= 8000, true);
+  assert.equal(maxEntitiesInArea(gen.entities, EntityType.MONSTER, 32) <= 64, true);
+  assert.equal(routeCueCount(gen.world) >= 4, true);
+  assert.equal(lowerSamosborZones.length > 0, true);
+});
+
+test('dark metro ships as sparse defended bands inside monster-heavy train pressure', () => {
+  const route = DESIGN_FLOOR_ROUTES.find(def => def.id === 'dark_metro');
+  assert.ok(route);
+  const profile = designFloorPopulationProfile(route);
+  const gen = timeFloorGeneration('design dark metro population field', () => generateDesignFloor('dark_metro'));
+  const npcs = gen.entities.filter(e => e.type === EntityType.NPC);
+  const ambientNpcs = npcs.filter(e => !e.plotNpcId && !e.persistentNpcId && e.alifeId === undefined);
+  const monsters = gen.entities.filter(e => e.type === EntityType.MONSTER);
+  const legalNpcFactions = new Set([Faction.LIQUIDATOR, Faction.CULTIST, Faction.WILD, Faction.SCIENTIST]);
+  const lineYs = [118, 260, 402, 642, 786, 920];
+  const railBandMonsters = monsters.filter(e => lineYs.some(y => Math.abs(Math.floor(e.y) - y) <= 24));
+  const defendedRooms = gen.world.rooms.filter(room => room.name.startsWith('Пост белой лампы'));
+  const defendedEdges = gen.world.rooms.filter(room => room.name.startsWith('Обороняемая кромка'));
+  const transitCaches = gen.world.containers.filter(container => container.tags.includes('transit_cache'));
+  const hqMonsterCount = monsters.filter(e => {
+    const ci = gen.world.idx(Math.floor(e.x), Math.floor(e.y));
+    const roomId = gen.world.roomMap[ci];
+    return roomId >= 0 && gen.world.rooms[roomId]?.type === RoomType.HQ;
+  }).length;
+
+  assert.equal(ambientNpcs.length, profile.npcTarget);
+  assert.equal(ambientNpcs.length >= 80 && ambientNpcs.length <= 300, true);
+  assert.equal(monsters.length, profile.monsterTarget);
+  assert.equal(monsters.length >= 2500 && monsters.length <= 4500, true);
+  assert.equal(ambientNpcs.every(e => e.name?.includes('ветеран')), true);
+  assert.equal(ambientNpcs.every(e => e.faction !== undefined && legalNpcFactions.has(e.faction)), true);
+  assert.equal(gen.world.railTracks.length >= 7, true);
+  assert.equal(gen.world.railTrains.length >= 7, true);
+  assert.equal(gen.world.railTrains.every(train => train.speed >= 3.4 && train.stopSeconds <= 3.8), true);
+  assert.equal(defendedRooms.length >= 12, true);
+  assert.equal(defendedEdges.length >= 12, true);
+  assert.equal(transitCaches.length >= 12, true);
+  assert.equal(railBandMonsters.length >= Math.floor(monsters.length * 0.45), true);
+  assert.equal(hqMonsterCount <= Math.floor(monsters.length * 0.03), true);
+  assert.equal(maxEntitiesInArea(gen.entities, EntityType.NPC, 32) <= 20, true);
+});
+
+test('upper bureau keeps controlled legal queues with archive monster pressure', () => {
+  const route = DESIGN_FLOOR_ROUTES.find(def => def.id === 'upper_bureau');
+  assert.ok(route);
+  const profile = designFloorPopulationProfile(route);
+  const gen = timeFloorGeneration('design upper bureau population field', () => generateDesignFloor('upper_bureau'));
+  const npcs = gen.entities.filter(e => e.type === EntityType.NPC);
+  const monsters = gen.entities.filter(e => e.type === EntityType.MONSTER);
+  const paperKinds = new Set([
+    MonsterKind.PARAGRAPH,
+    MonsterKind.PECHATEED,
+    MonsterKind.KONTORSHCHIK,
+    MonsterKind.PROTOKOLNIK,
+    MonsterKind.KANTSELYARSKIY_IDOL,
+  ]);
+  const paperMonsters = monsters.filter(e => e.monsterKind !== undefined && paperKinds.has(e.monsterKind));
+  const zoneFactions = new Set(gen.world.zones.map(zone => zone.faction));
+  const hqRooms = gen.world.rooms.filter(room => room.type === RoomType.HQ);
+
+  assert.equal(profile.npcTarget, 650);
+  assert.equal(profile.monsterTarget, 1100);
+  assert.equal(profile.npcNoun, 'проситель');
+  assert.equal(npcs.length >= 350 && npcs.length <= 900, true);
+  assert.equal(monsters.length >= 600 && monsters.length <= 1500, true);
+  assert.equal(npcs.filter(e => e.occupation === Occupation.SECRETARY).length >= Math.floor(npcs.length * 0.28), true);
+  assert.equal(npcs.filter(e => e.faction === Faction.LIQUIDATOR).length >= 120, true);
+  assert.equal(npcs.filter(e => e.faction === Faction.SCIENTIST).length >= 25, true);
+  assert.equal(paperMonsters.length >= 250, true);
+  assert.equal(zoneFactions.has(ZoneFaction.CITIZEN), true);
+  assert.equal(zoneFactions.has(ZoneFaction.LIQUIDATOR), true);
+  assert.equal(zoneFactions.has(ZoneFaction.SAMOSBOR), true);
+  assert.equal(zoneFactions.has(ZoneFaction.WILD), true);
+  assert.equal(hqRooms.some(room => room.name === 'Ниша проверки пропусков'), true);
+  assert.equal(hqRooms.some(room => room.name === 'Малый кабинет аудиторской тени'), true);
+  assert.equal(maxEntitiesInArea(gen.entities, EntityType.NPC, 32) <= 18, true);
+});
+
+test('antenna court is a monster-owned signal yard with bounded specialist enclaves', () => {
+  const gen = timeFloorGeneration('design antenna_court population field', () => generateDesignFloor('antenna_court'));
+  const ambientNpcs = gen.entities.filter(e => e.type === EntityType.NPC && !e.plotNpcId && !e.persistentNpcId && e.alifeId === undefined);
+  const monsters = gen.entities.filter(e => e.type === EntityType.MONSTER);
+  const openHostileZones = gen.world.zones.filter(zone => zone.faction === ZoneFaction.WILD || zone.faction === ZoneFaction.SAMOSBOR);
+  const legalNpcFactions = new Set([Faction.SCIENTIST, Faction.LIQUIDATOR]);
+
+  assert.equal(ambientNpcs.length >= 20 && ambientNpcs.length <= 80, true);
+  assert.equal(ambientNpcs.every(e => e.faction !== undefined && legalNpcFactions.has(e.faction)), true);
+  assert.equal(ambientNpcs.every(e => e.name?.includes('сигнал-специалист')), true);
+  assert.equal(monsters.length >= 2200 && monsters.length <= 4500, true);
+  assert.equal(openHostileZones.length >= 20, true);
+});
+
+test('silicon net well creates protected science pockets and silicon monster pressure', () => {
+  const gen = timeFloorGeneration('design silicon_net_well population field', () => generateDesignFloor('silicon_net_well'));
+  const npcs = gen.entities.filter(e => e.type === EntityType.NPC);
+  const ambientNpcs = npcs.filter(e => !e.plotNpcId && !e.persistentNpcId && e.alifeId === undefined);
+  const genericSpecialists = ambientNpcs.filter(e => e.name?.startsWith('Кремниевый НЕТ-колодец:'));
+  const monsters = gen.entities.filter(e => e.type === EntityType.MONSTER);
+  const specialists = npcs.filter(e =>
+    e.faction === Faction.SCIENTIST ||
+    e.occupation === Occupation.SCIENTIST ||
+    e.occupation === Occupation.ELECTRICIAN ||
+    e.occupation === Occupation.MECHANIC,
+  );
+  const liquidators = npcs.filter(e => e.faction === Faction.LIQUIDATOR);
+  const siliconKinds = new Set([
+    MonsterKind.SAFEGUARD,
+    MonsterKind.SLIMEVIK,
+    MonsterKind.SLIME_WOMAN,
+    MonsterKind.CHERVIE_AVATAR,
+    MonsterKind.CHERNOSLIZ,
+    MonsterKind.HEAD_SLUG,
+  ]);
+  const siliconMonsters = monsters.filter(e => e.monsterKind !== undefined && siliconKinds.has(e.monsterKind));
+  const sciencePocketRooms = gen.world.rooms.filter(room =>
+    room.name.includes('НИИ-под') ||
+    room.name.includes('Серверная') ||
+    room.name.includes('Кабельная')
+  );
+  const protectedRooms = gen.world.rooms.filter(room => room.type === RoomType.MEDICAL || room.type === RoomType.HQ);
+  const monsterZones = gen.world.zones.filter(zone => zone.faction === ZoneFaction.SAMOSBOR || zone.faction === ZoneFaction.WILD);
+  const liquidatorZones = gen.world.zones.filter(zone => zone.faction === ZoneFaction.LIQUIDATOR);
+
+  assert.equal(npcs.length >= 350 && npcs.length <= 900, true);
+  assert.equal(genericSpecialists.length >= 520, true);
+  assert.equal(genericSpecialists.every(e => e.name?.includes('специалист')), true);
+  assert.equal(monsters.length >= 1200 && monsters.length <= 2600, true);
+  assert.equal(specialists.length >= 240, true);
+  assert.equal(liquidators.length >= 120, true);
+  assert.equal(siliconMonsters.length >= 240, true);
+  assert.equal(sciencePocketRooms.length >= 7, true);
+  assert.equal(protectedRooms.length >= 6, true);
+  assert.equal(monsterZones.length >= liquidatorZones.length, true);
+  assert.equal(maxEntitiesInArea(gen.entities, EntityType.NPC, 32) <= 18, true);
+});
+
+test('floor 69 uses the shared field as an adult social-debt route', () => {
+  const gen = timeFloorGeneration('design floor_69 population field', () => generateDesignFloor('floor_69'));
+  const npcs = gen.entities.filter(e => e.type === EntityType.NPC);
+  const ambientNpcs = npcs.filter(e => !e.plotNpcId && !e.persistentNpcId && e.alifeId === undefined);
+  const monsters = gen.entities.filter(e => e.type === EntityType.MONSTER);
+  const liquidatorNpcs = npcs.filter(e => e.faction === Faction.LIQUIDATOR);
+  const socialStaffNpcs = npcs.filter(e =>
+    e.occupation === Occupation.SECRETARY ||
+    e.occupation === Occupation.STOREKEEPER ||
+    e.occupation === Occupation.DOCTOR ||
+    e.occupation === Occupation.HUNTER,
+  );
+
+  assert.equal(npcs.length >= 1700 && npcs.length <= 3200, true);
+  assert.equal(ambientNpcs.length >= 1700, true);
+  assert.equal(monsters.length >= 200 && monsters.length <= 700, true);
+  assert.equal(npcs.some(e => e.occupation === Occupation.CHILD), false);
+  assert.equal(liquidatorNpcs.length > 40, true);
+  assert.equal(socialStaffNpcs.length > 400, true);
+  assert.equal(maxEntitiesInArea(gen.entities, EntityType.NPC, 32) <= 26, true);
+});
+
+test('pioneer camp keeps a populated protected center and dangerous trail edge', () => {
+  const route = DESIGN_FLOOR_ROUTES.find(def => def.id === 'pioneer_camp');
+  assert.ok(route);
+  const profile = designFloorPopulationProfile(route);
+  const gen = timeFloorGeneration('design pioneer camp population field', () => generateDesignFloor('pioneer_camp'));
+  const npcs = gen.entities.filter(e => e.type === EntityType.NPC);
+  const monsters = gen.entities.filter(e => e.type === EntityType.MONSTER);
+  const childNpcs = npcs.filter(e => e.occupation === Occupation.CHILD);
+  const centerNpcs = npcs.filter(e => gen.world.dist(e.x, e.y, W / 2, W / 2) < 180);
+  const centerMonsters = monsters.filter(e => gen.world.dist(e.x, e.y, W / 2, W / 2) < 180);
+  const edgeMonsters = monsters.filter(e => gen.world.dist(e.x, e.y, W / 2, W / 2) > 250);
+  const factionAt = (x: number, y: number) => gen.world.factionControl[gen.world.idx(x, y)];
+
+  assert.equal(profile.npcTarget, 1100);
+  assert.equal(profile.monsterTarget, 900);
+  assert.equal(npcs.length >= 700 && npcs.length <= 1400, true);
+  assert.equal(monsters.length >= 500 && monsters.length <= 1200, true);
+  assert.equal(childNpcs.length >= Math.floor(npcs.length * 0.6), true);
+  assert.equal(centerNpcs.length > centerMonsters.length, true);
+  assert.equal(edgeMonsters.length > centerMonsters.length, true);
+  assert.equal(maxEntitiesInArea(gen.entities, EntityType.NPC, 32) <= 16, true);
+  assert.equal(npcs.filter(e => e.canGiveQuest).length >= 4, true);
+  assert.equal(gen.world.containers.filter(container => container.tags.includes('pioneer_camp')).length >= 5, true);
+  assert.notEqual(factionAt(W / 2, W / 2), ZoneFaction.WILD);
+  assert.notEqual(factionAt(W / 2, W / 2), ZoneFaction.SAMOSBOR);
+  assert.equal(factionAt(W / 2 - 197, W / 2 - 137), ZoneFaction.WILD);
+  assert.equal(factionAt(W / 2, W / 2 - 380), ZoneFaction.WILD);
+});
+
+test('chthonic attic keeps a zero-ordinary-NPC monster service maze', () => {
+  const gen = timeFloorGeneration('design chthonic attic population field', () => generateDesignFloor('chthonic_attic'));
+  const npcs = gen.entities.filter(e => e.type === EntityType.NPC);
+  const ambientNpcs = npcs.filter(e => !e.plotNpcId && !e.persistentNpcId && e.alifeId === undefined);
+  const monsters = gen.entities.filter(e => e.type === EntityType.MONSTER);
+  const cacheCount = gen.world.containers.filter(container => container.tags.includes('attic') && container.tags.includes('cache')).length;
+  const serviceRooms = gen.world.rooms.filter(room => {
+    const name = room.name.toLowerCase();
+    return name.includes('шахт') || name.includes('кабель') || name.includes('карман') || name.includes('сервис');
+  });
+
+  assert.equal(ambientNpcs.length, 0);
+  assert.equal(npcs.length <= 40, true);
+  assert.equal(monsters.length >= 3000 && monsters.length <= 5000, true);
+  assert.equal(maxEntitiesInArea(gen.entities, EntityType.MONSTER, 32) <= 36, true);
+  assert.equal(gen.world.zones.some(zone => zone.fogged && zone.faction === ZoneFaction.SAMOSBOR), true);
+  assert.equal(cacheCount >= 4, true);
+  assert.equal(serviceRooms.length >= 4, true);
+});
+
+test('generic design floor population field adds density without violating edge rules', () => {
+  const communal = timeFloorGeneration('design communal population field', () => generateDesignFloor('communal_ring'));
+  const communalNpcs = communal.entities.filter(e => e.type === EntityType.NPC);
+  const communalMonsters = communal.entities.filter(e => e.type === EntityType.MONSTER);
+  assert.equal(communalNpcs.length >= 3000, true);
+  assert.equal(communalMonsters.length >= 250, true);
+  assert.equal(communalNpcs.length <= ENTITY_SOFT_LIMITS[EntityType.NPC], true);
+  assert.equal(maxEntitiesInArea(communal.entities, EntityType.NPC, 32) <= 18, true);
+
+  const roof = timeFloorGeneration('design roof population field', () => generateDesignFloor('roof'));
+  const roofNpcs = roof.entities.filter(e => e.type === EntityType.NPC);
+  const roofMonsters = roof.entities.filter(e => e.type === EntityType.MONSTER);
+  assert.equal(roofNpcs.length, 0);
+  assert.equal(roofMonsters.length >= 4500, true);
+  assert.equal(roofMonsters.length <= 7000, true);
+  assert.equal(roofMonsters.length <= ENTITY_SOFT_LIMITS[EntityType.MONSTER], true);
+});
+
+test('black market 88 ships dense trade, guarded contraband, and service-gut monster pressure', () => {
+  const gen = timeFloorGeneration('design black_market_88 rework', () => generateDesignFloor('black_market_88'));
+  const npcs = gen.entities.filter(e => e.type === EntityType.NPC);
+  const monsters = gen.entities.filter(e => e.type === EntityType.MONSTER);
+  const marketContainers = gen.world.containers.filter(c => c.tags.includes('market88'));
+  const guardedMarketContainers = marketContainers.filter(c => c.tags.some(tag =>
+    tag === 'contraband_cache' ||
+    tag === 'debt' ||
+    tag === 'medicine' ||
+    tag === 'weapons' ||
+    tag === 'black_route_papers' ||
+    tag === 'supplier_betrayal',
+  ));
+  const serviceRoom = (x: number, y: number): boolean => {
+    const cell = gen.world.idx(Math.floor(x), Math.floor(y));
+    const room = gen.world.rooms[gen.world.roomMap[cell]];
+    return !!room && (
+      room.type === RoomType.STORAGE ||
+      room.type === RoomType.PRODUCTION ||
+      room.name.includes('склад') ||
+      room.name.includes('служеб') ||
+      room.name.includes('кишка') ||
+      room.name.includes('люк') ||
+      room.name.includes('кладовая')
+    );
+  };
+  const serviceMonsters = monsters.filter(e => serviceRoom(e.x, e.y)).length;
+  const marketQuestTags = new Set(SIDE_QUESTS
+    .filter(q => q.id.startsWith('market88_'))
+    .flatMap(q => q.eventTags ?? []));
+
+  assert.equal(npcs.length >= 1600 && npcs.length <= 3000, true);
+  assert.equal(monsters.length >= 300 && monsters.length <= 900, true);
+  assert.equal(marketContainers.length >= 14, true);
+  assert.equal(guardedMarketContainers.length >= 8, true);
+  assert.equal(guardedMarketContainers.every(c => c.access !== 'public' && c.access !== 'room'), true);
+  assert.equal(serviceMonsters >= 80, true);
+  for (const tag of ['supplier_delivery', 'protect_courier', 'forgery', 'debt_settlement', 'supplier_betrayal', 'market_scarcity']) {
+    assert.equal(marketQuestTags.has(tag), true, `missing Market 88 quest event tag ${tag}`);
+  }
+});
+
+test('service floor rework keeps sparse crews, pressure panels and machine-maze monsters reachable', () => {
+  const route = DESIGN_FLOOR_ROUTES.find(item => item.id === 'service_floor');
+  assert.ok(route);
+  const profile = designFloorPopulationProfile(route);
+  assert.equal(profile.npcTarget, 780);
+  assert.equal(profile.monsterTarget, 1600);
+  assert.equal(profile.npcPlacement.anchors?.length ?? 0, 5);
+  assert.equal((profile.monsterPlacement.anchors?.length ?? 0) >= 8, true);
+
+  const gen = timeFloorGeneration('design service_floor rework', () => generateDesignFloor('service_floor'));
+  const npcs = gen.entities.filter(e => e.type === EntityType.NPC);
+  const monsters = gen.entities.filter(e => e.type === EntityType.MONSTER);
+  const rescueWorker = gen.entities.find(e => e.plotNpcId === 'service_trapped_pump_worker');
+  const panels = getEmergencyPanels(gen.world);
+  const panelDefs = new Set(panels.map(panel => panel.defId));
+  const audit = auditReachability(gen.world, gen.world.idx(Math.floor(gen.spawnX), Math.floor(gen.spawnY)));
+
+  assert.equal(npcs.length >= 500 && npcs.length <= 1100, true);
+  assert.equal(monsters.length >= 900 && monsters.length <= 2200, true);
+  assert.equal(maxEntitiesInArea(gen.entities, EntityType.NPC, 32) <= 18, true);
+  assert.ok(rescueWorker);
+  assertAuditReachable(gen.world, audit, gen.world.idx(Math.floor(rescueWorker.x), Math.floor(rescueWorker.y)), 'service rescue worker');
+  assert.equal(panelDefs.has('panel_power'), true);
+  assert.equal(panelDefs.has('panel_water'), true);
+  assert.equal(panelDefs.has('panel_doors'), true);
+  assert.equal(panelDefs.has('panel_vent'), true);
+  for (const panel of panels) assertAuditReachable(gen.world, audit, panel.idx, `service panel ${panel.defId}`);
 });
 
 testGenerationMatrix('authored design floors occupy the full 1024x1024 route footprint', () => {

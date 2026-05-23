@@ -8,6 +8,7 @@ export type DesignFloorId =
   | 'bank_floor'
   | 'raionsovet_archive'
   | 'registry_morgue'
+  | 'slime_nii'
   | 'manhattan_crossroads'
   | 'communal_ring'
   | 'pioneer_camp'
@@ -40,6 +41,7 @@ export const DESIGN_FLOOR_ROUTES: readonly DesignFloorRouteDef[] = [
   { id: 'bank_floor', z: 26, displayName: 'Банковский этаж', baseFloor: FloorLevel.MINISTRY, color: '#fd6', role: 'деньги, долги, сейфы', danger: 3 },
   { id: 'raionsovet_archive', z: 22, displayName: 'Райсовет и архив картотек', baseFloor: FloorLevel.MINISTRY, color: '#fc4', role: 'архивы, картотеки, пропуска', danger: 3 },
   { id: 'registry_morgue', z: 18, displayName: 'Морг регистраций', baseFloor: FloorLevel.MINISTRY, color: '#ccc', role: 'мертвые записи и проверки', danger: 4 },
+  { id: 'slime_nii', z: 12, displayName: 'НИИ слизи', baseFloor: FloorLevel.KVARTIRY, color: '#7fdc8a', role: 'биолаборатории, карантин, камеры со слизью', danger: 4 },
   { id: 'manhattan_crossroads', z: 8, displayName: 'Перекрестки', baseFloor: FloorLevel.KVARTIRY, color: '#fa4', role: 'городской обход и развилки', danger: 3 },
   { id: 'communal_ring', z: 4, displayName: 'Коммунальное кольцо', baseFloor: FloorLevel.KVARTIRY, color: '#fa4', role: 'социальный обход', danger: 2 },
   { id: 'floor_69', z: -4, displayName: 'Этаж 69', baseFloor: FloorLevel.MAINTENANCE, color: '#f8a', role: 'населенный сбой, сделки, слухи', danger: 3 },

@@ -23,6 +23,7 @@ import { generateRegistryMorgueDesignFloor } from './registry_morgue';
 import { generateRoofDesignFloor } from './roof';
 import { generateServiceFloorDesignFloor } from './service_floor';
 import { generateSiliconNetWellDesignFloor } from './silicon_net_well';
+import { generateSlimeNiiDesignFloor } from './slime_nii';
 import { generateUnderhellDesignFloor } from './underhell';
 import { generateUpperBureauDesignFloor } from './upper_bureau';
 import { expandDesignFloorGeneration } from './full_floor';
@@ -35,6 +36,7 @@ const DESIGN_FLOOR_GENERATORS: Record<DesignFloorId, () => FloorGeneration> = {
   bank_floor: generateBankFloorDesignFloor,
   raionsovet_archive: generateRaionsovetArchiveDesignFloor,
   registry_morgue: generateRegistryMorgueDesignFloor,
+  slime_nii: generateSlimeNiiDesignFloor,
   manhattan_crossroads: generateManhattanCrossroadsDesignFloor,
   communal_ring: generateCommunalRingDesignFloor,
   pioneer_camp: generatePioneerCampDesignFloor,

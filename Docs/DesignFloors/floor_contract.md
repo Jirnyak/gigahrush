@@ -43,6 +43,50 @@ Each design floor must provide this minimum loop:
 4. Decision: trade, steal, repair, escort, kill, hide, forge, expose, reroute or flee.
 5. Consequence: event, reward, reputation change, container state, route unlock, scarcity, rumor or backlash.
 
+## Population Field Rework Contract
+
+Use the shipped story floors as calibration, not as copy-paste templates:
+
+- `LIVING` is the near-zero survival/exploration baseline: busy enough to feel inhabited, with low-level humans and a bounded monster fluctuation.
+- `KVARTIRY` is the dense social-chaos exemplar: thousands of citizens/wild/liquidators are scattered by `sampleNaturalPopulationCells()` rather than piled into one arena.
+- `MINISTRY` is the bureaucratic exemplar: offices, queues, guards, documents and lower monster pressure, with danger coming from access, paper and patrol routes.
+- `HELL` is the combat-density exemplar: thousands of monsters plus a small human/cultist/liquidator edge, still bounded by `ENTITY_SOFT_LIMITS`.
+- `VOID` and endgame darkness prove that zero-NPC route space is valid when monsters, light, protocol and loot carry the floor.
+
+All reworked design floors should gain an explicit population field. Do not solve emptiness by adding a dozen hand-placed actors. Add a compact data profile and generation-time placement:
+
+- Define desired live density through a reusable route profile: route `z`, `abs(z)`, local floor identity, faction override, anomaly/hazard pressure, room/zone signals and future generic anchors where needed.
+- Use `sampleNaturalPopulationCells()` / `samplePlacementFieldCells()` and `entitySpawnSlots()` for broad scattering.
+- Respect `ENTITY_SOFT_LIMITS`: current caps are `NPC=5000`, `MONSTER=10000`, `ITEM_DROP=100000`.
+- Broad ordinary NPCs should be A-Life materialization templates where possible; named quest NPCs can keep `plotNpcId`.
+- No periodic refill-to-cap, no silent replacement of killed people, no per-frame full-world scans.
+- Do not hardcode one z-specific exception when an `abs(z)` curve plus route-local modifiers can express it.
+
+After the 2026 pre-pass, routed design floors already have a generic source of truth in `src/data/design_floor_population.ts` and `src/gen/design_floors/population.ts`. Floor workers should change broad density there, then shape it through room types, zone factions, placement kind and route geometry. Local floor generators own named NPCs, authored encounters, locked rooms, hazards, loot and decisions; they should not add a second floor-wide population system.
+
+Broad ordinary NPCs are A-Life materialization templates. Named floor actors need stable authored identity when their death, relation, quest or memory matters. No worker should add refill logic after those people die.
+
+The current design-floor profile supports room and zone weights, not literal placement anchors. If a floor needs true anchors for sealed cameras, antennas, gates or camps, add anchors as one generic field feature and test it once. Do not simulate anchors by pushing hundreds of entities from local code.
+
+Recommended route curve for the rework batch:
+
+| `abs(z)` band | NPC field | NPC level | Monster field | Loot/monster level |
+| ---: | --- | --- | --- | --- |
+| `0..10` | very high, mostly ordinary residents/traders | low with a few veterans | low to medium | low to medium |
+| `11..30` | medium; specialists, guards, workers, factions | mixed, rising | medium, rising | medium |
+| `31..40` | low; small veteran groups or protected enclaves | high | high | high |
+| `41..50` | ordinary NPC field is zero or near-zero; only explicit authored survivors if the floor needs them | elite only | very high | very high |
+
+This is a baseline, not a straitjacket. Floors can override it for identity: `pioneer_camp` keeps a calmer child-heavy social center despite high `z`; `bank_floor` stays busy because money attracts people; `roof` should become a no-ordinary-NPC monster-pressure summit.
+
+Every floor worker should state its chosen targets in code comments/tests or debug output:
+
+- approximate NPC field target and faction mix;
+- approximate monster target and kind bias;
+- level/loot pressure relative to `abs(z)`;
+- placement signals/anchors and bucket limits;
+- samosbor aftermath behavior.
+
 ## Debug And Verification
 
 Every floor implementation must expose:

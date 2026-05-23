@@ -6,11 +6,15 @@ import {
   EntityType,
   FloorLevel,
   LiftDirection,
+  RoomType,
+  W,
+  ZoneFaction,
 } from '../src/core/types';
 import {
   designFloorAtZ,
   designFloorById,
 } from '../src/data/design_floors';
+import { designFloorPopulationProfile } from '../src/data/design_floor_population';
 import { getSideQuestRegistrySnapshot } from '../src/data/plot';
 import { generateDesignFloor } from '../src/gen/design_floors/manifest';
 import {
@@ -52,6 +56,37 @@ test('communal_ring generator creates through communal flats with quest NPCs', (
   assert.equal(gen.world.containers.filter(container => container.tags.includes('through_flat')).length >= 4, true);
   assert.equal(gen.entities.some(e => e.type === EntityType.NPC && e.plotNpcId === 'communal_through_nina'), true);
   assert.equal(gen.entities.some(e => e.type === EntityType.NPC && e.plotNpcId === 'communal_primus_yegor'), true);
+});
+
+test('communal_ring uses the design population field as a dense social floor', () => {
+  const route = designFloorById(COMMUNAL_RING_DESIGN_FLOOR_ID);
+  assert.ok(route);
+  const profile = designFloorPopulationProfile(route);
+  const gen = generateDesignFloor(COMMUNAL_RING_DESIGN_FLOOR_ID);
+  const mappedByType = new Map<RoomType, number>();
+  const zoneFactions = new Set(gen.world.zones.map(zone => zone.faction));
+
+  for (let i = 0; i < W * W; i++) {
+    if (gen.world.cells[i] !== Cell.FLOOR) continue;
+    const room = gen.world.rooms[gen.world.roomMap[i]];
+    if (!room) continue;
+    mappedByType.set(room.type, (mappedByType.get(room.type) ?? 0) + 1);
+  }
+
+  const npcs = gen.entities.filter(entity => entity.type === EntityType.NPC);
+  const monsters = gen.entities.filter(entity => entity.type === EntityType.MONSTER);
+  assert.equal(profile.npcTarget, 3800);
+  assert.equal(profile.monsterTarget, 420);
+  assert.equal(npcs.length >= 3800 && npcs.length <= 4500, true);
+  assert.equal(monsters.length >= 250 && monsters.length <= 700, true);
+  assert.equal((mappedByType.get(RoomType.CORRIDOR) ?? 0) >= 50_000, true);
+  assert.equal((mappedByType.get(RoomType.COMMON) ?? 0) >= 6_000, true);
+  assert.equal((mappedByType.get(RoomType.KITCHEN) ?? 0) >= 4_000, true);
+  assert.equal((mappedByType.get(RoomType.BATHROOM) ?? 0) >= 2_500, true);
+  assert.equal((mappedByType.get(RoomType.PRODUCTION) ?? 0) >= 2_500, true);
+  assert.equal(zoneFactions.has(ZoneFaction.WILD), true);
+  assert.equal(zoneFactions.has(ZoneFaction.LIQUIDATOR), true);
+  assert.equal(zoneFactions.has(ZoneFaction.SAMOSBOR), true);
 });
 
 test('communal_ring registers communal service and through-flat side quests', () => {

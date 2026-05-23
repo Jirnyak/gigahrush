@@ -100,6 +100,25 @@ test('A-Life quest candidates are bounded instead of every persistent NPC offeri
   assert.ok(candidates < 24_000, 'dense floors should not make every persistent NPC a quest giver');
 });
 
+test('A-Life design-floor records use Floor 69 social population mix', () => {
+  const state = minimalState();
+  const alife = setAlifeState(state, { seed: 12345, total: 100_000 }) as {
+    npcs: Array<{ floorKey: string; faction: Faction; occupation: Occupation }>;
+  };
+  const floor69 = alife.npcs.filter(npc => npc.floorKey === 'floor_69');
+  const industrialTrades = floor69.filter(npc =>
+    npc.occupation === Occupation.ELECTRICIAN ||
+    npc.occupation === Occupation.TURNER,
+  );
+
+  assert.ok(floor69.length > 1000, 'floor_69 should receive a dense A-Life allocation');
+  assert.equal(floor69.some(npc => npc.occupation === Occupation.CHILD), false);
+  assert.ok(floor69.some(npc => npc.faction === Faction.LIQUIDATOR), 'floor_69 should include guard/liquidator records');
+  assert.ok(floor69.some(npc => npc.occupation === Occupation.DOCTOR), 'floor_69 should include clinic records');
+  assert.ok(floor69.some(npc => npc.occupation === Occupation.SECRETARY || npc.occupation === Occupation.STOREKEEPER), 'floor_69 should include staff/accounting records');
+  assert.ok(industrialTrades.length < floor69.length * 0.05, 'floor_69 should not inherit the generic Maintenance worker mix');
+});
+
 test('A-Life generation keeps broad level and wealth tails bounded', () => {
   const state = minimalState();
   const alife = setAlifeState(state, { seed: 12345, total: 100_000 }) as {

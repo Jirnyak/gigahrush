@@ -634,6 +634,22 @@ function addContainer(
   world.addContainer(container);
 }
 
+function darknessMonsterAngle(id: number, x: number, y: number): number {
+  let h = Math.imul(id ^ 0x9e3779b9, 0x85ebca6b) ^ Math.imul(worldWrap(x) + 1, 0xc2b2ae35) ^ Math.imul(worldWrap(y) + 1, 0x27d4eb2d);
+  h ^= h >>> 15;
+  h = Math.imul(h, 0x2c1b3c6d);
+  h ^= h >>> 12;
+  return ((h >>> 0) / 0x100000000) * Math.PI * 2;
+}
+
+function darknessMonsterPhases(kind: MonsterKind): boolean {
+  return kind === MonsterKind.SPIRIT ||
+    kind === MonsterKind.SHADOW ||
+    kind === MonsterKind.TONKAYA_TEN ||
+    kind === MonsterKind.GLUBINNAYA_TEN ||
+    kind === MonsterKind.LOZHNYY_DUKH;
+}
+
 function spawnMonster(
   entities: Entity[],
   nextId: { v: number },
@@ -645,12 +661,13 @@ function spawnMonster(
 ): void {
   const def = MONSTERS[kind];
   const hp = Math.round(scaleMonsterHp(def.hp, level));
+  const id = nextId.v++;
   entities.push({
-    id: nextId.v++,
+    id,
     type: EntityType.MONSTER,
     x: x + 0.5,
     y: y + 0.5,
-    angle: Math.random() * Math.PI * 2,
+    angle: darknessMonsterAngle(id, x, y),
     pitch: 0,
     alive: true,
     speed: scaleMonsterSpeed(def.speed, level),
@@ -662,7 +679,7 @@ function spawnMonster(
     attackCd: 0,
     ai: { goal: AIGoal.WANDER, tx: 0, ty: 0, path: [], pi: 0, stuck: 0, timer: 0 },
     rpg: randomRPG(level),
-    phasing: kind === MonsterKind.SPIRIT,
+    phasing: darknessMonsterPhases(kind),
   });
 }
 
@@ -839,6 +856,8 @@ function placeContent(world: World, entities: Entity[], nextId: { v: number }, r
   spawnMonster(entities, nextId, MonsterKind.SHADOW, emergency.x + 10, emergency.y + 5, 11, 'Тень длинного обхода');
   spawnMonster(entities, nextId, MonsterKind.SHADOW, name.x + 3, name.y + 8, 11, 'Тень без фамилии');
   spawnMonster(entities, nextId, MonsterKind.GLUBINNAYA_TEN, trace.x + 5, trace.y + 8, 13, 'Глубинная Тень у пустотного шва');
+  spawnMonster(entities, nextId, MonsterKind.SLEPOGLAZ, bypass.x + 24, bypass.y + 2, 12, 'Слепоглаз гулкого обхода');
+  spawnMonster(entities, nextId, MonsterKind.PROTOKOLNIK, control.x + 11, control.y + 4, 12, 'Протокольник аварийного света');
   spawnMonster(entities, nextId, MonsterKind.LAMPOVY, generator.x + 6, generator.y + 5, 12, 'Ламповый у генератора');
   spawnMonster(entities, nextId, MonsterKind.EYE, trace.x + 9, trace.y + 2, 13, 'Глаз возврата');
 }
@@ -996,6 +1015,7 @@ function registerDarknessRouteCues(world: World, roomsByKey: Map<string, Room>):
   const toll = roomsByKey.get('toll');
   const tollGate = roomsByKey.get('toll_gate');
   const control = roomsByKey.get('control');
+  const emergency = roomsByKey.get('emergency');
   const trace = roomsByKey.get('trace');
   if (toll && tollGate) {
     const markerX = toll.x + 2.5;
@@ -1056,6 +1076,37 @@ function registerDarknessRouteCues(world: World, roomsByKey: Map<string, Room>):
       heardText: 'Пульт аварийного света предупреждает: возвратный след станет фактом для верхних этажей.',
       followedText: 'Комната следа найдена. Забрать кадр значит вынести темный отсек в другой маршрут.',
       ignoredText: 'Возвратный след остался в темноте. Верхние этажи пока не знают это имя.',
+    });
+  }
+
+  if (emergency && trace) {
+    const markerX = emergency.x + 10.5;
+    const markerY = emergency.y + 4.5;
+    const targetX = trace.x + trace.w + 1.5;
+    const targetY = trace.y + (trace.h >> 1) + 0.5;
+    const markerCell = world.idx(Math.floor(markerX), Math.floor(markerY));
+    registerRouteCue(world, {
+      id: 'darkness_exit_breath',
+      x: markerX,
+      y: markerY,
+      targetX,
+      targetY,
+      floor: FloorLevel.VOID,
+      roomId: emergency.id,
+      targetRoomId: trace.id,
+      zoneId: world.zoneMap[markerCell],
+      label: 'нижний выдох',
+      hint: 'выход слышен за следом',
+      targetName: 'нижний лифт Темного отсека',
+      color: '#9af',
+      tags: ['darkness', 'exit', 'sound', 'route_protocol', 'tool_cue'],
+      toneSeed: emergency.id * 2027 + trace.id,
+      radius: 7,
+      targetRadius: 3,
+      cooldownSec: 38,
+      heardText: 'За аварийным карманом слышен нижний выдох лифта: идти по звуку, не по темной табличке.',
+      followedText: 'Возвратный след и нижний лифт найдены. Дальше темнота уже не просит имени.',
+      ignoredText: 'Нижний выдох стихает за спиной. В Темном отсеке остались только обходы и чужие шаги.',
     });
   }
 }

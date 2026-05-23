@@ -44,6 +44,14 @@ export const REGISTRY_MORGUE_FUTURE_Z = 18 as const;
 export const REGISTRY_MORGUE_BASE_FLOOR = FloorLevel.MINISTRY;
 export const REGISTRY_MORGUE_DEBUG_ENTRY = 'design_floor.registry_morgue' as const;
 
+const REGISTRY_MORGUE_TARGET_ROUTE = {
+  designFloorId: REGISTRY_MORGUE_ROUTE_ID,
+  z: REGISTRY_MORGUE_FUTURE_Z,
+  tags: ['registry_morgue', 'morgue', 'death_record'],
+  label: 'Морг регистраций',
+  risk: 4,
+} as const;
+
 type NextId = { v: number };
 type MorgueDoorSide = 'north' | 'south' | 'west' | 'east';
 
@@ -151,9 +159,17 @@ registerSideQuest('morgue_registrar_faina', NPC_DEFS.morgue_registrar_faina, [
     type: QuestType.FETCH,
     desc: 'Фаина Реестровая: «Верните бирку из холодной камеры. Без нее живого человека можно закрыть бумагой, а потом искать уже по форме.»',
     targetItem: 'container_key_label', targetCount: 1,
+    targetFloor: REGISTRY_MORGUE_BASE_FLOOR,
+    targetRoute: REGISTRY_MORGUE_TARGET_ROUTE,
+    targetRoomName: 'Холодная камера-укрытие',
+    targetHint: 'бирка лежит в холодной картотеке; взять ее без сдачи можно как кражу из моргового хранения',
     rewardItem: 'official_quarantine_clearance', rewardCount: 1,
     extraRewards: [{ defId: 'clean_health_cert', count: 1 }],
     relationDelta: 14, xpReward: 65, moneyReward: 55,
+    eventTags: ['registry_morgue', 'record_correction', 'death_record', 'tag_returned', 'identity'],
+    eventData: { outcome: 'record_corrected', routeId: REGISTRY_MORGUE_ROUTE_ID },
+    eventTargetName: 'Бирка N-16 возвращена в книгу умерших; запись перестала закрывать живую фамилию.',
+    eventSeverity: 4,
   },
   {
     id: 'morgue_swap_certificate',
@@ -161,9 +177,16 @@ registerSideQuest('morgue_registrar_faina', NPC_DEFS.morgue_registrar_faina, [
     type: QuestType.FETCH,
     desc: 'Фаина Реестровая: «Принесите акт о пропавшей записи. Я оформлю смерть так, что Райсовет выдаст допуск человеку у окна. Пустую строку не трогайте.»',
     targetItem: 'record_exposure_notice', targetCount: 1,
+    targetFloor: REGISTRY_MORGUE_BASE_FLOOR,
+    targetRoute: REGISTRY_MORGUE_TARGET_ROUTE,
+    targetRoomName: 'Кабинет книги умерших',
     rewardItem: 'archive_access_permit', rewardCount: 1,
     extraRewards: [{ defId: 'passport_stub', count: 1 }],
     relationDelta: -4, xpReward: 80, moneyReward: 95,
+    eventTags: ['registry_morgue', 'false_death', 'death_record', 'forgery', 'archive_access'],
+    eventData: { outcome: 'false_death_registered', routeId: REGISTRY_MORGUE_ROUTE_ID },
+    eventTargetName: 'Ложная смерть внесена в морговой журнал; архивный допуск выдан до проверки тела.',
+    eventSeverity: 5,
   },
 ]);
 
@@ -175,9 +198,16 @@ registerSideQuest('morgue_orderly_stepan', NPC_DEFS.morgue_orderly_stepan, [
     desc: 'Степан Носильный: «В зараженной камере ходит человек с чужой биркой. Проверьте дистанцией и уберите подмену.»',
     targetMonsterKind: MonsterKind.NELYUD,
     killNeeded: 1,
+    targetFloor: REGISTRY_MORGUE_BASE_FLOOR,
+    targetRoute: REGISTRY_MORGUE_TARGET_ROUTE,
+    targetRoomName: 'Зараженная камера сверки',
     rewardItem: 'personal_file_copy', rewardCount: 1,
     extraRewards: [{ defId: 'filter_receipt', count: 1 }],
     relationDelta: 16, xpReward: 95, moneyReward: 90,
+    eventTags: ['registry_morgue', 'false_body', 'false_death', 'nelyud', 'quarantine'],
+    eventData: { outcome: 'false_body_exposed', routeId: REGISTRY_MORGUE_ROUTE_ID },
+    eventTargetName: 'Человек с чужой биркой разоблачен в зараженной камере.',
+    eventSeverity: 4,
   },
 ]);
 
@@ -188,9 +218,16 @@ registerSideQuest('morgue_relative_ira', NPC_DEFS.morgue_relative_ira, [
     type: QuestType.FETCH,
     desc: 'Ира Заименованная: «Найдите пропавшее личное дело. Мне нужен не ящик, а имя, пока графа не стала чужой.»',
     targetItem: 'missing_record_file', targetCount: 1,
+    targetFloor: REGISTRY_MORGUE_BASE_FLOOR,
+    targetRoute: REGISTRY_MORGUE_TARGET_ROUTE,
+    targetRoomName: 'Холодная камера-укрытие',
     rewardItem: 'sealed_complaint', rewardCount: 1,
     extraRewards: [{ defId: 'tea', count: 1 }],
     relationDelta: 18, xpReward: 70, moneyReward: 35,
+    eventTags: ['registry_morgue', 'identity', 'missing_record', 'name_returned'],
+    eventData: { outcome: 'name_returned', routeId: REGISTRY_MORGUE_ROUTE_ID },
+    eventTargetName: 'Пропавшее личное дело вернуло Ире фамилию до закрытия ящика.',
+    eventSeverity: 4,
   },
 ]);
 
@@ -201,9 +238,16 @@ registerSideQuest('morgue_quarantine_sanitar', NPC_DEFS.morgue_quarantine_sanita
     type: QuestType.FETCH,
     desc: 'Санитар Крутов: «Принесите чистую карантинную справку. Открою медшкаф законно. Иначе это будет кража.»',
     targetItem: 'official_quarantine_clearance', targetCount: 1,
+    targetFloor: REGISTRY_MORGUE_BASE_FLOOR,
+    targetRoute: REGISTRY_MORGUE_TARGET_ROUTE,
+    targetRoomName: 'Зараженная камера сверки',
     rewardItem: 'sanitary_kit', rewardCount: 1,
     extraRewards: [{ defId: 'antibiotic', count: 1 }],
     relationDelta: 12, xpReward: 75, moneyReward: 60,
+    eventTags: ['registry_morgue', 'quarantine_paper_use', 'medical', 'legal_medicine'],
+    eventData: { outcome: 'quarantine_paper_spent', routeId: REGISTRY_MORGUE_ROUTE_ID },
+    eventTargetName: 'Чистая карантинная справка обменяна на законную медицинскую выдачу.',
+    eventSeverity: 4,
   },
 ]);
 
@@ -737,24 +781,24 @@ function seedRegistryMorgueContainers(
       { defId: 'blank_form', count: 2 },
       { defId: 'ink_bottle', count: 1 },
     ],
-    ['tags', 'identity', 'paper'],
+    ['record_correction', 'identity', 'paper', 'morgue_theft'],
     Faction.SCIENTIST,
     npcs.faina,
   );
 
   addMorgueContainer(
     world, rooms.cold,
-    rooms.cold.x + 5, rooms.cold.y + 2,
+    rooms.cold.x + 2, rooms.cold.y + 5,
     ContainerKind.METAL_CABINET,
     'Холодная картотека без номера',
-    'locked',
+    'owner',
     [
       { defId: 'missing_record_file', count: 1 },
       { defId: 'container_key_label', count: 1 },
       { defId: 'emergency_roster', count: 1 },
     ],
-    ['cold_storage', 'identity', 'locked'],
-    Faction.SCIENTIST,
+    ['body_storage', 'identity', 'contaminated', 'morgue_theft'],
+    Faction.CITIZEN,
     npcs.stepan,
   );
 
@@ -769,7 +813,7 @@ function seedRegistryMorgueContainers(
       { defId: 'official_quarantine_clearance', count: 1 },
       { defId: 'archive_access_permit', count: 1 },
     ],
-    ['death_record', 'certificate', 'archive_hook'],
+    ['false_death', 'death_record', 'certificate', 'archive_hook'],
     Faction.SCIENTIST,
     npcs.faina,
   );
@@ -786,7 +830,7 @@ function seedRegistryMorgueContainers(
       { defId: 'morphine_ampoule', count: 1 },
       { defId: 'bandage', count: 2 },
     ],
-    ['medical', 'scarcity', 'owner', 'theft_risk'],
+    ['quarantine', 'medical', 'scarcity', 'morgue_theft'],
     Faction.LIQUIDATOR,
     npcs.sanitar,
   );

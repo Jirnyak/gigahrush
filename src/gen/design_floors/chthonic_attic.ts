@@ -213,6 +213,73 @@ const ATTIC_CHAMBERS: readonly AtticChamberPlan[] = [
     floorTex: Tex.F_CONCRETE,
     feature: Feature.MACHINE,
   },
+  {
+    cx: 458, cy: 402, rx: 16, ry: 18,
+    anchor: { x: ATTIC_BASE_X + 78, y: MAIN_Y - 22 },
+    type: RoomType.PRODUCTION,
+    name: 'Шахта кабельного давления',
+    wallTex: Tex.PIPE,
+    floorTex: Tex.F_CONCRETE,
+    feature: Feature.APPARATUS,
+  },
+  {
+    cx: 604, cy: 474, rx: 21, ry: 10,
+    anchor: { x: 590, y: 476 },
+    type: RoomType.PRODUCTION,
+    name: 'Кабельная развилка гудящего корня',
+    wallTex: Tex.PIPE,
+    floorTex: Tex.F_GUT,
+    feature: Feature.MACHINE,
+  },
+  {
+    cx: 620, cy: 642, rx: 18, ry: 13,
+    anchor: { x: 700, y: 536 },
+    type: RoomType.STORAGE,
+    name: 'Запечатанный карман фильтров',
+    wallTex: Tex.METAL,
+    floorTex: Tex.F_CONCRETE,
+    feature: Feature.SHELF,
+  },
+  {
+    cx: 438, cy: 842, rx: 20, ry: 12,
+    anchor: { x: 410, y: 918 },
+    type: RoomType.STORAGE,
+    name: 'Склад шахтных уплотнителей',
+    wallTex: Tex.CONCRETE,
+    floorTex: Tex.F_CONCRETE,
+    feature: Feature.SHELF,
+  },
+  {
+    cx: 820, cy: 736, rx: 18, ry: 16,
+    anchor: { x: 902, y: 650 },
+    type: RoomType.PRODUCTION,
+    name: 'Пульт старых вытяжных лопаток',
+    wallTex: Tex.PIPE,
+    floorTex: Tex.F_CONCRETE,
+    feature: Feature.APPARATUS,
+  },
+  {
+    cx: 252, cy: 398, rx: 20, ry: 9,
+    anchor: { x: 194, y: 508 },
+    type: RoomType.CORRIDOR,
+    name: 'Низкая полка под корнем связи',
+    wallTex: Tex.GUT,
+    floorTex: Tex.F_GUT,
+    feature: Feature.CANDLE,
+  },
+];
+
+const ATTIC_ECOLOGY_ANCHORS: readonly AtticPoint[] = [
+  ...ATTIC_SPINE,
+  { x: 638, y: 482 },
+  { x: 52, y: 538 },
+  { x: 524, y: 930 },
+  { x: 458, y: 402 },
+  { x: 604, y: 474 },
+  { x: 620, y: 642 },
+  { x: 438, y: 842 },
+  { x: 820, y: 736 },
+  { x: 252, y: 398 },
 ];
 
 const ATTIC_NPCS: Record<string, PlotNpcDef> = {
@@ -627,6 +694,8 @@ export function expandChthonicAtticRootNetwork(
     carveAtticRootPath(world, plan.anchor, { x: plan.cx, y: plan.cy }, plan.type === RoomType.CORRIDOR ? 1 : 2, plan.floorTex, protectedMask);
     dressAtticBulbRoom(world, room, plan, rng);
   }
+  fogAtticServiceCavities(world, chambers);
+  seedAtticShaftCaches(world, chambers, rng);
 
   carveAtticCrawlBypasses(world, protectedMask);
   stampAtticRootStubs(world, protectedMask);
@@ -636,6 +705,28 @@ export function expandChthonicAtticRootNetwork(
 
   world.markWallTexDirty();
   world.markFloorTexDirty();
+  world.markFogDirty();
+}
+
+export function retuneExpandedChthonicAtticEcology(world: World): void {
+  for (const zone of world.zones) {
+    const rootPressure = nearestAtticAnchorPressure(world, zone.cx, zone.cy, 190);
+    const shaftPressure = nearestAtticAnchorPressure(world, zone.cx, zone.cy, 118);
+    zone.level = rootPressure > 0.35 ? 5 : 4;
+    zone.faction = shaftPressure > 0.25
+      ? ZoneFaction.SAMOSBOR
+      : rootPressure > 0.18
+        ? ZoneFaction.CULTIST
+        : zone.id % 5 === 0
+          ? ZoneFaction.WILD
+          : ZoneFaction.CULTIST;
+    zone.fogged = shaftPressure > 0.25;
+  }
+
+  for (let idx = 0; idx < W * W; idx++) {
+    const zone = world.zones[world.zoneMap[idx]];
+    world.factionControl[idx] = zone?.faction ?? ZoneFaction.CULTIST;
+  }
 }
 
 function buildAtticProtectedMask(world: World): Uint8Array {
@@ -809,6 +900,79 @@ function dressAtticBulbRoom(world: World, room: Room, plan: AtticChamberPlan, rn
   if (plan.type === RoomType.CORRIDOR) {
     world.stamp(plan.cx, plan.cy, 0.5, 0.5, 2.6, 0.22, room.id * 911, 64, 42, 34, true);
   }
+}
+
+function fogAtticServiceCavities(world: World, rooms: readonly Room[]): void {
+  for (const room of rooms) {
+    if (room.type !== RoomType.PRODUCTION && room.type !== RoomType.STORAGE && room.type !== RoomType.CORRIDOR) continue;
+    const strong = room.type === RoomType.PRODUCTION || room.name.includes('Шахта') || room.name.includes('корн');
+    for (let dy = 1; dy < room.h - 1; dy++) {
+      for (let dx = 1; dx < room.w - 1; dx++) {
+        const idx = world.idx(room.x + dx, room.y + dy);
+        if (world.cells[idx] !== Cell.FLOOR || world.roomMap[idx] !== room.id) continue;
+        if (((dx * 17 + dy * 31 + room.id) & 3) === 0) continue;
+        const fog = strong ? 58 + ((idx + room.id * 11) & 31) : 34 + ((idx + room.id * 7) & 23);
+        if (world.fog[idx] < fog) world.fog[idx] = fog;
+      }
+    }
+  }
+}
+
+function seedAtticShaftCaches(world: World, rooms: readonly Room[], rng: () => number): void {
+  const loot: readonly WorldContainer['inventory'][] = [
+    [{ defId: 'gasmask_filter', count: 1 }, { defId: 'wire_coil', count: 2 }, { defId: 'sealant_tube', count: 1 }],
+    [{ defId: 'hermo_gasket', count: 1 }, { defId: 'fuse', count: 2 }, { defId: 'lamp_bulb', count: 1 }],
+    [{ defId: 'circuit_board', count: 1 }, { defId: 'relay_diagram', count: 1 }, { defId: 'wire_coil', count: 1 }],
+    [{ defId: 'gear', count: 2 }, { defId: 'sealant_tube', count: 1 }, { defId: 'gasmask_filter', count: 1 }],
+  ];
+  let placed = 0;
+  for (const room of rooms) {
+    if (room.type !== RoomType.PRODUCTION && room.type !== RoomType.STORAGE) continue;
+    const cell = atticCacheCell(world, room, rng);
+    if (cell < 0) continue;
+    const x = cell % W;
+    const y = (cell / W) | 0;
+    world.addContainer({
+      id: world.containers.length + 1,
+      x,
+      y,
+      floor: FloorLevel.MINISTRY,
+      roomId: room.id,
+      zoneId: world.zoneMap[cell],
+      kind: placed % 3 === 0 ? ContainerKind.SECRET_STASH : ContainerKind.TOOL_LOCKER,
+      name: placed % 3 === 0 ? 'Запаянный шахтный тайник' : 'Сервисный шкаф чердака',
+      inventory: loot[placed % loot.length].map(item => ({ ...item })),
+      capacitySlots: 6,
+      faction: placed % 2 === 0 ? Faction.LIQUIDATOR : Faction.CITIZEN,
+      access: placed % 3 === 0 ? 'secret' : 'locked',
+      lockDifficulty: placed % 3 === 0 ? undefined : 4,
+      discovered: placed % 3 !== 0,
+      tags: ['attic', 'shaft', 'utility', 'cache'],
+    });
+    placed++;
+  }
+}
+
+function atticCacheCell(world: World, room: Room, rng: () => number): number {
+  for (let attempt = 0; attempt < 80; attempt++) {
+    const x = room.x + 2 + Math.floor(rng() * Math.max(1, room.w - 4));
+    const y = room.y + 2 + Math.floor(rng() * Math.max(1, room.h - 4));
+    const idx = world.idx(x, y);
+    if (world.cells[idx] !== Cell.FLOOR || world.roomMap[idx] !== room.id || world.features[idx] !== Feature.NONE) continue;
+    return idx;
+  }
+  return -1;
+}
+
+function nearestAtticAnchorPressure(world: World, x: number, y: number, radius: number): number {
+  let pressure = 0;
+  const r2 = radius * radius;
+  for (const anchor of ATTIC_ECOLOGY_ANCHORS) {
+    const d2 = world.dist2(x, y, anchor.x, anchor.y);
+    if (d2 >= r2) continue;
+    pressure = Math.max(pressure, 1 - Math.sqrt(d2) / radius);
+  }
+  return pressure;
 }
 
 function carveAtticCrawlBypasses(world: World, protectedMask: Uint8Array): void {

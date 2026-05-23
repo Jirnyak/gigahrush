@@ -383,6 +383,14 @@ export function expandBankFloorRouteGeometry(world: World, rng: () => number): v
     stampBankRoom(world, RoomType.HQ, 728, 718, 44, 24, 'Пост инкассации банка Б-22', Tex.METAL, Tex.F_CONCRETE),
     stampBankRoom(world, RoomType.STORAGE, 482, 280, 62, 20, 'Полка невыплаченных процентов Б-22', Tex.PANEL, Tex.F_GREEN_CARPET),
     stampBankRoom(world, RoomType.CORRIDOR, 482, 724, 62, 18, 'Нижний банковский обход Б-22', Tex.PANEL, Tex.F_LINO),
+    stampBankRoom(world, RoomType.COMMON, 368, 338, 128, 34, 'Очередной зал вкладчиков Б-22', Tex.MARBLE, Tex.F_MARBLE_TILE),
+    stampBankRoom(world, RoomType.COMMON, 528, 338, 128, 34, 'Очередной зал должников Б-22', Tex.MARBLE, Tex.F_MARBLE_TILE),
+    stampBankRoom(world, RoomType.OFFICE, 334, 472, 90, 34, 'Кассовая галерея мелких выплат Б-22', Tex.MARBLE, Tex.F_GREEN_CARPET),
+    stampBankRoom(world, RoomType.OFFICE, 334, 530, 104, 34, 'Кредитная кишка просрочек Б-22', Tex.PANEL, Tex.F_LINO),
+    stampBankRoom(world, RoomType.HQ, 622, 458, 64, 38, 'Сейфовый пост ликвидаторов Б-22', Tex.METAL, Tex.F_CONCRETE),
+    stampBankRoom(world, RoomType.STORAGE, 632, 536, 82, 44, 'Архив испорченных депозитов Б-22', Tex.METAL, Tex.F_GREEN_CARPET),
+    stampBankRoom(world, RoomType.CORRIDOR, 548, 638, 140, 30, 'Черная кассовая перемычка Б-22', Tex.PANEL, Tex.F_LINO),
+    stampBankRoom(world, RoomType.STORAGE, 326, 636, 84, 42, 'Склад залогового хлама Б-22', Tex.PANEL, Tex.F_CONCRETE),
   ];
   for (const room of annexes) {
     openRoomToNearestCorridor(world, room);

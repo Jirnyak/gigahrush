@@ -457,17 +457,17 @@ function carveArchiveCell(world: World, x: number, y: number, floorTex = Tex.F_M
   world.features[ci] = Feature.NONE;
 }
 
-function carveArchiveBlock(world: World, x: number, y: number, w: number, h: number, floorTex = Tex.F_MARBLE_TILE): void {
+function carveArchiveBlock(world: World, x: number, y: number, w: number, h: number, floorTex = Tex.F_MARBLE_TILE, roomId = -1): void {
   for (let dy = 0; dy < h; dy++) {
-    for (let dx = 0; dx < w; dx++) carveArchiveCell(world, x + dx, y + dy, floorTex);
+    for (let dx = 0; dx < w; dx++) carveArchiveCell(world, x + dx, y + dy, floorTex, roomId);
   }
 }
 
-function carveArchiveDisc(world: World, cx: number, cy: number, r: number, floorTex = Tex.F_MARBLE_TILE): void {
+function carveArchiveDisc(world: World, cx: number, cy: number, r: number, floorTex = Tex.F_MARBLE_TILE, roomId = -1): void {
   const r2 = r * r;
   for (let dy = -r; dy <= r; dy++) {
     for (let dx = -r; dx <= r; dx++) {
-      if (dx * dx + dy * dy <= r2) carveArchiveCell(world, cx + dx, cy + dy, floorTex);
+      if (dx * dx + dy * dy <= r2) carveArchiveCell(world, cx + dx, cy + dy, floorTex, roomId);
     }
   }
 }
@@ -480,20 +480,21 @@ function carveArchiveLine(
   by: number,
   width = 1,
   floorTex = Tex.F_MARBLE_TILE,
+  roomId = -1,
 ): void {
   const sx = bx === ax ? 0 : bx > ax ? 1 : -1;
   const sy = by === ay ? 0 : by > ay ? 1 : -1;
   let x = ax;
   let y = ay;
   while (x !== bx) {
-    carveArchiveDisc(world, x, y, width, floorTex);
+    carveArchiveDisc(world, x, y, width, floorTex, roomId);
     x += sx;
   }
   while (y !== by) {
-    carveArchiveDisc(world, x, y, width, floorTex);
+    carveArchiveDisc(world, x, y, width, floorTex, roomId);
     y += sy;
   }
-  carveArchiveDisc(world, x, y, width, floorTex);
+  carveArchiveDisc(world, x, y, width, floorTex, roomId);
 }
 
 function setArchiveWall(world: World, x: number, y: number, wallTex = Tex.PANEL): void {
@@ -588,15 +589,13 @@ function decorateClerkBridge(world: World, x: number, y: number, len: number, ho
 
 function buildStackCanyon(
   world: World,
-  x: number,
-  y: number,
-  w: number,
-  h: number,
+  room: Room,
   vertical: boolean,
   rng: () => number,
 ): ArchivePoint[] {
+  const { x, y, w, h } = room;
   const bridges: ArchivePoint[] = [];
-  carveArchiveBlock(world, x, y, w, h, Tex.F_PARQUET);
+  carveArchiveBlock(world, x, y, w, h, Tex.F_PARQUET, room.id);
   frameArchiveArea(world, x, y, w, h, Tex.MARBLE);
 
   if (vertical) {
@@ -609,7 +608,7 @@ function buildStackCanyon(
       if (rng() < 0.6) addArchiveGate(world, sx, y + 16 + Math.floor(rng() * Math.max(1, h - 32)), rng() < 0.25 ? 'archive_access_permit' : '');
     }
     for (const by of bridgeYs) {
-      carveArchiveLine(world, x + 3, by, x + w - 4, by, 2, Tex.F_MARBLE_TILE);
+      carveArchiveLine(world, x + 3, by, x + w - 4, by, 2, Tex.F_MARBLE_TILE, room.id);
       decorateClerkBridge(world, x + 8, by - 1, w - 16, true);
       bridges.push({ x: x + Math.floor(w / 2), y: by });
     }
@@ -623,7 +622,7 @@ function buildStackCanyon(
       if (rng() < 0.55) addArchiveGate(world, x + 20 + Math.floor(rng() * Math.max(1, w - 40)), sy, rng() < 0.2 ? 'forged_stamp_sheet' : '');
     }
     for (const bx of bridgeXs) {
-      carveArchiveLine(world, bx, y + 3, bx, y + h - 4, 2, Tex.F_MARBLE_TILE);
+      carveArchiveLine(world, bx, y + 3, bx, y + h - 4, 2, Tex.F_MARBLE_TILE, room.id);
       decorateClerkBridge(world, bx - 1, y + 8, h - 16, false);
       bridges.push({ x: bx, y: y + Math.floor(h / 2) });
     }
@@ -714,11 +713,15 @@ function nextArchiveContainerId(world: World): { v: number } {
 
 export function expandRaionsovetArchiveGeometry(world: World, rng: () => number): void {
   paintNonRoomCells(world);
+  const westStacks = createArchiveRoom(world, world.rooms.length, RoomType.STORAGE, 78, 184, 286, 296, 'Западная картотека квартирных карточек', Tex.PANEL, Tex.F_PARQUET);
+  const eastStacks = createArchiveRoom(world, world.rooms.length, RoomType.STORAGE, 660, 176, 286, 318, 'Восточная картотека маршрутных дел', Tex.PANEL, Tex.F_PARQUET);
+  const lowerStacks = createArchiveRoom(world, world.rooms.length, RoomType.STORAGE, 158, 690, 410, 198, 'Нижний архив спорных копий', Tex.PANEL, Tex.F_PARQUET);
+  const formQueue = createArchiveRoom(world, world.rooms.length, RoomType.COMMON, 182, 62, 658, 104, 'Длинная очередь формуляров', Tex.MARBLE, Tex.F_PARQUET);
   const bridges = [
-    ...buildStackCanyon(world, 78, 184, 286, 296, true, rng),
-    ...buildStackCanyon(world, 660, 176, 286, 318, true, rng),
-    ...buildStackCanyon(world, 158, 690, 410, 198, false, rng),
-    ...buildStackCanyon(world, 182, 62, 658, 104, false, rng),
+    ...buildStackCanyon(world, westStacks, true, rng),
+    ...buildStackCanyon(world, eastStacks, true, rng),
+    ...buildStackCanyon(world, lowerStacks, false, rng),
+    ...buildStackCanyon(world, formQueue, false, rng),
   ];
   const loopNodes = buildArchiveLoop(world);
 

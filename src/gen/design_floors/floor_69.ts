@@ -2,7 +2,7 @@
 
 import {
   AIGoal, Cell, ContainerKind, DoorState, EntityType, Faction, Feature,
-  FloorLevel, LiftDirection, Occupation, QuestType, RoomType, Tex, W, ZoneFaction,
+  FloorLevel, LiftDirection, Occupation, QuestType, RoomType, Tex, ZoneFaction,
   type ContainerAccess, type Entity, type Room, type WorldContainer,
 } from '../../core/types';
 import { World } from '../../core/world';
@@ -32,17 +32,7 @@ export const FLOOR_69_DEFAULT_SEED = 690004;
 // adapt this string-route floor instead of adding a casual enum here.
 const FLOOR_69_BASE_FLOOR = FloorLevel.MAINTENANCE;
 const FLOOR_69_MAX_FLAGS = 8;
-const FLOOR_69_FULL_POP_CAP = 180;
 const FLOOR_69_CHECKPOINT_CROWD_CAP = 12;
-
-const FLOOR_69_NAMES_F = [
-  'Алина Сцена', 'Вера Красная', 'Дина Бархат', 'Лада Лента', 'Мира Пайетка',
-  'Ника Кулиса', 'Рита Свет', 'Соня Тихая', 'Тая Занавес', 'Эля Ночной Чай',
-];
-const FLOOR_69_NAMES_M = [
-  'Гена Сторож', 'Денис Гость', 'Жора Бармен', 'Клим Курьер', 'Левон Световой',
-  'Марк Счетчик', 'Паша Дверной', 'Рома Патруль', 'Савва Чистый', 'Федя Номерной',
-];
 
 const IRA_WORKER_LINES = [
   'Милый, смотреть можно на ценник. На дверь тоже смотри: рейд ходит тише клиентов.',
@@ -1104,97 +1094,8 @@ export function expandFloor69FullFloor(generation: FloorGeneration, rng: () => n
   genLog(
     `[F69] full geometry rooms=${counts.hotelRooms + counts.dressingRooms + counts.debtRooms + counts.refugeRooms}`
     + ` hotel=${counts.hotelRooms} backstage=${counts.dressingRooms} debt=${counts.debtRooms}`
-    + ` refuge=${counts.refugeRooms} gates=${counts.securityGates} loops=${counts.loops}`
-    + ` ambientCap=${FLOOR_69_FULL_POP_CAP}`,
+    + ` refuge=${counts.refugeRooms} gates=${counts.securityGates} loops=${counts.loops}`,
   );
-}
-
-function floor69ReachableCells(world: World, spawnX: number, spawnY: number): Uint8Array {
-  const out = new Uint8Array(W * W);
-  const queue = new Int32Array(W * W);
-  let head = 0;
-  let tail = 0;
-  const start = world.idx(Math.floor(spawnX), Math.floor(spawnY));
-  out[start] = 1;
-  queue[tail++] = start;
-
-  while (head < tail) {
-    const ci = queue[head++];
-    const x = ci % W;
-    const y = (ci / W) | 0;
-    for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]] as const) {
-      const ni = world.idx(x + dx, y + dy);
-      if (out[ni]) continue;
-      if (!doorWalkable(world.cells[ni])) continue;
-      out[ni] = 1;
-      queue[tail++] = ni;
-    }
-  }
-
-  return out;
-}
-
-function randomFloor69FloorCell(world: World, rng: () => number, reachable: Uint8Array): { x: number; y: number } | null {
-  for (let attempt = 0; attempt < 3000; attempt++) {
-    const x = Math.floor(rng() * W);
-    const y = Math.floor(rng() * W);
-    const ci = world.idx(x, y);
-    if (reachable[ci] && world.cells[ci] === Cell.FLOOR && world.features[ci] !== Feature.LIFT_BUTTON) return { x, y };
-  }
-  for (let i = 0; i < W * W; i++) {
-    if (reachable[i] && world.cells[i] === Cell.FLOOR && world.features[i] !== Feature.LIFT_BUTTON) {
-      return { x: i % W, y: (i / W) | 0 };
-    }
-  }
-  return null;
-}
-
-export function spawnFloor69ReachablePopulation(generation: FloorGeneration, rng: () => number): void {
-  let nextId = generation.entities.reduce((mx, e) => Math.max(mx, e.id), 0) + 1;
-  const existingAmbient = generation.entities
-    .filter(e => e.type === EntityType.NPC && e.canGiveQuest !== true)
-    .length;
-  const target = Math.max(0, FLOOR_69_FULL_POP_CAP - existingAmbient);
-  const reachable = floor69ReachableCells(generation.world, generation.spawnX, generation.spawnY);
-  for (let i = 0; i < target; i++) {
-    const p = randomFloor69FloorCell(generation.world, rng, reachable);
-    if (!p) break;
-    const female = i < Math.ceil(target * 0.56);
-    generation.entities.push(makeFloor69Npc(nextId++, p.x + 0.5, p.y + 0.5, female, i, rng));
-  }
-}
-
-function makeFloor69Npc(id: number, x: number, y: number, female: boolean, i: number, rng: () => number): Entity {
-  const faction = rng() < 0.12 ? Faction.LIQUIDATOR : Faction.CITIZEN;
-  return {
-    id,
-    type: EntityType.NPC,
-    x,
-    y,
-    angle: rng() * Math.PI * 2,
-    pitch: 0,
-    alive: true,
-    speed: 0.72 + rng() * 0.36,
-    sprite: female ? Spr.F69_FEMALE_NPC_BASE + (i % 8) : pickOccupationSprite(rng),
-    name: female ? FLOOR_69_NAMES_F[i % FLOOR_69_NAMES_F.length] : FLOOR_69_NAMES_M[i % FLOOR_69_NAMES_M.length],
-    isFemale: female,
-    needs: freshNeeds(),
-    hp: 70 + Math.floor(rng() * 60),
-    maxHp: 100,
-    money: Math.floor(8 + rng() * 110),
-    inventory: rng() < 0.5 ? [{ defId: 'cigs', count: 1 }] : [{ defId: 'tea', count: 1 }],
-    faction,
-    occupation: female ? Occupation.TRAVELER : rng() < 0.4 ? Occupation.HUNTER : Occupation.TRAVELER,
-    ai: { goal: AIGoal.WANDER, tx: x, ty: y, path: [], pi: 0, stuck: 0, timer: 0 },
-    canGiveQuest: false,
-    questId: -1,
-    weapon: faction === Faction.LIQUIDATOR ? 'makarov' : '',
-  };
-}
-
-function pickOccupationSprite(rng: () => number): number {
-  const pool = [Occupation.TRAVELER, Occupation.HUNTER, Occupation.STOREKEEPER, Occupation.SECRETARY, Occupation.DOCTOR];
-  return pool[Math.floor(rng() * pool.length)];
 }
 
 function addItemDrop(entities: Entity[], nextId: { v: number }, x: number, y: number, defId: string, count = 1): void {

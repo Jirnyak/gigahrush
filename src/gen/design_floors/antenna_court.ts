@@ -228,6 +228,46 @@ const NPC_DEFS: Record<string, PlotNpcDef> = {
       'Не носи закрытую запись через Министерство без бумаги.',
     ],
   },
+  antenna_guard_frequency_sergeant: {
+    name: 'Сержант Частотный',
+    isFemale: false,
+    faction: Faction.LIQUIDATOR,
+    occupation: Occupation.HUNTER,
+    sprite: Occupation.HUNTER,
+    hp: 180, maxHp: 180, money: 35, speed: 1.0,
+    inventory: [
+      { defId: 'makarov', count: 1 },
+      { defId: 'ammo_9mm', count: 8 },
+    ],
+    talkLines: [
+      'Батарейная стоит под охраной. Реле молчит лучше людей.',
+      'Проверяй пропуск у Круга. Я проверяю руки.',
+    ],
+    talkLinesPost: [
+      'Частота ровнее. Охрана остается.',
+      'После глушения батареи считают дважды.',
+    ],
+  },
+  antenna_guard_hz_watch: {
+    name: 'Дежурный Гц',
+    isFemale: false,
+    faction: Faction.LIQUIDATOR,
+    occupation: Occupation.HUNTER,
+    sprite: Occupation.HUNTER,
+    hp: 180, maxHp: 180, money: 35, speed: 1.0,
+    inventory: [
+      { defId: 'makarov', count: 1 },
+      { defId: 'ammo_9mm', count: 8 },
+    ],
+    talkLines: [
+      'У инспекции один вопрос: чей это шум.',
+      'Если канал пустой, значит кто-то заплатил за пустоту.',
+    ],
+    talkLinesPost: [
+      'Круг сказал ждать. Я жду громко.',
+      'Пустое место в эфире уже записано.',
+    ],
+  },
   antenna_echo_zhenya: {
     name: 'Эхо Женя',
     isFemale: false,
@@ -482,6 +522,51 @@ export function expandAntennaCourtRouteGeometry(world: World, rng: () => number)
   placeWeatherScreenWalls(world, hubs, protectedCells);
 }
 
+export function retuneAntennaCourtRouteZones(world: World): void {
+  const hubs = antennaRouteHubs();
+  for (const zone of world.zones) {
+    const hubD = nearestAntennaHubDistance(world, zone.cx, zone.cy, hubs);
+    const centerD = world.dist(zone.cx, zone.cy, CX, CY);
+    const enclave = centerD < 170 || hubD < 96;
+    zone.faction = enclave
+      ? ZoneFaction.LIQUIDATOR
+      : zone.id % 5 === 0
+        ? ZoneFaction.SAMOSBOR
+        : ZoneFaction.WILD;
+    zone.level = Math.max(zone.level, enclave ? 4 : 5);
+    zone.fogged = false;
+  }
+
+  for (let i = 0; i < W * W; i++) {
+    const zone = world.zones[world.zoneMap[i]];
+    world.factionControl[i] = zone?.faction ?? ZoneFaction.WILD;
+  }
+
+  for (const room of world.rooms) {
+    if (!room) continue;
+    if (isAntennaSpecialistRoom(room)) {
+      if (room.name.includes('НИИ')) room.sealed = true;
+      paintRoomFaction(world, room, ZoneFaction.LIQUIDATOR);
+    }
+    else if (room.name === 'Кабина глушения') paintRoomFaction(world, room, ZoneFaction.WILD);
+  }
+}
+
+function nearestAntennaHubDistance(world: World, x: number, y: number, hubs: readonly AntennaHub[]): number {
+  let best = Infinity;
+  for (const hub of hubs) best = Math.min(best, world.dist(x, y, hub.x, hub.y));
+  return best;
+}
+
+function isAntennaSpecialistRoom(room: Room): boolean {
+  return room.name.includes('НИИ') ||
+    room.name === 'Радиоклуб взрослых детей' ||
+    room.name === 'Релейная будка' ||
+    room.name === 'Архив мониторинга' ||
+    room.name === 'Батарейная кладовая' ||
+    room.name === 'Пост сигнал-инспекции';
+}
+
 export function generateAntennaCourtDesignFloor(seed = 0): AntennaCourtGeneration {
   const world = new World();
   const entities: Entity[] = [];
@@ -519,8 +604,8 @@ export function generateAntennaCourtDesignFloor(seed = 0): AntennaCourtGeneratio
   const captain = spawnPlotNpc(entities, nextId, 'antenna_captain_krug', rooms.inspection, 5, 5, Math.PI, { weapon: 'makarov' });
   spawnPlotNpc(entities, nextId, 'antenna_echo_zhenya', rooms.dorm, 3, 3, -Math.PI / 2, { spriteScale: 0.72 });
 
-  spawnGuard(entities, nextId, rooms.battery.x + 2, rooms.battery.y + 7, 'Сержант Частотный');
-  spawnGuard(entities, nextId, rooms.inspection.x + 8, rooms.inspection.y + 2, 'Дежурный Гц');
+  spawnPlotNpc(entities, nextId, 'antenna_guard_frequency_sergeant', rooms.battery, 2, 7, Math.PI / 2, { canGiveQuest: false });
+  spawnPlotNpc(entities, nextId, 'antenna_guard_hz_watch', rooms.inspection, 8, 2, Math.PI / 2, { canGiveQuest: false });
   spawnSignalMonsters(world, entities, nextId, rooms);
 
   addContainer(world, nextContainerId++, rooms.battery, 4, 4, ContainerKind.TOOL_LOCKER, 'Батарейный шкаф антенн', 'owner', [
@@ -865,19 +950,21 @@ function placeMaintenanceCabins(
       const rx = clampInt(option.x, 28, W - w - 28);
       const ry = clampInt(option.y, 28, W - h - 28);
       if (!canBuildRouteRoom(world, rx, ry, w, h, protectedCells)) continue;
+      const niiPod = i % 4 === 0;
       const room = stampNamedRoom(
         world,
-        i % 3 === 0 ? RoomType.STORAGE : RoomType.PRODUCTION,
+        niiPod ? RoomType.HQ : i % 3 === 0 ? RoomType.STORAGE : RoomType.PRODUCTION,
         rx,
         ry,
         w,
         h,
-        hub.cabinName,
+        niiPod ? `Гермокапсула НИИ ${i + 1}` : hub.cabinName,
         i % 2 === 0 ? Tex.METAL : Tex.PIPE,
         Tex.F_CONCRETE,
       );
+      if (niiPod) room.sealed = true;
       decorateRouteCabin(world, room, rng);
-      openRouteRoomToPoint(world, room, hub.x, hub.y, protectedCells);
+      openRouteRoomToPoint(world, room, hub.x, hub.y, protectedCells, niiPod ? DoorState.HERMETIC_OPEN : DoorState.CLOSED);
       break;
     }
   }
@@ -902,7 +989,14 @@ function decorateRouteCabin(world: World, room: Room, rng: () => number): void {
   }
 }
 
-function openRouteRoomToPoint(world: World, room: Room, tx: number, ty: number, protectedCells: Uint8Array): void {
+function openRouteRoomToPoint(
+  world: World,
+  room: Room,
+  tx: number,
+  ty: number,
+  protectedCells: Uint8Array,
+  doorState = DoorState.CLOSED,
+): void {
   const cx = room.x + (room.w >> 1);
   const cy = room.y + (room.h >> 1);
   const dx = world.delta(cx, tx);
@@ -924,7 +1018,7 @@ function openRouteRoomToPoint(world: World, room: Room, tx: number, ty: number, 
     outsideX = doorX;
     outsideY = doorY + sy;
   }
-  placeAntennaGate(world, doorX, doorY, room.id, -1, '');
+  placeAntennaGate(world, doorX, doorY, room.id, -1, '', doorState);
   carveCableLine(world, outsideX, outsideY, tx, ty, 1, protectedCells);
 }
 
@@ -954,7 +1048,15 @@ function setFeatureIfUnprotectedFloor(
   world.features[ci] = feature;
 }
 
-function placeAntennaGate(world: World, x: number, y: number, roomA: number, roomB: number, keyId: string): void {
+function placeAntennaGate(
+  world: World,
+  x: number,
+  y: number,
+  roomA: number,
+  roomB: number,
+  keyId: string,
+  state: DoorState = keyId ? DoorState.LOCKED : DoorState.CLOSED,
+): void {
   const ci = world.idx(x, y);
   if (world.cells[ci] === Cell.LIFT) return;
   world.cells[ci] = Cell.DOOR;
@@ -963,7 +1065,7 @@ function placeAntennaGate(world: World, x: number, y: number, roomA: number, roo
   world.features[ci] = Feature.NONE;
   world.doors.set(ci, {
     idx: ci,
-    state: keyId ? DoorState.LOCKED : DoorState.CLOSED,
+    state,
     roomA,
     roomB,
     keyId,
@@ -1151,33 +1253,6 @@ function spawnPlotNpc(
   };
   entities.push(npc);
   return npc;
-}
-
-function spawnGuard(entities: Entity[], nextId: { v: number }, x: number, y: number, name: string): void {
-  entities.push({
-    id: nextId.v++,
-    type: EntityType.NPC,
-    x: x + 0.5,
-    y: y + 0.5,
-    angle: Math.PI / 2,
-    pitch: 0,
-    alive: true,
-    speed: 1.0,
-    sprite: Occupation.HUNTER,
-    name,
-    isFemale: false,
-    needs: freshNeeds(),
-    hp: 180,
-    maxHp: 180,
-    money: 35,
-    ai: { goal: AIGoal.IDLE, tx: 0, ty: 0, path: [], pi: 0, stuck: 0, timer: 0 },
-    inventory: [{ defId: 'makarov', count: 1 }, { defId: 'ammo_9mm', count: 8 }],
-    weapon: 'makarov',
-    faction: Faction.LIQUIDATOR,
-    occupation: Occupation.HUNTER,
-    canGiveQuest: false,
-    questId: -1,
-  });
 }
 
 function spawnSignalMonsters(

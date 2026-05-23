@@ -21,6 +21,7 @@ import {
   type GameState,
   type RailTrainTrack,
   type Room,
+  type Zone,
   type WorldContainer,
 } from '../../core/types';
 import { World } from '../../core/world';
@@ -489,6 +490,50 @@ interface DarkMetroFullFloorStyle {
 
 const DARK_METRO_FULL_LINE_YS = [118, 260, 402, 642, 786, 920] as const;
 
+function axisDistance(a: number, b: number): number {
+  const d = Math.abs(a - b);
+  return Math.min(d, W - d);
+}
+
+function nearestDarkMetroLineDistance(y: number): number {
+  let best = W;
+  for (const lineY of DARK_METRO_FULL_LINE_YS) best = Math.min(best, axisDistance(y, lineY));
+  return best;
+}
+
+function nearestDarkMetroDefendedPostDistance2(x: number, y: number): number {
+  let best = Infinity;
+  for (let line = 0; line < DARK_METRO_FULL_LINE_YS.length; line++) {
+    const lineY = DARK_METRO_FULL_LINE_YS[line];
+    const platformY = darkMetroPlatformY(lineY, line);
+    const side = line % 2 === 0 ? 1 : -1;
+    const roomY = side > 0 ? platformY + 11 : platformY - 11;
+    const slots = line % 2 === 0 ? [1, 3] : [0, 2];
+    const stations = darkMetroStationXs(line);
+    for (const slot of slots) {
+      const dx = axisDistance(x, stations[slot]);
+      const dy = axisDistance(y, roomY);
+      best = Math.min(best, dx * dx + dy * dy);
+    }
+  }
+  return best;
+}
+
+export function tuneDarkMetroRouteZone(zone: Zone): void {
+  const lineDistance = nearestDarkMetroLineDistance(zone.cy);
+  const defended = nearestDarkMetroDefendedPostDistance2(zone.cx, zone.cy) <= 92 * 92;
+  const serviceDistance = Math.min(axisDistance(zone.cx, 176), axisDistance(zone.cx, 842), axisDistance(zone.cx, 512));
+  const serviceTunnel = serviceDistance <= 52 && zone.cy > 96 && zone.cy < 940;
+
+  zone.level = defended ? 4 : lineDistance <= 44 || serviceTunnel ? 5 : 4;
+  zone.faction = defended ? ZoneFaction.LIQUIDATOR
+    : lineDistance <= 28 && zone.id % 4 === 0 ? ZoneFaction.SAMOSBOR
+      : lineDistance <= 58 || serviceTunnel ? ZoneFaction.WILD
+        : zone.id % 5 === 0 ? ZoneFaction.CULTIST
+          : ZoneFaction.LIQUIDATOR;
+  zone.fogged = false;
+}
+
 export function generateDarkMetroDesignFloor(seed = DARK_METRO_DEFAULT_SEED): DarkMetroGeneration {
   return withSeededRandom(seed, () => {
     const world = new World();
@@ -537,6 +582,7 @@ export function expandDarkMetroFullFloorGeometry(
   addDarkMetroTicketHalls(world, protectedCells, style);
   addDarkMetroServiceRoutes(world, protectedCells, style, rng);
   addDarkMetroTransferWeb(world, protectedCells, style);
+  addDarkMetroDefendedPlatforms(world, protectedCells, style);
   linkDarkMetroCoreToInterchange(world, style);
   if (entities) seedFullFloorMetroTrains(world, entities);
   world.markFogDirty();
@@ -690,6 +736,142 @@ function addDarkMetroTransferWeb(world: World, mask: Uint8Array, style: DarkMetr
       setDarkMetroFog(world, x, y, x === 512 ? 42 : 22);
     }
   }
+}
+
+function addDarkMetroDefendedPlatforms(world: World, mask: Uint8Array, style: DarkMetroFullFloorStyle): void {
+  for (let line = 0; line < DARK_METRO_FULL_LINE_YS.length; line++) {
+    const lineY = DARK_METRO_FULL_LINE_YS[line];
+    const platformY = darkMetroPlatformY(lineY, line);
+    const side = line % 2 === 0 ? 1 : -1;
+    const stations = darkMetroStationXs(line);
+    const slots = line % 2 === 0 ? [1, 3] : [0, 2];
+    for (let i = 0; i < slots.length; i++) {
+      const platformX = stations[slots[i]];
+      addDarkMetroOpenPlatformRoom(
+        world,
+        platformX - 16,
+        platformY - 1,
+        32,
+        3,
+        `Обороняемая кромка линии ${line + 1}-${i + 1}`,
+        style.floorTex,
+      );
+      setFeature(world, platformX - 8, platformY, Feature.LAMP);
+      setFeature(world, platformX + 8, platformY, Feature.SCREEN);
+
+      const roomW = i === 0 ? 26 : 24;
+      const roomH = 8;
+      const roomX = Math.max(38, Math.min(W - 38 - roomW, platformX - (roomW >> 1)));
+      const roomY = side > 0 ? platformY + 7 : platformY - roomH - 7;
+      const room = addDarkMetroLandmarkRoom(
+        world,
+        mask,
+        RoomType.HQ,
+        roomX,
+        roomY,
+        roomW,
+        roomH,
+        `Пост белой лампы ${line + 1}-${i + 1}`,
+        Tex.METAL,
+        Tex.F_CONCRETE,
+      );
+      if (!room) continue;
+      markMetroMask(mask, world, room.x - 1, room.y - 1, room.w + 2, room.h + 2);
+
+      const doorX = room.x + (room.w >> 1);
+      const doorY = side > 0 ? room.y - 1 : room.y + room.h;
+      const outsideY = side > 0 ? doorY - 1 : doorY + 1;
+      carveMetroLine(world, null, doorX, outsideY, platformX, platformY, 1, style.floorTex);
+      placeDoor(world, doorX, doorY, room.id, -1);
+
+      setFeature(world, room.x + 3, room.y + 2, Feature.LAMP);
+      setFeature(world, room.x + room.w - 4, room.y + 2, Feature.SCREEN);
+      setFeature(world, room.x + 7, room.y + room.h - 3, Feature.TABLE);
+      setFeature(world, room.x + room.w - 5, room.y + room.h - 3, Feature.SHELF);
+      addDarkMetroTransitCache(world, room, room.x + room.w - 5, room.y + room.h - 3, line, i);
+    }
+  }
+}
+
+function addDarkMetroOpenPlatformRoom(world: World, x: number, y: number, w: number, h: number, name: string, floorTex: Tex): Room {
+  const room: Room = {
+    id: world.rooms.length,
+    type: RoomType.HQ,
+    x: world.wrap(x),
+    y: world.wrap(y),
+    w,
+    h,
+    doors: [],
+    sealed: false,
+    name,
+    apartmentId: -1,
+    wallTex: Tex.METAL,
+    floorTex,
+  };
+  world.rooms.push(room);
+  for (let dy = 0; dy < h; dy++) {
+    for (let dx = 0; dx < w; dx++) {
+      const ci = world.idx(x + dx, y + dy);
+      if (world.cells[ci] !== Cell.FLOOR) continue;
+      world.roomMap[ci] = room.id;
+      world.floorTex[ci] = floorTex;
+    }
+  }
+  return room;
+}
+
+function darkMetroStationXs(line: number): readonly number[] {
+  return [
+    132 + line * 11,
+    398 + (line % 2) * 54,
+    690 - (line % 3) * 23,
+    884 - line * 7,
+  ].map(x => Math.max(72, Math.min(W - 72, x)));
+}
+
+function darkMetroPlatformY(lineY: number, line: number): number {
+  return lineY + (line % 2 === 0 ? 12 : -11);
+}
+
+function markMetroMask(mask: Uint8Array, world: World, x: number, y: number, w: number, h: number): void {
+  for (let dy = 0; dy < h; dy++) {
+    for (let dx = 0; dx < w; dx++) {
+      mask[world.idx(x + dx, y + dy)] = 1;
+    }
+  }
+}
+
+function nextDarkMetroContainerId(world: World): number {
+  let next = 1;
+  for (const container of world.containers) next = Math.max(next, container.id + 1);
+  return next;
+}
+
+function addDarkMetroTransitCache(world: World, room: Room, x: number, y: number, line: number, slot: number): void {
+  const inventory: WorldContainer['inventory'] = line % 3 === 0
+    ? [{ defId: 'metro_ticket', count: 1 }, { defId: 'ammo_9mm', count: 10 }, { defId: 'bandage', count: 1 }]
+    : line % 3 === 1
+      ? [{ defId: 'fuse', count: 1 }, { defId: 'lamp_bulb', count: 1 }, { defId: 'water', count: 1 }]
+      : [{ defId: 'gasmask_filter', count: 1 }, { defId: 'ammo_9mm', count: 6 }, { defId: 'metro_ticket', count: 1 }];
+  const ci = world.idx(x, y);
+  world.addContainer({
+    id: nextDarkMetroContainerId(world),
+    x,
+    y,
+    floor: DARK_METRO_BASE_FLOOR,
+    roomId: room.id,
+    zoneId: world.zoneMap[ci],
+    kind: slot === 0 ? ContainerKind.TOOL_LOCKER : ContainerKind.EMERGENCY_BOX,
+    name: slot === 0 ? `Постовой ящик линии ${line + 1}` : `Аварийный кэш линии ${line + 1}`,
+    inventory,
+    capacitySlots: 8,
+    ownerName: 'пост белой лампы',
+    faction: Faction.LIQUIDATOR,
+    access: slot === 0 ? 'faction' : 'locked',
+    lockDifficulty: slot === 0 ? undefined : 4,
+    discovered: true,
+    tags: ['dark_metro', 'transit_cache', 'platform', 'train_risk'],
+  });
 }
 
 function linkDarkMetroCoreToInterchange(world: World, style: DarkMetroFullFloorStyle): void {
@@ -1013,10 +1195,10 @@ function seedCoreMetroTrain(ctx: BuildCtx, layout: DarkMetroLayout): void {
   addRailTrainRoute(ctx.world, ctx.entities, ctx.nextId, track, {
     id: 'dark_metro_platform_train',
     label: 'Короткий состав платформы',
-    speed: 2.9,
+    speed: 3.4,
     length: 7,
     initialOffset: track.stationOffsets[0],
-    stopSeconds: 5,
+    stopSeconds: 3.8,
   });
 }
 
@@ -1079,11 +1261,11 @@ function seedFullFloorMetroTrains(world: World, entities: Entity[]): void {
     addRailTrainRoute(world, entities, nextId, track, {
       id: `${track.id}_train`,
       label: i % 3 === 0 ? `Состав ${i + 1} без машиниста` : `Состав ${i + 1}`,
-      speed: 4.2 + i * 0.35,
+      speed: 4.8 + i * 0.45,
       length: 11 + (i % 3),
       direction: i % 2 === 0 ? 1 : -1,
       initialOffset: track.stationOffsets[0],
-      stopSeconds: 4.5,
+      stopSeconds: 3.4,
     });
   }
 }

@@ -42,6 +42,16 @@ Down decreases `z`; up increases `z`. Design-floor rows mirror `src/data/design_
 
 Historical differences now called out explicitly: the original plan assumed a shorter `z=-44..40` route with authored stops every four z-levels. Shipped route data now spans `z=-50..+50`, keeps `LIVING` at `z=0`, reserves even z-slots for future authored/story floors, and uses procedural fallback for every unoccupied slot.
 
+## Proposed Unshipped Authored Floor
+
+The population rework batch adds one proposed manual floor brief that is not yet in the shipped route:
+
+| Proposed z | Proposed route id | Display name | Intended role | Doc |
+| ---: | --- | --- | --- | --- |
+| 12 | `slime_nii` | НИИ слизи | Biological lab/quarantine bridge between `KVARTIRY` and `manhattan_crossroads` | [rework_floor_20_slime_nii.md](rework_floor_20_slime_nii.md) |
+
+Do not add this row to the shipped route table or `README.md` until `src/data/design_floors.ts`, `src/gen/design_floors/slime_nii.ts`, manifest registration and validation exist.
+
 ## Cross-Floor Spine
 
 - Ministry and Raionsovet own documents that open roads, markets, factories and medical/morgue records.
@@ -65,3 +75,32 @@ Each agent touching shipped floor code should read:
 Parallel implementation prompts from the completed floor waves are now historical context in `../../appendix.md`; original prompt files are archived under `../../gatbage/Docs/DesignFloors/AgentPrompts/`. Do not recreate this prompt folder unless a new explicit orchestration batch needs it. New floor work should start from this index, the relevant floor doc, `floor_contract.md`, README, architecture and current source.
 
 Do not update `README.md` until a floor is actually implemented and validated.
+
+## 2026 Population Rework Batch
+
+The current rework batch exists to fix sparse routed design floors while preserving each floor's identity. Start with [floor_contract.md](floor_contract.md), then hand one of these files to each parallel implementation agent:
+
+| Task | Route id | Doc |
+| ---: | --- | --- |
+| 01 | `roof` | [rework_floor_01_roof.md](rework_floor_01_roof.md) |
+| 02 | `chthonic_attic` | [rework_floor_02_chthonic_attic.md](rework_floor_02_chthonic_attic.md) |
+| 03 | `antenna_court` | [rework_floor_03_antenna_court.md](rework_floor_03_antenna_court.md) |
+| 04 | `pioneer_camp` | [rework_floor_04_pioneer_camp.md](rework_floor_04_pioneer_camp.md) |
+| 05 | `upper_bureau` | [rework_floor_05_upper_bureau.md](rework_floor_05_upper_bureau.md) |
+| 06 | `bank_floor` | [rework_floor_06_bank_floor.md](rework_floor_06_bank_floor.md) |
+| 07 | `raionsovet_archive` | [rework_floor_07_raionsovet_archive.md](rework_floor_07_raionsovet_archive.md) |
+| 08 | `registry_morgue` | [rework_floor_08_registry_morgue.md](rework_floor_08_registry_morgue.md) |
+| 09 | `manhattan_crossroads` | [rework_floor_09_manhattan_crossroads.md](rework_floor_09_manhattan_crossroads.md) |
+| 10 | `communal_ring` | [rework_floor_10_communal_ring.md](rework_floor_10_communal_ring.md) |
+| 11 | `floor_69` | [rework_floor_11_floor_69.md](rework_floor_11_floor_69.md) |
+| 12 | `black_market_88` | [rework_floor_12_black_market_88.md](rework_floor_12_black_market_88.md) |
+| 13 | `production_belt` | [rework_floor_13_production_belt.md](rework_floor_13_production_belt.md) |
+| 14 | `service_floor` | [rework_floor_14_service_floor.md](rework_floor_14_service_floor.md) |
+| 15 | `silicon_net_well` | [rework_floor_15_silicon_net_well.md](rework_floor_15_silicon_net_well.md) |
+| 16 | `dark_metro` | [rework_floor_16_dark_metro.md](rework_floor_16_dark_metro.md) |
+| 17 | `underhell` | [rework_floor_17_underhell.md](rework_floor_17_underhell.md) |
+| 18 | `podad` | [rework_floor_18_podad.md](rework_floor_18_podad.md) |
+| 19 | `darkness` | [rework_floor_19_darkness.md](rework_floor_19_darkness.md) |
+| 20 | `slime_nii` proposed | [rework_floor_20_slime_nii.md](rework_floor_20_slime_nii.md) |
+
+After the parallel floor agents finish, run the integration pass from [rework_orchectrator.md](rework_orchectrator.md).

@@ -26,7 +26,7 @@ Critical runtime facts:
 - `entities` is a flat array of plain objects with optional component fields. There are no entity subclasses.
 - The world is a 1024x1024 torus. All coordinate work must use `world.idx`, `world.wrap`, `world.delta`, or `world.dist`.
 - Floor generators return `{ world, entities, spawnX, spawnY }`.
-- Normal lift travel uses `systems/procedural_floors.ts` as a per-run vertical route across `z=-50..+50`. Existing `FloorLevel` values remain 6 story/base floors; authored design floors are 19 string-id route stops from `src/data/design_floors.ts`; unoccupied route positions are 76 seeded procedural/fallback specs with `z`, seed, geometry, main faction, anomaly and danger. Down decreases `z`; `VOID` is the final lowest stop at `z=-50`, `darkness` is the dark endgame route floor at `z=-48`, `podad` is the Herald-gated Hell route floor at `z=-40`, `underhell` is at `z=-38`, and `roof` is the highest stop at `z=+50`.
+- Normal lift travel uses `systems/procedural_floors.ts` as a per-run vertical route across `z=-50..+50`. Existing `FloorLevel` values remain 6 story/base floors; authored design floors are 20 string-id route stops from `src/data/design_floors.ts`; unoccupied route positions are 75 seeded procedural/fallback specs with `z`, seed, geometry, main faction, anomaly and danger. Down decreases `z`; `VOID` is the final lowest stop at `z=-50`, `darkness` is the dark endgame route floor at `z=-48`, `podad` is the Herald-gated Hell route floor at `z=-40`, `underhell` is at `z=-38`, and `roof` is the highest stop at `z=+50`.
 - `main.ts` owns the game loop and calls systems in fixed order.
 - `systems/events.ts` is the current EventBus analogue: fixed-size ring buffers, public event publication, and query filters.
 - Shared `E` interaction goes through `systems/interactions.ts`; generated gambling machines, local computers, NET-hack terminals, emergency panels, Net Terminal Gen and special floor interactions plug into that dispatcher.
@@ -79,6 +79,7 @@ Definitions  ->  Generation  ->  Runtime Systems  ->  Render/UI
 - Content modules mutate `World` once during generation or samosbor rebuild.
 - Agents should mostly add new files here.
 - Floor-wide placement should use the shared placement field in `src/gen/population_placement.ts` instead of choosing ad hoc clusters.
+- Routed design floors use `src/data/design_floor_population.ts` and `src/gen/design_floors/population.ts` for their broad NPC/monster fields after route-scale geometry is finalized; local generators still own named NPCs, authored encounters and floor-specific rooms.
 
 `systems/`
 

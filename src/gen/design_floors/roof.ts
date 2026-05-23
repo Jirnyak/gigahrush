@@ -10,13 +10,10 @@ import {
   ContainerKind,
   DoorState,
   EntityType,
-  Faction,
   Feature,
   FloorLevel,
   LiftDirection,
   MonsterKind,
-  Occupation,
-  QuestType,
   RoomType,
   Tex,
   ZoneFaction,
@@ -27,8 +24,6 @@ import {
   type WorldEvent,
 } from '../../core/types';
 import { World } from '../../core/world';
-import { freshNeeds } from '../../data/catalog';
-import { type PlotNpcDef, registerSideQuest } from '../../data/plot';
 import { MONSTERS } from '../../entities/monster';
 import { monsterSpr, Spr } from '../../render/sprite_index';
 import { publishEvent } from '../../systems/events';
@@ -128,149 +123,6 @@ interface RoofIsland {
   cx: number;
   cy: number;
 }
-
-const NPC_DEFS: Record<string, PlotNpcDef> = {
-  roof_meteorologist_varvara: {
-    name: 'Варвара Метеоролог',
-    isFemale: true,
-    faction: Faction.SCIENTIST,
-    occupation: Occupation.SCIENTIST,
-    sprite: Occupation.SCIENTIST,
-    hp: 105, maxHp: 105, money: 130, speed: 0.75,
-    inventory: [
-      { defId: 'radio', count: 1 },
-      { defId: 'blank_form', count: 2 },
-      { defId: 'tea', count: 1 },
-    ],
-    talkLines: [
-      'Небо над крышей повторяется с ошибкой в сорок семь секунд. Это не погода, это расписание.',
-      'Министерство просит писать "ясно". Граждане просят писать правду. Облака не просят ничего.',
-      'Если нужен честный прогноз самосбора, чините мачту или крадите мой бланк.',
-    ],
-    talkLinesPost: [
-      'Сводка ушла. Теперь небо будет врать уже под подпись.',
-      'Когда облака становятся квадратными, бегите в вентиляцию, не в лифт.',
-    ],
-  },
-  roof_rigger_senya: {
-    name: 'Сеня Верхолаз',
-    isFemale: false,
-    faction: Faction.CITIZEN,
-    occupation: Occupation.ELECTRICIAN,
-    sprite: Occupation.ELECTRICIAN,
-    hp: 135, maxHp: 135, money: 55, speed: 0.9,
-    inventory: [
-      { defId: 'wire_coil', count: 1 },
-      { defId: 'wrench', count: 1 },
-      { defId: 'bandage', count: 1 },
-    ],
-    talkLines: [
-      'Антенна держится на проволоке, молитве и чужих ошибках. Проволока закончилась первой.',
-      'Дашь моток и ячейку - подниму сигнал. Дашь бинт - поднимусь сам.',
-      'На открытом бетоне не геройствуют. Две перебежки, укрытие, потом мачта.',
-    ],
-    talkLinesPost: [
-      'Мачта ожила. Теперь верхние этажи услышат нас раньше, чем съедят.',
-      'Если реле снова щелкнет три раза подряд, значит прогноз пришел не отсюда.',
-    ],
-  },
-  roof_sniper_kadyr: {
-    name: 'Кадыр Линия',
-    isFemale: false,
-    faction: Faction.LIQUIDATOR,
-    occupation: Occupation.HUNTER,
-    sprite: Occupation.HUNTER,
-    hp: 260, maxHp: 260, money: 95, speed: 0.95,
-    inventory: [
-      { defId: 'gauss', count: 1 },
-      { defId: 'ammo_energy', count: 2 },
-      { defId: 'cigs', count: 1 },
-    ],
-    talkLines: [
-      'Открытая крыша принадлежит тому, кто раньше увидел движение.',
-      'Две пачки сигарет - и я десять минут смотрю на облака, а не на проход.',
-      'Можно стрелять. Можно темнить гнездо. Можно ползти через вентиляцию. Все варианты шумят по-разному.',
-    ],
-    talkLinesPost: [
-      'Линия снята. Идите, пока я не передумал смотреть на небо.',
-      'Если кто спросит, проход был пустой. Так проще всем живым.',
-    ],
-  },
-  roof_cloud_witness: {
-    name: 'Тихон Повторный',
-    isFemale: false,
-    faction: Faction.CITIZEN,
-    occupation: Occupation.TRAVELER,
-    sprite: Occupation.TRAVELER,
-    hp: 80, maxHp: 80, money: 12, speed: 0.75,
-    inventory: [
-      { defId: 'note', count: 2 },
-      { defId: 'bread', count: 1 },
-    ],
-    talkLines: [
-      'Я видел, как одно облако прошло дважды. Второй раз оно знало, где я стою.',
-      'Распечатку можно снять у метеобудки, когда небо дернется. Яков такое поймет.',
-      'Не называйте это улицей. У улицы есть конец, а здесь только повтор.',
-    ],
-    talkLinesPost: [
-      'Кадр у вас. Теперь у Якова будет бумага, а не мой рассказ на честном слове.',
-      'Если Яков спросит, я не спал. Спящие не считают повторы.',
-    ],
-    talkQuestResponse: 'Скажите Якову: небо не над нами. Оно перед нами, как экран.',
-  },
-};
-
-registerSideQuest('roof_rigger_senya', NPC_DEFS.roof_rigger_senya, [
-  {
-    id: 'roof_repair_antenna',
-    giverNpcId: 'roof_rigger_senya',
-    type: QuestType.FETCH,
-    desc: 'Сеня Верхолаз: «Принеси два мотка проволоки. С ячейкой будет лучше, но без проволоки мачта не держит контакт даже в тихую погоду.»',
-    targetItem: 'wire_coil', targetCount: 2,
-    rewardItem: 'relay_diagram', rewardCount: 1,
-    extraRewards: [{ defId: 'radio', count: 1 }, { defId: 'ammo_energy', count: 1 }],
-    relationDelta: 14, xpReward: 75, moneyReward: 65,
-  },
-]);
-
-registerSideQuest('roof_meteorologist_varvara', NPC_DEFS.roof_meteorologist_varvara, [
-  {
-    id: 'roof_false_weather_report',
-    giverNpcId: 'roof_meteorologist_varvara',
-    type: QuestType.FETCH,
-    desc: 'Варвара Метеоролог: «Нужен пустой бланк. Я напишу сводку для Министерства или правду для жильцов - решите, кому верить опаснее.»',
-    targetItem: 'blank_form', targetCount: 1,
-    rewardItem: 'forged_permit_slip', rewardCount: 1,
-    extraRewards: [{ defId: 'siren_instruction', count: 1 }],
-    relationDelta: 8, xpReward: 65, moneyReward: 90,
-  },
-]);
-
-registerSideQuest('roof_sniper_kadyr', NPC_DEFS.roof_sniper_kadyr, [
-  {
-    id: 'roof_sniper_line',
-    giverNpcId: 'roof_sniper_kadyr',
-    type: QuestType.FETCH,
-    desc: 'Кадыр Линия: «Две пачки сигарет - и открытая полоса станет коридором. Нет сигарет: темните гнездо, бейте первым или идите через вентиляцию.»',
-    targetItem: 'cigs', targetCount: 2,
-    rewardItem: 'key', rewardCount: 1,
-    extraRewards: [{ defId: 'ammo_9mm', count: 10 }],
-    relationDelta: 6, xpReward: 60, moneyReward: 20,
-  },
-]);
-
-registerSideQuest('roof_cloud_witness', NPC_DEFS.roof_cloud_witness, [
-  {
-    id: 'roof_cloud_sample',
-    giverNpcId: 'roof_cloud_witness',
-    type: QuestType.FETCH,
-    desc: 'Тихон Повторный: «Принеси распечатку облачного кадра из метеобудки. Якову нужен не прогноз, а доказательство повторения.»',
-    targetItem: 'note', targetCount: 1,
-    rewardItem: 'bottled_voice', rewardCount: 1,
-    extraRewards: [{ defId: 'antidep', count: 1 }],
-    relationDelta: 12, xpReward: 70, moneyReward: 45,
-  },
-]);
 
 export function createRoofWeatherState(seed = 0, skyTimeOfDay = 0.42): RoofWeatherState {
   return {
@@ -481,39 +333,38 @@ export function generateRoofDesignFloor(seed = 0): RoofGeneration {
   retuneRoofZones(world, rooms);
   decorateRoof(world, rooms);
 
-  const varvara = spawnRoofNpc(entities, nextId, 'roof_meteorologist_varvara', rooms.meteorology, 4, 4, 0);
-  const senya = spawnRoofNpc(entities, nextId, 'roof_rigger_senya', rooms.riggerMast, 4, 5, Math.PI / 2, { weapon: 'wrench' });
-  const kadyr = spawnRoofNpc(entities, nextId, 'roof_sniper_kadyr', rooms.sniperNest, 6, 4, Math.PI, { weapon: 'gauss' });
-  const witness = spawnRoofNpc(entities, nextId, 'roof_cloud_witness', rooms.cloudCamp, 3, 4, -Math.PI / 2);
-
-  spawnRoofGuard(entities, nextId, rooms.entry.x + 8, rooms.entry.y + 4, 'Дежурный люка');
   spawnRoofMonsters(world, entities, nextId, rooms);
 
-  addRoofContainer(world, nextContainerId++, rooms.meteorology, 3, 2, ContainerKind.FILING_CABINET, 'Шкаф ложных прогнозов', 'owner', [
+  addRoofContainer(world, nextContainerId++, rooms.meteorology, 3, 2, ContainerKind.FILING_CABINET, 'Запертый шкаф ложных прогнозов', 'locked', [
     { defId: 'blank_form', count: 2 },
     { defId: 'siren_instruction', count: 1 },
-    { defId: 'note', count: 1, data: 'Прогноз N-40: ясно, пока Министерству выгодно видеть далеко.' },
-  ], varvara, ['weather', 'ministry_report']);
-  addRoofContainer(world, nextContainerId++, rooms.riggerMast, 3, 3, ContainerKind.TOOL_LOCKER, 'Ящик верхолаза Сени', 'room', [
+    { defId: 'note', count: 1, data: 'Варвара: прогноз N-40 отправлен пустым каналом. Ясно, пока Министерству выгодно видеть далеко.' },
+  ], undefined, ['weather', 'ministry_report', 'evacuated']);
+  addRoofContainer(world, nextContainerId++, rooms.riggerMast, 3, 3, ContainerKind.TOOL_LOCKER, 'Сорванный ящик верхолаза', 'locked', [
     { defId: 'wire_coil', count: 2 },
     { defId: 'fuse', count: 1 },
-    { defId: 'bandage', count: 1 },
-  ], senya, ['repair', 'antenna']);
-  addRoofContainer(world, nextContainerId++, rooms.sniperNest, 4, 2, ContainerKind.WEAPON_CRATE, 'Сухой ящик Кадыра', 'owner', [
-    { defId: 'ammo_energy', count: 2 },
-    { defId: 'ammo_762', count: 18 },
-    { defId: 'cigs', count: 1 },
-  ], kadyr, ['sniper', 'theft']);
+    { defId: 'relay_diagram', count: 1 },
+    { defId: 'note', count: 1, data: 'Сеня: мачта держится на проволоке, молитве и чужих ошибках. Проволока закончилась первой.' },
+  ], undefined, ['repair', 'antenna', 'evacuated']);
+  addRoofContainer(world, nextContainerId++, rooms.sniperNest, 4, 2, ContainerKind.WEAPON_CRATE, 'Сухой ящик пустого гнезда', 'locked', [
+    { defId: 'ammo_energy', count: 1 },
+    { defId: 'ammo_762', count: 8 },
+    { defId: 'note', count: 1, data: 'Кадыр: открытая крыша принадлежит тому, кто раньше увидел движение. Я ушел ниже, пока движение смотрит вверх.' },
+  ], undefined, ['sniper', 'liquidator_trace']);
   addRoofContainer(world, nextContainerId++, rooms.waterTanks, 6, 4, ContainerKind.EMERGENCY_BOX, 'Сборник чистой воды', 'locked', [
     { defId: 'filtered_water', count: 2 },
     { defId: 'gasmask_filter', count: 1 },
   ], undefined, ['water', 'aftermath']);
+  addRoofContainer(world, nextContainerId++, rooms.cloudCamp, 4, 3, ContainerKind.FILING_CABINET, 'Полевой журнал повторного облака', 'secret', [
+    { defId: 'overexposed_photo', count: 1 },
+    { defId: 'bottled_voice', count: 1 },
+    { defId: 'note', count: 1, data: 'Тихон: я видел, как одно облако прошло дважды. Второй раз оно знало, где я стою.' },
+  ], undefined, ['sky', 'cloud', 'witness_trace']);
 
   dropItem(entities, nextId, rooms.entry.x + 4, rooms.entry.y + 5, 'siren_instruction', 1);
   dropItem(entities, nextId, rooms.mainSlab.x + 12, rooms.mainSlab.y + 8, 'wire_coil', 1);
   dropItem(entities, nextId, rooms.meteorology.x + 9, rooms.meteorology.y + 6, 'note', 1, 'Распечатка облачного кадра: облако повторилось, но тень под ним сместилась.');
-  dropItem(entities, nextId, rooms.cloudCamp.x + 5, rooms.cloudCamp.y + 3, 'note', 1, 'Тихон считает не облака, а секунды между одинаковыми облаками.');
-  void witness;
+  dropItem(entities, nextId, rooms.cloudCamp.x + 5, rooms.cloudCamp.y + 3, 'note', 1, 'Тихон считал не облака, а секунды между одинаковыми облаками. Последняя строка оборвана словом "смотрит".');
 
   placeFixedLift(world, rooms.entry.x + 2, rooms.entry.y + 2, LiftDirection.DOWN);
   placeFixedLift(world, rooms.maintenanceHatch.x + rooms.maintenanceHatch.w - 3, rooms.maintenanceHatch.y + 2, LiftDirection.DOWN);
@@ -592,6 +443,49 @@ export function expandRoofArchipelago(world: World, rng: () => number): void {
     eastLane, signalOutpost, southShelters, waterDeck, tarPocket,
   ]);
   applyUniformSkyLight(world);
+}
+
+export function retuneRoofPressureZones(world: World): void {
+  for (const zone of world.zones) {
+    const d = world.dist(zone.cx, zone.cy, CX, CY);
+    zone.level = d > 300 ? 5 : d > 150 ? 4 : 3;
+    zone.faction = d > 260 ? ZoneFaction.WILD : ZoneFaction.CITIZEN;
+    zone.fogged = false;
+  }
+
+  for (let i = 0; i < W * W; i++) {
+    const zone = world.zones[world.zoneMap[i]];
+    world.factionControl[i] = zone?.faction ?? ZoneFaction.WILD;
+  }
+
+  for (const room of world.rooms) {
+    const roomFaction = roofRoomPressureFaction(room);
+    const roomLevel = room.type === RoomType.PRODUCTION ? 5 : room.type === RoomType.HQ ? 4 : room.sealed ? 2 : 3;
+    paintRoofPressureRoom(world, room, roomFaction, roomLevel);
+  }
+}
+
+function roofRoomPressureFaction(room: Room): ZoneFaction {
+  if (room.type === RoomType.PRODUCTION) return ZoneFaction.SAMOSBOR;
+  if (room.type === RoomType.HQ) return ZoneFaction.LIQUIDATOR;
+  if (room.sealed || room.type === RoomType.CORRIDOR || room.type === RoomType.OFFICE) return ZoneFaction.CITIZEN;
+  return ZoneFaction.WILD;
+}
+
+function paintRoofPressureRoom(world: World, room: Room, faction: ZoneFaction, level: number): void {
+  const zid = world.zoneMap[world.idx(room.x + (room.w >> 1), room.y + (room.h >> 1))];
+  const zone = world.zones[zid];
+  if (zone) {
+    zone.faction = faction;
+    zone.level = Math.max(zone.level, level);
+    zone.fogged = false;
+  }
+  for (let dy = 0; dy < room.h; dy++) {
+    for (let dx = 0; dx < room.w; dx++) {
+      const ci = world.idx(room.x + dx, room.y + dy);
+      world.factionControl[ci] = faction;
+    }
+  }
 }
 
 function clampSignalQuality(value: number): number {
@@ -939,12 +833,12 @@ function stampRoofRooms(world: World): Record<string, Room> {
   return {
     entry: stampRoofRoom(world, RoomType.CORRIDOR, CX - 9, CY + 34, 15, 10, 'Лифтовая голова крыши', Tex.CONCRETE, Tex.F_CONCRETE, true),
     mainSlab: stampRoofRoom(world, RoomType.COMMON, CX - 30, CY - 15, 60, 38, 'Главная плита крыши', Tex.CONCRETE, Tex.F_CONCRETE),
-    meteorology: stampRoofRoom(world, RoomType.OFFICE, CX - 51, CY - 10, 16, 12, 'Метеобудка Варвары', Tex.PANEL, Tex.F_LINO),
-    riggerMast: stampRoofRoom(world, RoomType.PRODUCTION, CX + 35, CY - 14, 18, 14, 'Мачта верхолаза', Tex.METAL, Tex.F_CONCRETE),
+    meteorology: stampRoofRoom(world, RoomType.OFFICE, CX - 51, CY - 10, 16, 12, 'Пустая метеобудка', Tex.PANEL, Tex.F_LINO),
+    riggerMast: stampRoofRoom(world, RoomType.PRODUCTION, CX + 35, CY - 14, 18, 14, 'Оборванная сигнальная мачта', Tex.METAL, Tex.F_CONCRETE),
     ventShelter: stampRoofRoom(world, RoomType.STORAGE, CX - 9, CY + 26, 20, 13, 'Вентиляционное укрытие', Tex.HERMO_WALL, Tex.F_CONCRETE, true),
     waterTanks: stampRoofRoom(world, RoomType.STORAGE, CX + 16, CY + 25, 17, 13, 'Баковая площадка', Tex.PIPE, Tex.F_WATER),
-    sniperNest: stampRoofRoom(world, RoomType.HQ, CX + 39, CY + 7, 14, 11, 'Снайперское гнездо Кадыра', Tex.METAL, Tex.F_CONCRETE),
-    cloudCamp: stampRoofRoom(world, RoomType.LIVING, CX - 47, CY - 28, 13, 9, 'Лежанка свидетеля облаков', Tex.PANEL, Tex.F_CARPET),
+    sniperNest: stampRoofRoom(world, RoomType.HQ, CX + 39, CY + 7, 14, 11, 'Пустое снайперское гнездо', Tex.METAL, Tex.F_CONCRETE),
+    cloudCamp: stampRoofRoom(world, RoomType.STORAGE, CX - 47, CY - 28, 13, 9, 'Угол повторного облака', Tex.PANEL, Tex.F_CARPET),
     maintenanceHatch: stampRoofRoom(world, RoomType.CORRIDOR, CX - 49, CY + 20, 13, 9, 'Сервисный люк вниз', Tex.CONCRETE, Tex.F_CONCRETE, true),
   };
 }
@@ -1177,73 +1071,6 @@ function setWaterTank(world: World, x: number, y: number): void {
 function setFeatureIfFloor(world: World, x: number, y: number, feature: Feature): void {
   const ci = world.idx(x, y);
   if (world.cells[ci] === Cell.FLOOR || world.cells[ci] === Cell.WATER) world.features[ci] = feature;
-}
-
-function spawnRoofNpc(
-  entities: Entity[],
-  nextId: { v: number },
-  plotNpcId: string,
-  room: Room,
-  dx: number,
-  dy: number,
-  angle: number,
-  extra?: Partial<Entity>,
-): Entity {
-  const def = NPC_DEFS[plotNpcId];
-  const npc: Entity = {
-    id: nextId.v++,
-    type: EntityType.NPC,
-    x: room.x + dx + 0.5,
-    y: room.y + dy + 0.5,
-    angle,
-    pitch: 0,
-    alive: true,
-    speed: def.speed,
-    sprite: def.sprite,
-    name: def.name,
-    isFemale: def.isFemale,
-    needs: freshNeeds(),
-    hp: def.hp,
-    maxHp: def.maxHp,
-    money: def.money,
-    ai: { goal: AIGoal.IDLE, tx: room.x + dx + 0.5, ty: room.y + dy + 0.5, path: [], pi: 0, stuck: 0, timer: 0 },
-    inventory: def.inventory.map(i => ({ ...i })),
-    faction: def.faction,
-    occupation: def.occupation,
-    plotNpcId,
-    canGiveQuest: true,
-    questId: -1,
-    ...extra,
-  };
-  entities.push(npc);
-  return npc;
-}
-
-function spawnRoofGuard(entities: Entity[], nextId: { v: number }, x: number, y: number, name: string): void {
-  entities.push({
-    id: nextId.v++,
-    type: EntityType.NPC,
-    x: x + 0.5,
-    y: y + 0.5,
-    angle: Math.PI / 2,
-    pitch: 0,
-    alive: true,
-    speed: 0.95,
-    sprite: Occupation.HUNTER,
-    name,
-    isFemale: false,
-    needs: freshNeeds(),
-    hp: 150,
-    maxHp: 150,
-    money: 40,
-    ai: { goal: AIGoal.IDLE, tx: x + 0.5, ty: y + 0.5, path: [], pi: 0, stuck: 0, timer: 0 },
-    inventory: [{ defId: 'makarov', count: 1 }, { defId: 'ammo_9mm', count: 8 }],
-    weapon: 'makarov',
-    faction: Faction.LIQUIDATOR,
-    occupation: Occupation.HUNTER,
-    canGiveQuest: false,
-    questId: -1,
-  });
 }
 
 function spawnRoofMonsters(

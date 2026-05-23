@@ -675,12 +675,12 @@ function addSideRoomsForLane(world: World, mask: Uint8Array, laneY: number, row:
     const room = macroRoom(
       world,
       mask,
-      motif === 0 ? RoomType.COMMON : motif === 1 ? RoomType.STORAGE : motif === 2 ? RoomType.OFFICE : RoomType.STORAGE,
+      motif === 0 ? RoomType.PRODUCTION : motif === 1 ? RoomType.STORAGE : motif === 2 ? RoomType.HQ : RoomType.STORAGE,
       x,
       y,
       w,
       h,
-      motif === 0 ? 'Машинный остров ленты 14' : motif === 1 ? 'Складская ячейка ленты 14' : motif === 2 ? 'Сменная будка контроля' : 'Карман лома у ленты',
+      motif === 0 ? 'Безопасный машинный остров ленты 14' : motif === 1 ? 'Складская ячейка ленты 14' : motif === 2 ? 'Пост охраны смены 14' : 'Карман лома у ленты',
       motif === 2 ? Tex.PANEL : Tex.METAL,
       motif === 2 ? Tex.F_LINO : Tex.F_CONCRETE,
     );
@@ -705,6 +705,56 @@ function addCatwalkBypass(world: World, mask: Uint8Array, x: number, y0: number,
   for (let y = y0 + 42; y < y1 - 28; y += 96) {
     setFeature(world, x, y, Feature.LAMP);
     if (y % 192 === 0) setFeature(world, x, y + 3, Feature.APPARATUS);
+  }
+}
+
+function isRoom(room: Room | null): room is Room {
+  return room !== null;
+}
+
+function seedExpandedProductionCaches(world: World, dockRooms: readonly Room[], hazardRooms: readonly Room[]): void {
+  const dockInventories: readonly (readonly { defId: string; count: number }[])[] = [
+    [{ defId: 'gear', count: 1 }, { defId: 'fuse', count: 1 }, { defId: 'metal_sheet', count: 1 }],
+    [{ defId: 'pipe', count: 1 }, { defId: 'wrench', count: 1 }, { defId: 'relay_diagram', count: 1 }],
+    [{ defId: 'door_kit', count: 1 }, { defId: 'metal_sheet', count: 1 }, { defId: 'filter_layer', count: 1 }],
+    [{ defId: 'ammo_energy', count: 1 }, { defId: 'fuse', count: 1 }, { defId: 'gasmask_filter', count: 1 }],
+  ];
+  for (let i = 0; i < dockRooms.length; i++) {
+    addContainer(
+      world,
+      dockRooms[i],
+      17 + i,
+      ContainerKind.TOOL_LOCKER,
+      `Запертый ремонтный шкаф ленты 14-${i + 1}`,
+      dockInventories[i % dockInventories.length],
+      ['industrial_cache', 'repair', 'locked_output', 'service_floor', 'quota'],
+      'locked',
+      Faction.LIQUIDATOR,
+      undefined,
+      'Охрана ленты 14',
+      i % 2 === 0 ? 'metal_shop' : 'utility_room',
+    );
+  }
+
+  const hazardInventories: readonly (readonly { defId: string; count: number }[])[] = [
+    [{ defId: 'acid_bottle', count: 1 }, { defId: 'filter_layer', count: 1 }, { defId: 'metal_sheet', count: 1 }],
+    [{ defId: 'ammo_fuel', count: 1 }, { defId: 'pipe', count: 1 }, { defId: 'gear', count: 1 }],
+  ];
+  for (let i = 0; i < hazardRooms.length; i++) {
+    addContainer(
+      world,
+      hazardRooms[i],
+      31 + i,
+      ContainerKind.METAL_CABINET,
+      `Аварийная тара брака ${i + 1}`,
+      hazardInventories[i % hazardInventories.length],
+      ['industrial_cache', 'hazard', 'bad_batch', 'repair', 'theft'],
+      i % 2 === 0 ? 'locked' : 'room',
+      Faction.WILD,
+      undefined,
+      'Ночная смена',
+      'illegal_ammo_smelter',
+    );
   }
 }
 
@@ -748,13 +798,18 @@ export function expandProductionBeltGeometry(world: World, rng: () => number): v
   ];
   for (const room of loadingRooms) if (room) dressLoadingDock(world, room);
 
+  const hazardRooms: Room[] = [];
   for (const spec of [
     { x: 344, y: 206 }, { x: 654, y: 326 }, { x: 344, y: 682 }, { x: 654, y: 806 },
   ]) {
     const room = macroRoom(world, mask, RoomType.STORAGE, spec.x, spec.y, 24, 16, 'Опасный карман ремонта', Tex.ROTTEN, Tex.F_CONCRETE);
-    if (room) dressScrapPocket(world, room, rng);
+    if (room) {
+      dressScrapPocket(world, room, rng);
+      hazardRooms.push(room);
+    }
   }
 
+  seedExpandedProductionCaches(world, loadingRooms.filter(isRoom), hazardRooms);
   world.markFogDirty();
 }
 
@@ -1032,6 +1087,7 @@ function createProductionBeltState(
     ],
     dependencies: PRODUCTION_BELT_PIPELINE_DEPENDENCIES.map(dep => ({ ...dep })),
     cueIds: [
+      'production_belt_repair_feed',
       'production_belt_service_feed',
       'production_belt_bad_batch_warning',
     ],
@@ -1079,6 +1135,35 @@ function registerProductionBeltRouteCues(
   rooms: ProductionBeltRooms,
   containers: ProductionBeltContainers,
 ): void {
+  const repairMarkerX = rooms.metalLine.x + 6.5;
+  const repairMarkerY = rooms.metalLine.y + 12.5;
+  const repairTargetX = containers.metalOutput.x + 0.5;
+  const repairTargetY = containers.metalOutput.y + 0.5;
+  const repairCell = world.idx(Math.floor(repairMarkerX), Math.floor(repairMarkerY));
+  registerRouteCue(world, {
+    id: 'production_belt_repair_feed',
+    x: repairMarkerX,
+    y: repairMarkerY,
+    targetX: repairTargetX,
+    targetY: repairTargetY,
+    floor: PRODUCTION_BELT_BASE_FLOOR,
+    roomId: rooms.metalLine.id,
+    targetRoomId: rooms.metalLine.id,
+    zoneId: world.zoneMap[repairCell],
+    label: 'ремонтная линия',
+    hint: 'две шестерни возвращают дверь-комплект в выходной шкаф',
+    targetName: containers.metalOutput.name,
+    color: '#fd6',
+    tags: ['production_belt', 'repair', 'pipeline', 'service_floor', 'quota'],
+    toneSeed: rooms.metalLine.id * 97 + containers.metalOutput.id,
+    radius: 8,
+    targetRadius: 2.8,
+    cooldownSec: 30,
+    heardText: 'Восстановительная линия бьет валом: Рустаму нужны шестерни, выходной шкаф ждет комплект.',
+    followedText: 'Вы у выходного шкафа восстановительной линии. Его можно чинить по акту или обчищать как сменный долг.',
+    ignoredText: 'Стук восстановительной линии остался позади. Без ремонта С-15 снова недополучит дверь-комплект.',
+  });
+
   const serviceMarkerX = rooms.chargeLine.x + 6.5;
   const serviceMarkerY = rooms.chargeLine.y + 6.5;
   const serviceTargetX = containers.chargeOutput.x + 0.5;

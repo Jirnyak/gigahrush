@@ -234,7 +234,6 @@ export function generatePioneerCampDesignFloor(seed = CAMP_SEED): FloorGeneratio
     tuneCampZones(world);
 
     const owners = spawnCampNpcs(entities, nextId, rooms);
-    spawnCampCrowd(entities, nextId, rooms);
     placeCampContainers(world, rooms, owners);
     placeCampDrops(world, entities, nextId, rooms);
     spawnCampThreats(world, entities, nextId, rooms);
@@ -301,6 +300,43 @@ export function expandPioneerCampFullFloor(world: World, rng: () => number): voi
     const ci = world.idx(x, y);
     if (mask[ci] || world.cells[ci] !== Cell.FLOOR || world.features[ci] !== Feature.NONE) continue;
     world.features[ci] = rng() < 0.72 ? Feature.LAMP : Feature.CANDLE;
+  }
+}
+
+export function tunePioneerCampPopulationZones(world: World): void {
+  for (const zone of world.zones) {
+    const centerD = world.dist(zone.cx, zone.cy, CX, CY);
+    const oldCabinD = world.dist(zone.cx, zone.cy, CX - 197, CY - 137);
+    const bathhouseD = world.dist(zone.cx, zone.cy, CX - 126, CY + 140);
+    const boatD = world.dist(zone.cx, zone.cy, CX + 108, CY + 144);
+    const trailEdgeD = Math.min(
+      world.dist(zone.cx, zone.cy, CX, CY - 380),
+      world.dist(zone.cx, zone.cy, CX, CY + 376),
+      world.dist(zone.cx, zone.cy, CX - 352, CY),
+      world.dist(zone.cx, zone.cy, CX + 352, CY),
+    );
+
+    if (oldCabinD < 150 || centerD > 390 || trailEdgeD < 130) {
+      zone.faction = ZoneFaction.WILD;
+      zone.level = 4;
+    } else if (bathhouseD < 120 || boatD < 130 || centerD > 245) {
+      zone.faction = ZoneFaction.LIQUIDATOR;
+      zone.level = 3;
+    } else {
+      zone.faction = ZoneFaction.CITIZEN;
+      zone.level = 2;
+    }
+    zone.fogged = false;
+    zone.hasLift = false;
+  }
+
+  for (let i = 0; i < W * W; i++) {
+    world.factionControl[i] = world.zones[world.zoneMap[i]]?.faction ?? ZoneFaction.CITIZEN;
+  }
+  for (let i = 0; i < W * W; i++) {
+    if (world.cells[i] !== Cell.LIFT) continue;
+    const zone = world.zones[world.zoneMap[i]];
+    if (zone) zone.hasLift = true;
   }
 }
 
@@ -435,16 +471,7 @@ function placeCampLifts(world: World, rooms: CampRooms): void {
 }
 
 function tuneCampZones(world: World): void {
-  for (const zone of world.zones) {
-    const d = world.dist(zone.cx, zone.cy, CX, CY);
-    zone.faction = d > 250 ? ZoneFaction.WILD : ZoneFaction.CITIZEN;
-    zone.level = d > 300 ? 4 : d > 180 ? 3 : 2;
-    zone.fogged = false;
-    zone.hasLift = false;
-  }
-  for (let i = 0; i < W * W; i++) {
-    world.factionControl[i] = world.zones[world.zoneMap[i]]?.faction ?? ZoneFaction.CITIZEN;
-  }
+  tunePioneerCampPopulationZones(world);
 }
 
 function spawnCampNpcs(
@@ -458,26 +485,6 @@ function spawnCampNpcs(
     camp_medic_ira: spawnPlotNpc(entities, nextId, NPC_IDS.medic, NPC_DEFS.camp_medic_ira, rooms.infirmary.x + 8, rooms.infirmary.y + 12, 0),
     camp_canteen_zoya: spawnPlotNpc(entities, nextId, NPC_IDS.cook, NPC_DEFS.camp_canteen_zoya, rooms.canteen.x + 12, rooms.canteen.y + 18, Math.PI / 2, 'knife'),
   };
-}
-
-function spawnCampCrowd(entities: Entity[], nextId: { v: number }, rooms: CampRooms): void {
-  spawnAmbientNpc(entities, nextId, 'Дежурный у флагштока', Faction.CITIZEN, Occupation.CHILD, rooms.square.x + 35, rooms.square.y + 30, [
-    { defId: 'pressed_sugar', count: 1 },
-  ]);
-  spawnAmbientNpc(entities, nextId, 'Библиотекарь смены', Faction.CITIZEN, Occupation.SECRETARY, rooms.library.x + 10, rooms.library.y + 12, [
-    { defId: 'book', count: 2 },
-    { defId: 'note', count: 1 },
-  ]);
-  spawnAmbientNpc(entities, nextId, 'Лодочник без воды', Faction.LIQUIDATOR, Occupation.HUNTER, rooms.boat.x + 18, rooms.boat.y + 12, [
-    { defId: 'harpoon_gun', count: 1 },
-    { defId: 'metal_water', count: 1 },
-  ], 'harpoon_gun');
-  spawnAmbientNpc(entities, nextId, 'Тихий пионер у сцены', Faction.WILD, Occupation.TRAVELER, rooms.stage.x + 48, rooms.stage.y + 12, [
-    { defId: 'child_map', count: 1 },
-  ], 'knife');
-  spawnAmbientNpc(entities, nextId, 'Сторож старого корпуса', Faction.LIQUIDATOR, Occupation.HUNTER, rooms.oldCabin.x + rooms.oldCabin.w + 4, rooms.oldCabin.y + 12, [
-    { defId: 'ammo_9mm', count: 8 },
-  ], 'makarov');
 }
 
 function placeCampContainers(world: World, rooms: CampRooms, owners: Record<CampNpcId, number>): void {
@@ -716,41 +723,6 @@ function spawnPlotNpc(
     questId: -1,
   });
   return id;
-}
-
-function spawnAmbientNpc(
-  entities: Entity[],
-  nextId: { v: number },
-  name: string,
-  faction: Faction,
-  occupation: Occupation,
-  x: number,
-  y: number,
-  inventory: Item[],
-  weapon?: string,
-): void {
-  entities.push({
-    id: nextId.v++,
-    type: EntityType.NPC,
-    x: x + 0.5,
-    y: y + 0.5,
-    angle: Math.random() * Math.PI * 2,
-    pitch: 0,
-    alive: true,
-    speed: 0.82 + Math.random() * 0.25,
-    sprite: occupation,
-    name,
-    needs: freshNeeds(),
-    hp: faction === Faction.LIQUIDATOR ? 140 : 75,
-    maxHp: faction === Faction.LIQUIDATOR ? 140 : 75,
-    money: 4 + Math.floor(Math.random() * 28),
-    ai: { goal: AIGoal.IDLE, tx: x + 0.5, ty: y + 0.5, path: [], pi: 0, stuck: 0, timer: 0 },
-    inventory: inventory.map(item => ({ ...item })),
-    weapon,
-    faction,
-    occupation,
-    questId: -1,
-  });
 }
 
 function addCampContainer(

@@ -13,6 +13,7 @@ import {
 } from '../core/types';
 import { World } from '../core/world';
 import { DESIGN_FLOOR_ROUTES } from '../data/design_floors';
+import { designFloorPopulationProfile } from '../data/design_floor_population';
 import {
   floorRunZAllowsNpcs,
   majorityById,
@@ -72,6 +73,8 @@ interface AlifeFloorPlan {
   danger: 1 | 2 | 3 | 4 | 5;
   weight: number;
   majorityFaction?: Faction;
+  factionWeights?: readonly WeightedValue<Faction>[];
+  occupationWeights?: readonly WeightedValue<Occupation>[];
 }
 
 interface AlifeNpcRecord {
@@ -289,11 +292,15 @@ function buildFloorPlans(state: GameState): AlifeFloorPlan[] {
   }
   for (const def of DESIGN_FLOOR_ROUTES) {
     if (!floorRunZAllowsNpcs(def.z)) continue;
+    const population = designFloorPopulationProfile(def);
+    if (population.npcTarget <= 0) continue;
     plans.push({
       key: def.id,
       floor: def.baseFloor,
       danger: def.danger,
-      weight: 520 + def.danger * 360,
+      weight: population.npcTarget,
+      factionWeights: population.npcFactions,
+      occupationWeights: population.npcOccupations,
     });
   }
   const run = ensureFloorRunState(state);
@@ -351,6 +358,7 @@ function factionProfileWeight(profile: AlifeFactionProfile, plan: AlifeFloorPlan
 }
 
 function factionForPlan(plan: AlifeFloorPlan, seed: number, index: number): Faction {
+  if (plan.factionWeights && plan.factionWeights.length > 0) return pickWeighted(plan.factionWeights, seed, index, 11);
   const weighted = ALIFE_FACTION_PROFILES.map(profile => ({
     value: profile.faction,
     weight: factionProfileWeight(profile, plan),
@@ -358,11 +366,12 @@ function factionForPlan(plan: AlifeFloorPlan, seed: number, index: number): Fact
   return pickWeighted(weighted, seed, index, 11);
 }
 
-function occupationForRecord(profile: AlifeFactionProfile, floor: FloorLevel, seed: number, index: number): Occupation {
-  if (profile.faction === Faction.CITIZEN && floor === FloorLevel.MAINTENANCE) {
+function occupationForRecord(plan: AlifeFloorPlan, profile: AlifeFactionProfile, seed: number, index: number): Occupation {
+  if (plan.occupationWeights && plan.occupationWeights.length > 0) return pickWeighted(plan.occupationWeights, seed, index, 24);
+  if (profile.faction === Faction.CITIZEN && plan.floor === FloorLevel.MAINTENANCE) {
     return unit(seed, index, 22) < 0.55 ? Occupation.MECHANIC : Occupation.ELECTRICIAN;
   }
-  if (profile.faction === Faction.CITIZEN && floor === FloorLevel.MINISTRY) {
+  if (profile.faction === Faction.CITIZEN && plan.floor === FloorLevel.MINISTRY) {
     return unit(seed, index, 23) < 0.58 ? Occupation.SECRETARY : Occupation.DIRECTOR;
   }
   return pickWeighted(profile.occupations, seed, index, 24);
@@ -528,7 +537,7 @@ function activeMoneyForRecord(record: AlifeNpcRecord, seed: number): number {
 function createRecord(id: number, plan: AlifeFloorPlan, seed: number): AlifeNpcRecord {
   const faction = factionForPlan(plan, seed, id);
   const profile = profileForFaction(faction);
-  const occupation = occupationForRecord(profile, plan.floor, seed, id);
+  const occupation = occupationForRecord(plan, profile, seed, id);
   const level = levelForRecord(plan, faction, seed, id);
   const rpg = rpgForRecord(level, seed, id);
   const maxHp = getMaxHp(rpg);

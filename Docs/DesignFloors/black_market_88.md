@@ -12,20 +12,20 @@ Primary decisions: buy, steal, pay, owe, protect, betray, smuggle, forge, flee a
 
 ## Generation
 
-- Market lanes, guarded debt office, document booth, weapon stall, medicine locker, hidden courier rooms, service hatch.
+- Shared design-floor population profile targets roughly 2200 NPC templates and 700 monsters: people weight toward bazaar rows/debt/document lanes, monsters toward service guts, stock rooms and closed routes.
+- Market lanes, guarded debt office, document booth, weapon stall, medicine locker, hidden courier rooms, service hatch, raid shutters, smuggling tunnels and closed supplier/stock rooms.
 - At least three entry points: public password door, maintenance hatch, document-only door.
-- Containers must have owners/access rules.
+- Valuable containers use owner, faction, locked or secret access; contraband, medicine, debt, black-route and supplier caches are not public loot.
 - No live buyer simulation; use aggregate scarcity/heat/trust.
 
 ## NPCs
 
-Existing hidden-pocket NPCs can graduate into floor anchors:
-
 - `market88_marta_broker`
-- `market88_ryzhiy_guard`
-- `market88_lena_supplier`
-- `market88_nina_informer`
-- plus `market88_debt_judge` for full floor route arbitration.
+- `market88_mikhail_debt`
+- `market88_zlata_silence`
+- `market88_zhoka_knife`
+- `market88_uliana_cash`
+- `market88_courier_sasha`
 
 ## Quests
 
@@ -34,6 +34,7 @@ Existing hidden-pocket NPCs can graduate into floor anchors:
 - `market88_steal_stamp`: steal Ministry/Raionsovet stamp.
 - `market88_return_ammo_crate`: recover ammo from Production/Service.
 - `market88_settle_bad_debt`: settle or weaponize someone else's debt.
+- `market88_betray_supplier`: betray the courier/supplier route to Жока.
 
 ## Systems
 

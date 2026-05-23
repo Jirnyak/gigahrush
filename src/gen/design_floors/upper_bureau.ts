@@ -105,6 +105,22 @@ export const UPPER_BUREAU_DEBUG_ENTRY = {
   smokePath: 'spawn -> salon appointment gate OR cleaner closet -> staff route -> zero file room -> service lift',
 } as const;
 
+const UPPER_BUREAU_EVENT_BASE_TAGS = ['upper_bureau', 'bureaucracy', 'documents'] as const;
+
+function upperBureauQuestTags(...tags: string[]): string[] {
+  return [...UPPER_BUREAU_EVENT_BASE_TAGS, ...tags].slice(0, 8);
+}
+
+function upperBureauQuestData(action: string, extra?: Record<string, unknown>): Record<string, unknown> {
+  return {
+    routeId: UPPER_BUREAU_ROUTE_ID,
+    floorZ: UPPER_BUREAU_ANCHOR_Z,
+    baseFloor: UPPER_BUREAU_BASE_FLOOR,
+    upperBureauAction: action,
+    ...extra,
+  };
+}
+
 const ISKRA_DEF: PlotNpcDef = {
   name: 'Мадам Искра',
   isFemale: true,
@@ -258,6 +274,15 @@ registerSideQuest('bureau_madam_iskra', ISKRA_DEF, [
     rewardItem: 'key', rewardCount: 1,
     extraRewards: [{ defId: 'temp_pass', count: 1 }],
     relationDelta: 14, xpReward: 85, moneyReward: 55,
+    eventTargetName: 'Назначение Верхнего бюро подтверждено чистым корешком.',
+    eventSeverity: 3,
+    eventPrivacy: 'local',
+    eventTags: upperBureauQuestTags('appointment', 'legal', 'access', 'queue'),
+    eventData: upperBureauQuestData('legal_preapproval', {
+      appointmentToken: true,
+      auditHeatDelta: 0,
+      accessLayer: 'main_appointment_gate',
+    }),
   },
   {
     id: 'bureau_preapproval_fee',
@@ -268,6 +293,15 @@ registerSideQuest('bureau_madam_iskra', ISKRA_DEF, [
     rewardItem: 'key', rewardCount: 1,
     extraRewards: [{ defId: 'official_permit_slip', count: 1 }],
     relationDelta: -4, xpReward: 55, moneyReward: 0,
+    eventTargetName: 'Ускорительный сбор Верхнего бюро оставил слабый аудиторский след.',
+    eventSeverity: 4,
+    eventPrivacy: 'local',
+    eventTags: upperBureauQuestTags('appointment', 'bribe', 'audit_heat', 'access'),
+    eventData: upperBureauQuestData('acceleration_fee', {
+      appointmentToken: true,
+      auditHeatDelta: 1,
+      accessLayer: 'main_appointment_gate',
+    }),
   },
 ]);
 
@@ -281,6 +315,15 @@ registerSideQuest('bureau_cleaner_tolik', TOLIK_DEF, [
     rewardItem: 'key', rewardCount: 1,
     extraRewards: [{ defId: 'elevator_access_order', count: 1 }],
     relationDelta: 12, xpReward: 70, moneyReward: 35,
+    eventTargetName: 'Служебный маршрут Верхнего бюро открыт через Толика.',
+    eventSeverity: 3,
+    eventPrivacy: 'private',
+    eventTags: upperBureauQuestTags('staff_route', 'stealth', 'access', 'cleaner'),
+    eventData: upperBureauQuestData('staff_route_opened', {
+      staffRouteKnown: true,
+      auditHeatDelta: 0,
+      accessLayer: 'cleaner_service_corridor',
+    }),
   },
   {
     id: 'bureau_market88_warning',
@@ -290,6 +333,16 @@ registerSideQuest('bureau_cleaner_tolik', TOLIK_DEF, [
     targetNpcId: 'ag15_marta_broker',
     rewardItem: 'forged_permit_slip', rewardCount: 1,
     relationDelta: -6, xpReward: 90, moneyReward: 88,
+    eventTargetName: 'Предупреждение о проверке Льва ушло к рынку 88.',
+    eventSeverity: 4,
+    eventPrivacy: 'secret',
+    eventTags: upperBureauQuestTags('staff_route', 'black_market_88', 'leak', 'audit_heat'),
+    eventData: upperBureauQuestData('market88_warning_leaked', {
+      staffRouteKnown: true,
+      auditHeatDelta: 1,
+      targetRouteId: 'black_market_88',
+      backlash: 'auditor_trace_if_lev_checks_cleaner',
+    }),
   },
 ]);
 
@@ -303,6 +356,16 @@ registerSideQuest('bureau_auditor_lev', LEV_DEF, [
     rewardItem: 'permanent_pass', rewardCount: 1,
     extraRewards: [{ defId: 'record_exposure_notice', count: 1 }],
     relationDelta: 14, xpReward: 100, moneyReward: 120,
+    eventTargetName: 'Аудитор Лев поднял жар проверки по рынку 88.',
+    eventSeverity: 5,
+    eventPrivacy: 'public',
+    eventTags: upperBureauQuestTags('audit_heat', 'liquidator', 'black_market_88', 'expose'),
+    eventData: upperBureauQuestData('audit_heat_raised', {
+      auditHeatDelta: 2,
+      auditHeatMax: UPPER_BUREAU_AUDIT_HEAT_MAX,
+      targetRouteId: 'black_market_88',
+      accessLayer: 'auditor_office',
+    }),
   },
 ]);
 
@@ -316,6 +379,15 @@ registerSideQuest('bureau_archive_toll_keeper', TOLL_KEEPER_DEF, [
     rewardItem: 'archive_access_permit', rewardCount: 1,
     extraRewards: [{ defId: 'elevator_access_order', count: 1 }],
     relationDelta: 4, xpReward: 65, moneyReward: 0,
+    eventTargetName: 'Архивная пошлина Верхнего бюро оплачена законно.',
+    eventSeverity: 3,
+    eventPrivacy: 'local',
+    eventTags: upperBureauQuestTags('archive_toll', 'pay', 'access', 'queue'),
+    eventData: upperBureauQuestData('archive_toll_paid', {
+      archiveAccess: true,
+      auditHeatDelta: 0,
+      accessLayer: 'archive_toll_window',
+    }),
   },
   {
     id: 'bureau_archive_toll_expose',
@@ -326,6 +398,15 @@ registerSideQuest('bureau_archive_toll_keeper', TOLL_KEEPER_DEF, [
     rewardItem: 'personal_file_copy', rewardCount: 1,
     extraRewards: [{ defId: 'denunciation', count: 1 }],
     relationDelta: -4, xpReward: 75, moneyReward: 35,
+    eventTargetName: 'Пошлина Верхнего бюро приложена к делу как незаконная.',
+    eventSeverity: 4,
+    eventPrivacy: 'public',
+    eventTags: upperBureauQuestTags('archive_toll', 'exposed_file', 'audit_heat', 'access'),
+    eventData: upperBureauQuestData('archive_toll_exposed', {
+      exposedFile: true,
+      auditHeatDelta: 1,
+      accessLayer: 'archive_toll_window',
+    }),
   },
 ]);
 
@@ -339,6 +420,15 @@ registerSideQuest('bureau_permit_ambush_guard', AMBUSH_DEF, [
     rewardItem: 'record_exposure_notice', rewardCount: 1,
     extraRewards: [{ defId: 'official_permit_slip', count: 1 }],
     relationDelta: 10, xpReward: 90, moneyReward: 50,
+    eventTargetName: 'Поддельный корешок Верхнего бюро сработал как приманка засады.',
+    eventSeverity: 4,
+    eventPrivacy: 'witnessed',
+    eventTags: upperBureauQuestTags('forgery', 'backlash', 'permit_ambush', 'audit'),
+    eventData: upperBureauQuestData('forged_document_backlash', {
+      forgedDocumentBacklash: true,
+      auditHeatDelta: 1,
+      accessLayer: 'permit_ambush_room',
+    }),
   },
 ]);
 
@@ -352,6 +442,15 @@ registerSideQuest('bureau_visitor_anna', ANNA_DEF, [
     rewardItem: 'passport_stub', rewardCount: 1,
     extraRewards: [{ defId: 'personal_file_copy', count: 1 }],
     relationDelta: 16, xpReward: 110, moneyReward: 40,
+    eventTargetName: 'Имя Анны стерто из нулевой картотеки Верхнего бюро.',
+    eventSeverity: 4,
+    eventPrivacy: 'secret',
+    eventTags: upperBureauQuestTags('zero_file', 'record_edit', 'name_erasure', 'secret'),
+    eventData: upperBureauQuestData('name_erased_from_zero_file', {
+      nameErased: true,
+      auditHeatDelta: 1,
+      accessLayer: 'zero_file_room',
+    }),
   },
   {
     id: 'bureau_expose_erased_record',
@@ -361,6 +460,15 @@ registerSideQuest('bureau_visitor_anna', ANNA_DEF, [
     targetItem: 'record_exposure_notice', targetCount: 1,
     rewardItem: 'archive_access_permit', rewardCount: 1,
     relationDelta: 8, xpReward: 85, moneyReward: 70,
+    eventTargetName: 'Пропавшая запись Анны вынесена наружу как акт.',
+    eventSeverity: 4,
+    eventPrivacy: 'public',
+    eventTags: upperBureauQuestTags('zero_file', 'exposed_file', 'audit_heat', 'legal'),
+    eventData: upperBureauQuestData('erased_record_exposed', {
+      exposedFile: true,
+      auditHeatDelta: 1,
+      accessLayer: 'zero_file_room',
+    }),
   },
 ]);
 
@@ -769,7 +877,7 @@ function addPublicQueueTier(world: World, rng: () => number): void {
   const firstSalon = stampExpansionRoom(world, RoomType.COMMON, 'Передний зал живой очереди', 168, 418, 104, 30, Tex.F_RED_CARPET);
   const complaintSalon = stampExpansionRoom(world, RoomType.COMMON, 'Салон жалоб без номера', 282, 536, 126, 30, Tex.F_GREEN_CARPET);
   const cage = stampExpansionRoom(world, RoomType.OFFICE, 'Стеклянная клетка младших клерков', 318, 462, 78, 22, Tex.F_MARBLE_TILE, Tex.TILE_W);
-  const permitNiche = stampExpansionRoom(world, RoomType.OFFICE, 'Ниша проверки пропусков', 426, 462, 28, 28, Tex.F_MARBLE_TILE);
+  const permitNiche = stampExpansionRoom(world, RoomType.HQ, 'Ниша проверки пропусков', 426, 462, 28, 28, Tex.F_MARBLE_TILE);
   const refusalRoom = stampExpansionRoom(world, RoomType.OFFICE, 'Тупик личного отказа', 116, 477, 44, 28, Tex.F_PARQUET);
 
   addDoor(world, firstSalon, 220, 448);
@@ -803,7 +911,7 @@ function addPrivateOfficeTier(world: World, rng: () => number): void {
     stampExpansionRoom(world, RoomType.OFFICE, 'Личный кабинет тишины', 400, 346, 40, 28, Tex.F_PARQUET),
     stampExpansionRoom(world, RoomType.OFFICE, 'Кабинет утвержденного родства', 452, 346, 40, 28, Tex.F_PARQUET),
     stampExpansionRoom(world, RoomType.OFFICE, 'Комната предварительной подписи', 540, 346, 44, 28, Tex.F_PARQUET),
-    stampExpansionRoom(world, RoomType.OFFICE, 'Малый кабинет аудиторской тени', 596, 346, 44, 28, Tex.F_GREEN_CARPET),
+    stampExpansionRoom(world, RoomType.HQ, 'Малый кабинет аудиторской тени', 596, 346, 44, 28, Tex.F_GREEN_CARPET),
     stampExpansionRoom(world, RoomType.HQ, 'Привилегированная приемная', 650, 399, 42, 28, Tex.F_RED_CARPET),
     stampExpansionRoom(world, RoomType.OFFICE, 'Тупик особого ходатайства', 711, 392, 48, 26, Tex.F_PARQUET),
   ];
@@ -892,10 +1000,98 @@ export function expandUpperBureauGeometry(world: World, rng: () => number): void
 
 function setAdministrativeZones(world: World): void {
   generateZones(world);
+  retuneUpperBureauZones(world);
+}
+
+interface UpperBureauZoneMark {
+  x: number;
+  y: number;
+  faction: ZoneFaction;
+  level: number;
+  hq?: boolean;
+}
+
+const UPPER_BUREAU_ZONE_MARKS: readonly UpperBureauZoneMark[] = [
+  { x: 260, y: 508, faction: ZoneFaction.CITIZEN, level: 3 },
+  { x: 356, y: 476, faction: ZoneFaction.CITIZEN, level: 3 },
+  { x: 444, y: 508, faction: ZoneFaction.LIQUIDATOR, level: 4, hq: true },
+  { x: 468, y: 508, faction: ZoneFaction.LIQUIDATOR, level: 4, hq: true },
+  { x: 532, y: 508, faction: ZoneFaction.LIQUIDATOR, level: 4, hq: true },
+  { x: 628, y: 430, faction: ZoneFaction.LIQUIDATOR, level: 4, hq: true },
+  { x: 704, y: 508, faction: ZoneFaction.LIQUIDATOR, level: 4, hq: true },
+  { x: 724, y: 540, faction: ZoneFaction.SAMOSBOR, level: 5 },
+  { x: 760, y: 635, faction: ZoneFaction.SAMOSBOR, level: 5 },
+  { x: 840, y: 616, faction: ZoneFaction.SAMOSBOR, level: 5 },
+  { x: 520, y: 640, faction: ZoneFaction.WILD, level: 4 },
+  { x: 584, y: 742, faction: ZoneFaction.WILD, level: 4 },
+  { x: 760, y: 742, faction: ZoneFaction.WILD, level: 4 },
+  { x: 220, y: 620, faction: ZoneFaction.WILD, level: 3 },
+];
+
+function upperBureauBaselineZoneFaction(world: World, x: number, y: number): ZoneFaction {
+  const archiveD = Math.min(
+    world.dist(x, y, 758, 520),
+    world.dist(x, y, 760, 635),
+  );
+  const serviceD = Math.min(
+    world.dist(x, y, 584, 710),
+    world.dist(x, y, 760, 742),
+    world.dist(x, y, 220, 620),
+  );
+  const auditD = Math.min(
+    world.dist(x, y, 532, 508),
+    world.dist(x, y, 628, 430),
+    world.dist(x, y, 546, 482),
+  );
+  if (archiveD < 185) return ZoneFaction.SAMOSBOR;
+  if (serviceD < 195) return ZoneFaction.WILD;
+  if (auditD < 170) return ZoneFaction.LIQUIDATOR;
+  return ZoneFaction.CITIZEN;
+}
+
+function upperBureauBaselineZoneLevel(world: World, x: number, y: number, faction: ZoneFaction): number {
+  const base = Math.max(2, calcZoneLevel(x, y, UPPER_BUREAU_BASE_FLOOR));
+  const factionBoost = faction === ZoneFaction.SAMOSBOR ? 2 : faction === ZoneFaction.WILD || faction === ZoneFaction.LIQUIDATOR ? 1 : 0;
+  const edgeBoost = world.dist(x, y, W / 2, W / 2) > 310 ? 1 : 0;
+  return Math.max(2, Math.min(5, base + factionBoost + edgeBoost));
+}
+
+function roomAtCell(world: World, x: number, y: number): Room | undefined {
+  const rid = world.roomMap[world.idx(x, y)];
+  return rid >= 0 ? world.rooms[rid] : undefined;
+}
+
+function applyUpperBureauZoneMark(world: World, mark: UpperBureauZoneMark): void {
+  const zone = world.zones[world.zoneMap[world.idx(mark.x, mark.y)]];
+  if (!zone) return;
+  zone.faction = mark.faction;
+  zone.level = Math.max(zone.level, mark.level);
+  if (mark.hq) {
+    const room = roomAtCell(world, mark.x, mark.y);
+    if (room && room.type === RoomType.HQ) zone.hqRoomId = room.id;
+  }
+}
+
+export function retuneUpperBureauZones(world: World): void {
   for (const zone of world.zones) {
-    zone.level = Math.max(2, calcZoneLevel(zone.cx, zone.cy, UPPER_BUREAU_BASE_FLOOR));
-    zone.faction = zone.id % 5 === 0 ? ZoneFaction.LIQUIDATOR : ZoneFaction.CITIZEN;
+    zone.faction = upperBureauBaselineZoneFaction(world, zone.cx, zone.cy);
+    zone.level = upperBureauBaselineZoneLevel(world, zone.cx, zone.cy, zone.faction);
+    zone.hqRoomId = -1;
     zone.fogged = false;
+  }
+  for (const mark of UPPER_BUREAU_ZONE_MARKS) applyUpperBureauZoneMark(world, mark);
+  for (const room of world.rooms) {
+    if (room.type !== RoomType.HQ) continue;
+    const zone = world.zones[world.zoneMap[world.idx(room.x + Math.floor(room.w / 2), room.y + Math.floor(room.h / 2))]];
+    if (zone) {
+      zone.faction = ZoneFaction.LIQUIDATOR;
+      zone.level = Math.max(zone.level, 4);
+      zone.hqRoomId = room.id;
+    }
+  }
+  for (let i = 0; i < W * W; i++) {
+    const zone = world.zones[world.zoneMap[i]];
+    world.factionControl[i] = zone?.faction ?? ZoneFaction.CITIZEN;
   }
 }
 

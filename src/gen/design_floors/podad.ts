@@ -8,15 +8,11 @@ import {
 import { World } from '../../core/world';
 import { withSeededRandom } from '../../core/rand';
 import { freshNeeds } from '../../data/catalog';
-import { HELL_POPULATION_PROFILE, type MonsterPopulationProfile } from '../../data/population_profiles';
-import { chooseFloorMonsterKind } from '../../data/monster_ecology';
 import { PLOT_NPCS } from '../../data/plot';
 import { MONSTERS } from '../../entities/monster';
 import { monsterSpr, Spr } from '../../render/sprite_index';
 import { calcZoneLevel, randomRPG, scaleMonsterHp, scaleMonsterSpeed } from '../../systems/rpg';
 import { entitySpawnSlots } from '../../systems/entity_limits';
-import type { PlacementFieldProfile } from '../population_placement';
-import { sampleNaturalPopulationCells } from '../population_placement';
 import {
   carveCorridor,
   connectRoomsMST,
@@ -36,29 +32,7 @@ const SPAWN_Y = W >> 1;
 const LIVING_TUNNEL_TAG = '[living_tunnel:';
 const WALL_SNAKE_TAG = '[wall_snake:';
 const SECTION_SHIFT_TAG = '[section_shift:';
-const PODAD_MONSTER_PROFILE: MonsterPopulationProfile & Pick<PlacementFieldProfile, 'bucketSize' | 'maxPerBucket'> = {
-  ...HELL_POPULATION_PROFILE.monsters,
-  initial: HELL_POPULATION_PROFILE.monsters.initial + 1400,
-  noiseScale: 118,
-  noiseStrength: 0.11,
-  openWeight: 1.12,
-  roomWeights: {
-    ...HELL_POPULATION_PROFILE.monsters.roomWeights,
-    [RoomType.CORRIDOR]: 1.25,
-    [RoomType.PRODUCTION]: 1.18,
-    [RoomType.STORAGE]: 1.16,
-    [RoomType.HQ]: 0.82,
-  },
-  zoneWeights: {
-    ...HELL_POPULATION_PROFILE.monsters.zoneWeights,
-    [ZoneFaction.SAMOSBOR]: 1.28,
-    [ZoneFaction.WILD]: 1.16,
-    [ZoneFaction.CULTIST]: 1.08,
-  },
-  bucketSize: 18,
-  maxPerBucket: 5,
-};
-const PODAD_MONSTER_SEED = 936631;
+const HERALD_GATE_TAG = '[herald_gate:podad]';
 
 interface PodadRooms {
   entry: Room;
@@ -116,7 +90,6 @@ export function generatePodadDesignFloor(seed = PODAD_DEFAULT_SEED): FloorGenera
     world.bakeLights();
 
     spawnPodadPlotNpcs(world, entities, nextId, rooms);
-    spawnPodadPopulation(world, entities, nextId);
     spawnPodadHeralds(world, entities, nextId, SPAWN_X + 0.5, SPAWN_Y + 0.5);
     seedPodadDrops(world, entities, nextId, rooms);
 
@@ -231,7 +204,7 @@ function buildPodadRooms(world: World, seed: number): PodadRooms {
       spec.h,
       -1,
     );
-    room.name = spec.name;
+    room.name = spec.key === 'threshold' ? `${spec.name} ${HERALD_GATE_TAG}` : spec.name;
     room.wallTex = spec.wallTex;
     room.floorTex = spec.floorTex;
     repaintRoom(world, room, spec.wallTex, spec.floorTex);
@@ -415,85 +388,6 @@ function spawnPodadHeralds(world: World, entities: Entity[], nextId: { v: number
       rpg: randomRPG(zoneLevel),
     });
     slots--;
-  }
-}
-
-function spawnPodadPopulation(world: World, entities: Entity[], nextId: { v: number }): number {
-  const count = entitySpawnSlots(entities, EntityType.MONSTER, PODAD_MONSTER_PROFILE.initial);
-  const cells = sampleNaturalPopulationCells(world, count, PODAD_MONSTER_PROFILE, PODAD_MONSTER_SEED + nextId.v * 17);
-  let spawned = 0;
-  for (const cell of cells) {
-    const x = (cell % W) + 0.5;
-    const y = ((cell / W) | 0) + 0.5;
-    const kind = choosePodadMonsterKind(world, cell);
-    const def = MONSTERS[kind] ?? MONSTERS[MonsterKind.TVAR];
-    const zid = world.zoneMap[cell];
-    const zoneLevel = (zid >= 0 && world.zones[zid]) ? (world.zones[zid].level ?? 14) : 14;
-    const bonus = podadMonsterLevelBonus(kind);
-    const rpg = randomRPG(zoneLevel + bonus);
-    const hp = Math.round(scaleMonsterHp(def.hp, zoneLevel + bonus) * (1 + rpg.str * 0.1));
-    entities.push({
-      id: nextId.v++, type: EntityType.MONSTER,
-      x, y,
-      angle: Math.random() * Math.PI * 2, pitch: 0,
-      alive: true,
-      speed: scaleMonsterSpeed(def.speed, zoneLevel + Math.max(1, bonus - 1)),
-      sprite: monsterSpr(kind),
-      hp, maxHp: hp,
-      monsterKind: kind, attackCd: 0,
-      ai: { goal: AIGoal.WANDER, tx: 0, ty: 0, path: [], pi: 0, stuck: 0, timer: 0 },
-      rpg,
-      phasing: kind === MonsterKind.SPIRIT || kind === MonsterKind.GLUBINNAYA_TEN,
-    });
-    spawned++;
-  }
-  return spawned;
-}
-
-function choosePodadMonsterKind(world: World, cell: number): MonsterKind {
-  const room = world.rooms[world.roomMap[cell]];
-  const name = room?.name ?? '';
-  const roomTags = [
-    name.includes('[living_tunnels]') ? 'living_tunnels' : '',
-    name.includes(WALL_SNAKE_TAG) ? 'moving_walls' : '',
-    name.includes(SECTION_SHIFT_TAG) ? 'section_shift' : '',
-  ].filter(Boolean);
-  return chooseFloorMonsterKind({
-    floor: FloorLevel.HELL,
-    roomType: room?.type,
-    floorTags: ['hell', 'podad', 'meat', 'deep', 'moving_walls', 'living_tunnels'],
-    roomTags,
-    samosborCount: 9,
-    allowRare: true,
-    floorAffinity: 'weighted',
-    routePressure: 5,
-    excludeKinds: [MonsterKind.HERALD, MonsterKind.CREATOR],
-    biasKinds: [
-      MonsterKind.OLGOY,
-      MonsterKind.GLUBINNAYA_TEN,
-      MonsterKind.KOSTOREZ,
-      MonsterKind.ZAKALENNAYA_ARMATURA,
-      MonsterKind.POLZUN,
-      MonsterKind.SHADOW,
-      MonsterKind.SBORKA,
-    ],
-  });
-}
-
-function podadMonsterLevelBonus(kind: MonsterKind): number {
-  switch (kind) {
-    case MonsterKind.MATKA:
-    case MonsterKind.KHOROVAYA_MATKA:
-    case MonsterKind.GLUBINNAYA_TEN:
-    case MonsterKind.ZAKALENNAYA_ARMATURA:
-    case MonsterKind.KOSTOREZ:
-      return 4;
-    case MonsterKind.OLGOY:
-    case MonsterKind.SPIRIT:
-    case MonsterKind.REBAR:
-      return 3;
-    default:
-      return 2;
   }
 }
 

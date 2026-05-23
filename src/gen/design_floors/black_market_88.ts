@@ -418,6 +418,11 @@ const SIDE_QUESTS: readonly SideQuestStep[] = [
     relationDelta: 10,
     xpReward: 55,
     moneyReward: 80,
+    targetRoute: { designFloorId: BLACK_MARKET_88_ROUTE_ID, label: 'Z-10 Черный рынок 88' },
+    targetZoneTag: 'black_market_88',
+    targetHint: 'Z-10 Черный рынок 88: антибиотик для ночного запаса у рядов и лекарственного шкафа.',
+    eventTags: ['black_market_88', 'trade', 'supplier_delivery', 'market_scarcity'],
+    eventData: { routeId: BLACK_MARKET_88_ROUTE_ID, marketAction: 'supplier_delivery', scarcityLane: 'medicine' },
   },
   {
     id: 'market88_hide_courier',
@@ -431,6 +436,12 @@ const SIDE_QUESTS: readonly SideQuestStep[] = [
     relationDelta: 9,
     xpReward: 45,
     moneyReward: 45,
+    targetRoute: { designFloorId: BLACK_MARKET_88_ROUTE_ID, label: 'Z-10 Черный рынок 88' },
+    targetZoneTag: 'black_market_88',
+    targetHint: 'Z-10 Черный рынок 88: Саша Люк прячется в курьерской щели у служебного люка.',
+    eventTags: ['black_market_88', 'caravan', 'protect_courier', 'black_route_papers'],
+    eventData: { routeId: BLACK_MARKET_88_ROUTE_ID, marketAction: 'protect_courier', laneId: 'production_black_market_88' },
+    blockedBySideQuestIds: ['market88_betray_supplier'],
   },
   {
     id: 'market88_steal_stamp',
@@ -444,6 +455,11 @@ const SIDE_QUESTS: readonly SideQuestStep[] = [
     relationDelta: 8,
     xpReward: 60,
     moneyReward: 70,
+    targetRoute: { designFloorId: BLACK_MARKET_88_ROUTE_ID, label: 'Z-10 Черный рынок 88' },
+    targetZoneTag: 'black_market_88',
+    targetHint: 'Z-10 Черный рынок 88: печать ЖЭК нужна Злате для черного маршрута и поддельных окон.',
+    eventTags: ['black_market_88', 'forgery', 'theft', 'black_route_papers'],
+    eventData: { routeId: BLACK_MARKET_88_ROUTE_ID, marketAction: 'forge_route_papers', permitRisk: 'zhek_seal' },
   },
   {
     id: 'market88_settle_bad_debt',
@@ -457,6 +473,11 @@ const SIDE_QUESTS: readonly SideQuestStep[] = [
     extraRewards: [{ defId: 'bread', count: 1 }],
     relationDelta: 6,
     xpReward: 35,
+    targetRoute: { designFloorId: BLACK_MARKET_88_ROUTE_ID, label: 'Z-10 Черный рынок 88' },
+    targetZoneTag: 'black_market_88',
+    targetHint: 'Z-10 Черный рынок 88: Михаил закрывает долг только у долговой конторы 88.',
+    eventTags: ['black_market_88', 'debt_settlement', 'bank_debt', 'market_scarcity'],
+    eventData: { routeId: BLACK_MARKET_88_ROUTE_ID, marketAction: 'debt_settlement', debtRubles: 88 },
   },
   {
     id: 'market88_return_ammo_crate',
@@ -471,6 +492,31 @@ const SIDE_QUESTS: readonly SideQuestStep[] = [
     relationDelta: 8,
     xpReward: 50,
     moneyReward: 30,
+    targetRoute: { designFloorId: BLACK_MARKET_88_ROUTE_ID, label: 'Z-10 Черный рынок 88' },
+    targetZoneTag: 'black_market_88',
+    targetHint: 'Z-10 Черный рынок 88: Жока считает патроны у оружейного ряда и рейдовых задвижек.',
+    eventTags: ['black_market_88', 'trade', 'weapons', 'supplier_delivery'],
+    eventData: { routeId: BLACK_MARKET_88_ROUTE_ID, marketAction: 'ammo_supplier_return', scarcityLane: 'weapons' },
+  },
+  {
+    id: 'market88_betray_supplier',
+    giverNpcId: 'market88_zhoka_knife',
+    type: QuestType.TALK,
+    desc: 'Жока Нож: «Саша ведет поставщика мимо моей задвижки. Скажи ему, что маршрут продан, и не стой между мной и люком.»',
+    targetNpcId: 'market88_courier_sasha',
+    rewardItem: 'ammo_9mm',
+    rewardCount: 12,
+    extraRewards: [{ defId: 'liquidator_token', count: 1 }],
+    relationDelta: 7,
+    xpReward: 45,
+    moneyReward: 40,
+    targetRoute: { designFloorId: BLACK_MARKET_88_ROUTE_ID, label: 'Z-10 Черный рынок 88' },
+    targetZoneTag: 'black_market_88',
+    targetHint: 'Z-10 Черный рынок 88: предать поставщика можно через Сашу Люка в курьерской щели.',
+    eventTags: ['black_market_88', 'supplier_betrayal', 'caravan', 'crime', 'black_route_papers'],
+    eventData: { routeId: BLACK_MARKET_88_ROUTE_ID, marketAction: 'supplier_betrayal', laneId: 'production_black_market_88' },
+    blockedBySideQuestIds: ['market88_hide_courier'],
+    abandonsSideQuestIds: ['market88_hide_courier'],
   },
 ];
 
@@ -719,6 +765,14 @@ interface Market88StallPlacement {
   side: -1 | 1;
 }
 
+interface Market88ServiceGutPlacement {
+  room: Room;
+  side: Market88RoomSide;
+  targetX: number;
+  targetY: number;
+  storage: boolean;
+}
+
 interface Market88BazaarRooms {
   auction: Room | null;
   guardWest: Room | null;
@@ -747,15 +801,18 @@ const MARKET88_STALL_NAMES = [
 
 export function expandBlackMarket88Bazaar(world: World, rng: () => number): void {
   const rooms = addBazaarLandmarks(world);
+  const serviceGuts = addBazaarServiceGuts(world, rng);
   const stalls = addBazaarStallRooms(world, rng);
 
   carveBazaarAlleys(world);
   connectBazaarLandmarks(world, rooms);
+  connectBazaarServiceGuts(world, serviceGuts);
   connectStallsToAlleys(world, stalls);
   addRaidShutters(world);
   decorateBazaarLandmarks(world, rooms);
+  decorateBazaarServiceGuts(world, serviceGuts, rng);
   decorateSmugglingTunnels(world);
-  seedBazaarCaches(world, rooms);
+  seedBazaarCaches(world, rooms, serviceGuts);
 }
 
 function addBazaarLandmarks(world: World): Market88BazaarRooms {
@@ -769,6 +826,54 @@ function addBazaarLandmarks(world: World): Market88BazaarRooms {
     tunnelCacheEast: tryBazaarRoom(world, RoomType.STORAGE, 858, 622, 18, 10, 'Восточный тайник контрабанды 88', Tex.PIPE, Tex.F_CONCRETE),
     coldStorage: tryBazaarRoom(world, RoomType.STORAGE, 684, 364, 20, 12, 'Холодный склад без накладной 88', Tex.TILE_W, Tex.F_TILE),
   };
+}
+
+function addBazaarServiceGuts(world: World, rng: () => number): Market88ServiceGutPlacement[] {
+  const specs: readonly {
+    type: RoomType;
+    x: number;
+    y: number;
+    w: number;
+    h: number;
+    name: string;
+    side: Market88RoomSide;
+    targetX: number;
+    targetY: number;
+    wallTex: Tex;
+    floorTex: Tex;
+  }[] = [
+    { type: RoomType.STORAGE, x: 198, y: 306, w: 28, h: 13, name: 'Северный склад краденых тюков 88', side: 'south', targetX: 208, targetY: MARKET88_NORTH, wallTex: Tex.METAL, floorTex: Tex.F_CONCRETE },
+    { type: RoomType.PRODUCTION, x: 330, y: 304, w: 32, h: 15, name: 'Сервисная кишка под весами 88', side: 'south', targetX: 344, targetY: MARKET88_NORTH, wallTex: Tex.PIPE, floorTex: Tex.F_CONCRETE },
+    { type: RoomType.STORAGE, x: 652, y: 306, w: 30, h: 13, name: 'Склад чужой медицины 88', side: 'south', targetX: 664, targetY: MARKET88_NORTH, wallTex: Tex.TILE_W, floorTex: Tex.F_TILE },
+    { type: RoomType.PRODUCTION, x: 790, y: 306, w: 32, h: 15, name: 'Закрытый перегон поставщика 88', side: 'south', targetX: 792, targetY: MARKET88_NORTH, wallTex: Tex.PIPE, floorTex: Tex.F_CONCRETE },
+    { type: RoomType.STORAGE, x: 202, y: 704, w: 28, h: 13, name: 'Южный склад мокрой партии 88', side: 'north', targetX: 216, targetY: MARKET88_SOUTH, wallTex: Tex.BRICK, floorTex: Tex.F_LINO },
+    { type: RoomType.PRODUCTION, x: 382, y: 704, w: 32, h: 15, name: 'Задняя мастерская пломб 88', side: 'north', targetX: 392, targetY: MARKET88_SOUTH, wallTex: Tex.METAL, floorTex: Tex.F_CONCRETE },
+    { type: RoomType.STORAGE, x: 610, y: 704, w: 30, h: 14, name: 'Темный ряд долговых ящиков 88', side: 'north', targetX: 624, targetY: MARKET88_SOUTH, wallTex: Tex.MARBLE, floorTex: Tex.F_GREEN_CARPET },
+    { type: RoomType.PRODUCTION, x: 790, y: 704, w: 34, h: 15, name: 'Мясной протек склада 88', side: 'north', targetX: 808, targetY: MARKET88_SOUTH, wallTex: Tex.PIPE, floorTex: Tex.F_CONCRETE },
+    { type: RoomType.PRODUCTION, x: 86, y: 374, w: 26, h: 18, name: 'Западная служебная утроба 88', side: 'east', targetX: MARKET88_WEST, targetY: 384, wallTex: Tex.PIPE, floorTex: Tex.F_CONCRETE },
+    { type: RoomType.STORAGE, x: 88, y: 500, w: 24, h: 18, name: 'Клетка должников за занавесом 88', side: 'east', targetX: MARKET88_WEST, targetY: 500, wallTex: Tex.METAL, floorTex: Tex.F_CONCRETE },
+    { type: RoomType.PRODUCTION, x: 88, y: 610, w: 26, h: 18, name: 'Западный люк грязного товара 88', side: 'east', targetX: MARKET88_WEST, targetY: 628, wallTex: Tex.PIPE, floorTex: Tex.F_CONCRETE },
+    { type: RoomType.STORAGE, x: 912, y: 376, w: 26, h: 18, name: 'Восточная кладовая сухих имен 88', side: 'west', targetX: MARKET88_EAST, targetY: 384, wallTex: Tex.METAL, floorTex: Tex.F_CONCRETE },
+    { type: RoomType.PRODUCTION, x: 912, y: 496, w: 28, h: 18, name: 'Восточный сервис рейдовых задвижек 88', side: 'west', targetX: MARKET88_EAST, targetY: 500, wallTex: Tex.PIPE, floorTex: Tex.F_CONCRETE },
+    { type: RoomType.STORAGE, x: 912, y: 612, w: 26, h: 18, name: 'Восточный склад черного маршрута 88', side: 'west', targetX: MARKET88_EAST, targetY: 628, wallTex: Tex.BRICK, floorTex: Tex.F_LINO },
+  ];
+  const placements: Market88ServiceGutPlacement[] = [];
+  for (const spec of specs) {
+    const room = tryBazaarRoom(
+      world,
+      spec.type,
+      spec.x + Math.floor(rng() * 3) - 1,
+      spec.y + Math.floor(rng() * 3) - 1,
+      spec.w,
+      spec.h,
+      spec.name,
+      spec.wallTex,
+      spec.floorTex,
+    );
+    if (!room) continue;
+    placements.push({ room, side: spec.side, targetX: spec.targetX, targetY: spec.targetY, storage: spec.type === RoomType.STORAGE });
+  }
+  return placements;
 }
 
 function addBazaarStallRooms(world: World, rng: () => number): Market88StallPlacement[] {
@@ -826,6 +931,20 @@ function connectBazaarLandmarks(world: World, rooms: Market88BazaarRooms): void 
   if (rooms.tunnelCacheWest) connectRoomToPoint(world, rooms.tunnelCacheWest, 'north', MARKET88_WEST + 28, 632, DoorState.HERMETIC_CLOSED, '');
   if (rooms.tunnelCacheEast) connectRoomToPoint(world, rooms.tunnelCacheEast, 'west', MARKET88_EAST, 628, DoorState.HERMETIC_CLOSED, '');
   if (rooms.coldStorage) connectRoomToPoint(world, rooms.coldStorage, 'south', 704, 376, DoorState.LOCKED, 'key');
+}
+
+function connectBazaarServiceGuts(world: World, placements: Market88ServiceGutPlacement[]): void {
+  for (const placement of placements) {
+    connectRoomToPoint(
+      world,
+      placement.room,
+      placement.side,
+      placement.targetX,
+      placement.targetY,
+      placement.storage ? DoorState.LOCKED : DoorState.HERMETIC_CLOSED,
+      placement.storage ? 'key' : '',
+    );
+  }
 }
 
 function connectStallsToAlleys(world: World, placements: Market88StallPlacement[]): void {
@@ -899,6 +1018,18 @@ function decorateBazaarLandmarks(world: World, rooms: Market88BazaarRooms): void
   }
 }
 
+function decorateBazaarServiceGuts(world: World, placements: Market88ServiceGutPlacement[], rng: () => number): void {
+  for (let i = 0; i < placements.length; i++) {
+    const room = placements[i].room;
+    decorateStallRoom(world, room, rng, placements[i].storage);
+    const cx = room.x + (room.w >> 1);
+    const cy = room.y + (room.h >> 1);
+    setMarketFeature(world, cx, cy, placements[i].storage ? Feature.SHELF : Feature.MACHINE);
+    if (!placements[i].storage && room.w > 10) setMarketFeature(world, room.x + room.w - 4, room.y + room.h - 4, Feature.APPARATUS);
+    if (i % 3 === 0) setMarketFeature(world, room.x + 3, room.y + room.h - 3, Feature.CANDLE);
+  }
+}
+
 function decorateSmugglingTunnels(world: World): void {
   for (let x = MARKET88_WEST + 28; x < 484; x += 34) {
     setMarketFeature(world, x, 632, x % 68 === 0 ? Feature.CANDLE : Feature.SHELF);
@@ -911,7 +1042,7 @@ function decorateSmugglingTunnels(world: World): void {
   }
 }
 
-function seedBazaarCaches(world: World, rooms: Market88BazaarRooms): void {
+function seedBazaarCaches(world: World, rooms: Market88BazaarRooms, serviceGuts: readonly Market88ServiceGutPlacement[]): void {
   if (rooms.tunnelCacheWest) {
     addContainer(world, rooms.tunnelCacheWest, 9, 5, ContainerKind.SECRET_STASH, 'Тайник западного обхода 88', 'secret', 5, [
       { defId: 'fake_pass', count: 1 },
@@ -932,6 +1063,79 @@ function seedBazaarCaches(world: World, rooms: Market88BazaarRooms): void {
       { defId: 'water', count: 2 },
       { defId: 'door_kit', count: 1 },
     ], ['market88', 'contraband_cache', 'cold_storage'], undefined, Faction.CITIZEN, 4);
+  }
+  const cacheDefs: readonly {
+    name: string;
+    kind: ContainerKind;
+    access: ContainerAccess;
+    capacitySlots: number;
+    inventory: Item[];
+    tags: string[];
+    faction?: Faction;
+    lockDifficulty?: number;
+    discovered?: boolean;
+  }[] = [
+    {
+      name: 'Серый тюк поставщика 88',
+      kind: ContainerKind.SECRET_STASH,
+      access: 'faction',
+      capacitySlots: 6,
+      inventory: [
+        { defId: 'caravan_route', count: 1 },
+        { defId: 'ration_registry_extract', count: 1 },
+        { defId: 'govnyak_bad_batch', count: 1 },
+      ],
+      tags: ['market88', 'contraband_cache', 'supplier_betrayal', 'caravan', 'theft'],
+      faction: Faction.WILD,
+      lockDifficulty: 5,
+    },
+    {
+      name: 'Сейф черного маршрута 88',
+      kind: ContainerKind.SAFE,
+      access: 'locked',
+      capacitySlots: 7,
+      inventory: [
+        { defId: 'metro_ticket', count: 1 },
+        { defId: 'forged_bank_debt_paper', count: 1 },
+        { defId: 'container_key_label', count: 1 },
+      ],
+      tags: ['market88', 'black_route_papers', 'debt', 'documents', 'contraband_cache'],
+      faction: Faction.WILD,
+      lockDifficulty: 7,
+    },
+    {
+      name: 'Шкаф панической медицины 88',
+      kind: ContainerKind.MEDICAL_CABINET,
+      access: 'faction',
+      capacitySlots: 6,
+      inventory: [
+        { defId: 'antibiotic', count: 1 },
+        { defId: 'pills', count: 2 },
+        { defId: 'morphine_ampoule', count: 1 },
+      ],
+      tags: ['market88', 'medicine', 'scarcity', 'panic_buying', 'theft'],
+      faction: Faction.CITIZEN,
+      lockDifficulty: 4,
+    },
+    {
+      name: 'Ящик рейдовой задвижки 88',
+      kind: ContainerKind.TOOL_LOCKER,
+      access: 'locked',
+      capacitySlots: 6,
+      inventory: [
+        { defId: 'door_kit', count: 1 },
+        { defId: 'gasmask_filter', count: 1 },
+        { defId: 'fuse', count: 2 },
+      ],
+      tags: ['market88', 'raid_shutter', 'samosbor', 'service_guts'],
+      faction: Faction.LIQUIDATOR,
+      lockDifficulty: 6,
+    },
+  ];
+  for (let i = 0; i < Math.min(cacheDefs.length, serviceGuts.length); i++) {
+    const room = serviceGuts[i].room;
+    const def = cacheDefs[i];
+    addContainer(world, room, Math.max(2, room.w - 4), Math.max(2, Math.floor(room.h / 2)), def.kind, def.name, def.access, def.capacitySlots, def.inventory, def.tags, undefined, def.faction, def.lockDifficulty, def.discovered ?? true);
   }
 }
 

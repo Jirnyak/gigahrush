@@ -14,7 +14,7 @@ Primary decisions: bribe, forge, expose, steal access, pass inspection, erase a 
 
 - Central POI: salon, executive office, zero file room, audit office, cleaner closet, staff desk, political shelter, archive toll office, permit ambush room and up/down route lifts.
 - Full-floor expansion adds public queue tiers, private office tiers, archive balconies and service routes around the authored POI.
-- Administrative zones are generated and retuned to `MINISTRY` base floor; no new `FloorLevel` value is added.
+- Administrative zones are generated and retuned to queue/legal citizen space, liquidator access pockets, samosbor archive pressure and wild staff back routes; no new `FloorLevel` value is added.
 
 ## NPCs
 
@@ -24,6 +24,8 @@ Primary decisions: bribe, forge, expose, steal access, pass inspection, erase a 
 - `bureau_visitor_anna`: citizen trying to erase or expose a death record.
 - `bureau_archive_toll_keeper`: sells archive access for money or accepts an exposure act.
 - `bureau_permit_ambush_guard`: handles the forged-permit ambush and rewards clean exposure.
+- The generic design-floor population field targets `650` ambient NPC templates with a secretary/citizen majority, liquidator auditor share and small scientist tail; broad clerks, guards and queue bodies come from the shared profile rather than local crowd spawns.
+- The same field targets `1100` monsters with document/archive tags and bias toward `PARAGRAPH`, `PECHATEED`, `KONTORSHCHIK`, `PROTOKOLNIK` and `KANTSELYARSKIY_IDOL`.
 
 ## Route Decisions
 
@@ -42,6 +44,7 @@ Primary decisions: bribe, forge, expose, steal access, pass inspection, erase a 
 - `Касса архивной пошлины`: owner cashbox with `archive_access_permit`, `elevator_access_order`, `blank_form`, tagged `archive_toll` and `route_clue`.
 - `Папка подставных корешков`: faction filing cabinet with forged permit, exposure notice and denunciation, tagged for ambush/audit/theft.
 - `applyUpperBureauFlagChange()` publishes bounded `faction_relation_changed` events with `auditHeat` clamped to `0..3`; container theft/opening uses the existing container event path.
+- Side-quest completions now publish route-specific quest event tags/data for legal appointment, bribe heat, staff-route use, Market 88 leak, audit heat, archive toll exposure, zero-file exposure and forged-document backlash.
 
 ## Samosbor
 

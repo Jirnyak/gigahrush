@@ -30,6 +30,7 @@ import { type PlotNpcDef, registerSideQuest } from '../../data/plot';
 import { MONSTERS } from '../../entities/monster';
 import { Spr } from '../../render/sprite_index';
 import { publishEvent } from '../../systems/events';
+import { placeEmergencyPanel } from '../../systems/emergency_panels';
 import { registerRouteCue } from '../../systems/route_cues';
 import { randomRPG, scaleMonsterHp, scaleMonsterSpeed } from '../../systems/rpg';
 import { stampRoom } from '../shared';
@@ -46,6 +47,7 @@ const JANITOR_DEPOT = 'Кладовая дежурных ключей С-15';
 const VENT_JUNCTION = 'Вентиляционный узел над шахтой С-15';
 const STAFF_CANTEEN = 'Столовая ремонтной смены С-15';
 const CLERK_OFFICE = 'Запертая диспетчерская рейдов С-15';
+const PUMP_RESCUE_ROOM = 'Насосная ниша западного стояка С-15';
 
 export type ServiceLiftMachineState = 'faulty' | 'repaired';
 export type ServicePowerZoneId = 'machine_hall' | 'breaker_room' | 'staff_route' | 'ventilation';
@@ -232,6 +234,29 @@ const CLERK_DEF: PlotNpcDef = {
   ],
 };
 
+const MITKA_DEF: PlotNpcDef = {
+  name: 'Митя Насосный',
+  isFemale: false,
+  faction: Faction.LIQUIDATOR,
+  occupation: Occupation.LOCKSMITH,
+  sprite: Occupation.LOCKSMITH,
+  hp: 135, maxHp: 135, money: 55, speed: 0.98,
+  inventory: [
+    { defId: 'valve_tag', count: 1 },
+    { defId: 'sealant_tube', count: 1 },
+    { defId: 'gasmask_filter', count: 1 },
+  ],
+  talkLines: [
+    'Насос держит пол на честном слове. Если дать обратный напор, коридор станет мокрым, зато угри уйдут в трубу.',
+    'Я не герой. Я просто знаю, какой вентиль не трогать во время сирены.',
+    'Вытащи меня до следующего щелчка, и бирку давления заберешь без рапорта.',
+  ],
+  talkLinesPost: [
+    'Западный стояк дышит ровно. Восточный врёт, но хотя бы по расписанию.',
+    'Если щиток воды ругается, не спорь с ним лицом.',
+  ],
+};
+
 registerSideQuest('service_liftmaster_boris', BORIS_DEF, [
   {
     id: 'service_fix_lift_machine',
@@ -281,6 +306,19 @@ registerSideQuest('service_locked_out_clerk', CLERK_DEF, [
     rewardItem: 'official_permit_slip', rewardCount: 1,
     extraRewards: [{ defId: 'ammo_9mm', count: 12 }],
     relationDelta: 8, xpReward: 80, moneyReward: 95,
+  },
+]);
+
+registerSideQuest('service_trapped_pump_worker', MITKA_DEF, [
+  {
+    id: 'service_rescue_pump_worker',
+    giverNpcId: 'service_trapped_pump_worker',
+    type: QuestType.VISIT,
+    desc: 'Митя: «Западная насосная ниша С-15 захлопнулась. Вытащи меня из стояка, пока обратный напор не позвал трубных.»',
+    targetRoomName: PUMP_RESCUE_ROOM,
+    rewardItem: 'valve_tag', rewardCount: 1,
+    extraRewards: [{ defId: 'sealant_tube', count: 1 }, { defId: 'gasmask_filter', count: 1 }],
+    relationDelta: 9, xpReward: 85, moneyReward: 60,
   },
 ]);
 
@@ -529,6 +567,7 @@ export function generateServiceFloorDesignFloor(): ServiceFloorGeneration {
   ];
 
   registerServiceRouteCues(world, serviceState, machine, breaker, vent, eastLift);
+  placeServiceFloorEmergencyPanels(world);
 
   world.bakeLights();
   return {
@@ -649,6 +688,7 @@ export function expandServiceFloorMachineMaze(
   world: World,
   rng: () => number,
   style: ServiceFloorExpansionStyle,
+  entities?: Entity[],
 ): void {
   const staffTex = style.floorTex;
   const ductTex = Tex.F_ABYSS;
@@ -693,12 +733,13 @@ export function expandServiceFloorMachineMaze(
   for (const booth of booths) dressControlBooth(world, booth);
 
   const pumps = [
-    stampPumpAlcove(world, 304, 666, 46, 28, 'Насосная ниша западного стояка С-15', 700, 'down'),
+    stampPumpAlcove(world, 304, 666, 46, 28, PUMP_RESCUE_ROOM, 700, 'down'),
     stampPumpAlcove(world, 674, 666, 46, 28, 'Насосная ниша восточного стояка С-15', 700, 'down'),
     stampPumpAlcove(world, 302, 274, 46, 28, 'Компрессорный карман западной шахты С-15', 324, 'down'),
     stampPumpAlcove(world, 676, 274, 46, 28, 'Компрессорный карман восточной шахты С-15', 324, 'down'),
   ];
   for (const pump of pumps) dressPumpAlcove(world, pump);
+  if (entities) spawnServicePumpRescue(world, entities, pumps[0]);
 
   carveDuctBypass(world, 244, 188, 430, 486, ductTex);
   carveDuctBypass(world, 780, 188, 560, 486, ductTex);
@@ -713,6 +754,66 @@ export function expandServiceFloorMachineMaze(
   carveCableTrench(world, 244, 590, 780, 590, rng);
 
   dressServiceRoutes(world, rng);
+}
+
+export function placeServiceFloorEmergencyPanels(world: World): number {
+  const placements: readonly {
+    roomName: string;
+    dx: number;
+    dy: number;
+    panelId: 'panel_power' | 'panel_water' | 'panel_doors' | 'panel_vent';
+    seed: number;
+  }[] = [
+    { roomName: LIFT_MACHINE_ROOM, dx: 5, dy: 5, panelId: 'panel_doors', seed: 0x5151 },
+    { roomName: BREAKER_ROOM, dx: 16, dy: 4, panelId: 'panel_power', seed: 0x5152 },
+    { roomName: VENT_JUNCTION, dx: 19, dy: 3, panelId: 'panel_vent', seed: 0x5153 },
+    { roomName: PUMP_RESCUE_ROOM, dx: 5, dy: 4, panelId: 'panel_water', seed: 0x5154 },
+    { roomName: 'Насосная ниша восточного стояка С-15', dx: 5, dy: 4, panelId: 'panel_water', seed: 0x5155 },
+    { roomName: 'Пост учета кабельных потерь С-15', dx: 14, dy: 4, panelId: 'panel_power', seed: 0x5156 },
+  ];
+  let placed = 0;
+  for (const item of placements) {
+    const room = findServiceRoom(world, item.roomName);
+    if (!room) continue;
+    const x = world.wrap(room.x + Math.min(room.w - 2, Math.max(1, item.dx)));
+    const y = world.wrap(room.y + Math.min(room.h - 2, Math.max(1, item.dy)));
+    const idx = world.idx(x, y);
+    if (world.cells[idx] !== Cell.FLOOR && world.cells[idx] !== Cell.WATER) continue;
+    if (placeEmergencyPanel(world, x, y, item.panelId, item.seed ^ room.id * 131)) placed++;
+  }
+  return placed;
+}
+
+function spawnServicePumpRescue(world: World, entities: Entity[], room: Room): void {
+  if (entities.some(entity => entity.plotNpcId === 'service_trapped_pump_worker')) return;
+  const nextId = { v: nextServiceEntityId(entities) };
+  const mitkaId = spawnPlotNpc(
+    entities,
+    nextId,
+    'service_trapped_pump_worker',
+    MITKA_DEF,
+    room.x + 6,
+    room.y + 5,
+    0,
+  );
+  addServiceContainer(world, room, room.x + room.w - 5, room.y + 4, ContainerKind.TOOL_LOCKER, 'Аварийный ящик западного стояка С-15', 'owner', [
+    { defId: 'valve_tag', count: 1 },
+    { defId: 'wire_coil', count: 1 },
+    { defId: 'sealant_tube', count: 1 },
+    { defId: 'gasmask_filter', count: 1 },
+  ], mitkaId, MITKA_DEF.name, ['service_floor', 'pressure', 'rescue', 'tools']);
+  dropItems(world, entities, nextId, room, ['valve_tag', 'wire_coil', 'sealant_tube']);
+  spawnMonsterPack(world, entities, nextId, room.x + room.w - 11, room.y + 6, [
+    MonsterKind.TUBE_EEL,
+    MonsterKind.LOTOCHNIK,
+    MonsterKind.PAUPSINA,
+  ]);
+}
+
+function nextServiceEntityId(entities: readonly Entity[]): number {
+  let id = 1;
+  for (const entity of entities) id = Math.max(id, entity.id + 1);
+  return id;
 }
 
 function stampServiceRoom(
