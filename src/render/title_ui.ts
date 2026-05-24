@@ -88,18 +88,24 @@ export function drawTitleScreen(ctx: CanvasRenderingContext2D, options: DrawTitl
 
   ctx.fillStyle = '#555';
   ctx.font = `${Math.round(12 * s)}px monospace`;
-  const hint = options.mobile
-    ? lang.mobileHint
-    : lang.desktopHint(
+  if (options.mobile) {
+    ctx.fillText(fitText(ctx, lang.mobileHint, w * 0.92), cx, cy + 118 * s);
+  } else {
+    ctx.fillText(fitText(ctx, lang.desktopHint(
       controlBindingLabel('moveForward'),
       controlBindingLabel('interact'),
+    ), w * 0.92), cx, cy + 116 * s);
+    ctx.fillText(fitText(ctx, lang.desktopCombatHint(
+      controlBindingLabel('attack'),
+      controlBindingLabel('fullscreen'),
       controlBindingLabel('controlsMenu'),
-    );
-  ctx.fillText(fitText(ctx, hint, w * 0.92), cx, cy + 118 * s);
+      controlBindingLabel('uiSettings'),
+    ), w * 0.92), cx, cy + 130 * s);
+  }
 
   ctx.fillStyle = '#705858';
   ctx.font = `${Math.round(11 * s)}px monospace`;
-  ctx.fillText(fitText(ctx, lang.languageHint, w * 0.9), cx, cy + 142 * s);
+  ctx.fillText(fitText(ctx, lang.languageHint, w * 0.9), cx, cy + 150 * s);
 
   ctx.textAlign = 'left';
   return hits;

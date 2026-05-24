@@ -3,7 +3,6 @@
 import {
   type Entity, type GameState, type Msg,
   EntityType, AIGoal, Occupation, Faction, ProjType,
-  msg,
 } from '../../core/types';
 import { World } from '../../core/world';
 import { WEAPON_STATS, type WeaponStats } from '../../data/catalog';
@@ -33,6 +32,7 @@ import {
   BARK_WOUNDED, BARK_WOUNDED_F, BARK_CHANCE_WOUNDED,
   BARK_KILL, BARK_KILL_F, BARK_CHANCE_KILL,
   BARK_FLEE, BARK_FLEE_F, BARK_CHANCE_FLEE,
+  pushNpcLogMessage,
 } from './barks';
 
 /* ── Module-level bark refs (set each frame) ─────────────────── */
@@ -222,7 +222,7 @@ export function tryFactionCombat(
         ai.windupTargetId = undefined;
         e.attackCd = Math.max(e.attackCd ?? 0, NPC_RANGED_LOS_BREAK_CD);
         if (target.type === EntityType.PLAYER) {
-          msgs.push(msg(`${entityDisplayName(e)} потерял линию огня. Укрытие сработало.`, _time, '#9cf'));
+          pushNpcLogMessage(e, msgs, _time, `${entityDisplayName(e)} потерял линию огня. Укрытие сработало.`, '#9cf');
         }
         return true;
       }
@@ -242,7 +242,7 @@ export function tryFactionCombat(
           ai.windupTimer = npcRangedWindupSec(ws);
           ai.windupTargetId = target.id;
           if (target.type === EntityType.PLAYER && npcRangedShouldLog(ws)) {
-            msgs.push(msg(`${entityDisplayName(e)} целится: ${npcRangedThreatLabel(ws)}. Сбейте линию или дождитесь залпа.`, _time, npcRangedCueColor(ws)));
+            pushNpcLogMessage(e, msgs, _time, `${entityDisplayName(e)} целится: ${npcRangedThreatLabel(ws)}. Сбейте линию или дождитесь залпа.`, npcRangedCueColor(ws));
           }
           return true;
         }
@@ -293,7 +293,7 @@ export function tryFactionCombat(
           target.alive = false;
           spawnDeathPool(world, target.x, target.y, target.type === EntityType.MONSTER);
           if (target.type === EntityType.NPC) dropNpcInventory(target, entities, nextId);
-          msgs.push(msg(`${e.name ?? 'NPC'} ${e.isFemale ? 'убила' : 'убил'} ${entityDisplayName(target)}`, _time, '#fa4'));
+          pushNpcLogMessage(e, msgs, _time, `${e.name ?? 'NPC'} ${e.isFemale ? 'убила' : 'убил'} ${entityDisplayName(target)}`, '#fa4');
           bark(e, msgs, _time, BARK_KILL, BARK_KILL_F, BARK_CHANCE_KILL, '#da4');
           if (target.isFogBoss && target.fogBossZone !== undefined) {
             clearFogInZone(world, target.fogBossZone, msgs, _time);

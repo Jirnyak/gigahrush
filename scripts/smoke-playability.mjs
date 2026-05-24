@@ -927,8 +927,11 @@ async function sampleCanvases(client) {
     const hudCenterH = Math.min(240, hudH);
     const hudCenterX = Math.max(0, Math.floor((hudW - hudCenterW) / 2));
     const hudCenterY = Math.max(0, Math.floor((hudH - hudCenterH) / 2));
+    const hudBottomH = Math.min(180, hudH);
+    const hudBottomY = Math.max(0, hudH - hudBottomH);
     const hudCorner = sample2d(hctx, 0, 0, Math.min(192, hudW), Math.min(192, hudH));
     const hudCenter = sample2d(hctx, hudCenterX, hudCenterY, hudCenterW, hudCenterH);
+    const hudBottom = sample2d(hctx, 0, hudBottomY, hudW, hudBottomH);
     const gl = game?.getContext('webgl2') || game?.getContext('webgl');
     let webglLit = 0;
     let webglSum = 0;
@@ -958,8 +961,11 @@ async function sampleCanvases(client) {
       hudCanvas: hud instanceof HTMLCanvasElement,
       gameWidth: game?.width ?? 0,
       gameHeight: game?.height ?? 0,
-      hudLit: hudCorner.lit,
-      hudSum: hudCorner.sum,
+      hudLit: Math.max(hudCorner.lit, hudCenter.lit, hudBottom.lit),
+      hudSum: Math.max(hudCorner.sum, hudCenter.sum, hudBottom.sum),
+      hudCornerLit: hudCorner.lit,
+      hudBottomLit: hudBottom.lit,
+      hudBottomSum: hudBottom.sum,
       hudCenterLit: hudCenter.lit,
       hudCenterSum: hudCenter.sum,
       webgl: Boolean(gl),
@@ -985,6 +991,39 @@ function requireRunningTelemetry(sample, label, failures) {
   if (sample.hudLit < 10) failures.push(`${label}: HUD appears blank (${sample.hudLit} lit samples)`);
   if ((sample.sceneLit ?? 0) < 500) failures.push(`${label}: composited scene appears blank (${sample.sceneLit ?? 0} lit samples)`);
   if (sample.bodyChildren < 1) failures.push(`${label}: document body is empty`);
+}
+
+function requireStartupGuidance(debug, label, failures) {
+  if (!debug?.started) {
+    failures.push(`${label}: game did not report started state`);
+    return;
+  }
+  const objectiveLine = String(debug.currentObjectiveLine ?? '');
+  const interactionPrompt = String(debug.interactionPrompt ?? '');
+  const hasObjective = objectiveLine.includes('Цель:');
+  const hasPrompt = debug.interactionPromptEnabled === true && interactionPrompt.length > 0;
+  if (!hasObjective && !hasPrompt) {
+    failures.push(`${label}: no first objective data or interaction prompt (objective="${objectiveLine}", prompt="${interactionPrompt}")`);
+  }
+  if (!hasObjective && debug.interactionPromptEnabled === false) {
+    failures.push(`${label}: startup UI has no objective data and interaction prompt is disabled`);
+  }
+  if (debug.currentObjectiveSource === 'plot_offer' && debug.currentObjectiveTargetPlotNpcId !== 'olga') {
+    failures.push(`${label}: first plot-offer objective targets "${debug.currentObjectiveTargetPlotNpcId}", expected Olga`);
+  }
+}
+
+function requireMovementDelta(before, after, label, failures) {
+  if (!before || !after) {
+    failures.push(`${label}: missing movement telemetry`);
+    return;
+  }
+  const dx = Number(after.playerX ?? 0) - Number(before.playerX ?? 0);
+  const dy = Number(after.playerY ?? 0) - Number(before.playerY ?? 0);
+  const moved = Math.hypot(dx, dy);
+  if (moved < 0.02) {
+    failures.push(`${label}: movement input did not move player (${moved.toFixed(3)} cells)`);
+  }
 }
 
 function requirePanelTelemetry(before, after, label, failures) {
@@ -1174,9 +1213,11 @@ async function runMobilePanelChecks(client, running, failures) {
   await tapMobileMenuDown(client);
   const beforeMap = running;
   await tapMobileMenuSelect(client, 140);
-  await waitForGameDebug(client, 'mobile minimap open', state => state.mapMode === 1);
-  await tapMobileMenuSelect(client, 180);
-  await waitForGameDebug(client, 'mobile full map open', state => state.mapMode === 2);
+  const mapState = await waitForGameDebug(client, 'mobile map open', state => state.mapMode === 1 || state.mapMode === 2);
+  if (mapState.mapMode === 1) {
+    await tapMobileMenuSelect(client, 180);
+    await waitForGameDebug(client, 'mobile full map open', state => state.mapMode === 2);
+  }
   await waitFrames(client, 2);
   const mapPanel = await sampleCanvases(client);
   requirePanelTelemetry(beforeMap, mapPanel, 'mobile full map panel', failures);
@@ -1359,10 +1400,13 @@ async function main() {
 
     let running;
     await runStep('start and move', async () => {
+      let movementStart;
       if (runMobile) {
         await tapSelector(client, '#hud', 'mobile title canvas start', 350);
-        await waitForGameDebug(client, 'mobile title start', state => state.started === true);
+        const startup = await waitForGameDebug(client, 'mobile title start', state => state.started === true);
+        requireStartupGuidance(startup, 'mobile startup guidance', failures);
         await waitPage(client, 1200);
+        movementStart = await readGameDebug(client);
         await dragSelector(client, '.mobile-pad--move', 0, -42, 420);
         requireMobileLayout(await readMobileLayout(client), 'mobile gameplay layout', failures, {
           requireFullscreenVisible: true,
@@ -1372,10 +1416,20 @@ async function main() {
         await clickCanvasCenter(client);
         await tapKeyImmediate(client, KEY.enter);
         await waitPage(client, 500);
+        const startup = await waitForGameDebug(client, 'desktop title start', state => state.started === true);
+        requireStartupGuidance(startup, 'desktop startup guidance', failures);
         await tapKey(client, KEY.e, 90, 200);
+        const afterInteract = await readGameDebug(client);
+        if (afterInteract?.showNpcMenu) {
+          await tapKey(client, KEY.escape, 90, 160);
+          await waitForGameDebug(client, 'close first NPC interaction menu', state => !state.showNpcMenu);
+        }
         await waitPage(client, 1800);
+        movementStart = await readGameDebug(client);
         await holdKey(client, KEY.w, 350);
       }
+      const movementEnd = await readGameDebug(client);
+      requireMovementDelta(movementStart, movementEnd, runMobile ? 'mobile movement' : 'desktop movement', failures);
       running = await sampleRunning(client);
       requireRunningTelemetry(running, 'after movement', failures);
       return running;

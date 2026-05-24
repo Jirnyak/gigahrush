@@ -56,6 +56,7 @@ import {
   zhelemishSourceForItem,
 } from './status';
 import { consumeNoisyDocumentDelay } from './document_scent';
+import { pushNpcLogMessage } from './ai/barks';
 
 const MAX_SLOTS = 25;
 const GOVNYAK_COURIER_ROUTE_SET = new Set<string>(GOVNYAK_COURIER_CONTRACT_IDS);
@@ -832,10 +833,10 @@ export function getInventorySlotActionInfo(e: Entity, slotIdx: number): Inventor
     equippedLabel: isEquippedWeapon ? 'оружие выбрано' : isEquippedTool ? 'инструмент выбран' : inventoryCategoryLabel(category),
     useLabel,
     dropLabel: def.type === ItemType.TOOL
-      ? 'D выкинуть: сломать'
+      ? 'X выкинуть: сломать'
       : slot.count > 1
-        ? `D выкинуть ×${slot.count}`
-        : 'D выкинуть',
+        ? `X выкинуть ×${slot.count}`
+        : 'X выкинуть',
     sellLabel: value > 0
       ? `Справка: базовая цена ${value}₽${slot.count > 1 ? `/шт · ${value * slot.count}₽` : ''}`
       : 'Справка: почти даром',
@@ -1545,7 +1546,7 @@ export function consumeDurability(e: Entity, msgs: Msg[], time: number, state?: 
     if (e.type === EntityType.NPC && e.name) {
       const pool = e.isFemale ? BREAK_EXCLAIM_F : BREAK_EXCLAIM;
       const excl = pool[Math.floor(Math.random() * pool.length)];
-      msgs.push(msg(`${e.name}: ${excl} ${name} ${e.isFemale ? 'сломалась' : 'сломался'}!`, time, '#f84'));
+      pushNpcLogMessage(e, msgs, time, `${e.name}: ${excl} ${name} ${e.isFemale ? 'сломалась' : 'сломался'}!`, '#f84');
     } else {
       msgs.push(msg(`${name} сломался!`, time, '#f84'));
     }

@@ -17,6 +17,53 @@ export interface UiRect {
   h: number;
 }
 
+export interface HudSafeInsets {
+  top: number;
+  right: number;
+  bottom: number;
+  left: number;
+}
+
+export interface MobileHudSafeContext {
+  enabled: boolean;
+  portrait: boolean;
+  safeInsets?: Partial<HudSafeInsets>;
+}
+
+let mobileHudSafeContext: MobileHudSafeContext = {
+  enabled: false,
+  portrait: false,
+};
+
+export function setMobileHudSafeContext(next: MobileHudSafeContext): void {
+  mobileHudSafeContext = {
+    enabled: next.enabled,
+    portrait: next.portrait,
+    safeInsets: next.safeInsets,
+  };
+}
+
+export function getMobileHudSafeContext(): MobileHudSafeContext {
+  return mobileHudSafeContext;
+}
+
+export interface HudStackSlot extends UiRect {
+  cursorY: number;
+  gap: number;
+  align: 'left' | 'center' | 'right';
+}
+
+export interface HudSlots {
+  safe: HudSafeInsets;
+  topLeftEvent: HudStackSlot;
+  topCenterCritical: HudStackSlot;
+  topRightNavigation: HudStackSlot;
+  centerInteraction: UiRect;
+  centerModal: UiRect;
+  bottomVitals: UiRect;
+  screenFx: UiRect;
+}
+
 export interface InventoryPanelLayout {
   scale: number;
   originX: number;
@@ -39,6 +86,115 @@ export function dialogMenuScale(canvasW: number, canvasH: number, sx: number, sy
 
 function scaledRect(originX: number, originY: number, scale: number, x: number, y: number, w: number, h: number): UiRect {
   return { x: originX + x * scale, y: originY + y * scale, w: w * scale, h: h * scale };
+}
+
+function safeNumber(value: number | undefined, fallback: number): number {
+  return Number.isFinite(value) ? Math.max(0, value!) : fallback;
+}
+
+function hudSafeInsets(
+  canvasW: number,
+  canvasH: number,
+  sx: number,
+  sy: number,
+  mobileControls: boolean,
+  override?: Partial<HudSafeInsets>,
+): HudSafeInsets {
+  const base: HudSafeInsets = {
+    top: 4 * sy,
+    right: 4 * sx,
+    bottom: 0,
+    left: 4 * sx,
+  };
+  if (mobileControls) {
+    base.top = Math.max(base.top, Math.min(58, canvasH * 0.18));
+    base.left = Math.max(base.left, Math.min(118, canvasW * 0.22));
+    base.right = Math.max(base.right, Math.min(104, canvasW * 0.24));
+    base.bottom = Math.max(base.bottom, Math.min(160, Math.max(104, canvasH * 0.28)));
+  }
+  return {
+    top: safeNumber(override?.top, base.top),
+    right: safeNumber(override?.right, base.right),
+    bottom: safeNumber(override?.bottom, base.bottom),
+    left: safeNumber(override?.left, base.left),
+  };
+}
+
+function makeStackSlot(
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  gap: number,
+  align: HudStackSlot['align'],
+): HudStackSlot {
+  return { x, y, w: Math.max(0, w), h: Math.max(0, h), cursorY: y, gap, align };
+}
+
+export function createHudSlots(
+  canvasW: number,
+  canvasH: number,
+  sx: number,
+  sy: number,
+  options: {
+    mobileControls?: boolean;
+    safeInsets?: Partial<HudSafeInsets>;
+    bottomVitalsHeight?: number;
+    topRightWidth?: number;
+  } = {},
+): HudSlots {
+  const safe = hudSafeInsets(canvasW, canvasH, sx, sy, !!options.mobileControls, options.safeInsets);
+  const gap = Math.max(2 * sy, 4);
+  const bottomH = Math.max(16 * sy, options.bottomVitalsHeight ?? 20 * sy);
+  const bottomY = Math.max(safe.top + 64 * sy, canvasH - safe.bottom - bottomH);
+  const topH = Math.max(0, bottomY - safe.top - gap);
+  const usableW = Math.max(0, canvasW - safe.left - safe.right);
+  const navW = Math.max(80 * sx, Math.min(usableW, options.topRightWidth ?? 176 * sx));
+  const topLeftW = Math.max(48 * sx, usableW - navW - 8 * sx);
+
+  return {
+    safe,
+    topLeftEvent: makeStackSlot(safe.left, safe.top, topLeftW, topH, gap, 'left'),
+    topCenterCritical: makeStackSlot(safe.left, safe.top, usableW, topH, gap, 'center'),
+    topRightNavigation: makeStackSlot(canvasW - safe.right - navW, safe.top, navW, topH, gap, 'right'),
+    centerInteraction: {
+      x: safe.left,
+      y: canvasH * 0.5 + 24 * sy,
+      w: usableW,
+      h: Math.max(18 * sy, bottomY - (canvasH * 0.5 + 24 * sy) - gap),
+    },
+    centerModal: {
+      x: safe.left,
+      y: safe.top,
+      w: usableW,
+      h: Math.max(0, bottomY - safe.top),
+    },
+    bottomVitals: {
+      x: options.mobileControls ? safe.left : 0,
+      y: bottomY,
+      w: options.mobileControls ? usableW : canvasW,
+      h: bottomH,
+    },
+    screenFx: { x: 0, y: 0, w: canvasW, h: canvasH },
+  };
+}
+
+export function allocateHudSlot(
+  slot: HudStackSlot,
+  height: number,
+  width = slot.w,
+  align: HudStackSlot['align'] = slot.align,
+): UiRect {
+  const rectW = Math.max(0, Math.min(slot.w, width));
+  const rectH = Math.max(0, height);
+  const x = align === 'right'
+    ? slot.x + slot.w - rectW
+    : align === 'center'
+      ? slot.x + (slot.w - rectW) * 0.5
+      : slot.x;
+  const y = slot.cursorY;
+  slot.cursorY = Math.min(slot.y + slot.h, slot.cursorY + rectH + slot.gap);
+  return { x, y, w: rectW, h: rectH };
 }
 
 export function inventoryPanelLayout(canvasW: number, canvasH: number): InventoryPanelLayout {

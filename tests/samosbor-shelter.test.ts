@@ -25,6 +25,7 @@ import {
 import type { FloorGeneration } from '../src/gen/floor_manifest';
 import { createWorldEventState, getRecentEvents } from '../src/systems/events';
 import {
+  getSamosborActiveInstructionSnapshot,
   getSamosborWarningSnapshot,
   applySamosborFogEffectAtCellForTests,
   rebuildWorld,
@@ -235,6 +236,8 @@ test('samosbor warning publishes sound, HUD/log, map, and nearby NPC bark channe
 
   assert.equal(warning.variantId, 'classic');
   assert.equal(warning.tint, '#a34cff');
+  assert.equal(warning.actionLine, 'К гермодвери или выйдите из зоны.');
+  assert.match(warning.shelterHintLine, /выйдите из зоны/);
   assert.ok(warning.signals.channels.includes('audio'));
   assert.ok(warning.signals.channels.includes('hud'));
   assert.ok(warning.signals.channels.includes('log'));
@@ -254,6 +257,26 @@ test('samosbor warning publishes sound, HUD/log, map, and nearby NPC bark channe
   assert.ok(channels.includes('map'));
   assert.ok(channels.includes('npc_barks'));
   assert.ok(state.msgLog.some(entry => entry.text.includes('звук:') && entry.text.includes('карта:')));
+});
+
+test('active samosbor exposes a compact survival instruction', () => {
+  resetSamosborRuntimeForTests();
+  const ctx = makeShelterWorld(DoorState.CLOSED);
+  const state = makeGameState({
+    currentFloor: FloorLevel.LIVING,
+    samosborTimer: 0,
+    worldEvents: createWorldEventState(),
+  });
+  assert.equal(forceNextSamosborVariant('classic'), true);
+
+  assert.equal(updateSamosbor(ctx.world, ctx.entities, state, 0, ctx.nextId), false);
+  const active = getSamosborActiveInstructionSnapshot(state);
+
+  assert.equal(state.samosborActive, true);
+  assert.ok(active);
+  assert.equal(active.variantId, 'classic');
+  assert.match(active.actionLine, /гермодвери|гермой|зоны/);
+  assert.equal(active.secondsLeft > 0, true);
 });
 
 test('normal and rare samosbor warnings keep variant-specific colors and cues', () => {

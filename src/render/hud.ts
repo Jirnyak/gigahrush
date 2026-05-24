@@ -21,6 +21,7 @@ import { drawLogMenu } from './log_ui';
 import { drawFactionMenu } from './factions_ui';
 import { drawGameMenu } from './menu_ui';
 import { drawControlsMenu } from './controls_ui';
+import { drawUiSettingsMenu } from './ui_settings_ui';
 import { drawNpcMenu } from './npc_ui';
 import { drawContainerMenu } from './container_ui';
 import { drawEmergencyPanelMenu } from './emergency_panel_ui';
@@ -32,15 +33,21 @@ import { drawNetTerminalBank } from './net_terminal_bank_ui';
 import { drawNetTerminalGenDenied } from './net_terminal_gen_ui';
 import { drawMapEditor } from './map_editor_ui';
 import { entityDisplayName } from '../entities/monster';
-import { getActiveSamosborVariant } from '../data/samosbor_variants';
-import { getSamosborWarningSnapshot, type SamosborWarningSnapshot } from '../systems/samosbor';
+import { isHostile } from '../systems/factions';
+import { getNpcPlayerRelation } from '../systems/npc_relations';
+import {
+  getSamosborActiveInstructionSnapshot,
+  getSamosborWarningSnapshot,
+  type SamosborActiveInstructionSnapshot,
+  type SamosborWarningSnapshot,
+} from '../systems/samosbor';
 import { currentFloorInstanceLabel } from '../systems/floor_instances';
 import { getLiftArachnaWarningSnapshot, type LiftArachnaWarningSnapshot } from '../systems/lift_arachna';
 import {
   getProceduralSmogStatus,
   type ProceduralSmogStatus,
 } from '../systems/procedural_anomalies';
-import { getActiveRouteCueHud, type RouteCueHud } from '../systems/route_cues';
+import { getActiveRouteCueHud, getObjectiveRouteHud, type ObjectiveRouteHud, type RouteCueHud } from '../systems/route_cues';
 import { getNearestSmallCaravan, type SmallCaravanHudSnapshot } from '../systems/caravans';
 import { getSeroburmalineHudFx } from '../systems/seroburmaline';
 import { ENTITY_MASK_ACTOR, ENTITY_MASK_PROJECTILE, getEntityIndex } from '../systems/entity_index';
@@ -56,6 +63,7 @@ import {
 import { getComputerOverlaySnapshot } from '../systems/computers';
 import { getGamblingOverlaySnapshot } from '../systems/gambling';
 import { findInteractionTarget } from '../systems/interactions';
+import { npcHasQuestMarker } from '../systems/quests';
 import { getNetHackOverlaySnapshot } from '../systems/net_hack';
 import { getMapEditorSnapshot, isMapEditorOpen } from '../systems/map_editor';
 import { isEmergencyPanelMenuOpen } from '../systems/emergency_panels';
@@ -64,7 +72,10 @@ import {
   drawNeuroPanel, drawGlitchLine, drawStaticNoise, drawVeretarVeil, drawRouteCueWave, drawMaronaryProofNoise, drawSmogVeil,
   drawSeroburmalineNoLookFx, drawSignalRows,
 } from './hud_fx';
-import { fitText as fitUiText, setUiTextTime } from './ui_text';
+import { fitTextStable as fitUiText, setUiTextTime, wrapTextLines } from './ui_text';
+import { allocateHudSlot, createHudSlots, getMobileHudSafeContext, type UiRect } from './ui_layout';
+import { uiElementEnabled } from '../systems/ui_orchestrator';
+import { getLocalizationLanguage } from '../systems/localization';
 
 const BAR_W = 50, BAR_H = 4;
 const NEEDS_PANEL_H = 20;
@@ -91,6 +102,7 @@ const ZONE_FACTION_NAMES: Record<ZoneFaction, string> = {
   [ZoneFaction.WILD]: 'Дикие',
 };
 const MSG_MAX = 5;
+const MSG_SCAN_MAX = 32;
 
 interface VoidReturnPortalHudState {
   active?: boolean;
@@ -117,7 +129,7 @@ function voidReturnVictoryLine(state: GameState): string {
 
 function drawVoidReturnPortalHint(
   ctx: CanvasRenderingContext2D,
-  w: number,
+  rect: UiRect,
   sx: number,
   sy: number,
   time: number,
@@ -141,19 +153,19 @@ function drawVoidReturnPortalHint(
       : portal.voidSpikeCarried
         ? 'шип унесён'
         : 'встаньте в центр для выхода';
-  const panelW = Math.min(w - 12 * sx, 196 * sx);
+  const panelW = Math.min(rect.w, 196 * sx);
   const panelH = 28 * sy;
-  const x = (w - panelW) * 0.5;
-  const y = 42 * sy;
+  const x = rect.x + (rect.w - panelW) * 0.5;
+  const y = rect.y;
 
   ctx.save();
   drawNeuroPanel(ctx, x, y, panelW, panelH, time, 988);
   ctx.textAlign = 'center';
   ctx.shadowColor = '#0f8';
   ctx.shadowBlur = 7;
-  drawGlitchText(ctx, 'ВЫХОД ДОМОЙ', w * 0.5, y + 4 * sy, time * 1.7, 989, '#0f8', 9 * sy);
+  drawGlitchText(ctx, 'ВЫХОД ДОМОЙ', x + panelW * 0.5, y + 4 * sy, time * 1.7, 989, '#0f8', 9 * sy);
   ctx.shadowBlur = 0;
-  drawGlitchText(ctx, fitHudText(ctx, `центр ${dist}м / ${consequence}`, panelW - 12 * sx), w * 0.5, y + 17 * sy, time, 990, '#cfe', 7 * sy);
+  drawGlitchText(ctx, fitHudText(ctx, `центр ${dist}м / ${consequence}`, panelW - 12 * sx), x + panelW * 0.5, y + 17 * sy, time, 990, '#cfe', 7 * sy);
   ctx.textAlign = 'left';
   ctx.restore();
 }
@@ -166,20 +178,14 @@ function drawSamosborPrewarning(
   sy: number,
   time: number,
   warning: SamosborWarningSnapshot,
+  y: number,
+  compact = false,
 ): void {
   const panelW = Math.min(w - 12 * sx, 218 * sx);
-  const panelH = 58 * sy;
+  const panelH = (compact ? 24 : 64) * sy;
   const x = (w - panelW) * 0.5;
-  const y = 6 * sy;
   const title = `${samosborHudTitle(warning.variantId, warning.variantName)}: ${warning.secondsLeft}s`;
   const zone = warning.zoneId >= 0 ? `Зона ${warning.zoneId + 1}` : 'Локальная зона';
-  const action = warning.variantId === 'istotit'
-    ? (warning.shelterRoomIds.length > 0 ? 'Укрытие на карте. Мест мало.' : 'К укрытию. Не отвечайте голосам.')
-    : warning.variantId === 'maronary'
-    ? (warning.wrongDoorX !== undefined ? 'Повтор двери отмечен. Не смотрите в источник.' : 'Не смотрите в зелёный источник.')
-    : warning.variantId === 'veretar'
-    ? 'Закройте белую щель или выйдите из зоны.'
-    : 'К гермодвери или выйдите из зоны.';
 
   ctx.save();
   ctx.fillStyle = warning.variantId === 'veretar' ? 'rgba(31,31,28,0.84)' : 'rgba(18,6,24,0.82)';
@@ -213,8 +219,47 @@ function drawSamosborPrewarning(
   drawGlitchText(ctx, title, w * 0.5, y + 4 * sy, time * 2, 730, warning.tint, 10 * sy);
   ctx.shadowBlur = 0;
   drawGlitchText(ctx, `${warning.floorName} / ${zone}`, w * 0.5, y + 16 * sy, time, 731, '#ffd36a', 7 * sy);
-  drawGlitchText(ctx, action, w * 0.5, y + 25 * sy, time, 732, '#ddd', 7 * sy);
-  drawSignalRows(ctx, x + 6 * sx, y + 32 * sy, panelW - 12 * sx, 20 * sy, time, warning.tint, warning.signals.channelLines, 5.5 * sy);
+  if (!compact) {
+    drawGlitchText(ctx, fitHudText(ctx, warning.actionLine, panelW - 12 * sx), w * 0.5, y + 25 * sy, time, 732, '#fff', 7 * sy);
+    drawGlitchText(ctx, fitHudText(ctx, warning.shelterHintLine, panelW - 12 * sx), w * 0.5, y + 34 * sy, time, 733, '#ffd36a', 6 * sy);
+    drawSignalRows(ctx, x + 6 * sx, y + 42 * sy, panelW - 12 * sx, 16 * sy, time, warning.tint, warning.signals.channelLines, 5.5 * sy);
+  }
+  ctx.textAlign = 'left';
+  ctx.restore();
+}
+
+function drawSamosborActiveInstruction(
+  ctx: CanvasRenderingContext2D,
+  w: number,
+  sx: number,
+  sy: number,
+  time: number,
+  active: SamosborActiveInstructionSnapshot,
+  y: number,
+  compact = false,
+): void {
+  const panelW = Math.min(w - 12 * sx, 228 * sx);
+  const panelH = (compact ? 24 : 36) * sy;
+  const x = (w - panelW) * 0.5;
+  const title = `${samosborHudTitle(active.variantId, active.variantName)}: ${active.secondsLeft}s`;
+  const zone = active.zoneId >= 0 ? `Зона ${active.zoneId + 1}` : 'локально';
+  const sj = textJitter(time * 3, 666);
+
+  ctx.save();
+  ctx.fillStyle = active.variantId === 'veretar' ? 'rgba(25,25,22,0.86)' : 'rgba(18,4,18,0.84)';
+  ctx.fillRect(x, y, panelW, panelH);
+  ctx.strokeStyle = active.tint;
+  ctx.lineWidth = 1;
+  ctx.strokeRect(x + 0.5, y + 0.5, panelW - 1, panelH - 1);
+  ctx.textAlign = 'center';
+  ctx.shadowColor = active.tint;
+  ctx.shadowBlur = 9;
+  drawGlitchText(ctx, fitHudText(ctx, title, panelW - 12 * sx), w * 0.5 + sj.dx, y + 5 * sy + sj.dy, time * 2, 740, active.tint, 10 * sy);
+  ctx.shadowBlur = 0;
+  drawGlitchText(ctx, fitHudText(ctx, `${zone}: ${active.actionLine}`, panelW - 12 * sx), w * 0.5, y + 18 * sy, time, 741, '#fff', 7 * sy);
+  if (!compact) {
+    drawGlitchText(ctx, fitHudText(ctx, active.shelterHintLine, panelW - 12 * sx), w * 0.5, y + 27 * sy, time, 742, '#ffd36a', 6 * sy);
+  }
   ctx.textAlign = 'left';
   ctx.restore();
 }
@@ -262,16 +307,16 @@ function drawLiftArachnaWarning(
 
 function drawSmogIndicator(
   ctx: CanvasRenderingContext2D,
-  w: number,
+  rect: UiRect,
   sx: number,
   sy: number,
   time: number,
   status: ProceduralSmogStatus,
 ): void {
-  const panelW = 154 * sx;
+  const panelW = Math.min(rect.w, 154 * sx);
   const panelH = 30 * sy;
-  const x = w - panelW - 6 * sx;
-  const y = 50 * sy;
+  const x = rect.x + rect.w - panelW;
+  const y = rect.y;
   const title = status.handled
     ? 'СМОГ: ИСТОЧНИК ЗАКРЫТ'
     : status.sourceDistance <= 7
@@ -286,14 +331,18 @@ function drawSmogIndicator(
   ctx.lineWidth = 1;
   ctx.strokeRect(x + 0.5, y + 0.5, panelW - 1, panelH - 1);
   drawStaticNoise(ctx, x, y, panelW, panelH, time, status.handled ? 0.008 : 0.018);
-  drawGlitchText(ctx, title, x + 6 * sx, y + 5 * sy, time, 941, status.handled ? '#8cf' : '#d8b56a', 8 * sy);
-  drawGlitchText(ctx, fitHudText(ctx, action, panelW - 12 * sx), x + 6 * sx, y + 17 * sy, time, 942, '#d7d0bd', 7 * sy);
+  ctx.font = `${8 * sy}px monospace`;
+  ctx.fillStyle = status.handled ? '#8cf' : '#d8b56a';
+  ctx.fillText(fitHudText(ctx, title, panelW - 12 * sx), x + 6 * sx, y + 5 * sy);
+  ctx.font = `${7 * sy}px monospace`;
+  ctx.fillStyle = '#d7d0bd';
+  ctx.fillText(fitHudText(ctx, action, panelW - 12 * sx), x + 6 * sx, y + 17 * sy);
   ctx.restore();
 }
 
 function drawRouteCueHint(
   ctx: CanvasRenderingContext2D,
-  w: number,
+  rect: UiRect,
   sx: number,
   sy: number,
   time: number,
@@ -301,10 +350,10 @@ function drawRouteCueHint(
   world: World,
   cue: RouteCueHud,
 ): void {
-  const panelW = Math.min(w - 12 * sx, 176 * sx);
+  const panelW = Math.min(rect.w, 176 * sx);
   const panelH = 35 * sy;
-  const x = w - panelW - 6 * sx;
-  const y = 6 * sy;
+  const x = rect.x + rect.w - panelW;
+  const y = rect.y;
   const dx = world.delta(player.x, cue.targetX);
   const dy = world.delta(player.y, cue.targetY);
   const dist = Math.max(0, Math.round(Math.sqrt(dx * dx + dy * dy)));
@@ -319,36 +368,86 @@ function drawRouteCueHint(
   drawNeuroPanel(ctx, x, y, panelW, panelH, time, 760);
   drawRouteCueWave(ctx, x + 6 * sx, y + 4 * sy, panelW - 12 * sx, 7 * sy, time - cue.startedAt, cue.color);
   ctx.textAlign = 'left';
-  drawGlitchText(ctx, fitHudText(ctx, cue.label, panelW - 12 * sx), x + 6 * sx, y + 12 * sy, time, 761, cue.color, 7 * sy);
-  drawGlitchText(ctx, fitHudText(ctx, `${arrow} ${cue.targetName} ${dist}м`, panelW - 12 * sx), x + 6 * sx, y + 21 * sy, time, 762, '#ddd', 7 * sy);
-  drawGlitchText(ctx, fitHudText(ctx, cue.hint, panelW - 12 * sx), x + 6 * sx, y + 29 * sy, time, 763, '#9a8', 6 * sy);
+  ctx.font = `${7 * sy}px monospace`;
+  ctx.fillStyle = cue.color;
+  ctx.fillText(fitHudText(ctx, cue.label, panelW - 12 * sx), x + 6 * sx, y + 12 * sy);
+  ctx.fillStyle = '#ddd';
+  ctx.fillText(fitHudText(ctx, `${arrow} ${cue.targetName} ${dist}м`, panelW - 12 * sx), x + 6 * sx, y + 21 * sy);
+  ctx.font = `${6 * sy}px monospace`;
+  ctx.fillStyle = '#9a8';
+  ctx.fillText(fitHudText(ctx, cue.hint, panelW - 12 * sx), x + 6 * sx, y + 29 * sy);
+  ctx.restore();
+}
+
+function drawObjectiveRouteHint(
+  ctx: CanvasRenderingContext2D,
+  rect: UiRect,
+  sx: number,
+  sy: number,
+  time: number,
+  objective: ObjectiveRouteHud,
+): void {
+  const panelW = Math.min(rect.w, 188 * sx);
+  const panelH = 46 * sy;
+  const x = rect.x + rect.w - panelW;
+  const y = rect.y;
+
+  ctx.save();
+  drawNeuroPanel(ctx, x, y, panelW, panelH, time, 784);
+  ctx.textAlign = 'left';
+  ctx.font = `${8 * sy}px monospace`;
+  ctx.fillStyle = objective.color;
+  ctx.fillText(fitHudText(ctx, objective.title, panelW - 12 * sx), x + 6 * sx, y + 5 * sy);
+  ctx.font = `${7 * sy}px monospace`;
+  ctx.fillStyle = '#ddd';
+  ctx.fillText(fitHudText(ctx, objective.target, panelW - 12 * sx), x + 6 * sx, y + 16 * sy);
+  ctx.fillStyle = '#9cf';
+  ctx.fillText(fitHudText(ctx, objective.lift, panelW - 12 * sx), x + 6 * sx, y + 27 * sy);
+  ctx.font = `${6 * sy}px monospace`;
+  ctx.fillStyle = '#9a8';
+  ctx.fillText(fitHudText(ctx, `${objective.risk} / ${objective.returnPath}`, panelW - 12 * sx), x + 6 * sx, y + 37 * sy);
   ctx.restore();
 }
 
 function drawSmallCaravanHint(
   ctx: CanvasRenderingContext2D,
-  w: number,
+  rect: UiRect,
   sx: number,
   sy: number,
   time: number,
   caravan: SmallCaravanHudSnapshot,
-  yOffset: number,
 ): void {
-  const panelW = Math.min(w - 12 * sx, 176 * sx);
+  const panelW = Math.min(rect.w, 176 * sx);
   const panelH = 29 * sy;
-  const x = w - panelW - 6 * sx;
-  const y = 6 * sy + yOffset;
+  const x = rect.x + rect.w - panelW;
+  const y = rect.y;
   ctx.save();
   drawNeuroPanel(ctx, x, y, panelW, panelH, time, 815);
   ctx.textAlign = 'left';
-  drawGlitchText(ctx, fitHudText(ctx, `КАРАВАН ${caravan.statusText}`, panelW - 12 * sx), x + 6 * sx, y + 5 * sy, time, 816, caravan.color, 8 * sy);
-  drawGlitchText(ctx, fitHudText(ctx, `${caravan.name} ${caravan.dist}м`, panelW - 12 * sx), x + 6 * sx, y + 15 * sy, time, 817, '#ddd', 7 * sy);
-  drawGlitchText(ctx, fitHudText(ctx, caravan.detail, panelW - 12 * sx), x + 6 * sx, y + 23 * sy, time, 818, '#9a8', 6 * sy);
+  ctx.font = `${8 * sy}px monospace`;
+  ctx.fillStyle = caravan.color;
+  ctx.fillText(fitHudText(ctx, `КАРАВАН ${caravan.statusText}`, panelW - 12 * sx), x + 6 * sx, y + 5 * sy);
+  ctx.font = `${7 * sy}px monospace`;
+  ctx.fillStyle = '#ddd';
+  ctx.fillText(fitHudText(ctx, `${caravan.name} ${caravan.dist}м`, panelW - 12 * sx), x + 6 * sx, y + 15 * sy);
+  ctx.font = `${6 * sy}px monospace`;
+  ctx.fillStyle = '#9a8';
+  ctx.fillText(fitHudText(ctx, caravan.detail, panelW - 12 * sx), x + 6 * sx, y + 23 * sy);
   ctx.restore();
 }
 
 function fitHudText(ctx: CanvasRenderingContext2D, text: string, maxW: number): string {
   return fitUiText(ctx, text, maxW);
+}
+
+function mobileHudControlsOn(): boolean {
+  return getMobileHudSafeContext().enabled;
+}
+
+function interactionPromptHint(): string {
+  return mobileHudControlsOn()
+    ? (getLocalizationLanguage() === 'en' ? '[ACT]' : '[ДЕЙСТ]')
+    : controlHint('interact');
 }
 
 function samosborHudTitle(variantId: string | undefined, variantName?: string): string {
@@ -479,13 +578,18 @@ interface CombatTargetHud {
   name: string;
   dist: number;
   hpPct: number;
-  danger: boolean;
+  questMarker: boolean;
+  screenX: number;
+  headY: number;
+  attitude: CombatTargetAttitude;
 }
 
 interface CombatSignalHud {
   text: string;
   color: string;
 }
+
+type CombatTargetAttitude = 'hostile' | 'neutral' | 'friendly';
 
 function combatTargetName(e: Entity): string {
   return e.type === EntityType.PROJECTILE ? 'Снаряд' : entityDisplayName(e);
@@ -497,28 +601,40 @@ interface AimTargetHit {
   side: number;
 }
 
+interface CombatSpriteProjection {
+  screenX: number;
+  headY: number;
+  width: number;
+  height: number;
+}
+
 function combatSpriteScale(e: Entity): number {
   return Math.max(0.35, Math.min(1.6, e.spriteScale ?? 1));
 }
 
-function crosshairInsideCombatSprite(e: Entity, forward: number, side: number, pitch: number): boolean {
-  if (forward <= 0.1) return false;
+function combatSpriteProjection(e: Entity, forward: number, side: number, pitch: number): CombatSpriteProjection | null {
+  if (forward <= 0.1) return null;
   const scale = combatSpriteScale(e);
   const spriteScreenX = Math.floor((SCR_W / 2) * (1 + side / (forward * COMBAT_TARGET_PLANE_LEN)));
   const rawH = Math.abs(Math.floor(SCR_H / forward));
   const spriteH = Math.floor(rawH * scale);
   const spriteW = spriteH;
-  if (spriteW <= 1 || spriteH <= 1) return false;
+  if (spriteW <= 1 || spriteH <= 1) return null;
 
   const halfH = Math.floor(SCR_H / 2) + Math.floor(pitch * SCR_H);
   const footY = halfH + Math.floor(rawH * 0.5) - Math.floor(rawH * (e.spriteZ ?? 0));
-  const startY = footY - spriteH;
-  const tightHalfW = Math.max(2, spriteW * 0.34);
-  const verticalInset = Math.max(1, spriteH * 0.08);
+  return { screenX: spriteScreenX, headY: footY - spriteH, width: spriteW, height: spriteH };
+}
+
+function crosshairInsideCombatSprite(e: Entity, forward: number, side: number, pitch: number): boolean {
+  const projection = combatSpriteProjection(e, forward, side, pitch);
+  if (!projection) return false;
+  const tightHalfW = Math.max(2, projection.width * 0.34);
+  const verticalInset = Math.max(1, projection.height * 0.08);
   const centerX = SCR_W * 0.5;
   const centerY = SCR_H * 0.5;
-  return centerX >= spriteScreenX - tightHalfW && centerX <= spriteScreenX + tightHalfW
-    && centerY >= startY + verticalInset && centerY <= footY - verticalInset;
+  return centerX >= projection.screenX - tightHalfW && centerX <= projection.screenX + tightHalfW
+    && centerY >= projection.headY + verticalInset && centerY <= projection.headY + projection.height - verticalInset;
 }
 
 function aimRayBlocked(world: World, px: number, py: number, dirX: number, dirY: number, maxDist: number): boolean {
@@ -563,10 +679,20 @@ function aimTargetHit(world: World, player: Entity, e: Entity, ca: number, sa: n
   return { dist: Math.sqrt(d2), forward, side };
 }
 
-function findAimTarget(world: World, player: Entity): CombatTargetHud | null {
+function combatTargetAttitude(e: Entity, player: Entity): CombatTargetAttitude {
+  if (e.type === EntityType.MONSTER) return 'hostile';
+  if (e.type === EntityType.NPC) {
+    if (isHostile(e, player)) return 'hostile';
+    return getNpcPlayerRelation(e) < 25 ? 'neutral' : 'friendly';
+  }
+  return 'neutral';
+}
+
+function findAimTarget(world: World, player: Entity, state: GameState): CombatTargetHud | null {
   const ca = Math.cos(player.angle);
   const sa = Math.sin(player.angle);
   let best: Entity | null = null;
+  let bestHit: AimTargetHit | null = null;
   let bestScore = Infinity;
   let bestDist = 0;
   let checked = 0;
@@ -589,6 +715,7 @@ function findAimTarget(world: World, player: Entity): CombatTargetHud | null {
       const score = hit.forward + Math.abs(hit.side) * 0.4;
       if (score < bestScore) {
         best = e;
+        bestHit = hit;
         bestScore = score;
         bestDist = hit.dist;
       }
@@ -596,12 +723,16 @@ function findAimTarget(world: World, player: Entity): CombatTargetHud | null {
     if (checked >= COMBAT_TARGET_SCAN_CAP) break;
   }
 
-  if (!best) return null;
+  if (!best || !bestHit) return null;
+  const projection = combatSpriteProjection(best, bestHit.forward, bestHit.side, player.pitch);
   return {
     name: combatTargetName(best),
     dist: Math.max(1, Math.round(bestDist)),
     hpPct: toPercent(best.hp ?? 0, best.maxHp ?? 100),
-    danger: best.type === EntityType.MONSTER,
+    questMarker: best.type === EntityType.NPC && npcHasQuestMarker(best, state),
+    screenX: projection?.screenX ?? SCR_W * 0.5,
+    headY: projection?.headY ?? SCR_H * 0.5 - 44,
+    attitude: combatTargetAttitude(best, player),
   };
 }
 
@@ -610,6 +741,8 @@ function recentCombatSignal(state: GameState, time: number): CombatSignalHud | n
     const m = state.msgs[i];
     if (time - m.time > 1.15) continue;
     const text = m.text;
+    if (text.startsWith('Выстрел')) return { text: 'ВЫСТРЕЛ', color: '#8cf' };
+    if (text.includes('мимо')) return { text: text.toUpperCase(), color: '#fc4' };
     if (text.startsWith('Удар!')) return { text: text.replace(/^Удар!\s*/, 'ПОПАДАНИЕ '), color: '#fc4' };
     if (text.includes('повержен') || text.includes('повержена')) return { text: 'ЦЕЛЬ ПОВЕРЖЕНА', color: '#4f4' };
     if (text.startsWith('Взрыв!') || text.startsWith('БФГ!')) return { text: text.toUpperCase(), color: text.startsWith('БФГ!') ? '#4f4' : '#fa0' };
@@ -619,6 +752,16 @@ function recentCombatSignal(state: GameState, time: number): CombatSignalHud | n
     if (m.color === '#f66') return { text, color: '#f66' };
   }
   return null;
+}
+
+function hudMessagePriority(m: GameState['msgs'][number], now: number): number {
+  const explicit = Number.isFinite(m.hudPriority) ? m.hudPriority! : 32;
+  const freshness = Math.max(0, 8 - (now - m.time)) * 0.75;
+  if (m.color === '#f66' || m.color === '#f44' || m.color === '#f00') return explicit + 80 + freshness;
+  if (m.color === '#f84' || m.color === '#fa0' || m.color === '#fc4') return explicit + 48 + freshness;
+  if (m.color === '#4f4' || m.color === '#0f8' || m.color === '#8ff') return explicit + 24 + freshness;
+  if (m.color === '#888' || m.color === '#aaa') return explicit - 8 + freshness;
+  return explicit + freshness;
 }
 
 function inferDeathCause(state: GameState, player: Entity, world: World): { title: string; detail: string } {
@@ -671,20 +814,49 @@ function inferDeathCause(state: GameState, player: Entity, world: World): { titl
   return { title: 'Причина смерти', detail: 'источник урона не распознан' };
 }
 
+function drawPointerLockPrompt(
+  ctx: CanvasRenderingContext2D,
+  w: number,
+  h: number,
+  sx: number,
+  sy: number,
+  time: number,
+): void {
+  const panelW = Math.min(w - 18 * sx, 226 * sx);
+  const panelH = 34 * sy;
+  const x = (w - panelW) * 0.5;
+  const y = h * 0.5 - 54 * sy;
+  ctx.save();
+  drawNeuroPanel(ctx, x, y, panelW, panelH, time, 1501);
+  ctx.strokeStyle = 'rgba(100,220,255,0.58)';
+  ctx.strokeRect(x + 0.5, y + 0.5, panelW - 1, panelH - 1);
+  ctx.textAlign = 'center';
+  ctx.shadowColor = '#6cf';
+  ctx.shadowBlur = 7;
+  ctx.font = `${8 * sy}px monospace`;
+  ctx.fillStyle = '#9df';
+  ctx.fillText(fitHudText(ctx, 'Кликните по игре: мышь будет захвачена для обзора', panelW - 14 * sx), w * 0.5, y + 6 * sy);
+  ctx.shadowBlur = 0;
+  ctx.font = `${7 * sy}px monospace`;
+  ctx.fillStyle = '#9ab';
+  ctx.fillText(fitHudText(ctx, `После захвата ЛКМ/${controlHint('attack')} стреляет. ${controlHint('gameMenu')} откроет меню.`, panelW - 14 * sx), w * 0.5, y + 20 * sy);
+  ctx.textAlign = 'left';
+  ctx.restore();
+}
+
 function drawCombatWeaponPanel(
   ctx: CanvasRenderingContext2D,
   weapon: ReturnType<typeof getWeaponReadiness>,
-  w: number,
-  barY: number,
+  bottomSlot: UiRect,
   sx: number,
   sy: number,
   time: number,
 ): { x: number; y: number; w: number } {
   const s = Math.max(1, Math.min(sx, sy));
-  const panelW = Math.min(w - 8 * s, 96 * s);
+  const panelW = Math.max(44 * s, Math.min(bottomSlot.w - 8 * s, 96 * s));
   const panelH = 25 * s;
-  const panelX = w - panelW - 4 * s;
-  const panelY = barY - panelH - 3 * s;
+  const panelX = bottomSlot.x + bottomSlot.w - panelW - 4 * s;
+  const panelY = bottomSlot.y - panelH - 3 * s;
   const statusColor = weapon.cannotFireReason ? '#f84' : weapon.lowResource ? '#fc4' : weapon.cooldown > 0.05 ? '#8cf' : '#9d9';
   drawNeuroPanel(ctx, panelX, panelY, panelW, panelH, time, 190);
   if (weapon.cannotFireReason || weapon.lowResource) {
@@ -693,12 +865,11 @@ function drawCombatWeaponPanel(
     ctx.strokeRect(panelX + 0.5, panelY + 0.5, panelW - 1, panelH - 1);
   }
 
-  const wj = textJitter(time, 200);
   const lines = combatWeaponHudLines(weapon);
   ctx.textAlign = 'left';
   ctx.font = `${6.2 * s}px monospace`;
-  ctx.fillStyle = `rgba(220,240,255,${flicker(time, 201)})`;
-  ctx.fillText(fitHudText(ctx, lines.title, panelW - 9 * s), panelX + 4.5 * s + wj.dx, panelY + 2 * s + wj.dy);
+  ctx.fillStyle = '#dcefff';
+  ctx.fillText(fitHudText(ctx, lines.title, panelW - 9 * s), panelX + 4.5 * s, panelY + 2 * s);
 
   ctx.font = `${5.2 * s}px monospace`;
   ctx.fillStyle = '#8cf';
@@ -716,6 +887,35 @@ function drawCombatWeaponPanel(
   return { x: panelX, y: panelY, w: panelW };
 }
 
+function combatTargetPalette(attitude: CombatTargetAttitude): { bg: string; stroke: string; text: string; bar: string; glow: string } {
+  switch (attitude) {
+    case 'hostile':
+      return {
+        bg: 'rgba(28,4,5,0.78)',
+        stroke: 'rgba(255,70,58,0.9)',
+        text: '#ff9a8f',
+        bar: '#ff543f',
+        glow: '#f44',
+      };
+    case 'friendly':
+      return {
+        bg: 'rgba(4,24,14,0.76)',
+        stroke: 'rgba(70,255,145,0.82)',
+        text: '#a9ffc7',
+        bar: '#58f092',
+        glow: '#4f8',
+      };
+    default:
+      return {
+        bg: 'rgba(30,22,4,0.76)',
+        stroke: 'rgba(255,205,64,0.84)',
+        text: '#ffe084',
+        bar: '#f4c542',
+        glow: '#fc4',
+      };
+  }
+}
+
 function drawCombatSightFeedback(
   ctx: CanvasRenderingContext2D,
   target: CombatTargetHud | null,
@@ -727,23 +927,54 @@ function drawCombatSightFeedback(
   time: number,
 ): void {
   if (target) {
-    const tw = 76 * sx;
-    const th = 15 * sy;
-    const tx = cx - tw * 0.5;
-    const ty = cy - 28 * sy;
-    ctx.fillStyle = 'rgba(2,8,12,0.74)';
+    const s = Math.max(1, Math.min(sx, sy));
+    const palette = combatTargetPalette(target.attitude);
+    const label = `${target.name} ${target.dist}м`;
+    ctx.font = `${6.5 * s}px monospace`;
+    const minW = (target.questMarker ? 88 : 72) * s;
+    const maxW = Math.min(ctx.canvas.width - 8 * s, 124 * s);
+    const tw = Math.max(minW, Math.min(maxW, ctx.measureText(label).width + (target.questMarker ? 25 : 13) * s));
+    const th = 18 * s;
+    const tx = Math.max(4 * s, Math.min(ctx.canvas.width - tw - 4 * s, target.screenX * sx - tw * 0.5));
+    const ty = Math.max(4 * s, Math.min(ctx.canvas.height - th - 4 * s, target.headY * sy - 22 * s));
+    ctx.fillStyle = palette.bg;
     ctx.fillRect(tx, ty, tw, th);
-    ctx.strokeStyle = target.danger ? 'rgba(255,80,60,0.55)' : 'rgba(255,190,80,0.5)';
+    ctx.strokeStyle = palette.stroke;
     ctx.strokeRect(tx + 0.5, ty + 0.5, tw - 1, th - 1);
-    ctx.font = `${6 * sy}px monospace`;
-    ctx.fillStyle = target.danger ? '#f88' : '#fc8';
+    ctx.fillStyle = palette.text;
     ctx.textAlign = 'left';
-    ctx.fillText(fitHudText(ctx, `${target.name} ${target.dist}м`, tw - 8 * sx), tx + 4 * sx, ty + 2 * sy);
-    const hpW = (tw - 8 * sx) * Math.max(0, Math.min(1, target.hpPct / 100));
+    let textX = tx + 5 * s;
+    let textW = tw - 10 * s;
+    if (target.questMarker) {
+      const markX = tx + 5 * s;
+      const markY = ty + 2 * s;
+      const markW = 9 * s;
+      const markH = 10 * s;
+      ctx.fillStyle = 'rgba(94,58,0,0.95)';
+      ctx.fillRect(markX, markY, markW, markH);
+      ctx.strokeStyle = '#fff15a';
+      ctx.strokeRect(markX + 0.5, markY + 0.5, markW - 1, markH - 1);
+      ctx.shadowColor = '#ffb000';
+      ctx.shadowBlur = 8;
+      ctx.font = `bold ${10 * s}px monospace`;
+      ctx.fillStyle = '#ffe84a';
+      ctx.fillText('!', markX + 2.2 * s, ty + 0.5 * s);
+      ctx.shadowBlur = 0;
+      ctx.font = `${6.5 * s}px monospace`;
+      ctx.fillStyle = palette.text;
+      textX = tx + 18 * s;
+      textW = tw - 23 * s;
+    }
+    ctx.shadowColor = palette.glow;
+    ctx.shadowBlur = 5;
+    ctx.fillText(fitHudText(ctx, label, textW), textX, ty + 3 * s);
+    ctx.shadowBlur = 0;
+    const hpTrackW = tw - 10 * s;
+    const hpW = hpTrackW * Math.max(0, Math.min(1, target.hpPct / 100));
     ctx.fillStyle = 'rgba(255,255,255,0.16)';
-    ctx.fillRect(tx + 4 * sx, ty + 10 * sy, tw - 8 * sx, 2 * sy);
-    ctx.fillStyle = target.hpPct < 30 ? '#f84' : '#8f8';
-    ctx.fillRect(tx + 4 * sx, ty + 10 * sy, hpW, 2 * sy);
+    ctx.fillRect(tx + 5 * s, ty + 13 * s, hpTrackW, 2 * s);
+    ctx.fillStyle = target.hpPct < 30 ? '#f84' : palette.bar;
+    ctx.fillRect(tx + 5 * s, ty + 13 * s, hpW, 2 * s);
   }
 
   if (signal) {
@@ -761,8 +992,6 @@ function drawCombatSightFeedback(
   }
 }
 
-
-
 /* ── The HUD is drawn on the 2D canvas overlaying the 3D view ── */
 export function drawHUD(
   ctx: CanvasRenderingContext2D,
@@ -772,6 +1001,7 @@ export function drawHUD(
   world: World,
   entities: Entity[],
   uiTime = state.time,
+  options: { pointerLockHint?: boolean } = {},
 ): void {
   ctx.save();
   ctx.imageSmoothingEnabled = false;
@@ -790,15 +1020,58 @@ export function drawHUD(
 
   const time = uiTime;
   setUiTextTime(time);
+  const mobileHud = getMobileHudSafeContext();
+  const slots = createHudSlots(w, h, sx, sy, {
+    mobileControls: mobileHud.enabled,
+    safeInsets: mobileHud.safeInsets,
+    bottomVitalsHeight: NEEDS_PANEL_H * sy,
+    topRightWidth: 212 * sx,
+  });
+  const showBottomTabs = uiElementEnabled('bottom_tabs');
+  const showWeaponPanel = uiElementEnabled('weapon_panel');
+  const showCrosshair = uiElementEnabled('crosshair');
+  const showInteractionPrompt = uiElementEnabled('interaction_prompt');
+  const showDamageFeedback = uiElementEnabled('damage_feedback');
+  const showHazardWarning = uiElementEnabled('hazard_warning');
+  const showMessages = uiElementEnabled('messages');
+  const showLocationPanel = uiElementEnabled('location_panel');
+  const showMinimap = uiElementEnabled('minimap');
+  const showRouteHints = uiElementEnabled('route_hints');
+  const showCaravanHints = uiElementEnabled('caravan_hints');
+  const showStatusHints = uiElementEnabled('status_hints');
+  const showAnomalyHints = uiElementEnabled('anomaly_hints');
+  const showScreenFx = uiElementEnabled('screen_fx');
+  const netSphereOpen = isNetSphereOpen();
+  const netTerminalGenOpen = isNetTerminalGenOpen();
+  const emergencyPanelOpen = isEmergencyPanelMenuOpen();
+  const mapEditorOpen = isMapEditorOpen();
+  const netTerminalGenDeniedOpen = isNetTerminalGenDeniedOpen();
+  const netTerminalBankOpen = isNetTerminalBankOpen();
+  const gambling = getGamblingOverlaySnapshot(player);
+  const computer = getComputerOverlaySnapshot(world, state);
+  const hack = getNetHackOverlaySnapshot(world, state, player);
+  const centerModalOpen = state.showInventory || state.showQuests || state.showLog ||
+    state.showFactions || state.showMenu || state.showControls || state.showUiSettings ||
+    state.showNpcMenu || state.showContainerMenu || netSphereOpen || netTerminalGenOpen ||
+    emergencyPanelOpen || mapEditorOpen || gambling.open || computer.open || hack.open ||
+    netTerminalGenDeniedOpen || netTerminalBankOpen;
+  const quietHud = centerModalOpen || state.mapMode === 2;
+  const showCompactPanels = !quietHud;
+  const screenFxVisible = showScreenFx && !quietHud;
+  const combatFxVisible = !quietHud;
+  const damageFeedbackVisible = showDamageFeedback && !quietHud;
   const smogStatus = getProceduralSmogStatus(world, player, state);
-  if (smogStatus.inside) drawSmogVeil(ctx, w, h, time, smogStatus.intensity);
+  const anomalySafetyVisible = showHazardWarning || showAnomalyHints;
+  if (showCompactPanels && anomalySafetyVisible && smogStatus.inside) drawSmogVeil(ctx, w, h, time, smogStatus.intensity);
 
   // ── Bottom status bar (neuro-interface) ─────────────────
-  const needsPanelH = NEEDS_PANEL_H * sy;
-  const barY = h - needsPanelH;
-  drawNeuroPanel(ctx, 0, barY, w, needsPanelH, time, 1);
+  const bottomVitals = slots.bottomVitals;
+  const barY = bottomVitals.y;
+  if (showCompactPanels && showBottomTabs) {
+    drawNeuroPanel(ctx, bottomVitals.x, bottomVitals.y, bottomVitals.w, bottomVitals.h, time, 1);
+  }
 
-  if (player.needs) {
+  if (showCompactPanels && showBottomTabs && player.needs) {
     const bars: [string, number, number, string][] = [
       ['ХП', player.hp ?? 100, player.maxHp ?? 100, '#e44'],
     ];
@@ -814,37 +1087,30 @@ export function drawHUD(
     if (player.rpg) {
       bars.push(['XP', player.rpg.xp, xpForLevel(player.rpg.level + 1), '#af4']);
     }
+    const barAreaW = Math.max(1, bottomVitals.w - 16 * sx);
+    const barSpacing = Math.max(26 * sx, Math.min(62 * sx, barAreaW / bars.length));
+    const barW = Math.max(18 * sx, Math.min(BAR_W * sx, barSpacing - 8 * sx));
     bars.forEach(([label, current, max, color], i) => {
-      const barSpacing = bars.length > 5 ? 44 : 62;
-      const barW = bars.length > 5 ? 36 : BAR_W;
-      const bx = 8 * sx + i * barSpacing * sx;
+      const bx = bottomVitals.x + 8 * sx + i * barSpacing;
       const by = barY + 3 * sy;
       const pct = toPercent(current, max);
       // Label with jitter
       drawGlitchText(ctx, label, bx, by, time, i * 13 + 7, '#8cc', 7 * sy);
       ctx.font = `${7 * sy}px monospace`;
       // Holo bar
-      drawHoloBar(ctx, bx, by + 9 * sy, barW * sx, BAR_H * sy, pct, color, time, i);
+      drawHoloBar(ctx, bx, by + 9 * sy, barW, BAR_H * sy, pct, color, time, i);
     });
   }
+  const needsWeaponReadiness = showCompactPanels && (showWeaponPanel || showCrosshair);
+  const combatWeapon = needsWeaponReadiness ? getWeaponReadiness(player) : null;
+  const combatTarget = showCompactPanels && showCrosshair ? findAimTarget(world, player, state) : null;
+  const combatSignal = showCompactPanels && showCrosshair ? recentCombatSignal(state, time) : null;
 
-  const netSphereOpen = isNetSphereOpen();
-  const netTerminalGenOpen = isNetTerminalGenOpen();
-  const emergencyPanelOpen = isEmergencyPanelMenuOpen();
-  const mapEditorOpen = isMapEditorOpen();
-  const showCompactPanels = state.mapMode !== 2 &&
-    !state.showInventory && !state.showQuests && !state.showLog &&
-    !state.showFactions && !state.showMenu && !state.showControls && !state.showNpcMenu && !state.showContainerMenu &&
-    !netSphereOpen && !netTerminalGenOpen && !emergencyPanelOpen && !mapEditorOpen;
-  const combatWeapon = showCompactPanels ? getWeaponReadiness(player) : null;
-  const combatTarget = showCompactPanels ? findAimTarget(world, player) : null;
-  const combatSignal = showCompactPanels ? recentCombatSignal(state, time) : null;
-
-  const zhelemishLine = showCompactPanels ? zhelemishHudLine(player, time) : null;
+  const zhelemishLine = showCompactPanels && showStatusHints ? zhelemishHudLine(player, time) : null;
   if (zhelemishLine) {
-    const panelW = Math.min(180 * sx, w - 12 * sx);
+    const panelW = Math.min(180 * sx, bottomVitals.w);
     const panelH = 14 * sy;
-    const panelX = 4 * sx;
+    const panelX = bottomVitals.x + 4 * sx;
     const panelY = barY - panelH - 4 * sy;
     drawNeuroPanel(ctx, panelX, panelY, panelW, panelH, time, 185);
     ctx.font = `${7 * sy}px monospace`;
@@ -853,43 +1119,57 @@ export function drawHUD(
   }
 
   const routeCue = getActiveRouteCueHud(state.time, state.currentFloor);
-  const routeCueVisible = !!routeCue && showCompactPanels && !state.samosborActive;
-  const smallCaravan = showCompactPanels ? getNearestSmallCaravan(state, world, player) : undefined;
-  const smogIndicatorVisible = smogStatus.active && (smogStatus.inside || smogStatus.sourceFound || smogStatus.handled);
+  const routeHintsVisible = showCompactPanels && showRouteHints && !state.samosborActive;
+  const objectiveRoute = routeHintsVisible ? getObjectiveRouteHud(state, world, player) : null;
+  const routeCueVisible = !!routeCue && routeHintsVisible;
+  const smallCaravan = showCompactPanels && showCaravanHints ? getNearestSmallCaravan(state, world, player) : undefined;
+  const smogIndicatorVisible = showCompactPanels && anomalySafetyVisible && smogStatus.active && (smogStatus.inside || smogStatus.sourceFound || smogStatus.handled);
 
+  if (showCompactPanels && state.mapMode === 1 && showMinimap) {
+    const mapRect = allocateHudSlot(slots.topRightNavigation, 80 * sy, 80 * sx, 'right');
+    drawMinimap(ctx, world, entities, player, sx, sy, state.quests, currentFloorInstanceLabel(state), state.currentFloor, state, time, mapRect);
+  }
+  if (objectiveRoute) {
+    const rect = allocateHudSlot(slots.topRightNavigation, 46 * sy, 188 * sx, 'right');
+    drawObjectiveRouteHint(ctx, rect, sx, sy, time, objectiveRoute);
+  }
+  if (routeCueVisible) {
+    const rect = allocateHudSlot(slots.topRightNavigation, 35 * sy, 176 * sx, 'right');
+    drawRouteCueHint(ctx, rect, sx, sy, time, player, world, routeCue);
+  }
+  if (smallCaravan) {
+    const rect = allocateHudSlot(slots.topRightNavigation, 29 * sy, 176 * sx, 'right');
+    drawSmallCaravanHint(ctx, rect, sx, sy, time, smallCaravan);
+  }
+  if (smogIndicatorVisible) {
+    const rect = allocateHudSlot(slots.topRightNavigation, 30 * sy, 154 * sx, 'right');
+    drawSmogIndicator(ctx, rect, sx, sy, time, smogStatus);
+  }
   // Weapon state — compact bottom-right panel, hidden under fullscreen overlays.
-  if (showCompactPanels) {
-    const weaponPanel = drawCombatWeaponPanel(ctx, combatWeapon!, w, barY, sx, sy, time);
+  if (showCompactPanels && showWeaponPanel && combatWeapon) {
+    const weaponPanel = drawCombatWeaponPanel(ctx, combatWeapon, bottomVitals, sx, sy, time);
 
     if (player.tool) {
       const toolName = ITEMS[player.tool]?.name ?? player.tool;
       const toolDur = getEquippedToolDurability(player);
       const toolLabel = toolDur ? `${toolName} [${Math.max(0, Math.ceil(toolDur.cur))}/${toolDur.max}]` : toolName;
-      const tj = textJitter(time, 210);
       ctx.textAlign = 'right';
-      ctx.fillStyle = `rgba(136,200,255,${flicker(time, 211)})`;
+      ctx.fillStyle = '#8cf';
       if (weaponPanel.y > 14 * sy) {
         const s = Math.max(1, Math.min(sx, sy));
-        ctx.fillText(fitHudText(ctx, toolLabel, weaponPanel.w), weaponPanel.x + weaponPanel.w - 2 * s + tj.dx, weaponPanel.y - 8 * s + tj.dy);
+        ctx.fillText(fitHudText(ctx, toolLabel, weaponPanel.w), weaponPanel.x + weaponPanel.w - 2 * s, weaponPanel.y - 8 * s);
       }
       ctx.fillStyle = '#ccc';
     }
     ctx.textAlign = 'left';
   }
 
-  if (routeCueVisible) {
-    drawRouteCueHint(ctx, w, sx, sy, time, player, world, routeCue);
-  }
-  if (smallCaravan) {
-    const yOffset = smogIndicatorVisible ? 78 * sy : routeCueVisible ? 39 * sy : 0;
-    drawSmallCaravanHint(ctx, w, sx, sy, time, smallCaravan, yOffset);
-  }
-  if (showCompactPanels) {
-    drawVoidReturnPortalHint(ctx, w, sx, sy, time, player, state, world);
+  if (showCompactPanels && showRouteHints) {
+    drawVoidReturnPortalHint(ctx, slots.centerInteraction, sx, sy, time, player, state, world);
   }
 
   // Universal [E] interaction prompt (color changes per target object)
-  if (!emergencyPanelOpen && !state.showControls) {
+  if (showInteractionPrompt && showCompactPanels && !emergencyPanelOpen && !state.showControls && !state.showUiSettings) {
     const lookX = player.x + Math.cos(player.angle) * 1.5;
     const lookY = player.y + Math.sin(player.angle) * 1.5;
     const interaction = findInteractionTarget({
@@ -900,6 +1180,7 @@ export function drawHUD(
       nextEntityId: { v: 0 },
       lookX,
       lookY,
+      routeHintsVisible,
     });
     if (interaction) {
       const targetId = interaction.colorSeed;
@@ -908,7 +1189,6 @@ export function drawHUD(
       const er = Math.round(100 + 80 * Math.cos(h0 * Math.PI / 180));
       const eg = Math.round(200 + 55 * Math.cos((h0 + 120) * Math.PI / 180));
       const eb = Math.round(200 + 55 * Math.cos((h0 + 240) * Math.PI / 180));
-      const ej = textJitter(time, targetId);
       const eAlpha = flicker(time, targetId + 500);
       ctx.fillStyle = `rgba(${er},${eg},${eb},${eAlpha})`;
       ctx.font = `${9 * sy}px monospace`;
@@ -916,91 +1196,101 @@ export function drawHUD(
       // Subtle glow behind
       ctx.shadowColor = `rgba(${er},${eg},${eb},0.4)`;
       ctx.shadowBlur = 6;
-      const prompt = fitHudText(ctx, `${controlHint('interact')}${interaction.prompt}`, w - 24 * sx);
-      ctx.fillText(prompt, w / 2 + ej.dx, h / 2 + 30 * sy + ej.dy);
+      const prompt = fitHudText(ctx, `${interactionPromptHint()}${interaction.prompt}`, slots.centerInteraction.w);
+      ctx.fillText(prompt, slots.centerInteraction.x + slots.centerInteraction.w * 0.5, slots.centerInteraction.y);
       ctx.shadowBlur = 0;
       ctx.textAlign = 'left';
     }
   }
 
+  if (showCompactPanels && options.pointerLockHint && !state.gameOver) {
+    drawPointerLockPrompt(ctx, w, h, sx, sy, time);
+  }
+
   const hazardWarning = getPlayerHazardWarning(world, player);
-  if (hazardWarning && state.mapMode !== 2 && !state.showInventory && !state.showQuests && !state.showLog && !state.showControls && !netSphereOpen && !netTerminalGenOpen && !emergencyPanelOpen && !mapEditorOpen) {
-    const panelW = Math.min(w - 16 * sx, 230 * sx);
-    const panelH = 28 * sy;
-    const panelX = (w - panelW) * 0.5;
-    const panelY = h * 0.5 + 42 * sy;
-    drawNeuroPanel(ctx, panelX, panelY, panelW, panelH, time, 520);
-    ctx.textAlign = 'center';
-    ctx.shadowColor = hazardWarning.color;
-    ctx.shadowBlur = hazardWarning.trapped ? 9 : 4;
-    drawGlitchText(ctx, hazardWarning.title, w * 0.5, panelY + 4 * sy, time * 2, 521, hazardWarning.color, 10 * sy);
-    ctx.shadowBlur = 0;
+  const hazardWarningVisible = !!hazardWarning && (showHazardWarning || hazardWarning.critical);
+
+  // ── Messages ─────────────────────────────────────────────
+  if (showCompactPanels && showMessages) {
+    const now = state.time;
+    let my = slots.topLeftEvent.cursorY;
     ctx.font = `${7 * sy}px monospace`;
-    ctx.fillStyle = '#f0c8c8';
-    ctx.fillText(fitHudText(ctx, hazardWarning.detail, panelW - 12 * sx), w * 0.5, panelY + 17 * sy);
-    ctx.textAlign = 'left';
+    const msgMaxW = Math.max(48 * sx, slots.topLeftEvent.w);
+    const visibleMsgs: Array<{ msg: GameState['msgs'][number]; index: number; priority: number }> = [];
+    const scanStart = Math.max(0, state.msgs.length - MSG_SCAN_MAX);
+    for (let i = state.msgs.length - 1; i >= scanStart; i--) {
+      const m = state.msgs[i];
+      const age = now - m.time;
+      if (age > 8) continue;
+      if (m.hud === false) continue;
+      visibleMsgs.push({ msg: m, index: i, priority: hudMessagePriority(m, now) });
+    }
+    const selectedMsgs = visibleMsgs
+      .sort((a, b) => b.priority - a.priority || b.index - a.index)
+      .slice(0, MSG_MAX)
+      .sort((a, b) => b.index - a.index);
+	    for (const item of selectedMsgs) {
+	      const m = item.msg;
+	      const age = now - m.time;
+	      const _mday = m.day;
+	      const _mhh = String(m.hour).padStart(2, '0');
+	      const _mmm = String(m.minute).padStart(2, '0');
+      const _mdist = m.distanceMeters !== undefined ? ` ${Math.max(0, Math.round(m.distanceMeters))}м` : '';
+      const _stamp = `[Д${_mday} ${_mhh}:${_mmm}${_mdist}] `;
+	      const alpha = age > 6 ? 1 - (age - 6) / 2 : 1;
+	      ctx.globalAlpha = alpha;
+	      const stampW = ctx.measureText(_stamp).width;
+	      ctx.fillStyle = '#556';
+	      ctx.fillText(_stamp, slots.topLeftEvent.x, my);
+	      ctx.fillStyle = m.color;
+	      const textX = slots.topLeftEvent.x + stampW;
+	      const lineH = 9 * sy;
+	      const lines = wrapTextLines(ctx, m.text, Math.max(24 * sx, msgMaxW - stampW), 64, { stable: true });
+	      for (let li = 0; li < lines.length; li++) {
+	        ctx.fillText(lines[li], li === 0 ? textX : slots.topLeftEvent.x, my);
+	        my += lineH;
+	      }
+	    }
+    slots.topLeftEvent.cursorY = my + slots.topLeftEvent.gap;
+    ctx.globalAlpha = 1;
   }
 
-  // ── Messages (with jitter) ────────────────────────────────
-  const now = state.time;
-  let my = 4 * sy;
-  ctx.font = `${7 * sy}px monospace`;
-  const msgRightReserve = state.mapMode === 1 ? 90 * sx : 0;
-  const msgMaxW = Math.max(48 * sx, w - 8 * sx - msgRightReserve);
-  for (let i = state.msgs.length - 1; i >= Math.max(0, state.msgs.length - MSG_MAX); i--) {
-    const m = state.msgs[i];
-    const age = now - m.time;
-    if (age > 8) continue;
-    const _mday = m.day;
-    const _mhh = String(m.hour).padStart(2, '0');
-    const _mmm = String(m.minute).padStart(2, '0');
-    const _stamp = `[Д${_mday} ${_mhh}:${_mmm}] `;
-    const alpha = age > 6 ? 1 - (age - 6) / 2 : 1;
-    const mj = textJitter(time, i * 17 + 300);
-    ctx.globalAlpha = alpha * flicker(time, i + 300);
-    const stampW = ctx.measureText(_stamp).width;
-    ctx.fillStyle = '#556';
-    ctx.fillText(_stamp, 4 * sx + mj.dx, my + mj.dy);
-    ctx.fillStyle = m.color;
-    ctx.fillText(fitHudText(ctx, m.text, msgMaxW - stampW), 4 * sx + stampW + mj.dx, my + mj.dy);
-    my += 9 * sy;
-  }
-  ctx.globalAlpha = 1;
-
-  const seroburmalineFx = getSeroburmalineHudFx(state);
+  const seroburmalineFx = showCompactPanels && showStatusHints ? getSeroburmalineHudFx(state) : null;
   if (seroburmalineFx) drawSeroburmalineNoLookFx(ctx, w, h, time, seroburmalineFx);
 
   // ── Crosshair (neuro-style) ──────────────────────────────
-  const cj = textJitter(time, 999);
-  const cAlpha = 0.4 + Math.sin(time * 2) * 0.08;
-  const crossRgb = combatWeapon?.cannotFireReason ? '255,95,55'
-    : combatTarget ? '255,210,80'
-    : combatWeapon && combatWeapon.cooldown > 0.05 ? '90,180,255'
-    : '0,220,200';
-  ctx.strokeStyle = `rgba(${crossRgb},${cAlpha})`;
-  ctx.lineWidth = 1;
-  const cx = w / 2 + cj.dx * 0.3, cy = h / 2 + cj.dy * 0.3;
-  ctx.beginPath();
-  ctx.moveTo(cx - 6 * sx, cy); ctx.lineTo(cx - 2 * sx, cy);
-  ctx.moveTo(cx + 2 * sx, cy); ctx.lineTo(cx + 6 * sx, cy);
-  ctx.moveTo(cx, cy - 6 * sy); ctx.lineTo(cx, cy - 2 * sy);
-  ctx.moveTo(cx, cy + 2 * sy); ctx.lineTo(cx, cy + 6 * sy);
-  ctx.stroke();
-  // Small dot center
-  ctx.fillStyle = `rgba(${crossRgb},${cAlpha * 0.6})`;
-  ctx.fillRect(cx - 0.5, cy - 0.5, 1, 1);
-  if (combatWeapon && combatWeapon.cooldownPct > 0.02) {
-    const r = 10 * Math.min(sx, sy);
-    ctx.strokeStyle = `rgba(${crossRgb},0.48)`;
-    ctx.lineWidth = Math.max(1, Math.min(sx, sy));
+  if (showCompactPanels && showCrosshair) {
+    const cj = textJitter(time, 999);
+    const cAlpha = 0.4 + Math.sin(time * 2) * 0.08;
+    const crossRgb = combatWeapon?.cannotFireReason ? '255,95,55'
+      : combatTarget ? '255,210,80'
+      : combatWeapon && combatWeapon.cooldown > 0.05 ? '90,180,255'
+      : '0,220,200';
+    ctx.strokeStyle = `rgba(${crossRgb},${cAlpha})`;
+    ctx.lineWidth = 1;
+    const cx = w / 2 + cj.dx * 0.3, cy = h / 2 + cj.dy * 0.3;
     ctx.beginPath();
-    ctx.arc(cx, cy, r, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * combatWeapon.readyPct);
+    ctx.moveTo(cx - 6 * sx, cy); ctx.lineTo(cx - 2 * sx, cy);
+    ctx.moveTo(cx + 2 * sx, cy); ctx.lineTo(cx + 6 * sx, cy);
+    ctx.moveTo(cx, cy - 6 * sy); ctx.lineTo(cx, cy - 2 * sy);
+    ctx.moveTo(cx, cy + 2 * sy); ctx.lineTo(cx, cy + 6 * sy);
     ctx.stroke();
+    // Small dot center
+    ctx.fillStyle = `rgba(${crossRgb},${cAlpha * 0.6})`;
+    ctx.fillRect(cx - 0.5, cy - 0.5, 1, 1);
+    if (combatWeapon && combatWeapon.cooldownPct > 0.02) {
+      const r = 10 * Math.min(sx, sy);
+      ctx.strokeStyle = `rgba(${crossRgb},0.48)`;
+      ctx.lineWidth = Math.max(1, Math.min(sx, sy));
+      ctx.beginPath();
+      ctx.arc(cx, cy, r, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * combatWeapon.readyPct);
+      ctx.stroke();
+    }
+    drawCombatSightFeedback(ctx, combatTarget, combatSignal, cx, cy, sx, sy, time);
   }
-  drawCombatSightFeedback(ctx, combatTarget, combatSignal, cx, cy, sx, sy, time);
 
   // ── Zone info + time + room (neuro-interface left panel) ──
-  {
+  if (showCompactPanels && showLocationPanel) {
     const pci = world.idx(Math.floor(player.x), Math.floor(player.y));
     const zid = world.zoneMap[pci];
     const zone = world.zones[zid];
@@ -1010,9 +1300,10 @@ export function drawHUD(
     const mm = String(state.clock.minute).padStart(2, '0');
     const day = Math.floor(state.clock.totalMinutes / 1440);
     const floorInstance = currentFloorInstanceLabel(state);
-    const leftInfoW = Math.max(70 * sx, Math.min(220 * sx, w - 150 * sx));
-    if (floorInstance) drawGlitchText(ctx, fitHudText(ctx, `Лифт ${floorInstance}`, leftInfoW), 4 * sx, barY - 52 * sy, time, 404, '#f4a', 8 * sy);
-    drawGlitchText(ctx, `День ${day}  ${hh}:${mm}`, 4 * sx, barY - 42 * sy, time, 400, '#8ac', 9 * sy);
+    const leftX = bottomVitals.x + 4 * sx;
+    const leftInfoW = Math.max(70 * sx, Math.min(220 * sx, bottomVitals.w - 8 * sx));
+    if (floorInstance) drawGlitchText(ctx, fitHudText(ctx, `Лифт ${floorInstance}`, leftInfoW), leftX, barY - 52 * sy, time, 404, '#f4a', 8 * sy);
+    drawGlitchText(ctx, `День ${day}  ${hh}:${mm}`, leftX, barY - 42 * sy, time, 400, '#8ac', 9 * sy);
     ctx.font = `${9 * sy}px monospace`;
 
     // Zone
@@ -1022,24 +1313,22 @@ export function drawHUD(
       const zj = textJitter(time, 410);
       ctx.fillStyle = `rgba(${zr},${zg},${zb},${flicker(time, 411)})`;
       ctx.font = `${8 * sy}px monospace`;
-      ctx.fillText(fitHudText(ctx, `■ Зона ${zid + 1}  Ур.${zone.level ?? 1}`, leftInfoW), 4 * sx + zj.dx, barY - 32 * sy + zj.dy);
+      ctx.fillText(fitHudText(ctx, `■ Зона ${zid + 1}  Ур.${zone.level ?? 1}`, leftInfoW), leftX + zj.dx, barY - 32 * sy + zj.dy);
       const fColor = zone.faction === ZoneFaction.SAMOSBOR ? '#c4f' : '#7aa';
-      drawGlitchText(ctx, fitHudText(ctx, fLabel, leftInfoW), 4 * sx, barY - 22 * sy, time, 412, fColor, 7 * sy);
+      drawGlitchText(ctx, fitHudText(ctx, fLabel, leftInfoW), leftX, barY - 22 * sy, time, 412, fColor, 7 * sy);
       ctx.font = `${7 * sy}px monospace`;
     }
 
     // Room info
     const room = world.roomAt(player.x, player.y);
     if (room) {
-      drawGlitchText(ctx, fitHudText(ctx, room.name, leftInfoW), 4 * sx, barY - 12 * sy, time, 420, '#688', 7 * sy);
+      drawGlitchText(ctx, fitHudText(ctx, room.name, leftInfoW), leftX, barY - 12 * sy, time, 420, '#688', 7 * sy);
       ctx.font = `${7 * sy}px monospace`;
     }
   }
 
   // ── Minimap (if toggled) ─────────────────────────────────
-  if (state.mapMode === 1) {
-    drawMinimap(ctx, world, entities, player, sx, sy, state.quests, currentFloorInstanceLabel(state), state.currentFloor, state, time);
-  } else if (state.mapMode === 2) {
+  if (state.mapMode === 2) {
     drawFullMap(ctx, world, entities, player, sx, sy, state.quests, currentFloorInstanceLabel(state), state.currentFloor, state, time);
   }
 
@@ -1068,6 +1357,11 @@ export function drawHUD(
     drawControlsMenu(ctx, state, msx, msy, time);
   }
 
+  // ── UI orchestrator (U) ──────────────────────────────────
+  if (state.showUiSettings) {
+    drawUiSettingsMenu(ctx, state, msx, msy, time);
+  }
+
   // ── Game menu (ESC) ──────────────────────────────────────
   if (state.showMenu) {
     drawGameMenu(ctx, state, msx, msy, time);
@@ -1090,53 +1384,70 @@ export function drawHUD(
   // ── SAMOSBOR warning (intense glitch) ──────────────────────
   const samosborWarning = getSamosborWarningSnapshot(state);
   if (samosborWarning && !state.samosborActive) {
-    drawSamosborPrewarning(ctx, w, h, sx, sy, time, samosborWarning);
-    if (samosborWarning.variantId === 'veretar') drawVeretarVeil(ctx, w, h, time, 0.45);
+    const compactCritical = centerModalOpen;
+    const rect = allocateHudSlot(
+      slots.topCenterCritical,
+      (compactCritical ? 24 : 64) * sy,
+      Math.min(w - 12 * sx, 218 * sx),
+      'center',
+    );
+    drawSamosborPrewarning(ctx, w, h, sx, sy, time, samosborWarning, rect.y, compactCritical);
+    if (screenFxVisible && samosborWarning.variantId === 'veretar') drawVeretarVeil(ctx, w, h, time, 0.45);
   }
   const liftArachnaWarning = getLiftArachnaWarningSnapshot(state);
   if (liftArachnaWarning && !state.gameOver) {
-    drawLiftArachnaWarning(ctx, w, sx, sy, time, liftArachnaWarning, (samosborWarning && !state.samosborActive ? 66 : 6) * sy);
+    const rect = allocateHudSlot(
+      slots.topCenterCritical,
+      32 * sy,
+      Math.min(w - 12 * sx, 210 * sx),
+      'center',
+    );
+    drawLiftArachnaWarning(ctx, w, sx, sy, time, liftArachnaWarning, rect.y);
+  }
+  if (hazardWarningVisible && hazardWarning && !state.gameOver && (!centerModalOpen || hazardWarning.critical)) {
+    const panelW = Math.min(w - 16 * sx, 230 * sx);
+    const panelH = 28 * sy;
+    const rect = allocateHudSlot(slots.topCenterCritical, panelH, panelW, 'center');
+    drawNeuroPanel(ctx, rect.x, rect.y, rect.w, rect.h, time, 520);
+    ctx.textAlign = 'center';
+    ctx.shadowColor = hazardWarning.color;
+    ctx.shadowBlur = hazardWarning.trapped ? 9 : 4;
+    drawGlitchText(ctx, hazardWarning.title, rect.x + rect.w * 0.5, rect.y + 4 * sy, time * 2, 521, hazardWarning.color, 10 * sy);
+    ctx.shadowBlur = 0;
+    ctx.font = `${7 * sy}px monospace`;
+    ctx.fillStyle = '#f0c8c8';
+    ctx.fillText(fitHudText(ctx, hazardWarning.detail, rect.w - 12 * sx), rect.x + rect.w * 0.5, rect.y + 17 * sy);
+    ctx.textAlign = 'left';
   }
   if (state.samosborActive) {
-    const activeVariant = getActiveSamosborVariant();
-    const activeTitle = samosborHudTitle(activeVariant?.def.id, activeVariant?.def.displayName);
-    const sj = textJitter(time * 3, 666);
-    const sAlpha = 0.5 + Math.sin(time * 8) * 0.3;
-    ctx.save();
-    ctx.shadowColor = activeVariant ? activeVariant.def.tint : 'rgba(255,0,40,0.6)';
-    ctx.shadowBlur = 12;
-    ctx.fillStyle = activeVariant ? activeVariant.def.tint : `rgba(255,40,40,${sAlpha})`;
-    ctx.font = `bold ${16 * sy}px monospace`;
-    ctx.textAlign = 'center';
-    const fittedActiveTitle = fitHudText(ctx, activeTitle, w - 16 * sx);
-    ctx.fillText(fittedActiveTitle, w / 2 + sj.dx * 3, 20 * sy + sj.dy * 2);
-    // Doubled glitch offset copy
-    ctx.fillStyle = `rgba(0,255,200,${sAlpha * 0.2})`;
-    ctx.fillText(fittedActiveTitle, w / 2 + sj.dx * 3 + 2, 20 * sy + sj.dy * 2 + 1);
-    ctx.textAlign = 'left';
-    ctx.shadowBlur = 0;
-    ctx.restore();
-    drawSamosborCrawl(ctx, w, h, sx, sy, time, activeVariant?.def.id, activeVariant?.def.tint ?? '#f44');
-    // Extra static noise during samosbor
-    drawStaticNoise(ctx, 0, 0, w, h, time, 0.04);
-    if (activeVariant?.def.id === 'maronary') drawMaronaryProofNoise(ctx, w, h, time, 0.85);
-    if (activeVariant?.def.id === 'veretar') drawVeretarVeil(ctx, w, h, time, 0.85);
+    const activeInstruction = getSamosborActiveInstructionSnapshot(state);
+    if (activeInstruction) {
+      const compactCritical = centerModalOpen;
+      const rect = allocateHudSlot(
+        slots.topCenterCritical,
+        (compactCritical ? 24 : 36) * sy,
+        Math.min(w - 12 * sx, 228 * sx),
+        'center',
+      );
+      drawSamosborActiveInstruction(ctx, w, sx, sy, time, activeInstruction, rect.y, compactCritical);
+    }
+    if (screenFxVisible && activeInstruction) {
+      drawSamosborCrawl(ctx, w, h, sx, sy, time, activeInstruction.variantId, activeInstruction.tint);
+      drawStaticNoise(ctx, 0, 0, w, h, time, 0.04);
+      if (activeInstruction.variantId === 'maronary') drawMaronaryProofNoise(ctx, w, h, time, 0.85);
+      if (activeInstruction.variantId === 'veretar') drawVeretarVeil(ctx, w, h, time, 0.85);
+    }
   }
-
-  if (smogIndicatorVisible) {
-    drawSmogIndicator(ctx, w, sx, sy, time, smogStatus);
-  }
-
   // ── Damage vignette (procedural blood edges) ──────────────
-  if (state.dmgFlash > 0) {
+  if (damageFeedbackVisible && state.dmgFlash > 0) {
     drawDamageVignette(ctx, w, h, state.dmgFlash, state.dmgSeed, time);
   }
 
   // ── PSI Beam visual (Kamehameha) ──────────────────────────
-  if (state.beamFx > 0) {
+  if (combatFxVisible && state.beamFx > 0) {
     drawBeamFx(ctx, w, h, state.beamFx, state.beamAngle, state.beamLen, player.angle, time);
   }
-  if (state.uvBeamFx > 0) {
+  if (combatFxVisible && state.uvBeamFx > 0) {
     drawUvSpotlightFx(ctx, w, h, state.uvBeamFx, state.uvBeamLen, time);
   }
 
@@ -1213,22 +1524,19 @@ export function drawHUD(
     drawNetSphereMenu(ctx, msx, msy, time, getNetSphereSnapshot());
   }
 
-  const gambling = getGamblingOverlaySnapshot(player);
   if (gambling.open) {
     drawGamblingOverlay(ctx, msx, msy, time, gambling);
   }
 
-  const computer = getComputerOverlaySnapshot(world, state);
   if (computer.open) {
     drawComputerOverlay(ctx, msx, msy, time, computer);
   }
 
-  const hack = getNetHackOverlaySnapshot(world, state, player);
   if (hack.open) {
     drawNetHackOverlay(ctx, msx, msy, time, hack);
   }
 
-  if (isNetTerminalGenDeniedOpen()) {
+  if (netTerminalGenDeniedOpen) {
     const terminal = getNetTerminalGenRuntimeSnapshot();
     drawNetTerminalGenDenied(ctx, msx, msy, time, {
       status: 'locked',
@@ -1241,7 +1549,7 @@ export function drawHUD(
     });
   }
 
-  if (isNetTerminalBankOpen()) {
+  if (netTerminalBankOpen) {
     drawNetTerminalBank(ctx, msx, msy, time, getNetTerminalBankSnapshot(state, player));
   }
 
@@ -1253,7 +1561,7 @@ export function drawHUD(
   }
 
   // ── Sleep overlay (Z held) ───────────────────────────────
-  if (state.sleeping) {
+  if (damageFeedbackVisible && state.sleeping) {
     ctx.fillStyle = 'rgba(0,0,0,0.7)';
     ctx.fillRect(0, 0, w, h);
     ctx.fillStyle = '#a8f';
@@ -1268,7 +1576,7 @@ export function drawHUD(
   }
 
   // ── Global neuro-interface overlay (always-on) ───────────
-  drawGlitchLine(ctx, w, h, time);
+  if (screenFxVisible) drawGlitchLine(ctx, w, h, time);
 
   ctx.restore();
 }

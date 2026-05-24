@@ -11,7 +11,7 @@ import { ITEMS } from '../data/catalog';
 import { isSilverSlimeItem, SILVER_SLIME_SEALED_ID } from '../data/items';
 
 import { addFactionRelMutual, getFactionRel } from '../data/relations';
-import { PLOT_CHAIN, PLOT_NPCS, SIDE_QUESTS, isPlotNpc, sideQuestPrereqsMet } from '../data/plot';
+import { PLOT_CHAIN, PLOT_NPCS, SIDE_QUESTS, hasAvailableQuest, isPlotNpc, sideQuestPrereqsMet, type PlotStep } from '../data/plot';
 import {
   CONTRACTS,
   GOVNYAK_COURIER_PACKAGE_ITEM,
@@ -54,8 +54,20 @@ import {
   completedQuestGiverRelationDelta,
   getNpcPlayerRelation,
 } from './npc_relations';
+import { pushNpcLogMessage } from './ai/barks';
 
 const BASE_QUEST_GIVER_CHANCE = 0.35;
+
+export interface CurrentObjective {
+  line: string;
+  detail?: string;
+  source: 'plot_offer' | 'quest';
+  questId?: number;
+  plotStepIndex?: number;
+  targetEntityId?: number;
+  targetPlotNpcId?: string;
+  color: string;
+}
 
 interface AuthoredQuestMeta {
   targetFloor?: FloorLevel;
@@ -171,6 +183,149 @@ function questGiverChance(npc: Entity): number {
   return Math.max(0.20, Math.min(0.55, chance));
 }
 
+function plotStepPreviousStepsDone(index: number, quests: readonly Quest[]): boolean {
+  for (let i = 0; i < index; i++) {
+    if (!quests.some(q => q.plotStepIndex === i && q.done)) return false;
+  }
+  return true;
+}
+
+export function nextAvailablePlotStep(quests: readonly Quest[]): { index: number; step: PlotStep } | undefined {
+  for (let i = 0; i < PLOT_CHAIN.length; i++) {
+    const step = PLOT_CHAIN[i];
+    if (quests.some(q => q.plotStepIndex === i)) continue;
+    if (!plotStepPreviousStepsDone(i, quests)) continue;
+    return { index: i, step };
+  }
+  return undefined;
+}
+
+export function nextAvailablePlotStepForNpc(npc: Entity, state: Pick<GameState, 'quests'>): { index: number; step: PlotStep } | undefined {
+  if (!npc.plotNpcId) return undefined;
+  const available = nextAvailablePlotStep(state.quests);
+  return available?.step.giverNpcId === npc.plotNpcId ? available : undefined;
+}
+
+export function activeTalkQuestForNpc(npc: Entity, state: Pick<GameState, 'quests'>): Quest | undefined {
+  return state.quests.find(q =>
+    !q.done &&
+    !q.failed &&
+    q.type === QuestType.TALK &&
+    (q.targetNpcId === npc.id || (npc.plotNpcId !== undefined && q.targetPlotNpcId === npc.plotNpcId))
+  );
+}
+
+function activeQuestFromNpc(npc: Entity, state: Pick<GameState, 'quests'>): Quest | undefined {
+  return state.quests.find(q => !q.done && !q.failed && q.giverId === npc.id);
+}
+
+export function npcHasImportantQuestAction(npc: Entity, state: Pick<GameState, 'quests'>): boolean {
+  if (npc.type !== EntityType.NPC || !npc.alive) return false;
+  return activeTalkQuestForNpc(npc, state) !== undefined || nextAvailablePlotStepForNpc(npc, state) !== undefined;
+}
+
+export function npcCanGiveQuestNow(npc: Entity, state: Pick<GameState, 'quests'>): boolean {
+  if (npc.type !== EntityType.NPC || !npc.alive) return false;
+  if (npc.canGiveQuest !== true) return false;
+  if (npc.plotNpcId) return hasAvailableQuest(npc.plotNpcId, state.quests);
+  return !state.quests.some(q => !q.done && q.giverId === npc.id);
+}
+
+export function npcHasQuestMarker(npc: Entity, state: Pick<GameState, 'quests'>): boolean {
+  if (npc.type !== EntityType.NPC || !npc.alive) return false;
+  return activeTalkQuestForNpc(npc, state) !== undefined || npcCanGiveQuestNow(npc, state);
+}
+
+function withObjectivePrefix(text: string): string {
+  return text.startsWith('Цель:') ? text : `Цель: ${text}`;
+}
+
+function withoutObjectivePrefix(text: string): string {
+  return text.replace(/^Цель:\s*/, '');
+}
+
+function questObjectiveLine(q: Quest): string {
+  const step = q.plotStepIndex !== undefined ? PLOT_CHAIN[q.plotStepIndex] : undefined;
+  if (step?.activeObjective) return step.activeObjective;
+  if (q.type === QuestType.TALK && q.targetNpcName) return `Цель: поговорить с ${q.targetNpcName}.`;
+  return withObjectivePrefix(q.desc);
+}
+
+function objectiveTargetEntity(q: Quest, entities: readonly Entity[]): Entity | undefined {
+  if (q.targetNpcId !== undefined) {
+    const byLiveId = entities.find(e => e.id === q.targetNpcId && e.alive);
+    if (byLiveId) return byLiveId;
+  }
+  if (q.targetPlotNpcId) return entities.find(e => e.plotNpcId === q.targetPlotNpcId && e.alive);
+  return undefined;
+}
+
+function activeObjectiveQuest(state: Pick<GameState, 'quests'>): Quest | undefined {
+  const active = state.quests.filter(q => !q.done && !q.failed);
+  return active.find(q => q.plotStepIndex !== undefined) ?? active[0];
+}
+
+export function getCurrentObjective(state: Pick<GameState, 'quests'>, entities: readonly Entity[] = []): CurrentObjective | null {
+  const q = activeObjectiveQuest(state);
+  if (q) {
+    const step = q.plotStepIndex !== undefined ? PLOT_CHAIN[q.plotStepIndex] : undefined;
+    const target = objectiveTargetEntity(q, entities);
+    return {
+      line: questObjectiveLine(q),
+      detail: step?.activeObjective ? q.desc : undefined,
+      source: 'quest',
+      questId: q.id,
+      plotStepIndex: q.plotStepIndex,
+      targetEntityId: target?.id,
+      targetPlotNpcId: q.targetPlotNpcId,
+      color: q.plotStepIndex !== undefined ? '#6cf' : q.sideQuestId ? '#f7a7d8' : '#ffd35f',
+    };
+  }
+
+  const available = nextAvailablePlotStep(state.quests);
+  if (!available) return null;
+  const giverDef = PLOT_NPCS[available.step.giverNpcId];
+  const target = entities.find(e => e.plotNpcId === available.step.giverNpcId && e.alive);
+  return {
+    line: available.step.offerObjective ?? `Цель: поговорить с ${giverDef?.name ?? available.step.giverNpcId}.`,
+    detail: available.step.offerObjective ? undefined : available.step.desc,
+    source: 'plot_offer',
+    plotStepIndex: available.index,
+    targetEntityId: target?.id,
+    targetPlotNpcId: available.step.giverNpcId,
+    color: '#9df',
+  };
+}
+
+export function npcQuestActionHint(npc: Entity, state: Pick<GameState, 'quests'>): string | undefined {
+  const completing = activeTalkQuestForNpc(npc, state);
+  if (completing) return `Задание: ${withoutObjectivePrefix(questObjectiveLine(completing))}`;
+
+  const available = nextAvailablePlotStepForNpc(npc, state);
+  if (available) return `Задание: ${available.step.desc}`;
+
+  const active = activeQuestFromNpc(npc, state);
+  if (active) return `Задание в журнале: ${withoutObjectivePrefix(questObjectiveLine(active))}`;
+
+  return undefined;
+}
+
+function pushNpcQuestMessage(
+  npc: Entity,
+  player: Entity,
+  world: World,
+  state: GameState,
+  msgs: Msg[],
+  text: string,
+  color: string,
+): boolean {
+  return pushNpcLogMessage(npc, msgs, state.time, text, color, {
+    listener: player,
+    radiusMeters: state.npcLogRadiusMeters,
+    dist2: (x1, y1, x2, y2) => world.dist2(x1, y1, x2, y2),
+  });
+}
+
 /* ── Generate a quest from an NPC (called on interact) ────────── */
 export function offerQuest(
   npc: Entity, player: Entity, world: World, entities: Entity[],
@@ -178,12 +333,12 @@ export function offerQuest(
 ): void {
   if (!npc.alive || npc.type !== EntityType.NPC) return;
   if (!npc.canGiveQuest) {
-    msgs.push(msg(`${npc.name}: «Мне нечего тебе поручить.»`, state.time, '#888'));
+    pushNpcQuestMessage(npc, player, world, state, msgs, `${npc.name}: «Мне нечего тебе поручить.»`, '#888');
     return;
   }
   // Don't give quest if already has one active from this NPC
   if (state.quests.some(q => q.giverId === npc.id && !q.done)) {
-    msgs.push(msg(`${npc.name}: «Ещё не выполнил прошлое задание?»`, state.time, '#aaa'));
+    pushNpcQuestMessage(npc, player, world, state, msgs, `${npc.name}: «Ещё не выполнил прошлое задание?»`, '#aaa');
     return;
   }
   // Plot NPCs always give quests — they are not in the relation matrix
@@ -192,20 +347,20 @@ export function offerQuest(
     const rel = getFactionRel(Faction.PLAYER, npcFaction);
     const personalRel = getNpcPlayerRelation(npc);
     if (rel < -10 || personalRel < -10) {
-      msgs.push(msg(`${npc.name} не хочет с вами разговаривать.`, state.time, '#a44'));
+      pushNpcQuestMessage(npc, player, world, state, msgs, `${npc.name} не хочет с вами разговаривать.`, '#a44');
       return;
     }
   }
 
   const quest = generateQuest(npc, player, world, entities, state);
   if (!quest) {
-    msgs.push(msg(`${npc.name}: «Пока ничего не нужно.»`, state.time, '#888'));
+    pushNpcQuestMessage(npc, player, world, state, msgs, `${npc.name}: «Пока ничего не нужно.»`, '#888');
     return;
   }
 
   state.quests.push(quest);
   npc.questId = quest.id;
-  msgs.push(msg(`Новое поручение: ${quest.desc}${deadlineMessageSuffix(quest, state.clock.totalMinutes)}`, state.time, '#4af'));
+  pushNpcQuestMessage(npc, player, world, state, msgs, `Новое поручение: ${quest.desc}${deadlineMessageSuffix(quest, state.clock.totalMinutes)}`, '#4af');
   const contractId = quest.contractId;
   const contractDef = contractId ? CONTRACTS.find(c => c.id === contractId) : undefined;
   publishEvent(state, {
@@ -504,7 +659,7 @@ function failQuest(
 
 /* ── Check if talking to target NPC completes a TALK quest ────── */
 export function checkTalkQuest(
-  targetNpc: Entity, player: Entity, entities: Entity[],
+  targetNpc: Entity, player: Entity, world: World, entities: Entity[],
   state: GameState, msgs: Msg[],
 ): void {
   for (const q of state.quests) {
@@ -516,9 +671,9 @@ export function checkTalkQuest(
     const plotDef = targetNpc.plotNpcId ? PLOT_NPCS[targetNpc.plotNpcId] : undefined;
     const talkQuestResponse = plotDef?.talkQuestResponse;
     if (talkQuestResponse) {
-      msgs.push(msg(`${targetNpc.name}: «${pickTalkQuestResponse(talkQuestResponse)}»`, state.time, '#aaf'));
+      pushNpcQuestMessage(targetNpc, player, world, state, msgs, `${targetNpc.name}: «${pickTalkQuestResponse(talkQuestResponse)}»`, '#aaf');
     } else {
-      msgs.push(msg(`${targetNpc.name}: «Передам, спасибо.»`, state.time, '#aaf'));
+      pushNpcQuestMessage(targetNpc, player, world, state, msgs, `${targetNpc.name}: «Передам, спасибо.»`, '#aaf');
     }
     completeQuest(q, player, entities, state, msgs);
   }

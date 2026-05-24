@@ -29,7 +29,6 @@ import {
   openComputer,
   placeComputer,
 } from './computers';
-import { questTargetLiftDirection } from './contracts';
 import { getCultProcessionPrompt, tryInteractCultProcession } from './faction_events';
 import { isHostile } from './factions';
 import { getActiveFloorInstance } from './floor_instances';
@@ -75,7 +74,7 @@ import { pseudoliftPrompt, tryUsePseudolift } from './pseudolift';
 import { floorRunLiftPrompt, currentFloorRunLabel } from './procedural_floors';
 import { proceduralAnomalyInteractionTargetId, tryUseProceduralFloorAnomaly } from './procedural_anomalies';
 import { railTrainInteractionTargetId, tryUseRailTrain } from './rail_trains';
-import { isRouteCueTarget, tryUseRouteCue } from './route_cues';
+import { isRouteCueTarget, routeObjectiveLiftPromptSuffix, tryUseRouteCue } from './route_cues';
 import { tryUseSamosborVariantInteraction } from './samosbor';
 import { tryCoverSeroburmalineSource } from './seroburmaline';
 import { findSlimevikInteractionTarget, tryUseSlimevikInteraction } from './slimevik';
@@ -106,6 +105,7 @@ export interface InteractionContext {
   openContainerMenu?: (container: WorldContainer) => void;
   openMapEditor?: (world: World, player: Entity, state: GameState, terminal?: { x: number; y: number }) => void;
   playDoor?: () => void;
+  routeHintsVisible?: boolean;
 }
 
 export interface InteractionTarget {
@@ -164,12 +164,8 @@ function target(
   return { id, defId, kind, x, y, priority, prompt, colorSeed: id };
 }
 
-function activeVisitLiftHint(state: GameState, direction: LiftDirection): string {
-  for (const q of state.quests) {
-    if (q.done || q.failed) continue;
-    if (questTargetLiftDirection(q, state) === direction) return ' ЦЕЛЬ';
-  }
-  return '';
+function activeVisitLiftHint(ctx: InteractionContext, direction: LiftDirection): string {
+  return ctx.routeHintsVisible ? routeObjectiveLiftPromptSuffix(ctx.state, direction) : '';
 }
 
 function liftPrompt(ctx: InteractionContext, idx: number): string {
@@ -179,7 +175,7 @@ function liftPrompt(ctx: InteractionContext, idx: number): string {
     const route = currentFloorRunLabel(ctx.state) ?? 'плановый маршрут';
     return ` ${dir === LiftDirection.UP ? '↑' : '↓'} НОМЕРНОЙ №${activeInstance.displayNumber} риск ${activeInstance.risk}/5 -> ${route}`;
   }
-  return ` ${floorRunLiftPrompt(ctx.state, dir)}${activeVisitLiftHint(ctx.state, dir)}`;
+  return ` ${floorRunLiftPrompt(ctx.state, dir)}${activeVisitLiftHint(ctx, dir)}`;
 }
 
 function interactionSpriteScale(e: Entity): number {

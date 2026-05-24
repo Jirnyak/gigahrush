@@ -1,5 +1,11 @@
 import { type InputState } from './core/types';
 import {
+  type BooleanInputKey,
+  MOBILE_ACTIONS,
+  type MobileMenuId,
+  type MobileText,
+} from './systems/mobile_actions';
+import {
   canUseMobileFullscreen,
   enterMobileFullscreen,
   exitMobileFullscreen,
@@ -9,29 +15,9 @@ import {
 } from './fullscreen';
 import { isStandaloneDisplay } from './pwa';
 import { getLocalizationLanguage } from './systems/localization';
+import { setMobileHudSafeContext, type HudSafeInsets } from './render/ui_layout';
 
-export type MobileMenuId = 'inventory' | 'map' | 'quests' | 'log' | 'factions' | 'net' | 'menu' | 'debug';
-
-interface MobileText {
-  ru: string;
-  en: string;
-}
-
-interface MobileActionBase {
-  label: MobileText;
-  ariaLabel: MobileText;
-}
-
-interface MobileMenuAction extends MobileActionBase {
-  kind: 'menu';
-  id: MobileMenuId;
-}
-
-interface MobileInputAction extends MobileActionBase {
-  kind: 'input';
-  input: BooleanInputKey;
-  hold?: boolean;
-}
+export type { MobileMenuId } from './systems/mobile_actions';
 
 export interface MobileControlsContext {
   started: boolean;
@@ -54,35 +40,16 @@ interface MobileControlsOptions {
   onClose(): void;
 }
 
-type BooleanInputKey = {
-  [K in keyof InputState]: InputState[K] extends boolean ? K : never;
-}[keyof InputState];
-
-type MobileAction = MobileMenuAction | MobileInputAction;
-
-const MOBILE_ACTIONS: readonly MobileAction[] = [
-  { kind: 'menu', id: 'inventory', label: { ru: 'ИНВ', en: 'INV' }, ariaLabel: { ru: 'Открыть инвентарь', en: 'Open inventory' } },
-  { kind: 'menu', id: 'map', label: { ru: 'КАРТА', en: 'MAP' }, ariaLabel: { ru: 'Открыть карту', en: 'Open map' } },
-  { kind: 'menu', id: 'quests', label: { ru: 'ЗАД', en: 'QUEST' }, ariaLabel: { ru: 'Открыть задания', en: 'Open quests' } },
-  { kind: 'menu', id: 'log', label: { ru: 'ЖУРН', en: 'LOG' }, ariaLabel: { ru: 'Открыть журнал сообщений', en: 'Open message log' } },
-  { kind: 'menu', id: 'factions', label: { ru: 'ФРАК', en: 'FACT' }, ariaLabel: { ru: 'Открыть фракции', en: 'Open factions' } },
-  { kind: 'menu', id: 'net', label: { ru: 'НЕТ', en: 'NET' }, ariaLabel: { ru: 'Открыть НЕТ-СФЕРУ', en: 'Open Net Sphere' } },
-  { kind: 'menu', id: 'menu', label: { ru: 'МЕНЮ', en: 'MENU' }, ariaLabel: { ru: 'Открыть меню сохранения', en: 'Open save menu' } },
-  { kind: 'input', input: 'attack', hold: true, label: { ru: 'БОЙ', en: 'FIRE' }, ariaLabel: { ru: 'Атака', en: 'Attack' } },
-  { kind: 'input', input: 'interact', hold: true, label: { ru: 'ДЕЙСТ', en: 'ACT' }, ariaLabel: { ru: 'Взаимодействие', en: 'Interact' } },
-  { kind: 'input', input: 'use', hold: true, label: { ru: 'ИНСТР', en: 'TOOL' }, ariaLabel: { ru: 'Использовать инструмент', en: 'Use tool' } },
-  { kind: 'input', input: 'sleep', hold: true, label: { ru: 'СОН', en: 'SLEEP' }, ariaLabel: { ru: 'Спать, удерживать', en: 'Sleep, hold' } },
-  { kind: 'input', input: 'pee', hold: true, label: { ru: 'ПИС', en: 'PEE' }, ariaLabel: { ru: 'Пописать', en: 'Pee' } },
-  { kind: 'input', input: 'controls', label: { ru: 'КЛАВ', en: 'KEYS' }, ariaLabel: { ru: 'Открыть экран клавиш', en: 'Open controls screen' } },
-  { kind: 'input', input: 'drop', label: { ru: 'СБРОС', en: 'DROP' }, ariaLabel: { ru: 'Выбросить или перенести вправо', en: 'Drop or move right' } },
-  { kind: 'input', input: 'attrStr', label: { ru: 'СИЛ', en: 'STR' }, ariaLabel: { ru: 'Очко в силу', en: 'Spend point on strength' } },
-  { kind: 'input', input: 'attrAgi', label: { ru: 'ЛОВ', en: 'AGI' }, ariaLabel: { ru: 'Очко в ловкость', en: 'Spend point on agility' } },
-  { kind: 'input', input: 'attrInt', label: { ru: 'ИНТ', en: 'INT' }, ariaLabel: { ru: 'Очко в интеллект', en: 'Spend point on intellect' } },
-  { kind: 'menu', id: 'debug', label: { ru: 'ОТЛ', en: 'DBG' }, ariaLabel: { ru: 'Открыть отладочное меню', en: 'Open debug menu' } },
-];
-
 function mobileText(text: MobileText): string {
   return getLocalizationLanguage() === 'en' ? text.en : text.ru;
+}
+
+function mobileInteractLabel(): string {
+  return mobileText({ ru: 'ДЕЙСТ', en: 'ACT' });
+}
+
+function clamp(v: number, lo: number, hi: number): number {
+  return Math.max(lo, Math.min(hi, v));
 }
 
 function shouldUseTouchControls(): boolean {
@@ -91,6 +58,34 @@ function shouldUseTouchControls(): boolean {
   const touchCapable = navigator.maxTouchPoints > 0 || 'ontouchstart' in globalThis;
   const compactViewport = Math.min(window.innerWidth, window.innerHeight) < 900;
   return mobileUa || (touchCapable && compactViewport);
+}
+
+function mobileViewportSize(): { w: number; h: number } {
+  const viewport = window.visualViewport;
+  return {
+    w: Math.max(1, Math.round(viewport?.width ?? window.innerWidth)),
+    h: Math.max(1, Math.round(viewport?.height ?? window.innerHeight)),
+  };
+}
+
+function computeMobileHudSafeInsets(active: boolean): { portrait: boolean; safeInsets?: HudSafeInsets } {
+  const { w, h } = mobileViewportSize();
+  const portrait = h > w;
+  if (!active) return { portrait };
+  const pad = clamp(h * 0.26, 92, 148);
+  const edge = 14;
+  const rail = 62 + 12;
+  const lookReserve = 86 + pad + 10;
+  const fullscreenReserve = 10 + 42 + 8;
+  return {
+    portrait,
+    safeInsets: {
+      top: fullscreenReserve,
+      left: Math.min(w * 0.36, edge + pad + 10),
+      right: Math.min(w * 0.42, Math.max(rail, lookReserve)),
+      bottom: Math.min(h * 0.38, edge + pad + 10),
+    },
+  };
 }
 
 function capturePointer(target: EventTarget | null, pointerId: number): void {
@@ -133,7 +128,7 @@ export function createMobileControls(input: InputState, options: MobileControlsO
   lookThumb.className = 'mobile-pad-thumb';
   lookPad.append(lookThumb);
 
-  const interact = makeButton('mobile-interact', 'E', mobileText({ ru: 'Взаимодействие', en: 'Interact' }));
+  const interact = makeButton('mobile-interact', mobileInteractLabel(), mobileText({ ru: 'Взаимодействие', en: 'Interact' }));
   const fire = makeButton('mobile-fire-zone', '', mobileText({ ru: 'Атака', en: 'Attack' }));
   const fullscreen = makeButton('mobile-fullscreen', 'FULL', mobileText({ ru: 'Полный экран', en: 'Fullscreen' }));
 
@@ -198,6 +193,21 @@ export function createMobileControls(input: InputState, options: MobileControlsO
     input.touch.active = moveActive || lookActive;
   };
 
+  const syncHudSafeContext = (): void => {
+    const active = enabled && context.started;
+    const safe = computeMobileHudSafeInsets(active);
+    setMobileHudSafeContext({
+      enabled: active,
+      portrait: safe.portrait,
+      safeInsets: safe.safeInsets,
+    });
+    const cssInsets = safe.safeInsets ?? { top: 0, right: 0, bottom: 0, left: 0 };
+    root.style.setProperty('--mobile-safe-top-px', `${cssInsets.top}px`);
+    root.style.setProperty('--mobile-safe-right-px', `${cssInsets.right}px`);
+    root.style.setProperty('--mobile-safe-bottom-px', `${cssInsets.bottom}px`);
+    root.style.setProperty('--mobile-safe-left-px', `${cssInsets.left}px`);
+  };
+
   const clearTouchInput = (): void => {
     input.touch.moveX = 0;
     input.touch.moveY = 0;
@@ -222,6 +232,7 @@ export function createMobileControls(input: InputState, options: MobileControlsO
     rotate.textContent = mobileText({ ru: 'Поверните телефон горизонтально', en: 'Rotate phone landscape' });
     movePad.setAttribute('aria-label', mobileText({ ru: 'Джойстик движения', en: 'Movement stick' }));
     lookPad.setAttribute('aria-label', mobileText({ ru: 'Джойстик камеры', en: 'Camera stick' }));
+    interact.textContent = mobileInteractLabel();
     interact.setAttribute('aria-label', mobileText({ ru: 'Взаимодействие', en: 'Interact' }));
     fire.setAttribute('aria-label', mobileText({ ru: 'Атака', en: 'Attack' }));
     actionUp.setAttribute('aria-label', mobileText(context.menuOpen ? { ru: 'Меню выше', en: 'Menu up' } : { ru: 'Действие выше', en: 'Previous action' }));
@@ -249,7 +260,7 @@ export function createMobileControls(input: InputState, options: MobileControlsO
     const mode = standalone ? 'standalone' : embedded ? 'direct' : nativeFullscreen ? (active ? 'exit' : 'native') : 'hidden';
     fullscreen.dataset.fullscreenMode = mode;
     fullscreen.hidden = standalone || (!embedded && !nativeFullscreen);
-    fullscreen.textContent = embedded ? '↗' : (active ? 'EXIT' : 'FULL');
+    fullscreen.textContent = embedded ? 'PAGE' : (active ? 'EXIT' : 'FULL');
     fullscreen.setAttribute(
       'aria-label',
       embedded
@@ -267,6 +278,7 @@ export function createMobileControls(input: InputState, options: MobileControlsO
     if (!enabled) clearTouchInput();
     updateSelectedLabel();
     updateFullscreenUi();
+    syncHudSafeContext();
   };
 
   const refreshClasses = (): void => {
@@ -279,6 +291,7 @@ export function createMobileControls(input: InputState, options: MobileControlsO
     updateLocalizedText();
     updateSelectedLabel();
     updateFullscreenUi();
+    syncHudSafeContext();
   };
 
   const refresh = (): void => {
@@ -509,6 +522,7 @@ export function createMobileControls(input: InputState, options: MobileControlsO
       document.removeEventListener('fullscreenchange', onResize);
       document.removeEventListener('webkitfullscreenchange', onResize);
       document.body.classList.remove('mobile-controls-on');
+      setMobileHudSafeContext({ enabled: false, portrait: false });
       root.remove();
     },
   };

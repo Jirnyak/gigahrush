@@ -176,7 +176,9 @@ Suggested IndieDB tags / keywords:
 
 Media / profile notes:
 
-- Use current approved screenshots and GIFs from `itch_page_pack/approved_frontpage/` and `itch_page_pack/approved_frontpage_itch/`.
+- Use current owner-updated screenshots and GIFs from `tmp/prcampaign_screenshot_hunt_2026-05-23/selected_best/`.
+- Use `tmp/prcampaign_screenshot_hunt_2026-05-23/selected_best/contact_sheet_3x3.png` as the compact square overview when a portal/social post wants one image.
+- Keep `itch_page_pack/approved_frontpage/` and `itch_page_pack/approved_frontpage_itch/` as backup/older gallery sources, not the first pick.
 - Cover and social assets are available under `itch_page_pack/assets/` and `itch_page_pack/capsules/`.
 - A download can point to the current HTML5 ZIP, but a short archive note should explain that it is a browser build with `index.html` at the archive root.
 

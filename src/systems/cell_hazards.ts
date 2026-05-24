@@ -99,6 +99,7 @@ export interface CellHazardWarning {
   detail: string;
   color: string;
   trapped: boolean;
+  critical: boolean;
 }
 
 const runtimes = new WeakMap<World, CellHazardRuntime>();
@@ -459,6 +460,7 @@ export function getPlayerHazardWarning(world: World, player: Entity): CellHazard
       detail: inactive.inactiveWarning,
       color: '#8cf',
       trapped: false,
+      critical: false,
     };
   }
   const subject = runtime?.subjects.get(player.id);
@@ -468,6 +470,7 @@ export function getPlayerHazardWarning(world: World, player: Entity): CellHazard
     detail: trapped ? 'Двигайтесь, чтобы вырваться. R с чистящим комплектом или огонь снимут липучку.' : hit.site.warning,
     color: trapped ? '#ff3838' : hit.site.warningColor,
     trapped,
+    critical: trapped || hit.site.playerDamagePerSecond > 0,
   };
 }
 

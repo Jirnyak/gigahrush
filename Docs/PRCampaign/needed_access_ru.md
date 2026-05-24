@@ -4,48 +4,62 @@
 
 Не присылай личные пароли в чат, если можно обойтись входом в браузере. Лучший вариант: открыть нужную площадку в Opera GX или Chrome, войти там, после этого я продолжу публикацию через уже авторизованную сессию.
 
+Актуальный медианабор уже подготовлен и не требует от владельца нового поиска скриншотов: `tmp/prcampaign_screenshot_hunt_2026-05-23/selected_best/`. Для быстрого квадратного превью использовать `contact_sheet_3x3.png`; для галерей и писем брать GIF/PNG из этой же папки.
+
 ## Уже не требует действий
 
 | Площадка | Статус |
 | --- | --- |
 | samosborarchive Fandom | Страница опубликована: https://samosborarchive.fandom.com/ru/wiki/ГИГАХРУЩ |
 | samosb0r Fandom | Страница опубликована: https://samosb0r.fandom.com/ru/wiki/ГИГАХРУЩ |
-| Self-Assembly Wiki EN / Fandom | Страница опубликована: https://samosborarchive-en.fandom.com/wiki/GIGAH_RUSH |
+| Self-Assembly Wiki EN / Fandom | Страница опубликована: https://samosborarchive-en.fandom.com/wiki/GIGAH_RUSH. Правка 2026-05-23 21:19 UTC, rev `420`, убрала неактивный Newgrounds и заменила его на Game Jolt; API extlinks больше не содержат Newgrounds. |
 | Fandom game lists | `ГИГАХРУЩ` добавлен в https://samosborarchive.fandom.com/ru/wiki/Игры_по_вселенной, `GIGAH RUSH` добавлен в https://samosborarchive-en.fandom.com/wiki/Self-Assembly_Games |
 | ShoutWiki Самосбор | Нужен не логин, а разморозка вики: abuse filter `запрет правок` запрещает все правки правилом `1==1`. |
 | itch.io Release Announcements | Топик опубликован: https://itch.io/t/6385827/gigahrush-free-browser-survival-horror-in-an-endless-concrete-apartment-block |
-| itch.io Devlog | Devlog index опубликован: https://tenevik.itch.io/gigahrush/devlog; прежний прямой URL `https://tenevik.itch.io/gigahrush/devlog/1530909/-` вернул публичный `404` из shell на 2026-05-23, нужен browser/dashboard check permalink. |
+| itch.io Devlog | Devlog index опубликован: https://tenevik.itch.io/gigahrush/devlog; прежний прямой URL `https://tenevik.itch.io/gigahrush/devlog/1530909/-` вернул публичный `404` из shell на 2026-05-23. Dashboard/editor check уже сделан: пост `Published`, но отдельного slug/permalink поля нет. |
 | DTF | Пост опубликован: https://dtf.ru/indie/5077801-gigahrush-brauzernyj-survival-horror |
 | GameDev.ru | Тема опубликована: https://gamedev.ru/projects/forum/?id=295485 |
 | Newgrounds | Больше не считать закрытым успешным действием: https://www.newgrounds.com/portal/view/1033564 редиректит на RIP/eulogy https://www.newgrounds.com/portal/rip/1033564. Существующий проект `7759223` редактируется, но штатный upload flow сохраняет свежий ZIP как `9B`; битый файл удален. |
-| GamHub | Публичная форма приняла сабмит: https://gamhub.net/website_submit/ вернул `{"code":200,"msg":"Submit success"}`. Публичного URL еще нет, нужен review 24-48 часов. |
+| GamHub | Публичная форма приняла сабмит: https://gamhub.net/website_submit/ вернул `{"code":200,"msg":"Submit success"}`. Follow-up 2026-05-23 21:26 UTC: публичного URL нет, `/game/gigahrush/` и `/game/gigah-rush/` 404, sitemap без `gigahrush`, contact/about не найдены; нужен review 48-72 часа, не duplicate-submit same-day. |
 | Reddit r/playmygame | Новый non-NSFW пост опубликован пользователем: https://www.reddit.com/r/playmygame/comments/1tku91k/gigahrush/ |
-| IndieDB | Листинг создан: https://www.indiedb.com/games/gigahrush; загружены assets и 5 gameplay screenshots: https://www.indiedb.com/games/gigahrush/images/gigahrush-gameplay-screenshots |
-| DiscoverGG | Сабмит отправлен; ответ сайта: `Submitted! Live within 24h after review.` На 2026-05-23 `/game/gigahrush`, guessed slugs и internal search пустые; финальный public URL пока не выдан. |
-| Fake Portal | Сабмит отправлен; ответ сайта: `Game submitted for review!`, `game_id: 10841`, status `pending`; публичный поиск/direct slugs на 2026-05-23 не подтверждают листинг. |
-| FreeZonePlay | Заявка отправлена через contact form: `mail_sent`; публичный поиск/direct slugs на 2026-05-23 не дают реальный листинг. |
+| IndieDB | Листинг создан: https://www.indiedb.com/games/gigahrush; загружены assets и 5 gameplay screenshots: https://www.indiedb.com/games/gigahrush/images/gigahrush-gameplay-screenshots. Shell fetch остается Cloudflare `403`, но Chrome browser/account check 2026-05-23 21:23-21:24 UTC открыл game page и screenshot page с ожидаемыми заголовками. |
+| DiscoverGG | Листинг стал публичным: https://discovergg.com/game/gigahrush. Public recheck 2026-05-23 19:45 UTC: `200 OK`, title `GIGAH\|RUSH — Free Browser Game`, `robots: index, follow`, play link ведет на itch.io. |
+| Fake Portal | Сабмит отправлен; ответ сайта: `Game submitted for review!`, `game_id: 10841`, status `pending`. Logged-in dashboard 2026-05-23 21:22 UTC подтверждает `Submitted Games (1)`, `GIGAH\|RUSH`, status `Pending`, date `May 23, 2026`, только `Preview`; публичный URL еще 404. |
+| FreeZonePlay | Заявка отправлена через contact form: `mail_sent`; public/direct slugs на 2026-05-23 21:26 UTC не дают листинг, guessed submit/add-game paths 404, WP REST не показывает game post type. |
 | Email batch 1 | Отправлено через Gmail DOM automation 2026-05-23: Alpha Beta Gamer `Admin@alphabetagamer.com`, Free Game Planet `admin@freegameplanet.com`, Games Pending `gamespending@gmail.com`. Gmail показал `Message sent` по каждому письму. |
-| Game Jolt | Страница опубликована публично: https://gamejolt.com/games/gigahrush/1072064; description сохранен; maturity сохранен как Teen/non-adult; thumbnail `50560626`, header `50560651`, screenshot `2181594`/`50560706` загружены. Package `1093814`, release `1474909`, version `0.1.0`; HTML build `gigahrush-itch.zip` загружен из `itch/gigahrush-itch.zip`, playable check дошел до `ГИГАХРУЩ - САМОСБОР` с видимым canvas. |
+| Email batch 3 | Отправлено через Gmail DOM automation 2026-05-24 00:28-00:31 BST: VK Play Media `mediavkplay@vkteam.ru`, HorrorFam `lauren@horrorfam.com`, Indie Game Buzz `games@indiegamebuzz.com`, Into Indie Games `info@intoindiegames.com`. Gmail search подтвердил sent conversation по каждому адресу. |
+| Game Jolt | Страница опубликована публично и package sync завершен: https://gamejolt.com/games/gigahrush/1072064; description сохранен; maturity сохранен как Teen/non-adult; thumbnail `50560626`, header `50560651`, screenshot `2181594`/`50560706` загружены. Package `1093814`, release `1474942`, version `0.2.0`, build `1960153`; public API reports `gigahrush-itch.zip` at `4 999 557` bytes, and direct `serve.gamejolt.net` check returned current `index.html` with visible canvases. |
+| iDev.Games | Публичный листинг опубликован: https://idev.games/game/gigah-rush. Public fetch 2026-05-23 21:21 UTC: `200 OK`, title `Gigah Rush - Free Online Browser Game`, `noindex` нет; edit page пишет `Public: This game has been released and is visible to everyone!`; embed HTML открывает `ГИГАХРУЩ - САМОСБОР` с canvas content. |
+| MyIndie | Публичный Web (HTML5) листинг опубликован: https://myindie.ru/games/game/gigahrush. Загружены cover, 3 screenshots и `itch/gigahrush-itch.zip` (`4 999 557` bytes); страница показывает `WEB VERSION`, version `0.2.0`, Web (HTML5), engine `Another`, RU/EN, genres Shooter/RPG/Action/Survival/Horror, дату `23.05.2026` и Web iframe uploaded ZIP build. |
+| Kongregate | Developer Application submitted 2026-05-23: https://www.kongregate.com/en/developer/apply. Это не публичная страница игры; ждать approval before Alpha/upload. |
 
-## Нужен логин для обновления уже опубликованных постов
+## itch.io support/indexing: выполнено, ожидание
+
+| Что нужно | Почему | Что делать |
+| --- | --- | --- |
+| Проверить dashboard `GIGAH\|RUSH` на itch.io | Выполнено через Opera GX owner session 2026-05-23 20:10-20:20 UTC. Public recheck 20:20 UTC: страница `https://tenevik.itch.io/gigahrush` отдает `200 OK`, видна из профиля и playable, но публичный HTML все еще содержит `noindex`; поиск itch по `gigahrush`, `GIGAH\|RUSH`, `ГИГАХРУЩ` не показывает страницу Tenevik. Dashboard source: published/active, not restricted, not unlisted, current ZIP ready/embedded, cover/screenshots есть, Release info и Classification saved, Engines/tools blank intentionally, External links compact. | Больше не просить owner login для этого чеклиста. Ждать support/indexing, затем recheck `noindex`/search. Не пересоздавать страницу, не дублировать itch posts. |
+| Написать в support@itch.io с email владельца аккаунта | Выполнено: Gmail `jirnyak@gmail.com` отправил письмо в `support@itch.io` 2026-05-23 20:22 UTC; перед отправкой DOM-проверка подтвердила recipient, subject и body. | Ждать ответа/изменения индексации. Если поддержка попросит уточнения, использовать факты из `Docs/PRCampaign/itch_listing_incident_2026-05-23.md`. |
+| Исправить devlog permalink | `https://tenevik.itch.io/gigahrush/devlog` и RSS показывают launch post, но `https://tenevik.itch.io/gigahrush/devlog/1530909/-` публично возвращает `404`. Devlog editor уже проверен: пост `Published`, comments enabled, type `Major Update or Launch`, но отдельного slug/permalink поля нет. | Ждать ответа itch support или явного owner ok на публичное изменение заголовка ради латинского автослага. До фикса шарить только devlog index. |
+
+## Нужен логин только для условных ответов
 
 | Площадка | Что нужно | Что я сделаю после входа |
 | --- | --- | --- |
-| DTF | Оставить авторизованную вкладку https://dtf.ru/indie/5077801-gigahrush-brauzernyj-survival-horror или написать, что пост обновлять вручную. | Добавлю короткий комментарий/update: свежий релиз уже на itch.io и Cloudflare, ссылка на билд, просьба о фидбеке без повторной рекламной простыни. |
-| GameDev.ru | Оставить авторизованную вкладку https://gamedev.ru/projects/forum/?id=295485 или написать, что пост обновлять вручную. | Добавлю reply/update с changelog-смыслом и запросом конкретного фидбека. |
+| DTF | Логин не нужен для планового действия прямо сейчас: media/link edit уже выполнен, публичный API на 2026-05-23 21:26 UTC показывает `1998` views, `470` hits, `12` comments, `10` favorites, `6` reactions. | Только мониторить и отвечать на конкретные новые вопросы/фидбек. Не делать duplicate post, generic update или link-only bump. |
+| GameDev.ru | Оставить авторизованную вкладку https://gamedev.ru/projects/forum/?id=295485 или написать, что пост обновлять вручную, только если нужен ответ на существующую жалобу про загрузку/progress. | Не делать generic changelog bump. Если отвечать, то признать риск dark-blue/loading состояния direct build, указать itch.io как primary playable link и попросить проверить первые минуты/UI. |
 
 ## Нужен вход в аккаунт
 
 | Площадка | Что нужно | Что я сделаю после входа |
 | --- | --- | --- |
-| iDev.Games | Открыть https://idev.games/login или https://idev.games/register в Opera GX/Chrome, пройти Cloudflare и войти/создать аккаунт. Актуальная стартовая страница: https://idev.games/publish-game (`/submit-game` сейчас отдает 404). | Подам HTML5 build или подготовлю страницу с текущим ZIP после iframe-smoke. |
+| iDev.Games | Больше не нужен для базовой публикации: https://idev.games/game/gigah-rush уже public. | Логин понадобится только позже для icon/promo polish, moderation response или devlog/media work. |
 | Reddit следующие сабреддиты | Текущий Reddit уже авторизован, но лучше не постить пачкой. | Через 24-48 часов можно идти в r/WebGames, затем r/indiegames другим текстом. |
 
 ## Нужен ручной контакт с владельцами площадок
 
 | Площадка | Что произошло | Что нужно от владельца проекта |
 | --- | --- | --- |
-| Newgrounds | В существующем проекте `7759223` штатный browser upload через настоящий file input и прямой `/parkfile` attach оба сохраняют свежий `itch/gigahrush-itch.zip` как `9B`; прямой `file_2=@zip` не прикрепляет файл. | Если продолжаем Newgrounds, открыть редактор вручную и проверить, повторяется ли `9B`. Если повторяется, писать в Newgrounds support: HTML5 ZIP `4.76MB` attaches as `9B` in project `7759223`. Не нажимать publish без playable preview. |
+| Newgrounds | В существующем проекте `7759223` штатный browser upload через настоящий file input и прямой `/parkfile` attach оба сохраняют свежий `itch/gigahrush-itch.zip` как `9B`; прямой `file_2=@zip` не прикрепляет файл. | Если продолжаем Newgrounds, открыть редактор вручную и проверить, повторяется ли `9B`. Если повторяется, писать в Newgrounds support: HTML5 ZIP `4.77 MiB` / `4 999 557` bytes attaches as `9B` in project `7759223`. Не нажимать publish без playable preview. |
 | Gamemoor | Аккаунт `jirnyak` авторизован, но `/developer` редиректит на главную; `/submit`, `/games/add`, `/dashboard`, `/my-games` дают `404`. | Открыть https://gamemoor.com/contact и попросить включить developer portal для `jirnyak` или дать актуальный submit URL. |
 | Free Indie Games | https://www.freeindiegames.org/submit-game/ показывает сырой shortcode `[ninja_forms_display_form id=1]`; рабочей формы нет. | Нужен email/contact владельца сайта или ремонт формы на их стороне. |
 
@@ -61,9 +75,11 @@
 
 | Для чего | Что нужно |
 | --- | --- |
-| Письма медиа/кураторам | Gmail batch 1 был отправлен через DOM automation, без координатных кликов. Chrome Apple Events рабочий, но при длинной автоматизации может вернуть ошибку 12; если это случится, активировать Chrome/проверить menu item и повторить. Следующую отправку делать малой порцией через Gmail DOM/manual, без массовой рассылки. |
+| Письма медиа/кураторам | Gmail batch 1 и batch 2 отправлены через DOM automation, без координатных кликов. Chrome Apple Events рабочий, но при длинной автоматизации может вернуть ошибку 12; если это случится, активировать Chrome/проверить menu item и повторить. Дальше пауза: мониторить ответы/bounce/coverage, быстрые follow-up не слать. |
 | Alpha Beta Gamer / Free Game Planet / Games Pending | Уже отправлено 2026-05-23; не отправлять быстрый follow-up, ждать ответов/coverage. |
-| Indie Games Plus / TapCraftBox / Armor Games | Тексты готовы, но не отправлены. Для Indie Games Plus использовать `editors@indiegamesplus.com`; Armor Games `mygame@armorgames.com`; TapCraftBox `support@tapcraftbox.com`. |
+| Indie Games Plus / TapCraftBox / Armor Games | Уже отправлено 2026-05-23: Armor Games `mygame@armorgames.com` 21:33 BST, TapCraftBox `support@tapcraftbox.com` 21:34 BST, Indie Games Plus `editors@indiegamesplus.com` 21:35 BST. Не делать быстрый follow-up. |
+| VK Play Media / HorrorFam / Indie Game Buzz / Into Indie Games | Уже отправлено 2026-05-24 00:28-00:31 BST через Gmail DOM. | Не делать быстрый follow-up. Ждать ответы/bounce/coverage; для HorrorFam выдержать минимум 7 business days перед повторным письмом. |
+| Gamemoor support | Support request отправлен на `contact@gamemoor.com` 2026-05-23 21:35 BST, но public contact page показывает форму, не email. | Ждать ответ/bounce; если bounce или тишина, повторить через https://gamemoor.com/contact form. |
 | PLRun | Не считать P0 email target: старый `https://plrun.com/plrun-for-developers/` на 2026-05-23 вернул `410`; возвращаться только после подтверждения актуального developer/contact path. |
 | VK Play Media / Telegram-каналы | Telegram разрешен как контакт; RU pitch допустим. |
 
@@ -74,10 +90,10 @@
 | Яндекс Игры | Нужен отдельный SDK-адаптер и developer account. Это уже техническая задача, не просто публикация. |
 | Пикабу Игры | Нужен GamePush/юридический статус и отдельная портальная сборка; физлицам без подходящего статуса может быть нельзя. |
 | ИграйТут | Нужно решить, публикуем ли без SDK или делаем SDK-сборку; для SDK есть ограничения на cloud save size. |
-| CrazyGames | Можно начинать с Basic Launch build, но для Full Launch нужен SDK и portal QA. |
+| CrazyGames | Можно начинать только как отдельную portal-build задачу: Basic Launch допускает Basic Implementation/QA без CrazyGames-specific SDK и без монетизации, но нужны английская локализация, PEGI 12, iframe readability/performance, no custom fullscreen, no cross-promotion, `<=50MB` initial download, `<=250MB` total, `<=1500` files. Full Launch требует CrazyGames SDK и Full QA. |
 | Newgrounds | Сейчас не playable listing: RIP/eulogy, а свежий ZIP в редакторе сохраняется как `9B`. Нужна ручная проверка/support; до этого не ссылаться как на active publication. |
-| Kongregate | Нужен аккаунт и Developer Application approval; после approval можно загружать HTML5/WebGL/iframe game в Alpha/review. |
-| Game Jolt | Public page уже опубликован; package `1093814`, release `1474909`, HTML build `itch/gigahrush-itch.zip`, playable preview check пройден. Осталось только мониторить plays/comments/followers и позже добавить дополнительные media/devlog через безопасный UI path. |
+| Kongregate | Developer Application уже подана; нужен approval. После approval можно загружать HTML5/WebGL/iframe game в Alpha/review. |
+| Game Jolt | Public page уже опубликован и синхронизирован: package `1093814`, release `1474942`, build `1960153`, текущий `itch/gigahrush-itch.zip` (`4 999 557` bytes) подтвержден public API и прямой playable check. Дальше только мониторить plays/comments/followers и позже добавить media/devlog через безопасный UI path при реальном инфоповоде. |
 | CWS Games | Решение: пропустить пока. Площадка adult-adjacent, а игра не NSFW; публикация даст неправильный контекст. |
 | MegaViral | Нужен отдельный бюджетный ok: форма требует Stripe `$1/month per game`. Без подтверждения не трогать. |
 
@@ -87,17 +103,17 @@
 
 | Площадка | Что нужно от владельца | Что можно сделать безопасно после входа |
 | --- | --- | --- |
-| Game Jolt | Аккаунт уже использован для создания и публикации страницы. Description, Teen maturity, thumbnail, header, один screenshot, package `1093814`, release `1474909` и HTML build уже сохранены. | Следующий шаг: мониторинг, дополнительные screenshots/GIFs и devlog/update, если composer открывается trusted UI path. Финальный publish уже сделан после playable preview. |
-| MyIndie | Войти/создать аккаунт на https://myindie.ru/login или https://myindie.ru/register. | Можно подготовить RU listing через https://myindie.ru/games/create, если после логина есть preview/draft. Если форма сразу публикует, остановиться перед финальным действием. |
-| iDev.Games | Войти/создать developer account на https://idev.games/register или https://idev.games/login; пройти Cloudflare/JS в браузере. | Публикация не draft-safe: публичная страница говорит, что игра добавляется instantly and then moderated later. Загружать только после явного ok на моментальную публичность. |
+| Game Jolt | Аккаунт уже использован для создания, публикации и package sync. Description, Teen maturity, thumbnail, header, один screenshot, package `1093814`, release `1474942`, build `1960153` сохранены и публично проверены. | Следующий шаг: мониторинг, дополнительные screenshots/GIFs и devlog/update, если composer открывается trusted UI path и есть реальный инфоповод. |
+| MyIndie | Больше не нужен для базовой публикации: https://myindie.ru/games/game/gigahrush уже public. | Логин понадобится только позже для правок, media polish, moderation response или comments. |
+| iDev.Games | Public listing уже есть: https://idev.games/game/gigah-rush. | Мониторинг/moderation/media polish; не resubmit. |
 | IndieHub | Зарегистрироваться/войти на https://indiehub.ru/ или написать в support Telegram с вопросом о рабочем add-game path. | Публичная кнопка `добавить игру` ведет на https://indiehub.ru/game/add, где сейчас ошибка “страница не существует”. Не считать готовым quick target, пока аккаунт/support не покажет рабочую форму. |
-| Kongregate | Создать/войти в аккаунт Kongregate, выбрать username осознанно, подать Developer Application и дождаться approval. | Это не quick listing: до approval нельзя публиковать. После approval можно подготовить Alpha submission; publish доступен только после Kongregate review/approval. |
+| Kongregate | Ждать ответа по уже поданной Developer Application. | Это не quick listing: до approval нельзя публиковать. После approval можно подготовить Alpha submission; publish доступен только после Kongregate review/approval. |
 
 Дополнительные owner decisions перед финальными кликами:
 
-- Kongregate требует English language option и AI declaration. Нужно решить формулировку AI disclosure для игры до Alpha submission.
+- Kongregate application подана, но до Alpha submission всё еще нужно решить English language option и AI declaration.
 - Game Jolt maturity уже сохранен как Teen/non-adult: cartoon violence 2, fantasy violence 2, bloodshed 2, без sexual/gambling/adult flags.
-- iDev.Games adult/hateful content rule делает survival-horror допустимым только с аккуратной non-NSFW content note; не использовать adult positioning.
+- iDev.Games уже public; adult/hateful content rule остается важным для будущих правок: survival-horror описывать аккуратно как non-NSFW, без adult positioning.
 
 ## Участок 4: quick RU/listing public recheck, 2026-05-23
 
@@ -105,17 +121,32 @@
 
 | Площадка | Текущий публичный факт | Что нужно от владельца |
 | --- | --- | --- |
-| MyIndie | `https://myindie.ru/games` живой; есть `Добавить игру`; поддерживает `Web (HTML5)`, `Horror`, `Shooter`, `RPG`, `Survival`, движок `Another`. `https://myindie.ru/games/create` редиректит на `https://myindie.ru/login`. | Войти/зарегистрироваться на MyIndie. После входа я могу заполнить RU listing, но остановлюсь перед финальной отправкой, если нет явного draft/preview. |
+| MyIndie | Superseded PR 11: `https://myindie.ru/games/game/gigahrush` уже public. | Больше не нужен вход для базовой публикации; только мониторинг и будущие правки. |
 | IndieHub | `https://indiehub.ru/` показывает вход/регистрацию, `добавить игру`, правила и Telegram support. `https://indiehub.ru/game/add` сейчас отвечает ошибкой, что страницы нет и нужно обратиться к администрации в Telegram. | Либо войти и проверить, появляется ли рабочий add-flow, либо написать в support Telegram и попросить актуальный путь добавления игры. |
-| iDev.Games | `https://idev.games/upload-your-game` / `/publish-game` говорят: нужен account, HTML5/WebGL подходит, добавление игры происходит instantly, потом moderation/verification later; сайт требует JavaScript/Cloudflare. | Войти/зарегистрироваться и отдельно подтвердить, что можно публиковать instant-public. Без такого ok не загружать. |
+| iDev.Games | `https://idev.games/game/gigah-rush` уже public; edit page подтверждает visible to everyone. | Мониторить страницу/moderation; не загружать повторно. |
 | Gamemoor | `https://gamemoor.com/contact` говорит, что developer portal открыт и submissions идут в review queue за несколько дней. Публично `https://gamemoor.com/developer` редиректит на login; `/submit`, `/dashboard`, `/my-games`, `/games/add` не дают рабочий submit. | Войти и открыть `/developer`; если снова редирект/нет доступа, отправить support message с просьбой включить developer portal для `jirnyak` или дать submit URL. |
 
 Реально можно сегодня:
 
-1. MyIndie: подготовить карточку после логина; финальный submit только после проверки, есть ли draft/preview.
+1. MyIndie: уже опубликован; только мониторинг и media polish позже.
 2. Gamemoor: проверить `/developer` после логина или отправить support request; это не instant-public.
-3. iDev.Games: публиковать только после явного согласия на instant-public.
+3. iDev.Games: уже опубликован; только мониторинг и media polish позже.
 4. IndieHub: не тратить финальные клики; сначала support/login check.
+
+## Расширенный public recheck account-gated portals, 2026-05-23 20:31 UTC
+
+Без логина, без отправок, без final-click. Проверены MyIndie, iDev.Games, IndieHub, Kongregate, CrazyGames, Gamemoor.
+
+| Площадка | Текущий публичный blocker / requirement | Что нужно от владельца |
+| --- | --- | --- |
+| MyIndie | Completed/public after PR 11: https://myindie.ru/games/game/gigahrush. Карточка опубликована с Web HTML5/Another/RU+EN/current ZIP. | Мониторить страницу, Web iframe, comments/moderation. |
+| iDev.Games | Public listing: https://idev.games/game/gigah-rush; account/editor says released and visible to everyone. | Мониторить moderation/plays/comments; логин нужен только для будущих правок. |
+| IndieHub | `/game/add` публично сломан: “страница не существует”, просит обратиться в Telegram support. Rules требуют publisher rights и запрещают spam/malware/illegal/misleading/infringing content. | Войти и проверить скрытый add-flow или написать в support Telegram за текущим URL. Не публиковать, пока форма/статус неизвестны. |
+| Kongregate | Developer Application submitted after PR 11. Требует approval, legal upload agreement, Alpha/review. Нужны screenshots, description, instructions, voluntary age rating, AI declaration, English language option; publish только после review. | Ждать approval. После approval можно готовить Alpha. |
+| CrazyGames | Developer Portal - JS app. Basic Launch требует Basic Implementation/QA, но не Full SDK и без monetization; Full Launch SDK-required. Public requirements: `<=50MB` initial download, `<=250MB` total, `<=1500` files, relative paths, Chrome/Edge, iframe/mobile readability, English localization, PEGI 12, no custom fullscreen, no cross-promotion. | Сначала принять отдельную portal-build задачу. После owner login я не должен submit current build как quick PR: нужно убрать external playable CTA/fullscreen, проверить English path, iframe/performance, затем preview/QA. Full Launch требует SDK events/data/user work. |
+| Gamemoor | Contact page says developer portal open and review usually within a few days. `/developer` redirects to login; `/submit`, `/dashboard`, `/my-games` = 404; `/games/add` -> 404. Terms: submissions reviewed for PEGI 3-16 and no NSFW. | Войти и открыть `/developer`; если нет доступа, отправить support request для `jirnyak` с просьбой включить developer portal или дать submit URL. Подавать как non-NSFW survival horror / PEGI 16. |
+
+Классификация после PR 11: already public - MyIndie и iDev.Games; support-blocked - IndieHub; application/review queue - Kongregate; SDK/portal-build - CrazyGames; review queue after portal access/support - Gamemoor.
 
 ## Браузерная автоматизация
 

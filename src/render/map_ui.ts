@@ -5,14 +5,13 @@ import {
   LiftDirection, MonsterKind, Faction, FloorLevel, ZoneFaction,
 } from '../core/types';
 import { World } from '../core/world';
-import { ITEMS } from '../data/catalog';
-import { hasAvailableQuest } from '../data/plot';
 import {
   isQuestTargetOnCurrentFloor,
   questRouteFloor,
   questTargetLiftDirection,
   resolveQuestTargetRoom,
 } from '../systems/contracts';
+import { npcHasQuestMarker } from '../systems/quests';
 import { areFactionsHostile, getFactionUiSnapshot, type FactionUiSnapshot } from '../systems/factions';
 import { getActiveSamosborVariant } from '../data/samosbor_variants';
 import { getSamosborShelterRoomIds, getSamosborWarningSnapshot } from '../systems/samosbor';
@@ -20,22 +19,20 @@ import { getRecentRumorLead } from '../systems/npc_memory';
 import { getWrongDoorMapCues, wrongDoorCueActionLabel, wrongDoorCueSecondsLeft } from '../systems/wrong_door';
 import { getActiveCultProcessionSnapshots } from '../systems/faction_events';
 import { seroburmalineSourceCellState } from '../systems/seroburmaline';
-import { formatQuestMinutes, questRemainingMinutes } from '../systems/quest_deadlines';
 import { getRouteCueMapReveals, type RouteCueMapReveal } from '../systems/route_cues';
 import { getNearestSmallCaravan } from '../systems/caravans';
 import { ENTITY_MASK_VISIBLE, getEntityIndex } from '../systems/entity_index';
-import { floorInstanceLabel as formatFloorInstanceLabel, getActiveFloorInstance } from '../systems/floor_instances';
-import { currentFloorRunEntry, floorRunEntryMapLabel } from '../systems/procedural_floors';
 import { isMapCellExplored } from '../systems/map_exploration';
 import { getBlackHandMarkCells } from './marks';
 import { fitText as fitMapText } from './ui_text';
+import { type UiRect } from './ui_layout';
+import { uiElementEnabled } from '../systems/ui_orchestrator';
 
 const MAP_SIZE = 80;
 type QuestKind = 'plot' | 'side' | 'system';
 
 const activeTalkTargets = new Map<number, QuestKind>();
 const activeTalkPlotTargets = new Map<string, QuestKind>();
-const activeQuestGivers = new Map<number, QuestKind>();
 const activeKillKinds = new Map<MonsterKind, QuestKind>();
 const activeTargetRoomTypes = new Map<RoomType, QuestKind>();
 const activeTargetRooms = new Map<number, QuestKind>();
@@ -52,6 +49,8 @@ const MAP_CROWD_GROUP_NPC = 0;
 const MAP_CROWD_GROUP_HOSTILE_NPC = 1;
 const MAP_CROWD_GROUP_MONSTER = 2;
 const MAP_CROWD_GROUP_ITEM = 3;
+const MAP_INACTIVE_NPC_MARKER = { stroke: '#04375c', fill: '#49b8ff', text: '#80d8ff' };
+const MAP_ACTIVE_NPC_MARKER = { stroke: '#8a5c00', fill: '#ffd21f', text: '#ffe06a' };
 const MAP_UNEXPLORED_FADE_RADIUS = 3;
 const mapCrowdHashKeys = new Int32Array(MAP_CROWD_BIN_HASH_CAP);
 const mapCrowdHashBins = new Int16Array(MAP_CROWD_BIN_HASH_CAP);
@@ -75,21 +74,6 @@ const QUEST_MARKERS: Record<QuestKind, { label: string; stroke: string; fill: st
   side: { label: 'БОК', stroke: '#704060', fill: '#f7a7d8', text: '#f7a7d8' },
   system: { label: 'СИСТ', stroke: '#76631a', fill: '#ffd35f', text: '#ffd35f' },
 };
-const FLOOR_SHORT_NAMES: Record<FloorLevel, string> = {
-  [FloorLevel.MINISTRY]: 'МИН',
-  [FloorLevel.KVARTIRY]: 'КВ',
-  [FloorLevel.LIVING]: 'ЖИЛ',
-  [FloorLevel.MAINTENANCE]: 'КОЛ',
-  [FloorLevel.HELL]: 'АД',
-  [FloorLevel.VOID]: 'ПУСТ',
-};
-const QUEST_TYPE_LABELS: Record<QuestType, string> = {
-  [QuestType.FETCH]: 'ДОБ',
-  [QuestType.VISIT]: 'МЕСТ',
-  [QuestType.KILL]: 'БОЙ',
-  [QuestType.TALK]: 'РАЗГ',
-};
-
 const FACTION_RGB: Record<ZoneFaction, [number, number, number]> = {
   [ZoneFaction.CITIZEN]: [74, 190, 145],
   [ZoneFaction.LIQUIDATOR]: [91, 158, 238],
@@ -178,7 +162,7 @@ function addMapCrowdDot(x: number, y: number, key: number, group: number): void 
 function mapCrowdColor(bin: number): string {
   if (mapCrowdMonster[bin] > 0) return '#e33';
   if (mapCrowdHostileNpc[bin] > 0) return '#e44';
-  if (mapCrowdNpc[bin] > 0) return '#4a4';
+  if (mapCrowdNpc[bin] > 0) return '#4af';
   return '#dd4';
 }
 
@@ -219,88 +203,16 @@ function setMarkerKind<K>(map: Map<K, QuestKind>, key: K, kind: QuestKind): void
 function clearActiveQuestMarkers(): void {
   activeTalkTargets.clear();
   activeTalkPlotTargets.clear();
-  activeQuestGivers.clear();
   activeKillKinds.clear();
   activeTargetRoomTypes.clear();
   activeTargetRooms.clear();
   activeFetchItems.clear();
 }
 
-function displayFloor(q: Quest, currentFloor: FloorLevel | undefined): FloorLevel | undefined {
-  const floor = routeFloor(q);
-  if (floor !== undefined) return floor;
-  if (q.targetRoom !== undefined || q.targetNpcId !== undefined || q.targetMonsterKind !== undefined) return currentFloor;
-  if (q.plotStepIndex === undefined && q.sideQuestId === undefined) return currentFloor;
-  return undefined;
-}
-
-function objectiveFloorLabel(q: Quest, currentFloor: FloorLevel | undefined, state: GameState | undefined): string {
-  const floor = displayFloor(q, currentFloor);
-  if (floor === undefined) return 'ЭТ ?';
-  const here = state ? isQuestTargetOnCurrentFloor(q, state) : floor === currentFloor;
-  return here ? 'ЭТ ЗДЕСЬ' : `ЭТ ${FLOOR_SHORT_NAMES[floor]}`;
-}
-
 function questTargetVisibleOnMap(q: Quest, currentFloor: FloorLevel | undefined, state: GameState | undefined): boolean {
   if (state) return isQuestTargetOnCurrentFloor(q, state);
   const floor = routeFloor(q);
   return floor === undefined || floor === currentFloor;
-}
-
-function objectiveDeadlineLabel(q: Quest, state: GameState | undefined): string {
-  if (!state) return 'СРОК --';
-  const remaining = questRemainingMinutes(q, state.clock.totalMinutes);
-  return remaining === undefined ? 'СРОК --' : `СРОК ${formatQuestMinutes(remaining)}`;
-}
-
-function objectiveDeadlineColor(q: Quest, state: GameState | undefined): string {
-  if (!state) return '#789';
-  const remaining = questRemainingMinutes(q, state.clock.totalMinutes);
-  if (remaining === undefined) return '#789';
-  if (remaining <= 120) return '#f66';
-  if (remaining <= 360) return '#fa6';
-  return '#8cf';
-}
-
-function objectiveRewardLabel(q: Quest): string {
-  if ((q.moneyReward ?? 0) > 0) return `НАГР ${q.moneyReward}₽`;
-  if (q.rewardItem) return `НАГР ${ITEMS[q.rewardItem]?.name ?? q.rewardItem}`;
-  if ((q.xpReward ?? 0) > 0) return `НАГР ${q.xpReward}XP`;
-  return 'НАГР --';
-}
-
-function objectiveSummary(q: Quest, currentFloor: FloorLevel | undefined, state: GameState | undefined): string {
-  const marker = QUEST_MARKERS[questKind(q)];
-  return `${marker.label} ${QUEST_TYPE_LABELS[q.type]} ${objectiveFloorLabel(q, currentFloor, state)} ${objectiveDeadlineLabel(q, state)} ${objectiveRewardLabel(q)}`;
-}
-
-function primaryObjective(quests: Quest[] | undefined, state: GameState | undefined): Quest | undefined {
-  let best: Quest | undefined;
-  let bestScore = -Infinity;
-  if (!quests) return undefined;
-  for (const q of quests) {
-    if (q.done) continue;
-    const remaining = state ? questRemainingMinutes(q, state.clock.totalMinutes) : undefined;
-    const deadlinePressure = remaining === undefined ? 0 : Math.max(0, 600 - remaining);
-    const rewardPressure = Math.min(80, (q.moneyReward ?? 0) / 4 + (q.xpReward ?? 0) / 8);
-    const score = QUEST_KIND_PRIORITY[questKind(q)] * 1000 + deadlinePressure + rewardPressure;
-    if (score > bestScore) {
-      best = q;
-      bestScore = score;
-    }
-  }
-  return best;
-}
-
-function currentRouteLabel(state: GameState | undefined): string | undefined {
-  return state ? floorRunEntryMapLabel(currentFloorRunEntry(state)) : undefined;
-}
-
-function numberedLiftRouteLabel(state: GameState | undefined, fallback: string | undefined): string | undefined {
-  if (!state) return fallback;
-  const active = getActiveFloorInstance(state);
-  if (!active) return fallback;
-  return `${formatFloorInstanceLabel(active)} риск ${active.risk}/5 -> ${floorRunEntryMapLabel(currentFloorRunEntry(state))}`;
 }
 
 function activeVisitLiftDirection(
@@ -345,47 +257,6 @@ function drawQuestDiamond(
 function drawQuestMarker(ctx: CanvasRenderingContext2D, x: number, y: number, sz: number, sw: number, kind: QuestKind): void {
   const marker = QUEST_MARKERS[kind];
   drawQuestDiamond(ctx, x, y, sz, sw, marker.stroke, marker.fill);
-}
-
-function drawObjectiveStrip(
-  ctx: CanvasRenderingContext2D,
-  quests: Quest[] | undefined,
-  currentFloor: FloorLevel | undefined,
-  state: GameState | undefined,
-  x: number,
-  y: number,
-  w: number,
-  sx: number,
-  sy: number,
-  maxRows: number,
-): void {
-  if (!quests) return;
-  let activeCount = 0;
-  for (const q of quests) if (!q.done) activeCount++;
-  if (activeCount === 0) return;
-
-  const rowH = 11 * sy;
-  const panelH = maxRows * rowH + 5 * sy;
-  ctx.fillStyle = 'rgba(0,4,8,0.72)';
-  ctx.fillRect(x - 3 * sx, y - 7 * sy, w + 6 * sx, panelH);
-  ctx.strokeStyle = '#1b3440';
-  ctx.strokeRect(x - 3 * sx + 0.5, y - 7 * sy + 0.5, w + 6 * sx - 1, panelH - 1);
-
-  ctx.font = `${7 * sy}px monospace`;
-  let drawn = 0;
-  for (const q of quests) {
-    if (q.done) continue;
-    const marker = QUEST_MARKERS[questKind(q)];
-    const rowY = y + drawn * rowH;
-    const suffix = drawn === maxRows - 1 && activeCount > maxRows ? ` +${activeCount - maxRows}` : '';
-    ctx.fillStyle = marker.text;
-    ctx.fillText(marker.label, x, rowY);
-    ctx.fillStyle = objectiveDeadlineColor(q, state);
-    const text = fitMapText(ctx, `${QUEST_TYPE_LABELS[q.type]} ${objectiveFloorLabel(q, currentFloor, state)} ${objectiveDeadlineLabel(q, state)} ${objectiveRewardLabel(q)}${suffix}`, w - 32 * sx);
-    ctx.fillText(text, x + 32 * sx, rowY);
-    drawn++;
-    if (drawn >= maxRows) break;
-  }
 }
 
 function tintFactionColor(cr: number, cg: number, cb: number, faction: ZoneFaction, amount: number): [number, number, number] {
@@ -490,7 +361,7 @@ function drawSamosborWarningRisk(
   cellW: number,
   cellH: number,
 ): void {
-  if (!state) return;
+  if (!state || !uiElementEnabled('caravan_hints')) return;
   const warning = getSamosborWarningSnapshot(state);
   if (!warning || warning.floor !== currentFloor) return;
   const dx = world.delta(pxI, warning.zoneX);
@@ -1119,12 +990,11 @@ function drawMap(
   if (quests) {
     clearActiveQuestMarkers();
     let concreteRoomMarkers = 0;
-    for (const q of quests) {
-      if (q.done) continue;
-      const kind = questKind(q);
-      setMarkerKind(activeQuestGivers, q.giverId, kind);
-      if (q.type === QuestType.TALK && q.targetNpcId !== undefined) setMarkerKind(activeTalkTargets, q.targetNpcId, kind);
-      if (q.type === QuestType.TALK && q.targetPlotNpcId) setMarkerKind(activeTalkPlotTargets, q.targetPlotNpcId, kind);
+	    for (const q of quests) {
+	      if (q.done) continue;
+	      const kind = questKind(q);
+	      if (q.type === QuestType.TALK && q.targetNpcId !== undefined) setMarkerKind(activeTalkTargets, q.targetNpcId, kind);
+	      if (q.type === QuestType.TALK && q.targetPlotNpcId) setMarkerKind(activeTalkPlotTargets, q.targetPlotNpcId, kind);
       if (q.type === QuestType.KILL && q.targetMonsterKind !== undefined) setMarkerKind(activeKillKinds, q.targetMonsterKind, kind);
       if (
         q.type === QuestType.FETCH &&
@@ -1354,45 +1224,32 @@ function drawMap(
     }
   }
 
-  // Quest markers — plot NPC markers + VISIT room markers
-  if (quests) {
-    // Mark all plot NPCs (gold if active quest / new quest available, blue otherwise)
-    for (const e of mapEntityQuery) {
-      if (!e.alive || !e.plotNpcId) continue;
-      const eCell = world.idx(Math.floor(e.x), Math.floor(e.y));
-      if (!isMapCellExplored(world, eCell)) continue;
-      const edx = world.delta(pxI, Math.floor(e.x));
-      const edy = world.delta(pyI, Math.floor(e.y));
-      if (Math.abs(edx) > radius || Math.abs(edy) > radius) continue;
+	  // Quest markers — notable NPC markers + VISIT room markers
+	  if (quests) {
+	    // Mark plot NPCs blue by default; gold is reserved for a current quest action.
+	    for (const e of mapEntityQuery) {
+	      if (!e.alive || e.type !== EntityType.NPC) continue;
+	      const hasActiveMarker = state ? npcHasQuestMarker(e, state) : false;
+	      if (!hasActiveMarker && !e.plotNpcId) continue;
+	      const eCell = world.idx(Math.floor(e.x), Math.floor(e.y));
+	      if (!isMapCellExplored(world, eCell)) continue;
+	      const edx = world.delta(pxI, Math.floor(e.x));
+	      const edy = world.delta(pyI, Math.floor(e.y));
+	      if (Math.abs(edx) > radius || Math.abs(edy) > radius) continue;
 
-      const targetKind = activeTalkTargets.get(e.id) ?? (e.plotNpcId !== undefined ? activeTalkPlotTargets.get(e.plotNpcId) : undefined);
-      const giverKind = activeQuestGivers.get(e.id);
-      let markerKind = targetKind;
-      if (giverKind) markerKind = mergeQuestKind(markerKind, giverKind);
-      const hasActiveMarker = markerKind !== undefined;
-      const hasNewQuest = hasAvailableQuest(e.plotNpcId, quests);
+	      const markerKind = activeTalkTargets.get(e.id) ?? (e.plotNpcId !== undefined ? activeTalkPlotTargets.get(e.plotNpcId) : undefined);
+	      const markerStyle = hasActiveMarker ? MAP_ACTIVE_NPC_MARKER : MAP_INACTIVE_NPC_MARKER;
 
-      const qsx = mapX + (edx + radius) * cellW;
-      const qsy = mapY + (edy + radius) * cellH;
-      const sz = 6, sw = 4;
-      const marker = markerKind ? QUEST_MARKERS[markerKind] : undefined;
-      ctx.strokeStyle = marker?.stroke ?? (hasNewQuest ? '#640' : '#024');
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.moveTo(qsx, qsy - sz);
-      ctx.lineTo(qsx + sw, qsy);
-      ctx.lineTo(qsx, qsy + sz);
-      ctx.lineTo(qsx - sw, qsy);
-      ctx.closePath();
-      ctx.stroke();
-      ctx.fillStyle = marker?.fill ?? (hasNewQuest ? '#fc4' : '#4af');
-      ctx.fill();
-      if (hasActiveMarker && mapW > 140 && mapH > 120) {
-        ctx.fillStyle = marker?.text ?? '#fc4';
-        ctx.font = '7px monospace';
-        ctx.fillText(marker?.label ?? '', qsx + 5, qsy - 5);
-      }
-    }
+	      const qsx = mapX + (edx + radius) * cellW;
+	      const qsy = mapY + (edy + radius) * cellH;
+	      const sz = 6, sw = 4;
+	      drawQuestDiamond(ctx, qsx, qsy, sz, sw, markerStyle.stroke, markerStyle.fill);
+	      if (hasActiveMarker && mapW > 140 && mapH > 120) {
+	        ctx.fillStyle = markerStyle.text;
+	        ctx.font = '7px monospace';
+	        ctx.fillText(markerKind ? QUEST_MARKERS[markerKind].label : '!', qsx + 5, qsy - 5);
+	      }
+	    }
     // VISIT quest markers (room targets)
     for (const q of quests) {
       if (q.done) continue;
@@ -1482,41 +1339,14 @@ function drawMap(
 export function drawMinimap(
   ctx: CanvasRenderingContext2D,
   world: World, entities: Entity[], player: Entity,
-  sx: number, sy: number, quests?: Quest[], floorInstanceLabel?: string, currentFloor?: FloorLevel, state?: GameState, uiTime = state?.time ?? 0,
+  sx: number, sy: number, quests?: Quest[], _floorInstanceLabel?: string, currentFloor?: FloorLevel, state?: GameState, uiTime = state?.time ?? 0,
+  rect?: UiRect,
 ): void {
-  const mw = MAP_SIZE * sx, mh = MAP_SIZE * sy;
-  const mx = ctx.canvas.width - mw - 4 * sx;
-  const my = 4 * sy;
+  const mw = rect?.w ?? MAP_SIZE * sx;
+  const mh = rect?.h ?? MAP_SIZE * sy;
+  const mx = rect?.x ?? ctx.canvas.width - mw - 4 * sx;
+  const my = rect?.y ?? 4 * sy;
   drawMap(ctx, world, entities, player, sx, sy, mx, my, mw, mh, 40, 0.75, quests, currentFloor, state, uiTime);
-  let infoRows = 0;
-  const routeLabel = currentRouteLabel(state);
-  if (routeLabel) {
-    ctx.fillStyle = '#8cf';
-    ctx.font = `${7 * sy}px monospace`;
-    ctx.textAlign = 'right';
-    ctx.fillText(fitMapText(ctx, routeLabel, mw), mx + mw, my + mh + 3 * sy + infoRows * 9 * sy);
-    ctx.textAlign = 'left';
-    infoRows++;
-  }
-  const numberedLiftLabel = numberedLiftRouteLabel(state, floorInstanceLabel);
-  if (numberedLiftLabel) {
-    ctx.fillStyle = '#f4a';
-    ctx.font = `${7 * sy}px monospace`;
-    ctx.textAlign = 'right';
-    ctx.fillText(fitMapText(ctx, numberedLiftLabel, mw), mx + mw, my + mh + 3 * sy + infoRows * 9 * sy);
-    ctx.textAlign = 'left';
-    infoRows++;
-  }
-  const objective = primaryObjective(quests, state);
-  if (objective) {
-    const marker = QUEST_MARKERS[questKind(objective)];
-    ctx.fillStyle = marker.text;
-    ctx.font = `${7 * sy}px monospace`;
-    ctx.textAlign = 'right';
-    const oy = my + mh + 3 * sy + infoRows * 9 * sy;
-    ctx.fillText(fitMapText(ctx, objectiveSummary(objective, currentFloor, state), mw), mx + mw, oy);
-    ctx.textAlign = 'left';
-  }
 }
 
 /* ── Full world map (fullscreen) ─────────────────────────────── */
@@ -1531,7 +1361,6 @@ export function drawFullMap(
   const mapW = cw - pad * 2;
   const mapH = ch - pad * 2;
   drawMap(ctx, world, entities, player, sx, sy, pad, pad, mapW, mapH, 200, 0.85, quests, currentFloor, state, uiTime);
-  drawObjectiveStrip(ctx, quests, currentFloor, state, pad + mapW - Math.min(360 * sx, mapW - 12 * sx), pad + 8 * sy, Math.min(360 * sx, mapW - 12 * sx), sx, sy, 4);
 
   ctx.fillStyle = '#666';
   ctx.font = `${8 * sy}px monospace`;

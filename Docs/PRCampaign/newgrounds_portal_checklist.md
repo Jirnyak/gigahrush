@@ -16,6 +16,8 @@
 - `Docs/PRCampaign/copy_pack_ru.md` - RU/EN copy, pitch, письма и one-liners.
 - `Docs/PRCampaign/itch_release_announcement.md` - готовый itch forum post.
 - `Docs/PRCampaign/press_kit_checklist.md` - структура press-kit.
+- `tmp/prcampaign_screenshot_hunt_2026-05-23/selected_best/` - текущий owner-updated best media set для PR/порталов; брать GIF/PNG и 3x3 sheet отсюда.
+- `tmp/prcampaign_screenshot_hunt_2026-05-23/selected_best/contact_sheet_3x3.png` - квадратный 3x3 обзор для social/portal preview.
 - `itch_page_pack/approved_frontpage/` - 12 PNG screenshots и 2 GIF.
 - `itch_page_pack/approved_frontpage_itch/` - 2 оптимизированных itch-safe GIF.
 - `itch_page_pack/assets/` - cover 630x500, header/background/banner/social/media wall.

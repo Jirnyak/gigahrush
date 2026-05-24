@@ -1,8 +1,10 @@
 /* ── World log consumer: structured events → HUD/log strings ──── */
 
 import {
-  type GameState, type LogEntry, type Msg, type WorldEvent,
+  FloorLevel,
+  type GameState, type LogEntry, type Msg, type MsgLocation, type WorldEvent,
   MonsterKind,
+  msgAt,
 } from '../core/types';
 
 const LOG_MAX = 500;
@@ -12,6 +14,107 @@ const TELEMETRY_ONLY = new Set<string>([
   'container_opened',
   'rumor_observed',
 ]);
+
+export interface WorldLogPoint {
+  x: number;
+  y: number;
+}
+
+export interface WorldLogSpatialContext {
+  floor: FloorLevel;
+  playerX: number;
+  playerY: number;
+  audibleRadiusMeters?: number;
+  dist2: (ax: number, ay: number, bx: number, by: number) => number;
+  entityPosition?: (entityId: number) => WorldLogPoint | undefined;
+  roomCenter?: (roomId: number) => WorldLogPoint | undefined;
+  zoneCenter?: (zoneId: number) => WorldLogPoint | undefined;
+}
+
+let spatialContextProvider: () => WorldLogSpatialContext | undefined = () => undefined;
+
+export function setWorldLogSpatialContext(context?: WorldLogSpatialContext): void {
+  spatialContextProvider = () => context;
+}
+
+export function setWorldLogSpatialContextProvider(provider?: () => WorldLogSpatialContext | undefined): void {
+  spatialContextProvider = provider ?? (() => undefined);
+}
+
+function currentSpatialContext(): WorldLogSpatialContext | undefined {
+  try {
+    return spatialContextProvider();
+  } catch {
+    return undefined;
+  }
+}
+
+function finiteCoord(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value);
+}
+
+function locationPoint(location: MsgLocation, context: WorldLogSpatialContext): WorldLogPoint | undefined {
+  if (finiteCoord(location.x) && finiteCoord(location.y)) return { x: location.x, y: location.y };
+  if (Number.isFinite(location.actorId)) {
+    const point = context.entityPosition?.(Math.floor(location.actorId!));
+    if (point && finiteCoord(point.x) && finiteCoord(point.y)) return point;
+  }
+  if (Number.isFinite(location.targetId)) {
+    const point = context.entityPosition?.(Math.floor(location.targetId!));
+    if (point && finiteCoord(point.x) && finiteCoord(point.y)) return point;
+  }
+  if (Number.isFinite(location.roomId)) {
+    const point = context.roomCenter?.(Math.floor(location.roomId!));
+    if (point && finiteCoord(point.x) && finiteCoord(point.y)) return point;
+  }
+  if (Number.isFinite(location.zoneId)) {
+    const point = context.zoneCenter?.(Math.floor(location.zoneId!));
+    if (point && finiteCoord(point.x) && finiteCoord(point.y)) return point;
+  }
+  return undefined;
+}
+
+function locationHasSource(location: MsgLocation): boolean {
+  return finiteCoord(location.x) || finiteCoord(location.y) ||
+    Number.isFinite(location.actorId) || Number.isFinite(location.targetId) ||
+    Number.isFinite(location.roomId) || Number.isFinite(location.zoneId);
+}
+
+export function worldLogDistanceForLocation(location: MsgLocation): number | undefined {
+  const context = currentSpatialContext();
+  if (!context) return undefined;
+  const locationFloor = location.floor ?? context.floor;
+  if (locationFloor !== context.floor) return undefined;
+  const point = locationPoint(location, context);
+  if (!point) return undefined;
+  const d2 = context.dist2(context.playerX, context.playerY, point.x, point.y);
+  return Number.isFinite(d2) ? Math.max(0, Math.round(Math.sqrt(Math.max(0, d2)))) : undefined;
+}
+
+export function worldLogMessageDistance(location: MsgLocation): number {
+  return worldLogDistanceForLocation(location) ?? 0;
+}
+
+export function worldLogLocationIsAudible(location: MsgLocation, distanceMeters = worldLogDistanceForLocation(location)): boolean {
+  if (!locationHasSource(location)) return true;
+  if (distanceMeters === undefined) return true;
+  const radius = currentSpatialContext()?.audibleRadiusMeters;
+  if (!Number.isFinite(radius)) return true;
+  return distanceMeters <= Math.max(0, radius!);
+}
+
+export function pushLocalizedMessage(
+  msgs: Msg[],
+  text: string,
+  time: number,
+  color: string,
+  location: MsgLocation,
+): boolean {
+  const distanceMeters = worldLogDistanceForLocation(location);
+  if (!worldLogLocationIsAudible(location, distanceMeters)) return false;
+  msgs.push(msgAt(text, time, color, location, distanceMeters ?? 0));
+  return true;
+}
 
 function eventKey(e: WorldEvent): string {
   return `${e.type}|${e.actorId ?? -1}|${e.targetId ?? -1}|${e.zoneId ?? -1}|${e.itemId ?? ''}`;
@@ -449,16 +552,28 @@ export function recordWorldLogEvent(state: GameState, event: WorldEvent): void {
   if (state.worldEvents.lastLogKey === key && event.time - state.worldEvents.lastLogTime < DEDUPE_SECONDS && event.severity < 5) {
     return;
   }
-  state.worldEvents.lastLogKey = key;
-  state.worldEvents.lastLogTime = event.time;
 
   const text = eventText(event);
   const color = colorFor(event);
-  const entry: LogEntry = { text, color, day: event.day, hour: event.hour, minute: event.minute };
+  const location: MsgLocation = {
+    floor: event.floor,
+    x: event.x,
+    y: event.y,
+    actorId: event.actorId,
+    targetId: event.targetId,
+    roomId: event.roomId,
+    zoneId: event.zoneId,
+  };
+  const distanceMeters = worldLogDistanceForLocation(location);
+  if (!worldLogLocationIsAudible(location, distanceMeters)) return;
+  state.worldEvents.lastLogKey = key;
+  state.worldEvents.lastLogTime = event.time;
+  const stampedDistanceMeters = distanceMeters ?? 0;
+  const entry: LogEntry = { text, color, day: event.day, hour: event.hour, minute: event.minute, ...location, distanceMeters: stampedDistanceMeters };
   pushLog(state, entry);
 
   if (shouldHud(event)) {
-    const hud: Msg = { text, color, time: event.time, day: event.day, hour: event.hour, minute: event.minute };
+    const hud: Msg = { text, color, time: event.time, day: event.day, hour: event.hour, minute: event.minute, ...location, distanceMeters: stampedDistanceMeters };
     state.msgs.push(hud);
   }
 }

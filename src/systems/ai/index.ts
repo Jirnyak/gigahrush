@@ -6,6 +6,7 @@ export { tryMonsterProjectileStagger } from './monster';
 import {
   type Entity, type GameState, type Msg, type GameClock,
   EntityType, Faction, FloorLevel, MonsterKind, AIGoal,
+  setMsgLocationProvider,
 } from '../../core/types';
 import { World } from '../../core/world';
 import { AI_LOD_SCHEDULER_PROFILE } from '../../data/population_profiles';
@@ -14,6 +15,7 @@ import { setEntityMap, updateMonster } from './monster';
 import { setCombatContext, tryFactionCombat, tryFleeFromMonster } from './combat';
 import { primeNpcAlifeState, setNpcContext, updateNPC } from './npc_fsm';
 import { primeMinistryAlifeState, setMinistryContext, updateMinistryNPC } from './ministry_ai';
+import { setNpcBarkLogContext } from './barks';
 import { expireMonsterBaits } from '../monster_bait';
 import { ensureEntityIndex } from '../entity_index';
 import { isActorNoiseHot } from '../noise';
@@ -273,39 +275,60 @@ export function updateAI(world: World, entities: Entity[], dt: number, time: num
 
   const isMinistry = currentFloor === FloorLevel.MINISTRY;
   const player = entityIndex.byId.get(playerId);
+  setNpcBarkLogContext({
+    listener: player,
+    radiusMeters: state?.npcLogRadiusMeters,
+    dist2: (x1, y1, x2, y2) => world.dist2(x1, y1, x2, y2),
+  });
   updateSwarmNests(world, entities, dt, time, player, nextId, state);
   aiFrame = (aiFrame + 1) & 0x3fffffff;
   resetAiStats(aiFrame, entityIndex.ai.length, entityIndex.projectiles.length);
 
-  for (const e of entityIndex.ai) {
-    if (!e.alive || !e.ai) continue;
-    if (e.type === EntityType.NPC) {
-      if (isMinistry) primeMinistryAlifeState(e, clock, samosborActive);
-      else primeNpcAlifeState(e, clock, samosborActive);
-    } else if (e.type === EntityType.MONSTER && e.ai.goal === AIGoal.IDLE && e.ai.combatTargetId === undefined && e.speed > 0) {
-      e.ai.goal = AIGoal.WANDER;
-    }
-    const decision = classifyAiTier(world, e, player, aiFrame, time, entityIndex.byId, state);
-    aiStats[decision.tier]++;
-    const aiDt = consumeAiDt(e, decision.tier, decision.targetsPlayer, dt, aiFrame);
-    if (aiDt <= 0) {
-      aiStats.skipped++;
-      continue;
-    }
-    if (decision.tier === 'hot') aiStats.updatedHot++;
-    else if (decision.tier === 'warm') aiStats.updatedWarm++;
-    else aiStats.updatedCold++;
-    if (e.type === EntityType.NPC) {
-      if (!tryFactionCombat(world, entities, e, aiDt, time, msgs, nextId, state, player)) {
-        if (!tryFleeFromMonster(world, entities, e, aiDt)) {
-          if (isMinistry) {
-            updateMinistryNPC(world, entities, e, aiDt, time, clock, samosborActive);
-          } else {
-            updateNPC(world, entities, e, aiDt, time, clock, samosborActive);
+  try {
+    for (const e of entityIndex.ai) {
+      if (!e.alive || !e.ai) continue;
+      setMsgLocationProvider(() => {
+        const ci = world.idx(Math.floor(e.x), Math.floor(e.y));
+        const roomId = world.roomMap[ci];
+        return {
+          floor: currentFloor,
+          x: e.x,
+          y: e.y,
+          actorId: e.id,
+          roomId: roomId >= 0 ? roomId : undefined,
+          zoneId: world.zoneMap[ci],
+        };
+      });
+      if (e.type === EntityType.NPC) {
+        if (isMinistry) primeMinistryAlifeState(e, clock, samosborActive);
+        else primeNpcAlifeState(e, clock, samosborActive);
+      } else if (e.type === EntityType.MONSTER && e.ai.goal === AIGoal.IDLE && e.ai.combatTargetId === undefined && e.speed > 0) {
+        e.ai.goal = AIGoal.WANDER;
+      }
+      const decision = classifyAiTier(world, e, player, aiFrame, time, entityIndex.byId, state);
+      aiStats[decision.tier]++;
+      const aiDt = consumeAiDt(e, decision.tier, decision.targetsPlayer, dt, aiFrame);
+      if (aiDt <= 0) {
+        aiStats.skipped++;
+        continue;
+      }
+      if (decision.tier === 'hot') aiStats.updatedHot++;
+      else if (decision.tier === 'warm') aiStats.updatedWarm++;
+      else aiStats.updatedCold++;
+      if (e.type === EntityType.NPC) {
+        if (!tryFactionCombat(world, entities, e, aiDt, time, msgs, nextId, state, player)) {
+          if (!tryFleeFromMonster(world, entities, e, aiDt)) {
+            if (isMinistry) {
+              updateMinistryNPC(world, entities, e, aiDt, time, clock, samosborActive);
+            } else {
+              updateNPC(world, entities, e, aiDt, time, clock, samosborActive);
+            }
           }
         }
       }
+      if (e.type === EntityType.MONSTER) updateMonster(world, entities, e, aiDt, time, msgs, playerId, nextId, state);
     }
-    if (e.type === EntityType.MONSTER) updateMonster(world, entities, e, aiDt, time, msgs, playerId, nextId, state);
+  } finally {
+    setMsgLocationProvider();
   }
 }

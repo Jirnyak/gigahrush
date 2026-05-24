@@ -61,6 +61,19 @@ import {
   getControlCaptureAction,
   resetControlBinding,
 } from './systems/controls';
+import { GAME_MENU_ITEMS } from './systems/game_menu';
+import { MOBILE_BUTTON_CONTROL_ROWS } from './systems/mobile_actions';
+import {
+  DEFAULT_UI_PRESET_ID,
+  applyUiPreset,
+  nextVisibleMapMode,
+  normalizeVisibleMapMode,
+  resetUiElement,
+  toggleUiElement,
+  uiElementEnabled,
+  uiSettingsRowAt,
+  uiSettingsRowCount,
+} from './systems/ui_orchestrator';
 import { freshNeeds, ITEMS, WEAPON_STATS } from './data/catalog';
 import { getStack } from './data/items';
 import { entityDisplayName } from './entities/monster';
@@ -74,7 +87,16 @@ import {
   playProjectileImpact, playEnergyImpact, playProjectileBodyHit,
   startAmbientDrone, setListenerPos, playSoundAt,
 } from './systems/audio';
-import { offerQuest, checkQuests, checkTalkQuest, notifyKill, notifyNpcKill } from './systems/quests';
+import {
+  offerQuest,
+  checkQuests,
+  checkTalkQuest,
+  getCurrentObjective,
+  notifyKill,
+  notifyNpcKill,
+  npcHasImportantQuestAction,
+  npcQuestActionHint,
+} from './systems/quests';
 import { applyContractFloorHooks, notifyCleanupToolUse } from './systems/contracts';
 import { updateScriptedArrivals } from './systems/scripted_arrivals';
 import { applyStoryRouteGates } from './systems/story_route_gates';
@@ -101,6 +123,12 @@ import {
 import { debugOnePunchMeleeDamage, isDebugOnePunchManEnabled, keepDebugOnePunchManAlive } from './systems/debug_cheats';
 import { formatLastPlayerDamageCause, hasFreshPlayerDamageRecord, recordPlayerDamage } from './systems/damage';
 import { createWorldEventState, normalizeWorldEventState, publishEvent } from './systems/events';
+import {
+  setWorldLogSpatialContextProvider,
+  worldLogDistanceForLocation,
+  worldLogLocationIsAudible,
+  worldLogMessageDistance,
+} from './systems/world_log';
 import {
   publishExplosionNoise,
   publishFootstepNoise,
@@ -510,6 +538,32 @@ let pendingLoadDrawn = false; // true = loading screen was painted, next frame r
 let currentTip = randomTip();
 let activeSkyProvider: (DynamicSkyTexture & { update(deltaSeconds: number): boolean }) | null = null;
 let lastVoidReturnPortalHintTick = -9999;
+let lastAttackFeedbackAt = -999;
+const PLAYER_PITCH_LIMIT = 0.62;
+const ATTACK_FEEDBACK_MIN_INTERVAL = 0.18;
+
+setWorldLogSpatialContextProvider(() => {
+  if (!started || typeof state === 'undefined' || typeof world === 'undefined' || typeof player === 'undefined') return undefined;
+  return {
+    floor: state.currentFloor,
+    playerX: player.x,
+    playerY: player.y,
+    audibleRadiusMeters: state.npcLogRadiusMeters ?? 100,
+    dist2: (ax, ay, bx, by) => world.dist2(ax, ay, bx, by),
+    entityPosition: entityId => {
+      const entity = getEntityIndex().byId.get(entityId) ?? entities.find(e => e.id === entityId);
+      return entity ? { x: entity.x, y: entity.y } : undefined;
+    },
+    roomCenter: roomId => {
+      const room = world.rooms[roomId];
+      return room ? { x: room.x + room.w / 2, y: room.y + room.h / 2 } : undefined;
+    },
+    zoneCenter: zoneId => {
+      const zone = world.zones[zoneId];
+      return zone ? { x: zone.cx + 0.5, y: zone.cy + 0.5 } : undefined;
+    },
+  };
+});
 
 interface VoidReturnPortalState {
   active: boolean;
@@ -878,10 +932,20 @@ interface SmokeDebugSnapshot {
   showQuests: boolean;
   showInventory: boolean;
   showLog: boolean;
+  showNpcMenu: boolean;
+  npcMenuSel: number;
+  npcMenuTab: GameState['npcMenuTab'];
   mapMode: number;
   mobileControlsEnabled: boolean;
   currentFloor: FloorLevel;
   questCount: number;
+  currentObjectiveLine: string;
+  currentObjectiveSource: string;
+  currentObjectiveTargetPlotNpcId: string;
+  canInteractAhead: boolean;
+  interactionPrompt: string;
+  interactionPromptEnabled: boolean;
+  routeHintsEnabled: boolean;
   playerWeapon: string;
   gameOver: boolean;
   playerAlive: boolean;
@@ -930,6 +994,23 @@ function installSmokeDebugHook(): void {
   };
 }
 
+function interactionTargetAhead(): ReturnType<typeof findInteractionTarget> {
+  if (!started || typeof state === 'undefined' || typeof world === 'undefined' || typeof player === 'undefined') return null;
+  if (state.gameOver || state.sleeping || isMobileMenuOpen()) return null;
+  const lookX = player.x + Math.cos(player.angle) * 1.5;
+  const lookY = player.y + Math.sin(player.angle) * 1.5;
+  return findInteractionTarget({
+    world,
+    state,
+    player,
+    entities,
+    nextEntityId,
+    lookX,
+    lookY,
+    routeHintsVisible: uiElementEnabled('route_hints'),
+  });
+}
+
 function smokeSnapshot(): SmokeDebugSnapshot {
   let liveActorCount = 0;
   let liveAiCount = 0;
@@ -944,6 +1025,8 @@ function smokeSnapshot(): SmokeDebugSnapshot {
   }
   const netSphere = getNetSphereSnapshot();
   const memory = floorMemoryStats();
+  const objective = getCurrentObjective(state, entities);
+  const interaction = interactionTargetAhead();
   return {
       started,
       showDebug: state.showDebug,
@@ -951,10 +1034,20 @@ function smokeSnapshot(): SmokeDebugSnapshot {
       showQuests: state.showQuests,
       showInventory: state.showInventory,
       showLog: state.showLog,
+      showNpcMenu: state.showNpcMenu,
+      npcMenuSel: state.npcMenuSel,
+      npcMenuTab: state.npcMenuTab,
       mapMode: state.mapMode,
       mobileControlsEnabled: mobileControls?.isEnabled() === true,
       currentFloor: state.currentFloor,
       questCount: state.quests.length,
+      currentObjectiveLine: objective?.line ?? '',
+      currentObjectiveSource: objective?.source ?? '',
+      currentObjectiveTargetPlotNpcId: objective?.targetPlotNpcId ?? '',
+      canInteractAhead: interaction !== null,
+      interactionPrompt: interaction?.prompt.trim() ?? '',
+      interactionPromptEnabled: uiElementEnabled('interaction_prompt'),
+      routeHintsEnabled: uiElementEnabled('route_hints'),
       playerWeapon: player.weapon ?? '',
       gameOver: state.gameOver,
       playerAlive: player.alive,
@@ -1186,7 +1279,7 @@ function initGame(runSeedOverride?: number): void {
     mapMode: 0,
     showQuests: false,
     invSel: 0,
-    msgs: [msg('Добро пожаловать в ГИГАХРУЩ. Закройте дверь.', 0, '#aaa')],
+    msgs: [msg('Добро пожаловать в ГИГАХРУЩ. Закройте дверь.', 0, '#aaa', 0)],
     quests: [],
     nextQuestId: 1,
     currentFloor: FloorLevel.LIVING,
@@ -1214,9 +1307,14 @@ function initGame(runSeedOverride?: number): void {
     showLog: false,
     logScroll: 0,
     showControls: false,
+    controlView: 'keys',
     controlSel: 0,
     controlScroll: 0,
-    msgLog: [{ text: 'Добро пожаловать в ГИГАХРУЩ. Закройте дверь.', color: '#aaa', day: 0, hour: 8, minute: 0 }],
+    showUiSettings: false,
+    uiSettingsSel: 0,
+    uiSettingsScroll: 0,
+    npcLogRadiusMeters: 100,
+    msgLog: [{ text: 'Добро пожаловать в ГИГАХРУЩ. Закройте дверь.', color: '#aaa', day: 0, hour: 8, minute: 0, distanceMeters: 0 }],
     dmgFlash: 0,
     dmgSeed: 0,
     deathTimer: 0,
@@ -1294,18 +1392,42 @@ let netDeathReported = false;
 function syncMsgLog(): void {
   const msgs = state.msgs;
   if (msgs.length > _prevMsgCount) {
+    let writeIdx = _prevMsgCount;
     for (let i = _prevMsgCount; i < msgs.length; i++) {
       const m = msgs[i];
+      const location = {
+        floor: m.floor ?? state.currentFloor,
+        x: m.x,
+        y: m.y,
+        actorId: m.actorId,
+        targetId: m.targetId,
+        roomId: m.roomId,
+        zoneId: m.zoneId,
+      };
+      const resolvedDistance = m.distanceMeters ?? worldLogDistanceForLocation(location);
+      if (!worldLogLocationIsAudible(location, resolvedDistance)) continue;
+      const distanceMeters = resolvedDistance ?? worldLogMessageDistance(location);
+      m.distanceMeters = distanceMeters;
+      msgs[writeIdx++] = m;
       const last = state.msgLog[state.msgLog.length - 1];
-      if (last && last.text === m.text && last.day === m.day && last.hour === m.hour && last.minute === m.minute) continue;
+      if (last && last.text === m.text && last.day === m.day && last.hour === m.hour && last.minute === m.minute && last.distanceMeters === distanceMeters) continue;
       state.msgLog.push({
         text: m.text,
         color: m.color,
         day: m.day,
         hour: m.hour,
         minute: m.minute,
+        floor: location.floor,
+        x: location.x,
+        y: location.y,
+        actorId: location.actorId,
+        targetId: location.targetId,
+        roomId: location.roomId,
+        zoneId: location.zoneId,
+        distanceMeters,
       });
     }
+    if (writeIdx < msgs.length) msgs.splice(writeIdx, msgs.length - writeIdx);
     if (state.msgLog.length > 500) state.msgLog.splice(0, state.msgLog.length - 500);
   }
   _prevMsgCount = msgs.length;
@@ -1402,7 +1524,7 @@ function movePlayer(dt: number): void {
   // Mouse look
   if (input.mouse.locked) {
     player.angle += input.mouse.dx * 0.003;
-    player.pitch = Math.max(-1, Math.min(1, player.pitch - input.mouse.dy * 0.003));
+    player.pitch = Math.max(-PLAYER_PITCH_LIMIT, Math.min(PLAYER_PITCH_LIMIT, player.pitch - input.mouse.dy * 0.003));
     input.mouse.dx = 0;
     input.mouse.dy = 0;
   }
@@ -1411,7 +1533,10 @@ function movePlayer(dt: number): void {
   if (input.left)  player.angle -= 2.5 * dt;
   if (input.right) player.angle += 2.5 * dt;
   if (input.touch.lookX !== 0) player.angle += input.touch.lookX * 3.0 * dt;
-  if (input.touch.lookY !== 0) player.pitch = Math.max(-1, Math.min(1, player.pitch - input.touch.lookY * 1.6 * dt));
+  if (input.touch.lookY !== 0) {
+    player.pitch = Math.max(-PLAYER_PITCH_LIMIT, Math.min(PLAYER_PITCH_LIMIT, player.pitch - input.touch.lookY * 1.6 * dt));
+  }
+  player.pitch = Math.max(-PLAYER_PITCH_LIMIT, Math.min(PLAYER_PITCH_LIMIT, player.pitch));
   if (isRidingRailTrain(world, player)) return;
   nudgeBlockedPlayerToFloor();
 
@@ -1567,13 +1692,22 @@ function publishFuelEmptyEvent(ammoType: string | undefined): void {
   });
 }
 
+function pushAttackFeedback(text: string, color = '#8cf', minInterval = ATTACK_FEEDBACK_MIN_INTERVAL): void {
+  if (state.time - lastAttackFeedbackAt < minInterval) return;
+  const line = msg(text, state.time, color);
+  line.hud = true;
+  line.hudPriority = 92;
+  state.msgs.push(line);
+  lastAttackFeedbackAt = state.time;
+}
+
 /* ── Player actions ───────────────────────────────────────────── */
 function playerActions(_dt: number): void {
   if (!player.alive) return;
   if (state.sleeping) return; // no actions while sleeping
 
   // Toggle map
-  if (input.map && !prevMap) state.mapMode = (state.mapMode + 1) % 3;
+  if (input.map && !prevMap) state.mapMode = nextVisibleMapMode(state.mapMode);
   prevMap = input.map;
 
   // Pickup (on interact key E, if looking at item drop)
@@ -1591,6 +1725,7 @@ function playerActions(_dt: number): void {
       nextEntityId,
       lookX,
       lookY,
+      routeHintsVisible: uiElementEnabled('route_hints'),
       switchFloor,
       movePlayerToMetroRoom,
       openNpcMenu,
@@ -1616,7 +1751,7 @@ function playerActions(_dt: number): void {
     if (ws.psiCost) {
       // ── PSI spell: consume PSI instead of ammo ──────────
       if (!player.rpg || player.rpg.psi < ws.psiCost) {
-        state.msgs.push(msg('Недостаточно ПСИ!', state.time, '#f84'));
+        pushAttackFeedback('Недостаточно ПСИ!', '#f84', 0.3);
         player.attackCd = 0.5;
       } else {
         player.rpg.psi -= ws.psiCost;
@@ -1663,6 +1798,7 @@ function playerActions(_dt: number): void {
             state.beamLen = psiResult.beamLen;
           }
         }
+        pushAttackFeedback(ws.isRanged ? 'Выстрел ПСИ.' : 'ПСИ-удар.');
         if (ws.psiEffect === 'beam') playPsiBeam(); else playPsiCast();
         publishWeaponNoise(state, player, player.weapon ?? '', ws);
         player.attackCd = ws.speed * atkSpeedMod;
@@ -1718,16 +1854,17 @@ function playerActions(_dt: number): void {
           }
         }
         // Play weapon-specific sound
+        pushAttackFeedback('Выстрел.');
         playWeaponSound(player.weapon ?? '', ws);
         publishWeaponNoise(state, player, player.weapon ?? '', ws);
         notifyLiftArachnaNoise(world, player, state, player.weapon ?? '');
         player.attackCd = ws.speed * atkSpeedMod;
       } else {
         if ((player.weapon ?? '') === 'flamethrower') {
-          state.msgs.push(msg('Бензин кончился!', state.time, '#f84'));
+          pushAttackFeedback('Бензин кончился!', '#f84', 0.3);
           publishFuelEmptyEvent(ws.ammoType);
         } else {
-          state.msgs.push(msg('Нет патронов!', state.time, '#f84'));
+          pushAttackFeedback('Нет патронов!', '#f84', 0.3);
         }
         player.attackCd = 0.5;
       }
@@ -1784,6 +1921,7 @@ function playerActions(_dt: number): void {
           break;
         }
       }
+      if (!hitSomething) pushAttackFeedback('Взмах — мимо.', '#fc4', 0.24);
       if (player.weapon === 'chainsaw') playChainsaw(); else playAttack();
       publishWeaponNoise(state, player, player.weapon ?? '', ws);
       notifyLiftArachnaNoise(world, player, state, player.weapon ?? '');
@@ -2984,7 +3122,7 @@ function handleDebugCommandAction(action: DebugCommandAction): void {
 /* ── NPC interaction menu ──────────────────────────────────────── */
 function openNpcMenu(npc: Entity): void {
   state.showNpcMenu = true;
-  state.npcMenuSel = 0;
+  state.npcMenuSel = npcHasImportantQuestAction(npc, state) ? 1 : 0;
   state.npcMenuTarget = npc.id;
   state.npcMenuTab = 'main';
   state.npcTalkText = '';
@@ -3407,6 +3545,8 @@ function loadGame(): boolean {
 
     state.showMenu = false;
     state.showControls = false;
+    state.controlView = 'keys';
+    state.showUiSettings = false;
     cancelControlCapture();
     closeNetTerminalGen();
     closeMapEditor();
@@ -3496,6 +3636,8 @@ function loadGame(): boolean {
       state.lastDamage = undefined;
       state.showMenu = false;
       state.showControls = false;
+      state.controlView = 'keys';
+      state.showUiSettings = false;
       cancelControlCapture();
       state.showContainerMenu = false;
       state.containerMenuTarget = -1;
@@ -3785,6 +3927,7 @@ let prevMenuInteract = false, prevDrop = false;
 let prevFactionMenu = false;
 let prevLogMenu = false;
 let prevControlsMenu = false;
+let prevUiSettingsMenu = false;
 let prevControlReset = false;
 type MenuRepeatKey = 'up' | 'down' | 'left' | 'right';
 const MENU_REPEAT_DELAY = 0.30;
@@ -3854,14 +3997,14 @@ function mobileGestureUnlock(): void {
 function syncPauseState(): void {
   if (typeof state === 'undefined') return;
   state.paused = state.showMenu || state.showInventory || state.showNpcMenu || state.showContainerMenu ||
-    state.showQuests || state.showDebug || state.showFactions || state.showLog || state.showControls ||
+    state.showQuests || state.showDebug || state.showFactions || state.showLog || state.showControls || state.showUiSettings ||
     isNetSphereOpen() || isNetTerminalGenOpen() || isInteractableOverlayOpen() || isEmergencyPanelMenuOpen() || isMapEditorOpen();
 }
 
 function isMobileMenuOpen(): boolean {
   if (typeof state === 'undefined') return false;
   return state.showMenu || state.showInventory || state.showNpcMenu || state.showContainerMenu ||
-    state.showQuests || state.showDebug || state.showFactions || state.showLog || state.showControls ||
+    state.showQuests || state.showDebug || state.showFactions || state.showLog || state.showControls || state.showUiSettings ||
     state.mapMode === 2 || isNetSphereOpen() || isNetTerminalGenOpen() || isInteractableOverlayOpen() || isEmergencyPanelMenuOpen() || isMapEditorOpen();
 }
 
@@ -3876,6 +4019,7 @@ function closeMobilePanels(includeMap = true): void {
   state.showFactions = false;
   state.showLog = false;
   state.showControls = false;
+  state.showUiSettings = false;
   cancelControlCapture();
   if (includeMap) state.mapMode = 0;
   closeNetSphere();
@@ -3901,7 +4045,7 @@ function openMobileMenu(menu: MobileMenuId): void {
       break;
     case 'map':
       closeMobilePanels(false);
-      state.mapMode = (state.mapMode + 1) % 3;
+      state.mapMode = nextVisibleMapMode(state.mapMode);
       break;
     case 'quests':
       state.showQuests = true;
@@ -3920,6 +4064,9 @@ function openMobileMenu(menu: MobileMenuId): void {
     case 'menu':
       state.showMenu = true;
       state.menuSel = 0;
+      break;
+    case 'ui':
+      openUiSettingsMenu();
       break;
     case 'debug':
       state.showDebug = true;
@@ -3959,19 +4106,7 @@ function confirmActiveMobileSelection(): void {
 }
 
 function canInteractAhead(): boolean {
-  if (!started || typeof state === 'undefined' || typeof world === 'undefined' || typeof player === 'undefined') return false;
-  if (state.gameOver || state.sleeping || isMobileMenuOpen()) return false;
-  const lookX = player.x + Math.cos(player.angle) * 1.5;
-  const lookY = player.y + Math.sin(player.angle) * 1.5;
-  return findInteractionTarget({
-    world,
-    state,
-    player,
-    entities,
-    nextEntityId,
-    lookX,
-    lookY,
-  }) !== null;
+  return interactionTargetAhead() !== null;
 }
 
 function updateMobileContext(): void {
@@ -3985,19 +4120,26 @@ function updateMobileContext(): void {
 }
 
 function runGameMenuSelection(sel: number): void {
-  switch (sel) {
-    case 0:
+  const item = GAME_MENU_ITEMS[sel];
+  switch (item?.id) {
+    case 'continue':
       state.showMenu = false;
       break;
-    case 1:
+    case 'new_game':
       returnToTitleScreen();
       return;
-    case 2:
+    case 'save':
       saveGame();
       state.showMenu = false;
       break;
-    case 3:
+    case 'load':
       loadGame();
+      break;
+    case 'keys':
+      openControlsMenu('keys');
+      break;
+    case 'interface':
+      openUiSettingsMenu();
       break;
   }
   syncPauseState();
@@ -4018,6 +4160,32 @@ function spendMobileAttr(attr: 'str' | 'agi' | 'int'): void {
   if (attr === 'str') state.msgs.push(msg(`Сила +1 (${player.rpg.str})`, state.time, '#f84'));
   else if (attr === 'agi') state.msgs.push(msg(`Ловкость +1 (${player.rpg.agi})`, state.time, '#4af'));
   else state.msgs.push(msg(`Интеллект +1 (${player.rpg.int})`, state.time, '#a4f'));
+}
+
+function activateNpcTalk(npc: Entity | undefined): void {
+  state.npcMenuTab = 'talk';
+  if (!npc) {
+    state.npcTalkText = '...';
+    return;
+  }
+
+  checkTalkQuest(npc, player, world, entities, state, state.msgs);
+
+  const baseText = generateTalkText(npc, { world, state, player, time: state.time });
+  const questHint = npcQuestActionHint(npc, state);
+  state.npcTalkText = questHint ? `${baseText}\n\n${questHint}` : baseText;
+}
+
+function activateNpcQuest(npc: Entity | undefined): void {
+  if (!npc) return;
+  checkTalkQuest(npc, player, world, entities, state, state.msgs);
+  offerQuest(npc, player, world, entities, state, state.msgs, nextEntityId);
+  const active = state.quests.filter(q => !q.done);
+  const npcQIdx = active.findIndex(q => q.giverId === npc.id);
+  if (npcQIdx >= 0) {
+    state.npcMenuTab = 'quest';
+    state.questPage = npcQIdx;
+  }
 }
 
 function activateContainerSelection(container: WorldContainer): void {
@@ -4049,20 +4217,10 @@ function activateContainerSelection(container: WorldContainer): void {
 function activateNpcMainSelection(npc: Entity | undefined): void {
   switch (state.npcMenuSel) {
     case 0:
-      state.npcMenuTab = 'talk';
-      state.npcTalkText = npc ? generateTalkText(npc, { world, state, player, time: state.time }) : '...';
+      activateNpcTalk(npc);
       break;
     case 1:
-      if (npc) {
-        checkTalkQuest(npc, player, entities, state, state.msgs);
-        offerQuest(npc, player, world, entities, state, state.msgs, nextEntityId);
-        const active = state.quests.filter(q => !q.done);
-        const npcQIdx = active.findIndex(q => q.giverId === npc.id);
-        if (npcQIdx >= 0) {
-          state.npcMenuTab = 'quest';
-          state.questPage = npcQIdx;
-        }
-      }
+      activateNpcQuest(npc);
       break;
     case 2:
       state.npcMenuTab = 'trade';
@@ -4133,17 +4291,38 @@ function controlsVisibleRows(): number {
   return Math.max(4, Math.floor((hudCanvas.height - 58 * sy) / Math.max(1, 12 * sy)));
 }
 
+function controlMenuItemCount(): number {
+  return state.controlView === 'buttons' ? MOBILE_BUTTON_CONTROL_ROWS.length : CONTROL_ACTIONS.length;
+}
+
 function keepControlSelectionVisible(): void {
-  const maxSel = Math.max(0, CONTROL_ACTIONS.length - 1);
+  const count = controlMenuItemCount();
+  const maxSel = Math.max(0, count - 1);
   state.controlSel = Math.max(0, Math.min(maxSel, state.controlSel));
   const visible = controlsVisibleRows();
-  const maxScroll = Math.max(0, CONTROL_ACTIONS.length - visible);
+  const maxScroll = Math.max(0, count - visible);
   if (state.controlSel < state.controlScroll) state.controlScroll = state.controlSel;
   if (state.controlSel >= state.controlScroll + visible) state.controlScroll = state.controlSel - visible + 1;
   state.controlScroll = Math.max(0, Math.min(maxScroll, state.controlScroll));
 }
 
-function openControlsMenu(): void {
+function uiSettingsVisibleRows(): number {
+  const { sy } = menuScale();
+  return Math.max(4, Math.floor((hudCanvas.height - 58 * sy) / Math.max(1, 12 * sy)));
+}
+
+function keepUiSettingsSelectionVisible(): void {
+  const count = uiSettingsRowCount();
+  const maxSel = Math.max(0, count - 1);
+  state.uiSettingsSel = Math.max(0, Math.min(maxSel, state.uiSettingsSel));
+  const visible = uiSettingsVisibleRows();
+  const maxScroll = Math.max(0, count - visible);
+  if (state.uiSettingsSel < state.uiSettingsScroll) state.uiSettingsScroll = state.uiSettingsSel;
+  if (state.uiSettingsSel >= state.uiSettingsScroll + visible) state.uiSettingsScroll = state.uiSettingsSel - visible + 1;
+  state.uiSettingsScroll = Math.max(0, Math.min(maxScroll, state.uiSettingsScroll));
+}
+
+function openControlsMenu(view: GameState['controlView'] = 'keys'): void {
   state.showMenu = false;
   state.showInventory = false;
   state.showQuests = false;
@@ -4152,7 +4331,9 @@ function openControlsMenu(): void {
   state.showDebug = false;
   state.showFactions = false;
   state.showLog = false;
+  state.showUiSettings = false;
   state.mapMode = 0;
+  state.controlView = view;
   state.showControls = true;
   cancelControlCapture();
   keepControlSelectionVisible();
@@ -4163,6 +4344,60 @@ function closeControlsMenu(): void {
   state.showControls = false;
   cancelControlCapture();
   syncPauseState();
+}
+
+function openUiSettingsMenu(): void {
+  state.showMenu = false;
+  state.showInventory = false;
+  state.showQuests = false;
+  state.showNpcMenu = false;
+  closeContainerMenu();
+  state.showDebug = false;
+  state.showFactions = false;
+  state.showLog = false;
+  state.showControls = false;
+  state.mapMode = 0;
+  state.showUiSettings = true;
+  cancelControlCapture();
+  keepUiSettingsSelectionVisible();
+  syncPauseState();
+}
+
+function closeUiSettingsMenu(): void {
+  state.showUiSettings = false;
+  syncPauseState();
+}
+
+function clampUiSettingsMapMode(): void {
+  state.mapMode = normalizeVisibleMapMode(state.mapMode);
+}
+
+function applyUiSettingsSelection(index: number): void {
+  const row = uiSettingsRowAt(index);
+  if (!row) return;
+  if (row.kind === 'preset') {
+    if (applyUiPreset(row.preset.id)) {
+      clampUiSettingsMapMode();
+      state.msgs.push(msg(`UI пресет: ${row.preset.label}`, state.time, '#8cf'));
+    }
+    return;
+  }
+  toggleUiElement(row.element.id);
+  clampUiSettingsMapMode();
+}
+
+function resetUiSettingsSelection(index: number): void {
+  const row = uiSettingsRowAt(index);
+  if (!row) return;
+  if (row.kind === 'preset') {
+    applyUiPreset(DEFAULT_UI_PRESET_ID);
+    clampUiSettingsMapMode();
+    state.msgs.push(msg('UI сброшен: Новичок', state.time, '#8cf'));
+    return;
+  }
+  resetUiElement(row.element.id);
+  clampUiSettingsMapMode();
+  state.msgs.push(msg(`UI сброшен: ${row.element.label}`, state.time, '#8cf'));
 }
 
 function pointInRect(x: number, y: number, rx: number, ry: number, rw: number, rh: number): boolean {
@@ -4177,7 +4412,7 @@ function handleMobileHudTap(x: number, y: number): void {
   const baseSy = h / SCR_H;
   const { sx, sy } = menuScale();
 
-  if (state.mapMode === 2 && !state.showInventory && !state.showQuests && !state.showLog && !state.showFactions && !state.showMenu && !state.showControls && !state.showNpcMenu && !state.showContainerMenu) {
+  if (state.mapMode === 2 && !state.showInventory && !state.showQuests && !state.showLog && !state.showFactions && !state.showMenu && !state.showControls && !state.showUiSettings && !state.showNpcMenu && !state.showContainerMenu) {
     state.mapMode = 0;
     return;
   }
@@ -4194,14 +4429,35 @@ function handleMobileHudTap(x: number, y: number): void {
     }
     if (relRow >= 0 && relRow < visible) {
       const idx = state.controlScroll + relRow;
-      if (idx >= 0 && idx < CONTROL_ACTIONS.length) {
+      if (idx >= 0 && idx < controlMenuItemCount()) {
         state.controlSel = idx;
         keepControlSelectionVisible();
       }
     }
+  } else if (state.showUiSettings) {
+    const { sy } = menuScale();
+    const top = 34 * sy;
+    const rowH = 12 * sy;
+    const visible = uiSettingsVisibleRows();
+    const relRow = Math.floor((y - top) / rowH);
+    if (y > h - 22 * sy) {
+      closeUiSettingsMenu();
+      return;
+    }
+    if (relRow >= 0 && relRow < visible) {
+      const idx = state.uiSettingsScroll + relRow;
+      if (idx >= 0 && idx < uiSettingsRowCount()) {
+        state.uiSettingsSel = idx;
+        keepUiSettingsSelectionVisible();
+        applyUiSettingsSelection(idx);
+      }
+    }
   } else if (state.showMenu) {
-    for (let i = 0; i < 4; i++) {
-      const yy = h / 2 - 20 * sy + i * 20 * sy;
+    const menuStep = 16 * sy;
+    const menuPanelH = Math.min(h - 16 * sy, Math.max(160 * sy, 80 * sy + GAME_MENU_ITEMS.length * menuStep));
+    const menuTop = (h - menuPanelH) / 2;
+    for (let i = 0; i < GAME_MENU_ITEMS.length; i++) {
+      const yy = menuTop + 52 * sy + i * menuStep;
       if (pointInRect(x, y, w / 2 - 90 * sx, yy - 6 * sy, 180 * sx, 16 * sy)) {
         state.menuSel = i;
         runGameMenuSelection(i);
@@ -4438,6 +4694,7 @@ function handleMenuInput(): void {
     state.showFactions = false;
     state.showLog = false;
     state.showControls = false;
+    state.showUiSettings = false;
     cancelControlCapture();
     closeNetSphere();
     closeNetTerminalGen();
@@ -4459,6 +4716,7 @@ function handleMenuInput(): void {
     prevFactionMenu = input.factionMenu;
     prevLogMenu = input.logMenu;
     prevControlsMenu = input.controls;
+    prevUiSettingsMenu = input.uiSettings;
     prevControlReset = input.controlReset;
     return;
   }
@@ -4473,6 +4731,7 @@ function handleMenuInput(): void {
     state.showLog = false;
     state.showDebug = false;
     state.showControls = false;
+    state.showUiSettings = false;
     cancelControlCapture();
     closeNetSphere();
     state.paused = true;
@@ -4529,6 +4788,7 @@ function handleMenuInput(): void {
     prevFactionMenu = input.factionMenu;
     prevLogMenu = input.logMenu;
     prevControlsMenu = input.controls;
+    prevUiSettingsMenu = input.uiSettings;
     prevControlReset = input.controlReset;
     prevMap = input.map;
     return;
@@ -4544,6 +4804,7 @@ function handleMenuInput(): void {
     state.showLog = false;
     state.showDebug = false;
     state.showControls = false;
+    state.showUiSettings = false;
     cancelControlCapture();
     closeNetSphere();
     state.paused = true;
@@ -4583,6 +4844,7 @@ function handleMenuInput(): void {
     prevFactionMenu = input.factionMenu;
     prevLogMenu = input.logMenu;
     prevControlsMenu = input.controls;
+    prevUiSettingsMenu = input.uiSettings;
     prevControlReset = input.controlReset;
     prevMap = input.map;
     return;
@@ -4598,6 +4860,7 @@ function handleMenuInput(): void {
     state.showLog = false;
     state.showDebug = false;
     state.showControls = false;
+    state.showUiSettings = false;
     cancelControlCapture();
     closeNetSphere();
     state.paused = true;
@@ -4631,6 +4894,7 @@ function handleMenuInput(): void {
     prevFactionMenu = input.factionMenu;
     prevLogMenu = input.logMenu;
     prevControlsMenu = input.controls;
+    prevUiSettingsMenu = input.uiSettings;
     prevControlReset = input.controlReset;
     prevMap = input.map;
     return;
@@ -4646,6 +4910,7 @@ function handleMenuInput(): void {
     state.showLog = false;
     state.showDebug = false;
     state.showControls = false;
+    state.showUiSettings = false;
     cancelControlCapture();
     state.paused = true;
     resetMenuRepeats();
@@ -4662,6 +4927,7 @@ function handleMenuInput(): void {
     prevFactionMenu = input.factionMenu;
     prevLogMenu = input.logMenu;
     prevControlsMenu = input.controls;
+    prevUiSettingsMenu = input.uiSettings;
     prevControlReset = input.controlReset;
     return;
   }
@@ -4678,14 +4944,19 @@ function handleMenuInput(): void {
   const factionEdge = input.factionMenu && !prevFactionMenu;
   const logEdge = input.logMenu && !prevLogMenu;
   const controlsEdge = input.controls && !prevControlsMenu;
+  const uiSettingsEdge = input.uiSettings && !prevUiSettingsMenu;
   const controlResetEdge = input.controlReset && !prevControlReset;
   const anyRepeatMenuOpen = state.showMenu || state.showInventory || state.showQuests ||
-    state.showContainerMenu || state.showNpcMenu || state.showDebug || state.showFactions || state.showLog || state.showControls;
+    state.showContainerMenu || state.showNpcMenu || state.showDebug || state.showFactions || state.showLog || state.showControls || state.showUiSettings;
   if (!anyRepeatMenuOpen) resetMenuRepeats();
 
   if (controlsEdge) {
     if (state.showControls) closeControlsMenu();
     else openControlsMenu();
+  }
+  if (uiSettingsEdge) {
+    if (state.showUiSettings) closeUiSettingsMenu();
+    else openUiSettingsMenu();
   }
 
   // ── Hotkey / rebind screen ───────────────────────────────
@@ -4694,13 +4965,13 @@ function handleMenuInput(): void {
       const upNav = menuRepeatStep('up', input.invUp, upEdge);
       const dnNav = menuRepeatStep('down', input.invDn, dnEdge);
       if (upNav) state.controlSel = Math.max(0, state.controlSel - 1);
-      if (dnNav) state.controlSel = Math.min(CONTROL_ACTIONS.length - 1, state.controlSel + 1);
+      if (dnNav) state.controlSel = Math.min(controlMenuItemCount() - 1, state.controlSel + 1);
       keepControlSelectionVisible();
-      if (interactEdge) {
+      if (interactEdge && state.controlView === 'keys') {
         const action = CONTROL_ACTIONS[state.controlSel];
         if (action) beginControlCapture(action.id);
       }
-      if (controlResetEdge) {
+      if (controlResetEdge && state.controlView === 'keys') {
         const action = CONTROL_ACTIONS[state.controlSel];
         if (action) {
           resetControlBinding(action.id);
@@ -4723,6 +4994,41 @@ function handleMenuInput(): void {
     prevFactionMenu = input.factionMenu;
     prevLogMenu = input.logMenu;
     prevControlsMenu = input.controls;
+    prevUiSettingsMenu = input.uiSettings;
+    prevControlReset = input.controlReset;
+    syncPauseState();
+    return;
+  }
+
+  // ── Configurable HUD element screen ─────────────────────
+  if (state.showUiSettings) {
+    const upNav = menuRepeatStep('up', input.invUp, upEdge);
+    const dnNav = menuRepeatStep('down', input.invDn, dnEdge);
+    if (upNav) state.uiSettingsSel = Math.max(0, state.uiSettingsSel - 1);
+    if (dnNav) state.uiSettingsSel = Math.min(uiSettingsRowCount() - 1, state.uiSettingsSel + 1);
+    keepUiSettingsSelectionVisible();
+    if (interactEdge) {
+      applyUiSettingsSelection(state.uiSettingsSel);
+    }
+    if (controlResetEdge) {
+      resetUiSettingsSelection(state.uiSettingsSel);
+    }
+    if (escEdge) closeUiSettingsMenu();
+
+    prevEsc = input.escape;
+    prevMenuUp = input.invUp;
+    prevMenuDn = input.invDn;
+    prevMenuLeft = input.invLeft;
+    prevMenuRight = input.invRight;
+    prevMenuInteract = input.interact;
+    prevDrop = input.drop;
+    prevInvMenu = input.inv;
+    prevQuestMenu = input.questLog;
+    prevDebug = input.debugScreen;
+    prevFactionMenu = input.factionMenu;
+    prevLogMenu = input.logMenu;
+    prevControlsMenu = input.controls;
+    prevUiSettingsMenu = input.uiSettings;
     prevControlReset = input.controlReset;
     syncPauseState();
     return;
@@ -4736,6 +5042,7 @@ function handleMenuInput(): void {
     else if (state.showQuests) { state.showQuests = false; }
     else if (state.showFactions) { state.showFactions = false; }
     else if (state.showLog) { state.showLog = false; }
+    else if (state.showUiSettings) { state.showUiSettings = false; }
     else if (state.showMenu && state.menuSel === 1) { runGameMenuSelection(state.menuSel); }
     else if (state.showMenu) { state.showMenu = false; }
     else { state.showMenu = !state.showMenu; state.menuSel = 0; }
@@ -4746,7 +5053,7 @@ function handleMenuInput(): void {
     const upNav = menuRepeatStep('up', input.invUp, upEdge);
     const dnNav = menuRepeatStep('down', input.invDn, dnEdge);
     if (upNav) state.menuSel = Math.max(0, state.menuSel - 1);
-    if (dnNav) state.menuSel = Math.min(3, state.menuSel + 1);
+    if (dnNav) state.menuSel = Math.min(GAME_MENU_ITEMS.length - 1, state.menuSel + 1);
     if (interactEdge) {
       runGameMenuSelection(state.menuSel);
     }
@@ -4862,22 +5169,10 @@ function handleMenuInput(): void {
       if (interactEdge) {
         switch (state.npcMenuSel) {
           case 0: // Talk
-            state.npcMenuTab = 'talk';
-            state.npcTalkText = npc ? generateTalkText(npc, { world, state, player, time: state.time }) : '...';
+            activateNpcTalk(npc);
             break;
           case 1: // Quest
-            if (npc) {
-              checkTalkQuest(npc, player, entities, state, state.msgs);
-              offerQuest(npc, player, world, entities, state, state.msgs, nextEntityId);
-              // Only switch to quest tab if this NPC has an active quest
-              const active = state.quests.filter(q => !q.done);
-              const npcQIdx = active.findIndex(q => q.giverId === npc.id);
-              if (npcQIdx >= 0) {
-                state.npcMenuTab = 'quest';
-                state.questPage = npcQIdx;
-              }
-              // Otherwise stay on 'main' — message already shown in HUD
-            }
+            activateNpcQuest(npc);
             break;
           case 2: // Trade
             state.npcMenuTab = 'trade';
@@ -4994,6 +5289,7 @@ function handleMenuInput(): void {
   prevFactionMenu = input.factionMenu;
   prevLogMenu = input.logMenu;
   prevControlsMenu = input.controls;
+  prevUiSettingsMenu = input.uiSettings;
   prevControlReset = input.controlReset;
 
   // Auto-pause when any menu is open
@@ -5028,10 +5324,6 @@ function cleanupDeadEntities(dt: number): number {
 }
 
 function gameLoop(now: number): void {
-  if (!started) {
-    showTitle();
-    return;
-  }
   // Two-phase deferred loading:
   // Phase 1: pendingLoad exists but not drawn yet → draw loading screen, yield to browser
   // Phase 2: pendingLoad exists and was drawn → execute heavy generation
@@ -5051,6 +5343,10 @@ function gameLoop(now: number): void {
     rebuildEntityIndex(entities, 'load');
     lastTime = performance.now(); // reset dt so we don't get a huge spike
     requestAnimationFrame(gameLoop);
+    return;
+  }
+  if (!started) {
+    showTitle();
     return;
   }
 
@@ -5408,7 +5704,9 @@ function gameLoop(now: number): void {
 
   // Draw HUD on 2D overlay canvas
   ctx.clearRect(0, 0, hudCanvas.width, hudCanvas.height);
-  drawHUD(ctx, hudCanvas.width / SCR_W, hudCanvas.height / SCR_H, player, state, world, entities, uiTime);
+  drawHUD(ctx, hudCanvas.width / SCR_W, hudCanvas.height / SCR_H, player, state, world, entities, uiTime, {
+    pointerLockHint: !mobileControls?.isEnabled() && !input.mouse.locked,
+  });
 
   requestAnimationFrame(gameLoop);
 }
@@ -5442,21 +5740,14 @@ function returnToTitleScreen(): void {
   input.invLeft = false;
   input.invRight = false;
   input.drop = false;
+  input.uiSettings = false;
   resetMenuRepeats();
   if (document.pointerLockElement) document.exitPointerLock();
   document.addEventListener('keydown', startHandler);
   showTitle();
 }
 
-function startGameFromTitle(): void {
-  if (started) return;
-  mobileGestureUnlock();
-  savePlayerNickname(playerNickname);
-  const seedOverride = titleRunSeedOverride();
-  if (seedOverride !== undefined || titleStartNeedsInit) {
-    initGame(seedOverride);
-    titleStartNeedsInit = false;
-  }
+function finishStartGameFromTitle(): void {
   player.name = playerDisplayName();
   started = true;
   input.escape = false;
@@ -5465,6 +5756,24 @@ function startGameFromTitle(): void {
   requestPointerLockIfDesktop();
   startAmbientDrone();
   updateMobileContext();
+}
+
+function startGameFromTitle(): void {
+  if (started || pendingLoad) return;
+  mobileGestureUnlock();
+  savePlayerNickname(playerNickname);
+  const seedOverride = titleRunSeedOverride();
+  if (seedOverride !== undefined || titleStartNeedsInit) {
+    pendingLoad = () => {
+      initGame(seedOverride);
+      titleStartNeedsInit = false;
+      finishStartGameFromTitle();
+    };
+    pendingLoadDrawn = false;
+    requestAnimationFrame(gameLoop);
+    return;
+  }
+  finishStartGameFromTitle();
   requestAnimationFrame(gameLoop);
 }
 

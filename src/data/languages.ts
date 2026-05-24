@@ -14,7 +14,8 @@ export interface TitleLanguageDef {
   startPrompt: string;
   languageHint: string;
   mobileHint: string;
-  desktopHint: (move: string, interact: string, controls: string) => string;
+  desktopHint: (move: string, interact: string) => string;
+  desktopCombatHint: (attack: string, fullscreen: string, controls: string, ui: string) => string;
   flag: TitleFlagKind;
 }
 
@@ -31,8 +32,9 @@ export const TITLE_LANGUAGES: readonly TitleLanguageDef[] = [
     seedPlaceholder: 'пусто = случайный',
     startPrompt: 'Введите имя и нажмите ENTER',
     languageHint: 'TAB поле  |  ←/→ язык',
-    mobileHint: 'Тап — начать  |  левый джойстик — ходьба  |  правый — камера  |  центр — атака',
-    desktopHint: (move, interact, controls) => `${controls} — клавиши  |  ${move} — движение  |  Мышь — обзор  |  ${interact} — действие`,
+    mobileHint: 'Тап — начать  |  ДЕЙСТ — действие  |  КАРТ/ЗАД/UI — рельса',
+    desktopHint: (move, interact) => `Клик захватывает мышь для обзора  |  ${move} — движение  |  ${interact} — действие`,
+    desktopCombatHint: (attack, fullscreen, controls, ui) => `ЛКМ/${attack} — атака  |  ${fullscreen} — полный экран  |  ${controls} — клавиши  |  ${ui} — интерфейс`,
     flag: 'soviet',
   },
   {
@@ -47,8 +49,9 @@ export const TITLE_LANGUAGES: readonly TitleLanguageDef[] = [
     seedPlaceholder: 'blank = random',
     startPrompt: 'Enter name and press ENTER',
     languageHint: 'TAB field  |  ←/→ language',
-    mobileHint: 'Tap — start  |  left stick — walk  |  right stick — camera  |  center — attack',
-    desktopHint: (move, interact, controls) => `${controls} — keys  |  ${move} — move  |  Mouse — look  |  ${interact} — action`,
+    mobileHint: 'Tap — start  |  ACT — interact  |  MAP/QUEST/UI — rail',
+    desktopHint: (move, interact) => `Click captures mouse for look  |  ${move} — move  |  ${interact} — action`,
+    desktopCombatHint: (attack, fullscreen, controls, ui) => `LMB/${attack} — attack  |  ${fullscreen} — fullscreen  |  ${controls} — keys  |  ${ui} — interface`,
     flag: 'british_empire',
   },
 ];

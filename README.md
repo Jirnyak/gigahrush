@@ -28,6 +28,7 @@ Active docs are intentionally narrow. Use them by role:
 - `commit.md`: release commit/deploy runbook for explicit commit requests.
 - `LICENSE.md`: source-available non-commercial license for the game and repository.
 - `Docs/DesignFloors/`, `Docs/ProceduralFloors/` and `Docs/Expansions/`: active design/reference packets.
+- `Docs/UXRework/`: active cautious UX rework briefs based on player feedback. These are implementation plans for reducing screen overload and first-session friction without removing existing game functionality; they are not shipped-behavior facts until implemented and verified.
 - `Docs/Localization/`: localization pipeline notes and generated missing-translation reports.
 - `scenarist.md`: active project-wide tone brief for player-facing text passes. It does not document shipped behavior.
 - `Docs/ScenarioWriters/`: active subordinate voice/domain packets for text passes. It is active, not archive; read `Docs/ScenarioWriters/README.md` before using it.
@@ -110,6 +111,10 @@ Cloudflare scripts are optional and only matter for Net Sphere deployment.
 When deployed as a Cloudflare Worker with Assets and the D1 binding described in [cloudflare.md](cloudflare.md), the game exposes an optional in-game `НЕТ-СФЕРА` terminal on `N`. The title screen asks for a persistent `НЕТ-ИМЯ` and an optional run seed field; blank seed means a fresh random route seed, while a typed numeric/text seed fixes the per-run route deck. Each browser also gets a persistent private `НЕТ-ГЕН` id in `localStorage` and a session id in `sessionStorage`. `/netgen NET-...` switches back to an existing cloud profile, `/new` creates a new `НЕТ-ГЕН`, and `/clear` clears local chat history. The terminal polls while open, sends a 30-second heartbeat, records active sessions, route seed/current `z`/route id, samosbor events, deaths, compact progress, recent dry event summaries such as `Жилец умер. Последний сигнал: Жилая зона, д2 08:30.`, and short sanitized chat messages labeled by nickname. The Worker also exposes an optional `/api/net/market` endpoint for compact global market impulses and bounded aggregate quote snapshots. If the binding is missing or the API is offline, the game continues as a local single-file build.
 
 Direct HTTPS builds also expose PWA metadata. Desktop play has a remappable `F11` fullscreen action that requests browser fullscreen with hidden navigation UI and never auto-opens on load. The mobile `FULL` control requests browser fullscreen only on compatible non-iOS browsers. Embedded mobile hosts show a direct-page launcher instead. iPhone/WebKit does not get the forced fullscreen path because it can reload the web view; iOS standalone Home Screen launch remains supported through the manifest and Apple web-app meta tags.
+
+The runtime HUD is configurable through the `U` UI orchestrator menu. HUD elements are stored in browser-local UI settings outside the game save; fresh local settings use the `Новичок` preset with bottom tabs, weapon panel, crosshair, simple `E` interaction prompt, hazard warnings and minimap support enabled, while route hints and the transient stenographic HUD summary are off by default. The full message log still records entries and opens with `L`. NPCs with a current quest action - either a quest they can issue now or an active TALK target - are marked by a bright yellow `!` in the existing aim target name/HP box, not in the `E` prompt; map NPC markers use blue for inactive notable NPCs and gold for current quest-action NPCs. `M` cycles minimap, full map and hidden map; when minimap UI is disabled, the cycle skips the invisible minimap state. The full map does not draw the quest strip over the map. Caravan markers are a separate UI surface and are off by default. Players can switch to `Минимум`, `Бой`, `Маршрут` or `Полный` presets and then adjust individual surfaces. Damage/sleep feedback, samosbor text, weapon/tool beam visuals and title/final screens are locked on, while location panel, route hints, stenographic HUD summary, status hints, anomaly deep hints and cosmetic screen effects can be toggled independently. Desktop title and in-game prompts explain click-to-capture mouse look, `ЛКМ`/attack, `F11`, `Tab` and `U`. The `Enter` game menu also links to key bindings and interface toggles.
+
+Localized floor messages use the toroidal world metric and enter the HUD/log only inside the current hearing radius, defaulting to 100 meters from the player. Heard NPC lines, AI actor messages and structured floor events carry distance in meters next to the timestamp; the radius is a runtime context value so future items, statuses or effects can expand or shrink it without changing message pools. Structured floor events in the stenographic summary resolve distance from coordinates first, then actor/target id, room id or zone id.
 
 ## Implementation Snapshot
 
@@ -796,7 +801,7 @@ Screens show active floor/zone context, quest markers, fog overlay, NPC/monster/
 | `Tab` | hotkey/rebind screen |
 | `Backspace` on hotkey screen | reset selected binding |
 | `G` / `R` | use equipped tool; `R` also restarts from game-over prompt |
-| `D` in inventory | drop selected inventory item |
+| `X` in inventory | drop selected inventory item |
 | `P` | pee |
 | `Z` | sleep when allowed |
 | `Enter` | save/load menu or close menu |

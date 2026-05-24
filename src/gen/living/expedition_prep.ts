@@ -23,7 +23,7 @@ const REPAIR_ID = 'floor11_anya_hermodoor';
 const LOST_ID = 'floor11_misha_lost_property';
 const WITNESS_ID = 'floor11_vera_return_witness';
 
-const CHECKLIST_NOTE = 'Чек-лист вылазки: вода, еда, бинт, патроны, фильтр или талон, маршрутная бумага. Нет цели - возьми слух или контракт до лифта.';
+const CHECKLIST_NOTE = 'Чек-лист вылазки: Ольга -> Барни -> Яков, потом цель, Z, риск, лифт туда и лифт обратно. Вода, еда, бинт, патроны, фильтр или талон. Нет цели - возьми слух или контракт до лифта.';
 
 const NPC_DEFS: Record<string, PlotNpcDef> = {
   [ROUTE_KEEPER_ID]: {

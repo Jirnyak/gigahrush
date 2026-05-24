@@ -29,6 +29,7 @@ const HELL_LIQUIDATOR_PROFILE = HELL_POPULATION.liquidators;
 const INITIAL_MONSTER_COUNT = HELL_MONSTER_PROFILE.initial;
 const INITIAL_CULTIST_COUNT = HELL_CULTIST_PROFILE.initial;
 const INITIAL_LIQUIDATOR_COUNT = HELL_LIQUIDATOR_PROFILE.initial;
+const HELL_POPULATION_EXCLUDED_MONSTERS: readonly MonsterKind[] = [MonsterKind.SPORE_CARPET];
 
 type SpawnFaction = Faction.CULTIST | Faction.LIQUIDATOR;
 
@@ -533,6 +534,7 @@ function pickHellMonsterKind(samosborCount: number): MonsterKind {
     floorTags: ['hell', 'meat', 'deep', 'cult'],
     samosborCount: Math.max(4, samosborCount),
     allowRare: true,
+    excludeKinds: HELL_POPULATION_EXCLUDED_MONSTERS,
   });
 }
 

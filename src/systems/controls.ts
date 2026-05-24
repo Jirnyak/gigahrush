@@ -26,6 +26,7 @@ export const CONTROL_ACTIONS = [
   { id: 'pee', group: 'Состояние', label: 'Пописать', input: 'pee', defaultKeys: ['KeyP'] },
   { id: 'gameMenu', group: 'Экраны', label: 'Меню / назад / закрыть', input: 'escape', defaultKeys: ['Enter'] },
   { id: 'controlsMenu', group: 'Экраны', label: 'Все клавиши', input: 'controls', defaultKeys: ['Tab'] },
+  { id: 'uiSettings', group: 'Экраны', label: 'Настройка UI', input: 'uiSettings', defaultKeys: ['KeyU'] },
   { id: 'fullscreen', group: 'Экраны', label: 'Полный экран', defaultKeys: ['F11'] },
   { id: 'inventory', group: 'Экраны', label: 'Инвентарь', input: 'inv', defaultKeys: ['KeyI'] },
   { id: 'map', group: 'Экраны', label: 'Карта: мини / полная / выкл.', input: 'map', defaultKeys: ['KeyM'] },
@@ -41,7 +42,7 @@ export const CONTROL_ACTIONS = [
   { id: 'menuDown', group: 'Меню', label: 'Выбор вниз', input: 'invDn', defaultKeys: ['KeyS', 'ArrowDown'] },
   { id: 'menuLeft', group: 'Меню', label: 'Влево / предыдущая', input: 'invLeft', defaultKeys: ['KeyA', 'ArrowLeft'] },
   { id: 'menuRight', group: 'Меню', label: 'Вправо / следующая', input: 'invRight', defaultKeys: ['KeyD', 'ArrowRight'] },
-  { id: 'drop', group: 'Инвентарь', label: 'Выбросить / перенести вправо', input: 'drop', defaultKeys: ['KeyD'] },
+  { id: 'drop', group: 'Инвентарь', label: 'Выбросить / перенести вправо', input: 'drop', defaultKeys: ['KeyX'] },
   { id: 'attrStr', group: 'Инвентарь', label: 'Очко в силу', input: 'attrStr', defaultKeys: ['Digit1'] },
   { id: 'attrAgi', group: 'Инвентарь', label: 'Очко в ловкость', input: 'attrAgi', defaultKeys: ['Digit2'] },
   { id: 'attrInt', group: 'Инвентарь', label: 'Очко в интеллект', input: 'attrInt', defaultKeys: ['Digit3'] },
@@ -51,7 +52,7 @@ export const CONTROL_ACTIONS = [
 export type ControlActionId = typeof CONTROL_ACTIONS[number]['id'];
 type ControlBindings = Record<ControlActionId, string[]>;
 
-const CONTROL_STORAGE_KEY = 'gigahrush_control_bindings_v1';
+const CONTROL_STORAGE_KEY = 'gigahrush_control_bindings_v2';
 
 const CODE_LABELS: Record<string, string> = {
   ArrowUp: '↑',

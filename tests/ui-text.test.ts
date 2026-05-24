@@ -6,7 +6,7 @@ import { ITEMS } from '../src/data/items';
 import { RUMORS } from '../src/data/rumors';
 import { SAMOSBOR_MODIFIERS, SAMOSBOR_VARIANTS } from '../src/data/samosbor_variants';
 import { combatWeaponHudLines } from '../src/render/hud';
-import { fitText, setUiTextTime, wrapTextLines } from '../src/render/ui_text';
+import { fitText, fitTextStable, setUiTextTime, wrapTextLines } from '../src/render/ui_text';
 
 const ctx = {
   font: '10px monospace',
@@ -25,6 +25,24 @@ test('overwide fitted text scrolls instead of gaining ellipsis', () => {
   assert.equal(first, 'ABC');
   assert.notEqual(moved, first);
   assert.equal(moved.includes('...'), false);
+});
+
+test('stable fitted text does not drift with UI time', () => {
+  const text = 'ABCDEFGHIJ';
+  setUiTextTime(0);
+  const first = fitTextStable(ctx, text, 50);
+  setUiTextTime(3);
+  const later = fitTextStable(ctx, text, 50);
+
+  assert.equal(first, 'AB...');
+  assert.equal(later, first);
+});
+
+test('stable wrapping keeps utility menu lines clipped predictably', () => {
+  const lines = wrapTextLines(ctx, 'alpha beta gamma delta', 50, 4, { stable: true });
+
+  assert.deepEqual(lines, ['alpha', 'beta', 'gamma', 'delta']);
+  for (const line of lines) assert.ok(ctx.measureText(line).width <= 50);
 });
 
 test('wrapped text does not append ellipsis when line budget is exhausted', () => {

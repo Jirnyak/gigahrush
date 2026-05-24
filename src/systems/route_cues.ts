@@ -5,9 +5,23 @@ import {
   type Entity, type FloorLevel, type GameState, type Quest, type Room, type WorldEventSeverity,
 } from '../core/types';
 import { type World } from '../core/world';
+import { ITEMS } from '../data/catalog';
+import {
+  isQuestTargetOnCurrentFloor,
+  questRouteFloor,
+  questRouteTargetLabel,
+  questTargetLiftDirection,
+  resolveQuestTargetRoom,
+} from './contracts';
 import { playRouteCueTone, playSoundAt } from './audio';
 import { publishEvent } from './events';
-import { resolveFloorRunRoute } from './procedural_floors';
+import {
+  currentFloorRunEntry,
+  floorRunEntryDanger,
+  floorRunEntryMapLabel,
+  formatFloorZ,
+  resolveFloorRunRoute,
+} from './procedural_floors';
 import { getSamosborShelterRoomIds } from './samosbor';
 
 const MAX_MAP_REVEALS = 8;
@@ -88,6 +102,16 @@ export interface RouteCueHud {
   startedAt: number;
   expiresAt: number;
   routeGroup?: RouteCueGroup;
+}
+
+export interface ObjectiveRouteHud {
+  title: string;
+  target: string;
+  lift: string;
+  risk: string;
+  returnPath: string;
+  color: string;
+  questId?: number;
 }
 
 export interface RouteCueMapReveal {
@@ -246,6 +270,144 @@ export function routeCueCount(world: World): number {
 
 export function getRouteCueMarkers(world: World): readonly RouteCueMarker[] {
   return cueByWorld.get(world)?.markers ?? emptyMarkers;
+}
+
+type ObjectiveKind = 'plot' | 'side' | 'system';
+
+const OBJECTIVE_PRIORITY: Record<ObjectiveKind, number> = { plot: 3, side: 2, system: 1 };
+const OBJECTIVE_COLORS: Record<ObjectiveKind, string> = { plot: '#6cf', side: '#f7a7d8', system: '#ffd35f' };
+
+function objectiveKind(q: Quest): ObjectiveKind {
+  if (q.plotStepIndex !== undefined) return 'plot';
+  if (q.sideQuestId !== undefined) return 'side';
+  return 'system';
+}
+
+function primaryRouteObjective(state: GameState): Quest | undefined {
+  let best: Quest | undefined;
+  let bestScore = -Infinity;
+  for (let i = 0; i < state.quests.length; i++) {
+    const q = state.quests[i];
+    if (q.done || q.failed) continue;
+    const kind = objectiveKind(q);
+    const rewardPressure = Math.min(90, (q.moneyReward ?? 0) / 4 + (q.xpReward ?? 0) / 8);
+    const routePressure = q.targetFloor !== undefined || q.visitFloor !== undefined || q.targetRoute !== undefined ? 80 : 0;
+    const score = OBJECTIVE_PRIORITY[kind] * 1000 + routePressure + rewardPressure - i * 0.01;
+    if (score > bestScore) {
+      best = q;
+      bestScore = score;
+    }
+  }
+  return best;
+}
+
+function compactRouteText(text: string | undefined, max = 92): string {
+  const clean = (text ?? '').replace(/\s+/g, ' ').trim();
+  if (!clean) return '';
+  const end = clean.search(/[.!?]/);
+  const first = end > 8 ? clean.slice(0, end) : clean;
+  return first.length > max ? `${first.slice(0, Math.max(0, max - 1)).trim()}…` : first;
+}
+
+function objectiveTitle(q: Quest): string {
+  if (q.type === QuestType.TALK) return `ЦЕЛЬ: разговор — ${q.targetNpcName ?? 'найти собеседника'}`;
+  if (q.type === QuestType.KILL) return `ЦЕЛЬ: бой ${q.killCount ?? 0}/${q.killNeeded ?? 1}`;
+  if (q.type === QuestType.VISIT) return `ЦЕЛЬ: дойти до места`;
+  const itemName = q.targetItem ? ITEMS[q.targetItem]?.name ?? q.targetItem : 'предмет';
+  const count = q.targetCount && q.targetCount > 1 ? ` x${q.targetCount}` : '';
+  return `ЦЕЛЬ: добыть ${itemName}${count}`;
+}
+
+function targetLine(world: World | undefined, player: Entity | undefined, state: GameState, q: Quest): string {
+  if (isQuestTargetOnCurrentFloor(q, state)) {
+    if (world && player) {
+      const resolved = resolveQuestTargetRoom(world, q, player);
+      if (resolved?.room) {
+        const cx = resolved.room.x + resolved.room.w / 2;
+        const cy = resolved.room.y + resolved.room.h / 2;
+        const dist = Math.max(0, Math.round(world.dist(player.x, player.y, cx, cy)));
+        return `Здесь: ${resolved.room.name} ${dist}м`;
+      }
+    }
+    if (q.targetNpcName) return `Здесь: ${q.targetNpcName}`;
+    const detail = compactRouteText(q.targetHint || q.desc, 72);
+    return detail ? `Здесь: ${detail}` : 'Здесь: текущий этаж';
+  }
+
+  const label = questRouteTargetLabel(q, state);
+  const floor = questRouteFloor(q);
+  if (label) return `Цель: ${label}`;
+  if (floor !== undefined) return `Цель: ${FLOOR_NAMES[floor]}`;
+  return 'Цель: другой маршрут';
+}
+
+function returnLiftDirection(state: GameState): LiftDirection | undefined {
+  const z = currentFloorRunEntry(state).z;
+  if (z < 0) return LiftDirection.UP;
+  if (z > 0) return LiftDirection.DOWN;
+  return undefined;
+}
+
+function routeReturnPath(state: GameState): string {
+  const z = currentFloorRunEntry(state).z;
+  if (z === 0) return 'Возврат: Жилая зона, герма рядом';
+  const step = z < 0 ? 1 : -1;
+  const dir = z < 0 ? '↑' : '↓';
+  return `Возврат: лифт ${dir} к Z${formatFloorZ(z + step)}`;
+}
+
+function objectiveLiftLine(state: GameState, q: Quest): string {
+  const dir = questTargetLiftDirection(q, state);
+  if (dir === undefined) return 'Лифт: не нужен, цель на этом этаже';
+  const currentZ = currentFloorRunEntry(state).z;
+  return `Лифт ${dir === LiftDirection.DOWN ? '↓' : '↑'} к цели от Z${formatFloorZ(currentZ)}`;
+}
+
+function objectiveRiskLine(state: GameState, q: Quest): string {
+  const routeRisk = q.targetRoute?.risk ?? q.targetMarker?.risk;
+  const dir = questTargetLiftDirection(q, state);
+  const next = dir !== undefined ? resolveFloorRunRoute(state, dir) : null;
+  const risk = Math.max(1, Math.min(5, Math.round(routeRisk ?? (next ? floorRunEntryDanger(next) : floorRunEntryDanger(currentFloorRunEntry(state))))));
+  const hint = compactRouteText(q.targetHint, 68);
+  return hint ? `Риск ${risk}/5: ${hint}` : `Риск ${risk}/5`;
+}
+
+export function routeObjectiveLiftPromptSuffix(state: GameState, direction: LiftDirection): string {
+  const objective = primaryRouteObjective(state);
+  if (objective && questTargetLiftDirection(objective, state) === direction) return ' / ЦЕЛЬ';
+  const returnDir = returnLiftDirection(state);
+  return returnDir === direction ? ' / ВОЗВРАТ' : '';
+}
+
+export function getObjectiveRouteHud(
+  state: GameState,
+  world?: World,
+  player?: Entity,
+): ObjectiveRouteHud {
+  const objective = primaryRouteObjective(state);
+  const current = currentFloorRunEntry(state);
+  if (!objective) {
+    const livingStart = current.z === 0 && current.storyFloor !== undefined;
+    return {
+      title: livingStart ? 'ЦЕЛЬ: Ольга → Барни → Яков' : 'ЦЕЛЬ: возьмите слух или контракт',
+      target: livingStart ? 'Жилая зона: вводная, оружейная, лаборатория' : floorRunEntryMapLabel(current),
+      lift: livingStart ? 'Лифт: после цели, не вслепую' : 'Лифт: выберите по задаче',
+      risk: `Риск ${floorRunEntryDanger(current)}/5`,
+      returnPath: routeReturnPath(state),
+      color: '#8cf',
+    };
+  }
+
+  const kind = objectiveKind(objective);
+  return {
+    title: objectiveTitle(objective),
+    target: targetLine(world, player, state, objective),
+    lift: objectiveLiftLine(state, objective),
+    risk: objectiveRiskLine(state, objective),
+    returnPath: routeReturnPath(state),
+    color: OBJECTIVE_COLORS[kind],
+    questId: objective.id,
+  };
 }
 
 function protectedCellAt(world: World, x: number | undefined, y: number | undefined): boolean {

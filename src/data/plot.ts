@@ -48,7 +48,7 @@ export const PLOT_NPCS: Record<string, PlotNpcDef> = {
       { defId: 'bread', count: 2 },
     ],
     talkLines: [
-      'Руки покажи. Дрожат, но жить будешь. Я Ольга Дмитриевна, врач; сначала поешь, потом геройствуй.',
+      'Руки покажи. Дрожат, но жить будешь. Я Ольга Дмитриевна, врач; поешь, проверь сумку и иди к Барни за стволом.',
       'WASD — ходить, мышь — смотреть. Не крутись в панике, в углу потом трудно перевязывать.',
       'E — поговорить, открыть дверь, проверить шкаф. Сначала смотри, кто рядом, потом тянись рукой.',
       'I — сумка. Хлеб, вода, бинт должны быть с собой. Кушайте вовремя.',
@@ -57,7 +57,7 @@ export const PLOT_NPCS: Record<string, PlotNpcDef> = {
       'Сирена — это САМОСБОР. Идёшь к ближайшей герме, закрываешь дверь и сидишь тихо.',
       'Фиолетовый туман не нюхай. Увидел в коридоре — назад, к двери, без разговоров.',
       'M — карта. Найди ближайшую герму и запомни путь ногами, не только глазами.',
-      'Q — журнал заданий, N — НЕТ-СФЕРА. Слухи слушай, но воду, еду и талоны проверяй руками.',
+      'Q — журнал заданий: кто просит, куда идти, чем платит. N — НЕТ-СФЕРА, но воду, еду и талоны проверяй руками.',
     ],
     talkLinesPost: [
       'Руки покажи. Обе. Чистые руки тут редкость, но грязные раны хуже.',
@@ -93,7 +93,7 @@ export const PLOT_NPCS: Record<string, PlotNpcDef> = {
       { defId: 'canned', count: 1 },
     ],
     talkLines: [
-      'Барни. Стойка моя, сектор общий. Взял ствол — считай патроны.',
+      'Барни. Макаров и восемь патронов получишь, но ствол не обещание: он покупает дверь и секунду.',
       'Мишень стоит. Тварь бежит. Учись попадать до коридора.',
       'Макаров не спасает сам. Он даёт секунду добежать до двери.',
       'Магазин проверяй у стойки. В коридоре поздно щёлкать пустым.',
@@ -345,7 +345,9 @@ export const PLOT_CHAIN: PlotStep[] = [
   {
     giverNpcId: 'olga',
     type: QuestType.TALK,
-    desc: 'Ольга Дмитриевна проводит вводную: поговори с Барни в оружейной. Он выдаст Макаров и 8 патронов новому жильцу этажа.',
+    desc: 'После вводной Ольги поговори с Барни в оружейной. Он выдаст Макаров и 8 патронов: без ствола новичка несут обратно к медпункту.',
+    offerObjective: 'Цель: поговорить с Ольгой Дмитриевной в актовом зале.',
+    activeObjective: 'Цель: поговорить с Барни в оружейной/стрельбище.',
     targetNpcId: 'barni',
     rewardItem: 'makarov', rewardCount: 1,
     extraRewards: [{ defId: 'ammo_9mm', count: 8 }],
@@ -356,6 +358,7 @@ export const PLOT_CHAIN: PlotStep[] = [
     giverNpcId: 'barni',
     type: QuestType.TALK,
     desc: 'Доложи Ольге о стрельбе. Она выдаст бинты, воду и хлеб, а потом даст первую настоящую работу на этаже.',
+    activeObjective: 'Цель: вернуться к Ольге Дмитриевне после оружейной.',
     targetNpcId: 'olga',
     rewardItem: 'bandage', rewardCount: 2,
     extraRewards: [{ defId: 'water', count: 2 }, { defId: 'bread', count: 2 }],
@@ -365,7 +368,8 @@ export const PLOT_CHAIN: PlotStep[] = [
   {
     giverNpcId: 'olga',
     type: QuestType.TALK,
-    desc: 'Сходи к Якову Давидовичу, коллеге Ольги. Его лаборатория {dir}. Он изучает природу Самосбора, и ему нужен полевой помощник, а не лишние руки у стола.',
+    desc: 'Сходи к Якову Давидовичу, коллеге Ольги. Его лаборатория {dir}. Ему нужен полевой помощник: образцы сами до журнала не доходят.',
+    activeObjective: 'Цель: поговорить с Яковом Давидовичем в лаборатории. Это мост к первой полевой работе.',
     targetNpcId: 'yakov',
     rewardItem: 'psi_strike', rewardCount: 1,
     relationDelta: 10, xpReward: 20,
@@ -554,6 +558,10 @@ export interface PlotStep {
   giverNpcId: string;
   type: QuestType;
   desc: string;
+  /** HUD text before this step is accepted, when the player should find the giver. */
+  offerObjective?: string;
+  /** HUD text after this step is accepted; falls back to desc. */
+  activeObjective?: string;
   targetNpcId?: string;
   targetPlotNpcId?: string;   // plot NPC key for cross-floor KILL quests targeting NPCs
   targetItem?: string;

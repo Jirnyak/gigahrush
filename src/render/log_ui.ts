@@ -2,8 +2,8 @@
 
 import { type GameState } from '../core/types';
 import { controlBindingLabel, controlHint } from '../systems/controls';
-import { drawNeuroPanel, drawGlitchText } from './hud_fx';
-import { wrapTextLines } from './ui_text';
+import { drawNeuroPanel } from './hud_fx';
+import { fitTextStable, wrapTextLines } from './ui_text';
 
 export function drawLogMenu(
   ctx: CanvasRenderingContext2D,
@@ -21,7 +21,9 @@ export function drawLogMenu(
   drawNeuroPanel(ctx, 4 * sx, 4 * sy, w - 8 * sx, h - 8 * sy, time, 60);
 
   // Title
-  drawGlitchText(ctx, `ЖУРНАЛ СООБЩЕНИЙ ${controlHint('log')}`, 12 * sx, 14 * sy, time, 600, '#6cf', 10 * sy);
+  ctx.fillStyle = '#6cf';
+  ctx.font = `${10 * sy}px monospace`;
+  ctx.fillText(fitTextStable(ctx, `СТЕНОГРАФИЧЕСКАЯ СВОДКА ${controlHint('log')}`, w - 24 * sx), 12 * sx, 14 * sy);
   ctx.font = `${10 * sy}px monospace`;
 
   // Separator
@@ -46,7 +48,7 @@ export function drawLogMenu(
   ctx.font = `${8 * sy}px monospace`;
 
   // Pre-compute stamp width for wrapping
-  const sampleStamp = '[Д 0 00:00]  ';
+  const sampleStamp = '[Д00 00:00 999м]  ';
   const stampW = ctx.measureText(sampleStamp).width;
   const textAvailW = maxW - stampW;
 
@@ -58,8 +60,9 @@ export function drawLogMenu(
     const dd = String(entry.day).padStart(2, ' ');
     const lhh = String(entry.hour).padStart(2, '0');
     const lmm = String(entry.minute).padStart(2, '0');
-    const stamp = `[Д${dd} ${lhh}:${lmm}]`;
-    const lines = wrapTextLines(ctx, entry.text, textAvailW, 8);
+    const distance = entry.distanceMeters !== undefined ? ` ${Math.max(0, Math.round(entry.distanceMeters))}м` : '';
+    const stamp = `[Д${dd} ${lhh}:${lmm}${distance}]`;
+    const lines = wrapTextLines(ctx, entry.text, textAvailW, 8, { stable: true });
     for (let j = 0; j < lines.length; j++) {
       vlines.push({ stamp: j === 0 ? stamp : '', text: lines[j], color: entry.color, isWrap: j > 0 });
     }
@@ -106,5 +109,9 @@ export function drawLogMenu(
   // Bottom hint
   ctx.fillStyle = '#555';
   ctx.font = `${7 * sy}px monospace`;
-  ctx.fillText(`${controlBindingLabel('menuUp')}/${controlBindingLabel('menuDown')} листать  |  ${log.length} сообщ.  |  ${controlHint('log')} закрыть`, 12 * sx, h - 8 * sy);
+  ctx.fillText(
+    fitTextStable(ctx, `${controlBindingLabel('menuUp')}/${controlBindingLabel('menuDown')} листать  |  ${log.length} зап.  |  ${controlHint('log')} закрыть`, w - 24 * sx),
+    12 * sx,
+    h - 8 * sy,
+  );
 }

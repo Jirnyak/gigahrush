@@ -67,6 +67,30 @@ function fittingTextSlice(
   return from < to ? text.slice(from, to) : '';
 }
 
+export function fitTextStable(
+  ctx: CanvasRenderingContext2D,
+  text: string,
+  maxW: number,
+  mode: 'ellipsis' | 'clip' = 'ellipsis',
+): string {
+  text = translateText(text);
+  if (maxW <= 0 || text.length === 0) return '';
+  if (ctx.measureText(text).width <= maxW) return text;
+  if (mode === 'clip') {
+    const count = maxFittingChars(ctx, text, maxW);
+    return count <= 0 ? '' : text.slice(0, count);
+  }
+
+  const ellipsis = '...';
+  const ellipsisW = ctx.measureText(ellipsis).width;
+  if (ellipsisW >= maxW) {
+    const count = maxFittingChars(ctx, text, maxW);
+    return count <= 0 ? '' : text.slice(0, count);
+  }
+  const count = maxFittingChars(ctx, text, maxW - ellipsisW);
+  return count <= 0 ? '' : `${text.slice(0, count)}${ellipsis}`;
+}
+
 function maxFittingUnits(ctx: CanvasRenderingContext2D, units: readonly string[], start: number, maxW: number): number {
   let lo = 0;
   let hi = units.length - start;
@@ -107,13 +131,14 @@ export function wrapTextLines(
   text: string,
   maxW: number,
   maxLines = 64,
+  options: { stable?: boolean; mode?: 'ellipsis' | 'clip' } = {},
 ): string[] {
   text = translateText(text);
   if (maxW <= 0 || maxLines <= 0) return [];
   const lines: string[] = [];
   const pushLine = (line: string): boolean => {
     if (lines.length >= maxLines) return false;
-    lines.push(fitText(ctx, line, maxW));
+    lines.push(options.stable ? fitTextStable(ctx, line, maxW, options.mode ?? 'ellipsis') : fitText(ctx, line, maxW));
     return lines.length < maxLines;
   };
   const pushOverwideWord = (word: string): boolean => {

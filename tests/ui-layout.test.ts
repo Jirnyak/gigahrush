@@ -2,7 +2,13 @@ import { test } from 'node:test';
 import * as assert from 'node:assert/strict';
 
 import { mapEntityDotBudget } from '../src/render/map_ui';
-import { containerGridScale, dialogMenuScale, tradeGridScale } from '../src/render/ui_layout';
+import {
+  allocateHudSlot,
+  containerGridScale,
+  createHudSlots,
+  dialogMenuScale,
+  tradeGridScale,
+} from '../src/render/ui_layout';
 
 test('NPC dialog text can grow beyond the capped global HUD scale', () => {
   assert.equal(dialogMenuScale(640, 400, 2, 2), 2);
@@ -38,4 +44,25 @@ test('desktop full map entity dot budget scales but stays bounded', () => {
   const desktopBudget = mapEntityDotBudget(1920, 1080, 200);
   assert.ok(desktopBudget > mapEntityDotBudget(640, 360, 200));
   assert.ok(desktopBudget <= 900);
+});
+
+test('HUD navigation slot stacks minimap and hints without overlap', () => {
+  const slots = createHudSlots(640, 400, 2, 2);
+  const minimap = allocateHudSlot(slots.topRightNavigation, 160, 160, 'right');
+  const route = allocateHudSlot(slots.topRightNavigation, 70, 352, 'right');
+  const caravan = allocateHudSlot(slots.topRightNavigation, 58, 352, 'right');
+
+  assert.ok(route.y >= minimap.y + minimap.h);
+  assert.ok(caravan.y >= route.y + route.h);
+  assert.ok(minimap.x + minimap.w <= 640);
+  assert.ok(route.x >= 0);
+});
+
+test('mobile HUD vitals avoid bottom touch-control area', () => {
+  const slots = createHudSlots(640, 360, 2, 1.8, { mobileControls: true, bottomVitalsHeight: 36 });
+
+  assert.ok(slots.safe.bottom >= 100);
+  assert.ok(slots.bottomVitals.y + slots.bottomVitals.h <= 360 - slots.safe.bottom + 0.001);
+  assert.ok(slots.bottomVitals.x >= slots.safe.left);
+  assert.ok(slots.bottomVitals.x + slots.bottomVitals.w <= 640 - slots.safe.right + 0.001);
 });

@@ -1080,7 +1080,7 @@ export interface GameState {
   fogSpreadTimer: number;     // ticks between fog spread steps
   // ── Game menu (ESC) ──
   showMenu: boolean;
-  menuSel: number;            // 0=continue, 1=new game, 2=save, 3=load
+  menuSel: number;            // selected entry in the game menu
   // ── NPC interaction menu ──
   showNpcMenu: boolean;
   npcMenuSel: number;         // 0=talk, 1=quest, 2=trade
@@ -1104,8 +1104,13 @@ export interface GameState {
   showLog: boolean;            // message log menu (L key)
   logScroll: number;           // scroll offset in log menu
   showControls: boolean;       // hotkey / rebind screen (Tab by default)
+  controlView: 'keys' | 'buttons';
   controlSel: number;
   controlScroll: number;
+  showUiSettings: boolean;      // configurable HUD element screen
+  uiSettingsSel: number;
+  uiSettingsScroll: number;
+  npcLogRadiusMeters?: number;  // audible NPC bark/log radius; default supplied by AI bark context
   msgLog: LogEntry[];          // persistent message log with timestamps
   dmgFlash: number;           // damage vignette intensity 0..1, decays over time
   dmgSeed: number;            // random seed for vein pattern per hit
@@ -1121,18 +1126,70 @@ export interface GameState {
   worldEvents?: WorldEventState; // bounded structured event history; old saves may omit it
 }
 
-export interface Msg { text: string; time: number; color: string; day: number; hour: number; minute: number; }
-export interface LogEntry { text: string; color: string; day: number; hour: number; minute: number; }
+export interface MsgLocation {
+  floor?: FloorLevel;
+  x?: number;
+  y?: number;
+  actorId?: number;
+  targetId?: number;
+  roomId?: number;
+  zoneId?: number;
+}
+
+export interface Msg extends MsgLocation {
+  text: string;
+  time: number;
+  color: string;
+  day: number;
+  hour: number;
+  minute: number;
+  distanceMeters?: number;
+  hud?: boolean;              // transient display hint; msgLog/save payload ignores it
+  hudPriority?: number;       // higher recent messages win the bounded HUD lane
+}
+export interface LogEntry extends MsgLocation {
+  text: string;
+  color: string;
+  day: number;
+  hour: number;
+  minute: number;
+  distanceMeters?: number;
+}
 
 /* ── Global msg factory — stores current clock, call setMsgClock each frame ── */
 let _msgDay = 0, _msgHour = 8, _msgMin = 0;
+let _msgLocationProvider: (() => MsgLocation | undefined) | undefined;
 export function setMsgClock(clock: GameClock): void {
   _msgDay = Math.floor(clock.totalMinutes / 1440);
   _msgHour = clock.hour;
   _msgMin = clock.minute;
 }
-export function msg(text: string, time: number, color: string): Msg {
-  return { text, time, color, day: _msgDay, hour: _msgHour, minute: _msgMin };
+export function setMsgLocationProvider(provider?: () => MsgLocation | undefined): void {
+  _msgLocationProvider = provider;
+}
+export function msg(text: string, time: number, color: string, distanceMeters?: number): Msg {
+  const distance = Number.isFinite(distanceMeters) ? Math.max(0, Math.round(distanceMeters!)) : undefined;
+  const location = _msgLocationProvider?.();
+  return { ...location, text, time, color, day: _msgDay, hour: _msgHour, minute: _msgMin, distanceMeters: distance };
+}
+export function msgAt(text: string, time: number, color: string, location: MsgLocation, distanceMeters?: number): Msg {
+  const base = msg(text, time, color, distanceMeters);
+  const x = Number.isFinite(location.x) ? location.x : undefined;
+  const y = Number.isFinite(location.y) ? location.y : undefined;
+  const actorId = Number.isFinite(location.actorId) ? Math.floor(location.actorId!) : undefined;
+  const targetId = Number.isFinite(location.targetId) ? Math.floor(location.targetId!) : undefined;
+  const roomId = Number.isFinite(location.roomId) ? Math.floor(location.roomId!) : undefined;
+  const zoneId = Number.isFinite(location.zoneId) ? Math.floor(location.zoneId!) : undefined;
+  return {
+    ...base,
+    floor: location.floor,
+    x,
+    y,
+    actorId,
+    targetId,
+    roomId,
+    zoneId,
+  };
 }
 
 // ── Input ────────────────────────────────────────────────────────
@@ -1155,6 +1212,7 @@ export interface InputState {
   logMenu: boolean;             // L key — message log
   sleep: boolean;               // Z key — hold to sleep
   controls: boolean;            // Tab by default — hotkey / rebind screen
+  uiSettings: boolean;          // U key — configurable HUD element screen
   controlReset: boolean;        // Backspace by default — reset selected binding
   mouse: { dx: number; dy: number; locked: boolean; };
   touch: { moveX: number; moveY: number; lookX: number; lookY: number; active: boolean; };

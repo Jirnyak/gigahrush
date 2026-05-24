@@ -4,6 +4,7 @@ import { type Entity, type GameState, Faction } from '../core/types';
 import { ITEMS } from '../data/catalog';
 import { FACTION_NAMES, OCCUPATION_NAMES } from '../data/relations';
 import { controlBindingLabel, controlHint } from '../systems/controls';
+import { npcHasQuestMarker } from '../systems/quests';
 import { questDeadlineText, questRemainingMinutes } from '../systems/quest_deadlines';
 import { drawNeuroPanel, drawGlitchText, textJitter, flicker } from './hud_fx';
 import { dialogMenuScale, tradeGridScale } from './ui_layout';
@@ -54,7 +55,8 @@ export function drawNpcMenu(
 
   if (state.npcMenuTab === 'main') {
     // Main menu: Talk, Quest, Trade
-    const items = ['Говорить', 'Задание', 'Торг'];
+    const questMarker = npcHasQuestMarker(npc, state);
+    const items = ['Говорить', questMarker ? 'Задание !' : 'Задание', 'Торг'];
     ctx.font = `${10 * sy}px monospace`;
     for (let i = 0; i < items.length; i++) {
       const selected = i === state.npcMenuSel;

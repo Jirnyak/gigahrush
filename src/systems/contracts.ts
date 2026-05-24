@@ -455,7 +455,7 @@ export function questTargetLiftDirection(q: Quest, state: GameState): LiftDirect
   const targetZ = routeZ(route?.z) ?? (route?.designFloorId ? designFloorById(route.designFloorId)?.z : undefined) ?? (floor !== undefined ? zForStoryFloor(floor) : undefined);
   if (targetZ === undefined) return undefined;
   if (currentZ === targetZ) return undefined;
-  return targetZ > currentZ ? LiftDirection.DOWN : LiftDirection.UP;
+  return targetZ < currentZ ? LiftDirection.DOWN : LiftDirection.UP;
 }
 
 function roomMatchesQuestType(q: Quest, room: Room): boolean {

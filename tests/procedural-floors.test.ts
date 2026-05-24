@@ -1,7 +1,7 @@
 import { after, test } from 'node:test';
 import * as assert from 'node:assert/strict';
 
-import { Cell, DoorState, EntityType, Faction, Feature, FloorLevel, LiftDirection, MonsterKind, Occupation, RoomType, Tex, W, ZoneFaction } from '../src/core/types';
+import { Cell, DoorState, EntityType, Faction, Feature, FloorLevel, LiftDirection, MonsterKind, Occupation, QuestType, RoomType, Tex, W, ZoneFaction } from '../src/core/types';
 import {
   FLOOR_GEOMETRIES,
   FLOOR_RUN_MAX_Z,
@@ -57,7 +57,8 @@ import { currentNetTerminalGenFloorKey } from '../src/systems/net_terminal_gen';
 import { updateBadAppleWorldAnomaly } from '../src/systems/procedural_anomalies/bad_apple_world';
 import { updateLivingTunnelsAnomaly } from '../src/systems/procedural_anomalies/living_tunnels';
 import { tryZombieApocalypseInfection } from '../src/systems/procedural_anomalies/zombie_apocalypse';
-import { routeCueCount } from '../src/systems/route_cues';
+import { questTargetLiftDirection } from '../src/systems/contracts';
+import { getObjectiveRouteHud, routeCueCount, routeObjectiveLiftPromptSuffix } from '../src/systems/route_cues';
 import { getEmergencyPanels } from '../src/systems/emergency_panels';
 import { generateProceduralFloor } from '../src/gen/procedural_floor';
 import { generateDarknessDesignFloor } from '../src/gen/design_floors/darkness';
@@ -333,6 +334,46 @@ test('floor run UX labels expose z, route id, danger, anomaly and return path', 
   assert.match(floorRunEntryRouteCard(authored!), /РУЧНОЙ МАРШРУТ Z-4 floor_69 риск 3\/5: .+\. населенный сбой, сделки, слухи\./);
   assert.match(floorRunArrivalLead(authored!, LiftDirection.UP), /населенный сбой, сделки, слухи/);
   assert.match(floorRunArrivalLead(authored!, LiftDirection.UP), /Возврат: лифт ↑ к предыдущему Z/);
+});
+
+test('objective route HUD and lift prompts point down to lower route targets', () => {
+  const state = makeGameState({ currentFloor: FloorLevel.LIVING });
+  setFloorRunState(state, { runSeed: 123, currentZ: 0, specs: {}, visited: {} }, FloorLevel.LIVING);
+
+  const startHud = getObjectiveRouteHud(state);
+  assert.match(startHud.title, /Ольга.*Барни.*Яков/);
+  assert.match(startHud.lift, /после цели/);
+
+  const quest = {
+    id: 77,
+    type: QuestType.FETCH,
+    giverId: -77,
+    giverName: 'Пост давления',
+    desc: 'Принеси манометр с нижнего маршрута.',
+    targetItem: 'manometer',
+    targetCount: 1,
+    targetFloor: FloorLevel.MAINTENANCE,
+    targetRoute: { z: -20, label: 'Z-20 Коллекторы', risk: 2 },
+    targetHint: 'Коллекторы: насосная или пост давления; проверяйте клапан до входа в пар.',
+    done: false,
+  };
+  state.quests.push(quest);
+
+  assert.equal(questTargetLiftDirection(quest, state), LiftDirection.DOWN);
+  assert.equal(routeObjectiveLiftPromptSuffix(state, LiftDirection.DOWN), ' / ЦЕЛЬ');
+  assert.equal(routeObjectiveLiftPromptSuffix(state, LiftDirection.UP), '');
+
+  const hud = getObjectiveRouteHud(state);
+  assert.match(hud.title, /добыть/);
+  assert.match(hud.target, /Z-20 Коллекторы/);
+  assert.match(hud.lift, /Лифт ↓ к цели от Z\+0/);
+  assert.match(hud.risk, /Риск 2\/5/);
+  assert.match(hud.returnPath, /Жилая зона/);
+
+  commitFloorRunEntry(state, resolveFloorRunRoute(state, LiftDirection.DOWN)!);
+  assert.equal(routeObjectiveLiftPromptSuffix(state, LiftDirection.DOWN), ' / ЦЕЛЬ');
+  assert.equal(routeObjectiveLiftPromptSuffix(state, LiftDirection.UP), ' / ВОЗВРАТ');
+  assert.match(getObjectiveRouteHud(state).returnPath, /лифт ↑ к Z\+0/);
 });
 
 test('floor run keeps authored stops on expandable even route slots', () => {
