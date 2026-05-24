@@ -58,11 +58,19 @@ test('HUD navigation slot stacks minimap and hints without overlap', () => {
   assert.ok(route.x >= 0);
 });
 
-test('mobile HUD vitals avoid bottom touch-control area', () => {
+test('mobile HUD vitals use bottom center lane between touch controls', () => {
   const slots = createHudSlots(640, 360, 2, 1.8, { mobileControls: true, bottomVitalsHeight: 36 });
 
   assert.ok(slots.safe.bottom >= 100);
-  assert.ok(slots.bottomVitals.y + slots.bottomVitals.h <= 360 - slots.safe.bottom + 0.001);
+  assert.ok(slots.bottomVitals.y + slots.bottomVitals.h >= 360 - 28);
   assert.ok(slots.bottomVitals.x >= slots.safe.left);
   assert.ok(slots.bottomVitals.x + slots.bottomVitals.w <= 640 - slots.safe.right + 0.001);
+});
+
+test('mobile HUD interaction prompt stays above bottom vitals', () => {
+  const slots = createHudSlots(844, 390, 2.6375, 1.95, { mobileControls: true, bottomVitalsHeight: 39 });
+
+  assert.ok(slots.bottomVitals.y + slots.bottomVitals.h >= 390 - 32);
+  assert.ok(slots.centerInteraction.y + slots.centerInteraction.h <= slots.bottomVitals.y + 0.001);
+  assert.ok(slots.centerInteraction.y < slots.bottomVitals.y);
 });

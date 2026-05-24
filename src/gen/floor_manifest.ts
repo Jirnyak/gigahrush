@@ -41,30 +41,6 @@ export const FLOOR_MESSAGE_COLORS: Record<FloorLevel, string> = {
   [FloorLevel.VOID]: '#0f8',
 };
 
-export function nextFloorEntrySamosborTimer(floor: FloorLevel): number {
-  switch (floor) {
-    case FloorLevel.MINISTRY: return 600 + Math.random() * 600;
-    case FloorLevel.KVARTIRY: return 240 + Math.random() * 360;
-    case FloorLevel.MAINTENANCE: return 180 + Math.random() * 240;
-    case FloorLevel.HELL: return 60 + Math.random() * 240;
-    case FloorLevel.VOID: return 40 + Math.random() * 120;
-    case FloorLevel.LIVING:
-    default: return 300 + Math.random() * 300;
-  }
-}
-
-export function nextPostSamosborTimer(floor: FloorLevel): number {
-  switch (floor) {
-    case FloorLevel.MINISTRY: return 600 + Math.random() * 600;
-    case FloorLevel.KVARTIRY: return 240 + Math.random() * 360;
-    case FloorLevel.MAINTENANCE: return 180 + Math.random() * 240;
-    case FloorLevel.HELL: return 60 + Math.random() * 240;
-    case FloorLevel.LIVING:
-    case FloorLevel.VOID:
-    default: return 300 + Math.random() * 300;
-  }
-}
-
 export function resetGeneratedFloorPopulationState(): void {
   resetKvPopulationState();
 }

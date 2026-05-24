@@ -356,6 +356,47 @@ export function stampBlackHandTrail(
   return placed;
 }
 
+export function paintSurfacePixel(
+  world: World,
+  x: number,
+  y: number,
+  r: number,
+  g: number,
+  b: number,
+  alpha = 220,
+): boolean {
+  const cx = world.wrap(Math.floor(x));
+  const cy = world.wrap(Math.floor(y));
+  const ci = world.idx(cx, cy);
+  const cellKind = world.cells[ci];
+  if (cellKind === Cell.WALL || cellKind === Cell.ABYSS) return false;
+
+  const fx = x - Math.floor(x);
+  const fy = y - Math.floor(y);
+  const px = Math.max(0, Math.min(15, Math.floor(fx * 16)));
+  const py = Math.max(0, Math.min(15, Math.floor(fy * 16)));
+  let cell = world.surfaceMap.get(ci);
+  if (!cell) {
+    cell = new Uint8Array(1024);
+    world.surfaceMap.set(ci, cell);
+  }
+
+  const idx = (py * 16 + px) << 2;
+  const newA = Math.max(1, Math.min(255, Math.floor(alpha)));
+  const curA = cell[idx + 3];
+  if (curA === 0) {
+    cell[idx] = r; cell[idx + 1] = g; cell[idx + 2] = b; cell[idx + 3] = newA;
+  } else {
+    const total = curA + newA;
+    cell[idx] = Math.floor((cell[idx] * curA + r * newA) / total);
+    cell[idx + 1] = Math.floor((cell[idx + 1] * curA + g * newA) / total);
+    cell[idx + 2] = Math.floor((cell[idx + 2] * curA + b * newA) / total);
+    cell[idx + 3] = Math.min(255, total);
+  }
+  world.surfaceVersion++;
+  return true;
+}
+
 /* ── Generate & stamp a mark onto the world surface grid ──────── *
  *
  * cx, cy   — integer cell coordinates (center cell)

@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import * as assert from 'node:assert/strict';
 
-import { Cell, ContainerKind, EntityType, Feature, FloorLevel, MonsterKind, Occupation, Tex, type Entity } from '../src/core/types';
+import { Cell, ContainerKind, DoorState, EntityType, Feature, FloorLevel, MonsterKind, Occupation, Tex, type Entity } from '../src/core/types';
 import { entityUsesProceduralSprite, generateProceduralEntitySprite, isFloor69FemaleSprite } from '../src/entities/procedural_visuals';
 import { generateDesignFloor } from '../src/gen/design_floors/manifest';
 import { generateFloor, isFloorLevel } from '../src/gen/floor_manifest';
@@ -245,6 +245,31 @@ test('living generation places AG89 Istotit supply cache quest content', () => {
   assert.equal(generated.world.rooms.some(room => room?.name === 'Общий свечной запас'), true);
   for (const id of ['ag89_agafa_svechnaya', 'ag89_savva_guard', 'ag89_markel_report', 'ag89_lida_barter']) {
     assert.equal(plotNpcIds.has(id), true, `${id} should spawn with AG89 supply cache`);
+  }
+});
+
+test('living start tutorial rooms keep samosbor-proof hermowalls', () => {
+  const generated = generateFloor(FloorLevel.LIVING);
+  for (const name of ['Актовый зал', 'Оружейная']) {
+    const room = generated.world.rooms.find(r => r?.name === name);
+    assert.ok(room, `${name} should be generated`);
+    let protectedWalls = 0;
+    for (let dy = -1; dy <= room.h; dy++) {
+      for (let dx = -1; dx <= room.w; dx++) {
+        if (dx !== -1 && dx !== room.w && dy !== -1 && dy !== room.h) continue;
+        const idx = generated.world.idx(room.x + dx, room.y + dy);
+        if (generated.world.cells[idx] === Cell.WALL && generated.world.hermoWall[idx]) protectedWalls++;
+      }
+    }
+    assert.ok(protectedWalls > 0, `${name} should have hermowall perimeter cells`);
+    assert.ok(room.doors.length > 0, `${name} should expose at least one hermodoor`);
+    assert.ok(room.doors.some(idx => {
+      const door = generated.world.doors.get(idx);
+      return door &&
+        (door.state === DoorState.HERMETIC_OPEN || door.state === DoorState.HERMETIC_CLOSED) &&
+        generated.world.aptMask[idx] === 1 &&
+        generated.world.hermoWall[idx] === 1;
+    }), `${name} should have samosbor-proof hermodoor metadata`);
   }
 });
 

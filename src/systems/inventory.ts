@@ -31,6 +31,7 @@ import {
   useGovnyakItem,
 } from './govnyak';
 import { destroyMaronaryShaving } from './maronary_shaving';
+import { CHALK_ITEM_ID, createChalkItemData } from './chalk';
 import {
   FORGED_SHELTER_TALLY_ID,
   SHELTER_TALLY_ID,
@@ -707,7 +708,8 @@ export function addItem(e: Entity, defId: string, count = 1, data?: unknown): bo
     const add = Math.min(count, getStack(def));
     const ws = WEAPON_STATS[defId];
     let slotData = data;
-    if (slotData === undefined && ws && !ws.isRanged && ws.durability > 0) slotData = { dur: ws.durability };
+    if (slotData === undefined && defId === CHALK_ITEM_ID) slotData = createChalkItemData(def.durability ?? 0);
+    else if (slotData === undefined && ws && !ws.isRanged && ws.durability > 0) slotData = { dur: ws.durability };
     else if (slotData === undefined && def.durability && def.durability > 0) slotData = { dur: def.durability };
     e.inventory.push({ defId, count: add, data: slotData });
     count -= add;

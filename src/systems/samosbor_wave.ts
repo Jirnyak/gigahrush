@@ -17,7 +17,6 @@ import {
 import type { World } from '../core/world';
 import type { FloorGeneration } from '../gen/floor_manifest';
 import { publishEvent } from './events';
-import { currentFloorRunEntry, floorRunEntryKind } from './procedural_floors';
 import { pruneRouteCuesInCells } from './route_cues';
 
 export type SamosborWaveScale = 'small' | 'medium' | 'full';
@@ -113,6 +112,7 @@ interface SamosborWave {
   regenerated: boolean;
   patchRoomId: number;
   protectedRooms: Set<number>;
+  player?: Entity;
   floor: FloorLevel;
   startedAt: number;
   changedCells: number;
@@ -125,6 +125,7 @@ interface SamosborWave {
   prunedRouteCues: number;
   lastProcessed: number;
   lastChanged: number;
+  debugSnapshotTick: number;
   debug: boolean;
 }
 
@@ -134,7 +135,7 @@ const DIR_X = [1, -1, 0, 0] as const;
 const DIR_Y = [0, 0, 1, -1] as const;
 const EMPTY_WAVE_RESULT: SamosborWaveTickResult = { active: false, processed: 0, changed: 0, finished: false };
 const QUEUED_SAMPLE_CAP = 48;
-const TICK_ENTITY_BATCH_CAP = 256;
+const WAVE_SNAPSHOT_MIN_TICKS = 15;
 const LOCAL_REBUILD_HALO = 2;
 const LOCAL_STITCH_DEPTH = 5;
 
@@ -215,13 +216,8 @@ function wallTexFor(seed: number, idx: number): Tex {
   }
 }
 
-function isStoryLivingFloor(state: GameState): boolean {
-  if (state.currentFloor !== FloorLevel.LIVING) return false;
-  return floorRunEntryKind(currentFloorRunEntry(state)) === 'story';
-}
-
-export function canRunSamosborWave(state: GameState): boolean {
-  return isStoryLivingFloor(state);
+export function canRunSamosborWave(_state: GameState): boolean {
+  return true;
 }
 
 export function chooseSamosborScale(state: GameState): SamosborWaveScale {
@@ -260,12 +256,23 @@ function walkableCell(cell: number): boolean {
   return cell === Cell.FLOOR || cell === Cell.DOOR || cell === Cell.WATER;
 }
 
+function hermeticDoorCell(world: World, idx: number): boolean {
+  if (world.cells[idx] !== Cell.DOOR) return false;
+  const state = world.doors.get(idx)?.state;
+  return state === DoorState.HERMETIC_CLOSED || state === DoorState.HERMETIC_OPEN;
+}
+
+function waveSpreadableCell(world: World, idx: number): boolean {
+  return walkableCell(world.cells[idx]) && !hermeticDoorCell(world, idx);
+}
+
 function entityWalkableCell(cell: number): boolean {
   return cell === Cell.FLOOR || cell === Cell.WATER;
 }
 
 function localPatchCell(cell: number): Cell {
-  if (cell === Cell.FLOOR || cell === Cell.WATER || cell === Cell.DOOR) return cell;
+  if (cell === Cell.DOOR) return Cell.FLOOR;
+  if (cell === Cell.FLOOR || cell === Cell.WATER) return cell;
   if (cell === Cell.ABYSS) return Cell.WALL;
   return Cell.WALL;
 }
@@ -308,6 +315,7 @@ function adjacentLiftOrProtected(world: World, idx: number): boolean {
 
 function mutableCell(world: World, wave: SamosborWave, idx: number): boolean {
   if (world.aptMask[idx] || world.hermoWall[idx]) return false;
+  if (hermeticDoorCell(world, idx)) return false;
   if (world.cells[idx] === Cell.LIFT || world.features[idx] === Feature.LIFT_BUTTON) return false;
   const roomId = world.roomMap[idx];
   if (roomId >= 0 && wave.protectedRooms.has(roomId)) return false;
@@ -366,17 +374,26 @@ function makePatchRoom(world: World, wave: Pick<SamosborWave, 'scale' | 'radius'
 function buildLocalRebuildField(world: World, wave: SamosborWave): { mask: Uint8Array; indices: number[] } {
   const mask = new Uint8Array(W * W);
   const indices: number[] = [];
+  const queue: number[] = [];
   const o = waveOriginXY(wave);
   const r = Math.max(3, wave.fieldRadius);
   const r2 = r * r;
-  for (let dy = -r; dy <= r; dy++) {
-    for (let dx = -r; dx <= r; dx++) {
-      if (dx * dx + dy * dy > r2) continue;
-      const idx = world.idx(o.x + dx, o.y + dy);
-      if (mask[idx] || !mutableCell(world, wave, idx)) continue;
-      mask[idx] = 1;
-      indices.push(idx);
-    }
+  const push = (idx: number): void => {
+    if (mask[idx] || !mutableCell(world, wave, idx)) return;
+    const x = idx % W;
+    const y = (idx / W) | 0;
+    if (world.dist2(o.x + 0.5, o.y + 0.5, x + 0.5, y + 0.5) > r2) return;
+    mask[idx] = 1;
+    queue.push(idx);
+    indices.push(idx);
+  };
+  push(wave.originIdx);
+  for (const idx of wave.touched) push(idx);
+  for (let head = 0; head < queue.length; head++) {
+    const idx = queue[head];
+    const x = idx % W;
+    const y = (idx / W) | 0;
+    for (let i = 0; i < DIR_X.length; i++) push(world.idx(x + DIR_X[i], y + DIR_Y[i]));
   }
   return { mask, indices };
 }
@@ -386,7 +403,7 @@ function enqueueCell(world: World, wave: SamosborWave, idx: number): void {
   if (!withinWaveRadius(world, wave, idx)) return;
   if (!mutableCell(world, wave, idx)) return;
   wave.queued[idx] = 1;
-  wave.spreadable[idx] = walkableCell(world.cells[idx]) ? 1 : 0;
+  wave.spreadable[idx] = waveSpreadableCell(world, idx) ? 1 : 0;
   wave.queuedCount++;
   wave.frontier.push(idx);
 }
@@ -469,7 +486,8 @@ function cleanSolidCell(world: World, wave: SamosborWave, idx: number, flags: Di
     flags.fog = true;
     changed = true;
   }
-  if (world.surfaceMap.delete(idx)) {
+  if (world.surfaceMap.delete(idx) || world.surfaceFlags[idx] !== 0) {
+    world.surfaceFlags[idx] = 0;
     flags.surface = true;
     changed = true;
   }
@@ -672,35 +690,10 @@ function relocateEntity(world: World, entity: Entity, maxRadius: number): boolea
   return true;
 }
 
-function cleanupBatchEntities(world: World, wave: SamosborWave, entities: Entity[], touched: readonly number[]): void {
-  if (touched.length === 0 && entities.length > TICK_ENTITY_BATCH_CAP) {
-    const player = entities.find(e => e.type === EntityType.PLAYER && e.alive);
-    if (player && !entityWalkableCell(world.cells[world.idx(Math.floor(player.x), Math.floor(player.y))]) && relocateEntity(world, player, 30)) {
-      wave.relocatedEntities++;
-    }
-    return;
-  }
-  for (let i = entities.length - 1; i >= 0; i--) {
-    const entity = entities[i];
-    if (!entity.alive) continue;
-    const idx = world.idx(Math.floor(entity.x), Math.floor(entity.y));
-    const inBatch = touched.includes(idx);
-    if (entity.type === EntityType.PROJECTILE && inBatch) {
-      entities.splice(i, 1);
-      wave.deletedProjectiles++;
-      continue;
-    }
-    if (entity.type === EntityType.PLAYER) {
-      if (!entityWalkableCell(world.cells[idx]) && relocateEntity(world, entity, 30)) wave.relocatedEntities++;
-      continue;
-    }
-    if (entity.type === EntityType.ITEM_DROP && inBatch && !entityWalkableCell(world.cells[idx])) {
-      if (relocateEntity(world, entity, 14)) wave.relocatedEntities++;
-      else {
-        entities.splice(i, 1);
-        wave.deletedItems++;
-      }
-    }
+function cleanupBatchEntities(world: World, wave: SamosborWave, _entities: Entity[], _touched: readonly number[]): void {
+  const player = wave.player?.alive ? wave.player : undefined;
+  if (player && !entityWalkableCell(world.cells[world.idx(Math.floor(player.x), Math.floor(player.y))]) && relocateEntity(world, player, 30)) {
+    wave.relocatedEntities++;
   }
 }
 
@@ -766,6 +759,7 @@ function copyGeneratedSurfaceCell(world: World, source: World, idx: number): voi
   const surface = source.surfaceMap.get(idx);
   if (surface) world.surfaceMap.set(idx, new Uint8Array(surface));
   else world.surfaceMap.delete(idx);
+  world.surfaceFlags[idx] = source.surfaceFlags[idx];
 }
 
 function retunePatchRoomFromGeneratedField(world: World, source: World, wave: SamosborWave, indices: readonly number[]): void {
@@ -805,11 +799,12 @@ function copyGeneratedFieldCells(world: World, source: World, wave: SamosborWave
   pushUnique(wave.dirtyRooms, patchRoomId);
   for (const idx of indices) {
     const oldFog = world.fog[idx];
-    const cell = localPatchCell(source.cells[idx]);
+    const sourceCell = source.cells[idx];
+    const cell = localPatchCell(sourceCell);
     world.cells[idx] = cell;
     world.roomMap[idx] = walkableCell(cell) ? patchRoomId : -1;
-    world.wallTex[idx] = cell === Cell.WALL && source.cells[idx] === Cell.ABYSS ? Tex.DARK : source.wallTex[idx];
-    world.floorTex[idx] = source.cells[idx] === Cell.ABYSS ? Tex.F_ABYSS : source.floorTex[idx];
+    world.wallTex[idx] = sourceCell === Cell.DOOR ? Tex.CONCRETE : cell === Cell.WALL && sourceCell === Cell.ABYSS ? Tex.DARK : source.wallTex[idx];
+    world.floorTex[idx] = sourceCell === Cell.ABYSS ? Tex.F_ABYSS : source.floorTex[idx];
     world.features[idx] = walkableCell(cell) ? passiveGeneratedFeature(source.features[idx]) : Feature.NONE;
     world.light[idx] = source.light[idx];
     world.fog[idx] = walkableCell(cell) ? Math.max(oldFog, source.fog[idx]) : 0;
@@ -863,6 +858,7 @@ function carvePatchFloor(world: World, wave: SamosborWave, idx: number): boolean
   world.setFeatureAt(idx, Feature.NONE);
   world.fog[idx] = 0;
   world.surfaceMap.delete(idx);
+  world.surfaceFlags[idx] = 0;
   pushUnique(wave.dirtyRooms, wave.patchRoomId);
   return changed;
 }
@@ -994,7 +990,10 @@ function buildSnapshot(wave: SamosborWave, active: boolean): SamosborWaveDebugSn
 }
 
 export function getSamosborWaveDebugSnapshot(): SamosborWaveDebugSnapshot | null {
-  if (activeWave) return buildSnapshot(activeWave, activeWave.active);
+  if (activeWave) {
+    lastWaveSnapshot = buildSnapshot(activeWave, activeWave.active);
+    return lastWaveSnapshot;
+  }
   return lastWaveSnapshot;
 }
 
@@ -1075,6 +1074,7 @@ export function startSamosborWave(
     regenerated: false,
     patchRoomId: -1,
     protectedRooms,
+    player: _entities.find(e => e.type === EntityType.PLAYER && e.alive),
     floor: state.currentFloor,
     startedAt: state.time,
     changedCells: 0,
@@ -1087,6 +1087,7 @@ export function startSamosborWave(
     prunedRouteCues: 0,
     lastProcessed: 0,
     lastChanged: 0,
+    debugSnapshotTick: -999999,
     debug: options.debug === true,
   };
 
@@ -1169,7 +1170,11 @@ export function tickSamosborWave(world: World, entities: Entity[], state: GameSt
   cleanupBatchEntities(world, wave, entities, batchTouched);
   wave.lastProcessed = processed;
   wave.lastChanged = changed;
-  lastWaveSnapshot = buildSnapshot(wave, true);
+  const tick = state.tick ?? 0;
+  if (wave.debug || tick - wave.debugSnapshotTick >= WAVE_SNAPSHOT_MIN_TICKS) {
+    lastWaveSnapshot = buildSnapshot(wave, true);
+    wave.debugSnapshotTick = tick;
+  }
 
   if (wave.head >= wave.frontier.length) {
     finishSamosborWave(world, entities, state);
@@ -1243,7 +1248,7 @@ export function debugStartSamosborWaveAtPlayer(
     debug: true,
     seed: 0x51a0b0,
   });
-  if (!started) return ['wave start failed: story LIVING floor or mutable floor anchor required'];
+  if (!started) return ['wave start failed: mutable local floor anchor required'];
   const tick = tickSamosborWave(world, entities, state);
   const snapshot = getSamosborWaveDebugSnapshot();
   return [

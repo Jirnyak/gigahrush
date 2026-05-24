@@ -16,6 +16,7 @@ import { World } from '../src/core/world';
 import { createWorldEventState } from '../src/systems/events';
 import { registerRouteCue, routeCueCount } from '../src/systems/route_cues';
 import {
+  canRunSamosborWave,
   cancelSamosborWave,
   chooseSamosborScale,
   finishSamosborWave,
@@ -23,6 +24,10 @@ import {
   startSamosborWave,
   tickSamosborWave,
 } from '../src/systems/samosbor_wave';
+import {
+  nextFloorRunSamosborCooldown,
+  nextFloorRunSamosborDuration,
+} from '../src/systems/procedural_floors';
 import { makeGameState, makeTestContainer, makeTestPlayer } from './helpers';
 
 beforeEach(() => {
@@ -149,12 +154,37 @@ test('samosbor wave respects the per-tick budget', () => {
   assert.equal((snapshot?.lastProcessed ?? 99) <= 3, true);
 });
 
-test('story living samosbor scale rolls stay local', () => {
-  const state = makeGameState({ currentFloor: FloorLevel.LIVING });
+test('samosbor scale rolls stay local on all story floors', () => {
   const originalRandom = Math.random;
   Math.random = () => 0.999999;
   try {
-    assert.notEqual(chooseSamosborScale(state), 'full');
+    for (const floor of [
+      FloorLevel.MINISTRY,
+      FloorLevel.KVARTIRY,
+      FloorLevel.LIVING,
+      FloorLevel.MAINTENANCE,
+      FloorLevel.HELL,
+      FloorLevel.VOID,
+    ]) {
+      const state = makeGameState({ currentFloor: floor });
+      assert.equal(canRunSamosborWave(state), true);
+      assert.notEqual(chooseSamosborScale(state), 'full');
+    }
+  } finally {
+    Math.random = originalRandom;
+  }
+});
+
+test('samosbor duration grows and cooldown shrinks by absolute route z', () => {
+  const originalRandom = Math.random;
+  Math.random = () => 1;
+  try {
+    const living = makeGameState({ currentFloor: FloorLevel.LIVING });
+    const voidFloor = makeGameState({ currentFloor: FloorLevel.VOID });
+    assert.equal(nextFloorRunSamosborDuration(living), 30);
+    assert.equal(nextFloorRunSamosborCooldown(living), 30 * 60);
+    assert.equal(nextFloorRunSamosborDuration(voidFloor), 15 * 60);
+    assert.equal(nextFloorRunSamosborCooldown(voidFloor), 60);
   } finally {
     Math.random = originalRandom;
   }
@@ -272,4 +302,116 @@ test('finished local samosbor wave splices a regenerated field and stitches old 
   assert.ok((finished?.fieldCells ?? 0) > 0);
   assert.ok((finished?.regeneratedCells ?? 0) > 0);
   assert.ok((finished?.stitchedCells ?? 0) > 0);
+});
+
+test('finished local samosbor wave copies fresh replacement geometry inside the field only', () => {
+  const { world, state, entities } = makeOpenWaveWorld();
+  const insideIdx = world.idx(24, 24);
+  const outsideIdx = world.idx(17, 24);
+  world.cells[insideIdx] = Cell.FLOOR;
+  world.floorTex[insideIdx] = Tex.F_LINO;
+  world.cells[outsideIdx] = Cell.FLOOR;
+  world.floorTex[outsideIdx] = Tex.F_WOOD;
+
+  assert.equal(startSamosborWave(world, entities, state, 'small', 24, 24, { seed: 77, radius: 4, budgetCellsPerTick: 64 }), true);
+  runWaveToEnd(world, entities, state);
+  const beforePatchCell = world.cells[insideIdx];
+  const beforePatchFloorTex = world.floorTex[insideIdx];
+
+  const replacementWorld = makeReplacementWorld();
+  replacementWorld.cells[insideIdx] = Cell.WATER;
+  replacementWorld.floorTex[insideIdx] = Tex.F_ABYSS;
+  replacementWorld.wallTex[insideIdx] = Tex.DARK;
+  const replacement = { world: replacementWorld, entities: [], spawnX: 24.5, spawnY: 24.5 };
+  const finished = finishSamosborWave(world, entities, state, replacement);
+
+  assert.notEqual(beforePatchCell, Cell.WATER);
+  assert.notEqual(beforePatchFloorTex, Tex.F_ABYSS);
+  assert.equal(world.cells[insideIdx], Cell.WATER);
+  assert.equal(world.floorTex[insideIdx], Tex.F_ABYSS);
+  assert.equal(world.cells[outsideIdx], Cell.FLOOR);
+  assert.equal(world.floorTex[outsideIdx], Tex.F_WOOD);
+  assert.ok((finished?.regeneratedCells ?? 0) > 0);
+});
+
+test('finished local samosbor wave does not patch behind a hermowall barrier', () => {
+  const { world, state, entities } = makeOpenWaveWorld(24, 24, 10);
+  for (let y = 14; y <= 34; y++) {
+    const idx = world.idx(25, y);
+    world.cells[idx] = Cell.WALL;
+    world.hermoWall[idx] = 1;
+    world.aptMask[idx] = 1;
+  }
+  const behindIdx = world.idx(29, 24);
+  world.cells[behindIdx] = Cell.FLOOR;
+  world.floorTex[behindIdx] = Tex.F_WOOD;
+
+  assert.equal(startSamosborWave(world, entities, state, 'small', 20, 24, { seed: 90, radius: 8, budgetCellsPerTick: 64 }), true);
+  runWaveToEnd(world, entities, state);
+
+  const replacementWorld = makeReplacementWorld();
+  replacementWorld.cells[behindIdx] = Cell.WATER;
+  replacementWorld.floorTex[behindIdx] = Tex.F_ABYSS;
+  const replacement = { world: replacementWorld, entities: [], spawnX: 20.5, spawnY: 24.5 };
+
+  finishSamosborWave(world, entities, state, replacement);
+
+  assert.equal(world.cells[behindIdx], Cell.FLOOR);
+  assert.equal(world.floorTex[behindIdx], Tex.F_WOOD);
+});
+
+test('finished local samosbor wave treats hermetic doors as a patch barrier', () => {
+  const { world, state, entities } = makeOpenWaveWorld(24, 24, 10);
+  for (let y = 14; y <= 34; y++) {
+    const idx = world.idx(25, y);
+    world.cells[idx] = Cell.DOOR;
+    world.wallTex[idx] = Tex.DOOR_METAL;
+    world.doors.set(idx, { idx, state: DoorState.HERMETIC_CLOSED, roomA: -1, roomB: -1, keyId: '', timer: 0 });
+  }
+  const behindIdx = world.idx(29, 24);
+  world.cells[behindIdx] = Cell.FLOOR;
+  world.floorTex[behindIdx] = Tex.F_WOOD;
+
+  assert.equal(startSamosborWave(world, entities, state, 'small', 20, 24, { seed: 91, radius: 8, budgetCellsPerTick: 64 }), true);
+  runWaveToEnd(world, entities, state);
+
+  const replacementWorld = makeReplacementWorld();
+  replacementWorld.cells[behindIdx] = Cell.WATER;
+  replacementWorld.floorTex[behindIdx] = Tex.F_ABYSS;
+  const replacement = { world: replacementWorld, entities: [], spawnX: 20.5, spawnY: 24.5 };
+
+  finishSamosborWave(world, entities, state, replacement);
+
+  assert.equal(world.cells[behindIdx], Cell.FLOOR);
+  assert.equal(world.floorTex[behindIdx], Tex.F_WOOD);
+  for (let y = 14; y <= 34; y++) {
+    const idx = world.idx(25, y);
+    assert.equal(world.cells[idx], Cell.DOOR);
+    assert.equal(world.doors.get(idx)?.state, DoorState.HERMETIC_CLOSED);
+  }
+});
+
+test('finished local samosbor wave strips replacement doors instead of leaving door traces', () => {
+  const { world, state, entities } = makeOpenWaveWorld();
+  const doorIdx = world.idx(24, 24);
+
+  assert.equal(startSamosborWave(world, entities, state, 'small', 24, 24, { seed: 88, radius: 4, budgetCellsPerTick: 64 }), true);
+  runWaveToEnd(world, entities, state);
+
+  const replacementWorld = makeReplacementWorld();
+  replacementWorld.cells[doorIdx] = Cell.DOOR;
+  replacementWorld.wallTex[doorIdx] = Tex.DOOR_METAL;
+  replacementWorld.doors.set(doorIdx, { idx: doorIdx, state: DoorState.CLOSED, roomA: 0, roomB: 1, keyId: '', timer: 0 });
+  const replacement = { world: replacementWorld, entities: [], spawnX: 24.5, spawnY: 24.5 };
+
+  finishSamosborWave(world, entities, state, replacement);
+
+  assert.equal(world.cells[doorIdx], Cell.FLOOR);
+  assert.equal(world.wallTex[doorIdx] === Tex.DOOR_WOOD || world.wallTex[doorIdx] === Tex.DOOR_METAL, false);
+  assert.equal(world.doors.has(doorIdx), false);
+  for (const room of world.rooms) {
+    if (!room) continue;
+    assert.equal(room.doors.includes(doorIdx), false);
+  }
+  assert.equal(world.solid(24, 24), false);
 });

@@ -76,6 +76,7 @@ import {
 import { revealWholeMap } from './map_exploration';
 import { getAiSchedulerStats } from './ai';
 import { canSpawnEntityType, entitySpawnSlots } from './entity_limits';
+import { CHALK_ITEM_ID } from './chalk';
 
 /* ── Command execution ───────────────────────────────────────── */
 
@@ -192,6 +193,7 @@ type BaseDebugCommandId =
   | 'debug_false_cleanup_patrol'
   | 'debug_mukhozhuk_host'
   | 'debug_chervie_site'
+  | 'spawn_chalk'
   | 'toggle_onepunchman'
   | 'grant_net_terminal_gen_access'
   | 'place_net_terminal_gen_terminals'
@@ -1681,6 +1683,26 @@ export function execDebugCommand(
       state.msgs.push(msg(`[DEBUG] revealmap: открыто клеток ${cells}`, state.time, '#ff0'));
       break;
     }
+    case 86: {
+      if (!canSpawnEntityType(entities, EntityType.ITEM_DROP)) {
+        state.msgs.push(msg('[DEBUG] лимит предметов: мелок не заспавнен', state.time, '#f84'));
+        break;
+      }
+      entities.push({
+        id: nextEntityId.v++,
+        type: EntityType.ITEM_DROP,
+        x: player.x + Math.cos(player.angle) * 1.4,
+        y: player.y + Math.sin(player.angle) * 1.4,
+        angle: 0,
+        pitch: 0,
+        alive: true,
+        speed: 0,
+        sprite: Spr.ITEM_DROP,
+        inventory: [{ defId: CHALK_ITEM_ID, count: 1 }],
+      });
+      state.msgs.push(msg('[DEBUG] мелок заспавнен перед игроком', state.time, '#ff0'));
+      break;
+    }
   }
   return null;
 }
@@ -1782,6 +1804,7 @@ const BASE_CMD_DEFS = [
   { id: 'debug_mukhozhuk_host', label: 'MUKHOZHUK: носитель у игрока' },
   { id: 'debug_chervie_site', label: 'CHERVIE: экранный узел' },
   { id: 'revealmap', label: 'REVEALMAP: открыть всю карту' },
+  { id: 'spawn_chalk', label: 'DEBUG: спавн мелка' },
 ] as const satisfies readonly DebugCommandDef[];
 
 const BASE_CMD_VISUAL_BEFORE_DESIGN = [
@@ -1797,6 +1820,7 @@ const BASE_CMD_VISUAL_BEFORE_DESIGN = [
   'floor_monster_pack',
   'spawn_npc',
   'spawn_items',
+  'spawn_chalk',
   'spawn_bad_apple_world',
   'debug_samosbor_small_wave',
   'debug_false_cleanup_patrol',

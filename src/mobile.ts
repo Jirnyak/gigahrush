@@ -29,6 +29,7 @@ export interface MobileControlsContext {
 export interface MobileControls {
   isEnabled(): boolean;
   refresh(): void;
+  resetInput(): void;
   updateContext(context: MobileControlsContext): void;
   destroy(): void;
 }
@@ -52,7 +53,7 @@ function clamp(v: number, lo: number, hi: number): number {
   return Math.max(lo, Math.min(hi, v));
 }
 
-function shouldUseTouchControls(): boolean {
+export function shouldUseTouchControls(): boolean {
   const ua = navigator.userAgent;
   const mobileUa = /android|iphone|ipad|ipod|mobile/i.test(ua);
   const touchCapable = navigator.maxTouchPoints > 0 || 'ontouchstart' in globalThis;
@@ -510,6 +511,7 @@ export function createMobileControls(input: InputState, options: MobileControlsO
   return {
     isEnabled: () => enabled,
     refresh,
+    resetInput: clearTouchInput,
     updateContext(next: MobileControlsContext): void {
       context = next;
       refreshClasses();

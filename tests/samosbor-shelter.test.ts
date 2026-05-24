@@ -12,6 +12,7 @@ import {
   LiftDirection,
   RoomType,
   Tex,
+  W,
   ZoneFaction,
   type Entity,
 } from '../src/core/types';
@@ -31,6 +32,7 @@ import {
   rebuildWorld,
   resetSamosborRuntimeForTests,
   resolvePlayerShelterAtSealForTests,
+  tickRandomEntityTransferForTests,
   updateSamosbor,
 } from '../src/systems/samosbor';
 import { makeGameState } from './helpers';
@@ -224,11 +226,54 @@ test('unprepared shelter fails locally and publishes failure event', () => {
 
   assert.equal(ctx.world.rooms[TEST_SHELTER_ROOM_ID].sealed, false);
   assert.ok((ctx.player.hp ?? 50) < 50);
-  assert.ok(ctx.world.fog.some(v => v >= 155));
+  assert.equal(ctx.world.fog.some(v => v > 0), false);
   const events = getRecentEvents(state, { tags: ['shelter', 'failure'], limit: 4 });
   assert.equal(events.length, 1);
   assert.equal(events[0].type, 'samosbor_warning');
   assert.equal(events[0].data?.hpDamage, 4);
+  assert.equal(events[0].data?.fogCells, undefined);
+});
+
+test('random samosbor transfer moves a random map entity and can pick player', () => {
+  const ctx = makeShelterWorld(DoorState.HERMETIC_CLOSED);
+  const targetX = 20;
+  const targetY = 20;
+  const targetIdx = ctx.world.idx(targetX, targetY);
+  ctx.world.set(targetX, targetY, Cell.FLOOR);
+  ctx.world.zoneMap[targetIdx] = 0;
+  ctx.entities.unshift({
+    id: ctx.nextId.v++,
+    type: EntityType.NPC,
+    x: 14.5,
+    y: 14.5,
+    angle: 0,
+    pitch: 0,
+    alive: true,
+    speed: 1,
+    sprite: 0,
+    name: 'Сосед',
+    faction: Faction.CITIZEN,
+  });
+  const state = makeGameState({
+    currentFloor: FloorLevel.LIVING,
+    samosborActive: true,
+    samosborCount: 1,
+    worldEvents: createWorldEventState(),
+  });
+  const originalRandom = Math.random;
+  const targetRoll = (targetIdx + 0.25) / (W * W);
+  const rolls = [0.75, targetRoll, 0];
+  Math.random = () => rolls.shift() ?? 0;
+  try {
+    assert.equal(tickRandomEntityTransferForTests(ctx.world, ctx.entities, state, QUIET_TEST_VARIANT), true);
+  } finally {
+    Math.random = originalRandom;
+  }
+  assert.equal(ctx.player.x, targetX + 0.5);
+  assert.equal(ctx.player.y, targetY + 0.5);
+  const events = getRecentEvents(state, { tags: ['random_transfer'], limit: 1 });
+  assert.equal(events.length, 1);
+  assert.equal(events[0].actorId, ctx.player.id);
 });
 
 test('samosbor warning publishes sound, HUD/log, map, and nearby NPC bark channels', () => {
@@ -467,7 +512,7 @@ test('istotit fog effect heals actors in active fog', () => {
   assert.equal(getRecentEvents(ctx.state, { tags: ['istotit', 'create'], limit: 1 }).length, 1);
 });
 
-test('captured samosbor zone is restored before post-cycle rebuild', () => {
+test('captured samosbor zone is restored before post-cycle patch or fallback rebuild', () => {
   const ctx = makeShelterWorld(DoorState.CLOSED);
   const state = makeGameState({
     currentFloor: FloorLevel.MINISTRY,
@@ -714,6 +759,61 @@ function makeRuntimeGenerationCase(seed: number, floor: FloorLevel): RuntimeGene
     containerId,
   };
 }
+
+test('local samosbor patch can be deferred before replacement generation', () => {
+  const ctx = makeShelterWorld(DoorState.CLOSED);
+  ctx.world.zones[0].cx = 96;
+  ctx.world.zones[0].cy = 96;
+  for (let y = 88; y <= 104; y++) {
+    for (let x = 88; x <= 104; x++) {
+      const idx = ctx.world.idx(x, y);
+      ctx.world.set(x, y, Cell.FLOOR);
+      ctx.world.roomMap[idx] = -1;
+      ctx.world.zoneMap[idx] = 0;
+      ctx.world.aptMask[idx] = 0;
+      ctx.world.hermoWall[idx] = 0;
+    }
+  }
+  const state = makeGameState({
+    currentFloor: FloorLevel.MINISTRY,
+    samosborTimer: 0,
+    worldEvents: createWorldEventState(),
+  });
+  assert.equal(forceNextSamosborVariant('classic'), true);
+
+  assert.equal(updateSamosbor(ctx.world, ctx.entities, state, 0, ctx.nextId), false);
+  assert.equal(state.samosborActive, true);
+
+  state.samosborTimer = 0;
+  let replacementCalls = 0;
+  let scheduledPatch: (() => void) | null = null;
+  const replacement = makeRuntimeGenerationCase(8, FloorLevel.MINISTRY).generation;
+  const needsFullRebuild = updateSamosbor(
+    ctx.world,
+    ctx.entities,
+    state,
+    0,
+    ctx.nextId,
+    () => {
+      replacementCalls++;
+      return replacement;
+    },
+    fn => {
+      scheduledPatch = fn;
+    },
+  );
+
+  assert.equal(needsFullRebuild, false);
+  assert.equal(state.samosborActive, false);
+  assert.equal(ctx.world.zones[0].faction, ZoneFaction.CITIZEN);
+  assert.equal(ctx.world.zones[0].fogged, false);
+  assert.equal(replacementCalls, 0);
+  if (!scheduledPatch) throw new Error('local samosbor patch was not scheduled');
+
+  scheduledPatch();
+
+  assert.equal(replacementCalls, 1);
+});
 
 function runReplacementRebuild(seed: number, floor: FloorLevel): RuntimeGenerationCase {
   const ctx = makeRuntimeGenerationCase(seed, floor);

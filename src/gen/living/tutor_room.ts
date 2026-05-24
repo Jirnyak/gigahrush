@@ -11,7 +11,7 @@
 /*   call it from the living/index.ts orchestrator.                */
 
 import {
-  W, Cell, Tex, RoomType, Feature,
+  W, Cell, DoorState, Tex, RoomType, Feature,
   type Room, type Entity,
   EntityType, AIGoal,
 } from '../../core/types';
@@ -22,6 +22,16 @@ import { stampRoom, protectRoom } from '../shared';
 import { drawTextCentered } from '../../render/text';
 import { S, rgba, noise, clamp } from '../../render/pixutil';
 import { Spr } from '../../render/sprite_index';
+
+function protectTutorialWallsAsHermetic(world: World, x: number, y: number, w: number, h: number): void {
+  for (let dy = -1; dy <= h; dy++) {
+    for (let dx = -1; dx <= w; dx++) {
+      if (dx !== -1 && dx !== w && dy !== -1 && dy !== h) continue;
+      const idx = world.idx(x + dx, y + dy);
+      if (world.cells[idx] === Cell.WALL) world.hermoWall[idx] = 1;
+    }
+  }
+}
 
 export function generateTutorRoom(
   world: World, nextRoomId: number, entities: Entity[], nextId: { v: number },
@@ -62,6 +72,7 @@ export function generateTutorRoom(
   room.wallTex = Tex.PANEL;
   room.floorTex = Tex.F_LINO;
   protectRoom(world, hallX, hallY, hallW, hallH, Tex.PANEL, Tex.F_LINO);
+  protectTutorialWallsAsHermetic(world, hallX, hallY, hallW, hallH);
 
   // Desks: rows of half-height desk sprites
   const DESK_SPRITE = Spr.DESK;
@@ -130,14 +141,27 @@ export function generateTutorRoom(
   armory.wallTex = Tex.METAL;
   armory.floorTex = Tex.F_CONCRETE;
   protectRoom(world, armX, armY, armW, armH, Tex.METAL, Tex.F_CONCRETE);
+  protectTutorialWallsAsHermetic(world, armX, armY, armW, armH);
 
   // ── Connecting corridor (2 cells between halls) + door ──
   const doorY = hallY + Math.floor(hallH / 2);
   const gapX = hallX + hallW;
-  world.cells[world.idx(gapX, doorY)] = Cell.FLOOR;
-  world.roomMap[world.idx(gapX, doorY)] = room.id;
-  world.floorTex[world.idx(gapX, doorY)] = Tex.F_LINO;
-  world.aptMask[world.idx(gapX, doorY)] = 1;
+  const hallArmoryDoor = world.idx(gapX, doorY);
+  world.cells[hallArmoryDoor] = Cell.DOOR;
+  world.wallTex[hallArmoryDoor] = Tex.DOOR_METAL;
+  world.floorTex[hallArmoryDoor] = Tex.F_LINO;
+  world.aptMask[hallArmoryDoor] = 1;
+  world.hermoWall[hallArmoryDoor] = 1;
+  world.doors.set(hallArmoryDoor, {
+    idx: hallArmoryDoor,
+    state: DoorState.HERMETIC_OPEN,
+    roomA: room.id,
+    roomB: armory.id,
+    keyId: '',
+    timer: 0,
+  });
+  room.doors.push(hallArmoryDoor);
+  armory.doors.push(hallArmoryDoor);
   world.aptMask[world.idx(gapX, doorY - 1)] = 1;
   world.aptMask[world.idx(gapX, doorY + 1)] = 1;
 

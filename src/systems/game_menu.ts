@@ -5,6 +5,7 @@ export const GAME_MENU_ITEMS = [
   { id: 'load', label: 'Загрузить' },
   { id: 'keys', label: 'Клавиши' },
   { id: 'interface', label: 'Интерфейс' },
+  { id: 'graphics', label: 'Графика' },
 ] as const;
 
 export type GameMenuItemId = typeof GAME_MENU_ITEMS[number]['id'];

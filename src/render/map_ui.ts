@@ -4,7 +4,7 @@ import {
   type Entity, type GameState, type Quest, EntityType, Cell, RoomType, W, QuestType,
   LiftDirection, MonsterKind, Faction, FloorLevel, ZoneFaction,
 } from '../core/types';
-import { World } from '../core/world';
+import { SURFACE_FLAG_CHALK_MAP, World } from '../core/world';
 import {
   isQuestTargetOnCurrentFloor,
   questRouteFloor,
@@ -589,6 +589,103 @@ function drawBlackHandMarks(
   ctx.restore();
 }
 
+interface SurfaceMapCellMarker {
+  r: number;
+  g: number;
+  b: number;
+  alpha: number;
+  coverage: number;
+}
+
+interface SurfaceMapMarkerCache {
+  version: number;
+  markers: Map<number, SurfaceMapCellMarker>;
+}
+
+const SURFACE_MAP_MARKER_CACHE_CAP = 8192;
+const SURFACE_MAP_MARKER_ALPHA_MIN = 24;
+const surfaceMapMarkerCache = new WeakMap<World, SurfaceMapMarkerCache>();
+
+function surfaceMapCellMarker(pixels: Uint8Array): SurfaceMapCellMarker | null {
+  let alphaSum = 0;
+  let rSum = 0;
+  let gSum = 0;
+  let bSum = 0;
+  let covered = 0;
+  for (let i = 0; i < pixels.length; i += 4) {
+    const a = pixels[i + 3];
+    if (a < SURFACE_MAP_MARKER_ALPHA_MIN) continue;
+    alphaSum += a;
+    rSum += pixels[i] * a;
+    gSum += pixels[i + 1] * a;
+    bSum += pixels[i + 2] * a;
+    covered++;
+  }
+  if (alphaSum <= 0 || covered <= 0) return null;
+  const inv = 1 / alphaSum;
+  const coverage = covered / 256;
+  return {
+    r: Math.round(rSum * inv),
+    g: Math.round(gSum * inv),
+    b: Math.round(bSum * inv),
+    alpha: Math.min(0.9, 0.42 + Math.sqrt(coverage) * 1.1),
+    coverage,
+  };
+}
+
+function surfaceMapMarkers(world: World): Map<number, SurfaceMapCellMarker> {
+  const cached = surfaceMapMarkerCache.get(world);
+  if (cached && cached.version === world.surfaceVersion) return cached.markers;
+
+  const markers = new Map<number, SurfaceMapCellMarker>();
+  for (const [ci, pixels] of world.surfaceMap) {
+    if (markers.size >= SURFACE_MAP_MARKER_CACHE_CAP) break;
+    if ((world.surfaceFlags[ci] & SURFACE_FLAG_CHALK_MAP) === 0) continue;
+    const marker = surfaceMapCellMarker(pixels);
+    if (marker) markers.set(ci, marker);
+  }
+  surfaceMapMarkerCache.set(world, { version: world.surfaceVersion, markers });
+  return markers;
+}
+
+export function surfaceMapMarkersForTests(world: World): Map<number, SurfaceMapCellMarker> {
+  return surfaceMapMarkers(world);
+}
+
+function drawSurfaceMapMarks(
+  ctx: CanvasRenderingContext2D,
+  world: World,
+  pxI: number,
+  pyI: number,
+  mapX: number,
+  mapY: number,
+  radius: number,
+  cellW: number,
+  cellH: number,
+): void {
+  if (world.surfaceMap.size === 0) return;
+  const markers = surfaceMapMarkers(world);
+  if (markers.size === 0) return;
+
+  ctx.save();
+  for (const [ci, marker] of markers) {
+    const wx = ci % W;
+    const wy = (ci / W) | 0;
+    const dx = world.delta(pxI, wx);
+    const dy = world.delta(pyI, wy);
+    if (Math.abs(dx) > radius || Math.abs(dy) > radius) continue;
+    if (!isMapCellExplored(world, ci)) continue;
+
+    const x = mapX + (dx + radius + 0.5) * cellW;
+    const y = mapY + (dy + radius + 0.5) * cellH;
+    const size = Math.max(1, Math.min(8, Math.max(cellW, cellH) * (0.65 + Math.sqrt(marker.coverage) * 4.5)));
+    ctx.globalAlpha = marker.alpha;
+    ctx.fillStyle = `rgb(${marker.r},${marker.g},${marker.b})`;
+    ctx.fillRect(Math.round(x - size * 0.5), Math.round(y - size * 0.5), size, size);
+  }
+  ctx.restore();
+}
+
 function drawFactionZoneMarkers(
   ctx: CanvasRenderingContext2D,
   world: World,
@@ -1149,6 +1246,7 @@ function drawMap(
   drawWrongDoorCues(ctx, world, state, uiTime, pxI, pyI, mapX, mapY, radius, cellW, cellH);
   drawCultProcessionOverlays(ctx, world, state, currentFloor, uiTime, pxI, pyI, mapX, mapY, mapW, mapH, radius, cellW, cellH);
   drawBlackHandMarks(ctx, world, pxI, pyI, mapX, mapY, radius, cellW, cellH);
+  drawSurfaceMapMarks(ctx, world, pxI, pyI, mapX, mapY, radius, cellW, cellH);
   drawCartographerMapReveals(ctx, world, state, currentFloor, uiTime, pxI, pyI, mapX, mapY, mapW, mapH, radius, cellW, cellH);
   drawSmallCaravanMapMarker(ctx, world, state, player, pxI, pyI, mapX, mapY, mapW, mapH, radius, cellW, cellH);
   drawFactionZoneMarkers(ctx, world, factionSnapshot, currentFloor, pxI, pyI, mapX, mapY, mapW, mapH, radius, cellW, cellH, uiTime);

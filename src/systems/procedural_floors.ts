@@ -112,6 +112,10 @@ const MAX_RUN_SEED = 0x7fffffff;
 const MAX_SAVED_TITLE = 96;
 const MAX_SAVED_ID = 64;
 export const ROUTE_LIFTS_PER_DIRECTION = 8;
+export const SAMOSBOR_DURATION_MIN_SEC = 30;
+export const SAMOSBOR_DURATION_MAX_SEC = 15 * 60;
+export const SAMOSBOR_COOLDOWN_MIN_SEC = 60;
+export const SAMOSBOR_COOLDOWN_MAX_SEC = 30 * 60;
 const VALID_GEOMETRY_IDS = new Set<FloorGeometryId>(FLOOR_GEOMETRIES.map(def => def.id));
 const VALID_MAJORITY_IDS = new Set<FloorMajorityId>(FLOOR_MAJORITY_FACTIONS.map(def => def.id));
 const VALID_ANOMALY_IDS = new Set<FloorAnomalyId>(FLOOR_ANOMALIES.map(def => def.id));
@@ -570,26 +574,23 @@ export function currentFloorRunAllowsNpcs(state: GameState): boolean {
   return floorRunEntryAllowsNpcs(currentFloorRunEntry(state));
 }
 
-export function adjustFloorRunSamosborTimer(state: GameState, baseTimer: number): number {
-  const spec = currentProceduralFloorSpec(state);
-  if (!spec) return baseTimer;
-  const anomalyPressure = spec.anomalyId === 'samosbor_seed'
-    ? 0.35
-    : spec.anomalyId === 'smog'
-      ? 0.18
-      : spec.anomalyId === 'false_safe_block'
-        ? -0.12
-        : spec.anomalyId === 'hladon'
-          ? 0.12
-          : spec.anomalyId === 'wall_snake' || spec.anomalyId === 'living_tunnels' || spec.anomalyId === 'section_shift' || spec.anomalyId === 'conway_life' || spec.anomalyId === 'bad_apple_world' || spec.anomalyId === 'zombie_apocalypse'
-            ? 0.2
-            : spec.anomalyId === 'cement_memory'
-              ? 0.14
-              : spec.anomalyId === 'radio_chess' || spec.anomalyId === 'conveyor_sorter' || spec.anomalyId === 'fractal_floor' || spec.anomalyId === 'mirror_run' || spec.anomalyId === 'rail_trains'
-                ? 0.08
-          : 0;
-  const dangerPressure = (spec.danger - 1) * 0.08;
-  return Math.max(45, baseTimer * (1 - anomalyPressure - dangerPressure));
+export function floorRunSamosborDepth01(state: GameState): number {
+  const z = currentFloorRunEntry(state).z;
+  return Math.max(0, Math.min(1, Math.abs(z) / FLOOR_RUN_MAX_Z));
+}
+
+export function nextFloorRunSamosborDuration(state: GameState): number {
+  const depth = floorRunSamosborDepth01(state);
+  const maxForDepth = SAMOSBOR_DURATION_MIN_SEC +
+    (SAMOSBOR_DURATION_MAX_SEC - SAMOSBOR_DURATION_MIN_SEC) * depth;
+  return SAMOSBOR_DURATION_MIN_SEC + Math.random() * (maxForDepth - SAMOSBOR_DURATION_MIN_SEC);
+}
+
+export function nextFloorRunSamosborCooldown(state: GameState): number {
+  const depth = floorRunSamosborDepth01(state);
+  const maxForDepth = SAMOSBOR_COOLDOWN_MAX_SEC -
+    (SAMOSBOR_COOLDOWN_MAX_SEC - SAMOSBOR_COOLDOWN_MIN_SEC) * depth;
+  return SAMOSBOR_COOLDOWN_MIN_SEC + Math.random() * (maxForDepth - SAMOSBOR_COOLDOWN_MIN_SEC);
 }
 
 function clampRunDanger(value: number): 1 | 2 | 3 | 4 | 5 {

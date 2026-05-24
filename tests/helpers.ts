@@ -64,6 +64,7 @@ export function makeGameState(overrides: Partial<GameState> = {}): GameState {
     controlSel: 0,
     controlScroll: 0,
     showUiSettings: false,
+    uiSettingsView: 'interface',
     uiSettingsSel: 0,
     uiSettingsScroll: 0,
     npcLogRadiusMeters: 100,

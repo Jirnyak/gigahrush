@@ -30,8 +30,7 @@ export interface DynamicSkyTexture {
 /* ── Constants ─────────────────────────────────────────────────── */
 export const SCR_W = 320;
 export const SCR_H = 200;
-const FOV = Math.PI / 3;
-const HALF_FOV = FOV / 2;
+const DEFAULT_FOV_RADIANS = Math.PI / 2;
 
 /** Per-column depth buffer — unused (GPU depth test handles sprite clipping) */
 
@@ -72,6 +71,7 @@ uniform float uAngle;            // player angle
 uniform float uPitch;            // camera pitch (-1..1)
 uniform float uFogDensity;
 uniform float uGlitch;
+uniform float uPlaneLen;
 uniform float uCamHeight;        // 0..1 (0.5 = default)
 uniform float uFlashlight;       // 0..1
 uniform float uAmbient;          // floor ambient light
@@ -336,7 +336,7 @@ void main() {
 
   float dirX = cos(uAngle);
   float dirY = sin(uAngle);
-  float planeLen = tan(PI / 6.0); // tan(HALF_FOV) = tan(30°)
+  float planeLen = uPlaneLen;
   float planeX = -dirY * planeLen;
   float planeY =  dirX * planeLen;
 
@@ -1035,6 +1035,12 @@ function getUniforms(gl: WebGL2RenderingContext, prog: WebGLProgram, names: stri
   return u;
 }
 
+function planeLenForFov(fovRadians: number): number {
+  const fov = Number.isFinite(fovRadians) ? fovRadians : DEFAULT_FOV_RADIANS;
+  const clamped = Math.max(Math.PI / 3, Math.min((110 * Math.PI) / 180, fov));
+  return Math.tan(clamped * 0.5);
+}
+
 /* ── Create fullscreen quad VAO ───────────────────────────────── */
 function createQuadVAO(gl: WebGL2RenderingContext, prog: WebGLProgram): WebGLVertexArrayObject {
   const vao = gl.createVertexArray()!;
@@ -1387,7 +1393,7 @@ export function initWebGL(
   const rayVAO = createQuadVAO(gl, rayProgram);
   const rayUniforms = getUniforms(gl, rayProgram, [
     'uResolution', 'uPos', 'uAngle', 'uPitch', 'uFogDensity',
-    'uGlitch', 'uCamHeight', 'uFlashlight', 'uAmbient', 'uTime', 'uPurpleFog', 'uFogColor',
+    'uGlitch', 'uPlaneLen', 'uCamHeight', 'uFlashlight', 'uAmbient', 'uTime', 'uPurpleFog', 'uFogColor',
     'uCells', 'uWallTex', 'uFloorTex', 'uFeatures', 'uLight', 'uFog',
     'uDoorStates', 'uAtlas', 'uAtlasSize', 'uUseDynamicSky', 'uDynamicSky',
     'uDynamicSkyTint', 'uBaseFogColor', 'uSurfaceAtlas', 'uSurfaceIdx',
@@ -1644,9 +1650,11 @@ export function renderSceneGL(
   bloodParticles: BloodParticle[] = [],
   samosborActive = false,
   ambientLight = 0.12,
+  fovRadians = DEFAULT_FOV_RADIANS,
 ): void {
   if (!glState) return;
   const { gl } = glState;
+  const planeLen = planeLenForFov(fovRadians);
 
   // Check if player is in purple fog
   const pci = world.idx(Math.floor(px), Math.floor(py));
@@ -1670,6 +1678,7 @@ export function renderSceneGL(
   gl.uniform1f(ru['uPitch']!, pPitch);
   gl.uniform1f(ru['uFogDensity']!, fogDensity);
   gl.uniform1f(ru['uGlitch']!, glitch);
+  gl.uniform1f(ru['uPlaneLen']!, planeLen);
   gl.uniform1f(ru['uCamHeight']!, camHeight);
   gl.uniform1f(ru['uFlashlight']!, flashlight);
   gl.uniform1f(ru['uAmbient']!, ambientLight);
@@ -1715,11 +1724,11 @@ export function renderSceneGL(
 
   // ── Render sprites into FBO (with depth test against raycaster) ──
   gl.depthFunc(gl.LESS);
-  renderSpritesGL(world, sprites, entities, px, py, pAngle, pPitch, fogDensity, purpleFog, camHeight, time, fogRgb);
+  renderSpritesGL(world, sprites, entities, px, py, pAngle, pPitch, fogDensity, purpleFog, camHeight, time, fogRgb, planeLen);
 
   // ── Render blood particles into FBO ──
   if (bloodParticles.length > 0) {
-    renderParticlesGL(bloodParticles, px, py, pAngle, pPitch, camHeight);
+    renderParticlesGL(bloodParticles, px, py, pAngle, pPitch, camHeight, planeLen);
   }
 
   gl.disable(gl.DEPTH_TEST);
@@ -1912,13 +1921,13 @@ function renderSpritesGL(
   camHeight: number,
   time: number,
   activeFogRgb: readonly [number, number, number],
+  planeLen: number,
 ): void {
   if (!glState) return;
   const { gl } = glState;
 
   const dirX = Math.cos(pAngle);
   const dirY = Math.sin(pAngle);
-  const planeLen = Math.tan(HALF_FOV);
   const planeX = -dirY * planeLen;
   const planeY = dirX * planeLen;
   const horizonShift = Math.floor(pPitch * SCR_H);
@@ -2078,13 +2087,13 @@ function renderParticlesGL(
   particles: BloodParticle[],
   px: number, py: number, pAngle: number, pPitch: number,
   _camHeight: number,
+  planeLen: number,
 ): void {
   if (!glState || particles.length === 0) return;
   const { gl } = glState;
 
   const dirX = Math.cos(pAngle);
   const dirY = Math.sin(pAngle);
-  const planeLen = Math.tan(HALF_FOV);
   const planeX = -dirY * planeLen;
   const planeY = dirX * planeLen;
   const horizonShift = Math.floor(pPitch * SCR_H);

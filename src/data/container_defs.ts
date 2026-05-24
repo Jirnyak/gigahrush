@@ -58,7 +58,7 @@ export const CONTAINER_DEFS: Record<ContainerKind, ContainerDef> = {
   },
   [ContainerKind.TOOL_LOCKER]: {
     kind: ContainerKind.TOOL_LOCKER, name: 'Инструментальный шкаф', capacitySlots: 10, proceduralValueCap: 160, defaultAccess: 'room',
-    roomTypes: [RoomType.PRODUCTION, RoomType.STORAGE], itemPool: [{ defId: 'wrench', min: 1, max: 2 }, { defId: 'door_kit', min: 1, max: 1 }, { defId: 'flashlight', min: 1, max: 1 }, { defId: 'valve_tag', min: 1, max: 2 }, { defId: 'relay_diagram', min: 1, max: 1 }, { defId: 'inspection_mirror', min: 1, max: 1 }, { defId: 'fuse', min: 1, max: 2 }, { defId: 'sealant_tube', min: 1, max: 1 }], tags: ['tools'],
+    roomTypes: [RoomType.PRODUCTION, RoomType.STORAGE], itemPool: [{ defId: 'wrench', min: 1, max: 2 }, { defId: 'door_kit', min: 1, max: 1 }, { defId: 'flashlight', min: 1, max: 1 }, { defId: 'chalk', min: 1, max: 1, chance: 0.65 }, { defId: 'valve_tag', min: 1, max: 2 }, { defId: 'relay_diagram', min: 1, max: 1 }, { defId: 'inspection_mirror', min: 1, max: 1 }, { defId: 'fuse', min: 1, max: 2 }, { defId: 'sealant_tube', min: 1, max: 1 }], tags: ['tools'],
   },
 };
 

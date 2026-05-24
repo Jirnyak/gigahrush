@@ -5,6 +5,7 @@ import { BAD_APPLE_THEME_DURATION_SECONDS, BAD_APPLE_THEME_MP3_B64 } from '../da
 let ctx: AudioContext | null = null;
 let mainGain: GainNode | null = null;
 let scopedGain: GainNode | null = null;
+let pageAudioSuspended = false;
 
 export type AudioCueBudgetId =
   | 'footstep'
@@ -24,7 +25,10 @@ export type AudioCueBudgetId =
   | 'flesh_hit'
   | 'break'
   | 'psi_cast'
-  | 'flame';
+  | 'flame'
+  | 'hud_bar_change';
+
+export type HudBarAudioId = 'hp' | 'psi' | 'food' | 'water' | 'sleep' | 'toilet' | 'xp';
 
 export type AmbientDroneMode = 'normal' | 'samosbor' | 'maronary' | 'istotit' | 'veretar';
 
@@ -59,6 +63,7 @@ const AUDIO_BUDGETS: Record<AudioCueBudgetId, AudioBudgetDef> = {
   break: { cooldownSec: 0.16, windowSec: 1.0, maxPerWindow: 4 },
   psi_cast: { cooldownSec: 0.07, windowSec: 0.5, maxPerWindow: 6 },
   flame: { cooldownSec: 0.04, windowSec: 0.35, maxPerWindow: 8 },
+  hud_bar_change: { cooldownSec: 0.12, windowSec: 1.0, maxPerWindow: 3 },
 };
 
 const audioBudgetRuntime = new Map<AudioCueBudgetId, AudioBudgetRuntime>();
@@ -91,6 +96,7 @@ function claimAudioCue(id: AudioCueBudgetId, now: number): boolean {
 }
 
 function beginCue(id: AudioCueBudgetId): AudioContext | null {
+  if (pageAudioSuspended) return null;
   if (!hasAudioContext()) return null;
   const ac = ensureContext();
   return claimAudioCue(id, ac.currentTime) ? ac : null;
@@ -145,6 +151,7 @@ function volumeAt(x: number, y: number): number {
 
 /** Play a sound at a world position (volume depends on distance to player) */
 export function playSoundAt(fn: () => void, x: number, y: number): void {
+  if (pageAudioSuspended) return;
   if (!hasAudioContext()) return;
   const vol = Math.min(POSITIONAL_SOUND_MAX_GAIN, volumeAt(x, y));
   if (vol < 0.01) return;  // too far, skip entirely
@@ -173,11 +180,21 @@ function ensureContext(): AudioContext {
     mainGain.gain.value = 0.3;
     mainGain.connect(ctx.destination);
   }
-  if (ctx.state === 'suspended') void ctx.resume();
+  if (!pageAudioSuspended && ctx.state === 'suspended') void ctx.resume();
   return ctx;
 }
 
 function gain(): GainNode { return scopedGain ?? mainGain!; }
+
+export function setAudioSuspendedForPage(hidden: boolean): void {
+  pageAudioSuspended = hidden;
+  if (!ctx) return;
+  if (hidden) {
+    if (ctx.state === 'running') void ctx.suspend().catch(() => {});
+    return;
+  }
+  if (ctx.state === 'suspended') void ctx.resume().catch(() => {});
+}
 
 function decodeEmbeddedMp3(input: string): ArrayBuffer {
   const raw = atob(input);
@@ -559,6 +576,47 @@ export function playRouteCueTone(seed = 0, intensity = 1): void {
   g.gain.exponentialRampToValueAtTime(0.001, now + 1.12);
   src.connect(hp).connect(g).connect(bus);
   src.start(now + 0.55);
+}
+
+const HUD_BAR_BASE_HZ: Record<HudBarAudioId, number> = {
+  hp: 170,
+  psi: 720,
+  food: 260,
+  water: 390,
+  sleep: 510,
+  toilet: 300,
+  xp: 880,
+};
+
+export function playHudBarChange(bar: HudBarAudioId, direction: 'up' | 'down', intensity = 1): void {
+  const ac = beginCue('hud_bar_change');
+  if (!ac) return;
+  const base = HUD_BAR_BASE_HZ[bar] ?? 420;
+  const now = ac.currentTime;
+  const len = direction === 'up' ? 0.13 : 0.16;
+  const amount = Math.max(0.35, Math.min(1.25, intensity));
+  const osc = ac.createOscillator();
+  const g = ac.createGain();
+  const filter = ac.createBiquadFilter();
+  osc.type = bar === 'psi' || bar === 'xp' ? 'sine' : 'triangle';
+  filter.type = bar === 'hp' || direction === 'down' ? 'lowpass' : 'bandpass';
+  filter.frequency.value = direction === 'down' ? Math.max(220, base * 1.6) : Math.max(500, base * 2.2);
+  filter.Q.value = 0.7;
+  if (direction === 'up') {
+    osc.frequency.setValueAtTime(base, now);
+    osc.frequency.exponentialRampToValueAtTime(base * 1.42, now + len);
+    g.gain.setValueAtTime(0.001, now);
+    g.gain.exponentialRampToValueAtTime(0.034 * amount, now + 0.025);
+  } else {
+    osc.frequency.setValueAtTime(base * 1.12, now);
+    osc.frequency.exponentialRampToValueAtTime(Math.max(55, base * 0.68), now + len);
+    g.gain.setValueAtTime(0.001, now);
+    g.gain.exponentialRampToValueAtTime(0.026 * amount, now + 0.02);
+  }
+  g.gain.exponentialRampToValueAtTime(0.001, now + len);
+  osc.connect(filter).connect(g).connect(gain());
+  osc.start(now);
+  osc.stop(now + len + 0.01);
 }
 
 /* ── Pickup ding ─────────────────────────────────────────────── */

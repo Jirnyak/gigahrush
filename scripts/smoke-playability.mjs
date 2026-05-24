@@ -34,6 +34,7 @@ const mobileViewportHeight = Math.max(320, Math.min(700, Number.parseInt(process
 const mobileDeviceScaleFactor = Math.max(1, Math.min(4, Number.parseFloat(process.env.SMOKE_MOBILE_DSF ?? '2') || 2));
 const mobileUserAgent = process.env.SMOKE_MOBILE_UA
   ?? 'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Mobile Safari/537.36';
+const runIosMobile = runMobile && /iphone|ipad|ipod/i.test(mobileUserAgent);
 
 const KEY = {
   enter: ['Enter', 'Enter', 13],
@@ -1083,6 +1084,7 @@ async function readMobileLayout(client, frameSelector = '') {
       meta,
       maxTouchPoints: win.navigator.maxTouchPoints,
       hasOntouch: 'ontouchstart' in win,
+      hudLayout: win.__gigahrushLastHudLayout ?? null,
       bodyMobileControlsOn: doc.body.classList.contains('mobile-controls-on'),
       root: root instanceof HTMLElementCtor ? {
         exists: true,
@@ -1150,6 +1152,9 @@ function requireMobileLayout(layout, label, failures, options = {}) {
   if (options.requireFullscreenVisible) {
     rectInsideViewport(controls.fullscreen, layout.viewport, 'fullscreen/direct-launch button', failures, label);
   }
+  if (options.requireFullscreenHidden && controls.fullscreen.exists && !controls.fullscreen.hidden) {
+    failures.push(`${label}: expected hidden fullscreen button on this mobile profile, got mode "${controls.fullscreen.mode}" with text "${controls.fullscreen.text}"`);
+  }
   if (options.requireDirectLauncher && controls.fullscreen.mode !== 'direct') {
     failures.push(`${label}: expected embedded fullscreen mode "direct", got "${controls.fullscreen.mode}" with text "${controls.fullscreen.text}"`);
   }
@@ -1172,6 +1177,34 @@ function requireMobileLayout(layout, label, failures, options = {}) {
       controls.move.bottom < controls.look.top || controls.look.bottom < controls.move.top);
     if (overlap) failures.push(`${label}: movement and look pads overlap`);
   }
+  if (options.requireHudBottomVitals) requireMobileHudBottomVitals(layout, label, failures);
+}
+
+function requireMobileHudBottomVitals(layout, label, failures) {
+  const hud = layout.hudLayout;
+  if (!hud) {
+    failures.push(`${label}: missing HUD layout probe`);
+    return;
+  }
+  const bottom = hud.bottomVitals.y + hud.bottomVitals.h;
+  const right = hud.bottomVitals.x + hud.bottomVitals.w;
+  const eps = 1.5;
+  if (Math.abs(hud.canvasW - layout.viewport.width) > eps || Math.abs(hud.canvasH - layout.viewport.height) > eps) {
+    failures.push(`${label}: HUD canvas ${hud.canvasW}x${hud.canvasH} does not match viewport ${layout.viewport.width}x${layout.viewport.height}`);
+  }
+  if (bottom < hud.canvasH - 32 || bottom > hud.canvasH + eps) {
+    failures.push(`${label}: bottom vitals are not anchored to bottom (bottom=${bottom.toFixed(1)}, canvasH=${hud.canvasH})`);
+  }
+  if (hud.centerInteraction.y + hud.centerInteraction.h > hud.bottomVitals.y + eps) {
+    failures.push(`${label}: interaction prompt slot overlaps bottom vitals`);
+  }
+  const controls = layout.controls;
+  if (controls.move.exists && !controls.move.hidden && hud.bottomVitals.x < controls.move.right + 4) {
+    failures.push(`${label}: bottom vitals overlap movement pad horizontally`);
+  }
+  if (controls.look.exists && !controls.look.hidden && right > controls.look.left - 4) {
+    failures.push(`${label}: bottom vitals overlap look pad horizontally`);
+  }
 }
 
 async function waitForMobileLayout(client, frameSelector = '', timeoutMs = 10000) {
@@ -1193,7 +1226,7 @@ async function tapMobileMenuDown(client, settleMs = 120) {
   return tapSelector(client, '.mobile-menu-rail .mobile-menu-btn:last-child', 'mobile menu down', settleMs);
 }
 
-async function runMobilePanelChecks(client, running, failures) {
+async function runMobilePanelChecks(client, running, failures, fullscreenLayoutOptions = {}) {
   const closeCurrentPanel = async (label, predicate) => {
     await tapMobileMenuSelect(client, 160);
     await waitForGameDebug(client, `${label} close`, predicate);
@@ -1207,7 +1240,7 @@ async function runMobilePanelChecks(client, running, failures) {
   await waitFrames(client, 2);
   const inventory = await sampleCanvases(client);
   requirePanelTelemetry(running, inventory, 'mobile inventory panel', failures);
-  requireMobileLayout(await readMobileLayout(client), 'mobile layout with inventory panel', failures, { requireFullscreenVisible: true });
+  requireMobileLayout(await readMobileLayout(client), 'mobile layout with inventory panel', failures, fullscreenLayoutOptions);
   await closeCurrentPanel('mobile inventory panel', state => !state.showInventory);
 
   await tapMobileMenuDown(client);
@@ -1221,7 +1254,7 @@ async function runMobilePanelChecks(client, running, failures) {
   await waitFrames(client, 2);
   const mapPanel = await sampleCanvases(client);
   requirePanelTelemetry(beforeMap, mapPanel, 'mobile full map panel', failures);
-  requireMobileLayout(await readMobileLayout(client), 'mobile layout with map panel', failures, { requireFullscreenVisible: true });
+  requireMobileLayout(await readMobileLayout(client), 'mobile layout with map panel', failures, fullscreenLayoutOptions);
   await closeCurrentPanel('mobile full map panel', state => state.mapMode === 0);
 
   await tapMobileMenuDown(client);
@@ -1230,7 +1263,7 @@ async function runMobilePanelChecks(client, running, failures) {
   await waitFrames(client, 2);
   const questPanel = await sampleCanvases(client);
   requirePanelTelemetry(running, questPanel, 'mobile quest panel', failures);
-  requireMobileLayout(await readMobileLayout(client), 'mobile layout with quest panel', failures, { requireFullscreenVisible: true });
+  requireMobileLayout(await readMobileLayout(client), 'mobile layout with quest panel', failures, fullscreenLayoutOptions);
   await closeCurrentPanel('mobile quest panel', state => !state.showQuests);
 
   await tapMobileMenuDown(client);
@@ -1239,7 +1272,7 @@ async function runMobilePanelChecks(client, running, failures) {
   await waitFrames(client, 2);
   const logPanel = await sampleCanvases(client);
   requirePanelTelemetry(running, logPanel, 'mobile log panel', failures);
-  requireMobileLayout(await readMobileLayout(client), 'mobile layout with log panel', failures, { requireFullscreenVisible: true });
+  requireMobileLayout(await readMobileLayout(client), 'mobile layout with log panel', failures, fullscreenLayoutOptions);
   await closeCurrentPanel('mobile log panel', state => !state.showLog);
 
   return running;
@@ -1381,6 +1414,10 @@ async function main() {
         return undefined;
       }
     };
+    const mobileFullscreenLayoutOptions = runIosMobile
+      ? { requireFullscreenHidden: true }
+      : { requireFullscreenVisible: true, requireNativeFullscreen: true };
+    const mobileGameplayLayoutOptions = { ...mobileFullscreenLayoutOptions, requireHudBottomVitals: true };
 
     await runStep('title paint', async () => {
       await waitPage(client, 1000);
@@ -1389,10 +1426,7 @@ async function main() {
       requireTitleTelemetry(title, failures);
       if (runMobile) {
         const layout = await waitForMobileLayout(client);
-        requireMobileLayout(layout, 'mobile title layout', failures, {
-          requireFullscreenVisible: true,
-          requireNativeFullscreen: true,
-        });
+        requireMobileLayout(layout, 'mobile title layout', failures, mobileFullscreenLayoutOptions);
         return { title, layout };
       }
       return title;
@@ -1408,10 +1442,7 @@ async function main() {
         await waitPage(client, 1200);
         movementStart = await readGameDebug(client);
         await dragSelector(client, '.mobile-pad--move', 0, -42, 420);
-        requireMobileLayout(await readMobileLayout(client), 'mobile gameplay layout', failures, {
-          requireFullscreenVisible: true,
-          requireNativeFullscreen: true,
-        });
+        requireMobileLayout(await readMobileLayout(client), 'mobile gameplay layout', failures, mobileGameplayLayoutOptions);
       } else {
         await clickCanvasCenter(client);
         await tapKeyImmediate(client, KEY.enter);
@@ -1437,7 +1468,7 @@ async function main() {
 
     if (runMobile) {
       await runStep('mobile controls and panels', async () => {
-        running = await runMobilePanelChecks(client, running ?? await sampleRunning(client), failures);
+        running = await runMobilePanelChecks(client, running ?? await sampleRunning(client), failures, mobileGameplayLayoutOptions);
         return running;
       });
       await runStep('embedded direct-launch control', async () => {

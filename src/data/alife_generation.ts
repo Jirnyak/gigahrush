@@ -140,6 +140,7 @@ export const ALIFE_COMMON_POCKETS: readonly AlifePocketProfile[] = [
       { value: { defId: 'cigs', count: 1 }, weight: 9 },
       { value: { defId: 'note', count: 1 }, weight: 8 },
       { value: { defId: 'book', count: 1 }, weight: 4 },
+      { value: { defId: 'chalk', count: 1 }, weight: 3 },
     ],
   },
   {

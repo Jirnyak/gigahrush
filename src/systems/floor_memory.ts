@@ -64,7 +64,8 @@ type WorldArrayField =
   | 'zoneMap'
   | 'factionControl'
   | 'fog'
-  | 'liftDir';
+  | 'liftDir'
+  | 'surfaceFlags';
 
 interface RleArraySave {
   field: WorldArrayField;
@@ -140,6 +141,7 @@ const WORLD_ARRAY_FIELDS: readonly { field: WorldArrayField; type: RleArrayType 
   { field: 'factionControl', type: 'u8' },
   { field: 'fog', type: 'u8' },
   { field: 'liftDir', type: 'u8' },
+  { field: 'surfaceFlags', type: 'u8' },
 ];
 
 const floorMemory = new Map<string, FloorMemoryEntry>();
@@ -218,7 +220,8 @@ function estimateWorldBytes(world: World): number {
     world.zoneMap.byteLength +
     world.factionControl.byteLength +
     world.fog.byteLength +
-    world.liftDir.byteLength;
+    world.liftDir.byteLength +
+    world.surfaceFlags.byteLength;
   for (const surface of world.surfaceMap.values()) bytes += surface.byteLength + 16;
   bytes += world.rooms.length * 192;
   bytes += world.zones.length * 96;

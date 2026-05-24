@@ -24,10 +24,11 @@ test('runtime feature writes bump feature version and rebake feature light', () 
   assert.equal(world.light[near], 0);
 });
 
-test('runtime door removal clears world door map and all room door metadata', () => {
+test('runtime door removal clears cell, textures, door map and all room door metadata', () => {
   const world = new World();
   const idx = world.idx(20, 20);
   world.cells[idx] = Cell.DOOR;
+  world.wallTex[idx] = Tex.DOOR_METAL;
   world.rooms[1] = {
     id: 1,
     type: RoomType.LIVING,
@@ -73,8 +74,24 @@ test('runtime door removal clears world door map and all room door metadata', ()
   world.doors.set(idx, { idx, state: DoorState.CLOSED, roomA: 1, roomB: 2, keyId: '', timer: 0 });
 
   assert.equal(world.removeDoorAt(idx), true);
+  assert.equal(world.cells[idx], Cell.FLOOR);
+  assert.equal(world.wallTex[idx], Tex.CONCRETE);
+  assert.equal(world.solid(20, 20), false);
   assert.equal(world.doors.has(idx), false);
   assert.deepEqual(world.rooms[1].doors, []);
   assert.deepEqual(world.rooms[2].doors, []);
   assert.deepEqual(world.rooms[3].doors, []);
+});
+
+test('runtime door removal cleans stale door cells without a door record', () => {
+  const world = new World();
+  const idx = world.idx(21, 20);
+  world.cells[idx] = Cell.DOOR;
+  world.wallTex[idx] = Tex.DOOR_WOOD;
+
+  assert.equal(world.removeDoorAt(idx), true);
+  assert.equal(world.cells[idx], Cell.FLOOR);
+  assert.equal(world.wallTex[idx], Tex.CONCRETE);
+  assert.equal(world.doors.has(idx), false);
+  assert.equal(world.solid(21, 20), false);
 });

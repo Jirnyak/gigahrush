@@ -1,7 +1,7 @@
 /* ── Toroidal world grid ──────────────────────────────────────── */
 
 import {
-  W, Cell, DoorState, Feature,
+  W, Cell, DoorState, Feature, Tex,
   type RailTrain,
   type RailTrainTrack,
   type Room,
@@ -33,6 +33,7 @@ export const REACH_GATE_NONE = 0;
 export const REACH_GATE_KEY = 1 << 0;
 export const REACH_GATE_HERMETIC = 1 << 1;
 export const REACH_UNREACHED = 255;
+export const SURFACE_FLAG_CHALK_MAP = 1 << 0;
 
 export interface ReachabilityCell {
   passable: boolean;
@@ -91,6 +92,7 @@ export class World {
   slideCells: number[] = [];       // cell indices of slide walls (cycle textures)
   screenCells: number[] = [];      // cell indices of procedural screen/TV walls
   surfaceMap: Map<number, Uint8Array> = new Map(); // sparse RGBA canvas, 16×16×4 per cell (floors + walls)
+  surfaceFlags: Uint8Array;        // bit flags for surfaceMap cells
   anomalyTeleports: Map<number, number> = new Map(); // rare floor-anomaly cell links
   anomalySmogSource = -1;       // procedural smog source cell, -1 = none
   anomalySmogCells: number[] = []; // bounded cells affected by procedural smog
@@ -123,6 +125,7 @@ export class World {
     this.factionControl = new Uint8Array(n);        // per-cell faction (ZoneFaction)
     this.fog      = new Uint8Array(n);              // fog density
     this.liftDir  = new Uint8Array(n);              // LiftDirection (0=DOWN, 1=UP)
+    this.surfaceFlags = new Uint8Array(n);
   }
 
   addContainer(container: WorldContainer): void {
@@ -243,6 +246,16 @@ export class World {
         room.doors = next;
         changed = true;
       }
+    }
+    if (this.cells[idx] === Cell.DOOR) {
+      this.cells[idx] = Cell.FLOOR;
+      this.markCellsDirty();
+      changed = true;
+    }
+    if (this.wallTex[idx] === Tex.DOOR_WOOD || this.wallTex[idx] === Tex.DOOR_METAL) {
+      this.wallTex[idx] = Tex.CONCRETE;
+      this.markWallTexDirty();
+      changed = true;
     }
     return changed;
   }
@@ -452,6 +465,7 @@ export function replaceWorldFromGeneration(target: World | null | undefined, gen
   target.slideCells = source.slideCells.slice();
   target.screenCells = source.screenCells.slice();
   target.surfaceMap = new Map(source.surfaceMap);
+  target.surfaceFlags.set(source.surfaceFlags);
   target.anomalyTeleports = new Map(source.anomalyTeleports);
   target.anomalySmogSource = source.anomalySmogSource;
   target.anomalySmogCells = source.anomalySmogCells.slice();

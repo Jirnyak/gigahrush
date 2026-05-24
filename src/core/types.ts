@@ -1108,6 +1108,7 @@ export interface GameState {
   controlSel: number;
   controlScroll: number;
   showUiSettings: boolean;      // configurable HUD element screen
+  uiSettingsView: 'interface' | 'graphics';
   uiSettingsSel: number;
   uiSettingsScroll: number;
   npcLogRadiusMeters?: number;  // audible NPC bark/log radius; default supplied by AI bark context

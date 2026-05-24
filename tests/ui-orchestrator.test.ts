@@ -2,11 +2,19 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
+  CAMERA_FOV_DEFAULT_DEGREES,
   DEFAULT_UI_PRESET_ID,
+  MOBILE_LOOK_SENSITIVITY_DEFAULT,
   UI_ELEMENT_DEFS,
   UI_PRESETS,
+  adjustCameraFov,
+  adjustMobileLookSensitivity,
   activeUiPresetId,
   applyUiPreset,
+  cameraFovDegrees,
+  mobileLookSensitivity,
+  resetCameraFov,
+  resetMobileLookSensitivity,
   resetUiElement,
   resetUiSettings,
   setUiElementEnabled,
@@ -14,6 +22,7 @@ import {
   normalizeVisibleMapMode,
   toggleUiElement,
   uiElementEnabled,
+  uiSettingsRowAt,
   uiSettingsRowCount,
 } from '../src/systems/ui_orchestrator';
 
@@ -38,6 +47,8 @@ test('UI orchestrator defaults to the novice-safe HUD enabled', () => {
   assert.equal(uiElementEnabled('damage_feedback'), true);
   assert.equal(uiElementEnabled('samosbor_text'), true);
   assert.equal(uiElementEnabled('credits'), true);
+  assert.equal(mobileLookSensitivity(), MOBILE_LOOK_SENSITIVITY_DEFAULT);
+  assert.equal(cameraFovDegrees(), CAMERA_FOV_DEFAULT_DEGREES);
 });
 
 test('UI orchestrator skips invisible minimap map states', () => {
@@ -75,6 +86,15 @@ test('UI orchestrator applies combat preset deterministically', () => {
   assert.equal(uiElementEnabled('damage_feedback'), true);
 });
 
+test('UI orchestrator can switch off every unlocked surface', () => {
+  resetUiSettings();
+  assert.equal(applyUiPreset('off'), true);
+  assert.equal(activeUiPresetId(), 'off');
+  for (const def of UI_ELEMENT_DEFS) {
+    assert.equal(uiElementEnabled(def.id), def.locked === true, `${def.id} should only stay enabled when locked`);
+  }
+});
+
 test('UI orchestrator presets cover minimal and full player-safe modes', () => {
   resetUiSettings();
   assert.equal(applyUiPreset('minimal'), true);
@@ -92,5 +112,32 @@ test('UI orchestrator presets cover minimal and full player-safe modes', () => {
   for (const def of UI_ELEMENT_DEFS) {
     assert.equal(uiElementEnabled(def.id), true, `${def.id} should be enabled by full preset`);
   }
-  assert.equal(uiSettingsRowCount(), UI_PRESETS.length + UI_ELEMENT_DEFS.length);
+  assert.equal(uiSettingsRowCount('interface'), UI_PRESETS.length + UI_ELEMENT_DEFS.length + 1);
+  assert.equal(uiSettingsRowCount('graphics'), 1);
+});
+
+test('UI orchestrator stores mobile look sensitivity outside presets', () => {
+  resetUiSettings();
+  assert.equal(mobileLookSensitivity(), 0.5);
+  assert.equal(adjustMobileLookSensitivity(1), 0.75);
+  assert.equal(adjustMobileLookSensitivity(3), 1.5);
+  assert.equal(adjustMobileLookSensitivity(1), 0.25);
+  assert.equal(applyUiPreset('off'), true);
+  assert.equal(mobileLookSensitivity(), 0.25);
+  assert.equal(resetMobileLookSensitivity(), 0.5);
+  const row = uiSettingsRowAt(uiSettingsRowCount('interface') - 1, 'interface');
+  assert.equal(row?.kind, 'mobile_sensitivity');
+});
+
+test('UI orchestrator stores camera FOV as a graphics setting outside presets', () => {
+  resetUiSettings();
+  assert.equal(cameraFovDegrees(), 90);
+  assert.equal(adjustCameraFov(1), 95);
+  assert.equal(adjustCameraFov(3), 110);
+  assert.equal(adjustCameraFov(1), 60);
+  assert.equal(applyUiPreset('off'), true);
+  assert.equal(cameraFovDegrees(), 60);
+  assert.equal(resetCameraFov(), 90);
+  const row = uiSettingsRowAt(0, 'graphics');
+  assert.equal(row?.kind, 'camera_fov');
 });

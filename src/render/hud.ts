@@ -72,9 +72,9 @@ import {
   drawNeuroPanel, drawGlitchLine, drawStaticNoise, drawVeretarVeil, drawRouteCueWave, drawMaronaryProofNoise, drawSmogVeil,
   drawSeroburmalineNoLookFx, drawSignalRows,
 } from './hud_fx';
-import { fitTextStable as fitUiText, setUiTextTime, wrapTextLines } from './ui_text';
+import { fitTextStable as fitUiText, setUiTextTime } from './ui_text';
 import { allocateHudSlot, createHudSlots, getMobileHudSafeContext, type UiRect } from './ui_layout';
-import { uiElementEnabled } from '../systems/ui_orchestrator';
+import { cameraPlaneLen, uiElementEnabled } from '../systems/ui_orchestrator';
 import { getLocalizationLanguage } from '../systems/localization';
 
 const BAR_W = 50, BAR_H = 4;
@@ -84,7 +84,6 @@ const COMBAT_TARGET_QUERY_CAP = COMBAT_TARGET_SCAN_CAP * 2;
 const COMBAT_TARGET_MAX_D2 = 18 * 18;
 const COMBAT_TARGET_BODY_RADIUS = 0.3;
 const COMBAT_TARGET_RAY_STEP_CAP = 48;
-const COMBAT_TARGET_PLANE_LEN = Math.tan(Math.PI / 6);
 const DEATH_NEARBY_QUERY_CAP = 96;
 const aimTargetQuery: Entity[] = [];
 const deathNearbyQuery: Entity[] = [];
@@ -101,8 +100,20 @@ const ZONE_FACTION_NAMES: Record<ZoneFaction, string> = {
   [ZoneFaction.SAMOSBOR]: 'Самосбор',
   [ZoneFaction.WILD]: 'Дикие',
 };
-const MSG_MAX = 5;
+const MSG_MAX = 12;
 const MSG_SCAN_MAX = 32;
+
+declare global {
+  interface Window {
+    __gigahrushLastHudLayout?: {
+      canvasW: number;
+      canvasH: number;
+      safe: UiRect;
+      bottomVitals: UiRect;
+      centerInteraction: UiRect;
+    };
+  }
+}
 
 interface VoidReturnPortalHudState {
   active?: boolean;
@@ -236,30 +247,23 @@ function drawSamosborActiveInstruction(
   time: number,
   active: SamosborActiveInstructionSnapshot,
   y: number,
-  compact = false,
+  _compact = false,
 ): void {
-  const panelW = Math.min(w - 12 * sx, 228 * sx);
-  const panelH = (compact ? 24 : 36) * sy;
-  const x = (w - panelW) * 0.5;
   const title = `${samosborHudTitle(active.variantId, active.variantName)}: ${active.secondsLeft}s`;
-  const zone = active.zoneId >= 0 ? `Зона ${active.zoneId + 1}` : 'локально';
   const sj = textJitter(time * 3, 666);
+  const sAlpha = 0.5 + Math.sin(time * 8) * 0.3;
 
   ctx.save();
-  ctx.fillStyle = active.variantId === 'veretar' ? 'rgba(25,25,22,0.86)' : 'rgba(18,4,18,0.84)';
-  ctx.fillRect(x, y, panelW, panelH);
-  ctx.strokeStyle = active.tint;
-  ctx.lineWidth = 1;
-  ctx.strokeRect(x + 0.5, y + 0.5, panelW - 1, panelH - 1);
   ctx.textAlign = 'center';
   ctx.shadowColor = active.tint;
-  ctx.shadowBlur = 9;
-  drawGlitchText(ctx, fitHudText(ctx, title, panelW - 12 * sx), w * 0.5 + sj.dx, y + 5 * sy + sj.dy, time * 2, 740, active.tint, 10 * sy);
+  ctx.shadowBlur = 12;
+  ctx.fillStyle = active.tint;
+  ctx.font = `bold ${16 * sy}px monospace`;
+  const fittedTitle = fitHudText(ctx, title, w - 16 * sx);
+  ctx.fillText(fittedTitle, w * 0.5 + sj.dx * 3, y + 8 * sy + sj.dy * 2);
+  ctx.fillStyle = `rgba(0,255,200,${sAlpha * 0.2})`;
+  ctx.fillText(fittedTitle, w * 0.5 + sj.dx * 3 + 2, y + 8 * sy + sj.dy * 2 + 1);
   ctx.shadowBlur = 0;
-  drawGlitchText(ctx, fitHudText(ctx, `${zone}: ${active.actionLine}`, panelW - 12 * sx), w * 0.5, y + 18 * sy, time, 741, '#fff', 7 * sy);
-  if (!compact) {
-    drawGlitchText(ctx, fitHudText(ctx, active.shelterHintLine, panelW - 12 * sx), w * 0.5, y + 27 * sy, time, 742, '#ffd36a', 6 * sy);
-  }
   ctx.textAlign = 'left';
   ctx.restore();
 }
@@ -528,16 +532,15 @@ function drawSamosborCrawl(
   ctx.save();
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  ctx.beginPath();
-  ctx.rect(w * 0.08, h * 0.24, w * 0.84, h * 0.52);
-  ctx.clip();
-  for (let i = 0; i < 5; i++) {
-    const phase = time * 0.135 + i * 0.22;
+  for (let i = 0; i < 6; i++) {
+    const phase = time * 0.11 + i * 0.18;
     const cycle = Math.floor(phase);
     const travel = phase % 1;
-    const y = h * 0.78 - travel * h * 0.58;
-    const size = (7.5 + travel * 8.5) * sy;
-    const alpha = Math.max(0, Math.min(1, 1 - Math.abs(travel - 0.48) * 1.65));
+    const y = h * 1.12 - travel * h * 1.38;
+    const size = (6.5 + Math.pow(travel, 1.25) * 16.5) * sy;
+    const enter = Math.max(0, Math.min(1, (travel - 0.035) / 0.12));
+    const exit = Math.max(0, Math.min(1, (1 - travel) / 0.16));
+    const alpha = Math.min(enter, exit);
     if (alpha <= 0.02) continue;
     const line = lines[samosborCrawlLineIndex(variantId, i, cycle, lines.length)];
     const jitter = textJitter(time * 2.5, 1800 + i * 17);
@@ -615,7 +618,7 @@ function combatSpriteScale(e: Entity): number {
 function combatSpriteProjection(e: Entity, forward: number, side: number, pitch: number): CombatSpriteProjection | null {
   if (forward <= 0.1) return null;
   const scale = combatSpriteScale(e);
-  const spriteScreenX = Math.floor((SCR_W / 2) * (1 + side / (forward * COMBAT_TARGET_PLANE_LEN)));
+  const spriteScreenX = Math.floor((SCR_W / 2) * (1 + side / (forward * cameraPlaneLen())));
   const rawH = Math.abs(Math.floor(SCR_H / forward));
   const spriteH = Math.floor(rawH * scale);
   const spriteW = spriteH;
@@ -752,16 +755,6 @@ function recentCombatSignal(state: GameState, time: number): CombatSignalHud | n
     if (m.color === '#f66') return { text, color: '#f66' };
   }
   return null;
-}
-
-function hudMessagePriority(m: GameState['msgs'][number], now: number): number {
-  const explicit = Number.isFinite(m.hudPriority) ? m.hudPriority! : 32;
-  const freshness = Math.max(0, 8 - (now - m.time)) * 0.75;
-  if (m.color === '#f66' || m.color === '#f44' || m.color === '#f00') return explicit + 80 + freshness;
-  if (m.color === '#f84' || m.color === '#fa0' || m.color === '#fc4') return explicit + 48 + freshness;
-  if (m.color === '#4f4' || m.color === '#0f8' || m.color === '#8ff') return explicit + 24 + freshness;
-  if (m.color === '#888' || m.color === '#aaa') return explicit - 8 + freshness;
-  return explicit + freshness;
 }
 
 function inferDeathCause(state: GameState, player: Entity, world: World): { title: string; detail: string } {
@@ -1027,6 +1020,15 @@ export function drawHUD(
     bottomVitalsHeight: NEEDS_PANEL_H * sy,
     topRightWidth: 212 * sx,
   });
+  if (typeof window !== 'undefined' && window.location.search.includes('smoke')) {
+    window.__gigahrushLastHudLayout = {
+      canvasW: w,
+      canvasH: h,
+      safe: { x: slots.safe.left, y: slots.safe.top, w: slots.safe.right, h: slots.safe.bottom },
+      bottomVitals: { ...slots.bottomVitals },
+      centerInteraction: { ...slots.centerInteraction },
+    };
+  }
   const showBottomTabs = uiElementEnabled('bottom_tabs');
   const showWeaponPanel = uiElementEnabled('weapon_panel');
   const showCrosshair = uiElementEnabled('crosshair');
@@ -1041,6 +1043,7 @@ export function drawHUD(
   const showStatusHints = uiElementEnabled('status_hints');
   const showAnomalyHints = uiElementEnabled('anomaly_hints');
   const showScreenFx = uiElementEnabled('screen_fx');
+  const showSamosborText = uiElementEnabled('samosbor_text');
   const netSphereOpen = isNetSphereOpen();
   const netTerminalGenOpen = isNetTerminalGenOpen();
   const emergencyPanelOpen = isEmergencyPanelMenuOpen();
@@ -1124,6 +1127,74 @@ export function drawHUD(
   const routeCueVisible = !!routeCue && routeHintsVisible;
   const smallCaravan = showCompactPanels && showCaravanHints ? getNearestSmallCaravan(state, world, player) : undefined;
   const smogIndicatorVisible = showCompactPanels && anomalySafetyVisible && smogStatus.active && (smogStatus.inside || smogStatus.sourceFound || smogStatus.handled);
+  const samosborWarning = getSamosborWarningSnapshot(state);
+
+  // ── Stenographic summary: full-width top text band ─────────
+  if (showCompactPanels && showMessages && !state.samosborActive && !samosborWarning) {
+    const s = Math.max(1, Math.min(sx, sy));
+    const pad = 5 * s;
+    const headerH = 9 * s;
+    const rowH = 9 * s;
+    const maxPanelH = Math.min(slots.topCenterCritical.h, Math.max(36 * s, h * 0.33));
+    const maxRows = Math.max(0, Math.min(MSG_MAX, Math.floor((maxPanelH - pad * 2 - headerH) / rowH)));
+    const selectedMsgs: Array<{ msg: GameState['msgs'][number]; index: number }> = [];
+    const scanStart = Math.max(0, state.msgs.length - MSG_SCAN_MAX);
+    for (let i = state.msgs.length - 1; i >= scanStart && selectedMsgs.length < maxRows; i--) {
+      const m = state.msgs[i];
+      if (time - m.time > 8) continue;
+      if (m.hud === false) continue;
+      selectedMsgs.push({ msg: m, index: i });
+    }
+    if (selectedMsgs.length > 0 && slots.topCenterCritical.w >= 96 * s) {
+      const panelH = Math.min(maxPanelH, pad * 2 + headerH + selectedMsgs.length * rowH);
+      const rect = allocateHudSlot(slots.topCenterCritical, panelH, slots.topCenterCritical.w, 'center');
+      const reserveY = rect.y + rect.h + slots.topCenterCritical.gap;
+      slots.topLeftEvent.cursorY = Math.max(slots.topLeftEvent.cursorY, reserveY);
+      slots.topRightNavigation.cursorY = Math.max(slots.topRightNavigation.cursorY, reserveY);
+      drawNeuroPanel(ctx, rect.x, rect.y, rect.w, rect.h, time, 306);
+      drawStaticNoise(ctx, rect.x, rect.y, rect.w, rect.h, time, 0.006);
+
+      ctx.save();
+      ctx.textAlign = 'left';
+      ctx.shadowBlur = 0;
+      ctx.font = `${7 * s}px monospace`;
+      const titleY = rect.y + pad + 4 * s;
+      ctx.fillStyle = 'rgba(130,235,230,0.88)';
+      ctx.fillText(fitHudText(ctx, 'СТЕНОСВОДКА', 84 * s), rect.x + pad, titleY);
+      ctx.fillStyle = 'rgba(82,110,126,0.84)';
+      ctx.fillText(fitHudText(ctx, 'последние сообщения', Math.max(16 * s, rect.w - 100 * s)), rect.x + pad + 88 * s, titleY);
+      ctx.strokeStyle = 'rgba(70,220,255,0.25)';
+      ctx.beginPath();
+      ctx.moveTo(rect.x + pad, rect.y + pad + headerH);
+      ctx.lineTo(rect.x + rect.w - pad, rect.y + pad + headerH);
+      ctx.stroke();
+
+      let my = rect.y + pad + headerH + 6 * s;
+      for (const item of selectedMsgs) {
+        const m = item.msg;
+        const age = time - m.time;
+        const day = m.day;
+        const hour = String(m.hour).padStart(2, '0');
+        const minute = String(m.minute).padStart(2, '0');
+        const dist = m.distanceMeters !== undefined ? ` ${Math.max(0, Math.round(m.distanceMeters))}м` : '';
+        const stamp = `Д${day} ${hour}:${minute}${dist}`;
+        const alpha = age > 6 ? 1 - (age - 6) / 2 : 1;
+        const rowJitter = textJitter(time, item.index * 17 + 300);
+        const rowY = my + rowJitter.dy * 0.28;
+        const stampW = Math.min(72 * s, Math.max(42 * s, ctx.measureText(stamp).width + 5 * s));
+        const textX = rect.x + pad + stampW;
+        const textW = Math.max(32 * s, rect.x + rect.w - pad - textX);
+        ctx.globalAlpha = alpha * flicker(time, item.index + 300);
+        ctx.fillStyle = 'rgba(120,145,160,0.82)';
+        ctx.fillText(fitHudText(ctx, stamp, stampW - 4 * s), rect.x + pad + rowJitter.dx * 0.28, rowY);
+        ctx.fillStyle = m.color;
+        ctx.fillText(fitHudText(ctx, m.text, textW), textX + rowJitter.dx * 0.28, rowY);
+        my += rowH;
+      }
+      ctx.restore();
+      ctx.globalAlpha = 1;
+    }
+  }
 
   if (showCompactPanels && state.mapMode === 1 && showMinimap) {
     const mapRect = allocateHudSlot(slots.topRightNavigation, 80 * sy, 80 * sx, 'right');
@@ -1209,51 +1280,6 @@ export function drawHUD(
 
   const hazardWarning = getPlayerHazardWarning(world, player);
   const hazardWarningVisible = !!hazardWarning && (showHazardWarning || hazardWarning.critical);
-
-  // ── Messages ─────────────────────────────────────────────
-  if (showCompactPanels && showMessages) {
-    const now = state.time;
-    let my = slots.topLeftEvent.cursorY;
-    ctx.font = `${7 * sy}px monospace`;
-    const msgMaxW = Math.max(48 * sx, slots.topLeftEvent.w);
-    const visibleMsgs: Array<{ msg: GameState['msgs'][number]; index: number; priority: number }> = [];
-    const scanStart = Math.max(0, state.msgs.length - MSG_SCAN_MAX);
-    for (let i = state.msgs.length - 1; i >= scanStart; i--) {
-      const m = state.msgs[i];
-      const age = now - m.time;
-      if (age > 8) continue;
-      if (m.hud === false) continue;
-      visibleMsgs.push({ msg: m, index: i, priority: hudMessagePriority(m, now) });
-    }
-    const selectedMsgs = visibleMsgs
-      .sort((a, b) => b.priority - a.priority || b.index - a.index)
-      .slice(0, MSG_MAX)
-      .sort((a, b) => b.index - a.index);
-	    for (const item of selectedMsgs) {
-	      const m = item.msg;
-	      const age = now - m.time;
-	      const _mday = m.day;
-	      const _mhh = String(m.hour).padStart(2, '0');
-	      const _mmm = String(m.minute).padStart(2, '0');
-      const _mdist = m.distanceMeters !== undefined ? ` ${Math.max(0, Math.round(m.distanceMeters))}м` : '';
-      const _stamp = `[Д${_mday} ${_mhh}:${_mmm}${_mdist}] `;
-	      const alpha = age > 6 ? 1 - (age - 6) / 2 : 1;
-	      ctx.globalAlpha = alpha;
-	      const stampW = ctx.measureText(_stamp).width;
-	      ctx.fillStyle = '#556';
-	      ctx.fillText(_stamp, slots.topLeftEvent.x, my);
-	      ctx.fillStyle = m.color;
-	      const textX = slots.topLeftEvent.x + stampW;
-	      const lineH = 9 * sy;
-	      const lines = wrapTextLines(ctx, m.text, Math.max(24 * sx, msgMaxW - stampW), 64, { stable: true });
-	      for (let li = 0; li < lines.length; li++) {
-	        ctx.fillText(lines[li], li === 0 ? textX : slots.topLeftEvent.x, my);
-	        my += lineH;
-	      }
-	    }
-    slots.topLeftEvent.cursorY = my + slots.topLeftEvent.gap;
-    ctx.globalAlpha = 1;
-  }
 
   const seroburmalineFx = showCompactPanels && showStatusHints ? getSeroburmalineHudFx(state) : null;
   if (seroburmalineFx) drawSeroburmalineNoLookFx(ctx, w, h, time, seroburmalineFx);
@@ -1382,8 +1408,7 @@ export function drawHUD(
   }
 
   // ── SAMOSBOR warning (intense glitch) ──────────────────────
-  const samosborWarning = getSamosborWarningSnapshot(state);
-  if (samosborWarning && !state.samosborActive) {
+  if (showSamosborText && samosborWarning && !state.samosborActive) {
     const compactCritical = centerModalOpen;
     const rect = allocateHudSlot(
       slots.topCenterCritical,
@@ -1419,20 +1444,20 @@ export function drawHUD(
     ctx.fillText(fitHudText(ctx, hazardWarning.detail, rect.w - 12 * sx), rect.x + rect.w * 0.5, rect.y + 17 * sy);
     ctx.textAlign = 'left';
   }
-  if (state.samosborActive) {
+  if (showSamosborText && state.samosborActive) {
     const activeInstruction = getSamosborActiveInstructionSnapshot(state);
     if (activeInstruction) {
       const compactCritical = centerModalOpen;
       const rect = allocateHudSlot(
         slots.topCenterCritical,
-        (compactCritical ? 24 : 36) * sy,
-        Math.min(w - 12 * sx, 228 * sx),
+        (compactCritical ? 24 : 30) * sy,
+        w - 12 * sx,
         'center',
       );
       drawSamosborActiveInstruction(ctx, w, sx, sy, time, activeInstruction, rect.y, compactCritical);
+      drawSamosborCrawl(ctx, w, h, sx, sy, time, activeInstruction.variantId, activeInstruction.tint);
     }
     if (screenFxVisible && activeInstruction) {
-      drawSamosborCrawl(ctx, w, h, sx, sy, time, activeInstruction.variantId, activeInstruction.tint);
       drawStaticNoise(ctx, 0, 0, w, h, time, 0.04);
       if (activeInstruction.variantId === 'maronary') drawMaronaryProofNoise(ctx, w, h, time, 0.85);
       if (activeInstruction.variantId === 'veretar') drawVeretarVeil(ctx, w, h, time, 0.85);

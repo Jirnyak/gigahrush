@@ -20,6 +20,7 @@ import { addFactionRelMutual } from '../data/relations';
 import { changeResourceStock, getEconomyQuote, type EconomyQuote } from './economy';
 import { controlHint } from './controls';
 import { publishEvent } from './events';
+import { CHALK_ITEM_ID, createChalkItemData } from './chalk';
 import { recordPermitAccess } from './permits';
 import { applyRoomMemoryRelationPenalty, applyTheftRelationPenalty } from './factions';
 import { addKarma } from './alife_rating';
@@ -577,7 +578,8 @@ function addToInventory(inv: Item[], item: Item, count: number, capacitySlots: n
   }
   while (left > 0 && inv.length < capacitySlots) {
     const add = Math.min(left, maxStack);
-    inv.push({ defId: item.defId, count: add, data: item.data });
+    const data = item.data ?? (item.defId === CHALK_ITEM_ID ? createChalkItemData(def.durability ?? 0) : undefined);
+    inv.push({ defId: item.defId, count: add, data });
     left -= add;
   }
   return moved - left;

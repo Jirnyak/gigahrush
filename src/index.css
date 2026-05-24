@@ -37,11 +37,11 @@ body {
 }
 canvas {
   display: block;
-  width: 100%;
-  height: 100%;
+  width: var(--app-viewport-width, 100vw);
+  height: var(--app-viewport-height, 100dvh);
   image-rendering: pixelated;
   image-rendering: crisp-edges;
-  position: absolute;
+  position: fixed;
   top: 0;
   left: 0;
 }
@@ -69,7 +69,10 @@ canvas {
 
 .mobile-controls {
   position: fixed;
-  inset: 0;
+  left: 0;
+  top: 0;
+  width: var(--app-viewport-width, 100vw);
+  height: var(--app-viewport-height, 100dvh);
   z-index: 3;
   pointer-events: none;
   touch-action: none;

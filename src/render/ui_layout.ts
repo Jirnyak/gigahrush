@@ -146,11 +146,18 @@ export function createHudSlots(
   const safe = hudSafeInsets(canvasW, canvasH, sx, sy, !!options.mobileControls, options.safeInsets);
   const gap = Math.max(2 * sy, 4);
   const bottomH = Math.max(16 * sy, options.bottomVitalsHeight ?? 20 * sy);
-  const bottomY = Math.max(safe.top + 64 * sy, canvasH - safe.bottom - bottomH);
+  const bottomVitalsInset = options.mobileControls
+    ? Math.max(4 * sy, Math.min(14 * sy, canvasH * 0.04))
+    : safe.bottom;
+  const bottomY = Math.max(safe.top + 64 * sy, canvasH - bottomVitalsInset - bottomH);
   const topH = Math.max(0, bottomY - safe.top - gap);
   const usableW = Math.max(0, canvasW - safe.left - safe.right);
   const navW = Math.max(80 * sx, Math.min(usableW, options.topRightWidth ?? 176 * sx));
   const topLeftW = Math.max(48 * sx, usableW - navW - 8 * sx);
+  const interactionH = Math.max(18 * sy, 1);
+  const minInteractionY = safe.top + 36 * sy;
+  const maxInteractionY = Math.max(minInteractionY, bottomY - interactionH - gap);
+  const interactionY = clamp(Math.min(canvasH * 0.5 + 24 * sy, maxInteractionY), minInteractionY, maxInteractionY);
 
   return {
     safe,
@@ -159,9 +166,9 @@ export function createHudSlots(
     topRightNavigation: makeStackSlot(canvasW - safe.right - navW, safe.top, navW, topH, gap, 'right'),
     centerInteraction: {
       x: safe.left,
-      y: canvasH * 0.5 + 24 * sy,
+      y: interactionY,
       w: usableW,
-      h: Math.max(18 * sy, bottomY - (canvasH * 0.5 + 24 * sy) - gap),
+      h: Math.max(interactionH, bottomY - interactionY - gap),
     },
     centerModal: {
       x: safe.left,

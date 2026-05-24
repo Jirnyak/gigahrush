@@ -26,7 +26,19 @@ export const UI_ELEMENT_DEFS = [
 ] as const satisfies readonly UiElementDef[];
 
 export type UiElementId = typeof UI_ELEMENT_DEFS[number]['id'];
-type UiSettings = Record<UiElementId, boolean>;
+export const MOBILE_LOOK_SENSITIVITY_DEFAULT = 0.5;
+export const MOBILE_LOOK_SENSITIVITY_MIN = 0.25;
+export const MOBILE_LOOK_SENSITIVITY_MAX = 1.5;
+export const MOBILE_LOOK_SENSITIVITY_STEP = 0.25;
+export const CAMERA_FOV_DEFAULT_DEGREES = 90;
+export const CAMERA_FOV_MIN_DEGREES = 60;
+export const CAMERA_FOV_MAX_DEGREES = 110;
+export const CAMERA_FOV_STEP_DEGREES = 5;
+
+type UiSettings = Record<UiElementId, boolean> & {
+  mobileLookSensitivity: number;
+  cameraFovDegrees: number;
+};
 
 export interface UiPresetDef {
   id: string;
@@ -36,6 +48,12 @@ export interface UiPresetDef {
 }
 
 export const UI_PRESETS = [
+  {
+    id: 'off',
+    label: 'Выкл всё',
+    hint: 'Только обязательные системные сигналы.',
+    enabled: [],
+  },
   {
     id: 'novice',
     label: 'Новичок',
@@ -116,10 +134,21 @@ export const UI_PRESETS = [
 
 export type UiPresetId = typeof UI_PRESETS[number]['id'];
 export const DEFAULT_UI_PRESET_ID: UiPresetId = 'novice';
+export type UiSettingsView = 'interface' | 'graphics';
+
+const MOBILE_SETTINGS_ROWS = [
+  { kind: 'mobile_sensitivity', id: 'mobile_look_sensitivity', group: 'Мобилка', label: 'Чувствительность обзора' },
+] as const;
+
+const GRAPHICS_SETTINGS_ROWS = [
+  { kind: 'camera_fov', id: 'camera_fov', group: 'Графика', label: 'FOV / угол обзора' },
+] as const;
 
 export type UiSettingsRow =
   | { kind: 'preset'; preset: typeof UI_PRESETS[number] }
-  | { kind: 'element'; element: typeof UI_ELEMENT_DEFS[number] };
+  | { kind: 'element'; element: typeof UI_ELEMENT_DEFS[number] }
+  | typeof GRAPHICS_SETTINGS_ROWS[number]
+  | typeof MOBILE_SETTINGS_ROWS[number];
 
 const UI_STORAGE_KEY = 'gigahrush_ui_orchestrator_v6';
 
@@ -144,6 +173,8 @@ function settingsFromEnabledIds(enabledIds: readonly UiElementId[]): UiSettings 
   const enabled = new Set<UiElementId>(enabledIds);
   const out = {} as UiSettings;
   for (const def of UI_ELEMENT_DEFS) out[def.id] = def.locked || enabled.has(def.id);
+  out.mobileLookSensitivity = MOBILE_LOOK_SENSITIVITY_DEFAULT;
+  out.cameraFovDegrees = CAMERA_FOV_DEFAULT_DEGREES;
   return out;
 }
 
@@ -163,7 +194,35 @@ function normalizeUiSettings(raw: unknown): UiSettings {
     const value = src[def.id];
     if (typeof value === 'boolean') out[def.id] = value;
   }
+  out.mobileLookSensitivity = normalizeMobileLookSensitivity(src.mobileLookSensitivity);
+  out.cameraFovDegrees = normalizeCameraFovDegrees(src.cameraFovDegrees);
   return out;
+}
+
+function normalizeMobileLookSensitivity(value: unknown): number {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return MOBILE_LOOK_SENSITIVITY_DEFAULT;
+  const clamped = Math.max(MOBILE_LOOK_SENSITIVITY_MIN, Math.min(MOBILE_LOOK_SENSITIVITY_MAX, value));
+  const stepped = Math.round(clamped / MOBILE_LOOK_SENSITIVITY_STEP) * MOBILE_LOOK_SENSITIVITY_STEP;
+  return Math.round(stepped * 100) / 100;
+}
+
+function mobileLookSensitivityStepIndex(value: number): number {
+  const steps = Math.round((MOBILE_LOOK_SENSITIVITY_MAX - MOBILE_LOOK_SENSITIVITY_MIN) / MOBILE_LOOK_SENSITIVITY_STEP) + 1;
+  const normalized = normalizeMobileLookSensitivity(value);
+  return Math.max(0, Math.min(steps - 1, Math.round((normalized - MOBILE_LOOK_SENSITIVITY_MIN) / MOBILE_LOOK_SENSITIVITY_STEP)));
+}
+
+function normalizeCameraFovDegrees(value: unknown): number {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return CAMERA_FOV_DEFAULT_DEGREES;
+  const clamped = Math.max(CAMERA_FOV_MIN_DEGREES, Math.min(CAMERA_FOV_MAX_DEGREES, value));
+  const stepped = Math.round(clamped / CAMERA_FOV_STEP_DEGREES) * CAMERA_FOV_STEP_DEGREES;
+  return Math.round(stepped);
+}
+
+function cameraFovStepIndex(value: number): number {
+  const steps = Math.round((CAMERA_FOV_MAX_DEGREES - CAMERA_FOV_MIN_DEGREES) / CAMERA_FOV_STEP_DEGREES) + 1;
+  const normalized = normalizeCameraFovDegrees(value);
+  return Math.max(0, Math.min(steps - 1, Math.round((normalized - CAMERA_FOV_MIN_DEGREES) / CAMERA_FOV_STEP_DEGREES)));
 }
 
 function loadUiSettings(): UiSettings {
@@ -239,9 +298,61 @@ export function resetUiSettings(): void {
 export function applyUiPreset(id: UiPresetId): boolean {
   const preset = presetsById.get(id);
   if (!preset) return false;
+  const sensitivity = mobileLookSensitivity();
+  const fov = cameraFovDegrees();
   settings = settingsFromEnabledIds(preset.enabled);
+  settings.mobileLookSensitivity = sensitivity;
+  settings.cameraFovDegrees = fov;
   saveUiSettings();
   return true;
+}
+
+export function mobileLookSensitivity(): number {
+  settings.mobileLookSensitivity = normalizeMobileLookSensitivity(settings.mobileLookSensitivity);
+  return settings.mobileLookSensitivity;
+}
+
+export function adjustMobileLookSensitivity(deltaSteps: number): number {
+  const steps = Math.round((MOBILE_LOOK_SENSITIVITY_MAX - MOBILE_LOOK_SENSITIVITY_MIN) / MOBILE_LOOK_SENSITIVITY_STEP) + 1;
+  const current = mobileLookSensitivityStepIndex(mobileLookSensitivity());
+  const next = (current + Math.trunc(deltaSteps) + steps) % steps;
+  settings.mobileLookSensitivity = Math.round((MOBILE_LOOK_SENSITIVITY_MIN + next * MOBILE_LOOK_SENSITIVITY_STEP) * 100) / 100;
+  saveUiSettings();
+  return settings.mobileLookSensitivity;
+}
+
+export function resetMobileLookSensitivity(): number {
+  settings.mobileLookSensitivity = MOBILE_LOOK_SENSITIVITY_DEFAULT;
+  saveUiSettings();
+  return settings.mobileLookSensitivity;
+}
+
+export function cameraFovDegrees(): number {
+  settings.cameraFovDegrees = normalizeCameraFovDegrees(settings.cameraFovDegrees);
+  return settings.cameraFovDegrees;
+}
+
+export function cameraFovRadians(): number {
+  return cameraFovDegrees() * Math.PI / 180;
+}
+
+export function cameraPlaneLen(): number {
+  return Math.tan(cameraFovRadians() * 0.5);
+}
+
+export function adjustCameraFov(deltaSteps: number): number {
+  const steps = Math.round((CAMERA_FOV_MAX_DEGREES - CAMERA_FOV_MIN_DEGREES) / CAMERA_FOV_STEP_DEGREES) + 1;
+  const current = cameraFovStepIndex(cameraFovDegrees());
+  const next = (current + Math.trunc(deltaSteps) + steps) % steps;
+  settings.cameraFovDegrees = CAMERA_FOV_MIN_DEGREES + next * CAMERA_FOV_STEP_DEGREES;
+  saveUiSettings();
+  return settings.cameraFovDegrees;
+}
+
+export function resetCameraFov(): number {
+  settings.cameraFovDegrees = CAMERA_FOV_DEFAULT_DEGREES;
+  saveUiSettings();
+  return settings.cameraFovDegrees;
 }
 
 export function activeUiPresetId(): UiPresetId | undefined {
@@ -260,13 +371,16 @@ export function activeUiPresetId(): UiPresetId | undefined {
   return undefined;
 }
 
-export function uiSettingsRowCount(): number {
-  return UI_PRESETS.length + UI_ELEMENT_DEFS.length;
+export function uiSettingsRowCount(view: UiSettingsView = 'interface'): number {
+  if (view === 'graphics') return GRAPHICS_SETTINGS_ROWS.length;
+  return UI_PRESETS.length + UI_ELEMENT_DEFS.length + MOBILE_SETTINGS_ROWS.length;
 }
 
-export function uiSettingsRowAt(index: number): UiSettingsRow | undefined {
+export function uiSettingsRowAt(index: number, view: UiSettingsView = 'interface'): UiSettingsRow | undefined {
   if (index < 0) return undefined;
+  if (view === 'graphics') return GRAPHICS_SETTINGS_ROWS[index];
   if (index < UI_PRESETS.length) return { kind: 'preset', preset: UI_PRESETS[index] };
   const element = UI_ELEMENT_DEFS[index - UI_PRESETS.length];
-  return element ? { kind: 'element', element } : undefined;
+  if (element) return { kind: 'element', element };
+  return MOBILE_SETTINGS_ROWS[index - UI_PRESETS.length - UI_ELEMENT_DEFS.length];
 }

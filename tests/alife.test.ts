@@ -31,6 +31,11 @@ function minimalState(): GameState {
   return state;
 }
 
+function restoreGlobalProperty(name: 'navigator' | 'performance' | 'window', descriptor: PropertyDescriptor | undefined): void {
+  if (descriptor) Object.defineProperty(globalThis, name, descriptor);
+  else delete (globalThis as Record<string, unknown>)[name];
+}
+
 function ambientTemplate(id: number, x: number, y: number): Entity {
   return {
     id,
@@ -55,6 +60,36 @@ function ambientTemplate(id: number, x: number, y: number): Entity {
 
 test('A-Life default population falls back when runtime memory is unknown', () => {
   assert.equal(defaultAlifePopulation(), 100_000);
+});
+
+test('A-Life mobile runtime keeps fallback population despite large memory hints', () => {
+  const navigatorDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'navigator');
+  const performanceDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'performance');
+  const windowDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'window');
+  try {
+    Object.defineProperty(globalThis, 'navigator', {
+      configurable: true,
+      value: {
+        userAgent: 'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 Mobile Safari/537.36',
+        maxTouchPoints: 5,
+        deviceMemory: 16,
+      },
+    });
+    Object.defineProperty(globalThis, 'performance', {
+      configurable: true,
+      value: { memory: { jsHeapSizeLimit: 4 * 1024 * 1024 * 1024 } },
+    });
+    Object.defineProperty(globalThis, 'window', {
+      configurable: true,
+      value: { innerWidth: 844, innerHeight: 390 },
+    });
+
+    assert.equal(defaultAlifePopulation(), 100_000);
+  } finally {
+    restoreGlobalProperty('navigator', navigatorDescriptor);
+    restoreGlobalProperty('performance', performanceDescriptor);
+    restoreGlobalProperty('window', windowDescriptor);
+  }
 });
 
 test('A-Life materializes ambient slots and leaves killed slots empty', () => {

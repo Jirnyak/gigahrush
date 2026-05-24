@@ -112,7 +112,7 @@ When deployed as a Cloudflare Worker with Assets and the D1 binding described in
 
 Direct HTTPS builds also expose PWA metadata. Desktop play has a remappable `F11` fullscreen action that requests browser fullscreen with hidden navigation UI and never auto-opens on load. The mobile `FULL` control requests browser fullscreen only on compatible non-iOS browsers. Embedded mobile hosts show a direct-page launcher instead. iPhone/WebKit does not get the forced fullscreen path because it can reload the web view; iOS standalone Home Screen launch remains supported through the manifest and Apple web-app meta tags.
 
-The runtime HUD is configurable through the `U` UI orchestrator menu. HUD elements are stored in browser-local UI settings outside the game save; fresh local settings use the `Новичок` preset with bottom tabs, weapon panel, crosshair, simple `E` interaction prompt, hazard warnings and minimap support enabled, while route hints and the transient stenographic HUD summary are off by default. The full message log still records entries and opens with `L`. NPCs with a current quest action - either a quest they can issue now or an active TALK target - are marked by a bright yellow `!` in the existing aim target name/HP box, not in the `E` prompt; map NPC markers use blue for inactive notable NPCs and gold for current quest-action NPCs. `M` cycles minimap, full map and hidden map; when minimap UI is disabled, the cycle skips the invisible minimap state. The full map does not draw the quest strip over the map. Caravan markers are a separate UI surface and are off by default. Players can switch to `Минимум`, `Бой`, `Маршрут` or `Полный` presets and then adjust individual surfaces. Damage/sleep feedback, samosbor text, weapon/tool beam visuals and title/final screens are locked on, while location panel, route hints, stenographic HUD summary, status hints, anomaly deep hints and cosmetic screen effects can be toggled independently. Desktop title and in-game prompts explain click-to-capture mouse look, `ЛКМ`/attack, `F11`, `Tab` and `U`. The `Enter` game menu also links to key bindings and interface toggles.
+The runtime HUD is configurable through the `U` UI orchestrator menu. HUD elements are stored in browser-local UI settings outside the game save; fresh local settings use the `Новичок` preset with bottom tabs, weapon panel, crosshair, simple `E` interaction prompt, hazard warnings and minimap support enabled, while route hints and the transient stenographic HUD summary are off by default. When enabled, the stenographic summary is a full-width top HUD band capped to the upper third of the screen and shows recent one-line messages with time and distance. The same browser-local settings also store mobile look sensitivity, defaulting to 50% of the original touch rotation speed. The full message log still records entries and opens with `L`. NPCs with a current quest action - either a quest they can issue now or an active TALK target - are marked by a bright yellow `!` in the existing aim target name/HP box, not in the `E` prompt; map NPC markers use blue for inactive notable NPCs and gold for current quest-action NPCs. `M` cycles minimap, full map and hidden map; when minimap UI is disabled, the cycle skips the invisible minimap state. The full map does not draw the quest strip over the map. Caravan markers are a separate UI surface and are off by default. Players can switch to `Выкл всё`, `Минимум`, `Бой`, `Маршрут` or `Полный` presets and then adjust individual surfaces. Damage/sleep feedback, samosbor text, weapon/tool beam visuals and title/final screens are locked on, while location panel, route hints, stenographic HUD summary, status hints, anomaly deep hints and cosmetic screen effects can be toggled independently. Desktop title and in-game prompts explain click-to-capture mouse look, `ЛКМ`/attack, `F11`, `Tab` and `U`. The `Enter` game menu also links to key bindings, interface toggles and the graphics/FOV screen.
 
 Localized floor messages use the toroidal world metric and enter the HUD/log only inside the current hearing radius, defaulting to 100 meters from the player. Heard NPC lines, AI actor messages and structured floor events carry distance in meters next to the timestamp; the radius is a runtime context value so future items, statuses or effects can expand or shrink it without changing message pools. Structured floor events in the stenographic summary resolve distance from coordinates first, then actor/target id, room id or zone id.
 
@@ -131,7 +131,7 @@ Current shipped-data scale, counted from source registries:
 | Plot/side NPC ids after production manifests load | 304 |
 | Side quest steps after production manifests load | 349 |
 | System assignment templates | 201 |
-| Item ids | 254 |
+| Item ids | 255 |
 | Physical weapon stat entries | 32 |
 | PSI weapon stat entries | 16 |
 | Base monster kinds | 67 |
@@ -144,7 +144,7 @@ Current shipped-data scale, counted from source registries:
 | Factory definitions / recipes | 12 / 19 |
 | LIVING manifest entries | 35 |
 | Manifest imports checked by content audit | 144 |
-| Debug commands, including routed teleports | 106 |
+| Debug commands, including routed teleports | 107 |
 
 `npm run content:audit` is intentionally conservative and reports static literal registrations: currently 304 plot NPC ids, 349 side quest steps and 133 literal contract entries. The runtime counts above include production manifest imports, dynamic route-floor side-quest registration and spread/composed contract arrays used by the running game.
 
@@ -175,7 +175,7 @@ Core loop:
 
 ## A-Life Population
 
-New runs create a compact in-memory pool of `1_000_000` procedural NPC records when runtime memory allows it, falling back to `100_000` on constrained browsers. Records are distributed across story floors, routed design floors and the per-run procedural floor deck. Only the current floor is materialized into live `entities`; other floors keep identity, floor assignment, family id, quest affordance, RPG traits, loadout, death state and optional last known coordinates without running AI.
+New runs create a compact in-memory pool of `1_000_000` procedural NPC records when runtime memory allows it, falling back to `100_000` on constrained browsers and touch/mobile runtimes. Records are distributed across story floors, routed design floors and the per-run procedural floor deck. Only the current floor is materialized into live `entities`; other floors keep identity, floor assignment, family id, quest affordance, RPG traits, loadout, death state and optional last known coordinates without running AI.
 
 Persistent NPC generation uses data profiles in `src/data/alife_generation.ts`: faction weights, level tail, wealth tail, pockets and occupation mixes remain expandable without rewriting the runtime system.
 
@@ -297,7 +297,7 @@ The authoritative floor map is `FloorLevel` in `src/core/types.ts`, story-floor 
 
 Normal lifts move through a per-run vertical `FloorRun` route rather than directly through adjacent enum values. The player starts on `LIVING` at `z=0`; down decreases `z`, up increases `z`. The route spans 101 floors from `z=-50` to `z=+50`: `VOID` is the final lowest floor at `z=-50`, and `roof` is the highest floor at `z=+50`. The expandable target pattern is every even `z` as an authored/story slot and every odd `z` as a procedural floor. Until more authored floors exist, any unoccupied even slot also falls back to seeded procedural generation. The current span has 26 authored/story stops and 75 procedural/fallback floors.
 
-Visited route stops are kept in bounded runtime memory under stable floor keys (`story:*`, design ids, procedural keys and numbered lift instance keys). Each key owns its own live `World` object and non-player/non-projectile entities: decals, bullet/blood marks, opened doors, containers, monsters and map exploration belong to that exact floor and are restored only when the player returns to that same key in the same session. Re-entering an unvisited stop still runs the generator from the run seed. After generation or memory restoration, normal route floors are postprocessed to the route lift contract: most floors get 8 down and 8 up lift cells, `roof` only gets 8 down, `VOID` only gets 8 up, and `podad` gets lower down lifts only after the Herald gate opens. A normal lift transition mirrors the departure lift group onto the arrival floor as the opposite return direction at the same coordinates; if the restored/generated floor has no reachable access there, normalization can carve a bounded connector so cross-floor lift continuity wins. Route lift interaction is on the `Cell.LIFT` block itself; adjacent `LIFT_BUTTON` features are not travel anchors and are stripped next to route lifts. Samosbor/rebuild paths do not discard the active floor snapshot; they mutate or regenerate the active `World`, drop any stale parked copy for that same key, and the resulting stitched world becomes the next stored snapshot when the player leaves.
+Visited route stops are kept in bounded runtime memory under stable floor keys (`story:*`, design ids, procedural keys and numbered lift instance keys). Each key owns its own live `World` object and non-player/non-projectile entities: decals, bullet/blood marks, opened doors, containers, monsters and map exploration belong to that exact floor and are restored only when the player returns to that same key in the same session. Re-entering an unvisited stop still runs the generator from the run seed. After generation or memory restoration, normal route floors are postprocessed to the route lift contract: most floors get 8 down and 8 up lift cells, `roof` only gets 8 down, `VOID` only gets 8 up, and `podad` gets lower down lifts only after the Herald gate opens. A normal lift transition mirrors the departure lift group onto the arrival floor as the opposite return direction at the same coordinates; if the restored/generated floor has no reachable access there, normalization can carve a bounded connector so cross-floor lift continuity wins. Route lift interaction is on the `Cell.LIFT` block itself; adjacent `LIFT_BUTTON` features are not travel anchors and are stripped next to route lifts. Samosbor paths mutate the active floor locally from a random map source, defer the generated field splice through the two-phase loading screen, drop any stale parked copy for the same key, and the stitched world becomes the next stored snapshot when the player leaves.
 
 ```txt
 z=+50 roof
@@ -433,7 +433,7 @@ The player spawns in the **Актовый зал** on `LIVING`. It is a protecte
 
 Yakov Davidovich's lab is generated farther from spawn as a separate content module. Vanka's den is another story POI. The path to them is real gameplay, not just tutorial text.
 
-The act hall and adjacent protected rooms use `aptMask`, so the living-floor volatile rebuild does not erase them during samosbor.
+The act hall and adjacent protected rooms use `aptMask`, so local samosbor waves do not erase them.
 
 Slide textures rotate through 8 frames / 4 pairs:
 
@@ -525,7 +525,7 @@ Doors have five states: open, closed, locked, hermetic open, hermetic closed.
 8. `buildLivingHubGeometry()`: readable hub routes and district motifs over the generated maze.
 9. Vanka shadows, side quest NPCs, procedural screens, room items, families and travelers.
 
-During living-floor samosbor rebuild, `wipeVolatile()` + `generateVolatileMaze()` replaces the volatile maze. Apartments and protected content survive.
+Living samosbor uses the same local wave contract as other floors: apartments and protected content survive, while only the affected local field is mutated and stitched from fresh generated geometry.
 
 ### Ministry
 
@@ -592,24 +592,24 @@ Current behavior:
 3. Warning messages/events are published.
 4. Siren plays unless the variant suppresses or replaces it.
 5. Citizens/scientists hide through AI; liquidators and cultists keep acting.
-6. A zone is captured by samosbor fog/light; that zone seeds the field.
+6. A random mutable point on the current 1024x1024 map is chosen; its zone is captured by samosbor fog/light and the point seeds the local field.
 7. Fog boss, corridor monsters and map-pressure monsters spawn; start monsters are not leashed to the captured seed.
-8. Near the end, hermodoor sealing occurs with variant timing.
+8. Near the end, hermodoor sealing occurs with variant timing. A failed player shelter check applies direct pressure damage but no longer seeds a player-centered fog patch.
 9. The fog/light field spreads through reachable floor/water cells in the accessible volume; walls and doors stop it. Outside active samosbor the field keeps spreading, but its gameplay effect is inert.
 10. Active fog samples apply the current variant's effect: classic samosbor spawns monsters, Maronary rewrites actors/items/container contents/cell details, Veretar deletes actors/items/containers/cells into white residue, and Istotit heals or creates actors/items/features.
-11. On the story `LIVING` floor, samosbor rolls start `systems/samosbor_wave.ts`: a bounded small/medium frontier mutates volatile cells during the active phase, records a local rebuild field radius, preserves apartments, hermowalls, lifts and explicitly protected shelter rooms, then splices a freshly generated floor field into that local area at the end with boundary floor stitches, generated room traits, existing zone ownership left intact and old fog preserved on still-walkable cells.
-12. Route/design/procedural floors keep the deferred `pendingLoad` rebuild path until they have route-aware local patch generation.
-13. After end, doors reopen, aftermath may apply, and either the local wave is finalized or relevant floor geometry is rebuilt.
+11. Once per active second, samosbor picks one random live non-projectile entity from the current map and moves it to a random walkable non-protected map cell; the player is only affected when that same random selection picks the player entity.
+12. Every story, design, procedural and numbered-instance floor runs `systems/samosbor_wave.ts`: a bounded small/medium frontier mutates cells during the active phase, records a local rebuild field radius, preserves apartments, hermowalls, lifts and explicitly protected shelter rooms, then defers the freshly generated current-route field splice through the loading screen and applies it to that local area with boundary floor stitches, generated room traits, existing zone ownership left intact and old fog preserved on still-walkable cells.
+13. After end, doors reopen, aftermath may apply, local route cues inside the rebuilt field are pruned, and the active stitched world becomes the floor's next memory snapshot.
 
 `data/samosbor_variants.ts` currently has 8 variants, 21 modifiers and 40 aftermath beats. Rare replacement variants include Maronary with green fog/light, an intentionally kept high beep/active ping identity, damaging green source glow, wrong-door residue and identity rewrites; Istotit with a low bell cue, golden fog/light, marked shelter rooms, healing/creation effects and social aftermath; and Veretar with white fog/light, deletion effects, area leakage and white residue. The player-facing philosophy is explicit in runtime mechanics: samosbor brings purple fog and monsters, Maronary changes, Veretar removes, Istotit creates. `data/samosbor_director.ts` currently registers 34 bounded director beats for warnings, patrols, shortages, door malfunctions, aftershocks and rumor seeds.
 
 The `vacuum` tool clears samosbor fog/light from the player's cell and the eight neighboring cells, so the player can clean the active field edge without stepping deeper into it.
 
-Timers by story floor come from `src/gen/floor_manifest.ts`: Ministry is slowest, Kvartiry/Living/Maintenance are progressively more pressured, Hell and Void are fastest. Procedural floors additionally shorten the timer by danger level and anomaly pressure.
+Samosbor timing is route-depth based. Duration is random from a 30-second minimum up to a depth-scaled cap, reaching 15 minutes at `abs(z)=50`. Cooldown is the inverse random interval: at the safe center it can reach 30 minutes, and at `abs(z)=50` it bottoms out at 1 minute.
 
-Route cues live on the concrete `World` that registered them. Story, design, procedural and floor-instance loads keep their generated cue state with that world object. Deferred story/design/procedural replacements copy only the replacement world's fresh markers into the live world and drop old heard/followed/map-reveal state; Living's volatile regrow clears old cue state before the maze is regenerated. Runtime samosbor waves prune cues whose source/target cells fall inside the final local rebuild field.
+Route cues live on the concrete `World` that registered them. Story, design, procedural and floor-instance loads keep their generated cue state with that world object. Runtime samosbor waves prune cues whose source/target cells fall inside the final local rebuild field.
 
-Map exploration follows the rebuild boundary visually only: deferred samosbor rebuilds clear the current map memory and reveal the player's new starting sector again, while Living's local samosbor wave covers the rebuilt field area back with map fog-of-war. Re-entering that darkened local field reveals it through the same normal local cell trail as any other unknown map area. This is separate from purple fog density and from simulation visibility.
+Map exploration follows the local rebuild boundary visually only: a samosbor wave covers the rebuilt field area back with map fog-of-war. Re-entering that darkened local field reveals it through the same normal local cell trail as any other unknown map area. This is separate from purple fog density and from simulation visibility.
 
 ## Events, Memory And Rumors
 
@@ -808,7 +808,7 @@ Screens show active floor/zone context, quest markers, fog overlay, NPC/monster/
 | `F11` | browser fullscreen |
 | `~` | debug menu |
 
-On touch devices the game shows a landscape mobile overlay: left virtual joystick for movement, right virtual joystick for camera rotation, center tap zone for attack/shoot, left `[E]` popup for nearby interaction targets, a top-left `FULL`/direct-page control when the browser can use it safely, and a right-side menu rail. Desktop fullscreen is the same browser fullscreen path through the remappable `F11` action. The rail's up/down buttons choose inventory, map, quests, log, factions, Net Sphere, save/load menu or debug menu; the center button opens the selected panel or closes the current panel. The canvas resizes to the host viewport/fullscreen iframe, including itch.io mobile launch/fullscreen resizing. Canvas UI panels accept taps for selection, transfer, buy/sell, use/drop and close actions.
+On touch devices the game shows the title immediately and defers initial world generation until the player starts the run. The landscape mobile overlay has a left virtual joystick for movement, right virtual joystick for camera rotation, center tap zone for attack/shoot, left `[E]` popup for nearby interaction targets, a top-left `FULL`/direct-page control when the browser can use it safely, and a right-side menu rail. Mobile camera sensitivity is configurable in the `U` UI menu and defaults to 50%. Desktop fullscreen is the same browser fullscreen path through the remappable `F11` action. The rail's up/down buttons choose inventory, map, quests, log, factions, Net Sphere, save/load menu or debug menu; the center button opens the selected panel or closes the current panel. The canvas resizes to the host viewport/fullscreen iframe, including itch.io mobile launch/fullscreen resizing. Canvas UI panels accept taps for selection, transfer, buy/sell, use/drop and close actions.
 
 Debug menu currently has 86 base commands plus 20 routed design-floor teleports (106 total): weapons/PSI, spawn monsters/NPC/items, XP, samosbor variant cycle and small wave trigger, noclip, event log, economy prices, containers, production tick, system assignments, balance/catalog, lift instances, VOID protocols, faction events, route cues, samosbor director controls, story/design/procedural/anomaly teleports, Maronary/Istotit/Veretar forcing, govnyak courier, pneumomail, hermodoor borer QA, liquidator-cult clash, `ONEPUNCHMAN`, Net Terminal Gen/map editor commands, rail-train anomaly teleport, Bad Apple screen spawn near the player, zombie-apocalypse anomaly teleport, smoke expedition setup, expedition proof commands, permit debug commands and verification commands for contracts, events, lift route windows, numbered lift loops, samosbor warning, economy scarcity, floor monster packs and container routing.
 

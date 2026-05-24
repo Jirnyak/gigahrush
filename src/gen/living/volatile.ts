@@ -345,6 +345,7 @@ export function pruneVolatileSideArrays(world: World): { screenCells: number; su
   for (const [ci] of world.surfaceMap) {
     if (world.aptMask[ci]) continue;
     world.surfaceMap.delete(ci);
+    world.surfaceFlags[ci] = 0;
     removedSurfaces++;
   }
   if (removedSurfaces > 0) world.surfaceVersion++;

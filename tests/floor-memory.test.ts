@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import { Cell, EntityType, Feature, LiftDirection, type Entity } from '../src/core/types';
-import { World } from '../src/core/world';
+import { SURFACE_FLAG_CHALK_MAP, World } from '../src/core/world';
 import {
   collectFloorLiftAnchors,
   captureFloorMemory,
@@ -73,6 +73,7 @@ test('floor memory save restores full world snapshot without regenerating baseli
   world.cells[cellIdx] = Cell.FLOOR;
   world.features[cellIdx] = Feature.SCREEN;
   world.surfaceMap.set(cellIdx, new Uint8Array(16 * 16 * 4).fill(7));
+  world.surfaceFlags[cellIdx] |= SURFACE_FLAG_CHALK_MAP;
   world.addContainer({
     id: 44,
     x: 17,
@@ -104,6 +105,7 @@ test('floor memory save restores full world snapshot without regenerating baseli
   assert.equal(restoredWorld.cells[cellIdx], Cell.FLOOR);
   assert.equal(restoredWorld.features[cellIdx], Feature.SCREEN);
   assert.equal(restoredWorld.surfaceMap.get(cellIdx)?.[0], 7);
+  assert.equal((restoredWorld.surfaceFlags[cellIdx] & SURFACE_FLAG_CHALK_MAP) !== 0, true);
   assert.equal(restoredWorld.containers[0]?.name, 'snapshot box');
   assert.deepEqual(loaded.generation.entities.map(e => e.id), [9]);
   assert.equal(loaded.generation.spawnX, 17.5);

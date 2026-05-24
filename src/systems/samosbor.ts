@@ -1,6 +1,6 @@
 /* ── САМОСБОР — the maze restructures itself ─────────────────── */
-/*   Apartments (жилые) are INVARIANT. Everything else is        */
-/*   destroyed and regenerated. Hide in жилая or die.            */
+/*   Every floor runs a local wave from a random mutable map point. */
+/*   Protected rooms, hermowalls and lifts are preserved.           */
 
 import {
   W, Cell, DoorState, ZoneFaction, FloorLevel, Tex, Feature, ContainerKind, Faction,
@@ -29,13 +29,19 @@ import {
 import { recordPlayerDamage } from './damage';
 import { reassignQuestGivers } from './quests';
 import { regrowMaze } from '../gen/living';
-import { floorLevelDisplayName, generateFloor, nextPostSamosborTimer, type FloorGeneration } from '../gen/floor_manifest';
+import { floorLevelDisplayName, generateFloor, type FloorGeneration } from '../gen/floor_manifest';
 import { flashSamosborWarningScreens } from '../gen/procedural_screens';
 import { rng, pick, weightedPick } from '../gen/shared';
 import { getMaxHp, scaleMonsterHp, scaleMonsterSpeed, randomRPG } from './rpg';
 import { publishEvent } from './events';
+import {
+  nextFloorRunSamosborCooldown,
+  nextFloorRunSamosborDuration,
+  SAMOSBOR_DURATION_MAX_SEC,
+  SAMOSBOR_DURATION_MIN_SEC,
+} from './procedural_floors';
 import { controlHint } from './controls';
-import { ENTITY_MASK_ACTOR, ENTITY_MASK_VISIBLE, ensureEntityIndex } from './entity_index';
+import { ENTITY_MASK_ACTOR, ENTITY_MASK_VISIBLE, ensureEntityIndex, rebuildEntityIndex } from './entity_index';
 import { assignPersistentAlifeNpcFromEntity, recordAlifeNpcDeath, rewriteAlifeNpcIdentityFromEntity } from './alife';
 import { getSamosborLocalShelters } from './samosbor_hooks';
 import { replaceCellHazards } from './cell_hazards';
@@ -79,8 +85,6 @@ import {
   getSamosborVariantName,
 } from '../data/samosbor_variants';
 
-const SAMOSBOR_DUR_MIN = 12;      // min duration (0.2 game hours = 12 real sec)
-const SAMOSBOR_DUR_MAX = 90;      // max duration (1.5 game hours = 90 real sec)
 const MONSTERS_PER_SAMOSBOR = 10;
 const RANDOM_MAP_MONSTERS_PER_SAMOSBOR = 14;
 const FOG_SAMPLES_PER_TICK = 64;  // random cells sampled per tick for fog spread
@@ -108,10 +112,11 @@ const ISTOTIT_SHELTER_CANDIDATE_CAP = 9;
 const ISTOTIT_SUPPLY_TAG = 'istotit_supply';
 const ISTOTIT_DECISION_RADIUS2 = 4.5 * 4.5;
 const PLAYER_SHELTER_DOOR_CAP = 12;
-const UNSHELTERED_FOG_RADIUS = 4;
-const UNSHELTERED_FOG_STRENGTH = 155;
 const UNSHELTERED_HP_DAMAGE = 4;
 const UNSHELTERED_PSI_DAMAGE = 3;
+const SAMOSBOR_RANDOM_ENTITY_TRANSFER_INTERVAL = 1;
+const SAMOSBOR_RANDOM_ENTITY_TRANSFER_ENTITY_ATTEMPTS = 32;
+const SAMOSBOR_RANDOM_ENTITY_TRANSFER_CELL_ATTEMPTS = 384;
 const AFTERMATH_FACTION_CONTROL_CAP = 96;
 const FOG_DIRS_X = [1, -1, 0, 0];
 const FOG_DIRS_Y = [0, 0, 1, -1];
@@ -151,6 +156,7 @@ let knownSamosborTime = 0;
 let samosborDirectorAccum = 0;
 let maronaryPingAccum = 0;
 let maronaryGlowAccum = 0;
+let randomEntityTransferAccum = 0;
 let maronaryGlowNoticeAt = -Infinity;
 let maronaryGlowCells: number[] = [];
 let activeSamosborScale: SamosborWaveScale = 'full';
@@ -292,6 +298,7 @@ export function resetSamosborRuntimeForTests(): void {
   knownSamosborTime = 0;
   samosborDirectorAccum = 0;
   maronaryPingAccum = 0;
+  randomEntityTransferAccum = 0;
   clearMaronaryGlowRuntime();
   samosborPlayerShelterRoomId = -1;
   pendingAftermath = null;
@@ -424,26 +431,6 @@ function findNearbyDoorIdx(world: World, cx: number, cy: number, radius: number)
   return bestIdx;
 }
 
-function seedUnshelteredFog(world: World, x: number, y: number): number {
-  const r2 = UNSHELTERED_FOG_RADIUS * UNSHELTERED_FOG_RADIUS;
-  let changed = 0;
-  for (let dy = -UNSHELTERED_FOG_RADIUS; dy <= UNSHELTERED_FOG_RADIUS; dy++) {
-    for (let dx = -UNSHELTERED_FOG_RADIUS; dx <= UNSHELTERED_FOG_RADIUS; dx++) {
-      if (dx * dx + dy * dy > r2) continue;
-      const wx = world.wrap(x + dx);
-      const wy = world.wrap(y + dy);
-      const ci = world.idx(wx, wy);
-      if (world.cells[ci] !== Cell.FLOOR && world.cells[ci] !== Cell.DOOR) continue;
-      if (world.aptMask[ci] && world.fog[ci] >= 80) continue;
-      if (world.fog[ci] >= UNSHELTERED_FOG_STRENGTH) continue;
-      world.fog[ci] = UNSHELTERED_FOG_STRENGTH;
-      changed++;
-    }
-  }
-  if (changed > 0) world.markFogDirty();
-  return changed;
-}
-
 function applyUnshelteredPressure(player: Entity, state: GameState, detail: string): { hpDamage: number; psiDamage: number } {
   let hpDamage = 0;
   let psiDamage = 0;
@@ -512,9 +499,8 @@ function resolvePlayerShelterAtSeal(
     return;
   }
 
-  const fogCells = seedUnshelteredFog(world, px, py);
   const pressure = applyUnshelteredPressure(player, state, `${variant.def.displayName}: вне рабочей гермы`);
-  state.msgs.push(msg('Вы остались снаружи рабочей гермы. Через щель пошёл туман; стало больно дышать.', state.time, '#f66'));
+  state.msgs.push(msg('Вы остались снаружи рабочей гермы. Давление самосбора ударило напрямую.', state.time, '#f66'));
   publishEvent(state, {
     type: 'samosbor_warning',
     zoneId,
@@ -534,7 +520,6 @@ function resolvePlayerShelterAtSeal(
       roomId: room?.id,
       nearestDoorIdx: nearestDoorIdx >= 0 ? nearestDoorIdx : undefined,
       nearestDoorState: nearestDoorIdx >= 0 ? world.doors.get(nearestDoorIdx)?.state : undefined,
-      fogCells,
       hpDamage: pressure.hpDamage,
       psiDamage: pressure.psiDamage,
       samosborCount: state.samosborCount,
@@ -1261,34 +1246,30 @@ export function tickMaronaryGlowDamageForTests(
   tickMaronaryGlowDamage(world, entities, state, dt, variant);
 }
 
-function chooseWarningZone(world: World, entities: Entity[]): { id: number; cx: number; cy: number } {
-  const player = findPlayer(entities);
-  if (player) {
-    const px = Math.floor(player.x);
-    const py = Math.floor(player.y);
-    const playerZoneId = world.zoneMap[world.idx(px, py)];
-    const playerZone = world.zones[playerZoneId];
-    if (playerZone && playerZone.faction !== ZoneFaction.SAMOSBOR) {
-      return { id: playerZone.id, cx: playerZone.cx, cy: playerZone.cy };
-    }
+function canSeedRandomSamosborOrigin(world: World, idx: number): boolean {
+  if (world.aptMask[idx] || world.hermoWall[idx]) return false;
+  const cell = world.cells[idx];
+  if (cell !== Cell.FLOOR && cell !== Cell.WATER) return false;
+  const zone = world.zones[world.zoneMap[idx]];
+  return !zone || zone.faction !== ZoneFaction.SAMOSBOR;
+}
 
-    let best = playerZone;
-    let bestD2 = Infinity;
-    for (const zone of world.zones) {
-      if (!zone || zone.faction === ZoneFaction.SAMOSBOR) continue;
-      const d2 = world.dist2(player.x, player.y, zone.cx + 0.5, zone.cy + 0.5);
-      if (d2 < bestD2) {
-        best = zone;
-        bestD2 = d2;
-      }
-    }
-    if (best) return { id: best.id, cx: best.cx, cy: best.cy };
+function chooseWarningZone(world: World, _entities: Entity[]): { id: number; cx: number; cy: number } {
+  for (let attempt = 0; attempt < 768; attempt++) {
+    const x = Math.floor(Math.random() * W);
+    const y = Math.floor(Math.random() * W);
+    const idx = world.idx(x, y);
+    if (!canSeedRandomSamosborOrigin(world, idx)) continue;
+    const zone = world.zones[world.zoneMap[idx]];
+    return { id: zone?.id ?? -1, cx: x, cy: y };
   }
 
-  for (const zone of world.zones) {
-    if (zone && zone.faction !== ZoneFaction.SAMOSBOR) return { id: zone.id, cx: zone.cx, cy: zone.cy };
+  const candidates = world.zones.filter(zone => zone && zone.faction !== ZoneFaction.SAMOSBOR);
+  if (candidates.length > 0) {
+    const zone = candidates[Math.floor(Math.random() * candidates.length)];
+    return { id: zone.id, cx: zone.cx, cy: zone.cy };
   }
-  return { id: -1, cx: W >> 1, cy: W >> 1 };
+  return { id: -1, cx: Math.floor(Math.random() * W), cy: Math.floor(Math.random() * W) };
 }
 
 function samosborShortActionLine(variant: ActiveSamosborVariant, shelterCount: number): string {
@@ -1642,7 +1623,13 @@ function ensureSamosborWarning(
 
 /* ── Update samosbor timer and trigger ────────────────────────── */
 export function updateSamosbor(
-  world: World, entities: Entity[], state: GameState, dt: number, nextId: { v: number },
+  world: World,
+  entities: Entity[],
+  state: GameState,
+  dt: number,
+  nextId: { v: number },
+  replacementProvider?: () => FloorGeneration | undefined,
+  scheduleLocalPatch?: (runPatch: () => void) => void,
 ): boolean {
   if (state.gameOver) return false;
 
@@ -1667,7 +1654,10 @@ export function updateSamosbor(
     const variant = warning.variant;
     const warningZoneId = warning.zoneId;
     state.samosborActive = true;
-    state.samosborTimer = (SAMOSBOR_DUR_MIN + Math.random() * (SAMOSBOR_DUR_MAX - SAMOSBOR_DUR_MIN)) * variant.durationMult;
+    state.samosborTimer = Math.max(
+      SAMOSBOR_DURATION_MIN_SEC,
+      Math.min(SAMOSBOR_DURATION_MAX_SEC, nextFloorRunSamosborDuration(state) * variant.durationMult),
+    );
     state.samosborCount++;
     fogSpawnAccum = 0;
     samosborSealed = false;
@@ -1678,6 +1668,7 @@ export function updateSamosbor(
     activeSamosborWaveStarted = false;
     samosborDirectorAccum = 0;
     maronaryPingAccum = 0;
+    randomEntityTransferAccum = 0;
     samosborPlayerShelterRoomId = -1;
     state.msgs.push(msg(variant.def.startLine ?? '⚠ САМОСБОР НАЧАЛСЯ ⚠', state.time, variant.def.tint));
     publishEvent(state, {
@@ -1714,6 +1705,8 @@ export function updateSamosbor(
       state,
       variant,
       warningZoneId,
+      warning.zoneX,
+      warning.zoneY,
       warning.greenSourceCount,
       warning.wrongDoorIdx,
     );
@@ -1729,6 +1722,7 @@ export function updateSamosbor(
         warning.zoneY,
         { protectedRoomIds: getSamosborShelterRoomIds(state), durationSec: Math.max(6, state.samosborTimer - 1) },
       );
+      if (!activeSamosborWaveStarted) activeSamosborScale = 'full';
     } else {
       cancelSamosborWave();
     }
@@ -1783,6 +1777,11 @@ export function updateSamosbor(
         tickSamosborDirector(world, entities, state, nextId, activeVariant, 'active_cadence');
       }
     }
+    randomEntityTransferAccum += dt;
+    for (let i = 0; randomEntityTransferAccum >= SAMOSBOR_RANDOM_ENTITY_TRANSFER_INTERVAL && i < 4; i++) {
+      randomEntityTransferAccum -= SAMOSBOR_RANDOM_ENTITY_TRANSFER_INTERVAL;
+      tickRandomEntityTransfer(world, entities, state, activeVariant ?? undefined);
+    }
     fogSpawnAccum += dt;
     const fogSpawnInterval = Math.max(0.25, FOG_SPAWN_INTERVAL * (activeVariant?.fogSpawnIntervalMult ?? 1));
     if (fogSpawnAccum >= fogSpawnInterval) {
@@ -1801,7 +1800,7 @@ export function updateSamosbor(
       ? activeIstotitDecision(state) ?? 'none'
       : undefined;
     state.samosborActive = false;
-    state.samosborTimer = nextPostSamosborTimer(state.currentFloor);
+    state.samosborTimer = nextFloorRunSamosborCooldown(state);
     const endLine = endedVariant?.def.id === 'istotit'
       ? 'Истотит отзвонил. Жёлтая пыль осталась на плинтусах, ведомость - на руках.'
       : endedVariant?.def.id === 'maronary'
@@ -1865,11 +1864,19 @@ export function updateSamosbor(
     activeSamosborScale = 'full';
     activeSamosborWaveStarted = false;
     if (endedScale !== 'full') {
-      if (endedWaveStarted) {
-        const replacement = generateFloor(state.currentFloor);
-        finishSamosborWave(world, entities, state, replacement);
+      const endedFloor = state.currentFloor;
+      const finishLocalPatch = (): void => {
+        if (endedWaveStarted) {
+          const replacement = replacementProvider?.() ?? generateFloor(endedFloor);
+          finishSamosborWave(world, entities, state, replacement);
+        }
+        applyPendingSamosborAftermathAfterWave(world, entities, nextId, endedFloor);
+      };
+      if (endedWaveStarted && scheduleLocalPatch) {
+        scheduleLocalPatch(finishLocalPatch);
+      } else {
+        finishLocalPatch();
       }
-      applyPendingSamosborAftermathAfterWave(world, entities, nextId, state.currentFloor);
       return false;
     }
 
@@ -3633,10 +3640,11 @@ function captureZone(
   state: GameState,
   variant: ActiveSamosborVariant,
   preferredZoneId = -1,
+  preferredX?: number,
+  preferredY?: number,
   warningGreenSourceCount = 0,
   warningWrongDoorIdx = -1,
 ): number {
-  // Pick a random non-SAMOSBOR zone
   const preferredZone = preferredZoneId >= 0 ? world.zones[preferredZoneId] : undefined;
   const candidates = world.zones.filter(z => z.faction !== ZoneFaction.SAMOSBOR);
   if (candidates.length === 0) return -1;
@@ -3651,9 +3659,11 @@ function captureZone(
   zone.fogged = true;
   const istotit = isIstotit(variant);
   const maronary = isMaronary(variant);
+  const sourceX = Number.isFinite(preferredX) ? world.wrap(Math.floor(preferredX as number)) : zone.cx;
+  const sourceY = Number.isFinite(preferredY) ? world.wrap(Math.floor(preferredY as number)) : zone.cy;
 
-  // Seed fog/light at the captured zone center.
-  const ci = world.idx(zone.cx, zone.cy);
+  // Seed fog/light at the random local source point inside the captured zone.
+  const ci = world.idx(sourceX, sourceY);
   let fogDirty = false;
   let wallDirty = false;
   let floorDirty = false;
@@ -3672,7 +3682,7 @@ function captureZone(
   for (let dy = -fogRadius; dy <= fogRadius; dy++) {
     for (let dx = -fogRadius; dx <= fogRadius; dx++) {
       if (dx * dx + dy * dy > fogRadiusSq) continue;
-      const fi = world.idx(zone.cx + dx, zone.cy + dy);
+      const fi = world.idx(sourceX + dx, sourceY + dy);
       if (world.cells[fi] === Cell.FLOOR) {
         if (world.fog[fi] !== fogStrength) {
           world.fog[fi] = fogStrength;
@@ -3693,7 +3703,7 @@ function captureZone(
     }
   }
   if (isVeretar(variant) || variant.modifiers.some(m => m.id === 'area_leak')) {
-    veretarAreaLeaks = stampVeretarAreaLeak(world, zone.cx, zone.cy, fogRadius);
+    veretarAreaLeaks = stampVeretarAreaLeak(world, sourceX, sourceY, fogRadius);
   }
   if (fogDirty) world.markFogDirty();
   if (wallDirty) world.markWallTexDirty();
@@ -3709,12 +3719,12 @@ function captureZone(
   const hpBase = scaleMonsterHp(bossDef.hp, zoneLevel + 3);
   const hpFinal = Math.round(hpBase * (1 + 0.1 * rpg.str) * (istotit ? 1.35 : 2)); // lighter boss during Istotit
   // Find a walkable cell near the source point for boss spawn.
-  let bx = zone.cx, by = zone.cy;
+  let bx = sourceX, by = sourceY;
   for (let r = 0; r < 10; r++) {
     for (let dy = -r; dy <= r; dy++) {
       for (let dx = -r; dx <= r; dx++) {
-        const bi = world.idx(zone.cx + dx, zone.cy + dy);
-        if (world.cells[bi] === Cell.FLOOR) { bx = world.wrap(zone.cx + dx); by = world.wrap(zone.cy + dy); r = 99; break; }
+        const bi = world.idx(sourceX + dx, sourceY + dy);
+        if (world.cells[bi] === Cell.FLOOR) { bx = world.wrap(sourceX + dx); by = world.wrap(sourceY + dy); r = 99; break; }
       }
       if (r >= 99) break;
     }
@@ -3746,8 +3756,8 @@ function captureZone(
   const extraEyeSlots = entitySpawnSlots(entities, EntityType.MONSTER, variant.extraEyes);
   for (let i = 0; i < extraEyeSlots; i++) {
     for (let attempt = 0; attempt < 20; attempt++) {
-      const ex = world.wrap(zone.cx + rng(-8, 8));
-      const ey = world.wrap(zone.cy + rng(-8, 8));
+      const ex = world.wrap(sourceX + rng(-8, 8));
+      const ey = world.wrap(sourceY + rng(-8, 8));
       const ei = world.idx(ex, ey);
       if (world.cells[ei] !== Cell.FLOOR) continue;
       entities.push(createMonster(world, nextId, MonsterKind.EYE, ex + 0.5, ey + 0.5, state.currentFloor, true));
@@ -3766,8 +3776,8 @@ function captureZone(
   publishEvent(state, {
     type: 'samosbor_zone_captured',
     zoneId: zone.id,
-    x: zone.cx,
-    y: zone.cy,
+    x: sourceX,
+    y: sourceY,
     severity: 5,
     privacy: 'public',
     tags: [
@@ -3780,6 +3790,8 @@ function captureZone(
       zoneLevel,
       variantId: variant.def.id,
       areaLeaks: veretarAreaLeaks,
+      sourceX,
+      sourceY,
       greenSourceCount: warningGreenSourceCount,
       wrongDoorIdx: warningWrongDoorIdx >= 0 ? warningWrongDoorIdx : undefined,
     },
@@ -3810,6 +3822,7 @@ function captureZone(
 
 function trySpreadFogFromCell(world: World, ci: number): boolean {
   if (world.fog[ci] < 50) return false;
+  if (world.aptMask[ci] || world.hermoWall[ci]) return false;
   const fromCell = world.cells[ci];
   if (fromCell !== Cell.FLOOR && fromCell !== Cell.WATER) return false;
   let fogDirty = false;
@@ -3827,6 +3840,7 @@ function trySpreadFogFromCell(world: World, ci: number): boolean {
   const ni = world.idx(x + dx, y + dy);
 
   if (world.fog[ni] > 0) return fogDirty;
+  if (world.aptMask[ni] || world.hermoWall[ni]) return fogDirty;
   if (world.cells[ni] === Cell.DOOR) return fogDirty;
   if (world.cells[ni] !== Cell.FLOOR && world.cells[ni] !== Cell.WATER) return fogDirty;
 
@@ -3843,6 +3857,82 @@ function spreadFog(world: World): void {
     fogDirty = trySpreadFogFromCell(world, (Math.random() * total) | 0) || fogDirty;
   }
   if (fogDirty) world.markFogDirty();
+}
+
+function randomTransferEntity(entities: Entity[]): Entity | null {
+  if (entities.length === 0) return null;
+  for (let attempt = 0; attempt < SAMOSBOR_RANDOM_ENTITY_TRANSFER_ENTITY_ATTEMPTS; attempt++) {
+    const entity = entities[Math.floor(Math.random() * entities.length)];
+    if (entity?.alive && entity.type !== EntityType.PROJECTILE) return entity;
+  }
+  const start = Math.floor(Math.random() * entities.length);
+  const limit = Math.min(entities.length, 512);
+  for (let i = 0; i < limit; i++) {
+    const entity = entities[(start + i) % entities.length];
+    if (entity.alive && entity.type !== EntityType.PROJECTILE) return entity;
+  }
+  return null;
+}
+
+function randomTransferCell(world: World): number {
+  for (let attempt = 0; attempt < SAMOSBOR_RANDOM_ENTITY_TRANSFER_CELL_ATTEMPTS; attempt++) {
+    const ci = Math.floor(Math.random() * W * W);
+    if (world.aptMask[ci] || world.hermoWall[ci]) continue;
+    const cell = world.cells[ci];
+    if (cell === Cell.FLOOR || cell === Cell.WATER) return ci;
+  }
+  return -1;
+}
+
+function moveEntityToCell(entity: Entity, ci: number): void {
+  entity.x = (ci % W) + 0.5;
+  entity.y = ((ci / W) | 0) + 0.5;
+  entity.angle = Math.random() * Math.PI * 2;
+  if (entity.ai) {
+    entity.ai.path = [];
+    entity.ai.pi = 0;
+    entity.ai.stuck = 0;
+    entity.ai.tx = ci % W;
+    entity.ai.ty = (ci / W) | 0;
+  }
+}
+
+function tickRandomEntityTransfer(world: World, entities: Entity[], state: GameState, variant?: ActiveSamosborVariant): boolean {
+  const entity = randomTransferEntity(entities);
+  if (!entity) return false;
+  const ci = randomTransferCell(world);
+  if (ci < 0) return false;
+  const fromX = Math.floor(entity.x);
+  const fromY = Math.floor(entity.y);
+  moveEntityToCell(entity, ci);
+  rebuildEntityIndex(entities, 'manual');
+  if (entity.type === EntityType.PLAYER) {
+    const toX = ci % W;
+    const toY = (ci / W) | 0;
+    state.msgs.push(msg('Самосбор переставил вас в другую точку карты.', state.time, variant?.def.tint ?? '#f4a'));
+    publishEvent(state, {
+      type: 'samosbor_warning',
+      x: toX,
+      y: toY,
+      actorId: entity.id,
+      actorName: entity.name ?? 'Вы',
+      actorFaction: entity.faction,
+      severity: 5,
+      privacy: 'private',
+      tags: ['samosbor', 'random_transfer', 'teleport', variant ? `samosbor_${variant.def.id}` : 'samosbor_unknown'],
+      data: { fromX, fromY, toX, toY },
+    });
+  }
+  return true;
+}
+
+export function tickRandomEntityTransferForTests(
+  world: World,
+  entities: Entity[],
+  state: GameState,
+  variant?: ActiveSamosborVariant,
+): boolean {
+  return tickRandomEntityTransfer(world, entities, state, variant);
 }
 
 /* ── Clear fog when fog boss is killed ────────────────────────── */

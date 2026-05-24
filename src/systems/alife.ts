@@ -227,7 +227,17 @@ function runtimeHeapLimitMb(): number | undefined {
   return limit / BYTES_PER_MB;
 }
 
+function isMobileRuntime(): boolean {
+  const nav = globalThis.navigator as RuntimeNavigator | undefined;
+  const ua = nav?.userAgent ?? '';
+  const mobileUa = /android|iphone|ipad|ipod|mobile/i.test(ua);
+  const touchCapable = (nav?.maxTouchPoints ?? 0) > 0 || 'ontouchstart' in globalThis;
+  const compactViewport = typeof window !== 'undefined' && Math.min(window.innerWidth, window.innerHeight) < 900;
+  return mobileUa || (touchCapable && compactViewport);
+}
+
 export function defaultAlifePopulation(): number {
+  if (isMobileRuntime()) return ALIFE_FALLBACK_POPULATION;
   const targetPoolMb = ALIFE_ESTIMATED_OBJECT_MB_PER_100K * (ALIFE_TARGET_POPULATION / 100_000);
   const heapLimitMb = runtimeHeapLimitMb();
   if (heapLimitMb !== undefined) {

@@ -2,6 +2,8 @@ import { type GameState } from '../core/types';
 import { controlHint } from '../systems/controls';
 import {
   activeUiPresetId,
+  cameraFovDegrees,
+  mobileLookSensitivity,
   uiElementEnabled,
   uiSettingsRowAt,
   uiSettingsRowCount,
@@ -19,11 +21,12 @@ export function drawUiSettingsMenu(
   const w = ctx.canvas.width;
   const h = ctx.canvas.height;
   const time = uiTime;
+  const view = state.uiSettingsView ?? 'interface';
   const rowH = 12 * sy;
   const top = 34 * sy;
   const bottom = h - 24 * sy;
   const visible = Math.max(4, Math.floor((bottom - top) / rowH));
-  const rowCount = uiSettingsRowCount();
+  const rowCount = uiSettingsRowCount(view);
   const maxScroll = Math.max(0, rowCount - visible);
   const scroll = Math.max(0, Math.min(maxScroll, state.uiSettingsScroll));
   const selected = Math.max(0, Math.min(rowCount - 1, state.uiSettingsSel));
@@ -37,7 +40,7 @@ export function drawUiSettingsMenu(
   ctx.textBaseline = 'alphabetic';
   ctx.fillStyle = '#6cf';
   ctx.font = `${11 * sy}px monospace`;
-  ctx.fillText('ОРКЕСТРАТОР UI', 12 * sx, 12 * sy);
+  ctx.fillText(view === 'graphics' ? 'НАСТРОЙКИ ГРАФИКИ' : 'НАСТРОЙКИ ИНТЕРФЕЙСА', 12 * sx, 12 * sy);
   ctx.font = `${7 * sy}px monospace`;
   ctx.fillStyle = '#577';
   ctx.fillText(
@@ -54,24 +57,24 @@ export function drawUiSettingsMenu(
   ctx.font = `${7 * sy}px monospace`;
   ctx.fillStyle = '#345';
   ctx.fillText('РАЗДЕЛ', x + 14 * sx, top - 7 * sy);
-  ctx.fillText('ПРЕСЕТ / ЭЛЕМЕНТ', x + groupW + 18 * sx, top - 7 * sy);
-  ctx.fillText('СТАТУС', x + groupW + labelW + 20 * sx, top - 7 * sy);
+  ctx.fillText(view === 'graphics' ? 'НАСТРОЙКА' : 'ПРЕСЕТ / ЭЛЕМЕНТ', x + groupW + 18 * sx, top - 7 * sy);
+  ctx.fillText(view === 'graphics' ? 'ЗНАЧЕНИЕ' : 'СТАТУС', x + groupW + labelW + 20 * sx, top - 7 * sy);
 
   ctx.textBaseline = 'middle';
   for (let row = 0; row < visible; row++) {
     const i = scroll + row;
-    const item = uiSettingsRowAt(i);
+    const item = uiSettingsRowAt(i, view);
     if (!item) break;
     const rowY = top + row * rowH;
     const textY = rowY + rowH * 0.5;
     const isSel = i === selected;
     const isPreset = item.kind === 'preset';
-    const enabled = item.kind === 'element' ? uiElementEnabled(item.element.id) : activePreset === item.preset.id;
+    const enabled = item.kind === 'element' ? uiElementEnabled(item.element.id) : isPreset ? activePreset === item.preset.id : false;
 
     if (isSel) {
       ctx.fillStyle = `rgba(0,90,78,${0.46 + 0.12 * flicker(time, 1245 + i)})`;
       ctx.fillRect(x - 2 * sx, rowY, w - x * 2 + 4 * sx, rowH);
-      ctx.strokeStyle = isPreset || (item.kind === 'element' && item.element.locked) ? '#fd6' : 'rgba(0,255,190,0.46)';
+      ctx.strokeStyle = isPreset || item.kind === 'mobile_sensitivity' || item.kind === 'camera_fov' || (item.kind === 'element' && item.element.locked) ? '#fd6' : 'rgba(0,255,190,0.46)';
       ctx.strokeRect(x - 2 * sx + 0.5, rowY + 0.5, w - x * 2 + 4 * sx - 1, rowH - 1);
     }
 
@@ -84,7 +87,7 @@ export function drawUiSettingsMenu(
       ctx.fillText(fitTextStable(ctx, `${item.preset.label}: ${item.preset.hint}`, labelW - 8 * sx), x + groupW + 18 * sx, textY);
       ctx.fillStyle = enabled ? '#fd6' : '#789';
       ctx.fillText(enabled ? 'ВЫБРАН' : 'ПРИМ', x + groupW + labelW + 20 * sx, textY);
-    } else {
+    } else if (item.kind === 'element') {
       const element = item.element;
       ctx.fillStyle = '#689';
       ctx.fillText(fitTextStable(ctx, element.group, groupW - 10 * sx), x + 14 * sx, textY);
@@ -92,6 +95,17 @@ export function drawUiSettingsMenu(
       ctx.fillText(fitTextStable(ctx, element.label, labelW - 8 * sx), x + groupW + 18 * sx, textY);
       ctx.fillStyle = element.locked ? '#fd6' : enabled ? '#8f8' : '#b66';
       ctx.fillText(element.locked ? 'ВСЕГДА' : enabled ? 'ВКЛ' : 'ВЫКЛ', x + groupW + labelW + 20 * sx, textY);
+    } else {
+      ctx.fillStyle = '#689';
+      ctx.fillText(fitTextStable(ctx, item.group, groupW - 10 * sx), x + 14 * sx, textY);
+      ctx.fillStyle = isSel ? '#dff' : '#9bb';
+      ctx.fillText(fitTextStable(ctx, item.label, labelW - 8 * sx), x + groupW + 18 * sx, textY);
+      ctx.fillStyle = '#fd6';
+      ctx.fillText(
+        item.kind === 'camera_fov' ? `${cameraFovDegrees()}°` : `${Math.round(mobileLookSensitivity() * 100)}%`,
+        x + groupW + labelW + 20 * sx,
+        textY,
+      );
     }
   }
 
@@ -111,7 +125,10 @@ export function drawUiSettingsMenu(
   ctx.font = `${7 * sy}px monospace`;
   ctx.textBaseline = 'alphabetic';
   ctx.fillText(
-    fitTextStable(ctx, 'Пресет Новичок используется по умолчанию. Самосборный текст и титры не отключаются.', w - 24 * sx),
+    fitTextStable(ctx, view === 'graphics'
+      ? 'ДЕЙСТ меняет FOV, сброс возвращает 90°.'
+      : 'Новичок используется по умолчанию. ДЕЙСТ переключает UI и мобильный обзор, сброс возвращает умолчания.',
+    w - 24 * sx),
     12 * sx,
     h - 10 * sy,
   );
