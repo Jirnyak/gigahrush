@@ -1,8 +1,10 @@
 # Что нужно от владельца для продолжения PR
 
-Дата: 2026-05-23.
+Дата: 2026-05-23. Миграция контакта: 2026-05-26.
 
-Не присылай личные пароли в чат, если можно обойтись входом в браузере. Лучший вариант: открыть нужную площадку в Opera GX или Chrome, войти там, после этого я продолжу публикацию через уже авторизованную сессию.
+Не присылай личные пароли в чат, если можно обойтись входом в браузере. Для текущей PR-миграции новый почтовый секрет хранится локально в `.env.pr.local`, файл игнорируется git и не должен коммититься. Лучший вариант для площадок: открыть нужную площадку в Opera GX или Chrome, войти там, после этого я продолжу публикацию через уже авторизованную сессию.
+
+Новые PR-письма, регистрации, посты и support-запросы идут от `Tenevik Games` / `tenevik.games@gmail.com`. `jirnyak@gmail.com`, `jirnyak` и `https://jirny.uk` больше не использовать в новой публичной копии; старые строки ниже сохраняются только как факты уже отправленных писем, опубликованных постов или заблокированных аккаунтов.
 
 Актуальный медианабор уже подготовлен и не требует от владельца нового поиска скриншотов: `tmp/prcampaign_screenshot_hunt_2026-05-23/selected_best/`. Для быстрого квадратного превью использовать `contact_sheet_3x3.png`; для галерей и писем брать GIF/PNG из этой же папки.
 
@@ -60,16 +62,16 @@
 | Площадка | Что произошло | Что нужно от владельца проекта |
 | --- | --- | --- |
 | Newgrounds | В существующем проекте `7759223` штатный browser upload через настоящий file input и прямой `/parkfile` attach оба сохраняют свежий `itch/gigahrush-itch.zip` как `9B`; прямой `file_2=@zip` не прикрепляет файл. | Если продолжаем Newgrounds, открыть редактор вручную и проверить, повторяется ли `9B`. Если повторяется, писать в Newgrounds support: HTML5 ZIP `4.77 MiB` / `4 999 557` bytes attaches as `9B` in project `7759223`. Не нажимать publish без playable preview. |
-| Gamemoor | Аккаунт `jirnyak` авторизован, но `/developer` редиректит на главную; `/submit`, `/games/add`, `/dashboard`, `/my-games` дают `404`. | Открыть https://gamemoor.com/contact и попросить включить developer portal для `jirnyak` или дать актуальный submit URL. |
+| Gamemoor | Старый аккаунт `jirnyak` был авторизован, но `/developer` редиректит на главную; `/submit`, `/games/add`, `/dashboard`, `/my-games` дают `404`. | Не продолжать публикацию от старого аккаунта. Открыть https://gamemoor.com/contact и попросить перенести/деактивировать `jirnyak`, включить developer portal для Tenevik Games или дать актуальный submit URL. |
 | Free Indie Games | https://www.freeindiegames.org/submit-game/ показывает сырой shortcode `[ninja_forms_display_form id=1]`; рабочей формы нет. | Нужен email/contact владельца сайта или ремонт формы на их стороне. |
 
 ## Контакт подтвержден, outbound работает
 
-Контакт подтвержден 2026-05-23:
+Контакт обновлен владельцем 2026-05-26:
 
-- Ник/подпись: `jirnyak`
-- Email: `jirnyak@gmail.com`
-- Сайт: https://jirny.uk
+- Ник/подпись: `Tenevik Games`
+- Email: `tenevik.games@gmail.com`
+- Сайт: не указывать; `https://jirny.uk` снят с будущих постов.
 - Telegram можно указывать: https://t.me/gigah_rush
 - Основная страница игры: https://tenevik.itch.io/gigahrush
 
@@ -124,7 +126,7 @@
 | MyIndie | Superseded PR 11: `https://myindie.ru/games/game/gigahrush` уже public. | Больше не нужен вход для базовой публикации; только мониторинг и будущие правки. |
 | IndieHub | `https://indiehub.ru/` показывает вход/регистрацию, `добавить игру`, правила и Telegram support. `https://indiehub.ru/game/add` сейчас отвечает ошибкой, что страницы нет и нужно обратиться к администрации в Telegram. | Либо войти и проверить, появляется ли рабочий add-flow, либо написать в support Telegram и попросить актуальный путь добавления игры. |
 | iDev.Games | `https://idev.games/game/gigah-rush` уже public; edit page подтверждает visible to everyone. | Мониторить страницу/moderation; не загружать повторно. |
-| Gamemoor | `https://gamemoor.com/contact` говорит, что developer portal открыт и submissions идут в review queue за несколько дней. Публично `https://gamemoor.com/developer` редиректит на login; `/submit`, `/dashboard`, `/my-games`, `/games/add` не дают рабочий submit. | Войти и открыть `/developer`; если снова редирект/нет доступа, отправить support message с просьбой включить developer portal для `jirnyak` или дать submit URL. |
+| Gamemoor | `https://gamemoor.com/contact` говорит, что developer portal открыт и submissions идут в review queue за несколько дней. Публично `https://gamemoor.com/developer` редиректит на login; `/submit`, `/dashboard`, `/my-games`, `/games/add` не дают рабочий submit. | Войти с Tenevik identity и открыть `/developer`; если снова редирект/нет доступа, отправить support message с просьбой перенести/деактивировать `jirnyak`, включить developer portal для Tenevik Games или дать submit URL. |
 
 Реально можно сегодня:
 
@@ -144,7 +146,7 @@
 | IndieHub | `/game/add` публично сломан: “страница не существует”, просит обратиться в Telegram support. Rules требуют publisher rights и запрещают spam/malware/illegal/misleading/infringing content. | Войти и проверить скрытый add-flow или написать в support Telegram за текущим URL. Не публиковать, пока форма/статус неизвестны. |
 | Kongregate | Developer Application submitted after PR 11. Требует approval, legal upload agreement, Alpha/review. Нужны screenshots, description, instructions, voluntary age rating, AI declaration, English language option; publish только после review. | Ждать approval. После approval можно готовить Alpha. |
 | CrazyGames | Developer Portal - JS app. Basic Launch требует Basic Implementation/QA, но не Full SDK и без monetization; Full Launch SDK-required. Public requirements: `<=50MB` initial download, `<=250MB` total, `<=1500` files, relative paths, Chrome/Edge, iframe/mobile readability, English localization, PEGI 12, no custom fullscreen, no cross-promotion. | Сначала принять отдельную portal-build задачу. После owner login я не должен submit current build как quick PR: нужно убрать external playable CTA/fullscreen, проверить English path, iframe/performance, затем preview/QA. Full Launch требует SDK events/data/user work. |
-| Gamemoor | Contact page says developer portal open and review usually within a few days. `/developer` redirects to login; `/submit`, `/dashboard`, `/my-games` = 404; `/games/add` -> 404. Terms: submissions reviewed for PEGI 3-16 and no NSFW. | Войти и открыть `/developer`; если нет доступа, отправить support request для `jirnyak` с просьбой включить developer portal или дать submit URL. Подавать как non-NSFW survival horror / PEGI 16. |
+| Gamemoor | Contact page says developer portal open and review usually within a few days. `/developer` redirects to login; `/submit`, `/dashboard`, `/my-games` = 404; `/games/add` -> 404. Terms: submissions reviewed for PEGI 3-16 and no NSFW. | Войти с Tenevik identity и открыть `/developer`; если нет доступа, отправить support request о переносе/деактивации `jirnyak`, developer portal для Tenevik Games или submit URL. Подавать как non-NSFW survival horror / PEGI 16. |
 
 Классификация после PR 11: already public - MyIndie и iDev.Games; support-blocked - IndieHub; application/review queue - Kongregate; SDK/portal-build - CrazyGames; review queue after portal access/support - Gamemoor.
 
@@ -167,22 +169,21 @@ Subject: GIGAH|RUSH - free browser survival horror / ARPG shooter
 
 Hello,
 
-My name is jirnyak. I am affiliated with the development/outreach for GIGAH|RUSH, a free browser survival horror / ARPG shooter about expeditions inside an endless Soviet-style concrete apartment block.
+My name is Tenevik Games. I am affiliated with the development/outreach for GIGAH|RUSH, a free browser survival horror / ARPG shooter about expeditions inside an endless Soviet-style concrete apartment block.
 
 The player prepares food, water, ammo, medicine, documents and weapons, then leaves the safer living area for hostile floors with factions, traders, monsters, quests, rumors and Samosbor events. The current browser build includes preparation, expeditions, combat, trading, inventory, quests, factions, procedural floors, browser saves, A-Life NPCs and persistent consequences.
 
 Primary link: https://tenevik.itch.io/gigahrush
 Direct browser build: https://gigahrush.bileter.workers.dev
 Telegram: https://t.me/gigah_rush
-Official site: https://jirny.uk
 
 Content note: survival horror atmosphere, monsters, combat, death, corpses, blood, weapon use, sirens and disturbing procedural events. It is not NSFW.
 
 If this fits your coverage, list, video channel or indie roundup, I would be glad if you took a look.
 
 Best,
-jirnyak
-jirnyak@gmail.com
+Tenevik Games
+tenevik.games@gmail.com
 ```
 
 Для TapCraftBox / Armor Games / Free Play Games добавить перед `Content note`:

@@ -119,7 +119,7 @@ Title:
 Body:
 
 ```text
-Hi, I am jirnyak, the developer of GIGAH|RUSH.
+Hi, I am Tenevik Games, the developer of GIGAH|RUSH.
 
 GIGAH|RUSH is a free browser survival horror / ARPG shooter about expeditions inside an endless Soviet-style concrete apartment block. The current build runs in the browser with WebGL/canvas rendering, procedural textures, procedural sprites, procedural sound and browser saves.
 
@@ -198,7 +198,7 @@ Body:
 ```text
 Hi everyone,
 
-I am jirnyak, the developer of GIGAH|RUSH. It is a free HTML5/WebGL browser survival horror / ARPG shooter set inside an endless Soviet-style concrete apartment block.
+I am Tenevik Games, the developer of GIGAH|RUSH. It is a free HTML5/WebGL browser survival horror / ARPG shooter set inside an endless Soviet-style concrete apartment block.
 
 The build is playable in the browser:
 https://tenevik.itch.io/gigahrush
@@ -283,7 +283,7 @@ Body:
 ```text
 Hello GameDev.net,
 
-I am jirnyak, the developer of GIGAH|RUSH. It is a free browser survival horror / ARPG shooter about expeditions inside an endless Soviet-style concrete apartment block.
+I am Tenevik Games, the developer of GIGAH|RUSH. It is a free browser survival horror / ARPG shooter about expeditions inside an endless Soviet-style concrete apartment block.
 
 Playable page:
 https://tenevik.itch.io/gigahrush

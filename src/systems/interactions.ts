@@ -31,6 +31,7 @@ import {
 } from './computers';
 import { getCultProcessionPrompt, tryInteractCultProcession } from './faction_events';
 import { isHostile } from './factions';
+import { setDoorState } from './door_state';
 import { getActiveFloorInstance } from './floor_instances';
 import { findGnilushkaInteractionTarget, tryUseGnilushkaInteraction } from './gnilushka';
 import {
@@ -347,7 +348,7 @@ function activateDoor(ctx: InteractionContext, idx: number): InteractionResult {
       ctx.state.msgs.push(msg('Дверь герметично заперта!', ctx.state.time, '#f44'));
     } else {
       const quietDoor = consumeQuietDoorCharge(ctx.player, ctx.state.time);
-      door.state = door.state === DoorState.HERMETIC_CLOSED ? DoorState.HERMETIC_OPEN : DoorState.OPEN;
+      setDoorState(ctx.world, door, door.state === DoorState.HERMETIC_CLOSED ? DoorState.HERMETIC_OPEN : DoorState.OPEN);
       door.timer = 0;
       ctx.state.msgs.push(msg(quietDoor ? 'Дверь открыта тихо' : 'Дверь открыта', ctx.state.time, quietDoor ? '#8cf' : '#aaa'));
       ctx.playDoor?.();
@@ -355,7 +356,7 @@ function activateDoor(ctx: InteractionContext, idx: number): InteractionResult {
     }
   } else if (door.state === DoorState.OPEN || door.state === DoorState.HERMETIC_OPEN) {
     const quietDoor = consumeQuietDoorCharge(ctx.player, ctx.state.time);
-    door.state = door.state === DoorState.HERMETIC_OPEN ? DoorState.HERMETIC_CLOSED : DoorState.CLOSED;
+    setDoorState(ctx.world, door, door.state === DoorState.HERMETIC_OPEN ? DoorState.HERMETIC_CLOSED : DoorState.CLOSED);
     ctx.state.msgs.push(msg(quietDoor ? 'Дверь закрыта тихо' : 'Дверь закрыта', ctx.state.time, quietDoor ? '#8cf' : '#aaa'));
     ctx.playDoor?.();
     publishDoorNoise(ctx.state, ctx.player, idx, hermeticDoor, quietDoor);
@@ -363,7 +364,7 @@ function activateDoor(ctx: InteractionContext, idx: number): InteractionResult {
     const keyId = door.keyId || 'key';
     if (ctx.player.inventory?.some(i => i.defId === keyId)) {
       const quietDoor = consumeQuietDoorCharge(ctx.player, ctx.state.time);
-      door.state = DoorState.OPEN;
+      setDoorState(ctx.world, door, DoorState.OPEN);
       ctx.state.msgs.push(msg(quietDoor ? 'Дверь отперта тихо' : 'Дверь отперта ключом', ctx.state.time, quietDoor ? '#8cf' : '#4a4'));
       publishDoorNoise(ctx.state, ctx.player, idx, false, quietDoor);
     } else {

@@ -188,16 +188,6 @@ export const ECONOMY_ROUTE_SAMOSBOR_DEMAND_RULES: readonly EconomyRouteSamosborD
   },
   {
     routeId: ECONOMY_ROUTE_BLACK_MARKET_88,
-    variantId: 'quiet',
-    heatDelta: 8,
-    resourcePressure: [
-      { resourceId: 'medicine', multiplier: 1.16, reason: 'quiet_samosbor_panic_medicine', tags: ['samosbor', 'quiet', 'medicine'] },
-      { resourceId: 'documents', multiplier: 1.14, reason: 'quiet_samosbor_exit_papers', tags: ['samosbor', 'quiet', 'documents'] },
-    ],
-    rumorIds: ['samosbor_quiet_variant', 'contract_black_market_88_counter'],
-  },
-  {
-    routeId: ECONOMY_ROUTE_BLACK_MARKET_88,
     variantId: 'wet',
     heatDelta: 3,
     resourcePressure: [

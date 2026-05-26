@@ -36,6 +36,7 @@ import { randomRPG } from './rpg';
 import { removeItem } from './inventory';
 import { publishEvent } from './events';
 import { applyInfrastructureRelationResponse, zoneFactionToFaction } from './factions';
+import { setDoorState } from './door_state';
 
 type PanelAction = Exclude<EmergencyPanelActionId, 'leave'>;
 type PanelStatus = 'idle' | 'repaired' | 'shutdown' | 'forced' | 'overloaded';
@@ -389,15 +390,15 @@ function mutateDoors(world: World, rooms: readonly Room[], action: 'open' | 'clo
       if (!door) continue;
       if (action === 'open') {
         if (door.state === DoorState.OPEN || door.state === DoorState.HERMETIC_OPEN) continue;
-        door.state = door.state === DoorState.HERMETIC_CLOSED ? DoorState.HERMETIC_OPEN : DoorState.OPEN;
+        setDoorState(world, door, door.state === DoorState.HERMETIC_CLOSED ? DoorState.HERMETIC_OPEN : DoorState.OPEN);
         door.timer = 0;
         changed++;
       } else if (action === 'close') {
         if (door.state === DoorState.CLOSED || door.state === DoorState.HERMETIC_CLOSED) continue;
-        door.state = door.state === DoorState.HERMETIC_OPEN ? DoorState.HERMETIC_CLOSED : DoorState.CLOSED;
+        setDoorState(world, door, door.state === DoorState.HERMETIC_OPEN ? DoorState.HERMETIC_CLOSED : DoorState.CLOSED);
         changed++;
       } else if (door.state === DoorState.LOCKED) {
-        door.state = DoorState.CLOSED;
+        setDoorState(world, door, DoorState.CLOSED);
         door.keyId = '';
         changed++;
       }

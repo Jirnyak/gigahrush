@@ -266,8 +266,8 @@ function waveSpreadableCell(world: World, idx: number): boolean {
   return walkableCell(world.cells[idx]) && !hermeticDoorCell(world, idx);
 }
 
-function entityWalkableCell(cell: number): boolean {
-  return cell === Cell.FLOOR || cell === Cell.WATER;
+function entityWalkableCell(world: World, idx: number): boolean {
+  return !world.solid(idx % W, (idx / W) | 0);
 }
 
 function localPatchCell(cell: number): Cell {
@@ -668,14 +668,14 @@ function nearestEntityFloor(world: World, x: number, y: number, maxRadius: numbe
   const sx = world.wrap(Math.floor(x));
   const sy = world.wrap(Math.floor(y));
   const start = world.idx(sx, sy);
-  if (entityWalkableCell(world.cells[start])) return { x: sx, y: sy };
+  if (entityWalkableCell(world, start)) return { x: sx, y: sy };
   for (let r = 1; r <= maxRadius; r++) {
     for (let dy = -r; dy <= r; dy++) {
       for (let dx = -r; dx <= r; dx++) {
         if (Math.abs(dx) !== r && Math.abs(dy) !== r) continue;
         const tx = world.wrap(sx + dx);
         const ty = world.wrap(sy + dy);
-        if (entityWalkableCell(world.cells[world.idx(tx, ty)])) return { x: tx, y: ty };
+        if (entityWalkableCell(world, world.idx(tx, ty))) return { x: tx, y: ty };
       }
     }
   }
@@ -692,7 +692,7 @@ function relocateEntity(world: World, entity: Entity, maxRadius: number): boolea
 
 function cleanupBatchEntities(world: World, wave: SamosborWave, _entities: Entity[], _touched: readonly number[]): void {
   const player = wave.player?.alive ? wave.player : undefined;
-  if (player && !entityWalkableCell(world.cells[world.idx(Math.floor(player.x), Math.floor(player.y))]) && relocateEntity(world, player, 30)) {
+  if (player && !entityWalkableCell(world, world.idx(Math.floor(player.x), Math.floor(player.y))) && relocateEntity(world, player, 30)) {
     wave.relocatedEntities++;
   }
 }
@@ -735,7 +735,7 @@ function cleanupFinalEntities(world: World, wave: SamosborWave, entities: Entity
       wave.deletedProjectiles++;
       continue;
     }
-    if (entity.type === EntityType.ITEM_DROP && inTouched && !entityWalkableCell(world.cells[idx])) {
+    if (entity.type === EntityType.ITEM_DROP && inTouched && !entityWalkableCell(world, idx)) {
       if (relocateEntity(world, entity, 18)) wave.relocatedEntities++;
       else {
         entities.splice(i, 1);
@@ -743,7 +743,7 @@ function cleanupFinalEntities(world: World, wave: SamosborWave, entities: Entity
       }
       continue;
     }
-    if ((entity.type === EntityType.PLAYER || entity.type === EntityType.NPC || entity.type === EntityType.MONSTER) && !entityWalkableCell(world.cells[idx])) {
+    if ((entity.type === EntityType.PLAYER || entity.type === EntityType.NPC || entity.type === EntityType.MONSTER) && !entityWalkableCell(world, idx)) {
       if (relocateEntity(world, entity, 30)) wave.relocatedEntities++;
     }
   }
@@ -898,7 +898,7 @@ function stitchLocalRebuildField(world: World, wave: SamosborWave, mask: Uint8Ar
       const nx = x + DIR_X[i];
       const ny = y + DIR_Y[i];
       const ni = world.idx(nx, ny);
-      if (mask[ni] || !entityWalkableCell(world.cells[ni])) continue;
+      if (mask[ni] || !entityWalkableCell(world, ni)) continue;
       stitched += stitchBoundaryCell(world, wave, mask, idx, -DIR_X[i], -DIR_Y[i]);
       break;
     }

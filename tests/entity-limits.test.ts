@@ -27,6 +27,8 @@ test('entity soft limits are centralized by gameplay type', () => {
   assert.equal(ENTITY_SOFT_LIMITS[EntityType.NPC], 5_000);
   assert.equal(ENTITY_SOFT_LIMITS[EntityType.MONSTER], 10_000);
   assert.equal(ENTITY_SOFT_LIMITS[EntityType.ITEM_DROP], 100_000);
+  assert.equal(ENTITY_SOFT_LIMITS[EntityType.PROJECTILE], 100_000);
+  assert.equal(ENTITY_SOFT_LIMITS[EntityType.PROJECTILE], ENTITY_SOFT_LIMITS[EntityType.ITEM_DROP]);
 });
 
 test('entity spawn slots stop population spawns at the NPC ceiling', () => {
@@ -51,4 +53,18 @@ test('entity spawn slots ignore unrelated and dead entities', () => {
   assert.equal(countLiveEntitiesOfType(entities, EntityType.NPC), 1);
   assert.equal(entitySpawnSlots(entities, EntityType.MONSTER, 12), 12);
   assert.equal(entitySpawnSlots(entities, EntityType.ITEM_DROP, 12), 12);
+});
+
+test('projectile slots keep the emergency combat ceiling high', () => {
+  const nearLimit = Array.from({ length: 99_999 }, (_, i) => entity(i + 1, EntityType.PROJECTILE));
+  nearLimit.push(entity(100_000, EntityType.PROJECTILE, false));
+
+  assert.equal(remainingEntitySpawnSlots(nearLimit, EntityType.PROJECTILE), 1);
+  assert.equal(entitySpawnSlots(nearLimit, EntityType.PROJECTILE, 16), 1);
+  assert.equal(canSpawnEntityType(nearLimit, EntityType.PROJECTILE), true);
+
+  nearLimit.push(entity(100_001, EntityType.PROJECTILE));
+  assert.equal(remainingEntitySpawnSlots(nearLimit, EntityType.PROJECTILE), 0);
+  assert.equal(entitySpawnSlots(nearLimit, EntityType.PROJECTILE, 16), 0);
+  assert.equal(canSpawnEntityType(nearLimit, EntityType.PROJECTILE), false);
 });

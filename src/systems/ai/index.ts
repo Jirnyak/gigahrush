@@ -18,6 +18,7 @@ import { primeMinistryAlifeState, setMinistryContext, updateMinistryNPC } from '
 import { setNpcBarkLogContext } from './barks';
 import { expireMonsterBaits } from '../monster_bait';
 import { ensureEntityIndex } from '../entity_index';
+import { hearingRadiusMetersForActor } from '../hearing';
 import { isActorNoiseHot } from '../noise';
 import { updateSwarmNests } from '../swarm_nests';
 
@@ -277,7 +278,7 @@ export function updateAI(world: World, entities: Entity[], dt: number, time: num
   const player = entityIndex.byId.get(playerId);
   setNpcBarkLogContext({
     listener: player,
-    radiusMeters: state?.npcLogRadiusMeters,
+    radiusMeters: hearingRadiusMetersForActor(player, state?.npcLogRadiusMeters),
     dist2: (x1, y1, x2, y2) => world.dist2(x1, y1, x2, y2),
   });
   updateSwarmNests(world, entities, dt, time, player, nextId, state);

@@ -133,7 +133,7 @@ test('Tumannik arms a local fog offset and light collapses it', () => {
   assert.equal(msgs.some(m => m.text.includes('звучит сбоку')), true);
   assert.equal(getRecentEvents(state, { type: 'monster_sighted', tags: ['tumannik', 'fog_offset'], limit: 1 }).length, 1);
 
-  target.tool = 'flashlight';
+  world.light[world.idx(Math.floor(target.x), Math.floor(target.y))] = 0.72;
   sync(entities);
   updateMonster(world, entities, threat, 0.1, 1.2, msgs, target.id, { v: 100 }, state);
 

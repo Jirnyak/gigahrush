@@ -18,7 +18,11 @@ import { getSamosborShelterRoomIds, getSamosborWarningSnapshot } from '../system
 import { getRecentRumorLead } from '../systems/npc_memory';
 import { getWrongDoorMapCues, wrongDoorCueActionLabel, wrongDoorCueSecondsLeft } from '../systems/wrong_door';
 import { getActiveCultProcessionSnapshots } from '../systems/faction_events';
-import { seroburmalineSourceCellState } from '../systems/seroburmaline';
+import {
+  SEROBURMALINE_ROOM_PREFIX,
+  forSeroburmalineSourceCells,
+  seroburmalineSourceCellState,
+} from '../systems/seroburmaline';
 import { getRouteCueMapReveals, type RouteCueMapReveal } from '../systems/route_cues';
 import { getNearestSmallCaravan } from '../systems/caravans';
 import { ENTITY_MASK_VISIBLE, getEntityIndex } from '../systems/entity_index';
@@ -66,6 +70,18 @@ let mapExploredGrid = new Uint8Array(0);
 let mapExploredGridW = 0;
 let mapExploredGridH = 0;
 mapCrowdHashKeys.fill(MAP_CROWD_EMPTY_KEY);
+
+interface MapRasterBuffer {
+  canvas: HTMLCanvasElement;
+  ctx: CanvasRenderingContext2D;
+  imageData: ImageData;
+}
+
+const mapRasterBuffers = new Map<number, MapRasterBuffer>();
+const mapLiftX: number[] = [];
+const mapLiftY: number[] = [];
+const mapLiftUp: number[] = [];
+const mapLiftQuest: number[] = [];
 
 const QUEST_KIND_PRIORITY: Record<QuestKind, number> = { plot: 3, side: 2, system: 1 };
 const QUEST_MARKERS: Record<QuestKind, { label: string; stroke: string; fill: string; text: string }> = {
@@ -256,13 +272,12 @@ function drawQuestMarker(ctx: CanvasRenderingContext2D, x: number, y: number, sz
   drawQuestDiamond(ctx, x, y, sz, sw, marker.stroke, marker.fill);
 }
 
-function tintFactionColor(cr: number, cg: number, cb: number, faction: ZoneFaction, amount: number): [number, number, number] {
+function tintFactionColorPacked(cr: number, cg: number, cb: number, faction: ZoneFaction, amount: number): number {
   const [fr, fg, fb] = FACTION_RGB[faction];
-  return [
-    Math.round(cr * (1 - amount) + fr * amount),
-    Math.round(cg * (1 - amount) + fg * amount),
-    Math.round(cb * (1 - amount) + fb * amount),
-  ];
+  const r = Math.round(cr * (1 - amount) + fr * amount);
+  const g = Math.round(cg * (1 - amount) + fg * amount);
+  const b = Math.round(cb * (1 - amount) + fb * amount);
+  return (r << 16) | (g << 8) | b;
 }
 
 function wrapMapCoord(v: number): number {
@@ -309,21 +324,345 @@ function unexploredFadeBand(gx: number, gy: number, gridW: number): number {
   return 0;
 }
 
-function drawUnexploredMapCell(
-  ctx: CanvasRenderingContext2D,
-  wx: number,
-  wy: number,
-  x: number,
-  y: number,
-  w: number,
-  h: number,
-  fadeBand: number,
-): void {
+function unexploredMapCellPackedRgb(wx: number, wy: number, fadeBand: number): number {
   const hash = (Math.imul(wx + 17, 1103515245) ^ Math.imul(wy + 31, 12345)) >>> 0;
   const shade = 5 + (hash & 7);
   const edge = Math.max(0, Math.min(MAP_UNEXPLORED_FADE_RADIUS, fadeBand));
-  ctx.fillStyle = `rgb(${(shade >> 1) + edge * 3},${shade + edge * 8},${shade + 3 + edge * 9})`;
-  ctx.fillRect(x, y, w + 0.5, h + 0.5);
+  const r = (shade >> 1) + edge * 3;
+  const g = shade + edge * 8;
+  const b = shade + 3 + edge * 9;
+  return (r << 16) | (g << 8) | b;
+}
+
+function mapRasterBufferFor(ctx: CanvasRenderingContext2D, width: number, height: number): MapRasterBuffer | null {
+  const key = (width << 16) ^ height;
+  const cached = mapRasterBuffers.get(key);
+  if (cached) return cached;
+  const doc = ctx.canvas.ownerDocument ?? (typeof document !== 'undefined' ? document : null);
+  if (!doc) return null;
+  const canvas = doc.createElement('canvas');
+  canvas.width = width;
+  canvas.height = height;
+  const rasterCtx = canvas.getContext('2d');
+  if (!rasterCtx) return null;
+  const buffer = {
+    canvas,
+    ctx: rasterCtx,
+    imageData: rasterCtx.createImageData(width, height),
+  };
+  mapRasterBuffers.set(key, buffer);
+  return buffer;
+}
+
+function samosborShelterRoom(roomId: number, shelterRoomIds: readonly number[]): boolean {
+  for (let i = 0; i < shelterRoomIds.length; i++) if (shelterRoomIds[i] === roomId) return true;
+  return false;
+}
+
+function recordMapLiftMarker(x: number, y: number, isUp: boolean, isQuestLift: boolean): void {
+  mapLiftX.push(x);
+  mapLiftY.push(y);
+  mapLiftUp.push(isUp ? 1 : 0);
+  mapLiftQuest.push(isQuestLift ? 1 : 0);
+}
+
+function drawMapLiftArrow(ctx: CanvasRenderingContext2D, x: number, y: number, isUp: boolean, isQuestLift: boolean): void {
+  const ah = 7;
+  const aw = 5;
+  ctx.strokeStyle = isQuestLift ? '#fff' : '#440';
+  ctx.lineWidth = isQuestLift ? 3 : 2;
+  ctx.beginPath();
+  if (isUp) {
+    ctx.moveTo(x, y - ah);
+    ctx.lineTo(x + aw, y + ah);
+    ctx.lineTo(x - aw, y + ah);
+  } else {
+    ctx.moveTo(x, y + ah);
+    ctx.lineTo(x + aw, y - ah);
+    ctx.lineTo(x - aw, y - ah);
+  }
+  ctx.closePath();
+  ctx.stroke();
+  ctx.fillStyle = isQuestLift ? '#fc4' : '#ee2';
+  ctx.fill();
+}
+
+function drawRecordedMapLiftArrows(ctx: CanvasRenderingContext2D): void {
+  for (let i = 0; i < mapLiftX.length; i++) {
+    drawMapLiftArrow(ctx, mapLiftX[i], mapLiftY[i], mapLiftUp[i] !== 0, mapLiftQuest[i] !== 0);
+  }
+}
+
+function drawMapBaseRaster(
+  ctx: CanvasRenderingContext2D,
+  world: World,
+  pxI: number,
+  pyI: number,
+  mapX: number,
+  mapY: number,
+  mapW: number,
+  mapH: number,
+  radius: number,
+  cellW: number,
+  cellH: number,
+  fogR: number,
+  fogG: number,
+  fogB: number,
+  shelterRoomIds: readonly number[],
+  factionZones: FactionUiSnapshot['zoneById'] | undefined,
+  questLiftDir: LiftDirection | undefined,
+): void {
+  const cols = radius * 2;
+  const rows = cols;
+  mapLiftX.length = 0;
+  mapLiftY.length = 0;
+  mapLiftUp.length = 0;
+  mapLiftQuest.length = 0;
+
+  const buffer = mapRasterBufferFor(ctx, cols, rows);
+  if (!buffer) return;
+
+  const data = buffer.imageData.data;
+  const exploredGridW = mapExploredGridW;
+  const exploredGridPad = MAP_UNEXPLORED_FADE_RADIUS;
+  const startX = pxI - radius;
+  const startY = pyI - radius;
+  let out = 0;
+
+  for (let gy = 0; gy < rows; gy++) {
+    const wy = wrapMapCoord(startY + gy);
+    const row = wy * W;
+    for (let gx = 0; gx < cols; gx++) {
+      const wx = wrapMapCoord(startX + gx);
+      const ci = row + wx;
+      const gridX = gx + exploredGridPad;
+      const gridY = gy + exploredGridPad;
+      let cr = 0;
+      let cg = 0;
+      let cb = 0;
+      let alpha = 255;
+
+      if (!mapExploredGrid[gridY * exploredGridW + gridX]) {
+        const fadeBand = world.cells[ci] === Cell.WALL ? 0 : unexploredFadeBand(gridX, gridY, exploredGridW);
+        const packed = unexploredMapCellPackedRgb(wx, wy, fadeBand);
+        cr = (packed >> 16) & 255;
+        cg = (packed >> 8) & 255;
+        cb = packed & 255;
+      } else {
+        const cell = world.cells[ci];
+        if (cell === Cell.WALL) {
+          if (world.hermoWall[ci]) {
+            cr = 110;
+            cg = 195;
+            cb = 255;
+          } else {
+            alpha = 0;
+          }
+        } else if (cell === Cell.ABYSS) {
+          cr = 16;
+          cg = 8;
+          cb = 16;
+        } else if (cell === Cell.LIFT) {
+          cr = 204;
+          cg = 204;
+          cb = 0;
+          const liftDir = world.liftDir[ci];
+          recordMapLiftMarker(
+            mapX + gx * cellW,
+            mapY + gy * cellH,
+            liftDir === LiftDirection.UP,
+            questLiftDir !== undefined && liftDir === questLiftDir,
+          );
+        } else if (cell === Cell.WATER) {
+          cr = 34;
+          cg = 51;
+          cb = 85;
+        } else {
+          const rid = world.roomMap[ci];
+          if (rid >= 0) {
+            const r = world.rooms[rid];
+            if (r) {
+              switch (r.type) {
+                case RoomType.LIVING:     cr = 68; cg = 68; cb = 102; break;
+                case RoomType.KITCHEN:    cr = 85; cg = 85; cb = 68; break;
+                case RoomType.BATHROOM:   cr = 68; cg = 85; cb = 85; break;
+                case RoomType.STORAGE:    cr = 85; cg = 68; cb = 51; break;
+                case RoomType.MEDICAL:    cr = 68; cg = 102; cb = 102; break;
+                case RoomType.COMMON:     cr = 68; cg = 68; cb = 68; break;
+                case RoomType.PRODUCTION: cr = 85; cg = 85; cb = 68; break;
+                default:                  cr = 51; cg = 51; cb = 51;
+              }
+            } else {
+              cr = 51;
+              cg = 51;
+              cb = 51;
+            }
+          } else {
+            const zid = world.zoneMap[ci];
+            const [zr, zg, zb] = ZONE_COLORS[zid % 64];
+            cr = zr >> 1;
+            cg = zg >> 1;
+            cb = zb >> 1;
+          }
+          if (cell === Cell.DOOR) {
+            cr = 136;
+            cg = 100;
+            cb = 68;
+          }
+
+          const factionZone = factionZones?.[world.zoneMap[ci]];
+          if (factionZone) {
+            let packedTint = tintFactionColorPacked(cr, cg, cb, factionZone.owner, factionZone.contested ? 0.34 : 0.2);
+            cr = (packedTint >> 16) & 255;
+            cg = (packedTint >> 8) & 255;
+            cb = packedTint & 255;
+            if (factionZone.contested && ((wx + wy) & 7) < 3) {
+              packedTint = tintFactionColorPacked(cr, cg, cb, factionZone.dominant, 0.34);
+              cr = (packedTint >> 16) & 255;
+              cg = (packedTint >> 8) & 255;
+              cb = packedTint & 255;
+            }
+          }
+
+          if (world.fog[ci] > 50) {
+            const f = world.fog[ci] / 255;
+            cr = Math.round(cr * (1 - f) + fogR * f);
+            cg = Math.round(cg * (1 - f) + fogG * f);
+            cb = Math.round(cb * (1 - f) + fogB * f);
+          }
+          if (rid >= 0 && samosborShelterRoom(rid, shelterRoomIds)) {
+            cr = Math.round(cr * 0.55 + 212 * 0.45);
+            cg = Math.round(cg * 0.55 + 166 * 0.45);
+            cb = Math.round(cb * 0.55 + 72 * 0.45);
+          }
+        }
+      }
+
+      data[out++] = cr;
+      data[out++] = cg;
+      data[out++] = cb;
+      data[out++] = alpha;
+    }
+  }
+
+  buffer.ctx.putImageData(buffer.imageData, 0, 0);
+  ctx.save();
+  const smoothing = ctx.imageSmoothingEnabled;
+  ctx.imageSmoothingEnabled = false;
+  ctx.drawImage(buffer.canvas, mapX, mapY, mapW, mapH);
+  ctx.imageSmoothingEnabled = smoothing;
+  ctx.restore();
+}
+
+function drawSamosborShelterCellOutlines(
+  ctx: CanvasRenderingContext2D,
+  world: World,
+  pxI: number,
+  pyI: number,
+  mapX: number,
+  mapY: number,
+  radius: number,
+  cellW: number,
+  cellH: number,
+  shelterRoomIds: readonly number[],
+): void {
+  if (shelterRoomIds.length === 0) return;
+  const cols = radius * 2;
+  const exploredGridW = mapExploredGridW;
+  const exploredGridPad = MAP_UNEXPLORED_FADE_RADIUS;
+  const startX = pxI - radius;
+  const startY = pyI - radius;
+  ctx.save();
+  ctx.strokeStyle = '#d6a64b';
+  ctx.lineWidth = Math.max(1, Math.min(2, cellW));
+  for (let gy = 0; gy < cols; gy++) {
+    const wy = wrapMapCoord(startY + gy);
+    const row = wy * W;
+    for (let gx = 0; gx < cols; gx++) {
+      const gridX = gx + exploredGridPad;
+      const gridY = gy + exploredGridPad;
+      if (!mapExploredGrid[gridY * exploredGridW + gridX]) continue;
+      const wx = wrapMapCoord(startX + gx);
+      const ci = row + wx;
+      const cell = world.cells[ci];
+      if (cell === Cell.WALL || cell === Cell.ABYSS || cell === Cell.LIFT || cell === Cell.WATER) continue;
+      const rid = world.roomMap[ci];
+      if (rid < 0 || !samosborShelterRoom(rid, shelterRoomIds)) continue;
+      ctx.strokeRect(mapX + gx * cellW, mapY + gy * cellH, cellW + 0.5, cellH + 0.5);
+    }
+  }
+  ctx.restore();
+}
+
+function drawSeroburmalineMapSources(
+  ctx: CanvasRenderingContext2D,
+  world: World,
+  currentFloor: FloorLevel | undefined,
+  uiTime: number,
+  pxI: number,
+  pyI: number,
+  mapX: number,
+  mapY: number,
+  radius: number,
+  cellW: number,
+  cellH: number,
+): void {
+  if (currentFloor !== FloorLevel.MAINTENANCE) return;
+  for (const room of world.rooms) {
+    if (!room || !room.name.startsWith(SEROBURMALINE_ROOM_PREFIX)) continue;
+    forSeroburmalineSourceCells(world, room, (x, y) => {
+      const sourceState = seroburmalineSourceCellState(world, x, y);
+      if (!sourceState) return;
+      const ci = world.idx(x, y);
+      if (!isMapCellExplored(world, ci)) return;
+      const dx = world.delta(pxI, x);
+      const dy = world.delta(pyI, y);
+      if (Math.abs(dx) > radius || Math.abs(dy) > radius) return;
+      const sx0 = mapX + (dx + radius + 0.5) * cellW;
+      const sy0 = mapY + (dy + radius + 0.5) * cellH;
+      const pulse = sourceState === 'active' ? 0.6 + 0.28 * Math.sin(uiTime * 8) : 0.35;
+      ctx.save();
+      ctx.globalAlpha = sourceState === 'active' ? 0.62 + pulse * 0.25 : 0.42;
+      ctx.strokeStyle = sourceState === 'active' ? '#d58aa8' : '#8a8f88';
+      ctx.fillStyle = sourceState === 'active' ? '#563046' : '#4b504c';
+      ctx.lineWidth = Math.max(1, Math.min(2, cellW * 0.8));
+      ctx.beginPath();
+      ctx.arc(sx0, sy0, Math.max(3, Math.min(8, Math.max(cellW, cellH) * 2.2)), 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+      ctx.restore();
+    });
+  }
+}
+
+function drawMapRoomQuestMarkers(
+  ctx: CanvasRenderingContext2D,
+  world: World,
+  pxI: number,
+  pyI: number,
+  mapX: number,
+  mapY: number,
+  radius: number,
+  cellW: number,
+  cellH: number,
+): void {
+  if (activeTargetRooms.size === 0 && activeTargetRoomTypes.size === 0) return;
+  for (const room of world.rooms) {
+    if (!room || drawnTargetRooms.has(room.id)) continue;
+    let markerKind = activeTargetRooms.get(room.id);
+    if (!markerKind) markerKind = activeTargetRoomTypes.get(room.type);
+    if (!markerKind) continue;
+    const cx = world.wrap(Math.floor(room.x + room.w / 2));
+    const cy = world.wrap(Math.floor(room.y + room.h / 2));
+    const ci = world.idx(cx, cy);
+    const cell = world.cells[ci];
+    if ((cell !== Cell.FLOOR && cell !== Cell.DOOR) || !isMapCellExplored(world, ci)) continue;
+    const dx = world.delta(pxI, cx);
+    const dy = world.delta(pyI, cy);
+    if (Math.abs(dx) > radius || Math.abs(dy) > radius) continue;
+    drawQuestMarker(ctx, mapX + (dx + radius) * cellW, mapY + (dy + radius) * cellH, 5, 3, markerKind);
+    drawnTargetRooms.add(room.id);
+  }
 }
 
 function eventColor(severity: number): string {
@@ -1072,8 +1411,6 @@ function drawMap(
   const cellW = mapW / (radius * 2);
   const cellH = mapH / (radius * 2);
   prepareMapExploredGrid(world, pxI, pyI, radius);
-  const exploredGridW = mapExploredGridW;
-  const exploredGridPad = MAP_UNEXPLORED_FADE_RADIUS;
   const activeVariant = getActiveSamosborVariant();
   const questLiftDir = activeVisitLiftDirection(quests, currentFloor, state);
   const [fogR, fogG, fogB] = activeVariant?.fogColor ?? [80, 20, 120];
@@ -1109,133 +1446,10 @@ function drawMap(
     clearActiveQuestMarkers();
   }
 
-  for (let dy = -radius; dy < radius; dy++) {
-    for (let dx = -radius; dx < radius; dx++) {
-      const wx = ((pxI + dx) % W + W) % W;
-      const wy = ((pyI + dy) % W + W) % W;
-      const ci = wy * W + wx;
-      const sx0 = mapX + (dx + radius) * cellW;
-      const sy0 = mapY + (dy + radius) * cellH;
-      const gridX = dx + radius + exploredGridPad;
-      const gridY = dy + radius + exploredGridPad;
-      if (!mapExploredGrid[gridY * exploredGridW + gridX]) {
-        const fadeBand = world.cells[ci] === Cell.WALL ? 0 : unexploredFadeBand(gridX, gridY, exploredGridW);
-        drawUnexploredMapCell(ctx, wx, wy, sx0, sy0, cellW, cellH, fadeBand);
-        continue;
-      }
-      const cell = world.cells[ci];
-      if (cell === Cell.WALL) {
-        // Hermetic shelter walls: special unbreakable wall marker.
-        if (world.hermoWall[ci]) {
-          ctx.fillStyle = '#6ec3ff';
-          ctx.fillRect(sx0, sy0, cellW + 0.5, cellH + 0.5);
-        }
-        continue;
-      }
-      if (cell === Cell.ABYSS) {
-        ctx.fillStyle = '#100810';
-        ctx.fillRect(sx0, sy0, cellW + 0.5, cellH + 0.5);
-        continue;
-      }
-      if (cell === Cell.LIFT) {
-        ctx.fillStyle = '#cc0';
-        ctx.fillRect(sx0, sy0, cellW + 0.5, cellH + 0.5);
-        continue;
-      }
-      if (cell === Cell.WATER) {
-        ctx.fillStyle = '#235';
-        ctx.fillRect(sx0, sy0, cellW + 0.5, cellH + 0.5);
-        continue;
-      }
-
-      const rid = world.roomMap[ci];
-      let cr: number, cg: number, cb: number;
-      if (rid >= 0) {
-        const r = world.rooms[rid];
-        if (r) {
-          switch (r.type) {
-            case RoomType.LIVING:     cr = 68; cg = 68; cb = 102; break;
-            case RoomType.KITCHEN:    cr = 85; cg = 85; cb = 68; break;
-            case RoomType.BATHROOM:   cr = 68; cg = 85; cb = 85; break;
-            case RoomType.STORAGE:    cr = 85; cg = 68; cb = 51; break;
-            case RoomType.MEDICAL:    cr = 68; cg = 102; cb = 102; break;
-            case RoomType.COMMON:     cr = 68; cg = 68; cb = 68; break;
-            case RoomType.PRODUCTION: cr = 85; cg = 85; cb = 68; break;
-            default:                  cr = 51; cg = 51; cb = 51;
-          }
-        } else { cr = 51; cg = 51; cb = 51; }
-      } else {
-        const zid = world.zoneMap[ci];
-        const [zr, zg, zb] = ZONE_COLORS[zid % 64];
-        cr = zr >> 1; cg = zg >> 1; cb = zb >> 1;
-      }
-      if (cell === Cell.DOOR) { cr = 136; cg = 100; cb = 68; }
-
-      const factionZone = factionZones?.[world.zoneMap[ci]];
-      if (factionZone) {
-        [cr, cg, cb] = tintFactionColor(cr, cg, cb, factionZone.owner, factionZone.contested ? 0.34 : 0.2);
-        if (factionZone.contested && ((wx + wy) & 7) < 3) {
-          [cr, cg, cb] = tintFactionColor(cr, cg, cb, factionZone.dominant, 0.34);
-        }
-      }
-
-      if (world.fog[ci] > 50) {
-        const f = world.fog[ci] / 255;
-        cr = Math.round(cr * (1 - f) + fogR * f);
-        cg = Math.round(cg * (1 - f) + fogG * f);
-        cb = Math.round(cb * (1 - f) + fogB * f);
-      }
-      const isSamosborShelter = rid >= 0 && shelterRoomIds.includes(rid);
-      if (isSamosborShelter) {
-        cr = Math.round(cr * 0.55 + 212 * 0.45);
-        cg = Math.round(cg * 0.55 + 166 * 0.45);
-        cb = Math.round(cb * 0.55 + 72 * 0.45);
-      }
-
-      ctx.fillStyle = `rgb(${cr},${cg},${cb})`;
-      ctx.fillRect(sx0, sy0, cellW + 0.5, cellH + 0.5);
-      if (isSamosborShelter) {
-        ctx.strokeStyle = '#d6a64b';
-        ctx.lineWidth = Math.max(1, Math.min(2, cellW));
-        ctx.strokeRect(sx0, sy0, cellW + 0.5, cellH + 0.5);
-      }
-
-      if (currentFloor === FloorLevel.MAINTENANCE) {
-        const sourceState = seroburmalineSourceCellState(world, wx, wy);
-        if (sourceState) {
-          const sx0 = mapX + (dx + radius + 0.5) * cellW;
-          const sy0 = mapY + (dy + radius + 0.5) * cellH;
-          const pulse = sourceState === 'active' ? 0.6 + 0.28 * Math.sin(uiTime * 8) : 0.35;
-          ctx.save();
-          ctx.globalAlpha = sourceState === 'active' ? 0.62 + pulse * 0.25 : 0.42;
-          ctx.strokeStyle = sourceState === 'active' ? '#d58aa8' : '#8a8f88';
-          ctx.fillStyle = sourceState === 'active' ? '#563046' : '#4b504c';
-          ctx.lineWidth = Math.max(1, Math.min(2, cellW * 0.8));
-          ctx.beginPath();
-          ctx.arc(sx0, sy0, Math.max(3, Math.min(8, Math.max(cellW, cellH) * 2.2)), 0, Math.PI * 2);
-          ctx.fill();
-          ctx.stroke();
-          ctx.restore();
-        }
-      }
-
-      if ((activeTargetRooms.size > 0 || activeTargetRoomTypes.size > 0) && rid >= 0) {
-        const r = world.rooms[rid];
-        let markerKind = r ? activeTargetRooms.get(r.id) : undefined;
-        if (!markerKind && r) markerKind = activeTargetRoomTypes.get(r.type);
-        if (r && markerKind && !drawnTargetRooms.has(r.id)) {
-          const cx = world.wrap(Math.floor(r.x + r.w / 2));
-          const cy = world.wrap(Math.floor(r.y + r.h / 2));
-          if (wx === cx && wy === cy) {
-            const qsx = mapX + (dx + radius) * cellW;
-            const qsy = mapY + (dy + radius) * cellH;
-            drawQuestMarker(ctx, qsx, qsy, 5, 3, markerKind);
-            drawnTargetRooms.add(r.id);
-          }
-        }
-      }
-    }
-  }
+  drawMapBaseRaster(ctx, world, pxI, pyI, mapX, mapY, mapW, mapH, radius, cellW, cellH, fogR, fogG, fogB, shelterRoomIds, factionZones, questLiftDir);
+  drawSamosborShelterCellOutlines(ctx, world, pxI, pyI, mapX, mapY, radius, cellW, cellH, shelterRoomIds);
+  drawSeroburmalineMapSources(ctx, world, currentFloor, uiTime, pxI, pyI, mapX, mapY, radius, cellW, cellH);
+  drawMapRoomQuestMarkers(ctx, world, pxI, pyI, mapX, mapY, radius, cellW, cellH);
 
   drawSamosborWarningRisk(ctx, world, state, currentFloor, uiTime, pxI, pyI, mapX, mapY, mapW, mapH, radius, cellW, cellH);
   drawWrongDoorCues(ctx, world, state, uiTime, pxI, pyI, mapX, mapY, radius, cellW, cellH);
@@ -1382,38 +1596,7 @@ function drawMap(
   const pcy = mapY + radius * cellH;
 
   // Lift direction arrows
-  for (let dy = -radius; dy < radius; dy++) {
-    for (let dx = -radius; dx < radius; dx++) {
-      const wx = ((pxI + dx) % W + W) % W;
-      const wy = ((pyI + dy) % W + W) % W;
-      const ci = wy * W + wx;
-      if (world.cells[ci] !== Cell.LIFT) continue;
-      if (!isMapCellExplored(world, ci)) continue;
-      const lsx = mapX + (dx + radius) * cellW;
-      const lsy = mapY + (dy + radius) * cellH;
-      const isUp = world.liftDir[ci] === LiftDirection.UP;
-      const isQuestLift = questLiftDir !== undefined && world.liftDir[ci] === questLiftDir;
-      const ah = 7;  // arrow half-height
-      const aw = 5;  // arrow half-width
-      // Dark outline
-      ctx.strokeStyle = isQuestLift ? '#fff' : '#440';
-      ctx.lineWidth = isQuestLift ? 3 : 2;
-      ctx.beginPath();
-      if (isUp) {
-        ctx.moveTo(lsx, lsy - ah);
-        ctx.lineTo(lsx + aw, lsy + ah);
-        ctx.lineTo(lsx - aw, lsy + ah);
-      } else {
-        ctx.moveTo(lsx, lsy + ah);
-        ctx.lineTo(lsx + aw, lsy - ah);
-        ctx.lineTo(lsx - aw, lsy - ah);
-      }
-      ctx.closePath();
-      ctx.stroke();
-      ctx.fillStyle = isQuestLift ? '#fc4' : '#ee2';
-      ctx.fill();
-    }
-  }
+  drawRecordedMapLiftArrows(ctx);
   ctx.fillStyle = '#fff';
   ctx.fillRect(pcx - 1, pcy - 1, 3, 3);
   // Direction indicator

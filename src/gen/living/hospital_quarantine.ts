@@ -585,7 +585,7 @@ function addHospitalContainer(
   world.addContainer(container);
 }
 
-function generateHospitalQuarantine(
+export function generateHospitalQuarantine(
   world: World, nextRoomId: number, entities: Entity[], nextId: { v: number },
   zcx: number, zcy: number,
 ): { nextRoomId: number } {
@@ -704,6 +704,7 @@ function generateHospitalQuarantine(
     rx + 6, ry + 11, 'faction',
     [
       { defId: 'quarantine_medcard', count: 1 },
+      { defId: 'quarantine_breach_notice', count: 1 },
       { defId: 'clean_health_cert', count: 1 },
       { defId: 'hermodoor_journal', count: 1 },
       { defId: 'psychiatrist_referral', count: 1 },

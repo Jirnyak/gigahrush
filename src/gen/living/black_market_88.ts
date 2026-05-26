@@ -25,6 +25,7 @@ const NPC_DEFS: Record<string, PlotNpcDef> = {
     hp: 120, maxHp: 120, money: 260, speed: 0.75,
     inventory: [
       { defId: 'pills', count: 2 },
+      { defId: 'sleeping_pills', count: 1 },
       { defId: 'antibiotic', count: 1 },
       { defId: 'fake_pass', count: 1 },
       { defId: 'cigs', count: 4 },

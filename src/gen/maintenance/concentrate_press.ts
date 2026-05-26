@@ -233,6 +233,7 @@ function addPressContainers(ctx: MaintContentCtx, press: Room, waste: Room, mast
     name: 'Карантинный шкаф зелёной партии',
     inventory: [
       { defId: 'green_briquette', count: 2 },
+      { defId: 'experimental_concentrate', count: 1 },
       { defId: 'acid_bottle', count: 1 },
       { defId: 'rawmeat', count: 1 },
     ],

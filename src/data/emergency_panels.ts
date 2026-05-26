@@ -72,10 +72,10 @@ export const EMERGENCY_PANEL_DEFS: readonly EmergencyPanelDef[] = [
     weight: 24,
     geometryWeights: { service_spines: 2.4, workshops: 2.8, collectors: 1.2 },
     roomTypes: [RoomType.CORRIDOR, RoomType.STORAGE, RoomType.PRODUCTION, RoomType.OFFICE],
-    repairCost: [{ itemId: 'door_kit', count: 1 }, { itemId: 'wire_coil', count: 1 }],
+    repairCost: [{ itemId: 'door_kit', count: 1 }, { itemId: 'hermo_gasket', count: 1 }],
     tags: ['doors', 'access', 'shortcut', 'maintenance'],
     actionLabels: {
-      repair: 'Починить дверные реле',
+      repair: 'Починить гермоконтур дверей',
       shutdown: 'Закрыть местные двери',
       force: 'Открыть двери аварийно',
       overload: 'Перегрузить замки',

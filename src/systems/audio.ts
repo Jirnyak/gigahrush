@@ -13,6 +13,7 @@ export type AudioCueBudgetId =
   | 'door'
   | 'monster_growl'
   | 'samosbor_siren'
+  | 'samosbor_room_siren'
   | 'samosbor_bell'
   | 'samosbor_beep'
   | 'samosbor_distant_alarm'
@@ -50,6 +51,7 @@ const AUDIO_BUDGETS: Record<AudioCueBudgetId, AudioBudgetDef> = {
   door: { cooldownSec: 0.12, windowSec: 0.8, maxPerWindow: 5 },
   monster_growl: { cooldownSec: 0.18, windowSec: 1.0, maxPerWindow: 5 },
   samosbor_siren: { cooldownSec: 6.0, windowSec: 8.0, maxPerWindow: 1 },
+  samosbor_room_siren: { cooldownSec: 0.18, windowSec: 1.4, maxPerWindow: 4 },
   samosbor_bell: { cooldownSec: 5.0, windowSec: 7.0, maxPerWindow: 1 },
   samosbor_beep: { cooldownSec: 4.0, windowSec: 6.0, maxPerWindow: 1 },
   samosbor_distant_alarm: { cooldownSec: 5.0, windowSec: 7.0, maxPerWindow: 1 },
@@ -370,6 +372,42 @@ export function playSamosborAlarm(): void {
   g.gain.value = 0.25;
   src.connect(g).connect(gain());
   src.start();
+}
+
+/* ── Apartment room siren: short positional locator pulse ─────── */
+export function playSamosborRoomSiren(seed = 0): void {
+  const ac = beginCue('samosbor_room_siren');
+  if (!ac) return;
+  const now = ac.currentTime;
+  const len = 1.15;
+  const wobble = ((Math.abs(seed) % 17) - 8) * 2.5;
+  const base = 420 + wobble;
+  const bus = ac.createGain();
+  bus.gain.setValueAtTime(0.001, now);
+  bus.gain.exponentialRampToValueAtTime(0.14, now + 0.05);
+  bus.gain.exponentialRampToValueAtTime(0.001, now + len);
+  bus.connect(gain());
+
+  const hi = ac.createOscillator();
+  hi.type = 'sawtooth';
+  hi.frequency.setValueAtTime(base, now);
+  hi.frequency.linearRampToValueAtTime(base * 1.48, now + len * 0.5);
+  hi.frequency.linearRampToValueAtTime(base * 0.92, now + len);
+  hi.connect(bus);
+  hi.start(now);
+  hi.stop(now + len);
+
+  const lo = ac.createOscillator();
+  lo.type = 'triangle';
+  lo.frequency.setValueAtTime(base * 0.5, now + 0.08);
+  lo.frequency.linearRampToValueAtTime(base * 0.72, now + len);
+  const loGain = ac.createGain();
+  loGain.gain.setValueAtTime(0.001, now);
+  loGain.gain.exponentialRampToValueAtTime(0.05, now + 0.12);
+  loGain.gain.exponentialRampToValueAtTime(0.001, now + len);
+  lo.connect(loGain).connect(bus);
+  lo.start(now + 0.08);
+  lo.stop(now + len);
 }
 
 /* ── Maronary cue: thin green-screen beep and distant chord ─────

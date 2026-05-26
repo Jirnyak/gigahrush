@@ -10,6 +10,7 @@ import {
 import { World } from '../../core/world';
 import { type PlotNpcDef, registerSideQuest } from '../../data/plot';
 import { ITEMS, freshNeeds } from '../../data/catalog';
+import { DOCUMENT_MINISTRY_GATE_ACCESS_DEFS } from '../../data/documents_access';
 import { ITEM_TAGS } from '../../data/items';
 import { getPermitDef, type PermitAccessTag } from '../../data/permits';
 import { chernobogDocketGateItems } from '../../data/chernobog_docket';
@@ -77,6 +78,22 @@ export const DOCUMENT_GATE_ACCESS_ITEMS: readonly DocumentGateAccessDef[] = [
     severity: 3,
     privacy: 'private',
     line: 'Архивный допуск прошел как старший документ. Коридор уступил.',
+  },
+  {
+    itemId: 'part_ticket',
+    method: 'legal',
+    legal: true,
+    severity: 3,
+    privacy: 'private',
+    line: 'Партбилет приняли без улыбки. Коридор открылся, будто это его идея.',
+  },
+  {
+    itemId: 'rail_depot_pass',
+    method: 'legal',
+    legal: true,
+    severity: 3,
+    privacy: 'private',
+    line: 'Пропуск в депо прошел как транспортный доступ. N3 уступил старой линии.',
   },
   {
     itemId: 'forged_permit_slip',
@@ -151,6 +168,14 @@ export const DOCUMENT_GATE_ACCESS_ITEMS: readonly DocumentGateAccessDef[] = [
     line: 'Ордер на изъятие заставил N3 открыть проход для ревизии.',
   },
   {
+    itemId: 'cleanup_order_stub',
+    method: 'expose',
+    legal: true,
+    severity: 4,
+    privacy: 'witnessed',
+    line: 'Корешок приказа на зачистку прошёл как основание для служебного изъятия.',
+  },
+  {
     itemId: 'voluntary_receipt',
     method: 'bribe',
     legal: false,
@@ -167,6 +192,22 @@ export const DOCUMENT_GATE_ACCESS_ITEMS: readonly DocumentGateAccessDef[] = [
     line: 'Акт о пропавшей записи заставил пост искать виновного в архиве. N3 открылся, чтобы спор ушел выше.',
   },
   {
+    itemId: 'quarantine_breach_notice',
+    method: 'expose',
+    legal: true,
+    severity: 4,
+    privacy: 'witnessed',
+    line: 'Извещение о нарушении карантина заставило N3 пропустить санитарный акт выше.',
+  },
+  {
+    itemId: 'labor_shift_card',
+    method: 'legal',
+    legal: true,
+    severity: 3,
+    privacy: 'private',
+    line: 'Карта смены совпала с производственным списком. N3 пропустил рабочего.',
+  },
+  {
     itemId: 'key',
     method: 'key',
     legal: false,
@@ -174,6 +215,9 @@ export const DOCUMENT_GATE_ACCESS_ITEMS: readonly DocumentGateAccessDef[] = [
     privacy: 'local',
     line: 'Контрольный ключ обошел бумагу. Для двери это проход, для очереди - шум.',
   },
+  ...DOCUMENT_MINISTRY_GATE_ACCESS_DEFS.filter(def =>
+    def.itemId === 'hazard_shift_extension' || def.itemId === 'rail_switch_order' || def.itemId === 'ovb_search_warrant'
+  ),
 ];
 
 const DOCUMENT_GATE_ACCESS_BY_ITEM = new Map(DOCUMENT_GATE_ACCESS_ITEMS.map(def => [def.itemId, def]));
@@ -453,6 +497,7 @@ function permitAccessTagForGate(itemId: string, method: DocumentGateAccessMethod
   if (itemId.includes('raionsovet')) return 'raionsovet';
   if (itemId.includes('debt')) return 'bank_debt';
   if (itemId === 'confiscation_warrant') return 'bank_vault';
+  if (itemId === 'cleanup_order_stub') return 'archive';
   if (itemId.includes('archive') || method === 'stolen') return 'archive';
   return 'ministry_n3';
 }

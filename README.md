@@ -126,7 +126,7 @@ Direct HTTPS builds also expose PWA metadata. Desktop play has a remappable `F11
 
 The runtime HUD is configurable through the `U` UI orchestrator menu. HUD elements are stored in browser-local UI settings outside the game save; fresh local settings use the `Новичок` preset with bottom tabs, weapon panel, crosshair, simple `E` interaction prompt, hazard warnings and minimap support enabled, while route hints and the transient stenographic HUD summary are off by default. When enabled, the stenographic summary is a full-width top HUD band capped to the upper third of the screen and shows recent one-line messages with time and distance. The same browser-local settings also store desktop mouse sensitivity, defaulting to 130% of the old mouse-look speed, and mobile look sensitivity, defaulting to 50% of the original touch rotation speed. The full message log still records entries and opens with `L`. NPCs with authored quest action - either an authored quest they can issue now or an authored active TALK target - are marked by a bright yellow `!` in the existing aim target name/HP box, not in the `E` prompt; procedural quest offers use a blue `!`. Map NPC markers use green for idle authored quest NPCs, gold for authored quest actions, and blue for procedural quest offers or procedural TALK targets. Procedural givers that already issued or completed their quest fall back to ordinary NPC dots. `M` cycles minimap, full map and hidden map; when minimap UI is disabled, the cycle skips the invisible minimap state. The full map does not draw the quest strip over the map. Caravan markers are a separate UI surface and are off by default. Players can switch to `Выкл всё`, `Минимум`, `Бой`, `Маршрут` or `Полный` presets and then adjust individual surfaces. Damage/sleep feedback, samosbor text, weapon/tool beam visuals and title/final screens are locked on, while location panel, route hints, stenographic HUD summary, status hints, anomaly deep hints and cosmetic screen effects can be toggled independently. Desktop title and in-game prompts explain mandatory click-to-capture mouse look before gameplay, `ЛКМ`/attack, `F11`, `Tab`, `U`, `Enter` as menu/back/close, and `E` as confirm/send; losing pointer lock pauses the game behind the capture screen. `Esc` is not used for game windows because browser builds reserve it for browser escape/pointer-lock behavior. The `Enter` game menu also links to key bindings, interface toggles and the graphics/FOV screen without releasing pointer lock by itself.
 
-Localized floor messages use the toroidal world metric and enter the HUD/log only inside the current hearing radius, defaulting to 100 meters from the player. Heard NPC lines, AI actor messages and structured floor events carry distance in meters next to the timestamp; the radius is a runtime context value so future items, statuses or effects can expand or shrink it without changing message pools. Structured floor events in the stenographic summary resolve distance from coordinates first, then actor/target id, room id or zone id.
+Localized floor messages use the toroidal world metric and enter the HUD/log only inside the current hearing radius, defaulting to 100 meters from the player. Heard NPC lines, AI actor messages and structured floor events carry distance in meters next to the timestamp; the radius is a runtime context value, and equipped hearing tools such as the liquidator radio headset can expand it without changing message pools. Structured floor events in the stenographic summary resolve distance from coordinates first, then actor/target id, room id or zone id.
 
 ## Implementation Snapshot
 
@@ -141,24 +141,24 @@ Current shipped-data scale, counted from source registries:
 | Numbered lift anomalies | 8 |
 | Main plot steps | 18 |
 | Plot/side NPC ids after production manifests load | 304 |
-| Side quest steps after production manifests load | 349 |
+| Side quest steps after production manifests load | 350 |
 | System assignment templates | 201 |
-| Item ids | 255 |
-| Physical weapon stat entries | 32 |
+| Item ids | 431 |
+| Physical weapon stat entries | 70 |
 | PSI weapon stat entries | 16 |
 | Base monster kinds | 67 |
 | Monster ecology entries | 67 |
-| Static rumors | 578 |
-| Samosbor variants / modifiers / aftermath beats | 8 / 21 / 40 |
-| Samosbor director beats | 34 |
+| Static rumors | 577 |
+| Samosbor variants / modifiers / aftermath beats | 7 / 19 / 44 |
+| Samosbor director beats | 33 |
 | Economy resources | 17 |
 | Caravan supply lanes / small caravan templates | 6 / 5 |
-| Factory definitions / recipes | 12 / 19 |
+| Factory definitions / recipes | 12 / 30 |
 | LIVING manifest entries | 35 |
 | Manifest imports checked by content audit | 144 |
 | Debug commands, including routed teleports | 107 |
 
-`npm run content:audit` is intentionally conservative and reports static literal registrations: currently 304 plot NPC ids, 349 side quest steps and 133 literal contract entries. The runtime counts above include production manifest imports, dynamic route-floor side-quest registration and spread/composed contract arrays used by the running game.
+`npm run content:audit` is intentionally conservative and reports static literal registrations: currently 304 plot NPC ids, 350 side quest steps and 133 literal contract entries. The runtime counts above include production manifest imports, dynamic route-floor side-quest registration and spread/composed contract arrays used by the running game.
 
 ## НЕТ-ТЕРМИНАЛ ГЕН
 
@@ -166,7 +166,7 @@ The current build includes an optional debug/diegetic current-floor map editor. 
 
 The editor is a canvas HUD overlay over the live `World`: it can paint cells, doors, textures and features, spawn/delete entities and containers from live game registries, choose NPC faction variants, and replay compact current-floor patches after floor transitions, save/load and samosbor rebuilds.
 
-`E` interaction now routes through a shared dispatcher used by desktop, HUD prompts and mobile context. Generated floors also seed sparse interactable registries for gambling machines, local computers and НЕТ-hack terminals; these open canvas overlays, publish world events and mutate only local player/runtime state.
+`E` interaction now routes through a shared dispatcher used by desktop, HUD prompts and mobile context. Generated floors also seed sparse interactable registries for gambling machines, local computers and НЕТ-hack terminals; these open canvas overlays, publish world events and mutate only local player/runtime state. NPC main-menu rows are built through a conditional option registry, so inventory-, route-, NPC- and quest-gated entries can open transient interfaces without changing save shape. A card-deck NPC option starts a two-player throw-in durak hand with a fixed 10% NPC-money stake, transient card state, cheap-card NPC heuristics and settlement through existing gambling events.
 
 `silicon_net_well` is a routed design floor at `z=-22`: a кремниевый НЕТ-колодец with Sibo, administrators, a cyborg scientist, special НЕТ-КОЛОДЕЦ terminals, Safeguard hack backlash and the rare `gravity_beam_emitter`. Failed special-console hacks publish `net_terminal_hack_failed` and spawn one Safeguard subject to cooldown; the GBE is a generic energy weapon that deletes a bounded beam line of cells, doors, containers and entities.
 
@@ -264,7 +264,7 @@ src/
     containers.ts  world containers and theft/access rules
     interactions.ts shared E-interaction dispatcher
     camera.ts      transient runtime camera modes and resolved CameraView
-    computers.ts, gambling.ts, net_hack.ts generated local overlays
+    computers.ts, gambling.ts, durak.ts, net_hack.ts generated/local gambling overlays and card play
     emergency_panels.ts emergency panels and repair/report actions
     permits.ts     access checks, exposure and spoiled documents
     procedural_floors.ts per-run vertical route and floor specs
@@ -413,7 +413,7 @@ These are routed string-id floors, not new `FloorLevel` enum values. Each one is
 
 `src/systems/procedural_floors.ts` owns save/load state for the run seed, current `z`, visited route keys, authored route entry resolution and lift route resolution. `src/gen/procedural_floor.ts` builds procedural floors without spawning authored story NPCs: rooms/corridors, both lift directions, zone danger, faction majority, seed-biased loot, seed-biased monsters and anomaly effects.
 
-Teleport-cell anomaly pairs are stored sparsely in `world.anomalyTeleports`. Stepping on one paired cell moves the player to the paired cell after a short cooldown. Mushroom-mycelium floors also seed bounded carnivorous fungus rooms with corpse/bait feeding, salt neutralization, fire burn-off and risky zhelemish harvests. False safe blocks stamp quiet corridors, a too-clean shelter, black-hand marks, a missing-siren panel and cult-owned supplies; investigating, reporting, looting or breaking the marker publish events, while samosbor pressure is only partially delayed. Hladon cold pockets are bounded procedural rooms with pale frost marks; they slow and drain needs only inside/near the marked cells, and heat items, valve/steam tools or alternate routing counter them. Living-tunnel anomalies seed multiple root apparatuses across the generated floor; each root continuously carves a short moving organic tunnel while its tail restores the previous cell state, so the route opens and closes without full-world runtime scans. Sealant, jackhammer or UV use on a root pauses its local growth and collapses part of the old trail. Rail-train anomalies cut fixed rail routes through the floor, add platforms with schedule screens, spawn moving train segments, allow `E` boarding/exit while stopped and publish rail events when trains crush NPCs, monsters or the player. Bad Apple world stamps a 144x108 map rectangle from packed black/white RLE frames; black pixels become dark walls, white pixels become pale floor, and the projector can be paused/resumed with `E`. Zombie apocalypse floors seed up to the shared 5k active resident NPC ceiling plus patient zero, and any NPC bitten by a zombie becomes another zombie.
+Teleport-cell anomaly pairs are stored sparsely in `world.anomalyTeleports`. Stepping on one paired cell moves the player to the paired cell after a short cooldown. Mushroom-mycelium floors also seed bounded carnivorous fungus rooms with corpse/bait feeding, salt/reagent neutralization, fire burn-off and risky zhelemish harvests. False safe blocks stamp quiet corridors, a too-clean shelter, black-hand marks, a missing-siren panel and cult-owned supplies; investigating, reporting, looting or breaking the marker publish events, while samosbor pressure is only partially delayed. Hladon cold pockets are bounded procedural rooms with pale frost marks; they slow and drain needs only inside/near the marked cells, and heat items, valve/steam tools or alternate routing counter them. Living-tunnel anomalies seed multiple root apparatuses across the generated floor; each root continuously carves a short moving organic tunnel while its tail restores the previous cell state, so the route opens and closes without full-world runtime scans. Sealant, jackhammer or UV use on a root pauses its local growth and collapses part of the old trail. Rail-train anomalies cut fixed rail routes through the floor, add platforms with schedule screens, spawn moving train segments, allow `E` boarding/exit while stopped and publish rail events when trains crush NPCs, monsters or the player. Bad Apple world stamps a 144x108 map rectangle from packed black/white RLE frames; black pixels become dark walls, white pixels become pale floor, and the projector can be paused/resumed with `E`. Zombie apocalypse floors seed up to the shared 5k active resident NPC ceiling plus patient zero, and any NPC bitten by a zombie becomes another zombie.
 
 Floor VISIT quests only complete on story anchors, not on procedural or design floors that happen to use the same base `FloorLevel` for system mood.
 
@@ -615,7 +615,7 @@ Current behavior:
 12. Every story, design, procedural and numbered-instance floor runs `systems/samosbor_wave.ts`: a bounded small/medium frontier mutates cells during the active phase, records a local rebuild field radius, preserves apartments, hermowalls, lifts and explicitly protected shelter rooms, then defers the freshly generated current-route field splice through the loading screen and applies it to that local area with boundary floor stitches, generated room traits, existing zone ownership left intact and old fog preserved on still-walkable cells.
 13. After end, doors reopen, aftermath may apply, local route cues inside the rebuilt field are pruned, and the active stitched world becomes the floor's next memory snapshot.
 
-`data/samosbor_variants.ts` currently has 8 variants, 21 modifiers and 40 aftermath beats. Rare replacement variants include Maronary with green fog/light, an intentionally kept high beep/active ping identity, damaging green source glow, wrong-door residue and identity rewrites; Istotit with a low bell cue, golden fog/light, marked shelter rooms, healing/creation effects and social aftermath; and Veretar with white fog/light, deletion effects, area leakage and white residue. The player-facing philosophy is explicit in runtime mechanics: samosbor brings purple fog and monsters, Maronary changes, Veretar removes, Istotit creates. `data/samosbor_director.ts` currently registers 34 bounded director beats for warnings, patrols, shortages, door malfunctions, aftershocks and rumor seeds.
+`data/samosbor_variants.ts` currently has 7 variants, 19 modifiers and 44 aftermath beats. Rare replacement variants include Maronary with green fog/light, an intentionally kept high beep/active ping identity, damaging green source glow, wrong-door residue and identity rewrites; Istotit with a low bell cue, golden fog/light, marked shelter rooms, healing/creation effects and social aftermath; and Veretar with white fog/light, deletion effects, area leakage and white residue. The player-facing philosophy is explicit in runtime mechanics: samosbor brings purple fog and monsters, Maronary changes, Veretar removes, Istotit creates. `data/samosbor_director.ts` currently registers 33 bounded director beats for warnings, patrols, shortages, door malfunctions, aftershocks and rumor seeds.
 
 The `vacuum` tool clears samosbor fog/light from the player's cell and the eight neighboring cells, so the player can clean the active field edge without stepping deeper into it.
 
@@ -677,17 +677,17 @@ NPC and monster broadphase uses `systems/entity_index.ts`: a 16-cell toroidal bu
 
 ## Items, Weapons And PSI
 
-`src/data/items.ts` currently defines 255 item ids:
+`src/data/items.ts` currently defines 431 item ids:
 
 - food and drinks: bread, canned food, kasha, briquettes, water, tea, kompot, coffee, etc.
-- medicine: bandage, pills, antidepressant, antibiotic, morphine, PSI stabilizer, sanitary kit.
+- medicine: bandage, pills, antidepressant, antibiotic, morphine, PSI stabilizer, sanitary kit, sleeping pills and route-risk treatments.
 - weapons as items: knives, pipes, pistols, shotguns, rifles, tools, energy weapons, PSI clots.
 - ammo: 9mm, shells, nails, 7.62, belt, energy cells, fuel, special ammo.
 - tools: flashlight, repair kits, cleaning kit, vacuum, radio, fog detector, unpeople detector.
 - documents and components: permits, forms, denunciations, seals, tickets, manometer, filters, wire, metal, electronics.
 - plot and rare items: idol, strange clot, bottled voice, void spike, Maronary shaving, Veretar sand, overexposed photo and govnyak contraband.
 
-Physical weapon stats live in `src/data/weapons.ts` and include 32 entries, including fists, melee tools, Soviet firearms, improvised firearms, energy weapons, grenade, flamethrower, harpoon gun and the deletion-beam emitter. PSI weapon stats live in `src/data/psi.ts` and include 16 entries.
+Physical weapon stats live in `src/data/weapons.ts` and include 70 entries, including fists, melee tools, Soviet firearms, improvised firearms, energy weapons, grenade, flamethrower, harpoon gun, liquidator cleanup weapons and the deletion-beam emitter. PSI weapon stats live in `src/data/psi.ts` and include 16 entries, for 86 merged weapon stat entries.
 
 PSI does not regenerate passively. It is restored by medicine/items and scales with INT through RPG stats.
 
@@ -750,7 +750,7 @@ Economy:
 - `src/data/caravans.ts` and `src/systems/caravans.ts`: 6 supply lanes, bounded slow ticks, tariff pressure and route actions.
 - Scarcity affects item prices and some contract rewards.
 - Money is currently carried as entity cash (`Entity.money`) and used by NPC trade.
-- NPC trade moves one stack unit at the current scarcity-adjusted item price, transfers cash between buyer/seller and publishes trade or item-sale events.
+- NPC trade uses one symmetric `Торг` screen: edge 5x5 inventories show player/NPC stock, center 5x5 baskets stage what each side gives and takes, and `E` commits one atomic transaction with scarcity-adjusted item values plus only the remaining cash delta.
 - Current-version economy save data is sanitized on load, including missing floor/resource rows inside the accepted save shape.
 - The debug menu has an economy prices summary for current stock and adjusted prices.
 
@@ -762,7 +762,7 @@ Containers:
 
 Production:
 
-- `src/data/factories.ts`: 12 production definitions and 19 recipes.
+- `src/data/factories.ts`: 12 production definitions and 30 recipes.
 - `src/systems/production.ts`: up to 64 production rooms per floor, outputs deposited into room containers.
 - Production publishes `room_produced_items`, `room_lacked_resources` and `room_blocked_production`.
 

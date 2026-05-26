@@ -594,22 +594,53 @@ function performanceNowSeconds(): number {
 /* ── Trade item pools by occupation ──────────────────────────── */
 const OCC_TRADE_ITEMS: Record<number, string[]> = {
   [Occupation.HOUSEWIFE]:   ['bread', 'water', 'cigs'],
-  [Occupation.LOCKSMITH]:   ['wrench', 'pipe', 'flashlight', 'door_kit', 'block_kit'],
+  [Occupation.LOCKSMITH]:   ['wrench', 'pipe', 'flashlight', 'door_kit', 'block_kit', 'electrode_pack', 'water_filter_regulator'],
   [Occupation.SECRETARY]:   ['book', 'tea', 'cigs'],
-  [Occupation.ELECTRICIAN]: ['wrench', 'flashlight', 'ammo_nails'],
-  [Occupation.COOK]:        ['bread', 'kasha', 'kompot', 'canned', 'zhelemish_dried', 'grey_briquette', 'green_briquette', 'concentrate_coupon'],
-  [Occupation.DOCTOR]:      ['bandage', 'pills', 'antidep', 'zhelemish_boiled'],
+  [Occupation.ELECTRICIAN]: ['wrench', 'flashlight', 'ammo_nails', 'keyboard_unit', 'screen_unit', 'krona_battery', 'rail_signal_lamp'],
+  [Occupation.COOK]:        ['bread', 'kasha', 'kompot', 'canned', 'zhelemish_dried', 'grey_briquette', 'green_briquette', 'red_concentrate', 'protein_mold_cake', 'concentrate_coupon', 'sugar_pack', 'bottle_empty'],
+  [Occupation.DOCTOR]:      ['bandage', 'sterile_bandage', 'pills', 'antidep', 'anti_spore_inhaler', 'burn_gel', 'sleeping_pills', 'permanganate_vial', 'lice_shampoo', 'zhelemish_boiled'],
   [Occupation.TURNER]:      ['wrench', 'pipe', 'rebar'],
-  [Occupation.MECHANIC]:    ['wrench', 'pipe', 'flashlight', 'jackhammer', 'ammo_nails'],
-  [Occupation.STOREKEEPER]: ['bread', 'water', 'cigs', 'bandage', 'ammo_shells', 'cleaning_kit', 'chalk', 'zhelemish_raw', 'govnyak_roll', 'govnyak_brick', 'grey_briquette', 'green_briquette', 'liquidator_ration', 'concentrate_coupon'],
+  [Occupation.MECHANIC]:    ['wrench', 'pipe', 'flashlight', 'jackhammer', 'ammo_nails', 'pump_impeller', 'vent_damper_plate', 'heating_element'],
+  [Occupation.STOREKEEPER]: ['bread', 'water', 'cigs', 'toiletpaper', 'import_toiletpaper', 'bandage', 'sleeping_pills', 'ammo_shells', 'cleaning_kit', 'chalk', 'soap_72', 'lice_shampoo', 'krona_battery', 'zhelemish_raw', 'govnyak_roll', 'govnyak_brick', 'grey_briquette', 'green_briquette', 'red_concentrate', 'liquidator_ration', 'concentrate_coupon', 'dice_bone', 'cardboard_stack', 'roller_brush', 'plastic_sheet', 'ceramic_shards_pack'],
   [Occupation.ALCOHOLIC]:   ['bread', 'cigs', 'water', 'govnyak_roll'],
-  [Occupation.SCIENTIST]:   ['flashlight', 'book', 'note', 'ammo_9mm', 'zhelemish_raw', 'govnyak_sample'],
+  [Occupation.SCIENTIST]:   ['flashlight', 'book', 'note', 'ammo_9mm', 'zhelemish_raw', 'govnyak_sample', 'empty_sample_jar', 'sterile_swab', 'sample_chain_form', 'nii_sample_label', 'glass_ampoule_empty', 'blueprint_t2_folder', 'sound_emitter', 'syringe_empty'],
   [Occupation.CHILD]:       ['bread', 'water', 'chalk'],
-  [Occupation.DIRECTOR]:    ['book', 'tea', 'cigs', 'ammo_9mm'],
-  [Occupation.TRAVELER]:    ['bread', 'water', 'filtered_water', 'canned', 'cigs', 'chalk', 'govnyak_roll', 'gasmask_filter', 'caravan_route', 'lift_scheme'],
+  [Occupation.DIRECTOR]:    ['book', 'tea', 'cigs', 'ammo_9mm', 'blueprint_t1_folder', 'market_weight_scale'],
+  [Occupation.TRAVELER]:    ['bread', 'water', 'filtered_water', 'canned', 'cigs', 'chalk', 'govnyak_roll', 'gasmask_filter', 'caravan_route', 'lift_scheme', 'track_diagram_scrap'],
   [Occupation.PILGRIM]:     ['bread', 'water', 'knife', 'zhelemish_dried', 'govnyak_bad_batch'],
-  [Occupation.HUNTER]:      ['knife', 'canned', 'rawmeat', 'ammo_9mm', 'ammo_shells', 'gasmask_filter', 'filtered_water'],
+  [Occupation.HUNTER]:      ['knife', 'canned', 'rawmeat', 'ammo_9mm', 'ammo_shells', 'gasmask_filter', 'ip4_gasmask', 'filtered_water', 'radio_headset_liquidator'],
 };
+
+interface FactionTradeOffer {
+  faction: Faction;
+  minRank: number;
+  occupation?: Occupation;
+  defId: string;
+  count: number;
+}
+
+const FACTION_TRADE_OFFERS: readonly FactionTradeOffer[] = [
+  { faction: Faction.LIQUIDATOR, occupation: Occupation.HUNTER, minRank: 3, defId: 'moskvin_rifle', count: 1 },
+  { faction: Faction.LIQUIDATOR, occupation: Occupation.HUNTER, minRank: 3, defId: 'ammo_762', count: 6 },
+];
+
+function tradeRankForNpc(npc: Entity): number {
+  const level = Math.max(1, Math.floor(npc.rpg?.level ?? 1));
+  if (level >= 35) return 4;
+  if (level >= 18) return 3;
+  if (level >= 8) return 2;
+  return 1;
+}
+
+function appendFactionTradeOffers(npc: Entity, items: { defId: string; count: number }[]): void {
+  const rank = tradeRankForNpc(npc);
+  for (const offer of FACTION_TRADE_OFFERS) {
+    if (npc.faction !== offer.faction) continue;
+    if (offer.occupation !== undefined && npc.occupation !== offer.occupation) continue;
+    if (rank < offer.minRank) continue;
+    items.push({ defId: offer.defId, count: offer.count });
+  }
+}
 
 export function generateNpcTradeItems(npc: Entity): { defId: string; count: number }[] {
   const items: { defId: string; count: number }[] = [];
@@ -619,5 +650,6 @@ export function generateNpcTradeItems(npc: Entity): { defId: string; count: numb
     const defId = pool[Math.floor(Math.random() * pool.length)];
     items.push({ defId, count: 1 + Math.floor(Math.random() * 3) });
   }
+  appendFactionTradeOffers(npc, items);
   return items;
 }

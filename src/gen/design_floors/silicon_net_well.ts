@@ -360,10 +360,11 @@ function placeContainers(world: World, rooms: SiliconRooms, owners: Record<Silic
     { defId: 'liquidator_token', count: 1 },
   ], owners.silicon_admin_checker, NPC_DEFS.silicon_admin_checker.name, ['silicon_net_well', 'admin', 'documents']);
 
-  addContainer(world, rooms.vault, rooms.vault.x + rooms.vault.w - 9, rooms.vault.y + 18, ContainerKind.WEAPON_CRATE, 'Запертый ложемент GBE', 'locked', [
+  addContainer(world, rooms.vault, rooms.vault.x + rooms.vault.w - 9, rooms.vault.y + 18, ContainerKind.WEAPON_CRATE, 'Запертый ложемент гравиоружия', 'locked', [
     { defId: 'gravity_beam_emitter', count: 1 },
-    { defId: 'ammo_energy', count: 2 },
-  ], undefined, undefined, ['silicon_net_well', 'gbe', 'rare_weapon']);
+    { defId: 'grn420_gravizhernov', count: 1 },
+    { defId: 'ammo_energy', count: 3 },
+  ], undefined, undefined, ['silicon_net_well', 'gbe', 'grn420', 'rare_weapon']);
 }
 
 function placeDrops(world: World, entities: Entity[], nextId: { v: number }, rooms: SiliconRooms): void {

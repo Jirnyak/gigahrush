@@ -2,10 +2,11 @@
 
 import {
   EntityType,
+  FloorLevel,
+  RoomType,
   W,
   type Entity,
   type Faction,
-  type FloorLevel,
   type GameState,
   type WorldEvent,
   type WorldEventSeverity,
@@ -102,6 +103,7 @@ const QUIET_DOOR_DURATION = 35;
 const NOISE_CAN_ID = 'noise_can';
 const RADIO_JAMMER_ID = 'radio_jammer';
 const FELT_DOOR_PAD_ID = 'felt_door_pad';
+const SMOKE_CANDLE_CHECK_ID = 'smoke_candle_check';
 const noiseRecords: NoiseRecord[] = [];
 let nextNoiseId = 1;
 let lastNoiseTime = -Infinity;
@@ -113,6 +115,7 @@ const LOUD_MELEE: Record<string, NoiseProfile> = {
   chainsaw: { radius: 14, ttl: 3.2, severity: 3, source: 'melee', tags: ['weapon', 'melee', 'chainsaw'] },
   sledgehammer: { radius: 9, ttl: 2.4, severity: 2, source: 'melee', tags: ['weapon', 'melee', 'heavy'] },
   axe: { radius: 7, ttl: 2.1, severity: 2, source: 'melee', tags: ['weapon', 'melee', 'heavy'] },
+  liquidator_axe: { radius: 8, ttl: 2.2, severity: 2, source: 'melee', tags: ['weapon', 'melee', 'heavy', 'liquidator'] },
   pipe: { radius: 7, ttl: 2.1, severity: 2, source: 'melee', tags: ['weapon', 'melee', 'metal'] },
   rebar: { radius: 7, ttl: 2.1, severity: 2, source: 'melee', tags: ['weapon', 'melee', 'metal'] },
   crowbar: { radius: 7, ttl: 2.1, severity: 2, source: 'melee', tags: ['weapon', 'melee', 'metal'] },
@@ -508,7 +511,99 @@ function publishNoiseItemEvent(
   });
 }
 
+function smokeCandleDraftResult(
+  state: GameState | undefined,
+  world: World | undefined,
+  actor: Entity,
+): { result: string; text: string; severity: WorldEventSeverity } {
+  const room = world?.roomAt(actor.x, actor.y);
+  const maintenance = state?.currentFloor === FloorLevel.MAINTENANCE;
+  if (maintenance && (room?.type === RoomType.CORRIDOR || room?.type === RoomType.PRODUCTION)) {
+    return {
+      result: 'pulling_draft',
+      text: 'Дым лег ниткой вдоль труб. Тяга есть: вентканал живой, но источник не вскрыт.',
+      severity: 3,
+    };
+  }
+  if (maintenance && room?.type === RoomType.STORAGE) {
+    return {
+      result: 'weak_draft',
+      text: 'Дым держится у стеллажей и медленно ползет к щели. Тяга слабая, дальше нужен осмотр.',
+      severity: 2,
+    };
+  }
+  return {
+    result: 'stale_air',
+    text: 'Дым повис низко и быстро осел. Проверка ничего не запускает: это только местная тяга.',
+    severity: 1,
+  };
+}
+
+function publishSmokeCandleCheckEvent(
+  ctx: InventoryUseHandlerContext,
+  result: string,
+  severity: WorldEventSeverity,
+  noiseRecordId: number | undefined,
+): void {
+  const { state, actor, world } = ctx;
+  if (!state || actor.type !== EntityType.PLAYER) return;
+  const def = ITEMS[SMOKE_CANDLE_CHECK_ID];
+  const x = actor.x;
+  const y = actor.y;
+  const ci = world?.idx(Math.floor(x), Math.floor(y));
+  const room = world?.roomAt(x, y);
+  publishEvent(state, {
+    type: 'player_use_item',
+    floor: state.currentFloor,
+    zoneId: ctx.zoneId ?? (ci !== undefined ? world?.zoneMap[ci] : undefined),
+    roomId: room?.id,
+    x,
+    y,
+    actorId: actor.id,
+    actorName: actor.name ?? 'Вы',
+    actorFaction: actor.faction,
+    itemId: SMOKE_CANDLE_CHECK_ID,
+    itemName: def?.name ?? SMOKE_CANDLE_CHECK_ID,
+    itemCount: 1,
+    itemValue: def?.value ?? 0,
+    severity,
+    privacy: 'private',
+    tags: [
+      'player',
+      'inventory',
+      'smoke',
+      'vent_check',
+      state.currentFloor === FloorLevel.MAINTENANCE ? 'maintenance' : 'off_floor',
+      'counterplay',
+    ],
+    data: {
+      result,
+      roomType: room?.type,
+      noiseRecordId,
+      noGasSimulation: true,
+    },
+  });
+}
+
 function handleNoiseInventoryUse(ctx: InventoryUseHandlerContext): boolean {
+  if (ctx.def.id === SMOKE_CANDLE_CHECK_ID) {
+    removeItem(ctx.actor, SMOKE_CANDLE_CHECK_ID, 1);
+    const draft = smokeCandleDraftResult(ctx.state, ctx.world, ctx.actor);
+    const noise = ctx.state ? publishActorNoise(ctx.state, ctx.actor, {
+      x: ctx.actor.x,
+      y: ctx.actor.y,
+      radius: 5,
+      ttl: 3.5,
+      source: 'decoy',
+      severity: 1,
+      itemId: SMOKE_CANDLE_CHECK_ID,
+      tags: ['smoke', 'vent_check', 'inspection'],
+    }, false) : undefined;
+    ctx.msgs.push(msg(draft.text, ctx.time, draft.severity >= 3 ? '#cfd' : '#d8d4bf'));
+    publishSmokeCandleCheckEvent(ctx, draft.result, draft.severity, noise?.id);
+    return true;
+  }
+
   if (ctx.def.id === NOISE_CAN_ID) {
     removeItem(ctx.actor, NOISE_CAN_ID, 1);
     if (ctx.state) {

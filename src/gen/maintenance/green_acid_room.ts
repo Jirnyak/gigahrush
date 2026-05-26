@@ -24,7 +24,7 @@ function acidRisk(): GreenAcidDropData {
 }
 
 function acidSample(): GreenAcidDropData {
-  return { ag64GreenAcid: true, sample: true };
+  return { ag64GreenAcid: true, organicRisk: true, sample: true };
 }
 
 function dropAt(ctx: MaintContentCtx, x: number, y: number, defId: string, data?: unknown): void {
@@ -86,7 +86,7 @@ export function generateGreenAcidRoom(ctx: MaintContentCtx): void {
   markWarningSmears(ctx, room.x + 11, room.y + 5);
 
   dropAt(ctx, room.x + 2, room.y + 2, 'note',
-    'Журнал НИИ Слизи, ОВС: зелёная проба ест органику и ткань. Брать через фильтрующий слой; без него повторная попытка испортит добычу и форму 728/01-Д.');
+    'Журнал НИИ Слизи, ОВС: зелёная проба ест органику и ткань. Брать через фильтрующий слой или санитарные щипцы; без них повторная попытка испортит добычу и форму 728/01-Д.');
   dropAt(ctx, room.x + 4, room.y + 2, 'filter_layer');
   dropAt(ctx, room.x + 5, room.y + 2, 'filter_layer');
   dropAt(ctx, room.x + 6, room.y + 2, 'rubber_strip');

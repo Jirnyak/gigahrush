@@ -44,7 +44,12 @@ export function drawGamblingOverlay(
 
   ctx.font = `${8 * s}px monospace`;
   ctx.fillStyle = game.canSubmit ? '#8f8' : '#f86';
-  ctx.fillText(fitText(ctx, game.canSubmit ? 'Автомат принимает ставку.' : 'Наличных не хватает.', maxW), x + pad, y + 102 * s);
+  const stakeLine = game.itemStakeName
+    ? `${game.itemStakeName}: ставка ${rub(game.itemStakeRubles)}.`
+    : game.canSubmit
+      ? 'Автомат принимает ставку.'
+      : 'Наличных не хватает.';
+  ctx.fillText(fitText(ctx, stakeLine, maxW), x + pad, y + 102 * s);
   if (game.message) {
     ctx.fillStyle = '#d7f7ff';
     ctx.fillText(fitText(ctx, game.message, maxW), x + pad, y + 119 * s);

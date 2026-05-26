@@ -43,6 +43,7 @@ export const REGISTRY_MORGUE_ROUTE_ID = 'registry_morgue' as const;
 export const REGISTRY_MORGUE_FUTURE_Z = 18 as const;
 export const REGISTRY_MORGUE_BASE_FLOOR = FloorLevel.MINISTRY;
 export const REGISTRY_MORGUE_DEBUG_ENTRY = 'design_floor.registry_morgue' as const;
+const CORPSE_NUMBER_TAG_ITEM = 'corpse_number_tag' as const;
 
 const REGISTRY_MORGUE_TARGET_ROUTE = {
   designFloorId: REGISTRY_MORGUE_ROUTE_ID,
@@ -157,12 +158,12 @@ registerSideQuest('morgue_registrar_faina', NPC_DEFS.morgue_registrar_faina, [
     id: 'morgue_find_tag',
     giverNpcId: 'morgue_registrar_faina',
     type: QuestType.FETCH,
-    desc: 'Фаина Реестровая: «Верните бирку из холодной камеры. Без нее живого человека можно закрыть бумагой, а потом искать уже по форме.»',
-    targetItem: 'container_key_label', targetCount: 1,
+    desc: 'Фаина Реестровая: «Верните номерок из холодной камеры. Без него живого человека можно закрыть бумагой, а потом искать уже по форме.»',
+    targetItem: CORPSE_NUMBER_TAG_ITEM, targetCount: 1,
     targetFloor: REGISTRY_MORGUE_BASE_FLOOR,
     targetRoute: REGISTRY_MORGUE_TARGET_ROUTE,
     targetRoomName: 'Холодная камера-укрытие',
-    targetHint: 'бирка лежит в холодной картотеке; взять ее без сдачи можно как кражу из моргового хранения',
+    targetHint: 'номерок лежит в холодной картотеке; взять его без сдачи можно как кражу из моргового хранения',
     rewardItem: 'official_quarantine_clearance', rewardCount: 1,
     extraRewards: [{ defId: 'clean_health_cert', count: 1 }],
     relationDelta: 14, xpReward: 65, moneyReward: 55,
@@ -794,6 +795,7 @@ function seedRegistryMorgueContainers(
     'owner',
     [
       { defId: 'missing_record_file', count: 1 },
+      { defId: CORPSE_NUMBER_TAG_ITEM, count: 1 },
       { defId: 'container_key_label', count: 1 },
       { defId: 'emergency_roster', count: 1 },
     ],

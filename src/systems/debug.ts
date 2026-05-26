@@ -1179,7 +1179,7 @@ export function execDebugCommand(
     case 0: { // All weapons + ammo + PSI spells — spawn as drops around player
       const allItems: { defId: string; count: number }[] = [
         // weapons
-        ...['knife', 'wrench', 'pipe', 'rebar', 'axe', 'makarov', 'shotgun', 'nailgun',
+        ...['knife', 'wrench', 'pipe', 'rebar', 'axe', 'liquidator_rake', 'makarov', 'shotgun', 'nailgun',
           'chainsaw', 'ppsh', 'machinegun', 'gauss', 'plasma', 'bfg', 'flamethrower']
           .map(w => ({ defId: w, count: 1 })),
         { defId: 'uv_spotlight', count: 1 },

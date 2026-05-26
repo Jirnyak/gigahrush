@@ -10,6 +10,7 @@ import {
 import { World } from '../../core/world';
 import { MONSTERS, entityDisplayName, type MonsterAIFlag, type MonsterDef } from '../../entities/monster';
 import { ITEMS, ITEM_TAGS } from '../../data/items';
+import { droppedToolLightScore, equippedToolLightScore } from '../../data/tool_lights';
 import {
   playGrowl,
   playFogSharkBite,
@@ -3881,7 +3882,7 @@ function entityLight(world: World, e: Entity): number {
 }
 
 function entityHasEquippedLight(e: Entity): boolean {
-  return e.tool === 'flashlight' || e.tool === 'uv_spotlight';
+  return equippedToolLightScore(e.tool) > 0;
 }
 
 interface LishennyyLightTarget {
@@ -3896,7 +3897,7 @@ interface LishennyyLightTarget {
 function lishennyyActorLightScore(world: World, e: Entity): number {
   if (!canBeMonsterTarget(e)) return 0;
   let score = entityLight(world, e);
-  if (entityHasEquippedLight(e)) score = Math.max(score, e.tool === 'uv_spotlight' ? 0.86 : 0.72);
+  score = Math.max(score, equippedToolLightScore(e.tool));
   if (nearFeature(world, e, Feature.LAMP, 1)) score = Math.max(score, 0.62);
   if (nearFeature(world, e, Feature.CANDLE, 1)) score = Math.max(score, 0.48);
   return score;
@@ -3908,12 +3909,10 @@ function lishennyyDropLight(drop: Entity): { score: number; itemId: string } | n
   let bestItem = '';
   for (const item of drop.inventory ?? []) {
     if (item.count <= 0) continue;
-    let score = 0;
-    if (item.defId === 'uv_spotlight') score = 0.82;
-    else if (item.defId === 'flashlight') score = 0.74;
-    else if (item.defId === 'istotit_candle') score = 0.64;
+    let score = droppedToolLightScore(item.defId);
+    if (item.defId === 'istotit_candle') score = 0.64;
     else if (item.defId === 'lamp_bulb') score = 0.32;
-    else continue;
+    else if (score <= 0) continue;
     if (score > bestScore) {
       bestScore = score;
       bestItem = item.defId;

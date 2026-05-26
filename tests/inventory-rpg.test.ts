@@ -1,11 +1,14 @@
 import { test } from 'node:test';
 import * as assert from 'node:assert/strict';
 
-import { AIGoal, Cell, EntityType, Faction, ItemType, MonsterKind, type Entity, type Msg } from '../src/core/types';
+import { AIGoal, Cell, ContainerKind, EntityType, Faction, FloorLevel, ItemType, MonsterKind, RoomType, type Entity, type Msg } from '../src/core/types';
 import { World } from '../src/core/world';
+import { CONTAINER_DEFS } from '../src/data/container_defs';
 import { ITEMS, WEAPON_STATS } from '../src/data/catalog';
+import { CONTRACTS } from '../src/data/contracts';
+import { getPermitDef } from '../src/data/permits';
 import { PSI_WEAPON_STATS } from '../src/data/psi';
-import { RESOURCES, resourceForItemType } from '../src/data/resources';
+import { RESOURCES, resourceForItem, resourceForItemType } from '../src/data/resources';
 import { ITEM_TAGS, getStack, spawnCount } from '../src/data/items';
 import {
   addItem,
@@ -13,8 +16,11 @@ import {
   consumeDurability,
   countAmmo,
   getEquippedDurability,
+  getEquippedToolDurability,
+  getInventorySlotActionInfo,
   getWeaponReadiness,
   getWeaponStats,
+  inventoryItemCategory,
   useItem,
 } from '../src/systems/inventory';
 import {
@@ -97,6 +103,58 @@ test('item stack rules keep weapons single-slot and commodities stackable', () =
   assert.ok(pipes.every(i => (i.data as { dur?: number }).dur === WEAPON_STATS.pipe.durability));
 });
 
+test('ip4 gasmask is finite respiratory PPE in the tools economy', () => {
+  const def = ITEMS.ip4_gasmask;
+  assert.equal(def.type, ItemType.TOOL);
+  assert.equal(def.durability, 90);
+  assert.equal(resourceForItem(def.id)?.id, 'tools');
+  assert.ok(ITEM_TAGS.ip4_gasmask.includes('respiratory_ppe'));
+
+  const player = makePlayer();
+  const msgs: Msg[] = [];
+  assert.equal(addItem(player, def.id, 1), true);
+  useItem(player, 0, msgs, 12);
+  assert.equal(player.tool, def.id);
+  assert.deepEqual(getEquippedToolDurability(player), { cur: 90, max: 90 });
+});
+
+test('rusty rake is a weak reachable cleanup reach weapon', () => {
+  const item = ITEMS.rusty_rake;
+  const stats = WEAPON_STATS.rusty_rake;
+
+  assert.equal(item.type, ItemType.WEAPON);
+  assert.equal(resourceForItem(item.id)?.id, 'metal');
+  assert.ok(item.spawnRooms.includes(RoomType.STORAGE));
+  assert.ok(item.spawnRooms.includes(RoomType.LIVING));
+  assert.ok(item.tags?.includes('cleanup'));
+  assert.ok(item.tags?.includes('liquidator'));
+  assert.equal(stats.isRanged, false);
+  assert.ok(stats.range > WEAPON_STATS.knife.range);
+  assert.ok(stats.range < WEAPON_STATS.fire_hook.range);
+  assert.ok(stats.dmg < WEAPON_STATS.pipe.dmg);
+  assert.ok(stats.durability < WEAPON_STATS.fire_hook.durability);
+});
+
+test('liquidator rake is weak cleanup reach gear with reachable sources', () => {
+  const item = ITEMS.liquidator_rake;
+  const stats = WEAPON_STATS.liquidator_rake;
+  const cleanupContract = CONTRACTS.find(def => def.id === 'exp_maint_furnace_burn_residue');
+
+  assert.equal(item.type, ItemType.WEAPON);
+  assert.equal(stats.isRanged, false);
+  assert.ok(stats.dmg < WEAPON_STATS.fire_hook.dmg);
+  assert.ok(stats.range > WEAPON_STATS.pipe.range);
+  assert.ok(stats.range < WEAPON_STATS.fire_hook.range);
+  assert.equal(stats.durability, 70);
+  assert.ok(ITEM_TAGS.liquidator_rake?.includes('liquidator'));
+  assert.ok(ITEM_TAGS.liquidator_rake?.includes('cleanup'));
+  assert.ok(ITEM_TAGS.liquidator_rake?.includes('slime_clean'));
+  assert.equal(resourceForItem(item.id)?.id, 'tools');
+  assert.ok(item.spawnRooms.includes(RoomType.HQ));
+  assert.ok(item.spawnRooms.includes(RoomType.STORAGE));
+  assert.ok(cleanupContract?.extraRewards?.some(reward => reward.defId === item.id));
+});
+
 test('using items equips weapons and consumes medicine only once', () => {
   const player = makePlayer();
   const msgs: Msg[] = [];
@@ -111,6 +169,53 @@ test('using items equips weapons and consumes medicine only once', () => {
   useItem(player, 1, msgs, 11);
   assert.equal(player.hp, 35);
   assert.equal(player.inventory?.some(i => i.defId === 'bandage'), false);
+});
+
+test('inventory E toggles equipped weapon and active tool off', () => {
+  const player = makePlayer();
+  const msgs: Msg[] = [];
+
+  assert.equal(addItem(player, 'knife', 1), true);
+  assert.equal(getInventorySlotActionInfo(player, 0)?.useLabel, 'E экипировать');
+  useItem(player, 0, msgs, 20);
+  assert.equal(player.weapon, 'knife');
+  assert.equal(getInventorySlotActionInfo(player, 0)?.useLabel, 'E снять');
+
+  useItem(player, 0, msgs, 21);
+  assert.equal(player.weapon, '');
+  assert.deepEqual(player.inventory?.map(item => item.defId), ['knife']);
+
+  assert.equal(addItem(player, 'ip4_gasmask', 1), true);
+  assert.equal(getInventorySlotActionInfo(player, 1)?.useLabel, 'E в инструмент');
+  useItem(player, 1, msgs, 22);
+  assert.equal(player.tool, 'ip4_gasmask');
+  assert.equal(getInventorySlotActionInfo(player, 1)?.useLabel, 'E снять');
+
+  useItem(player, 1, msgs, 23);
+  assert.equal(player.tool, '');
+  assert.deepEqual(player.inventory?.map(item => item.defId), ['knife', 'ip4_gasmask']);
+  assert.ok(msgs.some(entry => /Оружие снято/.test(entry.text)));
+  assert.ok(msgs.some(entry => /Инструмент снят/.test(entry.text)));
+});
+
+test('painkiller pack is reachable medicine with sleep tradeoff', () => {
+  const item = ITEMS.painkiller_pack;
+  const player = makePlayer();
+  const msgs: Msg[] = [];
+
+  assert.equal(item.type, ItemType.MEDICINE);
+  assert.ok(item.spawnRooms.includes(RoomType.MEDICAL));
+  assert.equal(resourceForItem(item.id)?.id, 'medicine');
+  assert.ok(ITEM_TAGS.painkiller_pack?.includes('pain'));
+
+  player.hp = 40;
+  player.needs = { food: 100, water: 80, sleep: 30, pee: 0, poo: 0 };
+  addItem(player, item.id, 1);
+  useItem(player, 0, msgs, 12);
+
+  assert.equal(player.hp, 50);
+  assert.equal(player.needs.sleep, 24);
+  assert.equal(player.inventory?.some(i => i.defId === item.id), false);
 });
 
 test('using zhelemish resource applies timed skin and antifungal medicine cures it', () => {
@@ -169,6 +274,34 @@ test('ammo and durability consumption update equipped combat state', () => {
   assert.equal(consumeDurability(player, msgs, 21), true);
   assert.equal(player.weapon, '');
   assert.equal(player.inventory?.some(i => i.defId === 'knife'), false);
+});
+
+test('liquidator weapon wave uses existing ammo and self-ammo paths', () => {
+  const shotgunner = makePlayer();
+  addItem(shotgunner, 'chizh3_shotgun', 1);
+  addItem(shotgunner, 'ammo_shells', 3);
+  shotgunner.weapon = 'chizh3_shotgun';
+  let readiness = getWeaponReadiness(shotgunner);
+  assert.equal(readiness.resourceLabel, 'дробь 3');
+  assert.equal(readiness.damageLabel, '10x8');
+  assert.equal(consumeAmmo(shotgunner), true);
+  assert.equal(countAmmo(shotgunner), 2);
+
+  const flamer = makePlayer();
+  addItem(flamer, 'roks47_flamethrower', 1);
+  addItem(flamer, 'napalm_mix', 2);
+  flamer.weapon = 'roks47_flamethrower';
+  readiness = getWeaponReadiness(flamer);
+  assert.equal(readiness.resourceLabel, 'напалм 2');
+  assert.equal(readiness.damageLabel, '5x2');
+
+  const disposable = makePlayer();
+  addItem(disposable, 'shmk_disposable', 2);
+  disposable.weapon = 'shmk_disposable';
+  readiness = getWeaponReadiness(disposable);
+  assert.equal(readiness.resourceLabel, 'ШМК 2');
+  assert.equal(consumeAmmo(disposable), true);
+  assert.equal(countAmmo(disposable), 1);
 });
 
 test('NPC melee stop pushes targets through the generic faction combat path', () => {
@@ -376,19 +509,105 @@ test('audited survival documents, drinks, and rare trophies have economy roles',
   for (const id of [
     'official_permit_slip', 'weapon_permit_signed', 'ammo_issue_order',
     'official_quarantine_clearance', 'elevator_access_order', 'void_archive_warrant',
-    'pneumomail_capsule',
+    'pneumomail_capsule', 'p14_gasmask_receipt', 'cleanup_order_stub',
   ]) {
     assert.ok(byId.documents.itemIds.includes(id), `${id} must affect document scarcity`);
     assert.ok(ITEM_TAGS[id]?.includes('document'), `${id} must publish document tags`);
   }
+  assert.ok(byId.documents.itemIds.includes('nii_sample_container'), 'sample container must affect document scarcity');
+  assert.ok(byId.slime_samples.itemIds.includes('nii_sample_container'), 'sample container must remain in the sampleware economy');
+  assert.ok(ITEM_TAGS.nii_sample_container?.includes('sampleware'));
+  assert.ok(ITEM_TAGS.nii_sample_container?.includes('document'));
+  assert.equal(ITEM_TAGS.nii_sample_container?.includes('sample'), false, 'empty sampleware must not be treated as a taken sample');
+  assert.equal(getStack(ITEMS.nii_sample_container), 4);
 
   for (const id of ['bottled_voice', 'siren_shard', 'void_spike']) {
     assert.ok(byId.psi.itemIds.includes(id), `${id} must price as a PSI/void trophy`);
     assert.ok(ITEM_TAGS[id]?.includes('rare_trophy'), `${id} must publish rare trophy tags`);
   }
 
+  assert.ok(byId.electronics.itemIds.includes('field_radio_battery'));
+  assert.deepEqual(ITEMS.field_radio_battery.spawnRooms, [RoomType.STORAGE, RoomType.OFFICE]);
+
+  assert.equal(resourceForItem('asbestos_cord')?.id, 'tools');
+  assert.ok(byId.tools.itemIds.includes('asbestos_cord'));
+  assert.equal(ITEMS.asbestos_cord.name, 'Асбестовая верёвка');
+  assert.deepEqual(ITEMS.asbestos_cord.spawnRooms, [RoomType.PRODUCTION, RoomType.STORAGE]);
+  for (const tag of ['repair', 'heatline', 'hermetic', 'seal_input', 'cold_counter']) {
+    assert.ok(ITEM_TAGS.asbestos_cord?.includes(tag), `asbestos_cord must publish ${tag}`);
+  }
+
+  assert.equal(resourceForItem('ozk_patch')?.id, 'tools');
+  assert.deepEqual(ITEMS.ozk_patch.spawnRooms, [RoomType.MEDICAL, RoomType.HQ, RoomType.STORAGE]);
+  assert.ok(ITEM_TAGS.ozk_patch?.includes('repair_input'));
+  assert.ok(ITEMS.ozk_patch.tags?.includes('liquidator'));
+
   assert.ok(byId.contraband.itemIds.includes('shark_scale'));
   assert.ok(ITEMS.shark_scale.spawnW > 0);
+  assert.ok(byId.tools.itemIds.includes('cleanup_tongs'));
+  assert.equal(ITEMS.cleanup_tongs.type, ItemType.TOOL);
+  assert.ok(ITEM_TAGS.cleanup_tongs?.includes('sample_handling'));
+
+  assert.equal(resourceForItem('lime_bucket')?.id, 'tools');
+  assert.deepEqual(ITEMS.lime_bucket.spawnRooms, [RoomType.PRODUCTION, RoomType.STORAGE]);
+  assert.equal(ITEMS.lime_bucket.stack, 1);
+  for (const tag of ['cleanup', 'lime', 'sanitary', 'evidence', 'heavy']) {
+    assert.ok(ITEM_TAGS.lime_bucket?.includes(tag), `lime_bucket must publish ${tag}`);
+  }
+  assert.equal(CONTAINER_DEFS[ContainerKind.TOOL_LOCKER].itemPool.some(item => item.defId === 'lime_bucket'), true);
+});
+
+test('P14 gasmask receipt is an Office/HQ document with a black-market spend path', () => {
+  const def = ITEMS.p14_gasmask_receipt;
+  assert.equal(def.name, 'Квитанция 8П14');
+  assert.equal(def.type, ItemType.MISC);
+  assert.ok(def.spawnRooms.includes(RoomType.OFFICE));
+  assert.ok(def.spawnRooms.includes(RoomType.HQ));
+  assert.equal(inventoryItemCategory(def.id), 'documents');
+
+  const player = makePlayer();
+  const state = makeGameState({ currentFloor: FloorLevel.LIVING });
+  const msgs: Msg[] = [];
+  assert.equal(addItem(player, def.id, 1), true);
+
+  useItem(player, 0, msgs, 30, state);
+
+  assert.equal(player.inventory?.some(item => item.defId === def.id), false);
+  assert.equal(player.money, 28);
+  const sale = getRecentEvents(state, { type: 'player_sell_item', limit: 1 })[0];
+  assert.equal(sale.itemId, def.id);
+  assert.ok(sale.tags.includes('black_market'));
+  assert.ok(sale.tags.includes('liquidator'));
+});
+
+test('cleanup order stub is a liquidator document with access and sale choices', () => {
+  const def = ITEMS.cleanup_order_stub;
+  assert.equal(def.name, 'Корешок приказа на зачистку');
+  assert.equal(def.type, ItemType.MISC);
+  assert.ok(def.spawnRooms.includes(RoomType.OFFICE));
+  assert.ok(def.spawnRooms.includes(RoomType.HQ));
+  assert.equal(resourceForItem(def.id)?.id, 'documents');
+  assert.equal(inventoryItemCategory(def.id), 'documents');
+  assert.ok(ITEM_TAGS.cleanup_order_stub?.includes('liquidator'));
+
+  const permit = getPermitDef(def.id);
+  assert.ok(permit);
+  assert.ok(permit.accessTags.includes('archive'));
+  assert.ok(permit.accessTags.includes('general_admin'));
+
+  const player = makePlayer();
+  const state = makeGameState({ currentFloor: FloorLevel.LIVING });
+  const msgs: Msg[] = [];
+  assert.equal(addItem(player, def.id, 1), true);
+
+  useItem(player, 0, msgs, 30, state);
+
+  assert.equal(player.inventory?.some(item => item.defId === def.id), false);
+  assert.equal(player.money, 46);
+  const sale = getRecentEvents(state, { type: 'player_sell_item', limit: 1 })[0];
+  assert.equal(sale.itemId, def.id);
+  assert.ok(sale.tags.includes('black_market'));
+  assert.ok(sale.tags.includes('trade'));
 });
 
 test('RPG rewards, attribute spend, and scaling formulas remain stable', () => {

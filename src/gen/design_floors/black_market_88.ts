@@ -127,6 +127,16 @@ export const BLACK_MARKET_88_STOCK: readonly Market88StockRow[] = [
     maxPrice: 260,
   },
   {
+    id: 'market88.purchase.popobava_blister',
+    traderId: 'market88_marta_broker',
+    lane: 'medicine',
+    itemId: 'sleeping_pills',
+    count: 2,
+    markup: 1.65,
+    heatDelta: 3,
+    maxPrice: 180,
+  },
+  {
     id: 'market88.purchase.panic_bandages',
     traderId: 'market88_uliana_cash',
     lane: 'survival',
@@ -147,6 +157,26 @@ export const BLACK_MARKET_88_STOCK: readonly Market88StockRow[] = [
     maxPrice: 16,
   },
   {
+    id: 'market88.purchase.homemade_9mm',
+    traderId: 'market88_zhoka_knife',
+    lane: 'weapons',
+    itemId: 'homemade_9mm',
+    count: 6,
+    markup: 1.55,
+    heatDelta: 5,
+    maxPrice: 38,
+  },
+  {
+    id: 'market88.purchase.homemade_ammo_instruction',
+    traderId: 'market88_zlata_silence',
+    lane: 'documents',
+    itemId: 'homemade_ammo_instruction',
+    count: 1,
+    markup: 2.05,
+    heatDelta: 4,
+    maxPrice: 260,
+  },
+  {
     id: 'market88.purchase.false_pass',
     traderId: 'market88_zlata_silence',
     lane: 'documents',
@@ -154,6 +184,126 @@ export const BLACK_MARKET_88_STOCK: readonly Market88StockRow[] = [
     count: 1,
     markup: 2.4,
     heatDelta: 5,
+    maxPrice: 190,
+  },
+  {
+    id: 'market88.purchase.stolen_terminal_stamp',
+    traderId: 'market88_zlata_silence',
+    lane: 'documents',
+    itemId: 'stolen_terminal_stamp',
+    count: 1,
+    markup: 2.25,
+    heatDelta: 6,
+    maxPrice: 420,
+  },
+  {
+    id: 'market88.purchase.black_shells',
+    traderId: 'market88_zhoka_knife',
+    lane: 'weapons',
+    itemId: 'black_market_shells',
+    count: 4,
+    markup: 2.6,
+    heatDelta: 6,
+    maxPrice: 180,
+  },
+  {
+    id: 'market88.purchase.shock_baton_under_shelf',
+    traderId: 'market88_zhoka_knife',
+    lane: 'weapons',
+    itemId: 'shock_baton',
+    count: 1,
+    markup: 1.85,
+    heatDelta: 5,
+    maxPrice: 780,
+  },
+  {
+    id: 'market88.purchase.rb91_drum_box',
+    traderId: 'market88_zhoka_knife',
+    lane: 'weapons',
+    itemId: 'rb91_auto_shotgun',
+    count: 1,
+    markup: 1.75,
+    heatDelta: 9,
+    maxPrice: 6200,
+  },
+  {
+    id: 'market88.purchase.pushkin_shell_platform',
+    traderId: 'market88_zhoka_knife',
+    lane: 'weapons',
+    itemId: 'pushkin_shotgun',
+    count: 1,
+    markup: 1.95,
+    heatDelta: 10,
+    maxPrice: 6800,
+  },
+  {
+    id: 'market88.purchase.chest_failsafe_charge',
+    traderId: 'market88_zhoka_knife',
+    lane: 'weapons',
+    itemId: 'chest_failsafe_charge',
+    count: 1,
+    markup: 2.4,
+    heatDelta: 12,
+    maxPrice: 5200,
+  },
+  {
+    id: 'market88.purchase.stolen_filters',
+    traderId: 'market88_marta_broker',
+    lane: 'survival',
+    itemId: 'stolen_filter_pack',
+    count: 1,
+    markup: 1.7,
+    heatDelta: 4,
+    maxPrice: 240,
+  },
+  {
+    id: 'market88.purchase.braga_bucket',
+    traderId: 'market88_marta_broker',
+    lane: 'survival',
+    itemId: 'braga_bucket',
+    count: 1,
+    markup: 1.55,
+    heatDelta: 3,
+    maxPrice: 220,
+  },
+  {
+    id: 'market88.purchase.moonshine_still_part',
+    traderId: 'market88_marta_broker',
+    lane: 'access',
+    itemId: 'moonshine_still_part',
+    count: 1,
+    markup: 1.9,
+    heatDelta: 4,
+    maxPrice: 320,
+  },
+  {
+    id: 'market88.purchase.weapon_blueprint_t2',
+    traderId: 'market88_zlata_silence',
+    lane: 'documents',
+    itemId: 'weapon_blueprint_t2',
+    count: 1,
+    markup: 2.2,
+    heatDelta: 7,
+    maxPrice: 720,
+  },
+  {
+    id: 'market88.purchase.shocker_parts',
+    traderId: 'market88_zhoka_knife',
+    lane: 'weapons',
+    itemId: 'contraband_shocker_parts',
+    count: 1,
+    markup: 2,
+    heatDelta: 5,
+    maxPrice: 360,
+  },
+  {
+    id: 'market88.purchase.maiden_paint_can',
+    traderId: 'market88_zlata_silence',
+    lane: 'access',
+    itemId: 'aerosol_paint_maiden',
+    count: 2,
+    markup: 1.9,
+    heatDelta: 3,
     maxPrice: 190,
   },
 ];
@@ -334,6 +484,8 @@ const NPC_DEFS: Record<string, PlotNpcDef> = {
       { defId: 'ammo_9mm', count: 18 },
       { defId: 'ammo_shells', count: 3 },
       { defId: 'liquidator_token', count: 1 },
+      { defId: 'ip4_gasmask', count: 1 },
+      { defId: 'shock_baton', count: 1 },
     ],
     talkLines: [
       'Оружейный ряд не любит скидки. Скидка звучит как донос.',
@@ -691,12 +843,12 @@ export function applyBlackMarket88RaidWarning(state: Market88DesignState, now: n
 
 export function applyBlackMarket88SamosborDemand(
   state: Market88DesignState,
-  variant: 'classic' | 'quiet' | 'wet' | 'electric' | 'meat',
+  variant: 'classic' | 'wet' | 'electric' | 'meat',
 ): Market88DesignResult {
-  if (variant === 'classic' || variant === 'quiet') {
+  if (variant === 'classic') {
     state.demand.survival = clamp(state.demand.survival + 0.35, 0.75, 2.75);
     state.demand.medicine = clamp(state.demand.medicine + 0.3, 0.75, 2.75);
-    state.heat = clamp(state.heat + (variant === 'quiet' ? 8 : 4), 0, MAX_HEAT);
+    state.heat = clamp(state.heat + 4, 0, MAX_HEAT);
   } else if (variant === 'wet') {
     state.demand.survival = clamp(state.demand.survival + 0.25, 0.75, 2.75);
     state.demand.access = clamp(state.demand.access + 0.2, 0.75, 2.75);
@@ -1578,10 +1730,12 @@ function seedMarketContainers(world: World, rooms: MarketRooms, npcs: Record<str
   ], ['market88', 'documents', 'contract', 'steal_stamp'], npcs.market88_zlata_silence);
 
   addContainer(world, rooms.weaponStall, 9, 5, ContainerKind.WEAPON_CRATE, 'Запертый оружейный ящик 88', 'faction', 6, [
+    { defId: 'shock_baton', count: 1 },
+    { defId: 'pushkin_shotgun', count: 1 },
     { defId: 'ammo_9mm', count: 18 },
     { defId: 'ammo_shells', count: 3 },
     { defId: 'liquidator_token', count: 1 },
-  ], ['market88', 'weapons', 'raid_lock', 'theft'], npcs.market88_zhoka_knife, Faction.LIQUIDATOR, 3);
+  ], ['market88', 'weapons', 'control', 'ovb', 'raid_lock', 'theft'], npcs.market88_zhoka_knife, Faction.LIQUIDATOR, 3);
 
   addContainer(world, rooms.medicineLocker, 9, 5, ContainerKind.MEDICAL_CABINET, 'Лекарственный долг 88', 'owner', 6, [
     { defId: 'pills', count: 2 },

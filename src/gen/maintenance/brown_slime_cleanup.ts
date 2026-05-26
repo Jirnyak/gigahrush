@@ -10,7 +10,10 @@ import {
 
 const ROOM_NAME = 'Сухой обход: коричневая слизь';
 const BROWN_SAMPLE_ITEM = 'slime_sample_brown';
+const BROWN_LABEL_ITEM = 'slime_age_label_brown';
 const CLEANUP_ACT_ITEM = 'brown_slime_cleanup_act';
+const ALKALI_POWDER_ITEM = 'alkali_powder';
+const SLIME_SCRAPER_ITEM = 'slime_scraper';
 
 function addResidueCell(ctx: MaintContentCtx, cells: number[], roomId: number, x: number, y: number): void {
   const ci = ctx.world.idx(x, y);
@@ -78,23 +81,25 @@ export function generateBrownSlimeCleanup(ctx: MaintContentCtx): void {
     zoneId: ctx.world.zoneMap[ctx.world.idx(room.x + 6, room.y + 4)],
     centerX: room.x + 7.5,
     centerY: room.y + 4.5,
-    warning: 'Токсичная коричневая слизь держит обувь и несёт запах в стояк. Чистящий комплект или огонь снимают пятно.',
+    warning: 'Токсичная коричневая слизь держит обувь и несёт запах в стояк. Скребок, чистящий комплект или огонь снимают пятно.',
   });
 
-  dropItems(ctx, room, ['cleaning_kit', 'gasmask_filter', 'filter_layer', 'water', 'ammo_fuel']);
-  dropAt(ctx, room.x + 2, room.y + 2, 'flamethrower');
+  dropItems(ctx, room, ['liquidator_rake', 'cleaning_kit', SLIME_SCRAPER_ITEM, ALKALI_POWDER_ITEM, 'gasmask_filter', 'filter_canister', 'filter_layer', 'wet_rag_bundle', 'decon_fluid', 'water', 'ammo_fuel']);
+  dropAt(ctx, room.x + 2, room.y + 2, 'agnia_a130');
   dropAt(ctx, room.x + 3, room.y + 2, 'ammo_fuel');
   dropAt(ctx, room.x + 4, room.y + 2, 'ammo_fuel');
   dropAt(ctx, room.x + 5, room.y + 2, CLEANUP_ACT_ITEM, 2);
+  dropAt(ctx, room.x + 6, room.y + 2, BROWN_LABEL_ITEM, 2,
+    'Бирки первичного налёта: с ними коричневая проба выглядит как отчёт, а не как банка из-под кухни.');
   dropAt(ctx, room.x + 7, room.y + 3, BROWN_SAMPLE_ITEM, 1,
     'Пломба санобхода: коричневая проба после сухой зачистки.');
   dropAt(ctx, room.x + 6, room.y + 4, 'infected_mushroom', 2);
   dropAt(ctx, room.x + 8, room.y + 5, 'cloth_roll');
   dropAt(ctx, room.x + 10, room.y + 3, 'note', 1,
-    'Памятка санпоста: коричневую слизь считать токсичной до акта и после акта руками не трогать. Пробу в пломбе можно сдать Боковой, прожечь в печи или продать без журнала. Огонь быстрее комплекта, но бензин не выдаётся повторно.');
+    'Памятка санпоста: коричневую слизь считать токсичной до акта и после акта руками не трогать. Скребок годится для края пятна; комплект быстрее, огонь быстрее комплекта, но бензин не выдаётся повторно. Жидкость и фильтры списывать по факту дыхания. Пробу в пломбе можно сдать Боковой, прожечь в печи с щёлочной присыпкой или продать без журнала.');
   spawnAmbientNpc(
     ctx, 'Трофим Санобход', Faction.CITIZEN, Occupation.LOCKSMITH,
     room.x + 2, room.y + room.h - 2,
-    [{ defId: 'cleaning_kit', count: 1 }, { defId: 'ammo_fuel', count: 1 }, { defId: 'water_coupon', count: 1 }],
+    [{ defId: SLIME_SCRAPER_ITEM, count: 1 }, { defId: 'cleaning_kit', count: 1 }, { defId: 'ammo_fuel', count: 1 }, { defId: 'water_coupon', count: 1 }],
   );
 }

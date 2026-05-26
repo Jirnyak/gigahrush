@@ -674,7 +674,6 @@ function setRuntime(mode: NetTerminalGenOverlayMode, terminal?: NetTerminalGenTe
         ? 'НЕТ-БАНК'
         : '';
   if (mode === 'closed') runtime.bankMessage = '';
-  if (runtime.open && typeof document !== 'undefined' && document.pointerLockElement) document.exitPointerLock();
 }
 
 export function markNetTerminalGenDenied(state: GameState): NetTerminalGenState {

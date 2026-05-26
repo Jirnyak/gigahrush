@@ -53,7 +53,7 @@ const BORYA_DEF: PlotNpcDef = {
   talkLines: [
     'Я сцепщик без состава. Тут это нормальная должность.',
     'Красная нижняя ходит быстрее всех. Поэтому чаще всего приезжает не туда.',
-    'Предохранитель в стрелке важнее ругани и дешевле патронов.',
+    'Рукоять стрелки тяжелее предохранителя. Без неё маршрут спорит с рукой.',
   ],
   talkLinesPost: [
     'Если лампа над третьим табло моргнула дважды — держи оружие ближе.',
@@ -99,14 +99,27 @@ registerSideQuest('ag19_zhanna_ticket', ZHANNA_DEF, [
 
 registerSideQuest('ag19_borya_conductor', BORYA_DEF, [
   {
-    id: 'ag19_switch_fuses',
+    id: 'ag19_switch_handle',
     giverNpcId: 'ag19_borya_conductor',
     type: QuestType.FETCH,
-    desc: 'Боря: «Два предохранителя для стрелки. Если стрелка молчит, поезд сам выбирает, кого наказать.»',
-    targetItem: 'fuse', targetCount: 2,
+    desc: 'Боря: «Рукоять стрелочного перевода принеси. Предохранитель найдём, а без рукояти поезд сам выбирает, кого наказать.»',
+    targetItem: 'rail_switch_handle', targetCount: 1,
     rewardItem: 'metro_ticket', rewardCount: 3,
     extraRewards: [{ defId: 'clean_health_cert', count: 1 }, { defId: 'wrench', count: 1 }],
     relationDelta: 12, xpReward: 55, moneyReward: 45,
+  },
+  {
+    id: 'ag19_signal_lamp',
+    giverNpcId: 'ag19_borya_conductor',
+    type: QuestType.FETCH,
+    desc: 'Боря: «Сигнальную лампу депо принеси. Белый обратный огонь без неё моргает как чужой глаз.»',
+    targetItem: 'rail_signal_lamp', targetCount: 1,
+    rewardItem: 'fuse', rewardCount: 1,
+    extraRewards: [{ defId: 'metro_ticket', count: 1 }],
+    relationDelta: 8, xpReward: 35, moneyReward: 25,
+    requiresSideQuestDone: 'ag19_switch_handle',
+    eventTags: ['metro_error_line', 'rail_signal_lamp', 'repair', 'transport'],
+    eventData: { repair: 'depot_signal_lamp' },
   },
 ]);
 
@@ -178,7 +191,7 @@ export function generateMetroErrorLine(ctx: MaintContentCtx): void {
   spawnPlotNpc(ctx, 'ag19_lost_passenger', LOST_DEF, errorPocket.x + 5, errorPocket.y + 2, 0);
 
   dropItems(ctx, platform, ['metro_ticket', 'metro_ticket', 'note', 'water', 'cigs']);
-  dropItems(ctx, depot, ['fuse', 'fuse', 'wrench', 'pipe', 'clean_health_cert']);
+  dropItems(ctx, depot, ['fuse', 'fuse', 'wrench', 'pipe', 'clean_health_cert', 'rail_depot_pass', 'track_diagram_scrap', 'rail_switch_handle', 'rail_signal_lamp', 'rail_spike_pack']);
   dropItems(ctx, errorPocket, ['metro_ticket', 'child_map', 'bandage']);
   spawnMonstersNear(ctx, errorPocket.x + 6, errorPocket.y + 2, [
     MonsterKind.POLZUN, MonsterKind.REBAR, MonsterKind.SBORKA,

@@ -2,6 +2,8 @@
 
 Дата составления: 2026-05-22. Частично устарело после волн 2026-05-23/2026-05-24; актуальный operational queue для следующих площадок см. в `Docs/PRCampaign/next_wave_targets_2026-05-23.md`, `Docs/PRCampaign/PR_12.md` и `Docs/PRCampaign/kpi_report_2026-05-24.md`.
 
+Миграция 2026-05-26: это расписание нельзя использовать для новых отправок без правки контакта. Новые посты, регистрации и письма идут от `Tenevik Games` / `tenevik.games@gmail.com`; `jirnyak@gmail.com`, `jirnyak` и `https://jirny.uk` остаются только историческими фактами уже отправленных писем/постов.
+
 Отсчет начинался после действий 2026-05-22. Важные обновления 2026-05-23/24: новый non-NSFW r/playmygame пост опубликован, 2ch /b/ live thread опубликован и перешел в monitoring, Newgrounds стал RIP/upload-blocked, IndieDB создан, DiscoverGG/Fake Portal/FreeZonePlay отправлены на review/contact, Gamemoor и Free Indie Games заблокированы broken submit paths, email batches 1-3 уже отправлены. Ничего из этого расписания не отправлять наружу автоматически: каждый пункт требует ручной проверки правил площадки, логина и финального подтверждения владельца.
 
 Актуальный медианабор для любых пунктов расписания: `tmp/prcampaign_screenshot_hunt_2026-05-23/selected_best/`. Квадратный 3x3 обзор лежит в `contact_sheet_3x3.png`; индивидуальные GIF/PNG для галерей и питчей брать из той же папки. Правило после PR 13: каждый публичный пост/листинг/девлог требует platform-compliant playable/media plan. Где ссылки разрешены - добавлять playable link; где ссылки запрещены - делать самостоятельный native media post без обхода правил.
@@ -26,7 +28,7 @@
 - Reddit r/Games использовать только в Indie Sunday и только в разрешенном формате; после PR 13 соблюдать cooldown/monitoring.
 - DTF и GameDev.ru уже опубликованы; не дублировать без нового повода.
 - Порталы начинать только после аккаунтов и iframe/browser smoke текущего HTML5 билда.
-- Медиа pitch отправлять только через безопасный outbound: контакт уже подтвержден (`jirnyak`, `jirnyak@gmail.com`), Gmail/Chrome DOM Send работает. Batch 1-3 уже отправлены; следующие письма делать только точечно, без quick follow-up.
+- Медиа pitch отправлять только через безопасный outbound: batch 1-3 уже отправлены исторически со старого контакта; новые письма делать только точечно от `Tenevik Games` / `tenevik.games@gmail.com`, без quick follow-up.
 
 ## 7-дневный график
 

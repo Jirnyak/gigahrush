@@ -1,6 +1,6 @@
 # GIGAH|RUSH itch Page Pack
 
-Status: live itch page updated and public-probed on 2026-05-22.
+Status: live itch page English copy updated and public-probed on 2026-05-26.
 
 ## Main Files
 
@@ -8,9 +8,12 @@ Status: live itch page updated and public-probed on 2026-05-22.
 - `description_ru.md` - legacy Markdown fallback; do not use for the current approved page pass.
 - `description_ru_overkill.html` - legacy stronger copy; do not use for the current approved page pass.
 - `description_ru_overkill.md` - legacy stronger Markdown fallback; do not use for the current approved page pass.
-- `description_ru_approved.html` - current user-approved itch description as an HTML fragment.
-- `description_ru_approved.md` - exact user-approved source text. Do not rewrite or remove existing text; only append after it.
-- `itch_fields_ru.md` - exact title/short-description/tags/screenshot order.
+- `description_en_approved.html` - current English itch description as an HTML fragment.
+- `description_en_approved.md` - exact English source text. Do not rewrite or remove existing text unless a new English public-page pass explicitly requires it.
+- `description_ru_approved.html` - previous Russian approved itch description; keep as historical/source material, not current live page copy.
+- `description_ru_approved.md` - previous Russian source text; keep as historical/source material, not current live page copy.
+- `itch_fields_en.md` - current title/short-description/tags/screenshot order.
+- `itch_fields_ru.md` - previous Russian title/short-description/tag set; keep as historical/source material, not current live page fields.
 - `ITCH_EDITOR_RUNBOOK.md` - exact editor order for the live itch page.
 - `upload_manifest.json` - machine-readable upload roles, dimensions, and priority.
 - `copy_variants_ru.md` - backup page hooks, short descriptions, and devlog titles.
@@ -45,6 +48,6 @@ Status: live itch page updated and public-probed on 2026-05-22.
 
 ## Live Page State
 
-The current live page uses `description_ru_approved.html`, the 12 approved PNG screenshots, and the 2 optimized GIFs from `approved_frontpage_itch/`.
+The current live page uses `description_en_approved.html`, the 12 approved PNG screenshots, and the 2 optimized GIFs from `approved_frontpage_itch/`.
 
 Do not claim a future live-page update until `https://tenevik.itch.io/gigahrush` is checked after saving.

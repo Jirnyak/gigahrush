@@ -22,6 +22,14 @@ interface IslandSpec {
   shardSeed: number;
 }
 
+interface ChaosPocketSpec {
+  x: number;
+  y: number;
+  radius: number;
+  kind: 'spiral' | 'ring' | 'cross' | 'diamond' | 'line';
+  serial: number;
+}
+
 const SPAWN_X = W >> 1;
 const SPAWN_Y = W >> 1;
 
@@ -63,6 +71,38 @@ const VOID_REMOTE_POCKETS: readonly (readonly [number, number])[] = [
   [928, 520], [1023, 846], [688, 1023], [328, 922], [0, 790],
   [122, 390], [512, 1023], [512, 0], [1023, 512],
 ];
+
+const VOID_CHAOS_POCKETS: readonly ChaosPocketSpec[] = [
+  { x: 176, y: 176, radius: 24, kind: 'spiral', serial: 21 },
+  { x: 304, y: 92, radius: 18, kind: 'cross', serial: 22 },
+  { x: 486, y: 120, radius: 22, kind: 'ring', serial: 23 },
+  { x: 742, y: 166, radius: 26, kind: 'spiral', serial: 24 },
+  { x: 918, y: 308, radius: 20, kind: 'diamond', serial: 25 },
+  { x: 808, y: 438, radius: 23, kind: 'line', serial: 26 },
+  { x: 906, y: 704, radius: 25, kind: 'spiral', serial: 27 },
+  { x: 742, y: 884, radius: 20, kind: 'cross', serial: 28 },
+  { x: 552, y: 908, radius: 22, kind: 'ring', serial: 29 },
+  { x: 352, y: 842, radius: 24, kind: 'spiral', serial: 30 },
+  { x: 162, y: 714, radius: 21, kind: 'diamond', serial: 31 },
+  { x: 112, y: 492, radius: 24, kind: 'line', serial: 32 },
+  { x: 274, y: 358, radius: 19, kind: 'ring', serial: 33 },
+  { x: 884, y: 96, radius: 17, kind: 'spiral', serial: 34 },
+  { x: 1008, y: 898, radius: 18, kind: 'cross', serial: 35 },
+  { x: 42, y: 222, radius: 19, kind: 'spiral', serial: 36 },
+];
+
+const VOID_CHAOS_LINKS: readonly (readonly [number, number, number])[] = [
+  [0, 3, 61], [1, 5, 62], [2, 8, 63], [3, 10, 64],
+  [4, 12, 65], [5, 9, 66], [6, 11, 67], [7, 13, 68],
+  [8, 14, 69], [10, 15, 70], [12, 2, 71], [15, 4, 72],
+];
+
+function hash2(x: number, y: number, seed: number): number {
+  let n = (Math.imul(x, 374761393) + Math.imul(y, 668265263) + Math.imul(seed, 1274126177)) | 0;
+  n = Math.imul(n ^ (n >> 13), 1103515245);
+  n ^= n >> 16;
+  return (n & 0x7fffffff) / 0x7fffffff;
+}
 
 function setVoidFloor(world: World, x: number, y: number): void {
   const i = world.idx(x, y);
@@ -277,6 +317,7 @@ function buildVoidProtectedMask(world: World): Uint8Array {
   }
   for (const idx of world.doors.keys()) mask[idx] = 1;
   for (let i = 0; i < W * W; i++) if (world.cells[i] === Cell.LIFT) mask[i] = 1;
+  for (let i = 0; i < W * W; i++) if (world.features[i] !== Feature.NONE) mask[i] = 1;
   return mask;
 }
 
@@ -356,6 +397,174 @@ function carveVoidFootprintDisc(world: World, mask: Uint8Array, cx: number, cy: 
   }
 }
 
+function carveVoidChaosPocket(world: World, mask: Uint8Array, spec: ChaosPocketSpec): void {
+  const innerR2 = spec.radius * spec.radius;
+  const outer = spec.radius + 3;
+  const outerR2 = outer * outer;
+  for (let dy = -outer; dy <= outer; dy++) {
+    for (let dx = -outer; dx <= outer; dx++) {
+      const d2 = dx * dx + dy * dy;
+      if (d2 > outerR2) continue;
+      const x = spec.x + dx;
+      const y = spec.y + dy;
+      const ci = world.idx(x, y);
+      if (mask[ci] || world.cells[ci] === Cell.LIFT || world.cells[ci] === Cell.DOOR) continue;
+      if (d2 <= innerR2) {
+        const n = hash2(world.wrap(x) >> 2, world.wrap(y) >> 2, spec.serial);
+        if (d2 < innerR2 * 0.68 || n > 0.18) {
+          world.cells[ci] = Cell.FLOOR;
+          world.roomMap[ci] = -1;
+          world.floorTex[ci] = Tex.F_VOID;
+          world.wallTex[ci] = 0;
+          world.hermoWall[ci] = 0;
+        }
+      } else if (world.cells[ci] !== Cell.FLOOR) {
+        world.cells[ci] = Cell.WALL;
+        world.roomMap[ci] = -1;
+        world.wallTex[ci] = Tex.VOID_WALL;
+        world.floorTex[ci] = Tex.F_VOID;
+        world.hermoWall[ci] = 0;
+      }
+    }
+  }
+}
+
+function setChaosWall(world: World, mask: Uint8Array, x: number, y: number): void {
+  const ci = world.idx(x, y);
+  if (mask[ci] || world.cells[ci] !== Cell.FLOOR || world.features[ci] !== Feature.NONE) return;
+  world.cells[ci] = Cell.WALL;
+  world.roomMap[ci] = -1;
+  world.wallTex[ci] = Tex.VOID_WALL;
+  world.floorTex[ci] = Tex.F_VOID;
+  world.features[ci] = Feature.NONE;
+  world.hermoWall[ci] = 0;
+}
+
+function stampChaosSpiral(world: World, mask: Uint8Array, spec: ChaosPocketSpec): void {
+  const turns = 3 + (spec.serial % 3);
+  const steps = spec.radius * 18;
+  const phase = spec.serial * 0.37;
+  for (let step = 10; step < steps; step++) {
+    if (step % 19 === 0 || step % 23 === 0) continue;
+    const t = step / steps;
+    const angle = phase + t * Math.PI * 2 * turns;
+    const r = 3 + t * (spec.radius - 4);
+    const x = spec.x + Math.round(Math.cos(angle) * r);
+    const y = spec.y + Math.round(Math.sin(angle) * r);
+    setChaosWall(world, mask, x, y);
+    if (step % 4 === 0) setChaosWall(world, mask, x + 1, y);
+    if (step % 7 === 0) setChaosWall(world, mask, x, y + 1);
+  }
+}
+
+function stampChaosRing(world: World, mask: Uint8Array, spec: ChaosPocketSpec): void {
+  const radius = Math.max(6, spec.radius - 5);
+  for (let a = 0; a < 128; a++) {
+    if ((a + spec.serial) % 17 === 0) continue;
+    const angle = (a / 128) * Math.PI * 2;
+    const x = spec.x + Math.round(Math.cos(angle) * radius);
+    const y = spec.y + Math.round(Math.sin(angle) * radius * 0.72);
+    setChaosWall(world, mask, x, y);
+    if (a % 5 === 0) setChaosWall(world, mask, x, y + 1);
+  }
+}
+
+function stampChaosCross(world: World, mask: Uint8Array, spec: ChaosPocketSpec): void {
+  const radius = Math.max(8, spec.radius - 3);
+  for (let d = -radius; d <= radius; d++) {
+    if (Math.abs(d) < 3 || (d + spec.serial) % 11 === 0) continue;
+    setChaosWall(world, mask, spec.x + d, spec.y);
+    setChaosWall(world, mask, spec.x, spec.y + d);
+    if (Math.abs(d) % 5 === 0) {
+      setChaosWall(world, mask, spec.x + d, spec.y + Math.sign(d || 1));
+      setChaosWall(world, mask, spec.x + Math.sign(d || 1), spec.y + d);
+    }
+  }
+}
+
+function stampChaosDiamond(world: World, mask: Uint8Array, spec: ChaosPocketSpec): void {
+  const radius = Math.max(7, spec.radius - 5);
+  for (let dy = -radius; dy <= radius; dy++) {
+    for (let dx = -radius; dx <= radius; dx++) {
+      const edge = Math.abs(dx) + Math.abs(dy);
+      if (edge !== radius && edge !== radius - 1) continue;
+      if ((dx * 13 + dy * 7 + spec.serial) % 19 === 0) continue;
+      setChaosWall(world, mask, spec.x + dx, spec.y + dy);
+    }
+  }
+}
+
+function stampChaosLine(world: World, mask: Uint8Array, spec: ChaosPocketSpec): void {
+  const len = spec.radius * 3;
+  const angle = hash2(spec.x, spec.y, spec.serial) * Math.PI * 2;
+  for (let s = -len; s <= len; s++) {
+    if ((s + spec.serial) % 13 === 0) continue;
+    const bend = Math.sin((s + spec.serial) * 0.18) * spec.radius * 0.36;
+    const x = spec.x + Math.round(Math.cos(angle) * s - Math.sin(angle) * bend);
+    const y = spec.y + Math.round(Math.sin(angle) * s + Math.cos(angle) * bend);
+    setChaosWall(world, mask, x, y);
+    if (s % 6 === 0) setChaosWall(world, mask, x + 1, y);
+  }
+}
+
+function stampChaosPocketWalls(world: World, mask: Uint8Array, spec: ChaosPocketSpec): void {
+  switch (spec.kind) {
+    case 'spiral':
+      stampChaosSpiral(world, mask, spec);
+      break;
+    case 'ring':
+      stampChaosRing(world, mask, spec);
+      break;
+    case 'cross':
+      stampChaosCross(world, mask, spec);
+      break;
+    case 'diamond':
+      stampChaosDiamond(world, mask, spec);
+      break;
+    case 'line':
+      stampChaosLine(world, mask, spec);
+      break;
+  }
+}
+
+function carveChaosSpiralTendril(world: World, mask: Uint8Array, spec: ChaosPocketSpec): void {
+  if (spec.kind !== 'spiral') return;
+  const turns = 1.35 + (spec.serial % 3) * 0.32;
+  const steps = spec.radius * 12;
+  const phase = spec.serial * 0.41;
+  let px = world.wrap(spec.x + Math.round(Math.cos(phase) * (spec.radius - 3)));
+  let py = world.wrap(spec.y + Math.round(Math.sin(phase) * (spec.radius - 3)));
+  for (let step = 1; step <= steps; step++) {
+    const t = step / steps;
+    const r = spec.radius - 3 + t * spec.radius * 1.85;
+    const angle = phase + t * Math.PI * 2 * turns;
+    const x = world.wrap(spec.x + Math.round(Math.cos(angle) * r));
+    const y = world.wrap(spec.y + Math.round(Math.sin(angle) * r));
+    carveVoidFootprintBand(world, mask, px, py, x, y, step % 29 === 0 ? 2 : 1);
+    if (step % 41 === 0) carveVoidFootprintDisc(world, mask, x, y, 3);
+    px = x;
+    py = y;
+  }
+}
+
+function expandVoidChaoticGeometry(world: World): void {
+  const mask = buildVoidProtectedMask(world);
+  let last: readonly [number, number] = [SPAWN_X, SPAWN_Y];
+  for (const spec of VOID_CHAOS_POCKETS) {
+    carveVoidFoldRoute(world, mask, last[0], last[1], spec.x, spec.y, spec.serial);
+    carveVoidChaosPocket(world, mask, spec);
+    last = [spec.x, spec.y];
+  }
+  for (const [from, to, serial] of VOID_CHAOS_LINKS) {
+    const a = VOID_CHAOS_POCKETS[from];
+    const b = VOID_CHAOS_POCKETS[to];
+    carveVoidFoldRoute(world, mask, a.x, a.y, b.x, b.y, serial);
+  }
+  carveVoidFoldRoute(world, mask, last[0], last[1], 684, 558, 90);
+  for (const spec of VOID_CHAOS_POCKETS) stampChaosPocketWalls(world, mask, spec);
+  for (const spec of VOID_CHAOS_POCKETS) carveChaosSpiralTendril(world, mask, spec);
+}
+
 function expandVoidMegastructureFootprint(world: World): void {
   const mask = buildVoidProtectedMask(world);
   let last: readonly [number, number] = [SPAWN_X, SPAWN_Y];
@@ -397,6 +606,7 @@ export function buildVoidGeometry(world: World): VoidGeometryLayout {
   carveEchoAlcoves(world);
   placeVoidLifts(world);
   expandVoidMegastructureFootprint(world);
+  expandVoidChaoticGeometry(world);
   paintVoidDefaults(world);
 
   return {

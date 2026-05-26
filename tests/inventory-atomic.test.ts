@@ -3,6 +3,8 @@ import * as assert from 'node:assert/strict';
 
 import { EntityType, QuestType, type Entity, type Item, type Quest } from '../src/core/types';
 import { World } from '../src/core/world';
+import { ITEMS } from '../src/data/catalog';
+import { getRecentEvents } from '../src/systems/events';
 import { addItem, pickupNearby } from '../src/systems/inventory';
 import { checkQuests } from '../src/systems/quests';
 import { countInventoryItem, makeGameState, makeTestNpc, makeTestPlayer } from './helpers';
@@ -76,6 +78,42 @@ test('pickupNearby keeps unconsumed stacks on a multi-stack drop', () => {
   assert.equal(countInventoryItem(player, 'bread'), 1);
   assert.equal(countInventoryItem(player, 'pipe'), 24);
   assert.equal(player.inventory?.length, 25);
+});
+
+test('cleanup tongs recover green acid samples with durability instead of filter layer', () => {
+  installNoopAudioContext();
+  const world = new World();
+  const state = makeGameState({ time: 12 });
+  const player = makeTestPlayer({ id: 1, x: 10, y: 10 });
+  assert.equal(addItem(player, 'cleanup_tongs', 1), true);
+  player.tool = 'cleanup_tongs';
+  const drop: Entity = {
+    id: 2,
+    type: EntityType.ITEM_DROP,
+    x: 10.5,
+    y: 10,
+    angle: 0,
+    pitch: 0,
+    alive: true,
+    speed: 0,
+    sprite: 0,
+    inventory: [{
+      defId: 'slime_sample_green',
+      count: 1,
+      data: { ag64GreenAcid: true, organicRisk: true, sample: true },
+    }],
+  };
+
+  pickupNearby(world, [player, drop], player, state.msgs, state.time, state);
+
+  assert.equal(drop.alive, false);
+  assert.equal(countInventoryItem(player, 'slime_sample_green'), 1);
+  assert.equal(countInventoryItem(player, 'filter_layer'), 0);
+  const tongs = player.inventory?.find(item => item.defId === 'cleanup_tongs');
+  assert.equal((tongs?.data as { dur?: number } | undefined)?.dur, (ITEMS.cleanup_tongs.durability ?? 0) - 1);
+  const event = getRecentEvents(state, { type: 'player_use_item', tags: ['green_acid', 'sample_handling'], limit: 1 })[0];
+  assert.equal(event?.itemId, 'cleanup_tongs');
+  assert.equal(event?.data?.affectedItemId, 'slime_sample_green');
 });
 
 test('full inventory blocks item quest rewards without marking the quest done', () => {

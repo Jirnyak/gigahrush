@@ -8,20 +8,20 @@ Use this order. It avoids relying on custom CSS first, because CSS access can be
 ## 1. Core Page Fields
 
 - Title: `GIGAH|RUSH`
-- Short description: `Выживание, вылазки и САМОСБОР внутри бесконечной хрущёвки.`
+- Short description: `Browser survival horror / ARPG shooter in an endless concrete apartment block.`
 - Classification: `Game`
 - Kind of project: `HTML`
 - Genre: `Shooter`
 - Suggested pricing: keep current setting unless intentionally changing monetization.
 
 Tags:
-`Survival Horror`, `Procedural Generation`, `Life Simulation`, `Dungeon Crawler`, `Roguelike`, `Doom`, `Maze`, `Russian`, `Pixel Art`, `Browser`, `Singleplayer`, `Atmospheric`, `Horror`
+`ARPG`, `Atmospheric Horror`, `Browser Game`, `HTML5`, `Life Simulation`, `Procedural Generation`, `Shooter`, `Singleplayer`, `Survival Horror`, `WebGL`
 
 Description:
-- Primary paste: `description_ru_approved.html`
-- Exact user-approved source: `description_ru_approved.md`
-- Do not rewrite, shorten, or remove this description text. Only append after it if extra copy is explicitly needed.
-- Public page copy markers for verification: `Выживание в бесконечном бетонном лабиринте`, `Ты не проходишь уровни. Ты живёшь внутри огромного дома`, `Сотни этажей`
+- Primary paste: `description_en_approved.html`
+- Exact approved source: `description_en_approved.md`
+- Do not rewrite, shorten, or replace this English store copy unless a new English public-page pass explicitly requires it.
+- Public page copy markers for verification: `Browser survival horror / ARPG shooter inside a huge concrete apartment block.`, `GIGAH|RUSH is a free HTML5/WebGL browser game`, `Samosbor events with sirens, sealed doors, fog`
 
 ## 2. Theme
 
@@ -123,7 +123,7 @@ node itch_page_pack/probe_itch_editor.js --html /tmp/gigahrush-itch.html
 For a quick manual marker scan:
 
 ```bash
-curl -L https://tenevik.itch.io/gigahrush | rg "GIGAH\\|RUSH|Выживание в бесконечном бетонном лабиринте|Ты не проходишь уровни|Сотни этажей"
+curl -L https://tenevik.itch.io/gigahrush | rg "GIGAH\\|RUSH|Browser survival horror|free HTML5/WebGL browser game|Samosbor events"
 ```
 
 The script asserts:
@@ -136,7 +136,7 @@ The script asserts:
 Also open the public page in an incognito or logged-out browser and check:
 
 - the public page is no longer white/default;
-- the description starts with `Выживание в бесконечном бетонном лабиринте`;
+- the description starts with `Browser survival horror / ARPG shooter inside a huge concrete apartment block.`;
 - all 14 approved media files are visible in the itch media list or page gallery;
 - the embed still launches;
 - mobile width does not overflow;

@@ -36,6 +36,7 @@ function addSampleJar(ctx: MaintContentCtx, room: Room, x: number, y: number): v
     inventory: [
       { defId: 'strange_clot', count: 1, data: 'Слизистый образец с поющего вентканала.' },
       { defId: BROWN_SAMPLE_ITEM, count: 1, data: 'Запаянная проба с вентканала. Пост НИИ примет как коричневую, печь — как опасную.' },
+      { defId: 'smoke_candle_check', count: 2 },
       { defId: 'gasmask_filter', count: 1 },
       { defId: 'note', count: 1, data: 'Не брать, если песня идет в обе стороны. В акте писать: давление, не голос. Пломбу не вскрывать: Бокова запишет, Вера прожжет, Сеня купит.' },
     ],

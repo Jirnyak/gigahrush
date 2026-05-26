@@ -8,9 +8,17 @@ import {
 } from '../core/types';
 import { ITEMS, WEAPON_ROLE_LABELS, WEAPON_ROLE_TIERS, WEAPON_STATS, type WeaponStats } from '../data/catalog';
 import { GOVNYAK_COURIER_CONTRACT_IDS, GOVNYAK_COURIER_PACKAGE_ITEM } from '../data/contracts';
+import {
+  DOCUMENT_ACCESS_ACTIONS,
+  DOCUMENT_ACCESS_MARKET_VALUES,
+  DOCUMENT_MINISTRY_GATE_ACCESS_DEFS,
+  DOCUMENT_MINISTRY_GATE_OUTPUTS,
+} from '../data/documents_access';
 import { addFactionRelMutual } from '../data/relations';
 import {
   getStack,
+  itemEquipSlot,
+  itemHasUseAction,
   ITEM_TAGS,
   SILVER_SLIME_OPENED_ID,
   SILVER_SLIME_SEALED_ID,
@@ -19,6 +27,7 @@ import { getPermitDef, getPermitForgeryRecipe } from '../data/permits';
 import { World } from '../core/world';
 import { Spr } from '../render/sprite_index';
 import { playPickup } from './audio';
+import { cleanCellHazardsNear } from './cell_hazards';
 import { changeResourceStock } from './economy';
 import { publishEvent } from './events';
 import { placeMonsterBait, removeMonsterBaitForEntity } from './monster_bait';
@@ -48,8 +57,10 @@ import {
   strMeleeDmgMult,
 } from './rpg';
 import {
+  activeSporeHaze,
   activeZhelemishSkin,
   applyZhelemishSkinWithMessage,
+  cureSporeHaze,
   cureZhelemishSkin,
   isZhelemishCureItem,
   sporeHazeAimSpreadMult,
@@ -61,7 +72,21 @@ import { pushNpcLogMessage } from './ai/barks';
 
 const MAX_SLOTS = 25;
 const GOVNYAK_COURIER_ROUTE_SET = new Set<string>(GOVNYAK_COURIER_CONTRACT_IDS);
+const DIRECT_DOCUMENT_ACTION_ITEMS = new Set(['ammo_coupon_9mm', 'ammo_coupon_shells', 'fuel_issue_stamp', 'foam_grenade_act', 'water_reservoir_quota', 'shelter_seat_card', 'shelter_seat_forgery', 'concentrate_bonus_coupon']);
+const DECON_FLUID_ITEM = 'decon_fluid';
+const DECON_FLUID_RADIUS = 2.35;
+const INCENDIARY_12G_ITEM = 'ammo_12g_incendiary';
+const INCENDIARY_12G_RADIUS = 1.65;
+const ANTIFUNGAL_OINTMENT_ITEM = 'antifungal_ointment';
+const ANTI_SPORE_INHALER_ITEM = 'anti_spore_inhaler';
+const GASMASK_FILTER_ITEM = 'gasmask_filter';
+const USED_GASMASK_FILTER_ITEM = 'used_gasmask_filter';
 const GREEN_ACID_COUNTERMEASURE = 'filter_layer';
+const SAMPLE_HANDLING_TOOL_TAG = 'sample_handling';
+const SAMPLE_HANDLING_TOOL_WEAR = 1;
+const CONTAMINATED_SWAB_ITEM = 'contaminated_swab';
+const CONTAMINATED_SWAB_REPORT_REWARD = 8;
+const CONTAMINATED_SWAB_MARKET_REWARD = 6;
 const VERETAR_UNSEALED_SAND = 'veretar_sand';
 const VERETAR_SEALED_SAND = 'sealed_veretar_sand';
 const VERETAR_SEAL_ITEMS = ['sealant_tube', 'seal_wax'] as const;
@@ -83,7 +108,7 @@ const VERETAR_DOCUMENT_TARGETS = new Set([
   'elevator_access_order', 'void_archive_warrant', 'ministry_audit_forgery',
   'ministry_clean_stamp', 'raionsovet_floor_pass', 'forged_raionsovet_pass',
   'bank_debt_paper', 'forged_bank_debt_paper', 'debt_settlement_receipt',
-  'confiscation_warrant',
+  'confiscation_warrant', 'cleanup_order_stub',
 ]);
 
 const AMMO_LABELS: Record<string, string> = {
@@ -94,10 +119,18 @@ const AMMO_LABELS: Record<string, string> = {
   ammo_belt: 'лента',
   ammo_energy: 'энерго',
   ammo_fuel: 'бензин',
+  napalm_mix: 'напалм',
   ammo_762tt: '7.62 ТТ',
   ammo_nagant: 'Наган',
   ammo_harpoon: 'гарпуны',
+  rifle_bolt_pack: 'болты',
   grenade: 'граната',
+  shmk_disposable: 'ШМК',
+  foam_grenade_6p10: 'пена',
+  pbrog1_foam_launcher: 'ПБРОГ',
+  breach_charge: 'заряд',
+  concrete_breaker_grenade: 'бетонка',
+  chest_failsafe_charge: 'фугас',
 };
 
 const DOCUMENT_GATE_ITEMS = new Set([
@@ -112,8 +145,21 @@ const DOCUMENT_GATE_ITEMS = new Set([
   'forged_bank_debt_paper',
   'debt_settlement_receipt',
   'confiscation_warrant',
+  'cleanup_order_stub',
+  'labor_shift_card',
+  'hazard_shift_extension',
 ]);
+type DocumentMinistryGateAccessDef = (typeof DOCUMENT_MINISTRY_GATE_ACCESS_DEFS)[number];
+const DOCUMENT_MINISTRY_GATE_ACCESS_BY_ITEM = new Map<string, DocumentMinistryGateAccessDef>(
+  DOCUMENT_MINISTRY_GATE_ACCESS_DEFS.map(def => [def.itemId, def] as const),
+);
+const DOCUMENT_MINISTRY_GATE_OUTPUT_BY_ITEM: Record<string, string> = DOCUMENT_MINISTRY_GATE_OUTPUTS;
 const DOCUMENT_MARKET_VALUES: Record<string, number> = {
+  ...DOCUMENT_ACCESS_MARKET_VALUES,
+  liquidator_field_roster: 48,
+  weapon_checkout_tag: 28,
+  scrubbed_weapon_tag: 46,
+  contraband_receipt_blank: 42,
   forged_permit_slip: 38,
   fake_pass: 35,
   ministry_audit_forgery: 64,
@@ -122,6 +168,14 @@ const DOCUMENT_MARKET_VALUES: Record<string, number> = {
   forged_bank_debt_paper: 62,
   bank_debt_paper: 50,
   debt_settlement_receipt: 70,
+  passport_stub: 34,
+  hermodoor_journal: 52,
+  p14_gasmask_receipt: 28,
+  cleanup_order_stub: 46,
+  slime_age_label_brown: 18,
+};
+const AUDIT_PROOF_TRADE_VALUES: Record<string, { market: number; report: number }> = {
+  scrubbed_serial_plate: { market: 72, report: 54 },
 };
 
 export interface WeaponReadiness {
@@ -229,6 +283,14 @@ function setGreenAcidWarned(item: Item): void {
   (item.data as GreenAcidPickupData).warned = true;
 }
 
+function equippedToolWithTag(actor: Entity, tag: string): string | undefined {
+  const toolId = actor.tool ?? '';
+  if (!toolId) return undefined;
+  const def = ITEMS[toolId];
+  if (!def || def.type !== ItemType.TOOL) return undefined;
+  return itemHasTag(toolId, tag) ? toolId : undefined;
+}
+
 function publishGreenAcidItemEvent(
   state: GameState | undefined,
   actor: Entity,
@@ -238,11 +300,15 @@ function publishGreenAcidItemEvent(
   zoneId: number,
   x: number,
   y: number,
+  neutralizerId?: string,
 ): void {
   if (!state || actor.type !== EntityType.PLAYER) return;
   const def = ITEMS[defId];
-  const eventItemId = kind === 'neutralization' ? GREEN_ACID_COUNTERMEASURE : defId;
+  const eventItemId = kind === 'neutralization' ? neutralizerId ?? GREEN_ACID_COUNTERMEASURE : defId;
   const eventDef = ITEMS[eventItemId];
+  const neutralizerTags = kind === 'neutralization'
+    ? [...(ITEM_TAGS[eventItemId] ?? []), ...(eventDef?.tags ?? [])].filter(tag => tag === 'sample_handling' || tag === 'cleanup')
+    : [];
   publishEvent(state, {
     type: kind === 'neutralization' ? 'player_use_item' : 'player_pick_item',
     zoneId,
@@ -257,11 +323,12 @@ function publishGreenAcidItemEvent(
     itemValue: eventDef?.value ?? 0,
     severity: kind === 'sample' ? 3 : kind === 'neutralization' ? 3 : 2,
     privacy: 'private',
-    tags: ['player', 'inventory', 'slime', 'acid', 'green_acid', kind],
+    tags: ['player', 'inventory', 'slime', 'acid', 'green_acid', kind, ...neutralizerTags],
     data: {
       source: 'ag64_green_acid_room',
       affectedItemId: defId,
       affectedItemName: def?.name ?? defId,
+      neutralizerId: kind === 'neutralization' ? eventItemId : undefined,
     },
   });
 }
@@ -525,6 +592,161 @@ function openGovnyakCourierPackage(actor: Entity, msgs: Msg[], time: number, sta
       suspicion: 'market_saw_broken_seal',
     },
   });
+  return true;
+}
+
+function handleGasmaskFilterUse(
+  actor: Entity,
+  slotIdx: number,
+  msgs: Msg[],
+  time: number,
+  state: GameState | undefined,
+  zoneId: number | undefined,
+): boolean {
+  const inv = actor.inventory;
+  const slot = inv?.[slotIdx];
+  if (!inv || !slot || slot.defId !== GASMASK_FILTER_ITEM) return false;
+
+  if (slot.count > 1 && !canAddSingle(actor, USED_GASMASK_FILTER_ITEM)) {
+    msgs.push(msg('Отработанный фильтр некуда положить. Освободите слот или сдайте старые фильтры.', time, '#c9b38a'));
+    return true;
+  }
+
+  if (slot.count <= 1) {
+    slot.defId = USED_GASMASK_FILTER_ITEM;
+    slot.count = 1;
+    slot.data = undefined;
+  } else {
+    slot.count--;
+    addItem(actor, USED_GASMASK_FILTER_ITEM, 1);
+  }
+
+  const source = ITEMS[GASMASK_FILTER_ITEM];
+  const produced = ITEMS[USED_GASMASK_FILTER_ITEM];
+  msgs.push(msg('Фильтр отработал: дыхание выровнялось, в сумке осталась мокрая улика.', time, '#c9b38a'));
+  if (state && actor.type === EntityType.PLAYER) {
+    publishEvent(state, {
+      type: 'player_use_item',
+      zoneId,
+      actorId: actor.id,
+      actorName: actor.name ?? 'Вы',
+      actorFaction: actor.faction,
+      itemId: GASMASK_FILTER_ITEM,
+      itemName: source?.name ?? GASMASK_FILTER_ITEM,
+      itemCount: 1,
+      itemValue: source?.value ?? 0,
+      severity: 3,
+      privacy: 'private',
+      tags: ['player', 'inventory', 'filter', 'gasmask', 'ppe', 'cleanup', 'contaminant', 'audit'],
+      data: {
+        action: 'spent_filter',
+        producedItemId: USED_GASMASK_FILTER_ITEM,
+        producedItemName: produced?.name ?? USED_GASMASK_FILTER_ITEM,
+      },
+    });
+  }
+  return true;
+}
+
+function handleDeconFluidUse(
+  actor: Entity,
+  slotIdx: number,
+  msgs: Msg[],
+  time: number,
+  state: GameState | undefined,
+  zoneId: number | undefined,
+  world: World | undefined,
+): boolean {
+  const inv = actor.inventory;
+  const slot = inv?.[slotIdx];
+  if (!inv || !slot || slot.defId !== DECON_FLUID_ITEM) return false;
+
+  if (!state || !world) {
+    msgs.push(msg('Обеззараживающая жидкость нужна на реальном пятне слизи или грибницы.', time, '#c9b38a'));
+    return true;
+  }
+
+  const cleaned = cleanCellHazardsNear(world, actor.x, actor.y, DECON_FLUID_RADIUS, state, actor, 'solvent');
+  if (cleaned <= 0) {
+    msgs.push(msg('Рядом нет слизи или грибного налёта под раствор. Сохраните жидкость для зачистки.', time, '#aa8'));
+    return true;
+  }
+
+  decrementInventorySlot(inv, slotIdx);
+  const source = ITEMS[DECON_FLUID_ITEM];
+  msgs.push(msg(`Обеззараживающая жидкость сняла налёт: ${cleaned} кл.`, time, '#9f8'));
+  if (actor.type === EntityType.PLAYER) {
+    publishEvent(state, {
+      type: 'player_use_item',
+      zoneId,
+      actorId: actor.id,
+      actorName: actor.name ?? 'Вы',
+      actorFaction: actor.faction,
+      itemId: DECON_FLUID_ITEM,
+      itemName: source?.name ?? DECON_FLUID_ITEM,
+      itemCount: 1,
+      itemValue: source?.value ?? 0,
+      severity: 3,
+      privacy: 'private',
+      tags: ['player', 'inventory', 'cleanup', 'decon', 'slime', 'fungus', 'reagent', 'solvent'],
+      data: {
+        action: 'decon_cleanup',
+        cleanedHazardCells: cleaned,
+        radius: DECON_FLUID_RADIUS,
+      },
+    });
+  }
+  return true;
+}
+
+function handleIncendiary12gUse(
+  actor: Entity,
+  slotIdx: number,
+  msgs: Msg[],
+  time: number,
+  state: GameState | undefined,
+  zoneId: number | undefined,
+  world: World | undefined,
+): boolean {
+  const inv = actor.inventory;
+  const slot = inv?.[slotIdx];
+  if (!inv || !slot || slot.defId !== INCENDIARY_12G_ITEM) return false;
+
+  if (!state || !world) {
+    msgs.push(msg('Зажигательная дробь нужна у реального пятна слизи или грибницы.', time, '#c9b38a'));
+    return true;
+  }
+
+  const cleaned = cleanCellHazardsNear(world, actor.x, actor.y, INCENDIARY_12G_RADIUS, state, actor, 'fire');
+  if (cleaned <= 0) {
+    msgs.push(msg('Рядом нет налёта под поджог. Сохраните зажигательную дробь для зачистки.', time, '#aa8'));
+    return true;
+  }
+
+  decrementInventorySlot(inv, slotIdx);
+  const source = ITEMS[INCENDIARY_12G_ITEM];
+  msgs.push(msg(`Зажигательная дробь выжгла налёт: ${cleaned} кл.`, time, '#fa4'));
+  if (actor.type === EntityType.PLAYER) {
+    publishEvent(state, {
+      type: 'player_use_item',
+      zoneId,
+      actorId: actor.id,
+      actorName: actor.name ?? 'Вы',
+      actorFaction: actor.faction,
+      itemId: INCENDIARY_12G_ITEM,
+      itemName: source?.name ?? INCENDIARY_12G_ITEM,
+      itemCount: 1,
+      itemValue: source?.value ?? 0,
+      severity: 4,
+      privacy: 'local',
+      tags: ['player', 'inventory', 'ammo', 'shotgun', 'fire', 'cleanup', 'slime', 'fungus'],
+      data: {
+        action: 'incendiary_shell_cleanup',
+        cleanedHazardCells: cleaned,
+        radius: INCENDIARY_12G_RADIUS,
+      },
+    });
+  }
   return true;
 }
 
@@ -829,13 +1051,19 @@ function inventorySpecialUseLabel(defId: string, def: ItemDef, slot: Item): stri
   if (def.type === ItemType.NOTE && slot.data) return 'E прочесть';
   if (itemHasTag(defId, 'coupon') || itemHasTag(defId, 'single_use')) return 'E погасить';
   if (itemHasTag(defId, 'permit') || itemHasTag(defId, 'document_gate')) return 'E предъявить';
+  if (defId === DECON_FLUID_ITEM) return 'E зачистить';
+  if (defId === INCENDIARY_12G_ITEM) return 'E выжечь';
+  if (defId === GASMASK_FILTER_ITEM) return 'E отработать';
+  if (defId === CONTAMINATED_SWAB_ITEM) return 'E сдать/сбыть';
+  if (itemHasTag(defId, 'temporary_seal')) return 'E заклеить';
   if (defId === VERETAR_UNSEALED_SAND) return 'E запечатать / высыпать';
   if (defId === VERETAR_SEALED_SAND) return 'E проверить пломбу';
+  if (AUDIT_PROOF_TRADE_VALUES[defId]) return 'E сдать/сбыть';
+  if (itemHasTag(defId, 'document') || def.type === ItemType.KEY) return 'E проверить';
   if (itemHasTag(defId, 'sample')) return 'E вскрыть пробу';
   if (itemHasTag(defId, 'sealed') || itemHasTag(defId, 'veretar')) return 'E проверить';
   if (itemHasTag(defId, 'govnyak') || itemHasTag(defId, 'zhelemish')) return 'E применить';
   if (itemHasTag(defId, 'noise')) return 'E применить';
-  if (itemHasTag(defId, 'document') || def.type === ItemType.KEY) return 'E проверить';
   return '';
 }
 
@@ -844,15 +1072,16 @@ export function getInventorySlotActionInfo(e: Entity, slotIdx: number): Inventor
   if (!slot) return null;
   const def = ITEMS[slot.defId];
   if (!def) return null;
+  const equipSlot = itemEquipSlot(def);
   const category = inventoryItemCategory(def.id);
-  const isEquippedWeapon = def.type === ItemType.WEAPON && e.weapon === def.id;
-  const isEquippedTool = def.type === ItemType.TOOL && e.tool === def.id;
+  const isEquippedWeapon = equipSlot === 'weapon' && e.weapon === def.id;
+  const isEquippedTool = equipSlot === 'tool' && e.tool === def.id;
   let useLabel = '';
   let canUse = true;
 
-  if (def.type === ItemType.WEAPON) useLabel = isEquippedWeapon ? 'E уже оружие' : 'E экипировать';
-  else if (def.type === ItemType.TOOL) useLabel = isEquippedTool ? 'E уже инструмент' : 'E в инструмент';
-  else if (def.use) useLabel = 'E применить';
+  if (equipSlot === 'weapon') useLabel = isEquippedWeapon ? 'E снять' : 'E экипировать';
+  else if (equipSlot === 'tool') useLabel = isEquippedTool ? 'E снять' : 'E в инструмент';
+  else if (itemHasUseAction(def)) useLabel = 'E применить';
   else useLabel = inventorySpecialUseLabel(def.id, def, slot);
 
   if (!useLabel) {
@@ -1056,12 +1285,78 @@ function publishDocumentActionEvent(
   });
 }
 
+function handleDirectDocumentActionUse(
+  e: Entity,
+  slotIdx: number,
+  defId: string,
+  msgs: Msg[],
+  time: number,
+  state: GameState | undefined,
+  zoneId: number | undefined,
+  world: World | undefined,
+): boolean {
+  if (!DIRECT_DOCUMENT_ACTION_ITEMS.has(defId)) return false;
+  const action = DOCUMENT_ACCESS_ACTIONS[defId];
+  if (!action) return false;
+  if (action.floors && state && !action.floors.includes(state.currentFloor)) {
+    msgs.push(msg(`${ITEMS[defId]?.name ?? defId}: здесь нет нужного окна выдачи.`, time, '#aa8'));
+    return true;
+  }
+
+  const consume = action.consume !== false;
+  const outputCount = Math.max(1, action.outputCount ?? 1);
+  if (action.outputItemId && !hasRoomForOutputAfterConsuming(e, action.outputItemId, consume ? [defId] : [])) {
+    msgs.push(msg('Некуда положить выдачу. Освободите слот перед окном.', time, '#aa8'));
+    return true;
+  }
+  if (consume) decrementInventorySlot(e.inventory ?? [], slotIdx);
+  if (action.outputItemId) addItem(e, action.outputItemId, outputCount);
+
+  if (state) {
+    for (const delta of action.resourceDeltas ?? []) {
+      changeResourceStock(state, delta.resourceId, delta.delta, delta.floor ?? state.currentFloor);
+    }
+    for (const delta of action.relationDeltas ?? []) {
+      addFactionRelMutual(Faction.PLAYER, delta.faction, delta.delta);
+    }
+  }
+
+  msgs.push(msg(action.message, time, '#6a6'));
+  publishDocumentActionEvent(
+    state,
+    e,
+    action.eventType,
+    defId,
+    action.severity,
+    action.privacy,
+    action.tags,
+    {
+      ...action.data,
+      outputItemId: action.outputItemId,
+      outputItemName: action.outputItemId ? ITEMS[action.outputItemId]?.name ?? action.outputItemId : undefined,
+      outputCount: action.outputItemId ? outputCount : undefined,
+      resourceDeltas: action.resourceDeltas?.map(delta => ({
+        resourceId: delta.resourceId,
+        delta: delta.delta,
+        floor: delta.floor ?? state?.currentFloor,
+      })),
+    },
+    zoneId,
+    world,
+    action.targetName,
+  );
+  return true;
+}
+
 function documentGateOutput(defId: string): string {
+  const documentAccessOutput = DOCUMENT_MINISTRY_GATE_OUTPUT_BY_ITEM[defId];
+  if (documentAccessOutput) return documentAccessOutput;
   return defId === 'ministry_audit_forgery'
     || defId === 'stolen_archive_card'
     || defId === 'raionsovet_floor_pass'
     || defId === 'forged_raionsovet_pass'
     || defId === 'confiscation_warrant'
+    || defId === 'cleanup_order_stub'
     ? 'archive_access_permit'
     : 'key';
 }
@@ -1083,14 +1378,17 @@ function useDocumentAtMinistryGate(
   if (!consumeDocumentItems(e, [defId])) return true;
   addItem(e, outputId, 1);
 
-  const official = defId === 'official_permit_slip';
-  const stolen = defId === 'stolen_archive_card';
-  const forged = !official && !stolen;
+  const accessDef = DOCUMENT_MINISTRY_GATE_ACCESS_BY_ITEM.get(defId);
+  const permit = getPermitDef(defId);
+  const stolen = permit?.method === 'stolen' || itemHasTag(defId, 'stolen');
+  const forged = permit?.method === 'forged' || itemHasTag(defId, 'forged') || itemHasTag(defId, 'forgery');
+  const official = accessDef?.legal ?? permit?.official ?? (itemHasTag(defId, 'official') && !stolen && !forged);
+  const method = accessDef?.method ?? permit?.method ?? (official ? 'legal' : stolen ? 'stolen' : 'forged');
   const roomName = documentRoomName(e, world) ?? (outputId === 'key' ? 'Проверочный коридор N3' : 'архивное окно');
   if (official) {
     changeResourceStock(state, 'documents', 1, FloorLevel.MINISTRY);
     addFactionRelMutual(Faction.PLAYER, Faction.CITIZEN, 1);
-    msgs.push(msg('Официальный корешок принят. Дверь N3 выдала ключ.', time, '#8f8'));
+    msgs.push(msg(accessDef?.line ?? 'Официальная бумага принята. Доступ выдан.', time, '#8f8'));
   } else if (stolen) {
     changeResourceStock(state, 'documents', 1, FloorLevel.MINISTRY);
     addFactionRelMutual(Faction.PLAYER, Faction.LIQUIDATOR, 2);
@@ -1108,11 +1406,13 @@ function useDocumentAtMinistryGate(
     e,
     stolen ? 'player_handoff_item' : 'player_use_item',
     defId,
-    forged ? 4 : 3,
-    forged ? 'local' : 'private',
+    accessDef?.severity ?? permit?.severity ?? (forged ? 4 : 3),
+    accessDef?.privacy ?? permit?.privacy ?? (forged ? 'local' : 'private'),
     [
       outputId === 'key' ? 'document_gate' : 'archive_access',
+      method,
       official ? 'official' : stolen ? 'stolen' : 'forgery',
+      ...(itemHasTag(defId, 'hazard') ? ['hazard'] : []),
       ...(forged ? ['audit_risk'] : []),
       'access_granted',
     ],
@@ -1122,13 +1422,13 @@ function useDocumentAtMinistryGate(
       outputItemName: ITEMS[outputId]?.name ?? outputId,
       roomName,
       ministryDocumentDelta: official || stolen ? 1 : -1,
+      line: accessDef?.line ?? permit?.successLine,
       rumorIds: forged ? ['player_forged_stamp_risk', 'rare_forged_permit_slip'] : ['lead_ministry_permit_office_slip'],
     },
     zoneId,
     world,
     roomName,
   );
-  const permit = getPermitDef(defId);
   if (permit) {
     const tag = outputId === 'archive_access_permit' ? 'archive' : 'ministry_n3';
     recordPermitAccess(state, e, world, permit, roomName, tag, zoneId);
@@ -1227,8 +1527,160 @@ function sellDocumentToBlackMarket(
   return true;
 }
 
+function handleContaminatedSwabUse(
+  e: Entity,
+  slotIdx: number,
+  msgs: Msg[],
+  time: number,
+  state: GameState | undefined,
+  zoneId: number | undefined,
+  world: World | undefined,
+): boolean {
+  const slot = e.inventory?.[slotIdx];
+  if (!slot || slot.defId !== CONTAMINATED_SWAB_ITEM) return false;
+
+  if (!state || e.type !== EntityType.PLAYER) {
+    msgs.push(msg(ITEMS[CONTAMINATED_SWAB_ITEM]?.desc ?? 'Грязной пробе нужен адресат.', time, '#aa8'));
+    return true;
+  }
+
+  const report = state.currentFloor === FloorLevel.MINISTRY;
+  const market = state.currentFloor === FloorLevel.LIVING || state.currentFloor === FloorLevel.KVARTIRY;
+  if (!report && !market) {
+    msgs.push(msg('Мазок ждёт адресата: отчёт в Министерстве или скупщик в жилом блоке.', time, '#aa8'));
+    return true;
+  }
+
+  const reward = report ? CONTAMINATED_SWAB_REPORT_REWARD : CONTAMINATED_SWAB_MARKET_REWARD;
+  decrementInventorySlot(e.inventory ?? [], slotIdx);
+  e.money = (e.money ?? 0) + reward;
+  if (report) {
+    changeResourceStock(state, 'slime_samples', 1, FloorLevel.MINISTRY, { reason: 'contaminated_swab_report', tags: ['sample', 'evidence', 'nii'] });
+    addFactionRelMutual(Faction.PLAYER, Faction.SCIENTIST, 1);
+  } else {
+    changeResourceStock(state, 'slime_samples', -1, state.currentFloor, { reason: 'contaminated_swab_black_market', tags: ['sample', 'black_market'] });
+    changeResourceStock(state, 'contraband', 1, state.currentFloor, { reason: 'contaminated_swab_black_market', tags: ['sample', 'black_market'] });
+    addFactionRelMutual(Faction.PLAYER, Faction.WILD, 1);
+    addFactionRelMutual(Faction.PLAYER, Faction.SCIENTIST, -1);
+  }
+
+  const def = ITEMS[CONTAMINATED_SWAB_ITEM];
+  msgs.push(msg(
+    report
+      ? `Загрязнённый мазок сдан как провал отбора. +${reward}₽.`
+      : `Загрязнённый мазок ушёл в рыночный слух. +${reward}₽.`,
+    time,
+    report ? '#8cf' : '#ee4',
+  ));
+  publishEvent(state, {
+    type: report ? 'player_handoff_item' : 'player_sell_item',
+    zoneId: documentZoneId(e, zoneId, world),
+    roomId: world?.roomAt(e.x, e.y)?.id,
+    x: e.x,
+    y: e.y,
+    actorId: e.id,
+    actorName: e.name ?? 'Вы',
+    actorFaction: e.faction,
+    targetName: report ? 'окно брака проб' : 'скупщик проб',
+    itemId: CONTAMINATED_SWAB_ITEM,
+    itemName: def?.name ?? CONTAMINATED_SWAB_ITEM,
+    itemCount: 1,
+    itemValue: def?.value ?? 0,
+    severity: report ? 2 : 3,
+    privacy: report ? 'private' : 'local',
+    tags: report
+      ? ['player', 'inventory', 'sample', 'swab', 'failed_sample', 'evidence', 'report', 'nii']
+      : ['player', 'inventory', 'sample', 'swab', 'failed_sample', 'evidence', 'black_market', 'trade'],
+    data: {
+      outcome: report ? 'contaminated_swab_reported' : 'contaminated_swab_sold',
+      rewardMoney: reward,
+      sampleStockDelta: report ? 1 : -1,
+      contrabandDelta: report ? 0 : 1,
+    },
+  });
+  return true;
+}
+
+function handleAuditProofUse(
+  e: Entity,
+  slotIdx: number,
+  defId: string,
+  msgs: Msg[],
+  time: number,
+  state: GameState | undefined,
+  zoneId: number | undefined,
+  world: World | undefined,
+): boolean {
+  const values = AUDIT_PROOF_TRADE_VALUES[defId];
+  if (!values) return false;
+  const slot = e.inventory?.[slotIdx];
+  if (!slot || slot.defId !== defId) return false;
+
+  if (!state || e.type !== EntityType.PLAYER) {
+    msgs.push(msg(ITEMS[defId]?.desc ?? 'Улике нужен адресат.', time, '#aa8'));
+    return true;
+  }
+
+  const report = state.currentFloor === FloorLevel.MINISTRY;
+  const market = state.currentFloor === FloorLevel.LIVING || state.currentFloor === FloorLevel.KVARTIRY;
+  if (!report && !market) {
+    msgs.push(msg('Номерную планку примут в Министерстве как улику или в жилом блоке как рыночный риск.', time, '#aa8'));
+    return true;
+  }
+
+  decrementInventorySlot(e.inventory ?? [], slotIdx);
+  const reward = report ? values.report : values.market;
+  e.money = (e.money ?? 0) + reward;
+  const def = ITEMS[defId];
+
+  if (report) {
+    changeResourceStock(state, 'contraband', -1, state.currentFloor, { zoneId, roomId: world?.roomAt(e.x, e.y)?.id, reason: 'weapon_serial_plate_reported', tags: ['weapon', 'audit', 'evidence'] });
+    addFactionRelMutual(Faction.PLAYER, Faction.LIQUIDATOR, 1);
+    addFactionRelMutual(Faction.PLAYER, Faction.WILD, -1);
+  } else {
+    changeResourceStock(state, 'contraband', 1, state.currentFloor, { zoneId, roomId: world?.roomAt(e.x, e.y)?.id, reason: 'weapon_serial_plate_sold', tags: ['weapon', 'black_market', 'audit_risk'] });
+    addFactionRelMutual(Faction.PLAYER, Faction.WILD, 1);
+    addFactionRelMutual(Faction.PLAYER, Faction.LIQUIDATOR, -1);
+  }
+
+  msgs.push(msg(
+    report
+      ? `${def?.name ?? defId} сдана как оружейная улика. +${reward}₽.`
+      : `${def?.name ?? defId} продана на рынке за ${reward}₽. Риск аудита ушёл к покупателю.`,
+    time,
+    report ? '#8cf' : '#ee4',
+  ));
+  publishEvent(state, {
+    type: report ? 'player_handoff_item' : 'player_sell_item',
+    zoneId,
+    roomId: world?.roomAt(e.x, e.y)?.id,
+    x: e.x,
+    y: e.y,
+    actorId: e.id,
+    actorName: e.name ?? 'Вы',
+    actorFaction: e.faction,
+    targetName: report ? 'оружейная ревизия' : 'скупщик оружейных номеров',
+    itemId: defId,
+    itemName: def?.name ?? defId,
+    itemCount: 1,
+    itemValue: reward,
+    severity: report ? 3 : 4,
+    privacy: report ? 'private' : 'local',
+    tags: report
+      ? ['player', 'inventory', 'weapon', 'serial', 'audit', 'evidence', 'report', 'liquidator']
+      : ['player', 'inventory', 'weapon', 'serial', 'evidence', 'black_market', 'audit_risk', 'contraband'],
+    data: {
+      outcome: report ? 'weapon_serial_plate_reported' : 'weapon_serial_plate_sold',
+      rewardMoney: reward,
+      contrabandDelta: report ? -1 : 1,
+    },
+  });
+  return true;
+}
+
 function handleDocumentPaperUse(
   e: Entity,
+  slotIdx: number,
   defId: string,
   msgs: Msg[],
   time: number,
@@ -1237,6 +1689,7 @@ function handleDocumentPaperUse(
   world: World | undefined,
 ): boolean {
   if (defId === 'forged_stamp_sheet') return forgePermitFromStampSheet(e, msgs, time, state, zoneId, world);
+  if (handleDirectDocumentActionUse(e, slotIdx, defId, msgs, time, state, zoneId, world)) return true;
   if (!DOCUMENT_GATE_ITEMS.has(defId) && DOCUMENT_MARKET_VALUES[defId] === undefined) return false;
   if (!state || e.type !== EntityType.PLAYER) {
     msgs.push(msg(ITEMS[defId]?.desc ?? 'Бумаге нужен адресат.', time, '#aa8'));
@@ -1306,6 +1759,7 @@ export function useItem(e: Entity, slotIdx: number, msgs: Msg[], time: number, s
   const slot = e.inventory[slotIdx];
   const def = ITEMS[slot.defId];
   if (!def) return;
+  const equipSlot = itemEquipSlot(def);
   const noisyDocument = consumeNoisyDocumentDelay(slot, time);
   if (noisyDocument) {
     msgs.push(msg(`Конторская метка шумит в бумаге: ${noisyDocument.itemName}. Попробуйте еще раз через секунду.`, time, '#d9b36a'));
@@ -1320,8 +1774,13 @@ export function useItem(e: Entity, slotIdx: number, msgs: Msg[], time: number, s
   if (def.id === GOVNYAK_COURIER_PACKAGE_ITEM) {
     if (openGovnyakCourierPackage(e, msgs, time, state)) return;
   }
+  if (handleIncendiary12gUse(e, slotIdx, msgs, time, state, zoneId, world)) return;
+  if (handleDeconFluidUse(e, slotIdx, msgs, time, state, zoneId, world)) return;
+  if (handleGasmaskFilterUse(e, slotIdx, msgs, time, state, zoneId)) return;
 
-  if (handleDocumentPaperUse(e, def.id, msgs, time, state, zoneId, world)) return;
+  if (handleContaminatedSwabUse(e, slotIdx, msgs, time, state, zoneId, world)) return;
+  if (handleAuditProofUse(e, slotIdx, def.id, msgs, time, state, zoneId, world)) return;
+  if (handleDocumentPaperUse(e, slotIdx, def.id, msgs, time, state, zoneId, world)) return;
   if (handleShelterTallyUse(e, def.id, msgs, time, state)) return;
   if (handleVeretarSandUse(e, slotIdx, msgs, time, state)) return;
 
@@ -1333,7 +1792,13 @@ export function useItem(e: Entity, slotIdx: number, msgs: Msg[], time: number, s
   }
 
   // Weapons: equip
-  if (def.type === ItemType.WEAPON) {
+  if (equipSlot === 'weapon') {
+    if (e.weapon === def.id) {
+      e.weapon = '';
+      msgs.push(msg(`Оружие снято: ${def.name}`, time, '#ccc'));
+      publishPlayerItemEvent(state, e, 'player_use_item', def.id, 1, 2, zoneId);
+      return;
+    }
     e.weapon = def.id;
     msgs.push(msg(`Экипировано: ${def.name}`, time, '#ccc'));
     publishPlayerItemEvent(state, e, 'player_use_item', def.id, 1, 2, zoneId);
@@ -1341,7 +1806,13 @@ export function useItem(e: Entity, slotIdx: number, msgs: Msg[], time: number, s
   }
 
   // Tools: equip to utility slot
-  if (def.type === ItemType.TOOL) {
+  if (equipSlot === 'tool') {
+    if (e.tool === def.id) {
+      e.tool = '';
+      msgs.push(msg(`Инструмент снят: ${def.name}`, time, '#8cf'));
+      publishPlayerItemEvent(state, e, 'player_use_item', def.id, 1, 2, zoneId);
+      return;
+    }
     e.tool = def.id;
     msgs.push(msg(`Инструмент: ${def.name}`, time, '#8cf'));
     publishPlayerItemEvent(state, e, 'player_use_item', def.id, 1, 2, zoneId);
@@ -1373,6 +1844,14 @@ export function useItem(e: Entity, slotIdx: number, msgs: Msg[], time: number, s
 
   // Usable items
   if (def.use) {
+    if ((def.id === ANTIFUNGAL_OINTMENT_ITEM || def.id === ANTI_SPORE_INHALER_ITEM) && activeSporeHaze(e, time)) {
+      const useText = def.use(e);
+      msgs.push(msg(useText, time, '#6a6'));
+      cureSporeHaze(e, time, msgs, state, def.id);
+      consumeInventorySlot(e, slotIdx);
+      publishPlayerItemEvent(state, e, 'player_use_item', def.id, 1, 3, zoneId);
+      return;
+    }
     if (isZhelemishCureItem(def.id) && activeZhelemishSkin(e, time)) {
       const useText = def.use(e);
       msgs.push(msg(useText, time, '#6a6'));
@@ -1475,11 +1954,12 @@ export function pickupNearby(
       const def = ITEMS[item.defId];
       const acid = greenAcidPickupData(item.data);
       const zoneId = world.zoneMap[world.idx(Math.floor(drop.x), Math.floor(drop.y))];
-      if (acid?.organicRisk && !hasItem(player, GREEN_ACID_COUNTERMEASURE)) {
+      const acidHandlingTool = acid?.organicRisk ? equippedToolWithTag(player, SAMPLE_HANDLING_TOOL_TAG) : undefined;
+      if (acid?.organicRisk && !acidHandlingTool && !hasItem(player, GREEN_ACID_COUNTERMEASURE)) {
         if (!acid.warned) {
           setGreenAcidWarned(item);
           msgs.push(msg(
-            `Зелёная кислота шипит на ${def?.name ?? item.defId}. Нужен фильтрующий слой; повторная попытка испортит добычу.`,
+            `Зелёная кислота шипит на ${def?.name ?? item.defId}. Нужен фильтрующий слой или инструмент для проб; повторная попытка испортит добычу.`,
             time, '#9f4',
           ));
           publishGreenAcidItemEvent(state, player, 'exposure', item.defId, item.count, zoneId, drop.x, drop.y);
@@ -1497,9 +1977,16 @@ export function pickupNearby(
       const moved = addItemMovedCount(player, item.defId, item.count, acid ? undefined : item.data);
       if (moved > 0) {
         if (acid?.organicRisk) {
-          removeItem(player, GREEN_ACID_COUNTERMEASURE, 1);
-          msgs.push(msg(`Фильтрующий слой нейтрализовал кислоту: ${def?.name ?? item.defId} сохранён.`, time, '#9f4'));
-          publishGreenAcidItemEvent(state, player, 'neutralization', item.defId, moved, zoneId, drop.x, drop.y);
+          if (acidHandlingTool) {
+            const toolName = ITEMS[acidHandlingTool]?.name ?? acidHandlingTool;
+            consumeToolDurability(player, SAMPLE_HANDLING_TOOL_WEAR, msgs, time, state);
+            msgs.push(msg(`${toolName} удержали кислоту: ${def?.name ?? item.defId} сохранён.`, time, '#9f4'));
+            publishGreenAcidItemEvent(state, player, 'neutralization', item.defId, moved, zoneId, drop.x, drop.y, acidHandlingTool);
+          } else {
+            removeItem(player, GREEN_ACID_COUNTERMEASURE, 1);
+            msgs.push(msg(`Фильтрующий слой нейтрализовал кислоту: ${def?.name ?? item.defId} сохранён.`, time, '#9f4'));
+            publishGreenAcidItemEvent(state, player, 'neutralization', item.defId, moved, zoneId, drop.x, drop.y);
+          }
         }
         if (acid?.sample) {
           msgs.push(msg('Взята проба зелёной кислотной слизи.', time, '#9f4'));
@@ -1688,7 +2175,7 @@ function weaponRole(id: string, ws: WeaponStats): string {
     if (id === 'flamethrower' || ws.ammoType === 'ammo_fuel') return 'зачистка';
     if ((ws.pellets ?? 1) > 1) return 'дробь';
     if (ws.ammoType === 'ammo_energy') return 'энерго';
-    if (ws.ammoType === 'ammo_nails' || ws.ammoType === 'ammo_harpoon') return 'индустр.';
+    if (ws.ammoType === 'ammo_nails' || ws.ammoType === 'ammo_harpoon' || ws.ammoType === 'rifle_bolt_pack') return 'индустр.';
     if (ws.speed <= 0.1) return 'авто';
     return 'огонь';
   }

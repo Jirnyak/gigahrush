@@ -18,6 +18,8 @@ const TAG_BURNED = '[зола 0]';
 const TAG_FED = '[сыта]';
 const TAG_HARVESTED = '[срезан]';
 const SALT_ITEM = 'rock_salt';
+const DECON_FLUID_ITEM = 'decon_fluid';
+const INCENDIARY_12G_ITEM = 'ammo_12g_incendiary';
 const REAGENT_ITEM = 'antifungal_ointment';
 const HAZARD_RADIUS2 = 4.2 * 4.2;
 const NEARBY_RADIUS2 = 72 * 72;
@@ -141,8 +143,22 @@ function fungusHazardCell(world: World, room: Room, x: number, y: number): boole
 
 function findNeutralizer(player: Entity): string {
   if (hasItem(player, SALT_ITEM)) return SALT_ITEM;
+  if (hasItem(player, DECON_FLUID_ITEM)) return DECON_FLUID_ITEM;
+  if (hasItem(player, INCENDIARY_12G_ITEM)) return INCENDIARY_12G_ITEM;
   if (hasItem(player, REAGENT_ITEM)) return REAGENT_ITEM;
   return '';
+}
+
+function neutralizerEventTag(itemId: string): string {
+  if (itemId === SALT_ITEM) return 'salt';
+  if (itemId === DECON_FLUID_ITEM) return 'decon';
+  return 'reagent';
+}
+
+function neutralizerMessage(itemId: string): string {
+  if (itemId === SALT_ITEM) return 'Соль взяла грибницу сухим кругом. В центре остался варёный желемыш.';
+  if (itemId === DECON_FLUID_ITEM) return 'Раствор снял грибницу щёлочным кругом. В центре остался варёный желемыш.';
+  return 'Противогрибковый реагент усадил грибницу. В центре остался варёный желемыш.';
 }
 
 function dropReward(world: World, entities: Entity[], nextId: { v: number }, room: Room, defId: string, count = 1): void {
@@ -178,22 +194,23 @@ function neutralizeRoom(world: World, entities: Entity[], nextId: { v: number },
   addItem(player, 'zhelemish_boiled', 1);
   dropReward(world, entities, nextId, room, 'zhelemish_dried', 1);
   addFactionRelMutual(Faction.PLAYER, Faction.CITIZEN, 1);
-  state.msgs.push(msg('Соль взяла грибницу сухим кругом. В центре остался варёный желемыш.', state.time, '#9f8'));
-  publishFungusEvent(world, player, state, room, 'hazard_cleaned', 4, ['neutralized', 'salt', 'counterplay'], {
+  state.msgs.push(msg(neutralizerMessage(itemId), state.time, '#9f8'));
+  publishFungusEvent(world, player, state, room, 'hazard_cleaned', 4, ['neutralized', neutralizerEventTag(itemId), 'counterplay'], {
     consumed: itemId,
     reward: ['zhelemish_boiled', 'zhelemish_dried'],
     relationDelta: 1,
   }, itemId);
 }
 
-function burnRoom(world: World, entities: Entity[], nextId: { v: number }, player: Entity, state: GameState, room: Room): void {
+function burnRoom(world: World, entities: Entity[], nextId: { v: number }, player: Entity, state: GameState, room: Room, itemId?: string): void {
   addRoomTag(room, TAG_BURNED);
   markRoomSafe(world, room, true);
   dropReward(world, entities, nextId, room, 'zhelemish_dried', 1);
   state.msgs.push(msg('Грибница вспыхнула и сжалась в чёрный сладкий пепел.', state.time, '#fa4'));
   publishFungusEvent(world, player, state, room, 'hazard_cleaned', 4, ['burned', 'fire', 'counterplay'], {
     reward: ['zhelemish_dried'],
-  });
+    consumed: itemId,
+  }, itemId);
 }
 
 function harvestRoom(world: World, player: Entity, state: GameState, room: Room): void {
@@ -238,12 +255,12 @@ export function tryUseCarnivorousFungus(
 
   if (roomHas(room, TAG_NEUTRALIZED)) {
     if (roomHas(room, TAG_HARVESTED)) {
-      state.msgs.push(msg('Солёная грибница уже срезана. Дальше только мокрая труха.', state.time, '#888'));
+      state.msgs.push(msg('Обработанная грибница уже срезана. Дальше только мокрая труха.', state.time, '#888'));
       return true;
     }
     addRoomTag(room, TAG_HARVESTED);
     addItem(player, 'zhelemish_dried', 1);
-    state.msgs.push(msg('Из солёного круга снят безопасный сухой желемыш.', state.time, '#9f8'));
+    state.msgs.push(msg('Из сухого круга снят безопасный желемыш.', state.time, '#9f8'));
     publishFungusEvent(world, player, state, room, 'player_pick_item', 2, ['harvested', 'safe_harvest', 'neutralized'], {
       reward: ['zhelemish_dried'],
     }, 'zhelemish_dried');
@@ -252,6 +269,11 @@ export function tryUseCarnivorousFungus(
 
   const neutralizer = findNeutralizer(player);
   if (neutralizer) {
+    if (neutralizer === INCENDIARY_12G_ITEM) {
+      removeItem(player, neutralizer, 1);
+      burnRoom(world, entities, nextId, player, state, room, neutralizer);
+      return true;
+    }
     neutralizeRoom(world, entities, nextId, player, state, room, neutralizer);
     return true;
   }
@@ -266,10 +288,10 @@ function updatePlayerHazard(world: World, player: Entity, state: GameState): voi
 
   if (!discoveredRooms.has(room.id)) {
     discoveredRooms.add(room.id);
-    state.msgs.push(msg('У входа кости лежат сухо: плотоядная грибница ждёт мясо, соль или огонь.', state.time, '#bf8'));
+    state.msgs.push(msg('У входа кости лежат сухо: плотоядная грибница ждёт мясо, соль, раствор или огонь.', state.time, '#bf8'));
     publishFungusEvent(world, player, state, room, 'room_regrown', 3, ['discovered', 'warning'], {
       warning: 'corpse-fed fungus room',
-      counterplay: ['avoid', 'salt', 'fire', 'bait', 'risky_harvest'],
+      counterplay: ['avoid', 'salt', 'decon_fluid', 'fire', 'bait', 'risky_harvest'],
     });
   }
 

@@ -2,10 +2,22 @@ import { test } from 'node:test';
 import * as assert from 'node:assert/strict';
 
 import { EntityType, RoomType } from '../src/core/types';
+import { ITEMS } from '../src/data/catalog';
+import { CONTRACTS } from '../src/data/contracts';
 import { designFloorById } from '../src/data/design_floors';
 import { designFloorPopulationProfile } from '../src/data/design_floor_population';
 import { SIDE_QUESTS } from '../src/data/plot';
+import { resourceForItem } from '../src/data/resources';
 import { generateDesignFloor } from '../src/gen/design_floors/manifest';
+
+test('corpse number tag is a document-scarcity morgue proof token', () => {
+  const def = ITEMS.corpse_number_tag;
+  assert.ok(def);
+  assert.equal(def.name, 'Номерок трупа');
+  assert.equal(def.tags?.includes('identity'), true);
+  assert.equal(resourceForItem(def.id)?.id, 'documents');
+  assert.equal(CONTRACTS.find(contract => contract.id === 'ministry_registry_tag_return')?.targetItem, def.id);
+});
 
 test('registry morgue is a monster-heavy bureaucratic horror floor with bounded staff', () => {
   const route = designFloorById('registry_morgue');
@@ -36,6 +48,7 @@ test('registry morgue gates valuable records and medicine behind owned or locked
   assert.equal(bodyStorage.tags.includes('body_storage'), true);
   assert.equal(bodyStorage.tags.includes('morgue_theft'), true);
   assert.equal(bodyStorage.inventory.some(item => item.defId === 'missing_record_file'), true);
+  assert.equal(bodyStorage.inventory.some(item => item.defId === 'corpse_number_tag'), true);
   assert.equal(bodyStorage.inventory.some(item => item.defId === 'container_key_label'), true);
 
   assert.ok(medCabinet);
@@ -56,6 +69,7 @@ test('registry morgue side quests publish record, false-death, theft, and quaran
 
   assert.equal(byId.get('morgue_find_tag')?.eventTags?.includes('record_correction'), true);
   assert.equal(byId.get('morgue_find_tag')?.targetRoute?.designFloorId, 'registry_morgue');
+  assert.equal(byId.get('morgue_find_tag')?.targetItem, 'corpse_number_tag');
   assert.equal(byId.get('morgue_swap_certificate')?.eventTags?.includes('false_death'), true);
   assert.equal(byId.get('morgue_missing_body')?.eventTags?.includes('false_body'), true);
   assert.equal(byId.get('morgue_medicine_lock')?.eventTags?.includes('quarantine_paper_use'), true);

@@ -15,6 +15,7 @@ import {
 import {
   assignPersistentAlifeNpcFromEntity,
   alifeForSave,
+  captureAlifeFloorState,
   defaultAlifePopulation,
   getAlifeLeaderboardSnapshot,
   materializeAlifeFloorPopulation,
@@ -302,6 +303,23 @@ test('A-Life caps active pocket cash without removing off-floor wealth tails', (
 
   assert.equal(entities.length, 1);
   assert.ok((entities[0].money ?? 0) <= 2_000);
+  assert.equal(alifeForSave(state).overrides.some(item => item.id === 1 && item.money === 1_000_000), true);
+});
+
+test('A-Life restored floor entities preserve total wealth on capture', () => {
+  const state = minimalState();
+  setAlifeState(state, { seed: 12345, total: 100_000, overrides: [{ id: 1, money: 1_000_000 }] });
+  const world = new World();
+  world.cells[world.idx(12, 10)] = Cell.FLOOR;
+  const restored = ambientTemplate(1, 12.5, 10.5);
+  restored.alifeId = 1;
+  restored.persistentNpcId = 'alife:1';
+  restored.money = 640;
+  const entities = [restored];
+
+  materializeAlifeFloorPopulation(state, world, entities, { v: 2 }, 'story:living');
+  captureAlifeFloorState(state, entities);
+
   assert.equal(alifeForSave(state).overrides.some(item => item.id === 1 && item.money === 1_000_000), true);
 });
 

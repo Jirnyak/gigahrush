@@ -14,6 +14,7 @@ import {
 const CONTENT_TAG = 'ag71_slime_deactivation_furnace';
 const FACTORY_ID = 'slime_deactivation_furnace';
 const BROWN_SAMPLE_ITEM = 'slime_sample_brown';
+const ALKALI_POWDER_ITEM = 'alkali_powder';
 const BROWN_CLEANUP_LEAD_QUEST = 'ag84_nii_brown_cleanup_lead';
 
 const OPERATOR_DEF: PlotNpcDef = {
@@ -30,7 +31,7 @@ const OPERATOR_DEF: PlotNpcDef = {
   ],
   talkLines: [
     'Вера Гасильная. Печь не чистит, она делает грязь пригодной для подписи.',
-    'Пробу в бункер, топливо в ведомость. Без бензина это просто тёплый шкаф с претензией.',
+    'Пробу и щёлочь в бункер, топливо в ведомость. Без бензина это просто тёплый шкаф с претензией.',
     'Если унесёшь пробу в кармане, не садись потом рядом с людьми.',
   ],
   talkLinesPost: [
@@ -71,7 +72,7 @@ registerSideQuest('ag71_furnace_operator', OPERATOR_DEF, [
     targetFloor: FloorLevel.MAINTENANCE,
     targetRoomType: RoomType.PRODUCTION,
     targetZoneTag: 'deactivation_furnace',
-    targetHint: 'Коллекторы: сухой обход даёт коричневую пробу; печь деактивации гасит её в сухой остаток, а фильтр выдают по акту.',
+    targetHint: 'Коллекторы: сухой обход даёт коричневую пробу и щёлочную присыпку; печь деактивации гасит пробу в сухой остаток, а фильтр выдают по акту.',
     rewardItem: 'deactivated_residue', rewardCount: 2,
     extraRewards: [{ defId: 'gasmask_filter', count: 1 }, { defId: 'filter_receipt', count: 1 }],
     relationDelta: 12, xpReward: 75, moneyReward: 65,
@@ -173,8 +174,10 @@ function addFurnaceContainers(ctx: MaintContentCtx, intake: Room, furnace: Room,
     name: 'Приёмный бункер печи гашения',
     inventory: [
       { defId: BROWN_SAMPLE_ITEM, count: 1 },
+      { defId: ALKALI_POWDER_ITEM, count: 1 },
       { defId: 'filter_layer', count: 1 },
       { defId: 'deactivated_residue', count: 1 },
+      { defId: 'boiled_slime_residue', count: 1 },
     ],
     capacitySlots: 10,
     ownerNpcId: operatorId,
@@ -190,6 +193,7 @@ function addFurnaceContainers(ctx: MaintContentCtx, intake: Room, furnace: Room,
     name: 'Опломбированный шкаф топлива печи',
     inventory: [
       { defId: 'ammo_fuel', count: 2 },
+      { defId: 'liquidator_rake', count: 1 },
       { defId: 'cleaning_kit', count: 1 },
       { defId: 'gasmask_filter', count: 1 },
     ],
@@ -207,6 +211,7 @@ function addFurnaceContainers(ctx: MaintContentCtx, intake: Room, furnace: Room,
     name: 'Мокрая тара до гашения',
     inventory: [
       { defId: 'acid_bottle', count: 1 },
+      { defId: ALKALI_POWDER_ITEM, count: 1 },
       { defId: 'green_briquette', count: 1 },
       { defId: 'filter_receipt', count: 1 },
     ],
@@ -274,7 +279,7 @@ export function generateSlimeDeactivationFurnace(ctx: MaintContentCtx): void {
   spawnPlotNpc(ctx, 'ag71_furnace_claimant', CLAIMANT_DEF, fuel.x + 3, fuel.y + 4, -Math.PI / 2);
   addFurnaceContainers(ctx, intake, furnace, fuel, operatorId);
 
-  dropItems(ctx, intake, ['filter_layer', 'filter_receipt', 'acid_bottle']);
+  dropItems(ctx, intake, ['filter_layer', ALKALI_POWDER_ITEM, 'filter_receipt', 'acid_bottle']);
   dropItems(ctx, furnace, ['cleaning_kit', 'gasmask_filter', 'note']);
   dropItems(ctx, fuel, ['ammo_fuel']);
 

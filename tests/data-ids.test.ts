@@ -13,6 +13,7 @@ import {
   type Item,
 } from '../src/core/types';
 import { ITEMS, WEAPON_STATS } from '../src/data/catalog';
+import { PHYS_WEAPON_ROLE_TIERS, PHYS_WEAPON_STATS } from '../src/data/weapons';
 import { CONTAINER_DEFS } from '../src/data/container_defs';
 import { COMPACT_EXPEDITION_CONTRACT_IDS, CONTRACTS } from '../src/data/contracts';
 import { COMPUTER_DEFS } from '../src/data/computers';
@@ -165,6 +166,20 @@ test('item ids are unique, keyed by id, and weapon items have stats', () => {
     .map(([id]) => id)
     .filter(id => !WEAPON_STATS[id]);
   assert.deepEqual(weaponIdsWithoutStats, [], 'weapon items must have weapon stats');
+
+  const physicalStatsWithoutItems = Object.keys(PHYS_WEAPON_STATS)
+    .filter(id => id !== '' && !ITEMS[id]);
+  assert.deepEqual(physicalStatsWithoutItems, [], 'physical weapon stats must have item definitions');
+
+  const physicalStatsWithoutRole = Object.keys(PHYS_WEAPON_STATS)
+    .filter(id => !PHYS_WEAPON_ROLE_TIERS[id]);
+  assert.deepEqual(physicalStatsWithoutRole, [], 'physical weapon stats must have role tiers');
+
+  const missingAmmoItems = Object.entries(PHYS_WEAPON_STATS)
+    .filter(([, stats]) => !!stats.ammoType)
+    .map(([id, stats]) => `${id}:${stats.ammoType}`)
+    .filter(ref => !ITEMS[ref.slice(ref.indexOf(':') + 1)]);
+  assert.deepEqual(missingAmmoItems, [], 'physical weapon ammo types must reference item definitions');
 });
 
 test('ammo uses planned sources and explicit scarcity resources', () => {
@@ -485,8 +500,8 @@ test('samosbor floor families expose warning and aftermath identities', () => {
     {
       label: 'social',
       floor: FloorLevel.MINISTRY,
-      variants: ['quiet', 'electric', 'istotit'] as const,
-      aftermathVariant: 'quiet' as const,
+      variants: ['electric', 'maronary', 'istotit', 'veretar'] as const,
+      aftermathVariant: 'electric' as const,
       tag: 'civil',
       warningTag: 'social',
     },
@@ -540,6 +555,15 @@ test('slime definitions expose stable sample ids and text handles', () => {
 
   const slimeResource = RESOURCES.find(resource => resource.id === 'slime_samples');
   assert.ok(slimeResource, 'slime_samples resource must exist for contract/economy lookup');
+  assert.equal(slimeResource.itemIds.includes('zinc_slime_bucket'), true, 'zinc slime bucket must price as a slime sample');
+  assert.equal(
+    SAMOSBOR_AFTERMATH_BEATS.some(beat =>
+      beat.id === 'aftermath_zinc_slime_bucket'
+      && beat.floors.includes(FloorLevel.MAINTENANCE)
+      && beat.itemId === 'zinc_slime_bucket'),
+    true,
+    'zinc slime bucket must be reachable through Maintenance aftermath',
+  );
 
   const rumorIds = new Set(RUMORS.map(rumor => rumor.id));
   const rumorSampleIds = new Set<string>();

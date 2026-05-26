@@ -510,15 +510,22 @@ function spawnAmbientNpcs(entities: Entity[], nextId: NextId, rooms: SlimeNiiRoo
 function placeContainers(world: World, rooms: SlimeNiiRooms, owners: Record<SlimeNiiNpcId, number>): void {
   addContainer(world, rooms.admin, rooms.admin.x + rooms.admin.w - 8, rooms.admin.y + 12, ContainerKind.FILING_CABINET, 'Картотека директора НИИ слизи', 'owner', [
     { defId: 'nii_sample_container', count: 2 },
+    { defId: 'sterile_swab', count: 4 },
+    { defId: 'post_samosbor_probe_kit', count: 1 },
+    { defId: 'glass_ampoule_empty', count: 4 },
+    { defId: 'syringe_empty', count: 6 },
+    { defId: 'sample_chain_form', count: 2 },
+    { defId: 'nii_sample_label', count: 3 },
     { defId: 'official_quarantine_clearance', count: 1 },
     { defId: 'blank_form', count: 2 },
   ], owners.slime_nii_director_larisa, NPC_DEFS.slime_nii_director_larisa.name, ['slime_nii', 'science', 'documents']);
 
   addContainer(world, rooms.liquidatorPost, rooms.liquidatorPost.x + rooms.liquidatorPost.w - 10, rooms.liquidatorPost.y + 14, ContainerKind.WEAPON_CRATE, 'Оружейный ящик карантинной охраны', 'faction', [
     { defId: 'ammo_9mm', count: 18 },
+    { defId: 'ammo_12g_chemical', count: 1 },
     { defId: 'gasmask_filter', count: 1 },
     { defId: 'key', count: 1 },
-  ], owners.slime_nii_liquidator_voron, NPC_DEFS.slime_nii_liquidator_voron.name, ['slime_nii', 'liquidator', 'containment']);
+  ], owners.slime_nii_liquidator_voron, NPC_DEFS.slime_nii_liquidator_voron.name, ['slime_nii', 'liquidator', 'containment', 'ammo', 'chemical']);
 
   addContainer(world, rooms.secretary, rooms.secretary.x + rooms.secretary.w - 8, rooms.secretary.y + 12, ContainerKind.FILING_CABINET, 'Журнал утечки проб НИИ', 'owner', [
     { defId: 'nii_market_receipt', count: 1 },
@@ -529,6 +536,14 @@ function placeContainers(world: World, rooms: SlimeNiiRooms, owners: Record<Slim
   addContainer(world, rooms.coldStorage, rooms.coldStorage.x + 12, rooms.coldStorage.y + 12, ContainerKind.MEDICAL_CABINET, 'Холодный шкаф зелёных и белых проб', 'locked', [
     { defId: 'slime_sample_green', count: 1 },
     { defId: 'slime_sample_white', count: 1 },
+    { defId: 'gas_sample_ampoule', count: 1 },
+    { defId: 'anti_spore_inhaler', count: 1 },
+    { defId: 'experimental_concentrate', count: 1 },
+    { defId: 'frozen_slime_core', count: 1 },
+    { defId: 'boiled_slime_residue', count: 1 },
+    { defId: 'slime_calcified_chip', count: 1 },
+    { defId: 'slime_motor_node', count: 1 },
+    { defId: 'slime_age_label_violet', count: 1 },
     { defId: 'nii_contraband_manifest', count: 1 },
   ], undefined, undefined, ['slime_nii', 'sample', 'cold_storage']);
 
@@ -539,10 +554,16 @@ function placeContainers(world: World, rooms: SlimeNiiRooms, owners: Record<Slim
         : i % 5 === 2 ? 'slime_sample_red'
           : i % 5 === 3 ? 'slime_sample_contaminated'
             : 'nii_sample_container';
-    addContainer(world, room, room.x + room.w - 6, room.y + 6, ContainerKind.MEDICAL_CABINET, `Контейнер камеры НИИ ${i + 1}`, 'locked', [
+    const inventory = [
       { defId: item, count: 1 },
       { defId: 'filter_layer', count: 1 },
-    ], undefined, undefined, ['slime_nii', 'camera', 'sample']);
+    ];
+    if (item === 'slime_sample_contaminated') {
+      inventory.push({ defId: 'contaminated_sample_act', count: 1 });
+      inventory.push({ defId: 'contaminated_swab', count: 1 });
+    }
+    if (i === 3) inventory.push({ defId: 'slime_age_label_orange', count: 1 });
+    addContainer(world, room, room.x + room.w - 6, room.y + 6, ContainerKind.MEDICAL_CABINET, `Контейнер камеры НИИ ${i + 1}`, 'locked', inventory, undefined, undefined, ['slime_nii', 'camera', 'sample']);
   }
 }
 

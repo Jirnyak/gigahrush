@@ -115,6 +115,7 @@ export class EntityIndex {
   private readonly bucketVisits = new Uint32Array(BUCKET_COUNT);
   private bucketVisitId = 1;
   readonly byId = new Map<number, Entity>();
+  private readonly entityOrder = new Map<number, number>();
   readonly ai: Entity[] = [];
   readonly actors: Entity[] = [];
   readonly needs: Entity[] = [];
@@ -150,6 +151,7 @@ export class EntityIndex {
     const startedAt = nowMs();
     for (let i = 0; i < BUCKET_COUNT; i++) this.buckets[i].length = 0;
     this.byId.clear();
+    this.entityOrder.clear();
     this.ai.length = 0;
     this.actors.length = 0;
     this.needs.length = 0;
@@ -162,10 +164,12 @@ export class EntityIndex {
     let monsterCount = 0;
     let itemCount = 0;
 
-    for (const e of entities) {
-      if (!e.alive) continue;
+    for (let order = 0; order < entities.length; order++) {
+      const e = entities[order];
+      if (!e || !e.alive) continue;
       liveEntityCount++;
       this.byId.set(e.id, e);
+      this.entityOrder.set(e.id, order);
       if (e.type === EntityType.PLAYER || e.type === EntityType.NPC || e.type === EntityType.MONSTER) this.actors.push(e);
       if (e.type === EntityType.NPC) npcCount++;
       else if (e.type === EntityType.MONSTER) monsterCount++;
@@ -225,6 +229,10 @@ export class EntityIndex {
 
   getVersion(): number {
     return this.version;
+  }
+
+  orderOf(entity: Entity): number {
+    return this.entityOrder.get(entity.id) ?? Number.MAX_SAFE_INTEGER;
   }
 
   copyDebugStats(out: EntityIndexDebugStats): EntityIndexDebugStats {

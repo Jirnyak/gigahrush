@@ -55,6 +55,7 @@ import {
   getNpcPlayerRelation,
 } from './npc_relations';
 import { pushNpcLogMessage } from './ai/barks';
+import { hearingRadiusMetersForActor } from './hearing';
 
 const BASE_QUEST_GIVER_CHANCE = 0.35;
 
@@ -376,7 +377,7 @@ function pushNpcQuestMessage(
 ): boolean {
   return pushNpcLogMessage(npc, msgs, state.time, text, color, {
     listener: player,
-    radiusMeters: state.npcLogRadiusMeters,
+    radiusMeters: hearingRadiusMetersForActor(player, state.npcLogRadiusMeters),
     dist2: (x1, y1, x2, y2) => world.dist2(x1, y1, x2, y2),
   });
 }

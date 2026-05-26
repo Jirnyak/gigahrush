@@ -99,8 +99,8 @@
 - Active duration: `12..90s * variant.durationMult`.
 - Seal timing: `10s + variant/modifier delta` before end.
 - Unsheltered pressure: fog radius `4`, fog strength `155`, `-4 HP`, `-3 PSI`.
-- Variant weights: classic `60`, quiet `18`, wet `20`, electric `16`, meat `14`, maronary `4`, istotit `3`, veretar `4`.
-- Variant duration range roughly `0.82..1.15`, spawn `0.52..1.18`, seal delta `-4..+4` before modifiers.
+- Variant weights: classic `60`, wet `20`, electric `16`, meat `14`, maronary `4`, istotit `3`, veretar `4`.
+- Variant duration range roughly `0.82..1.15`, spawn `0.52..1.18`, seal delta `-2..+4` before modifiers.
 
 ### A-Life
 

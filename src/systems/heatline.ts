@@ -188,7 +188,7 @@ function consumeFailedPart(player: Entity, hasCord: boolean, hasSealant: boolean
 function eventItem(consumed: readonly string[], fallback: string): { id: string; name: string } {
   const id = consumed[0] ?? fallback;
   switch (id) {
-    case 'asbestos_cord': return { id, name: 'Асбестовый шнур' };
+    case 'asbestos_cord': return { id, name: 'Асбестовая верёвка' };
     case 'sealant_tube': return { id, name: 'Герметик' };
     case 'valve_tag': return { id, name: 'Бирка вентиля' };
     default: return { id: 'manometer', name: 'Манометр' };
@@ -360,7 +360,7 @@ export function tryUseHeatlinePressure(
       state.time,
       '#8cf',
     ));
-    publishHeatlineEvent(world, player, state, room, 'partial_repair', 3, part === 'cord' ? 'asbestos_cord' : 'sealant_tube', part === 'cord' ? 'Асбестовый шнур' : 'Герметик', {
+    publishHeatlineEvent(world, player, state, room, 'partial_repair', 3, part === 'cord' ? 'asbestos_cord' : 'sealant_tube', part === 'cord' ? 'Асбестовая верёвка' : 'Герметик', {
       consumed,
       installed: part === 'cord' ? 'asbestos_cord' : 'sealant_tube',
       missing: part === 'cord' ? 'sealant_tube' : 'asbestos_cord',
@@ -379,7 +379,7 @@ export function tryUseHeatlinePressure(
       state.time,
       '#888',
     ));
-    publishHeatlineEvent(world, player, state, room, 'blocked', 2, partialPart === 'cord' ? 'asbestos_cord' : 'sealant_tube', partialPart === 'cord' ? 'Асбестовый шнур' : 'Герметик', {
+    publishHeatlineEvent(world, player, state, room, 'blocked', 2, partialPart === 'cord' ? 'asbestos_cord' : 'sealant_tube', partialPart === 'cord' ? 'Асбестовая верёвка' : 'Герметик', {
       reason: 'partial_waiting_missing_part',
       installed: partialPart === 'cord' ? 'asbestos_cord' : 'sealant_tube',
       missing: partialPart === 'cord' ? 'sealant_tube' : 'asbestos_cord',

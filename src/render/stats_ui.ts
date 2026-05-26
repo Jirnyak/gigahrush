@@ -14,6 +14,7 @@ import { zhelemishStatsLine } from '../systems/status';
 import { drawNeuroPanel, drawGlitchText, textJitter, flicker } from './hud_fx';
 import { fitText as fitStatText } from './ui_text';
 import { drawInventoryFinanceBlock, readFinanceSnapshot } from './economy_ui';
+import { fullscreenInventoryLayout } from './ui_layout';
 
 export function drawInventory(
   ctx: CanvasRenderingContext2D,
@@ -26,9 +27,9 @@ export function drawInventory(
   const cw = ctx.canvas.width;
   const ch = ctx.canvas.height;
   const time = uiTime;
-  const uiScale = Math.max(0.9, Math.min(4.2, Math.min(sx, sy)));
-  sx = uiScale;
-  sy = uiScale;
+  const layout = fullscreenInventoryLayout(cw, ch, sx, sy);
+  sx = layout.scale;
+  sy = layout.scale;
 
   // Fullscreen neuro-panel background
   ctx.fillStyle = '#00040a';
@@ -52,10 +53,10 @@ export function drawInventory(
   ctx.textAlign = 'left';
 
   // ── LEFT COLUMN: grid + item desc + weapon + money ───────
-  const cellSz = 22 * sx;
-  const gridX = 8 * sx;
-  const gridY = 18 * sy;
-  const gridW = GRID * cellSz;
+  const cellSz = layout.grid.cell;
+  const gridX = layout.grid.x;
+  const gridY = layout.grid.y;
+  const gridW = layout.grid.w;
 
   // 5×5 Grid
   for (let row = 0; row < GRID; row++) {

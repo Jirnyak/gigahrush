@@ -1,6 +1,12 @@
 import { test } from 'node:test';
 import * as assert from 'node:assert/strict';
 
+import { Cell, DoorState, ZoneFaction } from '../src/core/types';
+import { World } from '../src/core/world';
+import { initFactionRelations } from '../src/data/relations';
+import { putIntoContainer } from '../src/systems/containers';
+import { createWorldEventState, getRecentEvents } from '../src/systems/events';
+import { destroyMaronaryShaving, tryHandleMaronaryShavingHandoff } from '../src/systems/maronary_shaving';
 import {
   ContainerKind,
   Faction,
@@ -9,17 +15,13 @@ import {
   WRONG_DOOR_MAX_DIST2,
   WRONG_DOOR_MIN_DIST2,
   chooseWrongDoorRouteOption,
+  createWrongDoorRemap,
   isUsableWrongDoorRoute,
   wrongDoorCueActionLabel,
   wrongDoorCueSecondsLeft,
   type WrongDoorMapCue,
   type WrongDoorRouteOption,
 } from '../src/systems/wrong_door';
-import { World } from '../src/core/world';
-import { initFactionRelations } from '../src/data/relations';
-import { putIntoContainer } from '../src/systems/containers';
-import { createWorldEventState, getRecentEvents } from '../src/systems/events';
-import { destroyMaronaryShaving, tryHandleMaronaryShavingHandoff } from '../src/systems/maronary_shaving';
 import { addTestRoom, makeGameState, makeTestContainer, makeTestNpc, makeTestPlayer } from './helpers';
 
 function option(overrides: Partial<WrongDoorRouteOption>): WrongDoorRouteOption {
@@ -34,6 +36,31 @@ function option(overrides: Partial<WrongDoorRouteOption>): WrongDoorRouteOption 
     targetDanger: 0,
     ...overrides,
   };
+}
+
+function addDoor(world: World, x: number, y: number, roomId: number, protectedDoor = false): number {
+  const idx = world.idx(x, y);
+  world.cells[idx] = Cell.DOOR;
+  world.roomMap[idx] = roomId;
+  world.zoneMap[idx] = 0;
+  world.doors.set(idx, { idx, state: DoorState.HERMETIC_OPEN, roomA: roomId, roomB: -1, keyId: '', timer: 0 });
+  for (const dx of [-1, 1]) {
+    const fi = world.idx(x + dx, y);
+    world.cells[fi] = Cell.FLOOR;
+    world.roomMap[fi] = -1;
+    world.zoneMap[fi] = 0;
+  }
+  if (protectedDoor) {
+    world.aptMask[idx] = 1;
+    world.hermoWall[idx] = 1;
+  }
+  return idx;
+}
+
+function makeWrongDoorWorld(): World {
+  const world = new World();
+  world.zones[0] = { id: 0, cx: 10, cy: 10, faction: ZoneFaction.CITIZEN, hasLift: false, fogged: false, level: 1, hqRoomId: -1 };
+  return world;
 }
 
 test('wrong-door route validation rejects same-room, same-cell, and out-of-band routes', () => {
@@ -68,6 +95,31 @@ test('wrong-door map cue tells the player to distrust or wait out the route', ()
   assert.equal(wrongDoorCueActionLabel(cue, 60), 'НЕ ВЕРЬ');
   assert.equal(wrongDoorCueActionLabel(cue, 88.2), 'ЖДИ');
   assert.equal(wrongDoorCueActionLabel(cue, 101), 'СБРОШЕНО');
+});
+
+test('maronary wrong-door remap ignores protected hermetic source doors', () => {
+  const world = makeWrongDoorWorld();
+  const protectedSource = addDoor(world, 10, 10, 1, true);
+  addDoor(world, 55, 10, 2);
+  const state = makeGameState({ currentFloor: FloorLevel.LIVING });
+
+  const cue = createWrongDoorRemap(world, state, 10.5, 10.5, 'test_protected_source', false, protectedSource);
+
+  assert.equal(cue, null);
+  assert.equal(world.anomalyTeleports.has(protectedSource), false);
+});
+
+test('maronary wrong-door remap can still use ordinary route doors', () => {
+  const world = makeWrongDoorWorld();
+  const source = addDoor(world, 10, 10, 1);
+  addDoor(world, 55, 10, 2);
+  const state = makeGameState({ currentFloor: FloorLevel.LIVING });
+
+  const cue = createWrongDoorRemap(world, state, 10.5, 10.5, 'test_open_source', false, source);
+
+  assert.ok(cue);
+  assert.equal(world.anomalyTeleports.has(source), true);
+  assert.notEqual(world.anomalyTeleports.get(source), source);
 });
 
 test('maronary shaving can be sold to science or hidden as contraband evidence', () => {

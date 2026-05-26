@@ -5,8 +5,10 @@ import { mapEntityDotBudget } from '../src/render/map_ui';
 import {
   allocateHudSlot,
   containerGridScale,
+  containerMenuGridLayout,
   createHudSlots,
   dialogMenuScale,
+  fullscreenInventoryLayout,
   tradeGridScale,
 } from '../src/render/ui_layout';
 
@@ -16,15 +18,15 @@ test('NPC dialog text can grow beyond the capped global HUD scale', () => {
 });
 
 test('trade and container inventories use large cells on desktop canvases', () => {
-  assert.ok(tradeGridScale(1920, 1080) >= 3.9);
+  assert.ok(tradeGridScale(1920, 1080) >= 3.2);
   assert.ok(containerGridScale(1920, 1080) >= 3.9);
 });
 
 test('trade inventory scale still fits shorter canvases', () => {
   const scale = tradeGridScale(1280, 720);
-  assert.ok(scale > 2.5);
-  assert.ok((22 * 5 * 2 + 24) * scale <= 1280 * 0.88 + 0.001);
-  assert.ok((28 + 22 * 5 + 58) * scale <= 720 * 0.78 + 0.001);
+  assert.ok(scale > 2);
+  assert.ok((22 * 5 * 4 + 24 * 3) * scale <= 1280 * 0.88 + 0.001);
+  assert.ok((28 + 22 * 5 + 70) * scale <= 720 * 0.78 + 0.001);
 });
 
 test('grid scale does not force tiny mobile canvases to overflow', () => {
@@ -32,6 +34,31 @@ test('grid scale does not force tiny mobile canvases to overflow', () => {
   assert.ok(scale < 1);
   assert.ok((22 * 5 * 2 + 24) * scale <= 280 * 0.88 + 0.001);
   assert.ok((30 + 22 * 5 + 66) * scale <= 180 * 0.78 + 0.001);
+});
+
+test('fullscreen inventory layout exposes the rendered mobile hit regions', () => {
+  const layout = fullscreenInventoryLayout(844, 390, 2.6375, 1.95);
+
+  assert.equal(layout.grid.cols, 5);
+  assert.equal(layout.grid.rows, 5);
+  assert.ok(layout.grid.x + layout.grid.w <= 844);
+  assert.ok(layout.grid.y + layout.grid.h <= 390);
+  assert.ok(layout.close.x + layout.close.w <= 844);
+  assert.ok(layout.use.y >= layout.grid.y + layout.grid.h);
+  assert.ok(layout.drop.y > layout.use.y);
+  assert.ok(layout.attr.x >= layout.grid.x + layout.grid.w);
+});
+
+test('container menu layout shares render and hit-test grid positions', () => {
+  const layout = containerMenuGridLayout(844, 390);
+  const expectedContainerX = layout.startX + layout.gridTotal + 24 * layout.scale;
+
+  assert.ok(layout.cell > 0);
+  assert.equal(layout.containerX, expectedContainerX);
+  assert.ok(layout.startX >= 0);
+  assert.ok(layout.containerX + layout.gridTotal <= 844 + 0.001);
+  assert.ok(layout.startY + layout.gridTotal <= 390);
+  assert.equal(layout.close.w, 844);
 });
 
 test('map entity dot budget compresses minimap and dense mobile maps', () => {

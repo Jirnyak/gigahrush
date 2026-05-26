@@ -135,7 +135,6 @@ export function openNetHackTerminal(state: GameState, terminal: NetHackTerminal)
   runtime.activeDefId = terminal.defId;
   runtime.message = '';
   state.paused = true;
-  if (typeof document !== 'undefined' && document.pointerLockElement) document.exitPointerLock();
 }
 
 export function closeNetHackTerminal(): void {

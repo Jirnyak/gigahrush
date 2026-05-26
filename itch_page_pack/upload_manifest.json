@@ -11,10 +11,9 @@
         "GIGAH|RUSH"
       ],
       "copy_markers": [
-        "Выживание в бесконечном бетонном лабиринте",
-        "ГИГАХРУЩ",
-        "Ты не проходишь уровни. Ты живёшь внутри огромного дома",
-        "Сотни этажей",
+        "Browser survival horror / ARPG shooter inside a huge concrete apartment block.",
+        "GIGAH|RUSH is a free HTML5/WebGL browser game",
+        "Samosbor events with sirens, sealed doors, fog",
         "https://gigahrush.bileter.workers.dev"
       ],
       "key_image_markers": [
@@ -37,26 +36,23 @@
     },
     "credential_policy": "No credentials are required or sent by the normal public probe path."
   },
-  "default_description": "description_ru_approved.html",
-  "fallback_description": "description_ru_approved.md",
+  "default_description": "description_en_approved.html",
+  "fallback_description": "description_en_approved.md",
   "core_fields": {
     "title": "GIGAH|RUSH",
-    "short_description": "Выживание, вылазки и САМОСБОР внутри бесконечной хрущёвки.",
+    "short_description": "Browser survival horror / ARPG shooter in an endless concrete apartment block.",
     "genre": "Shooter",
     "tags": [
+      "ARPG",
+      "Atmospheric Horror",
+      "Browser Game",
+      "HTML5",
       "Survival Horror",
       "Procedural Generation",
       "Life Simulation",
-      "Dungeon Crawler",
-      "Roguelike",
-      "Doom",
-      "Maze",
-      "Russian",
-      "Pixel Art",
-      "Browser",
+      "Shooter",
       "Singleplayer",
-      "Atmospheric",
-      "Horror"
+      "WebGL"
     ]
   },
   "theme": {

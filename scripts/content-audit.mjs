@@ -789,6 +789,7 @@ for (const abs of files) {
 const itemEntries = [
   ...objectKeys('src/data/items.ts', 'ITEMS'),
   ...objectKeys('src/data/chernobog_docket.ts', 'CHERNOBOG_DOCKET_ITEMS'),
+  ...objectKeys('src/data/documents_access.ts', 'DOCUMENT_ACCESS_ITEMS'),
 ];
 const localNpcDefEntries = objectKeysInFiles('NPC_DEFS');
 const plotNpcEntries = [

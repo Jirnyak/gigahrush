@@ -99,7 +99,6 @@ export function openComputer(state: GameState, terminal: ComputerTerminal): void
   runtime.pageIndex = 0;
   runtime.message = '';
   state.paused = true;
-  if (typeof document !== 'undefined' && document.pointerLockElement) document.exitPointerLock();
 }
 
 export function closeComputer(): void {

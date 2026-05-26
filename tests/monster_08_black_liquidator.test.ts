@@ -143,9 +143,16 @@ test('black liquidator knocks while neutral and reveals on forbidden samples', (
   assert.ok(getRecentEvents(state, { type: 'false_liquidator_knock', tags: ['black_liquidator'], limit: 1 })[0]);
 
   target.x = 18;
-  target.inventory = [{ defId: 'govnyak_sample', count: 1 }];
+  target.inventory = [{ defId: 'nii_sample_container', count: 1 }];
   prime(entities);
   updateMonster(world, entities, threat, 0.2, 2, msgs, target.id, { v: 10 }, state);
+
+  assert.equal(threat.ai?.falsePatrolRevealed, undefined);
+  assert.equal(threat.monsterStage, undefined);
+
+  target.inventory = [{ defId: 'govnyak_sample', count: 1 }];
+  prime(entities);
+  updateMonster(world, entities, threat, 0.2, 3, msgs, target.id, { v: 10 }, state);
 
   assert.equal(threat.ai?.falsePatrolRevealed, true);
   assert.equal(threat.monsterStage, 1);

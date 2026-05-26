@@ -41,6 +41,12 @@ export function fireDeletionBeam(
   stats: WeaponStats,
   handleKill: (e: Entity, killerIsPlayer: boolean, vx?: number, vy?: number, goreLevel?: number) => void,
 ): DeletionBeamResult {
+  const itemDef = ITEMS[weaponId];
+  const itemName = itemDef?.name ?? weaponId;
+  const beamTag = weaponId === 'gravity_beam_emitter' ? 'gravity_beam' : 'deletion_beam';
+  const eventTags = beamTag === 'gravity_beam'
+    ? ['weapon', 'gravity_beam', 'deletion_beam', 'collateral', weaponId]
+    : ['weapon', 'deletion_beam', 'collateral', weaponId];
   const range = Math.max(4, Math.min(48, stats.beamRange ?? 28));
   const width = Math.max(0.25, Math.min(1.5, stats.beamWidth ?? 0.65));
   const dirX = Math.cos(actor.angle);
@@ -94,12 +100,12 @@ export function fireDeletionBeam(
     actorName: actor.name ?? (actor.type === EntityType.PLAYER ? 'Вы' : undefined),
     actorFaction: actor.faction,
     itemId: weaponId,
-    itemName: ITEMS[weaponId]?.name ?? weaponId,
+    itemName,
     itemCount: 1,
-    itemValue: ITEMS[weaponId]?.value ?? 0,
+    itemValue: itemDef?.value ?? 0,
     severity: targetsKilled > 0 || cellsDeleted > 0 ? 5 : 3,
     privacy: 'local',
-    tags: ['weapon', 'gravity_beam', 'deletion_beam', 'collateral'],
+    tags: eventTags,
     data: {
       beamLen: Math.round(beamLen * 10) / 10,
       cellsDeleted,
@@ -112,7 +118,7 @@ export function fireDeletionBeam(
   });
 
   const lost = containerLoss.itemsLost > 0 ? ` Лут потерян: ${containerLoss.itemsLost}.` : '';
-  state.msgs.push(msg(`GBE: удалено ${cellsDeleted} кл., целей ${targetsKilled}.${lost}`, state.time, '#63f6ff'));
+  state.msgs.push(msg(`${itemName}: удалено ${cellsDeleted} кл., целей ${targetsKilled}.${lost}`, state.time, '#63f6ff'));
   return {
     beamLen,
     cellsDeleted,

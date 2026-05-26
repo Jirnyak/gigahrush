@@ -9,7 +9,9 @@ import { World } from '../core/world';
 import { MONSTERS } from '../entities/monster';
 import { monsterSpr } from '../render/sprite_index';
 import { stampMark, MarkType } from '../render/marks';
+import { equippedToolLightScore } from '../data/tool_lights';
 import { playBreak, playDoor, playSoundAt } from './audio';
+import { setDoorState } from './door_state';
 import { publishEvent } from './events';
 import { addItem, hasItem, removeItem } from './inventory';
 import { randomRPG, scaleMonsterHp, scaleMonsterSpeed } from './rpg';
@@ -78,6 +80,7 @@ const BORER_LIGHT_DELAY = 5;
 const BORER_MAX_LIGHT_DELAY = 20;
 const BORER_TRAP_RADIUS2 = 2.4 * 2.4;
 const BORER_TARGET_RADIUS2 = 64 * 64;
+const RUBBER_DOOR_WEDGE_ID = 'rubber_door_wedge';
 
 const stores = new WeakMap<World, BorerStore>();
 
@@ -366,7 +369,7 @@ function resolveActive(store: BorerStore, runtime: BorerRuntime, phase: BorerPha
 function applyLightCounterplay(world: World, entities: readonly Entity[], state: GameState, runtime: BorerRuntime, rec: BorerDoorRecord): void {
   if (state.time < runtime.nextLightAt || runtime.lightDelayUsed >= BORER_MAX_LIGHT_DELAY) return;
   const player = findPlayer(entities);
-  if (!player || (player.tool !== 'flashlight' && player.tool !== 'uv_spotlight')) return;
+  if (!player || equippedToolLightScore(player.tool) <= 0) return;
   const monster = activeMonster(entities, runtime);
   const dx = doorX(runtime.targetDoorIdx) + 0.5;
   const dy = doorY(runtime.targetDoorIdx) + 0.5;
@@ -411,9 +414,9 @@ function damageDoor(world: World, state: GameState, runtime: BorerRuntime, rec: 
   if (!door) return;
   rec.phase = 'damaged';
   runtime.phase = 'damaged';
-  door.state = door.state === DoorState.HERMETIC_CLOSED || door.state === DoorState.HERMETIC_OPEN
+  setDoorState(world, door, door.state === DoorState.HERMETIC_CLOSED || door.state === DoorState.HERMETIC_OPEN
     ? DoorState.HERMETIC_OPEN
-    : DoorState.OPEN;
+    : DoorState.OPEN);
   door.timer = 0;
   markBorerDoor(world, runtime.targetDoorIdx, runtime.id * 2053, true);
   playSoundAt(playBreak, doorX(runtime.targetDoorIdx) + 0.5, doorY(runtime.targetDoorIdx) + 0.5);
@@ -541,7 +544,7 @@ export function blocksHermodoorBorerSeal(world: World, state: GameState, doorIdx
   if (rec.phase === 'warning') return false;
   const door = world.doors.get(doorIdx);
   if (!door) return false;
-  door.state = DoorState.HERMETIC_OPEN;
+  setDoorState(world, door, DoorState.HERMETIC_OPEN);
   door.timer = 0;
   if (rec.phase === 'damaged') {
     rec.phase = 'compromised';
@@ -577,6 +580,7 @@ function clearLeakNearDoor(world: World, doorIdx: number): void {
 function repairSupply(player: Entity): { itemId: string; label: string; consume: boolean } | null {
   if (hasItem(player, 'sealant_tube')) return { itemId: 'sealant_tube', label: 'герметик', consume: true };
   if (hasItem(player, 'hermo_gasket')) return { itemId: 'hermo_gasket', label: 'гермоуплотнитель', consume: true };
+  if (hasItem(player, RUBBER_DOOR_WEDGE_ID)) return { itemId: RUBBER_DOOR_WEDGE_ID, label: 'резиновый клин', consume: true };
   if (hasItem(player, 'wrench') || player.weapon === 'wrench') return { itemId: 'wrench', label: 'гаечный ключ', consume: false };
   return null;
 }
@@ -610,15 +614,15 @@ export function tryRepairHermodoorBorerDamage(
       for (const di of room.doors) {
         const roomDoor = world.doors.get(di);
         if (!roomDoor) continue;
-        roomDoor.state = DoorState.HERMETIC_CLOSED;
+        setDoorState(world, roomDoor, DoorState.HERMETIC_CLOSED);
         roomDoor.timer = 0;
       }
     } else if (door) {
-      door.state = DoorState.HERMETIC_CLOSED;
+      setDoorState(world, door, DoorState.HERMETIC_CLOSED);
       door.timer = 0;
     }
   } else if (door) {
-    door.state = DoorState.HERMETIC_OPEN;
+    setDoorState(world, door, DoorState.HERMETIC_OPEN);
     door.timer = 0;
   }
   clearLeakNearDoor(world, doorIdx);
@@ -657,6 +661,7 @@ export function debugForceHermodoorBorer(
   addItem(player, 'uv_spotlight', 1);
   addItem(player, 'sealant_tube', 2);
   addItem(player, 'hermo_gasket', 1);
+  addItem(player, RUBBER_DOOR_WEDGE_ID, 1);
   addItem(player, 'wrench', 1);
   const runtime = startBorer(world, entities, state, nextEntityId, 'debug');
   if (!runtime) return ['no suitable hermodoor target'];
@@ -666,6 +671,6 @@ export function debugForceHermodoorBorer(
   const moved = movePlayerToDoor(world, player, runtime);
   return [
     `target=${runtime.targetRoomName} door=(${doorX(runtime.targetDoorIdx)},${doorY(runtime.targetDoorIdx)}) moved=${moved ? 1 : 0}`,
-    'kit=flashlight, uv_spotlight, sealant_tube, hermo_gasket, wrench; E repairs, closed door traps, killing prevents damage',
+    'kit=flashlight, uv_spotlight, sealant_tube, hermo_gasket, rubber_door_wedge, wrench; E repairs, closed door traps, killing prevents damage',
   ];
 }

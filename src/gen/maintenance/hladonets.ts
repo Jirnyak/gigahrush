@@ -329,7 +329,7 @@ export function generateHladonets(ctx: MaintContentCtx): void {
   const threatId = spawnHladonets(ctx, cold);
   dropItems(ctx, warm, ['boiler_water', 'asbestos_cord', 'sealant_tube', 'cloth_roll']);
   dropItems(ctx, cold, ['boiler_water']);
-  dropItems(ctx, trace, ['valve_tag', 'asbestos_cord', 'boiler_water', 'note']);
+  dropItems(ctx, trace, ['valve_tag', 'asbestos_cord', 'boiler_water', 'frozen_item_shard', 'frozen_slime_core', 'note']);
 
   registerHladonetsContext({
     world: ctx.world,

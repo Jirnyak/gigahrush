@@ -1,7 +1,7 @@
 # itch.io Upload Checklist
 
 1. Edit game page: `https://itch.io/game/edit/4587160`.
-2. Paste `description_ru_approved.html` into the description editor. Keep `description_ru_approved.md` as the exact source of truth; do not rewrite, shorten, or remove its existing text.
+2. Paste `description_en_approved.html` into the description editor. Keep `description_en_approved.md` as the exact source of truth; do not rewrite, shorten, or remove its existing text.
 3. Apply theme colors from `theme_settings.md`.
 4. Upload:
    - `assets/gigahrush_cover_630x500.png` as cover.

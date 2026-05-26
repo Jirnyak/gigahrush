@@ -603,7 +603,7 @@ export interface ItemDef {
   spawnRooms: RoomType[];
   spawnW: number;             // spawn weight
   value: number;              // price in рубли (0 = worthless)
-  tags?: string[];            // small content labels for events/economy hooks
+  tags?: readonly string[];   // small content labels for events/economy hooks
   stack?: number;             // override max stack size
   durability?: number;        // max durability for tools/consumable kits
   use?: (e: Entity) => string; // returns message
@@ -1088,9 +1088,9 @@ export interface GameState {
   npcMenuTab: string;         // 'main'|'talk'|'quest'|'trade'
   npcTalkText: string;
   questPage: number;
-  tradeCursorX: number;       // 0..4 column in trade grid
-  tradeCursorY: number;       // 0..4 row in trade grid
-  tradeSide: string;          // 'player'|'npc'
+  tradeCursorX: number;       // 0..4 column in active trade grid
+  tradeCursorY: number;       // 0..4 row in active trade grid
+  tradeSide: string;          // 'player'|'player_offer'|'npc_offer'|'npc'|'deal'
   // ── Container interaction menu ──
   showContainerMenu: boolean;
   containerMenuTarget: number; // world container id

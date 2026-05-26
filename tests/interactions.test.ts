@@ -4,10 +4,17 @@ import * as assert from 'node:assert/strict';
 import { Cell, DoorState, Feature, LiftDirection } from '../src/core/types';
 import { World } from '../src/core/world';
 import { GAMBLING_MACHINES } from '../src/data/gambling';
-import { clearGamblingMachines, resolveGamblingBet, placeGamblingMachine } from '../src/systems/gambling';
+import {
+  activateGamblingBet,
+  clearGamblingMachines,
+  getGamblingOverlaySnapshot,
+  openGamblingMachine,
+  resolveGamblingBet,
+  placeGamblingMachine,
+} from '../src/systems/gambling';
 import { activateInteraction, findInteractionTarget } from '../src/systems/interactions';
 import { netHackChance, netHackDifficultyTotal, netHackSkill } from '../src/systems/net_hack';
-import { addTestRoom, makeGameState, makeTestNpc, makeTestPlayer } from './helpers';
+import { addTestRoom, countInventoryItem, makeGameState, makeTestNpc, makeTestPlayer } from './helpers';
 
 test('gambling odds resolve stake, gross payout and net result without mutating state', () => {
   const roulette = GAMBLING_MACHINES.roulette;
@@ -57,6 +64,39 @@ test('interaction dispatcher reports generated gambling machines as E targets', 
 
   assert.equal(target?.kind, 'gambling');
   assert.equal(target?.defId, 'slots');
+});
+
+test('gambling machines accept gambling-tagged resident goods as a stake when cash is short', () => {
+  clearGamblingMachines();
+  const world = new World();
+  addTestRoom(world, { id: 0, x: 4, y: 4, w: 6, h: 6 });
+  const idx = world.idx(6, 6);
+  world.cells[idx] = Cell.FLOOR;
+  const machine = placeGamblingMachine(world, 6, 6, 'slots');
+  assert.ok(machine);
+
+  const state = makeGameState({ time: 12 });
+  const player = makeTestPlayer({
+    money: 0,
+    inventory: [{ defId: 'dice_bone', count: 1 }],
+  });
+
+  openGamblingMachine(state, machine);
+  const snapshot = getGamblingOverlaySnapshot(player);
+  assert.equal(snapshot.canSubmit, true);
+  assert.equal(snapshot.itemStakeName, 'Игральные кости');
+  assert.equal(snapshot.betRubles, 16);
+
+  const outcome = activateGamblingBet(world, state, player, 0.01);
+  assert.deepEqual(outcome, {
+    win: true,
+    stake: 16,
+    grossPayout: 48,
+    net: 32,
+  });
+  assert.equal(player.money, 48);
+  assert.equal(countInventoryItem(player, 'dice_bone'), 0);
+  assert.ok(state.msgs.some(line => line.text.includes('Игральные кости приняли')));
 });
 
 test('lift button feature alone is not a route transition target', () => {

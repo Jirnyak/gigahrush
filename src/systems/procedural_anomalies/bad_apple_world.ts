@@ -320,6 +320,13 @@ function applyBadAppleFrame(
   return changed;
 }
 
+export function badAppleScreenSoundPosition(screen: { x: number; y: number; w: number; h: number }): { x: number; y: number } {
+  return {
+    x: screen.x + screen.w * 0.5,
+    y: screen.y + screen.h * 0.5,
+  };
+}
+
 function publishBadAppleEvent(
   world: World,
   player: Entity,
@@ -356,8 +363,9 @@ export function updateBadAppleWorldAnomaly(world: World, player: Entity, state: 
   let audioDist2 = Infinity;
   for (const screen of runtime.screens) {
     if (!screen.active) continue;
-    const soundX = screen.projectorIdx >= 0 ? (screen.projectorIdx % W) + 0.5 : screen.x + BAD_APPLE_WIDTH * 0.5;
-    const soundY = screen.projectorIdx >= 0 ? ((screen.projectorIdx / W) | 0) + 0.5 : screen.y + BAD_APPLE_HEIGHT * 0.5;
+    const sound = badAppleScreenSoundPosition(screen);
+    const soundX = sound.x;
+    const soundY = sound.y;
     const dist2 = world.dist2(player.x, player.y, soundX, soundY);
     if (dist2 < audioDist2) {
       audioDist2 = dist2;
@@ -377,9 +385,8 @@ export function updateBadAppleWorldAnomaly(world: World, player: Entity, state: 
     world.markFogDirty();
   }
   if (audioScreen) {
-    const soundX = audioScreen.projectorIdx >= 0 ? (audioScreen.projectorIdx % W) + 0.5 : audioScreen.x + BAD_APPLE_WIDTH * 0.5;
-    const soundY = audioScreen.projectorIdx >= 0 ? ((audioScreen.projectorIdx / W) | 0) + 0.5 : audioScreen.y + BAD_APPLE_HEIGHT * 0.5;
-    updateBadAppleProjectorLoop(true, soundX, soundY, audioScreen.frame);
+    const sound = badAppleScreenSoundPosition(audioScreen);
+    updateBadAppleProjectorLoop(true, sound.x, sound.y, audioScreen.frame);
   } else {
     updateBadAppleProjectorLoop(false, player.x, player.y, 0);
   }

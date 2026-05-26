@@ -1,6 +1,7 @@
 import { Cell, Feature, W, msg, type Entity, type GameState } from '../core/types';
 import { World } from '../core/world';
 import { GAMBLING_MACHINES, getGamblingMachineDef, type GamblingDefId, type GamblingMachineDef } from '../data/gambling';
+import { ITEMS, ITEM_TAGS } from '../data/items';
 import { publishEvent } from './events';
 
 export interface GamblingMachine {
@@ -23,6 +24,8 @@ export interface GamblingOverlaySnapshot {
   label: string;
   betRubles: number;
   cashRubles: number;
+  itemStakeName: string;
+  itemStakeRubles: number;
   presetIndex: number;
   presets: readonly number[];
   minBet: number;
@@ -42,9 +45,51 @@ const runtime = {
   message: '',
 };
 
+interface GamblingStakeItem {
+  slotIndex: number;
+  defId: string;
+  name: string;
+  stakeRubles: number;
+}
+
 function cleanMoney(actor: Entity): number {
   const money = actor.money ?? 0;
   return Number.isFinite(money) ? Math.max(0, Math.floor(money)) : 0;
+}
+
+function itemHasTag(defId: string, tag: string): boolean {
+  const def = ITEMS[defId];
+  return (ITEM_TAGS[defId]?.includes(tag) ?? false) || (def?.tags?.includes(tag) ?? false);
+}
+
+function findGamblingStakeItem(actor: Entity, def: GamblingMachineDef): GamblingStakeItem | null {
+  const inv = actor.inventory ?? [];
+  for (let i = 0; i < inv.length; i++) {
+    const slot = inv[i];
+    if (!slot || slot.count <= 0 || !itemHasTag(slot.defId, 'gambling')) continue;
+    const itemDef = ITEMS[slot.defId];
+    if (!itemDef) continue;
+    const itemValue = Math.floor(itemDef.value ?? 0);
+    if (itemValue <= 0) continue;
+    const stakeRubles = Math.max(def.minBet, Math.min(def.maxBet, itemValue));
+    return { slotIndex: i, defId: slot.defId, name: itemDef.name, stakeRubles };
+  }
+  return null;
+}
+
+function consumeGamblingStakeItem(actor: Entity, stakeItem: GamblingStakeItem): boolean {
+  const inv = actor.inventory ?? [];
+  let slot: (typeof inv)[number] | undefined = inv[stakeItem.slotIndex];
+  if (!slot || slot.defId !== stakeItem.defId || slot.count <= 0) {
+    slot = inv.find(item => item.defId === stakeItem.defId && item.count > 0);
+  }
+  if (!slot || slot.count <= 0) return false;
+  slot.count--;
+  if (slot.count <= 0) {
+    const idx = inv.indexOf(slot);
+    if (idx >= 0) inv.splice(idx, 1);
+  }
+  return true;
 }
 
 function canUseMachineCell(world: World, idx: number): boolean {
@@ -94,7 +139,6 @@ export function openGamblingMachine(state: GameState, machine: GamblingMachine):
   runtime.presetIndex = 0;
   runtime.message = '';
   state.paused = true;
-  if (typeof document !== 'undefined' && document.pointerLockElement) document.exitPointerLock();
 }
 
 export function closeGamblingMachine(): void {
@@ -139,20 +183,37 @@ export function activateGamblingBet(
   }
 
   clampPreset();
-  const stake = Math.max(def.minBet, Math.min(def.maxBet, def.presets[runtime.presetIndex] ?? def.minBet));
+  const selectedStake = Math.max(def.minBet, Math.min(def.maxBet, def.presets[runtime.presetIndex] ?? def.minBet));
   const cash = cleanMoney(player);
-  if (cash < stake) {
+  const stakeItem = cash >= selectedStake ? null : findGamblingStakeItem(player, def);
+  const stake = stakeItem?.stakeRubles ?? selectedStake;
+  if (cash < selectedStake && !stakeItem) {
     runtime.message = 'Не хватает наличных.';
     state.msgs.push(msg(runtime.message, state.time, '#f84'));
     return null;
   }
 
-  player.money = cash - stake;
+  if (stakeItem) {
+    if (!consumeGamblingStakeItem(player, stakeItem)) {
+      runtime.message = 'Кости уже унесли.';
+      state.msgs.push(msg(runtime.message, state.time, '#f84'));
+      return null;
+    }
+    player.money = cash;
+  } else {
+    player.money = cash - stake;
+  }
   const outcome = resolveGamblingBet(def, stake, roll);
   player.money = cleanMoney(player) + outcome.grossPayout;
-  runtime.message = outcome.win
-    ? `${def.label}: выигрыш ${outcome.grossPayout} руб.`
-    : `${def.label}: ставка ушла в бетон.`;
+  if (stakeItem) {
+    runtime.message = outcome.win
+      ? `${def.label}: ${stakeItem.name} приняли за ${stake} руб.; выигрыш ${outcome.grossPayout} руб.`
+      : `${def.label}: ${stakeItem.name} ушли в бетон.`;
+  } else {
+    runtime.message = outcome.win
+      ? `${def.label}: выигрыш ${outcome.grossPayout} руб.`
+      : `${def.label}: ставка ушла в бетон.`;
+  }
 
   const zoneId = world.zoneMap[machine.idx];
   const roomId = world.roomMap[machine.idx];
@@ -168,8 +229,8 @@ export function activateGamblingBet(
     itemValue: stake,
     severity: 1,
     privacy: 'local',
-    tags: ['gambling', def.id, 'bet'],
-    data: { stake, machineId: def.id, houseEdge: def.houseEdge },
+    tags: ['gambling', def.id, 'bet', ...(stakeItem ? ['item_stake', stakeItem.defId] : [])],
+    data: { stake, machineId: def.id, houseEdge: def.houseEdge, stakeItemId: stakeItem?.defId },
   });
   publishEvent(state, {
     type: outcome.win ? 'gambling_win' : 'gambling_loss',
@@ -183,12 +244,13 @@ export function activateGamblingBet(
     itemValue: Math.abs(outcome.net),
     severity: outcome.win ? 3 : 2,
     privacy: 'local',
-    tags: ['gambling', def.id, outcome.win ? 'win' : 'loss'],
+    tags: ['gambling', def.id, outcome.win ? 'win' : 'loss', ...(stakeItem ? ['item_stake', stakeItem.defId] : [])],
     data: {
       stake,
       grossPayout: outcome.grossPayout,
       net: outcome.net,
       machineId: def.id,
+      stakeItemId: stakeItem?.defId,
     },
   });
   state.msgs.push(msg(runtime.message, state.time, outcome.win ? '#8f8' : '#f84'));
@@ -198,20 +260,24 @@ export function activateGamblingBet(
 export function getGamblingOverlaySnapshot(player: Entity): GamblingOverlaySnapshot {
   const def = currentDef();
   clampPreset();
-  const bet = Math.max(def.minBet, Math.min(def.maxBet, def.presets[runtime.presetIndex] ?? def.minBet));
+  const selectedBet = Math.max(def.minBet, Math.min(def.maxBet, def.presets[runtime.presetIndex] ?? def.minBet));
   const cash = cleanMoney(player);
+  const stakeItem = cash >= selectedBet ? null : findGamblingStakeItem(player, def);
+  const bet = stakeItem?.stakeRubles ?? selectedBet;
   return {
     open: runtime.open,
     machineIdx: runtime.machineIdx,
     label: def.label,
     betRubles: bet,
     cashRubles: cash,
+    itemStakeName: stakeItem?.name ?? '',
+    itemStakeRubles: stakeItem?.stakeRubles ?? 0,
     presetIndex: runtime.presetIndex,
     presets: def.presets,
     minBet: def.minBet,
     maxBet: def.maxBet,
     houseEdge: def.houseEdge,
     message: runtime.message,
-    canSubmit: cash >= bet,
+    canSubmit: cash >= selectedBet || !!stakeItem,
   };
 }

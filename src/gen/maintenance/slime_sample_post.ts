@@ -15,6 +15,7 @@ import {
 const ROOM_NAME = 'Полевой пост НИИ: тара и ответственность';
 const CONTENT_TAG = 'ag62_nii_sample_post';
 const SAMPLE_ITEM = 'slime_sample_brown';
+const BROWN_LABEL_ITEM = 'slime_age_label_brown';
 const GREEN_SAMPLE_ITEM = 'slime_sample_green';
 const RED_SAMPLE_ITEM = 'slime_sample_red';
 const BLUE_SAMPLE_ITEM = 'slime_sample_blue';
@@ -22,6 +23,7 @@ const SILVER_SAMPLE_ITEM = 'slime_sample_silver';
 const CONTAMINATED_SAMPLE_ITEM = 'slime_sample_contaminated';
 const EMPTY_CONTAINER_ITEM = 'nii_sample_container';
 const CLEANUP_ACT_ITEM = 'brown_slime_cleanup_act';
+const PROTECTIVE_APRON_ITEM = 'protective_apron';
 const BROWN_CLEANUP_LEAD_QUEST = 'ag84_nii_brown_cleanup_lead';
 const SCIENCE_QUEST = 'ag62_nii_science_return';
 const LIQUIDATOR_QUEST = 'ag62_nii_liquidator_burn';
@@ -49,6 +51,7 @@ const BOKOVA_DEF: PlotNpcDef = {
   hp: 120, maxHp: 120, money: 95, speed: 0.95,
   inventory: [
     { defId: EMPTY_CONTAINER_ITEM, count: 2 },
+    { defId: PROTECTIVE_APRON_ITEM, count: 1 },
     { defId: 'filter_layer', count: 2 },
     { defId: 'seal_wax', count: 1 },
   ],
@@ -376,7 +379,9 @@ function addSampleContainers(ctx: MaintContentCtx, room: Room, ownerNpcId: numbe
       { defId: BLUE_SAMPLE_ITEM, count: 1 },
       { defId: SILVER_SAMPLE_ITEM, count: 1 },
       { defId: CONTAMINATED_SAMPLE_ITEM, count: 1 },
+      { defId: BROWN_LABEL_ITEM, count: 3 },
       { defId: EMPTY_CONTAINER_ITEM, count: 1 },
+      { defId: PROTECTIVE_APRON_ITEM, count: 1 },
       { defId: 'seal_wax', count: 2 },
     ],
     capacitySlots: 10,

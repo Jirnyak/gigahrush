@@ -28,7 +28,7 @@ const KILL_AWAY_RADIUS2 = 3.4 * 3.4;
 const SHOT_INTERRUPT_RADIUS2 = 8 * 8;
 const MAX_CONTEXTS = 4;
 
-const CUT_ITEMS = new Set(['knife', 'axe', 'wrench', 'hammer', 'sledgehammer', 'fire_hook', 'crowbar']);
+const CUT_ITEMS = new Set(['knife', 'axe', 'liquidator_axe', 'wrench', 'hammer', 'sledgehammer', 'fire_hook', 'crowbar']);
 const REPAIR_ITEMS = new Set(['sealant_tube', 'hermo_gasket']);
 
 interface PlombContext {

@@ -32,7 +32,7 @@ export const SWARM_SOURCE_BURN_RADIUS = 3.2;
 const SWARM_NEST_ACTIVATION_RADIUS = 34;
 const SWARM_NEST_SPAWN_RADIUS = 4.5;
 const SWARM_SOURCE_HP = 48;
-const SWARM_SEAL_ITEMS = new Set(['duct_tape', 'sealant_tube']);
+const SWARM_SEAL_ITEMS = new Set(['duct_tape', 'sealant_tube', 'hermetic_tape', 'vent_damper_plate']);
 const SWARM_RUMOR_IDS = ['monster_swarm_source'] as const;
 const spawnBlockQuery: Entity[] = [];
 

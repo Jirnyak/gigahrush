@@ -57,7 +57,7 @@ const SERVICE_FLOORS = [FloorLevel.KVARTIRY, FloorLevel.LIVING, FloorLevel.MAINT
 const MAINTENANCE_FLOORS = [FloorLevel.MAINTENANCE] as const;
 const HELL_FLOORS = [FloorLevel.HELL] as const;
 const VOID_FLOORS = [FloorLevel.VOID] as const;
-const ALL_VARIANTS = ['classic', 'quiet', 'wet', 'electric', 'meat', 'maronary', 'istotit', 'veretar'] as const;
+const ALL_VARIANTS = ['classic', 'wet', 'electric', 'meat', 'maronary', 'istotit', 'veretar'] as const;
 
 const registry: SamosborBeatDef[] = [];
 const registeredIds = new Set<string>();
@@ -94,7 +94,7 @@ const BASELINE_BEATS: readonly SamosborBeatDef[] = [
     id: 'pre_corridor_rumor_seed',
     phase: 'warning',
     floors: CIVIL_FLOORS,
-    variants: ['classic', 'quiet', 'wet', 'electric'],
+    variants: ['classic', 'wet', 'electric'],
     weight: 18,
     cooldown: 240,
     maxPerCycle: 1,
@@ -136,7 +136,7 @@ const BASELINE_BEATS: readonly SamosborBeatDef[] = [
     id: 'pre_hell_meat_seam',
     phase: 'warning',
     floors: HELL_FLOORS,
-    variants: ['quiet', 'wet', 'meat', 'maronary', 'veretar'],
+    variants: ['wet', 'meat', 'maronary', 'veretar'],
     weight: 34,
     cooldown: 210,
     maxPerCycle: 1,
@@ -150,7 +150,7 @@ const BASELINE_BEATS: readonly SamosborBeatDef[] = [
     id: 'pre_void_anchor_warning',
     phase: 'warning',
     floors: VOID_FLOORS,
-    variants: ['classic', 'quiet', 'maronary', 'veretar'],
+    variants: ['classic', 'maronary', 'veretar'],
     weight: 36,
     cooldown: 210,
     maxPerCycle: 1,
@@ -164,7 +164,7 @@ const BASELINE_BEATS: readonly SamosborBeatDef[] = [
     id: 'pre_door_malfunction',
     phase: 'warning',
     floors: ALL_FLOORS,
-    variants: ['quiet', 'wet', 'electric', 'meat'],
+    variants: ['wet', 'electric', 'meat'],
     weight: 20,
     cooldown: 210,
     maxPerCycle: 1,
@@ -173,20 +173,6 @@ const BASELINE_BEATS: readonly SamosborBeatDef[] = [
     line: 'Гермопривод кашляет в стене. Ищи другую створку: эта может закрыться не вокруг тебя.',
     color: '#fa0',
     severity: 3,
-  },
-  {
-    id: 'pre_quiet_no_siren_crosscheck',
-    phase: 'warning',
-    floors: ALL_FLOORS,
-    variants: ['quiet'],
-    weight: 31,
-    cooldown: 210,
-    maxPerCycle: 1,
-    tags: ['warning', 'quiet', 'no_siren'],
-    effectId: 'warning_line',
-    line: 'Диспетчер: штатная сирена не подтверждена. Сверяйте карту, экраны и соседские крики.',
-    color: '#9a6bd6',
-    severity: 4,
   },
   {
     id: 'pre_veretar_white_area',
@@ -332,7 +318,7 @@ const BASELINE_BEATS: readonly SamosborBeatDef[] = [
     id: 'active_liquidator_patrol',
     phase: 'active',
     floors: SERVICE_FLOORS,
-    variants: ['classic', 'quiet', 'electric'],
+    variants: ['classic', 'electric'],
     weight: 16,
     cooldown: 180,
     maxPerCycle: 1,
@@ -346,7 +332,7 @@ const BASELINE_BEATS: readonly SamosborBeatDef[] = [
     id: 'active_social_shelter_argument',
     phase: 'active',
     floors: CIVIL_FLOORS,
-    variants: ['quiet', 'electric', 'istotit', 'veretar'],
+    variants: ['electric', 'istotit', 'veretar'],
     weight: 18,
     cooldown: 240,
     maxPerCycle: 1,
@@ -403,7 +389,7 @@ const BASELINE_BEATS: readonly SamosborBeatDef[] = [
     id: 'active_void_false_relief',
     phase: 'active',
     floors: VOID_FLOORS,
-    variants: ['classic', 'quiet', 'maronary', 'veretar'],
+    variants: ['classic', 'maronary', 'veretar'],
     weight: 28,
     cooldown: 180,
     maxPerCycle: 1,
@@ -417,7 +403,7 @@ const BASELINE_BEATS: readonly SamosborBeatDef[] = [
     id: 'active_container_theft',
     phase: 'active',
     floors: CIVIL_FLOORS,
-    variants: ['quiet', 'meat'],
+    variants: ['meat'],
     weight: 14,
     cooldown: 300,
     maxPerCycle: 1,

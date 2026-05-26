@@ -5,19 +5,20 @@ Purpose: continue the campaign without spam. Use this as the working queue for s
 Primary links:
 
 - itch.io: https://tenevik.itch.io/gigahrush
-- Official site: https://jirny.uk
 - Direct browser build: https://gigahrush.bileter.workers.dev
 - Telegram: https://t.me/gigah_rush
 - IndieDB: https://www.indiedb.com/games/gigahrush
 - iDev.Games: https://idev.games/game/gigah-rush
 - MyIndie: https://myindie.ru/games/game/gigahrush
 
-Sender/contact confirmed by owner on 2026-05-23:
+Sender/contact superseded by owner on 2026-05-26:
 
-- Sender name/nick: `jirnyak`
-- Contact email: `jirnyak@gmail.com`
+- Sender name/nick: `Tenevik Games`
+- Contact email: `tenevik.games@gmail.com`
 - Telegram may be used in pitch copy: yes, `https://t.me/gigah_rush`
 - Use itch.io and already published resource pages as primary links.
+- Do not mention `https://jirny.uk` in new posts, pitches, portal forms or support messages.
+- Historical logs still record already-sent mail from `jirnyak@gmail.com`; do not use that account for new outbound PR except to close or transfer old support threads.
 
 Current release artifact:
 
@@ -37,6 +38,9 @@ Current release artifact:
 - Kongregate Developer Application is submitted; wait for approval before Alpha/upload.
 - 2ch /b/ thread is now live: https://2ch.org/b/res/333348764.html. Public recheck 2026-05-23 23:26 UTC / 2026-05-24 00:26 BST found 14 posts, 11 files and 6 posters; OP uses developer disclosure, direct Cloudflare build first, itch second, and the prepared media pack (`01_hero_gif_hell_blinking_eyes.gif`, `contact_sheet_3x3.png`, `02_gif_underhell_maronary_samosbor_loop.gif`). No duplicate thread, no bumping and no extra mirrors unless asked.
 - PR 14 follow-up on 2026-05-24 17:32-17:44 UTC: Game Jolt short post was fixed with a visible owner media/playable comment, full Game Jolt media update is live, IndieDB news is awaiting authorisation, HTML5GameDevs requires registration/password/Terms after attempted guest submit, DevTribe add path returns `403`, and Pikabu posting waits on owner login. PBBG.com `/games` now publicly links the r/PBBG post, but `/games/gigahrush` is still `404`.
+- PR 15 follow-up on 2026-05-25 05:49-06:10 UTC: owner-requested six-lane sweep found the next practical unlocks. Immediate community queue is Pikabu `gamedev`, forum.indie.ru, HTML5GameDevs, GameDev.net Projects/Indie Showcase, TIGSource Playtesting/DevLogs and MakeWebGames. Next media batch is Rely on Horror, Big Boss Battle, The Indie Informer, Dread Central, Get Indie Gaming and Splattercat. Quick portal/contact candidates are GameBolt and KickoutGames; Addicting Games/GamePix/CrazyGames/Poki/Yandex/Pikabu Games require account, licensing, SDK, QA or business review. Detailed owner login phrases and public recheck status are in `Docs/PRCampaign/PR_15.md`; dated KPI report is `Docs/PRCampaign/kpi_report_2026-05-25.md`.
+- itch.io English/link cleanup pass on 2026-05-25 23:50 UTC / 2026-05-26 00:50 BST: owner requested an English itch page for the English-language platform. Six subagents prepared copy/fact checks, then the logged-in Opera GX dashboard saved English short description/body/tags and removed stale `Homepage -> https://jirny.uk`. Public logged-out recheck confirmed English copy on the game page/profile card and retained Community, Direct browser build, IndieDB and Game Jolt links. Remaining itch blockers: `noindex`, exact itch search, devlog permalink and iframe hash.
+- RU/CIS upload-platform scout on 2026-05-26: full report is `Docs/PRCampaign/ru_cis_upload_platforms_2026-05-26.md`. If the owner asks for one best Russian/CIS place to upload the game, answer **Яндекс Игры**, but classify it as a separate SDK portal-build task. If the owner asks for the fastest current-build upload scout, try **VK Play browser project** and **ИграйТут** first. **Пикабу Игры** is high reach but GamePush/cloud-save/legal-gated; **RuStore/NashStore** are no-go without Android wrapper.
 
 ## 2026-05-23 PR 11 Public Upload Update
 
@@ -65,9 +69,11 @@ Public/browser recheck at 20:59-21:26 UTC / 21:59-22:26 BST. No duplicate submis
 
 Public recheck 2026-05-23 21:03 UTC: `https://tenevik.itch.io/gigahrush` is live, profile-visible and playable by direct URL, but still has public `noindex`; itch search for `gigahrush`, `GIGAH|RUSH` and `ГИГАХРУЩ` does not show the Tenevik page. The devlog index is live, but `/devlog/1530909/-` returns public `404` with a moderator-review login gate.
 
+Update 2026-05-25 23:50 UTC / 2026-05-26 00:50 BST: the main itch page was switched to English store copy and English tags through the logged-in Opera GX dashboard. The stale `Homepage -> https://jirny.uk` External Link was removed; public Links now retain Community `https://t.me/gigah_rush`, Direct browser build `https://gigahrush.bileter.workers.dev`, IndieDB and Game Jolt. This fixes the public-copy/link-migration issue but not itch-controlled `noindex`, search absence or the broken devlog permalink.
+
 Action source: `Docs/PRCampaign/itch_listing_incident_2026-05-23.md`.
 
-Dashboard/source check through Opera GX is complete: project is published/active, not restricted, not unlisted, current HTML ZIP is ready/embedded, cover/screenshots exist, Release info and Classification are saved, Engines/tools is intentionally blank because itch has no honest custom TypeScript/Vite/WebGL/canvas option, and compact External links are saved. Support email was sent to `support@itch.io` from `jirnyak@gmail.com` at 2026-05-23 20:22 UTC. Devlog editor also confirms the launch post is published, but no slug/permalink field is exposed; the broken `/-` URL appears to be generated from the Cyrillic title and is now moderation/login gated. Next step: wait for support/indexing and recheck `noindex`, exact itch search, devlog access and public iframe hash after a delay or reply. Do not recreate the page, do not make a duplicate release announcement, do not use spammy collection/rating asks, and do not change the public devlog title just to force a Latin slug unless owner/support approves.
+Dashboard/source check through Opera GX is complete: project is published/active, not restricted, not unlisted, current HTML ZIP is ready/embedded, cover/screenshots exist, Release info and Classification are saved, Engines/tools is intentionally blank because itch has no honest custom TypeScript/Vite/WebGL/canvas option, and External Links are now clear of `jirny.uk`. Support email was sent to `support@itch.io` from `jirnyak@gmail.com` at 2026-05-23 20:22 UTC. Devlog editor also confirms the launch post is published, but no slug/permalink field is exposed; the broken `/-` URL appears to be generated from the Cyrillic title and is now moderation/login gated. Next step: wait for support/indexing and recheck `noindex`, exact itch search, devlog access and public iframe hash after a delay or reply. Do not recreate the page, do not make a duplicate release announcement, do not use spammy collection/rating asks, and do not change the public devlog title just to force a Latin slug unless owner/support approves.
 
 ## P0: DTF-Like Community Direction
 
@@ -75,7 +81,7 @@ The owner marked DTF as successful on 2026-05-23. The repeatable pattern is not 
 
 | Priority | Surface | URL | Format | Guardrail / next step |
 | --- | --- | --- | --- | --- |
-| A | DevTribe | https://devtribe.ru/ | RU devlog/project diary | Browser is logged in as `jirnyak`, but `https://devtribe.ru/p/games-dev/add` returns `Ошибка #403`; owner/account trust/support needed before posting. |
+| A | DevTribe | https://devtribe.ru/ | RU devlog/project diary | Browser was logged in as `jirnyak`, but `https://devtribe.ru/p/games-dev/add` returns `Ошибка #403`; do not publish from that old identity. Owner/account trust/support or a Tenevik account is needed before posting. |
 | A | Pikabu gamedev community | https://pikabu.ru/community/gamedev | RU longpost/devlog | Use developer disclosure, GIF/screenshots and a concrete feedback ask; avoid a naked external-link dump. Browser currently waits on Yandex login/code. |
 | A | Indie Spotlight | https://t.me/indiespotlight | RU editorial/channel pitch | Ask whether editorial/free submission is appropriate; send GIF, 3-4 screenshots and playable links. |
 | A | MyIndie | https://myindie.ru/games/game/gigahrush | RU playable listing, now public | Monitor the new listing and comments; later update media/description only for a real new build. |
@@ -162,12 +168,11 @@ Subject: GIGAH|RUSH - free browser survival horror / ARPG shooter
 
 Hello,
 
-My name is jirnyak. I am affiliated with GIGAH|RUSH, a free HTML5/WebGL browser survival horror / ARPG shooter about expeditions inside an endless Soviet-style concrete apartment block.
+My name is Tenevik Games. I am affiliated with GIGAH|RUSH, a free HTML5/WebGL browser survival horror / ARPG shooter about expeditions inside an endless Soviet-style concrete apartment block.
 
 The player prepares food, water, ammo, medicine, documents and weapons, then leaves the safer living area for hostile floors with factions, traders, monsters, quests, rumors and Samosbor events. The current browser build includes preparation, expeditions, combat, trading, inventory, quests, factions, procedural floors, browser saves, A-Life NPCs and persistent consequences.
 
 Primary link: https://tenevik.itch.io/gigahrush
-Official site: https://jirny.uk
 Direct browser build: https://gigahrush.bileter.workers.dev
 IndieDB: https://www.indiedb.com/games/gigahrush
 Telegram: https://t.me/gigah_rush
@@ -177,20 +182,20 @@ The submitted build runs in the browser with no install, no ads and no premium p
 If this fits your portal or roundup, I would be glad if you took a look. I can provide a ZIP, screenshots, GIFs or any extra metadata you need.
 
 Best,
-jirnyak
-jirnyak@gmail.com
+Tenevik Games
+tenevik.games@gmail.com
 ```
 
 ### Gamemoor Support
 
 ```text
-Subject: Developer portal access for GIGAH|RUSH
+Subject: Account migration and developer portal access for GIGAH|RUSH
 
 Hello,
 
-I am trying to submit GIGAH|RUSH from the logged-in account `jirnyak`, but https://gamemoor.com/developer redirects to the homepage for this account. I also could not find a working submit URL under `/submit`, `/games/add`, `/dashboard` or `/my-games`.
+I am migrating GIGAH|RUSH outreach from the old `jirnyak` account to Tenevik Games. The old logged-in account could not reach https://gamemoor.com/developer; it redirected to the homepage, and I could not find a working submit URL under `/submit`, `/games/add`, `/dashboard` or `/my-games`.
 
-Could you enable developer portal access for `jirnyak` or send the current game submission URL?
+Could you migrate or deactivate the old `jirnyak` account for this game and enable developer portal access for Tenevik Games, or send the current game submission URL?
 
 Game: GIGAH|RUSH
 itch.io: https://tenevik.itch.io/gigahrush
@@ -198,8 +203,8 @@ Direct browser build: https://gigahrush.bileter.workers.dev
 Telegram: https://t.me/gigah_rush
 
 Best,
-jirnyak
-jirnyak@gmail.com
+Tenevik Games
+tenevik.games@gmail.com
 ```
 
 ## Completed / Monitoring
@@ -432,7 +437,7 @@ No login and no submissions. Checked current public URLs/requirements for the re
 | MyIndie | `https://myindie.ru/games/game/gigahrush` | Superseded by PR 11: public Web (HTML5) listing is live with current ZIP, cover and screenshots. | Monitor page/Web iframe/comments; no final-click action remains. |
 | IndieHub | `https://indiehub.ru/`, `https://indiehub.ru/game/add` | Homepage shows login/registration, `добавить игру`, rules and Telegram support. Public add page errors: `Эта страница не существует. Обратитесь к администрации портала...`. | Contact support Telegram or test after login. Not a ready quick listing today without account/support. |
 | iDev.Games | `https://idev.games/game/gigah-rush` | Public listing is live; browser/edit check confirms `Public` and visible to everyone. | Monitor page/moderation; no final-click action remains. |
-| Gamemoor | `https://gamemoor.com/contact`, `https://gamemoor.com/developer`, `/submit`, `/dashboard`, `/my-games`, `/games/add` | Contact page says developer portal is open and review usually takes a few days. Public `/developer` redirects to login; `/submit`, `/dashboard`, `/my-games` are 404; `/games/add` redirects to 404. | Try `/developer` after owner login; if blocked, send support request for developer portal access / submit URL for account `jirnyak`. |
+| Gamemoor | `https://gamemoor.com/contact`, `https://gamemoor.com/developer`, `/submit`, `/dashboard`, `/my-games`, `/games/add` | Contact page says developer portal is open and review usually takes a few days. Public `/developer` redirects to login; `/submit`, `/dashboard`, `/my-games` are 404; `/games/add` redirects to 404. | Try `/developer` after owner login with Tenevik identity; if blocked, send support request for developer portal access / submit URL and old `jirnyak` account migration/deactivation. |
 
 Instant-public classification:
 
@@ -451,7 +456,7 @@ Public recheck at 20:31 UTC / 21:31 BST. No login, no submission, no final-click
 | IndieHub | Homepage exposes login/registration, `добавить игру`, service rules and Telegram support. Public `/game/add` returns an error saying the page does not exist and to contact portal administration in Telegram. Rules require publisher rights and ban spam, malware, illegal, misleading and infringing content. | Support-blocked; not a ready quick listing. | Owner logs in to check for a hidden add flow or contacts IndieHub support Telegram for the current add-game URL. No final-click until a working form and public/draft state are known. |
 | Kongregate | Developer Application submitted after PR 11. Still requires approval, legal Game License/Upload Agreement, no third-party ads/account systems/non-Kongregate microtransactions, browser playability, screenshots, description, instructions, voluntary age rating, AI declaration and English option. Publish happens only after approval/review. | Application submitted; not quick, not instant-public. | Wait for approval; agent prepares Alpha submission only after approval and owner-provided/legal confirmations. |
 | CrazyGames | JS Developer Portal. Basic Launch is possible after Basic Implementation/QA without CrazyGames-specific integration and has monetization disabled; Full Launch requires Full Implementation including CrazyGames SDK. Public requirements include initial download `<=50MB`, total file size `<=250MB`, file count `<=1500`, relative paths, Chrome/Edge compatibility, readable UI in listed 16:9/mobile iframe sizes, English localization, PEGI 12, no custom in-game fullscreen button and no cross-promotion to external playable versions. | SDK/portal-build track, not quick PR. Basic may be tried after a portal-specific build; Full is SDK-required. | Owner logs into developer portal only after accepting a separate portal-build task. Agent should first make/verify a CrazyGames build: English default/path, remove external playable CTAs and fullscreen button, iframe/performance check, then use portal preview/QA. Full Launch needs SDK event/data/user integration. |
-| Gamemoor | Contact page says developer portal is open and submissions enter review within a few days. Public `/developer` redirects to login; `/submit`, `/dashboard`, `/my-games` are 404; `/games/add` redirects to 404. Terms say game submissions are reviewed for PEGI 3-16 and no NSFW. | Review queue after portal access; currently access/support-blocked. | Owner logs in and opens `/developer`; if still blocked, send support request for developer access / submit URL for account `jirnyak`. Confirm non-NSFW survival-horror/PEGI 16 framing before submit. |
+| Gamemoor | Contact page says developer portal is open and submissions enter review within a few days. Public `/developer` redirects to login; `/submit`, `/dashboard`, `/my-games` are 404; `/games/add` redirects to 404. Terms say game submissions are reviewed for PEGI 3-16 and no NSFW. | Review queue after portal access; currently access/support-blocked. | Owner logs in with Tenevik identity and opens `/developer`; if still blocked, send support request for developer access / submit URL plus old `jirnyak` account migration/deactivation. Confirm non-NSFW survival-horror/PEGI 16 framing before submit. |
 
 Proceed order after PR 11: MyIndie and iDev.Games are public/monitoring-only; Gamemoor support/access remains; Kongregate waits for approval; CrazyGames only as a separate portal-build task; IndieHub only after support reveals a working path.
 

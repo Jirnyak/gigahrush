@@ -822,14 +822,17 @@ function placeContent(world: World, entities: Entity[], nextId: { v: number }, r
   ], ['darkness', 'shadow_toll', 'chokepoint']);
 
   addContainer(world, bypass, bypass.x + 18, bypass.y + 2, 'Темный обходной тайник', [
+    { defId: 'tanev_svt40', count: 1 },
+    { defId: 'ammo_762', count: 6 },
+    { defId: 'ptrs_liquidator', count: 1 },
+    { defId: 'ammo_harpoon', count: 2 },
     { defId: 'bandage', count: 1 },
-    { defId: 'ammo_9mm', count: 8 },
     {
       defId: 'note',
       count: 1,
-      data: 'Обход длинный, но свет остается у тебя. Слушай стены, а не таблички.',
+      data: 'Обход длинный, но свет остается у тебя. Винтовку Танева берегли для тихого выстрела, ПТРС - для брони, которую нельзя уговорить.',
     },
-  ], ['darkness', 'shadow_toll', 'long_route']);
+  ], ['darkness', 'shadow_toll', 'long_route', 'tanev_svt40', 'ptrs_liquidator', 'sniper_reward', 'anti_armor_reward']);
 
   addContainer(world, emergency, emergency.x + 5, emergency.y + 4, 'Аварийный карман без ключа', [
     { defId: 'bandage', count: 1 },
@@ -849,6 +852,15 @@ function placeContent(world: World, entities: Entity[], nextId: { v: number }, r
       data: 'Возвратный след: living/ministry/yakov. Один сохраненный факт разрешен к переносу.',
     },
   ], ['darkness', 'return_trace', 'living_hook', 'ministry_hook', 'yakov_hook']);
+
+  addContainer(world, trace, trace.x + 2, trace.y + 2, 'Атомный футляр АТО-41', [
+    { defId: 'ato41_atomic_flamer', count: 2 },
+    {
+      defId: 'note',
+      count: 1,
+      data: 'АТО-41: две секции. Режет дверь и налёт одной линией, но всё в луче считается сгоревшим имуществом.',
+    },
+  ], ['darkness', 'ato41_atomic_flamer', 'unique_weapon', 'collateral']);
 
   spawnMonster(entities, nextId, MonsterKind.SHADOW, toll.x + 11, toll.y + 3, 12, 'Тень пошлины');
   spawnMonster(entities, nextId, MonsterKind.SHADOW, toll.x + 12, toll.y + 8, 12, 'Тень сдачи');

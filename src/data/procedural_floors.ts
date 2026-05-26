@@ -426,7 +426,7 @@ const LOOT_BY_TAG: Record<string, readonly string[]> = {
   queue: ['ballot', 'ration_registry_extract', 'forged_ration_card', 'siren_instruction'],
   canteen: ['grey_briquette', 'green_briquette', 'kasha', 'kompot', 'ration_stamp_pad'],
   industrial: ['pipe', 'wrench', 'gear', 'spring', 'metal_sheet', 'ammo_nails', 'pressure_logbook'],
-  maintenance: ['fuse', 'wire_coil', 'relay_diagram', 'valve_tag', 'sealant_tube', 'gasmask_filter'],
+  maintenance: ['fuse', 'wire_coil', 'relay_diagram', 'valve_tag', 'sealant_tube', 'asbestos_cord', 'gasmask_filter'],
   emergency_panels: ['fuse', 'wire_coil', 'relay_diagram', 'door_kit', 'lamp_bulb'],
   workshop: ['nailgun', 'ammo_nails', 'circuit_board', 'barrel_part', 'rubber_strip'],
   service: ['fuse', 'relay_diagram', 'duct_tape', 'wire_coil', 'door_kit', 'flashlight'],
@@ -434,7 +434,7 @@ const LOOT_BY_TAG: Record<string, readonly string[]> = {
   water: ['metal_water', 'filter_layer', 'sealant_tube', 'harpoon_gun'],
   sump: ['harpoon_gun', 'metal_water', 'filter_layer', 'sealant_tube', 'valve_tag'],
   blackwater: ['metal_water', 'harpoon_gun', 'overexposed_photo', 'void_archive_warrant'],
-  abyss: ['void_archive_warrant', 'istotit_candle', 'overexposed_photo', 'psi_dust'],
+  abyss: ['void_archive_warrant', 'istotit_candle', 'overexposed_photo', 'psi_dust', 'losyash_rifle', 'rifle_bolt_pack'],
   admin: ['blank_form', 'temp_pass', 'official_permit_slip', 'seal_wax', 'ink_bottle'],
   documents: ['note', 'lift_scheme', 'elevator_access_order', 'missing_record_file'],
   archive: ['personal_file_copy', 'record_exposure_notice', 'passport_stub', 'void_archive_warrant'],
@@ -447,6 +447,7 @@ const LOOT_BY_TAG: Record<string, readonly string[]> = {
   samosbor: ['siren_shard', 'samosbor_tally', 'hermodoor_journal', 'meat_rune'],
   cult: ['meat_rune', 'holy_water', 'psi_dust', 'idol_chernobog'],
   shelter: ['water', 'bread', 'bandage', 'siren_instruction', 'emergency_roster'],
+  armed: ['ammo_shells', 'chizh3_shotgun', 'granit4u_belt_shotgun'],
   [FALSE_SAFE_BLOCK_TAG]: ['siren_instruction', 'emergency_roster', 'container_key_label', 'meat_rune'],
   smog: ['gasmask_filter', 'cloth_roll', 'filter_layer', 'valve_tag', 'filter_receipt', 'forged_quarantine_clearance'],
   govnyak: ['cigs', 'grey_briquette', 'green_briquette', 'concentrate_coupon'],
@@ -598,6 +599,19 @@ function uniquePicks<T>(pool: readonly T[], rng: () => number, count: number): T
   return out;
 }
 
+const LOOT_BIAS_COMPANION_IDS: readonly (readonly [string, string])[] = [
+  ['losyash_rifle', 'rifle_bolt_pack'],
+];
+
+function withLootBiasCompanions(ids: string[]): string[] {
+  const out = ids.slice();
+  for (const [a, b] of LOOT_BIAS_COMPANION_IDS) {
+    if (out.includes(a) && !out.includes(b)) out.push(b);
+    else if (out.includes(b) && !out.includes(a)) out.push(a);
+  }
+  return out;
+}
+
 function uniqueStrings(values: readonly string[]): string[] {
   const out: string[] = [];
   for (const value of values) {
@@ -717,7 +731,7 @@ export function makeProceduralFloorSpec(runSeed: number, z: number): ProceduralF
   const tags = [...geometry.tags, ...majority.tags, ...anomaly.tags];
   const lootPool = collectTagged(tags, LOOT_BY_TAG);
   const monsterPool = collectTagged(tags, MONSTERS_BY_TAG);
-  const lootBiasIds = uniquePicks(lootPool, rng, 5);
+  const lootBiasIds = withLootBiasCompanions(uniquePicks(lootPool, rng, 5));
   const monsterBiasKinds = anomaly.id === 'zombie_apocalypse'
     ? [MonsterKind.ZOMBIE]
     : uniquePicks(monsterPool, rng, 4);

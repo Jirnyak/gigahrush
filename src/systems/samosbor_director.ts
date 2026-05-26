@@ -19,6 +19,7 @@ import { freshNeeds, ITEMS, randomName } from '../data/catalog';
 import { MONSTERS } from '../entities/monster';
 import { getMaxHp, randomRPG, scaleMonsterHp, scaleMonsterSpeed } from './rpg';
 import { changeResourceStock } from './economy';
+import { setDoorState } from './door_state';
 import { publishEvent, getRecentEvents } from './events';
 import { observeRumorEvent } from './rumor';
 import { canSpawnEntityType, entitySpawnSlots } from './entity_limits';
@@ -486,7 +487,9 @@ function applyDoorMalfunction(world: World, snapshot: SamosborDirectorSnapshot):
   let checked = 0;
   for (const [idx, door] of world.doors) {
     if (checked++ > 256) break;
+    if (world.aptMask[idx] || world.hermoWall[idx]) continue;
     if (door.state !== DoorState.OPEN && door.state !== DoorState.HERMETIC_OPEN) continue;
+    if (snapshot.samosborActive && door.state === DoorState.HERMETIC_OPEN) continue;
     const x = idx % W;
     const y = (idx / W) | 0;
     const d2 = world.dist2(snapshot.playerX, snapshot.playerY, x + 0.5, y + 0.5);
@@ -498,7 +501,7 @@ function applyDoorMalfunction(world: World, snapshot: SamosborDirectorSnapshot):
   if (bestIdx < 0) return 0;
   const door = world.doors.get(bestIdx);
   if (!door) return 0;
-  door.state = door.state === DoorState.HERMETIC_OPEN ? DoorState.HERMETIC_CLOSED : DoorState.CLOSED;
+  setDoorState(world, door, door.state === DoorState.HERMETIC_OPEN ? DoorState.HERMETIC_CLOSED : DoorState.CLOSED);
   door.timer = Math.max(door.timer, 4);
   return 1;
 }

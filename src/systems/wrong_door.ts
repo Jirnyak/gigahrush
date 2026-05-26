@@ -136,6 +136,12 @@ function canUseDoorState(state: DoorState): boolean {
   return state !== DoorState.LOCKED && state !== DoorState.HERMETIC_CLOSED;
 }
 
+function canUseWrongDoorCell(world: World, idx: number): boolean {
+  if (world.cells[idx] !== Cell.DOOR || world.aptMask[idx] || world.hermoWall[idx]) return false;
+  const door = world.doors.get(idx);
+  return !!door && canUseDoorState(door.state);
+}
+
 function isFloorExit(world: World, idx: number): boolean {
   return world.cells[idx] === Cell.FLOOR && world.aptMask[idx] === 0;
 }
@@ -149,7 +155,7 @@ function targetDanger(world: World, idx: number): number {
 
 function sourceDoorAt(world: World, idx: number, originX: number, originY: number): SourceDoor | null {
   const door = world.doors.get(idx);
-  if (!door || world.cells[idx] !== Cell.DOOR || !canUseDoorState(door.state)) return null;
+  if (!door || !canUseWrongDoorCell(world, idx)) return null;
   return {
     idx,
     roomId: doorRoomId(door),
@@ -165,8 +171,10 @@ function collectSourceDoors(world: World, originX: number, originY: number, pref
   const out: SourceDoor[] = [];
   const ox = Math.floor(originX);
   const oy = Math.floor(originY);
-  for (const [idx, door] of world.doors) {
-    if (world.cells[idx] !== Cell.DOOR || !canUseDoorState(door.state)) continue;
+  for (const [idx] of world.doors) {
+    if (!canUseWrongDoorCell(world, idx)) continue;
+    const door = world.doors.get(idx);
+    if (!door) continue;
     const x = idx % W;
     const y = (idx / W) | 0;
     const dist2 = world.dist2(ox, oy, x, y);
@@ -180,8 +188,8 @@ function collectSourceDoors(world: World, originX: number, originY: number, pref
 function collectTargetExits(world: World): TargetExit[] {
   const out: TargetExit[] = [];
   const dirs = [-1, 1, -W, W];
-  for (const [doorIdx, door] of world.doors) {
-    if (world.cells[doorIdx] !== Cell.DOOR || !canUseDoorState(door.state)) continue;
+  for (const [doorIdx] of world.doors) {
+    if (!canUseWrongDoorCell(world, doorIdx)) continue;
     for (const d of dirs) {
       const idx = world.wrap((doorIdx % W) + (d === -1 ? -1 : d === 1 ? 1 : 0))
         + world.wrap(((doorIdx / W) | 0) + (d === -W ? -1 : d === W ? 1 : 0)) * W;
@@ -299,10 +307,9 @@ function expireRemap(world: World, state: GameState, store: WrongDoorStore, rema
 }
 
 function isRemapTopologyValid(world: World, remap: WrongDoorRemap): boolean {
-  if (world.cells[remap.sourceIdx] !== Cell.DOOR || !world.doors.has(remap.sourceIdx)) return false;
-  const sourceDoor = world.doors.get(remap.sourceIdx);
+  if (!canUseWrongDoorCell(world, remap.sourceIdx)) return false;
   const targetDoor = world.doors.get(remap.targetDoorIdx);
-  if (!sourceDoor || !targetDoor || !canUseDoorState(sourceDoor.state) || !canUseDoorState(targetDoor.state)) return false;
+  if (!targetDoor || !canUseWrongDoorCell(world, remap.targetDoorIdx)) return false;
   return isFloorExit(world, remap.targetIdx);
 }
 

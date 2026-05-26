@@ -14,6 +14,7 @@ import {
 import { MONSTERS } from '../entities/monster';
 import { monsterSpr, Spr } from '../render/sprite_index';
 import { recordPlayerDamage } from './damage';
+import { setDoorState } from './door_state';
 import { addItem, removeItem } from './inventory';
 import { randomRPG, scaleMonsterHp, scaleMonsterSpeed } from './rpg';
 import { publishEvent, registerWorldEventObserver as observeWorldEvents } from './events';
@@ -466,11 +467,11 @@ function applyInvertedAccess(world: World, mark: VoidProtocolMark, durationSec: 
   for (const idx of candidates) {
     const door = world.doors.get(idx);
     if (!door) continue;
-    if (door.state === DoorState.CLOSED) door.state = DoorState.OPEN;
-    else if (door.state === DoorState.HERMETIC_CLOSED) door.state = DoorState.HERMETIC_OPEN;
-    else if (door.state === DoorState.OPEN) door.state = DoorState.CLOSED;
-    else if (door.state === DoorState.HERMETIC_OPEN) door.state = DoorState.HERMETIC_CLOSED;
-    else if (door.state === DoorState.LOCKED) door.state = DoorState.OPEN;
+    if (door.state === DoorState.CLOSED) setDoorState(world, door, DoorState.OPEN);
+    else if (door.state === DoorState.HERMETIC_CLOSED) setDoorState(world, door, DoorState.HERMETIC_OPEN);
+    else if (door.state === DoorState.OPEN) setDoorState(world, door, DoorState.CLOSED);
+    else if (door.state === DoorState.HERMETIC_OPEN) setDoorState(world, door, DoorState.HERMETIC_CLOSED);
+    else if (door.state === DoorState.LOCKED) setDoorState(world, door, DoorState.OPEN);
     door.timer = durationSec;
   }
   return true;
@@ -553,8 +554,8 @@ function applyBorrowedLight(world: World, mark: VoidProtocolMark): boolean {
     for (const doorIdx of room.doors.slice(0, 4)) {
       const door = world.doors.get(doorIdx);
       if (!door) continue;
-      if (door.state === DoorState.OPEN) door.state = DoorState.CLOSED;
-      else if (door.state === DoorState.HERMETIC_OPEN) door.state = DoorState.HERMETIC_CLOSED;
+      if (door.state === DoorState.OPEN) setDoorState(world, door, DoorState.CLOSED);
+      else if (door.state === DoorState.HERMETIC_OPEN) setDoorState(world, door, DoorState.HERMETIC_CLOSED);
       door.timer = Math.max(door.timer, 12);
       changedDoors++;
     }
@@ -584,9 +585,9 @@ function keepBorrowedLightEvidence(world: World, mark: VoidProtocolMark): void {
       const door = world.doors.get(doorIdx);
       if (!door) continue;
       if (door.state === DoorState.CLOSED) {
-        door.state = DoorState.OPEN;
+        setDoorState(world, door, DoorState.OPEN);
       } else if (door.state === DoorState.HERMETIC_CLOSED) {
-        door.state = DoorState.HERMETIC_OPEN;
+        setDoorState(world, door, DoorState.HERMETIC_OPEN);
       }
       door.timer = 0;
     }
@@ -788,7 +789,7 @@ function nextRuntimeEntityId(entities: Entity[]): { v: number } {
 function setDoor(ctx: VoidSpiritTollChamberContext, doorIdx: number, state: DoorState, timer: number): void {
   const door = ctx.world.doors.get(doorIdx);
   if (!door) return;
-  door.state = state;
+  setDoorState(ctx.world, door, state);
   door.timer = timer;
 }
 

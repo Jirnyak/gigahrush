@@ -75,6 +75,8 @@ uniform float uGlitch;
 uniform float uPlaneLen;
 uniform float uCamHeight;        // 0..1 (0.5 = default)
 uniform float uFlashlight;       // 0..1
+uniform float uToolBeam;         // directed tool pulse, 0..1.05
+uniform float uToolBeamRange;    // directed tool reach in cells
 uniform float uAmbient;          // floor ambient light
 uniform float uTime;
 uniform int   uPurpleFog;        // 1 if player is in fogged area
@@ -221,6 +223,27 @@ float flashlightBoost(float dist) {
   if (dist >= radius) return 0.0;
   float t = 1.0 - dist / radius;
   return uFlashlight * t * t * 0.95;
+}
+
+float toolBeamBoost(float dist, float rayDX, float rayDY) {
+  if (uToolBeam <= 0.0 || uToolBeamRange <= 0.0) return 0.0;
+  vec2 forward = vec2(cos(uAngle), sin(uAngle));
+  vec2 delta = vec2(rayDX, rayDY) * dist;
+  float along = dot(delta, forward);
+  if (along <= 0.35 || along > uToolBeamRange) return 0.0;
+  float side = abs(dot(delta, vec2(-forward.y, forward.x)));
+  float halfWidth = min(1.05, 0.36 + along * 0.055);
+  float edge = 1.0 - smoothstep(halfWidth * 0.68, halfWidth, side);
+  float falloff = 1.0 - along / uToolBeamRange;
+  float flicker = 0.94 + 0.06 * sin(uTime * 57.0 + along * 3.1);
+  return uToolBeam * edge * (0.24 + falloff * 0.76) * flicker;
+}
+
+vec3 applyToolBeamTint(vec3 c, float beam) {
+  if (beam <= 0.0) return c;
+  vec3 tint = vec3(0.70, 0.96, 1.0);
+  float a = min(0.34, beam * 0.28);
+  return min(mix(c, max(c, tint), a) + tint * beam * 0.08, vec3(1.0));
 }
 
 // Hash noise for hell eye overlay (matches pixutil.noise on CPU)
@@ -423,7 +446,8 @@ void main() {
   if (hit && row >= drawStart && row <= drawEnd) {
       // ── Wall ──
       ivec2 hitCell = ivec2(wrapI(mapX), wrapI(mapY));
-      float cellLit = min(1.0, uAmbient + sampleLight(hitCell) * (1.0 - uAmbient) + flashlightBoost(dist));
+      float toolBeam = toolBeamBoost(dist, rayDX, rayDY);
+      float cellLit = min(1.0, uAmbient + sampleLight(hitCell) * (1.0 - uAmbient) + flashlightBoost(dist) + toolBeam * 0.82);
       float d = row - (HALF_H - lineH * (1.0 - uCamHeight));
       int texYi = int(floor(d / lineH * TEX_F)) & (TEX_I - 1);
       vec3 c = sampleAtlas(wallTexId, texXi, texYi).rgb;
@@ -442,6 +466,7 @@ void main() {
       }
       if (side == 1) c *= 0.7;
       c *= cellLit;
+      c = applyToolBeamTint(c, toolBeam);
       pixel = applyCellFog(c, hitCell, fogF);
       pixelDepth = min(1.0, dist / MAX_DIST);
   } else if (row > (hit ? drawEnd : HALF_H)) {
@@ -457,7 +482,8 @@ void main() {
           int ftx = int(floor(floorX * TEX_F)) & (TEX_I - 1);
           int fty = int(floor(floorY * TEX_F)) & (TEX_I - 1);
           float ff = min(1.0, currentDist * uFogDensity);
-          float fLit = min(1.0, uAmbient + sampleLight(fCell) * (1.0 - uAmbient) + flashlightBoost(currentDist));
+          float toolBeam = toolBeamBoost(currentDist, rayDX, rayDY);
+          float fLit = min(1.0, uAmbient + sampleLight(fCell) * (1.0 - uAmbient) + flashlightBoost(currentDist) + toolBeam * 0.82);
 
           uint fCellType = texelFetch(uCells, fCell, 0).r;
           if (fCellType == ${Cell.ABYSS}u) {
@@ -475,6 +501,7 @@ void main() {
             // Surface overlay (blood, urine, etc.)
             fc = blendSurface(fc, fCell, ftx >> 2, fty >> 2);
             fc *= fLit;
+            fc = applyToolBeamTint(fc, toolBeam);
             pixel = applyCellFog(fc, fCell, ff);
             pixelDepth = min(1.0, currentDist / MAX_DIST);
           }
@@ -493,7 +520,8 @@ void main() {
           int ftx = int(floor(floorX * TEX_F)) & (TEX_I - 1);
           int fty = int(floor(floorY * TEX_F)) & (TEX_I - 1);
           float ff = min(1.0, currentDist * uFogDensity);
-          float cLit = min(1.0, uAmbient + sampleLight(cCell) * (1.0 - uAmbient) + flashlightBoost(currentDist));
+          float toolBeam = toolBeamBoost(currentDist, rayDX, rayDY);
+          float cLit = min(1.0, uAmbient + sampleLight(cCell) * (1.0 - uAmbient) + flashlightBoost(currentDist) + toolBeam * 0.82);
 
           uint cCellType = texelFetch(uCells, cCell, 0).r;
           if (cCellType == ${Cell.ABYSS}u) {
@@ -527,6 +555,7 @@ void main() {
                 cc = sampleAtlas(${Tex.CEIL}u, ftx, fty).rgb;
                 cc *= cLit;
               }
+              cc = applyToolBeamTint(cc, toolBeam);
               pixel = applyCellFog(cc, cCell, ff);
               pixelDepth = min(1.0, currentDist / MAX_DIST);
             }
@@ -1354,7 +1383,7 @@ export function initWebGL(
   const rayVAO = createQuadVAO(gl, rayProgram);
   const rayUniforms = getUniforms(gl, rayProgram, [
     'uResolution', 'uPos', 'uAngle', 'uPitch', 'uFogDensity',
-    'uGlitch', 'uPlaneLen', 'uCamHeight', 'uFlashlight', 'uAmbient', 'uTime', 'uPurpleFog', 'uFogColor',
+    'uGlitch', 'uPlaneLen', 'uCamHeight', 'uFlashlight', 'uToolBeam', 'uToolBeamRange', 'uAmbient', 'uTime', 'uPurpleFog', 'uFogColor',
     'uCells', 'uWallTex', 'uFloorTex', 'uFeatures', 'uLight', 'uFog',
     'uDoorStates', 'uAtlas', 'uAtlasSize', 'uUseDynamicSky', 'uDynamicSky',
     'uDynamicSkyTint', 'uBaseFogColor', 'uSurfaceAtlas', 'uSurfaceIdx',
@@ -1610,6 +1639,8 @@ export function renderSceneGL(
   bloodParticles: BloodParticle[] = [],
   samosborActive = false,
   ambientLight = 0.12,
+  toolBeam = 0,
+  toolBeamRange = 0,
 ): void {
   if (!glState) return;
   const { gl } = glState;
@@ -1645,6 +1676,8 @@ export function renderSceneGL(
   gl.uniform1f(ru['uPlaneLen']!, planeLen);
   gl.uniform1f(ru['uCamHeight']!, camHeight);
   gl.uniform1f(ru['uFlashlight']!, flashlight);
+  gl.uniform1f(ru['uToolBeam']!, toolBeam);
+  gl.uniform1f(ru['uToolBeamRange']!, toolBeamRange);
   gl.uniform1f(ru['uAmbient']!, ambientLight);
   gl.uniform1f(ru['uTime']!, time);
   gl.uniform1i(ru['uPurpleFog']!, purpleFog);

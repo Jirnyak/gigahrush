@@ -30,7 +30,10 @@ import { rebuildEntityIndex } from '../src/systems/entity_index';
 import { createWorldEventState, getRecentEvents, publishEvent } from '../src/systems/events';
 import {
   activeSporeHaze,
+  applySporeHaze,
   SPORE_HAZE_AIM_SPREAD_MULT,
+  SPORE_HAZE_PROTECTED_AIM_SPREAD_MULT,
+  SPORE_HAZE_PROTECTED_DURATION_SEC,
   sporeHazeAimSpreadMult,
 } from '../src/systems/status';
 import { addTestRoom, makeGameState } from './helpers';
@@ -191,6 +194,17 @@ test('spore carpet stays idle until close, then puffs on a capped cooldown', () 
   prime(entities);
   updateMonster(world, entities, threat, 0.2, 3.2, msgs, target.id, { v: 3 }, state);
   assert.equal(target.hp, hpAfterPuff, 'cooldown should prevent immediate second puff');
+});
+
+test('ip4 gasmask counts as respiratory protection against spore haze', () => {
+  const target = player(10, 10, [{ defId: 'ip4_gasmask', count: 1, data: { dur: 90 } }]);
+  const threat = carpet(10.8, 10);
+  const state = makeGameState({ currentFloor: FloorLevel.LIVING, worldEvents: createWorldEventState(), time: 7 });
+  const status = applySporeHaze(target, 7, [], state, threat);
+
+  assert.ok(Math.abs(status.expiresAt - status.startedAt - SPORE_HAZE_PROTECTED_DURATION_SEC) < 0.001);
+  assert.equal(sporeHazeAimSpreadMult(target, 7), SPORE_HAZE_PROTECTED_AIM_SPREAD_MULT);
+  assert.equal(getRecentEvents(state, { type: 'player_status_applied', tags: ['protected'], limit: 1 })[0]?.data?.protectedByGear, true);
 });
 
 test('nearby container opening wakes spore carpet before proximity', () => {

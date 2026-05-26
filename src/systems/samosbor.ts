@@ -3,7 +3,7 @@
 /*   Protected rooms, hermowalls and lifts are preserved.           */
 
 import {
-  W, Cell, DoorState, ZoneFaction, FloorLevel, Tex, Feature, ContainerKind, Faction,
+  W, Cell, DoorState, ZoneFaction, FloorLevel, RoomType, Tex, Feature, ContainerKind, Faction,
   type Entity, type GameState, type Msg, type Room, type WorldContainer, type WorldEventType,
   EntityType, AIGoal, MonsterKind, Occupation, ItemType,
   msg,
@@ -11,7 +11,7 @@ import {
 import { World, replaceWorldFromGeneration } from '../core/world';
 import { ITEMS, NOTES, freshNeeds, randomName } from '../data/catalog';
 import { addFactionRelMutual } from '../data/relations';
-import { spawnCount } from '../data/items';
+import { getStack, spawnCount } from '../data/items';
 import { chooseFloorMonsterKind } from '../data/monster_ecology';
 import { MONSTERS } from '../entities/monster';
 import { Spr } from '../render/sprite_index';
@@ -22,6 +22,8 @@ import {
   playMaronaryPing,
   playMaronarySignal,
   playSamosborAlarm,
+  playSamosborRoomSiren,
+  playSoundAt,
   playVeretarSignal,
   setAmbientDroneMode,
   type AmbientDroneMode,
@@ -34,6 +36,7 @@ import { flashSamosborWarningScreens } from '../gen/procedural_screens';
 import { rng, pick, weightedPick } from '../gen/shared';
 import { getMaxHp, scaleMonsterHp, scaleMonsterSpeed, randomRPG } from './rpg';
 import { publishEvent } from './events';
+import { setDoorState } from './door_state';
 import {
   nextFloorRunSamosborCooldown,
   nextFloorRunSamosborDuration,
@@ -51,9 +54,11 @@ import { replaceRouteCueStateForRebuild } from './route_cues';
 import { replaceEmergencyPanelStateForRebuild } from './emergency_panels';
 import { changeResourceStock } from './economy';
 import { observeRumorEvent } from './rumor';
+import { publishNoise } from './noise';
 import { getNpcMemory } from './npc_memory';
 import { steerEntityTowardCell, tryAssignPathToCell } from './ai/pathfinding';
 import { pushNpcBarkMessage } from './ai/barks';
+import { hearingRadiusMetersForActor } from './hearing';
 import { createMaronaryWrongDoorRemap } from './wrong_door';
 import { canSpawnEntityType, entitySpawnSlots } from './entity_limits';
 import {
@@ -96,6 +101,9 @@ const SAMOSBOR_WARNING_SCREEN_RADIUS = 42;
 const SAMOSBOR_WARNING_SCREEN_CAP = 8;
 const SAMOSBOR_WARNING_BARK_RADIUS2 = 28 * 28;
 const SAMOSBOR_WARNING_BARK_CAP = 3;
+const SAMOSBOR_ROOM_SIREN_INTERVAL = 1.35;
+const SAMOSBOR_ROOM_SIREN_SOURCE_CAP = 4;
+const SAMOSBOR_ROOM_SIREN_RADIUS = 30;
 const SAMOSBOR_FOG_EFFECT_SEARCH_ATTEMPTS = 96;
 const SAMOSBOR_FOG_EFFECT_ENTITY_CAP = 10;
 const SAMOSBOR_FOG_EFFECT_NOTICE_INTERVAL = 4;
@@ -169,6 +177,13 @@ let istotitDecisionCycle = -1;
 let istotitDecision = '';
 let samosborPlayerShelterRoomId = -1;
 
+export interface SamosborRoomSirenSource {
+  roomId: number;
+  x: number;
+  y: number;
+  seed: number;
+}
+
 interface PendingAftermath {
   state: GameState;
   variant: ActiveSamosborVariant;
@@ -196,6 +211,11 @@ let lastVeretarAreaLeakAt = -Infinity;
 let lastSamosborFogEffectNoticeAt = -Infinity;
 let istotitBellFollowNoticeAt = -Infinity;
 let istotitBellResistNoticeAt = -Infinity;
+let samosborRoomSirenWorld: World | null = null;
+let samosborRoomSirenFloor = FloorLevel.LIVING;
+let samosborRoomSirenCycle = -1;
+let samosborRoomSirenAccum = 0;
+let samosborRoomSirenSources: SamosborRoomSirenSource[] = [];
 
 export interface SamosborWarningSnapshot {
   floor: FloorLevel;
@@ -290,6 +310,112 @@ function clearSamosborWarning(clearVariant: boolean, resetDrone = true): void {
   }
 }
 
+function clearSamosborRoomSirens(): void {
+  samosborRoomSirenWorld = null;
+  samosborRoomSirenCycle = -1;
+  samosborRoomSirenAccum = 0;
+  samosborRoomSirenSources = [];
+}
+
+function roomCenter(world: World, room: Room): { x: number; y: number } {
+  return {
+    x: world.wrap(room.x + room.w * 0.5),
+    y: world.wrap(room.y + room.h * 0.5),
+  };
+}
+
+function buildSamosborRoomSirenSources(world: World): SamosborRoomSirenSource[] {
+  const sources: SamosborRoomSirenSource[] = [];
+  for (const room of world.rooms) {
+    if (!room || room.type !== RoomType.LIVING || room.w <= 1 || room.h <= 1) continue;
+    const center = roomCenter(world, room);
+    sources.push({
+      roomId: room.id,
+      x: center.x,
+      y: center.y,
+      seed: Math.imul(room.id + 17, 131) ^ Math.imul(room.x + 31, 17) ^ room.y,
+    });
+  }
+  return sources;
+}
+
+export function getSamosborRoomSirenSourcesForTests(world: World): readonly SamosborRoomSirenSource[] {
+  return buildSamosborRoomSirenSources(world);
+}
+
+function ensureSamosborRoomSirens(world: World, state: GameState): void {
+  if (
+    samosborRoomSirenWorld === world &&
+    samosborRoomSirenFloor === state.currentFloor &&
+    samosborRoomSirenCycle === state.samosborCount
+  ) {
+    return;
+  }
+  samosborRoomSirenWorld = world;
+  samosborRoomSirenFloor = state.currentFloor;
+  samosborRoomSirenCycle = state.samosborCount;
+  samosborRoomSirenAccum = SAMOSBOR_ROOM_SIREN_INTERVAL;
+  samosborRoomSirenSources = buildSamosborRoomSirenSources(world);
+}
+
+function selectNearestSamosborRoomSirens(
+  world: World,
+  player: Entity,
+): SamosborRoomSirenSource[] {
+  const selected: Array<{ source: SamosborRoomSirenSource; dist2: number }> = [];
+  let worst = -1;
+  let worstDist2 = -1;
+  for (const source of samosborRoomSirenSources) {
+    const dist2 = world.dist2(player.x, player.y, source.x, source.y);
+    if (selected.length < SAMOSBOR_ROOM_SIREN_SOURCE_CAP) {
+      selected.push({ source, dist2 });
+      if (dist2 > worstDist2) {
+        worstDist2 = dist2;
+        worst = selected.length - 1;
+      }
+      continue;
+    }
+    if (dist2 >= worstDist2 || worst < 0) continue;
+    selected[worst] = { source, dist2 };
+    worst = 0;
+    worstDist2 = selected[0].dist2;
+    for (let i = 1; i < selected.length; i++) {
+      if (selected[i].dist2 > worstDist2) {
+        worstDist2 = selected[i].dist2;
+        worst = i;
+      }
+    }
+  }
+  selected.sort((a, b) => a.dist2 - b.dist2);
+  return selected.map(item => item.source);
+}
+
+function tickSamosborRoomSirens(world: World, entities: Entity[], state: GameState, dt: number): void {
+  if (!state.samosborActive) return;
+  const player = findPlayer(entities);
+  if (!player) return;
+  ensureSamosborRoomSirens(world, state);
+  if (samosborRoomSirenSources.length === 0) return;
+  samosborRoomSirenAccum += dt;
+  if (samosborRoomSirenAccum < SAMOSBOR_ROOM_SIREN_INTERVAL) return;
+  samosborRoomSirenAccum = 0;
+
+  const sources = selectNearestSamosborRoomSirens(world, player);
+  for (const source of sources) {
+    playSoundAt(() => playSamosborRoomSiren(source.seed + state.samosborCount * 97), source.x, source.y);
+    publishNoise(state, {
+      x: source.x,
+      y: source.y,
+      floor: state.currentFloor,
+      radius: SAMOSBOR_ROOM_SIREN_RADIUS,
+      ttl: SAMOSBOR_ROOM_SIREN_INTERVAL * 1.45,
+      source: 'siren',
+      severity: 4,
+      tags: ['samosbor', 'siren', 'living_room', 'room_siren'],
+    });
+  }
+}
+
 export function resetSamosborRuntimeForTests(): void {
   samosborSealed = false;
   activeSamosborZoneId = -1;
@@ -313,6 +439,7 @@ export function resetSamosborRuntimeForTests(): void {
   fogSpawnAccum = 0;
   activeSamosborScale = 'full';
   activeSamosborWaveStarted = false;
+  clearSamosborRoomSirens();
   cancelSamosborWave();
   aftermathRuntime.clear();
   clearSamosborWarning(true);
@@ -799,7 +926,7 @@ function prepareIstotitShelters(world: World, state: GameState, variant: ActiveS
     for (const di of room.doors) {
       const door = world.doors.get(di);
       if (!door || door.state === DoorState.LOCKED) continue;
-      door.state = DoorState.HERMETIC_OPEN;
+      setDoorState(world, door, DoorState.HERMETIC_OPEN);
       door.timer = Math.max(door.timer, 12);
     }
     addIstotitSupplyContainer(world, state, roomId);
@@ -913,7 +1040,7 @@ function istotitShelterAlone(world: World, player: Entity, state: GameState, roo
   for (const di of room.doors) {
     const door = world.doors.get(di);
     if (!door || door.state === DoorState.LOCKED) continue;
-    door.state = DoorState.HERMETIC_CLOSED;
+    setDoorState(world, door, DoorState.HERMETIC_CLOSED);
     door.timer = 0;
   }
   addFactionRelMutual(Faction.CITIZEN, Faction.PLAYER, -1);
@@ -972,7 +1099,7 @@ function istotitDisruptRite(
   if (!rememberIstotitDecision(state, 'disrupt_rite')) return false;
   const door = world.doors.get(doorIdx);
   if (!door) return false;
-  door.state = DoorState.HERMETIC_OPEN;
+  setDoorState(world, door, DoorState.HERMETIC_OPEN);
   door.timer = Math.max(door.timer, 4);
   const x = doorIdx % W;
   const y = (doorIdx / W) | 0;
@@ -1278,7 +1405,6 @@ function samosborShortActionLine(variant: ActiveSamosborVariant, shelterCount: n
     : 'К укрытию. Не отвечайте голосам.';
   if (isMaronary(variant)) return 'Не смотрите в зелёный источник. Проверьте дверь.';
   if (isVeretar(variant)) return 'От белой щели. К тёмной герме или из зоны.';
-  if (variant.def.id === 'quiet') return 'Не ждите сирену. К герме или за границу.';
   if (variant.def.id === 'wet') return 'С воды к сухой герме или выше по полу.';
   if (variant.def.id === 'electric') return 'От ламп. Закройтесь раньше или уходите.';
   if (variant.def.id === 'meat') return 'От тёплых швов. В центр прохода или из зоны.';
@@ -1316,7 +1442,6 @@ function samosborHudEventName(variant: ActiveSamosborVariant): string {
   if (isIstotit(variant)) return 'ИСТОТИТ';
   if (isMaronary(variant)) return 'МАРОНАРИЙ';
   if (isVeretar(variant)) return 'ВЕРЕТАР';
-  if (variant.def.id === 'quiet') return 'ТИХИЙ САМОСБОР';
   if (variant.def.id === 'wet') return 'МОКРЫЙ САМОСБОР';
   if (variant.def.id === 'electric') return 'ЭЛЕКТРОСБОР';
   if (variant.def.id === 'meat') return 'МЯСНОЙ САМОСБОР';
@@ -1325,7 +1450,6 @@ function samosborHudEventName(variant: ActiveSamosborVariant): string {
 
 function warningMapCode(variant: ActiveSamosborVariant): string {
   switch (variant.def.id) {
-    case 'quiet': return 'ТИХ';
     case 'wet': return 'ВОД';
     case 'electric': return 'ЭЛК';
     case 'meat': return 'МЯС';
@@ -1361,7 +1485,6 @@ function warningMapLine(
   if (isMaronary(variant)) return 'карта: зелёный источник жжёт; держаться в стороне';
   if (isIstotit(variant) && shelterCount > 0) return `карта: жёлтые укрытия ${shelterCount}; мест мало, список короткий`;
   if (isVeretar(variant)) return 'карта: белое пятно вместо комнаты';
-  if (variant.def.id === 'quiet') return 'карта: сирены может не быть; сверить табло';
   return 'карта: зона риска отмечена; выйти или закрыться';
 }
 
@@ -1432,10 +1555,6 @@ function warningBarkForVariant(variant: ActiveSamosborVariant, isFemale: boolean
       return isFemale
         ? 'Занавеску держи двумя руками. Там не наш двор!'
         : 'Белое окно не двор. Оттащи свидетеля и к тёмной герме!';
-    case 'quiet':
-      return isFemale
-        ? 'Тихо стало неправильно. Табло, карта, герма - сейчас!'
-        : 'Не жди сирену. Тишина уже предупреждает, к герме!';
     case 'wet':
       return isFemale
         ? 'Вода пошла по полу. Не стой в низине, к сухой двери!'
@@ -1474,7 +1593,7 @@ function pushWarningBarks(
     const line = warningBarkForVariant(variant, e.isFemale === true);
     if (!pushNpcBarkMessage(e, state.msgs, state.time, line, '#fc4', {
       listener: player,
-      radiusMeters: state.npcLogRadiusMeters,
+      radiusMeters: hearingRadiusMetersForActor(player, state.npcLogRadiusMeters),
       dist2: (x1, y1, x2, y2) => world.dist2(x1, y1, x2, y2),
     })) continue;
     observeRumorEvent(e, {
@@ -1739,6 +1858,7 @@ export function updateSamosbor(
   // ── Seal apartments 10 seconds before samosbor ends ──
   const activeVariant = getActiveSamosborVariant();
   tickMaronaryGlowDamage(world, entities, state, dt, activeVariant);
+  tickSamosborRoomSirens(world, entities, state, dt);
   const sealBeforeEnd = Math.max(0, SEAL_BEFORE_END + (activeVariant?.sealTimingDelta ?? 0));
   if (state.samosborActive && activeVariant && !samosborSealed && state.samosborTimer <= sealBeforeEnd) {
     const sealedShelters = sealApartments(world, entities, state, getSamosborShelterRoomIds(state));
@@ -1844,6 +1964,7 @@ export function updateSamosbor(
     samosborDirectorAccum = 0;
     maronaryPingAccum = 0;
     clearMaronaryGlowRuntime();
+    clearSamosborRoomSirens();
 
     const localShelterRoomIds = getLocalSamosborShelterRoomIds(state);
     notifyLocalSamosborShelterEnd(world, entities, state, nextId, endedVariant ?? null);
@@ -1913,7 +2034,7 @@ function sealApartments(world: World, entities: Entity[], state: GameState, extr
     room.sealed = true;
     for (const di of room.doors) {
       const door = world.doors.get(di);
-      if (door) door.state = DoorState.HERMETIC_CLOSED;
+      setDoorState(world, door, DoorState.HERMETIC_CLOSED);
     }
   }
   let sealedExtra = 0;
@@ -1931,7 +2052,7 @@ function sealApartments(world: World, entities: Entity[], state: GameState, extr
     room.sealed = true;
     for (const di of room.doors) {
       const door = world.doors.get(di);
-      if (door) door.state = DoorState.HERMETIC_CLOSED;
+      setDoorState(world, door, DoorState.HERMETIC_CLOSED);
     }
     sealedExtra++;
   }
@@ -1948,7 +2069,7 @@ function unsealApartments(world: World): void {
     for (const di of room.doors) {
       const door = world.doors.get(di);
       if (door && door.state === DoorState.HERMETIC_CLOSED) {
-        door.state = DoorState.HERMETIC_OPEN;
+        setDoorState(world, door, DoorState.HERMETIC_OPEN);
       }
     }
   }
@@ -1962,7 +2083,7 @@ function unsealRooms(world: World, roomIds: readonly number[]): void {
     for (const di of room.doors) {
       const door = world.doors.get(di);
       if (door && door.state === DoorState.HERMETIC_CLOSED) {
-        door.state = DoorState.HERMETIC_OPEN;
+        setDoorState(world, door, DoorState.HERMETIC_OPEN);
       }
     }
   }
@@ -2084,8 +2205,7 @@ function findPlayer(entities: Entity[]): Entity | undefined {
 function relocateEntityIfBlocked(world: World, e: Entity): void {
   if (!e.alive || e.type === EntityType.PROJECTILE) return;
   const ci = world.idx(Math.floor(e.x), Math.floor(e.y));
-  const cell = world.cells[ci];
-  if (cell === Cell.FLOOR || cell === Cell.WATER) return;
+  if (!world.solid(ci % W, (ci / W) | 0)) return;
 
   const sx = Math.floor(e.x);
   const sy = Math.floor(e.y);
@@ -2095,9 +2215,7 @@ function relocateEntityIfBlocked(world: World, e: Entity): void {
         if (Math.abs(dx) !== r && Math.abs(dy) !== r) continue;
         const x = world.wrap(sx + dx);
         const y = world.wrap(sy + dy);
-        const ni = world.idx(x, y);
-        const targetCell = world.cells[ni];
-        if (targetCell !== Cell.FLOOR && targetCell !== Cell.WATER) continue;
+        if (world.solid(x, y)) continue;
         e.x = x + 0.5;
         e.y = y + 0.5;
         return;
@@ -2402,9 +2520,9 @@ function applyDoorFault(
   const door = di >= 0 ? world.doors.get(di) : undefined;
   if (!door) return false;
   const oldState = door.state;
-  door.state = oldState === DoorState.HERMETIC_CLOSED || oldState === DoorState.HERMETIC_OPEN
+  setDoorState(world, door, oldState === DoorState.HERMETIC_CLOSED || oldState === DoorState.HERMETIC_OPEN
     ? DoorState.HERMETIC_OPEN
-    : DoorState.OPEN;
+    : DoorState.OPEN);
   door.timer = Math.max(door.timer, 45);
   const doorMark = stampAftermathDoorMark(world, di, pending, def);
   publishAftermath(def, pending, di % W, (di / W) | 0, {
@@ -2433,7 +2551,7 @@ function applyRouteBlock(
   const door = di >= 0 ? world.doors.get(di) : undefined;
   if (!door) return false;
   const oldState = door.state;
-  door.state = DoorState.HERMETIC_CLOSED;
+  setDoorState(world, door, DoorState.HERMETIC_CLOSED);
   door.timer = 0;
   const x = di % W;
   const y = (di / W) | 0;
@@ -2928,7 +3046,7 @@ function randomItemIdDifferent(current?: string): string {
 
 function randomItemStack(defId: string): { defId: string; count: number; data?: unknown } {
   const def = ITEMS[defId];
-  const count = def ? Math.max(1, Math.min(spawnCount(def), def.stack ?? 999)) : 1;
+  const count = def ? Math.max(1, Math.min(spawnCount(def), getStack(def))) : 1;
   const data = defId === 'note' ? pick(NOTES) : undefined;
   return data === undefined ? { defId, count } : { defId, count, data };
 }
@@ -3607,7 +3725,7 @@ function stampVeretarAreaLeak(world: World, cx: number, cy: number, radius: numb
     stampMark(world, x, y, Math.random(), Math.random(), 0.44 + Math.random() * 0.24, MarkType.SPLAT, seed, 244, 241, 223, 150);
     const door = world.doors.get(ci);
     if (door) {
-      if (door.state === DoorState.CLOSED) door.state = DoorState.OPEN;
+      if (door.state === DoorState.CLOSED) setDoorState(world, door, DoorState.OPEN);
       if (door.state === DoorState.OPEN || door.state === DoorState.HERMETIC_OPEN) door.timer = Math.max(door.timer, 22);
     }
     if (world.fog[ci] < 150) {

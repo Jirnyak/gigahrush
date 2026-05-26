@@ -29,7 +29,7 @@ const GESHA: PlotNpcDef = {
     'Патроны не рождаются. Мы плавим гильзы, гвозди и чужое молчание.',
     'Купить можно тихо. Помочь можно металлом. Сдать можно ликвидатору за дверью.',
     'Горячий ящик не трогай. Там не запас, а причина драки.',
-    'Лист металла в горячий ящик принесёшь — отсыплю девятки, пока обход не вернулся.',
+    'Лист металла и инструкцию в горячий ящик принесёшь — отсыплю девятки, пока обход не вернулся.',
     'Если сирена начнёт петь, беги. Плавилка не убежище.',
   ],
   talkLinesPost: [
@@ -132,6 +132,7 @@ function seedSmelterContainers(world: World, poi: SocialPoiRoom, geshaId: number
     [
       { defId: 'ammo_9mm', count: 4 },
       { defId: 'metal_sheet', count: 1 },
+      { defId: 'homemade_ammo_instruction', count: 1 },
     ],
     ['ammo', 'weapon', 'production_output', 'illegal', 'theft', 'faction_risk', 'contested_output', 'repair_input'],
     { id: geshaId, name: GESHA.name, faction: Faction.WILD, factoryId: 'illegal_ammo_smelter' },
@@ -152,6 +153,7 @@ function seedSmelterContainers(world: World, poi: SocialPoiRoom, geshaId: number
     'owner', 5,
     [
       { defId: 'denunciation', count: 1 },
+      { defId: 'homemade_ammo_instruction', count: 1 },
       { defId: 'voluntary_receipt', count: 1 },
       { defId: 'cigs', count: 2 },
     ],

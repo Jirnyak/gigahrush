@@ -43,6 +43,7 @@ interface SmogRuntime {
   lastMsgTime: number;
   sourceFound: boolean;
   wetClothUntil: number;
+  filterWear: number;
 }
 
 export interface ProceduralSmogStatus {
@@ -57,7 +58,10 @@ export interface ProceduralSmogStatus {
 }
 
 const WET_CLOTH_SECONDS = 75;
+const WET_RAG_BUNDLE_ITEM = 'wet_rag_bundle';
+const WET_RAG_BUNDLE_SECONDS = 45;
 const PRESSURE_TICK_SECONDS = 2.5;
+const FILTER_WEAR_UNITS = 42;
 const SMOG_ENTER_FOG = 64;
 const WATER_FOR_CLOTH = ['water', 'filtered_water', 'metal_water', 'boiler_water'];
 const TELEPORT_COUNTER_ITEMS = ['lift_scheme', 'elevator_access_order'] as const;
@@ -138,6 +142,7 @@ function runtimeFor(state: GameState, world: World): SmogRuntime {
     lastMsgTime: -Infinity,
     sourceFound: false,
     wetClothUntil: 0,
+    filterWear: 0,
   };
   smogRuntimeByState.set(state, next);
   return next;
@@ -151,6 +156,32 @@ function currentWaterForCloth(player: Entity): string {
 function protectionFor(player: Entity, state: GameState, runtime: SmogRuntime, autoPrepare: boolean): SmogProtection {
   if (hasItem(player, 'gasmask_filter')) return 'filter';
   if (runtime.wetClothUntil > state.time) return 'wet_cloth';
+  if (hasItem(player, WET_RAG_BUNDLE_ITEM)) {
+    if (!autoPrepare) return 'cloth_ready';
+    if (removeItem(player, WET_RAG_BUNDLE_ITEM, 1)) {
+      const item = ITEMS[WET_RAG_BUNDLE_ITEM];
+      runtime.wetClothUntil = state.time + WET_RAG_BUNDLE_SECONDS;
+      publishEvent(state, {
+        type: 'player_use_item',
+        zoneId: playerZoneId(player),
+        x: player.x,
+        y: player.y,
+        actorId: player.id,
+        actorName: player.name ?? 'Вы',
+        actorFaction: player.faction,
+        itemId: WET_RAG_BUNDLE_ITEM,
+        itemName: item?.name ?? 'Мокрые тряпки',
+        itemCount: 1,
+        itemValue: item?.value ?? 0,
+        severity: 2,
+        privacy: 'private',
+        tags: ['player', 'inventory', 'smog', 'wet_cloth', 'wet_rag_bundle', 'spent'],
+        data: { durationSeconds: WET_RAG_BUNDLE_SECONDS },
+      });
+      state.msgs.push(msg('Мокрые тряпки прижаты к лицу. Этого хватит только на короткий рывок.', state.time, '#9cf'));
+      return 'wet_cloth';
+    }
+  }
   const waterId = currentWaterForCloth(player);
   if (!hasItem(player, 'cloth_roll') || !waterId) return 'none';
   if (!autoPrepare) return 'cloth_ready';
@@ -182,6 +213,55 @@ function protectionFor(player: Entity, state: GameState, runtime: SmogRuntime, a
 function playerZoneId(player: Entity, world?: World): number | undefined {
   if (!world) return undefined;
   return world.zoneMap[world.idx(Math.floor(player.x), Math.floor(player.y))];
+}
+
+function countItem(player: Entity, defId: string): number {
+  let count = 0;
+  for (const item of player.inventory ?? []) {
+    if (item.defId === defId) count += item.count;
+  }
+  return count;
+}
+
+function wearSmogFilter(world: World, player: Entity, state: GameState, runtime: SmogRuntime, intensity: number): void {
+  runtime.filterWear += 0.75 + intensity;
+  if (runtime.filterWear < FILTER_WEAR_UNITS) return;
+  runtime.filterWear -= FILTER_WEAR_UNITS;
+  if (!removeItem(player, 'gasmask_filter', 1)) {
+    runtime.filterWear = 0;
+    return;
+  }
+
+  const remaining = countItem(player, 'gasmask_filter');
+  const item = ITEMS.gasmask_filter;
+  publishEvent(state, {
+    type: 'player_use_item',
+    zoneId: playerZoneId(player, world),
+    roomId: world.roomMap[world.idx(Math.floor(player.x), Math.floor(player.y))],
+    x: player.x,
+    y: player.y,
+    actorId: player.id,
+    actorName: player.name ?? 'Вы',
+    actorFaction: player.faction,
+    itemId: 'gasmask_filter',
+    itemName: item.name,
+    itemCount: 1,
+    itemValue: item.value,
+    severity: 3,
+    privacy: 'private',
+    tags: ['player', 'inventory', 'smog', 'filter', 'spent'],
+    data: {
+      reason: 'smog_exposure',
+      remainingFilters: remaining,
+    },
+  });
+  state.msgs.push(msg(
+    remaining > 0
+      ? `Фильтр намок и ушёл в расход. Осталось: ${remaining}.`
+      : 'Фильтр намок и ушёл в расход. Дальше только обход или влажная ткань.',
+    state.time,
+    '#9cf',
+  ));
 }
 
 function sourcePosition(world: World): { x: number; y: number } {
@@ -284,7 +364,7 @@ export function getProceduralSmogStatus(world: World, player: Entity, state: Gam
         : protection === 'wet_cloth'
           ? 'влажная ткань спасает горло'
           : protection === 'cloth_ready'
-            ? 'ткань и вода готовы'
+            ? 'влажная ткань готова'
             : 'кашель: нужен фильтр или обход'
       : '';
   return {
@@ -369,6 +449,7 @@ export function updateProceduralAnomalies(world: World, player: Entity, state: G
     player.needs.water = Math.max(0, player.needs.water - thirst * (0.7 + intensity));
     player.needs.sleep = Math.max(0, player.needs.sleep - 0.12 * intensity);
   }
+  if (protection === 'filter') wearSmogFilter(world, player, state, runtime, intensity);
 
   if (protection === 'none' || protection === 'cloth_ready') {
     const hpLoss = Math.max(1, Math.round(1 + intensity * 2));

@@ -22,6 +22,8 @@ import {
   isNetTerminalBankOpen,
   isNetTerminalGenEditorOpen,
   moveNetTerminalBankAction,
+  openNetTerminalBank,
+  openNetTerminalGenEditor,
   placeNetTerminalGenTerminal,
   placeNetTerminalGenTerminalsForCurrentFloor,
   tryUseNetTerminalGen,
@@ -100,6 +102,36 @@ test('net terminal bank can deposit cash and withdraw account rubles', () => {
 
   closeNetTerminalGen();
   clearNetTerminalGenTerminals();
+});
+
+test('net terminal overlays never release pointer lock', () => {
+  closeNetTerminalGen();
+  const state = makeGameState();
+  const lockedElement = {} as Element;
+  const previousDocument = Object.getOwnPropertyDescriptor(globalThis, 'document');
+  const fakeDocument = {
+    pointerLockElement: lockedElement as Element | null,
+    exitPointerLock(): void {
+      this.pointerLockElement = null;
+    },
+  };
+  Object.defineProperty(globalThis, 'document', { configurable: true, value: fakeDocument });
+
+  try {
+    openNetTerminalGenEditor(state);
+    assert.equal(isNetTerminalGenEditorOpen(), true);
+    assert.equal(fakeDocument.pointerLockElement, lockedElement);
+    closeNetTerminalGen();
+
+    fakeDocument.pointerLockElement = lockedElement;
+    openNetTerminalBank(state);
+    assert.equal(isNetTerminalBankOpen(), true);
+    assert.equal(fakeDocument.pointerLockElement, lockedElement);
+  } finally {
+    closeNetTerminalGen();
+    if (previousDocument) Object.defineProperty(globalThis, 'document', previousDocument);
+    else Reflect.deleteProperty(globalThis, 'document');
+  }
 });
 
 test('missing GEN terminal access spawns one cooldowned Safeguard backlash when live entities are provided', () => {

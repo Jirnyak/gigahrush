@@ -364,6 +364,8 @@ export function wipeVolatile(world: World): void {
     world.floorTex[i] = 0;
     world.features[i] = 0;
     world.light[i] = 0;
+    world.hermoWall[i] = 0;
+    world.liftDir[i] = 0;
   }
   for (const [idx] of Array.from(world.doors)) {
     if (world.aptMask[idx]) continue;

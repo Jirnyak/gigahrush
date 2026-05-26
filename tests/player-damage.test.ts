@@ -114,21 +114,21 @@ test('cell hazard damage records hazard cause', () => {
   assert.equal(formatLastPlayerDamageCause(state, 30), 'Кислотная лужа: -3. Сойдите с пятна или выжгите его.');
 });
 
-const QUIET_VARIANT_DEF = SAMOSBOR_VARIANTS.find(variant => variant.id === 'quiet');
-if (!QUIET_VARIANT_DEF) throw new Error('quiet samosbor variant missing');
+const CLASSIC_VARIANT_DEF = SAMOSBOR_VARIANTS.find(variant => variant.id === 'classic');
+if (!CLASSIC_VARIANT_DEF) throw new Error('classic samosbor variant missing');
 
-const QUIET_TEST_VARIANT: ActiveSamosborVariant = {
-  def: QUIET_VARIANT_DEF,
+const CLASSIC_TEST_VARIANT: ActiveSamosborVariant = {
+  def: CLASSIC_VARIANT_DEF,
   modifiers: [],
-  durationMult: QUIET_VARIANT_DEF.durationMult,
-  spawnMult: QUIET_VARIANT_DEF.spawnMult,
+  durationMult: CLASSIC_VARIANT_DEF.durationMult,
+  spawnMult: CLASSIC_VARIANT_DEF.spawnMult,
   fogSeedMult: 1,
   fogSpawnIntervalMult: 1,
-  sealTimingDelta: QUIET_VARIANT_DEF.sealTimingDelta,
+  sealTimingDelta: CLASSIC_VARIANT_DEF.sealTimingDelta,
   noSiren: false,
   extraEyes: 0,
   shelterRoomCount: 0,
-  fogColor: QUIET_VARIANT_DEF.fogColor,
+  fogColor: CLASSIC_VARIANT_DEF.fogColor,
 };
 
 function makeUnpreparedSamosborShelter(): { world: World; entities: Entity[]; player: Entity } {
@@ -181,11 +181,11 @@ test('samosbor shelter failure records samosbor damage cause', () => {
   const ctx = makeUnpreparedSamosborShelter();
   const state = makeGameState({ time: 33, tick: 101, currentFloor: FloorLevel.LIVING, samosborActive: true, samosborCount: 1 });
 
-  resolvePlayerShelterAtSealForTests(ctx.world, ctx.entities, state, QUIET_TEST_VARIANT);
+  resolvePlayerShelterAtSealForTests(ctx.world, ctx.entities, state, CLASSIC_TEST_VARIANT);
 
   assert.equal(ctx.player.hp, 16);
   assert.equal(state.lastDamage?.sourceKind, 'samosbor');
-  assert.equal(formatLastPlayerDamageCause(state, 33), `${QUIET_VARIANT_DEF.displayName}: вне рабочей гермы: -4`);
+  assert.equal(formatLastPlayerDamageCause(state, 33), `${CLASSIC_VARIANT_DEF.displayName}: вне рабочей гермы: -4`);
 });
 
 test('toroidal edge projectile swept query finds player across wrap', () => {

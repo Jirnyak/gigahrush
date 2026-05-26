@@ -38,22 +38,6 @@ import {
 import { makeGameState } from './helpers';
 
 const TEST_SHELTER_ROOM_ID = 777;
-const QUIET_VARIANT_DEF = SAMOSBOR_VARIANTS.find(variant => variant.id === 'quiet');
-if (!QUIET_VARIANT_DEF) throw new Error('quiet samosbor variant missing');
-
-const QUIET_TEST_VARIANT: ActiveSamosborVariant = {
-  def: QUIET_VARIANT_DEF,
-  modifiers: [],
-  durationMult: QUIET_VARIANT_DEF.durationMult,
-  spawnMult: QUIET_VARIANT_DEF.spawnMult,
-  fogSeedMult: 1,
-  fogSpawnIntervalMult: 1,
-  sealTimingDelta: QUIET_VARIANT_DEF.sealTimingDelta,
-  noSiren: false,
-  extraEyes: 0,
-  shelterRoomCount: 0,
-  fogColor: QUIET_VARIANT_DEF.fogColor,
-};
 
 function testVariant(id: SamosborVariantId): ActiveSamosborVariant {
   const def = SAMOSBOR_VARIANTS.find(variant => variant.id === id);
@@ -141,14 +125,14 @@ function makeShelterWorld(doorState: DoorState): {
   return { world, entities: [player], player, nextId: { v: 2 } };
 }
 
-function resolveQuietSeal(ctx: ReturnType<typeof makeShelterWorld>): ReturnType<typeof makeGameState> {
+function resolveClassicSeal(ctx: ReturnType<typeof makeShelterWorld>): ReturnType<typeof makeGameState> {
   const state = makeGameState({
     currentFloor: FloorLevel.LIVING,
     samosborActive: true,
     samosborCount: 1,
     worldEvents: createWorldEventState(),
   });
-  resolvePlayerShelterAtSealForTests(ctx.world, ctx.entities, state, QUIET_TEST_VARIANT);
+  resolvePlayerShelterAtSealForTests(ctx.world, ctx.entities, state, testVariant('classic'));
   return state;
 }
 
@@ -211,7 +195,7 @@ function makeMaronaryGlowWorld(): {
 
 test('prepared hermodoor room shelters player and publishes success event', () => {
   const ctx = makeShelterWorld(DoorState.HERMETIC_CLOSED);
-  const state = resolveQuietSeal(ctx);
+  const state = resolveClassicSeal(ctx);
 
   assert.equal(ctx.world.rooms[TEST_SHELTER_ROOM_ID].sealed, true);
   const events = getRecentEvents(state, { tags: ['shelter', 'success'], limit: 4 });
@@ -222,7 +206,7 @@ test('prepared hermodoor room shelters player and publishes success event', () =
 
 test('unprepared shelter fails locally and publishes failure event', () => {
   const ctx = makeShelterWorld(DoorState.HERMETIC_OPEN);
-  const state = resolveQuietSeal(ctx);
+  const state = resolveClassicSeal(ctx);
 
   assert.equal(ctx.world.rooms[TEST_SHELTER_ROOM_ID].sealed, false);
   assert.ok((ctx.player.hp ?? 50) < 50);
@@ -265,7 +249,7 @@ test('random samosbor transfer moves a random map entity and can pick player', (
   const rolls = [0.75, targetRoll, 0];
   Math.random = () => rolls.shift() ?? 0;
   try {
-    assert.equal(tickRandomEntityTransferForTests(ctx.world, ctx.entities, state, QUIET_TEST_VARIANT), true);
+    assert.equal(tickRandomEntityTransferForTests(ctx.world, ctx.entities, state, testVariant('classic')), true);
   } finally {
     Math.random = originalRandom;
   }

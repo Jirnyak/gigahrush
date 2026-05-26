@@ -149,10 +149,11 @@ test('Lishennyy light search is bounded and ignores far lightmap cells', () => {
   assert.equal(getRecentEvents(state, { type: 'lishennyy_lured', limit: 1 }).length, 0);
 });
 
-test('Lishennyy contact applies decay while the player carries light', () => {
+test('Lishennyy contact applies decay while the player stands in light', () => {
   const world = openDarkWorld();
   setListenerPos(512, 512, world.dist2.bind(world));
-  const target = player(10.5, 10.5, 'flashlight');
+  const target = player(10.5, 10.5);
+  world.light[world.idx(10, 10)] = 0.72;
   const threat = lishennyy(11.15, 10.5);
   const entities = [target, threat];
   const msgs: Msg[] = [];

@@ -10,7 +10,7 @@ import {
   questItemStateColor,
   questItemStateLabel,
 } from './economy_ui';
-import { containerGridScale } from './ui_layout';
+import { containerMenuGridLayout } from './ui_layout';
 import { drawCenteredWrappedText, fitText } from './ui_text';
 
 export function drawContainerMenu(
@@ -26,20 +26,19 @@ export function drawContainerMenu(
 
   const cw = ctx.canvas.width;
   const ch = ctx.canvas.height;
-  const gs = containerGridScale(cw, ch);
-  sx = gs;
-  sy = gs;
+  const layout = containerMenuGridLayout(cw, ch);
+  sx = layout.scale;
+  sy = layout.scale;
   ctx.fillStyle = 'rgba(0,0,0,0.98)';
   ctx.fillRect(0, 0, cw, ch);
 
   const GRID = 5;
-  const cellSz = 22 * sx;
-  const gap = 24 * sx;
-  const gridTotal = GRID * cellSz;
-  const totalW = gridTotal * 2 + gap;
-  const startX = (cw - totalW) / 2;
-  const startY = 30 * sy;
-  const containerX = startX + gridTotal + gap;
+  const cellSz = layout.cell;
+  const gridTotal = layout.gridTotal;
+  const totalW = layout.containerX - layout.startX + gridTotal;
+  const startX = layout.startX;
+  const startY = layout.startY;
+  const containerX = layout.containerX;
   const playerInv = player.inventory ?? [];
   const containerInv = container.inventory;
   const access = containerAccessInfo(container, player, state);

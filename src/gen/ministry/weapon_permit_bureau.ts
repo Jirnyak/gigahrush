@@ -72,14 +72,14 @@ const STEPAN_DEF: PlotNpcDef = {
   sprite: Occupation.HUNTER,
   hp: 260, maxHp: 260, money: 120, speed: 0.95,
   inventory: [
-    { defId: 'homemade_pistol', count: 1 },
+    { defId: 'karkarov_pistol', count: 1 },
     { defId: 'ammo_9mm', count: 8 },
     { defId: 'liquidator_token', count: 1 },
   ],
   talkLines: [
     'Показывайте бумагу, не пистолет.',
     'Я выдаю только малый запас. Кто просит ящик патронов, тот уже в рапорте.',
-    'Законный путь: оформленный журнал, семьдесят рублей за самоделку или одноразовый патронный ордер.',
+    'Законный путь: оформленный журнал, семьдесят рублей за Каркаров или одноразовый патронный ордер.',
     'Незаконный путь стоит ближе к шкафу. Потом ближе к протоколу.',
     'Липовое оружейное разрешение сдаете сюда. Не за патроны, за то, чтобы фамилия легла в правильную папку.',
   ],
@@ -130,9 +130,9 @@ registerSideQuest('stepan_patronov', STEPAN_DEF, [
     id: 'weapon_permit_sidearm_issue',
     giverNpcId: 'stepan_patronov',
     type: QuestType.FETCH,
-    desc: 'Степан Патронов: «Разрешение уже в журнале. Семьдесят рублей за самодельный короткоствол; патроны только по отдельному ордеру.»',
+    desc: 'Степан Патронов: «Разрешение уже в журнале. Семьдесят рублей за служебный Каркаров; патроны только по отдельному ордеру.»',
     targetItem: 'money', targetCount: 70,
-    rewardItem: 'homemade_pistol', rewardCount: 1,
+    rewardItem: 'karkarov_pistol', rewardCount: 1,
     relationDelta: 7, xpReward: 50, moneyReward: 0,
     requiresSideQuestDone: 'weapon_permit_legal_forms',
     eventTargetName: 'Короткоствол куплен по журналу бюро; патроны остались отдельным дефицитом.',
@@ -189,7 +189,7 @@ function addPermitContainer(
     { defId: 'weapon_permit_forged', count: 1 },
     { defId: 'ammo_issue_order', count: 1 },
     { defId: 'ammo_9mm', count: 12 },
-    { defId: 'homemade_pistol', count: 1 },
+    { defId: 'karkarov_pistol', count: 1 },
   ];
   world.addContainer({
     id: nextContainerId(world),
@@ -250,7 +250,7 @@ export function generateWeaponPermitBureau(
   spawnAdminNpc(entities, nextId, GALINA_DEF, 'galina_korotkostvolnaya', midX - 3, deskY - 1);
   spawnAdminNpc(entities, nextId, BORIS_DEF, 'boris_podchistkin', midX + 1, deskY - 1);
   const guardId = nextId.v;
-  spawnAdminNpc(entities, nextId, STEPAN_DEF, 'stepan_patronov', room.x + room.w - 3, room.y + room.h - 3, true, 'homemade_pistol');
+  spawnAdminNpc(entities, nextId, STEPAN_DEF, 'stepan_patronov', room.x + room.w - 3, room.y + room.h - 3, true, 'karkarov_pistol');
   spawnNamedCivilian(
     entities, nextId, 'Понятая Лидия Сейфовая', true,
     room.x + 2, room.y + room.h - 3, Occupation.SECRETARY, Faction.CITIZEN,

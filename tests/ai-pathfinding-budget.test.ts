@@ -4,6 +4,7 @@ import * as assert from 'node:assert/strict';
 import { AIGoal, Cell, DoorState, EntityType, RoomType, Tex, type Entity } from '../src/core/types';
 import { World } from '../src/core/world';
 import { bfsPath, getPathfindingBudgetStats, gotoNearestRoomType, gotoRoom, setPathContext, steerEntityTowardCell } from '../src/systems/ai/pathfinding';
+import { setDoorState } from '../src/systems/door_state';
 
 function makeCorridorWorld(): World {
   const world = new World();
@@ -95,6 +96,22 @@ test('ordinary closed doors are routeable while locked and hermetic doors block 
   world.doors.get(doorIdx)!.state = DoorState.HERMETIC_CLOSED;
   world.markCellsDirty();
   setPathContext([], 2, true);
+  assert.deepEqual(bfsPath(world, 0, 10, 21, 10), []);
+});
+
+test('door state helper invalidates baked navigation when passability changes', () => {
+  const world = makeCorridorWorld();
+  const doorIdx = world.idx(10, 10);
+  world.cells[doorIdx] = Cell.DOOR;
+  world.doors.set(doorIdx, { idx: doorIdx, state: DoorState.HERMETIC_OPEN, roomA: -1, roomB: 0, keyId: '', timer: 0 });
+
+  setPathContext([], 0);
+  assert.equal(bfsPath(world, 0, 10, 21, 10).length > 0, true);
+  const beforeVersion = world.cellVersion;
+
+  assert.equal(setDoorState(world, world.doors.get(doorIdx), DoorState.HERMETIC_CLOSED), true);
+
+  assert.ok(world.cellVersion > beforeVersion);
   assert.deepEqual(bfsPath(world, 0, 10, 21, 10), []);
 });
 

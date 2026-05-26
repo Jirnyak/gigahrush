@@ -79,6 +79,13 @@ import { registerProceduralAnomalyPlacement } from './procedural_anomalies/commo
 import { sampleNaturalPopulationCells, type NaturalPopulationProfile } from './population_placement';
 
 const EXCLUDE_GNILUSHKA = [MonsterKind.GNILUSHKA] as const;
+const O15_ENGINEER_FLAMER_ID = 'o15_multijet_flamer';
+const O15_ENGINEER_STASH_MIN_DEPTH = 30;
+const LOSYASH_RIFLE_ID = 'losyash_rifle';
+const RIFLE_BOLT_PACK_ID = 'rifle_bolt_pack';
+const DEEP_RECON_STASH_MIN_DEPTH = 45;
+const GRANIT4U_BELT_SHOTGUN_ID = 'granit4u_belt_shotgun';
+const DEEP_LIQUIDATOR_REWARD_MIN_DEPTH = 45;
 
 function irng(lo: number, hi: number): number {
   return lo + Math.floor(Math.random() * (hi - lo + 1));
@@ -600,6 +607,86 @@ function spawnLoot(world: World, rooms: Room[], spec: ProceduralFloorSpec, spawn
     const inventory = seedProceduralLootInventory(cell.room, kind, spec);
     addProceduralLootContainer(world, spec, cell.room, cell, kind, inventory);
   }
+}
+
+function addDeepEngineerStash(world: World, rooms: Room[], spec: ProceduralFloorSpec, reachable: Uint8Array): void {
+  if (spec.depth < O15_ENGINEER_STASH_MIN_DEPTH || spec.danger < 4 || spec.majorityId !== 'liquidators') return;
+  if (spec.geometryId !== 'workshops' && spec.geometryId !== 'service_spines') return;
+  const candidates = rooms.filter(room =>
+    room.id !== 0 &&
+    (room.type === RoomType.PRODUCTION || room.type === RoomType.STORAGE),
+  );
+  if (candidates.length === 0) return;
+  const preferred = candidates[(spec.seed + spec.depth) % candidates.length];
+  const target = findReachableContainerCell(world, candidates, reachable, spec.seed ^ 0x6015, preferred);
+  if (!target) return;
+  addProceduralLootContainer(
+    world,
+    spec,
+    target.room,
+    target,
+    ContainerKind.WEAPON_CRATE,
+    [
+      { defId: O15_ENGINEER_FLAMER_ID, count: 1 },
+      { defId: 'napalm_mix', count: 3 },
+      { defId: 'empty_roks_tank', count: 1 },
+    ],
+    ['deep_engineer_stash', 'engineer', 'breach', 'napalm', 'fuel'],
+    'Инженерный тайник 6О15-УТТХ',
+  );
+}
+
+function addDeepReconStash(world: World, rooms: Room[], spec: ProceduralFloorSpec, reachable: Uint8Array): void {
+  if (spec.depth < DEEP_RECON_STASH_MIN_DEPTH || spec.danger < 5 || spec.geometryId !== 'sump_causeways') return;
+  const preferredRooms = rooms.filter(room =>
+    room.id !== 0 &&
+    (room.type === RoomType.STORAGE || room.type === RoomType.PRODUCTION || room.type === RoomType.HQ),
+  );
+  const candidates = preferredRooms.length > 0 ? preferredRooms : rooms.filter(room => room.id !== 0);
+  if (candidates.length === 0) return;
+  const preferred = candidates[(spec.seed + spec.depth * 13) % candidates.length];
+  const target = findReachableContainerCell(world, candidates, reachable, spec.seed ^ 0x1047, preferred);
+  if (!target) return;
+  addProceduralLootContainer(
+    world,
+    spec,
+    target.room,
+    target,
+    ContainerKind.SECRET_STASH,
+    [
+      { defId: LOSYASH_RIFLE_ID, count: 1 },
+      { defId: RIFLE_BOLT_PACK_ID, count: 3 },
+      { defId: 'filtered_water', count: 1 },
+    ],
+    ['deep_recon_stash', 'anti_elite', LOSYASH_RIFLE_ID, RIFLE_BOLT_PACK_ID],
+    'Глубинный разведтайник Лосяша',
+  );
+}
+
+function addDeepLiquidatorRewardStash(world: World, rooms: Room[], spec: ProceduralFloorSpec, reachable: Uint8Array): void {
+  if (spec.depth < DEEP_LIQUIDATOR_REWARD_MIN_DEPTH || spec.danger < 5 || spec.majorityId !== 'liquidators') return;
+  if (!spec.lootBiasIds.includes(GRANIT4U_BELT_SHOTGUN_ID)) return;
+  const candidates = rooms.filter(room =>
+    room.id !== 0 &&
+    (room.type === RoomType.HQ || room.type === RoomType.STORAGE || room.type === RoomType.PRODUCTION),
+  );
+  if (candidates.length === 0) return;
+  const preferred = candidates[(spec.seed + spec.depth * 19) % candidates.length];
+  const target = findReachableContainerCell(world, candidates, reachable, spec.seed ^ 0x4704, preferred);
+  if (!target) return;
+  addProceduralLootContainer(
+    world,
+    spec,
+    target.room,
+    target,
+    ContainerKind.WEAPON_CRATE,
+    [
+      { defId: GRANIT4U_BELT_SHOTGUN_ID, count: 1 },
+      { defId: 'ammo_shells', count: 3 },
+    ],
+    ['deep_liquidator_reward', GRANIT4U_BELT_SHOTGUN_ID, 'ammo_shells'],
+    'Глубинный ликвидаторский ящик «Гранит»-4у',
+  );
 }
 
 function occupationForFaction(faction: Faction, roomType: RoomType): Occupation {
@@ -1634,6 +1721,37 @@ function seedHladonCounterplay(world: World, rooms: Room[], coldRooms: Room[], e
   }
 }
 
+function addDeepFrozenBlueprintCache(world: World, coldRooms: Room[], spec: ProceduralFloorSpec): void {
+  const itemId = 'blueprint_t3_folder';
+  const minDepth = 35;
+  if (spec.depth < minDepth || spec.danger < 4) return;
+  for (let attempt = 0; attempt < coldRooms.length; attempt++) {
+    const room = coldRooms[(spec.seed + attempt * 7) % coldRooms.length];
+    const pos = roomCell(
+      world,
+      room,
+      1 + ((spec.seed + attempt * 3) % Math.max(1, room.w - 2)),
+      1 + ((spec.seed * 3 + attempt * 5) % Math.max(1, room.h - 2)),
+    );
+    if (!pos || world.containersAt(pos.x, pos.y).length > 0) continue;
+    world.features[world.idx(pos.x, pos.y)] = Feature.APPARATUS;
+    addProceduralLootContainer(
+      world,
+      spec,
+      room,
+      pos,
+      ContainerKind.SAFE,
+      [
+        { defId: itemId, count: 1 },
+        { defId: 'frozen_item_shard', count: 1 },
+      ],
+      [itemId, 'frozen_item', 'deep_route', 'rare_recipe_unlock'],
+      'Замороженный сейф чертежей Т3',
+    );
+    return;
+  }
+}
+
 function applyHladon(world: World, rooms: Room[], entities: Entity[], nextId: { v: number }, spec: ProceduralFloorSpec, sx: number, sy: number): void {
   if (spec.anomalyId !== 'hladon') return;
   const coldRooms = pickHladonRooms(world, rooms, spec, sx, sy);
@@ -1642,6 +1760,7 @@ function applyHladon(world: World, rooms: Room[], entities: Entity[], nextId: { 
   for (let i = 0; i < coldRooms.length; i++) {
     stampHladonFrost(world, coldRooms[i], spec.seed + 9100 + i * 997, spec.danger);
   }
+  addDeepFrozenBlueprintCache(world, coldRooms, spec);
   seedHladonCounterplay(world, rooms, coldRooms, entities, nextId, spec);
   world.markFogDirty();
 }
@@ -2595,6 +2714,9 @@ export function generateProceduralFloor(spec: ProceduralFloorSpec): FloorGenerat
 
     placeProceduralEmergencyPanels(world, rooms, spec, placement.reachable);
     spawnLoot(world, rooms, spec, spawnX, spawnY, placement.reachable);
+    addDeepEngineerStash(world, rooms, spec, placement.reachable);
+    addDeepReconStash(world, rooms, spec, placement.reachable);
+    addDeepLiquidatorRewardStash(world, rooms, spec, placement.reachable);
     if (allowNpcs) spawnNpcs(world, rooms, entities, nextId, spec);
     spawnMonsters(world, entities, nextId, spec, spawnX, spawnY);
 

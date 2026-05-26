@@ -4,17 +4,28 @@ import { type Entity, type GameState, Faction } from '../core/types';
 import { ITEMS } from '../data/catalog';
 import { FACTION_NAMES, OCCUPATION_NAMES } from '../data/relations';
 import { controlBindingLabel, controlHint } from '../systems/controls';
-import { npcHasQuestMarker } from '../systems/quests';
+import { getDurakSnapshot } from '../systems/durak';
+import {
+  getNpcInteractionInterfaceSnapshot,
+  getNpcMenuOptions,
+  NPC_MENU_INTERFACE_TAB,
+} from '../systems/npc_interaction_options';
 import { questDeadlineText, questRemainingMinutes } from '../systems/quest_deadlines';
 import { drawNeuroPanel, drawGlitchText, textJitter, flicker } from './hud_fx';
 import { dialogMenuScale, tradeGridScale } from './ui_layout';
 import { drawCenteredWrappedText, drawWrappedText, fitText } from './ui_text';
+import { drawDurakInterface } from './durak_ui';
 import {
   questItemStateColor,
   questItemStateLabel,
   tradeCellPriceDisplay,
   tradePriceDisplay,
 } from './economy_ui';
+import {
+  getTradeDealSummary,
+  getTradeNpcOffer,
+  getTradeOffer,
+} from '../systems/trade';
 
 export function drawNpcMenu(
   ctx: CanvasRenderingContext2D,
@@ -54,16 +65,16 @@ export function drawNpcMenu(
   ctx.fillText(fitText(ctx, `${fName} · ${oName}`, pw - 16 * sx), px + 8 * sx + fj.dx, py + 22 * sy + fj.dy);
 
   if (state.npcMenuTab === 'main') {
-    // Main menu: Talk, Quest, Trade
-    const questMarker = npcHasQuestMarker(npc, state);
-    const items = ['Говорить', questMarker ? 'Задание !' : 'Задание', 'Торг'];
+    const items = getNpcMenuOptions({ state, player, npc, entities });
     ctx.font = `${10 * sy}px monospace`;
     for (let i = 0; i < items.length; i++) {
       const selected = i === state.npcMenuSel;
       const yy = py + 44 * sy + i * 20 * sy;
       const mj = textJitter(time, 910 + i);
-      ctx.fillStyle = selected ? `rgba(0,255,170,${flicker(time, 920 + i)})` : '#688';
-      ctx.fillText(`${selected ? '▶ ' : '  '}${items[i]}`, px + 16 * sx + mj.dx, yy + mj.dy);
+      ctx.fillStyle = items[i].disabled
+        ? selected ? '#9a6' : '#665'
+        : selected ? `rgba(0,255,170,${flicker(time, 920 + i)})` : '#688';
+      ctx.fillText(`${selected ? '▶ ' : '  '}${items[i].label}`, px + 16 * sx + mj.dx, yy + mj.dy);
     }
     ctx.fillStyle = '#456';
     ctx.font = `${8 * sy}px monospace`;
@@ -127,8 +138,50 @@ export function drawNpcMenu(
       : `${controlHint('interact')}/${controlBindingLabel('gameMenu')} назад`;
     ctx.fillText(fitText(ctx, hint, pw - 16 * sx), px + 8 * sx, py + ph - 11 * sy);
 
+  } else if (state.npcMenuTab === NPC_MENU_INTERFACE_TAB) {
+    const durak = getDurakSnapshot();
+    if (durak.open && durak.npcId === npc.id) {
+      drawDurakInterface(ctx, durak, px, py, pw, ph, sx, sy, time);
+      return;
+    }
+    const snapshot = getNpcInteractionInterfaceSnapshot();
+    ctx.fillStyle = '#d7f7ff';
+    ctx.font = `${11 * sy}px monospace`;
+    drawGlitchText(ctx, fitText(ctx, snapshot.title || 'ИНТЕРФЕЙС', pw - 16 * sx), px + 8 * sx, py + 38 * sy, time, 940, '#ffd36a', 11 * sy);
+
+    ctx.fillStyle = '#888';
+    ctx.font = `${8 * sy}px monospace`;
+    let ly = py + 56 * sy;
+    const maxW = pw - 16 * sx;
+    ctx.fillText(fitText(ctx, snapshot.npcName || npc.name || 'NPC', maxW), px + 8 * sx, ly);
+    ly += 14 * sy;
+    if (snapshot.stakeRubles !== undefined) {
+      ctx.fillStyle = '#ee4';
+      ctx.fillText(fitText(ctx, `Ставка: ₽${snapshot.stakeRubles}`, maxW), px + 8 * sx, ly);
+      ly += 12 * sy;
+    }
+    if (snapshot.priceRubles !== undefined) {
+      ctx.fillStyle = '#ee4';
+      ctx.fillText(fitText(ctx, `Цена: ₽${snapshot.priceRubles}`, maxW), px + 8 * sx, ly);
+      ly += 12 * sy;
+    }
+    ctx.fillStyle = '#ccc';
+    ctx.font = `${9 * sy}px monospace`;
+    for (const line of snapshot.lines) {
+      ly = drawWrappedText(ctx, line, px + 8 * sx, ly, maxW, 12 * sy, 2) + 3 * sy;
+      if (ly > py + ph - 48 * sy) break;
+    }
+    if (snapshot.message && ly <= py + ph - 36 * sy) {
+      ctx.fillStyle = '#8cf';
+      ctx.font = `${8 * sy}px monospace`;
+      drawWrappedText(ctx, snapshot.message, px + 8 * sx, ly, maxW, 10 * sy, 2);
+    }
+    ctx.fillStyle = '#555';
+    ctx.font = `${8 * sy}px monospace`;
+    ctx.fillText(`${controlHint('interact')}/${controlBindingLabel('gameMenu')} назад`, px + 8 * sx, py + ph - 11 * sy);
+
   } else if (state.npcMenuTab === 'trade') {
-    // ── Fullscreen trade: two 5×5 grids ──
+    // ── Fullscreen trade: symmetric inventories and offer baskets ──
     const cw = ctx.canvas.width;
     const ch = ctx.canvas.height;
     const gs = tradeGridScale(cw, ch);
@@ -140,14 +193,30 @@ export function drawNpcMenu(
 
     const GRID = 5;
     const cellSz = 22 * sx;
-    const gap = 24 * sx;               // gap between grids
+    const sideGap = 10 * sx;
+    const centerGap = 18 * sx;
     const gridTotal = GRID * cellSz;
-    const totalW = gridTotal * 2 + gap;
+    const totalW = gridTotal * 4 + sideGap * 2 + centerGap;
     const startX = (cw - totalW) / 2;
-    const startY = 28 * sy;
+    const startY = 30 * sy;
+    const playerOfferX = startX + gridTotal + sideGap;
+    const npcOfferX = playerOfferX + gridTotal + centerGap;
+    const npcX = npcOfferX + gridTotal + sideGap;
+    const dealX = playerOfferX;
+    const dealY = startY + GRID * cellSz + 10 * sy;
+    const dealW = gridTotal * 2 + centerGap;
+    const dealH = 16 * sy;
 
     const npcInv = npc.inventory ?? [];
     const plrInv = player.inventory ?? [];
+    const playerOffer = getTradeOffer(state);
+    const npcOffer = getTradeNpcOffer(state);
+    const deal = getTradeDealSummary(state, npc);
+    const stagedCount = (offer: readonly { defId: string; count: number; data?: unknown }[], item: { defId: string; data?: unknown }): number => {
+      let count = 0;
+      for (const slot of offer) if (slot.defId === item.defId && slot.data === item.data) count += slot.count;
+      return count;
+    };
 
     // ── Title (centered) ──
     ctx.fillStyle = '#aaa';
@@ -160,14 +229,26 @@ export function drawNpcMenu(
     ctx.font = `${8.5 * sy}px monospace`;
     ctx.fillStyle = '#ee4';
     ctx.fillText(`Вы: ₽${player.money ?? 0}`, startX, startY - 8 * sy);
+    ctx.fillStyle = '#cc9';
+    ctx.fillText('Вы отдаете', playerOfferX, startY - 8 * sy);
+    ctx.fillStyle = '#9cf';
+    ctx.fillText('Вы берете', npcOfferX, startY - 8 * sy);
     ctx.fillStyle = '#8cf';
     ctx.fillText(
       fitText(ctx, `${npc.name?.split(' ')[0] ?? 'NPC'}: ₽${npc.money ?? 0}`, gridTotal),
-      startX + gridTotal + gap, startY - 8 * sy,
+      npcX, startY - 8 * sy,
     );
 
     // ── Draw grid helper ──
-    const drawGrid = (inv: { defId: string; count: number }[], gx: number, side: 'player' | 'npc') => {
+    const drawGrid = (
+      inv: readonly { defId: string; count: number; data?: unknown }[],
+      gx: number,
+      side: 'player' | 'player_offer' | 'npc_offer' | 'npc',
+      label: string,
+    ) => {
+      ctx.fillStyle = side === 'npc' || side === 'npc_offer' ? '#7bd' : '#dc6';
+      ctx.font = `${6 * sy}px monospace`;
+      ctx.fillText(fitText(ctx, label, gridTotal), gx, startY - 1 * sy);
       for (let row = 0; row < GRID; row++) {
         for (let col = 0; col < GRID; col++) {
           const idx = row * GRID + col;
@@ -183,13 +264,23 @@ export function drawNpcMenu(
           if (idx < inv.length) {
             const item = inv[idx];
             const def = ITEMS[item.defId];
-            const price = tradeCellPriceDisplay(state, npc, item.defId, side === 'npc' ? 'buy' : 'sell');
+            const priceMode = side === 'npc' || side === 'npc_offer' ? 'buy' : 'sell';
+            const price = tradeCellPriceDisplay(state, npc, item.defId, priceMode);
             const questLabel = questItemStateLabel(price.questState);
+            const staged = side === 'player'
+              ? stagedCount(playerOffer, item)
+              : side === 'npc'
+                ? stagedCount(npcOffer, item)
+                : 0;
             ctx.fillStyle = price.scarcityColor;
             ctx.fillRect(cx + 1 * sx, cy + 1 * sy, Math.max(1, 2 * sx), cellSz - 4 * sy);
             ctx.font = `${4.5 * sy}px monospace`;
-            ctx.fillStyle = side === 'npc' ? '#8cf' : '#ee4';
-            ctx.fillText(side === 'npc' ? 'ПРОД' : 'ВАШ', cx + 4 * sx, cy + 3 * sy);
+            ctx.fillStyle = side === 'npc' || side === 'npc_offer' ? '#8cf' : '#ee4';
+            ctx.fillText(
+              side === 'npc' ? 'ПРОД' : side === 'npc_offer' ? 'БЕР' : side === 'player_offer' ? 'ОТД' : 'ВАШ',
+              cx + 4 * sx,
+              cy + 3 * sy,
+            );
             if (questLabel) {
               ctx.fillStyle = questItemStateColor(price.questState);
               ctx.textAlign = 'right';
@@ -207,24 +298,59 @@ export function drawNpcMenu(
               cx + 4 * sx,
               cy + cellSz - 5 * sy,
             );
-            if (item.count > 1) {
+            if (item.count > 1 || staged > 0) {
+              ctx.textAlign = 'right';
               ctx.fillStyle = '#8a8';
-              ctx.font = `${4.8 * sy}px monospace`;
-              ctx.fillText(`×${item.count}`, cx + cellSz - 16 * sx, cy + cellSz - 5 * sy);
+            ctx.font = `${4.8 * sy}px monospace`;
+            if (staged > 0) ctx.fillStyle = '#fc4';
+            ctx.fillText(staged > 0 ? `→${staged}` : `×${item.count}`, cx + cellSz - 4 * sx, cy + cellSz - 5 * sy);
+            ctx.textAlign = 'left';
             }
           }
         }
       }
     };
 
-    // Player grid (left), NPC grid (right)
-    drawGrid(plrInv, startX, 'player');
-    drawGrid(npcInv, startX + gridTotal + gap, 'npc');
+    drawGrid(plrInv, startX, 'player', 'ИНВЕНТАРЬ');
+    drawGrid(playerOffer, playerOfferX, 'player_offer', `ОТДАТЬ ${deal.creditValue}₽`);
+    drawGrid(npcOffer, npcOfferX, 'npc_offer', `ВЗЯТЬ ${deal.fullPrice}₽`);
+    drawGrid(npcInv, npcX, 'npc', 'ТОВАРЫ');
+
+    const canDeal = (deal.npcOfferCount ?? 0) > 0 && (player.money ?? 0) >= deal.cashDue;
+    const dealSelected = state.tradeSide === 'deal';
+    ctx.fillStyle = dealSelected ? (canDeal ? 'rgba(40,110,55,0.9)' : 'rgba(120,65,25,0.9)') : 'rgba(20,28,24,0.94)';
+    ctx.fillRect(dealX, dealY, dealW, dealH);
+    ctx.strokeStyle = dealSelected ? (canDeal ? '#8f8' : '#f84') : '#466';
+    ctx.strokeRect(dealX, dealY, dealW, dealH);
+    ctx.textAlign = 'center';
+    ctx.font = `${7.6 * sy}px monospace`;
+    ctx.fillStyle = canDeal ? '#8f8' : '#f84';
+    const dealText = canDeal
+      ? `ОБМЕН · доплата ${deal.cashDue}₽`
+      : (deal.npcOfferCount ?? 0) <= 0
+        ? 'ОБМЕН · выберите товары NPC'
+        : `НЕ ХВАТАЕТ ${deal.cashDue - (player.money ?? 0)}₽`;
+    ctx.fillText(fitText(ctx, dealText, dealW - 8 * sx), dealX + dealW / 2, dealY + 10.5 * sy);
+    ctx.fillStyle = deal.surplus > 0 ? '#fa6' : '#889';
+    ctx.font = `${6.2 * sy}px monospace`;
+    const summaryLine = deal.surplus > 0
+      ? `NPC ${deal.fullPrice}₽ · вы ${deal.creditValue}₽ · сдачи нет (${deal.surplus}₽)`
+      : `NPC ${deal.fullPrice}₽ · вы ${deal.creditValue}₽ · наличными ${deal.cashDue}₽`;
+    ctx.fillText(fitText(ctx, summaryLine, dealW - 8 * sx), dealX + dealW / 2, dealY + dealH + 8 * sy);
+    ctx.textAlign = 'left';
 
     // ── Selected item description ──
-    const descY = startY + GRID * cellSz + 6 * sy;
+    const descY = dealY + dealH + 20 * sy;
     const curIdx = state.tradeCursorY * GRID + state.tradeCursorX;
-    const curInv = state.tradeSide === 'player' ? plrInv : npcInv;
+    const curInv = state.tradeSide === 'player'
+      ? plrInv
+      : state.tradeSide === 'player_offer'
+        ? playerOffer
+        : state.tradeSide === 'npc_offer'
+          ? npcOffer
+          : state.tradeSide === 'npc'
+            ? npcInv
+            : [];
     ctx.textAlign = 'center';
     if (curIdx < curInv.length) {
       const item = curInv[curIdx];
@@ -237,15 +363,28 @@ export function drawNpcMenu(
         ctx.fillStyle = '#888';
         ctx.font = `${7.4 * sy}px monospace`;
         let actionY = drawCenteredWrappedText(ctx, def.desc, cw / 2, descY + 10 * sy, descW, 9 * sy, 2);
-        const price = tradePriceDisplay(state, player, npc, item.defId, state.tradeSide === 'npc' ? 'buy' : 'sell');
+        const priceMode = state.tradeSide === 'npc' || state.tradeSide === 'npc_offer' ? 'buy' : 'sell';
+        const price = tradePriceDisplay(state, player, npc, item.defId, priceMode);
         ctx.fillStyle = price.color;
         actionY = Math.min(actionY + 2 * sy, ch - 50 * sy);
-        ctx.fillText(fitText(ctx, price.line, descW), cw / 2, actionY);
-        ctx.fillStyle = price.scarcityColor;
-        ctx.fillText(fitText(ctx, price.detail, descW), cw / 2, actionY + 9 * sy);
-        ctx.fillStyle = price.ok ? '#6a6' : '#f84';
-        ctx.fillText(fitText(ctx, price.status, descW), cw / 2, Math.min(actionY + 18 * sy, ch - 32 * sy));
+        if (state.tradeSide === 'npc') {
+          ctx.fillText(fitText(ctx, `E запросить: ${price.line}`, descW), cw / 2, actionY);
+          ctx.fillStyle = price.scarcityColor;
+          ctx.fillText(fitText(ctx, price.detail, descW), cw / 2, actionY + 9 * sy);
+        } else if (state.tradeSide === 'player_offer') {
+          ctx.fillText(fitText(ctx, 'E убрать единицу из того, что отдаете', descW), cw / 2, actionY);
+        } else if (state.tradeSide === 'npc_offer') {
+          ctx.fillText(fitText(ctx, 'E убрать единицу из того, что берете', descW), cw / 2, actionY);
+        } else {
+          ctx.fillText(fitText(ctx, `E предложить: ${price.line}`, descW), cw / 2, actionY);
+          ctx.fillStyle = price.scarcityColor;
+          ctx.fillText(fitText(ctx, price.detail, descW), cw / 2, actionY + 9 * sy);
+        }
       }
+    } else if (state.tradeSide === 'deal') {
+      ctx.fillStyle = canDeal ? '#8f8' : '#f84';
+      ctx.font = `${8 * sy}px monospace`;
+      ctx.fillText(fitText(ctx, canDeal ? 'E подтвердить сделку' : 'Сделка пока невозможна', Math.min(cw - 16 * sx, totalW)), cw / 2, descY + 6 * sy);
     } else {
       ctx.fillStyle = '#555';
       ctx.font = `${7 * sy}px monospace`;
@@ -259,8 +398,9 @@ export function drawNpcMenu(
     ctx.textAlign = 'right';
     const hintW = Math.max(60 * sx, cw - 16 * sx);
     ctx.fillText(fitText(ctx, `${controlBindingLabel('menuUp')}/${controlBindingLabel('menuDown')} курсор`, hintW), cw - 8 * sx, ch - 24 * sy);
-    ctx.fillText(fitText(ctx, `${controlBindingLabel('interact')} купить/продать`, hintW), cw - 8 * sx, ch - 16 * sy);
+    ctx.fillText(fitText(ctx, `${controlBindingLabel('interact')} положить/убрать/обмен`, hintW), cw - 8 * sx, ch - 16 * sy);
     ctx.fillText(fitText(ctx, `${controlBindingLabel('gameMenu')} назад`, hintW), cw - 8 * sx, ch - 8 * sy);
     ctx.textAlign = 'left';
+
   }
 }

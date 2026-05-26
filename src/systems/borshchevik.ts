@@ -15,11 +15,12 @@ import { World } from '../core/world';
 import { Spr } from '../render/sprite_index';
 import { publishEvent } from './events';
 import { cleanCellHazardsNear } from './cell_hazards';
+import { hasAirborneHazardProtection } from './status';
 
 export const BORSHCHEVIK_SMOKE_BURST_CELL_CAP = 24;
 
 const BORSCH_RUMOR_IDS = ['ecology_borshchevik_sap', 'lead_maintenance_borshchevik_blockade'] as const;
-const BORSCH_CUT_WEAPONS = new Set(['knife', 'axe', 'chainsaw', 'fire_hook', 'rebar', 'pipe']);
+const BORSCH_CUT_WEAPONS = new Set(['knife', 'axe', 'liquidator_axe', 'chainsaw', 'fire_hook', 'rebar', 'pipe']);
 
 interface RootSite {
   id: string;
@@ -128,17 +129,10 @@ function actorName(e: Entity | undefined): string | undefined {
 }
 
 function hasSeedProtection(e: Entity | undefined): boolean {
-  if (!e?.inventory) return false;
-  for (const item of e.inventory) {
-    if (item.count <= 0) continue;
-    if (
-      item.defId === 'gasmask_filter' ||
-      item.defId === 'filter_layer' ||
-      item.defId === 'antifungal_ointment' ||
-      item.defId === 'cloth_roll'
-    ) return true;
-  }
-  return false;
+  return !!e && (
+    hasAirborneHazardProtection(e) ||
+    (e.inventory ?? []).some(item => item.count > 0 && item.defId === 'cloth_roll')
+  );
 }
 
 function puffFog(world: World, x: number, y: number, radius: number, fog: number): number {

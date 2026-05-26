@@ -30,6 +30,7 @@ export const BLOOD_PLANT_SALT_RADIUS = 3.6;
 const BLOOD_PLANT_CUT_WEAPONS = new Set([
   'knife',
   'axe',
+  'liquidator_axe',
   'chainsaw',
   'fire_hook',
   'rebar',

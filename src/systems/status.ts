@@ -40,12 +40,19 @@ export const PAUPSINA_WEB_MOVE_MULT = 0.54;
 export const PAUPSINA_WEB_ROOT_MULT = 0.22;
 const PAUPSINA_WEB_CUT_REDUCTION_SEC = 2.6;
 const PAUPSINA_WEB_FIRE_REDUCTION_SEC = 3.8;
-const PAUPSINA_WEB_CUT_WEAPONS = new Set(['knife', 'axe', 'chainsaw', 'fire_hook', 'bayonet', 'entrenching_spade']);
+const PAUPSINA_WEB_CUT_WEAPONS = new Set(['knife', 'axe', 'liquidator_axe', 'chainsaw', 'fire_hook', 'bayonet', 'entrenching_spade']);
 export const SPORE_HAZE_ID: PlayerStatusId = 'spore_haze';
 export const SPORE_HAZE_DURATION_SEC = 4.8;
 export const SPORE_HAZE_PROTECTED_DURATION_SEC = 2.2;
 export const SPORE_HAZE_AIM_SPREAD_MULT = 1.65;
 export const SPORE_HAZE_PROTECTED_AIM_SPREAD_MULT = 1.18;
+export const IP4_GASMASK_ID = 'ip4_gasmask';
+const AIRBORNE_HAZARD_PROTECTION_ITEMS = new Set([
+  IP4_GASMASK_ID,
+  'gasmask_filter',
+  'filter_layer',
+  'antifungal_ointment',
+]);
 
 export interface ZhelemishApplyResult {
   status: PlayerStatus;
@@ -166,16 +173,17 @@ export function activeSporeHaze(entity: Entity, time: number): PlayerStatus | un
   return undefined;
 }
 
-function hasSporeProtection(entity: Entity): boolean {
+export function hasAirborneHazardProtection(entity: Entity): boolean {
+  if (entity.tool === IP4_GASMASK_ID) return true;
   for (const item of entity.inventory ?? []) {
     if (item.count <= 0) continue;
-    if (item.defId === 'gasmask_filter' || item.defId === 'filter_layer' || item.defId === 'antifungal_ointment') return true;
+    if (AIRBORNE_HAZARD_PROTECTION_ITEMS.has(item.defId)) return true;
   }
   return false;
 }
 
 export function hasSporeHazeProtection(entity: Entity): boolean {
-  return hasSporeProtection(entity);
+  return hasAirborneHazardProtection(entity);
 }
 
 export function applySporeHaze(
@@ -185,7 +193,7 @@ export function applySporeHaze(
   state?: GameState,
   source?: Entity,
 ): PlayerStatus {
-  const protectedByGear = hasSporeProtection(entity);
+  const protectedByGear = hasAirborneHazardProtection(entity);
   const duration = protectedByGear ? SPORE_HAZE_PROTECTED_DURATION_SEC : SPORE_HAZE_DURATION_SEC;
   if (!entity.statuses) entity.statuses = [];
   const existing = entity.statuses.find(s => s.id === SPORE_HAZE_ID);
@@ -446,6 +454,46 @@ export function cureZhelemishSkin(
     reason,
     remaining: Math.max(0, removed.expiresAt - time),
   });
+  return true;
+}
+
+export function cureSporeHaze(
+  entity: Entity,
+  time: number,
+  msgs: Msg[],
+  state?: GameState,
+  reason = 'medicine',
+): boolean {
+  const statuses = entity.statuses;
+  if (!statuses) return false;
+  const idx = statuses.findIndex(s => s.id === SPORE_HAZE_ID && s.expiresAt > time);
+  if (idx < 0) return false;
+  const [removed] = statuses.splice(idx, 1);
+  if (statuses.length === 0) delete entity.statuses;
+  msgs.push(msg(
+    reason === 'anti_spore_inhaler'
+      ? 'Ингалятор выбил споры из дыхания. Прицел снова слушается.'
+      : 'Мазь связала споры. Прицел снова слушается.',
+    time,
+    '#8cf',
+  ));
+  if (state && entity.type === EntityType.PLAYER) {
+    publishEvent(state, {
+      type: 'player_status_cured',
+      actorId: entity.id,
+      actorName: entity.name ?? 'Вы',
+      actorFaction: entity.faction,
+      severity: 3,
+      privacy: 'private',
+      tags: ['player', 'status', 'spore_carpet', 'spores', 'fungus', 'cured'],
+      data: {
+        statusId: SPORE_HAZE_ID,
+        source: removed.source,
+        reason,
+        remaining: Math.max(0, removed.expiresAt - time),
+      },
+    });
+  }
   return true;
 }
 

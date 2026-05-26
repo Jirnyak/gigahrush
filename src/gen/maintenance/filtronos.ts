@@ -17,6 +17,7 @@ const MODULE_TAG = 'monster_08_filtronos';
 const EVENT_TAG = 'filtronos_event';
 const CACHE_TAG = 'filtronos_cache';
 const THREAT_NAME = 'Фильтронос';
+const CONTAMINATED_GLOVES_ITEM = 'contaminated_gloves';
 const CLEAN_TO_CONTAMINATED: Record<string, string> = {
   gasmask_filter: 'filter_layer',
   filtered_water: 'metal_water',
@@ -127,7 +128,14 @@ function publishFiltronosEvent(
   pushHud(state, text, severity >= 4 ? '#fc8' : '#8cf');
 }
 
-function contaminateContainer(container: WorldContainer): number {
+function addContaminatedGloves(container: WorldContainer): boolean {
+  if (container.inventory.some(item => item.defId === CONTAMINATED_GLOVES_ITEM)) return false;
+  if (container.inventory.length >= container.capacitySlots) return false;
+  container.inventory.push({ defId: CONTAMINATED_GLOVES_ITEM, count: 1 });
+  return true;
+}
+
+function contaminateContainer(container: WorldContainer): { changed: number; glovesAdded: boolean } {
   let changed = 0;
   for (const item of container.inventory) {
     const contaminated = CLEAN_TO_CONTAMINATED[item.defId];
@@ -135,8 +143,9 @@ function contaminateContainer(container: WorldContainer): number {
     item.defId = contaminated;
     changed += item.count;
   }
+  const glovesAdded = addContaminatedGloves(container);
   addContainerTag(container, 'contaminated');
-  return changed;
+  return { changed, glovesAdded };
 }
 
 function addRecoveredTrace(container: WorldContainer): boolean {
@@ -185,17 +194,21 @@ function contaminateIfUnguarded(state: GameState, ctx: FiltronosContext, event: 
   const container = contextContainer(ctx);
   if (!container) return;
   ctx.contaminated = true;
-  const changed = contaminateContainer(container);
+  const contamination = contaminateContainer(container);
   publishFiltronosEvent(
     state,
     ctx,
     event,
     'contaminated',
-    changed > 0
+    contamination.changed > 0
       ? 'Фильтронос втянул чистый воздух из ящика. Вода отдала металлом, фильтр осыпался.'
       : 'Фильтронос захрипел у пустого ящика: чистых запасов там уже не осталось.',
     4,
-    { changedStacks: changed },
+    {
+      changedStacks: contamination.changed,
+      contaminatedGlovesAdded: contamination.glovesAdded,
+      consequenceItem: contamination.glovesAdded ? CONTAMINATED_GLOVES_ITEM : undefined,
+    },
   );
 }
 

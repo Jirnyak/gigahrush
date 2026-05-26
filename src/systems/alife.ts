@@ -678,6 +678,16 @@ function captureEntityToRecord(record: AlifeNpcRecord, entity: Entity): void {
   record.touched = true;
 }
 
+function reconcileExistingAlifeEntities(alife: AlifeState, entities: readonly Entity[]): void {
+  for (const entity of entities) {
+    if (entity.type !== EntityType.NPC || entity.alifeId === undefined || !entity.alive) continue;
+    const record = alife.npcs[entity.alifeId - 1];
+    if (!record || record.dead || record.activeMoney !== undefined) continue;
+    const entityMoney = Math.max(0, Math.floor(entity.money ?? activeMoneyForRecord(record, alife.seed)));
+    record.activeMoney = Math.max(0, Math.min(record.money, entityMoney));
+  }
+}
+
 export function captureAlifeFloorState(state: GameState, entities: readonly Entity[]): void {
   const alife = (state as AlifeHost).alife;
   if (!alife) return;
@@ -938,6 +948,7 @@ export function materializeAlifeFloorPopulation(
   floorKey = floorRunEntryFloorKey(currentFloorRunEntry(state)),
 ): void {
   const alife = ensureAlifeState(state);
+  reconcileExistingAlifeEntities(alife, entities);
   filterDeadPlotNpcs(alife, entities);
   const templates = extractAmbientNpcTemplates(entities);
   if (templates.length === 0) return;

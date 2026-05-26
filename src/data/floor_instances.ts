@@ -44,7 +44,7 @@ export const FLOOR_INSTANCES: readonly FloorInstanceDef[] = [
     risk: 3,
     weight: 12,
     discovered: false,
-    rumorId: 'samosbor_quiet_variant',
+    rumorId: 'samosbor_doors_lie',
   },
   {
     id: 'loop_777',

@@ -245,7 +245,7 @@ export const MONSTER_ECOLOGY: readonly MonsterEcologyDef[] = [
     counterplay: 'Не кормите рой карманом: бросьте меченую приманку дальше себя, заведите через липкую ловушку или сбейте первый рывок дробью.',
     deathLogHint: 'Смерть от крысоножки должна напоминать про еду в кармане, позднюю дробь или бой в мусоре.',
     rumorIds: ['ecology_krysnozhka_bait'],
-    rareDrops: [{ itemId: 'rawmeat', chance: 0.04 }],
+    rareDrops: [{ itemId: 'rawmeat', chance: 0.04 }, { itemId: 'mutant_tissue_sample', chance: 0.018 }],
   },
   {
     kind: MonsterKind.GREEN_DOG,
@@ -381,7 +381,7 @@ export const MONSTER_ECOLOGY: readonly MonsterEcologyDef[] = [
     counterplay: 'Не принимайте бой в дверях, ванной или воде: ползун медленный, но там уже рядом. Прямой отход дает время расстрелять.',
     deathLogHint: 'Смерть от ползуна должна читать ошибку как бой в двери, ванной, воде или отход без прямой линии.',
     rumorIds: ['monster_polzun_floor', 'ecology_polzun_low'],
-    rareDrops: [{ itemId: 'filter_layer', chance: 0.04 }],
+    rareDrops: [{ itemId: 'filter_layer', chance: 0.04 }, { itemId: 'mutant_tissue_sample', chance: 0.014 }],
   },
   {
     kind: MonsterKind.BETONNIK,
@@ -704,7 +704,7 @@ export const MONSTER_ECOLOGY: readonly MonsterEcologyDef[] = [
     counterplay: 'Считайте припев: убивайте источник до вывода, чистите детей ради короткого окна урона или уходите, пока кап приплода не забил маршрут.',
     deathLogHint: 'Смерть от хоровой матки должна читать промедление: припев услышан, дети не вычищены, окно урона пропущено.',
     rumorIds: ['monster_khorovaya_matka_choir', 'ecology_khorovaya_matka_window'],
-    rareDrops: [{ itemId: 'meat_rune', chance: 0.06 }, { itemId: 'rawmeat', chance: 0.16 }],
+    rareDrops: [{ itemId: 'meat_rune', chance: 0.06 }, { itemId: 'rawmeat', chance: 0.16 }, { itemId: 'fibrous_capsule_cut', chance: 0.025 }],
   },
   {
     kind: MonsterKind.IDOL,
@@ -1027,7 +1027,7 @@ export const MONSTER_ECOLOGY: readonly MonsterEcologyDef[] = [
     counterplay: 'Уводите бой на сухой открытый пол и бросайте сырое мясо дальше маршрута. У воды, трубы или провала Олгой кусает тяжелее и подтягивает цель.',
     deathLogHint: 'Смерть от Олгой-Хорхоя должна читать мясо в кармане, бой у трубы или отказ от приманки.',
     rumorIds: ['monster_olgoy_meat', 'ecology_olgoy_collector'],
-    rareDrops: [{ itemId: 'rawmeat', chance: 0.12 }, { itemId: 'meat_rune', chance: 0.03 }],
+    rareDrops: [{ itemId: 'rawmeat', chance: 0.12 }, { itemId: 'meat_rune', chance: 0.03 }, { itemId: 'fibrous_capsule_cut', chance: 0.02 }],
   },
   {
     kind: MonsterKind.PARAGRAPH,

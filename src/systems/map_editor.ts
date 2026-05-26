@@ -268,7 +268,6 @@ export function openMapEditor(world: World, player: Entity, state: GameState, te
   runtime.activeTerminalX = terminal?.x;
   runtime.activeTerminalY = terminal?.y;
   state.paused = true;
-  if (typeof document !== 'undefined' && document.pointerLockElement) document.exitPointerLock();
 }
 
 export function closeMapEditor(): void {

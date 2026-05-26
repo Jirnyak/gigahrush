@@ -456,7 +456,6 @@ function interactionPromptHint(): string {
 
 function samosborHudTitle(variantId: string | undefined, variantName?: string): string {
   switch (variantId) {
-    case 'quiet': return 'ТИХИЙ САМОСБОР';
     case 'wet': return 'МОКРЫЙ САМОСБОР';
     case 'electric': return 'ЭЛЕКТРОСБОР';
     case 'meat': return 'МЯСНОЙ САМОСБОР';
@@ -507,15 +506,26 @@ function samosborCrawlLines(variantId: string | undefined): readonly string[] {
   }
 }
 
-function samosborCrawlLineIndex(variantId: string | undefined, slot: number, cycle: number, count: number): number {
-  let h = 0x811c9dc5 ^ Math.imul(slot + 1, 374761393) ^ Math.imul(cycle + 1, 668265263);
+function samosborCrawlHash(variantId: string | undefined, slot: number, cycle: number, salt = 0): number {
+  let h = 0x811c9dc5
+    ^ Math.imul(slot + 1, 374761393)
+    ^ Math.imul(cycle + 1, 668265263)
+    ^ Math.imul(salt + 1, 2246822519);
   const key = variantId ?? 'classic';
   for (let i = 0; i < key.length; i++) {
     h ^= key.charCodeAt(i);
     h = Math.imul(h, 16777619);
   }
   h ^= h >>> 16;
-  return (h >>> 0) % count;
+  return h >>> 0;
+}
+
+function samosborCrawlUnit(variantId: string | undefined, slot: number, cycle: number, salt: number): number {
+  return (samosborCrawlHash(variantId, slot, cycle, salt) % 10_000) / 10_000;
+}
+
+function samosborCrawlLineIndex(variantId: string | undefined, slot: number, cycle: number, count: number): number {
+  return samosborCrawlHash(variantId, slot, cycle) % count;
 }
 
 function drawSamosborCrawl(
@@ -532,27 +542,40 @@ function drawSamosborCrawl(
   ctx.save();
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  for (let i = 0; i < 6; i++) {
-    const phase = time * 0.11 + i * 0.18;
+  const slots = Math.max(8, Math.min(16, Math.round(w / 120)));
+  for (let i = 0; i < slots; i++) {
+    const phase = time * 0.12 + i / slots;
     const cycle = Math.floor(phase);
     const travel = phase % 1;
+    const xUnit = samosborCrawlUnit(variantId, i, cycle, 1);
+    const sizeUnit = samosborCrawlUnit(variantId, i, cycle, 2);
+    const angleUnit = samosborCrawlUnit(variantId, i, cycle, 3);
+    const spinUnit = samosborCrawlUnit(variantId, i, cycle, 4);
     const y = h * 1.12 - travel * h * 1.38;
-    const size = (6.5 + Math.pow(travel, 1.25) * 16.5) * sy;
+    const x = w * (0.06 + xUnit * 0.88);
+    const size = (5.5 + Math.pow(travel, 1.25) * 17.5) * sy * (0.72 + sizeUnit * 0.72);
+    const spin = -0.45 + spinUnit * 0.9;
+    const angle = -0.28 + angleUnit * 0.56 + (time * 0.35 + travel * 1.8) * spin;
     const enter = Math.max(0, Math.min(1, (travel - 0.035) / 0.12));
     const exit = Math.max(0, Math.min(1, (1 - travel) / 0.16));
     const alpha = Math.min(enter, exit);
     if (alpha <= 0.02) continue;
     const line = lines[samosborCrawlLineIndex(variantId, i, cycle, lines.length)];
     const jitter = textJitter(time * 2.5, 1800 + i * 17);
+    ctx.font = `bold ${size}px monospace`;
+    const fitted = fitHudText(ctx, line, Math.max(72 * sx, w * (0.28 + travel * 0.18)));
+    ctx.save();
+    ctx.translate(x + jitter.dx * 1.5, y + jitter.dy);
+    ctx.rotate(angle);
     ctx.globalAlpha = alpha * 0.76;
     ctx.shadowColor = tint;
     ctx.shadowBlur = 9 * Math.min(sx, sy);
     ctx.fillStyle = tint;
-    ctx.font = `bold ${size}px monospace`;
-    ctx.fillText(fitHudText(ctx, line, w * 0.72), w * 0.5 + jitter.dx * 1.5, y + jitter.dy);
+    ctx.fillText(fitted, 0, 0);
     ctx.globalAlpha = alpha * 0.22;
     ctx.fillStyle = '#8ff';
-    ctx.fillText(fitHudText(ctx, line, w * 0.72), w * 0.5 + jitter.dx * 1.5 + 2 * sx, y + jitter.dy + sy);
+    ctx.fillText(fitted, 2 * sx, sy);
+    ctx.restore();
   }
   ctx.restore();
   ctx.globalAlpha = 1;
@@ -1779,7 +1802,7 @@ function drawDamageVignette(
   ctx.restore();
 }
 
-/* ── UV spotlight visual — narrow cyan/violet utility cone ────── */
+/* ── UV spotlight visual — centered cyan-white utility cone ───── */
 function drawUvSpotlightFx(
   ctx: CanvasRenderingContext2D,
   w: number, h: number,
@@ -1789,47 +1812,47 @@ function drawUvSpotlightFx(
 ): void {
   ctx.save();
   const alpha = Math.min(1, intensity * 4);
+  const beamT = Math.min(1, Math.max(0, beamLen / 10));
   const cx = w / 2;
-  const cy = h / 2;
-  const reach = Math.min(w * 0.47, w * (0.22 + Math.min(1, beamLen / 10) * 0.3));
-  const endX = cx + reach;
-  const nearW = h * (0.012 + intensity * 0.018);
-  const farW = h * (0.052 + intensity * 0.04);
-  const wobble = Math.sin(time * 42) * h * 0.004;
+  const originY = h * 0.64;
+  const focusY = h * (0.44 - beamT * 0.06);
+  const nearW = h * (0.014 + intensity * 0.014);
+  const farW = Math.min(w * 0.34, h * (0.12 + beamT * 0.11));
+  const wobble = Math.sin(time * 42) * h * 0.003;
 
   ctx.globalCompositeOperation = 'lighter';
   for (let i = 0; i < 3; i++) {
     const layer = i / 2;
-    const grd = ctx.createLinearGradient(cx, cy, endX, cy);
-    grd.addColorStop(0, `rgba(230,255,255,${alpha * (0.42 - layer * 0.08)})`);
-    grd.addColorStop(0.45, `rgba(120,190,255,${alpha * (0.24 - layer * 0.04)})`);
-    grd.addColorStop(1, `rgba(120,70,255,0)`);
+    const grd = ctx.createLinearGradient(cx, originY, cx, focusY);
+    grd.addColorStop(0, `rgba(235,255,255,${alpha * (0.28 - layer * 0.05)})`);
+    grd.addColorStop(0.48, `rgba(150,230,255,${alpha * (0.22 - layer * 0.04)})`);
+    grd.addColorStop(1, 'rgba(130,220,255,0)');
     ctx.fillStyle = grd;
     ctx.beginPath();
-    ctx.moveTo(cx, cy - nearW * (1 + layer) + wobble);
-    ctx.lineTo(endX, cy - farW * (1 + layer * 0.45));
-    ctx.lineTo(endX, cy + farW * (1 + layer * 0.45));
-    ctx.lineTo(cx, cy + nearW * (1 + layer) + wobble);
+    ctx.moveTo(cx - nearW * (1 + layer), originY + wobble);
+    ctx.lineTo(cx - farW * (1 + layer * 0.35), focusY);
+    ctx.lineTo(cx + farW * (1 + layer * 0.35), focusY);
+    ctx.lineTo(cx + nearW * (1 + layer), originY + wobble);
     ctx.closePath();
     ctx.fill();
   }
 
-  ctx.strokeStyle = `rgba(210,250,255,${alpha * 0.75})`;
+  ctx.strokeStyle = `rgba(230,255,255,${alpha * 0.72})`;
   ctx.lineWidth = Math.max(1, h * 0.003);
   ctx.beginPath();
-  ctx.moveTo(cx - 2, cy + wobble);
-  ctx.lineTo(endX, cy + Math.sin(time * 58) * h * 0.01);
+  ctx.moveTo(cx, originY + wobble);
+  ctx.lineTo(cx + Math.sin(time * 58) * h * 0.006, focusY);
   ctx.stroke();
 
   for (let i = 0; i < 5; i++) {
     const t0 = (i + 1) / 6;
-    const x = cx + reach * t0;
-    const y = cy + Math.sin(time * 24 + i * 1.7) * farW * 0.36 * t0;
-    ctx.strokeStyle = `rgba(170,120,255,${alpha * 0.24})`;
+    const x = cx + Math.sin(time * 24 + i * 1.7) * farW * 0.34 * t0;
+    const y = originY + (focusY - originY) * t0;
+    ctx.strokeStyle = `rgba(150,235,255,${alpha * 0.22})`;
     ctx.lineWidth = 1;
     ctx.beginPath();
-    ctx.moveTo(x - reach * 0.06, y);
-    ctx.lineTo(x + reach * 0.05, y + Math.cos(time * 31 + i) * farW * 0.18);
+    ctx.moveTo(x - farW * 0.06 * t0, y);
+    ctx.lineTo(x + farW * 0.05 * t0, y + Math.cos(time * 31 + i) * farW * 0.08);
     ctx.stroke();
   }
   ctx.globalCompositeOperation = 'source-over';

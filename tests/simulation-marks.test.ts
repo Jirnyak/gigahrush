@@ -53,3 +53,14 @@ test('far-away projectile impacts still leave persistent bullet marks in world s
   assert.ok(world.surfaceVersion > beforeVersion);
   assert.ok(world.surfaceMap.has(cell), 'far bullet mark should be stamped into the world, not gated by rendering distance');
 });
+
+test('repeated projectile impacts keep repainting the same surface cell', () => {
+  const world = new World();
+  world.set(100, 100, Cell.FLOOR);
+
+  for (let i = 0; i < 12; i++) {
+    const beforeVersion = world.surfaceVersion;
+    spawnProjectileFloorImpact(world, 100.5, 100.5, undefined, ProjType.NORMAL);
+    assert.ok(world.surfaceVersion > beforeVersion, `impact ${i + 1} should repaint the cell`);
+  }
+});

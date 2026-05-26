@@ -2,7 +2,9 @@ import { test } from 'node:test';
 import * as assert from 'node:assert/strict';
 
 import {
+  Cell,
   ContainerKind,
+  DoorState,
   EntityType,
   Faction,
   FloorLevel,
@@ -504,6 +506,39 @@ test('samosbor director cadence, beat cooldowns, and events stay bounded', () =>
   }
 });
 
+test('active maronary door malfunction ignores protected hermetic doors', () => {
+  const state = makeGameState({
+    time: 100,
+    currentFloor: FloorLevel.LIVING,
+    samosborActive: true,
+    samosborCount: 3,
+    worldEvents: createWorldEventState(),
+  });
+  const world = testDirectorWorld();
+  const doorIdx = world.idx(10, 10);
+  world.cells[doorIdx] = Cell.DOOR;
+  world.aptMask[doorIdx] = 1;
+  world.hermoWall[doorIdx] = 1;
+  world.doors.set(doorIdx, { idx: doorIdx, state: DoorState.HERMETIC_OPEN, roomA: 0, roomB: -1, keyId: '', timer: 0 });
+  const player = makeTestEntity({ id: 0, x: 10.5, y: 10.5 });
+  const nextId = { v: 100 };
+  const originalRandom = Math.random;
+
+  try {
+    Math.random = () => 0;
+    const result = tickSamosborDirector(world, [player], state, nextId, testMaronarySamosborVariant(), 'active_cadence');
+
+    assert.equal(result.fired, true);
+    assert.equal(result.beatId, 'active_maronary_wrong_door');
+    assert.equal(world.doors.get(doorIdx)?.state, DoorState.HERMETIC_OPEN);
+    const event = getRecentEvents(state, { tags: ['samosbor', 'director'], limit: 1 })[0];
+    assert.ok(event);
+    assert.equal(event.data?.doors, 0);
+  } finally {
+    Math.random = originalRandom;
+  }
+});
+
 test('container take/put refuses full targets without changing source counts', () => {
   const state = makeGameState({ worldEvents: createWorldEventState() });
   const fullPlayer = makeTestEntity({
@@ -835,7 +870,7 @@ test('nearby production output marks container and reaches world log', () => {
   assert.ok(state.msgLog.some(entry => entry.text.includes('Цех выдал')));
 });
 
-test('slime furnace consumes a sample item before producing cleanup output', () => {
+test('slime furnace consumes a sample and alkali before producing cleanup output', () => {
   const state = makeGameState({
     currentFloor: FloorLevel.MAINTENANCE,
     time: 1000,
@@ -856,7 +891,7 @@ test('slime furnace consumes a sample item before producing cleanup output', () 
     floor: FloorLevel.MAINTENANCE,
     roomId: 0,
     zoneId: 0,
-    inventory: [{ defId: 'slime_sample_brown', count: 1 }],
+    inventory: [{ defId: 'slime_sample_brown', count: 1 }, { defId: 'alkali_powder', count: 1 }],
     capacitySlots: 4,
     tags: ['cleanup', 'slime'],
   }));
@@ -865,11 +900,16 @@ test('slime furnace consumes a sample item before producing cleanup output', () 
   const output = world.containerById.get(1);
   assert.ok(output);
   assert.equal(output.inventory.some(item => item.defId === 'slime_sample_brown'), false);
+  assert.equal(output.inventory.some(item => item.defId === 'alkali_powder'), false);
   assert.equal(output.inventory.find(item => item.defId === 'deactivated_residue')?.count, 2);
   assert.equal(output.inventory.find(item => item.defId === 'gasmask_filter')?.count, 1);
+  assert.equal(output.inventory.find(item => item.defId === 'sealant_tube')?.count, 1);
   const event = getRecentEvents(state, { type: 'room_produced_items', limit: 1 })[0];
   assert.ok(event.tags.includes('furnace_used'));
   assert.ok(event.tags.includes('deactivation_completed'));
+  assert.ok(event.tags.includes('sealant_issue'));
+  assert.ok(event.tags.includes('alkali'));
+  assert.deepEqual(event.data?.inputItemIds, ['slime_sample_brown', 'alkali_powder']);
 });
 
 test('illegal ammo smelter consumes contested metal input before producing 9mm', () => {
@@ -907,20 +947,23 @@ test('illegal ammo smelter consumes contested metal input before producing 9mm',
   assert.ok(shortage);
   assert.ok(shortage.tags.includes('metal_sheet_missing'));
   assert.ok(shortage.tags.includes('repair_input'));
-  assert.deepEqual(shortage.data?.missingItems, ['metal_sheet']);
+  assert.deepEqual(shortage.data?.missingItems, ['metal_sheet', 'homemade_ammo_instruction']);
 
   const hotBox = world.containerById.get(1);
   assert.ok(hotBox);
   hotBox.inventory.push({ defId: 'metal_sheet', count: 1 });
+  hotBox.inventory.push({ defId: 'homemade_ammo_instruction', count: 1 });
 
   assert.equal(tickProduction(state, world, true), 1);
   assert.equal(hotBox.inventory.some(item => item.defId === 'metal_sheet'), false);
+  assert.equal(hotBox.inventory.find(item => item.defId === 'homemade_ammo_instruction')?.count, 1);
   assert.equal(hotBox.inventory.find(item => item.defId === 'ammo_9mm')?.count, 10);
   const output = getRecentEvents(state, { type: 'room_produced_items', limit: 1 })[0];
   assert.ok(output);
   assert.ok(output.tags.includes('illegal_ammo_smelter'));
+  assert.ok(output.tags.includes('homemade'));
   assert.ok(output.tags.includes('contested_output'));
-  assert.deepEqual(output.data?.inputItemIds, ['metal_sheet']);
+  assert.deepEqual(output.data?.inputItemIds, ['metal_sheet', 'homemade_ammo_instruction']);
 });
 
 test('contract spawn creates a normal quest and contract event', () => {
@@ -1121,8 +1164,8 @@ function testDirectorWorld(): World {
   return world;
 }
 
-function testClassicSamosborVariant(): ActiveSamosborVariant {
-  const def = SAMOSBOR_VARIANTS.find(v => v.id === 'classic');
+function testSamosborVariant(id: 'classic' | 'maronary'): ActiveSamosborVariant {
+  const def = SAMOSBOR_VARIANTS.find(v => v.id === id);
   assert.ok(def);
   return {
     def,
@@ -1137,4 +1180,12 @@ function testClassicSamosborVariant(): ActiveSamosborVariant {
     shelterRoomCount: 0,
     fogColor: def.fogColor,
   };
+}
+
+function testClassicSamosborVariant(): ActiveSamosborVariant {
+  return testSamosborVariant('classic');
+}
+
+function testMaronarySamosborVariant(): ActiveSamosborVariant {
+  return testSamosborVariant('maronary');
 }

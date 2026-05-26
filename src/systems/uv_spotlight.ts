@@ -1,4 +1,4 @@
-/* ── Liquidator UV spotlight: short utility pulse, not lighting ─ */
+/* ── Liquidator UV spotlight: short utility light pulse ───────── */
 
 import {
   AIGoal, EntityType, MonsterKind,
@@ -19,12 +19,25 @@ const UV_DRAIN = 1;
 const UV_BASE_HALF_WIDTH = 0.38;
 const UV_WIDTH_PER_CELL = 0.045;
 const UV_SCAN_STEP = 0.5;
+export const UV_SPOTLIGHT_FX_SECONDS = 0.24;
 
 export interface UvSpotlightResult {
   beamLen: number;
   affected: number;
   revealed: number;
   depleted: boolean;
+}
+
+export function uvSpotlightRenderIntensity(uvBeamFx: number): number {
+  const t = Math.max(0, Math.min(1, uvBeamFx / UV_SPOTLIGHT_FX_SECONDS));
+  return t <= 0 ? 0 : 1.05 * t;
+}
+
+function isUvHiddenResiduePixel(r: number, g: number, b: number, a: number): boolean {
+  if (a < 28) return false;
+  const brightness = (r * 2 + g * 3 + b) / 6;
+  if (brightness > 48) return false;
+  return b >= r + 2 && b >= g + 2 && r <= 42 && g <= 36 && b <= 62;
 }
 
 function zoneAt(world: World, x: number, y: number): number {
@@ -234,12 +247,10 @@ function revealSurfaceCell(cell: Uint8Array): boolean {
   let changed = false;
   for (let i = 0; i < cell.length; i += 4) {
     const a = cell[i + 3];
-    if (a < 28) continue;
     const r = cell[i];
     const g = cell[i + 1];
     const b = cell[i + 2];
-    const brightness = (r * 2 + g * 3 + b) / 6;
-    if (brightness > 78 || (b > r + 38 && b > g + 38)) continue;
+    if (!isUvHiddenResiduePixel(r, g, b, a)) continue;
     const nr = Math.max(r, 86);
     const ng = Math.max(g, 44);
     const nb = Math.max(b, 212);

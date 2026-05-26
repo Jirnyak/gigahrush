@@ -154,6 +154,21 @@ test('samosbor wave respects the per-tick budget', () => {
   assert.equal((snapshot?.lastProcessed ?? 99) <= 3, true);
 });
 
+test('samosbor wave cleanup keeps player standing in an open door cell', () => {
+  const { world, state, player, entities } = makeOpenWaveWorld();
+  const doorIdx = world.idx(24, 24);
+  world.cells[doorIdx] = Cell.DOOR;
+  world.doors.set(doorIdx, { idx: doorIdx, state: DoorState.HERMETIC_OPEN, roomA: -1, roomB: -1, keyId: '', timer: 0 });
+  player.x = 24.5;
+  player.y = 24.5;
+
+  assert.equal(startSamosborWave(world, entities, state, 'small', 21, 24, { seed: 34, radius: 1, budgetCellsPerTick: 1 }), true);
+  tickSamosborWave(world, entities, state);
+
+  assert.equal(player.x, 24.5);
+  assert.equal(player.y, 24.5);
+});
+
 test('samosbor scale rolls stay local on all story floors', () => {
   const originalRandom = Math.random;
   Math.random = () => 0.999999;

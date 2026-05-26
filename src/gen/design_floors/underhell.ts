@@ -531,7 +531,10 @@ export function openUnderhellVoidGate(world: World, ritual: UnderhellRitualState
       }
     }
   }
+  world.markCellsDirty();
+  world.markWallTexDirty();
   world.markFloorTexDirty();
+  world.markFeaturesDirty();
 }
 
 export function publishUnderhellBacklash(

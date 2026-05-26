@@ -413,8 +413,10 @@ export function generateOstavshiysyaLikvidator(ctx: MaintContentCtx): void {
     inventory: [
       { defId: 'liquidator_token', count: 1 },
       { defId: 'samosbor_tally', count: 1 },
+      { defId: 'liquidator_rake', count: 1 },
       { defId: 'ammo_shells', count: 4 },
       { defId: 'gasmask_filter', count: 1 },
+      { defId: 'ip4_gasmask', count: 1 },
       { defId: 'unsigned_order', count: 1 },
     ],
     capacitySlots: 8,

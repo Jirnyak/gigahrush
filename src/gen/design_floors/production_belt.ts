@@ -358,6 +358,9 @@ interface ProductionBeltContainers {
   metalOutput: WorldContainer;
   chargeOutput: WorldContainer;
   ammoOutput: WorldContainer;
+  p41Mount: WorldContainer;
+  g41Mount: WorldContainer;
+  zhernovMachine: WorldContainer;
   quarantine: WorldContainer;
   lockers: WorldContainer;
   loading: WorldContainer;
@@ -1090,6 +1093,7 @@ function createProductionBeltState(
       'production_belt_repair_feed',
       'production_belt_service_feed',
       'production_belt_bad_batch_warning',
+      'production_belt_tracked_zhernov',
     ],
   };
 }
@@ -1221,6 +1225,35 @@ function registerProductionBeltRouteCues(
     followedText: 'Карантинный шкаф найден. Дальше выбор: образцы аудитору, товар рынку или оставить отраву в линии.',
     ignoredText: 'Предупреждение БОТ-14 погасло за спиной. Зеленая партия осталась в маршруте.',
   });
+
+  const zhernovMarkerX = rooms.metalLine.x + 22.5;
+  const zhernovMarkerY = rooms.metalLine.y + 6.5;
+  const zhernovTargetX = containers.zhernovMachine.x + 0.5;
+  const zhernovTargetY = containers.zhernovMachine.y + 0.5;
+  const zhernovCell = world.idx(Math.floor(zhernovMarkerX), Math.floor(zhernovMarkerY));
+  registerRouteCue(world, {
+    id: 'production_belt_tracked_zhernov',
+    x: zhernovMarkerX,
+    y: zhernovMarkerY,
+    targetX: zhernovTargetX,
+    targetY: zhernovTargetY,
+    floor: PRODUCTION_BELT_BASE_FLOOR,
+    roomId: rooms.metalLine.id,
+    targetRoomId: rooms.metalLine.id,
+    zoneId: world.zoneMap[zhernovCell],
+    label: 'гусеничный жернов',
+    hint: 'пломбированная тележка добивает собранных тварей, но числится у ликвидаторов',
+    targetName: containers.zhernovMachine.name,
+    color: '#f96',
+    tags: ['production_belt', 'tracked_zhernov', 'liquidator', 'regenerator_finisher', 'theft'],
+    toneSeed: rooms.metalLine.id * 107 + containers.zhernovMachine.id,
+    radius: 8,
+    targetRadius: 2.8,
+    cooldownSec: 42,
+    heardText: 'У восстановительной линии скрежещет тележка жернова: финишер для собранной твари стоит под пломбой.',
+    followedText: 'Вы у пломбированной тележки жернова. Можно оставить её ликвидаторам или вынести как тяжёлый финальный аргумент.',
+    ignoredText: 'Скрежет жернова остался за спиной. Собранную тварь придётся добивать обычным железом.',
+  });
 }
 
 function populateRooms(world: World, entities: Entity[], nextId: { v: number }, rooms: ProductionBeltRooms): ProductionBeltContainers {
@@ -1242,10 +1275,33 @@ function populateRooms(world: World, entities: Entity[], nextId: { v: number }, 
   ], ['production_output', 'utility_room', 'utility', 'room', 'tech', 'service_floor', 'transfer', 'theft'], 'owner', Faction.CITIZEN, rustamId, MECHANIC_DEF.name, 'utility_room');
 
   const ammoOutput = addContainer(world, rooms.ammoLine, 3, ContainerKind.WEAPON_CRATE, 'Серый ящик патронной смены', [
+    { defId: 'rpl23_lmg', count: 1 },
+    { defId: 'ammo_belt', count: 40 },
     { defId: 'ammo_9mm', count: 18 },
     { defId: 'ammo_fuel', count: 1 },
+    { defId: 'brt2_foam_projector', count: 1 },
+    { defId: 'foam_grenade_6p10', count: 3 },
+    { defId: 'pbrog1_foam_launcher', count: 1 },
     { defId: 'metal_sheet', count: 1 },
-  ], ['production_output', 'illegal_ammo_smelter', 'ammo', 'weapon', 'illegal', 'black_market_88', 'theft'], 'faction', Faction.WILD, egorId, WORKER_DEF.name, 'illegal_ammo_smelter');
+    { defId: 'homemade_ammo_instruction', count: 1 },
+  ], ['production_output', 'illegal_ammo_smelter', 'ammo', 'weapon', 'engineer', 'foam', 'rare_engineer_crate', 'illegal', 'black_market_88', 'theft'], 'faction', Faction.WILD, egorId, WORKER_DEF.name, 'illegal_ammo_smelter');
+
+  const p41Mount = addContainer(world, rooms.ammoLine, 6, ContainerKind.WEAPON_CRATE, 'Опломбированный станок 6П41', [
+    { defId: 'p41_heavy_mg', count: 1 },
+    { defId: 'ammo_belt', count: 80 },
+    { defId: 'weapon_checkout_tag', count: 1 },
+  ], ['mounted_weapon', 'p41_heavy_mg', 'heavy_mg', 'ammo_belt', 'stationary', 'authored_route', 'theft'], 'faction', Faction.LIQUIDATOR, auditorId, AUDITOR_DEF.name, 'illegal_ammo_smelter');
+
+  const g41Mount = addContainer(world, rooms.ammoLine, 7, ContainerKind.WEAPON_CRATE, 'Опломбированный станок 5Г41', [
+    { defId: 'g41_grenade_launcher', count: 1 },
+    { defId: 'grenade', count: 3 },
+    { defId: 'weapon_checkout_tag', count: 1 },
+  ], ['mounted_weapon', 'g41_grenade_launcher', 'grenade', 'stationary', 'authored_route', 'theft'], 'faction', Faction.LIQUIDATOR, auditorId, AUDITOR_DEF.name, 'illegal_ammo_smelter');
+
+  const zhernovMachine = addContainer(world, rooms.metalLine, 8, ContainerKind.WEAPON_CRATE, 'Пломбированная тележка жернова', [
+    { defId: 'tracked_zhernov', count: 1 },
+    { defId: 'weapon_checkout_tag', count: 1 },
+  ], ['mounted_weapon', 'tracked_zhernov', 'stationary', 'authored_route', 'regenerator_finisher', 'theft'], 'faction', Faction.LIQUIDATOR, auditorId, AUDITOR_DEF.name, 'metal_shop');
 
   const quarantine = addContainer(world, rooms.quarantine, 4, ContainerKind.METAL_CABINET, 'Карантинный шкаф зеленой партии', [
     { defId: 'green_briquette', count: 4 },
@@ -1254,6 +1310,7 @@ function populateRooms(world: World, entities: Entity[], nextId: { v: number }, 
   ], ['quarantine', 'bad_batch', 'food', 'living', 'warning', 'theft'], 'owner', Faction.CITIZEN, auditorId, AUDITOR_DEF.name);
 
   const lockers = addContainer(world, rooms.lockers, 5, ContainerKind.TOOL_LOCKER, 'Открытые шкафчики смены', [
+    { defId: 'labor_shift_card', count: 2 },
     { defId: 'gear', count: 2 },
     { defId: 'fuse', count: 1 },
     { defId: 'wrench', count: 1 },
@@ -1277,7 +1334,7 @@ function populateRooms(world: World, entities: Entity[], nextId: { v: number }, 
   spawnMonster(entities, nextId, MonsterKind.SBORKA, rooms.quarantine, 8, 2);
   spawnMonster(entities, nextId, MonsterKind.SBORKA, rooms.quarantine, 9, 2);
 
-  return { metalOutput, chargeOutput, ammoOutput, quarantine, lockers, loading };
+  return { metalOutput, chargeOutput, ammoOutput, p41Mount, g41Mount, zhernovMachine, quarantine, lockers, loading };
 }
 
 export function generateProductionBeltDesignFloor(): ProductionBeltGeneration {

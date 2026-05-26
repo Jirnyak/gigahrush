@@ -1,6 +1,6 @@
 # ГИГАХРУЩ Online Mode Plan
 
-Status: feasibility roadmap and implementation decision, not shipped behavior and not a public promise. Created 2026-05-24, revised 2026-05-25 after second architecture review and no-anti-cheat correction.
+Status: feasibility roadmap and implementation decision, not shipped behavior and not a public promise. Created 2026-05-24, revised 2026-05-25 after second architecture review, no-anti-cheat correction and critical host-AOI review.
 
 Scope: полноценный опциональный online mode через Cloudflare Workers/Durable Objects, где Cloudflare является sync/interaction authority для shared facts, а не полной удаленной копией offline-симуляции. Локальная single-player игра, `npm run dev`, single-file build и local save остаются полностью playable без Cloudflare, WebSocket, D1 и сети.
 
@@ -94,6 +94,14 @@ Goal for the next online test is no longer "128-player full online". The concret
 
 Critical correction after reviewing the current runtime loop: the POC must preserve the living offline simulation. NPCs, monsters, projectiles, samosbor, hazards and containers are not optional cosmetics. The online floor must feel like the current offline floor with more player-controlled actors inside it.
 
+Second critical correction after the host/AOI review: this is **not** "each peer locally plays its own authoritative piece of the floor". That would desync. The working model is:
+
+- host browser plays almost like normal offline and simulates the whole active floor;
+- every peer is a remote-controlled actor inside the host simulation;
+- peer renders local base geometry, but live dynamic truth comes from host AOI snapshots/events;
+- host decides meaningful world changes: movement acceptance, damage, drops, pickups, doors, NPC/monster results and later patches;
+- Cloudflare relays/order/buffers only. It is not the floor simulator.
+
 Recommended first realtime transport:
 
 - Use Cloudflare Worker only as the HTTP/WebSocket gateway.
@@ -115,14 +123,14 @@ browser client
 
 What the Durable Object owns in POC:
 
-- room membership: slot 0-7;
+- room membership format: slots 0-7, but POC cap is 2;
 - current route identity and ruleset/build version;
 - player public transforms: x, y, yaw, selected sprite/equipment summary;
 - short ordered event ring: `player_join`, `player_leave`, `move_snapshot`, `shot_spawn`, `projectile_hit`, `item_drop`, `item_pickup`, `chat_ping`;
 - small shared item overlay: dropped item id, def id, count, x/y, owner slot, TTL;
 - simple projectile/event ids and TTL;
 - heartbeat/reconnect timeout;
-- budget/rate caps and max payload sizes.
+- budget/rate caps and max payload sizes;
 - host election/lease: who currently owns the full floor simulation;
 - latest host snapshot buffer for reconnecting peers;
 - optional host-transfer marker if the room later supports migration.
@@ -136,7 +144,7 @@ What stays on the clients:
 - on the host: the full current offline simulation loop, including NPCs, monsters, projectiles, samosbor, hazards, containers, AI and local world mutation;
 - on peers: rendered mirrors of host-owned NPCs/monsters/projectiles/items plus their own local input/prediction;
 - local inventory, except for POC item drop/pickup mirror events;
-- all expensive AI, samosbor visuals and sound.
+- expensive AI/world mutation only on host; peers keep rendering, audio and local presentation.
 
 Authority for POC:
 
@@ -152,7 +160,7 @@ Why DO relay before WebRTC/P2P:
 - uses the existing browser sim instead of porting `main.ts`, AI, samosbor and generation into a server runtime;
 - all players use the same connection shape;
 - still serverless and still cheap for 2-8 players;
-- hard host crash is the main weakness. Normal host leave should transfer changed full-floor state to a new host through a visible loading handoff; sudden loss may still freeze/end the room in early POC.
+- host loss is the main weakness. First POC may freeze/end on any host loss. Later normal host leave can use a visible loading checkpoint handoff; sudden loss may still freeze/end the room.
 
 When WebRTC/player-host becomes useful:
 
@@ -202,7 +210,6 @@ First implementation does **not** need `LobbyDO`, `MarketDO`, R2, KV, new D1 tab
 - ordered event ring, initially 512 events or 120 seconds;
 - latest host snapshot/keyframe buffer;
 - tiny drop overlay and action idempotency table;
-- host handoff state: candidate host slot, handoff epoch, chunk cursors and timeout;
 - rate/payload caps and room close/freeze reason;
 - no AI, no pathfinding, no full `World`, no local save, no A-Life pool, no D1 writes per frame.
 
@@ -210,9 +217,11 @@ Host browser responsibilities:
 
 - runs the current offline floor loop for the **whole active 1024x1024 floor**, not only the host's current room;
 - owns all live floor simulation: NPCs, monsters, projectiles, dropped items, hazards, containers, samosbor and local world mutation;
-- receives peer inputs/actions from DO and applies them to host-local controlled mirror actors;
+- creates host-local remote player actors for peers and applies peer inputs/actions to those actors before projectile/AI simulation;
+- treats remote players as gameplay actors for collision, HP, weapon state, simple inventory, projectile ownership and AOI;
+- expands AI interest/hot anchors from one local `player` to `host player + remote player actors`, otherwise far peers will see cold/semi-dead PvE;
 - sends lossy per-peer AOI snapshots for current state and reliable events for consequences;
-- on normal floor exit or normal quit, enters a loading/handoff flow and transfers full changed floor state to the next host;
+- in the first POC, hard or normal host loss may freeze/end the room. Normal loading handoff is a later checkpoint milestone;
 - stays foreground desktop-only in early tests. Hidden/mobile host is invalid for POC.
 
 Peer browser responsibilities:
@@ -221,7 +230,7 @@ Peer browser responsibilities:
 - sends input/action intents to host through DO;
 - renders host-owned snapshots for remote players, NPCs, monsters, projectiles and drops in its own area;
 - does **not** run authoritative local AI/samosbor/projectile/world mutation while attached to the room;
-- if promoted, shows loading, reconstructs the same base floor, applies the handoff package and becomes the new full-floor host;
+- predicts only local camera/movement where useful, then reconciles with host self-correction;
 - keeps offline save separate and can fall back to local play if room freezes.
 
 First POC cap is **2 players**. Do not start at 4 or 8. The first question is narrower: can two browsers enter the same online floor, one become host, and the other see a living floor driven by the host.
@@ -233,7 +242,7 @@ Scale gates:
 - **8 players**: only after 4-player gate; hard AOI caps, host health monitor, room inbound below 200 msg/s, p99 snapshot age below 500 ms, mobile peers allowed but mobile host still disabled.
 - **16+**: separate experimental track. If 8 fails because host bandwidth/sleep dominates, either keep rooms at 4 or investigate VPS/headless/WebRTC later.
 
-The POC is one-floor only. No synchronized multi-floor travel yet, no online save merge, no strict economy, no full world patch stream during normal play, no 128-player claim. If the host exits the room/floor normally, the current floor should hand off to another player first; the actual elevator transfer to the host's next floor is a later milestone.
+The POC is one-floor only. No synchronized multi-floor travel yet, no online save merge, no strict economy, no full world patch stream during normal play, no 128-player claim. If the host exits or dies in the first POC, the room may freeze/end. Host handoff is intentionally moved after stable 2-player gameplay.
 
 ### Whole-Floor Host And Per-Peer AOI
 
@@ -254,19 +263,47 @@ AOI is only a network/send filter. Peers should not receive the whole entity lis
 
 This keeps the gameplay model "one host simulates the full floor" while keeping the network model "each peer receives only the useful local slice".
 
+### Remote Actor And AI Focus Requirements
+
+The critical game-side blocker is not Cloudflare. The critical blocker is that current runtime behavior is centered on one special local `player`.
+
+POC must add a small host-side online actor layer before claiming "real multiplayer":
+
+- each peer gets a host-local remote actor with `slotId`, `actorNetId`, x/y/angle/pitch, hp, alive state, weapon/tool summary and minimal online inventory;
+- remote actor ids are mapped to host-local `Entity.id`, but protocol never trusts local ids;
+- peer movement is not applied by `movePlayer()` directly; it needs a separate remote movement function with the same toroidal/collision semantics;
+- peer firing is not applied by `playerActions()` directly; it needs a remote action function that spawns host-owned projectiles/events for that actor;
+- peer drop/pickup is host-decided and limited to simple item stacks first;
+- NPC/monster AI needs interest centers for host player and remote actors, so mobs near a far peer do not become cold just because the host is elsewhere;
+- monster/player targeting can remain imperfect in POC, but it must at least allow remote actors to be attacked, damaged and visible as combat participants.
+
+Renderer blocker:
+
+- Current renderer skips `EntityType.PLAYER` for sprite drawing. POC should either render remote players as NPC-like mirror actors or change the generic render path to skip only the local player id and draw remote players.
+- Map/minimap should not promise exact far remote-player dots in POC. Far players can disappear as "somewhere else on the floor" until AOIs overlap.
+
+Interaction blocker:
+
+- Do not expose full `activateInteraction()` to peers in POC. It opens local UI and touches NPC menus, containers, terminals, lift travel and quest paths built around the local player.
+- First shared actions should be movement, look, shoot, hit/damage, simple item drop, simple item pickup and maybe one door toggle.
+- NPC dialogue, trade, terminals, complex containers, quest state and lift travel are later protocols.
+
 ### Host Handoff Policy
+
+Host handoff is **not** part of the first 2-player gameplay POC. It becomes a later loading checkpoint milestone after remote actors, AOI, simple combat and simple item transfer are stable.
 
 There are two different host-loss cases.
 
 Normal leave / normal lift exit / normal quit:
 
-1. Host sends `handoff_begin` with `handoffEpoch`, current `hostTick`, route identity and target next-host slot.
-2. `FloorRoomDO` freezes new gameplay actions and tells peers to show loading.
-3. Host builds a handoff package from base seed plus changed full-floor state.
-4. Package is sent in chunks through DO to the next host.
-5. Next host regenerates the same base floor locally, applies the package, rebuilds mirrors/indices and sends `handoff_ready`.
-6. DO switches `hostSlot`, increments host epoch and broadcasts `host_changed`.
-7. Peers request full AOI keyframes from the new host and resume.
+1. If handoff is not implemented yet, the room freezes/ends cleanly.
+2. Later, host sends `handoff_begin` with `handoffEpoch`, current `hostTick`, route identity and target next-host slot.
+3. `FloorRoomDO` freezes new gameplay actions and tells peers to show `ЗАГРУЗКА`.
+4. Host builds a loading-time **full current-floor checkpoint**, not a pretty base+diff patch.
+5. Package is chunked through DO to the next host. DO relays, tracks hash/size/timeout and does not treat it as durable cloud save.
+6. Next host restores the checkpoint, rebuilds dirty versions/entity index, clears stale AI paths, recalculates `nextEntityId`, inserts player slots and sends `handoff_ready`.
+7. DO switches `hostSlot`, increments host epoch and broadcasts `host_changed`.
+8. Peers request full AOI keyframes from the new host and resume.
 
 Hard crash / tab killed / network loss:
 
@@ -274,14 +311,24 @@ Hard crash / tab killed / network loss:
 - data loss is acceptable for this relaxed online mode;
 - later builds can keep low-frequency host checkpoints, but that is not a blocker for the first meeting POC.
 
-Handoff package should not contain the original full generated `World` arrays. Every client can regenerate the same base floor from `{runSeed, floorKey, z, rulesetVersion}`. The package contains the **changed and live state**:
+The first robust handoff package should be a full-floor checkpoint in a `floor_memory`-style shape, not a mutation diff. Current code has no universal runtime mutation journal, and different systems mutate doors, containers, fog, marks, cells, entities and samosbor state through different paths.
 
-- `floorEpoch`, `hostTick`, `gameTime`, active samosbor state;
-- all live floor actors with network ids: players, NPCs, monsters, projectiles, item drops and temporary hazards;
-- actor hp/status/ai target/position/velocity enough for the new host to continue approximately;
-- door/container/terminal changes and sparse world patches since floor creation;
-- remote player slot state, inventories needed for online drop/pickup POC, action/event cursors;
+Checkpoint contents:
+
+- `floorEpoch`, `hostTick`, `gameTime`, inactive/cooldown samosbor counters and phase metadata;
+- route identity, ruleset/build id and current floor key;
+- packed current `World` arrays/rooms/zones/doors/containers/surface/anomaly/rail/screen state in the same spirit as `floor_memory`;
+- sanitized live NPCs, monsters, item drops and temporary hazards;
+- remote player slot state, positions, hp/status/equipment and minimal online inventories;
+- event/action cursors;
 - recent reliable event ring cursor so peers do not reapply old consequences.
+
+Checkpoint exclusions/abort conditions:
+
+- no active samosbor handoff in the first version. If samosbor is active, warning, wave, pending aftermath or geometry rebuild is in progress, abort handoff and freeze/end;
+- projectiles may be discarded during loading handoff. Do not try to preserve in-flight bullets first;
+- stale AI paths should be cleared and recalculated by the new host;
+- if checkpoint is too large or times out, abort and end/freeze the room.
 
 This handoff is allowed to be visibly rough. Showing `ЗАГРУЗКА` is correct. The target is continuity good enough for relaxed co-op, not deterministic replay.
 
@@ -292,9 +339,9 @@ The six review roles converged on the same answer:
 1. **Runtime/host integrator**: this is the least invasive full-sim path because `main.ts` already runs one complete browser sim. Biggest risk is the single-player global `player` and monolithic loop. First POC should use remote mirror actors and generic hooks, not a broad multi-player core rewrite.
 2. **Cloudflare/Net Sphere architect**: add `/api/online/v1/*` beside `/api/net/*`. Keep current Net Sphere untouched. For POC use one `FloorRoomDO`; no new D1/R2/KV; DO validates WebSocket, lease, ordering and buffers only.
 3. **Protocol engineer**: JSON-first is acceptable for 2/4/8. Batch every 50-100 ms. Snapshots are lossy latest state; events are reliable ordered facts. Use `slotId`/`actorNetId`, never local `Entity.id` as network authority.
-4. **Gameplay/full-sim reviewer**: NPCs, mobs and samosbor must not become cosmetics. Host owns them; peers mirror them. Samosbor geometry rebuild and lift transition are later epoch/resync milestones, not the first meeting gate.
-5. **Ops/cost planner**: `$10/month` supports controlled small room-hours, not unlimited always-active rooms. Normal host leave should use loading/handoff; hard host crash may freeze/end the room in POC. Budget gates and stop metrics are required before public tests.
-6. **Adversarial architect**: this is a good relaxed-trust meeting POC, not a final MMO architecture. DO full sim, VPS, WebRTC and deterministic lockstep all lose as first moves under current code/budget, but may become later branches if 8-player host relay fails.
+4. **Gameplay/full-sim reviewer**: NPCs, mobs and samosbor must not become cosmetics. Host owns them; peers mirror them. First blockers are remote actor control, multi-focus AI and online action shims, not Cloudflare.
+5. **Ops/cost planner**: `$10/month` supports controlled small room-hours, not unlimited always-active rooms. First POC should freeze/end on host loss; handoff is a later loading checkpoint. Budget gates and stop metrics are required before public tests.
+6. **Adversarial architect**: this is a conditional relaxed-trust meeting POC, not a final MMO architecture. DO full sim, VPS, WebRTC and deterministic lockstep all lose as first moves under current code/budget, but the host relay also fails if peer is not a real host-world actor.
 
 ### POC Protocol Shape
 
@@ -318,7 +365,7 @@ Core message groups:
 - `action`: edge facts such as `fire_edge`, `drop`, `pickup`, `equip_weapon`, `interact`.
 - `snapshot`: host-owned lossy state for players, AOI actors, projectiles, drops and samosbor phase.
 - `event`: reliable ordered facts: `shot_spawn`, `projectile_hit`, `actor_damage`, `actor_death`, `item_drop`, `item_pickup`, `door_state`, `samosbor_phase`, `system_msg`.
-- `handoff_begin` / `handoff_chunk` / `handoff_ready` / `host_changed`: loading-time transfer from old host to new host on normal leave.
+- `handoff_begin` / `handoff_chunk` / `handoff_ready` / `host_changed`: later loading-time checkpoint transfer from old host to new host, not part of first gameplay POC.
 - `resync_req` / `resync`: replay event ring or ask host for a full AOI keyframe.
 - `heartbeat` / `heartbeat_ack`: room liveness when no gameplay frame is flowing.
 
@@ -354,19 +401,19 @@ The first successful POC means all of this works at once:
 - both players see each other in the same corridor;
 - host-owned NPC/monster movement appears on the peer;
 - peer input moves a host-local remote actor and host sees it;
+- host AI treats the remote actor as an interest/combat anchor, so peer-side nearby mobs are not cold just because host is elsewhere;
 - host shoots and peer sees projectile/hit event;
 - peer shoots and host applies it through the remote actor path;
 - one simple item can be dropped by one player and picked up by the other through ordered events;
-- normal host quit starts loading and transfers changed full-floor state to the next host;
-- host tab killed or network-lost freezes/ends the room within 15 seconds without corrupting offline play;
+- normal host quit, hidden tab, killed tab or network loss freezes/ends the room within 15 seconds without corrupting offline play;
 - reconnect within 20 seconds recovers the same slot if the host is still valid;
 - room runs 30 minutes without unbounded event/snapshot growth.
 
 Stop promotion if any of these are true:
 
 - projected Cloudflare spend crosses `$8/month` before public cap;
-- normal host leave cannot hand off changed full-floor state in a controlled loading flow;
-- hard host loss creates unresolved room state for more than 15 seconds;
+- host loss creates unresolved room state for more than 15 seconds;
+- peer AOI looks empty/dead because AI remains centered only on host player;
 - reconnect duplicates item/action events;
 - p99 snapshot age exceeds 750 ms in 2/4-player soak;
 - host upstream is sustained above 120 KB/s;
@@ -797,7 +844,16 @@ Strict no rollback loop:
 
 ### 7.7 Samosbor
 
-Online samosbor must be shard-authoritative:
+Online samosbor has two tracks.
+
+For the chosen host-browser POC:
+
+- host owns samosbor timer/phase and sends AOI-visible samosbor warning/active state;
+- peers render warning/effects locally from host snapshots/events;
+- active geometry rebuild, wave frontier, pending aftermath and shelter resolution are not part of the first meeting POC;
+- if a large samosbor rebuild would happen before resync support exists, the online room may show `ЗАГРУЗКА`, freeze or end.
+
+For later strict shards, samosbor may become shard-authoritative:
 
 - FloorShardDO schedules warning, active phase, shelter checks, aftermath and patch version.
 - Clients render warnings/effects locally.
@@ -808,7 +864,7 @@ Online samosbor must be shard-authoritative:
 
 Offline samosbor remains unchanged.
 
-Online clients must not run local samosbor damage or geometry mutation while attached to a shard. They render effects from server phase/timer data, apply server patches, and receive authoritative exposure/shelter results. Shelter checks should use server-defined shelter volumes or room tags, not a client-only guess from local floor memory.
+Online clients must not run local samosbor damage or geometry mutation while attached to a host/strict shard. They render effects from host/server phase/timer data, apply ordered patches when that milestone exists, and receive authoritative exposure/shelter results. Shelter checks should use host/server-defined shelter volumes or room tags, not a peer-only guess from local floor memory.
 
 ### 7.8 NPCs, Monsters And A-Life
 
@@ -821,6 +877,8 @@ POC rules:
 - peer does not run authoritative local NPC/monster/projectile/samosbor mutation while attached to the room;
 - peer may keep local base floor/render systems alive, but shared actors are replaced/overridden by host mirrors;
 - remote player actors in the host sim need stable `slotId`/`actorNetId` mapping; local `Entity.id` remains host-local only;
+- host AI scheduling and targeting must treat remote players as interest/combat anchors, not only the local `player.id`;
+- if renderer still skips all `EntityType.PLAYER`, remote players must be represented as NPC-like mirror actors or the renderer must skip only the local player id;
 - no A-Life pool sync, no off-floor simulation sync, no local floor memory upload.
 
 Strict server-authoritative monsters/NPCs are a later branch if host relay fails or public rooms need persistence. That later branch should phase in simple capped monsters first, then limited NPC terminal/trade actors, then online A-Life facts. Do not hide that as part of the first meeting POC.
@@ -1165,12 +1223,15 @@ Deliver:
 
 - Host-browser full current-floor simulation for one online floor room.
 - Peer input/actions relayed to host through `FloorRoomDO`.
+- Host creates a real remote actor for the peer, with `slotId`, `actorNetId`, x/y/angle/pitch, hp, weapon and minimal online inventory.
+- Remote actor movement/action handling is separate from the local `movePlayer()` / `playerActions()` singleton path.
+- AI interest centers include host player and remote actor so the peer AOI is not a dead pocket.
 - Host simulates the whole floor, while realtime snapshots are per-peer AOI slices for players, NPCs, monsters, projectiles, dropped items and samosbor phase.
 - `shot_spawn` / projectile state from host broadcast to peers.
 - `projectile_hit` event from host broadcast to peers.
 - `item_drop` event from host that creates a shared dropped item with TTL.
 - `item_pickup(dropId)` event where host decides pickup and DO relays ordered result.
-- Normal host leave/quit handoff: old host sends changed full-floor state to the next host during loading.
+- Host loss path freezes/ends the room cleanly. No handoff in this phase.
 - Small canvas/HUD indication that this is relaxed online test mode.
 
 Exit:
@@ -1179,12 +1240,13 @@ Exit:
 - Both players see host-owned NPCs/monsters/projectiles well enough to understand the shared scene.
 - One player can shoot and the other sees the projectile/hit event.
 - One player can drop one simple item and the other can pick it up.
-- Normal host leave promotes the remaining player after a visible loading handoff.
-- Hard host crash may still freeze/end the room in this phase.
+- Host normal leave, hidden tab, hard crash or network loss may freeze/end the room in this phase.
 - No full `World` transfer.
 - No full A-Life pool sync.
 - No Cloudflare-hosted headless sim yet.
 - No strict economy.
+- No lift travel, NPC trade/dialogue, terminal UI, quest progression or full containers for peers.
+- No active samosbor rebuild; mirror phase/warnings only or freeze/loading when rebuild would happen.
 - Room remains stable for 30 minutes with 2 clients.
 
 ### Phase 3: Prediction, AOI And 4-Player Host Relay
@@ -1213,7 +1275,7 @@ Deliver:
 - Host-owned projectile/hit/death events for player-vs-player and player-vs-host-owned NPC/monster combat.
 - Snapshot Hz degradation under load.
 - Host health monitor: foreground status, frame time, outbound queue, missed lease renewals.
-- Clear loading/handoff UI for normal host leave and freeze/end UI for hard host loss.
+- Clear freeze/end UI for host loss.
 - Keep strict economy and strict server PvP out of this phase.
 
 Exit:
@@ -1223,7 +1285,25 @@ Exit:
 - Disconnect during combat has defined relaxed-trust result.
 - 8-player room stays within host upstream, DO handler and snapshot-age stop metrics.
 
-### Phase 4.5: Strict Shard Research, Only If Needed
+### Phase 4.5: Loading Checkpoint Host Handoff
+
+Deliver:
+
+- Normal host leave/quit/floor-exit handoff after 2/4-player gameplay is stable.
+- `handoff_begin`, `handoff_chunk`, `handoff_ready`, `host_changed` protocol.
+- Loading-time full current-floor checkpoint in a `floor_memory`-style shape.
+- DO relay with chunk hash, size cap and timeout; no durable cloud save.
+- Abort conditions: active samosbor, samosbor warning/wave/aftermath, active combat burst, too many in-flight projectiles, oversized checkpoint.
+- Projectiles may be discarded during handoff.
+- New host restores world, actors, player slots, cursors, clears stale AI paths and recalculates `nextEntityId`.
+
+Exit:
+
+- Normal host leave promotes another player after visible `ЗАГРУЗКА`.
+- Handoff failure freezes/ends the room without corrupting offline play.
+- No requirement for seamless migration.
+
+### Phase 4.6: Strict Shard Research, Only If Needed
 
 Deliver:
 
@@ -1320,22 +1400,26 @@ Exit:
 | Risk | Severity | Problem | Best solution |
 | --- | --- | --- | --- |
 | `$10/month` treated as enough for unlimited realtime | Critical | always-on 128-player action floors can exceed budget from WS messages/duration | budget gate, low Hz, caps 2/4/8 first, 16+ only after host-relay soak |
-| Player-host treated as scalable infrastructure | Critical | host disconnects, mobile sleep, weak uplink and no persistence break rooms | normal leave uses loading handoff; hard crash may freeze/end; do not use as public high-cap backbone |
+| Player-host treated as scalable infrastructure | Critical | host disconnects, mobile sleep, weak uplink and no persistence break rooms | first POC may freeze/end; later normal leave uses loading checkpoint handoff; do not use as public high-cap backbone |
 | D1 used for realtime | Critical | query latency, single DB throughput, cost, queue overload | Durable Objects for realtime; D1 only durable summaries/economy |
 | One DO overloaded by 128 players | Critical | 128 at high Hz exceeds practical single-object budget | prove 2/4/8 relay first; 32+ needs separate scale architecture |
 | Soft economy accidentally presented as protected scarcity | Critical | players expect fair scarce trade from client-claimed data | label soft economy clearly; strict ledger only for strict features |
 | `NET-GEN` treated as password | Critical | visible/recoverable id can be stolen | private `netSecret` + short-lived join token |
 | Client/server floor mismatch | High | players see different walls/doors | build id, ruleset version, route seed, floor key and patch version in handshake |
 | World patch breaks render/AI caches | High | stale collision/light/fog data | patch API must bump dirty versions exactly like runtime geometry mutations |
+| Peer treated as local mini-sim | High | peer AI/projectiles/items/doors diverge from host | peer is mirror/prediction only; host owns dynamic truth |
+| Singleton `player` paths reused for peers | High | movement/actions/UI mutate the host local player or open wrong UI | remote actor movement/action functions separate from `movePlayer()` / `playerActions()` |
+| AI remains centered on host player only | High | far peer AOI looks dead because nearby mobs are cold | multi-focus AI interest centers: host player + remote actors |
+| Remote player not renderable | High | renderer currently skips all `EntityType.PLAYER` sprites | use NPC-like mirror actor first or render all players except local player id |
 | PvP fairness overdesigned | High | anti-cheat complexity delays playable online with no product upside | accept cheating; choose authority for UX/reconnect only |
 | Mobile WebSocket instability | High | background tab/reconnect pain | reconnect TTL, local degraded continuation, no modal during combat |
-| Host handoff becomes a hidden full cloud save | High | trying to upload full `World` arrays or local save makes handoff too large and fragile | transfer base seed plus changed full-floor state, actor snapshots and sparse patches only |
+| Host handoff becomes a hidden cloud save promise | High | seamless migration and diff replay are too fragile without a mutation journal | later handoff is rare loading-time checkpoint, chunked through DO, aborted during samosbor/combat/oversize cases |
 | Cloudflare object pinned to bad region | High | latency for whole shard | choose region before object creation; region in shard key |
 | Chat/market cost or moderation abuse | High | spam can harm users or spend budget even if cheating is allowed | sanitization, caps, cooldowns, report/mute, token buckets |
 | Online breaks offline | High | violates product baseline | kill switch, separate code path, browser tests with API 503 |
 | 128-player claim before tests | High | marketing promise exceeds measured capacity and budget | publish only tested caps; keep 128 as stretch until soak/chaos pass |
 | Server memory blowup | High | full `World`/entity arrays exceed isolate | compact overlays and typed slot arrays only |
-| Samosbor desync | Medium | clients disagree on hazard/patch | shard-authoritative phases and patch sequence |
+| Samosbor desync | Medium | clients disagree on hazard/patch | first POC mirrors phase/warnings only or freezes on rebuild; later host/server patch sequence |
 | Complex NPC/A-Life scope creep | Medium | impossible first milestone | phase PvE/NPC after PvP/interactions; capped server actors |
 | Schema churn | Medium | stale online saves/trades | separate online shape version; reject stale current-shape explicitly |
 | Cost surprise | Medium | too many hot shards/messages | metrics, daily budget alarms, soft caps, hibernation when idle |

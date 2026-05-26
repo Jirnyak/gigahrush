@@ -23,10 +23,6 @@ export const particles: BloodParticle[] = [];
 // Incrementing counter ensures every splatter is unique
 let _splatterSeed = 0;
 
-const PROJECTILE_MARK_CELL_CAP = 768;
-const PROJECTILE_MARKS_PER_CELL = 8;
-const projectileMarkCounts = new WeakMap<World, Map<number, number>>();
-
 // Substance colors (R, G, B)
 const BLOOD: [number, number, number] = [140, 10, 10];
 const GORE:  [number, number, number] = [30, 40, 10];
@@ -46,20 +42,6 @@ export function isEnergyProjectileImpact(sprite: number | undefined, pt = ProjTy
     sprite === Spr.HOSTILE_FLAME_BOLT;
 }
 
-function canStampProjectileMark(world: World, cx: number, cy: number): boolean {
-  const idx = world.idx(world.wrap(cx), world.wrap(cy));
-  let counts = projectileMarkCounts.get(world);
-  if (!counts) {
-    counts = new Map();
-    projectileMarkCounts.set(world, counts);
-  }
-  const prev = counts.get(idx) ?? 0;
-  if (prev >= PROJECTILE_MARKS_PER_CELL) return false;
-  if (prev === 0 && counts.size >= PROJECTILE_MARK_CELL_CAP) return false;
-  counts.set(idx, prev + 1);
-  return true;
-}
-
 function stampProjectileMark(
   world: World,
   cx: number, cy: number,
@@ -71,7 +53,6 @@ function stampProjectileMark(
   intensity: number,
   wallOk = false,
 ): void {
-  if (!canStampProjectileMark(world, cx, cy)) return;
   stampMark(world, cx, cy, fx, fy, radius, type, seed, r, g, b, intensity, wallOk);
 }
 
@@ -194,7 +175,10 @@ export function spawnProjectileWallImpact(
   u: number, v: number,
   sprite: number | undefined,
   pt = ProjType.NORMAL,
+  impactX = cx + 0.5,
+  impactY = cy + 0.5,
 ): void {
+  spawnProjectileImpactParticles(impactX, impactY, Math.max(0.001, Math.min(0.999, 1.0 - v)), sprite, pt);
   if (pt === ProjType.WEB) {
     stampProjectileMark(world, cx, cy, u, v, 0.3, MarkType.WEB, ++_splatterSeed, 226, 226, 202, 185, true);
   } else if (pt === ProjType.FLAME || sprite === Spr.FLAME_BOLT || sprite === Spr.HOSTILE_FLAME_BOLT) {

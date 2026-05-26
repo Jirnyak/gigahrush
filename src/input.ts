@@ -35,6 +35,7 @@ export function createInput(): InputState {
 
 interface InputBindOptions {
   onFullscreenToggle?: () => void;
+  shouldRequestPointerLock?: () => boolean;
 }
 
 function clearPointerState(input: InputState): void {
@@ -69,6 +70,9 @@ function requestPointerLockSafe(canvas: HTMLCanvasElement): void {
 }
 
 export function bindInput(input: InputState, canvas: HTMLCanvasElement, options: InputBindOptions = {}): () => void {
+  let pointerLockClickStarted = false;
+  let pointerLockAllowedAtMouseDown = false;
+
   const onDown = (e: KeyboardEvent) => {
     if (getControlCaptureAction()) {
       if (!e.metaKey && !e.ctrlKey && !e.altKey) consumeControlCaptureCode(e.code);
@@ -97,12 +101,19 @@ export function bindInput(input: InputState, canvas: HTMLCanvasElement, options:
   };
 
   const onClick = () => {
+    const allowedAtMouseDown = pointerLockClickStarted ? pointerLockAllowedAtMouseDown : true;
+    pointerLockClickStarted = false;
+    pointerLockAllowedAtMouseDown = false;
+    if (!allowedAtMouseDown) return;
+    if (options.shouldRequestPointerLock?.() === false) return;
     requestPointerLockSafe(canvas);
   };
 
   const onMouseDown = (e: MouseEvent) => {
-    if (e.button === 0 && document.pointerLockElement === canvas) {
-      input.mouseAttack = true;
+    if (e.button === 0) {
+      pointerLockClickStarted = true;
+      pointerLockAllowedAtMouseDown = options.shouldRequestPointerLock?.() !== false;
+      if (document.pointerLockElement === canvas) input.mouseAttack = true;
     }
   };
 

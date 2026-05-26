@@ -55,8 +55,10 @@ import {
 } from '../src/systems/map_editor';
 import { currentNetTerminalGenFloorKey } from '../src/systems/net_terminal_gen';
 import { updateBadAppleWorldAnomaly } from '../src/systems/procedural_anomalies/bad_apple_world';
+import { getProceduralSmogStatus, updateProceduralAnomalies } from '../src/systems/procedural_anomalies';
 import { updateLivingTunnelsAnomaly } from '../src/systems/procedural_anomalies/living_tunnels';
 import { tryZombieApocalypseInfection } from '../src/systems/procedural_anomalies/zombie_apocalypse';
+import { getRecentEvents } from '../src/systems/events';
 import { questTargetLiftDirection } from '../src/systems/contracts';
 import { getObjectiveRouteHud, routeCueCount, routeObjectiveLiftPromptSuffix } from '../src/systems/route_cues';
 import { getEmergencyPanels } from '../src/systems/emergency_panels';
@@ -73,7 +75,7 @@ import {
   type ReachabilityAudit,
 } from '../src/core/world';
 import { printSlowestFloorGenerators, timeFloorGeneration } from './generator_helpers';
-import { makeGameState, makeTestPlayer } from './helpers';
+import { countInventoryItem, makeGameState, makeTestPlayer } from './helpers';
 
 function playableBounds(world: World): { count: number; minX: number; minY: number; maxX: number; maxY: number } {
   const out = { count: 0, minX: W, minY: W, maxX: -1, maxY: -1 };
@@ -1335,6 +1337,90 @@ test('rail train anomaly generates tracks, trains, and rideable train entities',
   assert.equal(gen.world.railTracks[0].stationOffsets.length > 0, true);
   assert.equal(gen.world.railTracks[0].platformCells.length > 0, true);
   assert.equal(gen.world.railTrains[0].entityIds.every(id => gen.entities.some(e => e.id === id && e.type === EntityType.ITEM_DROP)), true);
+});
+
+test('smog anomaly spends gasmask filters under sustained exposure', () => {
+  const base = makeProceduralFloorSpec(606, -35);
+  const spec = {
+    ...base,
+    anomalyId: 'smog' as const,
+    danger: Math.max(3, base.danger) as typeof base.danger,
+    title: `говнячный смог: ${base.title}`,
+  };
+  const state = makeGameState({ currentFloor: spec.baseFloor, time: 10 });
+  setFloorRunState(state, {
+    runSeed: 606,
+    currentZ: spec.z,
+    specs: { [spec.key]: spec },
+    visited: {},
+  }, spec.baseFloor);
+
+  const world = new World();
+  const smogIdx = world.idx(24, 24);
+  world.cells[smogIdx] = Cell.FLOOR;
+  world.anomalySmogSource = smogIdx;
+  world.anomalySmogCells = [smogIdx];
+  world.fog[smogIdx] = 255;
+  const player = makeTestPlayer({
+    id: 9001,
+    x: 24.5,
+    y: 24.5,
+    hp: 100,
+    maxHp: 100,
+    inventory: [{ defId: 'gasmask_filter', count: 1 }],
+  });
+
+  for (let i = 0; i < 80 && countInventoryItem(player, 'gasmask_filter') > 0; i++) {
+    updateProceduralAnomalies(world, player, state, 2.5);
+    state.time += 2.5;
+  }
+
+  assert.equal(countInventoryItem(player, 'gasmask_filter'), 0);
+  assert.equal(player.hp, 100);
+  const spent = getRecentEvents(state, { type: 'player_use_item', tags: ['smog', 'spent'], limit: 1 })[0];
+  assert.equal(spent?.itemId, 'gasmask_filter');
+});
+
+test('smog anomaly spends wet rag bundles as short wet-cloth mitigation', () => {
+  const base = makeProceduralFloorSpec(608, -35);
+  const spec = {
+    ...base,
+    anomalyId: 'smog' as const,
+    danger: Math.max(3, base.danger) as typeof base.danger,
+    title: `говнячный смог: ${base.title}`,
+  };
+  const state = makeGameState({ currentFloor: spec.baseFloor, time: 10 });
+  setFloorRunState(state, {
+    runSeed: 608,
+    currentZ: spec.z,
+    specs: { [spec.key]: spec },
+    visited: {},
+  }, spec.baseFloor);
+
+  const world = new World();
+  const smogIdx = world.idx(30, 30);
+  world.cells[smogIdx] = Cell.FLOOR;
+  world.anomalySmogSource = smogIdx;
+  world.anomalySmogCells = [smogIdx];
+  world.fog[smogIdx] = 255;
+  const player = makeTestPlayer({
+    id: 9002,
+    x: 30.5,
+    y: 30.5,
+    hp: 100,
+    maxHp: 100,
+    inventory: [{ defId: 'wet_rag_bundle', count: 1 }],
+  });
+
+  assert.equal(getProceduralSmogStatus(world, player, state).protection, 'cloth_ready');
+  updateProceduralAnomalies(world, player, state, 2.5);
+
+  assert.equal(countInventoryItem(player, 'wet_rag_bundle'), 0);
+  assert.equal(player.hp, 100);
+  assert.equal(getProceduralSmogStatus(world, player, state).protection, 'wet_cloth');
+  const spent = getRecentEvents(state, { type: 'player_use_item', tags: ['wet_rag_bundle', 'spent'], limit: 1 })[0];
+  assert.equal(spent?.itemId, 'wet_rag_bundle');
+  assert.equal(spent?.data?.durationSeconds, 45);
 });
 
 test('living tunnels anomaly seeds roots and mutates bounded cells over time', () => {
