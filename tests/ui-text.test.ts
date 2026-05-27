@@ -5,7 +5,7 @@ import { readFileSync } from 'node:fs';
 import { ITEMS } from '../src/data/items';
 import { RUMORS } from '../src/data/rumors';
 import { SAMOSBOR_MODIFIERS, SAMOSBOR_VARIANTS } from '../src/data/samosbor_variants';
-import { combatWeaponHudLines } from '../src/render/hud';
+import { combatWeaponHudLines, hudMessageAgeSeconds, hudMessageVisible } from '../src/render/hud';
 import { fitText, fitTextStable, setUiTextTime, wrapTextLines } from '../src/render/ui_text';
 
 const ctx = {
@@ -50,6 +50,16 @@ test('wrapped text does not append ellipsis when line budget is exhausted', () =
   const lines = wrapTextLines(ctx, 'alpha beta gamma delta', 50, 1);
 
   assert.deepEqual(lines, ['alpha']);
+});
+
+test('transient HUD message age follows game time instead of UI animation time', () => {
+  const messageTime = 60;
+  const gameTimeAfterPausedMenu = 60;
+  const uiAnimationTimeAfterPausedMenu = 95;
+
+  assert.equal(hudMessageVisible(messageTime, gameTimeAfterPausedMenu), true);
+  assert.equal(hudMessageAgeSeconds(messageTime, gameTimeAfterPausedMenu), 0);
+  assert.equal(hudMessageVisible(messageTime, uiAnimationTimeAfterPausedMenu), false);
 });
 
 test('Veretar UI text stays a white external-area route with explicit choices', () => {

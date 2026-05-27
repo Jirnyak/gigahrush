@@ -85,6 +85,15 @@ test('HUD navigation slot stacks minimap and hints without overlap', () => {
   assert.ok(route.x >= 0);
 });
 
+test('HUD event summary lane ends before the fixed top-right minimap lane', () => {
+  const slots = createHudSlots(640, 400, 2, 2, { topRightWidth: 212 * 2 });
+  const summary = allocateHudSlot(slots.topLeftEvent, 72, slots.topLeftEvent.w, 'left');
+  const minimap = allocateHudSlot(slots.topRightNavigation, 160, 160, 'right');
+
+  assert.equal(minimap.y, slots.safe.top);
+  assert.ok(summary.x + summary.w <= minimap.x);
+});
+
 test('mobile HUD vitals use bottom center lane between touch controls', () => {
   const slots = createHudSlots(640, 360, 2, 1.8, { mobileControls: true, bottomVitalsHeight: 36 });
 

@@ -32,7 +32,7 @@
 | Email batch 3 | Отправлено через Gmail DOM automation 2026-05-24 00:28-00:31 BST: VK Play Media `mediavkplay@vkteam.ru`, HorrorFam `lauren@horrorfam.com`, Indie Game Buzz `games@indiegamebuzz.com`, Into Indie Games `info@intoindiegames.com`. Gmail search подтвердил sent conversation по каждому адресу. |
 | Game Jolt | Страница опубликована публично и package sync завершен: https://gamejolt.com/games/gigahrush/1072064; description сохранен; maturity сохранен как Teen/non-adult; thumbnail `50560626`, header `50560651`, screenshot `2181594`/`50560706` загружены. Package `1093814`, release `1474942`, version `0.2.0`, build `1960153`; public API reports `gigahrush-itch.zip` at `4 999 557` bytes, and direct `serve.gamejolt.net` check returned current `index.html` with visible canvases. |
 | iDev.Games | Публичный листинг опубликован: https://idev.games/game/gigah-rush. Public fetch 2026-05-23 21:21 UTC: `200 OK`, title `Gigah Rush - Free Online Browser Game`, `noindex` нет; edit page пишет `Public: This game has been released and is visible to everyone!`; embed HTML открывает `ГИГАХРУЩ - САМОСБОР` с canvas content. |
-| MyIndie | Публичный Web (HTML5) листинг опубликован: https://myindie.ru/games/game/gigahrush. Загружены cover, 3 screenshots и `itch/gigahrush-itch.zip` (`4 999 557` bytes); страница показывает `WEB VERSION`, version `0.2.0`, Web (HTML5), engine `Another`, RU/EN, genres Shooter/RPG/Action/Survival/Horror, дату `23.05.2026` и Web iframe uploaded ZIP build. |
+| MyIndie | Публичный Web (HTML5) листинг опубликован: https://myindie.ru/games/game/gigahrush. Public/API recheck on 2026-05-27: version `0.3.0`, updated `2026-05-27`, `11` views, `10` web plays, `2` downloads, `0` comments, `0` likes. Для RU/CIS это primary game page. |
 | Kongregate | Developer Application submitted 2026-05-23: https://www.kongregate.com/en/developer/apply. Это не публичная страница игры; ждать approval before Alpha/upload. |
 
 ## itch.io support/indexing: выполнено, ожидание
@@ -47,8 +47,9 @@
 
 | Площадка | Что нужно | Что я сделаю после входа |
 | --- | --- | --- |
-| DTF | Логин не нужен для планового действия прямо сейчас: media/link edit уже выполнен, публичный API на 2026-05-23 21:26 UTC показывает `1998` views, `470` hits, `12` comments, `10` favorites, `6` reactions. | Только мониторить и отвечать на конкретные новые вопросы/фидбек. Не делать duplicate post, generic update или link-only bump. |
-| GameDev.ru | Оставить авторизованную вкладку https://gamedev.ru/projects/forum/?id=295485 или написать, что пост обновлять вручную, только если нужен ответ на существующую жалобу про загрузку/progress. | Не делать generic changelog bump. Если отвечать, то признать риск dark-blue/loading состояния direct build, указать itch.io как primary playable link и попросить проверить первые минуты/UI. |
+| DTF follow-up | По newest owner request нужен вход в DTF: открыть https://dtf.ru/indie под нужным developer/Tenevik identity, открыть редактор поста и написать `DTF готово`. Previous DTF post metrics on 2026-05-27: `13` comments, `10` favorites, `7` reactions, `2 138` views, `569` hits, `2 737` total. | Использую `Docs/PRCampaign/dtf_followup_myindie_post_2026-05-27.md`, загружу GIF/screenshots, проверю preview/clickable links and ask for explicit final publish approval. Пост должен быть свежим update с MyIndie-first link, не duplicate/link bump. |
+| Pikabu gamedev | Пост уже опубликован: https://pikabu.ru/story/delayu_brauzernyiy_survival_horror_pro_samosbor_alife_i_vyilazki_v_betonnoy_strukture_14010914. Body remains itch-only and `data-editable="false"`, but author correction comment `393697666` is public. Recheck on 2026-05-27 19:39 UTC / 20:39 BST showed `Комментариев - 1`, AJAX `total:1`, and visible MyIndie. | No access needed now. Do not duplicate-post or submit another correction. Monitor retention/moderation and answer only concrete comments. |
+| GameDev.ru fallback | Если owner имел в виду именно GameDev.ru: открыть https://gamedev.ru/ в Chrome, войти под новым Tenevik-аккаунтом, открыть https://gamedev.ru/projects/forum/?appreciate и написать `GameDev.ru готово`. Active Chrome check on 2026-05-27 still showed `Войти`, so the agent cannot publish yet. | Использую draft `Docs/PRCampaign/gamedev_ru_tenevik_post_2026-05-27.md`, загружу GIF/screenshots, проверю preview/clickable links and ask for explicit final publish approval. Не публиковать от старого `jirnyak` account and do not make a generic bump. |
 
 ## Нужен вход в аккаунт
 
@@ -73,7 +74,9 @@
 - Email: `tenevik.games@gmail.com`
 - Сайт: не указывать; `https://jirny.uk` снят с будущих постов.
 - Telegram можно указывать: https://t.me/gigah_rush
-- Основная страница игры: https://tenevik.itch.io/gigahrush
+- Основная RU/CIS страница игры: https://myindie.ru/games/game/gigahrush
+- Прямая браузерная версия: https://gigahrush.bileter.workers.dev
+- itch.io mirror / EN page: https://tenevik.itch.io/gigahrush
 
 | Для чего | Что нужно |
 | --- | --- |
@@ -173,7 +176,7 @@ My name is Tenevik Games. I am affiliated with the development/outreach for GIGA
 
 The player prepares food, water, ammo, medicine, documents and weapons, then leaves the safer living area for hostile floors with factions, traders, monsters, quests, rumors and Samosbor events. The current browser build includes preparation, expeditions, combat, trading, inventory, quests, factions, procedural floors, browser saves, A-Life NPCs and persistent consequences.
 
-Primary link: https://tenevik.itch.io/gigahrush
+Primary EN/media link: https://tenevik.itch.io/gigahrush
 Direct browser build: https://gigahrush.bileter.workers.dev
 Telegram: https://t.me/gigah_rush
 

@@ -41,6 +41,7 @@ import {
   floorKeyForProcedural,
   floorKeyForStory,
 } from './floor_keys';
+import { portalBlocksDesignFloor } from './platform_bridge';
 
 export interface FloorRunState {
   runSeed: number;
@@ -233,7 +234,13 @@ function cloneSpec(spec: ProceduralFloorSpec): ProceduralFloorSpec {
 
 function validVisitedKeys(runSeed: number): Set<string> {
   const keys = new Set<string>(Object.values(STORY_ROUTE_IDS));
-  for (const route of DESIGN_FLOOR_ROUTES) keys.add(floorKeyForDesign(route.id));
+  for (const route of DESIGN_FLOOR_ROUTES) {
+    if (portalBlocksDesignFloor(route.id)) {
+      keys.add(floorKeyForProcedural(proceduralFloorKey(route.z)));
+      continue;
+    }
+    keys.add(floorKeyForDesign(route.id));
+  }
   for (const z of PROCEDURAL_FLOOR_ZS) keys.add(floorKeyForProcedural(proceduralFloorKey(z)));
   for (const spec of Object.values(createSpecDeck(runSeed))) keys.add(floorKeyForProcedural(spec.key));
   return keys;
@@ -281,6 +288,18 @@ export function normalizeFloorRunEntrySnapshot(input: unknown): FloorRunEntrySna
 
   const designFloor = designFloorAtZ(z);
   if (designFloor) {
+    if (portalBlocksDesignFloor(designFloor.id)) {
+      const specInput = input.spec;
+      const specSeed = isRecord(specInput) ? specInput.seed : undefined;
+      const spec = normalizeSpec(specInput, normalizeRunSeed(specSeed), z);
+      return {
+        key: floorKeyForProcedural(spec.key),
+        z,
+        baseFloor: spec.baseFloor,
+        spec: cloneSpec(spec),
+        procedural: true,
+      };
+    }
     const savedDesignId = typeof input.designFloorId === 'string' ? input.designFloorId : undefined;
     if (savedDesignId && savedDesignId !== designFloor.id) return undefined;
     return {
@@ -379,6 +398,19 @@ function entryForZ(state: GameState, z: number): FloorRunEntry | null {
   }
   const designFloor = designFloorAtZ(z);
   if (designFloor) {
+    if (portalBlocksDesignFloor(designFloor.id)) {
+      const run = ensureFloorRunState(state);
+      const spec = run.specs[proceduralFloorKey(z)] ?? makeProceduralFloorSpec(run.runSeed, z);
+      run.specs[spec.key] = spec;
+      return {
+        z,
+        baseFloor: spec.baseFloor,
+        spec,
+        procedural: true,
+        label: `Этаж ${formatFloorZ(z)}: ${spec.title}`,
+        color: spec.anomalyId === 'none' ? '#8cf' : '#c8f',
+      };
+    }
     return {
       z,
       baseFloor: designFloor.baseFloor,

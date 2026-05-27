@@ -10,8 +10,9 @@
 
 Основные ссылки:
 
-- itch.io: https://tenevik.itch.io/gigahrush
-- Онлайн-версия: https://gigahrush.bileter.workers.dev
+- MyIndie RU/CIS primary: https://myindie.ru/games/game/gigahrush
+- Онлайн-версия / direct build: https://gigahrush.bileter.workers.dev
+- itch.io mirror / EN: https://tenevik.itch.io/gigahrush
 - Fandom EN: https://samosborarchive-en.fandom.com/wiki/GIGAH_RUSH
 - r/playmygame пост: https://www.reddit.com/r/playmygame/comments/1tku91k/gigahrush/
 - itch.io forum topic: https://itch.io/t/6385827/gigahrush-free-browser-survival-horror-in-an-endless-concrete-apartment-block

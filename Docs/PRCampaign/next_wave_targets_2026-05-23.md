@@ -4,19 +4,19 @@ Purpose: continue the campaign without spam. Use this as the working queue for s
 
 Primary links:
 
-- itch.io: https://tenevik.itch.io/gigahrush
-- Direct browser build: https://gigahrush.bileter.workers.dev
+- MyIndie RU/CIS primary: https://myindie.ru/games/game/gigahrush
+- Direct browser build / fallback: https://gigahrush.bileter.workers.dev
+- itch.io mirror / EN: https://tenevik.itch.io/gigahrush
 - Telegram: https://t.me/gigah_rush
 - IndieDB: https://www.indiedb.com/games/gigahrush
 - iDev.Games: https://idev.games/game/gigah-rush
-- MyIndie: https://myindie.ru/games/game/gigahrush
 
 Sender/contact superseded by owner on 2026-05-26:
 
 - Sender name/nick: `Tenevik Games`
 - Contact email: `tenevik.games@gmail.com`
 - Telegram may be used in pitch copy: yes, `https://t.me/gigah_rush`
-- Use itch.io and already published resource pages as primary links.
+- Use MyIndie as the primary RU/CIS game page, direct build as a frictionless fallback, and itch.io as mirror/EN.
 - Do not mention `https://jirny.uk` in new posts, pitches, portal forms or support messages.
 - Historical logs still record already-sent mail from `jirnyak@gmail.com`; do not use that account for new outbound PR except to close or transfer old support threads.
 
@@ -27,7 +27,7 @@ Current release artifact:
 - current owner-updated best media folder: `tmp/prcampaign_screenshot_hunt_2026-05-23/selected_best/`.
 - square 3x3 contact sheet for social/portal preview: `tmp/prcampaign_screenshot_hunt_2026-05-23/selected_best/contact_sheet_3x3.png`; `contact_sheet_png.png` is the same image under the older filename.
 - PR agents should take GIFs/screenshots from `selected_best/` first: two GIF motion hooks plus the nine PNGs used in the 3x3 sheet.
-- Flexible media-first rule after PR 13: every public post, listing, devlog, forum thread or announcement must include visible project media: native screenshot/GIF/video/gallery/thumbnail or platform media upload. Prefer direct build plus itch mirror when links are allowed. If external links are forbidden or discouraged, do not evade the rule; make the post self-contained with native media, strong game description, developer disclosure and a legal platform-native path such as profile/listing/search wording where appropriate. If a platform allows neither links nor media, hold and record the blocker.
+- Flexible media-first rule after PR 13 and PR_18: every public post, listing, devlog, forum thread or announcement must include visible project media: native screenshot/GIF/video/gallery/thumbnail or platform media upload. Use audience-appropriate links: MyIndie first for RU/CIS, direct build as fallback, itch mirror/EN for international contexts. If external links are forbidden or discouraged, do not evade the rule; make the post self-contained with native media, strong game description, developer disclosure and a legal platform-native path such as profile/listing/search wording where appropriate. If a platform allows neither links nor media, hold and record the blocker.
 
 ## Completed Same-Day Fixes
 
@@ -39,6 +39,9 @@ Current release artifact:
 - 2ch /b/ thread is now live: https://2ch.org/b/res/333348764.html. Public recheck 2026-05-23 23:26 UTC / 2026-05-24 00:26 BST found 14 posts, 11 files and 6 posters; OP uses developer disclosure, direct Cloudflare build first, itch second, and the prepared media pack (`01_hero_gif_hell_blinking_eyes.gif`, `contact_sheet_3x3.png`, `02_gif_underhell_maronary_samosbor_loop.gif`). No duplicate thread, no bumping and no extra mirrors unless asked.
 - PR 14 follow-up on 2026-05-24 17:32-17:44 UTC: Game Jolt short post was fixed with a visible owner media/playable comment, full Game Jolt media update is live, IndieDB news is awaiting authorisation, HTML5GameDevs requires registration/password/Terms after attempted guest submit, DevTribe add path returns `403`, and Pikabu posting waits on owner login. PBBG.com `/games` now publicly links the r/PBBG post, but `/games/gigahrush` is still `404`.
 - PR 15 follow-up on 2026-05-25 05:49-06:10 UTC: owner-requested six-lane sweep found the next practical unlocks. Immediate community queue is Pikabu `gamedev`, forum.indie.ru, HTML5GameDevs, GameDev.net Projects/Indie Showcase, TIGSource Playtesting/DevLogs and MakeWebGames. Next media batch is Rely on Horror, Big Boss Battle, The Indie Informer, Dread Central, Get Indie Gaming and Splattercat. Quick portal/contact candidates are GameBolt and KickoutGames; Addicting Games/GamePix/CrazyGames/Poki/Yandex/Pikabu Games require account, licensing, SDK, QA or business review. Detailed owner login phrases and public recheck status are in `Docs/PRCampaign/PR_15.md`; dated KPI report is `Docs/PRCampaign/kpi_report_2026-05-25.md`.
+- PR 22 follow-up on 2026-05-27: RU forum lane completed. GameDev.ru live Tenevik thread: `https://gamedev.ru/projects/forum/?id=295560`; forum.indie.ru live MyIndie-first devlog thread: `https://forum.indie.ru/threads/devlog-gigakhrushch-podgotovka-vylazki-samosbor-i-a-life-v-brauzere.90/`. Both are monitoring-only now; do not duplicate. GameDev link-order caveat: body is direct/itch/MyIndie and should not be corrected with a link-only bump.
+- PR 27 follow-up on 2026-05-27: six-lane continuation completed. GameDev.net Projects is now live under `Tenevik` at `https://gamedev.net/projects/124-gigahrush/` with `Screenshots (3)`, `CREATED BY TENEVIK`, direct browser link and itch link verified in Chrome; shell public fetch still sees Cloudflare `403`, so use a clean normal browser challenge for logged-out verification. HTML5GameDevs remains author-visible/moderation-hidden with public `2F173/O`; TIGSource registration is still pending admin approval. DevTribe remains blocked by unconfirmed Tenevik email and `403`; StopGame contact attempt through `Пресс-релизы` is unconfirmed; Yandex/VK/Pikabu Games/Newgrounds remain separate portal-build/account tasks. Reports: `Docs/PRCampaign/PR_27_gamedevnet.md`, `Docs/PRCampaign/PR_27_en_forums.md`, `Docs/PRCampaign/PR_27_devtribe.md`, `Docs/PRCampaign/PR_27_ru_portals.md`, `Docs/PRCampaign/PR_27_upload_portals.md`, `Docs/PRCampaign/PR_27_next_targets.md`.
+- PR 24 follow-up on 2026-05-27: DTF follow-up is live at `https://dtf.ru/indie/5086991-gigahrusha-novaya-versiya-myindie-i-kadry-iz-samosbora`, but current public DOM shows no article media and no article anchors. The only safe DTF correction is editing that existing post to restore media/links plus public recheck. Do not create another same-day DTF post or link-only bump.
 - itch.io English/link cleanup pass on 2026-05-25 23:50 UTC / 2026-05-26 00:50 BST: owner requested an English itch page for the English-language platform. Six subagents prepared copy/fact checks, then the logged-in Opera GX dashboard saved English short description/body/tags and removed stale `Homepage -> https://jirny.uk`. Public logged-out recheck confirmed English copy on the game page/profile card and retained Community, Direct browser build, IndieDB and Game Jolt links. Remaining itch blockers: `noindex`, exact itch search, devlog permalink and iframe hash.
 - RU/CIS upload-platform scout on 2026-05-26: full report is `Docs/PRCampaign/ru_cis_upload_platforms_2026-05-26.md`. If the owner asks for one best Russian/CIS place to upload the game, answer **Яндекс Игры**, but classify it as a separate SDK portal-build task. If the owner asks for the fastest current-build upload scout, try **VK Play browser project** and **ИграйТут** first. **Пикабу Игры** is high reach but GamePush/cloud-save/legal-gated; **RuStore/NashStore** are no-go without Android wrapper.
 
@@ -59,8 +62,8 @@ Public/browser recheck at 20:59-21:26 UTC / 21:59-22:26 BST. No duplicate submis
 - The itch devlog direct permalink is a stronger blocker than before: public body says the page is flagged for moderator review and requires login. Use game page or devlog index only.
 - Public itch iframe `index.html` differs from the local `dist/index.html` / ZIP root (`10 673 105` bytes and SHA-256 `6bc3eff...` on itch versus `10 673 018` bytes and SHA-256 `732ced4...` locally). Verify the intended itch upload before making parity claims or syncing other portals from itch.
 - Direct Cloudflare build remains current and indexable: `10 673 018` bytes, SHA-256 `732ced4bc2d7bcf91edaec7382ca67d5f4707d1e75ed3c5a29f0ed5df3424d18`.
-- Release Announcements is live with 38 views and one post; DTF is live and successful with 1999 views, 472 hits, 12 comments, 10 favorites, 6 reactions and `total=2499`; DiscoverGG is live/indexable with one vote and the itch play link retained.
-- DTF counters after the media/link fix: `1999` views, `472` hits, `12` comments, `10` favorites, `6` reactions, `total=2499` at 21:44 UTC / 22:44 BST.
+- Release Announcements is live with 38 views and one post; DTF old post remains successful with `13` comments, `10` favorites, `7` reactions, `2 138` views, `569` hits and `2 737` total on the 2026-05-27 recheck; DTF follow-up is also live from PR 24. DiscoverGG is live/indexable with one vote and the itch play link retained.
+- DTF current watch set: old post `https://dtf.ru/indie/5077801-gigahrush-brauzernyj-survival-horror`; follow-up `https://dtf.ru/indie/5086991-gigahrusha-novaya-versiya-myindie-i-kadry-iz-samosbora`. Monitor comments/retention only; no duplicate DTF post.
 - Reddit r/playmygame remains live, non-NSFW and not removed, with only AutoModerator visible. Keep r/WebGames delayed and distinct.
 - DiscoverGG and iDev.Games are live/indexable enough for active links; GamHub, Fake Portal and FreeZonePlay are still not public; Querygame remains 404/not submitted.
 - IndieDB browser/account check confirms the game page and screenshot page open with expected titles, but shell still sees Cloudflare `403`. Newgrounds still requires manual/support work: Chrome is at login, Opera GX has the editable project tab, and the durable blocker remains RIP plus `9B` upload.
@@ -81,17 +84,17 @@ The owner marked DTF as successful on 2026-05-23. The repeatable pattern is not 
 
 | Priority | Surface | URL | Format | Guardrail / next step |
 | --- | --- | --- | --- | --- |
-| A | DevTribe | https://devtribe.ru/ | RU devlog/project diary | Browser was logged in as `jirnyak`, but `https://devtribe.ru/p/games-dev/add` returns `Ошибка #403`; do not publish from that old identity. Owner/account trust/support or a Tenevik account is needed before posting. |
+| A | DevTribe | https://devtribe.ru/ | RU devlog/project diary | Chrome is logged in as `TENEVIK`, but `tenevik.games@gmail.com` is unconfirmed, same-session create dialog shows `projects:0`, and `https://devtribe.ru/p/games-dev/add` returns `Ошибка #403`. Confirm the Tenevik email first, then create/unlock a project before posting. Do not paste the DTF follow-up verbatim. |
 | A | Pikabu gamedev community | https://pikabu.ru/community/gamedev | RU longpost/devlog | Use developer disclosure, GIF/screenshots and a concrete feedback ask; avoid a naked external-link dump. Browser currently waits on Yandex login/code. |
 | A | Indie Spotlight | https://t.me/indiespotlight | RU editorial/channel pitch | Ask whether editorial/free submission is appropriate; send GIF, 3-4 screenshots and playable links. |
 | A | MyIndie | https://myindie.ru/games/game/gigahrush | RU playable listing, now public | Monitor the new listing and comments; later update media/description only for a real new build. |
 | A | Game Jolt devlog | https://gamejolt.com/games/gigahrush/1072064 | EN game-page devlog | Done enough for today: full media update is live and the weaker short post now has a visible media/playable owner comment. Next Game Jolt action should be gallery media upload or a real new build/update, not another post. |
 | A | IndieDB article | https://www.indiedb.com/games/gigahrush | EN media-rich article/news | Submitted: `https://www.indiedb.com/games/gigahrush/news/gigahrush-clearer-media-for-the-browser-survival-horror-build`, currently awaiting authorisation. Recheck after roughly one day; do not duplicate-submit. |
 | A | Reddit monitoring after PR 13 | `r/PBBG`, `r/WebGames`, `r/Games Indie Sunday` | EN community posts already published | Monitor live URLs in `Docs/PRCampaign/PR_13.md`; answer only real questions/bugs; do not add another Reddit post without owner instruction. |
-| B | TIGSource DevLogs | https://forums.tigsource.com/ | Long-running EN devlog thread | Use process/design detail and commit to updates; not a one-off ad. |
-| B | HTML5 GameDevs Showcase | https://www.html5gamedevs.com/forum/8-game-showcase/ | EN browser tech/showcase post | Best EN fit, but PR 14 guest-submit attempt led to required registration details: display name, email, password, browser-name answer and Terms agreement. Owner must register/log in or explicitly approve account creation before final publish. |
+| B | TIGSource DevLogs | https://forums.tigsource.com/ | Long-running EN devlog thread | Blocked until admin approves the registered account. After approval, use process/design detail and commit to updates; not a one-off ad. |
+| B | HTML5 GameDevs Showcase | https://www.html5gamedevs.com/forum/8-game-showcase/ | EN browser tech/showcase post | Submitted in PR 23: `https://www.html5gamedevs.com/topic/73484-wip-gigahrush-free-html5webgl-survival-horror-arpg-shooter/`. Monitor moderator approval/public visibility; do not duplicate-post. |
 | B | Habr / vc.ru | https://habr.com/ru/hubs/gamedev/articles/ / https://vc.ru/ | Technical or case-study article | Only as useful engineering/business material with links secondary; promotional reposts are high risk. |
-| C | StopGame / PlayGround / Kanobu | https://stopgame.ru/ / https://www.playground.ru/ / https://kanobu.ru/ | Editorial or cautious community material | Do not use as direct advertising devlog without a new angle; check rules/account UI first. |
+| C | StopGame / PlayGround / Kanobu | https://stopgame.ru/ / https://www.playground.ru/ / https://kanobu.ru/ | Editorial or cautious community material | StopGame blog editor is writable but not safe for self-promo; PR_27 tried `https://stopgame.ru/contact` with `Пресс-релизы`, but no durable success banner appeared. Monitor for reply; do not immediately resend or publish a blog. |
 
 ## P0: 2ch /b/ Live Thread
 
@@ -198,8 +201,9 @@ I am migrating GIGAH|RUSH outreach from the old `jirnyak` account to Tenevik Gam
 Could you migrate or deactivate the old `jirnyak` account for this game and enable developer portal access for Tenevik Games, or send the current game submission URL?
 
 Game: GIGAH|RUSH
-itch.io: https://tenevik.itch.io/gigahrush
+MyIndie RU/CIS: https://myindie.ru/games/game/gigahrush
 Direct browser build: https://gigahrush.bileter.workers.dev
+itch.io mirror / EN: https://tenevik.itch.io/gigahrush
 Telegram: https://t.me/gigah_rush
 
 Best,
@@ -408,6 +412,16 @@ Current Reddit rule after PR 13:
 6. IndieHub still needs account/support if we continue quick RU listings; MyIndie is complete/public.
 7. Keep CWS Games skipped unless the strategy changes and adult-adjacent discovery becomes acceptable.
 
+## 2026-05-27 RU community/portal lane check
+
+Subagent 3 checked StopGame blogs, IndieHub and Pikabu Games in the authenticated Chrome session. No public blog post, portal submission, comment or game listing was made. PR_27 later attempted the safer StopGame `Пресс-релизы` contact route, but there was no durable success banner, so it is only an unconfirmed contact attempt.
+
+| Target | Current account/session fact | Today decision | Next step |
+| --- | --- | --- | --- |
+| StopGame blogs/contact | Logged in as `TENEVIK-GAMES`; `https://stopgame.ru/blogs/add` opens the blog editor with media tools and publish/draft buttons. `https://stopgame.ru/contact` was tried with topic `Пресс-релизы`, but no durable success banner was shown. | Do not publish a GIGAH\|RUSH blog post: official StopGame help says blogs are not for advertising or promoting own games/projects. Count contact as unconfirmed. | Monitor for reply; if retrying later, use a cleaner press-kit message, not a duplicate blog or immediate resend. |
+| IndieHub | Logged in as `TENEVIK`; authenticated `https://indiehub.ru/game/add` still returns `Произошла ошибка` and points to Telegram support. | Not a ready quick listing. | Ask `IndieHub \| Поддержка` for the current add-game path; no final click until a real form and preview/draft state exist. |
+| Pikabu Games | Logged in; `https://games.pikabu.ru/add-own-game/form` opens, but step 1 is `Авторизация в GamePush`. | Not publishable without SDK work. | Separate `portal=gamepush` task: GamePush SDK, cloud saves, support-only external link policy, legal/payment readiness, icons and QA before moderation. |
+
 ## 2026-05-23 Участок 4: account-gated / quick listing queue
 
 Public requirements/current URL check, no login and no submissions:
@@ -417,7 +431,7 @@ Public requirements/current URL check, no login and no submissions:
 | Game Jolt | https://gamejolt.com/games/gigahrush/1072064 | Add game from Store under user account; page needs description, tags, header/thumbnail, maturity rating, packages/releases/builds. Browser builds are supported; releases start hidden until explicitly published. | Public page is live after playable preview. Package `1093814`, release `1474942`, version `0.2.0`, build `1960153`; one screenshot, thumbnail and header are saved; public API reports the current `4 999 557` byte ZIP. |
 | iDev.Games | https://idev.games/game/gigah-rush | Public listing exists; edit page says the game has been released and is visible to everyone. Embed `/appvert/game/4008/game66400/` returns the game HTML title `ГИГАХРУЩ - САМОСБОР` with canvas content. | Completed; monitor moderation and polish media later if needed. |
 | MyIndie | https://myindie.ru/games/game/gigahrush | Public Web (HTML5) listing is live after PR 11. Uploaded cover, 3 screenshots and current `itch/gigahrush-itch.zip`; Web iframe opens the uploaded build. | Completed; monitor moderation, iframe, comments and counters. |
-| IndieHub | https://indiehub.ru/ and https://indiehub.ru/game/add | Public home exposes login/registration, service rules, support Telegram and `добавить игру`; current public `/game/add` returns “page does not exist” and asks to contact administration in Telegram. Rules require rights to publish and ban spam/malware/illegal/misleading content. | Blocked as quick listing until owner asks support or account reveals a working add flow. Draft-only if logged-in dashboard has a hidden state; otherwise do not final-click. |
+| IndieHub | https://indiehub.ru/ and https://indiehub.ru/game/add | Public home exposes login/registration, service rules, support Telegram and `добавить игру`; authenticated Chrome as `TENEVIK` still sees `/game/add` return “page does not exist” and asks to contact administration in Telegram. Rules require rights to publish and ban spam/malware/illegal/misleading content. | Support-blocked; no hidden logged-in add flow found. Do not final-click until support or the site exposes a real form. |
 | Kongregate | https://www.kongregate.com/en/developer/apply | Accepts HTML5/WebGL and iframe, but requires developer application approval, legal upload agreement, no third-party ads/account systems/non-Kongregate microtransactions, browser playability, screenshots, description, instructions, age rating, AI declaration and English language option. Publish is available only after approval. | Application submitted; wait for approval before Alpha materials. |
 
 Safest next order:
@@ -425,7 +439,7 @@ Safest next order:
 1. MyIndie: already public; monitor, do not resubmit.
 2. iDev.Games: already public; monitor, do not resubmit.
 3. Game Jolt: monitor live surface; add more media/devlog later only through trusted UI path.
-4. IndieHub: contact support or test logged-in dashboard; skip final submission if `/game/add` remains broken.
+4. IndieHub: contact support; logged-in dashboard was tested on 2026-05-27 and `/game/add` remains broken.
 5. Kongregate: application submitted; wait for approval before Alpha/upload.
 
 ## 2026-05-23 Участок 4: quick RU/listing public recheck
@@ -470,7 +484,7 @@ Scope: English-language user-generated indie/devlog/community-post surfaces simi
 | itch.io Release Announcements | https://itch.io/community | B | Designated itch area for creators to announce/promote own projects; already used once for GIGAH\|RUSH. | No duplicate today; use only for a real new release/update angle. |
 | Game Jolt Devlog / Communities | https://gamejolt.com/help-docs/creators/add-game and https://gamejolt.com/help-docs/start/communities | A | Native game-page devlogs plus topical communities; good fit because GIGAH\|RUSH page is already live. | Add more media first; post a devlog/update through trusted UI only, then share to relevant communities after reading each community rules. |
 | IndieDB Articles | https://www.indiedb.com/articles | A | Public article feed is full of update/devlog/playtest posts; GIGAH\|RUSH page already exists. | Prepare a media-rich English article tied to a concrete playable update, not a repost of the listing text. |
-| TIGSource DevLogs | https://forums.tigsource.com/ | B | Long-form indie devlog forum culture; best for technical/design process and repeated updates. | Register/login, create one thread with a strong first post and plan to maintain it; avoid link dump. |
+| TIGSource DevLogs | https://forums.tigsource.com/ | B | Long-form indie devlog forum culture; best for technical/design process and repeated updates. | Registration is pending admin approval after PR 23. After approval, create one thread with a strong first post and plan to maintain it; avoid link dump. |
 | r/WebGames | https://www.reddit.com/r/WebGames/ | A | Browser-game audience; PR 13 direct-link post is live. | Monitor `https://old.reddit.com/r/WebGames/comments/1tmhk3l/gigahrush_free_browser_survival_horror_arpg_in_an/`; do not repost. |
 | r/Games Indie Sunday | https://www.reddit.com/r/Games/comments/p9adzi | A | Large English gaming audience; PR 13 Indie Sunday post is live. | Monitor `https://old.reddit.com/r/Games/comments/1tmhl9l/gigahrush_tenevik_games_browser_survival_horror/`; respect cooldown and do not repost if removed. |
 | r/IndieDev | https://www.reddit.com/r/IndieDev/ | B | Posted during PR 13 and removed by moderator/automoderation. | Do not repost immediately; only modmail/manual review if owner explicitly asks. |

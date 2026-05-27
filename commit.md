@@ -2,11 +2,12 @@
 
 Эта инструкция применяется, когда пользователь дает короткую команду вроде `комить`, `сделай коммит`, `commit`, `закоммить и выложи`.
 
-Цель каждого коммита для ГИГАХРУЩ:
+Цель каждого релизного коммита для ГИГАХРУЩ:
 
-1. Собрать новый HTML5 ZIP для itch.io.
+1. Собрать и проверить HTML5 upload artifacts: itch.io ZIP, MyIndie RU ZIP-кандидат и Pikabu/GamePush ZIP-кандидат.
 2. Закоммитить проект и отправить коммит в GitHub.
 3. Убедиться, что Cloudflare Worker под аккаунтом `jirnyak` отдает свежую сборку на `https://gigahrush.bileter.workers.dev`.
+4. Обновить или проверить публичные площадки только когда пользователь явно просит upload/publish; обычный `комить` не означает blind-click в itch.io, MyIndie или Pikabu Games.
 
 Не останавливайся после локального коммита. Команда `комить` означает весь релизный цикл ниже.
 
@@ -17,6 +18,8 @@ git status --short
 npm run check
 npm run itch:build
 unzip -l itch/gigahrush-itch.zip | sed -n '1,40p'
+npm run pikabu:build
+unzip -l pikabu/gigahrush-pikabu.zip | sed -n '1,40p'
 npx wrangler whoami
 git add -A
 git status --short
@@ -30,6 +33,13 @@ curl -fsS "https://gigahrush.bileter.workers.dev/api/net/stats" | head -c 500
 ```
 
 Если любой обязательный шаг падает, остановись, прочитай реальную ошибку, исправь ее или явно сообщи блокер. Не объявляй релиз готовым по предположению.
+
+Перед PR/portal действиями сверяй актуальную операционную информацию с `KPI.md` и `Docs/PRCampaign/`, особенно:
+
+- `Docs/PRCampaign/campaign_plan_ru.md`;
+- свежий `Docs/PRCampaign/kpi_report_*.md`;
+- `Docs/PRCampaign/PR_16.md` для MyIndie;
+- `Docs/PRCampaign/PR_29_pikabu_gamepush_readiness.md`, `Docs/PRCampaign/PR_29_pikabu_games_prep.md` и `Docs/PRCampaign/pikabu_games_pre_submit_qa_2026-05-27.md` для Pikabu/GamePush.
 
 ## 1. Перед Коммитом
 
@@ -67,7 +77,17 @@ npm run smoke
 
 Если smoke невозможен из-за окружения, так и напиши в итоговом отчете.
 
-## 3. Новый ZIP Для itch.io
+## 3. HTML5 Upload Artifacts
+
+Релизный коммит теперь должен оставлять локально готовыми три upload-кандидата:
+
+- itch.io: `itch/gigahrush-itch.zip`;
+- MyIndie RU: тот же текущий HTML5 ZIP `itch/gigahrush-itch.zip`, потому что отдельного `myindie:build` скрипта сейчас нет;
+- Pikabu Games/GamePush: `pikabu/gigahrush-pikabu.zip`.
+
+Эти каталоги находятся в `.gitignore`, поэтому ZIP обычно не коммитятся. Это релизные артефакты для ручной загрузки/проверки, а не исходный код.
+
+### 3.1 itch.io ZIP
 
 Собери itch.io пакет:
 
@@ -89,7 +109,51 @@ unzip -l itch/gigahrush-itch.zip | sed -n '1,80p'
 
 Критично: `index.html` должен лежать в корне ZIP. Если внутри архива путь выглядит как `dist/index.html` или `itch/index.html`, пакет неправильный для itch.io.
 
-`itch/` находится в `.gitignore`, поэтому ZIP обычно не коммитится. Это релизный артефакт для загрузки на itch.io, а не исходный код. Если пользователь отдельно просит загрузить файл на itch.io, используй `itch/gigahrush-itch.zip` и настройки из `itch/ITCH_UPLOAD_NOTES.txt` и `itch_page_pack/ITCH_EDITOR_RUNBOOK.md`.
+Если пользователь отдельно просит загрузить файл на itch.io, используй `itch/gigahrush-itch.zip` и настройки из `itch/ITCH_UPLOAD_NOTES.txt` и `itch_page_pack/ITCH_EDITOR_RUNBOOK.md`.
+
+### 3.2 MyIndie RU ZIP-Кандидат
+
+MyIndie сейчас является основной RU/CIS игровой страницей:
+
+```txt
+https://myindie.ru/games/game/gigahrush
+```
+
+Для MyIndie используй свежий `itch/gigahrush-itch.zip`, собранный через `npm run itch:build`. Не придумывай отдельную сборку и не добавляй `myindie:build`, пока в репозитории нет измеренной причины. Перед ручным обновлением MyIndie проверь:
+
+```bash
+unzip -l itch/gigahrush-itch.zip | sed -n '1,80p'
+```
+
+Критично то же самое: `index.html` должен лежать в корне ZIP.
+
+Если пользователь просит только `комить`, не заходи в MyIndie dashboard и не обновляй страницу. В итоговом отчете достаточно указать, что MyIndie RU upload-кандидат - это свежий `itch/gigahrush-itch.zip`. Если пользователь явно просит `обновить MyIndie`, используй существующую опубликованную карточку, не создавай duplicate listing, загружай текущий ZIP, проверяй публичную страницу, Web iframe, ссылку на MyIndie в PR/KPI docs и не делай final publish/update без preview.
+
+Актуальные операционные факты для MyIndie держатся в `KPI.md`, `Docs/PRCampaign/campaign_plan_ru.md`, `Docs/PRCampaign/PR_16.md` и свежем `Docs/PRCampaign/kpi_report_*.md`.
+
+### 3.3 Pikabu Games / GamePush ZIP
+
+Собери отдельный Pikabu/GamePush artifact:
+
+```bash
+npm run pikabu:build
+```
+
+Ожидаемый результат:
+
+- `pikabu/index.html`;
+- `pikabu/gigahrush-pikabu.zip`;
+- `pikabu/PIKABU_UPLOAD_NOTES.txt`.
+
+Проверь форму архива:
+
+```bash
+unzip -l pikabu/gigahrush-pikabu.zip | sed -n '1,80p'
+```
+
+Критично: `index.html` должен лежать в корне ZIP. `pikabu:build` должен включать strict portal metadata только в скопированный `pikabu/index.html`, а не загрязнять обычный `dist/index.html`.
+
+Без `GAMEPUSH_PROJECT_ID`/`GAMEPUSH_PUBLIC_TOKEN` или `GP_PROJECT_ID`/`GP_PUBLIC_TOKEN` это только no-credential QA-кандидат. Для реальной отправки нужны владелец/юридический статус, проект GamePush, поле игрока `progress`, реальные public credentials, `npm run check:browser`, iframe SDK save/load QA, финальные иконки/обложка/скриншоты и ручной preview в форме Pikabu Games.
 
 ## 4. Wrangler И Cloudflare Аккаунт
 
@@ -208,15 +272,18 @@ curl -fsS "https://gigahrush.bileter.workers.dev/api/net/stats" | head -c 500
 
 Если нужно убедиться визуально после UI/render изменений, открой production URL или запусти smoke. Для canvas/WebGL изменений не ограничивайся только `curl`.
 
-## 8. itch.io Upload Notes
+## 8. Публичные Площадки И Upload Notes
 
-Каждый коммит должен создавать новый ZIP:
+Каждый релизный коммит должен создавать новые локальные upload-кандидаты:
 
 ```txt
 itch/gigahrush-itch.zip
+pikabu/gigahrush-pikabu.zip
 ```
 
-Но загрузка на itch.io может требовать браузерной авторизации. Если пользователь просит именно `комить`, минимально обязательное действие - собрать новый ZIP и указать его путь в отчете. Если пользователь просит `комить и залить на itch`, тогда:
+MyIndie RU использует текущий `itch/gigahrush-itch.zip` как HTML5 ZIP-кандидат.
+
+Загрузка на публичные площадки может требовать браузерной авторизации, owner/legal confirmation, captcha, preview или final submit. Если пользователь просит именно `комить`, минимально обязательное действие - собрать ZIP-кандидаты и указать их пути в отчете. Если пользователь просит `комить и залить на itch`, тогда:
 
 1. Открой `https://itch.io/game/edit/4587160`.
 2. Загрузи `itch/gigahrush-itch.zip`.
@@ -225,6 +292,21 @@ itch/gigahrush-itch.zip
 
 Настройки itch.io описаны в `itch/ITCH_UPLOAD_NOTES.txt` и `itch_page_pack/ITCH_EDITOR_RUNBOOK.md`.
 
+Если пользователь просит `комить и обновить MyIndie`, тогда:
+
+1. Открой существующую карточку MyIndie `https://myindie.ru/games/game/gigahrush` или edit URL из актуального PRCampaign отчета.
+2. Загрузи свежий `itch/gigahrush-itch.zip`.
+3. Не создавай новую карточку и не меняй публичную ссылку без явной причины.
+4. Проверь публичную страницу, Web iframe, кликабельные ссылки и что старая карточка осталась под Tenevik Games/TENEVIK.
+
+Если пользователь просит `комить и подготовить/отправить на Пикабу Игры`, тогда:
+
+1. Сверь `Docs/PRCampaign/pikabu_games_pre_submit_qa_2026-05-27.md`.
+2. Собери `pikabu/gigahrush-pikabu.zip` через `npm run pikabu:build`, при реальной отправке только с owner-provided GamePush public credentials в локальном окружении.
+3. Проверь root `index.html`, strict portal metadata, отсутствие встроенных секретов и отсутствие portal meta в обычном `dist/index.html`.
+4. Запусти `npm run check:browser`, затем реальный GamePush/Pikabu iframe save/load/pause/audio/content QA.
+5. Не нажимай final submit, не принимай legal/payment terms и не создавай GamePush/Pikabu проект от имени владельца без явной команды.
+
 ## 9. Итоговый Отчет Пользователю
 
 В конце коротко сообщи:
@@ -232,6 +314,8 @@ itch/gigahrush-itch.zip
 - commit hash;
 - что push в GitHub выполнен;
 - что `itch/gigahrush-itch.zip` собран;
+- что MyIndie RU upload-кандидат использует свежий `itch/gigahrush-itch.zip`;
+- что `pikabu/gigahrush-pikabu.zip` собран или какой Pikabu/GamePush блокер остался;
 - что `npm run check` прошел или какие проверки были запущены;
 - что Wrangler был под аккаунтом `jirnyak`;
 - что `https://gigahrush.bileter.workers.dev` отвечает свежей сборкой;
@@ -240,5 +324,5 @@ itch/gigahrush-itch.zip
 Пример:
 
 ```txt
-Готово: commit 1234abc отправлен в origin/main. `npm run check` и `npm run itch:build` прошли, ZIP лежит в `itch/gigahrush-itch.zip`. Wrangler показал аккаунт jirnyak, `npm run cf:deploy` завершился, `https://gigahrush.bileter.workers.dev/?v=1234abc` и `/api/net/stats` отвечают 200.
+Готово: commit 1234abc отправлен в origin/main. `npm run check`, `npm run itch:build` и `npm run pikabu:build` прошли. itch/MyIndie ZIP-кандидат лежит в `itch/gigahrush-itch.zip`, Pikabu/GamePush ZIP-кандидат лежит в `pikabu/gigahrush-pikabu.zip`. Wrangler показал аккаунт jirnyak, `npm run cf:deploy` завершился, `https://gigahrush.bileter.workers.dev/?v=1234abc` и `/api/net/stats` отвечают 200.
 ```

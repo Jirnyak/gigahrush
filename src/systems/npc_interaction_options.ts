@@ -2,6 +2,7 @@ import { EntityType, msg, type Entity, type GameState } from '../core/types';
 import { DESIGN_FLOOR_ROUTES } from '../data/design_floors';
 import { closeDiceGame, diceStakeFromNpc, startDiceGame } from './dice';
 import { closeDurakGame, durakStakeFromNpc, startDurakGame } from './durak';
+import { portalAllowsCasinoLikeContent } from './platform_bridge';
 import { npcHasQuestMarker } from './quests';
 
 export const CARD_DECK_ITEM_ID = 'card_deck';
@@ -54,6 +55,11 @@ export interface NpcInteractionOptionDef {
 }
 
 const customOptions: NpcInteractionOptionDef[] = [];
+const BUILTIN_MENU_OPTIONS = [
+  { id: 'talk', label: 'Говорить', order: 0 },
+  { id: 'quest', label: 'Задание', questMarkerLabel: 'Задание !', order: 10 },
+  { id: 'trade', label: 'Торг', order: 20 },
+] as const;
 
 const runtime: NpcInteractionInterfaceSnapshot = {
   open: false,
@@ -116,14 +122,28 @@ export function registerNpcInteractionOption(def: NpcInteractionOptionDef): void
   customOptions.sort((a, b) => a.order - b.order || a.id.localeCompare(b.id));
 }
 
+function menuOptionOrderCompare(aOrder: number, aId: string, bOrder: number, bId: string): number {
+  return aOrder - bOrder || aId.localeCompare(bId);
+}
+
+function pushBuiltinMenuOption(options: NpcMenuOption[], ctx: NpcInteractionContext, index: number): void {
+  const def = BUILTIN_MENU_OPTIONS[index];
+  if (!def) return;
+  const label = def.id === 'quest' && npcHasQuestMarker(ctx.npc, ctx.state) ? def.questMarkerLabel : def.label;
+  options.push({ id: def.id, label, order: def.order });
+}
+
 export function getNpcMenuOptions(ctx: NpcInteractionContext): NpcMenuOption[] {
-  const options: NpcMenuOption[] = [
-    { id: 'talk', label: 'Говорить', order: 0 },
-    { id: 'quest', label: npcHasQuestMarker(ctx.npc, ctx.state) ? 'Задание !' : 'Задание', order: 10 },
-    { id: 'trade', label: 'Торг', order: 20 },
-  ];
+  const options: NpcMenuOption[] = [];
+  let builtinIndex = 0;
   for (const def of customOptions) {
     if (!def.visible(ctx)) continue;
+    while (builtinIndex < BUILTIN_MENU_OPTIONS.length) {
+      const builtin = BUILTIN_MENU_OPTIONS[builtinIndex];
+      if (menuOptionOrderCompare(builtin.order, builtin.id, def.order, def.id) > 0) break;
+      pushBuiltinMenuOption(options, ctx, builtinIndex);
+      builtinIndex++;
+    }
     const disabledReason = def.disabledReason?.(ctx);
     options.push({
       id: def.id,
@@ -133,7 +153,11 @@ export function getNpcMenuOptions(ctx: NpcInteractionContext): NpcMenuOption[] {
       disabledReason,
     });
   }
-  return options.sort((a, b) => a.order - b.order || a.id.localeCompare(b.id));
+  while (builtinIndex < BUILTIN_MENU_OPTIONS.length) {
+    pushBuiltinMenuOption(options, ctx, builtinIndex);
+    builtinIndex++;
+  }
+  return options;
 }
 
 export function clampNpcMenuSelection(state: GameState, options: readonly NpcMenuOption[]): void {
@@ -206,7 +230,7 @@ registerNpcInteractionOption({
   id: 'durak',
   order: 30,
   label: ctx => `Играть в дурака (₽${durakStake(ctx)})`,
-  visible: hasCardDeck,
+  visible: ctx => portalAllowsCasinoLikeContent() && hasCardDeck(ctx),
   disabledReason: ctx => {
     const stake = durakStake(ctx);
     if (stake <= 0) return 'У NPC нет денег для ставки.';
@@ -237,7 +261,7 @@ registerNpcInteractionOption({
   id: 'dice',
   order: 31,
   label: ctx => `Играть в кости (₽${diceStake(ctx)})`,
-  visible: hasDice,
+  visible: ctx => portalAllowsCasinoLikeContent() && hasDice(ctx),
   disabledReason: ctx => {
     const stake = diceStake(ctx);
     if (stake <= 0) return 'У NPC нет денег для ставки.';
@@ -268,7 +292,7 @@ registerNpcInteractionOption({
   id: 'floor69_entertainment',
   order: 40,
   label: () => `Развлечься (₽${floor69EntertainmentPrice()})`,
-  visible: ctx => currentRouteId(ctx.state) === 'floor_69' && isFloor69Worker(ctx.npc),
+  visible: ctx => portalAllowsCasinoLikeContent() && currentRouteId(ctx.state) === 'floor_69' && isFloor69Worker(ctx.npc),
   disabledReason: ctx => {
     const price = floor69EntertainmentPrice();
     if (cleanMoney(ctx.player) < price) return `Нужно ₽${price}.`;

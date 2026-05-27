@@ -39,8 +39,9 @@
 
 Играть:
 
-- itch.io: https://tenevik.itch.io/gigahrush
+- MyIndie: https://myindie.ru/games/game/gigahrush
 - прямая браузерная версия: https://gigahrush.bileter.workers.dev
+- itch.io-зеркало: https://tenevik.itch.io/gigahrush
 - Telegram для обновлений: https://t.me/gigah_rush
 
 Мне особенно нужен фидбек по четырем вещам:
@@ -50,7 +51,7 @@
 3. Работает ли САМОСБОР как опасность, а не просто визуальный шум.
 4. Где вы закрыли вкладку или потеряли цель.
 
-Если запуск через прямую ссылку выглядит как долгий темный экран, попробуйте itch.io-страницу: часть игроков уже ловила странности на direct Cloudflare build/VPN, и это отдельная зона для фикса.
+Если запуск через прямую ссылку выглядит как долгий темный экран, попробуйте MyIndie: часть игроков уже ловила странности на direct Cloudflare build/VPN, и это отдельная зона для фикса.
 
 ### Вложения
 
@@ -65,7 +66,7 @@
 
 ### Ссылки
 
-- Основная страница: https://tenevik.itch.io/gigahrush
+- Основная RU-страница: https://myindie.ru/games/game/gigahrush
 - Direct build: https://gigahrush.bileter.workers.dev
 - Telegram: https://t.me/gigah_rush
 - IndieDB: https://www.indiedb.com/games/gigahrush
@@ -109,8 +110,9 @@
 
 Играть можно здесь:
 
-- itch.io: https://tenevik.itch.io/gigahrush
+- MyIndie: https://myindie.ru/games/game/gigahrush
 - прямая браузерная версия: https://gigahrush.bileter.workers.dev
+- itch.io-зеркало: https://tenevik.itch.io/gigahrush
 
 Я не прошу плюсов или продвижения. Мне полезнее конкретный фидбек: где непонятно, что делать; читается ли интерфейс; достаточно ли опасен САМОСБОР; не слишком ли темно/шумно; в какой момент хочется закрыть вкладку.
 
@@ -133,8 +135,9 @@
 
 ### Ссылки
 
-- itch.io: https://tenevik.itch.io/gigahrush
+- MyIndie: https://myindie.ru/games/game/gigahrush
 - Direct build: https://gigahrush.bileter.workers.dev
+- itch.io-зеркало: https://tenevik.itch.io/gigahrush
 - Telegram, только если в комментариях попросят обновления/контакт: https://t.me/gigah_rush
 - Не добавлять Newgrounds, itch devlog permalink, Querygame, GamHub, Fake Portal, FreeZonePlay, Gamemoor или Free Indie Games.
 
@@ -143,11 +146,11 @@
 - Не публиковать агентом и не использовать браузер/UI: эти тексты предназначены для ручной публикации владельцем.
 - Не копировать DTF-пост дословно и не делать вид, что автор случайный игрок. В обоих текстах раскрыта роль разработчика.
 - Не просить плюсы, лайки, подписки, рейтинг, репосты, "вывести в горячее" или любые формы накрутки.
-- Не делать link-only пост. Если площадка режет внешние ссылки, оставить itch.io и убрать direct/Telegram из тела, но не превращать пост в голую рекламу.
+- Не делать link-only пост. Если площадка режет внешние ссылки, оставить MyIndie для RU/CIS и убрать direct/Telegram из тела, но не превращать пост в голую рекламу.
 - Если площадка требует рекламную маркировку или пометку промо, использовать ее. Не спорить с модерацией.
 - На Пикабу не публиковать как коммерческую рекламу и не добавлять агрессивный CTA. Сохранять формат истории разработки и запроса конкретного фидбека.
 - На DevTribe предпочтительнее сначала создать/оформить проект, затем публиковать дневниковую запись в проекте.
 - Не использовать неактивные/проблемные ссылки: Newgrounds сейчас RIP/blocked; itch devlog permalink login-gated/moderation; Querygame не submitted; GamHub/Fake Portal/FreeZonePlay не публичны.
 - Не делать duplicate threads/posts в тот же день на той же площадке. После публикации отвечать только на реальные вопросы, баги и конкретный фидбек.
-- Если direct Cloudflare build вызывает жалобу на темный/зависший экран, отвечать честно: известен риск загрузки/direct/VPN, первичная ссылка для проверки - itch.io.
+- Если direct Cloudflare build вызывает жалобу на темный/зависший экран, отвечать честно: известен риск загрузки/direct/VPN, первичная RU-ссылка для проверки - MyIndie.
 - Контент описывать как survival horror, не NSFW/adult. Не скрывать наличие боя, крови, трупов, сирен и тревожных событий.

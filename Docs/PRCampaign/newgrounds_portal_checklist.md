@@ -42,7 +42,7 @@
 | IndieDB | Создать страницу игры, добавить изображения/GIF, ссылку на itch и онлайн-версию, затем опубликовать news/update. IndieDB позиционирует профиль как developer-driven promo toolkit с profile, news, image gallery, video hosting и download hosting. | RU/EN pitch в `Docs/PRCampaign/copy_pack_ru.md`; screenshots/GIF в `itch_page_pack/approved_frontpage/`; cover/capsules/social/media wall в `itch_page_pack/assets/` и `capsules/`; live links из `Docs/PRCampaign/campaign_plan_ru.md`. | Нужен аккаунт/логин; лучше подготовить EN long description и 3-6 EN captions. Для страницы без downloadable build можно сразу вести на itch/Cloudflare, но для сильной страницы нужен trailer или gameplay video. |
 | IndieDB | Загрузить файл как download, если решено давать HTML ZIP не только ссылкой. | `itch/gigahrush-itch.zip` уже маленький и содержит `index.html` в корне. | Проверить лицензионный текст/README внутри download pack. Может понадобиться отдельный archive note: "open index.html / browser build". |
 | ИграйТут | Предварительно собрать заявку/метаданные и проверить контент на соответствие: название, short/long description, screenshots, возрастной рейтинг, отсутствие внешних ссылок в описании. | RU-описание, screenshots, 16:9 background/banner/media wall. | Для реальной публикации, если используется SDK ИграйТут, потребуется SDK init и облачные сохранения; не хватает 512x512 icon, 1280x720 cover, 640x360 thumbnail, 16:9 screenshots без альфа в нужной сетке. |
-| Пикабу Игры | Подготовить письмо на `games@pikabu.ru` или заявку через официальное сообщество, приложив itch/Cloudflare links и медиа. | RU-copy, публичная itch page, онлайн-версия, PNG/GIF. | Реальная публикация требует GamePush-кабинет/договорные условия и облачные сохранения. Также нужен аудит контента: Пикабу запрещает 18+, казино-механики, ненормативную лексику и внешние ссылки в игре кроме поддержки. |
+| Пикабу Игры | Подготовить письмо на `games@pikabu.ru` или заявку через официальное сообщество, приложив MyIndie/direct-build links и медиа. | RU-copy, публичная MyIndie page, онлайн-версия, itch mirror, PNG/GIF. | Реальная публикация требует GamePush-кабинет/договорные условия и облачные сохранения. Также нужен аудит контента: Пикабу запрещает 18+, казино-механики, ненормативную лексику и внешние ссылки в игре кроме поддержки. |
 
 ## Нужна отдельная сборка
 
@@ -82,3 +82,13 @@
 - Yandex Games requirements: https://yandex.com/dev/games/doc/en/concepts/requirements
 - Пикабу Игры technical docs: https://games.pikabu.ru/page/tehnicheskaya-dokumentatsiya
 - ИграйТут publishing rules: https://igraytut.ru/pages/publishing-rules
+
+## 2026-05-27 Newgrounds Check-Only Update
+
+Scope: check official requirement and current blocker only. No upload, no `/parkfile`, no publish, no project mutation.
+
+- Official Newgrounds wiki still says games can be SWF or HTML5 ZIP, ZIP must have `index.html` in the archive root, it will load in an iframe, and the project preview appears before publish. A `403` after ZIP upload usually means `index.html` is inside a folder rather than root.
+- Public recheck at 20:09 UTC / 21:09 BST: `https://www.newgrounds.com/portal/view/1033564` redirects to `https://www.newgrounds.com/portal/rip/1033564`; page title is `Eulogy for: GIGAH RUSH`, dates are `May 22, 2026 - May 22, 2026`, and the page says `This entry was deleted.`
+- Account/session check: Chrome opens `https://www.newgrounds.com/projects/games/7759223/details` but shows `ERROR - You do not have permission to view this page`; Opera GX redirects the same URL to `https://www.newgrounds.com/login`. The prior project upload bug was therefore not retested.
+- Current local artifact fact: `itch/gigahrush-itch.zip` is now `5 194 294` bytes, contains `index.html` at archive root, and the root `index.html` is `11 302 283` bytes. This supersedes older Newgrounds support wording that referenced `4 999 557` bytes.
+- Durable decision: keep Newgrounds out of active campaign links. Publish remains forbidden until the correct logged-in account or Newgrounds support accepts the current real archive in preview and the preview plays.

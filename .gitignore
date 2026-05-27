@@ -4,6 +4,7 @@
 node_modules/
 dist/
 itch/
+pikabu/
 .test-build/
 .wrangler/
 coverage/

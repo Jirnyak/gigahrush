@@ -4,8 +4,9 @@
 
 Основные ссылки:
 
-- itch.io: https://tenevik.itch.io/gigahrush
-- Прямая браузерная версия: https://gigahrush.bileter.workers.dev
+- MyIndie RU/CIS primary: https://myindie.ru/games/game/gigahrush
+- Прямая браузерная версия / fallback: https://gigahrush.bileter.workers.dev
+- itch.io mirror / EN: https://tenevik.itch.io/gigahrush
 - Telegram проекта: https://t.me/gigah_rush
 - Game Jolt: https://gamejolt.com/games/gigahrush/1072064
 - DTF proof / удачный RU-пост: https://dtf.ru/indie/5077801-gigahrush-brauzernyj-survival-horror
@@ -60,8 +61,9 @@ Message body:
 
 Игра запускается прямо в браузере без установки: игрок собирает еду, воду, патроны и документы, берет контракты, торгует, сталкивается с фракциями и переживает САМОСБОР, который может закрыть двери и изменить этаж. Внутри есть процедурные текстуры/спрайты/звук, WebGL/canvas raycaster, A-Life NPC и перманентные последствия смертей.
 
-Ссылка: https://tenevik.itch.io/gigahrush
+Основная RU-страница: https://myindie.ru/games/game/gigahrush
 Прямая версия: https://gigahrush.bileter.workers.dev
+itch.io-зеркало: https://tenevik.itch.io/gigahrush
 Telegram проекта: https://t.me/gigah_rush
 
 Подскажите, пожалуйста, можно ли предложить игру для короткого поста/подборки Indie Spotlight? Прикладываю GIF и компактный лист скриншотов.
@@ -95,7 +97,7 @@ Message body:
 
 Игрок ходит в вылазки по бесконечной бетонной мегаструктуре: ресурсы, патроны, торговля, контракты, фракции, A-Life NPC и САМОСБОР, который меняет правила этажа. Установка не нужна, игра открывается в браузере.
 
-Играть: https://tenevik.itch.io/gigahrush
+Играть: https://myindie.ru/games/game/gigahrush
 Прямая версия: https://gigahrush.bileter.workers.dev
 
 Пишу как разработчик. Буду рад, если проект подойдет для короткой заметки или подборки инди-игр.
@@ -127,8 +129,9 @@ Message body:
 
 Особенности: запуск без установки, процедурный WebGL/canvas raycaster, САМОСБОР, фракции, торговля, контракты, A-Life NPC и перманентные последствия.
 
-itch.io: https://tenevik.itch.io/gigahrush
+MyIndie: https://myindie.ru/games/game/gigahrush
 Web: https://gigahrush.bileter.workers.dev
+itch.io-зеркало: https://tenevik.itch.io/gigahrush
 Контакт: https://t.me/gigah_rush
 
 Разработчик: Tenevik Games. Проект бесплатный и уже playable.
@@ -171,8 +174,9 @@ Message body:
 
 Технически это zero-runtime-dependency TypeScript/Vite browser game: процедурные текстуры, процедурные спрайты и звук, WebGL raycasting, canvas HUD, плоские массивы сущностей и typed-array world storage.
 
-Играть: https://tenevik.itch.io/gigahrush
+Играть: https://myindie.ru/games/game/gigahrush
 Прямая browser build: https://gigahrush.bileter.workers.dev
+itch.io-зеркало: https://tenevik.itch.io/gigahrush
 Telegram: https://t.me/gigah_rush
 
 Буду благодарен, если проект подойдет для программы поддержки инди-разработчиков, короткой новости, подборки или редакционного просмотра. Прикладываю GIF и скриншоты с геймплеем, интерфейсом контрактов и A-Life/фракциями.
@@ -215,8 +219,9 @@ Message body:
 Это playable build без установки: вылазки за ресурсами, контракты, торговля, фракции, A-Life NPC, перманентные смерти и САМОСБОР, который может закрыть двери и изменить этаж. Игра вдохновлена темой Самосбора, но сделана как самостоятельный браузерный проект.
 
 Ссылки:
-itch.io - https://tenevik.itch.io/gigahrush
+MyIndie - https://myindie.ru/games/game/gigahrush
 direct web build - https://gigahrush.bileter.workers.dev
+itch.io mirror / EN - https://tenevik.itch.io/gigahrush
 Telegram - https://t.me/gigah_rush
 
 Прикладываю GIF и несколько скриншотов: геймплей под САМОСБОРОМ, подготовка вылазки, контрактный экран и фракции/A-Life. Если формат подходит, буду рад короткой новости, редакционному просмотру или включению в indie-подборку.
@@ -258,8 +263,9 @@ Message body:
 ГИГАХРУЩ - бесплатная браузерная survival horror / ARPG shooter игра про вылазки в бесконечной хрущевке: игрок готовит снаряжение, берет контракты, добывает еду/воду/патроны, торгует, встречает фракции и переживает САМОСБОР. Важный угол не "еще один ретро-шутер", а процедурная жилая мегаструктура с A-Life NPC и последствиями.
 
 Играть можно сразу в браузере:
-https://tenevik.itch.io/gigahrush
+https://myindie.ru/games/game/gigahrush
 https://gigahrush.bileter.workers.dev
+https://tenevik.itch.io/gigahrush
 
 Если это подходит для короткой новости, "Индикатора", подборки странных инди или авторского first-look, пришлю дополнительные факты/скриншоты/маршрут на первые 10 минут. Несколько медиа прикладываю сразу.
 ```
@@ -288,5 +294,5 @@ Free browser survival horror / ARPG shooter: expeditions through an endless conc
 Для Telegram-бота с лимитом:
 
 ```txt
-ГИГАХРУЩ - бесплатный браузерный survival horror / ARPG shooter про вылазки в бесконечной хрущевке. САМОСБОР, контракты, торговля, фракции, A-Life NPC. Играть: https://tenevik.itch.io/gigahrush
+ГИГАХРУЩ - бесплатный браузерный survival horror / ARPG shooter про вылазки в бесконечной хрущевке. САМОСБОР, контракты, торговля, фракции, A-Life NPC. Играть: https://myindie.ru/games/game/gigahrush
 ```

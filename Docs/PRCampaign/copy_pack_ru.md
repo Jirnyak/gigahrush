@@ -4,8 +4,9 @@
 
 Основные ссылки:
 
-- itch.io: https://tenevik.itch.io/gigahrush
-- Онлайн-версия: https://gigahrush.bileter.workers.dev
+- MyIndie RU/CIS primary: https://myindie.ru/games/game/gigahrush
+- Онлайн-версия / direct build: https://gigahrush.bileter.workers.dev
+- itch.io mirror / EN: https://tenevik.itch.io/gigahrush
 
 ## Короткий pitch, до 280 символов
 
@@ -23,8 +24,9 @@
 
 Игра запускается прямо в браузере, без установки. Сделана на TypeScript/Vite, WebGL/canvas и процедурных ассетах.
 
-Играть на itch.io: https://tenevik.itch.io/gigahrush  
+Основная RU-страница: https://myindie.ru/games/game/gigahrush
 Онлайн-версия: https://gigahrush.bileter.workers.dev
+itch.io-зеркало: https://tenevik.itch.io/gigahrush
 
 Буду рад фидбеку по ощущению вылазок, читаемости интерфейса, балансу выживания и тому, насколько жутко работает САМОСБОР.
 
@@ -57,8 +59,9 @@ I would especially appreciate feedback on expedition pacing, readability, surviv
 
 ГИГАХРУЩ работает прямо в браузере. Текущий билд уже содержит полноценный survival loop: процедурные и ручные этажи, бой, торговлю, квесты, фракции, A-Life NPC, экономику, сохранения, НЕТ-СФЕРУ и варианты САМОСБОРА.
 
-Страница itch.io: https://tenevik.itch.io/gigahrush  
+Основная RU-страница MyIndie: https://myindie.ru/games/game/gigahrush
 Онлайн-версия: https://gigahrush.bileter.workers.dev
+itch.io mirror / EN: https://tenevik.itch.io/gigahrush
 
 Если вам подходит такой формат, буду рад, если вы посмотрите игру для новости, подборки, стрима, кураторского списка или короткого поста. Могу отдельно прислать скриншоты, GIF, краткое описание, факты о разработке и ответы на вопросы.
 

@@ -1209,6 +1209,10 @@ function insertTop(entries: AlifeLeaderboardEntry[], entry: AlifeLeaderboardEntr
   if (entries.length > limit) entries.length = limit;
 }
 
+function canEnterTop(entries: readonly AlifeLeaderboardEntry[], score: number, limit: number): boolean {
+  return entries.length < limit || score > entries[entries.length - 1].score;
+}
+
 export function getAlifeLeaderboardSnapshot(state: GameState, player: Entity, limit = 100): AlifeLeaderboardSnapshot {
   const alife = ensureAlifeState(state);
   const boundedLimit = Math.max(1, Math.min(100, Math.floor(limit)));
@@ -1241,6 +1245,7 @@ export function getAlifeLeaderboardSnapshot(state: GameState, player: Entity, li
     totalAlive++;
     const score = rankScore(recordRankStats(record));
     if (score > playerScore) betterThanPlayer++;
+    if (!canEnterTop(entries, score, boundedLimit)) continue;
     insertTop(entries, {
       rank: 0,
       id: `alife:${record.id}`,

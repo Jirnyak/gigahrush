@@ -22,6 +22,11 @@ function walk(dir) {
 
 const files = walk(srcRoot);
 const sourceCache = new Map();
+const variableInitializerCache = new Map();
+const stringConstantsCache = new Map();
+const stringArrayConstantsCache = new Map();
+const numberConstantsCache = new Map();
+const exportedFunctionEntriesCache = new Map();
 
 function sourceFile(relPath) {
   const abs = path.join(root, relPath);
@@ -83,19 +88,28 @@ function forEachNode(sf, cb) {
   visit(sf);
 }
 
-function varInitializer(relPath, name) {
+function variableInitializers(relPath) {
   const sf = sourceFile(relPath);
-  let found;
+  const cached = variableInitializerCache.get(sf.fileName);
+  if (cached) return cached;
+  const initializers = new Map();
   forEachNode(sf, node => {
     if (!ts.isVariableDeclaration(node)) return;
-    if (!ts.isIdentifier(node.name) || node.name.text !== name) return;
-    found = node.initializer;
+    if (!ts.isIdentifier(node.name)) return;
+    initializers.set(node.name.text, node.initializer);
   });
-  return found;
+  variableInitializerCache.set(sf.fileName, initializers);
+  return initializers;
+}
+
+function varInitializer(relPath, name) {
+  return variableInitializers(relPath).get(name);
 }
 
 function stringConstants(relPath) {
   const sf = sourceFile(relPath);
+  const cached = stringConstantsCache.get(sf.fileName);
+  if (cached) return cached;
   const constants = new Map();
   for (const stmt of sf.statements) {
     if (!ts.isVariableStatement(stmt)) continue;
@@ -105,6 +119,7 @@ function stringConstants(relPath) {
       if (text !== undefined) constants.set(decl.name.text, text);
     }
   }
+  stringConstantsCache.set(sf.fileName, constants);
   return constants;
 }
 
@@ -144,6 +159,8 @@ function stringArrayValues(expr, constants = new Map(), arrayConstants = new Map
 
 function stringArrayConstants(relPath) {
   const sf = sourceFile(relPath);
+  const cached = stringArrayConstantsCache.get(sf.fileName);
+  if (cached) return cached;
   const constants = stringConstants(relPath);
   const arrays = new Map();
   for (const stmt of sf.statements) {
@@ -154,11 +171,14 @@ function stringArrayConstants(relPath) {
       if (values.length > 0) arrays.set(decl.name.text, values);
     }
   }
+  stringArrayConstantsCache.set(sf.fileName, arrays);
   return arrays;
 }
 
 function numberConstants(relPath) {
   const sf = sourceFile(relPath);
+  const cached = numberConstantsCache.get(sf.fileName);
+  if (cached) return cached;
   const constants = new Map();
   for (const stmt of sf.statements) {
     if (!ts.isVariableStatement(stmt)) continue;
@@ -168,6 +188,7 @@ function numberConstants(relPath) {
       if (value !== undefined) constants.set(decl.name.text, value);
     }
   }
+  numberConstantsCache.set(sf.fileName, constants);
   return constants;
 }
 
@@ -495,6 +516,8 @@ function manifestExportRunnerName(name) {
 
 function exportedFunctionEntries(relPath) {
   const sf = sourceFile(relPath);
+  const cached = exportedFunctionEntriesCache.get(sf.fileName);
+  if (cached) return cached;
   const out = [];
   for (const stmt of sf.statements) {
     if (ts.isFunctionDeclaration(stmt) && stmt.name && hasExportModifier(stmt)) {
@@ -510,6 +533,7 @@ function exportedFunctionEntries(relPath) {
       }
     }
   }
+  exportedFunctionEntriesCache.set(sf.fileName, out);
   return out;
 }
 

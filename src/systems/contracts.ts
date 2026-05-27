@@ -63,6 +63,13 @@ const ZHELEMISH_SAMPLE_SEALED = 'zhelemish_sample_sealed';
 const ZHELEMISH_SAMPLE_CONTAMINATED = 'zhelemish_sample_contaminated';
 const ZHELEMISH_SAMPLE_ZONE_TAG = 'zhelemish_sample_site';
 const GOVNYAK_COURIER_ROUTE_SET = new Set<string>(GOVNYAK_COURIER_CONTRACT_IDS);
+const CONTRACT_BY_ID = new Map<string, ContractDef>();
+for (const def of CONTRACTS) {
+  if (!CONTRACT_BY_ID.has(def.id)) CONTRACT_BY_ID.set(def.id, def);
+}
+const GOVNYAK_COURIER_DEFS: readonly ContractDef[] = GOVNYAK_COURIER_CONTRACT_IDS
+  .map(id => CONTRACT_BY_ID.get(id))
+  .filter((def): def is ContractDef => def !== undefined);
 
 interface ZhelemishNiiTarget {
   kind: 'procedural_mushroom' | 'living_cellar';
@@ -431,6 +438,10 @@ export function isContractHiddenForAssignment(def: ContractDef): boolean {
   return def.tags.includes('debug_only');
 }
 
+function contractById(contractId: string | undefined): ContractDef | undefined {
+  return contractId === undefined ? undefined : CONTRACT_BY_ID.get(contractId);
+}
+
 function questObjectiveKindForContract(def: ContractDef): QuestRewardObjectiveKind {
   if (def.tags.includes('repair')) return 'repair';
   if (def.tags.includes('theft') || def.tags.includes('steal')) return 'steal';
@@ -701,7 +712,7 @@ export function notifyCleanupToolUse(
 
   for (const q of activeContracts(state)) {
     if (q.type !== QuestType.FETCH || !q.targetItem || !q.contractId) continue;
-    const def = CONTRACTS.find(c => c.id === q.contractId);
+    const def = contractById(q.contractId);
     if (!def || !isCleanupTargetRoom(world, state, def, x, y)) continue;
 
     const needed = q.targetCount ?? 1;
@@ -989,10 +1000,8 @@ function anyGovnyakCourierHistory(state: GameState): boolean {
   return state.quests.some(q => isGovnyakCourierContractId(q.contractId));
 }
 
-function govnyakCourierDefs(): ContractDef[] {
-  return GOVNYAK_COURIER_CONTRACT_IDS
-    .map(id => CONTRACTS.find(c => c.id === id))
-    .filter((def): def is ContractDef => def !== undefined);
+function govnyakCourierDefs(): readonly ContractDef[] {
+  return GOVNYAK_COURIER_DEFS;
 }
 
 export function canCompleteGovnyakCourierEndpoint(
@@ -1014,7 +1023,7 @@ export function canCompleteGovnyakCourierEndpoint(
   }
 
   if (!q.contractId || q.type !== QuestType.VISIT) return undefined;
-  const def = CONTRACTS.find(c => c.id === q.contractId);
+  const def = contractById(q.contractId);
   if (!def || def.type !== QuestType.VISIT) return undefined;
   if (q.targetRoomType === undefined && !def.target.roomName) return undefined;
   if (!isQuestTargetOnCurrentFloor(q, state)) return false;
@@ -1136,12 +1145,32 @@ export function activeContracts(state: GameState) {
   return state.quests.filter(q => !q.done && q.contractId);
 }
 
+function assignedContractIds(state: GameState): Set<string> {
+  const ids = new Set<string>();
+  for (const q of state.quests) if (q.contractId !== undefined) ids.add(q.contractId);
+  return ids;
+}
+
 export function listAvailableContracts(state: GameState, limit = 6) {
-  return CONTRACTS
-    .filter(c => !isContractHiddenForAssignment(c))
-    .filter(c => !state.quests.some(q => q.contractId === c.id))
-    .sort((a, b) => Number(b.target.floor === state.currentFloor) - Number(a.target.floor === state.currentFloor))
-    .slice(0, limit);
+  const assignedIds = assignedContractIds(state);
+  const sliceLimit = Number.isFinite(limit) ? Math.trunc(limit) : limit;
+  if (sliceLimit === 0) return [];
+
+  const currentFloor: ContractDef[] = [];
+  const otherFloors: ContractDef[] = [];
+  const bounded = sliceLimit > 0;
+  for (const def of CONTRACTS) {
+    if (isContractHiddenForAssignment(def) || assignedIds.has(def.id)) continue;
+    if (def.target.floor === state.currentFloor) {
+      currentFloor.push(def);
+      if (bounded && currentFloor.length >= sliceLimit) return currentFloor;
+    } else if (!bounded || otherFloors.length < sliceLimit) {
+      otherFloors.push(def);
+    }
+  }
+
+  if (bounded) return currentFloor.concat(otherFloors.slice(0, sliceLimit - currentFloor.length));
+  return currentFloor.concat(otherFloors).slice(0, limit);
 }
 
 export function spawnContract(state: GameState): boolean {
@@ -1167,7 +1196,7 @@ export function spawnContractById(
   sourceTags: string[] = [],
   rumorIds?: string[],
 ): boolean {
-  const def = CONTRACTS.find(c => c.id === contractId);
+  const def = contractById(contractId);
   if (!def) {
     state.msgs.push(msg(`[QUEST] Контракт не найден: ${contractId}`, state.time, '#f84'));
     publishContractFailure(state, 'missing_definition');

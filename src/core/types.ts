@@ -1222,7 +1222,7 @@ export interface InputState {
   sleep: boolean;               // Z key — hold to sleep
   controls: boolean;            // Tab by default — hotkey / rebind screen
   uiSettings: boolean;          // U key — configurable HUD element screen
-  controlReset: boolean;        // Backspace by default — reset selected binding
+  controlReset: boolean;        // Backspace by default — clear selected binding
   mouse: { dx: number; dy: number; locked: boolean; };
   touch: { moveX: number; moveY: number; lookX: number; lookY: number; active: boolean; };
 }

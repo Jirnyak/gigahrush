@@ -6,8 +6,9 @@
 
 Основные ссылки:
 
-- itch.io: https://tenevik.itch.io/gigahrush
-- Direct browser build: https://gigahrush.bileter.workers.dev
+- MyIndie RU/CIS primary: https://myindie.ru/games/game/gigahrush
+- Direct browser build / fallback: https://gigahrush.bileter.workers.dev
+- itch.io mirror / EN: https://tenevik.itch.io/gigahrush
 - RU wiki: https://samosborarchive.fandom.com/ru/wiki/ГИГАХРУЩ
 - RU wiki 2: https://samosb0r.fandom.com/ru/wiki/ГИГАХРУЩ
 - EN wiki: https://samosborarchive-en.fandom.com/wiki/GIGAH_RUSH

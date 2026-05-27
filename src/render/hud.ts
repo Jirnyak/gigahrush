@@ -60,11 +60,11 @@ import {
   isNetTerminalGenDeniedOpen,
   isNetTerminalGenOpen,
 } from '../systems/net_terminal_gen';
-import { getComputerOverlaySnapshot } from '../systems/computers';
-import { getGamblingOverlaySnapshot } from '../systems/gambling';
+import { getComputerOverlaySnapshot, isComputerOverlayOpen } from '../systems/computers';
+import { getGamblingOverlaySnapshot, isGamblingOverlayOpen } from '../systems/gambling';
 import { findInteractionTarget } from '../systems/interactions';
 import { npcQuestMarkerState, type NpcQuestMarkerTone } from '../systems/quests';
-import { getNetHackOverlaySnapshot } from '../systems/net_hack';
+import { getNetHackOverlaySnapshot, isNetHackOverlayOpen } from '../systems/net_hack';
 import { getMapEditorSnapshot, isMapEditorOpen } from '../systems/map_editor';
 import { isEmergencyPanelMenuOpen } from '../systems/emergency_panels';
 import {
@@ -102,6 +102,38 @@ const ZONE_FACTION_NAMES: Record<ZoneFaction, string> = {
 };
 const MSG_MAX = 12;
 const MSG_SCAN_MAX = 32;
+const HUD_MESSAGE_TTL_SECONDS = 8;
+const HUD_MESSAGE_FADE_START_SECONDS = 6;
+const COMBAT_SIGNAL_TTL_SECONDS = 1.15;
+
+export interface HudPerfDebugSnapshot {
+  fps?: number;
+  frameMsAvg?: number;
+  frameMsMax?: number;
+  aiMs?: number;
+  renderMs?: number;
+  hudMs?: number;
+  liveAi?: number;
+  visibleSprites?: number;
+  drawnSprites?: number;
+  visibleEntityQueryResults?: number;
+  aiHot?: number;
+  aiWarm?: number;
+  aiCold?: number;
+  aiUpdatedHot?: number;
+  aiUpdatedWarm?: number;
+  aiUpdatedCold?: number;
+  aiSkipped?: number;
+}
+
+export function hudMessageAgeSeconds(messageTime: number, gameTime: number): number {
+  if (!Number.isFinite(messageTime) || !Number.isFinite(gameTime)) return Number.POSITIVE_INFINITY;
+  return Math.max(0, gameTime - messageTime);
+}
+
+export function hudMessageVisible(messageTime: number, gameTime: number, ttlSeconds = HUD_MESSAGE_TTL_SECONDS): boolean {
+  return hudMessageAgeSeconds(messageTime, gameTime) <= ttlSeconds;
+}
 
 declare global {
   interface Window {
@@ -349,7 +381,8 @@ function drawRouteCueHint(
   rect: UiRect,
   sx: number,
   sy: number,
-  time: number,
+  animationTime: number,
+  gameTime: number,
   player: Entity,
   world: World,
   cue: RouteCueHud,
@@ -365,12 +398,12 @@ function drawRouteCueHint(
   while (rel > Math.PI) rel -= Math.PI * 2;
   while (rel < -Math.PI) rel += Math.PI * 2;
   const arrow = Math.abs(rel) < Math.PI * 0.25 ? '>' : Math.abs(rel) > Math.PI * 0.75 ? '<' : rel > 0 ? 'v' : '^';
-  const alpha = Math.max(0, Math.min(1, (cue.expiresAt - time) / 1.2));
+  const alpha = Math.max(0, Math.min(1, (cue.expiresAt - gameTime) / 1.2));
 
   ctx.save();
   ctx.globalAlpha = alpha;
-  drawNeuroPanel(ctx, x, y, panelW, panelH, time, 760);
-  drawRouteCueWave(ctx, x + 6 * sx, y + 4 * sy, panelW - 12 * sx, 7 * sy, time - cue.startedAt, cue.color);
+  drawNeuroPanel(ctx, x, y, panelW, panelH, animationTime, 760);
+  drawRouteCueWave(ctx, x + 6 * sx, y + 4 * sy, panelW - 12 * sx, 7 * sy, Math.max(0, gameTime - cue.startedAt), cue.color);
   ctx.textAlign = 'left';
   ctx.font = `${7 * sy}px monospace`;
   ctx.fillStyle = cue.color;
@@ -442,6 +475,44 @@ function drawSmallCaravanHint(
 
 function fitHudText(ctx: CanvasRenderingContext2D, text: string, maxW: number): string {
   return fitUiText(ctx, text, maxW);
+}
+
+function compactNumber(value: number | undefined): string {
+  return Number.isFinite(value) ? String(Math.round(value!)) : '-';
+}
+
+function compactMs(value: number | undefined): string {
+  return Number.isFinite(value) ? value!.toFixed(value! >= 10 ? 0 : 1) : '-';
+}
+
+function drawFpsCounter(ctx: CanvasRenderingContext2D, perf: HudPerfDebugSnapshot | undefined, rect: UiRect, sx: number, sy: number): void {
+  const fps = perf?.fps;
+  if (fps === undefined || !Number.isFinite(fps) || fps <= 0) return;
+  const s = Math.max(1, Math.min(sx, sy));
+  const lines = [
+    `FPS ${Math.round(fps)}  кадр ${compactMs(perf?.frameMsAvg)}/${compactMs(perf?.frameMsMax)}мс`,
+    `AI ${compactNumber(perf?.liveAi)} H${compactNumber(perf?.aiHot)}/${compactNumber(perf?.aiUpdatedHot)} W${compactNumber(perf?.aiWarm)}/${compactNumber(perf?.aiUpdatedWarm)} C${compactNumber(perf?.aiCold)}/${compactNumber(perf?.aiUpdatedCold)} skip ${compactNumber(perf?.aiSkipped)}`,
+    `VIS ${compactNumber(perf?.visibleSprites)} draw ${compactNumber(perf?.drawnSprites)} q ${compactNumber(perf?.visibleEntityQueryResults)}  ms AI ${compactMs(perf?.aiMs)} R ${compactMs(perf?.renderMs)} HUD ${compactMs(perf?.hudMs)}`,
+  ];
+  const padX = 3 * s;
+  const padY = 2 * s;
+  const lineH = 8 * s;
+  ctx.save();
+  ctx.font = `${7 * s}px monospace`;
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'top';
+  const textW = Math.max(...lines.map(line => ctx.measureText(line).width));
+  const boxW = Math.min(rect.w, textW + padX * 2);
+  const boxH = Math.min(rect.h, lines.length * lineH + padY * 2);
+  ctx.fillStyle = 'rgba(0,8,10,0.74)';
+  ctx.fillRect(rect.x, rect.y, boxW, boxH);
+  ctx.strokeStyle = 'rgba(72,220,190,0.36)';
+  ctx.strokeRect(rect.x + 0.5, rect.y + 0.5, boxW - 1, boxH - 1);
+  ctx.fillStyle = fps >= 50 ? '#8fffd0' : fps >= 30 ? '#ffd36a' : '#ff8a6a';
+  for (let i = 0; i < lines.length; i++) {
+    ctx.fillText(fitHudText(ctx, lines[i], boxW - padX * 2), rect.x + padX, rect.y + padY + i * lineH);
+  }
+  ctx.restore();
 }
 
 function mobileHudControlsOn(): boolean {
@@ -763,10 +834,10 @@ function findAimTarget(world: World, player: Entity, state: GameState): CombatTa
   };
 }
 
-function recentCombatSignal(state: GameState, time: number): CombatSignalHud | null {
+function recentCombatSignal(state: GameState, gameTime: number): CombatSignalHud | null {
   for (let i = state.msgs.length - 1; i >= 0 && i >= state.msgs.length - 8; i--) {
     const m = state.msgs[i];
-    if (time - m.time > 1.15) continue;
+    if (!hudMessageVisible(m.time, gameTime, COMBAT_SIGNAL_TTL_SECONDS)) continue;
     const text = m.text;
     if (text.startsWith('Выстрел')) return { text: 'ВЫСТРЕЛ', color: '#8cf' };
     if (text.includes('мимо')) return { text: text.toUpperCase(), color: '#fc4' };
@@ -1090,7 +1161,7 @@ export function drawHUD(
   world: World,
   entities: Entity[],
   uiTime = state.time,
-  options: { pointerLockHint?: boolean; pointerCaptureGate?: boolean } = {},
+  options: { fps?: number; perf?: HudPerfDebugSnapshot; pointerLockHint?: boolean; pointerCaptureGate?: boolean } = {},
 ): void {
   ctx.save();
   ctx.imageSmoothingEnabled = false;
@@ -1108,6 +1179,7 @@ export function drawHUD(
   ctx.textBaseline = 'top';
 
   const time = uiTime;
+  const gameTime = Number.isFinite(state.time) ? state.time : time;
   setUiTextTime(time);
   const mobileHud = getMobileHudSafeContext();
   const slots = createHudSlots(w, h, sx, sy, {
@@ -1146,13 +1218,13 @@ export function drawHUD(
   const mapEditorOpen = isMapEditorOpen();
   const netTerminalGenDeniedOpen = isNetTerminalGenDeniedOpen();
   const netTerminalBankOpen = isNetTerminalBankOpen();
-  const gambling = getGamblingOverlaySnapshot(player);
-  const computer = getComputerOverlaySnapshot(world, state);
-  const hack = getNetHackOverlaySnapshot(world, state, player);
+  const gamblingOpen = isGamblingOverlayOpen();
+  const computerOpen = isComputerOverlayOpen();
+  const hackOpen = isNetHackOverlayOpen();
   const centerModalOpen = state.showInventory || state.showQuests || state.showLog ||
     state.showFactions || state.showMenu || state.showControls || state.showUiSettings ||
     state.showNpcMenu || state.showContainerMenu || netSphereOpen || netTerminalGenOpen ||
-    emergencyPanelOpen || mapEditorOpen || gambling.open || computer.open || hack.open ||
+    emergencyPanelOpen || mapEditorOpen || gamblingOpen || computerOpen || hackOpen ||
     netTerminalGenDeniedOpen || netTerminalBankOpen;
   const quietHud = centerModalOpen || state.mapMode === 2;
   const showCompactPanels = !quietHud;
@@ -1204,9 +1276,9 @@ export function drawHUD(
   const needsWeaponReadiness = showCompactPanels && (showWeaponPanel || showCrosshair);
   const combatWeapon = needsWeaponReadiness ? getWeaponReadiness(player) : null;
   const combatTarget = showCompactPanels && showCrosshair ? findAimTarget(world, player, state) : null;
-  const combatSignal = showCompactPanels && showCrosshair ? recentCombatSignal(state, time) : null;
+  const combatSignal = showCompactPanels && showCrosshair ? recentCombatSignal(state, gameTime) : null;
 
-  const zhelemishLine = showCompactPanels && showStatusHints ? zhelemishHudLine(player, time) : null;
+  const zhelemishLine = showCompactPanels && showStatusHints ? zhelemishHudLine(player, gameTime) : null;
   if (zhelemishLine) {
     const panelW = Math.min(180 * sx, bottomVitals.w);
     const panelH = 14 * sy;
@@ -1225,29 +1297,40 @@ export function drawHUD(
   const smallCaravan = showCompactPanels && showCaravanHints ? getNearestSmallCaravan(state, world, player) : undefined;
   const smogIndicatorVisible = showCompactPanels && anomalySafetyVisible && smogStatus.active && (smogStatus.inside || smogStatus.sourceFound || smogStatus.handled);
   const samosborWarning = getSamosborWarningSnapshot(state);
+  const perfDebug = options.perf ?? (options.fps !== undefined ? { fps: options.fps } : undefined);
 
-  // ── Stenographic summary: full-width top text band ─────────
+  if (showCompactPanels && uiElementEnabled('fps_counter') && perfDebug) {
+    const s = Math.max(1, Math.min(sx, sy));
+    const fpsH = 28 * s;
+    const fpsW = Math.min(slots.topLeftEvent.w, 224 * s);
+    if (fpsW >= 96 * s) {
+      const rect = allocateHudSlot(slots.topLeftEvent, fpsH, fpsW, 'left');
+      drawFpsCounter(ctx, perfDebug, rect, sx, sy);
+    }
+  }
+
+  // ── Stenographic summary: top-left event band ─────────
   if (showCompactPanels && showMessages && !state.samosborActive && !samosborWarning) {
     const s = Math.max(1, Math.min(sx, sy));
     const pad = 5 * s;
     const headerH = 9 * s;
     const rowH = 9 * s;
-    const maxPanelH = Math.min(slots.topCenterCritical.h, Math.max(36 * s, h * 0.33));
+    const summarySlot = slots.topLeftEvent;
+    const maxPanelH = Math.min(summarySlot.h, Math.max(36 * s, h * 0.33));
     const maxRows = Math.max(0, Math.min(MSG_MAX, Math.floor((maxPanelH - pad * 2 - headerH) / rowH)));
     const selectedMsgs: Array<{ msg: GameState['msgs'][number]; index: number }> = [];
     const scanStart = Math.max(0, state.msgs.length - MSG_SCAN_MAX);
     for (let i = state.msgs.length - 1; i >= scanStart && selectedMsgs.length < maxRows; i--) {
       const m = state.msgs[i];
-      if (time - m.time > 8) continue;
+      if (!hudMessageVisible(m.time, gameTime)) continue;
       if (m.hud === false) continue;
       selectedMsgs.push({ msg: m, index: i });
     }
-    if (selectedMsgs.length > 0 && slots.topCenterCritical.w >= 96 * s) {
+    if (selectedMsgs.length > 0 && summarySlot.w >= 96 * s) {
       const panelH = Math.min(maxPanelH, pad * 2 + headerH + selectedMsgs.length * rowH);
-      const rect = allocateHudSlot(slots.topCenterCritical, panelH, slots.topCenterCritical.w, 'center');
-      const reserveY = rect.y + rect.h + slots.topCenterCritical.gap;
-      slots.topLeftEvent.cursorY = Math.max(slots.topLeftEvent.cursorY, reserveY);
-      slots.topRightNavigation.cursorY = Math.max(slots.topRightNavigation.cursorY, reserveY);
+      const rect = allocateHudSlot(summarySlot, panelH, summarySlot.w, 'left');
+      const reserveY = rect.y + rect.h + summarySlot.gap;
+      slots.topCenterCritical.cursorY = Math.max(slots.topCenterCritical.cursorY, reserveY);
       drawNeuroPanel(ctx, rect.x, rect.y, rect.w, rect.h, time, 306);
       drawStaticNoise(ctx, rect.x, rect.y, rect.w, rect.h, time, 0.006);
 
@@ -1269,13 +1352,15 @@ export function drawHUD(
       let my = rect.y + pad + headerH + 6 * s;
       for (const item of selectedMsgs) {
         const m = item.msg;
-        const age = time - m.time;
+        const age = hudMessageAgeSeconds(m.time, gameTime);
         const day = m.day;
         const hour = String(m.hour).padStart(2, '0');
         const minute = String(m.minute).padStart(2, '0');
         const dist = m.distanceMeters !== undefined ? ` ${Math.max(0, Math.round(m.distanceMeters))}м` : '';
         const stamp = `Д${day} ${hour}:${minute}${dist}`;
-        const alpha = age > 6 ? 1 - (age - 6) / 2 : 1;
+        const alpha = age > HUD_MESSAGE_FADE_START_SECONDS
+          ? 1 - (age - HUD_MESSAGE_FADE_START_SECONDS) / (HUD_MESSAGE_TTL_SECONDS - HUD_MESSAGE_FADE_START_SECONDS)
+          : 1;
         const rowJitter = textJitter(time, item.index * 17 + 300);
         const rowY = my + rowJitter.dy * 0.28;
         const stampW = Math.min(72 * s, Math.max(42 * s, ctx.measureText(stamp).width + 5 * s));
@@ -1303,7 +1388,7 @@ export function drawHUD(
   }
   if (routeCueVisible) {
     const rect = allocateHudSlot(slots.topRightNavigation, 35 * sy, 176 * sx, 'right');
-    drawRouteCueHint(ctx, rect, sx, sy, time, player, world, routeCue);
+    drawRouteCueHint(ctx, rect, sx, sy, time, gameTime, player, world, routeCue);
   }
   if (smallCaravan) {
     const rect = allocateHudSlot(slots.topRightNavigation, 29 * sy, 176 * sx, 'right');
@@ -1646,15 +1731,18 @@ export function drawHUD(
     drawNetSphereMenu(ctx, msx, msy, time, getNetSphereSnapshot());
   }
 
-  if (gambling.open) {
+  if (gamblingOpen) {
+    const gambling = getGamblingOverlaySnapshot(player);
     drawGamblingOverlay(ctx, msx, msy, time, gambling);
   }
 
-  if (computer.open) {
+  if (computerOpen) {
+    const computer = getComputerOverlaySnapshot(world, state);
     drawComputerOverlay(ctx, msx, msy, time, computer);
   }
 
-  if (hack.open) {
+  if (hackOpen) {
+    const hack = getNetHackOverlaySnapshot(world, state, player);
     drawNetHackOverlay(ctx, msx, msy, time, hack);
   }
 

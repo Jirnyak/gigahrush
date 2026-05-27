@@ -12,6 +12,7 @@
     "build": "vite build",
     "build:size": "node scripts/build-size-report.mjs",
     "itch:build": "node scripts/build-itch.mjs",
+    "pikabu:build": "node scripts/build-pikabu.mjs",
     "itch:verify": "node scripts/verify-itch-pack.mjs",
     "artifacts:verify": "node scripts/verify-artifacts.mjs",
     "preview": "vite preview",

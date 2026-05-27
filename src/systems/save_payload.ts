@@ -20,6 +20,12 @@ export const SAVE_CONTAINER_TAG_CAP = 12;
 export const SAVE_CONTAINER_STOLEN_ITEM_CAP = 16;
 export const SAVE_QUEST_CAP = 512;
 export const SAVE_STATUS_CAP = 12;
+export const PORTAL_COMPACT_QUEST_CAP = 64;
+export const PORTAL_COMPACT_CONTAINER_CAP = 16;
+export const PORTAL_COMPACT_ALIFE_DEAD_ID_CAP = 1024;
+export const PORTAL_COMPACT_ALIFE_PLOT_DEATH_CAP = 128;
+export const PORTAL_COMPACT_ALIFE_OVERRIDE_CAP = 64;
+export const PORTAL_COMPACT_PRODUCTION_CAP = 16;
 
 const SAVE_DATA_DEPTH_CAP = 2;
 const SAVE_DATA_ARRAY_CAP = 16;
@@ -347,23 +353,89 @@ export function summarizeSavePayload(
   };
 }
 
-function formatBytes(bytes: number): string {
-  if (bytes < 1024) return `${bytes}B`;
-  return `${(bytes / 1024).toFixed(1)}KB`;
+type VersionedSavePayload = SavePayload & { version?: number };
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return !!value && typeof value === 'object' && !Array.isArray(value);
 }
 
-export function formatSavePayloadSummary(summary: SavePayloadSummary, sectionLimit = 8): string[] {
-  const largest = summary.sections
-    .slice()
-    .sort((a, b) => b.bytes - a.bytes)
-    .slice(0, sectionLimit)
-    .map(section => {
-      const count = section.count === undefined ? '' : ` count=${section.count}${section.cap ? `/${section.cap}` : ''}`;
-      return `${section.label}=${formatBytes(section.bytes)}${count}`;
-    });
-  const live = summary.liveEntityCount === undefined ? '' : ` liveEntities=${summary.liveEntityCount}`;
-  return [
-    `[SAVE] payload=${formatBytes(summary.bytes)} serializedEntities=${summary.serializedEntities ? 'yes' : 'no'}${live}`,
-    `[SAVE] sections ${largest.join(' | ')}`,
-  ];
+function compactBooleanRecord(input: unknown, cap: number, keyCap = 96): Record<string, true> {
+  const out: Record<string, true> = {};
+  if (!isRecord(input)) return out;
+  let used = 0;
+  for (const [rawKey, value] of Object.entries(input)) {
+    if (used >= cap) break;
+    if (value !== true) continue;
+    const key = rawKey.slice(0, keyCap);
+    if (!key) continue;
+    out[key] = true;
+    used++;
+  }
+  return out;
+}
+
+function compactFloorRunForPortal(input: unknown): unknown {
+  if (!isRecord(input)) return undefined;
+  return {
+    runSeed: input.runSeed,
+    currentZ: input.currentZ,
+    visited: compactBooleanRecord(input.visited, 128),
+  };
+}
+
+function compactAlifeForPortal(input: unknown): unknown {
+  if (!isRecord(input)) return undefined;
+  return {
+    version: input.version,
+    seed: input.seed,
+    total: input.total,
+    deadIds: Array.isArray(input.deadIds) ? input.deadIds.slice(0, PORTAL_COMPACT_ALIFE_DEAD_ID_CAP) : [],
+    deadPlotNpcIds: Array.isArray(input.deadPlotNpcIds)
+      ? input.deadPlotNpcIds.slice(0, PORTAL_COMPACT_ALIFE_PLOT_DEATH_CAP)
+      : [],
+    overrides: Array.isArray(input.overrides) ? input.overrides.slice(0, PORTAL_COMPACT_ALIFE_OVERRIDE_CAP) : [],
+  };
+}
+
+function compactBankingForPortal(input: unknown): unknown {
+  if (!isRecord(input)) return input;
+  return {
+    ...input,
+    recentLedger: Array.isArray(input.recentLedger) ? input.recentLedger.slice(-6) : [],
+  };
+}
+
+function compactStockMarketForPortal(input: unknown): unknown {
+  if (!isRecord(input)) return input;
+  return {
+    ...input,
+    recentTrades: Array.isArray(input.recentTrades) ? input.recentTrades.slice(-6) : [],
+  };
+}
+
+export function createPortalCompactSavePayload<T extends VersionedSavePayload>(payload: T): T {
+  return {
+    version: payload.version,
+    player: {
+      ...payload.player,
+      inventory: inventoryForSave(payload.player.inventory),
+      statuses: statusesForSave(payload.player.statuses),
+    },
+    state: {
+      ...payload.state,
+      samosborActive: false,
+      quests: payload.state.quests.slice(-PORTAL_COMPACT_QUEST_CAP),
+      floorRun: compactFloorRunForPortal(payload.state.floorRun),
+      floorMemory: { version: 1, entries: [] },
+      alife: compactAlifeForPortal(payload.state.alife),
+      mapEditorPatches: undefined,
+      worldEvents: undefined,
+      banking: compactBankingForPortal(payload.state.banking),
+      stockMarket: compactStockMarketForPortal(payload.state.stockMarket),
+      production: payload.state.production.slice(0, PORTAL_COMPACT_PRODUCTION_CAP),
+      containers: containersForSave(payload.state.containers, PORTAL_COMPACT_CONTAINER_CAP),
+      voidReturnPortal: undefined,
+      voidEntryFromFloor: undefined,
+    },
+  } as T;
 }

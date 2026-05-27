@@ -79,6 +79,7 @@ import { isRouteCueTarget, routeObjectiveLiftPromptSuffix, tryUseRouteCue } from
 import { tryUseSamosborVariantInteraction } from './samosbor';
 import { tryCoverSeroburmalineSource } from './seroburmaline';
 import { findSlimevikInteractionTarget, tryUseSlimevikInteraction } from './slimevik';
+import { portalAllowsCasinoLikeContent } from './platform_bridge';
 
 export type InteractableKind =
   | 'instant'
@@ -275,7 +276,7 @@ export function findInteractionTarget(ctx: InteractionContext): InteractionTarge
   const railId = railTrainInteractionTargetId(ctx.world, ctx.player, ctx.state, ctx.lookX, ctx.lookY);
   if (railId !== null) return target('rail_train', railId, 'rail_train', ctx.lookX, ctx.lookY, 30, ' поезд');
 
-  const gambling = getGamblingMachineAt(ctx.world, ctx.lookX, ctx.lookY);
+  const gambling = portalAllowsCasinoLikeContent() ? getGamblingMachineAt(ctx.world, ctx.lookX, ctx.lookY) : null;
   if (gambling) {
     const def = getGamblingMachineDef(gambling.defId);
     return target('gambling', gambling.idx + 960000, gambling.defId, gambling.x, gambling.y, 40, ` ${def?.prompt ?? 'ставка'}`);
@@ -407,7 +408,7 @@ export function activateInteraction(ctx: InteractionContext): InteractionResult 
 
   if (tryUseRailTrain(ctx.world, ctx.player, ctx.state, ctx.lookX, ctx.lookY)) return { handled: true };
 
-  const gambling = getGamblingMachineAt(ctx.world, ctx.lookX, ctx.lookY);
+  const gambling = portalAllowsCasinoLikeContent() ? getGamblingMachineAt(ctx.world, ctx.lookX, ctx.lookY) : null;
   if (gambling) {
     openGamblingMachine(ctx.state, gambling);
     return { handled: true, openedOverlay: true };
@@ -582,10 +583,12 @@ export function placeGeneratedInteractablesForCurrentFloor(world: World, state: 
   const used = new Set<number>();
   let placed = 0;
 
-  const gamblingCell = findGeneratedInteractableCell(world, rng, used);
-  if (gamblingCell >= 0) {
-    used.add(gamblingCell);
-    if (placeGamblingMachine(world, gamblingCell % W, (gamblingCell / W) | 0, rng() < 0.5 ? 'roulette' : 'slots')) placed++;
+  if (portalAllowsCasinoLikeContent()) {
+    const gamblingCell = findGeneratedInteractableCell(world, rng, used);
+    if (gamblingCell >= 0) {
+      used.add(gamblingCell);
+      if (placeGamblingMachine(world, gamblingCell % W, (gamblingCell / W) | 0, rng() < 0.5 ? 'roulette' : 'slots')) placed++;
+    }
   }
 
   const computerCell = findGeneratedInteractableCell(world, rng, used);

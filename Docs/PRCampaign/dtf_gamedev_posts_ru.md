@@ -2,10 +2,13 @@
 
 Готовые варианты для русскоязычной PR-волны. Тексты используют только факты из `README.md`, `itch_page_pack/description_ru_approved.md`, `Docs/PRCampaign/campaign_plan_ru.md` и `Docs/PRCampaign/copy_pack_ru.md`.
 
+2026-05-27 update: the owner-requested DTF follow-up is now live at `https://dtf.ru/indie/5086991-gigahrusha-novaya-versiya-myindie-i-kadry-iz-samosbora`. `Docs/PRCampaign/dtf_followup_myindie_post_2026-05-27.md` is the source/record copy, not an unposted draft; the older variants below are historical source material and should not be reposted as-is.
+
 Основные ссылки:
 
-- itch.io: https://tenevik.itch.io/gigahrush
-- Онлайн-версия: https://gigahrush.bileter.workers.dev
+- MyIndie RU/CIS primary: https://myindie.ru/games/game/gigahrush
+- Онлайн-версия / direct build: https://gigahrush.bileter.workers.dev
+- itch.io mirror / EN: https://tenevik.itch.io/gigahrush
 
 ## Длинный DTF-пост: devlog-угол
 
@@ -67,9 +70,11 @@ NPC не существуют только как декорация рядом 
 
 Если будете пробовать, лучше воспринимать это как текущий playable build в активной разработке, а не как финальный релиз. Мне особенно полезны конкретные замечания: где стало непонятно, где темп провис, где интерфейс мешал, где наоборот появилась удачная история из систем.
 
-Играть на itch.io: https://tenevik.itch.io/gigahrush
+Основная RU-страница: https://myindie.ru/games/game/gigahrush
 
 Онлайн-версия: https://gigahrush.bileter.workers.dev
+
+itch.io-зеркало: https://tenevik.itch.io/gigahrush
 
 ## Короткий DTF-пост
 
@@ -87,7 +92,7 @@ NPC не существуют только как декорация рядом 
 
 Буду рад конкретному фидбеку: понятна ли подготовка к вылазкам, читается ли интерфейс, хватает ли давления выживания и ощущается ли САМОСБОР опасным.
 
-itch.io: https://tenevik.itch.io/gigahrush
+Основная RU-страница: https://myindie.ru/games/game/gigahrush
 
 Онлайн-версия: https://gigahrush.bileter.workers.dev
 
@@ -109,8 +114,9 @@ itch.io: https://tenevik.itch.io/gigahrush
 
 Ссылки:
 
-- itch.io: https://tenevik.itch.io/gigahrush
+- MyIndie: https://myindie.ru/games/game/gigahrush
 - Онлайн-версия: https://gigahrush.bileter.workers.dev
+- itch.io-зеркало: https://tenevik.itch.io/gigahrush
 
 Очень нужны не общие оценки, а конкретный фидбек по нескольким вопросам:
 

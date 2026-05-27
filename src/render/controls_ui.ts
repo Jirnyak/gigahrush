@@ -1,6 +1,7 @@
 import { type GameState } from '../core/types';
 import {
   CONTROL_ACTIONS,
+  controlActionLocked,
   controlBindingLabel,
   controlHint,
   getControlCaptureAction,
@@ -57,7 +58,7 @@ export function drawControlsMenu(
   ctx.fillText(
     fitText(ctx, isButtons
       ? `${controlHint('controlsMenu')} закрыть  |  ${controlHint('gameMenu')} закрыть`
-      : `${controlHint('controlsMenu')} открыть/закрыть  |  ${controlHint('interact')} изменить  |  ←/→ слайдер  |  ${controlHint('controlReset')} сбросить  |  ${controlHint('gameMenu')} закрыть`,
+      : `${controlHint('controlsMenu')} открыть/закрыть  |  ${controlHint('interact')} изменить  |  ←/→ слайдер  |  ${controlHint('controlReset')} очистить  |  ${controlHint('gameMenu')} закрыть`,
     w - 24 * sx),
     12 * sx,
     25 * sy,
@@ -103,17 +104,18 @@ export function drawControlsMenu(
     ctx.fillStyle = '#689';
     const group = isButtons ? button?.group ?? '' : isMouseSensitivity ? 'Мышь' : action?.group ?? '';
     const label = isButtons ? button?.label ?? '' : isMouseSensitivity ? 'Чувствительность мыши' : action?.label ?? '';
+    const locked = !isButtons && !!action && controlActionLocked(action.id);
     ctx.fillText(fitText(ctx, group, groupW - 10 * sx), x + 14 * sx, textY);
     ctx.fillStyle = isSel ? '#dff' : '#9bb';
     ctx.fillText(fitText(ctx, label, labelW - 8 * sx), x + groupW + 18 * sx, textY);
-    ctx.fillStyle = isCapture || isMouseSensitivity ? '#fd6' : isSel ? '#fff' : '#9cb';
+    ctx.fillStyle = locked ? '#fc4' : isCapture || isMouseSensitivity ? '#fd6' : isSel ? '#fff' : '#9cb';
     const keys = isButtons
       ? button?.binding ?? ''
       : isMouseSensitivity
         ? mouseSensitivitySliderText()
         : isCapture
           ? 'НАЖМИТЕ КЛАВИШУ...'
-          : action ? controlBindingLabel(action.id) : '';
+          : action ? `${controlBindingLabel(action.id)}${locked ? ' фикс.' : ''}` : '';
     ctx.fillText(fitText(ctx, keys, keyW - 4 * sx), x + groupW + labelW + 20 * sx, textY);
   }
 
@@ -134,10 +136,10 @@ export function drawControlsMenu(
   ctx.textBaseline = 'alphabetic';
   ctx.fillText(
     capture
-      ? `${controlHint('gameMenu')} отменит ввод. Backspace вернёт выбранное действие к умолчанию.`
+      ? `${controlHint('gameMenu')} отменит ввод. Backspace очистит выбранное действие. E, Enter, Backspace и Esc не назначаются.`
       : isButtons
         ? 'Экранные кнопки и мобильная рельса живут отдельно от клавиатурных биндов.'
-        : 'Бинды и чувствительность мыши хранятся отдельно от сохранения игры и применяются сразу.',
+        : 'Новая клавиша заменяет старую. E, Enter и Backspace зафиксированы для браузерной сборки.',
     12 * sx,
     h - 10 * sy,
   );

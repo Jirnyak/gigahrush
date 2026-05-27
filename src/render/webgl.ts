@@ -29,6 +29,13 @@ export interface DynamicSkyTexture {
   dirty: boolean;
 }
 
+export interface RenderSceneDebugStats {
+  visibleSprites: number;
+  drawnSprites: number;
+  visibleEntityQueryResults: number;
+  spriteCap: number;
+}
+
 /* ── Constants ─────────────────────────────────────────────────── */
 export const SCR_W = 320;
 export const SCR_H = 200;
@@ -51,12 +58,22 @@ const VISIBLE_SPRITE_CAP = 1024;
 const VISIBLE_ENTITY_QUERY_CAP = VISIBLE_SPRITE_CAP * 2;
 const visibleEntityQuery: Entity[] = [];
 const STATIC_OBJECT_RADIUS = MAX_DRAW;
+const lastRenderSceneDebugStats: RenderSceneDebugStats = {
+  visibleSprites: 0,
+  drawnSprites: 0,
+  visibleEntityQueryResults: 0,
+  spriteCap: VISIBLE_SPRITE_CAP,
+};
 
 const enum VisibleSpriteSource {
   ENTITY = 0,
   ITEM_DROP = 1,
   FEATURE = 2,
   CONTAINER = 3,
+}
+
+export function getRenderSceneDebugStats(): RenderSceneDebugStats {
+  return { ...lastRenderSceneDebugStats };
 }
 
 /* ── GLSL Shaders ─────────────────────────────────────────────── */
@@ -1699,7 +1716,12 @@ export function renderSceneGL(
   toolBeam = 0,
   toolBeamRange = 0,
 ): void {
-  if (!glState) return;
+  if (!glState) {
+    lastRenderSceneDebugStats.visibleSprites = 0;
+    lastRenderSceneDebugStats.drawnSprites = 0;
+    lastRenderSceneDebugStats.visibleEntityQueryResults = 0;
+    return;
+  }
   const { gl } = glState;
   const px = camera.x;
   const py = camera.y;
@@ -2001,6 +2023,7 @@ function renderSpritesGL(
   // Collect visible entities without per-frame record allocation.
   let visibleCount = 0;
   getEntityIndex().queryRadiusCapped(px, py, MAX_DRAW, visibleEntityQuery, ENTITY_MASK_VISIBLE, VISIBLE_ENTITY_QUERY_CAP);
+  lastRenderSceneDebugStats.visibleEntityQueryResults = visibleEntityQuery.length;
   for (const e of visibleEntityQuery) {
     if (!e.alive || e.type === EntityType.PLAYER) continue;
     const renderX = hasTumannikRenderOffset(e) ? wrapWorldFloat(e.x + (e.ai?.fogOffsetX ?? 0)) : e.x;
@@ -2064,6 +2087,7 @@ function renderSpritesGL(
   visibleSource.length = visibleCount;
   // Sort far to near
   visibleOrder.sort((a, b) => visibleDist[b] - visibleDist[a]);
+  lastRenderSceneDebugStats.visibleSprites = visibleCount;
 
   gl.useProgram(glState.spriteProgram);
   // Depth test is already enabled by caller with LESS func
@@ -2077,6 +2101,7 @@ function renderSpritesGL(
   gl.uniform1f(su['uTime']!, time);
   gl.bindVertexArray(glState.spriteVAO);
 
+  let drawnSprites = 0;
   for (let oi = 0; oi < visibleCount; oi++) {
     const vi = visibleOrder[oi];
     const e = visibleEntities[vi];
@@ -2139,10 +2164,12 @@ function renderSpritesGL(
     gl.uniform1i(su['uSpriteTex']!, 0);
 
     gl.drawArrays(gl.TRIANGLES, 0, 6);
+    drawnSprites++;
 
     // Restore depth mask if it was disabled for flame
     if (isProjectile === 2) gl.depthMask(true);
   }
+  lastRenderSceneDebugStats.drawnSprites = drawnSprites;
 
   gl.disable(gl.BLEND);
 }

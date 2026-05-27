@@ -20,6 +20,7 @@ export const UI_ELEMENT_DEFS = [
   { id: 'caravan_hints', group: 'Навигация', label: 'Караванные метки', defaultEnabled: false, locked: false },
   { id: 'status_hints', group: 'Состояние', label: 'Статусы и мутации', defaultEnabled: false, locked: false },
   { id: 'anomaly_hints', group: 'Аномалии', label: 'Смог и аномальные индикаторы', defaultEnabled: false, locked: false },
+  { id: 'fps_counter', group: 'Отладка', label: 'FPS в левом углу', defaultEnabled: false, locked: false },
   { id: 'screen_fx', group: 'Экран', label: 'Нейрошум и помехи', defaultEnabled: false, locked: false },
   { id: 'samosbor_text', group: 'Системное', label: 'Текст самосбора', defaultEnabled: true, locked: true },
   { id: 'credits', group: 'Системное', label: 'Титры и финальные экраны', defaultEnabled: true, locked: true },

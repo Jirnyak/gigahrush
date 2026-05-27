@@ -10,6 +10,7 @@ interface ControlActionDefBase {
   label: string;
   input?: BooleanInputKey;
   defaultKeys: readonly string[];
+  locked?: boolean;
 }
 
 export const CONTROL_ACTIONS = [
@@ -20,11 +21,11 @@ export const CONTROL_ACTIONS = [
   { id: 'strafeLeft', group: 'Движение', label: 'Шаг влево', input: 'strafeL', defaultKeys: ['KeyA'] },
   { id: 'strafeRight', group: 'Движение', label: 'Шаг вправо', input: 'strafeR', defaultKeys: ['KeyD'] },
   { id: 'attack', group: 'Бой', label: 'Атака / выстрел', input: 'attack', defaultKeys: ['Space'] },
-  { id: 'interact', group: 'Бой', label: 'Взаимодействовать / подтвердить', input: 'interact', defaultKeys: ['KeyE'] },
+  { id: 'interact', group: 'Бой', label: 'Взаимодействовать / подтвердить', input: 'interact', defaultKeys: ['KeyE'], locked: true },
   { id: 'useTool', group: 'Бой', label: 'Использовать инструмент', input: 'use', defaultKeys: ['KeyG', 'KeyR'] },
   { id: 'sleep', group: 'Состояние', label: 'Спать, удерживать', input: 'sleep', defaultKeys: ['KeyZ'] },
   { id: 'pee', group: 'Состояние', label: 'Пописать', input: 'pee', defaultKeys: ['KeyP'] },
-  { id: 'gameMenu', group: 'Экраны', label: 'Меню / назад / закрыть', input: 'escape', defaultKeys: ['Enter'] },
+  { id: 'gameMenu', group: 'Экраны', label: 'Меню / назад / закрыть', input: 'escape', defaultKeys: ['Enter'], locked: true },
   { id: 'controlsMenu', group: 'Экраны', label: 'Все клавиши', input: 'controls', defaultKeys: ['Tab'] },
   { id: 'uiSettings', group: 'Экраны', label: 'Настройка UI', input: 'uiSettings', defaultKeys: ['KeyU'] },
   { id: 'fullscreen', group: 'Экраны', label: 'Полный экран', defaultKeys: ['F11'] },
@@ -35,9 +36,9 @@ export const CONTROL_ACTIONS = [
   { id: 'log', group: 'Экраны', label: 'Журнал сообщений', input: 'logMenu', defaultKeys: ['KeyL'] },
   { id: 'netSphere', group: 'Экраны', label: 'НЕТ-СФЕРА', defaultKeys: ['KeyN'] },
   { id: 'debug', group: 'Экраны', label: 'Отладка', input: 'debugScreen', defaultKeys: ['Backquote'] },
-  { id: 'netSubmit', group: 'НЕТ-СФЕРА', label: 'Отправить сообщение / подтвердить', defaultKeys: ['KeyE'] },
-  { id: 'netClose', group: 'НЕТ-СФЕРА', label: 'Закрыть окно', defaultKeys: ['Enter'] },
-  { id: 'netErase', group: 'НЕТ-СФЕРА', label: 'Удалить символ', defaultKeys: ['Backspace'] },
+  { id: 'netSubmit', group: 'НЕТ-СФЕРА', label: 'Отправить сообщение / подтвердить', defaultKeys: ['KeyE'], locked: true },
+  { id: 'netClose', group: 'НЕТ-СФЕРА', label: 'Закрыть окно', defaultKeys: ['Enter'], locked: true },
+  { id: 'netErase', group: 'НЕТ-СФЕРА', label: 'Удалить символ', defaultKeys: ['Backspace'], locked: true },
   { id: 'menuUp', group: 'Меню', label: 'Выбор вверх', input: 'invUp', defaultKeys: ['KeyW', 'ArrowUp'] },
   { id: 'menuDown', group: 'Меню', label: 'Выбор вниз', input: 'invDn', defaultKeys: ['KeyS', 'ArrowDown'] },
   { id: 'menuLeft', group: 'Меню', label: 'Влево / предыдущая', input: 'invLeft', defaultKeys: ['KeyA', 'ArrowLeft'] },
@@ -46,13 +47,23 @@ export const CONTROL_ACTIONS = [
   { id: 'attrStr', group: 'Инвентарь', label: 'Очко в силу', input: 'attrStr', defaultKeys: ['Digit1'] },
   { id: 'attrAgi', group: 'Инвентарь', label: 'Очко в ловкость', input: 'attrAgi', defaultKeys: ['Digit2'] },
   { id: 'attrInt', group: 'Инвентарь', label: 'Очко в интеллект', input: 'attrInt', defaultKeys: ['Digit3'] },
-  { id: 'controlReset', group: 'Экран клавиш', label: 'Сбросить выбранную', input: 'controlReset', defaultKeys: ['Backspace'] },
+  { id: 'controlReset', group: 'Экран клавиш', label: 'Очистить выбранную', input: 'controlReset', defaultKeys: ['Backspace'], locked: true },
 ] as const satisfies readonly ControlActionDefBase[];
 
 export type ControlActionId = typeof CONTROL_ACTIONS[number]['id'];
 type ControlBindings = Record<ControlActionId, string[]>;
 
 const CONTROL_STORAGE_KEY = 'gigahrush_control_bindings_v3';
+const RESERVED_CONTROL_CODES = new Set(['Escape', 'KeyE', 'Enter', 'Backspace']);
+const MOVEMENT_ACTION_IDS = new Set<ControlActionId>([
+  'moveForward',
+  'moveBackward',
+  'turnLeft',
+  'turnRight',
+  'strafeLeft',
+  'strafeRight',
+]);
+const MENU_NAV_ACTION_IDS = new Set<ControlActionId>(['menuUp', 'menuDown', 'menuLeft', 'menuRight']);
 
 const CODE_LABELS: Record<string, string> = {
   ArrowUp: '↑',
@@ -80,6 +91,31 @@ function defaultBindings(): ControlBindings {
   return out;
 }
 
+function actionDef(actionId: ControlActionId): typeof CONTROL_ACTIONS[number] | undefined {
+  return CONTROL_ACTIONS.find(def => def.id === actionId);
+}
+
+function actionLocked(action: typeof CONTROL_ACTIONS[number] | undefined): boolean {
+  return !!action && 'locked' in action && action.locked === true;
+}
+
+export function controlActionLocked(actionId: ControlActionId): boolean {
+  return actionLocked(actionDef(actionId));
+}
+
+function actionsMayShareCode(a: ControlActionId, b: ControlActionId, code: string): boolean {
+  if (a === b) return true;
+  if ((code === 'KeyE' || code === 'Enter' || code === 'Backspace') && controlActionLocked(a) && controlActionLocked(b)) return true;
+  return (MOVEMENT_ACTION_IDS.has(a) && MENU_NAV_ACTION_IDS.has(b)) ||
+    (MOVEMENT_ACTION_IDS.has(b) && MENU_NAV_ACTION_IDS.has(a));
+}
+
+function codeAssignableTo(actionId: ControlActionId, code: string): boolean {
+  if (controlActionLocked(actionId)) return false;
+  if (RESERVED_CONTROL_CODES.has(code)) return false;
+  return true;
+}
+
 function storage(): Storage | null {
   try {
     return typeof localStorage === 'undefined' ? null : localStorage;
@@ -92,9 +128,34 @@ function uniqueCodes(codes: readonly unknown[]): string[] {
   const out: string[] = [];
   for (const raw of codes) {
     if (typeof raw !== 'string' || raw.length < 2 || raw.length > 32) continue;
+    if (raw === 'Escape') continue;
     if (!out.includes(raw)) out.push(raw);
   }
   return out;
+}
+
+function sanitizeCodesForAction(actionId: ControlActionId, codes: readonly unknown[]): string[] {
+  const action = actionDef(actionId);
+  if (!action) return [];
+  if (actionLocked(action)) return [...action.defaultKeys];
+  return uniqueCodes(codes).filter(code => !RESERVED_CONTROL_CODES.has(code));
+}
+
+function enforceExclusiveBindings(next: ControlBindings): ControlBindings {
+  const owners = new Map<string, ControlActionId[]>();
+  for (const action of CONTROL_ACTIONS) {
+    const filtered: string[] = [];
+    for (const code of next[action.id]) {
+      const existingOwners = owners.get(code) ?? [];
+      const conflict = existingOwners.some(owner => !actionsMayShareCode(owner, action.id, code));
+      if (conflict) continue;
+      filtered.push(code);
+      existingOwners.push(action.id);
+      owners.set(code, existingOwners);
+    }
+    next[action.id] = filtered;
+  }
+  return next;
 }
 
 function normalizeBindings(raw: unknown): ControlBindings {
@@ -103,9 +164,9 @@ function normalizeBindings(raw: unknown): ControlBindings {
   const src = raw as Record<string, unknown>;
   for (const action of CONTROL_ACTIONS) {
     const codes = src[action.id];
-    if (Array.isArray(codes)) out[action.id] = uniqueCodes(codes);
+    if (Array.isArray(codes)) out[action.id] = sanitizeCodesForAction(action.id, codes);
   }
-  return out;
+  return enforceExclusiveBindings(out);
 }
 
 function loadControlBindings(): ControlBindings {
@@ -181,22 +242,27 @@ export function clearControlInputs(input: InputState): void {
   input.interactHeld = false;
 }
 
-export function setControlPrimaryBinding(actionId: ControlActionId, code: string): void {
-  const current = [...controlBindings(actionId)];
-  const rest = current.filter(existing => existing !== code);
-  bindings[actionId] = uniqueCodes([code, ...rest]);
+export function setControlPrimaryBinding(actionId: ControlActionId, code: string): boolean {
+  if (!codeAssignableTo(actionId, code)) return false;
+  for (const action of CONTROL_ACTIONS) {
+    if (action.id === actionId || actionLocked(action)) continue;
+    if (actionsMayShareCode(action.id, actionId, code)) continue;
+    bindings[action.id] = bindings[action.id].filter(existing => existing !== code);
+  }
+  bindings[actionId] = [code];
   saveControlBindings();
+  return true;
 }
 
-export function resetControlBinding(actionId: ControlActionId): void {
-  const action = CONTROL_ACTIONS.find(def => def.id === actionId);
-  if (!action) return;
-  bindings[actionId] = [...action.defaultKeys];
+export function clearControlBinding(actionId: ControlActionId): boolean {
+  if (controlActionLocked(actionId)) return false;
+  bindings[actionId] = [];
   saveControlBindings();
+  return true;
 }
 
 export function resetAllControlBindings(): void {
-  bindings = defaultBindings();
+  bindings = enforceExclusiveBindings(defaultBindings());
   saveControlBindings();
 }
 
@@ -214,12 +280,12 @@ export function getControlCaptureAction(): ControlActionId | null {
 
 export function consumeControlCaptureCode(code: string): boolean {
   if (!captureAction) return false;
-  if (code === 'Enter' || code === 'Escape') {
+  if (code === 'Enter' || code === 'Escape' || controlActionLocked(captureAction)) {
     captureAction = null;
     return true;
   }
   if (code === 'Backspace') {
-    resetControlBinding(captureAction);
+    clearControlBinding(captureAction);
     captureAction = null;
     return true;
   }

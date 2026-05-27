@@ -2,6 +2,7 @@ import { beforeEach, test } from 'node:test';
 import * as assert from 'node:assert/strict';
 
 import {
+  AIGoal,
   Cell,
   ContainerKind,
   DoorState,
@@ -32,6 +33,7 @@ import {
   rebuildWorld,
   resetSamosborRuntimeForTests,
   resolvePlayerShelterAtSealForTests,
+  spawnSamosborPlayerPressureMonsterForTests,
   tickRandomEntityTransferForTests,
   updateSamosbor,
 } from '../src/systems/samosbor';
@@ -398,6 +400,86 @@ test('classic fog effect spawns a monster from active fog', () => {
   assert.equal(applied, true);
   assert.equal(ctx.entities.length, 1);
   assert.equal(ctx.entities[0].type, EntityType.MONSTER);
+});
+
+function makePlayerPressureWorld(): {
+  world: World;
+  entities: Entity[];
+  player: Entity;
+  state: ReturnType<typeof makeGameState>;
+  nextId: { v: number };
+  pressureIdx: number;
+} {
+  const world = new World();
+  world.zones[0] = { id: 0, cx: 20, cy: 20, faction: ZoneFaction.SAMOSBOR, hasLift: false, fogged: true, level: 2, hqRoomId: -1 };
+  const player = makePlayer(1, 20.5, 20.5);
+  player.rpg = { level: 7, xp: 0, attrPoints: 0, str: 0, agi: 0, int: 0, psi: 10, maxPsi: 10 };
+  const playerIdx = world.idx(20, 20);
+  world.set(20, 20, Cell.FLOOR);
+  world.zoneMap[playerIdx] = 0;
+  world.roomMap[playerIdx] = -1;
+
+  const pressureIdx = world.idx(32, 20);
+  world.set(32, 20, Cell.FLOOR);
+  world.zoneMap[pressureIdx] = 0;
+  world.roomMap[pressureIdx] = -1;
+
+  const state = makeGameState({
+    currentFloor: FloorLevel.LIVING,
+    samosborActive: true,
+    samosborCount: 3,
+    worldEvents: createWorldEventState(),
+  });
+  return { world, entities: [player], player, state, nextId: { v: 10 }, pressureIdx };
+}
+
+test('active samosbor spawns nearby pressure monster targeting unsheltered player above player level', () => {
+  const ctx = makePlayerPressureWorld();
+
+  assert.equal(spawnSamosborPlayerPressureMonsterForTests(
+    ctx.world,
+    ctx.entities,
+    ctx.state,
+    ctx.nextId,
+    testVariant('classic'),
+    FloorLevel.LIVING,
+  ), true);
+
+  const monster = ctx.entities.find(e => e.type === EntityType.MONSTER);
+  assert.ok(monster);
+  assert.equal(monster.ai?.goal, AIGoal.HUNT);
+  assert.equal(monster.ai?.combatTargetId, ctx.player.id);
+  assert.equal((monster.rpg?.level ?? 0) >= (ctx.player.rpg?.level ?? 1) + 1, true);
+  assert.equal(ctx.world.dist2(ctx.player.x, ctx.player.y, monster.x, monster.y) >= 8 * 8, true);
+  const events = getRecentEvents(ctx.state, { tags: ['player_pressure', 'target_player'], limit: 1 });
+  assert.equal(events.length, 1);
+  assert.equal(events[0].targetId, ctx.player.id);
+  assert.equal(events[0].data?.raised, true);
+});
+
+test('active samosbor pressure spawn is skipped for accepted shelter player', () => {
+  const ctx = makeShelterWorld(DoorState.HERMETIC_CLOSED);
+  const state = makeGameState({
+    currentFloor: FloorLevel.LIVING,
+    samosborActive: true,
+    samosborCount: 2,
+    worldEvents: createWorldEventState(),
+  });
+  resolvePlayerShelterAtSealForTests(ctx.world, ctx.entities, state, testVariant('classic'));
+  const pressureIdx = ctx.world.idx(28, 13);
+  ctx.world.set(28, 13, Cell.FLOOR);
+  ctx.world.zoneMap[pressureIdx] = 0;
+  ctx.world.roomMap[pressureIdx] = -1;
+
+  assert.equal(spawnSamosborPlayerPressureMonsterForTests(
+    ctx.world,
+    ctx.entities,
+    state,
+    ctx.nextId,
+    testVariant('classic'),
+    FloorLevel.LIVING,
+  ), false);
+  assert.equal(ctx.entities.some(e => e.type === EntityType.MONSTER), false);
 });
 
 test('maronary fog effect rewrites actor identity in active fog', () => {

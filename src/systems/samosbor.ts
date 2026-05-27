@@ -125,6 +125,10 @@ const UNSHELTERED_PSI_DAMAGE = 3;
 const SAMOSBOR_RANDOM_ENTITY_TRANSFER_INTERVAL = 1;
 const SAMOSBOR_RANDOM_ENTITY_TRANSFER_ENTITY_ATTEMPTS = 32;
 const SAMOSBOR_RANDOM_ENTITY_TRANSFER_CELL_ATTEMPTS = 384;
+const SAMOSBOR_PLAYER_PRESSURE_INTERVAL = 1;
+const SAMOSBOR_PLAYER_PRESSURE_MIN_RADIUS = 8;
+const SAMOSBOR_PLAYER_PRESSURE_MAX_RADIUS = 24;
+const SAMOSBOR_PLAYER_PRESSURE_PICK_ATTEMPTS = 12;
 const AFTERMATH_FACTION_CONTROL_CAP = 96;
 const FOG_DIRS_X = [1, -1, 0, 0];
 const FOG_DIRS_Y = [0, 0, 1, -1];
@@ -167,6 +171,7 @@ let maronaryGlowAccum = 0;
 let randomEntityTransferAccum = 0;
 let maronaryGlowNoticeAt = -Infinity;
 let maronaryGlowCells: number[] = [];
+let playerPressureSpawnAccum = 0;
 let activeSamosborScale: SamosborWaveScale = 'full';
 let activeSamosborWaveStarted = false;
 let istotitShelterRoomIds: number[] = [];
@@ -425,6 +430,7 @@ export function resetSamosborRuntimeForTests(): void {
   samosborDirectorAccum = 0;
   maronaryPingAccum = 0;
   randomEntityTransferAccum = 0;
+  playerPressureSpawnAccum = 0;
   clearMaronaryGlowRuntime();
   samosborPlayerShelterRoomId = -1;
   pendingAftermath = null;
@@ -1788,6 +1794,7 @@ export function updateSamosbor(
     samosborDirectorAccum = 0;
     maronaryPingAccum = 0;
     randomEntityTransferAccum = 0;
+    playerPressureSpawnAccum = 0;
     samosborPlayerShelterRoomId = -1;
     state.msgs.push(msg(variant.def.startLine ?? '⚠ САМОСБОР НАЧАЛСЯ ⚠', state.time, variant.def.tint));
     publishEvent(state, {
@@ -1907,6 +1914,11 @@ export function updateSamosbor(
     if (fogSpawnAccum >= fogSpawnInterval) {
       fogSpawnAccum -= fogSpawnInterval;
       if (activeVariant) tickSamosborFogEffects(world, entities, state, nextId, state.samosborCount, activeVariant, state.currentFloor);
+    }
+    playerPressureSpawnAccum += dt;
+    for (let i = 0; playerPressureSpawnAccum >= SAMOSBOR_PLAYER_PRESSURE_INTERVAL && i < 4; i++) {
+      playerPressureSpawnAccum -= SAMOSBOR_PLAYER_PRESSURE_INTERVAL;
+      if (activeVariant) spawnSamosborPlayerPressureMonster(world, entities, state, nextId, activeVariant, state.currentFloor);
     }
   }
 
@@ -3020,6 +3032,21 @@ function createMonster(world: World, nextId: { v: number }, kind: MonsterKind, x
   return monster;
 }
 
+function raiseMonsterToAtLeastLevel(monster: Entity, kind: MonsterKind, minLevel: number): boolean {
+  const currentLevel = Math.max(1, Math.floor(monster.rpg?.level ?? 1));
+  if (currentLevel >= minLevel) return false;
+  const def = MONSTERS[kind];
+  const rpg = randomRPG(minLevel);
+  const level = rpg.level;
+  const hpBase = scaleMonsterHp(def.hp, level);
+  const hpFinal = Math.max(1, Math.round(hpBase * (1 + 0.1 * rpg.str)));
+  monster.rpg = rpg;
+  monster.hp = hpFinal;
+  monster.maxHp = hpFinal;
+  monster.speed = scaleMonsterSpeed(def.speed, level);
+  return true;
+}
+
 function randomEnumValue<T extends number>(values: readonly T[]): T {
   return values[Math.floor(Math.random() * values.length)];
 }
@@ -3706,6 +3733,186 @@ function spawnRandomMapMonsters(
     entities.push(createMonster(world, nextId, kind, x + 0.5, y + 0.5, floor));
     spawned++;
   }
+}
+
+const samosborPlayerPressurePreferredCells: number[] = [];
+const samosborPlayerPressureFallbackCells: number[] = [];
+const samosborPlayerPressureOccupants: Entity[] = [];
+
+function isPlayerInAcceptedSamosborShelter(world: World, state: GameState, player: Entity): boolean {
+  const room = world.roomAt(player.x, player.y);
+  if (!room || !room.sealed) return false;
+  if (room.id === samosborPlayerShelterRoomId) return true;
+  return getSamosborShelterRoomIds(state).includes(room.id);
+}
+
+function samosborDirectLineBlocked(world: World, ax: number, ay: number, bx: number, by: number): boolean {
+  const dx = world.delta(ax, bx);
+  const dy = world.delta(ay, by);
+  const steps = Math.max(2, Math.ceil(Math.max(Math.abs(dx), Math.abs(dy)) * 2));
+  for (let i = 1; i < steps; i++) {
+    const t = i / steps;
+    const x = world.wrap(Math.floor(ax + dx * t));
+    const y = world.wrap(Math.floor(ay + dy * t));
+    if (world.solid(x, y)) return true;
+  }
+  return false;
+}
+
+function samosborCellInPlayerFrontCone(world: World, player: Entity, x: number, y: number): boolean {
+  const dx = world.delta(player.x, x + 0.5);
+  const dy = world.delta(player.y, y + 0.5);
+  const len = Math.sqrt(dx * dx + dy * dy);
+  if (len <= 0.001) return true;
+  const dot = (Math.cos(player.angle) * dx + Math.sin(player.angle) * dy) / len;
+  return dot > 0.45;
+}
+
+function collectSamosborPlayerPressureCells(world: World, player: Entity): number[] {
+  samosborPlayerPressurePreferredCells.length = 0;
+  samosborPlayerPressureFallbackCells.length = 0;
+  const px = Math.floor(player.x);
+  const py = Math.floor(player.y);
+  const playerRoomId = world.roomAt(player.x, player.y)?.id ?? -1;
+  const minSq = SAMOSBOR_PLAYER_PRESSURE_MIN_RADIUS * SAMOSBOR_PLAYER_PRESSURE_MIN_RADIUS;
+  const maxSq = SAMOSBOR_PLAYER_PRESSURE_MAX_RADIUS * SAMOSBOR_PLAYER_PRESSURE_MAX_RADIUS;
+
+  for (let dy = -SAMOSBOR_PLAYER_PRESSURE_MAX_RADIUS; dy <= SAMOSBOR_PLAYER_PRESSURE_MAX_RADIUS; dy++) {
+    for (let dx = -SAMOSBOR_PLAYER_PRESSURE_MAX_RADIUS; dx <= SAMOSBOR_PLAYER_PRESSURE_MAX_RADIUS; dx++) {
+      const dSqGrid = dx * dx + dy * dy;
+      if (dSqGrid < minSq || dSqGrid > maxSq) continue;
+      const x = world.wrap(px + dx);
+      const y = world.wrap(py + dy);
+      const ci = world.idx(x, y);
+      if (world.cells[ci] !== Cell.FLOOR || world.aptMask[ci] || world.hermoWall[ci]) continue;
+      const roomId = world.roomMap[ci];
+      if (roomId >= 0 && roomId < world.apartmentRoomCount) continue;
+      const dSq = world.dist2(player.x, player.y, x + 0.5, y + 0.5);
+      if (dSq < minSq || dSq > maxSq) continue;
+
+      const blocked = samosborDirectLineBlocked(world, player.x, player.y, x + 0.5, y + 0.5);
+      if (blocked) {
+        samosborPlayerPressurePreferredCells.push(ci);
+        continue;
+      }
+      const differentRoom = playerRoomId >= 0 && roomId >= 0 && roomId !== playerRoomId;
+      if (differentRoom || !samosborCellInPlayerFrontCone(world, player, x, y)) {
+        samosborPlayerPressureFallbackCells.push(ci);
+      }
+    }
+  }
+
+  return samosborPlayerPressurePreferredCells.length > 0
+    ? samosborPlayerPressurePreferredCells
+    : samosborPlayerPressureFallbackCells;
+}
+
+function samosborPressureCellOccupied(entities: Entity[], ci: number): boolean {
+  const x = (ci % W) + 0.5;
+  const y = ((ci / W) | 0) + 0.5;
+  ensureEntityIndex(entities).queryRadiusCapped(
+    x,
+    y,
+    1.2,
+    samosborPlayerPressureOccupants,
+    ENTITY_MASK_ACTOR,
+    1,
+  );
+  return samosborPlayerPressureOccupants.length > 0;
+}
+
+function pickSamosborPlayerPressureCell(world: World, entities: Entity[], player: Entity): number {
+  const pool = collectSamosborPlayerPressureCells(world, player);
+  for (let attempt = 0; attempt < SAMOSBOR_PLAYER_PRESSURE_PICK_ATTEMPTS && pool.length > 0; attempt++) {
+    const poolIdx = Math.floor(Math.random() * pool.length);
+    const ci = pool[poolIdx];
+    if (samosborPressureCellOccupied(entities, ci)) {
+      pool.splice(poolIdx, 1);
+      continue;
+    }
+    return ci;
+  }
+  return -1;
+}
+
+function armSamosborPressureMonster(world: World, monster: Entity, player: Entity): void {
+  const tx = world.wrap(Math.floor(player.x));
+  const ty = world.wrap(Math.floor(player.y));
+  monster.ai = monster.ai ?? { goal: AIGoal.HUNT, tx, ty, path: [], pi: 0, stuck: 0, timer: 0 };
+  monster.ai.goal = AIGoal.HUNT;
+  monster.ai.combatTargetId = player.id;
+  monster.ai.tx = tx;
+  monster.ai.ty = ty;
+  monster.ai.path = [];
+  monster.ai.pi = 0;
+  monster.ai.stuck = 0;
+  monster.ai.timer = 0;
+  tryAssignPathToCell(world, monster, tx, ty);
+}
+
+function spawnSamosborPlayerPressureMonster(
+  world: World,
+  entities: Entity[],
+  state: GameState,
+  nextId: { v: number },
+  variant: ActiveSamosborVariant,
+  floor: FloorLevel,
+): boolean {
+  if (!state.samosborActive || !canSpawnEntityType(entities, EntityType.MONSTER)) return false;
+  const player = findPlayer(entities);
+  if (!player || isPlayerInAcceptedSamosborShelter(world, state, player)) return false;
+
+  const ci = pickSamosborPlayerPressureCell(world, entities, player);
+  if (ci < 0) return false;
+
+  const kind = variant.extraEyes > 0 && Math.random() < 0.25
+    ? MonsterKind.EYE
+    : pickMonsterKindForWave(floor, state.samosborCount);
+  const x = (ci % W) + 0.5;
+  const y = ((ci / W) | 0) + 0.5;
+  const monster = createMonster(world, nextId, kind, x, y, floor);
+  const playerLevel = Math.max(1, Math.floor(player.rpg?.level ?? 1));
+  const minMonsterLevel = playerLevel + 1;
+  const raised = raiseMonsterToAtLeastLevel(monster, kind, minMonsterLevel);
+  armSamosborPressureMonster(world, monster, player);
+  entities.push(monster);
+
+  publishEvent(state, {
+    type: 'samosbor_warning',
+    zoneId: world.zoneMap[ci] >= 0 ? world.zoneMap[ci] : undefined,
+    roomId: world.roomMap[ci] >= 0 ? world.roomMap[ci] : undefined,
+    x,
+    y,
+    actorId: monster.id,
+    actorName: MONSTERS[kind]?.name,
+    targetId: player.id,
+    targetName: player.name ?? 'Вы',
+    targetFaction: player.faction,
+    monsterKind: kind,
+    severity: 4,
+    privacy: 'local',
+    tags: ['samosbor', 'player_pressure', 'spawn', 'target_player', `samosbor_${variant.def.id}`],
+    data: {
+      playerLevel,
+      monsterLevel: monster.rpg?.level,
+      minMonsterLevel,
+      raised,
+      distance: Math.round(Math.sqrt(world.dist2(player.x, player.y, x, y))),
+      variantId: variant.def.id,
+    },
+  });
+  return true;
+}
+
+export function spawnSamosborPlayerPressureMonsterForTests(
+  world: World,
+  entities: Entity[],
+  state: GameState,
+  nextId: { v: number },
+  variant: ActiveSamosborVariant,
+  floor: FloorLevel,
+): boolean {
+  return spawnSamosborPlayerPressureMonster(world, entities, state, nextId, variant, floor);
 }
 
 function stampVeretarAreaLeak(world: World, cx: number, cy: number, radius: number): number {

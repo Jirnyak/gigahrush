@@ -29,9 +29,9 @@ import { generateSprites } from './render/sprites';
 import { Spr, monsterSpr } from './render/sprite_index';
 import {
   SCR_W, SCR_H, initWebGL, renderSceneGL, updateWorldData, updateDynamicData,
-  disposeWebGL, setDynamicSkyTexture, type DynamicSkyTexture,
+  disposeWebGL, setDynamicSkyTexture, getRenderSceneDebugStats, type DynamicSkyTexture,
 } from './render/webgl';
-import { drawHUD, drawPointerCaptureGate } from './render/hud';
+import { drawHUD, drawPointerCaptureGate, type HudPerfDebugSnapshot } from './render/hud';
 import {
   spawnBloodHit, spawnDeathPool, updateBloodTrails, updateParticles, particles,
   spawnProjectileBodyImpact, spawnProjectileFloorImpact, spawnProjectileWallImpact, isEnergyProjectileImpact,
@@ -59,9 +59,10 @@ import {
   CONTROL_ACTIONS,
   beginControlCapture,
   cancelControlCapture,
+  clearControlBinding,
   clearControlInputs,
+  controlActionLocked,
   getControlCaptureAction,
-  resetControlBinding,
 } from './systems/controls';
 import { GAME_MENU_ITEMS } from './systems/game_menu';
 import { MOBILE_BUTTON_CONTROL_ROWS } from './systems/mobile_actions';
@@ -104,7 +105,7 @@ import {
   playGauss, playPlasma, playBFG, playFlame, playPsiBeam,
   playProjectileImpact, playEnergyImpact, playProjectileBodyHit,
   startAmbientDrone, setListenerPos, playSoundAt, playHudBarChange,
-  setAudioSuspendedForPage,
+  setAudioSuspendedForPage, setAudioSuspendedForPlatform,
   type HudBarAudioId,
 } from './systems/audio';
 import {
@@ -370,6 +371,14 @@ import {
   setMapEditorPatchState,
 } from './systems/map_editor';
 import { createGameSavePayload, saveShapeVersionStatus } from './systems/save_runtime';
+import { createPortalCompactSavePayload } from './systems/save_payload';
+import {
+  initPlatformBridge,
+  markPlatformGameplayStart,
+  markPlatformGameplayStop,
+  markPlatformReady,
+  savePlatformRawGameSave,
+} from './systems/platform_bridge';
 import { addFactionRel, addFactionRelMutual, initFactionRelations } from './data/relations';
 import { createRuntimeCamera, resetRuntimeCamera, runtimeCameraView, startDeathCamera, updateRuntimeCamera } from './systems/camera';
 import { onHeraldKilled, onCreatorKilled, onHellArrival, tryCreateVoiceQuest, onVoidEntry } from './data/plot_events';
@@ -407,6 +416,9 @@ let titleInputField: TitleInputField = 'name';
 let titleLanguageId = loadTitleLanguageId();
 let titleLanguageHits: TitleLanguageHit[] = [];
 let mobileControls: MobileControls | null = null;
+let mobileContextKey = '';
+let mobileCanInteractCache = false;
+let mobileCanInteractProbeAt = Number.NEGATIVE_INFINITY;
 type PointerCaptureGateReason = 'released';
 let pointerCaptureGate = false;
 let pointerCaptureGateReason: PointerCaptureGateReason = 'released';
@@ -523,12 +535,22 @@ function playerAlifeFields(source: Partial<Entity> = {}): Pick<Entity, 'persiste
 
 let pageHiddenPause = typeof document !== 'undefined' ? document.hidden : false;
 let pageHiddenInputCleared = false;
+let platformPause = false;
+let platformPauseInputCleared = false;
 
 function setPageHiddenPause(hidden: boolean): void {
   pageHiddenPause = hidden;
   pageHiddenInputCleared = false;
   setAudioSuspendedForPage(hidden);
   if (!hidden) scheduleResize();
+  syncPauseState();
+}
+
+function setPlatformPause(paused: boolean): void {
+  platformPause = paused;
+  platformPauseInputCleared = false;
+  setAudioSuspendedForPlatform(paused);
+  if (!paused) scheduleResize();
   syncPauseState();
 }
 
@@ -676,6 +698,7 @@ let lastProjectileHitMsgTick = -999;
 let runtimeCamera = createRuntimeCamera();
 let pendingLoad: (() => void) | null = null; // deferred heavy generation callback
 let pendingLoadDrawn = false; // true = loading screen was painted, next frame runs the callback
+let platformGameplayMarkedActive = false;
 let currentTip = randomTip();
 let activeSkyProvider: (DynamicSkyTexture & { update(deltaSeconds: number): boolean }) | null = null;
 let lastVoidReturnPortalHintTick = -9999;
@@ -685,6 +708,8 @@ const PLAYER_BAR_AUDIO_IDS = ['hp', 'psi', 'food', 'water', 'sleep', 'toilet', '
 const PLAYER_BAR_AUDIO_THRESHOLD = 5;
 const PLAYER_BAR_AUDIO_COOLDOWN = 1.25;
 const PLAYER_BAR_AUDIO_SLEEP_COOLDOWN = 4.0;
+
+initPlatformBridge({ onPauseChange: setPlatformPause });
 type PlayerBarAudioValues = Record<HudBarAudioId, number>;
 const playerBarAudio = {
   initialized: false,
@@ -1611,12 +1636,14 @@ function bootInitialGameOrTitle(): void {
   if (shouldUseTouchControls()) {
     titleStartNeedsInit = true;
     showTitle();
+    markPlatformReady();
     return;
   }
   drawLoading();
   setTimeout(() => {
     initGame();
     showTitle();
+    markPlatformReady();
   }, 0);
 }
 
@@ -3809,7 +3836,17 @@ function saveGame(): void {
       voidEntryFromFloor: (state as VoidReturnPortalHost).voidEntryFromFloor,
       floorMemory: floorMemoryStateForSave(),
     });
-    localStorage.setItem(SAVE_KEY, JSON.stringify(data));
+    const raw = JSON.stringify(data);
+    const compactData = createPortalCompactSavePayload(data);
+    const compactRaw = JSON.stringify(compactData);
+    const rawBytes = new TextEncoder().encode(raw).length;
+    const compactBytes = new TextEncoder().encode(compactRaw).length;
+    localStorage.setItem(SAVE_KEY, raw);
+    void savePlatformRawGameSave(raw, rawBytes, {
+      raw: compactRaw,
+      bytes: compactBytes,
+      mode: 'compact',
+    });
     state.msgs.push(msg('Игра сохранена', state.time, '#4f4'));
   } catch {
     state.msgs.push(msg('Ошибка сохранения!', state.time, '#f44'));
@@ -4024,11 +4061,20 @@ function applyUrinationPenalty(dt: number): void {
 
 function setCellToFloor(x: number, y: number): void {
   const ci = world.idx(x, y);
+  const oldCell = world.cells[ci];
+  if (oldCell === Cell.DOOR) world.removeDoorAt(ci);
   world.cells[ci] = Cell.FLOOR;
+  if (oldCell !== Cell.FLOOR) world.markCellsDirty();
   if (!world.floorTex[ci]) {
     const room = world.roomAt(x + 0.5, y + 0.5);
     world.floorTex[ci] = room?.floorTex ?? Tex.F_CONCRETE;
+    world.markFloorTexDirty();
   }
+}
+
+function addRuntimeDoorToRoom(roomId: number, doorIdx: number): void {
+  const room = roomId >= 0 ? world.rooms[roomId] : undefined;
+  if (room && !room.doors.includes(doorIdx)) room.doors.push(doorIdx);
 }
 
 function cleanSurfaceArea(cx: number, cy: number, radiusCells: number): number {
@@ -4146,6 +4192,7 @@ function updateEquippedTool(dt: number): void {
       return;
     }
     setCellToFloor(cx, cy);
+    updateWorldData(world);
     consumeToolDurability(player, 1, state.msgs, state.time, state);
     state.msgs.push(msg('Стена разрушена', state.time, '#fc4'));
     playBreak();
@@ -4177,7 +4224,10 @@ function updateEquippedTool(dt: number): void {
     const roomA = world.roomMap[world.idx(cx - 1, cy)] >= 0 ? world.roomMap[world.idx(cx - 1, cy)] : world.roomMap[world.idx(cx, cy - 1)];
     const roomB = world.roomMap[world.idx(cx + 1, cy)] >= 0 ? world.roomMap[world.idx(cx + 1, cy)] : world.roomMap[world.idx(cx, cy + 1)];
     world.cells[ci] = Cell.DOOR;
+    world.markCellsDirty();
     world.doors.set(ci, { idx: ci, state: DoorState.CLOSED, roomA, roomB, keyId: '', timer: 0 });
+    addRuntimeDoorToRoom(roomA, ci);
+    addRuntimeDoorToRoom(roomB, ci);
     updateWorldData(world);
     consumeToolDurability(player, 1, state.msgs, state.time, state);
     state.msgs.push(msg('Дверь установлена', state.time, '#6cf'));
@@ -4202,6 +4252,7 @@ function updateEquippedTool(dt: number): void {
     }
     if (world.cells[ci] === Cell.DOOR) world.removeDoorAt(ci);
     world.cells[ci] = Cell.WALL;
+    world.markCellsDirty();
     const room = world.roomAt(player.x, player.y);
     world.wallTex[ci] = room?.wallTex ?? Tex.CONCRETE;
     world.markWallTexDirty();
@@ -4353,10 +4404,20 @@ function mobileGestureUnlock(): void {
 
 function syncPauseState(): void {
   if (typeof state === 'undefined') return;
-  state.paused = pointerCaptureGateVisible() || pageHiddenPause || state.showMenu || state.showInventory || state.showNpcMenu || state.showContainerMenu ||
+  state.paused = pointerCaptureGateVisible() || pageHiddenPause || platformPause || state.showMenu || state.showInventory || state.showNpcMenu || state.showContainerMenu ||
     state.showQuests || state.showDebug || state.showFactions || state.showLog || state.showControls || state.showUiSettings ||
     isNetSphereOpen() || isNetTerminalGenOpen() || isInteractableOverlayOpen() || isEmergencyPanelMenuOpen() || isMapEditorOpen();
   syncPointerCursorClasses();
+  syncPlatformGameplayState();
+}
+
+function syncPlatformGameplayState(): void {
+  if (typeof state === 'undefined') return;
+  const active = started && !pendingLoad && !state.paused && !state.gameOver;
+  if (active === platformGameplayMarkedActive) return;
+  platformGameplayMarkedActive = active;
+  if (active) markPlatformGameplayStart();
+  else markPlatformGameplayStop();
 }
 
 function isMobileMenuOpen(): boolean {
@@ -4519,10 +4580,6 @@ function confirmActiveMobileSelection(): void {
 function canInteractAhead(): boolean {
   return interactionTargetAhead() !== null;
 }
-
-let mobileContextKey = '';
-let mobileCanInteractCache = false;
-let mobileCanInteractProbeAt = Number.NEGATIVE_INFINITY;
 
 function updateMobileContext(force = false): void {
   const controls = mobileControls;
@@ -5528,7 +5585,13 @@ function handleMenuInput(): void {
         state.msgs.push(msg(`Чувствительность мыши: ${Math.round(sensitivity * 100)}%`, state.time, '#8cf'));
       } else if (interactEdge && state.controlView === 'keys') {
         const action = CONTROL_ACTIONS[state.controlSel];
-        if (action) beginControlCapture(action.id);
+        if (action) {
+          if (controlActionLocked(action.id)) {
+            state.msgs.push(msg(`Клавиша зафиксирована: ${action.label}`, state.time, '#fc4'));
+          } else {
+            beginControlCapture(action.id);
+          }
+        }
       }
       if (controlResetEdge && mouseSensitivitySelected) {
         const sensitivity = resetMouseLookSensitivity();
@@ -5536,8 +5599,11 @@ function handleMenuInput(): void {
       } else if (controlResetEdge && state.controlView === 'keys') {
         const action = CONTROL_ACTIONS[state.controlSel];
         if (action) {
-          resetControlBinding(action.id);
-          state.msgs.push(msg(`Клавиши сброшены: ${action.label}`, state.time, '#8cf'));
+          if (clearControlBinding(action.id)) {
+            state.msgs.push(msg(`Клавиши очищены: ${action.label}`, state.time, '#8cf'));
+          } else {
+            state.msgs.push(msg(`Клавиша зафиксирована: ${action.label}`, state.time, '#fc4'));
+          }
         }
       }
     }
@@ -5919,6 +5985,65 @@ let needsTickAccum = 0;
 let bloodTrailAccum = 0;
 let deadCleanupAccum = 0;
 let entityIndexFrame = 0;
+let fpsWindowStart = lastTime;
+let fpsFrameCount = 0;
+let frameMsWindowSum = 0;
+let frameMsWindowMax = 0;
+let displayedFps = 0;
+let displayedFrameMsAvg = 0;
+let displayedFrameMsMax = 0;
+let lastAiUpdateMs = 0;
+let lastRenderSceneMs = 0;
+let lastHudDrawMs = 0;
+
+function updateFpsMeter(now: number, frameMs: number): number {
+  const elapsed = now - fpsWindowStart;
+  if (elapsed > 2000) {
+    fpsWindowStart = now;
+    fpsFrameCount = 0;
+    frameMsWindowSum = 0;
+    frameMsWindowMax = 0;
+    return displayedFps;
+  }
+  fpsFrameCount++;
+  frameMsWindowSum += frameMs;
+  frameMsWindowMax = Math.max(frameMsWindowMax, frameMs);
+  if (elapsed >= 500) {
+    displayedFps = Math.max(0, Math.round(fpsFrameCount * 1000 / elapsed));
+    displayedFrameMsAvg = frameMsWindowSum / Math.max(1, fpsFrameCount);
+    displayedFrameMsMax = frameMsWindowMax;
+    fpsWindowStart = now;
+    fpsFrameCount = 0;
+    frameMsWindowSum = 0;
+    frameMsWindowMax = 0;
+  }
+  return displayedFps;
+}
+
+function hudPerfDebugSnapshot(fps: number): HudPerfDebugSnapshot {
+  const ai = getAiSchedulerStats();
+  const entityStats = getEntityIndex().getDebugStats();
+  const renderStats = getRenderSceneDebugStats();
+  return {
+    fps,
+    frameMsAvg: displayedFrameMsAvg,
+    frameMsMax: displayedFrameMsMax,
+    aiMs: lastAiUpdateMs,
+    renderMs: lastRenderSceneMs,
+    hudMs: lastHudDrawMs,
+    liveAi: entityStats.aiCount,
+    visibleSprites: renderStats.visibleSprites,
+    drawnSprites: renderStats.drawnSprites,
+    visibleEntityQueryResults: renderStats.visibleEntityQueryResults,
+    aiHot: ai.hot,
+    aiWarm: ai.warm,
+    aiCold: ai.cold,
+    aiUpdatedHot: ai.updatedHot,
+    aiUpdatedWarm: ai.updatedWarm,
+    aiUpdatedCold: ai.updatedCold,
+    aiSkipped: ai.skipped,
+  };
+}
 
 function cleanupDeadEntities(dt: number): number {
   deadCleanupAccum += dt;
@@ -5938,6 +6063,17 @@ function cleanupDeadEntities(dt: number): number {
 
 function clearPagePauseInputsOnce(): void {
   if (pageHiddenInputCleared) return;
+  clearExternalPauseInputs();
+  pageHiddenInputCleared = true;
+}
+
+function clearPlatformPauseInputsOnce(): void {
+  if (platformPauseInputCleared) return;
+  clearExternalPauseInputs();
+  platformPauseInputCleared = true;
+}
+
+function clearExternalPauseInputs(): void {
   clearControlInputs(input);
   mobileControls?.resetInput();
   input.mouseAttack = false;
@@ -5948,7 +6084,11 @@ function clearPagePauseInputsOnce(): void {
   input.touch.lookX = 0;
   input.touch.lookY = 0;
   input.touch.active = false;
-  pageHiddenInputCleared = true;
+}
+
+function clearExternalPauseInputsOnce(): void {
+  if (pageHiddenPause) clearPagePauseInputsOnce();
+  if (platformPause) clearPlatformPauseInputsOnce();
 }
 
 function gameLoop(now: number): void {
@@ -5963,8 +6103,8 @@ function gameLoop(now: number): void {
       requestAnimationFrame(gameLoop);
       return;
     }
-    if (pageHiddenPause) {
-      clearPagePauseInputsOnce();
+    if (pageHiddenPause || platformPause) {
+      clearExternalPauseInputsOnce();
       if (typeof state !== 'undefined') {
         state.sleeping = false;
         syncPauseState();
@@ -5988,8 +6128,8 @@ function gameLoop(now: number): void {
     return;
   }
 
-  if (pageHiddenPause) {
-    clearPagePauseInputsOnce();
+  if (pageHiddenPause || platformPause) {
+    clearExternalPauseInputsOnce();
     state.sleeping = false;
     syncPauseState();
     lastTime = now;
@@ -6103,10 +6243,12 @@ function gameLoop(now: number): void {
       updateNeeds(entities, needsDt, state.time, state.msgs, player.id, nextEntityId, state, world);
     }
     if (updateBetonoedShortcut(world, entities, player, state, dt)) updateWorldData(world);
-    setListenerPos(player.x, player.y, (ax, ay, bx, by) => world.dist2(ax, ay, bx, by));
+    setListenerPos(player.x, player.y, world);
     updateRouteCues(world, player, state);
     updateMapExploration(world, player, state);
+    const aiStart = performance.now();
     updateAI(world, entities, dt, state.time, state.msgs, player.id, state.clock, state.samosborActive, nextEntityId, state.currentFloor, state);
+    lastAiUpdateMs = performance.now() - aiStart;
     updateRailTrains(world, entities, player, state, dt);
     updateParitelSteamBridge(world, entities, player, state, dt);
     updateCarnivorousFungus(world, entities, player, state, dt, nextEntityId);
@@ -6264,10 +6406,12 @@ function gameLoop(now: number): void {
       updateNeeds(entities, needsDt, state.time, state.msgs, player.id, nextEntityId, state, world);
     }
     if (updateBetonoedShortcut(world, entities, player, state, dt)) updateWorldData(world);
-    setListenerPos(player.x, player.y, (ax, ay, bx, by) => world.dist2(ax, ay, bx, by));
+    setListenerPos(player.x, player.y, world);
     updateMapExploration(world, player, state);
     updatePseudolifts(world, entities, player, state);
+    const aiStart = performance.now();
     updateAI(world, entities, dt, state.time, state.msgs, player.id, state.clock, state.samosborActive, nextEntityId, state.currentFloor, state);
+    lastAiUpdateMs = performance.now() - aiStart;
     tickCellHazards(world, entities, state, dt, player, false);
     if (updateSamosbor(world, entities, state, dt, nextEntityId, currentLocalSamosborPatchGeneration, scheduleLocalSamosborPatch)) {
       reportNetSphereProgressEvents();
@@ -6319,6 +6463,7 @@ function gameLoop(now: number): void {
   checkRestart();
   if (pendingLoad) { requestAnimationFrame(gameLoop); return; }
   updateMobileContext();
+  const currentFps = updateFpsMeter(now, rawDt * 1000);
 
   // ── Render ───────────────────────────────────────────────
   // Fog density varies by floor level
@@ -6351,16 +6496,22 @@ function gameLoop(now: number): void {
 
   // WebGL raycaster + sprites
   const ambientLight = currentFloorRunEntry(state).designFloorId === 'darkness' ? 0 : 0.12;
+  const renderSceneStart = performance.now();
   renderSceneGL(world, textures, sprites, entities,
     cameraView,
     fogDensity, glitch, flashlight, uiTime, particles, state.samosborActive, ambientLight, toolBeam, state.uvBeamLen);
+  lastRenderSceneMs = performance.now() - renderSceneStart;
 
   // Draw HUD on 2D overlay canvas
   ctx.clearRect(0, 0, hudCanvas.width, hudCanvas.height);
+  const hudDrawStart = performance.now();
   drawHUD(ctx, hudCanvas.width / SCR_W, hudCanvas.height / SCR_H, player, state, world, entities, uiTime, {
+    fps: currentFps,
+    perf: uiElementEnabled('fps_counter') ? hudPerfDebugSnapshot(currentFps) : undefined,
     pointerLockHint: !mobileControls?.isEnabled() && !input.mouse.locked && !pointerCaptureGateVisible(),
     pointerCaptureGate: pointerCaptureGateVisible(),
   });
+  lastHudDrawMs = performance.now() - hudDrawStart;
 
   requestAnimationFrame(gameLoop);
 }
@@ -6382,6 +6533,7 @@ function returnToTitleScreen(): void {
   pendingLoad = null;
   pendingLoadDrawn = false;
   started = false;
+  syncPlatformGameplayState();
   clearPointerCaptureGate();
   titleRunSeedText = '';
   titleInputField = 'name';
@@ -6410,6 +6562,7 @@ function finishStartGameFromTitle(): void {
   requestPointerLockIfDesktop();
   startAmbientDrone();
   updateMobileContext();
+  syncPauseState();
 }
 
 function startGameFromTitle(): void {

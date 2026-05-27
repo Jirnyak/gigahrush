@@ -237,8 +237,8 @@ jirnyak
 
 ## Campaign Decision Until Fixed
 
-- Keep itch.io as the primary store/page link in public copy because the page is playable and visible by direct URL/profile.
-- Use the direct Cloudflare build as a fallback play link when a community complains about itch loading or embedding.
+- Superseded by PR_18: for RU/CIS public copy, use MyIndie as the primary game page; keep itch.io as mirror/EN link while monitoring indexing.
+- Use the direct Cloudflare build as a fallback play link when a community complains about MyIndie or itch loading/embedding.
 - Do not create a new itch.io page, new account, duplicate devlog or duplicate release-announcement topic to bypass `noindex`.
 - Do not ask for ratings, votes, collections or artificial engagement.
 - If search still collides after indexing because older `gigahrush` pages rank above this project, consider a normal title refinement rather than a new page: `GIGAH|RUSH: Samosbor` or `GIGAH|RUSH - Samosbor Survival Horror`.

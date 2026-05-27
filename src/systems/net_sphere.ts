@@ -1,5 +1,6 @@
 import { FloorLevel, type Entity, type GameState } from '../core/types';
 import { getControlCaptureAction, matchesControlAction } from './controls';
+import { portalAllowsOptionalNetwork } from './platform_bridge';
 import { currentFloorRunEntry, ensureFloorRunState, floorRunEntryRouteId } from './procedural_floors';
 
 type NetSphereStatus = 'idle' | 'syncing' | 'online' | 'offline';
@@ -651,6 +652,7 @@ function submitDraft(): void {
 }
 
 export function bindNetSphereInput(): () => void {
+  if (!portalAllowsOptionalNetwork()) return () => {};
   if (runtime.bound && inputUnbind) return inputUnbind;
   runtime.bound = true;
   ensureIdentity();
@@ -718,6 +720,7 @@ export function isNetSphereOpen(): boolean {
 }
 
 export function openNetSphere(): void {
+  if (!portalAllowsOptionalNetwork()) return;
   ensureIdentity();
   runtime.open = true;
   runtime.nextPollAt = 0;
@@ -729,6 +732,7 @@ export function closeNetSphere(): void {
 }
 
 export function tickNetSphere(state: GameState, player: Entity): void {
+  if (!portalAllowsOptionalNetwork()) return;
   ensureIdentity();
   runtime.lastProgress = progressFromState(state, player);
   const now = performance.now();
@@ -738,6 +742,7 @@ export function tickNetSphere(state: GameState, player: Entity): void {
 }
 
 export function pollNetMarketSnapshot(): void {
+  if (!portalAllowsOptionalNetwork()) return;
   ensureIdentity();
   void pollMarketSnapshot();
 }
@@ -751,6 +756,7 @@ export function sendNetMarketImpulses(
   state: GameState,
   player: Entity,
 ): void {
+  if (!portalAllowsOptionalNetwork()) return;
   ensureIdentity();
   void postMarketImpulses(impulses, progressFromState(state, player));
 }
@@ -761,6 +767,7 @@ export function reportNetSphereEvent(
   state: GameState,
   player: Entity,
 ): void {
+  if (!portalAllowsOptionalNetwork()) return;
   ensureIdentity();
   const payload = {
     netGen: runtime.netGen,
@@ -791,6 +798,24 @@ export function reportNetSphereEvent(
 }
 
 export function getNetSphereSnapshot(): NetSphereSnapshot {
+  if (!portalAllowsOptionalNetwork()) {
+    return {
+      open: false,
+      netGen: '',
+      sessionId: '',
+      nickname: 'Жилец',
+      status: 'idle',
+      statusText: statusText('idle'),
+      error: '',
+      stats: null,
+      profile: null,
+      market: null,
+      chat: [],
+      events: [],
+      draft: '',
+      busy: false,
+    };
+  }
   ensureIdentity();
   const nickname = cleanNickname(runtime.profile?.nickname ?? '') || cleanNickname(runtime.lastProgress?.nickname ?? '') || 'Жилец';
   return {

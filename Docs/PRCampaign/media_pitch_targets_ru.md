@@ -1,13 +1,14 @@
 # Media Pitch Targets: ГИГАХРУЩ
 
-Краткий рабочий список для точечного pitch. Ничего не отправлять без актуального press kit: playable link, itch.io, 30-60 sec GIF/video, 5-8 screenshots, cover, RU/EN fact sheet, content warning, контакт Telegram/email.
+Краткий рабочий список для точечного pitch. Ничего не отправлять без актуального press kit: audience-appropriate playable link, 30-60 sec GIF/video, 5-8 screenshots, cover, RU/EN fact sheet, content warning, контакт Telegram/email.
 
 Основной угол: browser survival horror / ARPG shooter inside an endless Soviet concrete apartment block; playable in browser; Samosbor, A-Life NPC, factions, expeditions, persistent consequences.
 
 Основные ссылки:
 
-- itch.io: https://tenevik.itch.io/gigahrush
-- Web build: https://gigahrush.bileter.workers.dev
+- MyIndie RU/CIS primary: https://myindie.ru/games/game/gigahrush
+- Web build / fallback: https://gigahrush.bileter.workers.dev
+- itch.io mirror / EN: https://tenevik.itch.io/gigahrush
 - GIF 1: https://img.itch.zone/aW1hZ2UvNDU4NzE2MC8yNzQwNDQ4OS5naWY=/original/LTioNh.gif
 - GIF 2: https://img.itch.zone/aW1hZ2UvNDU4NzE2MC8yNzQwNDQ5MC5naWY=/original/xkmr2K.gif
 - Cover: https://img.itch.zone/aW1nLzI3MzI4NTE0LnBuZw==/original/Pp7K5P.png

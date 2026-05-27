@@ -75,3 +75,41 @@ Implementation guardrail: canonical Cloudflare/itch build remains zero-runtime-d
 3. If VK Play: log in to developers.vkplay.ru under Tenevik identity; create draft only, no final publish without preview.
 4. If ИграйТут: verify current submit form/account, prepare no-external-link ZIP and media pack, then submit only after preview.
 5. After first RU upload is live, publish one Пикабу gamedev longpost and pitch Indie Spotlight/prototype.indie with the new local playable URL.
+
+## 2026-05-27 Yandex / VK Play Official Recheck
+
+Срез 20:08-20:14 UTC / 21:08-21:14 BST, без кода, без upload, без publish.
+
+| Platform | Official requirements confirmed | Current session blocker | Decision |
+| --- | --- | --- | --- |
+| Яндекс Игры | SDK Яндекс Игр обязателен для успешной модерации; требуется корректный `LoadingAPI.ready()`; игра с прогрессом должна сохранять прогресс; звук должен останавливаться при сворачивании; платежи/реклама только через SDK; unzipped source limit `100 MB`; в корне архива нужен `index.html`; внешние ссылки в текстах/медиа не допускаются кроме разрешенных каталогом/сообществом случаев; moderation usually takes `3-5 working days`. | Chrome reaches Yandex as `tenevik.games@gmail.com`, but `https://games.yandex.com/console` redirects to Yandex ID registration asking to create a Yandex mailbox. No mailbox or draft was created. | Ranking unchanged: best long-term RU/CIS upload target, but only after separate `portal=yandex` build and owner account setup. Do not submit current build. |
+| VK Play browser project | Project creation supports `Browser` type; after creation the project cannot be deleted from account, only hidden. Browser projects are developer-hosted through an HTTPS iframe URL entered in Basic features; VK Play then loads `https://vkplay.ru/app/[GMRID]`. Test iFrames support up to 10 test pages. Dashboard shows moderation/publication status and distinguishes unpublished from published. Browser test checklist includes first-load success, adaptive layout, no external leading links on page, no external links in game, no third-party ads/payments, age rating and filled Basic Features fields. | Chrome is logged into `developers.vkplay.ru` as `Tenevik`, but `Developer Dashboard` opens a registration application requiring `Company Name`, `Country of Residence` where taxes are paid, game description, contact emails and `I'm 18 years old`. No registration application or browser project was submitted because those are owner/legal attestations. | Nearer practical scout remains valid, but next step is owner-completed developer registration. After that, create only a non-public Browser draft/test iframe and do not publish until preview QA passes. |
+
+## 2026-05-27 Bridge Start
+
+PR_28 started the engineering side without submitting to any portal:
+
+- Added optional `src/systems/platform_bridge.ts` for Yandex/GamePush SDK lifecycle hooks.
+- Added platform pause as transient runtime state in `src/main.ts`.
+- Extended audio suspension to multiple reasons, so page-hidden and platform pauses cannot resume over each other.
+- Local `localStorage` save remains authoritative; portal cloud-save is attempted only when an SDK exists and the raw payload is below `190 KiB`.
+- Focused verification passed: `npm run typecheck` and `node --test --import tsx tests/audio.test.ts tests/platform-bridge.test.ts`.
+
+This does not make Yandex or Pikabu Games upload-ready. Remaining work: owner/legal setup, Yandex/GamePush credentials, dedicated portal artifact, compact save policy, external-link/content cleanup, mobile/browser QA, and moderation assets.
+
+## 2026-05-27 Pikabu Games / GamePush Prep Continuation
+
+PR_29 continued the Pikabu Games lane without upload or final submit:
+
+- `?portal=gamepush` and `?portal=pikabu` are now strict portal modes.
+- GamePush SDK loading is optional and credential-driven only: query/meta `gpProjectId` plus `gpPublicToken`; no project secret is committed.
+- GamePush cloud save writes wrapped current-shape save records to `player.progress`, prefers compact current-shape portal records after `64 KiB`, and syncs cloud storage up to the hard `900 KiB` guard.
+- Current-shape cloud saves can hydrate back into local `gigahrush_save` when local storage is missing or older.
+- Strict portal mode disables generated roulette/slots, NPC durak/dice money-stake options, authored `floor_69`, the Floor 69 placeholder entertainment option, and optional Net Sphere `/api/net` traffic.
+- `npm run pikabu:build` now emits a separate `pikabu/gigahrush-pikabu.zip` candidate with strict portal metadata and optional local-env GamePush public credentials.
+- Added `Docs/PRCampaign/pikabu_games_pre_submit_qa_2026-05-27.md` as the concrete pre-submit gate.
+- Focused verification passed: `npm run typecheck` and `npx tsx --test tests/platform-bridge.test.ts tests/audio.test.ts tests/npc-interaction-options.test.ts tests/interactions.test.ts tests/procedural-floors.test.ts` (`71` tests, `69` pass, `2` skipped, `0` fail).
+- Full `npm run check` passed after docs: typecheck, `1336` unit tests, content audit and production build.
+- Local `npm run pikabu:build` passed without GamePush credentials and produced ignored `pikabu/gigahrush-pikabu.zip` (`5 196 710` bytes) with root `index.html` and strict portal metadata.
+
+This still does not make Pikabu Games submit-ready. Remaining work: owner-created GamePush project, real project id/public token, GamePush `progress` field, owner legal/payment readiness, `npm run pikabu:build` with real local-env credentials, real GamePush/Pikabu iframe test, `npm run check:browser`, final icons/cover/form fields and moderation preview. Any compact portal save above `900 KiB` remains a blocker until the current-shape portal profile is tightened.

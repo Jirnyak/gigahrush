@@ -46,6 +46,7 @@ test('UI orchestrator defaults to the novice-safe HUD enabled', () => {
   assert.equal(UI_ELEMENT_DEFS.find(def => def.id === 'messages')?.label, 'Стенографическая сводка');
   assert.equal(uiElementEnabled('messages'), false);
   assert.equal(uiElementEnabled('route_hints'), false);
+  assert.equal(uiElementEnabled('fps_counter'), false);
   assert.equal(uiElementEnabled('damage_feedback'), true);
   assert.equal(uiElementEnabled('samosbor_text'), true);
   assert.equal(uiElementEnabled('credits'), true);
@@ -111,8 +112,10 @@ test('UI orchestrator presets cover minimal and full player-safe modes', () => {
   assert.equal(applyUiPreset('full'), true);
   assert.equal(activeUiPresetId(), 'full');
   for (const def of UI_ELEMENT_DEFS) {
+    if (def.id === 'fps_counter') continue;
     assert.equal(uiElementEnabled(def.id), true, `${def.id} should be enabled by full preset`);
   }
+  assert.equal(uiElementEnabled('fps_counter'), false);
   assert.equal(uiSettingsRowCount('interface'), UI_PRESETS.length + UI_ELEMENT_DEFS.length + 1);
   assert.equal(uiSettingsRowCount('graphics'), 1);
 });

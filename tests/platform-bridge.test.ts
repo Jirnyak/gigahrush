@@ -1,0 +1,384 @@
+import { test } from 'node:test';
+import * as assert from 'node:assert/strict';
+
+import {
+  GAMEPUSH_COMPACT_SAVE_THRESHOLD_BYTES,
+  GAMEPUSH_RAW_SAVE_LIMIT_BYTES,
+  gamePushConfigFromSearch,
+  isPortalCloudSaveSizeAllowed,
+  isGamePushCloudSaveSizeAllowed,
+  hydratePlatformSaveFromCloud,
+  loadPlatformRawGameSave,
+  normalizePortalTarget,
+  portalAllowsCasinoLikeContent,
+  portalAllowsOptionalNetwork,
+  portalBlocksDesignFloor,
+  portalTargetFromSearchOrMeta,
+  PORTAL_RAW_SAVE_LIMIT_BYTES,
+  requestedPortalFromSearch,
+  resetPlatformBridgeForTests,
+  savePlatformRawGameSave,
+} from '../src/systems/platform_bridge';
+import { SAVE_SHAPE_VERSION } from '../src/systems/save_runtime';
+import { createPortalCompactSavePayload, summarizeSavePayload, type SavePayload } from '../src/systems/save_payload';
+import { FloorLevel, QuestType } from '../src/core/types';
+
+test('platform bridge detects explicit portal query safely', () => {
+  assert.equal(requestedPortalFromSearch('?portal=yandex'), 'yandex');
+  assert.equal(requestedPortalFromSearch('?x=1&portal=GamePush'), 'gamepush');
+  assert.equal(requestedPortalFromSearch('?portal=pikabu-games'), 'pikabu');
+  assert.equal(normalizePortalTarget('gp'), 'gamepush');
+  assert.equal(requestedPortalFromSearch('not a query'), '');
+  assert.equal(portalTargetFromSearchOrMeta('', 'pikabu'), 'pikabu');
+  assert.equal(portalTargetFromSearchOrMeta('?portal=gamepush', 'pikabu'), 'gamepush');
+  assert.deepEqual(gamePushConfigFromSearch('?gpProjectId=123&gpPublicToken=pub'), {
+    projectId: '123',
+    publicToken: 'pub',
+  });
+  assert.equal(gamePushConfigFromSearch('?gpProjectId=123'), null);
+});
+
+test('portal compact save keeps a current-shape resume profile without heavy floor memory', () => {
+  const payload: SavePayload & { version: number } = {
+    version: SAVE_SHAPE_VERSION,
+    player: {
+      x: 12,
+      y: 34,
+      angle: 1.5,
+      inventory: [{ defId: 'bread', count: 1 }],
+      money: 77,
+    },
+    state: {
+      time: 10,
+      tick: 20,
+      clock: { hour: 8, minute: 30, totalMinutes: 510 },
+      samosborActive: true,
+      samosborCount: 3,
+      samosborTimer: 5,
+      quests: Array.from({ length: 90 }, (_, i) => ({
+        id: i + 1,
+        type: QuestType.FETCH,
+        giverId: -1,
+        giverName: 'Тест',
+        desc: `Квест ${i}`,
+        done: false,
+        targetItem: 'bread',
+        targetCount: 1,
+      })),
+      nextQuestId: 91,
+      currentFloor: FloorLevel.LIVING,
+      floorRun: {
+        runSeed: 123,
+        currentZ: -4,
+        specs: Object.fromEntries(Array.from({ length: 80 }, (_, i) => [`floor_${i}`, { title: 'x'.repeat(160) }])),
+        visited: Object.fromEntries(Array.from({ length: 200 }, (_, i) => [`story:${i}`, true])),
+      },
+      floorInstances: undefined,
+      liftArachna: undefined,
+      pseudolift: undefined,
+      floorMemory: { version: 1, entries: Array.from({ length: 12 }, (_, i) => ({ key: `k${i}`, packed: 'x'.repeat(8000) })) },
+      alife: {
+        version: 1,
+        seed: 456,
+        total: 100000,
+        deadIds: Array.from({ length: 5000 }, (_, i) => i + 1),
+        deadPlotNpcIds: Array.from({ length: 300 }, (_, i) => `plot_${i}`),
+        overrides: Array.from({ length: 200 }, (_, i) => ({ id: i + 1, name: 'x'.repeat(80), floorKey: `story:${i}` })),
+      },
+      netTerminalGen: undefined,
+      mapEditorPatches: { patches: { huge: { ops: Array.from({ length: 200 }, () => ({ a: 'x'.repeat(100) })) } } },
+      worldEvents: { facts: Array.from({ length: 200 }, (_, i) => ({ id: i, text: 'x'.repeat(100) })) },
+      economy: undefined,
+      banking: { accountRubles: 50, recentLedger: Array.from({ length: 20 }, (_, i) => ({ id: i + 1 })) },
+      stockMarket: { portfolio: {}, quotes: {}, recentTrades: Array.from({ length: 20 }, (_, i) => ({ id: i + 1 })) },
+      production: Array.from({ length: 40 }, (_, i) => ({
+        floor: FloorLevel.LIVING,
+        roomId: i,
+        factoryId: 'unknown',
+        recipeId: 'unknown',
+        progressSec: 0,
+        nextTickAt: 0,
+        outputContainerId: i,
+      })),
+      containers: Array.from({ length: 80 }, (_, i) => ({
+        id: i + 1,
+        x: i,
+        y: i,
+        floor: FloorLevel.LIVING,
+        roomId: 1,
+        zoneId: 1,
+        kind: 0,
+        name: 'Ящик',
+        inventory: [{ defId: 'bread', count: 1 }],
+        capacitySlots: 1,
+        access: 'public',
+        discovered: true,
+        tags: [],
+      })),
+    },
+  };
+  const compact = createPortalCompactSavePayload(payload);
+  assert.equal(compact.version, SAVE_SHAPE_VERSION);
+  assert.equal(compact.state.samosborActive, false);
+  assert.equal(compact.state.quests.length, 64);
+  assert.deepEqual(compact.state.floorMemory, { version: 1, entries: [] });
+  assert.equal((compact.state.floorRun as { specs?: unknown }).specs, undefined);
+  assert.equal((compact.state.alife as { deadIds: unknown[] }).deadIds.length, 1024);
+  assert.equal(compact.state.containers.length, 16);
+  assert.ok(summarizeSavePayload(compact).bytes < summarizeSavePayload(payload).bytes);
+});
+
+test('platform cloud save keeps the raw payload under the strictest portal limit', () => {
+  assert.equal(isPortalCloudSaveSizeAllowed(PORTAL_RAW_SAVE_LIMIT_BYTES), true);
+  assert.equal(isPortalCloudSaveSizeAllowed(PORTAL_RAW_SAVE_LIMIT_BYTES + 1), false);
+  assert.equal(isPortalCloudSaveSizeAllowed(-1), false);
+  assert.equal(isGamePushCloudSaveSizeAllowed(GAMEPUSH_RAW_SAVE_LIMIT_BYTES), true);
+  assert.equal(isGamePushCloudSaveSizeAllowed(GAMEPUSH_RAW_SAVE_LIMIT_BYTES + 1), false);
+});
+
+test('platform cloud save is a no-op without an SDK', async () => {
+  resetPlatformBridgeForTests();
+  assert.equal(await savePlatformRawGameSave('{}', 2), 'no-sdk');
+});
+
+test('GamePush script load without callback resolves without hanging', async () => {
+  resetPlatformBridgeForTests();
+  const globals = globalThis as typeof globalThis & {
+    document?: Document;
+    location?: Location;
+  };
+  const originalDocument = Object.getOwnPropertyDescriptor(globalThis, 'document');
+  const originalLocation = Object.getOwnPropertyDescriptor(globalThis, 'location');
+  const scripts: Array<{ onload?: () => void; onerror?: () => void; dataset: Record<string, string>; src?: string; async?: boolean }> = [];
+
+  Object.defineProperty(globalThis, 'location', {
+    configurable: true,
+    value: { search: '?portal=gamepush&gpProjectId=123&gpPublicToken=pub' },
+  });
+  Object.defineProperty(globalThis, 'document', {
+    configurable: true,
+    value: {
+      querySelector() { return null; },
+      createElement() {
+        const script = { dataset: {} };
+        scripts.push(script);
+        return script;
+      },
+      head: {
+        appendChild(script: { onload?: () => void }) {
+          queueMicrotask(() => script.onload?.());
+        },
+      },
+    },
+  });
+
+  try {
+    const status = await Promise.race([
+      savePlatformRawGameSave('{}', 2),
+      new Promise<never>((_, reject) => setTimeout(() => reject(new Error('GamePush load timed out')), 100)),
+    ]);
+    assert.equal(status, 'no-sdk');
+    assert.equal(scripts.length, 1);
+  } finally {
+    resetPlatformBridgeForTests();
+    if (originalDocument) Object.defineProperty(globalThis, 'document', originalDocument);
+    else delete globals.document;
+    if (originalLocation) Object.defineProperty(globalThis, 'location', originalLocation);
+    else delete globals.location;
+  }
+});
+
+test('strict portal mode blocks casino-like and adult-route surfaces', () => {
+  const original = Object.getOwnPropertyDescriptor(globalThis, 'location');
+  Object.defineProperty(globalThis, 'location', {
+    configurable: true,
+    value: { search: '?portal=pikabu' },
+  });
+
+  try {
+    assert.equal(portalAllowsCasinoLikeContent(), false);
+    assert.equal(portalAllowsOptionalNetwork(), false);
+    assert.equal(portalBlocksDesignFloor('floor_69'), true);
+    assert.equal(portalBlocksDesignFloor('service_floor'), false);
+  } finally {
+    if (original) Object.defineProperty(globalThis, 'location', original);
+    else delete (globalThis as typeof globalThis & { location?: Location }).location;
+  }
+});
+
+test('platform cloud save uses the larger GamePush raw progress budget', async () => {
+  resetPlatformBridgeForTests();
+  const globalWithGamePush = globalThis as typeof globalThis & {
+    gp?: {
+      player: {
+        set(key: string, value: string | number | boolean): void;
+        sync(options?: { storage?: string }): Promise<void>;
+      };
+    };
+  };
+  const originalGamePush = globalWithGamePush.gp;
+  const writes: Array<{ key: string; value: string | number | boolean }> = [];
+  const syncs: Array<{ storage?: string } | undefined> = [];
+  globalWithGamePush.gp = {
+    player: {
+      set(key, value) { writes.push({ key, value }); },
+      async sync(options) { syncs.push(options); },
+    },
+  };
+
+  try {
+    const withinGamePushOnly = JSON.stringify({ version: SAVE_SHAPE_VERSION, pad: 'x'.repeat(PORTAL_RAW_SAVE_LIMIT_BYTES + 1) });
+    assert.equal(await savePlatformRawGameSave(withinGamePushOnly, withinGamePushOnly.length), 'queued');
+    const written = writes.at(-1);
+    assert.equal(written?.key, 'progress');
+    const record = JSON.parse(String(written?.value)) as { kind?: string; raw?: string; shapeVersion?: number };
+    assert.equal(record.kind, 'gigahrush-save');
+    assert.equal(record.raw, withinGamePushOnly);
+    assert.equal(record.shapeVersion, SAVE_SHAPE_VERSION);
+    assert.deepEqual(syncs.at(-1), { storage: 'cloud' });
+
+    const tooLarge = 'x'.repeat(GAMEPUSH_RAW_SAVE_LIMIT_BYTES + 1);
+    assert.equal(await savePlatformRawGameSave(tooLarge, tooLarge.length), 'skipped-size');
+  } finally {
+    resetPlatformBridgeForTests();
+    if (originalGamePush) globalWithGamePush.gp = originalGamePush;
+    else delete globalWithGamePush.gp;
+  }
+});
+
+test('GamePush cloud save prefers compact current-shape profile for large saves', async () => {
+  resetPlatformBridgeForTests();
+  const globalWithGamePush = globalThis as typeof globalThis & {
+    gp?: {
+      player: {
+        set(key: string, value: string | number | boolean): void;
+        sync(options?: { storage?: string }): Promise<void>;
+      };
+    };
+  };
+  const originalGamePush = globalWithGamePush.gp;
+  let written = '';
+  globalWithGamePush.gp = {
+    player: {
+      set(_key, value) { written = String(value); },
+      async sync() {},
+    },
+  };
+
+  try {
+    const full = JSON.stringify({ version: SAVE_SHAPE_VERSION, pad: 'x'.repeat(GAMEPUSH_COMPACT_SAVE_THRESHOLD_BYTES + 1) });
+    const compact = JSON.stringify({ version: SAVE_SHAPE_VERSION, compact: true });
+    assert.equal(await savePlatformRawGameSave(full, full.length, { raw: compact, bytes: compact.length, mode: 'compact' }), 'queued');
+    const record = JSON.parse(written) as { mode?: string; raw?: string; shapeVersion?: number };
+    assert.equal(record.mode, 'compact');
+    assert.equal(record.raw, compact);
+    assert.equal(record.shapeVersion, SAVE_SHAPE_VERSION);
+  } finally {
+    resetPlatformBridgeForTests();
+    if (originalGamePush) globalWithGamePush.gp = originalGamePush;
+    else delete globalWithGamePush.gp;
+  }
+});
+
+test('platform bridge can read wrapped GamePush cloud save without local mutation', async () => {
+  resetPlatformBridgeForTests();
+  const raw = JSON.stringify({ version: SAVE_SHAPE_VERSION, player: {}, state: {} });
+  const globalWithGamePush = globalThis as typeof globalThis & {
+    gp?: {
+      player: {
+        get(key: string): string | number | boolean;
+      };
+    };
+  };
+  const originalGamePush = globalWithGamePush.gp;
+  globalWithGamePush.gp = {
+    player: {
+      get(key) {
+        assert.equal(key, 'progress');
+        return JSON.stringify({
+          kind: 'gigahrush-save',
+          recordVersion: 1,
+          shapeVersion: SAVE_SHAPE_VERSION,
+          savedAt: 123,
+          bytes: raw.length,
+          raw,
+        });
+      },
+    },
+  };
+
+  try {
+    assert.deepEqual(await loadPlatformRawGameSave(null), {
+      status: 'loaded',
+      raw,
+      source: 'gamepush',
+    });
+    assert.deepEqual(await loadPlatformRawGameSave(raw), {
+      status: 'local-present',
+      source: 'gamepush',
+    });
+  } finally {
+    resetPlatformBridgeForTests();
+    if (originalGamePush) globalWithGamePush.gp = originalGamePush;
+    else delete globalWithGamePush.gp;
+  }
+});
+
+test('platform cloud hydration does not overwrite a newer localStorage change', async () => {
+  resetPlatformBridgeForTests();
+  const globals = globalThis as typeof globalThis & {
+    gp?: {
+      player: {
+        ready?: Promise<void>;
+        get(key: string): string | number | boolean;
+      };
+    };
+    localStorage?: Storage;
+  };
+  const originalGamePush = globals.gp;
+  const originalStorage = Object.getOwnPropertyDescriptor(globalThis, 'localStorage');
+  const storage = new Map<string, string>();
+  const cloudRaw = JSON.stringify({ version: SAVE_SHAPE_VERSION, player: { x: 1 }, state: {} });
+  const localRaw = JSON.stringify({ version: SAVE_SHAPE_VERSION, player: { x: 2 }, state: {} });
+
+  Object.defineProperty(globalThis, 'localStorage', {
+    configurable: true,
+    value: {
+      getItem(key: string) { return storage.has(key) ? storage.get(key)! : null; },
+      setItem(key: string, value: string) { storage.set(key, String(value)); },
+      removeItem(key: string) { storage.delete(key); },
+    },
+  });
+  globals.gp = {
+    player: {
+      ready: Promise.resolve().then(() => {
+        localStorage.setItem('gigahrush_save', localRaw);
+      }),
+      get(key) {
+        assert.equal(key, 'progress');
+        return JSON.stringify({
+          kind: 'gigahrush-save',
+          recordVersion: 1,
+          shapeVersion: SAVE_SHAPE_VERSION,
+          savedAt: 999,
+          bytes: cloudRaw.length,
+          raw: cloudRaw,
+        });
+      },
+    },
+  };
+
+  try {
+    assert.deepEqual(await hydratePlatformSaveFromCloud(), {
+      status: 'local-present',
+      source: 'gamepush',
+    });
+    assert.equal(localStorage.getItem('gigahrush_save'), localRaw);
+  } finally {
+    resetPlatformBridgeForTests();
+    if (originalGamePush) globals.gp = originalGamePush;
+    else delete globals.gp;
+    if (originalStorage) Object.defineProperty(globalThis, 'localStorage', originalStorage);
+    else delete globals.localStorage;
+  }
+});

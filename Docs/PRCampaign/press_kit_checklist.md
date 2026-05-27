@@ -4,8 +4,9 @@
 
 ## Must Have
 
-- itch.io page: https://tenevik.itch.io/gigahrush
+- MyIndie RU/CIS primary page: https://myindie.ru/games/game/gigahrush
 - direct browser build: https://gigahrush.bileter.workers.dev
+- itch.io mirror / EN page: https://tenevik.itch.io/gigahrush
 - 30-60 second gameplay GIF or clip with Samosbor / combat / HUD; current GIF hooks are in `tmp/prcampaign_screenshot_hunt_2026-05-23/selected_best/`.
 - 5-8 screenshots from `tmp/prcampaign_screenshot_hunt_2026-05-23/selected_best/`; this is the current owner-updated best-pick folder.
 - capsule / cover image from `itch_page_pack/assets` or current itch cover.

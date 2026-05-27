@@ -5,7 +5,8 @@ import { BAD_APPLE_THEME_DURATION_SECONDS, BAD_APPLE_THEME_MP3_B64 } from '../da
 let ctx: AudioContext | null = null;
 let mainGain: GainNode | null = null;
 let scopedGain: GainNode | null = null;
-let pageAudioSuspended = false;
+type AudioSuspendReason = 'page' | 'platform';
+const audioSuspendReasons = new Set<AudioSuspendReason>();
 
 export type AudioCueBudgetId =
   | 'footstep'
@@ -98,7 +99,7 @@ function claimAudioCue(id: AudioCueBudgetId, now: number): boolean {
 }
 
 function beginCue(id: AudioCueBudgetId): AudioContext | null {
-  if (pageAudioSuspended) return null;
+  if (audioSuspended()) return null;
   if (!hasAudioContext()) return null;
   const ac = ensureContext();
   return claimAudioCue(id, ac.currentTime) ? ac : null;
@@ -118,8 +119,16 @@ const POSITIONAL_SOUND_MAX_GAIN = 0.78;
 const BAD_APPLE_LOOP_GAIN = 0.34;
 const BAD_APPLE_VIDEO_SECONDS = 6470 / 30;
 const BAD_APPLE_LOOP_RATE = BAD_APPLE_THEME_DURATION_SECONDS / BAD_APPLE_VIDEO_SECONDS;
+export type AudioDistanceProvider = (ax: number, ay: number, bx: number, by: number) => number;
+
+export interface AudioWorldDistanceContext {
+  dist2(ax: number, ay: number, bx: number, by: number): number;
+}
+
+type AudioDistanceSource = AudioDistanceProvider | AudioWorldDistanceContext;
+
 let _playerX = 0, _playerY = 0;
-let _worldDist2: ((ax: number, ay: number, bx: number, by: number) => number) | null = null;
+let _distanceSource: AudioDistanceSource | null = null;
 let badAppleThemeBufferPromise: Promise<AudioBuffer | null> | null = null;
 let badAppleThemeBuffer: AudioBuffer | null = null;
 let badApplePendingStart: { x: number; y: number; frame: number } | null = null;
@@ -135,16 +144,18 @@ function hasAudioContext(): boolean {
   return audioContextCtor() !== null;
 }
 
-export function setListenerPos(x: number, y: number, distFn: (ax: number, ay: number, bx: number, by: number) => number): void {
+export function setListenerPos(x: number, y: number, distanceSource?: AudioDistanceSource): void {
   _playerX = x;
   _playerY = y;
-  _worldDist2 = distFn;
+  _distanceSource = distanceSource ?? null;
 }
 
 /** Compute volume multiplier [0..1] based on distance from listener */
 function volumeAt(x: number, y: number): number {
-  if (!_worldDist2) return 1;
-  const d2 = _worldDist2(_playerX, _playerY, x, y);
+  if (!_distanceSource) return 1;
+  const d2 = typeof _distanceSource === 'function'
+    ? _distanceSource(_playerX, _playerY, x, y)
+    : _distanceSource.dist2(_playerX, _playerY, x, y);
   if (d2 <= 1) return 1;
   const d = Math.sqrt(d2);
   if (d >= SOUND_MAX_DIST) return 0;
@@ -153,7 +164,7 @@ function volumeAt(x: number, y: number): number {
 
 /** Play a sound at a world position (volume depends on distance to player) */
 export function playSoundAt(fn: () => void, x: number, y: number): void {
-  if (pageAudioSuspended) return;
+  if (audioSuspended()) return;
   if (!hasAudioContext()) return;
   const vol = Math.min(POSITIONAL_SOUND_MAX_GAIN, volumeAt(x, y));
   if (vol < 0.01) return;  // too far, skip entirely
@@ -182,19 +193,40 @@ function ensureContext(): AudioContext {
     mainGain.gain.value = 0.3;
     mainGain.connect(ctx.destination);
   }
-  if (!pageAudioSuspended && ctx.state === 'suspended') void ctx.resume();
+  if (!audioSuspended() && ctx.state === 'suspended') void ctx.resume();
   return ctx;
 }
 
 function gain(): GainNode { return scopedGain ?? mainGain!; }
 
-export function setAudioSuspendedForPage(hidden: boolean): void {
-  pageAudioSuspended = hidden;
-  if (!ctx) return;
-  if (hidden) {
+function audioSuspended(): boolean {
+  return audioSuspendReasons.size > 0;
+}
+
+function setAudioSuspended(reason: AudioSuspendReason, suspended: boolean): void {
+  const wasSuspended = audioSuspended();
+  if (suspended) audioSuspendReasons.add(reason);
+  else audioSuspendReasons.delete(reason);
+  const isSuspended = audioSuspended();
+  if (!ctx || wasSuspended === isSuspended) return;
+  if (isSuspended) {
     if (ctx.state === 'running') void ctx.suspend().catch(() => {});
     return;
   }
+  if (ctx.state === 'suspended') void ctx.resume().catch(() => {});
+}
+
+export function setAudioSuspendedForPage(hidden: boolean): void {
+  setAudioSuspended('page', hidden);
+}
+
+export function setAudioSuspendedForPlatform(paused: boolean): void {
+  setAudioSuspended('platform', paused);
+}
+
+export function resetAudioSuspensionForTests(): void {
+  audioSuspendReasons.clear();
+  if (!ctx) return;
   if (ctx.state === 'suspended') void ctx.resume().catch(() => {});
 }
 
