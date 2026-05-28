@@ -190,7 +190,7 @@ test('samosbor shelter failure records samosbor damage cause', () => {
 
 test('toroidal edge projectile swept query finds player across wrap', () => {
   const index = new EntityIndex();
-  const player = makeTestEntity({ id: 1, type: EntityType.PLAYER, x: 0.2, y: 32, hp: 100 });
+  const player = makeTestEntity({ id: 1, type: EntityType.NPC, persistentNpcId: 'player', x: 0.2, y: 32, hp: 100 });
   const projectile = makeTestEntity({
     id: 2,
     type: EntityType.PROJECTILE,

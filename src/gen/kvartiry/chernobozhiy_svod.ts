@@ -1,5 +1,6 @@
 /* ── Чернобожий Свод: cult false-shelter room anchor ─────────── */
 
+import { stampSurfaceSplat } from '../../systems/surface_marks';
 import {
   AIGoal, Cell, ContainerKind, EntityType, Faction, Feature, FloorLevel,
   MonsterKind, Occupation, QuestType, RoomType, Tex, ZoneFaction, msg,
@@ -431,7 +432,7 @@ function paintBlackHandMarks(world: World, poi: SocialPoiRoom): void {
     { dx: 14, dy: 8, r: 0.34, seed: 53, wall: false },
   ] as const;
   for (const mark of marks) {
-    world.stamp(
+    stampSurfaceSplat(world,
       world.wrap(poi.x + mark.dx),
       world.wrap(poi.y + mark.dy),
       0.5,

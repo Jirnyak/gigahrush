@@ -162,7 +162,7 @@ function makeNpc(): Entity {
 function makePlayer(): Entity {
   return {
     id: 0,
-    type: EntityType.PLAYER,
+    type: EntityType.NPC, persistentNpcId: 'player',
     x: 11,
     y: 10,
     angle: 0,

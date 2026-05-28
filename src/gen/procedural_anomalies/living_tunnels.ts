@@ -1,3 +1,4 @@
+import { stampSurfaceSplat } from '../../systems/surface_marks';
 import { Feature, Tex, type Room } from '../../core/types';
 import {
   addItemDrop,
@@ -68,7 +69,7 @@ function markRoot(ctx: ProceduralAnomalyGenContext, room: Room, placed: number):
   ctx.world.wallTex[ci] = Tex.GUT;
   ctx.world.fog[ci] = Math.max(ctx.world.fog[ci], 32);
   ctx.world.light[ci] = Math.max(ctx.world.light[ci], 0.58);
-  ctx.world.stamp(pos.x, pos.y, 0.5, 0.5, 0.82, 0.66, seed, 58, 170, 126, false);
+  stampSurfaceSplat(ctx.world, pos.x, pos.y, 0.5, 0.5, 0.82, 0.66, seed, 58, 170, 126, false);
 
   const prefix = room.name.startsWith(LIVING_TUNNEL_ROOM_PREFIX) ? room.name : `${LIVING_TUNNEL_ROOM_PREFIX} ${room.name}`;
   room.name = `${prefix} ${LIVING_TUNNEL_TAG}${pos.x},${pos.y},${seed},${maxLen}]`;

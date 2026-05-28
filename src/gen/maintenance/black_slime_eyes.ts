@@ -1,5 +1,6 @@
 /* -- AG67 black slime eyes: one capped residue lure encounter -- */
 
+import { stampSurfaceSplat } from '../../systems/surface_marks';
 import {
   AIGoal, Cell, ContainerKind, EntityType, Feature, FloorLevel,
   MonsterKind, RoomType, Tex, msg,
@@ -380,9 +381,9 @@ function decorateBlackSlimeSite(ctx: MaintContentCtx, entry: Room, nest: Room): 
       if (ctx.world.roomMap[ci] === nest.id) setWater(ctx.world, x, y);
     }
   }
-  ctx.world.stamp(cx, cy, 0.5, 0.5, 5.2, 0.92, 67001, 3, 5, 7, false);
-  ctx.world.stamp(cx + 4, cy - 3, 0.5, 0.5, 2.2, 0.8, 67002, 10, 12, 18, true);
-  ctx.world.stamp(cx - 5, cy + 3, 0.5, 0.5, 2.7, 0.74, 67003, 5, 8, 10, false);
+  stampSurfaceSplat(ctx.world, cx, cy, 0.5, 0.5, 5.2, 0.92, 67001, 3, 5, 7, false);
+  stampSurfaceSplat(ctx.world, cx + 4, cy - 3, 0.5, 0.5, 2.2, 0.8, 67002, 10, 12, 18, true);
+  stampSurfaceSplat(ctx.world, cx - 5, cy + 3, 0.5, 0.5, 2.7, 0.74, 67003, 5, 8, 10, false);
 
   for (let dx = 2; dx < nest.w - 2; dx += 4) {
     setFeature(ctx.world, nest.x + dx, nest.y + 2, Feature.APPARATUS);

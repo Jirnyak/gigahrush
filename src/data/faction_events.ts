@@ -1,6 +1,11 @@
 import {
-  Faction, Occupation, RoomType, ZoneFaction,
-  type Item, type WorldEventPrivacy, type WorldEventSeverity,
+  Faction,
+  Occupation,
+  RoomType,
+  ZoneFaction,
+  type Item,
+  type WorldEventPrivacy,
+  type WorldEventSeverity,
 } from '../core/types';
 
 export type FactionEventKind =

@@ -6,8 +6,15 @@
 /*   4. Add room spec to plot_rooms.ts (optional)                  */
 
 import {
-  type Entity, type Quest, type WorldEventPrivacy, type WorldEventSeverity,
-  QuestType, Faction, Occupation, MonsterKind, FloorLevel,
+  type Entity,
+  type Quest,
+  type WorldEventPrivacy,
+  type WorldEventSeverity,
+  QuestType,
+  Faction,
+  Occupation,
+  MonsterKind,
+  FloorLevel,
 } from '../core/types';
 import type { QuestRouteTarget } from './contracts';
 

@@ -17,7 +17,7 @@ import {
 import { freshNeeds, ITEMS, randomName } from '../data/catalog';
 import { getStack } from '../data/items';
 import { addFactionRelMutual } from '../data/relations';
-import { stampMark, MarkType } from '../render/marks';
+import { stampMark, MarkType } from './surface_marks';
 import { Spr } from '../render/sprite_index';
 import { ensureRoomContainers } from './containers';
 import { controlHint } from './controls';

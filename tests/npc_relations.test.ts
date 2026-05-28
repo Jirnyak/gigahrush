@@ -11,7 +11,7 @@ import { makeGameState, makeTestEntity } from './helpers';
 
 test('player attack lowers personal NPC relation and can make that NPC hostile', () => {
   initFactionRelations();
-  const player = makeTestEntity({ id: 0, type: EntityType.PLAYER, faction: Faction.PLAYER });
+  const player = makeTestEntity({ id: 0, type: EntityType.NPC, persistentNpcId: 'player', faction: Faction.PLAYER });
   const npc = makeTestEntity({
     id: 7,
     type: EntityType.NPC,
@@ -34,7 +34,7 @@ test('quest completion gives small faction gain and stronger giver relation gain
   const world = new World();
   const player = makeTestEntity({
     id: 0,
-    type: EntityType.PLAYER,
+    type: EntityType.NPC, persistentNpcId: 'player',
     faction: Faction.PLAYER,
     inventory: [{ defId: 'bread', count: 1 }],
   });

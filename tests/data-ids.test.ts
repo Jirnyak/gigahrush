@@ -14,6 +14,7 @@ import {
 } from '../src/core/types';
 import { ITEMS, WEAPON_STATS } from '../src/data/catalog';
 import { PHYS_WEAPON_ROLE_TIERS, PHYS_WEAPON_STATS } from '../src/data/weapons';
+import { PSI_WEAPON_ROLE_TIERS, PSI_WEAPON_STATS } from '../src/data/psi';
 import { CONTAINER_DEFS } from '../src/data/container_defs';
 import { COMPACT_EXPEDITION_CONTRACT_IDS, CONTRACTS } from '../src/data/contracts';
 import { COMPUTER_DEFS } from '../src/data/computers';
@@ -174,6 +175,14 @@ test('item ids are unique, keyed by id, and weapon items have stats', () => {
   const physicalStatsWithoutRole = Object.keys(PHYS_WEAPON_STATS)
     .filter(id => !PHYS_WEAPON_ROLE_TIERS[id]);
   assert.deepEqual(physicalStatsWithoutRole, [], 'physical weapon stats must have role tiers');
+
+  const psiStatsWithoutItems = Object.keys(PSI_WEAPON_STATS)
+    .filter(id => !ITEMS[id]);
+  assert.deepEqual(psiStatsWithoutItems, [], 'PSI weapon stats must have item definitions');
+
+  const psiStatsWithoutRole = Object.keys(PSI_WEAPON_STATS)
+    .filter(id => PSI_WEAPON_ROLE_TIERS[id] !== 'psi');
+  assert.deepEqual(psiStatsWithoutRole, [], 'PSI weapon stats must have psi role tiers');
 
   const missingAmmoItems = Object.entries(PHYS_WEAPON_STATS)
     .filter(([, stats]) => !!stats.ammoType)

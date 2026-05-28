@@ -1,8 +1,17 @@
 /* -- Кабинет больного приказа: exposed Mukhozhuk authority host -- */
 
 import {
-  ContainerKind, Faction, Feature, FloorLevel, MonsterKind, Occupation, RoomType, Tex,
-  type Entity, type Room, type WorldContainer,
+  ContainerKind,
+  Faction,
+  Feature,
+  FloorLevel,
+  MonsterKind,
+  Occupation,
+  RoomType,
+  Tex,
+  type Entity,
+  type Room,
+  type WorldContainer,
 } from '../../core/types';
 import { World } from '../../core/world';
 import {

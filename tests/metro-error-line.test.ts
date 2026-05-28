@@ -52,7 +52,7 @@ function makeMetroRoom(roomName: string, feature: Feature, panelSlot = 0): World
 function testPlayer(inventory: Entity['inventory'] = []): Entity {
   return {
     id: 1,
-    type: EntityType.PLAYER,
+    type: EntityType.NPC, persistentNpcId: 'player',
     x: 12.5,
     y: 12.5,
     angle: 0,

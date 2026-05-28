@@ -14,12 +14,12 @@ import { setPathContext } from './pathfinding';
 import { setEntityMap, updateMonster } from './monster';
 import { setCombatContext, tryFactionCombat, tryFleeFromMonster } from './combat';
 import { primeNpcAlifeState, setNpcContext, updateNPC } from './npc_fsm';
-import { primeMinistryAlifeState, setMinistryContext, updateMinistryNPC } from './ministry_ai';
 import { setNpcBarkLogContext } from './barks';
 import { expireMonsterBaits } from '../monster_bait';
 import { ensureEntityIndex } from '../entity_index';
 import { hearingRadiusMetersForActor } from '../hearing';
 import { isActorNoiseHot } from '../noise';
+import { isPlayerEntity } from '../player_actor';
 import { updateSwarmNests } from '../swarm_nests';
 
 type AiLodTier = 'hot' | 'warm' | 'cold';
@@ -266,7 +266,6 @@ export function updateAI(world: World, entities: Entity[], dt: number, time: num
   setPathContext(msgs, time, samosborActive);
   setCombatContext(msgs, time);
   setNpcContext(msgs, time);
-  setMinistryContext(msgs, time);
   expireMonsterBaits(state, time);
 
   // Main rebuilds the runtime broadphase once before simulation; AI only consumes it.
@@ -288,9 +287,12 @@ export function updateAI(world: World, entities: Entity[], dt: number, time: num
   try {
     for (const e of entityIndex.ai) {
       if (!e.alive || !e.ai) continue;
+      if (isPlayerEntity(e)) {
+        aiStats.skipped++;
+        continue;
+      }
       if (e.type === EntityType.NPC) {
-        if (isMinistry) primeMinistryAlifeState(e, clock, samosborActive);
-        else primeNpcAlifeState(e, clock, samosborActive);
+        primeNpcAlifeState(e, clock, samosborActive, isMinistry ? 'ministry' : 'default');
       } else if (e.type === EntityType.MONSTER && e.ai.goal === AIGoal.IDLE && e.ai.combatTargetId === undefined && e.speed > 0) {
         e.ai.goal = AIGoal.WANDER;
       }
@@ -320,11 +322,7 @@ export function updateAI(world: World, entities: Entity[], dt: number, time: num
         if (e.type === EntityType.NPC) {
           if (!tryFactionCombat(world, entities, e, aiDt, time, msgs, nextId, state, player ?? null)) {
             if (!tryFleeFromMonster(world, entities, e, aiDt)) {
-              if (isMinistry) {
-                updateMinistryNPC(world, entities, e, aiDt, time, clock, samosborActive);
-              } else {
-                updateNPC(world, entities, e, aiDt, time, clock, samosborActive);
-              }
+              updateNPC(world, entities, e, aiDt, time, clock, samosborActive, isMinistry ? 'ministry' : 'default');
             }
           }
         }

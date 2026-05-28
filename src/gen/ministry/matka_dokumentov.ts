@@ -1,5 +1,6 @@
 /* -- Матка Документов: capped Ministry paper-boss room puzzle --- */
 
+import { stampSurfaceSplat } from '../../systems/surface_marks';
 import {
   AIGoal, Cell, ContainerKind, EntityType, Faction, Feature, FloorLevel,
   MonsterKind, Occupation, QuestType, RoomType, Tex, msg,
@@ -568,9 +569,9 @@ function decorateRoom(world: World, room: Room): void {
   world.wallTex[world.idx(cx, room.y - 1)] = Tex.SCREEN_BASE + 6;
   world.wallTex[world.idx(room.x + room.w, cy)] = Tex.POSTER_BASE + 18;
 
-  world.stamp(cx, cy, 0.5, 0.5, 5.2, 0.74, 23023, 205, 198, 154, false);
-  world.stamp(cx - 5, cy - 2, 0.5, 0.5, 2.2, 0.58, 23024, 165, 28, 28, true);
-  world.stamp(cx + 6, cy + 3, 0.5, 0.5, 2.6, 0.64, 23025, 210, 205, 170, false);
+  stampSurfaceSplat(world, cx, cy, 0.5, 0.5, 5.2, 0.74, 23023, 205, 198, 154, false);
+  stampSurfaceSplat(world, cx - 5, cy - 2, 0.5, 0.5, 2.2, 0.58, 23024, 165, 28, 28, true);
+  stampSurfaceSplat(world, cx + 6, cy + 3, 0.5, 0.5, 2.6, 0.64, 23025, 210, 205, 170, false);
 }
 
 function findGuideSpot(world: World, spawnX: number, spawnY: number, roomId: number): { x: number; y: number } | null {

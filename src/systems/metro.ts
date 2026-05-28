@@ -1,9 +1,6 @@
 /* ── Metro Error Line interaction-time routing ───────────────── */
 
-import {
-  W, Feature, FloorLevel,
-  type Entity, type GameState,
-} from '../core/types';
+import { W, Feature, FloorLevel, type Entity, type GameState } from '../core/types';
 import { type World } from '../core/world';
 import {
   metroRouteForPanel,

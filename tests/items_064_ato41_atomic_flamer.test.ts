@@ -12,7 +12,7 @@ import { addItem, consumeAmmo, countAmmo, getWeaponReadiness } from '../src/syst
 function makePlayer(): Entity {
   return {
     id: 1,
-    type: EntityType.PLAYER,
+    type: EntityType.NPC, persistentNpcId: 'player',
     x: 0,
     y: 0,
     angle: 0,

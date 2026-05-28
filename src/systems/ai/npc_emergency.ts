@@ -11,6 +11,7 @@ import {
   type Room,
 } from '../../core/types';
 import type { World } from '../../core/world';
+import { isPlayerEntity } from '../player_actor';
 
 export const NPC_EMERGENCY_DEFAULT_CANDIDATE_CAP = 12;
 export const NPC_EMERGENCY_MAX_CANDIDATE_CAP = 24;
@@ -675,7 +676,7 @@ function roomCrowdPenalty(world: World, roomId: number, actors: readonly Entity[
   if (cap <= 0) return 0;
   let count = 0;
   for (const actor of actors) {
-    if (!actor.alive || (actor.type !== EntityType.PLAYER && actor.type !== EntityType.NPC && actor.type !== EntityType.MONSTER)) continue;
+    if (!actor.alive || (!isPlayerEntity(actor) && actor.type !== EntityType.NPC && actor.type !== EntityType.MONSTER)) continue;
     if (world.roomAt(actor.x, actor.y)?.id !== roomId) continue;
     count++;
     if (count >= cap) break;

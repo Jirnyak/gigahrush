@@ -1,9 +1,6 @@
 /* ── Item definitions — еда, напитки, медицина, оружие, амуниция, разное ── */
 
-import {
-  RoomType, ItemType,
-  type ItemDef, type Entity,
-} from '../core/types';
+import { RoomType, ItemType, type ItemDef, type Entity } from '../core/types';
 import { CHERNOBOG_DOCKET_ITEMS, CHERNOBOG_DOCKET_ITEM_TAGS } from './chernobog_docket';
 import { DOCUMENT_ACCESS_ITEMS, DOCUMENT_ACCESS_ITEM_TAGS } from './documents_access';
 
@@ -305,6 +302,7 @@ export const ITEM_TAGS: Record<string, readonly string[]> = {
   plastic_sheet: ['material', 'plastic', 'production', 'repair_input', 'electronics', 'tools', 'trade'],
   party_portrait_pin: ['bureaucracy', 'resident_good', 'bribe', 'trade'],
   card_deck: ['cards', 'durak', 'resident_good', 'trade'],
+  domino_box: ['domino', 'table_game', 'resident_good', 'trade'],
   ...CHERNOBOG_DOCKET_ITEM_TAGS,
 };
 
@@ -483,6 +481,8 @@ export const ITEMS: Record<string, ItemDef> = {
   psi_brainburn:{ id:'psi_brainburn', name:'Сгусток: Выжиг мозга',     type:ItemType.WEAPON, desc:'Запрещённый импульс НИИ: 22 ПСИ. Убивает цель не выше вашего уровня.',                     spawnRooms:[RoomType.MEDICAL],                                spawnW:0.25, value:52000 },
   psi_madness:  { id:'psi_madness',   name:'Сгусток: Безумие',         type:ItemType.WEAPON, desc:'Сбойный поведенческий импульс: 10 ПСИ, цель 15с атакует ближайших. Потом объяснения не принимают.',                                 spawnRooms:[RoomType.OFFICE,RoomType.COMMON],                 spawnW:0.65, value:18000 },
   psi_control:  { id:'psi_control',   name:'Сгусток: Контроль',        type:ItemType.WEAPON, desc:'Принудительный ПСИ-захват: 20 ПСИ, цель 15с считает вас союзником. Используйте это время на отход.',                              spawnRooms:[RoomType.MEDICAL],                                spawnW:0.25, value:64000 },
+  psi_shield:   { id:'psi_shield',    name:'Сгусток: ПСИ-щит',         type:ItemType.WEAPON, desc:'Защитный ПСИ-контур: 12 ПСИ, 15с не дает HP просесть. 10% входящего урона уходит из запаса ПСИ.', spawnRooms:[RoomType.MEDICAL,RoomType.HQ], spawnW:0.3, value:30000 },
+  psi_possession:{ id:'psi_possession', name:'Сгусток: Вселение',       type:ItemType.WEAPON, desc:'Запрещённый перенос НИИ: 26 ПСИ, 15с ведёт чужое тело, если ваш интеллект выше цели. Ваше тело остаётся на месте.', spawnRooms:[RoomType.MEDICAL], spawnW:0.12, value:76000 },
   psi_phase:    { id:'psi_phase',     name:'Сгусток: Фазовый сдвиг',   type:ItemType.WEAPON, desc:'Проход через стену: 17 ПСИ, 15с. Не останавливайтесь внутри препятствия.',                                 spawnRooms:[RoomType.STORAGE],                                spawnW:0.2, value:70000 },
   psi_mark:     { id:'psi_mark',      name:'Сгусток: Метка',           type:ItemType.WEAPON, desc:'Метка возврата: 4 ПСИ. Ставит точку, куда потом тянет сгусток Возврат.',                              spawnRooms:[RoomType.MEDICAL,RoomType.OFFICE],                spawnW:0.8, value:10000 },
   psi_recall:   { id:'psi_recall',    name:'Сгусток: Возврат',         type:ItemType.WEAPON, desc:'Возврат к ПСИ-метке: 8 ПСИ. Работает лучше, если метка стоит у укрытия или лифта.',                                             spawnRooms:[RoomType.MEDICAL,RoomType.OFFICE],                spawnW:0.65, value:18000 },
@@ -561,6 +561,7 @@ export const ITEMS: Record<string, ItemDef> = {
   moonshine_still_part:{ id:'moonshine_still_part', name:'Деталь самогонного аппарата', type:ItemType.MISC, desc:'Медная коленка с запахом сахара и запрета. Сборка аппарата пока ждёт цех, но рынок берёт сразу.', spawnRooms:[RoomType.PRODUCTION,RoomType.KITCHEN,RoomType.SMOKING], spawnW:0.18, value:125, tags:[...ITEM_TAGS.moonshine_still_part], stack:2 },
   dice_bone:{ id:'dice_bone', name:'Игральные кости', type:ItemType.MISC, desc:'Пара костей с разными углами честности. У автомата звенят громче талона.', spawnRooms:[RoomType.COMMON,RoomType.SMOKING,RoomType.LIVING], spawnW:0.65, value:16, tags:['gambling','resident_good','trade'], stack:4 },
   card_deck:{ id:'card_deck', name:'Колода карт', type:ItemType.MISC, desc:'Засаленная колода для кухонного дурака, долговой паузы и разговора, который проще вести через козыри.', spawnRooms:[RoomType.COMMON,RoomType.SMOKING,RoomType.LIVING,RoomType.KITCHEN], spawnW:0.55, value:22, tags:[...ITEM_TAGS.card_deck], stack:1 },
+  domino_box:{ id:'domino_box', name:'Коробка домино', type:ItemType.MISC, desc:'Пластмассовые костяшки в мягкой коробке. За столом слышно не спор, а сухой щелчок счета.', spawnRooms:[RoomType.COMMON,RoomType.SMOKING,RoomType.LIVING,RoomType.KITCHEN], spawnW:0.48, value:24, tags:[...ITEM_TAGS.domino_box], stack:1 },
   resident_trinket_box:{ id:'resident_trinket_box', name:'Коробка жильцовых мелочей', type:ItemType.MISC, desc:'Пуговицы, значки, чужой ключ без двери. Небольшая ценность, если не думать, чья.', spawnRooms:[RoomType.LIVING,RoomType.STORAGE,RoomType.COMMON], spawnW:0.45, value:34, tags:[...ITEM_TAGS.resident_trinket_box], stack:3 },
   party_portrait_pin:{ id:'party_portrait_pin', name:'Значок с портрета партии', type:ItemType.MISC, desc:'Малый значок с большой уверенностью. Бюро любит такие мелочи, пока не спрашивают год выпуска.', spawnRooms:[RoomType.OFFICE,RoomType.COMMON,RoomType.LIVING], spawnW:0.55, value:22, tags:[...ITEM_TAGS.party_portrait_pin], stack:6 },
   stolen_terminal_stamp:{ id:'stolen_terminal_stamp', name:'Украденная печать терминала', type:ItemType.MISC, desc:'Служебная печать с терминального стола. Очередь подделывает легко, память камер - хуже.', spawnRooms:[RoomType.OFFICE,RoomType.SMOKING,RoomType.STORAGE], spawnW:0.16, value:155, tags:[...ITEM_TAGS.stolen_terminal_stamp], stack:1 },

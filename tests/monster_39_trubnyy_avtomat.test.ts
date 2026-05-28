@@ -49,7 +49,7 @@ function monster(): Entity {
 function player(x: number, y: number): Entity {
   return {
     id: 2,
-    type: EntityType.PLAYER,
+    type: EntityType.NPC, persistentNpcId: 'player',
     x,
     y,
     angle: 0,

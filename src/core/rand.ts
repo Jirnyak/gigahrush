@@ -1,6 +1,66 @@
 /* ── Tiny shared randomness utilities ─────────────────────────── */
-/*   Use these instead of inlining `Math.floor(Math.random()*…)`. */
-/*   Keeps call-sites short and search-friendly.                  */
+/*   Use explicit seeded RNG for generation-time choices.          */
+/*   Math.random helpers below are only for fresh runtime entropy. */
+
+export type RandomSource = () => number;
+
+/** Fast xorshift32 PRNG, bit-compatible with the timaert generator. */
+export function xorshift32(seed: number): RandomSource {
+  let s = (seed | 0) || 1;
+  return () => {
+    s ^= s << 13;
+    s ^= s >>> 17;
+    s ^= s << 5;
+    return (s >>> 0) / 4294967296;
+  };
+}
+
+export class SeedRng {
+  private state: number;
+  readonly seed: number;
+
+  constructor(seed: number) {
+    this.seed = seed >>> 0;
+    this.state = (seed | 0) || 1;
+  }
+
+  nextU32(): number {
+    let s = this.state;
+    s ^= s << 13;
+    s ^= s >>> 17;
+    s ^= s << 5;
+    this.state = s;
+    return s >>> 0;
+  }
+
+  random(): number {
+    return this.nextU32() / 4294967296;
+  }
+
+  int(lo: number, hi: number): number {
+    return lo + Math.floor(this.random() * (hi - lo + 1));
+  }
+
+  float(lo: number, hi: number): number {
+    return lo + this.random() * (hi - lo);
+  }
+
+  chance(p: number): boolean {
+    return this.random() < p;
+  }
+
+  pick<T>(items: readonly T[]): T {
+    return items[Math.floor(this.random() * items.length)];
+  }
+
+  shuffle<T>(items: T[]): T[] {
+    for (let i = items.length - 1; i > 0; i--) {
+      const j = Math.floor(this.random() * (i + 1));
+      [items[i], items[j]] = [items[j], items[i]];
+    }
+    return items;
+  }
+}
 
 /** Random non-negative integer seed in [0, 99999), suitable for
  *  decals, mark stamping and other procedural variation. */
@@ -11,6 +71,23 @@ export function randSeed(): number {
 /** Inclusive integer in [a, b]. */
 export function irand(a: number, b: number): number {
   return a + Math.floor(Math.random() * (b - a + 1));
+}
+
+/** Inclusive integer in [a, b] from an explicit RNG. */
+export function irandFrom(rand: RandomSource, a: number, b: number): number {
+  return a + Math.floor(rand() * (b - a + 1));
+}
+
+export function pickFrom<T>(rand: RandomSource, items: readonly T[]): T {
+  return items[Math.floor(rand() * items.length)];
+}
+
+export function shuffleWith<T>(rand: RandomSource, items: T[]): T[] {
+  for (let i = items.length - 1; i > 0; i--) {
+    const j = Math.floor(rand() * (i + 1));
+    [items[i], items[j]] = [items[j], items[i]];
+  }
+  return items;
 }
 
 /** Stable 32-bit hash for string ids and procedural route keys. */
@@ -38,7 +115,7 @@ export function seededRandom(seed: number): () => number {
 /** Run Math.random-based generators under a local deterministic seed. */
 export function withSeededRandom<T>(seed: number, fn: () => T): T {
   const oldRandom = Math.random;
-  Math.random = seededRandom(seed);
+  Math.random = xorshift32(seed);
   try {
     return fn();
   } finally {

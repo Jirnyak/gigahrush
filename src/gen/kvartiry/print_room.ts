@@ -1,6 +1,13 @@
 /* ── Нелегальная типография — Kvartiry social pressure POI ───── */
 
-import { Tex, Feature, RoomType, Faction, Occupation, QuestType } from '../../core/types';
+import {
+  Tex,
+  Feature,
+  RoomType,
+  Faction,
+  Occupation,
+  QuestType,
+} from '../../core/types';
 import { World } from '../../core/world';
 import { type Entity } from '../../core/types';
 import { type PlotNpcDef, registerSideQuest } from '../../data/plot';

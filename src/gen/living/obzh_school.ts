@@ -2,6 +2,7 @@
 /* One classroom, one shelter, five NPCs, and a repairable gap     */
 /* that becomes meaningful when samosbor fog reaches the school.   */
 
+import { stampSurfaceSplat } from '../../systems/surface_marks';
 import {
   Cell, DoorState, Tex, Feature, RoomType,
   type Room, type Entity, EntityType, AIGoal, Faction, Occupation, QuestType, MonsterKind,
@@ -456,7 +457,7 @@ function decorateClassroom(world: World, entities: Entity[], nextId: { v: number
   dropItem(entities, nextId, rx + 11, ry + 2, 'bandage', 1);
   dropItem(entities, nextId, rx + 10, ry + 6, 'water', 1);
   dropItem(entities, nextId, rx + 1, ry + 7, 'wrench', 1);
-  world.stamp(rx + 2, ry + CLASS_H - 1, 0.5, 0.5, 5, 0.5, 16016, 95, 44, 52, false);
+  stampSurfaceSplat(world, rx + 2, ry + CLASS_H - 1, 0.5, 0.5, 5, 0.5, 16016, 95, 44, 52, false);
 }
 
 function decorateShelter(world: World, entities: Entity[], nextId: { v: number }, room: Room): void {

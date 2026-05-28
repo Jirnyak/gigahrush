@@ -7,12 +7,13 @@ import {
 import { World } from '../../core/world';
 import { MONSTERS } from '../../entities/monster';
 import { monsterSpr } from '../../render/sprite_index';
-import { MarkType, stampMark } from '../../render/marks';
+import { MarkType, stampMark } from '../../systems/surface_marks';
 import { playMaronaryPing } from '../../systems/audio';
 import { publishEvent, registerWorldEventObserver as observeWorldEvents } from '../../systems/events';
 import { registerRouteCue } from '../../systems/route_cues';
 import { randomRPG, scaleMonsterHp, scaleMonsterSpeed } from '../../systems/rpg';
 import { carveCorridor, findClearArea, placeDoorAt, stampRoom } from '../shared';
+import { isPlayerEntity } from '../../systems/player_actor';
 
 const ENCOUNTER_ID = 'maronary_signalshchik';
 const ENCOUNTER_NAME = 'Маронарный Сигнальщик';
@@ -75,7 +76,7 @@ function findSignalshchikContext(event: WorldEvent): SignalshchikContext | undef
 }
 
 function findPlayer(entities: Entity[]): Entity | undefined {
-  return entities.find(e => e.type === EntityType.PLAYER && e.alive);
+  return entities.find(e => isPlayerEntity(e) && e.alive);
 }
 
 function pushHud(state: GameState, line: string, color = '#35ff66'): void {

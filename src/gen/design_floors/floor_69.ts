@@ -1,5 +1,6 @@
 /* -- Design floor 69: adult vice, debt, blackmail and refuge ---- */
 
+import { stampSurfaceSplat } from '../../systems/surface_marks';
 import {
   AIGoal, Cell, ContainerKind, DoorState, EntityType, Faction, Feature,
   FloorLevel, LiftDirection, Occupation, QuestType, RoomType, Tex, ZoneFaction,
@@ -826,7 +827,7 @@ function decorateRouteRoom(world: World, room: Room, motif: 'hotel' | 'dressing'
   } else if (motif === 'hotel' || motif === 'dressing') {
     addPosterWall(world, room.x + Math.floor(room.w / 2), room.y - 1, room.id * 3);
     if (rng() < 0.24) {
-      world.stamp(room.x + Math.floor(room.w / 2), room.y + Math.floor(room.h / 2), 0.5, 0.5, 2.8, 0.16, room.id * 983, 200, 42, 112, true);
+      stampSurfaceSplat(world, room.x + Math.floor(room.w / 2), room.y + Math.floor(room.h / 2), 0.5, 0.5, 2.8, 0.16, room.id * 983, 200, 42, 112, true);
     }
   }
 }
@@ -1028,8 +1029,8 @@ function decorateRooms(world: World, rooms: Floor69Rooms, seed: number): void {
   setFeature(world, rooms.hall.x + Math.floor(rooms.hall.w / 2), rooms.hall.y + 8, Feature.SCREEN);
   addScreenWall(world, rooms.hall.x + 12, rooms.hall.y - 1, 9);
   addScreenWall(world, rooms.hall.x + 18, rooms.hall.y - 1, 10);
-  world.stamp(rooms.hall.x + 13, rooms.hall.y + 9, 0.5, 0.5, 3.5, 0.22, seed + 11, 210, 45, 130, true);
-  world.stamp(rooms.hall.x + 18, rooms.hall.y + 9, 0.5, 0.5, 3.5, 0.18, seed + 12, 40, 160, 210, true);
+  stampSurfaceSplat(world, rooms.hall.x + 13, rooms.hall.y + 9, 0.5, 0.5, 3.5, 0.22, seed + 11, 210, 45, 130, true);
+  stampSurfaceSplat(world, rooms.hall.x + 18, rooms.hall.y + 9, 0.5, 0.5, 3.5, 0.18, seed + 12, 40, 160, 210, true);
 
   for (let x = rooms.checkpoint.x + 2; x < rooms.checkpoint.x + rooms.checkpoint.w - 2; x += 3) {
     setFeature(world, x, rooms.checkpoint.y + 2, Feature.DESK);

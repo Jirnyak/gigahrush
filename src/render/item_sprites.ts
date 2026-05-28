@@ -106,7 +106,9 @@ function itemVisualKind(defId: string, def: ItemDef | undefined): VisualKind {
       || defId === 'psi_brainburn'
       || defId === 'psi_concrete_splinter'
       || defId === 'psi_control'
-      || defId === 'psi_madness')
+      || defId === 'psi_madness'
+      || defId === 'psi_shield'
+      || defId === 'psi_possession')
   ) return 'weapon';
   if (hasAny(tags, ['psi', 'void', 'rare_trophy', 'cult', 'istotit', 'maronary']) || defId.includes('psi_') || defId.includes('void')) return 'artifact';
   if (def?.type === ItemType.WEAPON || has(tags, 'weapon')) return 'weapon';
@@ -8307,6 +8309,8 @@ function psiWeaponGlow(defId: string): {
   if (defId === 'psi_concrete_splinter') return { glow: [126, 180, 194], glow2: [194, 194, 176], accent: [184, 74, 52] };
   if (defId === 'psi_control') return { glow: [78, 216, 134], glow2: [82, 172, 228], accent: [210, 164, 62] };
   if (defId === 'psi_madness') return { glow: [206, 72, 218], glow2: [230, 68, 64], accent: [226, 174, 62] };
+  if (defId === 'psi_shield') return { glow: [94, 214, 238], glow2: [128, 98, 230], accent: [232, 196, 82] };
+  if (defId === 'psi_possession') return { glow: [82, 226, 154], glow2: [198, 72, 230], accent: [222, 172, 70] };
   return { glow: [142, 92, 224], glow2: [80, 182, 230], accent: [210, 154, 54] };
 }
 
@@ -8375,6 +8379,21 @@ function drawPsiWeaponSprite(t: Uint32Array, seed: number, defId: string): void 
     line(t, 31, 23, 47, 38, 0.9, dark, seed + 2460, 190);
     line(t, 47, 23, 31, 39, 0.9, seal, seed + 2461, 185);
     rect(t, 22, 42, 33, 45, accent, seed + 2462, 168);
+  } else if (defId === 'psi_shield') {
+    line(t, 18, 45, 44, 30, 4.8, dark, seed + 2464, 248);
+    ellipse(t, 39, 30, 15, 15, glow, seed + 2465, 74);
+    arcLine(t, 39, 30, 12, 12, Math.PI * 0.12, Math.PI * 1.88, 2.4, glow, seed + 2466, 236, 22);
+    arcLine(t, 39, 30, 8, 8, Math.PI * 0.2, Math.PI * 1.8, 1.4, glow2, seed + 2467, 224, 18);
+    ellipse(t, 39, 30, 4.6, 4.6, [222, 238, 242], seed + 2468, 210);
+    rect(t, 23, 41, 34, 44, accent, seed + 2469, 168);
+  } else if (defId === 'psi_possession') {
+    line(t, 17, 45, 47, 29, 4.8, dark, seed + 2473, 250);
+    ellipse(t, 34, 31, 13, 10, glow2, seed + 2474, 88);
+    ellipse(t, 45, 25, 9, 7, glow, seed + 2475, 190);
+    ellipse(t, 31, 33, 5.2, 3.4, [222, 226, 188], seed + 2476, 230);
+    ellipse(t, 46, 25, 3.8, 2.6, [222, 226, 188], seed + 2477, 225);
+    line(t, 34, 31, 45, 25, 1.3, accent, seed + 2478, 210);
+    line(t, 25, 39, 42, 22, 0.9, glow, seed + 2479, 190);
   } else {
     line(t, 19, 42, 52, 24, 4.8, dark, seed + 2470, 248);
     ellipse(t, 40, 29, 10, 8, glow, seed + 2471, 210);
@@ -14095,6 +14114,47 @@ function drawDiceBoneSprite(t: Uint32Array, seed: number): void {
   drawNoiseDust(t, seed + 954, grime, 11);
 }
 
+function drawDominoBoxSprite(t: Uint32Array, seed: number): void {
+  const box: [number, number, number] = [96, 42, 32];
+  const boxLight: [number, number, number] = [154, 70, 48];
+  const boxDark: [number, number, number] = [46, 24, 22];
+  const ivory: [number, number, number] = [226, 216, 184];
+  const ivoryLight: [number, number, number] = [246, 236, 202];
+  const ink: [number, number, number] = [18, 18, 16];
+  const gold: [number, number, number] = [204, 154, 62];
+  const grime: [number, number, number] = [62, 70, 54];
+
+  ellipse(t, 33, 53, 18, 4.2, [14, 15, 13], seed + 964, 86);
+  rect(t, 15, 26, 51, 49, box, seed + 965, 244);
+  rect(t, 18, 22, 54, 44, boxLight, seed + 966, 236);
+  outlineRect(t, 15, 26, 51, 49, boxDark);
+  outlineRect(t, 18, 22, 54, 44, boxDark);
+  clearRect(t, 15, 26, 18, 29);
+  clearRect(t, 51, 22, 54, 26);
+  rect(t, 22, 27, 48, 31, gold, seed + 967, 195);
+  rect(t, 24, 35, 46, 37, boxDark, seed + 968, 150);
+  line(t, 18, 43, 51, 26, 0.8, boxDark, seed + 969, 115);
+
+  rect(t, 17, 14, 34, 27, ivory, seed + 970, 248);
+  rect(t, 19, 12, 36, 25, ivoryLight, seed + 971, 240);
+  outlineRect(t, 17, 14, 34, 27, ink);
+  outlineRect(t, 19, 12, 36, 25, ink);
+  rect(t, 26, 14, 27, 25, ink, 0, 210);
+  for (const [x, y] of [[23, 17], [31, 21], [23, 22]]) ellipse(t, x, y, 1.2, 1.2, ink, seed + x + y, 235);
+
+  rect(t, 36, 31, 53, 44, ivory, seed + 972, 248);
+  rect(t, 38, 29, 55, 42, ivoryLight, seed + 973, 240);
+  outlineRect(t, 36, 31, 53, 44, ink);
+  outlineRect(t, 38, 29, 55, 42, ink);
+  rect(t, 45, 31, 46, 42, ink, 0, 210);
+  for (const [x, y] of [[41, 34], [50, 34], [41, 39], [50, 39]]) ellipse(t, x, y, 1.15, 1.15, ink, seed + x + y, 235);
+
+  rect(t, 20, 46, 31, 49, ivory, seed + 974, 210);
+  line(t, 20, 46, 31, 49, 0.8, ink, seed + 975, 155);
+  drawNoiseDust(t, seed + 976, grime, 12);
+  drawNoiseDust(t, seed + 977, gold, 6);
+}
+
 function drawDiverRouteTagSprite(t: Uint32Array, seed: number): void {
   const brass: [number, number, number] = [176, 124, 48];
   const brassLight: [number, number, number] = [232, 184, 84];
@@ -15622,6 +15682,10 @@ function drawMiscSprite(t: Uint32Array, seed: number, p: Palette, defId: string)
   }
   if (defId === 'dice_bone') {
     drawDiceBoneSprite(t, seed);
+    return;
+  }
+  if (defId === 'domino_box') {
+    drawDominoBoxSprite(t, seed);
     return;
   }
   if (defId === 'fuse') {

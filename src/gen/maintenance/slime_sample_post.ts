@@ -1,8 +1,18 @@
 /* ── AG62 NII slime sample post: field containers and liability ─ */
 
 import {
-  ContainerKind, Faction, Feature, FloorLevel, Occupation, QuestType, RoomType, Tex,
-  type GameState, type Room, type WorldContainer, type WorldEvent,
+  ContainerKind,
+  Faction,
+  Feature,
+  FloorLevel,
+  Occupation,
+  QuestType,
+  RoomType,
+  Tex,
+  type GameState,
+  type Room,
+  type WorldContainer,
+  type WorldEvent,
 } from '../../core/types';
 import { type PlotNpcDef, registerSideQuest } from '../../data/plot';
 import { publishEvent, registerWorldEventObserver } from '../../systems/events';

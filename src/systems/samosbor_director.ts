@@ -23,6 +23,7 @@ import { setDoorState } from './door_state';
 import { publishEvent, getRecentEvents } from './events';
 import { observeRumorEvent } from './rumor';
 import { canSpawnEntityType, entitySpawnSlots } from './entity_limits';
+import { isPlayerEntity } from './player_actor';
 
 const TRACE_CAP = 300;
 
@@ -143,7 +144,7 @@ function phaseForReason(reason: SamosborDirectorTickReason): SamosborBeatPhase {
 }
 
 function findPlayer(entities: Entity[]): Entity | null {
-  for (const e of entities) if (e.type === EntityType.PLAYER && e.alive) return e;
+  for (const e of entities) if (isPlayerEntity(e) && e.alive) return e;
   return null;
 }
 

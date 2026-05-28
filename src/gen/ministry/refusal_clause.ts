@@ -1,6 +1,13 @@
 /* ── Кабинет отказных параграфов — Ministry ranged encounter ─── */
 
-import { Cell, Feature, MonsterKind, RoomType, Tex, type Entity } from '../../core/types';
+import {
+  Cell,
+  Feature,
+  MonsterKind,
+  RoomType,
+  Tex,
+  type Entity,
+} from '../../core/types';
 import { World } from '../../core/world';
 import {
   type NextId, addItemDrop, createAdminRoom, setFeature, spawnAdminMonster,

@@ -4,6 +4,7 @@ import { getFactionRel } from '../data/relations';
 export const RELATION_MIN = -100;
 export const RELATION_MAX = 100;
 export const HOSTILE_RELATION_THRESHOLD = -50;
+export const FRIENDLY_RELATION_THRESHOLD = 50;
 export const NPC_PLAYER_RELATION_FLUCTUATION = 12;
 export const QUEST_FACTION_RELATION_DELTA = 1;
 

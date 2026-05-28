@@ -14,12 +14,13 @@ import { World } from '../core/world';
 import { MONSTERS, entityDisplayName } from '../entities/monster';
 import { ITEMS } from '../data/items';
 import { Spr, monsterSpr } from '../render/sprite_index';
-import { MarkType, stampMark } from '../render/marks';
+import { MarkType, stampMark } from './surface_marks';
 import { publishEvent } from './events';
 import { registerInventoryUseHandler, type InventoryUseHandlerContext } from './inventory';
 import { ENTITY_MASK_ACTOR, ensureEntityIndex, getEntityIndex } from './entity_index';
 import { canSpawnEntityType } from './entity_limits';
 import { randomRPG, scaleMonsterHp, scaleMonsterSpeed } from './rpg';
+import { isPlayerEntity } from './player_actor';
 
 export const SWARM_SOURCE_STAGE = 1;
 export const SWARM_BODY_STAGE = 0;
@@ -101,7 +102,7 @@ function cellRoomId(world: World, x: number, y: number): number | undefined {
 function actorName(actor: Entity | undefined): string | undefined {
   if (!actor) return undefined;
   if (actor.name) return actor.name;
-  if (actor.type === EntityType.PLAYER) return 'Вы';
+  if (isPlayerEntity(actor)) return 'Вы';
   return actor.monsterKind !== undefined ? entityDisplayName(actor) : undefined;
 }
 
@@ -286,7 +287,7 @@ function publishSourceResolved(
     itemValue: item?.value,
     monsterKind: MonsterKind.SWARM,
     severity: 4,
-    privacy: actor?.type === EntityType.PLAYER ? 'local' : 'witnessed',
+    privacy: isPlayerEntity(actor) ? 'local' : 'witnessed',
     tags: ['monster', 'swarm', 'source', type === 'swarm_source_burned' ? 'fire' : 'sealed', 'counterplay'],
     data: {
       sourceId: nest.id,

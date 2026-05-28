@@ -1,5 +1,6 @@
 /* ── AG72: scientist sample route, escort-like side quest ─────── */
 
+import { stampSurfaceSplat } from '../../systems/surface_marks';
 import {
   AIGoal, Cell, ContainerKind, DoorState, EntityType, Faction, Feature,
   FloorLevel, MonsterKind, Occupation, QuestType, RoomType, Tex,
@@ -423,8 +424,8 @@ function decorate(world: World, lab: Room, sample: Room): void {
   }
   world.wallTex[world.idx(lab.x + 12, lab.y - 1)] = Tex.SCREEN_BASE + 5;
   world.wallTex[world.idx(lab.x + 4, lab.y - 1)] = Tex.POSTER_BASE + 37;
-  world.stamp(sample.x + 5, sample.y + 5, 0.5, 0.5, 5, 0.42, 72072, 230, 235, 245, false);
-  world.stamp(sample.x + 8, sample.y + 6, 0.5, 0.5, 5, 0.32, 72073, 70, 120, 80, false);
+  stampSurfaceSplat(world, sample.x + 5, sample.y + 5, 0.5, 0.5, 5, 0.42, 72072, 230, 235, 245, false);
+  stampSurfaceSplat(world, sample.x + 8, sample.y + 6, 0.5, 0.5, 5, 0.32, 72073, 70, 120, 80, false);
 }
 
 function nextContainerId(world: World): number {

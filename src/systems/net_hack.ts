@@ -1,4 +1,11 @@
-import { Cell, Feature, W, msg, type Entity, type GameState } from '../core/types';
+import {
+  Cell,
+  Feature,
+  W,
+  msg,
+  type Entity,
+  type GameState,
+} from '../core/types';
 import { World } from '../core/world';
 import { getNetHackTerminalDef, NET_HACK_TERMINALS, type NetHackTerminalDef, type NetHackTerminalDefId } from '../data/net_hack';
 import { publishEvent } from './events';

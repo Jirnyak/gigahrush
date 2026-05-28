@@ -11,7 +11,7 @@ import {
 } from '../core/types';
 import { World } from '../core/world';
 import { entityDisplayName } from '../entities/monster';
-import { MarkType, stampMark } from '../render/marks';
+import { MarkType, stampMark } from './surface_marks';
 import { Spr } from '../render/sprite_index';
 import { playExplosion, playSoundAt } from './audio';
 import { getEntityIndex, ENTITY_MASK_ACTOR } from './entity_index';
@@ -19,6 +19,7 @@ import { publishEvent } from './events';
 import { applyDamageRelationPenalty } from './factions';
 import { publishExplosionNoise } from './noise';
 import { recordPlayerDamage } from './damage';
+import { isPlayerEntity } from './player_actor';
 
 export const FOG_SHARK_IGNITION_RADIUS = 2.65;
 export const FOG_SHARK_IGNITION_DAMAGE = 16;
@@ -42,7 +43,7 @@ function cellRoomId(world: World, e: Entity): number | undefined {
 
 function actorName(e: Entity | undefined): string | undefined {
   if (!e) return undefined;
-  if (e.type === EntityType.PLAYER) return 'Вы';
+  if (isPlayerEntity(e)) return 'Вы';
   return entityDisplayName(e);
 }
 
@@ -88,7 +89,7 @@ export function recordFogSharkIgnited(
   for (const target of fogSharkIgnitionQuery) {
     if (hitCount >= FOG_SHARK_IGNITION_TARGET_CAP) break;
     if (!target.alive || target.id === shark.id || target.hp === undefined) continue;
-    if (target.type !== EntityType.PLAYER && target.type !== EntityType.NPC && target.type !== EntityType.MONSTER) continue;
+    if (!isPlayerEntity(target) && target.type !== EntityType.NPC && target.type !== EntityType.MONSTER) continue;
     const d2 = world.dist2(shark.x, shark.y, target.x, target.y);
     if (d2 > radiusSq) continue;
     const dist = Math.sqrt(d2);
@@ -105,7 +106,7 @@ export function recordFogSharkIgnited(
     const blastVx = (dx / len) * 7;
     const blastVy = (dy / len) * 7;
 
-    if (target.type === EntityType.PLAYER) {
+    if (isPlayerEntity(target)) {
       state.dmgFlash = Math.max(state.dmgFlash, 0.28);
       state.dmgSeed = (state.dmgSeed + 91) | 0;
       recordPlayerDamage(state, shark, damage, `Газовый взрыв туманной акулы: -${damage}`, 'hazard');
@@ -151,7 +152,7 @@ export function recordFogSharkIgnited(
     targetName: actorName(shark),
     monsterKind: MonsterKind.FOG_SHARK,
     severity: hitCount > 0 ? 4 : 3,
-    privacy: actor?.type === EntityType.PLAYER ? 'local' : 'witnessed',
+    privacy: isPlayerEntity(actor) ? 'local' : 'witnessed',
     tags: ['monster', 'fog_shark', 'fire', 'explosion', 'counterplay', 'fog'],
     data: {
       radius,

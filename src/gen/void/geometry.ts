@@ -1,7 +1,13 @@
 /* ── VOID macro geometry: islands, folds, shelters, boss lane ─── */
 
 import {
-  W, Cell, Tex, Feature, LiftDirection, DoorState, RoomType,
+  W,
+  Cell,
+  Tex,
+  Feature,
+  LiftDirection,
+  DoorState,
+  RoomType,
   type Room,
 } from '../../core/types';
 import { World } from '../../core/world';

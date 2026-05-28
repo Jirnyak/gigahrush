@@ -1,5 +1,6 @@
 /* ── Экранник — local screen-bound misinformation encounter ───── */
 
+import { stampSurfaceSplat } from '../../systems/surface_marks';
 import {
   AIGoal,
   Cell,
@@ -414,13 +415,13 @@ function decorateEkrannikRooms(world: World, room: Room, danger: Room): number[]
   for (const ci of screens) {
     const x = ci % W;
     const y = (ci / W) | 0;
-    world.stamp(x, y, 0.5, 0.5, 1.4, 0.34, 16016 + ci, ci & 1 ? 230 : 45, 245, ci & 1 ? 230 : 80, true);
+    stampSurfaceSplat(world, x, y, 0.5, 0.5, 1.4, 0.34, 16016 + ci, ci & 1 ? 230 : 45, 245, ci & 1 ? 230 : 80, true);
   }
   for (let dx = 1; dx < room.w - 1; dx += 3) {
-    world.stamp(room.x + dx, room.y + room.h - 1, 0.5, 0.5, 0.22, 95, room.id * 97 + dx, 210, 220, 220);
+    stampSurfaceSplat(world, room.x + dx, room.y + room.h - 1, 0.5, 0.5, 0.22, 95, room.id * 97 + dx, 210, 220, 220);
   }
   for (let dx = 1; dx < danger.w - 1; dx += 2) {
-    world.stamp(danger.x + dx, danger.y + 1, 0.5, 0.5, 0.28, 105, danger.id * 113 + dx, 45, 220, 85);
+    stampSurfaceSplat(world, danger.x + dx, danger.y + 1, 0.5, 0.5, 0.28, 105, danger.id * 113 + dx, 45, 220, 85);
   }
   return screens;
 }

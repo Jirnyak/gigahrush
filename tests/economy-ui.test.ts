@@ -20,7 +20,7 @@ function state(extra: Partial<GameState> & Record<string, unknown> = {}): GameSt
 function entity(extra: Partial<Entity> = {}): Entity {
   return {
     id: 1,
-    type: EntityType.PLAYER,
+    type: EntityType.NPC, persistentNpcId: 'player',
     x: 0,
     y: 0,
     angle: 0,

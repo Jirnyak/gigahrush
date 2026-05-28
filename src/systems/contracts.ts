@@ -1,3 +1,4 @@
+import { stampSurfaceSplat } from './surface_marks';
 import {
   AIGoal,
   Cell,
@@ -842,7 +843,7 @@ function markZhelemishSampleSite(world: World, x: number, y: number, sealed: boo
   const ci = world.idx(x, y);
   if (world.cells[ci] !== Cell.FLOOR && world.cells[ci] !== Cell.WATER) return;
   world.setFeatureAt(ci, sealed ? Feature.APPARATUS : Feature.SHELF);
-  world.stamp(x, y, 0.5, 0.5, sealed ? 5 : 3, sealed ? 0.62 : 0.42, 105105 + (sealed ? 1 : 2), 84, sealed ? 150 : 92, sealed ? 72 : 58, false);
+  stampSurfaceSplat(world, x, y, 0.5, 0.5, sealed ? 5 : 3, sealed ? 0.62 : 0.42, 105105 + (sealed ? 1 : 2), 84, sealed ? 150 : 92, sealed ? 72 : 58, false);
 }
 
 function guardCell(world: World, room: Room, sampleX: number, sampleY: number, offset: number): { x: number; y: number } | undefined {

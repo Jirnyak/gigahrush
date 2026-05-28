@@ -51,7 +51,7 @@ function cultWorld(): World {
 function player(overrides: Partial<Entity> = {}): Entity {
   return {
     id: 1,
-    type: EntityType.PLAYER,
+    type: EntityType.NPC, persistentNpcId: 'player',
     x: 64.5,
     y: 64.5,
     angle: 0,

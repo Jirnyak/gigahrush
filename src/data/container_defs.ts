@@ -92,6 +92,7 @@ const ITEM5_CONTAINER_POOLS: Partial<Record<ContainerKind, ContainerDef['itemPoo
   ],
   [ContainerKind.CASHBOX]: [
     { defId: 'dice_bone', min: 1, max: 2, chance: 0.35 },
+    { defId: 'domino_box', min: 1, max: 1, chance: 0.2 },
     { defId: 'market_weight_scale', min: 1, max: 1, chance: 0.08 },
     { defId: 'party_portrait_pin', min: 1, max: 1, chance: 0.22 },
     { defId: 'import_toiletpaper', min: 1, max: 2, chance: 0.18 },

@@ -26,7 +26,7 @@ import { isHostile } from '../factions';
 import { scaleMonsterDmg, strMeleeDmgMult, scaleMonsterHp, scaleMonsterSpeed, randomRPG } from '../rpg';
 import { applySporeHaze, hasSporeHazeProtection, zhelemishIncomingMeleeDamage } from '../status';
 import { spawnBloodHit, spawnDeathPool } from '../../render/blood';
-import { MarkType, stampMark } from '../../render/marks';
+import { MarkType, stampMark } from '../surface_marks';
 import { followPath, tryAssignPathToCell, wanderNearby } from './pathfinding';
 import { Spr } from '../../render/sprite_index';
 import { getRecentEvents, publishEvent } from '../events';
@@ -55,6 +55,7 @@ import {
 } from '../procedural_anomalies/zombie_apocalypse';
 import { canSpawnEntityType, entitySpawnSlots } from '../entity_limits';
 import { documentScentStrength, hasDocumentScent, markNoisyDocument } from '../document_scent';
+import { isPlayerEntity } from '../player_actor';
 import { damageBorshchevikRootSite, releaseBorshchevikSeedPuff } from '../borshchevik';
 import {
   BLOOD_PLANT_HEAL_SCAN_SEC,
@@ -784,8 +785,8 @@ function publishGreenDogHowl(
     targetName: entityDisplayName(target),
     targetFaction: target.faction,
     monsterKind: MonsterKind.GREEN_DOG,
-    severity: target.type === EntityType.PLAYER ? 3 : 2,
-    privacy: target.type === EntityType.PLAYER ? 'local' : 'witnessed',
+    severity: isPlayerEntity(target) ? 3 : 2,
+    privacy: isPlayerEntity(target) ? 'local' : 'witnessed',
     tags: ['monster', 'green_dog', 'pack_howl', 'door_pressure'],
     data: {
       shared,
@@ -1159,7 +1160,7 @@ function publishMukhozhukEvent(
     containerId: typeof data?.containerId === 'number' ? data.containerId : undefined,
     monsterKind: MonsterKind.MUKHOZHUK_HOST,
     severity,
-    privacy: target?.type === EntityType.PLAYER ? 'local' : 'witnessed',
+    privacy: isPlayerEntity(target) ? 'local' : 'witnessed',
     tags: ['monster', 'mukhozhuk', 'parasite_leader', ...tags],
     data: {
       counterplay: MONSTERS[MonsterKind.MUKHOZHUK_HOST]?.counterplay,
@@ -1221,7 +1222,7 @@ export function commandMukhozhukNearby(
     npc.ai!.timer = 0;
     npc.ai!.path.length = 0;
     npc.ai!.pi = 0;
-    if (target.type === EntityType.PLAYER) npc.playerRelation = Math.min(npc.playerRelation ?? -70, -70);
+    if (isPlayerEntity(target)) npc.playerRelation = Math.min(npc.playerRelation ?? -70, -70);
     commanded++;
   }
   if (commanded <= 0) return 0;
@@ -1422,7 +1423,7 @@ function publishSobrannyyEvent(
     targetFaction: target?.faction,
     monsterKind: MonsterKind.SOBRANNYY,
     severity,
-    privacy: target?.type === EntityType.PLAYER ? 'local' : 'witnessed',
+    privacy: isPlayerEntity(target) ? 'local' : 'witnessed',
     tags: ['monster', 'sobrannyy', 'composite', ...tags],
     data: {
       rumorIds: ['ecology_sobrannyy_shelter'],
@@ -1600,7 +1601,7 @@ function trySobrannyyBreakWeakDoor(
       targetFaction: target.faction,
       monsterKind: MonsterKind.SOBRANNYY,
       severity: 3,
-      privacy: target.type === EntityType.PLAYER ? 'local' : 'witnessed',
+      privacy: isPlayerEntity(target) ? 'local' : 'witnessed',
       tags: ['monster', 'sobrannyy', 'door', 'weak_door'],
       data: { doorIdx, counterplay: 'closed_hermetic_door_still_blocks_composite' },
     });
@@ -1709,7 +1710,7 @@ function publishObzhivalshchikEvent(
     targetFaction: target?.faction,
     monsterKind: MonsterKind.OBZHIVALSHCHIK,
     severity,
-    privacy: target?.type === EntityType.PLAYER ? 'local' : 'witnessed',
+    privacy: isPlayerEntity(target) ? 'local' : 'witnessed',
     tags: ['monster', 'obzhivalshchik', 'room_bound', ...tags],
     data: {
       rumorIds: ['monster_obzhivalshchik_room', 'ecology_obzhivalshchik_growth'],
@@ -2023,7 +2024,7 @@ function publishMonsterReadabilityEvent(
     targetFaction: target?.faction,
     monsterKind: e.monsterKind,
     severity,
-    privacy: target?.type === EntityType.PLAYER ? 'local' : 'witnessed',
+    privacy: isPlayerEntity(target) ? 'local' : 'witnessed',
     tags: ['monster', ...tags],
     data: monsterReadabilityEventData(e.monsterKind, data),
   });
@@ -2054,7 +2055,7 @@ function publishBladeEliteEvent(
     targetFaction: target?.faction,
     monsterKind: tuning.kind,
     severity,
-    privacy: target?.type === EntityType.PLAYER ? 'local' : 'witnessed',
+    privacy: isPlayerEntity(target) ? 'local' : 'witnessed',
     tags: ['monster', tuning.tag, ...tags],
     data: bladeEliteEventData(tuning, data),
   });
@@ -2606,7 +2607,7 @@ function findImmediateCombatTarget(
 }
 
 function canBeMonsterTarget(other: Entity): boolean {
-  return other.type === EntityType.PLAYER || other.type === EntityType.NPC;
+  return isPlayerEntity(other) || isPlayerEntity(other) || other.type === EntityType.NPC;
 }
 
 function hasAIFlag(e: Entity, flag: MonsterAIFlag): boolean {
@@ -2854,7 +2855,7 @@ export function updateChervieNetPossessor(
   for (const other of cherviePulseQuery) {
     if (!other.alive || other.id === e.id) continue;
     if (world.dist2(e.x, e.y, other.x, other.y) > pulseRadiusSq) continue;
-    if (other.id === playerId || other.type === EntityType.PLAYER) continue;
+    if (other.id === playerId || isPlayerEntity(other)) continue;
     if (other.type !== EntityType.NPC || affectedNpcs >= CHERVIE_MIND_PULSE_CAP) continue;
     other.psiMadness = Math.max(other.psiMadness ?? 0, CHERVIE_MIND_PULSE_CONFUSION_SEC);
     if (other.ai) {
@@ -3189,7 +3190,7 @@ function findMeatWormTarget(world: World, e: Entity, dt: number): Entity | null 
     let score = d2;
     if (meat) score *= 0.34;
     if (bleeding) score *= 0.52;
-    if (other.type === EntityType.PLAYER) score *= 0.86;
+    if (isPlayerEntity(other)) score *= 0.86;
     if (score >= bestScore) continue;
     bestScore = score;
     target = other;
@@ -3315,7 +3316,7 @@ function tryOlgoyDragTarget(world: World, e: Entity, target: Entity, time: numbe
   if (world.solid(Math.floor(nx), Math.floor(ny))) return;
   target.x = nx;
   target.y = ny;
-  msgs.push(msg(`${entityDisplayName(e)} подтянул ${target.type === EntityType.PLAYER ? 'тебя' : entityDisplayName(target)} к трубе`, time, '#f86'));
+  msgs.push(msg(`${entityDisplayName(e)} подтянул ${isPlayerEntity(target) ? 'тебя' : entityDisplayName(target)} к трубе`, time, '#f86'));
   if (!state) return;
   publishEvent(state, {
     type: 'olgoy_dragged_target',
@@ -3330,8 +3331,8 @@ function tryOlgoyDragTarget(world: World, e: Entity, target: Entity, time: numbe
     targetName: entityDisplayName(target),
     targetFaction: target.faction,
     monsterKind: MonsterKind.OLGOY,
-    severity: target.type === EntityType.PLAYER ? 4 : 3,
-    privacy: target.type === EntityType.PLAYER ? 'local' : 'witnessed',
+    severity: isPlayerEntity(target) ? 4 : 3,
+    privacy: isPlayerEntity(target) ? 'local' : 'witnessed',
     tags: ['monster', 'olgoy', 'meat_worm', 'dragged'],
     data: { dragStep: step, counterplay: 'fight_away_from_pipe_water_or_abyss' },
   });
@@ -3490,7 +3491,7 @@ function publishBezekhiyEvent(
     targetFaction: target.faction,
     monsterKind: MonsterKind.BEZEKHIY,
     severity: type === 'bezekhiy_lunge' ? 4 : 3,
-    privacy: target.type === EntityType.PLAYER ? 'local' : 'witnessed',
+    privacy: isPlayerEntity(target) ? 'local' : 'witnessed',
     tags: ['monster', 'bezekhiy', 'dead_echo', reason],
     data: { reason, damage, rumorIds: ['monster_bezekhiy_dead_echo'] },
   });
@@ -3984,7 +3985,7 @@ function publishLishennyyLured(
     itemId: target.itemId,
     itemName,
     severity: 3,
-    privacy: target.entity?.type === EntityType.PLAYER ? 'local' : 'witnessed',
+    privacy: isPlayerEntity(target.entity) ? 'local' : 'witnessed',
     tags: ['monster', 'lishennyy', 'light_follower', 'lured', target.source],
     data: {
       source: target.source,
@@ -4185,8 +4186,8 @@ function applyLishennyyContactDecay(
     targetName: entityDisplayName(target),
     targetFaction: target.faction,
     monsterKind: MonsterKind.LISHENNYY,
-    severity: target.type === EntityType.PLAYER ? 4 : 3,
-    privacy: target.type === EntityType.PLAYER ? 'local' : 'witnessed',
+    severity: isPlayerEntity(target) ? 4 : 3,
+    privacy: isPlayerEntity(target) ? 'local' : 'witnessed',
     tags: ['monster', 'lishennyy', 'contact_decay', 'decay'],
     data: {
       damage: dmg,
@@ -4308,7 +4309,7 @@ function dropSlimeWomanResidue(
     warning: 'Жижевая пленка ест подошву. Чистящий комплект, огонь или сухой обход держат проход.',
     warningColor: '#4f8',
   });
-  if (state && target?.type === EntityType.PLAYER) {
+  if (state && target && isPlayerEntity(target)) {
     publishEvent(state, {
       type: 'monster_sighted',
       time,
@@ -4678,7 +4679,7 @@ function updateDikiyMertvyakCrowdShove(
   for (const other of dikiyCrowdQuery) {
     if (!other.alive || other.id === e.id || other.type === EntityType.MONSTER) continue;
     if (world.dist2(e.x, e.y, other.x, other.y) > DIKIY_SHOVE_RADIUS * DIKIY_SHOVE_RADIUS) continue;
-    if (other.type === EntityType.PLAYER) {
+    if (isPlayerEntity(other)) {
       shovedPlayer = other.id === playerId;
     } else if (other.type === EntityType.NPC && other.ai) {
       other.ai.staggerTimer = Math.max(other.ai.staggerTimer ?? 0, DIKIY_SHOVE_STAGGER_SEC);
@@ -5034,7 +5035,7 @@ function wakeRzhavnik(
   ai.pi = 0;
   e.spriteScale = 1.16;
   stampRzhavnikScrape(world, e, time);
-  if (target?.type === EntityType.PLAYER) {
+  if (isPlayerEntity(target)) {
     msgs.push(msg('Ровная стопка ржавых прутьев разложилась в ноги. Уклоняйтесь от первого рывка.', time, '#d86'));
   }
   publishRzhavnikWake(state, world, e, target, reason);
@@ -5110,7 +5111,7 @@ function finishRzhavnikLeap(
   e.attackCd = Math.max(e.attackCd ?? 0, MONSTERS[MonsterKind.RZHAVNIK].attackRate * 0.85);
   applyRzhavnikFragileState(e);
   stampRzhavnikScrape(world, e, time);
-  if (target?.type === EntityType.PLAYER) {
+  if (isPlayerEntity(target)) {
     msgs.push(msg(
       damage > 0
         ? `Ржавник попал первым рывком: -${damage}. Теперь корпус хрупкий.`
@@ -5255,7 +5256,7 @@ function damageZhornayaTarget(
     }
   }
 
-  const label = target.type === EntityType.PLAYER ? 'тебя' : entityDisplayName(target);
+  const label = isPlayerEntity(target) ? 'тебя' : entityDisplayName(target);
   msgs.push(msg(`${entityDisplayName(e)} сорвалась на запах и ударила ${label}: -${dmg}`, time, '#f44'));
   return true;
 }
@@ -5430,7 +5431,7 @@ function applyKontorshchikGrab(
   if (e.monsterKind !== MonsterKind.KONTORSHCHIK || documentScentStrength(target) <= 0) return;
   const mark = markNoisyDocument(target, time, e.id);
   if (!mark) return;
-  const targetIsPlayer = target.type === EntityType.PLAYER;
+  const targetIsPlayer = isPlayerEntity(target);
   msgs.push(msg(
     mark.marked
       ? `Конторщик проштамповал ${mark.itemName}: бумага шумит и тянет хват.`
@@ -5518,7 +5519,7 @@ function finishBladeEliteWindup(
       }
       const hitAng = Math.atan2(target.y - e.y, target.x - e.x);
       spawnBloodHit(world, target.x, target.y, hitAng, dmg, target.type === EntityType.MONSTER);
-      const targetLabel = target.type === EntityType.PLAYER ? 'тебя' : entityDisplayName(target);
+      const targetLabel = isPlayerEntity(target) ? 'тебя' : entityDisplayName(target);
       msgs.push(msg(
         armorCut
           ? `${entityDisplayName(e)} срезал бронелист и задел ${targetLabel}: -${dmg}`
@@ -5629,7 +5630,7 @@ function sporeCarpetRoomId(world: World, e: Entity): number | undefined {
 
 function sporeCarpetEventName(e: Entity | undefined): string | undefined {
   if (!e) return undefined;
-  if (e.type === EntityType.PLAYER) return 'Вы';
+  if (isPlayerEntity(e)) return 'Вы';
   return entityDisplayName(e);
 }
 
@@ -5658,7 +5659,7 @@ function publishSporeCarpetEvent(
     targetFaction: target?.faction,
     monsterKind: MonsterKind.SPORE_CARPET,
     severity,
-    privacy: target?.type === EntityType.PLAYER ? 'local' : 'witnessed',
+    privacy: isPlayerEntity(target) ? 'local' : 'witnessed',
     tags: ['monster', 'spore_carpet', 'lurking_furniture', ...tags],
     data: {
       rumorIds: [...SPORE_CARPET_RUMOR_IDS],
@@ -5682,7 +5683,7 @@ function wakeSporeCarpet(
   const ai = e.ai!;
   ai.sporePuffCd = Math.min(ai.sporePuffCd ?? 0.8, 0.8);
   e.spriteScale = 1.06;
-  if (target?.type === EntityType.PLAYER) {
+  if (isPlayerEntity(target)) {
     msgs.push(msg('Ковер поднял угол и повис в проходе. Жилы на ткани шевелятся.', time, '#bf8'));
   }
   publishSporeCarpetEvent(state, world, e, target, 'spore_carpet_woke', 4, ['woke', reason], {
@@ -6818,7 +6819,7 @@ function fireSlepoglazBeam(
   getEntityIndex().queryRadius(e.x, e.y, len + SLEPOGLAZ_BEAM_WIDTH + 1, slepoglazBeamQuery, ENTITY_MASK_ACTOR);
   for (const target of slepoglazBeamQuery) {
     if (!target.alive || target.id === e.id) continue;
-    if (target.type !== EntityType.PLAYER && target.type !== EntityType.NPC) continue;
+    if (!isPlayerEntity(target) && target.type !== EntityType.NPC) continue;
     const dx = world.delta(e.x, target.x);
     const dy = world.delta(e.y, target.y);
     const along = dx * dirX + dy * dirY;
@@ -7132,7 +7133,7 @@ function collapseTumannikFogOffset(
   ai.fogOffsetCollapsedUntil = time + TUMANNIK_COLLAPSE_SEC;
   e.attackCd = Math.max(e.attackCd ?? 0, 0.45);
   if (!hadOffset) return;
-  if (target?.type === EntityType.PLAYER && hadOffset && reason !== 'strike') {
+  if (isPlayerEntity(target) && hadOffset && reason !== 'strike') {
     msgs.push(msg(reason === 'fire'
       ? 'Огонь сложил ложный бок Туманника.'
       : reason === 'light'
@@ -7245,7 +7246,7 @@ function damageTumannikOffsetStrike(
     }
   }
 
-  const label = target.type === EntityType.PLAYER ? 'тебя' : entityDisplayName(target);
+  const label = isPlayerEntity(target) ? 'тебя' : entityDisplayName(target);
   msgs.push(msg(`${entityDisplayName(e)} бьет ${label} не из центра силуэта: -${dmg}`, time, '#9cf'));
   if (state) {
     publishEvent(state, {
@@ -7464,7 +7465,7 @@ function damageGlubinnayaSecondBeat(
     }
   }
 
-  const label = target.type === EntityType.PLAYER ? 'тебя' : entityDisplayName(target);
+  const label = isPlayerEntity(target) ? 'тебя' : entityDisplayName(target);
   msgs.push(msg(`${entityDisplayName(e)} ударила ${label} вторым телом: -${dmg}`, time, '#f44'));
   if (state) {
     publishEvent(state, {
@@ -7711,7 +7712,7 @@ function damageTonkayaTenStrike(
     }
   }
 
-  const label = target.type === EntityType.PLAYER ? 'тебя' : entityDisplayName(target);
+  const label = isPlayerEntity(target) ? 'тебя' : entityDisplayName(target);
   msgs.push(msg(`${entityDisplayName(e)} бьет ${label} сбоку из подготовленной линии: -${dmg}`, time, '#c8f'));
   publishMonsterReadabilityEvent(state, world, e, target, 'monster_sighted', 4, ['tonkaya_ten', 'bait_line', 'flank', 'line_crossed'], {
     damage: dmg,
@@ -7732,7 +7733,7 @@ function collapseTonkayaLine(
   e.ai!.baitScanCd = TONKAYA_REPOSITION_CD;
   e.attackCd = Math.max(e.attackCd ?? 0, 0.65);
   e.spriteScale = undefined;
-  if (target.type === EntityType.PLAYER) {
+  if (isPlayerEntity(target)) {
     msgs.push(msg(
       reason === 'wait'
         ? 'Тонкая Тень не выдержала ожидания и вернулась без фланговой линии.'
@@ -7926,7 +7927,7 @@ function damageTreskotnikTarget(
     }
   }
   msgs.push(msg(`Трескотник ударил и осыпался сам: -${selfDamage}`, time, '#f86'));
-  publishMonsterReadabilityEvent(state, world, e, target, 'monster_sighted', target.type === EntityType.PLAYER ? 4 : 3, ['treskotnik', 'fracture_sprint', 'hit'], {
+  publishMonsterReadabilityEvent(state, world, e, target, 'monster_sighted', isPlayerEntity(target) ? 4 : 3, ['treskotnik', 'fracture_sprint', 'hit'], {
     damage: dmg,
     selfDamage,
     counterplay: 'shoot_windup_or_break_line_before_contact',

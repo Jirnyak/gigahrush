@@ -19,7 +19,7 @@ import {
 function player(): Entity {
   return {
     id: 1,
-    type: EntityType.PLAYER,
+    type: EntityType.NPC, persistentNpcId: 'player',
     x: 10.5,
     y: 10.5,
     angle: 0,

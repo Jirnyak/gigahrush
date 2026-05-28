@@ -1,12 +1,14 @@
 import { EntityType, msg, type Entity, type GameState } from '../core/types';
 import { DESIGN_FLOOR_ROUTES } from '../data/design_floors';
 import { closeDiceGame, diceStakeFromNpc, startDiceGame } from './dice';
+import { closeDominoGame, dominoStakeFromNpc, startDominoGame } from './domino';
 import { closeDurakGame, durakStakeFromNpc, startDurakGame } from './durak';
 import { portalAllowsCasinoLikeContent } from './platform_bridge';
 import { npcHasQuestMarker } from './quests';
 
 export const CARD_DECK_ITEM_ID = 'card_deck';
 export const DICE_BONE_ITEM_ID = 'dice_bone';
+export const DOMINO_BOX_ITEM_ID = 'domino_box';
 export const NPC_MENU_INTERFACE_TAB = 'interface';
 
 export interface NpcInteractionContext {
@@ -92,12 +94,20 @@ function hasDice(ctx: NpcInteractionContext): boolean {
   return countItem(ctx.player, DICE_BONE_ITEM_ID) > 0 || countItem(ctx.npc, DICE_BONE_ITEM_ID) > 0;
 }
 
+function hasDominoBox(ctx: NpcInteractionContext): boolean {
+  return countItem(ctx.player, DOMINO_BOX_ITEM_ID) > 0 || countItem(ctx.npc, DOMINO_BOX_ITEM_ID) > 0;
+}
+
 function durakStake(ctx: NpcInteractionContext): number {
   return durakStakeFromNpc(ctx.npc);
 }
 
 function diceStake(ctx: NpcInteractionContext): number {
   return diceStakeFromNpc(ctx.npc);
+}
+
+function dominoStake(ctx: NpcInteractionContext): number {
+  return dominoStakeFromNpc(ctx.npc);
 }
 
 function currentRouteId(state: GameState): string {
@@ -194,6 +204,7 @@ export function openNpcInteractionInterface(ctx: NpcInteractionContext, request:
 export function closeNpcInteractionInterface(state?: GameState): void {
   closeDurakGame();
   closeDiceGame();
+  closeDominoGame();
   runtime.open = false;
   runtime.id = '';
   runtime.title = '';
@@ -284,6 +295,37 @@ registerNpcInteractionOption({
         'Бросайте до 21. Перебор проигрывает; равный счет оставляет деньги при себе.',
       ],
       message: 'E бросить, сброс/стоп передать ход NPC.',
+    });
+  },
+});
+
+registerNpcInteractionOption({
+  id: 'domino',
+  order: 32,
+  label: ctx => `Играть в домино (₽${dominoStake(ctx)})`,
+  visible: ctx => portalAllowsCasinoLikeContent() && hasDominoBox(ctx),
+  disabledReason: ctx => {
+    const stake = dominoStake(ctx);
+    if (stake <= 0) return 'У NPC нет денег для ставки.';
+    if (cleanMoney(ctx.player) < stake) return `Нужно ₽${stake} для ставки в домино.`;
+    return undefined;
+  },
+  activate: ctx => {
+    const stake = dominoStake(ctx);
+    if (!startDominoGame(ctx)) {
+      ctx.state.msgs.push(msg('Домино не разложилось на столе.', ctx.state.time, '#f84'));
+      return;
+    }
+    openNpcInteractionInterface(ctx, {
+      id: 'domino',
+      title: 'ДОМИНО',
+      stakeRubles: stake,
+      lines: [
+        `${ctx.npc.name ?? 'NPC'} высыпает костяшки из коробки.`,
+        `Ставка зафиксирована: 10% от денег NPC, сейчас ₽${stake}.`,
+        'По 7 костяшек. Кладите к совпадающему краю; если хода нет, добирайте из коробки.',
+      ],
+      message: 'E сыграть/добрать, сброс меняет левый/правый край.',
     });
   },
 });

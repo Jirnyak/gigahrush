@@ -1,5 +1,6 @@
 /* ── Комната чужой очереди — Kvartiry close-reveal encounter ─── */
 
+import { stampSurfaceSplat } from '../../systems/surface_marks';
 import {
   AIGoal, Cell, ContainerKind, EntityType, Faction, FloorLevel, MonsterKind, Occupation, QuestType,
   RoomType, Tex, Feature, type Entity, type WorldContainer,
@@ -97,7 +98,7 @@ function placeQueueTell(world: World, poi: SocialPoiRoom): void {
   world.wallTex[screen] = (Tex.SCREEN_BASE + 6) as Tex;
   if (!world.screenCells.includes(screen)) world.screenCells.push(screen);
   setFeatureIfFloor(world, poi.x + 1, poi.y + 1, Feature.SCREEN);
-  world.stamp(poi.x + poi.w - 3, poi.y + poi.h - 3, 0.5, 0.5, 1.4, 0.42, 44016, 4, 5, 5, false);
+  stampSurfaceSplat(world, poi.x + poi.w - 3, poi.y + poi.h - 3, 0.5, 0.5, 1.4, 0.42, 44016, 4, 5, 5, false);
 }
 
 function nextContainerId(world: World): number {

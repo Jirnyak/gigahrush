@@ -1,5 +1,6 @@
 /* ── Design floor: service_floor — lift machines and staff routes ─ */
 
+import { stampSurfaceSplat } from '../../systems/surface_marks';
 import {
   AIGoal,
   Cell,
@@ -1066,7 +1067,7 @@ function dressLiftMachine(world: World, room: Room): void {
   for (let x = room.x + 6; x < room.x + room.w - 4; x += 5) {
     setFeature(world, x, room.y + 2, Feature.SCREEN);
     setFeature(world, x, room.y + room.h - 3, Feature.LAMP);
-    world.stamp(x, room.y + 9, 0.5, 0.5, 0.18, 70, room.id * 53 + x, 30, 30, 35);
+    stampSurfaceSplat(world, x, room.y + 9, 0.5, 0.5, 0.18, 70, room.id * 53 + x, 30, 30, 35);
   }
   setFeature(world, room.x + 5, room.y + 5, Feature.LIFT_BUTTON);
 }
@@ -1089,7 +1090,7 @@ function dressMachineCore(world: World, room: Room, seedOffset: number): void {
   for (let x = room.x + 8; x < room.x + room.w - 8; x += 8) {
     setFeature(world, x, room.y + 3, Feature.SCREEN);
     setFeature(world, x, room.y + room.h - 4, Feature.LAMP);
-    world.stamp(x, room.y + (room.h >> 1), 0.5, 0.5, 2.4, 0.18, room.id * 311 + seedOffset * 17 + x, 22, 24, 28);
+    stampSurfaceSplat(world, x, room.y + (room.h >> 1), 0.5, 0.5, 2.4, 0.18, room.id * 311 + seedOffset * 17 + x, 22, 24, 28);
   }
   setFeature(world, room.x + 5, room.y + 5, Feature.LIFT_BUTTON);
 }
@@ -1139,7 +1140,7 @@ function dressVentJunction(world: World, room: Room): void {
   for (let x = room.x + 3; x < room.x + room.w - 3; x += 4) {
     for (let y = room.y + 3; y < room.y + room.h - 3; y += 4) {
       setFeature(world, x, y, Feature.APPARATUS);
-      world.stamp(x, y, 0.5, 0.5, 0.22, 90, room.id * 97 + x + y, 20, 22, 25);
+      stampSurfaceSplat(world, x, y, 0.5, 0.5, 0.22, 90, room.id * 97 + x + y, 20, 22, 25);
     }
   }
   setFeature(world, room.x + room.w - 4, room.y + 2, Feature.LAMP);
@@ -1186,14 +1187,14 @@ function carveCableTrench(world: World, ax: number, ay: number, bx: number, by: 
     const maxY = Math.max(ay, by);
     for (let y = minY; y <= maxY; y += 22) {
       setFeature(world, ax - 1, y, rng() < 0.5 ? Feature.APPARATUS : Feature.SCREEN);
-      world.stamp(ax, y, 0.5, 0.5, 1.8, 0.14, ax * 997 + y, 18, 20, 24);
+      stampSurfaceSplat(world, ax, y, 0.5, 0.5, 1.8, 0.14, ax * 997 + y, 18, 20, 24);
     }
   } else {
     const minX = Math.min(ax, bx);
     const maxX = Math.max(ax, bx);
     for (let x = minX; x <= maxX; x += 24) {
       setFeature(world, x, ay - 1, rng() < 0.5 ? Feature.APPARATUS : Feature.SCREEN);
-      world.stamp(x, ay, 0.5, 0.5, 1.8, 0.14, ay * 991 + x, 18, 20, 24);
+      stampSurfaceSplat(world, x, ay, 0.5, 0.5, 1.8, 0.14, ay * 991 + x, 18, 20, 24);
     }
   }
 }

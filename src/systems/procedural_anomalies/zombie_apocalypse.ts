@@ -14,6 +14,7 @@ import { publishEvent } from '../events';
 import { randomRPG } from '../rpg';
 import { currentProceduralFloorSpec } from '../procedural_floors';
 import { ENTITY_MASK_ACTOR, getEntityIndex } from '../entity_index';
+import { isPlayerEntity } from '../player_actor';
 
 interface ZombieApocalypseRuntime {
   infections: number;
@@ -38,7 +39,7 @@ export function isZombieApocalypseActive(state: GameState | undefined): boolean 
 }
 
 function canZombieApocalypseTarget(e: Entity, zombieId: number): boolean {
-  return e.alive && e.id !== zombieId && (e.type === EntityType.NPC || e.type === EntityType.PLAYER);
+  return e.alive && e.id !== zombieId && (e.type === EntityType.NPC || isPlayerEntity(e));
 }
 
 export function findZombieApocalypseTarget(
@@ -75,7 +76,7 @@ export function findZombieApocalypseTarget(
     if (other.type === EntityType.NPC && d2 < npcBest) {
       npcBest = d2;
       npcTarget = other;
-    } else if (other.type === EntityType.PLAYER && d2 < playerBest) {
+    } else if (isPlayerEntity(other) && d2 < playerBest) {
       playerBest = d2;
       playerTarget = other;
     }

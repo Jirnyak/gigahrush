@@ -1,4 +1,12 @@
-import { Cell, Feature, FloorLevel, W, msg, type Entity, type GameState } from '../core/types';
+import {
+  Cell,
+  Feature,
+  FloorLevel,
+  W,
+  msg,
+  type Entity,
+  type GameState,
+} from '../core/types';
 import { World } from '../core/world';
 import { COMPUTER_DEFS, getComputerDef, type ComputerDef, type ComputerDefId } from '../data/computers';
 import { publishEvent } from './events';

@@ -131,7 +131,7 @@ let _playerX = 0, _playerY = 0;
 let _distanceSource: AudioDistanceSource | null = null;
 let badAppleThemeBufferPromise: Promise<AudioBuffer | null> | null = null;
 let badAppleThemeBuffer: AudioBuffer | null = null;
-let badApplePendingStart: { x: number; y: number; frame: number } | null = null;
+let badApplePendingStart: { x: number; y: number; frame: number; maxDist: number } | null = null;
 let badAppleLoopSource: AudioBufferSourceNode | null = null;
 let badAppleLoopGain: GainNode | null = null;
 let badAppleLoopFilter: BiquadFilterNode | null = null;
@@ -151,15 +151,16 @@ export function setListenerPos(x: number, y: number, distanceSource?: AudioDista
 }
 
 /** Compute volume multiplier [0..1] based on distance from listener */
-function volumeAt(x: number, y: number): number {
+function volumeAt(x: number, y: number, maxDist = SOUND_MAX_DIST): number {
   if (!_distanceSource) return 1;
   const d2 = typeof _distanceSource === 'function'
     ? _distanceSource(_playerX, _playerY, x, y)
     : _distanceSource.dist2(_playerX, _playerY, x, y);
   if (d2 <= 1) return 1;
+  const maxDistance = Math.max(1, maxDist);
   const d = Math.sqrt(d2);
-  if (d >= SOUND_MAX_DIST) return 0;
-  return 1 - d / SOUND_MAX_DIST;
+  if (d >= maxDistance) return 0;
+  return 1 - d / maxDistance;
 }
 
 /** Play a sound at a world position (volume depends on distance to player) */
@@ -268,7 +269,7 @@ export function primeBadAppleProjectorAudio(): void {
   void loadBadAppleTheme(ac);
 }
 
-export function updateBadAppleProjectorLoop(active: boolean, x: number, y: number, frame: number): void {
+export function updateBadAppleProjectorLoop(active: boolean, x: number, y: number, frame: number, maxDist = SOUND_MAX_DIST): void {
   if (!hasAudioContext()) return;
   const ac = ensureContext();
   if (!active) {
@@ -276,14 +277,14 @@ export function updateBadAppleProjectorLoop(active: boolean, x: number, y: numbe
     return;
   }
 
-  const targetGain = Math.max(0, Math.min(BAD_APPLE_LOOP_GAIN, volumeAt(x, y) * BAD_APPLE_LOOP_GAIN));
+  const targetGain = Math.max(0, Math.min(BAD_APPLE_LOOP_GAIN, volumeAt(x, y, maxDist) * BAD_APPLE_LOOP_GAIN));
   if (!badAppleThemeBuffer) {
-    badApplePendingStart = { x, y, frame };
+    badApplePendingStart = { x, y, frame, maxDist };
     void loadBadAppleTheme(ac).then(buffer => {
       if (!buffer || !badApplePendingStart) return;
       const pending = badApplePendingStart;
       badApplePendingStart = null;
-      updateBadAppleProjectorLoop(true, pending.x, pending.y, pending.frame);
+      updateBadAppleProjectorLoop(true, pending.x, pending.y, pending.frame, pending.maxDist);
     });
     return;
   }

@@ -1,4 +1,12 @@
-import { Faction, FloorLevel, MonsterKind, QuestType, RoomType, type Quest, type QuestTargetMarker } from '../core/types';
+import {
+  Faction,
+  FloorLevel,
+  MonsterKind,
+  QuestType,
+  RoomType,
+  type Quest,
+  type QuestTargetMarker,
+} from '../core/types';
 import { DESIGN_FLOOR_ROUTES, type DesignFloorId } from './design_floors';
 import type { FloorAnomalyId } from './procedural_floors';
 import { METRO_DEPOT_ROOM_NAME, METRO_STATION_ROOM_NAME } from './metro';

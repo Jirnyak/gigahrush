@@ -1,4 +1,11 @@
-import { Cell, Feature, W, msg, type Entity, type GameState } from '../core/types';
+import {
+  Cell,
+  Feature,
+  W,
+  msg,
+  type Entity,
+  type GameState,
+} from '../core/types';
 import { World } from '../core/world';
 import { GAMBLING_MACHINES, getGamblingMachineDef, type GamblingDefId, type GamblingMachineDef } from '../data/gambling';
 import { ITEMS, ITEM_TAGS } from '../data/items';

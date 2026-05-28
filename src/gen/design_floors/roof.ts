@@ -3,6 +3,7 @@
  * dynamic sky provider consumed through the generic WebGL ceiling slot.
  */
 
+import { stampSurfaceSplat } from '../../systems/surface_marks';
 import {
   W,
   AIGoal,
@@ -681,7 +682,7 @@ function placeRoofSniperLane(world: World, keep: Uint8Array, ax: number, ay: num
     const y = ay + Math.round((ddy * step) / steps);
     const ci = world.idx(x, y);
     if (keep[ci] || world.cells[ci] !== Cell.FLOOR) continue;
-    world.stamp(x, y, 0.5, 0.5, 3.5, 0.18, x * 97 + y * 131, 30, 34, 38, false);
+    stampSurfaceSplat(world, x, y, 0.5, 0.5, 3.5, 0.18, x * 97 + y * 131, 30, 34, 38, false);
     if (((step / 16) | 0) % 2 === 0) placeRoofShedBlock(world, keep, x - 1, y - 2, 3, 2, Tex.METAL);
     else setFeatureIfFloor(world, x, y, Feature.APPARATUS);
   }
@@ -694,7 +695,7 @@ function placeLargeAntennaCluster(world: World, x: number, y: number): void {
   for (const [dx, dy] of [[2, 2], [-2, 2], [2, -2], [-2, -2], [7, 0], [-7, 0]] as const) {
     setFeatureIfFloor(world, x + dx, y + dy, Feature.APPARATUS);
   }
-  world.stamp(x, y, 0.5, 0.5, 8, 0.16, x * 19 + y * 23, 84, 92, 96, false);
+  stampSurfaceSplat(world, x, y, 0.5, 0.5, 8, 0.16, x * 19 + y * 23, 84, 92, 96, false);
 }
 
 function placeRoofShedBlock(world: World, keep: Uint8Array, x: number, y: number, w: number, h: number, tex: Tex): void {
@@ -724,7 +725,7 @@ function placeRoofSkylightPit(world: World, keep: Uint8Array, x: number, y: numb
       world.features[ci] = Feature.NONE;
     }
   }
-  world.stamp(x + (w >> 1), y + (h >> 1), 0.5, 0.5, Math.max(w, h) + 1, 0.22, x * 53 + y * 61, 118, 126, 132, false);
+  stampSurfaceSplat(world, x + (w >> 1), y + (h >> 1), 0.5, 0.5, Math.max(w, h) + 1, 0.22, x * 53 + y * 61, 118, 126, 132, false);
 }
 
 function placeWaterTankCluster(world: World, keep: Uint8Array, x: number, y: number): void {
@@ -748,7 +749,7 @@ function scatterRoofMachinery(world: World, keep: Uint8Array, rng: () => number,
       if (keep[ci] || world.cells[ci] !== Cell.FLOOR || world.features[ci] !== Feature.NONE) continue;
       const roll = rng();
       world.features[ci] = roll < 0.42 ? Feature.APPARATUS : roll < 0.72 ? Feature.MACHINE : Feature.SHELF;
-      if (rng() < 0.28) world.stamp(x, y, 0.5, 0.5, 2.2 + rng() * 3.4, 0.14, Math.floor(rng() * 100000), 58, 64, 68, false);
+      if (rng() < 0.28) stampSurfaceSplat(world, x, y, 0.5, 0.5, 2.2 + rng() * 3.4, 0.14, Math.floor(rng() * 100000), 58, 64, 68, false);
     }
   }
 }
@@ -931,8 +932,8 @@ function placeSlabLandmarks(world: World, room: Room): void {
   for (let dx = 8; dx < room.w - 7; dx += 13) setFeatureIfFloor(world, room.x + dx, room.y + room.h - 3, Feature.MACHINE);
   placeBrokenSkylight(world, room.x + 18, room.y + 16, 4, 3);
   placeBrokenSkylight(world, room.x + 41, room.y + 20, 3, 3);
-  world.stamp(room.x + 12, room.y + 9, 0.5, 0.5, 5, 0.18, 4099, 55, 62, 66, false);
-  world.stamp(room.x + 43, room.y + 9, 0.5, 0.5, 4, 0.18, 4101, 80, 82, 78, false);
+  stampSurfaceSplat(world, room.x + 12, room.y + 9, 0.5, 0.5, 5, 0.18, 4099, 55, 62, 66, false);
+  stampSurfaceSplat(world, room.x + 43, room.y + 9, 0.5, 0.5, 4, 0.18, 4101, 80, 82, 78, false);
 }
 
 function decorateMeteorology(world: World, room: Room): void {
@@ -975,7 +976,7 @@ function decorateSniperNest(world: World, room: Room): void {
   setFeatureIfFloor(world, room.x + 2, room.y + room.h - 3, Feature.SHELF);
   setFeatureIfFloor(world, room.x + room.w - 3, room.y + 2, Feature.APPARATUS);
   setFeatureIfFloor(world, room.x + room.w - 4, room.y + room.h - 3, Feature.CHAIR);
-  world.stamp(room.x + 6, room.y + 4, 0.5, 0.5, 3, 0.24, 4112, 30, 30, 32, false);
+  stampSurfaceSplat(world, room.x + 6, room.y + 4, 0.5, 0.5, 3, 0.24, 4112, 30, 30, 32, false);
 }
 
 function decorateCloudCamp(world: World, room: Room): void {
@@ -1057,7 +1058,7 @@ function placeBrokenSkylight(world: World, x: number, y: number, w: number, h: n
       world.features[ci] = Feature.NONE;
     }
   }
-  world.stamp(x + (w >> 1), y + (h >> 1), 0.5, 0.5, Math.max(w, h) + 1, 0.2, x * 17 + y * 31, 120, 128, 134, false);
+  stampSurfaceSplat(world, x + (w >> 1), y + (h >> 1), 0.5, 0.5, Math.max(w, h) + 1, 0.2, x * 17 + y * 31, 120, 128, 134, false);
 }
 
 function setWaterTank(world: World, x: number, y: number): void {

@@ -1,9 +1,22 @@
 /* ── Ревизия НИИ: пробы уходят на рынок ─────────────────────── */
 
 import {
-  Cell, ContainerKind, DoorState, Faction, Feature, FloorLevel, Occupation, QuestType,
-  RoomType, Tex, msg,
-  type Entity, type GameState, type Room, type WorldContainer, type WorldEvent,
+  Cell,
+  ContainerKind,
+  DoorState,
+  Faction,
+  Feature,
+  FloorLevel,
+  Occupation,
+  QuestType,
+  RoomType,
+  Tex,
+  msg,
+  type Entity,
+  type GameState,
+  type Room,
+  type WorldContainer,
+  type WorldEvent,
 } from '../../core/types';
 import { World } from '../../core/world';
 import { type PlotNpcDef, registerSideQuest } from '../../data/plot';

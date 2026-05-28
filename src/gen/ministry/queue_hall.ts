@@ -1,8 +1,16 @@
 /* ── Зал невозможной очереди — Ministry admin POI ─────────────── */
 
 import {
-  Tex, Feature, RoomType, Faction, Occupation, QuestType, ContainerKind, FloorLevel,
-  type Entity, type WorldContainer,
+  Tex,
+  Feature,
+  RoomType,
+  Faction,
+  Occupation,
+  QuestType,
+  ContainerKind,
+  FloorLevel,
+  type Entity,
+  type WorldContainer,
 } from '../../core/types';
 import { World } from '../../core/world';
 import { type PlotNpcDef, registerSideQuest } from '../../data/plot';

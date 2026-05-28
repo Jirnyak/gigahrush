@@ -3,8 +3,10 @@
 
 import {
   Tex,
-  type Entity, type GameState,
-  MonsterKind, QuestType,
+  type Entity,
+  type GameState,
+  MonsterKind,
+  QuestType,
   msg,
 } from '../core/types';
 import { World } from '../core/world';

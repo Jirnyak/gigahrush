@@ -1,8 +1,18 @@
 /* ── AG71 slime deactivation furnace — dirty cleanup production ─ */
 
+import { stampSurfaceSplat } from '../../systems/surface_marks';
 import {
-  ContainerKind, Faction, Feature, FloorLevel, MonsterKind, Occupation, QuestType, RoomType, Tex,
-  type Room, type WorldContainer,
+  ContainerKind,
+  Faction,
+  Feature,
+  FloorLevel,
+  MonsterKind,
+  Occupation,
+  QuestType,
+  RoomType,
+  Tex,
+  type Room,
+  type WorldContainer,
 } from '../../core/types';
 import { type PlotNpcDef, registerSideQuest } from '../../data/plot';
 import { placeDoor } from '../shared';
@@ -157,14 +167,14 @@ function stainQuarantine(ctx: MaintContentCtx, room: Room): void {
       ctx.world.fog[ci] = Math.max(ctx.world.fog[ci], 105 + ((dx * 19 + dy * 7) % 70));
     }
   }
-  ctx.world.stamp(room.x + 4, room.y + 4, 0.5, 0.5, 3.2, 0.42, room.id * 71 + 3, 35, 92, 42, false);
-  ctx.world.stamp(room.x + room.w - 4, room.y + room.h - 3, 0.5, 0.5, 2.2, 0.38, room.id * 71 + 9, 80, 120, 54, true);
+  stampSurfaceSplat(ctx.world, room.x + 4, room.y + 4, 0.5, 0.5, 3.2, 0.42, room.id * 71 + 3, 35, 92, 42, false);
+  stampSurfaceSplat(ctx.world, room.x + room.w - 4, room.y + room.h - 3, 0.5, 0.5, 2.2, 0.38, room.id * 71 + 9, 80, 120, 54, true);
   ctx.world.markFogDirty();
 }
 
 function scorchFurnace(ctx: MaintContentCtx, room: Room): void {
   for (let dx = 3; dx < room.w - 3; dx += 3) {
-    ctx.world.stamp(room.x + dx, room.y + 6, 0.5, 0.5, 0.34, 150, room.id * 41 + dx, 95, 34, 8);
+    stampSurfaceSplat(ctx.world, room.x + dx, room.y + 6, 0.5, 0.5, 0.34, 150, room.id * 41 + dx, 95, 34, 8);
   }
 }
 

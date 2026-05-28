@@ -15,9 +15,8 @@ import { hashSeed, seededRandom } from '../core/rand';
 import { getComputerDef } from '../data/computers';
 import { getGamblingMachineDef } from '../data/gambling';
 import { getNetHackTerminalDef } from '../data/net_hack';
-import { isParitelSteamValveTarget, tryUseParitelSteamBridge } from '../gen/maintenance/paritel_steam_bridge';
-import { tryUseBetonoedShortcut } from '../gen/maintenance/betonoed_shortcut';
 import { tryUseCarnivorousFungus } from './carnivorous_fungus';
+import { findContentInteractionTarget, tryUseContentInteraction } from './content_hooks';
 import { ensureRoomContainers } from './containers';
 import {
   clearComputers,
@@ -316,9 +315,9 @@ export function findInteractionTarget(ctx: InteractionContext): InteractionTarge
     return target('lift', idx + 200000, 'lift', idx % W, (idx / W) | 0, 60, liftPrompt(ctx, idx));
   }
 
-  if (isParitelSteamValveTarget(ctx.world, ctx.lookX, ctx.lookY)) {
-    return target('instant', idx + 450000, 'paritel_steam_valve', idx % W, (idx / W) | 0, 70, ' вентиль');
-  }
+  const contentTarget = findContentInteractionTarget(ctx);
+  if (contentTarget) return target('instant', contentTarget.id, contentTarget.targetId, contentTarget.x, contentTarget.y, contentTarget.priority, contentTarget.prompt);
+
   if (isRouteCueTarget(ctx.world, ctx.player, ctx.lookX, ctx.lookY)) {
     return target('instant', idx + 470000, 'route_cue', idx % W, (idx / W) | 0, 80, ' маршрут');
   }
@@ -456,10 +455,8 @@ export function activateInteraction(ctx: InteractionContext): InteractionResult 
   if (tryUsePneumomailTube(ctx.world, ctx.player, ctx.state, ctx.lookX, ctx.lookY)) return { handled: true };
   if (tryCoverSeroburmalineSource(ctx.world, ctx.player, ctx.state, ctx.lookX, ctx.lookY)) return { handled: true, worldChanged: true };
   if (tryUseHladonColdPocketCounter(ctx.world, ctx.player, ctx.state, ctx.lookX, ctx.lookY)) return { handled: true };
-  if (tryUseParitelSteamBridge(ctx.world, ctx.player, ctx.state, ctx.lookX, ctx.lookY)) return { handled: true };
-
-  const betonoed = tryUseBetonoedShortcut(ctx.world, ctx.player, ctx.state, ctx.lookX, ctx.lookY);
-  if (betonoed.handled) return { handled: true, worldChanged: betonoed.worldChanged };
+  const content = tryUseContentInteraction(ctx);
+  if (content.handled) return content;
 
   if (tryUseRouteCue(ctx.world, ctx.player, ctx.state, ctx.lookX, ctx.lookY)) return { handled: true };
   if (tryUseProceduralFloorAnomaly(ctx.world, ctx.player, ctx.state, ctx.lookX, ctx.lookY)) return { handled: true };

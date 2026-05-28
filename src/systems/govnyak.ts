@@ -1,7 +1,6 @@
 /* ── Govnyak pressure items: bounded relief, cough, debt ─────── */
 
 import {
-  EntityType,
   type Entity,
   type GameState,
   type PlayerStatus,
@@ -12,6 +11,7 @@ import {
 import { ITEMS } from '../data/items';
 import { publishEvent } from './events';
 import { monsterBaitPreviewForItem } from './monster_bait';
+import { isPlayerEntity } from './player_actor';
 
 export const GOVNYAK_ITEM_IDS = [
   'govnyak_roll',
@@ -164,7 +164,7 @@ function publishGovnyakStatusEvent(
   severity: WorldEventSeverity,
   tags: string[],
 ): void {
-  if (!state || actor.type !== EntityType.PLAYER) return;
+  if (!state || !isPlayerEntity(actor)) return;
   publishEvent(state, {
     type,
     actorId: actor.id,
@@ -229,7 +229,7 @@ export function useGovnyakItem(actor: Entity, defId: string, state?: GameState):
     badBatch,
   );
 
-  if (state && actor.type === EntityType.PLAYER) {
+  if (state && isPlayerEntity(actor)) {
     publishEvent(state, {
       type: 'player_use_item',
       actorId: actor.id,

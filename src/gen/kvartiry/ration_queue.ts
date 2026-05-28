@@ -1,6 +1,15 @@
 /* ── Очередь за пайком — Kvartiry social pressure POI ────────── */
 
-import { Tex, Feature, RoomType, Faction, Occupation, QuestType, ContainerKind, FloorLevel } from '../../core/types';
+import {
+  Tex,
+  Feature,
+  RoomType,
+  Faction,
+  Occupation,
+  QuestType,
+  ContainerKind,
+  FloorLevel,
+} from '../../core/types';
 import { World } from '../../core/world';
 import { type Entity, type WorldContainer } from '../../core/types';
 import { type PlotNpcDef, registerSideQuest } from '../../data/plot';

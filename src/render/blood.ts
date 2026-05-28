@@ -2,7 +2,7 @@
 
 import { W, Cell, ProjType, type Entity, EntityType } from '../core/types';
 import { World } from '../core/world';
-import { stampMark, MarkType } from './marks';
+import { stampMark, MarkType } from '../systems/surface_marks';
 import { Spr } from './sprite_index';
 import { ensureEntityIndex } from '../systems/entity_index';
 

@@ -1,9 +1,21 @@
 /* -- AG81 compromised liquidator: proof route and faction choice -- */
 
+import { stampSurfaceSplat } from '../../systems/surface_marks';
 import {
-  ContainerKind, Faction, Feature, FloorLevel, MonsterKind, Occupation,
-  QuestType, RoomType, Tex, msg,
-  type GameState, type Room, type WorldContainer, type WorldEvent,
+  ContainerKind,
+  Faction,
+  Feature,
+  FloorLevel,
+  MonsterKind,
+  Occupation,
+  QuestType,
+  RoomType,
+  Tex,
+  msg,
+  type GameState,
+  type Room,
+  type WorldContainer,
+  type WorldEvent,
 } from '../../core/types';
 import { type PlotNpcDef, registerSideQuest } from '../../data/plot';
 import { addFactionRelMutual } from '../../data/relations';
@@ -447,9 +459,9 @@ function dressAg81Room(ctx: MaintContentCtx, room: Room, feature: Feature): void
 function stampBlackHandSmear(ctx: MaintContentCtx, room: Room): void {
   const x = room.x + Math.floor(room.w / 2);
   const y = room.y + Math.floor(room.h / 2);
-  ctx.world.stamp(x, y, 0.5, 0.45, 0.45, 180, room.id * 997 + 81, 8, 6, 5, true);
-  ctx.world.stamp(x - 1, y, 0.7, 0.5, 0.22, 135, room.id * 997 + 82, 12, 7, 6, true);
-  ctx.world.stamp(x + 1, y - 1, 0.35, 0.65, 0.18, 120, room.id * 997 + 83, 12, 7, 6, true);
+  stampSurfaceSplat(ctx.world, x, y, 0.5, 0.45, 0.45, 180, room.id * 997 + 81, 8, 6, 5, true);
+  stampSurfaceSplat(ctx.world, x - 1, y, 0.7, 0.5, 0.22, 135, room.id * 997 + 82, 12, 7, 6, true);
+  stampSurfaceSplat(ctx.world, x + 1, y - 1, 0.35, 0.65, 0.18, 120, room.id * 997 + 83, 12, 7, 6, true);
 }
 
 export function generateDefectorLiquidator(ctx: MaintContentCtx): void {

@@ -1,5 +1,6 @@
 /* ── Перестановщик — local topology anomaly chamber ───────────── */
 
+import { stampSurfaceSplat } from '../../systems/surface_marks';
 import {
   AIGoal,
   ContainerKind,
@@ -157,7 +158,7 @@ function markPairCell(world: World, idx: number, seed: number, safe: boolean): v
   world.features[idx] = Feature.SCREEN;
   world.floorTex[idx] = Tex.F_VOID;
   world.fog[idx] = Math.max(world.fog[idx], safe ? 18 : 46);
-  world.stamp(x, y, 0.5, 0.5, safe ? 0.34 : 0.52, safe ? 0.55 : 0.82, seed, safe ? 90 : 160, safe ? 210 : 80, safe ? 180 : 210, false);
+  stampSurfaceSplat(world, x, y, 0.5, 0.5, safe ? 0.34 : 0.52, safe ? 0.55 : 0.82, seed, safe ? 90 : 160, safe ? 210 : 80, safe ? 180 : 210, false);
 }
 
 function addTeleportPair(world: World, sourceIdx: number, targetIdx: number, seed: number, safe: boolean): PerestanovshchikPair {
@@ -229,7 +230,7 @@ function disablePerestanovshchikAnchor(ctx: PerestanovshchikContext): number {
     ctx.world.floorTex[pair.targetIdx] = Tex.F_CONCRETE;
   }
   ctx.world.features[ctx.anchorIdx] = Feature.MACHINE;
-  ctx.world.stamp(ctx.anchorIdx % W, (ctx.anchorIdx / W) | 0, 0.5, 0.5, 0.92, 0.7, ctx.anchorIdx ^ 0x17, 35, 245, 180, false);
+  stampSurfaceSplat(ctx.world, ctx.anchorIdx % W, (ctx.anchorIdx / W) | 0, 0.5, 0.5, 0.92, 0.7, ctx.anchorIdx ^ 0x17, 35, 245, 180, false);
   ctx.world.markFloorTexDirty();
   ctx.world.markFogDirty();
   const room = ctx.world.rooms[ctx.roomId];
@@ -309,7 +310,7 @@ export function generatePerestanovshchik(
 
   const anchorIdx = cellInRoom(world, anchor, anchor.w >> 1, anchor.h >> 1);
   world.features[anchorIdx] = Feature.APPARATUS;
-  world.stamp(anchorIdx % W, (anchorIdx / W) | 0, 0.5, 0.5, 1.2, 0.78, 170017, 32, 230, 180, false);
+  stampSurfaceSplat(world, anchorIdx % W, (anchorIdx / W) | 0, 0.5, 0.5, 1.2, 0.78, 170017, 32, 230, 180, false);
 
   const safeSource = cellInRoom(world, entry, 12, 5);
   const safeTarget = cellInRoom(world, anchor, 3, 4);
@@ -368,7 +369,7 @@ export function generatePerestanovshchik(
   });
 
   for (let dx = 3; dx <= 13; dx += 5) {
-    world.stamp(entry.x + dx, entry.y + 1, 0.5, 0.5, 0.28, 0.48, 170300 + dx, 210, 210, 190, false);
+    stampSurfaceSplat(world, entry.x + dx, entry.y + 1, 0.5, 0.5, 0.28, 0.48, 170300 + dx, 210, 210, 190, false);
   }
   dropNote(
     entities,

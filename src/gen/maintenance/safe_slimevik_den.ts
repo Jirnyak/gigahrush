@@ -1,5 +1,6 @@
 /* ── Safe Slimevik den: barterable slime scavenger POI ───────── */
 
+import { stampSurfaceSplat } from '../../systems/surface_marks';
 import {
   AIGoal,
   Cell,
@@ -54,7 +55,7 @@ function stampFeedSlime(ctx: MaintContentCtx, roomId: number, x: number, y: numb
       const wy = y + dy;
       const ci = ctx.world.idx(wx, wy);
       if (ctx.world.cells[ci] !== Cell.FLOOR && ctx.world.cells[ci] !== Cell.WATER) continue;
-      ctx.world.stamp(wx, wy, 0.5, 0.5, 0.75, 125, 91_000 + roomId * 31 + cells.length, 44, 170, 126);
+      stampSurfaceSplat(ctx.world, wx, wy, 0.5, 0.5, 0.75, 125, 91_000 + roomId * 31 + cells.length, 44, 170, 126);
       cells.push(ci);
     }
   }

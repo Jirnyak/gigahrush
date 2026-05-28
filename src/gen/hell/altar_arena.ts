@@ -1,5 +1,6 @@
 /* ── Hell altar arena: capped combat POI ─────────────────────── */
 
+import { stampSurfaceSplat } from '../../systems/surface_marks';
 import {
   W, Cell, DoorState, EntityType, AIGoal, Faction, Feature, FloorLevel,
   MonsterKind, Occupation, RoomType, Tex,
@@ -10,11 +11,12 @@ import { freshNeeds, randomName } from '../../data/catalog';
 import { MONSTERS } from '../../entities/monster';
 import { getMaxHp, gaussianLevel, randomRPG, scaleMonsterHp, scaleMonsterSpeed } from '../../systems/rpg';
 import { Spr } from '../../render/sprite_index';
-import { MarkType, stampMark } from '../../render/marks';
+import { MarkType, stampMark } from '../../systems/surface_marks';
 import { playRouteCueTone, playSoundAt } from '../../systems/audio';
 import { publishEvent, registerWorldEventObserver } from '../../systems/events';
 import { registerRouteCue } from '../../systems/route_cues';
 import { findClearArea, protectRoom, stampRoom } from '../shared';
+import { isPlayerEntity } from '../../systems/player_actor';
 
 const ROOM_W = 23;
 const ROOM_H = 19;
@@ -306,7 +308,7 @@ function decorateArena(world: World, room: Room, entry: Route, escape: Route): v
     const a = (Math.PI * 2 * i) / 16;
     const x = Math.floor(cx + Math.cos(a) * 6);
     const y = Math.floor(cy + Math.sin(a) * 5);
-    world.stamp(x, y, 0.5, 0.5, 0.34, 125, 5300 + i, 120, 22, 36);
+    stampSurfaceSplat(world, x, y, 0.5, 0.5, 0.34, 125, 5300 + i, 120, 22, 36);
   }
   stampEscapeTrail(world, room, escape);
   stampWaveTelegraphs(world, room, 1, 90);
@@ -803,7 +805,7 @@ function nextEntityId(entities: readonly Entity[]): number {
 
 function findPlayer(entities: readonly Entity[]): Entity | null {
   for (const entity of entities) {
-    if (entity.type === EntityType.PLAYER && entity.alive) return entity;
+    if (isPlayerEntity(entity) && entity.alive) return entity;
   }
   return null;
 }

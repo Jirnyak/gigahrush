@@ -2,10 +2,10 @@
  * Room-local cold pressure only: no floor temperature field.
  */
 
+import { stampSurfaceSplat } from './surface_marks';
 import {
   W,
   Cell,
-  EntityType,
   Feature,
   type Entity,
   type GameState,
@@ -16,6 +16,7 @@ import { World } from '../core/world';
 import { ITEMS } from '../data/catalog';
 import { hasItem, removeItem } from './inventory';
 import { publishEvent } from './events';
+import { isPlayerEntity } from './player_actor';
 
 const HLADON_PREFIX = 'Хладон:';
 const HLADON_CLEARED = 'разморожен';
@@ -163,7 +164,7 @@ function publishHladonEvent(
   level: 0 | 1 | 2,
   method?: string,
 ): void {
-  if (player.type !== EntityType.PLAYER) return;
+  if (!isPlayerEntity(player)) return;
   const px = Math.floor(player.x);
   const py = Math.floor(player.y);
   const ci = world.idx(px, py);
@@ -282,7 +283,7 @@ function clearHladonRoom(world: World, room: Room, seed: number): void {
       if (world.roomMap[ci] !== room.id) continue;
       if (world.cells[ci] !== Cell.FLOOR && world.cells[ci] !== Cell.WATER) continue;
       world.fog[ci] = Math.min(world.fog[ci], 10);
-      if ((dx + dy) % 7 === 0) world.stamp(x, y, 0.5, 0.5, 0.3, 0.35, seed + dx * 41 + dy * 97, 135, 135, 125, false);
+      if ((dx + dy) % 7 === 0) stampSurfaceSplat(world, x, y, 0.5, 0.5, 0.3, 0.35, seed + dx * 41 + dy * 97, 135, 135, 125, false);
     }
   }
   world.markFogDirty();

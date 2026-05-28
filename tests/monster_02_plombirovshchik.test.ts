@@ -14,7 +14,7 @@ test('Plombirovshchik uses Shovnik body and opens local seal when killed away fr
   const world = new World();
   const entities: Entity[] = [{
     id: 0,
-    type: EntityType.PLAYER,
+    type: EntityType.NPC, persistentNpcId: 'player',
     x: 100.5,
     y: 100.5,
     angle: 0,

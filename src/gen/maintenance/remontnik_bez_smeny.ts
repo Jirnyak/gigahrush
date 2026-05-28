@@ -1,5 +1,6 @@
 /* ── Ремонтник Без Смены: local shortcut/tool route encounter ─── */
 
+import { stampSurfaceSplat } from '../../systems/surface_marks';
 import {
   AIGoal, Cell, ContainerKind, EntityType, Faction, Feature, FloorLevel,
   MonsterKind, Occupation, QuestType, RoomType, Tex, msg,
@@ -190,8 +191,8 @@ function dressRooms(ctx: MaintContentCtx, left: Room, closet: Room, right: Room)
   setFeature(ctx.world, right.x + right.w - 3, right.y + 2, Feature.APPARATUS);
   setFeature(ctx.world, right.x + right.w - 2, right.y + right.h - 3, Feature.SHELF);
 
-  ctx.world.stamp(left.x + left.w - 1, left.y + 4, 0.5, 0.5, 0.75, 120, left.id * 977 + 25, 255, 145, 55, true);
-  ctx.world.stamp(right.x + 1, right.y + 4, 0.5, 0.5, 0.65, 100, right.id * 983 + 17, 255, 170, 65, true);
+  stampSurfaceSplat(ctx.world, left.x + left.w - 1, left.y + 4, 0.5, 0.5, 0.75, 120, left.id * 977 + 25, 255, 145, 55, true);
+  stampSurfaceSplat(ctx.world, right.x + 1, right.y + 4, 0.5, 0.5, 0.65, 100, right.id * 983 + 17, 255, 170, 65, true);
 }
 
 function addRemontnikContainers(ctx: MaintContentCtx, closet: Room, npcId: number): { lockerId: number; cartId: number } {

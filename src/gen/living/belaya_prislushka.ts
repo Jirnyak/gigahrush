@@ -1,5 +1,6 @@
 /* -- Monster 13: Белая Прислушка, local white-slime escort risk -- */
 
+import { stampSurfaceSplat } from '../../systems/surface_marks';
 import {
   AIGoal, Cell, ContainerKind, DoorState, EntityType, Faction, Feature,
   FloorLevel, NpcState, Occupation, QuestType, RoomType, Tex,
@@ -585,10 +586,10 @@ function decorate(world: World, main: Room, source: Room, entities: Entity[], ne
 
   world.wallTex[world.idx(rx + 3, ry - 1)] = Tex.SCREEN_BASE + 8;
   world.wallTex[world.idx(doorX - 1, ry - 1)] = Tex.POSTER_BASE + 41;
-  world.stamp(doorX - 2, cueY, 0.5, 0.5, 1.5, 0.3, 13001, 235, 235, 225, true);
-  world.stamp(doorX - 4, cueY + 1, 0.5, 0.5, 1.1, 0.22, 13002, 218, 222, 214, true);
-  world.stamp(sourceX, sourceY, 0.5, 0.5, 5.4, 0.45, 13003, 238, 240, 232, false);
-  world.stamp(sourceX + 2, sourceY - 2, 0.5, 0.5, 2.0, 0.24, 13004, 245, 245, 238, true);
+  stampSurfaceSplat(world, doorX - 2, cueY, 0.5, 0.5, 1.5, 0.3, 13001, 235, 235, 225, true);
+  stampSurfaceSplat(world, doorX - 4, cueY + 1, 0.5, 0.5, 1.1, 0.22, 13002, 218, 222, 214, true);
+  stampSurfaceSplat(world, sourceX, sourceY, 0.5, 0.5, 5.4, 0.45, 13003, 238, 240, 232, false);
+  stampSurfaceSplat(world, sourceX + 2, sourceY - 2, 0.5, 0.5, 2.0, 0.24, 13004, 245, 245, 238, true);
 
   addDrop(world, entities, nextId, rx + 2, ry + 4, 'note', 1, {
     text: 'Белая Прислушка: экран просит тише. Если свидетель повторяет одну фразу, закройте ей обзор, уведите от двери, источник закрывайте после людей.',

@@ -165,7 +165,8 @@ test('behavior room flow field assigns many actors from one baked field', () => 
 test('path steering follows baked path chunks instead of the final point vector', () => {
   const world = makeCornerWorld();
   const player = npc(100, 0);
-  player.type = EntityType.PLAYER;
+  player.type = EntityType.NPC;
+  player.persistentNpcId = 'player';
   player.x = 0.5;
   player.y = 10.5;
 

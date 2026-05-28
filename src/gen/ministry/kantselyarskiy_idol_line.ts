@@ -1,8 +1,15 @@
 /* ── Канцелярская линия — office-field Idol encounter ────────── */
 
 import {
-  ContainerKind, Feature, FloorLevel, MonsterKind, RoomType, Tex,
-  type Entity, type Room, type WorldContainer,
+  ContainerKind,
+  Feature,
+  FloorLevel,
+  MonsterKind,
+  RoomType,
+  Tex,
+  type Entity,
+  type Room,
+  type WorldContainer,
 } from '../../core/types';
 import { World } from '../../core/world';
 import {

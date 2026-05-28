@@ -30,7 +30,7 @@ function openWorld(): World {
 function actor(): Entity {
   return {
     id: 1,
-    type: EntityType.PLAYER,
+    type: EntityType.NPC, persistentNpcId: 'player',
     x: 10,
     y: 10,
     angle: 0,

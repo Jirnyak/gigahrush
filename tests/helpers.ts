@@ -84,9 +84,13 @@ export function makeGameState(overrides: Partial<GameState> = {}): GameState {
 }
 
 export function makeTestEntity(overrides: Partial<Entity> = {}): Entity {
+  const type = overrides.type ?? EntityType.NPC;
+  const faction = overrides.faction ?? Faction.PLAYER;
+  const persistentNpcId = overrides.persistentNpcId
+    ?? (type === EntityType.NPC && faction === Faction.PLAYER ? 'player' : undefined);
   return {
     id: 1,
-    type: EntityType.PLAYER,
+    type,
     x: 0,
     y: 0,
     angle: 0,
@@ -95,19 +99,21 @@ export function makeTestEntity(overrides: Partial<Entity> = {}): Entity {
     speed: 0,
     sprite: 0,
     name: 'Вы',
-    faction: Faction.PLAYER,
+    faction,
     inventory: [],
     ...overrides,
+    persistentNpcId,
   };
 }
 
 export function makeTestPlayer(overrides: Partial<Entity> = {}): Entity {
   return makeTestEntity({
     ...overrides,
-    type: EntityType.PLAYER,
+    type: EntityType.NPC,
     name: overrides.name ?? 'Вы',
     faction: overrides.faction ?? Faction.PLAYER,
     inventory: overrides.inventory ?? [],
+    persistentNpcId: overrides.persistentNpcId ?? 'player',
   });
 }
 
@@ -119,6 +125,7 @@ export function makeTestNpc(overrides: Partial<Entity> = {}): Entity {
     faction: overrides.faction ?? Faction.CITIZEN,
     inventory: overrides.inventory ?? [],
     money: overrides.money ?? 100,
+    persistentNpcId: overrides.persistentNpcId,
   });
 }
 

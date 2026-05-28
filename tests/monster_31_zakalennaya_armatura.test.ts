@@ -34,7 +34,7 @@ function monster(overrides: Partial<Entity> = {}): Entity {
 function player(): Entity {
   return {
     id: 1,
-    type: EntityType.PLAYER,
+    type: EntityType.NPC, persistentNpcId: 'player',
     x: 18,
     y: 20,
     angle: 0,

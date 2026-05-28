@@ -41,7 +41,8 @@ test('cold resident needs use world room restoration cadence when world is suppl
     wallTex: Tex.CONCRETE,
     floorTex: Tex.F_CONCRETE,
   });
-  const player = entity(1, EntityType.PLAYER, 10, 10);
+  const player = entity(1, EntityType.NPC, 10, 10);
+  player.persistentNpcId = 'player';
   const resident = entity(2, EntityType.NPC, roomX + 0.5, roomY + 0.5);
   resident.needs = { food: 10, water: 10, sleep: 100, pee: 0, poo: 0 };
   const entities = [player, resident];

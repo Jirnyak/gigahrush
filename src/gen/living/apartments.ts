@@ -3,7 +3,12 @@
 /*   Protected by aptMask — never destroyed during samosbor.     */
 
 import {
-  W, Cell, RoomType, Feature, DoorState, Tex,
+  W,
+  Cell,
+  RoomType,
+  Feature,
+  DoorState,
+  Tex,
   type Room,
 } from '../../core/types';
 import { World } from '../../core/world';

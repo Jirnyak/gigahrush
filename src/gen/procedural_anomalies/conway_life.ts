@@ -1,3 +1,4 @@
+import { stampSurfaceSplat } from '../../systems/surface_marks';
 import { Cell, Feature, RoomType, Tex } from '../../core/types';
 import type { Room } from '../../core/types';
 import {
@@ -70,7 +71,7 @@ function applyArena(ctx: ProceduralAnomalyGenContext, room: Room, arenaIndex: nu
         ctx.world.cells[ci] = Cell.FLOOR;
       }
       if ((dx + dy + arenaIndex) % 7 === 0) {
-        ctx.world.stamp(x, y, 0.5, 0.5, 0.16, 0.34, ctx.spec.seed + room.id * 97 + dx * 13 + dy, 38, 35, 42, false);
+        stampSurfaceSplat(ctx.world, x, y, 0.5, 0.5, 0.16, 0.34, ctx.spec.seed + room.id * 97 + dx * 13 + dy, 38, 35, 42, false);
       }
       ctx.world.fog[ci] = Math.max(ctx.world.fog[ci], 12);
     }
@@ -89,7 +90,7 @@ function applyArena(ctx: ProceduralAnomalyGenContext, room: Room, arenaIndex: nu
     ctx.world.features[ci] = Feature.APPARATUS;
     ctx.world.floorTex[ci] = Tex.F_VOID;
     ctx.world.fog[ci] = 0;
-    ctx.world.stamp(control.x, control.y, 0.5, 0.5, 0.72, 0.6, ctx.spec.seed + room.id * 331, 30, 210, 160, false);
+    stampSurfaceSplat(ctx.world, control.x, control.y, 0.5, 0.5, 0.72, 0.6, ctx.spec.seed + room.id * 331, 30, 210, 160, false);
   }
 
   ctx.world.markWallTexDirty();

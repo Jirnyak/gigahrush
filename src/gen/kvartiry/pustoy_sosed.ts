@@ -1,5 +1,6 @@
 /* ── Пустой Сосед: verifiable false-neighbor encounter ───────── */
 
+import { stampSurfaceSplat } from '../../systems/surface_marks';
 import {
   AIGoal, Cell, EntityType, Faction, Feature, FloorLevel, MonsterKind, Occupation, QuestType,
   RoomType, Tex, type Entity, type GameState, type WorldEvent,
@@ -387,9 +388,9 @@ function spawnPustoySosed(world: World, entities: Entity[], nextId: { v: number 
 }
 
 function stampBlackSlime(world: World, x: number, y: number): void {
-  world.stamp(x, y, 0.5, 0.5, 2.1, 0.58, 44004, 4, 5, 5, false);
-  world.stamp(x - 1, y, 0.5, 0.5, 1.2, 0.45, 44005, 2, 8, 7, false);
-  world.stamp(x, y - 1, 0.5, 0.5, 0.8, 0.38, 44006, 8, 5, 5, false);
+  stampSurfaceSplat(world, x, y, 0.5, 0.5, 2.1, 0.58, 44004, 4, 5, 5, false);
+  stampSurfaceSplat(world, x - 1, y, 0.5, 0.5, 1.2, 0.45, 44005, 2, 8, 7, false);
+  stampSurfaceSplat(world, x, y - 1, 0.5, 0.5, 0.8, 0.38, 44006, 8, 5, 5, false);
 }
 
 function placeScreenCue(world: World, poi: SocialPoiRoom): void {

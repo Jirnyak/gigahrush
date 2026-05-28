@@ -1,8 +1,12 @@
 /* ── RPG system: levels, XP, attributes, PSI ─────────────────── */
 
 import {
-  type Entity, type RPGStats, type Msg,
-  W, MonsterKind, FloorLevel,
+  type Entity,
+  type RPGStats,
+  type Msg,
+  W,
+  MonsterKind,
+  FloorLevel,
   msg,
 } from '../core/types';
 import { RPG_ATTRIBUTE_CAP, RPG_LEVEL_CAP } from '../data/rpg_progression';

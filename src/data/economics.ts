@@ -76,6 +76,8 @@ export const ECONOMY_PSI_WEAPON_IDS = [
   'psi_brainburn',
   'psi_madness',
   'psi_control',
+  'psi_shield',
+  'psi_possession',
   'psi_phase',
   'psi_mark',
   'psi_recall',

@@ -3,6 +3,7 @@
  * FloorLevel; route integration belongs to the floor manifest owner.
  */
 
+import { stampSurfaceSplat } from '../../systems/surface_marks';
 import {
   AIGoal,
   Cell,
@@ -1135,7 +1136,7 @@ function decorateBazaarLandmarks(world: World, rooms: Market88BazaarRooms): void
     const room = rooms.auction;
     const cx = room.x + (room.w >> 1);
     const cy = room.y + (room.h >> 1);
-    world.stamp(cx, cy, 0.5, 0.5, 12, 0.18, 88013, 74, 58, 30, false);
+    stampSurfaceSplat(world, cx, cy, 0.5, 0.5, 12, 0.18, 88013, 74, 58, 30, false);
     for (let dx = 6; dx < room.w - 5; dx += 5) {
       setMarketFeature(world, room.x + dx, room.y + 4, Feature.TABLE);
       setMarketFeature(world, room.x + dx, room.y + room.h - 5, Feature.DESK);
@@ -1375,7 +1376,7 @@ function addShutterGate(world: World, x: number, y: number, axis: 'east_west' | 
     setMarketWall(world, x + 1, y, Tex.METAL);
   }
   addDoorCell(world, x, y, DoorState.HERMETIC_CLOSED, -1, -1, '');
-  world.stamp(x, y, 0.5, 0.5, 2, 0.35, 88100 + x + y, 112, 88, 38, true);
+  stampSurfaceSplat(world, x, y, 0.5, 0.5, 2, 0.35, 88100 + x + y, 112, 88, 38, true);
 }
 
 function addDoorCell(world: World, x: number, y: number, state: DoorState, roomA: number, roomB: number, keyId: string): void {

@@ -1,6 +1,13 @@
 /* ── Cheap rumor selection, event bridge, and NPC remembrance ─── */
 
-import { Faction, FloorLevel, MonsterKind, RoomType, type Entity, type WorldEvent } from '../core/types';
+import {
+  Faction,
+  FloorLevel,
+  MonsterKind,
+  RoomType,
+  type Entity,
+  type WorldEvent,
+} from '../core/types';
 import { chernobogDocketItemRumorId } from '../data/chernobog_docket';
 import { ITEMS, isSilverSlimeItem } from '../data/items';
 import { RUMORS, type RumorDef, type RumorLead, type RumorReveal, type RumorTopic } from '../data/rumors';

@@ -1,7 +1,15 @@
 /* ── AG19 Metro Error Line — platform pocket in maintenance ───── */
 
 import {
-  W, Cell, Tex, Feature, RoomType, Faction, Occupation, QuestType, MonsterKind,
+  W,
+  Cell,
+  Tex,
+  Feature,
+  RoomType,
+  Faction,
+  Occupation,
+  QuestType,
+  MonsterKind,
 } from '../../core/types';
 import { type PlotNpcDef, registerSideQuest } from '../../data/plot';
 import {

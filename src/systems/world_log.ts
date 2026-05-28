@@ -2,7 +2,11 @@
 
 import {
   FloorLevel,
-  type GameState, type LogEntry, type Msg, type MsgLocation, type WorldEvent,
+  type GameState,
+  type LogEntry,
+  type Msg,
+  type MsgLocation,
+  type WorldEvent,
   MonsterKind,
   msgAt,
 } from '../core/types';

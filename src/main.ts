@@ -11,11 +11,9 @@ import {
 } from './core/types';
 import { World, replaceWorldFromGeneration } from './core/world';
 import { randSeed } from './core/rand';
-import { priestDeathCurse } from './gen/living/temple';
 import { updateProceduralScreens } from './gen/procedural_screens';
 import { generateProceduralFloor } from './gen/procedural_floor';
 import { generateDesignFloor, isDesignFloorId } from './gen/design_floors/manifest';
-import { updateKvPopulation } from './gen/kvartiry';
 import {
   FLOOR_MESSAGE_COLORS,
   FLOOR_NAMES,
@@ -36,7 +34,7 @@ import {
   spawnBloodHit, spawnDeathPool, updateBloodTrails, updateParticles, particles,
   spawnProjectileBodyImpact, spawnProjectileFloorImpact, spawnProjectileWallImpact, isEnergyProjectileImpact,
 } from './render/blood';
-import { stampMark, MarkType } from './render/marks';
+import { stampMark, MarkType } from './systems/surface_marks';
 import { containerMenuGridLayout, fullscreenInventoryLayout, tradeGridScale } from './render/ui_layout';
 import { updateNeeds } from './systems/needs';
 import { updateAI, tryMonsterProjectileStagger, getAiSchedulerStats, type AiSchedulerStats } from './systems/ai';
@@ -119,6 +117,7 @@ import {
   npcQuestActionHint,
 } from './systems/quests';
 import { handleDiceInput, isDiceGameOpen } from './systems/dice';
+import { handleDominoInput, isDominoGameOpen } from './systems/domino';
 import { handleDurakInput, isDurakGameOpen } from './systems/durak';
 import {
   activateNpcCustomMenuOption,
@@ -185,8 +184,7 @@ import {
   syncMapExplorationAfterSamosborWave,
   updateMapExploration,
 } from './systems/map_exploration';
-import { updateParitelSteamBridge } from './gen/maintenance/paritel_steam_bridge';
-import { updateBetonoedShortcut } from './gen/maintenance/betonoed_shortcut';
+import { runContentEntityDeathHooks, updateContentRuntimeHooks } from './systems/content_hooks';
 import {
   closeEmergencyPanelMenu,
   handleEmergencyPanelMenuInput,
@@ -293,8 +291,10 @@ import {
 import { ensureProductionRooms, setProductionState, tickProduction } from './systems/production';
 import {
   castInstantSpell, updatePsiEffects, psiAoeExplosion,
-  isNoClipActive, resetPsiState,
+  isNoClipActive, resetPsiState, absorbPsiShieldDamage,
+  endPsiPossession,
 } from './systems/psi';
+import { getCurrentPlayerId, isNativePlayerBodyEntity, isPlayerEntity, setCurrentPlayerEntity } from './systems/player_actor';
 import { fireDeletionBeam } from './systems/weapon_beams';
 import { traceFirstSolidCell, wrapWorld } from './systems/local_space';
 import {
@@ -693,7 +693,8 @@ let entities: Entity[];
 let player: Entity;
 let state: GameState;
 let nextEntityId = { v: 1 };
-let prevPlayerHp = 100; // track HP changes for damage flash
+let prevPlayerActorId = -1;
+let prevPlayerActorHp = 100; // track current player actor HP changes for damage flash
 let lastProjectileHitMsgTick = -999;
 let runtimeCamera = createRuntimeCamera();
 let pendingLoad: (() => void) | null = null; // deferred heavy generation callback
@@ -719,11 +720,11 @@ const playerBarAudio = {
   lastAt: Object.fromEntries(PLAYER_BAR_AUDIO_IDS.map(id => [id, -999])) as PlayerBarAudioValues,
 };
 
-function playerBarAudioValues(): PlayerBarAudioValues {
-  const needs = player.needs;
-  const rpg = player.rpg;
+function playerBarAudioValues(actor = player): PlayerBarAudioValues {
+  const needs = actor.needs;
+  const rpg = actor.rpg;
   return {
-    hp: Math.max(0, Math.min(100, ((player.hp ?? 0) / Math.max(1, player.maxHp ?? 100)) * 100)),
+    hp: Math.max(0, Math.min(100, ((actor.hp ?? 0) / Math.max(1, actor.maxHp ?? 100)) * 100)),
     psi: rpg ? Math.max(0, Math.min(100, (rpg.psi / Math.max(1, rpg.maxPsi)) * 100)) : 0,
     food: needs ? Math.max(0, Math.min(100, needs.food)) : 0,
     water: needs ? Math.max(0, Math.min(100, needs.water)) : 0,
@@ -746,8 +747,44 @@ function syncPlayerBarAudioSnapshot(): void {
 }
 
 function syncPlayerRuntimeBaselines(): void {
-  prevPlayerHp = player.hp ?? 100;
+  setCurrentPlayerEntity(player);
+  const actor = player;
+  prevPlayerActorId = actor.id;
+  prevPlayerActorHp = actor.hp ?? 100;
   syncPlayerBarAudioSnapshot();
+}
+
+function makeCurrentPlayer(actor: Entity | undefined): boolean {
+  if (!actor) return false;
+  if (actor.id === player.id) {
+    setCurrentPlayerEntity(player);
+    return false;
+  }
+  player = actor;
+  syncPlayerRuntimeBaselines();
+  return true;
+}
+
+function restorePlayerBeforeWorldBoundary(): void {
+  if (typeof entities === 'undefined' || typeof player === 'undefined') return;
+  makeCurrentPlayer(endPsiPossession(
+    entities,
+    player,
+    undefined,
+    typeof state === 'undefined' ? 0 : state.time,
+    'reset',
+  ));
+}
+
+function syncPlayerActorSwitchBaseline(): Entity {
+  setCurrentPlayerEntity(player);
+  const actor = player;
+  if (actor.id !== prevPlayerActorId) {
+    prevPlayerActorId = actor.id;
+    prevPlayerActorHp = actor.hp ?? 100;
+    syncPlayerBarAudioSnapshot();
+  }
+  return actor;
 }
 
 function updatePlayerBarAudioFeedback(): void {
@@ -1029,6 +1066,7 @@ function maybeShowVoidReturnPortalHint(playerCell: number): void {
 }
 
 function returnFromVoidPortalToLiving(portal: VoidReturnPortalState): void {
+  restorePlayerBeforeWorldBoundary();
   portal.used = true;
   portal.usedAt = state.time;
   portal.voidSpikeCarried = hasVoidSpike();
@@ -1087,7 +1125,7 @@ function returnFromVoidPortalToLiving(portal: VoidReturnPortalState): void {
 
     player = {
       id: nextEntityId.v++,
-      type: EntityType.PLAYER,
+      type: EntityType.NPC,
       x: gen.spawnX,
       y: gen.spawnY,
       angle: savedAngle,
@@ -1228,6 +1266,13 @@ interface SmokeDebugSnapshot {
   floorMemoryCap: number;
   entityIndex: EntityIndexDebugStats;
   aiScheduler: AiSchedulerStats;
+  tick: number;
+  inputFwd: boolean;
+  inputInv: boolean;
+  inputInteract: boolean;
+  currentPlayerId: number;
+  playerId: number;
+  playerType: EntityType;
 }
 
 declare global {
@@ -1311,6 +1356,13 @@ function smokeSnapshot(): SmokeDebugSnapshot {
       gameOver: state.gameOver,
       playerAlive: player.alive,
       playerHp: player.hp ?? 0,
+      tick: state.tick,
+      inputFwd: input.fwd,
+      inputInv: input.inv,
+      inputInteract: input.interact,
+      currentPlayerId: getCurrentPlayerId() ?? -1,
+      playerId: player.id,
+      playerType: player.type,
       paused: state.paused,
       pointerCaptureGate: pointerCaptureGateVisible(),
       pointerCaptureGateReason: pointerCaptureGateVisible() ? pointerCaptureGateReason : '',
@@ -1498,14 +1550,15 @@ function initGame(runSeedOverride?: number): void {
   resetRuntimeCamera(runtimeCamera);
   clearFloorMemory();
   resetNoiseRecords();
-  const gen = generateFloor(FloorLevel.LIVING);
+  const initialRunSeed = normalizeFloorRunSeed(runSeedOverride);
+  const gen = generateFloor(FloorLevel.LIVING, initialRunSeed);
   world = replaceWorldFromGeneration(null, gen);
   entities = gen.entities;
   nextEntityId.v = entities.reduce((mx, e) => Math.max(mx, e.id), 0) + 1;
 
   player = {
     id: nextEntityId.v++,
-    type: EntityType.PLAYER,
+    type: EntityType.NPC,
     x: gen.spawnX,
     y: gen.spawnY,
     angle: -Math.PI / 2, // face north — toward slides
@@ -1604,11 +1657,9 @@ function initGame(runSeedOverride?: number): void {
   closeNetSphere();
   closeNetTerminalGen();
   closeMapEditor();
+  setFloorRunState(state, { runSeed: initialRunSeed }, FloorLevel.LIVING);
   if (runSeedOverride !== undefined) {
-    setFloorRunState(state, { runSeed: runSeedOverride }, FloorLevel.LIVING);
     setAlifeState(state, { seed: runSeedOverride });
-  } else {
-    ensureFloorRunState(state, FloorLevel.LIVING);
   }
   state.samosborTimer = nextFloorRunSamosborCooldown(state);
   ensureFloorInstanceState(state, FloorLevel.LIVING);
@@ -1758,12 +1809,12 @@ function recordUnattributedPlayerDamage(amount: number): void {
   recordPlayerDamage(state, undefined, amount, `${source.label}: -${roundPlayerDamage(amount)}`, source.kind);
 }
 
-function handlePlayerDeath(): void {
+function handlePlayerDeath(deadActor = player): void {
   const deathTime = state.time;
   const cause = formatLastPlayerDamageCause(state, deathTime);
   state.gameOver = true;
   state.deathTimer = 0;
-  startDeathCamera(runtimeCamera, player.x, player.y, player.angle);
+  startDeathCamera(runtimeCamera, deadActor.x, deadActor.y, deadActor.angle);
   state.msgs.push(msg(cause ? `Вы погибли: ${cause}` : 'Вы погибли: источник урона не распознан', state.time, '#f66'));
 }
 
@@ -1789,11 +1840,11 @@ function playerCanOccupy(x: number, y: number, r = PLAYER_COLLISION_R): boolean 
     !world.solid(Math.floor(x - r), Math.floor(y - r));
 }
 
-function nudgeBlockedPlayerToFloor(): void {
+function nudgeBlockedPlayerToFloor(actor = player): void {
   if (isNoClipActive()) return;
-  const px = Math.floor(player.x);
-  const py = Math.floor(player.y);
-  if (!world.solid(px, py) && playerCanOccupy(player.x, player.y)) return;
+  const px = Math.floor(actor.x);
+  const py = Math.floor(actor.y);
+  if (!world.solid(px, py) && playerCanOccupy(actor.x, actor.y)) return;
   for (let r = 1; r <= 5; r++) {
     for (let dy = -r; dy <= r; dy++) {
       for (let dx = -r; dx <= r; dx++) {
@@ -1802,8 +1853,8 @@ function nudgeBlockedPlayerToFloor(): void {
         const y = world.wrap(py + dy);
         if (!passableSpawnCell(x + 0.5, y + 0.5)) continue;
         if (!playerCanOccupy(x + 0.5, y + 0.5)) continue;
-        player.x = x + 0.5;
-        player.y = y + 0.5;
+        actor.x = x + 0.5;
+        actor.y = y + 0.5;
         return;
       }
     }
@@ -1811,44 +1862,45 @@ function nudgeBlockedPlayerToFloor(): void {
 }
 
 function movePlayer(dt: number): void {
-  if (!player.alive) return;
+  const actor = player;
+  if (!actor.alive) return;
   if (state.sleeping) return; // no movement while sleeping
   floorTeleportCd = Math.max(0, floorTeleportCd - dt);
 
   // Mouse look
   if (input.mouse.locked) {
     const mouseSensitivity = mouseLookSensitivity();
-    player.angle += input.mouse.dx * 0.003 * mouseSensitivity;
-    player.pitch = Math.max(-PLAYER_PITCH_LIMIT, Math.min(PLAYER_PITCH_LIMIT, player.pitch - input.mouse.dy * 0.003 * mouseSensitivity));
+    actor.angle += input.mouse.dx * 0.003 * mouseSensitivity;
+    actor.pitch = Math.max(-PLAYER_PITCH_LIMIT, Math.min(PLAYER_PITCH_LIMIT, actor.pitch - input.mouse.dy * 0.003 * mouseSensitivity));
     input.mouse.dx = 0;
     input.mouse.dy = 0;
   }
 
   // Keyboard turn
-  if (input.left)  player.angle -= 2.5 * dt;
-  if (input.right) player.angle += 2.5 * dt;
+  if (input.left)  actor.angle -= 2.5 * dt;
+  if (input.right) actor.angle += 2.5 * dt;
   const touchLookSensitivity = (input.touch.lookX !== 0 || input.touch.lookY !== 0) ? mobileLookSensitivity() : 0;
-  if (input.touch.lookX !== 0) player.angle += input.touch.lookX * 3.0 * touchLookSensitivity * dt;
+  if (input.touch.lookX !== 0) actor.angle += input.touch.lookX * 3.0 * touchLookSensitivity * dt;
   if (input.touch.lookY !== 0) {
-    player.pitch = Math.max(-PLAYER_PITCH_LIMIT, Math.min(PLAYER_PITCH_LIMIT, player.pitch - input.touch.lookY * 1.6 * touchLookSensitivity * dt));
+    actor.pitch = Math.max(-PLAYER_PITCH_LIMIT, Math.min(PLAYER_PITCH_LIMIT, actor.pitch - input.touch.lookY * 1.6 * touchLookSensitivity * dt));
   }
-  player.pitch = Math.max(-PLAYER_PITCH_LIMIT, Math.min(PLAYER_PITCH_LIMIT, player.pitch));
-  if (isRidingRailTrain(world, player)) return;
-  nudgeBlockedPlayerToFloor();
+  actor.pitch = Math.max(-PLAYER_PITCH_LIMIT, Math.min(PLAYER_PITCH_LIMIT, actor.pitch));
+  if (actor.id === player.id && isRidingRailTrain(world, player)) return;
+  nudgeBlockedPlayerToFloor(actor);
 
   // Movement
-  const cos = Math.cos(player.angle);
-  const sin = Math.sin(player.angle);
+  const cos = Math.cos(actor.angle);
+  const sin = Math.sin(actor.angle);
   const fwdAxis = Math.max(-1, Math.min(1, (input.fwd ? 1 : 0) - (input.back ? 1 : 0) + input.touch.moveY));
   const strafeAxis = Math.max(-1, Math.min(1, (input.strafeR ? 1 : 0) - (input.strafeL ? 1 : 0) + input.touch.moveX));
   let mx = cos * fwdAxis - sin * strafeAxis;
   let my = sin * fwdAxis + cos * strafeAxis;
-  const processionPull = updateCultProcessionCompulsion(state, world, player, input.interactHeld);
+  const processionPull = actor.id === player.id ? updateCultProcessionCompulsion(state, world, player, input.interactHeld) : null;
   if (processionPull) {
     mx += processionPull.x * processionPull.strength;
     my += processionPull.y * processionPull.strength;
   }
-  const bellPull = updateIstotitBellCompulsion(world, state, player, input.interactHeld);
+  const bellPull = actor.id === player.id ? updateIstotitBellCompulsion(world, state, player, input.interactHeld) : null;
   if (bellPull) {
     mx += bellPull.x * bellPull.strength;
     my += bellPull.y * bellPull.strength;
@@ -1857,16 +1909,16 @@ function movePlayer(dt: number): void {
   // Normalize
   const len = Math.sqrt(mx * mx + my * my);
   if (len > 0) {
-    const speed = player.speed * dt;
+    const speed = actor.speed * dt;
     // Sleep exhaustion reduces speed
-    const sleepMod = player.needs && player.needs.sleep < 10 ? 0.5 : 1;
+    const sleepMod = actor.needs && actor.needs.sleep < 10 ? 0.5 : 1;
     // AGI bonus to move speed
-    const agiMod = player.rpg ? agiSpeedMult(player.rpg) : 1;
-    const hazardMod = getCellHazardMoveMultiplier(world, player);
-    const statusMod = zhelemishMoveMult(player, state.time);
-    const coldMod = hladonColdMoveMultiplier(world, player);
-    const toolLightMod = passiveToolLightMoveMultiplier(player.tool) *
-      (input.use ? activeToolLightMoveMultiplier(player.tool) : 1);
+    const agiMod = actor.rpg ? agiSpeedMult(actor.rpg) : 1;
+    const hazardMod = getCellHazardMoveMultiplier(world, actor);
+    const statusMod = zhelemishMoveMult(actor, state.time);
+    const coldMod = hladonColdMoveMultiplier(world, actor);
+    const toolLightMod = passiveToolLightMoveMultiplier(actor.tool) *
+      (input.use ? activeToolLightMoveMultiplier(actor.tool) : 1);
     const moveMod = sleepMod * agiMod * hazardMod * statusMod * coldMod * toolLightMod;
     mx = mx / len * speed * moveMod;
     my = my / len * speed * moveMod;
@@ -1874,25 +1926,25 @@ function movePlayer(dt: number): void {
     const r = PLAYER_COLLISION_R; // small enough to slide along tight concrete corners
     const canClip = isNoClipActive();
     // X movement – check all 4 AABB corners (skip if noclip effect is active)
-    const nx = player.x + mx;
+    const nx = actor.x + mx;
     if (canClip || (
-        !world.solid(Math.floor(nx + r), Math.floor(player.y + r)) &&
-        !world.solid(Math.floor(nx + r), Math.floor(player.y - r)) &&
-        !world.solid(Math.floor(nx - r), Math.floor(player.y + r)) &&
-        !world.solid(Math.floor(nx - r), Math.floor(player.y - r)))) {
-      player.x = ((nx % W) + W) % W;
+        !world.solid(Math.floor(nx + r), Math.floor(actor.y + r)) &&
+        !world.solid(Math.floor(nx + r), Math.floor(actor.y - r)) &&
+        !world.solid(Math.floor(nx - r), Math.floor(actor.y + r)) &&
+        !world.solid(Math.floor(nx - r), Math.floor(actor.y - r)))) {
+      actor.x = ((nx % W) + W) % W;
     }
     // Y movement – check all 4 AABB corners (use updated X)
-    const ny = player.y + my;
+    const ny = actor.y + my;
     if (canClip || (
-        !world.solid(Math.floor(player.x + r), Math.floor(ny + r)) &&
-        !world.solid(Math.floor(player.x + r), Math.floor(ny - r)) &&
-        !world.solid(Math.floor(player.x - r), Math.floor(ny + r)) &&
-        !world.solid(Math.floor(player.x - r), Math.floor(ny - r)))) {
-      player.y = ((ny % W) + W) % W;
+        !world.solid(Math.floor(actor.x + r), Math.floor(ny + r)) &&
+        !world.solid(Math.floor(actor.x + r), Math.floor(ny - r)) &&
+        !world.solid(Math.floor(actor.x - r), Math.floor(ny + r)) &&
+        !world.solid(Math.floor(actor.x - r), Math.floor(ny - r)))) {
+      actor.y = ((ny % W) + W) % W;
     }
 
-    if (floorTeleportCd <= 0 && world.anomalyTeleports.size > 0) {
+    if (actor.id === player.id && floorTeleportCd <= 0 && world.anomalyTeleports.size > 0) {
       const from = world.idx(Math.floor(player.x), Math.floor(player.y));
       if (tryUseWrongDoorRemap(world, state, player)) {
         floorTeleportCd = 1.25;
@@ -1912,7 +1964,7 @@ function movePlayer(dt: number): void {
     if (stepAccum > 1.8) {
       stepAccum = 0;
       playFootstep();
-      publishFootstepNoise(state, player, moveMod * len > 1.08);
+      publishFootstepNoise(state, actor, moveMod * len > 1.08);
     }
   }
 }
@@ -2093,6 +2145,7 @@ function playerActions(_dt: number): void {
             state.beamAngle = player.angle;
             state.beamLen = psiResult.beamLen;
           }
+          makeCurrentPlayer(psiResult.player);
         }
         pushAttackFeedback(ws.isRanged ? 'Выстрел ПСИ.' : 'ПСИ-удар.');
         if (ws.psiEffect === 'beam') playPsiBeam(); else playPsiCast();
@@ -2353,6 +2406,10 @@ function playerKillMessage(e: Entity): string {
 }
 
 function handleKill(e: Entity, killerIsPlayer: boolean, pvx = 0, pvy = 0, goreLevel = 1): void {
+  if (isPlayerEntity(e)) {
+    const hpBefore = e.id === prevPlayerActorId ? prevPlayerActorHp : (e.maxHp ?? e.hp ?? 100);
+    if (absorbPsiShieldDamage(e, hpBefore, state.msgs, state.time) > 0) return;
+  }
   // Death blood pool — directional + gore-scaled
   spawnDeathPool(world, e.x, e.y, e.type === EntityType.MONSTER, goreLevel, pvx, pvy);
   if (killerIsPlayer) {
@@ -2433,14 +2490,9 @@ function handleKill(e: Entity, killerIsPlayer: boolean, pvx = 0, pvy = 0, goreLe
   } else if (e.type === EntityType.NPC && killerIsPlayer) {
     awardXP(player, xpForNpcKill(e.rpg?.level ?? 1), state.msgs, state.time);
     if (e.plotNpcId) notifyNpcKill(e.plotNpcId, state);
-    // Priest death curse: killing Батюшка spawns 666 monsters in pentagram
-    if (e.plotNpcId === 'batushka') {
-      priestDeathCurse(world, entities, nextEntityId, e.x, e.y);
-      state.msgs.push(msg('☠ ПРОКЛЯТИЕ БАТЮШКИ! 666 тварей вырвались из ада!', state.time, '#f00'));
-      state.msgs.push(msg('На миникарте проступает пентаграмма...', state.time, '#a00'));
-      updateWorldData(world);
-    }
   }
+  const contentDeath = runContentEntityDeathHooks({ world, entities, player, state, nextEntityId, killed: e, killerIsPlayer });
+  if (contentDeath.worldChanged) updateWorldData(world);
 }
 
 const FLAME_COLLATERAL_ITEMS = new Set([
@@ -2451,6 +2503,10 @@ const FLAME_COLLATERAL_ITEMS = new Set([
 function projectileActor(p: Entity): Entity | undefined {
   if (p.ownerId === player.id) return player;
   return getEntityIndex().byId.get(p.ownerId ?? -1);
+}
+
+function isPlayerOwnedProjectile(p: Entity): boolean {
+  return p.ownerId === player.id || isPlayerEntity(projectileActor(p));
 }
 
 const flameCollateralQuery: Entity[] = [];
@@ -2641,7 +2697,7 @@ function updateProjectiles(dt: number): void {
     if (pt !== ProjType.FLAME) {
       for (const e of projectileHitQuery) {
         if (!e.alive || e.id === p.ownerId) continue;
-        if (e.type !== EntityType.MONSTER && e.type !== EntityType.NPC && e.type !== EntityType.PLAYER) continue;
+        if (e.type !== EntityType.MONSTER && e.type !== EntityType.NPC) continue;
         const hitT = projectilePathHitT(prevX, prevY, wx, wy, e, hitRadius);
         if (hitT <= blockingT + 0.000001 && hitT < nearestHitT) {
           nearestHit = e;
@@ -2651,7 +2707,7 @@ function updateProjectiles(dt: number): void {
     }
     for (const e of projectileHitQuery) {
       if (!e.alive || e.id === p.ownerId) continue;
-      if (e.type !== EntityType.MONSTER && e.type !== EntityType.NPC && e.type !== EntityType.PLAYER) continue;
+      if (e.type !== EntityType.MONSTER && e.type !== EntityType.NPC) continue;
       if (pt !== ProjType.FLAME && e !== nearestHit) continue;
       const hitT = pt === ProjType.FLAME ? projectilePathHitT(prevX, prevY, wx, wy, e, hitRadius) : nearestHitT;
       if (hitT <= blockingT + 0.000001) {
@@ -2661,7 +2717,7 @@ function updateProjectiles(dt: number): void {
         if (pt === ProjType.WEB) {
           applyPaupsinaWeb(e, state.time, state.msgs, state, projectileActor(p));
           spawnProjectileBodyImpact(world, hitX, hitY, p.sprite, pt, hitZ);
-          playProjectileBodyHitCue(p, e.x, e.y, e.id === player.id);
+          playProjectileBodyHitCue(p, e.x, e.y, isPlayerEntity(e));
           p.alive = false;
           break;
         }
@@ -2675,13 +2731,13 @@ function updateProjectiles(dt: number): void {
             projectileType: pt,
           });
           const dmg = armor.damage;
-          const debugImmortalPlayerHit = e.id === player.id && isDebugOnePunchManEnabled();
+          const debugImmortalPlayerHit = isPlayerEntity(e) && isDebugOnePunchManEnabled();
           if (debugImmortalPlayerHit) {
-            keepDebugOnePunchManAlive(player);
+            keepDebugOnePunchManAlive(e);
           } else {
             e.hp -= dmg;
             tryMonsterProjectileStagger(world, state, e, p, player.id);
-            if (e.type === EntityType.NPC && p.ownerId === player.id) {
+            if (e.type === EntityType.NPC && isPlayerOwnedProjectile(p)) {
               applyDamageRelationPenalty(player.faction, e.faction, dmg, e, player);
               recordFactionClashPlayerHit(state, world, player, e, dmg);
             }
@@ -2689,20 +2745,20 @@ function updateProjectiles(dt: number): void {
             spawnBloodHit(world, hitX, hitY, hitAngle, dmg, e.type === EntityType.MONSTER, p.vx ?? 0, p.vy ?? 0, hitZ);
             spawnProjectileBodyImpact(world, hitX, hitY, p.sprite, pt, hitZ);
           }
-          const playerHit = e.id === player.id;
+          const playerHit = isPlayerEntity(e);
           if (playerHit && !debugImmortalPlayerHit) reportPlayerProjectileHit(p, dmg);
           playProjectileBodyHitCue(p, e.x, e.y, playerHit);
           if (!debugImmortalPlayerHit && e.hp <= 0) {
             e.alive = false;
             e.hp = 0;
-            handleKill(e, p.ownerId === player.id, p.vx ?? 0, p.vy ?? 0, p.projGore ?? 1);
+            handleKill(e, isPlayerOwnedProjectile(p), p.vx ?? 0, p.vy ?? 0, p.projGore ?? 1);
             recordMonsterProjectileDeath(
               world,
               state,
               e,
               p,
               projectileActor(p),
-              (target, vx, vy, gore) => handleKill(target, p.ownerId === player.id, vx, vy, gore),
+              (target, vx, vy, gore) => handleKill(target, isPlayerOwnedProjectile(p), vx, vy, gore),
             );
           }
         }
@@ -2715,7 +2771,7 @@ function updateProjectiles(dt: number): void {
           p.x = hitX;
           p.y = hitY;
           p.spriteZ = hitZ;
-          psiAoeExplosion(p, entities, world, state.msgs, state.time, (e2) => handleKill(e2, p.ownerId === player.id));
+          psiAoeExplosion(p, entities, world, state.msgs, state.time, (e2) => handleKill(e2, isPlayerOwnedProjectile(p)));
         }
         // Flame projectiles pierce through (don't die on hit)
         if (pt !== ProjType.FLAME) {
@@ -2740,7 +2796,7 @@ function updateProjectiles(dt: number): void {
         playProjectileImpactCue(p, wallHit.x, wallHit.y);
       }
       if (p.aoeRadius && pt !== ProjType.GRENADE && pt !== ProjType.BFG)
-        psiAoeExplosion(p, entities, world, state.msgs, state.time, (e) => handleKill(e, p.ownerId === player.id));
+        psiAoeExplosion(p, entities, world, state.msgs, state.time, (e) => handleKill(e, isPlayerOwnedProjectile(p)));
       p.alive = false;
       continue;
     }
@@ -2759,7 +2815,7 @@ function updateProjectiles(dt: number): void {
         playProjectileImpactCue(p, floorX, floorY);
       }
       if (p.aoeRadius)
-        psiAoeExplosion(p, entities, world, state.msgs, state.time, (e) => handleKill(e, p.ownerId === player.id));
+        psiAoeExplosion(p, entities, world, state.msgs, state.time, (e) => handleKill(e, isPlayerOwnedProjectile(p)));
       p.alive = false;
       continue;
     }
@@ -2773,7 +2829,7 @@ function updateProjectiles(dt: number): void {
 function triggerExplosion(p: Entity, pt: ProjType): void {
   const radius = p.aoeRadius ?? 4;
   const dmg = p.aoeDmg ?? p.projDmg ?? 80;
-  const isPlayer = p.ownerId === player.id;
+  const isPlayer = isPlayerOwnedProjectile(p);
   const actor = projectileActor(p);
 
   // AoE damage to all entities in radius
@@ -2781,7 +2837,7 @@ function triggerExplosion(p: Entity, pt: ProjType): void {
   getEntityIndex().queryRadius(p.x, p.y, radius, explosionHitQuery, ENTITY_MASK_ACTOR);
   for (const e of explosionHitQuery) {
     if (!e.alive || e.id === p.ownerId) continue;
-    if (e.type !== EntityType.NPC && e.type !== EntityType.MONSTER && e.type !== EntityType.PLAYER) continue;
+    if (e.type !== EntityType.NPC && e.type !== EntityType.MONSTER) continue;
     const dx = ((e.x - p.x + W / 2) % W + W) % W - W / 2;
     const dy = ((e.y - p.y + W / 2) % W + W) % W - W / 2;
     const dist = Math.sqrt(dx * dx + dy * dy);
@@ -2797,14 +2853,14 @@ function triggerExplosion(p: Entity, pt: ProjType): void {
         aoe: true,
       });
       const finalDmg = armor.damage;
-      if (e.id === player.id && isDebugOnePunchManEnabled()) {
-        keepDebugOnePunchManAlive(player);
+      if (isPlayerEntity(e) && isDebugOnePunchManEnabled()) {
+        keepDebugOnePunchManAlive(e);
         hits++;
         continue;
       }
       e.hp -= finalDmg;
-      if (e.id === player.id) {
-        const detail = actor && actor.id !== player.id
+      if (isPlayerEntity(e)) {
+        const detail = actor && !isPlayerEntity(actor)
           ? `Взрыв от ${entityDisplayName(actor)}: -${finalDmg}`
           : `Взрыв: -${finalDmg}`;
         recordPlayerDamage(state, p, finalDmg, detail, 'projectile');
@@ -2933,12 +2989,13 @@ function currentRouteRebuildGeneration(): FloorGeneration | undefined {
   if (getActiveFloorInstance(state)) return undefined;
   const entry = currentFloorRunEntry(state);
   if (entry.spec) return generateProceduralFloor(entry.spec);
-  if (entry.designFloorId) return generateDesignFloor(entry.designFloorId);
+  const runSeed = ensureFloorRunState(state).runSeed;
+  if (entry.designFloorId) return generateDesignFloor(entry.designFloorId, runSeed);
   return undefined;
 }
 
 function currentLocalSamosborPatchGeneration(): FloorGeneration {
-  return currentRouteRebuildGeneration() ?? generateFloor(state.currentFloor);
+  return currentRouteRebuildGeneration() ?? generateFloor(state.currentFloor, ensureFloorRunState(state).runSeed);
 }
 
 function scheduleLocalSamosborPatch(fn: () => void): void {
@@ -3005,8 +3062,9 @@ function captureFloorMemoryByKey(key: string): void {
 
 function generateFloorForTarget(floor: FloorLevel, entry: FloorRunEntry | null | undefined): FloorGeneration {
   if (entry?.spec) return generateProceduralFloor(entry.spec);
-  if (entry?.designFloorId) return generateDesignFloor(entry.designFloorId);
-  return generateFloor(floor);
+  const runSeed = ensureFloorRunState(state).runSeed;
+  if (entry?.designFloorId) return generateDesignFloor(entry.designFloorId, runSeed);
+  return generateFloor(floor, runSeed);
 }
 
 function floorMemoryGenerationExtrasForKey(key: string): Record<string, unknown> | undefined {
@@ -3014,7 +3072,7 @@ function floorMemoryGenerationExtrasForKey(key: string): Record<string, unknown>
   if (!key.startsWith(designPrefix)) return undefined;
   const designId = key.slice(designPrefix.length);
   if (!isDesignFloorId(designId)) return undefined;
-  const gen = generateDesignFloor(designId) as FloorGeneration & Record<string, unknown>;
+  const gen = generateDesignFloor(designId, ensureFloorRunState(state).runSeed) as FloorGeneration & Record<string, unknown>;
   const extras: Record<string, unknown> = {};
   for (const [extraKey, value] of Object.entries(gen)) {
     if (extraKey === 'world' || extraKey === 'entities' || extraKey === 'spawnX' || extraKey === 'spawnY') continue;
@@ -3043,6 +3101,7 @@ function switchFloor(
   overrideArrivalColor?: string,
   allowElevatorAnomaly = true,
 ): void {
+  restorePlayerBeforeWorldBoundary();
   const fromFloor = state.currentFloor;
   captureCurrentAlifeFloor();
   const departingMemoryKey = currentFloorMemoryKey();
@@ -3131,7 +3190,7 @@ function switchFloor(
     const spawn = safeSpawnNear(savedX, savedY, gen.spawnX, gen.spawnY);
     player = {
       id: nextEntityId.v++,
-      type: EntityType.PLAYER,
+      type: EntityType.NPC,
       x: spawn.x,
       y: spawn.y,
       angle: savedAngle,
@@ -3272,6 +3331,7 @@ function formatFloorZ(z: number): string {
 }
 
 function debugTeleportTo(target: DebugTeleportTarget): void {
+  restorePlayerBeforeWorldBoundary();
   const fromFloor = state.currentFloor;
   captureCurrentAlifeFloor();
   const savedInventory = player.inventory ? [...player.inventory] : [];
@@ -3320,7 +3380,7 @@ function debugTeleportTo(target: DebugTeleportTarget): void {
 
     player = {
       id: nextEntityId.v++,
-      type: EntityType.PLAYER,
+      type: EntityType.NPC,
       x: gen.spawnX,
       y: gen.spawnY,
       angle: savedAngle,
@@ -3829,6 +3889,7 @@ function normalizeQuestList(input: unknown, nextQuestIdInput: unknown, nowMinute
 
 function saveGame(): void {
   try {
+    makeCurrentPlayer(endPsiPossession(entities, player, state.msgs, state.time, 'cancelled'));
     captureCurrentAlifeFloor();
     captureCurrentFloorMemory();
     const data = createGameSavePayload(player, state, world.containers, {
@@ -3928,7 +3989,7 @@ function loadGame(): boolean {
 
       player = {
         id: nextEntityId.v++,
-        type: EntityType.PLAYER,
+        type: EntityType.NPC,
         x: spawn.x,
         y: spawn.y,
         angle: finiteNumber(dataPlayer.angle, 0),
@@ -3952,6 +4013,7 @@ function loadGame(): boolean {
       entities.push(player);
       applyContractFloorHooks(state, world, entities, nextEntityId, player);
       syncPlayerRuntimeBaselines();
+      resetPsiState();
 
       initFactionRelations();
       initFactionControl(world);
@@ -4113,11 +4175,12 @@ function cleanSurfaceArea(cx: number, cy: number, radiusCells: number): number {
   return removed;
 }
 
-function updateEquippedTool(dt: number): void {
-  if (!player.alive) {
+function updateEquippedTool(dt: number, actor = player): void {
+  if (!actor.alive) {
     _prevToolUse = input.use;
     return;
   }
+  const player = actor;
   if (_toolActionCd > 0) _toolActionCd = Math.max(0, _toolActionCd - dt);
   const toolId = player.tool ?? '';
   const useEdge = input.use && !_prevToolUse;
@@ -4562,6 +4625,9 @@ function confirmActiveMobileSelection(): void {
         if (result.closeInterface) closeNpcInteractionInterface(state);
       } else if (npc && isDiceGameOpen()) {
         const result = handleDiceInput({ state, player, npc, input: { interactEdge: true } });
+        if (result.closeInterface) closeNpcInteractionInterface(state);
+      } else if (npc && isDominoGameOpen()) {
+        const result = handleDominoInput({ state, player, npc, input: { interactEdge: true } });
         if (result.closeInterface) closeNpcInteractionInterface(state);
       } else {
         closeNpcInteractionInterface(state);
@@ -5205,6 +5271,9 @@ function handleMobileHudTap(x: number, y: number): void {
         } else if (isDiceGameOpen()) {
           const result = handleDiceInput({ state, player, npc, input: { escEdge: true } });
           if (result.closeInterface) closeNpcInteractionInterface(state);
+        } else if (isDominoGameOpen()) {
+          const result = handleDominoInput({ state, player, npc, input: { escEdge: true } });
+          if (result.closeInterface) closeNpcInteractionInterface(state);
         } else {
           closeNpcInteractionInterface(state);
         }
@@ -5668,6 +5737,7 @@ function handleMenuInput(): void {
       const npc = entities.find(e => e.id === state.npcMenuTarget);
       if (npc && isDurakGameOpen()) handleDurakInput({ state, player, npc, input: { escEdge: true } });
       else if (npc && isDiceGameOpen()) handleDiceInput({ state, player, npc, input: { escEdge: true } });
+      else if (npc && isDominoGameOpen()) handleDominoInput({ state, player, npc, input: { escEdge: true } });
       clearTradeOffers(state);
       closeNpcInteractionInterface();
       state.showNpcMenu = false;
@@ -5898,6 +5968,16 @@ function handleMenuInput(): void {
           input: { leftNav, rightNav, interactEdge, dropEdge },
         });
         if (result.closeInterface) closeNpcInteractionInterface(state);
+      } else if (npc && isDominoGameOpen()) {
+        const leftNav = menuRepeatStep('left', input.invLeft, leftEdge);
+        const rightNav = menuRepeatStep('right', input.invRight, rightEdge);
+        const result = handleDominoInput({
+          state,
+          player,
+          npc,
+          input: { leftNav, rightNav, interactEdge, dropEdge },
+        });
+        if (result.closeInterface) closeNpcInteractionInterface(state);
       } else if (interactEdge || escEdge) {
         closeNpcInteractionInterface(state);
       }
@@ -6052,7 +6132,7 @@ function cleanupDeadEntities(dt: number): number {
   let removed = 0;
   for (let i = entities.length - 1; i >= 0; i--) {
     const e = entities[i];
-    if (!e.alive && e.type !== EntityType.PLAYER) {
+    if (!e.alive && !isNativePlayerBodyEntity(e)) {
       if (e.type === EntityType.NPC) recordAlifeNpcDeath(state, e);
       entities.splice(i, 1);
       removed++;
@@ -6204,11 +6284,12 @@ function gameLoop(now: number): void {
     movePlayer(dt);
     rebuildEntityIndexForSimulation(entities, entityIndexFrame);
     playerActions(dt);
+    syncPlayerActorSwitchBaseline();
     // If switchFloor was triggered, pendingLoad is set — skip the rest of this frame
     if (pendingLoad) { requestAnimationFrame(gameLoop); return; }
     updateLiftArachnaEncounter(world, entities, player, state, dt, nextEntityId);
     updatePseudolifts(world, entities, player, state);
-    updateEquippedTool(dt);
+    updateEquippedTool(dt, player);
     // Player urination (P key)
     if (input.pee && player.alive && player.needs && player.needs.pee > 5) {
       const range = 1.5;
@@ -6242,21 +6323,23 @@ function gameLoop(now: number): void {
       needsTickAccum = 0;
       updateNeeds(entities, needsDt, state.time, state.msgs, player.id, nextEntityId, state, world);
     }
-    if (updateBetonoedShortcut(world, entities, player, state, dt)) updateWorldData(world);
-    setListenerPos(player.x, player.y, world);
-    updateRouteCues(world, player, state);
-    updateMapExploration(world, player, state);
+    if (updateContentRuntimeHooks({ world, entities, player, state, nextEntityId, dt, phase: 'pre_ai', gameOver: false })) updateWorldData(world);
+    const listener = player;
+    setListenerPos(listener.x, listener.y, world);
+    updateRouteCues(world, listener, state);
+    updateMapExploration(world, listener, state);
     const aiStart = performance.now();
-    updateAI(world, entities, dt, state.time, state.msgs, player.id, state.clock, state.samosborActive, nextEntityId, state.currentFloor, state);
+    updateAI(world, entities, dt, state.time, state.msgs, listener.id, state.clock, state.samosborActive, nextEntityId, state.currentFloor, state);
     lastAiUpdateMs = performance.now() - aiStart;
     updateRailTrains(world, entities, player, state, dt);
-    updateParitelSteamBridge(world, entities, player, state, dt);
+    if (updateContentRuntimeHooks({ world, entities, player, state, nextEntityId, dt, phase: 'post_ai', gameOver: false })) updateWorldData(world);
     updateCarnivorousFungus(world, entities, player, state, dt, nextEntityId);
     tickCellHazards(world, entities, state, dt, player, input.fwd || input.back || input.strafeL || input.strafeR || input.touch.moveX !== 0 || input.touch.moveY !== 0);
     updateProceduralAnomalies(world, player, state, dt);
     if (updateSamosbor(world, entities, state, dt, nextEntityId, currentLocalSamosborPatchGeneration, scheduleLocalSamosborPatch)) {
       reportNetSphereProgressEvents();
       scheduleLoading(() => {
+        restorePlayerBeforeWorldBoundary();
         captureCurrentAlifeFloor();
         clearWrongDoorRemaps(world, state, 'world_rebuild');
         clearPseudoliftActive(state, entities);
@@ -6285,16 +6368,14 @@ function gameLoop(now: number): void {
     // Faction zone capture (cell-based territory control)
     updateFactionCapture(world, entities, dt);
     updateFactionActivity(world, entities, player, state, nextEntityId, dt, currentFloorAllowsNpcPopulation());
-    if (state.currentFloor === FloorLevel.KVARTIRY) {
-      updateKvPopulation(world, entities, dt, state);
-    }
+    if (updateContentRuntimeHooks({ world, entities, player, state, nextEntityId, dt, phase: 'floor_activity', gameOver: false })) updateWorldData(world);
     // Continuous monster spawn for Grom's defense quest (step 8)
     if (state.currentFloor === FloorLevel.MAINTENANCE) {
       updateDefenseQuestSpawn(dt);
     }
     // PSI does NOT auto-regenerate — only restored via items (pills, antidepressant)
     // Update ongoing PSI spell effects (phase shift, madness, control)
-    updatePsiEffects(entities, dt);
+    makeCurrentPlayer(updatePsiEffects(entities, dt, player, state.msgs, state.time).player);
     updateSeroburmalineExposure(world, player, state, dt);
 
     // Blood trails from wounded entities + particle physics
@@ -6358,21 +6439,30 @@ function gameLoop(now: number): void {
     keepDebugOnePunchManAlive(player);
 
     // Detect player damage for vignette flash
-    const curHp = player.hp ?? 100;
-    if (curHp < prevPlayerHp) {
-      const lost = prevPlayerHp - curHp;
-      const maxHp = player.maxHp ?? 100;
+    const damageActor = syncPlayerActorSwitchBaseline();
+    let curHp = damageActor.hp ?? 100;
+    if (curHp < prevPlayerActorHp) {
+      absorbPsiShieldDamage(damageActor, prevPlayerActorHp, state.msgs, state.time);
+      curHp = damageActor.hp ?? curHp;
+    }
+    if (curHp < prevPlayerActorHp) {
+      const lost = prevPlayerActorHp - curHp;
+      const maxHp = damageActor.maxHp ?? 100;
       state.dmgFlash = Math.min(1, 0.3 + (lost / maxHp) * 1.5);
       state.dmgSeed = Math.random() * 10000;
       recordUnattributedPlayerDamage(lost);
       playFleshHit();
     }
-    prevPlayerHp = curHp;
+    prevPlayerActorId = damageActor.id;
+    prevPlayerActorHp = curHp;
     updatePlayerBarAudioFeedback();
 
     // Check player death
-    if (!player.alive && !state.gameOver) {
-      handlePlayerDeath();
+    const deathActor = player;
+    if (!deathActor.alive && !state.gameOver) {
+      handlePlayerDeath(deathActor);
+    } else if (!player.alive && !state.gameOver) {
+      handlePlayerDeath(player);
     }
     reportNetSphereProgressEvents();
 
@@ -6405,17 +6495,19 @@ function gameLoop(now: number): void {
       needsTickAccum = 0;
       updateNeeds(entities, needsDt, state.time, state.msgs, player.id, nextEntityId, state, world);
     }
-    if (updateBetonoedShortcut(world, entities, player, state, dt)) updateWorldData(world);
-    setListenerPos(player.x, player.y, world);
-    updateMapExploration(world, player, state);
+    if (updateContentRuntimeHooks({ world, entities, player, state, nextEntityId, dt, phase: 'pre_ai', gameOver: true })) updateWorldData(world);
+    const listener = player;
+    setListenerPos(listener.x, listener.y, world);
+    updateMapExploration(world, listener, state);
     updatePseudolifts(world, entities, player, state);
     const aiStart = performance.now();
-    updateAI(world, entities, dt, state.time, state.msgs, player.id, state.clock, state.samosborActive, nextEntityId, state.currentFloor, state);
+    updateAI(world, entities, dt, state.time, state.msgs, listener.id, state.clock, state.samosborActive, nextEntityId, state.currentFloor, state);
     lastAiUpdateMs = performance.now() - aiStart;
     tickCellHazards(world, entities, state, dt, player, false);
     if (updateSamosbor(world, entities, state, dt, nextEntityId, currentLocalSamosborPatchGeneration, scheduleLocalSamosborPatch)) {
       reportNetSphereProgressEvents();
       scheduleLoading(() => {
+        restorePlayerBeforeWorldBoundary();
         captureCurrentAlifeFloor();
         clearWrongDoorRemaps(world, state, 'world_rebuild');
         clearPseudoliftActive(state, entities);
@@ -6441,9 +6533,7 @@ function gameLoop(now: number): void {
     syncMapExplorationAfterSamosborWave(world, state);
     updateFactionCapture(world, entities, dt);
     updateFactionActivity(world, entities, player, state, nextEntityId, dt, currentFloorAllowsNpcPopulation());
-    if (state.currentFloor === FloorLevel.KVARTIRY) {
-      updateKvPopulation(world, entities, dt, state);
-    }
+    if (updateContentRuntimeHooks({ world, entities, player, state, nextEntityId, dt, phase: 'floor_activity', gameOver: true })) updateWorldData(world);
     bloodTrailAccum += dt;
     if (bloodTrailAccum >= 0.3) {
       const bloodDt = bloodTrailAccum;
@@ -6476,15 +6566,16 @@ function gameLoop(now: number): void {
     ? 0.3 + Math.sin(uiTime * 5) * 0.15
     : Math.min(0.18, smogFogBonus * 4);
 
-  const cameraView = runtimeCameraView(runtimeCamera, player, cameraFovRadians());
+  const renderActor = player;
+  const cameraView = runtimeCameraView(runtimeCamera, renderActor, cameraFovRadians());
   const camX = cameraView.x;
   const camY = cameraView.y;
   const passiveFlashlight = state.gameOver
     ? 0
-    : passiveToolLightRenderIntensity(player.tool, getEquippedToolDurability(player));
+    : passiveToolLightRenderIntensity(renderActor.tool, getEquippedToolDurability(renderActor));
   const activeToolLight = state.gameOver || !input.use
     ? 0
-    : activeToolLightRenderIntensity(player.tool, getEquippedToolDurability(player));
+    : activeToolLightRenderIntensity(renderActor.tool, getEquippedToolDurability(renderActor));
   const flashlight = state.gameOver
     ? 0
     : Math.max(passiveFlashlight, activeToolLight);
@@ -6505,7 +6596,7 @@ function gameLoop(now: number): void {
   // Draw HUD on 2D overlay canvas
   ctx.clearRect(0, 0, hudCanvas.width, hudCanvas.height);
   const hudDrawStart = performance.now();
-  drawHUD(ctx, hudCanvas.width / SCR_W, hudCanvas.height / SCR_H, player, state, world, entities, uiTime, {
+  drawHUD(ctx, hudCanvas.width / SCR_W, hudCanvas.height / SCR_H, renderActor, state, world, entities, uiTime, {
     fps: currentFps,
     perf: uiElementEnabled('fps_counter') ? hudPerfDebugSnapshot(currentFps) : undefined,
     pointerLockHint: !mobileControls?.isEnabled() && !input.mouse.locked && !pointerCaptureGateVisible(),

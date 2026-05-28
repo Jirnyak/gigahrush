@@ -1,8 +1,20 @@
 /* ── Аптечный разменник — household medicine crisis POI ─────── */
 
 import {
-  Cell, ContainerKind, FloorLevel, Tex, Feature, RoomType, Faction, Occupation, QuestType,
-  type Entity, type Item, type WorldContainer, type WorldEventPrivacy, type WorldEventSeverity,
+  Cell,
+  ContainerKind,
+  FloorLevel,
+  Tex,
+  Feature,
+  RoomType,
+  Faction,
+  Occupation,
+  QuestType,
+  type Entity,
+  type Item,
+  type WorldContainer,
+  type WorldEventPrivacy,
+  type WorldEventSeverity,
 } from '../../core/types';
 import { World } from '../../core/world';
 import { type PlotNpcDef, registerSideQuest } from '../../data/plot';

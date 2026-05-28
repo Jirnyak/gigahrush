@@ -1,17 +1,25 @@
 /* ── Shared maze generation utilities ─────────────────────────── */
 
 import {
-  W, Cell, Tex, RoomType, DoorState, Feature,
-  ZoneFaction, LiftDirection,
-  type Room, type Zone,
+  W,
+  Cell,
+  Tex,
+  RoomType,
+  DoorState,
+  Feature,
+  ZoneFaction,
+  LiftDirection,
+  type Room,
+  type Zone,
 } from '../core/types';
 import { World } from '../core/world';
+import { irandFrom, pickFrom, shuffleWith, type RandomSource } from '../core/rand';
 import { ROOM_DEFS } from '../data/catalog';
 
 /* ── RNG helpers ─────────────────────────────────────────────── */
-export const rng  = (lo: number, hi: number) => lo + Math.floor(Math.random() * (hi - lo + 1));
-export const pick = <T>(a: T[]): T => a[Math.floor(Math.random() * a.length)];
-export const shuffle = <T>(a: T[]): T[] => { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
+export const rng = (lo: number, hi: number, rand: RandomSource = Math.random): number => irandFrom(rand, lo, hi);
+export const pick = <T>(a: readonly T[], rand: RandomSource = Math.random): T => pickFrom(rand, a);
+export const shuffle = <T>(a: T[], rand: RandomSource = Math.random): T[] => shuffleWith(rand, a);
 
 export type ArrivalSpawnReason =
   | 'matched_lift'

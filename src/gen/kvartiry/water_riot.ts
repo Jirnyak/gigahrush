@@ -1,10 +1,23 @@
 /* ── Водяной бунт у стояка — Kvartiry scarcity POI ───────────── */
 
 import {
-  Cell, ContainerKind, Faction, Feature, FloorLevel, Occupation, QuestType, RoomType, Tex,
+  Cell,
+  ContainerKind,
+  Faction,
+  Feature,
+  FloorLevel,
+  Occupation,
+  QuestType,
+  RoomType,
+  Tex,
   msg,
-  type Entity, type GameState, type Item, type WorldContainer, type WorldEvent,
-  type WorldEventPrivacy, type WorldEventSeverity,
+  type Entity,
+  type GameState,
+  type Item,
+  type WorldContainer,
+  type WorldEvent,
+  type WorldEventPrivacy,
+  type WorldEventSeverity,
 } from '../../core/types';
 import { World } from '../../core/world';
 import { type PlotNpcDef, registerSideQuest } from '../../data/plot';

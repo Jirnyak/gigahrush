@@ -1,5 +1,6 @@
 /* ── Brown slime cleanup: bounded residue room ───────────────── */
 
+import { stampSurfaceSplat } from '../../systems/surface_marks';
 import { Cell, EntityType, Faction, Feature, Occupation, RoomType, Tex } from '../../core/types';
 import { Spr } from '../../render/sprite_index';
 import { registerCellHazardSite } from '../../systems/cell_hazards';
@@ -27,12 +28,12 @@ function stampResidue(ctx: MaintContentCtx, roomId: number, x: number, y: number
   for (let i = 0; i < 5; i++) {
     const px = x + (i % 3) * 2;
     const py = y + Math.floor(i / 3) * 2;
-    world.stamp(px, py, 0.45 + (i % 2) * 0.18, 0.52, 0.55 + i * 0.08, 145, seed + i * 17, 74, 48, 24);
+    stampSurfaceSplat(world, px, py, 0.45 + (i % 2) * 0.18, 0.52, 0.55 + i * 0.08, 145, seed + i * 17, 74, 48, 24);
     addResidueCell(ctx, cells, roomId, px, py);
   }
-  world.stamp(x + 4, y + 2, 0.5, 0.5, 1.15, 185, seed + 101, 92, 55, 26);
+  stampSurfaceSplat(world, x + 4, y + 2, 0.5, 0.5, 1.15, 185, seed + 101, 92, 55, 26);
   addResidueCell(ctx, cells, roomId, x + 4, y + 2);
-  world.stamp(x + 7, y + 4, 0.35, 0.65, 0.85, 165, seed + 131, 58, 38, 22);
+  stampSurfaceSplat(world, x + 7, y + 4, 0.35, 0.65, 0.85, 165, seed + 131, 58, 38, 22);
   addResidueCell(ctx, cells, roomId, x + 7, y + 4);
   return cells;
 }

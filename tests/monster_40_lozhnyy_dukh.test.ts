@@ -88,7 +88,7 @@ function openUvWorld(): World {
 function player(x: number, y: number, angle = 0): Entity {
   return {
     id: 1,
-    type: EntityType.PLAYER,
+    type: EntityType.NPC, persistentNpcId: 'player',
     x,
     y,
     angle,

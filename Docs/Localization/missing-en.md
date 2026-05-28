@@ -2,8 +2,8 @@
 
 Source locale: `ru`.
 Locale file: `locales/en.json`.
-Canonical strings: 15917.
-Translated: 15917.
+Canonical strings: 17005.
+Translated: 17005.
 Missing: 0.
 Todo records: 0.
 

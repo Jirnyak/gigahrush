@@ -1,11 +1,4 @@
-import {
-  EntityType,
-  Faction,
-  type Entity,
-  type GameState,
-  type WorldEventPrivacy,
-  type WorldEventSeverity,
-} from '../core/types';
+import { Faction, type Entity, type GameState, type WorldEventPrivacy, type WorldEventSeverity } from '../core/types';
 import { World } from '../core/world';
 import { ITEMS } from '../data/catalog';
 import {
@@ -16,6 +9,7 @@ import {
 } from '../data/permits';
 import { applyFactionRelationDeltas, type FactionRelationDelta } from './factions';
 import { publishEvent } from './events';
+import { isPlayerEntity } from './player_actor';
 
 function actorItemIds(actor: Entity): string[] {
   const out: string[] = [];
@@ -76,7 +70,7 @@ function publishPermitEvent(
   data: Record<string, unknown>,
   zoneId?: number,
 ): void {
-  if (!state || actor.type !== EntityType.PLAYER) return;
+  if (!state || !isPlayerEntity(actor)) return;
   const item = ITEMS[def.itemId];
   const relationDelta = type === 'access_granted' ? applyPermitFactionCost(def) : undefined;
   publishEvent(state, {

@@ -3,13 +3,9 @@
 import { Cell, EntityType, QuestType, W, type Entity, type GameState, type Quest } from '../core/types';
 import type { World } from '../core/world';
 import { isQuestTargetOnCurrentFloor, resolveQuestTargetRoom } from './contracts';
-import { getRouteCueMapReveals } from './route_cues';
-import { getSamosborShelterRoomIds } from './samosbor';
 import { getSamosborWaveDebugSnapshot } from './samosbor_wave';
 
 const LOCAL_TRAIL_RADIUS = 2;
-const ROUTE_REVEAL_RADIUS = 8;
-const ZONE_REVEAL_RADIUS = 18;
 const QUEST_MARKER_REVEAL_RADIUS = 8;
 
 interface MapExplorationRuntime {
@@ -134,21 +130,6 @@ function hideMapArea(world: World, x: number, y: number, radius: number): void {
   runtime.lastCell = -1;
 }
 
-function revealRouteCueKnowledge(world: World, state: GameState): void {
-  for (const reveal of getRouteCueMapReveals(world, state)) {
-    if (reveal.floor !== state.currentFloor) continue;
-    if (reveal.roomId !== undefined) revealMapRoom(world, reveal.roomId);
-    if (reveal.zoneId !== undefined) revealMapZone(world, reveal.zoneId);
-    if (reveal.x !== undefined && reveal.y !== undefined) {
-      revealMapArea(world, reveal.x, reveal.y, reveal.kind === 'zone_danger' ? ZONE_REVEAL_RADIUS : ROUTE_REVEAL_RADIUS);
-    }
-  }
-}
-
-function revealSamosborShelters(world: World, state: GameState): void {
-  for (const roomId of getSamosborShelterRoomIds(state)) revealMapRoom(world, roomId);
-}
-
 function questHasMapRevealTarget(q: Quest): boolean {
   return q.targetRoom !== undefined ||
     q.targetRoomType !== undefined ||
@@ -242,7 +223,7 @@ export function revealQuestTargetOnMap(
   }
 }
 
-export function updateMapExploration(world: World, player: Entity, state: GameState): void {
+export function updateMapExploration(world: World, player: Entity, _state: GameState): void {
   const runtime = runtimeFor(world);
   const px = Math.floor(player.x);
   const py = Math.floor(player.y);
@@ -256,8 +237,6 @@ export function updateMapExploration(world: World, player: Entity, state: GameSt
     runtime.lastCell = cellIdx;
     revealMapArea(world, px, py, LOCAL_TRAIL_RADIUS);
   }
-  revealRouteCueKnowledge(world, state);
-  revealSamosborShelters(world, state);
 }
 
 export function syncMapExplorationAfterSamosborWave(world: World, state: GameState): void {

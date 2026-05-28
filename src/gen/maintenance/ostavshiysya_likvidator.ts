@@ -1,9 +1,21 @@
 /* ── Оставшийся Ликвидатор: armed post-cleanup non-kill encounter ── */
 
+import { stampSurfaceSplat } from '../../systems/surface_marks';
 import {
-  Cell, ContainerKind, Faction, Feature, FloorLevel, Occupation,
-  QuestType, RoomType, Tex, msg,
-  type GameState, type Room, type WorldContainer, type WorldEvent,
+  Cell,
+  ContainerKind,
+  Faction,
+  Feature,
+  FloorLevel,
+  Occupation,
+  QuestType,
+  RoomType,
+  Tex,
+  msg,
+  type GameState,
+  type Room,
+  type WorldContainer,
+  type WorldEvent,
 } from '../../core/types';
 import { type PlotNpcDef, registerSideQuest } from '../../data/plot';
 import { addFactionRelMutual } from '../../data/relations';
@@ -352,7 +364,7 @@ function dressOstliqRooms(ctx: MaintContentCtx, post: Room, stash: Room, radio: 
   setFeature(ctx.world, stash.x + 2, stash.y + 2, Feature.SHELF);
   setFeature(ctx.world, stash.x + 6, stash.y + 2, Feature.SHELF);
   setFeature(ctx.world, stash.x + 7, stash.y + 5, Feature.LAMP);
-  ctx.world.stamp(stash.x + 5, stash.y + 3, 0.55, 0.45, 0.35, 160, stash.id * 997 + 21, 8, 7, 5, true);
+  stampSurfaceSplat(ctx.world, stash.x + 5, stash.y + 3, 0.55, 0.45, 0.35, 160, stash.id * 997 + 21, 8, 7, 5, true);
 
   setFeature(ctx.world, radio.x + 2, radio.y + 2, Feature.DESK);
   setFeature(ctx.world, radio.x + 3, radio.y + 2, Feature.SCREEN);

@@ -1,7 +1,14 @@
 /* ── Станция давления — pumps, valves, pressure bureaucracy ───── */
 
 import {
-  Cell, Tex, Feature, RoomType, Faction, Occupation, QuestType, MonsterKind,
+  Cell,
+  Tex,
+  Feature,
+  RoomType,
+  Faction,
+  Occupation,
+  QuestType,
+  MonsterKind,
 } from '../../core/types';
 import { type PlotNpcDef, registerSideQuest } from '../../data/plot';
 import {

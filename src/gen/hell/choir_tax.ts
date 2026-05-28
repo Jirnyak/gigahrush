@@ -1,5 +1,6 @@
 /* ── Hell choir tax: capped PSI combat/trade/extraction POI ───── */
 
+import { stampSurfaceSplat } from '../../systems/surface_marks';
 import {
   W, Cell, ContainerKind, DoorState, EntityType, AIGoal, Faction, Feature,
   FloorLevel, MonsterKind, Occupation, QuestType, RoomType, Tex,
@@ -17,6 +18,7 @@ import {
   connectProtectedRoom, connectToNetwork, findClearArea, protectRoom, rng, stampRoom,
 } from '../shared';
 import { genLog } from '../log';
+import { isPlayerEntity } from '../../systems/player_actor';
 
 const ROOM_W = 31;
 const ROOM_H = 25;
@@ -442,7 +444,7 @@ function drainPlayerForChoir(
   psiLoss: number,
   hpPerMissingPsi: number,
 ): { psiLost: number; hpLost: number } {
-  const player = entities.find(entity => entity.type === EntityType.PLAYER && entity.alive);
+  const player = entities.find(entity => isPlayerEntity(entity) && entity.alive);
   if (!player) return { psiLost: 0, hpLost: 0 };
 
   let psiLost = 0;
@@ -477,7 +479,7 @@ function spawnChoirBranchBacklash(
     const zoneLevel = world.zones[site.zoneId]?.level ?? 12;
     const level = zoneLevel + (kind === MonsterKind.EYE ? 3 : 2);
     const hp = Math.max(1, Math.round(scaleMonsterHp(def.hp, level)));
-    const player = entities.find(entity => entity.type === EntityType.PLAYER && entity.alive);
+    const player = entities.find(entity => isPlayerEntity(entity) && entity.alive);
     const monster: Entity = {
       id,
       type: EntityType.MONSTER,
@@ -697,8 +699,8 @@ function decorateChoir(world: World, room: Room): void {
   }
 
   world.wallTex[world.idx(cx, room.y - 1)] = Tex.ICON;
-  world.stamp(cx, cy, 0.5, 0.5, 6, 0.55, 18180, 150, 24, 70, false);
-  world.stamp(rx + room.w - 5, ry + room.h - 5, 0.5, 0.5, 4, 0.35, 18181, 220, 120, 35, false);
+  stampSurfaceSplat(world, cx, cy, 0.5, 0.5, 6, 0.55, 18180, 150, 24, 70, false);
+  stampSurfaceSplat(world, rx + room.w - 5, ry + room.h - 5, 0.5, 0.5, 4, 0.35, 18181, 220, 120, 35, false);
 }
 
 function makeInteriorWall(world: World, x: number, y: number): void {

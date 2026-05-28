@@ -1,5 +1,6 @@
 /* -- Monster 15: Самосборный Остов corpse/loot-risk scene ------- */
 
+import { stampSurfaceSplat } from '../../systems/surface_marks';
 import {
   AIGoal, Cell, ContainerKind, DoorState, EntityType, Faction, Feature, FloorLevel,
   MonsterKind, Occupation, QuestType, RoomType, Tex,
@@ -398,9 +399,9 @@ function decorateRoom(world: World, room: Room): void {
 
   world.wallTex[world.idx(rx + 2, ry - 1)] = Tex.POSTER_BASE + 15;
   world.wallTex[world.idx(rx + 10, ry - 1)] = Tex.SCREEN_BASE + 6;
-  world.stamp(rx + 12, ry + 6, 0.5, 0.5, 3.7, 0.58, 15015, 22, 16, 24, false);
-  world.stamp(rx + 15, ry + 8, 0.5, 0.5, 2.4, 0.42, 15016, 12, 10, 16, false);
-  world.stamp(rx + 6, ry + 7, 0.5, 0.5, 1.8, 0.22, 15017, 140, 128, 96, false);
+  stampSurfaceSplat(world, rx + 12, ry + 6, 0.5, 0.5, 3.7, 0.58, 15015, 22, 16, 24, false);
+  stampSurfaceSplat(world, rx + 15, ry + 8, 0.5, 0.5, 2.4, 0.42, 15016, 12, 10, 16, false);
+  stampSurfaceSplat(world, rx + 6, ry + 7, 0.5, 0.5, 1.8, 0.22, 15017, 140, 128, 96, false);
   world.markFogDirty();
   world.markFloorTexDirty();
 }

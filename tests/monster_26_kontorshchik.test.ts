@@ -25,7 +25,7 @@ function sortedFloors(floors: readonly FloorLevel[] | undefined): FloorLevel[] {
 function carrierWith(items: Item[]): Entity {
   return {
     id: 1,
-    type: EntityType.PLAYER,
+    type: EntityType.NPC, persistentNpcId: 'player',
     x: 0,
     y: 0,
     angle: 0,

@@ -1,4 +1,13 @@
-import { W, Cell, Feature, Tex, msg, type Entity, type GameState, type Room } from '../../core/types';
+import {
+  W,
+  Cell,
+  Feature,
+  Tex,
+  msg,
+  type Entity,
+  type GameState,
+  type Room,
+} from '../../core/types';
 import { World } from '../../core/world';
 import { consumeToolDurability, hasItem } from '../inventory';
 

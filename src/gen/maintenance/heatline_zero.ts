@@ -1,7 +1,14 @@
 /* ── Теплотрасса Ноль — local static heat hazard slice ───────── */
 
+import { stampSurfaceSplat } from '../../systems/surface_marks';
 import {
-  Tex, Feature, RoomType, Faction, Occupation, QuestType, MonsterKind,
+  Tex,
+  Feature,
+  RoomType,
+  Faction,
+  Occupation,
+  QuestType,
+  MonsterKind,
 } from '../../core/types';
 import { type PlotNpcDef, registerSideQuest } from '../../data/plot';
 import {
@@ -161,7 +168,7 @@ export function generateHeatlineZero(ctx: MaintContentCtx): void {
     if (dx % 4 === 1) setFeature(ctx.world, x, scorch.y + 3, Feature.LAMP);
     ctx.world.fog[ctx.world.idx(x, scorch.y + 2)] = 105;
     if (dx % 2 === 0) ctx.world.fog[ctx.world.idx(x, scorch.y + 1)] = 45;
-    ctx.world.stamp(x, scorch.y + 2, 0.5, 0.5, 0.34, 160, scorch.id * 31 + dx, 120, 35, 8);
+    stampSurfaceSplat(ctx.world, x, scorch.y + 2, 0.5, 0.5, 0.34, 160, scorch.id * 31 + dx, 120, 35, 8);
   }
   ctx.world.markFogDirty();
 

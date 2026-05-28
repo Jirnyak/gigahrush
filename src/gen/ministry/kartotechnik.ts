@@ -1,5 +1,6 @@
 /* -- Картотечник: bounded Ministry document-objective harassment -- */
 
+import { stampSurfaceSplat } from '../../systems/surface_marks';
 import {
   Cell, ContainerKind, DoorState, EntityType, Faction, Feature, FloorLevel,
   MonsterKind, Occupation, QuestType, RoomType, Tex, msg,
@@ -343,7 +344,7 @@ function decorateKartotechnikRoom(world: World, room: Room, gateX: number, cente
   setFeature(world, gateX + 6, centerY + 3, Feature.SCREEN);
   world.wallTex[world.idx(room.x + 6, room.y - 1)] = Tex.POSTER_BASE + 34;
   world.wallTex[world.idx(room.x + room.w, centerY)] = Tex.PORTRAIT_BASE + 44;
-  world.stamp(gateX + 4, centerY, 0.5, 0.55, 0.65, 115, room.id * 1009 + 5, 44, 36, 24, false);
+  stampSurfaceSplat(world, gateX + 4, centerY, 0.5, 0.55, 0.65, 115, room.id * 1009 + 5, 44, 36, 24, false);
 }
 
 export function generateKartotechnikArchive(

@@ -114,7 +114,7 @@ test('breach charge opens nearby ordinary doors, walls and biomass but not prote
 
   const player: Entity = {
     id: 1,
-    type: EntityType.PLAYER,
+    type: EntityType.NPC, persistentNpcId: 'player',
     x: 11.5,
     y: 10.5,
     angle: 0,

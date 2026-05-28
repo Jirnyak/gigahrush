@@ -1,5 +1,6 @@
-import { Cell, EntityType, Feature, msg, type Entity, type GameState } from '../../core/types';
+import { Cell, Feature, msg, type Entity, type GameState } from '../../core/types';
 import { World } from '../../core/world';
+import { isPlayerEntity } from '../player_actor';
 
 interface ShiftSection {
   roomId: number;
@@ -114,7 +115,7 @@ function tintLocal(world: World, x: number, y: number, phase: number): void {
 }
 
 export function updateSectionShiftAnomaly(world: World, player: Entity, state: GameState, dt: number): void {
-  if (player.type !== EntityType.PLAYER) return;
+  if (!isPlayerEntity(player)) return;
   const runtime = initShift(world);
   if (!runtime) return;
   const px = world.wrap(Math.floor(player.x));

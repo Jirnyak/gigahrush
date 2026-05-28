@@ -1,9 +1,19 @@
 /* ── Архив ликвидаторских дел — contract records POI ─────────── */
 
 import {
-  Cell, ContainerKind, DoorState, Feature, FloorLevel, Faction, MonsterKind, Occupation, RoomType, Tex,
+  Cell,
+  ContainerKind,
+  DoorState,
+  Feature,
+  FloorLevel,
+  Faction,
+  MonsterKind,
+  Occupation,
+  RoomType,
+  Tex,
   msg,
-  type Entity, type WorldContainer,
+  type Entity,
+  type WorldContainer,
 } from '../../core/types';
 import { World } from '../../core/world';
 import { ITEMS } from '../../data/catalog';

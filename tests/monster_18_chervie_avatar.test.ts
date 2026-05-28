@@ -57,7 +57,7 @@ function chervie(x = 10.5, y = 10.5): Entity {
 function player(x = 12.5, y = 10.5): Entity {
   return {
     id: 1,
-    type: EntityType.PLAYER,
+    type: EntityType.NPC, persistentNpcId: 'player',
     x,
     y,
     angle: 0,

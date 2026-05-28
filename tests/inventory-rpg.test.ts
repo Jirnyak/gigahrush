@@ -62,7 +62,7 @@ import { makeGameState } from './helpers';
 function makePlayer(): Entity {
   return {
     id: 1,
-    type: EntityType.PLAYER,
+    type: EntityType.NPC, persistentNpcId: 'player',
     x: 0,
     y: 0,
     angle: 0,
@@ -465,7 +465,7 @@ test('hostile weaker NPC flees a nearby stronger player', () => {
 });
 
 test('PSI weapon ids, resources, and effect bindings stay coherent', () => {
-  const instantEffects = new Set(['storm', 'brain_burn', 'madness', 'control', 'phase', 'mark', 'recall', 'beam']);
+  const instantEffects = new Set(['storm', 'brain_burn', 'madness', 'control', 'shield', 'possession', 'phase', 'mark', 'recall', 'beam']);
   const statIds = Object.keys(PSI_WEAPON_STATS).sort();
   const itemIds = Object.values(ITEMS)
     .filter(def => def.type === ItemType.WEAPON && def.id.startsWith('psi_'))

@@ -1,5 +1,6 @@
 /* ── Клеть автоматики — Maintenance robot/light encounter ────── */
 
+import { stampSurfaceSplat } from '../../systems/surface_marks';
 import { Cell, Feature, MonsterKind, RoomType, Tex } from '../../core/types';
 import {
   type MaintContentCtx, dropItems, findMaintArea, setFeature,
@@ -36,7 +37,7 @@ export function generateAutomationCage(ctx: MaintContentCtx): void {
   setFeature(ctx.world, cage.x + cage.w - 2, cage.y + 1, Feature.LAMP);
   setFeature(ctx.world, cage.x + cage.w - 2, cage.y + cage.h - 2, Feature.SCREEN);
   ctx.world.wallTex[ctx.world.idx(cage.x + Math.floor(cage.w / 2), cage.y - 1)] = Tex.SCREEN_BASE + 18;
-  ctx.world.stamp(cage.x + 11, cage.y + 5, 0.5, 0.5, 5, 0.45, 35037, 35, 95, 130, false);
+  stampSurfaceSplat(ctx.world, cage.x + 11, cage.y + 5, 0.5, 0.5, 5, 0.45, 35037, 35, 95, 130, false);
 
   dropItems(ctx, cage, ['circuit_board', 'fuse', 'ammo_energy', 'lamp_bulb', 'relay_diagram']);
   spawnMonstersNear(ctx, cage.x + 12, cage.y + 5, [

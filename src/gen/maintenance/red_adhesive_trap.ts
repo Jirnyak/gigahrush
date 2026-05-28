@@ -4,7 +4,7 @@ import {
   EntityType, Faction, Feature, MonsterKind, Occupation, RoomType, Tex,
 } from '../../core/types';
 import { registerCellHazardSite } from '../../systems/cell_hazards';
-import { stampMark, MarkType } from '../../render/marks';
+import { stampMark, MarkType } from '../../systems/surface_marks';
 import { Spr } from '../../render/sprite_index';
 import {
   type MaintContentCtx, dropItems, findMaintArea, setFeature,

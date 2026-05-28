@@ -1,31 +1,35 @@
 /* ── PSI spell system: сгустки (psychic runes) ───────────────── */
 
 import {
-  W, type Entity, type Msg, EntityType,
+  W, type Entity, type Msg, EntityType, AIGoal,
   msg,
 } from '../core/types';
 import { World } from '../core/world';
 import { randSeed } from '../core/rand';
-import { stampMark, MarkType } from '../render/marks';
+import { stampMark, MarkType } from './surface_marks';
 import { WEAPON_STATS } from '../data/catalog';
 import { spawnBloodHit, spawnDeathPool } from '../render/blood';
-import { entityDisplayName } from '../entities/monster';
+import { MONSTERS, entityDisplayName } from '../entities/monster';
 import { ENTITY_MASK_ACTOR, ensureEntityIndex } from './entity_index';
 import { applyMonsterIncomingDamage } from './monster_traits';
 
 // ── Module state (player-only transient effects) ─────────────────
 let phaseTimer = 0;                              // phase shift remaining seconds
+let shieldTimer = 0;                             // PSI shield remaining seconds
 let markPos: { x: number; y: number } | null = null;  // saved teleport mark
 let debugNoClip = false;                        // debug override for phase movement
 const psiTargetQuery: Entity[] = [];
 let hasActiveMadness = false;
 let madnessScanAccum = 0;
+let possession: { previousPlayerId: number; targetId: number; timer: number } | null = null;
 
 // ── Queries ──────────────────────────────────────────────────────
 export function isPhaseActive(): boolean { return phaseTimer > 0; }
 export function isNoClipActive(): boolean { return debugNoClip || phaseTimer > 0; }
 export function isDebugNoClipEnabled(): boolean { return debugNoClip; }
 export function getPhaseTimer(): number { return phaseTimer; }
+export function isPsiShieldActive(): boolean { return shieldTimer > 0; }
+export function getPsiShieldTimer(): number { return shieldTimer; }
 export function getPsiMark(): { x: number; y: number } | null { return markPos; }
 export function toggleDebugNoClip(): boolean {
   debugNoClip = !debugNoClip;
@@ -35,7 +39,9 @@ export function toggleDebugNoClip(): boolean {
 // ── Reset (on new game / floor switch) ───────────────────────────
 export function resetPsiState(): void {
   phaseTimer = 0;
+  shieldTimer = 0;
   markPos = null;
+  possession = null;
 }
 
 // ── Cast an instant (non-projectile) PSI spell ───────────────────
@@ -47,7 +53,7 @@ export function castInstantSpell(
   msgs: Msg[],
   time: number,
   handleKill: (e: Entity) => void,
-): { beamLen?: number } {
+): { beamLen?: number; player?: Entity } {
   ensureEntityIndex(entities);
   switch (effect) {
     case 'storm':    castStorm(player, entities, world, msgs, time, handleKill); break;
@@ -55,18 +61,23 @@ export function castInstantSpell(
     case 'madness':  castTargeted(player, entities, world, msgs, time, 'madness'); break;
     case 'control':  castTargeted(player, entities, world, msgs, time, 'control'); break;
     case 'phase':    castPhase(player, msgs, time); break;
+    case 'shield':   castShield(player, msgs, time); break;
     case 'mark':     castMark(player, msgs, time); break;
     case 'recall':   castRecall(player, msgs, time); break;
+    case 'possession': return { player: castPossession(player, entities, world, msgs, time) ?? undefined };
     case 'beam':     return { beamLen: castBeam(player, entities, world, msgs, time, handleKill) };
   }
   return {};
 }
 
 // ── Update ongoing PSI effects (call every frame) ────────────────
-export function updatePsiEffects(entities: Entity[], dt: number): void {
+export function updatePsiEffects(entities: Entity[], dt: number, player: Entity, msgs?: Msg[], time = 0): { player?: Entity } {
   // Phase shift timer
   if (phaseTimer > 0) {
     phaseTimer = Math.max(0, phaseTimer - dt);
+  }
+  if (shieldTimer > 0) {
+    shieldTimer = Math.max(0, shieldTimer - dt);
   }
 
   let madnessDt = dt;
@@ -113,6 +124,17 @@ export function updatePsiEffects(entities: Entity[], dt: number): void {
       controlTimers.set(eid, left);
     }
   }
+
+  if (possession) {
+    possession.timer -= dt;
+    const byId = ensureEntityIndex(entities).byId;
+    const body = byId.get(possession.previousPlayerId);
+    const target = byId.get(possession.targetId);
+    if (!body?.alive || !target?.alive || possession.timer <= 0) {
+      return { player: endPsiPossession(entities, player, msgs, time, target?.alive ? 'expired' : 'broken') };
+    }
+  }
+  return {};
 }
 
 // ── Control timer tracking ───────────────────────────────────────
@@ -220,7 +242,9 @@ function castBrainBurn(
 }
 
 // ── Безумие / Контроль: targeted PSI effects ─────────────────────
-const PSI_EFFECT_DURATION = 15; // 15 seconds = 15 game minutes
+export const PSI_EFFECT_DURATION = 15; // 15 seconds = 15 game minutes
+const POSSESSION_RANGE = 10;
+const POSSESSION_AFTERSHOCK_SEC = 3;
 
 function castTargeted(
   player: Entity, entities: Entity[], world: World,
@@ -250,6 +274,126 @@ function castTargeted(
 function castPhase(_player: Entity, msgs: Msg[], time: number): void {
   phaseTimer = PSI_EFFECT_DURATION;
   msgs.push(msg('Фазовый сдвиг! Вы проходите сквозь материю', time, '#4af'));
+}
+
+// ── ПСИ-щит: HP loss is paid from PSI until the timer or PSI ends ─
+function castShield(_player: Entity, msgs: Msg[], time: number): void {
+  shieldTimer = PSI_EFFECT_DURATION;
+  msgs.push(msg('ПСИ-щит поднят: боль уходит в запас ПСИ', time, '#8cf'));
+}
+
+export function absorbPsiShieldDamage(player: Entity, hpBefore: number, msgs: Msg[], time: number): number {
+  if (shieldTimer <= 0 || !player.rpg || player.hp === undefined) return 0;
+  const hpAfter = player.hp;
+  const lost = Math.max(0, hpBefore - hpAfter);
+  if (lost <= 0) return 0;
+  if (player.rpg.psi <= 0) {
+    shieldTimer = 0;
+    msgs.push(msg('ПСИ-щит погас: запас ПСИ пуст', time, '#f84'));
+    return 0;
+  }
+
+  const psiLoss = Math.round(lost * 0.1 * 10) / 10;
+  player.rpg.psi = Math.max(0, player.rpg.psi - psiLoss);
+  player.hp = Math.min(player.maxHp ?? hpBefore, hpBefore);
+  player.alive = true;
+  const costLabel = Number.isInteger(psiLoss) ? String(psiLoss) : psiLoss.toFixed(1);
+  msgs.push(msg(`ПСИ-щит держит удар: ПСИ -${costLabel}`, time, '#8cf'));
+  if (player.rpg.psi <= 0) {
+    shieldTimer = 0;
+    msgs.push(msg('ПСИ-щит рассыпался: запас ПСИ исчерпан', time, '#f84'));
+  }
+  return lost;
+}
+
+function actorIntelligence(e: Entity): number {
+  const direct = e.rpg?.int;
+  if (Number.isFinite(direct)) return Math.max(0, Math.floor(direct ?? 0));
+  if (e.type === EntityType.MONSTER) {
+    const hp = Math.max(1, e.maxHp ?? e.hp ?? 1);
+    const bossBias = e.monsterKind !== undefined && MONSTERS[e.monsterKind]?.boss ? 8 : 0;
+    return Math.max(0, Math.floor(Math.sqrt(hp) / 5) + bossBias);
+  }
+  return 0;
+}
+
+function canPossessTarget(target: Entity): boolean {
+  if (!target.alive) return false;
+  if (target.type !== EntityType.NPC && target.type !== EntityType.MONSTER) return false;
+  if (target.plotNpcId) return false;
+  if (target.monsterKind !== undefined && MONSTERS[target.monsterKind]?.boss) return false;
+  return true;
+}
+
+function castPossession(player: Entity, entities: Entity[], world: World, msgs: Msg[], time: number): Entity | null {
+  if (possession) {
+    msgs.push(msg('Вселение уже держит чужое тело', time, '#f84'));
+    return null;
+  }
+  const target = findLookTarget(player, entities, world, POSSESSION_RANGE);
+  if (!target) {
+    msgs.push(msg('Вселение — цель не найдена', time, '#a4f'));
+    return null;
+  }
+  if (!canPossessTarget(target)) {
+    msgs.push(msg(`${entityDisplayName(target)} не принимает вселение`, time, '#f84'));
+    return null;
+  }
+  const playerInt = actorIntelligence(player);
+  const targetInt = actorIntelligence(target);
+  if (playerInt <= targetInt) {
+    msgs.push(msg(`Вселение сорвалось: интеллект цели ${targetInt}, ваш ${playerInt}`, time, '#f84'));
+    return null;
+  }
+
+  target.psiControlledBy = player.id;
+  if (target.ai) {
+    target.ai.combatTargetId = undefined;
+    target.ai.goal = AIGoal.IDLE;
+    target.ai.path = [];
+    target.ai.timer = 0;
+  }
+  possession = { previousPlayerId: player.id, targetId: target.id, timer: PSI_EFFECT_DURATION };
+  msgs.push(msg(`Вселение: вы внутри ${entityDisplayName(target)} на 15с`, time, '#4ff'));
+  return target;
+}
+
+export function getPsiPossessionTarget(entities: readonly Entity[]): Entity | null {
+  if (!possession) return null;
+  const target = entities.find(e => e.id === possession!.targetId);
+  const body = entities.find(e => e.id === possession!.previousPlayerId);
+  if (!target?.alive || !body?.alive) return null;
+  return target;
+}
+
+export function getPsiPossessionTimer(): number {
+  return possession?.timer ?? 0;
+}
+
+export function endPsiPossession(
+  entities: readonly Entity[],
+  currentPlayer?: Entity,
+  msgs?: Msg[],
+  time = 0,
+  reason: 'expired' | 'broken' | 'cancelled' | 'reset' = 'cancelled',
+): Entity | undefined {
+  if (!possession) return currentPlayer;
+  const previous = entities.find(e => e.id === possession!.previousPlayerId);
+  const target = entities.find(e => e.id === possession!.targetId);
+  if (target) {
+    target.psiControlledBy = undefined;
+    if (target.ai) target.ai.combatTargetId = undefined;
+    if (target.alive && reason !== 'reset') {
+      target.psiMadness = Math.max(target.psiMadness ?? 0, POSSESSION_AFTERSHOCK_SEC);
+      hasActiveMadness = true;
+    }
+  }
+  possession = null;
+  if (msgs && reason !== 'reset') {
+    msgs.push(msg(reason === 'broken' ? 'Вселение оборвалось' : 'Вселение отпустило чужое тело', time, '#8cf'));
+  }
+  if (previous?.alive) return previous;
+  return currentPlayer?.alive ? currentPlayer : undefined;
 }
 
 // ── Метка: save current position ─────────────────────────────────

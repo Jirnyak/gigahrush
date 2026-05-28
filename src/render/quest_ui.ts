@@ -1,6 +1,13 @@
 /* ── Quest log panel — paginated, one quest per page ──────────── */
 
-import { FloorLevel, LiftDirection, RoomType, type GameState, type Quest, QuestType } from '../core/types';
+import {
+  FloorLevel,
+  LiftDirection,
+  RoomType,
+  type GameState,
+  type Quest,
+  QuestType,
+} from '../core/types';
 import { ITEMS } from '../data/catalog';
 import { zForStoryFloor } from '../data/procedural_floors';
 import { isQuestTargetOnCurrentFloor, questRouteFloor, questRouteTargetLabel, questTargetLiftDirection } from '../systems/contracts';

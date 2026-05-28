@@ -1,11 +1,6 @@
 /* ── Per-run vertical procedural floor route ─────────────────── */
 
-import {
-  FloorLevel,
-  LiftDirection,
-  MonsterKind,
-  type GameState,
-} from '../core/types';
+import { FloorLevel, LiftDirection, MonsterKind, type GameState } from '../core/types';
 import {
   FLOOR_ANOMALIES,
   FLOOR_GEOMETRIES,

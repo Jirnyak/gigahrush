@@ -7,6 +7,7 @@ import {
 import { World } from '../core/world';
 import { recordPlayerDamage } from './damage';
 import { publishEvent } from './events';
+import { isPlayerEntity } from './player_actor';
 
 export type CellHazardCleanReason = 'fire' | 'solvent' | 'tool' | 'debug';
 
@@ -287,7 +288,7 @@ function hazardAtEntity(world: World, e: Entity): { site: CellHazardSite; cell: 
 
 function subjectName(e: Entity): string {
   if (e.name) return e.name;
-  if (e.type === EntityType.PLAYER) return 'Вы';
+  if (isPlayerEntity(e)) return 'Вы';
   return e.type === EntityType.NPC ? 'Жилец' : 'Существо';
 }
 
@@ -315,7 +316,7 @@ function publishHazardEvent(
     actorName: actor ? subjectName(actor) : undefined,
     actorFaction: actor?.faction,
     severity,
-    privacy: actor?.type === EntityType.PLAYER ? 'private' : 'local',
+    privacy: isPlayerEntity(actor) ? 'private' : 'local',
     tags: hazardTags(site),
     data: {
       hazardId: site.id,
@@ -437,7 +438,7 @@ export function deactivateCellHazardSite(
 }
 
 export function getCellHazardMoveMultiplier(world: World, e: Entity): number {
-  if (e.type !== EntityType.PLAYER && e.type !== EntityType.NPC) return 1;
+  if (!isPlayerEntity(e) && e.type !== EntityType.NPC) return 1;
   const runtime = runtimes.get(world);
   if (!runtime) return 1;
   const cell = world.idx(Math.floor(e.x), Math.floor(e.y));
@@ -547,7 +548,7 @@ function applyHazardDamage(
   if (amount <= 0) return false;
 
   subject.damageCarry -= amount;
-  if (e.type === EntityType.PLAYER) {
+  if (isPlayerEntity(e)) {
     const before = e.hp;
     e.hp = Math.max(1, e.hp - amount);
     const actual = before - e.hp;
@@ -565,7 +566,7 @@ function applyHazardDamage(
     }
   }
 
-  const nearPlayer = e.type === EntityType.PLAYER || world.dist2(player.x, player.y, e.x, e.y) <= HAZARD_MESSAGE_RADIUS2;
+  const nearPlayer = isPlayerEntity(e) || world.dist2(player.x, player.y, e.x, e.y) <= HAZARD_MESSAGE_RADIUS2;
   if (!nearPlayer) return true;
 
   if (e.type === EntityType.MONSTER) {
@@ -594,7 +595,7 @@ function tickHazardSubject(
   playerId: number,
   playerStruggling: boolean,
 ): void {
-  if (!e.alive || (e.type !== EntityType.PLAYER && e.type !== EntityType.NPC)) return;
+  if (!e.alive || (!isPlayerEntity(e) && e.type !== EntityType.NPC)) return;
   const hit = hazardAtEntity(world, e);
   const prior = runtime.subjects.get(e.id);
   if (!hit) {
@@ -617,7 +618,7 @@ function tickHazardSubject(
   if (hit.site.sticky && !subject.trapped && subject.timeIn >= hit.site.stickAfter) {
     subject.trapped = true;
     subject.escapeProgress = 0;
-    publishHazardEvent(state, 'hazard_trapped', hit.site, e.type === EntityType.PLAYER ? 4 : 3, e, { cell: hit.cell });
+    publishHazardEvent(state, 'hazard_trapped', hit.site, isPlayerEntity(e) ? 4 : 3, e, { cell: hit.cell });
   }
 
   if (subject.trapped) {
@@ -687,7 +688,7 @@ export function tickCellHazards(
   runtime.npcScanAccum = 0;
   let damagedMonsters = 0;
   for (const e of entities) {
-    if (e.type === EntityType.NPC) {
+    if (e.type === EntityType.NPC && !isPlayerEntity(e)) {
       tickHazardSubject(world, runtime, state, e, npcDt, player.id, false);
     } else if (damagedMonsters < MONSTER_HAZARD_DAMAGE_CAP && e.type === EntityType.MONSTER) {
       if (tickMonsterHazardDamage(world, runtime, state, e, npcDt, player)) damagedMonsters++;

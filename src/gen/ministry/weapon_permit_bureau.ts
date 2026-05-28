@@ -1,8 +1,16 @@
 /* ── Бюро оружейных разрешений — Ministry permit/ammo POI ─────── */
 
 import {
-  ContainerKind, Feature, FloorLevel, Faction, Occupation, QuestType, RoomType, Tex,
-  type Entity, type WorldContainer,
+  ContainerKind,
+  Feature,
+  FloorLevel,
+  Faction,
+  Occupation,
+  QuestType,
+  RoomType,
+  Tex,
+  type Entity,
+  type WorldContainer,
 } from '../../core/types';
 import { World } from '../../core/world';
 import { type PlotNpcDef, registerSideQuest } from '../../data/plot';

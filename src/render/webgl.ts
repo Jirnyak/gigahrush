@@ -19,6 +19,7 @@ import { containerSpr, featureSpr } from './sprite_index';
 import { generateItemSprite, itemDropDefId, itemSpriteKey } from './item_sprites';
 import { ENTITY_MASK_VISIBLE, getEntityIndex } from '../systems/entity_index';
 import type { CameraView } from '../systems/camera';
+import { isPlayerEntity } from '../systems/player_actor';
 
 export interface DynamicSkyTexture {
   readonly width: number;
@@ -2025,7 +2026,7 @@ function renderSpritesGL(
   getEntityIndex().queryRadiusCapped(px, py, MAX_DRAW, visibleEntityQuery, ENTITY_MASK_VISIBLE, VISIBLE_ENTITY_QUERY_CAP);
   lastRenderSceneDebugStats.visibleEntityQueryResults = visibleEntityQuery.length;
   for (const e of visibleEntityQuery) {
-    if (!e.alive || e.type === EntityType.PLAYER) continue;
+    if (!e.alive || isPlayerEntity(e)) continue;
     const renderX = hasTumannikRenderOffset(e) ? wrapWorldFloat(e.x + (e.ai?.fogOffsetX ?? 0)) : e.x;
     const renderY = hasTumannikRenderOffset(e) ? wrapWorldFloat(e.y + (e.ai?.fogOffsetY ?? 0)) : e.y;
     const dx = toroidalDelta(renderX, px);

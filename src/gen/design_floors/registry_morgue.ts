@@ -3,6 +3,7 @@
  * generator; an integrator can wire it into FloorRun later.
  */
 
+import { stampSurfaceSplat } from '../../systems/surface_marks';
 import {
   W,
   AIGoal,
@@ -668,7 +669,7 @@ function spawnMorgueMonster(
     monsterKind: kind, attackCd: 0,
     ai: { goal: AIGoal.WANDER, tx: x, ty: y, path: [], pi: 0, stuck: 0, timer: 0 },
   });
-  world.stamp(x, y, 0.5, 0.5, 3, 0.22, 7100 + kind, 82, 88, 94, false);
+  stampSurfaceSplat(world, x, y, 0.5, 0.5, 3, 0.22, 7100 + kind, 82, 88, 94, false);
 }
 
 function addMorgueContainer(
@@ -906,9 +907,9 @@ function seedRegistryMorgueReadables(world: World, entities: Entity[], nextId: N
     'Если человек сам просит свою бирку, проверьте дистанцию. Нелюдь любит чужой порядок и ближний разговор.',
   );
 
-  world.stamp(rooms.ledger.x + 5, rooms.ledger.y + 5, 0.5, 0.5, 2, 0.18, 7161, 35, 35, 42, false);
-  world.stamp(rooms.cold.x + 7, rooms.cold.y + 5, 0.5, 0.5, 4, 0.2, 7162, 120, 140, 150, false);
-  world.stamp(rooms.tagRoom.x + 5, rooms.tagRoom.y + 5, 0.5, 0.5, 2, 0.18, 7163, 50, 45, 32, false);
+  stampSurfaceSplat(world, rooms.ledger.x + 5, rooms.ledger.y + 5, 0.5, 0.5, 2, 0.18, 7161, 35, 35, 42, false);
+  stampSurfaceSplat(world, rooms.cold.x + 7, rooms.cold.y + 5, 0.5, 0.5, 4, 0.2, 7162, 120, 140, 150, false);
+  stampSurfaceSplat(world, rooms.tagRoom.x + 5, rooms.tagRoom.y + 5, 0.5, 0.5, 2, 0.18, 7163, 50, 45, 32, false);
 }
 
 export function generateRegistryMorgueDesignFloor(): FloorGeneration {

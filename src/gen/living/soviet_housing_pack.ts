@@ -2,6 +2,7 @@
 /* Fixed-zone living POIs: concierge, radio club, lost-and-found,  */
 /* hermodoor repair alcove, and common kitchen argument site.      */
 
+import { stampSurfaceSplat } from '../../systems/surface_marks';
 import {
   Cell, Tex, Feature, RoomType,
   type Room, type Entity, EntityType, AIGoal, Faction, Occupation, QuestType, MonsterKind,
@@ -613,7 +614,7 @@ function generateCommonKitchen(
   world.features[world.idx(pos.x + 6, pos.y + 4)] = Feature.CHAIR;
   world.features[world.idx(pos.x + 8, pos.y + 1)] = Feature.SHELF;
   world.wallTex[world.idx(pos.x + 1, pos.y - 1)] = Tex.POSTER_BASE + 23;
-  world.stamp(pos.x + 5, pos.y + 5, 0.5, 0.5, 5, 0.6, 3103, 120, 42, 28, false);
+  stampSurfaceSplat(world, pos.x + 5, pos.y + 5, 0.5, 0.5, 5, 0.6, 3103, 120, 42, 28, false);
   dropDesk(entities, nextId, pos.x + 5, pos.y + 3);
   dropItem(entities, nextId, pos.x + 8, pos.y + 6, 'kasha', 1);
   dropItem(entities, nextId, pos.x + 2, pos.y + 5, 'knife', 1);

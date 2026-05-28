@@ -1,7 +1,13 @@
 /* ── Допросная — Ministry admin POI with ambush ───────────────── */
 
 import {
-  Tex, Feature, RoomType, Faction, Occupation, QuestType, MonsterKind,
+  Tex,
+  Feature,
+  RoomType,
+  Faction,
+  Occupation,
+  QuestType,
+  MonsterKind,
   type Entity,
 } from '../../core/types';
 import { World } from '../../core/world';

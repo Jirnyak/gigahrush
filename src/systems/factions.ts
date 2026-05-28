@@ -12,6 +12,7 @@ import { World } from '../core/world';
 import { ITEMS } from '../data/catalog';
 import { getFactionRel, addFactionRelMutual } from '../data/relations';
 import { isPsiMad, isPsiAlly } from './psi';
+import { isPlayerEntity } from './player_actor';
 import { updateFactionEvents } from './faction_events';
 import { MAX_CARAVAN_LANES_PER_TICK, tickCaravans } from './caravans';
 import { getRecentEvents, publishEvent } from './events';
@@ -73,6 +74,11 @@ export function isHostile(attacker: Entity, target: Entity): boolean {
   // PSI madness: mad entities attack everyone
   if (isPsiMad(attacker)) return target.id !== attacker.id;
   if (isPassiveDefensiveNeutralMonster(attacker) || isPassiveDefensiveNeutralMonster(target)) return false;
+  if (isPlayerEntity(target) && attacker.id !== target.id) {
+    if (attacker.type === EntityType.MONSTER) return getFactionMonsterRelation(Faction.PLAYER) <= HOSTILE_RELATION_THRESHOLD;
+    if (attacker.type === EntityType.NPC && isNpcPlayerHostile(attacker)) return true;
+    return areFactionsHostile(attacker.faction ?? Faction.CITIZEN, Faction.PLAYER);
+  }
   // Monsters: use faction-vs-monster table
   if (attacker.type === EntityType.MONSTER && target.type === EntityType.MONSTER) return false;
   if (attacker.type === EntityType.MONSTER) {
@@ -84,7 +90,7 @@ export function isHostile(attacker: Entity, target: Entity): boolean {
     const aFaction = attacker.faction ?? Faction.CITIZEN;
     return getFactionMonsterRelation(aFaction) <= HOSTILE_RELATION_THRESHOLD;
   }
-  if (attacker.type === EntityType.NPC && target.type === EntityType.PLAYER && isNpcPlayerHostile(attacker)) {
+  if (attacker.type === EntityType.NPC && isPlayerEntity(target) && isNpcPlayerHostile(attacker)) {
     return true;
   }
   // NPC vs NPC / Player
@@ -458,7 +464,7 @@ function updateNoisePatrolResponse(world: World, entities: Entity[], state: Game
       privacy: 'local',
       tags: ['faction_event', 'noise_response', record.source, 'patrol'],
       data: {
-        name: 'noise_response',
+        name: 'Патруль на шум',
         phase: 'patrol_response',
         text: 'Патруль пошёл на шум.',
         source: record.source,

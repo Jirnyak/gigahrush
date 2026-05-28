@@ -1,9 +1,19 @@
 /* ── Инспекционный архив — Ministry access-control POI ───────── */
 
 import {
-  Cell, ContainerKind, DoorState, Tex, Feature, FloorLevel, RoomType, Faction, Occupation,
-  QuestType, MonsterKind,
-  type Entity, type WorldContainer,
+  Cell,
+  ContainerKind,
+  DoorState,
+  Tex,
+  Feature,
+  FloorLevel,
+  RoomType,
+  Faction,
+  Occupation,
+  QuestType,
+  MonsterKind,
+  type Entity,
+  type WorldContainer,
 } from '../../core/types';
 import { World } from '../../core/world';
 import { type PlotNpcDef, registerSideQuest } from '../../data/plot';

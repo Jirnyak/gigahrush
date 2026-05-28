@@ -1,7 +1,6 @@
 import {
   Cell,
   DoorState,
-  EntityType,
   Feature,
   Tex,
   W,
@@ -11,6 +10,7 @@ import {
 import type { World } from '../core/world';
 import { ITEMS } from '../data/items';
 import { publishEvent } from './events';
+import { isPlayerEntity } from './player_actor';
 
 export const BREACH_CHARGE_ID = 'breach_charge';
 
@@ -166,7 +166,7 @@ function publishBreachEvent(
     severity: changed ? 4 : 3,
     privacy: 'local',
     tags: [
-      actor?.type === EntityType.PLAYER ? 'player' : 'actor',
+      isPlayerEntity(actor) ? 'player' : 'actor',
       'breach_charge',
       'breach',
       'explosive',

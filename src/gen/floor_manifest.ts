@@ -4,6 +4,7 @@
 
 import { FloorLevel, type Entity } from '../core/types';
 import { World } from '../core/world';
+import { hashSeed, withSeededRandom } from '../core/rand';
 import { generateMinistry } from './ministry';
 import { generateKvartiry, resetKvPopulationState } from './kvartiry';
 import { generateWorld } from './living';
@@ -54,11 +55,17 @@ const FLOOR_GENERATORS: Record<FloorLevel, () => FloorGeneration> = {
   [FloorLevel.VOID]: generateVoid,
 };
 
+const DEFAULT_STORY_FLOOR_SEED = 0x47524748;
+
+export function storyFloorGenerationSeed(floor: FloorLevel, runSeed = DEFAULT_STORY_FLOOR_SEED): number {
+  return hashSeed(`story-floor:${floor}`, runSeed);
+}
+
 export function isFloorLevel(value: unknown): value is FloorLevel {
   return typeof value === 'number' && value in FLOOR_GENERATORS;
 }
 
-export function generateFloor(floor: FloorLevel): FloorGeneration {
-  const generation = FLOOR_GENERATORS[floor]();
+export function generateFloor(floor: FloorLevel, runSeed = DEFAULT_STORY_FLOOR_SEED): FloorGeneration {
+  const generation = withSeededRandom(storyFloorGenerationSeed(floor, runSeed), () => FLOOR_GENERATORS[floor]());
   return floor === FloorLevel.VOID ? withoutNpcEntities(generation) : generation;
 }

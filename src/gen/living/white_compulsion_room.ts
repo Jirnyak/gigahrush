@@ -1,5 +1,6 @@
 /* -- AG65 white compulsion room: quiet NPC decision POI --------- */
 
+import { stampSurfaceSplat } from '../../systems/surface_marks';
 import {
   AIGoal, Cell, ContainerKind, DoorState, EntityType, Faction, Feature,
   FloorLevel, NpcState, Occupation, QuestType, RoomType, Tex,
@@ -477,9 +478,9 @@ function decorateRoom(world: World, room: Room, entities: Entity[], nextId: { v:
     setFeature(world, rx + dx, ry + dy, feature);
   }
 
-  world.stamp(residueX, residueY, 0.5, 0.5, 4.8, 0.42, 65065, 230, 232, 218, false);
-  world.stamp(residueX - 2, residueY + 2, 0.5, 0.5, 2.3, 0.28, 65066, 215, 220, 210, false);
-  world.stamp(residueX, residueY - 2, 0.5, 0.5, 1.4, 0.2, 65067, 245, 245, 236, true);
+  stampSurfaceSplat(world, residueX, residueY, 0.5, 0.5, 4.8, 0.42, 65065, 230, 232, 218, false);
+  stampSurfaceSplat(world, residueX - 2, residueY + 2, 0.5, 0.5, 2.3, 0.28, 65066, 215, 220, 210, false);
+  stampSurfaceSplat(world, residueX, residueY - 2, 0.5, 0.5, 1.4, 0.2, 65067, 245, 245, 236, true);
   world.wallTex[world.idx(residueX, ry - 1)] = Tex.TILE_W;
   world.floorTex[world.idx(residueX, residueY)] = Tex.F_TILE;
 

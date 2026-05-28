@@ -15,7 +15,7 @@ import { getStack, spawnCount } from '../data/items';
 import { chooseFloorMonsterKind } from '../data/monster_ecology';
 import { MONSTERS } from '../entities/monster';
 import { Spr } from '../render/sprite_index';
-import { stampMark, MarkType } from '../render/marks';
+import { stampMark, MarkType } from './surface_marks';
 import { forceHide } from './ai';
 import {
   playIstotitBell,
@@ -38,6 +38,7 @@ import { getMaxHp, scaleMonsterHp, scaleMonsterSpeed, randomRPG } from './rpg';
 import { publishEvent } from './events';
 import { setDoorState } from './door_state';
 import {
+  ensureFloorRunState,
   nextFloorRunSamosborCooldown,
   nextFloorRunSamosborDuration,
   SAMOSBOR_DURATION_MAX_SEC,
@@ -89,6 +90,7 @@ import {
   getSamosborAftermathBeats,
   getSamosborVariantName,
 } from '../data/samosbor_variants';
+import { isPlayerEntity } from './player_actor';
 
 const MONSTERS_PER_SAMOSBOR = 10;
 const RANDOM_MAP_MONSTERS_PER_SAMOSBOR = 14;
@@ -247,11 +249,11 @@ export interface SamosborWarningSnapshot {
 export interface SamosborWarningSignals {
   audioLine: string;
   screenLine: string;
-  mapLine: string;
+  hazardLine: string;
   npcLine: string;
   visualLine: string;
   logLine: string;
-  mapCode: string;
+  signalCode: string;
   channels: readonly string[];
   channelLines: readonly string[];
 }
@@ -1257,7 +1259,7 @@ function maronaryGlowSourceCenter(ci: number): { x: number; y: number } {
 }
 
 function forceMaronaryGlowFlee(world: World, e: Entity, sx: number, sy: number): void {
-  if (!e.ai || e.type === EntityType.PLAYER) return;
+  if (!e.ai || isPlayerEntity(e)) return;
   const dx = world.delta(sx, e.x);
   const dy = world.delta(sy, e.y);
   const len = Math.max(0.1, Math.sqrt(dx * dx + dy * dy));
@@ -1272,7 +1274,7 @@ function forceMaronaryGlowFlee(world: World, e: Entity, sx: number, sy: number):
 function applyMaronaryGlowDamage(world: World, state: GameState, e: Entity, amount: number, sx: number, sy: number): number {
   if (!e.alive || e.hp === undefined || amount <= 0) return 0;
   const before = e.hp;
-  if (e.type === EntityType.PLAYER) {
+  if (isPlayerEntity(e)) {
     e.hp = Math.max(1, e.hp - amount);
   } else {
     e.hp = Math.max(0, e.hp - amount);
@@ -1285,7 +1287,7 @@ function applyMaronaryGlowDamage(world: World, state: GameState, e: Entity, amou
   }
   const actual = before - e.hp;
   if (actual <= 0) return 0;
-  if (e.type === EntityType.PLAYER) {
+  if (isPlayerEntity(e)) {
     const maxHp = Math.max(1, e.maxHp ?? 100);
     state.dmgFlash = Math.max(state.dmgFlash, Math.min(1, 0.2 + actual / maxHp));
     state.dmgSeed = (state.dmgSeed + 53) | 0;
@@ -1338,7 +1340,7 @@ function tickMaronaryGlowDamage(
       if (actual <= 0) continue;
       damagedIds.push(e.id);
       hitCount++;
-      if (e.type === EntityType.PLAYER) playerDamage += actual;
+      if (isPlayerEntity(e)) playerDamage += actual;
     }
   }
 
@@ -1454,7 +1456,7 @@ function samosborHudEventName(variant: ActiveSamosborVariant): string {
   return 'САМОСБОР';
 }
 
-function warningMapCode(variant: ActiveSamosborVariant): string {
+function warningSignalCode(variant: ActiveSamosborVariant): string {
   switch (variant.def.id) {
     case 'wet': return 'ВОД';
     case 'electric': return 'ЭЛК';
@@ -1482,16 +1484,16 @@ function ambientDroneModeForVariant(variant: ActiveSamosborVariant): AmbientDron
   return variant.noSiren ? 'samosbor' : 'samosbor';
 }
 
-function warningMapLine(
+function warningHazardLine(
   variant: ActiveSamosborVariant,
   wrongDoorIdx: number,
   shelterCount: number,
 ): string {
-  if (isMaronary(variant) && wrongDoorIdx >= 0) return 'карта: повтор двери; зелёное свечение жжёт';
-  if (isMaronary(variant)) return 'карта: зелёный источник жжёт; держаться в стороне';
-  if (isIstotit(variant) && shelterCount > 0) return `карта: жёлтые укрытия ${shelterCount}; мест мало, список короткий`;
-  if (isVeretar(variant)) return 'карта: белое пятно вместо комнаты';
-  return 'карта: зона риска отмечена; выйти или закрыться';
+  if (isMaronary(variant) && wrongDoorIdx >= 0) return 'опасность: повтор двери; зелёное свечение жжёт';
+  if (isMaronary(variant)) return 'опасность: зелёный источник жжёт; держаться в стороне';
+  if (isIstotit(variant) && shelterCount > 0) return `укрытия: жёлтые комнаты ${shelterCount}; мест мало, список короткий`;
+  if (isVeretar(variant)) return 'опасность: белое пятно вместо комнаты';
+  return 'опасность: зона риска рядом; выйти или закрыться';
 }
 
 function buildWarningSignals(
@@ -1506,25 +1508,25 @@ function buildWarningSignals(
   const screenLine = screenCount > 0
     ? `экраны: ${screenCount} табло мигают; проверь ближайшее`
     : 'экраны: рядом нет табло';
-  const mapLine = warningMapLine(variant, wrongDoorIdx, shelterCount);
+  const hazardLine = warningHazardLine(variant, wrongDoorIdx, shelterCount);
   const npcLine = barkCount > 0
     ? `соседи: ${barkCount} предупреждения; слушай короткие команды`
     : 'соседи: никого рядом';
   const visualLine = screenCount > 0
-    ? `визуал: ${screenCount} табло; ${mapLine}`
-    : `визуал: ${mapLine}`;
-  const channels = ['hud', 'log', 'map'];
+    ? `визуал: ${screenCount} табло; ${hazardLine}`
+    : `визуал: ${hazardLine}`;
+  const channels = ['hud', 'log', 'hazard'];
   if (screenCount > 0) channels.push('screens');
   if (barkCount > 0) channels.push('npc_barks');
   if (!variant.noSiren || variant.def.audioCue) channels.push('audio');
   return {
     audioLine,
     screenLine,
-    mapLine,
+    hazardLine,
     npcLine,
     visualLine,
     logLine: `Предупреждение принято: ${audioLine}; ${visualLine}; ${npcLine}. Решение: ${actionLine}`,
-    mapCode: warningMapCode(variant),
+    signalCode: warningSignalCode(variant),
     channels,
     channelLines: [audioLine, visualLine, npcLine],
   };
@@ -1590,11 +1592,11 @@ function pushWarningBarks(
 ): number {
   let barked = 0;
   let checked = 0;
-  const player = entities.find(e => e.alive && e.type === EntityType.PLAYER);
+  const player = entities.find(e => e.alive && isPlayerEntity(e));
   for (const e of entities) {
     if (barked >= SAMOSBOR_WARNING_BARK_CAP || checked >= 512) break;
     checked++;
-    if (!e.alive || e.type !== EntityType.NPC || !e.name) continue;
+    if (!e.alive || isPlayerEntity(e) || e.type !== EntityType.NPC || !e.name) continue;
     if (world.dist2(zoneX + 0.5, zoneY + 0.5, e.x, e.y) > SAMOSBOR_WARNING_BARK_RADIUS2) continue;
     const line = warningBarkForVariant(variant, e.isFemale === true);
     if (!pushNpcBarkMessage(e, state.msgs, state.time, line, '#fc4', {
@@ -1671,7 +1673,7 @@ function ensureSamosborWarning(
     actionLine,
   );
   const signalMsg = msg(signals.logLine, state.time, variant.def.tint);
-  const signalListener = entities.find(e => e.alive && e.type === EntityType.PLAYER);
+  const signalListener = entities.find(e => e.alive && isPlayerEntity(e));
   signalMsg.floor = state.currentFloor;
   signalMsg.zoneId = zone.id >= 0 ? zone.id : undefined;
   signalMsg.x = zone.cx;
@@ -1736,7 +1738,7 @@ function ensureSamosborWarning(
       signals: {
         audio: signals.audioLine,
         screen: signals.screenLine,
-        map: signals.mapLine,
+        hazard: signals.hazardLine,
         npc: signals.npcLine,
       },
     },
@@ -2000,7 +2002,7 @@ export function updateSamosbor(
       const endedFloor = state.currentFloor;
       const finishLocalPatch = (): void => {
         if (endedWaveStarted) {
-          const replacement = replacementProvider?.() ?? generateFloor(endedFloor);
+          const replacement = replacementProvider?.() ?? generateFloor(endedFloor, ensureFloorRunState(state).runSeed);
           finishSamosborWave(world, entities, state, replacement);
         }
         applyPendingSamosborAftermathAfterWave(world, entities, nextId, endedFloor);
@@ -2127,7 +2129,7 @@ export function rebuildWorld(
     const kept: Entity[] = [];
     for (const e of entities) {
       if (!e.alive) continue;
-      if (e.type === EntityType.PLAYER) {
+      if (isPlayerEntity(e)) {
         kept.push(e);
       }
     }
@@ -2211,7 +2213,7 @@ export function rebuildWorld(
 }
 
 function findPlayer(entities: Entity[]): Entity | undefined {
-  return entities.find(e => e.type === EntityType.PLAYER && e.alive);
+  return entities.find(e => isPlayerEntity(e) && e.alive);
 }
 
 function relocateEntityIfBlocked(world: World, e: Entity): void {
@@ -3105,7 +3107,7 @@ function rewriteActorAsRandomNpc(state: GameState, entity: Entity, variant: Acti
   const rpg = randomRPG(randomNpcLevel());
   const maxHp = getMaxHp(rpg);
   const loadout = randomNpcInventory(faction, rpg.level);
-  const wasPlayer = entity.type === EntityType.PLAYER;
+  const wasPlayer = isPlayerEntity(entity);
   if (entity.type === EntityType.NPC && entity.plotNpcId && entity.alifeId === undefined) {
     recordAlifeNpcDeath(state, entity);
     delete entity.plotNpcId;
@@ -3289,9 +3291,9 @@ function applyMaronaryFogEffectAtCell(
   if (target) {
     targetId = target.id;
     targetName = target.name;
-    if (target.type === EntityType.PLAYER || target.type === EntityType.NPC) {
+    if (isPlayerEntity(target) || target.type === EntityType.NPC) {
       rewriteActorAsRandomNpc(state, target, variant);
-      effect = target.type === EntityType.PLAYER ? 'player_rewritten' : 'npc_rewritten';
+      effect = isPlayerEntity(target) ? 'player_rewritten' : 'npc_rewritten';
       targetName = target.name;
     } else if (target.type === EntityType.MONSTER) {
       rewriteMonsterAsRandom(world, target, floor, samosborCount);
@@ -3370,7 +3372,7 @@ function applyVeretarFogEffectAtCell(
   if (target) {
     targetId = target.id;
     targetName = target.name;
-    if (target.type === EntityType.PLAYER) {
+    if (isPlayerEntity(target)) {
       const damage = Math.max(9999, target.hp ?? target.maxHp ?? 100);
       target.hp = 0;
       target.alive = false;
@@ -3524,9 +3526,9 @@ function applyIstotitFogEffectAtCell(
   let effect = '';
   let targetId: number | undefined;
   let targetName: string | undefined;
-  if (target && (target.type === EntityType.PLAYER || target.type === EntityType.NPC || target.type === EntityType.MONSTER)) {
+  if (target && (isPlayerEntity(target) || target.type === EntityType.NPC || target.type === EntityType.MONSTER)) {
     healActorByIstotit(state, target, variant);
-    effect = target.type === EntityType.MONSTER ? 'monster_healed' : target.type === EntityType.PLAYER ? 'player_healed' : 'npc_healed';
+    effect = target.type === EntityType.MONSTER ? 'monster_healed' : isPlayerEntity(target) ? 'player_healed' : 'npc_healed';
     targetId = target.id;
     targetName = target.name ?? (target.monsterKind !== undefined ? MONSTERS[target.monsterKind]?.name : undefined);
   } else {
@@ -4232,7 +4234,7 @@ function tickRandomEntityTransfer(world: World, entities: Entity[], state: GameS
   const fromY = Math.floor(entity.y);
   moveEntityToCell(entity, ci);
   rebuildEntityIndex(entities, 'manual');
-  if (entity.type === EntityType.PLAYER) {
+  if (isPlayerEntity(entity)) {
     const toX = ci % W;
     const toY = (ci / W) | 0;
     state.msgs.push(msg('Самосбор переставил вас в другую точку карты.', state.time, variant?.def.tint ?? '#f4a'));

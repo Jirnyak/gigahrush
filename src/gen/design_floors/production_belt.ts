@@ -1,3 +1,4 @@
+import { stampSurfaceSplat } from '../../systems/surface_marks';
 import {
   AIGoal,
   Cell,
@@ -619,7 +620,7 @@ function dressMachineIsland(world: World, room: Room, rng: () => number): void {
   setFeature(world, room.x + 3, room.y + room.h - 3, Feature.LAMP);
   setFeature(world, room.x + room.w - 4, room.y + 3, Feature.LAMP);
   if (rng() < 0.55) {
-    world.stamp(room.x + (room.w >> 1), room.y + (room.h >> 1), 0.5, 0.5, 4 + rng() * 4, 0.16, room.id * 8191, 42, 46, 42, false);
+    stampSurfaceSplat(world, room.x + (room.w >> 1), room.y + (room.h >> 1), 0.5, 0.5, 4 + rng() * 4, 0.16, room.id * 8191, 42, 46, 42, false);
   }
 }
 

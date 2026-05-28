@@ -2,13 +2,14 @@
 
 import {
   W, Cell, Feature, RoomType, Faction, ZoneFaction, LiftDirection, FloorLevel,
-  EntityType, MonsterKind, Occupation, AIGoal,
-  type Entity, type GameState, type WorldContainer,
+  EntityType, MonsterKind, Occupation, AIGoal, ItemType,
+  type Entity, type GameState, type ItemDef, type WorldContainer,
   msg,
 } from '../core/types';
 import { World } from '../core/world';
 import { freshNeeds, randomName, ITEMS } from '../data/catalog';
 import { getStack } from '../data/items';
+import { PSI_WEAPON_STATS } from '../data/psi';
 import { getPermitDef, type PermitAccessTag } from '../data/permits';
 import { FACTION_NAMES } from '../data/relations';
 import { MONSTERS, monsterTypeName } from '../entities/monster';
@@ -77,6 +78,7 @@ import { revealWholeMap } from './map_exploration';
 import { getAiSchedulerStats } from './ai';
 import { canSpawnEntityType, entitySpawnSlots } from './entity_limits';
 import { CHALK_ITEM_ID } from './chalk';
+import { isPlayerEntity } from './player_actor';
 
 /* ── Command execution ───────────────────────────────────────── */
 
@@ -147,6 +149,8 @@ let debugFloorInstanceCursor = 0;
 
 type BaseDebugCommandId =
   | 'spawn_all_weapons'
+  | 'spawn_all_psi'
+  | 'spawn_all_tools'
   | 'spawn_monsters'
   | 'spawn_npc'
   | 'spawn_items'
@@ -373,7 +377,7 @@ function countDebugBadPlacements(world: World, player: Entity, entities: Entity[
   const playerBad = world.solid(Math.floor(player.x), Math.floor(player.y)) ? 1 : 0;
   let entityBad = 0;
   for (const e of entities) {
-    if (!e.alive || e.type === EntityType.PLAYER || e.type === EntityType.PROJECTILE || e.phasing) continue;
+    if (!e.alive || isPlayerEntity(e) || e.type === EntityType.PROJECTILE || e.phasing) continue;
     if (world.solid(Math.floor(e.x), Math.floor(e.y))) entityBad++;
   }
   let containerBad = 0;
@@ -1151,6 +1155,89 @@ function spoilDebugPermit(world: World, player: Entity, state: GameState): strin
   return ['нет пропуска для порчи'];
 }
 
+const DEBUG_PSI_CLOT_IDS = new Set(Object.keys(PSI_WEAPON_STATS));
+
+function isDebugPsiClot(id: string): boolean {
+  return DEBUG_PSI_CLOT_IDS.has(id);
+}
+
+function debugItemDrop(def: ItemDef): { defId: string; count: number } {
+  return { defId: def.id, count: getStack(def) };
+}
+
+function debugWeaponAndAmmoDrops(): { defId: string; count: number }[] {
+  const weapons: { defId: string; count: number }[] = [];
+  const ammo: { defId: string; count: number }[] = [];
+  for (const def of Object.values(ITEMS)) {
+    if (def.type === ItemType.WEAPON && !isDebugPsiClot(def.id)) weapons.push(debugItemDrop(def));
+    else if (def.type === ItemType.AMMO) ammo.push(debugItemDrop(def));
+  }
+  return [...weapons, ...ammo];
+}
+
+function debugPsiClotDrops(): { defId: string; count: number }[] {
+  const out: { defId: string; count: number }[] = [];
+  for (const id of Object.keys(PSI_WEAPON_STATS)) {
+    const def = ITEMS[id];
+    if (def) out.push(debugItemDrop(def));
+  }
+  return out;
+}
+
+function debugToolDrops(): { defId: string; count: number }[] {
+  return Object.values(ITEMS)
+    .filter(def => def.type === ItemType.TOOL)
+    .map(debugItemDrop);
+}
+
+function debugOtherItemDrops(): { defId: string; count: number }[] {
+  return Object.values(ITEMS)
+    .filter(def => (
+      def.type !== ItemType.WEAPON
+      && def.type !== ItemType.AMMO
+      && def.type !== ItemType.TOOL
+      && !isDebugPsiClot(def.id)
+    ))
+    .map(debugItemDrop);
+}
+
+function debugItemDropSpot(world: World, player: Entity, index: number): { x: number; y: number } {
+  const angle = player.angle + index * Math.PI * 2;
+  const radius = 2;
+  return {
+    x: world.wrap(player.x + Math.cos(angle) * radius),
+    y: world.wrap(player.y + Math.sin(angle) * radius),
+  };
+}
+
+function spawnDebugItemDropsAroundPlayer(
+  world: World,
+  player: Entity,
+  entities: Entity[],
+  nextEntityId: { v: number },
+  items: readonly { defId: string; count: number }[],
+  label: string,
+): string {
+  const slots = entitySpawnSlots(entities, EntityType.ITEM_DROP, items.length);
+  for (let i = 0; i < slots; i++) {
+    const spot = debugItemDropSpot(world, player, i / Math.max(1, slots));
+    entities.push({
+      id: nextEntityId.v++,
+      type: EntityType.ITEM_DROP,
+      x: spot.x,
+      y: spot.y,
+      angle: 0,
+      pitch: 0,
+      alive: true,
+      speed: 0,
+      sprite: Spr.ITEM_DROP,
+      inventory: [items[i]],
+    });
+  }
+  if (slots >= items.length) return `${label}: разложено ${slots}`;
+  return `${label}: разложено ${slots}/${items.length}, лимит предметов`;
+}
+
 export function execDebugCommand(
   idx: number,
   world: World,
@@ -1176,38 +1263,8 @@ export function execDebugCommand(
   }
 
   switch (execIdx) {
-    case 0: { // All weapons + ammo + PSI spells — spawn as drops around player
-      const allItems: { defId: string; count: number }[] = [
-        // weapons
-        ...['knife', 'wrench', 'pipe', 'rebar', 'axe', 'liquidator_rake', 'makarov', 'shotgun', 'nailgun',
-          'chainsaw', 'ppsh', 'machinegun', 'gauss', 'plasma', 'bfg', 'flamethrower']
-          .map(w => ({ defId: w, count: 1 })),
-        { defId: 'uv_spotlight', count: 1 },
-        { defId: 'grenade', count: 99 },
-        // ammo
-        { defId: 'ammo_9mm', count: 999 },
-        { defId: 'ammo_shells', count: 999 },
-        { defId: 'ammo_nails', count: 999 },
-        { defId: 'ammo_belt', count: 999 },
-        { defId: 'ammo_energy', count: 999 },
-        { defId: 'ammo_fuel', count: 999 },
-        // psi spells
-        ...['psi_strike', 'psi_rupture', 'psi_storm', 'psi_brainburn', 'psi_madness',
-          'psi_control', 'psi_phase', 'psi_mark', 'psi_recall', 'psi_beam']
-          .map(s => ({ defId: s, count: 1 })),
-      ];
-      const slots = entitySpawnSlots(entities, EntityType.ITEM_DROP, allItems.length);
-      for (let i = 0; i < slots; i++) {
-        const ang = (i / allItems.length) * Math.PI * 2;
-        entities.push({
-          id: nextEntityId.v++, type: EntityType.ITEM_DROP,
-          x: player.x + Math.cos(ang) * 2,
-          y: player.y + Math.sin(ang) * 2,
-          angle: 0, pitch: 0, alive: true, speed: 0, sprite: Spr.ITEM_DROP,
-          inventory: [allItems[i]],
-        });
-      }
-      state.msgs.push(msg('Все оружия + сгустки заспавнены', state.time, '#ff0'));
+    case 0: { // All physical weapons + ammo — spawn as drops around player
+      state.msgs.push(msg(`[DEBUG] ${spawnDebugItemDropsAroundPlayer(world, player, entities, nextEntityId, debugWeaponAndAmmoDrops(), 'оружие+патроны')}`, state.time, '#ff0'));
       break;
     }
     case 1: { // Spawn one of each monster nearby
@@ -1260,21 +1317,8 @@ export function execDebugCommand(
       state.msgs.push(msg(`NPC ${nm.name} заспавнен`, state.time, '#ff0'));
       break;
     }
-    case 3: { // Spawn all items nearby
-      const ids = Object.keys(ITEMS);
-      const slots = entitySpawnSlots(entities, EntityType.ITEM_DROP, ids.length);
-      for (let i = 0; i < slots; i++) {
-        const def = ITEMS[ids[i]];
-        const ang = (i / ids.length) * Math.PI * 2;
-        entities.push({
-          id: nextEntityId.v++, type: EntityType.ITEM_DROP,
-          x: player.x + Math.cos(ang) * 2,
-          y: player.y + Math.sin(ang) * 2,
-          angle: 0, pitch: 0, alive: true, speed: 0, sprite: Spr.ITEM_DROP,
-          inventory: [{ defId: def.id, count: getStack(def) }],
-        });
-      }
-      state.msgs.push(msg('Все предметы заспавнены', state.time, '#ff0'));
+    case 3: { // Spawn all non-weapon/non-ammo/non-tool items nearby
+      state.msgs.push(msg(`[DEBUG] ${spawnDebugItemDropsAroundPlayer(world, player, entities, nextEntityId, debugOtherItemDrops(), 'остальные предметы')}`, state.time, '#ff0'));
       break;
     }
     case 4: { // Give 1M XP
@@ -1703,6 +1747,14 @@ export function execDebugCommand(
       state.msgs.push(msg('[DEBUG] мелок заспавнен перед игроком', state.time, '#ff0'));
       break;
     }
+    case 87: {
+      state.msgs.push(msg(`[DEBUG] ${spawnDebugItemDropsAroundPlayer(world, player, entities, nextEntityId, debugPsiClotDrops(), 'ПСИ-сгустки')}`, state.time, '#ff0'));
+      break;
+    }
+    case 88: {
+      state.msgs.push(msg(`[DEBUG] ${spawnDebugItemDropsAroundPlayer(world, player, entities, nextEntityId, debugToolDrops(), 'инструменты')}`, state.time, '#ff0'));
+      break;
+    }
   }
   return null;
 }
@@ -1718,10 +1770,10 @@ const ZONE_FACTION_NAMES: Record<ZoneFaction, string> = {
 };
 
 const BASE_CMD_DEFS = [
-  { id: 'spawn_all_weapons', label: 'Все оружия + сгустки' },
+  { id: 'spawn_all_weapons', label: 'Всё оружие + патроны' },
   { id: 'spawn_monsters', label: 'Спавн монстров' },
   { id: 'spawn_npc', label: 'Спавн NPC' },
-  { id: 'spawn_items', label: 'Спавн предметов' },
+  { id: 'spawn_items', label: 'Все остальные предметы' },
   { id: 'grant_xp', label: '1 000 000 XP' },
   { id: 'cycle_samosbor_variant', label: 'Цикл варианта + самосбор' },
   { id: 'toggle_noclip', label: 'Noclip' },
@@ -1805,10 +1857,15 @@ const BASE_CMD_DEFS = [
   { id: 'debug_chervie_site', label: 'CHERVIE: экранный узел' },
   { id: 'revealmap', label: 'REVEALMAP: открыть всю карту' },
   { id: 'spawn_chalk', label: 'DEBUG: спавн мелка' },
+  { id: 'spawn_all_psi', label: 'Все ПСИ-сгустки' },
+  { id: 'spawn_all_tools', label: 'Все инструменты' },
 ] as const satisfies readonly DebugCommandDef[];
 
 const BASE_CMD_VISUAL_BEFORE_DESIGN = [
   'spawn_all_weapons',
+  'spawn_all_psi',
+  'spawn_all_tools',
+  'spawn_items',
   'grant_xp',
   'toggle_noclip',
   'revealmap',
@@ -1819,7 +1876,6 @@ const BASE_CMD_VISUAL_BEFORE_DESIGN = [
   'spawn_monsters',
   'floor_monster_pack',
   'spawn_npc',
-  'spawn_items',
   'spawn_chalk',
   'spawn_bad_apple_world',
   'debug_samosbor_small_wave',
@@ -2077,7 +2133,7 @@ export function drawDebugOverlay(
   row(`AI LOD: H${ai.hot}/${ai.updatedHot} W${ai.warm}/${ai.updatedWarm} C${ai.cold}/${ai.updatedCold} skip ${ai.skipped}`, '#9cf');
   row(`AI важн: plot ${ai.plot} boss ${ai.bosses} atk ${ai.activeAttackers} dmg ${ai.recentlyDamaged} proj ${ai.projectileOwners}/${ai.projectiles}`, '#9cf');
   for (const line of summarizeFloorRun(state).slice(0, 2)) row(`Этажи: ${line}`, '#8cf');
-  const playerEntity = entities.find(e => e.type === EntityType.PLAYER);
+  const playerEntity = entities.find(e => isPlayerEntity(e));
   for (const line of summarizeRoomMemoryForRoom(state.currentFloor, playerEntity ? currentPlayerRoom(world, playerEntity) : undefined)) row(line, '#dc9');
   for (const line of summarizeProceduralSmog(world, state).slice(0, 2)) row(`Смог: ${line}`, '#b98');
   for (const line of summarizeBadAppleWorld(world).slice(0, 2)) row(`BadApple: ${line}`, '#eee');

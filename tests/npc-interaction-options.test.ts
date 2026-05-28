@@ -8,10 +8,12 @@ import {
   CARD_DECK_ITEM_ID,
   closeNpcInteractionInterface,
   DICE_BONE_ITEM_ID,
+  DOMINO_BOX_ITEM_ID,
   getNpcInteractionInterfaceSnapshot,
   getNpcMenuOptions,
 } from '../src/systems/npc_interaction_options';
 import { getDiceSnapshot } from '../src/systems/dice';
+import { getDominoSnapshot } from '../src/systems/domino';
 import { getDurakSnapshot } from '../src/systems/durak';
 import { makeGameState, makeTestNpc, makeTestPlayer } from './helpers';
 
@@ -52,6 +54,18 @@ test('bone dice are a non-active inventory item for NPC menu affordances', () =>
   assert.ok(def.spawnW > 0);
   assert.ok(def.value > 0);
   assert.ok(def.tags?.includes('gambling'));
+});
+
+test('domino box is a non-active inventory item for NPC menu affordances', () => {
+  const def = ITEMS[DOMINO_BOX_ITEM_ID];
+  assert.ok(def);
+  assert.equal(def.type, ItemType.MISC);
+  assert.equal(typeof def.use, 'undefined');
+  assert.equal(def.name, 'Коробка домино');
+  assert.ok(def.spawnRooms.length > 0);
+  assert.ok(def.spawnW > 0);
+  assert.ok(def.value > 0);
+  assert.ok(def.tags?.includes('domino'));
 });
 
 test('durak NPC menu option requires a card deck on either side and player stake money', () => {
@@ -99,6 +113,31 @@ test('dice NPC menu option requires bone dice on either side and player stake mo
   assert.match(blocked?.disabledReason ?? '', /Нужно ₽10/);
 });
 
+test('domino NPC menu option requires a domino box on either side and player stake money', () => {
+  const state = makeGameState();
+  const player = makeTestPlayer({ money: 10, inventory: [] });
+  const npc = makeTestNpc({ money: 100, inventory: [] });
+
+  assert.equal(optionIds(getNpcMenuOptions({ state, player, npc })).includes('domino'), false);
+
+  player.inventory = [{ defId: DOMINO_BOX_ITEM_ID, count: 1 }];
+  let domino = getNpcMenuOptions({ state, player, npc }).find(option => option.id === 'domino');
+  assert.ok(domino);
+  assert.equal(domino.disabled, false);
+  assert.equal(domino.label, 'Играть в домино (₽10)');
+
+  player.inventory = [];
+  npc.inventory = [{ defId: DOMINO_BOX_ITEM_ID, count: 1 }];
+  domino = getNpcMenuOptions({ state, player, npc }).find(option => option.id === 'domino');
+  assert.ok(domino);
+  assert.equal(domino.disabled, false);
+
+  player.money = 9;
+  const blocked = getNpcMenuOptions({ state, player, npc }).find(option => option.id === 'domino');
+  assert.equal(blocked?.disabled, true);
+  assert.match(blocked?.disabledReason ?? '', /Нужно ₽10/);
+});
+
 test('durak option opens a playable NPC interface without charging money until result', () => {
   closeNpcInteractionInterface();
   const state = makeGameState({ time: 5 });
@@ -136,6 +175,26 @@ test('dice option opens a playable NPC interface without charging money until re
 
   closeNpcInteractionInterface(state);
   assert.equal(getDiceSnapshot().open, false);
+});
+
+test('domino option opens a playable NPC interface without charging money until result', () => {
+  closeNpcInteractionInterface();
+  const state = makeGameState({ time: 5 });
+  const player = makeTestPlayer({ money: 20, inventory: [{ defId: DOMINO_BOX_ITEM_ID, count: 1 }] });
+  const npc = makeTestNpc({ id: 9, name: 'Игрок с домино', money: 100, inventory: [] });
+
+  assert.equal(activateNpcCustomMenuOption({ state, player, npc }, 'domino'), true);
+  const snapshot = getNpcInteractionInterfaceSnapshot();
+  assert.equal(snapshot.open, true);
+  assert.equal(snapshot.id, 'domino');
+  assert.equal(snapshot.npcId, 9);
+  assert.equal(snapshot.stakeRubles, 10);
+  assert.equal(getDominoSnapshot().open, true);
+  assert.equal(player.money, 20);
+  assert.equal(npc.money, 100);
+
+  closeNpcInteractionInterface(state);
+  assert.equal(getDominoSnapshot().open, false);
 });
 
 test('floor 69 entertainment option is route and worker gated', () => {

@@ -17,6 +17,7 @@ import { placeProceduralScreens } from '../procedural_screens';
 import { randomName, freshNeeds } from '../../data/catalog';
 import { KVARTIRY_POPULATION_PROFILE, type NpcPopulationProfile } from '../../data/population_profiles';
 import { sampleNaturalPopulationCells } from '../population_placement';
+import { registerContentRuntimeHook } from '../../systems/content_hooks';
 import { calcZoneLevel, randomRPG, gaussianLevel, getMaxHp } from '../../systems/rpg';
 import { entitySpawnSlots } from '../../systems/entity_limits';
 import { Spr } from '../../render/sprite_index';
@@ -624,6 +625,15 @@ export function updateKvPopulation(
     }
   }
 }
+
+registerContentRuntimeHook({
+  id: 'kvartiry_population_pressure',
+  phases: ['floor_activity'],
+  update(ctx) {
+    if (ctx.state.currentFloor !== FloorLevel.KVARTIRY) return;
+    updateKvPopulation(ctx.world, ctx.entities, ctx.dt, ctx.state);
+  },
+});
 
 /* ── Uprising mechanic ────────────────────────────────────────── */
 function triggerUprising(world: World, entities: Entity[]): void {

@@ -1,8 +1,17 @@
 /* ── AG41 charge cage — production output with container conflict ─ */
 
 import {
-  ContainerKind, Faction, Feature, FloorLevel, MonsterKind, Occupation, QuestType, RoomType, Tex,
-  type Room, type WorldContainer,
+  ContainerKind,
+  Faction,
+  Feature,
+  FloorLevel,
+  MonsterKind,
+  Occupation,
+  QuestType,
+  RoomType,
+  Tex,
+  type Room,
+  type WorldContainer,
 } from '../../core/types';
 import { type PlotNpcDef, registerSideQuest } from '../../data/plot';
 import { placeDoor } from '../shared';

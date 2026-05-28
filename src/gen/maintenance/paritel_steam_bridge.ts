@@ -1,5 +1,6 @@
 /* -- AG110 Paritel steam bridge: valve-count visibility combat -- */
 
+import { stampSurfaceSplat } from '../../systems/surface_marks';
 import {
   AIGoal, Cell, EntityType, Feature, FloorLevel, MonsterKind, RoomType, Tex, W,
   msg,
@@ -7,6 +8,7 @@ import {
 } from '../../core/types';
 import { type World } from '../../core/world';
 import { MONSTERS } from '../../entities/monster';
+import { registerContentInteractionHook, registerContentRuntimeHook } from '../../systems/content_hooks';
 import { publishEvent } from '../../systems/events';
 import { randomRPG, scaleMonsterHp, scaleMonsterSpeed } from '../../systems/rpg';
 import {
@@ -168,7 +170,7 @@ function applySteamLayout(world: World, room: Room, pressure: number): void {
     const hot = i < pressure;
     const cx = room.x + jet.x;
     const cy = room.y + jet.y1;
-    world.stamp(cx, cy, 0.5, 0.45, hot ? 0.34 : 0.22, hot ? 96 : 44, 9110 + room.id * 17 + i, hot ? 150 : 80, hot ? 130 : 105, hot ? 95 : 110);
+    stampSurfaceSplat(world, cx, cy, 0.5, 0.45, hot ? 0.34 : 0.22, hot ? 96 : 44, 9110 + room.id * 17 + i, hot ? 150 : 80, hot ? 130 : 105, hot ? 95 : 110);
   }
 
   if (dirty) world.markFogDirty();
@@ -488,3 +490,32 @@ export function generateParitelSteamBridge(ctx: MaintContentCtx): void {
   spawnBridgeMonster(ctx, MonsterKind.LAMPOVY, room.x + 18, room.y + 8, THREAT_NAME);
   spawnBridgeMonster(ctx, MonsterKind.TUBE_EEL, room.x + 26, room.y + 13);
 }
+
+registerContentInteractionHook({
+  id: 'maint_paritel_steam_bridge',
+  target(ctx) {
+    if (!isParitelSteamValveTarget(ctx.world, ctx.lookX, ctx.lookY)) return null;
+    const idx = ctx.world.idx(Math.floor(ctx.lookX), Math.floor(ctx.lookY));
+    return {
+      id: idx + 450000,
+      targetId: 'paritel_steam_valve',
+      x: idx % W,
+      y: (idx / W) | 0,
+      priority: 70,
+      prompt: ' вентиль',
+    };
+  },
+  use(ctx) {
+    return tryUseParitelSteamBridge(ctx.world, ctx.player, ctx.state, ctx.lookX, ctx.lookY)
+      ? { handled: true }
+      : undefined;
+  },
+});
+
+registerContentRuntimeHook({
+  id: 'maint_paritel_steam_bridge',
+  phases: ['post_ai'],
+  update(ctx) {
+    updateParitelSteamBridge(ctx.world, ctx.entities, ctx.player, ctx.state, ctx.dt);
+  },
+});

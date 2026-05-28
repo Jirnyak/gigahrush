@@ -2,7 +2,7 @@
 
 import {
   type Entity, type GameState, type Quest, EntityType, Cell, RoomType, W, QuestType,
-  LiftDirection, MonsterKind, Faction, FloorLevel, ZoneFaction,
+  LiftDirection, MonsterKind, FloorLevel,
 } from '../core/types';
 import { SURFACE_FLAG_CHALK_MAP, World } from '../core/world';
 import {
@@ -12,25 +12,12 @@ import {
   resolveQuestTargetRoom,
 } from '../systems/contracts';
 import { npcQuestMarkerState } from '../systems/quests';
-import { areFactionsHostile, getFactionUiSnapshot, type FactionUiSnapshot } from '../systems/factions';
-import { getActiveSamosborVariant } from '../data/samosbor_variants';
-import { getSamosborShelterRoomIds, getSamosborWarningSnapshot } from '../systems/samosbor';
-import { getRecentRumorLead } from '../systems/npc_memory';
-import { getWrongDoorMapCues, wrongDoorCueActionLabel, wrongDoorCueSecondsLeft } from '../systems/wrong_door';
-import { getActiveCultProcessionSnapshots } from '../systems/faction_events';
-import {
-  SEROBURMALINE_ROOM_PREFIX,
-  forSeroburmalineSourceCells,
-  seroburmalineSourceCellState,
-} from '../systems/seroburmaline';
-import { getRouteCueMapReveals, type RouteCueMapReveal } from '../systems/route_cues';
-import { getNearestSmallCaravan } from '../systems/caravans';
+import { isHostile } from '../systems/factions';
 import { ENTITY_MASK_VISIBLE, getEntityIndex } from '../systems/entity_index';
 import { isMapCellExplored } from '../systems/map_exploration';
-import { getBlackHandMarkCells } from './marks';
-import { fitText as fitMapText } from './ui_text';
+import { FRIENDLY_RELATION_THRESHOLD, getNpcPlayerRelation } from '../systems/npc_relations';
 import { type UiRect } from './ui_layout';
-import { uiElementEnabled } from '../systems/ui_orchestrator';
+import { isPlayerEntity } from '../systems/player_actor';
 
 const MAP_SIZE = 80;
 type QuestKind = 'plot' | 'side' | 'system';
@@ -47,13 +34,14 @@ const MAP_FULL_ENTITY_DOT_BUDGET = 900;
 const MAP_ENTITY_QUERY_BUDGET_MULT = 3;
 const MAP_CROWD_BIN_HASH_CAP = 2048;
 const MAP_CROWD_EMPTY_KEY = -1;
-const MAP_CROWD_GROUP_NPC = 0;
-const MAP_CROWD_GROUP_HOSTILE_NPC = 1;
-const MAP_CROWD_GROUP_MONSTER = 2;
-const MAP_CROWD_GROUP_ITEM = 3;
-const MAP_AUTHORED_IDLE_NPC_MARKER = { stroke: '#064225', fill: '#35d072', text: '#91ffb4' };
-const MAP_AUTHORED_ACTIVE_NPC_MARKER = { stroke: '#8a5c00', fill: '#ffd21f', text: '#ffe06a' };
-const MAP_PROCEDURAL_NPC_MARKER = { stroke: '#04375c', fill: '#49b8ff', text: '#80d8ff' };
+const MAP_CROWD_GROUP_FRIENDLY_NPC = 0;
+const MAP_CROWD_GROUP_NEUTRAL_NPC = 1;
+const MAP_CROWD_GROUP_HOSTILE_NPC = 2;
+const MAP_CROWD_GROUP_MONSTER = 3;
+const MAP_CROWD_GROUP_ITEM = 4;
+const MAP_AUTHORED_IDLE_NPC_MARKER = { stroke: '#064225', fill: '#35d072' };
+const MAP_AUTHORED_ACTIVE_NPC_MARKER = { stroke: '#8a5c00', fill: '#ffd21f' };
+const MAP_PROCEDURAL_NPC_MARKER = { stroke: '#04375c', fill: '#49b8ff' };
 const MAP_UNEXPLORED_FADE_RADIUS = 3;
 const mapCrowdHashKeys = new Int32Array(MAP_CROWD_BIN_HASH_CAP);
 const mapCrowdHashBins = new Int16Array(MAP_CROWD_BIN_HASH_CAP);
@@ -61,6 +49,7 @@ const mapCrowdX = new Float32Array(MAP_FULL_ENTITY_DOT_BUDGET);
 const mapCrowdY = new Float32Array(MAP_FULL_ENTITY_DOT_BUDGET);
 const mapCrowdTotal = new Uint16Array(MAP_FULL_ENTITY_DOT_BUDGET);
 const mapCrowdNpc = new Uint16Array(MAP_FULL_ENTITY_DOT_BUDGET);
+const mapCrowdNeutralNpc = new Uint16Array(MAP_FULL_ENTITY_DOT_BUDGET);
 const mapCrowdHostileNpc = new Uint16Array(MAP_FULL_ENTITY_DOT_BUDGET);
 const mapCrowdMonster = new Uint16Array(MAP_FULL_ENTITY_DOT_BUDGET);
 const mapCrowdItem = new Uint16Array(MAP_FULL_ENTITY_DOT_BUDGET);
@@ -84,26 +73,12 @@ const mapLiftUp: number[] = [];
 const mapLiftQuest: number[] = [];
 
 const QUEST_KIND_PRIORITY: Record<QuestKind, number> = { plot: 3, side: 2, system: 1 };
-const QUEST_MARKERS: Record<QuestKind, { label: string; stroke: string; fill: string; text: string }> = {
-  plot: { label: 'СЮЖ', stroke: '#0b5570', fill: '#6cf', text: '#9df' },
-  side: { label: 'БОК', stroke: '#704060', fill: '#f7a7d8', text: '#f7a7d8' },
-  system: { label: 'СИСТ', stroke: '#76631a', fill: '#ffd35f', text: '#ffd35f' },
+const QUEST_MARKERS: Record<QuestKind, { stroke: string; fill: string }> = {
+  plot: { stroke: '#0b5570', fill: '#6cf' },
+  side: { stroke: '#704060', fill: '#f7a7d8' },
+  system: { stroke: '#76631a', fill: '#ffd35f' },
 };
-const FACTION_RGB: Record<ZoneFaction, [number, number, number]> = {
-  [ZoneFaction.CITIZEN]: [74, 190, 145],
-  [ZoneFaction.LIQUIDATOR]: [91, 158, 238],
-  [ZoneFaction.CULTIST]: [188, 89, 255],
-  [ZoneFaction.SAMOSBOR]: [230, 78, 92],
-  [ZoneFaction.WILD]: [224, 167, 69],
-};
-
-const FACTION_SHORT: Record<ZoneFaction, string> = {
-  [ZoneFaction.CITIZEN]: 'ГР',
-  [ZoneFaction.LIQUIDATOR]: 'ЛК',
-  [ZoneFaction.CULTIST]: 'КЛ',
-  [ZoneFaction.SAMOSBOR]: 'СБ',
-  [ZoneFaction.WILD]: 'ДК',
-};
+const MAP_FOG_RGB = [80, 20, 120] as const;
 
 function routeFloor(q: Quest): FloorLevel | undefined {
   return questRouteFloor(q);
@@ -143,6 +118,7 @@ function mapCrowdBinForKey(key: number): number {
       mapCrowdY[bin] = 0;
       mapCrowdTotal[bin] = 0;
       mapCrowdNpc[bin] = 0;
+      mapCrowdNeutralNpc[bin] = 0;
       mapCrowdHostileNpc[bin] = 0;
       mapCrowdMonster[bin] = 0;
       mapCrowdItem[bin] = 0;
@@ -153,14 +129,16 @@ function mapCrowdBinForKey(key: number): number {
   return -1;
 }
 
-function mapEntityCrowdGroup(e: Entity): number {
+function mapEntityCrowdGroup(e: Entity, player: Entity): number {
   if (e.type === EntityType.MONSTER) return MAP_CROWD_GROUP_MONSTER;
   if (e.type === EntityType.ITEM_DROP || e.type === EntityType.PROJECTILE) return MAP_CROWD_GROUP_ITEM;
   if (e.type === EntityType.BILLBOARD) return -1;
-  if (e.type === EntityType.NPC && e.faction !== undefined && areFactionsHostile(Faction.PLAYER, e.faction)) {
-    return MAP_CROWD_GROUP_HOSTILE_NPC;
+  if (e.type !== EntityType.NPC) return -1;
+  if (isHostile(e, player)) return MAP_CROWD_GROUP_HOSTILE_NPC;
+  if (getNpcPlayerRelation(e) < FRIENDLY_RELATION_THRESHOLD) {
+    return MAP_CROWD_GROUP_NEUTRAL_NPC;
   }
-  return MAP_CROWD_GROUP_NPC;
+  return MAP_CROWD_GROUP_FRIENDLY_NPC;
 }
 
 function addMapCrowdDot(x: number, y: number, key: number, group: number): void {
@@ -171,6 +149,7 @@ function addMapCrowdDot(x: number, y: number, key: number, group: number): void 
   mapCrowdTotal[bin]++;
   if (group === MAP_CROWD_GROUP_MONSTER) mapCrowdMonster[bin]++;
   else if (group === MAP_CROWD_GROUP_HOSTILE_NPC) mapCrowdHostileNpc[bin]++;
+  else if (group === MAP_CROWD_GROUP_NEUTRAL_NPC) mapCrowdNeutralNpc[bin]++;
   else if (group === MAP_CROWD_GROUP_ITEM) mapCrowdItem[bin]++;
   else mapCrowdNpc[bin]++;
 }
@@ -178,7 +157,8 @@ function addMapCrowdDot(x: number, y: number, key: number, group: number): void 
 function mapCrowdColor(bin: number): string {
   if (mapCrowdMonster[bin] > 0) return '#e33';
   if (mapCrowdHostileNpc[bin] > 0) return '#e44';
-  if (mapCrowdNpc[bin] > 0) return '#4af';
+  if (mapCrowdNeutralNpc[bin] > 0) return '#fc4';
+  if (mapCrowdNpc[bin] > 0) return '#35d072';
   return '#dd4';
 }
 
@@ -273,14 +253,6 @@ function drawQuestMarker(ctx: CanvasRenderingContext2D, x: number, y: number, sz
   drawQuestDiamond(ctx, x, y, sz, sw, marker.stroke, marker.fill);
 }
 
-function tintFactionColorPacked(cr: number, cg: number, cb: number, faction: ZoneFaction, amount: number): number {
-  const [fr, fg, fb] = FACTION_RGB[faction];
-  const r = Math.round(cr * (1 - amount) + fr * amount);
-  const g = Math.round(cg * (1 - amount) + fg * amount);
-  const b = Math.round(cb * (1 - amount) + fb * amount);
-  return (r << 16) | (g << 8) | b;
-}
-
 function wrapMapCoord(v: number): number {
   return ((v % W) + W) % W;
 }
@@ -355,11 +327,6 @@ function mapRasterBufferFor(ctx: CanvasRenderingContext2D, width: number, height
   return buffer;
 }
 
-function samosborShelterRoom(roomId: number, shelterRoomIds: readonly number[]): boolean {
-  for (let i = 0; i < shelterRoomIds.length; i++) if (shelterRoomIds[i] === roomId) return true;
-  return false;
-}
-
 function recordMapLiftMarker(x: number, y: number, isUp: boolean, isQuestLift: boolean): void {
   mapLiftX.push(x);
   mapLiftY.push(y);
@@ -406,11 +373,6 @@ function drawMapBaseRaster(
   radius: number,
   cellW: number,
   cellH: number,
-  fogR: number,
-  fogG: number,
-  fogB: number,
-  shelterRoomIds: readonly number[],
-  factionZones: FactionUiSnapshot['zoneById'] | undefined,
   questLiftDir: LiftDirection | undefined,
 ): void {
   const cols = radius * 2;
@@ -511,30 +473,12 @@ function drawMapBaseRaster(
             cb = 68;
           }
 
-          const factionZone = factionZones?.[world.zoneMap[ci]];
-          if (factionZone) {
-            let packedTint = tintFactionColorPacked(cr, cg, cb, factionZone.owner, factionZone.contested ? 0.34 : 0.2);
-            cr = (packedTint >> 16) & 255;
-            cg = (packedTint >> 8) & 255;
-            cb = packedTint & 255;
-            if (factionZone.contested && ((wx + wy) & 7) < 3) {
-              packedTint = tintFactionColorPacked(cr, cg, cb, factionZone.dominant, 0.34);
-              cr = (packedTint >> 16) & 255;
-              cg = (packedTint >> 8) & 255;
-              cb = packedTint & 255;
-            }
-          }
-
           if (world.fog[ci] > 50) {
             const f = world.fog[ci] / 255;
+            const [fogR, fogG, fogB] = MAP_FOG_RGB;
             cr = Math.round(cr * (1 - f) + fogR * f);
             cg = Math.round(cg * (1 - f) + fogG * f);
             cb = Math.round(cb * (1 - f) + fogB * f);
-          }
-          if (rid >= 0 && samosborShelterRoom(rid, shelterRoomIds)) {
-            cr = Math.round(cr * 0.55 + 212 * 0.45);
-            cg = Math.round(cg * 0.55 + 166 * 0.45);
-            cb = Math.round(cb * 0.55 + 72 * 0.45);
           }
         }
       }
@@ -553,87 +497,6 @@ function drawMapBaseRaster(
   ctx.drawImage(buffer.canvas, mapX, mapY, mapW, mapH);
   ctx.imageSmoothingEnabled = smoothing;
   ctx.restore();
-}
-
-function drawSamosborShelterCellOutlines(
-  ctx: CanvasRenderingContext2D,
-  world: World,
-  pxI: number,
-  pyI: number,
-  mapX: number,
-  mapY: number,
-  radius: number,
-  cellW: number,
-  cellH: number,
-  shelterRoomIds: readonly number[],
-): void {
-  if (shelterRoomIds.length === 0) return;
-  const cols = radius * 2;
-  const exploredGridW = mapExploredGridW;
-  const exploredGridPad = MAP_UNEXPLORED_FADE_RADIUS;
-  const startX = pxI - radius;
-  const startY = pyI - radius;
-  ctx.save();
-  ctx.strokeStyle = '#d6a64b';
-  ctx.lineWidth = Math.max(1, Math.min(2, cellW));
-  for (let gy = 0; gy < cols; gy++) {
-    const wy = wrapMapCoord(startY + gy);
-    const row = wy * W;
-    for (let gx = 0; gx < cols; gx++) {
-      const gridX = gx + exploredGridPad;
-      const gridY = gy + exploredGridPad;
-      if (!mapExploredGrid[gridY * exploredGridW + gridX]) continue;
-      const wx = wrapMapCoord(startX + gx);
-      const ci = row + wx;
-      const cell = world.cells[ci];
-      if (cell === Cell.WALL || cell === Cell.ABYSS || cell === Cell.LIFT || cell === Cell.WATER) continue;
-      const rid = world.roomMap[ci];
-      if (rid < 0 || !samosborShelterRoom(rid, shelterRoomIds)) continue;
-      ctx.strokeRect(mapX + gx * cellW, mapY + gy * cellH, cellW + 0.5, cellH + 0.5);
-    }
-  }
-  ctx.restore();
-}
-
-function drawSeroburmalineMapSources(
-  ctx: CanvasRenderingContext2D,
-  world: World,
-  currentFloor: FloorLevel | undefined,
-  uiTime: number,
-  pxI: number,
-  pyI: number,
-  mapX: number,
-  mapY: number,
-  radius: number,
-  cellW: number,
-  cellH: number,
-): void {
-  if (currentFloor !== FloorLevel.MAINTENANCE) return;
-  for (const room of world.rooms) {
-    if (!room || !room.name.startsWith(SEROBURMALINE_ROOM_PREFIX)) continue;
-    forSeroburmalineSourceCells(world, room, (x, y) => {
-      const sourceState = seroburmalineSourceCellState(world, x, y);
-      if (!sourceState) return;
-      const ci = world.idx(x, y);
-      if (!isMapCellExplored(world, ci)) return;
-      const dx = world.delta(pxI, x);
-      const dy = world.delta(pyI, y);
-      if (Math.abs(dx) > radius || Math.abs(dy) > radius) return;
-      const sx0 = mapX + (dx + radius + 0.5) * cellW;
-      const sy0 = mapY + (dy + radius + 0.5) * cellH;
-      const pulse = sourceState === 'active' ? 0.6 + 0.28 * Math.sin(uiTime * 8) : 0.35;
-      ctx.save();
-      ctx.globalAlpha = sourceState === 'active' ? 0.62 + pulse * 0.25 : 0.42;
-      ctx.strokeStyle = sourceState === 'active' ? '#d58aa8' : '#8a8f88';
-      ctx.fillStyle = sourceState === 'active' ? '#563046' : '#4b504c';
-      ctx.lineWidth = Math.max(1, Math.min(2, cellW * 0.8));
-      ctx.beginPath();
-      ctx.arc(sx0, sy0, Math.max(3, Math.min(8, Math.max(cellW, cellH) * 2.2)), 0, Math.PI * 2);
-      ctx.fill();
-      ctx.stroke();
-      ctx.restore();
-    });
-  }
 }
 
 function drawMapRoomQuestMarkers(
@@ -664,266 +527,6 @@ function drawMapRoomQuestMarkers(
     drawQuestMarker(ctx, mapX + (dx + radius) * cellW, mapY + (dy + radius) * cellH, 5, 3, markerKind);
     drawnTargetRooms.add(room.id);
   }
-}
-
-function eventColor(severity: number): string {
-  return severity >= 5 ? '#f35' : severity >= 4 ? '#fa4' : severity >= 3 ? '#fc6' : '#8cf';
-}
-
-function compactFactionEventLabel(event: FactionUiSnapshot['recentEvents'][number]): string {
-  const name = event.name || String(event.type);
-  if (!name.startsWith('Толпа: ')) return name;
-  const place = name.slice('Толпа: '.length)
-    .replace('Пункт выдачи талонов', 'пайки')
-    .replace('Водораздача у стояка', 'вода')
-    .replace('Коммунальная кухня раздора', 'кухня')
-    .replace('Баррикадированный пролёт', 'барр.')
-    .replace('Нелегальная типография', 'печать');
-  return `ТОЛПА ${place}`;
-}
-
-function drawSamosborWarningRisk(
-  ctx: CanvasRenderingContext2D,
-  world: World,
-  state: GameState | undefined,
-  currentFloor: FloorLevel | undefined,
-  uiTime: number,
-  pxI: number,
-  pyI: number,
-  mapX: number,
-  mapY: number,
-  mapW: number,
-  mapH: number,
-  radius: number,
-  cellW: number,
-  cellH: number,
-): void {
-  if (!state || !uiElementEnabled('caravan_hints')) return;
-  const warning = getSamosborWarningSnapshot(state);
-  if (!warning || warning.floor !== currentFloor) return;
-  const dx = world.delta(pxI, warning.zoneX);
-  const dy = world.delta(pyI, warning.zoneY);
-  const innerRadius = Math.max(1, radius - 1);
-  const inView = Math.abs(dx) <= radius && Math.abs(dy) <= radius;
-  const markerDx = inView ? dx : Math.max(-innerRadius, Math.min(innerRadius, dx));
-  const markerDy = inView ? dy : Math.max(-innerRadius, Math.min(innerRadius, dy));
-
-  const x = mapX + (markerDx + radius) * cellW;
-  const y = mapY + (markerDy + radius) * cellH;
-  const pulse = 0.55 + 0.35 * Math.sin(uiTime * 8);
-  const riskR = Math.max(6, Math.min(20, Math.max(cellW, cellH) * (inView ? 11 : 13)));
-
-  ctx.save();
-  ctx.globalAlpha = 0.28 + pulse * 0.24;
-  ctx.fillStyle = warning.tint;
-  ctx.strokeStyle = warning.tint;
-  ctx.lineWidth = Math.max(1, Math.min(3, cellW * 2));
-  if (!inView) {
-    const angle = Math.atan2(dy, dx);
-    ctx.save();
-    ctx.translate(x, y);
-    ctx.rotate(angle);
-    ctx.beginPath();
-    ctx.moveTo(riskR + 3, 0);
-    ctx.lineTo(-riskR * 0.55, -riskR * 0.62);
-    ctx.lineTo(-riskR * 0.28, 0);
-    ctx.lineTo(-riskR * 0.55, riskR * 0.62);
-    ctx.closePath();
-    ctx.fill();
-    ctx.globalAlpha = 0.95;
-    ctx.stroke();
-    ctx.restore();
-  } else if (warning.variantId === 'istotit') {
-    ctx.fillRect(x - riskR, y - riskR, riskR * 2, riskR * 2);
-    ctx.globalAlpha = 0.82;
-    ctx.strokeRect(x - riskR - 2, y - riskR - 2, riskR * 2 + 4, riskR * 2 + 4);
-    ctx.beginPath();
-    ctx.moveTo(x - riskR, y);
-    ctx.lineTo(x + riskR, y);
-    ctx.moveTo(x, y - riskR);
-    ctx.lineTo(x, y + riskR);
-    ctx.stroke();
-  } else if (warning.variantId === 'veretar') {
-    ctx.beginPath();
-    ctx.moveTo(x, y - riskR - 3);
-    ctx.lineTo(x + riskR + 3, y);
-    ctx.lineTo(x, y + riskR + 3);
-    ctx.lineTo(x - riskR - 3, y);
-    ctx.closePath();
-    ctx.fill();
-    ctx.globalAlpha = 0.88;
-    ctx.stroke();
-    ctx.beginPath();
-    ctx.moveTo(x - riskR, y - riskR);
-    ctx.lineTo(x + riskR, y + riskR);
-    ctx.moveTo(x + riskR, y - riskR);
-    ctx.lineTo(x - riskR, y + riskR);
-    ctx.stroke();
-  } else {
-    ctx.beginPath();
-    ctx.arc(x, y, riskR, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.globalAlpha = 0.78;
-    if (warning.variantId === 'maronary') {
-      ctx.strokeRect(x - riskR * 0.75, y - riskR, riskR * 1.5, riskR * 2);
-      ctx.strokeRect(x - riskR * 0.48, y - riskR * 0.64, riskR * 0.96, riskR * 1.28);
-    } else {
-      ctx.beginPath();
-      ctx.arc(x, y, riskR + 2, 0, Math.PI * 2);
-      ctx.stroke();
-    }
-    ctx.beginPath();
-    ctx.moveTo(x - riskR - 3, y);
-    ctx.lineTo(x + riskR + 3, y);
-    ctx.moveTo(x, y - riskR - 3);
-    ctx.lineTo(x, y + riskR + 3);
-    ctx.stroke();
-  }
-  if (warning.variantId === 'maronary' && warning.wrongDoorX !== undefined && warning.wrongDoorY !== undefined) {
-    const ddx = world.delta(pxI, warning.wrongDoorX);
-    const ddy = world.delta(pyI, warning.wrongDoorY);
-    if (Math.abs(ddx) <= radius && Math.abs(ddy) <= radius) {
-      const doorX = mapX + (ddx + radius) * cellW;
-      const doorY = mapY + (ddy + radius) * cellH;
-      const markerW = Math.max(5, Math.min(12, cellW * 7));
-      const markerH = Math.max(7, Math.min(16, cellH * 10));
-      ctx.globalAlpha = 0.9;
-      ctx.strokeStyle = '#35ff66';
-      ctx.lineWidth = Math.max(1, Math.min(2, cellW * 1.5));
-      ctx.strokeRect(doorX - markerW * 0.5, doorY - markerH * 0.5, markerW, markerH);
-      ctx.beginPath();
-      ctx.moveTo(doorX - markerW * 0.3, doorY);
-      ctx.lineTo(doorX + markerW * 0.3, doorY);
-      ctx.stroke();
-    }
-  }
-  if (mapW > 140 && mapH > 120) {
-    ctx.globalAlpha = 0.85;
-    const panelW = Math.min(158, Math.max(82, mapW * 0.28));
-    const panelH = 29;
-    const panelX = Math.max(mapX + 4, Math.min(mapX + mapW - panelW - 4, x + riskR + 4));
-    const panelY = Math.max(mapY + 4, Math.min(mapY + mapH - panelH - 4, y - 13));
-    ctx.fillStyle = warning.variantId === 'veretar' ? 'rgba(22,22,20,0.82)' : 'rgba(8,8,12,0.78)';
-    ctx.fillRect(panelX, panelY, panelW, panelH);
-    ctx.strokeStyle = warning.tint;
-    ctx.lineWidth = 1;
-    ctx.strokeRect(panelX + 0.5, panelY + 0.5, panelW - 1, panelH - 1);
-    ctx.fillStyle = warning.variantId === 'veretar' ? '#f4f1df' : '#ffd36a';
-    ctx.font = '8px monospace';
-    ctx.fillText(`${warning.signals.mapCode} ${warning.secondsLeft}s${inView ? '' : ' ->'}`, panelX + 4, panelY + 9);
-    ctx.fillStyle = '#ddd';
-    ctx.font = '7px monospace';
-    ctx.fillText(fitMapText(ctx, warning.signals.audioLine, panelW - 8), panelX + 4, panelY + 18);
-    ctx.fillText(fitMapText(ctx, warning.signals.mapLine, panelW - 8), panelX + 4, panelY + 26);
-  }
-  ctx.restore();
-}
-
-function drawCultProcessionOverlays(
-  ctx: CanvasRenderingContext2D,
-  world: World,
-  state: GameState | undefined,
-  currentFloor: FloorLevel | undefined,
-  uiTime: number,
-  pxI: number,
-  pyI: number,
-  mapX: number,
-  mapY: number,
-  mapW: number,
-  mapH: number,
-  radius: number,
-  cellW: number,
-  cellH: number,
-): void {
-  if (!state || currentFloor === undefined) return;
-  for (const p of getActiveCultProcessionSnapshots(state)) {
-    if (p.floor !== currentFloor) continue;
-    const dx = world.delta(pxI, Math.floor(p.x));
-    const dy = world.delta(pyI, Math.floor(p.y));
-    if (Math.abs(dx) > radius || Math.abs(dy) > radius) continue;
-
-    const x = mapX + (dx + radius) * cellW;
-    const y = mapY + (dy + radius) * cellH;
-    const pulse = 0.5 + 0.35 * Math.sin(uiTime * 7 + p.id);
-    const fearR = Math.max(5, Math.min(22, Math.max(cellW, cellH) * p.fearRadius));
-    const actionR = Math.max(3, Math.min(12, Math.max(cellW, cellH) * p.actionRadius));
-    const color = p.disrupted ? '#fa0' : p.reported ? '#8cf' : p.disguised ? '#c8f' : '#b45cff';
-    const label = p.disrupted ? 'СОРВ'
-      : p.reported ? 'ДОН'
-      : p.disguised ? 'ЗНАК'
-      : p.followed ? 'ХВОСТ'
-      : p.avoided ? 'ОБХ'
-      : 'КУЛЬТ';
-
-    ctx.save();
-    ctx.globalAlpha = 0.12 + pulse * 0.12;
-    ctx.fillStyle = color;
-    ctx.beginPath();
-    ctx.arc(x, y, fearR, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.globalAlpha = 0.7;
-    ctx.strokeStyle = color;
-    ctx.lineWidth = Math.max(1, Math.min(3, cellW * 2));
-    ctx.beginPath();
-    ctx.arc(x, y, actionR, 0, Math.PI * 2);
-    ctx.stroke();
-    ctx.beginPath();
-    ctx.moveTo(x - actionR - 2, y);
-    ctx.lineTo(x + actionR + 2, y);
-    ctx.moveTo(x, y - actionR - 2);
-    ctx.lineTo(x, y + actionR + 2);
-    ctx.stroke();
-    if (mapW > 140 && mapH > 120) {
-      ctx.globalAlpha = 0.9;
-      ctx.fillStyle = color;
-      ctx.font = '8px monospace';
-      ctx.fillText(`${label} ${Math.ceil(p.expiresIn)}s`, x + actionR + 4, y - 4);
-    }
-    ctx.restore();
-  }
-}
-
-function drawBlackHandMarks(
-  ctx: CanvasRenderingContext2D,
-  world: World,
-  pxI: number,
-  pyI: number,
-  mapX: number,
-  mapY: number,
-  radius: number,
-  cellW: number,
-  cellH: number,
-): void {
-  const marks = getBlackHandMarkCells(world);
-  if (marks.length === 0) return;
-  const size = Math.max(2, Math.min(7, Math.max(cellW, cellH) * 2.2));
-
-  ctx.save();
-  ctx.lineWidth = Math.max(1, Math.min(2, size * 0.28));
-  for (const mark of marks) {
-    const dx = world.delta(pxI, mark.x);
-    const dy = world.delta(pyI, mark.y);
-    if (Math.abs(dx) > radius || Math.abs(dy) > radius) continue;
-    if (!isMapCellExplored(world, world.idx(mark.x, mark.y))) continue;
-
-    const x = mapX + (dx + radius + 0.5) * cellW;
-    const y = mapY + (dy + radius + 0.5) * cellH;
-    ctx.globalAlpha = 0.82;
-    ctx.fillStyle = '#050404';
-    ctx.strokeStyle = '#b33';
-    ctx.beginPath();
-    ctx.arc(x, y + size * 0.12, size * 0.45, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.stroke();
-    ctx.beginPath();
-    for (let i = -1; i <= 2; i++) {
-      const fx = x + i * size * 0.18;
-      ctx.moveTo(fx, y - size * 0.72);
-      ctx.lineTo(fx, y - size * 0.08);
-    }
-    ctx.stroke();
-  }
-  ctx.restore();
 }
 
 interface SurfaceMapCellMarker {
@@ -1023,352 +626,6 @@ function drawSurfaceMapMarks(
   ctx.restore();
 }
 
-function drawFactionZoneMarkers(
-  ctx: CanvasRenderingContext2D,
-  world: World,
-  snapshot: FactionUiSnapshot | undefined,
-  currentFloor: FloorLevel | undefined,
-  pxI: number,
-  pyI: number,
-  mapX: number,
-  mapY: number,
-  mapW: number,
-  mapH: number,
-  radius: number,
-  cellW: number,
-  cellH: number,
-  uiTime: number,
-): void {
-  if (!snapshot || snapshot.floor !== currentFloor) return;
-  const showText = mapW > 140 && mapH > 120;
-  ctx.save();
-  ctx.font = showText ? '8px monospace' : '6px monospace';
-  ctx.textBaseline = 'middle';
-  for (const zone of snapshot.zones) {
-    const dx = world.delta(pxI, zone.x);
-    const dy = world.delta(pyI, zone.y);
-    if (Math.abs(dx) > radius || Math.abs(dy) > radius) continue;
-
-    const x = mapX + (dx + radius + 0.5) * cellW;
-    const y = mapY + (dy + radius + 0.5) * cellH;
-    const [or, og, ob] = FACTION_RGB[zone.owner];
-    const pulse = zone.contested ? 0.55 + 0.35 * Math.sin(uiTime * 6 + zone.zoneId) : 0.55;
-    const markerR = Math.max(3, Math.min(showText ? 7 : 4, Math.max(cellW, cellH) * (zone.contested ? 3.2 : 2.2)));
-
-    ctx.globalAlpha = zone.contested ? 0.72 + pulse * 0.2 : 0.72;
-    ctx.strokeStyle = `rgb(${or},${og},${ob})`;
-    ctx.lineWidth = zone.contested ? 2 : 1;
-    ctx.beginPath();
-    ctx.arc(x, y, markerR, 0, Math.PI * 2);
-    ctx.stroke();
-    if (zone.contested) {
-      const [dr, dg, db] = FACTION_RGB[zone.dominant];
-      ctx.fillStyle = `rgba(${dr},${dg},${db},0.45)`;
-      ctx.fillRect(x - markerR * 0.65, y - markerR * 0.65, markerR * 1.3, markerR * 1.3);
-    }
-
-    if (!showText) continue;
-    const text = zone.contested
-      ? `${FACTION_SHORT[zone.owner]}/${FACTION_SHORT[zone.dominant]} ${Math.round(zone.pressure * 100)}%`
-      : `${FACTION_SHORT[zone.owner]} ${zone.zoneId + 1}`;
-    const label = fitMapText(ctx, text, 64);
-    const tw = ctx.measureText(label).width;
-    const lx = x + markerR + 3;
-    const ly = y - 1;
-    ctx.globalAlpha = 0.82;
-    ctx.fillStyle = 'rgba(0,0,0,0.62)';
-    ctx.fillRect(lx - 2, ly - 6, tw + 4, 11);
-    ctx.globalAlpha = 0.95;
-    ctx.fillStyle = zone.contested ? '#ffd36a' : `rgb(${or},${og},${ob})`;
-    ctx.fillText(label, lx, ly);
-  }
-  ctx.restore();
-}
-
-function drawFactionEventMarkers(
-  ctx: CanvasRenderingContext2D,
-  world: World,
-  snapshot: FactionUiSnapshot | undefined,
-  currentFloor: FloorLevel | undefined,
-  pxI: number,
-  pyI: number,
-  mapX: number,
-  mapY: number,
-  mapW: number,
-  mapH: number,
-  radius: number,
-  cellW: number,
-  cellH: number,
-  uiTime: number,
-): void {
-  if (!snapshot) return;
-  const showText = mapW > 140 && mapH > 120;
-  ctx.save();
-  ctx.font = '8px monospace';
-  ctx.textBaseline = 'middle';
-  for (const event of snapshot.recentEvents) {
-    if (event.floor !== currentFloor) continue;
-    const dx = world.delta(pxI, Math.floor(event.x));
-    const dy = world.delta(pyI, Math.floor(event.y));
-    if (Math.abs(dx) > radius || Math.abs(dy) > radius) continue;
-
-    const x = mapX + (dx + radius + 0.5) * cellW;
-    const y = mapY + (dy + radius + 0.5) * cellH;
-    const color = eventColor(event.severity);
-    const age = Math.max(0, snapshot.time - event.time);
-    const pulse = 0.45 + 0.35 * Math.sin(uiTime * 8 + event.id);
-    const isCrowdPressure = event.name.startsWith('Толпа: ');
-    const r = Math.max(4, Math.min(10, Math.max(cellW, cellH) * (4 + event.severity)));
-
-    ctx.globalAlpha = Math.max(0.35, 0.9 - age / 180) + pulse * 0.08;
-    ctx.strokeStyle = color;
-    ctx.lineWidth = Math.max(1, Math.min(3, cellW * 2));
-    if (isCrowdPressure) {
-      ctx.beginPath();
-      ctx.arc(x, y, r * 0.9, 0, Math.PI * 2);
-      ctx.stroke();
-      ctx.globalAlpha = 0.42;
-      ctx.beginPath();
-      ctx.arc(x, y, r * 1.45, 0, Math.PI * 2);
-      ctx.stroke();
-      ctx.globalAlpha = 0.5;
-      ctx.fillStyle = color;
-      ctx.fillRect(x - r * 0.45, y - r * 0.45, r * 0.9, r * 0.9);
-    } else {
-      ctx.beginPath();
-      ctx.moveTo(x, y - r);
-      ctx.lineTo(x + r, y);
-      ctx.lineTo(x, y + r);
-      ctx.lineTo(x - r, y);
-      ctx.closePath();
-      ctx.stroke();
-      ctx.globalAlpha = 0.5;
-      ctx.fillStyle = color;
-      ctx.fill();
-    }
-
-    if (!showText) continue;
-    const name = compactFactionEventLabel(event);
-    const phase = event.phase === 'aftermath' ? ' итог' : event.phase === 'start' ? ' старт' : '';
-    const label = fitMapText(ctx, `${name}${isCrowdPressure ? '' : phase}`, isCrowdPressure ? 88 : 120);
-    const tw = ctx.measureText(label).width;
-    ctx.globalAlpha = 0.82;
-    ctx.fillStyle = 'rgba(0,0,0,0.66)';
-    ctx.fillRect(x + r + 2, y - 6, tw + 5, 11);
-    ctx.globalAlpha = 0.95;
-    ctx.fillStyle = color;
-    ctx.fillText(label, x + r + 4, y);
-  }
-  ctx.restore();
-}
-
-function drawWrongDoorCues(
-  ctx: CanvasRenderingContext2D,
-  world: World,
-  state: GameState | undefined,
-  uiTime: number,
-  pxI: number,
-  pyI: number,
-  mapX: number,
-  mapY: number,
-  radius: number,
-  cellW: number,
-  cellH: number,
-): void {
-  const cues = getWrongDoorMapCues(world, state);
-  if (cues.length === 0) return;
-
-  ctx.save();
-  ctx.strokeStyle = '#35ff66';
-  ctx.fillStyle = '#35ff66';
-  ctx.lineWidth = Math.max(1, Math.min(3, cellW * 2));
-  for (const cue of cues) {
-    const sdx = world.delta(pxI, cue.sourceX);
-    const sdy = world.delta(pyI, cue.sourceY);
-    if (Math.abs(sdx) > radius || Math.abs(sdy) > radius) continue;
-
-    const tdx = world.delta(pxI, cue.targetX);
-    const tdy = world.delta(pyI, cue.targetY);
-    const targetVisible = Math.abs(tdx) <= radius && Math.abs(tdy) <= radius;
-    const clampedDx = Math.max(-radius + 1, Math.min(radius - 1, tdx));
-    const clampedDy = Math.max(-radius + 1, Math.min(radius - 1, tdy));
-    const sx = mapX + (sdx + radius + 0.5) * cellW;
-    const sy = mapY + (sdy + radius + 0.5) * cellH;
-    const tx = mapX + ((targetVisible ? tdx : clampedDx) + radius + 0.5) * cellW;
-    const ty = mapY + ((targetVisible ? tdy : clampedDy) + radius + 0.5) * cellH;
-    const pulse = 0.55 + 0.35 * Math.sin(uiTime * 9 + cue.id);
-
-    ctx.globalAlpha = 0.35 + pulse * 0.35;
-    ctx.setLineDash([Math.max(3, cellW * 2), Math.max(2, cellW)]);
-    ctx.beginPath();
-    ctx.moveTo(sx, sy);
-    ctx.lineTo(tx, ty);
-    ctx.stroke();
-    ctx.setLineDash([]);
-    ctx.globalAlpha = 0.82;
-    ctx.strokeRect(sx - 4, sy - 4, 8, 8);
-    ctx.fillRect(sx - 1.5, sy - 1.5, 3, 3);
-    if (targetVisible) {
-      ctx.beginPath();
-      ctx.arc(tx, ty, 4, 0, Math.PI * 2);
-      ctx.stroke();
-    }
-    if (mapX >= 0 && cellW > 0 && cellH > 0) {
-      const secondsLeft = wrongDoorCueSecondsLeft(cue, state?.time ?? uiTime);
-      const label = wrongDoorCueActionLabel(cue, state?.time ?? uiTime);
-      if (secondsLeft > 0) {
-        ctx.globalAlpha = 0.9;
-        ctx.font = '7px monospace';
-        ctx.fillStyle = '#35ff66';
-        ctx.fillText(fitMapText(ctx, `${label} ${secondsLeft}s`, 68), sx + 6, sy - 5);
-      }
-      if (targetVisible) {
-        ctx.globalAlpha = 0.78;
-        ctx.fillStyle = '#fc4';
-        ctx.fillText('РИСК', tx + 5, ty + 8);
-      }
-    }
-  }
-  ctx.restore();
-}
-
-function drawCartographerRevealMarker(
-  ctx: CanvasRenderingContext2D,
-  reveal: RouteCueMapReveal,
-  x: number,
-  y: number,
-  uiTime: number,
-  cellW: number,
-  cellH: number,
-): void {
-  const pulse = 0.55 + 0.35 * Math.sin(uiTime * 7 + reveal.id.length);
-  const size = Math.max(4, Math.min(12, Math.max(cellW, cellH) * 5));
-  ctx.strokeStyle = reveal.color;
-  ctx.fillStyle = reveal.color;
-  ctx.lineWidth = Math.max(1, Math.min(3, cellW * 1.8));
-  ctx.globalAlpha = 0.55 + pulse * 0.28;
-
-  if (reveal.kind === 'contract_target') {
-    drawQuestDiamond(ctx, x, y, size * 0.72, size * 0.5, '#542', reveal.color);
-    return;
-  }
-
-  if (reveal.kind === 'shelter_mark') {
-    ctx.strokeRect(x - size * 0.55, y - size * 0.55, size * 1.1, size * 1.1);
-    ctx.beginPath();
-    ctx.moveTo(x - size * 0.35, y);
-    ctx.lineTo(x + size * 0.35, y);
-    ctx.moveTo(x, y - size * 0.35);
-    ctx.lineTo(x, y + size * 0.35);
-    ctx.stroke();
-    return;
-  }
-
-  ctx.beginPath();
-  ctx.arc(x, y, size * (reveal.kind === 'zone_danger' ? 0.9 : 0.55), 0, Math.PI * 2);
-  ctx.stroke();
-  ctx.beginPath();
-  ctx.moveTo(x - size, y);
-  ctx.lineTo(x + size, y);
-  ctx.moveTo(x, y - size);
-  ctx.lineTo(x, y + size);
-  ctx.stroke();
-}
-
-function drawCartographerMapReveals(
-  ctx: CanvasRenderingContext2D,
-  world: World,
-  state: GameState | undefined,
-  currentFloor: FloorLevel | undefined,
-  uiTime: number,
-  pxI: number,
-  pyI: number,
-  mapX: number,
-  mapY: number,
-  mapW: number,
-  mapH: number,
-  radius: number,
-  cellW: number,
-  cellH: number,
-): void {
-  if (!state || currentFloor === undefined) return;
-  const reveals = getRouteCueMapReveals(world, state);
-  if (reveals.length === 0) return;
-
-  ctx.save();
-  ctx.font = '8px monospace';
-  for (const reveal of reveals) {
-    if (reveal.floor !== currentFloor || reveal.x === undefined || reveal.y === undefined) continue;
-    const dx = world.delta(pxI, Math.floor(reveal.x));
-    const dy = world.delta(pyI, Math.floor(reveal.y));
-    if (Math.abs(dx) > radius || Math.abs(dy) > radius) continue;
-
-    const x = mapX + (dx + radius + 0.5) * cellW;
-    const y = mapY + (dy + radius + 0.5) * cellH;
-    drawCartographerRevealMarker(ctx, reveal, x, y, uiTime, cellW, cellH);
-    if (mapW > 140 && mapH > 120) {
-      ctx.globalAlpha = 0.88;
-      ctx.fillStyle = reveal.color;
-      ctx.fillText(fitMapText(ctx, reveal.label, 74), x + 6, y - 5);
-    }
-  }
-  ctx.restore();
-}
-
-function drawSmallCaravanMapMarker(
-  ctx: CanvasRenderingContext2D,
-  world: World,
-  state: GameState | undefined,
-  player: Entity,
-  pxI: number,
-  pyI: number,
-  mapX: number,
-  mapY: number,
-  mapW: number,
-  mapH: number,
-  radius: number,
-  cellW: number,
-  cellH: number,
-): void {
-  if (!state) return;
-  const caravan = getNearestSmallCaravan(state, world, player, radius * 1.35);
-  if (!caravan) return;
-  const dx = world.delta(pxI, Math.floor(caravan.x));
-  const dy = world.delta(pyI, Math.floor(caravan.y));
-  if (Math.abs(dx) > radius || Math.abs(dy) > radius) return;
-  const x = mapX + (dx + radius + 0.5) * cellW;
-  const y = mapY + (dy + radius + 0.5) * cellH;
-  const size = Math.max(4, Math.min(8, Math.max(cellW, cellH) * 2.2));
-
-  ctx.save();
-  ctx.strokeStyle = caravan.color;
-  ctx.fillStyle = '#111812';
-  ctx.lineWidth = 2;
-  ctx.beginPath();
-  ctx.moveTo(x, y - size);
-  ctx.lineTo(x + size, y);
-  ctx.lineTo(x, y + size);
-  ctx.lineTo(x - size, y);
-  ctx.closePath();
-  ctx.fill();
-  ctx.stroke();
-  ctx.fillStyle = caravan.color;
-  ctx.fillRect(x - 1.5, y - 1.5, 3, 3);
-  if (mapW > 140 && mapH > 120) {
-    ctx.font = '7px monospace';
-    ctx.fillText(fitMapText(ctx, `КАР ${caravan.statusText}`, 80), x + 7, y - 5);
-  }
-  ctx.restore();
-}
-
-function latestCartographerReveal(reveals: readonly RouteCueMapReveal[]): RouteCueMapReveal | undefined {
-  let best: RouteCueMapReveal | undefined;
-  for (const reveal of reveals) {
-    if (!best || reveal.expiresAt > best.expiresAt) best = reveal;
-  }
-  return best;
-}
-
 /* ── 64 unique zone colors (HSL-based palette) ─────────────── */
 export const ZONE_COLORS: [number, number, number][] = [];
 for (let i = 0; i < 64; i++) {
@@ -1402,7 +659,6 @@ function drawMap(
   quests?: Quest[],
   currentFloor?: FloorLevel,
   state?: GameState,
-  uiTime = state?.time ?? 0,
 ): void {
   ctx.fillStyle = `rgba(0,0,0,${bgAlpha})`;
   ctx.fillRect(mapX, mapY, mapW, mapH);
@@ -1412,12 +668,7 @@ function drawMap(
   const cellW = mapW / (radius * 2);
   const cellH = mapH / (radius * 2);
   prepareMapExploredGrid(world, pxI, pyI, radius);
-  const activeVariant = getActiveSamosborVariant();
   const questLiftDir = activeVisitLiftDirection(quests, currentFloor, state);
-  const [fogR, fogG, fogB] = activeVariant?.fogColor ?? [80, 20, 120];
-  const shelterRoomIds = getSamosborShelterRoomIds(state);
-  const factionSnapshot = getFactionUiSnapshot();
-  const factionZones = factionSnapshot && factionSnapshot.floor === currentFloor ? factionSnapshot.zoneById : undefined;
   drawnTargetRooms.clear();
   if (quests) {
     clearActiveQuestMarkers();
@@ -1447,20 +698,9 @@ function drawMap(
     clearActiveQuestMarkers();
   }
 
-  drawMapBaseRaster(ctx, world, pxI, pyI, mapX, mapY, mapW, mapH, radius, cellW, cellH, fogR, fogG, fogB, shelterRoomIds, factionZones, questLiftDir);
-  drawSamosborShelterCellOutlines(ctx, world, pxI, pyI, mapX, mapY, radius, cellW, cellH, shelterRoomIds);
-  drawSeroburmalineMapSources(ctx, world, currentFloor, uiTime, pxI, pyI, mapX, mapY, radius, cellW, cellH);
+  drawMapBaseRaster(ctx, world, pxI, pyI, mapX, mapY, mapW, mapH, radius, cellW, cellH, questLiftDir);
   drawMapRoomQuestMarkers(ctx, world, pxI, pyI, mapX, mapY, radius, cellW, cellH);
-
-  drawSamosborWarningRisk(ctx, world, state, currentFloor, uiTime, pxI, pyI, mapX, mapY, mapW, mapH, radius, cellW, cellH);
-  drawWrongDoorCues(ctx, world, state, uiTime, pxI, pyI, mapX, mapY, radius, cellW, cellH);
-  drawCultProcessionOverlays(ctx, world, state, currentFloor, uiTime, pxI, pyI, mapX, mapY, mapW, mapH, radius, cellW, cellH);
-  drawBlackHandMarks(ctx, world, pxI, pyI, mapX, mapY, radius, cellW, cellH);
   drawSurfaceMapMarks(ctx, world, pxI, pyI, mapX, mapY, radius, cellW, cellH);
-  drawCartographerMapReveals(ctx, world, state, currentFloor, uiTime, pxI, pyI, mapX, mapY, mapW, mapH, radius, cellW, cellH);
-  drawSmallCaravanMapMarker(ctx, world, state, player, pxI, pyI, mapX, mapY, mapW, mapH, radius, cellW, cellH);
-  drawFactionZoneMarkers(ctx, world, factionSnapshot, currentFloor, pxI, pyI, mapX, mapY, mapW, mapH, radius, cellW, cellH, uiTime);
-  drawFactionEventMarkers(ctx, world, factionSnapshot, currentFloor, pxI, pyI, mapX, mapY, mapW, mapH, radius, cellW, cellH, uiTime);
 
   // Entities: bounded local query, then screen-bin compression for dense crowds.
   const entityDotBudget = mapEntityDotBudget(mapW, mapH, radius);
@@ -1475,7 +715,7 @@ function drawMap(
   );
   resetMapCrowdBins(entityDotBudget);
   for (const e of mapEntityQuery) {
-    if (!e.alive || e.type === EntityType.PLAYER) continue;
+    if (!e.alive || isPlayerEntity(e)) continue;
     const eCell = world.idx(Math.floor(e.x), Math.floor(e.y));
     if (!isMapCellExplored(world, eCell)) continue;
     const edx = world.delta(pxI, Math.floor(e.x));
@@ -1486,7 +726,7 @@ function drawMap(
     const esy = mapY + (edy + radius) * cellH;
     const bx = Math.floor((esx - mapX) / crowdBinPx);
     const by = Math.floor((esy - mapY) / crowdBinPx);
-    const group = mapEntityCrowdGroup(e);
+    const group = mapEntityCrowdGroup(e, player);
     if (group >= 0) addMapCrowdDot(esx, esy, by * 2048 + bx, group);
   }
   drawMapCrowdBins(ctx, mapW, mapH);
@@ -1501,25 +741,6 @@ function drawMap(
 
     const esx = mapX + (edx + radius) * cellW;
     const esy = mapY + (edy + radius) * cellH;
-    const maronaryResidue = e.type === EntityType.ITEM_DROP && e.inventory?.some(slot => slot.defId === 'maronary_shaving') === true;
-    if (maronaryResidue) {
-      const pulse = 0.55 + 0.35 * Math.sin(uiTime * 8 + e.id);
-      ctx.save();
-      ctx.globalAlpha = 0.68 + pulse * 0.22;
-      ctx.strokeStyle = '#35ff66';
-      ctx.fillStyle = '#fc4';
-      ctx.lineWidth = Math.max(1, Math.min(2, cellW * 1.5));
-      ctx.beginPath();
-      ctx.arc(esx, esy, Math.max(4, Math.min(9, Math.max(cellW, cellH) * 3.4)), 0, Math.PI * 2);
-      ctx.stroke();
-      ctx.fillRect(esx - 1.5, esy - 1.5, 3, 3);
-      if (mapW > 140 && mapH > 120) {
-        ctx.font = '7px monospace';
-        ctx.fillStyle = '#fc4';
-        ctx.fillText('СТРУЖКА', esx + 6, esy - 5);
-      }
-      ctx.restore();
-    }
     if (
       activeFetchItems.size > 0 &&
       e.inventory
@@ -1552,11 +773,6 @@ function drawMap(
       const qsy = mapY + (edy + radius) * cellH;
       const sz = 6, sw = 4;
       drawQuestDiamond(ctx, qsx, qsy, sz, sw, markerStyle.stroke, markerStyle.fill);
-      if (markerState.showExclamation && mapW > 140 && mapH > 120) {
-        ctx.fillStyle = markerStyle.text;
-        ctx.font = 'bold 8px monospace';
-        ctx.fillText('!', qsx + 5, qsy - 5);
-      }
     }
     // VISIT quest markers (room targets)
     for (const q of quests) {
@@ -1616,46 +832,30 @@ function drawMap(
 export function drawMinimap(
   ctx: CanvasRenderingContext2D,
   world: World, entities: Entity[], player: Entity,
-  sx: number, sy: number, quests?: Quest[], _floorInstanceLabel?: string, currentFloor?: FloorLevel, state?: GameState, uiTime = state?.time ?? 0,
+  sx: number, sy: number, quests?: Quest[], _floorInstanceLabel?: string, currentFloor?: FloorLevel, state?: GameState, _uiTime = state?.time ?? 0,
   rect?: UiRect,
 ): void {
   const mw = rect?.w ?? MAP_SIZE * sx;
   const mh = rect?.h ?? MAP_SIZE * sy;
   const mx = rect?.x ?? ctx.canvas.width - mw - 4 * sx;
   const my = rect?.y ?? 4 * sy;
-  drawMap(ctx, world, entities, player, sx, sy, mx, my, mw, mh, 40, 0.75, quests, currentFloor, state, uiTime);
+  drawMap(ctx, world, entities, player, sx, sy, mx, my, mw, mh, 40, 0.75, quests, currentFloor, state);
 }
 
 /* ── Full world map (fullscreen) ─────────────────────────────── */
 export function drawFullMap(
   ctx: CanvasRenderingContext2D,
   world: World, entities: Entity[], player: Entity,
-  sx: number, sy: number, quests?: Quest[], _floorInstanceLabel?: string, currentFloor?: FloorLevel, state?: GameState, uiTime = state?.time ?? 0,
+  sx: number, sy: number, quests?: Quest[], _floorInstanceLabel?: string, currentFloor?: FloorLevel, state?: GameState, _uiTime = state?.time ?? 0,
 ): void {
   const cw = ctx.canvas.width;
   const ch = ctx.canvas.height;
   const pad = 4 * sx;
   const mapW = cw - pad * 2;
   const mapH = ch - pad * 2;
-  drawMap(ctx, world, entities, player, sx, sy, pad, pad, mapW, mapH, 200, 0.85, quests, currentFloor, state, uiTime);
+  drawMap(ctx, world, entities, player, sx, sy, pad, pad, mapW, mapH, 200, 0.85, quests, currentFloor, state);
 
   ctx.fillStyle = '#666';
   ctx.font = `${8 * sy}px monospace`;
-  const rumorLead = state ? getRecentRumorLead(state.time) : undefined;
-  const cartographerLead = state ? latestCartographerReveal(getRouteCueMapReveals(world, state)) : undefined;
-  if (cartographerLead) {
-    ctx.fillStyle = cartographerLead.color;
-    ctx.fillText(
-      fitMapText(ctx, `Карта: ${cartographerLead.label} - ${cartographerLead.hint}`, mapW - 16 * sx),
-      pad + 4,
-      pad + mapH - 24 * sy,
-    );
-    ctx.fillStyle = '#666';
-  }
-  if (rumorLead) {
-    ctx.fillStyle = '#d9a';
-    ctx.fillText(fitMapText(ctx, `Слух: ${rumorLead.text}`, mapW - 16 * sx), pad + 4, pad + mapH - 14 * sy);
-    ctx.fillStyle = '#666';
-  }
   ctx.fillText('[M] закрыть', pad + 4, pad + mapH - 4);
 }

@@ -1,7 +1,12 @@
 /* ── Volatile maze — destroyed and rebuilt every samosbor ─────── */
 
 import {
-  W, Cell, Tex, RoomType, Feature, LiftDirection,
+  W,
+  Cell,
+  Tex,
+  RoomType,
+  Feature,
+  LiftDirection,
   type Room,
 } from '../../core/types';
 import { World } from '../../core/world';

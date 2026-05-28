@@ -2,6 +2,7 @@
 /* Finite quarantine slice: triage desk, sealed ward, med archive, */
 /* locked/secret medical containers, triage choices and outcomes.  */
 
+import { stampSurfaceSplat } from '../../systems/surface_marks';
 import {
   AIGoal, Cell, ContainerKind, DoorState, EntityType, Faction, Feature,
   FloorLevel, MonsterKind, Occupation, QuestType, RoomType, Tex,
@@ -531,7 +532,7 @@ function pushOutbreakMonster(world: World, entities: Entity[], nextId: { v: numb
     monsterKind: MonsterKind.ZOMBIE, attackCd: 0,
     ai: { goal: AIGoal.WANDER, tx: x, ty: y, path: [], pi: 0, stuck: 0, timer: 0 },
   });
-  world.stamp(x, y, 0.5, 0.5, 6, 0.45, 17017, 72, 90, 68, false);
+  stampSurfaceSplat(world, x, y, 0.5, 0.5, 6, 0.45, 17017, 72, 90, 68, false);
 }
 
 function pushHeadSlugHost(world: World, entities: Entity[], nextId: { v: number }, x: number, y: number): void {
@@ -549,7 +550,7 @@ function pushHeadSlugHost(world: World, entities: Entity[], nextId: { v: number 
     attackCd: 0,
     ai: { goal: AIGoal.WANDER, tx: x, ty: y, path: [], pi: 0, stuck: 0, timer: 0 },
   });
-  world.stamp(x, y, 0.5, 0.5, 4, 0.35, 17019, 112, 62, 76, false);
+  stampSurfaceSplat(world, x, y, 0.5, 0.5, 4, 0.35, 17019, 112, 62, 76, false);
 }
 
 function addHospitalContainer(

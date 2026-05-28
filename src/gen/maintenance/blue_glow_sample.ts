@@ -1,13 +1,22 @@
 /* ── AG68 blue glow sample — sealed science trade with risk ───── */
 
 import {
-  ContainerKind, Faction, Feature, FloorLevel, Occupation, QuestType, RoomType, Tex,
-  type Room, type WorldContainer, type WorldEvent,
+  ContainerKind,
+  Faction,
+  Feature,
+  FloorLevel,
+  Occupation,
+  QuestType,
+  RoomType,
+  Tex,
+  type Room,
+  type WorldContainer,
+  type WorldEvent,
 } from '../../core/types';
 import { type PlotNpcDef, registerSideQuest } from '../../data/plot';
 import { changeResourceStock } from '../../systems/economy';
 import { publishEvent, registerWorldEventObserver } from '../../systems/events';
-import { MarkType, stampMark } from '../../render/marks';
+import { MarkType, stampMark } from '../../systems/surface_marks';
 import {
   type MaintContentCtx, dropItems, findMaintArea, setFeature,
   spawnPlotNpc, stampMaintRoom,

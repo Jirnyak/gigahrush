@@ -10,6 +10,7 @@ import {
   chervieNetPowered,
   panelnikWallBraceActive,
 } from './monster_traits';
+import { isPlayerEntity } from './player_actor';
 
 export const ZAKALENNAYA_ARMATURA_ARMOR_STACKS = 3;
 
@@ -123,7 +124,7 @@ function publishArmorStripEvent(
     monsterKind: monster.monsterKind,
     itemId: input.weaponId,
     severity: result.armorStacks <= 0 ? 4 : 3,
-    privacy: input.attacker?.type === EntityType.PLAYER ? 'local' : 'witnessed',
+    privacy: isPlayerEntity(input.attacker) ? 'local' : 'witnessed',
     tags: ['monster', 'zakalennaya_armatura', 'armor_strip', result.hitKind],
     data: {
       armorStacks: result.armorStacks,
@@ -179,7 +180,7 @@ function applyPanelnikWallBraceHit(
       monsterKind: MonsterKind.PANELNIK,
       itemId: input.weaponId,
       severity: 3,
-      privacy: input.attacker?.type === EntityType.PLAYER ? 'local' : 'witnessed',
+      privacy: isPlayerEntity(input.attacker) ? 'local' : 'witnessed',
       tags: ['monster', 'panelnik', 'wall_brace', 'armor'],
       data: {
         rawDamage,

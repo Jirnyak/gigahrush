@@ -1,12 +1,22 @@
 /* ── Monster_09 Pressovik — production-line timing room ──────── */
 
 import {
-  ContainerKind, Faction, Feature, FloorLevel, MonsterKind, Occupation, QuestType, RoomType, Tex,
+  ContainerKind,
+  Faction,
+  Feature,
+  FloorLevel,
+  MonsterKind,
+  Occupation,
+  QuestType,
+  RoomType,
+  Tex,
   msg,
-  type Room, type WorldContainer, type WorldEvent,
+  type Room,
+  type WorldContainer,
+  type WorldEvent,
 } from '../../core/types';
 import { type PlotNpcDef, registerSideQuest } from '../../data/plot';
-import { MarkType, stampMark } from '../../render/marks';
+import { MarkType, stampMark } from '../../systems/surface_marks';
 import { registerCellHazardSite, cleanCellHazardsNear } from '../../systems/cell_hazards';
 import { publishEvent, registerWorldEventObserver } from '../../systems/events';
 import { placeDoor } from '../shared';

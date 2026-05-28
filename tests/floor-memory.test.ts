@@ -80,7 +80,8 @@ test('floor memory restores live world and keeps only persistent floor entities'
   const surface = new Uint8Array([1, 2, 3, 4]);
   world.surfaceMap.set(world.idx(12, 13), surface);
 
-  const player = entity(1, EntityType.PLAYER);
+  const player = entity(1, EntityType.NPC);
+  player.persistentNpcId = 'player';
   const npc = entity(2, EntityType.NPC);
   const projectile = entity(3, EntityType.PROJECTILE);
   assert.equal(captureFloorMemory(' route:test ', world, [player, npc, projectile], 12.5, 13.5, 90, 2), true);

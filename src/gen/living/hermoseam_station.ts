@@ -1,5 +1,6 @@
 /* ── Герметичный шов — Living tactical monster room ──────────── */
 
+import { stampSurfaceSplat } from '../../systems/surface_marks';
 import {
   AIGoal, Cell, EntityType, Feature, MonsterKind, RoomType, Tex,
   type Entity, type Room,
@@ -165,8 +166,8 @@ function generateHermoseamStation(
     setFeature(world, x, y, feature);
   }
   world.wallTex[world.idx(rx + Math.floor(ROOM_W / 2), ry - 1)] = Tex.SCREEN_BASE + 9;
-  world.stamp(rx + 3, midY, 0.5, 0.5, 4, 0.5, 35035, 82, 82, 82, false);
-  world.stamp(rx + ROOM_W - 4, midY, 0.5, 0.5, 4, 0.45, 35036, 140, 118, 54, false);
+  stampSurfaceSplat(world, rx + 3, midY, 0.5, 0.5, 4, 0.5, 35035, 82, 82, 82, false);
+  stampSurfaceSplat(world, rx + ROOM_W - 4, midY, 0.5, 0.5, 4, 0.45, 35036, 140, 118, 54, false);
 
   addDrop(entities, nextId, rx + 5, ry + ROOM_H - 2, 'hermo_gasket');
   addDrop(entities, nextId, rx + 6, ry + ROOM_H - 2, 'sealant_tube');

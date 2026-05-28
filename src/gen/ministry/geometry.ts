@@ -4,7 +4,12 @@
  */
 
 import {
-  W, Cell, Tex, RoomType, Feature, DoorState,
+  W,
+  Cell,
+  Tex,
+  RoomType,
+  Feature,
+  DoorState,
   type Room,
 } from '../../core/types';
 import { World } from '../../core/world';

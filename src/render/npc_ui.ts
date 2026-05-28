@@ -5,6 +5,7 @@ import { ITEMS } from '../data/catalog';
 import { FACTION_NAMES, OCCUPATION_NAMES } from '../data/relations';
 import { controlBindingLabel, controlHint } from '../systems/controls';
 import { getDiceSnapshot } from '../systems/dice';
+import { getDominoSnapshot } from '../systems/domino';
 import { getDurakSnapshot } from '../systems/durak';
 import {
   getNpcInteractionInterfaceSnapshot,
@@ -17,6 +18,7 @@ import { dialogMenuScale, tradeGridScale } from './ui_layout';
 import { drawCenteredWrappedText, drawWrappedText, fitText } from './ui_text';
 import { drawDurakInterface } from './durak_ui';
 import { drawDiceInterface } from './dice_ui';
+import { drawDominoInterface } from './domino_ui';
 import {
   questItemStateColor,
   questItemStateLabel,
@@ -150,6 +152,11 @@ export function drawNpcMenu(
     const dice = getDiceSnapshot();
     if (dice.open && dice.npcId === npc.id) {
       drawDiceInterface(ctx, dice, px, py, pw, ph, sx, sy, time);
+      return;
+    }
+    const domino = getDominoSnapshot();
+    if (domino.open && domino.npcId === npc.id) {
+      drawDominoInterface(ctx, domino, px, py, pw, ph, sx, sy, time);
       return;
     }
     const snapshot = getNpcInteractionInterfaceSnapshot();

@@ -3,6 +3,7 @@
  * uses generic camp grammar, not copied Everlasting Summer names.
  */
 
+import { stampSurfaceSplat } from '../../systems/surface_marks';
 import {
   AIGoal,
   Cell,
@@ -291,7 +292,7 @@ export function expandPioneerCampFullFloor(world: World, rng: () => number): voi
     const ci = world.idx(x, y);
     if (mask[ci] || world.cells[ci] !== Cell.WALL) continue;
     world.wallTex[ci] = rng() < 0.6 ? Tex.ROTTEN : Tex.PANEL;
-    if (rng() < 0.35) world.stamp(x, y, 0.5, 0.5, 0.8, 0.16, 4100 + i, 42, 88, 52, true);
+    if (rng() < 0.35) stampSurfaceSplat(world, x, y, 0.5, 0.5, 0.8, 0.16, 4100 + i, 42, 88, 52, true);
   }
 
   for (let i = 0; i < 44; i++) {
@@ -478,7 +479,7 @@ function decorateCampCore(world: World, rooms: CampRooms): void {
   setFeature(world, rooms.oldCabin.x + 4, rooms.oldCabin.y + 4, Feature.BED);
   setFeature(world, rooms.oldCabin.x + 11, rooms.oldCabin.y + 8, Feature.SHELF);
   setFeature(world, rooms.oldCabin.x + rooms.oldCabin.w - 6, rooms.oldCabin.y + rooms.oldCabin.h - 5, Feature.CANDLE);
-  world.stamp(rooms.oldCabin.x + 18, rooms.oldCabin.y + 11, 0.5, 0.5, 3.2, 0.42, 7001, 55, 34, 62);
+  stampSurfaceSplat(world, rooms.oldCabin.x + 18, rooms.oldCabin.y + 11, 0.5, 0.5, 3.2, 0.42, 7001, 55, 34, 62);
 }
 
 function placeCampLifts(world: World, rooms: CampRooms): void {

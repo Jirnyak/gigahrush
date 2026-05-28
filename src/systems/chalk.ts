@@ -1,6 +1,6 @@
 import { type Entity } from '../core/types';
 import { SURFACE_FLAG_CHALK_MAP, type World } from '../core/world';
-import { paintSurfacePixel } from '../render/marks';
+import { paintSurfacePixel } from './surface_marks';
 
 export const CHALK_ITEM_ID = 'chalk';
 const CHALK_PIXEL_ALPHA = 235;

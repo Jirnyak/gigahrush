@@ -2,14 +2,21 @@
  * Static hazard rooms only: no pressure tick, no cell heat field.
  */
 
+import { stampSurfaceSplat } from './surface_marks';
 import {
-  Cell, EntityType, Feature, FloorLevel, RoomType,
-  type Entity, type GameState, type Room,
+  Cell,
+  Feature,
+  FloorLevel,
+  RoomType,
+  type Entity,
+  type GameState,
+  type Room,
   msg,
 } from '../core/types';
 import { World } from '../core/world';
 import { addItem, hasItem, removeItem } from './inventory';
 import { publishEvent } from './events';
+import { isPlayerEntity } from './player_actor';
 
 const HEATLINE_PREFIX = 'Теплотрасса Ноль';
 const HEATLINE_RESOLVED = 'сброс открыт';
@@ -117,7 +124,7 @@ function setRoomFog(world: World, room: Room, density: number, mode: 'set' | 'ma
 function stampSteamResidue(world: World, room: Room, seedBase: number, hot: boolean): void {
   const y = room.y + Math.floor(room.h / 2);
   for (let dx = 2; dx < room.w - 2; dx += 4) {
-    world.stamp(
+    stampSurfaceSplat(world,
       room.x + dx, y,
       0.5, 0.5, hot ? 0.36 : 0.24,
       hot ? 130 : 80,
@@ -160,7 +167,7 @@ function publishHeatlineEvent(
     itemId,
     itemName,
     severity,
-    privacy: player.type === EntityType.PLAYER ? 'local' : 'private',
+    privacy: isPlayerEntity(player) ? 'local' : 'private',
     tags: ['player', 'maintenance', 'heatline', 'pressure', outcome],
     data: {
       system: 'heatline_zero',

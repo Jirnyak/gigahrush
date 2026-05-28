@@ -7,13 +7,14 @@ import {
 } from '../../core/types';
 import { World } from '../../core/world';
 import { MONSTERS } from '../../entities/monster';
-import { MarkType, stampMark } from '../../render/marks';
+import { MarkType, stampMark } from '../../systems/surface_marks';
 import { monsterSpr, Spr } from '../../render/sprite_index';
 import { publishEvent, registerWorldEventObserver } from '../../systems/events';
 import { randomRPG, scaleMonsterHp, scaleMonsterSpeed } from '../../systems/rpg';
 import { findClearArea, protectRoom } from '../shared';
 import { genLog } from '../log';
 import { registerZoneContent } from './zone_content';
+import { isPlayerEntity } from '../../systems/player_actor';
 
 const CONTENT_TAG = 'monster_02_plombirovshchik';
 const ZONE_HUD = 62;
@@ -360,7 +361,7 @@ function nearestActiveContextToPlayer(): PlombContext | undefined {
     const ctx = contexts[i];
     const monster = ctx.entities.find(e => e.id === ctx.monsterId);
     if (!monster?.alive || ctx.shotHandled || ctx.routeOpened) continue;
-    const player = ctx.entities.find(e => e.type === EntityType.PLAYER && e.alive);
+    const player = ctx.entities.find(e => isPlayerEntity(e) && e.alive);
     if (!player) continue;
     const dDoor = ctx.world.dist2(player.x, player.y, doorX(ctx.sealedDoorIdx) + 0.5, doorY(ctx.sealedDoorIdx) + 0.5);
     const dMonster = ctx.world.dist2(player.x, player.y, monster.x, monster.y);

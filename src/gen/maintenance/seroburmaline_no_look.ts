@@ -1,10 +1,16 @@
 /* ── AG70 seroburmaline no-look POI ───────────────────────────── */
 
 import {
-  Cell, Faction, Feature, MonsterKind, Occupation, RoomType, Tex,
+  Cell,
+  Faction,
+  Feature,
+  MonsterKind,
+  Occupation,
+  RoomType,
+  Tex,
   type Room,
 } from '../../core/types';
-import { MarkType, stampMark } from '../../render/marks';
+import { MarkType, stampMark } from '../../systems/surface_marks';
 import {
   forSeroburmalineSourceCells,
   SEROBURMALINE_ACTIVE_FEATURE,

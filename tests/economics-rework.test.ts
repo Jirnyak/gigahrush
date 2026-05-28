@@ -13,11 +13,14 @@ import {
   proceduralContainerValueCap,
   proceduralLootValueCap,
 } from '../src/data/economics';
+import { PSI_WEAPON_STATS } from '../src/data/psi';
 import { PROCEDURAL_LOOT_VALUE_CAP_BY_DANGER } from '../src/data/procedural_floors';
 import { resourceForItem } from '../src/data/resources';
 import { calculateQuestReward } from '../src/systems/quest_rewards';
 
 test('economy weapon ladder prices PSI, energy and late gear for long progression', () => {
+  assert.deepEqual([...ECONOMY_PSI_WEAPON_IDS].sort(), Object.keys(PSI_WEAPON_STATS).sort());
+
   for (const id of ECONOMY_PSI_WEAPON_IDS) {
     const def = ITEMS[id];
     assert.ok(def, `${id} must exist`);

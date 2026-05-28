@@ -1,3 +1,4 @@
+import { stampSurfaceSplat } from '../../systems/surface_marks';
 import {
   AIGoal,
   Cell,
@@ -172,7 +173,7 @@ function markOutbreakRoom(ctx: ProceduralAnomalyGenContext, room: Room): void {
       if (ctx.world.cells[ci] !== Cell.FLOOR) continue;
       if (((dx * 17 + dy * 31 + ctx.spec.seed) & 7) === 0) {
         ctx.world.floorTex[ci] = Tex.F_TILE;
-        ctx.world.stamp(x, y, 0.5, 0.5, 0.36, 0.54, ctx.spec.seed + dx * 101 + dy * 37, 92, 24, 20, false);
+        stampSurfaceSplat(ctx.world, x, y, 0.5, 0.5, 0.36, 0.54, ctx.spec.seed + dx * 101 + dy * 37, 92, 24, 20, false);
       }
       if (ctx.world.features[ci] === Feature.LAMP && Math.random() < 0.55) ctx.world.features[ci] = Feature.NONE;
       ctx.world.fog[ci] = Math.max(ctx.world.fog[ci], 18 + ctx.spec.danger * 6);

@@ -1,5 +1,6 @@
 /* -- Monster 18: Hladonets, a bounded cold-pocket stalker -------- */
 
+import { stampSurfaceSplat } from '../../systems/surface_marks';
 import {
   AIGoal, Cell, EntityType, Feature, FloorLevel, MonsterKind, RoomType, Tex, msg,
   type Entity, type GameState, type Room, type WorldEvent, type WorldEventSeverity,
@@ -124,15 +125,15 @@ function frostRoom(world: World, room: Room, seedBase: number): void {
       world.floorTex[ci] = Tex.F_TILE;
       world.fog[ci] = Math.max(world.fog[ci], 34 + ((dx + dy) % 3) * 8);
       if ((dx * 3 + dy + seedBase) % 6 === 0) {
-        world.stamp(x, y, 0.5, 0.5, 0.32, 0.55, seedBase + dx * 41 + dy * 97, 190, 228, 240, false);
+        stampSurfaceSplat(world, x, y, 0.5, 0.5, 0.32, 0.55, seedBase + dx * 41 + dy * 97, 190, 228, 240, false);
       }
       if ((dx + dy) % 11 === 0) setWater(world, x, y);
     }
   }
 
   for (let dx = 1; dx < room.w - 1; dx += 2) {
-    world.stamp(room.x + dx, room.y, 0.5, 0.5, 0.42, 0.7, seedBase + dx * 13, 215, 240, 255, true);
-    world.stamp(room.x + dx, room.y + room.h - 1, 0.5, 0.5, 0.36, 0.65, seedBase + dx * 17, 205, 235, 248, true);
+    stampSurfaceSplat(world, room.x + dx, room.y, 0.5, 0.5, 0.42, 0.7, seedBase + dx * 13, 215, 240, 255, true);
+    stampSurfaceSplat(world, room.x + dx, room.y + room.h - 1, 0.5, 0.5, 0.36, 0.65, seedBase + dx * 17, 205, 235, 248, true);
   }
   for (let dy = 2; dy < room.h - 2; dy += 3) {
     setFeature(world, room.x + room.w - 3, room.y + dy, Feature.SHELF);
@@ -141,7 +142,7 @@ function frostRoom(world: World, room: Room, seedBase: number): void {
   const valveX = room.x + 2;
   const valveY = room.y + Math.floor(room.h / 2);
   setFeature(world, valveX, valveY, Feature.APPARATUS);
-  world.stamp(valveX, valveY, 0.5, 0.5, 0.75, 0.5, seedBase + 901, 145, 200, 230, false);
+  stampSurfaceSplat(world, valveX, valveY, 0.5, 0.5, 0.75, 0.5, seedBase + 901, 145, 200, 230, false);
   world.markFogDirty();
 }
 
@@ -154,7 +155,7 @@ function warmValveRoom(ctx: MaintContentCtx, room: Room, seedBase: number): void
   setFeature(ctx.world, room.x + 2, room.y + 2, Feature.APPARATUS);
   setFeature(ctx.world, room.x + room.w - 3, room.y + 2, Feature.LAMP);
   const c = center(room);
-  ctx.world.stamp(c.x, c.y, 0.5, 0.5, 0.65, 0.38, seedBase + 170, 220, 128, 60, false);
+  stampSurfaceSplat(ctx.world, c.x, c.y, 0.5, 0.5, 0.65, 0.38, seedBase + 170, 220, 128, 60, false);
 }
 
 function traceRoom(ctx: MaintContentCtx, room: Room, seedBase: number): void {
@@ -164,7 +165,7 @@ function traceRoom(ctx: MaintContentCtx, room: Room, seedBase: number): void {
   setFeature(ctx.world, room.x + 2, room.y + room.h - 2, Feature.LAMP);
   setFeature(ctx.world, room.x + room.w - 3, room.y + room.h - 2, Feature.MACHINE);
   const c = center(room);
-  ctx.world.stamp(c.x, c.y, 0.5, 0.5, 0.42, 0.42, seedBase + 271, 160, 205, 220, false);
+  stampSurfaceSplat(ctx.world, c.x, c.y, 0.5, 0.5, 0.42, 0.42, seedBase + 271, 160, 205, 220, false);
 }
 
 function connectRooms(ctx: MaintContentCtx, warm: Room, cold: Room, trace: Room): void {
@@ -218,7 +219,7 @@ function softenColdResidue(world: World, room: Room, seedBase: number): void {
       const ci = world.idx(x, y);
       if (world.cells[ci] !== Cell.FLOOR && world.cells[ci] !== Cell.WATER) continue;
       world.fog[ci] = Math.min(world.fog[ci], 16);
-      world.stamp(x, y, 0.5, 0.5, 0.28, 0.32, seedBase + dx * 31 + dy * 73, 150, 160, 155, false);
+      stampSurfaceSplat(world, x, y, 0.5, 0.5, 0.28, 0.32, seedBase + dx * 31 + dy * 73, 150, 160, 155, false);
     }
   }
   world.markFogDirty();

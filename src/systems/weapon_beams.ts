@@ -13,9 +13,10 @@ import {
 import type { World } from '../core/world';
 import type { WeaponStats } from '../data/weapons';
 import { ITEMS } from '../data/items';
-import { stampMark, MarkType } from '../render/marks';
+import { stampMark, MarkType } from './surface_marks';
 import { ENTITY_MASK_ACTOR, ensureEntityIndex } from './entity_index';
 import { publishEvent } from './events';
+import { isPlayerEntity } from './player_actor';
 
 export interface DeletionBeamResult {
   beamLen: number;
@@ -97,7 +98,7 @@ export function fireDeletionBeam(
     x: actor.x,
     y: actor.y,
     actorId: actor.id,
-    actorName: actor.name ?? (actor.type === EntityType.PLAYER ? 'Вы' : undefined),
+    actorName: actor.name ?? (isPlayerEntity(actor) ? 'Вы' : undefined),
     actorFaction: actor.faction,
     itemId: weaponId,
     itemName,
@@ -195,7 +196,7 @@ function killBeamTargets(
   for (const target of deletionBeamQuery) {
     if (killed >= MAX_TARGETS) break;
     if (!target.alive || target.id === actor.id) continue;
-    if (target.type !== EntityType.NPC && target.type !== EntityType.MONSTER && target.type !== EntityType.PLAYER) continue;
+    if (target.type !== EntityType.NPC && target.type !== EntityType.MONSTER && !isPlayerEntity(target)) continue;
     const dx = world.delta(actor.x, target.x);
     const dy = world.delta(actor.y, target.y);
     const along = dx * dirX + dy * dirY;
@@ -204,7 +205,7 @@ function killBeamTargets(
     if (perp > width + 0.45) continue;
     if (target.hp !== undefined) target.hp = 0;
     target.alive = false;
-    handleKill(target, actor.type === EntityType.PLAYER, dirX * 16, dirY * 16, 1);
+    handleKill(target, isPlayerEntity(actor), dirX * 16, dirY * 16, 1);
     killed++;
   }
   return killed;

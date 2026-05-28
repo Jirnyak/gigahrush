@@ -4,7 +4,6 @@ import {
   W,
   Cell,
   DoorState,
-  EntityType,
   MonsterKind,
   ProjType,
   msg,
@@ -16,6 +15,7 @@ import { Spr } from '../render/sprite_index';
 import { publishEvent } from './events';
 import { cleanCellHazardsNear } from './cell_hazards';
 import { hasAirborneHazardProtection } from './status';
+import { isPlayerEntity } from './player_actor';
 
 export const BORSHCHEVIK_SMOKE_BURST_CELL_CAP = 24;
 
@@ -124,7 +124,7 @@ function cellZoneId(world: World, e: Entity): number | undefined {
 function actorName(e: Entity | undefined): string | undefined {
   if (!e) return undefined;
   if (e.name) return e.name;
-  if (e.type === EntityType.PLAYER) return 'Вы';
+  if (isPlayerEntity(e)) return 'Вы';
   return e.monsterKind === MonsterKind.BORSHCHEVIK ? 'Борщевик' : undefined;
 }
 
@@ -169,8 +169,8 @@ export function releaseBorshchevikSeedPuff(
   const fogCells = puffFog(world, plant.x, plant.y, fire ? 5.2 : 3.8, fire ? 72 : 44);
   if (target && world.dist2(plant.x, plant.y, target.x, target.y) <= (fire ? 6.2 * 6.2 : 4.6 * 4.6)) {
     const protectedTarget = hasSeedProtection(target);
-    if (!protectedTarget) target.psiMadness = Math.max(target.psiMadness ?? 0, target.type === EntityType.PLAYER ? 2.5 : 4.5);
-    if (target.type === EntityType.PLAYER) {
+    if (!protectedTarget) target.psiMadness = Math.max(target.psiMadness ?? 0, isPlayerEntity(target) ? 2.5 : 4.5);
+    if (isPlayerEntity(target)) {
       state.dmgFlash = Math.max(state.dmgFlash, protectedTarget ? 0.12 : 0.24);
       state.dmgSeed = (state.dmgSeed + (fire ? 73 : 41)) | 0;
       state.msgs.push(msg(
@@ -196,7 +196,7 @@ export function releaseBorshchevikSeedPuff(
     targetFaction: target?.faction,
     monsterKind: MonsterKind.BORSHCHEVIK,
     severity: fire ? 4 : 3,
-    privacy: target?.type === EntityType.PLAYER ? 'private' : 'local',
+    privacy: isPlayerEntity(target) ? 'private' : 'local',
     tags: ['monster', 'borshchevik', 'seed_puff', 'plant', fire ? 'smoke' : 'hallucination'],
     data: {
       fogCells,
@@ -210,7 +210,7 @@ export function releaseBorshchevikSeedPuff(
 }
 
 export function recordBorshchevikBurned(world: World, state: GameState, plant: Entity, actor?: Entity): number {
-  const fogCells = releaseBorshchevikSeedPuff(world, state, plant, actor?.type === EntityType.PLAYER ? actor : undefined, 'fire');
+  const fogCells = releaseBorshchevikSeedPuff(world, state, plant, isPlayerEntity(actor) ? actor : undefined, 'fire');
   publishEvent(state, {
     type: 'borshchevik_burned',
     zoneId: cellZoneId(world, plant),
@@ -224,7 +224,7 @@ export function recordBorshchevikBurned(world: World, state: GameState, plant: E
     targetName: actorName(plant),
     monsterKind: MonsterKind.BORSHCHEVIK,
     severity: 4,
-    privacy: actor?.type === EntityType.PLAYER ? 'private' : 'local',
+    privacy: isPlayerEntity(actor) ? 'private' : 'local',
     tags: ['monster', 'borshchevik', 'burned', 'fire', 'smoke'],
     data: { fogCells, rumorIds: [...BORSCH_RUMOR_IDS] },
   });
@@ -246,7 +246,7 @@ export function recordBorshchevikCut(world: World, state: GameState, plant: Enti
     targetName: actorName(plant),
     monsterKind: MonsterKind.BORSHCHEVIK,
     severity: 3,
-    privacy: actor?.type === EntityType.PLAYER ? 'private' : 'local',
+    privacy: isPlayerEntity(actor) ? 'private' : 'local',
     tags: ['monster', 'borshchevik', 'cut', 'tool', 'route'],
     data: { cleanedHazards, rumorIds: [...BORSCH_RUMOR_IDS] },
   });

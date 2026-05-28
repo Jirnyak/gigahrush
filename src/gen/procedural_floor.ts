@@ -1,5 +1,6 @@
 /* ── Seeded combinatoric procedural floors ───────────────────── */
 
+import { stampSurfaceSplat } from '../systems/surface_marks';
 import {
   W,
   Cell,
@@ -52,7 +53,7 @@ import {
 } from '../data/procedural_floors';
 import { MONSTERS } from '../entities/monster';
 import { monsterSpr, Spr } from '../render/sprite_index';
-import { MarkType, stampMark } from '../render/marks';
+import { MarkType, stampMark } from '../systems/surface_marks';
 import { gaussianLevel, getMaxHp, randomRPG } from '../systems/rpg';
 import { canSpawnEntityType, entitySpawnSlots } from '../systems/entity_limits';
 import { addRailTrainRoute } from '../systems/rail_trains';
@@ -1072,7 +1073,7 @@ function seedSmogCorridorPockets(world: World, set: Set<number>, source: Room, s
     const ci = world.idx(x, y);
     if (world.roomMap[ci] >= 0 && world.roomMap[ci] !== source.id) continue;
     addSmogCell(world, set, x, y, irng(58, 158));
-    if (chance(0.08)) world.stamp(x, y, 0.5, 0.5, 0.38, 0.36, spec.seed + i, 86, 76, 52, false);
+    if (chance(0.08)) stampSurfaceSplat(world, x, y, 0.5, 0.5, 0.38, 0.36, spec.seed + i, 86, 76, 52, false);
   }
 }
 
@@ -1089,7 +1090,7 @@ function placeSmogSource(world: World, source: Room, spec: ProceduralFloorSpec, 
       addSmogCell(world, set, pos.x + dx, pos.y + dy, irng(176, 235));
     }
   }
-  world.stamp(pos.x, pos.y, 0.5, 0.5, 0.72, 0.92, spec.seed ^ 0x51f00d, 92, 76, 44, false);
+  stampSurfaceSplat(world, pos.x, pos.y, 0.5, 0.5, 0.72, 0.92, spec.seed ^ 0x51f00d, 92, 76, 44, false);
   return pos;
 }
 
@@ -1199,7 +1200,7 @@ function decorateRoofDuctEdge(world: World, x: number, y: number, feature: Featu
   const ci = world.idx(x, y);
   if (world.cells[ci] !== Cell.FLOOR || world.features[ci] !== Feature.NONE) return;
   world.features[ci] = feature;
-  world.stamp(x, y, 0.5, 0.5, 0.24, 0.46, spec.seed ^ (step * 41), 88, 100, 104, false);
+  stampSurfaceSplat(world, x, y, 0.5, 0.5, 0.24, 0.46, spec.seed ^ (step * 41), 88, 100, 104, false);
 }
 
 function carveRoofDuctSegment(
@@ -1234,7 +1235,7 @@ function carveRoofDuctSegment(
       decorateRoofDuctEdge(world, fx, fy, roofDuctFeature(absoluteStep, line), spec, absoluteStep);
     }
     if (absoluteStep % 43 === 0) {
-      world.stamp(x, y, 0.5, 0.5, 0.18, 0.34, spec.seed + absoluteStep * 59 + line * 7, 210, 220, 218, true);
+      stampSurfaceSplat(world, x, y, 0.5, 0.5, 0.18, 0.34, spec.seed + absoluteStep * 59 + line * 7, 210, 220, 218, true);
     }
 
     if (s < steps) {
@@ -1309,7 +1310,7 @@ function applyArchiveWarrens(world: World, rooms: Room[], spec: ProceduralFloorS
       }
     }
     const center = roomCenter(room);
-    if (i % 3 === 0) world.stamp(center.x, center.y, 0.5, 0.5, 0.32, 0.58, spec.seed + i * 113, 210, 198, 168, false);
+    if (i % 3 === 0) stampSurfaceSplat(world, center.x, center.y, 0.5, 0.5, 0.32, 0.58, spec.seed + i * 113, 210, 198, 168, false);
   }
 }
 
@@ -1337,7 +1338,7 @@ function applyCommunalKnots(world: World, rooms: Room[], spec: ProceduralFloorSp
       placeRoomFeature(world, room, Feature.CHAIR, room.w - 2, room.h - 2);
     }
     const center = roomCenter(room);
-    world.stamp(center.x, center.y, 0.5, 0.5, 0.28, 0.5, spec.seed + i * 211, 120, 92, 70, false);
+    stampSurfaceSplat(world, center.x, center.y, 0.5, 0.5, 0.28, 0.5, spec.seed + i * 211, 120, 92, 70, false);
   }
 }
 
@@ -1350,7 +1351,7 @@ function carveSumpCell(world: World, x: number, y: number, water: boolean, spec:
   world.features[ci] = Feature.NONE;
   world.roomMap[ci] = -1;
   if (water && ((x * 13 + y * 17 + spec.seed) & 31) === 0) {
-    world.stamp(x, y, 0.5, 0.5, 0.32, 0.44, spec.seed ^ (x * 31 + y * 7), 30, 54, 48, false);
+    stampSurfaceSplat(world, x, y, 0.5, 0.5, 0.32, 0.44, spec.seed ^ (x * 31 + y * 7), 30, 54, 48, false);
   }
   return true;
 }
@@ -1360,7 +1361,7 @@ function decorateSumpEdge(world: World, x: number, y: number, feature: Feature, 
   if (world.cells[ci] !== Cell.FLOOR || world.features[ci] !== Feature.NONE) return;
   world.features[ci] = feature;
   if (feature === Feature.MACHINE || feature === Feature.APPARATUS) {
-    world.stamp(x, y, 0.5, 0.5, 0.42, 0.5, spec.seed + step * 97, 76, 96, 90, false);
+    stampSurfaceSplat(world, x, y, 0.5, 0.5, 0.42, 0.5, spec.seed + step * 97, 76, 96, 90, false);
   }
 }
 
@@ -1429,7 +1430,7 @@ function decorateServiceSpineEdge(world: World, x: number, y: number, feature: F
   if (world.cells[ci] !== Cell.FLOOR || world.features[ci] !== Feature.NONE) return;
   world.features[ci] = feature;
   if (feature === Feature.APPARATUS || feature === Feature.MACHINE) {
-    world.stamp(x, y, 0.5, 0.5, 0.34, 0.52, spec.seed + step * 29, 72, 88, 86, false);
+    stampSurfaceSplat(world, x, y, 0.5, 0.5, 0.34, 0.52, spec.seed + step * 29, 72, 88, 86, false);
   }
 }
 
@@ -1465,7 +1466,7 @@ function carveServiceSpineSegment(
       decorateServiceSpineEdge(world, fx, fy, serviceSpineFeature(absoluteStep, line), spec, absoluteStep);
     }
     if (absoluteStep % 37 === 0) {
-      world.stamp(x, y, 0.5, 0.5, 0.28, 0.36, spec.seed ^ (absoluteStep * 131 + line * 17), 58, 68, 65, false);
+      stampSurfaceSplat(world, x, y, 0.5, 0.5, 0.28, 0.36, spec.seed ^ (absoluteStep * 131 + line * 17), 58, 68, 65, false);
     }
 
     if (s < steps) {
@@ -1580,7 +1581,7 @@ function applySamosborSeed(world: World, spec: ProceduralFloorSpec): void {
     if (!pos) continue;
     const ci = world.idx(pos.x, pos.y);
     world.floorTex[ci] = chance(0.5) ? Tex.F_GUT : Tex.F_MEAT;
-    if (chance(0.2)) world.stamp(pos.x, pos.y, 0.5, 0.5, 0.45, 0.8, spec.seed + i, 120, 15, 28, false);
+    if (chance(0.2)) stampSurfaceSplat(world, pos.x, pos.y, 0.5, 0.5, 0.45, 0.8, spec.seed + i, 120, 15, 28, false);
   }
 }
 
@@ -1593,7 +1594,7 @@ function applyMushrooms(world: World, rooms: Room[], entities: Entity[], nextId:
     const ci = world.idx(pos.x, pos.y);
     world.features[ci] = Feature.APPARATUS;
     dropItem(entities, nextId, pos.x, pos.y, chance(0.7) ? 'mushroom_mass' : 'infected_mushroom', irng(1, 3));
-    world.stamp(pos.x, pos.y, 0.5, 0.5, 0.5, 0.65, spec.seed + i, 60, 130, 70, false);
+    stampSurfaceSplat(world, pos.x, pos.y, 0.5, 0.5, 0.5, 0.65, spec.seed + i, 60, 130, 70, false);
   }
 }
 
@@ -1638,26 +1639,26 @@ function stampHladonFrost(world: World, room: Room, seedBase: number, danger: nu
         world.features[ci] = Feature.NONE;
       }
       if ((dx + dy + seedBase) % 5 === 0) {
-        world.stamp(x, y, 0.5, 0.5, 0.28, 0.45, seedBase + dx * 37 + dy * 101, 185, 220, 235, false);
+        stampSurfaceSplat(world, x, y, 0.5, 0.5, 0.28, 0.45, seedBase + dx * 37 + dy * 101, 185, 220, 235, false);
       }
     }
   }
 
   for (let dx = 0; dx < room.w; dx += 2) {
     for (const y of [room.y, room.y + room.h - 1]) {
-      world.stamp(room.x + dx, y, 0.5, 0.5, 0.38, 0.75, seedBase + dx * 17 + y, 210, 238, 255, true);
+      stampSurfaceSplat(world, room.x + dx, y, 0.5, 0.5, 0.38, 0.75, seedBase + dx * 17 + y, 210, 238, 255, true);
     }
   }
   for (let dy = 0; dy < room.h; dy += 2) {
     for (const x of [room.x, room.x + room.w - 1]) {
-      world.stamp(x, room.y + dy, 0.5, 0.5, 0.38, 0.75, seedBase + dy * 23 + x, 210, 238, 255, true);
+      stampSurfaceSplat(world, x, room.y + dy, 0.5, 0.5, 0.38, 0.75, seedBase + dy * 23 + x, 210, 238, 255, true);
     }
   }
 
   const control = roomCell(world, room, Math.floor(room.w / 2), Math.floor(room.h / 2));
   if (control) {
     world.features[world.idx(control.x, control.y)] = Feature.APPARATUS;
-    world.stamp(control.x, control.y, 0.5, 0.5, 0.7, 0.5, seedBase + 909, 150, 205, 240, false);
+    stampSurfaceSplat(world, control.x, control.y, 0.5, 0.5, 0.7, 0.5, seedBase + 909, 150, 205, 240, false);
   }
 }
 
@@ -1712,7 +1713,7 @@ function seedHladonCounterplay(world: World, rooms: Room[], coldRooms: Room[], e
     world.features[world.idx(warmSpot.x, warmSpot.y)] = isIndustrialGeometry(spec.geometryId)
       ? Feature.MACHINE
       : Feature.STOVE;
-    world.stamp(warmSpot.x, warmSpot.y, 0.5, 0.5, 0.6, 0.38, spec.seed + 7301, 225, 120, 45, false);
+    stampSurfaceSplat(world, warmSpot.x, warmSpot.y, 0.5, 0.5, 0.6, 0.38, spec.seed + 7301, 225, 120, 45, false);
   }
 
   const kitCount = Math.min(HLADON_KIT_ITEMS.length, 2 + Math.floor(spec.danger / 2));
@@ -1803,7 +1804,7 @@ function carveRailBed(world: World, x: number, y: number, horizontal: boolean, s
     if (side === 0) centerOpen = opened;
   }
   if (centerOpen && ((x * 17 + y * 31 + spec.seed) & 15) === 0) {
-    world.stamp(x, y, 0.5, 0.5, 0.32, 0.5, spec.seed ^ (x * 13 + y * 29), 92, 92, 84, false);
+    stampSurfaceSplat(world, x, y, 0.5, 0.5, 0.32, 0.5, spec.seed ^ (x * 13 + y * 29), 92, 92, 84, false);
   }
   return centerOpen;
 }
@@ -2106,7 +2107,7 @@ function registerProceduralMonsterPressureCue(world: World, rooms: Room[], spec:
 
   const markerCell = world.idx(marker.x, marker.y);
   if (world.features[markerCell] === Feature.NONE) world.features[markerCell] = Feature.SCREEN;
-  world.stamp(marker.x, marker.y, 0.5, 0.5, 0.34, 0.72, spec.seed ^ 0x5111, 84, 124, 116, true);
+  stampSurfaceSplat(world, marker.x, marker.y, 0.5, 0.5, 0.34, 0.72, spec.seed ^ 0x5111, 84, 124, 116, true);
   const profile = pressureCueProfile(proceduralMonsterFloor(spec), spec);
   registerRouteCue(world, {
     id: `procedural_${spec.key}_monster_pressure`,
@@ -2307,17 +2308,17 @@ function applyFalseSafeBlock(
   placeRoomFeature(world, shelter, Feature.BED, Math.floor(shelter.w / 2), Math.floor(shelter.h / 2));
   placeRoomFeature(world, shelter, Feature.LAMP, 1, shelter.h - 2);
   placeRoomFeature(world, shelter, Feature.LAMP, shelter.w - 2, 1);
-  if (screen) world.stamp(screen.x, screen.y, 0.5, 0.5, 0.2, 160, spec.seed + 4401, 6, 6, 6, true);
+  if (screen) stampSurfaceSplat(world, screen.x, screen.y, 0.5, 0.5, 0.2, 160, spec.seed + 4401, 6, 6, 6, true);
   if (marker) {
-    world.stamp(marker.x, marker.y, 0.5, 0.5, 0.52, 220, spec.seed + 4402, 4, 4, 3, true);
-    world.stamp(marker.x, marker.y, 0.5, 0.5, 0.28, 190, spec.seed + 4403, 80, 12, 48, false);
+    stampSurfaceSplat(world, marker.x, marker.y, 0.5, 0.5, 0.52, 220, spec.seed + 4402, 4, 4, 3, true);
+    stampSurfaceSplat(world, marker.x, marker.y, 0.5, 0.5, 0.28, 190, spec.seed + 4403, 80, 12, 48, false);
   }
 
   for (let i = 0; i < 7; i++) {
     const room = i < quietCorridors.length ? quietCorridors[i] : shelter;
     const pos = roomCell(world, room, 1 + ((i * 5) % Math.max(1, room.w - 2)), 1 + ((i * 7) % Math.max(1, room.h - 2)));
     if (!pos) continue;
-    world.stamp(pos.x, pos.y, 0.5, 0.5, 0.24 + (i % 3) * 0.04, 150, spec.seed + 4500 + i, 2, 2, 2, i % 2 === 0);
+    stampSurfaceSplat(world, pos.x, pos.y, 0.5, 0.5, 0.24 + (i % 3) * 0.04, 150, spec.seed + 4500 + i, 2, 2, 2, i % 2 === 0);
   }
 
   const supplyPos = findFreeRoomCell(world, shelter, spec.seed + 51);

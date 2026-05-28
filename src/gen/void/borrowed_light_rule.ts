@@ -1,8 +1,16 @@
 /* ── Borrowed Light — Void local-rule chamber ─────────────────── */
 
 import {
-  Cell, ContainerKind, DoorState, Feature, FloorLevel, RoomType, Tex,
-  type Entity, type Item, type WorldContainer,
+  Cell,
+  ContainerKind,
+  DoorState,
+  Feature,
+  FloorLevel,
+  RoomType,
+  Tex,
+  type Entity,
+  type Item,
+  type WorldContainer,
 } from '../../core/types';
 import { World } from '../../core/world';
 import { registerVoidBorrowedLightChamber } from '../../systems/void_protocols';

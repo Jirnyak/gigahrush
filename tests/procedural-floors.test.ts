@@ -1506,7 +1506,7 @@ test('bad apple runtime advances the map rectangle into white floor cells', () =
   const state = makeGameState({ currentFloor: spec.baseFloor });
   const player = {
     id: 999999,
-    type: EntityType.PLAYER,
+    type: EntityType.NPC, persistentNpcId: 'player',
     x: gen.spawnX,
     y: gen.spawnY,
     angle: 0,

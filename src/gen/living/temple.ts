@@ -5,6 +5,7 @@
 import {
   W, Cell, Tex, Feature, RoomType,
   type Room, type Entity, EntityType, AIGoal, Faction, Occupation, QuestType, MonsterKind,
+  msg,
 } from '../../core/types';
 import { World } from '../../core/world';
 import { freshNeeds } from '../../data/catalog';
@@ -12,6 +13,7 @@ import { type PlotNpcDef, registerSideQuest } from '../../data/plot';
 import { registerZoneContent } from './zone_content';
 import { MONSTERS } from '../../entities/monster';
 import { monsterSpr } from '../../render/sprite_index';
+import { registerContentEntityDeathHook } from '../../systems/content_hooks';
 import { randomRPG, scaleMonsterHp, scaleMonsterSpeed } from '../../systems/rpg';
 import { genLog } from '../log';
 
@@ -315,3 +317,14 @@ export function priestDeathCurse(
     }
   }
 }
+
+registerContentEntityDeathHook({
+  id: 'living_temple_priest_death_curse',
+  onDeath(ctx) {
+    if (!ctx.killerIsPlayer || ctx.killed.plotNpcId !== 'batushka') return;
+    priestDeathCurse(ctx.world, ctx.entities, ctx.nextEntityId, ctx.killed.x, ctx.killed.y);
+    ctx.state.msgs.push(msg('☠ ПРОКЛЯТИЕ БАТЮШКИ! 666 тварей вырвались из ада!', ctx.state.time, '#f00'));
+    ctx.state.msgs.push(msg('На миникарте проступает пентаграмма...', ctx.state.time, '#a00'));
+    return { worldChanged: true };
+  },
+});

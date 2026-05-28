@@ -1,5 +1,6 @@
 /* ── Monster_10: Насосная Матка — local water-pressure boss room ─ */
 
+import { stampSurfaceSplat } from '../../systems/surface_marks';
 import {
   AIGoal, Cell, ContainerKind, EntityType, Faction, Feature, FloorLevel,
   MonsterKind, Occupation, QuestType, RoomType, Tex, msg,
@@ -218,10 +219,10 @@ function decoratePumpRoom(ctx: MaintContentCtx, room: Room): void {
     setFeature(ctx.world, room.x + lx, room.y + ly, Feature.LAMP);
   }
   setFeature(ctx.world, room.x + 21, room.y + 3, Feature.SCREEN);
-  ctx.world.stamp(room.x + 21, room.y + 3, 0.5, 0.5, 1.4, 120, room.id * 911 + 10, 30, 170, 190, true);
-  ctx.world.stamp(room.x + 21, room.y + 12, 0.5, 0.5, 4.8, 90, room.id * 911 + 11, 10, 60, 72);
+  stampSurfaceSplat(ctx.world, room.x + 21, room.y + 3, 0.5, 0.5, 1.4, 120, room.id * 911 + 10, 30, 170, 190, true);
+  stampSurfaceSplat(ctx.world, room.x + 21, room.y + 12, 0.5, 0.5, 4.8, 90, room.id * 911 + 11, 10, 60, 72);
   for (let i = 0; i < 3; i++) {
-    ctx.world.stamp(room.x + 16 + i * 5, room.y + 12, 0.5, 0.5, 1.6, 125, room.id * 911 + i, 80, 25, 35);
+    stampSurfaceSplat(ctx.world, room.x + 16 + i * 5, room.y + 12, 0.5, 0.5, 1.6, 125, room.id * 911 + i, 80, 25, 35);
   }
 }
 
@@ -237,7 +238,7 @@ function addValveControl(
   const y = room.y + ly;
   setFeature(ctx.world, x, y, Feature.APPARATUS);
   setFeature(ctx.world, x + (lx < ROOM_W / 2 ? 1 : -1), y, Feature.MACHINE);
-  ctx.world.stamp(x, y, 0.5, 0.5, 0.42, 150, room.id * 1200 + valveNo, 125, 170, 120, true);
+  stampSurfaceSplat(ctx.world, x, y, 0.5, 0.5, 0.42, 150, room.id * 1200 + valveNo, 125, 170, 120, true);
   addContainer(ctx, room, x, y, {
     kind: ContainerKind.EMERGENCY_BOX,
     name: `Вентиль ${valveNo}: ${label}`,

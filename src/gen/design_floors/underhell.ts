@@ -1,5 +1,6 @@
 /* ── Underhell design floor: ritual thresholds below Hell ─────── */
 
+import { stampSurfaceSplat } from '../../systems/surface_marks';
 import {
   AIGoal, Cell, ContainerKind, DoorState, EntityType, Faction, Feature,
   FloorLevel, LiftDirection, MonsterKind, Occupation, QuestType, RoomType,
@@ -1056,14 +1057,14 @@ function decorateEntry(world: World, room: Room): void {
   world.wallTex[liftCell] = Tex.LIFT_DOOR;
   world.liftDir[liftCell] = LiftDirection.UP;
   world.features[world.idx(room.x + room.w - 4, room.y + room.h - 3)] = Feature.LIFT_BUTTON;
-  world.stamp(room.x + (room.w >> 1), room.y + (room.h >> 1), 0.5, 0.5, 5, 130, 19032, 75, 18, 40, false);
+  stampSurfaceSplat(world, room.x + (room.w >> 1), room.y + (room.h >> 1), 0.5, 0.5, 5, 130, 19032, 75, 18, 40, false);
 }
 
 function decorateFallbackLedge(world: World, room: Room): void {
   setFeature(world, room.x + 2, room.y + 2, Feature.CANDLE);
   setFeature(world, room.x + room.w - 3, room.y + 2, Feature.SHELF);
   setFeature(world, room.x + 2, room.y + room.h - 3, Feature.TABLE);
-  world.stamp(room.x + (room.w >> 1), room.y + (room.h >> 1), 0.5, 0.5, 4, 110, room.id * 19039, 92, 78, 64, false);
+  stampSurfaceSplat(world, room.x + (room.w >> 1), room.y + (room.h >> 1), 0.5, 0.5, 4, 110, room.id * 19039, 92, 78, 64, false);
 }
 
 function decorateRootStair(world: World, room: Room): void {
@@ -1071,7 +1072,7 @@ function decorateRootStair(world: World, room: Room): void {
     setFeature(world, room.x + i, room.y + 2 + (i & 3), Feature.CANDLE);
   }
   setFeature(world, room.x + room.w - 4, room.y + room.h - 3, Feature.APPARATUS);
-  world.stamp(room.x + (room.w >> 1), room.y + (room.h >> 1), 0.5, 0.5, 4, 130, 19040, 54, 24, 18, false);
+  stampSurfaceSplat(world, room.x + (room.w >> 1), room.y + (room.h >> 1), 0.5, 0.5, 4, 130, 19040, 54, 24, 18, false);
 }
 
 function decorateThreshold(world: World, room: Room): void {
@@ -1083,14 +1084,14 @@ function decorateThreshold(world: World, room: Room): void {
   }
   setFeature(world, room.x + 3, room.y + room.h - 3, Feature.SINK);
   setFeature(world, room.x + room.w - 4, room.y + room.h - 3, Feature.DESK);
-  world.stamp(cx, cy, 0.5, 0.5, 6, 160, 19033, 90, 12, 60, false);
+  stampSurfaceSplat(world, cx, cy, 0.5, 0.5, 6, 160, 19033, 90, 12, 60, false);
 }
 
 function decorateWitnessCell(world: World, room: Room, lit: boolean): void {
   setFeature(world, room.x + 2, room.y + 2, lit ? Feature.LAMP : Feature.CANDLE);
   setFeature(world, room.x + room.w - 3, room.y + room.h - 3, Feature.BED);
   setFeature(world, room.x + 2, room.y + room.h - 3, Feature.TABLE);
-  world.stamp(room.x + (room.w >> 1), room.y + (room.h >> 1), 0.5, 0.5, 3, 110, lit ? 19034 : 19035, 40, 35, 35, false);
+  stampSurfaceSplat(world, room.x + (room.w >> 1), room.y + (room.h >> 1), 0.5, 0.5, 3, 110, lit ? 19034 : 19035, 40, 35, 35, false);
 }
 
 function decorateTollChamber(world: World, room: Room): void {
@@ -1102,7 +1103,7 @@ function decorateTollChamber(world: World, room: Room): void {
   for (const [dx, dy] of [[-9, -4], [-3, 4], [3, 4], [9, -4]] as const) {
     setFeature(world, cx + dx, cy + dy, Feature.CANDLE);
   }
-  world.stamp(cx, cy, 0.5, 0.5, 5, 130, 19041, 86, 16, 18, false);
+  stampSurfaceSplat(world, cx, cy, 0.5, 0.5, 5, 130, 19041, 86, 16, 18, false);
 }
 
 function decorateDebtWell(world: World, room: Room): number {
@@ -1124,7 +1125,7 @@ function decorateInvertedChapel(world: World, room: Room): void {
   setFeature(world, cx, cy + 5, Feature.APPARATUS);
   setFeature(world, cx, cy - 5, Feature.SCREEN);
   world.wallTex[world.idx(cx, room.y - 1)] = Tex.ICON;
-  world.stamp(cx, cy + 4, 0.5, 0.5, 7, 140, 19036, 110, 18, 45, false);
+  stampSurfaceSplat(world, cx, cy + 4, 0.5, 0.5, 7, 140, 19036, 110, 18, 45, false);
 }
 
 function decorateSacrificeGate(world: World, room: Room): void {
@@ -1137,7 +1138,7 @@ function decorateSacrificeGate(world: World, room: Room): void {
   setFeature(world, cx, cy + 5, Feature.CANDLE);
   setFeature(world, cx + 8, cy + 5, Feature.CANDLE);
   addBlackWell(world, cx, cy, 1);
-  world.stamp(cx, cy, 0.5, 0.5, 6, 150, 19042, 120, 28, 24, false);
+  stampSurfaceSplat(world, cx, cy, 0.5, 0.5, 6, 150, 19042, 120, 28, 24, false);
 }
 
 function decorateVoidGate(world: World, room: Room): number {
@@ -1148,7 +1149,7 @@ function decorateVoidGate(world: World, room: Room): number {
   setFeature(world, cx + 5, cy, Feature.CANDLE);
   setFeature(world, cx, cy + 4, Feature.APPARATUS);
   world.floorTex[world.idx(cx, cy)] = Tex.F_ABYSS;
-  world.stamp(cx, cy, 0.5, 0.5, 6, 180, 19037, 5, 80, 70, false);
+  stampSurfaceSplat(world, cx, cy, 0.5, 0.5, 6, 180, 19037, 5, 80, 70, false);
   return world.idx(cx, cy);
 }
 

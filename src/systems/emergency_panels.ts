@@ -1,5 +1,6 @@
 /* ── Emergency maintenance panels: local room infrastructure controls ─ */
 
+import { stampSurfaceSplat } from './surface_marks';
 import {
   AIGoal,
   Cell,
@@ -231,7 +232,7 @@ export function placeEmergencyPanel(
       : def.domain === 'doors'
         ? [150, 170, 145]
         : [95, 185, 145];
-  world.stamp(panel.x, panel.y, 0.5, 0.5, 0.34, 0.58, seed ^ panel.idx, tint[0], tint[1], tint[2], false);
+  stampSurfaceSplat(world, panel.x, panel.y, 0.5, 0.5, 0.34, 0.58, seed ^ panel.idx, tint[0], tint[1], tint[2], false);
   return panel;
 }
 
@@ -432,7 +433,7 @@ function stampNoise(world: World, panel: EmergencyPanelInstance, action: PanelAc
   const loud = action === 'force' || action === 'overload';
   const count = loud ? 5 : action === 'shutdown' ? 2 : 1;
   for (let i = 0; i < count; i++) {
-    world.stamp(
+    stampSurfaceSplat(world,
       panel.x + ((i * 3) % 5) - 2,
       panel.y + ((i * 5) % 5) - 2,
       0.5,

@@ -1,5 +1,6 @@
 /* -- Голос За Дверью: bounded Living threshold encounter -------- */
 
+import { stampSurfaceSplat } from '../../systems/surface_marks';
 import {
   AIGoal, Cell, ContainerKind, DoorState, EntityType, Faction, Feature,
   FloorLevel, MonsterKind, Occupation, QuestType, RoomType, Tex,
@@ -554,10 +555,10 @@ function decorate(world: World, front: Room, back: Room, entities: Entity[], nex
 
   world.wallTex[world.idx(fx + 6, fy - 1)] = Tex.SCREEN_BASE + 12;
   world.wallTex[world.idx(doorX, doorY - 2)] = Tex.POSTER_BASE + 31;
-  world.stamp(doorX - 1, doorY, 0.5, 0.5, 3.8, 0.48, 101101, 92, 28, 26, false);
-  world.stamp(doorX, doorY, 0.54, 0.38, 0.6, 0.72, 101102, 9, 8, 8, true);
-  world.stamp(doorX, doorY - 1, 0.5, 0.7, 0.5, 0.58, 101103, 130, 32, 32, true);
-  world.stamp(bx + 2, by + ROOM_H - 3, 0.5, 0.5, 3.2, 0.36, 101104, 70, 22, 24, false);
+  stampSurfaceSplat(world, doorX - 1, doorY, 0.5, 0.5, 3.8, 0.48, 101101, 92, 28, 26, false);
+  stampSurfaceSplat(world, doorX, doorY, 0.54, 0.38, 0.6, 0.72, 101102, 9, 8, 8, true);
+  stampSurfaceSplat(world, doorX, doorY - 1, 0.5, 0.7, 0.5, 0.58, 101103, 130, 32, 32, true);
+  stampSurfaceSplat(world, bx + 2, by + ROOM_H - 3, 0.5, 0.5, 3.2, 0.36, 101104, 70, 22, 24, false);
 
   addDrop(entities, nextId, fx + 2, fy + ROOM_H - 3, 'duct_tape');
   addDrop(entities, nextId, fx + 3, fy + ROOM_H - 3, 'sealant_tube');

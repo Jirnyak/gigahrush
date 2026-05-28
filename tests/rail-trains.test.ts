@@ -54,7 +54,7 @@ test('rail train can board at a platform and keeps the passenger on route', () =
 
   const player: Entity = {
     id: nextId.v++,
-    type: EntityType.PLAYER,
+    type: EntityType.NPC, persistentNpcId: 'player',
     x: 21.5,
     y: 18.5,
     angle: 0,

@@ -1,5 +1,6 @@
 /* ── Hell PSI meat cache: finite cult trade/theft/fight POI ───── */
 
+import { stampSurfaceSplat } from '../../systems/surface_marks';
 import {
   W, Cell, ContainerKind, Feature, FloorLevel, RoomType, Tex,
   type Entity, EntityType, AIGoal, Faction, Occupation, MonsterKind, QuestType,
@@ -14,6 +15,7 @@ import { monsterSpr, Spr } from '../../render/sprite_index';
 import { publishEvent, registerWorldEventObserver } from '../../systems/events';
 import { randomRPG, scaleMonsterHp, scaleMonsterSpeed } from '../../systems/rpg';
 import { connectProtectedRoom, findClearArea, protectRoom, rng, stampRoom } from '../shared';
+import { isPlayerEntity } from '../../systems/player_actor';
 
 const ROOM_W = 15;
 const ROOM_H = 11;
@@ -279,7 +281,7 @@ function drainPlayerForCache(
   psiLoss: number,
   hpPerMissingPsi: number,
 ): { psiLost: number; hpLost: number } {
-  const player = entities.find(entity => entity.type === EntityType.PLAYER && entity.alive);
+  const player = entities.find(entity => isPlayerEntity(entity) && entity.alive);
   if (!player) return { psiLost: 0, hpLost: 0 };
 
   let psiLost = 0;
@@ -314,7 +316,7 @@ function spawnCacheBranchBacklash(
     const zoneLevel = world.zones[site.zoneId]?.level ?? 10;
     const level = zoneLevel + (kind === MonsterKind.POLZUN ? 3 : 2);
     const hp = Math.max(1, Math.round(scaleMonsterHp(def.hp, level)));
-    const player = entities.find(entity => entity.type === EntityType.PLAYER && entity.alive);
+    const player = entities.find(entity => isPlayerEntity(entity) && entity.alive);
     const monster: Entity = {
       id,
       type: EntityType.MONSTER,
@@ -492,7 +494,7 @@ function decorateCacheRoom(world: World, room: Room): void {
   placeFeature(world, room.x + 5, room.y + room.h - 3, Feature.TABLE);
   placeFeature(world, room.x + room.w - 6, room.y + room.h - 3, Feature.TABLE);
 
-  world.stamp(room.x + 7, room.y + 5, 0.5, 0.5, 5, 150, 54054, 120, 20, 105, false);
+  stampSurfaceSplat(world, room.x + 7, room.y + 5, 0.5, 0.5, 5, 150, 54054, 120, 20, 105, false);
 }
 
 function placeFeature(world: World, x: number, y: number, feature: Feature): void {

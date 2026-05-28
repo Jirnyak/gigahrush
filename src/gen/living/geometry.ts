@@ -1,7 +1,11 @@
 /* ── Living hub geometry — readable z=0 district routes ───────── */
 
 import {
-  W, Cell, Tex, Feature, LiftDirection,
+  W,
+  Cell,
+  Tex,
+  Feature,
+  LiftDirection,
   type Room,
 } from '../../core/types';
 import { World } from '../../core/world';

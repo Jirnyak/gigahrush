@@ -3,6 +3,7 @@ import {
   designFloorById,
   type DesignFloorId,
 } from '../../data/design_floors';
+import { hashSeed, withSeededRandom } from '../../core/rand';
 import { floorRunZAllowsNpcs } from '../../data/procedural_floors';
 import type { FloorGeneration } from '../floor_manifest';
 import { withoutNpcEntities } from '../entity_filters';
@@ -51,16 +52,24 @@ const DESIGN_FLOOR_GENERATORS: Record<DesignFloorId, () => FloorGeneration> = {
   darkness: generateDarknessDesignFloor,
 };
 
+const DEFAULT_DESIGN_FLOOR_SEED = 0x4453474e;
+
+export function designFloorGenerationSeed(id: DesignFloorId, runSeed = DEFAULT_DESIGN_FLOOR_SEED): number {
+  return hashSeed(`design-floor:${id}`, runSeed);
+}
+
 export function isDesignFloorId(id: string): id is DesignFloorId {
   return designFloorById(id) !== undefined;
 }
 
-export function generateDesignFloor(id: DesignFloorId): FloorGeneration {
+export function generateDesignFloor(id: DesignFloorId, runSeed = DEFAULT_DESIGN_FLOOR_SEED): FloorGeneration {
   const route = designFloorById(id);
-  const gen = DESIGN_FLOOR_GENERATORS[id]();
-  if (!route) return gen;
-  const expanded = expandDesignFloorGeneration(gen, route);
-  return floorRunZAllowsNpcs(route.z) ? expanded : withoutNpcEntities(expanded);
+  return withSeededRandom(designFloorGenerationSeed(id, runSeed), () => {
+    const gen = DESIGN_FLOOR_GENERATORS[id]();
+    if (!route) return gen;
+    const expanded = expandDesignFloorGeneration(gen, route);
+    return floorRunZAllowsNpcs(route.z) ? expanded : withoutNpcEntities(expanded);
+  });
 }
 
 export function validateDesignFloorGenerators(): void {

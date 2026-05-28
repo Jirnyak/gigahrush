@@ -1,5 +1,6 @@
 /* ── BetoNoed weak-wall shortcut: bounded concrete eater set-piece ── */
 
+import { stampSurfaceSplat } from '../../systems/surface_marks';
 import {
   AIGoal, Cell, DoorState, EntityType, Feature, FloorLevel,
   MonsterKind, ProjType, RoomType, Tex, W,
@@ -9,6 +10,7 @@ import {
 import { World } from '../../core/world';
 import { MONSTERS } from '../../entities/monster';
 import { monsterSpr } from '../../render/sprite_index';
+import { registerContentInteractionHook, registerContentRuntimeHook } from '../../systems/content_hooks';
 import { publishEvent } from '../../systems/events';
 import { hasItem, removeItem } from '../../systems/inventory';
 import { findNoiseForActor } from '../../systems/noise';
@@ -367,8 +369,8 @@ export function generateBetonoedShortcut(ctx: MaintContentCtx): void {
   setFeature(ctx.world, shortcut.x + 5, shortcut.y + 4, Feature.MACHINE);
   setFeature(ctx.world, shortcut.x + shortcut.w - 3, shortcut.y + 2, Feature.SHELF);
 
-  ctx.world.stamp(weakX - 1, weakY, 0.5, 0.5, 0.4, 80, weakIdx, 120, 120, 115);
-  ctx.world.stamp(weakX + 1, weakY, 0.5, 0.5, 0.35, 75, weakIdx + 1, 95, 82, 62);
+  stampSurfaceSplat(ctx.world, weakX - 1, weakY, 0.5, 0.5, 0.4, 80, weakIdx, 120, 120, 115);
+  stampSurfaceSplat(ctx.world, weakX + 1, weakY, 0.5, 0.5, 0.35, 75, weakIdx + 1, 95, 82, 62);
 
   dropItems(ctx, bait, ['noise_can', 'bottled_voice', 'sealant_tube', 'block_kit', 'flamethrower', 'ammo_fuel']);
   dropItems(ctx, shortcut, ['rebar', 'ammo_fuel', 'psi_concrete_splinter']);
@@ -540,3 +542,19 @@ export function summarizeBetonoedShortcut(): string[] {
     `[BETONOED] weak=${cellX(encounter.weakIdx)},${cellY(encounter.weakIdx)} monster=${encounter.monsterId} breached=${encounter.breached ? 1 : 0} sealed=${encounter.sealed ? 1 : 0} used=${encounter.used ? 1 : 0} drivenOff=${encounter.drivenOff ? 1 : 0}`,
   ];
 }
+
+registerContentInteractionHook({
+  id: 'maint_betonoed_shortcut',
+  use(ctx) {
+    const result = tryUseBetonoedShortcut(ctx.world, ctx.player, ctx.state, ctx.lookX, ctx.lookY);
+    return result.handled ? { handled: true, worldChanged: result.worldChanged } : undefined;
+  },
+});
+
+registerContentRuntimeHook({
+  id: 'maint_betonoed_shortcut',
+  phases: ['pre_ai'],
+  update(ctx) {
+    return { worldChanged: updateBetonoedShortcut(ctx.world, ctx.entities, ctx.player, ctx.state, ctx.dt) };
+  },
+});

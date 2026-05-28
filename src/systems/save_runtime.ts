@@ -1,8 +1,4 @@
-import {
-  type Entity,
-  type GameState,
-  type WorldContainer,
-} from '../core/types';
+import { type Entity, type GameState, type WorldContainer } from '../core/types';
 import { bankingForSave } from './banking';
 import { alifeForSave } from './alife';
 import { economyForSave } from './economy';
@@ -17,7 +13,7 @@ import { floorRunStateForSave } from './procedural_floors';
 import { buildSavePayload, type SavePayload } from './save_payload';
 import { stockMarketForSave } from './stock_market';
 
-export const SAVE_SHAPE_VERSION = 12;
+export const SAVE_SHAPE_VERSION = 13;
 export type SaveShapeVersionStatus = 'missing' | 'old' | 'current' | 'newer' | 'invalid';
 
 export interface SaveRuntimeExtras {

@@ -1,5 +1,6 @@
 import { EntityType, type Entity } from '../core/types';
 import { ENTITY_SOFT_LIMITS } from '../data/entity_limits';
+import { isNativePlayerBodyEntity, isPlayerEntity } from './player_actor';
 
 export function entitySoftLimit(type: EntityType): number | undefined {
   return ENTITY_SOFT_LIMITS[type];
@@ -8,6 +9,7 @@ export function entitySoftLimit(type: EntityType): number | undefined {
 export function countLiveEntitiesOfType(entities: readonly Entity[], type: EntityType): number {
   let count = 0;
   for (const entity of entities) {
+    if (type === EntityType.NPC && (isNativePlayerBodyEntity(entity) || isPlayerEntity(entity))) continue;
     if (entity.alive && entity.type === type) count++;
   }
   return count;

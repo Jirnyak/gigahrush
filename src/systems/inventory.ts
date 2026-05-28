@@ -69,6 +69,7 @@ import {
 } from './status';
 import { consumeNoisyDocumentDelay } from './document_scent';
 import { pushNpcLogMessage } from './ai/barks';
+import { isPlayerEntity } from './player_actor';
 
 const MAX_SLOTS = 25;
 const GOVNYAK_COURIER_ROUTE_SET = new Set<string>(GOVNYAK_COURIER_CONTRACT_IDS);
@@ -302,7 +303,7 @@ function publishGreenAcidItemEvent(
   y: number,
   neutralizerId?: string,
 ): void {
-  if (!state || actor.type !== EntityType.PLAYER) return;
+  if (!state || !isPlayerEntity(actor)) return;
   const def = ITEMS[defId];
   const eventItemId = kind === 'neutralization' ? neutralizerId ?? GREEN_ACID_COUNTERMEASURE : defId;
   const eventDef = ITEMS[eventItemId];
@@ -383,7 +384,7 @@ function publishVeretarSandEvent(
   affectedItemId?: string,
   replacementItemId?: string,
 ): void {
-  if (!state || actor.type !== EntityType.PLAYER) return;
+  if (!state || !isPlayerEntity(actor)) return;
   const def = ITEMS[itemId];
   const affectedDef = affectedItemId ? ITEMS[affectedItemId] : undefined;
   publishEvent(state, {
@@ -514,7 +515,7 @@ function publishPlayerItemEvent(
   severity: 0 | 1 | 2 | 3,
   zoneId?: number,
 ): void {
-  if (!state || actor.type !== EntityType.PLAYER) return;
+  if (!state || !isPlayerEntity(actor)) return;
   const def = ITEMS[defId];
   const tags = ['player', 'inventory', def?.type !== undefined ? `item_type_${def.type}` : 'item'];
   for (const tag of ITEM_TAGS[defId] ?? []) if (!tags.includes(tag)) tags.push(tag);
@@ -624,7 +625,7 @@ function handleGasmaskFilterUse(
   const source = ITEMS[GASMASK_FILTER_ITEM];
   const produced = ITEMS[USED_GASMASK_FILTER_ITEM];
   msgs.push(msg('Фильтр отработал: дыхание выровнялось, в сумке осталась мокрая улика.', time, '#c9b38a'));
-  if (state && actor.type === EntityType.PLAYER) {
+  if (state && isPlayerEntity(actor)) {
     publishEvent(state, {
       type: 'player_use_item',
       zoneId,
@@ -675,7 +676,7 @@ function handleDeconFluidUse(
   decrementInventorySlot(inv, slotIdx);
   const source = ITEMS[DECON_FLUID_ITEM];
   msgs.push(msg(`Обеззараживающая жидкость сняла налёт: ${cleaned} кл.`, time, '#9f8'));
-  if (actor.type === EntityType.PLAYER) {
+  if (isPlayerEntity(actor)) {
     publishEvent(state, {
       type: 'player_use_item',
       zoneId,
@@ -726,7 +727,7 @@ function handleIncendiary12gUse(
   decrementInventorySlot(inv, slotIdx);
   const source = ITEMS[INCENDIARY_12G_ITEM];
   msgs.push(msg(`Зажигательная дробь выжгла налёт: ${cleaned} кл.`, time, '#fa4'));
-  if (actor.type === EntityType.PLAYER) {
+  if (isPlayerEntity(actor)) {
     publishEvent(state, {
       type: 'player_use_item',
       zoneId,
@@ -759,7 +760,7 @@ export function publishItemTradeEvent(
   count = 1,
 ): void {
   if (!state) return;
-  const player = seller.type === EntityType.PLAYER ? seller : buyer.type === EntityType.PLAYER ? buyer : undefined;
+  const player = isPlayerEntity(seller) ? seller : isPlayerEntity(buyer) ? buyer : undefined;
   if (!player) return;
   const other = player === seller ? buyer : seller;
   const def = ITEMS[defId];
@@ -827,7 +828,7 @@ function publishSilverSlimeInventoryEvent(
   outcome: string,
   rumorId: string,
 ): void {
-  if (!state || actor.type !== EntityType.PLAYER) return;
+  if (!state || !isPlayerEntity(actor)) return;
   const def = ITEMS[defId];
   publishEvent(state, {
     type,
@@ -1262,7 +1263,7 @@ function publishDocumentActionEvent(
   world: World | undefined,
   targetName?: string,
 ): void {
-  if (!state || actor.type !== EntityType.PLAYER) return;
+  if (!state || !isPlayerEntity(actor)) return;
   const def = ITEMS[itemId];
   publishEvent(state, {
     type,
@@ -1539,7 +1540,7 @@ function handleContaminatedSwabUse(
   const slot = e.inventory?.[slotIdx];
   if (!slot || slot.defId !== CONTAMINATED_SWAB_ITEM) return false;
 
-  if (!state || e.type !== EntityType.PLAYER) {
+  if (!state || !isPlayerEntity(e)) {
     msgs.push(msg(ITEMS[CONTAMINATED_SWAB_ITEM]?.desc ?? 'Грязной пробе нужен адресат.', time, '#aa8'));
     return true;
   }
@@ -1616,7 +1617,7 @@ function handleAuditProofUse(
   const slot = e.inventory?.[slotIdx];
   if (!slot || slot.defId !== defId) return false;
 
-  if (!state || e.type !== EntityType.PLAYER) {
+  if (!state || !isPlayerEntity(e)) {
     msgs.push(msg(ITEMS[defId]?.desc ?? 'Улике нужен адресат.', time, '#aa8'));
     return true;
   }
@@ -1691,7 +1692,7 @@ function handleDocumentPaperUse(
   if (defId === 'forged_stamp_sheet') return forgePermitFromStampSheet(e, msgs, time, state, zoneId, world);
   if (handleDirectDocumentActionUse(e, slotIdx, defId, msgs, time, state, zoneId, world)) return true;
   if (!DOCUMENT_GATE_ITEMS.has(defId) && DOCUMENT_MARKET_VALUES[defId] === undefined) return false;
-  if (!state || e.type !== EntityType.PLAYER) {
+  if (!state || !isPlayerEntity(e)) {
     msgs.push(msg(ITEMS[defId]?.desc ?? 'Бумаге нужен адресат.', time, '#aa8'));
     return true;
   }
@@ -1709,7 +1710,7 @@ function handleDocumentPaperUse(
 
 function handleShelterTallyUse(e: Entity, defId: string, msgs: Msg[], time: number, state?: GameState): boolean {
   if (!isShelterTallyItem(defId)) return false;
-  if (!state || e.type !== EntityType.PLAYER) {
+  if (!state || !isPlayerEntity(e)) {
     msgs.push(msg(ITEMS[defId]?.desc ?? 'Бумаге нужен адресат.', time, '#aa8'));
     return true;
   }

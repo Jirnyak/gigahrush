@@ -1,7 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { Faction, Occupation, RoomType } from '../src/core/types';
+import { AIGoal, Cell, EntityType, Faction, NpcState, Occupation, RoomType, type Entity, type GameClock } from '../src/core/types';
+import { World } from '../src/core/world';
 import {
   chooseStableNpcUtilityTarget,
   createNpcUtilityScoreBuffer,
@@ -17,6 +18,49 @@ import {
   shouldSwitchNpcUtilityIntent,
   type NpcUtilityTargetCandidate,
 } from '../src/systems/ai/npc_utility';
+import { updateNPC } from '../src/systems/ai/npc_fsm';
+import { rebuildEntityIndexForSimulation } from '../src/systems/entity_index';
+import { addTestRoom, makeTestPlayer } from './helpers';
+
+function makeUtilityWorld(): World {
+  const world = new World();
+  for (let y = 0; y < 80; y++) {
+    for (let x = 0; x < 80; x++) world.set(x, y, Cell.FLOOR);
+  }
+  addTestRoom(world, { id: 0, type: RoomType.LIVING, x: 5, y: 5, w: 8, h: 8 });
+  addTestRoom(world, { id: 1, type: RoomType.KITCHEN, x: 20, y: 5, w: 8, h: 8 });
+  addTestRoom(world, { id: 2, type: RoomType.BATHROOM, x: 35, y: 5, w: 8, h: 8 });
+  addTestRoom(world, { id: 3, type: RoomType.PRODUCTION, x: 50, y: 5, w: 8, h: 8 });
+  addTestRoom(world, { id: 4, type: RoomType.COMMON, x: 20, y: 25, w: 8, h: 8 });
+  return world;
+}
+
+function makeUtilityNpc(id: number, needs: Entity['needs'], extra: Partial<Entity> = {}): Entity {
+  return {
+    id,
+    type: EntityType.NPC,
+    x: 8,
+    y: 8,
+    angle: 0,
+    pitch: 0,
+    alive: true,
+    speed: 1,
+    sprite: 0,
+    hp: 50,
+    maxHp: 50,
+    faction: Faction.CITIZEN,
+    occupation: Occupation.MECHANIC,
+    alifeId: id,
+    needs,
+    ai: { goal: AIGoal.IDLE, tx: 0, ty: 0, path: [], pi: 0, stuck: 0, timer: 0 },
+    ...extra,
+  };
+}
+
+function tickUtilityNpc(world: World, entities: Entity[], npc: Entity, clock: GameClock): void {
+  rebuildEntityIndexForSimulation(entities, clock.totalMinutes);
+  updateNPC(world, entities, npc, 1, clock.totalMinutes, clock, false);
+}
 
 test('NPC utility identity seed prefers stable A-Life identity over transient entity id', () => {
   const a = { entityId: 10, alifeId: 777 };
@@ -117,4 +161,33 @@ test('NPC utility target preference is stable across candidate order and respect
   assert.equal(forward?.id, reversed?.id);
   assert.ok(npcUtilityWorkRoomTypeWeight(Occupation.COOK, RoomType.KITCHEN) > npcUtilityWorkRoomTypeWeight(Occupation.COOK, RoomType.PRODUCTION));
   assert.ok(scoreNpcUtilityTargetPreference(targets[0], context) > scoreNpcUtilityTargetPreference(targets[2], context));
+});
+
+test('NPC runtime utility lets urgent thirst beat work at working hours', () => {
+  const world = makeUtilityWorld();
+  const player = makeTestPlayer({ id: 1, x: 70, y: 70 });
+  const thirsty = makeUtilityNpc(10, { food: 90, water: 5, sleep: 90, pee: 5, poo: 5 });
+  const worker = makeUtilityNpc(11, { food: 90, water: 90, sleep: 90, pee: 5, poo: 5 });
+  const entities = [player, thirsty, worker];
+  const clock = { hour: 9, minute: 0, totalMinutes: 9 * 60 };
+
+  tickUtilityNpc(world, entities, thirsty, clock);
+  tickUtilityNpc(world, entities, worker, clock);
+
+  assert.equal(thirsty.ai?.goal, AIGoal.DRINK);
+  assert.equal(thirsty.ai?.npcState, NpcState.LUNCH);
+  assert.equal(worker.ai?.goal, AIGoal.WORK);
+  assert.equal(worker.ai?.npcState, NpcState.WORKING);
+});
+
+test('NPC runtime utility does not force lunch from the noon clock edge', () => {
+  const world = makeUtilityWorld();
+  const player = makeTestPlayer({ id: 1, x: 70, y: 70 });
+  const npc = makeUtilityNpc(12, { food: 100, water: 100, sleep: 100, pee: 0, poo: 0 });
+  const entities = [player, npc];
+
+  tickUtilityNpc(world, entities, npc, { hour: 12, minute: 0, totalMinutes: 12 * 60 });
+
+  assert.notEqual(npc.ai?.goal, AIGoal.EAT);
+  assert.notEqual(npc.ai?.npcState, NpcState.LUNCH);
 });

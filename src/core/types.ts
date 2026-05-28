@@ -171,7 +171,6 @@ export interface Door {
 
 // ── Entities ─────────────────────────────────────────────────────
 export enum EntityType {
-  PLAYER,
   NPC,
   MONSTER,
   ITEM_DROP,
@@ -371,18 +370,18 @@ export enum AIGoal {
   IDLE, GOTO, EAT, DRINK, SLEEP, TOILET, WORK, HIDE, HUNT, FLEE, WANDER,
 }
 
-// ── NPC A-Life FSM states ────────────────────────────────────────
+// ── NPC visible/debug states derived from local utility intents ───
 export enum NpcState {
-  SLEEPING,    // 22-6: в жилой комнате, спит
-  MORNING,     // 6-8: утренние дела — санузел, кухня, коридоры
-  WORKING,     // 8-12, 13-18: на работе
-  LUNCH,       // 12-13: обед в кухне
-  FREE_TIME,   // 18-22: свободное время — курилка, кухня, бродит
-  HIDING,      // самосбор — сидит в жилой
-  TRAVELING,   // путники — бродят по лабиринту постоянно
-  MEETING,     // заседание в зале (министерство)
-  PATROL,      // патруль коридоров (ликвидаторы)
-  BREAK,       // перекур / перерыв
+  SLEEPING,    // sleep/rest intent
+  MORNING,     // toilet/personal upkeep intent
+  WORKING,     // work/profession intent
+  LUNCH,       // eat/drink intent
+  FREE_TIME,   // social/wander/low-pressure intent
+  HIDING,      // safety/flee intent
+  TRAVELING,   // traveler movement intent
+  MEETING,     // social/coordination intent
+  PATROL,      // patrol/combat-readiness intent
+  BREAK,       // legacy display label for short rest
 }
 
 export interface MonsterBaitLineState {
@@ -402,8 +401,8 @@ export interface AIState {
   pi: number;                 // path index
   stuck: number;
   timer: number;
-  npcState?: NpcState;        // A-Life FSM current state
-  stateTimer?: number;        // time remaining in current sub-activity
+  npcState?: NpcState;        // visible/debug state derived from the current NPC intent
+  stateTimer?: number;        // elapsed time in current sub-activity
   combatTargetId?: number;    // cached hostile target entity id
   combatScanCd?: number;      // cooldown until next full hostile scan
   windupTimer?: number;       // generic readable attack windup countdown

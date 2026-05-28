@@ -5,6 +5,7 @@ import {
 import type { World } from '../core/world';
 import { drawGlitchText, drawNeuroPanel, drawStaticNoise } from './hud_fx';
 import { fitText } from './ui_text';
+import { isPlayerEntity } from '../systems/player_actor';
 
 export type MapEditorToolId = 'cell' | 'door' | 'texture' | 'feature' | 'entity' | 'container' | 'inspect' | string;
 export type MapEditorDirtyCell = number | { x: number; y: number; idx?: number };
@@ -601,7 +602,7 @@ function drawEntityDots(
   let drawn = 0;
   const r = Math.max(1.4, Math.min(4, scale * 0.45));
   for (const entity of entities) {
-    if (!entity.alive || entity.type === EntityType.PLAYER) continue;
+    if (!entity.alive || isPlayerEntity(entity)) continue;
     const x = screenX(layout, world, centerX, entity.x, scale);
     const y = screenY(layout, world, centerY, entity.y, scale);
     if (x < layout.mapX - 4 || x > layout.mapX + layout.mapW + 4 || y < layout.mapY - 4 || y > layout.mapY + layout.mapH + 4) continue;

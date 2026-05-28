@@ -42,6 +42,7 @@ import {
   isShelterTallyItem,
   publishShelterTallyEvent,
 } from './shelter_tally';
+import { isPlayerEntity } from './player_actor';
 
 const MAX_ENTITY_INVENTORY_SLOTS = 25;
 const THEFT_WITNESS_RADIUS = 7;
@@ -1148,7 +1149,7 @@ export function takeFromContainer(
     });
     if (stolen) {
       for (const witness of theftWitness.witnesses) observeRumorEvent(witness, event, state.time);
-      if (actor.type === EntityType.PLAYER && isShelterTallyItem(defId)) {
+      if (isPlayerEntity(actor) && isShelterTallyItem(defId)) {
         publishShelterTallyEvent(state, actor, defId, 'stolen', {
           targetId: firstWitness?.id ?? container.ownerNpcId,
           targetName: firstWitness?.name ?? container.ownerName,
@@ -1253,7 +1254,7 @@ export function putIntoContainer(
       },
     });
     for (const witness of witnesses.witnesses) observeRumorEvent(witness, event, state.time);
-    if (actor.type === EntityType.PLAYER && isShelterTallyItem(defId) && isShelterTallyHideContainer(container)
+    if (isPlayerEntity(actor) && isShelterTallyItem(defId) && isShelterTallyHideContainer(container)
       && !container.tags.includes('shelter_tally_hidden')) {
       container.tags.push('shelter_tally_hidden');
       publishShelterTallyEvent(state, actor, defId, 'hide', { container });

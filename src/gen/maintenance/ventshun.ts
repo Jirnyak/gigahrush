@@ -1,5 +1,6 @@
 /* ── Monster_07 Ventshun: warned vent predator encounter ──────── */
 
+import { stampSurfaceSplat } from '../../systems/surface_marks';
 import {
   AIGoal, Cell, ContainerKind, EntityType, Feature, FloorLevel,
   MonsterKind, RoomType, Tex, W, msg,
@@ -391,7 +392,7 @@ registerWorldEventObserver(handleVentshunEvents);
 
 function markVent(ctx: MaintContentCtx, room: Room, x: number, y: number, seed: number): number {
   const ci = ctx.world.idx(x, y);
-  ctx.world.stamp(x, y, 0.5, 0.45, 0.45, 80, seed, 136, 128, 106);
+  stampSurfaceSplat(ctx.world, x, y, 0.5, 0.45, 0.45, 80, seed, 136, 128, 106);
   ctx.world.fog[ci] = Math.max(ctx.world.fog[ci], 42);
   setFeature(ctx.world, x, y, Feature.APPARATUS);
   if (seed % 2 === 0) setWater(ctx.world, x, y + 1);
@@ -407,7 +408,7 @@ function decorateVentshunRoom(ctx: MaintContentCtx, room: Room): number[] {
   ];
 
   for (let x = room.x + 2; x < room.x + room.w - 2; x++) {
-    if (x % 3 === 0) ctx.world.stamp(x, room.y + 2, 0.5, 0.5, 0.2, 55, 70200 + x, 96, 92, 82);
+    if (x % 3 === 0) stampSurfaceSplat(ctx.world, x, room.y + 2, 0.5, 0.5, 0.2, 55, 70200 + x, 96, 92, 82);
   }
   for (let x = room.x + 3; x < room.x + room.w - 3; x += 4) {
     setFeature(ctx.world, x, room.y + room.h - 3, Feature.LAMP);

@@ -22,13 +22,14 @@ import {
 import { World } from '../../core/world';
 import { ITEMS } from '../../data/catalog';
 import { MONSTERS } from '../../entities/monster';
-import { MarkType, stampMark } from '../../render/marks';
+import { MarkType, stampMark } from '../../systems/surface_marks';
 import { monsterSpr, Spr } from '../../render/sprite_index';
 import { registerCellHazardSite } from '../../systems/cell_hazards';
 import { publishEvent, registerWorldEventObserver } from '../../systems/events';
 import { randomRPG, scaleMonsterHp, scaleMonsterSpeed } from '../../systems/rpg';
 import { connectProtectedRoom, findClearArea, protectRoom, stampRoom } from '../shared';
 import { genLog } from '../log';
+import { isPlayerEntity } from '../../systems/player_actor';
 
 const MYASOMER_ID = 'myasomer';
 const MYASOMER_NAME = 'Мясомер';
@@ -605,7 +606,7 @@ function nextEntityId(entities: readonly Entity[]): number {
 
 function findPlayer(entities: readonly Entity[]): Entity | null {
   for (const entity of entities) {
-    if (entity.type === EntityType.PLAYER && entity.alive) return entity;
+    if (isPlayerEntity(entity) && entity.alive) return entity;
   }
   return null;
 }

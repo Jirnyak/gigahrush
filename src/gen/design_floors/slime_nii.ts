@@ -1,5 +1,6 @@
 /* ── Design floor: НИИ слизи ─────────────────────────────────── */
 
+import { stampSurfaceSplat } from '../../systems/surface_marks';
 import {
   AIGoal,
   Cell,
@@ -423,7 +424,7 @@ function decorateRooms(world: World, rooms: SlimeNiiRooms): void {
     addWetCell(world, rooms.drainWard.x + 15, y);
     setFeature(world, rooms.drainWard.x + 26, y, Feature.APPARATUS);
   }
-  world.stamp(rooms.drainWard.x + 18, rooms.drainWard.y + 29, 0.5, 0.5, 8, 0.28, 12012, 32, 140, 74, false);
+  stampSurfaceSplat(world, rooms.drainWard.x + 18, rooms.drainWard.y + 29, 0.5, 0.5, 8, 0.28, 12012, 32, 140, 74, false);
 
   for (let x = rooms.volunteerWard.x + 12; x < rooms.volunteerWard.x + rooms.volunteerWard.w - 10; x += 22) {
     setFeature(world, x, rooms.volunteerWard.y + 16, Feature.BED);
@@ -440,7 +441,7 @@ function decorateCamera(world: World, room: Room, serial: number): void {
   setFeature(world, room.x + 6, room.y + 6, serial % 2 === 0 ? Feature.APPARATUS : Feature.BED);
   setFeature(world, room.x + room.w - 7, room.y + room.h - 7, serial % 3 === 0 ? Feature.SINK : Feature.SHELF);
   const color = serial % 4;
-  world.stamp(
+  stampSurfaceSplat(world,
     room.x + (room.w >> 1),
     room.y + (room.h >> 1),
     0.5,

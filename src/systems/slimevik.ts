@@ -26,6 +26,7 @@ import { publishEvent, registerWorldEventObserver } from './events';
 import { isDebugOnePunchManEnabled, keepDebugOnePunchManAlive } from './debug_cheats';
 import { scaleMonsterDmg, strMeleeDmgMult } from './rpg';
 import { followPath, tryAssignPathToCell, wanderNearby } from './ai/pathfinding';
+import { isPlayerEntity } from './player_actor';
 
 const INTERACTION_RANGE = 2.0;
 const INTERACTION_FORWARD = 0.2;
@@ -164,7 +165,7 @@ function nearestActor(world: World, entities: readonly Entity[], e: Entity): Ent
   let best: Entity | null = null;
   let bestD2 = FLEE_DISTANCE * FLEE_DISTANCE;
   for (const other of entities) {
-    if (!other.alive || other.id === e.id || (other.type !== EntityType.PLAYER && other.type !== EntityType.NPC)) continue;
+    if (!other.alive || other.id === e.id || (!isPlayerEntity(other) && other.type !== EntityType.NPC)) continue;
     const d2 = world.dist2(e.x, e.y, other.x, other.y);
     if (d2 < bestD2) {
       best = other;
@@ -210,7 +211,7 @@ function lashIfCornered(
   const strMult = e.rpg ? strMeleeDmgMult(e.rpg) : 1;
   const dmg = Math.max(1, Math.round(scaleMonsterDmg(def.dmg, level) * strMult));
   if (target.hp !== undefined) {
-    if (target.type === EntityType.PLAYER && isDebugOnePunchManEnabled()) {
+    if (isPlayerEntity(target) && isDebugOnePunchManEnabled()) {
       keepDebugOnePunchManAlive(target);
     } else {
       target.hp = Math.max(0, target.hp - dmg);
@@ -219,9 +220,9 @@ function lashIfCornered(
         target.hp = 0;
       }
     }
-    if (target.type === EntityType.PLAYER) recordPlayerDamage(state, e, dmg, 'Слизневик хлестнул кислотной слизью в углу');
+    if (isPlayerEntity(target)) recordPlayerDamage(state, e, dmg, 'Слизневик хлестнул кислотной слизью в углу');
   }
-  msgs.push(msg(`Слизневик хлестнул ${target.type === EntityType.PLAYER ? 'тебя' : entityDisplayName(target)} кислотной слизью: -${dmg}`, time, '#9d7'));
+  msgs.push(msg(`Слизневик хлестнул ${isPlayerEntity(target) ? 'тебя' : entityDisplayName(target)} кислотной слизью: -${dmg}`, time, '#9d7'));
   e.attackCd = def.attackRate;
 }
 

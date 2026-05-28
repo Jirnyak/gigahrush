@@ -1,11 +1,10 @@
 /* ── Maronary wrong-door one-shot remap ───────────────────────── */
 
-import {
-  W, Cell, DoorState, EntityType,
-  type Entity, type GameState,
-} from '../core/types';
+import { stampSurfaceSplat } from './surface_marks';
+import { W, Cell, DoorState, type Entity, type GameState } from '../core/types';
 import { World } from '../core/world';
 import { publishEvent } from './events';
+import { isPlayerEntity } from './player_actor';
 
 export { ContainerKind, Faction, FloorLevel, Occupation } from '../core/types';
 
@@ -369,8 +368,8 @@ export function createWrongDoorRemap(
   const sy = (remap.sourceIdx / W) | 0;
   const tx = remap.targetIdx % W;
   const ty = (remap.targetIdx / W) | 0;
-  world.stamp(sx, sy, 0.5, 0.5, 0.42, 0.72, remap.id * 17 + 3, 35, 255, 94, true);
-  world.stamp(tx, ty, 0.5, 0.5, 0.28, 0.55, remap.id * 17 + 7, 35, 255, 94, false);
+  stampSurfaceSplat(world, sx, sy, 0.5, 0.5, 0.42, 0.72, remap.id * 17 + 3, 35, 255, 94, true);
+  stampSurfaceSplat(world, tx, ty, 0.5, 0.5, 0.28, 0.55, remap.id * 17 + 7, 35, 255, 94, false);
 
   publishWrongDoorEvent(world, state, remap, 'created', reason);
   return {
@@ -390,7 +389,7 @@ export function createMaronaryWrongDoorRemap(
   reason: string,
   preferredSourceIdx?: number,
 ): boolean {
-  const player = entities.find(e => e.type === EntityType.PLAYER && e.alive);
+  const player = entities.find(e => isPlayerEntity(e) && e.alive);
   const cue = createWrongDoorRemap(world, state, player?.x ?? W / 2, player?.y ?? W / 2, reason, false, preferredSourceIdx);
   return cue !== null;
 }

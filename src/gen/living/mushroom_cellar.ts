@@ -1,5 +1,6 @@
 /* -- AG12 Mushroom Shift: first playable cellar slice ----------- */
 
+import { stampSurfaceSplat } from '../../systems/surface_marks';
 import {
   AIGoal, Cell, EntityType, Faction, Feature, FloorLevel, Occupation, QuestType, RoomType, Tex,
   type Entity, type Room,
@@ -325,8 +326,8 @@ function decorateCellar(world: World, entities: Entity[], nextId: { v: number },
 
   world.wallTex[world.idx(rx + Math.floor(CELLAR_W / 2), ry - 1)] = Tex.POSTER_BASE + 41;
   world.wallTex[world.idx(rx + CELLAR_W - 1, ry + 4)] = Tex.ROTTEN;
-  world.stamp(rx + 4, ry + 6, 0.5, 0.5, 5, 0.55, 12012, 42, 110, 54, false);
-  world.stamp(rx + 8, ry + 3, 0.5, 0.5, 4, 0.45, 12013, 120, 68, 42, false);
+  stampSurfaceSplat(world, rx + 4, ry + 6, 0.5, 0.5, 5, 0.55, 12012, 42, 110, 54, false);
+  stampSurfaceSplat(world, rx + 8, ry + 3, 0.5, 0.5, 4, 0.45, 12013, 120, 68, 42, false);
 
   dropItem(entities, nextId, rx + 3, ry + 3, 'spore_print', 1);
   dropItem(entities, nextId, rx + 5, ry + 3, 'substrate_sack', 2);

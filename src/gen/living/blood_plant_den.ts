@@ -1,5 +1,6 @@
 /* ── Blood plant den: red mold stash, witnesses, root source ──── */
 
+import { stampSurfaceSplat } from '../../systems/surface_marks';
 import {
   AIGoal,
   Cell,
@@ -217,7 +218,7 @@ function decorateDen(world: World, entities: Entity[], nextId: { v: number }, ro
   for (let i = 0; i < 12; i++) {
     const x = room.x + 4 + (i % 5);
     const y = room.y + 4 + ((i * 3) % 6);
-    world.stamp(x, y, 0.5, 0.5, 0.68, 0.62, 151_000 + i * 41, 142, 14, 28, false);
+    stampSurfaceSplat(world, x, y, 0.5, 0.5, 0.68, 0.62, 151_000 + i * 41, 142, 14, 28, false);
   }
 
   const distributor = spawnDenNpc(entities, nextId, 'Сеня Красная Плесень', Faction.CULTIST, Occupation.PILGRIM, room.x + 4, room.y + 8, 'knife');

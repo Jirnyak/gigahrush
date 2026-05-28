@@ -23,6 +23,7 @@ import {
 import { carveCorridor, findClearArea, protectRoom, stampRoom } from '../shared';
 import { genLog } from '../log';
 import { spawnChernobogDocketHandlers } from './chernobog_archive_docket';
+import { isPlayerEntity } from '../../systems/player_actor';
 
 const GATE_ROOM_NAME = 'Проверочный коридор N3';
 const GATE_W = 19;
@@ -557,7 +558,7 @@ function publishDocumentGateAccessEvent(
 }
 
 function handleDocumentGateUse(ctx: InventoryUseHandlerContext): boolean {
-  if (!ctx.state || !ctx.world || ctx.actor.type !== EntityType.PLAYER) return false;
+  if (!ctx.state || !ctx.world || !isPlayerEntity(ctx.actor)) return false;
   if (ctx.state.currentFloor !== FloorLevel.MINISTRY) return false;
   const target = findDocumentGateTarget(ctx.world, ctx.actor);
   if (!target) return false;

@@ -1,6 +1,14 @@
-import { Cell, EntityType, Feature, W, msg, type Entity, type GameState } from '../../core/types';
+import {
+  Cell,
+  Feature,
+  W,
+  msg,
+  type Entity,
+  type GameState,
+} from '../../core/types';
 import { World } from '../../core/world';
-import { MarkType, stampMark } from '../../render/marks';
+import { MarkType, stampMark } from '../surface_marks';
+import { isPlayerEntity } from '../player_actor';
 
 const AMNESIA_ROOM_PREFIX = 'Амнезийная зона';
 const RING_SIZE = 192;
@@ -29,7 +37,7 @@ interface CementMemoryRuntime {
 const runtimeByState = new WeakMap<GameState, CementMemoryRuntime>();
 
 export function updateCementMemoryAnomaly(world: World, player: Entity, state: GameState, dt: number): void {
-  if (player.type !== EntityType.PLAYER) return;
+  if (!isPlayerEntity(player)) return;
   const runtime = runtimeFor(world, state);
   const px = world.wrap(Math.floor(player.x));
   const py = world.wrap(Math.floor(player.y));

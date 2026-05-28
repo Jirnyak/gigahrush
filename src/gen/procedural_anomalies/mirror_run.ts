@@ -1,3 +1,4 @@
+import { stampSurfaceSplat } from '../../systems/surface_marks';
 import { Cell, Feature, RoomType, Tex, type Room } from '../../core/types';
 import {
   addItemDrop,
@@ -96,7 +97,7 @@ function setMirrorFeature(ctx: ProceduralAnomalyGenContext, pos: { x: number; y:
   ctx.world.features[ci] = feature;
   ctx.world.floorTex[ci] = Tex.F_TILE;
   ctx.world.fog[ci] = Math.max(ctx.world.fog[ci], 22);
-  ctx.world.stamp(pos.x, pos.y, 0.5, 0.5, 0.34, 0.58, seed ^ ci, 155, 205, 225, false);
+  stampSurfaceSplat(ctx.world, pos.x, pos.y, 0.5, 0.5, 0.34, 0.58, seed ^ ci, 155, 205, 225, false);
 }
 
 function addMirrorTeleport(ctx: ProceduralAnomalyGenContext, a: { x: number; y: number } | null, b: { x: number; y: number } | null): void {
@@ -152,7 +153,7 @@ function markAxis(ctx: ProceduralAnomalyGenContext, axis: Axis, axisValue: numbe
     if (!isWalkableCell(ctx.world, ci)) continue;
     ctx.world.floorTex[ci] = Tex.F_VOID;
     ctx.world.fog[ci] = Math.max(ctx.world.fog[ci], 34);
-    if ((d & 15) === 0) ctx.world.stamp(x, y, 0.5, 0.5, 0.2, 0.5, ctx.spec.seed + d, 120, 185, 215, false);
+    if ((d & 15) === 0) stampSurfaceSplat(ctx.world, x, y, 0.5, 0.5, 0.2, 0.5, ctx.spec.seed + d, 120, 185, 215, false);
   }
 }
 

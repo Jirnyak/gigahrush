@@ -8,7 +8,7 @@ import {
 } from '../../core/types';
 import type { World } from '../../core/world';
 import { MONSTERS } from '../../entities/monster';
-import { MarkType, stampMark } from '../../render/marks';
+import { MarkType, stampMark } from '../../systems/surface_marks';
 import { Spr, monsterSpr } from '../../render/sprite_index';
 import { cleanCellHazardsNear, registerCellHazardSite } from '../../systems/cell_hazards';
 import { publishEvent, registerWorldEventObserver } from '../../systems/events';

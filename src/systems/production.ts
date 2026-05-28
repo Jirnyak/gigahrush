@@ -1,7 +1,17 @@
 import {
-  Cell, ContainerKind, Faction, Feature, FloorLevel,
-  type ContainerAccess, type Entity, type GameState, type Room, type WorldContainer,
-  type WorldEventPrivacy, type WorldEventSeverity, msg,
+  Cell,
+  ContainerKind,
+  Faction,
+  Feature,
+  FloorLevel,
+  type ContainerAccess,
+  type Entity,
+  type GameState,
+  type Room,
+  type WorldContainer,
+  type WorldEventPrivacy,
+  type WorldEventSeverity,
+  msg,
 } from '../core/types';
 import { World } from '../core/world';
 import {

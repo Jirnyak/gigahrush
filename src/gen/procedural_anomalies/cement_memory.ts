@@ -1,5 +1,5 @@
 import { Feature, RoomType } from '../../core/types';
-import { MarkType, stampMark } from '../../render/marks';
+import { MarkType, stampMark } from '../../systems/surface_marks';
 import {
   addItemDrop,
   randomRoomCell,

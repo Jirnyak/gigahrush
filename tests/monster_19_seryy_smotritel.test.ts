@@ -23,7 +23,7 @@ function angleTo(world: World, fromX: number, fromY: number, toX: number, toY: n
 function makePlayer(world: World, x: number, y: number, sourceX: number, sourceY: number): Entity {
   return {
     id: 1000,
-    type: EntityType.PLAYER,
+    type: EntityType.NPC, persistentNpcId: 'player',
     x,
     y,
     angle: angleTo(world, x, y, sourceX + 0.5, sourceY + 0.5),

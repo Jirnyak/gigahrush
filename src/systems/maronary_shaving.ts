@@ -1,12 +1,17 @@
 import {
-  EntityType, Faction, FloorLevel, Occupation,
-  type Entity, type GameState, type Item,
+  Faction,
+  FloorLevel,
+  Occupation,
+  type Entity,
+  type GameState,
+  type Item,
   msg,
 } from '../core/types';
 import { ITEMS } from '../data/catalog';
 import { getStack } from '../data/items';
 import { addFactionRelMutual } from '../data/relations';
 import { publishEvent } from './events';
+import { isPlayerEntity } from './player_actor';
 
 const ITEM_ID = 'maronary_shaving';
 const BASE_TAGS = ['player', 'inventory', 'maronary', 'contraband', 'evidence'];
@@ -111,7 +116,7 @@ export function destroyMaronaryShaving(actor: Entity, state: GameState | undefin
   if (actor.rpg) actor.rpg.psi = Math.max(0, actor.rpg.psi - 6);
   else if (actor.hp !== undefined) actor.hp = Math.max(1, actor.hp - 2);
 
-  if (state && actor.type === EntityType.PLAYER) {
+  if (state && isPlayerEntity(actor)) {
     const def = shavingDef();
     publishEvent(state, {
       type: 'player_destroy_item',
@@ -140,7 +145,7 @@ export function destroyMaronaryShaving(actor: Entity, state: GameState | undefin
 }
 
 export function publishMaronaryShavingAcquired(actor: Entity, state: GameState, source: string): void {
-  if (actor.type !== EntityType.PLAYER) return;
+  if (!isPlayerEntity(actor)) return;
   const def = shavingDef();
   publishEvent(state, {
     type: 'player_pick_item',

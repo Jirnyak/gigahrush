@@ -1,12 +1,11 @@
 import { W, EntityType, type Entity } from '../core/types';
 
-export const ENTITY_MASK_PLAYER = 1 << EntityType.PLAYER;
 export const ENTITY_MASK_NPC = 1 << EntityType.NPC;
 export const ENTITY_MASK_MONSTER = 1 << EntityType.MONSTER;
 export const ENTITY_MASK_ITEM_DROP = 1 << EntityType.ITEM_DROP;
 export const ENTITY_MASK_PROJECTILE = 1 << EntityType.PROJECTILE;
 export const ENTITY_MASK_BILLBOARD = 1 << EntityType.BILLBOARD;
-export const ENTITY_MASK_ACTOR = ENTITY_MASK_PLAYER | ENTITY_MASK_NPC | ENTITY_MASK_MONSTER;
+export const ENTITY_MASK_ACTOR = ENTITY_MASK_NPC | ENTITY_MASK_MONSTER;
 export const ENTITY_MASK_VISIBLE = ENTITY_MASK_ACTOR | ENTITY_MASK_ITEM_DROP | ENTITY_MASK_PROJECTILE | ENTITY_MASK_BILLBOARD;
 
 const BUCKET_SIZE = 16;
@@ -171,7 +170,7 @@ export class EntityIndex {
       liveEntityCount++;
       this.byId.set(e.id, e);
       this.entityOrder.set(e.id, order);
-      if (e.type === EntityType.PLAYER || e.type === EntityType.NPC || e.type === EntityType.MONSTER) this.actors.push(e);
+      if (e.type === EntityType.NPC || e.type === EntityType.MONSTER) this.actors.push(e);
       if (e.type === EntityType.NPC) npcCount++;
       else if (e.type === EntityType.MONSTER) monsterCount++;
       else if (e.type === EntityType.ITEM_DROP) itemCount++;

@@ -23,6 +23,7 @@ import {
 import { World } from '../core/world';
 import { type FloorGeneration } from '../gen/floor_manifest';
 import { cleanFloorKey, floorKeyForStory } from './floor_keys';
+import { isNativePlayerBodyEntity } from './player_actor';
 
 export interface FloorMemoryEntry {
   key: string;
@@ -171,7 +172,7 @@ export function floorMemoryKeyForStoryFloor(floor: FloorLevel): string {
 }
 
 function storableEntity(entity: Entity): boolean {
-  return entity.type !== EntityType.PLAYER && entity.type !== EntityType.PROJECTILE;
+  return !isNativePlayerBodyEntity(entity) && entity.type !== EntityType.PROJECTILE;
 }
 
 function clampBytes(value: number, min: number, max: number): number {
@@ -1440,7 +1441,7 @@ function finiteNonNegativeInt(value: unknown, fallback = 0): number {
 function knownEntityType(value: unknown): value is EntityType {
   return typeof value === 'number'
     && Number.isInteger(value)
-    && value >= EntityType.PLAYER
+    && value >= EntityType.NPC
     && value <= EntityType.BILLBOARD;
 }
 

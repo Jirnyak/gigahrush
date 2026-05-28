@@ -1,8 +1,19 @@
 /* ── Комната печатей — Ministry admin POI ─────────────────────── */
 
 import {
-  ContainerKind, Tex, Feature, FloorLevel, RoomType, Faction, Occupation, QuestType, msg,
-  type Entity, type GameState, type WorldContainer, type WorldEvent,
+  ContainerKind,
+  Tex,
+  Feature,
+  FloorLevel,
+  RoomType,
+  Faction,
+  Occupation,
+  QuestType,
+  msg,
+  type Entity,
+  type GameState,
+  type WorldContainer,
+  type WorldEvent,
 } from '../../core/types';
 import { World } from '../../core/world';
 import { type PlotNpcDef, registerSideQuest } from '../../data/plot';

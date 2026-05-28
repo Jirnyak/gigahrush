@@ -1,3 +1,4 @@
+import { stampSurfaceSplat } from '../../systems/surface_marks';
 import { Cell, Feature, RoomType, Tex } from '../../core/types';
 import {
   addItemDrop,
@@ -23,7 +24,7 @@ function markBoardCell(ctx: ProceduralAnomalyGenContext, x: number, y: number, s
   world.light[ci] = Math.max(world.light[ci], light);
   if (((x ^ y ^ seed) & 3) === 0) world.floorTex[ci] = Tex.F_TILE;
   if (((x * 31 + y * 17 + seed) & 15) === 0) {
-    world.stamp(x, y, 0.5, 0.5, 0.18, 0.34, seed + x * 13 + y * 19, 190, 190, 125, false);
+    stampSurfaceSplat(world, x, y, 0.5, 0.5, 0.18, 0.34, seed + x * 13 + y * 19, 190, 190, 125, false);
   }
 }
 
@@ -46,7 +47,7 @@ function stampBoardRoom(ctx: ProceduralAnomalyGenContext, roomIndex: number): vo
   const bi = world.idx(beacon.x, beacon.y);
   world.features[bi] = Feature.APPARATUS;
   world.light[bi] = Math.max(world.light[bi], 0.85);
-  world.stamp(beacon.x, beacon.y, 0.5, 0.5, 0.72, 0.7, spec.seed + 6100 + room.id, 210, 185, 70, false);
+  stampSurfaceSplat(world, beacon.x, beacon.y, 0.5, 0.5, 0.72, 0.7, spec.seed + 6100 + room.id, 210, 185, 70, false);
 
   if (chance(0.7)) addItemDrop(ctx, beacon.x + irng(-1, 1), beacon.y + irng(-1, 1), pick(['radio', 'wire_coil', 'circuit_board']), 1);
 }
@@ -65,7 +66,7 @@ function placeSafeBench(ctx: ProceduralAnomalyGenContext, boardRoomIds: Set<numb
   const ci = ctx.world.idx(pos.x, pos.y);
   ctx.world.features[ci] = Feature.CHAIR;
   ctx.world.light[ci] = Math.max(ctx.world.light[ci], 0.45);
-  ctx.world.stamp(pos.x, pos.y, 0.5, 0.5, 0.34, 0.42, ctx.spec.seed + room.id * 131, 90, 145, 170, false);
+  stampSurfaceSplat(ctx.world, pos.x, pos.y, 0.5, 0.5, 0.34, 0.42, ctx.spec.seed + room.id * 131, 90, 145, 170, false);
 }
 
 function boardCandidates(ctx: ProceduralAnomalyGenContext): number[] {

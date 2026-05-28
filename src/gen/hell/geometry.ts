@@ -1,7 +1,14 @@
 /* ── Hell macro geometry: arena chains, flee loops and scars ─── */
 
+import { stampSurfaceSplat } from '../../systems/surface_marks';
 import {
-  W, Cell, DoorState, Feature, FloorLevel, RoomType, Tex,
+  W,
+  Cell,
+  DoorState,
+  Feature,
+  FloorLevel,
+  RoomType,
+  Tex,
   type Room,
 } from '../../core/types';
 import { World } from '../../core/world';
@@ -206,7 +213,7 @@ function carveThreatPocket(world: World, center: Pos, spec: ChainSpec, geometry:
     const a = (Math.PI * 2 * i) / 7;
     const x = world.wrap(center.x + Math.round(Math.cos(a) * (rx - 2)));
     const y = world.wrap(center.y + Math.round(Math.sin(a) * (ry - 2)));
-    world.stamp(x, y, 0.5, 0.5, 2.8, 140, 7800 + i + spec.id.length * 37, 115, 18, 24);
+    stampSurfaceSplat(world, x, y, 0.5, 0.5, 2.8, 140, 7800 + i + spec.id.length * 37, 115, 18, 24);
   }
 }
 

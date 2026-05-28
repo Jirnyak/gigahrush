@@ -1,5 +1,6 @@
 /* ── Filtronos: local filter/water sabotage cache ─────────────── */
 
+import { stampSurfaceSplat } from '../../systems/surface_marks';
 import {
   AIGoal, Cell, ContainerKind, EntityType, Faction, Feature, FloorLevel, MonsterKind, Occupation,
   RoomType, Tex, msg,
@@ -378,9 +379,9 @@ function decorateCache(ctx: MaintContentCtx, room: Room): void {
 
   const cx = room.x + Math.floor(room.w / 2);
   const cy = room.y + 3;
-  ctx.world.stamp(cx, cy, 0.5, 0.5, 2.6, 0.65, room.id * 701 + 8, 122, 118, 96);
-  ctx.world.stamp(cx - 3, cy + 2, 0.4, 0.35, 1.2, 0.55, room.id * 701 + 19, 170, 170, 145);
-  ctx.world.stamp(room.x + room.w - 4, room.y + room.h - 3, 0.45, 0.55, 1.8, 0.68, room.id * 701 + 31, 74, 64, 50);
+  stampSurfaceSplat(ctx.world, cx, cy, 0.5, 0.5, 2.6, 0.65, room.id * 701 + 8, 122, 118, 96);
+  stampSurfaceSplat(ctx.world, cx - 3, cy + 2, 0.4, 0.35, 1.2, 0.55, room.id * 701 + 19, 170, 170, 145);
+  stampSurfaceSplat(ctx.world, room.x + room.w - 4, room.y + room.h - 3, 0.45, 0.55, 1.8, 0.68, room.id * 701 + 31, 74, 64, 50);
   for (let dy = 1; dy < room.h - 1; dy++) {
     for (let dx = 1; dx < room.w - 1; dx++) {
       const ci = ctx.world.idx(room.x + dx, room.y + dy);

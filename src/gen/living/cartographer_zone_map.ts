@@ -1,5 +1,6 @@
 /* -- Living cartographer: route clues without full-map omniscience ---- */
 
+import { stampSurfaceSplat } from '../../systems/surface_marks';
 import {
   AIGoal, Cell, ContainerKind, DoorState, EntityType, Faction, Feature, FloorLevel, Occupation, QuestType,
   RoomType, Tex,
@@ -38,7 +39,7 @@ const NPC_DEF: PlotNpcDef = {
   talkLines: [],
   talkLinesPost: [
     'Слух без этажа - мусор. Слух с зоной - уже маршрут.',
-    'Я не показываю всю карту. Я показываю один проверенный риск на сегодня.',
+    'Я не открываю весь этаж. За 100 рублей живая карта снимет один кусок тумана.',
     'Карту покупают, крадут или выверяют ногами. Все три способа оставляют след.',
   ],
 };
@@ -185,7 +186,7 @@ function decorateRoom(world: World, room: Room): void {
 
   world.wallTex[world.idx(rx + Math.floor(ROOM_W / 2), ry - 1)] = Tex.POSTER_BASE + 37;
   world.wallTex[world.idx(rx + ROOM_W - 1, ry + 4)] = Tex.POSTER_BASE + 12;
-  world.stamp(rx + Math.floor(ROOM_W / 2), ry + 5, 0.5, 0.5, 4, 0.35, 43043, 80, 180, 150, false);
+  stampSurfaceSplat(world, rx + Math.floor(ROOM_W / 2), ry + 5, 0.5, 0.5, 4, 0.35, 43043, 80, 180, 150, false);
 }
 
 function dropItem(entities: Entity[], nextId: { v: number }, x: number, y: number, defId: string, count = 1): void {
@@ -309,26 +310,22 @@ function registerPaidMapCue(world: World, room: Room): void {
     targetRoomId: room.id,
     zoneId: world.zoneMap[markerCell],
     label: 'живая карта Севы',
-    hint: '35₽ сразу или 70₽ в долг: цель, этаж, убежище, опасность',
-    targetName: 'платная отметка маршрута',
+    hint: '100₽: раскрыть один полезный участок тумана карты',
+    targetName: 'платное раскрытие карты',
     color: '#8fd',
     tags: ['living', 'cartographer', 'paid_map', 'route_planning'],
     toneSeed: room.id * 43043 + 57,
     radius: 4,
     targetRadius: 1.8,
     cooldownSec: 9,
-    paidReveal: {
-      priceRubles: 35,
-      debtRubles: 70,
-      debtLimitRubles: 210,
-      ttlSec: 480,
+    paidMapReveal: {
+      priceRubles: 100,
+      radius: 18,
+      roomScanCap: 640,
       sellerName: NPC_DEF.name,
-      debtQuestId: 'ag43_cartographer_map_debt',
-      debtTargetHint: 'Жилая зона: Комната живой карты. Верните Севе долг за маршрутные отметки.',
-      kinds: ['contract_target', 'route_floor_hint', 'shelter_mark', 'zone_danger'],
     },
-    heardText: 'На столе живая карта шевелит нитями маршрута. Она работает только за деньги или запись долга.',
-    followedText: 'Живая карта держит отметки достаточно долго, чтобы сверить вылазку.',
+    heardText: 'На столе живая карта шевелит нитями маршрута. За 100₽ она снимет туман с одного полезного участка карты.',
+    followedText: 'Живая карта держит открытую бумагу достаточно долго, чтобы сверить вылазку.',
     ignoredText: 'Карта свернулась обратно в бумагу: бесплатного маршрута не получилось.',
   });
 }

@@ -1,6 +1,12 @@
 import {
-  EntityType, Faction, FloorLevel, msg,
-  type Entity, type GameState, type Item, type Msg, type WorldEvent,
+  Faction,
+  FloorLevel,
+  msg,
+  type Entity,
+  type GameState,
+  type Item,
+  type Msg,
+  type WorldEvent,
 } from '../core/types';
 import { type World } from '../core/world';
 import { ITEMS } from '../data/catalog';
@@ -8,6 +14,7 @@ import { getStack } from '../data/items';
 import { addFactionRelMutual } from '../data/relations';
 import { changeResourceStock } from './economy';
 import { getRecentEvents, publishEvent, registerWorldEventObserver } from './events';
+import { isPlayerEntity } from './player_actor';
 
 export const RATION_COUPON_ITEM_IDS = [
   'water_coupon',
@@ -46,7 +53,7 @@ function itemName(defId: string): string {
 }
 
 function actorName(actor: Entity): string {
-  return actor.name ?? (actor.type === EntityType.PLAYER ? 'Вы' : '???');
+  return actor.name ?? (isPlayerEntity(actor) ? 'Вы' : '???');
 }
 
 function inventoryCount(actor: Entity, defId: string): number {
@@ -121,7 +128,7 @@ function publishPlayerCouponEvent(
   data: Record<string, unknown>,
   severity: 3 | 4 | 5 = 4,
 ): void {
-  if (!state || actor.type !== EntityType.PLAYER) return;
+  if (!state || !isPlayerEntity(actor)) return;
   publishEvent(state, {
     type,
     actorId: actor.id,
@@ -145,7 +152,7 @@ function applyFairSpendEconomy(state: GameState | undefined, resourceId: string)
 }
 
 function rationQueueContext(actor: Entity, zoneId: number | undefined, world: World | undefined): QueueRoomContext | null {
-  if (!world || actor.type !== EntityType.PLAYER) return null;
+  if (!world || !isPlayerEntity(actor)) return null;
   const x = Math.floor(actor.x);
   const y = Math.floor(actor.y);
   const ci = world.idx(x, y);

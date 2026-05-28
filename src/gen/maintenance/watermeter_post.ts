@@ -1,6 +1,14 @@
 /* ── Водомерный пост — radio/water bureaucracy quest hub ─────── */
 
-import { Tex, Feature, RoomType, Faction, Occupation, QuestType, MonsterKind } from '../../core/types';
+import {
+  Tex,
+  Feature,
+  RoomType,
+  Faction,
+  Occupation,
+  QuestType,
+  MonsterKind,
+} from '../../core/types';
 import { type PlotNpcDef, registerSideQuest } from '../../data/plot';
 import {
   type MaintContentCtx, dropItems, findMaintArea, setFeature, setWater,

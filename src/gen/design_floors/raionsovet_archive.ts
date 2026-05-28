@@ -3,6 +3,7 @@
  * FloorLevel/FloorRun here; an integrator can mount this route later.
  */
 
+import { stampSurfaceSplat } from '../../systems/surface_marks';
 import {
   W, Cell, Tex, Feature, RoomType, LiftDirection, ContainerKind, DoorState,
   EntityType, AIGoal, Faction, Occupation, FloorLevel, QuestType, MonsterKind, ZoneFaction,
@@ -784,9 +785,9 @@ export function expandRaionsovetArchiveGeometry(world: World, rng: () => number)
     Faction.CITIZEN,
   );
 
-  world.stamp(236, 318, 0.5, 0.5, 5, 0.45, 6021, 0.55, 0.09, 0.04, false);
-  world.stamp(812, 338, 0.5, 0.5, 5, 0.35, 6022, 0.08, 0.12, 0.18, false);
-  world.stamp(512, 646, 0.5, 0.5, 8, 0.22, 6023, 0.7, 0.68, 0.55, true);
+  stampSurfaceSplat(world, 236, 318, 0.5, 0.5, 5, 0.45, 6021, 0.55, 0.09, 0.04, false);
+  stampSurfaceSplat(world, 812, 338, 0.5, 0.5, 5, 0.35, 6022, 0.08, 0.12, 0.18, false);
+  stampSurfaceSplat(world, 512, 646, 0.5, 0.5, 8, 0.22, 6023, 0.7, 0.68, 0.55, true);
 }
 
 function connectRoomToPoint(world: World, room: Room, tx: number, ty: number): void {
@@ -984,7 +985,7 @@ function decorateArchive(world: World, rooms: ArchiveRooms): void {
     }
   }
   setFeatureIfFloor(world, shelves.x + shelves.w - 3, shelves.y + 2, Feature.LAMP);
-  world.stamp(shelves.x + 5, shelves.y + shelves.h - 5, 0.5, 0.5, 3, 0.65, 41, 0.7, 0.12, 0.05, false);
+  stampSurfaceSplat(world, shelves.x + 5, shelves.y + shelves.h - 5, 0.5, 0.5, 3, 0.65, 41, 0.7, 0.12, 0.05, false);
 
   for (let x = stamp.x + 3; x < stamp.x + stamp.w - 3; x += 4) setFeatureIfFloor(world, x, stamp.y + 3, Feature.DESK);
   setFeatureIfFloor(world, stamp.x + stamp.w - 4, stamp.y + stamp.h - 3, Feature.APPARATUS);
@@ -995,7 +996,7 @@ function decorateArchive(world: World, rooms: ArchiveRooms): void {
     setShelfWall(world, fire.x + 10, y);
     setFeatureIfFloor(world, fire.x + fire.w - 3, y, Feature.CANDLE);
   }
-  world.stamp(fire.x + 5, fire.y + 5, 0.5, 0.5, 4, 0.9, 17, 0.65, 0.08, 0.04, false);
+  stampSurfaceSplat(world, fire.x + 5, fire.y + 5, 0.5, 0.5, 4, 0.9, 17, 0.65, 0.08, 0.04, false);
 
   setFeatureIfFloor(world, heir.x + 3, heir.y + 3, Feature.DESK);
   setFeatureIfFloor(world, heir.x + heir.w - 3, heir.y + 3, Feature.CHAIR);

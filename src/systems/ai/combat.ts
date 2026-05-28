@@ -26,6 +26,7 @@ import { recordPlayerDamage } from '../damage';
 import { ENTITY_MASK_MONSTER, getEntityIndex } from '../entity_index';
 import { applyMonsterIncomingDamage } from '../monster_traits';
 import { publishWeaponNoise } from '../noise';
+import { getCurrentPlayerEntity, isPlayerEntity } from '../player_actor';
 import {
   bark,
   BARK_COMBAT_START, BARK_COMBAT_START_F, BARK_CHANCE_COMBAT,
@@ -163,7 +164,7 @@ function npcShouldFleeTarget(e: Entity, target: Entity): boolean {
 }
 
 function livePlayerTarget(entities: readonly Entity[]): Entity | undefined {
-  return entities.find(other => other.alive && other.type === EntityType.PLAYER);
+  return getCurrentPlayerEntity(entities);
 }
 
 export function tryFactionCombat(
@@ -176,7 +177,7 @@ export function tryFactionCombat(
     isArmed;
   const playerTarget = player === null
     ? undefined
-    : player?.alive && player.type === EntityType.PLAYER
+    : player?.alive && isPlayerEntity(player)
       ? player
       : livePlayerTarget(entities);
   const hostileToPlayer = playerTarget !== undefined && isHostile(e, playerTarget);
@@ -194,7 +195,7 @@ export function tryFactionCombat(
   const target = findCombatTarget(
     world, entities, e, dt,
     detectRange * detectRange, deterministicScanCd(e.id, 0.8, 0.4),
-    o => o.type === EntityType.NPC || o.type === EntityType.MONSTER || o.type === EntityType.PLAYER,
+    o => o.type === EntityType.NPC || o.type === EntityType.MONSTER || isPlayerEntity(o),
   );
 
   if (!target) return false;
@@ -225,7 +226,7 @@ export function tryFactionCombat(
         ai.windupTimer = undefined;
         ai.windupTargetId = undefined;
         e.attackCd = Math.max(e.attackCd ?? 0, NPC_RANGED_LOS_BREAK_CD);
-        if (target.type === EntityType.PLAYER) {
+        if (isPlayerEntity(target)) {
           pushNpcLogMessage(e, msgs, _time, `${entityDisplayName(e)} потерял линию огня. Укрытие сработало.`, '#9cf');
         }
         return true;
@@ -245,7 +246,7 @@ export function tryFactionCombat(
         if (npcCanStartRangedWindup(e, ws)) {
           ai.windupTimer = npcRangedWindupSec(ws);
           ai.windupTargetId = target.id;
-          if (target.type === EntityType.PLAYER && npcRangedShouldLog(ws)) {
+          if (isPlayerEntity(target) && npcRangedShouldLog(ws)) {
             pushNpcLogMessage(e, msgs, _time, `${entityDisplayName(e)} целится: ${npcRangedThreatLabel(ws)}. Сбейте линию или дождитесь залпа.`, npcRangedCueColor(ws));
           }
           return true;
@@ -277,12 +278,12 @@ export function tryFactionCombat(
     let dmg = zhelemishIncomingMeleeDamage(target, _time, rawDmg);
     if (target.type === EntityType.MONSTER) dmg = applyMonsterIncomingDamage(world, target, dmg);
     if (target.hp !== undefined) {
-      const debugImmortalPlayerHit = target.type === EntityType.PLAYER && isDebugOnePunchManEnabled();
+      const debugImmortalPlayerHit = isPlayerEntity(target) && isDebugOnePunchManEnabled();
       if (debugImmortalPlayerHit) {
         keepDebugOnePunchManAlive(target);
       } else {
         target.hp -= dmg;
-        if (target.type === EntityType.PLAYER) recordPlayerDamage(state, e, dmg, `${entityDisplayName(e)} задел тебя: -${dmg}`);
+        if (isPlayerEntity(target)) recordPlayerDamage(state, e, dmg, `${entityDisplayName(e)} задел тебя: -${dmg}`);
         if (target.type === EntityType.NPC) {
           applyDamageRelationPenalty(e.faction, target.faction, dmg, target, e);
           if (target.hp > 0 && target.hp < (target.maxHp ?? 100) * 0.5) {
@@ -342,7 +343,7 @@ function applyMeleeKnockback(world: World, source: Entity, target: Entity, ws: W
 
   const stagger = Math.min(MELEE_STAGGER_CAP, 0.08 + force * 0.35);
   if (target.ai) target.ai.staggerTimer = Math.max(target.ai.staggerTimer ?? 0, stagger);
-  if (target.type !== EntityType.PLAYER) target.attackCd = Math.max(target.attackCd ?? 0, stagger);
+  if (!isPlayerEntity(target)) target.attackCd = Math.max(target.attackCd ?? 0, stagger);
 }
 
 function npcRangedDamageScore(ws: WeaponStats): number {

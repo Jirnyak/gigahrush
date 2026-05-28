@@ -27,6 +27,8 @@ const BAD_APPLE_PIXELS = BAD_APPLE_WIDTH * BAD_APPLE_HEIGHT;
 const BAD_APPLE_FRAME_SECONDS = BAD_APPLE_SOURCE_FRAME_STEP / 30;
 const BAD_APPLE_PLAYER_WARN_SECONDS = 2.2;
 const BAD_APPLE_LIGHT = 0.52;
+const BAD_APPLE_PROJECTOR_SOUND_MARGIN = 32;
+export const BAD_APPLE_PROJECTOR_SOUND_RADIUS = Math.ceil(Math.hypot(BAD_APPLE_WIDTH, BAD_APPLE_HEIGHT) * 0.5 + BAD_APPLE_PROJECTOR_SOUND_MARGIN);
 
 interface BadAppleScreenRuntime {
   roomId: number;
@@ -386,7 +388,7 @@ export function updateBadAppleWorldAnomaly(world: World, player: Entity, state: 
   }
   if (audioScreen) {
     const sound = badAppleScreenSoundPosition(audioScreen);
-    updateBadAppleProjectorLoop(true, sound.x, sound.y, audioScreen.frame);
+    updateBadAppleProjectorLoop(true, sound.x, sound.y, audioScreen.frame, BAD_APPLE_PROJECTOR_SOUND_RADIUS);
   } else {
     updateBadAppleProjectorLoop(false, player.x, player.y, 0);
   }

@@ -347,7 +347,7 @@ test('A-Life leaderboard includes the player as a ranked actor', () => {
   setAlifeState(state, { seed: 12345, total: 1_000 });
   const player: Entity = {
     id: 0,
-    type: EntityType.PLAYER,
+    type: EntityType.NPC, persistentNpcId: 'player',
     x: 0,
     y: 0,
     angle: 0,
@@ -378,7 +378,7 @@ test('A-Life leaderboard cache respects requested limits', () => {
   setAlifeState(state, { seed: 12345, total: 1_000 });
   const player: Entity = {
     id: 0,
-    type: EntityType.PLAYER,
+    type: EntityType.NPC, persistentNpcId: 'player',
     x: 0,
     y: 0,
     angle: 0,

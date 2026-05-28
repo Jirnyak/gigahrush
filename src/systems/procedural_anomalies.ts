@@ -1,8 +1,14 @@
 /* ── Runtime hooks for bounded procedural floor anomalies ─────── */
 
 import {
-  W, Cell, type Entity, type GameState, type Room, type WorldEventSeverity,
-  EntityType, Feature, msg,
+  W,
+  Cell,
+  type Entity,
+  type GameState,
+  type Room,
+  type WorldEventSeverity,
+  Feature,
+  msg,
 } from '../core/types';
 import { World } from '../core/world';
 import { ITEMS } from '../data/catalog';
@@ -33,6 +39,7 @@ import {
 import { updateRadioChessAnomaly, tryUseRadioChessAnomaly } from './procedural_anomalies/radio_chess';
 import { updateSectionShiftAnomaly, tryUseSectionShiftAnomaly } from './procedural_anomalies/section_shift';
 import { updateWallSnakeAnomaly, tryUseWallSnakeAnomaly } from './procedural_anomalies/wall_snake';
+import { isPlayerEntity } from './player_actor';
 
 type SmogProtection = 'filter' | 'wet_cloth' | 'cloth_ready' | 'none';
 
@@ -406,7 +413,7 @@ export function updateProceduralAnomalies(world: World, player: Entity, state: G
     return;
   }
 
-  if (world.anomalySmogSource < 0 || world.anomalySmogHandled || player.type !== EntityType.PLAYER) {
+  if (world.anomalySmogSource < 0 || world.anomalySmogHandled || !isPlayerEntity(player)) {
     if (world.anomalySmogSource >= 0) runtimeFor(state, world).wasInside = false;
     return;
   }

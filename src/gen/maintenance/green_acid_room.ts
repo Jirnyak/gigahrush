@@ -1,5 +1,6 @@
 /* ── AG64 green acid slime room — explicit pickup risk, no sim ── */
 
+import { stampSurfaceSplat } from '../../systems/surface_marks';
 import {
   Cell, EntityType, Feature, MonsterKind, RoomType, Tex,
 } from '../../core/types';
@@ -40,13 +41,13 @@ function dropAt(ctx: MaintContentCtx, x: number, y: number, defId: string, data?
 
 function stainAcid(ctx: MaintContentCtx, x: number, y: number, seed: number): void {
   setWater(ctx.world, x, y);
-  ctx.world.stamp(x, y, 0.5, 0.5, 0.52 + (seed % 3) * 0.08, 215, 64_000 + seed, 58, 235, 42);
+  stampSurfaceSplat(ctx.world, x, y, 0.5, 0.5, 0.52 + (seed % 3) * 0.08, 215, 64_000 + seed, 58, 235, 42);
 }
 
 function markWarningSmears(ctx: MaintContentCtx, x: number, y: number): void {
-  ctx.world.stamp(x, y, 0.5, 0.5, 2.8, 120, 64_700, 30, 160, 46, false);
-  ctx.world.stamp(x + 3, y + 1, 0.4, 0.5, 1.6, 150, 64_701, 75, 245, 50, true);
-  ctx.world.stamp(x - 4, y - 1, 0.5, 0.5, 1.4, 130, 64_702, 80, 210, 45, true);
+  stampSurfaceSplat(ctx.world, x, y, 0.5, 0.5, 2.8, 120, 64_700, 30, 160, 46, false);
+  stampSurfaceSplat(ctx.world, x + 3, y + 1, 0.4, 0.5, 1.6, 150, 64_701, 75, 245, 50, true);
+  stampSurfaceSplat(ctx.world, x - 4, y - 1, 0.5, 0.5, 1.4, 130, 64_702, 80, 210, 45, true);
 }
 
 export function generateGreenAcidRoom(ctx: MaintContentCtx): void {

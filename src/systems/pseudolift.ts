@@ -18,7 +18,7 @@ import { World } from '../core/world';
 import { hashSeed, randSeed, seededRandom } from '../core/rand';
 import { MONSTERS, entityDisplayName } from '../entities/monster';
 import { monsterSpr } from '../render/sprite_index';
-import { MarkType, stampMark } from '../render/marks';
+import { MarkType, stampMark } from './surface_marks';
 import { publishEvent } from './events';
 import { getActiveFloorInstance } from './floor_instances';
 import {

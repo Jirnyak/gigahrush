@@ -70,7 +70,7 @@ function rowOpaquePixels(sprite: Uint32Array, y: number): number {
 
 test('procedural item sprites cover the complete item registry', () => {
   const ids = Object.keys(ITEMS).sort();
-  assert.equal(ids.length, 431);
+  assert.equal(ids.length, 434);
 
   const hashes = new Set<number>();
   for (const id of ids) {
@@ -2342,6 +2342,7 @@ test('bundle 012 sprites cover every planned item with unique readable silhouett
     'decon_fluid',
     'denunciation',
     'dice_bone',
+    'domino_box',
   ] as const;
   const hashes = new Set<number>();
 
@@ -2409,6 +2410,7 @@ test('bundle 012 paper and trade sprites keep document and small-good reads dist
   const stamp = generateItemSprite('decon_completion_stamp');
   const denunciation = generateItemSprite('denunciation');
   const dice = generateItemSprite('dice_bone');
+  const domino = generateItemSprite('domino_box');
 
   const cultPot = countPixelsIn(cult, 27, 32, 47, 43, (r, g, b, a) => a > 120 && r < 110 && g < 120 && b < 110);
   const cultRedBullets = countPixelsIn(cult, 18, 22, 24, 42, (r, g, b, a) => a > 140 && r > 130 && g < 80 && b < 80);
@@ -2419,6 +2421,9 @@ test('bundle 012 paper and trade sprites keep document and small-good reads dist
   const denunciationSlash = countPixels(denunciation, (r, g, b, a) => a > 130 && r > 130 && g < 80 && b < 80);
   const diceBone = countPixels(dice, (r, g, b, a) => a > 150 && r > 160 && g > 145 && b > 110);
   const dicePips = countPixels(dice, (r, g, b, a) => a > 150 && r > 45 && r < 100 && g > 40 && g < 90 && b > 30 && b < 80);
+  const dominoBox = countPixels(domino, (r, g, b, a) => a > 130 && r > 70 && r < 215 && g > 20 && g < 175 && b < 115);
+  const dominoIvory = countPixels(domino, (r, g, b, a) => a > 145 && r > 150 && g > 140 && b > 105);
+  const dominoPips = countPixels(domino, (r, g, b, a) => a > 145 && r < 65 && g < 65 && b < 65);
 
   assert.ok(cultPot > 45, 'cult_supply_list should include a dark kitchen pot silhouette');
   assert.ok(cultRedBullets > 8, 'cult_supply_list should include red supply marks');
@@ -2429,10 +2434,15 @@ test('bundle 012 paper and trade sprites keep document and small-good reads dist
   assert.ok(denunciationSlash > 120, 'denunciation should show a threatening red diagonal/stamp');
   assert.ok(diceBone > 260, 'dice_bone should read as pale bone dice');
   assert.ok(dicePips > 30, 'dice_bone should include dark dice pips');
+  assert.ok(dominoBox > 260, 'domino_box should include a red-brown storage box');
+  assert.ok(dominoIvory > 130, 'domino_box should show ivory domino tiles');
+  assert.ok(dominoPips > 25, 'domino_box should include dark domino pips and dividers');
   assert.notEqual(spriteHash(cult), spriteHash(generateItemSprite('denunciation')));
   assert.notEqual(spriteHash(receipt), spriteHash(generateItemSprite('bank_debt_paper')));
   assert.notEqual(spriteHash(stamp), spriteHash(generateItemSprite('cleanup_order_stub')));
   assert.notEqual(spriteHash(dice), spriteHash(generateItemSprite('card_deck')));
+  assert.notEqual(spriteHash(domino), spriteHash(dice));
+  assert.notEqual(spriteHash(domino), spriteHash(generateItemSprite('card_deck')));
 });
 
 test('bundle 017 sprites cover documents, parts, weapons, samples, filters, and glass', () => {

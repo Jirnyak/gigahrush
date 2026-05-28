@@ -1,8 +1,15 @@
 /* ── Второй затопленный тайник водолазов ─────────────────────── */
 
 import {
-  ContainerKind, Faction, Feature, FloorLevel, MonsterKind, RoomType, Tex,
-  type Room, type WorldContainer,
+  ContainerKind,
+  Faction,
+  Feature,
+  FloorLevel,
+  MonsterKind,
+  RoomType,
+  Tex,
+  type Room,
+  type WorldContainer,
 } from '../../core/types';
 import {
   type MaintContentCtx, dropItems, findMaintArea, setFeature, setWater,

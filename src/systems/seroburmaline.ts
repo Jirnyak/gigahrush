@@ -3,15 +3,20 @@
  */
 
 import {
-  Cell, EntityType, Feature, FloorLevel,
-  type Entity, type GameState, type Room,
+  Cell,
+  Feature,
+  FloorLevel,
+  type Entity,
+  type GameState,
+  type Room,
   msg,
 } from '../core/types';
 import { World } from '../core/world';
 import { ITEMS } from '../data/catalog';
-import { MarkType, stampMark } from '../render/marks';
+import { MarkType, stampMark } from './surface_marks';
 import { addItem, consumeToolDurability, hasItem, removeItem } from './inventory';
 import { publishEvent } from './events';
+import { isPlayerEntity } from './player_actor';
 
 export const SEROBURMALINE_ROOM_PREFIX = 'НИИ Слизи: серобурмалиновый';
 export const SEROBURMALINE_ACTIVE_FEATURE = Feature.APPARATUS;
@@ -305,7 +310,7 @@ export function tryCoverSeroburmalineSource(
   lookY: number,
   toolId?: string,
 ): boolean {
-  if (state.currentFloor !== FloorLevel.MAINTENANCE || player.type !== EntityType.PLAYER) return false;
+  if (state.currentFloor !== FloorLevel.MAINTENANCE || !isPlayerEntity(player)) return false;
   const source = sourceAtCell(world, Math.floor(lookX), Math.floor(lookY), true);
   if (!source) return false;
 

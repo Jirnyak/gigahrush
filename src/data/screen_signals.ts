@@ -1,9 +1,6 @@
 /* ── Procedural screen signal definitions ─────────────────────── */
 
-import {
-  FloorLevel, RoomType, Tex, ZoneFaction,
-  type WorldEventType,
-} from '../core/types';
+import { FloorLevel, RoomType, Tex, ZoneFaction, type WorldEventType } from '../core/types';
 
 export type ScreenSignalId =
   | 'samosbor_warning'

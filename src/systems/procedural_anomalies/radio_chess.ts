@@ -1,5 +1,13 @@
-import { Cell, EntityType, Feature, msg, type Entity, type GameState, type Room } from '../../core/types';
+import {
+  Cell,
+  Feature,
+  msg,
+  type Entity,
+  type GameState,
+  type Room,
+} from '../../core/types';
 import { World } from '../../core/world';
+import { isPlayerEntity } from '../player_actor';
 
 type RadioChessPhase = 'white' | 'black' | 'file' | 'rank' | 'knight';
 
@@ -183,7 +191,7 @@ function playerCellDanger(world: World, player: Entity, state: GameState): { dan
 }
 
 export function updateRadioChessAnomaly(world: World, player: Entity, state: GameState, dt: number): void {
-  if (player.type !== EntityType.PLAYER) return;
+  if (!isPlayerEntity(player)) return;
   const cache = cacheFor(world);
   if (cache.domains.length === 0) return;
   const runtime = runtimeFor(state);

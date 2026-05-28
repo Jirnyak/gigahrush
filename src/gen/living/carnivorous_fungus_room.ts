@@ -1,8 +1,15 @@
 /* ── AG113 carnivorous fungus room: avoid, salt, burn, feed ───── */
 
 import {
-  Cell, ContainerKind, Feature, FloorLevel, RoomType, Tex,
-  type Entity, type Room, type WorldContainer,
+  Cell,
+  ContainerKind,
+  Feature,
+  FloorLevel,
+  RoomType,
+  Tex,
+  type Entity,
+  type Room,
+  type WorldContainer,
 } from '../../core/types';
 import { World } from '../../core/world';
 import { decorateCarnivorousFungusRoom } from '../carnivorous_fungus_room';

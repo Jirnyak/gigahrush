@@ -1,3 +1,4 @@
+import { stampSurfaceSplat } from '../../systems/surface_marks';
 import {
   AIGoal,
   Cell,
@@ -1070,7 +1071,7 @@ function applySamosborAftermath(world: World, entities: Entity[], nextId: { v: n
     world.floorTex[i] = Tex.F_WATER;
   }
 
-  world.stamp(rooms.laundry.x + 6, rooms.laundry.y + 8, 0, 0, 4, 0.55, 2718, 40, 80, 90, false);
+  stampSurfaceSplat(world, rooms.laundry.x + 6, rooms.laundry.y + 8, 0, 0, 4, 0.55, 2718, 40, 80, 90, false);
   spawnMonster(entities, nextId, MonsterKind.POLZUN, rooms.laundry.x + 9, rooms.laundry.y + 8);
 }
 

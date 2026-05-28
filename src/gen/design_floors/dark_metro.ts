@@ -1,5 +1,6 @@
 /* ── Design floor: dark_metro / Темная пересадка ─────────────── */
 
+import { stampSurfaceSplat } from '../../systems/surface_marks';
 import {
   AIGoal,
   Cell,
@@ -653,7 +654,7 @@ function addDeadTrainShell(
   for (let i = 8; i < train.w - 8; i += 14) {
     setFeature(world, train.x + i, train.y + 1, Feature.CHAIR);
     if (i % 28 === 0) setFeature(world, train.x + i + 5, train.y + 3, Feature.CANDLE);
-    world.stamp(train.x + i, train.y + 2, 0.5, 0.5, 1.7, 0.18, hashSeed(`dark_metro_train.${line}.${i}`), 42, 38, 44, false);
+    stampSurfaceSplat(world, train.x + i, train.y + 2, 0.5, 0.5, 1.7, 0.18, hashSeed(`dark_metro_train.${line}.${i}`), 42, 38, 44, false);
   }
 }
 
@@ -1160,7 +1161,7 @@ function dressDarkMetro(ctx: BuildCtx, layout: DarkMetroLayout): void {
 
   for (let i = 0; i < 9; i++) {
     const x = layout.blindTunnel.x + 4 + i * 3;
-    world.stamp(x, layout.blindTunnel.y + 2, 0.5, 0.5, 2.5, 0.24, hashSeed(`dark_metro_mark.${i}`), 55, 45, 70, false);
+    stampSurfaceSplat(world, x, layout.blindTunnel.y + 2, 0.5, 0.5, 2.5, 0.24, hashSeed(`dark_metro_mark.${i}`), 55, 45, 70, false);
   }
 }
 

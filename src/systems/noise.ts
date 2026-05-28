@@ -1,7 +1,6 @@
 /* ── Bounded short-lived noise records for AI / HUD ───────────── */
 
 import {
-  EntityType,
   FloorLevel,
   RoomType,
   W,
@@ -17,6 +16,7 @@ import type { WeaponStats } from '../data/weapons';
 import { ITEMS } from '../data/catalog';
 import { registerInventoryUseHandler, removeItem, type InventoryUseHandlerContext } from './inventory';
 import { publishEvent, registerWorldEventObserver } from './events';
+import { isPlayerEntity } from './player_actor';
 
 export type NoiseSource =
   | 'weapon_fire'
@@ -490,7 +490,7 @@ function publishNoiseItemEvent(
   zoneId: number | undefined,
   world: World | undefined,
 ): void {
-  if (!state || actor.type !== EntityType.PLAYER) return;
+  if (!state || !isPlayerEntity(actor)) return;
   const def = ITEMS[itemId];
   publishEvent(state, {
     type: 'player_use_item',
@@ -546,7 +546,7 @@ function publishSmokeCandleCheckEvent(
   noiseRecordId: number | undefined,
 ): void {
   const { state, actor, world } = ctx;
-  if (!state || actor.type !== EntityType.PLAYER) return;
+  if (!state || !isPlayerEntity(actor)) return;
   const def = ITEMS[SMOKE_CANDLE_CHECK_ID];
   const x = actor.x;
   const y = actor.y;

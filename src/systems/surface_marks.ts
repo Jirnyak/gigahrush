@@ -478,3 +478,20 @@ export function stampMark(
   }
   if (touched) world.surfaceVersion++;
 }
+
+export function stampSurfaceSplat(
+  world: World,
+  cx: number,
+  cy: number,
+  fx: number,
+  fy: number,
+  radius: number,
+  intensity: number,
+  seed: number,
+  r: number,
+  g: number,
+  b: number,
+  wallOk = false,
+): void {
+  stampMark(world, cx, cy, fx, fy, radius, MarkType.SPLAT, seed, r, g, b, intensity, wallOk);
+}

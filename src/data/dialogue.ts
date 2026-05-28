@@ -601,7 +601,7 @@ const OCC_TRADE_ITEMS: Record<number, string[]> = {
   [Occupation.DOCTOR]:      ['bandage', 'sterile_bandage', 'pills', 'antidep', 'anti_spore_inhaler', 'burn_gel', 'sleeping_pills', 'permanganate_vial', 'lice_shampoo', 'zhelemish_boiled'],
   [Occupation.TURNER]:      ['wrench', 'pipe', 'rebar'],
   [Occupation.MECHANIC]:    ['wrench', 'pipe', 'flashlight', 'jackhammer', 'ammo_nails', 'pump_impeller', 'vent_damper_plate', 'heating_element'],
-  [Occupation.STOREKEEPER]: ['bread', 'water', 'cigs', 'toiletpaper', 'import_toiletpaper', 'bandage', 'sleeping_pills', 'ammo_shells', 'cleaning_kit', 'chalk', 'soap_72', 'lice_shampoo', 'krona_battery', 'zhelemish_raw', 'govnyak_roll', 'govnyak_brick', 'grey_briquette', 'green_briquette', 'red_concentrate', 'liquidator_ration', 'concentrate_coupon', 'dice_bone', 'cardboard_stack', 'roller_brush', 'plastic_sheet', 'ceramic_shards_pack'],
+  [Occupation.STOREKEEPER]: ['bread', 'water', 'cigs', 'toiletpaper', 'import_toiletpaper', 'bandage', 'sleeping_pills', 'ammo_shells', 'cleaning_kit', 'chalk', 'soap_72', 'lice_shampoo', 'krona_battery', 'zhelemish_raw', 'govnyak_roll', 'govnyak_brick', 'grey_briquette', 'green_briquette', 'red_concentrate', 'liquidator_ration', 'concentrate_coupon', 'dice_bone', 'domino_box', 'cardboard_stack', 'roller_brush', 'plastic_sheet', 'ceramic_shards_pack'],
   [Occupation.ALCOHOLIC]:   ['bread', 'cigs', 'water', 'govnyak_roll'],
   [Occupation.SCIENTIST]:   ['flashlight', 'book', 'note', 'ammo_9mm', 'zhelemish_raw', 'govnyak_sample', 'empty_sample_jar', 'sterile_swab', 'sample_chain_form', 'nii_sample_label', 'glass_ampoule_empty', 'blueprint_t2_folder', 'sound_emitter', 'syringe_empty'],
   [Occupation.CHILD]:       ['bread', 'water', 'chalk'],

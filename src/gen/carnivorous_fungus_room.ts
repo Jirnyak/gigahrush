@@ -1,5 +1,6 @@
 /* ── Corpse-fed carnivorous fungus room dressing ──────────────── */
 
+import { stampSurfaceSplat } from '../systems/surface_marks';
 import {
   AIGoal, Cell, EntityType, Feature, MonsterKind, RoomType, Tex,
   type Entity, type Room,
@@ -48,7 +49,7 @@ function setFeature(world: World, x: number, y: number, feature: Feature): void 
 }
 
 function stampFungus(world: World, x: number, y: number, radius: number, seed: number, red = false): void {
-  world.stamp(
+  stampSurfaceSplat(world,
     x, y,
     0.5, 0.5,
     radius,

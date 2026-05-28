@@ -1,8 +1,17 @@
 /* ── Slime-singing vent: rare Maintenance route/sample cue ───── */
 
+import { stampSurfaceSplat } from '../../systems/surface_marks';
 import {
-  Cell, ContainerKind, Faction, Feature, FloorLevel, MonsterKind, RoomType, Tex,
-  type Room, type WorldContainer,
+  Cell,
+  ContainerKind,
+  Faction,
+  Feature,
+  FloorLevel,
+  MonsterKind,
+  RoomType,
+  Tex,
+  type Room,
+  type WorldContainer,
 } from '../../core/types';
 import { registerRouteCue } from '../../systems/route_cues';
 import {
@@ -62,12 +71,12 @@ function stampSlimeResidue(ctx: MaintContentCtx, vent: Room, sample: Room): void
   for (let dx = 1; dx < vent.w - 1; dx++) {
     const x = vent.x + dx;
     const y = vent.y + 2;
-    if (dx % 2 === 0) ctx.world.stamp(x, y, 0.5, 0.5, 0.24, 110, vent.id * 97 + dx, 42, 100, 38);
+    if (dx % 2 === 0) stampSurfaceSplat(ctx.world, x, y, 0.5, 0.5, 0.24, 110, vent.id * 97 + dx, 42, 100, 38);
   }
   for (let dx = 1; dx < sample.w - 1; dx += 2) {
     const x = sample.x + dx;
     const y = sample.y + sample.h - 2;
-    ctx.world.stamp(x, y, 0.48, 0.56, 0.34, 150, sample.id * 131 + dx, 22, 54, 26);
+    stampSurfaceSplat(ctx.world, x, y, 0.48, 0.56, 0.34, 150, sample.id * 131 + dx, 22, 54, 26);
     ctx.world.fog[ctx.world.idx(x, y)] = Math.max(ctx.world.fog[ctx.world.idx(x, y)], 65);
   }
   ctx.world.markFogDirty();

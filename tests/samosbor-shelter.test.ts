@@ -109,7 +109,7 @@ function makeShelterWorld(doorState: DoorState): {
 
   const player: Entity = {
     id: 1,
-    type: EntityType.PLAYER,
+    type: EntityType.NPC, persistentNpcId: 'player',
     x: room.x + 2.5,
     y: room.y + 2.5,
     angle: 0,
@@ -262,7 +262,7 @@ test('random samosbor transfer moves a random map entity and can pick player', (
   assert.equal(events[0].actorId, ctx.player.id);
 });
 
-test('samosbor warning publishes sound, HUD/log, map, and nearby NPC bark channels', () => {
+test('samosbor warning publishes sound, HUD/log, hazard, and nearby NPC bark channels', () => {
   const { state, warning } = forceWarningWindow('classic');
 
   assert.equal(warning.variantId, 'classic');
@@ -272,10 +272,10 @@ test('samosbor warning publishes sound, HUD/log, map, and nearby NPC bark channe
   assert.ok(warning.signals.channels.includes('audio'));
   assert.ok(warning.signals.channels.includes('hud'));
   assert.ok(warning.signals.channels.includes('log'));
-  assert.ok(warning.signals.channels.includes('map'));
+  assert.ok(warning.signals.channels.includes('hazard'));
   assert.ok(warning.signals.channels.includes('npc_barks'));
   assert.match(warning.signals.audioLine, /сирена/);
-  assert.match(warning.signals.mapLine, /зона риска/);
+  assert.match(warning.signals.hazardLine, /зона риска|зона риска рядом/);
   assert.match(warning.signals.npcLine, /соседи: 1/);
   assert.ok(state.msgs.some(m => m.text.includes('Предупреждение принято')));
   assert.ok(state.msgs.some(m => m.text.includes('Соседка:')));
@@ -285,9 +285,9 @@ test('samosbor warning publishes sound, HUD/log, map, and nearby NPC bark channe
   const channels = events[0].data?.warningChannels;
   assert.ok(Array.isArray(channels));
   assert.ok(channels.includes('audio'));
-  assert.ok(channels.includes('map'));
+  assert.ok(channels.includes('hazard'));
   assert.ok(channels.includes('npc_barks'));
-  assert.ok(state.msgLog.some(entry => entry.text.includes('звук:') && entry.text.includes('карта:')));
+  assert.ok(state.msgLog.some(entry => entry.text.includes('звук:') && entry.text.includes('опасность:')));
 });
 
 test('active samosbor exposes a compact survival instruction', () => {
@@ -314,23 +314,23 @@ test('normal and rare samosbor warnings keep variant-specific colors and cues', 
   const cases: Array<{
     id: SamosborVariantId;
     tint: string;
-    mapCode: string;
+    signalCode: string;
     audio: RegExp;
-    map: RegExp;
+    hazard: RegExp;
   }> = [
-    { id: 'classic', tint: '#a34cff', mapCode: 'СБОР', audio: /штатная сирена/, map: /зона риска/ },
-    { id: 'maronary', tint: '#35ff66', mapCode: 'МАР', audio: /высокий писк/, map: /зелёный|повтор двери/ },
-    { id: 'istotit', tint: '#d6a64b', mapCode: 'ИСТ', audio: /колокол/, map: /жёлтые укрытия/ },
-    { id: 'veretar', tint: '#f4f1df', mapCode: 'ВЕР', audio: /внешняя тревога/, map: /белое пятно/ },
+    { id: 'classic', tint: '#a34cff', signalCode: 'СБОР', audio: /штатная сирена/, hazard: /зона риска/ },
+    { id: 'maronary', tint: '#35ff66', signalCode: 'МАР', audio: /высокий писк/, hazard: /зелёный|повтор двери/ },
+    { id: 'istotit', tint: '#d6a64b', signalCode: 'ИСТ', audio: /колокол/, hazard: /жёлтые комнаты/ },
+    { id: 'veretar', tint: '#f4f1df', signalCode: 'ВЕР', audio: /внешняя тревога/, hazard: /белое пятно/ },
   ];
 
   for (const spec of cases) {
     const { warning } = forceWarningWindow(spec.id);
     assert.equal(warning.variantId, spec.id);
     assert.equal(warning.tint, spec.tint);
-    assert.equal(warning.signals.mapCode, spec.mapCode);
+    assert.equal(warning.signals.signalCode, spec.signalCode);
     assert.match(warning.signals.audioLine, spec.audio);
-    assert.match(warning.signals.mapLine, spec.map);
+    assert.match(warning.signals.hazardLine, spec.hazard);
   }
 });
 
@@ -627,7 +627,7 @@ interface RuntimeGenerationCase {
 function makePlayer(id: number, x: number, y: number): Entity {
   return {
     id,
-    type: EntityType.PLAYER,
+    type: EntityType.NPC, persistentNpcId: 'player',
     x,
     y,
     angle: 0,
@@ -903,7 +903,7 @@ test('story-floor samosbor rebuild copies generated protected state and bumps di
   assert.equal(ctx.target.aptMask[ctx.staleIdx], 0);
   assert.equal(ctx.target.hermoWall[ctx.staleIdx], 0);
   assert.equal(ctx.target.apartmentRoomCount, 1);
-  assert.equal(ctx.entities.some(e => e.type === EntityType.PLAYER), true);
+  assert.equal(ctx.entities.some(e => e.persistentNpcId === 'player'), true);
   assert.equal(ctx.entities.some(e => e.type === EntityType.NPC && e.id >= 1000), true);
   assertDirtyVersionsBumped(ctx);
 });

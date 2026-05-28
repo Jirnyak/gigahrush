@@ -4,7 +4,7 @@ import {
   AIGoal, EntityType, Feature, MonsterKind, RoomType, Tex, type Room,
 } from '../../core/types';
 import { MONSTERS } from '../../entities/monster';
-import { MarkType, stampMark } from '../../render/marks';
+import { MarkType, stampMark } from '../../systems/surface_marks';
 import { monsterSpr } from '../../render/sprite_index';
 import { randomRPG, scaleMonsterHp, scaleMonsterSpeed } from '../../systems/rpg';
 import {

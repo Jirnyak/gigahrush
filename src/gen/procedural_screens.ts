@@ -1,7 +1,13 @@
 /* ── Procedural wall screens / TVs ────────────────────────────── */
 
 import {
-  W, Cell, Feature, FloorLevel, RoomType, Tex, ZoneFaction,
+  W,
+  Cell,
+  Feature,
+  FloorLevel,
+  RoomType,
+  Tex,
+  ZoneFaction,
   type Room,
 } from '../core/types';
 import { World } from '../core/world';

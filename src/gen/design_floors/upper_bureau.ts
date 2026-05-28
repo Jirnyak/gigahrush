@@ -1,9 +1,24 @@
 /* ── Future design floor: Верхнее бюро ───────────────────────── */
 
 import {
-  W, Cell, ContainerKind, DoorState, Faction, Feature, FloorLevel, LiftDirection,
-  MonsterKind, Occupation, QuestType, RoomType, Tex, ZoneFaction,
-  type Entity, type GameState, type Room, type WorldContainer,
+  W,
+  Cell,
+  ContainerKind,
+  DoorState,
+  Faction,
+  Feature,
+  FloorLevel,
+  LiftDirection,
+  MonsterKind,
+  Occupation,
+  QuestType,
+  RoomType,
+  Tex,
+  ZoneFaction,
+  type Entity,
+  type GameState,
+  type Room,
+  type WorldContainer,
 } from '../../core/types';
 import { World } from '../../core/world';
 import { type PlotNpcDef, registerSideQuest } from '../../data/plot';

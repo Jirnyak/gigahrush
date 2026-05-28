@@ -9,7 +9,6 @@ import {
   type Zone,
   type WorldContainer,
 } from './types';
-import { stampMark, MarkType } from '../render/marks';
 
 export interface WorldGenerationLike {
   world: World;
@@ -298,13 +297,6 @@ export class World {
   roomAt(x: number, y: number): Room | null {
     const id = this.roomMap[this.idx(Math.floor(x), Math.floor(y))];
     return id >= 0 ? this.rooms[id] ?? null : null;
-  }
-
-  /* Compatibility stamp — delegates to the procedural mark system.
-     Kept for callers that use the compact (cx, cy, fx, fy, radius, intensity, seed, r, g, b, wallOk) signature.
-     Uses MarkType.SPLAT for general blobs, which produces organic irregular shapes. */
-  stamp(cx: number, cy: number, fx: number, fy: number, radius: number, intensity: number, seed: number, cr: number, cg: number, cb: number, wallOk = false): void {
-    stampMark(this, cx, cy, fx, fy, radius, MarkType.SPLAT, seed, cr, cg, cb, intensity, wallOk);
   }
 
   /* carve a floor cell */

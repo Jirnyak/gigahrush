@@ -1,5 +1,6 @@
 /* -- Пункт сборов вылазки: Living route prep without menu UI ----- */
 
+import { stampSurfaceSplat } from '../../systems/surface_marks';
 import {
   AIGoal, Cell, ContainerKind, DoorState, EntityType, Faction, Feature,
   FloorLevel, Occupation, QuestType, RoomType, Tex,
@@ -334,7 +335,7 @@ function decorateRoom(world: World, room: Room): void {
   world.wallTex[world.idx(rx + Math.floor(ROOM_W / 2), ry - 1)] = Tex.SCREEN_BASE + 6;
   world.wallTex[world.idx(rx + 2, ry - 1)] = Tex.POSTER_BASE + 41;
   world.wallTex[world.idx(rx + ROOM_W - 3, ry - 1)] = Tex.HINT_5;
-  world.stamp(rx + Math.floor(ROOM_W / 2), ry + 6, 0.5, 0.5, 5, 0.38, 11052, 55, 120, 130, false);
+  stampSurfaceSplat(world, rx + Math.floor(ROOM_W / 2), ry + 6, 0.5, 0.5, 5, 0.38, 11052, 55, 120, 130, false);
 }
 
 function dropItem(entities: Entity[], nextId: { v: number }, x: number, y: number, defId: string, count = 1): void {

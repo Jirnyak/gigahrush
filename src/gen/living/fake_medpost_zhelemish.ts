@@ -1,6 +1,7 @@
 /* -- Липовый медугол желемыша (AG104) -------------------------- */
 /* Counterfeit treatment POI: warn, report, buy in, profit, steal. */
 
+import { stampSurfaceSplat } from '../../systems/surface_marks';
 import {
   AIGoal, Cell, ContainerKind, DoorState, EntityType, Faction, Feature,
   FloorLevel, Occupation, QuestType, RoomType, Tex,
@@ -358,7 +359,7 @@ function decorateRoom(world: World, room: Room): void {
     world.features[world.idx(rx + dx, ry + dy)] = feature;
   }
   world.wallTex[world.idx(rx + 6, ry - 1)] = Tex.POSTER_BASE + 18;
-  world.stamp(rx + ROOM_W - 5, ry + 8, 0.5, 0.5, 5, 0.35, 10446, 78, 112, 74, false);
+  stampSurfaceSplat(world, rx + ROOM_W - 5, ry + 8, 0.5, 0.5, 5, 0.35, 10446, 78, 112, 74, false);
 }
 
 function nextContainerId(world: World): number {

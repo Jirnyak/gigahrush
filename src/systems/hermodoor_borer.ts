@@ -8,13 +8,14 @@ import {
 import { World } from '../core/world';
 import { MONSTERS } from '../entities/monster';
 import { monsterSpr } from '../render/sprite_index';
-import { stampMark, MarkType } from '../render/marks';
+import { stampMark, MarkType } from './surface_marks';
 import { equippedToolLightScore } from '../data/tool_lights';
 import { playBreak, playDoor, playSoundAt } from './audio';
 import { setDoorState } from './door_state';
 import { publishEvent } from './events';
 import { addItem, hasItem, removeItem } from './inventory';
 import { randomRPG, scaleMonsterHp, scaleMonsterSpeed } from './rpg';
+import { isPlayerEntity } from './player_actor';
 
 type BorerSource = 'pre_samosbor' | 'post_samosbor' | 'debug';
 type BorerPhase = 'warning' | 'damaged' | 'compromised' | 'repaired' | 'resolved';
@@ -101,7 +102,7 @@ function storeFor(world: World): BorerStore {
 }
 
 function findPlayer(entities: readonly Entity[]): Entity | undefined {
-  return entities.find(e => e.type === EntityType.PLAYER && e.alive);
+  return entities.find(e => isPlayerEntity(e) && e.alive);
 }
 
 function doorX(idx: number): number {

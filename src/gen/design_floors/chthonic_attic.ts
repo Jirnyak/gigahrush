@@ -1,5 +1,6 @@
 /* ── Future design floor: Хтонический чердак ─────────────────── */
 
+import { stampSurfaceSplat } from '../../systems/surface_marks';
 import {
   W, Cell, Tex, Feature, DoorState, LiftDirection,
   FloorLevel, RoomType, EntityType, AIGoal, Faction, Occupation,
@@ -774,7 +775,7 @@ function carveAtticRootPath(
     const y = from.y + Math.round((dy * step) / steps);
     carveAtticDisc(world, x, y, radius, floorTex, protectedMask);
     if (step % 11 === 0) {
-      world.stamp(x, y, 0.5, 0.5, radius + 0.85, 0.18, x * 73856093 ^ y * 19349663, 58, 35, 28, true);
+      stampSurfaceSplat(world, x, y, 0.5, 0.5, radius + 0.85, 0.18, x * 73856093 ^ y * 19349663, 58, 35, 28, true);
     }
   }
 }
@@ -898,7 +899,7 @@ function dressAtticBulbRoom(world: World, room: Room, plan: AtticChamberPlan, rn
     setAtticFeature(world, plan.cx + 2, plan.cy - 1, Feature.APPARATUS);
   }
   if (plan.type === RoomType.CORRIDOR) {
-    world.stamp(plan.cx, plan.cy, 0.5, 0.5, 2.6, 0.22, room.id * 911, 64, 42, 34, true);
+    stampSurfaceSplat(world, plan.cx, plan.cy, 0.5, 0.5, 2.6, 0.22, room.id * 911, 64, 42, 34, true);
   }
 }
 
@@ -1041,8 +1042,8 @@ function placeAtticRootPillar(world: World, cx: number, cy: number, radius: numb
 }
 
 function stampAtticExitCues(world: World): void {
-  world.stamp(ATTIC_BASE_X + 7, ATTIC_BASE_Y + 57, 0.5, 0.5, 4.2, 0.2, 3602, 80, 78, 70, true);
-  world.stamp(ATTIC_BASE_X + 216, ATTIC_BASE_Y + 58, 0.5, 0.5, 4.6, 0.22, 3603, 38, 54, 64, true);
+  stampSurfaceSplat(world, ATTIC_BASE_X + 7, ATTIC_BASE_Y + 57, 0.5, 0.5, 4.2, 0.2, 3602, 80, 78, 70, true);
+  stampSurfaceSplat(world, ATTIC_BASE_X + 216, ATTIC_BASE_Y + 58, 0.5, 0.5, 4.6, 0.22, 3603, 38, 54, 64, true);
   setAtticFeature(world, ATTIC_BASE_X + 5, ATTIC_BASE_Y + 57, Feature.LAMP);
   setAtticFeature(world, ATTIC_BASE_X + 214, ATTIC_BASE_Y + 58, Feature.LAMP);
   setAtticFeature(world, ATTIC_BASE_X + 153, ATTIC_BASE_Y + 15, Feature.LIFT_BUTTON);
@@ -1274,14 +1275,14 @@ function stampRootObstacles(world: World, y: number): void {
   for (let x = ATTIC_BASE_X + 50; x <= ATTIC_BASE_X + 180; x += 13) {
     const idx = world.idx(x, ATTIC_BASE_Y + 17);
     world.wallTex[idx] = Tex.GUT;
-    world.stamp(x, ATTIC_BASE_Y + 17, 0.5, 0.5, 0.35, 0.55, x * 17, 60, 42, 30, true);
+    stampSurfaceSplat(world, x, ATTIC_BASE_Y + 17, 0.5, 0.5, 0.35, 0.55, x * 17, 60, 42, 30, true);
   }
 }
 
 function stampBlackHand(world: World, x: number, y: number): void {
   for (let dy = -1; dy <= 1; dy++) {
     for (let dx = -1; dx <= 1; dx++) {
-      world.stamp(x + dx, y + dy, 0.5, 0.5, 0.18, 0.75, 7000 + dx * 31 + dy, 12, 8, 6, true);
+      stampSurfaceSplat(world, x + dx, y + dy, 0.5, 0.5, 0.18, 0.75, 7000 + dx * 31 + dy, 12, 8, 6, true);
     }
   }
 }

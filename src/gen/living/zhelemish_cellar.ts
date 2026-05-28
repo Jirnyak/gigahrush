@@ -1,5 +1,6 @@
 /* -- AG102 Zhelemish cellar: harvest / steal / burn ethics loop -- */
 
+import { stampSurfaceSplat } from '../../systems/surface_marks';
 import {
   AIGoal, Cell, ContainerKind, EntityType, Faction, Feature, FloorLevel,
   Occupation, QuestType, RoomType, Tex,
@@ -347,9 +348,9 @@ function decorateCellar(world: World, room: Room): void {
   }
 
   world.wallTex[world.idx(rx + Math.floor(CELLAR_W / 2), ry - 1)] = Tex.POSTER_BASE + 44;
-  world.stamp(rx + 4, ry + 7, 0.5, 0.5, 5, 0.58, 10231, 50, 96, 50, false);
-  world.stamp(rx + 10, ry + 4, 0.5, 0.5, 4, 0.5, 10232, 118, 76, 44, false);
-  world.stamp(rx + 12, ry + 8, 0.5, 0.5, 3, 0.42, 10233, 22, 18, 12, false);
+  stampSurfaceSplat(world, rx + 4, ry + 7, 0.5, 0.5, 5, 0.58, 10231, 50, 96, 50, false);
+  stampSurfaceSplat(world, rx + 10, ry + 4, 0.5, 0.5, 4, 0.5, 10232, 118, 76, 44, false);
+  stampSurfaceSplat(world, rx + 12, ry + 8, 0.5, 0.5, 3, 0.42, 10233, 22, 18, 12, false);
 }
 
 function seedContainers(world: World, room: Room, ownerId: number, witnessId: number): void {

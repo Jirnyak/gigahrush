@@ -1,5 +1,6 @@
 /* ── Borshchevik blockade: rooted plant corridor with bypass ─── */
 
+import { stampSurfaceSplat } from '../../systems/surface_marks';
 import {
   AIGoal,
   Cell,
@@ -29,8 +30,8 @@ export const BORSHCHEVIK_BLOCKADE_ID = 'maintenance_borshchevik_blockade';
 
 function paintSap(ctx: MaintContentCtx, x: number, y: number, n: number): number {
   const cell = ctx.world.idx(x, y);
-  ctx.world.stamp(x, y, 0.5, 0.5, 0.58, 0.72, 72_000 + n * 53, 194, 210, 52, false);
-  ctx.world.stamp(x, y, 0.38, 0.62, 0.28, 0.46, 73_000 + n * 47, 88, 132, 50, false);
+  stampSurfaceSplat(ctx.world, x, y, 0.5, 0.5, 0.58, 0.72, 72_000 + n * 53, 194, 210, 52, false);
+  stampSurfaceSplat(ctx.world, x, y, 0.38, 0.62, 0.28, 0.46, 73_000 + n * 47, 88, 132, 50, false);
   return cell;
 }
 

@@ -18,6 +18,7 @@ import type { World } from '../core/world';
 import type { FloorGeneration } from '../gen/floor_manifest';
 import { publishEvent } from './events';
 import { pruneRouteCuesInCells } from './route_cues';
+import { isPlayerEntity } from './player_actor';
 
 export type SamosborWaveScale = 'small' | 'medium' | 'full';
 
@@ -743,7 +744,7 @@ function cleanupFinalEntities(world: World, wave: SamosborWave, entities: Entity
       }
       continue;
     }
-    if ((entity.type === EntityType.PLAYER || entity.type === EntityType.NPC || entity.type === EntityType.MONSTER) && !entityWalkableCell(world, idx)) {
+    if ((isPlayerEntity(entity) || entity.type === EntityType.NPC || entity.type === EntityType.MONSTER) && !entityWalkableCell(world, idx)) {
       if (relocateEntity(world, entity, 30)) wave.relocatedEntities++;
     }
   }
@@ -1074,7 +1075,7 @@ export function startSamosborWave(
     regenerated: false,
     patchRoomId: -1,
     protectedRooms,
-    player: _entities.find(e => e.type === EntityType.PLAYER && e.alive),
+    player: _entities.find(e => isPlayerEntity(e) && e.alive),
     floor: state.currentFloor,
     startedAt: state.time,
     changedCells: 0,

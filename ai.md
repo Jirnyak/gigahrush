@@ -8,17 +8,18 @@ The core direction is simple: ordinary NPCs should not be synchronized by a glob
 
 ## Current Baseline
 
-The current implementation is useful but too synchronous for ordinary civilians:
+The current implementation has moved ordinary NPCs off the old global schedule path:
 
 - `src/systems/ai/index.ts` owns the single `updateAI()` entry point. It updates hot/warm/cold live AI actors through deterministic cadence, not through a player spawn bubble.
-- `src/systems/ai/npc_fsm.ts` maps `clock.hour` and `samosborActive` to `NpcState`: sleep, morning, work, lunch, free time, hiding and traveling.
-- `src/systems/ai/ministry_ai.ts` has a separate ministry schedule with meetings, patrols and breaks, still driven by shared time bands.
+- `src/systems/ai/npc_utility.ts` scores safety, combat, flee, toilet, drink, eat, sleep, work, heal, social, patrol and wander from needs, threat, role, soft rhythm, local room context and current-intent stickiness.
+- `src/systems/ai/npc_fsm.ts` is now the utility executor: it selects the winning intent, maps it to a visible/debug `NpcState`, and reuses bounded path/needs handlers for travel and activity.
+- Ministry NPCs use the same executor with a ministry profile; the old separate ministry schedule path is removed.
 - `src/systems/ai/combat.ts` gives NPC combat, fleeing, ranged windup and relation-aware hostility higher priority than routine behavior.
 - `src/systems/ai/pathfinding.ts` provides a toroidal baked navigation tree and cached behavior flow fields for shared targets such as kitchens, bathrooms and work rooms.
 - `src/systems/ai/monster.ts` contains the monster target loop and many `MonsterKind`/`aiFlags` behavior hooks.
 - `src/systems/entity_index.ts` is the runtime broadphase for AI target, threat and local actor queries.
 
-The failure mode is visible: if many NPCs share the same hour, state and room-type target, they can decide together that it is time to work and then follow the same flow field toward production rooms. This creates the reported "everyone walks in a line to the factory" problem.
+The old failure mode was that many NPCs could share the same hour, state and room-type target, decide together that it was time to work and follow the same flow field toward production rooms. Current runtime selection lets urgent needs, threat, role and local context beat work or lunch pressure, so the clock no longer forces synchronized factory streams.
 
 ## Target Model
 
@@ -374,14 +375,12 @@ Use `alifeId`, `persistentNpcId`, `plotNpcId`, room id, zone id and route key. D
 
 ## Implementation Order
 
-1. Document and expose current AI stats in debug so the existing schedule-driven baseline is measurable.
-2. Keep fixed `100_000` A-Life population as the runtime baseline in `src/systems/alife.ts`.
-3. Add deterministic A-Life need/personality fields used at materialization.
-4. Convert ordinary NPC schedule selection into utility intent selection while keeping current handlers as executors.
-5. Add home/work/social anchors and soft room capacity.
-6. Expand the current per-NPC samosbor shelter hook into full emergency intent selection for escort, defense, denial and panic.
-7. Move common monster behavior toward archetype helpers while preserving existing special counterplay.
-8. Add focused tests for cadence, target selection, path invalidation, shelter reaction and no-refill guarantees.
+1. Keep fixed `100_000` A-Life population as the runtime baseline in `src/systems/alife.ts`.
+2. Add deterministic A-Life need/personality fields used at materialization.
+3. Add home/work/social anchors and soft room capacity.
+4. Expand the current per-NPC samosbor shelter hook into full emergency intent selection for escort, defense, denial and panic.
+5. Move common monster behavior toward archetype helpers while preserving existing special counterplay.
+6. Add broader focused tests for cadence, target selection, path invalidation, shelter reaction and no-refill guarantees.
 
 ## Acceptance Checklist
 

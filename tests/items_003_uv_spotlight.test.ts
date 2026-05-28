@@ -13,7 +13,7 @@ import {
   toolLightDef,
 } from '../src/data/tool_lights';
 import { generateLiquidatorArchive } from '../src/gen/ministry/liquidator_archive';
-import { MarkType, stampMark } from '../src/render/marks';
+import { MarkType, stampMark } from '../src/systems/surface_marks';
 import { UV_SPOTLIGHT_FX_SECONDS, useUvSpotlight, uvSpotlightRenderIntensity } from '../src/systems/uv_spotlight';
 import { makeGameState, makeTestPlayer } from './helpers';
 

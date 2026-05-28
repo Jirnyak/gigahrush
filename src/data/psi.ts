@@ -11,6 +11,8 @@ export const PSI_WEAPON_STATS: Record<string, WeaponStats> = {
   psi_brainburn:{ dmg: 0,  durability: 0, range: 0, speed: 1.8,  isRanged: false, psiCost: 22, psiEffect: 'brain_burn' },
   psi_madness:  { dmg: 0,  durability: 0, range: 0, speed: 1.05, isRanged: false, psiCost: 10, psiEffect: 'madness' },
   psi_control:  { dmg: 0,  durability: 0, range: 0, speed: 1.35, isRanged: false, psiCost: 20, psiEffect: 'control' },
+  psi_shield:   { dmg: 0,  durability: 0, range: 0, speed: 0.9,  isRanged: false, psiCost: 12, psiEffect: 'shield' },
+  psi_possession:{ dmg: 0, durability: 0, range: 0, speed: 1.6,  isRanged: false, psiCost: 26, psiEffect: 'possession' },
   psi_phase:    { dmg: 0,  durability: 0, range: 0, speed: 1.0,  isRanged: false, psiCost: 17, psiEffect: 'phase' },
   psi_mark:     { dmg: 0,  durability: 0, range: 0, speed: 0.40, isRanged: false, psiCost: 4,  psiEffect: 'mark' },
   psi_recall:   { dmg: 0,  durability: 0, range: 0, speed: 0.65, isRanged: false, psiCost: 8,  psiEffect: 'recall' },

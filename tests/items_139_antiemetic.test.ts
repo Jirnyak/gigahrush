@@ -19,7 +19,7 @@ test('antiemetic is a medical nausea item with a bounded use effect', () => {
     assert.ok(ITEM_TAGS.antiemetic?.includes(tag), `antiemetic tags must publish ${tag} tag`);
   }
 
-  const patient: Entity = { id: 1, type: EntityType.PLAYER, x: 0, y: 0, hp: 40, maxHp: 45 };
+  const patient: Entity = { id: 1, type: EntityType.NPC, persistentNpcId: 'player', x: 0, y: 0, hp: 40, maxHp: 45 };
   assert.equal(def.use?.(patient), 'Тошноту заглушило. Лечение +8; еду пока держит внутри');
   assert.equal(patient.hp, 45);
 });

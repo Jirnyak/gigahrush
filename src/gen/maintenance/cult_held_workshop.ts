@@ -1,9 +1,23 @@
 /* ── AG83 cult-held workshop: repair, bargain, clear, sabotage ── */
 
+import { stampSurfaceSplat } from '../../systems/surface_marks';
 import {
-  Cell, ContainerKind, Faction, Feature, FloorLevel, MonsterKind, Occupation,
-  QuestType, RoomType, Tex, ZoneFaction, msg,
-  type GameState, type Room, type WorldContainer, type WorldEvent,
+  Cell,
+  ContainerKind,
+  Faction,
+  Feature,
+  FloorLevel,
+  MonsterKind,
+  Occupation,
+  QuestType,
+  RoomType,
+  Tex,
+  ZoneFaction,
+  msg,
+  type GameState,
+  type Room,
+  type WorldContainer,
+  type WorldEvent,
 } from '../../core/types';
 import { type PlotNpcDef, registerSideQuest } from '../../data/plot';
 import { changeResourceStock } from '../../systems/economy';
@@ -376,8 +390,8 @@ function decoratePost(ctx: MaintContentCtx, room: Room): void {
   setFeature(ctx.world, room.x + room.w - 3, room.y + 2, Feature.CANDLE);
   setFeature(ctx.world, room.x + 3, room.y + 4, Feature.TABLE);
   setFeature(ctx.world, room.x + 5, room.y + 5, Feature.SHELF);
-  ctx.world.stamp(room.x + 4, room.y + 1, 0.5, 0.5, 2.2, 170, room.id * 97 + 11, 10, 8, 8, true);
-  ctx.world.stamp(room.x + 4, room.y + 4, 0.5, 0.5, 1.1, 140, room.id * 101 + 3, 55, 12, 8, false);
+  stampSurfaceSplat(ctx.world, room.x + 4, room.y + 1, 0.5, 0.5, 2.2, 170, room.id * 97 + 11, 10, 8, 8, true);
+  stampSurfaceSplat(ctx.world, room.x + 4, room.y + 4, 0.5, 0.5, 1.1, 140, room.id * 101 + 3, 55, 12, 8, false);
 }
 
 function decorateShop(ctx: MaintContentCtx, room: Room): void {
@@ -392,8 +406,8 @@ function decorateShop(ctx: MaintContentCtx, room: Room): void {
   setFeature(ctx.world, room.x + 7, room.y + room.h - 3, Feature.SHELF);
   setWater(ctx.world, room.x + 11, room.y + room.h - 2);
   setWater(ctx.world, room.x + 12, room.y + room.h - 2);
-  ctx.world.stamp(room.x + 15, room.y + 6, 0.5, 0.5, 3.0, 115, room.id * 113 + 17, 20, 20, 18, false);
-  ctx.world.stamp(room.x + 16, room.y + 7, 0.5, 0.5, 1.5, 130, room.id * 127 + 5, 70, 8, 8, false);
+  stampSurfaceSplat(ctx.world, room.x + 15, room.y + 6, 0.5, 0.5, 3.0, 115, room.id * 113 + 17, 20, 20, 18, false);
+  stampSurfaceSplat(ctx.world, room.x + 16, room.y + 7, 0.5, 0.5, 1.5, 130, room.id * 127 + 5, 70, 8, 8, false);
 }
 
 function decorateOutputCage(ctx: MaintContentCtx, room: Room): void {

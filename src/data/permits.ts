@@ -1,9 +1,4 @@
-import {
-  Faction,
-  FloorLevel,
-  type WorldEventPrivacy,
-  type WorldEventSeverity,
-} from '../core/types';
+import { Faction, FloorLevel, type WorldEventPrivacy, type WorldEventSeverity } from '../core/types';
 
 export type PermitMethod = 'legal' | 'forged' | 'stolen' | 'debt' | 'expose';
 

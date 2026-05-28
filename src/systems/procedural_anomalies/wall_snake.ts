@@ -1,5 +1,6 @@
-import { Cell, EntityType, msg, type Entity, type GameState } from '../../core/types';
+import { Cell, msg, type Entity, type GameState } from '../../core/types';
 import { World } from '../../core/world';
+import { isPlayerEntity } from '../player_actor';
 
 interface SnakeRuntime {
   path: Int32Array;
@@ -121,7 +122,7 @@ function hurtPlayer(player: Entity, state: GameState, amount: number): void {
 }
 
 export function updateWallSnakeAnomaly(world: World, player: Entity, state: GameState, dt: number): void {
-  if (player.type !== EntityType.PLAYER) return;
+  if (!isPlayerEntity(player)) return;
   const snake = initSnake(world);
   if (!snake || snake.path.length === 0) return;
   if (state.time < snake.stoppedUntil) return;

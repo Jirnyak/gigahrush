@@ -1,13 +1,13 @@
 {
-  "generatedAt": "2026-05-22T21:07:02.208Z",
+  "generatedAt": "2026-05-28T03:28:53.824Z",
   "sourceLocale": "ru",
-  "totalCanonicalStrings": 15917,
+  "totalCanonicalStrings": 17005,
   "locales": [
     {
       "locale": "en",
       "file": "locales/en.json",
-      "total": 15917,
-      "translated": 15917,
+      "total": 17005,
+      "translated": 17005,
       "missing": 0,
       "todo": 0,
       "sourceMismatches": 0,

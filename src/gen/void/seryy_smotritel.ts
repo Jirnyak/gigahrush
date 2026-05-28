@@ -7,13 +7,14 @@ import {
 } from '../../core/types';
 import { World } from '../../core/world';
 import { MONSTERS } from '../../entities/monster';
-import { MarkType, stampMark } from '../../render/marks';
+import { MarkType, stampMark } from '../../systems/surface_marks';
 import { monsterSpr } from '../../render/sprite_index';
 import { publishEvent, registerWorldEventObserver as observeWorldEvents } from '../../systems/events';
 import { registerRouteCue } from '../../systems/route_cues';
 import { randomRPG, scaleMonsterHp, scaleMonsterSpeed } from '../../systems/rpg';
 import { carveCorridor, findClearArea, placeDoor, placeDoorAt, stampRoom } from '../shared';
 import { genLog } from '../log';
+import { isPlayerEntity } from '../../systems/player_actor';
 
 export const SERYY_SMOTRITEL_ID = 'seryy_smotritel' as const;
 export const SERYY_SMOTRITEL_RU_NAME = 'Серый Смотритель' as const;
@@ -92,7 +93,7 @@ function contextForEvent(event: WorldEvent): SeryyContext | undefined {
 }
 
 function playerInContext(ctx: SeryyContext): Entity | undefined {
-  return ctx.entities.find(e => e.type === EntityType.PLAYER && e.alive);
+  return ctx.entities.find(e => isPlayerEntity(e) && e.alive);
 }
 
 function nextEntityId(entities: readonly Entity[]): number {

@@ -1,5 +1,6 @@
 /* -- MONSTER_14: Желемышник, local zhelemish guardian ---------- */
 
+import { stampSurfaceSplat } from '../../systems/surface_marks';
 import {
   AIGoal, Cell, ContainerKind, EntityType, Faction, Feature, FloorLevel,
   MonsterKind, Occupation, QuestType, RoomType, Tex,
@@ -353,9 +354,9 @@ function decorateRoom(world: World, room: Room): void {
   const coreX = room.x + 9;
   const coreY = room.y + 8;
   world.wallTex[world.idx(room.x + Math.floor(ROOM_W / 2), room.y - 1)] = Tex.POSTER_BASE + 45;
-  world.stamp(room.x + 4, room.y + 4, 0.5, 0.5, 3.2, 0.55, 14001, 80, 118, 52, false);
-  world.stamp(coreX, coreY, 0.5, 0.5, 5.0, 0.72, 14002, 86, 64, 42, false);
-  world.stamp(room.x + 14, room.y + 10, 0.5, 0.5, 2.1, 0.5, 14003, 46, 35, 26, false);
+  stampSurfaceSplat(world, room.x + 4, room.y + 4, 0.5, 0.5, 3.2, 0.55, 14001, 80, 118, 52, false);
+  stampSurfaceSplat(world, coreX, coreY, 0.5, 0.5, 5.0, 0.72, 14002, 86, 64, 42, false);
+  stampSurfaceSplat(world, room.x + 14, room.y + 10, 0.5, 0.5, 2.1, 0.5, 14003, 46, 35, 26, false);
   world.markFloorTexDirty();
   world.markWallTexDirty();
 }

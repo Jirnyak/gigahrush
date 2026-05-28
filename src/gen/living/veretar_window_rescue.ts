@@ -8,7 +8,7 @@ import {
 import { World } from '../../core/world';
 import { freshNeeds } from '../../data/catalog';
 import { type PlotNpcDef, registerSideQuest } from '../../data/plot';
-import { MarkType, stampMark } from '../../render/marks';
+import { MarkType, stampMark } from '../../systems/surface_marks';
 import { Spr } from '../../render/sprite_index';
 import { findClearArea, protectRoom } from '../shared';
 import { genLog } from '../log';

@@ -24,7 +24,7 @@ function openWorld(): World {
 function player(): Entity {
   return {
     id: 1,
-    type: EntityType.PLAYER,
+    type: EntityType.NPC, persistentNpcId: 'player',
     x: 20,
     y: 18,
     angle: 0,

@@ -1,5 +1,4 @@
 import {
-  EntityType,
   type Entity,
   type GameState,
   type Msg,
@@ -10,6 +9,7 @@ import {
   msg,
 } from '../core/types';
 import { publishEvent } from './events';
+import { isPlayerEntity } from './player_actor';
 
 export const ZHELEMISH_SKIN_ID: PlayerStatusId = 'zhelemish_skin';
 export const ZHELEMISH_RAW_ITEM = 'zhelemish_raw';
@@ -90,7 +90,7 @@ function statusEvent(
   privacy: 'private' | 'witnessed',
   data?: Record<string, unknown>,
 ): void {
-  if (!state || actor.type !== EntityType.PLAYER) return;
+  if (!state || !isPlayerEntity(actor)) return;
   const source = typeof data?.source === 'string' ? data.source as PlayerStatusSource : undefined;
   const tags = ['player', 'status', 'zhelemish', 'condition'];
   if (source) tags.push(...sourceTags(source));
@@ -207,7 +207,7 @@ export function applySporeHaze(
   if (existing) Object.assign(existing, status);
   else entity.statuses.push(status);
 
-  if (msgs && entity.type === EntityType.PLAYER) {
+  if (msgs && isPlayerEntity(entity)) {
     msgs.push(msg(
       protectedByGear
         ? 'Фильтр поймал споры ковра: прицел мутнеет ненадолго.'
@@ -216,7 +216,7 @@ export function applySporeHaze(
       protectedByGear ? '#9cf' : '#bf8',
     ));
   }
-  if (state && entity.type === EntityType.PLAYER) {
+  if (state && isPlayerEntity(entity)) {
     publishEvent(state, {
       type: 'player_status_applied',
       actorId: source?.id,
@@ -260,7 +260,7 @@ export function applyPaupsinaWeb(
   if (existing) Object.assign(existing, status);
   else entity.statuses.push(status);
 
-  if (msgs && entity.type === EntityType.PLAYER) {
+  if (msgs && isPlayerEntity(entity)) {
     msgs.push(msg('Паупсина плюнула сетью: ноги липнут, но нож или огонь быстро рвут путы.', time, '#ddd'));
   }
   if (state) {
@@ -270,11 +270,11 @@ export function applyPaupsinaWeb(
       actorName: source?.name,
       actorFaction: source?.faction,
       targetId: entity.id,
-      targetName: entity.name ?? (entity.type === EntityType.PLAYER ? 'Вы' : undefined),
+      targetName: entity.name ?? (isPlayerEntity(entity) ? 'Вы' : undefined),
       targetFaction: entity.faction,
       monsterKind: source?.monsterKind,
-      severity: entity.type === EntityType.PLAYER ? 4 : 3,
-      privacy: entity.type === EntityType.PLAYER ? 'local' : 'witnessed',
+      severity: isPlayerEntity(entity) ? 4 : 3,
+      privacy: isPlayerEntity(entity) ? 'local' : 'witnessed',
       tags: ['monster', 'paupsina', 'web', 'status', 'control'],
       data: {
         statusId: PAUPSINA_WEB_ID,
@@ -312,20 +312,20 @@ export function reducePaupsinaWeb(
     if (idx >= 0) entity.statuses.splice(idx, 1);
     if (entity.statuses.length === 0) delete entity.statuses;
   }
-  if (msgs && entity.type === EntityType.PLAYER) {
+  if (msgs && isPlayerEntity(entity)) {
     msgs.push(msg(method === 'fire' ? 'Огонь схватил паутину: липкая сеть спала.' : 'Лезвие режет паутину: сеть уже не держит.', time, '#8cf'));
   }
   if (state) {
     publishEvent(state, {
       type: 'paupsina_web_cut',
       actorId: actor?.id,
-      actorName: actor?.name ?? (actor?.id === entity.id && entity.type === EntityType.PLAYER ? 'Вы' : undefined),
+      actorName: actor?.name ?? (actor?.id === entity.id && isPlayerEntity(entity) ? 'Вы' : undefined),
       actorFaction: actor?.faction,
       targetId: entity.id,
-      targetName: entity.name ?? (entity.type === EntityType.PLAYER ? 'Вы' : undefined),
+      targetName: entity.name ?? (isPlayerEntity(entity) ? 'Вы' : undefined),
       targetFaction: entity.faction,
       severity: 3,
-      privacy: entity.type === EntityType.PLAYER ? 'local' : 'witnessed',
+      privacy: isPlayerEntity(entity) ? 'local' : 'witnessed',
       tags: ['monster', 'paupsina', 'web', method, freed ? 'freed' : 'reduced'],
       data: {
         statusId: PAUPSINA_WEB_ID,
@@ -477,7 +477,7 @@ export function cureSporeHaze(
     time,
     '#8cf',
   ));
-  if (state && entity.type === EntityType.PLAYER) {
+  if (state && isPlayerEntity(entity)) {
     publishEvent(state, {
       type: 'player_status_cured',
       actorId: entity.id,
@@ -505,14 +505,14 @@ export function updateZhelemishSkinStatus(entity: Entity, state: GameState, dt: 
     if (status.id === PAUPSINA_WEB_ID) {
       if (status.expiresAt <= state.time) {
         statuses.splice(i, 1);
-        if (entity.type === EntityType.PLAYER) state.msgs.push(msg('Паутинные путы осыпались сухой ниткой.', state.time, '#8cf'));
+        if (isPlayerEntity(entity)) state.msgs.push(msg('Паутинные путы осыпались сухой ниткой.', state.time, '#8cf'));
       }
       continue;
     }
     if (status.id === SPORE_HAZE_ID) {
       if (status.expiresAt <= state.time) {
         statuses.splice(i, 1);
-        if (entity.type === EntityType.PLAYER) state.msgs.push(msg('Споровая муть выветрилась.', state.time, '#8cf'));
+        if (isPlayerEntity(entity)) state.msgs.push(msg('Споровая муть выветрилась.', state.time, '#8cf'));
       }
       continue;
     }

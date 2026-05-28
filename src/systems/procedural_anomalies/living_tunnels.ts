@@ -1,7 +1,6 @@
 import {
   W,
   Cell,
-  EntityType,
   Feature,
   Tex,
   msg,
@@ -12,6 +11,7 @@ import {
 import { World } from '../../core/world';
 import { consumeToolDurability, hasItem, removeItem } from '../inventory';
 import { publishEvent } from '../events';
+import { isPlayerEntity } from '../player_actor';
 
 const LIVING_TUNNEL_RE = /\[living_tunnel:(-?\d+),(-?\d+),(-?\d+),(\d+)\]/g;
 const LIVING_TUNNEL_TICK_SECONDS = 0.42;
@@ -140,7 +140,7 @@ function restoreCell(world: World, player: Entity, state: GameState, runtime: Li
   runtime.base.delete(ci);
   if (!snap) return 0;
 
-  if (player.type === EntityType.PLAYER && playerProtectsCell(world, player, ci)) {
+  if (isPlayerEntity(player) && playerProtectsCell(world, player, ci)) {
     world.cells[ci] = Cell.FLOOR;
     world.floorTex[ci] = Tex.F_GUT;
     world.fog[ci] = Math.max(world.fog[ci], 24);
@@ -322,7 +322,7 @@ function clearOldTrail(world: World, player: Entity, state: GameState, runtime: 
 }
 
 export function updateLivingTunnelsAnomaly(world: World, player: Entity, state: GameState, dt: number): void {
-  if (player.type !== EntityType.PLAYER) return;
+  if (!isPlayerEntity(player)) return;
   const runtime = runtimeFor(world);
   if (runtime.roots.length === 0) return;
 

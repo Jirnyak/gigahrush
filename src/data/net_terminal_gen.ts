@@ -1,11 +1,6 @@
 /* ── НЕТ-ТЕРМИНАЛ ГЕН definitions ────────────────────────────── */
 
-import {
-  Feature,
-  ItemType,
-  Tex,
-  type ItemDef,
-} from '../core/types';
+import { Feature, ItemType, Tex, type ItemDef } from '../core/types';
 import { ITEMS } from './items';
 
 export const NET_TERMINAL_GEN_STATE_KEY = 'netTerminalGen';

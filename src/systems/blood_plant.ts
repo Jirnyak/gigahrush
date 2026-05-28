@@ -3,7 +3,6 @@
 import {
   Cell,
   DoorState,
-  EntityType,
   MonsterKind,
   ProjType,
   W,
@@ -18,6 +17,7 @@ import { Spr } from '../render/sprite_index';
 import { entityDisplayName } from '../entities/monster';
 import { publishEvent, registerWorldEventObserver } from './events';
 import { registerInventoryUseHandler, type InventoryUseHandlerContext } from './inventory';
+import { isPlayerEntity } from './player_actor';
 
 export const RED_MOLD_SAMPLE_ID = 'red_mold_sample';
 export const BLOOD_PLANT_TENDRIL_RANGE = 8.25;
@@ -161,7 +161,7 @@ function cellRoomId(world: World, e: Entity): number | undefined {
 function actorName(e: Entity | undefined): string | undefined {
   if (!e) return undefined;
   if (e.name) return e.name;
-  return e.monsterKind !== undefined ? entityDisplayName(e) : e.type === EntityType.PLAYER ? 'Вы' : undefined;
+  return e.monsterKind !== undefined ? entityDisplayName(e) : isPlayerEntity(e) ? 'Вы' : undefined;
 }
 
 function hasRedMoldInventory(items: readonly { defId: string; count: number }[]): boolean {
@@ -262,7 +262,7 @@ export function recordBloodPlantBurned(world: World, state: GameState, plant: En
     targetName: actorName(plant),
     monsterKind: MonsterKind.BLOOD_PLANT,
     severity: 5,
-    privacy: actor?.type === EntityType.PLAYER ? 'local' : 'witnessed',
+    privacy: isPlayerEntity(actor) ? 'local' : 'witnessed',
     tags: ['monster', 'blood_plant', 'burned', 'fire', 'red_mold', 'route'],
     data: {
       openedRootCells,
@@ -293,7 +293,7 @@ export function recordBloodPlantRootCut(
     targetName: actorName(plant),
     monsterKind: MonsterKind.BLOOD_PLANT,
     severity: 4,
-    privacy: actor?.type === EntityType.PLAYER ? 'local' : 'witnessed',
+    privacy: isPlayerEntity(actor) ? 'local' : 'witnessed',
     tags: ['monster', 'blood_plant', 'cut', reason, 'roots', 'route'],
     data: {
       openedRootCells,
@@ -345,7 +345,7 @@ export function neutralizeRedMoldSourceNear(
     containerOwnerId: container.ownerNpcId,
     containerFaction: container.faction,
     severity: 4,
-    privacy: actor.type === EntityType.PLAYER ? 'local' : 'witnessed',
+    privacy: isPlayerEntity(actor) ? 'local' : 'witnessed',
     tags: ['blood_plant', 'red_mold', 'contraband', 'salt', 'neutralized', 'counterplay'],
     data: {
       containerName: container.name,

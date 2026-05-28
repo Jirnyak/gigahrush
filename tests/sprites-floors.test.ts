@@ -318,7 +318,7 @@ test('non-living samosbor rebuild replaces stale generated actors but keeps play
   entities.push(
     {
       id: 9001,
-      type: EntityType.PLAYER,
+      type: EntityType.NPC, persistentNpcId: 'player',
       x: generated.spawnX,
       y: generated.spawnY,
       angle: 0,

@@ -24,6 +24,7 @@ import { publishEvent } from './events';
 import { isDebugOnePunchManEnabled, keepDebugOnePunchManAlive } from './debug_cheats';
 import { scaleMonsterDmg, strMeleeDmgMult } from './rpg';
 import { followPath, tryAssignPathToCell, wanderNearby } from './ai/pathfinding';
+import { isPlayerEntity } from './player_actor';
 
 const INTERACTION_RANGE = 2.15;
 const INTERACTION_FORWARD = 0.2;
@@ -222,7 +223,7 @@ function nearestActor(world: World, e: Entity, radius: number): Entity | null {
   let bestD2 = radius * radius;
   getEntityIndex().queryRadiusCapped(e.x, e.y, radius, gnilushkaActorQuery, ENTITY_MASK_ACTOR, ACTOR_QUERY_CAP);
   for (const other of gnilushkaActorQuery) {
-    if (!other.alive || other.id === e.id || (other.type !== EntityType.PLAYER && other.type !== EntityType.NPC)) continue;
+    if (!other.alive || other.id === e.id || (!isPlayerEntity(other) && other.type !== EntityType.NPC)) continue;
     const d2 = world.dist2(e.x, e.y, other.x, other.y);
     if (d2 < bestD2) {
       best = other;
@@ -283,7 +284,7 @@ function defensiveSlash(
   const strMult = e.rpg ? strMeleeDmgMult(e.rpg) : 1;
   const dmg = Math.max(1, Math.round(scaleMonsterDmg(def.dmg, level) * strMult * 1.25));
   if (target.hp !== undefined) {
-    if (target.type === EntityType.PLAYER && isDebugOnePunchManEnabled()) {
+    if (isPlayerEntity(target) && isDebugOnePunchManEnabled()) {
       keepDebugOnePunchManAlive(target);
     } else {
       target.hp = Math.max(0, target.hp - dmg);
@@ -293,9 +294,9 @@ function defensiveSlash(
       }
     }
     spawnBloodHit(world, target.x, target.y, Math.atan2(target.y - e.y, target.x - e.x), dmg, target.type === EntityType.MONSTER);
-    if (target.type === EntityType.PLAYER) recordPlayerDamage(state, e, dmg, 'Гнилушка ударила когтями из угла');
+    if (isPlayerEntity(target)) recordPlayerDamage(state, e, dmg, 'Гнилушка ударила когтями из угла');
   }
-  msgs.push(msg(`Гнилушка ударила ${target.type === EntityType.PLAYER ? 'вас' : entityDisplayName(target)} когтями: -${dmg}`, time, '#f96'));
+  msgs.push(msg(`Гнилушка ударила ${isPlayerEntity(target) ? 'вас' : entityDisplayName(target)} когтями: -${dmg}`, time, '#f96'));
   playSoundAt(playGrowl, e.x, e.y);
   e.attackCd = def.attackRate;
   return true;

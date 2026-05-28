@@ -1,5 +1,6 @@
 /* ── Void trace seal — local protocol backlash room ───────────── */
 
+import { stampSurfaceSplat } from '../../systems/surface_marks';
 import {
   Cell, ContainerKind, DoorState, EntityType, AIGoal, Faction, Feature, FloorLevel,
   MonsterKind, Occupation, RoomType, Tex, msg,
@@ -14,6 +15,7 @@ import { publishEvent, registerWorldEventObserver as observeWorldEvents } from '
 import { hasItem, removeItem } from '../../systems/inventory';
 import { randomRPG, scaleMonsterHp, scaleMonsterSpeed } from '../../systems/rpg';
 import { carveCorridor, findClearArea, placeDoorAt, stampRoom } from '../shared';
+import { isPlayerEntity } from '../../systems/player_actor';
 
 const CLERK_ID = 'floor20_void_protocol_clerk';
 const NEIGHBOR_ID = 'floor20_void_borrowed_neighbor';
@@ -178,7 +180,7 @@ function publishProtocol(
 }
 
 function playerInContext(ctx: TraceSealContext): Entity | undefined {
-  return ctx.entities.find(e => e.type === EntityType.PLAYER && e.alive);
+  return ctx.entities.find(e => isPlayerEntity(e) && e.alive);
 }
 
 function nextEntityId(entities: Entity[]): number {
@@ -239,7 +241,7 @@ function markTraceBranch(ctx: TraceSealContext, branch: 'seal' | 'leave_evidence
   const ci = world.idx(x, y);
   if (world.cells[ci] === Cell.FLOOR) {
     world.features[ci] = branch === 'seal' ? Feature.APPARATUS : Feature.SCREEN;
-    world.stamp(x, y, 0.5, 0.5, branch === 'seal' ? 0.5 : 0.68, branch === 'seal' ? 0.72 : 0.48, room.id * 43 + (branch === 'seal' ? 11 : 19), branch === 'seal' ? 80 : 220, 240, branch === 'seal' ? 255 : 190, true);
+    stampSurfaceSplat(world, x, y, 0.5, 0.5, branch === 'seal' ? 0.5 : 0.68, branch === 'seal' ? 0.72 : 0.48, room.id * 43 + (branch === 'seal' ? 11 : 19), branch === 'seal' ? 80 : 220, 240, branch === 'seal' ? 255 : 190, true);
   }
   if (!room.name.includes(branch === 'seal' ? 'след запечатан' : 'улика оставлена')) {
     room.name = `${room.name}; ${branch === 'seal' ? 'след запечатан' : 'улика оставлена'}`;

@@ -1,8 +1,18 @@
 /* ── Маршрутный сход: три спорных выхода с этажа Квартир ─────── */
 
 import {
-  Cell, ContainerKind, Faction, Feature, FloorLevel, Occupation, QuestType, RoomType, Tex,
-  type Entity, type Item, type WorldContainer,
+  Cell,
+  ContainerKind,
+  Faction,
+  Feature,
+  FloorLevel,
+  Occupation,
+  QuestType,
+  RoomType,
+  Tex,
+  type Entity,
+  type Item,
+  type WorldContainer,
 } from '../../core/types';
 import { World } from '../../core/world';
 import { type PlotNpcDef, registerSideQuest } from '../../data/plot';

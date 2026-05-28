@@ -1,8 +1,11 @@
 /* ── Pneumomail interaction: capsules become rumors/contracts ─── */
 
 import {
-  Feature, FloorLevel,
-  type Entity, type GameState, type Room,
+  Feature,
+  FloorLevel,
+  type Entity,
+  type GameState,
+  type Room,
   msg,
 } from '../core/types';
 import { type World } from '../core/world';

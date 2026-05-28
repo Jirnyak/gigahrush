@@ -1,3 +1,4 @@
+import { stampSurfaceSplat } from '../../systems/surface_marks';
 import { Cell, Feature, RoomType, Tex, type Room } from '../../core/types';
 import {
   addItemDrop,
@@ -56,7 +57,7 @@ function markFractalCell(ctx: ProceduralAnomalyGenContext, x: number, y: number,
   ctx.world.floorTex[ci] = spine ? Tex.F_CONCRETE : Tex.F_VOID;
   ctx.world.fog[ci] = Math.max(ctx.world.fog[ci], spine ? 18 : 46);
   if ((hash32(seed ^ ci) & 7) === 0) {
-    ctx.world.stamp(x, y, 0.5, 0.5, spine ? 0.26 : 0.42, spine ? 0.44 : 0.62, seed ^ ci, 44, 105, 92, false);
+    stampSurfaceSplat(ctx.world, x, y, 0.5, 0.5, spine ? 0.26 : 0.42, spine ? 0.44 : 0.62, seed ^ ci, 44, 105, 92, false);
   }
 }
 
@@ -105,7 +106,7 @@ function decorateCopyRoom(ctx: ProceduralAnomalyGenContext, room: Room, ordinal:
       if (repeated) {
         ctx.world.floorTex[ci] = ordinal === 0 ? Tex.F_PARQUET : Tex.F_VOID;
         ctx.world.fog[ci] = Math.max(ctx.world.fog[ci], ordinal === 0 ? 12 : 54);
-        if (((dx + dy + ordinal) % 6) === 0) ctx.world.stamp(x, y, 0.5, 0.5, 0.24, 0.38, ctx.spec.seed + room.id * 97 + dx * 11 + dy, 58, 116, 94, false);
+        if (((dx + dy + ordinal) % 6) === 0) stampSurfaceSplat(ctx.world, x, y, 0.5, 0.5, 0.24, 0.38, ctx.spec.seed + room.id * 97 + dx * 11 + dy, 58, 116, 94, false);
       }
     }
   }

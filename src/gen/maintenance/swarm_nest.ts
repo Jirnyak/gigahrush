@@ -1,5 +1,6 @@
 /* ── Swarm nest: vent source with seal/burn counterplay ─────── */
 
+import { stampSurfaceSplat } from '../../systems/surface_marks';
 import {
   AIGoal,
   Cell,
@@ -30,8 +31,8 @@ import {
 export const SWARM_NEST_ID = 'maintenance_swarm_nest';
 
 function stampCrumbs(ctx: MaintContentCtx, x: number, y: number, seed: number): void {
-  ctx.world.stamp(x, y, 0.5, 0.5, 0.42, 0.32, 91_000 + seed * 17, 34, 20, 10, false);
-  ctx.world.stamp(x, y, 0.34, 0.58, 0.18, 0.14, 91_400 + seed * 19, 116, 74, 20, false);
+  stampSurfaceSplat(ctx.world, x, y, 0.5, 0.5, 0.42, 0.32, 91_000 + seed * 17, 34, 20, 10, false);
+  stampSurfaceSplat(ctx.world, x, y, 0.34, 0.58, 0.18, 0.14, 91_400 + seed * 19, 116, 74, 20, false);
 }
 
 function spawnDormantBody(ctx: MaintContentCtx, x: number, y: number, level: number): Entity {

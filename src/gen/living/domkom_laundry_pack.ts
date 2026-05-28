@@ -2,6 +2,7 @@
 /* Zone 39 is an unsafe no-door laundry: bad shelter during sirens.  */
 /* Zone 46 is a protected household institution with a closable door. */
 
+import { stampSurfaceSplat } from '../../systems/surface_marks';
 import {
   Cell, DoorState, Feature, Faction, MonsterKind, Occupation,
   QuestType, RoomType, Tex,
@@ -524,7 +525,7 @@ function generateLaundry(
   world.features[world.idx(pos.x + 2, pos.y + 5)] = Feature.SHELF;
   world.wallTex[world.idx(pos.x + 5, pos.y - 1)] = Tex.PIPE;
   world.wallTex[world.idx(pos.x + 6, pos.y - 1)] = Tex.PIPE;
-  world.stamp(pos.x + 5, pos.y + 5, 0.5, 0.5, 4, 0.45, 3903, 35, 65, 80, false);
+  stampSurfaceSplat(world, pos.x + 5, pos.y + 5, 0.5, 0.5, 4, 0.45, 3903, 35, 65, 80, false);
 
   dropDesk(entities, nextId, pos.x + 7, pos.y + 2, 0.45);
   dropItem(entities, nextId, pos.x + 2, pos.y + 5, 'cloth_roll', 1);

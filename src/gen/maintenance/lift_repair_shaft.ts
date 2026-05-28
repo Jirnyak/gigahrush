@@ -1,8 +1,18 @@
 /* ── AG50 lift repair shaft — repair/reroute/loot expedition ─── */
 
+import { stampSurfaceSplat } from '../../systems/surface_marks';
 import {
-  ContainerKind, Faction, Feature, FloorLevel, MonsterKind, Occupation,
-  QuestType, RoomType, Tex, W, type Room,
+  ContainerKind,
+  Faction,
+  Feature,
+  FloorLevel,
+  MonsterKind,
+  Occupation,
+  QuestType,
+  RoomType,
+  Tex,
+  W,
+  type Room,
 } from '../../core/types';
 import { type PlotNpcDef, registerSideQuest } from '../../data/plot';
 import {
@@ -178,7 +188,7 @@ function dressShaft(ctx: MaintContentCtx, shaft: Room): void {
     setFeature(ctx.world, shaft.x + 1, shaft.y + dy, dy % 3 === 0 ? Feature.LAMP : Feature.APPARATUS);
     setFeature(ctx.world, shaft.x + shaft.w - 2, shaft.y + dy, dy % 2 === 0 ? Feature.MACHINE : Feature.APPARATUS);
     if (dy > 2 && dy < shaft.h - 3) {
-      ctx.world.stamp(shaft.x + 5, shaft.y + dy, 0.5, 0.5, 0.24, 95, shaft.id * 41 + dy, 28, 28, 28);
+      stampSurfaceSplat(ctx.world, shaft.x + 5, shaft.y + dy, 0.5, 0.5, 0.24, 95, shaft.id * 41 + dy, 28, 28, 28);
     }
   }
   for (let dx = 3; dx < shaft.w - 3; dx++) {

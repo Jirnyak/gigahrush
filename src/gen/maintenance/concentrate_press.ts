@@ -1,8 +1,18 @@
 /* ── AG18 concentrate press — factory loop without factory sim ── */
 
 import {
-  Cell, ContainerKind, Feature, FloorLevel, Faction, MonsterKind, Occupation, QuestType, RoomType, Tex,
-  type Room, type WorldContainer,
+  Cell,
+  ContainerKind,
+  Feature,
+  FloorLevel,
+  Faction,
+  MonsterKind,
+  Occupation,
+  QuestType,
+  RoomType,
+  Tex,
+  type Room,
+  type WorldContainer,
 } from '../../core/types';
 import { type PlotNpcDef, registerSideQuest } from '../../data/plot';
 import { placeDoor } from '../shared';

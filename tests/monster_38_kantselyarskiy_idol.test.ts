@@ -31,7 +31,7 @@ function officeWorld(): World {
 function player(x: number, y: number, carriesPaper = true): Entity {
   return {
     id: 1,
-    type: EntityType.PLAYER,
+    type: EntityType.NPC, persistentNpcId: 'player',
     x,
     y,
     angle: 0,

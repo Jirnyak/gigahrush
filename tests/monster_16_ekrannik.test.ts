@@ -24,7 +24,7 @@ import { makeGameState } from './helpers';
 function player(): Entity {
   return {
     id: 1000,
-    type: EntityType.PLAYER,
+    type: EntityType.NPC, persistentNpcId: 'player',
     x: 512.5,
     y: 512.5,
     angle: 0,

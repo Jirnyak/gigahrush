@@ -1,5 +1,6 @@
 /* ── Тонкая стена — Hell phasing encounter ───────────────────── */
 
+import { stampSurfaceSplat } from '../../systems/surface_marks';
 import {
   AIGoal, Cell, ContainerKind, EntityType, Faction, Feature, FloorLevel,
   MonsterKind, Occupation, QuestType, RoomType, Tex, W,
@@ -9,7 +10,7 @@ import { World } from '../../core/world';
 import { freshNeeds } from '../../data/catalog';
 import { type PlotNpcDef, registerSideQuest } from '../../data/plot';
 import { MONSTERS } from '../../entities/monster';
-import { stampBlackHandTrail } from '../../render/marks';
+import { stampBlackHandTrail } from '../../systems/surface_marks';
 import { monsterSpr, Spr } from '../../render/sprite_index';
 import { publishEvent, registerWorldEventObserver } from '../../systems/events';
 import { randomRPG, scaleMonsterHp, scaleMonsterSpeed } from '../../systems/rpg';
@@ -272,7 +273,7 @@ function decorateChapel(world: World, room: Room): void {
   }
 
   world.wallTex[world.idx(cx, ry - 1)] = Tex.ICON;
-  world.stamp(cx, cy, 0.5, 0.5, 5, 0.5, 35038, 180, 180, 190, false);
+  stampSurfaceSplat(world, cx, cy, 0.5, 0.5, 5, 0.5, 35038, 180, 180, 190, false);
 }
 
 export function generateThinWallChapel(world: World, entities: Entity[], nextId: { v: number }): void {

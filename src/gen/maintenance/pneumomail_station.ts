@@ -1,7 +1,13 @@
 /* ── AG114 Pneumomail station: rumor capsules through old tubes ─ */
 
+import { stampSurfaceSplat } from '../../systems/surface_marks';
 import {
-  Cell, Feature, Faction, Occupation, RoomType, Tex,
+  Cell,
+  Feature,
+  Faction,
+  Occupation,
+  RoomType,
+  Tex,
 } from '../../core/types';
 import { PNEUMOMAIL_ROOM_NAME, PNEUMOMAIL_SORTER_ROOM_NAME } from '../../data/pneumomail';
 import {
@@ -42,7 +48,7 @@ export function generatePneumomailStation(ctx: MaintContentCtx): void {
 
   for (let dx = 2; dx < station.w - 2; dx += 4) {
     const ci = ctx.world.idx(station.x + dx, station.y + station.h - 2);
-    if (ctx.world.cells[ci] !== Cell.LIFT) ctx.world.stamp(station.x + dx, station.y + station.h - 2, 0.45, 0.35, 0.22, 90, 9100 + dx, 120, 96, 48);
+    if (ctx.world.cells[ci] !== Cell.LIFT) stampSurfaceSplat(ctx.world, station.x + dx, station.y + station.h - 2, 0.45, 0.35, 0.22, 90, 9100 + dx, 120, 96, 48);
   }
 
   spawnAmbientNpc(ctx, 'Инга Трубная', Faction.CITIZEN, Occupation.STOREKEEPER, station.x + 12, station.y + 5, [

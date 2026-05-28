@@ -14,6 +14,7 @@ import { addItem } from '../../systems/inventory';
 import { registerRouteCue } from '../../systems/route_cues';
 import { randomRPG, scaleMonsterHp, scaleMonsterSpeed } from '../../systems/rpg';
 import { carveCorridor, findClearArea, placeDoorAt, stampRoom } from '../shared';
+import { isPlayerEntity } from '../../systems/player_actor';
 
 const PROTOCOL_ID = 'pristav_pustoty';
 const PROTOCOL_NAME = 'Пристав Пустоты';
@@ -174,7 +175,7 @@ function publishPristavEvent(
 }
 
 function playerInContext(ctx: PristavContext): Entity | undefined {
-  return ctx.entities.find(e => e.type === EntityType.PLAYER && e.alive);
+  return ctx.entities.find(e => isPlayerEntity(e) && e.alive);
 }
 
 function nextEntityId(entities: Entity[]): number {

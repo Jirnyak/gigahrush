@@ -1,5 +1,6 @@
 /* ── VOID afterprotocol runtime — bounded local rules ─────────── */
 
+import { stampSurfaceSplat } from './surface_marks';
 import {
   W, Cell, DoorState, EntityType, Feature, MonsterKind, AIGoal,
   type Entity, type GameState, type WorldEvent, type WorldContainer, type WorldEventType,
@@ -19,6 +20,7 @@ import { addItem, removeItem } from './inventory';
 import { randomRPG, scaleMonsterHp, scaleMonsterSpeed } from './rpg';
 import { publishEvent, registerWorldEventObserver as observeWorldEvents } from './events';
 import { canSpawnEntityType, entitySpawnSlots } from './entity_limits';
+import { isPlayerEntity } from './player_actor';
 
 type ProtocolPhase = 'obtained' | 'started' | 'ended' | 'backlash' | 'rejected';
 
@@ -370,7 +372,7 @@ function markSpiritTollChoice(ctx: VoidSpiritTollChamberContext, tag: string): v
 }
 
 function playerInContext(ctx: { entities: Entity[] }): Entity | undefined {
-  return ctx.entities.find(e => e.type === EntityType.PLAYER && e.alive);
+  return ctx.entities.find(e => isPlayerEntity(e) && e.alive);
 }
 
 function markFromEvent(ctx: { world: World; roomId: number }, state: GameState, event: WorldEvent, def: VoidProtocolDef): VoidProtocolMark {
@@ -571,7 +573,7 @@ function markBorrowedLightReceipt(world: World, mark: VoidProtocolMark, kept: bo
   const ci = world.idx(x, y);
   if (world.cells[ci] === Cell.FLOOR) {
     world.setFeatureAt(ci, kept ? Feature.LAMP : Feature.SCREEN);
-    world.stamp(x, y, 0.5, 0.5, kept ? 0.54 : 0.42, kept ? 0.78 : 0.68, mark.id * 31 + (kept ? 7 : 3), kept ? 210 : 40, 245, kept ? 180 : 255, true);
+    stampSurfaceSplat(world, x, y, 0.5, 0.5, kept ? 0.54 : 0.42, kept ? 0.78 : 0.68, mark.id * 31 + (kept ? 7 : 3), kept ? 210 : 40, 245, kept ? 180 : 255, true);
   }
   if (room && !room.name.includes(kept ? 'улика' : 'потреблен')) {
     room.name = `${room.name}; свет ${kept ? 'улика' : 'потреблен'}`;

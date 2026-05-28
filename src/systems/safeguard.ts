@@ -16,6 +16,7 @@ import { monsterSpr } from '../render/sprite_index';
 import { getRecentEvents, publishEvent } from './events';
 import { randomRPG, scaleMonsterHp, scaleMonsterSpeed } from './rpg';
 import { canSpawnEntityType } from './entity_limits';
+import { isPlayerEntity } from './player_actor';
 
 const HACK_FLOOR_COOLDOWN_S = 480;
 const HACK_TERMINAL_COOLDOWN_S = 900;
@@ -86,7 +87,7 @@ function canSpawnAt(world: World, entities: readonly Entity[], x: number, y: num
   if (blocksSpawnFeature(world.features[idx] as Feature)) return false;
   for (const entity of entities) {
     if (!entity.alive) continue;
-    if (entity.type !== EntityType.PLAYER && entity.type !== EntityType.NPC && entity.type !== EntityType.MONSTER) continue;
+    if (!isPlayerEntity(entity) && entity.type !== EntityType.NPC && entity.type !== EntityType.MONSTER) continue;
     if (world.dist2(entity.x, entity.y, wx + 0.5, wy + 0.5) < 0.9) return false;
   }
   return true;
@@ -136,7 +137,7 @@ export function spawnSafeguardHackBacklash(
   const level = Math.max(4, zoneLevelAt(world, spawn.x, spawn.y));
   const rpg = randomRPG(level);
   const hp = Math.round(scaleMonsterHp(def.hp, level) * (1 + 0.08 * rpg.str));
-  const target = entities.find(entity => entity.alive && entity.type === EntityType.PLAYER);
+  const target = entities.find(entity => entity.alive && isPlayerEntity(entity));
   const safeguard: Entity = {
     id: nextId.v++,
     type: EntityType.MONSTER,

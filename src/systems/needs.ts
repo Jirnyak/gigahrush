@@ -250,11 +250,10 @@ function rememberNeedsTouch(id: number, time: number): void {
   }
 }
 
-function applyColdResidentCadence(e: Entity, dt: number, time: number, world: World | undefined): void {
+function applyColdResidentCadence(e: Entity, dt: number, _time: number, world: World | undefined): void {
   const n = e.needs;
   if (!n || e.type !== EntityType.NPC || dt <= 0) return;
   const room = world?.roomAt(e.x, e.y);
-  const hour = (8 + Math.floor(Math.floor(time) / 60)) % 24;
   if (room?.type === RoomType.KITCHEN) {
     const food = e.occupation === Occupation.COOK ? 5 : 3.5;
     n.food = Math.min(100, n.food + food * dt);
@@ -269,8 +268,7 @@ function applyColdResidentCadence(e: Entity, dt: number, time: number, world: Wo
     e.hp = Math.min(e.maxHp, e.hp + (e.occupation === Occupation.DOCTOR ? 2 : 1) * dt);
   }
 
-  const resting = e.ai?.npcState === NpcState.SLEEPING || hour >= 22 || hour < 6;
-  if (resting && (room?.type === RoomType.LIVING || room?.type === RoomType.OFFICE)) {
+  if (e.ai?.npcState === NpcState.SLEEPING && (room?.type === RoomType.LIVING || room?.type === RoomType.OFFICE)) {
     n.sleep = Math.min(100, n.sleep + 2.8 * dt);
   }
   if (e.ai?.npcState === NpcState.LUNCH && (room?.type === RoomType.COMMON || room?.type === RoomType.KITCHEN)) {

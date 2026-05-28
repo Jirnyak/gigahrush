@@ -28,6 +28,7 @@ import { activeFloorInstanceWorldKey, floorInstanceLabel, getActiveFloorInstance
 import { controlBindingLabel, controlHint } from './controls';
 import { mapEditorContainerBrushes, mapEditorEntityBrushes } from './map_editor_catalog';
 import { canSpawnEntityType } from './entity_limits';
+import { isPlayerEntity } from './player_actor';
 
 export type MapEditorToolId = 'cell' | 'door' | 'texture' | 'feature' | 'entity' | 'container' | 'inspect';
 export type MapEditorMode = 'map' | 'menu' | 'brush' | 'details' | 'objects';
@@ -437,7 +438,7 @@ function removeContainersAt(world: World, idx: number): void {
 
 function removeLooseEntitiesAt(entities: Entity[], idx: number, world: World): void {
   for (const entity of entities) {
-    if (entity.type === EntityType.PLAYER) continue;
+    if (isPlayerEntity(entity)) continue;
     if (world.idx(Math.floor(entity.x), Math.floor(entity.y)) === idx) entity.alive = false;
   }
 }
@@ -709,7 +710,7 @@ export function applyMapEditorOp(
   } else if (op.kind === 'spawn_entity') {
     result = spawnEditorEntity(world, entities, nextEntityId, op);
   } else if (op.kind === 'delete_entity') {
-    const entity = entities.find(e => e.id === op.entityId && e.type !== EntityType.PLAYER);
+    const entity = entities.find(e => e.id === op.entityId && !isPlayerEntity(e));
     if (!entity) return setError('Нет entity');
     entity.alive = false;
     const idx = world.idx(Math.floor(entity.x), Math.floor(entity.y));
@@ -736,7 +737,7 @@ export function applyMapEditorOp(
 function nearestEntityId(world: World, entities: readonly Entity[], x: number, y: number): number | null {
   const idx = world.idx(x, y);
   for (const entity of entities) {
-    if (entity.type === EntityType.PLAYER || !entity.alive) continue;
+    if (isPlayerEntity(entity) || !entity.alive) continue;
     if (world.idx(Math.floor(entity.x), Math.floor(entity.y)) === idx) return entity.id;
   }
   return null;

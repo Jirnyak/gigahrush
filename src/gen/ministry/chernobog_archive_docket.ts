@@ -1,9 +1,6 @@
 /* ── Досье ЧБ — Ministry Chernobog archive decisions ─────────── */
 
-import {
-  Faction, Occupation, QuestType,
-  type Entity, type Room,
-} from '../../core/types';
+import { Faction, Occupation, QuestType, type Entity, type Room } from '../../core/types';
 import { chernobogDocketQuestEventTags, chernobogDocketQuestRumorIds } from '../../data/chernobog_docket';
 import { type PlotNpcDef, registerSideQuest, registerSideQuestSteps } from '../../data/plot';
 import { type NextId, spawnAdminNpc } from './admin_common';

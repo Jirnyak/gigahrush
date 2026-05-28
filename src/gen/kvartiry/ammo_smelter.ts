@@ -1,8 +1,17 @@
 /* -- Podpolnaya ammo smelter: contested Kvartiry ammo route ------- */
 
 import {
-  Cell, ContainerKind, Faction, Feature, FloorLevel, Occupation, QuestType, RoomType, Tex,
-  type Entity, type WorldContainer,
+  Cell,
+  ContainerKind,
+  Faction,
+  Feature,
+  FloorLevel,
+  Occupation,
+  QuestType,
+  RoomType,
+  Tex,
+  type Entity,
+  type WorldContainer,
 } from '../../core/types';
 import { World } from '../../core/world';
 import { type PlotNpcDef, registerSideQuest } from '../../data/plot';

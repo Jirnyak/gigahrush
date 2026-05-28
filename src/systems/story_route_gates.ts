@@ -1,11 +1,6 @@
 /* ── Story route gates: small floor mutations keyed by plot state ─ */
 
-import {
-  Cell,
-  LiftDirection,
-  type Entity,
-  type GameState,
-} from '../core/types';
+import { Cell, LiftDirection, type Entity, type GameState } from '../core/types';
 import { World } from '../core/world';
 import { ensureFloorRouteLiftLayout } from './floor_memory';
 import {

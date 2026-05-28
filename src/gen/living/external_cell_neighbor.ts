@@ -1,5 +1,6 @@
 /* ── External Chernobog cell neighbor: domestic recruitment POI ── */
 
+import { stampSurfaceSplat } from '../../systems/surface_marks';
 import {
   AIGoal, Cell, ContainerKind, DoorState, EntityType, Faction, Feature, FloorLevel, Occupation,
   QuestType, RoomType, Tex,
@@ -514,9 +515,9 @@ function setFeature(world: World, x: number, y: number, feature: Feature): void 
 function stampBlackHand(world: World, room: Room): void {
   const x = world.wrap(room.x + ROOM_W - 4);
   const y = world.wrap(room.y - 1);
-  world.stamp(x, y, 0.52, 0.68, 0.18, 0.62, 77077, 5, 5, 6, true);
+  stampSurfaceSplat(world, x, y, 0.52, 0.68, 0.18, 0.62, 77077, 5, 5, 6, true);
   for (let i = 0; i < 5; i++) {
-    world.stamp(x, y, 0.34 + i * 0.09, 0.44, 0.07, 0.55, 77090 + i, 4, 4, 5, true);
+    stampSurfaceSplat(world, x, y, 0.34 + i * 0.09, 0.44, 0.07, 0.55, 77090 + i, 4, 4, 5, true);
   }
 }
 
@@ -539,7 +540,7 @@ function decorateRoom(world: World, room: Room): void {
 
   world.wallTex[world.idx(rx + 3, ry - 1)] = Tex.POSTER_BASE + 4;
   world.wallTex[world.idx(rx + ROOM_W - 4, ry - 1)] = Tex.POSTER_BASE + 17;
-  world.stamp(rx + 6, ry + 5, 0.5, 0.5, 3, 0.22, 77012, 40, 36, 26, false);
+  stampSurfaceSplat(world, rx + 6, ry + 5, 0.5, 0.5, 3, 0.22, 77012, 40, 36, 26, false);
   stampBlackHand(world, room);
 }
 

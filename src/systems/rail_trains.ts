@@ -15,6 +15,7 @@ import {
 import { World } from '../core/world';
 import { Spr } from '../render/sprite_index';
 import { publishEvent } from './events';
+import { isPlayerEntity } from './player_actor';
 
 const SEGMENT_STRIDE = 2;
 const BOARD_DIST2 = 3.2 * 3.2;
@@ -137,7 +138,7 @@ function publishRailEvent(
     x: actor.x,
     y: actor.y,
     actorId: actor.id,
-    actorName: actor.name ?? (actor.type === EntityType.PLAYER ? 'Вы' : 'цель'),
+    actorName: actor.name ?? (isPlayerEntity(actor) ? 'Вы' : 'цель'),
     actorFaction: actor.faction,
     severity,
     privacy: 'local',
@@ -224,15 +225,15 @@ function updateTrainMotion(world: World, track: RailTrainTrack, train: RailTrain
 }
 
 function damageEntity(world: World, victim: Entity, train: RailTrain, state: GameState): void {
-  if (victim.type !== EntityType.PLAYER && victim.type !== EntityType.NPC && victim.type !== EntityType.MONSTER) return;
-  const amount = victim.type === EntityType.PLAYER ? 38 : 260;
+  if (!isPlayerEntity(victim) && victim.type !== EntityType.NPC && victim.type !== EntityType.MONSTER) return;
+  const amount = isPlayerEntity(victim) ? 38 : 260;
   if (victim.hp !== undefined) {
     victim.hp = Math.max(0, victim.hp - amount);
     if (victim.hp <= 0) victim.alive = false;
   } else {
     victim.alive = false;
   }
-  publishRailEvent(world, state, victim, train, 'rail_train_crush', victim.type === EntityType.PLAYER ? 5 : 4, ['crush'], {
+  publishRailEvent(world, state, victim, train, 'rail_train_crush', isPlayerEntity(victim) ? 5 : 4, ['crush'], {
     damage: amount,
     killed: !victim.alive,
   });
