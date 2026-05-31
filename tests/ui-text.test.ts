@@ -6,7 +6,7 @@ import { ITEMS } from '../src/data/items';
 import { RUMORS } from '../src/data/rumors';
 import { SAMOSBOR_MODIFIERS, SAMOSBOR_VARIANTS } from '../src/data/samosbor_variants';
 import { combatWeaponHudLines, hudMessageAgeSeconds, hudMessageVisible } from '../src/render/hud';
-import { fitText, fitTextStable, setUiTextTime, wrapTextLines } from '../src/render/ui_text';
+import { fitText, fitTextStable, formatUiNumber, setUiTextTime, wrapTextLines } from '../src/render/ui_text';
 
 const ctx = {
   font: '10px monospace',
@@ -119,6 +119,13 @@ test('wrapped Russian action phrase keeps every visible line inside bounds', () 
     assert.ok(ctx.measureText(line).width <= 90);
     assert.equal(line.includes('...'), false);
   }
+});
+
+test('UI number formatting keeps player-facing decimals compact', () => {
+  assert.equal(formatUiNumber(83.333333333), '83.3');
+  assert.equal(formatUiNumber(100), '100');
+  assert.equal(formatUiNumber(1.239, 2), '1.24');
+  assert.equal(formatUiNumber(1.239, 9), '1.24');
 });
 
 test('overwide Russian fitted text scrolls without ellipsis', () => {

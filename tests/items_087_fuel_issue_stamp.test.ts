@@ -31,7 +31,7 @@ test('fuel issue stamp redeems into one fuel canister', () => {
   const player = makeTestPlayer({ inventory: [{ defId: 'fuel_issue_stamp', count: 1 }] });
   const state = makeGameState({ currentFloor: FloorLevel.MINISTRY, time: 87 });
 
-  assert.equal(getInventorySlotActionInfo(player, 0)?.useLabel, 'E погасить');
+  assert.equal(getInventorySlotActionInfo(player, 0)?.useLabel, 'Enter погасить');
 
   useItem(player, 0, state.msgs, state.time, state);
 

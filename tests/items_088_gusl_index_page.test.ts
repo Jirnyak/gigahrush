@@ -35,7 +35,7 @@ test('gusl index page can be sold as access intelligence in the living block', (
   const state = makeGameState({ currentFloor: FloorLevel.LIVING, time: 88 });
 
   assert.equal(addItem(player, ITEM_ID, 1), true);
-  assert.equal(getInventorySlotActionInfo(player, 0)?.useLabel, 'E проверить');
+  assert.equal(getInventorySlotActionInfo(player, 0)?.useLabel, 'Enter проверить');
 
   useItem(player, 0, state.msgs, state.time, state);
 

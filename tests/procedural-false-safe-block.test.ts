@@ -18,6 +18,7 @@ import {
   tryUseProceduralFloorAnomaly,
 } from '../src/systems/procedural_anomalies';
 import { setFloorRunState } from '../src/systems/procedural_floors';
+import { testGenerationMatrix } from './generator_helpers';
 import { makeGameState, makeTestPlayer } from './helpers';
 
 function forcedFalseSafeSpec(seed = 55_028, anomalyId: FloorAnomalyId = 'false_safe_block'): ProceduralFloorSpec {
@@ -63,7 +64,7 @@ function installCurrentProceduralSpec(spec: ProceduralFloorSpec) {
   return state;
 }
 
-test('false-safe block exposes evidence and player counterplay through anomaly interaction', () => {
+testGenerationMatrix('false-safe block exposes evidence and player counterplay through anomaly interaction', () => {
   const spec = forcedFalseSafeSpec();
   const gen = generateProceduralFloor(spec);
   const screen = findFalseSafeFeature(gen.world, Feature.SCREEN);
@@ -103,7 +104,7 @@ test('false-safe block exposes evidence and player counterplay through anomaly i
   assert.equal(getRecentEvents(state, { tags: ['marker_resolved', FALSE_SAFE_BLOCK_TAG], limit: 1 }).length, 1);
 });
 
-test('false-safe block does not silently replace existing citizen shelter rooms', () => {
+testGenerationMatrix('false-safe block does not silently replace existing citizen shelter rooms', () => {
   const baseline = generateProceduralFloor(forcedFalseSafeSpec(55_028, 'none'));
   const falseSafe = generateProceduralFloor(forcedFalseSafeSpec(55_028, 'false_safe_block'));
   const baselineShelters = baseline.world.rooms.filter(citizenShelterName).map(room => room.name).sort();

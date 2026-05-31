@@ -3130,7 +3130,7 @@ function rewriteActorAsRandomNpc(state: GameState, entity: Entity, variant: Acti
   entity.weapon = loadout.weapon;
   entity.ai = wasPlayer ? entity.ai : { goal: AIGoal.WANDER, tx: 0, ty: 0, path: [], pi: 0, stuck: 0, timer: 0 };
   entity.questId = -1;
-  entity.canGiveQuest = !wasPlayer && Math.random() < 0.12;
+  entity.canGiveQuest = !wasPlayer && Math.random() < 0.10;
   entity.familyId = Math.floor(Math.random() * 1_000_000_000);
   if (entity.type === EntityType.NPC && entity.alifeId !== undefined) rewriteAlifeNpcIdentityFromEntity(state, entity);
   if (wasPlayer) {
@@ -3498,7 +3498,7 @@ function createIstotitThingAtCell(
       weapon: loadout.weapon,
       rpg,
       questId: -1,
-      canGiveQuest: Math.random() < 0.12,
+      canGiveQuest: Math.random() < 0.10,
       familyId: Math.floor(Math.random() * 1_000_000_000),
       money: Math.floor(Math.random() * (40 + rpg.level * 8)),
     };

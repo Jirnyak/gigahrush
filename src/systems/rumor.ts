@@ -567,7 +567,7 @@ function formatReveal(reveal: RumorReveal): string {
     case 'room':
       return reveal.roomName ?? (reveal.roomType !== undefined ? ROOM_TYPE_NAMES[reveal.roomType] : '');
     case 'danger':
-      return `опасность ${Math.max(1, Math.min(5, reveal.level | 0))}/5`;
+      return 'опасность';
     case 'monster':
       return reveal.monsterKind !== undefined ? monsterTypeName(reveal.monsterKind).toLowerCase() : '';
     case 'container':

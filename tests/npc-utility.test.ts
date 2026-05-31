@@ -18,8 +18,8 @@ import {
   shouldSwitchNpcUtilityIntent,
   type NpcUtilityTargetCandidate,
 } from '../src/systems/ai/npc_utility';
-import { updateNPC } from '../src/systems/ai/npc_fsm';
-import { rebuildEntityIndexForSimulation } from '../src/systems/entity_index';
+import { forceHide, updateNPC } from '../src/systems/ai/npc_fsm';
+import { getEntityIndex, rebuildEntityIndexForSimulation } from '../src/systems/entity_index';
 import { addTestRoom, makeTestPlayer } from './helpers';
 
 function makeUtilityWorld(): World {
@@ -190,4 +190,25 @@ test('NPC runtime utility does not force lunch from the noon clock edge', () => 
 
   assert.notEqual(npc.ai?.goal, AIGoal.EAT);
   assert.notEqual(npc.ai?.npcState, NpcState.LUNCH);
+});
+
+test('samosbor forceHide enters shelter state without bypassing utility cadence', () => {
+  const world = makeUtilityWorld();
+  const player = makeTestPlayer({ id: 1, x: 70, y: 70 });
+  const npc = makeUtilityNpc(13, { food: 100, water: 100, sleep: 100, pee: 0, poo: 0 });
+  const entities = [player, npc];
+  const clock = { hour: 5, minute: 0, totalMinutes: 5 * 60 };
+
+  rebuildEntityIndexForSimulation(entities, 1);
+  forceHide(entities, [], 100, world, clock);
+
+  assert.equal(npc.ai?.goal, AIGoal.HIDE);
+  assert.equal(npc.ai?.npcState, NpcState.HIDING);
+
+  getEntityIndex().beginTelemetryFrame();
+  updateNPC(world, entities, npc, 1 / 60, 100.016, clock, true);
+
+  assert.equal(getEntityIndex().getDebugStats().queries.radiusCount, 0);
+  assert.equal(npc.ai?.goal, AIGoal.HIDE);
+  assert.equal(npc.ai?.npcState, NpcState.HIDING);
 });

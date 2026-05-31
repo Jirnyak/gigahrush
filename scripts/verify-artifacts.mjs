@@ -9,7 +9,7 @@ import { inflateRawSync } from 'node:zlib';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const root = path.resolve(__dirname, '..');
-const freshDistRel = 'tmp/artifact-verify/dist';
+const freshDistRel = 'gatbage/tmp/artifact-verify/dist';
 const freshRoot = path.resolve(root, 'tmp', 'artifact-verify');
 const freshDist = path.resolve(root, freshDistRel);
 const trackedDist = path.resolve(root, 'dist');

@@ -5,6 +5,7 @@ import {
 import { World } from '../core/world';
 import { CONTAINER_DEFS, containerKindsForRoom } from '../data/container_defs';
 import { ITEMS } from '../data/catalog';
+import { MAX_INVENTORY_SLOTS } from '../data/inventory_limits';
 import {
   getPermitDef,
   permitAccessTagsFromContainerTags,
@@ -44,7 +45,6 @@ import {
 } from './shelter_tally';
 import { isPlayerEntity } from './player_actor';
 
-const MAX_ENTITY_INVENTORY_SLOTS = 25;
 const THEFT_WITNESS_RADIUS = 7;
 const THEFT_WITNESS_SCAN_CAP = 160;
 const THEFT_WITNESS_REPORT_CAP = 4;
@@ -238,7 +238,7 @@ function normalizeSavedContainer(
   const y = world.wrap(rawY);
   const savedCapacity = Math.floor(Number(src.capacitySlots));
   const capacitySlots = Number.isFinite(savedCapacity) && savedCapacity > 0
-    ? Math.max(1, Math.min(25, savedCapacity))
+    ? Math.max(1, Math.min(MAX_INVENTORY_SLOTS, savedCapacity))
     : def.capacitySlots;
   const container: WorldContainer = {
     id,
@@ -1054,7 +1054,7 @@ export function takeFromContainer(
   const access = containerAccessInfo(container, actor, state);
   if (!access.canTake) return false;
   if (!actor.inventory) actor.inventory = [];
-  const take = Math.min(count, slot.count, inventoryFitCount(actor.inventory, slot.defId, MAX_ENTITY_INVENTORY_SLOTS));
+  const take = Math.min(count, slot.count, inventoryFitCount(actor.inventory, slot.defId, MAX_INVENTORY_SLOTS));
   if (take <= 0) return false;
   const purchase = access.purchase === true;
   const purchaseQuote = purchase ? containerPurchaseQuote(state, container, slot.defId, take) : undefined;
@@ -1064,7 +1064,7 @@ export function takeFromContainer(
   const itemName = def.name;
   const item: Item = { defId, count: take, data: take === slot.count ? slot.data : undefined };
   if (!removeFromInventorySlot(container.inventory, slotIdx, take)) return false;
-  const moved = addToInventory(actor.inventory, item, take, MAX_ENTITY_INVENTORY_SLOTS);
+  const moved = addToInventory(actor.inventory, item, take, MAX_INVENTORY_SLOTS);
   if (moved !== take) {
     addToInventory(container.inventory, item, take - moved, container.capacitySlots);
     return false;
@@ -1196,7 +1196,7 @@ export function putIntoContainer(
   if (!removeFromInventorySlot(inv, slotIdx, moved)) return false;
   const added = addToInventory(container.inventory, item, moved, container.capacitySlots);
   if (added !== moved) {
-    addToInventory(inv, item, moved - added, MAX_ENTITY_INVENTORY_SLOTS);
+    addToInventory(inv, item, moved - added, MAX_INVENTORY_SLOTS);
     return false;
   }
   const unlock = access.unlock ? unlockContainerForActor(container, actor, state) : null;

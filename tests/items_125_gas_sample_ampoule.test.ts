@@ -50,5 +50,5 @@ test('gas sample ampoule is a trade item to save or move through NPC barter', ()
   assert.equal(info?.sellLabel, 'Справка: базовая цена 165₽');
   assert.equal(info?.canDrop, true);
   assert.equal(info?.canUse, true);
-  assert.equal(info?.useLabel, 'E вскрыть пробу');
+  assert.equal(info?.useLabel, 'Enter вскрыть пробу');
 });

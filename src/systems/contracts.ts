@@ -265,7 +265,7 @@ function proceduralRouteLabel(spec: ProceduralFloorSpec): string {
   const geometry = FLOOR_GEOMETRIES.find(def => def.id === spec.geometryId)?.title ?? spec.geometryId;
   const majority = FLOOR_MAJORITY_FACTIONS.find(def => def.id === spec.majorityId)?.title ?? spec.majorityId;
   const anomaly = FLOOR_ANOMALIES.find(def => def.id === spec.anomalyId)?.title ?? spec.anomalyId;
-  return `Z${formatFloorZ(spec.z)} ${geometry}, ${majority}, ${anomaly}, опасность ${spec.danger}/5`;
+  return `Z${formatFloorZ(spec.z)} ${geometry}, ${majority}, ${anomaly}`;
 }
 
 function routeLabelFromTarget(route: QuestRouteTarget | undefined, state?: GameState): string {
@@ -415,7 +415,7 @@ export function prepareAcceptedContract(q: Quest, state: GameState): void {
       z: target.z,
       anomalyId: 'mushroom_mycelium',
       tags: ['mushroom'],
-      label: `Z${formatFloorZ(target.z ?? 0)} грибница, опасность ${target.danger}/5`,
+      label: `Z${formatFloorZ(target.z ?? 0)} грибница`,
     }
     : undefined);
   enrichRouteHint(q, state);

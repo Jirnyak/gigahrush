@@ -5,7 +5,7 @@ import ts from 'typescript';
 
 const ROOT = process.cwd();
 const SRC_DIR = path.join(ROOT, 'src');
-const OUT_FILE = path.join(ROOT, 'Docs/ScenarioWriters/game_text_inventory.md');
+const OUT_FILE = path.join(ROOT, 'gatbage/reference/scenario_writers/game_text_inventory.md');
 const EXTRA_TEXT_FILES = ['index.html', 'public/manifest.webmanifest'];
 
 const PLAYER_KEYS = new Set([

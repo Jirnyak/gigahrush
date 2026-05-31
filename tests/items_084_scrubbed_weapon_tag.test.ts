@@ -38,7 +38,7 @@ test('scrubbed weapon tag can be sold as audit-risk contraband in the living blo
   const state = makeGameState({ currentFloor: FloorLevel.LIVING, time: 84 });
 
   assert.equal(addItem(player, 'scrubbed_weapon_tag', 1), true);
-  assert.equal(getInventorySlotActionInfo(player, 0)?.useLabel, 'E проверить');
+  assert.equal(getInventorySlotActionInfo(player, 0)?.useLabel, 'Enter проверить');
 
   useItem(player, 0, state.msgs, state.time, state);
 

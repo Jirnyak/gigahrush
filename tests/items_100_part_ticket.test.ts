@@ -46,7 +46,7 @@ test('part ticket opens the Ministry N3 document gate without consuming the pape
   const state = makeGameState({ currentFloor: FloorLevel.MINISTRY, time: 100 });
 
   assert.equal(addItem(player, ITEM_ID, 1), true);
-  assert.equal(getInventorySlotActionInfo(player, 0)?.useLabel, 'E предъявить');
+  assert.equal(getInventorySlotActionInfo(player, 0)?.useLabel, 'Enter предъявить');
   useItem(player, 0, state.msgs, state.time, state, undefined, world);
 
   assert.equal(countInventoryItem(player, ITEM_ID), 1);

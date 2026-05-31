@@ -45,7 +45,7 @@ test('hazard shift extension opens the Ministry N3 gate as risky legal access', 
   const state = makeGameState({ currentFloor: FloorLevel.MINISTRY, time: 102 });
 
   assert.equal(addItem(player, ITEM_ID, 1), true);
-  assert.equal(getInventorySlotActionInfo(player, 0)?.useLabel, 'E предъявить');
+  assert.equal(getInventorySlotActionInfo(player, 0)?.useLabel, 'Enter предъявить');
 
   useItem(player, 0, state.msgs, state.time, state, undefined, world);
 

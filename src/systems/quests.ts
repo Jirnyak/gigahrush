@@ -9,6 +9,7 @@ import {
 import { World } from '../core/world';
 import { ITEMS } from '../data/catalog';
 import { isSilverSlimeItem, SILVER_SLIME_SEALED_ID } from '../data/items';
+import { craftRecipeSourcesForQuest, getCraftRecipeSource } from '../data/craft_recipe_sources';
 
 import { addFactionRelMutual, getFactionRel } from '../data/relations';
 import { PLOT_CHAIN, PLOT_NPCS, SIDE_QUESTS, hasAvailableQuest, isPlotNpc, sideQuestPrereqsMet, type PlotStep } from '../data/plot';
@@ -38,7 +39,7 @@ import {
   intContractRewardMult, intDocumentRewardMult,
 } from './rpg';
 import { currentFloorRunEntry, floorRunEntryDanger } from './procedural_floors';
-import { calculateQuestReward, type QuestRewardObjectiveKind } from './quest_rewards';
+import { calculateQuestReward, scaleAuthoredQuestRewards, type QuestRewardObjectiveKind } from './quest_rewards';
 import { MONSTERS } from '../entities/monster';
 import { publishEvent } from './events';
 import { entitySpawnSlots } from './entity_limits';
@@ -60,8 +61,15 @@ import { pushNpcLogMessage } from './ai/barks';
 import { hearingRadiusMetersForActor } from './hearing';
 import { getAlifeNpcTotalMoney } from './alife';
 import { revealQuestTargetOnMap } from './map_exploration';
+import {
+  craftRecipeExists,
+  craftRecipeLearnedMessage,
+  hasCraftRecipe,
+  learnCraftRecipe,
+  learnCraftRecipesFromSource,
+} from './crafting';
 
-const BASE_QUEST_GIVER_CHANCE = 0.35;
+const PROCEDURAL_QUEST_GIVER_CHANCE = 0.10;
 
 export interface CurrentObjective {
   line: string;
@@ -174,26 +182,12 @@ export function reassignQuestGivers(entities: Entity[]): void {
     if (e.type !== EntityType.NPC || !e.alive) continue;
     if (isPlotNpc(e)) continue;
     if (e.persistentNpcId) continue;
-    e.canGiveQuest = Math.random() < questGiverChance(e);
+    e.canGiveQuest = Math.random() < proceduralQuestGiverChance();
   }
 }
 
-function questGiverChance(npc: Entity): number {
-  let chance = BASE_QUEST_GIVER_CHANCE;
-  if (npc.faction === Faction.LIQUIDATOR || npc.occupation === Occupation.HUNTER) chance += 0.18;
-  if (npc.faction === Faction.SCIENTIST || npc.occupation === Occupation.SCIENTIST) chance += 0.12;
-  if (
-    npc.occupation === Occupation.COOK ||
-    npc.occupation === Occupation.DOCTOR ||
-    npc.occupation === Occupation.LOCKSMITH ||
-    npc.occupation === Occupation.MECHANIC ||
-    npc.occupation === Occupation.STOREKEEPER ||
-    npc.occupation === Occupation.SECRETARY ||
-    npc.occupation === Occupation.DIRECTOR
-  ) chance += 0.10;
-  if (npc.occupation === Occupation.CHILD || npc.occupation === Occupation.ALCOHOLIC) chance -= 0.12;
-  if (npc.faction === Faction.WILD) chance -= 0.05;
-  return Math.max(0.20, Math.min(0.55, chance));
+function proceduralQuestGiverChance(): number {
+  return PROCEDURAL_QUEST_GIVER_CHANCE;
 }
 
 function plotStepPreviousStepsDone(index: number, quests: readonly Quest[]): boolean {
@@ -260,6 +254,28 @@ function activeQuestFromNpc(npc: Entity, state: Pick<GameState, 'quests'>): Ques
   return state.quests.find(q => !q.done && !q.failed && q.giverId === npc.id);
 }
 
+type ActiveQuestState = Pick<GameState, 'quests' | 'activeQuestId'>;
+
+export function isQuestSelectableAsActive(q: Quest): boolean {
+  return !q.done && !q.failed;
+}
+
+export function getActiveQuest(state: ActiveQuestState): Quest | undefined {
+  if (state.activeQuestId === undefined) return undefined;
+  return state.quests.find(q => q.id === state.activeQuestId && isQuestSelectableAsActive(q));
+}
+
+export function toggleActiveQuest(state: ActiveQuestState, questId: number): Quest | undefined {
+  if (state.activeQuestId === questId) {
+    state.activeQuestId = undefined;
+    return undefined;
+  }
+  const quest = state.quests.find(q => q.id === questId && isQuestSelectableAsActive(q));
+  if (!quest) return getActiveQuest(state);
+  state.activeQuestId = quest.id;
+  return quest;
+}
+
 export function npcHasImportantQuestAction(npc: Entity, state: Pick<GameState, 'quests'>): boolean {
   if (npc.type !== EntityType.NPC || !npc.alive) return false;
   return activeTalkQuestForNpc(npc, state) !== undefined || nextAvailablePlotStepForNpc(npc, state) !== undefined;
@@ -320,12 +336,14 @@ function objectiveTargetEntity(q: Quest, entities: readonly Entity[]): Entity | 
   return undefined;
 }
 
-function activeObjectiveQuest(state: Pick<GameState, 'quests'>): Quest | undefined {
+function activeObjectiveQuest(state: Pick<GameState, 'quests' | 'activeQuestId'>): Quest | undefined {
+  const selected = getActiveQuest(state);
+  if (selected) return selected;
   const active = state.quests.filter(q => !q.done && !q.failed);
   return active.find(q => q.plotStepIndex !== undefined) ?? active[0];
 }
 
-export function getCurrentObjective(state: Pick<GameState, 'quests'>, entities: readonly Entity[] = []): CurrentObjective | null {
+export function getCurrentObjective(state: Pick<GameState, 'quests' | 'activeQuestId'>, entities: readonly Entity[] = []): CurrentObjective | null {
   const q = activeObjectiveQuest(state);
   if (q) {
     const step = q.plotStepIndex !== undefined ? PLOT_CHAIN[q.plotStepIndex] : undefined;
@@ -419,6 +437,7 @@ export function offerQuest(
     return;
   }
 
+  scaleAuthoredQuestRewards(quest);
   state.quests.push(quest);
   npc.questId = quest.id;
   if (!isPlotNpc(npc)) npc.canGiveQuest = false;
@@ -791,6 +810,49 @@ function questRewardNoSpaceText(q: Quest): string {
   return `Нет места для платы: ${names.join(', ')}. Освободите инвентарь и сдайте поручение снова.`;
 }
 
+function questCraftRecipeSourceIds(q: Quest): string[] {
+  const ids: string[] = [];
+  const fromEvent = q.eventData?.craftRecipeSourceId;
+  if (typeof fromEvent === 'string') ids.push(fromEvent);
+  if (q.sideQuestId) {
+    for (const source of craftRecipeSourcesForQuest(q.sideQuestId)) ids.push(source.id);
+  }
+  return [...new Set(ids)];
+}
+
+function questEventCraftRecipeIds(q: Quest): string[] {
+  const raw = q.eventData?.craftRecipeIds;
+  if (!Array.isArray(raw)) return [];
+  const ids: string[] = [];
+  for (const id of raw) {
+    if (typeof id === 'string') ids.push(id);
+  }
+  return [...new Set(ids)];
+}
+
+function learnQuestCraftRecipeRewards(q: Quest, state: GameState, msgs: Msg[]): void {
+  const announced = new Set<string>();
+  for (const sourceId of questCraftRecipeSourceIds(q)) {
+    const source = getCraftRecipeSource(sourceId);
+    if (!source || source.kind !== 'quest') continue;
+    const result = learnCraftRecipesFromSource(state, source);
+    for (const recipeId of result.learned) {
+      announced.add(recipeId);
+      msgs.push(msg(craftRecipeLearnedMessage(recipeId), state.time, '#8cf'));
+    }
+    if (result.learned.length === 0 && result.unknown.length > 0 && result.duplicate.length === 0) {
+      msgs.push(msg('Схема неполная: нужен станок или другой лист', state.time, '#aa8'));
+    }
+  }
+  for (const recipeId of questEventCraftRecipeIds(q)) {
+    if (announced.has(recipeId) || !craftRecipeExists(recipeId)) continue;
+    if (learnCraftRecipe(state, recipeId, 'quest_event') || hasCraftRecipe(state, recipeId)) {
+      announced.add(recipeId);
+      msgs.push(msg(craftRecipeLearnedMessage(recipeId), state.time, '#8cf'));
+    }
+  }
+}
+
 /* ── Complete a quest ─────────────────────────────────────────── */
 function completeQuest(
   q: Quest, player: Entity, entities: Entity[],
@@ -837,6 +899,8 @@ function completeQuest(
     player.money = (player.money ?? 0) + q.moneyReward;
     msgs.push(msg(`+${q.moneyReward}₽`, state.time, '#ee4'));
   }
+
+  learnQuestCraftRecipeRewards(q, state, msgs);
 
   const giver = entities.find(e => e.id === q.giverId);
   const giverFaction = giver?.faction ?? q.contractFaction ?? Faction.CITIZEN;

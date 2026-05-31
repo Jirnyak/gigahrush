@@ -1,4 +1,5 @@
 import * as assert from 'node:assert/strict';
+import { test } from 'node:test';
 
 import { Cell, LiftDirection, W } from '../src/core/types';
 import type { World } from '../src/core/world';
@@ -10,6 +11,8 @@ interface GeneratorTiming {
 }
 
 const generatorTimings: GeneratorTiming[] = [];
+const RUN_GENERATION_MATRIX = process.env.GIGAHRUSH_GENERATION_MATRIX === '1';
+const GENERATION_SKIP_REASON = 'run npm run test:generation for the full generation matrix';
 
 const ORTHO_DIRS = [[1, 0], [-1, 0], [0, 1], [0, -1]] as const;
 
@@ -29,6 +32,10 @@ export function printSlowestFloorGenerators(limit = 8): void {
   const totalMs = generatorTimings.reduce((sum, item) => sum + item.ms, 0);
   console.log(`Generation timing: ${generatorTimings.length} floor generator calls, total ${totalMs.toFixed(1)}ms, slowest ${slowest.length}:`);
   for (const item of slowest) console.log(`- ${item.ms.toFixed(1)}ms ${item.label}`);
+}
+
+export function testGenerationMatrix(name: string, fn: () => void): void {
+  test(name, { skip: RUN_GENERATION_MATRIX ? false : GENERATION_SKIP_REASON }, fn);
 }
 
 function playableBounds(world: World): { count: number; minX: number; minY: number; maxX: number; maxY: number } {

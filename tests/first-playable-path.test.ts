@@ -6,6 +6,7 @@ import { World } from '../src/core/world';
 import { PLOT_CHAIN, PLOT_NPCS } from '../src/data/plot';
 import { setFloorRunState } from '../src/systems/procedural_floors';
 import {
+  getActiveQuest,
   getCurrentObjective,
   nextAvailablePlotStepForNpc,
   npcCanGiveQuestNow,
@@ -14,6 +15,7 @@ import {
   npcQuestMarkerState,
   npcQuestActionHint,
   offerQuest,
+  toggleActiveQuest,
 } from '../src/systems/quests';
 import { getObjectiveRouteHud, routeObjectiveLiftPromptSuffix } from '../src/systems/route_cues';
 import { makeGameState, makeTestNpc, makeTestPlayer } from './helpers';
@@ -34,10 +36,10 @@ test('fresh run exposes Olga as the first soft objective', () => {
   assert.deepEqual(npcQuestMarkerState(olga, state), { tone: 'authored', active: true, showExclamation: true });
   assert.equal(npcHasQuestMarker(barni, state), false);
   assert.deepEqual(npcQuestMarkerState(barni, state), { tone: 'authored', active: false, showExclamation: false });
-  assert.match(npcQuestActionHint(olga, state) ?? '', /Барни/);
+  assert.match(npcQuestActionHint(olga, state) ?? '', /Баринов/);
 });
 
-test('accepted first plot step points to Barni and the armory range', () => {
+test('accepted first plot step points to Sergeant Barinov and the armory range', () => {
   const olga = makeTestNpc({ id: 10, name: PLOT_NPCS.olga.name, plotNpcId: 'olga', canGiveQuest: true });
   const barni = makeTestNpc({ id: 11, name: PLOT_NPCS.barni.name, plotNpcId: 'barni', canGiveQuest: true });
   const quest: Quest = {
@@ -56,17 +58,50 @@ test('accepted first plot step points to Barni and the armory range', () => {
 
   const objective = getCurrentObjective(state, [olga, barni]);
 
-  assert.equal(objective?.line, 'Цель: поговорить с Барни в оружейной/стрельбище.');
+  assert.equal(objective?.line, 'Цель: поговорить с сержантом Бариновым в оружейной/стрельбище.');
   assert.equal(objective?.targetEntityId, barni.id);
   assert.equal(npcHasImportantQuestAction(barni, state), true);
   assert.equal(npcCanGiveQuestNow(barni, state), false);
   assert.equal(npcHasQuestMarker(olga, state), false);
   assert.equal(npcHasQuestMarker(barni, state), true);
-  assert.match(npcQuestActionHint(barni, state) ?? '', /Барни/);
+  assert.match(npcQuestActionHint(barni, state) ?? '', /Баринов/);
 
   quest.done = true;
   assert.equal(npcCanGiveQuestNow(barni, state), true);
   assert.equal(npcHasQuestMarker(barni, state), true);
+});
+
+test('player-selected active quest overrides the automatic objective and toggles off', () => {
+  const plotQuest: Quest = {
+    id: 1,
+    type: QuestType.TALK,
+    giverId: 10,
+    giverName: PLOT_NPCS.olga.name,
+    desc: PLOT_CHAIN[0].desc,
+    targetPlotNpcId: 'barni',
+    plotStepIndex: 0,
+    done: false,
+  };
+  const sideQuest: Quest = {
+    id: 2,
+    type: QuestType.VISIT,
+    giverId: 20,
+    giverName: 'Дежурная по лестнице',
+    desc: 'Проверить сухую кладовую.',
+    targetRoom: 7,
+    sideQuestId: 'test_storage_check',
+    done: false,
+  };
+  const state = makeGameState({ quests: [plotQuest, sideQuest], nextQuestId: 3 });
+
+  assert.equal(getCurrentObjective(state)?.questId, plotQuest.id);
+  assert.equal(toggleActiveQuest(state, sideQuest.id)?.id, sideQuest.id);
+  assert.equal(getActiveQuest(state)?.id, sideQuest.id);
+  assert.equal(getCurrentObjective(state)?.questId, sideQuest.id);
+
+  assert.equal(toggleActiveQuest(state, sideQuest.id), undefined);
+  assert.equal(getActiveQuest(state), undefined);
+  assert.equal(getCurrentObjective(state)?.questId, plotQuest.id);
 });
 
 test('quest marker state separates authored and procedural NPC map roles', () => {
@@ -153,7 +188,7 @@ test('route objective HUD prioritizes the active plot route and labels its lift'
   assert.equal(hud.questId, plotQuest.id);
   assert.match(hud.target, /Z\+12 НИИ слизевой пробы/);
   assert.match(hud.lift, /Лифт ↑ к цели от Z\+0/);
-  assert.match(hud.risk, /Риск 4\/5/);
+  assert.match(hud.risk, /Верхний маршрут важнее оплаченной рутины/);
   assert.equal(routeObjectiveLiftPromptSuffix(state, LiftDirection.UP), ' / ЦЕЛЬ');
   assert.equal(routeObjectiveLiftPromptSuffix(state, LiftDirection.DOWN), '');
 });

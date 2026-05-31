@@ -14,6 +14,9 @@
 - `src/systems/interactive.ts` содержит sparse per-`World` runtime registry на `WeakMap<World, ...>`, public API для placement/query/use/debug и один `ContentInteractionHook` с id `interactive_surfaces`.
 - `src/gen/interactive_placement.ts` содержит generator-facing helpers `placeInteractiveAt()` и `placeInteractiveInRoom()`.
 - `src/gen/interactive_fixtures.ts` содержит generation helper `maybePlaceBrokenFixture()` для редких сломанных раковин/унитазов поверх уже расставленных `Feature.SINK` / `Feature.TOILET`.
+- `src/data/floor_object_placement.ts` содержит per-floor object profiles: story-floor, design-route and procedural-geometry entries declare decor features, explicit interactives, broken fixture overlays and craft-station subprofiles.
+- `src/gen/floor_object_placement.ts` applies those object profiles through one reachable generation-time hook. Static cell-bound objects such as collector pumps, lab apparatus, status screens, broken sanitary fixtures and craft stations share the same bounded path.
+- `src/data/craft_station_placement.ts` and `src/gen/craft_stations.ts` remain the craft-station subprofile and placement implementation; station identity is marked in `world.surfaceFlags`, so restored floor memory can recover the same interactive definition when the feature survives. LIVING also has guaranteed authored pairs in the expedition prep point and Yakov Davidovich's lab.
 - `src/systems/content_hooks.ts` расширен callback `openContainerMenu`, чтобы generic interactive layer мог делегировать открытие существующих контейнеров без переписывания container UI.
 - `src/systems/interactions.ts` side-effect imports `./interactive`, поэтому hook регистрируется в общем `E` dispatcher path.
 - `src/core/types.ts` содержит `interactive_used` в `WORLD_EVENT_TYPES`.
@@ -26,7 +29,11 @@
 - `sink_broken`: explicit repair-pending adapter для существующей `Feature.SINK`; генераторы могут пометить раковину сломанной, она перекрывает lazy drinking prompt до будущего ремонта.
 - `toilet_relief`: lazy adapter для существующих `Feature.TOILET`; игрок снижает needs pressure, видит сообщение и публикуется `interactive_used`.
 - `toilet_broken`: explicit repair-pending adapter для существующей `Feature.TOILET`; генераторы могут пометить унитаз сломанным, он перекрывает lazy relief prompt до будущего ремонта.
-- `workbench_basic`: explicit feature-backed interactive на `Feature.MACHINE`; сейчас это inspect-only верстак, готовый для будущих crafting/repair handlers.
+- `workbench_basic`: explicit feature-backed interactive на `Feature.MACHINE`; сейчас это inspect-only верстак для обычных rooms that do not open crafting.
+- `craft_lathe`: feature-backed `Feature.MACHINE` station with `open_craft_menu`, station `lathe`, and a craft station surface flag.
+- `disassembly_workbench`: feature-backed `Feature.TABLE` station with `open_disassembly_menu`, station `workbench`, and a disassembly surface flag.
+- `craft_lab_bench`: feature-backed `Feature.APPARATUS` station with `open_craft_menu`, station `lab`, and a lab station surface flag.
+- `recipe_billboard`: feature-backed `Feature.SCREEN` source with `learn_recipe` for `floor_recipe_billboard_basics` and a recipe billboard surface flag.
 - `container_adapter`: adapter для видимых `WorldContainer`; target идет через generic interactive layer, но inventory/access/theft/UI остаются в существующей container system.
 
 Важно: это готовое универсальное ядро, но не полный перенос всех старых interaction systems. Двери, route lifts, emergency panels, generated computers, gambling machines, NET-hack terminals и специальные аномальные панели пока остаются в своих системах. Их можно адаптировать через этот слой позже, если это даст реальную пользу. Новые ordinary feature-like objects уже нужно добавлять через interactive layer.
@@ -143,7 +150,10 @@ export type InteractiveActionKind =
   | 'relieve'
   | 'repair_pending'
   | 'message'
-  | 'open_container';
+  | 'open_container'
+  | 'open_craft_menu'
+  | 'open_disassembly_menu'
+  | 'learn_recipe';
 
 export type InteractiveVisualDef =
   | { kind: 'feature'; feature: Feature }
@@ -160,6 +170,10 @@ export interface InteractiveActionDef {
   id: string;
   label: string;
   kind: InteractiveActionKind;
+  craftMode?: 'craft' | 'disassemble';
+  craftStation?: 'lathe' | 'workbench' | 'lab' | 'net_terminal';
+  recipeId?: string;
+  recipeSourceId?: string;
   cooldownSeconds?: number;
   waterDelta?: number;
   peeDelta?: number;
@@ -177,6 +191,7 @@ export interface InteractiveDef {
   prompt: string;
   tags: readonly string[];
   visual: InteractiveVisualDef;
+  surfaceFlag?: number;
   target: InteractiveTargetDef;
   actions: readonly InteractiveActionDef[];
 }
@@ -258,10 +273,11 @@ Why `WeakMap<World, ...>`:
 
 Current persistence status:
 
-- no save shape change;
-- no `SAVE_SHAPE_VERSION` bump;
+- interactive instance state has no dedicated save section;
+- craft stations persist their identity through `world.surfaceFlags` when floor memory saves/restores the underlying cell;
+- crafting player state is saved by `src/systems/crafting.ts`, not by the interactive instance registry;
 - generated/lazy interactives are reconstructable from world features/containers/placement;
-- durable consequences currently live in player needs, containers, events, room memory, generated world cells/features or future system-specific state.
+- durable consequences currently live in player needs, containers, events, room memory, surface flags, generated world cells/features or system-specific state.
 
 ## Public System API
 
@@ -394,6 +410,9 @@ relieve
 repair_pending
 message
 open_container
+open_craft_menu
+open_disassembly_menu
+learn_recipe
 ```
 
 `drink_water`:
@@ -422,7 +441,7 @@ open_container
 `repair_pending`:
 
 - currently uses the same bounded message/event path as `message`;
-- marks objects that need future crafting/repair integration;
+- marks objects that need a future durable repair path;
 - does not mutate the object into a repaired state yet;
 - publishes `interactive_used`;
 - applies cooldown.
@@ -434,6 +453,20 @@ open_container
 - publishes `interactive_used`;
 - returns `openedOverlay: true`;
 - falls through as unhandled if no container or no callback exists, so old container behavior can still handle contexts without the new callback.
+
+`open_craft_menu` / `open_disassembly_menu`:
+
+- call `ctx.openCraftMenu()` with `mode`, station kind and source interactive id;
+- publish `interactive_used`;
+- return `openedOverlay: true`;
+- fall through as unhandled when the runtime did not provide the callback, so a missing UI callback does not corrupt world state.
+
+`learn_recipe`:
+
+- resolves `recipeSourceId` through crafting recipe sources;
+- learns newly available recipe ids into player crafting state;
+- prints a bounded already-known/newly-learned message;
+- publishes `interactive_used`.
 
 Cooldown:
 
@@ -542,7 +575,7 @@ Gameplay:
 
 Future repair path:
 
-- crafting/repair should remove or transform the `sink_broken` instance;
+- repair should remove or transform the `sink_broken` instance;
 - after removal, the existing `Feature.SINK` lazily exposes `sink_drink` again;
 - do not add a new `Feature` enum for a repaired sink.
 
@@ -609,7 +642,7 @@ Gameplay:
 
 Future repair path:
 
-- crafting/repair should remove or transform the `toilet_broken` instance;
+- repair should remove or transform the `toilet_broken` instance;
 - after removal, the existing `Feature.TOILET` lazily exposes `toilet_relief` again;
 - do not add a new `Feature` enum for a repaired toilet.
 
@@ -641,7 +674,77 @@ Gameplay:
 - message says the workbench accepts tools, parts and recipes, but only inspect exists now;
 - event `interactive_used`.
 
-This is the intended seed for future crafting/repair handlers.
+This remains a generic inspect-only workbench. Actual crafting stations use the dedicated definitions below so ordinary room decoration does not accidentally open crafting.
+
+### `craft_lathe`
+
+Visual:
+
+```ts
+{ kind: 'feature', feature: Feature.MACHINE }
+```
+
+Reachability:
+
+- placed through `src/gen/craft_stations.ts`;
+- LIVING has a fixed reachable expedition-prep lathe;
+- story, maintenance and procedural floors use bounded generation-time placement.
+
+Gameplay:
+
+- action `open_craft`;
+- kind `open_craft_menu`;
+- station `lathe`;
+- sets `INTERACTIVE_SURFACE_FLAG_CRAFT_LATHE` in `world.surfaceFlags`;
+- event `interactive_used`.
+
+### `disassembly_workbench`
+
+Visual:
+
+```ts
+{ kind: 'feature', feature: Feature.TABLE }
+```
+
+Gameplay:
+
+- action `open_disassembly`;
+- kind `open_disassembly_menu`;
+- station `workbench`;
+- sets `INTERACTIVE_SURFACE_FLAG_DISASSEMBLY_WORKBENCH`;
+- event `interactive_used`.
+
+### `craft_lab_bench`
+
+Visual:
+
+```ts
+{ kind: 'feature', feature: Feature.APPARATUS }
+```
+
+Gameplay:
+
+- action `open_lab_craft`;
+- kind `open_craft_menu`;
+- station `lab`;
+- sets `INTERACTIVE_SURFACE_FLAG_CRAFT_LAB_BENCH`;
+- event `interactive_used`.
+
+### `recipe_billboard`
+
+Visual:
+
+```ts
+{ kind: 'feature', feature: Feature.SCREEN }
+```
+
+Gameplay:
+
+- action `read_recipe`;
+- kind `learn_recipe`;
+- source `floor_recipe_billboard_basics`;
+- sets `INTERACTIVE_SURFACE_FLAG_RECIPE_BILLBOARD`;
+- event `interactive_used`.
 
 ### `container_adapter`
 
@@ -726,7 +829,10 @@ Examples that should be added through this system:
 - `stove_cook`: food crafting;
 - `stove_dead`: inspect message or repair action;
 - `workbench_basic`: current shipped inspect action;
-- `workbench_repair`: consumes tools/parts and repairs gear;
+- `disassembly_workbench`: current shipped disassembly station;
+- `craft_lathe`: current shipped lathe station;
+- `craft_lab_bench`: current shipped lab station;
+- `workbench_repair`: future gear repair station;
 - `machine_press`: production/crafting machine;
 - `apparatus_sample_processor`: sample processing;
 - `screen_notice`: read-only screen text;
@@ -852,7 +958,7 @@ Steps:
 
 Good action kinds:
 
-- `craft_open`;
+- `open_craft_menu`;
 - `repair`;
 - `toggle_power`;
 - `read_screen`;
@@ -886,16 +992,15 @@ Do not migrate doors just to make the model look pure. The current system is int
 
 ## Save And Floor Memory
 
-Current system state is transient.
-
-No current interactive save section exists.
+Interactive instance state is transient.
 
 This is intentional because:
 
 - lazy sink/toilet adapters can be reconstructed from `world.features`;
 - container adapters can be reconstructed from `WorldContainer`;
 - workbench placement is generation-time world state plus transient instance registry;
-- durable effects already land in needs/events/containers/world state.
+- craft station identity is stored as `surfaceFlag` bits alongside the feature cell and can be lazily recovered after floor memory restore;
+- durable crafting effects live in player crafting state, inventory and recipe sources, not in the interactive instance.
 
 Add persistent interactive state only when an object has durable state that cannot live in an existing authoritative system.
 
@@ -929,7 +1034,9 @@ Current shipped interactives are safe with the existing approach:
 - lazy sinks/toilets follow regenerated `world.features`;
 - broken sink/toilet markers are generation-time repair-pending overlays and rebuild with their generated floor unless a future repair system makes them durable;
 - containers remain owned by container/floor-memory systems;
-- explicit workbenches are generation-time features and may be rebuilt with the floor unless a future module makes them durable.
+- explicit workbenches are generation-time features and may be rebuilt with the floor unless a future module makes them durable;
+- craft stations are generation-time features plus `surfaceFlags`; samosbor geometry rebuilds may remove them with the affected area, while floor memory can preserve them when the cell survives;
+- player material counts and known recipes are owned by crafting save state and are not reset by local interactive rebuild.
 
 Future durable interactives must declare a samosbor policy:
 
@@ -987,6 +1094,9 @@ Current UI integration:
 
 - `sink_drink`, `toilet_relief`, `sink_broken`, `toilet_broken` and `workbench_basic` are message/event actions;
 - `container_adapter` opens the existing container overlay through `openContainerMenu`.
+- `craft_lathe` and `craft_lab_bench` open craft mode through `openCraftMenu`.
+- `disassembly_workbench` opens disassembly mode through `openCraftMenu`.
+- `recipe_billboard` learns recipes through the crafting recipe-source path.
 
 ## Debug And Audit
 
@@ -1000,6 +1110,7 @@ Current audit support:
 
 - `scripts/content-audit.mjs` counts `interactive defs`;
 - it validates static references in `placeInteractive()`, `placeInteractiveAt()` and `placeInteractiveInRoom()`;
+- it validates craft station interactive ids and recipe-source references;
 - it keeps item `defId` validation intact while recognizing interactive ids in interactive placement contexts.
 
 Future debug additions can include:
@@ -1024,6 +1135,14 @@ Current tests in `tests/interactive.test.ts` cover:
 - explicit `workbench_basic` placement stamps `Feature.MACHINE`;
 - workbench activation emits the expected message;
 - feature-backed placement rejects blocked cells.
+
+Craft station and recipe-source integration is covered by focused crafting tests:
+
+- station definitions expose `open_craft_menu`, `open_disassembly_menu` and `learn_recipe`;
+- station placement writes matching `surfaceFlags`;
+- LIVING has reachable fixed lathe/workbench cells;
+- recipe billboard actions resolve `floor_recipe_billboard_basics`;
+- crafting integration tests verify station ids, event types, default recipes and recipe sources.
 
 General validation:
 
@@ -1052,8 +1171,7 @@ These are not bugs; they are explicit boundaries of the implemented layer:
 
 - no persistent interactive save section yet;
 - no floor-memory snapshot/restore for `WeakMap` interactive state yet;
-- no generic crafting overlay yet;
-- no completed repair/crafting handler yet; `repair_pending` is currently an inspect/message action;
+- no durable repair handler yet; `repair_pending` is currently an inspect/message action;
 - no door/lift migration yet;
 - no generic terminal/screen overlay adapter yet;
 - no billboard-backed shipped definition yet;

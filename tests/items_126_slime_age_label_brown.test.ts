@@ -76,7 +76,7 @@ test('brown slime age label can be sold instead of saved as evidence', () => {
   const state = makeGameState({ currentFloor: FloorLevel.LIVING, time: 128 });
 
   assert.equal(addItem(player, LABEL_ID, 1), true);
-  assert.equal(getInventorySlotActionInfo(player, 0)?.useLabel, 'E проверить');
+  assert.equal(getInventorySlotActionInfo(player, 0)?.useLabel, 'Enter проверить');
 
   useItem(player, 0, state.msgs, state.time, state);
 

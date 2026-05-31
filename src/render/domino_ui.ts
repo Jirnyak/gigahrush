@@ -1,5 +1,5 @@
 import { type DominoBoardTile, type DominoSnapshot, type DominoTile } from '../systems/domino';
-import { controlBindingLabel, controlHint } from '../systems/controls';
+import { controlBindingLabel, controlHint, menuCloseHint } from '../systems/controls';
 import { fitText } from './ui_text';
 
 const PIPS: Record<number, readonly [number, number][]> = {
@@ -183,8 +183,8 @@ export function drawDominoInterface(
   drawPlayerHand(ctx, snapshot, px + pad, handY, pw - pad * 2, handH, s);
 
   const action = snapshot.finished
-    ? `${controlHint('interact')}/${controlBindingLabel('gameMenu')} ЗАКРЫТЬ`
-    : `${controlBindingLabel('menuLeft')}/${controlBindingLabel('menuRight')} КОСТЬ  ${controlHint('interact')} СЫГРАТЬ/ДОБРАТЬ  ${controlBindingLabel('drop')} КРАЙ  ${controlBindingLabel('gameMenu')} СДАТЬСЯ`;
+    ? `${controlHint('gameMenu')} ЗАКРЫТЬ  ${menuCloseHint()} ВЫЙТИ`
+    : `${controlBindingLabel('menuLeft')}/${controlBindingLabel('menuRight')} КОСТЬ  ${controlHint('gameMenu')} СЫГРАТЬ/ДОБРАТЬ  ${controlBindingLabel('drop')} КРАЙ  ${menuCloseHint()} СДАТЬСЯ`;
   ctx.fillStyle = '#59615d';
   ctx.font = `${7 * sy}px monospace`;
   ctx.textAlign = 'center';

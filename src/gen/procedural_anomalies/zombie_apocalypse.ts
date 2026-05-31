@@ -17,8 +17,8 @@ import {
   type WorldContainer,
 } from '../../core/types';
 import { CONTAINER_DEFS } from '../../data/container_defs';
+import { activeActorSoftLimit } from '../../data/entity_limits';
 import { freshNeeds, randomName } from '../../data/catalog';
-import { PROCEDURAL_POPULATION_PROFILES } from '../../data/population_profiles';
 import { floorRunZAllowsNpcs, type ProceduralFloorSpec } from '../../data/procedural_floors';
 import { MONSTERS } from '../../entities/monster';
 import { HEAD_SLUG_HOSTED_STAGE } from '../../entities/head_slug';
@@ -72,7 +72,7 @@ interface ZombieApocalypseGeometryStats {
 }
 
 function crowdCount(ctx: ProceduralAnomalyGenContext): number {
-  return entitySpawnSlots(ctx.entities, EntityType.NPC, PROCEDURAL_POPULATION_PROFILES.highDensity.npcs.cap);
+  return entitySpawnSlots(ctx.entities, EntityType.NPC, activeActorSoftLimit());
 }
 
 function crowdRooms(rooms: readonly Room[]): Room[] {

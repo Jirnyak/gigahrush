@@ -1,10 +1,13 @@
 import { EntityType, msg, type Entity, type GameState } from '../core/types';
+import { craftRecipeSourcesForNpc, type CraftRecipeSourceDef } from '../data/craft_recipe_sources';
 import { DESIGN_FLOOR_ROUTES } from '../data/design_floors';
+import { craftRecipeLearnedMessage, isCraftRecipeKnown, learnCraftRecipe } from './crafting';
 import { closeDiceGame, diceStakeFromNpc, startDiceGame } from './dice';
 import { closeDominoGame, dominoStakeFromNpc, startDominoGame } from './domino';
 import { closeDurakGame, durakStakeFromNpc, startDurakGame } from './durak';
 import { portalAllowsCasinoLikeContent } from './platform_bridge';
 import { npcHasQuestMarker } from './quests';
+import { controlBindingLabel } from './controls';
 
 export const CARD_DECK_ITEM_ID = 'card_deck';
 export const DICE_BONE_ITEM_ID = 'dice_bone';
@@ -54,6 +57,11 @@ export interface NpcInteractionOptionDef {
   visible: (ctx: NpcInteractionContext) => boolean;
   disabledReason?: (ctx: NpcInteractionContext) => string | undefined;
   activate: (ctx: NpcInteractionContext) => void;
+}
+
+interface NpcRecipeLesson {
+  source: CraftRecipeSourceDef;
+  recipeId: string;
 }
 
 const customOptions: NpcInteractionOptionDef[] = [];
@@ -124,6 +132,34 @@ function isFloor69Worker(npc: Entity): boolean {
 
 function floor69EntertainmentPrice(): number {
   return 45;
+}
+
+function hashString32(value: string): number {
+  let h = 2166136261;
+  for (let i = 0; i < value.length; i++) h = Math.imul(h ^ value.charCodeAt(i), 16777619);
+  return h >>> 0;
+}
+
+function npcRecipeLessonKey(npc: Entity): string {
+  return [
+    npc.persistentNpcId ?? '',
+    npc.plotNpcId ?? '',
+    Number.isFinite(npc.alifeId) ? String(npc.alifeId) : '',
+    String(npc.id),
+    npc.name ?? '',
+    npc.occupation ?? '',
+    npc.faction ?? '',
+  ].join('|');
+}
+
+function npcRecipeLesson(ctx: NpcInteractionContext): NpcRecipeLesson | undefined {
+  const choices: NpcRecipeLesson[] = [];
+  for (const source of craftRecipeSourcesForNpc(ctx.npc)) {
+    for (const recipeId of source.recipeIds) choices.push({ source, recipeId });
+  }
+  if (choices.length === 0) return undefined;
+  const lesson = choices[hashString32(npcRecipeLessonKey(ctx.npc)) % choices.length];
+  return lesson && !isCraftRecipeKnown(ctx.state, lesson.recipeId) ? lesson : undefined;
 }
 
 export function registerNpcInteractionOption(def: NpcInteractionOptionDef): void {
@@ -238,6 +274,32 @@ export function activateNpcCustomMenuOption(ctx: NpcInteractionContext, optionId
 }
 
 registerNpcInteractionOption({
+  id: 'craft_recipe_lesson',
+  order: 25,
+  label: () => 'Спросить схему',
+  visible: ctx => npcRecipeLesson(ctx) !== undefined,
+  activate: ctx => {
+    const lesson = npcRecipeLesson(ctx);
+    if (!lesson) {
+      ctx.state.msgs.push(msg('Рецепт уже известен', ctx.state.time, '#888'));
+      return;
+    }
+    const learned = learnCraftRecipe(ctx.state, lesson.recipeId, lesson.source.id);
+    const learnedLines = learned ? [craftRecipeLearnedMessage(lesson.recipeId)] : [];
+    for (const line of learnedLines) ctx.state.msgs.push(msg(line, ctx.state.time, '#8cf'));
+    openNpcInteractionInterface(ctx, {
+      id: 'craft_recipe_lesson',
+      title: 'СХЕМА',
+      lines: [
+        `${ctx.npc.name ?? 'NPC'}: «${lesson.source.text}»`,
+        ...learnedLines.slice(0, 4),
+      ],
+      message: learnedLines.length > 0 ? 'Рецепт записан в журнал крафта.' : 'Рецепт уже известен.',
+    });
+  },
+});
+
+registerNpcInteractionOption({
   id: 'durak',
   order: 30,
   label: ctx => `Играть в дурака (₽${durakStake(ctx)})`,
@@ -294,7 +356,7 @@ registerNpcInteractionOption({
         `Ставка зафиксирована: 10% от денег NPC, сейчас ₽${stake}.`,
         'Бросайте до 21. Перебор проигрывает; равный счет оставляет деньги при себе.',
       ],
-      message: 'E бросить, сброс/стоп передать ход NPC.',
+      message: `${controlBindingLabel('gameMenu')} бросить, ${controlBindingLabel('drop')} стоп: передать ход NPC.`,
     });
   },
 });
@@ -325,7 +387,7 @@ registerNpcInteractionOption({
         `Ставка зафиксирована: 10% от денег NPC, сейчас ₽${stake}.`,
         'По 7 костяшек. Кладите к совпадающему краю; если хода нет, добирайте из коробки.',
       ],
-      message: 'E сыграть/добрать, сброс меняет левый/правый край.',
+      message: `${controlBindingLabel('gameMenu')} сыграть/добрать, ${controlBindingLabel('drop')} меняет левый/правый край.`,
     });
   },
 });

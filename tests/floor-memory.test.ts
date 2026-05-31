@@ -74,6 +74,25 @@ function testZone(id: number, hasLift: boolean): Zone {
   };
 }
 
+function minLiftDistance(world: World, direction: LiftDirection): number {
+  const anchors = collectFloorLiftAnchors(world, direction);
+  let min = Number.POSITIVE_INFINITY;
+  for (let i = 0; i < anchors.length; i++) {
+    for (let j = i + 1; j < anchors.length; j++) {
+      min = Math.min(
+        min,
+        world.dist(
+          anchors[i].liftX + 0.5,
+          anchors[i].liftY + 0.5,
+          anchors[j].liftX + 0.5,
+          anchors[j].liftY + 0.5,
+        ),
+      );
+    }
+  }
+  return min;
+}
+
 test('floor memory restores live world and keeps only persistent floor entities', () => {
   clearFloorMemory();
   const world = new World();
@@ -421,6 +440,47 @@ test('route lift layout mirrors return lifts and normalizes both directions to e
       assert.notEqual(target.features[target.idx(anchor.liftX + dx, anchor.liftY + dy)], Feature.LIFT_BUTTON);
     }
   }
+});
+
+test('route lift layout distributes filled lifts across the reachable floor', () => {
+  const world = new World();
+  for (let y = 100; y < 356; y++) {
+    for (let x = 100; x < 356; x++) {
+      world.cells[world.idx(x, y)] = Cell.FLOOR;
+    }
+  }
+
+  const result = ensureFloorRouteLiftLayout(world, 228.5, 228.5, [LiftDirection.DOWN], {
+    countPerDirection: 8,
+  });
+
+  assert.equal(result.down, 8);
+  assert.equal(result.placed, 8);
+  assert.equal(minLiftDistance(world, LiftDirection.DOWN) >= 96, true);
+});
+
+test('route lift layout redistributes existing clustered route lifts', () => {
+  const world = new World();
+  for (let y = 100; y < 356; y++) {
+    for (let x = 100; x < 356; x++) {
+      world.cells[world.idx(x, y)] = Cell.FLOOR;
+    }
+  }
+  for (let i = 0; i < 8; i++) {
+    const liftIdx = world.idx(220 + i, 220);
+    world.cells[liftIdx] = Cell.LIFT;
+    world.wallTex[liftIdx] = Tex.LIFT_DOOR;
+    world.liftDir[liftIdx] = LiftDirection.DOWN;
+  }
+
+  const result = ensureFloorRouteLiftLayout(world, 228.5, 228.5, [LiftDirection.DOWN], {
+    countPerDirection: 8,
+  });
+
+  assert.equal(result.down, 8);
+  assert.equal(result.demoted, 8);
+  assert.equal(result.placed, 8);
+  assert.equal(minLiftDistance(world, LiftDirection.DOWN) >= 96, true);
 });
 
 test('route lift layout recomputes zone lift flags after demotion and placement', () => {

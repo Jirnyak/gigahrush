@@ -14,8 +14,9 @@ import {
   type GameState,
   type Room,
 } from '../core/types';
-import type { World } from '../core/world';
+import type { World, WorldGridDirtyRect } from '../core/world';
 import type { FloorGeneration } from '../gen/floor_manifest';
+import { freezeNavigationCacheForWorld, unfreezeNavigationCacheForWorld } from './ai/pathfinding';
 import { publishEvent } from './events';
 import { pruneRouteCuesInCells } from './route_cues';
 import { isPlayerEntity } from './player_actor';
@@ -85,6 +86,7 @@ interface DirtyFlags {
   cells: boolean;
   wallTex: boolean;
   floorTex: boolean;
+  light: boolean;
   fog: boolean;
   surface: boolean;
 }
@@ -142,6 +144,61 @@ const LOCAL_STITCH_DEPTH = 5;
 
 let activeWave: SamosborWave | null = null;
 let lastWaveSnapshot: SamosborWaveDebugSnapshot | null = null;
+
+function circularSegmentsForCoords(coords: readonly number[]): { x: number; w: number }[] {
+  if (coords.length === 0) return [];
+  const unique = Array.from(new Set(coords)).sort((a, b) => a - b);
+  if (unique.length >= W) return [{ x: 0, w: W }];
+  let largestGap = -1;
+  let gapIndex = 0;
+  for (let i = 0; i < unique.length; i++) {
+    const current = unique[i];
+    const next = i === unique.length - 1 ? unique[0] + W : unique[i + 1];
+    const gap = next - current - 1;
+    if (gap > largestGap) {
+      largestGap = gap;
+      gapIndex = i;
+    }
+  }
+  let start = unique[(gapIndex + 1) % unique.length];
+  let end = unique[gapIndex];
+  if (end < start) end += W;
+  let len = end - start + 1;
+  if (len >= W) return [{ x: 0, w: W }];
+  start = ((start % W) + W) % W;
+  if (start + len <= W) return [{ x: start, w: len }];
+  return [
+    { x: start, w: W - start },
+    { x: 0, w: (start + len) % W },
+  ].filter(segment => segment.w > 0);
+}
+
+function dirtyRectsForIndices(indices: readonly number[]): WorldGridDirtyRect[] | undefined {
+  if (indices.length === 0) return undefined;
+  const xs: number[] = [];
+  const ys: number[] = [];
+  for (const idx of indices) {
+    xs.push(idx % W);
+    ys.push((idx / W) | 0);
+  }
+  const xSegs = circularSegmentsForCoords(xs);
+  const ySegs = circularSegmentsForCoords(ys);
+  const rects: WorldGridDirtyRect[] = [];
+  for (const x of xSegs) {
+    for (const y of ySegs) {
+      rects.push({ x: x.x, y: y.x, w: x.w, h: y.w });
+    }
+  }
+  return rects.length > 0 ? rects : undefined;
+}
+
+function dirtyRectForIndex(idx: number): WorldGridDirtyRect {
+  return { x: idx % W, y: (idx / W) | 0, w: 1, h: 1 };
+}
+
+function featureCastsLight(feature: number): boolean {
+  return feature === Feature.LAMP || feature === Feature.CANDLE;
+}
 
 function hash32(v: number): number {
   let x = v | 0;
@@ -416,11 +473,12 @@ function enqueueNeighbors(world: World, wave: SamosborWave, idx: number): void {
   for (let i = 0; i < DIR_X.length; i++) enqueueCell(world, wave, world.idx(x + DIR_X[i], y + DIR_Y[i]));
 }
 
-function markDirty(world: World, flags: DirtyFlags): void {
-  if (flags.cells) world.markCellsDirty();
-  if (flags.wallTex) world.markWallTexDirty();
-  if (flags.floorTex) world.markFloorTexDirty();
-  if (flags.fog) world.markFogDirty();
+function markDirty(world: World, flags: DirtyFlags, rects?: readonly WorldGridDirtyRect[]): void {
+  if (flags.cells) world.markCellsDirty(rects);
+  if (flags.wallTex) world.markWallTexDirty(rects);
+  if (flags.floorTex) world.markFloorTexDirty(rects);
+  if (flags.light) world.markFeaturesDirty(true, rects);
+  if (flags.fog) world.markFogDirty(rects);
   if (flags.surface) world.surfaceVersion = (world.surfaceVersion + 1) | 0;
 }
 
@@ -478,7 +536,8 @@ function cleanSolidCell(world: World, wave: SamosborWave, idx: number, flags: Di
     changed = true;
   }
   if (world.features[idx] !== Feature.NONE) {
-    world.setFeatureAt(idx, Feature.NONE);
+    if (featureCastsLight(world.features[idx])) flags.light = true;
+    world.setFeatureAt(idx, Feature.NONE, false, dirtyRectForIndex(idx));
     flags.cells = true;
     changed = true;
   }
@@ -525,7 +584,8 @@ function applyFloor(world: World, wave: SamosborWave, idx: number, flags: DirtyF
     changed = true;
   }
   if (world.features[idx] !== Feature.NONE && oldRoom < 0) {
-    world.setFeatureAt(idx, Feature.NONE);
+    if (featureCastsLight(world.features[idx])) flags.light = true;
+    world.setFeatureAt(idx, Feature.NONE, false, dirtyRectForIndex(idx));
     flags.cells = true;
     changed = true;
   }
@@ -856,7 +916,7 @@ function carvePatchFloor(world: World, wave: SamosborWave, idx: number): boolean
   world.roomMap[idx] = wave.patchRoomId;
   world.floorTex[idx] = Tex.F_CONCRETE;
   world.wallTex[idx] = Tex.CONCRETE;
-  world.setFeatureAt(idx, Feature.NONE);
+  world.setFeatureAt(idx, Feature.NONE, false, dirtyRectForIndex(idx));
   world.fog[idx] = 0;
   world.surfaceMap.delete(idx);
   world.surfaceFlags[idx] = 0;
@@ -918,6 +978,7 @@ function applyGeneratedFieldPatch(
   const source = replacement.world;
   const field = buildLocalRebuildField(world, wave);
   if (field.indices.length === 0) return;
+  const fieldRects = dirtyRectsForIndices(field.indices);
   const fieldSet = new Set(field.indices);
   removeDoorsInField(world, field.indices);
   wave.regeneratedCells += copyGeneratedFieldCells(world, source, wave, field.indices);
@@ -929,11 +990,11 @@ function applyGeneratedFieldPatch(
   cleanupContainers(world, wave, fieldSet, state.currentFloor);
   cleanupFinalEntities(world, wave, entities, fieldSet);
   wave.prunedRouteCues += pruneRouteCuesInCells(world, fieldSet);
-  world.markCellsDirty();
-  world.markWallTexDirty();
-  world.markFloorTexDirty();
-  world.markFeaturesDirty();
-  world.markFogDirty();
+  world.markCellsDirty(fieldRects);
+  world.markWallTexDirty(fieldRects);
+  world.markFloorTexDirty(fieldRects);
+  world.markFeaturesDirty(true, fieldRects);
+  world.markFogDirty(fieldRects);
   world.surfaceVersion = (world.surfaceVersion + 1) | 0;
   wave.regenerated = true;
 
@@ -1025,6 +1086,7 @@ export function cancelSamosborWave(): void {
     activeWave.finished = true;
     lastWaveSnapshot = buildSnapshot(activeWave, false);
   }
+  unfreezeNavigationCacheForWorld();
   activeWave = null;
 }
 
@@ -1094,6 +1156,7 @@ export function startSamosborWave(
 
   const anchorIdx = findWaveOrigin(world, wave, originX, originY);
   if (anchorIdx < 0) return false;
+  freezeNavigationCacheForWorld(world);
   wave.originIdx = anchorIdx;
   wave.seed = options.seed ?? seedForWave(state, scale, anchorIdx);
   wave.patchRoomId = makePatchRoom(world, wave);
@@ -1139,7 +1202,7 @@ export function tickSamosborWave(world: World, entities: Entity[], state: GameSt
     return { active: false, processed: 0, changed: 0, finished: true };
   }
 
-  const flags: DirtyFlags = { cells: false, wallTex: false, floorTex: false, fog: false, surface: false };
+  const flags: DirtyFlags = { cells: false, wallTex: false, floorTex: false, light: false, fog: false, surface: false };
   const batchTouched: number[] = [];
   let budget = wave.budgetCellsPerTick;
   if (wave.durationSec > 0) {
@@ -1167,7 +1230,7 @@ export function tickSamosborWave(world: World, entities: Entity[], state: GameSt
     }
     enqueueNeighbors(world, wave, idx);
   }
-  markDirty(world, flags);
+  markDirty(world, flags, dirtyRectsForIndices(batchTouched));
   cleanupBatchEntities(world, wave, entities, batchTouched);
   wave.lastProcessed = processed;
   wave.lastChanged = changed;
@@ -1231,10 +1294,15 @@ export function finishSamosborWave(
   if (replacement) {
     applyGeneratedFieldPatch(world, entities, state, wave, replacement);
     lastWaveSnapshot = buildSnapshot(wave, false);
+    unfreezeNavigationCacheForWorld(world);
     activeWave = null;
     return lastWaveSnapshot;
   }
   lastWaveSnapshot = buildSnapshot(wave, false);
+  if (!state.samosborActive || wave.debug) {
+    unfreezeNavigationCacheForWorld(world);
+    activeWave = null;
+  }
   return lastWaveSnapshot;
 }
 

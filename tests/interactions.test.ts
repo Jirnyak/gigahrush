@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import * as assert from 'node:assert/strict';
 
-import { Cell, DoorState, Feature, LiftDirection } from '../src/core/types';
+import { Cell, DoorState, EntityType, Feature, LiftDirection, type Entity } from '../src/core/types';
 import { World } from '../src/core/world';
 import { GAMBLING_MACHINES } from '../src/data/gambling';
 import {
@@ -15,6 +15,34 @@ import {
 import { activateInteraction, findInteractionTarget } from '../src/systems/interactions';
 import { netHackChance, netHackDifficultyTotal, netHackSkill } from '../src/systems/net_hack';
 import { addTestRoom, countInventoryItem, makeGameState, makeTestNpc, makeTestPlayer } from './helpers';
+
+function installNoopAudioContext(): void {
+  const fakeNode = {
+    connect: () => fakeNode,
+    disconnect: () => undefined,
+    gain: {
+      value: 0,
+      setValueAtTime: () => undefined,
+      exponentialRampToValueAtTime: () => undefined,
+    },
+    frequency: {
+      setValueAtTime: () => undefined,
+      exponentialRampToValueAtTime: () => undefined,
+    },
+    start: () => undefined,
+    stop: () => undefined,
+    type: 'sine',
+  };
+  class FakeAudioContext {
+    currentTime = 0;
+    destination = fakeNode;
+    state: AudioContextState = 'running';
+    createOscillator(): OscillatorNode { return fakeNode as unknown as OscillatorNode; }
+    createGain(): GainNode { return fakeNode as unknown as GainNode; }
+    resume(): Promise<void> { return Promise.resolve(); }
+  }
+  (globalThis as typeof globalThis & { AudioContext: typeof AudioContext }).AudioContext = FakeAudioContext as unknown as typeof AudioContext;
+}
 
 test('gambling odds resolve stake, gross payout and net result without mutating state', () => {
   const roulette = GAMBLING_MACHINES.roulette;
@@ -155,6 +183,72 @@ test('interaction dispatcher only reports NPCs when the crosshair is on the spri
   });
 
   assert.equal(offCrosshair, null);
+});
+
+test('manual item pickup exposes aimed drops as E targets and picks only on interact', () => {
+  installNoopAudioContext();
+  const world = new World();
+  addTestRoom(world, { id: 0, x: 4, y: 4, w: 8, h: 8 });
+  const state = makeGameState({ time: 10 });
+  const player = makeTestPlayer({ id: 1, x: 5, y: 6, angle: 0, inventory: [] });
+  const drop: Entity = {
+    id: 2,
+    type: EntityType.ITEM_DROP,
+    x: 6.1,
+    y: 6,
+    angle: 0,
+    pitch: 0,
+    alive: true,
+    speed: 0,
+    sprite: 0,
+    inventory: [{ defId: 'bread', count: 1 }],
+  };
+  const entities = [player, drop];
+
+  assert.equal(findInteractionTarget({
+    world,
+    state,
+    player,
+    entities,
+    nextEntityId: { v: 3 },
+    lookX: 6,
+    lookY: 6,
+  }), null);
+
+  const target = findInteractionTarget({
+    world,
+    state,
+    player,
+    entities,
+    nextEntityId: { v: 3 },
+    lookX: 6,
+    lookY: 6,
+    manualItemPickup: true,
+  });
+  assert.equal(target?.kind, 'item_drop');
+  assert.equal(target?.defId, 'bread');
+  assert.equal(target?.itemName, 'Хлеб');
+  assert.equal(target?.prompt, ' поднять');
+
+  let pickedHook = 0;
+  const result = activateInteraction({
+    world,
+    state,
+    player,
+    entities,
+    nextEntityId: { v: 3 },
+    lookX: 6,
+    lookY: 6,
+    manualItemPickup: true,
+    onPickedDrop: picked => {
+      if (picked.id === drop.id) pickedHook++;
+    },
+  });
+
+  assert.equal(result.handled, true);
+  assert.equal(drop.alive, false);
+  assert.equal(countInventoryItem(player, 'bread'), 1);
+  assert.equal(pickedHook, 1);
 });
 
 test('off-crosshair nearby NPC does not mask an aimed door', () => {

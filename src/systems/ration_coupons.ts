@@ -10,6 +10,7 @@ import {
 } from '../core/types';
 import { type World } from '../core/world';
 import { ITEMS } from '../data/catalog';
+import { MAX_INVENTORY_SLOTS } from '../data/inventory_limits';
 import { getStack } from '../data/items';
 import { addFactionRelMutual } from '../data/relations';
 import { changeResourceStock } from './economy';
@@ -25,7 +26,6 @@ export const RATION_COUPON_ITEM_IDS = [
 ] as const;
 
 const COUPON_ITEM_IDS = new Set<string>(RATION_COUPON_ITEM_IDS);
-const MAX_INVENTORY_SLOTS = 25;
 const REPORT_SIDE_QUEST_IDS = new Set(['min_coupon_forgery_report', 'kv_coupon_audit_registry']);
 const QUEUE_ROOM_TAGS = ['ration_queue', 'ocherednik'] as const;
 const QUEUE_TRADE_TAG = 'ration_queue_trade';

@@ -46,7 +46,7 @@ test('sleeping pills force rest while spending survival reserves and publishing 
   });
   const state = makeGameState({ time: 138 });
 
-  assert.equal(getInventorySlotActionInfo(player, 0)?.useLabel, 'E применить');
+  assert.equal(getInventorySlotActionInfo(player, 0)?.useLabel, 'Enter применить');
 
   useItem(player, 0, state.msgs, state.time, state, 12);
 

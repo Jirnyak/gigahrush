@@ -7,7 +7,7 @@
   "scripts": {
     "dev": "vite",
     "typecheck": "tsc --noEmit",
-    "test:unit": "tsx --test tests/*.test.ts",
+    "test:unit": "node scripts/run-unit-tests.mjs",
     "test:generation": "GIGAHRUSH_GENERATION_MATRIX=1 tsx --test tests/*.test.ts",
     "build": "vite build",
     "build:size": "node scripts/build-size-report.mjs",

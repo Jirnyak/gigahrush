@@ -16,6 +16,7 @@ import { rng, placeLifts, generateZones, ensureConnectivity } from '../shared';
 import { placeProceduralScreens } from '../procedural_screens';
 import { randomName, freshNeeds } from '../../data/catalog';
 import { KVARTIRY_POPULATION_PROFILE, type NpcPopulationProfile } from '../../data/population_profiles';
+import { activeActorCountAtDefaultSoftLimit } from '../../data/entity_limits';
 import { sampleNaturalPopulationCells } from '../population_placement';
 import { registerContentRuntimeHook } from '../../systems/content_hooks';
 import { calcZoneLevel, randomRPG, gaussianLevel, getMaxHp } from '../../systems/rpg';
@@ -224,7 +225,7 @@ function seedNpcPopulation(
   profile: NpcPopulationProfile,
   fixedOccupation?: Occupation,
 ): void {
-  spawnNpcPopulationBatch(world, entities, nextId, faction, profile, profile.initial, fixedOccupation);
+  spawnNpcPopulationBatch(world, entities, nextId, faction, profile, activeActorCountAtDefaultSoftLimit(profile.initial), fixedOccupation);
 }
 
 /* ══════════════════════════════════════════════════════════════════

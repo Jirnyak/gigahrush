@@ -73,7 +73,7 @@ test('hermetic tape seals a nearby swarm source through the shared inventory use
   const msgs: Msg[] = [];
 
   assert.equal(addItem(player, 'hermetic_tape', 1), true);
-  assert.equal(getInventorySlotActionInfo(player, 0)?.useLabel, 'E заклеить');
+  assert.equal(getInventorySlotActionInfo(player, 0)?.useLabel, 'Enter заклеить');
 
   registerSwarmNestSource(world, {
     id: 'test_hermetic_tape',

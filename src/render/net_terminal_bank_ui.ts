@@ -1,5 +1,5 @@
 import { type NetTerminalBankSnapshot } from '../systems/net_terminal_gen';
-import { controlBindingLabel, controlHint } from '../systems/controls';
+import { controlBindingLabel, controlHint, menuCloseHint } from '../systems/controls';
 import { drawGlitchText, drawNeuroPanel, drawStaticNoise, textJitter } from './hud_fx';
 import { fitText } from './ui_text';
 
@@ -101,6 +101,6 @@ export function drawNetTerminalBank(
 
   ctx.fillStyle = '#59717a';
   ctx.font = `${7 * s}px monospace`;
-  ctx.fillText(fitText(ctx, `${controlBindingLabel('menuUp')}/${controlBindingLabel('menuDown')} действие  ${controlBindingLabel('menuLeft')}/${controlBindingLabel('menuRight')} сумма  ${controlHint('interact')} выполнить  ${controlBindingLabel('gameMenu')} закрыть`, maxTextW), x + pad, y + panelH - 16 * s);
+  ctx.fillText(fitText(ctx, `${controlBindingLabel('menuUp')}/${controlBindingLabel('menuDown')} действие  ${controlBindingLabel('menuLeft')}/${controlBindingLabel('menuRight')} сумма  ${controlHint('gameMenu')} выполнить  ${menuCloseHint()} закрыть`, maxTextW), x + pad, y + panelH - 16 * s);
   ctx.restore();
 }

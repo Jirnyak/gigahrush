@@ -39,6 +39,7 @@ const runIosMobile = runMobile && /iphone|ipad|ipod/i.test(mobileUserAgent);
 const KEY = {
   enter: ['Enter', 'Enter', 13],
   escape: ['Escape', 'Escape', 27],
+  backspace: ['Backspace', 'Backspace', 8],
   w: ['KeyW', 'w', 87],
   e: ['KeyE', 'e', 69],
   i: ['KeyI', 'i', 73],
@@ -507,7 +508,7 @@ async function tapDebugMenuDown(client) {
 }
 
 async function tapDebugMenuSelect(client) {
-  await tapKey(client, KEY.e, 120, 120);
+  await tapKey(client, KEY.enter, 120, 120);
 }
 
 async function selectDebugCommand(client, index, label) {
@@ -1307,7 +1308,7 @@ async function runDebugCommand(client, index, label, failures, options = {}) {
   await selectDebugCommand(client, index, label);
   for (let i = 0; i < repeat; i++) await tapDebugMenuSelect(client);
   if (!closesOverlay) {
-    await toggleDebugOverlay(client);
+    await tapKey(client, KEY.backspace, 120, 160);
     await waitForGameDebug(client, `${label} debug close`, state => !state.showDebug);
   } else {
     await waitForGameDebug(client, `${label} debug action close`, state => !state.showDebug);
@@ -1452,7 +1453,7 @@ async function main() {
         await tapKey(client, KEY.e, 90, 200);
         const afterInteract = await readGameDebug(client);
         if (afterInteract?.showNpcMenu) {
-          await tapKey(client, KEY.escape, 90, 160);
+          await tapKey(client, KEY.backspace, 90, 160);
           await waitForGameDebug(client, 'close first NPC interaction menu', state => !state.showNpcMenu);
         }
         await waitPage(client, 1800);
@@ -1483,12 +1484,26 @@ async function main() {
         await waitFrames(client, 2);
         const inventory = await sampleCanvases(client);
         requirePanelTelemetry(before, inventory, 'inventory panel', failures);
-        await tapKey(client, KEY.i);
+        await tapKey(client, KEY.backspace);
         await waitForGameDebug(client, 'inventory panel close', state => !state.showInventory);
         await waitFrames(client, 2);
         running = await sampleRunning(client);
         requireRunningTelemetry(running, 'after inventory close', failures);
         return inventory;
+      });
+      await runStep('map panel M toggle', async () => {
+        const before = running ?? await sampleCanvases(client);
+        await tapKey(client, KEY.m);
+        await waitForGameDebug(client, 'map panel open by M', state => state.mapMode === 2);
+        await waitFrames(client, 2);
+        const mapPanel = await sampleCanvases(client);
+        requirePanelTelemetry(before, mapPanel, 'map panel opened by M', failures);
+        await tapKey(client, KEY.m);
+        await waitForGameDebug(client, 'map panel close by M', state => state.mapMode === 0);
+        await waitFrames(client, 2);
+        running = await sampleRunning(client);
+        requireRunningTelemetry(running, 'after map close by M', failures);
+        return mapPanel;
       });
     }
 
@@ -1561,7 +1576,7 @@ async function main() {
         await waitFrames(client, 2);
         const questPanel = await sampleCanvases(client);
         requirePanelTelemetry(before, questPanel, 'quest panel after contract', failures);
-        await tapKey(client, KEY.q, 120, 160);
+        await tapKey(client, KEY.backspace, 120, 160);
         await waitForGameDebug(client, 'quest panel close', state => !state.showQuests);
         await waitFrames(client, 2);
         return questPanel;

@@ -49,7 +49,7 @@ test('contaminated swab can be reported or sold from inventory', () => {
   const ministry = makeGameState({ currentFloor: FloorLevel.MINISTRY, time: 122 });
 
   assert.equal(addItem(reporter, SWAB_ID, 1), true);
-  assert.equal(getInventorySlotActionInfo(reporter, 0)?.useLabel, 'E сдать/сбыть');
+  assert.equal(getInventorySlotActionInfo(reporter, 0)?.useLabel, 'Enter сдать/сбыть');
 
   useItem(reporter, 0, ministry.msgs, ministry.time, ministry);
 

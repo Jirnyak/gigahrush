@@ -12,7 +12,9 @@ import { World } from '../../core/world';
 
 import { rng, generateZones } from '../shared';
 import { VOID_POPULATION_PROFILE } from '../../data/population_profiles';
+import { activeActorCountAtDefaultSoftLimit } from '../../data/entity_limits';
 import { calcZoneLevel, randomRPG, scaleMonsterHp, scaleMonsterSpeed } from '../../systems/rpg';
+import { entitySpawnSlots } from '../../systems/entity_limits';
 import { MONSTERS } from '../../entities/monster';
 import { Spr, monsterSpr } from '../../render/sprite_index';
 import { runVoidContent } from './content_manifest';
@@ -97,7 +99,8 @@ export function generateVoid(): { world: World; entities: Entity[]; spawnX: numb
     MonsterKind.REBAR, MonsterKind.BETONNIK, MonsterKind.SPIRIT,
     MonsterKind.LOZHNYY_DUKH,
   ];
-  for (let i = 0; i < VOID_POPULATION_PROFILE.guardians; i++) {
+  const guardianTarget = entitySpawnSlots(entities, EntityType.MONSTER, activeActorCountAtDefaultSoftLimit(VOID_POPULATION_PROFILE.guardians));
+  for (let i = 0; i < guardianTarget; i++) {
     const cell = randomFloorCell(world, spawnX, spawnY, 26);
     if (cell < 0) continue;
     const kind = voidKinds[rng(0, voidKinds.length - 1)];

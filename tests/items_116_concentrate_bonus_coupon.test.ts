@@ -34,7 +34,7 @@ test('concentrate bonus coupon redeems into better concentrate rations', () => {
   const player = makeTestPlayer({ inventory: [{ defId: COUPON_ID, count: 1 }] });
   const state = makeGameState({ currentFloor: FloorLevel.LIVING, time: 116 });
 
-  assert.equal(getInventorySlotActionInfo(player, 0)?.useLabel, 'E погасить');
+  assert.equal(getInventorySlotActionInfo(player, 0)?.useLabel, 'Enter погасить');
 
   useItem(player, 0, state.msgs, state.time, state);
 

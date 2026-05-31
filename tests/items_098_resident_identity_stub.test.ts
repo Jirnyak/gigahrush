@@ -31,7 +31,7 @@ test('resident identity stub can be sold as basic papers in the living block', (
   const state = makeGameState({ currentFloor: FloorLevel.LIVING, time: 98 });
 
   assert.equal(addItem(player, 'resident_identity_stub', 1), true);
-  assert.equal(getInventorySlotActionInfo(player, 0)?.useLabel, 'E проверить');
+  assert.equal(getInventorySlotActionInfo(player, 0)?.useLabel, 'Enter проверить');
 
   useItem(player, 0, state.msgs, state.time, state);
 

@@ -9,7 +9,7 @@ import {
   W, Cell, TEX, Tex, MAX_DRAW, Feature, ContainerKind,
   type Entity, EntityType, ProjType, MonsterKind,
 } from '../core/types';
-import { World } from '../core/world';
+import { World, type WorldGridDirtyRect } from '../core/world';
 import { getActiveSamosborVariant } from '../data/samosbor_variants';
 import { entityUsesProceduralSprite, generateProceduralEntitySprite, proceduralEntitySpriteKey } from '../entities/procedural_visuals';
 import type { TexData } from './textures';
@@ -778,16 +778,17 @@ void main() {
   /* ── Samosbor glitch: heavy horizontal shift ────────────────── */
   if (uGlitch > 0.0) {
     float scanline = floor(uv.y * 200.0);
-    float h = fract(sin(scanline * 12.9898 + t * 43758.5453) * 43758.5453);
+    float glitchTick = floor(t * 8.0);
+    float h = hash11(scanline * 12.9898 + glitchTick * 31.7);
     if (h < uGlitch * 0.35) {
       uv.x += (h - 0.5) * uGlitch * 0.08;
     }
     // Block glitch: shift entire horizontal bands
     float blockY = floor(uv.y * 25.0);
-    float blockH = hash21(vec2(blockY, floor(t * 4.0)));
+    float blockH = hash11(blockY * 17.0 + floor(t * 4.0) * 113.0);
     if (blockH > 1.0 - uGlitch * 0.12) {
       uv.x += (blockH - 0.5) * 0.05 * uGlitch;
-      uv.y += (hash21(vec2(blockY + 100.0, floor(t * 6.0))) - 0.5) * 0.008 * uGlitch;
+      uv.y += (hash11(blockY * 29.0 + floor(t * 6.0) * 71.0) - 0.5) * 0.008 * uGlitch;
     }
   }
 
@@ -795,10 +796,10 @@ void main() {
   if (uGlitch > 0.02) {
     float barSeed = floor(t * 2.5);
     float barY = floor(uv.y * 200.0);
-    float barH = hash21(vec2(barY * 0.37, barSeed));
+    float barH = hash11(barY * 0.37 + barSeed * 43.0);
     float threshold = 0.997 - uGlitch * 0.05;
     if (barH > threshold) {
-      uv.x += (hash21(vec2(barY, t * 1.7)) - 0.5) * 0.025;
+      uv.x += (hash11(barY * 13.0 + floor(t * 12.0)) - 0.5) * 0.025;
     }
   }
 
@@ -840,40 +841,17 @@ void main() {
 
   /* ── Procedural glitch bursts (rare pixel displacement) ─────── */
   if (uGlitch > 0.02) {
-    // Spawn rare glitch events — each has a random position and short lifetime
-    float glitchTick = floor(t * 1.8);
-    for (int i = 0; i < 3; i++) {
-      float seed = float(i) * 137.0 + glitchTick * 31.7;
-      float chance = hash11(seed);
-      if (chance > 0.65) continue; // ~35% chance each slot is active
-
-      // Glitch band position & size
-      float gy = hash11(seed + 1.0);                  // vertical pos 0..1
-      float gx = hash11(seed + 2.0);                  // horizontal center 0..1
-      float gw = 0.06 + hash11(seed + 3.0) * 0.18;    // width
-      float gh = 0.004 + hash11(seed + 4.0) * 0.012;  // height (thin band)
-
-      // Animate: slide quickly across in sub-frame
-      float life = fract(t * 1.8);  // 0..1 within tick
-      float slideDir = hash11(seed + 5.0) > 0.5 ? 1.0 : -1.0;
-      float slideOff = slideDir * life * 0.3;
-      gy = fract(gy + slideOff);
-
-      float dy = abs(uv.y - gy);
-      float dx = abs(uv.x - gx);
-      if (dy < gh && dx < gw * 0.5) {
-        // Inside glitch band — shift pixels
-        float intensity = (1.0 - dy / gh) * (1.0 - dx / (gw * 0.5));
-        intensity *= intensity;
-        float shift = (hash11(seed + 6.0 + floor(uv.y * 200.0)) - 0.5) * 0.04 * intensity;
-        vec2 displaced = clamp(uv + vec2(shift, (hash11(seed + 7.0) - 0.5) * 0.006 * intensity), vec2(0.001), vec2(0.999));
-        vec3 glitchCol = texture(uTex, displaced).rgb;
-        // Chromatic split in glitch region
-        float csplit = 0.003 * intensity;
-        glitchCol.r = texture(uTex, clamp(displaced + vec2(csplit, 0.0), vec2(0.001), vec2(0.999))).r;
-        glitchCol.b = texture(uTex, clamp(displaced - vec2(csplit, 0.0), vec2(0.001), vec2(0.999))).b;
-        color = mix(color, glitchCol, intensity * 0.85);
-      }
+    float band = floor(uv.y * 90.0);
+    float tick = floor(t * 4.0);
+    float gate = hash11(band * 0.53 + tick * 97.0);
+    if (gate > 0.982 - uGlitch * 0.04) {
+      float lane = floor(uv.x * 16.0);
+      float laneGate = hash11((lane + band) * 19.0 + (tick + 17.0) * 41.0);
+      float intensity = smoothstep(0.35, 1.0, laneGate) * uGlitch;
+      float shift = (hash11(band * 23.0 + (tick + 31.0) * 67.0) - 0.5) * 0.035 * intensity;
+      vec2 displaced = clamp(uv + vec2(shift, (laneGate - 0.5) * 0.004 * intensity), vec2(0.001), vec2(0.999));
+      vec3 glitchCol = texture(uTex, displaced).rgb;
+      color = mix(color, glitchCol, intensity * 0.62);
     }
   }
 
@@ -888,19 +866,20 @@ void main() {
 
   /* ── Samosbor: variant-shaped post noise ────────────────────── */
   if (uSamosborActive > 0.5) {
-    float noiseBurst = hash21(floor(vUV * 60.0 + t * 5.0)) * 0.06;
+    vec2 noiseTile = floor(vUV * 60.0);
+    float noiseBurst = hash11(noiseTile.x + noiseTile.y * 173.0 + floor(t * 5.0) * 31.0) * 0.06;
     if (uSamosborStyle == 3) {
       float luma = dot(color, vec3(0.299, 0.587, 0.114));
       color = mix(color, vec3(luma), 0.58);
       color = mix(color, vec3(0.96, 0.94, 0.84), 0.12);
-      color += (hash21(vUV * 500.0 + floor(t * 9.0)) - 0.5) * 0.045;
-      float whiteLine = hash21(vec2(floor(uv.y * 120.0), floor(t * 5.0)));
+      color += (hash11(floor(vUV.x * 500.0) + floor(vUV.y * 280.0) * 331.0 + floor(t * 9.0) * 47.0) - 0.5) * 0.045;
+      float whiteLine = hash11(floor(uv.y * 120.0) * 7.0 + floor(t * 5.0) * 59.0);
       if (whiteLine > 0.985) color += vec3(0.08, 0.075, 0.055);
     } else {
       color.r += noiseBurst * 0.5;
       color.b += noiseBurst;
       // Occasional white flash lines
-      float flashLine = hash21(vec2(floor(uv.y * 100.0), floor(t * 8.0)));
+      float flashLine = hash11(floor(uv.y * 100.0) * 11.0 + floor(t * 8.0) * 79.0);
       if (flashLine > 0.993) {
         color += 0.15;
       }
@@ -993,12 +972,14 @@ interface GLState {
   surfacePixels: Uint8Array;
   surfaceIndex: Uint16Array;
   surfaceVersion: number;
+  surfaceUploadMs: number;
   surfaceCamTileX: number;
   surfaceCamTileY: number;
   cellVersion: number;
   wallTexVersion: number;
   floorTexVersion: number;
   featureVersion: number;
+  lightVersion: number;
   fogVersion: number;
   doorStatesData: Uint8Array;
   // Uniforms cache
@@ -1370,6 +1351,7 @@ function syncDoorStates(world: World, out: Uint8Array): boolean {
 const SURF_ATLAS_SIZE = 512;         // 512×512 total
 const SURF_ATLAS_COLS = 32;          // 32 tiles per row
 const SURF_MAX_SLOTS = SURF_ATLAS_COLS * SURF_ATLAS_COLS; // 1024
+const SURF_UPLOAD_MIN_INTERVAL_MS = 100;
 
 interface SurfaceUploadData {
   pixels: Uint8Array;
@@ -1603,12 +1585,14 @@ export function initWebGL(
     surfacePixels: surfData.pixels,
     surfaceIndex: surfData.index,
     surfaceVersion: world.surfaceVersion,
+    surfaceUploadMs: 0,
     surfaceCamTileX: 0,
     surfaceCamTileY: 0,
     cellVersion: world.cellVersion,
     wallTexVersion: world.wallTexVersion,
     floorTexVersion: world.floorTexVersion,
     featureVersion: world.featureVersion,
+    lightVersion: world.lightVersion,
     fogVersion: world.fogVersion,
     doorStatesData,
     rayUniforms, blitUniforms, spriteUniforms,
@@ -1646,6 +1630,34 @@ function createSpriteVAO(gl: WebGL2RenderingContext, prog: WebGLProgram): WebGLV
   return vao;
 }
 
+function uploadGridTexture(
+  gl: WebGL2RenderingContext,
+  texture: WebGLTexture,
+  format: number,
+  type: number,
+  data: ArrayBufferView,
+  rects: readonly WorldGridDirtyRect[] | null,
+): void {
+  gl.bindTexture(gl.TEXTURE_2D, texture);
+  if (!rects || rects.length === 0) {
+    gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, W, W, format, type, data);
+    return;
+  }
+  gl.pixelStorei(gl.UNPACK_ROW_LENGTH, W);
+  try {
+    for (const rect of rects) {
+      if (rect.w <= 0 || rect.h <= 0) continue;
+      gl.pixelStorei(gl.UNPACK_SKIP_PIXELS, rect.x);
+      gl.pixelStorei(gl.UNPACK_SKIP_ROWS, rect.y);
+      gl.texSubImage2D(gl.TEXTURE_2D, 0, rect.x, rect.y, rect.w, rect.h, format, type, data);
+    }
+  } finally {
+    gl.pixelStorei(gl.UNPACK_ROW_LENGTH, 0);
+    gl.pixelStorei(gl.UNPACK_SKIP_PIXELS, 0);
+    gl.pixelStorei(gl.UNPACK_SKIP_ROWS, 0);
+  }
+}
+
 /* ── Update world data textures (call after world changes) ────── */
 export function updateWorldData(world: World): void {
   if (!glState) return;
@@ -1666,6 +1678,7 @@ export function updateWorldData(world: World): void {
   gl.bindTexture(gl.TEXTURE_2D, glState.featuresTex);
   gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, W, W, gl.RED_INTEGER, gl.UNSIGNED_BYTE, world.features);
   glState.featureVersion = world.featureVersion;
+  glState.lightVersion = world.lightVersion;
 
   gl.bindTexture(gl.TEXTURE_2D, glState.lightTex);
   gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, W, W, gl.RED, gl.FLOAT, world.light);
@@ -1678,8 +1691,10 @@ export function updateWorldData(world: World): void {
   gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, W, W, gl.RED_INTEGER, gl.UNSIGNED_BYTE, rebuildDoorStates(world, glState.doorStatesData));
 
   glState.surfaceVersion = -1;
+  glState.surfaceUploadMs = 0;
   glState.surfaceCamTileX = Number.NaN;
   glState.surfaceCamTileY = Number.NaN;
+  world.clearPendingGridDirtyRects();
 
   // Also update dynamic data
   updateDynamicData(world);
@@ -1691,36 +1706,33 @@ export function updateDynamicData(world: World, camX = 0, camY = 0): void {
   const { gl } = glState;
 
   if (world.cellVersion !== glState.cellVersion) {
-    gl.bindTexture(gl.TEXTURE_2D, glState.cellsTex);
-    gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, W, W, gl.RED_INTEGER, gl.UNSIGNED_BYTE, world.cells);
-    gl.bindTexture(gl.TEXTURE_2D, glState.featuresTex);
-    gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, W, W, gl.RED_INTEGER, gl.UNSIGNED_BYTE, world.features);
+    uploadGridTexture(gl, glState.cellsTex, gl.RED_INTEGER, gl.UNSIGNED_BYTE, world.cells, world.takeCellDirtyRects());
     glState.cellVersion = world.cellVersion;
   }
 
   if (world.featureVersion !== glState.featureVersion) {
-    gl.bindTexture(gl.TEXTURE_2D, glState.featuresTex);
-    gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, W, W, gl.RED_INTEGER, gl.UNSIGNED_BYTE, world.features);
-    gl.bindTexture(gl.TEXTURE_2D, glState.lightTex);
-    gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, W, W, gl.RED, gl.FLOAT, world.light);
+    uploadGridTexture(gl, glState.featuresTex, gl.RED_INTEGER, gl.UNSIGNED_BYTE, world.features, world.takeFeatureDirtyRects());
     glState.featureVersion = world.featureVersion;
   }
 
+  if (world.lightVersion !== glState.lightVersion) {
+    gl.bindTexture(gl.TEXTURE_2D, glState.lightTex);
+    gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, W, W, gl.RED, gl.FLOAT, world.light);
+    glState.lightVersion = world.lightVersion;
+  }
+
   if (world.wallTexVersion !== glState.wallTexVersion) {
-    gl.bindTexture(gl.TEXTURE_2D, glState.wallTexTex);
-    gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, W, W, gl.RED_INTEGER, gl.UNSIGNED_BYTE, world.wallTex);
+    uploadGridTexture(gl, glState.wallTexTex, gl.RED_INTEGER, gl.UNSIGNED_BYTE, world.wallTex, world.takeWallTexDirtyRects());
     glState.wallTexVersion = world.wallTexVersion;
   }
 
   if (world.floorTexVersion !== glState.floorTexVersion) {
-    gl.bindTexture(gl.TEXTURE_2D, glState.floorTexTex);
-    gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, W, W, gl.RED_INTEGER, gl.UNSIGNED_BYTE, world.floorTex);
+    uploadGridTexture(gl, glState.floorTexTex, gl.RED_INTEGER, gl.UNSIGNED_BYTE, world.floorTex, world.takeFloorTexDirtyRects());
     glState.floorTexVersion = world.floorTexVersion;
   }
 
   if (world.fogVersion !== glState.fogVersion) {
-    gl.bindTexture(gl.TEXTURE_2D, glState.fogTex);
-    gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, W, W, gl.RED_INTEGER, gl.UNSIGNED_BYTE, world.fog);
+    uploadGridTexture(gl, glState.fogTex, gl.RED_INTEGER, gl.UNSIGNED_BYTE, world.fog, world.takeFogDirtyRects());
     glState.fogVersion = world.fogVersion;
   }
 
@@ -1735,7 +1747,11 @@ export function updateDynamicData(world: World, camX = 0, camY = 0): void {
   const surfaceCamTileY = Math.floor(camY / 4);
   const surfaceCameraDirty = world.surfaceMap.size > SURF_MAX_SLOTS
     && (surfaceCamTileX !== glState.surfaceCamTileX || surfaceCamTileY !== glState.surfaceCamTileY);
-  if (world.surfaceVersion !== glState.surfaceVersion || surfaceCameraDirty) {
+  const surfaceDirty = world.surfaceVersion !== glState.surfaceVersion || surfaceCameraDirty;
+  if (surfaceDirty) {
+    const now = performance.now();
+    const forceUpload = glState.surfaceVersion < 0;
+    if (!forceUpload && now - glState.surfaceUploadMs < SURF_UPLOAD_MIN_INTERVAL_MS) return;
     const surfData = buildSurfaceData(world, camX, camY, {
       pixels: glState.surfacePixels,
       index: glState.surfaceIndex,
@@ -1745,6 +1761,7 @@ export function updateDynamicData(world: World, camX = 0, camY = 0): void {
     gl.bindTexture(gl.TEXTURE_2D, glState.surfaceIdxTex);
     gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, W, W, gl.RED_INTEGER, gl.UNSIGNED_SHORT, surfData.index);
     glState.surfaceVersion = world.surfaceVersion;
+    glState.surfaceUploadMs = now;
     glState.surfaceCamTileX = surfaceCamTileX;
     glState.surfaceCamTileY = surfaceCamTileY;
   }

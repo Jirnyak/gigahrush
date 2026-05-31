@@ -4,6 +4,10 @@ import {
   type WorldContainer,
 } from '../core/types';
 import { type World } from '../core/world';
+import {
+  type InteractiveCraftMenuMode,
+  type InteractiveCraftStationKind,
+} from '../data/interactive';
 
 export type ContentRuntimePhase = 'pre_ai' | 'post_ai' | 'floor_activity';
 
@@ -52,6 +56,22 @@ export interface ContentInteractionContext {
   lookX: number;
   lookY: number;
   openContainerMenu?: (container: WorldContainer) => void;
+  openCraftMenu?: (request: ContentCraftMenuRequest) => void;
+  learnRecipe?: (request: ContentRecipeLearnRequest) => boolean;
+}
+
+export interface ContentCraftMenuRequest {
+  mode: InteractiveCraftMenuMode;
+  station: InteractiveCraftStationKind;
+  sourceInteractiveId: number;
+  sourceDefId: string;
+}
+
+export interface ContentRecipeLearnRequest {
+  recipeId?: string;
+  recipeSourceId?: string;
+  sourceInteractiveId: number;
+  sourceDefId: string;
 }
 
 export interface ContentInteractionTarget {

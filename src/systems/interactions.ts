@@ -12,11 +12,17 @@ import {
 } from '../core/types';
 import { World } from '../core/world';
 import { hashSeed, seededRandom } from '../core/rand';
+import { ITEMS } from '../data/catalog';
 import { getComputerDef } from '../data/computers';
 import { getGamblingMachineDef } from '../data/gambling';
 import { getNetHackTerminalDef } from '../data/net_hack';
 import { tryUseCarnivorousFungus } from './carnivorous_fungus';
-import { findContentInteractionTarget, tryUseContentInteraction } from './content_hooks';
+import {
+  findContentInteractionTarget,
+  tryUseContentInteraction,
+  type ContentCraftMenuRequest,
+  type ContentRecipeLearnRequest,
+} from './content_hooks';
 import './interactive';
 import { ensureRoomContainers } from './containers';
 import {
@@ -48,7 +54,8 @@ import { tryUseHeatlinePressure } from './heatline';
 import { tryRepairHermodoorBorerDamage } from './hermodoor_borer';
 import { hladonInteractionTargetId, tryUseHladonColdPocketCounter } from './hladon';
 import { getEmergencyPanelAt, tryUseEmergencyPanel } from './emergency_panels';
-import { ENTITY_MASK_NPC, ensureEntityIndex } from './entity_index';
+import { ENTITY_MASK_ITEM_DROP, ENTITY_MASK_NPC, ensureEntityIndex } from './entity_index';
+import { pickupDrop } from './inventory';
 import { tryUseMetroRoute } from './metro';
 import {
   attemptNetHack,
@@ -85,6 +92,7 @@ export type InteractableKind =
   | 'instant'
   | 'door'
   | 'lift'
+  | 'item_drop'
   | 'npc'
   | 'container'
   | 'rail_train'
@@ -105,9 +113,13 @@ export interface InteractionContext {
   movePlayerToMetroRoom?: (roomName: string) => boolean;
   openNpcMenu?: (npc: Entity) => void;
   openContainerMenu?: (container: WorldContainer) => void;
+  openCraftMenu?: (request: ContentCraftMenuRequest) => void;
+  learnRecipe?: (request: ContentRecipeLearnRequest) => boolean;
   openMapEditor?: (world: World, player: Entity, state: GameState, terminal?: { x: number; y: number }) => void;
   playDoor?: () => void;
   routeHintsVisible?: boolean;
+  manualItemPickup?: boolean;
+  onPickedDrop?: (drop: Entity) => void;
 }
 
 export interface InteractionTarget {
@@ -120,6 +132,10 @@ export interface InteractionTarget {
   prompt: string;
   colorSeed: number;
   disabledReason?: string;
+  itemName?: string;
+  itemDesc?: string;
+  itemCount?: number;
+  itemValue?: number;
 }
 
 export interface InteractionResult {
@@ -152,7 +168,12 @@ const NPC_INTERACTION_MIN_FORWARD = 0.35;
 const NPC_INTERACTION_BODY_RADIUS = 0.33;
 const NPC_INTERACTION_QUERY_CAP = 48;
 const NPC_INTERACTION_RAY_STEP_CAP = 12;
+const ITEM_INTERACTION_RANGE = 2.2;
+const ITEM_INTERACTION_MIN_FORWARD = 0.2;
+const ITEM_INTERACTION_BODY_RADIUS = 0.42;
+const ITEM_INTERACTION_QUERY_CAP = 64;
 const npcInteractionQuery: Entity[] = [];
+const itemInteractionQuery: Entity[] = [];
 
 function target(
   kind: InteractableKind,
@@ -175,7 +196,7 @@ function liftPrompt(ctx: InteractionContext, idx: number): string {
   const activeInstance = getActiveFloorInstance(ctx.state);
   if (activeInstance) {
     const route = currentFloorRunLabel(ctx.state) ?? 'плановый маршрут';
-    return ` ${dir === LiftDirection.UP ? '↑' : '↓'} НОМЕРНОЙ №${activeInstance.displayNumber} риск ${activeInstance.risk}/5 -> ${route}`;
+    return ` ${dir === LiftDirection.UP ? '↑' : '↓'} НОМЕРНОЙ №${activeInstance.displayNumber} -> ${route}`;
   }
   return ` ${floorRunLiftPrompt(ctx.state, dir)}${activeVisitLiftHint(ctx, dir)}`;
 }
@@ -243,6 +264,58 @@ function findFriendlyNpc(ctx: InteractionContext): Entity | null {
   return best;
 }
 
+function firstPickupItem(drop: Entity): { defId: string; count: number } | null {
+  for (const item of drop.inventory ?? []) {
+    if (item && item.count > 0 && typeof item.defId === 'string') return { defId: item.defId, count: item.count };
+  }
+  return null;
+}
+
+function findItemDrop(ctx: InteractionContext): Entity | null {
+  const dirX = Math.cos(ctx.player.angle);
+  const dirY = Math.sin(ctx.player.angle);
+  let best: Entity | null = null;
+  let bestScore = Infinity;
+  ensureEntityIndex(ctx.entities).queryRadiusCapped(
+    ctx.player.x,
+    ctx.player.y,
+    ITEM_INTERACTION_RANGE,
+    itemInteractionQuery,
+    ENTITY_MASK_ITEM_DROP,
+    ITEM_INTERACTION_QUERY_CAP,
+  );
+  for (const e of itemInteractionQuery) {
+    if (e.type !== EntityType.ITEM_DROP || !e.alive || !firstPickupItem(e)) continue;
+    const dx = ctx.world.delta(ctx.player.x, e.x);
+    const dy = ctx.world.delta(ctx.player.y, e.y);
+    const forward = dx * dirX + dy * dirY;
+    if (forward <= ITEM_INTERACTION_MIN_FORWARD || forward > ITEM_INTERACTION_RANGE) continue;
+    const side = -dx * dirY + dy * dirX;
+    const bodyRadius = Math.max(0.25, Math.min(0.65, ITEM_INTERACTION_BODY_RADIUS * interactionSpriteScale(e)));
+    if (Math.abs(side) > bodyRadius) continue;
+    if (interactionRayBlocked(ctx.world, ctx.player.x, ctx.player.y, dirX, dirY, forward - bodyRadius)) continue;
+    const score = forward + Math.abs(side) * 0.75;
+    if (score < bestScore) {
+      best = e;
+      bestScore = score;
+    }
+  }
+  return best;
+}
+
+function itemDropInteractionTarget(drop: Entity): InteractionTarget | null {
+  const item = firstPickupItem(drop);
+  if (!item) return null;
+  const def = ITEMS[item.defId];
+  return {
+    ...target('item_drop', drop.id, item.defId, drop.x, drop.y, 52, ' поднять'),
+    itemName: def?.name ?? item.defId,
+    itemDesc: def?.desc ?? '',
+    itemCount: item.count,
+    itemValue: def?.value ?? 0,
+  };
+}
+
 function findContainer(ctx: InteractionContext, discoverSecret: boolean): WorldContainer | null {
   const lx = Math.floor(ctx.lookX);
   const ly = Math.floor(ctx.lookY);
@@ -307,6 +380,11 @@ export function findInteractionTarget(ctx: InteractionContext): InteractionTarge
 
   const npc = findFriendlyNpc(ctx);
   if (npc) return target('npc', npc.id, 'npc', npc.x, npc.y, 50, ' разговор');
+
+  if (ctx.manualItemPickup) {
+    const itemDrop = findItemDrop(ctx);
+    if (itemDrop) return itemDropInteractionTarget(itemDrop);
+  }
 
   const pseudoLift = pseudoliftPrompt(ctx.world, ctx.state, ctx.lookX, ctx.lookY);
   if (pseudoLift) return target('lift', idx + 205000, 'pseudolift', idx % W, (idx / W) | 0, 58, pseudoLift);
@@ -439,6 +517,14 @@ export function activateInteraction(ctx: InteractionContext): InteractionResult 
     return { handled: true, openedOverlay: true };
   }
 
+  if (ctx.manualItemPickup) {
+    const itemDrop = findItemDrop(ctx);
+    if (itemDrop) {
+      const result = pickupDrop(ctx.world, itemDrop, ctx.player, ctx.state.msgs, ctx.state.time, ctx.state, ctx.onPickedDrop);
+      return { handled: result.handled };
+    }
+  }
+
   if (tryUsePseudolift(ctx.world, ctx.entities, ctx.nextEntityId, ctx.player, ctx.state, ctx.lookX, ctx.lookY)) {
     return { handled: true, worldChanged: true };
   }
@@ -518,7 +604,6 @@ export function handleInteractableOverlayInput(input: InteractableOverlayInput, 
   }
 
   if (isNetTerminalGenDeniedOpen()) {
-    if (input.interactEdge) closeNetTerminalGen();
     return { handled: true };
   }
 

@@ -40,7 +40,7 @@ test('market weight scale is reachable through cashbox theft and sale choice', (
 
   const info = getInventorySlotActionInfo(player, 0);
   assert.equal(info?.category, 'trade');
-  assert.equal(info?.useLabel, 'E нет действия');
+  assert.equal(info?.useLabel, 'Enter нет действия');
   assert.equal(info?.canUse, false);
   assert.equal(info?.canDrop, true);
   assert.equal(info?.sellLabel, 'Справка: базовая цена 88₽');

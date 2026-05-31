@@ -29,7 +29,7 @@ test('using a clean gasmask filter turns it into used evidence and publishes aud
   const state = makeGameState({ time: 12 });
 
   assert.equal(addItem(player, 'gasmask_filter', 1), true);
-  assert.equal(getInventorySlotActionInfo(player, 0)?.useLabel, 'E отработать');
+  assert.equal(getInventorySlotActionInfo(player, 0)?.useLabel, 'Enter отработать');
 
   useItem(player, 0, state.msgs, 12, state, 7);
 

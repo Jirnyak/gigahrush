@@ -3,8 +3,9 @@
 import { type Entity, type GameState } from '../core/types';
 import { World } from '../core/world';
 import { ITEMS } from '../data/catalog';
+import { MAX_INVENTORY_SLOTS } from '../data/inventory_limits';
 import { containerAccessInfo, containerItemActionInfo, containerTheftStatus } from '../systems/containers';
-import { controlBindingLabel } from '../systems/controls';
+import { controlBindingLabel, menuCloseHint } from '../systems/controls';
 import {
   itemValueDisplay,
   questItemStateColor,
@@ -33,7 +34,8 @@ export function drawContainerMenu(
   ctx.fillStyle = 'rgba(0,0,0,0.98)';
   ctx.fillRect(0, 0, cw, ch);
 
-  const GRID = 5;
+  const gridCols = layout.cols;
+  const gridRows = layout.rows;
   const cellSz = layout.cell;
   const gridTotal = layout.gridTotal;
   const totalW = layout.containerX - layout.startX + gridTotal;
@@ -45,23 +47,23 @@ export function drawContainerMenu(
   const access = containerAccessInfo(container, player, state);
 
   ctx.fillStyle = '#aaa';
-  ctx.font = `${9.5 * sy}px monospace`;
+  ctx.font = `${8.2 * sy}px monospace`;
   ctx.textAlign = 'center';
   ctx.fillText('КОНТЕЙНЕР', cw / 2, 10 * sy);
   ctx.textAlign = 'left';
 
-  ctx.font = `${8.5 * sy}px monospace`;
+  ctx.font = `${7.2 * sy}px monospace`;
   ctx.fillStyle = '#ee4';
-  ctx.fillText(`Вы: ${playerInv.length}/25`, startX, startY - 9 * sy);
+  ctx.fillText(`Вы: ${playerInv.length}/${MAX_INVENTORY_SLOTS}`, startX, startY - 9 * sy);
   const columnW = gridTotal;
   const containerName = fitText(ctx, container.name, columnW * 0.85);
   ctx.fillStyle = access.color;
   ctx.fillText(`${containerName}: ${containerInv.length}/${container.capacitySlots}`, containerX, startY - 9 * sy);
   ctx.fillStyle = access.color;
-  ctx.font = `${7.4 * sy}px monospace`;
+  ctx.font = `${6.4 * sy}px monospace`;
   ctx.fillText(fitText(ctx, access.label, columnW), containerX, startY - 18 * sy);
   ctx.fillStyle = '#888';
-  let infoY = startY + GRID * cellSz + 36 * sy;
+  let infoY = startY + gridRows * cellSz + 34 * sy;
   ctx.fillText(fitText(ctx, access.detail, totalW), startX, infoY);
   const theftStatus = containerTheftStatus(container);
   if (theftStatus) {
@@ -86,9 +88,9 @@ export function drawContainerMenu(
   }
 
   const drawGrid = (inv: { defId: string; count: number }[], gx: number, side: 'player' | 'container') => {
-    for (let row = 0; row < GRID; row++) {
-      for (let col = 0; col < GRID; col++) {
-        const idx = row * GRID + col;
+    for (let row = 0; row < gridRows; row++) {
+      for (let col = 0; col < gridCols; col++) {
+        const idx = row * gridCols + col;
         const cx = gx + col * cellSz;
         const cy = startY + row * cellSz;
         const selected = state.containerSide === side && state.containerCursorX === col && state.containerCursorY === row;
@@ -143,20 +145,20 @@ export function drawContainerMenu(
   drawGrid(playerInv, startX, 'player');
   drawGrid(containerInv, containerX, 'container');
 
-  const descY = startY + GRID * cellSz + 8 * sy;
-  const curIdx = state.containerCursorY * GRID + state.containerCursorX;
+  const descY = startY + gridRows * cellSz + 8 * sy;
+  const curIdx = state.containerCursorY * gridCols + state.containerCursorX;
   const curInv = state.containerSide === 'player' ? playerInv : containerInv;
   ctx.textAlign = 'center';
   if (curIdx < curInv.length) {
     const item = curInv[curIdx];
     const def = ITEMS[item.defId];
     ctx.fillStyle = '#ccc';
-    ctx.font = `${8.5 * sy}px monospace`;
+    ctx.font = `${7.3 * sy}px monospace`;
     const descW = Math.min(cw - 16 * sx, totalW + 24 * sx);
     ctx.fillText(fitText(ctx, `${def?.name ?? item.defId} x${item.count}`, descW), cw / 2, descY);
     ctx.fillStyle = '#888';
-    ctx.font = `${7.4 * sy}px monospace`;
-    let actionY = drawCenteredWrappedText(ctx, def?.desc ?? '', cw / 2, descY + 10 * sy, descW, 9 * sy, 2);
+    ctx.font = `${6.4 * sy}px monospace`;
+    let actionY = drawCenteredWrappedText(ctx, def?.desc ?? '', cw / 2, descY + 9 * sy, descW, 8 * sy, 2);
     const side = state.containerSide === 'player' ? 'player' : 'container';
     const actionInfo = containerItemActionInfo(container, player, side, item, state);
     const actionDetail = actionInfo.detail && (actionInfo.mode === 'steal' || actionInfo.mode === 'buy' || actionInfo.mode === 'unlock' || actionInfo.mode === 'service')
@@ -168,30 +170,30 @@ export function drawContainerMenu(
     ctx.fillStyle = value.scarcityColor;
     ctx.fillText(fitText(ctx, value.line, descW), cw / 2, actionY);
     ctx.fillStyle = '#888';
-    ctx.fillText(fitText(ctx, actionDetail || value.detail, descW), cw / 2, actionY + 9 * sy);
+    ctx.fillText(fitText(ctx, actionDetail || value.detail, descW), cw / 2, actionY + 8 * sy);
     ctx.fillStyle = actionInfo.enabled ? actionInfo.color : '#f84';
     if (value.questState) {
       const questLabel = value.questState === 'target' ? 'Квестовая цель' : 'Квестовая награда';
       ctx.fillStyle = questItemStateColor(value.questState);
-      ctx.fillText(fitText(ctx, questLabel, descW), cw / 2, actionY + 18 * sy);
+      ctx.fillText(fitText(ctx, questLabel, descW), cw / 2, actionY + 16 * sy);
       ctx.fillStyle = actionInfo.enabled ? actionInfo.color : '#f84';
-      ctx.fillText(fitText(ctx, actionInfo.label, descW), cw / 2, Math.min(actionY + 27 * sy, ch - 34 * sy));
+      ctx.fillText(fitText(ctx, actionInfo.label, descW), cw / 2, Math.min(actionY + 24 * sy, ch - 34 * sy));
     } else {
-      ctx.fillText(fitText(ctx, actionInfo.label, descW), cw / 2, Math.min(actionY + 18 * sy, ch - 34 * sy));
+      ctx.fillText(fitText(ctx, actionInfo.label, descW), cw / 2, Math.min(actionY + 16 * sy, ch - 34 * sy));
     }
   } else {
     ctx.fillStyle = '#555';
-    ctx.font = `${7.4 * sy}px monospace`;
+    ctx.font = `${6.4 * sy}px monospace`;
     ctx.fillText('Пустой слот', cw / 2, descY + 6 * sy);
   }
   ctx.textAlign = 'left';
 
   ctx.fillStyle = '#555';
-  ctx.font = `${6.5 * sy}px monospace`;
+  ctx.font = `${5.8 * sy}px monospace`;
   ctx.textAlign = 'right';
   const hintW = Math.max(60 * sx, cw - 16 * sx);
   ctx.fillText(fitText(ctx, `${controlBindingLabel('menuUp')}/${controlBindingLabel('menuDown')} - курсор`, hintW), cw - 8 * sx, ch - 24 * sy);
-  ctx.fillText(fitText(ctx, `${controlBindingLabel('interact')} - действие с предметом`, hintW), cw - 8 * sx, ch - 16 * sy);
-  ctx.fillText(fitText(ctx, `${controlBindingLabel('gameMenu')} - закрыть`, hintW), cw - 8 * sx, ch - 8 * sy);
+  ctx.fillText(fitText(ctx, `${controlBindingLabel('gameMenu')} - действие с предметом`, hintW), cw - 8 * sx, ch - 16 * sy);
+  ctx.fillText(fitText(ctx, `${menuCloseHint()} - закрыть`, hintW), cw - 8 * sx, ch - 8 * sy);
   ctx.textAlign = 'left';
 }

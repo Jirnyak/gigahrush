@@ -12,6 +12,19 @@ export interface TitleLanguageDef {
   seedLabel: string;
   seedPlaceholder: string;
   startPrompt: string;
+  setupTitle: string;
+  setupSubtitle: string;
+  setupStartLabel: string;
+  setupStartValue: string;
+  setupLanguageLabel: string;
+  setupActorCapLabel: string;
+  setupNameHint: string;
+  setupSeedHint: string;
+  setupLanguageHint: string;
+  setupActorCapHint: string;
+  setupStartHint: string;
+  setupControlHint: string;
+  actorCapValue: (value: number, min: number, max: number) => string;
   languageHint: string;
   mobileHint: string;
   desktopHint: (move: string, interact: string) => string;
@@ -30,9 +43,22 @@ export const TITLE_LANGUAGES: readonly TitleLanguageDef[] = [
     namePlaceholder: 'введите имя',
     seedLabel: 'СИД',
     seedPlaceholder: 'пусто = случайный',
-    startPrompt: 'Введите имя и нажмите ENTER',
-    languageHint: 'TAB поле  |  ←/→ язык',
-    mobileHint: 'Тап — начать  |  ДЕЙСТ — действие  |  КАРТ/ЗАД/UI — рельса',
+    startPrompt: 'Выберите язык и нажмите ENTER',
+    setupTitle: 'НАСТРОЙКА ЗАБЕГА',
+    setupSubtitle: 'меню запуска',
+    setupStartLabel: 'СТАРТ',
+    setupStartValue: 'начать игру',
+    setupLanguageLabel: 'ЯЗЫК',
+    setupActorCapLabel: 'ЛИМИТ NPC/МОБОВ',
+    setupNameHint: 'текст вводится прямо с клавиатуры',
+    setupSeedHint: 'пусто оставит случайный маршрутный сид',
+    setupLanguageHint: '←/→ переключить язык',
+    setupActorCapHint: '←/→ шаг 1024',
+    setupStartHint: 'ENTER запускает выбранный забег',
+    setupControlHint: '↑/↓ выбор  |  ←/→ изменить  |  текст печатается в выбранном поле  |  ENTER старт',
+    actorCapValue: (value, min, max) => `${value} (${min}-${max})`,
+    languageHint: '←/→ язык  |  ENTER далее',
+    mobileHint: 'Тап — далее  |  ДЕЙСТ — действие  |  КАРТ/ЗАД/UI — рельса',
     desktopHint: (move, interact) => `Клик захватывает курсор перед стартом  |  ${move} — движение  |  ${interact} — действие`,
     desktopCombatHint: (attack, fullscreen, controls, ui) => `ЛКМ/${attack} — атака  |  ${fullscreen} — полный экран  |  ${controls} — клавиши  |  ${ui} — интерфейс`,
     flag: 'soviet',
@@ -47,9 +73,22 @@ export const TITLE_LANGUAGES: readonly TitleLanguageDef[] = [
     namePlaceholder: 'enter name',
     seedLabel: 'SEED',
     seedPlaceholder: 'blank = random',
-    startPrompt: 'Enter name and press ENTER',
-    languageHint: 'TAB field  |  ←/→ language',
-    mobileHint: 'Tap — start  |  ACT — interact  |  MAP/QUEST/UI — rail',
+    startPrompt: 'Choose language and press ENTER',
+    setupTitle: 'RUN SETUP',
+    setupSubtitle: 'launch menu',
+    setupStartLabel: 'START',
+    setupStartValue: 'start game',
+    setupLanguageLabel: 'LANGUAGE',
+    setupActorCapLabel: 'NPC/MOB LIMIT',
+    setupNameHint: 'type directly while this row is selected',
+    setupSeedHint: 'blank keeps a random route seed',
+    setupLanguageHint: '←/→ switch language',
+    setupActorCapHint: '←/→ step 1024',
+    setupStartHint: 'ENTER starts this run',
+    setupControlHint: '↑/↓ select  |  ←/→ change  |  type into the selected text field  |  ENTER start',
+    actorCapValue: (value, min, max) => `${value} (${min}-${max})`,
+    languageHint: '←/→ language  |  ENTER next',
+    mobileHint: 'Tap — next  |  ACT — interact  |  MAP/QUEST/UI — rail',
     desktopHint: (move, interact) => `Click captures cursor before start  |  ${move} — move  |  ${interact} — action`,
     desktopCombatHint: (attack, fullscreen, controls, ui) => `LMB/${attack} — attack  |  ${fullscreen} — fullscreen  |  ${controls} — keys  |  ${ui} — interface`,
     flag: 'british_empire',

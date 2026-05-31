@@ -4,6 +4,7 @@ import * as assert from 'node:assert/strict';
 import { EntityType, QuestType, type Entity, type Item, type Quest } from '../src/core/types';
 import { World } from '../src/core/world';
 import { ITEMS } from '../src/data/catalog';
+import { MAX_INVENTORY_SLOTS } from '../src/data/inventory_limits';
 import { getRecentEvents } from '../src/systems/events';
 import { addItem, pickupNearby } from '../src/systems/inventory';
 import { checkQuests } from '../src/systems/quests';
@@ -43,7 +44,7 @@ function installNoopAudioContext(): void {
 
 test('addItem is atomic when a near-full inventory can only accept part of a stack', () => {
   const player = makeTestPlayer({
-    inventory: [{ defId: 'bread', count: 998 }, ...pipeSlots(24)],
+    inventory: [{ defId: 'bread', count: 998 }, ...pipeSlots(MAX_INVENTORY_SLOTS - 1)],
   });
   const before = player.inventory?.map(item => ({ ...item })) ?? [];
 
@@ -55,7 +56,7 @@ test('addItem is atomic when a near-full inventory can only accept part of a sta
 test('pickupNearby keeps unconsumed stacks on a multi-stack drop', () => {
   installNoopAudioContext();
   const world = new World();
-  const player = makeTestPlayer({ id: 1, x: 10, y: 10, inventory: pipeSlots(24) });
+  const player = makeTestPlayer({ id: 1, x: 10, y: 10, inventory: pipeSlots(MAX_INVENTORY_SLOTS - 1) });
   const drop: Entity = {
     id: 2,
     type: EntityType.ITEM_DROP,
@@ -76,8 +77,8 @@ test('pickupNearby keeps unconsumed stacks on a multi-stack drop', () => {
   assert.equal(drop.alive, true);
   assert.deepEqual(drop.inventory, [{ defId: 'pipe', count: 1 }]);
   assert.equal(countInventoryItem(player, 'bread'), 1);
-  assert.equal(countInventoryItem(player, 'pipe'), 24);
-  assert.equal(player.inventory?.length, 25);
+  assert.equal(countInventoryItem(player, 'pipe'), MAX_INVENTORY_SLOTS - 1);
+  assert.equal(player.inventory?.length, MAX_INVENTORY_SLOTS);
 });
 
 test('cleanup tongs recover green acid samples with durability instead of filter layer', () => {
@@ -118,7 +119,7 @@ test('cleanup tongs recover green acid samples with durability instead of filter
 
 test('full inventory blocks item quest rewards without marking the quest done', () => {
   const world = new World();
-  const player = makeTestPlayer({ id: 1, inventory: pipeSlots(25), money: 0 });
+  const player = makeTestPlayer({ id: 1, inventory: pipeSlots(MAX_INVENTORY_SLOTS), money: 0 });
   const giver = makeTestNpc({ id: 2, name: 'Выдающий' });
   const quest: Quest = {
     id: 1,
@@ -138,7 +139,7 @@ test('full inventory blocks item quest rewards without marking the quest done', 
 
   assert.equal(quest.done, false);
   assert.equal(countInventoryItem(player, 'bread'), 0);
-  assert.equal(player.inventory?.length, 25);
+  assert.equal(player.inventory?.length, MAX_INVENTORY_SLOTS);
   assert.ok(state.msgs.some(entry => /Нет места для платы/.test(entry.text)));
   assert.equal(state.msgs.some(entry => /Поручение закрыто/.test(entry.text)), false);
 });

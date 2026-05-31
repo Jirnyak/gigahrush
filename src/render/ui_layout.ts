@@ -1,8 +1,11 @@
-const GRID_COLS = 5;
+import { INVENTORY_GRID_COLS, INVENTORY_GRID_ROWS } from '../data/inventory_limits';
+
+const GRID_COLS = INVENTORY_GRID_COLS;
+const GRID_ROWS = INVENTORY_GRID_ROWS;
 const GRID_CELL_UNITS = 22;
-const GRID_GAP_UNITS = 24;
+const GRID_GAP_UNITS = 16;
 const GRID_SCREEN_W = 0.88;
-const GRID_SCREEN_H = 0.78;
+const GRID_SCREEN_H = 0.82;
 const GRID_SCALE_MAX = 4;
 const GRID_SCALE_TARGET_MIN = 2.2;
 
@@ -81,7 +84,9 @@ export interface InventoryPanelLayout {
 
 export interface FullscreenInventoryLayout {
   scale: number;
+  textScale: number;
   grid: UiRect & { cell: number; cols: number; rows: number };
+  details: UiRect;
   close: UiRect;
   use: UiRect;
   drop: UiRect;
@@ -91,6 +96,9 @@ export interface FullscreenInventoryLayout {
 export interface ContainerMenuGridLayout {
   scale: number;
   cell: number;
+  gap: number;
+  cols: number;
+  rows: number;
   startX: number;
   startY: number;
   containerX: number;
@@ -98,9 +106,43 @@ export interface ContainerMenuGridLayout {
   close: UiRect;
 }
 
+export interface TradeMenuGridLayout {
+  scale: number;
+  cell: number;
+  sideGap: number;
+  centerGap: number;
+  cols: number;
+  rows: number;
+  gridTotal: number;
+  startX: number;
+  startY: number;
+  playerOfferX: number;
+  npcOfferX: number;
+  npcX: number;
+  dealX: number;
+  dealY: number;
+  dealW: number;
+  dealH: number;
+}
+
+export interface CraftMenuLayout {
+  scale: number;
+  originX: number;
+  originY: number;
+  title: UiRect;
+  list: UiRect;
+  detail: UiRect;
+  materials: UiRect;
+  bottom: UiRect;
+  close: UiRect;
+  rowH: number;
+  materialRowH: number;
+  icon: UiRect;
+}
+
 export function dialogMenuScale(canvasW: number, canvasH: number, sx: number, sy: number): number {
   const raw = Math.min(canvasW / 320, canvasH / 200);
-  return Math.max(sx, sy, clamp(raw, 1, 3.35));
+  return Math.max(sx, sy, clamp(raw, 1, 2.72));
 }
 
 function scaledRect(originX: number, originY: number, scale: number, x: number, y: number, w: number, h: number): UiRect {
@@ -224,14 +266,15 @@ export function allocateHudSlot(
 }
 
 export function inventoryPanelLayout(canvasW: number, canvasH: number): InventoryPanelLayout {
-  const scale = Math.max(0.2, Math.min(4.2, Math.min(canvasW / 320, canvasH / 200)));
-  const originX = Math.max(0, (canvasW - 320 * scale) * 0.5);
-  const originY = Math.max(0, (canvasH - 200 * scale) * 0.5);
-  const grid = scaledRect(originX, originY, scale, 8, 22, 110, 110) as InventoryPanelLayout['grid'];
+  const scale = Math.max(0.2, Math.min(4.2, Math.min(canvasW / 392, canvasH / 236)));
+  const originX = Math.max(0, (canvasW - 392 * scale) * 0.5);
+  const originY = Math.max(0, (canvasH - 236 * scale) * 0.5);
+  const grid = scaledRect(originX, originY, scale, 8, 22, GRID_CELL_UNITS * GRID_COLS, GRID_CELL_UNITS * GRID_ROWS) as InventoryPanelLayout['grid'];
   grid.cell = 22 * scale;
-  grid.cols = 5;
-  grid.rows = 5;
-  const prep = scaledRect(originX, originY, scale, 128, 22, 184, 40) as InventoryPanelLayout['prep'];
+  grid.cols = GRID_COLS;
+  grid.rows = GRID_ROWS;
+  const rightX = 8 + GRID_CELL_UNITS * GRID_COLS + 14;
+  const prep = scaledRect(originX, originY, scale, rightX, 22, 186, 40) as InventoryPanelLayout['prep'];
   prep.cols = 4;
   prep.rows = 2;
   prep.tileW = prep.w / prep.cols;
@@ -241,35 +284,44 @@ export function inventoryPanelLayout(canvasW: number, canvasH: number): Inventor
     originX,
     originY,
     grid,
-    details: scaledRect(originX, originY, scale, 8, 137, 110, 55),
+    details: scaledRect(originX, originY, scale, rightX, 66, 186, 42),
     prep,
-    equip: scaledRect(originX, originY, scale, 128, 66, 184, 39),
-    vitals: scaledRect(originX, originY, scale, 128, 109, 184, 83),
-    attr: scaledRect(originX, originY, scale, 128, 110, 184, 15),
-    close: scaledRect(originX, originY, scale, 238, 1, 74, 16),
-    use: scaledRect(originX, originY, scale, 10, 176, 50, 14),
-    drop: scaledRect(originX, originY, scale, 66, 176, 50, 14),
+    equip: scaledRect(originX, originY, scale, rightX, 112, 186, 32),
+    vitals: scaledRect(originX, originY, scale, rightX, 148, 186, 80),
+    attr: scaledRect(originX, originY, scale, rightX, 148, 186, 15),
+    close: scaledRect(originX, originY, scale, 310, 1, 74, 16),
+    use: scaledRect(originX, originY, scale, rightX, 94, 86, 14),
+    drop: scaledRect(originX, originY, scale, rightX + 92, 94, 86, 14),
   };
 }
 
 export function fullscreenInventoryLayout(canvasW: number, canvasH: number, sx: number, sy: number): FullscreenInventoryLayout {
-  const scale = Math.max(0.9, Math.min(4.2, Math.min(sx, sy)));
+  const base = Math.min(sx, sy);
+  const fitW = canvasW / (8 + GRID_CELL_UNITS * GRID_COLS + 132);
+  const fitH = canvasH / (14 + GRID_CELL_UNITS * GRID_ROWS + 8);
+  const scale = Math.max(0.72, Math.min(4.2, base, fitW, fitH));
+  const textScale = scale <= 1.2 ? scale : Math.max(1.05, scale * 0.72);
   const cell = GRID_CELL_UNITS * scale;
   const gridX = 8 * scale;
-  const gridY = 18 * scale;
-  const gridTotal = GRID_COLS * cell;
-  const descY = gridY + gridTotal + 4 * scale;
-  const descX = gridX + gridTotal / 2;
-  const actionBaseY = Math.min(descY + 20 * scale, canvasH - 42 * scale);
-  const stX = gridX + gridTotal + 16 * scale;
-  const grid = { x: gridX, y: gridY, w: gridTotal, h: gridTotal, cell, cols: GRID_COLS, rows: GRID_COLS };
+  const gridY = 14 * scale;
+  const gridW = GRID_COLS * cell;
+  const gridH = GRID_ROWS * cell;
+  const stX = gridX + gridW + 12 * scale;
+  const rightW = Math.max(72 * scale, canvasW - stX - 8 * scale);
+  const detailsY = Math.max(8 * scale, gridY - 4 * scale);
+  const detailsH = 58 * textScale;
+  const actionW = Math.min(82 * textScale, rightW);
+  const actionY = detailsY + 37 * textScale;
+  const grid = { x: gridX, y: gridY, w: gridW, h: gridH, cell, cols: GRID_COLS, rows: GRID_ROWS };
   return {
     scale,
+    textScale,
     grid,
     close: { x: canvasW - 88 * scale, y: 0, w: 88 * scale, h: 18 * scale },
-    use: { x: descX - 70 * scale, y: actionBaseY + 4 * scale, w: 140 * scale, h: 12 * scale },
-    drop: { x: descX - 70 * scale, y: actionBaseY + 14 * scale, w: 140 * scale, h: 12 * scale },
-    attr: { x: stX, y: gridY - 4 * scale, w: Math.max(0, canvasW - stX - 8 * scale), h: 18 * scale },
+    details: { x: stX, y: detailsY, w: rightW, h: detailsH },
+    use: { x: stX, y: actionY, w: actionW, h: 12 * textScale },
+    drop: { x: stX + actionW + 6 * textScale, y: actionY, w: actionW, h: 12 * textScale },
+    attr: { x: stX, y: detailsY + detailsH + 4 * textScale, w: rightW, h: 14 * textScale },
   };
 }
 
@@ -284,12 +336,12 @@ function inventoryGridScale(canvasW: number, canvasH: number, verticalUnits: num
 }
 
 export function tradeGridScale(canvasW: number, canvasH: number): number {
-  const fourGridUnits = GRID_CELL_UNITS * GRID_COLS * 4 + GRID_GAP_UNITS * 3;
-  return inventoryGridScale(canvasW, canvasH, 28 + GRID_CELL_UNITS * GRID_COLS + 70, fourGridUnits);
+  const fourGridUnits = GRID_CELL_UNITS * GRID_COLS * 4 + GRID_GAP_UNITS * 1.9;
+  return inventoryGridScale(canvasW, canvasH, 24 + GRID_CELL_UNITS * GRID_ROWS + 58, fourGridUnits);
 }
 
 export function containerGridScale(canvasW: number, canvasH: number): number {
-  return inventoryGridScale(canvasW, canvasH, 30 + GRID_CELL_UNITS * GRID_COLS + 66);
+  return inventoryGridScale(canvasW, canvasH, 30 + GRID_CELL_UNITS * GRID_ROWS + 66);
 }
 
 export function containerMenuGridLayout(canvasW: number, canvasH: number): ContainerMenuGridLayout {
@@ -303,10 +355,73 @@ export function containerMenuGridLayout(canvasW: number, canvasH: number): Conta
   return {
     scale,
     cell,
+    gap,
+    cols: GRID_COLS,
+    rows: GRID_ROWS,
     startX,
     startY,
     containerX: startX + gridTotal + gap,
     gridTotal,
     close: { x: 0, y: canvasH - 30 * scale, w: canvasW, h: 30 * scale },
+  };
+}
+
+export function tradeMenuGridLayout(canvasW: number, canvasH: number): TradeMenuGridLayout {
+  const scale = tradeGridScale(canvasW, canvasH);
+  const cell = GRID_CELL_UNITS * scale;
+  const sideGap = Math.max(4 * scale, GRID_GAP_UNITS * 0.35 * scale);
+  const centerGap = Math.max(6 * scale, GRID_GAP_UNITS * 0.6 * scale);
+  const gridTotal = GRID_COLS * cell;
+  const totalW = gridTotal * 4 + sideGap * 2 + centerGap;
+  const startX = (canvasW - totalW) / 2;
+  const startY = 30 * scale;
+  const playerOfferX = startX + gridTotal + sideGap;
+  const npcOfferX = playerOfferX + gridTotal + centerGap;
+  const npcX = npcOfferX + gridTotal + sideGap;
+  const dealX = playerOfferX;
+  const dealY = startY + GRID_ROWS * cell + 10 * scale;
+  const dealW = gridTotal * 2 + centerGap;
+  const dealH = 17 * scale;
+  return {
+    scale,
+    cell,
+    sideGap,
+    centerGap,
+    cols: GRID_COLS,
+    rows: GRID_ROWS,
+    gridTotal,
+    startX,
+    startY,
+    playerOfferX,
+    npcOfferX,
+    npcX,
+    dealX,
+    dealY,
+    dealW,
+    dealH,
+  };
+}
+
+export function craftMenuLayout(canvasW: number, canvasH: number): CraftMenuLayout {
+  const raw = Math.min(canvasW / 320, canvasH / 200);
+  const scale = Math.max(0.72, Math.min(4.2, raw));
+  const baseW = 320 * scale;
+  const baseH = 200 * scale;
+  const originX = Math.max(0, (canvasW - baseW) * 0.5);
+  const originY = Math.max(0, (canvasH - baseH) * 0.5);
+  const r = (x: number, y: number, w: number, h: number): UiRect => scaledRect(originX, originY, scale, x, y, w, h);
+  return {
+    scale,
+    originX,
+    originY,
+    title: r(8, 5, 304, 15),
+    list: r(8, 24, 90, 142),
+    detail: r(104, 24, 122, 142),
+    materials: r(232, 24, 80, 142),
+    bottom: r(8, 171, 304, 22),
+    close: r(248, 5, 64, 14),
+    rowH: 12 * scale,
+    materialRowH: 12 * scale,
+    icon: r(111, 32, 38, 38),
   };
 }

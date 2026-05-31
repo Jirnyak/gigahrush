@@ -3,16 +3,18 @@
 import { type InputState } from './core/types';
 import {
   applyControlCode,
+  cancelControlCapture,
   clearControlInputs,
   consumeControlCaptureCode,
   getControlCaptureAction,
+  isMenuCloseCode,
   matchesControlAction,
 } from './systems/controls';
 
 export function createInput(): InputState {
   return {
     fwd: false, back: false, left: false, right: false,
-    strafeL: false, strafeR: false,
+    strafeL: false, strafeR: false, sprint: false,
     attack: false, interact: false, interactHeld: false, pickup: false,
     map: false, inv: false, invUp: false, invDn: false, invLeft: false, invRight: false,
     use: false, escape: false,
@@ -80,6 +82,12 @@ export function bindInput(input: InputState, canvas: HTMLCanvasElement, options:
 
   const onDown = (e: KeyboardEvent) => {
     if (getControlCaptureAction()) {
+      if (isMenuCloseCode(e.code)) {
+        cancelControlCapture();
+        input.controlClose = true;
+        e.preventDefault();
+        return;
+      }
       if (!e.metaKey && !e.ctrlKey && !e.altKey) consumeControlCaptureCode(e.code);
       e.preventDefault();
       return;
@@ -89,17 +97,20 @@ export function bindInput(input: InputState, canvas: HTMLCanvasElement, options:
       options.onFullscreenToggle?.();
       return;
     }
-    if (e.code === 'KeyE') input.controlEdit = true;
-    if (e.code === 'Backspace') input.controlReset = true;
-    if (e.code === 'Enter') input.controlClose = true;
+    if (isMenuCloseCode(e.code)) {
+      input.controlClose = true;
+      e.preventDefault();
+      return;
+    }
     applyControlCode(input, e.code, true);
     e.preventDefault();
   };
 
   const onUp = (e: KeyboardEvent) => {
-    if (e.code === 'KeyE') input.controlEdit = false;
-    if (e.code === 'Backspace') input.controlReset = false;
-    if (e.code === 'Enter') input.controlClose = false;
+    if (isMenuCloseCode(e.code)) {
+      input.controlClose = false;
+      return;
+    }
     applyControlCode(input, e.code, false);
   };
 

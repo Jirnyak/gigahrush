@@ -65,7 +65,7 @@ test('fibrous capsule cut can be saved or spent on a utility-room blueprint reci
   assert.equal(info?.category, 'trade');
   assert.equal(info?.canDrop, true);
   assert.equal(info?.canUse, true);
-  assert.equal(info?.useLabel, 'E вскрыть пробу');
+  assert.equal(info?.useLabel, 'Enter вскрыть пробу');
   assert.equal(info?.sellLabel, 'Справка: базовая цена 145₽');
 
   const factory = FACTORY_BY_ID.utility_room;

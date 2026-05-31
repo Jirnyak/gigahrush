@@ -1,5 +1,6 @@
 import { type Entity, type GameState } from '../core/types';
 import { ITEMS } from '../data/catalog';
+import { MAX_INVENTORY_SLOTS } from '../data/inventory_limits';
 import { getStack } from '../data/items';
 import { RESOURCES, RESOURCE_BY_ID } from '../data/resources';
 import { bankingSummary } from '../systems/banking';
@@ -8,8 +9,6 @@ import { getAdjustedItemPrice, getEconomyQuote, getItemPriceMultiplier, getResou
 import { stockMarketSnapshot } from '../systems/stock_market';
 import { drawGlitchText, drawNeuroPanel } from './hud_fx';
 import { fitText } from './ui_text';
-
-const INVENTORY_SLOTS = 25;
 
 type LooseRecord = Record<string, unknown>;
 
@@ -371,20 +370,20 @@ export function drawInventoryFinanceBlock(
   maxBottom: number,
 ): number {
   const lines = inventoryFinanceLines(readFinanceSnapshot(player, state));
-  const lineH = 9 * sy;
-  const available = Math.max(1, Math.floor((maxBottom - y - 8 * sy) / lineH));
+  const lineH = 7.2 * sy;
+  const available = Math.max(1, Math.floor((maxBottom - y - 7 * sy) / lineH));
   const visible = lines.slice(0, available);
   if (visible.length === 0) return y;
 
-  drawGlitchText(ctx, 'ФИНАНСЫ', x, y, time, 830, '#6cf', 7 * sy);
-  let cy = y + 10 * sy;
-  ctx.font = `${7 * sy}px monospace`;
+  drawGlitchText(ctx, 'ФИНАНСЫ', x, y, time, 830, '#6cf', 6 * sy);
+  let cy = y + 8.4 * sy;
+  ctx.font = `${5.8 * sy}px monospace`;
   for (const line of visible) {
     ctx.fillStyle = line.color;
     ctx.fillText(fitText(ctx, line.text, w), x, cy);
     cy += lineH;
   }
-  return cy + 3 * sy;
+  return cy + 2.2 * sy;
 }
 
 export function hasInventoryRoom(inv: readonly { defId: string; count: number; data?: unknown }[] | undefined, defId: string): boolean {
@@ -395,7 +394,7 @@ export function hasInventoryRoom(inv: readonly { defId: string; count: number; d
   for (const slot of slots) {
     if (slot.defId === defId && slot.count < stack && slot.data === undefined) return true;
   }
-  return slots.length < INVENTORY_SLOTS;
+  return slots.length < MAX_INVENTORY_SLOTS;
 }
 
 export function tradeCellPriceDisplay(
@@ -481,7 +480,7 @@ export function tradePriceDisplay(
   const hasSpace = hasInventoryRoom(receiver.inventory, defId);
   const ok = hasMoney && hasSpace;
   const status = ok
-    ? side === 'buy' ? `${controlHint('interact')} купить` : `${controlHint('interact')} продать`
+    ? side === 'buy' ? `${controlHint('gameMenu')} купить` : `${controlHint('gameMenu')} продать`
     : !hasMoney
       ? side === 'buy' ? 'не хватает денег' : 'у торговца нет денег'
       : side === 'buy' ? 'нет места' : 'у торговца нет места';

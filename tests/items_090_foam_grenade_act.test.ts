@@ -31,7 +31,7 @@ test('foam grenade act redeems into one legal 6p10 foam grenade', () => {
   const player = makeTestPlayer({ inventory: [{ defId: 'foam_grenade_act', count: 1 }] });
   const state = makeGameState({ currentFloor: FloorLevel.MINISTRY, time: 90 });
 
-  assert.equal(getInventorySlotActionInfo(player, 0)?.useLabel, 'E погасить');
+  assert.equal(getInventorySlotActionInfo(player, 0)?.useLabel, 'Enter погасить');
 
   useItem(player, 0, state.msgs, state.time, state);
 

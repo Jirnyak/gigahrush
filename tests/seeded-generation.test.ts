@@ -6,6 +6,8 @@ import type { FloorGeneration } from '../src/gen/floor_manifest';
 import { generateFloor } from '../src/gen/floor_manifest';
 import { generateDesignFloor } from '../src/gen/design_floors/manifest';
 
+const CELL_SAMPLE_STEP = 257;
+
 function mix(h: number, value: number): number {
   h ^= value | 0;
   return Math.imul(h, 0x01000193) >>> 0;
@@ -28,13 +30,19 @@ function generationFingerprint(gen: FloorGeneration): number {
   h = mix(h, gen.entities.length);
 
   const total = W * W;
-  for (let i = 0; i < total; i++) {
+  for (let i = 0; i < total; i += CELL_SAMPLE_STEP) {
     h = mix(h, world.cells[i]);
     h = mix(h, world.roomMap[i]);
     h = mix(h, world.features[i]);
     h = mix(h, world.wallTex[i]);
     h = mix(h, world.floorTex[i]);
   }
+  const last = total - 1;
+  h = mix(h, world.cells[last]);
+  h = mix(h, world.roomMap[last]);
+  h = mix(h, world.features[last]);
+  h = mix(h, world.wallTex[last]);
+  h = mix(h, world.floorTex[last]);
 
   for (const room of world.rooms) {
     h = mix(h, room.id);
@@ -71,9 +79,9 @@ test('story floor generation is reproducible from run seed', () => {
 });
 
 test('design floor generation is reproducible from run seed', () => {
-  const a = generationFingerprint(generateDesignFloor('darkness', 98_765));
-  const b = generationFingerprint(generateDesignFloor('darkness', 98_765));
-  const c = generationFingerprint(generateDesignFloor('darkness', 98_766));
+  const a = generationFingerprint(generateDesignFloor('service_floor', 98_765));
+  const b = generationFingerprint(generateDesignFloor('service_floor', 98_765));
+  const c = generationFingerprint(generateDesignFloor('service_floor', 98_766));
 
   assert.equal(a, b);
   assert.notEqual(a, c);

@@ -38,7 +38,7 @@ test('using protein mold cake spends a mold-origin ration and publishes bait tag
   });
   const state = makeGameState({ time: 155 });
 
-  assert.equal(getInventorySlotActionInfo(player, 0)?.useLabel, 'E применить');
+  assert.equal(getInventorySlotActionInfo(player, 0)?.useLabel, 'Enter применить');
 
   useItem(player, 0, state.msgs, state.time, state, 4);
 

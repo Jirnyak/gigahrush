@@ -726,9 +726,11 @@ test('Net Sphere input binding opens after game input prevention but ignores con
     const net = await import('../src/systems/net_sphere');
     controls.cancelControlCapture();
     net.closeNetSphere();
-    assert.equal(controls.matchesControlAction('netSubmit', 'KeyE'), true);
-    assert.equal(controls.matchesControlAction('netSubmit', 'Enter'), false);
-    assert.equal(controls.matchesControlAction('netClose', 'Enter'), true);
+    assert.equal(controls.matchesControlAction('netSubmit', 'KeyE'), false);
+    assert.equal(controls.matchesControlAction('netSubmit', 'Enter'), true);
+    assert.equal(controls.matchesControlAction('netClose', 'Backspace'), true);
+    assert.equal(controls.matchesControlAction('netClose', 'Delete'), true);
+    assert.equal(controls.matchesControlAction('netClose', 'Enter'), false);
     assert.equal(controls.matchesControlAction('netClose', 'Escape'), false);
 
     const unbind = net.bindNetSphereInput();
@@ -761,7 +763,7 @@ test('Net Sphere input binding opens after game input prevention but ignores con
       leakedCodes.push((event as unknown as FakeKeyboardEvent).code);
     };
     browser.document.addEventListener('keydown', leakListener);
-    const close = new FakeKeyboardEvent('Enter', 'Enter');
+    const close = new FakeKeyboardEvent('Backspace', 'Backspace');
     browser.document.dispatch('keydown', close);
     assert.equal(net.isNetSphereOpen(), false);
     assert.equal(close.defaultPrevented, true);
@@ -816,7 +818,7 @@ test('Net Sphere aborts stalled client fetches and releases busy flags', async (
     net.openNetSphere();
 
     browser.document.dispatch('keydown', new FakeKeyboardEvent('KeyH', 'h'));
-    browser.document.dispatch('keydown', new FakeKeyboardEvent('KeyE', 'e'));
+    browser.document.dispatch('keydown', new FakeKeyboardEvent('Enter', 'Enter'));
     net.tickNetSphere(minimalNetSphereState(), minimalNetSpherePlayer());
     assert.equal(net.getNetSphereSnapshot().busy, true);
 

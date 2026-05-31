@@ -4,6 +4,7 @@ import {
   controlBindingLabel,
   controlHint,
   getControlCaptureAction,
+  menuCloseHint,
 } from '../systems/controls';
 import { MOBILE_BUTTON_CONTROL_ROWS } from '../systems/mobile_actions';
 import {
@@ -34,7 +35,7 @@ export function drawControlsMenu(
   const h = ctx.canvas.height;
   const time = uiTime;
   const isButtons = state.controlView === 'buttons';
-  const rowCount = isButtons ? MOBILE_BUTTON_CONTROL_ROWS.length : CONTROL_ACTIONS.length + 1;
+  const rowCount = isButtons ? MOBILE_BUTTON_CONTROL_ROWS.length : CONTROL_ACTIONS.length + 2;
   const rowH = 12 * sy;
   const top = 44 * sy;
   const bottom = h - 24 * sy;
@@ -56,8 +57,8 @@ export function drawControlsMenu(
   ctx.fillStyle = '#577';
   ctx.fillText(
     fitText(ctx, isButtons
-      ? `${controlHint('controlsMenu')} закрыть  |  ${controlHint('gameMenu')} закрыть`
-      : 'Enter закрыть  |  E изменить/добавить  |  Backspace сбросить  |  ←/→ слайдер',
+      ? `${menuCloseHint()} закрыть`
+      : `${controlHint('gameMenu')} принять/изменить  |  ${menuCloseHint()} закрыть  |  ←/→ слайдер`,
     w - 24 * sx),
     12 * sx,
     26 * sy,
@@ -78,12 +79,13 @@ export function drawControlsMenu(
   for (let row = 0; row < visible; row++) {
     const i = scroll + row;
     if (i >= rowCount) break;
-    const action = isButtons ? undefined : CONTROL_ACTIONS[i];
+    const isReset = !isButtons && i === 0;
+    const action = isButtons || isReset ? undefined : CONTROL_ACTIONS[i - 1];
     const button = isButtons ? MOBILE_BUTTON_CONTROL_ROWS[i] : undefined;
-    const isMouseSensitivity = !isButtons && i === CONTROL_ACTIONS.length;
+    const isMouseSensitivity = !isButtons && i === CONTROL_ACTIONS.length + 1;
     if (isButtons) {
       if (!button) break;
-    } else if (!action && !isMouseSensitivity) {
+    } else if (!isReset && !action && !isMouseSensitivity) {
       break;
     }
     const rowY = top + row * rowH;
@@ -101,8 +103,8 @@ export function drawControlsMenu(
     ctx.fillStyle = isSel ? '#0fa' : '#6a8';
     ctx.fillText(isSel ? '▶' : ' ', x, textY);
     ctx.fillStyle = '#689';
-    const group = isButtons ? button?.group ?? '' : isMouseSensitivity ? 'Мышь' : action?.group ?? '';
-    const label = isButtons ? button?.label ?? '' : isMouseSensitivity ? 'Чувствительность мыши' : action?.label ?? '';
+    const group = isButtons ? button?.group ?? '' : isReset ? 'Сервис' : isMouseSensitivity ? 'Мышь' : action?.group ?? '';
+    const label = isButtons ? button?.label ?? '' : isReset ? 'Сбросить клавиши' : isMouseSensitivity ? 'Чувствительность мыши' : action?.label ?? '';
     ctx.fillText(fitText(ctx, group, groupW - 10 * sx), x + 14 * sx, textY);
     ctx.fillStyle = isSel ? '#dff' : '#9bb';
     ctx.fillText(fitText(ctx, label, labelW - 8 * sx), x + groupW + 18 * sx, textY);
@@ -111,6 +113,8 @@ export function drawControlsMenu(
       ? button?.binding ?? ''
       : isMouseSensitivity
         ? mouseSensitivitySliderText()
+        : isReset
+          ? 'ENTER'
         : isCapture
           ? 'НАЖМИТЕ КЛАВИШУ...'
           : action ? controlBindingLabel(action.id) : '';
@@ -137,7 +141,7 @@ export function drawControlsMenu(
       ? 'Нажатая клавиша добавится к действию. Enter, E и Backspace тоже можно назначить; Esc отменяет ввод.'
       : isButtons
         ? 'Экранные кнопки и мобильная рельса живут отдельно от клавиатурных биндов.'
-        : 'Клавиши можно повторять между действиями. Backspace сбрасывает выбранный слайдер или клавиши.',
+        : 'Клавиши можно повторять между действиями. Верхняя строка сбрасывает клавиши по умолчанию.',
     12 * sx,
     h - 10 * sy,
   );

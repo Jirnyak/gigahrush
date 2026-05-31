@@ -636,6 +636,15 @@ export interface Item {
   data?: unknown;              // key roomId, note text, etc.
 }
 
+export type MutableCraftVector = [number, number, number, number, number, number, number, number, number];
+
+export interface CraftingState {
+  materials: MutableCraftVector;
+  knownRecipes: Record<string, true>;
+  learnedCount: number;
+  lastChangedAt: number;
+}
+
 // ── Containers ──────────────────────────────────────────────────
 export enum ContainerKind {
   WOODEN_CHEST,
@@ -827,6 +836,9 @@ export const WORLD_EVENT_TYPES = [
   'player_pick_item',
   'player_drop_item',
   'player_use_item',
+  'player_disassemble_item',
+  'player_craft_item',
+  'craft_recipe_learned',
   'player_sell_item',
   'player_handoff_item',
   'player_destroy_item',
@@ -1082,6 +1094,9 @@ export interface GameClock {
   totalMinutes: number;     // total minutes elapsed since game start
 }
 
+export type CraftMenuMode = 'craft' | 'disassemble';
+export type CraftStationKind = 'any' | 'workbench' | 'lathe' | 'lab' | 'net_terminal';
+
 export interface GameState {
   tick: number;
   time: number;
@@ -1097,6 +1112,7 @@ export interface GameState {
   invSel: number;
   msgs: Msg[];
   quests: Quest[];
+  activeQuestId?: number;    // one player-selected quest for map guidance/current objective
   nextQuestId: number;
   currentFloor: FloorLevel;
   fogSpreadTimer: number;     // ticks between fog spread steps
@@ -1110,15 +1126,20 @@ export interface GameState {
   npcMenuTab: string;         // 'main'|'talk'|'quest'|'trade'
   npcTalkText: string;
   questPage: number;
-  tradeCursorX: number;       // 0..4 column in active trade grid
-  tradeCursorY: number;       // 0..4 row in active trade grid
+  tradeCursorX: number;       // column in active trade grid
+  tradeCursorY: number;       // row in active trade grid
   tradeSide: string;          // 'player'|'player_offer'|'npc_offer'|'npc'|'deal'
   // ── Container interaction menu ──
   showContainerMenu: boolean;
   containerMenuTarget: number; // world container id
-  containerCursorX: number;    // 0..4 column in container grid
-  containerCursorY: number;    // 0..4 row in container grid
+  containerCursorX: number;    // column in container grid
+  containerCursorY: number;    // row in container grid
   containerSide: string;       // 'player'|'container'
+  showCraftMenu: boolean;
+  craftMode: CraftMenuMode;
+  craftCursor: number;
+  craftFilter: string;
+  craftStationKind: CraftStationKind;
   showDebug: boolean;
   debugSel: number;
   showFactions: boolean;       // faction relations matrix (F key)
@@ -1146,6 +1167,7 @@ export interface GameState {
   uvBeamFx: number;          // UV spotlight visual timer (seconds remaining)
   uvBeamLen: number;         // UV spotlight reach (cells)
   gameWon: boolean;          // end-screen victory flag; return portal now continues freeplay
+  crafting: CraftingState;    // persistent player craft materials and known recipes
   worldEvents?: WorldEventState; // bounded structured event history; old saves may omit it
 }
 
@@ -1219,6 +1241,7 @@ export function msgAt(text: string, time: number, color: string, location: MsgLo
 export interface InputState {
   fwd: boolean; back: boolean; left: boolean; right: boolean;
   strafeL: boolean; strafeR: boolean;
+  sprint: boolean;              // Shift by default — movement speed burst
   attack: boolean; interact: boolean; pickup: boolean;
   interactHeld: boolean;       // raw hold state for pressure/resistance mechanics
   map: boolean; inv: boolean;
@@ -1236,9 +1259,9 @@ export interface InputState {
   sleep: boolean;               // Z key — hold to sleep
   controls: boolean;            // Tab by default — hotkey / rebind screen
   uiSettings: boolean;          // U key — configurable HUD element screen
-  controlEdit: boolean;         // fixed E on the hotkey screen
-  controlReset: boolean;        // fixed Backspace on settings screens
-  controlClose: boolean;        // fixed Enter close/back command
+  controlEdit: boolean;         // reserved fixed command slot for hotkey screens
+  controlReset: boolean;        // reserved fixed command slot for settings screens
+  controlClose: boolean;        // fixed Backspace/Delete close/back command
   mouse: { dx: number; dy: number; locked: boolean; };
   touch: { moveX: number; moveY: number; lookX: number; lookY: number; active: boolean; };
 }

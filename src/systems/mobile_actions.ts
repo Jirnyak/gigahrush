@@ -60,7 +60,7 @@ export interface MobileButtonControlRow {
 export const MOBILE_BUTTON_CONTROL_ROWS: readonly MobileButtonControlRow[] = [
   { group: 'Тач', label: 'Левый стик', binding: 'Ходьба' },
   { group: 'Тач', label: 'Правый стик', binding: 'Камера' },
-  { group: 'Тач', label: 'E', binding: 'Взаимодействие / подтверждение' },
+  { group: 'Тач', label: 'ДЕЙСТ', binding: 'Взаимодействие в мире' },
   { group: 'Тач', label: 'Правая зона', binding: 'Атака / выстрел' },
   { group: 'Тач', label: 'FULL/PAGE', binding: 'Полный экран / отдельная страница' },
   { group: 'Рельса', label: 'Вверх / вниз', binding: 'Выбор действия или строки меню' },

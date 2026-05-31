@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { FloorLevel, type GameState } from '../src/core/types';
 import { createEconomyFloorState } from '../src/data/economy';
+import { MAX_INVENTORY_SLOTS } from '../src/data/inventory_limits';
 import { ensureEconomyState, getEconomyQuote } from '../src/systems/economy';
 import { buyFromNpc, sellToNpc } from '../src/systems/trade';
 import { getRecentEvents } from '../src/systems/events';
@@ -115,7 +116,7 @@ test('failed trades do not mutate money, inventories or resource stock', () => {
   const fullNpc = makeTestNpc({
     id: 4,
     name: 'Торговец',
-    inventory: Array.from({ length: 25 }, () => ({ defId: 'water', count: 999 })),
+    inventory: Array.from({ length: MAX_INVENTORY_SLOTS }, () => ({ defId: 'water', count: 999 })),
     money: 20,
   });
   const stockBeforeSell = resourceStock(noSpaceState, FloorLevel.LIVING, 'drink_water');
@@ -127,6 +128,6 @@ test('failed trades do not mutate money, inventories or resource stock', () => {
   assert.equal(seller.money, 2);
   assert.equal(seller.inventory?.[0]?.count, 1);
   assert.equal(fullNpc.money, 20);
-  assert.equal(fullNpc.inventory?.length, 25);
+  assert.equal(fullNpc.inventory?.length, MAX_INVENTORY_SLOTS);
   assert.equal(resourceStock(noSpaceState, FloorLevel.LIVING, 'drink_water'), stockBeforeSell);
 });

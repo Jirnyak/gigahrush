@@ -3,7 +3,16 @@ import * as assert from 'node:assert/strict';
 
 import { AIGoal, Cell, DoorState, EntityType, RoomType, Tex, type Entity } from '../src/core/types';
 import { World } from '../src/core/world';
-import { bfsPath, getPathfindingStats, gotoNearestRoomType, gotoRoom, setPathContext, steerEntityTowardCell } from '../src/systems/ai/pathfinding';
+import {
+  bfsPath,
+  freezeNavigationCacheForWorld,
+  getPathfindingStats,
+  gotoNearestRoomType,
+  gotoRoom,
+  setPathContext,
+  steerEntityTowardCell,
+  unfreezeNavigationCacheForWorld,
+} from '../src/systems/ai/pathfinding';
 import { setDoorState } from '../src/systems/door_state';
 
 function makeCorridorWorld(): World {
@@ -77,6 +86,45 @@ test('bfsPath reuses the baked navigation tree for identical endpoints', () => {
   assertContiguous(first);
   assert.deepEqual(second, first);
   assert.equal(getPathfindingStats().cacheHits, 1);
+});
+
+test('samosbor mode does not invalidate baked navigation without geometry changes', () => {
+  const world = makeCorridorWorld();
+  setPathContext([], 0, false);
+  const first = bfsPath(world, 0, 10, 21, 10);
+
+  setPathContext([], 0.1, true);
+  const second = bfsPath(world, 0, 10, 21, 10);
+  const stats = getPathfindingStats();
+
+  assert.ok(first.length > 0);
+  assert.deepEqual(second, first);
+  assert.equal(stats.bfsCalls, 0);
+  assert.equal(stats.cacheHits, 1);
+});
+
+test('frozen navigation cache survives temporary samosbor geometry dirties until unfreeze', () => {
+  const world = makeCorridorWorld();
+  setPathContext([], 0);
+  const first = bfsPath(world, 0, 10, 21, 10);
+  assert.ok(first.length > 0);
+
+  freezeNavigationCacheForWorld(world);
+  world.set(10, 10, Cell.WALL);
+  world.markCellsDirty();
+
+  setPathContext([], 0.1, true);
+  const staleDuringWave = bfsPath(world, 0, 10, 21, 10);
+  let stats = getPathfindingStats();
+  assert.deepEqual(staleDuringWave, first);
+  assert.equal(stats.bfsCalls, 0);
+  assert.equal(stats.cacheHits, 1);
+
+  unfreezeNavigationCacheForWorld(world);
+  setPathContext([], 0.2, false);
+  assert.deepEqual(bfsPath(world, 0, 10, 21, 10), []);
+  stats = getPathfindingStats();
+  assert.equal(stats.bfsCalls, 1);
 });
 
 test('ordinary closed doors are routeable while locked and hermetic doors block navigation', () => {

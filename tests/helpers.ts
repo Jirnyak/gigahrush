@@ -16,6 +16,7 @@ import {
   ZoneFaction,
 } from '../src/core/types';
 import type { World } from '../src/core/world';
+import { createCraftingState } from '../src/systems/crafting';
 
 export function makeGameState(overrides: Partial<GameState> = {}): GameState {
   const clock = overrides.clock ?? { hour: 8, minute: 0, totalMinutes: 0 };
@@ -34,6 +35,7 @@ export function makeGameState(overrides: Partial<GameState> = {}): GameState {
     invSel: 0,
     msgs: [] as Msg[],
     quests: [],
+    activeQuestId: undefined,
     nextQuestId: 1,
     currentFloor: FloorLevel.LIVING,
     fogSpreadTimer: 0,
@@ -53,6 +55,11 @@ export function makeGameState(overrides: Partial<GameState> = {}): GameState {
     containerCursorX: 0,
     containerCursorY: 0,
     containerSide: 'container',
+    showCraftMenu: false,
+    craftMode: 'craft',
+    craftCursor: 0,
+    craftFilter: '',
+    craftStationKind: 'lathe',
     showDebug: false,
     debugSel: 0,
     showFactions: false,
@@ -79,6 +86,7 @@ export function makeGameState(overrides: Partial<GameState> = {}): GameState {
     uvBeamFx: 0,
     uvBeamLen: 0,
     gameWon: false,
+    crafting: createCraftingState(),
     ...overrides,
   };
 }

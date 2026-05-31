@@ -19,6 +19,7 @@ import {
   hasReachableAdjacentCell,
   type ReachabilityAudit,
 } from '../src/core/world';
+import { testGenerationMatrix } from './generator_helpers';
 import { makeGameState, makeTestPlayer } from './helpers';
 
 interface HeavyTopologyCase {
@@ -70,7 +71,7 @@ function forcedConveyorSpec(): ProceduralFloorSpec {
 }
 
 for (const anomalyCase of HEAVY_TOPOLOGY_CASES) {
-  test(`heavy topology anomaly ${anomalyCase.id} keeps route reachable and counterplay cued`, () => {
+  testGenerationMatrix(`heavy topology anomaly ${anomalyCase.id} keeps route reachable and counterplay cued`, () => {
     const spec = forcedSpec(anomalyCase.id);
     const gen = generateProceduralFloor(spec);
     const world = gen.world;
@@ -99,7 +100,7 @@ for (const anomalyCase of HEAVY_TOPOLOGY_CASES) {
   });
 }
 
-test('conveyor sorter creates reachable belts, receivers and local shutdown control', () => {
+testGenerationMatrix('conveyor sorter creates reachable belts, receivers and local shutdown control', () => {
   const gen = generateProceduralFloor(forcedConveyorSpec());
   const world = gen.world;
   const audit = auditReachability(world, world.idx(Math.floor(gen.spawnX), Math.floor(gen.spawnY)));

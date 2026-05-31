@@ -30,7 +30,7 @@ test('pushkin shotgun is a rare tactical shell platform on existing shell mechan
   assert.equal(stats.isRanged, true);
   assert.equal(stats.ammoType, 'ammo_shells');
   assert.equal(resourceForItem(stats.ammoType ?? '')?.id, 'ammo');
-  assert.equal(stats.dmg, 11);
+  assert.equal(stats.dmg, 14);
   assert.equal(stats.pellets, 6);
   assert.ok((stats.spread ?? 1) < (WEAPON_STATS.rb91_auto_shotgun.spread ?? 0), 'Pushkin should be tighter than RB-91');
   assert.ok(stats.speed > WEAPON_STATS.rb91_auto_shotgun.speed, 'Pushkin should fire slower than auto shotgun');

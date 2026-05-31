@@ -31,7 +31,7 @@ test('weapon blueprint t2 is a contraband armory document token', () => {
   assert.ok(RESOURCES.find(resource => resource.id === 'contraband')?.itemIds.includes(def.id));
 
   const actionInfo = getInventorySlotActionInfo(makeTestPlayer({ inventory: [{ defId: ITEM_ID, count: 1 }] }), 0);
-  assert.equal(actionInfo?.useLabel, 'E проверить');
+  assert.equal(actionInfo?.useLabel, 'Enter проверить');
 
   for (const tag of ['document', 'blueprint', 'recipe', 'weapon', 'production', 'access', 'tier2', 'armory', 'contraband', 'audit']) {
     assert.ok(def.tags?.includes(tag), `${ITEM_ID} item must carry ${tag}`);

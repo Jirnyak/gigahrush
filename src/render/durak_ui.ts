@@ -4,7 +4,7 @@ import {
   type DurakSnapshot,
   type DurakSuit,
 } from '../systems/durak';
-import { controlBindingLabel, controlHint } from '../systems/controls';
+import { controlBindingLabel, controlHint, menuCloseHint } from '../systems/controls';
 import { fitText } from './ui_text';
 
 const CARD_ASPECT = 0.70;
@@ -515,8 +515,8 @@ export function drawDurakInterface(
   drawPlayerHand(ctx, snapshot, px + pad, handY, pw - pad * 2, handPreferredH, s);
 
   const action = snapshot.finished
-    ? `${controlHint('interact')}/${controlBindingLabel('gameMenu')} ЗАКРЫТЬ`
-    : `${controlBindingLabel('menuLeft')}/${controlBindingLabel('menuRight')} КАРТА  ${controlHint('interact')} СЫГРАТЬ  ${controlBindingLabel('drop')} ВЗЯТЬ/СТОП  ${controlBindingLabel('gameMenu')} СДАТЬСЯ`;
+    ? `${controlHint('gameMenu')} ЗАКРЫТЬ  ${menuCloseHint()} ВЫЙТИ`
+    : `${controlBindingLabel('menuLeft')}/${controlBindingLabel('menuRight')} КАРТА  ${controlHint('gameMenu')} СЫГРАТЬ  ${controlBindingLabel('drop')} ВЗЯТЬ/СТОП  ${menuCloseHint()} СДАТЬСЯ`;
   ctx.fillStyle = '#59615d';
   ctx.font = `${7 * sy}px monospace`;
   ctx.textAlign = 'center';

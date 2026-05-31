@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import * as assert from 'node:assert/strict';
 
 import { EntityType, FloorLevel, type Entity, type GameState } from '../src/core/types';
+import { MAX_INVENTORY_SLOTS } from '../src/data/inventory_limits';
 import {
   financeDetailLines,
   hasInventoryRoom,
@@ -85,5 +86,5 @@ test('trade price display includes fallback price reason and affordability statu
 
 test('inventory room check treats existing stacks as space', () => {
   assert.equal(hasInventoryRoom([{ defId: 'water', count: 1 }], 'water'), true);
-  assert.equal(hasInventoryRoom(Array.from({ length: 25 }, (_, i) => ({ defId: `missing_${i}`, count: 1 })), 'water'), false);
+  assert.equal(hasInventoryRoom(Array.from({ length: MAX_INVENTORY_SLOTS }, (_, i) => ({ defId: `missing_${i}`, count: 1 })), 'water'), false);
 });

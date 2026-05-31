@@ -81,9 +81,9 @@ function hasActivePath(e: Entity): boolean {
   return !!ai && ai.path.length > 0 && ai.pi < ai.path.length;
 }
 
-function canHoldRoutineFrame(e: Entity, intent: NpcUtilityIntentId, samosborActive: boolean): boolean {
+function canHoldRoutineFrame(e: Entity, intent: NpcUtilityIntentId): boolean {
   const ai = e.ai;
-  if (!ai || samosborActive || ai.combatTargetId !== undefined || hasActivePath(e) || ai.timer <= 0) return false;
+  if (!ai || ai.combatTargetId !== undefined || hasActivePath(e) || ai.timer <= 0) return false;
   return intent === 'work' || intent === 'social' || intent === 'patrol' || intent === 'wander';
 }
 
@@ -297,7 +297,7 @@ export function updateNPC(
   ai.timer -= dt;
   ai.stateTimer = (ai.stateTimer ?? 0) + dt;
 
-  if (!decision.rescored && canHoldRoutineFrame(e, intent, samosborActive)) {
+  if (!decision.rescored && canHoldRoutineFrame(e, intent)) {
     tickNpcMemoryLowFrequency(e, time, clock.totalMinutes, samosborActive);
     tickNpcRumorLowFrequency(e, time, clock.totalMinutes, samosborActive);
     tryAmbientBark(e, dt, samosborActive);
@@ -356,7 +356,7 @@ function selectAndEnterUtilityIntent(
 ): { intent: NpcUtilityIntentId; rescored: boolean } {
   const currentIntent = utilityIntentByNpc.get(e);
   const now = _barkTime;
-  if (currentIntent !== undefined && !samosborActive && (utilityNextDecisionAtByNpc.get(e) ?? -Infinity) > now) {
+  if (currentIntent !== undefined && (utilityNextDecisionAtByNpc.get(e) ?? -Infinity) > now) {
     return { intent: currentIntent, rescored: false };
   }
 
@@ -775,6 +775,7 @@ export function forceHide(entities: Entity[], msgs?: Msg[], time?: number, world
       e.ai.pi = 0;
       e.ai.timer = 0;
       if (world) tryAssignEmergencyShelterPath(world, entities, e, clock);
+      utilityNextDecisionAtByNpc.set(e, (time ?? _barkTime) + utilityRethinkInterval(e));
     }
   }
 }

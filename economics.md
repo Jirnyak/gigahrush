@@ -15,7 +15,7 @@
 
 - `src/data/economics.ts` задает E0..E4 money bands, топ-gear value floors, `PSI >= 10_000₽`, major reward tags и depth-aware procedural loot caps.
 - `src/systems/quest_rewards.ts` стал runtime-расчетом наград для system contracts и procedural NPC quests по objective value, route depth, danger, giver level/wealth, scarcity и major tags.
-- `src/data/items.ts` ребейзнут под длинную лестницу: sidearms больше не стоят меньше стартовых денег, mid rifles/launchers/flamers/LMG ушли в тысячи, energy/PSI/top gear ушли в десятки и сотни тысяч, `ammo_energy` поднят до endgame-shot economy.
+- `src/data/items.ts` ребейзнут под длинную лестницу: sidearms больше не стоят меньше стартовых денег, mid rifles/launchers/flamers/LMG ушли в тысячи, energy/PSI/top gear ушли в десятки и сотни тысяч, а базовая `ammo_energy` держится в сотнях как дорогой боеприпас, не как отдельное endgame-оружие.
 - Procedural floor loot теперь ограничивается не только `danger`, но и `abs(z)`: случайный высокий danger около старта не открывает E4 loot cap, а глубокие route floors сохраняют дорогие weapon crates/stashes.
 - A-Life NPC wealth разнесен на те же честные денежные поля, что и у игрока: `money` как наличные и `accountRubles` как счет; wealth считается суммой, а save shape поднят.
 - Добавлены unit tests для PSI/top gear floors, физической weapon ladder, depth-aware loot caps и bounded quest reward difficulty.
@@ -94,6 +94,11 @@ Finance and logistics:
 - `src/data/caravans.ts`, `src/systems/caravans.ts` - caravan lanes, resource movement, active runs.
 - `src/data/factories.ts`, `src/systems/production.ts` - production input/output conversion.
 
+Craft components:
+
+- `src/data/craft_materials.ts`, `src/data/item_composition.ts`, `src/data/craft_recipes.ts` and `src/systems/crafting.ts` describe personal item crafting/disassembly. These 9 craft materials are not `ResourceDef`s and do not automatically enter floor scarcity, caravans or market quotes.
+- Economy hints are advisory only: `mechanics` relates to tools/labor/metal, `electronics` to existing electronics, `chemical` to fuel/medicine/industrial slurry, and `bio` to slime/zhelemish/fungal inputs. `cybernetics`, `psimatter` and `metamatter` are rare craft materials, not broad macro resources.
+
 ## 4. Current Gaps To Fix
 
 The current code already has useful pieces, but they do not yet form one long economy.
@@ -158,7 +163,7 @@ PSI:
 
 Top gear ammo:
 
-- BFG/GBE/GRN must not use only plain `ammo_energy` at `260₽`.
+- BFG/GBE/GRN must not be balanced only by plain `ammo_energy` at about `300₽`.
 - Add unique charges, charge packs, degraded batteries or faction-owned cells.
 - Strong shots need a per-use economy decision: `5_000..20_000₽` equivalent for endgame shots, or explicit non-money cost such as destroyed loot, route heat, debt, audit or permanent faction hostility.
 

@@ -19,6 +19,8 @@ Use the existing npm scripts as separate gates:
 
 Do not weaken a test just to make the fast gate pass. Move broad coverage to the correct gate, shrink duplicated setup, or replace runtime generation with a cheaper direct invariant.
 
+`npm run test:unit` is selected by `scripts/run-unit-tests.mjs`. The selector skips per-item content files named `items_*.test.ts` and files that import `src/gen/*`; those files are reserved for `npm run test:generation`, which still runs the full `tests/*.test.ts` set with `GIGAHRUSH_GENERATION_MATRIX=1`.
+
 ## Unit Gate Budget
 
 `test:unit` may include full floor generation only when the generated world is the subject of the test and the coverage is P0 for normal development. Examples:

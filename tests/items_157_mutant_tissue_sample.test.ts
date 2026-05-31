@@ -47,7 +47,7 @@ test('mutant tissue sample is a non-generic ecology proof item', () => {
   const player = makeTestPlayer({ inventory: [{ defId: ITEM_ID, count: 1 }] });
   const info = getInventorySlotActionInfo(player, 0);
   assert.equal(info?.canUse, true);
-  assert.equal(info?.useLabel, 'E вскрыть пробу');
+  assert.equal(info?.useLabel, 'Enter вскрыть пробу');
   assert.equal(info?.canDrop, true);
 });
 

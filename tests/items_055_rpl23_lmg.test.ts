@@ -23,7 +23,7 @@ test('rpl23 lmg is a heavy liquidator squad weapon with belt ammo pressure', () 
   assert.equal(stats.isRanged, true);
   assert.equal(stats.ammoType, 'ammo_belt');
   assert.equal(resourceForItem(stats.ammoType ?? '')?.id, 'ammo');
-  assert.equal(stats.dmg, 11);
+  assert.equal(stats.dmg, 14);
   assert.ok(stats.speed < WEAPON_STATS.ak47.speed, 'RPL-23 should burn ammo faster than AK-47');
   assert.ok(stats.speed > WEAPON_STATS.machinegun.speed, 'RPL-23 should stay below the generic PKM burn rate');
   assert.ok((stats.spread ?? 0) < (WEAPON_STATS.machinegun.spread ?? 0), 'RPL-23 should be more controlled than PKM');

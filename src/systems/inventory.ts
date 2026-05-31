@@ -8,6 +8,7 @@ import {
 } from '../core/types';
 import { ITEMS, WEAPON_ROLE_LABELS, WEAPON_ROLE_TIERS, WEAPON_STATS, type WeaponStats } from '../data/catalog';
 import { GOVNYAK_COURIER_CONTRACT_IDS, GOVNYAK_COURIER_PACKAGE_ITEM } from '../data/contracts';
+import { MAX_INVENTORY_SLOTS } from '../data/inventory_limits';
 import {
   DOCUMENT_ACCESS_ACTIONS,
   DOCUMENT_ACCESS_MARKET_VALUES,
@@ -23,6 +24,15 @@ import {
   SILVER_SLIME_OPENED_ID,
   SILVER_SLIME_SEALED_ID,
 } from '../data/items';
+import {
+  craftRecipeNoteText,
+  craftRecipeSourceConsumesItem,
+  craftRecipeSourceIdFromNoteData,
+  craftRecipeSourcePassesThroughItemUse,
+  craftRecipeSourcesForItem,
+  getCraftRecipeSource,
+  type CraftRecipeSourceDef,
+} from '../data/craft_recipe_sources';
 import { getPermitDef, getPermitForgeryRecipe } from '../data/permits';
 import { World } from '../core/world';
 import { Spr } from '../render/sprite_index';
@@ -70,8 +80,13 @@ import {
 import { consumeNoisyDocumentDelay } from './document_scent';
 import { pushNpcLogMessage } from './ai/barks';
 import { isPlayerEntity } from './player_actor';
+import {
+  craftRecipeLearnedMessage,
+  learnCraftRecipesFromSource,
+  type CraftRecipeLearnResult,
+} from './crafting';
+import { controlBindingLabel } from './controls';
 
-const MAX_SLOTS = 25;
 const GOVNYAK_COURIER_ROUTE_SET = new Set<string>(GOVNYAK_COURIER_CONTRACT_IDS);
 const DIRECT_DOCUMENT_ACTION_ITEMS = new Set(['ammo_coupon_9mm', 'ammo_coupon_shells', 'fuel_issue_stamp', 'foam_grenade_act', 'water_reservoir_quota', 'shelter_seat_card', 'shelter_seat_forgery', 'concentrate_bonus_coupon']);
 const DECON_FLUID_ITEM = 'decon_fluid';
@@ -256,6 +271,13 @@ interface GreenAcidPickupData {
   warned?: boolean;
 }
 
+export interface PickupDropResult {
+  handled: boolean;
+  pickedAny: boolean;
+  depleted: boolean;
+  blockedReason?: 'empty' | 'inventory_full';
+}
+
 // Side-effect floor modules can register through import cycles before this module finishes evaluating.
 var inventoryUseHandlers: InventoryUseHandler[] | undefined;
 
@@ -349,7 +371,7 @@ function canAddSingle(actor: Entity, defId: string): boolean {
   if (!def) return false;
   const inv = actor.inventory ?? [];
   return inv.some(slot => slot.defId === defId && slot.count < getStack(def) && canStackData(slot.data, undefined))
-    || inv.length < MAX_SLOTS;
+    || inv.length < MAX_INVENTORY_SLOTS;
 }
 
 function decrementInventorySlot(inv: Item[], slotIdx: number): void {
@@ -370,7 +392,7 @@ function hasRoomForSealedSand(inv: Item[], selectedSand: Item, sealItemId: strin
   if (selectedSand.count <= 1) return true;
   if (inv.some(slot => slot.defId === VERETAR_SEALED_SAND && slot.count < getStack(sealedDef) && canStackData(slot.data, undefined))) return true;
   const sealSlot = inv.find(slot => slot.defId === sealItemId);
-  return inv.length < MAX_SLOTS || sealSlot?.count === 1;
+  return inv.length < MAX_INVENTORY_SLOTS || sealSlot?.count === 1;
 }
 
 function publishVeretarSandEvent(
@@ -922,7 +944,7 @@ function itemAddCapacity(e: Entity, defId: string, count: number, data: unknown)
       if (capacity >= count) return capacity;
     }
   }
-  capacity += Math.max(0, MAX_SLOTS - (e.inventory?.length ?? 0)) * stackMax;
+  capacity += Math.max(0, MAX_INVENTORY_SLOTS - (e.inventory?.length ?? 0)) * stackMax;
   return capacity;
 }
 
@@ -961,7 +983,7 @@ function addItemMovedCount(e: Entity, defId: string, count = 1, data?: unknown):
   }
 
   // New slot — init durability for melee weapons
-  while (count > 0 && e.inventory.length < MAX_SLOTS) {
+  while (count > 0 && e.inventory.length < MAX_INVENTORY_SLOTS) {
     const add = Math.min(count, stackMax);
     const slotData = defaultSlotData(defId, def, data);
     e.inventory.push({ defId, count: add, data: slotData });
@@ -1049,22 +1071,24 @@ function inventoryCategoryLabel(category: InventoryItemCategory): string {
 }
 
 function inventorySpecialUseLabel(defId: string, def: ItemDef, slot: Item): string {
-  if (def.type === ItemType.NOTE && slot.data) return 'E прочесть';
-  if (itemHasTag(defId, 'coupon') || itemHasTag(defId, 'single_use')) return 'E погасить';
-  if (itemHasTag(defId, 'permit') || itemHasTag(defId, 'document_gate')) return 'E предъявить';
-  if (defId === DECON_FLUID_ITEM) return 'E зачистить';
-  if (defId === INCENDIARY_12G_ITEM) return 'E выжечь';
-  if (defId === GASMASK_FILTER_ITEM) return 'E отработать';
-  if (defId === CONTAMINATED_SWAB_ITEM) return 'E сдать/сбыть';
-  if (itemHasTag(defId, 'temporary_seal')) return 'E заклеить';
-  if (defId === VERETAR_UNSEALED_SAND) return 'E запечатать / высыпать';
-  if (defId === VERETAR_SEALED_SAND) return 'E проверить пломбу';
-  if (AUDIT_PROOF_TRADE_VALUES[defId]) return 'E сдать/сбыть';
-  if (itemHasTag(defId, 'document') || def.type === ItemType.KEY) return 'E проверить';
-  if (itemHasTag(defId, 'sample')) return 'E вскрыть пробу';
-  if (itemHasTag(defId, 'sealed') || itemHasTag(defId, 'veretar')) return 'E проверить';
-  if (itemHasTag(defId, 'govnyak') || itemHasTag(defId, 'zhelemish')) return 'E применить';
-  if (itemHasTag(defId, 'noise')) return 'E применить';
+  const accept = controlBindingLabel('gameMenu');
+  if (def.type === ItemType.NOTE && slot.data) return `${accept} прочесть`;
+  if (itemHasTag(defId, 'coupon') || itemHasTag(defId, 'single_use')) return `${accept} погасить`;
+  if (itemHasTag(defId, 'permit') || itemHasTag(defId, 'document_gate')) return `${accept} предъявить`;
+  if (defId === DECON_FLUID_ITEM) return `${accept} зачистить`;
+  if (defId === INCENDIARY_12G_ITEM) return `${accept} выжечь`;
+  if (defId === GASMASK_FILTER_ITEM) return `${accept} отработать`;
+  if (defId === CONTAMINATED_SWAB_ITEM) return `${accept} сдать/сбыть`;
+  if (itemHasTag(defId, 'temporary_seal')) return `${accept} заклеить`;
+  if (defId === VERETAR_UNSEALED_SAND) return `${accept} запечатать / высыпать`;
+  if (defId === VERETAR_SEALED_SAND) return `${accept} проверить пломбу`;
+  if (AUDIT_PROOF_TRADE_VALUES[defId]) return `${accept} сдать/сбыть`;
+  if (itemHasTag(defId, 'document') || def.type === ItemType.KEY) return `${accept} проверить`;
+  if (itemHasTag(defId, 'sample')) return `${accept} вскрыть пробу`;
+  if (itemHasTag(defId, 'sealed') || itemHasTag(defId, 'veretar')) return `${accept} проверить`;
+  if (itemHasTag(defId, 'govnyak') || itemHasTag(defId, 'zhelemish')) return `${accept} применить`;
+  if (itemHasTag(defId, 'noise')) return `${accept} применить`;
+  if (craftRecipeSourcesForItem(defId).length > 0) return `${accept} изучить`;
   return '';
 }
 
@@ -1080,14 +1104,15 @@ export function getInventorySlotActionInfo(e: Entity, slotIdx: number): Inventor
   let useLabel = '';
   let canUse = true;
 
-  if (equipSlot === 'weapon') useLabel = isEquippedWeapon ? 'E снять' : 'E экипировать';
-  else if (equipSlot === 'tool') useLabel = isEquippedTool ? 'E снять' : 'E в инструмент';
-  else if (itemHasUseAction(def)) useLabel = 'E применить';
+  const accept = controlBindingLabel('gameMenu');
+  if (equipSlot === 'weapon') useLabel = isEquippedWeapon ? `${accept} снять` : `${accept} экипировать`;
+  else if (equipSlot === 'tool') useLabel = isEquippedTool ? `${accept} снять` : `${accept} в инструмент`;
+  else if (itemHasUseAction(def)) useLabel = `${accept} применить`;
   else useLabel = inventorySpecialUseLabel(def.id, def, slot);
 
   if (!useLabel) {
     canUse = false;
-    useLabel = 'E нет действия';
+    useLabel = `${accept} нет действия`;
   }
 
   const value = Math.max(0, def.value ?? 0);
@@ -1221,7 +1246,7 @@ function hasRoomForOutputAfterConsuming(e: Entity, outputId: string, consumedIds
     consumeCounts.set(slot.defId, consume - taken);
     if (taken >= slot.count) freedSlots++;
   }
-  return inv.length - freedSlots < MAX_SLOTS;
+  return inv.length - freedSlots < MAX_INVENTORY_SLOTS;
 }
 
 function consumeDocumentItems(e: Entity, ids: readonly string[]): boolean {
@@ -1754,6 +1779,90 @@ function handleShelterTallyUse(e: Entity, defId: string, msgs: Msg[], time: numb
   return true;
 }
 
+function pushCraftRecipeSourceMessages(result: CraftRecipeLearnResult, msgs: Msg[], time: number): void {
+  for (const recipeId of result.learned) {
+    msgs.push(msg(craftRecipeLearnedMessage(recipeId), time, '#8cf'));
+  }
+  if (result.learned.length === 0 && result.duplicate.length > 0) {
+    msgs.push(msg('Рецепт уже известен', time, '#888'));
+  } else if (result.learned.length === 0 && result.duplicate.length === 0 && result.unknown.length > 0) {
+    msgs.push(msg('Схема неполная: нужен станок или другой лист', time, '#aa8'));
+  }
+}
+
+function learnCraftRecipeSource(
+  source: CraftRecipeSourceDef,
+  state: GameState | undefined,
+  msgs: Msg[],
+  time: number,
+): CraftRecipeLearnResult | null {
+  if (!state) {
+    msgs.push(msg('Схема неполная: нужен станок или другой лист', time, '#aa8'));
+    return null;
+  }
+  const result = learnCraftRecipesFromSource(state, source);
+  pushCraftRecipeSourceMessages(result, msgs, time);
+  return result;
+}
+
+function handleCraftRecipeItemSourceUse(
+  e: Entity,
+  slotIdx: number,
+  defId: string,
+  msgs: Msg[],
+  time: number,
+  state: GameState | undefined,
+  zoneId: number | undefined,
+): boolean {
+  const sources = craftRecipeSourcesForItem(defId);
+  if (sources.length === 0) return false;
+  if (
+    state &&
+    isPlayerEntity(e) &&
+    (state.currentFloor === FloorLevel.LIVING || state.currentFloor === FloorLevel.KVARTIRY) &&
+    DOCUMENT_MARKET_VALUES[defId] !== undefined
+  ) {
+    return false;
+  }
+
+  let learned = 0;
+  let duplicate = 0;
+  let unknown = 0;
+  let shouldConsume = false;
+  let passThrough = false;
+
+  for (const source of sources) {
+    if (craftRecipeSourcePassesThroughItemUse(source)) passThrough = true;
+    const result = learnCraftRecipeSource(source, state, msgs, time);
+    if (!result) continue;
+    learned += result.learned.length;
+    duplicate += result.duplicate.length;
+    unknown += result.unknown.length;
+    if (result.learned.length > 0 && craftRecipeSourceConsumesItem(source)) shouldConsume = true;
+  }
+
+  if (learned > 0 && state) {
+    publishPlayerItemEvent(state, e, 'player_use_item', defId, 1, unknown > 0 ? 2 : 3, zoneId);
+  }
+  if (shouldConsume) decrementInventorySlot(e.inventory ?? [], slotIdx);
+  return shouldConsume || !passThrough || (learned === 0 && duplicate === 0 && unknown === 0);
+}
+
+function noteText(data: unknown): string {
+  return craftRecipeNoteText(data) ?? String(data);
+}
+
+function handleCraftRecipeNoteSourceUse(data: unknown, msgs: Msg[], time: number, state: GameState | undefined): void {
+  const sourceId = craftRecipeSourceIdFromNoteData(data);
+  if (!sourceId) return;
+  const source = getCraftRecipeSource(sourceId);
+  if (!source || source.kind !== 'note') {
+    msgs.push(msg('Схема неполная: нужен станок или другой лист', time, '#aa8'));
+    return;
+  }
+  learnCraftRecipeSource(source, state, msgs, time);
+}
+
 /* ── Use selected item ────────────────────────────────────────── */
 export function useItem(e: Entity, slotIdx: number, msgs: Msg[], time: number, state?: GameState, zoneId?: number, world?: World): void {
   if (!e.inventory || slotIdx >= e.inventory.length) return;
@@ -1778,6 +1887,7 @@ export function useItem(e: Entity, slotIdx: number, msgs: Msg[], time: number, s
   if (handleIncendiary12gUse(e, slotIdx, msgs, time, state, zoneId, world)) return;
   if (handleDeconFluidUse(e, slotIdx, msgs, time, state, zoneId, world)) return;
   if (handleGasmaskFilterUse(e, slotIdx, msgs, time, state, zoneId)) return;
+  if (handleCraftRecipeItemSourceUse(e, slotIdx, def.id, msgs, time, state, zoneId)) return;
 
   if (handleContaminatedSwabUse(e, slotIdx, msgs, time, state, zoneId, world)) return;
   if (handleAuditProofUse(e, slotIdx, def.id, msgs, time, state, zoneId, world)) return;
@@ -1872,7 +1982,8 @@ export function useItem(e: Entity, slotIdx: number, msgs: Msg[], time: number, s
 
   // Notes
   if (def.type === ItemType.NOTE && slot.data) {
-    msgs.push(msg(String(slot.data), time, '#aa8'));
+    msgs.push(msg(noteText(slot.data), time, '#aa8'));
+    handleCraftRecipeNoteSourceUse(slot.data, msgs, time, state);
     publishPlayerItemEvent(state, e, 'player_use_item', def.id, 1, 2, zoneId);
     return;
   }
@@ -1931,6 +2042,116 @@ export function dropItem(
   }
 }
 
+function pickupDropItems(
+  world: World,
+  drop: Entity,
+  player: Entity,
+  msgs: Msg[],
+  time: number,
+  state?: GameState,
+  onPickedDrop?: (drop: Entity) => void,
+  manual = false,
+): PickupDropResult {
+  const inv = drop.inventory;
+  if (!drop.alive || drop.type !== EntityType.ITEM_DROP || !inv || inv.length === 0) {
+    return { handled: false, pickedAny: false, depleted: false, blockedReason: 'empty' };
+  }
+
+  let pickedAny = false;
+  let handled = false;
+  let blockedByCapacity = false;
+  let blockedName = '';
+  for (let itemIndex = 0; itemIndex < inv.length;) {
+    const item = inv[itemIndex];
+    const def = ITEMS[item.defId];
+    const acid = greenAcidPickupData(item.data);
+    const zoneId = world.zoneMap[world.idx(Math.floor(drop.x), Math.floor(drop.y))];
+    const acidHandlingTool = acid?.organicRisk ? equippedToolWithTag(player, SAMPLE_HANDLING_TOOL_TAG) : undefined;
+    if (acid?.organicRisk && !acidHandlingTool && !hasItem(player, GREEN_ACID_COUNTERMEASURE)) {
+      handled = true;
+      if (!acid.warned) {
+        setGreenAcidWarned(item);
+        msgs.push(msg(
+          `Зелёная кислота шипит на ${def?.name ?? item.defId}. Нужен фильтрующий слой или инструмент для проб; повторная попытка испортит добычу.`,
+          time, '#9f4',
+        ));
+        publishGreenAcidItemEvent(state, player, 'exposure', item.defId, item.count, zoneId, drop.x, drop.y);
+        itemIndex++;
+        continue;
+      }
+      const lostCount = item.count;
+      msgs.push(msg(`${def?.name ?? item.defId} вспенился в кислоте. Добыча потеряна.`, time, '#bf4'));
+      inv.splice(itemIndex, 1);
+      pickedAny = true;
+      publishGreenAcidItemEvent(state, player, 'exposure', item.defId, lostCount, zoneId, drop.x, drop.y);
+      continue;
+    }
+
+    const moved = addItemMovedCount(player, item.defId, item.count, acid ? undefined : item.data);
+    if (moved > 0) {
+      handled = true;
+      if (acid?.organicRisk) {
+        if (acidHandlingTool) {
+          const toolName = ITEMS[acidHandlingTool]?.name ?? acidHandlingTool;
+          consumeToolDurability(player, SAMPLE_HANDLING_TOOL_WEAR, msgs, time, state);
+          msgs.push(msg(`${toolName} удержали кислоту: ${def?.name ?? item.defId} сохранён.`, time, '#9f4'));
+          publishGreenAcidItemEvent(state, player, 'neutralization', item.defId, moved, zoneId, drop.x, drop.y, acidHandlingTool);
+        } else {
+          removeItem(player, GREEN_ACID_COUNTERMEASURE, 1);
+          msgs.push(msg(`Фильтрующий слой нейтрализовал кислоту: ${def?.name ?? item.defId} сохранён.`, time, '#9f4'));
+          publishGreenAcidItemEvent(state, player, 'neutralization', item.defId, moved, zoneId, drop.x, drop.y);
+        }
+      }
+      if (acid?.sample) {
+        msgs.push(msg('Взята проба зелёной кислотной слизи.', time, '#9f4'));
+        publishGreenAcidItemEvent(state, player, 'sample', item.defId, moved, zoneId, drop.x, drop.y);
+      }
+      msgs.push(msg(`Подобрано: ${def?.name ?? item.defId}`, time, '#dd4'));
+      publishPlayerItemEvent(state, player, 'player_pick_item', item.defId, moved, 2, zoneId);
+      handleVeretarPickupRisk(player, item.defId, msgs, time, state, zoneId);
+      item.count -= moved;
+      if (item.count <= 0) inv.splice(itemIndex, 1);
+      else itemIndex++;
+      pickedAny = true;
+      continue;
+    }
+    blockedByCapacity = true;
+    if (!blockedName) blockedName = def?.name ?? item.defId;
+    itemIndex++;
+  }
+
+  if (pickedAny) {
+    if (inv.length === 0) {
+      removeMonsterBaitForEntity(drop.id, state, time, 'picked_up');
+      onPickedDrop?.(drop);
+      drop.alive = false;
+    }
+    playPickup();
+  } else if (manual && blockedByCapacity) {
+    handled = true;
+    msgs.push(msg(`Нет места: ${blockedName}`, time, '#f84'));
+  }
+
+  return {
+    handled,
+    pickedAny,
+    depleted: !drop.alive || inv.length === 0,
+    blockedReason: blockedByCapacity && !pickedAny ? 'inventory_full' : undefined,
+  };
+}
+
+export function pickupDrop(
+  world: World,
+  drop: Entity,
+  player: Entity,
+  msgs: Msg[],
+  time: number,
+  state?: GameState,
+  onPickedDrop?: (drop: Entity) => void,
+): PickupDropResult {
+  return pickupDropItems(world, drop, player, msgs, time, state, onPickedDrop, true);
+}
+
 /* ── Pickup nearby item drops ─────────────────────────────────── */
 export function pickupNearby(
   world: World,
@@ -1945,74 +2166,7 @@ export function pickupNearby(
     const drop = entities[i];
     if (drop.type !== EntityType.ITEM_DROP || !drop.alive) continue;
     if (world.dist(player.x, player.y, drop.x, drop.y) > 1.5) continue;
-
-    const inv = drop.inventory;
-    if (!inv || inv.length === 0) continue;
-
-    let pickedAny = false;
-    for (let itemIndex = 0; itemIndex < inv.length;) {
-      const item = inv[itemIndex];
-      const def = ITEMS[item.defId];
-      const acid = greenAcidPickupData(item.data);
-      const zoneId = world.zoneMap[world.idx(Math.floor(drop.x), Math.floor(drop.y))];
-      const acidHandlingTool = acid?.organicRisk ? equippedToolWithTag(player, SAMPLE_HANDLING_TOOL_TAG) : undefined;
-      if (acid?.organicRisk && !acidHandlingTool && !hasItem(player, GREEN_ACID_COUNTERMEASURE)) {
-        if (!acid.warned) {
-          setGreenAcidWarned(item);
-          msgs.push(msg(
-            `Зелёная кислота шипит на ${def?.name ?? item.defId}. Нужен фильтрующий слой или инструмент для проб; повторная попытка испортит добычу.`,
-            time, '#9f4',
-          ));
-          publishGreenAcidItemEvent(state, player, 'exposure', item.defId, item.count, zoneId, drop.x, drop.y);
-          itemIndex++;
-          continue;
-        }
-        const lostCount = item.count;
-        msgs.push(msg(`${def?.name ?? item.defId} вспенился в кислоте. Добыча потеряна.`, time, '#bf4'));
-        inv.splice(itemIndex, 1);
-        pickedAny = true;
-        publishGreenAcidItemEvent(state, player, 'exposure', item.defId, lostCount, zoneId, drop.x, drop.y);
-        continue;
-      }
-
-      const moved = addItemMovedCount(player, item.defId, item.count, acid ? undefined : item.data);
-      if (moved > 0) {
-        if (acid?.organicRisk) {
-          if (acidHandlingTool) {
-            const toolName = ITEMS[acidHandlingTool]?.name ?? acidHandlingTool;
-            consumeToolDurability(player, SAMPLE_HANDLING_TOOL_WEAR, msgs, time, state);
-            msgs.push(msg(`${toolName} удержали кислоту: ${def?.name ?? item.defId} сохранён.`, time, '#9f4'));
-            publishGreenAcidItemEvent(state, player, 'neutralization', item.defId, moved, zoneId, drop.x, drop.y, acidHandlingTool);
-          } else {
-            removeItem(player, GREEN_ACID_COUNTERMEASURE, 1);
-            msgs.push(msg(`Фильтрующий слой нейтрализовал кислоту: ${def?.name ?? item.defId} сохранён.`, time, '#9f4'));
-            publishGreenAcidItemEvent(state, player, 'neutralization', item.defId, moved, zoneId, drop.x, drop.y);
-          }
-        }
-        if (acid?.sample) {
-          msgs.push(msg('Взята проба зелёной кислотной слизи.', time, '#9f4'));
-          publishGreenAcidItemEvent(state, player, 'sample', item.defId, moved, zoneId, drop.x, drop.y);
-        }
-        msgs.push(msg(`Подобрано: ${def?.name ?? item.defId}`, time, '#dd4'));
-        publishPlayerItemEvent(state, player, 'player_pick_item', item.defId, moved, 2, zoneId);
-        handleVeretarPickupRisk(player, item.defId, msgs, time, state, zoneId);
-        item.count -= moved;
-        if (item.count <= 0) inv.splice(itemIndex, 1);
-        else itemIndex++;
-        pickedAny = true;
-        continue;
-      }
-      itemIndex++;
-    }
-
-    if (pickedAny) {
-      if (inv.length === 0) {
-        removeMonsterBaitForEntity(drop.id, state, time, 'picked_up');
-        onPickedDrop?.(drop);
-        drop.alive = false;
-      }
-      playPickup();
-    }
+    pickupDropItems(world, drop, player, msgs, time, state, onPickedDrop, false);
   }
 }
 

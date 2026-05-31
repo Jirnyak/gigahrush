@@ -90,7 +90,9 @@ import {
 } from './shared';
 import type { FloorGeneration } from './floor_manifest';
 import { decorateCarnivorousFungusRoom } from './carnivorous_fungus_room';
+import { applyProceduralFloorObjectProfile } from './floor_object_placement';
 import { applyProceduralAnomalyProfile } from './procedural_anomalies';
+import { applyProceduralStructureLibrary } from './procedural_structure_library';
 import { ensureZombieApocalypseQuarantineDoor } from './procedural_anomalies/zombie_apocalypse';
 import { removeNpcEntities } from './entity_filters';
 import { registerProceduralAnomalyPlacement } from './procedural_anomalies/common';
@@ -185,6 +187,12 @@ const CULT_MAJORITY_EVIDENCE_TAG = 'cult_evidence';
 const SMOG_PROXY_SIZE = 64;
 const SMOG_MAX_CELLS = 13_500;
 const SMOG_COUNTERPLAY_DROPS = ['wet_rag_bundle', 'cloth_roll', 'gasmask_filter', 'filter_canister'] as const;
+const WALL_SNAKE_FIELD_COLUMNS = 16;
+const WALL_SNAKE_FIELD_ROWS = 8;
+const WALL_SNAKE_FIELD_TARGET = WALL_SNAKE_FIELD_COLUMNS * WALL_SNAKE_FIELD_ROWS;
+const LIFE_FIELD_SAFE_ROOM_COUNT = 12;
+const LIFE_FIELD_NOISE_DENSITY = 0.27;
+const LIFE_FIELD_NOISE_BAND_BONUS = 0.08;
 
 export interface CollectorDecisionMetrics {
   wetBasinCells: number;
@@ -300,6 +308,442 @@ function roomSize(type: RoomType, industrial: boolean): { w: number; h: number }
   return { w: irng(5, 12), h: irng(5, 11) };
 }
 
+interface ProceduralMacroProfile {
+  hallCount: number;
+  minW: number;
+  maxW: number;
+  minH: number;
+  maxH: number;
+  trunkWidth: number;
+  branchWidth: number;
+  branchCount: number;
+  namePrefix: string;
+  hallTypes: readonly RoomType[];
+  corridorFloorTex: Tex;
+  corridorWallTex: Tex;
+  featureStep: number;
+  elongated?: 'horizontal' | 'vertical' | 'mixed';
+}
+
+interface ProceduralMacroLayer {
+  profile: ProceduralMacroProfile;
+  halls: Room[];
+}
+
+function proceduralMacroProfile(spec: ProceduralFloorSpec, industrial: boolean): ProceduralMacroProfile | null {
+  const geom = geometryById(spec.geometryId);
+  if (
+    spec.geometryId === 'living_blocks'
+    || spec.geometryId === 'archive_warrens'
+    || spec.geometryId === 'apartment_pressure'
+    || spec.geometryId === 'sump_causeways'
+  ) return null;
+
+  if (spec.geometryId === 'collectors') {
+    return {
+      hallCount: 6 + Math.floor(spec.danger / 2),
+      minW: 24,
+      maxW: 58,
+      minH: 12,
+      maxH: 30,
+      trunkWidth: 2,
+      branchWidth: 1,
+      branchCount: 16,
+      namePrefix: 'Насосный зал',
+      hallTypes: [RoomType.PRODUCTION, RoomType.COMMON, RoomType.STORAGE],
+      corridorFloorTex: Tex.F_CONCRETE,
+      corridorWallTex: Tex.PIPE,
+      featureStep: 23,
+      elongated: 'mixed',
+    };
+  }
+  if (spec.geometryId === 'workshops') {
+    return {
+      hallCount: 7,
+      minW: 24,
+      maxW: 56,
+      minH: 16,
+      maxH: 34,
+      trunkWidth: 2,
+      branchWidth: 1,
+      branchCount: 15,
+      namePrefix: 'Цеховой пролет',
+      hallTypes: [RoomType.PRODUCTION, RoomType.PRODUCTION, RoomType.STORAGE],
+      corridorFloorTex: Tex.F_CONCRETE,
+      corridorWallTex: Tex.METAL,
+      featureStep: 19,
+      elongated: 'mixed',
+    };
+  }
+  if (spec.geometryId === 'service_spines') {
+    return {
+      hallCount: 5,
+      minW: 18,
+      maxW: 46,
+      minH: 8,
+      maxH: 18,
+      trunkWidth: 1,
+      branchWidth: 1,
+      branchCount: 18,
+      namePrefix: 'Сервисный узел',
+      hallTypes: [RoomType.CORRIDOR, RoomType.PRODUCTION, RoomType.STORAGE],
+      corridorFloorTex: Tex.F_CONCRETE,
+      corridorWallTex: Tex.METAL,
+      featureStep: 17,
+      elongated: 'mixed',
+    };
+  }
+  if (spec.geometryId === 'attic_weatherworks') {
+    return {
+      hallCount: 5,
+      minW: 26,
+      maxW: 64,
+      minH: 7,
+      maxH: 17,
+      trunkWidth: 1,
+      branchWidth: 1,
+      branchCount: 12,
+      namePrefix: 'Ветровой короб',
+      hallTypes: [RoomType.CORRIDOR, RoomType.PRODUCTION, RoomType.STORAGE],
+      corridorFloorTex: Tex.F_CONCRETE,
+      corridorWallTex: Tex.PIPE,
+      featureStep: 13,
+      elongated: 'horizontal',
+    };
+  }
+  if (spec.geometryId === 'admin_pockets') {
+    return {
+      hallCount: 5,
+      minW: 18,
+      maxW: 42,
+      minH: 12,
+      maxH: 28,
+      trunkWidth: 2,
+      branchWidth: 1,
+      branchCount: 12,
+      namePrefix: 'Приемный зал',
+      hallTypes: [RoomType.COMMON, RoomType.OFFICE, RoomType.STORAGE],
+      corridorFloorTex: Tex.F_MARBLE_TILE,
+      corridorWallTex: Tex.MARBLE,
+      featureStep: 21,
+    };
+  }
+  if (spec.geometryId === 'communal_knots') {
+    return {
+      hallCount: 5 + Math.floor(spec.danger / 3),
+      minW: 18,
+      maxW: 40,
+      minH: 12,
+      maxH: 26,
+      trunkWidth: 2,
+      branchWidth: 1,
+      branchCount: 14,
+      namePrefix: 'Общий тамбур',
+      hallTypes: [RoomType.COMMON, RoomType.KITCHEN, RoomType.SMOKING],
+      corridorFloorTex: Tex.F_LINO,
+      corridorWallTex: Tex.BRICK,
+      featureStep: 19,
+    };
+  }
+
+  return {
+    hallCount: industrial ? 6 : 5,
+    minW: industrial ? 22 : 16,
+    maxW: industrial ? 52 : 38,
+    minH: industrial ? 12 : 10,
+    maxH: industrial ? 28 : 24,
+    trunkWidth: industrial ? 2 : 1,
+    branchWidth: 1,
+    branchCount: industrial ? 14 : 12,
+    namePrefix: geom.tags.includes('residential') ? 'Большой общий зал' : 'Опорный зал',
+    hallTypes: industrial
+      ? [RoomType.PRODUCTION, RoomType.COMMON, RoomType.STORAGE]
+      : [RoomType.COMMON, RoomType.LIVING, RoomType.KITCHEN],
+    corridorFloorTex: geom.floorTex,
+    corridorWallTex: geom.wallTex,
+    featureStep: industrial ? 23 : 19,
+  };
+}
+
+function macroRoomSize(profile: ProceduralMacroProfile, index: number): { w: number; h: number } {
+  let w = irng(profile.minW, profile.maxW);
+  let h = irng(profile.minH, profile.maxH);
+  if (profile.elongated === 'horizontal' || (profile.elongated === 'mixed' && index % 2 === 0)) {
+    w = Math.max(w, h + irng(12, 28));
+    h = Math.min(h, irng(profile.minH, Math.max(profile.minH, profile.minH + 8)));
+  } else if (profile.elongated === 'vertical' || (profile.elongated === 'mixed' && index % 2 === 1)) {
+    h = Math.max(h, w + irng(10, 24));
+    w = Math.min(w, irng(profile.minW, Math.max(profile.minW, profile.minW + 10)));
+  }
+  return {
+    w: Math.max(8, Math.min(72, w)),
+    h: Math.max(7, Math.min(48, h)),
+  };
+}
+
+function decorateProceduralMacroHall(world: World, room: Room, spec: ProceduralFloorSpec, profile: ProceduralMacroProfile, serial: number): void {
+  applyRoomTexture(world, room, profile.corridorWallTex, profile.corridorFloorTex);
+  const center = roomCenter(room);
+  const columnStrideX = Math.max(7, Math.min(13, Math.floor(room.w / 4)));
+  const columnStrideY = Math.max(5, Math.min(11, Math.floor(room.h / 3)));
+
+  for (let dy = 1; dy < room.h - 1; dy++) {
+    for (let dx = 1; dx < room.w - 1; dx++) {
+      const ci = world.idx(room.x + dx, room.y + dy);
+      if (world.cells[ci] !== Cell.FLOOR || world.roomMap[ci] !== room.id) continue;
+      const nearCenter = Math.abs(room.x + dx - center.x) <= 2 && Math.abs(room.y + dy - center.y) <= 2;
+      if (!nearCenter && room.w >= 18 && room.h >= 12 && dx % columnStrideX === 0 && dy % columnStrideY === 0 && ((dx + dy + serial) % 3) !== 0) {
+        world.cells[ci] = Cell.WALL;
+        world.wallTex[ci] = profile.corridorWallTex;
+        continue;
+      }
+      if (world.features[ci] === Feature.NONE && ((dx * 17 + dy * 31 + serial + spec.seed) % profile.featureStep) === 0) {
+        world.features[ci] = room.type === RoomType.PRODUCTION
+          ? Feature.MACHINE
+          : room.type === RoomType.OFFICE
+            ? Feature.DESK
+            : (serial + dx + dy) % 4 === 0 ? Feature.SCREEN : Feature.LAMP;
+      }
+    }
+  }
+  world.features[world.idx(center.x, center.y)] = room.type === RoomType.PRODUCTION ? Feature.APPARATUS : Feature.TABLE;
+}
+
+function buildProceduralMacroLayer(world: World, rooms: Room[], spec: ProceduralFloorSpec, nextRoomId: { v: number }, industrial: boolean): ProceduralMacroLayer | null {
+  const profile = proceduralMacroProfile(spec, industrial);
+  if (!profile) return null;
+
+  const halls: Room[] = [];
+  const cols = Math.max(2, Math.ceil(Math.sqrt(profile.hallCount * 1.45)));
+  const rows = Math.max(2, Math.ceil(profile.hallCount / cols));
+  const margin = 28;
+  const slotW = Math.floor((W - margin * 2) / cols);
+  const slotH = Math.floor((W - margin * 2) / rows);
+  const usedSlots = new Set<number>();
+
+  for (let serial = 0; serial < profile.hallCount; serial++) {
+    for (let attempt = 0; attempt < 64; attempt++) {
+      const slotCount = cols * rows;
+      const slot = (serial * 5 + (spec.seed & 15) + attempt) % slotCount;
+      if (usedSlots.has(slot) && attempt < slotCount) continue;
+      const col = slot % cols;
+      const row = Math.floor(slot / cols);
+      const size = macroRoomSize(profile, serial + attempt);
+      const jitterX = irng(4, Math.max(5, slotW - size.w - 6));
+      const jitterY = irng(4, Math.max(5, slotH - size.h - 6));
+      const x = margin + col * slotW + jitterX;
+      const y = margin + row * slotH + jitterY;
+      if (!canPlaceRoom(world, x, y, size.w, size.h)) continue;
+
+      const type = profile.hallTypes[(serial + attempt + spec.danger) % profile.hallTypes.length];
+      const room = stampRoom(world, nextRoomId.v++, type, x, y, size.w, size.h, -1);
+      room.name = `${profile.namePrefix} ${serial + 1}`;
+      decorateProceduralMacroHall(world, room, spec, profile, serial + 1);
+      rooms.push(room);
+      halls.push(room);
+      usedSlots.add(slot);
+      break;
+    }
+  }
+
+  return halls.length > 0 ? { profile, halls } : null;
+}
+
+function canOverwriteForMacroRoute(world: World, ci: number): boolean {
+  if (world.cells[ci] === Cell.LIFT) return false;
+  if (world.features[ci] === Feature.LIFT_BUTTON || world.hermoWall[ci] || world.aptMask[ci] || world.containerMap.has(ci)) return false;
+  return true;
+}
+
+function carveProceduralMacroCell(
+  world: World,
+  x: number,
+  y: number,
+  profile: ProceduralMacroProfile,
+  step: number,
+  centerLine: boolean,
+): boolean {
+  const ci = world.idx(x, y);
+  if (!canOverwriteForMacroRoute(world, ci)) return false;
+  const before = world.cells[ci];
+  if (before === Cell.DOOR) return false;
+  if (before !== Cell.FLOOR && before !== Cell.WATER) {
+    world.cells[ci] = Cell.FLOOR;
+    world.roomMap[ci] = -1;
+  }
+  if (world.roomMap[ci] < 0) {
+    world.floorTex[ci] = profile.corridorFloorTex;
+    world.wallTex[ci] = profile.corridorWallTex;
+  }
+  if (centerLine && world.features[ci] === Feature.NONE && step > 0 && step % profile.featureStep === 0) {
+    world.features[ci] = step % (profile.featureStep * 2) === 0 ? Feature.LAMP : Feature.APPARATUS;
+  }
+  return before !== world.cells[ci] || world.roomMap[ci] < 0;
+}
+
+function carveProceduralMacroSegment(
+  world: World,
+  profile: ProceduralMacroProfile,
+  ax: number,
+  ay: number,
+  bx: number,
+  by: number,
+  width: number,
+  stepBase: number,
+): number {
+  const horizontal = Math.abs(world.delta(ax, bx)) >= Math.abs(world.delta(ay, by));
+  const delta = horizontal ? world.delta(ax, bx) : world.delta(ay, by);
+  const stepDir = delta >= 0 ? 1 : -1;
+  const steps = Math.abs(delta);
+  let x = world.wrap(ax);
+  let y = world.wrap(ay);
+
+  for (let s = 0; s <= steps; s++) {
+    const step = stepBase + s;
+    for (let side = -width; side <= width; side++) {
+      if (horizontal) carveProceduralMacroCell(world, x, y + side, profile, step, side === 0);
+      else carveProceduralMacroCell(world, x + side, y, profile, step, side === 0);
+    }
+    if (s < steps) {
+      if (horizontal) x = world.wrap(x + stepDir);
+      else y = world.wrap(y + stepDir);
+    }
+  }
+
+  return stepBase + steps + 1;
+}
+
+function connectProceduralMacroPoints(
+  world: World,
+  profile: ProceduralMacroProfile,
+  a: { x: number; y: number },
+  b: { x: number; y: number },
+  width: number,
+  seed: number,
+): void {
+  const horizontalFirst = (seed & 1) === 0;
+  let step = Math.abs(seed % 997);
+  if (horizontalFirst) {
+    step = carveProceduralMacroSegment(world, profile, a.x, a.y, b.x, a.y, width, step);
+    carveProceduralMacroSegment(world, profile, b.x, a.y, b.x, b.y, width, step);
+  } else {
+    step = carveProceduralMacroSegment(world, profile, a.x, a.y, a.x, b.y, width, step);
+    carveProceduralMacroSegment(world, profile, a.x, b.y, b.x, b.y, width, step);
+  }
+}
+
+function roomMacroAnchor(world: World, room: Room, target: Room): { x: number; y: number } {
+  const targetCenter = roomCenter(target);
+  const exit = roomExit(world, room, targetCenter.x, targetCenter.y);
+  placeDoorAt(world, exit.wx, exit.wy, room.id);
+  return { x: exit.ox, y: exit.oy };
+}
+
+function macroRoomDistance(world: World, a: Room, b: Room): number {
+  const ac = roomCenter(a);
+  const bc = roomCenter(b);
+  return world.dist(ac.x, ac.y, bc.x, bc.y);
+}
+
+function applyProceduralMacroNetwork(world: World, rooms: Room[], spec: ProceduralFloorSpec, layer: ProceduralMacroLayer | null, spawnX: number, spawnY: number): void {
+  if (!layer || layer.halls.length === 0) return;
+  const { profile, halls } = layer;
+  const ordered = halls.slice().sort((a, b) => {
+    const ac = roomCenter(a);
+    const bc = roomCenter(b);
+    const aa = Math.atan2(world.delta(spawnY, ac.y), world.delta(spawnX, ac.x));
+    const ba = Math.atan2(world.delta(spawnY, bc.y), world.delta(spawnX, bc.x));
+    return aa - ba;
+  });
+
+  for (let i = 0; i < ordered.length; i++) {
+    const a = ordered[i];
+    const b = ordered[(i + 1) % ordered.length];
+    if (!a || !b || a.id === b.id) continue;
+    connectProceduralMacroPoints(
+      world,
+      profile,
+      roomMacroAnchor(world, a, b),
+      roomMacroAnchor(world, b, a),
+      profile.trunkWidth,
+      spec.seed + i * 311,
+    );
+  }
+
+  if (ordered.length >= 4) {
+    for (let i = 0; i < Math.min(3, ordered.length); i++) {
+      const a = ordered[i];
+      const b = ordered[(i + Math.floor(ordered.length / 2)) % ordered.length];
+      if (!a || !b || a.id === b.id) continue;
+      connectProceduralMacroPoints(
+        world,
+        profile,
+        roomMacroAnchor(world, a, b),
+        roomMacroAnchor(world, b, a),
+        Math.max(1, profile.trunkWidth - 1),
+        spec.seed ^ (0x5100 + i * 971),
+      );
+    }
+  }
+
+  const hallIds = new Set(halls.map(room => room.id));
+  const localRooms = rooms.filter(room => !hallIds.has(room.id) && room.w >= 4 && room.h >= 4);
+  const usedLocal = new Set<number>();
+  for (let i = 0; i < profile.branchCount && localRooms.length > 0; i++) {
+    const hall = halls[i % halls.length];
+    const candidates = localRooms
+      .filter(room => !usedLocal.has(room.id))
+      .map(room => ({ room, d: macroRoomDistance(world, hall, room) }))
+      .sort((a, b) => a.d - b.d);
+    const picked = candidates[(spec.seed + i * 7) % Math.min(candidates.length, 6)]?.room;
+    if (!picked) continue;
+    usedLocal.add(picked.id);
+    connectProceduralMacroPoints(
+      world,
+      profile,
+      roomMacroAnchor(world, hall, picked),
+      roomMacroAnchor(world, picked, hall),
+      profile.branchWidth,
+      spec.seed ^ (0xb41 + i * 101),
+    );
+  }
+
+  const first = ordered[0];
+  const last = ordered[ordered.length - 1];
+  if (first && last) {
+    const firstCenter = roomCenter(first);
+    const lastCenter = roomCenter(last);
+    registerRouteCue(world, {
+      id: `procedural_${spec.key}_macro_spine`,
+      x: firstCenter.x + 0.5,
+      y: firstCenter.y + 0.5,
+      targetX: lastCenter.x + 0.5,
+      targetY: lastCenter.y + 0.5,
+      floor: spec.baseFloor,
+      roomId: first.id,
+      targetRoomId: last.id,
+      zoneId: world.zoneMap[world.idx(firstCenter.x, firstCenter.y)],
+      label: 'широкая магистраль',
+      hint: 'крупные залы связаны широким ходом, локальные комнаты уходят ветками',
+      targetName: last.name,
+      color: '#9ec8d8',
+      tags: ['procedural_floor', 'macro_spine', 'multi_scale', spec.geometryId, spec.majorityId],
+      toneSeed: (spec.seed ^ 0x5ca1e) >>> 0,
+      radius: 12,
+      targetRadius: 5,
+      cooldownSec: 60,
+      heardText: 'За стеной слышен широкий проход: гул идет не из комнаты, а из целой магистрали.',
+      followedText: 'Широкая магистраль вывела к другому масштабу этажа.',
+      ignoredText: 'Магистраль осталась сбоку, мелкие двери снова забрали внимание.',
+    });
+  }
+
+  world.markCellsDirty();
+  world.markWallTexDirty();
+  world.markFloorTexDirty();
+  world.markFeaturesDirty(true);
+}
+
 function applyRoomTexture(world: World, room: Room, wallTex: Tex, floorTex: Tex): void {
   room.wallTex = wallTex;
   room.floorTex = floorTex;
@@ -332,6 +776,448 @@ function decorateProceduralRoom(world: World, room: Room, spec: ProceduralFloorS
       maybePlaceBrokenFixture(world, room.x + dx, room.y + dy, { salt: room.id * 37 + dx * 7 + dy });
     }
   }
+}
+
+function fieldHash01(seed: number, x: number, y: number, salt = 0): number {
+  let h = seed ^ Math.imul(x + 0x9e37, 0x85ebca6b) ^ Math.imul(y + 0x632b, 0xc2b2ae35) ^ Math.imul(salt + 0x27d4, 0x165667b1);
+  h ^= h >>> 16;
+  h = Math.imul(h, 0x7feb352d);
+  h ^= h >>> 15;
+  h = Math.imul(h, 0x846ca68b);
+  h ^= h >>> 16;
+  return (h >>> 0) / 0xffffffff;
+}
+
+function clearWorldToField(world: World, floorTex: Tex, wallTex: Tex, fog = 0): void {
+  world.doors.clear();
+  world.rooms.length = 0;
+  for (let i = 0; i < world.cells.length; i++) {
+    world.cells[i] = Cell.FLOOR;
+    world.roomMap[i] = -1;
+    world.wallTex[i] = wallTex;
+    world.floorTex[i] = floorTex;
+    world.features[i] = Feature.NONE;
+    world.fog[i] = fog;
+    world.hermoWall[i] = 0;
+    world.aptMask[i] = 0;
+  }
+}
+
+function protectedFieldCell(world: World, ci: number): boolean {
+  return world.cells[ci] === Cell.LIFT || world.hermoWall[ci] !== 0 || world.aptMask[ci] !== 0 || world.containerMap.has(ci);
+}
+
+function carveFieldCell(world: World, x: number, y: number, floorTex: Tex, wallTex: Tex, fog = 0): boolean {
+  const ci = world.idx(x, y);
+  if (protectedFieldCell(world, ci)) return false;
+  if (world.cells[ci] === Cell.DOOR && world.doors.has(ci)) return false;
+  world.cells[ci] = Cell.FLOOR;
+  world.floorTex[ci] = floorTex;
+  world.wallTex[ci] = wallTex;
+  if (world.roomMap[ci] < 0) world.roomMap[ci] = -1;
+  if (world.features[ci] !== Feature.LIFT_BUTTON) world.features[ci] = Feature.NONE;
+  world.fog[ci] = Math.min(world.fog[ci], fog);
+  return true;
+}
+
+function carveFieldSegment(
+  world: World,
+  ax: number,
+  ay: number,
+  bx: number,
+  by: number,
+  width: number,
+  floorTex: Tex,
+  wallTex: Tex,
+  fog = 0,
+): void {
+  const horizontal = Math.abs(world.delta(ax, bx)) >= Math.abs(world.delta(ay, by));
+  const delta = horizontal ? world.delta(ax, bx) : world.delta(ay, by);
+  const dir = delta >= 0 ? 1 : -1;
+  const steps = Math.abs(delta);
+  let x = world.wrap(ax);
+  let y = world.wrap(ay);
+  for (let step = 0; step <= steps; step++) {
+    for (let side = -width; side <= width; side++) {
+      if (horizontal) carveFieldCell(world, x, y + side, floorTex, wallTex, fog);
+      else carveFieldCell(world, x + side, y, floorTex, wallTex, fog);
+    }
+    if (step < steps) {
+      if (horizontal) x = world.wrap(x + dir);
+      else y = world.wrap(y + dir);
+    }
+  }
+}
+
+function carveFieldRoute(
+  world: World,
+  a: { x: number; y: number },
+  b: { x: number; y: number },
+  width: number,
+  floorTex: Tex,
+  wallTex: Tex,
+  seed: number,
+  fog = 0,
+): void {
+  if ((seed & 1) === 0) {
+    carveFieldSegment(world, a.x, a.y, b.x, a.y, width, floorTex, wallTex, fog);
+    carveFieldSegment(world, b.x, a.y, b.x, b.y, width, floorTex, wallTex, fog);
+  } else {
+    carveFieldSegment(world, a.x, a.y, a.x, b.y, width, floorTex, wallTex, fog);
+    carveFieldSegment(world, a.x, b.y, b.x, b.y, width, floorTex, wallTex, fog);
+  }
+}
+
+function hermeticDoorForIsland(world: World, room: Room, side: 0 | 1 | 2 | 3): { x: number; y: number } {
+  const midX = room.x + Math.floor(room.w / 2);
+  const midY = room.y + Math.floor(room.h / 2);
+  let wx = midX;
+  let wy = room.y - 1;
+  let ox = midX;
+  let oy = room.y - 2;
+  if (side === 1) {
+    wx = room.x + room.w;
+    wy = midY;
+    ox = room.x + room.w + 1;
+    oy = midY;
+  } else if (side === 2) {
+    wx = midX;
+    wy = room.y + room.h;
+    ox = midX;
+    oy = room.y + room.h + 1;
+  } else if (side === 3) {
+    wx = room.x - 1;
+    wy = midY;
+    ox = room.x - 2;
+    oy = midY;
+  }
+  const idx = world.idx(wx, wy);
+  world.cells[idx] = Cell.DOOR;
+  world.wallTex[idx] = Tex.DOOR_METAL;
+  world.hermoWall[idx] = 1;
+  world.doors.set(idx, { idx, state: DoorState.HERMETIC_OPEN, roomA: room.id, roomB: -1, keyId: '', timer: 0 });
+  if (!room.doors.includes(idx)) room.doors.push(idx);
+  return { x: world.wrap(ox), y: world.wrap(oy) };
+}
+
+function stampFieldIslandRoom(
+  world: World,
+  rooms: Room[],
+  type: RoomType,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  name: string,
+  wallTex: Tex,
+  floorTex: Tex,
+  side: 0 | 1 | 2 | 3,
+): { room: Room; doorOutside: { x: number; y: number } } {
+  const room = stampRoom(world, rooms.length, type, x, y, w, h, -1);
+  room.name = name;
+  room.wallTex = wallTex;
+  room.floorTex = floorTex;
+  applyRoomTexture(world, room, wallTex, floorTex);
+  room.sealed = true;
+  for (let dy = -1; dy <= room.h; dy++) {
+    for (let dx = -1; dx <= room.w; dx++) {
+      if (dx >= 0 && dx < room.w && dy >= 0 && dy < room.h) continue;
+      const ci = world.idx(room.x + dx, room.y + dy);
+      if (world.cells[ci] !== Cell.DOOR) {
+        world.hermoWall[ci] = 1;
+        world.wallTex[ci] = Tex.HERMO_WALL;
+      }
+    }
+  }
+  const center = roomCenter(room);
+  world.features[world.idx(center.x, center.y)] = type === RoomType.PRODUCTION ? Feature.MACHINE : Feature.TABLE;
+  const doorOutside = hermeticDoorForIsland(world, room, side);
+  rooms.push(room);
+  return { room, doorOutside };
+}
+
+function buildConwayLifeField(world: World, spec: ProceduralFloorSpec): void {
+  clearWorldToField(world, Tex.F_CONCRETE, Tex.CONCRETE, 6);
+  for (let y = 0; y < W; y++) {
+    for (let x = 0; x < W; x++) {
+      const band = ((x + spec.seed) % 17 === 0 || (y + spec.ordinal * 5) % 19 === 0)
+        ? LIFE_FIELD_NOISE_BAND_BONUS
+        : 0;
+      if (fieldHash01(spec.seed, x, y, 0x1a1f) >= LIFE_FIELD_NOISE_DENSITY + band) continue;
+      const ci = world.idx(x, y);
+      world.cells[ci] = Cell.WALL;
+      world.wallTex[ci] = Tex.DARK;
+      world.floorTex[ci] = Tex.F_VOID;
+      world.fog[ci] = 34;
+    }
+  }
+}
+
+function buildConwayLifeFieldRooms(world: World, spec: ProceduralFloorSpec): { rooms: Room[]; spawnX: number; spawnY: number } {
+  world.doors.clear();
+  world.rooms.length = 0;
+  buildConwayLifeField(world, spec);
+  const rooms: Room[] = [];
+  const cols = 4;
+  const rows = 3;
+  const cellW = Math.floor(W / cols);
+  const cellH = Math.floor(W / rows);
+  const exits: { x: number; y: number }[] = [];
+
+  for (let i = 0; i < LIFE_FIELD_SAFE_ROOM_COUNT; i++) {
+    const col = i % cols;
+    const row = Math.floor(i / cols);
+    const w = 20 + Math.floor(fieldHash01(spec.seed, i, row, 0x7101) * 14);
+    const h = 16 + Math.floor(fieldHash01(spec.seed, i, col, 0x7102) * 12);
+    const x = Math.floor(col * cellW + cellW * 0.38 + fieldHash01(spec.seed, i, col, 0x7103) * Math.max(1, cellW * 0.22));
+    const y = Math.floor(row * cellH + cellH * 0.34 + fieldHash01(spec.seed, i, row, 0x7104) * Math.max(1, cellH * 0.22));
+    const side = (i + spec.seed) & 3;
+    const type = i % 5 === 0 ? RoomType.PRODUCTION : i % 3 === 0 ? RoomType.STORAGE : RoomType.COMMON;
+    const placed = stampFieldIslandRoom(
+      world,
+      rooms,
+      type,
+      Math.max(8, Math.min(W - w - 9, x)),
+      Math.max(8, Math.min(W - h - 9, y)),
+      w,
+      h,
+      `Остров игры жизнь ${i + 1}`,
+      Tex.HERMO_WALL,
+      i % 4 === 0 ? Tex.F_VOID : Tex.F_CONCRETE,
+      side as 0 | 1 | 2 | 3,
+    );
+    exits.push(placed.doorOutside);
+    const c = roomCenter(placed.room);
+    carveFieldSegment(world, c.x - 3, c.y, c.x + 3, c.y, 1, Tex.F_CONCRETE, Tex.CONCRETE, 0);
+    carveFieldSegment(world, c.x, c.y - 3, c.x, c.y + 3, 1, Tex.F_CONCRETE, Tex.CONCRETE, 0);
+  }
+
+  for (let i = 1; i < exits.length; i++) {
+    carveFieldRoute(world, exits[i - 1], exits[i], 2, Tex.F_CONCRETE, Tex.CONCRETE, spec.seed + i * 613, 0);
+  }
+  if (exits.length > 4) carveFieldRoute(world, exits[0], exits[exits.length - 1], 1, Tex.F_VOID, Tex.VOID_WALL, spec.seed ^ 0x71fe, 0);
+
+  const spawnRoom = rooms[0];
+  const spawn = spawnRoom ? roomCenter(spawnRoom) : { x: W / 2, y: W / 2 };
+  const target = rooms[rooms.length - 1] ? roomCenter(rooms[rooms.length - 1]) : { x: world.wrap(spawn.x + 120), y: spawn.y };
+  registerRouteCue(world, {
+    id: `procedural_${spec.key}_life_field_macro`,
+    x: spawn.x + 0.5,
+    y: spawn.y + 0.5,
+    targetX: target.x + 0.5,
+    targetY: target.y + 0.5,
+    floor: spec.baseFloor,
+    roomId: spawnRoom?.id,
+    targetRoomId: rooms[rooms.length - 1]?.id,
+    zoneId: world.zoneMap[world.idx(spawn.x, spawn.y)],
+    label: 'поле игры жизнь',
+    hint: 'живые стены уже собрали весь этаж; безопасны только гермоострова и прорезанные ходы',
+    targetName: 'дальний гермоостров',
+    color: '#6ee0b6',
+    tags: ['procedural_floor', 'conway_life', 'cellular', 'visible_anomaly', 'route_pressure', 'macro_geometry'],
+    toneSeed: spec.seed ^ 0x71fe,
+    radius: 16,
+    targetRadius: 4,
+    cooldownSec: 45,
+    heardText: 'Весь этаж щелкает как клеточное поле. Живые стены не похожи на коридорную нарезку.',
+    followedText: 'Гермоостров найден между поколениями клеток.',
+    ignoredText: 'Клеточное поле осталось шевелиться за спиной.',
+  });
+  ensureConnectivity(world, spawn.x + 0.5, spawn.y + 0.5);
+  sanitizeDoors(world);
+  world.markCellsDirty();
+  world.markWallTexDirty();
+  world.markFloorTexDirty();
+  world.markFeaturesDirty(true);
+  world.markFogDirty();
+  return { rooms, spawnX: spawn.x + 0.5, spawnY: spawn.y + 0.5 };
+}
+
+function wallSnakePerimeterPoint(world: World, x0: number, y0: number, w: number, h: number, step: number): { x: number; y: number } {
+  const len = Math.max(1, (w + h) * 2 - 4);
+  let t = ((step % len) + len) % len;
+  if (t < w) return { x: world.wrap(x0 + t), y: world.wrap(y0) };
+  t -= w;
+  if (t < h - 1) return { x: world.wrap(x0 + w - 1), y: world.wrap(y0 + 1 + t) };
+  t -= h - 1;
+  if (t < w - 1) return { x: world.wrap(x0 + w - 2 - t), y: world.wrap(y0 + h - 1) };
+  t -= w - 1;
+  return { x: world.wrap(x0), y: world.wrap(y0 + h - 2 - t) };
+}
+
+function paintWallSnakeLoop(world: World, spec: ProceduralFloorSpec, x0: number, y0: number, w: number, h: number, index: number): { head: { x: number; y: number }; bait: { x: number; y: number } } {
+  const perimeter = Math.max(1, Math.min(192, (w + h) * 2 - 4));
+  for (let step = 0; step < perimeter; step++) {
+    const p = wallSnakePerimeterPoint(world, x0, y0, w, h, step);
+    const ci = world.idx(p.x, p.y);
+    if (world.hermoWall[ci] || world.aptMask[ci] || world.cells[ci] === Cell.LIFT) continue;
+    world.cells[ci] = Cell.FLOOR;
+    world.floorTex[ci] = Tex.F_CONCRETE;
+    world.wallTex[ci] = Tex.METAL;
+    world.fog[ci] = Math.max(world.fog[ci], 22);
+    if (world.features[ci] === Feature.NONE && step % 37 === 0) world.features[ci] = Feature.LAMP;
+  }
+  const head = wallSnakePerimeterPoint(world, x0, y0, w, h, 0);
+  const bait = wallSnakePerimeterPoint(world, x0, y0, w, h, Math.floor(perimeter * 0.62));
+  const headIdx = world.idx(head.x, head.y);
+  if (!world.hermoWall[headIdx] && world.cells[headIdx] !== Cell.LIFT) world.features[headIdx] = Feature.SCREEN;
+  stampSurfaceSplat(world, bait.x, bait.y, 0.5, 0.5, 0.28, 0.42, spec.seed ^ (index * 611), 142, 106, 64, false);
+  return { head, bait };
+}
+
+function appendWallSnakeTag(room: Room, x0: number, y0: number, w: number, h: number): void {
+  room.name = `${room.name} [wall_snake:${x0},${y0},${w},${h}]`;
+}
+
+interface WallSnakeFieldLoop {
+  index: number;
+  roomId?: number;
+  x0: number;
+  y0: number;
+  w: number;
+  h: number;
+  head: { x: number; y: number };
+  bait: { x: number; y: number };
+}
+
+function registerWallSnakeFieldCue(
+  world: World,
+  spec: ProceduralFloorSpec,
+  cueId: string,
+  loop: WallSnakeFieldLoop,
+  head: { x: number; y: number },
+): void {
+  const headIdx = world.idx(head.x, head.y);
+  if (!world.hermoWall[headIdx] && world.cells[headIdx] !== Cell.LIFT) world.features[headIdx] = Feature.SCREEN;
+  registerRouteCue(world, {
+    id: cueId,
+    x: head.x + 0.5,
+    y: head.y + 0.5,
+    targetX: loop.bait.x + 0.5,
+    targetY: loop.bait.y + 0.5,
+    floor: spec.baseFloor,
+    roomId: loop.roomId,
+    targetRoomId: loop.roomId,
+    zoneId: world.zoneMap[headIdx],
+    label: 'поле змеек стен',
+    hint: 'почти пустой этаж разрезан множеством движущихся периметров; гермоострова безопасны',
+    targetName: 'приманка за петлей',
+    color: '#f6c267',
+    tags: ['procedural_floor', 'wall_snake', 'moving_walls', 'visible_anomaly', 'route_pressure', 'macro_geometry'],
+    toneSeed: (spec.seed ^ loop.index * 977 ^ 0x51a4e) >>> 0,
+    radius: 14,
+    targetRadius: 4,
+    cooldownSec: 42,
+    heardText: 'На карте рядом видно поле стеновых змеек: пустота не значит безопасность.',
+    followedText: 'Змеиное поле читается: петли обходятся, гермоострова не съедаются.',
+    ignoredText: 'Змеиные периметры остались ползти по пустому полу.',
+  });
+}
+
+function nearestWallSnakeFieldPoint(world: World, loop: WallSnakeFieldLoop, x: number, y: number): { x: number; y: number } {
+  const perimeter = Math.max(1, Math.min(192, (loop.w + loop.h) * 2 - 4));
+  let best = loop.head;
+  let bestD2 = world.dist2(x + 0.5, y + 0.5, best.x + 0.5, best.y + 0.5);
+  for (let step = 0; step < perimeter; step += 4) {
+    const p = wallSnakePerimeterPoint(world, loop.x0, loop.y0, loop.w, loop.h, step);
+    const ci = world.idx(p.x, p.y);
+    if (world.hermoWall[ci] || world.cells[ci] === Cell.LIFT) continue;
+    const d2 = world.dist2(x + 0.5, y + 0.5, p.x + 0.5, p.y + 0.5);
+    if (d2 < bestD2) {
+      bestD2 = d2;
+      best = p;
+    }
+  }
+  return best;
+}
+
+function buildWallSnakeFieldRooms(world: World, spec: ProceduralFloorSpec): { rooms: Room[]; spawnX: number; spawnY: number } {
+  clearWorldToField(world, Tex.F_CONCRETE, Tex.METAL, 4);
+  const rooms: Room[] = [];
+  const islandCols = 4;
+  const islandRows = 4;
+  const islandCell = W / islandCols;
+  const exits: { x: number; y: number }[] = [];
+  const loops: WallSnakeFieldLoop[] = [];
+
+  for (let i = 0; i < islandCols * islandRows; i++) {
+    const col = i % islandCols;
+    const row = Math.floor(i / islandCols);
+    const w = 18 + Math.floor(fieldHash01(spec.seed, i, row, 0x51a1) * 10);
+    const h = 14 + Math.floor(fieldHash01(spec.seed, i, col, 0x51a2) * 8);
+    const x = Math.floor(col * islandCell + islandCell * 0.42 + fieldHash01(spec.seed, i, col, 0x51a3) * 28);
+    const y = Math.floor(row * islandCell + islandCell * 0.38 + fieldHash01(spec.seed, i, row, 0x51a4) * 34);
+    const type = i % 4 === 0 ? RoomType.STORAGE : i % 5 === 0 ? RoomType.PRODUCTION : RoomType.COMMON;
+    const placed = stampFieldIslandRoom(
+      world,
+      rooms,
+      type,
+      Math.max(8, Math.min(W - w - 9, x)),
+      Math.max(8, Math.min(W - h - 9, y)),
+      w,
+      h,
+      `Гермоостров змей ${i + 1}`,
+      Tex.HERMO_WALL,
+      Tex.F_CONCRETE,
+      ((i + spec.seed) & 3) as 0 | 1 | 2 | 3,
+    );
+    exits.push(placed.doorOutside);
+  }
+
+  for (let i = 1; i < exits.length; i++) {
+    carveFieldRoute(world, exits[i - 1], exits[i], 1, Tex.F_CONCRETE, Tex.METAL, spec.seed + i * 307, 2);
+  }
+
+  let cueCount = 0;
+  for (let row = 0; row < WALL_SNAKE_FIELD_ROWS; row++) {
+    for (let col = 0; col < WALL_SNAKE_FIELD_COLUMNS; col++) {
+      const index = row * WALL_SNAKE_FIELD_COLUMNS + col;
+      const slotW = W / WALL_SNAKE_FIELD_COLUMNS;
+      const slotH = W / WALL_SNAKE_FIELD_ROWS;
+      const w = 34 + Math.floor(fieldHash01(spec.seed, index, col, 0x51b1) * 12);
+      const h = 34 + Math.floor(fieldHash01(spec.seed, index, row, 0x51b2) * 18);
+      const x0 = Math.floor(col * slotW + 8 + fieldHash01(spec.seed, index, col, 0x51b3) * Math.max(1, slotW - w - 14));
+      const y0 = Math.floor(row * slotH + 18 + fieldHash01(spec.seed, index, row, 0x51b4) * Math.max(1, slotH - h - 24));
+      const painted = paintWallSnakeLoop(world, spec, x0, y0, w, h, index);
+      const room = rooms[index % rooms.length];
+      appendWallSnakeTag(room, x0, y0, w, h);
+      const loop = { index, roomId: room?.id, x0, y0, w, h, head: painted.head, bait: painted.bait };
+      loops.push(loop);
+      if (cueCount < 8 && (index % 16 === 0 || index === WALL_SNAKE_FIELD_TARGET - 1)) {
+        registerWallSnakeFieldCue(world, spec, `procedural_${spec.key}_wall_snake_field_${cueCount}`, loop, painted.head);
+        cueCount++;
+      }
+    }
+  }
+
+  const spawnRoom = rooms[0];
+  const spawn = roomCenter(spawnRoom);
+  const nearest = loops.reduce<WallSnakeFieldLoop | null>((best, loop) => {
+    if (!best) return loop;
+    const bestPoint = nearestWallSnakeFieldPoint(world, best, spawn.x, spawn.y);
+    const point = nearestWallSnakeFieldPoint(world, loop, spawn.x, spawn.y);
+    return world.dist2(spawn.x + 0.5, spawn.y + 0.5, point.x + 0.5, point.y + 0.5)
+      < world.dist2(spawn.x + 0.5, spawn.y + 0.5, bestPoint.x + 0.5, bestPoint.y + 0.5)
+      ? loop
+      : best;
+  }, null);
+  if (nearest) {
+    registerWallSnakeFieldCue(
+      world,
+      spec,
+      `procedural_${spec.key}_wall_snake_field_start`,
+      nearest,
+      nearestWallSnakeFieldPoint(world, nearest, spawn.x, spawn.y),
+    );
+  }
+  ensureConnectivity(world, spawn.x + 0.5, spawn.y + 0.5);
+  sanitizeDoors(world);
+  world.markCellsDirty();
+  world.markWallTexDirty();
+  world.markFloorTexDirty();
+  world.markFeaturesDirty(true);
+  world.markFogDirty();
+  return { rooms, spawnX: spawn.x + 0.5, spawnY: spawn.y + 0.5 };
 }
 
 function archiveGridDelta(size: number, from: number, to: number): number {
@@ -565,6 +1451,8 @@ function buildArchiveWarrenRooms(world: World, spec: ProceduralFloorSpec): { roo
 }
 
 function buildRooms(world: World, spec: ProceduralFloorSpec): { rooms: Room[]; spawnX: number; spawnY: number } {
+  if (spec.anomalyId === 'conway_life') return buildConwayLifeFieldRooms(world, spec);
+  if (spec.anomalyId === 'wall_snake') return buildWallSnakeFieldRooms(world, spec);
   if (spec.geometryId === 'living_blocks') return buildLivingBlockRooms(world, spec);
   if (spec.geometryId === 'archive_warrens') return buildArchiveWarrenRooms(world, spec);
 
@@ -572,7 +1460,8 @@ function buildRooms(world: World, spec: ProceduralFloorSpec): { rooms: Room[]; s
   const rooms: Room[] = [];
   const industrial = geom.tags.includes('industrial');
   const targetRooms = geom.roomCount + spec.danger * 6;
-  let id = 0;
+  const nextRoomId = { v: 0 };
+  const macroLayer = buildProceduralMacroLayer(world, rooms, spec, nextRoomId, industrial);
 
   for (let attempt = 0; attempt < targetRooms * 70 && rooms.length < targetRooms; attempt++) {
     const type = pick(geom.roomTypes);
@@ -580,7 +1469,7 @@ function buildRooms(world: World, spec: ProceduralFloorSpec): { rooms: Room[]; s
     const x = irng(20, W - 20 - size.w);
     const y = irng(20, W - 20 - size.h);
     if (!canPlaceRoom(world, x, y, size.w, size.h)) continue;
-    const room = stampRoom(world, id++, type, x, y, size.w, size.h, -1);
+    const room = stampRoom(world, nextRoomId.v++, type, x, y, size.w, size.h, -1);
     room.name = proceduralRoomName(spec, room);
     applyRoomTexture(world, room, geom.wallTex, geom.floorTex);
     if (type === RoomType.COMMON || type === RoomType.PRODUCTION || type === RoomType.CORRIDOR) {
@@ -595,6 +1484,8 @@ function buildRooms(world: World, spec: ProceduralFloorSpec): { rooms: Room[]; s
   const first = rooms[0];
   const spawnX = first ? first.x + Math.floor(first.w / 2) + 0.5 : W / 2 + 0.5;
   const spawnY = first ? first.y + Math.floor(first.h / 2) + 0.5 : W / 2 + 0.5;
+  applyProceduralStructureLibrary(world, rooms, spec, spawnX, spawnY);
+  applyProceduralMacroNetwork(world, rooms, spec, macroLayer, spawnX, spawnY);
   ensureConnectivity(world, spawnX, spawnY);
   sanitizeDoors(world);
   return { rooms, spawnX, spawnY };
@@ -7286,12 +8177,23 @@ function pickHladonRooms(world: World, rooms: Room[], spec: ProceduralFloorSpec,
   return picked;
 }
 
-function seedHladonCounterplay(world: World, rooms: Room[], coldRooms: Room[], entities: Entity[], nextId: { v: number }, spec: ProceduralFloorSpec): void {
+function seedHladonCounterplay(
+  world: World,
+  rooms: Room[],
+  coldRooms: Room[],
+  entities: Entity[],
+  nextId: { v: number },
+  spec: ProceduralFloorSpec,
+  sx: number,
+  sy: number,
+): void {
+  const reachable = reachableFromSpawn(world, sx, sy);
   const warmRooms = rooms.filter(room => (
     !coldRooms.includes(room) &&
     room.type !== RoomType.CORRIDOR &&
     room.w >= 5 &&
-    room.h >= 5
+    room.h >= 5 &&
+    reachable[world.idx(roomCenter(room).x, roomCenter(room).y)] === 1
   ));
   if (warmRooms.length === 0) return;
 
@@ -7365,7 +8267,7 @@ function applyHladon(world: World, rooms: Room[], entities: Entity[], nextId: { 
     stampHladonFrost(world, coldRooms[i], spec.seed + 9100 + i * 997, spec.danger);
   }
   addDeepFrozenBlueprintCache(world, coldRooms, spec);
-  seedHladonCounterplay(world, rooms, coldRooms, entities, nextId, spec);
+  seedHladonCounterplay(world, rooms, coldRooms, entities, nextId, spec, sx, sy);
   world.markFogDirty();
   world.markFloorTexDirty();
 }
@@ -8829,7 +9731,10 @@ function placeCultRoomFeature(world: World, room: Room, feature: Feature, x: num
 function stampCultRitualRing(world: World, room: Room, spec: ProceduralFloorSpec, index: number): { x: number; y: number } {
   const center = roomCenter(room);
   const radius = Math.max(2, Math.min(6, Math.floor(Math.min(room.w, room.h) / 2) - 1));
-  room.name = `Ритуальное кольцо ${room.id}`;
+  const circular = index === 0 && (spec.seed & 3) === 0;
+  const rx = Math.max(2, Math.min(8, Math.floor(room.w / 2) - 2));
+  const ry = Math.max(2, Math.min(7, Math.floor(room.h / 2) - 2));
+  room.name = circular ? `Ритуальное кольцо ${room.id}` : `Ритуальное кольцо-угол ${room.id}`;
   room.floorTex = spec.baseFloor === FloorLevel.HELL ? Tex.F_MEAT : Tex.F_CARPET;
   for (let dy = 0; dy < room.h; dy++) {
     for (let dx = 0; dx < room.w; dx++) {
@@ -8837,8 +9742,16 @@ function stampCultRitualRing(world: World, room: Room, spec: ProceduralFloorSpec
       const y = world.wrap(room.y + dy);
       const ci = world.idx(x, y);
       if (world.roomMap[ci] !== room.id || world.cells[ci] !== Cell.FLOOR) continue;
-      const d = Math.abs(Math.hypot(world.delta(x, center.x), world.delta(y, center.y)) - radius);
-      if (d <= 1.05) {
+      const lx = Math.abs(world.delta(x, center.x));
+      const ly = Math.abs(world.delta(y, center.y));
+      const onGlyph = circular
+        ? Math.abs(Math.hypot(lx, ly) - radius) <= 1.05
+        : (
+          (Math.abs(lx - rx) <= 0.75 && ly <= ry) ||
+          (Math.abs(ly - ry) <= 0.75 && lx <= rx) ||
+          ((lx <= 1 || ly <= 1) && lx + ly <= Math.max(rx, ry) + 1)
+        );
+      if (onGlyph) {
         world.floorTex[ci] = room.floorTex;
         if (((x * 31 + y * 17 + spec.seed) & 3) === 0) {
           stampSurfaceSplat(world, x, y, 0.5, 0.5, 0.22, 120, spec.seed + index * 1009 + dx * 37 + dy, 82, 18, 54, false);
@@ -8851,8 +9764,23 @@ function stampCultRitualRing(world: World, room: Room, spec: ProceduralFloorSpec
   stampMark(world, center.x, center.y, 0.5, 0.5, 0.78, MarkType.PSI, spec.seed ^ (room.id * 199), 132, 34, 168, 210, false);
   for (let i = 0; i < 8; i++) {
     const a = (Math.PI * 2 * i / 8) + hashUnit3(spec.seed, room.id, i) * 0.18;
-    const x = world.wrap(center.x + Math.round(Math.cos(a) * radius));
-    const y = world.wrap(center.y + Math.round(Math.sin(a) * radius));
+    const angularPoints = [
+      [rx, 0],
+      [rx, ry],
+      [0, ry],
+      [-rx, ry],
+      [-rx, 0],
+      [-rx, -ry],
+      [0, -ry],
+      [rx, -ry],
+    ] as const;
+    const point = angularPoints[i];
+    const x = circular
+      ? world.wrap(center.x + Math.round(Math.cos(a) * radius))
+      : world.wrap(center.x + point[0]);
+    const y = circular
+      ? world.wrap(center.y + Math.round(Math.sin(a) * radius))
+      : world.wrap(center.y + point[1]);
     if (placeCultRoomFeature(world, room, i % 2 === 0 ? Feature.CANDLE : Feature.LAMP, x, y)) {
       stampMark(world, x, y, 0.5, 0.5, 0.34, MarkType.BLACK_HAND, spec.seed + room.id * 257 + i, 12, 8, 8, 190, false);
     }
@@ -9058,7 +9986,7 @@ function applyCultistMajorityProfile(
   if (spec.majorityId !== 'cultists') return;
   const candidates = cultMajorityCandidateRooms(world, rooms, spec, spawnX, spawnY);
   if (candidates.length === 0) return;
-  const ritualCount = Math.min(3, Math.max(1, 1 + Math.floor(spec.danger / 2)), candidates.length);
+  const ritualCount = Math.min(2, Math.max(1, Math.floor((spec.danger + 1) / 2)), candidates.length);
   const ritualRooms = candidates.slice(0, ritualCount);
   const anchors = ritualRooms.map((room, index) => {
     const anchor = stampCultRitualRing(world, room, spec, index);
@@ -10124,6 +11052,7 @@ export function generateProceduralFloor(spec: ProceduralFloorSpec): FloorGenerat
     addDeepEngineerStash(world, rooms, spec, placement.reachable);
     addDeepReconStash(world, rooms, spec, placement.reachable);
     addDeepLiquidatorRewardStash(world, rooms, spec, placement.reachable);
+    applyProceduralFloorObjectProfile(world, rooms, spec, placement.reachable);
     if (allowNpcs) {
       spawnWildMajorityAmbushes(world, entities, nextId, spec, wildRewardSites, placement.reachable, spawnX, spawnY);
       spawnNpcs(world, rooms, entities, nextId, spec);

@@ -8,6 +8,13 @@ import { generateProtokolnikSprite } from './protokolnik';
 import { generateRobotSprite } from './robot';
 import { generateBlackLiquidatorSprite } from './black_liquidator';
 import { HEAD_SLUG_DETACHED_STAGE, generateSlugSprite } from './head_slug';
+import {
+  NPC_SPRITE_GENERATORS,
+  generateTravelerSprite,
+  generatePilgrimSprite,
+  generateHunterSprite,
+  generatePriestSprite,
+} from './npc';
 import { Spr } from '../render/sprite_index';
 
 type RGB = readonly [number, number, number];
@@ -267,44 +274,112 @@ function addNpcEquipment(
   }
 }
 
-function paintMatch(t: Uint32Array, x0: number, y0: number, x1: number, y1: number, seed: number, headAtEnd = true): void {
-  paintLine(t, x0 + 1, y0 + 1, x1 + 1, y1 + 1, [58, 40, 28], seed + 1, 1);
-  paintLine(t, x0, y0, x1, y1, [174, 128, 72], seed + 2, 1);
-  paintLine(t, x0, y0, x1, y1, [218, 174, 102], seed + 3, 0);
-  if (!headAtEnd) return;
-  paintEllipse(t, x1, y1, 2.2, 2.2, (d, x, y) => rgba(176, 38, 32, clamp(255 - d * 28 + noise(x, y, seed + 4) * 20)));
+function isCultVisualOccupation(occupation: Occupation): boolean {
+  return occupation === Occupation.PILGRIM || occupation === Occupation.PRIEST;
 }
 
-function generateVankaMatchSprite(seed: number): Uint32Array {
-  const t = new Uint32Array(S * S).fill(CLEAR);
-  const cx = 32;
-  const skin = rgbJitter([194, 154, 128], seed, 1200, 18);
-  const hair = rgbJitter([46, 34, 24], seed, 1210, 14);
-
-  paintEllipse(t, cx, 11, 6.5, 7.5, (d, x, y) => col(skin, Math.floor((noise(x, y, seed + 1201) - 0.45) * 16 - d * 5)));
-  paintRect(t, cx - 6, 4, 12, 4, hair, seed + 1202);
-  paintLine(t, cx - 5, 7, cx + 5, 7, hair, seed + 1203, 1);
-  t[11 * S + cx - 2] = rgba(18, 18, 18);
-  t[11 * S + cx + 2] = rgba(18, 18, 18);
-  t[14 * S + cx] = rgba(204, 62, 62);
-
-  paintMatch(t, cx, 18, cx, 48, seed + 1220, false);
-  paintMatch(t, cx - 11, 20, cx + 11, 20, seed + 1221);
-  paintMatch(t, cx - 9, 22, cx - 11, 43, seed + 1222);
-  paintMatch(t, cx + 9, 22, cx + 11, 43, seed + 1223);
-  for (let y = 25; y <= 41; y += 4) {
-    paintMatch(t, cx - 1, y, cx - 10, y + 2, seed + 1230 + y);
-    paintMatch(t, cx + 1, y, cx + 10, y + 2, seed + 1240 + y);
+function legacyNpcBaseSprite(occupation: Occupation): Uint32Array {
+  const generator = occupation >= 0 && occupation < NPC_SPRITE_GENERATORS.length
+    ? NPC_SPRITE_GENERATORS[occupation]
+    : undefined;
+  if (generator) return generator();
+  switch (occupation) {
+    case Occupation.TRAVELER: return generateTravelerSprite();
+    case Occupation.PILGRIM: return generatePilgrimSprite();
+    case Occupation.HUNTER: return generateHunterSprite();
+    case Occupation.PRIEST: return generatePriestSprite();
+    default: return generateTravelerSprite();
   }
-  paintMatch(t, cx - 8, 23, cx - 18, 37, seed + 1250);
-  paintMatch(t, cx + 8, 23, cx + 18, 36, seed + 1251);
-  paintMatch(t, cx - 4, 48, cx - 12, 58, seed + 1252);
-  paintMatch(t, cx + 4, 48, cx + 12, 58, seed + 1253);
-  paintEllipse(t, cx, 49, 5, 3, (d, x, y) => rgba(104, 70, 42, clamp(150 * (1 - d) + noise(x, y, seed + 1254) * 30)));
-  return t;
 }
 
-export function generateProceduralNpcSprite(
+function pixelRgb(c: number): RGB {
+  return [component(c, 0), component(c, 8), component(c, 16)];
+}
+
+function blendRgb(a: RGB, b: RGB, k: number): RGB {
+  return [
+    clamp(a[0] * (1 - k) + b[0] * k),
+    clamp(a[1] * (1 - k) + b[1] * k),
+    clamp(a[2] * (1 - k) + b[2] * k),
+  ];
+}
+
+function legacyZoneTint(y: number, seed: number, occupation: Occupation, faction: Faction | undefined): { tint: RGB; strength: number } {
+  const pal = npcPalette(occupation, faction, seed);
+  if (y < 22) return { tint: rgbJitter(pickRgb(SKIN, seed, 812), seed, 813, 18), strength: 0.08 };
+  if (y < 44) return { tint: pal.top, strength: 0.16 };
+  return { tint: pal.pants, strength: 0.12 };
+}
+
+function paintMaskedRect(t: Uint32Array, x0: number, y0: number, w: number, h: number, c: RGB, seed: number): void {
+  for (let y = y0; y < y0 + h; y++) for (let x = x0; x < x0 + w; x++) {
+    if (x < 0 || x >= S || y < 0 || y >= S) continue;
+    const i = y * S + x;
+    if (t[i] === CLEAR) continue;
+    const n = Math.floor((noise(x, y, seed) - 0.5) * 14);
+    t[i] = col(c, n);
+  }
+}
+
+function isLegacyFaceFeaturePixel(c: number, occupation: Occupation): boolean {
+  const [r, g, b] = pixelRgb(c);
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  if (max <= 48) return true;
+  if (occupation === Occupation.SCIENTIST && b >= 190 && g >= 185 && r >= 160 && b - r >= 20) return true;
+  if (occupation === Occupation.ALCOHOLIC && r >= 180 && g <= 120 && b <= 120) return true;
+  return max - min > 65 && max <= 120;
+}
+
+function restoreLegacyFaceFeatures(t: Uint32Array, base: Uint32Array, occupation: Occupation): void {
+  for (let y = 0; y < 22; y++) for (let x = 0; x < S; x++) {
+    const i = y * S + x;
+    const c = base[i];
+    if ((c >>> 24) === 0) continue;
+    if (isLegacyFaceFeaturePixel(c, occupation)) t[i] = c;
+  }
+}
+
+function addLegacyNpcDetails(t: Uint32Array, occupation: Occupation, seed: number, female: boolean): void {
+  const accent = rgbJitter([174, 126, 72], seed, 830, 36);
+  if (female && occupation !== Occupation.HUNTER && rnd(seed, 831) > 0.45) {
+    paintMaskedRect(t, 25, 23, 14, 3, accent, seed + 832);
+  }
+  if (occupation === Occupation.TRAVELER && rnd(seed, 835) > 0.5) {
+    paintMaskedRect(t, 41, 25, 4, 14, [76, 64, 48], seed + 836);
+  } else if (occupation === Occupation.HUNTER) {
+    paintMaskedRect(t, 25, 25, 13, 2, [92, 82, 52], seed + 837);
+  }
+  if (rnd(seed, 839) > 0.62) paintMaskedRect(t, 27, 42, 10, 2, accent, seed + 840);
+}
+
+function generateLegacyNpcSprite(
+  seed: number,
+  occupation: Occupation,
+  faction: Faction | undefined,
+  isFemale: boolean | undefined,
+): Uint32Array {
+  const base = legacyNpcBaseSprite(occupation);
+  const out = new Uint32Array(S * S).fill(CLEAR);
+  const female = isFemale ?? rnd(seed, 811) > 0.56;
+
+  for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) {
+    const i = y * S + x;
+    const c = base[i];
+    const a = c >>> 24;
+    if (a === 0) continue;
+    const { tint, strength } = legacyZoneTint(y, seed, occupation, faction);
+    const mixed = blendRgb(pixelRgb(c), tint, strength);
+    const n = Math.floor((noise(x, y, seed + 850) - 0.5) * 10);
+    out[i] = col(mixed, n, a);
+  }
+
+  addLegacyNpcDetails(out, occupation, seed, female);
+  restoreLegacyFaceFeatures(out, base, occupation);
+  return out;
+}
+
+function generateDetailedNpcSprite(
   seed: number,
   occupation: Occupation | undefined,
   faction: Faction | undefined,
@@ -349,6 +424,19 @@ export function generateProceduralNpcSprite(
   }
 
   return t;
+}
+
+export function generateProceduralNpcSprite(
+  seed: number,
+  occupation: Occupation | undefined,
+  faction: Faction | undefined,
+  isFemale: boolean | undefined,
+  spriteHint: number | undefined,
+): Uint32Array {
+  const occ = inferOccupation(occupation, spriteHint);
+  return isCultVisualOccupation(occ)
+    ? generateDetailedNpcSprite(seed, occupation, faction, isFemale, spriteHint)
+    : generateLegacyNpcSprite(seed, occ, faction, isFemale);
 }
 
 function component(c: number, shift: number): number {
@@ -525,9 +613,6 @@ export function proceduralEntitySpriteKey(e: Entity): number {
 
 export function generateProceduralEntitySprite(e: Entity): Uint32Array | null {
   const seed = proceduralEntitySpriteKey(e);
-  if (e.type === EntityType.NPC && e.plotNpcId === 'vanka') {
-    return generateVankaMatchSprite(seed);
-  }
   if (e.type === EntityType.NPC && entityUsesProceduralSprite(e)) {
     return generateProceduralNpcSprite(seed, e.occupation, e.faction, e.isFemale, e.sprite);
   }

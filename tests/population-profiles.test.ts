@@ -11,7 +11,13 @@ import {
   proceduralPopulationProfileId,
   VOID_POPULATION_PROFILE,
 } from '../src/data/population_profiles';
-import { ACTIVE_ACTOR_SOFT_LIMIT } from '../src/data/entity_limits';
+import {
+  ACTIVE_ACTOR_SOFT_LIMIT,
+  activeActorCountAtDefaultSoftLimit,
+  setActiveActorSoftLimit,
+} from '../src/data/entity_limits';
+import { DESIGN_FLOOR_ROUTES } from '../src/data/design_floors';
+import { designFloorPopulationProfile } from '../src/data/design_floor_population';
 import {
   PROCEDURAL_FLOOR_ZS,
   floorRunZAllowsNpcs,
@@ -23,6 +29,7 @@ import { generateFloor } from '../src/gen/floor_manifest';
 import { updateAI } from '../src/systems/ai';
 import { rebuildEntityIndexForSimulation } from '../src/systems/entity_index';
 import { getRouteCueMarkers } from '../src/systems/route_cues';
+import { testGenerationMatrix } from './generator_helpers';
 import { makeGameState, makeTestPlayer } from './helpers';
 
 function liveActors(entities: readonly { alive: boolean; type: EntityType; ai?: unknown }[]): readonly { ai?: unknown }[] {
@@ -85,18 +92,18 @@ function idleMovingMonsterCount(entities: readonly Entity[]): number {
   return count;
 }
 
-test('KVARTIRY starts as a power-of-two actor AI floor', () => {
+testGenerationMatrix('KVARTIRY starts as a power-of-two actor AI floor', () => {
   const gen = generateKvartiry();
   const actors = liveActors(gen.entities);
   assert.equal(actors.length <= ACTIVE_ACTOR_SOFT_LIMIT, true);
   assert.equal(actors.length >= ACTIVE_ACTOR_SOFT_LIMIT - 128, true);
   assert.equal(liveAiActors(gen.entities).length, actors.length);
-  assert.equal(gen.entities.filter(e => e.type === EntityType.NPC).length >= KVARTIRY_POPULATION_PROFILE.citizens.initial, true);
+  assert.equal(gen.entities.filter(e => e.type === EntityType.NPC).length >= activeActorCountAtDefaultSoftLimit(KVARTIRY_POPULATION_PROFILE.citizens.initial), true);
   tickOneAlifeFrame(gen, FloorLevel.KVARTIRY);
   assert.equal(tasklessNpcCount(gen.entities), 0);
 });
 
-test('HELL starts as a power-of-two actor AI floor', () => {
+testGenerationMatrix('HELL starts as a power-of-two actor AI floor', () => {
   const gen = generateHell();
   const actors = liveActors(gen.entities);
   const monsters = gen.entities.filter(e => e.alive && e.type === EntityType.MONSTER);
@@ -104,7 +111,7 @@ test('HELL starts as a power-of-two actor AI floor', () => {
   assert.equal(actors.length <= ACTIVE_ACTOR_SOFT_LIMIT, true);
   assert.equal(actors.length >= ACTIVE_ACTOR_SOFT_LIMIT - 128, true);
   assert.equal(liveAiActors(gen.entities).length, actors.length);
-  assert.equal(monsters.length >= HELL_POPULATION_PROFILE.monsters.initial, true);
+  assert.equal(monsters.length >= activeActorCountAtDefaultSoftLimit(HELL_POPULATION_PROFILE.monsters.initial), true);
   assert.equal(maxLiveActorsInArea(gen.entities, 32) <= 24, true);
   assert.equal(sightlineCues.length >= 5, true);
   for (const cue of sightlineCues) {
@@ -117,13 +124,13 @@ test('HELL starts as a power-of-two actor AI floor', () => {
   assert.equal(idleMovingMonsterCount(gen.entities), 0);
 });
 
-test('VOID keeps NPC-free endgame density through monsters', () => {
+testGenerationMatrix('VOID keeps NPC-free endgame density through monsters', () => {
   const gen = generateFloor(FloorLevel.VOID);
   const actors = liveActors(gen.entities);
   assert.equal(gen.entities.some(e => e.type === EntityType.NPC), false);
   assert.equal(actors.length >= 1000, true);
   assert.equal(liveAiActors(gen.entities).length, actors.length);
-  assert.equal(gen.entities.filter(e => e.type === EntityType.MONSTER).length >= VOID_POPULATION_PROFILE.guardians, true);
+  assert.equal(gen.entities.filter(e => e.type === EntityType.MONSTER).length >= activeActorCountAtDefaultSoftLimit(VOID_POPULATION_PROFILE.guardians), true);
   assert.equal(VOID_POPULATION_PROFILE.floor, FloorLevel.VOID);
 });
 
@@ -240,7 +247,37 @@ test('procedural population deck keeps random slots normal-density unless the ra
   assert.equal(summary.slots, PROCEDURAL_FLOOR_ZS.length * seeds.length);
   assert.equal(summary.highDensity > 0, true);
   assert.equal(summary.normal > summary.highDensity, true);
-  assert.equal(summary.maxNormalActors < KVARTIRY_POPULATION_PROFILE.citizens.initial, true);
+  assert.equal(summary.maxNormalActors < activeActorCountAtDefaultSoftLimit(KVARTIRY_POPULATION_PROFILE.citizens.initial), true);
   assert.equal(summary.maxHighDensityActors > summary.maxNormalActors, true);
   assert.equal(summary.npcFreeRouteSlots > 0, true);
+});
+
+test('actor population targets derive from the active actor soft cap', () => {
+  const previous = ACTIVE_ACTOR_SOFT_LIMIT;
+  try {
+    setActiveActorSoftLimit(2_048);
+    assert.equal(activeActorCountAtDefaultSoftLimit(4_096), 2_048);
+    const procedural = proceduralPopulationBudget({
+      z: 2,
+      danger: 1,
+      anomalyPressure: 0,
+      industrial: false,
+      npcAllowed: true,
+      profileId: 'normal',
+    });
+    assert.equal(procedural.npcs, 205);
+    assert.equal(procedural.monsters, 115);
+
+    const blackMarket = DESIGN_FLOOR_ROUTES.find(route => route.id === 'black_market_88');
+    assert.ok(blackMarket);
+    const profile = designFloorPopulationProfile(blackMarket);
+    assert.equal(profile.npcTarget, 1_100);
+    assert.equal(profile.monsterTarget, 350);
+
+    const podad = DESIGN_FLOOR_ROUTES.find(route => route.id === 'podad');
+    assert.ok(podad);
+    assert.equal(designFloorPopulationProfile(podad).monsterTarget, ACTIVE_ACTOR_SOFT_LIMIT);
+  } finally {
+    setActiveActorSoftLimit(previous);
+  }
 });

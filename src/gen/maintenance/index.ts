@@ -16,13 +16,14 @@ import { runMaintenanceContent } from './content_manifest';
 import { Spr, monsterSpr } from '../../render/sprite_index';
 import { applyCollectorMacroGeometry, placeCollectorMacroPanels } from './geometry';
 import { entitySpawnSlots } from '../../systems/entity_limits';
+import { activeActorCountAtDefaultSoftLimit } from '../../data/entity_limits';
 
 /* ── Coarse grid parameters ───────────────────────────────────── */
 const CELL = 6;                   // world-tiles per maze cell (walls between = 1-wide passage)
 const GRID = Math.floor(W / CELL);// 1024/6 = 170 coarse cells
 const EXTRA_CONN = 0.06;          // fraction of extra random connections (loops)
-const MAINTENANCE_MONSTER_TARGET = 1000;
-const MAINTENANCE_NPC_TARGET = 500;
+const MAINTENANCE_MONSTER_TARGET_AT_DEFAULT_CAP = 1000;
+const MAINTENANCE_NPC_TARGET_AT_DEFAULT_CAP = 500;
 
 /* Room type pool for maintenance floor */
 const MAINT_ROOM_TYPES: { type: RoomType; name: string; weight: number }[] = [
@@ -453,7 +454,7 @@ export function generateMaintenance(): { world: World; entities: Entity[]; spawn
      Phase 11: Monsters
      ══════════════════════════════════════════════════════════════ */
   let monsterCount = 0;
-  const monsterTarget = entitySpawnSlots(entities, EntityType.MONSTER, MAINTENANCE_MONSTER_TARGET);
+  const monsterTarget = entitySpawnSlots(entities, EntityType.MONSTER, activeActorCountAtDefaultSoftLimit(MAINTENANCE_MONSTER_TARGET_AT_DEFAULT_CAP));
   for (let attempt = 0; attempt < 50_000 && monsterCount < monsterTarget; attempt++) {
     const ci = rng(0, W * W - 1);
     if (world.cells[ci] !== Cell.FLOOR) continue;
@@ -507,7 +508,7 @@ export function generateMaintenance(): { world: World; entities: Entity[]; spawn
     { faction: Faction.SCIENTIST,  occupation: Occupation.SCIENTIST },
   ];
   let npcCount = 0;
-  const npcTarget = entitySpawnSlots(entities, EntityType.NPC, MAINTENANCE_NPC_TARGET);
+  const npcTarget = entitySpawnSlots(entities, EntityType.NPC, activeActorCountAtDefaultSoftLimit(MAINTENANCE_NPC_TARGET_AT_DEFAULT_CAP));
   while (npcCount < npcTarget) {
     const prevCount = npcCount;
     for (const zone of world.zones) {

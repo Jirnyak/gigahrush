@@ -1,9 +1,9 @@
 import { test } from 'node:test';
 import * as assert from 'node:assert/strict';
 
-import { Cell, Feature } from '../src/core/types';
+import { Cell, Feature, W } from '../src/core/types';
 import { World } from '../src/core/world';
-import { nextLifeCell, tryUseConwayLifeAnomaly } from '../src/systems/procedural_anomalies/conway_life';
+import { nextLifeCell, tryUseConwayLifeAnomaly, updateConwayLifeAnomaly } from '../src/systems/procedural_anomalies/conway_life';
 import { addTestRoom, makeGameState, makeTestPlayer } from './helpers';
 
 test('conway life helper applies B3/S23 rules', () => {
@@ -56,4 +56,25 @@ test('conway life control freezes and resets an arena without hiding the control
       assert.equal(world.cells[world.idx(x, y)], Cell.FLOOR, `player-adjacent reset cell ${x},${y}`);
     }
   }
+});
+
+test('conway life world window mutates a bounded noisy field', () => {
+  const world = new World();
+  for (let y = 4; y < W - 4; y += 8) {
+    for (let x = 4; x < W - 4; x += 8) {
+      world.cells[world.idx(x, y)] = Cell.WALL;
+      world.cells[world.idx(x, y + 1)] = Cell.WALL;
+      world.cells[world.idx(x, y + 2)] = Cell.WALL;
+    }
+  }
+
+  const before = world.cellVersion;
+  updateConwayLifeAnomaly(
+    world,
+    makeTestPlayer({ x: 900.5, y: 900.5, hp: 100 }),
+    makeGameState({ time: 0 }),
+    1,
+  );
+
+  assert.equal(world.cellVersion > before, true);
 });

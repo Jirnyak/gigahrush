@@ -950,7 +950,7 @@ export function getNearestSmallCaravan(
     name: template?.name ?? CARAVAN_LANE_BY_ID[best.laneId]?.name ?? 'малый караван',
     status: best.status,
     statusText: SMALL_CARAVAN_STATUS_TEXT[best.status],
-    detail: `риск ${best.risk}/5 тариф x${tariff}`,
+    detail: `тариф x${tariff}`,
     x: best.x,
     y: best.y,
     dist: Math.max(0, Math.round(Math.sqrt(bestD2))),

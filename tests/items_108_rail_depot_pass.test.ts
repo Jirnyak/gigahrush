@@ -65,7 +65,7 @@ test('rail depot pass opens the Ministry N3 document gate as legal access', () =
   const state = makeGameState({ currentFloor: FloorLevel.MINISTRY, time: 108 });
 
   assert.equal(addItem(player, PASS_ID, 1), true);
-  assert.equal(getInventorySlotActionInfo(player, 0)?.useLabel, 'E предъявить');
+  assert.equal(getInventorySlotActionInfo(player, 0)?.useLabel, 'Enter предъявить');
 
   useItem(player, 0, state.msgs, state.time, state, undefined, world);
 

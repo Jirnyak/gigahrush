@@ -13,10 +13,10 @@ let _barkMsgs: Msg[] = [];
 let _barkTime = 0;
 
 /** Call once per frame from updateAI to set bark context for followPath arrival barks */
-export function setPathContext(msgs: Msg[], time: number, samosborActive = false): void {
+export function setPathContext(msgs: Msg[], time: number, _samosborActive = false): void {
   _barkMsgs = msgs;
   _barkTime = time;
-  beginPathFrame(time, samosborActive);
+  beginPathFrame(time);
 }
 
 /* ── Baked navigation tree (toroidal, ordinary doors are openable) */
@@ -35,12 +35,13 @@ const _navDepth = new Int32Array(W * W);
 const _navComponent = new Int32Array(W * W);
 const _navQueue = new Int32Array(W * W);
 const _flowSourceScratch: number[] = [];
-let _pathSamosborActive = false;
 let _navWorld: World | null = null;
 let _navCellVersion = -1;
-let _navSamosborActive = false;
 let _navComponents = 0;
 let _navReachable = 0;
+let _frozenNavWorld: World | null = null;
+let _frozenNavCellVersion = -1;
+let _frozenNavRoomCount = -1;
 let _flowFieldTouch = 0;
 let _routinePathUsed = 0;
 let _routinePathDenied = 0;
@@ -58,7 +59,6 @@ interface BehaviorFlowField {
   key: string;
   world: World;
   cellVersion: number;
-  samosborActive: boolean;
   roomCount: number;
   next: Int32Array;
   sourceCount: number;
@@ -82,7 +82,6 @@ export interface PathSteering {
 interface SteeringPathAssignment {
   world: World;
   cellVersion: number;
-  samosborActive: boolean;
   target: number;
   path: number[];
   pi: number;
@@ -108,9 +107,8 @@ const _flowPathAssignments = new WeakMap<Entity, FlowPathAssignment>();
 const _steeringPathAssignments = new WeakMap<Entity, SteeringPathAssignment>();
 const _roomTypeSourceProviders = new Map<string, BehaviorFlowFieldSourceProvider>();
 
-function beginPathFrame(time: number, samosborActive: boolean): void {
+function beginPathFrame(time: number): void {
   void time;
-  _pathSamosborActive = samosborActive;
   _routinePathUsed = 0;
   _routinePathDenied = 0;
   _routinePathDeferred = 0;
@@ -159,6 +157,32 @@ export function bfsPath(world: World, sx: number, sy: number, ex: number, ey: nu
   return buildBakedTreePath(world, start, end);
 }
 
+function navigationCacheCellVersion(world: World): number {
+  return _frozenNavWorld === world ? _frozenNavCellVersion : world.cellVersion;
+}
+
+function navigationCacheRoomCount(world: World): number {
+  return _frozenNavWorld === world ? _frozenNavRoomCount : world.rooms.length;
+}
+
+export function freezeNavigationCacheForWorld(world: World): void {
+  if (_frozenNavWorld === world) return;
+  const frozenCellVersion = world.cellVersion;
+  if (_navWorld !== world || _navCellVersion !== frozenCellVersion) {
+    bakeNavigationTree(world, frozenCellVersion);
+  }
+  _frozenNavWorld = world;
+  _frozenNavCellVersion = frozenCellVersion;
+  _frozenNavRoomCount = world.rooms.length;
+}
+
+export function unfreezeNavigationCacheForWorld(world?: World): void {
+  if (world && _frozenNavWorld && _frozenNavWorld !== world) return;
+  _frozenNavWorld = null;
+  _frozenNavCellVersion = -1;
+  _frozenNavRoomCount = -1;
+}
+
 function isNavPassable(world: World, i: number): boolean {
   const cell = world.cells[i];
   if (cell === Cell.FLOOR || cell === Cell.WATER) return true;
@@ -167,14 +191,13 @@ function isNavPassable(world: World, i: number): boolean {
   return !door || (door.state !== DoorState.LOCKED && door.state !== DoorState.HERMETIC_CLOSED);
 }
 
-function bakeNavigationTree(world: World): void {
+function bakeNavigationTree(world: World, cacheCellVersion = world.cellVersion): void {
   _bfsCalls++;
   _navParent.fill(NAV_UNKNOWN);
   _navDepth.fill(0);
   _navComponent.fill(-1);
   _navWorld = world;
-  _navCellVersion = world.cellVersion;
-  _navSamosborActive = _pathSamosborActive;
+  _navCellVersion = cacheCellVersion;
   _navComponents = 0;
   _navReachable = 0;
 
@@ -226,18 +249,18 @@ function visitNavNeighbor(world: World, cell: number, parent: number, componentI
 }
 
 function ensureNavigationTree(world: World): void {
-  if (_navWorld === world && _navCellVersion === world.cellVersion && _navSamosborActive === _pathSamosborActive) {
+  const cacheCellVersion = navigationCacheCellVersion(world);
+  if (_navWorld === world && _navCellVersion === cacheCellVersion) {
     _pathCacheHits++;
     return;
   }
-  bakeNavigationTree(world);
+  bakeNavigationTree(world, cacheCellVersion);
 }
 
 function flowFieldValid(field: BehaviorFlowField, world: World): boolean {
   return field.world === world &&
-    field.cellVersion === world.cellVersion &&
-    field.samosborActive === _pathSamosborActive &&
-    field.roomCount === world.rooms.length;
+    field.cellVersion === navigationCacheCellVersion(world) &&
+    field.roomCount === navigationCacheRoomCount(world);
 }
 
 function ensureBehaviorFlowField(
@@ -290,9 +313,8 @@ function ensureBehaviorFlowField(
   const field: BehaviorFlowField = {
     key,
     world,
-    cellVersion: world.cellVersion,
-    samosborActive: _pathSamosborActive,
-    roomCount: world.rooms.length,
+    cellVersion: navigationCacheCellVersion(world),
+    roomCount: navigationCacheRoomCount(world),
     next,
     sourceCount: _flowSourceScratch.length,
     reachable: tail,
@@ -513,8 +535,7 @@ function openPathDoor(world: World, cell: number): void {
 
 function validSteeringAssignment(assignment: SteeringPathAssignment, world: World, target: number): boolean {
   return assignment.world === world &&
-    assignment.cellVersion === world.cellVersion &&
-    assignment.samosborActive === _pathSamosborActive &&
+    assignment.cellVersion === navigationCacheCellVersion(world) &&
     assignment.target === target;
 }
 
@@ -546,8 +567,7 @@ export function steerEntityTowardCell(world: World, e: Entity, tx: number, ty: n
     }
     assignment = {
       world,
-      cellVersion: world.cellVersion,
-      samosborActive: _pathSamosborActive,
+      cellVersion: navigationCacheCellVersion(world),
       target,
       path,
       pi: 0,
@@ -571,8 +591,7 @@ export function steerEntityTowardCell(world: World, e: Entity, tx: number, ty: n
     }
     assignment.path = path;
     assignment.pi = 0;
-    assignment.cellVersion = world.cellVersion;
-    assignment.samosborActive = _pathSamosborActive;
+    assignment.cellVersion = navigationCacheCellVersion(world);
   }
 
   const nextCell = assignment.path[assignment.pi];

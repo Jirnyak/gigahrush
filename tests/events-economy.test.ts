@@ -23,6 +23,7 @@ import {
 import { World } from '../src/core/world';
 import { ITEMS } from '../src/data/catalog';
 import { createEconomyFloorState, normalizeEconomyState } from '../src/data/economy';
+import { MAX_INVENTORY_SLOTS } from '../src/data/inventory_limits';
 import { getStack } from '../src/data/items';
 import { SIDE_QUESTS } from '../src/data/plot';
 import { getFactionRel, initFactionRelations } from '../src/data/relations';
@@ -542,13 +543,13 @@ test('active maronary door malfunction ignores protected hermetic doors', () => 
 test('container take/put refuses full targets without changing source counts', () => {
   const state = makeGameState({ worldEvents: createWorldEventState() });
   const fullPlayer = makeTestEntity({
-    inventory: Array.from({ length: 25 }, () => ({ defId: 'bread', count: getStack(ITEMS.bread) })),
+    inventory: Array.from({ length: MAX_INVENTORY_SLOTS }, () => ({ defId: 'bread', count: getStack(ITEMS.bread) })),
   });
   const waterBox = makeTestContainer({ inventory: [{ defId: 'water', count: 1 }] });
 
   assert.equal(takeFromContainer(waterBox, fullPlayer, 0, 1, state), false);
   assert.equal(waterBox.inventory[0].count, 1);
-  assert.equal(fullPlayer.inventory?.length, 25);
+  assert.equal(fullPlayer.inventory?.length, MAX_INVENTORY_SLOTS);
 
   const donor = makeTestEntity({ inventory: [{ defId: 'water', count: 1 }] });
   const fullBox = makeTestContainer({ inventory: [{ defId: 'bread', count: getStack(ITEMS.bread) }] });

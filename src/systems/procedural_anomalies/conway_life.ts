@@ -15,6 +15,8 @@ import { consumeToolDurability, hasItem } from '../inventory';
 const CONWAY_LIFE_ROOM_PREFIX = 'Игра жизнь:';
 const CONWAY_LIFE_DISABLED = 'выкл';
 const LIFE_TICK_SECONDS = 0.75;
+const LIFE_FIELD_WINDOW_SIZE = 128;
+const LIFE_FIELD_SHIFT_SECONDS = 60;
 const PLAYER_PROTECT_R2 = 2.25 * 2.25;
 const LIFE_WALL_FOG = 34;
 
@@ -34,8 +36,20 @@ interface ConwayLifeArena {
 
 interface ConwayLifeRuntime {
   arenas: ConwayLifeArena[];
+  field: ConwayLifeField;
   accum: number;
   nextMsgAt: number;
+}
+
+interface ConwayLifeField {
+  x: number;
+  y: number;
+  mask: Uint8Array;
+  current: Uint8Array;
+  next: Uint8Array;
+  windowToken: number;
+  active: boolean;
+  alive: number;
 }
 
 const runtimeByWorld = new WeakMap<World, ConwayLifeRuntime>();
@@ -70,6 +84,10 @@ function localIndex(arena: ConwayLifeArena, dx: number, dy: number): number {
   return dy * arena.w + dx;
 }
 
+function fieldIndex(dx: number, dy: number): number {
+  return dy * LIFE_FIELD_WINDOW_SIZE + dx;
+}
+
 function findControl(world: World, room: Room): number {
   for (let dy = 1; dy < room.h - 1; dy++) {
     for (let dx = 1; dx < room.w - 1; dx++) {
@@ -92,6 +110,17 @@ function nearDoor(world: World, x: number, y: number): boolean {
 function mutableRuntimeCell(world: World, room: Room, x: number, y: number): boolean {
   const ci = world.idx(x, y);
   if (world.roomMap[ci] !== room.id) return false;
+  if (world.hermoWall[ci] !== 0 || world.aptMask[ci] !== 0) return false;
+  if (world.doors.has(ci) || nearDoor(world, x, y)) return false;
+  if (world.containerMap.has(ci)) return false;
+  if (world.cells[ci] === Cell.LIFT || world.features[ci] === Feature.LIFT_BUTTON) return false;
+  const feature = world.features[ci] as Feature;
+  if (feature !== Feature.NONE && feature !== Feature.LAMP) return false;
+  return world.cells[ci] === Cell.FLOOR || world.cells[ci] === Cell.WALL;
+}
+
+function mutableFieldCell(world: World, x: number, y: number): boolean {
+  const ci = world.idx(x, y);
   if (world.hermoWall[ci] !== 0 || world.aptMask[ci] !== 0) return false;
   if (world.doors.has(ci) || nearDoor(world, x, y)) return false;
   if (world.containerMap.has(ci)) return false;
@@ -153,7 +182,22 @@ function runtimeFor(world: World): ConwayLifeRuntime {
     const arena = buildArena(world, room);
     if (arena) arenas.push(arena);
   }
-  const runtime = { arenas, accum: 0, nextMsgAt: 0 };
+  const fieldCells = LIFE_FIELD_WINDOW_SIZE * LIFE_FIELD_WINDOW_SIZE;
+  const runtime = {
+    arenas,
+    field: {
+      x: 0,
+      y: 0,
+      mask: new Uint8Array(fieldCells),
+      current: new Uint8Array(fieldCells),
+      next: new Uint8Array(fieldCells),
+      windowToken: -1,
+      active: false,
+      alive: 0,
+    },
+    accum: 0,
+    nextMsgAt: 0,
+  };
   runtimeByWorld.set(world, runtime);
   return runtime;
 }
@@ -280,6 +324,111 @@ function tickArena(world: World, player: Entity, arena: ConwayLifeArena): number
   return commitArena(world, player, arena);
 }
 
+function fieldNeighborCount(field: ConwayLifeField, dx: number, dy: number): number {
+  let n = 0;
+  for (let oy = -1; oy <= 1; oy++) {
+    for (let ox = -1; ox <= 1; ox++) {
+      if (ox === 0 && oy === 0) continue;
+      const nx = dx + ox;
+      const ny = dy + oy;
+      if (nx < 0 || ny < 0 || nx >= LIFE_FIELD_WINDOW_SIZE || ny >= LIFE_FIELD_WINDOW_SIZE) continue;
+      n += field.current[fieldIndex(nx, ny)];
+    }
+  }
+  return n;
+}
+
+function selectFieldWindow(world: World, state: GameState, field: ConwayLifeField): void {
+  const token = Math.max(0, Math.floor(state.time / LIFE_FIELD_SHIFT_SECONDS));
+  if (field.active && field.windowToken === token) return;
+
+  const maxOrigin = W - LIFE_FIELD_WINDOW_SIZE;
+  const seed = hash32(
+    Math.imul(token + 1, 0x9e3779b1)
+      ^ Math.imul((state.tick | 0) + 1, 0x85ebca6b)
+      ^ Math.imul(world.cellVersion + 1, 0xc2b2ae35),
+  );
+  field.x = hash32(seed ^ 0x71c0) % (maxOrigin + 1);
+  field.y = hash32(seed ^ 0x71c1) % (maxOrigin + 1);
+  field.windowToken = token;
+  field.active = true;
+  field.next.fill(0);
+  let alive = 0;
+  let mutable = 0;
+
+  for (let dy = 0; dy < LIFE_FIELD_WINDOW_SIZE; dy++) {
+    for (let dx = 0; dx < LIFE_FIELD_WINDOW_SIZE; dx++) {
+      const x = field.x + dx;
+      const y = field.y + dy;
+      const li = fieldIndex(dx, dy);
+      const canMutate = mutableFieldCell(world, x, y);
+      field.mask[li] = canMutate ? 1 : 0;
+      const isAlive = canMutate && world.cells[world.idx(x, y)] === Cell.WALL;
+      field.current[li] = isAlive ? 1 : 0;
+      if (canMutate) mutable++;
+      if (isAlive) alive++;
+    }
+  }
+  field.alive = alive;
+  if (mutable < 64) field.active = false;
+}
+
+function commitField(world: World, player: Entity, field: ConwayLifeField): number {
+  let changed = 0;
+  let alive = 0;
+
+  for (let dy = 0; dy < LIFE_FIELD_WINDOW_SIZE; dy++) {
+    for (let dx = 0; dx < LIFE_FIELD_WINDOW_SIZE; dx++) {
+      const li = fieldIndex(dx, dy);
+      if (!field.mask[li]) continue;
+      const x = field.x + dx;
+      const y = field.y + dy;
+      const ci = world.idx(x, y);
+      if (!mutableFieldCell(world, x, y)) {
+        field.current[li] = 0;
+        field.next[li] = 0;
+        continue;
+      }
+      const wasAlive = field.current[li] !== 0;
+      let nowAlive = field.next[li] !== 0;
+      if (nowAlive && cellNearPlayer(world, player, x, y)) nowAlive = false;
+      field.current[li] = nowAlive ? 1 : 0;
+      if (nowAlive) alive++;
+      if (nowAlive === wasAlive) continue;
+      changed++;
+      world.cells[ci] = nowAlive ? Cell.WALL : Cell.FLOOR;
+      if (nowAlive) {
+        world.wallTex[ci] = Tex.DARK;
+        world.floorTex[ci] = Tex.F_VOID;
+        world.fog[ci] = Math.max(world.fog[ci], LIFE_WALL_FOG);
+      } else {
+        world.wallTex[ci] = Tex.CONCRETE;
+        world.floorTex[ci] = Tex.F_CONCRETE;
+        world.fog[ci] = Math.max(4, Math.min(world.fog[ci], 22));
+      }
+    }
+  }
+
+  field.alive = alive;
+  return changed;
+}
+
+function tickField(world: World, player: Entity, field: ConwayLifeField): number {
+  if (!field.active) return 0;
+  for (let dy = 0; dy < LIFE_FIELD_WINDOW_SIZE; dy++) {
+    for (let dx = 0; dx < LIFE_FIELD_WINDOW_SIZE; dx++) {
+      const li = fieldIndex(dx, dy);
+      if (!field.mask[li]) {
+        field.next[li] = 0;
+        continue;
+      }
+      const alive = field.current[li] !== 0;
+      field.next[li] = nextLifeCell(alive, fieldNeighborCount(field, dx, dy)) ? 1 : 0;
+    }
+  }
+  return commitField(world, player, field);
+}
+
 function arenaNearControl(world: World, runtime: ConwayLifeRuntime, player: Entity, lookX: number, lookY: number): ConwayLifeArena | undefined {
   let best: ConwayLifeArena | undefined;
   let bestD2 = 4;
@@ -326,28 +475,35 @@ function disableArena(world: World, arena: ConwayLifeArena): number {
 
 export function updateConwayLifeAnomaly(world: World, player: Entity, state: GameState, dt: number): void {
   const runtime = runtimeFor(world);
-  if (runtime.arenas.length === 0) return;
+  selectFieldWindow(world, state, runtime.field);
   runtime.accum += dt;
   if (runtime.accum < LIFE_TICK_SECONDS) return;
   runtime.accum %= LIFE_TICK_SECONDS;
 
   let changed = 0;
-  let active = 0;
+  let active = runtime.field.active ? 1 : 0;
   let alive = 0;
   for (const arena of runtime.arenas) {
     if (arena.active) active++;
     changed += tickArena(world, player, arena);
     alive += arena.alive;
   }
+  changed += tickField(world, player, runtime.field);
+  alive += runtime.field.alive;
   if (changed > 0) {
     world.markCellsDirty();
     world.markWallTexDirty();
     world.markFloorTexDirty();
     world.markFogDirty();
   }
-  if (active > 0 && changed > 18 && state.time >= runtime.nextMsgAt && world.dist2(player.x, player.y, runtime.arenas[0].x, runtime.arenas[0].y) < 90 * 90) {
+  const fieldNearPlayer = runtime.field.active
+    && world.dist2(player.x, player.y, runtime.field.x + LIFE_FIELD_WINDOW_SIZE / 2, runtime.field.y + LIFE_FIELD_WINDOW_SIZE / 2) < 90 * 90;
+  const arenaNearPlayer = runtime.arenas[0]
+    ? world.dist2(player.x, player.y, runtime.arenas[0].x, runtime.arenas[0].y) < 90 * 90
+    : false;
+  if (active > 0 && changed > 18 && state.time >= runtime.nextMsgAt && (fieldNearPlayer || arenaNearPlayer)) {
     runtime.nextMsgAt = state.time + 11;
-    state.msgs.push(msg(`Живой бетон щелкнул: ${active} ар., ${alive} клеток.`, state.time, '#8fa'));
+    state.msgs.push(msg(`Живой бетон щелкнул: ${active} пол., ${alive} клеток.`, state.time, '#8fa'));
   }
 }
 

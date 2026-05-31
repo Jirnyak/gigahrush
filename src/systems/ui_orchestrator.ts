@@ -39,11 +39,13 @@ export const CAMERA_FOV_DEFAULT_DEGREES = 90;
 export const CAMERA_FOV_MIN_DEGREES = 60;
 export const CAMERA_FOV_MAX_DEGREES = 110;
 export const CAMERA_FOV_STEP_DEGREES = 5;
+export const AUTO_PICKUP_DEFAULT = true;
 
 type UiSettings = Record<UiElementId, boolean> & {
   mouseLookSensitivity: number;
   mobileLookSensitivity: number;
   cameraFovDegrees: number;
+  autoPickupEnabled: boolean;
 };
 
 export interface UiPresetDef {
@@ -146,14 +148,25 @@ const MOBILE_SETTINGS_ROWS = [
   { kind: 'mobile_sensitivity', id: 'mobile_look_sensitivity', group: 'Мобилка', label: 'Чувствительность обзора' },
 ] as const;
 
+const GAMEPLAY_SETTINGS_ROWS = [
+  { kind: 'auto_pickup', id: 'auto_pickup', group: 'Предметы', label: 'Автоподбор предметов' },
+] as const;
+
 const GRAPHICS_SETTINGS_ROWS = [
   { kind: 'camera_fov', id: 'camera_fov', group: 'Графика', label: 'FOV / угол обзора' },
 ] as const;
 
+const UI_RESET_ROWS = {
+  interface: { kind: 'reset_interface', id: 'reset_interface', group: 'Сервис', label: 'Сбросить интерфейс' },
+  graphics: { kind: 'reset_graphics', id: 'reset_graphics', group: 'Сервис', label: 'Сбросить графику' },
+} as const;
+
 export type UiSettingsRow =
+  | typeof UI_RESET_ROWS[keyof typeof UI_RESET_ROWS]
   | { kind: 'preset'; preset: typeof UI_PRESETS[number] }
   | { kind: 'element'; element: typeof UI_ELEMENT_DEFS[number] }
   | typeof GRAPHICS_SETTINGS_ROWS[number]
+  | typeof GAMEPLAY_SETTINGS_ROWS[number]
   | typeof MOBILE_SETTINGS_ROWS[number];
 
 const UI_STORAGE_KEY = 'gigahrush_ui_orchestrator_v6';
@@ -182,6 +195,7 @@ function settingsFromEnabledIds(enabledIds: readonly UiElementId[]): UiSettings 
   out.mouseLookSensitivity = MOUSE_LOOK_SENSITIVITY_DEFAULT;
   out.mobileLookSensitivity = MOBILE_LOOK_SENSITIVITY_DEFAULT;
   out.cameraFovDegrees = CAMERA_FOV_DEFAULT_DEGREES;
+  out.autoPickupEnabled = AUTO_PICKUP_DEFAULT;
   return out;
 }
 
@@ -204,6 +218,7 @@ function normalizeUiSettings(raw: unknown): UiSettings {
   out.mouseLookSensitivity = normalizeMouseLookSensitivity(src.mouseLookSensitivity);
   out.mobileLookSensitivity = normalizeMobileLookSensitivity(src.mobileLookSensitivity);
   out.cameraFovDegrees = normalizeCameraFovDegrees(src.cameraFovDegrees);
+  out.autoPickupEnabled = typeof src.autoPickupEnabled === 'boolean' ? src.autoPickupEnabled : AUTO_PICKUP_DEFAULT;
   return out;
 }
 
@@ -308,10 +323,12 @@ export function applyUiPreset(id: UiPresetId): boolean {
   const mouseSensitivity = mouseLookSensitivity();
   const sensitivity = mobileLookSensitivity();
   const fov = cameraFovDegrees();
+  const autoPickup = autoPickupEnabled();
   settings = settingsFromEnabledIds(preset.enabled);
   settings.mouseLookSensitivity = mouseSensitivity;
   settings.mobileLookSensitivity = sensitivity;
   settings.cameraFovDegrees = fov;
+  settings.autoPickupEnabled = autoPickup;
   saveUiSettings();
   return true;
 }
@@ -384,6 +401,25 @@ export function resetCameraFov(): number {
   return settings.cameraFovDegrees;
 }
 
+export function autoPickupEnabled(): boolean {
+  if (typeof settings.autoPickupEnabled !== 'boolean') settings.autoPickupEnabled = AUTO_PICKUP_DEFAULT;
+  return settings.autoPickupEnabled;
+}
+
+export function setAutoPickupEnabled(enabled: boolean): boolean {
+  settings.autoPickupEnabled = enabled;
+  saveUiSettings();
+  return settings.autoPickupEnabled;
+}
+
+export function toggleAutoPickup(): boolean {
+  return setAutoPickupEnabled(!autoPickupEnabled());
+}
+
+export function resetAutoPickup(): boolean {
+  return setAutoPickupEnabled(AUTO_PICKUP_DEFAULT);
+}
+
 export function activeUiPresetId(): UiPresetId | undefined {
   for (const preset of UI_PRESETS) {
     const enabled = new Set<UiElementId>(preset.enabled);
@@ -401,15 +437,19 @@ export function activeUiPresetId(): UiPresetId | undefined {
 }
 
 export function uiSettingsRowCount(view: UiSettingsView = 'interface'): number {
-  if (view === 'graphics') return GRAPHICS_SETTINGS_ROWS.length;
-  return UI_PRESETS.length + UI_ELEMENT_DEFS.length + MOBILE_SETTINGS_ROWS.length;
+  if (view === 'graphics') return 1 + GRAPHICS_SETTINGS_ROWS.length;
+  return 1 + UI_PRESETS.length + UI_ELEMENT_DEFS.length + GAMEPLAY_SETTINGS_ROWS.length + MOBILE_SETTINGS_ROWS.length;
 }
 
 export function uiSettingsRowAt(index: number, view: UiSettingsView = 'interface'): UiSettingsRow | undefined {
   if (index < 0) return undefined;
-  if (view === 'graphics') return GRAPHICS_SETTINGS_ROWS[index];
-  if (index < UI_PRESETS.length) return { kind: 'preset', preset: UI_PRESETS[index] };
-  const element = UI_ELEMENT_DEFS[index - UI_PRESETS.length];
+  if (index === 0) return UI_RESET_ROWS[view];
+  const localIndex = index - 1;
+  if (view === 'graphics') return GRAPHICS_SETTINGS_ROWS[localIndex];
+  if (localIndex < UI_PRESETS.length) return { kind: 'preset', preset: UI_PRESETS[localIndex] };
+  const element = UI_ELEMENT_DEFS[localIndex - UI_PRESETS.length];
   if (element) return { kind: 'element', element };
-  return MOBILE_SETTINGS_ROWS[index - UI_PRESETS.length - UI_ELEMENT_DEFS.length];
+  const gameplay = GAMEPLAY_SETTINGS_ROWS[localIndex - UI_PRESETS.length - UI_ELEMENT_DEFS.length];
+  if (gameplay) return gameplay;
+  return MOBILE_SETTINGS_ROWS[localIndex - UI_PRESETS.length - UI_ELEMENT_DEFS.length - GAMEPLAY_SETTINGS_ROWS.length];
 }

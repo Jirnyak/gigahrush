@@ -55,11 +55,11 @@ export const PLOT_NPCS: Record<string, PlotNpcDef> = {
       { defId: 'bread', count: 2 },
     ],
     talkLines: [
-      'Руки покажи. Дрожат, но жить будешь. Я Ольга Дмитриевна, врач; поешь, проверь сумку и иди к Барни за стволом.',
+      'Руки покажи. Дрожат, но жить будешь. Я Ольга Дмитриевна, врач; поешь, проверь сумку и иди к сержанту Баринову за стволом.',
       'WASD — ходить, мышь — смотреть. Не крутись в панике, в углу потом трудно перевязывать.',
       'E — поговорить, открыть дверь, проверить шкаф. Сначала смотри, кто рядом, потом тянись рукой.',
       'I — сумка. Хлеб, вода, бинт должны быть с собой. Кушайте вовремя.',
-      'Пробел или ЛКМ — удар и выстрел. Барни даст ствол, а ты не маши им по людям.',
+      'Пробел или ЛКМ — удар и выстрел. Сержант Баринов даст ствол, а ты не маши им по людям.',
       'Кровь пошла — сразу бинт. Не жди, пока ботинок начнёт хлюпать.',
       'Сирена — это САМОСБОР. Идёшь к ближайшей герме, закрываешь дверь и сидишь тихо.',
       'Фиолетовый туман не нюхай. Увидел в коридоре — назад, к двери, без разговоров.',
@@ -74,7 +74,7 @@ export const PLOT_NPCS: Record<string, PlotNpcDef> = {
       'Пей воду заранее. Когда язык сухой, таблетки глотать нечем.',
       'Кипяток держи при себе. Сегодня труба даёт, завтра может хрипеть и плеваться ржавчиной.',
       'Не спорь с гермодверью, милый. Закрылась — значит сидишь и ждёшь отбоя.',
-      'Если Барни орёт, слушай, что он говорит. Громкость у него рабочая.',
+      'Если сержант Баринов орёт, слушай, что он говорит. Громкость у него рабочая.',
       'Якову не давай мерить себя без причины. Потом будешь чесаться и ругаться на меня.',
       'Талон на воду не пей. Талон показывают, воду берегут, кружку не теряют.',
       'Перед вылазкой проверь сумку: вода, бинт, еда, патроны. Характер я не перевяжу.',
@@ -84,11 +84,11 @@ export const PLOT_NPCS: Record<string, PlotNpcDef> = {
       'Зелёный свет увидел — не пялься. Глаза у нас без обменного фонда.',
       'Мне на обход. Береги себя и не ходи один, если коридор стал другим.',
     ],
-    talkQuestResponse: 'Стрельбу видел, Барни жив, значит, вводная закончилась. Держи бинты, воду и хлеб. Теперь реальная работа: сходи к моему коллеге Якову Давидовичу. Он изучает природу Самосбора, и ему нужны не лишние руки в лаборатории, а человек для поля.',
+    talkQuestResponse: 'Стрельбу видел, Баринов жив, значит, вводная закончилась. Держи бинты, воду и хлеб. Теперь реальная работа: сходи к моему коллеге Якову Давидовичу. Он изучает природу Самосбора, и ему нужны не лишние руки в лаборатории, а человек для поля.',
   },
 
   barni: {
-    name: 'Барни',
+    name: 'Сержант Баринов',
     isFemale: false,
     faction: Faction.LIQUIDATOR,
     occupation: Occupation.HUNTER,
@@ -100,7 +100,7 @@ export const PLOT_NPCS: Record<string, PlotNpcDef> = {
       { defId: 'canned', count: 1 },
     ],
     talkLines: [
-      'Барни. Макаров и восемь патронов получишь, но ствол не обещание: он покупает дверь и секунду.',
+      'Сержант Баринов. Макаров и восемь патронов получишь, но ствол не обещание: он покупает дверь и секунду.',
       'Мишень стоит. Тварь бежит. Учись попадать до коридора.',
       'Макаров не спасает сам. Он даёт секунду добежать до двери.',
       'Магазин проверяй у стойки. В коридоре поздно щёлкать пустым.',
@@ -348,19 +348,19 @@ export const PLOT_NPCS: Record<string, PlotNpcDef> = {
 /* {dir} in desc is auto-replaced with toroidal direction.        */
 
 export const PLOT_CHAIN: PlotStep[] = [
-  // Step 0: Olga → talk to Barni
+  // Step 0: Olga → talk to Sergeant Barinov
   {
     giverNpcId: 'olga',
     type: QuestType.TALK,
-    desc: 'После вводной Ольги поговори с Барни в оружейной. Он выдаст Макаров и 8 патронов: без ствола новичка несут обратно к медпункту.',
+    desc: 'После вводной Ольги поговори с сержантом Бариновым в оружейной. Он выдаст Макаров и 8 патронов: без ствола новичка несут обратно к медпункту.',
     offerObjective: 'Цель: поговорить с Ольгой Дмитриевной в актовом зале.',
-    activeObjective: 'Цель: поговорить с Барни в оружейной/стрельбище.',
+    activeObjective: 'Цель: поговорить с сержантом Бариновым в оружейной/стрельбище.',
     targetNpcId: 'barni',
     rewardItem: 'makarov', rewardCount: 1,
     extraRewards: [{ defId: 'ammo_9mm', count: 8 }],
     relationDelta: 10, xpReward: 10,
   },
-  // Step 1: Barni → report to Olga
+  // Step 1: Sergeant Barinov → report to Olga
   {
     giverNpcId: 'barni',
     type: QuestType.TALK,
@@ -370,6 +370,11 @@ export const PLOT_CHAIN: PlotStep[] = [
     rewardItem: 'bandage', rewardCount: 2,
     extraRewards: [{ defId: 'water', count: 2 }, { defId: 'bread', count: 2 }],
     relationDelta: 12, xpReward: 10,
+    eventTags: ['craft_recipe_reward'],
+    eventData: {
+      craftRecipeSourceId: 'quest_barni_range_cleanup',
+      craftRecipeIds: ['craft_item_homemade_9mm'],
+    },
   },
   // Step 2: Olga → visit Yakov
   {
@@ -427,6 +432,11 @@ export const PLOT_CHAIN: PlotStep[] = [
     targetNpcId: 'major_grom',
     rewardItem: 'psi_rupture', rewardCount: 1,
     relationDelta: 20, xpReward: 60, moneyReward: 80,
+    eventTags: ['craft_recipe_reward'],
+    eventData: {
+      craftRecipeSourceId: 'quest_yakov_field_lab',
+      craftRecipeIds: ['craft_item_psi_stabilizer'],
+    },
   },
   // Step 8: Major Grom → kill monsters (defend outpost)
   {
@@ -633,11 +643,13 @@ export const SIDE_QUESTS: SideQuestStep[] = [
     eventTargetName: 'Идол Чернобога зарегистрирован в Министерстве и возвращен владельцу.',
     eventSeverity: 4,
     eventPrivacy: 'public',
-    eventTags: ['idol_branch', 'chernobog', 'ministry', 'report', 'contraband', 'returned_item'],
+    eventTags: ['idol_branch', 'chernobog', 'ministry', 'report', 'contraband', 'returned_item', 'craft_recipe_reward'],
     eventData: {
       branch: 'ministry_report',
       mainPlotItemReturned: true,
       suspicionDelta: 1,
+      craftRecipeSourceId: 'quest_idol_ministry_registration',
+      craftRecipeIds: ['craft_item_blank_form', 'craft_item_seal_wax'],
       rumorIds: ['idol_branch_ministry_report'],
     },
   },
@@ -654,11 +666,13 @@ export const SIDE_QUESTS: SideQuestStep[] = [
     eventTargetName: 'Ликвидаторы сняли полевой рапорт по идолу и вернули улику.',
     eventSeverity: 4,
     eventPrivacy: 'local',
-    eventTags: ['idol_branch', 'chernobog', 'liquidator', 'report', 'suspicion', 'returned_item'],
+    eventTags: ['idol_branch', 'chernobog', 'liquidator', 'report', 'suspicion', 'returned_item', 'craft_recipe_reward'],
     eventData: {
       branch: 'liquidator_report',
       mainPlotItemReturned: true,
       suspicionDelta: 2,
+      craftRecipeSourceId: 'quest_idol_liquidator_field_report',
+      craftRecipeIds: ['craft_item_ammo_9mm', 'craft_item_gasmask_filter'],
       rumorIds: ['idol_branch_liquidator_report'],
     },
   },
@@ -717,11 +731,13 @@ export const SIDE_QUESTS: SideQuestStep[] = [
     eventTargetName: 'Никанор проверил идол Чернобога как культовую улику и вернул его для цепочки Якова.',
     eventSeverity: 4,
     eventPrivacy: 'local',
-    eventTags: ['idol_branch', 'chernobog', 'cult', 'handoff', 'evidence', 'returned_item'],
+    eventTags: ['idol_branch', 'chernobog', 'cult', 'handoff', 'evidence', 'returned_item', 'craft_recipe_reward'],
     eventData: {
       branch: 'cult_handoff',
       mainPlotItemReturned: true,
       suspicionDelta: 1,
+      craftRecipeSourceId: 'quest_idol_hell_contact_handoff',
+      craftRecipeIds: ['craft_item_holy_water', 'craft_item_meat_rune'],
       rumorIds: ['idol_branch_cult_handoff'],
     },
   },

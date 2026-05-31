@@ -2,7 +2,7 @@
 
 > Центральный документ предметной системы.
 >
-> Роль: описывает items, tools, weapons, PSI clots, loot, resources, future crafting/production, food, water, value, use effects, procedural sprites and economy hooks. Связан с `economics.md`, `balance.md`, `alife.md`, `fight.md` and `quests.md`.
+> Роль: описывает items, tools, weapons, PSI clots, loot, resources, crafting/production, food, water, value, use effects, procedural sprites and economy hooks. Связан с `economics.md`, `balance.md`, `alife.md`, `fight.md` and `quests.md`.
 
 Актуально на 2026-05-30. Этот файл описывает уже работающую предметную систему, а не список будущих item-кандидатов. Архивные item-манифесты и оркестратор перенесены в `gatbage/`.
 
@@ -17,6 +17,8 @@
 ## Инвентарь и использование
 
 Runtime-предметы хранятся как compact stacks: `defId`, `count`, опциональное `data`. Стекуемость выводится из типа и `stack`; оружие и инструменты обычно занимают отдельный слот, durable tools расходуют `durability`. `src/systems/inventory.ts` владеет категориями, equip/use/drop/read/check actions, ammo consumption, tool durability, use-events и player-facing сообщениями.
+
+World item drops подбираются через тот же inventory transfer path. Browser-local настройка автоподбора включена по умолчанию; если игрок выключает ее в `U` -> настройки интерфейса, item drops больше не берутся при проходе рядом и становятся `E`-целью с названием, описанием и ручным pickup prompt.
 
 Использование предмета должно давать решение, а не только эффект:
 
@@ -36,11 +38,15 @@ Runtime-предметы хранятся как compact stacks: `defId`, `count
 
 ПСИ-сгустки используют тот же weapon contract, но платят `psiCost` и могут иметь `psiEffect`. Они остаются предметами и ресурсом, а не отдельной магической подсистемой вне инвентаря.
 
-## Ресурсы и производство
+## Ресурсы, крафт и производство
 
 `src/data/resources.ts` связывает предметы с экономическими ресурсами: вода, еда, медицина, металл, патроны, инструменты, бумага, топливо, электроника, ПСИ, образцы слизи, контрабанда, документы, industrial slurry, грибной субстрат, желемыш и трудочасы. Сейчас есть 17 resource defs.
 
-`src/data/factories.ts` описывает production surfaces: factories, recipes, inputs, inputItems, outputs, access, cycleSec, bad batches and repair outputs. Сейчас есть 12 factory defs и 42 recipes. Это текущий путь для будущего crafting/resource gameplay: не добавлять глобальный crafting UI, пока recipe можно сделать через room/factory/container/contract.
+Игровой крафт отделен от макроэкономических `ResourceDef`. `src/data/craft_materials.ts` задает фиксированный вектор из 9 craft-компонентов: mechanics, electronics, consumables, bio, chemical, metal, cybernetics, psimatter, metamatter. `src/data/item_composition.ts` хранит composition для каждого предмета, а `src/data/craft_recipes.ts` строит item recipes поверх этих vectors. Это definition-level данные; runtime item stack не хранит состав в `Item.data`.
+
+Рецепты становятся известны через default список и источники в `src/data/craft_recipe_sources.ts`: blueprint items, notes, quests, terminals, NPC/floor sources and recipe billboards. Станки открываются через interactive definitions `craft_lathe`, `disassembly_workbench`, `craft_lab_bench` and `recipe_billboard`; сборка и разбор используют player crafting state, а не factory production queues.
+
+`src/data/factories.ts` описывает production surfaces: factories, recipes, inputs, inputItems, outputs, access, cycleSec, bad batches and repair outputs. Сейчас есть 12 factory defs и 42 recipes. Factories остаются floor/economy production path with cadence and access rules; крафт остается personal item/material path.
 
 Рецепт должен иметь достижимые inputs, полезный output, access decision и bounded cadence. Bad batch допустим как factory rule, если у него есть repair path и событие; он не должен превращаться в скрытый таймер без игрокового решения.
 
@@ -51,7 +57,7 @@ Runtime-предметы хранятся как compact stacks: `defId`, `count
 - room loot через `spawnRooms`/`spawnW`;
 - container pool, faction/owner/locked/secret access;
 - NPC trade, contract, quest, route floor, samosbor aftermath;
-- factory output или repair input;
+- factory output, craft recipe/source или repair input;
 - one-per-run unique source с явным route/debug proof;
 - use-handler, weapon stats, document gate, counterplay или event consequence.
 

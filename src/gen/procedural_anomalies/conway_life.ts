@@ -1,6 +1,7 @@
 import { stampSurfaceSplat } from '../../systems/surface_marks';
 import { Cell, Feature, RoomType, Tex } from '../../core/types';
 import type { Room } from '../../core/types';
+import { registerRouteCue } from '../../systems/route_cues';
 import {
   isProtectedCell,
   roomCell,
@@ -68,6 +69,33 @@ function addLifeGlider(ctx: ProceduralAnomalyGenContext, room: Room, ox: number,
   }
 }
 
+function registerConwayCue(ctx: ProceduralAnomalyGenContext, room: Room, arenaIndex: number, target: { x: number; y: number }): void {
+  const c = roomCenter(room);
+  registerRouteCue(ctx.world, {
+    id: `procedural_${ctx.spec.key}_conway_life_${arenaIndex}`,
+    x: c.x + 0.5,
+    y: c.y + 0.5,
+    targetX: target.x + 0.5,
+    targetY: target.y + 0.5,
+    floor: ctx.spec.baseFloor,
+    roomId: room.id,
+    targetRoomId: room.id,
+    zoneId: ctx.world.zoneMap[ctx.world.idx(c.x, c.y)],
+    label: 'игра жизнь',
+    hint: 'поле клеток растет стенами; аппарат в центре дает окно управления',
+    targetName: 'аппарат клеточного поля',
+    color: '#6ee0b6',
+    tags: ['procedural_floor', 'conway_life', 'cellular', 'visible_anomaly', 'route_pressure', ctx.spec.geometryId, ctx.spec.majorityId],
+    toneSeed: (ctx.spec.seed ^ room.id * 4099 ^ arenaIndex * 131) >>> 0,
+    radius: 14,
+    targetRadius: 4,
+    cooldownSec: 50,
+    heardText: 'Рядом щелкает клеточное поле: стены рождаются и умирают по такту.',
+    followedText: 'Клеточное поле открыло центральный аппарат между живыми стенами.',
+    ignoredText: 'Клеточное поле осталось работать за соседней перегородкой.',
+  });
+}
+
 function applyArena(ctx: ProceduralAnomalyGenContext, room: Room, arenaIndex: number): void {
   room.name = `${CONWAY_LIFE_ROOM_PREFIX} арена ${arenaIndex}; комната ${room.id}`;
   room.wallTex = Tex.DARK;
@@ -107,6 +135,10 @@ function applyArena(ctx: ProceduralAnomalyGenContext, room: Room, arenaIndex: nu
     ctx.world.floorTex[ci] = Tex.F_VOID;
     ctx.world.fog[ci] = 0;
     stampSurfaceSplat(ctx.world, control.x, control.y, 0.5, 0.5, 0.72, 0.6, ctx.spec.seed + room.id * 331, 30, 210, 160, false);
+    registerConwayCue(ctx, room, arenaIndex, control);
+  } else {
+    const c = roomCenter(room);
+    registerConwayCue(ctx, room, arenaIndex, c);
   }
 
   ctx.world.markWallTexDirty();
@@ -119,9 +151,15 @@ function candidateRooms(ctx: ProceduralAnomalyGenContext): Room[] {
     if (room.type === RoomType.CORRIDOR) return false;
     if (room.w < 12 || room.h < 12 || room.w > 48 || room.h > 48) return false;
     const c = roomCenter(room);
-    if (ctx.world.dist2(ctx.spawnX, ctx.spawnY, c.x, c.y) < 42 * 42) return false;
+    if (ctx.world.dist2(ctx.spawnX, ctx.spawnY, c.x, c.y) < 18 * 18) return false;
     return true;
   }).sort((a, b) => {
+    const ac = roomCenter(a);
+    const bc = roomCenter(b);
+    const ideal = 42 + ctx.spec.danger * 8;
+    const ad = Math.abs(Math.sqrt(ctx.world.dist2(ctx.spawnX, ctx.spawnY, ac.x, ac.y)) - ideal);
+    const bd = Math.abs(Math.sqrt(ctx.world.dist2(ctx.spawnX, ctx.spawnY, bc.x, bc.y)) - ideal);
+    if (Math.abs(ad - bd) > 4) return ad - bd;
     const orderA = hash32(ctx.spec.seed ^ Math.imul(a.id + 1, 0x9e3779b1) ^ Math.imul(a.w * 31 + a.h, 0x85ebca6b));
     const orderB = hash32(ctx.spec.seed ^ Math.imul(b.id + 1, 0x9e3779b1) ^ Math.imul(b.w * 31 + b.h, 0x85ebca6b));
     return orderA - orderB;
@@ -132,7 +170,7 @@ export function applyConwayLife(ctx: ProceduralAnomalyGenContext): void {
   const candidates = candidateRooms(ctx);
   if (candidates.length === 0) return;
 
-  const arenas = Math.min(candidates.length, ctx.spec.danger >= 5 ? 3 : ctx.spec.danger >= 4 ? 2 : 1);
+  const arenas = Math.min(candidates.length, ctx.spec.danger >= 5 ? 4 : ctx.spec.danger >= 4 ? 3 : 2);
   for (let i = 0; i < arenas; i++) {
     applyArena(ctx, candidates[i], i + 1);
   }

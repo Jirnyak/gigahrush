@@ -38,6 +38,10 @@ function sourceFile(relPath) {
   return sf;
 }
 
+function relExists(relPath) {
+  return fs.existsSync(path.join(root, relPath));
+}
+
 function lineOf(sf, node) {
   return sf.getLineAndCharacterOfPosition(node.getStart(sf)).line + 1;
 }
@@ -397,6 +401,179 @@ function objectStringArrayRefs(relPath, name) {
     }
   }
   return out;
+}
+
+function topLevelStringArrayEntries(relPath, name) {
+  if (!relExists(relPath)) return [];
+  const constants = stringConstants(relPath);
+  const arrays = stringArrayConstants(relPath);
+  return stringArrayValues(varInitializer(relPath, name), constants, arrays)
+    .map(value => ({ id: value.id, file: relPath, line: value.line }));
+}
+
+function objectRegistryPropertyEntries(relPath, name) {
+  if (!relExists(relPath)) return [];
+  const init = unwrapConstExpression(varInitializer(relPath, name));
+  if (!init || !ts.isObjectLiteralExpression(init)) return [];
+  const constants = stringConstants(relPath);
+  const sf = sourceFile(relPath);
+  const entries = [];
+  for (const prop of init.properties) {
+    if (!ts.isPropertyAssignment(prop)) continue;
+    const id = propName(prop.name, constants);
+    if (!id) continue;
+    entries.push({
+      id,
+      file: relPath,
+      line: lineOf(sf, prop),
+      value: unwrapConstExpression(prop.initializer),
+    });
+  }
+  return entries;
+}
+
+function staticCraftVector(expr) {
+  expr = unwrapConstExpression(expr);
+  if (!expr) return undefined;
+  if (ts.isArrayLiteralExpression(expr)) {
+    return {
+      kind: 'array',
+      line: lineOf(expr.getSourceFile(), expr),
+      length: expr.elements.length,
+      values: expr.elements.map(element => numberValue(element)),
+    };
+  }
+  if (ts.isCallExpression(expr)) {
+    const name = callName(expr.expression);
+    if (name !== 'cv' && name !== 'craftVector' && name !== 'makeCraftVector') return undefined;
+    return {
+      kind: 'call',
+      line: lineOf(expr.getSourceFile(), expr),
+      length: expr.arguments.length,
+      values: expr.arguments.map(argument => numberValue(argument)),
+    };
+  }
+  return undefined;
+}
+
+function addCraftVectorLiteralErrors(errors, label, file, line, expr) {
+  const vector = staticCraftVector(expr);
+  if (!vector) return;
+  if (vector.kind === 'array' && vector.length !== 9) {
+    errors.push(`${file}:${vector.line || line} ${label} material vector must have 9 entries, found ${vector.length}`);
+  }
+  if (vector.kind === 'call' && vector.length > 9) {
+    errors.push(`${file}:${vector.line || line} ${label} material vector call has ${vector.length} args, expected at most 9`);
+  }
+  let total = 0;
+  let hasOnlyStaticNumbers = true;
+  vector.values.forEach((value, index) => {
+    if (value === undefined) {
+      hasOnlyStaticNumbers = false;
+      return;
+    }
+    if (!Number.isFinite(value) || !Number.isInteger(value) || value < 0) {
+      errors.push(`${file}:${vector.line || line} ${label}[${index}] must be a finite integer >= 0, found ${value}`);
+      hasOnlyStaticNumbers = false;
+      return;
+    }
+    total += value;
+  });
+  if (hasOnlyStaticNumbers && vector.length <= 9 && total < 1) {
+    errors.push(`${file}:${vector.line || line} ${label} material vector total must be at least 1`);
+  }
+}
+
+function craftRecipeEntries(relPath) {
+  if (!relExists(relPath)) return [];
+  const constants = stringConstants(relPath);
+  const entries = [];
+  for (const entry of objectRegistryPropertyEntries(relPath, 'CRAFT_RECIPES')) {
+    const value = entry.value;
+    const id = value && ts.isObjectLiteralExpression(value)
+      ? (getObjectString(value, 'id', constants) ?? entry.id)
+      : entry.id;
+    entries.push({
+      id,
+      itemId: value && ts.isObjectLiteralExpression(value) ? getObjectString(value, 'itemId', constants) : undefined,
+      station: value && ts.isObjectLiteralExpression(value) ? getObjectString(value, 'station', constants) : undefined,
+      components: value && ts.isObjectLiteralExpression(value) ? getObjectProp(value, 'components') : undefined,
+      file: entry.file,
+      line: entry.line,
+    });
+  }
+  if (entries.length > 0) return entries;
+  for (const entry of arrayObjects(relPath, 'CRAFT_RECIPES')) {
+    entries.push({
+      id: getObjectString(entry.node, 'id', constants),
+      itemId: getObjectString(entry.node, 'itemId', constants),
+      station: getObjectString(entry.node, 'station', constants),
+      components: getObjectProp(entry.node, 'components'),
+      file: entry.file,
+      line: entry.line,
+    });
+  }
+  return entries.filter(entry => entry.id);
+}
+
+function craftRecipeSourceEntries(relPath) {
+  if (!relExists(relPath)) return [];
+  const constants = stringConstants(relPath);
+  const out = [];
+  function recipeIdValues(expr) {
+    expr = unwrapConstExpression(expr);
+    if (!expr) return [];
+    const sf = expr.getSourceFile();
+    if (!ts.isArrayLiteralExpression(expr)) return stringArrayValues(expr, constants, stringArrayConstants(relPath));
+    const refs = [];
+    for (const element of expr.elements) {
+      const node = unwrapConstExpression(element);
+      if (!node) continue;
+      if (ts.isSpreadElement(node)) {
+        refs.push(...recipeIdValues(node.expression));
+        continue;
+      }
+      const raw = stringValue(node, constants);
+      if (raw) {
+        refs.push({ id: raw, file: relPath, line: lineOf(sf, node) });
+        continue;
+      }
+      if (ts.isCallExpression(node)) {
+        const name = callName(node.expression);
+        const itemId = stringValue(node.arguments[0], constants);
+        if (itemId && (name === 'r' || name === 'craftItemRecipeId')) {
+          refs.push({ id: `craft_item_${itemId}`, file: relPath, line: lineOf(sf, node) });
+        }
+      }
+    }
+    return refs;
+  }
+  for (const entry of arrayObjects(relPath, 'CRAFT_RECIPE_SOURCES')) {
+    out.push({
+      id: getObjectString(entry.node, 'id', constants),
+      kind: getObjectString(entry.node, 'kind', constants),
+      recipeIds: recipeIdValues(getObjectProp(entry.node, 'recipeIds')),
+      file: entry.file,
+      line: entry.line,
+    });
+  }
+  return out.filter(entry => entry.id);
+}
+
+function craftInteractiveStationRefs(relPath) {
+  if (!relExists(relPath)) return [];
+  const constants = stringConstants(relPath);
+  const props = new Set(['stationId', 'interactiveId', 'interactiveDefId', 'stationInteractiveId']);
+  const refs = [];
+  const sf = sourceFile(relPath);
+  forEachNode(sf, node => {
+    if (!ts.isPropertyAssignment(node)) return;
+    const name = propName(node.name);
+    if (!name || !props.has(name)) return;
+    const id = stringValue(node.initializer, constants);
+    if (id) refs.push({ id, prop: name, file: relPath, line: lineOf(sf, node) });
+  });
+  return refs;
 }
 
 function propertyStringArrayRefs(relPath, arrayName, prop) {
@@ -826,7 +1003,11 @@ for (const abs of files) {
       const value = stringValue(node.initializer, stringConstants);
       if (value && name === 'defId') {
         const owner = node.parent;
-        if (owner && ts.isObjectLiteralExpression(owner) && objectArgumentCallName(owner) === 'placeInteractive') {
+        if (
+          (owner && ts.isObjectLiteralExpression(owner) && objectArgumentCallName(owner) === 'placeInteractive')
+          || rel === 'src/data/interactive.ts'
+          || rel === 'src/gen/craft_stations.ts'
+        ) {
           interactiveRefs.push({ id: value, prop: name, file: rel, line: lineOf(sf, node) });
         } else {
           itemRefs.push({ id: value, prop: name, file: rel, line: lineOf(sf, node) });
@@ -870,8 +1051,8 @@ const interactiveEntries = arrayIds('src/data/interactive.ts', 'INTERACTIVE_DEFS
 const floorGeometryEntries = arrayIds('src/data/procedural_floors.ts', 'FLOOR_GEOMETRIES');
 const floorMajorityEntries = arrayIds('src/data/procedural_floors.ts', 'FLOOR_MAJORITY_FACTIONS');
 const floorAnomalyEntries = arrayIds('src/data/procedural_floors.ts', 'FLOOR_ANOMALIES');
-const floorGeometryDocEntries = documentedProfileIds('Docs/ProceduralFloors/geometry.md');
-const floorAnomalyDocEntries = documentedProfileIds('Docs/ProceduralFloors/anomaly.md');
+const floorGeometryDocEntries = documentedProfileIds('gatbage/reference/procedural_floors/geometry.md');
+const floorAnomalyDocEntries = documentedProfileIds('gatbage/reference/procedural_floors/anomaly.md');
 const proceduralLootRefs = objectStringArrayRefs('src/data/procedural_floors.ts', 'LOOT_BY_TAG');
 const monsterKindEntries = enumMembers('src/core/types.ts', 'MonsterKind');
 const worldEventTypeEntries = arrayInitializer('src/core/types.ts', varInitializer('src/core/types.ts', 'WORLD_EVENT_TYPES'))?.elements
@@ -915,6 +1096,30 @@ const samosborVariantEntries = arrayIds('src/data/samosbor_variants.ts', 'SAMOSB
 const samosborModifierEntries = objectKeys('src/data/samosbor_variants.ts', 'SAMOSBOR_MODIFIERS');
 const samosborAftermathEntries = arrayIds('src/data/samosbor_variants.ts', 'SAMOSBOR_AFTERMATH_BEATS');
 const samosborDirectorEntries = arrayIds('src/data/samosbor_director.ts', 'BASELINE_BEATS');
+const craftRequiredPaths = [
+  'src/data/craft_materials.ts',
+  'src/data/item_composition.ts',
+  'src/data/craft_recipes.ts',
+  'src/data/craft_recipe_sources.ts',
+];
+const craftMaterialEntries = topLevelStringArrayEntries('src/data/craft_materials.ts', 'CRAFT_MATERIAL_IDS');
+const itemCompositionEntries = objectRegistryPropertyEntries('src/data/item_composition.ts', 'ITEM_COMPOSITIONS');
+const craftRecipeEntriesList = craftRecipeEntries('src/data/craft_recipes.ts');
+const craftRecipeSourceEntriesList = craftRecipeSourceEntries('src/data/craft_recipe_sources.ts');
+const craftInteractiveRefs = [
+  ...craftInteractiveStationRefs('src/data/craft_recipes.ts'),
+  ...craftInteractiveStationRefs('src/data/craft_recipe_sources.ts'),
+];
+const itemCompositionText = relExists('src/data/item_composition.ts')
+  ? fs.readFileSync(path.join(root, 'src/data/item_composition.ts'), 'utf8')
+  : '';
+const craftRecipeText = relExists('src/data/craft_recipes.ts')
+  ? fs.readFileSync(path.join(root, 'src/data/craft_recipes.ts'), 'utf8')
+  : '';
+const itemCompositionRegistryCoversAllItems = /Object\.values\(ITEMS\)\.map\(def\s*=>\s*\[def\.id,\s*compositionForItemDef\(def\)\]\)/s.test(itemCompositionText);
+const craftRecipeRegistryCoversAllItems = /Object\.values\(ITEMS\)\.map\(def\s*=>/s.test(craftRecipeText) && /recipeForItem\(def\)/.test(craftRecipeText);
+const itemCompositionCount = itemCompositionRegistryCoversAllItems ? itemEntries.length : itemCompositionEntries.length;
+const craftRecipeCount = craftRecipeRegistryCoversAllItems ? itemEntries.length : craftRecipeEntriesList.length;
 
 const itemIds = new Set(itemEntries.map(v => v.id));
 const interactiveIds = new Set(interactiveEntries.map(v => v.id));
@@ -924,6 +1129,10 @@ const plotNpcIds = new Set([...plotNpcEntries, ...localNpcDefEntries].map(v => v
 const rumorIds = new Set(rumorEntries.map(v => v.id));
 const resourceIds = new Set(resourceEntries.map(v => v.id));
 const worldEventTypes = new Set(worldEventTypeEntries.map(v => v.id));
+const craftRecipeIds = new Set([
+  ...craftRecipeEntriesList.map(v => v.id),
+  ...(craftRecipeRegistryCoversAllItems ? itemEntries.map(v => `craft_item_${v.id}`) : []),
+]);
 
 const errors = [];
 function addDuplicateErrors(label, entries) {
@@ -987,9 +1196,88 @@ addDuplicateErrors('SAMOSBOR_MODIFIERS', samosborModifierEntries);
 addDuplicateErrors('SAMOSBOR_AFTERMATH_BEATS', samosborAftermathEntries);
 addDuplicateErrors('SAMOSBOR_DIRECTOR_BEATS', samosborDirectorEntries);
 addDuplicateErrors('LIVING zone content', zoneEntries.filter(v => v.file.includes('/living/')));
+addDuplicateErrors('CRAFT_MATERIAL_IDS', craftMaterialEntries);
+addDuplicateErrors('ITEM_COMPOSITIONS', itemCompositionEntries);
+addDuplicateErrors('CRAFT_RECIPES', craftRecipeEntriesList);
+addDuplicateErrors('CRAFT_RECIPE_SOURCES', craftRecipeSourceEntriesList);
 
-addDocProfileSyncErrors('procedural geometry profile', floorGeometryEntries, floorGeometryDocEntries, 'Docs/ProceduralFloors/geometry.md');
-addDocProfileSyncErrors('procedural anomaly profile', floorAnomalyEntries, floorAnomalyDocEntries, 'Docs/ProceduralFloors/anomaly.md');
+addDocProfileSyncErrors('procedural geometry profile', floorGeometryEntries, floorGeometryDocEntries, 'gatbage/reference/procedural_floors/geometry.md');
+addDocProfileSyncErrors('procedural anomaly profile', floorAnomalyEntries, floorAnomalyDocEntries, 'gatbage/reference/procedural_floors/anomaly.md');
+
+for (const relPath of craftRequiredPaths) {
+  if (!relExists(relPath)) errors.push(`${relPath}:1 missing required crafting data module`);
+}
+
+if (relExists('src/data/craft_materials.ts') && craftMaterialEntries.length !== 9) {
+  errors.push(`src/data/craft_materials.ts:1 CRAFT_MATERIAL_IDS must contain exactly 9 ids, found ${craftMaterialEntries.length}`);
+}
+const expectedCraftMaterialIds = [
+  'mechanics',
+  'electronics',
+  'consumables',
+  'bio',
+  'chemical',
+  'metal',
+  'cybernetics',
+  'psimatter',
+  'metamatter',
+];
+const craftMaterialIds = craftMaterialEntries.map(entry => entry.id);
+if (
+  relExists('src/data/craft_materials.ts')
+  && craftMaterialIds.length === expectedCraftMaterialIds.length
+  && craftMaterialIds.some((id, index) => id !== expectedCraftMaterialIds[index])
+) {
+  errors.push(`src/data/craft_materials.ts:1 CRAFT_MATERIAL_IDS order must be ${expectedCraftMaterialIds.join(', ')}`);
+}
+
+if (relExists('src/data/item_composition.ts')) {
+  const compositionIds = new Set(itemCompositionEntries.map(entry => entry.id));
+  if (!itemCompositionRegistryCoversAllItems) {
+    for (const item of itemEntries) {
+      if (!compositionIds.has(item.id)) errors.push(`src/data/item_composition.ts:1 ITEM_COMPOSITIONS missing item "${item.id}"`);
+    }
+  }
+  for (const entry of itemCompositionEntries) {
+    if (!itemIds.has(entry.id)) errors.push(`${entry.file}:${entry.line} ITEM_COMPOSITIONS references missing item "${entry.id}"`);
+    addCraftVectorLiteralErrors(errors, `ITEM_COMPOSITIONS.${entry.id}`, entry.file, entry.line, entry.value);
+  }
+  const sf = sourceFile('src/data/item_composition.ts');
+  forEachNode(sf, node => {
+    if (!ts.isCallExpression(node) || !staticCraftVector(node)) return;
+    addCraftVectorLiteralErrors(errors, 'item composition craft vector literal', 'src/data/item_composition.ts', lineOf(sf, node), node);
+  });
+}
+
+if (relExists('src/data/craft_recipes.ts')) {
+  for (const recipe of craftRecipeEntriesList) {
+    if (!recipe.itemId) {
+      errors.push(`${recipe.file}:${recipe.line} CRAFT_RECIPES.${recipe.id} missing itemId`);
+    } else if (!itemIds.has(recipe.itemId)) {
+      errors.push(`${recipe.file}:${recipe.line} CRAFT_RECIPES.${recipe.id}.itemId references missing item "${recipe.itemId}"`);
+    }
+    if (recipe.components) {
+      addCraftVectorLiteralErrors(errors, `CRAFT_RECIPES.${recipe.id}.components`, recipe.file, recipe.line, recipe.components);
+    }
+  }
+}
+
+if (relExists('src/data/craft_recipe_sources.ts')) {
+  for (const source of craftRecipeSourceEntriesList) {
+    if (source.recipeIds.length === 0) {
+      errors.push(`${source.file}:${source.line} CRAFT_RECIPE_SOURCES.${source.id} must reference at least one recipe id`);
+    }
+    for (const ref of source.recipeIds) {
+      if (!craftRecipeIds.has(ref.id)) {
+        errors.push(`${ref.file}:${ref.line} CRAFT_RECIPE_SOURCES.${source.id}.recipeIds references missing recipe "${ref.id}"`);
+      }
+    }
+  }
+}
+
+for (const ref of craftInteractiveRefs) {
+  if (!interactiveIds.has(ref.id)) errors.push(`${ref.file}:${ref.line} ${ref.prop} references missing interactive "${ref.id}"`);
+}
 
 const designFloorGeneratorIds = new Set(designFloorGeneratorEntries.map(v => v.id));
 for (const route of designFloorRouteEntries) {
@@ -1245,6 +1533,10 @@ console.log(`- design floor routes: ${designFloorRouteEntries.length}`);
 console.log(`- design floor generators: ${designFloorGeneratorEntries.length}`);
 console.log(`- permits / forgery recipes: ${permitEntries.length} / ${permitForgeryEntries.length}`);
 console.log(`- computers / net hack terminals / emergency panels: ${computerEntries.length} / ${netHackTerminalEntries.length} / ${emergencyPanelEntries.length}`);
+console.log(`- craft material ids: ${craftMaterialEntries.length}`);
+console.log(`- item compositions: ${itemCompositionCount}`);
+console.log(`- craft recipes: ${craftRecipeCount}`);
+console.log(`- craft recipe sources: ${craftRecipeSourceEntriesList.length}`);
 console.log(`- manifest imports checked: ${manifestImportRefs.length}`);
 console.log(`- direct item call refs checked: ${directItemCallRefs.length}`);
 console.log(`- interactive refs checked: ${interactiveRefs.length + directInteractiveCallRefs.length}`);

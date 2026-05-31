@@ -35,7 +35,7 @@ test('mail intercept slip can be sold as stolen delivery intelligence', () => {
   const state = makeGameState({ currentFloor: FloorLevel.LIVING, time: 104 });
 
   assert.equal(addItem(player, ITEM_ID, 1), true);
-  assert.equal(getInventorySlotActionInfo(player, 0)?.useLabel, 'E проверить');
+  assert.equal(getInventorySlotActionInfo(player, 0)?.useLabel, 'Enter проверить');
 
   useItem(player, 0, state.msgs, state.time, state);
 

@@ -59,7 +59,7 @@
 ### Экономика
 
 - `src/data/items.ts`: 253 item ids, цена `0..24000`.
-- Грубые группы цен: еда обычно до `40`, напитки до `18`, медицина до `220`, ammo до `260`, инструменты до `1500`, оружие до `24000`.
+- Грубые группы цен: еда обычно до `40`, напитки до `18`, медицина до `220`, ammo обычно до `300`, инструменты до `1500`, оружие до `24000`.
 - Топ-выбросы: `gravity_beam_emitter=24000`, `bfg=12500`, `psi_beam=9000`, `gauss=7200`.
 - `src/data/resources.ts`: 17 ресурсов. Примеры: water `120/35`, food `140/40`, medicine `70/20`, ammo `80/18`, psi `20/5`, slime samples `12/3`.
 - Цена через `src/systems/economy.ts`: item value * scarcity * demand * tariff * trader spread.
@@ -70,8 +70,9 @@
 ### Контракты И Награды
 
 - `src/data/contracts.ts`: 205 assignment templates at runtime.
-- Денежные награды примерно `0..340`, median около `115`, average около `119`.
-- XP награды примерно `20..170`, median около `65`.
+- Ordinary non-authored NPCs are selected as procedural quest givers at `10%` when the floor assigns quest affordances; plot NPCs stay on authored quest rules.
+- Authoring-base денежные награды примерно `0..340`, median около `115`, average около `119`; runtime `quest_rewards` сейчас платит примерно `2x` по деньгам для принятых системных/процедурных заданий.
+- XP награды примерно `2x` от authoring-base и формульной сложности; обычный процедурный baseline начинается от `40 * difficulty`.
 - Rank `0..4`; relation delta примерно `-8..14`.
 - Scarcity и INT могут умножать денежную награду.
 
@@ -88,7 +89,7 @@
 
 - Physical weapon stats live in `src/data/weapons.ts`.
 - Melee: урон `3..52`, cooldown `0.20..1.35`, reach `1.35..2.35`, durability `14..120`.
-- Ranged examples: `makarov 16/0.52`, `ppsh 6/0.07`, `shotgun 9x7/1.2`, `ak47 19/0.14`, `machinegun 10/0.05`, `grenade 90 AoE 4.5`, `gauss 150`, `bfg 230 AoE 9`, `GBE 420` deletion beam range `30`.
+- Ranged examples: `makarov 22/0.52`, `ppsh 8/0.07`, `shotgun 12x7/1.2`, `ak47 26/0.14`, `machinegun 13/0.05`, `grenade 90 AoE 4.5`, `gauss 180`, `bfg 270 AoE 9`, `GBE 500` deletion beam range `30`.
 - Расход патронов сейчас ровно `1` ammo item за выстрел, включая дробовик с pellets.
 - PSI stats live in `src/data/psi.ts`: cost `3..23`, projectile damage `12..96`, no passive regen.
 - Monster base stats: 67 видов, HP `8..1000`, speed `0..3.15`.
@@ -432,7 +433,7 @@ A-Life меняет главный смысл баланса: мир не refill
 
 ### Источники Квестов
 
-Сейчас A-Life records получают стабильный `canGiveQuest` при генерации identity: шанс ограничен примерно `0.04..0.24` по фракции и профессии. Контекстный reroll `0.20..0.55` остается только для неперсистентных NPC и не перезаписывает `persistentNpcId`.
+Сейчас A-Life records получают стабильный `canGiveQuest` при генерации identity: шанс `10%` без профессий-фонтанов поручений. Контекстный reroll для неперсистентных NPC использует тот же `10%` и не перезаписывает `persistentNpcId`.
 
 Цель:
 

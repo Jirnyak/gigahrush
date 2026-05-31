@@ -60,6 +60,8 @@ const SAFE_CURB_ROOM_NAME = 'Безопасный бордюр у зебры';
 const TOLL_GATE_ROOM_NAME = 'Платная перемычка центральной зебры';
 const AVENUE_CENTERS = [232, 344, 512, 680, 792] as const;
 const STREET_CENTERS = [232, 344, 512, 680, 792] as const;
+const SHELL_AVENUE_CENTERS = [104, ...AVENUE_CENTERS, 920] as const;
+const SHELL_STREET_CENTERS = [104, ...STREET_CENTERS, 920] as const;
 const CROSSROADS_TOLL_CROWD_CAP = 12;
 const CROSSROADS_TRAFFIC_BAND_CAP = 34;
 
@@ -109,6 +111,8 @@ export interface ManhattanCrossroadsDebugInfo {
 
 export interface ManhattanCrossroadsDecisionMetrics {
   crosswalkStripeCells: number;
+  blockInteriorRooms: number;
+  blockInteriorReachableCells: number;
   escortNpcPresent: boolean;
   tollDoorLocked: boolean;
   tollDoorRequiresKey: boolean;
@@ -856,6 +860,367 @@ function stampShellStorefronts(world: World, sidewalkRoomId: number, rng: () => 
   }
 }
 
+function blockRoomType(serial: number): RoomType {
+  const types = [
+    RoomType.LIVING,
+    RoomType.LIVING,
+    RoomType.KITCHEN,
+    RoomType.BATHROOM,
+    RoomType.STORAGE,
+    RoomType.OFFICE,
+  ] as const;
+  return types[serial % types.length];
+}
+
+function blockRoomTex(type: RoomType): { wall: Tex; floor: Tex } {
+  if (type === RoomType.BATHROOM) return { wall: Tex.TILE_W, floor: Tex.F_TILE };
+  if (type === RoomType.KITCHEN) return { wall: Tex.PANEL, floor: Tex.F_TILE };
+  if (type === RoomType.STORAGE) return { wall: Tex.METAL, floor: Tex.F_CONCRETE };
+  if (type === RoomType.OFFICE) return { wall: Tex.CONCRETE, floor: Tex.F_LINO };
+  return { wall: Tex.PANEL, floor: Tex.F_LINO };
+}
+
+function decorateBlockInteriorRoom(world: World, room: Room, type: RoomType, rng: () => number): void {
+  const centerX = room.x + Math.floor(room.w / 2);
+  const centerY = room.y + Math.floor(room.h / 2);
+  if (type === RoomType.KITCHEN) {
+    setFeatureIfFloor(world, room.x + 2, room.y + 2, Feature.STOVE);
+    setFeatureIfFloor(world, room.x + room.w - 3, room.y + 2, Feature.SINK);
+  } else if (type === RoomType.BATHROOM) {
+    setFeatureIfFloor(world, room.x + 2, room.y + 2, Feature.TOILET);
+    setFeatureIfFloor(world, room.x + room.w - 3, room.y + 2, Feature.SINK);
+  } else if (type === RoomType.STORAGE) {
+    setFeatureIfFloor(world, centerX, centerY, Feature.SHELF);
+  } else if (type === RoomType.OFFICE) {
+    setFeatureIfFloor(world, centerX, centerY, Feature.DESK);
+    setFeatureIfFloor(world, room.x + room.w - 3, room.y + 2, Feature.SCREEN);
+  } else {
+    setFeatureIfFloor(world, centerX, centerY, rng() < 0.5 ? Feature.TABLE : Feature.BED);
+  }
+  if (rng() < 0.72) setFeatureIfFloor(world, room.x + room.w - 2, room.y + room.h - 2, Feature.LAMP);
+}
+
+interface FloorplanRect {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
+function canBuildFloorplanRect(world: World, rect: FloorplanRect): boolean {
+  for (let dy = 0; dy < rect.h; dy++) {
+    for (let dx = 0; dx < rect.w; dx++) {
+      if (!canRetuneStreetCell(world, world.idx(rect.x + dx, rect.y + dy))) return false;
+    }
+  }
+  return true;
+}
+
+function addFloorplanRoom(world: World, name: string, type: RoomType, x: number, y: number, w: number, h: number, wallTex: Tex, floorTex: Tex): Room {
+  const room = addLogicalRoom(world, name, type, x, y, w, h, floorTex, wallTex);
+  room.wallTex = wallTex;
+  room.floorTex = floorTex;
+  return room;
+}
+
+function fillFloorplanWalls(world: World, rect: FloorplanRect, wallTex: Tex): void {
+  for (let dy = 0; dy < rect.h; dy++) {
+    for (let dx = 0; dx < rect.w; dx++) {
+      const ci = world.idx(rect.x + dx, rect.y + dy);
+      if (!canRetuneStreetCell(world, ci)) continue;
+      world.cells[ci] = Cell.WALL;
+      world.wallTex[ci] = wallTex;
+      world.floorTex[ci] = Tex.F_CONCRETE;
+      world.roomMap[ci] = -1;
+      world.features[ci] = Feature.NONE;
+    }
+  }
+}
+
+function carveFloorplanRoom(world: World, room: Room): void {
+  for (let dy = 0; dy < room.h; dy++) {
+    for (let dx = 0; dx < room.w; dx++) {
+      const ci = world.idx(room.x + dx, room.y + dy);
+      if (!canRetuneStreetCell(world, ci)) continue;
+      world.cells[ci] = Cell.FLOOR;
+      world.wallTex[ci] = room.wallTex;
+      world.floorTex[ci] = room.floorTex;
+      world.roomMap[ci] = room.id;
+      world.features[ci] = Feature.NONE;
+    }
+  }
+}
+
+function canRetuneFloorplanCell(world: World, ci: number): boolean {
+  if (canRetuneStreetCell(world, ci)) return true;
+  const roomId = world.roomMap[ci];
+  return roomId >= 0 && world.rooms[roomId]?.name.startsWith('Внутренний квартал');
+}
+
+function carveFloorplanCorridor(world: World, room: Room): void {
+  for (let dy = 0; dy < room.h; dy++) {
+    for (let dx = 0; dx < room.w; dx++) {
+      const ci = world.idx(room.x + dx, room.y + dy);
+      if (!canRetuneFloorplanCell(world, ci)) continue;
+      world.cells[ci] = Cell.FLOOR;
+      world.wallTex[ci] = room.wallTex;
+      world.floorTex[ci] = room.floorTex;
+      world.roomMap[ci] = room.id;
+      world.features[ci] = Feature.NONE;
+    }
+  }
+}
+
+function placeFloorplanDoor(world: World, a: Room, b: Room, x: number, y: number): void {
+  const ci = world.idx(x, y);
+  if (!canRetuneStreetCell(world, ci) && world.cells[ci] !== Cell.WALL) return;
+  world.cells[ci] = Cell.DOOR;
+  world.wallTex[ci] = Tex.DOOR_WOOD;
+  world.features[ci] = Feature.NONE;
+  world.doors.set(ci, {
+    idx: ci,
+    state: DoorState.CLOSED,
+    roomA: a.id,
+    roomB: b.id,
+    keyId: '',
+    timer: 0,
+  });
+  if (!a.doors.includes(ci)) a.doors.push(ci);
+  if (!b.doors.includes(ci)) b.doors.push(ci);
+}
+
+function floorplanSegments(start: number, end: number, rng: () => number): { from: number; size: number }[] {
+  const out: { from: number; size: number }[] = [];
+  let cursor = start;
+  while (cursor + 8 <= end) {
+    const remaining = end - cursor + 1;
+    const target = 10 + Math.floor(rng() * 13);
+    const size = remaining <= target + 10 ? remaining : Math.min(target, remaining - 10);
+    if (size < 8) break;
+    out.push({ from: cursor, size });
+    cursor += size + 1;
+  }
+  return out;
+}
+
+function randomFloorplanDepth(maxDepth: number, minDepth: number, rng: () => number): number {
+  if (maxDepth <= minDepth) return Math.max(1, maxDepth);
+  const span = maxDepth - minDepth;
+  const biased = Math.floor(Math.pow(rng(), 1.45) * (span + 1));
+  return Math.max(minDepth, Math.min(maxDepth, minDepth + biased));
+}
+
+function overlapMidpoint(a0: number, a1: number, b0: number, b1: number): number | null {
+  const from = Math.max(a0, b0);
+  const to = Math.min(a1, b1);
+  return from <= to ? Math.floor((from + to) / 2) : null;
+}
+
+function linkFloorplanNeighbors(world: World, rooms: readonly Room[], verticalWall: boolean, rng: () => number): void {
+  for (let i = 1; i < rooms.length; i++) {
+    if (rng() >= 0.34) continue;
+    const prev = rooms[i - 1];
+    const room = rooms[i];
+    if (verticalWall) {
+      const y = overlapMidpoint(prev.y, prev.y + prev.h - 1, room.y, room.y + room.h - 1);
+      if (y !== null) placeFloorplanDoor(world, prev, room, room.x - 1, y);
+    } else {
+      const x = overlapMidpoint(prev.x, prev.x + prev.w - 1, room.x, room.x + room.w - 1);
+      if (x !== null) placeFloorplanDoor(world, prev, room, x, room.y - 1);
+    }
+  }
+}
+
+function stampHorizontalFloorplanRow(
+  world: World,
+  corridor: Room,
+  blockIndex: number,
+  rowIndex: number,
+  y: number,
+  h: number,
+  x0: number,
+  x1: number,
+  wallTex: Tex,
+  rng: () => number,
+): number {
+  if (h < 7) return 0;
+  const rowRooms: Room[] = [];
+  const segments = floorplanSegments(x0, x1, rng);
+  const above = y < corridor.y;
+  for (let i = 0; i < segments.length; i++) {
+    const type = blockRoomType(blockIndex * 17 + rowIndex * 7 + i);
+    const tex = blockRoomTex(type);
+    const depth = randomFloorplanDepth(h, Math.min(9, h), rng);
+    const roomY = above ? corridor.y - 1 - depth : corridor.y + corridor.h + 1;
+    const room = addFloorplanRoom(
+      world,
+      `Внутренний квартал ${blockIndex + 1}.${rowIndex + 1}.${i + 1}`,
+      type,
+      segments[i].from,
+      roomY,
+      segments[i].size,
+      depth,
+      wallTex,
+      tex.floor,
+    );
+    carveFloorplanRoom(world, room);
+    const doorY = y < corridor.y ? corridor.y - 1 : corridor.y + corridor.h;
+    placeFloorplanDoor(world, room, corridor, room.x + Math.floor(room.w / 2), doorY);
+    decorateBlockInteriorRoom(world, room, type, rng);
+    rowRooms.push(room);
+  }
+  linkFloorplanNeighbors(world, rowRooms, true, rng);
+  return rowRooms.length;
+}
+
+function stampVerticalFloorplanRow(
+  world: World,
+  corridor: Room,
+  blockIndex: number,
+  rowIndex: number,
+  x: number,
+  w: number,
+  y0: number,
+  y1: number,
+  wallTex: Tex,
+  rng: () => number,
+): number {
+  if (w < 8) return 0;
+  const rowRooms: Room[] = [];
+  const segments = floorplanSegments(y0, y1, rng);
+  const left = x < corridor.x;
+  for (let i = 0; i < segments.length; i++) {
+    const type = blockRoomType(blockIndex * 19 + rowIndex * 5 + i);
+    const tex = blockRoomTex(type);
+    const depth = randomFloorplanDepth(w, Math.min(9, w), rng);
+    const roomX = left ? corridor.x - 1 - depth : corridor.x + corridor.w + 1;
+    const room = addFloorplanRoom(
+      world,
+      `Внутренний квартал ${blockIndex + 1}.${rowIndex + 1}.${i + 1}`,
+      type,
+      roomX,
+      segments[i].from,
+      depth,
+      segments[i].size,
+      wallTex,
+      tex.floor,
+    );
+    carveFloorplanRoom(world, room);
+    const doorX = x < corridor.x ? corridor.x - 1 : corridor.x + corridor.w;
+    placeFloorplanDoor(world, room, corridor, doorX, room.y + Math.floor(room.h / 2));
+    decorateBlockInteriorRoom(world, room, type, rng);
+    rowRooms.push(room);
+  }
+  linkFloorplanNeighbors(world, rowRooms, false, rng);
+  return rowRooms.length;
+}
+
+function stampFloorplanBranchCorridor(
+  world: World,
+  sidewalkRoomId: number,
+  rect: FloorplanRect,
+  blockIndex: number,
+  horizontalMain: boolean,
+  wallTex: Tex,
+  rng: () => number,
+): number {
+  if (rect.w < 56 || rect.h < 54 || rng() < 0.22) return 0;
+  if (horizontalMain) {
+    const w = rng() < 0.45 ? 2 : 3;
+    const x = rect.x + 8 + Math.floor(rng() * Math.max(1, rect.w - 16 - w));
+    const room = addFloorplanRoom(
+      world,
+      `Внутренний квартал ${blockIndex + 1}: боковой проход`,
+      RoomType.CORRIDOR,
+      x,
+      rect.y + 1,
+      w,
+      rect.h - 2,
+      wallTex,
+      SIDEWALK_TEX,
+    );
+    carveFloorplanCorridor(world, room);
+    connectRoomExit(world, room, x + Math.floor(w / 2), rect.y, 0, -1, sidewalkRoomId);
+    connectRoomExit(world, room, x + Math.floor(w / 2), rect.y + rect.h - 1, 0, 1, sidewalkRoomId);
+    return 1;
+  }
+
+  const h = rng() < 0.45 ? 2 : 3;
+  const y = rect.y + 8 + Math.floor(rng() * Math.max(1, rect.h - 16 - h));
+  const room = addFloorplanRoom(
+    world,
+    `Внутренний квартал ${blockIndex + 1}: боковой проход`,
+    RoomType.CORRIDOR,
+    rect.x + 1,
+    y,
+    rect.w - 2,
+    h,
+    wallTex,
+    SIDEWALK_TEX,
+  );
+  carveFloorplanCorridor(world, room);
+  connectRoomExit(world, room, rect.x, y + Math.floor(h / 2), -1, 0, sidewalkRoomId);
+  connectRoomExit(world, room, rect.x + rect.w - 1, y + Math.floor(h / 2), 1, 0, sidewalkRoomId);
+  return 1;
+}
+
+function stampFloorplanBlock(world: World, sidewalkRoomId: number, rect: FloorplanRect, blockIndex: number, rng: () => number): number {
+  if (rect.w < 44 || rect.h < 40 || !canBuildFloorplanRect(world, rect)) return 0;
+  const wallTex = blockIndex % 7 === 0 ? Tex.BRICK : blockIndex % 5 === 0 ? Tex.CONCRETE : Tex.PANEL;
+  const horizontal = rect.w >= rect.h ? rng() > 0.22 : rng() > 0.58;
+  fillFloorplanWalls(world, rect, wallTex);
+
+  let placed = 0;
+  if (horizontal) {
+    const corridorH = rect.h >= 68 ? 3 : 2;
+    const corridorY = rect.y + Math.floor((rect.h - corridorH) / 2);
+    const corridor = addFloorplanRoom(world, `Внутренний квартал ${blockIndex + 1}: общий коридор`, RoomType.CORRIDOR, rect.x + 1, corridorY, rect.w - 2, corridorH, wallTex, SIDEWALK_TEX);
+    carveFloorplanRoom(world, corridor);
+    connectRoomExit(world, corridor, rect.x, corridorY + Math.floor(corridorH / 2), -1, 0, sidewalkRoomId);
+    connectRoomExit(world, corridor, rect.x + rect.w - 1, corridorY + Math.floor(corridorH / 2), 1, 0, sidewalkRoomId);
+    placed += stampHorizontalFloorplanRow(world, corridor, blockIndex, 0, rect.y + 2, corridorY - rect.y - 3, rect.x + 2, rect.x + rect.w - 3, wallTex, rng);
+    placed += stampHorizontalFloorplanRow(world, corridor, blockIndex, 1, corridorY + corridorH + 1, rect.y + rect.h - corridorY - corridorH - 3, rect.x + 2, rect.x + rect.w - 3, wallTex, rng);
+    placed += stampFloorplanBranchCorridor(world, sidewalkRoomId, rect, blockIndex, true, wallTex, rng);
+  } else {
+    const corridorW = rect.w >= 72 ? 3 : 2;
+    const corridorX = rect.x + Math.floor((rect.w - corridorW) / 2);
+    const corridor = addFloorplanRoom(world, `Внутренний квартал ${blockIndex + 1}: поперечный коридор`, RoomType.CORRIDOR, corridorX, rect.y + 1, corridorW, rect.h - 2, wallTex, SIDEWALK_TEX);
+    carveFloorplanRoom(world, corridor);
+    connectRoomExit(world, corridor, corridorX + Math.floor(corridorW / 2), rect.y, 0, -1, sidewalkRoomId);
+    connectRoomExit(world, corridor, corridorX + Math.floor(corridorW / 2), rect.y + rect.h - 1, 0, 1, sidewalkRoomId);
+    placed += stampVerticalFloorplanRow(world, corridor, blockIndex, 0, rect.x + 2, corridorX - rect.x - 3, rect.y + 2, rect.y + rect.h - 3, wallTex, rng);
+    placed += stampVerticalFloorplanRow(world, corridor, blockIndex, 1, corridorX + corridorW + 1, rect.x + rect.w - corridorX - corridorW - 3, rect.y + 2, rect.y + rect.h - 3, wallTex, rng);
+    placed += stampFloorplanBranchCorridor(world, sidewalkRoomId, rect, blockIndex, false, wallTex, rng);
+  }
+  return placed;
+}
+
+function stampManhattanBlockInteriors(world: World, sidewalkRoomId: number, rng: () => number): void {
+  let blockIndex = 0;
+  let placed = 0;
+  for (let row = 0; row < SHELL_STREET_CENTERS.length - 1; row++) {
+    for (let col = 0; col < SHELL_AVENUE_CENTERS.length - 1; col++) {
+      const left = SHELL_AVENUE_CENTERS[col];
+      const right = SHELL_AVENUE_CENTERS[col + 1];
+      const top = SHELL_STREET_CENTERS[row];
+      const bottom = SHELL_STREET_CENTERS[row + 1];
+      const rect = {
+        x: left + 16,
+        y: top + 16,
+        w: right - left - 32,
+        h: bottom - top - 32,
+      };
+      placed += stampFloorplanBlock(world, sidewalkRoomId, rect, blockIndex++, rng);
+    }
+  }
+  if (placed > 0) {
+    world.markCellsDirty();
+    world.markWallTexDirty();
+    world.markFloorTexDirty();
+    world.markFeaturesDirty(true);
+  }
+}
+
 export function expandManhattanCrossroadsRouteShell(world: World, rng: () => number): void {
   const roadRoom = logicalRoomByName(world, 'Асфальтовая сетка авеню', RoomType.CORRIDOR, ROAD_TEX);
   const sidewalkRoom = logicalRoomByName(world, 'Бордюры и служебные края', RoomType.COMMON, SIDEWALK_TEX);
@@ -887,6 +1252,7 @@ export function expandManhattanCrossroadsRouteShell(world: World, rng: () => num
   placeBarrierRect(world, 910, 512, 46, 7);
   placeBarrierRect(world, 98, 676, 7, 46);
   stampShellStorefronts(world, sidewalkRoom.id, rng);
+  stampManhattanBlockInteriors(world, sidewalkRoom.id, rng);
   for (const [x, y] of [[104, 104], [920, 104], [104, 920], [920, 920], [512, 920], [920, 512]] as const) {
     placeSignalCluster(world, x, y);
   }
@@ -1533,8 +1899,22 @@ export function measureManhattanCrossroadsDecisionMetrics(generation: FloorGener
     }
   }
 
+  const blockRoomIds = new Set<number>();
+  for (const room of generation.world.rooms) {
+    if (!room.name.startsWith('Внутренний квартал')) continue;
+    blockRoomIds.add(room.id);
+  }
+  let blockInteriorReachableCells = 0;
+  if (blockRoomIds.size > 0) {
+    for (let ci = 0; ci < generation.world.cells.length; ci++) {
+      if (blockRoomIds.has(generation.world.roomMap[ci]) && audit.reachable[ci]) blockInteriorReachableCells++;
+    }
+  }
+
   return {
     crosswalkStripeCells,
+    blockInteriorRooms: blockRoomIds.size,
+    blockInteriorReachableCells,
     escortNpcPresent: generation.entities.some(entity => entity.plotNpcId === 'crossroads_zebra_granny')
       && generation.entities.some(entity => entity.plotNpcId === 'crossroads_courier_dima'),
     tollDoorLocked: tollDoor?.state === DoorState.LOCKED,

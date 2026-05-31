@@ -27,6 +27,12 @@ const HOT_NEEDS_RADIUS = 42;
 const COLD_NEEDS_BUDGET = 192;
 const COLD_NEEDS_MAX_DT = 30;
 const NEEDS_TOUCH_MAX = 16_384;
+const PASSIVE_HP_REGEN_FRACTION_PER_MINUTE = 0.01;
+const PASSIVE_HP_REGEN_FOOD_PER_MINUTE = 2;
+
+function needFraction(value: number): number {
+  return Math.max(0, Math.min(1, value / 100));
+}
 
 export interface NeedsCohortDebugSummary {
   totalNeeds: number;
@@ -66,6 +72,7 @@ export function updateNeeds(
   nextId?: { v: number },
   state?: GameState,
   world?: World,
+  passiveHealthRegenTimeScale = 1,
 ): void {
   const entityIndex = ensureEntityIndex(entities);
   const needsEntities = entityIndex.needs;
@@ -80,7 +87,7 @@ export function updateNeeds(
   hotNeedIds.clear();
 
   if (player?.alive && player.needs) {
-    const result = applyNeedTick(entities, player, dt, time, msgs, playerId, nextId, state);
+    const result = applyNeedTick(entities, player, dt, time, msgs, playerId, nextId, state, passiveHealthRegenTimeScale);
     rememberNeedsTouch(player.id, time);
     needsDebug.playerExact = 1;
     recordNeedDebugResult(result);
@@ -92,7 +99,7 @@ export function updateNeeds(
       if (!e.alive || !e.needs || e.id === playerId || hotNeedIds.has(e.id)) continue;
       hotNeedIds.add(e.id);
       const elapsed = elapsedNeedsDt(e, time, dt);
-      const result = applyNeedTick(entities, e, elapsed, time, msgs, playerId, nextId, state);
+      const result = applyNeedTick(entities, e, elapsed, time, msgs, playerId, nextId, state, passiveHealthRegenTimeScale);
       rememberNeedsTouch(e.id, time);
       needsDebug.hotExact++;
       recordNeedDebugResult(result);
@@ -111,7 +118,7 @@ export function updateNeeds(
     budget--;
     const elapsed = elapsedNeedsDt(e, time, dt);
     applyColdResidentCadence(e, elapsed, time, world);
-    const result = applyNeedTick(entities, e, elapsed, time, msgs, playerId, nextId, state);
+    const result = applyNeedTick(entities, e, elapsed, time, msgs, playerId, nextId, state, passiveHealthRegenTimeScale);
     rememberNeedsTouch(e.id, time);
     needsDebug.coldUpdated++;
     recordNeedDebugResult(result);
@@ -151,6 +158,7 @@ function applyNeedTick(
   playerId: number,
   nextId: { v: number } | undefined,
   state: GameState | undefined,
+  passiveHealthRegenTimeScale: number,
 ): { died: boolean; droppedItems: number } {
   const n = e.needs;
   if (!n || dt <= 0) return { died: false, droppedItems: 0 };
@@ -178,6 +186,8 @@ function applyNeedTick(
     n.poo = Math.min(100, n.poo + dp);
     n.pendingPoo -= dp;
   }
+
+  applyPassiveHealthRegen(e, dt * passiveHealthRegenTimeScale);
 
   // Consequences
   if (e.hp === undefined) return { died: false, droppedItems: 0 };
@@ -212,6 +222,20 @@ function applyNeedTick(
   e.alive = false;
   e.hp = 0;
   return { died: true, droppedItems: dropNpcInventory(entities, e, nextId) };
+}
+
+function applyPassiveHealthRegen(e: Entity, dt: number): void {
+  const n = e.needs;
+  if (!n || e.hp === undefined || e.maxHp === undefined || e.hp <= 0 || e.hp >= e.maxHp) return;
+  const maxHp = Math.max(1, e.maxHp);
+  const foodEfficiency = needFraction(n.food);
+  const healRate = maxHp * PASSIVE_HP_REGEN_FRACTION_PER_MINUTE * foodEfficiency / 60;
+  const foodRate = PASSIVE_HP_REGEN_FOOD_PER_MINUTE * foodEfficiency / 60;
+  if (n.food <= 0 || healRate <= 0 || foodRate <= 0) return;
+  const healed = Math.min(e.maxHp - e.hp, healRate * dt, n.food * (healRate / foodRate));
+  if (healed <= 0) return;
+  e.hp += healed;
+  n.food = Math.max(0, n.food - healed * (foodRate / healRate));
 }
 
 function dropNpcInventory(entities: Entity[], e: Entity, nextId: { v: number } | undefined): number {

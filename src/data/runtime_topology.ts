@@ -31,9 +31,11 @@ export interface RuntimeTopologyContract {
 export const RUNTIME_TOPOLOGY_LIMITS = {
   conwayLifeMaxArenas: 4,
   conwayLifeMaxArenaCells: 48 * 48,
+  conwayLifeWorldWindowCells: 128 * 128,
   livingTunnelsMaxRoots: 16,
   livingTunnelsMaxTrailPatches: 180,
   livingTunnelsMaxPatchCells: 13,
+  wallSnakeMaxSnakes: 128,
   wallSnakeMaxPathCells: 192,
   wallSnakeMaxBodyCells: 96,
   sectionShiftMaxSections: 6,
@@ -49,10 +51,10 @@ export const RUNTIME_TOPOLOGY_LIMITS = {
 export const RUNTIME_TOPOLOGY_CONTRACTS: readonly RuntimeTopologyContract[] = [
   {
     id: 'wall_snake',
-    cadence: '0.40-0.78s head step; contact warning checked every update',
-    maxArenaCells: RUNTIME_TOPOLOGY_LIMITS.wallSnakeMaxPathCells,
-    maxArenaCount: 1,
-    cacheKey: 'WeakMap<World, SnakeRuntime | null> from [wall_snake:*] room tag',
+    cadence: '0.24-0.54s independent phased head step per snake; contact warning checked every update',
+    maxArenaCells: RUNTIME_TOPOLOGY_LIMITS.wallSnakeMaxSnakes * RUNTIME_TOPOLOGY_LIMITS.wallSnakeMaxPathCells,
+    maxArenaCount: RUNTIME_TOPOLOGY_LIMITS.wallSnakeMaxSnakes,
+    cacheKey: 'WeakMap<World, SnakeFieldRuntime | null> from [wall_snake:*] room tags',
     invalidatesOn: ['new World object', 'route transition/load', 'samosbor rebuild'],
     dirtyFlags: ['cells'],
     routeCriticalProtections: ['lift cells', 'doors', 'abyss', 'aptMask', 'hermoWall', 'containers'],
@@ -101,16 +103,17 @@ export const RUNTIME_TOPOLOGY_CONTRACTS: readonly RuntimeTopologyContract[] = [
   },
   {
     id: 'conway_life',
-    cadence: '0.75s cellular tick',
-    maxArenaCells: RUNTIME_TOPOLOGY_LIMITS.conwayLifeMaxArenas *
+    cadence: '0.75s active cellular tick inside one 128x128 world window; random window changes every 60s',
+    maxArenaCells: RUNTIME_TOPOLOGY_LIMITS.conwayLifeWorldWindowCells +
+      RUNTIME_TOPOLOGY_LIMITS.conwayLifeMaxArenas *
       RUNTIME_TOPOLOGY_LIMITS.conwayLifeMaxArenaCells,
-    maxArenaCount: RUNTIME_TOPOLOGY_LIMITS.conwayLifeMaxArenas,
-    cacheKey: 'WeakMap<World, ConwayLifeRuntime> from "Игра жизнь:" room names',
+    maxArenaCount: RUNTIME_TOPOLOGY_LIMITS.conwayLifeMaxArenas + 1,
+    cacheKey: 'WeakMap<World, ConwayLifeRuntime> from current World cells plus optional "Игра жизнь:" room names',
     invalidatesOn: ['new World object', 'route transition/load', 'samosbor rebuild'],
     dirtyFlags: ['cells', 'wallTex', 'floorTex', 'features', 'fog'],
     routeCriticalProtections: ['doors and near-door cells', 'aptMask', 'hermoWall', 'containers', 'lifts', 'lift buttons'],
     counterplay: ['apparatus freeze/reset', 'wrench or UV', 'circuit board or relay diagram'],
-    saveBehavior: 'No custom save section; arena mask is rebuilt from tagged rooms and current cells.',
+    saveBehavior: 'No custom save section; active window and optional room arena masks are rebuilt from current World cells.',
   },
   {
     id: 'rail_trains',

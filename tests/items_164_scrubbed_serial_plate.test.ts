@@ -49,7 +49,7 @@ test('scrubbed serial plate can be sold as audit-risk black-market proof', () =>
   const state = makeGameState({ currentFloor: FloorLevel.LIVING, time: 164 });
 
   assert.equal(addItem(player, ITEM_ID, 1), true);
-  assert.equal(getInventorySlotActionInfo(player, 0)?.useLabel, 'E сдать/сбыть');
+  assert.equal(getInventorySlotActionInfo(player, 0)?.useLabel, 'Enter сдать/сбыть');
 
   useItem(player, 0, state.msgs, state.time, state);
 

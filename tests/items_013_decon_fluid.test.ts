@@ -68,7 +68,7 @@ test('using decon fluid cleans nearby slime or fungus hazards and publishes clea
   const player = makeTestPlayer({ id: 77, x: 12.5, y: 12.5 });
   const state = makeGameState({ currentFloor: FloorLevel.MAINTENANCE, time: 12 });
   assert.equal(addItem(player, 'decon_fluid', 1), true);
-  assert.equal(getInventorySlotActionInfo(player, 0)?.useLabel, 'E зачистить');
+  assert.equal(getInventorySlotActionInfo(player, 0)?.useLabel, 'Enter зачистить');
   assert.ok(getCellHazardMoveMultiplier(world, player) < 1, 'test hazard should slow before cleanup');
 
   useItem(player, 0, state.msgs, 12, state, 0, world);

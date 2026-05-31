@@ -33,7 +33,7 @@ test('shelter seat card can be handed to shelter seniors in the living block', (
   const state = makeGameState({ currentFloor: FloorLevel.LIVING, time: 113 });
 
   assert.equal(addItem(player, ITEM_ID, 1), true);
-  assert.equal(getInventorySlotActionInfo(player, 0)?.useLabel, 'E предъявить');
+  assert.equal(getInventorySlotActionInfo(player, 0)?.useLabel, 'Enter предъявить');
 
   useItem(player, 0, state.msgs, state.time, state);
 

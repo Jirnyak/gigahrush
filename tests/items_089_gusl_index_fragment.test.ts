@@ -31,7 +31,7 @@ test('gusl index fragment can be sold as a black-market weapon hint', () => {
   const state = makeGameState({ currentFloor: FloorLevel.LIVING, time: 89 });
 
   assert.equal(addItem(player, 'gusl_index_fragment', 1), true);
-  assert.equal(getInventorySlotActionInfo(player, 0)?.useLabel, 'E проверить');
+  assert.equal(getInventorySlotActionInfo(player, 0)?.useLabel, 'Enter проверить');
 
   useItem(player, 0, state.msgs, state.time, state);
 

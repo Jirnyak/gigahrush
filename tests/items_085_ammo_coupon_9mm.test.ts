@@ -29,7 +29,7 @@ test('ammo coupon 9mm redeems into legal 9mm ammo', () => {
   const player = makeTestPlayer({ inventory: [{ defId: 'ammo_coupon_9mm', count: 1 }] });
   const state = makeGameState({ currentFloor: FloorLevel.MINISTRY, time: 85 });
 
-  assert.equal(getInventorySlotActionInfo(player, 0)?.useLabel, 'E погасить');
+  assert.equal(getInventorySlotActionInfo(player, 0)?.useLabel, 'Enter погасить');
 
   useItem(player, 0, state.msgs, state.time, state);
 

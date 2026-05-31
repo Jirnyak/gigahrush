@@ -11,11 +11,12 @@ import {
 import { ITEMS } from '../data/catalog';
 import { zForStoryFloor } from '../data/procedural_floors';
 import { isQuestTargetOnCurrentFloor, questRouteFloor, questRouteTargetLabel, questTargetLiftDirection } from '../systems/contracts';
-import { controlBindingLabel, controlHint } from '../systems/controls';
+import { controlBindingLabel, controlHint, menuCloseHint } from '../systems/controls';
 import { getRecentEvents } from '../systems/events';
 import { getRecentRumorLead } from '../systems/npc_memory';
 import { currentFloorRunEntry, floorRunEntryMapLabel, formatFloorZ } from '../systems/procedural_floors';
 import { formatQuestMinutes, questDeadlineText, questHasDeadline, questRemainingMinutes } from '../systems/quest_deadlines';
+import { getActiveQuest, isQuestSelectableAsActive } from '../systems/quests';
 import { drawNeuroPanel, drawGlitchText } from './hud_fx';
 import { drawWrappedText, fitText } from './ui_text';
 
@@ -262,6 +263,7 @@ export function drawQuestLog(
 
   const page = Math.min(state.questPage, all.length - 1);
   const q = all[page];
+  const isActiveQuest = getActiveQuest(state)?.id === q.id;
   const maxW = pw - 16 * sx;
   const contentBottom = py + ph - 22 * sy;
 
@@ -269,6 +271,9 @@ export function drawQuestLog(
   ctx.fillStyle = '#888';
   ctx.font = `${7 * sy}px monospace`;
   ctx.fillText(`${page + 1} / ${all.length}`, px + pw - 40 * sx, py + 6 * sy);
+  if (isActiveQuest) {
+    drawLabelCell(ctx, 'АКТИВНО', px + pw - 98 * sx, py + 5 * sy, 50 * sx, 10 * sy, '#8a5c00', '#2a2107', '#ffd21f');
+  }
 
   // Quest giver
   ctx.fillStyle = '#8af';
@@ -276,7 +281,7 @@ export function drawQuestLog(
   let ly = py + 32 * sy;
   ctx.fillText(fitText(ctx, `От: ${q.giverName ?? '???'}`, maxW), px + 8 * sx, ly);
   ly += 8 * sy;
-  drawObjectiveRow(ctx, q, state, px + 8 * sx, ly, maxW, sx, sy, false);
+  drawObjectiveRow(ctx, q, state, px + 8 * sx, ly, maxW, sx, sy, isActiveQuest);
 
   // Status badge
   const isFailed = q.failed === true;
@@ -357,8 +362,8 @@ export function drawQuestLog(
   // Bottom hint
   ctx.fillStyle = '#555';
   ctx.font = `${7 * sy}px monospace`;
-  const hint = all.length > 1
-    ? `${controlBindingLabel('menuUp')}/${controlBindingLabel('menuDown')} листать  |  ${controlHint('quests')} закрыть`
-    : `${controlHint('quests')} закрыть`;
-  ctx.fillText(hint, px + 8 * sx, py + ph - 8 * sy);
+  const pageHint = all.length > 1 ? `${controlBindingLabel('menuUp')}/${controlBindingLabel('menuDown')} листать` : '';
+  const activeHint = isQuestSelectableAsActive(q) ? `${controlHint('gameMenu')} ${isActiveQuest ? 'снять цель' : 'цель на карте'}` : '';
+  const hint = [pageHint, activeHint, `${menuCloseHint()} закрыть`].filter(Boolean).join('  |  ');
+  ctx.fillText(fitText(ctx, hint, maxW), px + 8 * sx, py + ph - 8 * sy);
 }

@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { FloorLevel, type GameState } from '../src/core/types';
 import { createEconomyFloorState } from '../src/data/economy';
+import { MAX_INVENTORY_SLOTS } from '../src/data/inventory_limits';
 import { ensureEconomyState, getEconomyQuote } from '../src/systems/economy';
 import {
   addTradeAskFromSlot,
@@ -251,26 +252,26 @@ test('trade credit offer caps distinct staged slots and can be cleared', () => {
   const state = makeGameState({ currentFloor: FloorLevel.LIVING });
   const player = makeTestPlayer({
     id: 1,
-    inventory: Array.from({ length: 26 }, (_, i) => ({ defId: 'bread', count: 1, data: { serial: i } })),
+    inventory: Array.from({ length: MAX_INVENTORY_SLOTS + 1 }, (_, i) => ({ defId: 'bread', count: 1, data: { serial: i } })),
   });
   const npc = makeTestNpc({
     id: 2,
     name: 'Торговец',
-    inventory: Array.from({ length: 26 }, (_, i) => ({ defId: 'water', count: 1, data: { serial: i } })),
+    inventory: Array.from({ length: MAX_INVENTORY_SLOTS + 1 }, (_, i) => ({ defId: 'water', count: 1, data: { serial: i } })),
   });
 
-  for (let i = 0; i < 25; i++) {
+  for (let i = 0; i < MAX_INVENTORY_SLOTS; i++) {
     assert.equal(addTradeOfferFromSlot(state, player, npc, i).ok, true);
     assert.equal(addTradeAskFromSlot(state, npc, i).ok, true);
   }
-  const overflow = addTradeOfferFromSlot(state, player, npc, 25);
-  const askOverflow = addTradeAskFromSlot(state, npc, 25);
+  const overflow = addTradeOfferFromSlot(state, player, npc, MAX_INVENTORY_SLOTS);
+  const askOverflow = addTradeAskFromSlot(state, npc, MAX_INVENTORY_SLOTS);
   assert.equal(overflow.ok, false);
   assert.equal(overflow.code, 'offer_full');
   assert.equal(askOverflow.ok, false);
   assert.equal(askOverflow.code, 'ask_full');
-  assert.equal(getTradeOffer(state).length, 25);
-  assert.equal(getTradeNpcOffer(state).length, 25);
+  assert.equal(getTradeOffer(state).length, MAX_INVENTORY_SLOTS);
+  assert.equal(getTradeNpcOffer(state).length, MAX_INVENTORY_SLOTS);
 
   clearTradeOffers(state);
   assert.equal(getTradeOffer(state).length, 0);

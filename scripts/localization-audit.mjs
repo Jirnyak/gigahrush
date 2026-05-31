@@ -7,7 +7,7 @@ import { collectGameTextEntries } from './extract-game-texts.mjs';
 
 const ROOT = process.cwd();
 export const LOCALE_DIR = path.join(ROOT, 'locales');
-export const REPORT_DIR = path.join(ROOT, 'Docs/Localization');
+export const REPORT_DIR = path.join(ROOT, 'gatbage/reference/localization');
 export const SOURCE_LOCALE = 'ru';
 const DEFAULT_LOCALES = ['en'];
 

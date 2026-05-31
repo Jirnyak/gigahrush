@@ -1,8 +1,9 @@
 import { EntityType, type Entity } from '../core/types';
-import { ACTIVE_ACTOR_SOFT_LIMIT, ENTITY_SOFT_LIMITS, FLOOR_OBJECT_SOFT_LIMIT } from '../data/entity_limits';
+import { activeActorSoftLimit, ENTITY_SOFT_LIMITS, FLOOR_OBJECT_SOFT_LIMIT } from '../data/entity_limits';
 import { isNativePlayerBodyEntity, isPlayerEntity } from './player_actor';
 
 export function entitySoftLimit(type: EntityType): number | undefined {
+  if (type === EntityType.NPC || type === EntityType.MONSTER) return activeActorSoftLimit();
   return ENTITY_SOFT_LIMITS[type];
 }
 
@@ -47,7 +48,7 @@ export function countLiveFloorObjects(entities: readonly Entity[]): number {
 }
 
 export function remainingActiveActorSpawnSlots(entities: readonly Entity[]): number {
-  return Math.max(0, ACTIVE_ACTOR_SOFT_LIMIT - countLiveActiveActors(entities));
+  return Math.max(0, activeActorSoftLimit() - countLiveActiveActors(entities));
 }
 
 export function remainingFloorObjectSpawnSlots(entities: readonly Entity[]): number {

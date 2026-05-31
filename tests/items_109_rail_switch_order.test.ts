@@ -33,7 +33,7 @@ test('rail switch order is official rail route access paperwork', () => {
 
   const player = makeTestPlayer();
   assert.equal(addItem(player, ITEM_ID, 1), true);
-  assert.equal(getInventorySlotActionInfo(player, 0)?.useLabel, 'E предъявить');
+  assert.equal(getInventorySlotActionInfo(player, 0)?.useLabel, 'Enter предъявить');
 });
 
 test('rail switch order opens the Ministry N3 service passage without consuming the order', () => {

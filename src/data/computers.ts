@@ -12,6 +12,7 @@ export interface ComputerDef {
   pages: readonly ComputerPageDef[];
   stealRewardRubles: number;
   stealLabel: string;
+  recipeSourceIds?: readonly string[];
 }
 
 export const COMPUTER_DEFS: Record<ComputerDefId, ComputerDef> = {
@@ -21,6 +22,7 @@ export const COMPUTER_DEFS: Record<ComputerDefId, ComputerDef> = {
     prompt: 'архив',
     stealRewardRubles: 45,
     stealLabel: 'архивная выгрузка',
+    recipeSourceIds: ['terminal_floor_archive_scrap_schemes'],
     pages: [
       {
         title: 'Журнал этажа',
@@ -34,6 +36,7 @@ export const COMPUTER_DEFS: Record<ComputerDefId, ComputerDef> = {
         lines: [
           'Копирование оставляет след в журнале доступа.',
           'След можно продать, но источник станет заметнее.',
+          'Схемы в выгрузке локальные: НЕТ не требуется.',
         ],
       },
     ],
@@ -44,6 +47,7 @@ export const COMPUTER_DEFS: Record<ComputerDefId, ComputerDef> = {
     prompt: 'компьютер',
     stealRewardRubles: 30,
     stealLabel: 'диспетчерский слепок',
+    recipeSourceIds: ['terminal_dispatch_net_relay'],
     pages: [
       {
         title: 'Сменная сводка',
@@ -57,6 +61,7 @@ export const COMPUTER_DEFS: Record<ComputerDefId, ComputerDef> = {
         lines: [
           'Если этаж шумит, не верьте карте без второго источника.',
           'Веди заметки: после Самосбора сверишь дверь, список жильцов и маршрут назад.',
+          'Релейную схему копируй в блокнот, а не в облако.',
         ],
       },
     ],

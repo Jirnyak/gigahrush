@@ -1,7 +1,7 @@
 /* ── Message log (L key) — fullscreen STALKER-style PDA log ───── */
 
 import { type GameState } from '../core/types';
-import { controlBindingLabel, controlHint } from '../systems/controls';
+import { controlBindingLabel, controlHint, menuCloseHint } from '../systems/controls';
 import { drawNeuroPanel } from './hud_fx';
 import { fitTextStable, wrapTextLines } from './ui_text';
 
@@ -110,7 +110,7 @@ export function drawLogMenu(
   ctx.fillStyle = '#555';
   ctx.font = `${7 * sy}px monospace`;
   ctx.fillText(
-    fitTextStable(ctx, `${controlBindingLabel('menuUp')}/${controlBindingLabel('menuDown')} листать  |  ${log.length} зап.  |  ${controlHint('log')} закрыть`, w - 24 * sx),
+    fitTextStable(ctx, `${controlBindingLabel('menuUp')}/${controlBindingLabel('menuDown')} листать  |  ${log.length} зап.  |  ${menuCloseHint()} закрыть`, w - 24 * sx),
     12 * sx,
     h - 8 * sy,
   );

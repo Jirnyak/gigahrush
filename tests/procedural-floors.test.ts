@@ -32,6 +32,7 @@ import {
   commitFloorRunEntry,
   currentFloorRunEntry,
   currentFloorRunLabel,
+  ensureFloorRunState,
   floorRunArrivalLead,
   floorRunEntryFloorKey,
   floorRunEntryKind,
@@ -71,6 +72,7 @@ import { measureManhattanCrossroadsDecisionMetrics } from '../src/gen/design_flo
 import { UPPER_BUREAU_DOCUMENTS } from '../src/gen/design_floors/upper_bureau';
 import { designFloorGeneratorIds, generateDesignFloor, validateDesignFloorGenerators } from '../src/gen/design_floors/manifest';
 import { validateProceduralAnomalyGenerationRegistry } from '../src/gen/procedural_anomalies';
+import { proceduralStructureFamilyForSpec } from '../src/gen/procedural_structure_library';
 import { generateFloor } from '../src/gen/floor_manifest';
 import { sampleNaturalPopulationCells } from '../src/gen/population_placement';
 import {
@@ -167,6 +169,25 @@ function reachableWithDoorKeys(gen: ReturnType<typeof generateDesignFloor>, keyI
 function countReachableCells(reachable: Uint8Array): number {
   let count = 0;
   for (const value of reachable) count += value;
+  return count;
+}
+
+function reachableBucketCount(world: World, reachable: Uint8Array, bucketSize: number): number {
+  const side = Math.ceil(W / bucketSize);
+  const buckets = new Uint8Array(side * side);
+  let count = 0;
+  for (let i = 0; i < world.cells.length; i++) {
+    if (!reachable[i]) continue;
+    const cell = world.cells[i];
+    if (cell !== Cell.FLOOR && cell !== Cell.WATER && cell !== Cell.DOOR && cell !== Cell.LIFT) continue;
+    const x = i % W;
+    const y = (i / W) | 0;
+    const bi = Math.min(side - 1, Math.floor(y / bucketSize)) * side + Math.min(side - 1, Math.floor(x / bucketSize));
+    if (!buckets[bi]) {
+      buckets[bi] = 1;
+      count++;
+    }
+  }
   return count;
 }
 
@@ -465,6 +486,38 @@ function summarizeAnomalyPressure(): Record<'none' | 'anomaly', { slots: number;
   };
 }
 
+function summarizeProceduralDeckDiversity(): {
+  total: number;
+  geometryCounts: Map<string, number>;
+  anomalyCounts: Map<string, number>;
+} {
+  const geometryCounts = new Map<string, number>();
+  const anomalyCounts = new Map<string, number>();
+  let total = 0;
+
+  for (const seed of DANGER_SNAPSHOT_SEEDS) {
+    for (const z of PROCEDURAL_FLOOR_ZS) {
+      const spec = makeProceduralFloorSpec(seed, z);
+      geometryCounts.set(spec.geometryId, (geometryCounts.get(spec.geometryId) ?? 0) + 1);
+      anomalyCounts.set(spec.anomalyId, (anomalyCounts.get(spec.anomalyId) ?? 0) + 1);
+      total++;
+    }
+  }
+
+  return { total, geometryCounts, anomalyCounts };
+}
+
+test('procedural route deck keeps broad geometry and anomaly diversity', () => {
+  const summary = summarizeProceduralDeckDiversity();
+  const maxGeometryShare = Math.max(...summary.geometryCounts.values()) / summary.total;
+  const noneAnomalyShare = (summary.anomalyCounts.get('none') ?? 0) / summary.total;
+
+  assert.equal(summary.geometryCounts.size >= Math.min(8, FLOOR_GEOMETRIES.length), true, `geometry ids ${[...summary.geometryCounts.keys()].join(',')}`);
+  assert.equal(maxGeometryShare < 0.34, true, `dominant geometry share ${maxGeometryShare}`);
+  assert.equal(summary.anomalyCounts.size >= 12, true, `anomaly ids ${[...summary.anomalyCounts.keys()].join(',')}`);
+  assert.equal(noneAnomalyShare < 0.45, true, `none anomaly share ${noneAnomalyShare}`);
+});
+
 test('floor run reaches the next lower authored floor through procedural gaps', () => {
   const state = makeGameState({ currentFloor: FloorLevel.LIVING });
   setFloorRunState(state, { runSeed: 123, currentZ: 0, specs: {}, visited: {} }, FloorLevel.LIVING);
@@ -490,23 +543,24 @@ test('floor run reaches the next lower authored floor through procedural gaps', 
   assert.equal(authored?.baseFloor, FloorLevel.MAINTENANCE);
 });
 
-test('floor run UX labels expose z, route id, danger, anomaly and return path', () => {
+test('floor run UX labels avoid duplicate procedural z and keep return path', () => {
   const state = makeGameState({ currentFloor: FloorLevel.LIVING });
   setFloorRunState(state, { runSeed: 123, currentZ: 0, specs: {}, visited: {} }, FloorLevel.LIVING);
 
-  assert.match(currentFloorRunLabel(state) ?? '', /Z\+0 story:living риск 1\/5/);
+  assert.match(currentFloorRunLabel(state) ?? '', /Z\+0 story:living Жилая зона/);
   assert.equal(floorRunEntryKind(currentFloorRunEntry(state)), 'story');
   assert.equal(floorRunEntryFloorKey(currentFloorRunEntry(state)), 'story:living');
-  assert.match(floorRunEntryRouteCard(currentFloorRunEntry(state)), /СЮЖЕТНЫЙ ЯКОРЬ Z\+0 story:living риск 1\/5: Жилая зона\. домашний hub, подготовка, возврат\./);
+  assert.match(floorRunEntryRouteCard(currentFloorRunEntry(state)), /СЮЖЕТНЫЙ ЯКОРЬ Z\+0 story:living: Жилая зона\. домашний hub, подготовка, возврат\./);
 
   const first = resolveFloorRunRoute(state, LiftDirection.DOWN);
   assert.equal(first?.procedural, true);
   assert.equal(floorRunEntryKind(first!), 'procedural');
   assert.equal(floorRunEntryFloorKey(first!), 'procedural:z-1');
-  assert.match(floorRunEntryLiftLabel(first!), /ВЫЛАЗКА Z-1 z-1 риск \d\/5:/);
-  assert.match(floorRunEntryMapLabel(first!), /Z-1 z-1 риск \d\/5/);
-  assert.match(floorRunEntryRouteCard(first!), /ВЫЛАЗКА Z-1 z-1 риск \d\/5: .+\. .+, .+, .+\./);
-  assert.match(floorRunArrivalLead(first!, LiftDirection.UP), /Зацепка: ВЫЛАЗКА Z-1 z-1 риск \d\/5: .+\. .+ Возврат: лифт ↑ к предыдущему Z\./);
+  assert.match(floorRunEntryLiftLabel(first!), /ВЫЛАЗКА Z-1:/);
+  assert.doesNotMatch(floorRunEntryLiftLabel(first!), /Z-1 z-1/);
+  assert.doesNotMatch(floorRunEntryMapLabel(first!), /Z-1 z-1/);
+  assert.match(floorRunEntryRouteCard(first!), /ВЫЛАЗКА Z-1: .+\. .+, .+, .+\./);
+  assert.match(floorRunArrivalLead(first!, LiftDirection.UP), /Зацепка: ВЫЛАЗКА Z-1: .+\. .+ Возврат: лифт ↑ к предыдущему Z\./);
 
   commitFloorRunEntry(state, first!);
   commitFloorRunEntry(state, resolveFloorRunRoute(state, LiftDirection.DOWN)!);
@@ -515,10 +569,23 @@ test('floor run UX labels expose z, route id, danger, anomaly and return path', 
   assert.equal(authored?.designFloorId, 'floor_69');
   assert.equal(floorRunEntryKind(authored!), 'design');
   assert.equal(floorRunEntryFloorKey(authored!), 'design:floor_69');
-  assert.match(floorRunEntryLiftLabel(authored!), /РУЧНОЙ МАРШРУТ Z-4 floor_69 риск 3\/5/);
-  assert.match(floorRunEntryRouteCard(authored!), /РУЧНОЙ МАРШРУТ Z-4 floor_69 риск 3\/5: .+\. населенный сбой, сделки, слухи\./);
+  assert.match(floorRunEntryLiftLabel(authored!), /РУЧНОЙ МАРШРУТ Z-4 floor_69/);
+  assert.match(floorRunEntryRouteCard(authored!), /РУЧНОЙ МАРШРУТ Z-4 floor_69: .+\. населенный сбой, сделки, слухи\./);
   assert.match(floorRunArrivalLead(authored!, LiftDirection.UP), /населенный сбой, сделки, слухи/);
   assert.match(floorRunArrivalLead(authored!, LiftDirection.UP), /Возврат: лифт ↑ к предыдущему Z/);
+});
+
+test('floor run reads keep normalized state identity', () => {
+  const state = makeGameState({ currentFloor: FloorLevel.LIVING });
+  const run = setFloorRunState(state, { runSeed: 123, currentZ: 0, specs: {}, visited: {} }, FloorLevel.LIVING);
+  const host = state as typeof state & { floorRun?: unknown };
+
+  assert.equal(ensureFloorRunState(state), run);
+  currentFloorRunEntry(state);
+  currentFloorRunLabel(state);
+  resolveFloorRunRoute(state, LiftDirection.DOWN);
+
+  assert.equal(host.floorRun, run);
 });
 
 test('objective route HUD and lift prompts point down to lower route targets', () => {
@@ -526,7 +593,7 @@ test('objective route HUD and lift prompts point down to lower route targets', (
   setFloorRunState(state, { runSeed: 123, currentZ: 0, specs: {}, visited: {} }, FloorLevel.LIVING);
 
   const startHud = getObjectiveRouteHud(state);
-  assert.match(startHud.title, /Ольга.*Барни.*Яков/);
+  assert.match(startHud.title, /Ольга.*Баринов.*Яков/);
   assert.match(startHud.lift, /после цели/);
 
   const quest = {
@@ -552,7 +619,7 @@ test('objective route HUD and lift prompts point down to lower route targets', (
   assert.match(hud.title, /добыть/);
   assert.match(hud.target, /Z-20 Коллекторы/);
   assert.match(hud.lift, /Лифт ↓ к цели от Z\+0/);
-  assert.match(hud.risk, /Риск 2\/5/);
+  assert.match(hud.risk, /Коллекторы: насосная или пост давления/);
   assert.match(hud.returnPath, /Жилая зона/);
 
   commitFloorRunEntry(state, resolveFloorRunRoute(state, LiftDirection.DOWN)!);
@@ -961,10 +1028,64 @@ testGenerationMatrix('all procedural geometry profiles can be forced without ano
     assert.equal(gen.world.cells[gen.world.idx(Math.floor(gen.spawnX), Math.floor(gen.spawnY))], Cell.FLOOR, `${def.id} spawn cell`);
     assert.equal(hasReachableLift(gen, audit, LiftDirection.UP), true, `${def.id} up lift`);
     assert.equal(hasReachableLift(gen, audit, LiftDirection.DOWN), true, `${def.id} down lift`);
+    assert.equal(reachableBucketCount(gen.world, audit.reachable, 64) >= 10, true, `${def.id} should occupy multiple map-scale buckets`);
+    if (!['living_blocks', 'archive_warrens', 'apartment_pressure', 'sump_causeways'].includes(def.id)) {
+      const macroHalls = gen.world.rooms.filter(room =>
+        room.name.startsWith('Насосный зал') ||
+        room.name.startsWith('Цеховой пролет') ||
+        room.name.startsWith('Сервисный узел') ||
+        room.name.startsWith('Ветровой короб') ||
+        room.name.startsWith('Приемный зал') ||
+        room.name.startsWith('Общий тамбур') ||
+        room.name.startsWith('Большой общий зал') ||
+        room.name.startsWith('Опорный зал') ||
+        (room.w * room.h >= 140 && Math.max(room.w, room.h) >= 18)
+      );
+      const macroCues = getRouteCueMarkers(gen.world).filter(marker => marker.tags.includes('macro_spine') && marker.tags.includes(def.id));
+      assert.equal(macroHalls.length >= 3, true, `${def.id} macro halls ${macroHalls.length}`);
+      assert.equal(macroCues.length >= 1, true, `${def.id} macro spine cue`);
+    }
   }
 });
 
-test('archive warrens geometry builds a fair document maze with recorded landmarks', () => {
+testGenerationMatrix('procedural structure library gives generic geometries distinct macro overlays', () => {
+  const cases = [
+    { geometryId: 'communal_knots', z: 1, family: 'cellular_braid' },
+    { geometryId: 'admin_pockets', z: -21, family: 'prime_xor_registry' },
+    { geometryId: 'service_spines', z: 17, family: 'braided_maintenance_maze' },
+    { geometryId: 'workshops', z: 17, family: 'factory_islands' },
+  ] as const;
+
+  for (const [i, item] of cases.entries()) {
+    const def = FLOOR_GEOMETRIES.find(candidate => candidate.id === item.geometryId);
+    assert.ok(def, `missing geometry ${item.geometryId}`);
+    const base = makeProceduralFloorSpec(202_606 + i * 17, item.z);
+    const spec: ProceduralFloorSpec = {
+      ...base,
+      geometryId: item.geometryId,
+      baseFloor: def.baseFloor,
+      majorityId: 'citizens',
+      anomalyId: 'none',
+      danger: 3,
+      title: `${def.title}: ${base.title}`,
+    };
+    assert.equal(proceduralStructureFamilyForSpec(spec), item.family);
+    const gen = timedProceduralSpec(spec, `structure library ${item.geometryId}`);
+    const audit = reachabilityAudit(gen);
+    const cues = getRouteCueMarkers(gen.world).filter(marker =>
+      marker.tags.includes('structure_library') &&
+      marker.tags.includes(item.family) &&
+      marker.tags.includes(item.geometryId),
+    );
+
+    assert.equal(cues.length >= 1, true, `${item.geometryId} structure cue`);
+    assert.equal(reachableBucketCount(gen.world, audit.reachable, 64) >= 12, true, `${item.geometryId} macro buckets`);
+    assert.equal(hasReachableLift(gen, audit, LiftDirection.UP), true, `${item.geometryId} up lift`);
+    assert.equal(hasReachableLift(gen, audit, LiftDirection.DOWN), true, `${item.geometryId} down lift`);
+  }
+});
+
+testGenerationMatrix('archive warrens geometry builds a fair document maze with recorded landmarks', () => {
   const def = FLOOR_GEOMETRIES.find(item => item.id === 'archive_warrens');
   assert.equal(def?.tags.includes('maze'), true);
   const z = proceduralZForGeometry(def!);
@@ -1021,7 +1142,7 @@ test('archive warrens geometry builds a fair document maze with recorded landmar
   }
 });
 
-test('collector geometry records wet basins, dry causeways and valve route choices', () => {
+testGenerationMatrix('collector geometry records wet basins, dry causeways and valve route choices', () => {
   const def = FLOOR_GEOMETRIES.find(item => item.id === 'collectors');
   assert.equal(def?.tags.includes('water'), true);
   const z = proceduralZForGeometry(def!);
@@ -1078,7 +1199,7 @@ testGenerationMatrix('all procedural anomalies can be forced and keep route lift
   }
 });
 
-test('sandpile perekrytie anomaly seeds a cracked arena with safe rim and stabilizer', () => {
+testGenerationMatrix('sandpile perekrytie anomaly seeds a cracked arena with safe rim and stabilizer', () => {
   const def = FLOOR_GEOMETRIES.find(item => item.id === 'workshops');
   assert.ok(def);
   const base = makeProceduralFloorSpec(73_073, proceduralZForGeometry(def));
@@ -1127,7 +1248,7 @@ test('sandpile perekrytie anomaly seeds a cracked arena with safe rim and stabil
   );
 });
 
-test('mushroom mycelium anomaly grows visible reachable food and spore territory', () => {
+testGenerationMatrix('mushroom mycelium anomaly grows visible reachable food and spore territory', () => {
   const base = makeProceduralFloorSpec(53_053, 9);
   const gen = timedProceduralSpec({
     ...base,
@@ -1170,7 +1291,7 @@ test('mushroom mycelium anomaly grows visible reachable food and spore territory
   }
 });
 
-test('apartment pressure geometry exposes legal, crowd, cut-through and barricade routes', () => {
+testGenerationMatrix('apartment pressure geometry exposes legal, crowd, cut-through and barricade routes', () => {
   const base = makeProceduralFloorSpec(20_260_536, -3);
   const gen = timedProceduralSpec({
     ...base,
@@ -1220,7 +1341,7 @@ test('apartment pressure geometry exposes legal, crowd, cut-through and barricad
   assert.equal(hasReachableLift(gen, audit, LiftDirection.DOWN), true);
 });
 
-test('living block geometry builds apartment blocks with route choices and usable lifts', () => {
+testGenerationMatrix('living block geometry builds apartment blocks with route choices and usable lifts', () => {
   const def = FLOOR_GEOMETRIES.find(item => item.id === 'living_blocks');
   assert.equal(def?.baseFloor, FloorLevel.LIVING);
   assert.equal(def?.tags.includes('residential'), true);
@@ -1275,7 +1396,7 @@ test('living block geometry builds apartment blocks with route choices and usabl
   assert.equal(hasReachableLift(gen, audit, LiftDirection.DOWN), true);
 });
 
-test('cultist procedural majority imprints optional ritual geometry without locking route lifts', () => {
+testGenerationMatrix('cultist procedural majority imprints optional ritual geometry without locking route lifts', () => {
   const base = makeProceduralFloorSpec(49_049, 9);
   const gen = timedProceduralSpec({
     ...base,
@@ -1308,7 +1429,7 @@ test('cultist procedural majority imprints optional ritual geometry without lock
   assert.equal(hasReachableLift(gen, audit, LiftDirection.DOWN), true);
 });
 
-test('wild procedural majority builds risky stash leaves without locking route lifts', () => {
+testGenerationMatrix('wild procedural majority builds risky stash leaves without locking route lifts', () => {
   const base = makeProceduralFloorSpec(47_047, 3);
   const gen = timedProceduralSpec({
     ...base,
@@ -1356,7 +1477,7 @@ test('wild procedural majority builds risky stash leaves without locking route l
   assert.equal(hasReachableLift(gen, audit, LiftDirection.DOWN), true);
 });
 
-test('liquidator procedural majority builds readable checkpoints without isolating lifts', () => {
+testGenerationMatrix('liquidator procedural majority builds readable checkpoints without isolating lifts', () => {
   const base = makeProceduralFloorSpec(46_046, -23);
   const gen = timedProceduralSpec({
     ...base,
@@ -1405,7 +1526,7 @@ test('liquidator procedural majority builds readable checkpoints without isolati
   assert.equal(hasReachableLift(gen, audit, LiftDirection.DOWN), true);
 });
 
-test('admin pocket geometry exposes legal queue, staff chord and document landmarks', () => {
+testGenerationMatrix('admin pocket geometry exposes legal queue, staff chord and document landmarks', () => {
   const def = FLOOR_GEOMETRIES.find(item => item.id === 'admin_pockets');
   assert.equal(def?.baseFloor, FloorLevel.MINISTRY);
   assert.equal(def?.tags.includes('admin'), true);
@@ -1455,7 +1576,7 @@ test('admin pocket geometry exposes legal queue, staff chord and document landma
   }
 });
 
-test('communal knots geometry builds service and through-flat loops with grievance landmarks', () => {
+testGenerationMatrix('communal knots geometry builds service and through-flat loops with grievance landmarks', () => {
   const def = FLOOR_GEOMETRIES.find(item => item.id === 'communal_knots');
   assert.equal(def?.roomTypes.includes(RoomType.BATHROOM), true);
   assert.equal(def?.tags.includes('queue'), true);
@@ -1502,7 +1623,7 @@ test('communal knots geometry builds service and through-flat loops with grievan
   assert.equal(gen.entities.filter(entity => entity.type === EntityType.NPC).length <= ENTITY_SOFT_LIMITS[EntityType.NPC], true);
 });
 
-test('service spine geometry carves connected maintenance trunks with usable lifts', () => {
+testGenerationMatrix('service spine geometry carves connected maintenance trunks with usable lifts', () => {
   const def = FLOOR_GEOMETRIES.find(item => item.id === 'service_spines');
   assert.equal(def?.minZ, 9);
   assert.equal(def?.maxZ, 23);
@@ -1567,7 +1688,7 @@ test('service spine geometry carves connected maintenance trunks with usable lif
   assert.equal(serviceFixtures > 0, true);
 });
 
-test('attic weatherworks geometry exposes wind lanes, crawl pockets, repair and document choices', () => {
+testGenerationMatrix('attic weatherworks geometry exposes wind lanes, crawl pockets, repair and document choices', () => {
   const def = FLOOR_GEOMETRIES.find(item => item.id === 'attic_weatherworks');
   assert.equal(def?.tags.includes('wind'), true);
   assert.equal(def?.tags.includes('documents'), true);
@@ -1618,7 +1739,7 @@ test('attic weatherworks geometry exposes wind lanes, crawl pockets, repair and 
   assert.equal(atticCues.some(marker => marker.tags.includes('document_cache') && marker.tags.includes('crawl_bypass')), true);
 });
 
-test('sump causeway geometry builds dry repair spans and off-path stash islands', () => {
+testGenerationMatrix('sump causeway geometry builds dry repair spans and off-path stash islands', () => {
   const def = FLOOR_GEOMETRIES.find(item => item.id === 'sump_causeways');
   assert.equal(def?.minZ, 21);
   assert.equal(def?.maxZ, 39);
@@ -1670,7 +1791,7 @@ test('sump causeway geometry builds dry repair spans and off-path stash islands'
   }
 });
 
-test('procedural monster pressure stays capped and registers a route cue', () => {
+testGenerationMatrix('procedural monster pressure stays capped and registers a route cue', () => {
   const base = makeProceduralFloorSpec(2468, -38);
   const gen = timedProceduralSpec({
     ...base,
@@ -1726,7 +1847,7 @@ test('zombie apocalypse procedural specs bias monster pressure to мертвяк
   assert.deepEqual(spec.monsterBiasKinds, [MonsterKind.ZOMBIE]);
 });
 
-test('deep procedural route floors blend route identity with design monster bias', () => {
+testGenerationMatrix('deep procedural route floors blend route identity with design monster bias', () => {
   const base = makeProceduralFloorSpec(1357, -35);
   const gen = timedProceduralSpec({
     ...base,
@@ -1745,11 +1866,32 @@ test('deep procedural route floors blend route identity with design monster bias
   assert.equal(monsters.some(e => e.monsterKind === MonsterKind.CREATOR), false);
 });
 
-test('void and lower route floors do not generate NPCs', () => {
+testGenerationMatrix('void and lower route floors do not generate NPCs', () => {
   const voidGen = timeFloorGeneration('story VOID', () => generateFloor(FloorLevel.VOID));
   assert.equal(voidGen.entities.some(e => e.type === EntityType.NPC), false);
   assert.equal(voidGen.entities.some(e => e.type === EntityType.MONSTER), true);
   assertFullFootprint(voidGen.world, 'VOID story floor');
+  const voidAudit = auditReachability(voidGen.world, voidGen.world.idx(Math.floor(voidGen.spawnX), Math.floor(voidGen.spawnY)));
+  assert.equal(reachableBucketCount(voidGen.world, voidAudit.reachable, 128) >= 16, true, 'VOID should spread reachable chaos across many coarse buckets');
+  let voidSignals = 0;
+  let voidInteriorWallEdges = 0;
+  for (let i = 0; i < voidGen.world.cells.length; i++) {
+    const feature = voidGen.world.features[i];
+    if (feature === Feature.SCREEN || feature === Feature.APPARATUS || feature === Feature.CANDLE) voidSignals++;
+    if (voidGen.world.cells[i] !== Cell.WALL || voidGen.world.wallTex[i] !== Tex.VOID_WALL) continue;
+    const x = i % W;
+    const y = (i / W) | 0;
+    if (
+      voidAudit.reachable[voidGen.world.idx(x + 1, y)] ||
+      voidAudit.reachable[voidGen.world.idx(x - 1, y)] ||
+      voidAudit.reachable[voidGen.world.idx(x, y + 1)] ||
+      voidAudit.reachable[voidGen.world.idx(x, y - 1)]
+    ) {
+      voidInteriorWallEdges++;
+    }
+  }
+  assert.equal(voidSignals >= 24, true, `VOID signals ${voidSignals}`);
+  assert.equal(voidInteriorWallEdges >= 240, true, `VOID interior wall edges ${voidInteriorWallEdges}`);
 
   const base = makeProceduralFloorSpec(321, FLOOR_RUN_VOID_Z + 1);
   const procGen = timedProceduralSpec({
@@ -1780,7 +1922,7 @@ test('void and lower route floors do not generate NPCs', () => {
   assert.equal(rawDarknessGen.entities.some(e => e.type === EntityType.MONSTER), true);
 });
 
-test('smog anomaly generates bounded curl plumes and reachable filter pockets', () => {
+testGenerationMatrix('smog anomaly generates bounded curl plumes and reachable filter pockets', () => {
   const base = makeProceduralFloorSpec(611, -35);
   const spec = {
     ...base,
@@ -1827,7 +1969,99 @@ test('smog anomaly generates bounded curl plumes and reachable filter pockets', 
   assert.equal(reachablePocketDrop, true);
 });
 
-test('podad ships as a denser-than-Hell monster floor with gated lower lifts', () => {
+testGenerationMatrix('wall snake anomaly places a visible nearby map cue and loot loop', () => {
+  const def = FLOOR_GEOMETRIES.find(item => item.id === 'workshops');
+  assert.ok(def);
+  const base = makeProceduralFloorSpec(61_061, proceduralZForGeometry(def));
+  const gen = timedProceduralSpec({
+    ...base,
+    geometryId: 'workshops',
+    baseFloor: FloorLevel.MAINTENANCE,
+    majorityId: 'liquidators',
+    anomalyId: 'wall_snake',
+    danger: 4,
+    title: `змейка: ${base.title}`,
+  }, 'forced wall_snake visibility seed=61061');
+  const audit = reachabilityAudit(gen);
+  const snakeRooms = gen.world.rooms.filter(room => room.name.includes('[wall_snake:'));
+  const cues = getRouteCueMarkers(gen.world).filter(marker => marker.tags.includes('wall_snake') && marker.tags.includes('visible_anomaly'));
+
+  assert.equal(snakeRooms.length >= 1, true);
+  assert.equal(cues.length >= 1, true);
+  assert.equal(hasReachableLift(gen, audit, LiftDirection.UP), true);
+  assert.equal(hasReachableLift(gen, audit, LiftDirection.DOWN), true);
+
+  const nearestCueD2 = Math.min(...cues.map(cue => gen.world.dist2(gen.spawnX, gen.spawnY, cue.x, cue.y)));
+  assert.equal(nearestCueD2 <= 120 * 120, true, `nearest wall snake cue d2=${nearestCueD2}`);
+  const reachableGearBait = gen.entities.some(entity => {
+    if (entity.type !== EntityType.ITEM_DROP || !entity.inventory?.some(item => item.defId === 'gear')) return false;
+    return !!audit.reachable[gen.world.idx(Math.floor(entity.x), Math.floor(entity.y))];
+  }) || gen.world.containers.some(container => {
+    if (!container.inventory.some(item => item.defId === 'gear')) return false;
+    return !!audit.reachable[gen.world.idx(container.x, container.y)];
+  });
+  assert.equal(reachableGearBait, true);
+
+  const fieldCues = cues.filter(marker => marker.tags.includes('macro_geometry'));
+  const hermoIslands = gen.world.rooms.filter(room =>
+    room.sealed && room.doors.some(doorIdx => gen.world.doors.get(doorIdx)?.state === DoorState.HERMETIC_OPEN)
+  );
+  let paintedLoopCells = 0;
+  for (let ci = 0; ci < gen.world.cells.length; ci++) {
+    if (gen.world.cells[ci] === Cell.FLOOR && gen.world.floorTex[ci] === Tex.F_CONCRETE && gen.world.fog[ci] >= 22) paintedLoopCells++;
+  }
+  assert.equal(fieldCues.length >= 6, true, `wall snake macro cues ${fieldCues.length}`);
+  assert.equal(hermoIslands.length >= 12, true, `wall snake hermo islands ${hermoIslands.length}`);
+  assert.equal(paintedLoopCells >= 2000, true, `painted wall snake cells ${paintedLoopCells}`);
+});
+
+testGenerationMatrix('conway life anomaly seeds multiple visible nearby arenas', () => {
+  const def = FLOOR_GEOMETRIES.find(item => item.id === 'communal_knots');
+  assert.ok(def);
+  const base = makeProceduralFloorSpec(67_067, proceduralZForGeometry(def));
+  const gen = timedProceduralSpec({
+    ...base,
+    geometryId: 'communal_knots',
+    baseFloor: FloorLevel.KVARTIRY,
+    majorityId: 'citizens',
+    anomalyId: 'conway_life',
+    danger: 5,
+    title: `игра жизнь: ${base.title}`,
+  }, 'forced conway_life visibility seed=67067');
+  const audit = reachabilityAudit(gen);
+  const arenas = gen.world.rooms.filter(room => room.name.startsWith('Игра жизнь:'));
+  const cues = getRouteCueMarkers(gen.world).filter(marker => marker.tags.includes('conway_life') && marker.tags.includes('visible_anomaly'));
+  const macroCues = cues.filter(marker => marker.tags.includes('macro_geometry'));
+
+  assert.equal(arenas.length >= 2, true, `conway arenas ${arenas.length}`);
+  assert.equal(cues.length >= 2, true, `conway cues ${cues.length}`);
+  assert.equal(macroCues.length >= 1, true, `conway macro cues ${macroCues.length}`);
+  assert.equal(hasReachableLift(gen, audit, LiftDirection.UP), true);
+  assert.equal(hasReachableLift(gen, audit, LiftDirection.DOWN), true);
+
+  const nearestCueD2 = Math.min(...cues.map(cue => gen.world.dist2(gen.spawnX, gen.spawnY, cue.x, cue.y)));
+  assert.equal(nearestCueD2 <= 150 * 150, true, `nearest conway cue d2=${nearestCueD2}`);
+  let apparatus = 0;
+  let cellularWalls = 0;
+  for (const room of arenas) {
+    for (let y = room.y; y < room.y + room.h; y++) {
+      for (let x = room.x; x < room.x + room.w; x++) {
+        const ci = gen.world.idx(x, y);
+        if (gen.world.features[ci] === Feature.APPARATUS) apparatus++;
+        if (gen.world.cells[ci] === Cell.WALL && gen.world.wallTex[ci] === Tex.DARK) cellularWalls++;
+      }
+    }
+  }
+  assert.equal(apparatus >= arenas.length, true, `conway apparatus ${apparatus}`);
+  assert.equal(cellularWalls >= 40, true, `conway walls ${cellularWalls}`);
+  let macroLifeWalls = 0;
+  for (let ci = 0; ci < gen.world.cells.length; ci++) {
+    if (gen.world.cells[ci] === Cell.WALL && gen.world.wallTex[ci] === Tex.DARK) macroLifeWalls++;
+  }
+  assert.equal(macroLifeWalls >= 20_000, true, `macro life walls ${macroLifeWalls}`);
+});
+
+testGenerationMatrix('podad ships as a denser-than-Hell monster floor with gated lower lifts', () => {
   const route = DESIGN_FLOOR_ROUTES.find(def => def.id === 'podad');
   assert.ok(route);
   const profile = designFloorPopulationProfile(route);
@@ -1932,7 +2166,7 @@ test('design floor population profiles follow route density curve and caps', () 
   }
 });
 
-test('slime NII route ships containment cameras, samples, and slime pressure', () => {
+testGenerationMatrix('slime NII route ships containment cameras, samples, and slime pressure', () => {
   const route = DESIGN_FLOOR_ROUTES.find(def => def.id === 'slime_nii');
   assert.ok(route);
   assert.equal(route.z, 12);
@@ -1962,7 +2196,7 @@ test('slime NII route ships containment cameras, samples, and slime pressure', (
   assert.equal(gen.world.cells.some((cell, idx) => cell === Cell.LIFT && gen.world.liftDir[idx] === LiftDirection.DOWN), true);
 });
 
-test('manhattan crossroads ships as dense road traffic with gang and wrong-exit pressure', () => {
+testGenerationMatrix('manhattan crossroads ships as dense road traffic with gang and wrong-exit pressure', () => {
   const gen = timedDesignFloor('manhattan_crossroads', 'design manhattan_crossroads population field');
   const npcs = gen.entities.filter(e => e.type === EntityType.NPC);
   const monsters = gen.entities.filter(e => e.type === EntityType.MONSTER);
@@ -1990,11 +2224,13 @@ test('manhattan crossroads ships as dense road traffic with gang and wrong-exit 
   assert.equal(maxEntitiesInArea(gen.entities, EntityType.NPC, 32) <= 40, true);
 });
 
-test('manhattan crossroads keeps its core route decisions reachable', () => {
+testGenerationMatrix('manhattan crossroads keeps its core route decisions reachable', () => {
   const gen = timedDesignFloor('manhattan_crossroads', 'design manhattan_crossroads decisions');
   const metrics = measureManhattanCrossroadsDecisionMetrics(gen);
 
   assert.equal(metrics.crosswalkStripeCells >= 100, true, `crosswalk cells ${metrics.crosswalkStripeCells}`);
+  assert.equal(metrics.blockInteriorRooms >= 18, true, `block interior rooms ${metrics.blockInteriorRooms}`);
+  assert.equal(metrics.blockInteriorReachableCells >= 300, true, `block interior reachable cells ${metrics.blockInteriorReachableCells}`);
   assert.equal(metrics.escortNpcPresent, true);
   assert.equal(metrics.tollDoorLocked, true);
   assert.equal(metrics.tollDoorRequiresKey, true);
@@ -2010,7 +2246,7 @@ test('manhattan crossroads keeps its core route decisions reachable', () => {
   assert.equal(metrics.wrongExitMonsters >= 1, true, `wrong-exit monsters ${metrics.wrongExitMonsters}`);
 });
 
-test('underhell ships as a monster-owned veteran threshold', () => {
+testGenerationMatrix('underhell ships as a monster-owned veteran threshold', () => {
   const gen = timeFloorGeneration('design underhell population field', () => generateDesignFloor('underhell'));
   const npcs = gen.entities.filter(e => e.type === EntityType.NPC);
   const ambientNpcs = npcs.filter(e => !e.plotNpcId && !e.persistentNpcId && e.alifeId === undefined);
@@ -2028,7 +2264,7 @@ test('underhell ships as a monster-owned veteran threshold', () => {
   assert.equal(lowerSamosborZones.length > 0, true);
 });
 
-test('dark metro ships as sparse defended bands inside monster-heavy train pressure', () => {
+testGenerationMatrix('dark metro ships as sparse defended bands inside monster-heavy train pressure', () => {
   const route = DESIGN_FLOOR_ROUTES.find(def => def.id === 'dark_metro');
   assert.ok(route);
   const profile = designFloorPopulationProfile(route);
@@ -2065,7 +2301,7 @@ test('dark metro ships as sparse defended bands inside monster-heavy train press
   assert.equal(maxEntitiesInArea(gen.entities, EntityType.NPC, 32) <= 20, true);
 });
 
-test('upper bureau keeps controlled legal queues with archive monster pressure', () => {
+testGenerationMatrix('upper bureau keeps controlled legal queues with archive monster pressure', () => {
   const route = DESIGN_FLOOR_ROUTES.find(def => def.id === 'upper_bureau');
   assert.ok(route);
   const profile = designFloorPopulationProfile(route);
@@ -2101,7 +2337,7 @@ test('upper bureau keeps controlled legal queues with archive monster pressure',
   assert.equal(maxEntitiesInArea(gen.entities, EntityType.NPC, 32) <= 18, true);
 });
 
-test('upper bureau preserves legal, forged, stolen-key and staff route cuts', () => {
+testGenerationMatrix('upper bureau preserves legal, forged, stolen-key and staff route cuts', () => {
   const gen = timedDesignFloor('upper_bureau', 'design upper bureau route cuts');
   const publicRoute = reachableWithDoorKeys(gen, []);
   const legalRoute = reachableWithDoorKeys(gen, [UPPER_BUREAU_DOCUMENTS.appointmentToken]);
@@ -2143,7 +2379,7 @@ test('upper bureau preserves legal, forged, stolen-key and staff route cuts', ()
   assert.equal(reachableRoomCellCount(gen, fullStaffRoute, 'Черный ход печатей') > 0, true);
 });
 
-test('antenna court is a monster-owned signal yard with bounded specialist enclaves', () => {
+testGenerationMatrix('antenna court is a monster-owned signal yard with bounded specialist enclaves', () => {
   const gen = timeFloorGeneration('design antenna_court population field', () => generateDesignFloor('antenna_court'));
   const ambientNpcs = gen.entities.filter(e => e.type === EntityType.NPC && !e.plotNpcId && !e.persistentNpcId && e.alifeId === undefined);
   const monsters = gen.entities.filter(e => e.type === EntityType.MONSTER);
@@ -2170,7 +2406,7 @@ test('antenna court is a monster-owned signal yard with bounded specialist encla
   assert.equal(signalYardFixtures >= 40, true);
 });
 
-test('silicon net well creates protected science pockets and silicon monster pressure', () => {
+testGenerationMatrix('silicon net well creates protected science pockets and silicon monster pressure', () => {
   const gen = timeFloorGeneration('design silicon_net_well population field', () => generateDesignFloor('silicon_net_well'));
   const npcs = gen.entities.filter(e => e.type === EntityType.NPC);
   const ambientNpcs = npcs.filter(e => !e.plotNpcId && !e.persistentNpcId && e.alifeId === undefined);
@@ -2214,7 +2450,7 @@ test('silicon net well creates protected science pockets and silicon monster pre
   assert.equal(maxEntitiesInArea(gen.entities, EntityType.NPC, 32) <= 18, true);
 });
 
-test('floor 69 uses the shared field as an adult social-debt route', () => {
+testGenerationMatrix('floor 69 uses the shared field as an adult social-debt route', () => {
   const gen = timeFloorGeneration('design floor_69 population field', () => generateDesignFloor('floor_69'));
   const npcs = gen.entities.filter(e => e.type === EntityType.NPC);
   const ambientNpcs = npcs.filter(e => !e.plotNpcId && !e.persistentNpcId && e.alifeId === undefined);
@@ -2247,7 +2483,7 @@ test('floor 69 uses the shared field as an adult social-debt route', () => {
   assert.equal(maxEntitiesInArea(gen.entities, EntityType.NPC, 32) <= 26, true);
 });
 
-test('pioneer camp keeps a populated protected center and dangerous trail edge', () => {
+testGenerationMatrix('pioneer camp keeps a populated protected center and dangerous trail edge', () => {
   const route = DESIGN_FLOOR_ROUTES.find(def => def.id === 'pioneer_camp');
   assert.ok(route);
   const profile = designFloorPopulationProfile(route);
@@ -2290,7 +2526,7 @@ test('pioneer camp keeps a populated protected center and dangerous trail edge',
   assert.equal(factionAt(W / 2, W / 2 - 380), ZoneFaction.WILD);
 });
 
-test('chthonic attic keeps a zero-ordinary-NPC monster service maze', () => {
+testGenerationMatrix('chthonic attic keeps a zero-ordinary-NPC monster service maze', () => {
   const gen = timeFloorGeneration('design chthonic attic population field', () => generateDesignFloor('chthonic_attic'));
   const npcs = gen.entities.filter(e => e.type === EntityType.NPC);
   const ambientNpcs = npcs.filter(e => !e.plotNpcId && !e.persistentNpcId && e.alifeId === undefined);
@@ -2310,7 +2546,7 @@ test('chthonic attic keeps a zero-ordinary-NPC monster service maze', () => {
   assert.equal(serviceRooms.length >= 4, true);
 });
 
-test('generic design floor population field adds density without violating edge rules', () => {
+testGenerationMatrix('generic design floor population field adds density without violating edge rules', () => {
   const communal = timeFloorGeneration('design communal population field', () => generateDesignFloor('communal_ring'));
   const communalNpcs = communal.entities.filter(e => e.type === EntityType.NPC);
   const communalMonsters = communal.entities.filter(e => e.type === EntityType.MONSTER);
@@ -2375,7 +2611,7 @@ test('population placement sampler skips fixtures, containers and lift buttons',
   }
 });
 
-test('black market 88 ships dense trade, guarded contraband, and service-gut monster pressure', () => {
+testGenerationMatrix('black market 88 ships dense trade, guarded contraband, and service-gut monster pressure', () => {
   const gen = timeFloorGeneration('design black_market_88 rework', () => generateDesignFloor('black_market_88'));
   const npcs = gen.entities.filter(e => e.type === EntityType.NPC);
   const monsters = gen.entities.filter(e => e.type === EntityType.MONSTER);
@@ -2431,7 +2667,7 @@ test('black market 88 ships dense trade, guarded contraband, and service-gut mon
   }
 });
 
-test('service floor rework keeps sparse crews, pressure panels and machine-maze monsters reachable', () => {
+testGenerationMatrix('service floor rework keeps sparse crews, pressure panels and machine-maze monsters reachable', () => {
   const route = DESIGN_FLOOR_ROUTES.find(item => item.id === 'service_floor');
   assert.ok(route);
   const profile = designFloorPopulationProfile(route);
@@ -2467,7 +2703,7 @@ testGenerationMatrix('authored design floors occupy the full 1024x1024 route foo
   }
 });
 
-test('rail train anomaly generates tracks, trains, and rideable train entities', () => {
+testGenerationMatrix('rail train anomaly generates tracks, trains, and rideable train entities', () => {
   const base = makeProceduralFloorSpec(654, 3);
   const spec = {
     ...base,
@@ -2594,7 +2830,7 @@ test('smog anomaly spends wet rag bundles as short wet-cloth mitigation', () => 
   assert.equal(spent?.data?.durationSeconds, 45);
 });
 
-test('living tunnels anomaly seeds roots and mutates bounded cells over time', () => {
+testGenerationMatrix('living tunnels anomaly seeds roots and mutates bounded cells over time', () => {
   const base = makeProceduralFloorSpec(881, 9);
   const spec = {
     ...base,
@@ -2644,7 +2880,7 @@ test('bad apple frame pack decodes 144x108 binary frames', () => {
   assert.equal(black > 0 && black < pixels.length, true);
 });
 
-test('bad apple anomaly stamps an honest 144x108 map rectangle', () => {
+testGenerationMatrix('bad apple anomaly stamps an honest 144x108 map rectangle', () => {
   const base = makeProceduralFloorSpec(777, 3);
   const spec = {
     ...base,
@@ -2670,7 +2906,7 @@ test('bad apple anomaly stamps an honest 144x108 map rectangle', () => {
   assert.equal(owned, BAD_APPLE_WIDTH * BAD_APPLE_HEIGHT);
 });
 
-test('bad apple runtime advances the map rectangle into white floor cells', () => {
+testGenerationMatrix('bad apple runtime advances the map rectangle into white floor cells', () => {
   const base = makeProceduralFloorSpec(778, 3);
   const spec = {
     ...base,
@@ -2711,7 +2947,7 @@ test('bad apple runtime advances the map rectangle into white floor cells', () =
   assert.equal(gen.world.cellVersion > beforeVersion, true);
 });
 
-test('bad apple placement searches past route-critical cells before stamping', () => {
+testGenerationMatrix('bad apple placement searches past route-critical cells before stamping', () => {
   const world = new World();
   const centerX = 512;
   const centerY = 512;
@@ -2741,7 +2977,7 @@ test('bad apple placement searches past route-critical cells before stamping', (
   }
 });
 
-test('bad apple projector toggles animation without breaking route reachability', () => {
+testGenerationMatrix('bad apple projector toggles animation without breaking route reachability', () => {
   const base = makeProceduralFloorSpec(780, 3);
   const spec = {
     ...base,
@@ -2785,7 +3021,7 @@ test('bad apple projector toggles animation without breaking route reachability'
   assert.equal(hasReachableLift(gen, reachableActive, LiftDirection.DOWN), true);
 });
 
-test('zombie apocalypse anomaly seeds a dense crowd and patient zero infection', () => {
+testGenerationMatrix('zombie apocalypse anomaly seeds a dense crowd and patient zero infection', () => {
   const base = makeProceduralFloorSpec(779, -35);
   const spec = {
     ...base,

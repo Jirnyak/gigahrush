@@ -10,7 +10,7 @@ import {
   msg, setMsgClock,
 } from './core/types';
 import { World, replaceWorldFromGeneration } from './core/world';
-import { randSeed } from './core/rand';
+import { hashSeed, randSeed } from './core/rand';
 import { updateProceduralScreens } from './gen/procedural_screens';
 import { generateProceduralFloor } from './gen/procedural_floor';
 import { generateDesignFloor, isDesignFloorId } from './gen/design_floors/manifest';
@@ -35,7 +35,7 @@ import {
   spawnProjectileBodyImpact, spawnProjectileFloorImpact, spawnProjectileWallImpact, isEnergyProjectileImpact,
 } from './render/blood';
 import { stampMark, MarkType } from './systems/surface_marks';
-import { containerMenuGridLayout, fullscreenInventoryLayout, tradeGridScale } from './render/ui_layout';
+import { containerMenuGridLayout, craftMenuLayout, fullscreenInventoryLayout, tradeMenuGridLayout } from './render/ui_layout';
 import { updateNeeds } from './systems/needs';
 import { updateAI, tryMonsterProjectileStagger, getAiStats, type AiStats } from './systems/ai';
 import { resolveBreachChargeExplosion } from './systems/breach_charge';
@@ -52,7 +52,7 @@ import {
   updateInventoryConditions,
 } from './systems/inventory';
 import { createInput, bindInput } from './input';
-import { createMobileControls, shouldUseTouchControls, type MobileControls, type MobileMenuId } from './mobile';
+import { createMobileControls, type MobileControls, type MobileMenuId } from './mobile';
 import { isNativeFullscreenActive, toggleNativeFullscreen } from './fullscreen';
 import {
   CONTROL_ACTIONS,
@@ -65,18 +65,17 @@ import {
 import { GAME_MENU_ITEMS } from './systems/game_menu';
 import { MOBILE_BUTTON_CONTROL_ROWS } from './systems/mobile_actions';
 import {
-  DEFAULT_UI_PRESET_ID,
   adjustCameraFov,
   adjustMobileLookSensitivity,
   adjustMouseLookSensitivity,
   applyUiPreset,
+  autoPickupEnabled,
   cameraFovRadians,
   mobileLookSensitivity,
   mouseLookSensitivity,
   resetCameraFov,
-  resetMobileLookSensitivity,
-  resetMouseLookSensitivity,
-  resetUiElement,
+  resetUiSettings,
+  toggleAutoPickup,
   toggleUiElement,
   uiElementEnabled,
   type UiSettingsView,
@@ -84,6 +83,7 @@ import {
   uiSettingsRowCount,
 } from './systems/ui_orchestrator';
 import { freshNeeds, ITEMS, WEAPON_STATS } from './data/catalog';
+import { INVENTORY_GRID_COLS, INVENTORY_GRID_ROWS, MAX_INVENTORY_SLOTS } from './data/inventory_limits';
 import { getStack } from './data/items';
 import {
   activeToolLightDrainPerSecond,
@@ -111,10 +111,12 @@ import {
   checkQuests,
   checkTalkQuest,
   getCurrentObjective,
+  isQuestSelectableAsActive,
   notifyKill,
   notifyNpcKill,
   npcHasImportantQuestAction,
   npcQuestActionHint,
+  toggleActiveQuest,
 } from './systems/quests';
 import { handleDiceInput, isDiceGameOpen } from './systems/dice';
 import { handleDominoInput, isDominoGameOpen } from './systems/domino';
@@ -158,6 +160,19 @@ import { debugOnePunchMeleeDamage, isDebugOnePunchManEnabled, keepDebugOnePunchM
 import { formatLastPlayerDamageCause, hasFreshPlayerDamageRecord, recordPlayerDamage } from './systems/damage';
 import { createWorldEventState, normalizeWorldEventState, publishEvent } from './systems/events';
 import {
+  craftKnownRecipe,
+  craftRecipeLearnedMessage,
+  craftMenuEntries,
+  craftMenuSnapshot,
+  createCraftingState,
+  disassembleInventorySlot,
+  learnCraftRecipe,
+  learnCraftRecipesFromSource,
+  restoreCraftingState,
+  type CraftingActionResult,
+} from './systems/crafting';
+import { getCraftRecipeSource } from './data/craft_recipe_sources';
+import {
   setWorldLogSpatialContextProvider,
   worldLogDistanceForLocation,
   worldLogLocationIsAudible,
@@ -185,7 +200,12 @@ import {
   syncMapExplorationAfterSamosborWave,
   updateMapExploration,
 } from './systems/map_exploration';
-import { runContentEntityDeathHooks, updateContentRuntimeHooks } from './systems/content_hooks';
+import {
+  runContentEntityDeathHooks,
+  updateContentRuntimeHooks,
+  type ContentCraftMenuRequest,
+  type ContentRecipeLearnRequest,
+} from './systems/content_hooks';
 import {
   closeEmergencyPanelMenu,
   handleEmergencyPanelMenuInput,
@@ -397,8 +417,23 @@ import {
   titleLanguageDef,
   type TitleLanguageId,
 } from './data/languages';
-import { drawTitleScreen, hitTitleField, hitTitleLanguage, type TitleLanguageHit } from './render/title_ui';
+import {
+  drawTitleScreen,
+  hitTitleField,
+  hitTitleLanguage,
+  type TitleHitField,
+  type TitleLanguageHit,
+  type TitleScreenMode,
+  type TitleSetupRowView,
+} from './render/title_ui';
 import { installCanvasLocalization, setLocalizationLanguage } from './systems/localization';
+import {
+  ACTIVE_ACTOR_SOFT_LIMIT_STEP,
+  MAX_ACTIVE_ACTOR_SOFT_LIMIT,
+  MIN_ACTIVE_ACTOR_SOFT_LIMIT,
+  normalizeActiveActorSoftLimit,
+  setActiveActorSoftLimit,
+} from './data/entity_limits';
 
 /* ── Canvas setup ─────────────────────────────────────────────── */
 const canvas = document.getElementById('game') as HTMLCanvasElement;
@@ -407,14 +442,19 @@ const ctx = hudCanvas.getContext('2d')!;
 registerPwaServiceWorker();
 const PLAYER_NAME_KEY = 'gigahrush_player_name';
 const TITLE_LANGUAGE_KEY = 'gigahrush_title_language';
+const TITLE_ACTIVE_ACTOR_SOFT_LIMIT_KEY = 'gigahrush_active_actor_soft_limit';
 const NET_GEN_NAME_RE = /^NET-[A-Z0-9-]{4,28}$/;
-type TitleInputField = 'name' | 'seed';
+type TitleInputField = Extract<TitleHitField, 'language' | 'name' | 'seed' | 'actorCap' | 'start'>;
+const TITLE_SETUP_FIELDS: readonly TitleInputField[] = ['start', 'language', 'name', 'seed', 'actorCap'];
 let started = false;
 let playerNickname = loadPlayerNickname();
 let titleRunSeedText = '';
-let titleStartNeedsInit = false;
-let titleInputField: TitleInputField = 'name';
+let titleStartNeedsInit = true;
+let titleMode: TitleScreenMode = 'language';
+let titleSetupSel = 0;
+let titleInputField: TitleInputField = TITLE_SETUP_FIELDS[titleSetupSel];
 let titleLanguageId = loadTitleLanguageId();
+let titleActiveActorSoftLimit = loadTitleActiveActorSoftLimit();
 let titleLanguageHits: TitleLanguageHit[] = [];
 let mobileControls: MobileControls | null = null;
 let mobileContextKey = '';
@@ -425,6 +465,7 @@ let pointerCaptureGate = false;
 let pointerCaptureGateReason: PointerCaptureGateReason = 'released';
 installCanvasLocalization();
 setLocalizationLanguage(titleLanguageId);
+setActiveActorSoftLimit(titleActiveActorSoftLimit);
 
 function looksLikeNetGenName(value: string): boolean {
   const clean = value.trim().toUpperCase().replace(/[^A-Z0-9-]/g, '').slice(0, 32);
@@ -487,6 +528,25 @@ function titleRunSeedOverride(): number | undefined {
   return normalizeFloorRunSeed(hashSeedText(clean));
 }
 
+function loadTitleActiveActorSoftLimit(): number {
+  try {
+    return normalizeActiveActorSoftLimit(localStorage.getItem(TITLE_ACTIVE_ACTOR_SOFT_LIMIT_KEY));
+  } catch {
+    return normalizeActiveActorSoftLimit(undefined);
+  }
+}
+
+function saveTitleActiveActorSoftLimit(value: number): void {
+  const previous = titleActiveActorSoftLimit;
+  titleActiveActorSoftLimit = setActiveActorSoftLimit(value);
+  if (titleActiveActorSoftLimit !== previous) titleStartNeedsInit = true;
+  try {
+    localStorage.setItem(TITLE_ACTIVE_ACTOR_SOFT_LIMIT_KEY, String(titleActiveActorSoftLimit));
+  } catch {
+    // Local storage can be blocked; the selected cap still applies for this run.
+  }
+}
+
 function loadTitleLanguageId(): TitleLanguageId {
   try {
     return normalizeTitleLanguageId(localStorage.getItem(TITLE_LANGUAGE_KEY));
@@ -510,17 +570,81 @@ function cycleTitleLanguage(dir: number): void {
   showTitle();
 }
 
+function adjustTitleActiveActorSoftLimit(dir: number): void {
+  const step = ACTIVE_ACTOR_SOFT_LIMIT_STEP * Math.sign(dir || 1);
+  saveTitleActiveActorSoftLimit(titleActiveActorSoftLimit + step);
+  showTitle();
+}
+
+function setTitleSelection(field: TitleInputField): void {
+  const index = TITLE_SETUP_FIELDS.indexOf(field);
+  if (index >= 0) titleSetupSel = index;
+  titleInputField = TITLE_SETUP_FIELDS[titleSetupSel] ?? 'start';
+}
+
+function moveTitleSelection(delta: number): void {
+  titleSetupSel = (titleSetupSel + TITLE_SETUP_FIELDS.length + delta) % TITLE_SETUP_FIELDS.length;
+  titleInputField = TITLE_SETUP_FIELDS[titleSetupSel] ?? 'start';
+  showTitle();
+}
+
+function openTitleSetupMenu(): void {
+  titleMode = 'setup';
+  setTitleSelection(titleInputField === 'start' ? 'start' : titleInputField);
+  showTitle();
+}
+
 function editTitleFieldFromPointer(field: TitleInputField): void {
+  if (field === 'start') {
+    startGameFromTitle();
+    return;
+  }
+  if (field === 'language') {
+    cycleTitleLanguage(1);
+    return;
+  }
+  if (field === 'actorCap') {
+    const lang = titleLanguageDef(titleLanguageId);
+    const next = typeof window !== 'undefined' ? window.prompt(lang.setupActorCapLabel, String(titleActiveActorSoftLimit)) : null;
+    if (next !== null) saveTitleActiveActorSoftLimit(Number(next));
+    showTitle();
+    return;
+  }
   titleInputField = field;
   const lang = titleLanguageDef(titleLanguageId);
   const label = field === 'seed' ? lang.seedLabel : lang.nameLabel;
   const current = field === 'seed' ? titleRunSeedText : playerNickname;
   const next = typeof window !== 'undefined' ? window.prompt(label, current) : null;
   if (next !== null) {
-    if (field === 'seed') titleRunSeedText = cleanTitleRunSeedText(next);
+    if (field === 'seed') {
+      titleRunSeedText = cleanTitleRunSeedText(next);
+      titleStartNeedsInit = true;
+    }
     else playerNickname = cleanPlayerNickname(next).slice(0, 24);
   }
   showTitle();
+}
+
+function titleSetupRows(cursorOn: boolean): TitleSetupRowView[] {
+  const lang = titleLanguageDef(titleLanguageId);
+  const selected = (field: TitleInputField) => titleMode === 'setup' && titleInputField === field;
+  const shownName = playerNickname || lang.namePlaceholder;
+  const shownSeed = titleRunSeedText || lang.seedPlaceholder;
+  const nameCursor = cursorOn && selected('name') ? '_' : '';
+  const seedCursor = cursorOn && selected('seed') ? '_' : '';
+  return [
+    { field: 'start', label: lang.setupStartLabel, value: lang.setupStartValue, hint: lang.setupStartHint, selected: selected('start') },
+    { field: 'language', label: lang.setupLanguageLabel, value: titleLanguageDef(titleLanguageId).name, hint: lang.setupLanguageHint, selected: selected('language') },
+    { field: 'name', label: lang.nameLabel, value: `${shownName}${nameCursor}`, hint: lang.setupNameHint, selected: selected('name') },
+    { field: 'seed', label: lang.seedLabel, value: `${shownSeed}${seedCursor}`, hint: lang.setupSeedHint, selected: selected('seed') },
+    {
+      field: 'actorCap',
+      label: lang.setupActorCapLabel,
+      value: lang.actorCapValue(titleActiveActorSoftLimit, MIN_ACTIVE_ACTOR_SOFT_LIMIT, MAX_ACTIVE_ACTOR_SOFT_LIMIT),
+      hint: lang.setupActorCapHint,
+      selected: selected('actorCap'),
+    },
+  ];
 }
 
 function playerAlifeFields(source: Partial<Entity> = {}): Pick<Entity, 'persistentNpcId' | 'playerRelation' | 'karma' | 'kills' | 'npcKills' | 'monsterKills'> {
@@ -1614,6 +1738,7 @@ function initGame(runSeedOverride?: number): void {
     invSel: 0,
     msgs: [msg('Добро пожаловать в ГИГАХРУЩ. Закройте дверь.', 0, '#aaa', 0)],
     quests: [],
+    activeQuestId: undefined,
     nextQuestId: 1,
     currentFloor: FloorLevel.LIVING,
     fogSpreadTimer: 0,
@@ -1633,6 +1758,11 @@ function initGame(runSeedOverride?: number): void {
     containerCursorX: 0,
     containerCursorY: 0,
     containerSide: 'container',
+    showCraftMenu: false,
+    craftMode: 'craft',
+    craftCursor: 0,
+    craftFilter: '',
+    craftStationKind: 'lathe',
     showDebug: false,
     debugSel: 0,
     showFactions: false,
@@ -1659,6 +1789,7 @@ function initGame(runSeedOverride?: number): void {
     uvBeamFx: 0,
     uvBeamLen: 0,
     gameWon: false,
+    crafting: createCraftingState(),
     worldEvents: createWorldEventState(),
   };
   clearVoidReturnPortalState(state);
@@ -1696,18 +1827,9 @@ function initGame(runSeedOverride?: number): void {
 }
 
 function bootInitialGameOrTitle(): void {
-  if (shouldUseTouchControls()) {
-    titleStartNeedsInit = true;
-    showTitle();
-    markPlatformReady();
-    return;
-  }
-  drawLoading();
-  setTimeout(() => {
-    initGame();
-    showTitle();
-    markPlatformReady();
-  }, 0);
+  titleStartNeedsInit = true;
+  showTitle();
+  markPlatformReady();
 }
 
 /* ── Input ────────────────────────────────────────────────────── */
@@ -1848,6 +1970,7 @@ function recordUnattributedPlayerDamage(amount: number): void {
 function handlePlayerDeath(deadActor = player): void {
   const deathTime = state.time;
   const cause = formatLastPlayerDamageCause(state, deathTime);
+  closeCraftMenu();
   state.gameOver = true;
   state.deathTimer = 0;
   startDeathCamera(runtimeCamera, deadActor.x, deadActor.y, deadActor.angle);
@@ -1868,6 +1991,12 @@ function updateDoors(dt: number): void {
 
 /* ── Player movement ──────────────────────────────────────────── */
 const PLAYER_COLLISION_R = 0.16;
+const PLAYER_SPRINT_SPEED_MULT = 2;
+const PLAYER_SPRINT_WATER_RATE = 0.24;
+
+function needFraction(value: number): number {
+  return Math.max(0, Math.min(1, value / 100));
+}
 
 function playerCanOccupy(x: number, y: number, r = PLAYER_COLLISION_R): boolean {
   return !world.solid(Math.floor(x + r), Math.floor(y + r)) &&
@@ -1895,6 +2024,19 @@ function nudgeBlockedPlayerToFloor(actor = player): void {
       }
     }
   }
+}
+
+function playerSprintMoveMultiplier(actor: Entity): number {
+  const needs = actor.needs;
+  if (!input.sprint || !needs) return 1;
+  return 1 + (PLAYER_SPRINT_SPEED_MULT - 1) * needFraction(needs.water);
+}
+
+function consumePlayerSprintWater(actor: Entity, dt: number, sprintMod: number): void {
+  const needs = actor.needs;
+  if (!needs) return;
+  const sprintLoad = Math.max(0, sprintMod - 1) / Math.max(1, PLAYER_SPRINT_SPEED_MULT - 1);
+  needs.water = Math.max(0, needs.water - PLAYER_SPRINT_WATER_RATE * sprintLoad * dt);
 }
 
 function movePlayer(dt: number): void {
@@ -1955,12 +2097,15 @@ function movePlayer(dt: number): void {
     const coldMod = hladonColdMoveMultiplier(world, actor);
     const toolLightMod = passiveToolLightMoveMultiplier(actor.tool) *
       (input.use ? activeToolLightMoveMultiplier(actor.tool) : 1);
-    const moveMod = sleepMod * agiMod * hazardMod * statusMod * coldMod * toolLightMod;
+    const sprintMod = playerSprintMoveMultiplier(actor);
+    const moveMod = sleepMod * agiMod * hazardMod * statusMod * coldMod * toolLightMod * sprintMod;
     mx = mx / len * speed * moveMod;
     my = my / len * speed * moveMod;
 
     const r = PLAYER_COLLISION_R; // small enough to slide along tight concrete corners
     const canClip = isNoClipActive();
+    const beforeX = actor.x;
+    const beforeY = actor.y;
     // X movement – check all 4 AABB corners (skip if noclip effect is active)
     const nx = actor.x + mx;
     if (canClip || (
@@ -1979,6 +2124,8 @@ function movePlayer(dt: number): void {
         !world.solid(Math.floor(actor.x - r), Math.floor(ny - r)))) {
       actor.y = ((ny % W) + W) % W;
     }
+
+    if (sprintMod > 1 && (actor.x !== beforeX || actor.y !== beforeY)) consumePlayerSprintWater(actor, dt, sprintMod);
 
     if (actor.id === player.id && floorTeleportCd <= 0 && world.anomalyTeleports.size > 0) {
       const from = world.idx(Math.floor(player.x), Math.floor(player.y));
@@ -2114,8 +2261,15 @@ function playerActions(_dt: number): void {
       movePlayerToMetroRoom,
       openNpcMenu,
       openContainerMenu,
+      openCraftMenu,
+      learnRecipe: learnCraftRecipeFromInteraction,
       openMapEditor,
       playDoor,
+      manualItemPickup: !autoPickupEnabled(),
+      onPickedDrop: drop => {
+        claimNetTerminalGenFleshDrop(state, drop, player, world);
+        recordFactionEventLootTaken(state, world, player, drop);
+      },
     });
     if (result.worldChanged) updateWorldData(world);
     if (result.openedOverlay) syncPauseState();
@@ -3035,8 +3189,22 @@ function currentRouteRebuildGeneration(): FloorGeneration | undefined {
   return undefined;
 }
 
+function currentSamosborPatchSeed(): number {
+  return hashSeed(`samosbor-patch:${currentFloorMemoryKey()}:${state.samosborCount}`, ensureFloorRunState(state).runSeed);
+}
+
+function currentRouteLocalSamosborPatchGeneration(patchSeed: number): FloorGeneration | undefined {
+  invalidateFloorMemory(currentFloorMemoryKey());
+  if (getActiveFloorInstance(state)) return undefined;
+  const entry = currentFloorRunEntry(state);
+  if (entry.spec) return generateProceduralFloor({ ...entry.spec, seed: patchSeed });
+  if (entry.designFloorId) return generateDesignFloor(entry.designFloorId, patchSeed);
+  return undefined;
+}
+
 function currentLocalSamosborPatchGeneration(): FloorGeneration {
-  return currentRouteRebuildGeneration() ?? generateFloor(state.currentFloor, ensureFloorRunState(state).runSeed);
+  const patchSeed = currentSamosborPatchSeed();
+  return currentRouteLocalSamosborPatchGeneration(patchSeed) ?? generateFloor(state.currentFloor, patchSeed);
 }
 
 function scheduleLocalSamosborPatch(fn: () => void): void {
@@ -3142,6 +3310,7 @@ function switchFloor(
   overrideArrivalColor?: string,
   allowElevatorAnomaly = true,
 ): void {
+  closeCraftMenu();
   restorePlayerBeforeWorldBoundary();
   const fromFloor = state.currentFloor;
   captureCurrentAlifeFloor();
@@ -3278,7 +3447,7 @@ function switchFloor(
       overrideArrivalColor ?? (route.activeInstance ? '#f4a' : route.exitedInstance ? '#8cf' : generatedRunEntry?.color ?? FLOOR_MESSAGE_COLORS[nextFloor]),
     ));
     const arrivalLead = route.activeInstance
-      ? `Маршрут прерван: номерной лифт ${floorInstanceLabel(route.activeInstance)}, риск ${route.activeInstance.risk}/5. Возврат: следующий лифт ведет к ${intendedRunEntry ? floorRunEntryLiftLabel(intendedRunEntry) : 'плановому маршруту'}.`
+      ? `Маршрут прерван: номерной лифт ${floorInstanceLabel(route.activeInstance)}. Возврат: следующий лифт ведет к ${intendedRunEntry ? floorRunEntryLiftLabel(intendedRunEntry) : 'плановому маршруту'}.`
       : generatedRunEntry
         ? floorRunArrivalLead(generatedRunEntry, returnDirection)
         : undefined;
@@ -3604,9 +3773,133 @@ function closeContainerMenu(): void {
   state.containerSide = 'container';
 }
 
+function closeCraftMenu(): void {
+  state.showCraftMenu = false;
+  state.craftMode = 'craft';
+  state.craftCursor = 0;
+  state.craftFilter = '';
+  state.craftStationKind = 'lathe';
+}
+
+function closeInterfacesForCraftMenu(): void {
+  clearTradeOffers(state);
+  state.showMenu = false;
+  state.showInventory = false;
+  state.showQuests = false;
+  state.showNpcMenu = false;
+  closeNpcInteractionInterface();
+  closeContainerMenu();
+  state.showDebug = false;
+  state.showFactions = false;
+  state.showLog = false;
+  state.showControls = false;
+  state.showUiSettings = false;
+  cancelControlCapture();
+  state.mapMode = 0;
+  closeNetSphere();
+  closeNetTerminalGen();
+  closeInteractableOverlay();
+  closeEmergencyPanelMenu();
+  closeMapEditor();
+}
+
+function openCraftMenu(request: ContentCraftMenuRequest): void {
+  closeInterfacesForCraftMenu();
+  state.showCraftMenu = true;
+  state.craftMode = request.mode;
+  state.craftStationKind = request.station;
+  state.craftCursor = 0;
+  state.craftFilter = '';
+  resetMenuRepeats();
+  syncPauseState();
+  updateMobileContext(true);
+}
+
+function learnCraftRecipeFromInteraction(request: ContentRecipeLearnRequest): boolean {
+  if (request.recipeSourceId) {
+    const source = getCraftRecipeSource(request.recipeSourceId);
+    if (!source) return false;
+    const result = learnCraftRecipesFromSource(state, source);
+    for (const recipeId of result.learned) {
+      state.msgs.push(msg(craftRecipeLearnedMessage(recipeId), state.time, '#8cf'));
+    }
+    return result.learned.length > 0;
+  }
+  if (!request.recipeId) return false;
+  return learnCraftRecipe(state, request.recipeId, request.sourceDefId);
+}
+
+function pushCraftActionResult(result: CraftingActionResult): void {
+  const last = state.msgs.at(-1);
+  if (last?.text === result.message) return;
+  state.msgs.push(msg(result.message, state.time, result.ok ? '#8cf' : '#f84'));
+}
+
+function clampCraftMenuCursor(): void {
+  const snapshot = craftMenuSnapshot({
+    actor: player,
+    state,
+    mode: state.craftMode,
+    stationKind: state.craftStationKind,
+    filter: state.craftFilter,
+  });
+  const entries = craftMenuEntries(snapshot);
+  state.craftCursor = entries.length === 0
+    ? 0
+    : Math.max(0, Math.min(entries.length - 1, Math.floor(state.craftCursor)));
+}
+
+function activateCraftSelection(): void {
+  const snapshot = craftMenuSnapshot({
+    actor: player,
+    state,
+    mode: state.craftMode,
+    stationKind: state.craftStationKind,
+    filter: state.craftFilter,
+  });
+  const entries = craftMenuEntries(snapshot);
+  if (entries.length === 0) {
+    state.msgs.push(msg(state.craftMode === 'craft' ? 'Известных рецептов нет.' : 'Инвентарь пуст.', state.time, '#888'));
+    state.craftCursor = 0;
+    return;
+  }
+  state.craftCursor = Math.max(0, Math.min(entries.length - 1, Math.floor(state.craftCursor)));
+  const entry = entries[state.craftCursor];
+  const result = entry.kind === 'recipe'
+    ? craftKnownRecipe({ actor: player, state, stationKind: state.craftStationKind, recipeId: entry.id })
+    : disassembleInventorySlot({ actor: player, state, stationKind: state.craftStationKind, slotIndex: entry.slotIndex });
+  pushCraftActionResult(result);
+  clampCraftMenuCursor();
+}
+
+function questLogEntries(): Quest[] {
+  const active = state.quests.filter(q => !q.done);
+  const done = state.quests.filter(q => q.done);
+  return [...active, ...done];
+}
+
+function selectedQuestLogQuest(): Quest | undefined {
+  const entries = questLogEntries();
+  if (entries.length === 0) return undefined;
+  const page = Math.max(0, Math.min(entries.length - 1, state.questPage));
+  return entries[page];
+}
+
+function toggleSelectedQuestActive(): void {
+  const quest = selectedQuestLogQuest();
+  if (!quest || !isQuestSelectableAsActive(quest)) return;
+  const wasActive = state.activeQuestId === quest.id;
+  const selected = toggleActiveQuest(state, quest.id);
+  if (wasActive) {
+    state.msgs.push(msg('Активная цель снята.', state.time, '#888'));
+  } else if (selected) {
+    state.msgs.push(msg(`Активная цель: ${selected.desc}`, state.time, '#fc4'));
+  }
+}
+
 /* ── Save / Load ──────────────────────────────────────────────── */
 const SAVE_KEY = 'gigahrush_save';
-const SAVE_INVENTORY_SLOT_CAP = 25;
+const SAVE_INVENTORY_SLOT_CAP = MAX_INVENTORY_SLOTS;
 const SAVE_QUEST_CAP = 512;
 const SAVE_TEXT_CAP = 192;
 const MAX_SAVE_MONEY = 999_999;
@@ -4074,6 +4367,7 @@ function loadGame(): boolean {
       setLiftArachnaState(state, dataState.liftArachna as Parameters<typeof setLiftArachnaState>[1]);
       setPseudoliftState(state, dataState.pseudolift as Parameters<typeof setPseudoliftState>[1]);
       state.worldEvents = normalizeWorldEventState(dataState.worldEvents as Parameters<typeof normalizeWorldEventState>[0]);
+      state.crafting = restoreCraftingState(dataState.crafting);
       normalizeGameEconomy(state, dataState.economy);
       (state as GameState & { banking?: BankingState }).banking = normalizeBankingState(dataState.banking);
       normalizeGameStockMarket(state, dataState.stockMarket);
@@ -4413,13 +4707,11 @@ function updateEquippedTool(dt: number, actor = player): void {
 /* ── Menu input handling (runs regardless of pause state) ─────── */
 let prevEsc = false, prevInvMenu = false, prevQuestMenu = false;
 let prevMenuUp = false, prevMenuDn = false, prevMenuLeft = false, prevMenuRight = false;
-let prevMenuInteract = false, prevDrop = false;
+let prevDrop = false;
 let prevFactionMenu = false;
 let prevLogMenu = false;
 let prevControlsMenu = false;
 let prevUiSettingsMenu = false;
-let prevControlEdit = false;
-let prevControlReset = false;
 let prevControlClose = false;
 type MenuRepeatKey = 'up' | 'down' | 'left' | 'right';
 const MENU_REPEAT_DELAY = 0.30;
@@ -4453,13 +4745,16 @@ function menuRepeatStep(key: MenuRepeatKey, held: boolean, edge: boolean): boole
   return false;
 }
 
+function wrapMenuIndex(value: number, count: number): number {
+  return ((value % count) + count) % count;
+}
+
 function syncMenuInputBaselines(): void {
   prevEsc = input.escape;
   prevMenuUp = input.invUp;
   prevMenuDn = input.invDn;
   prevMenuLeft = input.invLeft;
   prevMenuRight = input.invRight;
-  prevMenuInteract = input.interact;
   prevDrop = input.drop;
   prevInvMenu = input.inv;
   prevQuestMenu = input.questLog;
@@ -4468,8 +4763,6 @@ function syncMenuInputBaselines(): void {
   prevLogMenu = input.logMenu;
   prevControlsMenu = input.controls;
   prevUiSettingsMenu = input.uiSettings;
-  prevControlEdit = input.controlEdit;
-  prevControlReset = input.controlReset;
   prevControlClose = input.controlClose;
   prevMap = input.map;
 }
@@ -4509,7 +4802,7 @@ function mobileGestureUnlock(): void {
 
 function syncPauseState(): void {
   if (typeof state === 'undefined') return;
-  state.paused = pointerCaptureGateVisible() || pageHiddenPause || platformPause || state.showMenu || state.showInventory || state.showNpcMenu || state.showContainerMenu ||
+  state.paused = pointerCaptureGateVisible() || pageHiddenPause || platformPause || state.showMenu || state.showInventory || state.showNpcMenu || state.showContainerMenu || state.showCraftMenu ||
     state.showQuests || state.showDebug || state.showFactions || state.showLog || state.showControls || state.showUiSettings ||
     isNetSphereOpen() || isNetTerminalGenOpen() || isInteractableOverlayOpen() || isEmergencyPanelMenuOpen() || isMapEditorOpen();
   syncPointerCursorClasses();
@@ -4527,7 +4820,7 @@ function syncPlatformGameplayState(): void {
 
 function isMobileMenuOpen(): boolean {
   if (typeof state === 'undefined') return false;
-  return state.showMenu || state.showInventory || state.showNpcMenu || state.showContainerMenu ||
+  return state.showMenu || state.showInventory || state.showNpcMenu || state.showContainerMenu || state.showCraftMenu ||
     state.showQuests || state.showDebug || state.showFactions || state.showLog || state.showControls || state.showUiSettings ||
     state.mapMode === 2 || isNetSphereOpen() || isNetTerminalGenOpen() || isInteractableOverlayOpen() || isEmergencyPanelMenuOpen() || isMapEditorOpen();
 }
@@ -4541,6 +4834,7 @@ function closeMobilePanels(includeMap = true): void {
   state.showNpcMenu = false;
   closeNpcInteractionInterface();
   closeContainerMenu();
+  closeCraftMenu();
   state.showDebug = false;
   state.showFactions = false;
   state.showLog = false;
@@ -4565,6 +4859,7 @@ function closeInterfacesForFullMap(): void {
   state.showNpcMenu = false;
   closeNpcInteractionInterface();
   closeContainerMenu();
+  closeCraftMenu();
   state.showDebug = false;
   state.showFactions = false;
   state.showLog = false;
@@ -4655,6 +4950,8 @@ function confirmActiveMobileSelection(): void {
     const container = world.containerById.get(state.containerMenuTarget);
     if (container) activateContainerSelection(container);
     else closeContainerMenu();
+  } else if (state.showCraftMenu) {
+    activateCraftSelection();
   } else if (state.showNpcMenu) {
     const npc = entities.find(e => e.id === state.npcMenuTarget);
     if (state.npcMenuTab === 'main') {
@@ -4791,8 +5088,7 @@ function activateNpcQuest(npc: Entity | undefined): void {
 }
 
 function activateContainerSelection(container: WorldContainer): void {
-  const GRID = 5;
-  const idx = state.containerCursorY * GRID + state.containerCursorX;
+  const idx = state.containerCursorY * INVENTORY_GRID_COLS + state.containerCursorX;
     const access = containerAccessInfo(container, player, state);
   if (state.containerSide === 'container') {
     const slot = container.inventory[idx];
@@ -4896,8 +5192,7 @@ function reportTradeResult(npc: Entity, result: TradeResult): void {
 }
 
 function activateTradeSelection(npc: Entity): void {
-  const GRID = 5;
-  const idx = state.tradeCursorY * GRID + state.tradeCursorX;
+  const idx = state.tradeCursorY * INVENTORY_GRID_COLS + state.tradeCursorX;
   const zoneId = currentPlayerZoneId();
   const result = state.tradeSide === 'deal'
     ? executeTradeDeal(state, player, npc, { zoneId })
@@ -4924,11 +5219,21 @@ function controlsVisibleRows(): number {
 }
 
 function controlMenuItemCount(): number {
-  return state.controlView === 'buttons' ? MOBILE_BUTTON_CONTROL_ROWS.length : CONTROL_ACTIONS.length + 1;
+  return state.controlView === 'buttons' ? MOBILE_BUTTON_CONTROL_ROWS.length : CONTROL_ACTIONS.length + 2;
+}
+
+function controlResetSelected(): boolean {
+  return state.controlView === 'keys' && state.controlSel === 0;
+}
+
+function selectedControlAction(): typeof CONTROL_ACTIONS[number] | undefined {
+  return state.controlView === 'keys' && state.controlSel > 0 && state.controlSel <= CONTROL_ACTIONS.length
+    ? CONTROL_ACTIONS[state.controlSel - 1]
+    : undefined;
 }
 
 function controlMouseSensitivitySelected(): boolean {
-  return state.controlView === 'keys' && state.controlSel === CONTROL_ACTIONS.length;
+  return state.controlView === 'keys' && state.controlSel === CONTROL_ACTIONS.length + 1;
 }
 
 function keepControlSelectionVisible(): void {
@@ -4964,6 +5269,7 @@ function openControlsMenu(view: GameState['controlView'] = 'keys'): void {
   state.showQuests = false;
   state.showNpcMenu = false;
   closeContainerMenu();
+  closeCraftMenu();
   state.showDebug = false;
   state.showFactions = false;
   state.showLog = false;
@@ -4995,6 +5301,7 @@ function openUiSettingsMenu(view: UiSettingsView = 'interface', focusKind?: stri
   state.showQuests = false;
   state.showNpcMenu = false;
   closeContainerMenu();
+  closeCraftMenu();
   state.showDebug = false;
   state.showFactions = false;
   state.showLog = false;
@@ -5021,6 +5328,16 @@ function closeUiSettingsMenu(): void {
 function applyUiSettingsSelection(index: number): void {
   const row = uiSettingsRowAt(index, state.uiSettingsView);
   if (!row) return;
+  if (row.kind === 'reset_interface') {
+    resetUiSettings();
+    state.msgs.push(msg('UI сброшен: Новичок', state.time, '#8cf'));
+    return;
+  }
+  if (row.kind === 'reset_graphics') {
+    const fov = resetCameraFov();
+    state.msgs.push(msg(`Графика сброшена: FOV ${fov}°`, state.time, '#8cf'));
+    return;
+  }
   if (row.kind === 'preset') {
     if (applyUiPreset(row.preset.id)) {
       state.msgs.push(msg(`UI пресет: ${row.preset.label}`, state.time, '#8cf'));
@@ -5037,29 +5354,12 @@ function applyUiSettingsSelection(index: number): void {
     state.msgs.push(msg(`FOV: ${fov}°`, state.time, '#8cf'));
     return;
   }
+  if (row.kind === 'auto_pickup') {
+    const enabled = toggleAutoPickup();
+    state.msgs.push(msg(`Автоподбор предметов: ${enabled ? 'вкл' : 'выкл'}`, state.time, enabled ? '#8cf' : '#fc8'));
+    return;
+  }
   toggleUiElement(row.element.id);
-}
-
-function resetUiSettingsSelection(index: number): void {
-  const row = uiSettingsRowAt(index, state.uiSettingsView);
-  if (!row) return;
-  if (row.kind === 'preset') {
-    applyUiPreset(DEFAULT_UI_PRESET_ID);
-    state.msgs.push(msg('UI сброшен: Новичок', state.time, '#8cf'));
-    return;
-  }
-  if (row.kind === 'mobile_sensitivity') {
-    const sensitivity = resetMobileLookSensitivity();
-    state.msgs.push(msg(`Мобильный обзор сброшен: ${Math.round(sensitivity * 100)}%`, state.time, '#8cf'));
-    return;
-  }
-  if (row.kind === 'camera_fov') {
-    const fov = resetCameraFov();
-    state.msgs.push(msg(`FOV сброшен: ${fov}°`, state.time, '#8cf'));
-    return;
-  }
-  resetUiElement(row.element.id);
-  state.msgs.push(msg(`UI сброшен: ${row.element.label}`, state.time, '#8cf'));
 }
 
 function pointInRect(x: number, y: number, rx: number, ry: number, rw: number, rh: number): boolean {
@@ -5074,7 +5374,7 @@ function handleMobileHudTap(x: number, y: number): void {
   const baseSy = h / SCR_H;
   const { sx, sy } = menuScale();
 
-  if (state.mapMode === 2 && !state.showInventory && !state.showQuests && !state.showLog && !state.showFactions && !state.showMenu && !state.showControls && !state.showUiSettings && !state.showNpcMenu && !state.showContainerMenu) {
+  if (state.mapMode === 2 && !state.showInventory && !state.showQuests && !state.showLog && !state.showFactions && !state.showMenu && !state.showControls && !state.showUiSettings && !state.showNpcMenu && !state.showContainerMenu && !state.showCraftMenu) {
     state.mapMode = 0;
     return;
   }
@@ -5095,7 +5395,10 @@ function handleMobileHudTap(x: number, y: number): void {
         const wasSelected = state.controlSel === idx;
         state.controlSel = idx;
         keepControlSelectionVisible();
-        if (wasSelected && controlMouseSensitivitySelected()) {
+        if (wasSelected && controlResetSelected()) {
+          resetAllControlBindings();
+          state.msgs.push(msg('Клавиши сброшены по умолчанию', state.time, '#8cf'));
+        } else if (wasSelected && controlMouseSensitivitySelected()) {
           const sensitivity = adjustMouseLookSensitivity(1);
           state.msgs.push(msg(`Чувствительность мыши: ${Math.round(sensitivity * 100)}%`, state.time, '#8cf'));
         }
@@ -5165,15 +5468,55 @@ function handleMobileHudTap(x: number, y: number): void {
       spendMobileAttr(rel < 0.34 ? 'str' : rel < 0.67 ? 'agi' : 'int');
       return;
     }
+  } else if (state.showCraftMenu) {
+    const layout = craftMenuLayout(w, h);
+    if (pointInRect(x, y, layout.close.x, layout.close.y, layout.close.w, layout.close.h)
+      || pointInRect(x, y, layout.bottom.x, layout.bottom.y, layout.bottom.w, layout.bottom.h)) {
+      closeCraftMenu();
+      syncPauseState();
+      updateMobileContext(true);
+      return;
+    }
+    const snapshot = craftMenuSnapshot({
+      actor: player,
+      state,
+      mode: state.craftMode,
+      stationKind: state.craftStationKind,
+      filter: state.craftFilter,
+    });
+    const entries = craftMenuEntries(snapshot);
+    const visibleRows = Math.max(1, Math.floor((layout.list.h - 20 * layout.scale) / layout.rowH));
+    const cursor = entries.length === 0 ? 0 : Math.max(0, Math.min(entries.length - 1, state.craftCursor));
+    const first = Math.max(0, Math.min(Math.max(0, entries.length - visibleRows), cursor - Math.floor(visibleRows * 0.5)));
+    const listTop = layout.list.y + 16 * layout.scale;
+    for (let row = 0; row < visibleRows; row++) {
+      const index = first + row;
+      if (index >= entries.length) break;
+      const rowY = listTop + row * layout.rowH - 3 * layout.scale;
+      if (pointInRect(x, y, layout.list.x, rowY, layout.list.w, layout.rowH)) {
+        const wasSelected = state.craftCursor === index;
+        state.craftCursor = index;
+        if (wasSelected) activateCraftSelection();
+        return;
+      }
+    }
+    if (entries.length > 0 && pointInRect(x, y, layout.detail.x, layout.detail.y, layout.detail.w, layout.detail.h)) {
+      activateCraftSelection();
+      return;
+    }
   } else if (state.showQuests) {
     const pw = Math.min(400 * sx, w - 24 * sx);
-    const ph = Math.min(280 * sy, h - 24 * sy);
+    const ph = Math.min(320 * sy, h - 24 * sy);
     const px = (w - pw) / 2;
     const py = (h - ph) / 2;
-    const total = state.quests.length;
+    const total = questLogEntries().length;
     if (pointInRect(x, y, px, py + ph - 22 * sy, pw, 22 * sy)) {
       state.showQuests = false;
       syncPauseState();
+      return;
+    }
+    if (pointInRect(x, y, px, py + ph - 44 * sy, pw, 22 * sy)) {
+      toggleSelectedQuestActive();
       return;
     }
     if (total > 1) {
@@ -5201,15 +5544,14 @@ function handleMobileHudTap(x: number, y: number): void {
       return;
     }
     const layout = containerMenuGridLayout(w, h);
-    const GRID = 5;
     const cellSz = layout.cell;
     const startX = layout.startX;
     const startY = layout.startY;
     const containerX = layout.containerX;
     for (const side of ['player', 'container'] as const) {
       const gx = side === 'player' ? startX : containerX;
-      for (let row = 0; row < GRID; row++) {
-        for (let col = 0; col < GRID; col++) {
+      for (let row = 0; row < layout.rows; row++) {
+        for (let col = 0; col < layout.cols; col++) {
           if (pointInRect(x, y, gx + col * cellSz, startY + row * cellSz, cellSz, cellSz)) {
             state.containerSide = side;
             state.containerCursorX = col;
@@ -5235,43 +5577,29 @@ function handleMobileHudTap(x: number, y: number): void {
       const options = getNpcMenuOptions({ state, player, npc, entities });
       clampNpcMenuSelection(state, options);
       for (let i = 0; i < options.length; i++) {
-        const yy = py + 44 * sy + i * 20 * sy;
-        if (pointInRect(x, y, px + 8 * sx, yy - 7 * sy, 220 * sx, 18 * sy)) {
+        const yy = py + 42 * sy + i * 17 * sy;
+        if (pointInRect(x, y, px + 8 * sx, yy - 6 * sy, 220 * sx, 16 * sy)) {
           state.npcMenuSel = i;
           activateNpcMainSelection(npc);
           return;
-        }
       }
-      if (pointInRect(x, y, px, py + ph - 22 * sy, pw, 22 * sy)) {
+    }
+    if (pointInRect(x, y, px, py + ph - 22 * sy, pw, 22 * sy)) {
         state.showNpcMenu = false;
         syncPauseState();
       }
     } else if (state.npcMenuTab === 'trade') {
-      const GRID = 5;
-      const ts = tradeGridScale(w, h);
-      const cellSz = 22 * ts;
-      const sideGap = 10 * ts;
-      const centerGap = 18 * ts;
-      const gridTotal = GRID * cellSz;
-      const totalW = gridTotal * 4 + sideGap * 2 + centerGap;
-      const startX = (w - totalW) / 2;
-      const startY = 30 * ts;
-      const playerOfferX = startX + gridTotal + sideGap;
-      const npcOfferX = playerOfferX + gridTotal + centerGap;
-      const npcX = npcOfferX + gridTotal + sideGap;
-      const dealX = playerOfferX;
-      const dealY = startY + GRID * cellSz + 10 * ts;
-      const dealW = gridTotal * 2 + centerGap;
-      const dealH = 16 * ts;
+      const layout = tradeMenuGridLayout(w, h);
+      const cellSz = layout.cell;
       for (const panel of [
-        { side: 'player', x: startX },
-        { side: 'player_offer', x: playerOfferX },
-        { side: 'npc_offer', x: npcOfferX },
-        { side: 'npc', x: npcX },
+        { side: 'player', x: layout.startX },
+        { side: 'player_offer', x: layout.playerOfferX },
+        { side: 'npc_offer', x: layout.npcOfferX },
+        { side: 'npc', x: layout.npcX },
       ] as const) {
-        for (let row = 0; row < GRID; row++) {
-          for (let col = 0; col < GRID; col++) {
-            if (pointInRect(x, y, panel.x + col * cellSz, startY + row * cellSz, cellSz, cellSz)) {
+        for (let row = 0; row < layout.rows; row++) {
+          for (let col = 0; col < layout.cols; col++) {
+            if (pointInRect(x, y, panel.x + col * cellSz, layout.startY + row * cellSz, cellSz, cellSz)) {
               state.tradeSide = panel.side;
               state.tradeCursorX = col;
               state.tradeCursorY = row;
@@ -5281,7 +5609,7 @@ function handleMobileHudTap(x: number, y: number): void {
           }
         }
       }
-      if (pointInRect(x, y, dealX, dealY, dealW, dealH + 10 * ts)) {
+      if (pointInRect(x, y, layout.dealX, layout.dealY, layout.dealW, layout.dealH + 10 * layout.scale)) {
         state.tradeSide = 'deal';
         state.tradeCursorX = 0;
         state.tradeCursorY = 0;
@@ -5342,11 +5670,14 @@ function handleHudPointerUp(e: PointerEvent): void {
       return;
     }
     const titleField = hitTitleField(titleLanguageHits, x, y);
-    if (titleField === 'name' || titleField === 'seed') {
-      editTitleFieldFromPointer(titleField);
+    if (titleMode === 'language') {
+      if (titleField === 'start' || !titleField) openTitleSetupMenu();
       return;
     }
-    if (titleField === 'start' || !titleField) startGameFromTitle();
+    if (titleField) {
+      setTitleSelection(titleField);
+      editTitleFieldFromPointer(titleField);
+    }
     return;
   }
   if (pendingLoad) return;
@@ -5372,7 +5703,13 @@ function handleTitleCanvasPointerUp(e: PointerEvent): void {
     showTitle();
   } else {
     const titleField = hitTitleField(titleLanguageHits, x, y);
-    if (titleField === 'name' || titleField === 'seed') editTitleFieldFromPointer(titleField);
+    if (titleMode === 'language') {
+      if (titleField === 'start' || !titleField) openTitleSetupMenu();
+      else return;
+    } else if (titleField) {
+      setTitleSelection(titleField);
+      editTitleFieldFromPointer(titleField);
+    }
     else return;
   }
   suppressNextTitleClick = true;
@@ -5397,6 +5734,7 @@ function handleMenuInput(): void {
     state.showQuests = false;
     state.showNpcMenu = false;
     closeContainerMenu();
+    closeCraftMenu();
     state.showFactions = false;
     state.showLog = false;
     state.showControls = false;
@@ -5415,7 +5753,6 @@ function handleMenuInput(): void {
     prevMenuDn = input.invDn;
     prevMenuLeft = input.invLeft;
     prevMenuRight = input.invRight;
-    prevMenuInteract = input.interact;
     prevDrop = input.drop;
     prevInvMenu = input.inv;
     prevQuestMenu = input.questLog;
@@ -5423,8 +5760,6 @@ function handleMenuInput(): void {
     prevLogMenu = input.logMenu;
     prevControlsMenu = input.controls;
     prevUiSettingsMenu = input.uiSettings;
-    prevControlEdit = input.controlEdit;
-    prevControlReset = input.controlReset;
     prevControlClose = input.controlClose;
     prevMap = input.map;
     return;
@@ -5439,7 +5774,8 @@ function handleMenuInput(): void {
 
   const globalMapEdge = input.map && !prevMap;
   if (globalMapEdge && !isMapEditorOpen()) {
-    toggleFullMapMenu();
+    if (state.mapMode === 2) closeFullMapMenu();
+    else if (!isMobileMenuOpen()) openFullMapMenu();
     syncMenuInputBaselines();
     return;
   }
@@ -5450,6 +5786,7 @@ function handleMenuInput(): void {
     state.showQuests = false;
     state.showNpcMenu = false;
     closeContainerMenu();
+    closeCraftMenu();
     state.showFactions = false;
     state.showLog = false;
     state.showDebug = false;
@@ -5459,12 +5796,12 @@ function handleMenuInput(): void {
     closeNetSphere();
     state.paused = true;
 
-    const escEdge = input.escape && !prevEsc;
+    const acceptEdge = input.escape && !prevEsc;
+    const closeEdge = input.controlClose && !prevControlClose;
     const upEdge = input.invUp && !prevMenuUp;
     const dnEdge = input.invDn && !prevMenuDn;
     const leftEdge = input.invLeft && !prevMenuLeft;
     const rightEdge = (input.invRight && !prevMenuRight) || (input.drop && !prevDrop);
-    const interactEdge = input.interact && !prevMenuInteract;
     const mapEdge = input.map && !prevMap;
     const upNav = menuRepeatStep('up', input.invUp, upEdge);
     const dnNav = menuRepeatStep('down', input.invDn, dnEdge);
@@ -5477,7 +5814,7 @@ function handleMenuInput(): void {
       syncPauseState();
     };
 
-    if (escEdge) {
+    if (closeEdge) {
       const action = backMapEditorMode();
       if (action === 'close') closeEditor();
     } else {
@@ -5486,13 +5823,12 @@ function handleMenuInput(): void {
       if (leftNav) moveMapEditorMode(world, -1, 0);
       if (rightNav) moveMapEditorMode(world, 1, 0);
       if (mapEdge) adjustMapEditorZoom(1);
-      if (interactEdge) {
+      if (acceptEdge) {
         const action = activateMapEditorMode();
         if (action === 'apply') {
           const result = applyCurrentMapEditorBrush(world, entities, player, state, nextEntityId);
           if (result.ok) updateWorldData(world);
         } else if (action === 'close') {
-          input.interact = false;
           closeEditor();
         }
       }
@@ -5503,7 +5839,6 @@ function handleMenuInput(): void {
     prevMenuDn = input.invDn;
     prevMenuLeft = input.invLeft;
     prevMenuRight = input.invRight;
-    prevMenuInteract = input.interact;
     prevDrop = input.drop;
     prevInvMenu = input.inv;
     prevQuestMenu = input.questLog;
@@ -5512,8 +5847,6 @@ function handleMenuInput(): void {
     prevLogMenu = input.logMenu;
     prevControlsMenu = input.controls;
     prevUiSettingsMenu = input.uiSettings;
-    prevControlEdit = input.controlEdit;
-    prevControlReset = input.controlReset;
     prevControlClose = input.controlClose;
     prevMap = input.map;
     return;
@@ -5525,6 +5858,7 @@ function handleMenuInput(): void {
     state.showQuests = false;
     state.showNpcMenu = false;
     closeContainerMenu();
+    closeCraftMenu();
     state.showFactions = false;
     state.showLog = false;
     state.showDebug = false;
@@ -5534,26 +5868,25 @@ function handleMenuInput(): void {
     closeNetSphere();
     state.paused = true;
 
-    const escEdge = input.escape && !prevEsc;
+    const acceptEdge = input.escape && !prevEsc;
+    const closeEdge = input.controlClose && !prevControlClose;
     const upEdge = input.invUp && !prevMenuUp;
     const dnEdge = input.invDn && !prevMenuDn;
     const leftEdge = input.invLeft && !prevMenuLeft;
     const rightEdge = (input.invRight && !prevMenuRight) || (input.drop && !prevDrop);
-    const interactEdge = input.interact && !prevMenuInteract;
     const upNav = menuRepeatStep('up', input.invUp, upEdge);
     const dnNav = menuRepeatStep('down', input.invDn, dnEdge);
     const leftNav = menuRepeatStep('left', input.invLeft, leftEdge);
     const rightNav = menuRepeatStep('right', input.invRight || input.drop, rightEdge);
     const result = handleInteractableOverlayInput({
-      escEdge,
-      interactEdge,
+      escEdge: closeEdge,
+      interactEdge: acceptEdge,
       upNav,
       dnNav,
       leftNav,
       rightNav,
     }, { world, state, player });
     if (result.worldChanged) updateWorldData(world);
-    if (interactEdge) input.interact = false;
     if (!isInteractableOverlayOpen()) syncPauseState();
 
     prevEsc = input.escape;
@@ -5561,7 +5894,6 @@ function handleMenuInput(): void {
     prevMenuDn = input.invDn;
     prevMenuLeft = input.invLeft;
     prevMenuRight = input.invRight;
-    prevMenuInteract = input.interact;
     prevDrop = input.drop;
     prevInvMenu = input.inv;
     prevQuestMenu = input.questLog;
@@ -5570,8 +5902,6 @@ function handleMenuInput(): void {
     prevLogMenu = input.logMenu;
     prevControlsMenu = input.controls;
     prevUiSettingsMenu = input.uiSettings;
-    prevControlEdit = input.controlEdit;
-    prevControlReset = input.controlReset;
     prevControlClose = input.controlClose;
     prevMap = input.map;
     return;
@@ -5583,6 +5913,7 @@ function handleMenuInput(): void {
     state.showQuests = false;
     state.showNpcMenu = false;
     closeContainerMenu();
+    closeCraftMenu();
     state.showFactions = false;
     state.showLog = false;
     state.showDebug = false;
@@ -5592,20 +5923,19 @@ function handleMenuInput(): void {
     closeNetSphere();
     state.paused = true;
 
-    const escEdge = input.escape && !prevEsc;
+    const acceptEdge = input.escape && !prevEsc;
+    const closeEdge = input.controlClose && !prevControlClose;
     const upEdge = input.invUp && !prevMenuUp;
     const dnEdge = input.invDn && !prevMenuDn;
-    const interactEdge = input.interact && !prevMenuInteract;
     const upNav = menuRepeatStep('up', input.invUp, upEdge);
     const dnNav = menuRepeatStep('down', input.invDn, dnEdge);
     const result = handleEmergencyPanelMenuInput({
       up: upNav,
       down: dnNav,
-      confirm: interactEdge,
-      close: escEdge,
+      confirm: acceptEdge,
+      close: closeEdge,
     }, world, player, entities, state, nextEntityId);
     if (result.worldChanged) updateWorldData(world);
-    if (interactEdge) input.interact = false;
     if (!isEmergencyPanelMenuOpen()) syncPauseState();
 
     prevEsc = input.escape;
@@ -5613,7 +5943,6 @@ function handleMenuInput(): void {
     prevMenuDn = input.invDn;
     prevMenuLeft = input.invLeft;
     prevMenuRight = input.invRight;
-    prevMenuInteract = input.interact;
     prevDrop = input.drop;
     prevInvMenu = input.inv;
     prevQuestMenu = input.questLog;
@@ -5622,8 +5951,6 @@ function handleMenuInput(): void {
     prevLogMenu = input.logMenu;
     prevControlsMenu = input.controls;
     prevUiSettingsMenu = input.uiSettings;
-    prevControlEdit = input.controlEdit;
-    prevControlReset = input.controlReset;
     prevControlClose = input.controlClose;
     prevMap = input.map;
     return;
@@ -5635,6 +5962,7 @@ function handleMenuInput(): void {
     state.showQuests = false;
     state.showNpcMenu = false;
     closeContainerMenu();
+    closeCraftMenu();
     state.showFactions = false;
     state.showLog = false;
     state.showDebug = false;
@@ -5648,7 +5976,6 @@ function handleMenuInput(): void {
     prevMenuDn = input.invDn;
     prevMenuLeft = input.invLeft;
     prevMenuRight = input.invRight;
-    prevMenuInteract = input.interact;
     prevDrop = input.drop;
     prevInvMenu = input.inv;
     prevQuestMenu = input.questLog;
@@ -5657,18 +5984,16 @@ function handleMenuInput(): void {
     prevLogMenu = input.logMenu;
     prevControlsMenu = input.controls;
     prevUiSettingsMenu = input.uiSettings;
-    prevControlEdit = input.controlEdit;
-    prevControlReset = input.controlReset;
     prevControlClose = input.controlClose;
     return;
   }
 
-  const escEdge = input.escape && !prevEsc;
+  const acceptEdge = input.escape && !prevEsc;
+  const closeEdge = input.controlClose && !prevControlClose;
   const upEdge = input.invUp && !prevMenuUp;
   const dnEdge = input.invDn && !prevMenuDn;
   const leftEdge = input.invLeft && !prevMenuLeft;
   const rightEdge = input.invRight && !prevMenuRight;
-  const interactEdge = input.interact && !prevMenuInteract;
   const dropEdge = input.drop && !prevDrop;
   const invEdge = input.inv && !prevInvMenu;
   const questEdge = input.questLog && !prevQuestMenu;
@@ -5676,32 +6001,19 @@ function handleMenuInput(): void {
   const logEdge = input.logMenu && !prevLogMenu;
   const controlsEdge = input.controls && !prevControlsMenu;
   const uiSettingsEdge = input.uiSettings && !prevUiSettingsMenu;
-  const controlEditEdge = input.controlEdit && !prevControlEdit;
-  const controlResetEdge = input.controlReset && !prevControlReset;
-  const controlCloseEdge = input.controlClose && !prevControlClose;
   const anyRepeatMenuOpen = state.showMenu || state.showInventory || state.showQuests ||
-    state.showContainerMenu || state.showNpcMenu || state.showDebug || state.showFactions || state.showLog || state.showControls || state.showUiSettings;
+    state.showContainerMenu || state.showCraftMenu || state.showNpcMenu || state.showDebug || state.showFactions || state.showLog || state.showControls || state.showUiSettings;
   if (!anyRepeatMenuOpen) resetMenuRepeats();
 
-  const controlsWasOpen = state.showControls;
-  const controlsToggleSuppressed = controlsWasOpen && controlsEdge && (controlEditEdge || controlResetEdge);
-  const controlsOpenedThisFrame = controlsEdge && !controlsWasOpen && !controlsToggleSuppressed;
-  if (controlsEdge && !controlsToggleSuppressed) {
-    if (state.showControls) closeControlsMenu();
-    else openControlsMenu();
-  }
-  if (uiSettingsEdge) {
-    if (state.showUiSettings) closeUiSettingsMenu();
-    else openUiSettingsMenu();
-  }
+  const controlsOpenedThisFrame = controlsEdge && !state.showControls && !anyRepeatMenuOpen && state.mapMode !== 2;
+  if (controlsOpenedThisFrame) openControlsMenu();
+  if (uiSettingsEdge && !state.showUiSettings && !anyRepeatMenuOpen && state.mapMode !== 2 && !controlsOpenedThisFrame) openUiSettingsMenu();
 
   // ── Hotkey / rebind screen ───────────────────────────────
   if (state.showControls) {
     if (!getControlCaptureAction()) {
-      const effectiveControlEditEdge = !controlsOpenedThisFrame && controlEditEdge;
-      const effectiveControlResetEdge = !controlsOpenedThisFrame && controlResetEdge;
-      const effectiveControlCloseEdge = !controlsOpenedThisFrame && controlCloseEdge;
-      const fixedControlsCommand = effectiveControlEditEdge || effectiveControlResetEdge || effectiveControlCloseEdge;
+      const effectiveAcceptEdge = !controlsOpenedThisFrame && acceptEdge;
+      const fixedControlsCommand = effectiveAcceptEdge || closeEdge;
       const upNav = !fixedControlsCommand && menuRepeatStep('up', input.invUp, upEdge);
       const dnNav = !fixedControlsCommand && menuRepeatStep('down', input.invDn, dnEdge);
       if (upNav) state.controlSel = Math.max(0, state.controlSel - 1);
@@ -5710,31 +6022,26 @@ function handleMenuInput(): void {
       const mouseSensitivitySelected = controlMouseSensitivitySelected();
       const leftNav = !fixedControlsCommand && mouseSensitivitySelected ? menuRepeatStep('left', input.invLeft, leftEdge) : false;
       const rightNav = !fixedControlsCommand && mouseSensitivitySelected ? menuRepeatStep('right', input.invRight, rightEdge) : false;
-      if (mouseSensitivitySelected && (leftNav || rightNav || effectiveControlEditEdge)) {
+      if (mouseSensitivitySelected && (leftNav || rightNav || effectiveAcceptEdge)) {
         const sensitivity = adjustMouseLookSensitivity(leftNav ? -1 : 1);
         state.msgs.push(msg(`Чувствительность мыши: ${Math.round(sensitivity * 100)}%`, state.time, '#8cf'));
-      } else if (effectiveControlEditEdge && state.controlView === 'keys') {
-        const action = CONTROL_ACTIONS[state.controlSel];
+      } else if (effectiveAcceptEdge && controlResetSelected()) {
+        resetAllControlBindings();
+        state.msgs.push(msg('Клавиши сброшены по умолчанию', state.time, '#8cf'));
+      } else if (effectiveAcceptEdge && state.controlView === 'keys') {
+        const action = selectedControlAction();
         if (action) {
           beginControlCapture(action.id);
         }
       }
-      if (effectiveControlResetEdge && mouseSensitivitySelected) {
-        const sensitivity = resetMouseLookSensitivity();
-        state.msgs.push(msg(`Чувствительность мыши сброшена: ${Math.round(sensitivity * 100)}%`, state.time, '#8cf'));
-      } else if (effectiveControlResetEdge && state.controlView === 'keys') {
-        resetAllControlBindings();
-        state.msgs.push(msg('Клавиши сброшены по умолчанию', state.time, '#8cf'));
-      }
     }
-    if ((controlCloseEdge && !controlsOpenedThisFrame) || (escEdge && !controlEditEdge && !controlResetEdge)) closeControlsMenu();
+    if (closeEdge && !controlsOpenedThisFrame) closeControlsMenu();
 
     prevEsc = input.escape;
     prevMenuUp = input.invUp;
     prevMenuDn = input.invDn;
     prevMenuLeft = input.invLeft;
     prevMenuRight = input.invRight;
-    prevMenuInteract = input.interact;
     prevDrop = input.drop;
     prevInvMenu = input.inv;
     prevQuestMenu = input.questLog;
@@ -5743,8 +6050,6 @@ function handleMenuInput(): void {
     prevLogMenu = input.logMenu;
     prevControlsMenu = input.controls;
     prevUiSettingsMenu = input.uiSettings;
-    prevControlEdit = input.controlEdit;
-    prevControlReset = input.controlReset;
     prevControlClose = input.controlClose;
     syncPauseState();
     return;
@@ -5752,26 +6057,22 @@ function handleMenuInput(): void {
 
   // ── Configurable HUD element screen ─────────────────────
   if (state.showUiSettings) {
-    const fixedUiCommand = controlResetEdge;
+    const fixedUiCommand = acceptEdge || closeEdge;
     const upNav = !fixedUiCommand && menuRepeatStep('up', input.invUp, upEdge);
     const dnNav = !fixedUiCommand && menuRepeatStep('down', input.invDn, dnEdge);
     if (upNav) state.uiSettingsSel = Math.max(0, state.uiSettingsSel - 1);
     if (dnNav) state.uiSettingsSel = Math.min(uiSettingsRowCount(state.uiSettingsView) - 1, state.uiSettingsSel + 1);
     keepUiSettingsSelectionVisible();
-    if (interactEdge) {
+    if (acceptEdge) {
       applyUiSettingsSelection(state.uiSettingsSel);
     }
-    if (controlResetEdge) {
-      resetUiSettingsSelection(state.uiSettingsSel);
-    }
-    if (escEdge) closeUiSettingsMenu();
+    if (closeEdge) closeUiSettingsMenu();
 
     prevEsc = input.escape;
     prevMenuUp = input.invUp;
     prevMenuDn = input.invDn;
     prevMenuLeft = input.invLeft;
     prevMenuRight = input.invRight;
-    prevMenuInteract = input.interact;
     prevDrop = input.drop;
     prevInvMenu = input.inv;
     prevQuestMenu = input.questLog;
@@ -5780,16 +6081,14 @@ function handleMenuInput(): void {
     prevLogMenu = input.logMenu;
     prevControlsMenu = input.controls;
     prevUiSettingsMenu = input.uiSettings;
-    prevControlEdit = input.controlEdit;
-    prevControlReset = input.controlReset;
     prevControlClose = input.controlClose;
     syncPauseState();
     return;
   }
 
-  // ── Enter: toggle game menu (or close any open menu) ─────
+  // ── Enter accepts menu rows; Backspace/Delete closes them ─────
   let gameMenuOpenedThisFrame = false;
-  if (escEdge) {
+  if (closeEdge) {
     if (state.showNpcMenu) {
       const npc = entities.find(e => e.id === state.npcMenuTarget);
       if (npc && isDurakGameOpen()) handleDurakInput({ state, player, npc, input: { escEdge: true } });
@@ -5800,14 +6099,19 @@ function handleMenuInput(): void {
       state.showNpcMenu = false;
     }
     else if (state.showContainerMenu) { closeContainerMenu(); }
+    else if (state.showCraftMenu) { closeCraftMenu(); syncPauseState(); updateMobileContext(true); }
     else if (state.showInventory) { state.showInventory = false; }
     else if (state.showQuests) { state.showQuests = false; }
+    else if (state.showDebug) { state.showDebug = false; }
     else if (state.showFactions) { state.showFactions = false; }
     else if (state.showLog) { state.showLog = false; }
     else if (state.showUiSettings) { state.showUiSettings = false; }
     else if (state.mapMode === 2) { closeFullMapMenu(); }
-    else if (state.showMenu && !interactEdge) { state.showMenu = false; }
-    else if (!state.showMenu) { state.showMenu = true; state.menuSel = 0; gameMenuOpenedThisFrame = true; }
+    else if (state.showMenu) { state.showMenu = false; }
+  } else if (acceptEdge && !anyRepeatMenuOpen && state.mapMode !== 2) {
+    state.showMenu = true;
+    state.menuSel = 0;
+    gameMenuOpenedThisFrame = true;
   }
 
   // ── Game menu navigation ─────────────────────────────────
@@ -5816,24 +6120,24 @@ function handleMenuInput(): void {
     const dnNav = menuRepeatStep('down', input.invDn, dnEdge);
     if (upNav) state.menuSel = Math.max(0, state.menuSel - 1);
     if (dnNav) state.menuSel = Math.min(GAME_MENU_ITEMS.length - 1, state.menuSel + 1);
-    if (interactEdge && !gameMenuOpenedThisFrame) {
+    if (acceptEdge && !gameMenuOpenedThisFrame) {
       runGameMenuSelection(state.menuSel);
     }
   }
   // ── Inventory toggle + navigation ────────────────────────
   else if (state.showInventory) {
-    if (invEdge) { state.showInventory = false; }
-    else {
-      const GRID_W = 5;
+    if (invEdge) {
+      state.showInventory = false;
+    } else {
       const upNav = menuRepeatStep('up', input.invUp, upEdge);
       const dnNav = menuRepeatStep('down', input.invDn, dnEdge);
       const leftNav = menuRepeatStep('left', input.invLeft, leftEdge);
       const rightNav = menuRepeatStep('right', input.invRight, rightEdge);
-      if (upNav) state.invSel = Math.max(0, state.invSel - GRID_W);
-      if (dnNav) state.invSel = Math.min(24, state.invSel + GRID_W);
-      if (leftNav && state.invSel % GRID_W > 0) state.invSel--;
-      if (rightNav && state.invSel % GRID_W < GRID_W - 1) state.invSel++;
-      if (interactEdge) {
+      if (upNav) state.invSel = wrapMenuIndex(state.invSel - INVENTORY_GRID_COLS, MAX_INVENTORY_SLOTS);
+      if (dnNav) state.invSel = wrapMenuIndex(state.invSel + INVENTORY_GRID_COLS, MAX_INVENTORY_SLOTS);
+      if (leftNav) state.invSel = wrapMenuIndex(state.invSel - 1, MAX_INVENTORY_SLOTS);
+      if (rightNav) state.invSel = wrapMenuIndex(state.invSel + 1, MAX_INVENTORY_SLOTS);
+      if (acceptEdge) {
         const zoneId = world.zoneMap[world.idx(Math.floor(player.x), Math.floor(player.y))];
         useItem(player, state.invSel, state.msgs, state.time, state, zoneId, world);
       }
@@ -5856,14 +6160,41 @@ function handleMenuInput(): void {
       }
     }
   }
+  // ── Craft / disassembly menu navigation ──────────────────
+  else if (state.showCraftMenu) {
+    if (closeEdge) {
+      closeCraftMenu();
+      syncPauseState();
+      updateMobileContext(true);
+    } else {
+      const upNav = menuRepeatStep('up', input.invUp, upEdge);
+      const dnNav = menuRepeatStep('down', input.invDn, dnEdge);
+      const snapshot = craftMenuSnapshot({
+        actor: player,
+        state,
+        mode: state.craftMode,
+        stationKind: state.craftStationKind,
+        filter: state.craftFilter,
+      });
+      const count = craftMenuEntries(snapshot).length;
+      if (upNav) state.craftCursor = Math.max(0, state.craftCursor - 1);
+      if (dnNav) state.craftCursor = Math.min(Math.max(0, count - 1), state.craftCursor + 1);
+      if (count === 0) state.craftCursor = 0;
+      if (acceptEdge) {
+        activateCraftSelection();
+      }
+    }
+  }
   // ── Quest log toggle ─────────────────────────────────────
   else if (state.showQuests) {
-    if (questEdge) { state.showQuests = false; }
-    const totalQ = state.quests.length;
+    const totalQ = questLogEntries().length;
     const upNav = menuRepeatStep('up', input.invUp, upEdge);
     const dnNav = menuRepeatStep('down', input.invDn, dnEdge);
     if (upNav) state.questPage = Math.max(0, state.questPage - 1);
     if (dnNav) state.questPage = Math.min(Math.max(0, totalQ - 1), state.questPage + 1);
+    if (acceptEdge) {
+      toggleSelectedQuestActive();
+    }
   }
   // ── Container menu navigation ────────────────────────────
   else if (state.showContainerMenu) {
@@ -5871,31 +6202,30 @@ function handleMenuInput(): void {
     if (!container) {
       closeContainerMenu();
     } else {
-      const GRID = 5;
       const upNav = menuRepeatStep('up', input.invUp, upEdge);
       const dnNav = menuRepeatStep('down', input.invDn, dnEdge);
       const leftNav = menuRepeatStep('left', input.invLeft, leftEdge);
       const rightNav = menuRepeatStep('right', input.invRight || input.drop, rightEdge || dropEdge);
       if (upNav) state.containerCursorY = Math.max(0, state.containerCursorY - 1);
-      if (dnNav) state.containerCursorY = Math.min(GRID - 1, state.containerCursorY + 1);
+      if (dnNav) state.containerCursorY = Math.min(INVENTORY_GRID_ROWS - 1, state.containerCursorY + 1);
       if (leftNav) {
         if (state.containerCursorX > 0) {
           state.containerCursorX--;
         } else if (state.containerSide === 'container') {
           state.containerSide = 'player';
-          state.containerCursorX = GRID - 1;
+          state.containerCursorX = INVENTORY_GRID_COLS - 1;
         }
       }
       if (rightNav) {
-        if (state.containerCursorX < GRID - 1) {
+        if (state.containerCursorX < INVENTORY_GRID_COLS - 1) {
           state.containerCursorX++;
         } else if (state.containerSide === 'player') {
           state.containerSide = 'container';
           state.containerCursorX = 0;
         }
       }
-      if (interactEdge) {
-        const idx = state.containerCursorY * GRID + state.containerCursorX;
+      if (acceptEdge) {
+        const idx = state.containerCursorY * INVENTORY_GRID_COLS + state.containerCursorX;
         const access = containerAccessInfo(container, player, state);
         if (state.containerSide === 'container') {
           const slot = container.inventory[idx];
@@ -5930,9 +6260,9 @@ function handleMenuInput(): void {
       clampNpcMenuSelection(state, options);
       if (upNav) state.npcMenuSel = Math.max(0, state.npcMenuSel - 1);
       if (dnNav) state.npcMenuSel = Math.min(Math.max(0, options.length - 1), state.npcMenuSel + 1);
-      if (interactEdge) activateNpcMainSelection(npc);
+      if (acceptEdge) activateNpcMainSelection(npc);
     } else if (state.npcMenuTab === 'talk') {
-      if (interactEdge || escEdge) state.npcMenuTab = 'main';
+      if (acceptEdge || closeEdge) state.npcMenuTab = 'main';
     } else if (state.npcMenuTab === 'quest') {
       const totalQ = state.quests.filter(q => !q.done).length;
       const upNav = menuRepeatStep('up', input.invUp, upEdge);
@@ -5941,10 +6271,9 @@ function handleMenuInput(): void {
       const rightNav = menuRepeatStep('right', input.invRight || input.drop, rightEdge || dropEdge);
       if (upNav || leftNav) state.questPage = Math.max(0, state.questPage - 1);
       if (dnNav || rightNav) state.questPage = Math.min(Math.max(0, totalQ - 1), state.questPage + 1);
-      if (interactEdge || escEdge) state.npcMenuTab = 'main';
+      if (acceptEdge || closeEdge) state.npcMenuTab = 'main';
     } else if (state.npcMenuTab === 'trade') {
       if (npc) {
-        const GRID = 5;
         const upNav = menuRepeatStep('up', input.invUp, upEdge);
         const dnNav = menuRepeatStep('down', input.invDn, dnEdge);
         const leftNav = menuRepeatStep('left', input.invLeft, leftEdge);
@@ -5953,19 +6282,19 @@ function handleMenuInput(): void {
         if (state.tradeSide === 'deal') {
           if (upNav) {
             state.tradeSide = 'player_offer';
-            state.tradeCursorX = GRID - 1;
-            state.tradeCursorY = GRID - 1;
+            state.tradeCursorX = INVENTORY_GRID_COLS - 1;
+            state.tradeCursorY = INVENTORY_GRID_ROWS - 1;
           }
           if (leftNav) state.tradeSide = 'player_offer';
           if (rightNav) state.tradeSide = 'npc_offer';
-          state.tradeCursorX = Math.max(0, Math.min(GRID - 1, state.tradeCursorX));
-          state.tradeCursorY = Math.max(0, Math.min(GRID - 1, state.tradeCursorY));
+          state.tradeCursorX = Math.max(0, Math.min(INVENTORY_GRID_COLS - 1, state.tradeCursorX));
+          state.tradeCursorY = Math.max(0, Math.min(INVENTORY_GRID_ROWS - 1, state.tradeCursorY));
         } else {
           let panelIndex = panels.indexOf(state.tradeSide as typeof panels[number]);
           if (panelIndex < 0) panelIndex = 3;
           if (upNav) state.tradeCursorY = Math.max(0, state.tradeCursorY - 1);
           if (dnNav) {
-            if (state.tradeCursorY >= GRID - 1) {
+            if (state.tradeCursorY >= INVENTORY_GRID_ROWS - 1) {
               state.tradeSide = 'deal';
               state.tradeCursorX = 0;
               state.tradeCursorY = 0;
@@ -5978,11 +6307,11 @@ function handleMenuInput(): void {
               state.tradeCursorX--;
             } else if (panelIndex > 0) {
               state.tradeSide = panels[panelIndex - 1];
-              state.tradeCursorX = GRID - 1;
+              state.tradeCursorX = INVENTORY_GRID_COLS - 1;
             }
           }
           if (state.tradeSide !== 'deal' && rightNav) {
-            if (state.tradeCursorX < GRID - 1) {
+            if (state.tradeCursorX < INVENTORY_GRID_COLS - 1) {
               state.tradeCursorX++;
             } else if (panelIndex < panels.length - 1) {
               state.tradeSide = panels[panelIndex + 1];
@@ -5990,16 +6319,16 @@ function handleMenuInput(): void {
             }
           }
           if (state.tradeSide !== 'deal') {
-            state.tradeCursorX = Math.max(0, Math.min(GRID - 1, state.tradeCursorX));
-            state.tradeCursorY = Math.max(0, Math.min(GRID - 1, state.tradeCursorY));
+            state.tradeCursorX = Math.max(0, Math.min(INVENTORY_GRID_COLS - 1, state.tradeCursorX));
+            state.tradeCursorY = Math.max(0, Math.min(INVENTORY_GRID_ROWS - 1, state.tradeCursorY));
           }
         }
-        // E — stage inventory items, remove basket items, or commit the centered deal.
-        if (interactEdge) {
+        // Enter stages inventory items, removes basket items, or commits the centered deal.
+        if (acceptEdge) {
           activateTradeSelection(npc);
         }
       }
-      if (escEdge) {
+      if (closeEdge) {
         clearTradeOffers(state);
         state.npcMenuTab = 'main';
       }
@@ -6011,7 +6340,7 @@ function handleMenuInput(): void {
           state,
           player,
           npc,
-          input: { leftNav, rightNav, interactEdge, dropEdge },
+          input: { leftNav, rightNav, interactEdge: acceptEdge, dropEdge },
         });
         if (result.closeInterface) closeNpcInteractionInterface(state);
       } else if (npc && isDiceGameOpen()) {
@@ -6021,7 +6350,7 @@ function handleMenuInput(): void {
           state,
           player,
           npc,
-          input: { leftNav, rightNav, interactEdge, dropEdge },
+          input: { leftNav, rightNav, interactEdge: acceptEdge, dropEdge },
         });
         if (result.closeInterface) closeNpcInteractionInterface(state);
       } else if (npc && isDominoGameOpen()) {
@@ -6031,18 +6360,17 @@ function handleMenuInput(): void {
           state,
           player,
           npc,
-          input: { leftNav, rightNav, interactEdge, dropEdge },
+          input: { leftNav, rightNav, interactEdge: acceptEdge, dropEdge },
         });
         if (result.closeInterface) closeNpcInteractionInterface(state);
-      } else if (interactEdge || escEdge) {
+      } else if (acceptEdge || closeEdge) {
         closeNpcInteractionInterface(state);
       }
     }
   }
   // ── Debug menu navigation ────────────────────────────────
   else if (state.showDebug) {
-    const dbgEdge = input.debugScreen && !prevDebug;
-    if (escEdge || dbgEdge) { state.showDebug = false; }
+    if (closeEdge) { state.showDebug = false; }
     else {
       const upNav = menuRepeatStep('up', input.invUp, upEdge);
       const dnNav = menuRepeatStep('down', input.invDn, dnEdge);
@@ -6052,7 +6380,7 @@ function handleMenuInput(): void {
       if (dnNav) state.debugSel = Math.min(DEBUG_COMMAND_COUNT - 1, state.debugSel + 1);
       if (leftNav) moveDebugInfoPage(-1);
       if (rightNav) moveDebugInfoPage(1);
-      if (interactEdge) {
+      if (acceptEdge) {
         const action = execDebugCommand(state.debugSel, world, player, entities, state, nextEntityId);
         if (action) handleDebugCommandAction(action);
       }
@@ -6060,7 +6388,6 @@ function handleMenuInput(): void {
   }
   // ── Faction relations menu ───────────────────────────────
   else if (state.showFactions) {
-    if (factionEdge || escEdge) { state.showFactions = false; }
     const upNav = menuRepeatStep('up', input.invUp, upEdge);
     const dnNav = menuRepeatStep('down', input.invDn, dnEdge);
     if (upNav) state.factionRankScroll = Math.max(0, state.factionRankScroll - 3);
@@ -6068,7 +6395,6 @@ function handleMenuInput(): void {
   }
   // ── Message log menu ─────────────────────────────────────
   else if (state.showLog) {
-    if (logEdge || escEdge) { state.showLog = false; }
     const maxScroll = Math.max(0, state.msgLog.length * 3); // generous; draw clamps
     const upNav = menuRepeatStep('up', input.invUp, upEdge);
     const dnNav = menuRepeatStep('down', input.invDn, dnEdge);
@@ -6077,7 +6403,7 @@ function handleMenuInput(): void {
   }
   // ── Full map menu ───────────────────────────────────────
   else if (state.mapMode === 2) {
-    // M and Enter close the full map; other menu hotkeys wait for the map to close.
+    // Backspace/Delete closes the full map; other menu hotkeys wait for the map to close.
   }
   // ── Normal gameplay toggles ──────────────────────────────
   else {
@@ -6095,7 +6421,6 @@ function handleMenuInput(): void {
   prevMenuDn = input.invDn;
   prevMenuLeft = input.invLeft;
   prevMenuRight = input.invRight;
-  prevMenuInteract = input.interact;
   prevDrop = input.drop;
   prevInvMenu = input.inv;
   prevQuestMenu = input.questLog;
@@ -6104,8 +6429,6 @@ function handleMenuInput(): void {
   prevLogMenu = input.logMenu;
   prevControlsMenu = input.controls;
   prevUiSettingsMenu = input.uiSettings;
-  prevControlEdit = input.controlEdit;
-  prevControlReset = input.controlReset;
   prevControlClose = input.controlClose;
   prevMap = input.map;
 
@@ -6120,6 +6443,7 @@ let lastSlidePair = -1;
 let lastSlideCellA = -1;
 let lastSlideCellB = -1;
 let needsTickAccum = 0;
+let needsRealTickAccum = 0;
 let bloodTrailAccum = 0;
 let deadCleanupAccum = 0;
 let entityIndexFrame = 0;
@@ -6395,11 +6719,14 @@ function gameLoop(now: number): void {
     updateWrongDoorRemaps(world, state);
     updateHladonColdPocket(world, player, state, dt);
     needsTickAccum += dt;
+    needsRealTickAccum += frameDt;
     if (needsTickAccum >= 0.25) {
       const needsDt = needsTickAccum;
+      const needsRealDt = needsRealTickAccum;
       needsTickAccum = 0;
+      needsRealTickAccum = 0;
       const needsStart = performance.now();
-      updateNeeds(entities, needsDt, state.time, state.msgs, player.id, nextEntityId, state, world);
+      updateNeeds(entities, needsDt, state.time, state.msgs, player.id, nextEntityId, state, world, needsDt > 0 ? needsRealDt / needsDt : 1);
       lastNeedsUpdateMs += performance.now() - needsStart;
     }
     let contentStart = performance.now();
@@ -6425,6 +6752,7 @@ function gameLoop(now: number): void {
     const samosborRebuild = updateSamosbor(world, entities, state, dt, nextEntityId, currentLocalSamosborPatchGeneration, scheduleLocalSamosborPatch);
     lastSamosborUpdateMs = performance.now() - samosborStart;
     if (samosborRebuild) {
+      closeCraftMenu();
       reportNetSphereProgressEvents();
       scheduleLoading(() => {
         restorePlayerBeforeWorldBoundary();
@@ -6516,7 +6844,7 @@ function gameLoop(now: number): void {
     }
 
     // Auto-pickup when walking
-    if (state.tick % 15 === 0) {
+    if (autoPickupEnabled() && state.tick % 15 === 0) {
       pickupNearby(world, entities, player, state.msgs, state.time, state, drop => {
         claimNetTerminalGenFleshDrop(state, drop, player, world);
         recordFactionEventLootTaken(state, world, player, drop);
@@ -6587,10 +6915,13 @@ function gameLoop(now: number): void {
     updateDoors(dt);
     updateWrongDoorRemaps(world, state);
     needsTickAccum += dt;
+    needsRealTickAccum += frameDt;
     if (needsTickAccum >= 0.25) {
       const needsDt = needsTickAccum;
+      const needsRealDt = needsRealTickAccum;
       needsTickAccum = 0;
-      updateNeeds(entities, needsDt, state.time, state.msgs, player.id, nextEntityId, state, world);
+      needsRealTickAccum = 0;
+      updateNeeds(entities, needsDt, state.time, state.msgs, player.id, nextEntityId, state, world, needsDt > 0 ? needsRealDt / needsDt : 1);
     }
     if (updateContentRuntimeHooks({ world, entities, player, state, nextEntityId, dt, phase: 'pre_ai', gameOver: true })) updateWorldData(world);
     const listener = player;
@@ -6602,6 +6933,7 @@ function gameLoop(now: number): void {
     lastAiUpdateMs = performance.now() - aiStart;
     tickCellHazards(world, entities, state, dt, player, false);
     if (updateSamosbor(world, entities, state, dt, nextEntityId, currentLocalSamosborPatchGeneration, scheduleLocalSamosborPatch)) {
+      closeCraftMenu();
       reportNetSphereProgressEvents();
       scheduleLoading(() => {
         restorePlayerBeforeWorldBoundary();
@@ -6705,12 +7037,14 @@ function gameLoop(now: number): void {
 
 /* ── Title screen ─────────────────────────────────────────────── */
 function showTitle(): void {
+  const cursorOn = Math.floor(performance.now() / 500) % 2 === 0;
   titleLanguageHits = drawTitleScreen(ctx, {
+    mode: titleMode,
     languageId: titleLanguageId,
     playerName: playerNickname,
     runSeedText: titleRunSeedText,
-    activeField: titleInputField,
-    cursorOn: Math.floor(performance.now() / 500) % 2 === 0,
+    setupRows: titleSetupRows(cursorOn),
+    cursorOn,
     mobile: mobileControls?.isEnabled() === true,
   });
   updateMobileContext(true);
@@ -6723,7 +7057,8 @@ function returnToTitleScreen(): void {
   syncPlatformGameplayState();
   clearPointerCaptureGate();
   titleRunSeedText = '';
-  titleInputField = 'name';
+  titleMode = 'language';
+  setTitleSelection('start');
   titleStartNeedsInit = true;
   closeMobilePanels(true);
   input.escape = false;
@@ -6761,6 +7096,7 @@ function finishStartGameFromTitle(): void {
 function startGameFromTitle(): void {
   if (started || pendingLoad) return;
   mobileGestureUnlock();
+  saveTitleActiveActorSoftLimit(titleActiveActorSoftLimit);
   savePlayerNickname(playerNickname);
   const seedOverride = titleRunSeedOverride();
   if (seedOverride !== undefined || titleStartNeedsInit) {
@@ -6782,25 +7118,54 @@ function startHandler(e: KeyboardEvent): void {
     e.preventDefault();
     return;
   }
-  if (e.code === 'Tab' || e.code === 'ArrowUp' || e.code === 'ArrowDown') {
-    titleInputField = titleInputField === 'name' ? 'seed' : 'name';
-    showTitle();
+
+  if (titleMode === 'language') {
+    if (e.code === 'ArrowLeft' || e.code === 'ArrowRight') {
+      cycleTitleLanguage(e.code === 'ArrowRight' ? 1 : -1);
+      e.preventDefault();
+      return;
+    }
+    if (e.code === 'Enter' || e.code === 'Space') {
+      openTitleSetupMenu();
+      e.preventDefault();
+      return;
+    }
+    e.preventDefault();
+    return;
+  }
+
+  if (e.code === 'Tab' || e.code === 'ArrowDown') {
+    moveTitleSelection(1);
+    e.preventDefault();
+    return;
+  }
+  if (e.code === 'ArrowUp') {
+    moveTitleSelection(-1);
     e.preventDefault();
     return;
   }
   if (e.code === 'ArrowLeft' || e.code === 'ArrowRight') {
-    cycleTitleLanguage(e.code === 'ArrowRight' ? 1 : -1);
+    if (titleInputField === 'language') cycleTitleLanguage(e.code === 'ArrowRight' ? 1 : -1);
+    else if (titleInputField === 'actorCap') adjustTitleActiveActorSoftLimit(e.code === 'ArrowRight' ? 1 : -1);
+    else showTitle();
     e.preventDefault();
     return;
   }
   if (e.code === 'Enter') {
     e.preventDefault();
-    startGameFromTitle();
+    if (titleInputField === 'start') startGameFromTitle();
+    else if (titleInputField === 'language') cycleTitleLanguage(1);
+    else if (titleInputField === 'actorCap') adjustTitleActiveActorSoftLimit(1);
+    else moveTitleSelection(1);
     return;
   }
   if (e.code === 'Backspace') {
-    if (titleInputField === 'seed') titleRunSeedText = titleRunSeedText.slice(0, -1);
-    else playerNickname = playerNickname.slice(0, -1);
+    if (titleInputField === 'seed') {
+      titleRunSeedText = titleRunSeedText.slice(0, -1);
+      titleStartNeedsInit = true;
+    } else if (titleInputField === 'name') {
+      playerNickname = playerNickname.slice(0, -1);
+    }
     showTitle();
     e.preventDefault();
     return;
@@ -6810,9 +7175,10 @@ function startHandler(e: KeyboardEvent): void {
       const next = cleanTitleRunSeedText(titleRunSeedText + e.key);
       if (next !== titleRunSeedText) {
         titleRunSeedText = next;
+        titleStartNeedsInit = true;
         showTitle();
       }
-    } else if (playerNickname.length < 24) {
+    } else if (titleInputField === 'name' && playerNickname.length < 24) {
       const next = cleanPlayerNickname(playerNickname + e.key);
       if (next !== playerNickname) {
         playerNickname = next;

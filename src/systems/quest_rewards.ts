@@ -50,6 +50,9 @@ const OBJECTIVE_BASE: Record<QuestRewardObjectiveKind, number> = {
   escort: 1.8,
 };
 
+export const QUEST_REWARD_MONEY_MULTIPLIER = 2;
+export const QUEST_REWARD_XP_MULTIPLIER = 2;
+
 function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value));
 }
@@ -111,6 +114,7 @@ export function calculateQuestReward(input: QuestRewardInput): QuestRewardResult
   const baseRate = Math.max(bandDef.baseQuestCashRate, input.authoredBaseMoney ?? 0);
   const rawMoney = baseRate *
     rawDifficulty *
+    QUEST_REWARD_MONEY_MULTIPLIER *
     clamp(input.scarcityMult ?? 1, 0.5, 3) *
     clamp(input.playerRewardMult ?? 1, 1, 1.7) *
     factionBudgetMult(input.giverFaction) *
@@ -120,7 +124,18 @@ export function calculateQuestReward(input: QuestRewardInput): QuestRewardResult
   const moneyReward = Math.max(0, roundCash(clamp(rawMoney, 0, moneyCap)));
   const xpReward = Math.max(
     1,
-    Math.round(Math.max(input.authoredBaseXp ?? 0, 20 * rawDifficulty)),
+    Math.round(Math.max(input.authoredBaseXp ?? 0, 20 * rawDifficulty) * QUEST_REWARD_XP_MULTIPLIER),
   );
   return { difficulty, moneyReward, xpReward, moneyCap, band };
+}
+
+export function scaleAuthoredQuestRewards<T extends { difficulty?: number; contractId?: string; xpReward?: number; moneyReward?: number }>(quest: T): T {
+  if (quest.difficulty !== undefined || quest.contractId !== undefined) return quest;
+  if (quest.xpReward !== undefined && Number.isFinite(quest.xpReward) && quest.xpReward > 0) {
+    quest.xpReward = Math.round(quest.xpReward * QUEST_REWARD_XP_MULTIPLIER);
+  }
+  if (quest.moneyReward !== undefined && Number.isFinite(quest.moneyReward) && quest.moneyReward > 0) {
+    quest.moneyReward = roundCash(quest.moneyReward * QUEST_REWARD_MONEY_MULTIPLIER);
+  }
+  return quest;
 }

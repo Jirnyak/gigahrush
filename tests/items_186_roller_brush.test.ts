@@ -59,7 +59,7 @@ test('roller brush is a save, sell or drop decision until painting is executable
 
   const info = getInventorySlotActionInfo(player, 0);
   assert.equal(info?.category, 'trade');
-  assert.equal(info?.useLabel, 'E нет действия');
+  assert.equal(info?.useLabel, 'Enter нет действия');
   assert.equal(info?.canUse, false);
   assert.equal(info?.canDrop, true);
   assert.equal(info?.sellLabel, 'Справка: базовая цена 12₽/шт · 24₽');

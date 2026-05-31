@@ -4,6 +4,7 @@ import { type Entity, Faction, type GameState, ZoneFaction } from '../core/types
 import { getFactionRel } from '../data/relations';
 import { getFactionUiSnapshot, type FactionUiSnapshot } from '../systems/factions';
 import { getAlifeLeaderboardSnapshot, type AlifeLeaderboardEntry, type AlifeLeaderboardSnapshot } from '../systems/alife';
+import { menuCloseHint } from '../systems/controls';
 import { drawNeuroPanel, drawGlitchText } from './hud_fx';
 import { fitText } from './ui_text';
 
@@ -320,7 +321,7 @@ export function drawFactionMenu(
   ctx.font = `${8 * sy}px monospace`;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'top';
-  ctx.fillText('[F] закрыть  ↑↓ рейтинг', w / 2, botY + 2 * sy);
+  ctx.fillText(fitText(ctx, `${menuCloseHint()} закрыть  ↑↓ рейтинг`, w - 16 * sx), w / 2, botY + 2 * sy);
   ctx.textAlign = 'left';
   ctx.textBaseline = 'top';
 }

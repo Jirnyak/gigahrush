@@ -54,7 +54,7 @@ test('hermodoor journal can be sold as door audit evidence in the living block',
   const state = makeGameState({ currentFloor: FloorLevel.LIVING, time: 111 });
 
   assert.equal(addItem(player, ITEM_ID, 1), true);
-  assert.equal(getInventorySlotActionInfo(player, 0)?.useLabel, 'E проверить');
+  assert.equal(getInventorySlotActionInfo(player, 0)?.useLabel, 'Enter проверить');
 
   useItem(player, 0, state.msgs, state.time, state);
 

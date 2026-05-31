@@ -10,7 +10,7 @@ The browser save lives in `localStorage` under `gigahrush_save`.
 
 Current authoritative shape:
 
-- `SAVE_SHAPE_VERSION = 13`;
+- `SAVE_SHAPE_VERSION = 14`;
 - old or unversioned saves are rejected;
 - newer saves are rejected;
 - cross-version migration code is not required by default.
@@ -41,12 +41,15 @@ Current runtime save sections include:
 - `netTerminalGen`;
 - `mapEditorPatches`;
 - `worldEvents`;
+- `crafting`;
 - `economy`;
 - `banking`;
 - `stockMarket`;
 - `production`.
 
 If a system stores persistent state, it needs a current-shape serializer/sanitizer, a cap or compact representation, and a rejection/test path when shape compatibility changes.
+
+The crafting section stores only the player material bank and known recipe ids: 9 numeric material counts and deduplicated current recipe ids. Item composition and recipe definitions remain data registries, not item-instance save data.
 
 ## Sanitization Rules
 
@@ -96,7 +99,7 @@ Production save state is capped by the production system. Economy rows and resou
 
 ## Portal Boundary
 
-Portal compaction is an external packaging/runtime concern documented in `Docs/PRCampaign/portal.md`. The local `gigahrush_save` payload remains authoritative for the normal browser build.
+Portal compaction is an external packaging/runtime concern documented in `PRCampaign/portal.md`. The local `gigahrush_save` payload remains authoritative for the normal browser build.
 
 Portal bridges may upload wrapped current-shape data or compact current-shape profiles, but they must not introduce a second gameplay save format inside core game docs.
 

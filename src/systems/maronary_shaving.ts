@@ -8,6 +8,7 @@ import {
   msg,
 } from '../core/types';
 import { ITEMS } from '../data/catalog';
+import { MAX_INVENTORY_SLOTS } from '../data/inventory_limits';
 import { getStack } from '../data/items';
 import { addFactionRelMutual } from '../data/relations';
 import { publishEvent } from './events';
@@ -47,7 +48,7 @@ function addToNpcInventory(npc: Entity): boolean {
     slot.count++;
     return true;
   }
-  if (npc.inventory.length >= 25) return false;
+  if (npc.inventory.length >= MAX_INVENTORY_SLOTS) return false;
   npc.inventory.push({ defId: ITEM_ID, count: 1 });
   return true;
 }

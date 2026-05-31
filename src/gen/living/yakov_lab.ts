@@ -18,9 +18,52 @@ import { freshNeeds } from '../../data/catalog';
 import { PLOT_NPCS } from '../../data/plot';
 import { stampRoom, protectRoom, findClearArea } from '../shared';
 import { Spr } from '../../render/sprite_index';
+import { placeCraftStationAt, type CraftStationDefId } from '../craft_stations';
 
 const LAB_MIN_DIST = 10;
 const LAB_MAX_DIST = 50;
+
+function placeProtectedLabStation(
+  world: World,
+  room: Room,
+  defId: CraftStationDefId,
+  feature: Feature,
+  offsets: readonly (readonly [number, number])[],
+): boolean {
+  for (const [dx, dy] of offsets) {
+    const x = world.wrap(room.x + dx);
+    const y = world.wrap(room.y + dy);
+    const idx = world.idx(x, y);
+    if (world.cells[idx] !== Cell.FLOOR || world.doors.has(idx) || world.containerMap.has(idx)) continue;
+    if (world.surfaceFlags[idx] !== 0) continue;
+
+    const oldFeature = world.features[idx] as Feature;
+    world.features[idx] = feature;
+    const placed = placeCraftStationAt(world, x, y, defId, {
+      allowProtectedExistingFeature: true,
+      seed: ((room.id + 1) * 4099 + idx + dx * 17 + dy * 31) >>> 0,
+      tags: ['craft_station', 'living_fixed', 'yakov_lab'],
+    });
+    if (placed) return true;
+    world.features[idx] = oldFeature;
+  }
+  return false;
+}
+
+function placeYakovLabCraftStations(world: World, room: Room): void {
+  placeProtectedLabStation(world, room, 'disassembly_workbench', Feature.TABLE, [
+    [1, room.h - 2],
+    [1, 2],
+    [2, room.h - 2],
+    [2, 1],
+  ]);
+  placeProtectedLabStation(world, room, 'craft_lathe', Feature.MACHINE, [
+    [room.w - 2, room.h - 2],
+    [room.w - 2, 2],
+    [room.w - 3, room.h - 2],
+    [room.w - 2, 1],
+  ]);
+}
 
 export function generateYakovLab(
   world: World, nextRoomId: number, entities: Entity[], nextId: { v: number },
@@ -67,6 +110,8 @@ export function generateYakovLab(
     world.features[world.idx(labX + 1, labY + 1)] = Feature.APPARATUS;
     world.features[world.idx(labX + labW - 2, labY + 1)] = Feature.SHELF;
   }
+
+  placeYakovLabCraftStations(world, room);
 
   // ── NPC: Яков Давидович — PSI researcher ──
   const labCx = room.x + Math.floor(room.w / 2);

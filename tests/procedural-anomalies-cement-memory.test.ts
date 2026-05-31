@@ -11,6 +11,7 @@ import { generateProceduralFloor } from '../src/gen/procedural_floor';
 import { tryUseCementMemoryAnomaly, updateCementMemoryAnomaly } from '../src/systems/procedural_anomalies/cement_memory';
 import { setCurrentPlayerEntity } from '../src/systems/player_actor';
 import { getRouteCueMarkers } from '../src/systems/route_cues';
+import { testGenerationMatrix } from './generator_helpers';
 import { addTestRoom, makeGameState, makeTestPlayer } from './helpers';
 
 function forcedCementMemorySpec(): ProceduralFloorSpec {
@@ -34,7 +35,7 @@ function hasReachableLift(world: World, audit: ReachabilityAudit, direction: Lif
   return false;
 }
 
-test('cement memory generation adds panels, pressure corridors, cue, and keeps route lifts reachable', () => {
+testGenerationMatrix('cement memory generation adds panels, pressure corridors, cue, and keeps route lifts reachable', () => {
   const gen = generateProceduralFloor(forcedCementMemorySpec());
   const world = gen.world;
   const spawnIdx = world.idx(Math.floor(gen.spawnX), Math.floor(gen.spawnY));

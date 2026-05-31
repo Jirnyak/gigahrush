@@ -34,7 +34,7 @@ test('permanganate vial is a small consumable treatment and event decision', () 
   const state = makeGameState({ time: 143 });
 
   assert.equal(addItem(player, ITEM_ID, 1), true);
-  assert.equal(getInventorySlotActionInfo(player, 0)?.useLabel, 'E применить');
+  assert.equal(getInventorySlotActionInfo(player, 0)?.useLabel, 'Enter применить');
 
   useItem(player, 0, state.msgs, state.time, state, 14);
 

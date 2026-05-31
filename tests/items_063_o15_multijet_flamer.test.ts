@@ -25,7 +25,7 @@ test('o15 multijet flamer is a focused engineer napalm weapon without new projec
   assert.equal(resourceForItem(stats.ammoType ?? '')?.id, 'fuel');
   assert.equal(stats.projType, ProjType.FLAME);
   assert.equal(stats.projSprite, WEAPON_STATS.roks47_flamethrower.projSprite);
-  assert.equal(stats.dmg, 4);
+  assert.equal(stats.dmg, 6);
   assert.equal(stats.pellets, 3);
   assert.ok(stats.speed > WEAPON_STATS.roks47_flamethrower.speed, '6О15 should not out-DPS the ROKS-47');
   assert.ok((stats.spread ?? 1) < (WEAPON_STATS.roks47_flamethrower.spread ?? 0), 'breach jets should be narrower than ROKS spray');

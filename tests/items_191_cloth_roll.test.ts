@@ -41,7 +41,7 @@ test('cloth roll is a save, spend or sell decision in inventory', () => {
 
   const info = getInventorySlotActionInfo(player, 0);
   assert.equal(info?.category, 'other');
-  assert.equal(info?.useLabel, 'E нет действия');
+  assert.equal(info?.useLabel, 'Enter нет действия');
   assert.equal(info?.canUse, false);
   assert.equal(info?.canDrop, true);
   assert.equal(info?.sellLabel, 'Справка: базовая цена 6₽/шт · 12₽');

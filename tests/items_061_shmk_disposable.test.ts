@@ -48,7 +48,7 @@ test('shmk disposable is reachable from rare faction weapon crates and consumes 
 
   const readiness = getWeaponReadiness(player);
   assert.equal(readiness.resourceLabel, 'ШМК 2');
-  assert.equal(readiness.damageLabel, '8x8');
+  assert.equal(readiness.damageLabel, '11x8');
   assert.equal(consumeAmmo(player), true);
   assert.equal(countAmmo(player), 1);
 });

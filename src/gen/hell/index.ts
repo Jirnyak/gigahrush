@@ -10,6 +10,7 @@ import { randomName, freshNeeds } from '../../data/catalog';
 import { rng, pick, ensureConnectivity, placeLifts, generateZones } from '../shared';
 import { placeProceduralScreens } from '../procedural_screens';
 import { HELL_POPULATION_PROFILE, type MonsterPopulationProfile } from '../../data/population_profiles';
+import { activeActorCountAtDefaultSoftLimit } from '../../data/entity_limits';
 import { chooseFloorMonsterKind } from '../../data/monster_ecology';
 import { sampleNaturalPopulationCells, type PlacementFieldAnchor } from '../population_placement';
 import { MONSTERS } from '../../entities/monster';
@@ -26,9 +27,6 @@ const HELL_MONSTER_PROFILE = HELL_POPULATION.monsters;
 const HELL_CULTIST_PROFILE = HELL_POPULATION.cultists;
 const HELL_LIQUIDATOR_PROFILE = HELL_POPULATION.liquidators;
 
-const INITIAL_MONSTER_COUNT = HELL_MONSTER_PROFILE.initial;
-const INITIAL_CULTIST_COUNT = HELL_CULTIST_PROFILE.initial;
-const INITIAL_LIQUIDATOR_COUNT = HELL_LIQUIDATOR_PROFILE.initial;
 const HELL_POPULATION_EXCLUDED_MONSTERS: readonly MonsterKind[] = [MonsterKind.SPORE_CARPET];
 
 type SpawnFaction = Faction.CULTIST | Faction.LIQUIDATOR;
@@ -64,7 +62,16 @@ export function generateHell(): { world: World; entities: Entity[]; spawnX: numb
   }
   world.bakeLights();
 
-  seedHellPopulation(world, entities, { v: nextId }, INITIAL_MONSTER_COUNT, INITIAL_CULTIST_COUNT, INITIAL_LIQUIDATOR_COUNT, 0, hellGeometry);
+  seedHellPopulation(
+    world,
+    entities,
+    { v: nextId },
+    activeActorCountAtDefaultSoftLimit(HELL_MONSTER_PROFILE.initial),
+    activeActorCountAtDefaultSoftLimit(HELL_CULTIST_PROFILE.initial),
+    activeActorCountAtDefaultSoftLimit(HELL_LIQUIDATOR_PROFILE.initial),
+    0,
+    hellGeometry,
+  );
   nextId = entities.reduce((mx, e) => Math.max(mx, e.id), nextId) + 1;
 
   seedLoot(world, entities, { v: nextId });

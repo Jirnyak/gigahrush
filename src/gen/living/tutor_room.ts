@@ -2,8 +2,8 @@
 /*   Self-contained content module:                               */
 /*     • Актовый зал — briefing room with slides & desks          */
 /*     • Оружейная — armory / shooting range with targets          */
-/*     • NPCs: Ольга Дмитриевна (tutor), Барни (armory)           */
-/*     • Quest chain: Ольга→Барни→Ольга                           */
+/*     • NPCs: Ольга Дмитриевна (tutor), Сержант Баринов (armory)           */
+/*     • Quest chain: Ольга→сержант Баринов→Ольга                           */
 /*     • Item drops: makarov, ammo, supplies near counters         */
 /*     • Keybind hint textures for tutorial room walls             */
 /*                                                                 */
@@ -11,8 +11,9 @@
 /*   call it from the living/index.ts orchestrator.                */
 
 import {
-  W, Cell, DoorState, Tex, RoomType, Feature,
+  W, Cell, ContainerKind, DoorState, FloorLevel, Tex, RoomType, Feature,
   type Room, type Entity,
+  type Item, type WorldContainer,
   EntityType, AIGoal,
 } from '../../core/types';
 import { World } from '../../core/world';
@@ -31,6 +32,53 @@ function protectTutorialWallsAsHermetic(world: World, x: number, y: number, w: n
       if (world.cells[idx] === Cell.WALL) world.hermoWall[idx] = 1;
     }
   }
+}
+
+const STARTER_LOCKER_POOL: readonly Item[] = [
+  { defId: 'water', count: 1 },
+  { defId: 'bread', count: 1 },
+  { defId: 'bandage', count: 1 },
+  { defId: 'chalk', count: 1 },
+  { defId: 'cigs', count: 1 },
+];
+
+function nextContainerId(world: World): number {
+  let id = world.containers.length + 1;
+  while (world.containerById.has(id) || world.containers.some(c => c.id === id)) id++;
+  return id;
+}
+
+function starterLockerLoot(): Item[] {
+  const loot: Item[] = [];
+  const count = 2 + Math.floor(Math.random() * 2);
+  let cursor = Math.floor(Math.random() * STARTER_LOCKER_POOL.length);
+  for (let i = 0; i < count; i++) {
+    const item = STARTER_LOCKER_POOL[(cursor + i * 2) % STARTER_LOCKER_POOL.length];
+    loot.push({ ...item });
+  }
+  return loot;
+}
+
+function addStarterLocker(world: World, room: Room, x: number, y: number): WorldContainer {
+  const idx = world.idx(x, y);
+  world.features[idx] = Feature.SHELF;
+  const container: WorldContainer = {
+    id: nextContainerId(world),
+    x,
+    y,
+    floor: FloorLevel.LIVING,
+    roomId: room.id,
+    zoneId: world.zoneMap[idx],
+    kind: ContainerKind.EMERGENCY_BOX,
+    name: 'Учебный шкафчик вылазки',
+    inventory: starterLockerLoot(),
+    capacitySlots: 6,
+    access: 'public',
+    discovered: true,
+    tags: ['tutorial', 'starter', 'public', 'low_level_loot'],
+  };
+  world.addContainer(container);
+  return container;
 }
 
 export function generateTutorRoom(
@@ -113,6 +161,7 @@ export function generateTutorRoom(
   world.features[world.idx(hallX + Math.floor(hallW / 2), hallY + Math.floor(hallH / 2))] = Feature.LAMP;
   world.features[world.idx(hallX + 2, hallY + 2)] = Feature.LAMP;
   world.features[world.idx(hallX + hallW - 3, hallY + 2)] = Feature.LAMP;
+  addStarterLocker(world, room, hallX + 1, hallY + hallH - 2);
 
   // Tutorial NPC: Ольга Дмитриевна
   const olgaDef = PLOT_NPCS['olga'];
@@ -199,7 +248,7 @@ export function generateTutorRoom(
     inventory: [{ defId: 'ammo_9mm', count: 8 }],
   });
 
-  // ── NPC: Барни — armory instructor ──
+  // ── NPC: Сержант Баринов — armory instructor ──
   const barniDef = PLOT_NPCS['barni'];
   entities.push({
     id: nextId.v++, type: EntityType.NPC,

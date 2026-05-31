@@ -7,6 +7,7 @@ import { hashSeed, withSeededRandom } from '../../core/rand';
 import { floorRunZAllowsNpcs } from '../../data/procedural_floors';
 import type { FloorGeneration } from '../floor_manifest';
 import { withoutNpcEntities } from '../entity_filters';
+import { applyDesignFloorObjectProfile } from '../floor_object_placement';
 import { generateAntennaCourtDesignFloor } from './antenna_court';
 import { generateAttractorDvorDesignFloor } from './attractor_dvor';
 import { generateBankFloorDesignFloor } from './bank_floor';
@@ -114,6 +115,7 @@ export function generateDesignFloor(id: DesignFloorId, runSeed = DEFAULT_DESIGN_
     const gen = DESIGN_FLOOR_GENERATORS[id]();
     if (!route) return gen;
     const expanded = expandDesignFloorGeneration(gen, route);
+    applyDesignFloorObjectProfile(expanded.world, expanded.spawnX, expanded.spawnY, route);
     return floorRunZAllowsNpcs(route.z) ? expanded : withoutNpcEntities(expanded);
   });
 }

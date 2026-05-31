@@ -37,7 +37,7 @@ test('economy weapon ladder prices PSI, energy and late gear for long progressio
     assert.equal(resourceForItem(id)?.id, 'electronics', `${id} must use the rare electronics economy`);
   }
 
-  assert.ok(ITEMS.ammo_energy.value >= 5_000);
+  assert.ok(ITEMS.ammo_energy.value >= 100 && ITEMS.ammo_energy.value <= 500);
   assert.ok(ITEMS.psi_stabilizer.value >= 250);
 });
 

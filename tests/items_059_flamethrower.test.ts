@@ -24,7 +24,7 @@ test('flamethrower remains the generic industrial fire-clear weapon', () => {
   assert.equal(stats.isRanged, true);
   assert.equal(stats.ammoType, 'ammo_fuel');
   assert.equal(stats.projType, ProjType.FLAME);
-  assert.equal(stats.dmg, 4);
+  assert.equal(stats.dmg, 6);
   assert.equal(stats.pellets, 1);
   assert.equal(resourceForItem('ammo_fuel')?.id, 'fuel');
   assert.equal(resourceForItem(def.id), undefined);

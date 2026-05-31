@@ -29,7 +29,7 @@ test('passport stub remains the existing identity document item', () => {
 
   const player = makeTestPlayer();
   assert.equal(addItem(player, ITEM_ID, 1), true);
-  assert.equal(getInventorySlotActionInfo(player, 0)?.useLabel, 'E проверить');
+  assert.equal(getInventorySlotActionInfo(player, 0)?.useLabel, 'Enter проверить');
 });
 
 test('passport stub has reachable steal, reward, archive and black-market decisions', () => {

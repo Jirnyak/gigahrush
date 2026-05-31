@@ -21,7 +21,7 @@ test('eralashnikov auto is a liquidator 7.62 automatic rifle', () => {
 
   assert.equal(stats.isRanged, true);
   assert.equal(stats.ammoType, 'ammo_762');
-  assert.equal(stats.dmg, 17);
+  assert.equal(stats.dmg, 23);
   assert.ok(stats.speed < WEAPON_STATS.ak47.speed, 'eralashnikov_auto should cycle faster than ak47');
   assert.ok((stats.spread ?? 0) > (WEAPON_STATS.ak47.spread ?? 0), 'eralashnikov_auto should spread wider than ak47');
   assert.equal(resourceForItem(stats.ammoType ?? '')?.id, 'ammo');

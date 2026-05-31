@@ -1,7 +1,8 @@
 import { type GameState } from '../core/types';
-import { controlHint } from '../systems/controls';
+import { controlHint, menuCloseHint } from '../systems/controls';
 import {
   activeUiPresetId,
+  autoPickupEnabled,
   cameraFovDegrees,
   mobileLookSensitivity,
   uiElementEnabled,
@@ -44,7 +45,7 @@ export function drawUiSettingsMenu(
   ctx.font = `${7 * sy}px monospace`;
   ctx.fillStyle = '#577';
   ctx.fillText(
-    fitTextStable(ctx, `${controlHint('uiSettings')} открыть/закрыть  |  ${controlHint('interact')} применить/переключить  |  Backspace сбросить  |  ${controlHint('gameMenu')} закрыть`, w - 24 * sx),
+    fitTextStable(ctx, `${controlHint('uiSettings')} открыть/закрыть  |  ${controlHint('gameMenu')} принять/переключить  |  ${menuCloseHint()} закрыть`, w - 24 * sx),
     12 * sx,
     26 * sy,
   );
@@ -69,18 +70,32 @@ export function drawUiSettingsMenu(
     const textY = rowY + rowH * 0.5;
     const isSel = i === selected;
     const isPreset = item.kind === 'preset';
-    const enabled = item.kind === 'element' ? uiElementEnabled(item.element.id) : isPreset ? activePreset === item.preset.id : false;
+    const isReset = item.kind === 'reset_interface' || item.kind === 'reset_graphics';
+    const enabled = item.kind === 'element'
+      ? uiElementEnabled(item.element.id)
+      : isPreset
+        ? activePreset === item.preset.id
+        : item.kind === 'auto_pickup'
+          ? autoPickupEnabled()
+          : false;
 
     if (isSel) {
       ctx.fillStyle = `rgba(0,90,78,${0.46 + 0.12 * flicker(time, 1245 + i)})`;
       ctx.fillRect(x - 2 * sx, rowY, w - x * 2 + 4 * sx, rowH);
-      ctx.strokeStyle = isPreset || item.kind === 'mobile_sensitivity' || item.kind === 'camera_fov' || (item.kind === 'element' && item.element.locked) ? '#fd6' : 'rgba(0,255,190,0.46)';
+      ctx.strokeStyle = isReset || isPreset || item.kind === 'mobile_sensitivity' || item.kind === 'camera_fov' || (item.kind === 'element' && item.element.locked) ? '#fd6' : 'rgba(0,255,190,0.46)';
       ctx.strokeRect(x - 2 * sx + 0.5, rowY + 0.5, w - x * 2 + 4 * sx - 1, rowH - 1);
     }
 
     ctx.fillStyle = isSel ? '#0fa' : '#6a8';
     ctx.fillText(isSel ? '▶' : ' ', x, textY);
-    if (isPreset) {
+    if (isReset) {
+      ctx.fillStyle = '#b98';
+      ctx.fillText(item.group, x + 14 * sx, textY);
+      ctx.fillStyle = isSel ? '#ffe7ad' : '#d7c38a';
+      ctx.fillText(fitTextStable(ctx, item.label, labelW - 8 * sx), x + groupW + 18 * sx, textY);
+      ctx.fillStyle = '#fd6';
+      ctx.fillText('ENTER', x + groupW + labelW + 20 * sx, textY);
+    } else if (isPreset) {
       ctx.fillStyle = '#b98';
       ctx.fillText('ПРЕСЕТ', x + 14 * sx, textY);
       ctx.fillStyle = isSel ? '#ffe7ad' : '#d7c38a';
@@ -95,6 +110,13 @@ export function drawUiSettingsMenu(
       ctx.fillText(fitTextStable(ctx, element.label, labelW - 8 * sx), x + groupW + 18 * sx, textY);
       ctx.fillStyle = element.locked ? '#fd6' : enabled ? '#8f8' : '#b66';
       ctx.fillText(element.locked ? 'ВСЕГДА' : enabled ? 'ВКЛ' : 'ВЫКЛ', x + groupW + labelW + 20 * sx, textY);
+    } else if (item.kind === 'auto_pickup') {
+      ctx.fillStyle = '#689';
+      ctx.fillText(fitTextStable(ctx, item.group, groupW - 10 * sx), x + 14 * sx, textY);
+      ctx.fillStyle = isSel ? '#dff' : '#9bb';
+      ctx.fillText(fitTextStable(ctx, item.label, labelW - 8 * sx), x + groupW + 18 * sx, textY);
+      ctx.fillStyle = enabled ? '#8f8' : '#fc8';
+      ctx.fillText(enabled ? 'ВКЛ' : 'ВЫКЛ', x + groupW + labelW + 20 * sx, textY);
     } else {
       ctx.fillStyle = '#689';
       ctx.fillText(fitTextStable(ctx, item.group, groupW - 10 * sx), x + 14 * sx, textY);
@@ -126,8 +148,8 @@ export function drawUiSettingsMenu(
   ctx.textBaseline = 'alphabetic';
   ctx.fillText(
     fitTextStable(ctx, view === 'graphics'
-      ? 'ДЕЙСТ меняет FOV, сброс возвращает 90°.'
-      : 'Новичок используется по умолчанию. ДЕЙСТ переключает UI и мобильный обзор, сброс возвращает умолчания.',
+      ? 'ENTER меняет FOV; верхняя строка возвращает графику к умолчанию.'
+      : 'Новичок используется по умолчанию. ENTER переключает UI, автоподбор и мобильный обзор; верхняя строка сбрасывает.',
     w - 24 * sx),
     12 * sx,
     h - 10 * sy,

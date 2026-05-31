@@ -71,7 +71,7 @@ test('cook trade can expose empty bottles, leaving a save or sell decision', () 
 
   const info = getInventorySlotActionInfo(player, 0);
   assert.equal(info?.category, 'trade');
-  assert.equal(info?.useLabel, 'E нет действия');
+  assert.equal(info?.useLabel, 'Enter нет действия');
   assert.equal(info?.canUse, false);
   assert.equal(info?.sellLabel, 'Справка: базовая цена 2₽/шт · 4₽');
 });

@@ -9,7 +9,7 @@ import { World } from '../core/world';
 import { ITEMS } from '../data/catalog';
 import { getEquippedToolDurability, getWeaponReadiness, type WeaponReadiness } from '../systems/inventory';
 import { getPlayerHazardWarning } from '../systems/cell_hazards';
-import { controlHint } from '../systems/controls';
+import { controlHint, menuCloseHint } from '../systems/controls';
 import { formatLastPlayerDamageCause } from '../systems/damage';
 import { RPG_LEVEL_CAP, xpForLevel } from '../systems/rpg';
 import { zhelemishHudLine } from '../systems/status';
@@ -24,6 +24,7 @@ import { drawControlsMenu } from './controls_ui';
 import { drawUiSettingsMenu } from './ui_settings_ui';
 import { drawNpcMenu } from './npc_ui';
 import { drawContainerMenu } from './container_ui';
+import { drawCraftMenu } from './craft_ui';
 import { drawEmergencyPanelMenu } from './emergency_panel_ui';
 import { drawComputerOverlay } from './computer_ui';
 import { drawGamblingOverlay } from './gambling_ui';
@@ -45,6 +46,11 @@ import {
   getProceduralSmogStatus,
   type ProceduralSmogStatus,
 } from '../systems/procedural_anomalies';
+import {
+  currentFloorRunEntry,
+  formatFloorZ,
+  type FloorRunEntry,
+} from '../systems/procedural_floors';
 import { getActiveRouteCueHud, getObjectiveRouteHud, type ObjectiveRouteHud, type RouteCueHud } from '../systems/route_cues';
 import { getNearestSmallCaravan, type SmallCaravanHudSnapshot } from '../systems/caravans';
 import { getSeroburmalineHudFx } from '../systems/seroburmaline';
@@ -72,10 +78,12 @@ import {
 } from './hud_fx';
 import { fitTextStable as fitUiText, setUiTextTime } from './ui_text';
 import { allocateHudSlot, createHudSlots, getMobileHudSafeContext, type UiRect } from './ui_layout';
-import { cameraPlaneLen, uiElementEnabled } from '../systems/ui_orchestrator';
+import { autoPickupEnabled, cameraPlaneLen, uiElementEnabled } from '../systems/ui_orchestrator';
 import { getLocalizationLanguage } from '../systems/localization';
 
 const BAR_W = 50, BAR_H = 4;
+const VITAL_LABEL_FONT = 6;
+const VITAL_PERCENT_FONT = 5.2;
 const NEEDS_PANEL_H = 20;
 const COMBAT_TARGET_SCAN_CAP = 160;
 const COMBAT_TARGET_QUERY_CAP = COMBAT_TARGET_SCAN_CAP * 2;
@@ -89,6 +97,11 @@ const deathNearbyQuery: Entity[] = [];
 function toPercent(current: number, max: number): number {
   if (max <= 0) return 0;
   return Math.max(0, Math.min(100, current / max * 100));
+}
+
+function formatVitalPercent(pct: number): string {
+  if (!Number.isFinite(pct)) return '0%';
+  return `${Math.round(Math.max(0, Math.min(100, pct)))}%`;
 }
 
 const ZONE_FACTION_NAMES: Record<ZoneFaction, string> = {
@@ -421,6 +434,15 @@ function fitHudText(ctx: CanvasRenderingContext2D, text: string, maxW: number): 
   return fitUiText(ctx, text, maxW);
 }
 
+function compactFloorLabel(entry: FloorRunEntry): string {
+  const z = formatFloorZ(entry.z);
+  const prefix = `Этаж Z${z}: `;
+  const name = entry.label.startsWith(prefix)
+    ? entry.label.slice(prefix.length)
+    : entry.label.replace(/^Этаж\s+Z?[+-]?\d+:\s*/, '');
+  return `${z} ${name}`;
+}
+
 function wrapHudText(ctx: CanvasRenderingContext2D, text: string, maxW: number, maxLines: number): string[] {
   const limit = Math.max(1, Math.floor(maxLines));
   const words = text.trim().split(/\s+/).filter(Boolean);
@@ -493,6 +515,48 @@ function interactionPromptHint(): string {
   return mobileHudControlsOn()
     ? (getLocalizationLanguage() === 'en' ? '[ACT]' : '[ДЕЙСТ]')
     : controlHint('interact');
+}
+
+function drawItemPickupPanel(
+  ctx: CanvasRenderingContext2D,
+  interaction: NonNullable<ReturnType<typeof findInteractionTarget>>,
+  rect: UiRect,
+  sx: number,
+  sy: number,
+  time: number,
+): void {
+  const def = ITEMS[interaction.defId];
+  const s = Math.max(1, Math.min(sx, sy));
+  const panelW = Math.min(188 * sx, ctx.canvas.width - 16 * sx);
+  const panelH = 42 * sy;
+  const x = Math.max(8 * sx, Math.min(ctx.canvas.width - panelW - 8 * sx, rect.x + rect.w * 0.5 - panelW * 0.5));
+  const y = Math.max(16 * sy, rect.y - panelH - 11 * sy);
+  const count = Math.max(1, Math.floor(interaction.itemCount ?? 1));
+  const title = `${interaction.itemName ?? def?.name ?? interaction.defId}${count > 1 ? ` x${count}` : ''}`;
+  const value = Math.max(0, Math.floor(interaction.itemValue ?? def?.value ?? 0));
+  const desc = interaction.itemDesc || def?.desc || 'Предмет без описания.';
+  const descLines = wrapHudText(ctx, desc, panelW - 12 * sx, 2);
+
+  ctx.save();
+  ctx.globalAlpha = 0.94;
+  ctx.fillStyle = 'rgba(4,12,12,0.92)';
+  ctx.fillRect(x, y, panelW, panelH);
+  ctx.strokeStyle = `rgba(120,255,210,${0.32 + 0.08 * flicker(time, interaction.colorSeed + 1200)})`;
+  ctx.strokeRect(x + 0.5, y + 0.5, panelW - 1, panelH - 1);
+  ctx.globalAlpha = 1;
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'alphabetic';
+  ctx.font = `${8 * sy}px monospace`;
+  ctx.fillStyle = '#dff';
+  ctx.fillText(fitHudText(ctx, title, panelW - 12 * sx), x + 6 * sx, y + 10 * sy);
+  ctx.font = `${6 * sy}px monospace`;
+  ctx.fillStyle = '#9bb';
+  for (let i = 0; i < descLines.length; i++) {
+    ctx.fillText(descLines[i], x + 6 * sx, y + (20 + i * 8) * sy);
+  }
+  ctx.fillStyle = '#fd6';
+  ctx.fillText(fitHudText(ctx, `${interactionPromptHint()} поднять${value > 0 ? ` / ${value} руб.` : ''}`, panelW - 12 * sx), x + 6 * sx, y + panelH - 5 * s);
+  ctx.restore();
 }
 
 function samosborHudTitle(variantId: string | undefined, variantName?: string): string {
@@ -604,7 +668,7 @@ function drawSamosborCrawl(
     const line = lines[samosborCrawlLineIndex(variantId, i, cycle, lines.length)];
     const jitter = textJitter(time * 2.5, 1800 + i * 17);
     ctx.font = `bold ${size}px monospace`;
-    const fitted = fitHudText(ctx, line, Math.max(72 * sx, w * (0.28 + travel * 0.18)));
+    const maxLineW = Math.max(72 * sx, w * (0.28 + travel * 0.18));
     ctx.save();
     ctx.translate(x + jitter.dx * 1.5, y + jitter.dy);
     ctx.rotate(angle);
@@ -612,10 +676,7 @@ function drawSamosborCrawl(
     ctx.shadowColor = tint;
     ctx.shadowBlur = 9 * Math.min(sx, sy);
     ctx.fillStyle = tint;
-    ctx.fillText(fitted, 0, 0);
-    ctx.globalAlpha = alpha * 0.22;
-    ctx.fillStyle = '#8ff';
-    ctx.fillText(fitted, 2 * sx, sy);
+    ctx.fillText(line, 0, 0, maxLineW);
     ctx.restore();
   }
   ctx.restore();
@@ -885,8 +946,8 @@ export function drawPointerCaptureGate(ctx: CanvasRenderingContext2D, time = 0):
   ctx.fillText(fitHudText(ctx, 'Данная игра является шутером от первого лица', panelW - 24 * s), w * 0.5, y + 61 * s);
   ctx.fillText(fitHudText(ctx, 'и не использует мышку.', panelW - 24 * s), w * 0.5, y + 75 * s);
   ctx.fillStyle = '#9ab';
-  ctx.fillText(fitHudText(ctx, 'Вместо ESC используйте Enter: меню / назад.', panelW - 24 * s), w * 0.5, y + 91 * s);
-  ctx.fillText(fitHudText(ctx, 'Вместо Enter используйте E: подтвердить / отправить.', panelW - 24 * s), w * 0.5, y + 105 * s);
+  ctx.fillText(fitHudText(ctx, 'Enter: меню / принять. Backspace/Del: назад.', panelW - 24 * s), w * 0.5, y + 91 * s);
+  ctx.fillText(fitHudText(ctx, 'E: взаимодействие в мире, двери, предметы, NPC.', panelW - 24 * s), w * 0.5, y + 105 * s);
 
   ctx.strokeStyle = 'rgba(100,220,255,0.25)';
   ctx.beginPath();
@@ -907,8 +968,8 @@ export function drawPointerCaptureGate(ctx: CanvasRenderingContext2D, time = 0):
   ctx.fillText(fitHudText(ctx, 'This game is a first-person shooter', panelW - 24 * s), w * 0.5, y + 186 * s);
   ctx.fillText(fitHudText(ctx, 'and does not use the mouse cursor.', panelW - 24 * s), w * 0.5, y + 200 * s);
   ctx.fillStyle = '#9ab';
-  ctx.fillText(fitHudText(ctx, 'Use Enter instead of Esc: menu / back.', panelW - 24 * s), w * 0.5, y + 216 * s);
-  ctx.fillText(fitHudText(ctx, 'Use E instead of Enter: confirm / send.', panelW - 24 * s), w * 0.5, y + 230 * s);
+  ctx.fillText(fitHudText(ctx, 'Enter: menu / accept. Backspace/Del: back.', panelW - 24 * s), w * 0.5, y + 216 * s);
+  ctx.fillText(fitHudText(ctx, 'E: world interaction, doors, items, NPCs.', panelW - 24 * s), w * 0.5, y + 230 * s);
   ctx.fillStyle = '#708888';
   ctx.font = `${Math.round(7 * s)}px monospace`;
   ctx.fillText(fitHudText(ctx, 'После клика игра продолжится. / Game resumes after click.', panelW - 24 * s), w * 0.5, y + 240 * s);
@@ -941,8 +1002,8 @@ function drawPointerLockPrompt(
   ctx.shadowBlur = 0;
   ctx.font = `${7 * sy}px monospace`;
   ctx.fillStyle = '#9ab';
-  ctx.fillText(fitHudText(ctx, `После захвата ЛКМ/${controlHint('attack')} стреляет. ${controlHint('gameMenu')} меню/назад.`, panelW - 14 * sx), w * 0.5, y + 20 * sy);
-  ctx.fillText(fitHudText(ctx, `${controlHint('interact')} подтвердить вместо Enter. Esc отпускает курсор браузером.`, panelW - 14 * sx), w * 0.5, y + 32 * sy);
+  ctx.fillText(fitHudText(ctx, `После захвата ЛКМ/${controlHint('attack')} стреляет. ${controlHint('gameMenu')} меню/принять.`, panelW - 14 * sx), w * 0.5, y + 20 * sy);
+  ctx.fillText(fitHudText(ctx, `${menuCloseHint()} назад/закрыть. ${controlHint('interact')} действует в мире. Esc отпускает курсор браузером.`, panelW - 14 * sx), w * 0.5, y + 32 * sy);
   ctx.textAlign = 'left';
   ctx.restore();
 }
@@ -1100,7 +1161,7 @@ export function drawHUD(
   const h = ctx.canvas.height;
   const sx = w / SCR_W;
   const sy = h / SCR_H;
-  const menuScale = Math.max(0.8, Math.min(2, Math.min(sx, sy)));
+  const menuScale = Math.max(0.72, Math.min(1.68, Math.min(sx, sy)));
   const msx = menuScale;
   const msy = menuScale;
 
@@ -1152,7 +1213,7 @@ export function drawHUD(
   const hackOpen = isNetHackOverlayOpen();
   const centerModalOpen = state.showInventory || state.showQuests || state.showLog ||
     state.showFactions || state.showMenu || state.showControls || state.showUiSettings ||
-    state.showNpcMenu || state.showContainerMenu || netSphereOpen || netTerminalGenOpen ||
+    state.showNpcMenu || state.showContainerMenu || state.showCraftMenu || netSphereOpen || netTerminalGenOpen ||
     emergencyPanelOpen || mapEditorOpen || gamblingOpen || computerOpen || hackOpen ||
     netTerminalGenDeniedOpen || netTerminalBankOpen;
   const quietHud = centerModalOpen || state.mapMode === 2;
@@ -1191,13 +1252,19 @@ export function drawHUD(
     const barAreaW = Math.max(1, bottomVitals.w - 16 * sx);
     const barSpacing = Math.max(26 * sx, Math.min(62 * sx, barAreaW / bars.length));
     const barW = Math.max(18 * sx, Math.min(BAR_W * sx, barSpacing - 8 * sx));
+    const vitalTextScale = Math.max(1, Math.min(sx, sy));
     bars.forEach(([label, current, max, color], i) => {
       const bx = bottomVitals.x + 8 * sx + i * barSpacing;
       const by = barY + 3 * sy;
       const pct = toPercent(current, max);
-      // Label with jitter
-      drawGlitchText(ctx, label, bx, by, time, i * 13 + 7, '#8cc', 7 * sy);
-      ctx.font = `${7 * sy}px monospace`;
+      const labelFont = VITAL_LABEL_FONT * vitalTextScale;
+      const percentFont = VITAL_PERCENT_FONT * vitalTextScale;
+      drawGlitchText(ctx, label, bx, by, time, i * 13 + 7, '#8cc', labelFont);
+      ctx.save();
+      ctx.textAlign = 'right';
+      drawGlitchText(ctx, formatVitalPercent(pct), bx + barW, by + 0.6 * sy, time, i * 19 + 101, '#9ac', percentFont);
+      ctx.restore();
+      ctx.font = `${labelFont}px monospace`;
       // Holo bar
       drawHoloBar(ctx, bx, by + 9 * sy, barW, BAR_H * sy, pct, color, time, i);
     });
@@ -1389,7 +1456,8 @@ export function drawHUD(
   }
 
   // Universal [E] interaction prompt (color changes per target object)
-  if (showInteractionPrompt && showCompactPanels && !emergencyPanelOpen && !state.showControls && !state.showUiSettings) {
+  const manualItemPickup = !autoPickupEnabled();
+  if ((showInteractionPrompt || manualItemPickup) && showCompactPanels && !emergencyPanelOpen && !state.showControls && !state.showUiSettings) {
     const lookX = player.x + Math.cos(player.angle) * 1.5;
     const lookY = player.y + Math.sin(player.angle) * 1.5;
     const interaction = findInteractionTarget({
@@ -1401,25 +1469,31 @@ export function drawHUD(
       lookX,
       lookY,
       routeHintsVisible,
+      manualItemPickup,
     });
     if (interaction) {
-      const targetId = interaction.colorSeed;
-      // Deterministic color from targetId — shifted to cyan/teal palette
-      const h0 = ((targetId * 2654435761) >>> 0) % 360;
-      const er = Math.round(100 + 80 * Math.cos(h0 * Math.PI / 180));
-      const eg = Math.round(200 + 55 * Math.cos((h0 + 120) * Math.PI / 180));
-      const eb = Math.round(200 + 55 * Math.cos((h0 + 240) * Math.PI / 180));
-      const eAlpha = flicker(time, targetId + 500);
-      ctx.fillStyle = `rgba(${er},${eg},${eb},${eAlpha})`;
-      ctx.font = `${9 * sy}px monospace`;
-      ctx.textAlign = 'center';
-      // Subtle glow behind
-      ctx.shadowColor = `rgba(${er},${eg},${eb},0.4)`;
-      ctx.shadowBlur = 6;
-      const prompt = fitHudText(ctx, `${interactionPromptHint()}${interaction.prompt}`, slots.centerInteraction.w);
-      ctx.fillText(prompt, slots.centerInteraction.x + slots.centerInteraction.w * 0.5, slots.centerInteraction.y);
-      ctx.shadowBlur = 0;
-      ctx.textAlign = 'left';
+      if (interaction.kind === 'item_drop') {
+        drawItemPickupPanel(ctx, interaction, slots.centerInteraction, sx, sy, time);
+      }
+      if (showInteractionPrompt || interaction.kind === 'item_drop') {
+        const targetId = interaction.colorSeed;
+        // Deterministic color from targetId — shifted to cyan/teal palette
+        const h0 = ((targetId * 2654435761) >>> 0) % 360;
+        const er = Math.round(100 + 80 * Math.cos(h0 * Math.PI / 180));
+        const eg = Math.round(200 + 55 * Math.cos((h0 + 120) * Math.PI / 180));
+        const eb = Math.round(200 + 55 * Math.cos((h0 + 240) * Math.PI / 180));
+        const eAlpha = flicker(time, targetId + 500);
+        ctx.fillStyle = `rgba(${er},${eg},${eb},${eAlpha})`;
+        ctx.font = `${9 * sy}px monospace`;
+        ctx.textAlign = 'center';
+        // Subtle glow behind
+        ctx.shadowColor = `rgba(${er},${eg},${eb},0.4)`;
+        ctx.shadowBlur = 6;
+        const prompt = fitHudText(ctx, `${interactionPromptHint()}${interaction.prompt}`, slots.centerInteraction.w);
+        ctx.fillText(prompt, slots.centerInteraction.x + slots.centerInteraction.w * 0.5, slots.centerInteraction.y);
+        ctx.shadowBlur = 0;
+        ctx.textAlign = 'left';
+      }
     }
   }
 
@@ -1469,6 +1543,7 @@ export function drawHUD(
     const pci = world.idx(Math.floor(player.x), Math.floor(player.y));
     const zid = world.zoneMap[pci];
     const zone = world.zones[zid];
+    const floorEntry = currentFloorRunEntry(state);
 
     // Game clock + day counter — just above status bar
     const hh = String(state.clock.hour).padStart(2, '0');
@@ -1497,9 +1572,19 @@ export function drawHUD(
     // Room info
     const room = world.roomAt(player.x, player.y);
     if (room) {
-      drawGlitchText(ctx, fitHudText(ctx, room.name, leftInfoW), leftX, barY - 12 * sy, time, 420, '#688', 7 * sy);
+      drawGlitchText(ctx, fitHudText(ctx, room.name, leftInfoW), leftX, barY - 13 * sy, time, 420, '#688', 7 * sy);
       ctx.font = `${7 * sy}px monospace`;
     }
+    drawGlitchText(
+      ctx,
+      fitHudText(ctx, compactFloorLabel(floorEntry), leftInfoW),
+      leftX,
+      barY - 5.5 * sy,
+      time,
+      424,
+      floorEntry.color,
+      5.6 * sy,
+    );
   }
 
   // ── Full map menu ────────────────────────────────────────
@@ -1550,6 +1635,10 @@ export function drawHUD(
   // ── Container menu ──────────────────────────────────────
   if (state.showContainerMenu) {
     drawContainerMenu(ctx, player, state, world, msx, msy);
+  }
+
+  if (state.showCraftMenu) {
+    drawCraftMenu(ctx, player, state, msx, msy, time);
   }
 
   if (emergencyPanelOpen) {
@@ -1710,7 +1799,7 @@ export function drawHUD(
         'НЕТ-ГЕН не найден.',
         'Банковский счёт доступен, редактор карты закрыт.',
       ],
-      footer: `${controlHint('gameMenu')} закрыть  |  счёт без ГЕН`,
+      footer: `${menuCloseHint()} закрыть  |  счёт без ГЕН`,
     });
   }
 

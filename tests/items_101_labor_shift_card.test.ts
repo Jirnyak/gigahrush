@@ -33,7 +33,7 @@ test('labor shift card is official production access paperwork', () => {
 
   const player = makeTestPlayer();
   assert.equal(addItem(player, CARD_ID, 1), true);
-  assert.equal(getInventorySlotActionInfo(player, 0)?.useLabel, 'E предъявить');
+  assert.equal(getInventorySlotActionInfo(player, 0)?.useLabel, 'Enter предъявить');
 });
 
 test('labor shift card is reachable from production belt shift lockers', () => {

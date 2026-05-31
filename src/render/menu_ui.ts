@@ -2,7 +2,7 @@
 
 import { type GameState } from '../core/types';
 import { GAME_MENU_ITEMS } from '../systems/game_menu';
-import { controlBindingLabel } from '../systems/controls';
+import { controlBindingLabel, menuCloseHint } from '../systems/controls';
 import { drawNeuroPanel, textJitter, flicker } from './hud_fx';
 import { fitText } from './ui_text';
 
@@ -55,7 +55,7 @@ export function drawGameMenu(
   ctx.fillStyle = '#456';
   ctx.font = `${7 * sy}px monospace`;
   ctx.fillText(
-    fitText(ctx, `${controlBindingLabel('controlsMenu')} — клавиши  |  ${controlBindingLabel('menuUp')}/${controlBindingLabel('menuDown')} — выбор  |  ${controlBindingLabel('interact')} — подтвердить  |  ${controlBindingLabel('gameMenu')} — закрыть`, pw - 12 * _sx),
+    fitText(ctx, `${controlBindingLabel('controlsMenu')} — клавиши  |  ${controlBindingLabel('menuUp')}/${controlBindingLabel('menuDown')} — выбор  |  ${controlBindingLabel('gameMenu')} — подтвердить  |  ${menuCloseHint()} — закрыть`, pw - 12 * _sx),
     w / 2,
     py + ph - 10 * sy,
   );

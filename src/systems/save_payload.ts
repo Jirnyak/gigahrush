@@ -13,8 +13,9 @@ import {
   PRODUCTION_SAVE_STATE_CAP,
   type ProductionState,
 } from './production';
+import { MAX_INVENTORY_SLOTS } from '../data/inventory_limits';
 
-export const SAVE_PLAYER_INVENTORY_CAP = 25;
+export const SAVE_PLAYER_INVENTORY_CAP = MAX_INVENTORY_SLOTS;
 export const SAVE_CONTAINER_CAP = 128;
 export const SAVE_CONTAINER_TAG_CAP = 12;
 export const SAVE_CONTAINER_STOLEN_ITEM_CAP = 16;
@@ -45,6 +46,7 @@ export interface SavePayloadSections {
   netTerminalGen: unknown;
   mapEditorPatches: unknown;
   worldEvents: unknown;
+  crafting: unknown;
   economy: unknown;
   banking: unknown;
   stockMarket: unknown;
@@ -99,6 +101,7 @@ export interface SavePayload {
     netTerminalGen: unknown;
     mapEditorPatches: unknown;
     worldEvents: unknown;
+    crafting: unknown;
     economy: unknown;
     banking: unknown;
     stockMarket: unknown;
@@ -222,7 +225,7 @@ export function containersForSave(
       x: Math.floor(container.x),
       y: Math.floor(container.y),
       name: container.name.slice(0, 96),
-      inventory: inventoryForSave(container.inventory, Math.max(1, Math.min(25, container.capacitySlots))) ?? [],
+      inventory: inventoryForSave(container.inventory, Math.max(1, Math.min(MAX_INVENTORY_SLOTS, container.capacitySlots))) ?? [],
       ownerName: container.ownerName?.slice(0, 64),
       stolenItemIds: container.stolenItemIds?.slice(0, SAVE_CONTAINER_STOLEN_ITEM_CAP).map(id => id.slice(0, 64)),
       tags: container.tags.slice(0, SAVE_CONTAINER_TAG_CAP).map(tag => tag.slice(0, 48)),
@@ -274,6 +277,7 @@ export function buildSavePayload(input: SavePayloadBuildInput): SavePayload {
       netTerminalGen: sections.netTerminalGen,
       mapEditorPatches: sections.mapEditorPatches,
       worldEvents: sections.worldEvents,
+      crafting: sections.crafting,
       economy: sections.economy,
       banking: sections.banking,
       stockMarket: sections.stockMarket,
@@ -324,6 +328,7 @@ export function summarizeSavePayload(
     { label: 'player', value: payload.player, count: payload.player.inventory?.length, cap: SAVE_PLAYER_INVENTORY_CAP },
     { label: 'quests', value: payload.state.quests, count: payload.state.quests.length, cap: SAVE_QUEST_CAP },
     { label: 'events', value: payload.state.worldEvents, count: countWorldEvents(payload.state.worldEvents) },
+    { label: 'crafting', value: payload.state.crafting },
     { label: 'alife', value: payload.state.alife },
     { label: 'mapEditor', value: payload.state.mapEditorPatches, count: countMapEditorOps(payload.state.mapEditorPatches) },
     { label: 'economy', value: payload.state.economy },

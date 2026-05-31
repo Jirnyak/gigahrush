@@ -32,6 +32,22 @@ export type { WeaponRoleTier, WeaponStats } from './weapons';
 export { WEAPON_ROLE_LABELS };
 export { ROOM_DEFS, type RoomDef } from './rooms';
 export { ITEMS } from './items';
+export {
+  CRAFT_MATERIAL_IDS,
+  CRAFT_MATERIALS,
+  type CraftMaterialDef,
+  type CraftMaterialId,
+  type CraftVector,
+  type MutableCraftVector,
+} from './craft_materials';
+export { ITEM_COMPOSITIONS, INTENTIONAL_RARE_MATERIAL_ITEMS } from './item_composition';
+export {
+  CRAFT_RECIPES,
+  CRAFT_RECIPE_EXCEPTIONS,
+  type CraftRecipeDef,
+  type CraftRecipeTier,
+  type CraftStationKind,
+} from './craft_recipes';
 export { randomName, type NameResult, freshNeeds } from './names';
 export { NOTES } from './notes';
 export { PLOT_NPCS, PLOT_CHAIN, isPlotNpc, getPlotDef, type PlotNpcDef, type PlotStep } from './plot';

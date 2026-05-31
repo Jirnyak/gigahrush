@@ -55,7 +55,7 @@ test('hermodoor journal has theft and black-market document decisions', () => {
   const player = makeTestPlayer();
   const state = makeGameState({ currentFloor: FloorLevel.LIVING, time: 110 });
   assert.equal(addItem(player, SERVICE_LOG_ID, 1), true);
-  assert.equal(getInventorySlotActionInfo(player, 0)?.useLabel, 'E проверить');
+  assert.equal(getInventorySlotActionInfo(player, 0)?.useLabel, 'Enter проверить');
 
   useItem(player, 0, state.msgs, state.time, state);
 

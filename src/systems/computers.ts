@@ -9,6 +9,12 @@ import {
 } from '../core/types';
 import { World } from '../core/world';
 import { COMPUTER_DEFS, getComputerDef, type ComputerDef, type ComputerDefId } from '../data/computers';
+import { getCraftRecipeSource } from '../data/craft_recipe_sources';
+import {
+  craftRecipeLearnedMessage,
+  learnCraftRecipesFromSource,
+  type CraftRecipeLearnResult,
+} from './crafting';
 import { publishEvent } from './events';
 
 export interface ComputerTerminal {
@@ -77,6 +83,29 @@ function floorFactLines(world: World, state: GameState, terminal: ComputerTermin
   ];
 }
 
+function learnComputerRecipeSources(state: GameState, def: ComputerDef): CraftRecipeLearnResult[] {
+  const results: CraftRecipeLearnResult[] = [];
+  for (const sourceId of def.recipeSourceIds ?? []) {
+    const source = getCraftRecipeSource(sourceId);
+    if (!source || source.kind !== 'terminal') continue;
+    results.push(learnCraftRecipesFromSource(state, source));
+  }
+  return results;
+}
+
+function learnedComputerRecipeIds(results: readonly CraftRecipeLearnResult[]): string[] {
+  return results.flatMap(result => result.learned);
+}
+
+function allComputerRecipeIds(def: ComputerDef): string[] {
+  const ids: string[] = [];
+  for (const sourceId of def.recipeSourceIds ?? []) {
+    const source = getCraftRecipeSource(sourceId);
+    if (source?.kind === 'terminal') ids.push(...source.recipeIds);
+  }
+  return [...new Set(ids)];
+}
+
 export function clearComputers(): void {
   computerRegistry.clear();
 }
@@ -141,7 +170,15 @@ export function copyComputerData(world: World, state: GameState, player: Entity)
 
   copiedKeys.add(key);
   player.money = Math.max(0, Math.floor(player.money ?? 0)) + def.stealRewardRubles;
+  const recipeResults = learnComputerRecipeSources(state, def);
+  const learnedRecipeIds = learnedComputerRecipeIds(recipeResults);
   runtime.message = `${def.stealLabel}: +${def.stealRewardRubles} руб.`;
+  for (const recipeId of learnedRecipeIds) {
+    state.msgs.push(msg(craftRecipeLearnedMessage(recipeId), state.time, '#8cf'));
+  }
+  if (learnedRecipeIds.length === 0 && recipeResults.some(result => result.duplicate.length > 0)) {
+    state.msgs.push(msg('Рецепт уже известен', state.time, '#888'));
+  }
   const roomId = world.roomMap[terminal.idx];
   publishEvent(state, {
     type: 'computer_data_stolen',
@@ -160,6 +197,9 @@ export function copyComputerData(world: World, state: GameState, player: Entity)
       terminalId: def.id,
       rewardRubles: def.stealRewardRubles,
       pageIndex: runtime.pageIndex,
+      recipeSourceIds: def.recipeSourceIds,
+      recipeIds: allComputerRecipeIds(def),
+      learnedRecipeIds,
     },
   });
   state.msgs.push(msg(runtime.message, state.time, '#6cf'));

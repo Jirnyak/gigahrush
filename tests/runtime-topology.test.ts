@@ -254,6 +254,29 @@ test('wall snake runtime path preserves route-critical cells and marks solidity 
   assert.equal(world.features[protectedIdx], Feature.LIFT_BUTTON);
 });
 
+test('wall snake field runs multiple independent phased snakes', () => {
+  const world = new World();
+  addTestRoom(world, { id: 0, x: 20, y: 20, w: 96, h: 40, name: 'Тестовое поле [wall_snake:21,21,12,12] [wall_snake:61,21,16,12]' });
+  const firstPath = wallSnakePathCells(world, 21, 21, 12, 12);
+  const secondPath = wallSnakePathCells(world, 61, 21, 16, 12);
+  const state = makeGameState();
+  const player = makeTestPlayer({ x: 120.5, y: 120.5, hp: 100 });
+
+  updateWallSnakeAnomaly(world, player, state, 0);
+  const firstStart = wallSnakeWallSnapshot(world, firstPath);
+  const secondStart = wallSnakeWallSnapshot(world, secondPath);
+  assert.notEqual(firstStart, secondStart);
+
+  for (let i = 0; i < 5; i++) {
+    state.time += 0.12;
+    updateWallSnakeAnomaly(world, player, state, 0.12);
+  }
+
+  assert.notEqual(wallSnakeWallSnapshot(world, firstPath), firstStart);
+  assert.notEqual(wallSnakeWallSnapshot(world, secondPath), secondStart);
+  assert.notEqual(wallSnakeWallSnapshot(world, firstPath), wallSnakeWallSnapshot(world, secondPath));
+});
+
 test('wall snake control bait shortens and pauses the moving wall', () => {
   const world = new World();
   addTestRoom(world, { id: 0, x: 20, y: 20, w: 16, h: 16, name: 'Тестовая змейка [wall_snake:21,21,12,12]' });

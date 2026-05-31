@@ -71,7 +71,7 @@ test('vent damper plate can be spent to seal a nearby swarm vent source', () => 
   const state = makeGameState({ currentFloor: FloorLevel.MAINTENANCE, time: 179 });
 
   assert.equal(addItem(player, ITEM_ID, 1), true);
-  assert.equal(getInventorySlotActionInfo(player, 0)?.useLabel, 'E заклеить');
+  assert.equal(getInventorySlotActionInfo(player, 0)?.useLabel, 'Enter заклеить');
 
   registerSwarmNestSource(world, {
     id: 'test_vent_damper_plate',

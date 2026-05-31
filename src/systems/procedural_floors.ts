@@ -67,6 +67,7 @@ export interface FloorRunEntrySnapshot {
 }
 
 type FloorRunHost = GameState & { floorRun?: FloorRunState };
+const normalizedFloorRuns = new WeakSet<FloorRunState>();
 
 const STORY_NAMES: Record<FloorLevel, string> = {
   [FloorLevel.MINISTRY]: 'Министерство',
@@ -321,12 +322,14 @@ export function normalizeFloorRunEntrySnapshot(input: unknown): FloorRunEntrySna
 
 export function createFloorRunState(currentFloor = FloorLevel.LIVING): FloorRunState {
   const runSeed = randomRunSeed();
-  return {
+  const run: FloorRunState = {
     runSeed,
     currentZ: zForStoryFloor(currentFloor),
     specs: createSpecDeck(runSeed),
     visited: {},
   };
+  normalizedFloorRuns.add(run);
+  return run;
 }
 
 export function normalizeFloorRunState(
@@ -350,6 +353,7 @@ export function normalizeFloorRunState(
   for (const [key, value] of Object.entries(visited)) {
     if (value && validVisited.has(key)) out.visited[key] = true;
   }
+  normalizedFloorRuns.add(out);
   return out;
 }
 
@@ -361,6 +365,7 @@ export function floorRunSaveHasRestorableRoute(input: unknown): boolean {
 
 export function ensureFloorRunState(state: GameState, currentFloor = state.currentFloor): FloorRunState {
   const host = state as FloorRunHost;
+  if (host.floorRun && normalizedFloorRuns.has(host.floorRun)) return host.floorRun;
   host.floorRun = normalizeFloorRunState(host.floorRun, currentFloor);
   return host.floorRun;
 }
@@ -538,29 +543,26 @@ export function floorRunEntryRole(entry: FloorRunEntry): string {
 
 export function floorRunEntryMapLabel(entry: FloorRunEntry): string {
   const z = formatFloorZ(entry.z);
-  const danger = floorRunEntryDanger(entry);
   if (entry.spec) {
-    const anomaly = anomalyById(entry.spec.anomalyId);
-    return `Z${z} ${entry.spec.key} риск ${danger}/5 ${anomaly.title}`;
+    return `Z${z} ${entry.spec.title}`;
   }
   if (entry.designFloorId) {
     const design = designFloorById(entry.designFloorId);
-    return `Z${z} ${entry.designFloorId} риск ${danger}/5 ${design?.displayName ?? entry.label}`;
+    return `Z${z} ${entry.designFloorId} ${design?.displayName ?? entry.label}`;
   }
   const story = entry.storyFloor ?? entry.baseFloor;
-  return `Z${z} ${STORY_ROUTE_IDS[story]} риск ${danger}/5 ${STORY_NAMES[story]}`;
+  return `Z${z} ${STORY_ROUTE_IDS[story]} ${STORY_NAMES[story]}`;
 }
 
 export function floorRunEntryLiftLabel(entry: FloorRunEntry): string {
   const kind = floorRunEntryKindLabel(entry).toUpperCase();
-  const routeId = floorRunEntryRouteId(entry);
-  const danger = floorRunEntryDanger(entry);
+  const routeId = entry.spec ? '' : ` ${floorRunEntryRouteId(entry)}`;
   const name = entry.designFloorId
     ? designFloorById(entry.designFloorId)?.displayName ?? entry.label
     : entry.storyFloor !== undefined
       ? STORY_NAMES[entry.storyFloor]
       : entry.spec?.title ?? entry.label;
-  return `${kind} Z${formatFloorZ(entry.z)} ${routeId} риск ${danger}/5: ${name}`;
+  return `${kind} Z${formatFloorZ(entry.z)}${routeId}: ${name}`;
 }
 
 export function floorRunEntryLiftDirections(entry: FloorRunEntry, podadDownOpen = false): LiftDirection[] {

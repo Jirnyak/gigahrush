@@ -24,10 +24,8 @@ import { playRouteCueTone, playSoundAt } from './audio';
 import { publishEvent } from './events';
 import {
   currentFloorRunEntry,
-  floorRunEntryDanger,
   floorRunEntryMapLabel,
   formatFloorZ,
-  resolveFloorRunRoute,
 } from './procedural_floors';
 import {
   isMapCellExplored,
@@ -305,13 +303,9 @@ function objectiveLiftLine(state: GameState, q: Quest): string {
   return `Лифт ${dir === LiftDirection.DOWN ? '↓' : '↑'} к цели от Z${formatFloorZ(currentZ)}`;
 }
 
-function objectiveRiskLine(state: GameState, q: Quest): string {
-  const routeRisk = q.targetRoute?.risk ?? q.targetMarker?.risk;
-  const dir = questTargetLiftDirection(q, state);
-  const next = dir !== undefined ? resolveFloorRunRoute(state, dir) : null;
-  const risk = Math.max(1, Math.min(5, Math.round(routeRisk ?? (next ? floorRunEntryDanger(next) : floorRunEntryDanger(currentFloorRunEntry(state))))));
+function objectiveRiskLine(_state: GameState, q: Quest): string {
   const hint = compactRouteText(q.targetHint, 68);
-  return hint ? `Риск ${risk}/5: ${hint}` : `Риск ${risk}/5`;
+  return hint || 'Маршрут: по цели';
 }
 
 export function routeObjectiveLiftPromptSuffix(state: GameState, direction: LiftDirection): string {
@@ -331,10 +325,10 @@ export function getObjectiveRouteHud(
   if (!objective) {
     const livingStart = current.z === 0 && current.storyFloor !== undefined;
     return {
-      title: livingStart ? 'ЦЕЛЬ: Ольга → Барни → Яков' : 'ЦЕЛЬ: возьмите слух или контракт',
+      title: livingStart ? 'ЦЕЛЬ: Ольга → сержант Баринов → Яков' : 'ЦЕЛЬ: возьмите слух или контракт',
       target: livingStart ? 'Жилая зона: вводная, оружейная, лаборатория' : floorRunEntryMapLabel(current),
       lift: livingStart ? 'Лифт: после цели, не вслепую' : 'Лифт: выберите по задаче',
-      risk: `Риск ${floorRunEntryDanger(current)}/5`,
+      risk: 'Маршрут: без активной цели',
       returnPath: routeReturnPath(state),
       color: '#8cf',
     };

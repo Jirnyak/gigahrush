@@ -5,16 +5,16 @@ import type { Msg } from '../src/core/types';
 import { addItem, getInventorySlotActionInfo, useItem } from '../src/systems/inventory';
 import { makeTestPlayer } from './helpers';
 
-test('inventory E unequips an already equipped weapon without consuming its slot', () => {
+test('inventory Enter unequips an already equipped weapon without consuming its slot', () => {
   const player = makeTestPlayer();
   const msgs: Msg[] = [];
 
   assert.equal(addItem(player, 'knife', 1), true);
-  assert.equal(getInventorySlotActionInfo(player, 0)?.useLabel, 'E экипировать');
+  assert.equal(getInventorySlotActionInfo(player, 0)?.useLabel, 'Enter экипировать');
 
   useItem(player, 0, msgs, 1);
   assert.equal(player.weapon, 'knife');
-  assert.equal(getInventorySlotActionInfo(player, 0)?.useLabel, 'E снять');
+  assert.equal(getInventorySlotActionInfo(player, 0)?.useLabel, 'Enter снять');
 
   useItem(player, 0, msgs, 2);
   assert.equal(player.weapon, '');
@@ -24,16 +24,16 @@ test('inventory E unequips an already equipped weapon without consuming its slot
   assert.ok(msgs.some(entry => entry.text.includes('Оружие снято')));
 });
 
-test('inventory E unequips an already active tool without consuming its slot', () => {
+test('inventory Enter unequips an already active tool without consuming its slot', () => {
   const player = makeTestPlayer();
   const msgs: Msg[] = [];
 
   assert.equal(addItem(player, 'flashlight', 1), true);
-  assert.equal(getInventorySlotActionInfo(player, 0)?.useLabel, 'E в инструмент');
+  assert.equal(getInventorySlotActionInfo(player, 0)?.useLabel, 'Enter в инструмент');
 
   useItem(player, 0, msgs, 1);
   assert.equal(player.tool, 'flashlight');
-  assert.equal(getInventorySlotActionInfo(player, 0)?.useLabel, 'E снять');
+  assert.equal(getInventorySlotActionInfo(player, 0)?.useLabel, 'Enter снять');
 
   useItem(player, 0, msgs, 2);
   assert.equal(player.tool, '');
@@ -43,14 +43,14 @@ test('inventory E unequips an already active tool without consuming its slot', (
   assert.ok(msgs.some(entry => entry.text.includes('Инструмент снят')));
 });
 
-test('inventory E still consumes ordinary stack-use items', () => {
+test('inventory Enter still consumes ordinary stack-use items', () => {
   const player = makeTestPlayer({
     needs: { food: 0, water: 50, sleep: 50, pee: 0, poo: 0 },
   });
   const msgs: Msg[] = [];
 
   assert.equal(addItem(player, 'bread', 2), true);
-  assert.equal(getInventorySlotActionInfo(player, 0)?.useLabel, 'E применить');
+  assert.equal(getInventorySlotActionInfo(player, 0)?.useLabel, 'Enter применить');
 
   useItem(player, 0, msgs, 1);
   assert.equal(player.weapon ?? '', '');

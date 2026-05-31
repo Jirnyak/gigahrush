@@ -2,20 +2,32 @@ import { TITLE_LANGUAGES, type TitleLanguageId, type TitleFlagKind, titleLanguag
 import { controlBindingLabel } from '../systems/controls';
 import { fitText } from './ui_text';
 
+export type TitleScreenMode = 'language' | 'setup';
+export type TitleHitField = 'language' | 'name' | 'seed' | 'actorCap' | 'start';
+
 export interface TitleLanguageHit {
   id?: TitleLanguageId;
-  field?: 'name' | 'seed' | 'start';
+  field?: TitleHitField;
   x: number;
   y: number;
   w: number;
   h: number;
 }
 
+export interface TitleSetupRowView {
+  field: TitleHitField;
+  label: string;
+  value: string;
+  hint: string;
+  selected: boolean;
+}
+
 export interface DrawTitleOptions {
+  mode: TitleScreenMode;
   languageId: TitleLanguageId;
   playerName: string;
   runSeedText: string;
-  activeField: 'name' | 'seed';
+  setupRows: readonly TitleSetupRowView[];
   cursorOn: boolean;
   mobile: boolean;
 }
@@ -28,7 +40,7 @@ export function hitTitleLanguage(hits: readonly TitleLanguageHit[], x: number, y
   return null;
 }
 
-export function hitTitleField(hits: readonly TitleLanguageHit[], x: number, y: number): 'name' | 'seed' | 'start' | null {
+export function hitTitleField(hits: readonly TitleLanguageHit[], x: number, y: number): TitleHitField | null {
   for (const hit of hits) {
     if (!hit.field) continue;
     if (x >= hit.x && x <= hit.x + hit.w && y >= hit.y && y <= hit.y + hit.h) return hit.field;
@@ -45,10 +57,6 @@ export function drawTitleScreen(ctx: CanvasRenderingContext2D, options: DrawTitl
   const cx = w / 2;
   const cy = h / 2;
   const lang = titleLanguageDef(options.languageId);
-  const shownName = options.playerName || lang.namePlaceholder;
-  const nameCursor = options.cursorOn && options.activeField === 'name' ? '_' : '';
-  const seedCursor = options.cursorOn && options.activeField === 'seed' ? '_' : '';
-  const shownSeed = options.runSeedText || lang.seedPlaceholder;
 
   ctx.fillStyle = '#090909';
   ctx.fillRect(0, 0, w, h);
@@ -68,27 +76,16 @@ export function drawTitleScreen(ctx: CanvasRenderingContext2D, options: DrawTitl
   ctx.font = `${Math.round(16 * s)}px monospace`;
   ctx.fillText(lang.subtitle, cx, cy - 76 * s);
 
-  const hits = drawLanguageSwitch(ctx, cx, cy - 44 * s, s, options.languageId);
-  const fieldW = Math.min(w * 0.9, 460 * s);
-  const fieldH = Math.max(20, 22 * s);
-
-  ctx.textAlign = 'center';
-  ctx.fillStyle = '#6cf';
-  ctx.font = `${Math.round(14 * s)}px monospace`;
-  ctx.fillText(fitText(ctx, `${lang.nameLabel}: ${shownName}${nameCursor}`, w * 0.9), cx, cy + 30 * s);
-  hits.push({ field: 'name', x: cx - fieldW / 2, y: cy + 30 * s - fieldH + 5 * s, w: fieldW, h: fieldH });
-  ctx.fillStyle = '#8fb';
-  ctx.fillText(fitText(ctx, `${lang.seedLabel}: ${shownSeed}${seedCursor}`, w * 0.9), cx, cy + 50 * s);
-  hits.push({ field: 'seed', x: cx - fieldW / 2, y: cy + 50 * s - fieldH + 5 * s, w: fieldW, h: fieldH });
-
-  ctx.fillStyle = '#888';
-  ctx.font = `${Math.round(16 * s)}px monospace`;
-  ctx.fillText(fitText(ctx, lang.startPrompt, w * 0.9), cx, cy + 82 * s);
-  hits.push({ field: 'start', x: cx - fieldW / 2, y: cy + 82 * s - 20 * s, w: fieldW, h: 28 * s });
+  const hits = options.mode === 'setup'
+    ? drawSetupMenu(ctx, cx, cy - 48 * s, s, options)
+    : drawLanguageMenu(ctx, cx, cy - 44 * s, s, options.languageId);
 
   ctx.fillStyle = '#555';
   ctx.font = `${Math.round(12 * s)}px monospace`;
-  if (options.mobile) {
+  ctx.textAlign = 'center';
+  if (options.mode === 'setup') {
+    ctx.fillText(fitText(ctx, lang.setupControlHint, w * 0.92), cx, Math.min(h - 16 * s, cy + 226 * s));
+  } else if (options.mobile) {
     ctx.fillText(fitText(ctx, lang.mobileHint, w * 0.92), cx, cy + 118 * s);
   } else {
     ctx.fillText(fitText(ctx, lang.desktopHint(
@@ -105,9 +102,92 @@ export function drawTitleScreen(ctx: CanvasRenderingContext2D, options: DrawTitl
 
   ctx.fillStyle = '#705858';
   ctx.font = `${Math.round(11 * s)}px monospace`;
-  ctx.fillText(fitText(ctx, lang.languageHint, w * 0.9), cx, cy + 150 * s);
+  if (options.mode !== 'setup') ctx.fillText(fitText(ctx, lang.languageHint, w * 0.9), cx, cy + 150 * s);
 
   ctx.textAlign = 'left';
+  return hits;
+}
+
+function drawLanguageMenu(
+  ctx: CanvasRenderingContext2D,
+  cx: number,
+  y: number,
+  s: number,
+  languageId: TitleLanguageId,
+): TitleLanguageHit[] {
+  const lang = titleLanguageDef(languageId);
+  const hits = drawLanguageSwitch(ctx, cx, y, s, languageId);
+  const w = ctx.canvas.width;
+  const fieldW = Math.min(w * 0.9, 460 * s);
+  ctx.fillStyle = '#888';
+  ctx.font = `${Math.round(16 * s)}px monospace`;
+  ctx.textAlign = 'center';
+  ctx.fillText(fitText(ctx, lang.startPrompt, w * 0.9), cx, y + 94 * s);
+  hits.push({ field: 'start', x: cx - fieldW / 2, y: y + 68 * s, w: fieldW, h: 40 * s });
+  return hits;
+}
+
+function drawSetupMenu(
+  ctx: CanvasRenderingContext2D,
+  cx: number,
+  top: number,
+  s: number,
+  options: DrawTitleOptions,
+): TitleLanguageHit[] {
+  const w = ctx.canvas.width;
+  const lang = titleLanguageDef(options.languageId);
+  const hits: TitleLanguageHit[] = [];
+  const panelW = Math.min(w * 0.92, 560 * s);
+  const rowH = Math.max(28, 30 * s);
+  const gap = Math.max(4, 5 * s);
+  const panelH = 64 * s + options.setupRows.length * rowH + Math.max(0, options.setupRows.length - 1) * gap + 24 * s;
+  const x = cx - panelW / 2;
+  const y = top;
+
+  ctx.fillStyle = 'rgba(4,8,10,0.88)';
+  ctx.fillRect(x, y, panelW, panelH);
+  ctx.strokeStyle = '#243b40';
+  ctx.lineWidth = Math.max(1, 1.5 * s);
+  ctx.strokeRect(x + 0.5, y + 0.5, panelW - 1, panelH - 1);
+
+  ctx.textAlign = 'center';
+  ctx.fillStyle = '#d6b24c';
+  ctx.font = `bold ${Math.round(18 * s)}px monospace`;
+  ctx.fillText(fitText(ctx, lang.setupTitle, panelW - 24 * s), cx, y + 24 * s);
+  ctx.fillStyle = '#667';
+  ctx.font = `${Math.round(10 * s)}px monospace`;
+  ctx.fillText(fitText(ctx, lang.setupSubtitle, panelW - 24 * s), cx, y + 40 * s);
+
+  let rowY = y + 56 * s;
+  for (const row of options.setupRows) {
+    const selected = row.selected;
+    ctx.fillStyle = selected ? 'rgba(24,64,58,0.9)' : 'rgba(12,18,20,0.72)';
+    ctx.fillRect(x + 10 * s, rowY, panelW - 20 * s, rowH);
+    ctx.strokeStyle = selected ? '#00d49a' : '#23363a';
+    ctx.strokeRect(x + 10 * s + 0.5, rowY + 0.5, panelW - 20 * s - 1, rowH - 1);
+
+    ctx.textAlign = 'left';
+    ctx.fillStyle = selected ? '#d8ffe8' : '#7b9a9a';
+    ctx.font = `bold ${Math.round(11 * s)}px monospace`;
+    ctx.fillText(fitText(ctx, `${selected ? '> ' : '  '}${row.label}`, panelW * 0.4), x + 18 * s, rowY + 13 * s);
+
+    ctx.textAlign = row.field === 'start' ? 'center' : 'right';
+    ctx.fillStyle = row.field === 'start' ? (selected ? '#ffd46a' : '#9a7b44') : (selected ? '#8fffd2' : '#698b88');
+    ctx.font = `${Math.round(11 * s)}px monospace`;
+    const valueMaxW = row.field === 'start' ? panelW - 52 * s : panelW * 0.48;
+    const valueX = row.field === 'start' ? cx : x + panelW - 18 * s;
+    ctx.fillText(fitText(ctx, row.value, valueMaxW), valueX, rowY + 13 * s);
+
+    if (row.hint) {
+      ctx.textAlign = 'left';
+      ctx.fillStyle = selected ? '#668' : '#465';
+      ctx.font = `${Math.round(8 * s)}px monospace`;
+      ctx.fillText(fitText(ctx, row.hint, panelW - 40 * s), x + 18 * s, rowY + 24 * s);
+    }
+
+    hits.push({ field: row.field, x: x + 10 * s, y: rowY, w: panelW - 20 * s, h: rowH });
+    rowY += rowH + gap;
+  }
   return hits;
 }
 

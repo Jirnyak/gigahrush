@@ -14,6 +14,13 @@ export interface WorldGenerationLike {
   world: World;
 }
 
+export interface WorldGridDirtyRect {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
 export type ReachabilityReason =
   | 'open'
   | 'water'
@@ -52,12 +59,41 @@ function nextVersion(version: number): number {
   return (version + 1) | 0;
 }
 
+const MAX_GRID_DIRTY_RECTS = 32;
+type GridDirtyRectsInput = WorldGridDirtyRect | readonly WorldGridDirtyRect[] | undefined;
+type PendingGridDirtyRects = WorldGridDirtyRect[] | null;
+
+function normalizeGridDirtyRect(rect: WorldGridDirtyRect): WorldGridDirtyRect | null {
+  const x = Math.max(0, Math.min(W, Math.floor(rect.x)));
+  const y = Math.max(0, Math.min(W, Math.floor(rect.y)));
+  const w = Math.max(0, Math.ceil(rect.w));
+  const h = Math.max(0, Math.ceil(rect.h));
+  if (w <= 0 || h <= 0 || x >= W || y >= W) return { x: 0, y: 0, w: W, h: W };
+  const x2 = Math.min(W, x + w);
+  const y2 = Math.min(W, y + h);
+  if (x === 0 && y === 0 && x2 === W && y2 === W) return null;
+  return { x, y, w: x2 - x, h: y2 - y };
+}
+
+function appendGridDirtyRects(current: PendingGridDirtyRects, input: GridDirtyRectsInput): PendingGridDirtyRects {
+  if (!input || current === null) return null;
+  const list = Array.isArray(input) ? input : [input];
+  for (const candidate of list) {
+    const rect = normalizeGridDirtyRect(candidate);
+    if (!rect) return null;
+    current.push(rect);
+    if (current.length > MAX_GRID_DIRTY_RECTS) return null;
+  }
+  return current;
+}
+
 function markWorldReplaced(world: World, versions: {
   cellVersion: number;
   surfaceVersion: number;
   wallTexVersion: number;
   floorTexVersion: number;
   featureVersion: number;
+  lightVersion: number;
   fogVersion: number;
 }): void {
   world.cellVersion = nextVersion(versions.cellVersion);
@@ -65,7 +101,9 @@ function markWorldReplaced(world: World, versions: {
   world.wallTexVersion = nextVersion(versions.wallTexVersion);
   world.floorTexVersion = nextVersion(versions.floorTexVersion);
   world.featureVersion = nextVersion(versions.featureVersion);
+  world.lightVersion = nextVersion(versions.lightVersion);
   world.fogVersion = nextVersion(versions.fogVersion);
+  world.clearPendingGridDirtyRects();
 }
 
 function lightFeature(feature: number): boolean {
@@ -103,12 +141,18 @@ export class World {
   surfaceVersion = 0;              // bumped when surfaceMap pixels change
   wallTexVersion = 0;              // bumped when runtime wall texture data changes
   floorTexVersion = 0;             // bumped when runtime floor texture data changes
-  featureVersion = 0;              // bumped when runtime feature data or baked feature light changes
+  featureVersion = 0;              // bumped when runtime feature data changes
+  lightVersion = 0;                // bumped when baked feature light changes
   fogVersion = 0;                  // bumped when runtime fog data changes
   liftDir:   Uint8Array;           // LiftDirection per cell (only meaningful where cells[i] === Cell.LIFT)
   containers: WorldContainer[] = [];
   containerMap: Map<number, number[]> = new Map(); // cell idx -> container ids
   containerById: Map<number, WorldContainer> = new Map();
+  private cellDirtyRects: PendingGridDirtyRects = [];
+  private wallTexDirtyRects: PendingGridDirtyRects = [];
+  private floorTexDirtyRects: PendingGridDirtyRects = [];
+  private featureDirtyRects: PendingGridDirtyRects = [];
+  private fogDirtyRects: PendingGridDirtyRects = [];
 
   constructor() {
     const n = W * W;
@@ -196,24 +240,76 @@ export class World {
     this.cells[this.idx(x, y)] = v;
   }
 
-  markWallTexDirty(): void { this.wallTexVersion = (this.wallTexVersion + 1) | 0; }
-
-  markCellsDirty(): void { this.cellVersion = (this.cellVersion + 1) | 0; }
-
-  markFloorTexDirty(): void { this.floorTexVersion = (this.floorTexVersion + 1) | 0; }
-
-  markFeaturesDirty(rebakeLights = false): void {
-    if (rebakeLights) this.bakeLights();
-    this.featureVersion = (this.featureVersion + 1) | 0;
+  clearPendingGridDirtyRects(): void {
+    this.cellDirtyRects = [];
+    this.wallTexDirtyRects = [];
+    this.floorTexDirtyRects = [];
+    this.featureDirtyRects = [];
+    this.fogDirtyRects = [];
   }
 
-  markFogDirty(): void { this.fogVersion = (this.fogVersion + 1) | 0; }
+  takeCellDirtyRects(): readonly WorldGridDirtyRect[] | null {
+    const rects = this.cellDirtyRects;
+    this.cellDirtyRects = [];
+    return rects === null ? null : rects.slice();
+  }
 
-  setFeatureAt(idx: number, feature: Feature, rebakeLights = true): boolean {
+  takeWallTexDirtyRects(): readonly WorldGridDirtyRect[] | null {
+    const rects = this.wallTexDirtyRects;
+    this.wallTexDirtyRects = [];
+    return rects === null ? null : rects.slice();
+  }
+
+  takeFloorTexDirtyRects(): readonly WorldGridDirtyRect[] | null {
+    const rects = this.floorTexDirtyRects;
+    this.floorTexDirtyRects = [];
+    return rects === null ? null : rects.slice();
+  }
+
+  takeFeatureDirtyRects(): readonly WorldGridDirtyRect[] | null {
+    const rects = this.featureDirtyRects;
+    this.featureDirtyRects = [];
+    return rects === null ? null : rects.slice();
+  }
+
+  takeFogDirtyRects(): readonly WorldGridDirtyRect[] | null {
+    const rects = this.fogDirtyRects;
+    this.fogDirtyRects = [];
+    return rects === null ? null : rects.slice();
+  }
+
+  markWallTexDirty(rects?: GridDirtyRectsInput): void {
+    this.wallTexVersion = (this.wallTexVersion + 1) | 0;
+    this.wallTexDirtyRects = appendGridDirtyRects(this.wallTexDirtyRects, rects);
+  }
+
+  markCellsDirty(rects?: GridDirtyRectsInput): void {
+    this.cellVersion = (this.cellVersion + 1) | 0;
+    this.cellDirtyRects = appendGridDirtyRects(this.cellDirtyRects, rects);
+  }
+
+  markFloorTexDirty(rects?: GridDirtyRectsInput): void {
+    this.floorTexVersion = (this.floorTexVersion + 1) | 0;
+    this.floorTexDirtyRects = appendGridDirtyRects(this.floorTexDirtyRects, rects);
+  }
+
+  markFeaturesDirty(rebakeLights = false, rects?: GridDirtyRectsInput): void {
+    if (rebakeLights) this.bakeLights();
+    if (rebakeLights) this.lightVersion = (this.lightVersion + 1) | 0;
+    this.featureVersion = (this.featureVersion + 1) | 0;
+    this.featureDirtyRects = appendGridDirtyRects(this.featureDirtyRects, rects);
+  }
+
+  markFogDirty(rects?: GridDirtyRectsInput): void {
+    this.fogVersion = (this.fogVersion + 1) | 0;
+    this.fogDirtyRects = appendGridDirtyRects(this.fogDirtyRects, rects);
+  }
+
+  setFeatureAt(idx: number, feature: Feature, rebakeLights = true, rects?: GridDirtyRectsInput): boolean {
     const old = this.features[idx] as Feature;
     if (old === feature) return false;
     this.features[idx] = feature;
-    this.markFeaturesDirty(rebakeLights && (lightFeature(old) || lightFeature(feature)));
+    this.markFeaturesDirty(rebakeLights && (lightFeature(old) || lightFeature(feature)), rects);
     if (old === Feature.SCREEN && feature !== Feature.SCREEN) this.screenCells = this.screenCells.filter(i => i !== idx);
     if (feature === Feature.SCREEN && !this.screenCells.includes(idx)) this.screenCells.push(idx);
     if (old === Feature.SLIDE && feature !== Feature.SLIDE) this.slideCells = this.slideCells.filter(i => i !== idx);
@@ -423,6 +519,7 @@ export function replaceWorldFromGeneration(target: World | null | undefined, gen
       wallTexVersion: source.wallTexVersion,
       floorTexVersion: source.floorTexVersion,
       featureVersion: source.featureVersion,
+      lightVersion: source.lightVersion,
       fogVersion: source.fogVersion,
     });
     return source;
@@ -434,6 +531,7 @@ export function replaceWorldFromGeneration(target: World | null | undefined, gen
     wallTexVersion: target.wallTexVersion,
     floorTexVersion: target.floorTexVersion,
     featureVersion: target.featureVersion,
+    lightVersion: target.lightVersion,
     fogVersion: target.fogVersion,
   };
 

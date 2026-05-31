@@ -8,6 +8,7 @@ import {
   MOUSE_LOOK_SENSITIVITY_DEFAULT,
   UI_ELEMENT_DEFS,
   UI_PRESETS,
+  autoPickupEnabled,
   adjustCameraFov,
   adjustMobileLookSensitivity,
   adjustMouseLookSensitivity,
@@ -17,10 +18,12 @@ import {
   mobileLookSensitivity,
   mouseLookSensitivity,
   resetCameraFov,
+  resetAutoPickup,
   resetMobileLookSensitivity,
   resetMouseLookSensitivity,
   resetUiElement,
   resetUiSettings,
+  toggleAutoPickup,
   setUiElementEnabled,
   toggleUiElement,
   uiElementEnabled,
@@ -53,6 +56,7 @@ test('UI orchestrator defaults to the novice-safe HUD enabled', () => {
   assert.equal(mobileLookSensitivity(), MOBILE_LOOK_SENSITIVITY_DEFAULT);
   assert.equal(mouseLookSensitivity(), MOUSE_LOOK_SENSITIVITY_DEFAULT);
   assert.equal(cameraFovDegrees(), CAMERA_FOV_DEFAULT_DEGREES);
+  assert.equal(autoPickupEnabled(), true);
 });
 
 test('UI orchestrator treats minimap as an ordinary interface surface', () => {
@@ -116,8 +120,22 @@ test('UI orchestrator presets cover minimal and full player-safe modes', () => {
     assert.equal(uiElementEnabled(def.id), true, `${def.id} should be enabled by full preset`);
   }
   assert.equal(uiElementEnabled('fps_counter'), false);
-  assert.equal(uiSettingsRowCount('interface'), UI_PRESETS.length + UI_ELEMENT_DEFS.length + 1);
-  assert.equal(uiSettingsRowCount('graphics'), 1);
+  assert.equal(uiSettingsRowCount('interface'), UI_PRESETS.length + UI_ELEMENT_DEFS.length + 3);
+  assert.equal(uiSettingsRowCount('graphics'), 2);
+  assert.equal(uiSettingsRowAt(0, 'interface')?.kind, 'reset_interface');
+  assert.equal(uiSettingsRowAt(0, 'graphics')?.kind, 'reset_graphics');
+});
+
+test('UI orchestrator keeps auto-pickup as a gameplay toggle outside presets', () => {
+  resetUiSettings();
+  assert.equal(autoPickupEnabled(), true);
+  assert.equal(toggleAutoPickup(), false);
+  assert.equal(autoPickupEnabled(), false);
+  assert.equal(applyUiPreset('full'), true);
+  assert.equal(autoPickupEnabled(), false);
+  assert.equal(resetAutoPickup(), true);
+  const row = uiSettingsRowAt(1 + UI_PRESETS.length + UI_ELEMENT_DEFS.length, 'interface');
+  assert.equal(row?.kind, 'auto_pickup');
 });
 
 test('UI orchestrator stores mobile look sensitivity outside presets', () => {
@@ -153,6 +171,6 @@ test('UI orchestrator stores camera FOV as a graphics setting outside presets', 
   assert.equal(applyUiPreset('off'), true);
   assert.equal(cameraFovDegrees(), 60);
   assert.equal(resetCameraFov(), 90);
-  const row = uiSettingsRowAt(0, 'graphics');
+  const row = uiSettingsRowAt(1, 'graphics');
   assert.equal(row?.kind, 'camera_fov');
 });

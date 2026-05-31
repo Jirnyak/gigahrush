@@ -2,10 +2,12 @@ import { test } from 'node:test';
 import * as assert from 'node:assert/strict';
 
 import { EntityType, Faction, MonsterKind, Occupation, RoomType, Tex, type Entity } from '../src/core/types';
+import { auditReachability } from '../src/core/world';
 import { designFloorById } from '../src/data/design_floors';
 import { designFloorPopulationProfile } from '../src/data/design_floor_population';
 import { generateDesignFloor } from '../src/gen/design_floors/manifest';
 import type { ProductionBeltGeneration } from '../src/gen/design_floors/production_belt';
+import { craftStationCells } from '../src/gen/craft_stations';
 import { getCellHazardMoveMultiplier } from '../src/systems/cell_hazards';
 import { getRouteCueMarkers } from '../src/systems/route_cues';
 
@@ -96,4 +98,16 @@ test('production belt generation exposes repair, theft, bad batch and industrial
   assert.equal(workerBand >= 100, true, `worker band ${workerBand}`);
   assert.equal(monsterBand >= Math.floor(monsters.length * 0.65), true, `monster band ${monsterBand}/${monsters.length}`);
   assert.equal(monsters.some(entity => entity.monsterKind === MonsterKind.ROBOT || entity.monsterKind === MonsterKind.TRUBNYY_AVTOMAT), true);
+});
+
+test('production belt exposes reachable craft lathe and disassembly workbench', () => {
+  const gen = generateDesignFloor('production_belt') as ProductionBeltGeneration;
+  const audit = auditReachability(gen.world, gen.world.idx(Math.floor(gen.spawnX), Math.floor(gen.spawnY)));
+  const lathe = craftStationCells(gen.world, 'craft_lathe');
+  const workbench = craftStationCells(gen.world, 'disassembly_workbench');
+
+  assert.equal(lathe.length >= 1, true, 'production belt profile should place a craft_lathe');
+  assert.equal(workbench.length >= 1, true, 'production belt profile should place a disassembly_workbench');
+  assert.equal(lathe.every(idx => audit.reachable[idx] === 1), true, 'production belt lathe should be reachable from spawn');
+  assert.equal(workbench.every(idx => audit.reachable[idx] === 1), true, 'production belt workbench should be reachable from spawn');
 });

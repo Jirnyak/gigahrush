@@ -38,12 +38,12 @@ curl -fsS "https://gigahrush.bileter.workers.dev/api/net/stats" | head -c 500
 
 Если любой обязательный шаг падает, остановись, прочитай реальную ошибку, исправь ее или явно сообщи блокер. Не объявляй релиз готовым по предположению.
 
-Перед PR/portal действиями сверяй актуальную операционную информацию с `Docs/PRCampaign/KPI.md` и `Docs/PRCampaign/`, особенно:
+Перед PR/portal действиями сверяй актуальную операционную информацию с `PRCampaign/KPI.md` и `PRCampaign/`, особенно:
 
-- `Docs/PRCampaign/campaign_plan_ru.md`;
-- свежий `Docs/PRCampaign/kpi_report_*.md`;
-- `Docs/PRCampaign/PR_16.md` для MyIndie;
-- `Docs/PRCampaign/PR_29_pikabu_gamepush_readiness.md`, `Docs/PRCampaign/PR_29_pikabu_games_prep.md` и `Docs/PRCampaign/pikabu_games_pre_submit_qa_2026-05-27.md` для Pikabu/GamePush.
+- `PRCampaign/campaign_plan_ru.md`;
+- свежий `PRCampaign/kpi_report_*.md`;
+- `PRCampaign/PR_16.md` для MyIndie;
+- `PRCampaign/PR_29_pikabu_gamepush_readiness.md`, `PRCampaign/PR_29_pikabu_games_prep.md` и `PRCampaign/pikabu_games_pre_submit_qa_2026-05-27.md` для Pikabu/GamePush.
 
 ## 1. Перед Коммитом
 
@@ -103,7 +103,7 @@ npm run itch:build
 
 - `itch/index.html`;
 - `itch/gigahrush-itch.zip`;
-- `itch/ITCH_UPLOAD_NOTES.txt`.
+- `PRCampaign/itch_upload_notes.md` or the freshly generated `itch/ITCH_UPLOAD_NOTES.txt`.
 
 Проверь форму архива:
 
@@ -113,7 +113,7 @@ unzip -l itch/gigahrush-itch.zip | sed -n '1,80p'
 
 Критично: `index.html` должен лежать в корне ZIP. Если внутри архива путь выглядит как `dist/index.html` или `itch/index.html`, пакет неправильный для itch.io.
 
-Если пользователь отдельно просит загрузить файл на itch.io, используй `itch/gigahrush-itch.zip` и настройки из `itch/ITCH_UPLOAD_NOTES.txt` и `itch_page_pack/ITCH_EDITOR_RUNBOOK.md`.
+Если пользователь отдельно просит загрузить файл на itch.io, используй свежий `itch/gigahrush-itch.zip` и настройки из `PRCampaign/itch_upload_notes.md`, свежего `itch/ITCH_UPLOAD_NOTES.txt` и `PRCampaign/itch_editor_runbook.md`.
 
 ### 3.2 MyIndie RU ZIP-Кандидат
 
@@ -133,7 +133,7 @@ unzip -l itch/gigahrush-itch.zip | sed -n '1,80p'
 
 Если пользователь просит только `комить`, не заходи в MyIndie dashboard и не обновляй страницу. В итоговом отчете достаточно указать, что MyIndie RU upload-кандидат - это свежий `itch/gigahrush-itch.zip`. Если пользователь явно просит `обновить MyIndie`, используй существующую опубликованную карточку, не создавай duplicate listing, загружай текущий ZIP, проверяй публичную страницу, Web iframe, ссылку на MyIndie в PR/KPI docs и не делай final publish/update без preview.
 
-Актуальные операционные факты для MyIndie держатся в `Docs/PRCampaign/KPI.md`, `Docs/PRCampaign/campaign_plan_ru.md`, `Docs/PRCampaign/PR_16.md` и свежем `Docs/PRCampaign/kpi_report_*.md`.
+Актуальные операционные факты для MyIndie держатся в `PRCampaign/KPI.md`, `PRCampaign/campaign_plan_ru.md`, `PRCampaign/PR_16.md` и свежем `PRCampaign/kpi_report_*.md`.
 
 ### 3.3 Pikabu Games / GamePush ZIP
 
@@ -147,7 +147,7 @@ npm run pikabu:build
 
 - `pikabu/index.html`;
 - `pikabu/gigahrush-pikabu.zip`;
-- `pikabu/PIKABU_UPLOAD_NOTES.txt`.
+- `PRCampaign/pikabu_upload_notes.md` or the freshly generated `pikabu/PIKABU_UPLOAD_NOTES.txt`.
 
 Проверь форму архива:
 
@@ -294,7 +294,7 @@ MyIndie RU использует текущий `itch/gigahrush-itch.zip` как 
 3. Включи HTML/browser play для файла.
 4. Проверь публичную страницу `https://tenevik.itch.io/gigahrush`.
 
-Настройки itch.io описаны в `itch/ITCH_UPLOAD_NOTES.txt` и `itch_page_pack/ITCH_EDITOR_RUNBOOK.md`.
+Настройки itch.io описаны в `PRCampaign/itch_upload_notes.md`, свежем `itch/ITCH_UPLOAD_NOTES.txt` и `PRCampaign/itch_editor_runbook.md`.
 
 Если пользователь просит `комить и обновить MyIndie`, тогда:
 
@@ -305,7 +305,7 @@ MyIndie RU использует текущий `itch/gigahrush-itch.zip` как 
 
 Если пользователь просит `комить и подготовить/отправить на Пикабу Игры`, тогда:
 
-1. Сверь `Docs/PRCampaign/pikabu_games_pre_submit_qa_2026-05-27.md`.
+1. Сверь `PRCampaign/pikabu_games_pre_submit_qa_2026-05-27.md`.
 2. Собери `pikabu/gigahrush-pikabu.zip` через `npm run pikabu:build`, при реальной отправке только с owner-provided GamePush public credentials в локальном окружении.
 3. Проверь root `index.html`, strict portal metadata, отсутствие встроенных секретов и отсутствие portal meta в обычном `dist/index.html`.
 4. Запусти `npm run check:browser`, затем реальный GamePush/Pikabu iframe save/load/pause/audio/content QA.

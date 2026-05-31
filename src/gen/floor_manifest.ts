@@ -12,6 +12,7 @@ import { generateMaintenance } from './maintenance';
 import { generateHell } from './hell';
 import { generateVoid } from './void';
 import { withoutNpcEntities } from './entity_filters';
+import { applyStoryFloorObjectProfile } from './floor_object_placement';
 
 export interface FloorGeneration {
   world: World;
@@ -65,7 +66,12 @@ export function isFloorLevel(value: unknown): value is FloorLevel {
   return typeof value === 'number' && value in FLOOR_GENERATORS;
 }
 
+function applyStoryFloorObjects(floor: FloorLevel, generation: FloorGeneration): void {
+  applyStoryFloorObjectProfile(generation.world, generation.spawnX, generation.spawnY, floor);
+}
+
 export function generateFloor(floor: FloorLevel, runSeed = DEFAULT_STORY_FLOOR_SEED): FloorGeneration {
   const generation = withSeededRandom(storyFloorGenerationSeed(floor, runSeed), () => FLOOR_GENERATORS[floor]());
+  applyStoryFloorObjects(floor, generation);
   return floor === FloorLevel.VOID ? withoutNpcEntities(generation) : generation;
 }

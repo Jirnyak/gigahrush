@@ -1,6 +1,7 @@
 import { type Entity, type FloorLevel, type GameState, type Item } from '../core/types';
 import { ITEMS } from '../data/catalog';
 import { type EconomyFloorRef } from '../data/economy_rules';
+import { MAX_INVENTORY_SLOTS } from '../data/inventory_limits';
 import { addItem } from './inventory';
 import {
   changeResourceStock,
@@ -80,7 +81,7 @@ interface TradeOfferSession {
   npcOffer: Item[];
 }
 
-export const TRADE_OFFER_SLOT_CAP = 25;
+export const TRADE_OFFER_SLOT_CAP = MAX_INVENTORY_SLOTS;
 
 const tradeOfferSessions = new WeakMap<GameState, TradeOfferSession>();
 

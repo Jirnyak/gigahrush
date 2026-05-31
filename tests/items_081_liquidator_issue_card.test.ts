@@ -29,7 +29,7 @@ test('liquidator issue card is a legal single-use document for a field kit', () 
 
   const player = makeTestPlayer();
   assert.equal(addItem(player, CARD_ID, 1), true);
-  assert.equal(getInventorySlotActionInfo(player, 0)?.useLabel, 'E погасить');
+  assert.equal(getInventorySlotActionInfo(player, 0)?.useLabel, 'Enter погасить');
 });
 
 test('liquidator issue card is reachable in the Ministry archive and redeems one field kit at the issue stash', () => {

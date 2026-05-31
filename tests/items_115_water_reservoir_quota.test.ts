@@ -39,7 +39,7 @@ test('water reservoir quota redeems into water and pressures water stock', () =>
   const state = makeGameState({ currentFloor: FloorLevel.LIVING, time: 115 });
   const beforeStock = resourceStock(state, FloorLevel.LIVING, 'drink_water');
 
-  assert.equal(getInventorySlotActionInfo(player, 0)?.useLabel, 'E погасить');
+  assert.equal(getInventorySlotActionInfo(player, 0)?.useLabel, 'Enter погасить');
 
   useItem(player, 0, state.msgs, state.time, state);
 

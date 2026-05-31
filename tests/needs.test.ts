@@ -53,3 +53,33 @@ test('cold resident needs use world room restoration cadence when world is suppl
   assert.ok((resident.needs?.food ?? 0) > 10);
   assert.ok((resident.needs?.water ?? 0) > 10);
 });
+
+test('passive health regen scales with current food', () => {
+  resetNeedsCohortStateForTests();
+  const player = entity(1, EntityType.NPC, 10, 10);
+  player.persistentNpcId = 'player';
+  player.hp = 90;
+  player.maxHp = 100;
+  player.needs = { food: 50, water: 50, sleep: 100, pee: 0, poo: 0 };
+
+  rebuildEntityIndex([player]);
+  updateNeeds([player], 10, 10, [], player.id);
+
+  assert.ok(Math.abs((player.hp ?? 0) - 90.082) < 0.000001);
+  assert.ok(Math.abs((player.needs?.food ?? 0) - 49.036) < 0.000001);
+});
+
+test('passive health regen can stay on real time during accelerated simulation', () => {
+  resetNeedsCohortStateForTests();
+  const player = entity(1, EntityType.NPC, 10, 10);
+  player.persistentNpcId = 'player';
+  player.hp = 90;
+  player.maxHp = 100;
+  player.needs = { food: 50, water: 50, sleep: 100, pee: 0, poo: 0 };
+
+  rebuildEntityIndex([player]);
+  updateNeeds([player], 10, 10, [], player.id, undefined, undefined, undefined, 0.1);
+
+  assert.ok(Math.abs((player.hp ?? 0) - 90.0082) < 0.000001);
+  assert.ok(Math.abs((player.needs?.food ?? 0) - 49.1836) < 0.000001);
+});

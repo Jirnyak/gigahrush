@@ -5,6 +5,7 @@ import {
 import type { World } from '../core/world';
 import { drawGlitchText, drawNeuroPanel, drawStaticNoise } from './hud_fx';
 import { fitText } from './ui_text';
+import { menuCloseHint } from '../systems/controls';
 import { isPlayerEntity } from '../systems/player_actor';
 
 export type MapEditorToolId = 'cell' | 'door' | 'texture' | 'feature' | 'entity' | 'container' | 'inspect' | string;
@@ -942,7 +943,7 @@ function drawStatus(
 
   const hints = state.hints && state.hints.length > 0
     ? state.hints.join('  |  ')
-    : 'Enter закрыть  |  WASD/стрелки карта  |  wheel/+/- масштаб';
+    : `${menuCloseHint()} закрыть  |  WASD/стрелки карта  |  wheel/+/- масштаб`;
   ctx.textAlign = 'right';
   ctx.fillStyle = '#4f6470';
   ctx.fillText(fitText(ctx, hints, w * 0.48), layout.x + layout.w - layout.pad, y);

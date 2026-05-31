@@ -1,5 +1,5 @@
 import { type DiceRoll, type DiceSnapshot } from '../systems/dice';
-import { controlBindingLabel, controlHint } from '../systems/controls';
+import { controlBindingLabel, controlHint, menuCloseHint } from '../systems/controls';
 import { fitText } from './ui_text';
 
 const PIPS: Record<number, readonly [number, number][]> = {
@@ -160,8 +160,8 @@ export function drawDiceInterface(
   drawBadge(ctx, fitText(ctx, status.toUpperCase(), pw - pad * 2 - 8 * s), px + pad, statusY, pw - pad * 2, statusH, s, '#c4cdc7');
 
   const action = snapshot.finished
-    ? `${controlHint('interact')}/${controlBindingLabel('gameMenu')} ЗАКРЫТЬ`
-    : `${controlHint('interact')} БРОСИТЬ  ${controlBindingLabel('drop')} СТОП  ${controlBindingLabel('gameMenu')} СДАТЬСЯ`;
+    ? `${controlHint('gameMenu')} ЗАКРЫТЬ  ${menuCloseHint()} ВЫЙТИ`
+    : `${controlHint('gameMenu')} БРОСИТЬ  ${controlBindingLabel('drop')} СТОП  ${menuCloseHint()} СДАТЬСЯ`;
   ctx.fillStyle = '#59615d';
   ctx.font = `${7 * sy}px monospace`;
   ctx.textAlign = 'center';

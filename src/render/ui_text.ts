@@ -2,7 +2,9 @@ import { translateText } from '../systems/localization';
 
 let uiTextTime = 0;
 const fitTextSeenAt = new Map<string, number>();
+const fitTextStableCache = new Map<string, string>();
 const FIT_TEXT_CACHE_LIMIT = 256;
+const FIT_TEXT_STABLE_CACHE_LIMIT = 512;
 const FIT_TEXT_EDGE_HOLD = 0.65;
 const FIT_TEXT_CHARS_PER_SECOND = 9;
 
@@ -10,8 +12,34 @@ export function setUiTextTime(time: number): void {
   uiTextTime = Number.isFinite(time) ? time : 0;
 }
 
+export function formatUiNumber(value: number | undefined, maxFractionDigits = 1): string {
+  if (value === undefined || !Number.isFinite(value)) return '0';
+  const digits = Math.max(0, Math.min(2, Math.floor(maxFractionDigits)));
+  const rounded = Math.round(value * 10 ** digits) / 10 ** digits;
+  const stable = Object.is(rounded, -0) ? 0 : rounded;
+  if (digits === 0 || Number.isInteger(stable)) return String(stable);
+  return stable.toFixed(digits).replace(/\.?0+$/, '');
+}
+
 function fitTextCacheKey(ctx: CanvasRenderingContext2D, text: string, maxW: number): string {
   return `${ctx.font}|${Math.round(maxW)}|${text}`;
+}
+
+function cachedFitTextStable(key: string): string | undefined {
+  const cached = fitTextStableCache.get(key);
+  if (cached === undefined) return undefined;
+  fitTextStableCache.delete(key);
+  fitTextStableCache.set(key, cached);
+  return cached;
+}
+
+function rememberFitTextStable(key: string, value: string): string {
+  if (fitTextStableCache.size >= FIT_TEXT_STABLE_CACHE_LIMIT) {
+    const oldest = fitTextStableCache.keys().next().value;
+    if (oldest !== undefined) fitTextStableCache.delete(oldest);
+  }
+  fitTextStableCache.set(key, value);
+  return value;
 }
 
 function firstSeenTime(ctx: CanvasRenderingContext2D, text: string, maxW: number): number {
@@ -75,20 +103,23 @@ export function fitTextStable(
 ): string {
   text = translateText(text);
   if (maxW <= 0 || text.length === 0) return '';
-  if (ctx.measureText(text).width <= maxW) return text;
+  const cacheKey = `${mode}|${fitTextCacheKey(ctx, text, maxW)}`;
+  const cached = cachedFitTextStable(cacheKey);
+  if (cached !== undefined) return cached;
+  if (ctx.measureText(text).width <= maxW) return rememberFitTextStable(cacheKey, text);
   if (mode === 'clip') {
     const count = maxFittingChars(ctx, text, maxW);
-    return count <= 0 ? '' : text.slice(0, count);
+    return rememberFitTextStable(cacheKey, count <= 0 ? '' : text.slice(0, count));
   }
 
   const ellipsis = '...';
   const ellipsisW = ctx.measureText(ellipsis).width;
   if (ellipsisW >= maxW) {
     const count = maxFittingChars(ctx, text, maxW);
-    return count <= 0 ? '' : text.slice(0, count);
+    return rememberFitTextStable(cacheKey, count <= 0 ? '' : text.slice(0, count));
   }
   const count = maxFittingChars(ctx, text, maxW - ellipsisW);
-  return count <= 0 ? '' : `${text.slice(0, count)}${ellipsis}`;
+  return rememberFitTextStable(cacheKey, count <= 0 ? '' : `${text.slice(0, count)}${ellipsis}`);
 }
 
 function maxFittingUnits(ctx: CanvasRenderingContext2D, units: readonly string[], start: number, maxW: number): number {

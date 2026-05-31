@@ -1,6 +1,10 @@
 import { EntityType } from '../core/types';
 
-export const ACTIVE_ACTOR_SOFT_LIMIT = 4_096;
+export const DEFAULT_ACTIVE_ACTOR_SOFT_LIMIT = 4_096;
+export const MIN_ACTIVE_ACTOR_SOFT_LIMIT = 1_024;
+export const MAX_ACTIVE_ACTOR_SOFT_LIMIT = 16_384;
+export const ACTIVE_ACTOR_SOFT_LIMIT_STEP = 1_024;
+export let ACTIVE_ACTOR_SOFT_LIMIT = DEFAULT_ACTIVE_ACTOR_SOFT_LIMIT;
 export const FLOOR_OBJECT_SOFT_LIMIT = 65_536;
 
 export const ENTITY_SOFT_LIMITS: Partial<Record<EntityType, number>> = {
@@ -9,9 +13,39 @@ export const ENTITY_SOFT_LIMITS: Partial<Record<EntityType, number>> = {
   [EntityType.ITEM_DROP]: FLOOR_OBJECT_SOFT_LIMIT,
   [EntityType.PROJECTILE]: FLOOR_OBJECT_SOFT_LIMIT,
   [EntityType.BILLBOARD]: FLOOR_OBJECT_SOFT_LIMIT,
-} as const;
+};
 
-export function fitActiveActorCounts(npcs: number, monsters: number, cap = ACTIVE_ACTOR_SOFT_LIMIT): { npcs: number; monsters: number } {
+export function normalizeActiveActorSoftLimit(value: unknown): number {
+  if (value === null || value === undefined || value === '') return DEFAULT_ACTIVE_ACTOR_SOFT_LIMIT;
+  const raw = typeof value === 'number' ? value : Number(value);
+  if (!Number.isFinite(raw)) return DEFAULT_ACTIVE_ACTOR_SOFT_LIMIT;
+  const stepped = Math.round(raw / ACTIVE_ACTOR_SOFT_LIMIT_STEP) * ACTIVE_ACTOR_SOFT_LIMIT_STEP;
+  return Math.max(MIN_ACTIVE_ACTOR_SOFT_LIMIT, Math.min(MAX_ACTIVE_ACTOR_SOFT_LIMIT, stepped));
+}
+
+export function setActiveActorSoftLimit(value: unknown): number {
+  const next = normalizeActiveActorSoftLimit(value);
+  ACTIVE_ACTOR_SOFT_LIMIT = next;
+  ENTITY_SOFT_LIMITS[EntityType.NPC] = next;
+  ENTITY_SOFT_LIMITS[EntityType.MONSTER] = next;
+  return next;
+}
+
+export function activeActorSoftLimit(): number {
+  return ACTIVE_ACTOR_SOFT_LIMIT;
+}
+
+export function activeActorSoftLimitScale(cap = activeActorSoftLimit()): number {
+  return Math.max(0, cap) / DEFAULT_ACTIVE_ACTOR_SOFT_LIMIT;
+}
+
+// Generation densities are authored as "count at default cap" and resolved at generation time.
+export function activeActorCountAtDefaultSoftLimit(countAtDefault: number, cap = activeActorSoftLimit()): number {
+  if (!Number.isFinite(countAtDefault) || countAtDefault <= 0) return 0;
+  return Math.max(0, Math.round(countAtDefault * activeActorSoftLimitScale(cap)));
+}
+
+export function fitActiveActorCounts(npcs: number, monsters: number, cap = activeActorSoftLimit()): { npcs: number; monsters: number } {
   const npcTarget = Math.max(0, Math.round(npcs));
   const monsterTarget = Math.max(0, Math.round(monsters));
   const total = npcTarget + monsterTarget;

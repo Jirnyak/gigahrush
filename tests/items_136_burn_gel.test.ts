@@ -34,7 +34,7 @@ test('burn gel is a small consumable treatment decision', () => {
   const state = makeGameState({ currentFloor: FloorLevel.LIVING, time: 136 });
 
   assert.equal(addItem(player, ITEM_ID, 1), true);
-  assert.equal(getInventorySlotActionInfo(player, 0)?.useLabel, 'E применить');
+  assert.equal(getInventorySlotActionInfo(player, 0)?.useLabel, 'Enter применить');
 
   useItem(player, 0, state.msgs, state.time, state, 7);
 

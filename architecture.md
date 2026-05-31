@@ -32,14 +32,14 @@ Critical runtime facts:
 - Floor generators return `{ world, entities, spawnX, spawnY }`.
 - Normal lift travel uses `systems/procedural_floors.ts` as a per-run vertical route across `z=-50..+50`. Existing `FloorLevel` values remain 6 story/base floors; authored design floors are 41 string-id route stops from `src/data/design_floors.ts`; unoccupied route positions are 54 seeded procedural/fallback specs with `z`, seed, geometry, main faction, anomaly and danger. Down decreases `z`; `VOID` is the final lowest stop at `z=-50`, `darkness` is the dark endgame route floor at `z=-48`, `podad` is the Herald-gated Hell route floor at `z=-40`, `underhell` is at `z=-38`, and `roof` is the highest stop at `z=+50`.
 - `systems/floor_memory.ts` keeps visited route stops alive by stable floor key. Hot entries keep their own live `World` object plus non-player/non-projectile entities; older entries are packed into RLE snapshots instead of being lost, so decals, bullet/blood marks, containers, opened doors and monsters survive ordinary floor travel for that exact floor. UI-only map exploration survives while its live `World` object survives, but packed/save restoration can restart exploration for the restored world. Browser saves include the packed floor-memory section and restore it before selecting the active floor; samosbor/rebuild paths update the active `World` and drop only stale parked memory for that same key.
-- Desktop input treats `Esc` as browser/pointer-lock territory, not as a gameplay/window key. `Enter` opens the game menu only from the normal gameplay screen and otherwise acts as back/close for open canvas windows; handled window keys are consumed so they do not fall through to the game menu. `E` is the interaction/confirm/send action, including Net Sphere chat submission.
+- Desktop input treats `Esc` as browser/pointer-lock territory, not as a gameplay/window key. `Enter` opens the game menu from normal gameplay and is the universal accept/confirm key inside canvas menus, including Net Sphere chat submission. `Backspace`/`Delete` are the universal back/close keys for canvas menus. Handled window keys are consumed so they do not fall through to the game menu. `E` stays reserved for in-world interaction: pickups, doors, NPCs, containers and aimed interactables.
 - `main.ts` owns the game loop and calls systems in fixed order.
 - `systems/camera.ts` owns transient runtime camera modes and resolves them to `CameraView` for render. The death camera is one mode of this system; future free-camera and cinematic modes should plug into the same API.
 - `systems/events.ts` is the current EventBus analogue: fixed-size ring buffers, public event publication, and query filters.
 - Shared `E` interaction goes through `systems/interactions.ts`; generated gambling machines, local computers, NPC table-game interfaces, NET-hack terminals, emergency panels, Net Terminal Gen and special floor interactions plug into that dispatcher.
-- `systems/interactive.ts` is the generic sparse cell-bound interactive layer. Definitions live in `src/data/interactive.ts`, explicit generation helpers live in `src/gen/interactive_placement.ts`, broken fixture placement lives in `src/gen/interactive_fixtures.ts`, and one `ContentInteractionHook` exposes feature-like objects and container adapters to the shared dispatcher. Current shipped adapters are transient: lazy `Feature.SINK` drinking, lazy `Feature.TOILET` needs relief, repair-pending broken sink/toilet fixtures, explicit `workbench_basic` placement and visible `WorldContainer` delegation. The contract is feature-first: floor generators own how many visual primitives exist and where they are, while `InteractiveDef` ids own what `E` does when a matching primitive is targeted. They do not change save shape.
+- `systems/interactive.ts` is the generic sparse cell-bound interactive layer. Definitions live in `src/data/interactive.ts`, explicit generation helpers live in `src/gen/interactive_placement.ts`, broken fixture placement lives in `src/gen/interactive_fixtures.ts`, and one `ContentInteractionHook` exposes feature-like objects and container adapters to the shared dispatcher. Current shipped adapters are transient: lazy `Feature.SINK` drinking, lazy `Feature.TOILET` needs relief, repair-pending broken sink/toilet fixtures, explicit `workbench_basic` placement and visible `WorldContainer` delegation. `src/data/floor_object_placement.ts` defines story-floor, design-route and procedural-geometry profiles for static decor features, explicit interactives, broken fixture overlays and craft-station subprofiles; `src/gen/floor_object_placement.ts` applies them once during generation through reachable bounded placement. Complex runtime-owned objects such as moving trains stay in their authored/anomaly systems. The contract is feature-first: floor generators own how many visual primitives exist and where they are, while `InteractiveDef` ids own what `E` does when a matching primitive is targeted. They do not change save shape.
 - `systems/alife.ts` owns persistent procedural NPC identity. A run creates a fixed compact NPC pool of `100_000` procedural identities, materializes only the active floor into live `entities`, folds live state back on transitions/rebuilds/saves, and records permanent deaths. Browser saves keep dead procedural A-Life ids with a current cap of `65_536`. `systems/npc_relations.ts` owns compact personal relation-to-player math shared by A-Life, quests and hostility. `alife.md` is the detailed design contract for this feature.
-- Save/load uses `systems/save_runtime.ts` and `systems/save_payload.ts`. Current save shape version is `13`; old or unversioned saves are rejected rather than migrated. `save.md` is the detailed persistence contract.
+- Save/load uses `systems/save_runtime.ts` and `systems/save_payload.ts`. Current save shape version is `14`; old or unversioned saves are rejected rather than migrated. `save.md` is the detailed persistence contract.
 - Existing content extensibility already exists in `registerSideQuest`, `registerZoneContent`, floor content manifests, `SAMOSBOR_VARIANTS`, `getSamosborBeatDefs()`, contract/economy registries, route/design-floor ids and `publishEvent`. `samosbor.md` is the detailed samosbor contract.
 
 ## 1.1 Project Bible And Honest Scope
@@ -217,7 +217,7 @@ Green files, safe for one agent:
 - New `src/gen/<floor>/<module>.ts`
 - New `src/data/<domain>_<module>.ts` or a new small domain file
 - New `src/entities/<monster>.ts`
-- New docs under `Docs/`
+- New docs under `gatbage/reference/`
 
 Yellow files, edit only with a narrow reason:
 
@@ -253,7 +253,7 @@ Current examples:
 - LIVING zone POIs: module calls `registerZoneContent()` in `src/gen/living/zone_content.ts`.
 - Samosbor variants/director: definitions live in `src/data/samosbor_variants.ts` and `src/data/samosbor_director.ts`; `systems/samosbor.ts` consumes active variants and bounded beats.
 - Events: systems call `publishEvent()`, consumers query ring buffers.
-- Interactive surfaces: definitions live in `src/data/interactive.ts`; generators call `placeInteractive()` / `placeInteractiveAt()` or fixture helpers such as `maybePlaceBrokenFixture()`; `systems/interactive.ts` owns sparse per-`World` instances and action handlers.
+- Interactive surfaces: definitions live in `src/data/interactive.ts`; broad static floor objects use `src/data/floor_object_placement.ts` plus `src/gen/floor_object_placement.ts`; local authored modules can still call `placeInteractive()` / `placeInteractiveAt()` or fixture helpers such as `maybePlaceBrokenFixture()`; `systems/interactive.ts` owns sparse per-`World` instances and action handlers.
 
 Standard shape for new registries:
 
@@ -566,9 +566,9 @@ System telemetry entry:
   last action flags
 ```
 
-Store the last 300 relevant samples, not infinite history. In browser runtime, dumps should go to debug UI, console, downloadable blob, or save data. In Node-side tooling, durable dumps should stay outside active docs unless an explicit orchestration/debug task asks for an archived `gatbage/Docs/AgentLogs/` record.
+Store the last 300 relevant samples, not infinite history. In browser runtime, dumps should go to debug UI, console, downloadable blob, or save data. In Node-side tooling, durable dumps should stay outside active docs unless an explicit orchestration/debug task asks for an archived `gatbage/history/agent_logs/` record.
 
-Historical `Docs/AgentLogs`, task statuses and prompts were consolidated into `appendix.md` and archived under `gatbage/`. Recreate those directories only for an explicit orchestration/debug-dump task; routine patches should keep their durable notes compact and update `appendix.md` only when the context will be useful later.
+Historical `gatbage/history/agent_logs`, task statuses and prompts were consolidated into `gatbage/history/root_notes/appendix.md` and archived under `gatbage/`. Recreate those directories only for an explicit orchestration/debug-dump task; routine patches should keep their durable notes compact and update `gatbage/history/root_notes/appendix.md` only when the context will be useful later.
 
 ## 16. Verification Checklist
 

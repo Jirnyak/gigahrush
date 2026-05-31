@@ -247,7 +247,7 @@ test('active kill quest reveals a radius around the nearest target monster marke
       id: 3,
       type: QuestType.KILL,
       giverId: 10,
-      giverName: 'Барни',
+      giverName: 'Сержант Баринов',
       desc: 'Убить тварь.',
       targetMonsterKind: MonsterKind.TVAR,
       killCount: 0,

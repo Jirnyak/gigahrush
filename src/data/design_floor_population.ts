@@ -9,7 +9,13 @@ import {
   ZoneFaction,
 } from '../core/types';
 import type { DesignFloorId, DesignFloorRouteDef } from './design_floors';
-import { ACTIVE_ACTOR_SOFT_LIMIT, ENTITY_SOFT_LIMITS, fitActiveActorCounts } from './entity_limits';
+import {
+  DEFAULT_ACTIVE_ACTOR_SOFT_LIMIT,
+  activeActorCountAtDefaultSoftLimit,
+  activeActorSoftLimit,
+  ENTITY_SOFT_LIMITS,
+  fitActiveActorCounts,
+} from './entity_limits';
 
 export interface DesignPlacementFieldProfile {
   noiseScale: number;
@@ -53,8 +59,9 @@ export interface DesignFloorPopulationProfile {
 }
 
 interface DesignFloorPopulationOverride {
-  npcTarget?: number;
-  monsterTarget?: number;
+  /** Numeric targets are authored at DEFAULT_ACTIVE_ACTOR_SOFT_LIMIT and scaled when the route is generated. */
+  npcTarget?: number | 'active_actor_cap';
+  monsterTarget?: number | 'active_actor_cap';
   npcMult?: number;
   monsterMult?: number;
   npcFactions?: readonly WeightedDesignValue<Faction>[];
@@ -70,8 +77,13 @@ interface DesignFloorPopulationOverride {
 
 type PlacementKind = 'social' | 'communal' | 'floor_69' | 'admin' | 'bank' | 'industrial' | 'silicon' | 'slime' | 'attic' | 'hell' | 'underhell' | 'void' | 'roof' | 'camp' | 'metro' | 'morgue' | 'crossroads';
 
-const ENTITY_NPC_CAP = ENTITY_SOFT_LIMITS[EntityType.NPC] ?? ACTIVE_ACTOR_SOFT_LIMIT;
-const ENTITY_MONSTER_CAP = ENTITY_SOFT_LIMITS[EntityType.MONSTER] ?? ACTIVE_ACTOR_SOFT_LIMIT;
+function entityNpcCap(): number {
+  return ENTITY_SOFT_LIMITS[EntityType.NPC] ?? activeActorSoftLimit();
+}
+
+function entityMonsterCap(): number {
+  return ENTITY_SOFT_LIMITS[EntityType.MONSTER] ?? activeActorSoftLimit();
+}
 
 const DARKNESS_CENTER = W >> 1;
 const PODAD_CENTER = W >> 1;
@@ -335,7 +347,7 @@ const COMMUNAL_MONSTER_ANCHORS: readonly DesignPlacementFieldAnchor[] = [
 const DESIGN_FLOOR_POPULATION_OVERRIDES: Readonly<Record<DesignFloorId, DesignFloorPopulationOverride>> = {
   roof: {
     npcTarget: 0,
-    monsterTarget: ACTIVE_ACTOR_SOFT_LIMIT,
+    monsterTarget: 'active_actor_cap',
     monsterBiasKinds: [MonsterKind.EYE, MonsterKind.SHADOW, MonsterKind.REBAR, MonsterKind.LAMPOGLAZ, MonsterKind.TONKAYA_TEN],
     monsterTags: ['roof', 'sky', 'antenna', 'signal', 'wind', 'open', 'weather'],
     monsterPlacementKind: 'roof',
@@ -1865,7 +1877,7 @@ const DESIGN_FLOOR_POPULATION_OVERRIDES: Readonly<Record<DesignFloorId, DesignFl
   },
   podad: {
     npcTarget: 0,
-    monsterTarget: ACTIVE_ACTOR_SOFT_LIMIT,
+    monsterTarget: 'active_actor_cap',
     monsterBiasKinds: [MonsterKind.OLGOY, MonsterKind.KOSTOREZ, MonsterKind.ZHORNAYA_TVAR, MonsterKind.CHERNOSLIZ, MonsterKind.POLZUN],
     monsterTags: ['hell', 'podad', 'meat', 'deep', 'living_tunnels', 'moving_walls', 'section_shift', 'gate'],
     monsterPlacementKind: 'hell',
@@ -1950,7 +1962,7 @@ const DESIGN_FLOOR_POPULATION_OVERRIDES: Readonly<Record<DesignFloorId, DesignFl
   },
   cantor_pustoty: {
     npcTarget: 0,
-    monsterTarget: ACTIVE_ACTOR_SOFT_LIMIT,
+    monsterTarget: 'active_actor_cap',
     monsterBiasKinds: [MonsterKind.SHADOW, MonsterKind.TONKAYA_TEN, MonsterKind.GLUBINNAYA_TEN, MonsterKind.LISHENNYY, MonsterKind.SPIRIT],
     monsterTags: ['void', 'cantor', 'fractal', 'gap_bridge', 'dust_island', 'low_light', 'route_pressure'],
     npcPlacementKind: 'void',
@@ -1986,7 +1998,7 @@ const DESIGN_FLOOR_POPULATION_OVERRIDES: Readonly<Record<DesignFloorId, DesignFl
   },
   darkness: {
     npcTarget: 0,
-    monsterTarget: ACTIVE_ACTOR_SOFT_LIMIT,
+    monsterTarget: 'active_actor_cap',
     monsterBiasKinds: [MonsterKind.SHADOW, MonsterKind.TONKAYA_TEN, MonsterKind.GLUBINNAYA_TEN, MonsterKind.LISHENNYY, MonsterKind.SLEPOGLAZ],
     monsterTags: ['dark', 'low_light', 'void', 'route_pressure', 'sound', 'noise', 'light', 'lamp', 'protocol'],
     monsterPlacementKind: 'void',
@@ -2012,6 +2024,11 @@ function clampInt(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, Math.round(value)));
 }
 
+function resolveActorTarget(value: number | 'active_actor_cap' | undefined, fallback: number): number {
+  if (value === 'active_actor_cap') return activeActorSoftLimit();
+  return activeActorCountAtDefaultSoftLimit(value ?? fallback);
+}
+
 function depth01(z: number): number {
   return Math.max(0, Math.min(1, Math.abs(z) / 50));
 }
@@ -2025,7 +2042,7 @@ function baseNpcTarget(route: DesignFloorRouteDef): number {
         : route.baseFloor === FloorLevel.MAINTENANCE ? 0.54
           : route.baseFloor === FloorLevel.HELL ? 0.16
             : 0;
-  return clampInt((260 + habitation * 4200) * baseFloorMult, 0, ENTITY_NPC_CAP);
+  return clampInt((260 + habitation * 4200) * baseFloorMult, 0, DEFAULT_ACTIVE_ACTOR_SOFT_LIMIT);
 }
 
 function baseMonsterTarget(route: DesignFloorRouteDef): number {
@@ -2036,7 +2053,7 @@ function baseMonsterTarget(route: DesignFloorRouteDef): number {
         : route.baseFloor === FloorLevel.KVARTIRY ? -180
           : route.baseFloor === FloorLevel.LIVING ? -120
             : 0;
-  return clampInt(220 + route.danger * 120 + edgePressure * 7200 + baseFloorBonus, 0, ENTITY_MONSTER_CAP);
+  return clampInt(220 + route.danger * 120 + edgePressure * 7200 + baseFloorBonus, 0, DEFAULT_ACTIVE_ACTOR_SOFT_LIMIT);
 }
 
 function defaultNpcFactions(route: DesignFloorRouteDef): readonly WeightedDesignValue<Faction>[] {
@@ -2536,8 +2553,8 @@ export function designFloorPopulationProfile(route: DesignFloorRouteDef): Design
   const override = DESIGN_FLOOR_POPULATION_OVERRIDES[route.id] ?? {};
   const npcBase = baseNpcTarget(route);
   const monsterBase = baseMonsterTarget(route);
-  const rawNpcTarget = clampInt(override.npcTarget ?? npcBase * (override.npcMult ?? 1), 0, ENTITY_NPC_CAP);
-  const rawMonsterTarget = clampInt(override.monsterTarget ?? monsterBase * (override.monsterMult ?? 1), 0, ENTITY_MONSTER_CAP);
+  const rawNpcTarget = clampInt(resolveActorTarget(override.npcTarget, npcBase * (override.npcMult ?? 1)), 0, entityNpcCap());
+  const rawMonsterTarget = clampInt(resolveActorTarget(override.monsterTarget, monsterBase * (override.monsterMult ?? 1)), 0, entityMonsterCap());
   const fitted = fitActiveActorCounts(rawNpcTarget, rawMonsterTarget);
   const npcTarget = fitted.npcs;
   const monsterTarget = fitted.monsters;

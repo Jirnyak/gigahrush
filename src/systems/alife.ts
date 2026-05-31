@@ -473,22 +473,8 @@ function playerRelationForRecord(record: AlifeNpcRecord, seed: number): number {
   return clampRelation(base + jitter);
 }
 
-function questCandidateChance(faction: Faction, occupation: Occupation): number {
-  let chance = 0.08;
-  if (faction === Faction.LIQUIDATOR || occupation === Occupation.HUNTER) chance += 0.08;
-  if (faction === Faction.SCIENTIST || occupation === Occupation.SCIENTIST) chance += 0.07;
-  if (
-    occupation === Occupation.COOK ||
-    occupation === Occupation.DOCTOR ||
-    occupation === Occupation.LOCKSMITH ||
-    occupation === Occupation.MECHANIC ||
-    occupation === Occupation.STOREKEEPER ||
-    occupation === Occupation.SECRETARY ||
-    occupation === Occupation.DIRECTOR
-  ) chance += 0.05;
-  if (occupation === Occupation.CHILD || occupation === Occupation.ALCOHOLIC) chance -= 0.04;
-  if (faction === Faction.WILD) chance -= 0.03;
-  return Math.max(0.04, Math.min(0.24, chance));
+function questCandidateChance(): number {
+  return 0.10;
 }
 
 function cashCapForProfile(
@@ -568,7 +554,7 @@ function createRecord(id: number, plan: AlifeFloorPlan, seed: number): AlifeNpcR
     money,
     accountRubles: Math.max(0, wealth - money),
     familyId: Math.floor((id - 1) / 4),
-    canGiveQuest: unit(seed, id, 94) < questCandidateChance(faction, occupation),
+    canGiveQuest: unit(seed, id, 94) < questCandidateChance(),
     weapon: loadout.weapon,
     inventory: mergeInventory(loadout.inventory, pockets),
     karma: initialNpcKarma(faction, occupation, unit(seed, id, 93)),

@@ -274,14 +274,14 @@ export function spendAttrPoint(e: Entity, attr: 'str' | 'agi' | 'int'): boolean 
 
 // ── XP for killing a monster (scales with monster level) ─────────
 const MONSTER_BASE_XP: Partial<Record<MonsterKind, number>> = {
-  [MonsterKind.SBORKA]:     30,
-  [MonsterKind.TVAR]:       60,
+  [MonsterKind.SBORKA]:     10,
+  [MonsterKind.TVAR]:       50,
   [MonsterKind.POLZUN]:    100,
   [MonsterKind.BETONNIK]:  240,
   [MonsterKind.BETONOED]:  130,
-  [MonsterKind.ZOMBIE]:     40,
-  [MonsterKind.DIKIY_MERTVYAK]: 42,
-  [MonsterKind.EYE]:        50,
+  [MonsterKind.ZOMBIE]:     14,
+  [MonsterKind.DIKIY_MERTVYAK]: 16,
+  [MonsterKind.EYE]:        35,
   [MonsterKind.NIGHTMARE]:  90,
   [MonsterKind.SHADOW]:     70,
   [MonsterKind.TONKAYA_TEN]: 58,
@@ -291,7 +291,7 @@ const MONSTER_BASE_XP: Partial<Record<MonsterKind, number>> = {
   [MonsterKind.SOBRANNYY]: 220,
   [MonsterKind.MANCOBUS]:  400,
   [MonsterKind.HERALD]:    360,
-  [MonsterKind.CREATOR]:  1000,
+  [MonsterKind.CREATOR]:  10_000,
   [MonsterKind.SPIRIT]:    80,
   [MonsterKind.LOZHNYY_DUKH]: 95,
   [MonsterKind.IDOL]:       20,
@@ -313,13 +313,13 @@ const MONSTER_BASE_XP: Partial<Record<MonsterKind, number>> = {
 };
 
 export function xpForMonsterKill(kind: MonsterKind, monsterLevel: number): number {
-  const base = MONSTER_BASE_XP[kind] ?? 20;
-  return Math.round(base * (1 + 0.15 * (monsterLevel - 1)));
+  const base = MONSTER_BASE_XP[kind] ?? 10;
+  return Math.round(base * (1 + 0.22 * (monsterLevel - 1)));
 }
 
 // ── XP for killing an NPC (based on NPC level) ──────────────────
 export function xpForNpcKill(npcLevel: number): number {
-  return Math.round(10 * (1 + 0.15 * (npcLevel - 1)));
+  return Math.round(10 * (1 + 0.22 * (npcLevel - 1)));
 }
 
 // ── Zone level calculation ───────────────────────────────────────

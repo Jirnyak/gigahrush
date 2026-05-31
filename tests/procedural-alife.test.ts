@@ -16,6 +16,7 @@ import {
 } from '../src/systems/alife';
 import { setFloorRunState } from '../src/systems/procedural_floors';
 import { isFloor69FemaleSprite } from '../src/entities/procedural_visuals';
+import { testGenerationMatrix } from './generator_helpers';
 
 function socialProceduralSpec(): ProceduralFloorSpec {
   return {
@@ -57,7 +58,7 @@ function ordinaryNpcCount(entities: readonly { type: EntityType; plotNpcId?: str
   ).length;
 }
 
-test('procedural route NPC templates materialize through A-Life and keep dead slots empty', () => {
+testGenerationMatrix('procedural route NPC templates materialize through A-Life and keep dead slots empty', () => {
   const spec = socialProceduralSpec();
   assert.equal(floorRunZAllowsNpcs(spec.z), true);
 
@@ -85,7 +86,7 @@ test('procedural route NPC templates materialize through A-Life and keep dead sl
   assert.equal(rematerialized.length, materialized.length - 1, 'dead procedural slot should stay empty until explicit migration');
 });
 
-test('procedural route templates are suppressed when the active floor has no A-Life records', () => {
+testGenerationMatrix('procedural route templates are suppressed when the active floor has no A-Life records', () => {
   const spec = socialProceduralSpec();
   const state = stateForSpec(spec);
   const floorKey = `procedural:${spec.key}`;
@@ -103,7 +104,7 @@ test('procedural route templates are suppressed when the active floor has no A-L
   assert.equal(generated.entities.some(entity => entity.type === EntityType.NPC && entity.alifeId !== undefined), false);
 });
 
-test('floor 69 adult sprite templates survive A-Life materialization', () => {
+testGenerationMatrix('floor 69 adult sprite templates survive A-Life materialization', () => {
   const state = { currentFloor: FloorLevel.MAINTENANCE } as GameState;
   setFloorRunState(state, { runSeed: 17, currentZ: -4 }, FloorLevel.MAINTENANCE);
   setAlifeState(state, { seed: 12345, total: 100_000 });

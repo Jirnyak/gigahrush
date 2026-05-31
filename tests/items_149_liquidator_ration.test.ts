@@ -39,7 +39,7 @@ test('using liquidator ration spends a high-nutrition field meal', () => {
   const state = makeGameState({ currentFloor: FloorLevel.MAINTENANCE, time: 149 });
 
   assert.equal(addItem(player, ITEM_ID, 1), true);
-  assert.equal(getInventorySlotActionInfo(player, 0)?.useLabel, 'E применить');
+  assert.equal(getInventorySlotActionInfo(player, 0)?.useLabel, 'Enter применить');
 
   useItem(player, 0, state.msgs, state.time, state, 12);
 

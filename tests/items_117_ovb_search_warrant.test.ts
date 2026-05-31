@@ -35,7 +35,7 @@ test('ovb search warrant can be sold as high-risk document leverage', () => {
   const state = makeGameState({ currentFloor: FloorLevel.LIVING, time: 117 });
 
   assert.equal(addItem(player, ITEM_ID, 1), true);
-  assert.equal(getInventorySlotActionInfo(player, 0)?.useLabel, 'E предъявить');
+  assert.equal(getInventorySlotActionInfo(player, 0)?.useLabel, 'Enter предъявить');
 
   useItem(player, 0, state.msgs, state.time, state);
 

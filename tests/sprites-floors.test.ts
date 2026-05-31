@@ -20,6 +20,7 @@ import {
 import { generateSprites } from '../src/render/sprites';
 import { generateTextures } from '../src/render/textures';
 import { rebuildWorld } from '../src/systems/samosbor';
+import { testGenerationMatrix } from './generator_helpers';
 
 const cachedFloors = new Map<string, ReturnType<typeof generateFloor>>();
 let cachedFloor69: ReturnType<typeof generateDesignFloor> | undefined;
@@ -48,10 +49,23 @@ function spriteHash(sprite: Uint32Array): number {
   return h >>> 0;
 }
 
+function alphaMaskHash(sprite: Uint32Array): number {
+  let h = 2166136261;
+  for (let i = 0; i < sprite.length; i++) {
+    h ^= (sprite[i] >>> 24) === 0 ? 0 : 1;
+    h = Math.imul(h, 16777619) >>> 0;
+  }
+  return h >>> 0;
+}
+
 function opaquePixels(sprite: Uint32Array): number {
   let opaque = 0;
   for (const px of sprite) if ((px >>> 24) !== 0) opaque++;
   return opaque;
+}
+
+function spritePixel(sprite: Uint32Array, x: number, y: number): number {
+  return sprite[y * S + x];
 }
 
 test('sprite registry and generated sheet stay aligned', () => {
@@ -221,6 +235,127 @@ test('F69 authored NPC sprites stay on the atlas path instead of default procedu
   assert.equal(generateProceduralEntitySprite(authoredNpc), null);
 });
 
+test('ordinary procedural NPC sprites keep legacy humanoid silhouettes with seeded color variation', () => {
+  const sprites = generateSprites();
+  const cases: Entity[] = [
+    {
+      id: 7101,
+      type: EntityType.NPC,
+      x: 1,
+      y: 1,
+      angle: 0,
+      pitch: 0,
+      alive: true,
+      speed: 1,
+      sprite: Occupation.DOCTOR,
+      occupation: Occupation.DOCTOR,
+      faction: undefined,
+      isFemale: true,
+      plotNpcId: 'olga',
+      spriteSeed: 11,
+    },
+    {
+      id: 7102,
+      type: EntityType.NPC,
+      x: 2,
+      y: 1,
+      angle: 0,
+      pitch: 0,
+      alive: true,
+      speed: 1,
+      sprite: Occupation.HUNTER,
+      occupation: Occupation.HUNTER,
+      faction: undefined,
+      isFemale: false,
+      plotNpcId: 'barni',
+      spriteSeed: 12,
+    },
+    {
+      id: 7103,
+      type: EntityType.NPC,
+      x: 3,
+      y: 1,
+      angle: 0,
+      pitch: 0,
+      alive: true,
+      speed: 1,
+      sprite: Occupation.SCIENTIST,
+      occupation: Occupation.SCIENTIST,
+      faction: undefined,
+      isFemale: false,
+      plotNpcId: 'yakov',
+      spriteSeed: 13,
+    },
+    {
+      id: 7104,
+      type: EntityType.NPC,
+      x: 4,
+      y: 1,
+      angle: 0,
+      pitch: 0,
+      alive: true,
+      speed: 1,
+      sprite: Occupation.ALCOHOLIC,
+      occupation: Occupation.ALCOHOLIC,
+      faction: undefined,
+      isFemale: false,
+      plotNpcId: 'vanka',
+      spriteSeed: 14,
+    },
+  ];
+  const generatedByPlotNpcId = new Map<string, Uint32Array>();
+
+  for (const entity of cases) {
+    const generated = generateProceduralEntitySprite(entity);
+    assert.ok(generated, `${entity.plotNpcId} should still get a seeded procedural NPC texture`);
+    generatedByPlotNpcId.set(entity.plotNpcId ?? '', generated);
+    const atlas = sprites[entity.sprite];
+    assert.equal(alphaMaskHash(generated), alphaMaskHash(atlas), `${entity.plotNpcId} should keep the legacy atlas silhouette`);
+    assert.equal(opaquePixels(generated), opaquePixels(atlas), `${entity.plotNpcId} should not grow needle limbs outside the old mask`);
+    assert.notEqual(spriteHash(generated), spriteHash(atlas), `${entity.plotNpcId} should keep per-entity color/detail variation`);
+  }
+
+  const olga = generatedByPlotNpcId.get('olga')!;
+  assert.equal(spritePixel(olga, 30, 15), spritePixel(sprites[Occupation.DOCTOR], 30, 15), 'Olga should keep the old left eye pixel');
+  assert.equal(spritePixel(olga, 34, 15), spritePixel(sprites[Occupation.DOCTOR], 34, 15), 'Olga should keep the old right eye pixel');
+
+  const yakov = generatedByPlotNpcId.get('yakov')!;
+  assert.equal(spritePixel(yakov, 29, 15), spritePixel(sprites[Occupation.SCIENTIST], 29, 15), 'Yakov should keep the old left glasses pixel');
+  assert.equal(spritePixel(yakov, 30, 15), spritePixel(sprites[Occupation.SCIENTIST], 30, 15), 'Yakov should keep the old left pupil pixel');
+  assert.equal(spritePixel(yakov, 34, 15), spritePixel(sprites[Occupation.SCIENTIST], 34, 15), 'Yakov should keep the old right pupil pixel');
+  assert.equal(spritePixel(yakov, 35, 15), spritePixel(sprites[Occupation.SCIENTIST], 35, 15), 'Yakov should keep the old right glasses pixel');
+
+  const vanka = generatedByPlotNpcId.get('vanka')!;
+  assert.equal(spritePixel(vanka, 32, 18), spritePixel(sprites[Occupation.ALCOHOLIC], 32, 18), 'Vanka should keep the old red nose pixel');
+
+  const vankaA = generateProceduralEntitySprite(cases[3]);
+  const vankaB = generateProceduralEntitySprite({ ...cases[3], id: 7105, spriteSeed: 15 });
+  assert.ok(vankaA && vankaB);
+  assert.notEqual(spriteHash(vankaA), spriteHash(vankaB), 'Vanka variants should remain seeded, not one fixed atlas copy');
+});
+
+test('cult visual NPCs keep the newer procedural hood treatment', () => {
+  const sprites = generateSprites();
+  const pilgrim: Entity = {
+    id: 7201,
+    type: EntityType.NPC,
+    x: 1,
+    y: 1,
+    angle: 0,
+    pitch: 0,
+    alive: true,
+    speed: 1,
+    sprite: Occupation.PILGRIM,
+    occupation: Occupation.PILGRIM,
+    isFemale: false,
+    spriteSeed: 21,
+  };
+  const generated = generateProceduralEntitySprite(pilgrim);
+
+  assert.ok(generated);
+  assert.notEqual(alphaMaskHash(generated), alphaMaskHash(sprites[Occupation.PILGRIM]));
+});
+
 test('floor manifest validates known floors and rejects invalid ids', () => {
   assert.equal(isFloorLevel(FloorLevel.MINISTRY), true);
   assert.equal(isFloorLevel(FloorLevel.VOID), true);
@@ -229,7 +364,7 @@ test('floor manifest validates known floors and rejects invalid ids', () => {
   assert.equal(isFloorLevel('2'), false);
 });
 
-test('all floor generators return playable spawn cells and live actors', () => {
+testGenerationMatrix('all floor generators return playable spawn cells and live actors', () => {
   const floors = [
     FloorLevel.MINISTRY,
     FloorLevel.KVARTIRY,
@@ -256,7 +391,7 @@ test('all floor generators return playable spawn cells and live actors', () => {
   }
 });
 
-test('living generation places AG89 Istotit supply cache quest content', () => {
+testGenerationMatrix('living generation places AG89 Istotit supply cache quest content', () => {
   const generated = floorForRead(FloorLevel.LIVING);
   const plotNpcIds = new Set(generated.entities
     .filter(e => e.type === EntityType.NPC && e.plotNpcId)
@@ -268,7 +403,7 @@ test('living generation places AG89 Istotit supply cache quest content', () => {
   }
 });
 
-test('living start tutorial rooms keep samosbor-proof hermowalls', () => {
+testGenerationMatrix('living start tutorial rooms keep samosbor-proof hermowalls', () => {
   const generated = floorForRead(FloorLevel.LIVING);
   for (const name of ['Актовый зал', 'Оружейная']) {
     const room = generated.world.rooms.find(r => r?.name === name);
@@ -293,7 +428,27 @@ test('living start tutorial rooms keep samosbor-proof hermowalls', () => {
   }
 });
 
-test('living macro routes keep landmarks, lifts and apartment shelters reachable', () => {
+testGenerationMatrix('living start tutorial hall exposes a public low-level loot locker', () => {
+  const generated = floorForRead(FloorLevel.LIVING);
+  const hall = generated.world.rooms.find(room => room?.name === 'Актовый зал');
+  assert.ok(hall, 'act hall should be generated');
+  const locker = generated.world.containers.find(container => container.name === 'Учебный шкафчик вылазки');
+  assert.ok(locker, 'tutorial hall should contain a starter locker');
+  const idx = generated.world.idx(locker.x, locker.y);
+  const lowLevelIds = new Set(['water', 'bread', 'bandage', 'chalk', 'cigs']);
+
+  assert.equal(locker.kind, ContainerKind.EMERGENCY_BOX);
+  assert.equal(locker.access, 'public');
+  assert.equal(locker.discovered, true);
+  assert.equal(locker.roomId, hall.id);
+  assert.equal(generated.world.containerMap.get(idx)?.includes(locker.id), true);
+  assert.equal(generated.world.features[idx], Feature.SHELF);
+  assert.equal(locker.inventory.length >= 2 && locker.inventory.length <= 3, true);
+  assert.equal(locker.inventory.every(item => lowLevelIds.has(item.defId) && item.count > 0), true);
+  assert.equal(locker.x <= hall.x + 2 && locker.y >= hall.y + hall.h - 3, true, 'starter locker should sit in a tutorial-room corner');
+});
+
+testGenerationMatrix('living macro routes keep landmarks, lifts and apartment shelters reachable', () => {
   const generated = floorForRead(FloorLevel.LIVING);
   const { world } = generated;
   const audit = auditReachability(world, world.idx(Math.floor(generated.spawnX), Math.floor(generated.spawnY)));
@@ -361,7 +516,7 @@ test('living macro routes keep landmarks, lifts and apartment shelters reachable
   assert.equal(shell.shellCells > 0, true, 'living generation should expose walkable shelter shell cells');
 });
 
-test('living start tutorial desks are billboards, not item drops', () => {
+testGenerationMatrix('living start tutorial desks are billboards, not item drops', () => {
   const generated = floorForRead(FloorLevel.LIVING);
   const tutorDesks = generated.entities.filter(e =>
     e.type === EntityType.BILLBOARD &&
@@ -376,7 +531,7 @@ test('living start tutorial desks are billboards, not item drops', () => {
     e.inventory?.some(slot => slot.defId === 'ammo_9mm' && slot.count > 0)));
 });
 
-test('living art study sprites are billboards, not empty item drops', () => {
+testGenerationMatrix('living art study sprites are billboards, not empty item drops', () => {
   const generated = floorForRead(FloorLevel.LIVING);
   const artProps = generated.entities.filter(e =>
     e.type === EntityType.BILLBOARD &&
@@ -387,7 +542,7 @@ test('living art study sprites are billboards, not empty item drops', () => {
   assert.equal(artProps.every(e => e.spriteScale === 0.88 && !e.inventory?.length), true);
 });
 
-test('floor 69 floor screens are registered as signal screen cells', () => {
+testGenerationMatrix('floor 69 floor screens are registered as signal screen cells', () => {
   const generated = floor69ForRead();
   const screenFeatureCells: number[] = [];
   for (let i = 0; i < generated.world.features.length; i++) {
@@ -400,7 +555,7 @@ test('floor 69 floor screens are registered as signal screen cells', () => {
   }
 });
 
-test('non-living samosbor rebuild replaces stale generated actors but keeps player', () => {
+testGenerationMatrix('non-living samosbor rebuild replaces stale generated actors but keeps player', () => {
   const generated = generateFloor(FloorLevel.MAINTENANCE);
   const entities = [...generated.entities];
   entities.push(

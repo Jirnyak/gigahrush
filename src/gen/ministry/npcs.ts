@@ -8,6 +8,7 @@ import {
 } from '../../core/types';
 import { World } from '../../core/world';
 import { freshNeeds, randomName } from '../../data/catalog';
+import { activeActorCountAtDefaultSoftLimit } from '../../data/entity_limits';
 import { rng } from '../shared';
 import { gaussianLevel, randomRPG, getMaxHp } from '../../systems/rpg';
 import { canSpawnEntityType, entitySpawnSlots } from '../../systems/entity_limits';
@@ -15,6 +16,8 @@ import { type PlotNpcDef, registerSideQuest } from '../../data/plot';
 import { spawnArkhivariusKafkin } from './arkhivarius';
 import { spawnPolkovnikStreltsov } from './streltsov';
 import { spawnBufetchitsaGlafira } from './glafira';
+
+const MINISTRY_NPC_TARGET_AT_DEFAULT_CAP = 1000;
 
 /* ── Weapon loadout for ministry NPCs ─────────────────────────── */
 function ministryWeaponLoadout(faction: Faction, occupation: Occupation): { weapon: string; inv: { defId: string; count: number }[] } {
@@ -114,7 +117,7 @@ registerSideQuest('rotenbergov', ROTENBERGOV_DEF, [
 export function spawnMinistryNpcs(
   world: World, entities: Entity[], nextId: { v: number },
 ): void {
-  const npcTarget = entitySpawnSlots(entities, EntityType.NPC, 1000);
+  const npcTarget = entitySpawnSlots(entities, EntityType.NPC, activeActorCountAtDefaultSoftLimit(MINISTRY_NPC_TARGET_AT_DEFAULT_CAP));
   let npcCount = 0;
 
   /* ── Regular NPCs: directors, secretaries, scientists, liquidators ── */

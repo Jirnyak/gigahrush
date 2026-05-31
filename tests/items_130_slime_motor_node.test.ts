@@ -48,5 +48,5 @@ test('slime motor node is a trade sample the player can save or risk opening', (
   assert.equal(info?.category, 'trade');
   assert.equal(info?.canDrop, true);
   assert.equal(info?.canUse, true);
-  assert.equal(info?.useLabel, 'E вскрыть пробу');
+  assert.equal(info?.useLabel, 'Enter вскрыть пробу');
 });

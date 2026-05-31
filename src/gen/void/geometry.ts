@@ -128,6 +128,16 @@ const VOID_CHAOS_LINKS: readonly (readonly [number, number, number])[] = [
   [8, 14, 69], [10, 15, 70], [12, 2, 71], [15, 4, 72],
 ];
 
+const VOID_ATTRACTOR_FIELDS: readonly (readonly [number, number, number, number])[] = [
+  [222, 246, 42, 201],
+  [456, 238, 48, 202],
+  [720, 278, 54, 203],
+  [884, 542, 46, 204],
+  [676, 782, 52, 205],
+  [412, 724, 44, 206],
+  [164, 548, 50, 207],
+];
+
 const VOID_REVEAL_SHELLS: readonly (readonly [number, number, number, number])[] = [
   [SPAWN_X, SPAWN_Y, 18, 0.34],
   [SPAWN_X, SPAWN_Y - 21, 28, 0.56],
@@ -867,6 +877,46 @@ function expandVoidChaoticGeometry(world: World): void {
   for (const spec of VOID_CHAOS_POCKETS) carveChaosSpiralTendril(world, mask, spec);
 }
 
+function expandVoidAttractorFields(world: World): void {
+  const mask = buildVoidProtectedMask(world);
+  for (const [cx, cy, radius, serial] of VOID_ATTRACTOR_FIELDS) {
+    carveVoidFootprintDisc(world, mask, cx, cy, Math.max(6, Math.floor(radius * 0.18)));
+    for (let arm = 0; arm < 3; arm++) {
+      const phase = serial * 0.17 + arm * Math.PI * 2 / 3;
+      let px = world.wrap(cx + Math.round(Math.cos(phase) * radius * 0.22));
+      let py = world.wrap(cy + Math.round(Math.sin(phase) * radius * 0.22));
+      const steps = radius * 5;
+      for (let step = 1; step <= steps; step++) {
+        const t = step / steps;
+        const angle = phase + t * Math.PI * (2.4 + arm * 0.35);
+        const wave = Math.sin(t * Math.PI * 5 + serial) * radius * 0.16;
+        const r = radius * (0.2 + t * 0.95);
+        const x = world.wrap(cx + Math.round(Math.cos(angle) * r - Math.sin(angle) * wave));
+        const y = world.wrap(cy + Math.round(Math.sin(angle) * r + Math.cos(angle) * wave));
+        carveVoidFootprintBand(world, mask, px, py, x, y, step % 37 === 0 ? 2 : 1);
+        if (step % 53 === 0) {
+          carveVoidFootprintDisc(world, mask, x, y, 4 + ((serial + arm + step) % 3));
+          const ci = world.idx(x, y);
+          if (world.cells[ci] === Cell.FLOOR && world.features[ci] === Feature.NONE) {
+            world.features[ci] = (serial + step) % 2 === 0 ? Feature.SCREEN : Feature.APPARATUS;
+          }
+        }
+        px = x;
+        py = y;
+      }
+    }
+
+    const ringSpec: ChaosPocketSpec = {
+      x: cx,
+      y: cy,
+      radius: Math.max(14, Math.floor(radius * 0.46)),
+      kind: serial % 2 === 0 ? 'ring' : 'diamond',
+      serial,
+    };
+    stampChaosPocketWalls(world, mask, ringSpec);
+  }
+}
+
 function expandVoidMegastructureFootprint(world: World): void {
   const mask = buildVoidProtectedMask(world);
   let last: readonly [number, number] = [SPAWN_X, SPAWN_Y];
@@ -976,6 +1026,7 @@ export function buildVoidGeometry(world: World): VoidGeometryLayout {
   placeVoidLifts(world);
   expandVoidMegastructureFootprint(world);
   expandVoidChaoticGeometry(world);
+  expandVoidAttractorFields(world);
   bridgeVoidProxyPercolation(world);
   bridgeVoidPercolationComponents(world);
   addDeadLampRows(world);

@@ -45,7 +45,7 @@ test('roks47 flamethrower uses napalm readiness and armory refill pressure', () 
 
   const readiness = getWeaponReadiness(player);
   assert.equal(readiness.resourceLabel, 'напалм 2');
-  assert.equal(readiness.damageLabel, '5x2');
+  assert.equal(readiness.damageLabel, '7x2');
   assert.equal(countAmmo(player), 2);
 
   const refill = FACTORY_BY_ID.armory_bench.recipes.find(recipe => recipe.id === 'fill_roks_tank');

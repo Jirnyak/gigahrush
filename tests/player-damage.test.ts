@@ -60,6 +60,15 @@ test('player projectile damage keeps projectile source and actionable shooter de
   assert.equal(formatLastPlayerDamageCause(state, 18), 'Дробь от Ликвидатор: -8');
 });
 
+test('player damage detail hides binary float tails', () => {
+  const state = makeGameState({ time: 19, tick: 56 });
+
+  recordPlayerDamage(state, undefined, 1.23456789, 'Тестовый ожог: -1.23456789');
+
+  assert.equal(state.lastDamage?.amount, 1.2);
+  assert.equal(formatLastPlayerDamageCause(state, 19), 'Тестовый ожог: -1.2');
+});
+
 test('needs starvation records player damage cause', () => {
   const state = makeGameState({ time: 21, tick: 60 });
   const player = makeTestPlayer({

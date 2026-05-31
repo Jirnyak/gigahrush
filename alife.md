@@ -120,7 +120,7 @@ Current fields:
 - `occupation`: runtime sprite/role.
 - `name`, `female`: display and grammar.
 - `familyId`: current compact family grouping.
-- `canGiveQuest`: active/authored quest affordance; persistent A-Life NPCs get a stable bounded candidate roll instead of a special quest-giver caste or a universal offer flag.
+- `canGiveQuest`: active/authored quest affordance; persistent A-Life NPCs get a stable `10%` candidate roll instead of a special quest-giver caste or a universal offer flag.
 - `level`, `str`, `agi`, `int`: RPG state.
 - `hp`, `maxHp`: folded health.
 - `money`, `accountRubles`, `weapon`, `inventory`: folded cash/account economy and loadout.
@@ -279,7 +279,7 @@ Current shipped behavior:
 
 - Authored named NPCs keep `plotNpcId`.
 - A-Life records killed `plotNpcId` values and filters those named NPCs on later floor generation.
-- Persistent A-Life NPCs can be quest candidates through their stable `canGiveQuest` affordance. It is not a separate population caste and it is not true for every persistent NPC.
+- Persistent A-Life NPCs can be quest candidates through their stable `canGiveQuest` affordance. It is a `10%` roll, not a separate population caste and not true for every persistent NPC.
 
 Target behavior:
 

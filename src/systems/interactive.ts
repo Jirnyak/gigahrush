@@ -10,6 +10,7 @@ import {
 import { World } from '../core/world';
 import {
   getInteractiveDef,
+  interactiveDefIdForSurfaceFlags,
   type InteractiveActionDef,
   type InteractiveDef,
   type InteractiveSurfaceLayer,
@@ -123,6 +124,15 @@ function attachInstance(world: World, instance: InteractiveInstance): Interactiv
   return instance;
 }
 
+function markSurfaceFlag(world: World, idx: number, def: InteractiveDef): void {
+  if (!def.surfaceFlag) return;
+  const before = world.surfaceFlags[idx];
+  const after = before | def.surfaceFlag;
+  if (after === before) return;
+  world.surfaceFlags[idx] = after;
+  world.surfaceVersion = (world.surfaceVersion + 1) | 0;
+}
+
 function existingAt(world: World, idx: number, defId: string, containerId?: number): InteractiveInstance | undefined {
   return worldState(world).byIdx.get(idx)?.find(instance =>
     instance.defId === defId && (containerId === undefined || instance.containerId === containerId),
@@ -140,6 +150,7 @@ export function placeInteractive(world: World, draft: PlaceInteractiveDraft): In
     if (!canPlaceFeature(world, idx, def.visual.feature, draft.forceFeature === true)) return null;
     if (world.features[idx] !== def.visual.feature) world.setFeatureAt(idx, def.visual.feature);
   }
+  markSurfaceFlag(world, idx, def);
 
   const state = worldState(world);
   return attachInstance(world, {
@@ -186,6 +197,14 @@ export function removeInteractiveAt(
 }
 
 function ensureAutoFeatureInstance(world: World, idx: number): void {
+  const flaggedDefId = interactiveDefIdForSurfaceFlags(world.surfaceFlags[idx] ?? 0);
+  if (flaggedDefId && !existingAt(world, idx, flaggedDefId)) {
+    const def = getInteractiveDef(flaggedDefId);
+    if (!def || def.visual.kind !== 'feature' || world.features[idx] === def.visual.feature) {
+      placeInteractive(world, { defId: flaggedDefId, x: idx % W, y: (idx / W) | 0 });
+    }
+  }
+
   const feature = world.features[idx] as Feature;
   const defId = autoFeatureDefs.get(feature);
   if (!defId || existingAt(world, idx, defId)) return;
@@ -296,6 +315,8 @@ function publishInteractiveEvent(
       interactiveId: resolved.instance.id,
       interactiveDefId: resolved.def.id,
       actionId: action.id,
+      recipeId: action.recipeId,
+      recipeSourceId: action.recipeSourceId,
       containerId: resolved.container?.id,
     },
   });
@@ -357,6 +378,46 @@ function runOpenContainer(ctx: ContentInteractionContext, resolved: ResolvedInte
   return { handled: true, openedOverlay: true };
 }
 
+function runOpenCraftMenu(ctx: ContentInteractionContext, resolved: ResolvedInteractive, action: InteractiveActionDef): ContentInteractionResult {
+  if (!action.craftMode || !action.craftStation) return runMessage(ctx, resolved, action);
+  if (!ctx.openCraftMenu) {
+    pushMsg(ctx.state, action.kind === 'open_disassembly_menu'
+      ? 'Верстак найден, но меню разборки еще не подключено.'
+      : 'Станок найден, но меню крафта еще не подключено.', '#888');
+    publishInteractiveEvent(ctx, resolved, action);
+    return { handled: true };
+  }
+  ctx.openCraftMenu({
+    mode: action.craftMode,
+    station: action.craftStation,
+    sourceInteractiveId: resolved.instance.id,
+    sourceDefId: resolved.def.id,
+  });
+  publishInteractiveEvent(ctx, resolved, action);
+  return { handled: true, openedOverlay: true };
+}
+
+function runLearnRecipe(ctx: ContentInteractionContext, resolved: ResolvedInteractive, action: InteractiveActionDef): ContentInteractionResult {
+  if (!ctx.learnRecipe) {
+    pushMsg(ctx.state, action.message ?? 'Вы читаете рецепт.', action.color);
+    publishInteractiveEvent(ctx, resolved, action);
+    return { handled: true };
+  }
+  const learned = ctx.learnRecipe({
+    recipeId: action.recipeId,
+    recipeSourceId: action.recipeSourceId,
+    sourceInteractiveId: resolved.instance.id,
+    sourceDefId: resolved.def.id,
+  });
+  pushMsg(
+    ctx.state,
+    learned ? (action.message ?? 'Рецепт записан.') : 'Рецепт уже известен',
+    learned ? action.color : '#888',
+  );
+  publishInteractiveEvent(ctx, resolved, action);
+  return { handled: true };
+}
+
 function runAction(ctx: ContentInteractionContext, resolved: ResolvedInteractive, action: InteractiveActionDef): ContentInteractionResult {
   if (cooldownBlocks(resolved.instance, ctx.state)) {
     pushMsg(ctx.state, 'Объект еще не готов.', '#888');
@@ -368,6 +429,8 @@ function runAction(ctx: ContentInteractionContext, resolved: ResolvedInteractive
   else if (action.kind === 'relieve') result = runRelieve(ctx, resolved, action);
   else if (action.kind === 'repair_pending') result = runMessage(ctx, resolved, action);
   else if (action.kind === 'open_container') result = runOpenContainer(ctx, resolved, action);
+  else if (action.kind === 'open_craft_menu' || action.kind === 'open_disassembly_menu') result = runOpenCraftMenu(ctx, resolved, action);
+  else if (action.kind === 'learn_recipe') result = runLearnRecipe(ctx, resolved, action);
   else result = runMessage(ctx, resolved, action);
 
   if (result.handled) applyCooldown(resolved.instance, action, ctx.state);

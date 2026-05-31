@@ -36,6 +36,8 @@ Before changing gameplay, content, generation, systems, rendering, save/load, or
 3. Read the relevant source files under `src/`; never implement from docs alone.
 4. Check `git status --short` and do not overwrite unrelated dirty work.
 
+Default search/read scope is code and primary docs: root `*.md`, `src/`, `tests/`, `scripts/`, `package.json` and task-specific files. Do not search or read `gatbage/**`, `dist/**`, `itch/**`, `pikabu/**`, `portal/**` or `screenshots/**` unless the user explicitly asks for archive/media/release context or a listed task area below requires a specific file there. Normal `rg` is intentionally scoped by `.rgignore`; use an explicit path or `--no-ignore` only when the task needs archived/generated material.
+
 Read additional docs only when relevant to the task:
 
 | Task area | Read |
@@ -49,7 +51,7 @@ Read additional docs only when relevant to the task:
 | Samosbor warning, shelter, local rebuild, variants, aftermath | `samosbor.md` |
 | Save/load shape, `localStorage`, payload sections, sanitization | `save.md` |
 | Vertical route, route keys, floor memory, geometry ownership | `floors.md` |
-| Procedural floor anomalies, cellular-world effects, anomaly runtime | `anomalies.md`, `Docs/ProceduralFloors/` |
+| Procedural floor anomalies, cellular-world effects, anomaly runtime | `anomalies.md`; use `gatbage/reference/procedural_floors/` only for authoring docs |
 | Economy, resources, factories, production, caravans, banking, markets | `economics.md` |
 | Numeric tuning, rewards, HP/XP, scarcity, progression pressure | `balance.md` |
 | Items, weapons, PSI, resources, loot, production inputs | `items.md` |
@@ -62,15 +64,15 @@ Read additional docs only when relevant to the task:
 | Mobile input, touch controls, viewport, mobile validation | `mobile.md` |
 | Optional online mode design boundaries; single-player remains primary | `online.md` |
 | Optional Cloudflare Net Sphere deployment, Worker/D1, network payloads | `cloudflare.md` |
-| Player-facing text, lore voice, scenario/domain packets | `scenarist.md`, `Docs/ScenarioWriters/README.md` |
+| Player-facing text, lore voice, scenario/domain packets | `scenarist.md`; use `gatbage/reference/scenario_writers/README.md` only for broad text-pass work |
 | Visual/audio/UI/atmosphere taste decisions | `taste.md` |
-| Authored route-floor briefs and expansion packets | `Docs/DesignFloors/`, `Docs/Expansions/` |
-| Cautious UX rework plans; not shipped facts until implemented | `Docs/UXRework/` |
-| Localization pipeline, generated reports, locale seeding/applying | `Docs/Localization/` |
-| PR, media, KPI monitoring, public campaign continuity | `Docs/PRCampaign/KPI.md`, `Docs/PRCampaign/campaign_plan_ru.md`, latest `Docs/PRCampaign/kpi_report_*.md` |
-| Portal/store artifact work | `Docs/PRCampaign/portal.md` |
+| Authored route-floor briefs and expansion packets | `gatbage/reference/design_floors/`, `gatbage/reference/expansions/` only for floor/route planning tasks |
+| Cautious UX rework plans; not shipped facts until implemented | `gatbage/reference/ux_rework/` only for UX rework tasks |
+| Localization pipeline, generated reports, locale seeding/applying | `gatbage/reference/localization/` only for localization tasks |
+| PR, media, KPI monitoring, public campaign continuity | `PRCampaign/KPI.md`, `PRCampaign/campaign_plan_ru.md`, latest `PRCampaign/kpi_report_*.md` |
+| Portal/store artifact work | `PRCampaign/portal.md` |
 | Release commit/deploy runbook | `commit.md`, only for explicit commit/release tasks |
-| Historical context and archived notes | `appendix.md`; `gatbage/**` only for explicit historical comparison |
+| Historical context and archived notes | `gatbage/**` only for explicit historical comparison |
 | License/legal text changes | `LICENSE.md` |
 
 `gatbage/**` and archived root prompt/status files are historical context only. Do not recreate old agent-log or task-status directories for routine work.
@@ -183,7 +185,7 @@ Green, usually safe for additive work:
 - New `src/data/<domain>_<module>.ts` or a small domain definition file
 - New `src/entities/<monster>.ts`
 - New focused tests under `tests/`
-- New docs under active `Docs/` folders
+- New focused reference docs under `gatbage/reference/` only when the task explicitly asks for reference/doc work
 
 Yellow, edit narrowly:
 
@@ -354,6 +356,7 @@ Rules:
 - `render/` reads state and draws. Gameplay decisions stay in `systems/`.
 - Use existing procedural textures, sprites, marks, particles, HUD panels, map overlays and log patterns.
 - Add generic render hooks when needed; do not put one floor's gameplay in `render/webgl.ts`.
+- Do not degrade the baseline WebGL image with always-on full-screen grain, blur, scanline, dither, chromatic or noise filters. Graphics are already deliberately low-fi; render work should improve material, lighting, silhouettes, depth, particles, decals or readability, not hide weak visuals under postprocess dirt.
 - Keep HUD/canvas text readable and unclipped on desktop and mobile.
 - Use existing UI helpers such as `ui_layout`, `ui_text`, panel modules and control bindings.
 - Touch/mobile changes must respect joystick, menu rail, fullscreen/direct-page behavior and canvas resizing.
@@ -391,7 +394,7 @@ Russian player-facing text is canonical unless a task explicitly asks for transl
 
 For text-heavy tasks:
 
-- Read `scenarist.md` and the relevant `Docs/ScenarioWriters/` packet.
+- Read `scenarist.md`; open `gatbage/reference/scenario_writers/` only for broad scenario/text-pass work.
 - Keep tone consistent with existing in-game strings.
 - Run localization audit/report scripts when changing broad player-facing text or locale data.
 - Use the l10n scripts for generated inventories, reports and locale seeding/applying; do not hand-maintain generated reports casually.
@@ -409,10 +412,10 @@ For Net Sphere work:
 
 ## PR Campaign And KPI Continuity
 
-For PR, media, portal submission or KPI monitoring work, treat `Docs/PRCampaign/KPI.md` and `Docs/PRCampaign/` as active operational docs, not scratch notes.
+For PR, media, portal submission or KPI monitoring work, treat `PRCampaign/KPI.md` and `PRCampaign/` as active operational docs, not scratch notes.
 
-- Before acting, read `Docs/PRCampaign/KPI.md`, `Docs/PRCampaign/campaign_plan_ru.md`, the latest dated `Docs/PRCampaign/kpi_report_*.md`, and the current queue such as `Docs/PRCampaign/next_wave_targets_*.md` or `Docs/PRCampaign/next_wave_schedule_ru.md`. For portal build/submission work, also read `Docs/PRCampaign/portal.md`.
-- After every campaign/KPI pass, update durable docs in the same turn: `Docs/PRCampaign/KPI.md` for global surfaces/KPIs/blockers, `campaign_plan_ru.md` for campaign status and next actions, and a dated report/target file under `Docs/PRCampaign/` for fresh facts. Do not leave progress only in chat, browser state, subagent output or local memory.
+- Before acting, read `PRCampaign/KPI.md`, `PRCampaign/campaign_plan_ru.md`, the latest dated `PRCampaign/kpi_report_*.md`, and the current queue such as `PRCampaign/next_wave_targets_*.md` or `PRCampaign/next_wave_schedule_ru.md`. For portal build/submission work, also read `PRCampaign/portal.md`.
+- After every campaign/KPI pass, update durable docs in the same turn: `PRCampaign/KPI.md` for global surfaces/KPIs/blockers, `campaign_plan_ru.md` for campaign status and next actions, and a dated report/target file under `PRCampaign/` for fresh facts. Do not leave progress only in chat, browser state, subagent output or local memory.
 - Record exact dates, URLs, visible statuses, owner-needed actions, sent/submitted/live/removed states, moderation/account blockers, and what the next agent should watch or avoid.
 - Public links must be actual clickable anchors, buttons or native link fields with clear visible labels whenever the platform supports it. Check the rendered public page or DOM before marking a publication complete; if a platform strips anchors, use its native link/profile/media/comment surfaces without evading moderation.
 - Public store pages, posts, pitches, portal listings and media copy must not reveal map dimensions, topology or other implementation-geometry details. Preserve player illusion with wording such as `безграничная структура`, `безграничная бетонная структура`, `unbounded structure` or `unbounded concrete megastructure`; keep implementation geometry only in internal engineering docs.
@@ -429,7 +432,6 @@ Update docs only when facts change.
 - `samosbor.md`: samosbor system contract and extension rules.
 - `save.md`: save/load shape, payload and sanitization contract.
 - `problems.md`: problematic non-system mechanics and consolidation targets.
-- `appendix.md`: compact historical notes only when useful later.
 
 Do not use README to promise unfinished work. Do not bury implementation facts only in plan docs.
 

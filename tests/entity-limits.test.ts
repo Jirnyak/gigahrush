@@ -1,7 +1,17 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { EntityType, type Entity } from '../src/core/types';
-import { ACTIVE_ACTOR_SOFT_LIMIT, ENTITY_SOFT_LIMITS, FLOOR_OBJECT_SOFT_LIMIT, fitActiveActorCounts } from '../src/data/entity_limits';
+import {
+  ACTIVE_ACTOR_SOFT_LIMIT,
+  ENTITY_SOFT_LIMITS,
+  FLOOR_OBJECT_SOFT_LIMIT,
+  MAX_ACTIVE_ACTOR_SOFT_LIMIT,
+  MIN_ACTIVE_ACTOR_SOFT_LIMIT,
+  activeActorCountAtDefaultSoftLimit,
+  fitActiveActorCounts,
+  normalizeActiveActorSoftLimit,
+  setActiveActorSoftLimit,
+} from '../src/data/entity_limits';
 import {
   canSpawnEntityType,
   countLiveActiveActors,
@@ -123,4 +133,25 @@ test('floor object slots are shared by projectiles item drops and billboards', (
   assert.equal(remainingEntitySpawnSlots(nearLimit, EntityType.BILLBOARD), 0);
   assert.equal(entitySpawnSlots(nearLimit, EntityType.PROJECTILE, 16), 0);
   assert.equal(canSpawnEntityType(nearLimit, EntityType.PROJECTILE), false);
+});
+
+test('active actor soft cap can be adjusted for a new run', () => {
+  assert.equal(normalizeActiveActorSoftLimit(null), ACTIVE_ACTOR_SOFT_LIMIT);
+  assert.equal(normalizeActiveActorSoftLimit(''), ACTIVE_ACTOR_SOFT_LIMIT);
+  assert.equal(normalizeActiveActorSoftLimit(777), MIN_ACTIVE_ACTOR_SOFT_LIMIT);
+  assert.equal(normalizeActiveActorSoftLimit(99_999), MAX_ACTIVE_ACTOR_SOFT_LIMIT);
+  const previous = ACTIVE_ACTOR_SOFT_LIMIT;
+  try {
+    assert.equal(setActiveActorSoftLimit(1_024), 1_024);
+    assert.equal(activeActorCountAtDefaultSoftLimit(4_096), 1_024);
+    assert.equal(activeActorCountAtDefaultSoftLimit(2_381), 595);
+    const full = Array.from({ length: 1_024 }, (_, i) => entity(i + 1, EntityType.MONSTER));
+    assert.equal(ENTITY_SOFT_LIMITS[EntityType.NPC], 1_024);
+    assert.equal(remainingActiveActorSpawnSlots(full), 0);
+    assert.equal(entitySpawnSlots(full, EntityType.NPC, 8), 0);
+    full[0].alive = false;
+    assert.equal(entitySpawnSlots(full, EntityType.NPC, 8), 1);
+  } finally {
+    setActiveActorSoftLimit(previous);
+  }
 });

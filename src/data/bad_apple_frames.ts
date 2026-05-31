@@ -1,6 +1,6 @@
 import { BAD_APPLE_FRAME_PACK_B64 } from './bad_apple_frame_pack';
 
-/* Generated from bad_apple/frames/frame_*.png, then repacked as keyframes + XOR delta runs. */
+/* Generated from raw Bad Apple PNG frames, then repacked as keyframes + XOR delta runs. */
 
 export const BAD_APPLE_WIDTH = 144;
 export const BAD_APPLE_HEIGHT = 108;

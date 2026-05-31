@@ -173,25 +173,25 @@ test('using items equips weapons and consumes medicine only once', () => {
   assert.equal(player.inventory?.some(i => i.defId === 'bandage'), false);
 });
 
-test('inventory E toggles equipped weapon and active tool off', () => {
+test('inventory Enter toggles equipped weapon and active tool off', () => {
   const player = makePlayer();
   const msgs: Msg[] = [];
 
   assert.equal(addItem(player, 'knife', 1), true);
-  assert.equal(getInventorySlotActionInfo(player, 0)?.useLabel, 'E экипировать');
+  assert.equal(getInventorySlotActionInfo(player, 0)?.useLabel, 'Enter экипировать');
   useItem(player, 0, msgs, 20);
   assert.equal(player.weapon, 'knife');
-  assert.equal(getInventorySlotActionInfo(player, 0)?.useLabel, 'E снять');
+  assert.equal(getInventorySlotActionInfo(player, 0)?.useLabel, 'Enter снять');
 
   useItem(player, 0, msgs, 21);
   assert.equal(player.weapon, '');
   assert.deepEqual(player.inventory?.map(item => item.defId), ['knife']);
 
   assert.equal(addItem(player, 'ip4_gasmask', 1), true);
-  assert.equal(getInventorySlotActionInfo(player, 1)?.useLabel, 'E в инструмент');
+  assert.equal(getInventorySlotActionInfo(player, 1)?.useLabel, 'Enter в инструмент');
   useItem(player, 1, msgs, 22);
   assert.equal(player.tool, 'ip4_gasmask');
-  assert.equal(getInventorySlotActionInfo(player, 1)?.useLabel, 'E снять');
+  assert.equal(getInventorySlotActionInfo(player, 1)?.useLabel, 'Enter снять');
 
   useItem(player, 1, msgs, 23);
   assert.equal(player.tool, '');
@@ -285,7 +285,7 @@ test('liquidator weapon wave uses existing ammo and self-ammo paths', () => {
   shotgunner.weapon = 'chizh3_shotgun';
   let readiness = getWeaponReadiness(shotgunner);
   assert.equal(readiness.resourceLabel, 'дробь 3');
-  assert.equal(readiness.damageLabel, '10x8');
+  assert.equal(readiness.damageLabel, '13x8');
   assert.equal(consumeAmmo(shotgunner), true);
   assert.equal(countAmmo(shotgunner), 2);
 
@@ -295,7 +295,7 @@ test('liquidator weapon wave uses existing ammo and self-ammo paths', () => {
   flamer.weapon = 'roks47_flamethrower';
   readiness = getWeaponReadiness(flamer);
   assert.equal(readiness.resourceLabel, 'напалм 2');
-  assert.equal(readiness.damageLabel, '5x2');
+  assert.equal(readiness.damageLabel, '7x2');
 
   const disposable = makePlayer();
   addItem(disposable, 'shmk_disposable', 2);
@@ -666,8 +666,8 @@ test('RPG rewards, attribute spend, and scaling formulas remain stable', () => {
   assert.equal(psiPlanner.rpg?.maxPsi, getMaxPsi(psiPlanner.rpg!));
   assert.equal(psiPlanner.rpg?.psi, 6);
 
-  assert.equal(xpForMonsterKill(MonsterKind.SBORKA, 1), 30);
-  assert.equal(xpForMonsterKill(MonsterKind.CREATOR, 1), 1000);
+  assert.equal(xpForMonsterKill(MonsterKind.SBORKA, 1), 10);
+  assert.equal(xpForMonsterKill(MonsterKind.CREATOR, 1), 10_000);
   assert.equal(scaleMonsterHp(100, 3), 124);
   assert.equal(scaleMonsterDmg(10, 3), 12);
 

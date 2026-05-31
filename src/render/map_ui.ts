@@ -11,27 +11,34 @@ import {
   questTargetLiftDirection,
   resolveQuestTargetRoom,
 } from '../systems/contracts';
-import { npcQuestMarkerState } from '../systems/quests';
+import { getActiveQuest, npcQuestMarkerState } from '../systems/quests';
 import { isHostile } from '../systems/factions';
-import { ENTITY_MASK_VISIBLE, getEntityIndex } from '../systems/entity_index';
+import { ENTITY_MASK_ITEM_DROP, ENTITY_MASK_VISIBLE, getEntityIndex } from '../systems/entity_index';
 import { isMapCellExplored } from '../systems/map_exploration';
 import { FRIENDLY_RELATION_THRESHOLD, getNpcPlayerRelation } from '../systems/npc_relations';
+import { menuCloseHint } from '../systems/controls';
 import { type UiRect } from './ui_layout';
 import { isPlayerEntity } from '../systems/player_actor';
 
 const MAP_SIZE = 80;
 type QuestKind = 'plot' | 'side' | 'system';
+type MapMarkerStyle = { stroke: string; fill: string };
 
-const activeKillKinds = new Map<MonsterKind, QuestKind>();
+const activeKillKinds = new Set<MonsterKind>();
+const activeKillNpcIds = new Set<number>();
+const activeKillPlotNpcIds = new Set<string>();
 const activeTargetRoomTypes = new Map<RoomType, QuestKind>();
 const activeTargetRooms = new Map<number, QuestKind>();
 const activeFetchItems = new Map<string, QuestKind>();
 const drawnTargetRooms = new Set<number>();
+let activeKillAnyMonster = false;
 const MAX_CONCRETE_QUEST_ROOM_MARKERS = 8;
 const mapEntityQuery: Entity[] = [];
+const activeQuestItemQuery: Entity[] = [];
 const MAP_MINIMAP_ENTITY_DOT_BUDGET = 220;
 const MAP_FULL_ENTITY_DOT_BUDGET = 900;
 const MAP_ENTITY_QUERY_BUDGET_MULT = 3;
+const MAP_ACTIVE_QUEST_ITEM_QUERY_CAP = 96;
 const MAP_CROWD_BIN_HASH_CAP = 2048;
 const MAP_CROWD_EMPTY_KEY = -1;
 const MAP_CROWD_GROUP_FRIENDLY_NPC = 0;
@@ -73,11 +80,12 @@ const mapLiftUp: number[] = [];
 const mapLiftQuest: number[] = [];
 
 const QUEST_KIND_PRIORITY: Record<QuestKind, number> = { plot: 3, side: 2, system: 1 };
-const QUEST_MARKERS: Record<QuestKind, { stroke: string; fill: string }> = {
+const QUEST_MARKERS: Record<QuestKind, MapMarkerStyle> = {
   plot: { stroke: '#0b5570', fill: '#6cf' },
   side: { stroke: '#704060', fill: '#f7a7d8' },
   system: { stroke: '#76631a', fill: '#ffd35f' },
 };
+const MAP_KILL_TARGET_MARKER: MapMarkerStyle = { stroke: '#600', fill: '#f44' };
 const MAP_FOG_RGB = [80, 20, 120] as const;
 
 function routeFloor(q: Quest): FloorLevel | undefined {
@@ -198,9 +206,33 @@ function setMarkerKind<K>(map: Map<K, QuestKind>, key: K, kind: QuestKind): void
 
 function clearActiveQuestMarkers(): void {
   activeKillKinds.clear();
+  activeKillNpcIds.clear();
+  activeKillPlotNpcIds.clear();
   activeTargetRoomTypes.clear();
   activeTargetRooms.clear();
   activeFetchItems.clear();
+  activeKillAnyMonster = false;
+}
+
+function registerActiveKillTarget(q: Quest): void {
+  if (q.targetMonsterKind !== undefined) activeKillKinds.add(q.targetMonsterKind);
+  else if (q.targetNpcId === undefined && q.targetPlotNpcId === undefined) activeKillAnyMonster = true;
+  if (q.targetNpcId !== undefined) activeKillNpcIds.add(q.targetNpcId);
+  if (q.targetPlotNpcId !== undefined) activeKillPlotNpcIds.add(q.targetPlotNpcId);
+}
+
+function hasActiveKillTargets(): boolean {
+  return activeKillAnyMonster || activeKillKinds.size > 0 || activeKillNpcIds.size > 0 || activeKillPlotNpcIds.size > 0;
+}
+
+function isActiveKillQuestTarget(e: Entity): boolean {
+  if (e.type === EntityType.MONSTER) {
+    return activeKillAnyMonster || (e.monsterKind !== undefined && activeKillKinds.has(e.monsterKind));
+  }
+  if (e.type === EntityType.NPC) {
+    return activeKillNpcIds.has(e.id) || (e.plotNpcId !== undefined && activeKillPlotNpcIds.has(e.plotNpcId));
+  }
+  return false;
 }
 
 function questTargetVisibleOnMap(q: Quest, currentFloor: FloorLevel | undefined, state: GameState | undefined): boolean {
@@ -248,9 +280,161 @@ function drawQuestDiamond(
   ctx.fill();
 }
 
-function drawQuestMarker(ctx: CanvasRenderingContext2D, x: number, y: number, sz: number, sw: number, kind: QuestKind): void {
-  const marker = QUEST_MARKERS[kind];
+function drawMapMarker(ctx: CanvasRenderingContext2D, x: number, y: number, sz: number, sw: number, marker: MapMarkerStyle): void {
   drawQuestDiamond(ctx, x, y, sz, sw, marker.stroke, marker.fill);
+}
+
+function drawQuestMarker(ctx: CanvasRenderingContext2D, x: number, y: number, sz: number, sw: number, kind: QuestKind): void {
+  drawMapMarker(ctx, x, y, sz, sw, QUEST_MARKERS[kind]);
+}
+
+function drawKillTargetMarker(ctx: CanvasRenderingContext2D, x: number, y: number, sz: number, sw: number): void {
+  drawMapMarker(ctx, x, y, sz, sw, MAP_KILL_TARGET_MARKER);
+}
+
+interface QuestMapTargetPoint {
+  x: number;
+  y: number;
+}
+
+function roomCenterPoint(room: { x: number; y: number; w: number; h: number }): QuestMapTargetPoint {
+  return { x: room.x + room.w * 0.5, y: room.y + room.h * 0.5 };
+}
+
+function entityPoint(e: Entity | undefined): QuestMapTargetPoint | undefined {
+  return e?.alive ? { x: e.x, y: e.y } : undefined;
+}
+
+function nearestActorPoint(
+  world: World,
+  player: Entity,
+  matches: (e: Entity) => boolean,
+): QuestMapTargetPoint | undefined {
+  let best: Entity | undefined;
+  let bestD2 = Infinity;
+  for (const e of getEntityIndex().actors) {
+    if (!e.alive || !matches(e)) continue;
+    const d2 = world.dist2(player.x, player.y, e.x, e.y);
+    if (d2 < bestD2) {
+      best = e;
+      bestD2 = d2;
+    }
+  }
+  return entityPoint(best);
+}
+
+function liveQuestNpcPoint(q: Quest, world: World, player: Entity): QuestMapTargetPoint | undefined {
+  const index = getEntityIndex();
+  if (q.targetNpcId !== undefined) {
+    const byId = entityPoint(index.byId.get(q.targetNpcId));
+    if (byId) return byId;
+  }
+  if (!q.targetPlotNpcId) return undefined;
+  return nearestActorPoint(world, player, e => e.type === EntityType.NPC && e.plotNpcId === q.targetPlotNpcId);
+}
+
+function liveQuestKillPoint(q: Quest, world: World, player: Entity): QuestMapTargetPoint | undefined {
+  const npcPoint = liveQuestNpcPoint(q, world, player);
+  if (npcPoint) return npcPoint;
+  return nearestActorPoint(world, player, e => (
+    e.type === EntityType.MONSTER &&
+    (q.targetMonsterKind === undefined || e.monsterKind === q.targetMonsterKind)
+  ));
+}
+
+function liveQuestFetchItemPoint(q: Quest, world: World, player: Entity): QuestMapTargetPoint | undefined {
+  if (!q.targetItem) return undefined;
+  getEntityIndex().queryRadiusCapped(
+    player.x,
+    player.y,
+    W,
+    activeQuestItemQuery,
+    ENTITY_MASK_ITEM_DROP,
+    MAP_ACTIVE_QUEST_ITEM_QUERY_CAP,
+  );
+  let best: Entity | undefined;
+  let bestD2 = Infinity;
+  for (const e of activeQuestItemQuery) {
+    if (!e.alive || !e.inventory?.some(slot => slot.defId === q.targetItem)) continue;
+    const d2 = world.dist2(player.x, player.y, e.x, e.y);
+    if (d2 < bestD2) {
+      best = e;
+      bestD2 = d2;
+    }
+  }
+  return entityPoint(best);
+}
+
+function activeQuestMapTargetPoint(world: World, player: Entity, state: GameState | undefined): QuestMapTargetPoint | undefined {
+  if (!state) return undefined;
+  const q = getActiveQuest(state);
+  if (!q || !isQuestTargetOnCurrentFloor(q, state)) return undefined;
+
+  if (q.type === QuestType.TALK) {
+    const talkPoint = liveQuestNpcPoint(q, world, player);
+    if (talkPoint) return talkPoint;
+  }
+  if (q.type === QuestType.KILL) {
+    const killPoint = liveQuestKillPoint(q, world, player);
+    if (killPoint) return killPoint;
+  }
+
+  const roomTarget = resolveQuestTargetRoom(world, q, player);
+  if (roomTarget) return roomCenterPoint(roomTarget.room);
+
+  if (q.type === QuestType.FETCH) return liveQuestFetchItemPoint(q, world, player);
+  return undefined;
+}
+
+function drawActiveQuestDirectionArrow(
+  ctx: CanvasRenderingContext2D,
+  world: World,
+  player: Entity,
+  state: GameState | undefined,
+  pcx: number,
+  pcy: number,
+  cellW: number,
+  cellH: number,
+): void {
+  if (state?.mapMode !== 2) return;
+  const target = activeQuestMapTargetPoint(world, player, state);
+  if (!target) return;
+
+  const dx = world.delta(player.x, target.x) * cellW;
+  const dy = world.delta(player.y, target.y) * cellH;
+  const dist = Math.hypot(dx, dy);
+  if (dist < 1) return;
+
+  const ux = dx / dist;
+  const uy = dy / dist;
+  const cell = Math.max(1, Math.hypot(cellW, cellH) / Math.SQRT2);
+  const handLen = Math.max(8, 4 * cell);
+  const x1 = pcx + ux * handLen;
+  const y1 = pcy + uy * handLen;
+  const head = Math.max(3, Math.min(5, handLen * 0.28));
+  const wing = Math.max(2, Math.min(3, handLen * 0.18));
+  const px = -uy;
+  const py = ux;
+
+  ctx.save();
+  ctx.strokeStyle = '#ffd21f';
+  ctx.fillStyle = '#ffd21f';
+  ctx.lineWidth = Math.max(1.5, Math.min(2.5, cell * 0.45));
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  ctx.shadowColor = 'rgba(255,210,31,0.45)';
+  ctx.shadowBlur = Math.max(2, cell * 0.75);
+  ctx.beginPath();
+  ctx.moveTo(pcx, pcy);
+  ctx.lineTo(x1, y1);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(x1, y1);
+  ctx.lineTo(x1 - ux * head + px * wing, y1 - uy * head + py * wing);
+  ctx.lineTo(x1 - ux * head - px * wing, y1 - uy * head - py * wing);
+  ctx.closePath();
+  ctx.fill();
+  ctx.restore();
 }
 
 function wrapMapCoord(v: number): number {
@@ -682,7 +866,7 @@ function drawMap(
         (q.targetFloor === undefined || q.targetFloor === currentFloor)
       ) setMarkerKind(activeFetchItems, q.targetItem, kind);
       if (!questTargetVisibleOnMap(q, currentFloor, state)) continue;
-      if (q.type === QuestType.KILL && q.targetMonsterKind !== undefined) setMarkerKind(activeKillKinds, q.targetMonsterKind, kind);
+      if (q.type === QuestType.KILL) registerActiveKillTarget(q);
       const hasRoomTarget = q.targetRoom !== undefined || q.targetRoomType !== undefined || q.targetZoneTag !== undefined;
       if (hasRoomTarget && concreteRoomMarkers < MAX_CONCRETE_QUEST_ROOM_MARKERS) {
         const resolved = resolveQuestTargetRoom(world, q, player);
@@ -789,22 +973,18 @@ function drawMap(
       const qsy = mapY + (qdy + radius) * cellH;
       drawQuestMarker(ctx, qsx, qsy, 6, 4, questKind(q));
     }
-    // KILL quest markers — show target monsters as red diamonds
-    if (activeKillKinds.size > 0) {
+    // KILL quest markers — show target NPCs and monsters as red diamonds.
+    if (hasActiveKillTargets()) {
       for (const e of mapEntityQuery) {
-        if (!e.alive || e.type !== EntityType.MONSTER) continue;
+        if (!e.alive || !isActiveKillQuestTarget(e)) continue;
         const eCell = world.idx(Math.floor(e.x), Math.floor(e.y));
         if (!isMapCellExplored(world, eCell)) continue;
-        const markerKind = e.monsterKind === undefined ? undefined : activeKillKinds.get(e.monsterKind);
-        if (!markerKind) continue;
         const edx = world.delta(pxI, Math.floor(e.x));
         const edy = world.delta(pyI, Math.floor(e.y));
         if (Math.abs(edx) > radius || Math.abs(edy) > radius) continue;
         const qsx = mapX + (edx + radius) * cellW;
         const qsy = mapY + (edy + radius) * cellH;
-        drawQuestMarker(ctx, qsx, qsy, 5, 3, markerKind);
-        ctx.fillStyle = '#f44';
-        ctx.fillRect(qsx - 1, qsy - 1, 2, 2);
+        drawKillTargetMarker(ctx, qsx, qsy, 5, 3);
       }
     }
   }
@@ -826,6 +1006,7 @@ function drawMap(
     pcy + Math.sin(player.angle) * 4 * cellH,
   );
   ctx.stroke();
+  drawActiveQuestDirectionArrow(ctx, world, player, state, pcx, pcy, cellW, cellH);
 }
 
 /* ── Minimap ──────────────────────────────────────────────────── */
@@ -857,5 +1038,5 @@ export function drawFullMap(
 
   ctx.fillStyle = '#666';
   ctx.font = `${8 * sy}px monospace`;
-  ctx.fillText('[M] закрыть', pad + 4, pad + mapH - 4);
+  ctx.fillText(`${menuCloseHint()} закрыть`, pad + 4, pad + mapH - 4);
 }

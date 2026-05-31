@@ -21,7 +21,7 @@ test('slyoznev pps41 is an early liquidator SMG with fast ammo burn', () => {
 
   assert.equal(stats.isRanged, true);
   assert.equal(stats.ammoType, 'ammo_9mm');
-  assert.equal(stats.dmg, 5);
+  assert.equal(stats.dmg, 7);
   assert.ok(stats.speed < WEAPON_STATS.ppsh.speed, 'slyoznev_pps41 should burn ammo faster than ppsh');
   assert.ok((stats.spread ?? 0) > (WEAPON_STATS.ppsh.spread ?? 0), 'slyoznev_pps41 should be less stable than ppsh');
   assert.equal(resourceForItem(stats.ammoType ?? '')?.id, 'ammo');

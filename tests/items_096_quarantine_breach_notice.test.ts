@@ -63,7 +63,7 @@ test('quarantine breach notice exposes a quarantine case at Ministry N3', () => 
   const state = makeGameState({ currentFloor: FloorLevel.MINISTRY, time: 96 });
 
   assert.equal(addItem(player, NOTICE_ID, 1), true);
-  assert.equal(getInventorySlotActionInfo(player, 0)?.useLabel, 'E проверить');
+  assert.equal(getInventorySlotActionInfo(player, 0)?.useLabel, 'Enter проверить');
   useItem(player, 0, state.msgs, state.time, state, undefined, world);
 
   assert.equal(countInventoryItem(player, NOTICE_ID), 1);

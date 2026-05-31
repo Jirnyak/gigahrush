@@ -1,5 +1,5 @@
 import { type NetHackOverlaySnapshot } from '../systems/net_hack';
-import { controlBindingLabel, controlHint } from '../systems/controls';
+import { controlHint, menuCloseHint } from '../systems/controls';
 import { drawGlitchText, drawNeuroPanel, drawStaticNoise, textJitter } from './hud_fx';
 import { fitText } from './ui_text';
 
@@ -50,6 +50,6 @@ export function drawNetHackOverlay(
 
   ctx.fillStyle = '#547078';
   ctx.font = `${7 * s}px monospace`;
-  ctx.fillText(fitText(ctx, `${controlHint('interact')} взломать  ${controlBindingLabel('gameMenu')} закрыть`, maxW), x + pad, y + panelH - 16 * s);
+  ctx.fillText(fitText(ctx, `${controlHint('gameMenu')} взломать  ${menuCloseHint()} закрыть`, maxW), x + pad, y + panelH - 16 * s);
   ctx.restore();
 }

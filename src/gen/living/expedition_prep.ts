@@ -12,6 +12,7 @@ import { type PlotNpcDef, registerSideQuest } from '../../data/plot';
 import { Spr } from '../../render/sprite_index';
 import { protectRoom } from '../shared';
 import { genLog } from '../log';
+import { placeLivingExpeditionCraftStations } from '../craft_stations';
 import { registerZoneContent } from './zone_content';
 
 const CONTENT_TAG = 'floor11_living_expedition_prep';
@@ -24,7 +25,7 @@ const REPAIR_ID = 'floor11_anya_hermodoor';
 const LOST_ID = 'floor11_misha_lost_property';
 const WITNESS_ID = 'floor11_vera_return_witness';
 
-const CHECKLIST_NOTE = 'Чек-лист вылазки: Ольга -> Барни -> Яков, потом цель, Z, риск, лифт туда и лифт обратно. Вода, еда, бинт, патроны, фильтр или талон. Нет цели - возьми слух или контракт до лифта.';
+const CHECKLIST_NOTE = 'Чек-лист вылазки: Ольга -> Сержант Баринов -> Яков, потом цель, Z, риск, лифт туда и лифт обратно. Вода, еда, бинт, патроны, фильтр или талон. Нет цели - возьми слух или контракт до лифта.';
 
 const NPC_DEFS: Record<string, PlotNpcDef> = {
   [ROUTE_KEEPER_ID]: {
@@ -552,6 +553,7 @@ function generateExpeditionPrep(
   const room = carveRoom(world, nextRoomId++, pos.x, pos.y);
   connectSouth(world, room);
   decorateRoom(world, room);
+  placeLivingExpeditionCraftStations(world, room);
 
   const routeKeeper = spawnNpc(world, entities, nextId, room, ROUTE_KEEPER_ID, 4, 3, Math.PI / 2);
   const repair = spawnNpc(world, entities, nextId, room, REPAIR_ID, ROOM_W - 5, 3, Math.PI, 'wrench');
