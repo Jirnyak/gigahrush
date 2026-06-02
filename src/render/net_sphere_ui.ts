@@ -124,7 +124,7 @@ export function drawNetSphereMenu(
   ctx.fillStyle = '#607080';
   ctx.fillText(fitText(ctx, '/netgen NET-...  /new  /clear', leftW), leftX, commandY);
   ctx.fillStyle = '#607080';
-  ctx.fillText(fitText(ctx, `${controlHint('netSphere')} открыть  ${controlHint('netClose')} закрыть  ${controlHint('netSubmit')} отправить`, leftW), leftX, commandY + 10 * s);
+  ctx.fillText(fitText(ctx, `${controlHint('netSphere')} открыть  ${controlHint('netClose')} закрыть  ${controlHint('netSubmit')} отправить+закрыть  ${controlHint('netErase')} стереть`, leftW), leftX, commandY + 10 * s);
   ctx.restore();
 
   ctx.strokeStyle = 'rgba(92,246,255,0.34)';

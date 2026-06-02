@@ -19,6 +19,7 @@ import {
   ZoneFaction,
   type Entity,
   type Room,
+  type TerritoryOwner,
   type WorldContainer,
 } from '../../core/types';
 import { SURFACE_FLAG_CHALK_MAP, World } from '../../core/world';
@@ -54,6 +55,15 @@ const CHORD_FLOOR = Tex.F_RED_CARPET;
 const SAFE_WALL_ROOM = 'Лабиринт: белая стена обратного пути';
 const LOST_ROOM = 'Лабиринт: узел потерянного Паши';
 const DOCUMENT_STASH_ROOM = 'Лабиринт: тупик документного ящика';
+const LANDMARK_ROOM_NAMES = new Set([
+  'Лабиринт: нулевая катушка Ариадны',
+  SAFE_WALL_ROOM,
+  'Лабиринт: комната шести стрелок',
+  'Лабиринт: узел короткой красной хорды',
+  LOST_ROOM,
+  DOCUMENT_STASH_ROOM,
+  'Лабиринт: дальняя лифтовая спина',
+]);
 
 const BIT_E = 1 << 0;
 const BIT_W = 1 << 1;
@@ -104,10 +114,33 @@ interface Landmark {
   feature: Feature;
 }
 
+interface LabyrinthOwnedRoom {
+  room: Room;
+  owner: TerritoryOwner;
+}
+
+interface RoomStampSpec {
+  cell: number;
+  dx: number;
+  dy: number;
+  w: number;
+  h: number;
+  type: RoomType;
+  name: string;
+  wallTex: Tex;
+  floorTex: Tex;
+  feature: Feature;
+  owner?: TerritoryOwner;
+  sealed?: boolean;
+  hermeticDoor?: boolean;
+}
+
 export interface IstinniyLabirintMetrics {
   routeId: typeof ISTINNIY_LABIRINT_ROUTE_ID;
   z: typeof ISTINNIY_LABIRINT_Z;
   landmarkCount: number;
+  midRooms: number;
+  microRooms: number;
   rewardDeadEnds: number;
   lockedChords: number;
   ariadneCueCells: number;
@@ -396,6 +429,37 @@ function carveLine(world: World, a: CellPoint, b: CellPoint, radius: number, flo
   return touched;
 }
 
+function carveThinLine(world: World, a: CellPoint, b: CellPoint, floorTex: Tex, markSeed = 0): number[] {
+  const touched: number[] = [];
+  let x = world.wrap(a.x);
+  let y = world.wrap(a.y);
+  const ddx = world.delta(x, b.x);
+  const ddy = world.delta(y, b.y);
+  const sx = ddx === 0 ? 0 : ddx > 0 ? 1 : -1;
+  const sy = ddy === 0 ? 0 : ddy > 0 ? 1 : -1;
+
+  function carveOne(serial: number): void {
+    const ci = world.idx(x, y);
+    if (world.cells[ci] !== Cell.LIFT && world.cells[ci] !== Cell.DOOR && world.roomMap[ci] < 0) {
+      world.cells[ci] = Cell.FLOOR;
+      world.floorTex[ci] = floorTex;
+      world.wallTex[ci] = MAZE_WALL;
+      touched.push(ci);
+      if (markSeed > 0 && serial % 9 === 0) markAriadneCue(world, x, y, markSeed + serial, 206, 198, 142);
+    }
+  }
+
+  for (let i = 0; i <= Math.abs(ddx); i++) {
+    carveOne(i);
+    if (i < Math.abs(ddx)) x = world.wrap(x + sx);
+  }
+  for (let i = 0; i <= Math.abs(ddy); i++) {
+    carveOne(i + 400);
+    if (i < Math.abs(ddy)) y = world.wrap(y + sy);
+  }
+  return touched;
+}
+
 function carveMaze(world: World, graph: MazeGraph): void {
   for (let idx = 0; idx < GRID_N; idx++) {
     const c = centerOf(idx);
@@ -483,6 +547,22 @@ function addDoorToRoom(world: World, room: Room, wx: number, wy: number): void {
   room.doors.push(idx);
 }
 
+function addDoorToRoomState(world: World, room: Room, wx: number, wy: number, state: DoorState, keyId = ''): void {
+  const idx = world.idx(wx, wy);
+  if (world.cells[idx] === Cell.DOOR) return;
+  world.cells[idx] = Cell.DOOR;
+  world.wallTex[idx] = state === DoorState.HERMETIC_OPEN || state === DoorState.HERMETIC_CLOSED ? Tex.HERMO_WALL : Tex.DOOR_METAL;
+  world.doors.set(idx, {
+    idx,
+    state,
+    roomA: room.id,
+    roomB: -1,
+    keyId,
+    timer: 0,
+  });
+  room.doors.push(idx);
+}
+
 function connectLandmarkRoom(world: World, room: Room, cell: number, links: Uint8Array): void {
   const c = centerOf(cell);
   const dirs = linkedDirections(links, cell);
@@ -541,6 +621,378 @@ function chooseLandmarks(graph: MazeGraph): Landmark[] {
     { cell: graph.exit, name: 'Лабиринт: дальняя лифтовая спина', type: RoomType.HQ, w: 17, h: 13, feature: Feature.LIFT_BUTTON },
   ];
   return specs;
+}
+
+function roomCanOverwriteLabyrinth(world: World, x: number, y: number, w: number, h: number): boolean {
+  if (x < 4 || y < 4 || x + w + 4 >= W || y + h + 4 >= W) return false;
+  for (let dy = -3; dy <= h + 2; dy++) {
+    for (let dx = -3; dx <= w + 2; dx++) {
+      const idx = world.idx(x + dx, y + dy);
+      if (world.aptMask[idx]) return false;
+      if (world.roomMap[idx] >= 0) return false;
+      if (world.cells[idx] === Cell.LIFT || world.cells[idx] === Cell.DOOR) return false;
+      if (world.features[idx] === Feature.LIFT_BUTTON) return false;
+      if (world.doors.has(idx)) return false;
+    }
+  }
+  return true;
+}
+
+function decorateLabyrinthRoom(world: World, room: Room, feature: Feature, serial: number): void {
+  const cx = room.x + Math.floor(room.w / 2);
+  const cy = room.y + Math.floor(room.h / 2);
+  const centerIdx = world.idx(cx, cy);
+  if (world.features[centerIdx] === Feature.NONE) world.features[centerIdx] = feature;
+  const left = world.idx(room.x + 1, cy);
+  const right = world.idx(room.x + room.w - 2, cy);
+  const top = world.idx(cx, room.y + 1);
+  const bottom = world.idx(cx, room.y + room.h - 2);
+  switch (room.type) {
+    case RoomType.KITCHEN:
+      world.features[left] = Feature.STOVE;
+      world.features[right] = Feature.SINK;
+      break;
+    case RoomType.BATHROOM:
+      world.features[left] = Feature.TOILET;
+      world.features[right] = Feature.SINK;
+      break;
+    case RoomType.STORAGE:
+      world.features[left] = Feature.SHELF;
+      world.features[right] = serial % 3 === 0 ? Feature.MACHINE : Feature.SHELF;
+      break;
+    case RoomType.MEDICAL:
+      world.features[top] = Feature.APPARATUS;
+      world.features[bottom] = Feature.BED;
+      break;
+    case RoomType.PRODUCTION:
+      world.features[top] = Feature.MACHINE;
+      world.features[bottom] = Feature.APPARATUS;
+      break;
+    case RoomType.OFFICE:
+    case RoomType.HQ:
+      world.features[left] = Feature.DESK;
+      world.features[right] = serial % 2 === 0 ? Feature.SCREEN : Feature.SHELF;
+      break;
+  }
+}
+
+function paintRoomTerritory(world: World, room: Room, owner: TerritoryOwner): void {
+  for (let dy = -1; dy <= room.h; dy++) {
+    for (let dx = -1; dx <= room.w; dx++) {
+      const idx = world.idx(room.x + dx, room.y + dy);
+      if (world.aptMask[idx]) continue;
+      world.factionControl[idx] = owner;
+    }
+  }
+}
+
+function connectRoomToPoint(
+  world: World,
+  room: Room,
+  targetX: number,
+  targetY: number,
+  state: DoorState,
+  markSeed: number,
+): void {
+  const cx = room.x + Math.floor(room.w / 2);
+  const cy = room.y + Math.floor(room.h / 2);
+  const dx = world.delta(cx, targetX);
+  const dy = world.delta(cy, targetY);
+  let wx = cx;
+  let wy = cy;
+  let ox = cx;
+  let oy = cy;
+  if (Math.abs(dx) >= Math.abs(dy)) {
+    wx = dx >= 0 ? room.x + room.w : room.x - 1;
+    wy = Math.max(room.y, Math.min(room.y + room.h - 1, targetY));
+    ox = wx + (dx >= 0 ? 1 : -1);
+    oy = wy;
+  } else {
+    wx = Math.max(room.x, Math.min(room.x + room.w - 1, targetX));
+    wy = dy >= 0 ? room.y + room.h : room.y - 1;
+    ox = wx;
+    oy = wy + (dy >= 0 ? 1 : -1);
+  }
+  addDoorToRoomState(world, room, wx, wy, state);
+  carveThinLine(world, { x: ox, y: oy }, { x: targetX, y: targetY }, state === DoorState.HERMETIC_OPEN ? THREAD_FLOOR : MAZE_FLOOR, markSeed);
+  markAriadneCue(world, ox, oy, markSeed, 206, 198, 142);
+}
+
+function tryStampLabyrinthRoom(world: World, spec: RoomStampSpec, serial: number): Room | null {
+  const center = centerOf(spec.cell);
+  const x = Math.max(6, Math.min(W - spec.w - 7, center.x + spec.dx - Math.floor(spec.w / 2)));
+  const y = Math.max(6, Math.min(W - spec.h - 7, center.y + spec.dy - Math.floor(spec.h / 2)));
+  if (!roomCanOverwriteLabyrinth(world, x, y, spec.w, spec.h)) return null;
+  const room = stampRoom(world, world.rooms.length, spec.type, x, y, spec.w, spec.h, -1);
+  room.name = spec.name;
+  room.sealed = spec.sealed === true;
+  retintRoom(world, room, spec.wallTex, spec.floorTex);
+  decorateLabyrinthRoom(world, room, spec.feature, serial);
+  connectRoomToPoint(
+    world,
+    room,
+    center.x,
+    center.y,
+    spec.hermeticDoor ? DoorState.HERMETIC_OPEN : DoorState.CLOSED,
+    2400 + serial * 17,
+  );
+  if (spec.owner !== undefined) paintRoomTerritory(world, room, spec.owner);
+  return room;
+}
+
+function hqSupportSpecs(cell: number, owner: TerritoryOwner, prefix: string, serial: number, includeCore: boolean): RoomStampSpec[] {
+  const wallTex = owner === ZoneFaction.LIQUIDATOR ? Tex.METAL
+    : owner === ZoneFaction.SCIENTIST ? Tex.TILE_W
+      : owner === ZoneFaction.CULTIST ? Tex.CROSS
+        : owner === ZoneFaction.WILD ? Tex.BRICK
+          : Tex.PANEL;
+  const floorTex = owner === ZoneFaction.SCIENTIST ? Tex.F_TILE
+    : owner === ZoneFaction.CULTIST ? Tex.F_RED_CARPET
+      : owner === ZoneFaction.WILD ? Tex.F_CONCRETE
+        : owner === ZoneFaction.LIQUIDATOR ? Tex.F_CONCRETE
+          : Tex.F_LINO;
+  const out: RoomStampSpec[] = [];
+  if (includeCore) {
+    out.push({
+      cell,
+      dx: 0,
+      dy: 0,
+      w: 15,
+      h: 11,
+      type: RoomType.HQ,
+      name: `${prefix}: гермоядро`,
+      wallTex: Tex.HERMO_WALL,
+      floorTex,
+      feature: owner === ZoneFaction.CULTIST ? Feature.CANDLE : Feature.DESK,
+      owner,
+      sealed: true,
+      hermeticDoor: true,
+    });
+  }
+  out.push(
+    { cell, dx: -18, dy: -18, w: 10, h: 8, type: RoomType.KITCHEN, name: `${prefix}: кухня нити`, wallTex, floorTex, feature: Feature.STOVE, owner },
+    { cell, dx: 18, dy: -18, w: 9, h: 7, type: RoomType.BATHROOM, name: `${prefix}: санитарная ниша`, wallTex: Tex.TILE_W, floorTex: Tex.F_TILE, feature: Feature.SINK, owner },
+    { cell, dx: -18, dy: 18, w: 11, h: 8, type: RoomType.STORAGE, name: `${prefix}: склад коротких ходов`, wallTex, floorTex, feature: Feature.SHELF, owner },
+    {
+      cell,
+      dx: 18,
+      dy: 18,
+      w: 11,
+      h: 8,
+      type: owner === ZoneFaction.SCIENTIST ? RoomType.MEDICAL : owner === ZoneFaction.WILD ? RoomType.SMOKING : RoomType.OFFICE,
+      name: `${prefix}: комната поддержки`,
+      wallTex,
+      floorTex,
+      feature: owner === ZoneFaction.SCIENTIST ? Feature.APPARATUS : Feature.TABLE,
+      owner,
+    },
+    { cell, dx: 0, dy: 28, w: 12, h: 7, type: RoomType.PRODUCTION, name: `${prefix}: мастерская отступления`, wallTex, floorTex, feature: Feature.MACHINE, owner },
+  );
+  void serial;
+  return out;
+}
+
+function selectDistinctCells(candidates: readonly number[], count: number, used: Set<number>, minGridDistance: number): number[] {
+  const out: number[] = [];
+  for (const cell of candidates) {
+    if (used.has(cell)) continue;
+    let far = true;
+    const x = gridX(cell);
+    const y = gridY(cell);
+    for (const taken of used) {
+      const tx = gridX(taken);
+      const ty = gridY(taken);
+      const dx = Math.abs(x - tx);
+      const dy = Math.abs(y - ty);
+      if (Math.min(dx, GRID_W - dx) + Math.min(dy, GRID_H - dy) < minGridDistance) {
+        far = false;
+        break;
+      }
+    }
+    if (!far) continue;
+    out.push(cell);
+    used.add(cell);
+    if (out.length >= count) break;
+  }
+  return out;
+}
+
+function placeFactionHqPackages(world: World, graph: MazeGraph, roomsByName: Map<string, Room>): LabyrinthOwnedRoom[] {
+  const owned: LabyrinthOwnedRoom[] = [];
+  const used = new Set<number>([graph.start, graph.exit, ...graph.mainPath.filter((_, index) => index % 11 === 0)]);
+  const existing: { room: Room | undefined; owner: TerritoryOwner; cell: number; prefix: string }[] = [
+    { room: roomsByName.get('Лабиринт: нулевая катушка Ариадны'), owner: ZoneFaction.LIQUIDATOR, cell: graph.start, prefix: 'Лабиринт: миништаб ликвидаторов у катушки' },
+    { room: roomsByName.get('Лабиринт: дальняя лифтовая спина'), owner: ZoneFaction.WILD, cell: graph.exit, prefix: 'Лабиринт: дикий пост у дальней спины' },
+  ];
+  for (const item of existing) {
+    if (!item.room) continue;
+    item.room.sealed = true;
+    paintRoomTerritory(world, item.room, item.owner);
+    owned.push({ room: item.room, owner: item.owner });
+    for (const spec of hqSupportSpecs(item.cell, item.owner, item.prefix, owned.length, false)) {
+      const room = tryStampLabyrinthRoom(world, spec, owned.length + 1);
+      if (room) owned.push({ room, owner: item.owner });
+    }
+  }
+
+  const deadEnds = deepestDeadEnds(graph, 64, new Set(graph.mainPath));
+  const newHqs: { owner: TerritoryOwner; cell: number; prefix: string }[] = [
+    { owner: ZoneFaction.CITIZEN, cell: pathCell(graph, 0.24), prefix: 'Лабиринт: гражданский узел белой стены' },
+    { owner: ZoneFaction.SCIENTIST, cell: pathCell(graph, 0.47), prefix: 'Лабиринт: НИИ измерения поворотов' },
+    { owner: ZoneFaction.CULTIST, cell: deadEnds[8] ?? pathCell(graph, 0.68), prefix: 'Лабиринт: культовый карман обратных стрелок' },
+  ];
+  for (const hq of newHqs) {
+    used.add(hq.cell);
+    for (const spec of hqSupportSpecs(hq.cell, hq.owner, hq.prefix, owned.length, true)) {
+      const room = tryStampLabyrinthRoom(world, spec, owned.length + 1);
+      if (room) owned.push({ room, owner: hq.owner });
+    }
+  }
+  return owned;
+}
+
+function placeMidStations(world: World, graph: MazeGraph, used: Set<number>): void {
+  const candidates = [
+    ...graph.mainPath.filter((_, index) => index % 9 === 4),
+    ...deepestDeadEnds(graph, 36, new Set(graph.mainPath)),
+  ].sort((a, b) => graph.depth[b] - graph.depth[a]);
+  const cells = selectDistinctCells(candidates, 34, used, 5);
+  for (let i = 0; i < cells.length; i++) {
+    const motif = i % 6;
+    const spec: RoomStampSpec = {
+      cell: cells[i],
+      dx: motif % 2 === 0 ? 18 : -18,
+      dy: motif % 3 === 0 ? 18 : -18,
+      w: motif === 0 ? 28 : motif === 1 ? 22 : 18,
+      h: motif === 0 ? 18 : motif === 2 ? 16 : 13,
+      type: motif === 0 ? RoomType.COMMON : motif === 1 ? RoomType.OFFICE : motif === 2 ? RoomType.STORAGE : motif === 3 ? RoomType.PRODUCTION : motif === 4 ? RoomType.MEDICAL : RoomType.CORRIDOR,
+      name: `Лабиринт: станция поворота ${i + 1}`,
+      wallTex: motif === 4 ? Tex.TILE_W : ROOM_WALL,
+      floorTex: motif === 4 ? Tex.F_TILE : motif === 3 ? Tex.F_CONCRETE : ROOM_FLOOR,
+      feature: motif === 3 ? Feature.MACHINE : motif === 4 ? Feature.APPARATUS : motif === 2 ? Feature.SHELF : Feature.TABLE,
+    };
+    const station = tryStampLabyrinthRoom(world, spec, 300 + i);
+    if (!station) continue;
+    const annexTypes = [RoomType.STORAGE, RoomType.BATHROOM, RoomType.OFFICE, RoomType.KITCHEN] as const;
+    const annexFeatures = [Feature.SHELF, Feature.SINK, Feature.DESK, Feature.STOVE] as const;
+    const annexOffsets = [
+      { dx: spec.dx + 30, dy: spec.dy },
+      { dx: spec.dx - 30, dy: spec.dy },
+      { dx: spec.dx, dy: spec.dy + 26 },
+      { dx: spec.dx, dy: spec.dy - 26 },
+    ];
+    for (let j = 0; j < annexOffsets.length; j++) {
+      if ((i + j) % 3 === 0) continue;
+      tryStampLabyrinthRoom(world, {
+        cell: cells[i],
+        dx: annexOffsets[j].dx,
+        dy: annexOffsets[j].dy,
+        w: 8 + ((i + j) % 4),
+        h: 6 + ((i + j * 2) % 3),
+        type: annexTypes[j],
+        name: `Лабиринт: станция поворота ${i + 1}: боковая ячейка ${j + 1}`,
+        wallTex: j === 1 ? Tex.TILE_W : MAZE_WALL,
+        floorTex: j === 1 ? Tex.F_TILE : MAZE_FLOOR,
+        feature: annexFeatures[j],
+      }, 360 + i * 5 + j);
+    }
+  }
+}
+
+function placeMicroRooms(world: World, graph: MazeGraph, used: Set<number>): void {
+  const allCells: number[] = [];
+  for (let i = 0; i < GRID_N; i++) {
+    if (degree(graph.links, i) <= 0) continue;
+    allCells.push(i);
+  }
+  allCells.sort((a, b) => {
+    const ah = (graph.depth[a] * 1103515245 + a * 2654435761) >>> 0;
+    const bh = (graph.depth[b] * 1103515245 + b * 2654435761) >>> 0;
+    return ah - bh;
+  });
+  const cells = selectDistinctCells(allCells, 150, used, 3);
+  const roomTypes = [RoomType.STORAGE, RoomType.OFFICE, RoomType.BATHROOM, RoomType.KITCHEN, RoomType.COMMON, RoomType.SMOKING] as const;
+  const features = [Feature.SHELF, Feature.DESK, Feature.SINK, Feature.STOVE, Feature.TABLE, Feature.CHAIR] as const;
+  for (let i = 0; i < cells.length; i++) {
+    const side = i % 4;
+    const spec: RoomStampSpec = {
+      cell: cells[i],
+      dx: side === 0 ? 12 : side === 1 ? -12 : 0,
+      dy: side === 2 ? 12 : side === 3 ? -12 : 0,
+      w: 5 + (i % 5),
+      h: 5 + ((i * 3) % 4),
+      type: roomTypes[i % roomTypes.length],
+      name: `Лабиринт: малая ячейка ${i + 1}`,
+      wallTex: i % 7 === 0 ? Tex.BRICK : MAZE_WALL,
+      floorTex: i % 6 === 0 ? Tex.F_LINO : i % 5 === 0 ? Tex.F_TILE : MAZE_FLOOR,
+      feature: features[i % features.length],
+    };
+    tryStampLabyrinthRoom(world, spec, 600 + i);
+  }
+}
+
+function placeSideAlcoves(world: World, graph: MazeGraph): void {
+  for (let i = 2; i < graph.mainPath.length; i += 5) {
+    const p = centerOf(graph.mainPath[i]);
+    const dir = DIRS[(i + graph.mainPath[i]) % DIRS.length];
+    const ax = p.x + dir.dx * 6;
+    const ay = p.y + dir.dy * 6;
+    carvePatch(world, ax, ay, 1, i % 2 === 0 ? THREAD_FLOOR : MAZE_FLOOR);
+    if (i % 4 === 0) {
+      const idx = world.idx(ax, ay);
+      if (world.features[idx] === Feature.NONE) world.features[idx] = i % 8 === 0 ? Feature.SHELF : Feature.CHAIR;
+    }
+  }
+}
+
+function placeLabyrinthMidMicro(world: World, graph: MazeGraph, roomsByName: Map<string, Room>): LabyrinthOwnedRoom[] {
+  const owned = placeFactionHqPackages(world, graph, roomsByName);
+  const used = new Set<number>([graph.start, graph.exit]);
+  for (const ownedRoom of owned) {
+    const cx = ownedRoom.room.x + Math.floor(ownedRoom.room.w / 2);
+    const cy = ownedRoom.room.y + Math.floor(ownedRoom.room.h / 2);
+    used.add(gridIdx(Math.round((cx - CENTER_OFFSET) / PITCH), Math.round((cy - CENTER_OFFSET) / PITCH)));
+  }
+  placeMidStations(world, graph, used);
+  placeMicroRooms(world, graph, used);
+  placeSideAlcoves(world, graph);
+  return owned;
+}
+
+function paintLabyrinthTerritorySeeds(world: World, ownedRooms: readonly LabyrinthOwnedRoom[]): void {
+  for (const item of ownedRooms) paintRoomTerritory(world, item.room, item.owner);
+}
+
+function ownerForLabyrinthRoomName(name: string): TerritoryOwner | undefined {
+  if (name === 'Лабиринт: нулевая катушка Ариадны' || name.startsWith('Лабиринт: миништаб ликвидаторов у катушки')) return ZoneFaction.LIQUIDATOR;
+  if (name === 'Лабиринт: дальняя лифтовая спина' || name.startsWith('Лабиринт: дикий пост у дальней спины')) return ZoneFaction.WILD;
+  if (name.startsWith('Лабиринт: гражданский узел белой стены')) return ZoneFaction.CITIZEN;
+  if (name.startsWith('Лабиринт: НИИ измерения поворотов')) return ZoneFaction.SCIENTIST;
+  if (name.startsWith('Лабиринт: культовый карман обратных стрелок')) return ZoneFaction.CULTIST;
+  return undefined;
+}
+
+export function reinforceIstinniyLabirintTerritorySeeds(world: World): void {
+  for (const room of world.rooms) {
+    const owner = ownerForLabyrinthRoomName(room.name);
+    if (owner === undefined) continue;
+    if (room.name.endsWith(': гермоядро') || room.name === 'Лабиринт: нулевая катушка Ариадны' || room.name === 'Лабиринт: дальняя лифтовая спина') {
+      room.type = RoomType.HQ;
+      room.sealed = true;
+      room.wallTex = Tex.HERMO_WALL;
+      for (let dy = -1; dy <= room.h; dy++) {
+        for (let dx = -1; dx <= room.w; dx++) {
+          const idx = world.idx(room.x + dx, room.y + dy);
+          if (dx >= 0 && dx < room.w && dy >= 0 && dy < room.h) continue;
+          if (world.cells[idx] === Cell.WALL) {
+            world.hermoWall[idx] = 1;
+            world.wallTex[idx] = Tex.HERMO_WALL;
+          }
+        }
+      }
+    }
+    paintRoomTerritory(world, room, owner);
+  }
 }
 
 function pairKey(a: number, b: number): string {
@@ -923,7 +1375,7 @@ export function measureIstinniyLabirintMetrics(generation: FloorGeneration): Ist
   const startIdx = world.idx(Math.floor(generation.spawnX), Math.floor(generation.spawnY));
   const reachable = reachableStrict(world, startIdx);
   const path = findPathToLift(world, startIdx, LiftDirection.DOWN);
-  const landmarkRooms = world.rooms.filter(room => room.name.startsWith('Лабиринт:'));
+  const landmarkRooms = world.rooms.filter(room => LANDMARK_ROOM_NAMES.has(room.name));
   let cueCells = 0;
   let safeWallCells = 0;
   for (let i = 0; i < W * W; i++) {
@@ -934,6 +1386,8 @@ export function measureIstinniyLabirintMetrics(generation: FloorGeneration): Ist
     routeId: ISTINNIY_LABIRINT_ROUTE_ID,
     z: ISTINNIY_LABIRINT_Z,
     landmarkCount: landmarkRooms.length,
+    midRooms: world.rooms.filter(room => room.name.startsWith('Лабиринт: станция поворота')).length,
+    microRooms: world.rooms.filter(room => room.name.startsWith('Лабиринт: малая ячейка')).length,
     rewardDeadEnds: world.containers.filter(container => container.tags.includes('dead_end') && container.tags.includes('reward')).length,
     lockedChords: [...world.doors.values()].filter(door => door.keyId === ISTINNIY_LABIRINT_CHORD_KEY && door.state === DoorState.LOCKED).length,
     ariadneCueCells: cueCells,
@@ -959,6 +1413,7 @@ export function generateIstinniyLabirintDesignFloor(): FloorGeneration {
   const roomsByName = placeLandmarks(world, graph);
   const chordSpecs = selectLockedChords(graph, 8);
   const chords = chordSpecs.map((chord, index) => carveLockedChord(world, chord, index));
+  const ownedRooms = placeLabyrinthMidMicro(world, graph, roomsByName);
 
   const nextContainerId = { v: 1 };
   placeRewardStashes(world, graph, nextContainerId, roomsByName);
@@ -969,6 +1424,7 @@ export function generateIstinniyLabirintDesignFloor(): FloorGeneration {
   placeLift(world, exit.x + 3, exit.y, LiftDirection.DOWN);
 
   tuneLabyrinthZones(world);
+  paintLabyrinthTerritorySeeds(world, ownedRooms);
   ensureConnectivity(world, start.x + 0.5, start.y + 0.5);
   sanitizeDoors(world);
   world.rebuildContainerMap();

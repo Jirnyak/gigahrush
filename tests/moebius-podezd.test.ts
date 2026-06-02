@@ -5,15 +5,24 @@ import {
   Cell,
   DoorState,
   EntityType,
+  Faction,
   FloorLevel,
   LiftDirection,
   MonsterKind,
+  Occupation,
   RoomType,
   W,
+  ZoneFaction,
+  type Entity,
+  type Room,
+  type TerritoryOwner,
 } from '../src/core/types';
+import { auditReachability } from '../src/core/world';
 import { designFloorAtZ, designFloorById } from '../src/data/design_floors';
 import { designFloorPopulationProfile } from '../src/data/design_floor_population';
 import { ACTIVE_ACTOR_SOFT_LIMIT } from '../src/data/entity_limits';
+import { HUMAN_TERRITORY_OWNERS, factionToTerritoryOwner, territoryOwnerName } from '../src/data/factions';
+import { territorySharesForDesignFloor } from '../src/data/floor_territory';
 import { PROCEDURAL_FLOOR_ZS } from '../src/data/procedural_floors';
 import { generateDesignFloor } from '../src/gen/design_floors/manifest';
 import {
@@ -24,6 +33,7 @@ import {
   moebiusPodezdDecisionMetrics,
 } from '../src/gen/design_floors/moebius_podezd';
 import type { FloorGeneration } from '../src/gen/floor_manifest';
+import { countTerritoryCells, territoryHqAnchors, territoryOwnerAt, territoryRoomOwner } from '../src/systems/territory';
 
 const ORTHO_DIRS = [[1, 0], [-1, 0], [0, 1], [0, -1]] as const;
 let cachedGeneration: FloorGeneration | undefined;
@@ -31,6 +41,49 @@ let cachedGeneration: FloorGeneration | undefined;
 function generatedMoebiusPodezd(): FloorGeneration {
   cachedGeneration ??= generateDesignFloor(MOEBIUS_PODEZD_ROUTE_ID);
   return cachedGeneration;
+}
+
+function passableCells(gen: FloorGeneration): number {
+  let count = 0;
+  for (let i = 0; i < W * W; i++) {
+    const cell = gen.world.cells[i];
+    if (cell === Cell.FLOOR || cell === Cell.WATER || cell === Cell.DOOR || cell === Cell.LIFT) count++;
+  }
+  return count;
+}
+
+function reachableCellCount(gen: FloorGeneration): number {
+  const audit = auditReachability(gen.world, gen.world.idx(Math.floor(gen.spawnX), Math.floor(gen.spawnY)));
+  let count = 0;
+  for (const value of audit.reachable) count += value;
+  return count;
+}
+
+function hermeticShellCells(gen: FloorGeneration, room: Room): number {
+  let count = 0;
+  for (let dy = -1; dy <= room.h; dy++) {
+    for (let dx = -1; dx <= room.w; dx++) {
+      if (dx >= 0 && dx < room.w && dy >= 0 && dy < room.h) continue;
+      if (gen.world.hermoWall[gen.world.idx(room.x + dx, room.y + dy)]) count++;
+    }
+  }
+  return count;
+}
+
+function supportRoomsForHq(gen: FloorGeneration, hq: Room): number {
+  return gen.world.rooms.filter(room => room.name.startsWith(`${hq.name}:`)).length;
+}
+
+function isAmbientNpcTemplate(entity: Entity): boolean {
+  return entity.type === EntityType.NPC &&
+    entity.alive &&
+    entity.name?.startsWith('Мёбиус-подъезд:') === true &&
+    entity.plotNpcId === undefined &&
+    entity.persistentNpcId === undefined &&
+    entity.alifeId === undefined &&
+    entity.questId === -1 &&
+    entity.faction !== Faction.PLAYER &&
+    entity.occupation !== Occupation.CHILD;
 }
 
 function reachableWithoutLockedDoors(gen: FloorGeneration): Uint8Array {
@@ -109,6 +162,60 @@ test('moebius_podezd generator creates mirrored strips, landmarks and route-mark
   assert.equal(profile.npcTarget, 3400);
   assert.equal(profile.monsterTarget, 520);
   assert.equal(profile.npcTarget + profile.monsterTarget <= ACTIVE_ACTOR_SOFT_LIMIT, true);
+});
+
+test('moebius_podezd expands into a route-scale mirrored floor with cell-first faction control', () => {
+  const gen = generateDesignFloor(MOEBIUS_PODEZD_ROUTE_ID, 61061);
+  const world = gen.world;
+  const routeBlocks = world.rooms.filter(room => room.name.endsWith('средний коридор ленты'));
+  const microRooms = world.rooms.filter(room => room.name.includes(': прямая ') || room.name.includes(': обратная '));
+  const anchors = territoryHqAnchors(world);
+  const anchorOwners = new Set(anchors.map(anchor => anchor.owner));
+  const counts = new Map(countTerritoryCells(world).map(row => [row.owner, row.cells]));
+  const targetRows = territorySharesForDesignFloor(MOEBIUS_PODEZD_ROUTE_ID);
+  const targetTotal = targetRows.reduce((sum, row) => sum + row.share, 0);
+  const share = (owner: TerritoryOwner): number => (counts.get(owner) ?? 0) / (W * W);
+  const dominant = [...counts.entries()]
+    .filter(([owner]) => owner !== ZoneFaction.SAMOSBOR)
+    .sort((a, b) => b[1] - a[1])[0]?.[0];
+
+  assert.equal(world.rooms.length >= 520, true, `rooms ${world.rooms.length}`);
+  assert.equal(world.doors.size >= 360, true, `doors ${world.doors.size}`);
+  assert.equal(passableCells(gen) >= 190_000, true, `passable ${passableCells(gen)}`);
+  assert.equal(reachableCellCount(gen) >= 180_000, true, `reachable ${reachableCellCount(gen)}`);
+  assert.equal(routeBlocks.length >= 8, true, `route blocks ${routeBlocks.length}`);
+  assert.equal(microRooms.length >= 450, true, `micro rooms ${microRooms.length}`);
+
+  for (const owner of HUMAN_TERRITORY_OWNERS) {
+    assert.equal(anchorOwners.has(owner), true, `missing HQ anchor for ${territoryOwnerName(owner)}`);
+    assert.equal((counts.get(owner) ?? 0) > 0, true, `owned cells for ${territoryOwnerName(owner)}`);
+  }
+  assert.equal(dominant, ZoneFaction.CITIZEN);
+
+  for (const target of targetRows) {
+    const actual = share(target.owner);
+    assert.equal(Math.abs(actual - target.share / targetTotal) <= 0.03, true, `${territoryOwnerName(target.owner)} share ${actual.toFixed(3)}`);
+  }
+
+  for (const anchor of anchors) {
+    const room = world.rooms[anchor.roomId];
+    assert.equal(room.type, RoomType.HQ, `HQ type for ${territoryOwnerName(anchor.owner)}`);
+    assert.equal(room.sealed, true, `sealed HQ for ${territoryOwnerName(anchor.owner)}`);
+    assert.equal(territoryRoomOwner(world, room.id), anchor.owner, `HQ owner for ${territoryOwnerName(anchor.owner)}`);
+    assert.equal(territoryOwnerAt(world, room.x + (room.w >> 1), room.y + (room.h >> 1)), anchor.owner, `HQ cell owner for ${territoryOwnerName(anchor.owner)}`);
+    assert.equal(hermeticShellCells(gen, room) > 0, true, `hermetic shell for ${territoryOwnerName(anchor.owner)}`);
+    assert.equal(supportRoomsForHq(gen, room) >= 3, true, `support rooms for ${territoryOwnerName(anchor.owner)}`);
+  }
+
+  let ambientTotal = 0;
+  let ambientOwned = 0;
+  for (const entity of gen.entities) {
+    if (!isAmbientNpcTemplate(entity) || entity.faction === undefined) continue;
+    ambientTotal++;
+    if (territoryOwnerAt(world, entity.x, entity.y) === factionToTerritoryOwner(entity.faction)) ambientOwned++;
+  }
+  assert.equal(ambientTotal >= 2000, true, `ambient NPC templates ${ambientTotal}`);
+  assert.equal(ambientOwned / ambientTotal >= 0.95, true, `own-territory NPC ratio ${ambientOwned / ambientTotal}`);
 });
 
 test('moebius_podezd keeps the public loop usable without opening the parity shortcut', () => {

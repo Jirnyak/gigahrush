@@ -68,6 +68,9 @@ const FLOOR_69_CONTROL_ANCHORS: readonly {
   { x: 512, y: 512, radius: 148, faction: ZoneFaction.CITIZEN, weight: 1.45, visibility: 0.72, danger: 1 },
   { x: 510, y: 536, radius: 118, faction: ZoneFaction.WILD, weight: 0.92, visibility: 0.18, danger: 1 },
   { x: 736, y: 812, radius: 144, faction: ZoneFaction.WILD, weight: 1.15, visibility: 0.34, danger: 1 },
+  { x: 304, y: 300, radius: 132, faction: ZoneFaction.SCIENTIST, weight: 1.7, visibility: 0.56, danger: 2 },
+  { x: 304, y: 744, radius: 142, faction: ZoneFaction.CULTIST, weight: 1.55, visibility: 0.28, danger: 2 },
+  { x: 836, y: 448, radius: 126, faction: ZoneFaction.LIQUIDATOR, weight: 1.6, visibility: 0.82, danger: 2 },
 ];
 
 const IRA_WORKER_LINES = [
@@ -204,6 +207,10 @@ export function floor69DebugLines(state: Floor69State, seed = FLOOR_69_DEFAULT_S
 
 function floor69RoomFaction(room: Room | undefined): ZoneFaction | undefined {
   if (!room) return undefined;
+  if (room.name.includes('Граждан') || room.name.includes('общак') || room.name.includes('Тихая комната')) return ZoneFaction.CITIZEN;
+  if (room.name.includes('НИИ') || room.name.includes('Лаборатор') || room.name.includes('Санитар') || room.name.includes('стерил')) return ZoneFaction.SCIENTIST;
+  if (room.name.includes('Культ') || room.name.includes('Свеч') || room.name.includes('исповед') || room.name.includes('ритуал')) return ZoneFaction.CULTIST;
+  if (room.name.includes('Дики') || room.name.includes('диких') || room.name.includes('стихийн') || room.name.includes('развал')) return ZoneFaction.WILD;
   if (room.type === RoomType.HQ || room.name.includes('пост') || room.name.includes('Пост')) return ZoneFaction.LIQUIDATOR;
   if (room.name.includes('Долг') || room.name.includes('долг') || room.name.includes('Картотека') || room.name.includes('распис')) return ZoneFaction.LIQUIDATOR;
   if (room.name.includes('Клиника') || room.name.includes('тих') || room.name.includes('Тих')) return ZoneFaction.CITIZEN;
@@ -213,7 +220,7 @@ function floor69RoomFaction(room: Room | undefined): ZoneFaction | undefined {
 
 function floor69ControlAt(world: World, x: number, y: number, room: Room | undefined): { faction: ZoneFaction; visibility: number; danger: number } {
   const roomFaction = floor69RoomFaction(room);
-  const scores = new Float32Array(5);
+  const scores = new Float32Array(6);
   scores[ZoneFaction.CITIZEN] = 0.55;
   let visibility = 0.2;
   let danger = 0;
@@ -241,7 +248,7 @@ function floor69ControlAt(world: World, x: number, y: number, room: Room | undef
 
   let faction = ZoneFaction.CITIZEN;
   let best = scores[faction];
-  for (const candidate of [ZoneFaction.LIQUIDATOR, ZoneFaction.WILD, ZoneFaction.CULTIST, ZoneFaction.SAMOSBOR] as const) {
+  for (const candidate of [ZoneFaction.LIQUIDATOR, ZoneFaction.CULTIST, ZoneFaction.WILD, ZoneFaction.SCIENTIST, ZoneFaction.SAMOSBOR] as const) {
     if (scores[candidate] > best) {
       best = scores[candidate];
       faction = candidate;
@@ -250,7 +257,7 @@ function floor69ControlAt(world: World, x: number, y: number, room: Room | undef
   return { faction, visibility, danger };
 }
 
-export function applyFloor69OwnershipVisibilityHeatmap(world: World): void {
+export function applyFloor69OwnershipVisibilityHeatmap(world: World, writeCells = true): void {
   if (world.zones.length > 0) {
     for (const zone of world.zones) {
       const samples = [
@@ -260,7 +267,7 @@ export function applyFloor69OwnershipVisibilityHeatmap(world: World): void {
         [zone.cx, zone.cy + 31],
         [zone.cx, zone.cy - 31],
       ] as const;
-      const counts = new Int16Array(5);
+      const counts = new Int16Array(6);
       let visibility = 0;
       let danger = 0;
       for (const [sx, sy] of samples) {
@@ -273,18 +280,21 @@ export function applyFloor69OwnershipVisibilityHeatmap(world: World): void {
       }
       let faction = ZoneFaction.CITIZEN;
       let best = counts[faction];
-      for (const candidate of [ZoneFaction.LIQUIDATOR, ZoneFaction.WILD, ZoneFaction.CULTIST, ZoneFaction.SAMOSBOR] as const) {
-        if (counts[candidate] > best) {
-          best = counts[candidate];
-          faction = candidate;
+      if (writeCells) {
+        for (const candidate of [ZoneFaction.LIQUIDATOR, ZoneFaction.CULTIST, ZoneFaction.WILD, ZoneFaction.SCIENTIST, ZoneFaction.SAMOSBOR] as const) {
+          if (counts[candidate] > best) {
+            best = counts[candidate];
+            faction = candidate;
+          }
         }
+        zone.faction = faction;
       }
-      zone.faction = faction;
       zone.level = Math.max(zone.level, Math.min(5, 2 + danger + (visibility / samples.length > 0.82 ? 1 : 0)));
       zone.fogged = false;
     }
   }
 
+  if (!writeCells) return;
   for (let i = 0; i < W * W; i++) {
     const roomId = world.roomMap[i];
     const heat = floor69ControlAt(world, i % W, (i / W) | 0, roomId >= 0 ? world.rooms[roomId] : undefined);
@@ -985,6 +995,121 @@ function addRouteRoom(
   return room;
 }
 
+function canPlaceFloor69Room(world: World, x: number, y: number, w: number, h: number): boolean {
+  for (let dy = -1; dy <= h; dy++) {
+    for (let dx = -1; dx <= w; dx++) {
+      const idx = world.idx(x + dx, y + dy);
+      if (world.cells[idx] !== Cell.WALL || world.aptMask[idx]) return false;
+    }
+  }
+  return true;
+}
+
+function floor69OwnerWallTex(owner: ZoneFaction): Tex {
+  if (owner === ZoneFaction.LIQUIDATOR) return Tex.METAL;
+  if (owner === ZoneFaction.SCIENTIST) return Tex.TILE_W;
+  if (owner === ZoneFaction.CULTIST) return Tex.DARK;
+  if (owner === ZoneFaction.WILD) return Tex.ROTTEN;
+  return Tex.PANEL;
+}
+
+function floor69OwnerFloorTex(owner: ZoneFaction): Tex {
+  if (owner === ZoneFaction.SCIENTIST) return Tex.F_TILE;
+  if (owner === ZoneFaction.CULTIST) return Tex.F_RED_CARPET;
+  if (owner === ZoneFaction.WILD) return Tex.F_CONCRETE;
+  if (owner === ZoneFaction.LIQUIDATOR) return Tex.F_CONCRETE;
+  return Tex.F_LINO;
+}
+
+function assignFloor69RoomOwner(world: World, room: Room, owner: ZoneFaction): void {
+  for (let dy = 0; dy < room.h; dy++) {
+    for (let dx = 0; dx < room.w; dx++) {
+      const idx = world.idx(room.x + dx, room.y + dy);
+      if (world.roomMap[idx] === room.id) world.factionControl[idx] = owner;
+    }
+  }
+  for (const idx of room.doors) world.factionControl[idx] = owner;
+}
+
+function decorateOwnedSupportRoom(world: World, room: Room, owner: ZoneFaction, salt: number): void {
+  if (room.type === RoomType.KITCHEN) {
+    setFeature(world, room.x + 2, room.y + 2, Feature.STOVE);
+    setFeature(world, room.x + room.w - 3, room.y + 2, Feature.SINK);
+    setFeature(world, room.x + (room.w >> 1), room.y + room.h - 3, Feature.TABLE);
+  } else if (room.type === RoomType.BATHROOM) {
+    setFeature(world, room.x + 2, room.y + 2, Feature.SINK);
+    setFeature(world, room.x + room.w - 3, room.y + room.h - 3, Feature.TOILET);
+  } else if (room.type === RoomType.MEDICAL) {
+    setFeature(world, room.x + 2, room.y + 2, Feature.APPARATUS);
+    setFeature(world, room.x + room.w - 3, room.y + room.h - 3, Feature.BED);
+  } else if (room.type === RoomType.OFFICE || room.type === RoomType.HQ) {
+    setFeature(world, room.x + 2, room.y + 2, Feature.DESK);
+    setFeature(world, room.x + room.w - 3, room.y + 2, Feature.SHELF);
+  } else {
+    setFeature(world, room.x + 2, room.y + 2, Feature.TABLE);
+    setFeature(world, room.x + room.w - 3, room.y + room.h - 3, Feature.SHELF);
+  }
+  setFeature(world, room.x + (room.w >> 1), room.y + (room.h >> 1), owner === ZoneFaction.CULTIST ? Feature.CANDLE : Feature.LAMP);
+  if (owner === ZoneFaction.SCIENTIST) addScreenWall(world, room.x + (room.w >> 1), room.y - 1, salt + 7);
+  if (owner === ZoneFaction.CULTIST) stampSurfaceSplat(world, room.x + (room.w >> 1), room.y + (room.h >> 1), 0.5, 0.5, 2.6, 0.18, salt * 701, 120, 32, 180, true);
+}
+
+function tryAddOwnedRoom(
+  world: World,
+  type: RoomType,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  name: string,
+  owner: ZoneFaction,
+  protectedRoom = false,
+): Room | undefined {
+  if (!canPlaceFloor69Room(world, x, y, w, h)) return undefined;
+  const room = addRoom(world, type, x, y, w, h, name, floor69OwnerWallTex(owner), floor69OwnerFloorTex(owner), protectedRoom);
+  if (protectedRoom) {
+    room.sealed = true;
+    for (let dy = -1; dy <= room.h; dy++) {
+      for (let dx = -1; dx <= room.w; dx++) {
+        const border = dx < 0 || dx >= room.w || dy < 0 || dy >= room.h;
+        if (!border) continue;
+        const idx = world.idx(room.x + dx, room.y + dy);
+        if (world.cells[idx] !== Cell.WALL) continue;
+        world.hermoWall[idx] = 1;
+        world.wallTex[idx] = Tex.HERMO_WALL;
+      }
+    }
+  }
+  assignFloor69RoomOwner(world, room, owner);
+  return room;
+}
+
+function tryAddRouteRoom(
+  world: World,
+  rng: () => number,
+  counts: Floor69MacroCounts,
+  motif: 'hotel' | 'dressing' | 'debt' | 'security' | 'refuge',
+  owner: ZoneFaction,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  name: string,
+  doorTargetX: number,
+  doorTargetY: number,
+  state = DoorState.CLOSED,
+  keyId = '',
+): Room | undefined {
+  if (!canPlaceFloor69Room(world, x, y, w, h)) return undefined;
+  const room = addRouteRoom(world, rng, motif, x, y, w, h, name, doorTargetX, doorTargetY, state, keyId);
+  assignFloor69RoomOwner(world, room, owner);
+  if (motif === 'hotel') counts.hotelRooms++;
+  else if (motif === 'dressing') counts.dressingRooms++;
+  else if (motif === 'debt') counts.debtRooms++;
+  else if (motif === 'refuge') counts.refugeRooms++;
+  return room;
+}
+
 function addHorizontalRooms(
   world: World,
   rng: () => number,
@@ -1021,6 +1146,174 @@ function addHorizontalRooms(
     else if (motif === 'debt') counts.debtRooms++;
     else counts.refugeRooms++;
   }
+}
+
+function addHorizontalOwnedRooms(
+  world: World,
+  rng: () => number,
+  counts: Floor69MacroCounts,
+  corridorY: number,
+  x1: number,
+  x2: number,
+  side: -1 | 1,
+  motif: 'hotel' | 'dressing' | 'debt' | 'refuge',
+  owner: ZoneFaction,
+  label: string,
+  step: number,
+): void {
+  for (let x = x1; x <= x2; x += step) {
+    const w = 18 + Math.floor(rng() * (motif === 'debt' ? 18 : 14));
+    const h = 11 + Math.floor(rng() * (motif === 'refuge' ? 6 : 9));
+    const y = side < 0 ? corridorY - h - 4 : corridorY + 5;
+    tryAddRouteRoom(
+      world,
+      rng,
+      counts,
+      motif,
+      owner,
+      x,
+      y,
+      w,
+      h,
+      `${label} ${Math.floor(x / step)}`,
+      x + Math.floor(w / 2),
+      corridorY,
+      motif === 'refuge' ? DoorState.HERMETIC_OPEN : motif === 'debt' && rng() < 0.32 ? DoorState.LOCKED : DoorState.CLOSED,
+      motif === 'debt' ? 'key' : '',
+    );
+  }
+}
+
+function addVerticalOwnedRooms(
+  world: World,
+  rng: () => number,
+  counts: Floor69MacroCounts,
+  corridorX: number,
+  y1: number,
+  y2: number,
+  side: -1 | 1,
+  motif: 'hotel' | 'dressing' | 'debt' | 'refuge',
+  owner: ZoneFaction,
+  label: string,
+  step: number,
+): void {
+  for (let y = y1; y <= y2; y += step) {
+    const w = 12 + Math.floor(rng() * (motif === 'debt' ? 14 : 12));
+    const h = 18 + Math.floor(rng() * (motif === 'refuge' ? 8 : 12));
+    const x = side < 0 ? corridorX - w - 4 : corridorX + 5;
+    tryAddRouteRoom(
+      world,
+      rng,
+      counts,
+      motif,
+      owner,
+      x,
+      y,
+      w,
+      h,
+      `${label} ${Math.floor(y / step)}`,
+      corridorX,
+      y + Math.floor(h / 2),
+      motif === 'refuge' ? DoorState.HERMETIC_OPEN : motif === 'debt' && rng() < 0.3 ? DoorState.LOCKED : DoorState.CLOSED,
+      motif === 'debt' ? 'key' : '',
+    );
+  }
+}
+
+function supportRoomType(owner: ZoneFaction, slot: number): RoomType {
+  if (slot === 0) return RoomType.KITCHEN;
+  if (slot === 1) return RoomType.BATHROOM;
+  if (slot === 2) return owner === ZoneFaction.SCIENTIST ? RoomType.MEDICAL : owner === ZoneFaction.LIQUIDATOR ? RoomType.OFFICE : RoomType.STORAGE;
+  return owner === ZoneFaction.CULTIST ? RoomType.COMMON : owner === ZoneFaction.WILD ? RoomType.STORAGE : RoomType.COMMON;
+}
+
+function buildFloor69MiniHq(
+  world: World,
+  rng: () => number,
+  owner: ZoneFaction,
+  label: string,
+  hx: number,
+  hy: number,
+  routeX: number,
+  routeY: number,
+): void {
+  const floorTex = floor69OwnerFloorTex(owner);
+  const wallTex = floor69OwnerWallTex(owner);
+  const hub = tryAddOwnedRoom(world, RoomType.CORRIDOR, hx - 18, hy - 5, 36, 10, `${label}: коридор`, owner);
+  if (!hub) return;
+
+  carveRouteLine(world, routeX, routeY, hub.x + 1, hy, 2, floorTex, wallTex);
+  decorateRouteLine(world, hy, hx - 18, hx + 18, hx + hy);
+
+  const rooms = [
+    tryAddOwnedRoom(world, RoomType.HQ, hub.x + 7, hub.y - 11, 22, 10, `${label}: гермокор`, owner, true),
+    tryAddOwnedRoom(world, supportRoomType(owner, 0), hub.x + 5, hub.y + hub.h + 1, 14, 10, `${label}: кухня`, owner),
+    tryAddOwnedRoom(world, supportRoomType(owner, 1), hub.x + 21, hub.y + hub.h + 1, 12, 10, `${label}: санузел`, owner),
+    tryAddOwnedRoom(world, supportRoomType(owner, 2), hub.x - 17, hub.y + 1, 16, 8, `${label}: склад`, owner),
+    tryAddOwnedRoom(world, supportRoomType(owner, 3), hub.x + hub.w + 1, hub.y + 1, 18, 8, `${label}: комната`, owner),
+  ];
+
+  for (let i = 0; i < rooms.length; i++) {
+    const room = rooms[i];
+    if (!room) continue;
+    connect(world, room, hub, '', room.type === RoomType.HQ ? DoorState.HERMETIC_OPEN : DoorState.CLOSED);
+    assignFloor69RoomOwner(world, room, owner);
+    assignFloor69RoomOwner(world, hub, owner);
+    decorateOwnedSupportRoom(world, room, owner, room.id + i * 17);
+  }
+
+  if (rng() < 0.5) setFeature(world, hx, hy, owner === ZoneFaction.CULTIST ? Feature.CANDLE : Feature.LAMP);
+}
+
+function buildFloor69DenseBlock(
+  world: World,
+  rng: () => number,
+  counts: Floor69MacroCounts,
+  owner: ZoneFaction,
+  motif: 'hotel' | 'dressing' | 'debt' | 'refuge',
+  label: string,
+  cx: number,
+  cy: number,
+  halfW: number,
+  halfH: number,
+  routeX: number,
+  routeY: number,
+): void {
+  const floorTex = floor69OwnerFloorTex(owner);
+  const wallTex = floor69OwnerWallTex(owner);
+  carveRouteLine(world, routeX, routeY, cx, cy, 2, floorTex, wallTex);
+  carveRouteLine(world, cx - halfW, cy, cx + halfW, cy, 2, floorTex, wallTex);
+  carveRouteLine(world, cx, cy - halfH, cx, cy + halfH, 2, floorTex, wallTex);
+  addHorizontalOwnedRooms(world, rng, counts, cy, cx - halfW + 10, cx + halfW - 28, -1, motif, owner, `${label} север`, 34);
+  addHorizontalOwnedRooms(world, rng, counts, cy, cx - halfW + 10, cx + halfW - 28, 1, motif, owner, `${label} юг`, 34);
+  addVerticalOwnedRooms(world, rng, counts, cx, cy - halfH + 12, cy + halfH - 30, -1, motif, owner, `${label} запад`, 34);
+  addVerticalOwnedRooms(world, rng, counts, cx, cy - halfH + 12, cy + halfH - 30, 1, motif, owner, `${label} восток`, 34);
+  counts.loops += 2;
+}
+
+function buildFloor69MidMicroLayer(world: World, rng: () => number, counts: Floor69MacroCounts): void {
+  buildFloor69MiniHq(world, rng, ZoneFaction.CITIZEN, 'Гражданский общак 69', 304, 512, 304, 512);
+  buildFloor69MiniHq(world, rng, ZoneFaction.SCIENTIST, 'Санитарный НИИ 69', 304, 300, 300, 256);
+  buildFloor69MiniHq(world, rng, ZoneFaction.CULTIST, 'Свечная исповедальня 69', 304, 744, 300, 812);
+  buildFloor69MiniHq(world, rng, ZoneFaction.WILD, 'Дикий развал должников 69', 736, 790, 736, 812);
+  buildFloor69MiniHq(world, rng, ZoneFaction.LIQUIDATOR, 'Рейдовый штаб протокола 69', 836, 448, 736, 448);
+
+  buildFloor69DenseBlock(world, rng, counts, ZoneFaction.SCIENTIST, 'debt', 'Лабораторный кабинет 69', 260, 300, 96, 70, 300, 256);
+  buildFloor69DenseBlock(world, rng, counts, ZoneFaction.CITIZEN, 'hotel', 'Гражданский двор свидетелей 69', 250, 520, 116, 86, 176, 512);
+  buildFloor69DenseBlock(world, rng, counts, ZoneFaction.CULTIST, 'dressing', 'Свечная ниша процента 69', 260, 760, 96, 74, 300, 812);
+  buildFloor69DenseBlock(world, rng, counts, ZoneFaction.WILD, 'refuge', 'Дикие лежанки должников 69', 766, 790, 112, 82, 736, 812);
+  buildFloor69DenseBlock(world, rng, counts, ZoneFaction.LIQUIDATOR, 'debt', 'Рейдовый архив протокола 69', 840, 456, 94, 70, 736, 448);
+
+  addVerticalOwnedRooms(world, rng, counts, 176, 330, 690, -1, 'hotel', ZoneFaction.CITIZEN, 'Боковой номер западной очереди', 34);
+  addVerticalOwnedRooms(world, rng, counts, 176, 330, 690, 1, 'hotel', ZoneFaction.CITIZEN, 'Боковой номер восточной очереди', 34);
+  addVerticalOwnedRooms(world, rng, counts, 392, 308, 704, -1, 'dressing', ZoneFaction.WILD, 'Гримерная средней петли', 36);
+  addVerticalOwnedRooms(world, rng, counts, 392, 308, 704, 1, 'refuge', ZoneFaction.CITIZEN, 'Тихий шкаф средней петли', 38);
+  addVerticalOwnedRooms(world, rng, counts, 736, 180, 872, -1, 'debt', ZoneFaction.WILD, 'Долговой развал запад', 36);
+  addVerticalOwnedRooms(world, rng, counts, 736, 180, 872, 1, 'debt', ZoneFaction.LIQUIDATOR, 'Протокольная будка восток', 36);
+  addHorizontalOwnedRooms(world, rng, counts, 256, 198, 690, -1, 'refuge', ZoneFaction.SCIENTIST, 'Стерильный верхний шкаф', 38);
+  addHorizontalOwnedRooms(world, rng, counts, 812, 500, 890, 1, 'refuge', ZoneFaction.WILD, 'Нижняя лежанка развала', 38);
+  addHorizontalOwnedRooms(world, rng, counts, 448, 190, 700, -1, 'dressing', ZoneFaction.CITIZEN, 'Смотровая кабинка средней линии', 38);
+  addHorizontalOwnedRooms(world, rng, counts, 448, 190, 700, 1, 'dressing', ZoneFaction.WILD, 'Служебная кабинка средней линии', 38);
 }
 
 function decorateRouteLine(world: World, y: number, x1: number, x2: number, seedOffset: number): void {
@@ -1112,6 +1405,7 @@ function buildLayout(world: World): Floor69Rooms {
   const clinic = addRoom(world, RoomType.MEDICAL, 530, 496, 17, 11, 'Клиника Сима: тихий прием', Tex.TILE_W, Tex.F_TILE);
   const debtOffice = addRoom(world, RoomType.OFFICE, 530, 515, 17, 12, 'Долговая контора 69', Tex.PANEL, Tex.F_PARQUET);
   const refuge = addRoom(world, RoomType.LIVING, 498, 515, 12, 10, 'Тихая комната 69', Tex.PANEL, Tex.F_LINO, true);
+  refuge.type = RoomType.HQ;
   const ledger = addRoom(world, RoomType.OFFICE, 514, 515, 12, 10, 'Картотека долгов 69', Tex.MARBLE, Tex.F_PARQUET);
   const staffRoute = addRoom(world, RoomType.CORRIDOR, 553, 500, 5, 49, 'Служебный ход 69', Tex.DARK, Tex.F_CONCRETE);
   const staffLift = addRoom(world, RoomType.CORRIDOR, 548, 550, 13, 9, 'Черная лестница 69', Tex.METAL, Tex.F_CONCRETE);
@@ -1270,6 +1564,7 @@ export function expandFloor69FullFloor(generation: FloorGeneration, rng: () => n
   buildFloor69DebtBlock(generation.world, rng, counts);
   buildFloor69RefugeClosets(generation.world, rng, counts);
   buildFloor69SecurityChokes(generation.world, counts);
+  buildFloor69MidMicroLayer(generation.world, rng, counts);
 
   genLog(
     `[F69] full geometry rooms=${counts.hotelRooms + counts.dressingRooms + counts.debtRooms + counts.refugeRooms}`

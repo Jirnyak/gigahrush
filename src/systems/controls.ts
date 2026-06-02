@@ -20,9 +20,9 @@ export const CONTROL_ACTIONS = [
   { id: 'strafeLeft', group: 'Движение', label: 'Шаг влево', input: 'strafeL', defaultKeys: ['KeyA'] },
   { id: 'strafeRight', group: 'Движение', label: 'Шаг вправо', input: 'strafeR', defaultKeys: ['KeyD'] },
   { id: 'sprint', group: 'Движение', label: 'Спринт, удерживать', input: 'sprint', defaultKeys: ['ShiftLeft', 'ShiftRight'] },
-  { id: 'attack', group: 'Бой', label: 'Атака / выстрел', input: 'attack', defaultKeys: ['Space'] },
+  { id: 'attack', group: 'Бой', label: 'Атака / выстрел', input: 'attack', defaultKeys: [] },
   { id: 'interact', group: 'Бой', label: 'Взаимодействовать в мире', input: 'interact', defaultKeys: ['KeyE'] },
-  { id: 'useTool', group: 'Бой', label: 'Использовать инструмент', input: 'use', defaultKeys: ['KeyG', 'KeyR'] },
+  { id: 'useTool', group: 'Бой', label: 'Использовать инструмент', input: 'use', defaultKeys: ['KeyR'] },
   { id: 'sleep', group: 'Состояние', label: 'Спать, удерживать', input: 'sleep', defaultKeys: ['KeyZ'] },
   { id: 'pee', group: 'Состояние', label: 'Пописать', input: 'pee', defaultKeys: ['KeyP'] },
   { id: 'gameMenu', group: 'Экраны', label: 'Меню / принять', input: 'escape', defaultKeys: ['Enter'] },
@@ -31,14 +31,15 @@ export const CONTROL_ACTIONS = [
   { id: 'fullscreen', group: 'Экраны', label: 'Полный экран', defaultKeys: ['F11'] },
   { id: 'inventory', group: 'Экраны', label: 'Инвентарь', input: 'inv', defaultKeys: ['KeyI'] },
   { id: 'map', group: 'Экраны', label: 'Большая карта', input: 'map', defaultKeys: ['KeyM'] },
+  { id: 'mapLegend', group: 'Экраны', label: 'Легенда карты', input: 'mapLegend', defaultKeys: ['KeyG'] },
   { id: 'quests', group: 'Экраны', label: 'Задания', input: 'questLog', defaultKeys: ['KeyQ'] },
   { id: 'factions', group: 'Экраны', label: 'Фракции / A-Life', input: 'factionMenu', defaultKeys: ['KeyF'] },
   { id: 'log', group: 'Экраны', label: 'Журнал сообщений', input: 'logMenu', defaultKeys: ['KeyL'] },
   { id: 'netSphere', group: 'Экраны', label: 'НЕТ-СФЕРА', defaultKeys: ['KeyN'] },
   { id: 'debug', group: 'Экраны', label: 'Отладка', input: 'debugScreen', defaultKeys: ['Backquote'] },
-  { id: 'netSubmit', group: 'НЕТ-СФЕРА', label: 'Отправить сообщение / принять', defaultKeys: ['Enter'] },
-  { id: 'netClose', group: 'НЕТ-СФЕРА', label: 'Закрыть окно', defaultKeys: ['Backspace', 'Delete'] },
-  { id: 'netErase', group: 'НЕТ-СФЕРА', label: 'Удалить символ', defaultKeys: [] },
+  { id: 'netSubmit', group: 'НЕТ-СФЕРА', label: 'Отправить и закрыть / принять', defaultKeys: ['Enter'] },
+  { id: 'netClose', group: 'НЕТ-СФЕРА', label: 'Закрыть окно', defaultKeys: ['Delete'] },
+  { id: 'netErase', group: 'НЕТ-СФЕРА', label: 'Удалить символ', defaultKeys: ['Backspace'] },
   { id: 'menuUp', group: 'Меню', label: 'Выбор вверх', input: 'invUp', defaultKeys: ['KeyW', 'ArrowUp'] },
   { id: 'menuDown', group: 'Меню', label: 'Выбор вниз', input: 'invDn', defaultKeys: ['KeyS', 'ArrowDown'] },
   { id: 'menuLeft', group: 'Меню', label: 'Влево / предыдущая', input: 'invLeft', defaultKeys: ['KeyA', 'ArrowLeft'] },
@@ -52,7 +53,7 @@ export const CONTROL_ACTIONS = [
 export type ControlActionId = typeof CONTROL_ACTIONS[number]['id'];
 type ControlBindings = Record<ControlActionId, string[]>;
 
-const CONTROL_STORAGE_KEY = 'gigahrush_control_bindings_v4';
+const CONTROL_STORAGE_KEY = 'gigahrush_control_bindings_v5';
 const MAX_BINDINGS_PER_ACTION = 16;
 
 const CODE_LABELS: Record<string, string> = {
@@ -69,10 +70,15 @@ const CODE_LABELS: Record<string, string> = {
   Tab: 'Tab',
 };
 
-export const MENU_CLOSE_CODES = ['Backspace', 'Delete'] as const;
+export const MENU_CLOSE_CODES = ['Space'] as const;
+const CONTROL_RESET_CODES = ['Backspace'] as const;
 
 export function isMenuCloseCode(code: string): boolean {
   return (MENU_CLOSE_CODES as readonly string[]).includes(code);
+}
+
+export function isControlResetCode(code: string): boolean {
+  return (CONTROL_RESET_CODES as readonly string[]).includes(code);
 }
 
 export function menuCloseLabel(): string {
@@ -108,7 +114,8 @@ export function controlActionLocked(actionId: ControlActionId): boolean {
 function codeAssignableTo(actionId: ControlActionId, code: string): boolean {
   if (!actionDef(actionId)) return false;
   if (code === 'Escape') return false;
-  if (isMenuCloseCode(code) && actionId !== 'netClose') return false;
+  if (isMenuCloseCode(code)) return false;
+  if (isControlResetCode(code) && actionId !== 'netErase') return false;
   if (typeof code !== 'string' || code.length < 2 || code.length > 32) return false;
   return true;
 }

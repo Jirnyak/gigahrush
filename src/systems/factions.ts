@@ -1,15 +1,17 @@
-/* ── Faction warfare system — S.T.A.L.K.E.R.-style zone control ── */
-/*   Cell-based territory map, zone capture AI, faction events,    */
+/* ── Faction warfare system — cell territory control ─────────── */
+/*   Cell-based territory map, local capture AI, faction events,   */
 /*   and faction strength from territory.                          */
 
 import {
-  W, Cell,
   type Entity, type GameState,
   EntityType, AIGoal, Faction, ZoneFaction, Occupation,
   type FloorLevel, type WorldEventSeverity, type WorldEventType,
 } from '../core/types';
 import { World } from '../core/world';
 import { ITEMS } from '../data/catalog';
+import {
+  HUMAN_TERRITORY_OWNERS,
+} from '../data/factions';
 import { getFactionRel, addFactionRelMutual } from '../data/relations';
 import { isPsiMad, isPsiAlly } from './psi';
 import { isPlayerEntity } from './player_actor';
@@ -18,7 +20,15 @@ import { MAX_CARAVAN_LANES_PER_TICK, tickCaravans } from './caravans';
 import { getRecentEvents, publishEvent } from './events';
 import { getRecentNoiseRecords, type NoiseRecord } from './noise';
 import { tryAssignPathToCell } from './ai/pathfinding';
-import { ENTITY_MASK_NPC, ensureEntityIndex, getEntityIndex } from './entity_index';
+import { ENTITY_MASK_NPC, getEntityIndex } from './entity_index';
+import {
+  countTerritoryCells,
+  currentTerritoryZoneId,
+  initializeCellTerritory,
+  territoryOwnerAt,
+  territoryOwnerAtIndex,
+  updateTerritoryCapture,
+} from './territory';
 import {
   HOSTILE_RELATION_THRESHOLD,
   addNpcPlayerRelation,
@@ -101,32 +111,9 @@ export function isHostile(attacker: Entity, target: Entity): boolean {
   return areFactionsHostile(aFaction, bFaction);
 }
 
-/* ── Zone → ZoneFaction mapping from Faction ─────────────────── */
-export function factionToZone(f: Faction): ZoneFaction {
-  switch (f) {
-    case Faction.CITIZEN:    return ZoneFaction.CITIZEN;
-    case Faction.LIQUIDATOR: return ZoneFaction.LIQUIDATOR;
-    case Faction.CULTIST:    return ZoneFaction.CULTIST;
-    case Faction.SCIENTIST:  return ZoneFaction.CITIZEN; // scientists align with citizens
-    case Faction.WILD:       return ZoneFaction.WILD;
-    case Faction.PLAYER:     return ZoneFaction.CITIZEN; // player aligned with citizens for zone purposes
-  }
-}
-
-export function zoneFactionToFaction(zf: ZoneFaction): Faction | null {
-  switch (zf) {
-    case ZoneFaction.CITIZEN:    return Faction.CITIZEN;
-    case ZoneFaction.LIQUIDATOR: return Faction.LIQUIDATOR;
-    case ZoneFaction.CULTIST:    return Faction.CULTIST;
-    case ZoneFaction.WILD:       return Faction.WILD;
-    default: return null;
-  }
-}
-
-/* ── Territory counting per ZoneFaction ──────────────────────── */
+/* ── Territory counting per owner ────────────────────────────── */
 export interface FactionStats {
-
-  zones: number;         // zones controlled
+  cells: number;
 }
 
 export interface FactionZoneUiSnapshot {
@@ -147,8 +134,8 @@ export interface FactionZoneUiSnapshot {
 
 export interface FactionOwnerUiSnapshot {
   faction: ZoneFaction;
-  zones: number;
-  contested: number;
+  cells: number;
+  fronts: number;
 }
 
 export interface FactionRecentEventUiSnapshot {
@@ -181,6 +168,7 @@ const ZONE_UI_FACTIONS = [
   ZoneFaction.CITIZEN,
   ZoneFaction.LIQUIDATOR,
   ZoneFaction.CULTIST,
+  ZoneFaction.SCIENTIST,
   ZoneFaction.WILD,
   ZoneFaction.SAMOSBOR,
 ] as const;
@@ -201,15 +189,13 @@ export function getFactionUiSnapshot(): FactionUiSnapshot | undefined {
 
 export function countFactionTerritory(world: World): Map<ZoneFaction, FactionStats> {
   const stats = new Map<ZoneFaction, FactionStats>();
-  for (const zf of [ZoneFaction.CITIZEN, ZoneFaction.LIQUIDATOR, ZoneFaction.CULTIST, ZoneFaction.WILD]) {
-    stats.set(zf, { zones: 0 });
+  for (const zf of HUMAN_TERRITORY_OWNERS) {
+    stats.set(zf, { cells: 0 });
   }
-
-  // Count zones (the strategic unit — no need to scan 1M cells)
-  for (const zone of world.zones) {
-    if (zone.faction === ZoneFaction.SAMOSBOR) continue;
-    const s = stats.get(zone.faction);
-    if (s) s.zones++;
+  for (const row of countTerritoryCells(world)) {
+    if (row.owner === ZoneFaction.SAMOSBOR) continue;
+    const s = stats.get(row.owner);
+    if (s) s.cells = row.cells;
   }
 
   return stats;
@@ -224,9 +210,13 @@ function refreshFactionUiSnapshot(world: World, state: GameState): void {
   const zones: FactionZoneUiSnapshot[] = [];
   const zoneById: (FactionZoneUiSnapshot | undefined)[] = [];
   const ownerCounts = new Map<ZoneFaction, FactionOwnerUiSnapshot>();
-  for (const faction of ZONE_UI_FACTIONS) ownerCounts.set(faction, { faction, zones: 0, contested: 0 });
+  for (const faction of ZONE_UI_FACTIONS) ownerCounts.set(faction, { faction, cells: 0, fronts: 0 });
 
   let contestedZones = 0;
+  for (const row of countTerritoryCells(world, 4)) {
+    const owner = ownerCounts.get(row.owner);
+    if (owner) owner.cells = row.cells;
+  }
   for (const zone of world.zones) {
     if (!zone) continue;
     uiSampleCounts.fill(0);
@@ -235,7 +225,7 @@ function refreshFactionUiSnapshot(world: World, state: GameState): void {
       for (let dx = -UI_ZONE_SAMPLE_RADIUS; dx <= UI_ZONE_SAMPLE_RADIUS; dx += UI_ZONE_SAMPLE_STEP) {
         const i = world.idx(world.wrap(zone.cx + dx), world.wrap(zone.cy + dy));
         if (world.zoneMap[i] !== zone.id) continue;
-        const zf = world.factionControl[i];
+        const zf = territoryOwnerAtIndex(world, i);
         if (zf < uiSampleCounts.length) {
           uiSampleCounts[zf]++;
           sampled++;
@@ -243,29 +233,50 @@ function refreshFactionUiSnapshot(world: World, state: GameState): void {
       }
     }
 
-    let dominant = zone.faction;
-    let dominantCount = 0;
+    let owner = territoryOwnerAt(world, zone.cx, zone.cy);
+    let ownerCount = owner < uiSampleCounts.length ? uiSampleCounts[owner] : 0;
+    let strongest = owner;
+    let strongestCount = ownerCount;
+    let pressureOwner = owner;
+    let pressureCount = 0;
     for (let i = 0; i < uiSampleCounts.length; i++) {
-      if (uiSampleCounts[i] > dominantCount) {
-        dominantCount = uiSampleCounts[i];
-        dominant = i as ZoneFaction;
+      const count = uiSampleCounts[i];
+      if (count > strongestCount) {
+        strongestCount = count;
+        strongest = i as ZoneFaction;
+      }
+      if (i !== owner && count > pressureCount) {
+        pressureCount = count;
+        pressureOwner = i as ZoneFaction;
+      }
+    }
+    if (sampled > 0 && ownerCount === 0) {
+      owner = strongest;
+      ownerCount = strongestCount;
+      pressureOwner = owner;
+      pressureCount = 0;
+      for (let i = 0; i < uiSampleCounts.length; i++) {
+        const count = uiSampleCounts[i];
+        if (i !== owner && count > pressureCount) {
+          pressureCount = count;
+          pressureOwner = i as ZoneFaction;
+        }
       }
     }
 
-    const ownerCount = zone.faction < uiSampleCounts.length ? uiSampleCounts[zone.faction] : 0;
     const ownerShare = sampled > 0 ? ownerCount / sampled : 1;
-    const dominantShare = sampled > 0 ? dominantCount / sampled : 1;
-    const pressure = Math.max(0, 1 - ownerShare);
-    const contested = zone.faction !== ZoneFaction.SAMOSBOR
+    const dominantShare = sampled > 0 ? pressureCount / sampled : 0;
+    const pressure = dominantShare;
+    const contested = owner !== ZoneFaction.SAMOSBOR
       && sampled > 0
-      && (pressure >= UI_CONTESTED_PRESSURE || (dominant !== zone.faction && dominantShare >= UI_DOMINANT_CONTESTED_SHARE));
+      && (pressure >= UI_CONTESTED_PRESSURE || (pressureOwner !== owner && dominantShare >= UI_DOMINANT_CONTESTED_SHARE));
     const row: FactionZoneUiSnapshot = {
       zoneId: zone.id,
       x: zone.cx,
       y: zone.cy,
       level: zone.level ?? 1,
-      owner: zone.faction,
-      dominant,
+      owner,
+      dominant: pressureOwner,
       ownerShare,
       dominantShare,
       pressure,
@@ -276,10 +287,9 @@ function refreshFactionUiSnapshot(world: World, state: GameState): void {
     };
     zones.push(row);
     zoneById[zone.id] = row;
-    const owner = ownerCounts.get(zone.faction);
-    if (owner) {
-      owner.zones++;
-      if (contested) owner.contested++;
+    const ownerRow = ownerCounts.get(owner);
+    if (ownerRow) {
+      if (contested) ownerRow.fronts++;
     }
     if (contested) contestedZones++;
   }
@@ -314,28 +324,17 @@ function refreshFactionUiSnapshot(world: World, state: GameState): void {
     floor: state.currentFloor,
     zones,
     zoneById,
-    owners: ZONE_UI_FACTIONS.map(faction => ownerCounts.get(faction) ?? { faction, zones: 0, contested: 0 }),
+    owners: ZONE_UI_FACTIONS.map(faction => ownerCounts.get(faction) ?? { faction, cells: 0, fronts: 0 }),
     contestedZones,
     recentEvents,
   };
 }
 
-/* ── Initialize per-cell faction control from zone map ────────── */
+/* ── Initialize per-cell faction control ─────────────────────── */
 export function initFactionControl(world: World): void {
-  for (let i = 0; i < W * W; i++) {
-    const zid = world.zoneMap[i];
-    const zone = world.zones[zid];
-    if (zone) {
-      world.factionControl[i] = zone.faction;
-    }
-  }
+  initializeCellTerritory(world);
 }
 
-/* ── Zone capture: NPC in enemy zone can flip cells ──────────── */
-const CAPTURE_RADIUS = 3;
-const CAPTURE_INTERVAL = 2.0; // seconds between capture ticks
-
-let captureAccum = 0;
 let activityAccum = 0;
 const NOISE_PATROL_EVENT_LIMIT = 6;
 const NOISE_PATROL_COOLDOWN_S = 8;
@@ -345,47 +344,8 @@ const NOISE_PATROL_ENTITY_SCAN_CAP = 360;
 const lastNoisePatrolResponseAt = new Map<string, number>();
 const noisePatrolQuery: Entity[] = [];
 
-export function updateFactionCapture(world: World, entities: Entity[], dt: number): void {
-  captureAccum += dt;
-  if (captureAccum < CAPTURE_INTERVAL) return;
-  captureAccum -= CAPTURE_INTERVAL;
-
-  // Collect capturers that are in enemy territory
-  const capturers: { ex: number; ey: number; myZf: ZoneFaction }[] = [];
-  for (const e of ensureEntityIndex(entities).actors) {
-    if (!e.alive || e.type !== EntityType.NPC) continue;
-    if (e.faction === undefined) continue;
-    if (!e.isTraveler && e.occupation !== Occupation.HUNTER) continue;
-
-    const ex = Math.floor(e.x), ey = Math.floor(e.y);
-    const ci = world.idx(ex, ey);
-    const myZf = factionToZone(e.faction);
-    const cellZf = world.factionControl[ci] as ZoneFaction;
-
-    if (cellZf === myZf || cellZf === ZoneFaction.SAMOSBOR) continue;
-    capturers.push({ ex, ey, myZf });
-  }
-
-  // Only do expensive work if any captures are happening
-  if (capturers.length === 0) return;
-
-  const affectedZones = new Set<number>();
-
-  for (const { ex, ey, myZf } of capturers) {
-    for (let dy = -CAPTURE_RADIUS; dy <= CAPTURE_RADIUS; dy++) {
-      for (let dx = -CAPTURE_RADIUS; dx <= CAPTURE_RADIUS; dx++) {
-        if (dx * dx + dy * dy > CAPTURE_RADIUS * CAPTURE_RADIUS) continue;
-        const ni = world.idx(world.wrap(ex + dx), world.wrap(ey + dy));
-        if (world.cells[ni] === Cell.FLOOR && world.factionControl[ni] !== ZoneFaction.SAMOSBOR) {
-          world.factionControl[ni] = myZf;
-          affectedZones.add(world.zoneMap[ni]);
-        }
-      }
-    }
-  }
-
-  // Recalculate ownership only for affected zones
-  recalcZoneOwnership(world, affectedZones);
+export function updateFactionCapture(world: World, entities: Entity[], dt: number, state?: GameState): void {
+  updateTerritoryCapture(world, entities, state, dt);
 }
 
 export function updateFactionActivity(
@@ -422,7 +382,7 @@ function canRespondToNoise(e: Entity): boolean {
 }
 
 function noiseZoneId(world: World, record: NoiseRecord): number {
-  return world.zoneMap[world.idx(Math.floor(record.x), Math.floor(record.y))];
+  return currentTerritoryZoneId(world, record.x, record.y);
 }
 
 function shouldRespondToNoise(state: GameState, zoneId: number, record: NoiseRecord): boolean {
@@ -487,38 +447,6 @@ function updateNoisePatrolResponse(world: World, entities: Entity[], state: Game
 
 /** Recalculate which faction owns each zone based on cell majority.
  *  Only checks zones in the given set (those that had cells flipped). */
-function recalcZoneOwnership(world: World, zoneIds: Set<number>): void {
-  for (const zid of zoneIds) {
-    const zone = world.zones[zid];
-    if (!zone || zone.faction === ZoneFaction.SAMOSBOR) continue;
-
-    // Sample cells in zone — coarse grid around zone center
-    const counts = new Uint16Array(8); // indexed by ZoneFaction (max ~6 values)
-    const cx = zone.cx, cy = zone.cy;
-    const R = 60;
-    for (let dy = -R; dy <= R; dy += 4) {
-      for (let dx = -R; dx <= R; dx += 4) {
-        const ni = world.idx(world.wrap(cx + dx), world.wrap(cy + dy));
-        if (world.zoneMap[ni] !== zid) continue;
-        const zf = world.factionControl[ni];
-        if (zf < counts.length) counts[zf]++;
-      }
-    }
-
-    // Find majority (skip SAMOSBOR)
-    let bestZf: ZoneFaction = zone.faction;
-    let bestCount = 0;
-    for (let i = 0; i < counts.length; i++) {
-      if (i === ZoneFaction.SAMOSBOR as number) continue;
-      if (counts[i] > bestCount) { bestCount = counts[i]; bestZf = i; }
-    }
-
-    if (bestZf !== zone.faction) {
-      zone.faction = bestZf;
-    }
-  }
-}
-
 /* ── Apply damage relation penalty between factions ──────────── */
 export function applyDamageRelationPenalty(
   attackerFaction: Faction | undefined, targetFaction: Faction | undefined,

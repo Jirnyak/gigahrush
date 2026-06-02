@@ -19,15 +19,18 @@ import {
   ZoneFaction,
   type Entity,
   type Room,
+  type TerritoryOwner,
   type WorldContainer,
 } from '../../core/types';
 import { World } from '../../core/world';
 import { freshNeeds } from '../../data/catalog';
+import { factionToTerritoryOwner } from '../../data/factions';
 import { type PlotNpcDef, registerSideQuest } from '../../data/plot';
 import { MONSTERS } from '../../entities/monster';
 import { monsterSpr } from '../../render/sprite_index';
 import { registerRouteCue } from '../../systems/route_cues';
 import { randomRPG, scaleMonsterHp, scaleMonsterSpeed } from '../../systems/rpg';
+import { syncZoneMetadataFromTerritory } from '../../systems/territory';
 import { ensureConnectivity, generateZones, sanitizeDoors, stampRoom } from '../shared';
 import type { FloorGeneration } from '../floor_manifest';
 
@@ -169,6 +172,21 @@ const ROUTE_TARGET = {
   label: 'Числовой реестр',
   risk: 3,
 } as const;
+
+interface RegistryTerritoryTarget {
+  owner: TerritoryOwner;
+  share: number;
+  label: string;
+  hq: { x: number; y: number };
+}
+
+export const NUMBER_REGISTRY_TERRITORY_TARGETS: readonly RegistryTerritoryTarget[] = [
+  { owner: ZoneFaction.CITIZEN, share: 0.30, label: 'граждане', hq: { x: 170, y: 520 } },
+  { owner: ZoneFaction.LIQUIDATOR, share: 0.18, label: 'ликвидаторы', hq: { x: 534, y: 228 } },
+  { owner: ZoneFaction.CULTIST, share: 0.10, label: 'культисты', hq: { x: 184, y: 238 } },
+  { owner: ZoneFaction.SCIENTIST, share: 0.34, label: 'учёные', hq: { x: 732, y: 654 } },
+  { owner: ZoneFaction.WILD, share: 0.08, label: 'дикие', hq: { x: 178, y: 812 } },
+] as const;
 
 const REGISTRAR_DEF: PlotNpcDef = {
   name: 'Вера Модульная',
@@ -403,15 +421,16 @@ function stampRegistryRoom(
   w: number,
   h: number,
   floorTex: Tex,
+  wallTex = Tex.MARBLE,
 ): Room {
   const room = stampRoom(world, id, type, x, y, w, h, -1);
   room.name = name;
-  room.wallTex = Tex.MARBLE;
+  room.wallTex = wallTex;
   room.floorTex = floorTex;
   for (let dy = -1; dy <= h; dy++) {
     for (let dx = -1; dx <= w; dx++) {
       const idx = world.idx(x + dx, y + dy);
-      if (world.cells[idx] === Cell.WALL) world.wallTex[idx] = Tex.MARBLE;
+      if (world.cells[idx] === Cell.WALL) world.wallTex[idx] = wallTex;
       if (dx >= 0 && dx < w && dy >= 0 && dy < h) world.floorTex[idx] = floorTex;
     }
   }
@@ -601,6 +620,335 @@ function decorateRegistryRooms(world: World, rooms: Record<string, Room>): void 
   setFeature(world, crt.x + Math.floor(crt.w / 2), crt.y + 3, Feature.SCREEN);
 }
 
+interface RegistryBlockSpec {
+  key: string;
+  owner: TerritoryOwner;
+  name: string;
+  left: number;
+  top: number;
+  cols: number;
+  rows: number;
+  roomW: number;
+  roomH: number;
+  gapX: number;
+  gapY: number;
+  floorTex: Tex;
+  wallTex: Tex;
+  roomTypes: readonly RoomType[];
+}
+
+interface RegistryHqSpec {
+  owner: TerritoryOwner;
+  coreName: string;
+  supportPrefix: string;
+  x: number;
+  y: number;
+  floorTex: Tex;
+  wallTex: Tex;
+  supports: readonly { type: RoomType; name: string; dx: number; dy: number; w: number; h: number }[];
+}
+
+const NUMBER_REGISTRY_HQ_SPECS: readonly RegistryHqSpec[] = [
+  {
+    owner: ZoneFaction.CITIZEN,
+    coreName: 'граждане: Миништаб общей очереди',
+    supportPrefix: 'граждане',
+    x: 158,
+    y: 510,
+    floorTex: Tex.F_PARQUET,
+    wallTex: Tex.PANEL,
+    supports: [
+      { type: RoomType.KITCHEN, name: 'кухня талонной очереди', dx: -36, dy: -28, w: 24, h: 14 },
+      { type: RoomType.BATHROOM, name: 'санузел публичных ожиданий', dx: 32, dy: -26, w: 20, h: 12 },
+      { type: RoomType.STORAGE, name: 'кладовая чистых бланков', dx: -38, dy: 30, w: 26, h: 14 },
+      { type: RoomType.MEDICAL, name: 'медпункт обморочных просителей', dx: 34, dy: 30, w: 26, h: 14 },
+    ],
+  },
+  {
+    owner: ZoneFaction.LIQUIDATOR,
+    coreName: 'ликвидаторы: Пост простого допуска',
+    supportPrefix: 'ликвидаторы',
+    x: 522,
+    y: 220,
+    floorTex: Tex.F_RED_CARPET,
+    wallTex: Tex.METAL,
+    supports: [
+      { type: RoomType.STORAGE, name: 'оружейная простых номеров', dx: -38, dy: -26, w: 26, h: 14 },
+      { type: RoomType.OFFICE, name: 'комната проверки делимости', dx: 34, dy: -26, w: 30, h: 14 },
+      { type: RoomType.MEDICAL, name: 'перевязочная бумажных порезов', dx: -38, dy: 30, w: 26, h: 14 },
+      { type: RoomType.PRODUCTION, name: 'мастерская пломбировочных щитов', dx: 34, dy: 30, w: 30, h: 14 },
+    ],
+  },
+  {
+    owner: ZoneFaction.CULTIST,
+    coreName: 'культисты: Скрытая молельня неделимых',
+    supportPrefix: 'культисты',
+    x: 172,
+    y: 230,
+    floorTex: Tex.F_RED_CARPET,
+    wallTex: Tex.DARK,
+    supports: [
+      { type: RoomType.COMMON, name: 'зал шепота простых чисел', dx: -38, dy: -28, w: 28, h: 14 },
+      { type: RoomType.STORAGE, name: 'тайник списанных делителей', dx: 34, dy: -26, w: 24, h: 12 },
+      { type: RoomType.SMOKING, name: 'курилка знамений остатка', dx: -36, dy: 30, w: 24, h: 12 },
+      { type: RoomType.BATHROOM, name: 'омовение перед делением', dx: 34, dy: 30, w: 24, h: 12 },
+    ],
+  },
+  {
+    owner: ZoneFaction.SCIENTIST,
+    coreName: 'учёные: НИИ числовых остатков',
+    supportPrefix: 'учёные',
+    x: 720,
+    y: 646,
+    floorTex: Tex.F_TILE,
+    wallTex: Tex.TILE_W,
+    supports: [
+      { type: RoomType.MEDICAL, name: 'лаборатория остаточных проб', dx: -42, dy: -30, w: 32, h: 16 },
+      { type: RoomType.PRODUCTION, name: 'вычислительная мастерская модулей', dx: 34, dy: -30, w: 34, h: 16 },
+      { type: RoomType.OFFICE, name: 'кабинет статистики ошибок', dx: -42, dy: 32, w: 32, h: 16 },
+      { type: RoomType.STORAGE, name: 'хранилище эталонных таблиц', dx: 36, dy: 32, w: 30, h: 16 },
+    ],
+  },
+  {
+    owner: ZoneFaction.WILD,
+    coreName: 'дикие: Лагерь списанных чисел',
+    supportPrefix: 'дикие',
+    x: 166,
+    y: 804,
+    floorTex: Tex.F_CONCRETE,
+    wallTex: Tex.ROTTEN,
+    supports: [
+      { type: RoomType.STORAGE, name: 'склад рваных ведомостей', dx: -38, dy: -28, w: 28, h: 14 },
+      { type: RoomType.SMOKING, name: 'курилка чужих номеров', dx: 34, dy: -26, w: 24, h: 12 },
+      { type: RoomType.KITCHEN, name: 'кухня сухих пайков', dx: -36, dy: 30, w: 24, h: 14 },
+      { type: RoomType.BATHROOM, name: 'ржавый умывальник лагеря', dx: 34, dy: 30, w: 22, h: 12 },
+    ],
+  },
+];
+
+const NUMBER_REGISTRY_BLOCKS: readonly RegistryBlockSpec[] = [
+  { key: 'citizen_west_queue', owner: ZoneFaction.CITIZEN, name: 'граждане: публичная ячейка остатка', left: 68, top: 378, cols: 7, rows: 7, roomW: 18, roomH: 10, gapX: 10, gapY: 10, floorTex: Tex.F_PARQUET, wallTex: Tex.PANEL, roomTypes: [RoomType.OFFICE, RoomType.COMMON, RoomType.STORAGE, RoomType.KITCHEN] },
+  { key: 'citizen_south_forms', owner: ZoneFaction.CITIZEN, name: 'граждане: нижняя очередь корешков', left: 316, top: 740, cols: 8, rows: 6, roomW: 17, roomH: 10, gapX: 9, gapY: 10, floorTex: Tex.F_GREEN_CARPET, wallTex: Tex.PANEL, roomTypes: [RoomType.COMMON, RoomType.OFFICE, RoomType.STORAGE] },
+  { key: 'liquidator_prime_gate', owner: ZoneFaction.LIQUIDATOR, name: 'ликвидаторы: блок простого допуска', left: 378, top: 142, cols: 7, rows: 6, roomW: 18, roomH: 10, gapX: 10, gapY: 9, floorTex: Tex.F_RED_CARPET, wallTex: Tex.METAL, roomTypes: [RoomType.OFFICE, RoomType.STORAGE, RoomType.HQ, RoomType.PRODUCTION] },
+  { key: 'liquidator_east_posts', owner: ZoneFaction.LIQUIDATOR, name: 'ликвидаторы: восточный пост делимости', left: 800, top: 374, cols: 5, rows: 7, roomW: 18, roomH: 10, gapX: 10, gapY: 10, floorTex: Tex.F_CONCRETE, wallTex: Tex.METAL, roomTypes: [RoomType.STORAGE, RoomType.OFFICE, RoomType.CORRIDOR] },
+  { key: 'cultist_hidden_numerator', owner: ZoneFaction.CULTIST, name: 'культисты: скрытая числительская келья', left: 78, top: 128, cols: 7, rows: 6, roomW: 17, roomH: 10, gapX: 9, gapY: 9, floorTex: Tex.F_RED_CARPET, wallTex: Tex.DARK, roomTypes: [RoomType.COMMON, RoomType.STORAGE, RoomType.SMOKING] },
+  { key: 'wild_scrap_register', owner: ZoneFaction.WILD, name: 'дикие: списанная карточная нора', left: 86, top: 700, cols: 7, rows: 6, roomW: 17, roomH: 10, gapX: 10, gapY: 10, floorTex: Tex.F_CONCRETE, wallTex: Tex.ROTTEN, roomTypes: [RoomType.STORAGE, RoomType.SMOKING, RoomType.CORRIDOR] },
+  { key: 'scientist_upper_archive', owner: ZoneFaction.SCIENTIST, name: 'учёные: верхняя лаборатория модулей', left: 636, top: 172, cols: 8, rows: 7, roomW: 18, roomH: 10, gapX: 9, gapY: 9, floorTex: Tex.F_TILE, wallTex: Tex.TILE_W, roomTypes: [RoomType.MEDICAL, RoomType.PRODUCTION, RoomType.OFFICE, RoomType.STORAGE] },
+  { key: 'scientist_lower_archive', owner: ZoneFaction.SCIENTIST, name: 'учёные: нижний архив остатков', left: 612, top: 600, cols: 8, rows: 7, roomW: 18, roomH: 10, gapX: 9, gapY: 10, floorTex: Tex.F_MARBLE_TILE, wallTex: Tex.MARBLE, roomTypes: [RoomType.OFFICE, RoomType.STORAGE, RoomType.PRODUCTION, RoomType.MEDICAL] },
+  { key: 'scientist_center_tables', owner: ZoneFaction.SCIENTIST, name: 'учёные: таблица китайских пересечений', left: 300, top: 306, cols: 6, rows: 5, roomW: 17, roomH: 10, gapX: 10, gapY: 10, floorTex: Tex.F_MARBLE_TILE, wallTex: Tex.MARBLE, roomTypes: [RoomType.OFFICE, RoomType.STORAGE, RoomType.COMMON] },
+];
+
+function canStampRegistryRoom(world: World, x: number, y: number, w: number, h: number): boolean {
+  if (x < 2 || y < 2 || x + w >= W - 2 || y + h >= W - 2) return false;
+  for (let dy = -1; dy <= h; dy++) {
+    for (let dx = -1; dx <= w; dx++) {
+      const idx = world.idx(x + dx, y + dy);
+      if (world.aptMask[idx] || world.hermoWall[idx] || world.cells[idx] === Cell.LIFT) return false;
+      if (world.roomMap[idx] >= 0 || world.doors.has(idx) || world.containerMap.has(idx)) return false;
+    }
+  }
+  return true;
+}
+
+function tryStampRegistryRoom(
+  world: World,
+  id: number,
+  type: RoomType,
+  name: string,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  floorTex: Tex,
+  wallTex: Tex,
+): Room | null {
+  if (!canStampRegistryRoom(world, x, y, w, h)) return null;
+  return stampRegistryRoom(world, id, type, name, x, y, w, h, floorTex, wallTex);
+}
+
+function carveHWidth(world: World, x0: number, x1: number, y: number, width: number, floorTex: Tex, wallTex = Tex.MARBLE): void {
+  const half = Math.max(0, Math.floor(width / 2));
+  for (let oy = -half; oy <= half; oy++) {
+    for (let x = Math.min(x0, x1); x <= Math.max(x0, x1); x++) setFloorCell(world, x, y + oy, floorTex, wallTex);
+  }
+}
+
+function carveVWidth(world: World, x: number, y0: number, y1: number, width: number, floorTex: Tex, wallTex = Tex.MARBLE): void {
+  const half = Math.max(0, Math.floor(width / 2));
+  for (let ox = -half; ox <= half; ox++) {
+    for (let y = Math.min(y0, y1); y <= Math.max(y0, y1); y++) setFloorCell(world, x + ox, y, floorTex, wallTex);
+  }
+}
+
+function carveOrthogonalWidth(world: World, ax: number, ay: number, bx: number, by: number, width: number, floorTex: Tex, wallTex = Tex.MARBLE): void {
+  carveHWidth(world, ax, bx, ay, width, floorTex, wallTex);
+  carveVWidth(world, bx, ay, by, width, floorTex, wallTex);
+}
+
+function addRoomDoor(
+  world: World,
+  room: Room,
+  side: 'north' | 'south' | 'west' | 'east',
+  offset: number,
+  state = DoorState.CLOSED,
+  keyId = '',
+  wallTex = Tex.DOOR_WOOD,
+): void {
+  let x = room.x;
+  let y = room.y;
+  let ox = room.x;
+  let oy = room.y;
+  if (side === 'north') {
+    x += Math.max(1, Math.min(room.w - 2, offset));
+    y -= 1;
+    ox = x;
+    oy = y - 1;
+  } else if (side === 'south') {
+    x += Math.max(1, Math.min(room.w - 2, offset));
+    y += room.h;
+    ox = x;
+    oy = y + 1;
+  } else if (side === 'west') {
+    x -= 1;
+    y += Math.max(1, Math.min(room.h - 2, offset));
+    ox = x - 1;
+    oy = y;
+  } else {
+    x += room.w;
+    y += Math.max(1, Math.min(room.h - 2, offset));
+    ox = x + 1;
+    oy = y;
+  }
+  setFloorCell(world, ox, oy, room.floorTex, room.wallTex);
+  addDoor(world, room, x, y, state, keyId, wallTex);
+  world.hermoWall[world.idx(x, y)] = 0;
+}
+
+function decorateMicroRegistryRoom(world: World, room: Room, serial: number): void {
+  const type = room.type;
+  const step = type === RoomType.STORAGE ? 3 : type === RoomType.PRODUCTION ? 4 : 5;
+  for (let x = room.x + 2; x < room.x + room.w - 2; x += step) {
+    const y = room.y + 2 + ((x + serial) % Math.max(1, room.h - 4));
+    const feature = type === RoomType.STORAGE
+      ? Feature.SHELF
+      : type === RoomType.PRODUCTION
+        ? Feature.MACHINE
+        : type === RoomType.MEDICAL
+          ? Feature.APPARATUS
+          : type === RoomType.BATHROOM
+            ? Feature.SINK
+            : type === RoomType.KITCHEN
+              ? Feature.STOVE
+              : (serial + x) % 3 === 0 ? Feature.SCREEN : Feature.DESK;
+    setFeature(world, x, y, feature);
+  }
+  if (room.w > 10 && room.h > 7) setFeature(world, room.x + room.w - 3, room.y + room.h - 3, Feature.LAMP);
+}
+
+function hardenHqCore(world: World, room: Room): void {
+  room.sealed = true;
+  for (let dy = -1; dy <= room.h; dy++) {
+    for (let dx = -1; dx <= room.w; dx++) {
+      if (dx >= 0 && dx < room.w && dy >= 0 && dy < room.h) continue;
+      const idx = world.idx(room.x + dx, room.y + dy);
+      if (world.cells[idx] !== Cell.WALL) continue;
+      world.hermoWall[idx] = 1;
+      world.wallTex[idx] = Tex.HERMO_WALL;
+    }
+  }
+}
+
+function stampMiniHq(world: World, spec: RegistryHqSpec, nextRoomId: number): number {
+  const core = tryStampRegistryRoom(world, nextRoomId, RoomType.HQ, spec.coreName, spec.x, spec.y, 24, 18, spec.floorTex, spec.wallTex);
+  if (!core) return nextRoomId;
+  nextRoomId++;
+  hardenHqCore(world, core);
+  addRoomDoor(world, core, 'south', 12, DoorState.HERMETIC_CLOSED, '', Tex.DOOR_METAL);
+  carveHWidth(world, core.x - 42, core.x + core.w + 48, core.y + core.h + 2, 3, spec.floorTex, spec.wallTex);
+  carveVWidth(world, core.x + (core.w >> 1), core.y - 34, core.y + core.h + 46, 3, spec.floorTex, spec.wallTex);
+  decorateMicroRegistryRoom(world, core, nextRoomId);
+
+  for (let i = 0; i < spec.supports.length; i++) {
+    const support = spec.supports[i];
+    const room = tryStampRegistryRoom(
+      world,
+      nextRoomId,
+      support.type,
+      `${spec.supportPrefix}: ${support.name}`,
+      spec.x + support.dx,
+      spec.y + support.dy,
+      support.w,
+      support.h,
+      spec.floorTex,
+      spec.wallTex,
+    );
+    if (!room) continue;
+    nextRoomId++;
+    const side = support.dy < 0 ? 'south' : support.dx < 0 ? 'east' : 'west';
+    addRoomDoor(world, room, side, side === 'south' ? room.w >> 1 : room.h >> 1);
+    decorateMicroRegistryRoom(world, room, nextRoomId + i);
+  }
+  return nextRoomId;
+}
+
+function stampRegistryBlock(world: World, spec: RegistryBlockSpec, nextRoomId: number, rng: () => number): number {
+  const blockRight = spec.left + spec.cols * (spec.roomW + spec.gapX);
+  const blockBottom = spec.top + spec.rows * (spec.roomH + spec.gapY);
+  for (let row = 0; row < spec.rows; row++) {
+    const y = spec.top + row * (spec.roomH + spec.gapY);
+    carveHWidth(world, spec.left - 6, blockRight + 6, y - 3, 3, spec.floorTex, spec.wallTex);
+  }
+  carveHWidth(world, spec.left - 6, blockRight + 6, blockBottom + 3, 3, spec.floorTex, spec.wallTex);
+  for (let col = 0; col <= spec.cols; col++) {
+    const x = spec.left + col * (spec.roomW + spec.gapX) - 5;
+    carveVWidth(world, x, spec.top - 8, blockBottom + 8, 3, spec.floorTex, spec.wallTex);
+  }
+
+  for (let row = 0; row < spec.rows; row++) {
+    for (let col = 0; col < spec.cols; col++) {
+      const serial = row * spec.cols + col;
+      const x = spec.left + col * (spec.roomW + spec.gapX) + (rng() < 0.5 ? 0 : 1);
+      const y = spec.top + row * (spec.roomH + spec.gapY);
+      const roomType = spec.roomTypes[serial % spec.roomTypes.length];
+      const room = tryStampRegistryRoom(
+        world,
+        nextRoomId,
+        roomType,
+        `${spec.name} ${serial + 1}`,
+        x,
+        y,
+        spec.roomW + (serial % 3 === 0 ? 2 : 0),
+        spec.roomH + (serial % 4 === 0 ? 2 : 0),
+        spec.floorTex,
+        spec.wallTex,
+      );
+      if (!room) continue;
+      nextRoomId++;
+      addRoomDoor(world, room, 'north', room.w >> 1);
+      if ((serial + spec.key.length) % 5 === 0) addRoomDoor(world, room, 'east', room.h >> 1);
+      decorateMicroRegistryRoom(world, room, serial);
+    }
+  }
+
+  carveOrthogonalWidth(world, spec.left + ((blockRight - spec.left) >> 1), spec.top - 3, W >> 1, W >> 1, 3, spec.floorTex, spec.wallTex);
+  return nextRoomId;
+}
+
+function carveRegistryQueueCourt(world: World, x: number, y: number, w: number, h: number, floorTex: Tex, wallTex: Tex, feature: Feature): void {
+  carveFloorRect(world, x, y, w, h, floorTex);
+  for (let yy = y + 5; yy < y + h - 4; yy += 10) {
+    carveHWidth(world, x + 4, x + w - 5, yy, 1, floorTex, wallTex);
+    for (let xx = x + 8; xx < x + w - 8; xx += 14) {
+      setFeature(world, xx, yy, feature);
+      if ((xx + yy) % 3 === 0) setFeature(world, xx + 2, yy + 2, Feature.CHAIR);
+    }
+  }
+  for (let xx = x + 10; xx < x + w - 10; xx += 24) {
+    setFloorCell(world, xx, y - 1, floorTex, wallTex);
+    setFloorCell(world, xx, y + h, floorTex, wallTex);
+  }
+}
+
 function retuneZoneMap(world: World): void {
   for (const zone of world.zones) {
     const d = world.dist(zone.cx, zone.cy, W / 2, W / 2);
@@ -631,6 +979,195 @@ function retuneZoneMap(world: World): void {
 
 export function retuneNumberRegistryZones(world: World): void {
   retuneZoneMap(world);
+  applyNumberRegistryTerritory(world);
+  syncZoneMetadataFromTerritory(world);
+}
+
+function isNumberRegistryAmbientNpc(entity: Entity): boolean {
+  return entity.type === EntityType.NPC &&
+    !entity.plotNpcId &&
+    !entity.persistentNpcId &&
+    entity.alifeId === undefined &&
+    entity.questId === -1 &&
+    entity.faction !== undefined;
+}
+
+function numberRegistryTerritorySpawnCells(world: World): Map<TerritoryOwner, number[]> {
+  const cells = new Map<TerritoryOwner, number[]>();
+  for (const target of NUMBER_REGISTRY_TERRITORY_TARGETS) cells.set(target.owner, []);
+  for (let i = 0; i < W * W; i++) {
+    const cell = world.cells[i];
+    if (cell !== Cell.FLOOR && cell !== Cell.WATER) continue;
+    if (world.aptMask[i] || world.hermoWall[i] || world.containerMap.has(i) || world.features[i] === Feature.LIFT_BUTTON) continue;
+    const owner = world.factionControl[i] as TerritoryOwner;
+    const list = cells.get(owner);
+    if (!list) continue;
+    list.push(i);
+  }
+  return cells;
+}
+
+export function alignNumberRegistryAmbientNpcTerritory(world: World, entities: Entity[]): void {
+  const cells = numberRegistryTerritorySpawnCells(world);
+  const offsets = new Uint16Array(8);
+  for (const entity of entities) {
+    if (!isNumberRegistryAmbientNpc(entity) || entity.faction === undefined) continue;
+    const owner = factionToTerritoryOwner(entity.faction);
+    const list = cells.get(owner);
+    if (!list || list.length === 0) continue;
+    const offset = offsets[owner]++ | 0;
+    const cell = list[(entity.id * 97 + offset * 389) % list.length];
+    entity.x = (cell % W) + 0.5;
+    entity.y = ((cell / W) | 0) + 0.5;
+    entity.assignedRoomId = world.roomMap[cell] >= 0 ? world.roomMap[cell] : -1;
+    if (entity.ai) {
+      entity.ai.tx = cell % W;
+      entity.ai.ty = (cell / W) | 0;
+      entity.ai.path = [];
+      entity.ai.pi = 0;
+      entity.ai.stuck = 0;
+    }
+  }
+}
+
+function targetIndexForOwner(owner: TerritoryOwner): number {
+  const index = NUMBER_REGISTRY_TERRITORY_TARGETS.findIndex(target => target.owner === owner);
+  return index >= 0 ? index : 0;
+}
+
+function roomNameOwnerHint(room: Room): TerritoryOwner | undefined {
+  for (const target of NUMBER_REGISTRY_TERRITORY_TARGETS) {
+    if (room.name.startsWith(`${target.label}:`)) return target.owner;
+  }
+  return undefined;
+}
+
+function ownerControlAnchors(owner: TerritoryOwner): readonly { x: number; y: number; weight: number }[] {
+  switch (owner) {
+    case ZoneFaction.CITIZEN:
+      return [
+        { x: 170, y: 520, weight: 1.0 },
+        { x: 402, y: 788, weight: 0.92 },
+        { x: 246, y: 410, weight: 0.84 },
+      ];
+    case ZoneFaction.LIQUIDATOR:
+      return [
+        { x: 534, y: 228, weight: 1.05 },
+        { x: 852, y: 426, weight: 0.88 },
+        { x: 712, y: 326, weight: 0.76 },
+      ];
+    case ZoneFaction.CULTIST:
+      return [
+        { x: 184, y: 238, weight: 1.0 },
+        { x: 302, y: 306, weight: 0.78 },
+      ];
+    case ZoneFaction.SCIENTIST:
+      return [
+        { x: 732, y: 654, weight: 1.08 },
+        { x: 706, y: 240, weight: 0.98 },
+        { x: 820, y: 486, weight: 0.9 },
+        { x: 424, y: 386, weight: 0.7 },
+      ];
+    case ZoneFaction.WILD:
+      return [
+        { x: 178, y: 812, weight: 1.0 },
+        { x: 92, y: 636, weight: 0.76 },
+      ];
+    default:
+      return [{ x: W >> 1, y: W >> 1, weight: 1.0 }];
+  }
+}
+
+function chunkyTerritoryNoise(x: number, y: number, salt: number): number {
+  let n = Math.imul((x >> 5) + 0x9e37 + salt * 37, 0x85ebca6b);
+  n ^= Math.imul((y >> 5) + 0xc2b2 + salt * 53, 0x27d4eb2d);
+  n ^= n >>> 15;
+  n = Math.imul(n, 0x2c1b3c6d);
+  n ^= n >>> 12;
+  return ((n >>> 0) / 0xffffffff) - 0.5;
+}
+
+function territoryScore(world: World, x: number, y: number, target: RegistryTerritoryTarget, bias: number, salt: number): number {
+  let best = -Infinity;
+  for (const anchor of ownerControlAnchors(target.owner)) {
+    const d2 = world.dist2(x, y, anchor.x, anchor.y);
+    const score = anchor.weight - d2 / (270 * 270);
+    if (score > best) best = score;
+  }
+  const idx = world.idx(x, y);
+  const roomId = world.roomMap[idx];
+  if (roomId >= 0) {
+    const room = world.rooms[roomId];
+    const hinted = room ? roomNameOwnerHint(room) : undefined;
+    if (hinted === target.owner) best += 0.9;
+  }
+  return best + bias + chunkyTerritoryNoise(x, y, salt) * 0.09;
+}
+
+function assignNumberRegistryTerritory(world: World, biases: Float64Array, counts?: Uint32Array): void {
+  if (counts) counts.fill(0);
+  for (let y = 0; y < W; y++) {
+    for (let x = 0; x < W; x++) {
+      let bestIndex = 0;
+      let bestScore = -Infinity;
+      for (let i = 0; i < NUMBER_REGISTRY_TERRITORY_TARGETS.length; i++) {
+        const target = NUMBER_REGISTRY_TERRITORY_TARGETS[i];
+        const score = territoryScore(world, x, y, target, biases[i] ?? 0, i + 1);
+        if (score > bestScore) {
+          bestScore = score;
+          bestIndex = i;
+        }
+      }
+      const owner = NUMBER_REGISTRY_TERRITORY_TARGETS[bestIndex].owner;
+      world.factionControl[world.idx(x, y)] = owner;
+      if (counts) counts[bestIndex]++;
+    }
+  }
+}
+
+function paintRoomTerritory(world: World, room: Room, owner: TerritoryOwner): void {
+  for (let dy = -1; dy <= room.h; dy++) {
+    for (let dx = -1; dx <= room.w; dx++) {
+      const idx = world.idx(room.x + dx, room.y + dy);
+      if (world.aptMask[idx]) continue;
+      world.factionControl[idx] = owner;
+    }
+  }
+}
+
+function reinforceNamedRoomTerritory(world: World): void {
+  for (const room of world.rooms) {
+    if (!room) continue;
+    const hinted = roomNameOwnerHint(room);
+    if (hinted !== undefined) paintRoomTerritory(world, room, hinted);
+  }
+}
+
+function applyNumberRegistryTerritory(world: World): void {
+  const biases = new Float64Array(NUMBER_REGISTRY_TERRITORY_TARGETS.length);
+  const counts = new Uint32Array(NUMBER_REGISTRY_TERRITORY_TARGETS.length);
+  const total = W * W;
+  for (let pass = 0; pass < 7; pass++) {
+    assignNumberRegistryTerritory(world, biases, counts);
+    for (let i = 0; i < NUMBER_REGISTRY_TERRITORY_TARGETS.length; i++) {
+      const share = counts[i] / total;
+      biases[i] += (NUMBER_REGISTRY_TERRITORY_TARGETS[i].share - share) * 2.4;
+    }
+  }
+  assignNumberRegistryTerritory(world, biases);
+  reinforceNamedRoomTerritory(world);
+  for (const target of NUMBER_REGISTRY_TERRITORY_TARGETS) {
+    const i = targetIndexForOwner(target.owner);
+    const hq = NUMBER_REGISTRY_HQ_SPECS.find(spec => spec.owner === target.owner);
+    if (!hq) continue;
+    for (let dy = -7; dy <= 7; dy++) {
+      for (let dx = -7; dx <= 7; dx++) {
+        if (dx * dx + dy * dy > 56) continue;
+        const idx = world.idx(target.hq.x + dx, target.hq.y + dy);
+        world.factionControl[idx] = NUMBER_REGISTRY_TERRITORY_TARGETS[i].owner;
+      }
+    }
+  }
 }
 
 function registerNumberRegistryRouteCues(world: World, rooms: Record<string, Room>): void {
@@ -735,15 +1272,15 @@ function carvePrimeGapCorridor(world: World): number {
   let lastX = 96;
   for (let i = 0; i < primes.length; i++) {
     const x = 96 + ((primes[i] * 7) % 812);
-    carveH(world, lastX, x, y, Tex.F_RED_CARPET);
+    carveHWidth(world, lastX, x, y, 3, Tex.F_RED_CARPET, Tex.METAL);
     const gap = i === 0 ? 6 : primes[i] - primes[i - 1];
     const nextY = Math.max(300, Math.min(466, y + (gap % 3 === 0 ? 17 : gap % 4 === 0 ? -13 : 9)));
-    carveV(world, x, y, nextY, Tex.F_RED_CARPET);
+    carveVWidth(world, x, y, nextY, 3, Tex.F_RED_CARPET, Tex.METAL);
     if (nextY !== y) turns++;
     y = nextY;
     lastX = x;
   }
-  carveH(world, lastX, 866, y, Tex.F_RED_CARPET);
+  carveHWidth(world, lastX, 866, y, 3, Tex.F_RED_CARPET, Tex.METAL);
   return turns;
 }
 
@@ -758,7 +1295,8 @@ function tryStampMacroRoom(
   name: string,
 ): Room | null {
   if (x < 2 || y < 2 || x + w >= W - 2 || y + h >= W - 2) return null;
-  const room = stampRegistryRoom(world, id, type, name, x, y, w, h, Tex.F_MARBLE_TILE);
+  const room = tryStampRegistryRoom(world, id, type, name, x, y, w, h, Tex.F_MARBLE_TILE, Tex.MARBLE);
+  if (!room) return null;
   for (let dx = 3; dx < w - 3; dx += 5) setFeature(world, x + dx, y + 3, Feature.SCREEN);
   for (let dx = 4; dx < w - 4; dx += 6) setFeature(world, x + dx, y + h - 4, Feature.SHELF);
   addDoor(world, room, x + Math.floor(w / 2), y + h, DoorState.CLOSED, '', Tex.DOOR_WOOD);
@@ -768,8 +1306,20 @@ function tryStampMacroRoom(
 
 export function expandNumberRegistryGeometry(world: World, rng: () => number): void {
   carveResidueLattice(world);
-  const primeTurns = carvePrimeGapCorridor(world);
+  carveRegistryQueueCourt(world, 356, 418, 232, 72, Tex.F_PARQUET, Tex.MARBLE, Feature.DESK);
+  carveRegistryQueueCourt(world, 524, 584, 188, 62, Tex.F_GREEN_CARPET, Tex.PANEL, Feature.CHAIR);
+  carveRegistryQueueCourt(world, 238, 620, 180, 58, Tex.F_MARBLE_TILE, Tex.MARBLE, Feature.SHELF);
+  carveHWidth(world, 84, 938, 512, 5, Tex.F_MARBLE_TILE, Tex.MARBLE);
+  carveVWidth(world, 512, 92, 932, 5, Tex.F_PARQUET, Tex.MARBLE);
+  carveHWidth(world, 100, 926, 690, 3, Tex.F_GREEN_CARPET, Tex.PANEL);
+  carveVWidth(world, 704, 124, 884, 3, Tex.F_TILE, Tex.TILE_W);
+
   let nextRoom = world.rooms.length;
+  while (world.rooms[nextRoom]) nextRoom++;
+  for (const spec of NUMBER_REGISTRY_HQ_SPECS) nextRoom = stampMiniHq(world, spec, nextRoom);
+  for (const spec of NUMBER_REGISTRY_BLOCKS) nextRoom = stampRegistryBlock(world, spec, nextRoom, rng);
+
+  const primeTurns = carvePrimeGapCorridor(world);
   while (world.rooms[nextRoom]) nextRoom++;
   const points = [
     { x: 166, y: 254, name: `Пересечение остатков ${NUMBER_REGISTRY_CRT_INTERSECTIONS[0].label}` },
@@ -779,9 +1329,10 @@ export function expandNumberRegistryGeometry(world: World, rng: () => number): v
   ];
   for (let i = 0; i < points.length; i++) {
     const p = points[i];
+    const roomId = nextRoom;
     const room = tryStampMacroRoom(
       world,
-      nextRoom++,
+      roomId,
       i === 3 ? RoomType.COMMON : RoomType.STORAGE,
       p.x + Math.floor(rng() * 9) - 4,
       p.y + Math.floor(rng() * 9) - 4,
@@ -790,6 +1341,7 @@ export function expandNumberRegistryGeometry(world: World, rng: () => number): v
       p.name,
     );
     if (!room) continue;
+    nextRoom++;
     const cX = room.x + Math.floor(room.w / 2);
     const cY = room.y + Math.floor(room.h / 2);
     carveH(world, cX, W >> 1, cY, Tex.F_MARBLE_TILE);

@@ -21,6 +21,7 @@ import {
   type Entity,
   type Item,
   type Room,
+  type TerritoryOwner,
   type WorldContainer,
 } from '../../core/types';
 import { World } from '../../core/world';
@@ -107,9 +108,60 @@ interface DoorSite {
   oy: number;
 }
 
+interface BolnichnyMicroBlockSpec {
+  name: string;
+  x: number;
+  y: number;
+  cols: number;
+  rows: number;
+  linkX: number;
+  linkY: number;
+  dirty: boolean;
+  owner: TerritoryOwner;
+  wallTex: Tex;
+  floorTex: Tex;
+}
+
+interface BolnichnyHqSite {
+  owner: TerritoryOwner;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  name: string;
+  linkX: number;
+  linkY: number;
+  wallTex: Tex;
+  floorTex: Tex;
+}
+
 const SEED = hashSeed(BOLNICHNY_KORPUS_ROUTE_ID);
 const CX = W >> 1;
 const CY = W >> 1;
+const MICRO_ROOM_W = 15;
+const MICRO_ROOM_H = 10;
+const MICRO_GAP_X = 8;
+const MICRO_GAP_Y = 4;
+const MICRO_SPINE_H = 8;
+
+const BOLNICHNY_HQ_SITES: readonly BolnichnyHqSite[] = [
+  { owner: ZoneFaction.SCIENTIST, x: 626, y: 352, w: 38, h: 22, name: 'НИИ-штаб стерильных допусков', linkX: 632, linkY: 420, wallTex: Tex.METAL, floorTex: Tex.F_CONCRETE },
+  { owner: ZoneFaction.LIQUIDATOR, x: 580, y: 628, w: 34, h: 22, name: 'Штаб ликвидаторов санитарного поста', linkX: 548, linkY: 662, wallTex: Tex.METAL, floorTex: Tex.F_CONCRETE },
+  { owner: ZoneFaction.CITIZEN, x: 604, y: 704, w: 32, h: 20, name: 'Гражданский штаб очереди выздоровления', linkX: 572, linkY: 735, wallTex: Tex.PANEL, floorTex: Tex.F_LINO },
+  { owner: ZoneFaction.WILD, x: 132, y: 626, w: 32, h: 18, name: 'Дикий штаб мокрой палаты', linkX: 244, linkY: 650, wallTex: Tex.ROTTEN, floorTex: Tex.F_WOOD },
+  { owner: ZoneFaction.CULTIST, x: 824, y: 620, w: 28, h: 18, name: 'Скрытый культовый штаб анамнеза', linkX: 738, linkY: 668, wallTex: Tex.ROTTEN, floorTex: Tex.F_MEAT },
+] as const;
+
+const BOLNICHNY_MICRO_BLOCKS: readonly BolnichnyMicroBlockSpec[] = [
+  { name: 'Северо-западный корпус обходных палат', x: 86, y: 228, cols: 4, rows: 4, linkX: 222, linkY: 268, dirty: true, owner: ZoneFaction.WILD, wallTex: Tex.BRICK, floorTex: Tex.F_LINO },
+  { name: 'Северная лабораторная очередь', x: 374, y: 178, cols: 5, rows: 4, linkX: 512, linkY: 420, dirty: false, owner: ZoneFaction.SCIENTIST, wallTex: Tex.TILE_W, floorTex: Tex.F_TILE },
+  { name: 'Северо-восточные аптечные боксы', x: 712, y: 230, cols: 4, rows: 4, linkX: 646, linkY: 512, dirty: false, owner: ZoneFaction.SCIENTIST, wallTex: Tex.METAL, floorTex: Tex.F_CONCRETE },
+  { name: 'Западный жёлтый карантин', x: 78, y: 470, cols: 4, rows: 5, linkX: 248, linkY: 544, dirty: true, owner: ZoneFaction.WILD, wallTex: Tex.TILE_W, floorTex: Tex.F_TILE },
+  { name: 'Восточный хирургический сервис', x: 768, y: 452, cols: 4, rows: 4, linkX: 598, linkY: 526, dirty: false, owner: ZoneFaction.SCIENTIST, wallTex: Tex.TILE_W, floorTex: Tex.F_TILE },
+  { name: 'Юго-западный коридор кашля', x: 148, y: 724, cols: 5, rows: 4, linkX: 264, linkY: 706, dirty: true, owner: ZoneFaction.CITIZEN, wallTex: Tex.BRICK, floorTex: Tex.F_LINO },
+  { name: 'Южная приёмная мелких процедур', x: 414, y: 790, cols: 5, rows: 4, linkX: 512, linkY: 752, dirty: false, owner: ZoneFaction.CITIZEN, wallTex: Tex.PANEL, floorTex: Tex.F_LINO },
+  { name: 'Юго-восточный склад каталок', x: 740, y: 742, cols: 4, rows: 4, linkX: 806, linkY: 828, dirty: false, owner: ZoneFaction.LIQUIDATOR, wallTex: Tex.METAL, floorTex: Tex.F_CONCRETE },
+] as const;
 
 const NPC_DEFS: Record<BolnichnyNpcId, PlotNpcDef> = {
   bolnichny_doctor_galina: {
@@ -437,6 +489,10 @@ export function expandBolnichnyKorpusRouteGeometry(world: World, rng: () => numb
     carveLineWidth(world, ward.x + (ward.w >> 1), ward.y + (ward.h >> 1), CX, CY, 3, anchor.dirty ? Tex.F_TILE : Tex.F_LINO);
     decorateAnnex(world, ward, store, i, anchor.dirty);
   }
+
+  buildBolnichnyFactionHqs(world);
+  buildBolnichnyMidMicroLayer(world, rng);
+  applyBolnichnyAuthoredTerritory(world);
 }
 
 export function tuneBolnichnyKorpusRouteZones(world: World): void {
@@ -462,24 +518,31 @@ export function tuneBolnichnyKorpusRouteZones(world: World): void {
   for (let i = 0; i < W * W; i++) {
     world.factionControl[i] = world.zones[world.zoneMap[i]]?.faction ?? ZoneFaction.CITIZEN;
   }
+  applyBolnichnyAuthoredTerritory(world);
 }
 
 export function reinforceBolnichnyKorpusGates(world: World): void {
   const pharmacy = world.rooms.find(room => room.name === BOLNICHNY_ROOM_NAMES.pharmacy);
+  const coldStore = world.rooms.find(room => room.name === BOLNICHNY_ROOM_NAMES.coldStore);
   const fever = world.rooms.find(room => room.name === BOLNICHNY_ROOM_NAMES.feverWard);
   const black = world.rooms.find(room => room.name === BOLNICHNY_ROOM_NAMES.blackWard);
   const papers = world.rooms.find(room => room.name === BOLNICHNY_ROOM_NAMES.papers);
   if (pharmacy) {
+    restoreBolnichnyGatedRoomShell(world, pharmacy, false, 'official_quarantine_clearance');
     placeGateLine(world, pharmacy.x - 8, pharmacy.y + (pharmacy.h >> 1) - 4, 'vertical', DoorState.LOCKED, 'official_quarantine_clearance', pharmacy);
     placeGateLine(world, pharmacy.x + (pharmacy.w >> 1), pharmacy.y - 8, 'horizontal', DoorState.LOCKED, 'forged_quarantine_clearance', pharmacy);
   }
+  if (coldStore) restoreBolnichnyGatedRoomShell(world, coldStore, false, 'official_quarantine_clearance');
   if (papers) {
+    restoreBolnichnyGatedRoomShell(world, papers, false, 'forged_quarantine_clearance');
     placeGateLine(world, papers.x + papers.w + 7, papers.y + (papers.h >> 1), 'vertical', DoorState.LOCKED, 'forged_quarantine_clearance', papers);
   }
   if (fever) {
+    restoreBolnichnyGatedRoomShell(world, fever, true);
     placeGateLine(world, fever.x + fever.w + 8, fever.y + (fever.h >> 1), 'vertical', DoorState.HERMETIC_CLOSED, '', fever);
   }
   if (black) {
+    restoreBolnichnyGatedRoomShell(world, black, true);
     placeGateLine(world, black.x + (black.w >> 1), black.y - 8, 'horizontal', DoorState.HERMETIC_CLOSED, '', black);
   }
 }
@@ -495,7 +558,7 @@ function initWorld(world: World): void {
 
 function buildRooms(world: World): BolnichnyRooms {
   const triageEntrance = addRoom(world, RoomType.COMMON, CX - 60, CY + 208, 120, 34, BOLNICHNY_ROOM_NAMES.triageEntrance, Tex.PANEL, Tex.F_LINO);
-  const checkpoint = addRoom(world, RoomType.HQ, CX - 36, CY + 148, 72, 42, BOLNICHNY_ROOM_NAMES.checkpoint, Tex.METAL, Tex.F_CONCRETE);
+  const checkpoint = addRoom(world, RoomType.OFFICE, CX - 36, CY + 148, 72, 42, BOLNICHNY_ROOM_NAMES.checkpoint, Tex.METAL, Tex.F_CONCRETE);
   const cleanLoopSouth = addRoom(world, RoomType.CORRIDOR, CX - 142, CY + 92, 284, 26, BOLNICHNY_ROOM_NAMES.cleanLoopSouth, Tex.TILE_W, Tex.F_TILE);
   const cleanLoopWest = addRoom(world, RoomType.CORRIDOR, CX - 142, CY - 92, 28, 210, BOLNICHNY_ROOM_NAMES.cleanLoopWest, Tex.TILE_W, Tex.F_TILE);
   const cleanLoopNorth = addRoom(world, RoomType.CORRIDOR, CX - 142, CY - 92, 284, 26, BOLNICHNY_ROOM_NAMES.cleanLoopNorth, Tex.TILE_W, Tex.F_TILE);
@@ -622,6 +685,299 @@ function decorateAnnex(world: World, ward: Room, store: Room, serial: number, di
   setFeature(world, store.x + 7, store.y + 7, Feature.SHELF);
   setFeature(world, store.x + store.w - 8, store.y + store.h - 7, dirty ? Feature.APPARATUS : Feature.LAMP);
   if (dirty) stampWardSurface(world, ward, serial + 20, 5);
+}
+
+function buildBolnichnyFactionHqs(world: World): void {
+  for (const site of BOLNICHNY_HQ_SITES) {
+    const core = addRoom(world, RoomType.HQ, site.x, site.y, site.w, site.h, site.name, site.wallTex, site.floorTex);
+    core.sealed = true;
+    markBolnichnyHermeticRoom(world, core);
+    decorateBolnichnyHqCore(world, core, site.owner);
+    connectRoomToPoint(world, core, site.linkX, site.linkY, DoorState.HERMETIC_OPEN, site.floorTex);
+    buildBolnichnyHqSupportRooms(world, site, core);
+  }
+}
+
+function buildBolnichnyHqSupportRooms(world: World, site: BolnichnyHqSite, core: Room): void {
+  const supports = bolnichnyHqSupportSpecs(site.owner);
+  const placements = [
+    { dx: 3, dy: -16, w: 17, h: 10 },
+    { dx: site.w + 8, dy: 2, w: 18, h: 10 },
+    { dx: 4, dy: site.h + 8, w: 18, h: 10 },
+    { dx: -23, dy: 2, w: 16, h: 10 },
+  ] as const;
+  const hubX = core.x + (core.w >> 1);
+  const hubY = core.y + (core.h >> 1);
+  for (let i = 0; i < supports.length; i++) {
+    const support = supports[i]!;
+    const placement = placements[i]!;
+    const room = addRoom(
+      world,
+      support.type,
+      site.x + placement.dx,
+      site.y + placement.dy,
+      placement.w,
+      placement.h,
+      `${site.name}: ${support.name}`,
+      support.wallTex,
+      support.floorTex,
+    );
+    const supportSide = sideToward(world, room, hubX, hubY);
+    connectRooms(world, room, supportSide, core, oppositeSide(supportSide), DoorState.CLOSED);
+    decorateBolnichnyMicroRoom(world, room, i, support.dirty);
+  }
+}
+
+function bolnichnyHqSupportSpecs(owner: TerritoryOwner): readonly { type: RoomType; name: string; wallTex: Tex; floorTex: Tex; dirty: boolean }[] {
+  switch (owner) {
+    case ZoneFaction.LIQUIDATOR:
+      return [
+        { type: RoomType.OFFICE, name: 'дежурная допусков', wallTex: Tex.METAL, floorTex: Tex.F_CONCRETE, dirty: false },
+        { type: RoomType.STORAGE, name: 'оружейная фильтров', wallTex: Tex.METAL, floorTex: Tex.F_CONCRETE, dirty: false },
+        { type: RoomType.MEDICAL, name: 'перевязочная досмотра', wallTex: Tex.TILE_W, floorTex: Tex.F_TILE, dirty: false },
+        { type: RoomType.BATHROOM, name: 'санузел поста', wallTex: Tex.TILE_W, floorTex: Tex.F_TILE, dirty: false },
+      ] as const;
+    case ZoneFaction.SCIENTIST:
+      return [
+        { type: RoomType.PRODUCTION, name: 'лабораторный стол', wallTex: Tex.METAL, floorTex: Tex.F_CONCRETE, dirty: false },
+        { type: RoomType.MEDICAL, name: 'изолятор наблюдения', wallTex: Tex.TILE_W, floorTex: Tex.F_TILE, dirty: false },
+        { type: RoomType.STORAGE, name: 'шкаф приборов', wallTex: Tex.METAL, floorTex: Tex.F_CONCRETE, dirty: false },
+        { type: RoomType.OFFICE, name: 'журнал чистой петли', wallTex: Tex.PANEL, floorTex: Tex.F_LINO, dirty: false },
+      ] as const;
+    case ZoneFaction.WILD:
+      return [
+        { type: RoomType.STORAGE, name: 'свалка тумбочек', wallTex: Tex.ROTTEN, floorTex: Tex.F_WOOD, dirty: true },
+        { type: RoomType.KITCHEN, name: 'коптилка бинтов', wallTex: Tex.ROTTEN, floorTex: Tex.F_CONCRETE, dirty: true },
+        { type: RoomType.SMOKING, name: 'лежанки кашля', wallTex: Tex.ROTTEN, floorTex: Tex.F_WOOD, dirty: true },
+        { type: RoomType.BATHROOM, name: 'ржавая вода', wallTex: Tex.TILE_W, floorTex: Tex.F_WATER, dirty: true },
+      ] as const;
+    case ZoneFaction.CULTIST:
+      return [
+        { type: RoomType.COMMON, name: 'круг анамнеза', wallTex: Tex.ROTTEN, floorTex: Tex.F_MEAT, dirty: true },
+        { type: RoomType.STORAGE, name: 'кладовая масок', wallTex: Tex.ROTTEN, floorTex: Tex.F_WOOD, dirty: true },
+        { type: RoomType.MEDICAL, name: 'тихая перевязка', wallTex: Tex.TILE_W, floorTex: Tex.F_TILE, dirty: true },
+        { type: RoomType.BATHROOM, name: 'умывальная золы', wallTex: Tex.TILE_W, floorTex: Tex.F_WATER, dirty: true },
+      ] as const;
+    case ZoneFaction.CITIZEN:
+    default:
+      return [
+        { type: RoomType.KITCHEN, name: 'чайная выздоравливающих', wallTex: Tex.TILE_W, floorTex: Tex.F_TILE, dirty: false },
+        { type: RoomType.STORAGE, name: 'шкаф пайков', wallTex: Tex.BRICK, floorTex: Tex.F_CONCRETE, dirty: false },
+        { type: RoomType.MEDICAL, name: 'медицинский угол', wallTex: Tex.TILE_W, floorTex: Tex.F_TILE, dirty: false },
+        { type: RoomType.BATHROOM, name: 'санузел очереди', wallTex: Tex.TILE_W, floorTex: Tex.F_TILE, dirty: false },
+      ] as const;
+  }
+}
+
+function buildBolnichnyMidMicroLayer(world: World, rng: () => number): void {
+  for (const block of BOLNICHNY_MICRO_BLOCKS) buildBolnichnyMicroBlock(world, block, rng);
+}
+
+function buildBolnichnyMicroBlock(world: World, spec: BolnichnyMicroBlockSpec, rng: () => number): void {
+  const topRows = Math.ceil(spec.rows / 2);
+  const blockW = spec.cols * MICRO_ROOM_W + (spec.cols - 1) * MICRO_GAP_X + 10;
+  const spineY = spec.y + topRows * (MICRO_ROOM_H + MICRO_GAP_Y) + 2;
+  const spine = tryAddBolnichnyRoom(world, RoomType.CORRIDOR, spec.x, spineY, blockW, MICRO_SPINE_H, `${spec.name}: коридор микроблоков`, spec.wallTex, spec.floorTex);
+  if (!spine) return;
+
+  let serial = 0;
+  for (let row = 0; row < spec.rows; row++) {
+    const aboveSpine = row < topRows;
+    const localRow = aboveSpine ? row : row - topRows;
+    const y = aboveSpine
+      ? spec.y + localRow * (MICRO_ROOM_H + MICRO_GAP_Y)
+      : spine.y + spine.h + 6 + localRow * (MICRO_ROOM_H + MICRO_GAP_Y);
+    for (let col = 0; col < spec.cols; col++) {
+      const x = spec.x + 5 + col * (MICRO_ROOM_W + MICRO_GAP_X);
+      const type = bolnichnyMicroRoomType(spec.dirty, row, col);
+      const room = tryAddBolnichnyRoom(
+        world,
+        type,
+        x,
+        y,
+        MICRO_ROOM_W,
+        MICRO_ROOM_H,
+        `${spec.name}: ${bolnichnyMicroRoomName(type, spec.dirty)} ${serial + 1}`,
+        type === RoomType.STORAGE || type === RoomType.PRODUCTION ? Tex.METAL : spec.wallTex,
+        type === RoomType.BATHROOM ? Tex.F_TILE : spec.floorTex,
+      );
+      if (!room) continue;
+      connectRoomToPoint(world, room, room.x + (room.w >> 1), spine.y + (spine.h >> 1), DoorState.CLOSED, spec.floorTex);
+      decorateBolnichnyMicroRoom(world, room, serial, spec.dirty);
+      if (spec.dirty && rng() < 0.28) stampWardSurface(world, room, serial + 40, 3);
+      serial++;
+    }
+  }
+  connectRoomToPoint(world, spine, spec.linkX, spec.linkY, DoorState.CLOSED, spec.floorTex);
+}
+
+function bolnichnyMicroRoomType(dirty: boolean, row: number, col: number): RoomType {
+  const clean = [RoomType.MEDICAL, RoomType.OFFICE, RoomType.STORAGE, RoomType.BATHROOM, RoomType.MEDICAL, RoomType.KITCHEN] as const;
+  const contaminated = [RoomType.MEDICAL, RoomType.STORAGE, RoomType.BATHROOM, RoomType.SMOKING, RoomType.COMMON, RoomType.MEDICAL] as const;
+  const list = dirty ? contaminated : clean;
+  return list[(row * 3 + col * 5) % list.length];
+}
+
+function bolnichnyMicroRoomName(type: RoomType, dirty: boolean): string {
+  if (type === RoomType.STORAGE) return dirty ? 'шкаф заражённых простыней' : 'шкаф стерильных тележек';
+  if (type === RoomType.BATHROOM) return dirty ? 'грязный санузел' : 'санпропуск';
+  if (type === RoomType.KITCHEN) return 'чайная медсестёр';
+  if (type === RoomType.OFFICE) return 'кабинет малых карт';
+  if (type === RoomType.SMOKING) return 'закуток ожидания кашля';
+  if (type === RoomType.COMMON) return dirty ? 'тёмный бокс очереди' : 'бокс ожидания';
+  return dirty ? 'микропалата температуры' : 'микропалата осмотра';
+}
+
+function decorateBolnichnyMicroRoom(world: World, room: Room, serial: number, dirty: boolean): void {
+  switch (room.type) {
+    case RoomType.MEDICAL:
+      setFeature(world, room.x + 3, room.y + 3, Feature.BED);
+      setFeature(world, room.x + room.w - 4, room.y + 3, dirty ? Feature.APPARATUS : Feature.SINK);
+      break;
+    case RoomType.BATHROOM:
+      setFeature(world, room.x + 3, room.y + 3, Feature.SINK);
+      setFeature(world, room.x + room.w - 4, room.y + room.h - 3, Feature.TOILET);
+      break;
+    case RoomType.KITCHEN:
+      setFeature(world, room.x + 3, room.y + 3, Feature.STOVE);
+      setFeature(world, room.x + room.w - 4, room.y + 3, Feature.SINK);
+      setFeature(world, room.x + 5, room.y + room.h - 3, Feature.TABLE);
+      break;
+    case RoomType.STORAGE:
+      setFeature(world, room.x + 3, room.y + 3, Feature.SHELF);
+      setFeature(world, room.x + room.w - 4, room.y + 3, Feature.SHELF);
+      break;
+    case RoomType.PRODUCTION:
+      setFeature(world, room.x + 4, room.y + 4, Feature.MACHINE);
+      setFeature(world, room.x + room.w - 5, room.y + 4, Feature.SCREEN);
+      break;
+    case RoomType.OFFICE:
+      setFeature(world, room.x + 3, room.y + 3, Feature.DESK);
+      setFeature(world, room.x + room.w - 4, room.y + 3, Feature.SHELF);
+      break;
+    default:
+      setFeature(world, room.x + 4, room.y + 4, dirty || serial % 3 === 0 ? Feature.CANDLE : Feature.CHAIR);
+      setFeature(world, room.x + room.w - 5, room.y + room.h - 4, Feature.TABLE);
+      break;
+  }
+}
+
+function decorateBolnichnyHqCore(world: World, room: Room, owner: TerritoryOwner): void {
+  setFeature(world, room.x + 4, room.y + 4, owner === ZoneFaction.CULTIST ? Feature.CANDLE : Feature.DESK);
+  setFeature(world, room.x + room.w - 5, room.y + 4, owner === ZoneFaction.SCIENTIST ? Feature.APPARATUS : Feature.SCREEN);
+  setFeature(world, room.x + 5, room.y + room.h - 5, Feature.SHELF);
+  setFeature(world, room.x + room.w - 6, room.y + room.h - 5, Feature.LAMP);
+}
+
+function tryAddBolnichnyRoom(
+  world: World,
+  type: RoomType,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  name: string,
+  wallTex: Tex,
+  floorTex: Tex,
+): Room | null {
+  if (!canStampBolnichnyRoom(world, x, y, w, h)) return null;
+  return addRoom(world, type, x, y, w, h, name, wallTex, floorTex);
+}
+
+function canStampBolnichnyRoom(world: World, x: number, y: number, w: number, h: number): boolean {
+  for (let dy = -1; dy <= h; dy++) {
+    for (let dx = -1; dx <= w; dx++) {
+      const idx = world.idx(x + dx, y + dy);
+      if (world.aptMask[idx] || world.hermoWall[idx] || world.cells[idx] === Cell.LIFT) return false;
+      if (world.cells[idx] === Cell.DOOR || world.roomMap[idx] >= 0) return false;
+      if (world.cells[idx] !== Cell.WALL && world.cells[idx] !== Cell.FLOOR && world.cells[idx] !== Cell.WATER) return false;
+    }
+  }
+  return true;
+}
+
+function markBolnichnyHermeticRoom(world: World, room: Room): void {
+  room.sealed = true;
+  room.wallTex = Tex.HERMO_WALL;
+  for (let dy = -1; dy <= room.h; dy++) {
+    for (let dx = -1; dx <= room.w; dx++) {
+      if (dx >= 0 && dx < room.w && dy >= 0 && dy < room.h) continue;
+      const idx = world.idx(room.x + dx, room.y + dy);
+      if (world.cells[idx] !== Cell.WALL || world.aptMask[idx]) continue;
+      world.hermoWall[idx] = 1;
+      world.wallTex[idx] = Tex.HERMO_WALL;
+    }
+  }
+}
+
+function connectRoomToPoint(world: World, room: Room, x: number, y: number, state: DoorState, floorTex: Tex): void {
+  const side = sideToward(world, room, x, y);
+  const site = doorSite(room, side);
+  addDoorAt(world, room, site.x, site.y, state);
+  carveLineWidth(world, site.ox, site.oy, Math.floor(x), Math.floor(y), 3, floorTex);
+}
+
+function sideToward(world: World, room: Room, x: number, y: number): DoorSide {
+  const cx = room.x + room.w / 2;
+  const cy = room.y + room.h / 2;
+  const dx = world.delta(cx, x);
+  const dy = world.delta(cy, y);
+  if (Math.abs(dx) > Math.abs(dy)) return dx >= 0 ? 'east' : 'west';
+  return dy >= 0 ? 'south' : 'north';
+}
+
+function oppositeSide(side: DoorSide): DoorSide {
+  if (side === 'north') return 'south';
+  if (side === 'south') return 'north';
+  if (side === 'west') return 'east';
+  return 'west';
+}
+
+function applyBolnichnyAuthoredTerritory(world: World): void {
+  for (const site of BOLNICHNY_HQ_SITES) {
+    for (const room of world.rooms) {
+      if (!room || (room.name !== site.name && !room.name.startsWith(`${site.name}:`))) continue;
+      if (room.name === site.name) {
+        room.type = RoomType.HQ;
+        markBolnichnyHermeticRoom(world, room);
+      }
+      paintBolnichnyRoomOwner(world, room, site.owner);
+    }
+    stampBolnichnyOwnerPatch(world, site.x + (site.w >> 1), site.y + (site.h >> 1), 38, site.owner);
+  }
+
+  for (const block of BOLNICHNY_MICRO_BLOCKS) {
+    for (const room of world.rooms) {
+      if (!room || !room.name.startsWith(`${block.name}:`)) continue;
+      paintBolnichnyRoomOwner(world, room, block.owner);
+    }
+    const topRows = Math.ceil(block.rows / 2);
+    const centerX = block.x + Math.floor((block.cols * MICRO_ROOM_W + (block.cols - 1) * MICRO_GAP_X) / 2);
+    const centerY = block.y + topRows * (MICRO_ROOM_H + MICRO_GAP_Y) + 6;
+    stampBolnichnyOwnerPatch(world, centerX, centerY, 52, block.owner);
+  }
+}
+
+function paintBolnichnyRoomOwner(world: World, room: Room, owner: TerritoryOwner): void {
+  for (let dy = 0; dy < room.h; dy++) {
+    for (let dx = 0; dx < room.w; dx++) {
+      const idx = world.idx(room.x + dx, room.y + dy);
+      if (world.aptMask[idx]) continue;
+      world.factionControl[idx] = owner;
+    }
+  }
+}
+
+function stampBolnichnyOwnerPatch(world: World, cx: number, cy: number, radius: number, owner: TerritoryOwner): void {
+  const r2 = radius * radius;
+  for (let dy = -radius; dy <= radius; dy++) {
+    for (let dx = -radius; dx <= radius; dx++) {
+      if (dx * dx + dy * dy > r2) continue;
+      const idx = world.idx(cx + dx, cy + dy);
+      if (world.cells[idx] === Cell.LIFT || world.cells[idx] === Cell.ABYSS || world.aptMask[idx]) continue;
+      world.factionControl[idx] = owner;
+    }
+  }
 }
 
 function placeLifts(world: World, rooms: BolnichnyRooms): void {
@@ -769,7 +1125,8 @@ function addDoorAt(world: World, room: Room, x: number, y: number, state: DoorSt
   const idx = world.idx(x, y);
   world.cells[idx] = Cell.DOOR;
   world.hermoWall[idx] = 0;
-  world.wallTex[idx] = state === DoorState.LOCKED || state === DoorState.HERMETIC_CLOSED ? Tex.DOOR_METAL : Tex.DOOR_WOOD;
+  const metalDoor = state === DoorState.LOCKED || state === DoorState.HERMETIC_OPEN || state === DoorState.HERMETIC_CLOSED;
+  world.wallTex[idx] = metalDoor ? Tex.DOOR_METAL : Tex.DOOR_WOOD;
   const existing = world.doors.get(idx);
   if (existing) {
     existing.state = state;
@@ -786,6 +1143,44 @@ function addDoorAt(world: World, room: Room, x: number, y: number, state: DoorSt
   }
   if (!room.doors.includes(idx)) room.doors.push(idx);
   return idx;
+}
+
+function restoreBolnichnyGatedRoomShell(world: World, room: Room, hermetic: boolean, keyId = ''): void {
+  const doors = new Set(room.doors);
+  for (let dy = -1; dy <= room.h; dy++) {
+    for (let dx = -1; dx <= room.w; dx++) {
+      if (dx >= 0 && dx < room.w && dy >= 0 && dy < room.h) continue;
+      const idx = world.idx(room.x + dx, room.y + dy);
+      if (world.cells[idx] === Cell.LIFT) continue;
+      const door = world.doors.get(idx);
+      if (door || doors.has(idx)) {
+        world.cells[idx] = Cell.DOOR;
+        world.hermoWall[idx] = 0;
+        world.wallTex[idx] = Tex.DOOR_METAL;
+        if (door) {
+          door.state = hermetic ? DoorState.HERMETIC_CLOSED : DoorState.LOCKED;
+          door.keyId = hermetic ? '' : (door.keyId || keyId);
+          if (door.roomA < 0) door.roomA = room.id;
+        } else {
+          world.doors.set(idx, {
+            idx,
+            state: hermetic ? DoorState.HERMETIC_CLOSED : DoorState.LOCKED,
+            roomA: room.id,
+            roomB: -1,
+            keyId: hermetic ? '' : keyId,
+            timer: 0,
+          });
+        }
+        if (!room.doors.includes(idx)) room.doors.push(idx);
+        continue;
+      }
+      world.cells[idx] = Cell.WALL;
+      world.roomMap[idx] = -1;
+      world.features[idx] = Feature.NONE;
+      world.hermoWall[idx] = hermetic ? 1 : 0;
+      world.wallTex[idx] = hermetic ? Tex.HERMO_WALL : room.wallTex;
+    }
+  }
 }
 
 function placeGateLine(

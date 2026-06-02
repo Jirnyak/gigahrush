@@ -20,6 +20,7 @@ import {
   type Entity,
   type Item,
   type Room,
+  type TerritoryOwner,
   type WorldContainer,
 } from '../../core/types';
 import { World } from '../../core/world';
@@ -54,6 +55,7 @@ const BASE_TAGS = ['spetspriemnik', 'detention', 'liquidator_control'];
 
 type NextId = { v: number };
 type DoorSide = 'north' | 'south' | 'west' | 'east';
+type CorridorAxis = 'vertical' | 'horizontal';
 type NpcId =
   | 'spetspriemnik_nachalnik_krivda'
   | 'spetspriemnik_guard_savva'
@@ -66,6 +68,33 @@ interface CellBlockResult {
   shelterRooms: number;
   lockedDoors: number;
   barredCells: number;
+}
+
+interface SupportClusterSpec {
+  name: string;
+  owner: TerritoryOwner;
+  axis: CorridorAxis;
+  x: number;
+  y: number;
+  rooms: number;
+  roomW: number;
+  roomH: number;
+  step: number;
+  typeA: RoomType;
+  typeB: RoomType;
+  wallTex: Tex;
+  floorTex: Tex;
+}
+
+interface HqSpec {
+  owner: TerritoryOwner;
+  title: string;
+  x: number;
+  y: number;
+  wallTex: Tex;
+  floorTex: Tex;
+  supportWallTex: Tex;
+  supportFloorTex: Tex;
 }
 
 export interface SpetspriemnikMetrics {
@@ -81,6 +110,74 @@ export interface SpetspriemnikMetrics {
   riotHoldQuestBounded: boolean;
   stablePrisonerNpcIds: readonly string[];
 }
+
+const HQ_SPECS: readonly HqSpec[] = [
+  {
+    owner: ZoneFaction.CULTIST,
+    title: 'скрытый культовый карцер',
+    x: 116,
+    y: 92,
+    wallTex: Tex.DARK,
+    floorTex: Tex.F_RED_CARPET,
+    supportWallTex: Tex.METAL,
+    supportFloorTex: Tex.F_CONCRETE,
+  },
+  {
+    owner: ZoneFaction.LIQUIDATOR,
+    title: 'северный караульный штаб',
+    x: 730,
+    y: 96,
+    wallTex: Tex.METAL,
+    floorTex: Tex.F_CONCRETE,
+    supportWallTex: Tex.MARBLE,
+    supportFloorTex: Tex.F_PARQUET,
+  },
+  {
+    owner: ZoneFaction.CITIZEN,
+    title: 'комната родственников',
+    x: 112,
+    y: 424,
+    wallTex: Tex.PANEL,
+    floorTex: Tex.F_LINO,
+    supportWallTex: Tex.PANEL,
+    supportFloorTex: Tex.F_TILE,
+  },
+  {
+    owner: ZoneFaction.WILD,
+    title: 'разбитая камера самообороны',
+    x: 118,
+    y: 790,
+    wallTex: Tex.ROTTEN,
+    floorTex: Tex.F_CONCRETE,
+    supportWallTex: Tex.METAL,
+    supportFloorTex: Tex.F_CONCRETE,
+  },
+  {
+    owner: ZoneFaction.SCIENTIST,
+    title: 'экспертный НИИ-бокс',
+    x: 804,
+    y: 790,
+    wallTex: Tex.BRICK,
+    floorTex: Tex.F_TILE,
+    supportWallTex: Tex.TILE_W,
+    supportFloorTex: Tex.F_TILE,
+  },
+] as const;
+
+const SUPPORT_CLUSTERS: readonly SupportClusterSpec[] = [
+  { name: 'северные боксы приема', owner: ZoneFaction.CULTIST, axis: 'vertical', x: 72, y: 210, rooms: 8, roomW: 24, roomH: 15, step: 28, typeA: RoomType.STORAGE, typeB: RoomType.LIVING, wallTex: Tex.METAL, floorTex: Tex.F_CONCRETE },
+  { name: 'архивные карманы верхнего журнала', owner: ZoneFaction.CITIZEN, axis: 'horizontal', x: 262, y: 116, rooms: 8, roomW: 18, roomH: 14, step: 32, typeA: RoomType.OFFICE, typeB: RoomType.STORAGE, wallTex: Tex.MARBLE, floorTex: Tex.F_PARQUET },
+  { name: 'северо-восточные конвойные каптерки', owner: ZoneFaction.LIQUIDATOR, axis: 'vertical', x: 842, y: 210, rooms: 8, roomW: 26, roomH: 15, step: 28, typeA: RoomType.OFFICE, typeB: RoomType.STORAGE, wallTex: Tex.METAL, floorTex: Tex.F_CONCRETE },
+  { name: 'левая семейная очередь', owner: ZoneFaction.CITIZEN, axis: 'vertical', x: 68, y: 512, rooms: 8, roomW: 24, roomH: 15, step: 28, typeA: RoomType.COMMON, typeB: RoomType.KITCHEN, wallTex: Tex.PANEL, floorTex: Tex.F_LINO },
+  { name: 'правый протокольный архив', owner: ZoneFaction.LIQUIDATOR, axis: 'vertical', x: 844, y: 512, rooms: 8, roomW: 26, roomH: 15, step: 28, typeA: RoomType.OFFICE, typeB: RoomType.STORAGE, wallTex: Tex.MARBLE, floorTex: Tex.F_PARQUET },
+  { name: 'нижний дикий пересыльник', owner: ZoneFaction.WILD, axis: 'horizontal', x: 240, y: 884, rooms: 8, roomW: 18, roomH: 14, step: 32, typeA: RoomType.SMOKING, typeB: RoomType.STORAGE, wallTex: Tex.ROTTEN, floorTex: Tex.F_CONCRETE },
+  { name: 'нижняя экспертная гребенка', owner: ZoneFaction.SCIENTIST, axis: 'horizontal', x: 548, y: 884, rooms: 8, roomW: 18, roomH: 14, step: 32, typeA: RoomType.MEDICAL, typeB: RoomType.PRODUCTION, wallTex: Tex.TILE_W, floorTex: Tex.F_TILE },
+  { name: 'внутренние шкафы ключей', owner: ZoneFaction.LIQUIDATOR, axis: 'vertical', x: 166, y: 304, rooms: 7, roomW: 20, roomH: 13, step: 30, typeA: RoomType.STORAGE, typeB: RoomType.OFFICE, wallTex: Tex.METAL, floorTex: Tex.F_CONCRETE },
+  { name: 'восточные камеры тишины', owner: ZoneFaction.LIQUIDATOR, axis: 'vertical', x: 782, y: 304, rooms: 7, roomW: 20, roomH: 13, step: 30, typeA: RoomType.LIVING, typeB: RoomType.STORAGE, wallTex: Tex.METAL, floorTex: Tex.F_CONCRETE },
+  { name: 'гражданский стол передач', owner: ZoneFaction.CITIZEN, axis: 'horizontal', x: 244, y: 246, rooms: 7, roomW: 18, roomH: 13, step: 34, typeA: RoomType.COMMON, typeB: RoomType.KITCHEN, wallTex: Tex.PANEL, floorTex: Tex.F_LINO },
+  { name: 'скрытые молитвенные кладовки', owner: ZoneFaction.CULTIST, axis: 'horizontal', x: 244, y: 780, rooms: 7, roomW: 18, roomH: 13, step: 34, typeA: RoomType.STORAGE, typeB: RoomType.COMMON, wallTex: Tex.DARK, floorTex: Tex.F_RED_CARPET },
+  { name: 'экспертные кабинки осмотра', owner: ZoneFaction.SCIENTIST, axis: 'vertical', x: 700, y: 560, rooms: 7, roomW: 20, roomH: 13, step: 30, typeA: RoomType.MEDICAL, typeB: RoomType.OFFICE, wallTex: Tex.TILE_W, floorTex: Tex.F_TILE },
+] as const;
 
 const NPC_DEFS: Record<NpcId, PlotNpcDef> = {
   spetspriemnik_nachalnik_krivda: {
@@ -492,6 +589,318 @@ function addGateAt(world: World, x: number, y: number, state: DoorState, keyId: 
   return idx;
 }
 
+function markProtectedRect(mask: Uint8Array, world: World, x: number, y: number, w: number, h: number): void {
+  for (let dy = -1; dy <= h; dy++) {
+    for (let dx = -1; dx <= w; dx++) mask[world.idx(x + dx, y + dy)] = 1;
+  }
+}
+
+function buildProtectedMask(world: World): Uint8Array {
+  const mask = new Uint8Array(W * W);
+  for (const room of world.rooms) {
+    if (!room) continue;
+    markProtectedRect(mask, world, room.x, room.y, room.w, room.h);
+  }
+  for (const idx of world.doors.keys()) mask[idx] = 1;
+  for (const container of world.containers) mask[world.idx(container.x, container.y)] = 1;
+  for (let i = 0; i < W * W; i++) {
+    if (world.cells[i] === Cell.LIFT || world.features[i] === Feature.LIFT_BUTTON) mask[i] = 1;
+  }
+  return mask;
+}
+
+function canStampRouteRoom(world: World, mask: Uint8Array, x: number, y: number, w: number, h: number): boolean {
+  if (x < 2 || y < 2 || x + w + 2 >= W || y + h + 2 >= W) return false;
+  for (let dy = -1; dy <= h; dy++) {
+    for (let dx = -1; dx <= w; dx++) {
+      const ci = world.idx(x + dx, y + dy);
+      if (mask[ci] || world.aptMask[ci]) return false;
+      if (world.cells[ci] !== Cell.WALL) return false;
+    }
+  }
+  return true;
+}
+
+function carveSafeRect(
+  world: World,
+  mask: Uint8Array,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  floorTex: Tex,
+  wallTex: Tex,
+): void {
+  for (let dy = -1; dy <= h; dy++) {
+    for (let dx = -1; dx <= w; dx++) {
+      const ci = world.idx(x + dx, y + dy);
+      if (mask[ci] || world.cells[ci] === Cell.LIFT || world.cells[ci] === Cell.DOOR) continue;
+      if (dx >= 0 && dx < w && dy >= 0 && dy < h) {
+        world.cells[ci] = Cell.FLOOR;
+        world.roomMap[ci] = -1;
+        world.floorTex[ci] = floorTex;
+        world.hermoWall[ci] = 0;
+      } else if (world.cells[ci] === Cell.WALL) {
+        world.wallTex[ci] = wallTex;
+        world.hermoWall[ci] = 0;
+      }
+    }
+  }
+}
+
+function carveSafeLine(
+  world: World,
+  mask: Uint8Array,
+  ax: number,
+  ay: number,
+  bx: number,
+  by: number,
+  width: number,
+  floorTex: Tex,
+  wallTex: Tex,
+): void {
+  const half = width >> 1;
+  if (ay === by) {
+    carveSafeRect(world, mask, Math.min(ax, bx), ay - half, Math.abs(bx - ax) + 1, width, floorTex, wallTex);
+    return;
+  }
+  carveSafeRect(world, mask, ax - half, Math.min(ay, by), width, Math.abs(by - ay) + 1, floorTex, wallTex);
+}
+
+function doorOutside(room: Room, side: DoorSide): { doorX: number; doorY: number; outsideX: number; outsideY: number } {
+  const midX = room.x + (room.w >> 1);
+  const midY = room.y + (room.h >> 1);
+  switch (side) {
+    case 'north':
+      return { doorX: midX, doorY: room.y - 1, outsideX: midX, outsideY: room.y - 2 };
+    case 'south':
+      return { doorX: midX, doorY: room.y + room.h, outsideX: midX, outsideY: room.y + room.h + 1 };
+    case 'west':
+      return { doorX: room.x - 1, doorY: midY, outsideX: room.x - 2, outsideY: midY };
+    case 'east':
+    default:
+      return { doorX: room.x + room.w, doorY: midY, outsideX: room.x + room.w + 1, outsideY: midY };
+  }
+}
+
+function addRouteRoomDoor(world: World, room: Room, side: DoorSide, state = DoorState.CLOSED, keyId = ''): void {
+  const p = doorOutside(room, side);
+  const outside = world.idx(p.outsideX, p.outsideY);
+  if (world.cells[outside] === Cell.WALL) {
+    world.cells[outside] = Cell.FLOOR;
+    world.roomMap[outside] = -1;
+    world.floorTex[outside] = room.floorTex;
+    world.hermoWall[outside] = 0;
+  }
+  addDoor(world, room, p.doorX, p.doorY, state, keyId);
+  carveDoorStub(world, room, side, p.outsideX, p.outsideY);
+}
+
+function carveDoorStub(world: World, room: Room, side: DoorSide, outsideX: number, outsideY: number): void {
+  const dir = side === 'north'
+    ? { x: 0, y: -1 }
+    : side === 'south'
+      ? { x: 0, y: 1 }
+      : side === 'west'
+        ? { x: -1, y: 0 }
+        : { x: 1, y: 0 };
+  let length = 0;
+  for (let step = 0; step <= 32; step++) {
+    const x = outsideX + dir.x * step;
+    const y = outsideY + dir.y * step;
+    const ci = world.idx(x, y);
+    if (step > 0 && (world.cells[ci] === Cell.FLOOR || world.cells[ci] === Cell.WATER)) {
+      length = step;
+      break;
+    }
+    if (world.cells[ci] === Cell.LIFT || world.cells[ci] === Cell.DOOR) break;
+  }
+  if (length <= 0) length = 3;
+  for (let step = 0; step <= length; step++) {
+    const x = outsideX + dir.x * step;
+    const y = outsideY + dir.y * step;
+    const ci = world.idx(x, y);
+    if (world.cells[ci] === Cell.LIFT || world.cells[ci] === Cell.DOOR) continue;
+    if (world.roomMap[ci] >= 0) continue;
+    world.cells[ci] = Cell.FLOOR;
+    world.floorTex[ci] = room.floorTex;
+    world.hermoWall[ci] = 0;
+  }
+}
+
+function decorateSupportRoom(world: World, room: Room, primary: Feature, secondary: Feature): void {
+  setFeature(world, room.x + 2, room.y + 2, primary);
+  setFeature(world, room.x + room.w - 3, room.y + 2, secondary);
+  if (room.w >= 12) setFeature(world, room.x + (room.w >> 1), room.y + room.h - 3, Feature.LAMP);
+}
+
+function featureForRoom(type: RoomType, alternate = false): Feature {
+  switch (type) {
+    case RoomType.KITCHEN: return alternate ? Feature.SINK : Feature.STOVE;
+    case RoomType.BATHROOM: return alternate ? Feature.TOILET : Feature.SINK;
+    case RoomType.MEDICAL: return alternate ? Feature.SHELF : Feature.APPARATUS;
+    case RoomType.PRODUCTION: return alternate ? Feature.SCREEN : Feature.MACHINE;
+    case RoomType.OFFICE:
+    case RoomType.HQ:
+      return alternate ? Feature.SCREEN : Feature.DESK;
+    case RoomType.STORAGE: return alternate ? Feature.SHELF : Feature.SHELF;
+    case RoomType.SMOKING: return alternate ? Feature.CHAIR : Feature.TABLE;
+    case RoomType.LIVING: return alternate ? Feature.CHAIR : Feature.BED;
+    case RoomType.COMMON:
+    default:
+      return alternate ? Feature.CHAIR : Feature.TABLE;
+  }
+}
+
+function tryStampOwnedRoom(
+  world: World,
+  mask: Uint8Array,
+  type: RoomType,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  name: string,
+  wallTex: Tex,
+  floorTex: Tex,
+  doorSide: DoorSide,
+  owner: TerritoryOwner,
+  hermetic = false,
+): Room | null {
+  const rx = Math.round(x);
+  const ry = Math.round(y);
+  if (!canStampRouteRoom(world, mask, rx, ry, w, h)) return null;
+  const room = addRoom(world, type, rx, ry, w, h, name, wallTex, floorTex);
+  if (hermetic) makeHermeticRoom(world, room);
+  addRouteRoomDoor(world, room, doorSide, hermetic ? DoorState.HERMETIC_OPEN : DoorState.CLOSED);
+  decorateSupportRoom(world, room, featureForRoom(type), featureForRoom(type, true));
+  paintRoomTerritory(world, room, owner);
+  markProtectedRect(mask, world, room.x, room.y, room.w, room.h);
+  return room;
+}
+
+function paintRoomTerritory(world: World, room: Room, owner: TerritoryOwner): void {
+  for (let dy = 0; dy < room.h; dy++) {
+    for (let dx = 0; dx < room.w; dx++) world.factionControl[world.idx(room.x + dx, room.y + dy)] = owner;
+  }
+}
+
+function hqName(spec: HqSpec): string {
+  return `Штаб спецприёмника: ${spec.title}`;
+}
+
+function buildHqCompound(world: World, mask: Uint8Array, spec: HqSpec): void {
+  carveSafeLine(world, mask, spec.x - 36, spec.y + 28, spec.x + 110, spec.y + 28, 5, spec.supportFloorTex, spec.supportWallTex);
+  carveSafeLine(world, mask, spec.x + 42, spec.y - 24, spec.x + 42, spec.y + 82, 5, spec.supportFloorTex, spec.supportWallTex);
+  const core = tryStampOwnedRoom(
+    world,
+    mask,
+    RoomType.HQ,
+    spec.x,
+    spec.y,
+    32,
+    20,
+    hqName(spec),
+    spec.wallTex,
+    spec.floorTex,
+    'south',
+    spec.owner,
+    true,
+  );
+  if (core) {
+    setFeature(world, core.x + 5, core.y + 5, Feature.SCREEN);
+    setFeature(world, core.x + core.w - 6, core.y + core.h - 5, Feature.DESK);
+  }
+
+  const supports: readonly [RoomType, number, number, number, number, DoorSide, string][] = [
+    [RoomType.COMMON, -38, 33, 30, 16, 'north', 'общая'],
+    [RoomType.KITCHEN, -38, 56, 30, 14, 'north', 'кухня'],
+    [RoomType.STORAGE, 42, 56, 30, 14, 'north', 'склад'],
+    [RoomType.MEDICAL, 78, 33, 30, 16, 'north', 'медбокс'],
+    [RoomType.OFFICE, 50, -22, 30, 14, 'west', 'дежурная'],
+  ] as const;
+  for (const [type, dx, dy, w, h, side, suffix] of supports) {
+    tryStampOwnedRoom(
+      world,
+      mask,
+      type,
+      spec.x + dx,
+      spec.y + dy,
+      w,
+      h,
+      `${hqName(spec)}: ${suffix}`,
+      spec.supportWallTex,
+      spec.supportFloorTex,
+      side,
+      spec.owner,
+    );
+  }
+}
+
+function buildSupportCluster(world: World, mask: Uint8Array, spec: SupportClusterSpec, rng: () => number): void {
+  if (spec.axis === 'vertical') {
+    const corridorX = spec.x + 70;
+    const top = spec.y - 10;
+    const bottom = spec.y + spec.rooms * spec.step + 12;
+    carveSafeLine(world, mask, corridorX, top, corridorX, bottom, 5, spec.floorTex, spec.wallTex);
+    for (let row = 0; row < spec.rooms; row++) {
+      const jitter = Math.floor(rng() * 3) - 1;
+      const y = spec.y + row * spec.step + jitter;
+      const typeL = row % 2 === 0 ? spec.typeA : spec.typeB;
+      const typeR = row % 3 === 0 ? RoomType.BATHROOM : row % 2 === 0 ? spec.typeB : spec.typeA;
+      tryStampOwnedRoom(world, mask, typeL, corridorX - spec.roomW - 3, y, spec.roomW, spec.roomH, `${spec.name}: левая ${row + 1}`, spec.wallTex, spec.floorTex, 'east', spec.owner);
+      tryStampOwnedRoom(world, mask, typeR, corridorX + 4, y, spec.roomW, spec.roomH, `${spec.name}: правая ${row + 1}`, spec.wallTex, spec.floorTex, 'west', spec.owner);
+      if (row % 3 === 1) carveSafeLine(world, mask, corridorX - 26, y + spec.roomH + 5, corridorX + 26, y + spec.roomH + 5, 3, spec.floorTex, spec.wallTex);
+    }
+    return;
+  }
+
+  const corridorY = spec.y + 32;
+  const left = spec.x - 10;
+  const right = spec.x + spec.rooms * spec.step + 12;
+  carveSafeLine(world, mask, left, corridorY, right, corridorY, 5, spec.floorTex, spec.wallTex);
+  for (let col = 0; col < spec.rooms; col++) {
+    const jitter = Math.floor(rng() * 3) - 1;
+    const x = spec.x + col * spec.step + jitter;
+    const typeT = col % 2 === 0 ? spec.typeA : spec.typeB;
+    const typeB = col % 3 === 0 ? RoomType.BATHROOM : col % 2 === 0 ? spec.typeB : spec.typeA;
+    tryStampOwnedRoom(world, mask, typeT, x, corridorY - spec.roomH - 3, spec.roomW, spec.roomH, `${spec.name}: верхняя ${col + 1}`, spec.wallTex, spec.floorTex, 'south', spec.owner);
+    tryStampOwnedRoom(world, mask, typeB, x, corridorY + 4, spec.roomW, spec.roomH, `${spec.name}: нижняя ${col + 1}`, spec.wallTex, spec.floorTex, 'north', spec.owner);
+    if (col % 3 === 1) carveSafeLine(world, mask, x + spec.roomW + 5, corridorY - 20, x + spec.roomW + 5, corridorY + 20, 3, spec.floorTex, spec.wallTex);
+  }
+}
+
+function buildSpetspriemnikMidSpines(world: World, mask: Uint8Array): void {
+  const corridors: readonly [number, number, number, number, number, Tex, Tex][] = [
+    [114, 148, 910, 148, 5, Tex.F_CONCRETE, Tex.METAL],
+    [104, 512, 920, 512, 6, Tex.F_CONCRETE, Tex.METAL],
+    [116, 876, 908, 876, 5, Tex.F_CONCRETE, Tex.METAL],
+    [156, 120, 156, 908, 5, Tex.F_CONCRETE, Tex.METAL],
+    [370, 104, 370, 924, 4, Tex.F_PARQUET, Tex.MARBLE],
+    [654, 104, 654, 924, 4, Tex.F_PARQUET, Tex.MARBLE],
+    [868, 120, 868, 908, 5, Tex.F_CONCRETE, Tex.METAL],
+    [250, 238, 778, 238, 4, Tex.F_PARQUET, Tex.MARBLE],
+    [250, 790, 778, 790, 4, Tex.F_CONCRETE, Tex.METAL],
+  ];
+  for (const [ax, ay, bx, by, width, floorTex, wallTex] of corridors) {
+    carveSafeLine(world, mask, ax, ay, bx, by, width, floorTex, wallTex);
+  }
+  for (const [x, y] of [[156, 148], [868, 148], [156, 876], [868, 876], [370, 512], [654, 512]] as const) {
+    setFeature(world, x, y, Feature.LAMP);
+  }
+}
+
+export function expandSpetspriemnikRouteGeometry(world: World, rng: () => number): void {
+  const mask = buildProtectedMask(world);
+  buildSpetspriemnikMidSpines(world, mask);
+  for (const spec of HQ_SPECS) buildHqCompound(world, mask, spec);
+  for (const spec of SUPPORT_CLUSTERS) buildSupportCluster(world, mask, spec, rng);
+  world.markCellsDirty();
+  world.markWallTexDirty();
+  world.markFloorTexDirty();
+  world.markFeaturesDirty(true);
+}
+
 export function reinforceSpetspriemnikRouteGates(world: World): void {
   addGateAt(world, CX, 382, DoorState.LOCKED, SPETSPRIEMNIK_PERMIT_KEY);
   addGateAt(world, CX, 650, DoorState.LOCKED, SPETSPRIEMNIK_GUARD_KEY);
@@ -792,10 +1201,12 @@ function buildCore(world: World): {
   const intake = addRoom(world, RoomType.OFFICE, 424, 282, 176, 56, SPETSPRIEMNIK_ROOM_NAMES.intake, Tex.MARBLE, Tex.F_PARQUET);
   const guardPost = addRoom(world, RoomType.HQ, 610, 296, 104, 58, SPETSPRIEMNIK_ROOM_NAMES.guardPost, Tex.METAL, Tex.F_CONCRETE);
   const visitor = addRoom(world, RoomType.COMMON, 330, 684, 152, 62, SPETSPRIEMNIK_ROOM_NAMES.visitor, Tex.METAL, Tex.F_CONCRETE);
-  const command = addRoom(world, RoomType.HQ, 594, 688, 128, 64, SPETSPRIEMNIK_ROOM_NAMES.command, Tex.MARBLE, Tex.F_RED_CARPET);
+  const command = addRoom(world, RoomType.OFFICE, 594, 688, 128, 64, SPETSPRIEMNIK_ROOM_NAMES.command, Tex.MARBLE, Tex.F_RED_CARPET);
   const riotYard = addRoom(world, RoomType.COMMON, 408, 754, 210, 58, SPETSPRIEMNIK_ROOM_NAMES.riotYard, Tex.METAL, Tex.F_CONCRETE);
   const lowerLift = addRoom(world, RoomType.CORRIDOR, 454, 836, 116, 44, SPETSPRIEMNIK_ROOM_NAMES.lowerLift, Tex.LIFT_DOOR, Tex.F_CONCRETE);
   const contraband = addRoom(world, RoomType.STORAGE, 274, 728, 92, 52, SPETSPRIEMNIK_ROOM_NAMES.contraband, Tex.METAL, Tex.F_CONCRETE);
+  paintRoomTerritory(world, guardPost, ZoneFaction.LIQUIDATOR);
+  paintRoomTerritory(world, command, ZoneFaction.LIQUIDATOR);
 
   setLift(world, CX, lobby.y + 18, LiftDirection.UP);
   setFeature(world, CX + 8, lobby.y + 18, Feature.LIFT_BUTTON);
@@ -879,10 +1290,6 @@ export function tuneSpetspriemnikRouteZones(world: World): void {
     } else {
       zone.faction = zone.id % 6 === 0 ? ZoneFaction.CITIZEN : ZoneFaction.LIQUIDATOR;
     }
-  }
-  for (let i = 0; i < W * W; i++) {
-    const zone = world.zones[world.zoneMap[i]];
-    world.factionControl[i] = zone?.faction ?? ZoneFaction.LIQUIDATOR;
   }
 }
 

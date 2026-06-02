@@ -29,6 +29,8 @@ import { CONTAINER_DEFS } from '../data/container_defs';
 import { ensureRoomContainers } from './containers';
 import { canSpendResources, spendResources } from './economy';
 import { publishEvent } from './events';
+import { territoryOwnerToFaction } from '../data/factions';
+import { territoryRoomOwner } from './territory';
 
 export interface ProductionState {
   floor: FloorLevel;
@@ -321,13 +323,7 @@ function nextContainerId(world: World): number {
 }
 
 function roomFaction(world: World, room: Room): Faction | undefined {
-  const zone = world.zones[world.zoneMap[world.idx(room.x + (room.w >> 1), room.y + (room.h >> 1))]];
-  if (!zone) return undefined;
-  if (zone.faction === 0) return Faction.CITIZEN;
-  if (zone.faction === 1) return Faction.LIQUIDATOR;
-  if (zone.faction === 2) return Faction.CULTIST;
-  if (zone.faction === 4) return Faction.WILD;
-  return undefined;
+  return territoryOwnerToFaction(territoryRoomOwner(world, room.id)) ?? undefined;
 }
 
 function recipeSalt(recipeId: string): number {

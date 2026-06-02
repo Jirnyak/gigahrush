@@ -8,6 +8,7 @@ import {
   AIGoal,
   Cell,
   ContainerKind,
+  DoorState,
   EntityType,
   Faction,
   Feature,
@@ -23,11 +24,13 @@ import {
   type Entity,
   type Item,
   type Room,
+  type TerritoryOwner,
   type WorldContainer,
 } from '../../core/types';
 import { World } from '../../core/world';
 import { hashSeed, withSeededRandom } from '../../core/rand';
 import { ITEMS, freshNeeds } from '../../data/catalog';
+import { factionToTerritoryOwner } from '../../data/factions';
 import { type PlotNpcDef, registerSideQuest } from '../../data/plot';
 import { MONSTERS } from '../../entities/monster';
 import { monsterSpr, Spr } from '../../render/sprite_index';
@@ -62,6 +65,24 @@ export const ORANZHEREYA_ROOM_NAMES = {
   compost: 'Компостная долговая яма',
 } as const;
 
+export const ORANZHEREYA_HQ_ROOM_NAMES = {
+  citizen: 'Штаб пайковой очереди Оранжереи',
+  liquidator: 'Гермопост водяной нормы',
+  cultist: 'Скрытый спорохрам компоста',
+  scientist: 'НИИ семенного контроля Оранжереи',
+  wild: 'Дикая форточка испорченной пайки',
+  citizenNorth: 'Северный пост пайковой очереди',
+  citizenSouth: 'Южный пост чистой зелени',
+} as const;
+
+export const ORANZHEREYA_MICRO_ROOM_PREFIXES = [
+  'Микросклад семенных кассет',
+  'Переход водяной бирки',
+  'Кладовая сухой тары',
+  'Будка чистки фильтра',
+  'Кабина спорного стеллажа',
+] as const;
+
 const SEED = hashSeed(ORANZHEREYA_BETONA_ROUTE_ID);
 const CONTENT_TAG = 'oranzhereya_betona';
 const CX = W >> 1;
@@ -89,6 +110,39 @@ interface GreenhouseRooms {
   compost: Room;
 }
 
+interface GreenhouseBlockSpec {
+  name: string;
+  x: number;
+  y: number;
+  owner: TerritoryOwner;
+  wallTex: Tex;
+  floorTex: Tex;
+}
+
+interface HqSupportSpec {
+  type: RoomType;
+  dx: number;
+  dy: number;
+  w: number;
+  h: number;
+  name: string;
+  wallTex: Tex;
+  floorTex: Tex;
+  feature: Feature;
+}
+
+interface HqSpec {
+  owner: TerritoryOwner;
+  name: string;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  wallTex: Tex;
+  floorTex: Tex;
+  supports: readonly HqSupportSpec[];
+}
+
 export interface OranzhereyaBetonaMetrics {
   cropCells: number;
   waterCells: number;
@@ -96,6 +150,89 @@ export interface OranzhereyaBetonaMetrics {
   publicHarvestContainers: number;
   sabotageContainers: number;
 }
+
+const BLOCK_ROOM_W = 14;
+const BLOCK_ROOM_H = 8;
+const BLOCK_COLS = 6;
+const BLOCK_ROWS = 5;
+const BLOCK_GAP_X = 9;
+const BLOCK_GAP_Y = 8;
+
+const GREENHOUSE_BLOCKS: readonly GreenhouseBlockSpec[] = [
+  { name: 'Северо-западный пайковый блок', x: 92, y: 70, owner: ZoneFaction.CITIZEN, wallTex: Tex.PANEL, floorTex: Tex.F_GREEN_CARPET },
+  { name: 'Северная лабораторная гряда', x: 314, y: 74, owner: ZoneFaction.SCIENTIST, wallTex: Tex.TILE_W, floorTex: Tex.F_GREEN_CARPET },
+  { name: 'Северо-восточный водяной стеллаж', x: 592, y: 72, owner: ZoneFaction.SCIENTIST, wallTex: Tex.TILE_W, floorTex: Tex.F_TILE },
+  { name: 'Восточные грибные кассеты', x: 798, y: 308, owner: ZoneFaction.WILD, wallTex: Tex.ROTTEN, floorTex: Tex.F_GREEN_CARPET },
+  { name: 'Юго-восточный споровый склад', x: 704, y: 742, owner: ZoneFaction.WILD, wallTex: Tex.BRICK, floorTex: Tex.F_LINO },
+  { name: 'Южный пайковый парник', x: 432, y: 824, owner: ZoneFaction.CITIZEN, wallTex: Tex.PANEL, floorTex: Tex.F_GREEN_CARPET },
+  { name: 'Юго-западные компостные кассеты', x: 118, y: 742, owner: ZoneFaction.CULTIST, wallTex: Tex.ROTTEN, floorTex: Tex.F_CONCRETE },
+  { name: 'Западный прожиговый ряд', x: 72, y: 324, owner: ZoneFaction.LIQUIDATOR, wallTex: Tex.METAL, floorTex: Tex.F_CONCRETE },
+];
+
+const HQ_SUPPORTS: readonly HqSupportSpec[] = [
+  { type: RoomType.KITCHEN, dx: -42, dy: 4, w: 30, h: 16, name: 'кухня сухой пайки', wallTex: Tex.TILE_W, floorTex: Tex.F_TILE, feature: Feature.STOVE },
+  { type: RoomType.BATHROOM, dx: 78, dy: 4, w: 24, h: 14, name: 'санузел фильтров', wallTex: Tex.TILE_W, floorTex: Tex.F_WATER, feature: Feature.SINK },
+  { type: RoomType.STORAGE, dx: 8, dy: -24, w: 34, h: 16, name: 'кладовая тары', wallTex: Tex.METAL, floorTex: Tex.F_CONCRETE, feature: Feature.SHELF },
+  { type: RoomType.MEDICAL, dx: 12, dy: 42, w: 32, h: 16, name: 'медпункт спор', wallTex: Tex.TILE_W, floorTex: Tex.F_TILE, feature: Feature.APPARATUS },
+];
+
+const ORANZHEREYA_HQ_SPECS: readonly HqSpec[] = [
+  {
+    owner: ZoneFaction.CITIZEN,
+    name: ORANZHEREYA_HQ_ROOM_NAMES.citizen,
+    x: 432,
+    y: 646,
+    w: 82,
+    h: 38,
+    wallTex: Tex.HERMO_WALL,
+    floorTex: Tex.F_LINO,
+    supports: HQ_SUPPORTS,
+  },
+  {
+    owner: ZoneFaction.LIQUIDATOR,
+    name: ORANZHEREYA_HQ_ROOM_NAMES.liquidator,
+    x: 738,
+    y: 244,
+    w: 70,
+    h: 34,
+    wallTex: Tex.HERMO_WALL,
+    floorTex: Tex.F_CONCRETE,
+    supports: HQ_SUPPORTS,
+  },
+  {
+    owner: ZoneFaction.CULTIST,
+    name: ORANZHEREYA_HQ_ROOM_NAMES.cultist,
+    x: 74,
+    y: 584,
+    w: 58,
+    h: 30,
+    wallTex: Tex.HERMO_WALL,
+    floorTex: Tex.F_GREEN_CARPET,
+    supports: HQ_SUPPORTS,
+  },
+  {
+    owner: ZoneFaction.SCIENTIST,
+    name: ORANZHEREYA_HQ_ROOM_NAMES.scientist,
+    x: 820,
+    y: 94,
+    w: 66,
+    h: 34,
+    wallTex: Tex.HERMO_WALL,
+    floorTex: Tex.F_TILE,
+    supports: HQ_SUPPORTS,
+  },
+  {
+    owner: ZoneFaction.WILD,
+    name: ORANZHEREYA_HQ_ROOM_NAMES.wild,
+    x: 816,
+    y: 766,
+    w: 64,
+    h: 32,
+    wallTex: Tex.HERMO_WALL,
+    floorTex: Tex.F_LINO,
+    supports: HQ_SUPPORTS,
+  },
+];
 
 const NPC_DEFS: Record<GreenhouseNpcId, PlotNpcDef> = {
   oranzhereya_agronom_nadya: {
@@ -353,6 +490,473 @@ export function measureOranzhereyaBetonaGeometry(world: World): OranzhereyaBeton
     publicHarvestContainers: world.containers.filter(c => c.tags.includes('harvest') && c.access === 'public').length,
     sabotageContainers: world.containers.filter(c => c.tags.includes('sabotage_drop')).length,
   };
+}
+
+export function expandOranzhereyaBetonaRouteGeometry(world: World, rng: () => number = Math.random): void {
+  const anchors: Room[] = [];
+  for (const spec of ORANZHEREYA_HQ_SPECS) {
+    const hq = addHqCompound(world, spec);
+    if (hq) anchors.push(hq);
+  }
+  anchors.push(...addCitizenOutposts(world));
+
+  const hubs: Room[] = [];
+  for (const spec of GREENHOUSE_BLOCKS) {
+    const hub = addGreenhouseBlock(world, spec, rng);
+    if (hub) hubs.push(hub);
+  }
+
+  carveMacroIrrigation(world, rng);
+  connectExpansionRooms(world, [...anchors, ...hubs]);
+  reinforceOranzhereyaBetonaAuthoredTerritory(world);
+  world.markFloorTexDirty();
+  world.markWallTexDirty();
+  world.markFeaturesDirty(false);
+}
+
+export function reinforceOranzhereyaBetonaAuthoredTerritory(world: World): void {
+  for (const spec of ORANZHEREYA_HQ_SPECS) {
+    const hq = world.rooms.find(room => room.name === spec.name);
+    if (hq) {
+      hardenAuthoredHq(world, hq, spec.owner);
+      paintRoomTerritory(world, hq, spec.owner);
+    }
+    for (const support of spec.supports) {
+      const room = world.rooms.find(candidate => candidate.name === hqSupportName(spec, support));
+      if (room) paintRoomTerritory(world, room, spec.owner);
+    }
+  }
+
+  for (const [name, owner] of [
+    [ORANZHEREYA_HQ_ROOM_NAMES.citizenNorth, ZoneFaction.CITIZEN],
+    [ORANZHEREYA_HQ_ROOM_NAMES.citizenSouth, ZoneFaction.CITIZEN],
+    [ORANZHEREYA_ROOM_NAMES.guardPost, ZoneFaction.LIQUIDATOR],
+    [ORANZHEREYA_ROOM_NAMES.seedVault, ZoneFaction.SCIENTIST],
+    [ORANZHEREYA_ROOM_NAMES.marketStall, ZoneFaction.WILD],
+    [ORANZHEREYA_ROOM_NAMES.compost, ZoneFaction.CULTIST],
+  ] as const) {
+    const room = world.rooms.find(candidate => candidate.name === name);
+    if (!room) continue;
+    if (
+      name === ORANZHEREYA_ROOM_NAMES.guardPost ||
+      name === ORANZHEREYA_HQ_ROOM_NAMES.citizenNorth ||
+      name === ORANZHEREYA_HQ_ROOM_NAMES.citizenSouth
+    ) hardenAuthoredHq(world, room, owner);
+    paintRoomTerritory(world, room, owner);
+  }
+
+  for (const room of world.rooms) {
+    if (!room?.name) continue;
+    const block = GREENHOUSE_BLOCKS.find(spec => room.name.startsWith(spec.name));
+    if (block) paintRoomTerritory(world, room, block.owner);
+  }
+  world.markWallTexDirty();
+  world.markFeaturesDirty(false);
+}
+
+export function alignOranzhereyaBetonaAmbientNpcTerritory(world: World, entities: Entity[]): void {
+  const cells = oranzhereyaTerritorySpawnCells(world);
+  const offsets = new Uint16Array(8);
+  for (const entity of entities) {
+    if (!isOranzhereyaAmbientNpc(entity) || entity.faction === undefined) continue;
+    const owner = factionToTerritoryOwner(entity.faction);
+    const list = cells.get(owner);
+    if (!list || list.length === 0) continue;
+    const offset = offsets[owner]++ | 0;
+    const cell = list[(entity.id * 109 + offset * 397) % list.length];
+    entity.x = (cell % W) + 0.5;
+    entity.y = ((cell / W) | 0) + 0.5;
+    entity.assignedRoomId = world.roomMap[cell] >= 0 ? world.roomMap[cell] : -1;
+    if (entity.ai) {
+      entity.ai.tx = cell % W;
+      entity.ai.ty = (cell / W) | 0;
+      entity.ai.path = [];
+      entity.ai.pi = 0;
+      entity.ai.stuck = 0;
+    }
+  }
+}
+
+function addGreenhouseBlock(world: World, spec: GreenhouseBlockSpec, rng: () => number): Room | null {
+  const gridW = BLOCK_COLS * BLOCK_ROOM_W + (BLOCK_COLS - 1) * BLOCK_GAP_X;
+  const gridH = BLOCK_ROWS * BLOCK_ROOM_H + (BLOCK_ROWS - 1) * BLOCK_GAP_Y;
+  const hub = tryMakeRoom(
+    world,
+    RoomType.COMMON,
+    spec.x + ((gridW - 42) >> 1),
+    spec.y + gridH + 10,
+    42,
+    18,
+    `${spec.name}: узел переходов`,
+    spec.wallTex,
+    spec.floorTex,
+  );
+  if (!hub) return null;
+  paintRoomTerritory(world, hub, spec.owner);
+  setFeature(world, hub.x + 5, hub.y + 5, Feature.TABLE);
+  setFeature(world, hub.x + hub.w - 6, hub.y + 5, Feature.SHELF);
+
+  const rooms: Room[] = [];
+  for (let row = 0; row < BLOCK_ROWS; row++) {
+    for (let col = 0; col < BLOCK_COLS; col++) {
+      const serial = row * BLOCK_COLS + col;
+      const x = spec.x + col * (BLOCK_ROOM_W + BLOCK_GAP_X);
+      const y = spec.y + row * (BLOCK_ROOM_H + BLOCK_GAP_Y);
+      const type = greenhouseMicroRoomType(serial);
+      const prefix = ORANZHEREYA_MICRO_ROOM_PREFIXES[serial % ORANZHEREYA_MICRO_ROOM_PREFIXES.length];
+      const room = tryMakeRoom(
+        world,
+        type,
+        x,
+        y,
+        BLOCK_ROOM_W + (serial % 4 === 0 ? 2 : 0),
+        BLOCK_ROOM_H + (serial % 5 === 0 ? 2 : 0),
+        `${spec.name}: ${prefix} ${serial + 1}`,
+        type === RoomType.BATHROOM ? Tex.TILE_W : spec.wallTex,
+        type === RoomType.BATHROOM ? Tex.F_WATER : spec.floorTex,
+      );
+      if (!room) continue;
+      decorateGreenhouseMicroRoom(world, room, serial, rng);
+      paintRoomTerritory(world, room, spec.owner);
+      rooms.push(room);
+    }
+  }
+  for (const room of rooms) connectRoomPair(world, room, hub);
+  return hub;
+}
+
+function addHqCompound(world: World, spec: HqSpec): Room | null {
+  const hq = tryMakeRoom(world, RoomType.HQ, spec.x, spec.y, spec.w, spec.h, spec.name, spec.wallTex, spec.floorTex);
+  if (!hq) return null;
+  hardenAuthoredHq(world, hq, spec.owner);
+  setFeature(world, hq.x + 5, hq.y + 5, Feature.DESK);
+  setFeature(world, hq.x + hq.w - 6, hq.y + 5, Feature.SCREEN);
+  setFeature(world, hq.x + (hq.w >> 1), hq.y + hq.h - 5, Feature.SHELF);
+
+  const supports: Room[] = [];
+  for (const support of spec.supports) {
+    const room = tryMakeRoom(
+      world,
+      support.type,
+      spec.x + support.dx,
+      spec.y + support.dy,
+      support.w,
+      support.h,
+      hqSupportName(spec, support),
+      support.wallTex,
+      support.floorTex,
+    );
+    if (!room) continue;
+    paintRoomTerritory(world, room, spec.owner);
+    setFeature(world, room.x + Math.max(2, Math.min(room.w - 3, 4)), room.y + Math.max(2, Math.min(room.h - 3, 4)), support.feature);
+    supports.push(room);
+  }
+  for (const room of supports) connectRoomPair(world, hq, room);
+  return hq;
+}
+
+function addCitizenOutposts(world: World): Room[] {
+  const out: Room[] = [];
+  for (const spec of [
+    { name: ORANZHEREYA_HQ_ROOM_NAMES.citizenNorth, x: 250, y: 196, w: 46, h: 22 },
+    { name: ORANZHEREYA_HQ_ROOM_NAMES.citizenSouth, x: 552, y: 896, w: 50, h: 24 },
+  ] as const) {
+    const room = tryMakeRoom(world, RoomType.HQ, spec.x, spec.y, spec.w, spec.h, spec.name, Tex.HERMO_WALL, Tex.F_LINO);
+    if (!room) continue;
+    hardenAuthoredHq(world, room, ZoneFaction.CITIZEN);
+    setFeature(world, room.x + 4, room.y + 4, Feature.DESK);
+    setFeature(world, room.x + room.w - 5, room.y + 4, Feature.SHELF);
+    out.push(room);
+  }
+  return out;
+}
+
+function carveMacroIrrigation(world: World, rng: () => number): void {
+  const green = Tex.F_GREEN_CARPET;
+  const concrete = Tex.F_CONCRETE;
+  const tile = Tex.F_TILE;
+  for (const line of [
+    [CX, CY, 0, CY, 7, concrete],
+    [CX, CY, W - 1, CY, 7, concrete],
+    [CX, CY, CX, 0, 7, concrete],
+    [CX, CY, CX, W - 1, 7, concrete],
+    [72, 184, 952, 184, 5, tile],
+    [72, 824, 952, 824, 5, tile],
+    [184, 72, 184, 952, 5, tile],
+    [824, 72, 824, 952, 5, tile],
+    [140, 140, 884, 884, 3, concrete],
+    [884, 140, 140, 884, 3, concrete],
+  ] as const) {
+    carveGreenhouseLine(world, line[0], line[1], line[2], line[3], line[4], line[5]);
+  }
+
+  for (const field of [
+    { x: 48, y: 220, w: 216, h: 86, tex: green, seed: 11 },
+    { x: 318, y: 218, w: 174, h: 72, tex: green, seed: 17 },
+    { x: 558, y: 210, w: 198, h: 78, tex: green, seed: 23 },
+    { x: 760, y: 420, w: 170, h: 110, tex: green, seed: 31 },
+    { x: 592, y: 590, w: 244, h: 92, tex: green, seed: 37 },
+    { x: 298, y: 688, w: 216, h: 88, tex: green, seed: 41 },
+    { x: 64, y: 644, w: 212, h: 84, tex: green, seed: 43 },
+    { x: 208, y: 102, w: 86, h: 70, tex: green, seed: 47 },
+  ] as const) {
+    carveCultivationField(world, field.x, field.y, field.w, field.h, field.tex, field.seed, rng);
+  }
+
+  for (const basin of [
+    { x: 370, y: 366, w: 124, h: 28 },
+    { x: 536, y: 356, w: 112, h: 30 },
+    { x: 426, y: 580, w: 188, h: 24 },
+    { x: 156, y: 498, w: 92, h: 24 },
+    { x: 780, y: 604, w: 96, h: 24 },
+  ] as const) {
+    carveWaterBasin(world, basin.x, basin.y, basin.w, basin.h);
+  }
+}
+
+function connectExpansionRooms(world: World, rooms: readonly Room[]): void {
+  const gallery = world.rooms.find(room => room.name === ORANZHEREYA_ROOM_NAMES.gallery)
+    ?? world.rooms.find(room => room.type === RoomType.COMMON)
+    ?? world.rooms[0];
+  if (!gallery) return;
+  for (const room of rooms) connectRoomPair(world, gallery, room);
+  for (let i = 1; i < rooms.length; i++) {
+    if (i % 2 === 0) connectRoomPair(world, rooms[i - 1], rooms[i]);
+  }
+}
+
+function tryMakeRoom(
+  world: World,
+  type: RoomType,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  name: string,
+  wallTex: Tex,
+  floorTex: Tex,
+): Room | null {
+  if (!canStampGreenhouseRoom(world, x, y, w, h)) return null;
+  const room = makeRoom(world, type, x, y, w, h, name, wallTex, floorTex);
+  return room;
+}
+
+function canStampGreenhouseRoom(world: World, x: number, y: number, w: number, h: number): boolean {
+  if (x < 4 || y < 4 || x + w >= W - 4 || y + h >= W - 4) return false;
+  for (let dy = -1; dy <= h; dy++) {
+    for (let dx = -1; dx <= w; dx++) {
+      const idx = world.idx(x + dx, y + dy);
+      if (world.aptMask[idx] || world.cells[idx] !== Cell.WALL || world.roomMap[idx] >= 0) return false;
+    }
+  }
+  return true;
+}
+
+function greenhouseMicroRoomType(serial: number): RoomType {
+  switch (serial % 8) {
+    case 0: return RoomType.STORAGE;
+    case 1: return RoomType.KITCHEN;
+    case 2: return RoomType.PRODUCTION;
+    case 3: return RoomType.BATHROOM;
+    case 4: return RoomType.STORAGE;
+    case 5: return RoomType.COMMON;
+    case 6: return RoomType.OFFICE;
+    default: return RoomType.KITCHEN;
+  }
+}
+
+function decorateGreenhouseMicroRoom(world: World, room: Room, serial: number, rng: () => number): void {
+  const primary = room.type === RoomType.BATHROOM ? Feature.SINK
+    : room.type === RoomType.PRODUCTION ? Feature.APPARATUS
+      : room.type === RoomType.OFFICE ? Feature.DESK
+        : room.type === RoomType.COMMON ? Feature.TABLE
+          : Feature.SHELF;
+  setFeature(world, room.x + 3, room.y + 3, primary);
+  if (room.w > 10) setFeature(world, room.x + room.w - 4, room.y + Math.max(3, room.h - 4), serial % 3 === 0 ? Feature.SCREEN : Feature.SHELF);
+  if (room.type === RoomType.KITCHEN || room.type === RoomType.PRODUCTION) {
+    for (let x = room.x + 2; x < room.x + room.w - 2; x += 5) {
+      const idx = world.idx(x, room.y + room.h - 2);
+      world.floorTex[idx] = Tex.F_GREEN_CARPET;
+      if (rng() < 0.5) world.features[idx] = Feature.TABLE;
+    }
+  }
+}
+
+function carveGreenhouseLine(world: World, ax: number, ay: number, bx: number, by: number, width: number, floorTex: Tex): void {
+  if (ax !== bx && ay !== by) {
+    carveGreenhouseLine(world, ax, ay, bx, ay, width, floorTex);
+    carveGreenhouseLine(world, bx, ay, bx, by, width, floorTex);
+    return;
+  }
+  const half = Math.floor(width / 2);
+  const from = ax === bx ? Math.min(ay, by) : Math.min(ax, bx);
+  const to = ax === bx ? Math.max(ay, by) : Math.max(ax, bx);
+  for (let p = from; p <= to; p++) {
+    for (let o = -half; o <= half; o++) {
+      setGreenhouseFloor(world, ax === bx ? ax + o : p, ax === bx ? p : ay + o, floorTex);
+    }
+  }
+}
+
+function carveCultivationField(
+  world: World,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  floorTex: Tex,
+  seed: number,
+  rng: () => number,
+): void {
+  for (let dy = 0; dy < h; dy++) {
+    for (let dx = 0; dx < w; dx++) {
+      const row = dy % 12;
+      if (row === 0 || row === 1 || row === 6) {
+        setGreenhouseFloor(world, x + dx, y + dy, row === 6 ? Tex.F_CONCRETE : floorTex);
+      } else if (dx % 13 <= 1) {
+        setGreenhouseFloor(world, x + dx, y + dy, Tex.F_WATER, true);
+      }
+      if (row === 3 && dx % 17 === 0 && rng() < 0.85) {
+        const idx = world.idx(x + dx, y + dy);
+        if (world.cells[idx] === Cell.FLOOR && world.features[idx] === Feature.NONE) world.features[idx] = Feature.TABLE;
+      }
+      if ((dx * 19 + dy * 23 + seed) % 211 === 0) {
+        stampSurfaceSplat(world, x + dx, y + dy, 0.5, 0.5, 1.1, 0.16, seed * 4099 + dx * 17 + dy, 62, 118, 52, true);
+      }
+    }
+  }
+}
+
+function carveWaterBasin(world: World, x: number, y: number, w: number, h: number): void {
+  for (let dy = 0; dy < h; dy++) {
+    for (let dx = 0; dx < w; dx++) {
+      if (dx <= 1 || dy <= 1 || dx >= w - 2 || dy >= h - 2) setGreenhouseFloor(world, x + dx, y + dy, Tex.F_TILE);
+      else setGreenhouseFloor(world, x + dx, y + dy, Tex.F_WATER, true);
+    }
+  }
+}
+
+function setGreenhouseFloor(world: World, x: number, y: number, floorTex: Tex, water = false): void {
+  const idx = world.idx(x, y);
+  if (world.aptMask[idx] || world.cells[idx] === Cell.LIFT || world.cells[idx] === Cell.DOOR) return;
+  if (world.roomMap[idx] >= 0 || world.hermoWall[idx]) return;
+  world.cells[idx] = water ? Cell.WATER : Cell.FLOOR;
+  world.roomMap[idx] = -1;
+  world.floorTex[idx] = floorTex;
+  for (const [dx, dy] of [[1,0],[-1,0],[0,1],[0,-1]] as const) {
+    const ni = world.idx(x + dx, y + dy);
+    if (world.cells[ni] === Cell.WALL) world.wallTex[ni] = Tex.PANEL;
+  }
+}
+
+function hardenAuthoredHq(world: World, room: Room, owner: TerritoryOwner): void {
+  room.type = RoomType.HQ;
+  room.sealed = true;
+  room.wallTex = Tex.HERMO_WALL;
+  for (let dy = -1; dy <= room.h; dy++) {
+    for (let dx = -1; dx <= room.w; dx++) {
+      const idx = world.idx(room.x + dx, room.y + dy);
+      const interior = dx >= 0 && dx < room.w && dy >= 0 && dy < room.h;
+      if (interior) {
+        if (world.roomMap[idx] === room.id) world.factionControl[idx] = owner;
+        continue;
+      }
+      if (world.cells[idx] !== Cell.WALL || world.aptMask[idx]) continue;
+      world.hermoWall[idx] = 1;
+      world.wallTex[idx] = Tex.HERMO_WALL;
+    }
+  }
+  for (const doorIdx of room.doors) {
+    const door = world.doors.get(doorIdx);
+    if (door) door.state = DoorState.HERMETIC_OPEN;
+    world.factionControl[doorIdx] = owner;
+  }
+  ensureHermeticHqDoor(world, room, owner);
+}
+
+function paintRoomTerritory(world: World, room: Room, owner: TerritoryOwner): void {
+  for (let dy = 0; dy < room.h; dy++) {
+    for (let dx = 0; dx < room.w; dx++) {
+      const idx = world.idx(room.x + dx, room.y + dy);
+      if (world.roomMap[idx] === room.id && !world.aptMask[idx]) world.factionControl[idx] = owner;
+    }
+  }
+  for (const doorIdx of room.doors) world.factionControl[doorIdx] = owner;
+}
+
+function ensureHermeticHqDoor(world: World, room: Room, owner: TerritoryOwner): void {
+  if (room.doors.some(doorIdx => {
+    const door = world.doors.get(doorIdx);
+    return door?.state === DoorState.HERMETIC_OPEN || door?.state === DoorState.HERMETIC_CLOSED;
+  })) return;
+
+  for (let dy = -1; dy <= room.h; dy++) {
+    for (let dx = -1; dx <= room.w; dx++) {
+      if (dx >= 0 && dx < room.w && dy >= 0 && dy < room.h) continue;
+      const x = room.x + dx;
+      const y = room.y + dy;
+      const idx = world.idx(x, y);
+      if (world.aptMask[idx]) continue;
+      let interior = false;
+      let exteriorRoom = -1;
+      let exteriorPassable = false;
+      for (const [ox, oy] of [[1,0],[-1,0],[0,1],[0,-1]] as const) {
+        const ni = world.idx(x + ox, y + oy);
+        if (world.roomMap[ni] === room.id) {
+          interior = true;
+          continue;
+        }
+        const cell = world.cells[ni];
+        if (cell === Cell.FLOOR || cell === Cell.WATER || cell === Cell.DOOR) {
+          exteriorPassable = true;
+          if (world.roomMap[ni] >= 0) exteriorRoom = world.roomMap[ni];
+        }
+      }
+      if (!interior || !exteriorPassable) continue;
+      world.cells[idx] = Cell.DOOR;
+      world.hermoWall[idx] = 0;
+      world.wallTex[idx] = Tex.HERMO_WALL;
+      world.factionControl[idx] = owner;
+      world.doors.set(idx, { idx, state: DoorState.HERMETIC_OPEN, roomA: room.id, roomB: exteriorRoom, keyId: '', timer: 0 });
+      if (!room.doors.includes(idx)) room.doors.push(idx);
+      if (exteriorRoom >= 0) {
+        const other = world.rooms[exteriorRoom];
+        if (other && !other.doors.includes(idx)) other.doors.push(idx);
+      }
+      return;
+    }
+  }
+}
+
+function hqSupportName(spec: HqSpec, support: HqSupportSpec): string {
+  return `${spec.name}: ${support.name}`;
+}
+
+function isOranzhereyaAmbientNpc(entity: Entity): boolean {
+  return entity.type === EntityType.NPC &&
+    !entity.plotNpcId &&
+    !entity.persistentNpcId &&
+    entity.alifeId === undefined &&
+    entity.questId === -1 &&
+    entity.faction !== undefined;
+}
+
+function oranzhereyaTerritorySpawnCells(world: World): Map<TerritoryOwner, number[]> {
+  const cells = new Map<TerritoryOwner, number[]>([
+    [ZoneFaction.CITIZEN, []],
+    [ZoneFaction.LIQUIDATOR, []],
+    [ZoneFaction.CULTIST, []],
+    [ZoneFaction.SCIENTIST, []],
+    [ZoneFaction.WILD, []],
+  ]);
+  for (let i = 0; i < W * W; i++) {
+    const cell = world.cells[i];
+    if (cell !== Cell.FLOOR && cell !== Cell.WATER) continue;
+    if (world.aptMask[i] || world.hermoWall[i] || world.containerMap.has(i) || world.features[i] === Feature.LIFT_BUTTON) continue;
+    const list = cells.get(world.factionControl[i] as TerritoryOwner);
+    if (list) list.push(i);
+  }
+  return cells;
 }
 
 function initWorld(world: World): void {

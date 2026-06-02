@@ -18,12 +18,14 @@ import {
   type Entity,
   type GameState,
   type Room,
+  type TerritoryOwner,
   type WorldContainer,
 } from '../../core/types';
 import { World } from '../../core/world';
 import { type PlotNpcDef, registerSideQuest } from '../../data/plot';
 import { calcZoneLevel } from '../../systems/rpg';
 import { publishEvent } from '../../systems/events';
+import { setTerritoryOwnerAtIndex, syncZoneMetadataFromTerritory } from '../../systems/territory';
 import { ensureConnectivity, generateZones, stampRoom } from '../shared';
 import { placeProceduralScreens } from '../procedural_screens';
 import { genLog } from '../log';
@@ -121,6 +123,227 @@ export const UPPER_BUREAU_DEBUG_ENTRY = {
 } as const;
 
 const UPPER_BUREAU_EVENT_BASE_TAGS = ['upper_bureau', 'bureaucracy', 'documents'] as const;
+
+interface UpperBureauDistrictSpec {
+  name: string;
+  owner: TerritoryOwner;
+  x: number;
+  y: number;
+  cols: number;
+  rows: number;
+  roomW: number;
+  roomH: number;
+  floorTex: Tex;
+  wallTex: Tex;
+  roomTypes: readonly RoomType[];
+  connector: { x: number; y: number };
+}
+
+interface UpperBureauHqSpec {
+  owner: TerritoryOwner;
+  hqName: string;
+  x: number;
+  y: number;
+  floorTex: Tex;
+  wallTex: Tex;
+  connector: { x: number; y: number };
+}
+
+interface UpperBureauTerritoryProfile {
+  owner: TerritoryOwner;
+  targetShare: number;
+  spread: number;
+  seeds: readonly { x: number; y: number; weight: number }[];
+}
+
+const UPPER_BUREAU_DISTRICTS: readonly UpperBureauDistrictSpec[] = [
+  {
+    name: 'Северный сектор прошений',
+    owner: ZoneFaction.CITIZEN,
+    x: 72,
+    y: 104,
+    cols: 10,
+    rows: 7,
+    roomW: 14,
+    roomH: 9,
+    floorTex: Tex.F_RED_CARPET,
+    wallTex: Tex.MARBLE,
+    roomTypes: [RoomType.OFFICE, RoomType.COMMON, RoomType.STORAGE, RoomType.OFFICE],
+    connector: { x: 196, y: 452 },
+  },
+  {
+    name: 'Надпотолочная часовня согласований',
+    owner: ZoneFaction.CULTIST,
+    x: 386,
+    y: 88,
+    cols: 10,
+    rows: 6,
+    roomW: 14,
+    roomH: 9,
+    floorTex: Tex.F_GREEN_CARPET,
+    wallTex: Tex.MARBLE,
+    roomTypes: [RoomType.STORAGE, RoomType.OFFICE, RoomType.COMMON, RoomType.SMOKING],
+    connector: { x: 512, y: 378 },
+  },
+  {
+    name: 'НИИ-сектор измерения подписей',
+    owner: ZoneFaction.SCIENTIST,
+    x: 704,
+    y: 104,
+    cols: 10,
+    rows: 7,
+    roomW: 14,
+    roomH: 9,
+    floorTex: Tex.F_MARBLE_TILE,
+    wallTex: Tex.TILE_W,
+    roomTypes: [RoomType.OFFICE, RoomType.MEDICAL, RoomType.STORAGE, RoomType.PRODUCTION],
+    connector: { x: 708, y: 430 },
+  },
+  {
+    name: 'Западный хвост очереди',
+    owner: ZoneFaction.CITIZEN,
+    x: 58,
+    y: 744,
+    cols: 10,
+    rows: 7,
+    roomW: 14,
+    roomH: 9,
+    floorTex: Tex.F_LINO,
+    wallTex: Tex.PANEL,
+    roomTypes: [RoomType.COMMON, RoomType.KITCHEN, RoomType.BATHROOM, RoomType.STORAGE],
+    connector: { x: 220, y: 742 },
+  },
+  {
+    name: 'Дикий сервисный низ',
+    owner: ZoneFaction.WILD,
+    x: 366,
+    y: 812,
+    cols: 10,
+    rows: 6,
+    roomW: 14,
+    roomH: 9,
+    floorTex: Tex.F_CONCRETE,
+    wallTex: Tex.METAL,
+    roomTypes: [RoomType.STORAGE, RoomType.SMOKING, RoomType.PRODUCTION, RoomType.COMMON],
+    connector: { x: 584, y: 742 },
+  },
+  {
+    name: 'Юго-восточная аудит-рота',
+    owner: ZoneFaction.LIQUIDATOR,
+    x: 704,
+    y: 744,
+    cols: 10,
+    rows: 7,
+    roomW: 14,
+    roomH: 9,
+    floorTex: Tex.F_GREEN_CARPET,
+    wallTex: Tex.MARBLE,
+    roomTypes: [RoomType.OFFICE, RoomType.STORAGE, RoomType.HQ, RoomType.OFFICE],
+    connector: { x: 884, y: 742 },
+  },
+];
+
+const UPPER_BUREAU_HQ_SPECS: readonly UpperBureauHqSpec[] = [
+  {
+    owner: ZoneFaction.CITIZEN,
+    hqName: 'Гражданский гермостол сверки очередей',
+    x: 124,
+    y: 266,
+    floorTex: Tex.F_RED_CARPET,
+    wallTex: Tex.HERMO_WALL,
+    connector: { x: 220, y: 452 },
+  },
+  {
+    owner: ZoneFaction.LIQUIDATOR,
+    hqName: 'Гермокабинет аудиторской стражи',
+    x: 804,
+    y: 662,
+    floorTex: Tex.F_GREEN_CARPET,
+    wallTex: Tex.HERMO_WALL,
+    connector: { x: 884, y: 616 },
+  },
+  {
+    owner: ZoneFaction.CULTIST,
+    hqName: 'Скрытый алтарь согласующей печати',
+    x: 500,
+    y: 220,
+    floorTex: Tex.F_GREEN_CARPET,
+    wallTex: Tex.HERMO_WALL,
+    connector: { x: 512, y: 378 },
+  },
+  {
+    owner: ZoneFaction.SCIENTIST,
+    hqName: 'Гермолаборатория экспертизы подписи',
+    x: 792,
+    y: 268,
+    floorTex: Tex.F_MARBLE_TILE,
+    wallTex: Tex.HERMO_WALL,
+    connector: { x: 708, y: 430 },
+  },
+  {
+    owner: ZoneFaction.WILD,
+    hqName: 'Разбитый штаб обходных тележек',
+    x: 430,
+    y: 762,
+    floorTex: Tex.F_CONCRETE,
+    wallTex: Tex.HERMO_WALL,
+    connector: { x: 584, y: 742 },
+  },
+];
+
+const UPPER_BUREAU_TERRITORY_PROFILES: readonly UpperBureauTerritoryProfile[] = [
+  {
+    owner: ZoneFaction.CITIZEN,
+    targetShare: 0.42,
+    spread: 1.34,
+    seeds: [
+      { x: 180, y: 190, weight: 1.15 },
+      { x: 244, y: 508, weight: 1.38 },
+      { x: 154, y: 838, weight: 1.08 },
+      { x: 430, y: 534, weight: 1.0 },
+    ],
+  },
+  {
+    owner: ZoneFaction.LIQUIDATOR,
+    targetShare: 0.26,
+    spread: 1.16,
+    seeds: [
+      { x: 444, y: 508, weight: 1.22 },
+      { x: 628, y: 430, weight: 1.12 },
+      { x: 850, y: 724, weight: 1.18 },
+      { x: 820, y: 846, weight: 1.0 },
+    ],
+  },
+  {
+    owner: ZoneFaction.CULTIST,
+    targetShare: 0.08,
+    spread: 0.76,
+    seeds: [
+      { x: 506, y: 246, weight: 1.28 },
+      { x: 480, y: 150, weight: 1.0 },
+    ],
+  },
+  {
+    owner: ZoneFaction.SCIENTIST,
+    targetShare: 0.16,
+    spread: 0.98,
+    seeds: [
+      { x: 822, y: 296, weight: 1.26 },
+      { x: 790, y: 176, weight: 1.08 },
+      { x: 690, y: 430, weight: 0.98 },
+    ],
+  },
+  {
+    owner: ZoneFaction.WILD,
+    targetShare: 0.08,
+    spread: 0.76,
+    seeds: [
+      { x: 468, y: 790, weight: 1.2 },
+      { x: 528, y: 882, weight: 1.08 },
+      { x: 276, y: 738, weight: 0.92 },
+    ],
+  },
+];
 
 function upperBureauQuestTags(...tags: string[]): string[] {
   return [...UPPER_BUREAU_EVENT_BASE_TAGS, ...tags].slice(0, 8);
@@ -826,6 +1049,33 @@ function stampExpansionRoom(
   return room;
 }
 
+function sealExpansionRoomPerimeter(world: World, room: Room): void {
+  const doors = new Set(room.doors);
+  for (let dy = -1; dy <= room.h; dy++) {
+    for (let dx = -1; dx <= room.w; dx++) {
+      if (dx >= 0 && dx < room.w && dy >= 0 && dy < room.h) continue;
+      const idx = world.idx(room.x + dx, room.y + dy);
+      if (doors.has(idx) || world.aptMask[idx]) continue;
+      world.cells[idx] = Cell.WALL;
+      world.roomMap[idx] = -1;
+      world.wallTex[idx] = room.wallTex;
+      world.features[idx] = Feature.NONE;
+    }
+  }
+}
+
+function sealUpperBureauRouteCutRooms(world: World): void {
+  for (const name of [
+    'Ниша проверки пропусков',
+    'Окно заднего назначения',
+    'Пост переписи сотрудников',
+    'Карман выданных обходов',
+  ] as const) {
+    const room = world.rooms.find(candidate => candidate?.name === name);
+    if (room) sealExpansionRoomPerimeter(world, room);
+  }
+}
+
 function addHorizontalGatePartition(
   world: World,
   y: number,
@@ -987,6 +1237,7 @@ function addStaffBalconyTier(world: World): void {
   addDoor(world, backAppointment, backAppointment.x + 22, backAppointment.y - 1, DoorState.LOCKED, UPPER_BUREAU_DOCUMENTS.forgedAppointment, Tex.DOOR_METAL);
   addDoor(world, witnessPost, witnessPost.x + 27, witnessPost.y - 1, DoorState.LOCKED, UPPER_BUREAU_DOCUMENTS.staffRoute, Tex.DOOR_METAL);
   addDoor(world, bypassLedger, bypassLedger.x + 22, bypassLedger.y - 1, DoorState.LOCKED, UPPER_BUREAU_DOCUMENTS.cleanerKey, Tex.DOOR_METAL);
+  sealExpansionRoomPerimeter(world, bypassLedger);
 
   decorateSalon(world, staffQueue);
   decorateClerkCage(world, backAppointment);
@@ -1030,12 +1281,148 @@ function addServiceTier(world: World, rng: () => number): void {
   placeFeatureRow(world, 590, 552, 590, 724, 10, Feature.LAMP);
 }
 
+function bureauRoomPitch(spec: UpperBureauDistrictSpec): { x: number; y: number } {
+  return { x: spec.roomW + 5, y: spec.roomH + 7 };
+}
+
+function bureauDistrictSpine(spec: UpperBureauDistrictSpec): { x: number; y0: number; y1: number } {
+  const pitch = bureauRoomPitch(spec);
+  const midCol = Math.max(1, Math.floor(spec.cols / 2));
+  return {
+    x: spec.x + midCol * pitch.x - 3,
+    y0: spec.y + spec.roomH + 1,
+    y1: spec.y + (spec.rows - 1) * pitch.y + spec.roomH + 3,
+  };
+}
+
+function decorateMicroRoom(world: World, room: Room, serial: number): void {
+  switch (room.type) {
+    case RoomType.KITCHEN:
+      for (let x = room.x + 2; x < room.x + room.w - 2; x += 4) setFeature(world, x, room.y + 2, Feature.STOVE);
+      setFeature(world, room.x + room.w - 4, room.y + room.h - 3, Feature.SINK);
+      setFeature(world, room.x + 3, room.y + room.h - 3, Feature.TABLE);
+      break;
+    case RoomType.BATHROOM:
+      setFeature(world, room.x + 2, room.y + 2, Feature.SINK);
+      setFeature(world, room.x + room.w - 3, room.y + room.h - 3, Feature.TOILET);
+      break;
+    case RoomType.MEDICAL:
+      setFeature(world, room.x + 2, room.y + 2, Feature.BED);
+      setFeature(world, room.x + room.w - 4, room.y + 2, Feature.APPARATUS);
+      setFeature(world, room.x + room.w - 4, room.y + room.h - 3, Feature.SINK);
+      break;
+    case RoomType.PRODUCTION:
+      setFeature(world, room.x + 3, room.y + 2, Feature.MACHINE);
+      setFeature(world, room.x + room.w - 4, room.y + 2, Feature.APPARATUS);
+      setFeature(world, room.x + 3, room.y + room.h - 3, Feature.SHELF);
+      break;
+    case RoomType.SMOKING:
+      setFeature(world, room.x + 2, room.y + 2, Feature.TABLE);
+      setFeature(world, room.x + room.w - 3, room.y + 2, Feature.CHAIR);
+      setFeature(world, room.x + room.w - 3, room.y + room.h - 3, Feature.LAMP);
+      break;
+    case RoomType.COMMON:
+      setFeature(world, room.x + 2, room.y + 2, Feature.TABLE);
+      setFeature(world, room.x + room.w - 3, room.y + 2, Feature.CHAIR);
+      setFeature(world, room.x + Math.floor(room.w / 2), room.y + room.h - 3, Feature.LAMP);
+      break;
+    case RoomType.HQ:
+      decorateOffice(world, room);
+      setFeature(world, room.x + 2, room.y + room.h - 3, Feature.SCREEN);
+      break;
+    case RoomType.STORAGE:
+      for (let y = room.y + 2; y < room.y + room.h - 2; y += 3) setFeature(world, room.x + 2, y, Feature.SHELF);
+      setFeature(world, room.x + room.w - 3, room.y + 2, Feature.LAMP);
+      break;
+    case RoomType.OFFICE:
+    default:
+      if (serial % 5 === 0) decorateClerkCage(world, room);
+      else decorateOffice(world, room);
+      break;
+  }
+}
+
+function addBureauMicroDistrict(world: World, spec: UpperBureauDistrictSpec): void {
+  const pitch = bureauRoomPitch(spec);
+  const width = (spec.cols - 1) * pitch.x + spec.roomW;
+  const spine = bureauDistrictSpine(spec);
+  let serial = 0;
+
+  for (let row = 0; row < spec.rows; row++) {
+    const rowY = spec.y + row * pitch.y;
+    const corridorY = rowY + spec.roomH + 2;
+    carveBureauLine(world, spec.x - 4, corridorY, spec.x + width + 4, corridorY, 3, spec.floorTex);
+    for (let col = 0; col < spec.cols; col++) {
+      const roomType = spec.roomTypes[(row * spec.cols + col) % spec.roomTypes.length];
+      const room = stampExpansionRoom(
+        world,
+        roomType,
+        `${spec.name} ${row + 1}.${col + 1}`,
+        spec.x + col * pitch.x,
+        rowY,
+        spec.roomW,
+        spec.roomH,
+        spec.floorTex,
+        spec.wallTex,
+      );
+      decorateMicroRoom(world, room, serial++);
+      addDoor(world, room, room.x + Math.floor(room.w / 2), room.y + room.h, DoorState.CLOSED, '', spec.wallTex === Tex.METAL ? Tex.DOOR_METAL : Tex.DOOR_WOOD);
+    }
+  }
+
+  carveBureauLine(world, spine.x, spine.y0, spine.x, spine.y1, 3, spec.floorTex);
+  carveBureauLine(world, spine.x, Math.floor((spine.y0 + spine.y1) / 2), spec.connector.x, spec.connector.y, 3, spec.floorTex);
+  placeFeatureRow(world, spec.x + 2, spec.y + spec.rows * pitch.y + 1, spec.x + width - 2, spec.y + spec.rows * pitch.y + 1, 9, Feature.LAMP);
+}
+
+function addMiniHqCluster(world: World, spec: UpperBureauHqSpec): void {
+  const hq = stampExpansionRoom(world, RoomType.HQ, spec.hqName, spec.x, spec.y, 26, 16, spec.floorTex, spec.wallTex);
+  const common = stampExpansionRoom(world, RoomType.COMMON, `${spec.hqName}: общая`, spec.x - 30, spec.y + 1, 22, 12, spec.floorTex, Tex.MARBLE);
+  const storage = stampExpansionRoom(world, RoomType.STORAGE, `${spec.hqName}: запас`, spec.x + 34, spec.y + 1, 20, 12, spec.floorTex, Tex.MARBLE);
+  const kitchen = stampExpansionRoom(world, RoomType.KITCHEN, `${spec.hqName}: кухня`, spec.x - 28, spec.y + 22, 18, 10, Tex.F_TILE, Tex.TILE_W);
+  const office = stampExpansionRoom(world, spec.owner === ZoneFaction.SCIENTIST ? RoomType.MEDICAL : RoomType.OFFICE, `${spec.hqName}: служба`, spec.x + 34, spec.y + 22, 22, 10, spec.floorTex, Tex.MARBLE);
+  const bathroom = stampExpansionRoom(world, RoomType.BATHROOM, `${spec.hqName}: санузел`, spec.x + 5, spec.y + 22, 14, 9, Tex.F_TILE, Tex.TILE_W);
+
+  decorateMicroRoom(world, hq, 0);
+  decorateMicroRoom(world, common, 1);
+  decorateMicroRoom(world, storage, 2);
+  decorateMicroRoom(world, kitchen, 3);
+  decorateMicroRoom(world, office, 4);
+  decorateMicroRoom(world, bathroom, 5);
+
+  carveBureauLine(world, spec.x - 34, spec.y + 18, spec.x + 60, spec.y + 18, 3, spec.floorTex);
+  carveBureauLine(world, spec.x + 13, spec.y + 18, spec.connector.x, spec.connector.y, 3, spec.floorTex);
+  carveBureauLine(world, common.x + (common.w >> 1), common.y + common.h + 1, common.x + (common.w >> 1), spec.y + 18, 1, spec.floorTex);
+  carveBureauLine(world, storage.x + (storage.w >> 1), storage.y + storage.h + 1, storage.x + (storage.w >> 1), spec.y + 18, 1, spec.floorTex);
+  carveBureauLine(world, kitchen.x + (kitchen.w >> 1), spec.y + 18, kitchen.x + (kitchen.w >> 1), kitchen.y - 2, 1, spec.floorTex);
+  carveBureauLine(world, office.x + (office.w >> 1), spec.y + 18, office.x + (office.w >> 1), office.y - 2, 1, spec.floorTex);
+  carveBureauLine(world, bathroom.x + (bathroom.w >> 1), spec.y + 18, bathroom.x + (bathroom.w >> 1), bathroom.y - 2, 1, spec.floorTex);
+  addDoor(world, hq, hq.x + Math.floor(hq.w / 2), hq.y + hq.h, DoorState.HERMETIC_OPEN, '', Tex.DOOR_METAL);
+  addDoor(world, common, common.x + (common.w >> 1), common.y + common.h, DoorState.CLOSED, '', Tex.DOOR_WOOD);
+  addDoor(world, storage, storage.x + (storage.w >> 1), storage.y + storage.h, DoorState.CLOSED, '', Tex.DOOR_METAL);
+  addDoor(world, kitchen, kitchen.x + (kitchen.w >> 1), kitchen.y - 1, DoorState.CLOSED, '', Tex.DOOR_WOOD);
+  addDoor(world, office, office.x + (office.w >> 1), office.y - 1, DoorState.CLOSED, '', Tex.DOOR_METAL);
+  addDoor(world, bathroom, bathroom.x + (bathroom.w >> 1), bathroom.y - 1, DoorState.CLOSED, '', Tex.DOOR_WOOD);
+}
+
+function addUpperBureauDistricts(world: World): void {
+  carveRibbonLine(world, 40, 308, 964, 308, 5, Tex.F_MARBLE_TILE, Tex.F_GREEN_CARPET);
+  carveRibbonLine(world, 40, 704, 964, 704, 5, Tex.F_MARBLE_TILE, Tex.F_GREEN_CARPET);
+  carveRibbonLine(world, 308, 40, 308, 964, 5, Tex.F_MARBLE_TILE, Tex.F_RED_CARPET);
+  carveRibbonLine(world, 676, 40, 676, 964, 5, Tex.F_MARBLE_TILE, Tex.F_GREEN_CARPET);
+
+  for (const spec of UPPER_BUREAU_DISTRICTS) addBureauMicroDistrict(world, spec);
+  for (const spec of UPPER_BUREAU_HQ_SPECS) addMiniHqCluster(world, spec);
+}
+
 export function expandUpperBureauGeometry(world: World, rng: () => number): void {
   addPublicQueueTier(world, rng);
   addPrivateOfficeTier(world, rng);
   addArchiveBalconyTier(world);
   addStaffBalconyTier(world);
   addServiceTier(world, rng);
+  addUpperBureauDistricts(world);
+  sealUpperBureauRouteCutRooms(world);
 }
 
 function setAdministrativeZones(world: World): void {
@@ -1043,32 +1430,41 @@ function setAdministrativeZones(world: World): void {
   retuneUpperBureauZones(world);
 }
 
-interface UpperBureauZoneMark {
+interface UpperBureauZoneLevelMark {
   x: number;
   y: number;
-  faction: ZoneFaction;
   level: number;
-  hq?: boolean;
 }
 
-const UPPER_BUREAU_ZONE_MARKS: readonly UpperBureauZoneMark[] = [
-  { x: 260, y: 508, faction: ZoneFaction.CITIZEN, level: 3 },
-  { x: 356, y: 476, faction: ZoneFaction.CITIZEN, level: 3 },
-  { x: 444, y: 508, faction: ZoneFaction.LIQUIDATOR, level: 4, hq: true },
-  { x: 468, y: 508, faction: ZoneFaction.LIQUIDATOR, level: 4, hq: true },
-  { x: 532, y: 508, faction: ZoneFaction.LIQUIDATOR, level: 4, hq: true },
-  { x: 628, y: 430, faction: ZoneFaction.LIQUIDATOR, level: 4, hq: true },
-  { x: 704, y: 508, faction: ZoneFaction.LIQUIDATOR, level: 4, hq: true },
-  { x: 724, y: 540, faction: ZoneFaction.SAMOSBOR, level: 5 },
-  { x: 760, y: 635, faction: ZoneFaction.SAMOSBOR, level: 5 },
-  { x: 840, y: 616, faction: ZoneFaction.SAMOSBOR, level: 5 },
-  { x: 520, y: 640, faction: ZoneFaction.WILD, level: 4 },
-  { x: 584, y: 742, faction: ZoneFaction.WILD, level: 4 },
-  { x: 760, y: 742, faction: ZoneFaction.WILD, level: 4 },
-  { x: 220, y: 620, faction: ZoneFaction.WILD, level: 3 },
+const UPPER_BUREAU_TERRITORY_BUCKET_SIZE = 32;
+const UPPER_BUREAU_TERRITORY_BUCKET_SIDE = W / UPPER_BUREAU_TERRITORY_BUCKET_SIZE;
+
+const UPPER_BUREAU_ZONE_LEVEL_MARKS: readonly UpperBureauZoneLevelMark[] = [
+  { x: 260, y: 508, level: 3 },
+  { x: 356, y: 476, level: 3 },
+  { x: 444, y: 508, level: 4 },
+  { x: 468, y: 508, level: 4 },
+  { x: 532, y: 508, level: 4 },
+  { x: 628, y: 430, level: 4 },
+  { x: 704, y: 508, level: 4 },
+  { x: 724, y: 540, level: 5 },
+  { x: 760, y: 635, level: 5 },
+  { x: 840, y: 616, level: 5 },
+  { x: 520, y: 640, level: 4 },
+  { x: 584, y: 742, level: 4 },
+  { x: 760, y: 742, level: 4 },
+  { x: 220, y: 620, level: 3 },
+  { x: 506, y: 246, level: 5 },
+  { x: 822, y: 296, level: 4 },
 ];
 
-function upperBureauBaselineZoneFaction(world: World, x: number, y: number): ZoneFaction {
+const UPPER_BUREAU_SAMOSBOR_ZONE_MARKS: readonly { x: number; y: number }[] = [
+  { x: 724, y: 540 },
+  { x: 760, y: 635 },
+  { x: 840, y: 616 },
+];
+
+function upperBureauBaselineZoneLevel(world: World, x: number, y: number): number {
   const archiveD = Math.min(
     world.dist(x, y, 758, 520),
     world.dist(x, y, 760, 635),
@@ -1083,56 +1479,196 @@ function upperBureauBaselineZoneFaction(world: World, x: number, y: number): Zon
     world.dist(x, y, 628, 430),
     world.dist(x, y, 546, 482),
   );
-  if (archiveD < 185) return ZoneFaction.SAMOSBOR;
-  if (serviceD < 195) return ZoneFaction.WILD;
-  if (auditD < 170) return ZoneFaction.LIQUIDATOR;
-  return ZoneFaction.CITIZEN;
-}
-
-function upperBureauBaselineZoneLevel(world: World, x: number, y: number, faction: ZoneFaction): number {
   const base = Math.max(2, calcZoneLevel(x, y, UPPER_BUREAU_BASE_FLOOR));
-  const factionBoost = faction === ZoneFaction.SAMOSBOR ? 2 : faction === ZoneFaction.WILD || faction === ZoneFaction.LIQUIDATOR ? 1 : 0;
+  const localBoost = archiveD < 185 ? 2 : serviceD < 195 || auditD < 170 ? 1 : 0;
   const edgeBoost = world.dist(x, y, W / 2, W / 2) > 310 ? 1 : 0;
-  return Math.max(2, Math.min(5, base + factionBoost + edgeBoost));
+  return Math.max(2, Math.min(5, base + localBoost + edgeBoost));
 }
 
-function roomAtCell(world: World, x: number, y: number): Room | undefined {
-  const rid = world.roomMap[world.idx(x, y)];
-  return rid >= 0 ? world.rooms[rid] : undefined;
-}
-
-function applyUpperBureauZoneMark(world: World, mark: UpperBureauZoneMark): void {
+function applyUpperBureauZoneLevelMark(world: World, mark: UpperBureauZoneLevelMark): void {
   const zone = world.zones[world.zoneMap[world.idx(mark.x, mark.y)]];
   if (!zone) return;
-  zone.faction = mark.faction;
   zone.level = Math.max(zone.level, mark.level);
-  if (mark.hq) {
-    const room = roomAtCell(world, mark.x, mark.y);
-    if (room && room.type === RoomType.HQ) zone.hqRoomId = room.id;
+}
+
+function upperBureauHash01(a: number, b: number, c: number): number {
+  let n = Math.imul(a ^ 0x9e3779b9, 0x85ebca6b)
+    ^ Math.imul(b ^ 0xc2b2ae35, 0x27d4eb2d)
+    ^ Math.imul(c ^ 0x165667b1, 0x7feb352d);
+  n ^= n >>> 15;
+  n = Math.imul(n, 0x846ca68b);
+  n ^= n >>> 16;
+  return (n >>> 0) / 0x100000000;
+}
+
+function upperBureauRoomOwnerHint(room: Room | undefined): TerritoryOwner | undefined {
+  if (!room) return undefined;
+  for (const spec of UPPER_BUREAU_HQ_SPECS) {
+    if (room.name === spec.hqName || room.name.startsWith(`${spec.hqName}:`)) return spec.owner;
+  }
+  if (
+    room.name === 'Ниша проверки пропусков' ||
+    room.name === 'Засада поддельных корешков' ||
+    room.name === 'Малый кабинет аудиторской тени' ||
+    room.name === 'Привилегированная приемная' ||
+    room.name === 'Пост переписи сотрудников'
+  ) return ZoneFaction.LIQUIDATOR;
+  for (const spec of UPPER_BUREAU_DISTRICTS) {
+    if (room.name.startsWith(spec.name)) return spec.owner;
+  }
+  return undefined;
+}
+
+function upperBureauRoomBias(room: Room | undefined, owner: TerritoryOwner): number {
+  if (!room) return 0;
+  const hint = upperBureauRoomOwnerHint(room);
+  if (hint === owner) return -0.22;
+  if (hint !== undefined) return 0.18;
+  if (owner === ZoneFaction.CITIZEN && (room.type === RoomType.COMMON || room.type === RoomType.KITCHEN || room.type === RoomType.BATHROOM)) return -0.06;
+  if (owner === ZoneFaction.LIQUIDATOR && (room.type === RoomType.HQ || room.type === RoomType.OFFICE)) return -0.07;
+  if (owner === ZoneFaction.SCIENTIST && (room.type === RoomType.MEDICAL || room.type === RoomType.PRODUCTION)) return -0.1;
+  if (owner === ZoneFaction.CULTIST && (room.type === RoomType.STORAGE || room.type === RoomType.SMOKING)) return -0.05;
+  if (owner === ZoneFaction.WILD && (room.type === RoomType.STORAGE || room.type === RoomType.SMOKING || room.type === RoomType.PRODUCTION)) return -0.08;
+  return 0;
+}
+
+function upperBureauOwnerScore(world: World, x: number, y: number, profile: UpperBureauTerritoryProfile, room: Room | undefined): number {
+  let nearest = Infinity;
+  for (const seed of profile.seeds) {
+    const d = Math.sqrt(world.dist2(x, y, seed.x, seed.y)) / Math.max(0.1, seed.weight);
+    if (d < nearest) nearest = d;
+  }
+  const distanceScore = nearest / (176 * profile.spread);
+  const targetBias = profile.targetShare * 0.94;
+  const noise = (upperBureauHash01(Math.floor(x / 11), Math.floor(y / 11), profile.owner + 17) - 0.5) * 0.12;
+  return distanceScore - targetBias + noise + upperBureauRoomBias(room, profile.owner);
+}
+
+function paintUpperBureauTargetTerritory(world: World): void {
+  const bucketCount = UPPER_BUREAU_TERRITORY_BUCKET_SIDE * UPPER_BUREAU_TERRITORY_BUCKET_SIDE;
+  const ownerBuckets = new Uint8Array(bucketCount).fill(255);
+  const quota = new Map<TerritoryOwner, number>();
+  const assigned = new Map<TerritoryOwner, number>();
+  let remaining = bucketCount;
+  for (let i = 0; i < UPPER_BUREAU_TERRITORY_PROFILES.length; i++) {
+    const profile = UPPER_BUREAU_TERRITORY_PROFILES[i];
+    const target = i === UPPER_BUREAU_TERRITORY_PROFILES.length - 1
+      ? remaining
+      : Math.max(1, Math.round(profile.targetShare * bucketCount));
+    quota.set(profile.owner, target);
+    assigned.set(profile.owner, 0);
+    remaining -= target;
+  }
+
+  const candidates: { owner: TerritoryOwner; bucket: number; score: number }[] = [];
+  for (const profile of UPPER_BUREAU_TERRITORY_PROFILES) {
+    for (let bucket = 0; bucket < bucketCount; bucket++) {
+      const bx = bucket % UPPER_BUREAU_TERRITORY_BUCKET_SIDE;
+      const by = (bucket / UPPER_BUREAU_TERRITORY_BUCKET_SIDE) | 0;
+      const x = bx * UPPER_BUREAU_TERRITORY_BUCKET_SIZE + UPPER_BUREAU_TERRITORY_BUCKET_SIZE / 2;
+      const y = by * UPPER_BUREAU_TERRITORY_BUCKET_SIZE + UPPER_BUREAU_TERRITORY_BUCKET_SIZE / 2;
+      const rid = world.roomMap[world.idx(x, y)];
+      const room = rid >= 0 ? world.rooms[rid] : undefined;
+      candidates.push({ owner: profile.owner, bucket, score: upperBureauOwnerScore(world, x, y, profile, room) });
+    }
+  }
+  candidates.sort((a, b) => a.score - b.score);
+  for (const candidate of candidates) {
+    if (ownerBuckets[candidate.bucket] !== 255) continue;
+    const used = assigned.get(candidate.owner) ?? 0;
+    const cap = quota.get(candidate.owner) ?? 0;
+    if (used >= cap) continue;
+    ownerBuckets[candidate.bucket] = candidate.owner;
+    assigned.set(candidate.owner, used + 1);
+  }
+  for (let bucket = 0; bucket < bucketCount; bucket++) {
+    if (ownerBuckets[bucket] !== 255) continue;
+    let bestOwner = UPPER_BUREAU_TERRITORY_PROFILES[0].owner;
+    let bestOverflow = Infinity;
+    for (const profile of UPPER_BUREAU_TERRITORY_PROFILES) {
+      const used = assigned.get(profile.owner) ?? 0;
+      const cap = Math.max(1, quota.get(profile.owner) ?? 1);
+      const overflow = used / cap;
+      if (overflow < bestOverflow) {
+        bestOverflow = overflow;
+        bestOwner = profile.owner;
+      }
+    }
+    ownerBuckets[bucket] = bestOwner;
+    assigned.set(bestOwner, (assigned.get(bestOwner) ?? 0) + 1);
+  }
+
+  for (let by = 0; by < UPPER_BUREAU_TERRITORY_BUCKET_SIDE; by++) {
+    for (let bx = 0; bx < UPPER_BUREAU_TERRITORY_BUCKET_SIDE; bx++) {
+      const owner = ownerBuckets[by * UPPER_BUREAU_TERRITORY_BUCKET_SIDE + bx] as TerritoryOwner;
+      for (let dy = 0; dy < UPPER_BUREAU_TERRITORY_BUCKET_SIZE; dy++) {
+        for (let dx = 0; dx < UPPER_BUREAU_TERRITORY_BUCKET_SIZE; dx++) {
+          setTerritoryOwnerAtIndex(
+            world,
+            world.idx(bx * UPPER_BUREAU_TERRITORY_BUCKET_SIZE + dx, by * UPPER_BUREAU_TERRITORY_BUCKET_SIZE + dy),
+            owner,
+          );
+        }
+      }
+    }
+  }
+}
+
+function paintUpperBureauRoomTerritory(world: World, room: Room, owner: TerritoryOwner): void {
+  for (let dy = 0; dy < room.h; dy++) {
+    for (let dx = 0; dx < room.w; dx++) setTerritoryOwnerAtIndex(world, world.idx(room.x + dx, room.y + dy), owner);
+  }
+}
+
+function paintUpperBureauHqTerritory(world: World): void {
+  for (const room of world.rooms) {
+    if (!room) continue;
+    const owner = upperBureauRoomOwnerHint(room);
+    if (owner === undefined) continue;
+    paintUpperBureauRoomTerritory(world, room, owner);
+    if (room.type !== RoomType.HQ) continue;
+    const cx = room.x + (room.w >> 1);
+    const cy = room.y + (room.h >> 1);
+    for (let dy = -8; dy <= 8; dy++) {
+      for (let dx = -8; dx <= 8; dx++) {
+        if (dx * dx + dy * dy > 64) continue;
+        const idx = world.idx(cx + dx, cy + dy);
+        if (world.cells[idx] !== Cell.ABYSS && world.cells[idx] !== Cell.LIFT) setTerritoryOwnerAtIndex(world, idx, owner);
+      }
+    }
+  }
+}
+
+function applyUpperBureauSamosborZoneOverlay(world: World): void {
+  for (const mark of UPPER_BUREAU_SAMOSBOR_ZONE_MARKS) {
+    const idx = world.idx(mark.x, mark.y);
+    const zone = world.zones[world.zoneMap[idx]];
+    if (!zone) continue;
+    zone.faction = ZoneFaction.SAMOSBOR;
+    zone.level = Math.max(zone.level, 5);
   }
 }
 
 export function retuneUpperBureauZones(world: World): void {
   for (const zone of world.zones) {
-    zone.faction = upperBureauBaselineZoneFaction(world, zone.cx, zone.cy);
-    zone.level = upperBureauBaselineZoneLevel(world, zone.cx, zone.cy, zone.faction);
+    zone.faction = ZoneFaction.CITIZEN;
+    zone.level = upperBureauBaselineZoneLevel(world, zone.cx, zone.cy);
     zone.hqRoomId = -1;
     zone.fogged = false;
   }
-  for (const mark of UPPER_BUREAU_ZONE_MARKS) applyUpperBureauZoneMark(world, mark);
-  for (const room of world.rooms) {
-    if (room.type !== RoomType.HQ) continue;
-    const zone = world.zones[world.zoneMap[world.idx(room.x + Math.floor(room.w / 2), room.y + Math.floor(room.h / 2))]];
-    if (zone) {
-      zone.faction = ZoneFaction.LIQUIDATOR;
-      zone.level = Math.max(zone.level, 4);
-      zone.hqRoomId = room.id;
-    }
-  }
-  for (let i = 0; i < W * W; i++) {
-    const zone = world.zones[world.zoneMap[i]];
-    world.factionControl[i] = zone?.faction ?? ZoneFaction.CITIZEN;
-  }
+  for (const mark of UPPER_BUREAU_ZONE_LEVEL_MARKS) applyUpperBureauZoneLevelMark(world, mark);
+  paintUpperBureauTargetTerritory(world);
+  paintUpperBureauHqTerritory(world);
+  sealUpperBureauRouteCutRooms(world);
+  syncZoneMetadataFromTerritory(world);
+  applyUpperBureauSamosborZoneOverlay(world);
+}
+
+export function reinforceUpperBureauAuthoredHqTerritory(world: World): void {
+  paintUpperBureauHqTerritory(world);
+  sealUpperBureauRouteCutRooms(world);
+  syncZoneMetadataFromTerritory(world);
+  applyUpperBureauSamosborZoneOverlay(world);
 }
 
 export function generateUpperBureauDesignFloor(): { world: World; entities: Entity[]; spawnX: number; spawnY: number } {

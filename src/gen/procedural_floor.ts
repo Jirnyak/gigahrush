@@ -22,6 +22,7 @@ import {
   type ItemDef,
   type RailTrainTrack,
   type Room,
+  type TerritoryOwner,
   type ContainerAccess,
   type WorldContainer,
 } from '../core/types';
@@ -32,6 +33,7 @@ import { ITEM_TAGS, getStack, spawnCount } from '../data/items';
 import { CONTAINER_DEFS, containerKindsForRoom } from '../data/container_defs';
 import { proceduralContainerValueCap as economyProceduralContainerValueCap } from '../data/economics';
 import { emergencyPanelDefsForGeometry, type EmergencyPanelDef } from '../data/emergency_panels';
+import { factionToTerritoryOwner, territoryOwnerName, territoryOwnerToFaction } from '../data/factions';
 import { chooseFloorMonsterKind, getMonsterEcology } from '../data/monster_ecology';
 import {
   proceduralPopulationBudget,
@@ -60,10 +62,16 @@ import {
   proceduralLootValueCap,
   type ProceduralFloorSpec,
 } from '../data/procedural_floors';
+import { territorySharesForProceduralSpec } from '../data/floor_territory';
 import { MONSTERS } from '../entities/monster';
 import { monsterSpr, Spr } from '../render/sprite_index';
 import { MarkType, stampMark } from '../systems/surface_marks';
 import { setDoorState } from '../systems/door_state';
+import {
+  initializeCellTerritory,
+  syncZoneMetadataFromTerritory,
+  territoryOwnerAtIndex,
+} from '../systems/territory';
 import { gaussianLevel, getMaxHp, randomRPG } from '../systems/rpg';
 import { canSpawnEntityType, entitySpawnSlots } from '../systems/entity_limits';
 import { addRailTrainRoute } from '../systems/rail_trains';
@@ -75,6 +83,7 @@ import {
   buildWalkablePlacementMap,
   canPlaceRoom,
   carveCorridor,
+  connectToNetwork,
   connectRoomsMST,
   decorateRoom,
   ensureConnectivity,
@@ -121,9 +130,18 @@ const WILD_MAJORITY_REWARD_TAG = 'wild_reward_leaf';
 const WILD_MAJORITY_RISK_TAG = 'wild_risk_cue';
 const WILD_MAJORITY_SHORTCUT_TAG = 'wild_unsafe_shortcut';
 const WILD_MAJORITY_AMBUSH_TAG = 'wild_ambush_chord';
+const WORKSHOP_CLUSTER_TARGET = 42;
+const WORKSHOP_MICRO_ROOM_TARGET = 260;
+const WORKSHOP_CLUSTER_MIN_SPACING = 24 * 24;
 const COLLECTOR_PROXY_SIZE = 32;
 const COLLECTOR_PROXY_CELL = W / COLLECTOR_PROXY_SIZE;
 const COLLECTOR_VALVE_ROOM_PREFIX = 'Вентильная седловина';
+const COLLECTOR_STATION_CLUSTER_TARGET = 44;
+const COLLECTOR_STATION_MICRO_ROOM_TARGET = 210;
+const COLLECTOR_STATION_CLUSTER_MIN_SPACING = 22 * 22;
+const COLLECTOR_MIRROR_GALLERY_TARGET = 18;
+const COLLECTOR_MIRROR_MICRO_ROOM_TARGET = 162;
+const COLLECTOR_MIRROR_CLUSTER_MIN_SPACING = 34 * 34;
 const COLLECTOR_REPAIR_ITEMS: readonly Item[] = [
   { defId: 'valve_tag', count: 1 },
   { defId: 'sealant_tube', count: 1 },
@@ -134,6 +152,18 @@ const ATTIC_PROXY_SIZE = 64;
 const ATTIC_PROXY_CELL = W / ATTIC_PROXY_SIZE;
 const ATTIC_SPINE_START = 42;
 const ATTIC_SPINE_END = W - 43;
+const ATTIC_MID_CLUSTER_TARGET = 18;
+const ATTIC_MICRO_ROOM_TARGET = 72;
+const ATTIC_LIVING_TUNNEL_MICRO_BONUS = 32;
+const ATTIC_CLUSTER_MIN_SPACING = 42 * 42;
+const PROCEDURAL_HQ_OWNERS = [
+  ZoneFaction.CITIZEN,
+  ZoneFaction.LIQUIDATOR,
+  ZoneFaction.CULTIST,
+  ZoneFaction.SCIENTIST,
+  ZoneFaction.WILD,
+] as const;
+const ATTIC_HQ_OWNERS = PROCEDURAL_HQ_OWNERS;
 const MYCELIUM_PROXY_SIZE = 64;
 const MYCELIUM_PROXY_CELL = W / MYCELIUM_PROXY_SIZE;
 const MYCELIUM_ROOM_PREFIX = 'Грибничный карман';
@@ -153,6 +183,28 @@ const ARCHIVE_WARREN_GRID = 15;
 const ARCHIVE_WARREN_ORIGIN = 64;
 const ARCHIVE_WARREN_CELL = 64;
 const ARCHIVE_WARREN_KEY_ID = 'container_key_label';
+const ARCHIVE_WARREN_MICRO_OFFSETS = [
+  { dx: -22, dy: -22 },
+  { dx: 18, dy: -22 },
+  { dx: -22, dy: 18 },
+  { dx: 18, dy: 18 },
+] as const;
+const ARCHIVE_WARREN_EDGE_ALCOVE_OFFSETS = [0.36, 0.64] as const;
+const ARCHIVE_WARREN_HQ_OWNERS = [
+  ZoneFaction.CITIZEN,
+  ZoneFaction.LIQUIDATOR,
+  ZoneFaction.CULTIST,
+  ZoneFaction.SCIENTIST,
+  ZoneFaction.WILD,
+] as const;
+const ARCHIVE_WARREN_HQ_TARGETS: Readonly<Record<TerritoryOwner, { gx: number; gy: number }>> = {
+  [ZoneFaction.CITIZEN]: { gx: 7, gy: 7 },
+  [ZoneFaction.LIQUIDATOR]: { gx: 2, gy: 2 },
+  [ZoneFaction.CULTIST]: { gx: 12, gy: 12 },
+  [ZoneFaction.SAMOSBOR]: { gx: 7, gy: 12 },
+  [ZoneFaction.WILD]: { gx: 2, gy: 12 },
+  [ZoneFaction.SCIENTIST]: { gx: 12, gy: 2 },
+};
 const ARCHIVE_WARREN_LANDMARK_NAMES = [
   'Портретная опись',
   'Клетка клерка',
@@ -190,6 +242,10 @@ const SMOG_COUNTERPLAY_DROPS = ['wet_rag_bundle', 'cloth_roll', 'gasmask_filter'
 const WALL_SNAKE_FIELD_COLUMNS = 16;
 const WALL_SNAKE_FIELD_ROWS = 8;
 const WALL_SNAKE_FIELD_TARGET = WALL_SNAKE_FIELD_COLUMNS * WALL_SNAKE_FIELD_ROWS;
+const WALL_SNAKE_MEAT_BLOCK_THRESHOLD = 0.57;
+const WALL_SNAKE_SPHINCTER_GRID = 64;
+const WALL_SNAKE_SPHINCTER_SEARCH = 18;
+const WALL_SNAKE_CONNECT_MIN_COMPONENT = 1536;
 const LIFE_FIELD_SAFE_ROOM_COUNT = 12;
 const LIFE_FIELD_NOISE_DENSITY = 0.27;
 const LIFE_FIELD_NOISE_BAND_BONUS = 0.08;
@@ -240,6 +296,7 @@ interface WorkshopNetwork {
 interface ArchiveWarrenIntent {
   graph: MazeGraph;
   roomsByNode: Room[];
+  microRoomsByNode: Room[][];
   landmarkAnchors: GeometryAnchor[];
   keyDropRoomIds: number[];
 }
@@ -359,14 +416,14 @@ function proceduralMacroProfile(spec: ProceduralFloorSpec, industrial: boolean):
   }
   if (spec.geometryId === 'workshops') {
     return {
-      hallCount: 7,
+      hallCount: 9 + Math.floor(spec.danger / 2),
       minW: 24,
       maxW: 56,
       minH: 16,
       maxH: 34,
       trunkWidth: 2,
       branchWidth: 1,
-      branchCount: 15,
+      branchCount: 22 + spec.danger * 2,
       namePrefix: 'Цеховой пролет',
       hallTypes: [RoomType.PRODUCTION, RoomType.PRODUCTION, RoomType.STORAGE],
       corridorFloorTex: Tex.F_CONCRETE,
@@ -377,14 +434,14 @@ function proceduralMacroProfile(spec: ProceduralFloorSpec, industrial: boolean):
   }
   if (spec.geometryId === 'service_spines') {
     return {
-      hallCount: 5,
-      minW: 18,
-      maxW: 46,
-      minH: 8,
-      maxH: 18,
-      trunkWidth: 1,
+      hallCount: 7,
+      minW: 20,
+      maxW: 54,
+      minH: 9,
+      maxH: 22,
+      trunkWidth: 2,
       branchWidth: 1,
-      branchCount: 18,
+      branchCount: 30,
       namePrefix: 'Сервисный узел',
       hallTypes: [RoomType.CORRIDOR, RoomType.PRODUCTION, RoomType.STORAGE],
       corridorFloorTex: Tex.F_CONCRETE,
@@ -430,14 +487,14 @@ function proceduralMacroProfile(spec: ProceduralFloorSpec, industrial: boolean):
   }
   if (spec.geometryId === 'communal_knots') {
     return {
-      hallCount: 5 + Math.floor(spec.danger / 3),
+      hallCount: 6 + Math.floor(spec.danger / 2),
       minW: 18,
-      maxW: 40,
+      maxW: 44,
       minH: 12,
-      maxH: 26,
+      maxH: 28,
       trunkWidth: 2,
       branchWidth: 1,
-      branchCount: 14,
+      branchCount: 18 + spec.danger * 2,
       namePrefix: 'Общий тамбур',
       hallTypes: [RoomType.COMMON, RoomType.KITCHEN, RoomType.SMOKING],
       corridorFloorTex: Tex.F_LINO,
@@ -533,7 +590,7 @@ function buildProceduralMacroLayer(world: World, rooms: Room[], spec: Procedural
       const jitterY = irng(4, Math.max(5, slotH - size.h - 6));
       const x = margin + col * slotW + jitterX;
       const y = margin + row * slotH + jitterY;
-      if (!canPlaceRoom(world, x, y, size.w, size.h)) continue;
+      if (!canPlaceRoom(world, x, y, size.w, size.h) && !canPlaceAtticSupportRoom(world, x, y, size.w, size.h)) continue;
 
       const type = profile.hallTypes[(serial + attempt + spec.danger) % profile.hallTypes.length];
       const room = stampRoom(world, nextRoomId.v++, type, x, y, size.w, size.h, -1);
@@ -778,6 +835,155 @@ function decorateProceduralRoom(world: World, room: Room, spec: ProceduralFloorS
   }
 }
 
+function workshopMicroRoomSize(type: RoomType, seed: number): { w: number; h: number } {
+  const n = seed >>> 0;
+  if (type === RoomType.BATHROOM) return { w: 4 + (n & 1), h: 4 + ((n >>> 1) & 1) };
+  if (type === RoomType.KITCHEN) return { w: 5 + (n % 3), h: 5 + ((n >>> 2) % 3) };
+  if (type === RoomType.OFFICE) return { w: 6 + (n % 5), h: 5 + ((n >>> 3) % 4) };
+  if (type === RoomType.STORAGE) return { w: 5 + (n % 6), h: 5 + ((n >>> 4) % 5) };
+  if (type === RoomType.PRODUCTION) return { w: 9 + (n % 8), h: 7 + ((n >>> 5) % 6) };
+  return { w: 7 + (n % 7), h: 5 + ((n >>> 6) % 5) };
+}
+
+function workshopSupportRoomName(type: RoomType, id: number, cluster: number): string {
+  if (type === RoomType.BATHROOM) return `Цеховой туалет ${cluster}.${id}`;
+  if (type === RoomType.KITCHEN) return `Комната кипятка цеха ${cluster}.${id}`;
+  if (type === RoomType.OFFICE) return `Мастерская контора ${cluster}.${id}`;
+  if (type === RoomType.STORAGE) return `Инструментальная ячейка ${cluster}.${id}`;
+  if (type === RoomType.PRODUCTION) return `Малый станочный бокс ${cluster}.${id}`;
+  return `Бытовка цеха ${cluster}.${id}`;
+}
+
+function decorateWorkshopClusterRoom(world: World, room: Room, spec: ProceduralFloorSpec, seed: number): void {
+  applyRoomTexture(world, room, Tex.METAL, Tex.F_CONCRETE);
+  if (room.type === RoomType.PRODUCTION) {
+    decorateWorkshopMachineLine(world, room, workshopFactoryForIndex(seed), spec.seed ^ seed);
+    return;
+  }
+  decorateProceduralRoom(world, room, spec);
+  const center = roomCenter(room);
+  const centerIdx = world.idx(center.x, center.y);
+  if (world.roomMap[centerIdx] !== room.id) return;
+  if (room.type === RoomType.STORAGE) world.features[centerIdx] = Feature.SHELF;
+  else if (room.type === RoomType.OFFICE) world.features[centerIdx] = Feature.DESK;
+  else if (room.type === RoomType.KITCHEN) world.features[centerIdx] = Feature.SINK;
+  else if (room.type === RoomType.BATHROOM) world.features[centerIdx] = Feature.TOILET;
+  else world.features[centerIdx] = Feature.TABLE;
+}
+
+function connectWorkshopLocalRooms(world: World, a: Room, b: Room, spec: ProceduralFloorSpec, seed: number): void {
+  const ac = roomCenter(a);
+  const bc = roomCenter(b);
+  const exitA = roomExit(world, a, bc.x, bc.y);
+  const exitB = roomExit(world, b, ac.x, ac.y);
+  placeDoorAt(world, exitA.wx, exitA.wy, a.id);
+  placeDoorAt(world, exitB.wx, exitB.wy, b.id);
+  carveWorkshopL(world, spec, exitA.ox, exitA.oy, exitB.ox, exitB.oy, seed);
+}
+
+function tryPlaceWorkshopSupportRoom(
+  world: World,
+  rooms: Room[],
+  spec: ProceduralFloorSpec,
+  nextRoomId: { v: number },
+  hub: Room,
+  type: RoomType,
+  size: { w: number; h: number },
+  cluster: number,
+  ordinal: number,
+  seed: number,
+): Room | null {
+  const dirs = [0, 1, 2, 3].sort((a, b) =>
+    fieldHash01(seed, a, ordinal, 0x5820) - fieldHash01(seed, b, ordinal, 0x5820),
+  );
+  for (const dir of dirs) {
+    const span = dir < 2 ? hub.w : hub.h;
+    const roomSpan = dir < 2 ? size.w : size.h;
+    const maxOffset = Math.max(0, span - roomSpan);
+    for (let step = 0; step < 5; step++) {
+      const gap = 3 + step * 4 + ((seed >>> (step + dir)) & 3);
+      const offset = Math.floor(maxOffset * fieldHash01(seed, dir * 11 + step, ordinal, 0x5821));
+      let x = dir < 2 ? hub.x + offset : hub.x + (dir === 2 ? -size.w - gap : hub.w + gap);
+      let y = dir < 2 ? hub.y + (dir === 0 ? -size.h - gap : hub.h + gap) : hub.y + offset;
+      if (x < 18 || y < 18 || x + size.w >= W - 18 || y + size.h >= W - 18) continue;
+      if (!canPlaceRoom(world, x, y, size.w, size.h)) continue;
+      nextRoomId.v = Math.max(nextRoomId.v, world.rooms.length);
+      const room = stampRoom(world, nextRoomId.v++, type, x, y, size.w, size.h, -1);
+      room.name = workshopSupportRoomName(type, room.id, cluster);
+      decorateWorkshopClusterRoom(world, room, spec, seed + ordinal * 101);
+      rooms.push(room);
+      connectWorkshopLocalRooms(world, hub, room, spec, seed + ordinal * 313);
+      return room;
+    }
+  }
+  return null;
+}
+
+function applyWorkshopClusterRooms(world: World, rooms: Room[], spec: ProceduralFloorSpec, nextRoomId: { v: number }): void {
+  if (spec.geometryId !== 'workshops') return;
+  const cols = 10;
+  const rows = 10;
+  const slotW = Math.floor(W / cols);
+  const slotH = Math.floor(W / rows);
+  const clusterCandidates = Array.from({ length: cols * rows }, (_, slot) => ({
+    slot,
+    score: fieldHash01(spec.seed, slot, spec.ordinal, 0x5801),
+  })).sort((a, b) => a.score - b.score);
+  const centers: { x: number; y: number }[] = [];
+  const supportTypes = [
+    RoomType.STORAGE,
+    RoomType.OFFICE,
+    RoomType.PRODUCTION,
+    RoomType.BATHROOM,
+    RoomType.KITCHEN,
+    RoomType.STORAGE,
+    RoomType.COMMON,
+    RoomType.OFFICE,
+    RoomType.STORAGE,
+    RoomType.PRODUCTION,
+  ] as const;
+  let clusters = 0;
+  let microRooms = 0;
+
+  for (const candidate of clusterCandidates) {
+    if (clusters >= WORKSHOP_CLUSTER_TARGET || microRooms >= WORKSHOP_MICRO_ROOM_TARGET) break;
+    const col = candidate.slot % cols;
+    const row = Math.floor(candidate.slot / cols);
+    const seed = (spec.seed ^ Math.imul(candidate.slot + 1, 0x45d9f3b)) >>> 0;
+    const horizontal = (seed & 1) === 0;
+    const hubW = horizontal ? 22 + Math.floor(fieldHash01(seed, col, row, 0x5802) * 22) : 5 + (seed % 4);
+    const hubH = horizontal ? 5 + ((seed >> 3) % 4) : 22 + Math.floor(fieldHash01(seed, row, col, 0x5803) * 22);
+    const cx = Math.floor(col * slotW + slotW * (0.34 + fieldHash01(seed, col, row, 0x5804) * 0.32));
+    const cy = Math.floor(row * slotH + slotH * (0.34 + fieldHash01(seed, row, col, 0x5805) * 0.32));
+    if (centers.some(center => world.dist2(center.x, center.y, cx, cy) < WORKSHOP_CLUSTER_MIN_SPACING)) continue;
+    const hx = Math.max(20, Math.min(W - hubW - 20, cx - (hubW >> 1)));
+    const hy = Math.max(20, Math.min(W - hubH - 20, cy - (hubH >> 1)));
+    if (!canPlaceRoom(world, hx, hy, hubW, hubH)) continue;
+
+    const hubType = clusters % 4 === 0 ? RoomType.PRODUCTION : RoomType.CORRIDOR;
+    const hub = stampRoom(world, nextRoomId.v++, hubType, hx, hy, hubW, hubH, -1);
+    hub.name = hubType === RoomType.PRODUCTION
+      ? `Цеховой остров ${clusters + 1}: станция`
+      : `Цеховой остров ${clusters + 1}: боковой ход`;
+    decorateWorkshopClusterRoom(world, hub, spec, seed);
+    rooms.push(hub);
+    centers.push({ x: cx, y: cy });
+
+    const localTarget = 5 + (seed % 5);
+    let localPlaced = 0;
+    for (let i = 0; i < supportTypes.length && localPlaced < localTarget && microRooms < WORKSHOP_MICRO_ROOM_TARGET; i++) {
+      const type = supportTypes[(i + clusters + spec.danger) % supportTypes.length];
+      const size = workshopMicroRoomSize(type, seed + i * 97);
+      const room = tryPlaceWorkshopSupportRoom(world, rooms, spec, nextRoomId, hub, type, size, clusters + 1, i, seed);
+      if (!room) continue;
+      localPlaced++;
+      microRooms++;
+    }
+
+    if (localPlaced >= 2) clusters++;
+  }
+}
+
 function fieldHash01(seed: number, x: number, y: number, salt = 0): number {
   let h = seed ^ Math.imul(x + 0x9e37, 0x85ebca6b) ^ Math.imul(y + 0x632b, 0xc2b2ae35) ^ Math.imul(salt + 0x27d4, 0x165667b1);
   h ^= h >>> 16;
@@ -786,6 +992,30 @@ function fieldHash01(seed: number, x: number, y: number, salt = 0): number {
   h = Math.imul(h, 0x846ca68b);
   h ^= h >>> 16;
   return (h >>> 0) / 0xffffffff;
+}
+
+function smooth01(v: number): number {
+  const t = Math.max(0, Math.min(1, v));
+  return t * t * (3 - 2 * t);
+}
+
+function smoothField01(seed: number, x: number, y: number, scale: number, salt = 0): number {
+  const gx = Math.floor(x / scale);
+  const gy = Math.floor(y / scale);
+  const fx = smooth01((x - gx * scale) / scale);
+  const fy = smooth01((y - gy * scale) / scale);
+  const wrap = Math.max(1, Math.ceil(W / scale));
+  const x0 = ((gx % wrap) + wrap) % wrap;
+  const y0 = ((gy % wrap) + wrap) % wrap;
+  const x1 = (x0 + 1) % wrap;
+  const y1 = (y0 + 1) % wrap;
+  const a = fieldHash01(seed, x0, y0, salt);
+  const b = fieldHash01(seed, x1, y0, salt);
+  const c = fieldHash01(seed, x0, y1, salt);
+  const d = fieldHash01(seed, x1, y1, salt);
+  const ab = a + (b - a) * fx;
+  const cd = c + (d - c) * fx;
+  return ab + (cd - ab) * fy;
 }
 
 function clearWorldToField(world: World, floorTex: Tex, wallTex: Tex, fog = 0): void {
@@ -865,6 +1095,148 @@ function carveFieldRoute(
   } else {
     carveFieldSegment(world, a.x, a.y, a.x, b.y, width, floorTex, wallTex, fog);
     carveFieldSegment(world, a.x, b.y, b.x, b.y, width, floorTex, wallTex, fog);
+  }
+}
+
+function carveWallSnakePoreDisk(world: World, cx: number, cy: number, radius: number, seed: number, fog = 6): void {
+  const r = Math.max(1, Math.ceil(radius));
+  for (let dy = -r; dy <= r; dy++) {
+    for (let dx = -r; dx <= r; dx++) {
+      const x = world.wrap(cx + dx);
+      const y = world.wrap(cy + dy);
+      const d = Math.sqrt(dx * dx + dy * dy);
+      const ragged = (fieldHash01(seed, x, y, 0x51d1) - 0.5) * 0.9;
+      if (d > radius + ragged) continue;
+      carveFieldCell(world, x, y, Tex.F_GUT, Tex.MEAT, fog);
+      const ci = world.idx(x, y);
+      if (fieldHash01(seed, x, y, 0x51d2) > 0.94) {
+        world.floorTex[ci] = Tex.F_MEAT;
+        world.fog[ci] = Math.min(world.fog[ci], 4);
+      }
+    }
+  }
+}
+
+function carveWallSnakeOrganicRoute(
+  world: World,
+  a: { x: number; y: number },
+  b: { x: number; y: number },
+  width: number,
+  seed: number,
+  fog = 6,
+): void {
+  const dx = world.delta(a.x, b.x);
+  const dy = world.delta(a.y, b.y);
+  const len = Math.max(1, Math.hypot(dx, dy));
+  const nx = -dy / len;
+  const ny = dx / len;
+  const steps = Math.max(8, Math.ceil(len * 1.35));
+  for (let step = 0; step <= steps; step++) {
+    const t = step / steps;
+    const envelope = Math.sin(Math.PI * t);
+    const waveA = smoothField01(seed, step * 3, 0, 19, 0x51d3) - 0.5;
+    const waveB = smoothField01(seed, step * 5, 0, 11, 0x51d4) - 0.5;
+    const wobble = (waveA * 13 + waveB * 5) * envelope;
+    const x = world.wrap(Math.round(a.x + dx * t + nx * wobble));
+    const y = world.wrap(Math.round(a.y + dy * t + ny * wobble));
+    const pore = width + 1.15 + fieldHash01(seed, step, 0, 0x51d5) * 1.65;
+    carveWallSnakePoreDisk(world, x, y, pore, seed ^ Math.imul(step + 1, 0x45d9f3b), fog);
+    if (step % 17 === 8) {
+      const side = fieldHash01(seed, step, 1, 0x51d6) < 0.5 ? -1 : 1;
+      const pocketX = world.wrap(Math.round(x + nx * side * (pore + 2.5)));
+      const pocketY = world.wrap(Math.round(y + ny * side * (pore + 2.5)));
+      carveWallSnakePoreDisk(world, pocketX, pocketY, pore + 1.5, seed ^ Math.imul(step + 17, 0x27d4eb2d), fog + 2);
+    }
+  }
+}
+
+function ensureWallSnakeConnectivity(world: World, spawnX: number, spawnY: number, seed: number): void {
+  const start = world.idx(Math.floor(spawnX), Math.floor(spawnY));
+  if (!isConnectivityWalkable(world, start)) return;
+  const dirs = [[1, 0], [-1, 0], [0, 1], [0, -1]] as const;
+  const size = W * W;
+  for (let pass = 0; pass < 4; pass++) {
+    const label = new Int32Array(size).fill(-1);
+    const queue = new Int32Array(size);
+    let head = 0;
+    let tail = 0;
+    label[start] = 0;
+    queue[tail++] = start;
+    while (head < tail) {
+      const ci = queue[head++];
+      const cx = ci % W;
+      const cy = (ci / W) | 0;
+      for (const [dx, dy] of dirs) {
+        const ni = world.idx(cx + dx, cy + dy);
+        if (label[ni] >= 0 || !isConnectivityWalkable(world, ni)) continue;
+        label[ni] = 0;
+        queue[tail++] = ni;
+      }
+    }
+
+    const mainCells: { x: number; y: number }[] = [];
+    const mainStep = Math.max(1, tail >> 10);
+    for (let i = 0; i < tail; i += mainStep) {
+      const ci = queue[i];
+      mainCells.push({ x: ci % W, y: (ci / W) | 0 });
+    }
+
+    let components = 0;
+    let connected = 0;
+    for (let i = 0; i < size; i++) {
+      if (label[i] >= 0 || !isConnectivityWalkable(world, i)) continue;
+      components++;
+      const comp: number[] = [i];
+      label[i] = components;
+      for (let h = 0; h < comp.length; h++) {
+        const ci = comp[h];
+        const cx = ci % W;
+        const cy = (ci / W) | 0;
+        for (const [dx, dy] of dirs) {
+          const ni = world.idx(cx + dx, cy + dy);
+          if (label[ni] >= 0 || !isConnectivityWalkable(world, ni)) continue;
+          label[ni] = components;
+          comp.push(ni);
+        }
+      }
+
+      let critical = comp.length >= WALL_SNAKE_CONNECT_MIN_COMPONENT;
+      for (let c = 0; !critical && c < comp.length; c++) {
+        const ci = comp[c];
+        critical = world.cells[ci] === Cell.LIFT ||
+          world.cells[ci] === Cell.DOOR ||
+          (world.features[ci] as Feature) === Feature.SCREEN ||
+          (world.features[ci] as Feature) === Feature.LIFT_BUTTON ||
+          world.containerMap.has(ci);
+      }
+      if (!critical) {
+        for (const ci of comp) label[ci] = 0;
+        continue;
+      }
+
+      let src = comp[0];
+      let dst = mainCells[0] ?? { x: spawnX | 0, y: spawnY | 0 };
+      let bestD = Infinity;
+      const compStep = Math.max(1, comp.length >> 3);
+      for (let c = 0; c < comp.length; c += compStep) {
+        const ci = comp[c];
+        const cx = ci % W;
+        const cy = (ci / W) | 0;
+        for (const main of mainCells) {
+          const d = Math.abs(world.delta(cx, main.x)) + Math.abs(world.delta(cy, main.y));
+          if (d >= bestD) continue;
+          bestD = d;
+          src = ci;
+          dst = main;
+        }
+      }
+      const sx = src % W;
+      const sy = (src / W) | 0;
+      carveWallSnakeOrganicRoute(world, { x: sx, y: sy }, dst, 2, seed ^ Math.imul(components + pass * 97, 0x51a7), 8);
+      mainCells.push({ x: sx, y: sy });
+      connected++;
+    }
+    if (components === 0 || connected === 0) break;
   }
 }
 
@@ -1045,23 +1417,101 @@ function wallSnakePerimeterPoint(world: World, x0: number, y0: number, w: number
   return { x: world.wrap(x0), y: world.wrap(y0 + h - 2 - t) };
 }
 
+function paintWallSnakeMeatField(world: World, spec: ProceduralFloorSpec): void {
+  clearWorldToField(world, Tex.F_GUT, Tex.MEAT, 18);
+  for (let y = 0; y < W; y++) {
+    for (let x = 0; x < W; x++) {
+      const ci = world.idx(x, y);
+      const lacuna = smoothField01(spec.seed, x, y, 104, 0x51f1);
+      const merge = smoothField01(spec.seed, x, y, 43, 0x51f2);
+      const membrane = smoothField01(spec.seed, x, y, 19, 0x51f3);
+      const pore = smoothField01(spec.seed, x, y, 13, 0x51f7);
+      const grain = fieldHash01(spec.seed, x, y, 0x51f8);
+      const tissue = lacuna * 0.54 + merge * 0.29 + membrane * 0.17;
+      const rim = Math.abs(tissue - WALL_SNAKE_MEAT_BLOCK_THRESHOLD);
+      const poreCut = (pore > 0.68 && membrane < 0.72) || grain > 0.988;
+      const capillaryA = Math.abs(merge - 0.5) < 0.034 && pore < 0.64;
+      const capillaryB = Math.abs(membrane - 0.54) < 0.026 && lacuna > 0.34 && pore < 0.6;
+      const trabecula = (rim < 0.028 && membrane > 0.36 && pore < 0.86) || capillaryA || capillaryB;
+      const smallBridge = tissue > WALL_SNAKE_MEAT_BLOCK_THRESHOLD - 0.035 && membrane > 0.75 && pore < 0.7;
+      if ((tissue > WALL_SNAKE_MEAT_BLOCK_THRESHOLD || smallBridge || trabecula) && !poreCut) {
+        world.cells[ci] = Cell.WALL;
+        world.wallTex[ci] = rim < 0.06 || membrane > 0.78 ? Tex.GUT : Tex.MEAT;
+        world.floorTex[ci] = Tex.F_MEAT;
+        world.fog[ci] = 12 + Math.floor(fieldHash01(spec.seed, x, y, 0x51f4) * 16);
+      } else {
+        world.cells[ci] = Cell.FLOOR;
+        world.wallTex[ci] = Tex.MEAT;
+        world.floorTex[ci] = tissue < WALL_SNAKE_MEAT_BLOCK_THRESHOLD - 0.12 || pore > 0.72 ? Tex.F_GUT : Tex.F_MEAT;
+        world.fog[ci] = 2 + Math.floor(fieldHash01(spec.seed, x, y, 0x51f6) * 10);
+      }
+    }
+  }
+}
+
+function placeWallSnakeSphincterLights(world: World, spec: ProceduralFloorSpec): void {
+  for (let gy = WALL_SNAKE_SPHINCTER_GRID / 2; gy < W; gy += WALL_SNAKE_SPHINCTER_GRID) {
+    for (let gx = WALL_SNAKE_SPHINCTER_GRID / 2; gx < W; gx += WALL_SNAKE_SPHINCTER_GRID) {
+      if (fieldHash01(spec.seed, gx, gy, 0x51fa) > 0.46) continue;
+      const cx = world.wrap(Math.round(gx + (fieldHash01(spec.seed, gx, gy, 0x51fb) - 0.5) * 34));
+      const cy = world.wrap(Math.round(gy + (fieldHash01(spec.seed, gx, gy, 0x51fc) - 0.5) * 34));
+      let best = -1;
+      let bestScore = -Infinity;
+      for (let dy = -WALL_SNAKE_SPHINCTER_SEARCH; dy <= WALL_SNAKE_SPHINCTER_SEARCH; dy++) {
+        for (let dx = -WALL_SNAKE_SPHINCTER_SEARCH; dx <= WALL_SNAKE_SPHINCTER_SEARCH; dx++) {
+          const d2 = dx * dx + dy * dy;
+          if (d2 > WALL_SNAKE_SPHINCTER_SEARCH * WALL_SNAKE_SPHINCTER_SEARCH) continue;
+          const x = world.wrap(cx + dx);
+          const y = world.wrap(cy + dy);
+          const ci = world.idx(x, y);
+          if (world.cells[ci] !== Cell.FLOOR || world.features[ci] !== Feature.NONE) continue;
+          if (world.hermoWall[ci] || world.aptMask[ci] || world.containerMap.has(ci) || world.doors.has(ci)) continue;
+          const tissue = smoothField01(spec.seed, x, y, 92, 0x51f1) * 0.62 +
+            smoothField01(spec.seed, x, y, 47, 0x51f2) * 0.27 +
+            smoothField01(spec.seed, x, y, 23, 0x51f3) * 0.11;
+          const rim = 1 - Math.min(1, Math.abs(tissue - WALL_SNAKE_MEAT_BLOCK_THRESHOLD) / 0.12);
+          const score = rim * 3 - d2 * 0.004 + fieldHash01(spec.seed, x, y, 0x51fd) * 0.2;
+          if (score <= bestScore) continue;
+          bestScore = score;
+          best = ci;
+        }
+      }
+      if (best < 0) continue;
+      const x = best % W;
+      const y = (best / W) | 0;
+      world.features[best] = Feature.LAMP;
+      world.floorTex[best] = Tex.F_GUT;
+      world.wallTex[best] = Tex.GUT;
+      world.fog[best] = 0;
+      stampSurfaceSplat(world, x, y, 0.5, 0.5, 0.42, 0.58, spec.seed ^ (x * 131 + y * 17), 160, 36, 32, false);
+    }
+  }
+}
+
 function paintWallSnakeLoop(world: World, spec: ProceduralFloorSpec, x0: number, y0: number, w: number, h: number, index: number): { head: { x: number; y: number }; bait: { x: number; y: number } } {
   const perimeter = Math.max(1, Math.min(192, (w + h) * 2 - 4));
   for (let step = 0; step < perimeter; step++) {
     const p = wallSnakePerimeterPoint(world, x0, y0, w, h, step);
     const ci = world.idx(p.x, p.y);
     if (world.hermoWall[ci] || world.aptMask[ci] || world.cells[ci] === Cell.LIFT) continue;
-    world.cells[ci] = Cell.FLOOR;
-    world.floorTex[ci] = Tex.F_CONCRETE;
-    world.wallTex[ci] = Tex.METAL;
-    world.fog[ci] = Math.max(world.fog[ci], 22);
-    if (world.features[ci] === Feature.NONE && step % 37 === 0) world.features[ci] = Feature.LAMP;
+    const flesh = world.cells[ci] === Cell.WALL || fieldHash01(spec.seed, index, step, 0x51c1) < 0.34;
+    world.cells[ci] = flesh ? Cell.WALL : Cell.FLOOR;
+    world.floorTex[ci] = flesh ? Tex.F_MEAT : Tex.F_GUT;
+    world.wallTex[ci] = fieldHash01(spec.seed, step, index, 0x51c2) < 0.18 ? Tex.GUT : Tex.MEAT;
+    world.fog[ci] = Math.max(world.fog[ci], 28);
+    if (world.features[ci] !== Feature.LIFT_BUTTON) world.features[ci] = Feature.NONE;
   }
   const head = wallSnakePerimeterPoint(world, x0, y0, w, h, 0);
   const bait = wallSnakePerimeterPoint(world, x0, y0, w, h, Math.floor(perimeter * 0.62));
   const headIdx = world.idx(head.x, head.y);
   if (!world.hermoWall[headIdx] && world.cells[headIdx] !== Cell.LIFT) world.features[headIdx] = Feature.SCREEN;
-  stampSurfaceSplat(world, bait.x, bait.y, 0.5, 0.5, 0.28, 0.42, spec.seed ^ (index * 611), 142, 106, 64, false);
+  const baitIdx = world.idx(bait.x, bait.y);
+  if (!world.hermoWall[baitIdx] && world.cells[baitIdx] !== Cell.LIFT) {
+    world.cells[baitIdx] = Cell.FLOOR;
+    world.floorTex[baitIdx] = Tex.F_GUT;
+    world.wallTex[baitIdx] = Tex.MEAT;
+  }
+  stampSurfaceSplat(world, bait.x, bait.y, 0.5, 0.5, 0.28, 0.42, spec.seed ^ (index * 611), 188, 214, 206, false);
   return { head, bait };
 }
 
@@ -1088,7 +1538,12 @@ function registerWallSnakeFieldCue(
   head: { x: number; y: number },
 ): void {
   const headIdx = world.idx(head.x, head.y);
-  if (!world.hermoWall[headIdx] && world.cells[headIdx] !== Cell.LIFT) world.features[headIdx] = Feature.SCREEN;
+  if (!world.hermoWall[headIdx] && !world.aptMask[headIdx] && world.cells[headIdx] !== Cell.LIFT) {
+    world.cells[headIdx] = Cell.FLOOR;
+    world.floorTex[headIdx] = Tex.F_GUT;
+    world.wallTex[headIdx] = Tex.MEAT;
+    world.features[headIdx] = Feature.SCREEN;
+  }
   registerRouteCue(world, {
     id: cueId,
     x: head.x + 0.5,
@@ -1099,18 +1554,18 @@ function registerWallSnakeFieldCue(
     roomId: loop.roomId,
     targetRoomId: loop.roomId,
     zoneId: world.zoneMap[headIdx],
-    label: 'поле змеек стен',
-    hint: 'почти пустой этаж разрезан множеством движущихся периметров; гермоострова безопасны',
-    targetName: 'приманка за петлей',
-    color: '#f6c267',
-    tags: ['procedural_floor', 'wall_snake', 'moving_walls', 'visible_anomaly', 'route_pressure', 'macro_geometry'],
+    label: 'пористое мясо личинок',
+    hint: 'белые личинки едят мясные блоки и оставляют каверны; гермоострова не отрастают',
+    targetName: 'светлая приманка за петлей',
+    color: '#f4efe2',
+    tags: ['procedural_floor', 'wall_snake', 'moving_walls', 'larva', 'meat_growth', 'visible_anomaly', 'route_pressure', 'macro_geometry'],
     toneSeed: (spec.seed ^ loop.index * 977 ^ 0x51a4e) >>> 0,
     radius: 14,
     targetRadius: 4,
     cooldownSec: 42,
-    heardText: 'На карте рядом видно поле стеновых змеек: пустота не значит безопасность.',
-    followedText: 'Змеиное поле читается: петли обходятся, гермоострова не съедаются.',
-    ignoredText: 'Змеиные периметры остались ползти по пустому полу.',
+    heardText: 'На карте рядом видно пористое мясо: белые блоки идут цепочкой, черные головы режут новый ход.',
+    followedText: 'Личиночное поле читается: мясо отрастает медленнее, чем его можно обойти.',
+    ignoredText: 'Белые личинки остались жевать этаж за спиной.',
   });
 }
 
@@ -1132,7 +1587,7 @@ function nearestWallSnakeFieldPoint(world: World, loop: WallSnakeFieldLoop, x: n
 }
 
 function buildWallSnakeFieldRooms(world: World, spec: ProceduralFloorSpec): { rooms: Room[]; spawnX: number; spawnY: number } {
-  clearWorldToField(world, Tex.F_CONCRETE, Tex.METAL, 4);
+  paintWallSnakeMeatField(world, spec);
   const rooms: Room[] = [];
   const islandCols = 4;
   const islandRows = 4;
@@ -1156,7 +1611,7 @@ function buildWallSnakeFieldRooms(world: World, spec: ProceduralFloorSpec): { ro
       Math.max(8, Math.min(W - h - 9, y)),
       w,
       h,
-      `Гермоостров змей ${i + 1}`,
+      `Гермоостров личинок ${i + 1}`,
       Tex.HERMO_WALL,
       Tex.F_CONCRETE,
       ((i + spec.seed) & 3) as 0 | 1 | 2 | 3,
@@ -1165,7 +1620,7 @@ function buildWallSnakeFieldRooms(world: World, spec: ProceduralFloorSpec): { ro
   }
 
   for (let i = 1; i < exits.length; i++) {
-    carveFieldRoute(world, exits[i - 1], exits[i], 1, Tex.F_CONCRETE, Tex.METAL, spec.seed + i * 307, 2);
+    carveWallSnakeOrganicRoute(world, exits[i - 1], exits[i], 1, spec.seed + i * 307, 8);
   }
 
   let cueCount = 0;
@@ -1184,6 +1639,9 @@ function buildWallSnakeFieldRooms(world: World, spec: ProceduralFloorSpec): { ro
       const loop = { index, roomId: room?.id, x0, y0, w, h, head: painted.head, bait: painted.bait };
       loops.push(loop);
       if (cueCount < 8 && (index % 16 === 0 || index === WALL_SNAKE_FIELD_TARGET - 1)) {
+        const anchor = exits[index % exits.length] ?? painted.head;
+        carveWallSnakeOrganicRoute(world, anchor, painted.head, 1, spec.seed ^ (index * 719), 8);
+        carveWallSnakeOrganicRoute(world, painted.head, painted.bait, 1, spec.seed ^ (index * 733), 8);
         registerWallSnakeFieldCue(world, spec, `procedural_${spec.key}_wall_snake_field_${cueCount}`, loop, painted.head);
         cueCount++;
       }
@@ -1202,16 +1660,20 @@ function buildWallSnakeFieldRooms(world: World, spec: ProceduralFloorSpec): { ro
       : best;
   }, null);
   if (nearest) {
+    const nearestPoint = nearestWallSnakeFieldPoint(world, nearest, spawn.x, spawn.y);
+    carveWallSnakeOrganicRoute(world, spawn, nearestPoint, 1, spec.seed ^ 0x51a751, 8);
+    carveWallSnakeOrganicRoute(world, nearestPoint, nearest.bait, 1, spec.seed ^ 0x51a752, 8);
     registerWallSnakeFieldCue(
       world,
       spec,
       `procedural_${spec.key}_wall_snake_field_start`,
       nearest,
-      nearestWallSnakeFieldPoint(world, nearest, spawn.x, spawn.y),
+      nearestPoint,
     );
   }
-  ensureConnectivity(world, spawn.x + 0.5, spawn.y + 0.5);
+  ensureWallSnakeConnectivity(world, spawn.x + 0.5, spawn.y + 0.5, spec.seed ^ 0x51a4e);
   sanitizeDoors(world);
+  placeWallSnakeSphincterLights(world, spec);
   world.markCellsDirty();
   world.markWallTexDirty();
   world.markFloorTexDirty();
@@ -1390,6 +1852,300 @@ function connectArchiveWarrenRooms(
   }
 }
 
+function archiveOwnerLabel(owner: TerritoryOwner): string {
+  if (owner === ZoneFaction.LIQUIDATOR) return 'ликвидаторов';
+  if (owner === ZoneFaction.CULTIST) return 'культистов';
+  if (owner === ZoneFaction.SCIENTIST) return 'НИИ';
+  if (owner === ZoneFaction.WILD) return 'диких';
+  return 'граждан';
+}
+
+function archiveRoomHasLandmarkName(room: Room): boolean {
+  return ARCHIVE_WARREN_LANDMARK_NAMES.some(name => room.name.includes(name));
+}
+
+function archiveSupportRoomType(owner: TerritoryOwner, index: number): RoomType {
+  if (owner === ZoneFaction.LIQUIDATOR) return [RoomType.OFFICE, RoomType.STORAGE, RoomType.MEDICAL, RoomType.PRODUCTION][index % 4];
+  if (owner === ZoneFaction.CULTIST) return [RoomType.COMMON, RoomType.STORAGE, RoomType.MEDICAL, RoomType.OFFICE][index % 4];
+  if (owner === ZoneFaction.SCIENTIST) return [RoomType.MEDICAL, RoomType.OFFICE, RoomType.PRODUCTION, RoomType.STORAGE][index % 4];
+  if (owner === ZoneFaction.WILD) return [RoomType.STORAGE, RoomType.COMMON, RoomType.SMOKING, RoomType.KITCHEN][index % 4];
+  return [RoomType.KITCHEN, RoomType.COMMON, RoomType.BATHROOM, RoomType.STORAGE][index % 4];
+}
+
+function archiveMicroRoomType(node: MazeGraphNode, index: number): RoomType {
+  if (node.degree <= 1 && index < 2) return RoomType.STORAGE;
+  if (node.degree >= 3 && index === 0) return RoomType.COMMON;
+  return index % 3 === 1 ? RoomType.OFFICE : RoomType.STORAGE;
+}
+
+function decorateArchiveMicroRoom(world: World, room: Room, seed: number): void {
+  applyRoomTexture(world, room, Tex.MARBLE, room.type === RoomType.OFFICE ? Tex.F_GREEN_CARPET : Tex.F_PARQUET);
+  const midX = Math.floor(room.w / 2);
+  const midY = Math.floor(room.h / 2);
+  for (let dy = 1; dy < room.h - 1; dy++) {
+    for (let dx = 1; dx < room.w - 1; dx++) {
+      const ci = world.idx(room.x + dx, room.y + dy);
+      if (world.features[ci] !== Feature.NONE) continue;
+      if (room.type === RoomType.OFFICE && (dx === midX || dy === midY)) {
+        if (((seed + dx * 13 + dy * 17) & 3) === 0) world.features[ci] = Feature.DESK;
+        continue;
+      }
+      if ((dx + dy + seed) % 3 === 0) world.features[ci] = Feature.SHELF;
+    }
+  }
+  if (room.type === RoomType.STORAGE) placeRoomFeature(world, room, Feature.SHELF, midX, midY);
+  else if (room.type === RoomType.OFFICE) placeRoomFeature(world, room, Feature.DESK, midX, midY);
+  else placeRoomFeature(world, room, Feature.TABLE, midX, midY);
+}
+
+function decorateArchiveSupportRoom(world: World, room: Room, owner: TerritoryOwner, seed: number): void {
+  const wallTex = room.type === RoomType.HQ ? Tex.HERMO_WALL : Tex.MARBLE;
+  const floorTex = room.type === RoomType.BATHROOM ? Tex.F_TILE : room.type === RoomType.MEDICAL ? Tex.F_GREEN_CARPET : Tex.F_PARQUET;
+  applyRoomTexture(world, room, wallTex, floorTex);
+  for (let dy = 1; dy < room.h - 1; dy++) {
+    for (let dx = 1; dx < room.w - 1; dx++) {
+      const ci = world.idx(room.x + dx, room.y + dy);
+      if (world.features[ci] !== Feature.NONE) continue;
+      if (((seed + dx * 19 + dy * 23) % 5) !== 0) continue;
+      if (room.type === RoomType.KITCHEN) world.features[ci] = dx & 1 ? Feature.STOVE : Feature.SINK;
+      else if (room.type === RoomType.BATHROOM) world.features[ci] = dx & 1 ? Feature.TOILET : Feature.SINK;
+      else if (room.type === RoomType.MEDICAL || room.type === RoomType.OFFICE) world.features[ci] = Feature.DESK;
+      else if (room.type === RoomType.PRODUCTION) world.features[ci] = Feature.MACHINE;
+      else if (room.type === RoomType.COMMON) world.features[ci] = Feature.TABLE;
+      else world.features[ci] = Feature.SHELF;
+    }
+  }
+  const center = roomCenter(room);
+  stampSurfaceSplat(
+    world,
+    center.x,
+    center.y,
+    0.5,
+    0.5,
+    room.type === RoomType.HQ ? 0.42 : 0.24,
+    0.62,
+    seed ^ owner * 997,
+    owner === ZoneFaction.LIQUIDATOR ? 84 : owner === ZoneFaction.CULTIST ? 118 : owner === ZoneFaction.SCIENTIST ? 78 : 164,
+    owner === ZoneFaction.WILD ? 102 : 154,
+    owner === ZoneFaction.CITIZEN ? 112 : 142,
+    false,
+  );
+}
+
+function paintArchiveRoomTerritory(world: World, room: Room, owner: TerritoryOwner): void {
+  for (let dy = -1; dy <= room.h; dy++) {
+    for (let dx = -1; dx <= room.w; dx++) {
+      const ci = world.idx(room.x + dx, room.y + dy);
+      if (world.aptMask[ci]) continue;
+      world.factionControl[ci] = owner;
+    }
+  }
+}
+
+function markArchiveHermeticShell(world: World, room: Room): void {
+  room.sealed = true;
+  for (let dy = -1; dy <= room.h; dy++) {
+    for (let dx = -1; dx <= room.w; dx++) {
+      if (dx >= 0 && dx < room.w && dy >= 0 && dy < room.h) continue;
+      const ci = world.idx(room.x + dx, room.y + dy);
+      if (world.cells[ci] !== Cell.WALL) continue;
+      world.hermoWall[ci] = 1;
+      world.wallTex[ci] = Tex.HERMO_WALL;
+    }
+  }
+}
+
+function connectArchiveRoomToRoom(world: World, from: Room, to: Room): void {
+  const fromCenter = roomCenter(from);
+  const toCenter = roomCenter(to);
+  const a = roomExit(world, from, toCenter.x, toCenter.y);
+  const b = roomExit(world, to, fromCenter.x, fromCenter.y);
+  placeDoorAt(world, a.wx, a.wy, from.id);
+  placeDoorAt(world, b.wx, b.wy, to.id);
+  carveCorridor(world, a.ox, a.oy, b.ox, b.oy);
+}
+
+function connectArchiveRoomToPoint(world: World, room: Room, tx: number, ty: number): void {
+  const exit = roomExit(world, room, tx, ty);
+  placeDoorAt(world, exit.wx, exit.wy, room.id);
+  carveCorridor(world, exit.ox, exit.oy, tx, ty);
+}
+
+function tryStampArchiveRoom(
+  world: World,
+  rooms: Room[],
+  type: RoomType,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  name: string,
+  seed: number,
+): Room | null {
+  const sx = world.wrap(x);
+  const sy = world.wrap(y);
+  if (!canPlaceRoom(world, sx, sy, w, h)) return null;
+  const room = stampRoom(world, rooms.length, type, sx, sy, w, h, -1);
+  room.name = name;
+  decorateArchiveMicroRoom(world, room, seed);
+  rooms.push(room);
+  return room;
+}
+
+function addArchiveNodeMicroRooms(
+  world: World,
+  rooms: Room[],
+  node: MazeGraphNode,
+  main: Room,
+  spec: ProceduralFloorSpec,
+): Room[] {
+  const out: Room[] = [];
+  const count = 3 + Math.min(2, spec.danger);
+  for (let i = 0; i < count; i++) {
+    const offset = ARCHIVE_WARREN_MICRO_OFFSETS[i % ARCHIVE_WARREN_MICRO_OFFSETS.length];
+    const type = archiveMicroRoomType(node, i);
+    const w = 5 + ((spec.seed + node.id * 11 + i) % 3);
+    const h = 5 + ((spec.seed + node.id * 17 + i * 3) % 3);
+    const x = node.x + offset.dx - Math.floor(w / 2);
+    const y = node.y + offset.dy - Math.floor(h / 2);
+    const room = tryStampArchiveRoom(
+      world,
+      rooms,
+      type,
+      x,
+      y,
+      w,
+      h,
+      `${type === RoomType.OFFICE ? 'Архивная будка' : 'Архивная ячейка'} ${node.id}-${i + 1}`,
+      spec.seed ^ node.id * 193 ^ i * 2003,
+    );
+    if (!room) continue;
+    connectArchiveRoomToRoom(world, room, main);
+    out.push(room);
+  }
+  return out;
+}
+
+function addArchiveEdgeAlcoveRooms(
+  world: World,
+  rooms: Room[],
+  graph: MazeGraph,
+  edge: MazeGraphEdge,
+  edgeIndex: number,
+  spec: ProceduralFloorSpec,
+): void {
+  const nodeA = graph.nodes[edge.a];
+  const nodeB = graph.nodes[edge.b];
+  if (!nodeA || !nodeB) return;
+  const dx = archiveGridDelta(graph.width, nodeA.gx, nodeB.gx);
+  const horizontal = dx !== 0;
+  const worldDelta = horizontal ? world.delta(nodeA.x, nodeB.x) : world.delta(nodeA.y, nodeB.y);
+  for (let i = 0; i < ARCHIVE_WARREN_EDGE_ALCOVE_OFFSETS.length; i++) {
+    const t = ARCHIVE_WARREN_EDGE_ALCOVE_OFFSETS[i];
+    const side = ((edgeIndex + i) & 1) === 0 ? 1 : -1;
+    const px = horizontal ? world.wrap(Math.round(nodeA.x + worldDelta * t)) : nodeA.x;
+    const py = horizontal ? nodeA.y : world.wrap(Math.round(nodeA.y + worldDelta * t));
+    const w = 5 + ((spec.seed + edgeIndex * 5 + i) % 2);
+    const h = 5 + ((spec.seed + edgeIndex * 7 + i) % 2);
+    const x = horizontal ? px - Math.floor(w / 2) : px + side * 11 - Math.floor(w / 2);
+    const y = horizontal ? py + side * 11 - Math.floor(h / 2) : py - Math.floor(h / 2);
+    const room = tryStampArchiveRoom(
+      world,
+      rooms,
+      RoomType.STORAGE,
+      x,
+      y,
+      w,
+      h,
+      `Боковой регистр ${edgeIndex}-${i + 1}`,
+      spec.seed ^ edgeIndex * 811 ^ i * 131,
+    );
+    if (!room) continue;
+    connectArchiveRoomToPoint(world, room, px, py);
+  }
+}
+
+function archiveClosestNode(
+  world: World,
+  graph: MazeGraph,
+  owner: TerritoryOwner,
+  used: Set<number>,
+  landmarks: ReadonlySet<number>,
+): MazeGraphNode {
+  const target = ARCHIVE_WARREN_HQ_TARGETS[owner];
+  let best = graph.nodes[0];
+  let bestScore = Infinity;
+  for (const node of graph.nodes) {
+    if (used.has(node.id) || landmarks.has(node.id)) continue;
+    const score = world.dist2(node.gx, node.gy, target.gx, target.gy) + node.id * 0.0001;
+    if (score < bestScore) {
+      best = node;
+      bestScore = score;
+    }
+  }
+  used.add(best.id);
+  return best;
+}
+
+function configureArchiveHqRoom(world: World, room: Room, owner: TerritoryOwner, seed: number, outpost = false): void {
+  room.type = RoomType.HQ;
+  const role = outpost ? `форпост ${archiveOwnerLabel(owner)}` : `гермоштаб ${archiveOwnerLabel(owner)}`;
+  room.name = archiveRoomHasLandmarkName(room) ? `${room.name}: ${role}` : `Архивный ${role}${outpost ? ` ${room.id}` : ''}`;
+  decorateArchiveSupportRoom(world, room, owner, seed);
+  markArchiveHermeticShell(world, room);
+  paintArchiveRoomTerritory(world, room, owner);
+}
+
+function configureArchiveSupportRoom(world: World, room: Room, owner: TerritoryOwner, index: number, seed: number): void {
+  room.type = archiveSupportRoomType(owner, index);
+  room.name = `Архивная опора ${archiveOwnerLabel(owner)} ${index + 1}`;
+  decorateArchiveSupportRoom(world, room, owner, seed ^ index * 977);
+  paintArchiveRoomTerritory(world, room, owner);
+}
+
+function placeArchiveFactionHqClusters(
+  world: World,
+  graph: MazeGraph,
+  roomsByNode: readonly Room[],
+  microRoomsByNode: readonly Room[][],
+  spec: ProceduralFloorSpec,
+): void {
+  const used = new Set<number>();
+  const landmarks = new Set(graph.landmarkIds);
+  const majorityOwner = majorityById(spec.majorityId).zoneFaction;
+  for (const owner of ARCHIVE_WARREN_HQ_OWNERS) {
+    const node = archiveClosestNode(world, graph, owner, used, landmarks);
+    const hq = roomsByNode[node.id];
+    if (!hq) continue;
+    configureArchiveHqRoom(world, hq, owner, spec.seed ^ owner * 1009);
+    const supports = microRoomsByNode[node.id] ?? [];
+    for (let i = 0; i < Math.min(4, supports.length); i++) {
+      configureArchiveSupportRoom(world, supports[i], owner, i, spec.seed ^ node.id * 307 ^ owner * 571);
+    }
+  }
+  const majorityNodes = graph.nodes
+    .filter(node => !used.has(node.id) && !landmarks.has(node.id))
+    .sort((a, b) => {
+      const ac = world.dist2(a.gx, a.gy, ARCHIVE_WARREN_HQ_TARGETS[majorityOwner].gx, ARCHIVE_WARREN_HQ_TARGETS[majorityOwner].gy);
+      const bc = world.dist2(b.gx, b.gy, ARCHIVE_WARREN_HQ_TARGETS[majorityOwner].gx, ARCHIVE_WARREN_HQ_TARGETS[majorityOwner].gy);
+      return ac - bc;
+    });
+  for (let i = 0; i < Math.min(2, majorityNodes.length); i++) {
+    const room = roomsByNode[majorityNodes[i].id];
+    if (!room) continue;
+    configureArchiveHqRoom(world, room, majorityOwner, spec.seed ^ majorityNodes[i].id * 811, true);
+  }
+}
+
+function restoreArchiveLandmarkNames(roomsByNode: readonly Room[], landmarkOrder: ReadonlyMap<number, number>): void {
+  for (const [nodeId, order] of landmarkOrder) {
+    const room = roomsByNode[nodeId];
+    if (!room || archiveRoomHasLandmarkName(room)) continue;
+    const landmarkName = `${ARCHIVE_WARREN_LANDMARK_NAMES[order % ARCHIVE_WARREN_LANDMARK_NAMES.length]} ${room.id}`;
+    room.name = room.type === RoomType.HQ ? `${landmarkName}: ${room.name}` : landmarkName;
+  }
+}
+
 function buildArchiveWarrenRooms(world: World, spec: ProceduralFloorSpec): { rooms: Room[]; spawnX: number; spawnY: number } {
   const graph = generateWilsonMaze({
     width: ARCHIVE_WARREN_GRID,
@@ -1431,6 +2187,18 @@ function buildArchiveWarrenRooms(world: World, spec: ProceduralFloorSpec): { roo
     roomsByNode[node.id] = room;
   }
 
+  const microRoomsByNode: Room[][] = Array.from({ length: graph.nodes.length }, () => []);
+  for (const node of graph.nodes) {
+    const main = roomsByNode[node.id];
+    if (!main) continue;
+    microRoomsByNode[node.id] = addArchiveNodeMicroRooms(world, rooms, node, main, spec);
+  }
+  for (let i = 0; i < graph.edges.length; i++) {
+    addArchiveEdgeAlcoveRooms(world, rooms, graph, graph.edges[i], i, spec);
+  }
+  placeArchiveFactionHqClusters(world, graph, roomsByNode, microRoomsByNode, spec);
+  restoreArchiveLandmarkNames(roomsByNode, landmarkOrder);
+
   const keyDropRoomIds: number[] = [];
   for (let i = 0; i < graph.edges.length; i++) {
     connectArchiveWarrenRooms(world, graph, graph.edges[i], i, roomsByNode, keyDropRoomIds);
@@ -1441,13 +2209,99 @@ function buildArchiveWarrenRooms(world: World, spec: ProceduralFloorSpec): { roo
     const center = roomCenter(room);
     return { id: `archive_landmark_${order}`, x: center.x, y: center.y };
   });
-  archiveWarrenIntents.set(world, { graph, roomsByNode, landmarkAnchors, keyDropRoomIds });
+  archiveWarrenIntents.set(world, { graph, roomsByNode, microRoomsByNode, landmarkAnchors, keyDropRoomIds });
 
   const start = roomsByNode[graph.startId];
   const center = roomCenter(start);
   sanitizeDoors(world);
   ensureConnectivity(world, center.x + 0.5, center.y + 0.5);
   return { rooms, spawnX: center.x + 0.5, spawnY: center.y + 0.5 };
+}
+
+function adminMicroRoomSize(type: RoomType): { w: number; h: number } {
+  if (type === RoomType.BATHROOM) return { w: irng(4, 6), h: irng(4, 6) };
+  if (type === RoomType.KITCHEN) return { w: irng(5, 8), h: irng(5, 8) };
+  if (type === RoomType.MEDICAL) return { w: irng(6, 9), h: irng(5, 8) };
+  if (type === RoomType.STORAGE) return { w: irng(5, 9), h: irng(4, 8) };
+  return { w: irng(6, 11), h: irng(5, 9) };
+}
+
+function connectAdminMicroRoom(world: World, hub: Room, room: Room, salt: number): void {
+  const hc = roomCenter(hub);
+  const rc = roomCenter(room);
+  const exitA = roomExit(world, hub, rc.x, rc.y);
+  const exitB = roomExit(world, room, hc.x, hc.y);
+  placeDoorAt(world, exitA.wx, exitA.wy, hub.id);
+  placeDoorAt(world, exitB.wx, exitB.wy, room.id);
+  if ((salt & 1) === 0) carveCorridor(world, exitA.ox, exitA.oy, exitB.ox, exitB.oy);
+  else carveCorridor(world, exitB.ox, exitB.oy, exitA.ox, exitA.oy);
+}
+
+function applyAdminPocketMicroClusters(world: World, rooms: Room[], spec: ProceduralFloorSpec, nextRoomId: { v: number }): void {
+  if (spec.geometryId !== 'admin_pockets') return;
+  const cols = 8;
+  const rows = 8;
+  const slotW = Math.floor(W / cols);
+  const slotH = Math.floor(W / rows);
+  const sideTypes = [RoomType.OFFICE, RoomType.STORAGE, RoomType.BATHROOM, RoomType.KITCHEN, RoomType.OFFICE, RoomType.MEDICAL] as const;
+  let clusters = 0;
+
+  for (let row = 0; row < rows; row++) {
+    for (let col = 0; col < cols; col++) {
+      if (clusters >= 52 + spec.danger * 4) break;
+      const seed = spec.seed ^ Math.imul(row * cols + col + 1, 0x45d9f3b);
+      if (fieldHash01(seed, row, col, 0xa11) < 0.18) continue;
+      const horizontal = (seed & 1) === 0;
+      const hubW = horizontal ? irng(18, 30) : irng(4, 6);
+      const hubH = horizontal ? irng(4, 6) : irng(18, 30);
+      const cx = col * slotW + Math.floor(slotW * (0.34 + fieldHash01(seed, col, row, 0xa12) * 0.32));
+      const cy = row * slotH + Math.floor(slotH * (0.34 + fieldHash01(seed, col, row, 0xa13) * 0.32));
+      const hx = world.wrap(cx - (hubW >> 1));
+      const hy = world.wrap(cy - (hubH >> 1));
+      if (!canPlaceRoom(world, hx, hy, hubW, hubH)) continue;
+
+      const hub = stampRoom(world, nextRoomId.v++, RoomType.COMMON, hx, hy, hubW, hubH, -1);
+      hub.name = `Очередной остров ${hub.id}`;
+      applyRoomTexture(world, hub, Tex.MARBLE, (clusters & 1) === 0 ? Tex.F_RED_CARPET : Tex.F_MARBLE_TILE);
+      decorateAdminQueueRoom(world, hub, clusters + 2, spec);
+      rooms.push(hub);
+
+      let localRooms = 0;
+      for (let i = 0; i < sideTypes.length; i++) {
+        const type = sideTypes[(i + clusters) % sideTypes.length];
+        const size = adminMicroRoomSize(type);
+        const side = (i & 1) === 0 ? -1 : 1;
+        const lane = Math.floor(i / 2) - 1;
+        const x = horizontal
+          ? world.wrap(hx + Math.max(0, Math.min(hubW - size.w, 2 + lane * 9 + ((seed >> (i + 2)) & 3))))
+          : world.wrap(hx + (side < 0 ? -size.w - 3 : hubW + 3));
+        const y = horizontal
+          ? world.wrap(hy + (side < 0 ? -size.h - 3 : hubH + 3))
+          : world.wrap(hy + Math.max(0, Math.min(hubH - size.h, 2 + lane * 9 + ((seed >> (i + 3)) & 3))));
+        if (!canPlaceRoom(world, x, y, size.w, size.h)) continue;
+        const room = stampRoom(world, nextRoomId.v++, type, x, y, size.w, size.h, -1);
+        room.name = type === RoomType.BATHROOM
+          ? `Туалет очереди ${room.id}`
+          : type === RoomType.KITCHEN
+            ? `Комната кипятка ${room.id}`
+            : type === RoomType.MEDICAL
+              ? `Кабинет справки о здоровье ${room.id}`
+              : type === RoomType.STORAGE
+                ? `Архивная ячейка ${room.id}`
+                : `Кабина справки ${room.id}`;
+        applyRoomTexture(world, room, Tex.MARBLE, type === RoomType.STORAGE ? Tex.F_MARBLE_TILE : Tex.F_PARQUET);
+        if (type === RoomType.OFFICE || type === RoomType.STORAGE || type === RoomType.MEDICAL) {
+          decorateAdminOfficeSlab(world, room, seed ^ i * 193);
+        } else {
+          decorateProceduralRoom(world, room, spec);
+        }
+        rooms.push(room);
+        connectAdminMicroRoom(world, hub, room, seed + i);
+        localRooms++;
+      }
+      if (localRooms >= 2) clusters++;
+    }
+  }
 }
 
 function buildRooms(world: World, spec: ProceduralFloorSpec): { rooms: Room[]; spawnX: number; spawnY: number } {
@@ -1459,9 +2313,19 @@ function buildRooms(world: World, spec: ProceduralFloorSpec): { rooms: Room[]; s
   const geom = geometryById(spec.geometryId);
   const rooms: Room[] = [];
   const industrial = geom.tags.includes('industrial');
-  const targetRooms = geom.roomCount + spec.danger * 6;
+  let targetRooms = geom.roomCount + spec.danger * 6;
+  if (spec.geometryId === 'service_spines') {
+    targetRooms += 36 + spec.danger * 8 + (spec.anomalyId === 'conveyor_sorter' ? 28 : 0);
+  }
   const nextRoomId = { v: 0 };
   const macroLayer = buildProceduralMacroLayer(world, rooms, spec, nextRoomId, industrial);
+  if (spec.geometryId === 'communal_knots') {
+    const hqAnchor = rooms[0];
+    const hqSpawnX = hqAnchor ? hqAnchor.x + Math.floor(hqAnchor.w / 2) + 0.5 : W / 2 + 0.5;
+    const hqSpawnY = hqAnchor ? hqAnchor.y + Math.floor(hqAnchor.h / 2) + 0.5 : W / 2 + 0.5;
+    placeProceduralMiniHqClusters(world, rooms, spec, hqSpawnX, hqSpawnY);
+    nextRoomId.v = Math.max(nextRoomId.v, world.rooms.length);
+  }
 
   for (let attempt = 0; attempt < targetRooms * 70 && rooms.length < targetRooms; attempt++) {
     const type = pick(geom.roomTypes);
@@ -1480,6 +2344,14 @@ function buildRooms(world: World, spec: ProceduralFloorSpec): { rooms: Room[]; s
     rooms.push(room);
   }
 
+  applyAdminPocketMicroClusters(world, rooms, spec, nextRoomId);
+  applyWorkshopClusterRooms(world, rooms, spec, nextRoomId);
+  applyCollectorStationClusters(world, rooms, spec, nextRoomId);
+  const firstRoom = rooms[0];
+  const earlySpawnX = firstRoom ? firstRoom.x + Math.floor(firstRoom.w / 2) + 0.5 : W / 2 + 0.5;
+  const earlySpawnY = firstRoom ? firstRoom.y + Math.floor(firstRoom.h / 2) + 0.5 : W / 2 + 0.5;
+  applyCollectorMirrorInfill(world, rooms, spec, nextRoomId, earlySpawnX, earlySpawnY);
+  applyCommunalKnotClusterRooms(world, rooms, spec, nextRoomId, earlySpawnX, earlySpawnY);
   connectRoomsMST(world, rooms);
   const first = rooms[0];
   const spawnX = first ? first.x + Math.floor(first.w / 2) + 0.5 : W / 2 + 0.5;
@@ -1516,15 +2388,685 @@ function proceduralRoomName(spec: ProceduralFloorSpec, room: Room): string {
   return `${prefix} ${room.id}`;
 }
 
+function collectorStationRoomType(index: number): RoomType {
+  if (index % 5 === 0) return RoomType.PRODUCTION;
+  if (index % 5 === 1) return RoomType.STORAGE;
+  if (index % 5 === 2) return RoomType.OFFICE;
+  if (index % 5 === 3) return RoomType.BATHROOM;
+  return RoomType.COMMON;
+}
+
+function collectorStationRoomSize(type: RoomType, seed: number): { w: number; h: number } {
+  if (type === RoomType.BATHROOM) return { w: 4 + (seed & 1), h: 4 + ((seed >> 1) & 1) };
+  if (type === RoomType.OFFICE) return { w: 6 + (seed % 4), h: 5 + ((seed >> 2) % 4) };
+  if (type === RoomType.STORAGE) return { w: 6 + (seed % 5), h: 5 + ((seed >> 3) % 4) };
+  if (type === RoomType.PRODUCTION) return { w: 10 + (seed % 8), h: 7 + ((seed >> 4) % 6) };
+  return { w: 7 + (seed % 5), h: 6 + ((seed >> 5) % 4) };
+}
+
+function collectorStationRoomName(type: RoomType, id: number, cluster: number): string {
+  if (type === RoomType.PRODUCTION) return `Насосная станция коллектора ${cluster}.${id}`;
+  if (type === RoomType.STORAGE) return `Кладовая вентилей коллектора ${cluster}.${id}`;
+  if (type === RoomType.OFFICE) return `Смотровая будка коллектора ${cluster}.${id}`;
+  if (type === RoomType.BATHROOM) return `Санузел смены коллектора ${cluster}.${id}`;
+  return `Сухая бытовка коллектора ${cluster}.${id}`;
+}
+
+function decorateCollectorStationRoom(world: World, room: Room, spec: ProceduralFloorSpec, salt: number): void {
+  applyRoomTexture(world, room, Tex.PIPE, room.type === RoomType.BATHROOM ? Tex.F_TILE : Tex.F_CONCRETE);
+  if (room.type === RoomType.PRODUCTION || room.type === RoomType.COMMON) shapeRoom(world, room);
+  decorateRoom(world, room);
+  decorateProceduralRoom(world, room, spec);
+  if (room.type === RoomType.PRODUCTION) placeRoomFeature(world, room, (salt & 1) === 0 ? Feature.MACHINE : Feature.APPARATUS, Math.floor(room.w / 2), Math.floor(room.h / 2));
+  else if (room.type === RoomType.STORAGE) placeRoomFeature(world, room, Feature.SHELF, Math.floor(room.w / 2), Math.floor(room.h / 2));
+  else if (room.type === RoomType.OFFICE) placeRoomFeature(world, room, Feature.SCREEN, Math.floor(room.w / 2), Math.floor(room.h / 2));
+  else if (room.type === RoomType.BATHROOM) {
+    placeRoomFeature(world, room, Feature.TOILET, 1, 1);
+    placeRoomFeature(world, room, Feature.SINK, room.w - 2, 1);
+  } else {
+    placeRoomFeature(world, room, (salt & 1) === 0 ? Feature.TABLE : Feature.LAMP, Math.floor(room.w / 2), Math.floor(room.h / 2));
+  }
+}
+
+function roomAreaScore(room: Room): number {
+  return room.w * room.h;
+}
+
+function collectorStationClusterTarget(spec: ProceduralFloorSpec): number {
+  return COLLECTOR_STATION_CLUSTER_TARGET
+    + (spec.anomalyId === 'smog' ? 8 : 0)
+    + (spec.majorityId === 'liquidators' ? 4 : 0);
+}
+
+function collectorStationMicroRoomTarget(spec: ProceduralFloorSpec): number {
+  return COLLECTOR_STATION_MICRO_ROOM_TARGET
+    + (spec.anomalyId === 'smog' ? 42 : 0)
+    + (spec.majorityId === 'liquidators' ? 14 : 0);
+}
+
+function tryPlaceCollectorStationRoom(
+  world: World,
+  rooms: Room[],
+  spec: ProceduralFloorSpec,
+  source: Room,
+  nextRoomId: { v: number },
+  cluster: number,
+  index: number,
+): Room | null {
+  const type = collectorStationRoomType(index);
+  const seed = spec.seed ^ (source.id * 173 + cluster * 457 + index * 811);
+  const size = collectorStationRoomSize(type, seed);
+  const center = roomCenter(source);
+  const dirs = [0, 1, 2, 3].sort((a, b) =>
+    fieldHash01(seed, a, source.id, 0x6101) - fieldHash01(seed, b, source.id, 0x6101),
+  );
+  for (const dir of dirs) {
+    for (let gap = 5; gap <= 22; gap += 4) {
+      let x = Math.floor(center.x - size.w / 2);
+      let y = Math.floor(center.y - size.h / 2);
+      if (dir === 0) x = source.x + source.w + gap;
+      else if (dir === 1) x = source.x - gap - size.w;
+      else if (dir === 2) y = source.y + source.h + gap;
+      else y = source.y - gap - size.h;
+      if (x < 18 || y < 18 || x + size.w >= W - 18 || y + size.h >= W - 18) continue;
+      if (!canPlaceRoom(world, x, y, size.w, size.h)) continue;
+      nextRoomId.v = Math.max(nextRoomId.v, world.rooms.length);
+      const room = stampRoom(world, nextRoomId.v++, type, x, y, size.w, size.h, -1);
+      room.name = collectorStationRoomName(type, room.id, cluster);
+      decorateCollectorStationRoom(world, room, spec, seed);
+      rooms.push(room);
+      connectRoomsMST(world, [source, room]);
+      return room;
+    }
+  }
+  return null;
+}
+
+function applyCollectorStationClusters(world: World, rooms: Room[], spec: ProceduralFloorSpec, nextRoomId: { v: number }): void {
+  if (spec.geometryId !== 'collectors') return;
+  const clusterTarget = collectorStationClusterTarget(spec);
+  const microRoomTarget = collectorStationMicroRoomTarget(spec);
+  const sources = rooms
+    .filter(room => (
+      room.id !== 0 &&
+      room.apartmentId < 0 &&
+      (room.type === RoomType.PRODUCTION || room.type === RoomType.STORAGE || room.type === RoomType.COMMON || room.type === RoomType.CORRIDOR)
+    ))
+    .sort((a, b) => roomAreaScore(b) - roomAreaScore(a));
+  const centers: { x: number; y: number }[] = [];
+  let clusters = 0;
+  let microRooms = 0;
+  for (const source of sources) {
+    if (clusters >= clusterTarget || microRooms >= microRoomTarget) break;
+    const center = roomCenter(source);
+    if (centers.some(item => world.dist2(item.x, item.y, center.x, center.y) < COLLECTOR_STATION_CLUSTER_MIN_SPACING)) continue;
+    const localTarget = 4 + (clusters % 3);
+    let localPlaced = 0;
+    for (let i = 0; i < localTarget && microRooms < microRoomTarget; i++) {
+      const room = tryPlaceCollectorStationRoom(world, rooms, spec, source, nextRoomId, clusters + 1, i);
+      if (!room) continue;
+      localPlaced++;
+      microRooms++;
+    }
+    if (localPlaced === 0) continue;
+    centers.push(center);
+    clusters++;
+  }
+  if (clusters > 0) {
+    world.markCellsDirty();
+    world.markWallTexDirty();
+    world.markFloorTexDirty();
+    world.markFeaturesDirty(true);
+  }
+}
+
+type MirrorAxis = 'x' | 'y';
+
+function collectorMirrorCoord(v: number, axisValue: number): number {
+  return (axisValue * 2 - v + W) & (W - 1);
+}
+
+function collectorMirrorAxis(spec: ProceduralFloorSpec, spawnX: number, spawnY: number): { axis: MirrorAxis; value: number } {
+  const axis: MirrorAxis = (spec.seed & 1) === 0 ? 'x' : 'y';
+  const base = axis === 'x' ? Math.floor(spawnX) : Math.floor(spawnY);
+  return {
+    axis,
+    value: (base + 192 + Math.floor(fieldHash01(spec.seed, spec.ordinal, spec.z, 0x5a88) * 128)) & (W - 1),
+  };
+}
+
+function collectorMirrorRoomType(index: number, gallery: boolean): RoomType {
+  if (gallery) return index % 3 === 0 ? RoomType.PRODUCTION : RoomType.COMMON;
+  if (index % 6 === 0) return RoomType.BATHROOM;
+  if (index % 6 === 1) return RoomType.STORAGE;
+  if (index % 6 === 2) return RoomType.OFFICE;
+  if (index % 6 === 3) return RoomType.KITCHEN;
+  if (index % 6 === 4) return RoomType.PRODUCTION;
+  return RoomType.COMMON;
+}
+
+function collectorMirrorRoomSize(type: RoomType, seed: number, gallery: boolean, horizontal: boolean): { w: number; h: number } {
+  if (gallery) {
+    const long = 34 + (seed % 19);
+    const short = 14 + ((seed >>> 4) % 8);
+    return horizontal ? { w: long, h: short } : { w: short, h: long };
+  }
+  if (type === RoomType.BATHROOM) return { w: 4 + (seed & 1), h: 4 + ((seed >>> 1) & 1) };
+  if (type === RoomType.KITCHEN) return { w: 6 + (seed % 4), h: 5 + ((seed >>> 2) % 3) };
+  if (type === RoomType.PRODUCTION) return { w: 9 + (seed % 7), h: 6 + ((seed >>> 3) % 5) };
+  if (type === RoomType.OFFICE || type === RoomType.STORAGE) return { w: 6 + (seed % 5), h: 5 + ((seed >>> 4) % 4) };
+  return { w: 7 + (seed % 5), h: 6 + ((seed >>> 5) % 4) };
+}
+
+function collectorMirrorRoomName(type: RoomType, id: number, pair: number, side: 'A' | 'B', gallery: boolean): string {
+  if (gallery) return `Зеркальная галерея коллектора ${pair}${side}.${id}`;
+  if (type === RoomType.BATHROOM) return `Санузел зеркальной смены ${pair}${side}.${id}`;
+  if (type === RoomType.KITCHEN) return `Кухня сухой проводки ${pair}${side}.${id}`;
+  if (type === RoomType.PRODUCTION) return `Кабельная насосная зеркала ${pair}${side}.${id}`;
+  if (type === RoomType.OFFICE) return `Будка сверки зеркала ${pair}${side}.${id}`;
+  if (type === RoomType.STORAGE) return `Склад зеркального кабеля ${pair}${side}.${id}`;
+  return `Бытовка зеркальной проводки ${pair}${side}.${id}`;
+}
+
+function decorateCollectorMirrorRoom(world: World, room: Room, spec: ProceduralFloorSpec, seed: number, gallery: boolean): void {
+  applyRoomTexture(world, room, Tex.PIPE, gallery ? Tex.F_CONCRETE : (room.type === RoomType.BATHROOM ? Tex.F_TILE : Tex.F_LINO));
+  if (gallery || room.type === RoomType.PRODUCTION || room.type === RoomType.COMMON) shapeRoom(world, room);
+  decorateRoom(world, room);
+  decorateProceduralRoom(world, room, spec);
+  if (gallery) {
+    placeRoomFeature(world, room, Feature.SCREEN, 1, 1);
+    placeRoomFeature(world, room, Feature.LAMP, room.w - 2, room.h - 2);
+    placeRoomFeature(world, room, Feature.MACHINE, Math.floor(room.w / 2), Math.floor(room.h / 2));
+  } else if (room.type === RoomType.BATHROOM) {
+    placeRoomFeature(world, room, Feature.TOILET, 1, 1);
+    placeRoomFeature(world, room, Feature.SINK, room.w - 2, 1);
+  } else if (room.type === RoomType.KITCHEN) {
+    placeRoomFeature(world, room, Feature.STOVE, 1, 1);
+    placeRoomFeature(world, room, Feature.SINK, room.w - 2, 1);
+  } else if (room.type === RoomType.PRODUCTION) {
+    placeRoomFeature(world, room, Feature.APPARATUS, Math.floor(room.w / 2), Math.floor(room.h / 2));
+  } else if (room.type === RoomType.OFFICE) {
+    placeRoomFeature(world, room, Feature.SCREEN, Math.floor(room.w / 2), Math.floor(room.h / 2));
+  } else if (room.type === RoomType.STORAGE) {
+    placeRoomFeature(world, room, Feature.SHELF, Math.floor(room.w / 2), Math.floor(room.h / 2));
+  } else {
+    placeRoomFeature(world, room, (seed & 1) === 0 ? Feature.TABLE : Feature.LAMP, Math.floor(room.w / 2), Math.floor(room.h / 2));
+  }
+}
+
+function tryPlaceCollectorMirrorRoom(
+  world: World,
+  rooms: Room[],
+  spec: ProceduralFloorSpec,
+  nextRoomId: { v: number },
+  center: { x: number; y: number },
+  pair: number,
+  side: 'A' | 'B',
+  index: number,
+  gallery: boolean,
+  horizontal: boolean,
+): Room | null {
+  const seed = spec.seed ^ Math.imul(pair + 1, 0x45d9f3b) ^ Math.imul(index + (side === 'A' ? 11 : 73), 0x119de1f3);
+  const type = collectorMirrorRoomType(index, gallery);
+  const size = collectorMirrorRoomSize(type, seed, gallery, horizontal);
+  const offsets = [
+    { x: 0, y: 0 },
+    { x: 18, y: 0 },
+    { x: -18, y: 0 },
+    { x: 0, y: 18 },
+    { x: 0, y: -18 },
+    { x: 28, y: 18 },
+    { x: -28, y: -18 },
+  ];
+  for (const offset of offsets) {
+    const x = Math.max(18, Math.min(W - size.w - 18, Math.floor(center.x - size.w / 2 + offset.x)));
+    const y = Math.max(18, Math.min(W - size.h - 18, Math.floor(center.y - size.h / 2 + offset.y)));
+    if (!canPlaceRoom(world, x, y, size.w, size.h)) continue;
+    nextRoomId.v = Math.max(nextRoomId.v, world.rooms.length);
+    const room = stampRoom(world, nextRoomId.v++, type, x, y, size.w, size.h, -1);
+    room.name = collectorMirrorRoomName(type, room.id, pair + 1, side, gallery);
+    decorateCollectorMirrorRoom(world, room, spec, seed, gallery);
+    rooms.push(room);
+    return room;
+  }
+  return null;
+}
+
+function collectorMirrorSupportCenter(hub: Room, seed: number, index: number): { x: number; y: number } {
+  const side = index & 3;
+  const gap = 7 + ((seed >>> (index & 7)) % 13);
+  const center = roomCenter(hub);
+  if (side === 0) return { x: center.x + ((index % 3) - 1) * 9, y: hub.y - gap };
+  if (side === 1) return { x: center.x + ((index % 3) - 1) * 9, y: hub.y + hub.h + gap };
+  if (side === 2) return { x: hub.x - gap, y: center.y + ((index % 3) - 1) * 8 };
+  return { x: hub.x + hub.w + gap, y: center.y + ((index % 3) - 1) * 8 };
+}
+
+function placeCollectorMirrorSupports(
+  world: World,
+  rooms: Room[],
+  spec: ProceduralFloorSpec,
+  nextRoomId: { v: number },
+  hub: Room,
+  pair: number,
+  side: 'A' | 'B',
+  microBudget: { v: number },
+): number {
+  let placed = 0;
+  const localTarget = 6 + (pair % 3);
+  const horizontal = hub.w >= hub.h;
+  for (let i = 0; i < localTarget && microBudget.v < COLLECTOR_MIRROR_MICRO_ROOM_TARGET; i++) {
+    const center = collectorMirrorSupportCenter(hub, spec.seed ^ pair * 977 ^ i * 131, i);
+    const room = tryPlaceCollectorMirrorRoom(world, rooms, spec, nextRoomId, center, pair, side, i + 1, false, !horizontal);
+    if (!room) continue;
+    connectRoomsMST(world, [hub, room]);
+    placed++;
+    microBudget.v++;
+  }
+  return placed;
+}
+
+function registerCollectorMirrorInfillCue(world: World, spec: ProceduralFloorSpec, first: Room, target: Room): void {
+  const a = roomCenter(first);
+  const b = roomCenter(target);
+  const ci = world.idx(a.x, a.y);
+  registerRouteCue(world, {
+    id: `procedural_${spec.key}_collector_mirror_infill`,
+    x: a.x + 0.5,
+    y: a.y + 0.5,
+    targetX: b.x + 0.5,
+    targetY: b.y + 0.5,
+    floor: spec.baseFloor,
+    roomId: first.id,
+    targetRoomId: target.id,
+    zoneId: world.zoneMap[ci],
+    label: 'зеркальная проводка коллектора',
+    hint: 'пары галерей и бытовок заполняют пустые пролеты вокруг зеркальной оси',
+    targetName: target.name,
+    color: '#76d7ff',
+    tags: ['procedural_floor', 'collectors', 'mirror_run', 'collector_mirror_infill', 'multi_scale'],
+    toneSeed: (spec.seed ^ 0x88c011ec) >>> 0,
+    radius: 14,
+    targetRadius: 6,
+    cooldownSec: 44,
+    heardText: 'За водой тянется зеркальная проводка: галереи повторяются не идеально, но читаемо.',
+    followedText: 'Зеркальная галерея дала сухой обход и мелкие служебные двери.',
+    ignoredText: 'Зеркальная проводка осталась рядом с водой, но не закрыла маршрут.',
+  });
+}
+
+function applyCollectorMirrorInfill(
+  world: World,
+  rooms: Room[],
+  spec: ProceduralFloorSpec,
+  nextRoomId: { v: number },
+  spawnX: number,
+  spawnY: number,
+): void {
+  if (spec.geometryId !== 'collectors' || spec.anomalyId !== 'mirror_run') return;
+  const axis = collectorMirrorAxis(spec, spawnX, spawnY);
+  const candidates: { x: number; y: number; score: number }[] = [];
+  for (let gy = 1; gy <= 6; gy++) {
+    for (let gx = 1; gx <= 6; gx++) {
+      const x = 70 + gx * 132 + Math.floor((fieldHash01(spec.seed, gx, gy, 0x881) - 0.5) * 54);
+      const y = 70 + gy * 132 + Math.floor((fieldHash01(spec.seed, gx, gy, 0x882) - 0.5) * 54);
+      const axisDelta = axis.axis === 'x' ? Math.abs(world.delta(x, axis.value)) : Math.abs(world.delta(y, axis.value));
+      if (axisDelta < 58 || world.dist2(spawnX, spawnY, x + 0.5, y + 0.5) < 72 * 72) continue;
+      const score = fieldHash01(spec.seed, gx, gy, 0x883) + Math.min(0.42, axisDelta / W);
+      candidates.push({ x: world.wrap(x), y: world.wrap(y), score });
+    }
+  }
+  candidates.sort((a, b) => b.score - a.score);
+
+  const placedCenters: { x: number; y: number }[] = [];
+  const galleryRooms: Room[] = [];
+  const microBudget = { v: 0 };
+  let pairCount = 0;
+  for (const candidate of candidates) {
+    if (pairCount >= COLLECTOR_MIRROR_GALLERY_TARGET || microBudget.v >= COLLECTOR_MIRROR_MICRO_ROOM_TARGET) break;
+    if (placedCenters.some(center => world.dist2(center.x, center.y, candidate.x, candidate.y) < COLLECTOR_MIRROR_CLUSTER_MIN_SPACING)) continue;
+    const mirrored = axis.axis === 'x'
+      ? { x: collectorMirrorCoord(candidate.x, axis.value), y: candidate.y }
+      : { x: candidate.x, y: collectorMirrorCoord(candidate.y, axis.value) };
+    if (world.dist2(candidate.x, candidate.y, mirrored.x, mirrored.y) < 52 * 52) continue;
+    const horizontal = axis.axis === 'y' ? (pairCount & 1) === 0 : (pairCount & 1) !== 0;
+    const a = tryPlaceCollectorMirrorRoom(world, rooms, spec, nextRoomId, candidate, pairCount, 'A', 0, true, horizontal);
+    const b = tryPlaceCollectorMirrorRoom(world, rooms, spec, nextRoomId, mirrored, pairCount, 'B', 0, true, horizontal);
+    if (!a && !b) continue;
+    if (a) {
+      galleryRooms.push(a);
+      placedCenters.push(roomCenter(a));
+      placeCollectorMirrorSupports(world, rooms, spec, nextRoomId, a, pairCount, 'A', microBudget);
+    }
+    if (b) {
+      galleryRooms.push(b);
+      placedCenters.push(roomCenter(b));
+      placeCollectorMirrorSupports(world, rooms, spec, nextRoomId, b, pairCount, 'B', microBudget);
+    }
+    if (a && b) connectRoomsMST(world, [a, b]);
+    pairCount++;
+  }
+
+  if (galleryRooms.length === 0) return;
+  if (galleryRooms.length > 1) registerCollectorMirrorInfillCue(world, spec, galleryRooms[0], galleryRooms[galleryRooms.length - 1]);
+  world.markCellsDirty();
+  world.markWallTexDirty();
+  world.markFloorTexDirty();
+  world.markFeaturesDirty(true);
+}
+
 function applyZones(world: World, spec: ProceduralFloorSpec): void {
   const majority = majorityById(spec.majorityId);
   const alternatives: ZoneFaction[] = [majority.zoneFaction, majority.zoneFaction, majority.zoneFaction];
   if (majority.zoneFaction !== ZoneFaction.CITIZEN) alternatives.push(ZoneFaction.CITIZEN);
-  alternatives.push(ZoneFaction.LIQUIDATOR, ZoneFaction.CULTIST, ZoneFaction.WILD);
+  alternatives.push(ZoneFaction.LIQUIDATOR, ZoneFaction.CULTIST, ZoneFaction.SCIENTIST, ZoneFaction.WILD);
   for (const zone of world.zones) {
     zone.level = Math.max(1, Math.min(5, spec.danger + irng(-1, 1)));
     zone.fogged = false;
     zone.faction = chance(0.68) ? majority.zoneFaction : pick(alternatives);
+  }
+}
+
+function initializeProceduralTerritory(world: World, spec: ProceduralFloorSpec): void {
+  initializeCellTerritory(world, {
+    seed: spec.seed ^ Math.imul(spec.z + 101, 0x6d2b79f5),
+    targetShares: territorySharesForProceduralSpec(spec),
+  });
+}
+
+function proceduralHqBase(owner: ZoneFaction): { x: number; y: number } {
+  switch (owner) {
+    case ZoneFaction.LIQUIDATOR: return { x: Math.floor(W * 0.78), y: Math.floor(W * 0.22) };
+    case ZoneFaction.CULTIST: return { x: Math.floor(W * 0.22), y: Math.floor(W * 0.76) };
+    case ZoneFaction.SCIENTIST: return { x: Math.floor(W * 0.76), y: Math.floor(W * 0.76) };
+    case ZoneFaction.WILD: return { x: Math.floor(W * 0.50), y: Math.floor(W * 0.54) };
+    default: return { x: Math.floor(W * 0.22), y: Math.floor(W * 0.22) };
+  }
+}
+
+function proceduralHqSupportType(owner: ZoneFaction, index: number): RoomType {
+  if (owner === ZoneFaction.SCIENTIST) return [RoomType.MEDICAL, RoomType.OFFICE, RoomType.PRODUCTION, RoomType.STORAGE][index] ?? RoomType.OFFICE;
+  if (owner === ZoneFaction.LIQUIDATOR) return [RoomType.STORAGE, RoomType.PRODUCTION, RoomType.OFFICE, RoomType.MEDICAL][index] ?? RoomType.STORAGE;
+  if (owner === ZoneFaction.CULTIST) return [RoomType.COMMON, RoomType.STORAGE, RoomType.SMOKING, RoomType.KITCHEN][index] ?? RoomType.COMMON;
+  if (owner === ZoneFaction.WILD) return [RoomType.STORAGE, RoomType.SMOKING, RoomType.KITCHEN, RoomType.COMMON][index] ?? RoomType.STORAGE;
+  return [RoomType.KITCHEN, RoomType.COMMON, RoomType.STORAGE, RoomType.MEDICAL][index] ?? RoomType.COMMON;
+}
+
+function proceduralHqTextures(owner: ZoneFaction): { wall: Tex; floor: Tex } {
+  if (owner === ZoneFaction.SCIENTIST) return { wall: Tex.MARBLE, floor: Tex.F_TILE };
+  if (owner === ZoneFaction.LIQUIDATOR) return { wall: Tex.METAL, floor: Tex.F_CONCRETE };
+  if (owner === ZoneFaction.CULTIST) return { wall: Tex.BRICK, floor: Tex.F_GUT };
+  if (owner === ZoneFaction.WILD) return { wall: Tex.BRICK, floor: Tex.F_CONCRETE };
+  return { wall: Tex.PANEL, floor: Tex.F_LINO };
+}
+
+function proceduralHqRoomName(owner: ZoneFaction, type: RoomType, index: number, dominant: boolean): string {
+  const ownerName = territoryOwnerName(owner).toLowerCase();
+  if (type === RoomType.HQ) return dominant ? `Сильный гермоштаб: ${ownerName}` : `Миништаб: ${ownerName}`;
+  if (type === RoomType.KITCHEN) return `Кухня штаба: ${ownerName}`;
+  if (type === RoomType.MEDICAL) return `Медпункт штаба: ${ownerName}`;
+  if (type === RoomType.PRODUCTION) return `Мастерская штаба: ${ownerName}`;
+  if (type === RoomType.OFFICE) return `Канцелярия штаба: ${ownerName}`;
+  if (type === RoomType.SMOKING) return `Дымная штаба: ${ownerName}`;
+  if (type === RoomType.STORAGE) return `Склад штаба: ${ownerName}`;
+  return `Опора штаба ${index + 1}: ${ownerName}`;
+}
+
+function paintProceduralRoomTerritory(world: World, room: Room, owner: ZoneFaction): void {
+  for (let dy = -1; dy <= room.h; dy++) {
+    for (let dx = -1; dx <= room.w; dx++) {
+      const ci = world.idx(room.x + dx, room.y + dy);
+      if (world.aptMask[ci]) continue;
+      world.factionControl[ci] = owner;
+    }
+  }
+}
+
+function proceduralHqHasHermeticDoor(world: World, room: Room): boolean {
+  return room.doors.some(doorIdx => world.doors.get(doorIdx)?.state === DoorState.HERMETIC_OPEN);
+}
+
+function proceduralHqDoorOffsets(length: number): number[] {
+  const offsets: number[] = [];
+  const center = Math.max(1, Math.floor(length / 2));
+  for (let step = 0; step < Math.max(1, length - 2); step++) {
+    const offset = step === 0 ? 0 : (step & 1 ? Math.ceil(step / 2) : -Math.ceil(step / 2));
+    const value = center + offset;
+    if (value > 0 && value < length - 1) offsets.push(value);
+  }
+  return offsets;
+}
+
+function ensureProceduralHqHermeticDoor(world: World, room: Room): void {
+  if (proceduralHqHasHermeticDoor(world, room)) return;
+  const candidates: { wx: number; wy: number; ox: number; oy: number }[] = [];
+  for (const yOffset of proceduralHqDoorOffsets(room.h)) {
+    const y = room.y + yOffset;
+    candidates.push(
+      { wx: room.x + room.w, wy: y, ox: room.x + room.w + 1, oy: y },
+      { wx: room.x - 1, wy: y, ox: room.x - 2, oy: y },
+    );
+  }
+  for (const xOffset of proceduralHqDoorOffsets(room.w)) {
+    const x = room.x + xOffset;
+    candidates.push(
+      { wx: x, wy: room.y + room.h, ox: x, oy: room.y + room.h + 1 },
+      { wx: x, wy: room.y - 1, ox: x, oy: room.y - 2 },
+    );
+  }
+
+  for (const candidate of candidates) {
+    const doorIdx = world.idx(candidate.wx, candidate.wy);
+    const outsideIdx = world.idx(candidate.ox, candidate.oy);
+    if (world.aptMask[doorIdx] || world.aptMask[outsideIdx]) continue;
+    if (world.cells[doorIdx] !== Cell.WALL && world.cells[doorIdx] !== Cell.DOOR) continue;
+    if (world.cells[outsideIdx] === Cell.LIFT || world.cells[outsideIdx] === Cell.ABYSS || world.hermoWall[outsideIdx]) continue;
+    if (world.cells[outsideIdx] !== Cell.FLOOR && world.cells[outsideIdx] !== Cell.DOOR) {
+      world.cells[outsideIdx] = Cell.FLOOR;
+      world.roomMap[outsideIdx] = -1;
+      world.features[outsideIdx] = Feature.NONE;
+      world.floorTex[outsideIdx] = world.floorTex[world.idx(room.x + 1, room.y + 1)] || Tex.F_CONCRETE;
+      world.wallTex[outsideIdx] = Tex.HERMO_WALL;
+    }
+    if (world.cells[doorIdx] !== Cell.DOOR) placeDoorAt(world, candidate.wx, candidate.wy, room.id);
+    const door = world.doors.get(doorIdx);
+    if (!door) continue;
+    if (!room.doors.includes(doorIdx)) room.doors.push(doorIdx);
+    setDoorState(world, door, DoorState.HERMETIC_OPEN);
+    world.hermoWall[doorIdx] = 1;
+    world.wallTex[doorIdx] = Tex.HERMO_WALL;
+    return;
+  }
+}
+
+function markProceduralHqShell(world: World, room: Room): void {
+  room.sealed = true;
+  for (let dy = -1; dy <= room.h; dy++) {
+    for (let dx = -1; dx <= room.w; dx++) {
+      if (dx >= 0 && dx < room.w && dy >= 0 && dy < room.h) continue;
+      const ci = world.idx(room.x + dx, room.y + dy);
+      if (world.cells[ci] !== Cell.WALL) continue;
+      world.hermoWall[ci] = 1;
+      world.wallTex[ci] = Tex.HERMO_WALL;
+    }
+  }
+  for (const doorIdx of room.doors) {
+    setDoorState(world, world.doors.get(doorIdx), DoorState.HERMETIC_OPEN);
+    world.hermoWall[doorIdx] = 1;
+  }
+  ensureProceduralHqHermeticDoor(world, room);
+}
+
+function proceduralHqLayout(owner: ZoneFaction, dominant: boolean): { type: RoomType; x: number; y: number; w: number; h: number }[] {
+  const hqW = dominant ? 20 : 14;
+  const hqH = dominant ? 14 : 10;
+  const gap = 4;
+  const supportW = dominant ? 12 : 10;
+  const supportH = dominant ? 9 : 8;
+  const layout = [
+    { type: RoomType.HQ, x: 0, y: 0, w: hqW, h: hqH },
+    { type: proceduralHqSupportType(owner, 0), x: hqW + gap, y: 0, w: supportW, h: supportH },
+    { type: proceduralHqSupportType(owner, 1), x: 0, y: hqH + gap, w: supportW + 2, h: supportH },
+    { type: proceduralHqSupportType(owner, 2), x: hqW + gap, y: hqH + gap, w: supportW, h: supportH },
+  ];
+  if (dominant) {
+    layout.push({ type: proceduralHqSupportType(owner, 3), x: Math.floor(hqW * 0.45), y: hqH + gap + supportH + gap, w: supportW + 2, h: supportH });
+  }
+  return layout;
+}
+
+function canReclaimProceduralHqRoom(world: World, x: number, y: number, w: number, h: number): boolean {
+  for (let dy = -1; dy <= h; dy++) {
+    for (let dx = -1; dx <= w; dx++) {
+      const ci = world.idx(x + dx, y + dy);
+      if (world.cells[ci] === Cell.LIFT || world.aptMask[ci] || world.hermoWall[ci]) return false;
+      if (world.features[ci] === Feature.LIFT_BUTTON || world.containerMap.has(ci)) return false;
+      const roomId = world.roomMap[ci];
+      if (roomId >= 0 && world.rooms[roomId]?.type === RoomType.HQ) return false;
+    }
+  }
+  return true;
+}
+
+function canPlaceProceduralHqLayout(
+  world: World,
+  layout: readonly { x: number; y: number; w: number; h: number }[],
+  x: number,
+  y: number,
+  reclaim: boolean,
+): boolean {
+  for (const item of layout) {
+    const rx = x + item.x;
+    const ry = y + item.y;
+    if (canPlaceRoom(world, rx, ry, item.w, item.h)) continue;
+    if (!reclaim || !canReclaimProceduralHqRoom(world, rx, ry, item.w, item.h)) return false;
+  }
+  return true;
+}
+
+function clearProceduralHqFootprint(world: World, x: number, y: number, w: number, h: number): void {
+  for (let dy = -1; dy <= h; dy++) {
+    for (let dx = -1; dx <= w; dx++) {
+      const ci = world.idx(x + dx, y + dy);
+      if (world.doors.has(ci) || world.cells[ci] === Cell.DOOR) world.removeDoorAt(ci);
+      if (world.features[ci] !== Feature.LIFT_BUTTON) world.features[ci] = Feature.NONE;
+      world.hermoWall[ci] = 0;
+    }
+  }
+}
+
+function findProceduralHqOrigin(
+  world: World,
+  owner: ZoneFaction,
+  dominant: boolean,
+  spec: ProceduralFloorSpec,
+  spawnX: number,
+  spawnY: number,
+): { x: number; y: number } | null {
+  const base = proceduralHqBase(owner);
+  const layout = proceduralHqLayout(owner, dominant);
+  const groupW = Math.max(...layout.map(item => item.x + item.w));
+  const groupH = Math.max(...layout.map(item => item.y + item.h));
+  for (let pass = 0; pass < 2; pass++) {
+    const reclaim = pass === 1;
+    const attempts = reclaim ? 320 : 220;
+    for (let attempt = 0; attempt < attempts; attempt++) {
+      const ring = Math.floor(attempt / 16);
+      const jitter = 18 + ring * 18;
+      const jx = Math.round((fieldHash01(spec.seed, owner, attempt, 0x71) - 0.5) * jitter * 2);
+      const jy = Math.round((fieldHash01(spec.seed, owner, attempt, 0x72) - 0.5) * jitter * 2);
+      const x = Math.max(24, Math.min(W - groupW - 24, base.x - Math.floor(groupW / 2) + jx));
+      const y = Math.max(24, Math.min(W - groupH - 24, base.y - Math.floor(groupH / 2) + jy));
+      if (world.dist2(spawnX, spawnY, x + groupW / 2, y + groupH / 2) < 56 * 56) continue;
+      if (canPlaceProceduralHqLayout(world, layout, x, y, reclaim)) return { x, y };
+    }
+  }
+  return null;
+}
+
+function nearestExistingRoom(world: World, rooms: readonly Room[], source: Room, clusterIds: ReadonlySet<number>): Room | null {
+  const sc = roomCenter(source);
+  let best: Room | null = null;
+  let bestD2 = Infinity;
+  for (const room of rooms) {
+    if (!room || clusterIds.has(room.id)) continue;
+    const c = roomCenter(room);
+    const d2 = world.dist2(sc.x + 0.5, sc.y + 0.5, c.x + 0.5, c.y + 0.5);
+    if (d2 < bestD2) {
+      best = room;
+      bestD2 = d2;
+    }
+  }
+  return best;
+}
+
+function stampProceduralHqCluster(
+  world: World,
+  rooms: Room[],
+  spec: ProceduralFloorSpec,
+  owner: ZoneFaction,
+  dominant: boolean,
+  origin: { x: number; y: number },
+): Room[] {
+  const layout = proceduralHqLayout(owner, dominant);
+  const textures = proceduralHqTextures(owner);
+  const cluster: Room[] = [];
+  for (let i = 0; i < layout.length; i++) {
+    const item = layout[i];
+    const x = origin.x + item.x;
+    const y = origin.y + item.y;
+    clearProceduralHqFootprint(world, x, y, item.w, item.h);
+    const room = stampRoom(world, world.rooms.length, item.type, x, y, item.w, item.h, -1);
+    room.name = proceduralHqRoomName(owner, item.type, i, dominant);
+    applyRoomTexture(world, room, item.type === RoomType.HQ ? Tex.HERMO_WALL : textures.wall, textures.floor);
+    decorateRoom(world, room);
+    decorateProceduralRoom(world, room, spec);
+    paintProceduralRoomTerritory(world, room, owner);
+    rooms.push(room);
+    cluster.push(room);
+  }
+  connectRoomsMST(world, cluster);
+  const hq = cluster[0];
+  if (hq) markProceduralHqShell(world, hq);
+  return cluster;
+}
+
+function existingProceduralHqOwners(world: World): Set<ZoneFaction> {
+  const owners = new Set<ZoneFaction>();
+  for (const room of world.rooms) {
+    if (!room || room.type !== RoomType.HQ) continue;
+    const center = world.idx(room.x + (room.w >> 1), room.y + (room.h >> 1));
+    owners.add(territoryOwnerAtIndex(world, center));
+  }
+  return owners;
+}
+
+function placeProceduralMiniHqClusters(world: World, rooms: Room[], spec: ProceduralFloorSpec, spawnX: number, spawnY: number): void {
+  const dominantOwner = factionToTerritoryOwner(majorityById(spec.majorityId).npcFaction);
+  const existingOwners = existingProceduralHqOwners(world);
+  const placed: Room[] = [];
+  for (const owner of PROCEDURAL_HQ_OWNERS) {
+    if (existingOwners.has(owner)) continue;
+    const dominant = owner === dominantOwner;
+    const origin = findProceduralHqOrigin(world, owner, dominant, spec, spawnX, spawnY);
+    if (!origin) continue;
+    const beforeIds = new Set(placed.map(room => room.id));
+    const cluster = stampProceduralHqCluster(world, rooms, spec, owner, dominant, origin);
+    placed.push(...cluster);
+    const hq = cluster[0];
+    if (!hq) continue;
+    const clusterIds = new Set([...beforeIds, ...cluster.map(room => room.id)]);
+    const nearest = nearestExistingRoom(world, rooms, hq, clusterIds);
+    if (nearest) connectRoomsMST(world, [hq, nearest]);
+    else connectToNetwork(world, hq);
+    markProceduralHqShell(world, hq);
+    existingOwners.add(owner);
+  }
+  if (placed.length > 0) {
+    world.markCellsDirty();
+    world.markWallTexDirty();
+    world.markFloorTexDirty();
+    world.markFeaturesDirty(true);
   }
 }
 
@@ -2084,7 +3626,10 @@ function spawnNpcs(world: World, rooms: Room[], entities: Entity[], nextId: { v:
   for (const cell of cells) {
     const room = rooms[world.roomMap[cell]];
     const roomType = room?.type ?? RoomType.CORRIDOR;
-    const faction = chance(0.78) ? majority.npcFaction : pick([Faction.CITIZEN, Faction.LIQUIDATOR, Faction.WILD, Faction.CULTIST]);
+    const ownerFaction = territoryOwnerToFaction(territoryOwnerAtIndex(world, cell));
+    const faction = ownerFaction !== null && chance(0.72)
+      ? ownerFaction
+      : chance(0.78) ? majority.npcFaction : pick([Faction.CITIZEN, Faction.LIQUIDATOR, Faction.WILD, Faction.CULTIST, Faction.SCIENTIST]);
     const occupation = occupationForFaction(faction, roomType);
     const zoneLevel = world.zones[world.zoneMap[cell]]?.level ?? spec.danger;
     const rpg = randomRPG(gaussianLevel(zoneLevel, 2));
@@ -2153,6 +3698,7 @@ function proceduralNpcPlacementProfile(spec: ProceduralFloorSpec, anchors: reado
     [ZoneFaction.CITIZEN]: highDensity ? 1.0 : 0.98,
     [ZoneFaction.LIQUIDATOR]: highDensity ? 1.0 : 0.98,
     [ZoneFaction.CULTIST]: highDensity ? 1.0 : 0.98,
+    [ZoneFaction.SCIENTIST]: highDensity ? 1.0 : 0.98,
     [ZoneFaction.WILD]: highDensity ? 1.0 : 0.98,
   };
   zoneWeights[majority.zoneFaction] = highDensity ? 1.04 : 1.14;
@@ -2457,8 +4003,9 @@ function chooseSmogSourceRoom(rooms: Room[]): Room | null {
 
 function nearbySmogRooms(world: World, rooms: Room[], source: Room, spec: ProceduralFloorSpec): Room[] {
   const sourceCenter = roomCenter(source);
-  const limit = Math.min(rooms.length, 5 + spec.danger * 2);
-  const radius = 74 + spec.danger * 18;
+  const serviceSpineBonus = spec.geometryId === 'service_spines' ? 4 : 0;
+  const limit = Math.min(rooms.length, 5 + spec.danger * 2 + serviceSpineBonus);
+  const radius = 74 + spec.danger * 18 + serviceSpineBonus * 6;
   const weighted = rooms
     .filter(room => room.id !== source.id && room.id !== 0)
     .map(room => {
@@ -3259,7 +4806,7 @@ function applyWaterAndMachines(world: World, rooms: Room[], spec: ProceduralFloo
 }
 
 function workshopFactoryForIndex(index: number): FactoryDef {
-  const id = WORKSHOP_FACTORY_IDS[index % WORKSHOP_FACTORY_IDS.length];
+  const id = WORKSHOP_FACTORY_IDS[((index % WORKSHOP_FACTORY_IDS.length) + WORKSHOP_FACTORY_IDS.length) % WORKSHOP_FACTORY_IDS.length];
   const factory = FACTORY_BY_ID[id] ?? FACTORY_BY_ID.metal_shop;
   if (!factory) throw new Error(`missing workshop factory ${id}`);
   return factory;
@@ -3947,6 +5494,463 @@ function placeAtticServicePockets(world: World, rooms: Room[], spec: ProceduralF
   }
 }
 
+interface AtticClusterAnchor {
+  x: number;
+  y: number;
+  score: number;
+}
+
+interface AtticSupportPlan {
+  type: RoomType;
+  name: string;
+  w: number;
+  h: number;
+}
+
+function clampAtticRoomOrigin(x: number, y: number, w: number, h: number): { x: number; y: number } {
+  return {
+    x: Math.max(10, Math.min(W - w - 11, Math.floor(x))),
+    y: Math.max(10, Math.min(W - h - 11, Math.floor(y))),
+  };
+}
+
+function decorateAtticSupportRoom(world: World, room: Room, spec: ProceduralFloorSpec, serial: number): void {
+  applyRoomTexture(world, room, Tex.PIPE, Tex.F_CONCRETE);
+  for (let dy = 1; dy < room.h - 1; dy++) {
+    for (let dx = 1; dx < room.w - 1; dx++) {
+      const ci = world.idx(room.x + dx, room.y + dy);
+      if (world.cells[ci] !== Cell.FLOOR || world.roomMap[ci] !== room.id) continue;
+      if (room.type === RoomType.BATHROOM) {
+        if (dx === 1 && dy === 1) world.features[ci] = Feature.TOILET;
+        else if (dx === room.w - 2 && dy === 1) world.features[ci] = Feature.SINK;
+      } else if (room.type === RoomType.KITCHEN) {
+        if (dx === 1 && dy === 1) world.features[ci] = Feature.STOVE;
+        else if (dx === room.w - 2 && dy === 1) world.features[ci] = Feature.SINK;
+        else if ((dx + dy + serial) % 5 === 0) world.features[ci] = Feature.TABLE;
+      } else if (room.type === RoomType.PRODUCTION) {
+        if ((dx + dy + serial) % 3 === 0) world.features[ci] = Feature.MACHINE;
+        else if ((dx * 3 + dy + serial) % 7 === 0) world.features[ci] = Feature.APPARATUS;
+      } else if (room.type === RoomType.OFFICE) {
+        if ((dx + dy + serial) % 4 === 0) world.features[ci] = Feature.DESK;
+        else if ((dx * 5 + dy + serial) % 9 === 0) world.features[ci] = Feature.SCREEN;
+      } else if (room.type === RoomType.COMMON) {
+        if ((dx + dy + serial) % 4 === 0) world.features[ci] = Feature.TABLE;
+        else if ((dx * 7 + dy + serial) % 11 === 0) world.features[ci] = Feature.CHAIR;
+      } else if ((dx + dy + serial) % 3 === 0) {
+        world.features[ci] = Feature.SHELF;
+      }
+    }
+  }
+  const c = roomCenter(room);
+  stampSurfaceSplat(world, c.x, c.y, 0.5, 0.5, 0.22, 0.36, spec.seed ^ (room.id * 193 + serial * 17), 104, 130, 128, false);
+}
+
+function canPlaceAtticSupportRoom(world: World, x: number, y: number, w: number, h: number): boolean {
+  for (let dy = -1; dy <= h; dy++) {
+    for (let dx = -1; dx <= w; dx++) {
+      const ci = world.idx(x + dx, y + dy);
+      if (world.aptMask[ci] || world.hermoWall[ci] || world.doors.has(ci) || world.containerMap.has(ci)) return false;
+      if (world.cells[ci] === Cell.LIFT || world.cells[ci] === Cell.ABYSS || world.cells[ci] === Cell.WATER) return false;
+      if (world.roomMap[ci] >= 0) return false;
+      if (world.cells[ci] !== Cell.WALL && world.cells[ci] !== Cell.FLOOR) return false;
+    }
+  }
+  return true;
+}
+
+function stampAtticSupportRoom(
+  world: World,
+  rooms: Room[],
+  spec: ProceduralFloorSpec,
+  type: RoomType,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  name: string,
+  serial: number,
+): Room | null {
+  const origin = clampAtticRoomOrigin(x, y, w, h);
+  if (!canPlaceRoom(world, origin.x, origin.y, w, h) && !canPlaceAtticSupportRoom(world, origin.x, origin.y, w, h)) return null;
+  const room = stampRoom(world, world.rooms.length, type, origin.x, origin.y, w, h, -1);
+  room.name = `${name} ${room.id}`;
+  decorateAtticSupportRoom(world, room, spec, serial);
+  rooms.push(room);
+  return room;
+}
+
+function connectAtticRoomToPoint(world: World, spec: ProceduralFloorSpec, room: Room, x: number, y: number, serial: number): void {
+  const exit = roomExit(world, room, x, y);
+  placeDoorAt(world, exit.wx, exit.wy, room.id);
+  const horizontalFirst = ((spec.seed + room.id * 31 + serial * 17) & 1) === 0;
+  if (horizontalFirst) {
+    const step = carveRoofDuctSegment(world, spec, exit.ox, exit.oy, x, exit.oy, true, serial + 71, serial * 503);
+    carveRoofDuctSegment(world, spec, x, exit.oy, x, y, false, serial + 71, step);
+  } else {
+    const step = carveRoofDuctSegment(world, spec, exit.ox, exit.oy, exit.ox, y, false, serial + 71, serial * 503);
+    carveRoofDuctSegment(world, spec, exit.ox, y, x, y, true, serial + 71, step);
+  }
+}
+
+function pushAtticClusterAnchor(anchors: AtticClusterAnchor[], seen: Set<string>, x: number, y: number, score: number): void {
+  const cx = Math.floor(x / 56);
+  const cy = Math.floor(y / 56);
+  const key = `${cx}:${cy}`;
+  if (seen.has(key)) return;
+  for (const anchor of anchors) {
+    const dx = x - anchor.x;
+    const dy = y - anchor.y;
+    if (dx * dx + dy * dy < ATTIC_CLUSTER_MIN_SPACING) return;
+  }
+  seen.add(key);
+  anchors.push({ x: Math.max(12, Math.min(W - 13, Math.floor(x))), y: Math.max(12, Math.min(W - 13, Math.floor(y))), score });
+}
+
+function collectAtticClusterAnchors(
+  spec: ProceduralFloorSpec,
+  traces: readonly AtticTrace[],
+  junctions: readonly AtticJunction[],
+  targets: readonly Room[],
+): AtticClusterAnchor[] {
+  const anchors: AtticClusterAnchor[] = [];
+  const seen = new Set<string>();
+  for (const junction of junctions) pushAtticClusterAnchor(anchors, seen, junction.x, junction.y, 20_000 + junction.score);
+  for (const room of targets) {
+    const c = roomCenter(room);
+    pushAtticClusterAnchor(anchors, seen, c.x, c.y, 12_000 + room.w * room.h);
+  }
+  for (const trace of traces) {
+    const step = Math.max(48, Math.floor(trace.cells.length / 10));
+    for (let i = (spec.seed + trace.id * 23) % step; i < trace.cells.length; i += step) {
+      const ci = trace.cells[i];
+      pushAtticClusterAnchor(anchors, seen, ci % W, (ci / W) | 0, 8_000 - i + trace.cells.length);
+    }
+  }
+  for (let i = 0; i < 36; i++) {
+    const x = 48 + Math.floor(atticHash01(spec.seed, i, 0, 0x7711) * (W - 96));
+    const y = 48 + Math.floor(atticHash01(spec.seed, i, 1, 0x7722) * (W - 96));
+    pushAtticClusterAnchor(anchors, seen, x, y, 3_000 - i);
+  }
+  return anchors.sort((a, b) => b.score - a.score);
+}
+
+const ATTIC_SUPPORT_PLANS: readonly AtticSupportPlan[] = [
+  { type: RoomType.STORAGE, name: 'Чердачная фильтровая кладовая', w: 5, h: 5 },
+  { type: RoomType.PRODUCTION, name: 'Чердачная моторная будка', w: 7, h: 5 },
+  { type: RoomType.COMMON, name: 'Чердачный дежурный закуток', w: 6, h: 5 },
+  { type: RoomType.BATHROOM, name: 'Чердачный санузел у тяги', w: 4, h: 4 },
+  { type: RoomType.OFFICE, name: 'Чердачный журнал ветрового поста', w: 6, h: 5 },
+  { type: RoomType.KITCHEN, name: 'Чердачная чайная будка', w: 5, h: 5 },
+] as const;
+
+function placeAtticSupportAroundCore(
+  world: World,
+  rooms: Room[],
+  spec: ProceduralFloorSpec,
+  core: Room,
+  serial: number,
+  supportBudget: { v: number },
+): number {
+  const coreCenter = roomCenter(core);
+  let placed = 0;
+  const directions = [
+    { x: 1, y: 0 },
+    { x: -1, y: 0 },
+    { x: 0, y: 1 },
+    { x: 0, y: -1 },
+  ] as const;
+  for (let i = 0; i < ATTIC_SUPPORT_PLANS.length && supportBudget.v > 0; i++) {
+    const plan = ATTIC_SUPPORT_PLANS[(i + serial) % ATTIC_SUPPORT_PLANS.length];
+    const dir = directions[(i + serial) & 3];
+    let room: Room | null = null;
+    for (let attempt = 0; attempt < 10 && !room; attempt++) {
+      const spread = 11 + attempt * 4 + (i % 2) * 3;
+      const lateral = ((attempt % 3) - 1) * 5;
+      const x = coreCenter.x + dir.x * (Math.floor(core.w / 2) + spread) + (dir.y ? lateral : 0) - Math.floor(plan.w / 2);
+      const y = coreCenter.y + dir.y * (Math.floor(core.h / 2) + spread) + (dir.x ? lateral : 0) - Math.floor(plan.h / 2);
+      room = stampAtticSupportRoom(world, rooms, spec, plan.type, x, y, plan.w, plan.h, plan.name, serial * 13 + i * 17 + attempt);
+    }
+    if (!room) continue;
+    connectAtticRoomToPoint(world, spec, room, coreCenter.x, coreCenter.y, serial * 19 + i);
+    supportBudget.v--;
+    placed++;
+  }
+  return placed;
+}
+
+function tryPlaceAtticCluster(
+  world: World,
+  rooms: Room[],
+  spec: ProceduralFloorSpec,
+  anchor: AtticClusterAnchor,
+  serial: number,
+  supportBudget: { v: number },
+): number {
+  const coreW = 9 + ((spec.seed + serial * 3) % 5);
+  const coreH = 7 + ((spec.seed >> (serial % 11)) % 4);
+  let core: Room | null = null;
+  for (let attempt = 0; attempt < 32 && !core; attempt++) {
+    const angleSlot = (serial * 5 + attempt * 3) & 15;
+    const angle = (angleSlot * Math.PI) / 8;
+    const radius = 10 + (attempt % 8) * 7 + Math.floor(attempt / 8) * 9;
+    const x = anchor.x + Math.cos(angle) * radius - Math.floor(coreW / 2);
+    const y = anchor.y + Math.sin(angle) * radius - Math.floor(coreH / 2);
+    core = stampAtticSupportRoom(
+      world,
+      rooms,
+      spec,
+      serial % 3 === 0 ? RoomType.PRODUCTION : serial % 3 === 1 ? RoomType.STORAGE : RoomType.COMMON,
+      x,
+      y,
+      coreW,
+      coreH,
+      serial % 3 === 0 ? 'Чердачный узел вентмашин' : serial % 3 === 1 ? 'Чердачный склад решеток' : 'Чердачная станция обхода',
+      serial * 101 + attempt,
+    );
+  }
+  if (!core) return 0;
+  connectAtticRoomToPoint(world, spec, core, anchor.x, anchor.y, serial * 29);
+  const supportCount = placeAtticSupportAroundCore(world, rooms, spec, core, serial, supportBudget);
+  return 1 + supportCount;
+}
+
+function placeAtticWeatherworksClusters(
+  world: World,
+  rooms: Room[],
+  spec: ProceduralFloorSpec,
+  traces: readonly AtticTrace[],
+  junctions: readonly AtticJunction[],
+  targets: readonly Room[],
+): void {
+  const anchors = collectAtticClusterAnchors(spec, traces, junctions, targets);
+  const clusterTarget = Math.min(anchors.length, ATTIC_MID_CLUSTER_TARGET + spec.danger * 5);
+  const supportBudget = { v: ATTIC_MICRO_ROOM_TARGET + spec.danger * 10 + (spec.anomalyId === 'living_tunnels' ? ATTIC_LIVING_TUNNEL_MICRO_BONUS : 0) };
+  let clusters = 0;
+  for (const anchor of anchors) {
+    if (clusters >= clusterTarget || supportBudget.v <= 0) break;
+    const placed = tryPlaceAtticCluster(world, rooms, spec, anchor, clusters, supportBudget);
+    if (placed > 0) clusters++;
+  }
+}
+
+function atticOwnerLabel(owner: ZoneFaction): string {
+  switch (owner) {
+    case ZoneFaction.LIQUIDATOR: return 'ликвидаторов';
+    case ZoneFaction.CULTIST: return 'культистов';
+    case ZoneFaction.SCIENTIST: return 'ученых';
+    case ZoneFaction.WILD: return 'диких';
+    default: return 'граждан';
+  }
+}
+
+function atticSupportRoomType(owner: ZoneFaction, index: number): RoomType {
+  if (index === 0) return RoomType.COMMON;
+  if (index === 1) return owner === ZoneFaction.SCIENTIST ? RoomType.MEDICAL : RoomType.STORAGE;
+  if (index === 2) return owner === ZoneFaction.CULTIST ? RoomType.COMMON : RoomType.PRODUCTION;
+  return owner === ZoneFaction.CITIZEN ? RoomType.KITCHEN : RoomType.OFFICE;
+}
+
+function atticRoomSize(type: RoomType, seed: number, index: number, scale: 'micro' | 'mid' | 'hq'): { w: number; h: number } {
+  if (scale === 'hq') return { w: 9 + ((seed + index) & 1), h: 7 + ((seed >>> (index & 7)) & 1) };
+  if (scale === 'mid') {
+    if (type === RoomType.PRODUCTION) return { w: 13 + (index % 5), h: 9 + ((seed + index) % 4) };
+    if (type === RoomType.COMMON) return { w: 12 + (index % 4), h: 8 + ((seed >>> 3) % 4) };
+    return { w: 10 + (index % 4), h: 7 + ((seed + index) % 3) };
+  }
+  if (type === RoomType.CORRIDOR) return (index & 1) === 0 ? { w: 9 + (index % 5), h: 3 } : { w: 3, h: 9 + (index % 5) };
+  if (type === RoomType.PRODUCTION) return { w: 7 + (index % 4), h: 6 + ((seed + index) % 3) };
+  if (type === RoomType.COMMON) return { w: 7 + (index % 3), h: 6 + ((seed >>> 4) % 3) };
+  if (type === RoomType.OFFICE) return { w: 6 + (index % 3), h: 5 + ((seed + index) % 2) };
+  return { w: 5 + (index % 3), h: 5 + ((seed >>> (index & 7)) % 3) };
+}
+
+function paintAtticRoomTerritory(world: World, room: Room, owner: ZoneFaction): void {
+  for (let dy = -1; dy <= room.h; dy++) {
+    for (let dx = -1; dx <= room.w; dx++) {
+      const ci = world.idx(room.x + dx, room.y + dy);
+      if (world.aptMask[ci]) continue;
+      world.factionControl[ci] = owner;
+    }
+  }
+}
+
+function markAtticHermeticShell(world: World, room: Room): void {
+  for (let dy = -1; dy <= room.h; dy++) {
+    for (let dx = -1; dx <= room.w; dx++) {
+      if (dx >= 0 && dx < room.w && dy >= 0 && dy < room.h) continue;
+      const ci = world.idx(room.x + dx, room.y + dy);
+      if (world.cells[ci] !== Cell.WALL) continue;
+      world.hermoWall[ci] = 1;
+      world.wallTex[ci] = Tex.HERMO_WALL;
+    }
+  }
+}
+
+function decorateAtticServiceRoom(world: World, room: Room, spec: ProceduralFloorSpec, seed: number): void {
+  applyRoomTexture(world, room, room.type === RoomType.HQ ? Tex.HERMO_WALL : Tex.PIPE, Tex.F_CONCRETE);
+  decorateAtticPocketRoom(world, room, seed);
+  decorateProceduralRoom(world, room, spec);
+}
+
+function tryPlaceAtticAttachedRoom(
+  world: World,
+  rooms: Room[],
+  spec: ProceduralFloorSpec,
+  anchor: { x: number; y: number },
+  type: RoomType,
+  size: { w: number; h: number },
+  name: string,
+  index: number,
+  owner?: ZoneFaction,
+  hermetic = false,
+): Room | null {
+  const dirs = [
+    { x: 1, y: 0 }, { x: -1, y: 0 }, { x: 0, y: 1 }, { x: 0, y: -1 },
+    { x: 1, y: 1 }, { x: -1, y: 1 }, { x: 1, y: -1 }, { x: -1, y: -1 },
+  ];
+  const start = (spec.seed + index * 3) % dirs.length;
+  const baseRadius = Math.max(6, Math.ceil(Math.max(size.w, size.h) / 2) + 4);
+  for (let ring = 0; ring < 6; ring++) {
+    const radius = baseRadius + ring * 4;
+    for (let n = 0; n < dirs.length; n++) {
+      const dir = dirs[(start + n) % dirs.length];
+      const x = world.wrap(Math.round(anchor.x + dir.x * radius - size.w / 2));
+      const y = world.wrap(Math.round(anchor.y + dir.y * radius - size.h / 2));
+      if (!canPlaceRoom(world, x, y, size.w, size.h)) continue;
+      const room = stampRoom(world, world.rooms.length, type, x, y, size.w, size.h, -1);
+      room.name = name;
+      decorateAtticServiceRoom(world, room, spec, spec.seed ^ index * 193);
+      if (hermetic) markAtticHermeticShell(world, room);
+      if (hermetic) room.sealed = true;
+      if (owner !== undefined) paintAtticRoomTerritory(world, room, owner);
+      const exit = roomExit(world, room, anchor.x, anchor.y);
+      placeDoorAt(world, exit.wx, exit.wy, room.id);
+      const doorIdx = world.idx(exit.wx, exit.wy);
+      if (world.cells[doorIdx] !== Cell.DOOR && !world.aptMask[doorIdx] && world.cells[doorIdx] !== Cell.LIFT) {
+        world.cells[doorIdx] = Cell.DOOR;
+        world.wallTex[doorIdx] = hermetic ? Tex.DOOR_METAL : room.wallTex;
+        world.features[doorIdx] = Feature.NONE;
+        world.doors.set(doorIdx, { idx: doorIdx, state: hermetic ? DoorState.HERMETIC_OPEN : DoorState.CLOSED, roomA: room.id, roomB: -1, keyId: '', timer: 0 });
+        if (!room.doors.includes(doorIdx)) room.doors.push(doorIdx);
+      }
+      const door = world.doors.get(doorIdx);
+      if (hermetic && door) {
+        door.state = DoorState.HERMETIC_OPEN;
+        world.hermoWall[doorIdx] = 1;
+      }
+      const horizontalFirst = ((spec.seed + index * 17 + ring) & 1) === 0;
+      if (horizontalFirst) {
+        const step = carveRoofDuctSegment(world, spec, exit.ox, exit.oy, anchor.x, exit.oy, true, index + 101, index * 331);
+        carveRoofDuctSegment(world, spec, anchor.x, exit.oy, anchor.x, anchor.y, false, index + 101, step);
+      } else {
+        const step = carveRoofDuctSegment(world, spec, exit.ox, exit.oy, exit.ox, anchor.y, false, index + 101, index * 331);
+        carveRoofDuctSegment(world, spec, exit.ox, anchor.y, anchor.x, anchor.y, true, index + 101, step);
+      }
+      rooms.push(room);
+      return room;
+    }
+  }
+  return null;
+}
+
+function atticTraceAnchors(traces: readonly AtticTrace[], junctions: readonly AtticJunction[], seed: number): { x: number; y: number }[] {
+  const anchors: { x: number; y: number; score: number }[] = [];
+  for (const junction of junctions) anchors.push({ x: junction.x, y: junction.y, score: junction.score + 20_000 });
+  for (const trace of traces) {
+    const step = Math.max(12, Math.floor(trace.cells.length / 44));
+    for (let i = (trace.id * 7) % step; i < trace.cells.length; i += step) {
+      const ci = trace.cells[i];
+      const x = ci % W;
+      const y = (ci / W) | 0;
+      anchors.push({
+        x,
+        y,
+        score: atticHash01(seed, x >> 3, y >> 3, trace.id) * 10_000 + trace.cells.length * 0.01,
+      });
+    }
+  }
+  anchors.sort((a, b) => b.score - a.score);
+  return anchors.map(({ x, y }) => ({ x, y }));
+}
+
+function selectAtticHqAnchor(
+  world: World,
+  anchors: readonly { x: number; y: number }[],
+  ownerIndex: number,
+  used: readonly { x: number; y: number }[],
+  seed: number,
+): { x: number; y: number } {
+  const preferred = [
+    { x: W * 0.20, y: W * 0.22 },
+    { x: W * 0.80, y: W * 0.22 },
+    { x: W * 0.22, y: W * 0.78 },
+    { x: W * 0.78, y: W * 0.78 },
+    { x: W * 0.52, y: W * 0.50 },
+  ][ownerIndex];
+  let best = anchors[0] ?? { x: Math.floor(preferred.x), y: Math.floor(preferred.y) };
+  let bestScore = Infinity;
+  for (const anchor of anchors) {
+    const d2 = world.dist2(anchor.x + 0.5, anchor.y + 0.5, preferred.x, preferred.y);
+    const spacingPenalty = used.some(prev => world.dist2(prev.x + 0.5, prev.y + 0.5, anchor.x + 0.5, anchor.y + 0.5) < 150 * 150) ? 80_000 : 0;
+    const noise = atticHash01(seed, anchor.x >> 4, anchor.y >> 4, ownerIndex) * 900;
+    const score = d2 + spacingPenalty + noise;
+    if (score < bestScore) {
+      bestScore = score;
+      best = anchor;
+    }
+  }
+  return best;
+}
+
+function placeAtticFactionHqClusters(
+  world: World,
+  rooms: Room[],
+  spec: ProceduralFloorSpec,
+  traces: readonly AtticTrace[],
+  junctions: readonly AtticJunction[],
+): void {
+  const anchors = atticTraceAnchors(traces, junctions, spec.seed ^ 0xfac710);
+  const used: { x: number; y: number }[] = [];
+  for (let i = 0; i < ATTIC_HQ_OWNERS.length; i++) {
+    const owner = ATTIC_HQ_OWNERS[i];
+    const anchor = selectAtticHqAnchor(world, anchors, i, used, spec.seed ^ 0x8a7c);
+    const label = atticOwnerLabel(owner);
+    const hq = tryPlaceAtticAttachedRoom(
+      world,
+      rooms,
+      spec,
+      anchor,
+      RoomType.HQ,
+      atticRoomSize(RoomType.HQ, spec.seed, i, 'hq'),
+      `Чердачный гермоштаб ${label}`,
+      3000 + i,
+      owner,
+      true,
+    );
+    const supportAnchor = hq ? roomCenter(hq) : anchor;
+    used.push(supportAnchor);
+    for (let s = 0; s < 4; s++) {
+      const type = atticSupportRoomType(owner, s);
+      const support = tryPlaceAtticAttachedRoom(
+        world,
+        rooms,
+        spec,
+        supportAnchor,
+        type,
+        atticRoomSize(type, spec.seed + i * 37, s, 'micro'),
+        `Чердачная опора ${label} ${s + 1}`,
+        3100 + i * 10 + s,
+        owner,
+      );
+      if (!support) continue;
+      if (type === RoomType.KITCHEN) {
+        const ci = world.idx(support.x + Math.floor(support.w / 2), support.y + Math.floor(support.h / 2));
+        if (world.features[ci] === Feature.NONE) world.features[ci] = Feature.STOVE;
+      }
+    }
+  }
+}
+
 function carveAtticWindLane(world: World, spec: ProceduralFloorSpec, line: number, anchor: { x: number; y: number }): AtticWindLane | null {
   const dirs = [[1, 0], [0, 1], [1, 1], [1, -1]] as const;
   const dir = dirs[(spec.seed + line * 11) & 3];
@@ -4022,7 +6026,7 @@ function applyAtticWindSignalLanes(
   sy: number,
 ): void {
   const anchors = targets.length > 0 ? targets : rooms.filter(room => room.id !== 0 && room.type !== RoomType.BATHROOM).slice(0, 3);
-  const count = Math.min(2, 1 + (spec.danger >= 3 ? 1 : 0));
+  const count = Math.min(4, 2 + (spec.danger >= 3 ? 1 : 0) + (spec.danger >= 4 ? 1 : 0));
   for (let i = 0; i < count; i++) {
     const room = anchors[i % Math.max(1, anchors.length)];
     const anchor = room ? roomCenter(room) : { x: sx, y: sy };
@@ -4038,7 +6042,7 @@ function chooseRoofDuctTargets(world: World, rooms: Room[], sx: number, sy: numb
     .filter(item => item.d2 > 50 * 50)
     .sort((a, b) => b.d2 - a.d2);
   const window = candidates.slice(0, Math.min(candidates.length, 14));
-  const targetCount = Math.min(window.length, 2 + Math.floor(spec.danger / 2));
+  const targetCount = Math.min(window.length, 4 + Math.floor(spec.danger / 2));
   const picked: Room[] = [];
   for (let i = 0; i < window.length && picked.length < targetCount; i++) {
     const index = (spec.seed + i * 5) % window.length;
@@ -4054,8 +6058,8 @@ function applyAtticWeatherworks(world: World, rooms: Room[], spec: ProceduralFlo
   const sy = Math.floor(spawnY);
   const targets = chooseRoofDuctTargets(world, rooms, sx, sy, spec);
   const field = buildAtticTensorField(spec);
-  const horizontalCount = 2 + (spec.danger >= 4 ? 1 : 0);
-  const verticalCount = 1 + (spec.danger >= 3 ? 1 : 0);
+  const horizontalCount = 4 + (spec.danger >= 4 ? 1 : 0);
+  const verticalCount = 3 + (spec.danger >= 3 ? 1 : 0);
   const horizontalLanes = selectAtticLanes(spec.seed ^ 0x3811, sy, targets, true, horizontalCount);
   const verticalLanes = selectAtticLanes(spec.seed ^ 0x3822, sx, targets, false, verticalCount);
   const traces: AtticTrace[] = [];
@@ -4085,7 +6089,13 @@ function applyAtticWeatherworks(world: World, rooms: Room[], spec: ProceduralFlo
     targets[i].name = `${targets[i].name} у шумной тяги`;
   }
   placeAtticServicePockets(world, rooms, spec, junctions);
+  placeAtticFactionHqClusters(world, rooms, spec, traces, junctions);
+  placeAtticWeatherworksClusters(world, rooms, spec, traces, junctions, targets);
   applyAtticWindSignalLanes(world, rooms, spec, targets, sx, sy);
+  world.markCellsDirty();
+  world.markWallTexDirty();
+  world.markFloorTexDirty();
+  world.markFeaturesDirty(true);
   world.markFogDirty();
 }
 
@@ -4257,6 +6267,27 @@ const COMMUNAL_THROUGH_FLAT_ITEMS: readonly Item[] = [
   { defId: 'bread', count: 1 },
   { defId: 'cigs', count: 1 },
 ];
+interface CommunalClusterLayout {
+  type: RoomType;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  label: string;
+}
+
+const COMMUNAL_CLUSTER_LAYOUT: readonly CommunalClusterLayout[] = [
+  { type: RoomType.COMMON, x: 0, y: 0, w: 16, h: 10, label: 'общий предбанник' },
+  { type: RoomType.KITCHEN, x: 21, y: 0, w: 9, h: 7, label: 'комната кипятка' },
+  { type: RoomType.BATHROOM, x: 0, y: 15, w: 7, h: 5, label: 'туалет очереди' },
+  { type: RoomType.STORAGE, x: 10, y: 15, w: 6, h: 5, label: 'чулан пайков' },
+  { type: RoomType.LIVING, x: 20, y: 13, w: 8, h: 7, label: 'жилая ячейка' },
+  { type: RoomType.SMOKING, x: 34, y: 2, w: 7, h: 5, label: 'курительная ниша' },
+  { type: RoomType.STORAGE, x: 34, y: 11, w: 5, h: 4, label: 'шкаф общака' },
+];
+const COMMUNAL_CLUSTER_GROUP_W = 42;
+const COMMUNAL_CLUSTER_GROUP_H = 21;
+const COMMUNAL_CLUSTER_MIN_SPACING = 34 * 34;
 
 function communalServiceRoomName(room: Room): string {
   if (room.type === RoomType.KITCHEN) return `Общая кухня ${room.id}`;
@@ -4434,6 +6465,140 @@ function decorateCommunalGrievanceDomains(world: World, rooms: readonly Room[], 
     const center = roomCenter(room);
     stampSurfaceSplat(world, pos?.x ?? center.x, pos?.y ?? center.y, 0.5, 0.5, 0.42, 0.58, spec.seed ^ (0x9047 + placed * 271), 160, 42, 36, false);
     placed++;
+  }
+}
+
+function communalClusterRoomName(cluster: number, item: CommunalClusterLayout, room: Room): string {
+  return `Очередной блок ${cluster + 1}: ${item.label} ${room.id}`;
+}
+
+function decorateCommunalClusterRoom(world: World, room: Room, item: CommunalClusterLayout, spec: ProceduralFloorSpec, cluster: number): void {
+  applyRoomTexture(world, room, item.type === RoomType.BATHROOM ? Tex.BRICK : Tex.PANEL, item.type === RoomType.BATHROOM ? Tex.F_TILE : Tex.F_LINO);
+  if (item.type === RoomType.KITCHEN) {
+    placeRoomFeature(world, room, Feature.STOVE, 1, 1);
+    placeRoomFeature(world, room, Feature.SINK, room.w - 2, 1);
+    placeRoomFeature(world, room, Feature.TABLE, Math.floor(room.w / 2), Math.floor(room.h / 2));
+  } else if (item.type === RoomType.BATHROOM) {
+    placeRoomFeature(world, room, Feature.SINK, 1, 1);
+    placeRoomFeature(world, room, Feature.TOILET, room.w - 2, room.h - 2);
+  } else if (item.type === RoomType.STORAGE) {
+    placeRoomFeature(world, room, Feature.SHELF, 1, 1);
+    placeRoomFeature(world, room, Feature.SHELF, room.w - 2, room.h - 2);
+  } else if (item.type === RoomType.LIVING) {
+    placeRoomFeature(world, room, Feature.BED, 1, room.h - 2);
+    placeRoomFeature(world, room, Feature.TABLE, room.w - 2, 1);
+  } else if (item.type === RoomType.SMOKING) {
+    placeRoomFeature(world, room, Feature.CHAIR, 1, room.h - 2);
+    placeRoomFeature(world, room, Feature.CHAIR, room.w - 2, room.h - 2);
+  } else {
+    placeRoomFeature(world, room, Feature.TABLE, Math.floor(room.w / 2), Math.floor(room.h / 2));
+    placeRoomFeature(world, room, Feature.LAMP, 1, 1);
+  }
+  const center = roomCenter(room);
+  if ((room.id + cluster) % 3 === 0) {
+    stampSurfaceSplat(world, center.x, center.y, 0.5, 0.5, 0.24, 0.4, spec.seed ^ (room.id * 193) ^ 0x4040, 116, 90, 66, false);
+  }
+}
+
+function canPlaceCommunalCluster(world: World, x: number, y: number): boolean {
+  for (const item of COMMUNAL_CLUSTER_LAYOUT) {
+    if (!canPlaceRoom(world, x + item.x, y + item.y, item.w, item.h)) return false;
+  }
+  return true;
+}
+
+function findCommunalClusterOrigin(
+  world: World,
+  spec: ProceduralFloorSpec,
+  clusterIndex: number,
+  centers: readonly { x: number; y: number }[],
+  spawnX: number,
+  spawnY: number,
+): { x: number; y: number } | null {
+  const maxX = W - COMMUNAL_CLUSTER_GROUP_W - 24;
+  const maxY = W - COMMUNAL_CLUSTER_GROUP_H - 24;
+  for (let attempt = 0; attempt < 160; attempt++) {
+    const salt = clusterIndex * 131 + attempt * 17;
+    const x = 24 + Math.floor(fieldHash01(spec.seed, salt, spec.z, 0x4041) * Math.max(1, maxX - 23));
+    const y = 24 + Math.floor(fieldHash01(spec.seed, spec.ordinal, salt, 0x4042) * Math.max(1, maxY - 23));
+    const cx = x + (COMMUNAL_CLUSTER_GROUP_W >> 1);
+    const cy = y + (COMMUNAL_CLUSTER_GROUP_H >> 1);
+    if (world.dist2(spawnX, spawnY, cx + 0.5, cy + 0.5) < 48 * 48) continue;
+    if (centers.some(center => world.dist2(center.x, center.y, cx, cy) < COMMUNAL_CLUSTER_MIN_SPACING)) continue;
+    if (canPlaceCommunalCluster(world, x, y)) return { x, y };
+  }
+  return null;
+}
+
+function stampCommunalClusterRooms(
+  world: World,
+  rooms: Room[],
+  spec: ProceduralFloorSpec,
+  nextRoomId: { v: number },
+  origin: { x: number; y: number },
+  clusterIndex: number,
+): Room[] {
+  const cluster: Room[] = [];
+  for (const item of COMMUNAL_CLUSTER_LAYOUT) {
+    const room = stampRoom(world, nextRoomId.v++, item.type, origin.x + item.x, origin.y + item.y, item.w, item.h, -1);
+    room.name = communalClusterRoomName(clusterIndex, item, room);
+    decorateRoom(world, room);
+    decorateProceduralRoom(world, room, spec);
+    decorateCommunalClusterRoom(world, room, item, spec, clusterIndex);
+    rooms.push(room);
+    cluster.push(room);
+  }
+  connectRoomsMST(world, cluster);
+  return cluster;
+}
+
+function carveCommunalClusterQueueRing(
+  world: World,
+  spec: ProceduralFloorSpec,
+  origin: { x: number; y: number },
+  clusterIndex: number,
+): void {
+  const left = origin.x - 3;
+  const right = origin.x + COMMUNAL_CLUSTER_GROUP_W + 2;
+  const top = origin.y - 3;
+  const bottom = origin.y + COMMUNAL_CLUSTER_GROUP_H + 2;
+  let step = clusterIndex * 1709 + 0x4c40;
+  step = carveCommunalSegment(world, spec, left, top, right, top, true, step, false);
+  step = carveCommunalSegment(world, spec, right, top, right, bottom, false, step, false);
+  step = carveCommunalSegment(world, spec, right, bottom, left, bottom, true, step, false);
+  carveCommunalSegment(world, spec, left, bottom, left, top, false, step, false);
+}
+
+function applyCommunalKnotClusterRooms(
+  world: World,
+  rooms: Room[],
+  spec: ProceduralFloorSpec,
+  nextRoomId: { v: number },
+  spawnX: number,
+  spawnY: number,
+): void {
+  if (spec.geometryId !== 'communal_knots') return;
+  const conveyorBonus = spec.anomalyId === 'conveyor_sorter' ? 6 : 0;
+  const targetClusters = 18 + spec.danger * 4 + conveyorBonus;
+  const centers: { x: number; y: number }[] = [];
+  let placedRooms = 0;
+  for (let cluster = 0; cluster < targetClusters; cluster++) {
+    const origin = findCommunalClusterOrigin(world, spec, cluster, centers, spawnX, spawnY);
+    if (!origin) continue;
+    const stamped = stampCommunalClusterRooms(world, rooms, spec, nextRoomId, origin, cluster);
+    if (stamped.length === 0) continue;
+    centers.push({
+      x: origin.x + (COMMUNAL_CLUSTER_GROUP_W >> 1),
+      y: origin.y + (COMMUNAL_CLUSTER_GROUP_H >> 1),
+    });
+    placedRooms += stamped.length;
+    carveCommunalClusterQueueRing(world, spec, origin, cluster);
+  }
+  if (placedRooms > 0) {
+    world.markCellsDirty();
+    world.markWallTexDirty();
+    world.markFloorTexDirty();
+    world.markFeaturesDirty(true);
   }
 }
 
@@ -4990,7 +7155,11 @@ function placeScientistMajorityLandmarks(world: World, rooms: Room[], spec: Proc
 
 const LIVING_BLOCK_PROXY_SIZE = 64;
 const LIVING_BLOCK_PROXY_CELL = W / LIVING_BLOCK_PROXY_SIZE;
-const LIVING_BLOCK_MARGIN = 56;
+const LIVING_BLOCK_MARGIN = 48;
+const LIVING_BLOCK_GRID_COLUMNS = 8;
+const LIVING_BLOCK_MIN_TARGET_ROOMS = 940;
+const LIVING_BLOCK_TARGET_ROOMS_PER_DANGER = 110;
+const LIVING_BLOCK_HQ_RESERVE_RADIUS2 = 82 * 82;
 
 interface LivingBlock {
   id: number;
@@ -5351,6 +7520,17 @@ function buildLivingBlockAt(
   return block;
 }
 
+function livingHqReserveCenters(): readonly { x: number; y: number }[] {
+  return PROCEDURAL_HQ_OWNERS.map(owner => proceduralHqBase(owner));
+}
+
+function livingSlotReservedForHq(world: World, x: number, y: number): boolean {
+  for (const reserve of livingHqReserveCenters()) {
+    if (world.dist2(x + 0.5, y + 0.5, reserve.x + 0.5, reserve.y + 0.5) <= LIVING_BLOCK_HQ_RESERVE_RADIUS2) return true;
+  }
+  return false;
+}
+
 function chooseLivingShelterBlock(blocks: readonly LivingBlock[], spawn: LivingRoutePoint, world: World): LivingBlock | undefined {
   let best: LivingBlock | undefined;
   let bestD2 = -1;
@@ -5458,20 +7638,29 @@ function buildLivingBlockRooms(world: World, spec: ProceduralFloorSpec): { rooms
   const geom = geometryById(spec.geometryId);
   const rooms: Room[] = [];
   const blocks: LivingBlock[] = [];
-  const targetRooms = geom.roomCount + spec.danger * 6;
-  const blockCount = Math.max(8, Math.min(11, Math.ceil(targetRooms / 10)));
-  const gridCols = blockCount > 9 ? 4 : 3;
-  const gridRows = Math.ceil(blockCount / gridCols);
+  const targetRooms = Math.max(
+    geom.roomCount + spec.danger * 6,
+    LIVING_BLOCK_MIN_TARGET_ROOMS + spec.danger * LIVING_BLOCK_TARGET_ROOMS_PER_DANGER,
+  );
+  const blockCount = Math.max(72, Math.min(132, Math.ceil(targetRooms / 10)));
+  const gridCols = LIVING_BLOCK_GRID_COLUMNS;
+  const gridRows = Math.ceil((blockCount + PROCEDURAL_HQ_OWNERS.length * 2) / gridCols);
   const cellW = Math.floor((W - LIVING_BLOCK_MARGIN * 2) / gridCols);
   const cellH = Math.floor((W - LIVING_BLOCK_MARGIN * 2) / gridRows);
 
-  for (let i = 0; i < blockCount; i++) {
-    const col = i % gridCols;
-    const row = Math.floor(i / gridCols);
-    const columns = Math.max(4, Math.min(6, Math.ceil((targetRooms - rooms.length) / Math.max(1, (blockCount - i) * 2))));
-    const x = LIVING_BLOCK_MARGIN + col * cellW + irng(10, Math.max(12, Math.floor(cellW * 0.28)));
-    const y = LIVING_BLOCK_MARGIN + row * cellH + irng(10, Math.max(12, Math.floor(cellH * 0.26)));
-    const block = buildLivingBlockAt(world, rooms, spec, i + 1, x, y, columns);
+  for (let slot = 0; blocks.length < blockCount && slot < gridCols * gridRows; slot++) {
+    const col = slot % gridCols;
+    const row = Math.floor(slot / gridCols);
+    const slotCenterX = LIVING_BLOCK_MARGIN + col * cellW + Math.floor(cellW / 2);
+    const slotCenterY = LIVING_BLOCK_MARGIN + row * cellH + Math.floor(cellH / 2);
+    if (livingSlotReservedForHq(world, slotCenterX, slotCenterY)) continue;
+    const remainingBlocks = Math.max(1, blockCount - blocks.length);
+    const wantedColumns = Math.ceil((targetRooms - rooms.length) / Math.max(1, remainingBlocks * 2));
+    const maxColumnsForCell = Math.max(3, Math.min(6, Math.floor((cellW - 14) / 15)));
+    const columns = Math.max(3, Math.min(6, maxColumnsForCell, wantedColumns));
+    const x = LIVING_BLOCK_MARGIN + col * cellW + irng(6, Math.max(7, Math.floor(cellW * 0.13)));
+    const y = LIVING_BLOCK_MARGIN + row * cellH + irng(5, Math.max(6, Math.floor(cellH * 0.16)));
+    const block = buildLivingBlockAt(world, rooms, spec, blocks.length + 1, x, y, columns);
     if (block.rooms.length > 0) blocks.push(block);
   }
 
@@ -5543,6 +7732,11 @@ interface ApartmentPressureAnchor {
 
 const APARTMENT_PRESSURE_LEGAL_KEY = 'resident_identity_stub';
 const APARTMENT_PRESSURE_CUT_KEY = 'key';
+const APARTMENT_PRESSURE_INFILL_GRID = 20;
+const APARTMENT_PRESSURE_INFILL_MAX_BLOCKS = 360;
+const APARTMENT_PRESSURE_INFILL_LINK_RADIUS = 132;
+const APARTMENT_PRESSURE_CEMENT_MEMORY_GRID = 12;
+const APARTMENT_PRESSURE_CEMENT_MEMORY_COURTS = 24;
 const APARTMENT_PRESSURE_DOMAINS = [
   { label: 'Домен очереди', floorTex: Tex.F_LINO, feature: Feature.CHAIR },
   { label: 'Домен домкома', floorTex: Tex.F_TILE, feature: Feature.TABLE },
@@ -5737,11 +7931,372 @@ function carveAdminStaffChord(world: World, a: Room, b: Room, spec: ProceduralFl
   setAdminRoomFloor(world, b, Tex.F_GREEN_CARPET);
 }
 
+interface AdminPocketCorridorAnchor {
+  x: number;
+  y: number;
+  dir: 0 | 1 | 2 | 3;
+  score: number;
+}
+
+const ADMIN_POCKET_CLUSTER_ROOM_TYPES = [
+  RoomType.OFFICE,
+  RoomType.STORAGE,
+  RoomType.OFFICE,
+  RoomType.COMMON,
+  RoomType.BATHROOM,
+  RoomType.KITCHEN,
+  RoomType.MEDICAL,
+] as const;
+
+function adminPocketClusterRoomSize(type: RoomType, seed: number): { w: number; h: number } {
+  if (type === RoomType.BATHROOM) return { w: 4 + (seed & 1), h: 4 + ((seed >>> 1) & 1) };
+  if (type === RoomType.KITCHEN) return { w: 5 + (seed % 3), h: 5 + ((seed >>> 3) % 3) };
+  if (type === RoomType.MEDICAL) return { w: 6 + (seed % 4), h: 5 + ((seed >>> 4) % 3) };
+  if (type === RoomType.STORAGE) return { w: 5 + (seed % 5), h: 4 + ((seed >>> 5) % 4) };
+  if (type === RoomType.COMMON) return { w: 8 + (seed % 6), h: 6 + ((seed >>> 6) % 5) };
+  return { w: 6 + (seed % 7), h: 5 + ((seed >>> 7) % 5) };
+}
+
+function decorateAdminClusterRoom(world: World, room: Room, type: RoomType, serial: number, spec: ProceduralFloorSpec): void {
+  const cluster = 1 + Math.floor(serial / 5);
+  if (type === RoomType.STORAGE) room.name = `Архивная кладовая грозди ${cluster}`;
+  else if (type === RoomType.COMMON) room.name = `Комната ожидания грозди ${cluster}`;
+  else if (type === RoomType.BATHROOM) room.name = `Туалет при очереди ${cluster}`;
+  else if (type === RoomType.KITCHEN) room.name = `Чайная при коридоре ${cluster}`;
+  else if (type === RoomType.MEDICAL) room.name = `Медкабинет ликвидаторской грозди ${cluster}`;
+  else room.name = `Кабинетная гроздь ${cluster}-${serial % 5 + 1}`;
+
+  applyRoomTexture(world, room, Tex.MARBLE, type === RoomType.COMMON ? Tex.F_RED_CARPET : Tex.F_PARQUET);
+  if (type === RoomType.OFFICE || type === RoomType.STORAGE) decorateAdminOfficeSlab(world, room, spec.seed + serial * 97);
+  else decorateProceduralRoom(world, room, spec);
+
+  const center = roomCenter(room);
+  const centerIdx = world.idx(center.x, center.y);
+  if (world.cells[centerIdx] === Cell.FLOOR && world.roomMap[centerIdx] === room.id) {
+    world.features[centerIdx] = type === RoomType.KITCHEN
+      ? Feature.TABLE
+      : type === RoomType.BATHROOM
+        ? Feature.SINK
+        : type === RoomType.MEDICAL
+          ? Feature.SHELF
+          : Feature.DESK;
+  }
+  if (type === RoomType.KITCHEN) {
+    const sink = roomCell(world, room, Math.max(1, room.w - 2), 1);
+    const stove = roomCell(world, room, 1, Math.max(1, room.h - 2));
+    if (sink) world.features[world.idx(sink.x, sink.y)] = Feature.SINK;
+    if (stove) world.features[world.idx(stove.x, stove.y)] = Feature.STOVE;
+  } else if (type === RoomType.BATHROOM) {
+    const toilet = roomCell(world, room, 1, Math.max(1, room.h - 2));
+    if (toilet) world.features[world.idx(toilet.x, toilet.y)] = Feature.TOILET;
+  }
+}
+
+function adminPocketSideRoomPlacement(
+  cx: number,
+  cy: number,
+  dir: 0 | 1 | 2 | 3,
+  w: number,
+  h: number,
+  seed: number,
+): { x: number; y: number; doorX: number; doorY: number } {
+  if (dir === 0) {
+    const doorY = cy;
+    const y = cy - (1 + (seed % Math.max(1, h - 2)));
+    return { x: cx + 2, y, doorX: cx + 1, doorY };
+  }
+  if (dir === 1) {
+    const doorY = cy;
+    const y = cy - (1 + (seed % Math.max(1, h - 2)));
+    return { x: cx - w - 1, y, doorX: cx - 1, doorY };
+  }
+  if (dir === 2) {
+    const doorX = cx;
+    const x = cx - (1 + (seed % Math.max(1, w - 2)));
+    return { x, y: cy + 2, doorX, doorY: cy + 1 };
+  }
+  const doorX = cx;
+  const x = cx - (1 + (seed % Math.max(1, w - 2)));
+  return { x, y: cy - h - 1, doorX, doorY: cy - 1 };
+}
+
+function tryPlaceAdminPocketSideRoom(
+  world: World,
+  rooms: Room[],
+  spec: ProceduralFloorSpec,
+  cx: number,
+  cy: number,
+  dir: 0 | 1 | 2 | 3,
+  serial: number,
+): Room | null {
+  const corridorIdx = world.idx(cx, cy);
+  if (world.cells[corridorIdx] !== Cell.FLOOR || world.roomMap[corridorIdx] >= 0) return null;
+  const type = ADMIN_POCKET_CLUSTER_ROOM_TYPES[(serial + dir) % ADMIN_POCKET_CLUSTER_ROOM_TYPES.length];
+  const size = adminPocketClusterRoomSize(type, spec.seed + serial * 131 + dir * 17);
+  const p = adminPocketSideRoomPlacement(cx, cy, dir, size.w, size.h, spec.seed + serial * 19 + dir);
+  if (p.x < 4 || p.y < 4 || p.x + size.w + 4 >= W || p.y + size.h + 4 >= W) return null;
+  const doorIdx = world.idx(p.doorX, p.doorY);
+  if (world.cells[doorIdx] !== Cell.WALL || world.hermoWall[doorIdx] || world.aptMask[doorIdx]) return null;
+  if (!canPlaceRoom(world, p.x, p.y, size.w, size.h)) return null;
+
+  const room = stampRoom(world, rooms.length, type, p.x, p.y, size.w, size.h, -1);
+  rooms.push(room);
+  decorateAdminClusterRoom(world, room, type, serial, spec);
+  placeDoorAt(world, p.doorX, p.doorY, room.id);
+  return room;
+}
+
+function collectAdminPocketCorridorAnchors(world: World, spec: ProceduralFloorSpec): AdminPocketCorridorAnchor[] {
+  const anchors: AdminPocketCorridorAnchor[] = [];
+  const dirs = [
+    [1, 0],
+    [-1, 0],
+    [0, 1],
+    [0, -1],
+  ] as const;
+  for (let y = 12; y < W - 12; y += 2) {
+    for (let x = 12; x < W - 12; x += 2) {
+      const ci = world.idx(x, y);
+      if (world.cells[ci] !== Cell.FLOOR || world.roomMap[ci] >= 0) continue;
+      if (world.features[ci] === Feature.LIFT_BUTTON || world.containerMap.has(ci)) continue;
+      for (let dir = 0; dir < dirs.length; dir++) {
+        const [dx, dy] = dirs[dir];
+        const wallIdx = world.idx(x + dx, y + dy);
+        const openIdx = world.idx(x - dx, y - dy);
+        if (world.cells[wallIdx] !== Cell.WALL || world.hermoWall[wallIdx] || world.aptMask[wallIdx]) continue;
+        if (world.cells[openIdx] === Cell.WALL && fieldHash01(spec.seed, x, y, dir + 0x606) < 0.55) continue;
+        anchors.push({
+          x,
+          y,
+          dir: dir as 0 | 1 | 2 | 3,
+          score: fieldHash01(spec.seed, x >> 2, y >> 2, dir + 0xa06) + anchors.length * 1e-8,
+        });
+      }
+    }
+  }
+  anchors.sort((a, b) => a.score - b.score);
+  return anchors;
+}
+
+function placeAdminPocketSideRoomClusters(world: World, rooms: Room[], spec: ProceduralFloorSpec): number {
+  const target = Math.min(124, 44
+    + spec.danger * 14
+    + (spec.anomalyId === 'smog' ? 14 : 0)
+    + (spec.anomalyId === 'mirror_run' ? 18 : 0));
+  const anchors = collectAdminPocketCorridorAnchors(world, spec);
+  const offsets = [
+    [0, 0],
+    [6, 0],
+    [-6, 0],
+    [0, 6],
+    [0, -6],
+    [11, 0],
+    [-11, 0],
+    [0, 11],
+    [0, -11],
+  ] as const;
+  let placed = 0;
+  for (let ai = 0; ai < anchors.length && placed < target; ai++) {
+    const anchor = anchors[ai];
+    const clusterTarget = 3 + ((spec.seed + ai) % 4);
+    let clusterPlaced = 0;
+    for (let oi = 0; oi < offsets.length && clusterPlaced < clusterTarget && placed < target; oi++) {
+      const [ox, oy] = offsets[(oi + ai) % offsets.length];
+      const cx = anchor.x + ox;
+      const cy = anchor.y + oy;
+      for (let turn = 0; turn < 4; turn++) {
+        const dir = ((anchor.dir + turn + oi) & 3) as 0 | 1 | 2 | 3;
+        const room = tryPlaceAdminPocketSideRoom(world, rooms, spec, cx, cy, dir, placed);
+        if (!room) continue;
+        placed++;
+        clusterPlaced++;
+        break;
+      }
+    }
+  }
+  if (placed > 0) {
+    world.markCellsDirty();
+    world.markWallTexDirty();
+    world.markFloorTexDirty();
+    world.markFeaturesDirty(true);
+  }
+  return placed;
+}
+
+function nextProceduralRoomId(world: World): number {
+  let id = world.rooms.length;
+  while (world.rooms[id]) id++;
+  return id;
+}
+
+function fallbackAdminMicroRoomType(serial: number): RoomType {
+  const cycle = [
+    RoomType.OFFICE,
+    RoomType.STORAGE,
+    RoomType.OFFICE,
+    RoomType.BATHROOM,
+    RoomType.COMMON,
+    RoomType.KITCHEN,
+    RoomType.MEDICAL,
+    RoomType.STORAGE,
+  ] as const;
+  return cycle[serial % cycle.length];
+}
+
+function fallbackAdminMicroRoomSize(type: RoomType, serial: number): { w: number; h: number } {
+  if (type === RoomType.BATHROOM) return { w: 3 + (serial & 1), h: 3 + ((serial >>> 1) & 1) };
+  if (type === RoomType.KITCHEN) return { w: 5 + (serial % 2), h: 4 + ((serial >>> 1) % 2) };
+  if (type === RoomType.MEDICAL) return { w: 5 + (serial % 3), h: 4 + ((serial >>> 2) % 2) };
+  if (type === RoomType.COMMON) return { w: 6 + (serial % 3), h: 4 + ((serial >>> 2) % 3) };
+  if (type === RoomType.STORAGE) return { w: 4 + (serial % 3), h: 3 + ((serial >>> 1) % 3) };
+  return { w: 5 + (serial % 4), h: 4 + ((serial >>> 2) % 3) };
+}
+
+function decorateFallbackAdminMicroRoom(world: World, room: Room, type: RoomType, serial: number, spec: ProceduralFloorSpec): void {
+  if (type === RoomType.STORAGE) room.name = `Архивный шкаф-карман ${room.id}`;
+  else if (type === RoomType.BATHROOM) room.name = `Служебный туалет ${room.id}`;
+  else if (type === RoomType.KITCHEN) room.name = `Чайная в кармане ${room.id}`;
+  else if (type === RoomType.MEDICAL) room.name = `Пункт холодной помощи ${room.id}`;
+  else if (type === RoomType.COMMON) room.name = `Малая очередь ${room.id}`;
+  else room.name = `Малый кабинет ${room.id}`;
+
+  const floor = type === RoomType.BATHROOM || type === RoomType.MEDICAL
+    ? Tex.F_TILE
+    : type === RoomType.COMMON
+      ? Tex.F_RED_CARPET
+      : type === RoomType.STORAGE
+        ? Tex.F_MARBLE_TILE
+        : Tex.F_PARQUET;
+  applyRoomTexture(world, room, Tex.MARBLE, floor);
+  if (type === RoomType.OFFICE || type === RoomType.STORAGE) decorateAdminOfficeSlab(world, room, spec.seed + serial * 137);
+  else decorateProceduralRoom(world, room, spec);
+
+  const center = roomCenter(room);
+  const ci = world.idx(center.x, center.y);
+  if (world.cells[ci] === Cell.FLOOR && world.roomMap[ci] === room.id) {
+    world.features[ci] = type === RoomType.BATHROOM
+      ? Feature.SINK
+      : type === RoomType.KITCHEN
+        ? Feature.TABLE
+        : type === RoomType.MEDICAL
+          ? Feature.APPARATUS
+          : type === RoomType.COMMON
+            ? Feature.CHAIR
+            : Feature.DESK;
+  }
+}
+
+function tryPlaceFallbackAdminMicroRoom(
+  world: World,
+  rooms: Room[],
+  spec: ProceduralFloorSpec,
+  anchor: Room,
+  serial: number,
+): Room | null {
+  const type = fallbackAdminMicroRoomType(serial);
+  const size = fallbackAdminMicroRoomSize(type, serial);
+  const ac = roomCenter(anchor);
+  for (let attempt = 0; attempt < 96; attempt++) {
+    const salt = spec.seed ^ (serial * 0x45d9f3b) ^ (attempt * 0x27d4eb2d);
+    const side = salt & 3;
+    const gap = 3 + ((salt >>> 4) % 11);
+    let x = 0;
+    let y = 0;
+    if (side === 0) {
+      x = ac.x - Math.floor(size.w / 2) + (((salt >>> 8) % 11) - 5);
+      y = anchor.y - size.h - gap;
+    } else if (side === 1) {
+      x = ac.x - Math.floor(size.w / 2) + (((salt >>> 8) % 11) - 5);
+      y = anchor.y + anchor.h + gap;
+    } else if (side === 2) {
+      x = anchor.x - size.w - gap;
+      y = ac.y - Math.floor(size.h / 2) + (((salt >>> 8) % 11) - 5);
+    } else {
+      x = anchor.x + anchor.w + gap;
+      y = ac.y - Math.floor(size.h / 2) + (((salt >>> 8) % 11) - 5);
+    }
+    x = world.wrap(x);
+    y = world.wrap(y);
+    if (!canPlaceRoom(world, x, y, size.w, size.h)) continue;
+    const room = stampRoom(world, nextProceduralRoomId(world), type, x, y, size.w, size.h, -1);
+    rooms.push(room);
+    decorateFallbackAdminMicroRoom(world, room, type, serial, spec);
+    const cc = roomCenter(room);
+    carveCorridor(world, ac.x, ac.y, cc.x, cc.y);
+    return room;
+  }
+  return null;
+}
+
+function placeFallbackAdminMicroRooms(
+  world: World,
+  rooms: Room[],
+  spec: ProceduralFloorSpec,
+  adminRooms: readonly Room[],
+  alreadyPlaced: number,
+): number {
+  const target = 34
+    + spec.danger * 8
+    + (spec.anomalyId === 'hladon' ? 12 : 0)
+    + (spec.anomalyId === 'mirror_run' ? 12 : 0)
+    + (spec.majorityId === 'wild' ? 8 : 0);
+  if (alreadyPlaced >= target) return 0;
+  const anchors = adminRooms
+    .filter(room => room.w >= 7 && room.h >= 5)
+    .sort((a, b) => (b.w * b.h) - (a.w * a.h))
+    .slice(0, 12 + spec.danger * 2);
+  let placed = 0;
+  for (let i = alreadyPlaced; i < target && anchors.length > 0; i++) {
+    const anchor = anchors[(i * 5 + spec.ordinal + (spec.seed & 7)) % anchors.length];
+    if (tryPlaceFallbackAdminMicroRoom(world, rooms, spec, anchor, i)) placed++;
+  }
+  if (placed > 0) {
+    registerRouteCue(world, {
+      id: `procedural_${spec.key}_admin_micro_pockets`,
+      x: spawnCueX(anchors[0]),
+      y: spawnCueY(anchors[0]),
+      targetX: spawnCueX(anchors[anchors.length - 1]),
+      targetY: spawnCueY(anchors[anchors.length - 1]),
+      floor: spec.baseFloor,
+      roomId: anchors[0]?.id,
+      targetRoomId: anchors[anchors.length - 1]?.id,
+      zoneId: world.zoneMap[world.idx(roomCenter(anchors[0]).x, roomCenter(anchors[0]).y)],
+      label: 'мелкие кабинеты',
+      hint: 'крупные приемные залы обросли тесными служебными карманами',
+      targetName: anchors[anchors.length - 1]?.name,
+      color: '#d7c899',
+      tags: ['procedural_floor', 'admin_pockets', 'micro_rooms', 'document_landmark'],
+      toneSeed: (spec.seed ^ 0xad11) >>> 0,
+      radius: 10,
+      targetRadius: 5,
+      cooldownSec: 55,
+      heardText: 'За стойкой дробно хлопают мелкие двери. Административный карман не заканчивается одним залом.',
+      followedText: 'Мелкие кабинеты дали обход, тайник и место переждать холод.',
+      ignoredText: 'Служебные карманы остались сбоку, за рядом одинаковых дверей.',
+    });
+    world.markCellsDirty();
+    world.markWallTexDirty();
+    world.markFloorTexDirty();
+    world.markFeaturesDirty(true);
+  }
+  return placed;
+}
+
+function spawnCueX(room: Room | undefined): number {
+  return room ? roomCenter(room).x + 0.5 : W / 2 + 0.5;
+}
+
+function spawnCueY(room: Room | undefined): number {
+  return room ? roomCenter(room).y + 0.5 : W / 2 + 0.5;
+}
+
 function applyAdminPockets(world: World, rooms: Room[], spec: ProceduralFloorSpec, spawnX: number, spawnY: number): void {
   if (spec.geometryId !== 'admin_pockets') return;
+  const sideRooms = placeAdminPocketSideRoomClusters(world, rooms, spec);
   const adminRooms = rooms
     .filter(room => room.id !== 0 && room.w >= 6 && room.h >= 5)
     .sort((a, b) => (b.w * b.h) - (a.w * a.h));
+  placeFallbackAdminMicroRooms(world, rooms, spec, adminRooms, sideRooms);
   const desiredQueueRooms = 4 + Math.floor(spec.danger / 2);
   const queueRooms = adminRooms
     .filter(room => room.type === RoomType.COMMON || room.type === RoomType.CORRIDOR || room.type === RoomType.SMOKING)
@@ -6029,9 +8584,12 @@ function placeLiquidatorFixture(world: World, x: number, y: number, feature: Fea
 }
 
 function stampLiquidatorCheckpoint(world: World, checkpoint: LiquidatorCheckpoint, spec: ProceduralFloorSpec, index: number): void {
-  checkpoint.room.name = index === 0
+  const checkpointName = index === 0
     ? `Главный пост ликвидаторов ${checkpoint.room.id}`
     : `Контрольный пост ликвидаторов ${checkpoint.room.id}`;
+  checkpoint.room.name = archiveRoomHasLandmarkName(checkpoint.room)
+    ? `${checkpoint.room.name}: ${checkpointName}`
+    : checkpointName;
   setLiquidatorCheckpointFloor(world, checkpoint.x, checkpoint.y, spec.seed ^ (index * 0x4c11));
   placeLiquidatorFixture(world, checkpoint.x, checkpoint.y, Feature.SCREEN);
   placeLiquidatorFixture(world, checkpoint.x + 1, checkpoint.y, Feature.DESK);
@@ -6425,6 +8983,20 @@ const SUMP_PROXY_SIZE = 32;
 const SUMP_PROXY_CELL = W / SUMP_PROXY_SIZE;
 const SUMP_REPAIR_ROOM_PREFIX = 'Ремонтный пролет эстакады';
 const SUMP_STASH_ROOM_PREFIX = 'Сухой остров черной воды';
+const SUMP_STATION_ROOM_PREFIX = 'Сухая станция эстакады';
+const SUMP_MICRO_ROOM_PREFIX = 'Боковая будка эстакады';
+const SUMP_LIFE_STATION_ROOM_PREFIX = 'Клеточная станция эстакады';
+const SUMP_LIFE_MICRO_ROOM_PREFIX = 'Клеточная будка эстакады';
+const SUMP_EDGE_BOOTH_ROOM_PREFIX = 'Боковой отсек эстакады';
+const SUMP_HQ_RESERVE_RADIUS2 = 96 * 96;
+const SUMP_NONE_STATION_BONUS = 20;
+const SUMP_NONE_MICRO_BONUS = 70;
+const SUMP_FRACTAL_STATION_BONUS = 14;
+const SUMP_FRACTAL_MICRO_BONUS = 38;
+const SUMP_MYCELIUM_STATION_BONUS = 14;
+const SUMP_MYCELIUM_MICRO_BONUS = 64;
+const SUMP_DEEP_STATION_BONUS = 8;
+const SUMP_DEEP_MICRO_BONUS = 32;
 
 interface SumpProxyComponents {
   dry: Uint8Array;
@@ -6636,15 +9208,16 @@ function createSumpPlatformRoom(
   targetX: number,
   targetY: number,
   outsideWater: boolean,
+  sizeOverride?: { w: number; h: number },
 ): { room: Room; doorOutside: { x: number; y: number } } | null {
   const gx = proxyIdx % SUMP_PROXY_SIZE;
   const gy = (proxyIdx / SUMP_PROXY_SIZE) | 0;
-  const w = Math.max(7, Math.min(11, 7 + Math.floor(sumpHash01(spec.seed, proxyIdx, 0x77, 0x11) * 5)));
-  const h = Math.max(6, Math.min(9, 6 + Math.floor(sumpHash01(spec.seed, proxyIdx, 0x78, 0x12) * 4)));
+  const w = sizeOverride?.w ?? Math.max(7, Math.min(11, 7 + Math.floor(sumpHash01(spec.seed, proxyIdx, 0x77, 0x11) * 5)));
+  const h = sizeOverride?.h ?? Math.max(6, Math.min(9, 6 + Math.floor(sumpHash01(spec.seed, proxyIdx, 0x78, 0x12) * 4)));
   const baseX = Math.floor(gx * SUMP_PROXY_CELL + SUMP_PROXY_CELL / 2 - w / 2);
   const baseY = Math.floor(gy * SUMP_PROXY_CELL + SUMP_PROXY_CELL / 2 - h / 2);
 
-  for (let attempt = 0; attempt < 9; attempt++) {
+  for (let attempt = 0; attempt < 14; attempt++) {
     const ox = Math.floor((sumpHash01(spec.seed, proxyIdx, attempt, 0x31) - 0.5) * 18);
     const oy = Math.floor((sumpHash01(spec.seed, proxyIdx, attempt, 0x32) - 0.5) * 18);
     const x = clampSumpRoomStart(baseX + ox, w);
@@ -6675,6 +9248,21 @@ function findNearestSumpWater(world: World, x: number, y: number, maxRadius: num
         const wy = world.wrap(y + dy);
         const ci = world.idx(wx, wy);
         if (world.cells[ci] === Cell.WATER && (!reachable || reachable[ci])) return { x: wx, y: wy };
+      }
+    }
+  }
+  return null;
+}
+
+function findNearestSumpDryReachable(world: World, x: number, y: number, maxRadius: number, reachable: Uint8Array): { x: number; y: number } | null {
+  for (let r = 2; r <= maxRadius; r++) {
+    for (let dy = -r; dy <= r; dy++) {
+      for (let dx = -r; dx <= r; dx++) {
+        if (Math.abs(dx) !== r && Math.abs(dy) !== r) continue;
+        const wx = world.wrap(x + dx);
+        const wy = world.wrap(y + dy);
+        const ci = world.idx(wx, wy);
+        if (reachable[ci] && isSumpDryWalkable(world, ci)) return { x: wx, y: wy };
       }
     }
   }
@@ -6816,6 +9404,506 @@ function carveSumpBand(world: World, spec: ProceduralFloorSpec, line: number, ho
   }
 }
 
+function canCarveSumpAmbientCell(world: World, idx: number): boolean {
+  if (world.cells[idx] !== Cell.WALL) return false;
+  if (world.doors.has(idx) || world.hermoWall[idx] || world.aptMask[idx]) return false;
+  if (world.roomMap[idx] >= 0 || world.containerMap.has(idx)) return false;
+  if (world.features[idx] === Feature.LIFT_BUTTON) return false;
+  return true;
+}
+
+function carveSumpAmbientCell(world: World, spec: ProceduralFloorSpec, x: number, y: number, water: boolean): number {
+  const idx = world.idx(x, y);
+  if (!canCarveSumpAmbientCell(world, idx)) return 0;
+  const cell = water ? Cell.WATER : Cell.FLOOR;
+  const floor = water ? Tex.F_WATER : Tex.F_CONCRETE;
+  const changed = world.cells[idx] !== cell || world.floorTex[idx] !== floor || world.wallTex[idx] !== Tex.PIPE;
+  world.cells[idx] = cell;
+  world.floorTex[idx] = floor;
+  world.wallTex[idx] = Tex.PIPE;
+  world.roomMap[idx] = -1;
+  if (world.features[idx] !== Feature.LIFT_BUTTON) world.features[idx] = Feature.NONE;
+  if (water && ((x * 19 + y * 23 + spec.seed) & 63) === 0) {
+    stampSurfaceSplat(world, x, y, 0.5, 0.5, 0.28, 0.38, spec.seed ^ (x * 37 + y * 11), 28, 48, 45, false);
+  }
+  return changed ? 1 : 0;
+}
+
+function carveSumpAmbientField(world: World, spec: ProceduralFloorSpec): number {
+  const proxy = buildSumpProxyComponents(spec);
+  let changed = 0;
+  for (let cell = 0; cell < SUMP_PROXY_SIZE * SUMP_PROXY_SIZE; cell++) {
+    const dry = proxy.dry[cell] === 1;
+    const cx = Math.floor((cell % SUMP_PROXY_SIZE) * SUMP_PROXY_CELL + SUMP_PROXY_CELL / 2);
+    const cy = Math.floor(((cell / SUMP_PROXY_SIZE) | 0) * SUMP_PROXY_CELL + SUMP_PROXY_CELL / 2);
+    const radius = dry ? 8 + (spec.danger >> 1) : 11 + (spec.danger >> 1);
+    const r2 = radius * radius;
+    for (let dy = -radius; dy <= radius; dy++) {
+      for (let dx = -radius; dx <= radius; dx++) {
+        const d2 = dx * dx + dy * dy;
+        if (d2 > r2) continue;
+        const n = sumpHash01(spec.seed, cell + dx * 31, dy * 17, dry ? 0xa31 : 0xa32);
+        if (dry) {
+          const lane = Math.abs(dx) <= 1 || Math.abs(dy) <= 1 || (Math.abs(dx - dy) <= 1 && n > 0.64);
+          const pad = d2 < r2 * 0.38 && n > 0.7;
+          if (!lane && !pad) continue;
+          changed += carveSumpAmbientCell(world, spec, cx + dx, cy + dy, false);
+        } else {
+          if (d2 > r2 * (0.78 + n * 0.22)) continue;
+          changed += carveSumpAmbientCell(world, spec, cx + dx, cy + dy, true);
+        }
+      }
+    }
+  }
+  return changed;
+}
+
+type SumpServiceScale = 'mid' | 'micro';
+
+function sumpServiceRoomType(scale: SumpServiceScale, serial: number): RoomType {
+  if (scale === 'mid') {
+    return [RoomType.PRODUCTION, RoomType.STORAGE, RoomType.COMMON, RoomType.OFFICE][serial % 4];
+  }
+  return [RoomType.STORAGE, RoomType.OFFICE, RoomType.STORAGE, RoomType.COMMON, RoomType.PRODUCTION][serial % 5];
+}
+
+function sumpServiceRoomSize(spec: ProceduralFloorSpec, proxyIdx: number, serial: number, scale: SumpServiceScale): { w: number; h: number } {
+  if (scale === 'mid') {
+    return {
+      w: 12 + Math.floor(sumpHash01(spec.seed, proxyIdx, serial, 0x8a) * 9),
+      h: 8 + Math.floor(sumpHash01(spec.seed, proxyIdx, serial, 0x8b) * 7),
+    };
+  }
+  return {
+    w: 5 + Math.floor(sumpHash01(spec.seed, proxyIdx, serial, 0x8c) * 6),
+    h: 4 + Math.floor(sumpHash01(spec.seed, proxyIdx, serial, 0x8d) * 5),
+  };
+}
+
+function sumpServiceRoomName(scale: SumpServiceScale, type: RoomType, serial: number): string {
+  const prefix = scale === 'mid' ? SUMP_STATION_ROOM_PREFIX : SUMP_MICRO_ROOM_PREFIX;
+  const suffix = type === RoomType.PRODUCTION
+    ? 'привод'
+    : type === RoomType.OFFICE
+      ? 'журнал'
+      : type === RoomType.COMMON
+        ? 'дежурка'
+        : 'склад';
+  return `${prefix} ${serial + 1}: ${suffix}`;
+}
+
+function sumpCellReservedForHq(world: World, spec: ProceduralFloorSpec, x: number, y: number): boolean {
+  const dominantOwner = factionToTerritoryOwner(majorityById(spec.majorityId).npcFaction);
+  for (const owner of PROCEDURAL_HQ_OWNERS) {
+    const base = proceduralHqBase(owner);
+    const radius2 = owner === dominantOwner ? SUMP_HQ_RESERVE_RADIUS2 * 1.35 : SUMP_HQ_RESERVE_RADIUS2;
+    if (world.dist2(x, y, base.x, base.y) <= radius2) return true;
+  }
+  return false;
+}
+
+function decorateSumpServiceRoom(world: World, room: Room, spec: ProceduralFloorSpec, scale: SumpServiceScale, serial: number): void {
+  const wall = room.type === RoomType.PRODUCTION ? Tex.METAL : Tex.PIPE;
+  const floor = scale === 'mid' || room.type === RoomType.PRODUCTION ? Tex.F_CONCRETE : Tex.F_TILE;
+  applyRoomTexture(world, room, wall, floor);
+  decorateRoom(world, room);
+  decorateProceduralRoom(world, room, spec);
+  const center = roomCenter(room);
+  const ci = world.idx(center.x, center.y);
+  if (world.cells[ci] === Cell.FLOOR) {
+    world.features[ci] = room.type === RoomType.OFFICE
+      ? Feature.SCREEN
+      : room.type === RoomType.COMMON
+        ? Feature.TABLE
+        : room.type === RoomType.PRODUCTION
+          ? Feature.MACHINE
+          : Feature.SHELF;
+  }
+  if ((serial & 3) === 0) {
+    stampSurfaceSplat(world, center.x, center.y, 0.5, 0.5, scale === 'mid' ? 0.54 : 0.34, 0.48, spec.seed ^ serial * 911, 64, 84, 76, false);
+  }
+}
+
+function decorateSumpLifeRoom(world: World, room: Room, spec: ProceduralFloorSpec, scale: SumpServiceScale, serial: number): void {
+  decorateSumpServiceRoom(world, room, spec, scale, serial);
+  const center = roomCenter(room);
+  const ci = world.idx(center.x, center.y);
+  if (world.cells[ci] === Cell.FLOOR) {
+    world.features[ci] = scale === 'mid' ? Feature.APPARATUS : Feature.SCREEN;
+    world.floorTex[ci] = Tex.F_VOID;
+    stampSurfaceSplat(world, center.x, center.y, 0.5, 0.5, scale === 'mid' ? 0.72 : 0.42, 0.58, spec.seed ^ serial * 1201, 42, 198, 146, false);
+  }
+}
+
+function sumpLifeRoomType(scale: SumpServiceScale, serial: number): RoomType {
+  if (scale === 'mid') return [RoomType.PRODUCTION, RoomType.COMMON, RoomType.STORAGE, RoomType.OFFICE][serial % 4];
+  return [RoomType.STORAGE, RoomType.OFFICE, RoomType.STORAGE, RoomType.COMMON][serial % 4];
+}
+
+function sumpLifeRoomSize(spec: ProceduralFloorSpec, proxyIdx: number, serial: number, scale: SumpServiceScale): { w: number; h: number } {
+  if (scale === 'mid') {
+    return {
+      w: 14 + Math.floor(sumpHash01(spec.seed, proxyIdx, serial, 0xa4) * 8),
+      h: 9 + Math.floor(sumpHash01(spec.seed, proxyIdx, serial, 0xa5) * 6),
+    };
+  }
+  return {
+    w: 6 + Math.floor(sumpHash01(spec.seed, proxyIdx, serial, 0xa6) * 5),
+    h: 5 + Math.floor(sumpHash01(spec.seed, proxyIdx, serial, 0xa7) * 4),
+  };
+}
+
+function registerSumpLifeRaftCue(world: World, spec: ProceduralFloorSpec, room: Room, cluster: number): void {
+  const c = roomCenter(room);
+  registerRouteCue(world, {
+    id: `procedural_${spec.key}_sump_life_raft_${cluster}`,
+    x: c.x + 0.5,
+    y: c.y + 0.5,
+    targetX: c.x + 0.5,
+    targetY: c.y + 0.5,
+    floor: spec.baseFloor,
+    roomId: room.id,
+    targetRoomId: room.id,
+    zoneId: world.zoneMap[world.idx(c.x, c.y)],
+    label: 'клеточная насосная',
+    hint: 'сухая станция держит клеточное поле над черной водой; рядом идут короткие будки обхода',
+    targetName: 'клеточная станция эстакады',
+    color: '#6ee0b6',
+    tags: ['procedural_floor', 'sump_causeways', 'conway_life', 'cellular', 'mid_geometry', 'micro_geometry', 'route_pressure'],
+    toneSeed: spec.seed ^ cluster * 1543 ^ 0x5a6d,
+    radius: 15,
+    targetRadius: 5,
+    cooldownSec: 45,
+    heardText: 'Над черной водой щелкает клеточная насосная. Сухие будки расходятся от нее короткими обходами.',
+    followedText: 'Клеточная станция держит сухую развязку среди эстакад.',
+    ignoredText: 'Клеточная насосная осталась щелкать под шумом воды.',
+  });
+}
+
+function connectSumpServiceRoom(
+  world: World,
+  spec: ProceduralFloorSpec,
+  placed: { room: Room; doorOutside: { x: number; y: number } },
+  reachable: Uint8Array,
+  spawnX: number,
+  spawnY: number,
+  scale: SumpServiceScale,
+): void {
+  const target = findNearestSumpDryReachable(
+    world,
+    placed.doorOutside.x,
+    placed.doorOutside.y,
+    scale === 'mid' ? 160 : 96,
+    reachable,
+  ) ?? { x: Math.floor(spawnX), y: Math.floor(spawnY) };
+  carveSumpRoute(world, spec, placed.doorOutside.x, placed.doorOutside.y, target.x, target.y, false, scale === 'mid' ? 1 : 0);
+}
+
+function sumpEdgeBoothType(serial: number): RoomType {
+  return [RoomType.STORAGE, RoomType.OFFICE, RoomType.BATHROOM, RoomType.COMMON, RoomType.STORAGE, RoomType.PRODUCTION][serial % 6];
+}
+
+function sumpEdgeBoothSize(type: RoomType, seed: number): { w: number; h: number } {
+  if (type === RoomType.BATHROOM) return { w: 4 + (seed & 1), h: 4 + ((seed >>> 1) & 1) };
+  if (type === RoomType.PRODUCTION) return { w: 7 + (seed % 4), h: 5 + ((seed >>> 2) % 3) };
+  if (type === RoomType.COMMON) return { w: 6 + (seed % 4), h: 5 + ((seed >>> 3) % 3) };
+  return { w: 5 + (seed % 4), h: 4 + ((seed >>> 4) % 3) };
+}
+
+function sumpEdgeBoothName(type: RoomType, serial: number): string {
+  const suffix = type === RoomType.PRODUCTION
+    ? 'насос'
+    : type === RoomType.BATHROOM
+      ? 'санузел'
+      : type === RoomType.OFFICE
+        ? 'журнал'
+        : type === RoomType.COMMON
+          ? 'дежурка'
+          : 'шкаф';
+  return `${SUMP_EDGE_BOOTH_ROOM_PREFIX} ${serial + 1}: ${suffix}`;
+}
+
+function decorateSumpEdgeBooth(world: World, room: Room, spec: ProceduralFloorSpec, serial: number): void {
+  const floor = room.type === RoomType.BATHROOM ? Tex.F_TILE : Tex.F_CONCRETE;
+  applyRoomTexture(world, room, room.type === RoomType.PRODUCTION ? Tex.METAL : Tex.PIPE, floor);
+  decorateRoom(world, room);
+  decorateProceduralRoom(world, room, spec);
+  const center = roomCenter(room);
+  const ci = world.idx(center.x, center.y);
+  if (world.cells[ci] !== Cell.FLOOR) return;
+  world.features[ci] = room.type === RoomType.PRODUCTION
+    ? Feature.MACHINE
+    : room.type === RoomType.OFFICE
+      ? Feature.SCREEN
+      : room.type === RoomType.BATHROOM
+        ? Feature.SINK
+        : room.type === RoomType.COMMON
+          ? Feature.TABLE
+          : Feature.SHELF;
+  if ((serial & 7) === 0) {
+    stampSurfaceSplat(world, center.x, center.y, 0.5, 0.5, 0.28, 0.42, spec.seed ^ serial * 1307, 56, 76, 70, false);
+  }
+}
+
+function addSumpServiceRoomsForScale(
+  world: World,
+  rooms: Room[],
+  spec: ProceduralFloorSpec,
+  spawnX: number,
+  spawnY: number,
+  scale: SumpServiceScale,
+): number {
+  const conveyorBonus = spec.anomalyId === 'conveyor_sorter' ? (scale === 'mid' ? 12 : 48) : 0;
+  const fractalBonus = spec.anomalyId === 'fractal_floor'
+    ? (scale === 'mid' ? SUMP_FRACTAL_STATION_BONUS : SUMP_FRACTAL_MICRO_BONUS)
+    : 0;
+  const badAppleBonus = spec.anomalyId === 'bad_apple_world' ? (scale === 'mid' ? 30 : 120) : 0;
+  const wildBonus = spec.majorityId === 'wild' ? (scale === 'mid' ? 8 : 32) : 0;
+  const myceliumBonus = spec.anomalyId === 'mushroom_mycelium'
+    ? (scale === 'mid' ? SUMP_MYCELIUM_STATION_BONUS : SUMP_MYCELIUM_MICRO_BONUS)
+    : 0;
+  const deepBonus = spec.depth >= 40
+    ? (scale === 'mid' ? SUMP_DEEP_STATION_BONUS : SUMP_DEEP_MICRO_BONUS)
+    : 0;
+  const noAnomalyBonus = spec.anomalyId === 'none'
+    ? (scale === 'mid' ? SUMP_NONE_STATION_BONUS : SUMP_NONE_MICRO_BONUS)
+    : 0;
+  const railBonus = spec.anomalyId === 'rail_trains' ? (scale === 'mid' ? 10 : 44) : 0;
+  const target = scale === 'mid'
+    ? 28 + spec.danger * 6 + conveyorBonus + fractalBonus + badAppleBonus + wildBonus + myceliumBonus + deepBonus + noAnomalyBonus + railBonus
+    : 112 + spec.danger * 16 + conveyorBonus + fractalBonus + badAppleBonus + wildBonus + myceliumBonus + deepBonus + noAnomalyBonus + railBonus;
+  const candidates = allSortedSumpProxyCells(spec, scale === 'mid' ? 0x920 : 0x921);
+  let reachable = reachableSumpDryCells(world, spawnX, spawnY);
+  let placed = 0;
+  for (const cell of candidates) {
+    if (placed >= target) break;
+    const center = {
+      x: (cell % SUMP_PROXY_SIZE) * SUMP_PROXY_CELL + SUMP_PROXY_CELL / 2,
+      y: ((cell / SUMP_PROXY_SIZE) | 0) * SUMP_PROXY_CELL + SUMP_PROXY_CELL / 2,
+    };
+    const minDist2 = scale === 'mid' ? 74 * 74 : 42 * 42;
+    if (world.dist2(spawnX, spawnY, center.x, center.y) < minDist2) continue;
+    if (sumpCellReservedForHq(world, spec, center.x, center.y)) continue;
+    const type = sumpServiceRoomType(scale, placed);
+    const size = sumpServiceRoomSize(spec, cell, placed, scale);
+    const created = createSumpPlatformRoom(
+      world,
+      rooms,
+      spec,
+      cell,
+      sumpServiceRoomName(scale, type, placed),
+      type,
+      Math.floor(spawnX),
+      Math.floor(spawnY),
+      false,
+      size,
+    );
+    if (!created) continue;
+    decorateSumpServiceRoom(world, created.room, spec, scale, placed);
+    connectSumpServiceRoom(world, spec, created, reachable, spawnX, spawnY, scale);
+    placed++;
+    if ((placed & 7) === 0) reachable = reachableSumpDryCells(world, spawnX, spawnY);
+  }
+  return placed;
+}
+
+function addSumpCausewayServiceRooms(
+  world: World,
+  rooms: Room[],
+  spec: ProceduralFloorSpec,
+  spawnX: number,
+  spawnY: number,
+): void {
+  const mid = addSumpServiceRoomsForScale(world, rooms, spec, spawnX, spawnY, 'mid');
+  const micro = addSumpServiceRoomsForScale(world, rooms, spec, spawnX, spawnY, 'micro');
+  if (mid + micro <= 0) return;
+  world.markCellsDirty();
+  world.markWallTexDirty();
+  world.markFloorTexDirty();
+  world.markFeaturesDirty(true);
+}
+
+function sumpEdgeBoothTarget(spec: ProceduralFloorSpec): number {
+  return 72 +
+    spec.danger * 12 +
+    (spec.anomalyId === 'none' ? 42 : 0) +
+    (spec.depth >= 40 ? 24 : 0) +
+    (spec.anomalyId === 'conveyor_sorter' ? 18 : 0) +
+    (spec.anomalyId === 'bad_apple_world' ? 42 : 0) +
+    (spec.anomalyId === 'mushroom_mycelium' ? 24 : 0) +
+    (spec.anomalyId === 'fractal_floor' ? 20 : 0) +
+    (spec.anomalyId === 'rail_trains' ? 16 : 0);
+}
+
+function tryPlaceSumpEdgeBooth(
+  world: World,
+  rooms: Room[],
+  spec: ProceduralFloorSpec,
+  route: { x: number; y: number },
+  serial: number,
+): Room | null {
+  const seed = spec.seed ^ Math.imul(serial + 1, 0x45d9f3b);
+  const type = sumpEdgeBoothType(serial);
+  const size = sumpEdgeBoothSize(type, seed);
+  const dirs = [0, 1, 2, 3].sort((a, b) =>
+    sumpHash01(seed, a, serial, 0x65) - sumpHash01(seed, b, serial, 0x65));
+  for (const dir of dirs) {
+    const gap = 3 + Math.floor(sumpHash01(seed, dir, serial, 0x66) * 7);
+    const jitter = Math.floor((sumpHash01(seed, dir, serial, 0x67) - 0.5) * 12);
+    let x = Math.floor(route.x - size.w / 2);
+    let y = Math.floor(route.y - size.h / 2);
+    if (dir === 0) {
+      x = route.x + gap;
+      y += jitter;
+    } else if (dir === 1) {
+      x = route.x - gap - size.w;
+      y += jitter;
+    } else if (dir === 2) {
+      y = route.y + gap;
+      x += jitter;
+    } else {
+      y = route.y - gap - size.h;
+      x += jitter;
+    }
+    x = clampSumpRoomStart(x, size.w);
+    y = clampSumpRoomStart(y, size.h);
+    if (sumpCellReservedForHq(world, spec, x + size.w / 2, y + size.h / 2)) continue;
+    if (!canPlaceSumpPlatform(world, x, y, size.w, size.h)) continue;
+    const room = stampRoom(world, world.rooms.length, type, x, y, size.w, size.h, -1);
+    room.name = sumpEdgeBoothName(type, serial);
+    applyRoomTexture(world, room, Tex.PIPE, Tex.F_CONCRETE);
+    carveSumpMoat(world, room, spec);
+    const doorOutside = placeSumpDoorToward(world, room, route.x, route.y, false, spec);
+    if (!doorOutside) continue;
+    carveSumpRoute(world, spec, doorOutside.x, doorOutside.y, route.x, route.y, false, 0);
+    decorateSumpEdgeBooth(world, room, spec, serial);
+    rooms.push(room);
+    return room;
+  }
+  return null;
+}
+
+function addSumpEdgeBoothRooms(
+  world: World,
+  rooms: Room[],
+  spec: ProceduralFloorSpec,
+  spawnX: number,
+  spawnY: number,
+): number {
+  if (spec.geometryId !== 'sump_causeways') return 0;
+  const target = sumpEdgeBoothTarget(spec);
+  const candidates = allSortedSumpProxyCells(spec, 0x932);
+  let reachable = reachableSumpDryCells(world, spawnX, spawnY);
+  let placed = 0;
+  for (const cell of candidates) {
+    if (placed >= target) break;
+    const center = {
+      x: (cell % SUMP_PROXY_SIZE) * SUMP_PROXY_CELL + SUMP_PROXY_CELL / 2,
+      y: ((cell / SUMP_PROXY_SIZE) | 0) * SUMP_PROXY_CELL + SUMP_PROXY_CELL / 2,
+    };
+    if (world.dist2(spawnX, spawnY, center.x, center.y) < 52 * 52) continue;
+    if (sumpCellReservedForHq(world, spec, center.x, center.y)) continue;
+    const route = findNearestSumpDryReachable(world, center.x, center.y, 84, reachable);
+    if (!route) continue;
+    if (!tryPlaceSumpEdgeBooth(world, rooms, spec, route, placed)) continue;
+    placed++;
+    if ((placed & 15) === 0) reachable = reachableSumpDryCells(world, spawnX, spawnY);
+  }
+  if (placed > 0) {
+    world.markCellsDirty();
+    world.markWallTexDirty();
+    world.markFloorTexDirty();
+    world.markFeaturesDirty(true);
+  }
+  return placed;
+}
+
+function addSumpConwayLifeRaftClusters(
+  world: World,
+  rooms: Room[],
+  spec: ProceduralFloorSpec,
+  spawnX: number,
+  spawnY: number,
+): void {
+  if (spec.geometryId !== 'sump_causeways' || spec.anomalyId !== 'conway_life') return;
+  const targetClusters = 18 + spec.danger * 3;
+  const satellitesPerCluster = spec.danger >= 5 ? 3 : 2;
+  const offsets = [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [-1, 1], [1, -1], [-1, -1]] as const;
+  const candidates = allSortedSumpProxyCells(spec, 0x985);
+  let reachable = reachableSumpDryCells(world, spawnX, spawnY);
+  let clusters = 0;
+  let placedRooms = 0;
+
+  for (const cell of candidates) {
+    if (clusters >= targetClusters) break;
+    const gx = cell % SUMP_PROXY_SIZE;
+    const gy = (cell / SUMP_PROXY_SIZE) | 0;
+    const center = {
+      x: gx * SUMP_PROXY_CELL + SUMP_PROXY_CELL / 2,
+      y: gy * SUMP_PROXY_CELL + SUMP_PROXY_CELL / 2,
+    };
+    if (world.dist2(spawnX, spawnY, center.x, center.y) < 96 * 96) continue;
+    if (sumpCellReservedForHq(world, spec, center.x, center.y)) continue;
+
+    const midType = sumpLifeRoomType('mid', clusters);
+    const main = createSumpPlatformRoom(
+      world,
+      rooms,
+      spec,
+      cell,
+      `${SUMP_LIFE_STATION_ROOM_PREFIX} ${clusters + 1}`,
+      midType,
+      Math.floor(spawnX),
+      Math.floor(spawnY),
+      false,
+      sumpLifeRoomSize(spec, cell, clusters, 'mid'),
+    );
+    if (!main) continue;
+
+    decorateSumpLifeRoom(world, main.room, spec, 'mid', clusters);
+    connectSumpServiceRoom(world, spec, main, reachable, spawnX, spawnY, 'mid');
+    if (clusters < 3) registerSumpLifeRaftCue(world, spec, main.room, clusters + 1);
+    placedRooms++;
+
+    const localRooms = [main];
+    for (let i = 0; i < satellitesPerCluster; i++) {
+      const offset = offsets[(clusters + i * 3) % offsets.length];
+      const proxy = sumpProxyIndex(gx + offset[0], gy + offset[1]);
+      const px = (proxy % SUMP_PROXY_SIZE) * SUMP_PROXY_CELL + SUMP_PROXY_CELL / 2;
+      const py = ((proxy / SUMP_PROXY_SIZE) | 0) * SUMP_PROXY_CELL + SUMP_PROXY_CELL / 2;
+      if (sumpCellReservedForHq(world, spec, px, py)) continue;
+      const serial = clusters * satellitesPerCluster + i;
+      const micro = createSumpPlatformRoom(
+        world,
+        rooms,
+        spec,
+        proxy,
+        `${SUMP_LIFE_MICRO_ROOM_PREFIX} ${clusters + 1}.${i + 1}`,
+        sumpLifeRoomType('micro', serial),
+        main.doorOutside.x,
+        main.doorOutside.y,
+        false,
+        sumpLifeRoomSize(spec, proxy, serial, 'micro'),
+      );
+      if (!micro) continue;
+      decorateSumpLifeRoom(world, micro.room, spec, 'micro', serial);
+      carveSumpRoute(world, spec, micro.doorOutside.x, micro.doorOutside.y, main.doorOutside.x, main.doorOutside.y, false, i === 0 ? 1 : 0);
+      localRooms.push(micro);
+      placedRooms++;
+    }
+
+    if (localRooms.length >= 2) clusters++;
+    if ((clusters & 3) === 0) reachable = reachableSumpDryCells(world, spawnX, spawnY);
+  }
+
+  if (placedRooms > 0) {
+    world.markCellsDirty();
+    world.markWallTexDirty();
+    world.markFloorTexDirty();
+    world.markFeaturesDirty(true);
+  }
+}
+
 function addSumpPercolationRooms(
   world: World,
   rooms: Room[],
@@ -6897,7 +9985,13 @@ function applySumpCauseways(world: World, rooms: Room[], spec: ProceduralFloorSp
     });
   const sourceRooms = anchors.length > 0 ? anchors : rooms;
   if (sourceRooms.length === 0) return;
-  const lineCount = Math.min(4, 2 + Math.floor(spec.danger / 2));
+  const lineCount = Math.min(
+    spec.anomalyId === 'bad_apple_world' ? 7 : 6,
+    3 + Math.floor(spec.danger / 2) + (
+      spec.anomalyId === 'fractal_floor' || spec.anomalyId === 'mushroom_mycelium' || spec.anomalyId === 'bad_apple_world' || spec.depth >= 40 ? 1 : 0
+    ),
+  );
+  const ambientChanged = carveSumpAmbientField(world, spec);
 
   for (let i = 0; i < lineCount; i++) {
     const room = sourceRooms[(spec.seed + i * 17) % sourceRooms.length];
@@ -6907,7 +10001,16 @@ function applySumpCauseways(world: World, rooms: Room[], spec: ProceduralFloorSp
     carveSumpBand(world, spec, i, horizontal, coord);
     room.name = `${room.name} у черной воды`;
   }
+  addSumpCausewayServiceRooms(world, rooms, spec, spawnX, spawnY);
+  addSumpEdgeBoothRooms(world, rooms, spec, spawnX, spawnY);
+  addSumpConwayLifeRaftClusters(world, rooms, spec, spawnX, spawnY);
   addSumpPercolationRooms(world, rooms, spec, spawnX, spawnY);
+  if (ambientChanged > 0) {
+    world.markCellsDirty();
+    world.markWallTexDirty();
+    world.markFloorTexDirty();
+    world.markFeaturesDirty(true);
+  }
 }
 
 function serviceSpineFeature(step: number, line: number): Feature {
@@ -6922,6 +10025,10 @@ const SERVICE_SPINE_PROXY_SIZE = 128;
 const SERVICE_SPINE_PROXY_CELL = W / SERVICE_SPINE_PROXY_SIZE;
 const SERVICE_SPINE_START = 48;
 const SERVICE_SPINE_END = W - 49;
+const SERVICE_SPINE_STATION_BASE_TARGET = 14;
+const SERVICE_SPINE_SIDE_ROOM_BASE_TARGET = 44;
+const SERVICE_SPINE_STATION_MIN_SPACING = 44 * 44;
+const SERVICE_SPINE_MICRO_BAY_MIN_SPACING = 16 * 16;
 
 interface ServiceTensorField {
   cos: Float32Array;
@@ -6943,6 +10050,7 @@ interface ServiceSpineJunction {
 function carveServiceSpineCell(world: World, x: number, y: number): boolean {
   const ci = world.idx(x, y);
   if (world.cells[ci] === Cell.LIFT || world.hermoWall[ci] || world.aptMask[ci]) return false;
+  if (world.cells[ci] === Cell.DOOR || world.doors.has(ci)) world.removeDoorAt(ci);
   world.cells[ci] = Cell.FLOOR;
   world.floorTex[ci] = Tex.F_CONCRETE;
   world.wallTex[ci] = Tex.METAL;
@@ -7218,6 +10326,7 @@ function serviceCellIsUtilityMutable(world: World, x: number, y: number): boolea
 function carveServiceUtilityCell(world: World, x: number, y: number): boolean {
   if (!serviceCellIsUtilityMutable(world, x, y)) return false;
   const ci = world.idx(x, y);
+  if (world.cells[ci] === Cell.DOOR || world.doors.has(ci)) world.removeDoorAt(ci);
   world.cells[ci] = Cell.FLOOR;
   world.floorTex[ci] = Tex.F_CONCRETE;
   world.wallTex[ci] = Tex.METAL;
@@ -7245,6 +10354,7 @@ function carveServiceRoomCell(world: World, room: Room, x: number, y: number): v
   const ci = world.idx(x, y);
   if (world.cells[ci] === Cell.LIFT || world.hermoWall[ci] || world.aptMask[ci] || world.containerMap.has(ci)) return;
   const wasWall = world.cells[ci] === Cell.WALL;
+  if (world.cells[ci] === Cell.DOOR || world.doors.has(ci)) world.removeDoorAt(ci);
   world.cells[ci] = Cell.FLOOR;
   world.floorTex[ci] = room.floorTex ?? Tex.F_CONCRETE;
   world.wallTex[ci] = room.wallTex ?? Tex.METAL;
@@ -7265,6 +10375,13 @@ function carveServiceRoomLine(world: World, room: Room, ax: number, ay: number, 
       else y = world.wrap(y + stepDir);
     }
   }
+}
+
+function ensureServiceRoomCenterSpine(world: World, room: Room): void {
+  const cx = room.x + Math.floor(room.w / 2);
+  const cy = room.y + Math.floor(room.h / 2);
+  for (let dx = 1; dx < room.w - 1; dx++) carveServiceRoomCell(world, room, room.x + dx, cy);
+  for (let dy = 1; dy < room.h - 1; dy++) carveServiceRoomCell(world, room, cx, room.y + dy);
 }
 
 function connectServiceSideChamber(world: World, room: Room, junction: ServiceSpineJunction): void {
@@ -7342,6 +10459,253 @@ function connectServiceTargetRooms(world: World, targetRooms: readonly Room[], t
   }
 }
 
+function serviceStationRoomType(spec: ProceduralFloorSpec, index: number): RoomType {
+  if (spec.majorityId === 'scientists') {
+    return [RoomType.MEDICAL, RoomType.OFFICE, RoomType.PRODUCTION, RoomType.STORAGE][index % 4];
+  }
+  if (spec.majorityId === 'liquidators') {
+    return [RoomType.PRODUCTION, RoomType.STORAGE, RoomType.OFFICE, RoomType.COMMON][index % 4];
+  }
+  if (spec.majorityId === 'cultists') {
+    return [RoomType.COMMON, RoomType.STORAGE, RoomType.SMOKING, RoomType.PRODUCTION][index % 4];
+  }
+  if (spec.majorityId === 'wild') {
+    return [RoomType.STORAGE, RoomType.COMMON, RoomType.SMOKING, RoomType.PRODUCTION][index % 4];
+  }
+  return [RoomType.COMMON, RoomType.KITCHEN, RoomType.STORAGE, RoomType.OFFICE][index % 4];
+}
+
+function serviceSupportRoomType(spec: ProceduralFloorSpec, index: number): RoomType {
+  if (spec.majorityId === 'scientists') {
+    return [RoomType.OFFICE, RoomType.MEDICAL, RoomType.STORAGE, RoomType.PRODUCTION, RoomType.BATHROOM][index % 5];
+  }
+  return [RoomType.STORAGE, RoomType.OFFICE, RoomType.BATHROOM, RoomType.KITCHEN, RoomType.COMMON][index % 5];
+}
+
+function serviceMicroBayType(spec: ProceduralFloorSpec, index: number): RoomType {
+  if (spec.majorityId === 'scientists') return [RoomType.OFFICE, RoomType.STORAGE, RoomType.MEDICAL, RoomType.PRODUCTION][index % 4];
+  return [RoomType.STORAGE, RoomType.OFFICE, RoomType.BATHROOM, RoomType.COMMON][index % 4];
+}
+
+function serviceRoomName(spec: ProceduralFloorSpec, type: RoomType, roomId: number, index: number, role: 'station' | 'support' | 'micro'): string {
+  const science = spec.majorityId === 'scientists';
+  if (role === 'station') {
+    if (science && type === RoomType.MEDICAL) return `Полевой пост НИИ сервисного штрека ${roomId}`;
+    if (type === RoomType.PRODUCTION) return `Станция насосов сервисного штрека ${roomId}`;
+    if (type === RoomType.OFFICE) return `Диспетчерская сервисного штрека ${roomId}`;
+    return `Сервисная станция штрека ${roomId}`;
+  }
+  if (role === 'micro') {
+    if (type === RoomType.BATHROOM) return `Микротуалет сервисного штрека ${roomId}`;
+    if (type === RoomType.MEDICAL) return `Пробный бокс сервисного штрека ${roomId}`;
+    if (type === RoomType.OFFICE) return `Пультовая ниша сервисного штрека ${roomId}`;
+    if (type === RoomType.PRODUCTION) return `Аппаратная ниша сервисного штрека ${roomId}`;
+    return `Кладовая ниша сервисного штрека ${roomId}`;
+  }
+  if (type === RoomType.BATHROOM) return `Туалет при станции штрека ${roomId}.${index}`;
+  if (type === RoomType.KITCHEN) return `Кипяток при станции штрека ${roomId}.${index}`;
+  if (type === RoomType.MEDICAL) return `Медбокс при станции штрека ${roomId}.${index}`;
+  if (type === RoomType.PRODUCTION) return `Аппаратная при станции штрека ${roomId}.${index}`;
+  if (type === RoomType.OFFICE) return `Сменная контора при станции штрека ${roomId}.${index}`;
+  return `Склад при станции штрека ${roomId}.${index}`;
+}
+
+function decorateServiceUtilityRoom(world: World, room: Room, spec: ProceduralFloorSpec, seed: number): void {
+  const wall = spec.majorityId === 'scientists' && (room.type === RoomType.MEDICAL || room.type === RoomType.OFFICE)
+    ? Tex.TILE_W
+    : Tex.METAL;
+  const floor = spec.majorityId === 'scientists' && room.type === RoomType.MEDICAL
+    ? Tex.F_TILE
+    : Tex.F_CONCRETE;
+  applyRoomTexture(world, room, wall, floor);
+  if (room.type === RoomType.PRODUCTION || room.type === RoomType.COMMON || room.type === RoomType.STORAGE) shapeRoom(world, room);
+  decorateRoom(world, room);
+  decorateProceduralRoom(world, room, spec);
+  ensureServiceRoomCenterSpine(world, room);
+  const feature = room.type === RoomType.BATHROOM
+    ? Feature.TOILET
+    : room.type === RoomType.KITCHEN
+      ? Feature.SINK
+      : room.type === RoomType.OFFICE
+        ? Feature.SCREEN
+        : room.type === RoomType.STORAGE
+          ? Feature.SHELF
+          : room.type === RoomType.MEDICAL
+            ? Feature.APPARATUS
+            : Feature.MACHINE;
+  placeRoomFeatureFallback(world, room, feature, Math.floor(room.w / 2), Math.floor(room.h / 2), seed);
+}
+
+function tryPlaceServiceSupportRoom(
+  world: World,
+  rooms: Room[],
+  spec: ProceduralFloorSpec,
+  hub: Room,
+  index: number,
+): Room | null {
+  const type = serviceSupportRoomType(spec, index);
+  const seed = spec.seed ^ (hub.id * 131 + index * 811);
+  const width = type === RoomType.BATHROOM ? 5 + (seed & 1) : 6 + Math.floor(serviceHash01(seed, hub.id, index, 109) * 8);
+  const height = type === RoomType.BATHROOM ? 5 + ((seed >> 1) & 1) : 5 + Math.floor(serviceHash01(seed, index, hub.id, 111) * 7);
+  const dirOrder = [0, 1, 2, 3].sort((a, b) =>
+    serviceHash01(seed, hub.id + index, a, 113) - serviceHash01(seed, hub.id + index, b, 113),
+  );
+
+  for (const dir of dirOrder) {
+    for (let gap = 3; gap <= 12; gap += 3) {
+      const lane = 2 + Math.floor(serviceHash01(seed, dir, gap, 115) * Math.max(2, dir < 2 ? hub.h - 4 : hub.w - 4));
+      const x = dir === 0
+        ? hub.x + hub.w + gap
+        : dir === 1
+          ? hub.x - gap - width
+          : hub.x + lane;
+      const y = dir === 2
+        ? hub.y + hub.h + gap
+        : dir === 3
+          ? hub.y - gap - height
+          : hub.y + lane;
+      if (x < 20 || y < 20 || x + width >= W - 20 || y + height >= W - 20) continue;
+      if (!canPlaceRoom(world, x, y, width, height)) continue;
+      const room = stampRoom(world, rooms.length, type, x, y, width, height, -1);
+      room.name = serviceRoomName(spec, type, hub.id, index + 1, 'support');
+      decorateServiceUtilityRoom(world, room, spec, seed);
+      rooms.push(room);
+      return room;
+    }
+  }
+  return null;
+}
+
+function tryPlaceServiceStationCluster(
+  world: World,
+  rooms: Room[],
+  spec: ProceduralFloorSpec,
+  junction: ServiceSpineJunction,
+  index: number,
+): Room[] {
+  const seed = spec.seed ^ (junction.x * 17 + junction.y * 31 + index * 127);
+  const type = serviceStationRoomType(spec, index);
+  const width = 18 + Math.floor(serviceHash01(seed, index, junction.x, 117) * 18);
+  const height = 12 + Math.floor(serviceHash01(seed, index, junction.y, 119) * 12);
+  const dirOrder = [0, 1, 2, 3].sort((a, b) =>
+    serviceHash01(seed, junction.x + index, junction.y, a) - serviceHash01(seed, junction.x + index, junction.y, b),
+  );
+
+  for (const dir of dirOrder) {
+    for (let gap = 12; gap <= 34; gap += 5) {
+      let x = junction.x;
+      let y = junction.y;
+      if (dir === 0) {
+        x = junction.x + gap;
+        y = junction.y - Math.floor(height / 2);
+      } else if (dir === 1) {
+        x = junction.x - gap - width;
+        y = junction.y - Math.floor(height / 2);
+      } else if (dir === 2) {
+        x = junction.x - Math.floor(width / 2);
+        y = junction.y + gap;
+      } else {
+        x = junction.x - Math.floor(width / 2);
+        y = junction.y - gap - height;
+      }
+      x = Math.max(SERVICE_SPINE_START, Math.min(SERVICE_SPINE_END - width, x));
+      y = Math.max(SERVICE_SPINE_START, Math.min(SERVICE_SPINE_END - height, y));
+      if (!canPlaceRoom(world, x, y, width, height)) continue;
+
+      const hub = stampRoom(world, rooms.length, type, x, y, width, height, -1);
+      hub.name = serviceRoomName(spec, type, hub.id, index + 1, 'station');
+      decorateServiceUtilityRoom(world, hub, spec, seed);
+      rooms.push(hub);
+
+      const cluster = [hub];
+      const supportTarget = 3 + (index % 2) + (spec.majorityId === 'scientists' ? 1 : 0);
+      for (let support = 0; support < supportTarget; support++) {
+        const room = tryPlaceServiceSupportRoom(world, rooms, spec, hub, support + index * 5);
+        if (room) cluster.push(room);
+      }
+      if (cluster.length > 1) connectRoomsMST(world, cluster);
+      connectServiceSideChamber(world, hub, junction);
+      return cluster;
+    }
+  }
+
+  return [];
+}
+
+function placeServiceStationClusters(world: World, rooms: Room[], spec: ProceduralFloorSpec, junctions: readonly ServiceSpineJunction[]): number {
+  const sorted = sortedServiceJunctions(world, junctions, spec.seed ^ 0x51a7);
+  const target = Math.min(sorted.length, 8 + spec.danger * 2);
+  const centers: { x: number; y: number }[] = [];
+  let placed = 0;
+  let placedRooms = 0;
+
+  for (const junction of sorted) {
+    if (placed >= target) break;
+    if (centers.some(center => world.dist2(center.x + 0.5, center.y + 0.5, junction.x + 0.5, junction.y + 0.5) < SERVICE_SPINE_STATION_MIN_SPACING)) continue;
+    const cluster = tryPlaceServiceStationCluster(world, rooms, spec, junction, placed);
+    if (cluster.length === 0) continue;
+    centers.push({ x: junction.x, y: junction.y });
+    placed++;
+    placedRooms += cluster.length;
+  }
+  return placedRooms;
+}
+
+function tryPlaceServiceMicroBay(
+  world: World,
+  rooms: Room[],
+  spec: ProceduralFloorSpec,
+  trace: ServiceSpineTrace,
+  cellIdx: number,
+  index: number,
+): Room | null {
+  const type = serviceMicroBayType(spec, index);
+  const seed = spec.seed ^ (cellIdx * 37 + index * 151);
+  const width = type === RoomType.BATHROOM ? 4 + (seed & 1) : 5 + Math.floor(serviceHash01(seed, trace.id, index, 121) * 6);
+  const height = type === RoomType.BATHROOM ? 4 + ((seed >> 1) & 1) : 4 + Math.floor(serviceHash01(seed, index, trace.id, 123) * 6);
+  const x0 = cellIdx % W;
+  const y0 = (cellIdx / W) | 0;
+  const side = serviceHash01(seed, x0, y0, 125) < 0.5 ? -1 : 1;
+  const gap = 4 + Math.floor(serviceHash01(seed, x0, y0, 127) * 8);
+  const x = trace.horizontal
+    ? x0 - Math.floor(width / 2)
+    : x0 + side * gap + (side < 0 ? -width : 0);
+  const y = trace.horizontal
+    ? y0 + side * gap + (side < 0 ? -height : 0)
+    : y0 - Math.floor(height / 2);
+  if (x < SERVICE_SPINE_START || y < SERVICE_SPINE_START || x + width >= SERVICE_SPINE_END || y + height >= SERVICE_SPINE_END) return null;
+  if (!canPlaceRoom(world, x, y, width, height)) return null;
+
+  const room = stampRoom(world, rooms.length, type, x, y, width, height, -1);
+  room.name = serviceRoomName(spec, type, room.id, index + 1, 'micro');
+  decorateServiceUtilityRoom(world, room, spec, seed);
+  connectServiceSideChamber(world, room, { x: x0, y: y0, score: 5000 });
+  rooms.push(room);
+  return room;
+}
+
+function placeServiceMicroBays(world: World, rooms: Room[], spec: ProceduralFloorSpec, traces: readonly ServiceSpineTrace[]): number {
+  if (traces.length === 0) return 0;
+  const target = Math.min(136, 48 + spec.danger * 16 + (spec.anomalyId === 'conveyor_sorter' ? 24 : 0));
+  const centers: { x: number; y: number }[] = [];
+  let placed = 0;
+
+  for (let attempt = 0; placed < target && attempt < target * 16; attempt++) {
+    const trace = traces[(spec.seed + attempt * 7) % traces.length];
+    if (!trace || trace.cells.length === 0) continue;
+    const cellIdx = trace.cells[(spec.seed + attempt * 193) % trace.cells.length];
+    const x = cellIdx % W;
+    const y = (cellIdx / W) | 0;
+    if (centers.some(center => world.dist2(center.x + 0.5, center.y + 0.5, x + 0.5, y + 0.5) < SERVICE_SPINE_MICRO_BAY_MIN_SPACING)) continue;
+    const room = tryPlaceServiceMicroBay(world, rooms, spec, trace, cellIdx, placed);
+    if (!room) continue;
+    const center = roomCenter(room);
+    centers.push(center);
+    placed++;
+  }
+  return placed;
+}
+
 function sortedServiceJunctions(world: World, junctions: readonly ServiceSpineJunction[], seed: number): ServiceSpineJunction[] {
   const out: ServiceSpineJunction[] = [];
   for (const j of junctions) {
@@ -7407,6 +10771,7 @@ function tryPlaceServiceSideChamber(
       if (type === RoomType.PRODUCTION || type === RoomType.COMMON) shapeRoom(world, room);
       decorateRoom(world, room);
       decorateProceduralRoom(world, room, spec);
+      ensureServiceRoomCenterSpine(world, room);
       const feature = type === RoomType.OFFICE ? Feature.SCREEN : type === RoomType.STORAGE ? Feature.APPARATUS : Feature.MACHINE;
       placeRoomFeature(world, room, feature, Math.floor(room.w / 2), Math.floor(room.h / 2));
       connectServiceSideChamber(world, room, junction);
@@ -7418,13 +10783,305 @@ function tryPlaceServiceSideChamber(
   return null;
 }
 
+const SERVICE_STATION_ROOM_TYPES = [
+  RoomType.PRODUCTION,
+  RoomType.STORAGE,
+  RoomType.OFFICE,
+  RoomType.BATHROOM,
+  RoomType.KITCHEN,
+  RoomType.COMMON,
+] as const;
+
+function serviceStationRoomSize(type: RoomType, spec: ProceduralFloorSpec, serial: number): { w: number; h: number } {
+  const hash = Math.floor(serviceHash01(spec.seed, serial, type, 0x510) * 10_000);
+  if (type === RoomType.BATHROOM) return { w: 4 + (hash & 1), h: 4 + ((hash >> 1) & 1) };
+  if (type === RoomType.KITCHEN) return { w: 5 + (hash % 3), h: 5 + ((hash >> 2) % 3) };
+  if (type === RoomType.OFFICE) return { w: 6 + (hash % 4), h: 5 + ((hash >> 3) % 3) };
+  if (type === RoomType.STORAGE) return { w: 6 + (hash % 5), h: 5 + ((hash >> 4) % 4) };
+  if (type === RoomType.PRODUCTION) return { w: 10 + (hash % 7), h: 8 + ((hash >> 5) % 5) };
+  return { w: 7 + (hash % 5), h: 6 + ((hash >> 6) % 4) };
+}
+
+function serviceStationRoomName(type: RoomType, id: number, block: number, micro: boolean): string {
+  const scale = micro ? 'инспекционная клетка' : 'станция';
+  if (type === RoomType.PRODUCTION) return `${scale} насосов сервисного штрека ${block}.${id}`;
+  if (type === RoomType.STORAGE) return `${scale} склада сервисного штрека ${block}.${id}`;
+  if (type === RoomType.OFFICE) return `${scale} пульта сервисного штрека ${block}.${id}`;
+  if (type === RoomType.BATHROOM) return `${scale} санузла сервисного штрека ${block}.${id}`;
+  if (type === RoomType.KITCHEN) return `${scale} кипятка сервисного штрека ${block}.${id}`;
+  return `${scale} отдыха сервисного штрека ${block}.${id}`;
+}
+
+function decorateServiceStationRoom(world: World, room: Room, spec: ProceduralFloorSpec, serial: number): void {
+  applyRoomTexture(world, room, Tex.METAL, room.type === RoomType.BATHROOM || room.type === RoomType.KITCHEN ? Tex.F_TILE : Tex.F_CONCRETE);
+  decorateRoom(world, room);
+  decorateProceduralRoom(world, room, spec);
+  ensureServiceRoomCenterSpine(world, room);
+  if (room.type === RoomType.PRODUCTION) placeRoomFeature(world, room, Feature.MACHINE, Math.floor(room.w / 2), Math.floor(room.h / 2));
+  else if (room.type === RoomType.STORAGE) placeRoomFeature(world, room, Feature.SHELF, Math.floor(room.w / 2), Math.floor(room.h / 2));
+  else if (room.type === RoomType.OFFICE) placeRoomFeature(world, room, Feature.SCREEN, Math.floor(room.w / 2), Math.floor(room.h / 2));
+  else if (room.type === RoomType.BATHROOM) {
+    placeRoomFeature(world, room, Feature.TOILET, 1, 1);
+    placeRoomFeature(world, room, Feature.SINK, room.w - 2, 1);
+  } else if (room.type === RoomType.KITCHEN) {
+    placeRoomFeature(world, room, Feature.SINK, 1, 1);
+    placeRoomFeature(world, room, Feature.STOVE, room.w - 2, 1);
+  } else {
+    placeRoomFeature(world, room, serial % 2 === 0 ? Feature.TABLE : Feature.LAMP, Math.floor(room.w / 2), Math.floor(room.h / 2));
+  }
+}
+
+function serviceClampRoomOrigin(value: number, size: number): number {
+  return Math.max(SERVICE_SPINE_START, Math.min(SERVICE_SPINE_END - size, Math.floor(value)));
+}
+
+function serviceStationLayout(spec: ProceduralFloorSpec, block: number): { type: RoomType; x: number; y: number; w: number; h: number }[] {
+  const main = serviceStationRoomSize(RoomType.PRODUCTION, spec, block * 11 + 1);
+  const storage = serviceStationRoomSize(RoomType.STORAGE, spec, block * 11 + 2);
+  const office = serviceStationRoomSize(RoomType.OFFICE, spec, block * 11 + 3);
+  const utilityType = block % 3 === 0 ? RoomType.KITCHEN : block % 3 === 1 ? RoomType.BATHROOM : RoomType.COMMON;
+  const utility = serviceStationRoomSize(utilityType, spec, block * 11 + 4);
+  const gap = 3;
+  const layout = [
+    { type: RoomType.PRODUCTION, x: 0, y: 0, w: main.w, h: main.h },
+    { type: RoomType.STORAGE, x: main.w + gap, y: 0, w: storage.w, h: storage.h },
+    { type: RoomType.OFFICE, x: 0, y: main.h + gap, w: office.w, h: office.h },
+    { type: utilityType, x: main.w + gap, y: main.h + gap, w: utility.w, h: utility.h },
+  ];
+  if (spec.anomalyId === 'samosbor_seed' || spec.danger >= 4) {
+    const microType = block % 2 === 0 ? RoomType.BATHROOM : RoomType.STORAGE;
+    const micro = serviceStationRoomSize(microType, spec, block * 11 + 5);
+    layout.push({ type: microType, x: Math.floor(main.w * 0.45), y: main.h + gap + Math.max(office.h, utility.h) + gap, w: micro.w, h: micro.h });
+  }
+  return layout;
+}
+
+function canPlaceServiceStationLayout(
+  world: World,
+  layout: readonly { x: number; y: number; w: number; h: number }[],
+  x: number,
+  y: number,
+): boolean {
+  for (const item of layout) {
+    if (!canPlaceRoom(world, x + item.x, y + item.y, item.w, item.h)) return false;
+  }
+  return true;
+}
+
+function stampServiceStationBlock(
+  world: World,
+  rooms: Room[],
+  spec: ProceduralFloorSpec,
+  junction: ServiceSpineJunction,
+  layout: readonly { type: RoomType; x: number; y: number; w: number; h: number }[],
+  x: number,
+  y: number,
+  block: number,
+): Room[] {
+  const cluster: Room[] = [];
+  for (let i = 0; i < layout.length; i++) {
+    const item = layout[i];
+    const room = stampRoom(world, world.rooms.length, item.type, x + item.x, y + item.y, item.w, item.h, -1);
+    room.name = serviceStationRoomName(item.type, room.id, block, false);
+    decorateServiceStationRoom(world, room, spec, block * 13 + i);
+    rooms.push(room);
+    cluster.push(room);
+  }
+  connectRoomsMST(world, cluster);
+  if (cluster[0]) connectServiceSideChamber(world, cluster[0], junction);
+  return cluster;
+}
+
+function tryPlaceServiceStationBlock(
+  world: World,
+  rooms: Room[],
+  spec: ProceduralFloorSpec,
+  junction: ServiceSpineJunction,
+  block: number,
+): Room[] {
+  const layout = serviceStationLayout(spec, block);
+  const groupW = Math.max(...layout.map(item => item.x + item.w));
+  const groupH = Math.max(...layout.map(item => item.y + item.h));
+  const directions = [0, 1, 2, 3].sort((a, b) =>
+    serviceHash01(spec.seed, junction.x + block, junction.y, a + 0x620) -
+    serviceHash01(spec.seed, junction.x + block, junction.y, b + 0x620),
+  );
+
+  for (const dir of directions) {
+    for (let gap = 12; gap <= 42; gap += 6) {
+      let x = junction.x - Math.floor(groupW / 2);
+      let y = junction.y - Math.floor(groupH / 2);
+      if (dir === 0) x = junction.x + gap;
+      else if (dir === 1) x = junction.x - gap - groupW;
+      else if (dir === 2) y = junction.y + gap;
+      else y = junction.y - gap - groupH;
+      x = serviceClampRoomOrigin(x, groupW);
+      y = serviceClampRoomOrigin(y, groupH);
+      if (!canPlaceServiceStationLayout(world, layout, x, y)) continue;
+      return stampServiceStationBlock(world, rooms, spec, junction, layout, x, y, block);
+    }
+  }
+  return [];
+}
+
+function placeServiceStationBlocks(world: World, rooms: Room[], spec: ProceduralFloorSpec, junctions: readonly ServiceSpineJunction[]): number {
+  const sorted = sortedServiceJunctions(world, junctions, spec.seed ^ 0x5ab10c);
+  const target = Math.min(sorted.length, SERVICE_SPINE_STATION_BASE_TARGET + spec.danger * 2 + (spec.anomalyId === 'samosbor_seed' ? 4 : 0) + (spec.anomalyId === 'conveyor_sorter' ? 6 : 0));
+  let placedRooms = 0;
+  let placedBlocks = 0;
+  for (const junction of sorted) {
+    if (placedBlocks >= target) break;
+    const cluster = tryPlaceServiceStationBlock(world, rooms, spec, junction, placedBlocks);
+    if (cluster.length === 0) continue;
+    placedBlocks++;
+    placedRooms += cluster.length;
+  }
+  return placedRooms;
+}
+
+function nearestServiceTracePoint(world: World, traces: readonly ServiceSpineTrace[], x: number, y: number): ServiceSpineJunction | null {
+  let bestIdx = -1;
+  let bestD2 = Infinity;
+  for (const trace of traces) {
+    const step = Math.max(1, Math.floor(trace.cells.length / 220));
+    for (let i = 0; i < trace.cells.length; i += step) {
+      const ci = trace.cells[i];
+      const d2 = world.dist2(x + 0.5, y + 0.5, (ci % W) + 0.5, ((ci / W) | 0) + 0.5);
+      if (d2 < bestD2) {
+        bestD2 = d2;
+        bestIdx = ci;
+      }
+    }
+  }
+  return bestIdx >= 0 ? { x: bestIdx % W, y: (bestIdx / W) | 0, score: Math.max(0, 12_000 - bestD2) } : null;
+}
+
+function placeServiceSpanStations(world: World, rooms: Room[], spec: ProceduralFloorSpec, traces: readonly ServiceSpineTrace[]): number {
+  const cols = 10;
+  const rows = 10;
+  const span = SERVICE_SPINE_END - SERVICE_SPINE_START;
+  const slotW = span / cols;
+  const slotH = span / rows;
+  const candidates = Array.from({ length: cols * rows }, (_, slot) => ({
+    slot,
+    score: serviceHash01(spec.seed, slot, spec.ordinal, 0x7a11),
+  })).sort((a, b) => a.score - b.score);
+  const target = SERVICE_SPINE_STATION_BASE_TARGET + spec.danger * 3 + (spec.anomalyId === 'samosbor_seed' ? 7 : 0);
+  const centers: { x: number; y: number }[] = [];
+  let placedBlocks = 0;
+  let placedRooms = 0;
+
+  for (const candidate of candidates) {
+    if (placedBlocks >= target) break;
+    const col = candidate.slot % cols;
+    const row = (candidate.slot / cols) | 0;
+    const cx = Math.floor(SERVICE_SPINE_START + col * slotW + slotW * (0.22 + serviceHash01(spec.seed, col, row, 0x7a12) * 0.56));
+    const cy = Math.floor(SERVICE_SPINE_START + row * slotH + slotH * (0.22 + serviceHash01(spec.seed, row, col, 0x7a13) * 0.56));
+    if (centers.some(center => world.dist2(center.x, center.y, cx, cy) < 42 * 42)) continue;
+    const trace = nearestServiceTracePoint(world, traces, cx, cy);
+    if (!trace) continue;
+    const traceDistance2 = world.dist2(cx + 0.5, cy + 0.5, trace.x + 0.5, trace.y + 0.5);
+    if (traceDistance2 < 24 * 24 || traceDistance2 > 180 * 180) continue;
+
+    const layout = serviceStationLayout(spec, 100 + placedBlocks);
+    const groupW = Math.max(...layout.map(item => item.x + item.w));
+    const groupH = Math.max(...layout.map(item => item.y + item.h));
+    const x = serviceClampRoomOrigin(cx - Math.floor(groupW / 2), groupW);
+    const y = serviceClampRoomOrigin(cy - Math.floor(groupH / 2), groupH);
+    if (!canPlaceServiceStationLayout(world, layout, x, y)) continue;
+    const cluster = stampServiceStationBlock(world, rooms, spec, trace, layout, x, y, 100 + placedBlocks);
+    if (cluster.length === 0) continue;
+    centers.push({ x: cx, y: cy });
+    placedBlocks++;
+    placedRooms += cluster.length;
+  }
+  return placedRooms;
+}
+
+function serviceMicroRoomType(spec: ProceduralFloorSpec, serial: number): RoomType {
+  const pool = spec.anomalyId === 'samosbor_seed'
+    ? [RoomType.STORAGE, RoomType.BATHROOM, RoomType.OFFICE, RoomType.COMMON, RoomType.PRODUCTION, RoomType.KITCHEN]
+    : SERVICE_STATION_ROOM_TYPES;
+  return pool[serial % pool.length];
+}
+
+function tryPlaceServiceMicroRoom(
+  world: World,
+  rooms: Room[],
+  spec: ProceduralFloorSpec,
+  junction: ServiceSpineJunction,
+  serial: number,
+): Room | null {
+  const type = serviceMicroRoomType(spec, serial);
+  const size = serviceStationRoomSize(type, spec, serial + 1000);
+  const directions = [0, 1, 2, 3].sort((a, b) =>
+    serviceHash01(spec.seed, junction.x + serial, junction.y, a + 0x710) -
+    serviceHash01(spec.seed, junction.x + serial, junction.y, b + 0x710),
+  );
+  for (const dir of directions) {
+    for (let gap = 6; gap <= 28; gap += 4) {
+      let x = junction.x - Math.floor(size.w / 2);
+      let y = junction.y - Math.floor(size.h / 2);
+      if (dir === 0) x = junction.x + gap;
+      else if (dir === 1) x = junction.x - gap - size.w;
+      else if (dir === 2) y = junction.y + gap;
+      else y = junction.y - gap - size.h;
+      x = serviceClampRoomOrigin(x, size.w);
+      y = serviceClampRoomOrigin(y, size.h);
+      if (!canPlaceRoom(world, x, y, size.w, size.h)) continue;
+      const room = stampRoom(world, world.rooms.length, type, x, y, size.w, size.h, -1);
+      room.name = serviceStationRoomName(type, room.id, serial, true);
+      decorateServiceStationRoom(world, room, spec, serial + 2000);
+      connectServiceSideChamber(world, room, junction);
+      rooms.push(room);
+      return room;
+    }
+  }
+  return null;
+}
+
+function placeServiceMicroRooms(world: World, rooms: Room[], spec: ProceduralFloorSpec, junctions: readonly ServiceSpineJunction[]): number {
+  const sorted = sortedServiceJunctions(world, junctions, spec.seed ^ 0xc1a55);
+  if (sorted.length === 0) return 0;
+  const target = Math.min(128, SERVICE_SPINE_SIDE_ROOM_BASE_TARGET + spec.danger * 10 + (spec.anomalyId === 'samosbor_seed' ? 16 : 0) + (spec.anomalyId === 'conveyor_sorter' ? 28 : 0));
+  let placed = 0;
+  for (let attempt = 0; attempt < target * 8 && placed < target; attempt++) {
+    const source = sorted[(attempt * 5 + spec.ordinal + (spec.seed & 7)) % sorted.length];
+    const junction = {
+      x: world.wrap(source.x + Math.round((serviceHash01(spec.seed, attempt, source.x, 0x716) - 0.5) * 30)),
+      y: world.wrap(source.y + Math.round((serviceHash01(spec.seed, attempt, source.y, 0x717) - 0.5) * 30)),
+      score: source.score,
+    };
+    if (tryPlaceServiceMicroRoom(world, rooms, spec, junction, placed + attempt)) placed++;
+  }
+  return placed;
+}
+
 function placeServiceSideChambers(world: World, rooms: Room[], spec: ProceduralFloorSpec, junctions: readonly ServiceSpineJunction[]): void {
   const sorted = sortedServiceJunctions(world, junctions, spec.seed);
-  const target = Math.min(sorted.length, 4 + spec.danger);
+  const target = Math.min(sorted.length, Math.floor(SERVICE_SPINE_SIDE_ROOM_BASE_TARGET * 0.5) + spec.danger * 3 + (spec.anomalyId === 'samosbor_seed' ? 5 : 0) + (spec.anomalyId === 'conveyor_sorter' ? 10 : 0));
   let placed = 0;
   for (const junction of sorted) {
     if (placed >= target) break;
     if (tryPlaceServiceSideChamber(world, rooms, spec, junction, placed)) placed++;
+  }
+}
+
+function appendServiceTraceJunctions(junctions: ServiceSpineJunction[], traces: readonly ServiceSpineTrace[], spec: ProceduralFloorSpec): void {
+  const spacing = Math.max(52, 94 - spec.danger * 6);
+  for (const trace of traces) {
+    if (trace.cells.length === 0) continue;
+    const start = Math.floor(spacing * (0.3 + serviceHash01(spec.seed, trace.id, trace.cells.length, 0x811) * 0.45));
+    for (let i = start; i < trace.cells.length; i += spacing) {
+      const ci = trace.cells[i];
+      const x = ci % W;
+      const y = (ci / W) | 0;
+      junctions.push({
+        x,
+        y,
+        score: 2_400 + serviceHash01(spec.seed, x, y, trace.id + 0x812) * 1_600,
+      });
+    }
   }
 }
 
@@ -7434,8 +11091,9 @@ function applyServiceSpines(world: World, rooms: Room[], spec: ProceduralFloorSp
   const sy = Math.floor(spawnY);
   const targets = chooseServiceSpineTargets(world, rooms, sx, sy, spec);
   const field = buildServiceTensorField(spec);
-  const horizontalCount = 2 + (spec.danger >= 3 ? 1 : 0);
-  const verticalCount = 2 + (spec.danger >= 4 ? 1 : 0);
+  const conveyorBonus = spec.anomalyId === 'conveyor_sorter' ? 1 : 0;
+  const horizontalCount = 3 + (spec.danger >= 3 ? 1 : 0) + (spec.danger >= 5 ? 1 : 0) + conveyorBonus;
+  const verticalCount = 3 + (spec.danger >= 3 ? 1 : 0) + conveyorBonus;
   const horizontalLanes = selectServiceLanes(spec.seed, sy, targets, true, horizontalCount);
   const verticalLanes = selectServiceLanes(spec.seed ^ 0x5eeda11, sx, targets, false, verticalCount);
   const horizontal: ServiceSpineTrace[] = [];
@@ -7457,13 +11115,28 @@ function applyServiceSpines(world: World, rooms: Room[], spec: ProceduralFloorSp
   }
   for (let i = 0; i < horizontal.length - 1; i++) bridgeServiceTraces(world, spec, horizontal[i], horizontal[i + 1], bridgeLine++, junctions);
   for (let i = 0; i < vertical.length - 1; i++) bridgeServiceTraces(world, spec, vertical[i], vertical[i + 1], bridgeLine++, junctions);
+  const traces = [...horizontal, ...vertical];
+  appendServiceTraceJunctions(junctions, traces, spec);
 
   const traceRooms = targets.slice(0, Math.min(targets.length, horizontal.length + vertical.length));
-  connectServiceTargetRooms(world, traceRooms, [...horizontal, ...vertical]);
+  connectServiceTargetRooms(world, traceRooms, traces);
   for (let i = 0; i < traceRooms.length; i++) {
     targets[i].name = `${targets[i].name} у магистрали сервисного штрека`;
   }
   placeServiceSideChambers(world, rooms, spec, junctions);
+  const stationClusterRooms = placeServiceStationClusters(world, rooms, spec, junctions);
+  const microBayRooms = placeServiceMicroBays(world, rooms, spec, traces);
+  const extraRooms = stationClusterRooms +
+    microBayRooms +
+    placeServiceStationBlocks(world, rooms, spec, junctions) +
+    placeServiceSpanStations(world, rooms, spec, traces) +
+    placeServiceMicroRooms(world, rooms, spec, junctions);
+  if (extraRooms > 0) {
+    world.markCellsDirty();
+    world.markWallTexDirty();
+    world.markFloorTexDirty();
+    world.markFeaturesDirty(true);
+  }
 }
 
 function applySmog(
@@ -8570,6 +12243,10 @@ function carveProceduralRailLine(
   return track;
 }
 
+function clampProceduralRailCoord(coord: number): number {
+  return Math.max(96, Math.min(W - 97, coord));
+}
+
 function preserveRailTransferCell(world: World, ci: number): boolean {
   return world.cells[ci] === Cell.LIFT ||
     world.hermoWall[ci] !== 0 ||
@@ -8675,6 +12352,374 @@ function chooseRailAnchorRooms(world: World, rooms: Room[], sx: number, sy: numb
   return candidates.length > 0 ? candidates : rooms;
 }
 
+function railTrackIsHorizontal(track: RailTrainTrack): boolean {
+  const first = track.cells[0];
+  const last = track.cells[track.cells.length - 1];
+  if (first === undefined || last === undefined) return true;
+  const firstPoint = cellPoint(first);
+  const lastPoint = cellPoint(last);
+  return Math.abs(firstPoint.x - lastPoint.x) >= Math.abs(firstPoint.y - lastPoint.y);
+}
+
+function railServiceRoomType(spec: ProceduralFloorSpec, serial: number): RoomType {
+  if (spec.geometryId === 'admin_pockets') {
+    const cycle = [
+      RoomType.OFFICE,
+      RoomType.STORAGE,
+      RoomType.OFFICE,
+      RoomType.BATHROOM,
+      RoomType.KITCHEN,
+      RoomType.MEDICAL,
+      RoomType.COMMON,
+    ] as const;
+    return cycle[serial % cycle.length];
+  }
+  if (isIndustrialGeometry(spec.geometryId)) {
+    const cycle = [RoomType.PRODUCTION, RoomType.STORAGE, RoomType.OFFICE, RoomType.COMMON] as const;
+    return cycle[serial % cycle.length];
+  }
+  return serial % 3 === 0 ? RoomType.STORAGE : RoomType.COMMON;
+}
+
+function railServiceRoomSize(type: RoomType, spec: ProceduralFloorSpec, serial: number): { w: number; h: number } {
+  if (type === RoomType.BATHROOM) return { w: 4 + (serial & 1), h: 4 + ((serial >>> 1) & 1) };
+  if (type === RoomType.KITCHEN) return { w: 6 + (serial % 3), h: 5 + ((serial >>> 2) % 3) };
+  if (type === RoomType.MEDICAL) return { w: 7 + (serial % 4), h: 6 + ((serial >>> 3) % 3) };
+  if (type === RoomType.PRODUCTION) return { w: 11 + (serial % 5), h: 8 + ((serial >>> 2) % 4) };
+  if (type === RoomType.STORAGE) return { w: 6 + (serial % 4), h: 5 + ((serial >>> 2) % 4) };
+  if (type === RoomType.COMMON) return { w: 9 + (serial % 5), h: 7 + ((serial >>> 2) % 4) };
+  return {
+    w: 7 + (serial % 5) + (spec.majorityId === 'liquidators' ? 1 : 0),
+    h: 6 + ((serial >>> 2) % 4),
+  };
+}
+
+function railServiceRoomLimit(spec: ProceduralFloorSpec): number {
+  if (spec.geometryId === 'sump_causeways') return spec.anomalyId === 'rail_trains' ? 72 : 36;
+  if (spec.geometryId === 'admin_pockets') return 44;
+  if (isIndustrialGeometry(spec.geometryId)) return 40;
+  return 24;
+}
+
+function railServiceOffsets(track: RailTrainTrack, spec: ProceduralFloorSpec): number[] {
+  const fractions = spec.geometryId === 'sump_causeways'
+    ? [0.10, 0.18, 0.28, 0.38, 0.50, 0.62, 0.72, 0.82, 0.90]
+    : [0.22, 0.36, 0.50, 0.64, 0.78];
+  const out = new Set<number>();
+  for (const offset of track.stationOffsets) out.add(offset);
+  for (const fraction of fractions) out.add(Math.floor(track.cells.length * fraction));
+  return [...out]
+    .map(offset => Math.max(0, Math.min(track.cells.length - 1, offset)))
+    .sort((a, b) => a - b);
+}
+
+function decorateRailServiceRoom(world: World, room: Room, type: RoomType, spec: ProceduralFloorSpec, serial: number, trackLabel: string): void {
+  if (spec.geometryId === 'admin_pockets') {
+    if (spec.majorityId === 'liquidators' && (type === RoomType.OFFICE || type === RoomType.STORAGE)) {
+      room.name = type === RoomType.STORAGE
+        ? `Платформенный склад ликвидаторов ${room.id}`
+        : `Платформенный пост ликвидаторов ${room.id}`;
+    } else if (type === RoomType.BATHROOM) room.name = `Платформенный туалет ${room.id}`;
+    else if (type === RoomType.KITCHEN) room.name = `Чайная платформы ${room.id}`;
+    else if (type === RoomType.MEDICAL) room.name = `Медпункт платформы ${room.id}`;
+    else if (type === RoomType.STORAGE) room.name = `Архив платформы ${room.id}`;
+    else if (type === RoomType.COMMON) room.name = `Зал ожидания платформы ${room.id}`;
+    else room.name = `Платформенный кабинет ${room.id}`;
+    applyRoomTexture(world, room, Tex.MARBLE, type === RoomType.COMMON ? Tex.F_RED_CARPET : Tex.F_MARBLE_TILE);
+    if (type === RoomType.OFFICE || type === RoomType.STORAGE) decorateAdminOfficeSlab(world, room, spec.seed + serial * 173);
+    else decorateProceduralRoom(world, room, spec);
+  } else {
+    room.name = type === RoomType.PRODUCTION
+      ? `Служба пути ${trackLabel} ${room.id}`
+      : `Карман платформы ${trackLabel} ${room.id}`;
+    applyRoomTexture(world, room, isIndustrialGeometry(spec.geometryId) ? Tex.METAL : Tex.MARBLE, isIndustrialGeometry(spec.geometryId) ? Tex.F_CONCRETE : Tex.F_MARBLE_TILE);
+    decorateProceduralRoom(world, room, spec);
+  }
+
+  const center = roomCenter(room);
+  const ci = world.idx(center.x, center.y);
+  if (world.cells[ci] !== Cell.FLOOR || world.roomMap[ci] !== room.id) return;
+  world.features[ci] = type === RoomType.PRODUCTION
+    ? Feature.MACHINE
+    : type === RoomType.BATHROOM
+      ? Feature.SINK
+      : type === RoomType.KITCHEN
+        ? Feature.TABLE
+        : type === RoomType.MEDICAL
+          ? Feature.APPARATUS
+          : type === RoomType.STORAGE
+            ? Feature.SHELF
+            : Feature.DESK;
+}
+
+function carveRailServiceSpur(world: World, ax: number, ay: number, bx: number, by: number, spec: ProceduralFloorSpec): void {
+  const horizontal = Math.abs(world.delta(ax, bx)) >= Math.abs(world.delta(ay, by));
+  const delta = horizontal ? world.delta(ax, bx) : world.delta(ay, by);
+  const dir = delta >= 0 ? 1 : -1;
+  const steps = Math.abs(delta);
+  let x = world.wrap(ax);
+  let y = world.wrap(ay);
+  for (let step = 0; step <= steps; step++) {
+    const ci = world.idx(x, y);
+    if (
+      world.cells[ci] !== Cell.WATER &&
+      world.cells[ci] !== Cell.LIFT &&
+      world.cells[ci] !== Cell.ABYSS &&
+      !world.hermoWall[ci] &&
+      !world.aptMask[ci] &&
+      !world.containerMap.has(ci) &&
+      world.features[ci] !== Feature.LIFT_BUTTON
+    ) {
+      if (world.cells[ci] === Cell.WALL) {
+        world.cells[ci] = Cell.FLOOR;
+        world.roomMap[ci] = -1;
+      }
+      if (world.roomMap[ci] < 0 && world.cells[ci] === Cell.FLOOR) {
+        world.floorTex[ci] = spec.geometryId === 'admin_pockets' ? Tex.F_MARBLE_TILE : Tex.F_CONCRETE;
+        if (world.features[ci] === Feature.NONE && step % 9 === 0) world.features[ci] = Feature.LAMP;
+      }
+    }
+    if (step < steps) {
+      if (horizontal) x = world.wrap(x + dir);
+      else y = world.wrap(y + dir);
+    }
+  }
+}
+
+function tryPlaceRailServiceRoom(
+  world: World,
+  rooms: Room[],
+  spec: ProceduralFloorSpec,
+  track: RailTrainTrack,
+  horizontal: boolean,
+  offset: number,
+  side: -1 | 1,
+  serial: number,
+): Room | null {
+  const trackCell = track.cells[Math.max(0, Math.min(track.cells.length - 1, offset))];
+  if (trackCell === undefined) return null;
+  const point = cellPoint(trackCell);
+  const type = railServiceRoomType(spec, serial);
+  const size = railServiceRoomSize(type, spec, serial);
+  const baseJitter = ((spec.seed >>> (serial % 13)) & 7) - 3;
+
+  for (let attempt = 0; attempt < 12; attempt++) {
+    const swing = attempt === 0 ? 0 : (attempt & 1 ? 1 : -1) * (5 + Math.floor(attempt / 2) * 4);
+    const alongJitter = baseJitter + swing;
+    const distance = 21 + (serial % 3) * 3 + Math.floor(attempt / 4) * 5;
+    let x = 0;
+    let y = 0;
+    let doorX = 0;
+    let doorY = 0;
+    let outsideX = 0;
+    let outsideY = 0;
+    let platformX = 0;
+    let platformY = 0;
+
+    if (horizontal) {
+      x = point.x - Math.floor(size.w / 2) + alongJitter;
+      y = side > 0 ? point.y + distance : point.y - distance - size.h;
+      doorX = Math.max(x + 1, Math.min(x + size.w - 2, point.x + alongJitter));
+      doorY = side > 0 ? y - 1 : y + size.h;
+      outsideX = doorX;
+      outsideY = side > 0 ? doorY - 1 : doorY + 1;
+      platformX = point.x + alongJitter;
+      platformY = point.y + side * 5;
+    } else {
+      x = side > 0 ? point.x + distance : point.x - distance - size.w;
+      y = point.y - Math.floor(size.h / 2) + alongJitter;
+      doorX = side > 0 ? x - 1 : x + size.w;
+      doorY = Math.max(y + 1, Math.min(y + size.h - 2, point.y + alongJitter));
+      outsideX = side > 0 ? doorX - 1 : doorX + 1;
+      outsideY = doorY;
+      platformX = point.x + side * 5;
+      platformY = point.y + alongJitter;
+    }
+
+    if (x < 8 || y < 8 || x + size.w >= W - 8 || y + size.h >= W - 8) continue;
+    if (!canPlaceRoom(world, x, y, size.w, size.h)) continue;
+    const room = stampRoom(world, nextProceduralRoomId(world), type, x, y, size.w, size.h, -1);
+    rooms.push(room);
+    decorateRailServiceRoom(world, room, type, spec, serial, track.label);
+    placeDoorAt(world, doorX, doorY, room.id);
+    carveRailServiceSpur(world, platformX, platformY, outsideX, outsideY, spec);
+    return room;
+  }
+  return null;
+}
+
+function placeRailServicePockets(world: World, rooms: Room[], spec: ProceduralFloorSpec, tracks: readonly RailTrainTrack[]): number {
+  if (tracks.length === 0) return 0;
+  const maxRooms = railServiceRoomLimit(spec);
+  const doubleSided = spec.geometryId === 'sump_causeways' || (isIndustrialGeometry(spec.geometryId) && spec.danger >= 4);
+  let placed = 0;
+  for (let trackIndex = 0; trackIndex < tracks.length && placed < maxRooms; trackIndex++) {
+    const track = tracks[trackIndex];
+    const horizontal = railTrackIsHorizontal(track);
+    const offsets = railServiceOffsets(track, spec);
+    for (let i = 0; i < offsets.length && placed < maxRooms; i++) {
+      const side: -1 | 1 = ((trackIndex + i) & 1) === 0 ? 1 : -1;
+      const sides: (-1 | 1)[] = doubleSided ? [side, side > 0 ? -1 : 1] : [side];
+      for (const candidateSide of sides) {
+        if (placed >= maxRooms) break;
+        const primary = tryPlaceRailServiceRoom(world, rooms, spec, track, horizontal, offsets[i], candidateSide, placed);
+        if (primary) {
+          placed++;
+          if (spec.geometryId === 'admin_pockets' && placed < maxRooms && tryPlaceRailServiceRoom(world, rooms, spec, track, horizontal, offsets[i] + 9, candidateSide > 0 ? -1 : 1, placed)) {
+            placed++;
+          }
+        }
+      }
+    }
+  }
+  if (placed > 0) {
+    world.markCellsDirty();
+    world.markWallTexDirty();
+    world.markFloorTexDirty();
+    world.markFeaturesDirty(true);
+  }
+  return placed;
+}
+
+function preserveRailYardCell(world: World, ci: number): boolean {
+  return world.cells[ci] === Cell.LIFT ||
+    world.cells[ci] === Cell.DOOR ||
+    world.hermoWall[ci] !== 0 ||
+    world.aptMask[ci] !== 0 ||
+    world.roomMap[ci] >= 0 ||
+    world.features[ci] === Feature.LIFT_BUTTON ||
+    world.containerMap.has(ci);
+}
+
+function carveRailYardCell(world: World, spec: ProceduralFloorSpec, x: number, y: number, water: boolean): number {
+  const ci = world.idx(x, y);
+  if (preserveRailYardCell(world, ci)) return 0;
+  if (world.cells[ci] === Cell.ABYSS) return 0;
+  const nextCell = water ? Cell.WATER : Cell.FLOOR;
+  const changed = world.cells[ci] !== nextCell || world.floorTex[ci] !== (water ? Tex.F_WATER : Tex.F_CONCRETE);
+  world.cells[ci] = nextCell;
+  world.floorTex[ci] = water ? Tex.F_WATER : Tex.F_CONCRETE;
+  world.wallTex[ci] = isIndustrialGeometry(spec.geometryId) ? Tex.PIPE : Tex.MARBLE;
+  world.roomMap[ci] = -1;
+  if (world.features[ci] !== Feature.SCREEN && world.features[ci] !== Feature.LAMP) world.features[ci] = Feature.NONE;
+  return changed ? 1 : 0;
+}
+
+function carveRailWalkwayLine(
+  world: World,
+  spec: ProceduralFloorSpec,
+  ax: number,
+  ay: number,
+  bx: number,
+  by: number,
+  width: number,
+): number {
+  let carved = 0;
+  let x = world.wrap(Math.floor(ax));
+  let y = world.wrap(Math.floor(ay));
+  const dx = world.delta(x, Math.floor(bx));
+  const dy = world.delta(y, Math.floor(by));
+  const stepX = dx === 0 ? 0 : dx > 0 ? 1 : -1;
+  const stepY = dy === 0 ? 0 : dy > 0 ? 1 : -1;
+  const stamp = (cx: number, cy: number): void => {
+    for (let oy = -width; oy <= width; oy++) {
+      for (let ox = -width; ox <= width; ox++) {
+        if (Math.abs(ox) + Math.abs(oy) > width) continue;
+        carved += carveRailYardCell(world, spec, cx + ox, cy + oy, false);
+      }
+    }
+  };
+
+  for (let i = 0; i <= Math.abs(dx); i++) {
+    stamp(x, y);
+    if (i < Math.abs(dx)) x = world.wrap(x + stepX);
+  }
+  for (let i = 0; i <= Math.abs(dy); i++) {
+    stamp(x, y);
+    if (i < Math.abs(dy)) y = world.wrap(y + stepY);
+  }
+  return carved;
+}
+
+function carveRailStationYard(
+  world: World,
+  spec: ProceduralFloorSpec,
+  x: number,
+  y: number,
+  horizontal: boolean,
+  serial: number,
+): number {
+  const alongRadius = spec.geometryId === 'sump_causeways' ? 42 : 30;
+  const sideRadius = spec.geometryId === 'sump_causeways' ? 15 : 10;
+  let carved = 0;
+  for (let along = -alongRadius; along <= alongRadius; along++) {
+    for (let side = -sideRadius; side <= sideRadius; side++) {
+      if (Math.abs(side) === sideRadius && Math.abs(along) > alongRadius - 8) continue;
+      const px = horizontal ? x + along : x + side;
+      const py = horizontal ? y + side : y + along;
+      const railWater = Math.abs(side) <= 1;
+      carved += carveRailYardCell(world, spec, px, py, railWater);
+      const ci = world.idx(px, py);
+      if (world.cells[ci] !== Cell.FLOOR || world.features[ci] !== Feature.NONE) continue;
+      if (Math.abs(side) === sideRadius - 1 && Math.abs(along + serial * 3) % 13 === 0) world.features[ci] = Feature.LAMP;
+      else if (Math.abs(side) === 5 && Math.abs(along) <= 2) world.features[ci] = Feature.SCREEN;
+      else if (Math.abs(side) >= sideRadius - 3 && Math.abs(along + serial) % 17 === 0) world.features[ci] = Feature.SHELF;
+    }
+  }
+  return carved;
+}
+
+function applyRailTransitYards(world: World, spec: ProceduralFloorSpec, tracks: readonly RailTrainTrack[]): number {
+  if (tracks.length === 0) return 0;
+  let carved = 0;
+  const stations: { x: number; y: number; trackIndex: number }[] = [];
+  for (let trackIndex = 0; trackIndex < tracks.length; trackIndex++) {
+    const track = tracks[trackIndex];
+    const horizontal = railTrackIsHorizontal(track);
+    const offsets = railServiceOffsets(track, spec).filter((_, i) => i % 2 === 0);
+    for (let i = 0; i < offsets.length; i++) {
+      const point = cellPoint(track.cells[offsets[i]]);
+      if (!point) continue;
+      carved += carveRailStationYard(world, spec, point.x, point.y, horizontal, trackIndex * 17 + i);
+      if (i < 4 || track.stationOffsets.includes(offsets[i])) stations.push({ x: point.x, y: point.y, trackIndex });
+    }
+  }
+
+  if (spec.geometryId === 'sump_causeways') {
+    const usedPairs = new Set<string>();
+    let bridges = 0;
+    for (const station of stations) {
+      if (bridges >= 14) break;
+      let best: typeof station | undefined;
+      let bestD2 = Infinity;
+      for (const other of stations) {
+        if (other.trackIndex === station.trackIndex) continue;
+        const d2 = world.dist2(station.x, station.y, other.x, other.y);
+        if (d2 < bestD2) {
+          best = other;
+          bestD2 = d2;
+        }
+      }
+      if (!best || bestD2 > 360 * 360) continue;
+      const key = station.trackIndex < best.trackIndex
+        ? `${station.trackIndex}:${best.trackIndex}:${station.x >> 5}:${station.y >> 5}:${best.x >> 5}:${best.y >> 5}`
+        : `${best.trackIndex}:${station.trackIndex}:${best.x >> 5}:${best.y >> 5}:${station.x >> 5}:${station.y >> 5}`;
+      if (usedPairs.has(key)) continue;
+      usedPairs.add(key);
+      carved += carveRailWalkwayLine(world, spec, station.x, station.y, best.x, best.y, 2);
+      bridges++;
+    }
+  }
+
+  if (carved > 0) {
+    world.markCellsDirty();
+    world.markWallTexDirty();
+    world.markFloorTexDirty();
+    world.markFeaturesDirty(true);
+  }
+  return carved;
+}
+
 function applyRailTrains(
   world: World,
   rooms: Room[],
@@ -8695,7 +12740,7 @@ function applyRailTrains(
     const room = anchors[(spec.seed + i * 7) % anchors.length];
     const center = roomCenter(room);
     const horizontal = i % 2 === 0;
-    const coord = world.wrap(horizontal ? center.y + (i - 1) * 18 : center.x + (i - 1) * 18);
+    const coord = clampProceduralRailCoord(world.wrap(horizontal ? center.y + (i - 1) * 18 : center.x + (i - 1) * 18));
     const track = carveProceduralRailLine(world, spec, i, horizontal, coord);
     if (!track) continue;
     addRailTrainRoute(world, entities, nextId, track, {
@@ -8710,6 +12755,8 @@ function applyRailTrains(
     tracks.push(track);
   }
   registerRailCrossings(world, spec, tracks);
+  placeRailServicePockets(world, rooms, spec, tracks);
+  applyRailTransitYards(world, spec, tracks);
   if (tracks.length > 0) {
     world.markCellsDirty();
     world.markFloorTexDirty();
@@ -8883,6 +12930,383 @@ function carveApartmentPressureSlabs(world: World, rooms: readonly Room[], spec:
   return changed.size;
 }
 
+function apartmentPressureInfillRoomType(seed: number, serial: number, row: number): RoomType {
+  const types = [
+    RoomType.LIVING,
+    RoomType.LIVING,
+    RoomType.KITCHEN,
+    RoomType.BATHROOM,
+    RoomType.STORAGE,
+    RoomType.COMMON,
+    RoomType.SMOKING,
+  ] as const;
+  return types[Math.abs(seed + serial * 5 + row * 11) % types.length];
+}
+
+function apartmentPressureInfillTargetRooms(spec: ProceduralFloorSpec): number {
+  const anomalyBonus = spec.anomalyId === 'samosbor_seed' ? 440 : spec.anomalyId === 'zombie_apocalypse' ? 320 : 0;
+  return 2250 + spec.danger * 170 + anomalyBonus;
+}
+
+function carveApartmentPressureInfillFloor(
+  world: World,
+  x: number,
+  y: number,
+  floorTex: Tex,
+  changed: Set<number>,
+): boolean {
+  const ci = world.idx(x, y);
+  if (world.aptMask[ci] || world.hermoWall[ci] || world.containerMap.has(ci)) return false;
+  if (world.cells[ci] === Cell.LIFT || world.cells[ci] === Cell.ABYSS || world.cells[ci] === Cell.DOOR) return false;
+  if (world.roomMap[ci] >= 0) return false;
+  if (world.features[ci] === Feature.LIFT_BUTTON) return false;
+  const changedCell = world.cells[ci] !== Cell.FLOOR || world.floorTex[ci] !== floorTex;
+  world.cells[ci] = Cell.FLOOR;
+  world.roomMap[ci] = -1;
+  world.floorTex[ci] = floorTex;
+  world.wallTex[ci] = Tex.BRICK;
+  if (world.features[ci] !== Feature.SCREEN) world.features[ci] = Feature.NONE;
+  if (changedCell) changed.add(ci);
+  return true;
+}
+
+function carveApartmentPressureInfillCorridor(
+  world: World,
+  x1: number,
+  x2: number,
+  y: number,
+  changed: Set<number>,
+): void {
+  for (let x = x1; x <= x2; x++) {
+    carveApartmentPressureInfillFloor(world, x, y, Tex.F_LINO, changed);
+    if (((x + y) & 31) === 0) {
+      const ci = world.idx(x, y);
+      if (world.cells[ci] === Cell.FLOOR && world.features[ci] === Feature.NONE) world.features[ci] = Feature.LAMP;
+    }
+  }
+}
+
+function carveApartmentPressureInfillSegment(
+  world: World,
+  ax: number,
+  ay: number,
+  bx: number,
+  by: number,
+  floorTex: Tex,
+  changed: Set<number>,
+): void {
+  let cx = world.wrap(ax);
+  let cy = world.wrap(ay);
+  const dx = world.delta(cx, world.wrap(bx));
+  const dy = world.delta(cy, world.wrap(by));
+  const stepX = dx >= 0 ? 1 : -1;
+  const stepY = dy >= 0 ? 1 : -1;
+  const nx = Math.abs(dx);
+  const ny = Math.abs(dy);
+  for (let i = 0; i <= nx; i++) {
+    carveApartmentPressureInfillFloor(world, cx, cy, floorTex, changed);
+    if (i < nx) cx = world.wrap(cx + stepX);
+  }
+  for (let i = 0; i <= ny; i++) {
+    carveApartmentPressureInfillFloor(world, cx, cy, floorTex, changed);
+    if (i < ny) cy = world.wrap(cy + stepY);
+  }
+}
+
+function stampApartmentPressureInfillRoom(
+  world: World,
+  rooms: Room[],
+  spec: ProceduralFloorSpec,
+  type: RoomType,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  row: number,
+  serial: number,
+): Room | null {
+  if (x < 3 || y < 3 || x + w >= W - 3 || y + h >= W - 3) return null;
+  if (!canPlaceRoom(world, x, y, w, h)) return null;
+  const room = stampRoom(world, world.rooms.length, type, x, y, w, h, -1);
+  room.name = `Квартирная давка ${room.id}`;
+  applyRoomTexture(world, room, Tex.BRICK, type === RoomType.BATHROOM ? Tex.F_TILE : Tex.F_LINO);
+  decorateProceduralRoom(world, room, spec);
+  if (type === RoomType.KITCHEN) placeRoomFeatureFallback(world, room, Feature.STOVE, Math.floor(w / 2), Math.floor(h / 2), spec.seed ^ room.id);
+  else if (type === RoomType.BATHROOM) placeRoomFeatureFallback(world, room, Feature.TOILET, Math.floor(w / 2), Math.floor(h / 2), spec.seed ^ room.id);
+  else if (type === RoomType.STORAGE) placeRoomFeatureFallback(world, room, Feature.SHELF, Math.max(1, w - 2), Math.max(1, h - 2), spec.seed ^ room.id);
+  else if ((serial + row) % 5 === 0) placeRoomFeatureFallback(world, room, Feature.TABLE, Math.floor(w / 2), Math.floor(h / 2), spec.seed ^ room.id);
+  rooms.push(room);
+  return room;
+}
+
+function connectApartmentPressureInfillRoom(world: World, room: Room, corridorY: number, seed: number): number {
+  const doorX = world.wrap(room.x + 1 + Math.abs(seed) % Math.max(1, room.w - 2));
+  const aboveCorridor = room.y + room.h < corridorY;
+  const doorY = aboveCorridor ? room.y + room.h : room.y - 1;
+  const before = world.cells[world.idx(doorX, doorY)];
+  placeDoorAt(world, doorX, doorY, room.id);
+  const door = world.doors.get(world.idx(doorX, doorY));
+  if (door && (seed & 15) === 0) setDoorState(world, door, DoorState.CLOSED);
+  return before === Cell.DOOR ? 0 : world.cells[world.idx(doorX, doorY)] === Cell.DOOR ? 1 : 0;
+}
+
+function tryStampApartmentPressureInfillBlock(
+  world: World,
+  rooms: Room[],
+  spec: ProceduralFloorSpec,
+  originX: number,
+  originY: number,
+  blockW: number,
+  blockH: number,
+  serial: number,
+): { rooms: number; cells: number; doors: number; anchor: { x: number; y: number } | null } {
+  const corridorYs = blockH >= 54
+    ? [originY + 12, originY + Math.floor(blockH / 2), originY + blockH - 13]
+    : blockH >= 38
+      ? [originY + 13, originY + blockH - 14]
+      : [Math.max(originY + 10, Math.min(originY + blockH - 10, originY + Math.floor(blockH / 2)))];
+  const corridorStart = originX + 3;
+  const corridorEnd = originX + blockW - 4;
+  const connector = nearestApartmentPressureWalkable(world, originX + Math.floor(blockW / 2), corridorYs[0], APARTMENT_PRESSURE_INFILL_LINK_RADIUS);
+  const made: { room: Room; corridorY: number }[] = [];
+
+  for (let row = 0; row < corridorYs.length; row++) {
+    const corridorY = corridorYs[row];
+    let cursor = corridorStart + 2 + ((serial + row) % 3);
+    let roomSerial = 0;
+    while (cursor <= corridorEnd - 8) {
+      const seed = spec.seed ^
+        Math.imul(serial + 1, 0x45d9f3b) ^
+        Math.imul(row + 1, 0x7feb352d) ^
+        Math.imul(roomSerial + 1, 0x27d4eb2d);
+      const rw = 6 + Math.abs(seed % 5);
+      const upperH = 4 + Math.abs((seed >>> 4) % 4);
+      const lowerH = 4 + Math.abs((seed >>> 9) % 4);
+      const upperY = corridorY - upperH - 1;
+      const lowerY = corridorY + 2;
+      const upperType = apartmentPressureInfillRoomType(seed, roomSerial, row * 2);
+      const lowerType = apartmentPressureInfillRoomType(seed >>> 1, roomSerial, row * 2 + 1);
+      if (upperY >= originY + 2) {
+        const upper = stampApartmentPressureInfillRoom(world, rooms, spec, upperType, cursor, upperY, rw, upperH, row * 2, roomSerial);
+        if (upper) made.push({ room: upper, corridorY });
+      }
+      if (lowerY + lowerH <= originY + blockH - 2) {
+        const lower = stampApartmentPressureInfillRoom(world, rooms, spec, lowerType, cursor, lowerY, rw, lowerH, row * 2 + 1, roomSerial);
+        if (lower) made.push({ room: lower, corridorY });
+      }
+      cursor += rw + 2 + Math.abs((seed >>> 13) % 2);
+      roomSerial++;
+    }
+  }
+
+  if (made.length < 4) return { rooms: made.length, cells: 0, doors: 0, anchor: null };
+
+  const changed = new Set<number>();
+  for (const corridorY of corridorYs) carveApartmentPressureInfillCorridor(world, corridorStart, corridorEnd, corridorY, changed);
+  const midX = world.wrap(originX + Math.floor(blockW / 2));
+  for (let i = 1; i < corridorYs.length; i++) {
+    carveApartmentPressureSegment(world, midX, corridorYs[i - 1], midX, corridorYs[i], Tex.F_LINO, changed);
+  }
+  let doors = 0;
+  for (const item of made) doors += connectApartmentPressureInfillRoom(world, item.room, item.corridorY, spec.seed ^ item.room.id * 733);
+  const mid = { x: midX, y: world.wrap(corridorYs[Math.floor(corridorYs.length / 2)]) };
+  if (connector && world.dist2(mid.x, mid.y, connector.x, connector.y) > 8 * 8) {
+    carveCorridor(world, mid.x, mid.y, connector.x, connector.y);
+  }
+  return { rooms: made.length, cells: changed.size, doors, anchor: mid };
+}
+
+function apartmentPressureMemoryRoomType(seed: number, serial: number): RoomType {
+  const types = [
+    RoomType.LIVING,
+    RoomType.LIVING,
+    RoomType.STORAGE,
+    RoomType.KITCHEN,
+    RoomType.BATHROOM,
+    RoomType.COMMON,
+    RoomType.SMOKING,
+  ] as const;
+  return types[Math.abs(seed + serial * 13) % types.length];
+}
+
+function placeApartmentPressureCourtDoor(
+  world: World,
+  room: Room,
+  side: 'top' | 'bottom' | 'left' | 'right',
+  seed: number,
+  cx: number,
+  cy: number,
+  changed: Set<number>,
+): number {
+  const doorX = side === 'left'
+    ? room.x + room.w
+    : side === 'right'
+      ? room.x - 1
+      : room.x + 1 + Math.abs(seed % Math.max(1, room.w - 2));
+  const doorY = side === 'top'
+    ? room.y + room.h
+    : side === 'bottom'
+      ? room.y - 1
+      : room.y + 1 + Math.abs((seed >>> 4) % Math.max(1, room.h - 2));
+  const outsideX = side === 'left' ? doorX + 1 : side === 'right' ? doorX - 1 : doorX;
+  const outsideY = side === 'top' ? doorY + 1 : side === 'bottom' ? doorY - 1 : doorY;
+  placeDoorAt(world, doorX, doorY, room.id);
+  carveApartmentPressureInfillSegment(world, outsideX, outsideY, cx, cy, Tex.F_CONCRETE, changed);
+  return world.cells[world.idx(doorX, doorY)] === Cell.DOOR ? 1 : 0;
+}
+
+function tryStampApartmentPressureCementMemoryCourt(
+  world: World,
+  rooms: Room[],
+  spec: ProceduralFloorSpec,
+  originX: number,
+  originY: number,
+  courtW: number,
+  courtH: number,
+  serial: number,
+): { rooms: number; cells: number; doors: number; anchor: { x: number; y: number } | null } {
+  const cx = world.wrap(originX + Math.floor(courtW / 2));
+  const cy = world.wrap(originY + Math.floor(courtH / 2));
+  const seed = spec.seed ^ Math.imul(serial + 1, 0x9e3779b1);
+  const plans: { x: number; y: number; w: number; h: number; side: 'top' | 'bottom' | 'left' | 'right'; type: RoomType }[] = [];
+  const topY = originY + 3;
+  const bottomY = originY + courtH - 12;
+  let cursor = originX + 4 + (serial % 3);
+  let planIndex = 0;
+  while (cursor <= originX + courtW - 13) {
+    const localSeed = seed ^ Math.imul(planIndex + 1, 0x45d9f3b);
+    const w = 7 + Math.abs(localSeed % 4);
+    const topH = 6 + Math.abs((localSeed >>> 5) % 4);
+    const bottomH = 6 + Math.abs((localSeed >>> 9) % 4);
+    plans.push({ x: cursor, y: topY, w, h: topH, side: 'top', type: apartmentPressureMemoryRoomType(localSeed, planIndex) });
+    plans.push({ x: cursor, y: bottomY, w, h: bottomH, side: 'bottom', type: apartmentPressureMemoryRoomType(localSeed >>> 1, planIndex + 7) });
+    cursor += w + 5;
+    planIndex++;
+  }
+  for (let row = 0; row < 3; row++) {
+    const localSeed = seed ^ Math.imul(row + 19, 0x27d4eb2d);
+    const h = 7 + Math.abs((localSeed >>> 3) % 4);
+    const y = originY + 15 + row * 11 + Math.abs((localSeed >>> 8) % 3);
+    plans.push({ x: originX + 3, y, w: 7 + Math.abs(localSeed % 3), h, side: 'left', type: apartmentPressureMemoryRoomType(localSeed, row + 13) });
+    plans.push({ x: originX + courtW - 11, y, w: 7 + Math.abs((localSeed >>> 11) % 3), h, side: 'right', type: apartmentPressureMemoryRoomType(localSeed >>> 1, row + 17) });
+  }
+
+  const made: Room[] = [];
+  const changed = new Set<number>();
+  let doors = 0;
+  for (let i = 0; i < plans.length; i++) {
+    const plan = plans[i];
+    if (!canPlaceRoom(world, plan.x, plan.y, plan.w, plan.h)) continue;
+    const room = stampRoom(world, world.rooms.length, plan.type, plan.x, plan.y, plan.w, plan.h, -1);
+    room.name = `Цементный двор памяти ${serial + 1}.${made.length + 1}`;
+    applyRoomTexture(world, room, Tex.BRICK, plan.type === RoomType.BATHROOM ? Tex.F_TILE : Tex.F_LINO);
+    decorateProceduralRoom(world, room, spec);
+    if (plan.type === RoomType.KITCHEN) placeRoomFeatureFallback(world, room, Feature.STOVE, Math.floor(room.w / 2), Math.floor(room.h / 2), seed ^ i);
+    else if (plan.type === RoomType.BATHROOM) placeRoomFeatureFallback(world, room, Feature.TOILET, Math.floor(room.w / 2), Math.floor(room.h / 2), seed ^ i);
+    else if (plan.type === RoomType.STORAGE) placeRoomFeatureFallback(world, room, Feature.SHELF, Math.max(1, room.w - 2), Math.max(1, room.h - 2), seed ^ i);
+    else if ((i + serial) % 4 === 0) placeRoomFeatureFallback(world, room, Feature.TABLE, Math.floor(room.w / 2), Math.floor(room.h / 2), seed ^ i);
+    rooms.push(room);
+    made.push(room);
+    doors += placeApartmentPressureCourtDoor(world, room, plan.side, seed ^ i * 733, cx, cy, changed);
+  }
+
+  if (made.length < 4) return { rooms: made.length, cells: changed.size, doors, anchor: null };
+
+  carveApartmentPressureInfillSegment(world, originX + 5, cy, originX + courtW - 6, cy, Tex.F_CONCRETE, changed);
+  carveApartmentPressureInfillSegment(world, cx, originY + 8, cx, originY + courtH - 9, Tex.F_CONCRETE, changed);
+  for (let dy = -3; dy <= 3; dy++) {
+    for (let dx = -4; dx <= 4; dx++) {
+      carveApartmentPressureInfillFloor(world, cx + dx, cy + dy, Tex.F_CONCRETE, changed);
+    }
+  }
+  const connector = nearestApartmentPressureWalkable(world, cx, cy, APARTMENT_PRESSURE_INFILL_LINK_RADIUS);
+  if (connector && world.dist2(cx, cy, connector.x, connector.y) > 7 * 7) {
+    carveApartmentPressureInfillSegment(world, cx, cy, connector.x, connector.y, Tex.F_LINO, changed);
+  }
+  const centerIdx = world.idx(cx, cy);
+  if (world.cells[centerIdx] === Cell.FLOOR) world.features[centerIdx] = Feature.APPARATUS;
+  return { rooms: made.length, cells: changed.size, doors, anchor: { x: cx, y: cy } };
+}
+
+function applyApartmentPressureCementMemoryCourts(world: World, rooms: Room[], spec: ProceduralFloorSpec): number {
+  if (spec.anomalyId !== 'cement_memory') return 0;
+  const margin = 22;
+  const step = Math.floor((W - margin * 2) / APARTMENT_PRESSURE_CEMENT_MEMORY_GRID);
+  const candidates: { x: number; y: number; w: number; h: number; score: number }[] = [];
+  for (let gy = 0; gy < APARTMENT_PRESSURE_CEMENT_MEMORY_GRID; gy++) {
+    for (let gx = 0; gx < APARTMENT_PRESSURE_CEMENT_MEMORY_GRID; gx++) {
+      const seed = spec.seed ^ Math.imul(gx + 43, 0x85ebca6b) ^ Math.imul(gy + 59, 0xc2b2ae35);
+      const w = Math.min(step - 5, 58 + Math.abs((seed >>> 4) % 15));
+      const h = Math.min(step - 5, 48 + Math.abs((seed >>> 10) % 13));
+      const x = Math.max(8, Math.min(W - w - 8, margin + gx * step + Math.floor((step - w) / 2) + Math.round((fieldHash01(seed, gx, gy, 0x671) - 0.5) * 16)));
+      const y = Math.max(8, Math.min(W - h - 8, margin + gy * step + Math.floor((step - h) / 2) + Math.round((fieldHash01(seed, gx, gy, 0x672) - 0.5) * 16)));
+      const diagonalBias = gx === gy || gx + gy === APARTMENT_PRESSURE_CEMENT_MEMORY_GRID - 1 ? 0.2 : 0;
+      candidates.push({ x, y, w, h, score: fieldHash01(spec.seed, gx, gy, 0x673) + diagonalBias });
+    }
+  }
+  candidates.sort((a, b) => b.score - a.score);
+
+  let changed = 0;
+  let courts = 0;
+  const anchors: { x: number; y: number }[] = [];
+  for (const candidate of candidates) {
+    if (courts >= APARTMENT_PRESSURE_CEMENT_MEMORY_COURTS) break;
+    const result = tryStampApartmentPressureCementMemoryCourt(world, rooms, spec, candidate.x, candidate.y, candidate.w, candidate.h, courts);
+    if (result.rooms < 4 || !result.anchor) continue;
+    changed += result.cells + result.doors + result.rooms;
+    if (anchors.length > 0 && (courts % 3) === 2) {
+      const prev = anchors[Math.max(0, anchors.length - 1 - (courts % Math.min(4, anchors.length)))];
+      const linkChanged = new Set<number>();
+      carveApartmentPressureInfillSegment(world, result.anchor.x, result.anchor.y, prev.x, prev.y, Tex.F_LINO, linkChanged);
+      changed += linkChanged.size;
+    }
+    anchors.push(result.anchor);
+    courts++;
+  }
+  return changed;
+}
+
+function applyApartmentPressureInfill(world: World, rooms: Room[], spec: ProceduralFloorSpec): number {
+  const targetRooms = apartmentPressureInfillTargetRooms(spec);
+  const beforeRooms = rooms.length;
+  const candidates: { x: number; y: number; w: number; h: number; score: number }[] = [];
+  const margin = 18;
+  const step = Math.floor((W - margin * 2) / APARTMENT_PRESSURE_INFILL_GRID);
+  for (let gy = 0; gy < APARTMENT_PRESSURE_INFILL_GRID; gy++) {
+    for (let gx = 0; gx < APARTMENT_PRESSURE_INFILL_GRID; gx++) {
+      const seed = spec.seed ^ Math.imul(gx + 17, 0x85ebca6b) ^ Math.imul(gy + 31, 0xc2b2ae35);
+      const w = Math.min(step - 4, 70 + Math.abs((seed >>> 3) % 18));
+      const h = Math.min(step - 4, 58 + Math.abs((seed >>> 9) % 16));
+      const jitterX = Math.round((fieldHash01(seed, gx, gy, 0x341) - 0.5) * 12);
+      const jitterY = Math.round((fieldHash01(seed, gx, gy, 0x342) - 0.5) * 12);
+      const x = Math.max(8, Math.min(W - w - 8, margin + gx * step + Math.floor((step - w) / 2) + jitterX));
+      const y = Math.max(8, Math.min(W - h - 8, margin + gy * step + Math.floor((step - h) / 2) + jitterY));
+      const score = fieldHash01(spec.seed, gx, gy, 0x343) + (gx === gy || gx + gy === APARTMENT_PRESSURE_INFILL_GRID - 1 ? 0.22 : 0);
+      candidates.push({ x, y, w, h, score });
+    }
+  }
+  candidates.sort((a, b) => b.score - a.score);
+
+  let changed = 0;
+  let blocks = 0;
+  const anchors: { x: number; y: number }[] = [];
+  for (const candidate of candidates) {
+    if (blocks >= APARTMENT_PRESSURE_INFILL_MAX_BLOCKS || rooms.length - beforeRooms >= targetRooms) break;
+    const result = tryStampApartmentPressureInfillBlock(world, rooms, spec, candidate.x, candidate.y, candidate.w, candidate.h, blocks);
+    if (result.rooms < 4) continue;
+    changed += result.cells + result.doors;
+    blocks++;
+    if (result.anchor) {
+      if (anchors.length > 0 && (blocks % 5 === 0 || result.rooms >= 10)) {
+        const prev = anchors[Math.max(0, anchors.length - 1 - (blocks % Math.min(3, anchors.length)))];
+        carveCorridor(world, result.anchor.x, result.anchor.y, prev.x, prev.y);
+      }
+      anchors.push(result.anchor);
+    }
+  }
+  return changed + Math.max(0, rooms.length - beforeRooms);
+}
+
 function nearestApartmentPressureWalkable(world: World, sx: number, sy: number, radius: number): { x: number; y: number } | null {
   const startX = world.wrap(Math.floor(sx));
   const startY = world.wrap(Math.floor(sy));
@@ -9038,9 +13462,17 @@ function openApartmentPressureRouteDoor(
   state: DoorState,
   keyId: string,
 ): number {
-  const exit = roomExit(world, room, Math.floor(targetX), Math.floor(targetY));
+  const exit = apartmentPressureDoorExit(world, room, Math.floor(targetX), Math.floor(targetY));
+  const doorCell = world.idx(exit.wx, exit.wy);
+  if (!world.aptMask[doorCell] && world.cells[doorCell] !== Cell.WALL && world.cells[doorCell] !== Cell.DOOR) {
+    world.cells[doorCell] = Cell.WALL;
+    world.roomMap[doorCell] = -1;
+    world.wallTex[doorCell] = room.wallTex;
+    world.features[doorCell] = Feature.NONE;
+  }
+  reinforceApartmentPressureDoorJambs(world, exit, room.wallTex);
   placeDoorAt(world, exit.wx, exit.wy, room.id);
-  const doorIdx = world.idx(exit.wx, exit.wy);
+  const doorIdx = doorCell;
   const outside = nearestApartmentPressureWalkable(world, exit.ox, exit.oy, 36);
   if (outside) carveCorridor(world, exit.ox, exit.oy, outside.x, outside.y);
   else {
@@ -9049,12 +13481,77 @@ function openApartmentPressureRouteDoor(
   }
   const door = world.doors.get(doorIdx);
   if (door) {
+    braceApartmentPressureDoor(world, room, doorIdx);
     setDoorState(world, door, state);
     door.keyId = keyId;
     world.wallTex[doorIdx] = state === DoorState.LOCKED ? Tex.DOOR_METAL : Tex.DOOR_WOOD;
     return doorIdx;
   }
   return -1;
+}
+
+function reinforceApartmentPressureDoorJambs(
+  world: World,
+  exit: { wx: number; wy: number; ox: number; oy: number },
+  wallTex: Tex,
+): void {
+  const horizontalPass = world.wrap(exit.ox) !== world.wrap(exit.wx);
+  const jambs = horizontalPass
+    ? [{ x: exit.wx, y: exit.wy - 1 }, { x: exit.wx, y: exit.wy + 1 }]
+    : [{ x: exit.wx - 1, y: exit.wy }, { x: exit.wx + 1, y: exit.wy }];
+  for (const jamb of jambs) {
+    const idx = world.idx(jamb.x, jamb.y);
+    if (world.aptMask[idx] || world.hermoWall[idx] || world.cells[idx] === Cell.LIFT || world.doors.has(idx) || world.containerMap.has(idx)) continue;
+    if (world.roomMap[idx] >= 0) continue;
+    world.cells[idx] = Cell.WALL;
+    world.roomMap[idx] = -1;
+    world.wallTex[idx] = wallTex;
+    world.features[idx] = Feature.NONE;
+  }
+}
+
+function apartmentPressureDoorExit(world: World, room: Room, targetX: number, targetY: number): { wx: number; wy: number; ox: number; oy: number } {
+  const preferred = roomExit(world, room, targetX, targetY);
+  if (!world.aptMask[world.idx(preferred.wx, preferred.wy)]) return preferred;
+
+  let best = preferred;
+  let bestD2 = Number.POSITIVE_INFINITY;
+  const consider = (wx: number, wy: number, ox: number, oy: number): void => {
+    const idx = world.idx(wx, wy);
+    if (world.aptMask[idx]) return;
+    const d2 = world.dist2(wx, wy, targetX, targetY);
+    if (d2 < bestD2) {
+      bestD2 = d2;
+      best = { wx: world.wrap(wx), wy: world.wrap(wy), ox: world.wrap(ox), oy: world.wrap(oy) };
+    }
+  };
+
+  for (let dx = 0; dx < room.w; dx++) {
+    const x = room.x + dx;
+    consider(x, room.y - 1, x, room.y - 2);
+    consider(x, room.y + room.h, x, room.y + room.h + 1);
+  }
+  for (let dy = 0; dy < room.h; dy++) {
+    const y = room.y + dy;
+    consider(room.x - 1, y, room.x - 2, y);
+    consider(room.x + room.w, y, room.x + room.w + 1, y);
+  }
+  return best;
+}
+
+function braceApartmentPressureDoor(world: World, room: Room, doorIdx: number): void {
+  const x = doorIdx % W;
+  const y = (doorIdx / W) | 0;
+  const horizontalDoor = x >= room.x && x < room.x + room.w;
+  const braces = horizontalDoor ? [[-1, 0], [1, 0]] as const : [[0, -1], [0, 1]] as const;
+  for (const [dx, dy] of braces) {
+    const idx = world.idx(x + dx, y + dy);
+    if (world.aptMask[idx] || world.cells[idx] === Cell.DOOR) continue;
+    world.cells[idx] = Cell.WALL;
+    world.roomMap[idx] = -1;
+    world.wallTex[idx] = room.wallTex;
+    world.features[idx] = Feature.NONE;
+  }
 }
 
 function lockExistingApartmentPressureDoor(world: World, room: Room, keyId: string): number {
@@ -9065,6 +13562,7 @@ function lockExistingApartmentPressureDoor(world: World, room: Room, keyId: stri
   if (existing !== undefined) {
     const door = world.doors.get(existing);
     if (door) {
+      braceApartmentPressureDoor(world, room, existing);
       setDoorState(world, door, DoorState.LOCKED);
       door.keyId = keyId;
       world.wallTex[existing] = Tex.DOOR_METAL;
@@ -9164,8 +13662,10 @@ function applyApartmentPressure(world: World, rooms: Room[], spec: ProceduralFlo
   if (spec.geometryId !== 'apartment_pressure') return;
 
   const used = new Set<number>();
+  const carvedInfill = applyApartmentPressureInfill(world, rooms, spec);
   const carvedSlabs = carveApartmentPressureSlabs(world, rooms, spec);
   applyApartmentPressureDomains(world, rooms, spec);
+  const carvedMemoryCourts = applyApartmentPressureCementMemoryCourts(world, rooms, spec);
 
   const legalRoom = pickApartmentPressureRoom(
     world,
@@ -9211,7 +13711,7 @@ function applyApartmentPressure(world: World, rooms: Room[], spec: ProceduralFlo
   const liftDown = findApartmentPressureLiftAnchor(world, LiftDirection.DOWN, 'lift_down', spawnX, spawnY);
   const liftUp = findApartmentPressureLiftAnchor(world, LiftDirection.UP, 'lift_up', spawnX, spawnY);
 
-  let changed = carvedSlabs;
+  let changed = carvedInfill + carvedSlabs + carvedMemoryCourts;
   for (const anchor of [legal, crowd, cut, barricade]) {
     if (anchor) changed += carveApartmentPressureQueueLoop(world, anchor, spec.seed ^ anchor.id.length * 733);
   }
@@ -9250,6 +13750,63 @@ function applyApartmentPressure(world: World, rooms: Room[], spec: ProceduralFlo
     world.markFloorTexDirty();
     world.markFeaturesDirty(true);
   }
+}
+
+function applyCollectorZombieResidentialInfill(
+  world: World,
+  rooms: Room[],
+  spec: ProceduralFloorSpec,
+  spawnX: number,
+  spawnY: number,
+): void {
+  if (spec.geometryId !== 'collectors' || spec.anomalyId !== 'zombie_apocalypse') return;
+  const beforeRooms = rooms.length;
+  const changed = applyApartmentPressureInfill(world, rooms, spec);
+  const addedRooms = rooms.slice(beforeRooms);
+  if (addedRooms.length === 0 && changed === 0) return;
+
+  for (const room of addedRooms) {
+    if (room.name.startsWith('Квартирная давка')) room.name = `Зараженный жилблок ${room.id}`;
+  }
+
+  const nearest = addedRooms
+    .slice()
+    .sort((a, b) => roomDist2(world, spawnX, spawnY, a) - roomDist2(world, spawnX, spawnY, b))[0];
+  const farthest = addedRooms
+    .slice()
+    .sort((a, b) => roomDist2(world, spawnX, spawnY, b) - roomDist2(world, spawnX, spawnY, a))[0];
+  if (nearest && farthest) {
+    const from = roomCenter(nearest);
+    const to = roomCenter(farthest);
+    registerRouteCue(world, {
+      id: `procedural_${spec.key}_collector_zombie_residential_infill`,
+      x: from.x + 0.5,
+      y: from.y + 0.5,
+      targetX: to.x + 0.5,
+      targetY: to.y + 0.5,
+      floor: spec.baseFloor,
+      roomId: nearest.id,
+      targetRoomId: farthest.id,
+      zoneId: world.zoneMap[world.idx(from.x, from.y)],
+      label: 'зараженный жилой рукав',
+      hint: 'коллектор раскрывается в плотные жилые карманы между мокрыми магистралями',
+      targetName: farthest.name,
+      color: '#d1b06a',
+      tags: ['procedural_floor', 'collectors', 'zombie_apocalypse', 'residential_infill', 'multi_scale'],
+      toneSeed: (spec.seed ^ 0x62c011ec) >>> 0,
+      radius: 12,
+      targetRadius: 4,
+      cooldownSec: 45,
+      heardText: 'За трубами слышны квартирные двери: заражение ушло не в круг, а в жилую толщу.',
+      followedText: 'Жилой рукав вывел к другому масштабу зараженного коллектора.',
+      ignoredText: 'Жилой рукав остался за влажной магистралью.',
+    });
+  }
+
+  world.markCellsDirty();
+  world.markWallTexDirty();
+  world.markFloorTexDirty();
+  world.markFeaturesDirty(true);
 }
 
 interface WildMajorityLeaf {
@@ -10391,6 +14948,7 @@ function applyFalseSafeBlock(
   const center = roomCenter(shelter);
   shelter.name = `${FALSE_SAFE_BLOCK_ROOM_PREFIX}: чистое укрытие без сирены`;
   cleanFalseSafeRoom(world, shelter);
+  paintProceduralRoomTerritory(world, shelter, ZoneFaction.CULTIST);
   const shelterZoneId = world.zoneMap[world.idx(center.x, center.y)];
   const shelterZone = world.zones[shelterZoneId];
   if (shelterZone) {
@@ -10408,6 +14966,7 @@ function applyFalseSafeBlock(
   for (const room of quietCorridors) {
     room.name = `${FALSE_SAFE_BLOCK_ROOM_PREFIX}: тихий ход ${room.id}`;
     cleanFalseSafeRoom(world, room);
+    paintProceduralRoomTerritory(world, room, ZoneFaction.CULTIST);
   }
 
   const screen = placeRoomFeatureFallback(world, shelter, Feature.SCREEN, 2, 1, spec.seed + 43);
@@ -10772,7 +15331,15 @@ function placeFallbackLift(world: World, reachable: Uint8Array, direction: LiftD
   return false;
 }
 
-function ensureProceduralLiftAccess(world: World, spawnX: number, spawnY: number): void {
+function ensureProceduralConnectivity(world: World, spawnX: number, spawnY: number, spec: ProceduralFloorSpec): void {
+  if (spec.anomalyId === 'wall_snake') {
+    ensureWallSnakeConnectivity(world, spawnX, spawnY, spec.seed ^ 0x51c0ffee);
+    return;
+  }
+  ensureConnectivity(world, spawnX, spawnY);
+}
+
+function ensureProceduralLiftAccess(world: World, spawnX: number, spawnY: number, spec: ProceduralFloorSpec): void {
   let reachable = reachableFromSpawn(world, spawnX, spawnY);
   for (const direction of [LiftDirection.UP, LiftDirection.DOWN] as const) {
     if (liftDirectionHasReachableAccess(world, reachable, direction)) continue;
@@ -10782,20 +15349,20 @@ function ensureProceduralLiftAccess(world: World, spawnX: number, spawnY: number
     } else {
       placeFallbackLift(world, reachable, direction);
     }
-    ensureConnectivity(world, spawnX, spawnY);
+    ensureProceduralConnectivity(world, spawnX, spawnY, spec);
     reachable = reachableFromSpawn(world, spawnX, spawnY);
   }
 }
 
-function repairFinalProceduralConnectivity(world: World, spawnX: number, spawnY: number): { spawnX: number; spawnY: number } {
+function repairFinalProceduralConnectivity(world: World, spawnX: number, spawnY: number, spec: ProceduralFloorSpec): { spawnX: number; spawnY: number } {
   let spawn = resolveProceduralSpawn(world, spawnX, spawnY);
   sanitizeDoors(world);
   repairProceduralRoomAnchors(world);
-  ensureConnectivity(world, spawn.spawnX, spawn.spawnY);
-  ensureProceduralLiftAccess(world, spawn.spawnX, spawn.spawnY);
-  ensureConnectivity(world, spawn.spawnX, spawn.spawnY);
+  ensureProceduralConnectivity(world, spawn.spawnX, spawn.spawnY, spec);
+  ensureProceduralLiftAccess(world, spawn.spawnX, spawn.spawnY, spec);
+  ensureProceduralConnectivity(world, spawn.spawnX, spawn.spawnY, spec);
   sanitizeDoors(world);
-  ensureConnectivity(world, spawn.spawnX, spawn.spawnY);
+  ensureProceduralConnectivity(world, spawn.spawnX, spawn.spawnY, spec);
   spawn = resolveProceduralSpawn(world, spawn.spawnX, spawn.spawnY);
   return spawn;
 }
@@ -11025,6 +15592,7 @@ export function generateProceduralFloor(spec: ProceduralFloorSpec): FloorGenerat
     applyCitizenMajorityPublicLayer(world, rooms, spec);
     applyScientistMajority(world, rooms, spec, spawnX, spawnY);
     const wildLayout = applyWildMajorityGeometry(world, rooms, spec, spawnX, spawnY);
+    placeProceduralMiniHqClusters(world, rooms, spec, spawnX, spawnY);
     generateZones(world);
     applyZones(world, spec);
     applyWaterAndMachines(world, rooms, spec, spawnX, spawnY);
@@ -11032,7 +15600,9 @@ export function generateProceduralFloor(spec: ProceduralFloorSpec): FloorGenerat
     placeLifts(world, 8, LiftDirection.DOWN);
     ensureSumpLiftDryAccess(world, spec, spawnX, spawnY);
     ensureCollectorDryLiftAccess(world, spec, spawnX, spawnY);
+    applyRailTrains(world, rooms, entities, nextId, spec, spawnX, spawnY);
     applyApartmentPressure(world, rooms, spec, spawnX, spawnY);
+    applyCollectorZombieResidentialInfill(world, rooms, spec, spawnX, spawnY);
     const placement = buildWalkablePlacementMap(world, spawnX, spawnY);
     const liquidatorControl = applyLiquidatorMajorityProfile(world, rooms, spec, placement.reachable, placement.candidates, spawnX, spawnY);
     registerProceduralAnomalyPlacement(world, placement);
@@ -11053,6 +15623,7 @@ export function generateProceduralFloor(spec: ProceduralFloorSpec): FloorGenerat
     addDeepReconStash(world, rooms, spec, placement.reachable);
     addDeepLiquidatorRewardStash(world, rooms, spec, placement.reachable);
     applyProceduralFloorObjectProfile(world, rooms, spec, placement.reachable);
+    initializeProceduralTerritory(world, spec);
     if (allowNpcs) {
       spawnWildMajorityAmbushes(world, entities, nextId, spec, wildRewardSites, placement.reachable, spawnX, spawnY);
       spawnNpcs(world, rooms, entities, nextId, spec);
@@ -11066,10 +15637,9 @@ export function generateProceduralFloor(spec: ProceduralFloorSpec): FloorGenerat
     applyCarnivorousFungusRooms(world, rooms, entities, nextId, spec, placement.reachable);
     applyHladon(world, rooms, entities, nextId, spec, spawnX, spawnY);
     applyTeleports(world, spec, placement);
-    applyRailTrains(world, rooms, entities, nextId, spec, spawnX, spawnY);
     applyFalseSafeBlock(world, rooms, entities, nextId, spec, allowNpcs);
     applyProceduralAnomalyProfile({ world, rooms, entities, nextId, spec, spawnX, spawnY, placement });
-    const spawn = repairFinalProceduralConnectivity(world, spawnX, spawnY);
+    const spawn = repairFinalProceduralConnectivity(world, spawnX, spawnY, spec);
     ensureZombieApocalypseQuarantineDoor(world, rooms, spec);
     ensureSumpRepairDryAccess(world, rooms, spec, spawn.spawnX, spawn.spawnY);
     ensureSumpLiftDryAccess(world, spec, spawn.spawnX, spawn.spawnY);
@@ -11081,6 +15651,7 @@ export function generateProceduralFloor(spec: ProceduralFloorSpec): FloorGenerat
     registerProceduralMonsterPressureCue(world, rooms, spec, spawn.spawnX, spawn.spawnY);
     if (!allowNpcs) removeNpcEntities(entities);
     recordProceduralGeometryMetrics(world, spec, spawn.spawnX, spawn.spawnY);
+    syncZoneMetadataFromTerritory(world);
 
     world.bakeLights();
     relightBadAppleWorld(world);

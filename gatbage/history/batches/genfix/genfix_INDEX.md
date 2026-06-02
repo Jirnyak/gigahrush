@@ -1,0 +1,227 @@
+# genfix index
+
+Generated from `tmp/floor-maps/all_route_seed_61061/manifest.json`, the full user feedback attachment, and the 2026-06-02 cell-first faction territory brief.
+
+## Successful reference floors
+
+- 021 Министерство: rooms 609, doors 609, reachable 394873, floors 395226
+- 037 Квартиры: rooms 13907, doors 79353, reachable 823940, floors 824339
+- 051 Жилая зона: rooms 10491, doors 2135, reachable 415803, floors 416423
+- 077 Коллекторы: rooms 4497, doors 75, reachable 287407, floors 287578
+
+## Territory control contract
+
+- Plans now assume cell-first ownership: `world.factionControl` / future `territoryOwner` is the authoritative owner per cell; zones are not territory truth.
+- Each generated floor should place mini HQ anchors for citizen, liquidator, cultist, scientist and wild factions in distinct map regions.
+- HQ geometry uses an unbreakable/hermetic safe core plus support rooms such as toilets, kitchens, workshops, storage, offices or medical rooms.
+- Territory is filled from HQ seeds to target shares, then room owners are derived from cell majority or explicit HQ anchors.
+- NPCs should prefer their own territory/HQ safe zones; raids and frontiers may cross borders, but ordinary population refill remains forbidden.
+- Special shares: Black Market 88 and Floor 69 are wild-majority; NII slime is scientist-majority; Kvartiry and Living are citizen-majority; Maintenance is liquidator-majority.
+
+## Territory share targets
+
+- 001 Крыша: dominant ликвидаторы, shares граждане 28%, ликвидаторы 38%, культисты 8%, учёные 14%, дикие 12%
+- 002 перескоки клеток: административные карманы, научная смена: dominant учёные, shares граждане 22%, ликвидаторы 16%, культисты 8%, учёные 42%, дикие 12%
+- 003 живые тоннели: чердачные венткамеры, дикий этаж: dominant дикие, shares граждане 17%, ликвидаторы 13%, культисты 12%, учёные 8%, дикие 50%
+- 004 зеркальная проводка: чердачные венткамеры, научная смена: dominant учёные, shares граждане 22%, ликвидаторы 16%, культисты 8%, учёные 42%, дикие 12%
+- 005 Чердак техслужб: dominant дикие, shares граждане 18%, ликвидаторы 24%, культисты 14%, учёные 10%, дикие 34%
+- 006 говнячный смог: административные карманы, этаж ликвидаторов: dominant ликвидаторы, shares граждане 17%, ликвидаторы 56%, культисты 7%, учёные 8%, дикие 12%
+- 007 Радоновый обменник: dominant ликвидаторы, shares граждане 16%, ликвидаторы 36%, культисты 10%, учёные 26%, дикие 12%
+- 008 тихий блок: чердачные венткамеры, этаж ликвидаторов: dominant ликвидаторы, shares граждане 16%, ликвидаторы 53%, культисты 12%, учёные 8%, дикие 11%
+- 009 Антенный двор: dominant ликвидаторы, shares граждане 18%, ликвидаторы 36%, культисты 8%, учёные 24%, дикие 14%
+- 010 хладон: административные карманы, дикий этаж: dominant дикие, shares граждане 17%, ликвидаторы 13%, культисты 12%, учёные 8%, дикие 50%
+- 011 Спецприёмник: dominant ликвидаторы, shares граждане 24%, ликвидаторы 44%, культисты 10%, учёные 8%, дикие 14%
+- 012 говнячный смог: чердачные венткамеры, гражданский этаж: dominant граждане, shares граждане 56%, ликвидаторы 17%, культисты 7%, учёные 8%, дикие 12%
+- 013 Пионерлагерь: dominant граждане, shares граждане 58%, ликвидаторы 12%, культисты 7%, учёные 9%, дикие 14%
+- 014 радио-шахматы: чердачные венткамеры, дикий этаж: dominant дикие, shares граждане 17%, ликвидаторы 13%, культисты 12%, учёные 8%, дикие 50%
+- 015 Бюро Кэли: dominant учёные, shares граждане 26%, ликвидаторы 20%, культисты 10%, учёные 34%, дикие 10%
+- 016 перескоки клеток: административные карманы, дикий этаж: dominant дикие, shares граждане 17%, ликвидаторы 13%, культисты 12%, учёные 8%, дикие 50%
+- 017 Верхнее бюро: dominant граждане, shares граждане 42%, ликвидаторы 26%, культисты 8%, учёные 16%, дикие 8%
+- 018 архивные норы, гражданский этаж: dominant граждане, shares граждане 56%, ликвидаторы 17%, культисты 7%, учёные 8%, дикие 12%
+- 019 Числовой реестр: dominant учёные, shares граждане 30%, ликвидаторы 18%, культисты 10%, учёные 34%, дикие 8%
+- 020 административные карманы, дикий этаж: dominant дикие, shares граждане 17%, ликвидаторы 13%, культисты 12%, учёные 8%, дикие 50%
+- 021 Министерство: dominant граждане, shares граждане 48%, ликвидаторы 24%, культисты 8%, учёные 14%, дикие 6%
+- 022 архивные норы, гражданский этаж: dominant граждане, shares граждане 56%, ликвидаторы 17%, культисты 7%, учёные 8%, дикие 12%
+- 023 Истинный лабиринт: dominant дикие, shares граждане 24%, ликвидаторы 16%, культисты 16%, учёные 10%, дикие 34%
+- 024 говнячный смог: архивные норы, гражданский этаж: dominant граждане, shares граждане 56%, ликвидаторы 17%, культисты 7%, учёные 8%, дикие 12%
+- 025 Банковский этаж: dominant граждане, shares граждане 42%, ликвидаторы 28%, культисты 8%, учёные 10%, дикие 12%
+- 026 тихий блок: архивные норы, гражданский этаж: dominant граждане, shares граждане 53%, ликвидаторы 16%, культисты 12%, учёные 8%, дикие 11%
+- 027 Архив критической протечки: dominant ликвидаторы, shares граждане 28%, ликвидаторы 34%, культисты 8%, учёные 18%, дикие 12%
+- 028 поезда: административные карманы, этаж ликвидаторов: dominant ликвидаторы, shares граждане 17%, ликвидаторы 56%, культисты 7%, учёные 8%, дикие 12%
+- 029 Райсовет и архив картотек: dominant граждане, shares граждане 44%, ликвидаторы 22%, культисты 8%, учёные 14%, дикие 12%
+- 030 сортировочный конвейер: административные карманы, научная смена: dominant учёные, shares граждане 22%, ликвидаторы 16%, культисты 8%, учёные 42%, дикие 12%
+- 031 Марковская лестница: dominant граждане, shares граждане 34%, ликвидаторы 24%, культисты 10%, учёные 14%, дикие 18%
+- 032 зеркальная проводка: административные карманы, гражданский этаж: dominant граждане, shares граждане 56%, ликвидаторы 17%, культисты 7%, учёные 8%, дикие 12%
+- 033 Морг регистраций: dominant ликвидаторы, shares граждане 28%, ликвидаторы 34%, культисты 12%, учёные 18%, дикие 8%
+- 034 поражение самосбором: плотные квартиры, гражданский этаж: dominant граждане, shares граждане 51%, ликвидаторы 15%, культисты 6%, учёные 7%, дикие 11%, самосбор 10%
+- 035 Больничный корпус: dominant учёные, shares граждане 24%, ликвидаторы 22%, культисты 6%, учёные 38%, дикие 10%
+- 036 перескоки клеток: административные карманы, гражданский этаж: dominant граждане, shares граждане 56%, ликвидаторы 17%, культисты 7%, учёные 8%, дикие 12%
+- 037 Квартиры: dominant граждане, shares граждане 66%, ликвидаторы 12%, культисты 6%, учёные 7%, дикие 9%
+- 038 плотные квартиры, гражданский этаж: dominant граждане, shares граждане 56%, ликвидаторы 17%, культисты 7%, учёные 8%, дикие 12%
+- 039 НИИ слизи: dominant учёные, shares граждане 14%, ликвидаторы 12%, культисты 6%, учёные 60%, дикие 8%
+- 040 коммунальные узлы, этаж ликвидаторов: dominant ликвидаторы, shares граждане 17%, ликвидаторы 56%, культисты 7%, учёные 8%, дикие 12%
+- 041 Ясли Тьюринга: dominant учёные, shares граждане 16%, ликвидаторы 14%, культисты 8%, учёные 50%, дикие 12%
+- 042 плотные квартиры, гражданский этаж: dominant граждане, shares граждане 56%, ликвидаторы 17%, культисты 7%, учёные 8%, дикие 12%
+- 043 Перекрестки: dominant граждане, shares граждане 44%, ликвидаторы 22%, культисты 10%, учёные 10%, дикие 14%
+- 044 коммунальные узлы, гражданский этаж: dominant граждане, shares граждане 56%, ликвидаторы 17%, культисты 7%, учёные 8%, дикие 12%
+- 045 Вороной-карантин: dominant учёные, shares граждане 18%, ликвидаторы 28%, культисты 8%, учёные 34%, дикие 12%
+- 046 цементная память: плотные квартиры, гражданский этаж: dominant граждане, shares граждане 56%, ликвидаторы 17%, культисты 7%, учёные 8%, дикие 12%
+- 047 Коммунальное кольцо: dominant граждане, shares граждане 54%, ликвидаторы 18%, культисты 7%, учёные 9%, дикие 12%
+- 048 жилая нарезка, научная смена: dominant учёные, shares граждане 22%, ликвидаторы 16%, культисты 8%, учёные 42%, дикие 12%
+- 049 Мёбиус-подъезд: dominant граждане, shares граждане 52%, ликвидаторы 18%, культисты 8%, учёные 12%, дикие 10%
+- 050 поезда: жилая нарезка, гражданский этаж: dominant граждане, shares граждане 56%, ликвидаторы 17%, культисты 7%, учёные 8%, дикие 12%
+- 051 Жилая зона: dominant граждане, shares граждане 64%, ликвидаторы 14%, культисты 6%, учёные 7%, дикие 9%
+- 052 жилая нарезка, научная смена: dominant учёные, shares граждане 22%, ликвидаторы 16%, культисты 8%, учёные 42%, дикие 12%
+- 053 Оранжерея бетона: dominant граждане, shares граждане 46%, ликвидаторы 10%, культисты 6%, учёные 24%, дикие 14%
+- 054 сортировочный конвейер: коммунальные узлы, дикий этаж: dominant дикие, shares граждане 17%, ликвидаторы 13%, культисты 12%, учёные 8%, дикие 50%
+- 055 Этаж 69: dominant дикие, shares граждане 18%, ликвидаторы 9%, культисты 8%, учёные 7%, дикие 58%
+- 056 говнячный смог: жилая нарезка, гражданский этаж: dominant граждане, shares граждане 56%, ликвидаторы 17%, культисты 7%, учёные 8%, дикие 12%
+- 057 Общежитие смены: dominant граждане, shares граждане 56%, ликвидаторы 16%, культисты 7%, учёные 8%, дикие 13%
+- 058 цеховой этаж, этаж ликвидаторов: dominant ликвидаторы, shares граждане 17%, ликвидаторы 56%, культисты 7%, учёные 8%, дикие 12%
+- 059 Прачечная Пенроуза: dominant граждане, shares граждане 56%, ликвидаторы 17%, культисты 7%, учёные 8%, дикие 12%
+- 060 хладон: жилая нарезка, научная смена: dominant учёные, shares граждане 22%, ликвидаторы 16%, культисты 8%, учёные 42%, дикие 12%
+- 061 Черный рынок 88: dominant дикие, shares граждане 16%, ликвидаторы 9%, культисты 8%, учёные 7%, дикие 60%
+- 062 зомби-апокалипсис: коллекторы, дикий этаж: dominant дикие, shares граждане 25%, ликвидаторы 12%, культисты 12%, учёные 9%, дикие 42%
+- 063 сервисные штреки, научная смена: dominant учёные, shares граждане 22%, ликвидаторы 16%, культисты 8%, учёные 42%, дикие 12%
+- 064 грибница: коммунальные узлы, гражданский этаж: dominant граждане, shares граждане 56%, ликвидаторы 17%, культисты 7%, учёные 8%, дикие 12%
+- 065 Производственный пояс: dominant ликвидаторы, shares граждане 14%, ликвидаторы 50%, культисты 6%, учёные 18%, дикие 12%
+- 066 поезда: сервисные штреки, гражданский этаж: dominant граждане, shares граждане 56%, ликвидаторы 17%, культисты 7%, учёные 8%, дикие 12%
+- 067 сервисные штреки, научная смена: dominant учёные, shares граждане 22%, ликвидаторы 16%, культисты 8%, учёные 42%, дикие 12%
+- 068 поражение самосбором: сервисные штреки, культовый этаж: dominant культисты, shares граждане 15%, ликвидаторы 11%, культисты 36%, учёные 7%, дикие 22%, самосбор 9%
+- 069 Служебный этаж: dominant ликвидаторы, shares граждане 16%, ликвидаторы 52%, культисты 6%, учёные 12%, дикие 14%
+- 070 говнячный смог: сервисные штреки, гражданский этаж: dominant граждане, shares граждане 56%, ликвидаторы 17%, культисты 7%, учёные 8%, дикие 12%
+- 071 Гиперболическая стрелочная: dominant ликвидаторы, shares граждане 12%, ликвидаторы 44%, культисты 8%, учёные 16%, дикие 20%
+- 072 песчаное перекрытие: коллекторы, этаж ликвидаторов: dominant ликвидаторы, shares граждане 17%, ликвидаторы 56%, культисты 7%, учёные 8%, дикие 12%
+- 073 Кремниевый НЕТ-колодец: dominant учёные, shares граждане 12%, ликвидаторы 18%, культисты 8%, учёные 48%, дикие 14%
+- 074 сервисные штреки, этаж ликвидаторов: dominant ликвидаторы, shares граждане 17%, ликвидаторы 56%, культисты 7%, учёные 8%, дикие 12%
+- 075 Шахта-атриум: dominant ликвидаторы, shares граждане 14%, ликвидаторы 44%, культисты 10%, учёные 10%, дикие 22%
+- 076 сервисные штреки, гражданский этаж: dominant граждане, shares граждане 56%, ликвидаторы 17%, культисты 7%, учёные 8%, дикие 12%
+- 077 Коллекторы: dominant ликвидаторы, shares граждане 16%, ликвидаторы 58%, культисты 5%, учёные 7%, дикие 14%
+- 078 сортировочный конвейер: затопленные эстакады, культовый этаж: dominant культисты, shares граждане 16%, ликвидаторы 12%, культисты 40%, учёные 8%, дикие 24%
+- 079 Гармоническая баня: dominant ликвидаторы, shares граждане 24%, ликвидаторы 38%, культисты 10%, учёные 14%, дикие 14%
+- 080 сортировочный конвейер: сервисные штреки, научная смена: dominant учёные, shares граждане 22%, ликвидаторы 16%, культисты 8%, учёные 42%, дикие 12%
+- 081 Склад Гильберта: dominant ликвидаторы, shares граждане 14%, ликвидаторы 42%, культисты 8%, учёные 20%, дикие 16%
+- 082 цеховой этаж, дикий этаж: dominant дикие, shares граждане 17%, ликвидаторы 13%, культисты 12%, учёные 8%, дикие 50%
+- 083 Темная пересадка: dominant дикие, shares граждане 14%, ликвидаторы 24%, культисты 14%, учёные 8%, дикие 40%
+- 084 игра жизнь: затопленные эстакады, этаж ликвидаторов: dominant ликвидаторы, shares граждане 17%, ликвидаторы 56%, культисты 7%, учёные 8%, дикие 12%
+- 085 Аттракторный двор: dominant ликвидаторы, shares граждане 14%, ликвидаторы 36%, культисты 10%, учёные 16%, дикие 24%
+- 086 фрактал: затопленные эстакады, гражданский этаж: dominant граждане, shares граждане 56%, ликвидаторы 17%, культисты 7%, учёные 8%, дикие 12%
+- 087 Мясной низ: dominant культисты, shares граждане 6%, ликвидаторы 8%, культисты 40%, учёные 4%, дикие 28%, самосбор 14%
+- 088 зеркальная проводка: коллекторы, гражданский этаж: dominant граждане, shares граждане 56%, ликвидаторы 17%, культисты 7%, учёные 8%, дикие 12%
+- 089 Нижний пропускник: dominant культисты, shares граждане 7%, ликвидаторы 10%, культисты 38%, учёные 5%, дикие 28%, самосбор 12%
+- 090 говнячный смог: коллекторы, этаж ликвидаторов: dominant ликвидаторы, shares граждане 17%, ликвидаторы 56%, культисты 7%, учёные 8%, дикие 12%
+- 091 Подад: dominant культисты, shares граждане 6%, ликвидаторы 9%, культисты 38%, учёные 5%, дикие 28%, самосбор 14%
+- 092 поезда: затопленные эстакады, дикий этаж: dominant дикие, shares граждане 17%, ликвидаторы 13%, культисты 12%, учёные 8%, дикие 50%
+- 093 Спектральная часовня: dominant культисты, shares граждане 10%, ликвидаторы 8%, культисты 46%, учёные 6%, дикие 22%, самосбор 8%
+- 094 грибница: затопленные эстакады, гражданский этаж: dominant граждане, shares граждане 56%, ликвидаторы 17%, культисты 7%, учёные 8%, дикие 12%
+- 095 Кантор пустоты: dominant дикие, shares граждане 6%, ликвидаторы 8%, культисты 24%, учёные 8%, дикие 34%, самосбор 20%
+- 096 bad apple!: затопленные эстакады, дикий этаж: dominant дикие, shares граждане 17%, ликвидаторы 13%, культисты 12%, учёные 8%, дикие 50%
+- 097 bad apple!: затопленные эстакады, культовый этаж: dominant культисты, shares граждане 16%, ликвидаторы 12%, культисты 40%, учёные 8%, дикие 24%
+- 098 затопленные эстакады, гражданский этаж: dominant граждане, shares граждане 56%, ликвидаторы 17%, культисты 7%, учёные 8%, дикие 12%
+- 099 Темный отсек: dominant дикие, shares граждане 6%, ликвидаторы 8%, культисты 24%, учёные 8%, дикие 36%, самосбор 18%
+- 100 затопленные эстакады, научная смена: dominant учёные, shares граждане 22%, ликвидаторы 16%, культисты 8%, учёные 42%, дикие 12%
+- 101 Пустота: dominant дикие, shares граждане 4%, ликвидаторы 8%, культисты 24%, учёные 6%, дикие 34%, самосбор 24%
+
+## Files
+
+- [genfix_001.md](genfix_001.md): design z+50 Крыша - P0 scale rewrite
+- [genfix_002.md](genfix_002.md): procedural z+49 перескоки клеток: административные карманы, научная смена - P0 scale rewrite
+- [genfix_003.md](genfix_003.md): procedural z+48 живые тоннели: чердачные венткамеры, дикий этаж - P0 scale rewrite
+- [genfix_004.md](genfix_004.md): procedural z+47 зеркальная проводка: чердачные венткамеры, научная смена - P0 scale rewrite
+- [genfix_005.md](genfix_005.md): design z+46 Чердак техслужб - P1 preserve macro, add mid/micro
+- [genfix_006.md](genfix_006.md): procedural z+45 говнячный смог: административные карманы, этаж ликвидаторов - P0 scale rewrite
+- [genfix_007.md](genfix_007.md): design z+44 Радоновый обменник - P0 scale rewrite
+- [genfix_008.md](genfix_008.md): procedural z+43 тихий блок: чердачные венткамеры, этаж ликвидаторов - P0 scale rewrite
+- [genfix_009.md](genfix_009.md): design z+42 Антенный двор - P0 scale rewrite
+- [genfix_010.md](genfix_010.md): procedural z+41 хладон: административные карманы, дикий этаж - P1 preserve macro, add mid/micro
+- [genfix_011.md](genfix_011.md): design z+40 Спецприёмник - P0 scale rewrite
+- [genfix_012.md](genfix_012.md): procedural z+39 говнячный смог: чердачные венткамеры, гражданский этаж - P0 scale rewrite
+- [genfix_013.md](genfix_013.md): design z+38 Пионерлагерь - P1 preserve macro, add mid/micro
+- [genfix_014.md](genfix_014.md): procedural z+37 радио-шахматы: чердачные венткамеры, дикий этаж - P0 scale rewrite
+- [genfix_015.md](genfix_015.md): design z+36 Бюро Кэли - P0 scale rewrite
+- [genfix_016.md](genfix_016.md): procedural z+35 перескоки клеток: административные карманы, дикий этаж - P1 preserve macro, add mid/micro
+- [genfix_017.md](genfix_017.md): design z+34 Верхнее бюро - P0 scale rewrite
+- [genfix_018.md](genfix_018.md): procedural z+33 архивные норы, гражданский этаж - P0 scale rewrite
+- [genfix_019.md](genfix_019.md): design z+32 Числовой реестр - P0 scale rewrite
+- [genfix_020.md](genfix_020.md): procedural z+31 административные карманы, дикий этаж - P0 scale rewrite
+- [genfix_021.md](genfix_021.md): story z+30 Министерство - P1 preserve macro, add mid/micro
+- [genfix_022.md](genfix_022.md): procedural z+29 архивные норы, гражданский этаж - P0 scale rewrite
+- [genfix_023.md](genfix_023.md): design z+28 Истинный лабиринт - P1 preserve macro, add mid/micro
+- [genfix_024.md](genfix_024.md): procedural z+27 говнячный смог: архивные норы, гражданский этаж - P1 preserve macro, add mid/micro
+- [genfix_025.md](genfix_025.md): design z+26 Банковский этаж - P1 preserve macro, add mid/micro
+- [genfix_026.md](genfix_026.md): procedural z+25 тихий блок: архивные норы, гражданский этаж - P1 preserve macro, add mid/micro
+- [genfix_027.md](genfix_027.md): design z+24 Архив критической протечки - P1 preserve macro, add mid/micro
+- [genfix_028.md](genfix_028.md): procedural z+23 поезда: административные карманы, этаж ликвидаторов - P0 scale rewrite
+- [genfix_029.md](genfix_029.md): design z+22 Райсовет и архив картотек - P1 preserve macro, add mid/micro
+- [genfix_030.md](genfix_030.md): procedural z+21 сортировочный конвейер: административные карманы, научная смена - P0 scale rewrite
+- [genfix_031.md](genfix_031.md): design z+20 Марковская лестница - P1 preserve macro, add mid/micro
+- [genfix_032.md](genfix_032.md): procedural z+19 зеркальная проводка: административные карманы, гражданский этаж - P0 scale rewrite
+- [genfix_033.md](genfix_033.md): design z+18 Морг регистраций - P0 scale rewrite
+- [genfix_034.md](genfix_034.md): procedural z+17 поражение самосбором: плотные квартиры, гражданский этаж - P0 scale rewrite
+- [genfix_035.md](genfix_035.md): design z+16 Больничный корпус - P1 preserve macro, add mid/micro
+- [genfix_036.md](genfix_036.md): procedural z+15 перескоки клеток: административные карманы, гражданский этаж - P1 preserve macro, add mid/micro
+- [genfix_037.md](genfix_037.md): story z+14 Квартиры - P3 reference or preserve
+- [genfix_038.md](genfix_038.md): procedural z+13 плотные квартиры, гражданский этаж - P0 scale rewrite
+- [genfix_039.md](genfix_039.md): design z+12 НИИ слизи - P0 scale rewrite
+- [genfix_040.md](genfix_040.md): procedural z+11 коммунальные узлы, этаж ликвидаторов - P1 preserve macro, add mid/micro
+- [genfix_041.md](genfix_041.md): design z+10 Ясли Тьюринга - P0 scale rewrite
+- [genfix_042.md](genfix_042.md): procedural z+9 плотные квартиры, гражданский этаж - P0 scale rewrite
+- [genfix_043.md](genfix_043.md): design z+8 Перекрестки - P0 scale rewrite
+- [genfix_044.md](genfix_044.md): procedural z+7 коммунальные узлы, гражданский этаж - P1 preserve macro, add mid/micro
+- [genfix_045.md](genfix_045.md): design z+6 Вороной-карантин - P0 scale rewrite
+- [genfix_046.md](genfix_046.md): procedural z+5 цементная память: плотные квартиры, гражданский этаж - P0 scale rewrite
+- [genfix_047.md](genfix_047.md): design z+4 Коммунальное кольцо - P1 preserve macro, add mid/micro
+- [genfix_048.md](genfix_048.md): procedural z+3 жилая нарезка, научная смена - P1 preserve macro, add mid/micro
+- [genfix_049.md](genfix_049.md): design z+2 Мёбиус-подъезд - P0 scale rewrite
+- [genfix_050.md](genfix_050.md): procedural z+1 поезда: жилая нарезка, гражданский этаж - P1 preserve macro, add mid/micro
+- [genfix_051.md](genfix_051.md): story z+0 Жилая зона - P3 reference or preserve
+- [genfix_052.md](genfix_052.md): procedural z-1 жилая нарезка, научная смена - P1 preserve macro, add mid/micro
+- [genfix_053.md](genfix_053.md): design z-2 Оранжерея бетона - P0 scale rewrite
+- [genfix_054.md](genfix_054.md): procedural z-3 сортировочный конвейер: коммунальные узлы, дикий этаж - P0 scale rewrite
+- [genfix_055.md](genfix_055.md): design z-4 Этаж 69 - P1 preserve macro, add mid/micro
+- [genfix_056.md](genfix_056.md): procedural z-5 говнячный смог: жилая нарезка, гражданский этаж - P1 preserve macro, add mid/micro
+- [genfix_057.md](genfix_057.md): design z-6 Общежитие смены - P1 preserve macro, add mid/micro
+- [genfix_058.md](genfix_058.md): procedural z-7 цеховой этаж, этаж ликвидаторов - P1 preserve macro, add mid/micro
+- [genfix_059.md](genfix_059.md): design z-8 Прачечная Пенроуза - P1 preserve macro, add mid/micro
+- [genfix_060.md](genfix_060.md): procedural z-9 хладон: жилая нарезка, научная смена - P1 fill pass
+- [genfix_061.md](genfix_061.md): design z-10 Черный рынок 88 - P1 preserve macro, add mid/micro
+- [genfix_062.md](genfix_062.md): procedural z-11 зомби-апокалипсис: коллекторы, дикий этаж - P0 scale rewrite
+- [genfix_063.md](genfix_063.md): procedural z-12 сервисные штреки, научная смена - P0 scale rewrite
+- [genfix_064.md](genfix_064.md): procedural z-13 грибница: коммунальные узлы, гражданский этаж - P1 preserve macro, add mid/micro
+- [genfix_065.md](genfix_065.md): design z-14 Производственный пояс - P1 preserve macro, add mid/micro
+- [genfix_066.md](genfix_066.md): procedural z-15 поезда: сервисные штреки, гражданский этаж - P1 preserve macro, add mid/micro
+- [genfix_067.md](genfix_067.md): procedural z-16 сервисные штреки, научная смена - P1 preserve macro, add mid/micro
+- [genfix_068.md](genfix_068.md): procedural z-17 поражение самосбором: сервисные штреки, культовый этаж - P1 preserve macro, add mid/micro
+- [genfix_069.md](genfix_069.md): design z-18 Служебный этаж - P0 scale rewrite
+- [genfix_070.md](genfix_070.md): procedural z-19 говнячный смог: сервисные штреки, гражданский этаж - P1 fill pass
+- [genfix_071.md](genfix_071.md): design z-20 Гиперболическая стрелочная - P1 preserve macro, add mid/micro
+- [genfix_072.md](genfix_072.md): procedural z-21 песчаное перекрытие: коллекторы, этаж ликвидаторов - P0 scale rewrite
+- [genfix_073.md](genfix_073.md): design z-22 Кремниевый НЕТ-колодец - P0 scale rewrite
+- [genfix_074.md](genfix_074.md): procedural z-23 сервисные штреки, этаж ликвидаторов - P0 scale rewrite
+- [genfix_075.md](genfix_075.md): design z-24 Шахта-атриум - P1 preserve macro, add mid/micro
+- [genfix_076.md](genfix_076.md): procedural z-25 сервисные штреки, гражданский этаж - P0 scale rewrite
+- [genfix_077.md](genfix_077.md): story z-26 Коллекторы - P3 reference or preserve
+- [genfix_078.md](genfix_078.md): procedural z-27 сортировочный конвейер: затопленные эстакады, культовый этаж - P1 preserve macro, add mid/micro
+- [genfix_079.md](genfix_079.md): design z-28 Гармоническая баня - P1 preserve macro, add mid/micro
+- [genfix_080.md](genfix_080.md): procedural z-29 сортировочный конвейер: сервисные штреки, научная смена - P0 scale rewrite
+- [genfix_081.md](genfix_081.md): design z-30 Склад Гильберта - P1 preserve macro, add mid/micro
+- [genfix_082.md](genfix_082.md): procedural z-31 цеховой этаж, дикий этаж - P1 preserve macro, add mid/micro
+- [genfix_083.md](genfix_083.md): design z-32 Темная пересадка - P0 scale rewrite
+- [genfix_084.md](genfix_084.md): procedural z-33 игра жизнь: затопленные эстакады, этаж ликвидаторов - P1 preserve macro, add mid/micro
+- [genfix_085.md](genfix_085.md): design z-34 Аттракторный двор - P1 preserve macro, add mid/micro
+- [genfix_086.md](genfix_086.md): procedural z-35 фрактал: затопленные эстакады, гражданский этаж - P0 scale rewrite
+- [genfix_087.md](genfix_087.md): story z-36 Мясной низ - P1 preserve macro, add mid/micro
+- [genfix_088.md](genfix_088.md): procedural z-37 зеркальная проводка: коллекторы, гражданский этаж - P0 scale rewrite
+- [genfix_089.md](genfix_089.md): design z-38 Нижний пропускник - P0 scale rewrite
+- [genfix_090.md](genfix_090.md): procedural z-39 говнячный смог: коллекторы, этаж ликвидаторов - P0 scale rewrite
+- [genfix_091.md](genfix_091.md): design z-40 Подад - P1 preserve macro, add mid/micro
+- [genfix_092.md](genfix_092.md): procedural z-41 поезда: затопленные эстакады, дикий этаж - P0 scale rewrite
+- [genfix_093.md](genfix_093.md): design z-42 Спектральная часовня - P0 scale rewrite
+- [genfix_094.md](genfix_094.md): procedural z-43 грибница: затопленные эстакады, гражданский этаж - P1 preserve macro, add mid/micro
+- [genfix_095.md](genfix_095.md): design z-44 Кантор пустоты - P0 scale rewrite
+- [genfix_096.md](genfix_096.md): procedural z-45 bad apple!: затопленные эстакады, дикий этаж - P0 scale rewrite
+- [genfix_097.md](genfix_097.md): procedural z-46 bad apple!: затопленные эстакады, культовый этаж - P0 scale rewrite
+- [genfix_098.md](genfix_098.md): procedural z-47 затопленные эстакады, гражданский этаж - P0 scale rewrite
+- [genfix_099.md](genfix_099.md): design z-48 Темный отсек - P1 preserve macro, add mid/micro
+- [genfix_100.md](genfix_100.md): procedural z-49 затопленные эстакады, научная смена - P0 scale rewrite
+- [genfix_101.md](genfix_101.md): story z-50 Пустота - P0 scale rewrite

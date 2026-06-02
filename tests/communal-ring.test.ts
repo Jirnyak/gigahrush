@@ -16,12 +16,18 @@ import {
 } from '../src/data/design_floors';
 import { designFloorPopulationProfile } from '../src/data/design_floor_population';
 import { ACTIVE_ACTOR_SOFT_LIMIT } from '../src/data/entity_limits';
+import { HUMAN_TERRITORY_OWNERS } from '../src/data/factions';
 import { getSideQuestRegistrySnapshot } from '../src/data/plot';
 import { generateDesignFloor } from '../src/gen/design_floors/manifest';
 import {
   COMMUNAL_RING_DESIGN_FLOOR_ID,
   COMMUNAL_RING_ROUTE_Z,
 } from '../src/gen/design_floors/communal_ring';
+import {
+  countTerritoryCells,
+  territoryHqAnchors,
+  territoryRoomOwner,
+} from '../src/systems/territory';
 
 let cachedGeneration: ReturnType<typeof generateDesignFloor> | undefined;
 
@@ -44,6 +50,12 @@ test('communal_ring generator creates through communal flats with quest NPCs', (
   const throughRooms = gen.world.rooms.filter(room => room.name.includes('сквозная коммуналка'));
   const smokingRooms = gen.world.rooms.filter(room => room.type === RoomType.SMOKING);
   const serviceLoops = gen.world.rooms.filter(room => room.name.startsWith('Петля '));
+  const microRooms = gen.world.rooms.filter(room => (
+    room.name.includes('между коридорами') ||
+    room.name.includes('микро') ||
+    room.name.includes('Кладовка') ||
+    room.name.includes('Тесная проходная')
+  ));
   const throughRoomIds = new Set(throughRooms.map(room => room.id));
   let internalThroughDoors = 0;
   let externalThroughDoors = 0;
@@ -63,6 +75,9 @@ test('communal_ring generator creates through communal flats with quest NPCs', (
   assert.equal(throughRooms.length >= 20, true);
   assert.equal(internalThroughDoors >= 16, true);
   assert.equal(externalThroughDoors >= 8, true);
+  assert.equal(gen.world.rooms.length >= 500, true);
+  assert.equal(gen.world.doors.size >= 450, true);
+  assert.equal(microRooms.length >= 300, true);
   assert.equal(smokingRooms.length >= 2, true);
   assert.equal(serviceLoops.length >= 5, true);
   assert.equal(serviceLoops.some(room => room.name.includes('курилки')), true);
@@ -109,6 +124,41 @@ test('communal_ring uses the design population field as a dense social floor', (
   assert.equal(zoneFactions.has(ZoneFaction.WILD), true);
   assert.equal(zoneFactions.has(ZoneFaction.LIQUIDATOR), true);
   assert.equal(zoneFactions.has(ZoneFaction.SAMOSBOR), true);
+});
+
+test('communal_ring seeds authored human faction HQs and target cell territory shares', () => {
+  const gen = generatedCommunalRing();
+  const anchors = territoryHqAnchors(gen.world);
+  const anchorsByOwner = new Map(anchors.map(anchor => [anchor.owner, anchor]));
+  const expectedShares = new Map([
+    [ZoneFaction.CITIZEN, 0.54],
+    [ZoneFaction.LIQUIDATOR, 0.18],
+    [ZoneFaction.CULTIST, 0.07],
+    [ZoneFaction.SCIENTIST, 0.09],
+    [ZoneFaction.WILD, 0.12],
+  ]);
+  const counts = new Map(countTerritoryCells(gen.world).map(row => [row.owner, row.cells]));
+  const distinctAnchorBuckets = new Set<string>();
+
+  for (const owner of HUMAN_TERRITORY_OWNERS) {
+    const anchor = anchorsByOwner.get(owner);
+    assert.ok(anchor, `missing HQ anchor for ${ZoneFaction[owner]}`);
+    const room = gen.world.rooms[anchor.roomId];
+    assert.ok(room, `missing HQ room for ${ZoneFaction[owner]}`);
+    assert.equal(room.type, RoomType.HQ);
+    assert.equal(room.sealed, true);
+    assert.equal(room.doors.length >= 1, true);
+    assert.equal(territoryRoomOwner(gen.world, room.id), owner);
+    assert.equal((counts.get(owner) ?? 0) > 0, true);
+    distinctAnchorBuckets.add(`${anchor.x >> 7}:${anchor.y >> 7}`);
+  }
+
+  for (const [owner, target] of expectedShares) {
+    const share = (counts.get(owner) ?? 0) / (W * W);
+    assert.equal(Math.abs(share - target) <= 0.0125, true, `${ZoneFaction[owner]} share ${share}`);
+  }
+
+  assert.equal(distinctAnchorBuckets.size >= HUMAN_TERRITORY_OWNERS.length, true);
 });
 
 test('communal_ring registers communal service and through-flat side quests', () => {

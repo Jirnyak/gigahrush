@@ -10,6 +10,9 @@ import {
   LiftDirection,
   MonsterKind,
   Occupation,
+  RoomType,
+  ZoneFaction,
+  type Room,
   W,
 } from '../src/core/types';
 import { auditReachability } from '../src/core/world';
@@ -27,6 +30,7 @@ import {
   setFloorRunState,
 } from '../src/systems/procedural_floors';
 import { getRouteCueMarkers } from '../src/systems/route_cues';
+import { countTerritoryCells, territoryHqAnchors, territoryOwnerAt, territoryRoomOwner } from '../src/systems/territory';
 import { generateDesignFloor } from '../src/gen/design_floors/manifest';
 import {
   PENROSE_LAUNDRY_BASE_FLOOR,
@@ -36,6 +40,21 @@ import {
   getPenroseLaundryState,
 } from '../src/gen/design_floors/penrose_laundry';
 import { makeGameState } from './helpers';
+
+type PenroseGeneration = ReturnType<typeof generateDesignFloor>;
+
+let cachedDefault: PenroseGeneration | undefined;
+let cachedSeed61061: PenroseGeneration | undefined;
+
+function penroseDefault(): PenroseGeneration {
+  cachedDefault ??= generateDesignFloor(PENROSE_LAUNDRY_ROUTE_ID);
+  return cachedDefault;
+}
+
+function penroseSeed61061(): PenroseGeneration {
+  cachedSeed61061 ??= generateDesignFloor(PENROSE_LAUNDRY_ROUTE_ID, 61_061);
+  return cachedSeed61061;
+}
 
 function hasReachableLift(gen: ReturnType<typeof generateDesignFloor>, direction: LiftDirection): boolean {
   const start = gen.world.idx(Math.floor(gen.spawnX), Math.floor(gen.spawnY));
@@ -49,6 +68,29 @@ function hasReachableLift(gen: ReturnType<typeof generateDesignFloor>, direction
     }
   }
   return false;
+}
+
+function measureReachability(gen: PenroseGeneration): { reachableCells: number; passableCells: number } {
+  const audit = auditReachability(gen.world, gen.world.idx(Math.floor(gen.spawnX), Math.floor(gen.spawnY)));
+  let reachableCells = 0;
+  let passableCells = 0;
+  for (let i = 0; i < W * W; i++) {
+    const cell = gen.world.cells[i];
+    if (cell === Cell.FLOOR || cell === Cell.DOOR || cell === Cell.LIFT || cell === Cell.WATER) passableCells++;
+    if (audit.reachable[i]) reachableCells++;
+  }
+  return { reachableCells, passableCells };
+}
+
+function hermeticShellCells(world: PenroseGeneration['world'], room: Room): number {
+  let count = 0;
+  for (let dy = -1; dy <= room.h; dy++) {
+    for (let dx = -1; dx <= room.w; dx++) {
+      if (dx >= 0 && dx < room.w && dy >= 0 && dy < room.h) continue;
+      if (world.hermoWall[world.idx(room.x + dx, room.y + dy)]) count++;
+    }
+  }
+  return count;
 }
 
 test('penrose_laundry is registered as a routed Living-band design floor', () => {
@@ -82,7 +124,7 @@ test('normal lift route reaches penrose_laundry before black_market_88', () => {
 });
 
 test('penrose_laundry generator builds a connected finite symbol patch with decisions', () => {
-  const gen = generateDesignFloor(PENROSE_LAUNDRY_ROUTE_ID);
+  const gen = penroseDefault();
   const state = getPenroseLaundryState(gen.world);
   assert.ok(state);
 
@@ -124,6 +166,68 @@ test('penrose_laundry generator builds a connected finite symbol patch with deci
   assert.equal(npcs.some(entity => entity.plotNpcId === 'penrose_laundry_igor_lock'), true);
   assert.equal(npcs.some(entity => entity.plotNpcId === 'penrose_laundry_lidia_steam'), true);
   assert.equal(npcs.some(entity => entity.plotNpcId === 'penrose_laundry_tonya_cache'), true);
+});
+
+test('penrose_laundry full route has Penrose macro, stations, micro rooms and no generic shell', () => {
+  const gen = penroseSeed61061();
+  const metrics = measureReachability(gen);
+  const macroRooms = gen.world.rooms.filter(room => room.name.startsWith('Прачечная Пенроуза: ромб'));
+  const stationRooms = gen.world.rooms.filter(room => room.name.startsWith('Прачечная Пенроуза: станция'));
+  const microRooms = gen.world.rooms.filter(room => room.name.startsWith('Прачечная Пенроуза: шкаф'));
+  const courtRooms = gen.world.rooms.filter(room => room.name.startsWith('Прачечная Пенроуза: паровой двор'));
+  const genericShellRooms = gen.world.rooms.filter(room => room.name.startsWith('Коммунальный квартал'));
+
+  assert.equal(gen.world.rooms.length >= 760, true, `rooms ${gen.world.rooms.length}`);
+  assert.equal(gen.world.doors.size >= 1200, true, `doors ${gen.world.doors.size}`);
+  assert.equal(metrics.passableCells >= 300_000, true, `passable ${metrics.passableCells}`);
+  assert.equal(metrics.reachableCells >= metrics.passableCells - 8, true, `reachable ${metrics.reachableCells}/${metrics.passableCells}`);
+  assert.equal(macroRooms.length >= 80, true, `macro ${macroRooms.length}`);
+  assert.equal(stationRooms.length >= 300, true, `stations ${stationRooms.length}`);
+  assert.equal(microRooms.length >= 300, true, `micro ${microRooms.length}`);
+  assert.equal(courtRooms.length >= 10, true, `courts ${courtRooms.length}`);
+  assert.equal(genericShellRooms.length, 0);
+});
+
+test('penrose_laundry territory keeps five authored mini HQs and target shares', () => {
+  const gen = penroseSeed61061();
+  const anchors = territoryHqAnchors(gen.world);
+  const byOwner = new Map(anchors.map(anchor => [anchor.owner, anchor]));
+  const counts = new Map(countTerritoryCells(gen.world).map(row => [row.owner, row.cells]));
+  const targetShares = new Map<ZoneFaction, number>([
+    [ZoneFaction.CITIZEN, 0.56],
+    [ZoneFaction.LIQUIDATOR, 0.17],
+    [ZoneFaction.CULTIST, 0.07],
+    [ZoneFaction.SCIENTIST, 0.08],
+    [ZoneFaction.WILD, 0.12],
+  ]);
+  const hqTitles = new Map<ZoneFaction, string>([
+    [ZoneFaction.CITIZEN, 'граждан'],
+    [ZoneFaction.LIQUIDATOR, 'ликвидаторов'],
+    [ZoneFaction.CULTIST, 'культистов'],
+    [ZoneFaction.SCIENTIST, 'учёных'],
+    [ZoneFaction.WILD, 'диких'],
+  ]);
+
+  for (const [owner, targetShare] of targetShares) {
+    const anchor = byOwner.get(owner);
+    assert.ok(anchor, `missing HQ anchor ${ZoneFaction[owner]}`);
+    const room = gen.world.rooms[anchor.roomId];
+    const share = (counts.get(owner) ?? 0) / (W * W);
+    const title = hqTitles.get(owner) ?? String(owner);
+    const supportRooms = gen.world.rooms.filter(candidate => candidate.id !== room.id && candidate.name.includes(`штаб ${title}`));
+
+    assert.equal(room.type, RoomType.HQ, `HQ room type ${ZoneFaction[owner]}`);
+    assert.equal(room.sealed, true, `HQ sealed ${ZoneFaction[owner]}`);
+    assert.equal(room.name.includes(`штаб ${title}`), true, room.name);
+    assert.equal(hermeticShellCells(gen.world, room) > 0, true, `HQ hermetic shell ${ZoneFaction[owner]}`);
+    assert.equal(supportRooms.length >= 5, true, `support rooms ${ZoneFaction[owner]}: ${supportRooms.length}`);
+    assert.equal(territoryOwnerAt(gen.world, anchor.x, anchor.y), owner, `anchor owner ${ZoneFaction[owner]}`);
+    assert.equal(territoryRoomOwner(gen.world, anchor.roomId), owner, `room owner ${ZoneFaction[owner]}`);
+    assert.equal((counts.get(owner) ?? 0) > 0, true, `owned cells ${ZoneFaction[owner]}`);
+    assert.equal(Math.abs(share - targetShare) <= 0.02, true, `share ${ZoneFaction[owner]}: ${share}`);
+  }
+
+  assert.equal((counts.get(ZoneFaction.CITIZEN) ?? 0) > (counts.get(ZoneFaction.LIQUIDATOR) ?? 0), true);
 });
 
 test('penrose_laundry population profile favors laundry crowds, steam repair and water threats', () => {

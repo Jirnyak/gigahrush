@@ -8,7 +8,9 @@ import {
   LiftDirection,
   DoorState,
   RoomType,
+  ZoneFaction,
   type Room,
+  type TerritoryOwner,
 } from '../../core/types';
 import { World } from '../../core/world';
 import { placeDoorAt, stampRoom } from '../shared';
@@ -49,6 +51,25 @@ interface ChaosPocketSpec {
   radius: number;
   kind: 'spiral' | 'ring' | 'cross' | 'diamond' | 'line';
   serial: number;
+}
+
+interface VoidMidBlockSpec {
+  cx: number;
+  cy: number;
+  cols: number;
+  rows: number;
+  serial: number;
+  owner: TerritoryOwner;
+}
+
+interface VoidHqSpec {
+  owner: TerritoryOwner;
+  name: string;
+  cx: number;
+  cy: number;
+  w: number;
+  h: number;
+  supportSerial: number;
 }
 
 const SPAWN_X = W >> 1;
@@ -136,6 +157,48 @@ const VOID_ATTRACTOR_FIELDS: readonly (readonly [number, number, number, number]
   [676, 782, 52, 205],
   [412, 724, 44, 206],
   [164, 548, 50, 207],
+];
+
+const VOID_MID_BLOCKS: readonly VoidMidBlockSpec[] = [
+  { cx: 176, cy: 176, cols: 6, rows: 4, serial: 301, owner: ZoneFaction.WILD },
+  { cx: 304, cy: 92, cols: 5, rows: 4, serial: 302, owner: ZoneFaction.SCIENTIST },
+  { cx: 486, cy: 120, cols: 6, rows: 4, serial: 303, owner: ZoneFaction.CULTIST },
+  { cx: 742, cy: 166, cols: 6, rows: 5, serial: 304, owner: ZoneFaction.WILD },
+  { cx: 918, cy: 308, cols: 5, rows: 4, serial: 305, owner: ZoneFaction.LIQUIDATOR },
+  { cx: 808, cy: 438, cols: 6, rows: 4, serial: 306, owner: ZoneFaction.WILD },
+  { cx: 906, cy: 704, cols: 6, rows: 5, serial: 307, owner: ZoneFaction.CULTIST },
+  { cx: 742, cy: 884, cols: 5, rows: 4, serial: 308, owner: ZoneFaction.WILD },
+  { cx: 552, cy: 908, cols: 6, rows: 4, serial: 309, owner: ZoneFaction.CULTIST },
+  { cx: 352, cy: 842, cols: 6, rows: 5, serial: 310, owner: ZoneFaction.WILD },
+  { cx: 162, cy: 714, cols: 5, rows: 4, serial: 311, owner: ZoneFaction.WILD },
+  { cx: 112, cy: 492, cols: 5, rows: 4, serial: 312, owner: ZoneFaction.CITIZEN },
+  { cx: 274, cy: 358, cols: 6, rows: 4, serial: 313, owner: ZoneFaction.CITIZEN },
+  { cx: 884, cy: 96, cols: 5, rows: 4, serial: 314, owner: ZoneFaction.LIQUIDATOR },
+  { cx: 1008, cy: 898, cols: 4, rows: 4, serial: 315, owner: ZoneFaction.WILD },
+  { cx: 42, cy: 222, cols: 4, rows: 4, serial: 316, owner: ZoneFaction.WILD },
+  { cx: 222, cy: 246, cols: 5, rows: 5, serial: 317, owner: ZoneFaction.CITIZEN },
+  { cx: 720, cy: 278, cols: 6, rows: 4, serial: 318, owner: ZoneFaction.SCIENTIST },
+  { cx: 676, cy: 782, cols: 6, rows: 5, serial: 319, owner: ZoneFaction.CULTIST },
+  { cx: 412, cy: 724, cols: 5, rows: 4, serial: 320, owner: ZoneFaction.WILD },
+];
+
+const VOID_HQ_SPECS: readonly VoidHqSpec[] = [
+  { owner: ZoneFaction.CITIZEN, name: 'Гражданский карман заемного света', cx: 254, cy: 448, w: 15, h: 10, supportSerial: 401 },
+  { owner: ZoneFaction.LIQUIDATOR, name: 'Ликвидаторский пост последнего лифта', cx: 944, cy: 484, w: 17, h: 11, supportSerial: 402 },
+  { owner: ZoneFaction.CULTIST, name: 'Культовый хор пустого ребра', cx: 812, cy: 776, w: 17, h: 12, supportSerial: 403 },
+  { owner: ZoneFaction.SCIENTIST, name: 'НИИ отрицательной комнаты', cx: 584, cy: 234, w: 16, h: 11, supportSerial: 404 },
+  { owner: ZoneFaction.WILD, name: 'Дикий узел выбитых дверей', cx: 166, cy: 650, w: 21, h: 13, supportSerial: 405 },
+];
+
+const VOID_ROOM_TYPE_SEQUENCE: readonly RoomType[] = [
+  RoomType.STORAGE,
+  RoomType.OFFICE,
+  RoomType.COMMON,
+  RoomType.PRODUCTION,
+  RoomType.BATHROOM,
+  RoomType.KITCHEN,
+  RoomType.MEDICAL,
+  RoomType.SMOKING,
 ];
 
 const VOID_REVEAL_SHELLS: readonly (readonly [number, number, number, number])[] = [
@@ -282,6 +345,125 @@ function setRoomVoidTextures(world: World, room: Room): void {
       else world.wallTex[i] = Tex.VOID_WALL;
     }
   }
+}
+
+function setVoidConnectorFloor(world: World, x: number, y: number): void {
+  const i = world.idx(x, y);
+  if (world.cells[i] === Cell.LIFT || world.cells[i] === Cell.DOOR || world.roomMap[i] >= 0) return;
+  world.cells[i] = Cell.FLOOR;
+  world.roomMap[i] = -1;
+  world.floorTex[i] = Tex.F_VOID;
+  world.wallTex[i] = 0;
+  world.hermoWall[i] = 0;
+}
+
+function carveVoidConnectorBand(world: World, ax: number, ay: number, bx: number, by: number, width: number): void {
+  const ddx = world.delta(ax, bx);
+  const ddy = world.delta(ay, by);
+  const steps = Math.max(Math.abs(ddx), Math.abs(ddy), 1);
+  for (let s = 0; s <= steps; s++) {
+    const t = s / steps;
+    const x = world.wrap(Math.round(ax + ddx * t));
+    const y = world.wrap(Math.round(ay + ddy * t));
+    for (let dy = -width; dy <= width; dy++) {
+      for (let dx = -width; dx <= width; dx++) {
+        if (Math.abs(dx) + Math.abs(dy) > width + 1) continue;
+        setVoidConnectorFloor(world, x + dx, y + dy);
+      }
+    }
+  }
+}
+
+function roomFootprintAvailable(world: World, x: number, y: number, w: number, h: number): boolean {
+  for (let dy = -1; dy <= h; dy++) {
+    for (let dx = -1; dx <= w; dx++) {
+      const idx = world.idx(x + dx, y + dy);
+      if (world.cells[idx] === Cell.LIFT || world.cells[idx] === Cell.DOOR) return false;
+      if (world.roomMap[idx] >= 0) return false;
+    }
+  }
+  return true;
+}
+
+function paintOwnedVoidRoom(world: World, room: Room, owner: TerritoryOwner): void {
+  for (let dy = 0; dy < room.h; dy++) {
+    for (let dx = 0; dx < room.w; dx++) {
+      const idx = world.idx(room.x + dx, room.y + dy);
+      if (world.roomMap[idx] === room.id) world.factionControl[idx] = owner;
+    }
+  }
+  for (const doorIdx of room.doors) world.factionControl[doorIdx] = owner;
+}
+
+function decorateVoidRoom(world: World, room: Room, serial: number): void {
+  const midX = room.x + (room.w >> 1);
+  const midY = room.y + (room.h >> 1);
+  const first = world.idx(midX, midY);
+  if (world.features[first] === Feature.NONE) {
+    if (room.type === RoomType.KITCHEN) world.features[first] = Feature.STOVE;
+    else if (room.type === RoomType.BATHROOM) world.features[first] = Feature.TOILET;
+    else if (room.type === RoomType.MEDICAL) world.features[first] = Feature.APPARATUS;
+    else if (room.type === RoomType.PRODUCTION) world.features[first] = Feature.MACHINE;
+    else if (room.type === RoomType.OFFICE) world.features[first] = Feature.DESK;
+    else world.features[first] = Feature.SHELF;
+  }
+  const second = world.idx(room.x + 1 + (serial % Math.max(1, room.w - 2)), room.y + 1);
+  if (world.features[second] === Feature.NONE) {
+    world.features[second] = serial % 5 === 0 ? Feature.SCREEN : Feature.TABLE;
+  }
+}
+
+function stampOwnedVoidRoom(
+  world: World,
+  type: RoomType,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  owner: TerritoryOwner,
+  name: string,
+  serial: number,
+): Room | null {
+  if (!roomFootprintAvailable(world, x, y, w, h)) return null;
+  const room = stampRoom(world, world.rooms.length, type, x, y, w, h, -1);
+  room.name = name;
+  setRoomVoidTextures(world, room);
+  paintOwnedVoidRoom(world, room, owner);
+  decorateVoidRoom(world, room, serial);
+  return room;
+}
+
+function connectVoidRoomToHub(world: World, room: Room, hubX: number, hubY: number, hermetic = false): void {
+  const centerX = room.x + (room.w >> 1);
+  const centerY = room.y + (room.h >> 1);
+  let doorX = centerX;
+  let doorY = room.y + room.h;
+  let outsideX = doorX;
+  let outsideY = doorY + 1;
+
+  if (Math.abs(world.delta(centerX, hubX)) > Math.abs(world.delta(centerY, hubY))) {
+    if (world.delta(centerX, hubX) > 0) {
+      doorX = room.x + room.w;
+      outsideX = doorX + 1;
+    } else {
+      doorX = room.x - 1;
+      outsideX = doorX - 1;
+    }
+    doorY = centerY;
+    outsideY = doorY;
+  } else if (world.delta(centerY, hubY) < 0) {
+    doorY = room.y - 1;
+    outsideY = doorY - 1;
+  }
+
+  carveVoidConnectorBand(world, outsideX, outsideY, hubX, hubY, 0);
+  placeDoorAt(world, doorX, doorY, room.id);
+  if (hermetic) openDoor(world, doorX, doorY);
+  paintOwnedVoidRoom(world, room, world.factionControl[world.idx(centerX, centerY)] as TerritoryOwner);
+}
+
+function voidRoomTypeFor(serial: number, row: number, col: number): RoomType {
+  return VOID_ROOM_TYPE_SEQUENCE[(serial + row * 3 + col * 5) % VOID_ROOM_TYPE_SEQUENCE.length];
 }
 
 function addShelterRoom(world: World): void {
@@ -917,6 +1099,158 @@ function expandVoidAttractorFields(world: World): void {
   }
 }
 
+function addVoidMidBlock(world: World, spec: VoidMidBlockSpec): void {
+  const spanX = spec.cols * 14 + 18;
+  const spanY = spec.rows * 12 + 18;
+  carveVoidConnectorBand(world, spec.cx - (spanX >> 1), spec.cy, spec.cx + (spanX >> 1), spec.cy, 2);
+  carveVoidConnectorBand(world, spec.cx, spec.cy - (spanY >> 1), spec.cx, spec.cy + (spanY >> 1), 2);
+  carveVoidConnectorBand(world, spec.cx - (spanX >> 2), spec.cy - (spanY >> 2), spec.cx + (spanX >> 2), spec.cy + (spanY >> 2), 1);
+
+  for (let row = 0; row < spec.rows; row++) {
+    for (let col = 0; col < spec.cols; col++) {
+      const gridX = spec.cx - Math.floor(((spec.cols - 1) * 14) / 2) + col * 14;
+      const gridY = spec.cy - Math.floor(((spec.rows - 1) * 12) / 2) + row * 12;
+      if (Math.abs(world.delta(gridX, spec.cx)) <= 8 && Math.abs(world.delta(gridY, spec.cy)) <= 8) continue;
+      const w = 4 + ((spec.serial + row + col * 2) % 4);
+      const h = 3 + ((spec.serial + row * 2 + col) % 3);
+      const type = voidRoomTypeFor(spec.serial, row, col);
+      const room = stampOwnedVoidRoom(
+        world,
+        type,
+        gridX - (w >> 1),
+        gridY - (h >> 1),
+        w,
+        h,
+        spec.owner,
+        `Пустотный отсек ${spec.serial}-${row + 1}-${col + 1}`,
+        spec.serial + row * 17 + col * 29,
+      );
+      if (room) connectVoidRoomToHub(world, room, spec.cx, spec.cy);
+    }
+  }
+
+  for (let i = 0; i < 5; i++) {
+    const x = world.wrap(spec.cx + Math.round(Math.cos(spec.serial + i * 1.9) * (spanX * 0.38)));
+    const y = world.wrap(spec.cy + Math.round(Math.sin(spec.serial * 0.7 + i * 1.4) * (spanY * 0.38)));
+    const ci = world.idx(x, y);
+    if (world.cells[ci] === Cell.FLOOR && world.features[ci] === Feature.NONE) {
+      world.features[ci] = i % 2 === 0 ? Feature.APPARATUS : Feature.SCREEN;
+    }
+  }
+}
+
+function addVoidMidBlocks(world: World): void {
+  for (const spec of VOID_MID_BLOCKS) addVoidMidBlock(world, spec);
+}
+
+function supportRoomName(owner: TerritoryOwner, type: RoomType, serial: number): string {
+  const ownerName =
+    owner === ZoneFaction.CITIZEN ? 'граждан' :
+    owner === ZoneFaction.LIQUIDATOR ? 'ликвидаторов' :
+    owner === ZoneFaction.CULTIST ? 'культа' :
+    owner === ZoneFaction.SCIENTIST ? 'НИИ' :
+    'диких';
+  const typeName =
+    type === RoomType.KITCHEN ? 'кухня' :
+    type === RoomType.BATHROOM ? 'санузел' :
+    type === RoomType.STORAGE ? 'кладовая' :
+    type === RoomType.MEDICAL ? 'медпункт' :
+    type === RoomType.OFFICE ? 'канцелярия' :
+    type === RoomType.PRODUCTION ? 'мастерская' :
+    'общая';
+  return `Опора ${ownerName}: ${typeName} ${serial}`;
+}
+
+function addVoidFactionHq(world: World, spec: VoidHqSpec): void {
+  carveVoidConnectorBand(world, spec.cx - 30, spec.cy, spec.cx + 30, spec.cy, 2);
+  carveVoidConnectorBand(world, spec.cx, spec.cy - 26, spec.cx, spec.cy + 26, 2);
+  const hq = stampOwnedVoidRoom(
+    world,
+    RoomType.HQ,
+    spec.cx - (spec.w >> 1),
+    spec.cy - (spec.h >> 1),
+    spec.w,
+    spec.h,
+    spec.owner,
+    spec.name,
+    spec.supportSerial,
+  );
+  if (hq) {
+    hq.sealed = true;
+    connectVoidRoomToHub(world, hq, spec.cx, spec.cy + spec.h + 4, true);
+  }
+
+  const supportTypes: readonly RoomType[] = [
+    RoomType.KITCHEN,
+    RoomType.BATHROOM,
+    RoomType.STORAGE,
+    RoomType.MEDICAL,
+    RoomType.OFFICE,
+    RoomType.PRODUCTION,
+    RoomType.COMMON,
+  ];
+  const offsets: readonly (readonly [number, number])[] = [
+    [-30, -18],
+    [28, -17],
+    [-32, 16],
+    [31, 17],
+    [0, -28],
+    [0, 29],
+    [41, 0],
+  ];
+  for (let i = 0; i < supportTypes.length; i++) {
+    const type = supportTypes[i];
+    const [ox, oy] = offsets[i];
+    const w = type === RoomType.COMMON ? 12 : 7 + ((spec.supportSerial + i) % 3);
+    const h = type === RoomType.COMMON ? 8 : 5 + ((spec.supportSerial + i * 2) % 3);
+    const room = stampOwnedVoidRoom(
+      world,
+      type,
+      spec.cx + ox - (w >> 1),
+      spec.cy + oy - (h >> 1),
+      w,
+      h,
+      spec.owner,
+      supportRoomName(spec.owner, type, spec.supportSerial + i),
+      spec.supportSerial + i * 13,
+    );
+    if (room) connectVoidRoomToHub(world, room, spec.cx, spec.cy);
+  }
+}
+
+function addVoidFactionHqs(world: World): void {
+  for (const spec of VOID_HQ_SPECS) addVoidFactionHq(world, spec);
+}
+
+function markVoidSamosborScars(world: World): void {
+  const scars: readonly (readonly [number, number, number, number])[] = [
+    [684, 558, 52, 501],
+    [676, 782, 58, 502],
+    [906, 704, 48, 503],
+    [552, 908, 46, 504],
+    [42, 222, 44, 505],
+    [1008, 898, 50, 506],
+    [512, 1023, 42, 507],
+  ];
+  for (const [cx, cy, radius, serial] of scars) {
+    const r2 = radius * radius;
+    for (let dy = -radius; dy <= radius; dy++) {
+      for (let dx = -radius; dx <= radius; dx++) {
+        const d2 = dx * dx + dy * dy;
+        if (d2 > r2) continue;
+        const idx = world.idx(cx + dx, cy + dy);
+        if (world.cells[idx] === Cell.LIFT) continue;
+        const n = hash2(world.wrap(cx + dx) >> 2, world.wrap(cy + dy) >> 2, serial);
+        if (d2 > r2 * 0.44 && n < 0.28) continue;
+        world.factionControl[idx] = ZoneFaction.SAMOSBOR;
+        if (world.cells[idx] === Cell.FLOOR && world.features[idx] === Feature.NONE && n > 0.86) {
+          world.features[idx] = n > 0.93 ? Feature.CANDLE : Feature.APPARATUS;
+        }
+      }
+    }
+  }
+}
+
 function expandVoidMegastructureFootprint(world: World): void {
   const mask = buildVoidProtectedMask(world);
   let last: readonly [number, number] = [SPAWN_X, SPAWN_Y];
@@ -1027,6 +1361,9 @@ export function buildVoidGeometry(world: World): VoidGeometryLayout {
   expandVoidMegastructureFootprint(world);
   expandVoidChaoticGeometry(world);
   expandVoidAttractorFields(world);
+  addVoidMidBlocks(world);
+  addVoidFactionHqs(world);
+  markVoidSamosborScars(world);
   bridgeVoidProxyPercolation(world);
   bridgeVoidPercolationComponents(world);
   addDeadLampRows(world);

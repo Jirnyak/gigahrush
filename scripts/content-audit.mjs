@@ -46,6 +46,14 @@ function lineOf(sf, node) {
   return sf.getLineAndCharacterOfPosition(node.getStart(sf)).line + 1;
 }
 
+function lineNumberAt(text, index) {
+  let line = 1;
+  for (let i = 0; i < index; i++) {
+    if (text.charCodeAt(i) === 10) line++;
+  }
+  return line;
+}
+
 function propName(name, constants = new Map()) {
   if (ts.isIdentifier(name) || ts.isStringLiteral(name) || ts.isNumericLiteral(name)) return name.text;
   if (ts.isComputedPropertyName(name)) {
@@ -1141,6 +1149,34 @@ function addDuplicateErrors(label, entries) {
   }
 }
 
+function addTerritoryArchitectureErrors() {
+  const zoneFactionRuntimeAllowlist = new Set([
+    'src/systems/territory.ts',
+  ]);
+  const factionControlWriteAllowlist = new Set([
+    'src/systems/territory.ts',
+  ]);
+  for (const abs of files) {
+    const rel = toRel(abs);
+    if (!rel.startsWith('src/systems/')) continue;
+    const text = fs.readFileSync(abs, 'utf8');
+    if (!zoneFactionRuntimeAllowlist.has(rel)) {
+      const zoneFactionRe = /\bzone(?:\?\.|\.)faction\b/g;
+      let match;
+      while ((match = zoneFactionRe.exec(text)) !== null) {
+        errors.push(`${rel}:${lineNumberAt(text, match.index)} runtime system reads zone.faction; use territoryOwnerAt/territoryRoomOwner/currentTerritoryZoneId unless this file is metadata sync`);
+      }
+    }
+    if (!factionControlWriteAllowlist.has(rel)) {
+      const factionControlWriteRe = /\bfactionControl\s*\[[^\]]+\]\s*=(?!=)/g;
+      let match;
+      while ((match = factionControlWriteRe.exec(text)) !== null) {
+        errors.push(`${rel}:${lineNumberAt(text, match.index)} writes factionControl directly; use territory.ts helpers so ownership and zone metadata stay synchronized`);
+      }
+    }
+  }
+}
+
 function addDocProfileSyncErrors(label, sourceEntries, docEntries, docPath) {
   if (docEntries.length === 0) {
     errors.push(`${docPath} missing Existing Profiles ${label} list`);
@@ -1200,6 +1236,8 @@ addDuplicateErrors('CRAFT_MATERIAL_IDS', craftMaterialEntries);
 addDuplicateErrors('ITEM_COMPOSITIONS', itemCompositionEntries);
 addDuplicateErrors('CRAFT_RECIPES', craftRecipeEntriesList);
 addDuplicateErrors('CRAFT_RECIPE_SOURCES', craftRecipeSourceEntriesList);
+
+addTerritoryArchitectureErrors();
 
 addDocProfileSyncErrors('procedural geometry profile', floorGeometryEntries, floorGeometryDocEntries, 'gatbage/reference/procedural_floors/geometry.md');
 addDocProfileSyncErrors('procedural anomaly profile', floorAnomalyEntries, floorAnomalyDocEntries, 'gatbage/reference/procedural_floors/anomaly.md');

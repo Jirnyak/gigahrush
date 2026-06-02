@@ -1,16 +1,35 @@
 import { test } from 'node:test';
 import * as assert from 'node:assert/strict';
 
-import { Cell, EntityType, Feature, RoomType, type Entity } from '../src/core/types';
+import { Cell, DoorState, EntityType, Feature, RoomType, W, ZoneFaction, type Entity } from '../src/core/types';
 import { auditReachability, hasReachableAdjacentCell } from '../src/core/world';
 import { hashSeed, seededRandom } from '../src/core/rand';
 import { designFloorById } from '../src/data/design_floors';
 import { designFloorPopulationProfile } from '../src/data/design_floor_population';
+import { HUMAN_TERRITORY_OWNERS } from '../src/data/factions';
+import { generateDesignFloor } from '../src/gen/design_floors/manifest';
 import { applyDesignFloorPopulationField } from '../src/gen/design_floors/population';
 import {
   expandRaionsovetArchiveGeometry,
   generateRaionsovetArchiveDesignFloor,
 } from '../src/gen/design_floors/raionsovet_archive';
+import { countTerritoryCells, territoryHqAnchors } from '../src/systems/territory';
+
+const RAIONSOVET_ARCHIVE_TARGET_SHARES = new Map<ZoneFaction, number>([
+  [ZoneFaction.CITIZEN, 0.44],
+  [ZoneFaction.LIQUIDATOR, 0.22],
+  [ZoneFaction.CULTIST, 0.08],
+  [ZoneFaction.SCIENTIST, 0.14],
+  [ZoneFaction.WILD, 0.12],
+]);
+
+const RAIONSOVET_ARCHIVE_HQ_NAMES = new Map<ZoneFaction, string>([
+  [ZoneFaction.CITIZEN, 'Гражданский штаб очереди райсовета'],
+  [ZoneFaction.LIQUIDATOR, 'Пост ликвидаторов зараженной полки'],
+  [ZoneFaction.CULTIST, 'Скрытый культовый штаб пепельной ведомости'],
+  [ZoneFaction.SCIENTIST, 'НИИ-штаб сверки картотек'],
+  [ZoneFaction.WILD, 'Дикий штаб подмены адресов'],
+]);
 
 function isAmbientNpcTemplate(entity: Entity): boolean {
   return entity.type === EntityType.NPC &&
@@ -99,4 +118,56 @@ test('raionsovet archive profile populates queues, offices, and dangerous stacks
     ) documentLaneFixtures++;
   }
   assert.equal(documentLaneFixtures >= 180, true, 'document lanes should be legible outside room interiors');
+
+  const microRooms = gen.world.rooms.filter(room =>
+    room.name.includes('Северные окна справок') ||
+    room.name.includes('Юго-западные шкафы прописки') ||
+    room.name.includes('Юго-восточная сетка допусков') ||
+    room.name.includes('Нижние маленькие спорные дела') ||
+    room.name.includes('Культовые ячейки сгоревших фамилий'));
+  const authoredHqs = [...RAIONSOVET_ARCHIVE_HQ_NAMES.values()].map(name =>
+    gen.world.rooms.find(room => room.name === name));
+  const hqSupportRooms = gen.world.rooms.filter(room =>
+    [...RAIONSOVET_ARCHIVE_HQ_NAMES.values()].some(name => room.name.startsWith(`${name}:`)));
+
+  assert.equal(gen.world.rooms.length >= 200, true, `rooms ${gen.world.rooms.length}`);
+  assert.equal(gen.world.doors.size >= 220, true, `doors ${gen.world.doors.size}`);
+  assert.equal(microRooms.length >= 145, true, `micro rooms ${microRooms.length}`);
+  assert.equal(authoredHqs.every(Boolean), true, 'five authored human HQ rooms are present');
+  assert.equal(hqSupportRooms.length >= 25, true, `HQ support rooms ${hqSupportRooms.length}`);
+});
+
+test('raionsovet archive seeds five cell-first HQ anchors and target territory shares', () => {
+  const gen = generateDesignFloor('raionsovet_archive', 61_061);
+  const anchors = territoryHqAnchors(gen.world);
+  const anchorsByOwner = new Map(anchors.map(anchor => [anchor.owner, anchor]));
+  const counts = new Map(countTerritoryCells(gen.world).map(row => [row.owner, row.cells]));
+  const total = W * W;
+
+  for (const owner of HUMAN_TERRITORY_OWNERS) {
+    const anchor = anchorsByOwner.get(owner);
+    assert.ok(anchor, `missing HQ anchor ${ZoneFaction[owner]}`);
+    assert.equal((counts.get(owner) ?? 0) > 0, true, `missing territory cells ${ZoneFaction[owner]}`);
+    const room = gen.world.rooms[anchor.roomId];
+    assert.equal(room?.name, RAIONSOVET_ARCHIVE_HQ_NAMES.get(owner), `authored HQ ${ZoneFaction[owner]}`);
+    assert.equal(room?.type, RoomType.HQ, `HQ room type ${ZoneFaction[owner]}`);
+    assert.equal(room?.sealed, true, `sealed HQ ${ZoneFaction[owner]}`);
+    assert.equal(room?.doors.some(doorIdx => {
+      const state = gen.world.doors.get(doorIdx)?.state;
+      return state === DoorState.HERMETIC_OPEN || state === DoorState.HERMETIC_CLOSED;
+    }), true, `hermetic HQ door ${ZoneFaction[owner]}`);
+    assert.equal(gen.world.rooms.filter(candidate => candidate.name.startsWith(`${room.name}:`)).length >= 5, true, `support rooms ${ZoneFaction[owner]}`);
+  }
+
+  for (const [owner, target] of RAIONSOVET_ARCHIVE_TARGET_SHARES) {
+    const share = (counts.get(owner) ?? 0) / total;
+    assert.equal(Math.abs(share - target) <= 0.025, true, `${ZoneFaction[owner]} share ${share}`);
+  }
+
+  let dominant = ZoneFaction.CITIZEN;
+  for (const owner of HUMAN_TERRITORY_OWNERS) {
+    if ((counts.get(owner) ?? 0) > (counts.get(dominant) ?? 0)) dominant = owner;
+  }
+  assert.equal(dominant, ZoneFaction.CITIZEN);
+  assert.equal((counts.get(ZoneFaction.SAMOSBOR) ?? 0) / total <= 0.001, true, 'no samosbor territory in human archive target');
 });

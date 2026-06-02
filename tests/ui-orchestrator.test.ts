@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import {
   CAMERA_FOV_DEFAULT_DEGREES,
   DEFAULT_UI_PRESET_ID,
+  MAP_LEGEND_TOGGLE_DEFS,
   MOBILE_LOOK_SENSITIVITY_DEFAULT,
   MOUSE_LOOK_SENSITIVITY_DEFAULT,
   UI_ELEMENT_DEFS,
@@ -15,15 +16,22 @@ import {
   activeUiPresetId,
   applyUiPreset,
   cameraFovDegrees,
+  mapColorMode,
+  mapLegendRowAt,
+  mapLegendRowCount,
+  mapLegendToggleEnabled,
   mobileLookSensitivity,
   mouseLookSensitivity,
   resetCameraFov,
   resetAutoPickup,
+  resetMapLegendSettings,
   resetMobileLookSensitivity,
   resetMouseLookSensitivity,
   resetUiElement,
   resetUiSettings,
   toggleAutoPickup,
+  toggleMapColorMode,
+  toggleMapLegendToggle,
   setUiElementEnabled,
   toggleUiElement,
   uiElementEnabled,
@@ -57,6 +65,38 @@ test('UI orchestrator defaults to the novice-safe HUD enabled', () => {
   assert.equal(mouseLookSensitivity(), MOUSE_LOOK_SENSITIVITY_DEFAULT);
   assert.equal(cameraFovDegrees(), CAMERA_FOV_DEFAULT_DEGREES);
   assert.equal(autoPickupEnabled(), true);
+  assert.equal(mapColorMode(), 'rooms');
+  assert.deepEqual(
+    MAP_LEGEND_TOGGLE_DEFS.map(def => [def.id, mapLegendToggleEnabled(def.id)]),
+    [
+      ['map_npcs', true],
+      ['map_monsters', true],
+      ['map_items', true],
+      ['map_quests', true],
+      ['map_lifts', true],
+      ['map_surface_marks', true],
+      ['map_room_labels', false],
+      ['map_npc_labels', false],
+    ],
+  );
+});
+
+test('map legend settings are local toggles outside HUD presets', () => {
+  resetUiSettings();
+  assert.equal(mapLegendRowCount(), 2 + MAP_LEGEND_TOGGLE_DEFS.length);
+  assert.equal(mapLegendRowAt(0)?.kind, 'reset_map_legend');
+  assert.equal(mapLegendRowAt(1)?.kind, 'map_color_mode');
+  assert.equal(toggleMapColorMode(), 'factions');
+  assert.equal(toggleMapLegendToggle('map_items'), false);
+  assert.equal(toggleMapLegendToggle('map_room_labels'), true);
+  assert.equal(applyUiPreset('off'), true);
+  assert.equal(mapColorMode(), 'factions');
+  assert.equal(mapLegendToggleEnabled('map_items'), false);
+  assert.equal(mapLegendToggleEnabled('map_room_labels'), true);
+  resetMapLegendSettings();
+  assert.equal(mapColorMode(), 'rooms');
+  assert.equal(mapLegendToggleEnabled('map_items'), true);
+  assert.equal(mapLegendToggleEnabled('map_room_labels'), false);
 });
 
 test('UI orchestrator treats minimap as an ordinary interface surface', () => {

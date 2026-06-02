@@ -127,6 +127,28 @@ test('frozen navigation cache survives temporary samosbor geometry dirties until
   assert.equal(stats.bfsCalls, 1);
 });
 
+test('nested samosbor navigation freezes survive inner wave unfreeze', () => {
+  const world = makeCorridorWorld();
+  setPathContext([], 0);
+  const first = bfsPath(world, 0, 10, 21, 10);
+  assert.ok(first.length > 0);
+
+  freezeNavigationCacheForWorld(world);
+  freezeNavigationCacheForWorld(world);
+  world.set(10, 10, Cell.WALL);
+  world.markCellsDirty();
+
+  unfreezeNavigationCacheForWorld(world);
+  setPathContext([], 0.1, true);
+  assert.deepEqual(bfsPath(world, 0, 10, 21, 10), first);
+  assert.equal(getPathfindingStats().bfsCalls, 0);
+
+  unfreezeNavigationCacheForWorld(world);
+  setPathContext([], 0.2, false);
+  assert.deepEqual(bfsPath(world, 0, 10, 21, 10), []);
+  assert.equal(getPathfindingStats().bfsCalls, 1);
+});
+
 test('ordinary closed doors are routeable while locked and hermetic doors block navigation', () => {
   const world = makeCorridorWorld();
   const doorIdx = world.idx(10, 10);

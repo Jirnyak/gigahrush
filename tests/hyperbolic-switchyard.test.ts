@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import * as assert from 'node:assert/strict';
 
+import { auditReachability } from '../src/core/world';
 import {
   Cell,
   EntityType,
@@ -8,6 +9,8 @@ import {
   LiftDirection,
   MonsterKind,
   RoomType,
+  W,
+  ZoneFaction,
 } from '../src/core/types';
 import { designFloorAtZ, designFloorById } from '../src/data/design_floors';
 import { designFloorPopulationProfile } from '../src/data/design_floor_population';
@@ -21,12 +24,26 @@ import {
 } from '../src/gen/design_floors/hyperbolic_switchyard';
 import { getEmergencyPanels } from '../src/systems/emergency_panels';
 import { getRouteCueMarkers } from '../src/systems/route_cues';
+import { countTerritoryCells, territoryHqAnchors, territoryOwnerAt, territoryRoomOwner } from '../src/systems/territory';
 
 let cachedGeneration: HyperbolicSwitchyardGeneration | undefined;
 
 function generatedHyperbolicSwitchyard(): HyperbolicSwitchyardGeneration {
   cachedGeneration ??= generateDesignFloor(HYPERBOLIC_SWITCHYARD_DESIGN_FLOOR_ID) as HyperbolicSwitchyardGeneration;
   return cachedGeneration;
+}
+
+function hermeticShellCells(gen: HyperbolicSwitchyardGeneration, roomId: number): number {
+  const room = gen.world.rooms[roomId];
+  let cells = 0;
+  for (let dy = -1; dy <= room.h; dy++) {
+    for (let dx = -1; dx <= room.w; dx++) {
+      if (dx >= 0 && dx < room.w && dy >= 0 && dy < room.h) continue;
+      const idx = gen.world.idx(room.x + dx, room.y + dy);
+      if (gen.world.hermoWall[idx]) cells++;
+    }
+  }
+  return cells;
 }
 
 test('hyperbolic_switchyard is a maintenance authored route floor', () => {
@@ -91,6 +108,58 @@ test('hyperbolic_switchyard population profile is industrial and monster-heavy',
   assert.ok(shortcutRoom);
   assert.equal(shortcutRoom.type, RoomType.STORAGE);
   assert.equal(gen.switchyardState.shortcutMonsterCells.length > 0, true);
+});
+
+test('hyperbolic_switchyard fills macro arcs with mid/micro rooms and cell-first territory', () => {
+  const gen = generatedHyperbolicSwitchyard();
+  const reachable = auditReachability(gen.world, gen.world.idx(Math.floor(gen.spawnX), Math.floor(gen.spawnY))).reachable;
+  const reachableCells = reachable.reduce((sum, value) => sum + value, 0);
+  const hqAnchors = territoryHqAnchors(gen.world);
+  const byOwner = new Map(hqAnchors.map(anchor => [anchor.owner, anchor]));
+  const counts = new Map(countTerritoryCells(gen.world).map(row => [row.owner, row.cells]));
+  const share = (owner: ZoneFaction): number => (counts.get(owner) ?? 0) / (W * W);
+  const targetShares = new Map<ZoneFaction, number>([
+    [ZoneFaction.CITIZEN, 0.12],
+    [ZoneFaction.LIQUIDATOR, 0.44],
+    [ZoneFaction.CULTIST, 0.08],
+    [ZoneFaction.SCIENTIST, 0.16],
+    [ZoneFaction.WILD, 0.20],
+  ]);
+  const microRooms = gen.world.rooms.filter(room => room.name.includes(': ') && (
+    room.name.includes('кладовая стрелок') ||
+    room.name.includes('санузел стрелочника') ||
+    room.name.includes('кабинет расписаний') ||
+    room.name.includes('мастерская привода')
+  ));
+  const serviceBlocks = gen.world.rooms.filter(room => room.name.includes('стрелк') || room.name.includes('дуг') || room.name.includes('двор'));
+
+  assert.equal(gen.world.rooms.length >= 320, true, `rooms ${gen.world.rooms.length}`);
+  assert.equal(gen.world.doors.size >= 220, true, `doors ${gen.world.doors.size}`);
+  assert.equal(reachableCells >= 170_000, true, `reachable ${reachableCells}`);
+  assert.equal(serviceBlocks.length >= 20, true, `service blocks ${serviceBlocks.length}`);
+  assert.equal(microRooms.length >= 170, true, `micro ${microRooms.length}`);
+
+  for (const [owner, targetShare] of targetShares) {
+    const anchor = byOwner.get(owner);
+    const room = anchor ? gen.world.rooms[anchor.roomId] : undefined;
+    assert.ok(anchor, `missing HQ anchor ${ZoneFaction[owner]}`);
+    assert.equal((counts.get(owner) ?? 0) > 0, true, `owned cells ${ZoneFaction[owner]}`);
+    assert.equal(Math.abs(share(owner) - targetShare) <= 0.025, true, `owner ${ZoneFaction[owner]} share ${share(owner)}`);
+    assert.equal(room?.type, RoomType.HQ, `HQ room type ${ZoneFaction[owner]}`);
+    assert.equal(room?.sealed, true, `sealed HQ ${ZoneFaction[owner]}`);
+    if (anchor && room) {
+      assert.equal(territoryRoomOwner(gen.world, room.id), owner, `room owner ${ZoneFaction[owner]}`);
+      assert.equal(territoryOwnerAt(gen.world, anchor.x, anchor.y), owner, `anchor owner ${ZoneFaction[owner]}`);
+      assert.equal(hermeticShellCells(gen, room.id) > 0, true, `hermetic shell ${ZoneFaction[owner]}`);
+    }
+  }
+
+  let dominant = ZoneFaction.CITIZEN;
+  for (const [owner, cells] of counts) {
+    if (owner === ZoneFaction.SAMOSBOR) continue;
+    if (cells > (counts.get(dominant) ?? 0)) dominant = owner;
+  }
+  assert.equal(dominant, ZoneFaction.LIQUIDATOR);
 });
 
 test('hyperbolic_switchyard registers the guide payment side quest', () => {

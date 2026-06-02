@@ -19,6 +19,7 @@ import {
   type Entity,
   type Item,
   type Room,
+  type TerritoryOwner,
   type WorldContainer,
 } from '../../core/types';
 import { World } from '../../core/world';
@@ -52,6 +53,10 @@ export interface CriticalLeakArchiveState {
   dryCausewayCells: number;
   bridgesAdded: number;
   contaminatedShortcutCells: number;
+  midArchiveBlocks: number;
+  microArchiveRooms: number;
+  hqAnchorRooms: number;
+  hqSupportRooms: number;
   dryPacketContainerIds: number[];
   floodgateContainerId: number;
   debugEntry: {
@@ -80,6 +85,38 @@ interface PercolationField {
 
 type NextId = { v: number };
 
+interface ArchiveBlockSpec {
+  cx: number;
+  cy: number;
+  cols: number;
+  lanes: number;
+  wet?: boolean;
+  prefix: string;
+}
+
+interface FactionHqSpec {
+  owner: TerritoryOwner;
+  x: number;
+  y: number;
+  label: string;
+  wallTex: Tex;
+  floorTex: Tex;
+}
+
+interface FactionHqCompound {
+  owner: TerritoryOwner;
+  core: Room;
+  supportRooms: Room[];
+}
+
+interface ArchiveExpansionStats {
+  blocks: number;
+  microRooms: number;
+  hqRooms: number;
+  supportRooms: number;
+  hqCompounds: FactionHqCompound[];
+}
+
 const GRID_W = 45;
 const GRID_H = 45;
 const GRID_STEP = 20;
@@ -87,6 +124,37 @@ const GRID_ORIGIN = 72;
 const SITE_P = 0.64;
 const BOND_P = 0.66;
 const WATER_TAGS = ['critical_leak_archive', 'wet_archive', 'contaminated_shortcut'] as const;
+
+const ARCHIVE_ROOM_W = 11;
+const ARCHIVE_ROOM_H = 8;
+const ARCHIVE_ROOM_GAP = 3;
+const ARCHIVE_AISLE_W = 3;
+const ARCHIVE_LANE_GAP = 8;
+
+const ARCHIVE_BLOCKS: readonly ArchiveBlockSpec[] = [
+  { cx: 150, cy: 130, cols: 7, lanes: 4, prefix: 'Северо-западная сетка сухих причин' },
+  { cx: 506, cy: 116, cols: 8, lanes: 4, prefix: 'Северная сетка отсроченных жалоб' },
+  { cx: 858, cy: 126, cols: 7, lanes: 4, wet: true, prefix: 'Северо-восточная сетка мокрых актов' },
+  { cx: 122, cy: 310, cols: 7, lanes: 4, prefix: 'Левый реестр аварийных писем' },
+  { cx: 362, cy: 338, cols: 7, lanes: 4, prefix: 'Сухой карман проверочных листов' },
+  { cx: 640, cy: 346, cols: 7, lanes: 4, prefix: 'Поперечный архив причинных скрепок' },
+  { cx: 888, cy: 330, cols: 7, lanes: 4, wet: true, prefix: 'Правый мокрый реестр отказов' },
+  { cx: 142, cy: 548, cols: 8, lanes: 4, prefix: 'Западная сетка свидетельских копий' },
+  { cx: 638, cy: 548, cols: 7, lanes: 4, prefix: 'Средняя сетка водоотсечки' },
+  { cx: 888, cy: 590, cols: 7, lanes: 4, wet: true, prefix: 'Восточная сетка зараженных дел' },
+  { cx: 138, cy: 782, cols: 7, lanes: 4, prefix: 'Нижний левый архив сухих отметок' },
+  { cx: 430, cy: 820, cols: 8, lanes: 4, prefix: 'Нижний центральный архив просушки' },
+  { cx: 704, cy: 836, cols: 7, lanes: 4, prefix: 'Нижняя сетка насосных ведомостей' },
+  { cx: 900, cy: 830, cols: 7, lanes: 4, wet: true, prefix: 'Нижний правый мокрый каталог' },
+] as const;
+
+const ARCHIVE_HQ_SPECS: readonly FactionHqSpec[] = [
+  { owner: ZoneFaction.CITIZEN, x: 68, y: 454, label: 'гражданской сухой очереди', wallTex: Tex.PANEL, floorTex: Tex.F_LINO },
+  { owner: ZoneFaction.LIQUIDATOR, x: 828, y: 438, label: 'ликвидаторской отсечки', wallTex: Tex.HERMO_WALL, floorTex: Tex.F_CONCRETE },
+  { owner: ZoneFaction.CULTIST, x: 824, y: 184, label: 'культа мокрой причины', wallTex: Tex.MARBLE, floorTex: Tex.F_WATER },
+  { owner: ZoneFaction.SCIENTIST, x: 552, y: 782, label: 'ученого учета протечки', wallTex: Tex.METAL, floorTex: Tex.F_CONCRETE },
+  { owner: ZoneFaction.WILD, x: 70, y: 820, label: 'дикой сушки трофеев', wallTex: Tex.BRICK, floorTex: Tex.F_CONCRETE },
+] as const;
 
 const TARGET_ROUTE = {
   designFloorId: CRITICAL_LEAK_ARCHIVE_ROUTE_ID,
@@ -434,6 +502,357 @@ function addDoor(world: World, room: Room, side: 'north' | 'south' | 'west' | 'e
   return { x: world.wrap(wx + 1), y: world.wrap(wy) };
 }
 
+function canStampArchiveRoom(world: World, x: number, y: number, w: number, h: number): boolean {
+  if (x < 2 || y < 2 || x + w + 2 >= W || y + h + 2 >= W) return false;
+  for (let dy = -1; dy <= h; dy++) {
+    for (let dx = -1; dx <= w; dx++) {
+      const idx = world.idx(x + dx, y + dy);
+      if (world.cells[idx] !== Cell.WALL || world.aptMask[idx]) return false;
+    }
+  }
+  return true;
+}
+
+function stampArchiveRoom(
+  world: World,
+  type: RoomType,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  name: string,
+  wallTex: Tex,
+  floorTex: Tex,
+): Room | null {
+  const rx = Math.round(x);
+  const ry = Math.round(y);
+  if (!canStampArchiveRoom(world, rx, ry, w, h)) return null;
+  return stampNamedRoom(world, type, rx, ry, w, h, name, wallTex, floorTex);
+}
+
+function carveArchiveCell(
+  world: World,
+  x: number,
+  y: number,
+  cell: Cell.FLOOR | Cell.WATER,
+  floorTex: Tex,
+  wallTex = Tex.MARBLE,
+): void {
+  const idx = world.idx(x, y);
+  if (world.aptMask[idx] || world.cells[idx] === Cell.LIFT || world.cells[idx] === Cell.DOOR) return;
+  if (world.roomMap[idx] >= 0) return;
+  world.cells[idx] = cell;
+  world.roomMap[idx] = -1;
+  world.floorTex[idx] = cell === Cell.WATER ? Tex.F_WATER : floorTex;
+  world.wallTex[idx] = wallTex;
+  world.hermoWall[idx] = 0;
+  if (world.features[idx] !== Feature.LIFT_BUTTON) world.features[idx] = Feature.NONE;
+}
+
+function carveArchiveRect(
+  world: World,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  cell: Cell.FLOOR | Cell.WATER,
+  floorTex: Tex,
+  wallTex = Tex.MARBLE,
+): void {
+  for (let yy = y; yy < y + h; yy++) {
+    for (let xx = x; xx < x + w; xx++) carveArchiveCell(world, xx, yy, cell, floorTex, wallTex);
+  }
+}
+
+function carveArchiveLine(
+  world: World,
+  a: Point,
+  b: Point,
+  radius: number,
+  cell: Cell.FLOOR | Cell.WATER,
+  floorTex: Tex,
+  wallTex = Tex.MARBLE,
+): void {
+  const dx = b.x - a.x;
+  const dy = b.y - a.y;
+  const steps = Math.max(1, Math.abs(dx), Math.abs(dy));
+  const r2 = radius * radius;
+  for (let step = 0; step <= steps; step++) {
+    const t = step / steps;
+    const x = Math.round(a.x + dx * t);
+    const y = Math.round(a.y + dy * t);
+    for (let yy = -radius; yy <= radius; yy++) {
+      for (let xx = -radius; xx <= radius; xx++) {
+        if (xx * xx + yy * yy > r2) continue;
+        carveArchiveCell(world, x + xx, y + yy, cell, floorTex, wallTex);
+      }
+    }
+  }
+}
+
+function carveArchiveBentRoute(
+  world: World,
+  a: Point,
+  b: Point,
+  radius: number,
+  cell: Cell.FLOOR | Cell.WATER,
+  floorTex: Tex,
+  wallTex = Tex.MARBLE,
+): void {
+  const mid: Point = Math.abs(world.delta(a.x, b.x)) > Math.abs(world.delta(a.y, b.y))
+    ? { x: b.x, y: a.y }
+    : { x: a.x, y: b.y };
+  carveArchiveLine(world, a, mid, radius, cell, floorTex, wallTex);
+  carveArchiveLine(world, mid, b, radius, cell, floorTex, wallTex);
+}
+
+function archiveMicroRoomType(serial: number): RoomType {
+  switch (serial % 12) {
+    case 0: return RoomType.OFFICE;
+    case 1: return RoomType.BATHROOM;
+    case 2: return RoomType.KITCHEN;
+    case 3: return RoomType.COMMON;
+    case 4: return RoomType.MEDICAL;
+    default: return RoomType.STORAGE;
+  }
+}
+
+function decorateMicroArchiveRoom(world: World, room: Room, serial: number): void {
+  if (room.type === RoomType.BATHROOM) {
+    setFeature(world, room.x + 2, room.y + 2, Feature.SINK);
+    setFeature(world, room.x + room.w - 3, room.y + room.h - 3, Feature.TOILET);
+    return;
+  }
+  if (room.type === RoomType.KITCHEN) {
+    setFeature(world, room.x + 2, room.y + 2, Feature.STOVE);
+    setFeature(world, room.x + room.w - 3, room.y + 2, Feature.SINK);
+    setFeature(world, room.x + (room.w >> 1), room.y + room.h - 3, Feature.TABLE);
+    return;
+  }
+  if (room.type === RoomType.OFFICE || room.type === RoomType.MEDICAL) {
+    setFeature(world, room.x + 2, room.y + 2, Feature.DESK);
+    setFeature(world, room.x + room.w - 3, room.y + 2, serial % 2 === 0 ? Feature.SCREEN : Feature.APPARATUS);
+    setFeature(world, room.x + room.w - 3, room.y + room.h - 3, Feature.SHELF);
+    return;
+  }
+  for (let x = room.x + 2; x < room.x + room.w - 2; x += 3) {
+    setFeature(world, x, room.y + 2, Feature.SHELF);
+    if (room.h > 6) setFeature(world, x, room.y + room.h - 3, serial % 5 === 0 ? Feature.TABLE : Feature.SHELF);
+  }
+  if (serial % 7 === 0) setFeature(world, room.x + room.w - 3, room.y + 2, Feature.LAMP);
+}
+
+function paintRoomTerritory(world: World, room: Room, owner: TerritoryOwner): void {
+  for (let dy = 0; dy < room.h; dy++) {
+    for (let dx = 0; dx < room.w; dx++) {
+      world.factionControl[world.idx(room.x + dx, room.y + dy)] = owner;
+    }
+  }
+}
+
+function markHermeticRoomShell(world: World, room: Room): void {
+  room.sealed = true;
+  room.wallTex = Tex.HERMO_WALL;
+  for (let dy = -1; dy <= room.h; dy++) {
+    for (let dx = -1; dx <= room.w; dx++) {
+      const border = dx < 0 || dx >= room.w || dy < 0 || dy >= room.h;
+      if (!border) continue;
+      const idx = world.idx(room.x + dx, room.y + dy);
+      if (world.cells[idx] !== Cell.WALL || world.aptMask[idx]) continue;
+      world.hermoWall[idx] = 1;
+      world.wallTex[idx] = Tex.HERMO_WALL;
+    }
+  }
+}
+
+function connectPointToField(world: World, field: PercolationField, point: Point, wet: boolean, floorTex: Tex): void {
+  const target = nearestComponentCenter(world, point, field.centers);
+  carveArchiveBentRoute(world, point, target, wet ? 1 : 0, wet ? Cell.WATER : Cell.FLOOR, floorTex);
+}
+
+function stampArchiveBlock(world: World, field: PercolationField, spec: ArchiveBlockSpec, serialBase: number): { rooms: Room[]; placed: boolean } {
+  const rooms: Room[] = [];
+  const stride = ARCHIVE_ROOM_W + ARCHIVE_ROOM_GAP;
+  const width = spec.cols * ARCHIVE_ROOM_W + (spec.cols - 1) * ARCHIVE_ROOM_GAP;
+  const laneSpan = ARCHIVE_ROOM_H * 2 + ARCHIVE_AISLE_W;
+  const height = spec.lanes * laneSpan + (spec.lanes - 1) * ARCHIVE_LANE_GAP;
+  const left = Math.round(spec.cx - width / 2);
+  const top = Math.round(spec.cy - height / 2);
+  const aisleCell = spec.wet ? Cell.WATER : Cell.FLOOR;
+  const aisleTex = spec.wet ? Tex.F_WATER : Tex.F_MARBLE_TILE;
+  let firstAisle: Point | null = null;
+  let previousAisleY = -1;
+
+  for (let lane = 0; lane < spec.lanes; lane++) {
+    const laneTop = top + lane * (laneSpan + ARCHIVE_LANE_GAP);
+    const aisleY = laneTop + ARCHIVE_ROOM_H + 1;
+    firstAisle ??= { x: spec.cx, y: aisleY };
+    carveArchiveRect(world, left - 4, aisleY, width + 8, 1, aisleCell, aisleTex);
+    if (previousAisleY >= 0) {
+      carveArchiveLine(world, { x: left - 2, y: previousAisleY }, { x: left - 2, y: aisleY }, 0, aisleCell, aisleTex);
+      carveArchiveLine(world, { x: left + width + 1, y: previousAisleY }, { x: left + width + 1, y: aisleY }, 0, aisleCell, aisleTex);
+    }
+    previousAisleY = aisleY;
+
+    for (let col = 0; col < spec.cols; col++) {
+      const roomX = left + col * stride;
+      const topRoomY = aisleY - 1 - ARCHIVE_ROOM_H;
+      const bottomRoomY = aisleY + ARCHIVE_AISLE_W - 1;
+      for (const [roomY, side, rowTag] of [
+        [topRoomY, 'south', 'верхняя'],
+        [bottomRoomY, 'north', 'нижняя'],
+      ] as const) {
+        const serial = serialBase + rooms.length + lane * 31 + col * 7 + (rowTag === 'нижняя' ? 3 : 0);
+        const room = stampArchiveRoom(
+          world,
+          archiveMicroRoomType(serial),
+          roomX,
+          roomY,
+          ARCHIVE_ROOM_W,
+          ARCHIVE_ROOM_H,
+          `${spec.prefix}: ${rowTag} ячейка ${lane + 1}.${col + 1}`,
+          spec.wet ? Tex.TILE_W : Tex.MARBLE,
+          spec.wet && serial % 4 === 0 ? Tex.F_WATER : Tex.F_PARQUET,
+        );
+        if (!room) continue;
+        addDoor(world, room, side, Math.floor(room.w / 2));
+        decorateMicroArchiveRoom(world, room, serial);
+        rooms.push(room);
+      }
+    }
+  }
+
+  if (firstAisle) {
+    const target = nearestComponentCenter(world, firstAisle, field.centers);
+    const exitX = world.delta(firstAisle.x, target.x) < 0 ? left - 6 : left + width + 6;
+    carveArchiveLine(world, firstAisle, { x: exitX, y: firstAisle.y }, 1, aisleCell, aisleTex);
+    connectPointToField(world, field, { x: exitX, y: firstAisle.y }, !!spec.wet, aisleTex);
+  }
+
+  return { rooms, placed: rooms.length > 0 };
+}
+
+function hqOwnerName(owner: TerritoryOwner): string {
+  switch (owner) {
+    case ZoneFaction.LIQUIDATOR: return 'ликвидаторов';
+    case ZoneFaction.CULTIST: return 'культистов';
+    case ZoneFaction.SCIENTIST: return 'ученых';
+    case ZoneFaction.WILD: return 'диких';
+    case ZoneFaction.CITIZEN:
+    default: return 'граждан';
+  }
+}
+
+function decorateHqSupportRoom(world: World, room: Room): void {
+  if (room.type === RoomType.KITCHEN) {
+    setFeature(world, room.x + 2, room.y + 2, Feature.STOVE);
+    setFeature(world, room.x + room.w - 3, room.y + 2, Feature.SINK);
+    setFeature(world, room.x + 4, room.y + room.h - 3, Feature.TABLE);
+  } else if (room.type === RoomType.BATHROOM) {
+    setFeature(world, room.x + 2, room.y + 2, Feature.SINK);
+    setFeature(world, room.x + room.w - 3, room.y + room.h - 3, Feature.TOILET);
+  } else if (room.type === RoomType.MEDICAL) {
+    setFeature(world, room.x + 2, room.y + 2, Feature.APPARATUS);
+    setFeature(world, room.x + room.w - 3, room.y + 2, Feature.DESK);
+  } else if (room.type === RoomType.OFFICE) {
+    setFeature(world, room.x + 2, room.y + 2, Feature.DESK);
+    setFeature(world, room.x + room.w - 3, room.y + 2, Feature.SCREEN);
+  } else {
+    for (let x = room.x + 2; x < room.x + room.w - 2; x += 3) setFeature(world, x, room.y + 2, Feature.SHELF);
+  }
+  setFeature(world, room.x + room.w - 3, room.y + room.h - 3, Feature.LAMP);
+}
+
+function stampFactionHqCompound(world: World, field: PercolationField, spec: FactionHqSpec): FactionHqCompound | null {
+  const attempts: readonly Point[] = [
+    { x: spec.x, y: spec.y },
+    { x: spec.x + 18, y: spec.y },
+    { x: spec.x - 18, y: spec.y + 18 },
+    { x: spec.x, y: spec.y - 18 },
+  ];
+  for (const attempt of attempts) {
+    const core = stampArchiveRoom(
+      world,
+      RoomType.HQ,
+      attempt.x,
+      attempt.y,
+      24,
+      16,
+      `Штаб ${spec.label}`,
+      spec.wallTex,
+      spec.floorTex,
+    );
+    if (!core) continue;
+    markHermeticRoomShell(world, core);
+    setFeature(world, core.x + 4, core.y + 3, Feature.DESK);
+    setFeature(world, core.x + core.w - 5, core.y + 3, Feature.SCREEN);
+    setFeature(world, core.x + core.w - 5, core.y + core.h - 4, Feature.LAMP);
+
+    const supportRooms: Room[] = [];
+    const supportSpecs = [
+      { type: RoomType.KITCHEN, x: core.x - 20, y: core.y + 1, w: 14, h: 9, side: 'east' as const, name: 'кухня' },
+      { type: RoomType.BATHROOM, x: core.x - 18, y: core.y + 14, w: 12, h: 8, side: 'east' as const, name: 'санузел' },
+      { type: RoomType.STORAGE, x: core.x + core.w + 6, y: core.y + 1, w: 15, h: 9, side: 'west' as const, name: 'кладовая' },
+      { type: spec.owner === ZoneFaction.SCIENTIST ? RoomType.MEDICAL : RoomType.OFFICE, x: core.x + core.w + 6, y: core.y + 14, w: 16, h: 9, side: 'west' as const, name: spec.owner === ZoneFaction.SCIENTIST ? 'медпункт' : 'кабинет' },
+    ];
+    for (const support of supportSpecs) {
+      const room = stampArchiveRoom(
+        world,
+        support.type,
+        support.x,
+        support.y,
+        support.w,
+        support.h,
+        `Опора ${hqOwnerName(spec.owner)}: ${support.name}`,
+        spec.wallTex,
+        support.type === RoomType.BATHROOM ? Tex.F_TILE : spec.floorTex,
+      );
+      if (!room) continue;
+      const exit = addDoor(world, room, support.side, Math.floor(room.h / 2));
+      carveArchiveLine(world, exit, { x: core.x + (core.w >> 1), y: exit.y }, 0, Cell.FLOOR, spec.floorTex, spec.wallTex);
+      decorateHqSupportRoom(world, room);
+      supportRooms.push(room);
+    }
+
+    const coreExit = addDoor(world, core, 'south', Math.floor(core.w / 2), DoorState.HERMETIC_CLOSED);
+    carveArchiveLine(world, coreExit, { x: coreExit.x, y: coreExit.y + 5 }, 1, Cell.FLOOR, spec.floorTex, spec.wallTex);
+    connectPointToField(world, field, { x: coreExit.x, y: coreExit.y + 5 }, spec.floorTex === Tex.F_WATER, spec.floorTex);
+    return { owner: spec.owner, core, supportRooms };
+  }
+  return null;
+}
+
+function expandArchiveMidAndMicro(world: World, field: PercolationField): ArchiveExpansionStats {
+  const hqCompounds: FactionHqCompound[] = [];
+  for (const spec of ARCHIVE_HQ_SPECS) {
+    const hq = stampFactionHqCompound(world, field, spec);
+    if (hq) hqCompounds.push(hq);
+  }
+
+  let blocks = 0;
+  let microRooms = 0;
+  for (let i = 0; i < ARCHIVE_BLOCKS.length; i++) {
+    const result = stampArchiveBlock(world, field, ARCHIVE_BLOCKS[i], i * 101);
+    if (result.placed) blocks++;
+    microRooms += result.rooms.length;
+  }
+
+  return {
+    blocks,
+    microRooms,
+    hqRooms: hqCompounds.length,
+    supportRooms: hqCompounds.reduce((sum, hq) => sum + hq.supportRooms.length, 0),
+    hqCompounds,
+  };
+}
+
+function paintCriticalLeakHqTerritory(world: World, compounds: readonly FactionHqCompound[]): void {
+  for (const compound of compounds) {
+    paintRoomTerritory(world, compound.core, compound.owner);
+    for (const room of compound.supportRooms) paintRoomTerritory(world, room, compound.owner);
+  }
+}
+
 function placeLift(world: World, x: number, y: number, buttonX: number, buttonY: number, direction: LiftDirection): void {
   const liftIdx = world.idx(x, y);
   world.cells[liftIdx] = Cell.LIFT;
@@ -578,7 +997,7 @@ function connectAnchors(
 
 function buildRooms(world: World): Record<keyof typeof CRITICAL_LEAK_ARCHIVE_ROOM_NAMES, Room> {
   return {
-    lobby: stampNamedRoom(world, RoomType.HQ, 488, 486, 50, 34, CRITICAL_LEAK_ARCHIVE_ROOM_NAMES.lobby, Tex.MARBLE, Tex.F_MARBLE_TILE),
+    lobby: stampNamedRoom(world, RoomType.COMMON, 488, 486, 50, 34, CRITICAL_LEAK_ARCHIVE_ROOM_NAMES.lobby, Tex.MARBLE, Tex.F_MARBLE_TILE),
     trade: stampNamedRoom(world, RoomType.OFFICE, 374, 486, 72, 30, CRITICAL_LEAK_ARCHIVE_ROOM_NAMES.trade, Tex.MARBLE, Tex.F_PARQUET),
     dryIndex: stampNamedRoom(world, RoomType.STORAGE, 230, 196, 76, 44, CRITICAL_LEAK_ARCHIVE_ROOM_NAMES.dryIndex, Tex.MARBLE, Tex.F_PARQUET),
     disputedStack: stampNamedRoom(world, RoomType.STORAGE, 706, 212, 70, 48, CRITICAL_LEAK_ARCHIVE_ROOM_NAMES.disputedStack, Tex.MARBLE, Tex.F_WATER),
@@ -697,6 +1116,10 @@ export function generateCriticalLeakArchiveDesignFloor(): CriticalLeakArchiveGen
     dryCausewayCells: 0,
     bridgesAdded: 0,
     contaminatedShortcutCells: 0,
+    midArchiveBlocks: 0,
+    microArchiveRooms: 0,
+    hqAnchorRooms: 0,
+    hqSupportRooms: 0,
     dryPacketContainerIds: [],
     floodgateContainerId: -1,
     debugEntry: {
@@ -733,11 +1156,17 @@ export function generateCriticalLeakArchiveDesignFloor(): CriticalLeakArchiveGen
     { point: witnessSouth },
   ], state);
   carveContaminatedShortcut(world, shortcutWest, floodgateNorth, state);
+  const archiveExpansion = expandArchiveMidAndMicro(world, field);
+  state.midArchiveBlocks = archiveExpansion.blocks;
+  state.microArchiveRooms = archiveExpansion.microRooms;
+  state.hqAnchorRooms = archiveExpansion.hqRooms;
+  state.hqSupportRooms = archiveExpansion.supportRooms;
 
   placeLift(world, rooms.lobby.x + 4, rooms.lobby.y + 8, rooms.lobby.x + 7, rooms.lobby.y + 8, LiftDirection.UP);
   placeLift(world, rooms.lobby.x + rooms.lobby.w - 5, rooms.lobby.y + 8, rooms.lobby.x + rooms.lobby.w - 8, rooms.lobby.y + 8, LiftDirection.DOWN);
 
   tuneInitialZones(world);
+  paintCriticalLeakHqTerritory(world, archiveExpansion.hqCompounds);
   decorateArchiveRooms(world, rooms);
   populateContainers(world, rooms, state);
 
@@ -748,7 +1177,7 @@ export function generateCriticalLeakArchiveDesignFloor(): CriticalLeakArchiveGen
   world.rebuildContainerMap();
   world.bakeLights();
 
-  state.debugEntry.summary = `largest=${state.largestComponentCells} bridges=${state.bridgesAdded} wet=${state.wetCausewayCells} dry=${state.dryCausewayCells}`;
+  state.debugEntry.summary = `largest=${state.largestComponentCells} bridges=${state.bridgesAdded} wet=${state.wetCausewayCells} dry=${state.dryCausewayCells} blocks=${state.midArchiveBlocks} micro=${state.microArchiveRooms}`;
   return {
     world,
     entities,

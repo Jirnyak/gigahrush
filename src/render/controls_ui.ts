@@ -58,7 +58,7 @@ export function drawControlsMenu(
   ctx.fillText(
     fitText(ctx, isButtons
       ? `${menuCloseHint()} закрыть`
-      : `${controlHint('gameMenu')} принять/изменить  |  ${menuCloseHint()} закрыть  |  ←/→ слайдер`,
+      : `${controlHint('gameMenu')} принять/изменить  |  ${menuCloseHint()} закрыть  |  Backspace сброс  |  ←/→ слайдер`,
     w - 24 * sx),
     12 * sx,
     26 * sy,
@@ -114,7 +114,7 @@ export function drawControlsMenu(
       : isMouseSensitivity
         ? mouseSensitivitySliderText()
         : isReset
-          ? 'ENTER'
+          ? 'ENTER / BACKSPACE'
         : isCapture
           ? 'НАЖМИТЕ КЛАВИШУ...'
           : action ? controlBindingLabel(action.id) : '';
@@ -138,10 +138,10 @@ export function drawControlsMenu(
   ctx.textBaseline = 'alphabetic';
   ctx.fillText(
     capture
-      ? 'Нажатая клавиша добавится к действию. Enter, E и Backspace тоже можно назначить; Esc отменяет ввод.'
+      ? 'Нажатая клавиша добавится к действию. Enter и E можно назначить; Backspace сбросит дефолты, Esc отменит ввод.'
       : isButtons
         ? 'Экранные кнопки и мобильная рельса живут отдельно от клавиатурных биндов.'
-        : 'Клавиши можно повторять между действиями. Верхняя строка сбрасывает клавиши по умолчанию.',
+        : 'Клавиши можно повторять между действиями. Backspace сбрасывает клавиши по умолчанию.',
     12 * sx,
     h - 10 * sy,
   );

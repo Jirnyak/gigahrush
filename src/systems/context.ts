@@ -15,6 +15,8 @@ import {
 import { World } from '../core/world';
 import { screenSignalForTexture } from '../data/screen_signals';
 import { ROOM_MEMORY_BITS, getRoomMemory, roomMemoryHas, type RoomMemoryRecord } from './room_memory';
+import { factionToTerritoryOwner } from '../data/factions';
+import { territoryOwnerAtIndex } from './territory';
 
 export interface ContextSnapshot {
   floor?: FloorLevel;
@@ -67,7 +69,6 @@ export interface ContextBuildOptions {
   time?: number;
 }
 
-const FACTION_TO_ZONE = [0, 1, 2, -1, 4, -1] as const;
 const SCREEN_RUMOR_RADIUS = 8;
 const SCREEN_RUMOR_MAX_IDS = 6;
 
@@ -91,7 +92,7 @@ export function buildContextSnapshot(npc: Entity, options: ContextBuildOptions =
     zoneId = world.zoneMap[idx];
     const zone = world.zones[zoneId];
     if (zone) {
-      zoneFaction = zone.faction;
+      zoneFaction = territoryOwnerAtIndex(world, idx);
       zoneLevel = zone.level;
     }
     const room = world.roomAt(npc.x, npc.y);
@@ -112,7 +113,7 @@ export function buildContextSnapshot(npc: Entity, options: ContextBuildOptions =
   const hp = npc.hp ?? npc.maxHp ?? 100;
   const maxHp = Math.max(1, npc.maxHp ?? hp);
   const hpRatio = hp / maxHp;
-  const ownZone = npc.faction === undefined ? -1 : FACTION_TO_ZONE[npc.faction] ?? -1;
+  const ownZone = npc.faction === undefined ? -1 : factionToTerritoryOwner(npc.faction);
   const isSafeOwnZone = zoneFaction !== undefined && ownZone === zoneFaction && (zoneLevel ?? 1) <= 3;
   const state = options.state;
   const now = options.time ?? state?.time ?? 0;

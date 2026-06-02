@@ -79,6 +79,24 @@ export interface PenroseLaundryTileRecord {
   h: number;
 }
 
+interface PenroseFullNode {
+  room: Room;
+  index: number;
+  symbol: PenroseLaundrySymbol;
+}
+
+interface PenroseHqSpec {
+  owner: ZoneFaction;
+  title: string;
+  x: number;
+  y: number;
+  strong?: boolean;
+  wallTex: Tex;
+  floorTex: Tex;
+  supportWallTex: Tex;
+  supportFloorTex: Tex;
+}
+
 export interface PenroseLaundryState {
   routeId: typeof PENROSE_LAUNDRY_ROUTE_ID;
   anchorZ: typeof PENROSE_LAUNDRY_Z;
@@ -128,6 +146,18 @@ const TILE_SPECS: readonly PenroseTileSpec[] = [
 
 const SYMBOL_CHAIN_IDS = ['first_sun', 'deflation_b', 'second_sun', 'hidden_cache'] as const;
 const DEFLATION_IDS = ['deflation_a', 'deflation_b'] as const;
+const FULL_FLOOR_NODE_COUNT = 96;
+const FULL_FLOOR_NODE_RADIUS_MIN = 96;
+const FULL_FLOOR_NODE_RADIUS_SPAN = 408;
+const FULL_FLOOR_NODE_SYMBOLS: readonly PenroseLaundrySymbol[] = ['sun', 'kite', 'dart', 'drop', 'coil'];
+
+const PENROSE_HQ_SPECS: readonly PenroseHqSpec[] = [
+  { owner: ZoneFaction.CITIZEN, title: 'граждан', x: 110, y: 154, strong: true, wallTex: Tex.PANEL, floorTex: Tex.F_LINO, supportWallTex: Tex.PANEL, supportFloorTex: Tex.F_TILE },
+  { owner: ZoneFaction.LIQUIDATOR, title: 'ликвидаторов', x: 785, y: 142, wallTex: Tex.METAL, floorTex: Tex.F_CONCRETE, supportWallTex: Tex.PIPE, supportFloorTex: Tex.F_CONCRETE },
+  { owner: ZoneFaction.SCIENTIST, title: 'учёных', x: 762, y: 736, wallTex: Tex.MARBLE, floorTex: Tex.F_PARQUET, supportWallTex: Tex.TILE_W, supportFloorTex: Tex.F_TILE },
+  { owner: ZoneFaction.WILD, title: 'диких', x: 132, y: 746, wallTex: Tex.DARK, floorTex: Tex.F_CONCRETE, supportWallTex: Tex.METAL, supportFloorTex: Tex.F_CONCRETE },
+  { owner: ZoneFaction.CULTIST, title: 'культистов', x: 452, y: 878, wallTex: Tex.MEAT, floorTex: Tex.F_MEAT, supportWallTex: Tex.DARK, supportFloorTex: Tex.F_GREEN_CARPET },
+] as const;
 
 const NPC_IDS = {
   marfa: 'penrose_laundry_marfa_symbols',
@@ -324,6 +354,7 @@ export function generatePenroseLaundryDesignFloor(): PenroseLaundryGeneration {
     });
   }
 
+  buildPenroseFullFloor(world, roomsById);
   const lockedDoorIds: number[] = [];
   connectTilePath(world, roomsById, lockedDoorIds);
   placeLifts(world, roomById(roomsById, 'lift_lobby'));
@@ -379,6 +410,545 @@ export function generatePenroseLaundryDesignFloor(): PenroseLaundryGeneration {
     spawnY: state.debugEntry.spawnY,
     penroseLaundryState: state,
   };
+}
+
+export function reinforcePenroseLaundryAuthoredHqTerritory(world: World): void {
+  for (const spec of PENROSE_HQ_SPECS) {
+    for (const room of world.rooms) {
+      if (!room.name.includes(`штаб ${spec.title}`)) continue;
+      if (room.type === RoomType.HQ) {
+        makePenroseHermeticCore(world, room);
+        paintPenroseTerritoryPatch(world, room.x + (room.w >> 1), room.y + (room.h >> 1), spec.strong ? 48 : 36, spec.owner);
+      }
+      paintPenroseRoomTerritory(world, room, spec.owner);
+    }
+  }
+  world.markWallTexDirty();
+  world.markFeaturesDirty(false);
+}
+
+function buildPenroseFullFloor(world: World, roomsById: Map<string, Room>): void {
+  const hqCores = buildPenroseHqCompounds(world);
+  const courts = buildPenroseSteamCourts(world);
+  const nodes = buildPenroseAperiodicGraph(world);
+  connectPenroseFullGraph(world, roomsById, nodes, courts);
+  connectPenroseHqsToGraph(world, hqCores, nodes, courts);
+  carvePenroseEdgeDrains(world);
+  world.markFloorTexDirty();
+  world.markWallTexDirty();
+  world.markFeaturesDirty(false);
+  world.markFogDirty();
+}
+
+function buildPenroseAperiodicGraph(world: World): PenroseFullNode[] {
+  const nodes: PenroseFullNode[] = [];
+  for (let i = 0; i < FULL_FLOOR_NODE_COUNT; i++) {
+    const symbol = FULL_FLOOR_NODE_SYMBOLS[(i * 3 + (i / 7 | 0)) % FULL_FLOOR_NODE_SYMBOLS.length] ?? 'sun';
+    const dims = penroseNodeDimensions(symbol, i);
+    const radius = FULL_FLOOR_NODE_RADIUS_MIN + Math.sqrt((i + 0.5) / FULL_FLOOR_NODE_COUNT) * FULL_FLOOR_NODE_RADIUS_SPAN;
+    const angle = i * GOLDEN_TURN + Math.sin(i * PHI) * 0.17;
+    const x = clamp(Math.round(C + Math.cos(angle) * radius - dims.w / 2), 38, W - dims.w - 38);
+    const y = clamp(Math.round(C + Math.sin(angle) * radius - dims.h / 2), 38, W - dims.h - 38);
+    const room = tryStampPenroseRoom(
+      world,
+      penroseNodeRoomType(symbol, i),
+      x,
+      y,
+      dims.w,
+      dims.h,
+      `Прачечная Пенроуза: ромб ${String(i + 1).padStart(2, '0')} ${penroseSymbolName(symbol)}`,
+      penroseNodeWallTex(symbol),
+      penroseNodeFloorTex(symbol),
+      penroseNodeOwner(symbol),
+    );
+    if (!room) continue;
+    decoratePenroseNodeRoom(world, room, symbol, i);
+    const node: PenroseFullNode = { room, index: i, symbol };
+    nodes.push(node);
+    buildPenroseStationCluster(world, node);
+  }
+  return nodes;
+}
+
+function buildPenroseStationCluster(world: World, node: PenroseFullNode): void {
+  const n = node.room;
+  const layouts: readonly { type: RoomType; label: string; dx: number; dy: number; w: number; h: number; wallTex: Tex; floorTex: Tex }[] = [
+    { type: RoomType.STORAGE, label: 'сухой карман', dx: -28, dy: -24, w: 24, h: 14, wallTex: Tex.PANEL, floorTex: Tex.F_LINO },
+    { type: RoomType.BATHROOM, label: 'мокрый бокс', dx: n.w + 8, dy: -20, w: 24, h: 15, wallTex: Tex.TILE_W, floorTex: Tex.F_TILE },
+    { type: RoomType.PRODUCTION, label: 'паровая машинка', dx: n.w + 10, dy: n.h + 8, w: 28, h: 16, wallTex: Tex.PIPE, floorTex: Tex.F_CONCRETE },
+    { type: RoomType.COMMON, label: 'очередь белья', dx: -30, dy: n.h + 8, w: 26, h: 15, wallTex: Tex.PANEL, floorTex: Tex.F_CARPET },
+  ];
+  for (let i = 0; i < layouts.length; i++) {
+    const spec = layouts[(i + node.index) % layouts.length];
+    const room = tryStampPenroseRoom(
+      world,
+      spec.type,
+      n.x + spec.dx,
+      n.y + spec.dy,
+      spec.w,
+      spec.h,
+      `Прачечная Пенроуза: станция ${String(node.index + 1).padStart(2, '0')}-${i + 1} ${spec.label}`,
+      spec.wallTex,
+      spec.floorTex,
+      penroseNodeOwner(node.symbol),
+    );
+    if (!room) continue;
+    decoratePenroseSupportRoom(world, room, node.index + i);
+    connectRooms(world, n, room, DoorState.CLOSED, '');
+    buildPenroseMicroRoom(world, node, room, i);
+  }
+}
+
+function buildPenroseMicroRoom(world: World, node: PenroseFullNode, parent: Room, index: number): void {
+  const ncx = node.room.x + node.room.w / 2;
+  const ncy = node.room.y + node.room.h / 2;
+  const pcx = parent.x + parent.w / 2;
+  const pcy = parent.y + parent.h / 2;
+  const horizontal = Math.abs(pcx - ncx) >= Math.abs(pcy - ncy);
+  const w = parent.type === RoomType.BATHROOM ? 12 : 14;
+  const h = parent.type === RoomType.BATHROOM ? 9 : 10;
+  const x = horizontal
+    ? (pcx < ncx ? parent.x - w - 7 : parent.x + parent.w + 7)
+    : parent.x + 2;
+  const y = horizontal
+    ? parent.y + 2
+    : (pcy < ncy ? parent.y - h - 7 : parent.y + parent.h + 7);
+  const room = tryStampPenroseRoom(
+    world,
+    parent.type === RoomType.BATHROOM ? RoomType.BATHROOM : RoomType.STORAGE,
+    Math.round(x),
+    Math.round(y),
+    w,
+    h,
+    `Прачечная Пенроуза: шкаф ${String(node.index + 1).padStart(2, '0')}-${index + 1}`,
+    parent.wallTex,
+    parent.floorTex,
+    penroseNodeOwner(node.symbol),
+  );
+  if (!room) return;
+  decoratePenroseSupportRoom(world, room, node.index + index + 11);
+  connectRooms(world, parent, room, DoorState.CLOSED, '');
+}
+
+function buildPenroseSteamCourts(world: World): Room[] {
+  const rooms: Room[] = [];
+  let serial = 0;
+  for (let row = 0; row < 3; row++) {
+    for (let col = 0; col < 4; col++) {
+      const x = 128 + col * 236 + (row % 2) * 38;
+      const y = 272 + row * 214 + ((col * 19 + row * 11) % 34);
+      const type = (row + col) % 3 === 0 ? RoomType.PRODUCTION : (row + col) % 3 === 1 ? RoomType.BATHROOM : RoomType.STORAGE;
+      const room = tryStampPenroseRoom(
+        world,
+        type,
+        x,
+        y,
+        type === RoomType.STORAGE ? 56 : 68,
+        type === RoomType.STORAGE ? 28 : 36,
+        `Прачечная Пенроуза: паровой двор ${String(++serial).padStart(2, '0')}`,
+        type === RoomType.BATHROOM ? Tex.TILE_W : type === RoomType.PRODUCTION ? Tex.PIPE : Tex.METAL,
+        type === RoomType.BATHROOM ? Tex.F_WATER : Tex.F_CONCRETE,
+        col < 2 ? ZoneFaction.CITIZEN : row === 0 ? ZoneFaction.LIQUIDATOR : row === 2 ? ZoneFaction.WILD : ZoneFaction.SCIENTIST,
+      );
+      if (!room) continue;
+      decoratePenroseCourt(world, room, serial);
+      rooms.push(room);
+    }
+  }
+  return rooms;
+}
+
+function buildPenroseHqCompounds(world: World): Room[] {
+  const cores: Room[] = [];
+  for (const spec of PENROSE_HQ_SPECS) {
+    const coreW = spec.strong ? 42 : 34;
+    const coreH = spec.strong ? 25 : 21;
+    const core = stampRequiredPenroseRoom(
+      world,
+      RoomType.HQ,
+      spec.x,
+      spec.y,
+      coreW,
+      coreH,
+      `Прачечная Пенроуза: штаб ${spec.title}, герметичная бельевая`,
+      spec.wallTex,
+      spec.floorTex,
+      spec.owner,
+    );
+    makePenroseHermeticCore(world, core);
+    decoratePenroseSupportRoom(world, core, spec.owner);
+    const supports: readonly [RoomType, number, number, number, number, string][] = [
+      [RoomType.COMMON, -34, coreH + 20, 30, 16, 'общая очередь'],
+      [RoomType.KITCHEN, 0, coreH + 25, 30, 15, 'чайная'],
+      [RoomType.STORAGE, coreW + 10, coreH + 22, 31, 15, 'склад порошка'],
+      [RoomType.MEDICAL, coreW + 12, -22, 30, 15, 'санпост'],
+      [RoomType.OFFICE, -34, -20, 30, 14, 'дежурная'],
+      [RoomType.PRODUCTION, coreW + 48, 2, 32, 16, 'мастерская'],
+    ];
+    const limit = spec.strong ? supports.length : 5;
+    for (let i = 0; i < limit; i++) {
+      const [type, dx, dy, w, h, suffix] = supports[i];
+      const support = stampRequiredPenroseRoom(
+        world,
+        type,
+        spec.x + dx,
+        spec.y + dy,
+        w,
+        h,
+        `Прачечная Пенроуза: штаб ${spec.title}, ${suffix}`,
+        spec.supportWallTex,
+        spec.supportFloorTex,
+        spec.owner,
+      );
+      decoratePenroseSupportRoom(world, support, i + spec.owner * 17);
+      connectRooms(world, core, support, DoorState.HERMETIC_OPEN, '');
+    }
+    cores.push(core);
+  }
+  return cores;
+}
+
+function connectPenroseFullGraph(
+  world: World,
+  roomsById: Map<string, Room>,
+  nodes: readonly PenroseFullNode[],
+  courts: readonly Room[],
+): void {
+  const authored = [
+    'lift_lobby',
+    'first_sun',
+    'kite_boiler',
+    'steam_valve',
+    'second_sun',
+    'hidden_cache',
+  ].map(id => roomById(roomsById, id));
+  const connected: Room[] = [...authored, ...courts];
+  for (const court of courts) {
+    const target = nearestRoom(world, court, authored);
+    if (target) connectRooms(world, court, target, DoorState.CLOSED, '');
+  }
+  for (const node of nodes) {
+    const target = nearestRoom(world, node.room, connected);
+    if (target) connectRooms(world, node.room, target, DoorState.CLOSED, '');
+    connected.push(node.room);
+  }
+
+  const angular = [...nodes].sort((a, b) => roomAngle(a.room) - roomAngle(b.room));
+  for (let i = 0; i < angular.length; i += 2) {
+    const a = angular[i]?.room;
+    const b = angular[(i + 1) % angular.length]?.room;
+    if (a && b && world.dist2(a.x + a.w / 2, a.y + a.h / 2, b.x + b.w / 2, b.y + b.h / 2) < 190 * 190) {
+      connectRooms(world, a, b, DoorState.CLOSED, '');
+    }
+  }
+}
+
+function connectPenroseHqsToGraph(
+  world: World,
+  hqs: readonly Room[],
+  nodes: readonly PenroseFullNode[],
+  courts: readonly Room[],
+): void {
+  const targets = nodes.map(node => node.room).concat(courts);
+  for (const hq of hqs) {
+    const target = nearestRoom(world, hq, targets);
+    if (target) connectRooms(world, hq, target, DoorState.HERMETIC_OPEN, '');
+  }
+}
+
+function carvePenroseEdgeDrains(world: World): void {
+  carvePenroseLine(world, C, C - 8, 0, C - 184, 4, Tex.F_WATER, Tex.TILE_W, ZoneFaction.CITIZEN);
+  carvePenroseLine(world, C + 4, C + 8, W - 1, C + 162, 4, Tex.F_CONCRETE, Tex.PIPE, ZoneFaction.LIQUIDATOR);
+  carvePenroseLine(world, C - 36, C, C - 210, 0, 3, Tex.F_LINO, Tex.PANEL, ZoneFaction.CITIZEN);
+  carvePenroseLine(world, C + 42, C, C + 184, W - 1, 3, Tex.F_GREEN_CARPET, Tex.DARK, ZoneFaction.CULTIST);
+}
+
+function carvePenroseLine(
+  world: World,
+  ax: number,
+  ay: number,
+  bx: number,
+  by: number,
+  radius: number,
+  floorTex: Tex,
+  wallTex: Tex,
+  owner: ZoneFaction,
+): void {
+  const steps = Math.max(1, Math.max(Math.abs(bx - ax), Math.abs(by - ay)));
+  const r2 = radius * radius;
+  for (let step = 0; step <= steps; step++) {
+    const x = Math.round(ax + (bx - ax) * step / steps);
+    const y = Math.round(ay + (by - ay) * step / steps);
+    for (let dy = -radius - 1; dy <= radius + 1; dy++) {
+      for (let dx = -radius - 1; dx <= radius + 1; dx++) {
+        const d2 = dx * dx + dy * dy;
+        const idx = world.idx(x + dx, y + dy);
+        if (d2 <= r2) {
+          openCorridorTile(world, x + dx, y + dy, floorTex, owner, wallTex);
+        } else if (world.cells[idx] === Cell.WALL && !world.aptMask[idx]) {
+          world.wallTex[idx] = wallTex;
+        }
+      }
+    }
+  }
+}
+
+function tryStampPenroseRoom(
+  world: World,
+  type: RoomType,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  name: string,
+  wallTex: Tex,
+  floorTex: Tex,
+  owner: ZoneFaction,
+): Room | null {
+  const shifts: readonly [number, number][] = [[0, 0], [18, 0], [-18, 0], [0, 18], [0, -18], [24, 16], [-24, -16], [24, -16], [-24, 16], [36, 0], [-36, 0], [0, 36], [0, -36]];
+  for (const [sx, sy] of shifts) {
+    const px = clamp(Math.round(x + sx), 4, W - w - 5);
+    const py = clamp(Math.round(y + sy), 4, W - h - 5);
+    if (!canStampPenroseRoom(world, px, py, w, h)) continue;
+    return stampPenroseRoom(world, type, px, py, w, h, name, wallTex, floorTex, owner);
+  }
+  return null;
+}
+
+function stampRequiredPenroseRoom(
+  world: World,
+  type: RoomType,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  name: string,
+  wallTex: Tex,
+  floorTex: Tex,
+  owner: ZoneFaction,
+): Room {
+  const room = tryStampPenroseRoom(world, type, x, y, w, h, name, wallTex, floorTex, owner);
+  if (!room) throw new Error(`Cannot place Penrose laundry room: ${name}`);
+  return room;
+}
+
+function canStampPenroseRoom(world: World, x: number, y: number, w: number, h: number): boolean {
+  if (x < 2 || y < 2 || x + w + 2 >= W || y + h + 2 >= W) return false;
+  for (let dy = -1; dy <= h; dy++) {
+    for (let dx = -1; dx <= w; dx++) {
+      const idx = world.idx(x + dx, y + dy);
+      if (world.cells[idx] !== Cell.WALL || world.aptMask[idx]) return false;
+    }
+  }
+  return true;
+}
+
+function stampPenroseRoom(
+  world: World,
+  type: RoomType,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  name: string,
+  wallTex: Tex,
+  floorTex: Tex,
+  owner: ZoneFaction,
+): Room {
+  const room = stampRoom(world, world.rooms.length, type, x, y, w, h, -1);
+  room.name = name;
+  room.wallTex = wallTex;
+  room.floorTex = floorTex;
+  for (let dy = -1; dy <= room.h; dy++) {
+    for (let dx = -1; dx <= room.w; dx++) {
+      const idx = world.idx(room.x + dx, room.y + dy);
+      if (dx >= 0 && dx < room.w && dy >= 0 && dy < room.h) {
+        world.floorTex[idx] = floorTex;
+        world.factionControl[idx] = owner;
+      } else {
+        world.wallTex[idx] = wallTex;
+      }
+    }
+  }
+  return room;
+}
+
+function makePenroseHermeticCore(world: World, room: Room): void {
+  room.type = RoomType.HQ;
+  room.sealed = true;
+  room.wallTex = Tex.HERMO_WALL;
+  for (let dy = -1; dy <= room.h; dy++) {
+    for (let dx = -1; dx <= room.w; dx++) {
+      if (dx >= 0 && dx < room.w && dy >= 0 && dy < room.h) continue;
+      const idx = world.idx(room.x + dx, room.y + dy);
+      if (world.cells[idx] !== Cell.WALL || world.aptMask[idx]) continue;
+      world.hermoWall[idx] = 1;
+      world.wallTex[idx] = Tex.HERMO_WALL;
+    }
+  }
+}
+
+function paintPenroseRoomTerritory(world: World, room: Room, owner: ZoneFaction): void {
+  for (let dy = 0; dy < room.h; dy++) {
+    for (let dx = 0; dx < room.w; dx++) {
+      const idx = world.idx(room.x + dx, room.y + dy);
+      if (!world.aptMask[idx]) world.factionControl[idx] = owner;
+    }
+  }
+  for (const doorIdx of room.doors) {
+    if (!world.aptMask[doorIdx]) world.factionControl[doorIdx] = owner;
+  }
+}
+
+function paintPenroseTerritoryPatch(world: World, x: number, y: number, radius: number, owner: ZoneFaction): void {
+  const r2 = radius * radius;
+  for (let dy = -radius; dy <= radius; dy++) {
+    for (let dx = -radius; dx <= radius; dx++) {
+      if (dx * dx + dy * dy > r2) continue;
+      const idx = world.idx(x + dx, y + dy);
+      if (!world.aptMask[idx]) world.factionControl[idx] = owner;
+    }
+  }
+}
+
+function decoratePenroseNodeRoom(world: World, room: Room, symbol: PenroseLaundrySymbol, index: number): void {
+  decoratePenroseSupportRoom(world, room, index);
+  if (symbol === 'drop') {
+    for (let y = room.y + 4; y < room.y + room.h - 3; y += 4) {
+      for (let x = room.x + 4; x < room.x + room.w - 4; x++) {
+        if (((x + y + index) % 4) !== 0) world.cells[world.idx(x, y)] = Cell.WATER;
+      }
+    }
+  } else if (symbol === 'kite') {
+    for (let y = room.y + 3; y < room.y + room.h - 3; y += 3) {
+      for (let x = room.x + 3; x < room.x + room.w - 3; x += 5) world.fog[world.idx(x, y)] = 72;
+    }
+  } else if (symbol === 'sun') {
+    setFeature(world, room.x + (room.w >> 1), room.y + (room.h >> 1), Feature.LAMP);
+  } else if (symbol === 'coil') {
+    setFeature(world, room.x + (room.w >> 1), room.y + 3, Feature.SCREEN);
+  }
+}
+
+function decoratePenroseCourt(world: World, room: Room, serial: number): void {
+  decoratePenroseSupportRoom(world, room, serial);
+  for (let y = room.y + 5; y < room.y + room.h - 4; y += 6) {
+    for (let x = room.x + 5; x < room.x + room.w - 5; x += 7) {
+      const idx = world.idx(x, y);
+      if (room.type === RoomType.BATHROOM) {
+        world.cells[idx] = Cell.WATER;
+        world.floorTex[idx] = Tex.F_WATER;
+      } else if (room.type === RoomType.PRODUCTION) {
+        world.fog[idx] = 86;
+        world.features[idx] = Feature.MACHINE;
+      } else {
+        world.features[idx] = Feature.SHELF;
+      }
+    }
+  }
+}
+
+function decoratePenroseSupportRoom(world: World, room: Room, seed: number): void {
+  setFeature(world, room.x + 3, room.y + 3, featureForPenroseRoom(room.type, false));
+  setFeature(world, room.x + room.w - 4, room.y + room.h - 4, featureForPenroseRoom(room.type, true));
+  if (room.type === RoomType.BATHROOM) {
+    for (let x = room.x + 4; x < room.x + room.w - 4; x += 5) {
+      const idx = world.idx(x, room.y + (room.h >> 1));
+      if (world.roomMap[idx] === room.id) {
+        world.cells[idx] = Cell.WATER;
+        world.floorTex[idx] = Tex.F_WATER;
+      }
+    }
+  } else if (room.type === RoomType.PRODUCTION) {
+    for (let y = room.y + 4; y < room.y + room.h - 4; y += 5) {
+      const idx = world.idx(room.x + (room.w >> 1), y);
+      if (world.roomMap[idx] === room.id && ((y + seed) & 1) === 0) world.fog[idx] = 64;
+    }
+  }
+}
+
+function featureForPenroseRoom(type: RoomType, secondary: boolean): Feature {
+  switch (type) {
+    case RoomType.KITCHEN: return secondary ? Feature.TABLE : Feature.STOVE;
+    case RoomType.BATHROOM: return secondary ? Feature.TOILET : Feature.SINK;
+    case RoomType.STORAGE: return Feature.SHELF;
+    case RoomType.MEDICAL: return secondary ? Feature.DESK : Feature.SINK;
+    case RoomType.OFFICE: return secondary ? Feature.SCREEN : Feature.DESK;
+    case RoomType.PRODUCTION: return secondary ? Feature.APPARATUS : Feature.MACHINE;
+    case RoomType.HQ: return secondary ? Feature.DESK : Feature.SCREEN;
+    default: return secondary ? Feature.CHAIR : Feature.TABLE;
+  }
+}
+
+function penroseNodeDimensions(symbol: PenroseLaundrySymbol, index: number): { w: number; h: number } {
+  switch (symbol) {
+    case 'sun': return { w: 42 + (index % 3) * 4, h: 24 };
+    case 'kite': return { w: 38, h: 26 };
+    case 'dart': return { w: 34, h: 20 };
+    case 'drop': return { w: 32, h: 22 };
+    case 'coil': return { w: 36, h: 22 };
+  }
+}
+
+function penroseNodeRoomType(symbol: PenroseLaundrySymbol, index: number): RoomType {
+  if (symbol === 'sun' || symbol === 'kite') return RoomType.PRODUCTION;
+  if (symbol === 'drop') return RoomType.BATHROOM;
+  if (symbol === 'coil') return index % 2 === 0 ? RoomType.COMMON : RoomType.CORRIDOR;
+  return RoomType.STORAGE;
+}
+
+function penroseNodeWallTex(symbol: PenroseLaundrySymbol): Tex {
+  if (symbol === 'kite') return Tex.PIPE;
+  if (symbol === 'drop') return Tex.TILE_W;
+  if (symbol === 'dart') return Tex.METAL;
+  if (symbol === 'coil') return Tex.PANEL;
+  return Tex.TILE_W;
+}
+
+function penroseNodeFloorTex(symbol: PenroseLaundrySymbol): Tex {
+  if (symbol === 'drop') return Tex.F_WATER;
+  if (symbol === 'kite') return Tex.F_CONCRETE;
+  if (symbol === 'dart') return Tex.F_LINO;
+  if (symbol === 'coil') return Tex.F_CARPET;
+  return Tex.F_TILE;
+}
+
+function penroseNodeOwner(symbol: PenroseLaundrySymbol): ZoneFaction {
+  if (symbol === 'kite') return ZoneFaction.LIQUIDATOR;
+  if (symbol === 'dart') return ZoneFaction.WILD;
+  if (symbol === 'drop') return ZoneFaction.SCIENTIST;
+  if (symbol === 'coil') return ZoneFaction.CULTIST;
+  return ZoneFaction.CITIZEN;
+}
+
+function penroseSymbolName(symbol: PenroseLaundrySymbol): string {
+  switch (symbol) {
+    case 'sun': return 'Солнце';
+    case 'kite': return 'Кайт';
+    case 'dart': return 'Дарт';
+    case 'drop': return 'Капля';
+    case 'coil': return 'Катушка';
+  }
+}
+
+function nearestRoom(world: World, source: Room, candidates: readonly Room[]): Room | null {
+  let best: Room | null = null;
+  let bestD2 = Infinity;
+  const sx = source.x + source.w / 2;
+  const sy = source.y + source.h / 2;
+  for (const candidate of candidates) {
+    if (!candidate || candidate.id === source.id) continue;
+    const d2 = world.dist2(sx, sy, candidate.x + candidate.w / 2, candidate.y + candidate.h / 2);
+    if (d2 < bestD2) {
+      best = candidate;
+      bestD2 = d2;
+    }
+  }
+  return best;
+}
+
+function roomAngle(room: Room): number {
+  return Math.atan2(room.y + room.h / 2 - C, room.x + room.w / 2 - C);
 }
 
 function stampLaundryRoom(world: World, spec: PenroseTileSpec): Room {
@@ -516,15 +1086,22 @@ function carveLaundryCorridor(world: World, ax: number, ay: number, bx: number, 
   }
 }
 
-function openCorridorTile(world: World, x: number, y: number, floorTex: Tex): void {
+function openCorridorTile(
+  world: World,
+  x: number,
+  y: number,
+  floorTex: Tex,
+  owner = ZoneFaction.CITIZEN,
+  wallTex = Tex.PANEL,
+): void {
   const ci = world.idx(x, y);
   if (world.cells[ci] === Cell.LIFT || world.doors.has(ci) || world.roomMap[ci] >= 0) return;
   world.cells[ci] = Cell.FLOOR;
   world.roomMap[ci] = -1;
-  world.wallTex[ci] = Tex.PANEL;
+  world.wallTex[ci] = wallTex;
   world.floorTex[ci] = floorTex;
   world.features[ci] = Feature.NONE;
-  world.factionControl[ci] = ZoneFaction.CITIZEN;
+  world.factionControl[ci] = owner;
 }
 
 function placeLifts(world: World, lobby: Room): void {

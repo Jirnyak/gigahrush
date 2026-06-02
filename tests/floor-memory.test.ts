@@ -399,7 +399,7 @@ test('floor memory byte budget evicts least-recent captured floors', () => {
   clearFloorMemory();
 });
 
-test('route lift layout mirrors return lifts and normalizes both directions to eight', () => {
+test('route lift layout mirrors return lifts and normalizes both directions to sixteen', () => {
   const source = new World();
   const target = new World();
   for (let y = 24; y <= 72; y++) {
@@ -412,6 +412,8 @@ test('route lift layout mirrors return lifts and normalizes both directions to e
   const anchors = [
     [30, 30], [38, 30], [46, 30], [54, 30],
     [30, 46], [38, 46], [46, 46], [54, 46],
+    [62, 46], [30, 62], [38, 62], [46, 62],
+    [54, 62], [62, 62], [62, 30], [70, 62],
   ] as const;
   for (const [x, y] of anchors) {
     const liftIdx = source.idx(x, y);
@@ -429,9 +431,9 @@ test('route lift layout mirrors return lifts and normalizes both directions to e
     mirror: { direction: LiftDirection.UP, anchors: mirror },
   });
 
-  assert.equal(result.up, 8);
-  assert.equal(result.down, 8);
-  assert.equal(result.mirrored, 8);
+  assert.equal(result.up, 16);
+  assert.equal(result.down, 16);
+  assert.equal(result.mirrored, 16);
   for (const anchor of mirror) {
     const liftIdx = target.idx(anchor.liftX, anchor.liftY);
     assert.equal(target.cells[liftIdx], Cell.LIFT);

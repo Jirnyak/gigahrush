@@ -7,6 +7,7 @@ import { createWorldEventState } from '../src/systems/events';
 import {
   isMapCellExplored,
   mapExplorationStats,
+  mapExplorationVersion,
   resetMapExploration,
   revealQuestTargetOnMap,
   revealWholeMap,
@@ -141,8 +142,13 @@ test('player movement reveals only local cell trail, not the whole entered room'
   });
 
   updateMapExploration(world, player, state);
+  const firstVersion = mapExplorationVersion(world);
+  assert.equal(firstVersion > 0, true);
   const farRoomIdx = world.idx(46, 40);
   assert.equal(isMapCellExplored(world, farRoomIdx), false);
+
+  updateMapExploration(world, player, state);
+  assert.equal(mapExplorationVersion(world), firstVersion);
 
   player.x = 40.5;
   player.y = 40.5;
@@ -150,6 +156,7 @@ test('player movement reveals only local cell trail, not the whole entered room'
 
   assert.equal(isMapCellExplored(world, world.idx(40, 40)), true);
   assert.equal(isMapCellExplored(world, farRoomIdx), false);
+  assert.equal(mapExplorationVersion(world) > firstVersion, true);
 });
 
 test('active talk quest reveals the target NPC room on the map', () => {
@@ -353,6 +360,7 @@ test('local samosbor map fog does not reveal the whole rebuilt patch room on re-
   assert.equal(isMapCellExplored(world, farHiddenIdx), true);
 
   assert.equal(startSamosborWave(world, entities, state, 'small', cx, cy, { seed: 99, radius: 4, budgetCellsPerTick: 64 }), true);
+  const beforeHideVersion = mapExplorationVersion(world);
   const replacementWorld = new World();
   carveMapTestFloor(replacementWorld, cx, cy, 10, 2);
   const replacement = { world: replacementWorld, entities: [], spawnX: cx + 0.5, spawnY: cy + 0.5 };
@@ -361,6 +369,7 @@ test('local samosbor map fog does not reveal the whole rebuilt patch room on re-
 
   assert.equal(isMapCellExplored(world, world.idx(cx, cy)), false);
   assert.equal(isMapCellExplored(world, farHiddenIdx), false);
+  assert.equal(mapExplorationVersion(world) > beforeHideVersion, true);
 
   updateMapExploration(world, player, state);
 

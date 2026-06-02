@@ -248,24 +248,53 @@ function decorateCopyRoom(ctx: ProceduralAnomalyGenContext, room: Room, ordinal:
     }
   }
 
-  const apparatus = roomCell(ctx.world, room, Math.floor(room.w / 2), Math.floor(room.h / 2), true);
+  const apparatus = nearestFractalRoomCell(ctx, room, Math.floor(room.w / 2), Math.floor(room.h / 2), true);
   if (apparatus) ctx.world.features[ctx.world.idx(apparatus.x, apparatus.y)] = ordinal === 0 ? Feature.APPARATUS : Feature.SCREEN;
-  const loot = roomCell(ctx.world, room, 1 + (ordinal * 3) % Math.max(1, room.w - 2), 1 + (ordinal * 5) % Math.max(1, room.h - 2), true);
+  const loot = nearestFractalRoomCell(ctx, room, 1 + (ordinal * 3) % Math.max(1, room.w - 2), 1 + (ordinal * 5) % Math.max(1, room.h - 2), true);
   if (loot) addItemDrop(ctx, loot.x, loot.y, ordinal === 0 ? REAL_LOOT[hash32(ctx.spec.seed + room.id) % REAL_LOOT.length] : COPY_LOOT[ordinal % COPY_LOOT.length], 1);
   return apparatus;
 }
 
-function addFractalTeleport(ctx: ProceduralAnomalyGenContext, a: { x: number; y: number } | null, b: { x: number; y: number } | null): void {
-  if (!a || !b) return;
+function nearestFractalRoomCell(
+  ctx: ProceduralAnomalyGenContext,
+  room: Room,
+  preferredDx: number,
+  preferredDy: number,
+  requireEmpty: boolean,
+): { x: number; y: number } | null {
+  const direct = roomCell(ctx.world, room, preferredDx, preferredDy, requireEmpty);
+  if (direct) return direct;
+  let best: { x: number; y: number } | null = null;
+  let bestD2 = Infinity;
+  for (let dy = 1; dy < room.h - 1; dy++) {
+    for (let dx = 1; dx < room.w - 1; dx++) {
+      const x = ctx.world.wrap(room.x + dx);
+      const y = ctx.world.wrap(room.y + dy);
+      const ci = ctx.world.idx(x, y);
+      if (ctx.world.roomMap[ci] !== room.id || !isWalkableCell(ctx.world, ci)) continue;
+      if (requireEmpty && ctx.world.features[ci] !== Feature.NONE) continue;
+      const d2 = (dx - preferredDx) * (dx - preferredDx) + (dy - preferredDy) * (dy - preferredDy);
+      if (d2 < bestD2) {
+        best = { x, y };
+        bestD2 = d2;
+      }
+    }
+  }
+  return best;
+}
+
+function addFractalTeleport(ctx: ProceduralAnomalyGenContext, a: { x: number; y: number } | null, b: { x: number; y: number } | null): boolean {
+  if (!a || !b) return false;
   const ai = ctx.world.idx(a.x, a.y);
   const bi = ctx.world.idx(b.x, b.y);
-  if (!isWalkableCell(ctx.world, ai) || !isWalkableCell(ctx.world, bi) || ctx.world.dist2(a.x, a.y, b.x, b.y) < 32 * 32) return;
+  if (!isWalkableCell(ctx.world, ai) || !isWalkableCell(ctx.world, bi) || ctx.world.dist2(a.x, a.y, b.x, b.y) < 32 * 32) return false;
   ctx.world.anomalyTeleports.set(ai, bi);
   ctx.world.anomalyTeleports.set(bi, ai);
   ctx.world.features[ai] = Feature.SCREEN;
   ctx.world.features[bi] = Feature.SCREEN;
   ctx.world.floorTex[ai] = Tex.F_VOID;
   ctx.world.floorTex[bi] = Tex.F_VOID;
+  return true;
 }
 
 function fractalWalkable(ctx: ProceduralAnomalyGenContext, ci: number): boolean {
@@ -418,6 +447,28 @@ function bridgeComponentToLargest(
   return true;
 }
 
+function roomWalkableSample(ctx: ProceduralAnomalyGenContext, room: Room): number {
+  if (room.sealed) return -1;
+  for (let dy = 0; dy < room.h; dy++) {
+    for (let dx = 0; dx < room.w; dx++) {
+      const idx = ctx.world.idx(room.x + dx, room.y + dy);
+      if (ctx.world.roomMap[idx] === room.id && fractalWalkable(ctx, idx)) return idx;
+    }
+  }
+  return -1;
+}
+
+function bridgeUnreachableFractalRooms(ctx: ProceduralAnomalyGenContext): void {
+  let components = labelFractalComponents(ctx);
+  if (components.largest < 0) return;
+  for (const room of ctx.rooms) {
+    const sample = roomWalkableSample(ctx, room);
+    if (sample < 0) continue;
+    if (components.label[sample] === components.largest) continue;
+    if (bridgeComponentToLargest(ctx, sample, components)) components = labelFractalComponents(ctx);
+  }
+}
+
 function extractFractalLargestComponent(ctx: ProceduralAnomalyGenContext, domain: FractalDomain, occupied: ReadonlySet<number>): void {
   let components = labelFractalComponents(ctx);
   for (const anchor of anchorAccessCells(ctx)) {
@@ -433,6 +484,7 @@ function extractFractalLargestComponent(ctx: ProceduralAnomalyGenContext, domain
     const y = (ci / W) | 0;
     setFractalGap(ctx, x, y, ctx.spec.seed ^ ci ^ 0x7a11, occupied);
   }
+  bridgeUnreachableFractalRooms(ctx);
 }
 
 export function applyFractalFloor(ctx: ProceduralAnomalyGenContext): void {
@@ -452,11 +504,18 @@ export function applyFractalFloor(ctx: ProceduralAnomalyGenContext): void {
   rebuildProceduralAnomalyPlacement(ctx);
 
   const copies = candidates.slice(0, Math.min(candidates.length, 3 + Math.floor(ctx.spec.danger / 2)));
-  let firstApparatus: { x: number; y: number } | null = null;
+  const apparatuses: ({ x: number; y: number } | null)[] = [];
   for (let i = 0; i < copies.length; i++) {
     const apparatus = decorateCopyRoom(ctx, copies[i], i);
-    if (i === 0) firstApparatus = apparatus;
-    else if (i <= 2) addFractalTeleport(ctx, firstApparatus, apparatus);
+    apparatuses.push(apparatus);
+  }
+  for (let i = 1; i < apparatuses.length && ctx.world.anomalyTeleports.size < 2; i++) {
+    addFractalTeleport(ctx, apparatuses[0], apparatuses[i]);
+  }
+  for (let a = 1; a < apparatuses.length && ctx.world.anomalyTeleports.size < 2; a++) {
+    for (let b = a + 1; b < apparatuses.length && ctx.world.anomalyTeleports.size < 2; b++) {
+      addFractalTeleport(ctx, apparatuses[a], apparatuses[b]);
+    }
   }
 
   ctx.world.markCellsDirty();

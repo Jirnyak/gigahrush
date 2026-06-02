@@ -55,6 +55,7 @@ export function generateTextures(): TexData[] {
   generateHintTextures(textures);
   generatePosterTextures(textures);
   generateProceduralScreenTextures(textures);
+  gen_larvaBody(textures[Tex.LARVA_BODY]);
 
   return textures;
 }
@@ -362,6 +363,26 @@ function gen_gutFloor(t: TexData) {
     const r = clamp(108 + band + pocket + wet + n);
     const g = clamp(38 + band * 0.3 + pocket * 0.35 + n * 0.5);
     const b = clamp(34 + wet * 0.35 + n * 0.35);
+    t[y * S + x] = rgba(r, g, b);
+  }
+}
+
+/* ── Wall-snake larva body: pale segmented wet flesh ─────────── */
+function gen_larvaBody(t: TexData) {
+  const cx = (S - 1) * 0.5;
+  for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) {
+    const nx = (x - cx) / cx;
+    const ny = (y - cx) / cx;
+    const sideShade = -Math.abs(ny) * 24;
+    const segment = Math.abs(((x + 5) % 16) - 8);
+    const groove = segment < 1.7 ? -42 : segment < 3.2 ? -18 : 0;
+    const fold = Math.sin(x * 0.52 + noise(y, x, 281) * 2.6) * 9;
+    const vein = noise(x * 2, y * 2, 282) > 0.87 ? -24 : 0;
+    const wet = noise(x, y, 283) * 18 - 7;
+    const highlight = Math.max(0, 1 - (nx * nx * 1.8 + (ny + 0.28) * (ny + 0.28) * 5.2)) * 30;
+    const r = clamp(214 + sideShade + groove + fold + wet + highlight + vein);
+    const g = clamp(212 + sideShade + groove * 0.85 + fold * 0.4 + wet + highlight * 0.72 + vein);
+    const b = clamp(194 + sideShade * 0.8 + groove * 0.6 + wet * 0.7 + highlight * 0.55 + vein * 0.45);
     t[y * S + x] = rgba(r, g, b);
   }
 }

@@ -3,27 +3,31 @@
 /*   1-wide tunnel passages, rooms at junctions, pipe fragments. */
 
 import {
-  W, Cell, Tex, RoomType, Feature, LiftDirection, Faction, Occupation,
+  W, Cell, Tex, RoomType, Feature, LiftDirection,
   type Room, type Entity,
   EntityType, AIGoal, MonsterKind, FloorLevel,
 } from '../../core/types';
 import { World } from '../../core/world';
 import { rng, pick, placeLifts, generateZones, ensureConnectivity } from '../shared';
 import { placeProceduralScreens } from '../procedural_screens';
-import { randomName, freshNeeds } from '../../data/catalog';
-import { calcZoneLevel, randomRPG, scaleMonsterHp, scaleMonsterSpeed, gaussianLevel, getMaxHp } from '../../systems/rpg';
+import { calcZoneLevel, randomRPG, scaleMonsterHp, scaleMonsterSpeed } from '../../systems/rpg';
 import { runMaintenanceContent } from './content_manifest';
 import { Spr, monsterSpr } from '../../render/sprite_index';
 import { applyCollectorMacroGeometry, placeCollectorMacroPanels } from './geometry';
 import { entitySpawnSlots } from '../../systems/entity_limits';
 import { activeActorCountAtDefaultSoftLimit } from '../../data/entity_limits';
+import {
+  MAINTENANCE_TERRITORY_SEED,
+  initializeMaintenanceTerritory,
+  relocateMaintenanceFactionNpcSquads,
+  spawnMaintenanceFactionNpcSquads,
+} from './territory';
 
 /* ── Coarse grid parameters ───────────────────────────────────── */
 const CELL = 6;                   // world-tiles per maze cell (walls between = 1-wide passage)
 const GRID = Math.floor(W / CELL);// 1024/6 = 170 coarse cells
 const EXTRA_CONN = 0.06;          // fraction of extra random connections (loops)
 const MAINTENANCE_MONSTER_TARGET_AT_DEFAULT_CAP = 1000;
-const MAINTENANCE_NPC_TARGET_AT_DEFAULT_CAP = 500;
 
 /* Room type pool for maintenance floor */
 const MAINT_ROOM_TYPES: { type: RoomType; name: string; weight: number }[] = [
@@ -46,10 +50,6 @@ function pickRoomType(): { type: RoomType; name: string } {
   }
   return MAINT_ROOM_TYPES[0];
 }
-
-/* PSI weapon IDs for cultists */
-const PSI_IDS = ['psi_strike','psi_rupture','psi_madness','psi_storm','psi_brainburn'];
-function pickPsi(): string { return PSI_IDS[Math.floor(Math.random() * PSI_IDS.length)]; }
 
 /* ── Maze edge set (undirected) stored as flat bitmask per cell ── */
 const DIR_R = 1;  // +x
@@ -131,7 +131,7 @@ function addEllerLadderFamily(mazeOpen: Uint8Array): void {
   }
 }
 
-export function generateMaintenance(): { world: World; entities: Entity[]; spawnX: number; spawnY: number } {
+export function generateMaintenance(generationSeed = MAINTENANCE_TERRITORY_SEED): { world: World; entities: Entity[]; spawnX: number; spawnY: number } {
   const world = new World();
   const entities: Entity[] = [];
   let nextId = 1;
@@ -498,73 +498,12 @@ export function generateMaintenance(): { world: World; entities: Entity[]; spawn
   }
 
   /* ══════════════════════════════════════════════════════════════
-     Phase 12: Faction NPC squads
+     Phase 12-14e: Manifest-owned maintenance content
      ══════════════════════════════════════════════════════════════ */
-  const factions: { faction: Faction; occupation: Occupation }[] = [
-    { faction: Faction.LIQUIDATOR, occupation: Occupation.HUNTER },
-    { faction: Faction.CULTIST,    occupation: Occupation.PILGRIM },
-    { faction: Faction.WILD,       occupation: Occupation.TRAVELER },
-    { faction: Faction.CITIZEN,    occupation: Occupation.TRAVELER },
-    { faction: Faction.SCIENTIST,  occupation: Occupation.SCIENTIST },
-  ];
-  let npcCount = 0;
-  const npcTarget = entitySpawnSlots(entities, EntityType.NPC, activeActorCountAtDefaultSoftLimit(MAINTENANCE_NPC_TARGET_AT_DEFAULT_CAP));
-  while (npcCount < npcTarget) {
-    const prevCount = npcCount;
-    for (const zone of world.zones) {
-      if (npcCount >= npcTarget) break;
-      const squadSize = rng(1, 4);
-      const fDef = pick(factions);
-      for (let s = 0; s < squadSize && npcCount < npcTarget; s++) {
-        let sx = -1, sy = -1;
-        for (let r = 0; r < 30; r++) {
-          const tx = world.wrap(zone.cx + rng(-r * 3, r * 3));
-          const ty = world.wrap(zone.cy + rng(-r * 3, r * 3));
-          const tci = world.idx(tx, ty);
-          if (world.cells[tci] === Cell.FLOOR) {
-            sx = tx; sy = ty;
-            break;
-          }
-        }
-        if (sx < 0) continue;
-        const zoneLevel = zone.level ?? 5;
-        const npcLevel = gaussianLevel(zoneLevel + 3, 3);
-        const rpg = randomRPG(npcLevel);
-        const maxHp = Math.round(getMaxHp(rpg) * 1.5);
-        const nm = randomName(fDef.faction);
-        const hasPsi = fDef.faction === Faction.CULTIST && Math.random() < 0.4;
-        const psiWeapon = hasPsi ? pickPsi() : undefined;
-        entities.push({
-          id: nextId++, type: EntityType.NPC,
-          x: sx + 0.5, y: sy + 0.5,
-          angle: Math.random() * Math.PI * 2, pitch: 0,
-          alive: true,
-          speed: 1.4 + Math.random() * 0.4,
-          sprite: fDef.occupation,
-          name: nm.name,
-          isFemale: nm.female,
-          needs: freshNeeds(),
-          hp: maxHp, maxHp,
-          money: rng(10, 80),
-          ai: { goal: AIGoal.IDLE, tx: 0, ty: 0, path: [], pi: 0, stuck: 0, timer: 0 },
-          inventory: psiWeapon ? [{ defId: psiWeapon, count: 1 }] : [],
-          weapon: psiWeapon,
-          faction: fDef.faction,
-          occupation: fDef.occupation,
-          isTraveler: true,
-          questId: -1,
-          rpg,
-        });
-        npcCount++;
-      }
-    }
-    // Safety: if no NPCs were placed this pass, stop to avoid infinite loop
-    if (npcCount === prevCount) break;
-  }
+  const factionNpcIdStart = nextId;
+  nextId = spawnMaintenanceFactionNpcSquads(world, entities, nextId);
+  const factionNpcIdEnd = nextId;
 
-  /* ══════════════════════════════════════════════════════════════
-     Phase 13-14e: Manifest-owned maintenance content
-     ══════════════════════════════════════════════════════════════ */
   nextId = runMaintenanceContent(world, entities, nextId, spawnX, spawnY);
 
   /* ══════════════════════════════════════════════════════════════
@@ -577,6 +516,12 @@ export function generateMaintenance(): { world: World; entities: Entity[]; spawn
      ══════════════════════════════════════════════════════════════ */
   placeProceduralScreens(world, FloorLevel.MAINTENANCE);
   placeCollectorMacroPanels(world, centerX, centerY);
+
+  /* ══════════════════════════════════════════════════════════════
+     Phase 17: Cell-first territory and faction NPC squads
+     ══════════════════════════════════════════════════════════════ */
+  initializeMaintenanceTerritory(world, generationSeed);
+  relocateMaintenanceFactionNpcSquads(world, entities, factionNpcIdStart, factionNpcIdEnd);
 
   return { world, entities, spawnX, spawnY };
 }

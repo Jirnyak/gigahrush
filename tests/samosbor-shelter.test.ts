@@ -20,12 +20,13 @@ import {
 import { World } from '../src/core/world';
 import {
   SAMOSBOR_VARIANTS,
-  forceNextSamosborVariant,
+  buildActiveSamosborVariant,
   type ActiveSamosborVariant,
   type SamosborVariantId,
 } from '../src/data/samosbor_variants';
 import type { FloorGeneration } from '../src/gen/floor_manifest';
 import { createWorldEventState, getRecentEvents } from '../src/systems/events';
+import { forceNextSamosborVariant } from '../src/systems/samosbor_variants_runtime';
 import {
   getSamosborActiveInstructionSnapshot,
   getSamosborWarningSnapshot,
@@ -44,19 +45,7 @@ const TEST_SHELTER_ROOM_ID = 777;
 function testVariant(id: SamosborVariantId): ActiveSamosborVariant {
   const def = SAMOSBOR_VARIANTS.find(variant => variant.id === id);
   if (!def) throw new Error(`${id} samosbor variant missing`);
-  return {
-    def,
-    modifiers: [],
-    durationMult: def.durationMult,
-    spawnMult: def.spawnMult,
-    fogSeedMult: 1,
-    fogSpawnIntervalMult: 1,
-    sealTimingDelta: def.sealTimingDelta,
-    noSiren: false,
-    extraEyes: 0,
-    shelterRoomCount: 0,
-    fogColor: def.fogColor,
-  };
+  return buildActiveSamosborVariant(def);
 }
 
 beforeEach(() => {
@@ -551,6 +540,25 @@ test('veretar fog effect deletes actor in active fog', () => {
   const events = getRecentEvents(ctx.state, { tags: ['veretar', 'delete'], limit: 1 });
   assert.equal(events.length, 1);
   assert.equal(events[0].data?.effect, 'npc_deleted');
+});
+
+test('veretar fog cell deletion records local grid dirty rects', () => {
+  const ctx = makeFogEffectWorld();
+
+  const applied = applySamosborFogEffectAtCellForTests(
+    ctx.world,
+    ctx.entities,
+    ctx.state,
+    ctx.nextId,
+    ctx.state.samosborCount,
+    testVariant('veretar'),
+    FloorLevel.LIVING,
+    ctx.ci,
+  );
+
+  assert.equal(applied, true);
+  assert.deepEqual(ctx.world.takeCellDirtyRects(), [{ x: 20, y: 20, w: 1, h: 1 }]);
+  assert.deepEqual(ctx.world.takeFloorTexDirtyRects(), [{ x: 20, y: 20, w: 1, h: 1 }]);
 });
 
 test('istotit fog effect heals actors in active fog', () => {

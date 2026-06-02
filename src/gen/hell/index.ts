@@ -9,13 +9,15 @@ import { World } from '../../core/world';
 import { randomName, freshNeeds } from '../../data/catalog';
 import { rng, pick, ensureConnectivity, placeLifts, generateZones } from '../shared';
 import { placeProceduralScreens } from '../procedural_screens';
-import { HELL_POPULATION_PROFILE, type MonsterPopulationProfile } from '../../data/population_profiles';
+import { HELL_POPULATION_PROFILE } from '../../data/population_profiles';
 import { activeActorCountAtDefaultSoftLimit } from '../../data/entity_limits';
+import { territorySharesForStoryFloor } from '../../data/floor_territory';
 import { chooseFloorMonsterKind } from '../../data/monster_ecology';
-import { sampleNaturalPopulationCells, type PlacementFieldAnchor } from '../population_placement';
+import { sampleNaturalPopulationCells, type NaturalPopulationProfile, type PlacementFieldAnchor } from '../population_placement';
 import { MONSTERS } from '../../entities/monster';
 import { calcZoneLevel, randomRPG, scaleMonsterHp, scaleMonsterSpeed, gaussianLevel, getMaxHp } from '../../systems/rpg';
 import { entitySpawnSlots } from '../../systems/entity_limits';
+import { initializeCellTerritory } from '../../systems/territory';
 import { Spr, monsterSpr } from '../../render/sprite_index';
 import { runHellContent } from './content_manifest';
 import { buildHellGeometry, imprintHellArenaValleys, type HellGeometry } from './geometry';
@@ -31,7 +33,7 @@ const HELL_POPULATION_EXCLUDED_MONSTERS: readonly MonsterKind[] = [MonsterKind.S
 
 type SpawnFaction = Faction.CULTIST | Faction.LIQUIDATOR;
 
-export function generateHell(): { world: World; entities: Entity[]; spawnX: number; spawnY: number } {
+export function generateHell(generationSeed = 0x4d594153): { world: World; entities: Entity[]; spawnX: number; spawnY: number } {
   const world = new World();
   const entities: Entity[] = [];
   let nextId = 1;
@@ -54,6 +56,10 @@ export function generateHell(): { world: World; entities: Entity[]; spawnX: numb
   generateZones(world);
   retuneHellZones(world);
   for (const z of world.zones) z.level = calcZoneLevel(z.cx, z.cy, FloorLevel.HELL) + 2;
+  initializeCellTerritory(world, {
+    seed: generationSeed,
+    targetShares: territorySharesForStoryFloor(FloorLevel.HELL),
+  });
 
   for (let i = 0; i < W * W; i++) {
     if (world.cells[i] === Cell.FLOOR && Math.random() < 0.0035) {
@@ -401,14 +407,16 @@ function spawnFactionAgentBatch(
   return spawned;
 }
 
-function profileForFaction(faction: SpawnFaction): MonsterPopulationProfile {
-  return faction === Faction.CULTIST ? HELL_CULTIST_PROFILE : HELL_LIQUIDATOR_PROFILE;
+function profileForFaction(faction: SpawnFaction): NaturalPopulationProfile {
+  return faction === Faction.CULTIST
+    ? { ...HELL_CULTIST_PROFILE, preferredTerritory: ZoneFaction.CULTIST, preferredTerritoryShare: 0.78 }
+    : { ...HELL_LIQUIDATOR_PROFILE, preferredTerritory: ZoneFaction.LIQUIDATOR, preferredTerritoryShare: 0.72 };
 }
 
 function sampleHellPopulationCells(
   world: World,
   count: number,
-  profile: MonsterPopulationProfile,
+  profile: NaturalPopulationProfile,
   seed: number,
   anchors: readonly PlacementFieldAnchor[],
 ): number[] {

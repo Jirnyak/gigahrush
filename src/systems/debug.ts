@@ -16,7 +16,7 @@ import { MONSTERS, monsterTypeName } from '../entities/monster';
 import { monsterSpr, Spr } from '../render/sprite_index';
 import { awardXP, randomRPG, getMaxHp } from './rpg';
 import { isDebugNoClipEnabled, toggleDebugNoClip } from './psi';
-import { cycleForcedSamosborVariant, forceNextSamosborVariant, getActiveSamosborVariant } from '../data/samosbor_variants';
+import { cycleForcedSamosborVariant, forceNextSamosborVariant, getActiveSamosborVariant } from './samosbor_variants_runtime';
 import {
   clearSamosborDirectorCooldowns,
   forceNextSamosborDirectorBeat,
@@ -35,6 +35,7 @@ import { spawnContract, spawnContractById, spawnGovnyakCourierContract, summariz
 import { debugForcePneumomailCapsule } from './pneumomail';
 import { populationItemSummary } from './balance';
 import { getSamosborDebugLines } from './samosbor';
+import { territoryOwnerAtIndex } from './territory';
 import { floorCatalogDebugLines } from './floor_catalog';
 import { summarizeHeatline } from './heatline';
 import { summarizeCarnivorousFungus } from './carnivorous_fungus';
@@ -1767,6 +1768,7 @@ const ZONE_FACTION_NAMES: Record<ZoneFaction, string> = {
   [ZoneFaction.CULTIST]: 'Культисты',
   [ZoneFaction.SAMOSBOR]: 'Самосбор',
   [ZoneFaction.WILD]: 'Дикие',
+  [ZoneFaction.SCIENTIST]: 'Учёные',
 };
 
 const BASE_CMD_DEFS = [
@@ -2072,14 +2074,11 @@ export function drawDebugOverlay(
     }
   }
 
-  // Zone cells per faction
+  // Territory cells per owner
   const zoneFactionCells: Record<number, number> = {};
   for (let i = 0; i < W * W; i++) {
-    const zi = world.zoneMap[i];
-    if (zi >= 0 && zi < world.zones.length) {
-      const f = world.zones[zi].faction;
-      zoneFactionCells[f] = (zoneFactionCells[f] || 0) + 1;
-    }
+    const f = territoryOwnerAtIndex(world, i);
+    zoneFactionCells[f] = (zoneFactionCells[f] || 0) + 1;
   }
 
   let funcRooms = 0;
@@ -2153,7 +2152,7 @@ export function drawDebugOverlay(
 
   // Territory
   row('Территория', '#ff0');
-  const zfOrder = [ZoneFaction.CITIZEN, ZoneFaction.LIQUIDATOR, ZoneFaction.CULTIST, ZoneFaction.WILD, ZoneFaction.SAMOSBOR];
+  const zfOrder = [ZoneFaction.CITIZEN, ZoneFaction.LIQUIDATOR, ZoneFaction.CULTIST, ZoneFaction.SCIENTIST, ZoneFaction.WILD, ZoneFaction.SAMOSBOR];
   for (const zf of zfOrder) {
     row(`  ${ZONE_FACTION_NAMES[zf]}: ${zoneFactionCells[zf] || 0}`, '#bbb');
   }

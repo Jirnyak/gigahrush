@@ -1,4 +1,4 @@
-import { Cell, Feature, msg, type Entity, type GameState } from '../../core/types';
+import { Cell, Feature, Tex, msg, type Entity, type GameState } from '../../core/types';
 import { World } from '../../core/world';
 import { RUNTIME_TOPOLOGY_LIMITS } from '../../data/runtime_topology';
 import { isPlayerEntity } from '../player_actor';
@@ -6,7 +6,6 @@ import { isPlayerEntity } from '../player_actor';
 interface SnakeRuntime {
   path: Int32Array;
   body: Int32Array;
-  base: Uint8Array;
   controlIdx: number;
   head: number;
   length: number;
@@ -20,10 +19,24 @@ interface SnakeRuntime {
 
 interface SnakeFieldRuntime {
   snakes: SnakeRuntime[];
+  growthAccum: number;
+  growthSeconds: number;
+  growthState: number;
+  topologyAccum: number;
+  topologySeconds: number;
 }
 
 const WALL_SNAKE_RE = /\[wall_snake:(-?\d+),(-?\d+),(\d+),(\d+)\]/g;
 const snakeByWorld = new WeakMap<World, SnakeFieldRuntime | null>();
+const LARVA_BODY_TEX = Tex.LARVA_BODY;
+const LARVA_HEAD_TEX = Tex.DARK;
+const EATEN_FLOOR_TEX = Tex.F_GUT;
+const FLESH_FLOOR_TEX = Tex.F_MEAT;
+const FLESH_WALL_TEX_A = Tex.MEAT;
+const FLESH_WALL_TEX_B = Tex.GUT;
+const WALL_SNAKE_TOPOLOGY_SECONDS = 0.78;
+const FLESH_GROWTH_MAX_STEPS = 1;
+const FLESH_GROWTH_ATTEMPTS = 64;
 
 function hash32(v: number): number {
   v |= 0;
@@ -49,10 +62,55 @@ function perimeterPoint(world: World, x0: number, y0: number, w: number, h: numb
 
 function mutableSnakeCell(world: World, ci: number): boolean {
   const cell = world.cells[ci] as Cell;
+  if (
+    cell !== Cell.FLOOR &&
+    cell !== Cell.WATER &&
+    !(cell === Cell.WALL && (isFleshBlock(world, ci) || isLarvaBlock(world, ci)))
+  ) return false;
+  if (world.hermoWall[ci] !== 0 || world.aptMask[ci] !== 0 || world.doors.has(ci) || world.containerMap.has(ci)) return false;
+  const feature = world.features[ci] as Feature;
+  return feature === Feature.NONE || feature === Feature.LAMP;
+}
+
+function isFleshBlock(world: World, ci: number): boolean {
+  if ((world.cells[ci] as Cell) !== Cell.WALL) return false;
+  const tex = world.wallTex[ci] as Tex;
+  return tex === FLESH_WALL_TEX_A || tex === FLESH_WALL_TEX_B;
+}
+
+function isLarvaBlock(world: World, ci: number): boolean {
+  if ((world.cells[ci] as Cell) !== Cell.WALL) return false;
+  const tex = world.wallTex[ci] as Tex;
+  return tex === LARVA_BODY_TEX || tex === LARVA_HEAD_TEX;
+}
+
+function setLarvaCell(world: World, ci: number, head: boolean): void {
+  world.cells[ci] = Cell.WALL;
+  world.wallTex[ci] = head ? LARVA_HEAD_TEX : LARVA_BODY_TEX;
+  world.floorTex[ci] = EATEN_FLOOR_TEX;
+}
+
+function setEatenCavity(world: World, ci: number): void {
+  if (world.hermoWall[ci] !== 0 || world.aptMask[ci] !== 0 || world.doors.has(ci) || world.containerMap.has(ci)) return;
+  if ((world.cells[ci] as Cell) === Cell.LIFT) return;
+  world.cells[ci] = Cell.FLOOR;
+  world.wallTex[ci] = FLESH_WALL_TEX_B;
+  world.floorTex[ci] = EATEN_FLOOR_TEX;
+}
+
+function canGrowFlesh(world: World, ci: number, playerIdx: number): boolean {
+  if (ci === playerIdx) return false;
+  const cell = world.cells[ci] as Cell;
   if (cell !== Cell.FLOOR && cell !== Cell.WATER) return false;
   if (world.hermoWall[ci] !== 0 || world.aptMask[ci] !== 0 || world.doors.has(ci) || world.containerMap.has(ci)) return false;
   const feature = world.features[ci] as Feature;
   return feature === Feature.NONE || feature === Feature.LAMP;
+}
+
+function setFleshBlock(world: World, ci: number, seed: number): void {
+  world.cells[ci] = Cell.WALL;
+  world.wallTex[ci] = (seed & 3) === 0 ? FLESH_WALL_TEX_B : FLESH_WALL_TEX_A;
+  world.floorTex[ci] = FLESH_FLOOR_TEX;
 }
 
 function initSnake(world: World): SnakeFieldRuntime | null {
@@ -78,17 +136,14 @@ function initSnake(world: World): SnakeFieldRuntime | null {
       if (perimeter < 18) continue;
       const controlIdx = perimeterPoint(world, x0, y0, w, h, 0);
       const pathCells: number[] = [];
-      const baseCells: number[] = [];
       for (let i = 0; i < perimeter; i++) {
         const ci = perimeterPoint(world, x0, y0, w, h, i);
         if (!mutableSnakeCell(world, ci)) continue;
         pathCells.push(ci);
-        baseCells.push(world.cells[ci]);
       }
       const count = pathCells.length;
       if (count < 18) continue;
       const path = Int32Array.from(pathCells);
-      const base = Uint8Array.from(baseCells);
       const body = new Int32Array(Math.min(RUNTIME_TOPOLOGY_LIMITS.wallSnakeMaxBodyCells, Math.max(12, 8 + Math.floor(count / 5))));
       const length = Math.min(body.length, 10 + Math.floor(count / 9));
       const snakeSeed = hash32(
@@ -103,12 +158,11 @@ function initSnake(world: World): SnakeFieldRuntime | null {
       for (let i = 0; i < length; i++) {
         const pi = (count - direction * i) % count;
         body[i] = pi;
-        world.cells[path[pi]] = Cell.WALL;
+        setLarvaCell(world, path[pi], i === 0);
       }
       snakes.push({
         path,
         body,
-        base,
         controlIdx,
         head: 0,
         length,
@@ -129,7 +183,16 @@ function initSnake(world: World): SnakeFieldRuntime | null {
   }
 
   world.markCellsDirty();
-  const runtime = { snakes };
+  world.markWallTexDirty();
+  world.markFloorTexDirty();
+  const runtime = {
+    snakes,
+    growthAccum: 0,
+    growthSeconds: WALL_SNAKE_TOPOLOGY_SECONDS,
+    growthState: hash32(snakes.reduce((acc, snake) => acc ^ snake.path.length ^ snake.controlIdx, 0x51a4e)),
+    topologyAccum: 0,
+    topologySeconds: WALL_SNAKE_TOPOLOGY_SECONDS,
+  };
   snakeByWorld.set(world, runtime);
   return runtime;
 }
@@ -152,8 +215,7 @@ function restoreTail(world: World, snake: SnakeRuntime): void {
   const tailSlot = snake.length - 1;
   const tailPathIndex = snake.body[tailSlot];
   if (tailPathIndex < 0) return;
-  const ci = snake.path[tailPathIndex];
-  world.cells[ci] = snake.base[tailPathIndex] as Cell;
+  setEatenCavity(world, snake.path[tailPathIndex]);
 }
 
 function pushHead(world: World, snake: SnakeRuntime, nextHead: number): void {
@@ -161,18 +223,26 @@ function pushHead(world: World, snake: SnakeRuntime, nextHead: number): void {
   for (let i = snake.length - 1; i > 0; i--) snake.body[i] = snake.body[i - 1];
   snake.body[0] = nextHead;
   snake.head = nextHead;
-  world.cells[snake.path[nextHead]] = Cell.WALL;
-  world.markCellsDirty();
+  if (snake.length > 1) setLarvaCell(world, snake.path[snake.body[1]], false);
+  setLarvaCell(world, snake.path[nextHead], true);
 }
 
-function shrinkSnake(world: World, snake: SnakeRuntime, nextLength: number): void {
+function shrinkSnake(world: World, snake: SnakeRuntime, nextLength: number): boolean {
   const clamped = Math.max(6, Math.min(snake.length, nextLength));
+  let changed = clamped !== snake.length;
   for (let i = clamped; i < snake.length; i++) {
     const pathIndex = snake.body[i];
-    world.cells[snake.path[pathIndex]] = snake.base[pathIndex] as Cell;
+    setEatenCavity(world, snake.path[pathIndex]);
+    changed = true;
   }
   snake.length = clamped;
+  return changed;
+}
+
+function markWallSnakeCellsDirty(world: World): void {
   world.markCellsDirty();
+  world.markWallTexDirty();
+  world.markFloorTexDirty();
 }
 
 function playerOnPath(world: World, snake: SnakeRuntime, player: Entity, pathIndex: number): boolean {
@@ -194,7 +264,48 @@ function findSnakeTarget(world: World, runtime: SnakeFieldRuntime, lookIdx: numb
 function hurtPlayer(player: Entity, state: GameState, amount: number): void {
   player.hp = Math.max(1, (player.hp ?? 100) - amount);
   if (player.needs) player.needs.sleep = Math.max(0, player.needs.sleep - amount * 0.15);
-  state.msgs.push(msg(`Змейка давит бетонным боком: -${amount} HP. Ждите хвост или клиньте экран.`, state.time, '#f84'));
+  state.msgs.push(msg(`Белая личинка жует проход под ногами: -${amount} HP. Ждите хвост или клиньте экран.`, state.time, '#f84'));
+}
+
+function runtimeRand(runtime: SnakeFieldRuntime): number {
+  let x = runtime.growthState || 0x6d2b79f5;
+  x ^= x << 13;
+  x ^= x >>> 17;
+  x ^= x << 5;
+  runtime.growthState = x >>> 0;
+  return runtime.growthState;
+}
+
+function growOneFleshBlock(world: World, runtime: SnakeFieldRuntime, player: Entity): boolean {
+  const playerIdx = world.idx(Math.floor(player.x), Math.floor(player.y));
+  for (let attempt = 0; attempt < FLESH_GROWTH_ATTEMPTS; attempt++) {
+    const r = runtimeRand(runtime);
+    const snake = runtime.snakes[r % runtime.snakes.length];
+    const sourcePathIndex = (r >>> 8) % snake.path.length;
+    const sourceIdx = snake.path[sourcePathIndex];
+    if (!isFleshBlock(world, sourceIdx)) continue;
+    const direction = (r & 0x10000) === 0 ? 1 : -1;
+    for (let side = 0; side < 2; side++) {
+      const targetPathIndex = (sourcePathIndex + direction * (side + 1) + snake.path.length) % snake.path.length;
+      const targetIdx = snake.path[targetPathIndex];
+      if (snakeBodyAtCell(snake, targetIdx) || !canGrowFlesh(world, targetIdx, playerIdx)) continue;
+      setFleshBlock(world, targetIdx, r ^ targetPathIndex);
+      return true;
+    }
+  }
+  return false;
+}
+
+function updateFleshGrowth(world: World, runtime: SnakeFieldRuntime, player: Entity, dt: number): boolean {
+  runtime.growthAccum += dt;
+  let steps = 0;
+  let changed = false;
+  while (runtime.growthAccum >= runtime.growthSeconds && steps < FLESH_GROWTH_MAX_STEPS) {
+    runtime.growthAccum -= runtime.growthSeconds;
+    changed = growOneFleshBlock(world, runtime, player) || changed;
+    steps++;
+  }
+  return changed;
 }
 
 export function updateWallSnakeAnomaly(world: World, player: Entity, state: GameState, dt: number): void {
@@ -212,9 +323,15 @@ export function updateWallSnakeAnomaly(world: World, player: Entity, state: Game
     }
   }
 
+  runtime.topologyAccum += dt;
+  if (runtime.topologyAccum < runtime.topologySeconds) return;
+  const topologyDt = Math.min(runtime.topologyAccum, runtime.topologySeconds * 1.5);
+  runtime.topologyAccum %= runtime.topologySeconds;
+
+  let changed = updateFleshGrowth(world, runtime, player, topologyDt);
   for (const snake of runtime.snakes) {
     if (state.time < snake.stoppedUntil) continue;
-    snake.stepAccum += dt;
+    snake.stepAccum += topologyDt;
     if (snake.stepAccum < snake.stepSeconds) continue;
     snake.stepAccum %= snake.stepSeconds;
 
@@ -230,14 +347,17 @@ export function updateWallSnakeAnomaly(world: World, player: Entity, state: Game
         snake.warnedUntil = state.time + snake.stepSeconds * 1.8;
         if (state.time - snake.lastMsgTime > 3) {
           snake.lastMsgTime = state.time;
-          state.msgs.push(msg('Голова змейки смотрит прямо сюда. Есть один шаг, чтобы уйти.', state.time, '#fa4'));
+          state.msgs.push(msg('Черная голова личинки смотрит прямо сюда. Есть один шаг, чтобы уйти.', state.time, '#fa4'));
         }
       }
+      if (changed) markWallSnakeCellsDirty(world);
       return;
     }
 
     pushHead(world, snake, nextHead);
+    changed = true;
   }
+  if (changed) markWallSnakeCellsDirty(world);
 }
 
 function removeOne(player: Entity, ids: readonly string[]): string {
@@ -261,14 +381,14 @@ export function tryUseWallSnakeAnomaly(world: World, player: Entity, state: Game
   const closeEnough = world.dist2(player.x, player.y, lookX, lookY) <= 5.8;
   if (!snake || !closeEnough) return false;
 
-  const bait = removeOne(player, ['gear', 'spring', 'metal_sheet', 'bread', 'mushroom_mass']);
+  const bait = removeOne(player, ['gear', 'spring', 'metal_sheet', 'bread', 'rawmeat', 'mushroom_mass']);
   if (bait) {
     snake.stoppedUntil = Math.max(snake.stoppedUntil, state.time + 7);
-    shrinkSnake(world, snake, snake.length - 2);
-    state.msgs.push(msg('Приманка ушла в экран. Змейка застряла и укоротилась.', state.time, '#8cf'));
+    if (shrinkSnake(world, snake, snake.length - 2)) markWallSnakeCellsDirty(world);
+    state.msgs.push(msg('Приманка ушла в экран. Личинка застряла, побелела дугой и укоротилась.', state.time, '#8cf'));
   } else {
     snake.stoppedUntil = Math.max(snake.stoppedUntil, state.time + 2.5);
-    state.msgs.push(msg('Экран щелкнул пустым зубом. Нужна железка, еда или грибная масса.', state.time, '#fa4'));
+    state.msgs.push(msg('Экран щелкнул пустым зубом. Нужна железка, еда, сырое мясо или грибная масса.', state.time, '#fa4'));
   }
   return true;
 }

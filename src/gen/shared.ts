@@ -2021,6 +2021,7 @@ const ZONE_FACTION_TEX: Record<ZoneFaction, Tex> = {
   [ZoneFaction.CULTIST]:    Tex.DARK,
   [ZoneFaction.WILD]:       Tex.ROTTEN,
   [ZoneFaction.SAMOSBOR]:   Tex.CONCRETE,
+  [ZoneFaction.SCIENTIST]:  Tex.BRICK,
 };
 
 export function stampHQRooms(world: World): void {

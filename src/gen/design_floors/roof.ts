@@ -17,6 +17,7 @@ import {
   MonsterKind,
   RoomType,
   Tex,
+  type TerritoryOwner,
   ZoneFaction,
   type Entity,
   type GameState,
@@ -29,6 +30,7 @@ import { MONSTERS } from '../../entities/monster';
 import { monsterSpr, Spr } from '../../render/sprite_index';
 import { publishEvent } from '../../systems/events';
 import { registerRouteCue } from '../../systems/route_cues';
+import { syncZoneMetadataFromTerritory } from '../../systems/territory';
 import {
   connectRoomsMST,
   ensureConnectivity,
@@ -67,8 +69,15 @@ const ROOF_LOS_RAY_MAX = 64;
 const ROOF_LOS_LONG_STEPS = 24;
 const ROOF_LOS_EXPOSURE_THRESHOLD = 110;
 const ROOF_LOS_SHELTER_MIN_SPACING = 24;
-const ROOF_LOS_SHELTER_MAX_SPACING = 48;
+const ROOF_LOS_SHELTER_MAX_SPACING = 64;
 const ROOF_LOS_SHELTER_CAP = 256;
+const ROOF_TERRITORY_TARGETS = [
+  { owner: ZoneFaction.CITIZEN, share: 0.28 },
+  { owner: ZoneFaction.LIQUIDATOR, share: 0.38 },
+  { owner: ZoneFaction.CULTIST, share: 0.08 },
+  { owner: ZoneFaction.SCIENTIST, share: 0.14 },
+  { owner: ZoneFaction.WILD, share: 0.12 },
+] as const satisfies readonly { owner: TerritoryOwner; share: number }[];
 const ROOF_LOS_DIRS = [
   [1, 0],
   [-1, 0],
@@ -143,6 +152,13 @@ export interface RoofLosExposureSummary {
   maxScore: number;
 }
 
+interface RoofTerritorySeed {
+  owner: TerritoryOwner;
+  x: number;
+  y: number;
+  radius: number;
+}
+
 interface RoofIsland {
   room: Room;
   cx: number;
@@ -155,6 +171,16 @@ interface RoofShelterIndex {
   side: number;
   shelterCells: number;
   buckets: number[][];
+}
+
+interface RoofHqSpec {
+  owner: TerritoryOwner;
+  x: number;
+  y: number;
+  name: string;
+  wallTex: Tex;
+  floorTex: Tex;
+  ruined?: boolean;
 }
 
 export function createRoofWeatherState(seed = 0, skyTimeOfDay = 0.42): RoofWeatherState {
@@ -439,6 +465,19 @@ export function expandRoofArchipelago(world: World, rng: () => number): void {
   const southShelters = addRoofIsland(world, keep, RoomType.STORAGE, CX - 64, CY + 122, 92, 50, 'Крыша: ряд вентиляций', Tex.PIPE, Tex.F_CONCRETE);
   const waterDeck = addRoofIsland(world, keep, RoomType.STORAGE, CX + 88, CY + 104, 78, 58, 'Крыша: баки дождевой воды', Tex.PIPE, Tex.F_WATER);
   const tarPocket = addRoofIsland(world, keep, RoomType.COMMON, CX - 210, CY + 86, 78, 42, 'Крыша: смоляной карман', Tex.CONCRETE, Tex.F_CONCRETE);
+  const routeRooms = [
+    entryDeck.room,
+    centralSlab.room,
+    westHatch.room,
+    eastMasts.room,
+    northField.room,
+    northWestPits.room,
+    eastLane.room,
+    signalOutpost.room,
+    southShelters.room,
+    waterDeck.room,
+    tarPocket.room,
+  ];
 
   connectRoofWalk(world, keep, entryDeck, centralSlab, 3, false);
   connectRoofWalk(world, keep, entryDeck, westHatch, 2, true);
@@ -454,6 +493,14 @@ export function expandRoofArchipelago(world: World, rng: () => number): void {
   connectRoofWalk(world, keep, eastMasts, eastLane, 2, true);
   connectRoofWalk(world, keep, eastLane, signalOutpost, 2, false);
   connectRoofWalk(world, keep, signalOutpost, waterDeck, 2, true);
+
+  placeRoofWideDeckNetwork(world, keep, rng);
+  const hqRooms = placeRoofFactionHqClusters(world, keep, rng);
+  const deckRooms = placeRoofOpenDeckLayer(world, keep, rng);
+  const midRooms = placeRoofMidServiceLayer(world, keep, rng);
+  const microRooms = placeRoofMicroLayer(world, keep, rng);
+  connectRoomsMST(world, routeRooms.concat(deckRooms, hqRooms, midRooms, microRooms));
+  normalizeRoofDoorHardware(world);
 
   placeRoofSniperLane(world, keep, entryDeck.cx + 12, entryDeck.cy - 3, eastLane.cx - 8, eastLane.cy + 2);
   placeLargeAntennaCluster(world, northField.cx, northField.cy);
@@ -482,20 +529,11 @@ export function retuneRoofPressureZones(world: World): void {
   for (const zone of world.zones) {
     const d = world.dist(zone.cx, zone.cy, CX, CY);
     zone.level = d > 300 ? 5 : d > 150 ? 4 : 3;
-    zone.faction = d > 260 ? ZoneFaction.WILD : ZoneFaction.CITIZEN;
     zone.fogged = false;
   }
 
-  for (let i = 0; i < W * W; i++) {
-    const zone = world.zones[world.zoneMap[i]];
-    world.factionControl[i] = zone?.faction ?? ZoneFaction.WILD;
-  }
-
-  for (const room of world.rooms) {
-    const roomFaction = roofRoomPressureFaction(room);
-    const roomLevel = room.type === RoomType.PRODUCTION ? 5 : room.type === RoomType.HQ ? 4 : room.sealed ? 2 : 3;
-    paintRoofPressureRoom(world, room, roomFaction, roomLevel);
-  }
+  applyRoofTerritoryField(world);
+  syncZoneMetadataFromTerritory(world);
 }
 
 export function buildRoofLosExposureHeatmap(world: World): Uint8Array {
@@ -587,10 +625,17 @@ export function applyRoofLosShelterPockets(world: World, rng: () => number): Roo
 }
 
 function roofRoomPressureFaction(room: Room): ZoneFaction {
-  if (room.type === RoomType.PRODUCTION) return ZoneFaction.SAMOSBOR;
+  const name = room.name.toLowerCase();
+  if (name.includes('ликвидатор') || name.includes('снайпер')) return ZoneFaction.LIQUIDATOR;
+  if (name.includes('культ')) return ZoneFaction.CULTIST;
+  if (name.includes('уч') || name.includes('нии') || name.includes('метео') || name.includes('медпост')) return ZoneFaction.SCIENTIST;
+  if (name.includes('дик') || name.includes('облак') || name.includes('смол')) return ZoneFaction.WILD;
+  if (name.includes('граждан') || name.includes('вод') || name.includes('бак') || name.includes('вентиляц')) return ZoneFaction.CITIZEN;
   if (room.type === RoomType.HQ) return ZoneFaction.LIQUIDATOR;
-  if (room.sealed || room.type === RoomType.CORRIDOR || room.type === RoomType.OFFICE) return ZoneFaction.CITIZEN;
-  return ZoneFaction.WILD;
+  if (room.type === RoomType.PRODUCTION) return ZoneFaction.LIQUIDATOR;
+  if (room.type === RoomType.OFFICE || room.type === RoomType.MEDICAL) return ZoneFaction.SCIENTIST;
+  if (room.type === RoomType.STORAGE && room.id % 5 === 0) return ZoneFaction.WILD;
+  return ZoneFaction.CITIZEN;
 }
 
 function paintRoofPressureRoom(world: World, room: Room, faction: ZoneFaction, level: number): void {
@@ -605,6 +650,118 @@ function paintRoofPressureRoom(world: World, room: Room, faction: ZoneFaction, l
     for (let dx = 0; dx < room.w; dx++) {
       const ci = world.idx(room.x + dx, room.y + dy);
       world.factionControl[ci] = faction;
+    }
+  }
+}
+
+function applyRoofTerritoryField(world: World): void {
+  const seeds = roofTerritorySeeds(world);
+  const bias = new Float64Array(8);
+  const counts = new Uint32Array(8);
+  let sampleTotal = 0;
+
+  for (const target of ROOF_TERRITORY_TARGETS) bias[target.owner] = target.share * 1.8;
+  for (let iter = 0; iter < 10; iter++) {
+    counts.fill(0);
+    sampleTotal = 0;
+    for (let y = 0; y < W; y += 4) {
+      for (let x = 0; x < W; x += 4) {
+        counts[roofTerritoryOwnerForCell(world, x, y, seeds, bias)]++;
+        sampleTotal++;
+      }
+    }
+    for (const target of ROOF_TERRITORY_TARGETS) {
+      const share = sampleTotal > 0 ? counts[target.owner] / sampleTotal : 0;
+      bias[target.owner] += (target.share - share) * 2.75;
+    }
+  }
+
+  for (let y = 0; y < W; y++) {
+    for (let x = 0; x < W; x++) {
+      const ci = world.idx(x, y);
+      world.factionControl[ci] = roofTerritoryOwnerForCell(world, x, y, seeds, bias);
+    }
+  }
+
+  for (const room of world.rooms) {
+    const roomFaction = roofRoomPressureFaction(room);
+    const roomLevel = room.type === RoomType.PRODUCTION ? 5 : room.type === RoomType.HQ ? 4 : room.sealed ? 2 : 3;
+    paintRoofPressureRoom(world, room, roomFaction, roomLevel);
+  }
+
+  for (const seed of seeds) {
+    paintRoofOwnerPatch(world, seed.x, seed.y, seed.owner, Math.min(30, Math.max(8, Math.floor(seed.radius / 7))));
+  }
+}
+
+function roofTerritorySeeds(world: World): RoofTerritorySeed[] {
+  const seeds: RoofTerritorySeed[] = [];
+  for (const room of world.rooms) {
+    const owner = roofRoomPressureFaction(room);
+    if (!ROOF_TERRITORY_TARGETS.some(target => target.owner === owner)) continue;
+    if (room.type !== RoomType.HQ && room.type !== RoomType.PRODUCTION && room.type !== RoomType.OFFICE && room.type !== RoomType.MEDICAL) continue;
+    seeds.push({
+      owner,
+      x: world.wrap(room.x + (room.w >> 1)),
+      y: world.wrap(room.y + (room.h >> 1)),
+      radius: room.type === RoomType.HQ ? 225 : room.type === RoomType.PRODUCTION ? 150 : 118,
+    });
+  }
+
+  const fallback: readonly RoofTerritorySeed[] = [
+    { owner: ZoneFaction.CITIZEN, x: 214, y: 730, radius: 240 },
+    { owner: ZoneFaction.LIQUIDATOR, x: 766, y: 234, radius: 275 },
+    { owner: ZoneFaction.CULTIST, x: 812, y: 736, radius: 145 },
+    { owner: ZoneFaction.SCIENTIST, x: 484, y: 154, radius: 180 },
+    { owner: ZoneFaction.WILD, x: 146, y: 270, radius: 170 },
+  ];
+  for (const target of ROOF_TERRITORY_TARGETS) {
+    if (seeds.some(seed => seed.owner === target.owner)) continue;
+    const seed = fallback.find(candidate => candidate.owner === target.owner);
+    if (seed) seeds.push(seed);
+  }
+  return seeds;
+}
+
+function roofTerritoryOwnerForCell(
+  world: World,
+  x: number,
+  y: number,
+  seeds: readonly RoofTerritorySeed[],
+  bias: Float64Array,
+): TerritoryOwner {
+  let best = ZoneFaction.CITIZEN as TerritoryOwner;
+  let bestScore = Infinity;
+  for (const target of ROOF_TERRITORY_TARGETS) {
+    let d = Infinity;
+    for (const seed of seeds) {
+      if (seed.owner !== target.owner) continue;
+      const score = Math.sqrt(world.dist2(x, y, seed.x, seed.y)) / seed.radius;
+      if (score < d) d = score;
+    }
+    const score = d - bias[target.owner] + roofTerritoryNoise(x, y, target.owner);
+    if (score < bestScore) {
+      bestScore = score;
+      best = target.owner;
+    }
+  }
+  return best;
+}
+
+function roofTerritoryNoise(x: number, y: number, owner: TerritoryOwner): number {
+  const coarse = hash01((x / 42) | 0, (y / 42) | 0, owner * 991 + 17);
+  const block = hash01((x / 96) | 0, (y / 96) | 0, owner * 577 + 41);
+  return (coarse - 0.5) * 0.18 + (block - 0.5) * 0.22;
+}
+
+function paintRoofOwnerPatch(world: World, x: number, y: number, owner: TerritoryOwner, radius: number): void {
+  const r2 = radius * radius;
+  for (let dy = -radius; dy <= radius; dy++) {
+    for (let dx = -radius; dx <= radius; dx++) {
+      if (dx * dx + dy * dy > r2) continue;
+      const ci = world.idx(x + dx, y + dy);
+      if (world.aptMask[ci]) continue;
+      world.factionControl[ci] = owner;
     }
   }
 }
@@ -1012,6 +1169,407 @@ function scatterRoofMachinery(world: World, keep: Uint8Array, rng: () => number,
       world.features[ci] = roll < 0.42 ? Feature.APPARATUS : roll < 0.72 ? Feature.MACHINE : Feature.SHELF;
       if (rng() < 0.28) stampSurfaceSplat(world, x, y, 0.5, 0.5, 2.2 + rng() * 3.4, 0.14, Math.floor(rng() * 100000), 58, 64, 68, false);
     }
+  }
+}
+
+function placeRoofWideDeckNetwork(world: World, keep: Uint8Array, rng: () => number): void {
+  const ring = [
+    [72, 72],
+    [952, 72],
+    [952, 952],
+    [72, 952],
+    [72, 72],
+  ] as const;
+  for (let i = 1; i < ring.length; i++) {
+    carveRoofLineDirect(world, keep, ring[i - 1][0], ring[i - 1][1], ring[i][0], ring[i][1], 6);
+  }
+
+  for (const y of [144, 272, 400, 528, 656, 784, 912]) {
+    carveRoofLineDirect(world, keep, 72, y + Math.floor(rng() * 9) - 4, 952, y + Math.floor(rng() * 9) - 4, 4);
+  }
+  for (const x of [112, 240, 368, 512, 640, 768, 896]) {
+    carveRoofLineDirect(world, keep, x + Math.floor(rng() * 9) - 4, 72, x + Math.floor(rng() * 9) - 4, 952, 4);
+  }
+
+  carveRoofLineDirect(world, keep, CX, 64, CX, 960, 7);
+  carveRoofLineDirect(world, keep, 64, CY, 960, CY, 7);
+  carveRoofLineDirect(world, keep, 122, 122, 900, 900, 3);
+  carveRoofLineDirect(world, keep, 900, 122, 122, 900, 3);
+
+  for (const [x, y, w, h] of [
+    [262, 266, 18, 10],
+    [726, 248, 20, 12],
+    [406, 678, 22, 14],
+    [612, 796, 18, 12],
+    [852, 534, 16, 10],
+    [168, 554, 18, 12],
+  ] as const) {
+    placeRoofSkylightPit(world, keep, x, y, w, h);
+  }
+}
+
+function carveRoofLineDirect(
+  world: World,
+  keep: Uint8Array,
+  ax: number,
+  ay: number,
+  bx: number,
+  by: number,
+  width: number,
+): void {
+  const steps = Math.max(1, Math.abs(bx - ax), Math.abs(by - ay));
+  for (let step = 0; step <= steps; step++) {
+    const t = step / steps;
+    carveRoofWalkDisc(
+      world,
+      keep,
+      Math.round(ax + (bx - ax) * t),
+      Math.round(ay + (by - ay) * t),
+      width,
+    );
+  }
+}
+
+function placeRoofFactionHqClusters(world: World, keep: Uint8Array, rng: () => number): Room[] {
+  const specs: readonly RoofHqSpec[] = [
+    { owner: ZoneFaction.LIQUIDATOR, x: 766, y: 234, name: 'ликвидаторов', wallTex: Tex.METAL, floorTex: Tex.F_CONCRETE },
+    { owner: ZoneFaction.CITIZEN, x: 214, y: 730, name: 'граждан', wallTex: Tex.PANEL, floorTex: Tex.F_LINO },
+    { owner: ZoneFaction.SCIENTIST, x: 484, y: 154, name: 'учёных НИИ', wallTex: Tex.PANEL, floorTex: Tex.F_TILE },
+    { owner: ZoneFaction.CULTIST, x: 812, y: 736, name: 'культистов', wallTex: Tex.CONCRETE, floorTex: Tex.F_CONCRETE, ruined: true },
+    { owner: ZoneFaction.WILD, x: 146, y: 270, name: 'диких', wallTex: Tex.CONCRETE, floorTex: Tex.F_CONCRETE, ruined: true },
+  ];
+  const out: Room[] = [];
+
+  for (const spec of specs) {
+    const core = addRoofServiceRoom(world, keep, RoomType.HQ, spec.x, spec.y, spec.ruined ? 15 : 21, spec.ruined ? 11 : 15, `Крыша: миништаб ${spec.name}`, spec.wallTex, spec.floorTex, true);
+    const common = addRoofServiceRoom(world, keep, RoomType.COMMON, spec.x - 21, spec.y + 2, 16, 10, `Крыша: общая ${spec.name}`, spec.wallTex, spec.floorTex);
+    const storage = addRoofServiceRoom(world, keep, RoomType.STORAGE, spec.x + 23, spec.y + 3, 15, 10, `Крыша: склад ${spec.name}`, spec.wallTex, Tex.F_CONCRETE);
+    const office = addRoofServiceRoom(world, keep, spec.owner === ZoneFaction.SCIENTIST ? RoomType.MEDICAL : RoomType.OFFICE, spec.x + 4, spec.y - 16, 17, 10, `Крыша: ${spec.owner === ZoneFaction.SCIENTIST ? 'медпост' : 'контора'} ${spec.name}`, spec.wallTex, spec.floorTex);
+    const kitchen = addRoofServiceRoom(world, keep, RoomType.KITCHEN, spec.x - 4, spec.y + 19, 14, 9, `Крыша: кухня ${spec.name}`, spec.wallTex, Tex.F_TILE);
+    const bath = addRoofServiceRoom(world, keep, RoomType.BATHROOM, spec.x + 16, spec.y + 19, 10, 8, `Крыша: туалет ${spec.name}`, Tex.TILE_W, Tex.F_TILE);
+    for (const room of [core, common, storage, office, kitchen, bath]) {
+      if (!room) continue;
+      decorateRoofServiceRoom(world, room, rng);
+      out.push(room);
+    }
+  }
+
+  for (const [x, y, label] of [[880, 352, 'верхний'], [664, 386, 'нижний'], [884, 646, 'дальний']] as const) {
+    const outpost = addRoofServiceRoom(world, keep, RoomType.HQ, x, y, 16, 10, `Крыша: ${label} пост ликвидаторов`, Tex.METAL, Tex.F_CONCRETE, label !== 'дальний');
+    const storage = addRoofServiceRoom(world, keep, RoomType.STORAGE, x + 19, y + 1, 12, 8, `Крыша: ${label} ящик ликвидаторов`, Tex.METAL, Tex.F_CONCRETE);
+    for (const room of [outpost, storage]) {
+      if (!room) continue;
+      decorateRoofServiceRoom(world, room, rng);
+      out.push(room);
+    }
+  }
+  return out;
+}
+
+function placeRoofOpenDeckLayer(world: World, keep: Uint8Array, rng: () => number): Room[] {
+  const out: Room[] = [];
+  let serial = 1;
+  for (const y of [176, 320, 464, 608, 752, 896]) {
+    for (const x of [176, 320, 464, 608, 752, 896]) {
+      const voidCourt = (serial % 9 === 0) || (x === 608 && y === 608) || (x === 320 && y === 464);
+      carveRoofLineDirect(world, keep, x - 52, y, x + 52, y, 2);
+      carveRoofLineDirect(world, keep, x, y - 42, x, y + 42, 2);
+      carveRoofLineDirect(world, keep, x - 38, y - 30, x + 38, y + 30, 1);
+      carveRoofLineDirect(world, keep, x - 38, y + 30, x + 38, y - 30, 1);
+      carveRoofBayLoop(world, keep, x, y);
+      carveRoofBaySpurs(world, keep, x, y, serial);
+      if (voidCourt) placeRoofSkylightPit(world, keep, x - 15, y - 10, 30, 20);
+
+      const rooms = [
+        { dx: -42, dy: -30, w: 18, h: 12, type: RoomType.STORAGE, name: 'будка', wall: Tex.CONCRETE, floor: Tex.F_CONCRETE },
+        { dx: -16, dy: -34, w: 22, h: 14, type: RoomType.COMMON, name: 'открытая плита', wall: Tex.CONCRETE, floor: Tex.F_CONCRETE },
+        { dx: 22, dy: -28, w: 20, h: 12, type: RoomType.PRODUCTION, name: 'антенный шкаф', wall: Tex.METAL, floor: Tex.F_CONCRETE },
+        { dx: -38, dy: 18, w: 16, h: 10, type: RoomType.KITCHEN, name: 'чайная будка', wall: Tex.TILE_W, floor: Tex.F_TILE },
+        { dx: -10, dy: 18, w: 18, h: 10, type: RoomType.BATHROOM, name: 'туалетная будка', wall: Tex.TILE_W, floor: Tex.F_TILE },
+        { dx: 18, dy: 16, w: 24, h: 14, type: RoomType.OFFICE, name: 'вахта', wall: Tex.PANEL, floor: Tex.F_LINO },
+        { dx: -58, dy: -5, w: 12, h: 9, type: RoomType.STORAGE, name: 'краевая кладовка', wall: Tex.CONCRETE, floor: Tex.F_CONCRETE },
+        { dx: 48, dy: -7, w: 13, h: 9, type: RoomType.STORAGE, name: 'краевой шкаф', wall: Tex.METAL, floor: Tex.F_CONCRETE },
+        { dx: -7, dy: -8, w: 13, h: 10, type: RoomType.COMMON, name: 'переходная будка', wall: Tex.CONCRETE, floor: Tex.F_CONCRETE },
+        { dx: 34, dy: 34, w: 14, h: 9, type: RoomType.PRODUCTION, name: 'кабельный пост', wall: Tex.METAL, floor: Tex.F_CONCRETE },
+        { dx: -54, dy: 33, w: 12, h: 8, type: RoomType.OFFICE, name: 'наблюдательная ниша', wall: Tex.PANEL, floor: Tex.F_LINO },
+      ] as const;
+
+      for (let i = 0; i < rooms.length; i++) {
+        if (voidCourt && i === 1) continue;
+        if (i < 6 && (serial + i) % 11 === 0) continue;
+        if (i >= 6 && (serial + i) % 17 === 0) continue;
+        const spec = rooms[i];
+        const room = addRoofServiceRoom(
+          world,
+          keep,
+          spec.type,
+          x + spec.dx + Math.floor(rng() * 7) - 3,
+          y + spec.dy + Math.floor(rng() * 7) - 3,
+          spec.w,
+          spec.h,
+          `Крыша: ${spec.name} ${serial}.${i + 1}`,
+          spec.wall,
+          spec.floor,
+        );
+        if (room) {
+          decorateRoofOpenDeck(world, room, rng);
+          out.push(room);
+        }
+      }
+      placeRoofBayInfillRooms(world, keep, rng, x, y, serial, out);
+      carveRoofBayComb(world, keep, x, y);
+      carveRoofBayLoop(world, keep, x, y);
+      carveRoofBaySpurs(world, keep, x, y, serial + 3);
+      serial++;
+    }
+  }
+  return out;
+}
+
+function carveRoofBayLoop(world: World, keep: Uint8Array, x: number, y: number): void {
+  carveRoofLineDirect(world, keep, x - 62, y - 42, x + 62, y - 42, 1);
+  carveRoofLineDirect(world, keep, x + 62, y - 42, x + 62, y + 42, 1);
+  carveRoofLineDirect(world, keep, x + 62, y + 42, x - 62, y + 42, 1);
+  carveRoofLineDirect(world, keep, x - 62, y + 42, x - 62, y - 42, 1);
+}
+
+function carveRoofBaySpurs(world: World, keep: Uint8Array, x: number, y: number, serial: number): void {
+  const north = y - 70;
+  const south = y + 70;
+  const west = x - 70;
+  const east = x + 70;
+  carveRoofLineDirect(world, keep, x - 22, y - 42, x - 22, north, 1);
+  carveRoofLineDirect(world, keep, x + 24, y + 42, x + 24, south, 1);
+  carveRoofLineDirect(world, keep, x - 62, y + 16, west, y + 16, 1);
+  carveRoofLineDirect(world, keep, x + 62, y - 18, east, y - 18, 1);
+  if (serial % 2 === 0) carveRoofLineDirect(world, keep, x - 48, y - 24, x + 48, y + 24, 1);
+  else carveRoofLineDirect(world, keep, x - 48, y + 24, x + 48, y - 24, 1);
+}
+
+function placeRoofBayInfillRooms(
+  world: World,
+  keep: Uint8Array,
+  rng: () => number,
+  x: number,
+  y: number,
+  serial: number,
+  out: Room[],
+): void {
+  const rooms = [
+    { dx: -61, dy: -38, w: 11, h: 7, type: RoomType.STORAGE, name: 'угловая будка', wall: Tex.CONCRETE, floor: Tex.F_CONCRETE },
+    { dx: -36, dy: -48, w: 12, h: 8, type: RoomType.OFFICE, name: 'смотровая щель', wall: Tex.PANEL, floor: Tex.F_LINO },
+    { dx: 5, dy: -47, w: 11, h: 8, type: RoomType.STORAGE, name: 'верхний шкаф', wall: Tex.METAL, floor: Tex.F_CONCRETE },
+    { dx: 45, dy: -42, w: 10, h: 8, type: RoomType.PRODUCTION, name: 'верхний пост', wall: Tex.METAL, floor: Tex.F_CONCRETE },
+    { dx: -56, dy: -22, w: 12, h: 7, type: RoomType.COMMON, name: 'левая келья', wall: Tex.CONCRETE, floor: Tex.F_CONCRETE },
+    { dx: -33, dy: -14, w: 11, h: 8, type: RoomType.STORAGE, name: 'левая кладовая', wall: Tex.CONCRETE, floor: Tex.F_CONCRETE },
+    { dx: 12, dy: -12, w: 11, h: 8, type: RoomType.STORAGE, name: 'средний шкаф', wall: Tex.METAL, floor: Tex.F_CONCRETE },
+    { dx: 43, dy: 6, w: 12, h: 8, type: RoomType.KITCHEN, name: 'правая чайная', wall: Tex.TILE_W, floor: Tex.F_TILE },
+    { dx: -60, dy: 8, w: 10, h: 8, type: RoomType.BATHROOM, name: 'левый санузел', wall: Tex.TILE_W, floor: Tex.F_TILE },
+    { dx: -32, dy: 6, w: 12, h: 8, type: RoomType.OFFICE, name: 'малый пост', wall: Tex.PANEL, floor: Tex.F_LINO },
+    { dx: 4, dy: 5, w: 10, h: 8, type: RoomType.COMMON, name: 'средняя будка', wall: Tex.CONCRETE, floor: Tex.F_CONCRETE },
+    { dx: 48, dy: 24, w: 10, h: 8, type: RoomType.STORAGE, name: 'правая ниша', wall: Tex.CONCRETE, floor: Tex.F_CONCRETE },
+    { dx: -36, dy: 34, w: 11, h: 8, type: RoomType.PRODUCTION, name: 'нижний кабель', wall: Tex.METAL, floor: Tex.F_CONCRETE },
+    { dx: -4, dy: 35, w: 10, h: 8, type: RoomType.STORAGE, name: 'нижняя кладовая', wall: Tex.CONCRETE, floor: Tex.F_CONCRETE },
+    { dx: 22, dy: 36, w: 10, h: 8, type: RoomType.COMMON, name: 'нижняя будка', wall: Tex.CONCRETE, floor: Tex.F_CONCRETE },
+  ] as const;
+
+  for (let i = 0; i < rooms.length; i++) {
+    if ((serial + i) % 19 === 0) continue;
+    const spec = rooms[i];
+    const room = addRoofServiceRoom(
+      world,
+      keep,
+      spec.type,
+      x + spec.dx + Math.floor(rng() * 5) - 2,
+      y + spec.dy + Math.floor(rng() * 5) - 2,
+      spec.w,
+      spec.h,
+      `Крыша: ${spec.name} ${serial}.${i + 1}`,
+      spec.wall,
+      spec.floor,
+    );
+    if (!room) continue;
+    decorateRoofServiceRoom(world, room, rng);
+    out.push(room);
+  }
+}
+
+function carveRoofBayComb(world: World, keep: Uint8Array, x: number, y: number): void {
+  for (const yy of [y - 24, y - 10, y + 10, y + 26]) {
+    carveRoofLineDirect(world, keep, x - 61, yy, x + 61, yy, 0);
+  }
+  for (const xx of [x - 42, x - 18, x + 16, x + 42]) {
+    carveRoofLineDirect(world, keep, xx, y - 41, xx, y + 41, 0);
+  }
+}
+
+function decorateRoofOpenDeck(world: World, room: Room, rng: () => number): void {
+  for (let x = room.x + 8; x < room.x + room.w - 8; x += 14) {
+    setFeatureIfFloor(world, x, room.y + 5, rng() < 0.5 ? Feature.APPARATUS : Feature.SHELF);
+    setFeatureIfFloor(world, x + 3, room.y + room.h - 6, Feature.MACHINE);
+  }
+  if (room.name.includes('открытая плита') && room.w >= 18 && room.h >= 12) {
+    placeBrokenSkylight(world, room.x + (room.w >> 1) - 2, room.y + (room.h >> 1) - 1, 4, 3);
+  }
+}
+
+function placeRoofMidServiceLayer(world: World, keep: Uint8Array, rng: () => number): Room[] {
+  const out: Room[] = [];
+  let serial = 1;
+  for (const y of [122, 250, 378, 506, 634, 762, 890]) {
+    for (const x of [122, 278, 434, 590, 746, 902]) {
+      if ((x === 434 || x === 590) && (y === 506 || y === 634)) continue;
+      const roll = (serial + Math.floor(rng() * 4)) % 6;
+      const type = roll === 0 ? RoomType.PRODUCTION
+        : roll === 1 ? RoomType.STORAGE
+          : roll === 2 ? RoomType.OFFICE
+            : roll === 3 ? RoomType.COMMON
+              : roll === 4 ? RoomType.KITCHEN
+                : RoomType.CORRIDOR;
+      const w = 38 + ((serial * 5) % 21);
+      const h = 22 + ((serial * 7) % 15);
+      const room = addRoofServiceRoom(
+        world,
+        keep,
+        type,
+        x - (w >> 1) + Math.floor(rng() * 9) - 4,
+        y - (h >> 1) + Math.floor(rng() * 9) - 4,
+        w,
+        h,
+        `Крыша: сервисная станция ${serial}`,
+        type === RoomType.KITCHEN ? Tex.TILE_W : type === RoomType.PRODUCTION ? Tex.METAL : Tex.CONCRETE,
+        type === RoomType.KITCHEN ? Tex.F_TILE : Tex.F_CONCRETE,
+      );
+      if (room) {
+        decorateRoofServiceRoom(world, room, rng);
+        out.push(room);
+      }
+      serial++;
+    }
+  }
+  return out;
+}
+
+function placeRoofMicroLayer(world: World, keep: Uint8Array, rng: () => number): Room[] {
+  const out: Room[] = [];
+  let serial = 1;
+  for (const y of [96, 192, 288, 384, 480, 576, 672, 768, 864, 944]) {
+    for (const x of [96, 192, 288, 384, 480, 576, 672, 768, 864, 944]) {
+      if (world.dist(x, y, CX, CY) < 92) continue;
+      if (serial % 7 === 0) {
+        serial++;
+        continue;
+      }
+      const typeRoll = serial % 8;
+      const type = typeRoll === 0 ? RoomType.BATHROOM
+        : typeRoll === 1 ? RoomType.KITCHEN
+          : typeRoll === 2 || typeRoll === 3 ? RoomType.STORAGE
+            : typeRoll === 4 ? RoomType.OFFICE
+              : typeRoll === 5 ? RoomType.PRODUCTION
+                : RoomType.COMMON;
+      const w = 8 + (serial % 5) * 2;
+      const h = 7 + (serial % 4) * 2;
+      const room = addRoofServiceRoom(
+        world,
+        keep,
+        type,
+        x - (w >> 1) + Math.floor(rng() * 13) - 6,
+        y - (h >> 1) + Math.floor(rng() * 13) - 6,
+        w,
+        h,
+        `Крыша: будка ${serial}`,
+        type === RoomType.BATHROOM || type === RoomType.KITCHEN ? Tex.TILE_W : type === RoomType.PRODUCTION ? Tex.METAL : Tex.CONCRETE,
+        type === RoomType.BATHROOM || type === RoomType.KITCHEN ? Tex.F_TILE : Tex.F_CONCRETE,
+      );
+      if (room) {
+        decorateRoofServiceRoom(world, room, rng);
+        out.push(room);
+      }
+      serial++;
+    }
+  }
+  return out;
+}
+
+function addRoofServiceRoom(
+  world: World,
+  keep: Uint8Array,
+  type: RoomType,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  name: string,
+  wallTex: Tex,
+  floorTex: Tex,
+  sealed = false,
+): Room | null {
+  const rx = Math.max(3, Math.min(W - w - 4, Math.round(x)));
+  const ry = Math.max(3, Math.min(W - h - 4, Math.round(y)));
+  if (!canStampRoofServiceRoom(world, rx, ry, w, h)) return null;
+  const room = stampRoofRoom(world, type, rx, ry, w, h, name, wallTex, floorTex, sealed);
+  for (let dy = -1; dy <= h; dy++) {
+    for (let dx = -1; dx <= w; dx++) keep[world.idx(rx + dx, ry + dy)] = 1;
+  }
+  return room;
+}
+
+function canStampRoofServiceRoom(world: World, x: number, y: number, w: number, h: number): boolean {
+  for (let dy = -1; dy <= h; dy++) {
+    for (let dx = -1; dx <= w; dx++) {
+      const ci = world.idx(x + dx, y + dy);
+      if (world.aptMask[ci] || world.cells[ci] === Cell.LIFT || world.cells[ci] === Cell.DOOR) return false;
+      if (world.doors.has(ci) || world.containerMap.has(ci)) return false;
+      if (world.roomMap[ci] >= 0) return false;
+    }
+  }
+  return true;
+}
+
+function decorateRoofServiceRoom(world: World, room: Room, rng: () => number): void {
+  switch (room.type) {
+    case RoomType.HQ:
+      setFeatureIfFloor(world, room.x + 2, room.y + 2, Feature.SCREEN);
+      setFeatureIfFloor(world, room.x + room.w - 3, room.y + 2, Feature.DESK);
+      setFeatureIfFloor(world, room.x + (room.w >> 1), room.y + room.h - 3, Feature.TABLE);
+      break;
+    case RoomType.KITCHEN:
+      for (let x = room.x + 2; x < room.x + room.w - 2; x += 4) setFeatureIfFloor(world, x, room.y + 2, Feature.STOVE);
+      setFeatureIfFloor(world, room.x + 2, room.y + room.h - 3, Feature.SINK);
+      break;
+    case RoomType.BATHROOM:
+      setFeatureIfFloor(world, room.x + 2, room.y + 2, Feature.SINK);
+      setFeatureIfFloor(world, room.x + room.w - 3, room.y + room.h - 3, Feature.TOILET);
+      break;
+    case RoomType.OFFICE:
+    case RoomType.MEDICAL:
+      for (let x = room.x + 2; x < room.x + room.w - 2; x += 5) setFeatureIfFloor(world, x, room.y + 2, Feature.DESK);
+      setFeatureIfFloor(world, room.x + room.w - 3, room.y + room.h - 3, room.type === RoomType.MEDICAL ? Feature.SINK : Feature.SHELF);
+      break;
+    case RoomType.PRODUCTION:
+      for (let y = room.y + 2; y < room.y + room.h - 2; y += 4) {
+        for (let x = room.x + 2; x < room.x + room.w - 2; x += 5) {
+          setFeatureIfFloor(world, x, y, rng() < 0.5 ? Feature.MACHINE : Feature.APPARATUS);
+        }
+      }
+      break;
+    case RoomType.STORAGE:
+      for (let x = room.x + 2; x < room.x + room.w - 2; x += 3) setFeatureIfFloor(world, x, room.y + 2, Feature.SHELF);
+      break;
+    default:
+      setFeatureIfFloor(world, room.x + 2, room.y + 2, Feature.TABLE);
+      setFeatureIfFloor(world, room.x + room.w - 3, room.y + room.h - 3, Feature.CHAIR);
+      break;
+  }
+}
+
+function normalizeRoofDoorHardware(world: World): void {
+  for (const door of world.doors.values()) {
+    world.hermoWall[door.idx] = 0;
+    world.wallTex[door.idx] = Tex.DOOR_METAL;
+    const a = door.roomA >= 0 ? world.rooms[door.roomA] : undefined;
+    const b = door.roomB >= 0 ? world.rooms[door.roomB] : undefined;
+    if (a?.sealed || b?.sealed) door.state = DoorState.HERMETIC_CLOSED;
   }
 }
 

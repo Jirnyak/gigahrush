@@ -9,6 +9,8 @@ export interface NpcPopulationProfile {
   openWeight: number;
   roomWeights: Partial<Record<RoomType, number>>;
   zoneWeights: Partial<Record<ZoneFaction, number>>;
+  preferredTerritory?: ZoneFaction;
+  preferredTerritoryShare?: number;
 }
 
 export interface MonsterPopulationProfile {
@@ -41,11 +43,14 @@ export const KVARTIRY_POPULATION_PROFILE = {
       [RoomType.HQ]: 0.55,
     },
     zoneWeights: {
-      [ZoneFaction.CITIZEN]: 1.12,
-      [ZoneFaction.WILD]: 0.96,
-      [ZoneFaction.LIQUIDATOR]: 0.9,
-      [ZoneFaction.CULTIST]: 0.78,
+      [ZoneFaction.CITIZEN]: 1.45,
+      [ZoneFaction.WILD]: 0.62,
+      [ZoneFaction.LIQUIDATOR]: 0.58,
+      [ZoneFaction.CULTIST]: 0.5,
+      [ZoneFaction.SCIENTIST]: 0.72,
     },
+    preferredTerritory: ZoneFaction.CITIZEN,
+    preferredTerritoryShare: 0.72,
   },
   wild: {
     initial: 1349,
@@ -64,11 +69,14 @@ export const KVARTIRY_POPULATION_PROFILE = {
       [RoomType.HQ]: 0.75,
     },
     zoneWeights: {
-      [ZoneFaction.WILD]: 1.28,
-      [ZoneFaction.CITIZEN]: 0.95,
-      [ZoneFaction.CULTIST]: 1.05,
-      [ZoneFaction.LIQUIDATOR]: 0.84,
+      [ZoneFaction.WILD]: 4.6,
+      [ZoneFaction.CITIZEN]: 0.58,
+      [ZoneFaction.CULTIST]: 1.65,
+      [ZoneFaction.LIQUIDATOR]: 0.95,
+      [ZoneFaction.SCIENTIST]: 0.82,
     },
+    preferredTerritory: ZoneFaction.WILD,
+    preferredTerritoryShare: 0.38,
   },
   liquidators: {
     initial: 238,
@@ -87,11 +95,14 @@ export const KVARTIRY_POPULATION_PROFILE = {
       [RoomType.LIVING]: 0.55,
     },
     zoneWeights: {
-      [ZoneFaction.LIQUIDATOR]: 1.65,
-      [ZoneFaction.WILD]: 1.18,
-      [ZoneFaction.CULTIST]: 1.12,
-      [ZoneFaction.CITIZEN]: 0.9,
+      [ZoneFaction.LIQUIDATOR]: 5.8,
+      [ZoneFaction.WILD]: 1.35,
+      [ZoneFaction.CULTIST]: 1.3,
+      [ZoneFaction.CITIZEN]: 0.55,
+      [ZoneFaction.SCIENTIST]: 0.9,
     },
+    preferredTerritory: ZoneFaction.LIQUIDATOR,
+    preferredTerritoryShare: 0.45,
   },
   uprising: {
     intervalSec: 24,

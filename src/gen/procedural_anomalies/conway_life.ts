@@ -96,6 +96,32 @@ function registerConwayCue(ctx: ProceduralAnomalyGenContext, room: Room, arenaIn
   });
 }
 
+function findLifeControlCell(ctx: ProceduralAnomalyGenContext, room: Room): { x: number; y: number } | null {
+  const preferredX = Math.floor(room.w / 2);
+  const preferredY = Math.floor(room.h / 2);
+  const direct = roomCell(ctx.world, room, preferredX, preferredY, true);
+  if (direct) return direct;
+  let best: { x: number; y: number } | null = null;
+  let bestD2 = Infinity;
+  for (let dy = 1; dy < room.h - 1; dy++) {
+    for (let dx = 1; dx < room.w - 1; dx++) {
+      const x = ctx.world.wrap(room.x + dx);
+      const y = ctx.world.wrap(room.y + dy);
+      const ci = ctx.world.idx(x, y);
+      if (ctx.world.roomMap[ci] !== room.id) continue;
+      if (ctx.world.cells[ci] !== Cell.FLOOR && ctx.world.cells[ci] !== Cell.WALL) continue;
+      if (isProtectedCell(ctx.world, ci) || nearDoor(ctx, x, y)) continue;
+      if (ctx.world.features[ci] !== Feature.NONE && ctx.world.features[ci] !== Feature.LAMP) continue;
+      const d2 = (dx - preferredX) * (dx - preferredX) + (dy - preferredY) * (dy - preferredY);
+      if (d2 < bestD2) {
+        best = { x, y };
+        bestD2 = d2;
+      }
+    }
+  }
+  return best;
+}
+
 function applyArena(ctx: ProceduralAnomalyGenContext, room: Room, arenaIndex: number): void {
   room.name = `${CONWAY_LIFE_ROOM_PREFIX} арена ${arenaIndex}; комната ${room.id}`;
   room.wallTex = Tex.DARK;
@@ -126,8 +152,7 @@ function applyArena(ctx: ProceduralAnomalyGenContext, room: Room, arenaIndex: nu
     addLifeGlider(ctx, room, Math.max(3, room.w - 7), Math.max(3, room.h - 7));
   }
 
-  const control = roomCell(ctx.world, room, Math.floor(room.w / 2), Math.floor(room.h / 2), true)
-    ?? roomCell(ctx.world, room, 2, 2, true);
+  const control = findLifeControlCell(ctx, room);
   if (control) {
     const ci = ctx.world.idx(control.x, control.y);
     ctx.world.cells[ci] = Cell.FLOOR;

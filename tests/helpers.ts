@@ -74,6 +74,9 @@ export function makeGameState(overrides: Partial<GameState> = {}): GameState {
     uiSettingsView: 'interface',
     uiSettingsSel: 0,
     uiSettingsScroll: 0,
+    showMapLegend: false,
+    mapLegendSel: 0,
+    mapLegendScroll: 0,
     npcLogRadiusMeters: 100,
     msgLog: [] as LogEntry[],
     dmgFlash: 0,
@@ -200,6 +203,7 @@ export function addTestRoom(world: World, options: TestRoomOptions = {}): Room {
     level: options.zoneLevel ?? 1,
     hqRoomId: options.hqRoomId ?? -1,
   };
+  const faction = options.zoneFaction ?? ZoneFaction.CITIZEN;
 
   if (options.carve === false) return room;
   for (let y = room.y; y < room.y + room.h; y++) {
@@ -208,6 +212,7 @@ export function addTestRoom(world: World, options: TestRoomOptions = {}): Room {
       world.cells[idx] = Cell.FLOOR;
       world.roomMap[idx] = room.id;
       world.zoneMap[idx] = zoneId;
+      world.factionControl[idx] = faction;
     }
   }
   return room;

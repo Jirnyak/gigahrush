@@ -15,6 +15,11 @@ import {
   type FactionResidueMarkDef,
 } from '../data/faction_events';
 import { freshNeeds, ITEMS, randomName } from '../data/catalog';
+import {
+  factionToTerritoryOwner,
+  territoryOwnerName,
+  territoryOwnerToFaction,
+} from '../data/factions';
 import { getStack } from '../data/items';
 import { addFactionRelMutual } from '../data/relations';
 import { stampMark, MarkType } from './surface_marks';
@@ -28,6 +33,13 @@ import { observeRumorEvent } from './rumor';
 import { gaussianLevel, getMaxHp, randomRPG } from './rpg';
 import { entitySpawnSlots } from './entity_limits';
 import { steerEntityTowardCell, tryAssignPathToCell } from './ai/pathfinding';
+import {
+  currentTerritoryZoneId,
+  setTerritoryOwnerAtIndex,
+  syncZoneMetadataFromTerritory,
+  territoryOwnerAt,
+  territoryOwnerAtIndex,
+} from './territory';
 
 const SCHEDULER_TICK_SEC = 10;
 const MIN_EVENT_GAP_SEC = 45;
@@ -275,8 +287,8 @@ function nearestResidueSiteForChoice(
 }
 
 function relieveResiduePressure(world: World, site: ActiveFactionResidueSite): number {
-  const zone = world.zones[site.zoneId];
-  if (!zone) return 0;
+  const owner = territoryOwnerAt(world, site.x, site.y);
+  if (owner === ZoneFaction.SAMOSBOR) return 0;
   const radius = Math.max(2, Math.min(10, Math.ceil(Math.sqrt(Math.max(1, site.pressureCells)))));
   const ix = Math.floor(site.x);
   const iy = Math.floor(site.y);
@@ -287,11 +299,12 @@ function relieveResiduePressure(world: World, site: ActiveFactionResidueSite): n
       if (dx * dx + dy * dy > radius * radius) continue;
       const i = world.idx(ix + dx, iy + dy);
       if (world.zoneMap[i] !== site.zoneId) continue;
-      if (world.factionControl[i] === ZoneFaction.SAMOSBOR || world.factionControl[i] === zone.faction) continue;
-      world.factionControl[i] = zone.faction;
-      changed++;
+      const previousOwner = territoryOwnerAtIndex(world, i);
+      if (previousOwner === ZoneFaction.SAMOSBOR || previousOwner === owner) continue;
+      if (setTerritoryOwnerAtIndex(world, i, owner)) changed++;
     }
   }
+  if (changed > 0) syncZoneMetadataFromTerritory(world, [site.zoneId]);
   return changed;
 }
 
@@ -448,11 +461,11 @@ export function summarizeFactionEvents(
   entities: Entity[],
 ): string[] {
   const zoneId = currentZoneId(world, player);
-  const zone = world.zones[zoneId];
+  const owner = territoryOwnerAt(world, player.x, player.y);
   const npcCount = countTagged(entities, EntityType.NPC);
   const dropCount = countTagged(entities, EntityType.ITEM_DROP);
   const lines = [
-    `zone ${zoneId + 1}: ${zone ? zoneFactionName(zone.faction) : '?'}`,
+    `sector ${zoneId + 1}: ${territoryOwnerName(owner)}`,
     `event NPC=${npcCount}/${MAX_EVENT_NPCS} DROP=${dropCount}/${MAX_EVENT_DROPS}`,
     `next auto ${Math.max(0, Math.round(nextEventAt - state.time))}s`,
   ];
@@ -1215,8 +1228,8 @@ function triggerFactionEvent(
   def: FactionEventDef,
   force: boolean,
 ): TriggerResult {
-  const zone = world.zones[zoneId];
-  if (!zone || zone.faction === ZoneFaction.SAMOSBOR) return blocked('зона занята самосбором');
+  const localOwner = territoryOwnerAt(world, player.x, player.y);
+  if (localOwner === ZoneFaction.SAMOSBOR) return blocked('территория занята самосбором');
   const key = cooldownKey(state, zoneId, def);
   if (!force && state.time < (zoneCooldownUntil.get(key) ?? 0)) return blocked('событие на перезарядке');
 
@@ -1232,7 +1245,7 @@ function triggerFactionEvent(
     return triggerFactionClash(state, world, player, entities, nextId, zoneId, def, force, taggedNpcs, taggedDrops, key);
   }
 
-  const faction = def.actorFaction ?? zoneFactionToFaction(zone.faction);
+  const faction = def.actorFaction ?? territoryOwnerToFaction(localOwner);
   if (faction === null) return blocked('нет фракции-исполнителя');
 
   const eventNpcCap = def.procession ? Math.min(MAX_PROCESSION_PILGRIMS, def.maxGroup) : def.maxGroup;
@@ -1344,7 +1357,9 @@ function pickEligibleDef(
 
 function isDefEligibleForZone(world: World, zoneId: number, def: FactionEventDef): boolean {
   const zone = world.zones[zoneId];
-  return !!zone && zone.faction !== ZoneFaction.SAMOSBOR && def.zoneFactions.includes(zone.faction);
+  if (!zone) return false;
+  const owner = territoryOwnerAt(world, zone.cx, zone.cy);
+  return owner !== ZoneFaction.SAMOSBOR && def.zoneFactions.includes(owner);
 }
 
 function cooldownKey(state: GameState, zoneId: number, def: FactionEventDef): string {
@@ -1352,7 +1367,7 @@ function cooldownKey(state: GameState, zoneId: number, def: FactionEventDef): st
 }
 
 function currentZoneId(world: World, actor: Entity): number {
-  return world.zoneMap[world.idx(Math.floor(actor.x), Math.floor(actor.y))] ?? 0;
+  return currentTerritoryZoneId(world, actor.x, actor.y);
 }
 
 function spawnCenter(world: World, player: Entity, zoneId: number): { x: number; y: number } {
@@ -1406,8 +1421,7 @@ function startCultProcession(
   npcIds: number[],
 ): ActiveCultProcession | null {
   if (!def.procession) return null;
-  const zf = factionToZoneFaction(faction);
-  if (zf === null) return null;
+  const zf = factionToTerritoryOwner(faction);
   const p: ActiveCultProcession = {
     id: nextProcessionId++,
     floor: state.currentFloor,
@@ -1444,9 +1458,13 @@ function applyTemporaryControl(world: World, p: ActiveCultProcession, zf: ZoneFa
   const strength = Math.max(0.15, Math.min(1, def.pressure.strength));
   const ix = Math.floor(p.x);
   const iy = Math.floor(p.y);
+  const startLength = p.tempCells.length;
   for (let dy = -radius; dy <= radius; dy++) {
     for (let dx = -radius; dx <= radius; dx++) {
-      if (p.tempCells.length >= MAX_PRESSURE_CELLS) return;
+      if (p.tempCells.length >= MAX_PRESSURE_CELLS) {
+        if (p.tempCells.length > startLength) syncZoneMetadataFromTerritory(world, [p.zoneId]);
+        return;
+      }
       if (dx * dx + dy * dy > radius * radius) continue;
       if (Math.random() > strength) continue;
       const x = world.wrap(ix + dx);
@@ -1455,12 +1473,13 @@ function applyTemporaryControl(world: World, p: ActiveCultProcession, zf: ZoneFa
       if (world.zoneMap[i] !== p.zoneId) continue;
       const cell = world.cells[i];
       if (cell === Cell.WALL || cell === Cell.ABYSS || cell === Cell.LIFT) continue;
-      const prev = world.factionControl[i] as ZoneFaction;
-      if (prev === ZoneFaction.SAMOSBOR) continue;
+      const prev = territoryOwnerAtIndex(world, i);
+      if (prev === ZoneFaction.SAMOSBOR || prev === zf) continue;
       p.tempCells.push({ idx: i, prev });
-      world.factionControl[i] = zf;
+      setTerritoryOwnerAtIndex(world, i, zf);
     }
   }
+  if (p.tempCells.length > startLength) syncZoneMetadataFromTerritory(world, [p.zoneId]);
 }
 
 function cancelCultProcession(world: World, p: ActiveCultProcession): void {
@@ -1474,10 +1493,12 @@ function dropCultProcession(p: ActiveCultProcession): void {
 }
 
 function restoreTemporaryControl(world: World, p: ActiveCultProcession): void {
+  let changed = 0;
   for (const cell of p.tempCells) {
-    if (world.factionControl[cell.idx] === ZoneFaction.CULTIST) world.factionControl[cell.idx] = cell.prev;
+    if (territoryOwnerAtIndex(world, cell.idx) === ZoneFaction.CULTIST && setTerritoryOwnerAtIndex(world, cell.idx, cell.prev)) changed++;
   }
   p.tempCells.length = 0;
+  if (changed > 0) syncZoneMetadataFromTerritory(world, [p.zoneId]);
 }
 
 function nearestCultProcession(world: World, state: GameState, player: Entity): ActiveCultProcession | null {
@@ -1905,8 +1926,7 @@ function residueMarkVisual(mark: FactionResidueMarkDef): { type: MarkType; r: nu
 }
 
 function applyLocalPressure(world: World, cx: number, cy: number, zoneId: number, faction: Faction, def: FactionEventDef): number {
-  const zf = factionToZoneFaction(faction);
-  if (zf === null) return 0;
+  const zf = factionToTerritoryOwner(faction);
   const radius = Math.max(1, Math.min(10, Math.floor(def.pressure.radius)));
   const strength = Math.max(0, Math.min(1, def.pressure.strength));
   const ix = Math.floor(cx);
@@ -1923,11 +1943,12 @@ function applyLocalPressure(world: World, cx: number, cy: number, zoneId: number
       if (world.zoneMap[i] !== zoneId) continue;
       const cell = world.cells[i];
       if (cell === Cell.WALL || cell === Cell.ABYSS || cell === Cell.LIFT) continue;
-      if (world.factionControl[i] === ZoneFaction.SAMOSBOR) continue;
-      if (world.factionControl[i] !== zf) world.factionControl[i] = zf;
-      changed++;
+      const previousOwner = territoryOwnerAtIndex(world, i);
+      if (previousOwner === ZoneFaction.SAMOSBOR) continue;
+      if (setTerritoryOwnerAtIndex(world, i, zf)) changed++;
     }
   }
+  if (changed > 0) syncZoneMetadataFromTerritory(world, [zoneId]);
   return changed;
 }
 
@@ -2037,28 +2058,4 @@ function countTagged(entities: Entity[], type: EntityType): number {
     if (e.questId === FACTION_EVENT_QUEST_ID) n++;
   }
   return n;
-}
-
-function zoneFactionToFaction(zf: ZoneFaction): Faction | null {
-  if (zf === ZoneFaction.CITIZEN) return Faction.CITIZEN;
-  if (zf === ZoneFaction.LIQUIDATOR) return Faction.LIQUIDATOR;
-  if (zf === ZoneFaction.CULTIST) return Faction.CULTIST;
-  if (zf === ZoneFaction.WILD) return Faction.WILD;
-  return null;
-}
-
-function factionToZoneFaction(faction: Faction): ZoneFaction | null {
-  if (faction === Faction.CITIZEN || faction === Faction.SCIENTIST || faction === Faction.PLAYER) return ZoneFaction.CITIZEN;
-  if (faction === Faction.LIQUIDATOR) return ZoneFaction.LIQUIDATOR;
-  if (faction === Faction.CULTIST) return ZoneFaction.CULTIST;
-  if (faction === Faction.WILD) return ZoneFaction.WILD;
-  return null;
-}
-
-function zoneFactionName(zf: ZoneFaction): string {
-  if (zf === ZoneFaction.CITIZEN) return 'Граждане';
-  if (zf === ZoneFaction.LIQUIDATOR) return 'Ликвидаторы';
-  if (zf === ZoneFaction.CULTIST) return 'Культисты';
-  if (zf === ZoneFaction.WILD) return 'Дикие';
-  return 'Самосбор';
 }

@@ -14,16 +14,20 @@ import {
   RoomType,
   Tex,
   W,
+  ZoneFaction,
   type Entity,
   type Item,
   type Room,
+  type TerritoryOwner,
   type WorldContainer,
 } from '../../core/types';
 import { World } from '../../core/world';
 import { ITEMS } from '../../data/catalog';
+import { HUMAN_TERRITORY_OWNERS, factionToTerritoryOwner } from '../../data/factions';
 import { MONSTERS } from '../../entities/monster';
 import { Spr, monsterSpr } from '../../render/sprite_index';
 import { registerRouteCue } from '../../systems/route_cues';
+import { setTerritoryOwnerAtIndex, territoryOwnerAtIndex } from '../../systems/territory';
 import {
   ensureConnectivity,
   generateZones,
@@ -46,11 +50,127 @@ const CONTENT_TAG = 'hilbert_depot';
 const SAFE_AISLE_RADIUS = 1;
 const BAY_FIRST_INDEX = 8;
 const BAY_INDEX_STEP = 8;
+const ROUTE_GRAPH_ORDER = 5;
+const ROUTE_GRAPH_X = 32;
+const ROUTE_GRAPH_Y = 32;
+const ROUTE_GRAPH_STEP = 30;
+const BLOCK_GRAPH_ORDER = 3;
+const BLOCK_GRAPH_X = 92;
+const BLOCK_GRAPH_Y = 108;
+const BLOCK_GRAPH_STEP = 112;
 
 interface Point {
   x: number;
   y: number;
 }
+
+interface DepotHqSpec {
+  owner: TerritoryOwner;
+  name: string;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  support: readonly DepotSupportSpec[];
+}
+
+interface DepotSupportSpec {
+  type: RoomType;
+  name: string;
+  dx: number;
+  dy: number;
+  w: number;
+  h: number;
+}
+
+const DEPOT_OWNER_SEQUENCE: readonly TerritoryOwner[] = [
+  ZoneFaction.LIQUIDATOR,
+  ZoneFaction.SCIENTIST,
+  ZoneFaction.CITIZEN,
+  ZoneFaction.WILD,
+  ZoneFaction.LIQUIDATOR,
+  ZoneFaction.CULTIST,
+  ZoneFaction.SCIENTIST,
+  ZoneFaction.LIQUIDATOR,
+];
+
+const DEPOT_HQ_SPECS: readonly DepotHqSpec[] = [
+  {
+    owner: ZoneFaction.LIQUIDATOR,
+    name: 'Склад Гильберта: главный гермопост ликвидаторов',
+    x: 716,
+    y: 176,
+    w: 34,
+    h: 18,
+    support: [
+      { type: RoomType.STORAGE, name: 'оружейная ячейка', dx: -30, dy: -18, w: 24, h: 12 },
+      { type: RoomType.OFFICE, name: 'журнал коротких хорд', dx: 40, dy: -16, w: 24, h: 12 },
+      { type: RoomType.KITCHEN, name: 'пункт сухпайка', dx: -28, dy: 28, w: 24, h: 12 },
+      { type: RoomType.MEDICAL, name: 'перевязочная учета', dx: 42, dy: 26, w: 22, h: 12 },
+      { type: RoomType.COMMON, name: 'караульный предбанник', dx: 6, dy: 32, w: 26, h: 12 },
+    ],
+  },
+  {
+    owner: ZoneFaction.SCIENTIST,
+    name: 'Склад Гильберта: НИИ узла нумерации',
+    x: 164,
+    y: 188,
+    w: 30,
+    h: 16,
+    support: [
+      { type: RoomType.OFFICE, name: 'кабинет индекса', dx: -28, dy: -16, w: 22, h: 11 },
+      { type: RoomType.MEDICAL, name: 'измерительная', dx: 34, dy: -16, w: 22, h: 11 },
+      { type: RoomType.STORAGE, name: 'архив этикеток', dx: -28, dy: 26, w: 22, h: 11 },
+      { type: RoomType.PRODUCTION, name: 'стол калибровки', dx: 34, dy: 24, w: 24, h: 12 },
+      { type: RoomType.BATHROOM, name: 'санпропускник НИИ', dx: 4, dy: 30, w: 20, h: 10 },
+    ],
+  },
+  {
+    owner: ZoneFaction.CITIZEN,
+    name: 'Склад Гильберта: гражданская приемка паек',
+    x: 168,
+    y: 710,
+    w: 30,
+    h: 16,
+    support: [
+      { type: RoomType.KITCHEN, name: 'кухня талонов', dx: -30, dy: -16, w: 24, h: 12 },
+      { type: RoomType.COMMON, name: 'комната очереди', dx: 34, dy: -16, w: 24, h: 12 },
+      { type: RoomType.STORAGE, name: 'общая кладовая', dx: -30, dy: 26, w: 24, h: 12 },
+      { type: RoomType.MEDICAL, name: 'медугол очереди', dx: 36, dy: 24, w: 22, h: 11 },
+      { type: RoomType.BATHROOM, name: 'санузел приемки', dx: 4, dy: 30, w: 20, h: 10 },
+    ],
+  },
+  {
+    owner: ZoneFaction.WILD,
+    name: 'Склад Гильберта: разбитый гермокор диких',
+    x: 746,
+    y: 790,
+    w: 28,
+    h: 15,
+    support: [
+      { type: RoomType.STORAGE, name: 'разобранная кладовая', dx: -30, dy: -16, w: 24, h: 12 },
+      { type: RoomType.SMOKING, name: 'курилка самозахвата', dx: 34, dy: -16, w: 22, h: 11 },
+      { type: RoomType.COMMON, name: 'общий угол', dx: -28, dy: 24, w: 24, h: 12 },
+      { type: RoomType.KITCHEN, name: 'плитка на ящике', dx: 34, dy: 24, w: 22, h: 11 },
+      { type: RoomType.BATHROOM, name: 'сорванный санузел', dx: 2, dy: 28, w: 20, h: 10 },
+    ],
+  },
+  {
+    owner: ZoneFaction.CULTIST,
+    name: 'Склад Гильберта: скрытая культовая ячейка',
+    x: 376,
+    y: 858,
+    w: 28,
+    h: 15,
+    support: [
+      { type: RoomType.COMMON, name: 'тихая комната следа', dx: -30, dy: -16, w: 24, h: 12 },
+      { type: RoomType.STORAGE, name: 'кладовая свечей', dx: 34, dy: -16, w: 22, h: 11 },
+      { type: RoomType.KITCHEN, name: 'ритуальный кипяток', dx: -28, dy: 24, w: 22, h: 11 },
+      { type: RoomType.OFFICE, name: 'лист чужих номеров', dx: 34, dy: 24, w: 22, h: 11 },
+      { type: RoomType.BATHROOM, name: 'мойка хорд', dx: 2, dy: 28, w: 20, h: 10 },
+    ],
+  },
+];
 
 export interface HilbertDepotChordState {
   fromIndex: number;
@@ -143,6 +263,56 @@ export function generateHilbertDepotDesignFloor(): HilbertDepotGeneration {
   };
 }
 
+export function expandHilbertDepotRouteGeometry(world: World, rng: () => number): void {
+  carveDepotRouteGraph(world);
+  buildDepotHqCompounds(world);
+  buildDepotIndexBlocks(world, rng);
+  repairDepotDoorFrames(world);
+  world.markCellsDirty();
+  world.markFloorTexDirty();
+  world.markWallTexDirty();
+  world.markFeaturesDirty(false);
+  world.markFogDirty();
+}
+
+export function applyHilbertDepotTerritorySeeds(world: World): void {
+  for (const spec of DEPOT_HQ_SPECS) {
+    const hq = world.rooms.find(room => room.name === spec.name);
+    if (hq) {
+      hardenDepotHqRoom(world, hq, spec.owner);
+      paintDepotRoomOwner(world, hq, spec.owner);
+    }
+    for (const room of world.rooms) {
+      if (room.name.startsWith(`${spec.name}:`)) paintDepotRoomOwner(world, room, spec.owner);
+    }
+  }
+  world.markWallTexDirty();
+  world.markFeaturesDirty(false);
+}
+
+export function alignHilbertDepotAmbientNpcTerritory(world: World, entities: Entity[]): void {
+  const cells = depotTerritorySpawnCells(world);
+  const offsets = new Uint16Array(8);
+  for (const entity of entities) {
+    if (!isHilbertDepotAmbientNpc(entity) || entity.faction === undefined) continue;
+    const owner = factionToTerritoryOwner(entity.faction);
+    const list = cells.get(owner);
+    if (!list || list.length === 0) continue;
+    const offset = offsets[owner]++ | 0;
+    const cell = list[(entity.id * 157 + offset * 409) % list.length];
+    entity.x = (cell % W) + 0.5;
+    entity.y = ((cell / W) | 0) + 0.5;
+    entity.assignedRoomId = world.roomMap[cell] >= 0 ? world.roomMap[cell] : -1;
+    if (entity.ai) {
+      entity.ai.tx = cell % W;
+      entity.ai.ty = (cell / W) | 0;
+      entity.ai.path = [];
+      entity.ai.pi = 0;
+      entity.ai.stuck = 0;
+    }
+  }
+}
+
 function carveSafeCurve(world: World, points: readonly Point[]): void {
   for (let i = 1; i < points.length; i++) {
     carveLine(world, points[i - 1].x, points[i - 1].y, points[i].x, points[i].y, SAFE_AISLE_RADIUS, Tex.F_CONCRETE);
@@ -158,6 +328,96 @@ function decorateSafeCurve(world: World, points: readonly Point[]): void {
       i % 8 === 0 ? Feature.LAMP :
       Feature.SHELF;
     setFeature(world, point.x, point.y, feature);
+  }
+}
+
+function carveDepotRouteGraph(world: World): void {
+  const fine = hilbertTracePoints(ROUTE_GRAPH_ORDER, ROUTE_GRAPH_X, ROUTE_GRAPH_Y, ROUTE_GRAPH_STEP);
+  for (let i = 1; i < fine.length; i++) {
+    const owner = DEPOT_OWNER_SEQUENCE[(i >> 6) % DEPOT_OWNER_SEQUENCE.length];
+    carveOwnedLine(world, fine[i - 1].x, fine[i - 1].y, fine[i].x, fine[i].y, 2, depotOwnerFloor(owner, i), owner);
+  }
+
+  const coarse = hilbertTracePoints(BLOCK_GRAPH_ORDER, BLOCK_GRAPH_X, BLOCK_GRAPH_Y, BLOCK_GRAPH_STEP);
+  for (let i = 1; i < coarse.length; i++) {
+    const owner = DEPOT_OWNER_SEQUENCE[i % DEPOT_OWNER_SEQUENCE.length];
+    carveOwnedLine(world, coarse[i - 1].x, coarse[i - 1].y, coarse[i].x, coarse[i].y, 4, depotOwnerFloor(owner, i), owner);
+  }
+
+  const first = fine[0];
+  const last = fine[fine.length - 1];
+  carveOwnedLine(world, 0, first.y, first.x, first.y, 3, Tex.F_CONCRETE, ZoneFaction.LIQUIDATOR);
+  carveOwnedLine(world, last.x, last.y, W - 1, last.y, 3, Tex.F_CONCRETE, ZoneFaction.LIQUIDATOR);
+  carveOwnedLine(world, CURVE_X, CURVE_Y, first.x, first.y, 2, Tex.F_CONCRETE, ZoneFaction.LIQUIDATOR);
+  carveOwnedLine(world, last.x, last.y, W - 18, W - 18, 2, Tex.F_CONCRETE, ZoneFaction.WILD);
+}
+
+function buildDepotIndexBlocks(world: World, rng: () => number): void {
+  const nodes = hilbertTracePoints(BLOCK_GRAPH_ORDER, BLOCK_GRAPH_X, BLOCK_GRAPH_Y, BLOCK_GRAPH_STEP);
+  for (let i = 0; i < nodes.length; i++) {
+    const node = nodes[i];
+    const owner = DEPOT_OWNER_SEQUENCE[(i + ((node.x + node.y) >> 7)) % DEPOT_OWNER_SEQUENCE.length];
+    carveOwnedLine(world, node.x - 38, node.y, node.x + 38, node.y, 2, depotOwnerFloor(owner, i), owner);
+    carveOwnedLine(world, node.x, node.y - 28, node.x, node.y + 28, 1, depotOwnerFloor(owner, i + 11), owner);
+    buildDepotBlockRooms(world, node, owner, i, rng);
+  }
+}
+
+function buildDepotBlockRooms(world: World, node: Point, owner: TerritoryOwner, serial: number, rng: () => number): void {
+  const skew = Math.round((rng() - 0.5) * 6);
+  const label = serial.toString().padStart(2, '0');
+  const specs = [
+    { type: RoomType.STORAGE, x: node.x - 30, y: node.y - 42 + skew, w: 24, h: 12, name: `Склад Гильберта: верхняя секция Г-${label}`, salt: 1 },
+    { type: serial % 5 === 0 ? RoomType.PRODUCTION : RoomType.STORAGE, x: node.x + 4, y: node.y - 42 - skew, w: 24, h: 12, name: `Склад Гильберта: верхний шкаф Г-${label}`, salt: 2 },
+    { type: serial % 4 === 0 ? RoomType.OFFICE : RoomType.STORAGE, x: node.x - 30, y: node.y + 30 - skew, w: 24, h: 12, name: `Склад Гильберта: нижняя секция Г-${label}`, salt: 3 },
+    { type: serial % 7 === 0 ? RoomType.MEDICAL : RoomType.STORAGE, x: node.x + 4, y: node.y + 30 + skew, w: 24, h: 12, name: `Склад Гильберта: нижний шкаф Г-${label}`, salt: 4 },
+    { type: serial % 6 === 0 ? RoomType.COMMON : RoomType.OFFICE, x: node.x - 58, y: node.y - 8, w: 22, h: 13, name: `Склад Гильберта: левая будка Г-${label}`, salt: 5 },
+    { type: serial % 8 === 0 ? RoomType.BATHROOM : RoomType.STORAGE, x: node.x + 36, y: node.y - 8, w: 22, h: 13, name: `Склад Гильберта: правая будка Г-${label}`, salt: 6 },
+  ] as const;
+
+  for (const spec of specs) {
+    const room = tryAddDepotRoom(world, spec.type, spec.x, spec.y, spec.w, spec.h, spec.name, depotOwnerWall(owner), depotOwnerFloor(owner, serial + spec.salt), owner);
+    if (!room) continue;
+    connectRoomToPoint(world, room, node.x, node.y, DoorState.CLOSED);
+    paintDepotRoomOwner(world, room, owner);
+    decorateDepotRoom(world, room, serial + spec.salt, owner);
+  }
+}
+
+function buildDepotHqCompounds(world: World): void {
+  for (const spec of DEPOT_HQ_SPECS) {
+    const floorTex = depotOwnerFloor(spec.owner, spec.x + spec.y);
+    const center = { x: spec.x + (spec.w >> 1), y: spec.y + spec.h + 25 };
+    carveOwnedLine(world, center.x - 58, center.y, center.x + 72, center.y, 3, floorTex, spec.owner);
+    carveOwnedLine(world, center.x, center.y - 20, center.x, center.y + 38, 2, floorTex, spec.owner);
+
+    const hq = tryAddDepotRoom(world, RoomType.HQ, spec.x, spec.y, spec.w, spec.h, spec.name, Tex.HERMO_WALL, floorTex, spec.owner);
+    if (hq) {
+      connectRoomToPoint(world, hq, center.x, center.y, DoorState.HERMETIC_OPEN);
+      hardenDepotHqRoom(world, hq, spec.owner);
+      paintDepotRoomOwner(world, hq, spec.owner);
+      decorateDepotRoom(world, hq, spec.x + spec.y, spec.owner);
+    }
+
+    for (let i = 0; i < spec.support.length; i++) {
+      const support = spec.support[i];
+      const room = tryAddDepotRoom(
+        world,
+        support.type,
+        spec.x + support.dx,
+        spec.y + support.dy,
+        support.w,
+        support.h,
+        `${spec.name}: ${support.name}`,
+        depotOwnerWall(spec.owner),
+        depotOwnerFloor(spec.owner, i + spec.x),
+        spec.owner,
+      );
+      if (!room) continue;
+      connectRoomToPoint(world, room, center.x, center.y, DoorState.CLOSED);
+      paintDepotRoomOwner(world, room, spec.owner);
+      decorateDepotRoom(world, room, i + spec.y, spec.owner);
+    }
   }
 }
 
@@ -551,6 +811,178 @@ function addNamedRoom(
   return room;
 }
 
+function tryAddDepotRoom(
+  world: World,
+  type: RoomType,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  name: string,
+  wallTex: Tex,
+  floorTex: Tex,
+  owner: TerritoryOwner,
+): Room | null {
+  if (!canStampDepotRoom(world, x, y, w, h)) return null;
+  const room = addNamedRoom(world, type, x, y, w, h, name, wallTex, floorTex);
+  paintDepotRoomOwner(world, room, owner);
+  return room;
+}
+
+function canStampDepotRoom(world: World, x: number, y: number, w: number, h: number): boolean {
+  if (x < 4 || y < 4 || x + w >= W - 4 || y + h >= W - 4) return false;
+  for (const room of world.rooms) {
+    if (!room) continue;
+    if (x + w < room.x - 2 || room.x + room.w + 2 < x || y + h < room.y - 2 || room.y + room.h + 2 < y) continue;
+    return false;
+  }
+  for (let dy = -1; dy <= h; dy++) {
+    for (let dx = -1; dx <= w; dx++) {
+      const idx = world.idx(x + dx, y + dy);
+      if (world.aptMask[idx] || world.cells[idx] === Cell.LIFT || world.cells[idx] === Cell.DOOR || world.hermoWall[idx]) return false;
+      if (world.containerMap.has(idx)) return false;
+    }
+  }
+  return true;
+}
+
+function paintDepotRoomOwner(world: World, room: Room, owner: TerritoryOwner): void {
+  for (let dy = 0; dy < room.h; dy++) {
+    for (let dx = 0; dx < room.w; dx++) {
+      const idx = world.idx(room.x + dx, room.y + dy);
+      if (world.roomMap[idx] === room.id) setTerritoryOwnerAtIndex(world, idx, owner);
+    }
+  }
+  for (const idx of room.doors) setTerritoryOwnerAtIndex(world, idx, owner);
+}
+
+function hardenDepotHqRoom(world: World, room: Room, owner: TerritoryOwner): void {
+  room.type = RoomType.HQ;
+  room.sealed = true;
+  room.wallTex = Tex.HERMO_WALL;
+  for (let dy = -1; dy <= room.h; dy++) {
+    for (let dx = -1; dx <= room.w; dx++) {
+      const idx = world.idx(room.x + dx, room.y + dy);
+      const interior = dx >= 0 && dx < room.w && dy >= 0 && dy < room.h;
+      if (interior) {
+        if (world.roomMap[idx] === room.id) {
+          world.floorTex[idx] = room.floorTex;
+          setTerritoryOwnerAtIndex(world, idx, owner);
+        }
+        continue;
+      }
+      if (world.cells[idx] !== Cell.WALL || world.aptMask[idx]) continue;
+      world.hermoWall[idx] = 1;
+      world.wallTex[idx] = Tex.HERMO_WALL;
+      setTerritoryOwnerAtIndex(world, idx, owner);
+    }
+  }
+  for (const idx of room.doors) {
+    const door = world.doors.get(idx);
+    if (!door) continue;
+    door.state = DoorState.HERMETIC_OPEN;
+    world.wallTex[idx] = Tex.HERMO_WALL;
+    world.hermoWall[idx] = 1;
+    setTerritoryOwnerAtIndex(world, idx, owner);
+  }
+  if (!room.doors.some(idx => world.doors.get(idx)?.state === DoorState.HERMETIC_OPEN)) {
+    ensureDepotHqDoor(world, room, owner);
+  }
+}
+
+function ensureDepotHqDoor(world: World, room: Room, owner: TerritoryOwner): void {
+  const passable = (idx: number): boolean => {
+    const cell = world.cells[idx];
+    return cell === Cell.FLOOR || cell === Cell.WATER || cell === Cell.DOOR;
+  };
+  for (let dy = -1; dy <= room.h; dy++) {
+    for (let dx = -1; dx <= room.w; dx++) {
+      if (dx >= 0 && dx < room.w && dy >= 0 && dy < room.h) continue;
+      const x = room.x + dx;
+      const y = room.y + dy;
+      const idx = world.idx(x, y);
+      if (world.aptMask[idx] || world.cells[idx] === Cell.LIFT) continue;
+      for (const [ddx, ddy] of [[1, 0], [-1, 0], [0, 1], [0, -1]] as const) {
+        const inside = world.idx(x - ddx, y - ddy);
+        const outside = world.idx(x + ddx, y + ddy);
+        if (world.roomMap[inside] !== room.id || !passable(outside)) continue;
+        world.cells[idx] = Cell.DOOR;
+        world.wallTex[idx] = Tex.HERMO_WALL;
+        world.hermoWall[idx] = 1;
+        world.doors.set(idx, { idx, state: DoorState.HERMETIC_OPEN, roomA: room.id, roomB: -1, keyId: '', timer: 0 });
+        if (!room.doors.includes(idx)) room.doors.push(idx);
+        setTerritoryOwnerAtIndex(world, idx, owner);
+        const jambA = world.idx(x + ddy, y + ddx);
+        const jambB = world.idx(x - ddy, y - ddx);
+        for (const jamb of [jambA, jambB]) {
+          if (world.aptMask[jamb] || world.cells[jamb] === Cell.LIFT || world.cells[jamb] === Cell.DOOR || world.roomMap[jamb] >= 0) continue;
+          world.cells[jamb] = Cell.WALL;
+          world.wallTex[jamb] = Tex.HERMO_WALL;
+          world.hermoWall[jamb] = 1;
+          setTerritoryOwnerAtIndex(world, jamb, owner);
+        }
+        return;
+      }
+    }
+  }
+}
+
+function decorateDepotRoom(world: World, room: Room, serial: number, owner: TerritoryOwner): void {
+  switch (room.type) {
+    case RoomType.KITCHEN:
+      setFeature(world, room.x + 2, room.y + 2, Feature.STOVE);
+      setFeature(world, room.x + room.w - 4, room.y + 2, Feature.SINK);
+      setFeature(world, room.x + (room.w >> 1), room.y + room.h - 3, Feature.TABLE);
+      break;
+    case RoomType.BATHROOM:
+      setFeature(world, room.x + 2, room.y + 2, Feature.TOILET);
+      setFeature(world, room.x + room.w - 4, room.y + room.h - 3, Feature.SINK);
+      break;
+    case RoomType.MEDICAL:
+      setFeature(world, room.x + 3, room.y + 2, Feature.BED);
+      setFeature(world, room.x + room.w - 4, room.y + 2, Feature.APPARATUS);
+      break;
+    case RoomType.PRODUCTION:
+      setFeature(world, room.x + 3, room.y + 2, Feature.MACHINE);
+      setFeature(world, room.x + room.w - 4, room.y + room.h - 3, Feature.APPARATUS);
+      break;
+    case RoomType.OFFICE:
+    case RoomType.HQ:
+      setFeature(world, room.x + 2, room.y + 2, Feature.DESK);
+      setFeature(world, room.x + 4, room.y + 2, Feature.SCREEN);
+      setFeature(world, room.x + room.w - 4, room.y + room.h - 3, owner === ZoneFaction.CULTIST ? Feature.CANDLE : Feature.LAMP);
+      break;
+    case RoomType.SMOKING:
+      setFeature(world, room.x + 2, room.y + 2, owner === ZoneFaction.CULTIST ? Feature.CANDLE : Feature.CHAIR);
+      setFeature(world, room.x + room.w - 4, room.y + 2, Feature.TABLE);
+      break;
+    case RoomType.STORAGE:
+    default:
+      for (let x = room.x + 2; x < room.x + room.w - 2; x += 4) setFeature(world, x, room.y + 2, Feature.SHELF);
+      setFeature(world, room.x + room.w - 4, room.y + room.h - 3, serial % 3 === 0 ? Feature.SCREEN : Feature.LAMP);
+      break;
+  }
+}
+
+function repairDepotDoorFrames(world: World): void {
+  for (const [idx, door] of world.doors) {
+    const room = world.rooms[door.roomA] ?? world.rooms[door.roomB];
+    if (!room) continue;
+    const x = idx % W;
+    const y = (idx / W) | 0;
+    const left = world.idx(x - 1, y);
+    const right = world.idx(x + 1, y);
+    const up = world.idx(x, y - 1);
+    const down = world.idx(x, y + 1);
+    const vertical = world.roomMap[up] >= 0 || world.roomMap[down] >= 0;
+    const jambs = vertical ? [left, right] : [up, down];
+    for (const jamb of jambs) {
+      if (world.cells[jamb] !== Cell.WALL || world.aptMask[jamb]) continue;
+      world.wallTex[jamb] = door.state === DoorState.HERMETIC_OPEN || door.state === DoorState.HERMETIC_CLOSED ? Tex.HERMO_WALL : room.wallTex;
+    }
+  }
+}
+
 function canStampRoom(world: World, x: number, y: number, w: number, h: number): boolean {
   for (let dy = -1; dy <= h; dy++) {
     for (let dx = -1; dx <= w; dx++) {
@@ -631,10 +1063,46 @@ function carveLine(world: World, ax: number, ay: number, bx: number, by: number,
   }
 }
 
+function carveOwnedLine(
+  world: World,
+  ax: number,
+  ay: number,
+  bx: number,
+  by: number,
+  width: number,
+  floorTex: Tex,
+  owner: TerritoryOwner,
+): void {
+  let x = world.wrap(ax);
+  let y = world.wrap(ay);
+  const targetX = world.wrap(bx);
+  const targetY = world.wrap(by);
+  const dx = Math.sign(world.delta(targetX, x));
+  const dy = Math.sign(world.delta(targetY, y));
+  openOwnedBrush(world, x, y, width, floorTex, owner);
+  while (x !== targetX) {
+    x = world.wrap(x + dx);
+    openOwnedBrush(world, x, y, width, floorTex, owner);
+  }
+  while (y !== targetY) {
+    y = world.wrap(y + dy);
+    openOwnedBrush(world, x, y, width, floorTex, owner);
+  }
+}
+
 function openBrush(world: World, x: number, y: number, radius: number, floorTex: Tex): void {
   for (let dy = -radius; dy <= radius; dy++) {
     for (let dx = -radius; dx <= radius; dx++) {
       openCell(world, x + dx, y + dy, floorTex);
+    }
+  }
+}
+
+function openOwnedBrush(world: World, x: number, y: number, radius: number, floorTex: Tex, owner: TerritoryOwner): void {
+  for (let dy = -radius; dy <= radius; dy++) {
+    for (let dx = -radius; dx <= radius; dx++) {
+      if (dx * dx + dy * dy > (radius + 0.4) * (radius + 0.4)) continue;
+      openOwnedCell(world, x + dx, y + dy, floorTex, owner);
     }
   }
 }
@@ -645,6 +1113,18 @@ function openCell(world: World, x: number, y: number, floorTex: Tex): void {
   world.cells[ci] = Cell.FLOOR;
   world.floorTex[ci] = floorTex;
   if (world.roomMap[ci] < 0) world.wallTex[ci] = Tex.METAL;
+}
+
+function openOwnedCell(world: World, x: number, y: number, floorTex: Tex, owner: TerritoryOwner): void {
+  const idx = world.idx(x, y);
+  if (world.aptMask[idx] || world.cells[idx] === Cell.LIFT || world.cells[idx] === Cell.DOOR || world.hermoWall[idx]) return;
+  if (world.roomMap[idx] >= 0) return;
+  world.cells[idx] = Cell.FLOOR;
+  world.roomMap[idx] = -1;
+  world.floorTex[idx] = floorTex;
+  world.wallTex[idx] = Tex.METAL;
+  setTerritoryOwnerAtIndex(world, idx, owner);
+  if (world.features[idx] !== Feature.LIFT_BUTTON) world.features[idx] = Feature.NONE;
 }
 
 function setFeature(world: World, x: number, y: number, feature: Feature): void {
@@ -680,6 +1160,47 @@ function uniqueTags(tags: readonly string[]): string[] {
 
 function cargoLabel(order: number): string {
   return `Г-${order.toString().padStart(3, '0')}`;
+}
+
+function depotOwnerFloor(owner: TerritoryOwner, serial: number): Tex {
+  if (owner === ZoneFaction.SCIENTIST) return Tex.F_TILE;
+  if (owner === ZoneFaction.CITIZEN) return serial % 2 === 0 ? Tex.F_LINO : Tex.F_CONCRETE;
+  if (owner === ZoneFaction.CULTIST) return Tex.F_CARPET;
+  if (owner === ZoneFaction.WILD) return serial % 3 === 0 ? Tex.F_TILE : Tex.F_CONCRETE;
+  return serial % 5 === 0 ? Tex.F_TILE : Tex.F_CONCRETE;
+}
+
+function depotOwnerWall(owner: TerritoryOwner): Tex {
+  if (owner === ZoneFaction.SCIENTIST) return Tex.TILE_W;
+  if (owner === ZoneFaction.CITIZEN) return Tex.PANEL;
+  if (owner === ZoneFaction.CULTIST) return Tex.CROSS;
+  if (owner === ZoneFaction.WILD) return Tex.ROTTEN;
+  return Tex.METAL;
+}
+
+function isHilbertDepotAmbientNpc(entity: Entity): boolean {
+  return entity.type === EntityType.NPC &&
+    entity.alive &&
+    entity.name?.startsWith('Склад Гильберта:') === true &&
+    entity.plotNpcId === undefined &&
+    entity.persistentNpcId === undefined &&
+    entity.alifeId === undefined &&
+    entity.questId === -1 &&
+    entity.faction !== undefined;
+}
+
+function depotTerritorySpawnCells(world: World): Map<TerritoryOwner, number[]> {
+  const cells = new Map<TerritoryOwner, number[]>();
+  for (const owner of HUMAN_TERRITORY_OWNERS) cells.set(owner, []);
+  for (let i = 0; i < W * W; i++) {
+    const cell = world.cells[i];
+    if (cell !== Cell.FLOOR && cell !== Cell.WATER) continue;
+    if (world.aptMask[i] || world.hermoWall[i] || world.containerMap.has(i) || world.features[i] === Feature.LIFT_BUTTON) continue;
+    const owner = territoryOwnerAtIndex(world, i);
+    const list = cells.get(owner);
+    if (list) list.push(i);
+  }
+  return cells;
 }
 
 function hilbertTracePoints(order: number, x: number, y: number, step: number): Point[] {

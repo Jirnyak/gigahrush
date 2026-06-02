@@ -680,6 +680,7 @@ export function bindNetSphereInput(): () => void {
     }
     if (matchesControlAction('netSubmit', e.code)) {
       submitDraft();
+      closeNetSphere();
       consumeNetSphereKeyboardEvent(e);
       return;
     }

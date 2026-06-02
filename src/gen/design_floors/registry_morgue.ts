@@ -22,6 +22,7 @@ import {
   ZoneFaction,
   type Entity,
   type Room,
+  type TerritoryOwner,
   type WorldContainer,
 } from '../../core/types';
 import { World } from '../../core/world';
@@ -29,6 +30,7 @@ import { freshNeeds } from '../../data/catalog';
 import { type PlotNpcDef, registerSideQuest } from '../../data/plot';
 import { MONSTERS } from '../../entities/monster';
 import { monsterSpr, Spr } from '../../render/sprite_index';
+import { setTerritoryOwnerAtIndex } from '../../systems/territory';
 import {
   generateZones,
   placeDoor,
@@ -64,6 +66,33 @@ interface MorgueDrawerSlot {
   hilbert: number;
 }
 
+interface MorgueHqSpec {
+  owner: TerritoryOwner;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  name: string;
+  supportPrefix: string;
+  wallTex: Tex;
+  floorTex: Tex;
+  exitSide: MorgueDoorSide;
+  connectX: number;
+  connectY: number;
+  support: readonly RoomType[];
+}
+
+interface MorgueArchiveBlockSpec {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  name: string;
+  connectX: number;
+  connectY: number;
+  ownerHint: TerritoryOwner;
+}
+
 interface MorgueRecordDomainDef {
   label: string;
   tag: string;
@@ -77,6 +106,84 @@ const MORGUE_RECORD_DOMAIN_ORDER: readonly MorgueRecordDomain[] = [
   'dead_record',
   'contaminated_record',
 ];
+
+const REGISTRY_MORGUE_HQ_SPECS: readonly MorgueHqSpec[] = [
+  {
+    owner: ZoneFaction.CITIZEN,
+    x: 118,
+    y: 132,
+    w: 48,
+    h: 30,
+    name: 'Гражданский гермопункт выдачи тел',
+    supportPrefix: 'Очередь выдачи тел',
+    wallTex: Tex.HERMO_WALL,
+    floorTex: Tex.F_LINO,
+    exitSide: 'south',
+    connectX: 142,
+    connectY: 260,
+    support: [RoomType.KITCHEN, RoomType.BATHROOM, RoomType.STORAGE, RoomType.COMMON],
+  },
+  {
+    owner: ZoneFaction.LIQUIDATOR,
+    x: 790,
+    y: 132,
+    w: 66,
+    h: 38,
+    name: 'Ликвидаторский штаб карантинной выдачи',
+    supportPrefix: 'Карантинный пост выдачи',
+    wallTex: Tex.HERMO_WALL,
+    floorTex: Tex.F_CONCRETE,
+    exitSide: 'south',
+    connectX: 824,
+    connectY: 260,
+    support: [RoomType.STORAGE, RoomType.MEDICAL, RoomType.OFFICE, RoomType.KITCHEN, RoomType.BATHROOM],
+  },
+  {
+    owner: ZoneFaction.SCIENTIST,
+    x: 474,
+    y: 132,
+    w: 58,
+    h: 34,
+    name: 'НИИ-гермокор сверки посмертных записей',
+    supportPrefix: 'НИИ сверки записей',
+    wallTex: Tex.HERMO_WALL,
+    floorTex: Tex.F_MARBLE_TILE,
+    exitSide: 'south',
+    connectX: 512,
+    connectY: 260,
+    support: [RoomType.MEDICAL, RoomType.OFFICE, RoomType.PRODUCTION, RoomType.STORAGE],
+  },
+  {
+    owner: ZoneFaction.CULTIST,
+    x: 130,
+    y: 836,
+    w: 42,
+    h: 28,
+    name: 'Скрытая культовая комната последней подписи',
+    supportPrefix: 'Культовая подпись',
+    wallTex: Tex.DARK,
+    floorTex: Tex.F_RED_CARPET,
+    exitSide: 'north',
+    connectX: 152,
+    connectY: 782,
+    support: [RoomType.COMMON, RoomType.STORAGE, RoomType.BATHROOM],
+  },
+  {
+    owner: ZoneFaction.WILD,
+    x: 806,
+    y: 834,
+    w: 46,
+    h: 30,
+    name: 'Дикий выбитый пост чужих бирок',
+    supportPrefix: 'Выбитый пост бирок',
+    wallTex: Tex.ROTTEN,
+    floorTex: Tex.F_CONCRETE,
+    exitSide: 'north',
+    connectX: 828,
+    connectY: 782,
+    support: [RoomType.STORAGE, RoomType.KITCHEN, RoomType.BATHROOM, RoomType.COMMON],
+  },
+] as const;
 
 const MORGUE_RECORD_DOMAINS: Record<MorgueRecordDomain, MorgueRecordDomainDef> = {
   living_record: {
@@ -448,6 +555,108 @@ function addMorgueGeometryRoom(
   return createDesignRoom(world, world.rooms.length, type, x, y, w, h, name, wallTex, floorTex, sealed);
 }
 
+function canStampMorgueRoom(world: World, x: number, y: number, w: number, h: number): boolean {
+  if (x < 8 || y < 8 || x + w >= W - 8 || y + h >= W - 8) return false;
+  for (let dy = -1; dy <= h; dy++) {
+    for (let dx = -1; dx <= w; dx++) {
+      const idx = world.idx(x + dx, y + dy);
+      const interior = dx >= 0 && dx < w && dy >= 0 && dy < h;
+      if (world.cells[idx] === Cell.LIFT || world.cells[idx] === Cell.DOOR) return false;
+      if (interior && world.roomMap[idx] >= 0) return false;
+    }
+  }
+  return true;
+}
+
+function paintMorgueRoomTerritory(world: World, room: Room, owner: TerritoryOwner): void {
+  for (let dy = 0; dy < room.h; dy++) {
+    for (let dx = 0; dx < room.w; dx++) {
+      setTerritoryOwnerAtIndex(world, world.idx(room.x + dx, room.y + dy), owner);
+    }
+  }
+}
+
+function supportRoomSuffix(type: RoomType): string {
+  switch (type) {
+    case RoomType.KITCHEN: return 'кухня';
+    case RoomType.BATHROOM: return 'санузел';
+    case RoomType.STORAGE: return 'кладовая';
+    case RoomType.MEDICAL: return 'медкабинет';
+    case RoomType.OFFICE: return 'канцелярия';
+    case RoomType.PRODUCTION: return 'мастерская';
+    case RoomType.COMMON: return 'общая';
+    default: return 'комната';
+  }
+}
+
+function dressMorgueSupportRoom(world: World, room: Room, seed: number): void {
+  switch (room.type) {
+    case RoomType.KITCHEN:
+      setCellFeature(world, room.x + 2, room.y + 2, Feature.STOVE);
+      setCellFeature(world, room.x + room.w - 3, room.y + 2, Feature.SINK);
+      setCellFeature(world, room.x + Math.floor(room.w / 2), room.y + room.h - 3, Feature.TABLE);
+      break;
+    case RoomType.BATHROOM:
+      setCellFeature(world, room.x + 2, room.y + 2, Feature.TOILET);
+      setCellFeature(world, room.x + room.w - 3, room.y + 2, Feature.SINK);
+      break;
+    case RoomType.MEDICAL:
+      setCellFeature(world, room.x + 2, room.y + Math.floor(room.h / 2), Feature.BED);
+      setCellFeature(world, room.x + room.w - 3, room.y + 2, Feature.APPARATUS);
+      break;
+    case RoomType.PRODUCTION:
+      setCellFeature(world, room.x + 2, room.y + 2, Feature.MACHINE);
+      setCellFeature(world, room.x + room.w - 3, room.y + room.h - 3, Feature.APPARATUS);
+      break;
+    case RoomType.OFFICE:
+      setCellFeature(world, room.x + 2, room.y + 2, Feature.DESK);
+      setCellFeature(world, room.x + 3, room.y + 3, Feature.CHAIR);
+      setCellFeature(world, room.x + room.w - 3, room.y + 2, Feature.SHELF);
+      break;
+    case RoomType.COMMON:
+      setCellFeature(world, room.x + 2, room.y + 2, Feature.TABLE);
+      setCellFeature(world, room.x + room.w - 3, room.y + 2, Feature.CHAIR);
+      break;
+    case RoomType.STORAGE:
+    default:
+      for (let dx = 2; dx < room.w - 2; dx += 4) setCellFeature(world, room.x + dx, room.y + 2, Feature.SHELF);
+      break;
+  }
+  if (seed % 2 === 0) setCellFeature(world, room.x + room.w - 2, room.y + room.h - 2, Feature.LAMP);
+}
+
+function addMorgueOwnedRoom(
+  world: World,
+  type: RoomType,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  name: string,
+  wallTex: Tex,
+  floorTex: Tex,
+  owner: TerritoryOwner,
+  doorSide: MorgueDoorSide,
+  doorTargetX: number,
+  doorTargetY: number,
+  sealed = false,
+): Room | null {
+  if (!canStampMorgueRoom(world, x, y, w, h)) return null;
+  const room = addMorgueGeometryRoom(world, type, x, y, w, h, name, wallTex, floorTex, sealed);
+  paintMorgueRoomTerritory(world, room, owner);
+  dressMorgueSupportRoom(world, room, room.id);
+  openMorgueDoor(
+    world,
+    room,
+    doorSide,
+    doorSide === 'north' || doorSide === 'south' ? Math.floor(room.w / 2) : Math.floor(room.h / 2),
+    sealed ? DoorState.HERMETIC_CLOSED : DoorState.CLOSED,
+    doorTargetX,
+    doorTargetY,
+  );
+  return room;
+}
+
 function openMorgueDoor(
   world: World,
   room: Room,
@@ -497,6 +706,152 @@ function openMorgueDoor(
   if (door) door.state = state;
   if (targetX !== undefined && targetY !== undefined) {
     carveMorgueLine(world, cx, cy, targetX, targetY, 0, Tex.F_TILE, room.wallTex);
+  }
+}
+
+function buildMorgueFactionHqs(world: World): void {
+  for (const spec of REGISTRY_MORGUE_HQ_SPECS) {
+    if (!canStampMorgueRoom(world, spec.x, spec.y, spec.w, spec.h)) continue;
+    const core = addMorgueGeometryRoom(
+      world,
+      RoomType.HQ,
+      spec.x,
+      spec.y,
+      spec.w,
+      spec.h,
+      spec.name,
+      spec.wallTex,
+      spec.floorTex,
+      true,
+    );
+    paintMorgueRoomTerritory(world, core, spec.owner);
+    dressMorgueSupportRoom(world, core, core.id);
+
+    const centerX = core.x + Math.floor(core.w / 2);
+    const corridorY = spec.exitSide === 'south' ? core.y + core.h + 8 : core.y - 8;
+    carveMorgueLine(world, core.x - 18, corridorY, core.x + core.w + 18, corridorY, 1, spec.floorTex, spec.wallTex);
+    openMorgueDoor(world, core, spec.exitSide, Math.floor(core.w / 2), DoorState.HERMETIC_CLOSED, centerX, corridorY);
+    carveMorgueLine(world, centerX, corridorY, spec.connectX, spec.connectY, 1, spec.floorTex, spec.wallTex);
+
+    const supportDoor = spec.exitSide === 'south' ? 'north' : 'south';
+    const roomY = spec.exitSide === 'south' ? corridorY + 4 : corridorY - 15;
+    const startX = core.x - 12;
+    for (let i = 0; i < spec.support.length; i++) {
+      const type = spec.support[i];
+      const w = type === RoomType.MEDICAL || type === RoomType.PRODUCTION ? 20 : 17;
+      const x = startX + i * 23;
+      const room = addMorgueOwnedRoom(
+        world,
+        type,
+        x,
+        roomY,
+        w,
+        11,
+        `${spec.supportPrefix}: ${supportRoomSuffix(type)}`,
+        spec.wallTex,
+        type === RoomType.KITCHEN || type === RoomType.BATHROOM || type === RoomType.MEDICAL ? Tex.F_TILE : spec.floorTex,
+        spec.owner,
+        supportDoor,
+        x + Math.floor(w / 2),
+        corridorY,
+      );
+      if (room) paintMorgueRoomTerritory(world, room, spec.owner);
+    }
+  }
+}
+
+export function reinforceRegistryMorgueAuthoredTerritory(world: World): void {
+  for (const spec of REGISTRY_MORGUE_HQ_SPECS) {
+    for (const room of world.rooms) {
+      if (room.name !== spec.name && !room.name.startsWith(`${spec.supportPrefix}:`)) continue;
+      paintMorgueRoomTerritory(world, room, spec.owner);
+      if (room.name === spec.name) room.type = RoomType.HQ;
+    }
+  }
+}
+
+function buildMorgueArchiveBlock(world: World, spec: MorgueArchiveBlockSpec, rng: () => number): void {
+  const corridorY = spec.y + Math.floor(spec.h / 2);
+  const left = spec.x + 8;
+  const right = spec.x + spec.w - 8;
+  carveMorgueLine(world, left, corridorY, right, corridorY, 1, Tex.F_TILE, Tex.TILE_W);
+  carveMorgueLine(world, spec.x + Math.floor(spec.w / 2), corridorY, spec.connectX, spec.connectY, 1, Tex.F_TILE, Tex.TILE_W);
+
+  for (let x = spec.x + 12; x <= spec.x + spec.w - 28; x += 26) {
+    for (const row of [
+      { y: spec.y + 8, side: 'south' as MorgueDoorSide },
+      { y: spec.y + 30, side: 'south' as MorgueDoorSide },
+      { y: spec.y + spec.h - 42, side: 'north' as MorgueDoorSide },
+      { y: spec.y + spec.h - 20, side: 'north' as MorgueDoorSide },
+    ]) {
+      const roomW = 16 + Math.floor(rng() * 4);
+      const roomH = 9 + Math.floor(rng() * 3);
+      const type = ((x + row.y) % 5 === 0) ? RoomType.OFFICE : RoomType.STORAGE;
+      const room = addMorgueOwnedRoom(
+        world,
+        type,
+        x,
+        row.y,
+        roomW,
+        roomH,
+        `${spec.name}: копийная ячейка`,
+        Tex.TILE_W,
+        Tex.F_TILE,
+        spec.ownerHint,
+        row.side,
+        x + Math.floor(roomW / 2),
+        corridorY,
+      );
+      if (!room) continue;
+      if (type === RoomType.STORAGE) {
+        setCellFeature(world, room.x + 2, room.y + Math.floor(room.h / 2), Feature.SHELF);
+        setCellFeature(world, room.x + room.w - 3, room.y + Math.floor(room.h / 2), Feature.SHELF);
+      }
+    }
+  }
+}
+
+function buildMorgueArchiveSideBlocks(world: World, rng: () => number): void {
+  const blocks: readonly MorgueArchiveBlockSpec[] = [
+    { x: 88, y: 118, w: 340, h: 118, name: 'Северо-западный зал копий живых', connectX: 240, connectY: 260, ownerHint: ZoneFaction.CITIZEN },
+    { x: 582, y: 118, w: 350, h: 118, name: 'Северо-восточный зал карантинных копий', connectX: 784, connectY: 260, ownerHint: ZoneFaction.LIQUIDATOR },
+    { x: 88, y: 804, w: 342, h: 118, name: 'Юго-западный зал последних подписей', connectX: 240, connectY: 782, ownerHint: ZoneFaction.CULTIST },
+    { x: 584, y: 804, w: 348, h: 118, name: 'Юго-восточный зал выбитых бирок', connectX: 784, connectY: 782, ownerHint: ZoneFaction.WILD },
+  ];
+  for (const block of blocks) buildMorgueArchiveBlock(world, block, rng);
+}
+
+function buildMorgueMicroDrawerRows(world: World, rng: () => number): void {
+  const rows = [
+    { corridorY: 298, roomY: 306, side: 'north' as MorgueDoorSide, owner: ZoneFaction.SCIENTIST, prefix: 'Микрокартотека живых' },
+    { corridorY: 350, roomY: 360, side: 'north' as MorgueDoorSide, owner: ZoneFaction.CITIZEN, prefix: 'Микрокабинет сверки фамилий' },
+    { corridorY: 402, roomY: 416, side: 'north' as MorgueDoorSide, owner: ZoneFaction.LIQUIDATOR, prefix: 'Микроотсек карантинной бирки' },
+    { corridorY: 616, roomY: 600, side: 'south' as MorgueDoorSide, owner: ZoneFaction.SCIENTIST, prefix: 'Микрокартотека умерших' },
+    { corridorY: 668, roomY: 646, side: 'south' as MorgueDoorSide, owner: ZoneFaction.CITIZEN, prefix: 'Микроокно выдачи копий' },
+    { corridorY: 720, roomY: 696, side: 'south' as MorgueDoorSide, owner: ZoneFaction.WILD, prefix: 'Микрокладовая сорванных бирок' },
+  ];
+  for (const row of rows) {
+    for (let x = 82; x <= 930; x += 28) {
+      const roomW = 12 + Math.floor(rng() * 5);
+      const roomH = 7 + Math.floor(rng() * 3);
+      const room = addMorgueOwnedRoom(
+        world,
+        (x + row.corridorY) % 7 === 0 ? RoomType.OFFICE : RoomType.STORAGE,
+        x,
+        row.roomY,
+        roomW,
+        roomH,
+        `${row.prefix} ${x}`,
+        Tex.TILE_W,
+        Tex.F_TILE,
+        row.owner,
+        row.side,
+        x + Math.floor(roomW / 2),
+        row.corridorY,
+      );
+      if (!room) continue;
+      if (rng() < 0.25) setCellFeature(world, room.x + room.w - 2, room.y + Math.floor(room.h / 2), Feature.SCREEN);
+    }
   }
 }
 
@@ -783,6 +1138,9 @@ export function expandRegistryMorgueGeometry(world: World, rng: () => number): v
   carveMorgueLine(world, 784, 260, 784, 782, 1, Tex.F_TILE, Tex.TILE_W);
   carveTagSwitchbacks(world);
   dressConveyorSpine(world);
+  buildMorgueFactionHqs(world);
+  buildMorgueArchiveSideBlocks(world, rng);
+  buildMorgueMicroDrawerRows(world, rng);
   addHilbertDrawerRegistry(world, drawerSlots);
 }
 

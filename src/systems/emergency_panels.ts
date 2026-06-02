@@ -36,7 +36,8 @@ import { monsterSpr } from '../render/sprite_index';
 import { randomRPG } from './rpg';
 import { removeItem } from './inventory';
 import { publishEvent } from './events';
-import { applyInfrastructureRelationResponse, zoneFactionToFaction } from './factions';
+import { applyInfrastructureRelationResponse } from './factions';
+import { territoryFactionAt } from './territory';
 import { setDoorState } from './door_state';
 
 type PanelAction = Exclude<EmergencyPanelActionId, 'leave'>;
@@ -696,7 +697,7 @@ function activatePanelAction(
 ): PanelActionResult {
   if (action === 'repair') consumeCost(player, def.repairCost);
   const rooms = affectedRooms(world, panel);
-  const owner = zoneFactionToFaction(world.zones[panel.zoneId]?.faction);
+  const owner = territoryFactionAt(world, panel.x, panel.y);
   const domainEffect = applyDomainEffect(world, rooms, panel, def, action);
   const severity = actionSeverity(action);
   const relationDelta = applyInfrastructureRelationResponse(owner, action);

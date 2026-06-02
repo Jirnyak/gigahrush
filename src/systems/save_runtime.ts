@@ -14,7 +14,7 @@ import { floorRunStateForSave } from './procedural_floors';
 import { buildSavePayload, type SavePayload } from './save_payload';
 import { stockMarketForSave } from './stock_market';
 
-export const SAVE_SHAPE_VERSION = 14;
+export const SAVE_SHAPE_VERSION = 15;
 export type SaveShapeVersionStatus = 'missing' | 'old' | 'current' | 'newer' | 'invalid';
 
 export interface SaveRuntimeExtras {

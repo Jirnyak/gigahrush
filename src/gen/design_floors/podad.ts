@@ -3,7 +3,7 @@
 import {
   AIGoal, Cell, EntityType, Feature, FloorLevel, LiftDirection,
   MonsterKind, RoomType, Tex, W, ZoneFaction,
-  type Entity, type Item, type Room,
+  type Entity, type Item, type Room, type TerritoryOwner,
 } from '../../core/types';
 import { World } from '../../core/world';
 import { withSeededRandom } from '../../core/rand';
@@ -19,7 +19,9 @@ import {
   connectRoomsMST,
   ensureConnectivity,
   generateZones,
+  placeDoorAt,
   placeLifts,
+  roomExit,
   sanitizeDoors,
   stampRoom,
 } from '../shared';
@@ -35,6 +37,8 @@ const WALL_SNAKE_TAG = '[wall_snake:';
 const SECTION_SHIFT_TAG = '[section_shift:';
 const HERALD_GATE_TAG = '[herald_gate:podad]';
 const CAPILLARY_FIELD_TAG = '[podad_capillary:';
+const PODAD_HQ_TAG = '[podad_hq:';
+const PODAD_SUPPORT_TAG = '[podad_support:';
 
 export type PodadTopologyNodeId =
   | 'entry'
@@ -93,6 +97,27 @@ interface RoomSpec {
   floorTex: Tex;
 }
 
+interface PodadHqSpec {
+  owner: TerritoryOwner;
+  ownerId: string;
+  x: number;
+  y: number;
+  coreName: string;
+  wallTex: Tex;
+  floorTex: Tex;
+  coreW?: number;
+  coreH?: number;
+}
+
+interface PodadMicroSpec {
+  type: RoomType;
+  name: string;
+  dx: number;
+  dy: number;
+  w: number;
+  h: number;
+}
+
 const ROOM_SPECS: readonly RoomSpec[] = [
   { key: 'entry', name: 'Корневая площадка Подада', type: RoomType.HQ, dx: -7, dy: -7, w: 15, h: 15, wallTex: Tex.GUT, floorTex: Tex.F_GUT },
   { key: 'contact', name: 'Обожженная сторожка Подада', type: RoomType.COMMON, dx: 34, dy: -28, w: 17, h: 13, wallTex: Tex.MEAT, floorTex: Tex.F_MEAT },
@@ -101,6 +126,24 @@ const ROOM_SPECS: readonly RoomSpec[] = [
   { key: 'wallSnake', name: 'Змейка стены: сухой желудок Подада', type: RoomType.STORAGE, dx: -82, dy: 96, w: 32, h: 22, wallTex: Tex.CONCRETE, floorTex: Tex.F_CONCRETE },
   { key: 'sectionShift', name: 'Секционный сдвиг: мокрый пролет Подада', type: RoomType.PRODUCTION, dx: 82, dy: 96, w: 34, h: 24, wallTex: Tex.METAL, floorTex: Tex.F_TILE },
   { key: 'upperLift', name: 'Верхняя створка Подада', type: RoomType.CORRIDOR, dx: 8, dy: 174, w: 19, h: 13, wallTex: Tex.METAL, floorTex: Tex.F_CONCRETE },
+];
+
+const PODAD_HQ_SPECS: readonly PodadHqSpec[] = [
+  { owner: ZoneFaction.CITIZEN, ownerId: 'citizen', x: 160, y: 170, coreName: 'Гражданский штаб Подада: тёплая кишка', wallTex: Tex.PANEL, floorTex: Tex.F_LINO },
+  { owner: ZoneFaction.LIQUIDATOR, ownerId: 'liquidator', x: 832, y: 176, coreName: 'Ликвидаторский штаб Подада: сухой шлюз', wallTex: Tex.METAL, floorTex: Tex.F_CONCRETE },
+  { owner: ZoneFaction.CULTIST, ownerId: 'cultist', x: 512, y: 272, coreName: 'Большой культовый штаб Подада: сердце нижнего порога', wallTex: Tex.GUT, floorTex: Tex.F_GUT, coreW: 30, coreH: 20 },
+  { owner: ZoneFaction.SCIENTIST, ownerId: 'scientist', x: 168, y: 812, coreName: 'Научный штаб Подада: камера сдвига', wallTex: Tex.PIPE, floorTex: Tex.F_TILE },
+  { owner: ZoneFaction.WILD, ownerId: 'wild', x: 840, y: 820, coreName: 'Дикий штаб Подада: костяной карман', wallTex: Tex.BRICK, floorTex: Tex.F_CONCRETE },
+];
+
+const PODAD_MICRO_SPECS: readonly PodadMicroSpec[] = [
+  { type: RoomType.STORAGE, name: 'кладовая плёнки', dx: -35, dy: -5, w: 14, h: 10 },
+  { type: RoomType.KITCHEN, name: 'кипятильная слюна', dx: 21, dy: -5, w: 14, h: 10 },
+  { type: RoomType.BATHROOM, name: 'мокрый санитарный карман', dx: -7, dy: -24, w: 14, h: 9 },
+  { type: RoomType.OFFICE, name: 'будка ведомости порога', dx: -7, dy: 15, w: 14, h: 9 },
+  { type: RoomType.LIVING, name: 'лежанка живого тоннеля', dx: -35, dy: 16, w: 13, h: 9 },
+  { type: RoomType.SMOKING, name: 'курилка стеновой змейки', dx: 22, dy: 16, w: 13, h: 9 },
+  { type: RoomType.MEDICAL, name: 'перевязочная сдвига', dx: -7, dy: 29, w: 14, h: 8 },
 ];
 
 export function generatePodadDesignFloor(seed = PODAD_DEFAULT_SEED): FloorGeneration {
@@ -146,6 +189,30 @@ export function generatePodadDebugFloor(seed = PODAD_DEFAULT_SEED): FloorGenerat
   return generatePodadDesignFloor(seed);
 }
 
+export function expandPodadRouteGeometry(world: World, rand: () => number): void {
+  const hqCores = stampPodadHqCompounds(world, rand);
+  const stations = stampPodadOrganStations(world, rand);
+  stampPodadScarYards(world, rand);
+  connectPodadRouteNetwork(world, [...hqCores, ...stations], rand);
+  world.markCellsDirty();
+  world.markFloorTexDirty();
+  world.markWallTexDirty();
+  world.markFeaturesDirty(false);
+  world.markFogDirty();
+}
+
+export function reinforcePodadAuthoredHqTerritory(world: World): void {
+  for (const room of world.rooms) {
+    const owner = podadTaggedRoomOwner(room);
+    if (owner === undefined) continue;
+    if (room.name.includes(PODAD_HQ_TAG)) {
+      room.type = RoomType.HQ;
+      room.sealed = true;
+    }
+    paintPodadRoomOwner(world, room, owner);
+  }
+}
+
 export function spawnPodadPlotNpcs(
   world: World,
   entities: Entity[],
@@ -154,6 +221,314 @@ export function spawnPodadPlotNpcs(
 ): void {
   spawnPlotNpc(world, rooms.contact, 'hell_contact', entities, nextId);
   spawnPlotNpc(world, rooms.threshold, 'herald_clue', entities, nextId);
+}
+
+function stampPodadHqCompounds(world: World, rand: () => number): Room[] {
+  const cores: Room[] = [];
+  for (const spec of PODAD_HQ_SPECS) {
+    const coreW = spec.coreW ?? 22;
+    const coreH = spec.coreH ?? 14;
+    const core = stampPodadStyledRoom(
+      world,
+      RoomType.HQ,
+      spec.x - (coreW >> 1),
+      spec.y - (coreH >> 1),
+      coreW,
+      coreH,
+      `${spec.coreName} ${PODAD_HQ_TAG}${spec.ownerId}]`,
+      spec.wallTex,
+      spec.floorTex,
+      spec.owner,
+    );
+    if (!core) continue;
+    core.sealed = true;
+    decoratePodadExpansionRoom(world, core, spec.owner, Feature.DESK, rand);
+    cores.push(core);
+
+    const supports = [
+      { type: RoomType.KITCHEN, name: 'кухня', dx: -10, dy: coreH + 8, w: 20, h: 10, feature: Feature.STOVE },
+      { type: RoomType.STORAGE, name: 'склад', dx: -34, dy: -5, w: 18, h: 11, feature: Feature.SHELF },
+      { type: RoomType.MEDICAL, name: 'медугол', dx: -10, dy: -coreH - 17, w: 20, h: 10, feature: Feature.BED },
+      { type: RoomType.OFFICE, name: 'журнал', dx: 16, dy: -5, w: 18, h: 11, feature: Feature.DESK },
+      { type: RoomType.COMMON, name: 'общая', dx: 16, dy: coreH + 5, w: 18, h: 10, feature: Feature.TABLE },
+    ] as const;
+    for (const support of supports) {
+      const room = stampPodadStyledRoom(
+        world,
+        support.type,
+        spec.x + support.dx,
+        spec.y + support.dy,
+        support.w,
+        support.h,
+        `Подад: ${support.name} миништаба ${spec.ownerId} ${PODAD_SUPPORT_TAG}${spec.ownerId}]`,
+        spec.wallTex,
+        support.type === RoomType.KITCHEN || support.type === RoomType.MEDICAL ? Tex.F_TILE : spec.floorTex,
+        spec.owner,
+      );
+      if (!room) continue;
+      decoratePodadExpansionRoom(world, room, spec.owner, support.feature, rand);
+      connectPodadRoomToPoint(world, room, roomCenter(core).x, roomCenter(core).y);
+    }
+  }
+  return cores;
+}
+
+function stampPodadOrganStations(world: World, rand: () => number): Room[] {
+  const stations: Room[] = [];
+  let serial = 0;
+  for (let gy = 0; gy < 5; gy++) {
+    for (let gx = 0; gx < 6; gx++) {
+      const baseX = 72 + gx * 176;
+      const baseY = 96 + gy * 184;
+      const wobbleX = Math.round((rand() - 0.5) * 22);
+      const wobbleY = Math.round((rand() - 0.5) * 22);
+      const x = world.wrap(baseX + wobbleX);
+      const y = world.wrap(baseY + wobbleY);
+      serial++;
+      const owner = podadStationOwner(gx, gy, serial);
+      const station = stampPodadStyledRoom(
+        world,
+        serial % 4 === 0 ? RoomType.PRODUCTION : RoomType.COMMON,
+        x - 9,
+        y - 7,
+        18,
+        14,
+        `Станция органа Подада ${serial}`,
+        ownerWallTex(owner),
+        serial % 3 === 0 ? Tex.F_MEAT : Tex.F_GUT,
+        owner,
+      );
+      if (!station) continue;
+      decoratePodadExpansionRoom(world, station, owner, serial % 3 === 0 ? Feature.APPARATUS : Feature.CANDLE, rand);
+      stations.push(station);
+
+      for (let i = 0; i < PODAD_MICRO_SPECS.length; i++) {
+        const micro = PODAD_MICRO_SPECS[i];
+        const room = stampPodadStyledRoom(
+          world,
+          micro.type,
+          x + micro.dx,
+          y + micro.dy,
+          micro.w,
+          micro.h,
+          `Микрокиста Подада ${serial}.${i + 1}: ${micro.name}`,
+          ownerWallTex(owner),
+          micro.type === RoomType.BATHROOM || micro.type === RoomType.MEDICAL ? Tex.F_TILE : (i % 2 === 0 ? Tex.F_GUT : Tex.F_MEAT),
+          owner,
+        );
+        if (!room) continue;
+        decoratePodadExpansionRoom(world, room, owner, podadMicroFeature(micro.type, i), rand);
+        connectPodadRoomToPoint(world, room, roomCenter(station).x, roomCenter(station).y);
+      }
+    }
+  }
+  return stations;
+}
+
+function stampPodadScarYards(world: World, rand: () => number): void {
+  const scars = [
+    { x: 348, y: 184, r: 19 },
+    { x: 720, y: 380, r: 24 },
+    { x: 312, y: 620, r: 23 },
+    { x: 650, y: 728, r: 20 },
+    { x: 932, y: 534, r: 17 },
+  ];
+  for (let i = 0; i < scars.length; i++) {
+    const scar = scars[i];
+    const cx = world.wrap(scar.x + Math.round((rand() - 0.5) * 12));
+    const cy = world.wrap(scar.y + Math.round((rand() - 0.5) * 12));
+    const yard = stampPodadStyledRoom(
+      world,
+      RoomType.CORRIDOR,
+      cx - scar.r,
+      cy - Math.max(8, scar.r >> 1),
+      scar.r * 2,
+      Math.max(16, scar.r),
+      `Рубец самосбора Подада ${i + 1}`,
+      Tex.GUT,
+      Tex.F_MEAT,
+      ZoneFaction.SAMOSBOR,
+    );
+    if (yard) decoratePodadScarRoom(world, yard, i);
+  }
+}
+
+function connectPodadRouteNetwork(world: World, rooms: readonly Room[], rand: () => number): void {
+  if (rooms.length === 0) return;
+  const sorted = [...rooms].sort((a, b) => {
+    const ay = roomCenter(a).y;
+    const by = roomCenter(b).y;
+    if (Math.abs(ay - by) > 80) return ay - by;
+    return roomCenter(a).x - roomCenter(b).x;
+  });
+  for (let i = 0; i < sorted.length; i++) {
+    const a = sorted[i];
+    const b = sorted[(i + 1) % sorted.length];
+    const ac = roomCenter(a);
+    const bc = roomCenter(b);
+    carveCorridor(world, ac.x, ac.y, bc.x, bc.y);
+  }
+  for (let i = 0; i < sorted.length; i += 5) {
+    const a = sorted[i];
+    const b = sorted[(i + 11 + Math.floor(rand() * 3)) % sorted.length];
+    const ac = roomCenter(a);
+    const bc = roomCenter(b);
+    carveCorridor(world, ac.x, ac.y, bc.x, bc.y);
+  }
+}
+
+function stampPodadStyledRoom(
+  world: World,
+  type: RoomType,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  name: string,
+  wallTex: Tex,
+  floorTex: Tex,
+  owner: TerritoryOwner,
+): Room | null {
+  if (!canStampPodadRoom(world, x, y, w, h)) return null;
+  const room = stampRoom(world, world.rooms.length, type, x, y, w, h, -1);
+  room.name = name;
+  room.wallTex = wallTex;
+  room.floorTex = floorTex;
+  for (let dy = -1; dy <= h; dy++) {
+    for (let dx = -1; dx <= w; dx++) {
+      const ci = world.idx(room.x + dx, room.y + dy);
+      if (dx >= 0 && dx < w && dy >= 0 && dy < h) {
+        world.floorTex[ci] = floorTex;
+        world.wallTex[ci] = 0;
+        world.factionControl[ci] = owner;
+        world.fog[ci] = Math.max(world.fog[ci], owner === ZoneFaction.SAMOSBOR ? 42 : 18);
+      } else if (world.cells[ci] === Cell.WALL) {
+        world.wallTex[ci] = wallTex;
+      }
+    }
+  }
+  return room;
+}
+
+function canStampPodadRoom(world: World, x: number, y: number, w: number, h: number): boolean {
+  for (let dy = -1; dy <= h; dy++) {
+    for (let dx = -1; dx <= w; dx++) {
+      const ci = world.idx(x + dx, y + dy);
+      if (world.aptMask[ci] || world.cells[ci] === Cell.LIFT || world.features[ci] === Feature.LIFT_BUTTON) return false;
+      if (world.doors.has(ci) || world.roomMap[ci] >= 0) return false;
+    }
+  }
+  return true;
+}
+
+function connectPodadRoomToPoint(world: World, room: Room, tx: number, ty: number): void {
+  const exit = roomExit(world, room, tx, ty);
+  placeDoorAt(world, exit.wx, exit.wy, room.id);
+  carveCorridor(world, exit.ox, exit.oy, tx, ty);
+}
+
+function decoratePodadExpansionRoom(world: World, room: Room, owner: TerritoryOwner, primary: Feature, rand: () => number): void {
+  placePodadFeature(world, room.x + (room.w >> 1), room.y + (room.h >> 1), primary);
+  const fixtures = Math.max(1, Math.min(5, Math.floor((room.w * room.h) / 34)));
+  for (let i = 0; i < fixtures; i++) {
+    const x = room.x + 1 + Math.floor(rand() * Math.max(1, room.w - 2));
+    const y = room.y + 1 + Math.floor(rand() * Math.max(1, room.h - 2));
+    placePodadFeature(world, x, y, i % 3 === 0 ? primary : podadOwnerFeature(owner, i));
+  }
+}
+
+function decoratePodadScarRoom(world: World, room: Room, serial: number): void {
+  for (let dy = 1; dy < room.h - 1; dy++) {
+    for (let dx = 1; dx < room.w - 1; dx++) {
+      if (((dx * 13 + dy * 17 + serial * 19) % 29) !== 0) continue;
+      const ci = world.idx(room.x + dx, room.y + dy);
+      world.cells[ci] = (dx + dy + serial) % 5 === 0 ? Cell.WATER : Cell.FLOOR;
+      world.floorTex[ci] = (dx + serial) % 3 === 0 ? Tex.F_WATER : Tex.F_MEAT;
+      world.fog[ci] = Math.max(world.fog[ci], 48);
+      world.factionControl[ci] = ZoneFaction.SAMOSBOR;
+    }
+  }
+  placePodadFeature(world, room.x + (room.w >> 1), room.y + (room.h >> 1), Feature.APPARATUS);
+}
+
+function placePodadFeature(world: World, x: number, y: number, feature: Feature): void {
+  const ci = world.idx(x, y);
+  if (world.cells[ci] === Cell.WALL || world.cells[ci] === Cell.LIFT || world.features[ci] === Feature.LIFT_BUTTON) return;
+  world.features[ci] = feature;
+}
+
+function podadStationOwner(gx: number, gy: number, serial: number): TerritoryOwner {
+  if ((gx === 2 && gy <= 2) || (gx === 3 && gy <= 2) || serial % 7 === 0) return ZoneFaction.CULTIST;
+  if (gx <= 1 && gy >= 3) return ZoneFaction.SCIENTIST;
+  if (gx >= 4 && gy >= 3) return ZoneFaction.WILD;
+  if (gx >= 4 && gy <= 1) return ZoneFaction.LIQUIDATOR;
+  if (gx <= 1 && gy <= 1) return ZoneFaction.CITIZEN;
+  return serial % 3 === 0 ? ZoneFaction.SAMOSBOR : ZoneFaction.WILD;
+}
+
+function ownerWallTex(owner: TerritoryOwner): Tex {
+  switch (owner) {
+    case ZoneFaction.CITIZEN: return Tex.PANEL;
+    case ZoneFaction.LIQUIDATOR: return Tex.METAL;
+    case ZoneFaction.SCIENTIST: return Tex.PIPE;
+    case ZoneFaction.WILD: return Tex.BRICK;
+    case ZoneFaction.SAMOSBOR: return Tex.GUT;
+    case ZoneFaction.CULTIST:
+    default: return Tex.GUT;
+  }
+}
+
+function podadMicroFeature(type: RoomType, serial: number): Feature {
+  switch (type) {
+    case RoomType.KITCHEN: return serial % 2 === 0 ? Feature.STOVE : Feature.SINK;
+    case RoomType.BATHROOM: return serial % 2 === 0 ? Feature.TOILET : Feature.SINK;
+    case RoomType.STORAGE: return Feature.SHELF;
+    case RoomType.MEDICAL: return Feature.BED;
+    case RoomType.OFFICE: return Feature.DESK;
+    case RoomType.SMOKING: return Feature.CANDLE;
+    case RoomType.LIVING: return Feature.BED;
+    default: return Feature.TABLE;
+  }
+}
+
+function podadOwnerFeature(owner: TerritoryOwner, serial: number): Feature {
+  if (owner === ZoneFaction.LIQUIDATOR) return serial % 2 === 0 ? Feature.MACHINE : Feature.SHELF;
+  if (owner === ZoneFaction.SCIENTIST) return serial % 2 === 0 ? Feature.APPARATUS : Feature.SCREEN;
+  if (owner === ZoneFaction.CULTIST || owner === ZoneFaction.SAMOSBOR) return serial % 2 === 0 ? Feature.CANDLE : Feature.APPARATUS;
+  if (owner === ZoneFaction.WILD) return serial % 2 === 0 ? Feature.TABLE : Feature.SHELF;
+  return serial % 2 === 0 ? Feature.LAMP : Feature.CHAIR;
+}
+
+function podadTaggedRoomOwner(room: Room): TerritoryOwner | undefined {
+  const hqAt = room.name.indexOf(PODAD_HQ_TAG);
+  const supportAt = room.name.indexOf(PODAD_SUPPORT_TAG);
+  const tagAt = hqAt >= 0 ? hqAt : supportAt;
+  if (tagAt < 0) return undefined;
+  const tag = hqAt >= 0 ? PODAD_HQ_TAG : PODAD_SUPPORT_TAG;
+  const end = room.name.indexOf(']', tagAt);
+  const raw = room.name.slice(tagAt + tag.length, end < 0 ? undefined : end);
+  return podadOwnerId(raw);
+}
+
+function podadOwnerId(id: string): TerritoryOwner | undefined {
+  switch (id) {
+    case 'citizen': return ZoneFaction.CITIZEN;
+    case 'liquidator': return ZoneFaction.LIQUIDATOR;
+    case 'cultist': return ZoneFaction.CULTIST;
+    case 'scientist': return ZoneFaction.SCIENTIST;
+    case 'wild': return ZoneFaction.WILD;
+    default: return undefined;
+  }
+}
+
+function paintPodadRoomOwner(world: World, room: Room, owner: TerritoryOwner): void {
+  for (let dy = 0; dy < room.h; dy++) {
+    for (let dx = 0; dx < room.w; dx++) {
+      const ci = world.idx(room.x + dx, room.y + dy);
+      if (world.roomMap[ci] === room.id) world.factionControl[ci] = owner;
+    }
+  }
+  for (const doorIdx of room.doors) world.factionControl[doorIdx] = owner;
 }
 
 function buildPodadField(seed: number): Uint8Array {

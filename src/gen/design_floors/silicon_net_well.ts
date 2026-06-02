@@ -20,11 +20,13 @@ import {
   type Entity,
   type Item,
   type Room,
+  type TerritoryOwner,
   type WorldContainer,
 } from '../../core/types';
 import { World } from '../../core/world';
 import { hashSeed, withSeededRandom } from '../../core/rand';
 import { freshNeeds } from '../../data/catalog';
+import { HUMAN_TERRITORY_OWNERS, factionToTerritoryOwner } from '../../data/factions';
 import { type PlotNpcDef, type SideQuestStep, registerSideQuest } from '../../data/plot';
 import { MONSTERS } from '../../entities/monster';
 import { monsterSpr, Spr } from '../../render/sprite_index';
@@ -64,6 +66,94 @@ interface SiliconPoint {
   x: number;
   y: number;
 }
+
+type SiliconDoorSide = 'north' | 'south' | 'west' | 'east';
+
+interface SiliconHqSite {
+  owner: TerritoryOwner;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  linkX: number;
+  linkY: number;
+  name: string;
+  wallTex: Tex;
+  floorTex: Tex;
+}
+
+interface SiliconSupportSpec {
+  type: RoomType;
+  name: string;
+  wallTex: Tex;
+  floorTex: Tex;
+}
+
+const SILICON_GRAPH_X = [72, 160, 248, 336, 424, 512, 600, 688, 776, 864, 952] as const;
+const SILICON_GRAPH_Y = [96, 184, 272, 360, 448, 576, 664, 752, 840, 928] as const;
+
+const SILICON_HQ_SITES: readonly SiliconHqSite[] = [
+  {
+    owner: ZoneFaction.SCIENTIST,
+    x: CX - 54,
+    y: CY - 406,
+    w: 108,
+    h: 36,
+    linkX: CX,
+    linkY: CY - 242,
+    name: 'Главный НИИ-штаб кремниевого колодца',
+    wallTex: Tex.HERMO_WALL,
+    floorTex: Tex.F_TILE,
+  },
+  {
+    owner: ZoneFaction.LIQUIDATOR,
+    x: CX + 270,
+    y: CY - 214,
+    w: 60,
+    h: 26,
+    linkX: CX + 348,
+    linkY: CY - 242,
+    name: 'Миништаб ликвидаторов протокола НЕТ',
+    wallTex: Tex.HERMO_WALL,
+    floorTex: Tex.F_CONCRETE,
+  },
+  {
+    owner: ZoneFaction.CITIZEN,
+    x: CX - 308,
+    y: CY + 86,
+    w: 58,
+    h: 24,
+    linkX: CX - 352,
+    linkY: CY + 226,
+    name: 'Гражданский убежищный пост старых кабелей',
+    wallTex: Tex.HERMO_WALL,
+    floorTex: Tex.F_LINO,
+  },
+  {
+    owner: ZoneFaction.WILD,
+    x: CX + 284,
+    y: CY + 244,
+    w: 58,
+    h: 24,
+    linkX: CX + 348,
+    linkY: CY + 226,
+    name: 'Дикий штаб срезанных серверных стоек',
+    wallTex: Tex.HERMO_WALL,
+    floorTex: Tex.F_CONCRETE,
+  },
+  {
+    owner: ZoneFaction.CULTIST,
+    x: CX - 286,
+    y: CY + 300,
+    w: 56,
+    h: 24,
+    linkX: CX - 352,
+    linkY: CY + 226,
+    name: 'Скрытый культовый штаб кремниевого следа',
+    wallTex: Tex.HERMO_WALL,
+    floorTex: Tex.F_RED_CARPET,
+  },
+] as const;
 
 const NPC_DEFS: Record<SiliconNpcId, PlotNpcDef> = {
   silicon_cibo: {
@@ -320,6 +410,52 @@ function tuneZones(world: World): void {
   }
 }
 
+function isSiliconAmbientNpc(entity: Entity): boolean {
+  return entity.type === EntityType.NPC &&
+    entity.alive &&
+    entity.plotNpcId === undefined &&
+    entity.persistentNpcId === undefined &&
+    entity.alifeId === undefined &&
+    entity.questId === -1 &&
+    entity.faction !== undefined;
+}
+
+function siliconTerritorySpawnCells(world: World): Map<TerritoryOwner, number[]> {
+  const cells = new Map<TerritoryOwner, number[]>();
+  for (const owner of HUMAN_TERRITORY_OWNERS) cells.set(owner, []);
+  for (let i = 0; i < W * W; i++) {
+    const cell = world.cells[i];
+    if (cell !== Cell.FLOOR && cell !== Cell.WATER) continue;
+    if (world.aptMask[i] || world.hermoWall[i] || world.containerMap.has(i) || world.features[i] === Feature.LIFT_BUTTON) continue;
+    const list = cells.get(world.factionControl[i] as TerritoryOwner);
+    if (list) list.push(i);
+  }
+  return cells;
+}
+
+export function alignSiliconNetWellAmbientNpcTerritory(world: World, entities: Entity[]): void {
+  const cells = siliconTerritorySpawnCells(world);
+  const offsets = new Uint16Array(8);
+  for (const entity of entities) {
+    if (!isSiliconAmbientNpc(entity) || entity.faction === undefined) continue;
+    const owner = factionToTerritoryOwner(entity.faction);
+    const list = cells.get(owner);
+    if (!list || list.length === 0) continue;
+    const offset = offsets[owner]++ | 0;
+    const cell = list[(entity.id * 109 + offset * 401) % list.length];
+    entity.x = (cell % W) + 0.5;
+    entity.y = ((cell / W) | 0) + 0.5;
+    entity.assignedRoomId = world.roomMap[cell] >= 0 ? world.roomMap[cell] : -1;
+    if (entity.ai) {
+      entity.ai.tx = cell % W;
+      entity.ai.ty = (cell / W) | 0;
+      entity.ai.path = [];
+      entity.ai.pi = 0;
+      entity.ai.stuck = 0;
+    }
+  }
+}
+
 function spawnNpcs(
   entities: Entity[],
   nextId: { v: number },
@@ -434,6 +570,9 @@ export function expandSiliconNetWellRouteGeometry(world: World, rng: () => numbe
   siliconMacroCorridor(world, mask, CX - 352, 116, 5, 780, 'Левая кабельная кишка НЕТ-колодца', Tex.F_CONCRETE, 28);
   siliconMacroCorridor(world, mask, CX + 348, 116, 5, 780, 'Правая кабельная кишка НЕТ-колодца', Tex.F_CONCRETE, 28);
 
+  buildSiliconFactionHqCompounds(world, mask, rng);
+  buildSiliconDeBruijnGraph(world, mask, rng);
+
   for (const p of [
     { x: CX - 352, y: CY - 242 }, { x: CX + 348, y: CY - 242 },
     { x: CX - 352, y: CY + 226 }, { x: CX + 348, y: CY + 226 },
@@ -475,9 +614,6 @@ export function tuneSiliconNetWellRouteZones(world: World): void {
     }
     zone.fogged = false;
     zone.hasLift = false;
-  }
-  for (let i = 0; i < W * W; i++) {
-    world.factionControl[i] = world.zones[world.zoneMap[i]]?.faction ?? ZoneFaction.WILD;
   }
 }
 
@@ -638,6 +774,298 @@ function decorateSiliconMacroRoom(world: World, room: Room, serial: number, rng:
   setFeature(world, room.x + room.w - 7, room.y + 5, Feature.LAMP);
 }
 
+function buildSiliconFactionHqCompounds(world: World, mask: Uint8Array, rng: () => number): void {
+  for (const site of SILICON_HQ_SITES) {
+    const core = siliconMacroRoom(world, mask, RoomType.HQ, site.x, site.y, site.w, site.h, site.name, site.wallTex, site.floorTex, 2);
+    if (!core) continue;
+    core.sealed = true;
+    markSiliconHermeticShell(world, core);
+    paintSiliconRoomOwner(world, core, site.owner);
+    decorateSiliconHqCore(world, core, site.owner);
+    connectSiliconRoomTo(world, mask, core, { x: site.linkX, y: site.linkY }, site.floorTex, 12, DoorState.HERMETIC_OPEN);
+    buildSiliconHqSupportRooms(world, mask, site, core, rng);
+  }
+}
+
+function buildSiliconHqSupportRooms(world: World, mask: Uint8Array, site: SiliconHqSite, core: Room, rng: () => number): void {
+  const supports = siliconHqSupportSpecs(site.owner);
+  const placements = [
+    { dx: -26, dy: -18, w: 20, h: 11 },
+    { dx: site.w + 10, dy: 2, w: 22, h: 12 },
+    { dx: 6, dy: site.h + 10, w: 24, h: 12 },
+    { dx: site.w - 18, dy: -18, w: 22, h: 11 },
+  ] as const;
+  for (let i = 0; i < supports.length; i++) {
+    const support = supports[i];
+    const place = placements[i];
+    const room = siliconMacroRoom(
+      world,
+      mask,
+      support.type,
+      site.x + place.dx,
+      site.y + place.dy,
+      place.w,
+      place.h,
+      `${site.name}: ${support.name}`,
+      support.wallTex,
+      support.floorTex,
+      0,
+    );
+    if (!room) continue;
+    paintSiliconRoomOwner(world, room, site.owner);
+    decorateSiliconSupportRoom(world, room, i + Math.floor(rng() * 7));
+    connectSiliconRooms(world, mask, core, room, site.floorTex, DoorState.CLOSED);
+  }
+}
+
+function siliconHqSupportSpecs(owner: TerritoryOwner): readonly SiliconSupportSpec[] {
+  switch (owner) {
+    case ZoneFaction.SCIENTIST:
+      return [
+        { type: RoomType.OFFICE, name: 'офис сверки сигналов', wallTex: Tex.PANEL, floorTex: Tex.F_TILE },
+        { type: RoomType.MEDICAL, name: 'лаборатория живого кремния', wallTex: Tex.TILE_W, floorTex: Tex.F_TILE },
+        { type: RoomType.STORAGE, name: 'склад сухих плат', wallTex: Tex.METAL, floorTex: Tex.F_CONCRETE },
+        { type: RoomType.KITCHEN, name: 'чайная НИИ-смены', wallTex: Tex.TILE_W, floorTex: Tex.F_TILE },
+      ];
+    case ZoneFaction.LIQUIDATOR:
+      return [
+        { type: RoomType.OFFICE, name: 'дежурная допуска', wallTex: Tex.METAL, floorTex: Tex.F_CONCRETE },
+        { type: RoomType.STORAGE, name: 'оружейная ниша', wallTex: Tex.METAL, floorTex: Tex.F_CONCRETE },
+        { type: RoomType.MEDICAL, name: 'перевязочный шкаф', wallTex: Tex.TILE_W, floorTex: Tex.F_TILE },
+        { type: RoomType.BATHROOM, name: 'санузел поста', wallTex: Tex.TILE_W, floorTex: Tex.F_TILE },
+      ];
+    case ZoneFaction.CULTIST:
+      return [
+        { type: RoomType.COMMON, name: 'комната тихого следа', wallTex: Tex.ROTTEN, floorTex: Tex.F_RED_CARPET },
+        { type: RoomType.STORAGE, name: 'кладовая свечей и плат', wallTex: Tex.ROTTEN, floorTex: Tex.F_CONCRETE },
+        { type: RoomType.KITCHEN, name: 'кипяток ритуальной смены', wallTex: Tex.TILE_W, floorTex: Tex.F_TILE },
+        { type: RoomType.MEDICAL, name: 'психометрическая ниша', wallTex: Tex.PANEL, floorTex: Tex.F_TILE },
+      ];
+    case ZoneFaction.WILD:
+      return [
+        { type: RoomType.COMMON, name: 'общий угол самозахвата', wallTex: Tex.ROTTEN, floorTex: Tex.F_CONCRETE },
+        { type: RoomType.STORAGE, name: 'склад снятых экранов', wallTex: Tex.METAL, floorTex: Tex.F_CONCRETE },
+        { type: RoomType.SMOKING, name: 'курилка у патч-панели', wallTex: Tex.ROTTEN, floorTex: Tex.F_CONCRETE },
+        { type: RoomType.BATHROOM, name: 'грязный санитарный отсек', wallTex: Tex.TILE_W, floorTex: Tex.F_WATER },
+      ];
+    case ZoneFaction.CITIZEN:
+    default:
+      return [
+        { type: RoomType.COMMON, name: 'общая комната кабельщиков', wallTex: Tex.PANEL, floorTex: Tex.F_LINO },
+        { type: RoomType.KITCHEN, name: 'кухня аварийной смены', wallTex: Tex.TILE_W, floorTex: Tex.F_TILE },
+        { type: RoomType.STORAGE, name: 'кладовая пайков', wallTex: Tex.PANEL, floorTex: Tex.F_CONCRETE },
+        { type: RoomType.MEDICAL, name: 'медшкаф убежища', wallTex: Tex.TILE_W, floorTex: Tex.F_TILE },
+      ];
+  }
+}
+
+function buildSiliconDeBruijnGraph(world: World, mask: Uint8Array, rng: () => number): void {
+  for (const y of SILICON_GRAPH_Y) {
+    carveSiliconLine(world, mask, SILICON_GRAPH_X[0], y, SILICON_GRAPH_X[SILICON_GRAPH_X.length - 1], y, 3, Tex.F_TILE, 26);
+  }
+  for (const x of SILICON_GRAPH_X) {
+    carveSiliconLine(world, mask, x, SILICON_GRAPH_Y[0], x, SILICON_GRAPH_Y[SILICON_GRAPH_Y.length - 1], 2, Tex.F_CONCRETE, 24);
+  }
+
+  const nodes: Room[] = [];
+  for (let gy = 0; gy < SILICON_GRAPH_Y.length; gy++) {
+    for (let gx = 0; gx < SILICON_GRAPH_X.length; gx++) {
+      const x = SILICON_GRAPH_X[gx];
+      const y = SILICON_GRAPH_Y[gy];
+      if (world.dist(x, y, CX, CY) < 156) continue;
+      const serial = gy * SILICON_GRAPH_X.length + gx;
+      const owner = siliconGraphOwner(serial);
+      const room = siliconMacroRoom(
+        world,
+        mask,
+        serial % 7 === 0 ? RoomType.PRODUCTION : serial % 5 === 0 ? RoomType.STORAGE : RoomType.OFFICE,
+        x - 16,
+        y - 9,
+        32,
+        18,
+        `НЕТ-граф Брёйна: узел ${serial.toString(2).padStart(6, '0')}`,
+        serial % 3 === 0 ? Tex.PANEL : Tex.METAL,
+        serial % 4 === 0 ? Tex.F_TILE : Tex.F_CONCRETE,
+        0,
+      );
+      if (!room) continue;
+      nodes.push(room);
+      paintSiliconRoomOwner(world, room, owner);
+      decorateSiliconGraphNode(world, room, serial);
+      addSiliconStationDoors(world, room);
+      placeSiliconNodeMicroRooms(world, mask, room, serial, owner, rng);
+    }
+  }
+
+  for (let i = 0; i < 16; i++) {
+    const from = graphPoint(i % SILICON_GRAPH_X.length, (i * 3) % SILICON_GRAPH_Y.length);
+    const to = graphPoint((i * 2 + 1) % SILICON_GRAPH_X.length, (i * 5 + 2) % SILICON_GRAPH_Y.length);
+    carveSiliconLine(world, mask, from.x, from.y, to.x, to.y, 1, Tex.F_TILE, 34);
+    setCircuitFeature(world, from.x, from.y, i % 2 === 0 ? Feature.SCREEN : Feature.APPARATUS);
+    setCircuitFeature(world, to.x, to.y, i % 2 === 0 ? Feature.APPARATUS : Feature.SCREEN);
+  }
+
+  placeSiliconEdgeArchiveCells(world, mask, rng);
+  for (let i = 0; i < nodes.length; i += 5) {
+    const c = roomCenter(nodes[i]);
+    scatterSiliconCrystals(world, rng, c.x, c.y, 12);
+  }
+}
+
+function graphPoint(gx: number, gy: number): SiliconPoint {
+  return {
+    x: SILICON_GRAPH_X[Math.max(0, Math.min(SILICON_GRAPH_X.length - 1, gx))],
+    y: SILICON_GRAPH_Y[Math.max(0, Math.min(SILICON_GRAPH_Y.length - 1, gy))],
+  };
+}
+
+function siliconGraphOwner(serial: number): TerritoryOwner {
+  if (serial % 17 === 0) return ZoneFaction.CULTIST;
+  if (serial % 11 === 0) return ZoneFaction.WILD;
+  if (serial % 7 === 0) return ZoneFaction.LIQUIDATOR;
+  if (serial % 5 === 0) return ZoneFaction.CITIZEN;
+  return ZoneFaction.SCIENTIST;
+}
+
+function decorateSiliconGraphNode(world: World, room: Room, serial: number): void {
+  for (let x = room.x + 4; x < room.x + room.w - 4; x += 6) {
+    setFeature(world, x, room.y + 4, serial % 2 === 0 ? Feature.SCREEN : Feature.APPARATUS);
+    setFeature(world, x + 2, room.y + room.h - 5, serial % 3 === 0 ? Feature.MACHINE : Feature.DESK);
+  }
+  setFeature(world, room.x + room.w - 5, room.y + 5, Feature.LAMP);
+}
+
+function addSiliconStationDoors(world: World, room: Room): void {
+  addSiliconRoomDoor(world, room, 'north', DoorState.CLOSED);
+  addSiliconRoomDoor(world, room, 'south', DoorState.CLOSED);
+  addSiliconRoomDoor(world, room, 'west', DoorState.CLOSED);
+  addSiliconRoomDoor(world, room, 'east', DoorState.CLOSED);
+}
+
+function placeSiliconNodeMicroRooms(
+  world: World,
+  mask: Uint8Array,
+  node: Room,
+  serial: number,
+  owner: TerritoryOwner,
+  rng: () => number,
+): void {
+  const specs = [
+    { dx: -31, dy: -25, w: 13, h: 8, type: RoomType.STORAGE, name: 'шкаф патч-кабелей', wallTex: Tex.METAL, floorTex: Tex.F_CONCRETE },
+    { dx: node.w + 18, dy: -22, w: 14, h: 8, type: RoomType.OFFICE, name: 'будка обходчика узла', wallTex: Tex.PANEL, floorTex: Tex.F_LINO },
+    { dx: -30, dy: node.h + 14, w: 13, h: 8, type: RoomType.MEDICAL, name: 'камера живого кремния', wallTex: Tex.TILE_W, floorTex: Tex.F_TILE },
+    { dx: node.w + 18, dy: node.h + 12, w: 15, h: 8, type: RoomType.STORAGE, name: 'кассета сухих ячеек', wallTex: Tex.METAL, floorTex: Tex.F_TILE },
+  ] as const;
+  const limit = 3 + (serial % 3 === 0 ? 1 : 0);
+  for (let i = 0; i < limit; i++) {
+    const spec = specs[i];
+    const room = siliconMacroRoom(
+      world,
+      mask,
+      spec.type,
+      node.x + spec.dx,
+      node.y + spec.dy,
+      spec.w,
+      spec.h,
+      `${node.name}: ${spec.name}`,
+      spec.wallTex,
+      spec.floorTex,
+      0,
+    );
+    if (!room) continue;
+    paintSiliconRoomOwner(world, room, owner);
+    decorateSiliconSupportRoom(world, room, serial + i + Math.floor(rng() * 5));
+    connectSiliconRooms(world, mask, node, room, spec.floorTex, DoorState.CLOSED);
+  }
+}
+
+function placeSiliconEdgeArchiveCells(world: World, mask: Uint8Array, rng: () => number): void {
+  let serial = 0;
+  for (const y of SILICON_GRAPH_Y) {
+    for (let gx = 0; gx < SILICON_GRAPH_X.length - 1; gx++) {
+      const x = Math.round((SILICON_GRAPH_X[gx] + SILICON_GRAPH_X[gx + 1]) / 2);
+      const dy = (serial % 2 === 0 ? -24 : 18) + Math.floor(rng() * 5);
+      placeSiliconEdgeArchiveCell(world, mask, x - 8, y + dy, x, y, serial++);
+    }
+  }
+  for (const x of SILICON_GRAPH_X) {
+    for (let gy = 0; gy < SILICON_GRAPH_Y.length - 1; gy++) {
+      const y = Math.round((SILICON_GRAPH_Y[gy] + SILICON_GRAPH_Y[gy + 1]) / 2);
+      const dx = (serial % 2 === 0 ? -24 : 18) + Math.floor(rng() * 5);
+      placeSiliconEdgeArchiveCell(world, mask, x + dx, y - 5, x, y, serial++);
+    }
+  }
+}
+
+function placeSiliconEdgeArchiveCell(world: World, mask: Uint8Array, x: number, y: number, linkX: number, linkY: number, serial: number): void {
+  if (world.dist(x, y, CX, CY) < 134) return;
+  const owner = siliconGraphOwner(serial + 3);
+  const room = siliconMacroRoom(
+    world,
+    mask,
+    serial % 4 === 0 ? RoomType.STORAGE : serial % 4 === 1 ? RoomType.OFFICE : serial % 4 === 2 ? RoomType.PRODUCTION : RoomType.BATHROOM,
+    x,
+    y,
+    serial % 3 === 0 ? 18 : 15,
+    serial % 5 === 0 ? 10 : 8,
+    `НЕТ-регистр Брёйна: боковая ячейка ${serial + 1}`,
+    serial % 2 === 0 ? Tex.METAL : Tex.PANEL,
+    serial % 4 === 3 ? Tex.F_TILE : Tex.F_CONCRETE,
+    0,
+  );
+  if (!room) return;
+  paintSiliconRoomOwner(world, room, owner);
+  decorateSiliconSupportRoom(world, room, serial);
+  connectSiliconRoomTo(world, mask, room, { x: linkX, y: linkY }, room.floorTex, 22, DoorState.CLOSED);
+}
+
+function decorateSiliconHqCore(world: World, room: Room, owner: TerritoryOwner): void {
+  setFeature(world, room.x + 5, room.y + 5, owner === ZoneFaction.CULTIST ? Feature.CANDLE : Feature.DESK);
+  setFeature(world, room.x + room.w - 7, room.y + 5, owner === ZoneFaction.SCIENTIST ? Feature.APPARATUS : Feature.SCREEN);
+  setFeature(world, room.x + 6, room.y + room.h - 6, Feature.SHELF);
+  setFeature(world, room.x + room.w - 8, room.y + room.h - 6, Feature.LAMP);
+  for (let x = room.x + 14; x < room.x + room.w - 12; x += 14) {
+    setFeature(world, x, room.y + (room.h >> 1), owner === ZoneFaction.SCIENTIST ? Feature.APPARATUS : Feature.TABLE);
+  }
+}
+
+function decorateSiliconSupportRoom(world: World, room: Room, serial: number): void {
+  switch (room.type) {
+    case RoomType.BATHROOM:
+      setFeature(world, room.x + 3, room.y + 3, Feature.SINK);
+      setFeature(world, room.x + room.w - 4, room.y + room.h - 3, Feature.TOILET);
+      break;
+    case RoomType.KITCHEN:
+      setFeature(world, room.x + 3, room.y + 3, Feature.STOVE);
+      setFeature(world, room.x + room.w - 4, room.y + 3, Feature.SINK);
+      setFeature(world, room.x + 5, room.y + room.h - 3, Feature.TABLE);
+      break;
+    case RoomType.MEDICAL:
+      setFeature(world, room.x + 3, room.y + 3, Feature.APPARATUS);
+      setFeature(world, room.x + room.w - 4, room.y + 3, Feature.SINK);
+      break;
+    case RoomType.STORAGE:
+      for (let y = room.y + 3; y < room.y + room.h - 2; y += 4) {
+        setFeature(world, room.x + 3, y, Feature.SHELF);
+        setFeature(world, room.x + room.w - 4, y, Feature.SHELF);
+      }
+      break;
+    case RoomType.OFFICE:
+      setFeature(world, room.x + 3, room.y + 3, Feature.DESK);
+      setFeature(world, room.x + room.w - 5, room.y + 3, serial % 2 === 0 ? Feature.SCREEN : Feature.SHELF);
+      break;
+    case RoomType.PRODUCTION:
+      setFeature(world, room.x + 4, room.y + 4, Feature.MACHINE);
+      setFeature(world, room.x + room.w - 5, room.y + 4, Feature.APPARATUS);
+      break;
+    default:
+      setFeature(world, room.x + 4, room.y + 4, Feature.TABLE);
+      setFeature(world, room.x + room.w - 5, room.y + room.h - 4, serial % 2 === 0 ? Feature.CHAIR : Feature.CANDLE);
+      break;
+  }
+  if (serial % 3 === 0) setFeature(world, room.x + (room.w >> 1), room.y + (room.h >> 1), Feature.LAMP);
+}
+
 function placeRadialNetPods(world: World, mask: Uint8Array, rng: () => number): SiliconPoint[] {
   const centers: SiliconPoint[] = [];
   const specs = [
@@ -787,7 +1215,96 @@ function setCircuitFeature(world: World, x: number, y: number, feature: Feature)
   if (world.cells[ci] === Cell.FLOOR && world.features[ci] === Feature.NONE) world.features[ci] = feature;
 }
 
-function connectSiliconRoomTo(world: World, mask: Uint8Array, room: Room, target: { x: number; y: number }, floorTex: Tex, fog: number): void {
+function paintSiliconRoomOwner(world: World, room: Room, owner: TerritoryOwner): void {
+  for (let dy = 0; dy < room.h; dy++) {
+    for (let dx = 0; dx < room.w; dx++) {
+      const idx = world.idx(room.x + dx, room.y + dy);
+      if (world.roomMap[idx] === room.id && !world.aptMask[idx]) world.factionControl[idx] = owner;
+    }
+  }
+  for (const idx of room.doors) {
+    if (!world.aptMask[idx]) world.factionControl[idx] = owner;
+  }
+}
+
+function markSiliconHermeticShell(world: World, room: Room): void {
+  room.sealed = true;
+  room.wallTex = Tex.HERMO_WALL;
+  for (let dy = -1; dy <= room.h; dy++) {
+    for (let dx = -1; dx <= room.w; dx++) {
+      if (dx >= 0 && dx < room.w && dy >= 0 && dy < room.h) continue;
+      const idx = world.idx(room.x + dx, room.y + dy);
+      if (world.cells[idx] !== Cell.WALL || world.aptMask[idx]) continue;
+      world.hermoWall[idx] = 1;
+      world.wallTex[idx] = Tex.HERMO_WALL;
+    }
+  }
+}
+
+function siliconDoorSite(room: Room, side: SiliconDoorSide): { x: number; y: number; ox: number; oy: number } {
+  if (side === 'north') {
+    const x = room.x + Math.max(2, Math.min(room.w - 3, room.w >> 1));
+    return { x, y: room.y - 1, ox: x, oy: room.y - 2 };
+  }
+  if (side === 'south') {
+    const x = room.x + Math.max(2, Math.min(room.w - 3, room.w >> 1));
+    return { x, y: room.y + room.h, ox: x, oy: room.y + room.h + 1 };
+  }
+  if (side === 'west') {
+    const y = room.y + Math.max(2, Math.min(room.h - 3, room.h >> 1));
+    return { x: room.x - 1, y, ox: room.x - 2, oy: y };
+  }
+  const y = room.y + Math.max(2, Math.min(room.h - 3, room.h >> 1));
+  return { x: room.x + room.w, y, ox: room.x + room.w + 1, oy: y };
+}
+
+function sideTowardRoom(from: Room, to: Room): SiliconDoorSide {
+  const ax = from.x + (from.w >> 1);
+  const ay = from.y + (from.h >> 1);
+  const bx = to.x + (to.w >> 1);
+  const by = to.y + (to.h >> 1);
+  const dx = bx - ax;
+  const dy = by - ay;
+  if (Math.abs(dx) > Math.abs(dy)) return dx < 0 ? 'west' : 'east';
+  return dy < 0 ? 'north' : 'south';
+}
+
+function addSiliconRoomDoor(world: World, room: Room, side: SiliconDoorSide, state: DoorState, keyId = ''): number {
+  const site = siliconDoorSite(room, side);
+  forceOpenSiliconTile(world, site.ox, site.oy, room.floorTex, -1, 18);
+  addDoor(world, room, site.x, site.y, state, keyId);
+  return world.idx(site.x, site.y);
+}
+
+function connectSiliconRooms(
+  world: World,
+  mask: Uint8Array,
+  a: Room,
+  b: Room,
+  floorTex: Tex,
+  state: DoorState,
+): void {
+  const aSide = sideTowardRoom(a, b);
+  const bSide = sideTowardRoom(b, a);
+  const aSite = siliconDoorSite(a, aSide);
+  const bSite = siliconDoorSite(b, bSide);
+  forceOpenSiliconTile(world, aSite.ox, aSite.oy, floorTex, -1, 16);
+  forceOpenSiliconTile(world, bSite.ox, bSite.oy, floorTex, -1, 16);
+  addDoor(world, a, aSite.x, aSite.y, state);
+  addDoor(world, b, bSite.x, bSite.y, state === DoorState.LOCKED ? DoorState.CLOSED : state);
+  carveSiliconLine(world, mask, aSite.ox, aSite.oy, bSite.ox, bSite.oy, 2, floorTex, 16);
+}
+
+function connectSiliconRoomTo(
+  world: World,
+  mask: Uint8Array,
+  room: Room,
+  target: { x: number; y: number },
+  floorTex: Tex,
+  fog: number,
+  state = DoorState.CLOSED,
+  keyId = '',
+): void {
   const cx = room.x + (room.w >> 1);
   const cy = room.y + (room.h >> 1);
   const dx = world.delta(cx, target.x);
@@ -802,13 +1319,13 @@ function connectSiliconRoomTo(world: World, mask: Uint8Array, room: Room, target
     outsideX = doorX + (dx < 0 ? -1 : 1);
     outsideY = doorY;
   } else {
-    doorX = Math.max(room.x + 2, Math.min(room.x + room.w - 3, cx));
+      doorX = Math.max(room.x + 2, Math.min(room.x + room.w - 3, cx));
     doorY = dy < 0 ? room.y - 1 : room.y + room.h;
     outsideX = doorX;
     outsideY = doorY + (dy < 0 ? -1 : 1);
   }
-  forceOpenSiliconTile(world, doorX, doorY, floorTex, -1, fog);
   forceOpenSiliconTile(world, outsideX, outsideY, floorTex, -1, fog);
+  addDoor(world, room, doorX, doorY, state, keyId);
   carveSiliconLine(world, mask, outsideX, outsideY, target.x, target.y, 2, floorTex, fog);
 }
 
@@ -943,6 +1460,11 @@ function carveVoidShaft(world: World, room: Room): void {
 function addDoor(world: World, room: Room, x: number, y: number, state: DoorState, keyId = ''): void {
   const idx = world.idx(x, y);
   world.cells[idx] = Cell.DOOR;
+  world.roomMap[idx] = room.id;
+  world.hermoWall[idx] = state === DoorState.HERMETIC_OPEN || state === DoorState.HERMETIC_CLOSED ? 1 : 0;
+  world.wallTex[idx] = state === DoorState.HERMETIC_OPEN || state === DoorState.HERMETIC_CLOSED
+    ? Tex.HERMO_WALL
+    : Tex.DOOR_METAL;
   world.doors.set(idx, {
     idx,
     state,
@@ -951,7 +1473,7 @@ function addDoor(world: World, room: Room, x: number, y: number, state: DoorStat
     keyId,
     timer: 0,
   });
-  room.doors.push(idx);
+  if (!room.doors.includes(idx)) room.doors.push(idx);
 }
 
 function setFeature(world: World, x: number, y: number, feature: Feature): void {

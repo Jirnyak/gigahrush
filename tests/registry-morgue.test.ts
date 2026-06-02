@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import * as assert from 'node:assert/strict';
 
 import { auditReachability } from '../src/core/world';
-import { Cell, EntityType, LiftDirection, RoomType, W } from '../src/core/types';
+import { Cell, DoorState, EntityType, LiftDirection, RoomType, W, ZoneFaction } from '../src/core/types';
 import { ITEMS } from '../src/data/catalog';
 import { CONTRACTS } from '../src/data/contracts';
 import { designFloorById } from '../src/data/design_floors';
@@ -10,6 +10,7 @@ import { designFloorPopulationProfile } from '../src/data/design_floor_populatio
 import { SIDE_QUESTS } from '../src/data/plot';
 import { resourceForItem } from '../src/data/resources';
 import { generateDesignFloor } from '../src/gen/design_floors/manifest';
+import { countTerritoryCells, territoryHqAnchors, territoryOwnerAt, territoryRoomOwner } from '../src/systems/territory';
 
 let cachedGeneration: ReturnType<typeof generateDesignFloor> | undefined;
 
@@ -33,6 +34,12 @@ function hasReachableLift(gen: ReturnType<typeof generateDesignFloor>, direction
     if (neighbors.some(idx => audit.reachable[idx] === 1)) return true;
   }
   return false;
+}
+
+function countReachableCells(reachable: Uint8Array): number {
+  let count = 0;
+  for (const value of reachable) count += value;
+  return count;
 }
 
 test('corpse number tag is a document-scarcity morgue proof token', () => {
@@ -60,6 +67,50 @@ test('registry morgue is a monster-heavy bureaucratic horror floor with bounded 
   assert.equal(monsters.length > npcs.length * 2, true, `monsters ${monsters.length}, npcs ${npcs.length}`);
   assert.equal(gen.world.rooms.some(room => room.type === RoomType.MEDICAL && room.name.includes('Зараженная камера')), true);
   assert.equal(gen.world.rooms.some(room => room.type === RoomType.STORAGE && room.name.includes('Холодная')), true);
+});
+
+test('registry morgue expands macro idea with mid blocks, micro rooms, and faction HQ territory', () => {
+  const gen = generatedRegistryMorgue();
+  const audit = auditReachability(gen.world, gen.world.idx(Math.floor(gen.spawnX), Math.floor(gen.spawnY)));
+  const reachable = countReachableCells(audit.reachable);
+  const microRooms = gen.world.rooms.filter(room =>
+    room.name.includes('Микро') ||
+    room.name.includes('копийная ячейка')
+  );
+  const hqRooms = gen.world.rooms.filter(room => room.type === RoomType.HQ);
+  const hermeticHqs = hqRooms.filter(room =>
+    room.sealed &&
+    room.doors.some(doorIdx => {
+      const state = gen.world.doors.get(doorIdx)?.state;
+      return state === DoorState.HERMETIC_OPEN || state === DoorState.HERMETIC_CLOSED;
+    })
+  );
+  const anchors = territoryHqAnchors(gen.world);
+  const anchorOwners = new Set(anchors.map(anchor => anchor.owner));
+  const counts = new Map(countTerritoryCells(gen.world).map(row => [row.owner, row.cells]));
+  const share = (owner: ZoneFaction): number => (counts.get(owner) ?? 0) / (W * W);
+
+  assert.equal(gen.world.rooms.length >= 420, true, `rooms ${gen.world.rooms.length}`);
+  assert.equal(gen.world.doors.size >= 500, true, `doors ${gen.world.doors.size}`);
+  assert.equal(reachable >= 185_000, true, `reachable ${reachable}`);
+  assert.equal(microRooms.length >= 300, true, `micro rooms ${microRooms.length}`);
+  assert.equal(hermeticHqs.length >= 5, true, `hermetic HQs ${hermeticHqs.length}`);
+
+  for (const owner of [ZoneFaction.CITIZEN, ZoneFaction.LIQUIDATOR, ZoneFaction.CULTIST, ZoneFaction.SCIENTIST, ZoneFaction.WILD] as const) {
+    assert.equal(anchorOwners.has(owner), true, `missing HQ anchor ${ZoneFaction[owner]}`);
+    assert.equal((counts.get(owner) ?? 0) > 0, true, `missing territory cells ${ZoneFaction[owner]}`);
+  }
+  for (const anchor of anchors) {
+    assert.equal(territoryRoomOwner(gen.world, anchor.roomId), anchor.owner, gen.world.rooms[anchor.roomId]?.name);
+    assert.equal(territoryOwnerAt(gen.world, anchor.x, anchor.y), anchor.owner, gen.world.rooms[anchor.roomId]?.name);
+  }
+
+  assert.equal(share(ZoneFaction.LIQUIDATOR) > share(ZoneFaction.CITIZEN), true);
+  assert.ok(Math.abs(share(ZoneFaction.CITIZEN) - 0.28) <= 0.025, `citizen ${share(ZoneFaction.CITIZEN)}`);
+  assert.ok(Math.abs(share(ZoneFaction.LIQUIDATOR) - 0.34) <= 0.025, `liquidator ${share(ZoneFaction.LIQUIDATOR)}`);
+  assert.ok(Math.abs(share(ZoneFaction.CULTIST) - 0.12) <= 0.02, `cultist ${share(ZoneFaction.CULTIST)}`);
+  assert.ok(Math.abs(share(ZoneFaction.SCIENTIST) - 0.18) <= 0.025, `scientist ${share(ZoneFaction.SCIENTIST)}`);
+  assert.ok(Math.abs(share(ZoneFaction.WILD) - 0.08) <= 0.02, `wild ${share(ZoneFaction.WILD)}`);
 });
 
 test('registry morgue gates valuable records and medicine behind owned or locked containers', () => {

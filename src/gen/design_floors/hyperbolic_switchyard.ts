@@ -19,11 +19,13 @@ import {
   ZoneFaction,
   type Entity,
   type Room,
+  type TerritoryOwner,
   type WorldContainer,
 } from '../../core/types';
 import { World } from '../../core/world';
 import { hashSeed, withSeededRandom } from '../../core/rand';
 import { freshNeeds } from '../../data/catalog';
+import { HUMAN_TERRITORY_OWNERS, factionToTerritoryOwner } from '../../data/factions';
 import { type PlotNpcDef, registerSideQuest } from '../../data/plot';
 import { MONSTERS } from '../../entities/monster';
 import { monsterSpr } from '../../render/sprite_index';
@@ -36,6 +38,9 @@ import type { FloorGeneration } from '../floor_manifest';
 export const HYPERBOLIC_SWITCHYARD_DESIGN_FLOOR_ID = 'hyperbolic_switchyard' as const;
 export const HYPERBOLIC_SWITCHYARD_ROUTE_Z = -20;
 export const HYPERBOLIC_SWITCHYARD_BASE_FLOOR = FloorLevel.MAINTENANCE;
+export const HYPERBOLIC_SWITCHYARD_ROOM_NAMES = {
+  shortcut: 'Геодезическая служебная кишка',
+} as const;
 
 const SEED = hashSeed(HYPERBOLIC_SWITCHYARD_DESIGN_FLOOR_ID);
 const GUIDE_NPC_ID = 'hyperbolic_switchyard_guide_zinaida';
@@ -108,6 +113,70 @@ interface SwitchyardRooms {
   falsePlatform: Room;
 }
 
+type SwitchyardDoorSide = 'north' | 'south' | 'west' | 'east';
+
+interface SwitchyardServiceBlockSpec {
+  owner: TerritoryOwner;
+  name: string;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  type: RoomType;
+  wallTex: Tex;
+  floorTex: Tex;
+  micro: number;
+}
+
+interface SwitchyardHqSpec {
+  owner: TerritoryOwner;
+  title: string;
+  x: number;
+  y: number;
+  wallTex: Tex;
+  floorTex: Tex;
+  supportWallTex: Tex;
+  supportFloorTex: Tex;
+  strong?: boolean;
+}
+
+const SWITCHYARD_SERVICE_BLOCKS: readonly SwitchyardServiceBlockSpec[] = [
+  { owner: ZoneFaction.CITIZEN, name: 'Очередь к северо-западной стрелке', x: 84, y: 166, w: 88, h: 44, type: RoomType.COMMON, wallTex: Tex.PANEL, floorTex: Tex.F_LINO, micro: 24 },
+  { owner: ZoneFaction.SCIENTIST, name: 'Архив кривизны северной дуги', x: 250, y: 126, w: 92, h: 42, type: RoomType.OFFICE, wallTex: Tex.MARBLE, floorTex: Tex.F_PARQUET, micro: 22 },
+  { owner: ZoneFaction.LIQUIDATOR, name: 'Пост обстрела верхнего семейства', x: 590, y: 126, w: 92, h: 42, type: RoomType.PRODUCTION, wallTex: Tex.METAL, floorTex: Tex.F_CONCRETE, micro: 24 },
+  { owner: ZoneFaction.LIQUIDATOR, name: 'Склад стрелочных заслонок', x: 780, y: 166, w: 92, h: 44, type: RoomType.STORAGE, wallTex: Tex.PIPE, floorTex: Tex.F_CONCRETE, micro: 24 },
+  { owner: ZoneFaction.WILD, name: 'Разобранный западный двор рельс', x: 74, y: 372, w: 96, h: 52, type: RoomType.COMMON, wallTex: Tex.DARK, floorTex: Tex.F_CONCRETE, micro: 28 },
+  { owner: ZoneFaction.CITIZEN, name: 'Бытовой остров ложной платформы', x: 230, y: 322, w: 90, h: 46, type: RoomType.KITCHEN, wallTex: Tex.PANEL, floorTex: Tex.F_TILE, micro: 24 },
+  { owner: ZoneFaction.SCIENTIST, name: 'Измерительный остров красной хорды', x: 724, y: 322, w: 90, h: 46, type: RoomType.PRODUCTION, wallTex: Tex.TILE_W, floorTex: Tex.F_TILE, micro: 24 },
+  { owner: ZoneFaction.WILD, name: 'Восточный двор неправильных путей', x: 858, y: 374, w: 96, h: 52, type: RoomType.STORAGE, wallTex: Tex.DARK, floorTex: Tex.F_CONCRETE, micro: 28 },
+  { owner: ZoneFaction.CULTIST, name: 'Нижний след двойной стрелки', x: 86, y: 598, w: 92, h: 48, type: RoomType.COMMON, wallTex: Tex.MEAT, floorTex: Tex.F_MEAT, micro: 24 },
+  { owner: ZoneFaction.LIQUIDATOR, name: 'Запасной караул нижней платформы', x: 250, y: 694, w: 92, h: 44, type: RoomType.STORAGE, wallTex: Tex.METAL, floorTex: Tex.F_CONCRETE, micro: 24 },
+  { owner: ZoneFaction.SCIENTIST, name: 'Лаборатория обратной стрелки', x: 602, y: 694, w: 92, h: 44, type: RoomType.MEDICAL, wallTex: Tex.TILE_W, floorTex: Tex.F_TILE, micro: 24 },
+  { owner: ZoneFaction.WILD, name: 'Юго-восточный двор снятых шпал', x: 782, y: 598, w: 96, h: 48, type: RoomType.COMMON, wallTex: Tex.DARK, floorTex: Tex.F_CONCRETE, micro: 28 },
+  { owner: ZoneFaction.CULTIST, name: 'Тихая петля расписания', x: 410, y: 788, w: 104, h: 46, type: RoomType.SMOKING, wallTex: Tex.DARK, floorTex: Tex.F_GREEN_CARPET, micro: 30 },
+  { owner: ZoneFaction.LIQUIDATOR, name: 'Центральный двор обходных стрелок', x: 388, y: 238, w: 98, h: 44, type: RoomType.PRODUCTION, wallTex: Tex.PIPE, floorTex: Tex.F_CONCRETE, micro: 26 },
+  { owner: ZoneFaction.LIQUIDATOR, name: 'Центральный двор нижних приводов', x: 522, y: 752, w: 98, h: 44, type: RoomType.PRODUCTION, wallTex: Tex.PIPE, floorTex: Tex.F_CONCRETE, micro: 26 },
+] as const;
+
+const SWITCHYARD_HQ_SPECS: readonly SwitchyardHqSpec[] = [
+  { owner: ZoneFaction.CITIZEN, title: 'граждан', x: 118, y: 92, wallTex: Tex.PANEL, floorTex: Tex.F_LINO, supportWallTex: Tex.PANEL, supportFloorTex: Tex.F_TILE },
+  { owner: ZoneFaction.LIQUIDATOR, title: 'ликвидаторов', x: 746, y: 86, wallTex: Tex.HERMO_WALL, floorTex: Tex.F_CONCRETE, supportWallTex: Tex.METAL, supportFloorTex: Tex.F_CONCRETE, strong: true },
+  { owner: ZoneFaction.SCIENTIST, title: 'учёных', x: 104, y: 742, wallTex: Tex.TILE_W, floorTex: Tex.F_TILE, supportWallTex: Tex.MARBLE, supportFloorTex: Tex.F_PARQUET },
+  { owner: ZoneFaction.WILD, title: 'диких', x: 760, y: 742, wallTex: Tex.DARK, floorTex: Tex.F_CONCRETE, supportWallTex: Tex.METAL, supportFloorTex: Tex.F_CONCRETE },
+  { owner: ZoneFaction.CULTIST, title: 'культистов', x: 430, y: 866, wallTex: Tex.MEAT, floorTex: Tex.F_MEAT, supportWallTex: Tex.DARK, supportFloorTex: Tex.F_GREEN_CARPET },
+] as const;
+
+const SWITCHYARD_MICRO_TYPES: readonly RoomType[] = [
+  RoomType.STORAGE,
+  RoomType.OFFICE,
+  RoomType.BATHROOM,
+  RoomType.KITCHEN,
+  RoomType.PRODUCTION,
+  RoomType.COMMON,
+  RoomType.STORAGE,
+  RoomType.SMOKING,
+] as const;
+
 const GUIDE_DEF: PlotNpcDef = {
   name: 'Зинаида Кривых Стрелок',
   isFemale: true,
@@ -164,6 +233,7 @@ export function generateHyperbolicSwitchyardDesignFloor(seed = SEED): Hyperbolic
     carveGeodesicShortcut(world, arcCells.shortcutCells);
     const rooms = buildSwitchyardRooms(world);
     connectSwitchyardRooms(world, rooms);
+    buildSwitchyardMidMicro(world, rooms);
     const gateCells = placeSwitchyardGates(world);
     generateZones(world);
     tuneSwitchyardZones(world);
@@ -307,7 +377,7 @@ function buildSwitchyardRooms(world: World): SwitchyardRooms {
     east: makeRoom(world, RoomType.COMMON, 680, 498, 48, 30, 'Хороцикл восточной платформы', Tex.METAL, Tex.F_CONCRETE),
     blueSwitch: makeRoom(world, RoomType.PRODUCTION, 402, 442, 38, 30, 'Пульт синего семейства дуг', Tex.PIPE, Tex.F_TILE),
     redSwitch: makeRoom(world, RoomType.PRODUCTION, 584, 442, 38, 30, 'Пульт красного семейства дуг', Tex.PIPE, Tex.F_TILE),
-    shortcut: makeRoom(world, RoomType.STORAGE, 616, 574, 48, 30, 'Геодезическая служебная кишка', Tex.PIPE, Tex.F_TILE),
+    shortcut: makeRoom(world, RoomType.STORAGE, 616, 574, 48, 30, HYPERBOLIC_SWITCHYARD_ROOM_NAMES.shortcut, Tex.PIPE, Tex.F_TILE),
     falsePlatform: makeRoom(world, RoomType.STORAGE, 666, 650, 58, 28, 'Ложная платформа с обратной стрелкой', Tex.DARK, Tex.F_CONCRETE),
   };
 }
@@ -358,10 +428,426 @@ function connectSwitchyardRooms(world: World, rooms: SwitchyardRooms): void {
   connectRoomToPoint(world, rooms.falsePlatform, 'west', 640, 650, DoorState.LOCKED, 'relay_diagram');
 }
 
+function buildSwitchyardMidMicro(world: World, rooms: SwitchyardRooms): void {
+  const hubs: Room[] = [];
+  for (const spec of SWITCHYARD_SERVICE_BLOCKS) {
+    const hub = tryStampSwitchyardRoom(world, spec.type, spec.x, spec.y, spec.w, spec.h, spec.name, spec.wallTex, spec.floorTex, spec.owner);
+    if (!hub) continue;
+    decorateSwitchyardOwnedRoom(world, hub, spec.owner, spec.x + spec.y);
+    const ports = openSwitchyardRoomPorts(world, hub, spec.owner, DoorState.CLOSED);
+    const target = nearestSwitchyardBackbonePoint(world, hub, rooms, hubs);
+    connectRoomToPoint(world, hub, sideTowardPoint(hub, target.x, target.y), target.x, target.y, DoorState.CLOSED);
+    placeSwitchyardMicroRooms(world, hub, ports, spec);
+    hubs.push(hub);
+  }
+
+  connectSwitchyardHubRing(world, hubs);
+  const hqs = buildSwitchyardHqCompounds(world, rooms, hubs);
+  connectSwitchyardHubRing(world, hqs);
+  world.markCellsDirty();
+  world.markWallTexDirty();
+  world.markFloorTexDirty();
+  world.markFeaturesDirty(false);
+}
+
+function stampRequiredSwitchyardRoom(
+  world: World,
+  type: RoomType,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  name: string,
+  wallTex: Tex,
+  floorTex: Tex,
+  owner: TerritoryOwner,
+): Room {
+  const room = tryStampSwitchyardRoom(world, type, x, y, w, h, name, wallTex, floorTex, owner);
+  if (!room) {
+    throw new Error(`Cannot place Hyperbolic switchyard room: ${name}`);
+  }
+  return room;
+}
+
+function tryStampSwitchyardRoom(
+  world: World,
+  type: RoomType,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  name: string,
+  wallTex: Tex,
+  floorTex: Tex,
+  owner: TerritoryOwner,
+): Room | null {
+  const shifts: readonly [number, number][] = [
+    [0, 0], [16, 0], [-16, 0], [0, 16], [0, -16],
+    [28, 18], [-28, 18], [28, -18], [-28, -18],
+    [42, 0], [-42, 0], [0, 42], [0, -42],
+  ];
+  for (const [sx, sy] of shifts) {
+    const px = clamp(Math.round(x + sx), 4, W - w - 5);
+    const py = clamp(Math.round(y + sy), 4, W - h - 5);
+    if (!canStampSwitchyardRoom(world, px, py, w, h)) continue;
+    return stampSwitchyardRoom(world, type, px, py, w, h, name, wallTex, floorTex, owner);
+  }
+  return null;
+}
+
+function canStampSwitchyardRoom(world: World, x: number, y: number, w: number, h: number): boolean {
+  if (x < 2 || y < 2 || x + w + 2 >= W || y + h + 2 >= W) return false;
+  for (let dy = -1; dy <= h; dy++) {
+    for (let dx = -1; dx <= w; dx++) {
+      const idx = world.idx(x + dx, y + dy);
+      if (world.aptMask[idx] || world.cells[idx] === Cell.LIFT || world.cells[idx] === Cell.DOOR) return false;
+      if (world.roomMap[idx] >= 0) return false;
+    }
+  }
+  return true;
+}
+
+function stampSwitchyardRoom(
+  world: World,
+  type: RoomType,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  name: string,
+  wallTex: Tex,
+  floorTex: Tex,
+  owner: TerritoryOwner,
+): Room {
+  const room = stampRoom(world, world.rooms.length, type, x, y, w, h, -1);
+  room.name = name;
+  room.wallTex = wallTex;
+  room.floorTex = floorTex;
+  for (let dy = -1; dy <= room.h; dy++) {
+    for (let dx = -1; dx <= room.w; dx++) {
+      const idx = world.idx(room.x + dx, room.y + dy);
+      const interior = dx >= 0 && dx < room.w && dy >= 0 && dy < room.h;
+      if (interior) {
+        world.floorTex[idx] = floorTex;
+        world.wallTex[idx] = wallTex;
+        world.factionControl[idx] = owner;
+      } else {
+        world.wallTex[idx] = wallTex;
+      }
+    }
+  }
+  return room;
+}
+
+function openSwitchyardRoomPorts(
+  world: World,
+  room: Room,
+  owner: TerritoryOwner,
+  state: DoorState,
+): Record<SwitchyardDoorSide, { x: number; y: number }> {
+  const ports = roomPorts(room, 10);
+  for (const side of ['north', 'south', 'west', 'east'] as const) {
+    connectRoomToPoint(world, room, side, ports[side].x, ports[side].y, state);
+    paintSwitchyardPatch(world, ports[side].x, ports[side].y, 4, owner);
+  }
+  return ports;
+}
+
+function roomPorts(room: Room, offset: number): Record<SwitchyardDoorSide, { x: number; y: number }> {
+  return {
+    north: { x: room.x + (room.w >> 1), y: room.y - offset },
+    south: { x: room.x + (room.w >> 1), y: room.y + room.h + offset },
+    west: { x: room.x - offset, y: room.y + (room.h >> 1) },
+    east: { x: room.x + room.w + offset, y: room.y + (room.h >> 1) },
+  };
+}
+
+function nearestSwitchyardBackbonePoint(
+  world: World,
+  room: Room,
+  rooms: SwitchyardRooms,
+  hubs: readonly Room[],
+): { x: number; y: number } {
+  const points = [
+    { x: 512, y: 430 },
+    { x: 512, y: 594 },
+    { x: 430, y: 512 },
+    { x: 594, y: 512 },
+    { x: 356, y: 648 },
+    { x: 668, y: 376 },
+    { x: rooms.north.x + rooms.north.w / 2, y: rooms.north.y + rooms.north.h + 8 },
+    { x: rooms.south.x + rooms.south.w / 2, y: rooms.south.y - 8 },
+    { x: rooms.west.x + rooms.west.w + 8, y: rooms.west.y + rooms.west.h / 2 },
+    { x: rooms.east.x - 8, y: rooms.east.y + rooms.east.h / 2 },
+    ...hubs.map(hub => ({ x: hub.x + hub.w / 2, y: hub.y + hub.h / 2 })),
+  ];
+  const c = roomCenterPoint(room);
+  let best = points[0];
+  let bestD = Infinity;
+  for (const point of points) {
+    const d2 = world.dist2(c.x, c.y, point.x, point.y);
+    if (d2 < bestD) {
+      best = point;
+      bestD = d2;
+    }
+  }
+  return best;
+}
+
+function placeSwitchyardMicroRooms(
+  world: World,
+  hub: Room,
+  ports: Record<SwitchyardDoorSide, { x: number; y: number }>,
+  spec: SwitchyardServiceBlockSpec,
+): void {
+  for (let i = 0; i < spec.micro; i++) {
+    const rect = microRoomRect(hub, i, spec.micro);
+    const type = SWITCHYARD_MICRO_TYPES[(i + spec.owner) % SWITCHYARD_MICRO_TYPES.length];
+    const room = tryStampSwitchyardRoom(
+      world,
+      type,
+      rect.x,
+      rect.y,
+      rect.w,
+      rect.h,
+      `${spec.name}: ${microRoomSuffix(type)} ${i + 1}`,
+      spec.wallTex,
+      type === RoomType.BATHROOM ? Tex.F_TILE : spec.floorTex,
+      spec.owner,
+    );
+    if (!room) continue;
+    decorateSwitchyardOwnedRoom(world, room, spec.owner, i);
+    connectRoomToPoint(world, room, oppositeSide(rect.side), ports[rect.side].x, ports[rect.side].y, DoorState.CLOSED);
+  }
+}
+
+function microRoomRect(
+  hub: Room,
+  serial: number,
+  total: number,
+): { x: number; y: number; w: number; h: number; side: SwitchyardDoorSide } {
+  const side = (['north', 'south', 'west', 'east'] as const)[serial % 4];
+  const perSide = Math.max(1, Math.ceil(total / 4));
+  const n = Math.floor(serial / 4);
+  const offset = n - Math.floor(perSide / 2);
+  const w = side === 'west' || side === 'east' ? 12 + (serial % 3) * 2 : 14 + (serial % 4) * 2;
+  const h = side === 'west' || side === 'east' ? 14 + (serial % 4) * 2 : 9 + (serial % 3) * 2;
+  if (side === 'north') {
+    return { x: hub.x + Math.round(hub.w / 2 + offset * 21 - w / 2), y: hub.y - h - 18 - (n % 2) * 10, w, h, side };
+  }
+  if (side === 'south') {
+    return { x: hub.x + Math.round(hub.w / 2 + offset * 21 - w / 2), y: hub.y + hub.h + 18 + (n % 2) * 10, w, h, side };
+  }
+  if (side === 'west') {
+    return { x: hub.x - w - 18 - (n % 2) * 10, y: hub.y + Math.round(hub.h / 2 + offset * 18 - h / 2), w, h, side };
+  }
+  return { x: hub.x + hub.w + 18 + (n % 2) * 10, y: hub.y + Math.round(hub.h / 2 + offset * 18 - h / 2), w, h, side };
+}
+
+function buildSwitchyardHqCompounds(world: World, rooms: SwitchyardRooms, hubs: readonly Room[]): Room[] {
+  const hqs: Room[] = [];
+  for (const spec of SWITCHYARD_HQ_SPECS) {
+    const coreW = spec.strong ? 42 : 34;
+    const coreH = spec.strong ? 25 : 21;
+    const core = stampRequiredSwitchyardRoom(
+      world,
+      RoomType.HQ,
+      spec.x,
+      spec.y,
+      coreW,
+      coreH,
+      `Гиперболическая стрелочная: штаб ${spec.title}, герметичная стрелка`,
+      spec.wallTex,
+      spec.floorTex,
+      spec.owner,
+    );
+    makeSwitchyardHermeticCore(world, core, spec.owner);
+    decorateSwitchyardOwnedRoom(world, core, spec.owner, spec.owner * 23);
+    const ports = openSwitchyardRoomPorts(world, core, spec.owner, DoorState.HERMETIC_OPEN);
+    const supports: readonly [RoomType, number, number, number, number, string, Feature][] = [
+      [RoomType.BATHROOM, -34, -20, 22, 12, 'санузел', Feature.TOILET],
+      [RoomType.KITCHEN, coreW + 12, -18, 24, 13, 'кухня', Feature.STOVE],
+      [RoomType.COMMON, -36, coreH + 18, 30, 15, 'общая комната', Feature.TABLE],
+      [RoomType.STORAGE, coreW + 12, coreH + 18, 28, 14, 'склад', Feature.SHELF],
+      [RoomType.MEDICAL, 0, coreH + 24, 24, 13, 'медпункт', Feature.SINK],
+      [RoomType.OFFICE, coreW + 46, 2, 28, 14, 'дежурная', Feature.DESK],
+      [RoomType.PRODUCTION, -44, 3, 30, 15, 'мастерская', Feature.MACHINE],
+    ];
+    const limit = spec.strong ? supports.length : 6;
+    for (let i = 0; i < limit; i++) {
+      const [type, dx, dy, w, h, suffix, feature] = supports[i];
+      const support = tryStampSwitchyardRoom(
+        world,
+        type,
+        spec.x + dx,
+        spec.y + dy,
+        w,
+        h,
+        `Гиперболическая стрелочная: штаб ${spec.title}, ${suffix}`,
+        spec.supportWallTex,
+        type === RoomType.BATHROOM || type === RoomType.MEDICAL ? Tex.F_TILE : spec.supportFloorTex,
+        spec.owner,
+      );
+      if (!support) continue;
+      placeFeature(world, support.x + Math.max(2, Math.min(support.w - 3, support.w >> 1)), support.y + Math.max(2, Math.min(support.h - 3, support.h >> 1)), feature);
+      decorateSwitchyardOwnedRoom(world, support, spec.owner, i + spec.owner * 41);
+      const side = sideTowardPoint(support, core.x + core.w / 2, core.y + core.h / 2);
+      connectRoomToPoint(world, support, side, ports[oppositeSide(side)].x, ports[oppositeSide(side)].y, DoorState.CLOSED);
+    }
+    const target = nearestSwitchyardBackbonePoint(world, core, rooms, hubs);
+    connectRoomToPoint(world, core, sideTowardPoint(core, target.x, target.y), target.x, target.y, DoorState.HERMETIC_OPEN);
+    hqs.push(core);
+  }
+  return hqs;
+}
+
+function makeSwitchyardHermeticCore(world: World, room: Room, owner: TerritoryOwner): void {
+  room.type = RoomType.HQ;
+  room.sealed = true;
+  room.wallTex = Tex.HERMO_WALL;
+  for (let dy = -1; dy <= room.h; dy++) {
+    for (let dx = -1; dx <= room.w; dx++) {
+      const idx = world.idx(room.x + dx, room.y + dy);
+      const interior = dx >= 0 && dx < room.w && dy >= 0 && dy < room.h;
+      if (interior) {
+        world.factionControl[idx] = owner;
+        continue;
+      }
+      if (world.cells[idx] !== Cell.WALL || world.aptMask[idx]) continue;
+      world.hermoWall[idx] = 1;
+      world.wallTex[idx] = Tex.HERMO_WALL;
+    }
+  }
+}
+
+function paintSwitchyardRoomTerritory(world: World, room: Room, owner: TerritoryOwner): void {
+  for (let dy = 0; dy < room.h; dy++) {
+    for (let dx = 0; dx < room.w; dx++) {
+      const idx = world.idx(room.x + dx, room.y + dy);
+      if (!world.aptMask[idx]) world.factionControl[idx] = owner;
+    }
+  }
+  for (const doorIdx of room.doors) {
+    if (!world.aptMask[doorIdx]) world.factionControl[doorIdx] = owner;
+  }
+}
+
+export function reinforceHyperbolicSwitchyardAuthoredHqTerritory(world: World): void {
+  for (const room of world.rooms) {
+    if (!room) continue;
+    if (room.name === 'Хороцикл главной стрелочной') {
+      makeSwitchyardHermeticCore(world, room, ZoneFaction.LIQUIDATOR);
+      paintSwitchyardRoomTerritory(world, room, ZoneFaction.LIQUIDATOR);
+      continue;
+    }
+    for (const spec of SWITCHYARD_HQ_SPECS) {
+      const prefix = `Гиперболическая стрелочная: штаб ${spec.title}, `;
+      if (!room.name.startsWith(prefix)) continue;
+      if (room.type === RoomType.HQ) makeSwitchyardHermeticCore(world, room, spec.owner);
+      paintSwitchyardRoomTerritory(world, room, spec.owner);
+      break;
+    }
+  }
+  world.markWallTexDirty();
+  world.markFeaturesDirty(false);
+}
+
+function connectSwitchyardHubRing(world: World, rooms: readonly Room[]): void {
+  if (rooms.length < 2) return;
+  const sorted = [...rooms].sort((a, b) => roomAngle(a) - roomAngle(b));
+  for (let i = 0; i < sorted.length; i++) {
+    const a = sorted[i];
+    const b = sorted[(i + 1) % sorted.length];
+    const target = roomPorts(b, 10)[sideTowardPoint(b, a.x + a.w / 2, a.y + a.h / 2)];
+    connectRoomToPoint(world, a, sideTowardPoint(a, target.x, target.y), target.x, target.y, DoorState.CLOSED);
+  }
+}
+
+function decorateSwitchyardOwnedRoom(world: World, room: Room, owner: TerritoryOwner, serial: number): void {
+  const primary = featureForSwitchyardRoom(room.type, false);
+  const secondary = featureForSwitchyardRoom(room.type, true);
+  placeFeature(world, room.x + 2, room.y + 2, primary);
+  placeFeature(world, room.x + room.w - 3, room.y + 2, secondary);
+  if (room.w > 12 && room.h > 9) {
+    placeFeature(world, room.x + (room.w >> 1), room.y + (room.h >> 1), serial % 3 === 0 ? Feature.SCREEN : Feature.LAMP);
+  }
+  if (owner === ZoneFaction.CULTIST) placeFeature(world, room.x + Math.max(2, room.w - 4), room.y + Math.max(2, room.h - 4), Feature.CANDLE);
+}
+
+function featureForSwitchyardRoom(type: RoomType, secondary: boolean): Feature {
+  switch (type) {
+    case RoomType.KITCHEN: return secondary ? Feature.SINK : Feature.STOVE;
+    case RoomType.BATHROOM: return secondary ? Feature.SINK : Feature.TOILET;
+    case RoomType.STORAGE: return secondary ? Feature.SHELF : Feature.MACHINE;
+    case RoomType.MEDICAL: return secondary ? Feature.SINK : Feature.APPARATUS;
+    case RoomType.PRODUCTION: return secondary ? Feature.APPARATUS : Feature.MACHINE;
+    case RoomType.OFFICE: return secondary ? Feature.SCREEN : Feature.DESK;
+    case RoomType.SMOKING: return secondary ? Feature.CHAIR : Feature.TABLE;
+    case RoomType.HQ: return secondary ? Feature.SCREEN : Feature.DESK;
+    case RoomType.COMMON:
+    default:
+      return secondary ? Feature.CHAIR : Feature.TABLE;
+  }
+}
+
+function microRoomSuffix(type: RoomType): string {
+  switch (type) {
+    case RoomType.KITCHEN: return 'чайная будка';
+    case RoomType.BATHROOM: return 'санузел стрелочника';
+    case RoomType.OFFICE: return 'кабинет расписаний';
+    case RoomType.PRODUCTION: return 'мастерская привода';
+    case RoomType.SMOKING: return 'курилка ложной дуги';
+    case RoomType.COMMON: return 'дежурная ниша';
+    case RoomType.STORAGE:
+    default:
+      return 'кладовая стрелок';
+  }
+}
+
+function paintSwitchyardPatch(world: World, x: number, y: number, radius: number, owner: TerritoryOwner): void {
+  const r2 = radius * radius;
+  for (let dy = -radius; dy <= radius; dy++) {
+    for (let dx = -radius; dx <= radius; dx++) {
+      if (dx * dx + dy * dy > r2) continue;
+      const idx = world.idx(x + dx, y + dy);
+      if (world.aptMask[idx]) continue;
+      world.factionControl[idx] = owner;
+    }
+  }
+}
+
+function roomCenterPoint(room: Room): { x: number; y: number } {
+  return { x: room.x + room.w / 2, y: room.y + room.h / 2 };
+}
+
+function roomAngle(room: Room): number {
+  const c = roomCenterPoint(room);
+  return Math.atan2(c.y - W / 2, c.x - W / 2);
+}
+
+function sideTowardPoint(room: Room, x: number, y: number): SwitchyardDoorSide {
+  const c = roomCenterPoint(room);
+  const dx = x - c.x;
+  const dy = y - c.y;
+  if (Math.abs(dx) > Math.abs(dy)) return dx < 0 ? 'west' : 'east';
+  return dy < 0 ? 'north' : 'south';
+}
+
+function oppositeSide(side: SwitchyardDoorSide): SwitchyardDoorSide {
+  if (side === 'north') return 'south';
+  if (side === 'south') return 'north';
+  if (side === 'west') return 'east';
+  return 'west';
+}
+
+function clamp(value: number, lo: number, hi: number): number {
+  return Math.max(lo, Math.min(hi, value));
+}
+
 function connectRoomToPoint(
   world: World,
   room: Room,
-  side: 'north' | 'south' | 'west' | 'east',
+  side: SwitchyardDoorSide,
   targetX: number,
   targetY: number,
   state: DoorState,
@@ -396,7 +882,7 @@ function connectRoomToPoint(
   world.wallTex[idx] = state === DoorState.LOCKED ? Tex.DOOR_METAL : Tex.DOOR_WOOD;
   world.doors.set(idx, { idx, state, roomA: room.id, roomB: -1, keyId, timer: 0 });
   if (!room.doors.includes(idx)) room.doors.push(idx);
-  carveSegment(world, outX, outY, targetX, targetY, 2, room.floorTex);
+  carveSegment(world, outX, outY, targetX, targetY, 1, room.floorTex);
 }
 
 function placeSwitchyardGates(world: World): number[] {
@@ -599,6 +1085,51 @@ function addContainer(
     tags,
   });
   if (world.features[ci] === Feature.NONE) world.features[ci] = Feature.SHELF;
+}
+
+function isHyperbolicSwitchyardAmbientNpc(entity: Entity): boolean {
+  return entity.type === EntityType.NPC &&
+    !entity.plotNpcId &&
+    !entity.persistentNpcId &&
+    entity.alifeId === undefined &&
+    entity.questId === -1;
+}
+
+function hyperbolicSwitchyardTerritorySpawnCells(world: World): Map<TerritoryOwner, number[]> {
+  const cells = new Map<TerritoryOwner, number[]>();
+  for (const owner of HUMAN_TERRITORY_OWNERS) cells.set(owner, []);
+  for (let i = 0; i < W * W; i++) {
+    const cell = world.cells[i];
+    if (cell !== Cell.FLOOR && cell !== Cell.WATER) continue;
+    if (world.aptMask[i] || world.hermoWall[i] || world.containerMap.has(i) || world.features[i] === Feature.LIFT_BUTTON) continue;
+    const owner = world.factionControl[i] as TerritoryOwner;
+    const list = cells.get(owner);
+    if (list) list.push(i);
+  }
+  return cells;
+}
+
+export function alignHyperbolicSwitchyardAmbientNpcTerritory(world: World, entities: Entity[]): void {
+  const cells = hyperbolicSwitchyardTerritorySpawnCells(world);
+  const offsets = new Uint16Array(8);
+  for (const entity of entities) {
+    if (!isHyperbolicSwitchyardAmbientNpc(entity) || entity.faction === undefined) continue;
+    const owner = factionToTerritoryOwner(entity.faction);
+    const list = cells.get(owner);
+    if (!list || list.length === 0) continue;
+    const offset = offsets[owner]++ | 0;
+    const cell = list[(entity.id * 127 + offset * 421) % list.length];
+    entity.x = (cell % W) + 0.5;
+    entity.y = ((cell / W) | 0) + 0.5;
+    entity.assignedRoomId = world.roomMap[cell] >= 0 ? world.roomMap[cell] : -1;
+    if (entity.ai) {
+      entity.ai.tx = cell % W;
+      entity.ai.ty = (cell / W) | 0;
+      entity.ai.path = [];
+      entity.ai.pi = 0;
+      entity.ai.stuck = 0;
+    }
+  }
 }
 
 function registerSwitchyardCues(world: World, rooms: SwitchyardRooms): void {

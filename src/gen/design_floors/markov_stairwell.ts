@@ -15,6 +15,7 @@ import {
   QuestType,
   RoomType,
   Tex,
+  W,
   ZoneFaction,
   type Entity,
   type Item,
@@ -48,9 +49,28 @@ const SERVICE_ENTRY_STEP = 4;
 const SERVICE_EXIT_STEP = 13;
 const RARE_STEP_MIN = 9;
 const RARE_STEP_SPAN = 5;
+const GRAPH_NODE_W = 42;
+const GRAPH_NODE_H = 22;
+const GRAPH_ROW_Y = [240, 372, 504, 636, 768] as const;
+const GRAPH_COLUMNS = [
+  { x: 86, side: 'left', label: 'L0' },
+  { x: 198, side: 'left', label: 'L1' },
+  { x: 310, side: 'left', label: 'L2' },
+  { x: 682, side: 'right', label: 'R0' },
+  { x: 794, side: 'right', label: 'R1' },
+  { x: 906, side: 'right', label: 'R2' },
+] as const;
+const LEFT_TRUNK_X = 360;
+const RIGHT_TRUNK_X = 640;
+const GRAPH_RING_LEFT = 58;
+const GRAPH_RING_RIGHT = 972;
+const GRAPH_RING_TOP = 176;
+const GRAPH_RING_BOTTOM = 828;
+const HQ_SUPPORT_LIMIT = 5;
 
 type MotifId = 'landing' | 'kitchen' | 'registry' | 'bath' | 'storage' | 'service' | 'rare';
 type HiddenState = 'quiet' | 'watched' | 'hunting' | 'rare';
+type DoorSide = 'north' | 'south' | 'west' | 'east';
 
 interface WeightedMotif {
   id: MotifId;
@@ -73,6 +93,18 @@ interface ChainRoom {
   motif: MotifId;
   state: HiddenState;
   step: number;
+}
+
+interface HqSpec {
+  owner: ZoneFaction;
+  title: string;
+  x: number;
+  y: number;
+  wallTex: Tex;
+  floorTex: Tex;
+  supportWallTex: Tex;
+  supportFloorTex: Tex;
+  strong?: boolean;
 }
 
 export interface MarkovStairwellMetrics {
@@ -261,6 +293,60 @@ registerSideQuest(NPC_IDS.watcher, WATCHER_DEF, [{
   eventTags: ['markov_stairwell', 'pattern_stash', 'service_bypass'],
 }]);
 
+const MARKOV_HQ_SPECS: readonly HqSpec[] = [
+  {
+    owner: ZoneFaction.CITIZEN,
+    title: 'гражданский счётный узел',
+    x: 402,
+    y: 52,
+    wallTex: Tex.PANEL,
+    floorTex: Tex.F_LINO,
+    supportWallTex: Tex.PANEL,
+    supportFloorTex: Tex.F_LINO,
+    strong: true,
+  },
+  {
+    owner: ZoneFaction.LIQUIDATOR,
+    title: 'караул среза',
+    x: 802,
+    y: 76,
+    wallTex: Tex.METAL,
+    floorTex: Tex.F_CONCRETE,
+    supportWallTex: Tex.METAL,
+    supportFloorTex: Tex.F_CONCRETE,
+  },
+  {
+    owner: ZoneFaction.CULTIST,
+    title: 'узел неверной вероятности',
+    x: 112,
+    y: 76,
+    wallTex: Tex.DARK,
+    floorTex: Tex.F_GREEN_CARPET,
+    supportWallTex: Tex.ROTTEN,
+    supportFloorTex: Tex.F_WOOD,
+  },
+  {
+    owner: ZoneFaction.SCIENTIST,
+    title: 'НИИ переходных матриц',
+    x: 802,
+    y: 850,
+    wallTex: Tex.MARBLE,
+    floorTex: Tex.F_MARBLE_TILE,
+    supportWallTex: Tex.TILE_W,
+    supportFloorTex: Tex.F_TILE,
+  },
+  {
+    owner: ZoneFaction.WILD,
+    title: 'дикая ночёвка под маршем',
+    x: 112,
+    y: 850,
+    wallTex: Tex.BRICK,
+    floorTex: Tex.F_CONCRETE,
+    supportWallTex: Tex.BRICK,
+    supportFloorTex: Tex.F_WOOD,
+  },
+] as const;
+
 const markovMetrics = new WeakMap<World, MarkovStairwellMetrics>();
 
 function weightedPick(options: readonly WeightedMotif[]): MotifId {
@@ -387,6 +473,88 @@ function addDoor(world: World, room: Room, x: number, y: number, state = DoorSta
   });
   if (!room.doors.includes(idx)) room.doors.push(idx);
   return idx;
+}
+
+function doorOffset(size: number, offset = 0): number {
+  const center = size >> 1;
+  return Math.max(1, Math.min(size - 2, center + offset));
+}
+
+function addSideDoor(
+  world: World,
+  room: Room,
+  side: DoorSide,
+  offset = 0,
+  state = DoorState.CLOSED,
+  keyId = '',
+): { idx: number; x: number; y: number; outX: number; outY: number } {
+  const horizontal = side === 'north' || side === 'south';
+  const x = horizontal ? room.x + doorOffset(room.w, offset) : side === 'west' ? room.x - 1 : room.x + room.w;
+  const y = horizontal ? side === 'north' ? room.y - 1 : room.y + room.h : room.y + doorOffset(room.h, offset);
+  const idx = addDoor(world, room, x, y, state, keyId);
+  const outX = side === 'west' ? x - 1 : side === 'east' ? x + 1 : x;
+  const outY = side === 'north' ? y - 1 : side === 'south' ? y + 1 : y;
+  return { idx, x, y, outX, outY };
+}
+
+function connectRoomToPoint(
+  world: World,
+  room: Room,
+  side: DoorSide,
+  tx: number,
+  ty: number,
+  width: number,
+  floorTex: Tex,
+  wallTex: Tex,
+  state = DoorState.CLOSED,
+  keyId = '',
+): number {
+  const door = addSideDoor(world, room, side, 0, state, keyId);
+  carveLine(world, door.outX, door.outY, tx, ty, width, floorTex, wallTex);
+  return door.idx;
+}
+
+function sideTowardPoint(room: Room, x: number, y: number): DoorSide {
+  if (x < room.x) return 'west';
+  if (x > room.x + room.w) return 'east';
+  if (y < room.y) return 'north';
+  return 'south';
+}
+
+function paintRoomTerritory(world: World, room: Room, owner: ZoneFaction): void {
+  for (let dy = 0; dy < room.h; dy++) {
+    for (let dx = 0; dx < room.w; dx++) {
+      const ci = world.idx(room.x + dx, room.y + dy);
+      if (!world.aptMask[ci]) world.factionControl[ci] = owner;
+    }
+  }
+  for (const doorIdx of room.doors) world.factionControl[doorIdx] = owner;
+}
+
+function paintTerritoryPatch(world: World, x: number, y: number, radius: number, owner: ZoneFaction): void {
+  const r2 = radius * radius;
+  for (let dy = -radius; dy <= radius; dy++) {
+    for (let dx = -radius; dx <= radius; dx++) {
+      if (dx * dx + dy * dy > r2) continue;
+      const ci = world.idx(x + dx, y + dy);
+      if (!world.aptMask[ci]) world.factionControl[ci] = owner;
+    }
+  }
+}
+
+function makeHermeticCore(world: World, room: Room): void {
+  room.type = RoomType.HQ;
+  room.sealed = true;
+  room.wallTex = Tex.HERMO_WALL;
+  for (let dy = -1; dy <= room.h; dy++) {
+    for (let dx = -1; dx <= room.w; dx++) {
+      if (dx >= 0 && dx < room.w && dy >= 0 && dy < room.h) continue;
+      const ci = world.idx(room.x + dx, room.y + dy);
+      if (world.cells[ci] !== Cell.WALL || world.aptMask[ci]) continue;
+      world.hermoWall[ci] = 1;
+      world.wallTex[ci] = Tex.HERMO_WALL;
+    }
+  }
 }
 
 function setFeature(world: World, x: number, y: number, feature: Feature): void {
@@ -601,6 +769,276 @@ function spawnThreats(world: World, entities: Entity[], nextId: { v: number }, c
   if (rare) spawnMonster(world, entities, nextId, MonsterKind.PARAGRAPH, rare.room.x + rare.room.w - 10, rare.room.y + 7, 3, 'Параграф редкого состояния');
 }
 
+function featureForSupportRoom(type: RoomType, secondary = false): Feature {
+  switch (type) {
+    case RoomType.KITCHEN: return secondary ? Feature.TABLE : Feature.STOVE;
+    case RoomType.BATHROOM: return secondary ? Feature.TOILET : Feature.SINK;
+    case RoomType.STORAGE: return Feature.SHELF;
+    case RoomType.MEDICAL: return secondary ? Feature.DESK : Feature.SINK;
+    case RoomType.OFFICE: return secondary ? Feature.SCREEN : Feature.DESK;
+    case RoomType.PRODUCTION: return secondary ? Feature.APPARATUS : Feature.MACHINE;
+    case RoomType.COMMON: return secondary ? Feature.CHAIR : Feature.TABLE;
+    default: return secondary ? Feature.LAMP : Feature.TABLE;
+  }
+}
+
+function decorateSupportRoom(world: World, room: Room): void {
+  setFeature(world, room.x + 3, room.y + 3, featureForSupportRoom(room.type));
+  setFeature(world, room.x + room.w - 4, room.y + room.h - 4, featureForSupportRoom(room.type, true));
+}
+
+function buildHqCompound(world: World, spec: HqSpec): void {
+  const coreW = spec.strong ? 42 : 32;
+  const coreH = spec.strong ? 26 : 20;
+  const core = addRoom(
+    world,
+    RoomType.HQ,
+    spec.x,
+    spec.y,
+    coreW,
+    coreH,
+    `Марковская лестница: штаб ${spec.title}`,
+    spec.wallTex,
+    spec.floorTex,
+  );
+  makeHermeticCore(world, core);
+  setFeature(world, core.x + 5, core.y + 5, Feature.SCREEN);
+  setFeature(world, core.x + core.w - 6, core.y + core.h - 5, Feature.DESK);
+  const hubX = core.x + (core.w >> 1);
+  const hubY = core.y + core.h + 18;
+  connectRoomToPoint(world, core, 'south', hubX, hubY, 4, spec.supportFloorTex, spec.supportWallTex, DoorState.HERMETIC_OPEN);
+
+  const supports: readonly [RoomType, number, number, number, number, string][] = [
+    [RoomType.COMMON, -36, coreH + 24, 30, 16, 'общая'],
+    [RoomType.KITCHEN, -36, coreH + 48, 30, 14, 'кухня'],
+    [RoomType.STORAGE, coreW + 8, coreH + 48, 30, 14, 'склад'],
+    [RoomType.MEDICAL, coreW + 44, coreH + 24, 30, 16, 'медпункт'],
+    [RoomType.OFFICE, coreW + 8, -22, 30, 14, 'дежурная'],
+    [RoomType.PRODUCTION, coreW + 44, -2, 30, 14, 'мастерская'],
+  ];
+  const limit = spec.strong ? supports.length : HQ_SUPPORT_LIMIT;
+  for (let i = 0; i < limit; i++) {
+    const [type, dx, dy, w, h, suffix] = supports[i];
+    const room = addRoom(
+      world,
+      type,
+      spec.x + dx,
+      spec.y + dy,
+      w,
+      h,
+      `Марковская лестница: ${spec.title}, ${suffix}`,
+      spec.supportWallTex,
+      spec.supportFloorTex,
+    );
+    decorateSupportRoom(world, room);
+    connectRoomToPoint(world, room, sideTowardPoint(room, hubX, hubY), hubX, hubY, 3, spec.supportFloorTex, spec.supportWallTex);
+    paintRoomTerritory(world, room, spec.owner);
+  }
+
+  const routeY = hubY < W / 2 ? GRAPH_RING_TOP : GRAPH_RING_BOTTOM;
+  carveLine(world, hubX, hubY, hubX, routeY, 3, spec.supportFloorTex, spec.supportWallTex);
+  paintRoomTerritory(world, core, spec.owner);
+  paintTerritoryPatch(world, hubX, hubY, spec.strong ? 44 : 34, spec.owner);
+}
+
+function markovGraphMotif(row: number, col: number): MotifId {
+  const motifs: readonly MotifId[] = ['landing', 'registry', 'kitchen', 'bath', 'storage', 'service', 'rare'];
+  if (row === 2 && col === 2) return 'rare';
+  return motifs[(row * 3 + col * 2 + (col > 2 ? 1 : 0)) % motifs.length];
+}
+
+function decorateGraphNode(world: World, room: Room, motif: MotifId, row: number, col: number): void {
+  const def = MOTIFS[motif];
+  const cx = room.x + (room.w >> 1);
+  const cy = room.y + (room.h >> 1);
+  setFeature(world, room.x + 4, room.y + 4, def.feature);
+  setFeature(world, room.x + room.w - 5, room.y + 4, Feature.SCREEN);
+  setFeature(world, cx, room.y + room.h - 5, row % 2 === 0 ? Feature.TABLE : Feature.SHELF);
+  if (motif === 'rare' || (row + col) % 4 === 0) setFeature(world, cx + 8, cy, Feature.CANDLE);
+  stampSurfaceSplat(
+    world,
+    cx,
+    cy,
+    0.5,
+    0.5,
+    motif === 'rare' ? 7 : 3.2,
+    0.14,
+    0x4d41524b ^ (row * 97 + col * 131),
+    motif === 'rare' ? 82 : 132,
+    motif === 'registry' || motif === 'service' ? 112 : 96,
+    motif === 'bath' || motif === 'rare' ? 146 : 78,
+    false,
+  );
+}
+
+function addGraphMicroRoom(
+  world: World,
+  node: Room,
+  rowY: number,
+  index: number,
+  type: RoomType,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  side: DoorSide,
+  suffix: string,
+): Room {
+  const tile = type === RoomType.KITCHEN || type === RoomType.BATHROOM || type === RoomType.MEDICAL;
+  const room = addRoom(
+    world,
+    type,
+    x,
+    y,
+    w,
+    h,
+    `Марковская лестница: микро ${String(index).padStart(3, '0')} ${suffix}`,
+    tile ? Tex.TILE_W : Tex.PANEL,
+    tile ? Tex.F_TILE : Tex.F_LINO,
+  );
+  decorateSupportRoom(world, room);
+  const targetX = Math.max(node.x - 2, Math.min(node.x + node.w + 2, room.x + (room.w >> 1)));
+  const targetY = side === 'north' ? rowY + 3 : side === 'south' ? rowY - 3 : rowY;
+  connectRoomToPoint(world, room, side, targetX, targetY, 2, Tex.F_LINO, Tex.PANEL);
+  return room;
+}
+
+function buildMarkovTransitionGraph(world: World): void {
+  carveLine(world, GRAPH_RING_LEFT, GRAPH_RING_TOP, GRAPH_RING_RIGHT, GRAPH_RING_TOP, 5, Tex.F_LINO, Tex.PANEL);
+  carveLine(world, GRAPH_RING_LEFT, GRAPH_RING_BOTTOM, GRAPH_RING_RIGHT, GRAPH_RING_BOTTOM, 5, Tex.F_LINO, Tex.PANEL);
+  carveLine(world, GRAPH_RING_LEFT, GRAPH_RING_TOP, GRAPH_RING_LEFT, GRAPH_RING_BOTTOM, 5, Tex.F_LINO, Tex.PANEL);
+  carveLine(world, GRAPH_RING_RIGHT, GRAPH_RING_TOP, GRAPH_RING_RIGHT, GRAPH_RING_BOTTOM, 5, Tex.F_LINO, Tex.PANEL);
+  carveLine(world, LEFT_TRUNK_X, GRAPH_RING_TOP, LEFT_TRUNK_X, GRAPH_RING_BOTTOM, 5, Tex.F_LINO, Tex.PANEL);
+  carveLine(world, RIGHT_TRUNK_X, GRAPH_RING_TOP, RIGHT_TRUNK_X, GRAPH_RING_BOTTOM, 5, Tex.F_CONCRETE, Tex.PIPE);
+
+  const topLinkY = SPINE_Y + 14;
+  const bottomLinkY = SPINE_Y + SPINE_H - 18;
+  carveLine(world, LEFT_TRUNK_X, topLinkY, SPINE_X - 1, topLinkY, 4, Tex.F_LINO, Tex.PANEL);
+  carveLine(world, RIGHT_TRUNK_X, topLinkY, SPINE_X + SPINE_W, topLinkY, 4, Tex.F_CONCRETE, Tex.PIPE);
+  carveLine(world, LEFT_TRUNK_X, bottomLinkY, SPINE_X - 1, bottomLinkY, 4, Tex.F_LINO, Tex.PANEL);
+  carveLine(world, RIGHT_TRUNK_X, bottomLinkY, SPINE_X + SPINE_W, bottomLinkY, 4, Tex.F_CONCRETE, Tex.PIPE);
+
+  for (const y of GRAPH_ROW_Y) {
+    carveLine(world, GRAPH_RING_LEFT, y, LEFT_TRUNK_X, y, 3, Tex.F_LINO, Tex.PANEL);
+    carveLine(world, RIGHT_TRUNK_X, y, GRAPH_RING_RIGHT, y, 3, Tex.F_CONCRETE, Tex.PIPE);
+  }
+
+  let microIndex = 0;
+  for (let row = 0; row < GRAPH_ROW_Y.length; row++) {
+    const rowY = GRAPH_ROW_Y[row];
+    for (let col = 0; col < GRAPH_COLUMNS.length; col++) {
+      const column = GRAPH_COLUMNS[col];
+      const motif = markovGraphMotif(row, col);
+      const def = MOTIFS[motif];
+      const node = addRoom(
+        world,
+        RoomType.OFFICE,
+        column.x,
+        rowY - (GRAPH_NODE_H >> 1),
+        GRAPH_NODE_W,
+        GRAPH_NODE_H,
+        `Марковская лестница: граф ${column.label}-${row + 1} ${def.label}`,
+        motif === 'service' ? Tex.PIPE : motif === 'rare' ? Tex.DARK : Tex.MARBLE,
+        motif === 'service' ? Tex.F_CONCRETE : motif === 'rare' ? Tex.F_GREEN_CARPET : Tex.F_PARQUET,
+      );
+      decorateGraphNode(world, node, motif, row, col);
+      addSideDoor(world, node, 'west');
+      addSideDoor(world, node, 'east');
+
+      addGraphMicroRoom(world, node, rowY, microIndex++, RoomType.STORAGE, node.x + 2, node.y - 28, 16, 11, 'south', 'шкаф перехода');
+      addGraphMicroRoom(world, node, rowY, microIndex++, RoomType.OFFICE, node.x + 23, node.y - 30, 18, 12, 'south', 'кабинка расчёта');
+      addGraphMicroRoom(world, node, rowY, microIndex++, RoomType.BATHROOM, node.x + 2, node.y + node.h + 17, 17, 11, 'north', 'мокрая петля');
+      addGraphMicroRoom(world, node, rowY, microIndex++, RoomType.STORAGE, node.x + 23, node.y + node.h + 15, 18, 12, 'north', 'архив шага');
+    }
+  }
+}
+
+function addTerraceMicroRoom(
+  world: World,
+  terrace: Room,
+  index: number,
+  left: boolean,
+): void {
+  const x = left ? terrace.x - 22 : terrace.x + terrace.w + 8;
+  const y = terrace.y + 6;
+  const room = addRoom(
+    world,
+    left ? RoomType.STORAGE : RoomType.OFFICE,
+    x,
+    y,
+    left ? 14 : 16,
+    12,
+    `Марковская лестница: микроклетка террасы ${String(index).padStart(2, '0')}${left ? 'л' : 'п'}`,
+    left ? Tex.METAL : Tex.MARBLE,
+    left ? Tex.F_CONCRETE : Tex.F_PARQUET,
+  );
+  decorateSupportRoom(world, room);
+  connectRoomToPoint(
+    world,
+    room,
+    left ? 'east' : 'west',
+    left ? terrace.x - 1 : terrace.x + terrace.w,
+    terrace.y + (terrace.h >> 1),
+    2,
+    terrace.floorTex,
+    terrace.wallTex,
+  );
+}
+
+function buildMarkovTerraceCells(world: World): void {
+  const terraceXs = [70, 186, 302, 648, 764, 880] as const;
+  let terraceIndex = 0;
+  for (let row = 0; row < GRAPH_ROW_Y.length - 1; row++) {
+    const upperY = GRAPH_ROW_Y[row];
+    const lowerY = GRAPH_ROW_Y[row + 1];
+    const y = Math.round((upperY + lowerY) / 2 - 12);
+    for (let col = 0; col < terraceXs.length; col++) {
+      const x = terraceXs[col];
+      const type = col % 3 === 0 ? RoomType.COMMON : col % 3 === 1 ? RoomType.STORAGE : RoomType.PRODUCTION;
+      const room = addRoom(
+        world,
+        type,
+        x,
+        y,
+        54,
+        24,
+        `Марковская лестница: терраса переходов ${row + 1}-${col + 1}`,
+        type === RoomType.PRODUCTION ? Tex.PIPE : type === RoomType.STORAGE ? Tex.METAL : Tex.PANEL,
+        type === RoomType.PRODUCTION || type === RoomType.STORAGE ? Tex.F_CONCRETE : Tex.F_LINO,
+      );
+      decorateSupportRoom(world, room);
+      setFeature(world, room.x + (room.w >> 1), room.y + (room.h >> 1), col % 2 === 0 ? Feature.SCREEN : Feature.APPARATUS);
+      connectRoomToPoint(world, room, 'north', room.x + (room.w >> 1), upperY, 3, room.floorTex, room.wallTex);
+      connectRoomToPoint(world, room, 'south', room.x + (room.w >> 1), lowerY, 3, room.floorTex, room.wallTex);
+      addTerraceMicroRoom(world, room, terraceIndex, true);
+      addTerraceMicroRoom(world, room, terraceIndex, false);
+      terraceIndex++;
+    }
+  }
+}
+
+function buildMarkovHqCompounds(world: World): void {
+  for (const spec of MARKOV_HQ_SPECS) buildHqCompound(world, spec);
+}
+
+export function reinforceMarkovStairwellAuthoredHqTerritory(world: World): void {
+  for (const spec of MARKOV_HQ_SPECS) {
+    let patched = 0;
+    for (const room of world.rooms) {
+      if (!room.name.includes(spec.title)) continue;
+      if (room.type === RoomType.HQ) makeHermeticCore(world, room);
+      paintRoomTerritory(world, room, spec.owner);
+      const cx = room.x + (room.w >> 1);
+      const cy = room.y + (room.h >> 1);
+      if (room.type === RoomType.HQ) paintTerritoryPatch(world, cx, cy, spec.strong ? 48 : 36, spec.owner);
+      patched++;
+    }
+    if (patched === 0) continue;
+  }
+  world.markWallTexDirty();
+  world.markFeaturesDirty(true);
+}
+
 function buildGeometry(world: World): { chain: ChainRoom[]; watcherRoom: Room; patternRoom: Room; rareRoom: Room; tellCells: number; serviceCells: number; lockedDoors: number } {
   const spine = addRoom(world, RoomType.CORRIDOR, SPINE_X, SPINE_Y, SPINE_W, SPINE_H, 'Марковская лестница: основной марш', Tex.PANEL, Tex.F_LINO);
   const sequence = buildSequence();
@@ -672,6 +1110,11 @@ function buildGeometry(world: World): { chain: ChainRoom[]; watcherRoom: Room; p
 
   if (!rareRoom) rareRoom = chain[Math.min(chain.length - 1, RARE_STEP_MIN)].room;
   if (!patternRoom) patternRoom = rareRoom;
+
+  buildMarkovTransitionGraph(world);
+  buildMarkovTerraceCells(world);
+  buildMarkovHqCompounds(world);
+  reinforceMarkovStairwellAuthoredHqTerritory(world);
 
   return { chain, watcherRoom, patternRoom, rareRoom, tellCells, serviceCells: Math.max(0, (serviceY2 - serviceY1 + 1) * SERVICE_W), lockedDoors };
 }

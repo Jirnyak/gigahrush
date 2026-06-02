@@ -2,6 +2,36 @@ import { FloorLevel, MonsterKind } from '../core/types';
 
 export type SamosborVariantId = 'classic' | 'wet' | 'electric' | 'meat' | 'maronary' | 'istotit' | 'veretar';
 export type SamosborAudioCueId = 'siren' | 'bell' | 'beep' | 'distant_alarm';
+export type SamosborScreenFxId =
+  | 'violet_noise'
+  | 'wet_noise'
+  | 'electric_static'
+  | 'meat_pulse'
+  | 'green_signal'
+  | 'gold_bell'
+  | 'white_exposure';
+
+export type SamosborSubsystemId =
+  | 'warning'
+  | 'audio'
+  | 'fog_tint'
+  | 'fog_spread'
+  | 'seal'
+  | 'monster_pressure'
+  | 'random_transfer'
+  | 'room_sirens'
+  | 'local_wave'
+  | 'aftermath'
+  | 'hell_meat_walls'
+  | 'maronary_sources'
+  | 'wrong_door'
+  | 'source_glow'
+  | 'fog_rewrite'
+  | 'istotit_shelters'
+  | 'bell_compulsion'
+  | 'fog_create'
+  | 'veretar_area_leak'
+  | 'fog_delete';
 
 export type SamosborAftermathEffectId =
   | 'fog_residue'
@@ -42,6 +72,8 @@ export interface SamosborVariantDef {
   displayName: string;
   floors: FloorLevel[];
   weight: number;
+  subsystems: readonly SamosborSubsystemId[];
+  visual: SamosborVisualProfile;
   fogColor: [number, number, number];
   tint: string;
   durationMult: number;
@@ -52,6 +84,13 @@ export interface SamosborVariantDef {
   gameplaySignal: string;
   audioCue?: SamosborAudioCueId;
   startLine?: string;
+}
+
+export interface SamosborVisualProfile {
+  screenFx: SamosborScreenFxId;
+  fogDensityBonus: number;
+  glitchIntensity: number;
+  postIntensity: number;
 }
 
 export interface SamosborModifierDef {
@@ -70,6 +109,8 @@ export interface SamosborModifierDef {
 export interface ActiveSamosborVariant {
   def: SamosborVariantDef;
   modifiers: SamosborModifierDef[];
+  subsystems: readonly SamosborSubsystemId[];
+  visual: SamosborVisualProfile;
   durationMult: number;
   spawnMult: number;
   fogSeedMult: number;
@@ -118,6 +159,19 @@ const VOID_AND_CIVIL_SERVICE_FLOORS = [
   FloorLevel.LIVING,
   FloorLevel.MAINTENANCE,
   FloorLevel.VOID,
+];
+
+export const SAMOSBOR_BASE_SUBSYSTEMS: readonly SamosborSubsystemId[] = [
+  'warning',
+  'audio',
+  'fog_tint',
+  'fog_spread',
+  'seal',
+  'monster_pressure',
+  'random_transfer',
+  'room_sirens',
+  'local_wave',
+  'aftermath',
 ];
 
 export const SAMOSBOR_MODIFIERS: Record<SamosborModifierId, SamosborModifierDef> = {
@@ -229,6 +283,8 @@ export const SAMOSBOR_VARIANTS: readonly SamosborVariantDef[] = [
     displayName: 'Классический',
     floors: ALL_FLOORS,
     weight: 60,
+    subsystems: [],
+    visual: { screenFx: 'violet_noise', fogDensityBonus: 0.022, glitchIntensity: 0.075, postIntensity: 0.62 },
     fogColor: [112, 24, 168],
     tint: '#a34cff',
     durationMult: 1,
@@ -245,6 +301,8 @@ export const SAMOSBOR_VARIANTS: readonly SamosborVariantDef[] = [
     displayName: 'Мокрый',
     floors: [FloorLevel.KVARTIRY, FloorLevel.LIVING, FloorLevel.MAINTENANCE, FloorLevel.HELL],
     weight: 20,
+    subsystems: [],
+    visual: { screenFx: 'wet_noise', fogDensityBonus: 0.024, glitchIntensity: 0.055, postIntensity: 0.52 },
     fogColor: [44, 116, 156],
     tint: '#44a6d8',
     durationMult: 1.08,
@@ -261,6 +319,8 @@ export const SAMOSBOR_VARIANTS: readonly SamosborVariantDef[] = [
     displayName: 'Электрический',
     floors: [FloorLevel.MINISTRY, FloorLevel.KVARTIRY, FloorLevel.LIVING, FloorLevel.MAINTENANCE],
     weight: 16,
+    subsystems: [],
+    visual: { screenFx: 'electric_static', fogDensityBonus: 0.018, glitchIntensity: 0.095, postIntensity: 0.58 },
     fogColor: [80, 180, 210],
     tint: '#72e6ff',
     durationMult: 0.95,
@@ -277,6 +337,8 @@ export const SAMOSBOR_VARIANTS: readonly SamosborVariantDef[] = [
     displayName: 'Мясной',
     floors: [FloorLevel.KVARTIRY, FloorLevel.LIVING, FloorLevel.MAINTENANCE, FloorLevel.HELL],
     weight: 14,
+    subsystems: ['hell_meat_walls'],
+    visual: { screenFx: 'meat_pulse', fogDensityBonus: 0.026, glitchIntensity: 0.06, postIntensity: 0.5 },
     fogColor: [156, 40, 56],
     tint: '#d64b5f',
     durationMult: 1.15,
@@ -297,6 +359,8 @@ export const SAMOSBOR_VARIANTS: readonly SamosborVariantDef[] = [
     displayName: 'Маронарий',
     floors: ALL_FLOORS,
     weight: 4,
+    subsystems: ['maronary_sources', 'wrong_door', 'source_glow', 'fog_rewrite'],
+    visual: { screenFx: 'green_signal', fogDensityBonus: 0.016, glitchIntensity: 0.07, postIntensity: 0.7 },
     fogColor: [48, 230, 86],
     tint: '#35ff66',
     durationMult: 0.82,
@@ -325,6 +389,8 @@ export const SAMOSBOR_VARIANTS: readonly SamosborVariantDef[] = [
     displayName: 'Истотит',
     floors: CIVIL_FLOORS,
     weight: 3,
+    subsystems: ['istotit_shelters', 'bell_compulsion', 'fog_create'],
+    visual: { screenFx: 'gold_bell', fogDensityBonus: 0.014, glitchIntensity: 0.04, postIntensity: 0.5 },
     fogColor: [212, 166, 72],
     tint: '#d6a64b',
     durationMult: 0.92,
@@ -346,6 +412,8 @@ export const SAMOSBOR_VARIANTS: readonly SamosborVariantDef[] = [
     displayName: 'Веретар',
     floors: ALL_FLOORS,
     weight: 4,
+    subsystems: ['veretar_area_leak', 'fog_delete'],
+    visual: { screenFx: 'white_exposure', fogDensityBonus: 0.015, glitchIntensity: 0.045, postIntensity: 0.54 },
     fogColor: [226, 222, 202],
     tint: '#f4f1df',
     durationMult: 0.96,
@@ -1022,10 +1090,6 @@ export const SAMOSBOR_AFTERMATH_BEATS: readonly SamosborAftermathBeatDef[] = [
   },
 ];
 
-let activeVariant: ActiveSamosborVariant | null = null;
-let forcedNextVariant: SamosborVariantId | null = null;
-let lastVariant: SamosborVariantId | null = null;
-
 function floorWeight(def: SamosborVariantDef, floor: FloorLevel): number {
   if (!def.floors.includes(floor)) return 0;
   if (floor === FloorLevel.MINISTRY) {
@@ -1064,8 +1128,12 @@ export function getSamosborVariantWeight(id: SamosborVariantId, floor: FloorLeve
   return def ? floorWeight(def, floor) : 0;
 }
 
-function buildActiveVariant(def: SamosborVariantDef): ActiveSamosborVariant {
+export function buildActiveSamosborVariant(def: SamosborVariantDef): ActiveSamosborVariant {
   const modifiers = def.modifiers.map(id => SAMOSBOR_MODIFIERS[id]);
+  const subsystems = [...SAMOSBOR_BASE_SUBSYSTEMS];
+  for (const subsystem of def.subsystems) {
+    if (!subsystems.includes(subsystem)) subsystems.push(subsystem);
+  }
   let spawnMult = def.spawnMult;
   let fogSeedMult = 1;
   let fogSpawnIntervalMult = 1;
@@ -1087,6 +1155,8 @@ function buildActiveVariant(def: SamosborVariantDef): ActiveSamosborVariant {
   return {
     def,
     modifiers,
+    subsystems,
+    visual: def.visual,
     durationMult: def.durationMult,
     spawnMult,
     fogSeedMult,
@@ -1099,62 +1169,11 @@ function buildActiveVariant(def: SamosborVariantDef): ActiveSamosborVariant {
   };
 }
 
-export function chooseSamosborVariant(floor: FloorLevel): ActiveSamosborVariant {
-  if (forcedNextVariant) {
-    const forced = SAMOSBOR_VARIANTS.find(v => v.id === forcedNextVariant);
-    forcedNextVariant = null;
-    if (forced && forced.floors.includes(floor)) {
-      activeVariant = buildActiveVariant(forced);
-      lastVariant = activeVariant.def.id;
-      return activeVariant;
-    }
-  }
-
-  let total = 0;
-  for (const def of SAMOSBOR_VARIANTS) total += floorWeight(def, floor);
-  let roll = Math.random() * Math.max(1, total);
-  for (const def of SAMOSBOR_VARIANTS) {
-    roll -= floorWeight(def, floor);
-    if (roll <= 0) {
-      activeVariant = buildActiveVariant(def);
-      lastVariant = activeVariant.def.id;
-      return activeVariant;
-    }
-  }
-
-  activeVariant = buildActiveVariant(SAMOSBOR_VARIANTS[0]);
-  lastVariant = activeVariant.def.id;
-  return activeVariant;
-}
-
-export function getActiveSamosborVariant(): ActiveSamosborVariant | null {
-  return activeVariant;
-}
-
-export function clearActiveSamosborVariant(): void {
-  activeVariant = null;
-}
-
-export function forceNextSamosborVariant(id: SamosborVariantId): boolean {
-  if (!SAMOSBOR_VARIANTS.some(v => v.id === id)) return false;
-  forcedNextVariant = id;
-  return true;
-}
-
-export function cycleForcedSamosborVariant(): SamosborVariantId {
-  const ids = SAMOSBOR_VARIANTS.map(v => v.id);
-  const currentIdx = forcedNextVariant ? ids.indexOf(forcedNextVariant) : -1;
-  const next = ids[(currentIdx + 1) % ids.length];
-  forcedNextVariant = next;
-  return next;
-}
-
-export function getForcedSamosborVariant(): SamosborVariantId | null {
-  return forcedNextVariant;
-}
-
-export function getLastSamosborVariant(): SamosborVariantId | null {
-  return lastVariant;
+export function samosborVariantHasSubsystem(
+  variant: Pick<ActiveSamosborVariant, 'subsystems'> | Pick<SamosborVariantDef, 'subsystems'>,
+  subsystem: SamosborSubsystemId,
+): boolean {
+  return variant.subsystems.includes(subsystem) || SAMOSBOR_BASE_SUBSYSTEMS.includes(subsystem);
 }
 
 export function getSamosborVariantName(id: SamosborVariantId | null | undefined): string {

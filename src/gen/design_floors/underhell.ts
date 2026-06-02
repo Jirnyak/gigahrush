@@ -11,6 +11,7 @@ import {
 import { auditReachability, World, type ReachabilityAudit } from '../../core/world';
 import { withSeededRandom } from '../../core/rand';
 import { freshNeeds } from '../../data/catalog';
+import { HUMAN_TERRITORY_OWNERS, factionToTerritoryOwner } from '../../data/factions';
 import { type PlotNpcDef, registerSideQuest } from '../../data/plot';
 import { MONSTERS } from '../../entities/monster';
 import { Spr, monsterSpr } from '../../render/sprite_index';
@@ -623,6 +624,53 @@ export function openUnderhellVoidGate(world: World, ritual: UnderhellRitualState
   world.markWallTexDirty();
   world.markFloorTexDirty();
   world.markFeaturesDirty();
+}
+
+export function alignUnderhellAmbientNpcTerritory(world: World, entities: Entity[]): void {
+  const cells = underhellTerritorySpawnCells(world);
+  const offsets = new Uint16Array(8);
+  for (const entity of entities) {
+    if (!isUnderhellAmbientNpc(entity) || entity.faction === undefined) continue;
+    const owner = factionToTerritoryOwner(entity.faction);
+    const list = cells.get(owner);
+    if (!list || list.length === 0) continue;
+    const offset = offsets[owner]++ | 0;
+    const cell = list[(entity.id * 131 + offset * 457) % list.length];
+    entity.x = (cell % W) + 0.5;
+    entity.y = ((cell / W) | 0) + 0.5;
+    entity.assignedRoomId = world.roomMap[cell] >= 0 ? world.roomMap[cell] : -1;
+    if (entity.ai) {
+      entity.ai.tx = cell % W;
+      entity.ai.ty = (cell / W) | 0;
+      entity.ai.path = [];
+      entity.ai.pi = 0;
+      entity.ai.stuck = 0;
+    }
+  }
+}
+
+function isUnderhellAmbientNpc(entity: Entity): boolean {
+  return entity.type === EntityType.NPC &&
+    entity.alive &&
+    entity.plotNpcId === undefined &&
+    entity.persistentNpcId === undefined &&
+    entity.alifeId === undefined &&
+    entity.questId === -1 &&
+    entity.faction !== undefined &&
+    (entity.name?.startsWith('Нижний пропускник: ветеран ') ?? false);
+}
+
+function underhellTerritorySpawnCells(world: World): Map<ZoneFaction, number[]> {
+  const cells = new Map<ZoneFaction, number[]>();
+  for (const owner of HUMAN_TERRITORY_OWNERS) cells.set(owner, []);
+  for (let i = 0; i < W * W; i++) {
+    const cell = world.cells[i];
+    if (cell !== Cell.FLOOR && cell !== Cell.WATER && cell !== Cell.DOOR) continue;
+    if (world.aptMask[i] || world.containerMap.has(i) || world.features[i] === Feature.LIFT_BUTTON) continue;
+    const list = cells.get(world.factionControl[i] as ZoneFaction);
+    if (list) list.push(i);
+  }
+  return cells;
 }
 
 export function publishUnderhellBacklash(

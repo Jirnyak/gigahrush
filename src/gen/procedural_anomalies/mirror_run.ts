@@ -154,10 +154,10 @@ function cuePoint(deco: MirrorPairDecoration, side: 'a' | 'b'): Point | null {
     : deco.screenB ?? deco.lightB;
 }
 
-function registerMirrorCue(ctx: ProceduralAnomalyGenContext, pair: MirrorPair, deco: MirrorPairDecoration, ordinal: number): void {
+function registerMirrorCue(ctx: ProceduralAnomalyGenContext, pair: MirrorPair, deco: MirrorPairDecoration, ordinal: number): boolean {
   const marker = cuePoint(deco, 'a');
   const target = cuePoint(deco, 'b');
-  if (!marker || !target) return;
+  if (!marker || !target) return false;
   const markerCell = ctx.world.idx(marker.x, marker.y);
   registerRouteCue(ctx.world, {
     id: `procedural_${ctx.spec.key}_mirror_run_pair_${ordinal}`,
@@ -192,6 +192,7 @@ function registerMirrorCue(ctx: ProceduralAnomalyGenContext, pair: MirrorPair, d
       logLine: 'Зеркальная проводка читается по одинаковым экранам, лампам и вещам.',
     },
   });
+  return true;
 }
 
 function decoratePair(ctx: ProceduralAnomalyGenContext, pair: MirrorPair, axis: Axis, ordinal: number): MirrorPairDecoration {
@@ -250,9 +251,10 @@ export function applyMirrorRun(ctx: ProceduralAnomalyGenContext): void {
   if (pairs.length === 0) return;
 
   markAxis(ctx, axis, axisValue);
+  let cueRegistered = false;
   for (let i = 0; i < pairs.length; i++) {
     const deco = decoratePair(ctx, pairs[i], axis, i);
-    if (i === 0) registerMirrorCue(ctx, pairs[i], deco, i);
+    if (!cueRegistered) cueRegistered = registerMirrorCue(ctx, pairs[i], deco, i);
   }
 
   ctx.world.markFogDirty();

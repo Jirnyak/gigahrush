@@ -26,6 +26,8 @@ import { recordPermitAccess } from './permits';
 import { applyRoomMemoryRelationPenalty, applyTheftRelationPenalty } from './factions';
 import { addKarma } from './alife_rating';
 import { publishMaronaryShavingAcquired } from './maronary_shaving';
+import { territoryOwnerToFaction } from '../data/factions';
+import { territoryRoomOwner } from './territory';
 import {
   ROOM_MEMORY_BITS,
   getRoomMemoryForContainer,
@@ -335,14 +337,7 @@ function accessForRoom(room: Room, kind: ContainerKind): ContainerAccess {
 }
 
 function factionForRoom(world: World, room: Room): Faction | undefined {
-  const ci = world.idx(room.x + Math.floor(room.w / 2), room.y + Math.floor(room.h / 2));
-  const zone = world.zones[world.zoneMap[ci]];
-  if (!zone) return undefined;
-  if (zone.faction === 0) return Faction.CITIZEN;
-  if (zone.faction === 1) return Faction.LIQUIDATOR;
-  if (zone.faction === 2) return Faction.CULTIST;
-  if (zone.faction === 4) return Faction.WILD;
-  return undefined;
+  return territoryOwnerToFaction(territoryRoomOwner(world, room.id)) ?? undefined;
 }
 
 export function ensureRoomContainers(world: World, floor: FloorLevel, maxContainers = 128): number {

@@ -7,6 +7,7 @@ import {
   clearControlInputs,
   consumeControlCaptureCode,
   getControlCaptureAction,
+  isControlResetCode,
   isMenuCloseCode,
   matchesControlAction,
 } from './systems/controls';
@@ -16,10 +17,10 @@ export function createInput(): InputState {
     fwd: false, back: false, left: false, right: false,
     strafeL: false, strafeR: false, sprint: false,
     attack: false, interact: false, interactHeld: false, pickup: false,
-    map: false, inv: false, invUp: false, invDn: false, invLeft: false, invRight: false,
+    map: false, mapLegend: false, inv: false, invUp: false, invDn: false, invLeft: false, invRight: false,
     use: false, escape: false,
     questLog: false,
-    mouseAttack: false,
+    mouseAttack: false, mouseUse: false,
     attrStr: false, attrAgi: false, attrInt: false,
     debugScreen: false,
     pee: false,
@@ -46,6 +47,7 @@ function clearPointerState(input: InputState): void {
   input.mouse.dx = 0;
   input.mouse.dy = 0;
   input.mouseAttack = false;
+  input.mouseUse = false;
   input.touch.moveX = 0;
   input.touch.moveY = 0;
   input.touch.lookX = 0;
@@ -82,6 +84,12 @@ export function bindInput(input: InputState, canvas: HTMLCanvasElement, options:
 
   const onDown = (e: KeyboardEvent) => {
     if (getControlCaptureAction()) {
+      if (isControlResetCode(e.code)) {
+        cancelControlCapture();
+        input.controlReset = true;
+        e.preventDefault();
+        return;
+      }
       if (isMenuCloseCode(e.code)) {
         cancelControlCapture();
         input.controlClose = true;
@@ -97,6 +105,11 @@ export function bindInput(input: InputState, canvas: HTMLCanvasElement, options:
       options.onFullscreenToggle?.();
       return;
     }
+    if (isControlResetCode(e.code)) {
+      input.controlReset = true;
+      e.preventDefault();
+      return;
+    }
     if (isMenuCloseCode(e.code)) {
       input.controlClose = true;
       e.preventDefault();
@@ -107,6 +120,10 @@ export function bindInput(input: InputState, canvas: HTMLCanvasElement, options:
   };
 
   const onUp = (e: KeyboardEvent) => {
+    if (isControlResetCode(e.code)) {
+      input.controlReset = false;
+      return;
+    }
     if (isMenuCloseCode(e.code)) {
       input.controlClose = false;
       return;
@@ -136,13 +153,23 @@ export function bindInput(input: InputState, canvas: HTMLCanvasElement, options:
       pointerLockClickStarted = true;
       pointerLockAllowedAtMouseDown = options.shouldRequestPointerLock?.() !== false;
       if (document.pointerLockElement === canvas) input.mouseAttack = true;
+    } else if (e.button === 2) {
+      if (document.pointerLockElement === canvas) input.mouseUse = true;
+      e.preventDefault();
     }
   };
 
   const onMouseUp = (e: MouseEvent) => {
     if (e.button === 0) {
       input.mouseAttack = false;
+    } else if (e.button === 2) {
+      input.mouseUse = false;
+      e.preventDefault();
     }
+  };
+
+  const onContextMenu = (e: MouseEvent) => {
+    e.preventDefault();
   };
 
   const onLockChange = () => {
@@ -170,6 +197,7 @@ export function bindInput(input: InputState, canvas: HTMLCanvasElement, options:
   canvas.addEventListener('click', onClick);
   canvas.addEventListener('mousedown', onMouseDown);
   document.addEventListener('mouseup', onMouseUp);
+  canvas.addEventListener('contextmenu', onContextMenu);
   document.addEventListener('pointerlockchange', onLockChange);
   window.addEventListener('blur', onBlur);
   document.addEventListener('blur', onBlur, true);
@@ -182,6 +210,7 @@ export function bindInput(input: InputState, canvas: HTMLCanvasElement, options:
     canvas.removeEventListener('click', onClick);
     canvas.removeEventListener('mousedown', onMouseDown);
     document.removeEventListener('mouseup', onMouseUp);
+    canvas.removeEventListener('contextmenu', onContextMenu);
     document.removeEventListener('pointerlockchange', onLockChange);
     window.removeEventListener('blur', onBlur);
     document.removeEventListener('blur', onBlur, true);

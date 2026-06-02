@@ -21,11 +21,13 @@ import {
   type Entity,
   type Item,
   type Room,
+  type TerritoryOwner,
   type WorldContainer,
 } from '../../core/types';
 import { World } from '../../core/world';
 import { hashSeed, withSeededRandom } from '../../core/rand';
 import { freshNeeds } from '../../data/catalog';
+import { factionToTerritoryOwner } from '../../data/factions';
 import { type PlotNpcDef, registerSideQuest } from '../../data/plot';
 import { MONSTERS } from '../../entities/monster';
 import { monsterSpr, Spr } from '../../render/sprite_index';
@@ -33,6 +35,7 @@ import { placeEmergencyPanel } from '../../systems/emergency_panels';
 import { randomRPG } from '../../systems/rpg';
 import { ensureConnectivity, generateZones, sanitizeDoors } from '../shared';
 import type { FloorGeneration } from '../floor_manifest';
+import { buildVoronoiRoomCells, type VoronoiRoomSite } from '../voronoi_cells';
 
 export const VORONOI_QUARANTINE_ROUTE_ID = 'voronoi_quarantine' as const;
 export const VORONOI_QUARANTINE_Z = 6 as const;
@@ -69,7 +72,8 @@ type NpcId =
   | 'voronoi_quarantine_quartermaster_marta';
 
 interface SiteSeed {
-  key: keyof typeof VORONOI_QUARANTINE_ROOM_NAMES;
+  key?: keyof typeof VORONOI_QUARANTINE_ROOM_NAMES;
+  name?: string;
   role: SiteRole;
   x: number;
   y: number;
@@ -107,10 +111,57 @@ interface RidgeCandidate {
   score: number;
 }
 
+interface HqSupportSpec {
+  type: RoomType;
+  name: string;
+  dx: number;
+  dy: number;
+  w: number;
+  h: number;
+  wallTex: Tex;
+  floorTex: Tex;
+}
+
+interface FactionHqSpec {
+  owner: TerritoryOwner;
+  key: keyof typeof VORONOI_QUARANTINE_ROOM_NAMES;
+  name: string;
+  dx: number;
+  dy: number;
+  w: number;
+  h: number;
+  wallTex: Tex;
+  floorTex: Tex;
+  support: readonly HqSupportSpec[];
+}
+
+interface QuarantineCellStats {
+  mid: number;
+  micro: number;
+  microDoors: number;
+}
+
+interface MicroVoronoiCellData {
+  parentSiteId: number;
+  serial: number;
+  role: SiteRole;
+  faction: ZoneFaction;
+  roomType: RoomType;
+  wallTex: Tex;
+  floorTex: Tex;
+  name: string;
+}
+
+type MicroVoronoiSite = VoronoiRoomSite<MicroVoronoiCellData>;
+
 export interface VoronoiQuarantineLayout {
   routeId: typeof VORONOI_QUARANTINE_ROUTE_ID;
   lloydPasses: number;
   siteCount: number;
+  macroSiteCount: number;
+  midCellCount: number;
+  microCellCount: number;
+  microDoorCount: number;
   siteCellCounts: readonly number[];
   adjacencyEdges: readonly [number, number][];
   ridgeDoorCount: number;
@@ -127,19 +178,60 @@ const CORE_MAX = W - CORE_MIN;
 const LLOYD_PASSES = 2;
 const LLOYD_STEP = 8;
 const OWNER_NONE = -1;
+const GENERATED_CELL_RING_COUNT = 2;
+const MICRO_ROOM_TARGET_MIN = 12_288;
+const MICRO_SITE_SAMPLE_ATTEMPTS = 32;
+const MICRO_EXTRA_DOOR_RATIO = 0.42;
 
 const SITE_SEEDS: readonly SiteSeed[] = [
   { key: 'northCheckpoint', role: 'checkpoint', x: CX, y: 250, weight: 118, roomType: RoomType.HQ, wallTex: Tex.METAL, floorTex: Tex.F_CONCRETE, faction: ZoneFaction.LIQUIDATOR, danger: 3 },
-  { key: 'cleanClinic', role: 'clinic', x: 402, y: 370, weight: 132, roomType: RoomType.MEDICAL, wallTex: Tex.TILE_W, floorTex: Tex.F_TILE, faction: ZoneFaction.CITIZEN, danger: 2 },
+  { key: 'cleanClinic', role: 'clinic', x: 402, y: 370, weight: 132, roomType: RoomType.MEDICAL, wallTex: Tex.TILE_W, floorTex: Tex.F_TILE, faction: ZoneFaction.SCIENTIST, danger: 2 },
   { key: 'forgeOffice', role: 'office', x: 620, y: 362, weight: 104, roomType: RoomType.OFFICE, wallTex: Tex.MARBLE, floorTex: Tex.F_PARQUET, faction: ZoneFaction.CITIZEN, danger: 2 },
   { key: 'publicKitchen', role: 'kitchen', x: 310, y: 522, weight: 126, roomType: RoomType.KITCHEN, wallTex: Tex.BRICK, floorTex: Tex.F_LINO, faction: ZoneFaction.CITIZEN, danger: 2 },
-  { key: 'triageHub', role: 'triage', x: CX, y: CY, weight: 148, roomType: RoomType.COMMON, wallTex: Tex.PANEL, floorTex: Tex.F_LINO, faction: ZoneFaction.LIQUIDATOR, danger: 3 },
-  { key: 'infectedWard', role: 'ward', x: 706, y: 508, weight: 130, roomType: RoomType.MEDICAL, wallTex: Tex.TILE_W, floorTex: Tex.F_TILE, faction: ZoneFaction.SAMOSBOR, danger: 4, infected: true },
+  { key: 'triageHub', role: 'triage', x: CX, y: CY, weight: 148, roomType: RoomType.COMMON, wallTex: Tex.PANEL, floorTex: Tex.F_LINO, faction: ZoneFaction.SCIENTIST, danger: 3 },
+  { key: 'infectedWard', role: 'ward', x: 706, y: 508, weight: 130, roomType: RoomType.MEDICAL, wallTex: Tex.TILE_W, floorTex: Tex.F_TILE, faction: ZoneFaction.SCIENTIST, danger: 4, infected: true },
   { key: 'redWard', role: 'ward', x: 440, y: 655, weight: 128, roomType: RoomType.MEDICAL, wallTex: Tex.HERMO_WALL, floorTex: Tex.F_TILE, faction: ZoneFaction.WILD, danger: 4, infected: true },
   { key: 'supplyConnector', role: 'supply', x: 690, y: 660, weight: 112, roomType: RoomType.STORAGE, wallTex: Tex.METAL, floorTex: Tex.F_CONCRETE, faction: ZoneFaction.LIQUIDATOR, danger: 3 },
   { key: 'corpsePitWest', role: 'corpse_pit', x: 270, y: 745, weight: 120, roomType: RoomType.STORAGE, wallTex: Tex.HERMO_WALL, floorTex: Tex.F_WATER, faction: ZoneFaction.SAMOSBOR, danger: 5, infected: true },
   { key: 'corpsePitEast', role: 'corpse_pit', x: 595, y: 785, weight: 116, roomType: RoomType.STORAGE, wallTex: Tex.HERMO_WALL, floorTex: Tex.F_WATER, faction: ZoneFaction.SAMOSBOR, danger: 5, infected: true },
   { key: 'southCheckpoint', role: 'checkpoint', x: CX, y: 882, weight: 118, roomType: RoomType.HQ, wallTex: Tex.METAL, floorTex: Tex.F_CONCRETE, faction: ZoneFaction.LIQUIDATOR, danger: 3 },
+];
+
+const HQ_SUPPORTS = {
+  citizen: [
+    { type: RoomType.KITCHEN, name: 'кухня кипячёных очередей', dx: -34, dy: 24, w: 18, h: 12, wallTex: Tex.BRICK, floorTex: Tex.F_LINO },
+    { type: RoomType.BATHROOM, name: 'туалет чистой очереди', dx: 32, dy: 24, w: 14, h: 10, wallTex: Tex.TILE_W, floorTex: Tex.F_TILE },
+    { type: RoomType.STORAGE, name: 'кладовая общих халатов', dx: 4, dy: 40, w: 20, h: 12, wallTex: Tex.PANEL, floorTex: Tex.F_CONCRETE },
+  ],
+  liquidator: [
+    { type: RoomType.STORAGE, name: 'оружейная сухого ребра', dx: -36, dy: -22, w: 20, h: 12, wallTex: Tex.METAL, floorTex: Tex.F_CONCRETE },
+    { type: RoomType.OFFICE, name: 'журнал допуска поста', dx: 34, dy: -20, w: 18, h: 12, wallTex: Tex.METAL, floorTex: Tex.F_CONCRETE },
+    { type: RoomType.BATHROOM, name: 'санузел смены ликвидаторов', dx: -4, dy: -38, w: 14, h: 10, wallTex: Tex.TILE_W, floorTex: Tex.F_TILE },
+  ],
+  cultist: [
+    { type: RoomType.COMMON, name: 'шёпотная общая за ребром', dx: -28, dy: 22, w: 20, h: 12, wallTex: Tex.DARK, floorTex: Tex.F_CARPET },
+    { type: RoomType.STORAGE, name: 'тайник мокрых печатей', dx: 28, dy: 22, w: 16, h: 10, wallTex: Tex.HERMO_WALL, floorTex: Tex.F_CONCRETE },
+    { type: RoomType.BATHROOM, name: 'умывальник обета карантина', dx: 0, dy: 38, w: 14, h: 10, wallTex: Tex.TILE_W, floorTex: Tex.F_WATER },
+  ],
+  scientist: [
+    { type: RoomType.MEDICAL, name: 'чистая перевязочная НИИ', dx: -38, dy: 22, w: 22, h: 14, wallTex: Tex.TILE_W, floorTex: Tex.F_TILE },
+    { type: RoomType.PRODUCTION, name: 'лабораторный стол проб', dx: 36, dy: 22, w: 22, h: 14, wallTex: Tex.TILE_W, floorTex: Tex.F_TILE },
+    { type: RoomType.OFFICE, name: 'кабинет протокола Ллойда', dx: 0, dy: 42, w: 22, h: 12, wallTex: Tex.MARBLE, floorTex: Tex.F_PARQUET },
+  ],
+  wild: [
+    { type: RoomType.KITCHEN, name: 'коптильня диких халатов', dx: -30, dy: -24, w: 18, h: 12, wallTex: Tex.ROTTEN, floorTex: Tex.F_LINO },
+    { type: RoomType.STORAGE, name: 'свалка фильтров и бинтов', dx: 30, dy: -24, w: 18, h: 12, wallTex: Tex.ROTTEN, floorTex: Tex.F_CONCRETE },
+    { type: RoomType.BATHROOM, name: 'грязная душевая ячейки', dx: 0, dy: -42, w: 14, h: 10, wallTex: Tex.TILE_W, floorTex: Tex.F_WATER },
+  ],
+} satisfies Record<string, readonly HqSupportSpec[]>;
+
+const FACTION_HQ_SPECS: readonly FactionHqSpec[] = [
+  { owner: ZoneFaction.SCIENTIST, key: 'cleanClinic', name: 'НИИ Вороного: гермоядро чистой клиники', dx: -24, dy: -24, w: 26, h: 18, wallTex: Tex.HERMO_WALL, floorTex: Tex.F_TILE, support: HQ_SUPPORTS.scientist },
+  { owner: ZoneFaction.SCIENTIST, key: 'triageHub', name: 'НИИ Вороного: пост сортировки рёбер', dx: 34, dy: -30, w: 24, h: 16, wallTex: Tex.HERMO_WALL, floorTex: Tex.F_TILE, support: HQ_SUPPORTS.scientist },
+  { owner: ZoneFaction.LIQUIDATOR, key: 'northCheckpoint', name: 'Ликвидаторы: гермоядро северного допуска', dx: -24, dy: 24, w: 24, h: 16, wallTex: Tex.HERMO_WALL, floorTex: Tex.F_CONCRETE, support: HQ_SUPPORTS.liquidator },
+  { owner: ZoneFaction.CITIZEN, key: 'publicKitchen', name: 'Граждане: гермоядро общей кухни', dx: -24, dy: -28, w: 22, h: 16, wallTex: Tex.HERMO_WALL, floorTex: Tex.F_LINO, support: HQ_SUPPORTS.citizen },
+  { owner: ZoneFaction.CULTIST, key: 'corpsePitWest', name: 'Культисты: скрытая гермокелья мокрой диаграммы', dx: 24, dy: -28, w: 20, h: 14, wallTex: Tex.HERMO_WALL, floorTex: Tex.F_CARPET, support: HQ_SUPPORTS.cultist },
+  { owner: ZoneFaction.WILD, key: 'redWard', name: 'Дикие: гермоядро красной палаты', dx: 28, dy: -34, w: 22, h: 15, wallTex: Tex.HERMO_WALL, floorTex: Tex.F_CONCRETE, support: HQ_SUPPORTS.wild },
 ];
 
 const NPC_DEFS: Record<NpcId, PlotNpcDef> = {
@@ -346,6 +438,8 @@ export function generateVoronoiQuarantineDesignFloor(seed = SEED): FloorGenerati
     const edgeMap = collectRidgeCandidates(world, owner, sites);
     const ridgeDoors = placeRidgeDoors(world, sites, edgeMap);
     buildRoomsFromOwners(world, sites, owner);
+    placeFactionMiniHqs(world, sites, owner, seed);
+    const cellStats = placeQuarantineMidMicroRooms(world, sites, owner, seed);
     decorateSites(world, sites, owner, seed);
     placeLifts(world, sites, owner);
     generateZones(world);
@@ -358,7 +452,7 @@ export function generateVoronoiQuarantineDesignFloor(seed = SEED): FloorGenerati
     spawnThreats(world, entities, nextId, sites, owner);
     stampContamination(world, sites, seed);
 
-    const spawn = findSiteCell(world, owner, siteId(sites, 'northCheckpoint'));
+    const spawn = findSiteCell(world, owner, sites, siteId(sites, 'northCheckpoint'));
     sanitizeDoors(world);
     ensureConnectivity(world, spawn.x + 0.5, spawn.y + 0.5);
     world.rebuildContainerMap();
@@ -367,7 +461,11 @@ export function generateVoronoiQuarantineDesignFloor(seed = SEED): FloorGenerati
     layouts.set(world, {
       routeId: VORONOI_QUARANTINE_ROUTE_ID,
       lloydPasses: LLOYD_PASSES,
-      siteCount: sites.length,
+      siteCount: sites.length + cellStats.mid + cellStats.micro,
+      macroSiteCount: sites.length,
+      midCellCount: cellStats.mid,
+      microCellCount: cellStats.micro,
+      microDoorCount: countMicroVoronoiDoors(world),
       siteCellCounts: countSiteCells(owner, sites.length),
       adjacencyEdges: sortedAdjacency(edgeMap),
       ridgeDoorCount: ridgeDoors.total,
@@ -400,11 +498,17 @@ export function tuneVoronoiQuarantineRouteZones(world: World): void {
         zone.hasLift = true;
         break;
       case 'clinic':
+        zone.faction = ZoneFaction.SCIENTIST;
+        zone.level = Math.max(zone.level, 3);
+        break;
       case 'office':
       case 'kitchen':
-      case 'triage':
         zone.faction = zone.id % 5 === 0 ? ZoneFaction.LIQUIDATOR : ZoneFaction.CITIZEN;
-        zone.level = Math.max(zone.level, role === 'triage' ? 3 : 2);
+        zone.level = Math.max(zone.level, 2);
+        break;
+      case 'triage':
+        zone.faction = ZoneFaction.SCIENTIST;
+        zone.level = Math.max(zone.level, 4);
         break;
       case 'supply':
         zone.faction = ZoneFaction.LIQUIDATOR;
@@ -427,8 +531,10 @@ export function tuneVoronoiQuarantineRouteZones(world: World): void {
     zone.fogged = false;
   }
 
-  for (let i = 0; i < W * W; i++) {
-    world.factionControl[i] = world.zones[world.zoneMap[i]]?.faction ?? ZoneFaction.CITIZEN;
+  if (!hasAuthoredVoronoiTerritory(world)) {
+    for (let i = 0; i < W * W; i++) {
+      world.factionControl[i] = world.zones[world.zoneMap[i]]?.faction ?? ZoneFaction.CITIZEN;
+    }
   }
 }
 
@@ -449,13 +555,43 @@ function buildSites(seed: number): Site[] {
     return {
       ...src,
       id,
-      name: VORONOI_QUARANTINE_ROOM_NAMES[src.key],
+      name: src.key ? VORONOI_QUARANTINE_ROOM_NAMES[src.key] : (src.name ?? `Вороной-ячейка ${id}`),
       originX: src.x,
       originY: src.y,
       x: clamp(src.x + jx, CORE_MIN + 48, CORE_MAX - 48),
       y: clamp(src.y + jy, CORE_MIN + 48, CORE_MAX - 48),
     };
   });
+  const baseCount = sites.length;
+  for (let parent = 0; parent < baseCount; parent++) {
+    const source = sites[parent]!;
+    for (let ring = 0; ring < GENERATED_CELL_RING_COUNT; ring++) {
+      const roll = hash01(seed, parent, ring, 211);
+      const angle = (ring / GENERATED_CELL_RING_COUNT) * Math.PI * 2 + (roll - 0.5) * 0.95;
+      const radius = 58 + ring * 26 + Math.round(hash01(seed, parent, ring, 223) * 22);
+      const role = generatedRoleForSite(source.role, ring);
+      const faction = generatedFactionForSite(source, ring);
+      const id = sites.length;
+      const x = clamp(Math.round(source.originX + Math.cos(angle) * radius), CORE_MIN + 42, CORE_MAX - 42);
+      const y = clamp(Math.round(source.originY + Math.sin(angle) * radius), CORE_MIN + 42, CORE_MAX - 42);
+      sites.push({
+        id,
+        role,
+        x,
+        y,
+        originX: x,
+        originY: y,
+        weight: Math.max(84, Math.round(source.weight * (0.78 + hash01(seed, parent, ring, 227) * 0.18))),
+        roomType: roomTypeForGeneratedRole(role, faction),
+        wallTex: wallTexForGeneratedRole(role, faction),
+        floorTex: floorTexForGeneratedRole(role, faction),
+        faction,
+        danger: Math.max(1, Math.min(5, source.danger + (role === 'corpse_pit' ? 1 : 0))) as 1 | 2 | 3 | 4 | 5,
+        infected: source.infected || role === 'corpse_pit' || (role === 'ward' && faction !== ZoneFaction.CITIZEN),
+        name: generatedSiteName(source, id, ring, role, faction),
+      });
+    }
+  }
 
   for (let pass = 0; pass < LLOYD_PASSES; pass++) {
     const sx = new Float64Array(sites.length);
@@ -470,7 +606,7 @@ function buildSites(seed: number): Site[] {
       }
     }
     for (const site of sites) {
-      if (count[site.id] <= 0 || site.role === 'checkpoint') continue;
+      if (count[site.id] <= 0 || (site.key && site.role === 'checkpoint')) continue;
       const cx = sx[site.id] / count[site.id];
       const cy = sy[site.id] / count[site.id];
       site.x = Math.round(clamp(site.originX * 0.42 + cx * 0.58, CORE_MIN + 36, CORE_MAX - 36));
@@ -479,6 +615,102 @@ function buildSites(seed: number): Site[] {
   }
 
   return sites;
+}
+
+function generatedRoleForSite(role: SiteRole, ring: number): SiteRole {
+  if (role === 'checkpoint') return ring % 2 === 0 ? 'supply' : 'office';
+  if (role === 'clinic' || role === 'triage') return ring % 3 === 0 ? 'clinic' : ring % 3 === 1 ? 'office' : 'supply';
+  if (role === 'kitchen') return ring % 2 === 0 ? 'kitchen' : 'supply';
+  if (role === 'ward') return ring % 2 === 0 ? 'ward' : 'triage';
+  if (role === 'corpse_pit') return ring % 2 === 0 ? 'corpse_pit' : 'ward';
+  if (role === 'supply') return ring % 2 === 0 ? 'supply' : 'office';
+  return ring % 2 === 0 ? role : 'supply';
+}
+
+function generatedFactionForSite(site: Site, ring: number): ZoneFaction {
+  if (site.role === 'corpse_pit' && ring === 1) return ZoneFaction.CULTIST;
+  if (site.role === 'ward' && ring === 2) return ZoneFaction.WILD;
+  if (site.role === 'clinic' || site.role === 'triage') return ZoneFaction.SCIENTIST;
+  if (site.role === 'checkpoint' || site.role === 'supply') return ring === 3 ? ZoneFaction.CITIZEN : ZoneFaction.LIQUIDATOR;
+  if (site.role === 'office') return ring === 2 ? ZoneFaction.SCIENTIST : ZoneFaction.CITIZEN;
+  if (site.role === 'kitchen') return ring === 3 ? ZoneFaction.WILD : ZoneFaction.CITIZEN;
+  return site.faction;
+}
+
+function roomTypeForGeneratedRole(role: SiteRole, faction: ZoneFaction): RoomType {
+  if (faction === ZoneFaction.CULTIST) return RoomType.COMMON;
+  switch (role) {
+    case 'checkpoint':
+      return RoomType.HQ;
+    case 'clinic':
+    case 'ward':
+      return RoomType.MEDICAL;
+    case 'office':
+      return RoomType.OFFICE;
+    case 'kitchen':
+      return RoomType.KITCHEN;
+    case 'supply':
+    case 'corpse_pit':
+      return RoomType.STORAGE;
+    case 'triage':
+    default:
+      return RoomType.COMMON;
+  }
+}
+
+function wallTexForGeneratedRole(role: SiteRole, faction: ZoneFaction): Tex {
+  if (faction === ZoneFaction.CULTIST) return Tex.DARK;
+  if (faction === ZoneFaction.SCIENTIST) return Tex.TILE_W;
+  if (faction === ZoneFaction.LIQUIDATOR) return Tex.METAL;
+  if (faction === ZoneFaction.WILD) return Tex.ROTTEN;
+  if (role === 'corpse_pit') return Tex.HERMO_WALL;
+  if (role === 'office') return Tex.MARBLE;
+  return Tex.PANEL;
+}
+
+function floorTexForGeneratedRole(role: SiteRole, faction: ZoneFaction): Tex {
+  if (faction === ZoneFaction.CULTIST) return Tex.F_CARPET;
+  if (faction === ZoneFaction.SCIENTIST) return Tex.F_TILE;
+  if (faction === ZoneFaction.LIQUIDATOR) return Tex.F_CONCRETE;
+  if (faction === ZoneFaction.WILD) return Tex.F_LINO;
+  if (role === 'corpse_pit') return Tex.F_WATER;
+  if (role === 'office') return Tex.F_PARQUET;
+  return Tex.F_LINO;
+}
+
+function generatedSiteName(parent: Site, id: number, ring: number, role: SiteRole, faction: ZoneFaction): string {
+  const owner = faction === ZoneFaction.SCIENTIST ? 'НИИ' :
+    faction === ZoneFaction.LIQUIDATOR ? 'пост' :
+      faction === ZoneFaction.CULTIST ? 'скрытая' :
+        faction === ZoneFaction.WILD ? 'дикая' : 'общая';
+  const roleName = role === 'clinic' ? 'клиника' :
+    role === 'ward' ? 'палата' :
+      role === 'supply' ? 'склад' :
+        role === 'office' ? 'контора' :
+          role === 'kitchen' ? 'кухня' :
+            role === 'corpse_pit' ? 'яма' :
+              role === 'checkpoint' ? 'пост' : 'сортировка';
+  return `Вороной-${owner} ${roleName} ${ring + 1} от ${parent.name} #${id}`;
+}
+
+function quarantineRoomType(site: Site, serial: number, scale: 'mid' | 'micro'): RoomType {
+  if (scale === 'mid') return roomTypeForGeneratedRole(site.role, site.faction);
+  const motif = (site.id + serial) % 7;
+  if (site.role === 'clinic' || site.role === 'ward') return motif <= 2 ? RoomType.MEDICAL : motif === 3 ? RoomType.BATHROOM : RoomType.STORAGE;
+  if (site.role === 'kitchen') return motif <= 2 ? RoomType.KITCHEN : motif === 3 ? RoomType.BATHROOM : RoomType.LIVING;
+  if (site.role === 'supply' || site.role === 'checkpoint') return motif <= 2 ? RoomType.STORAGE : motif === 3 ? RoomType.OFFICE : RoomType.COMMON;
+  if (site.role === 'corpse_pit') return motif <= 2 ? RoomType.STORAGE : motif === 3 ? RoomType.MEDICAL : RoomType.COMMON;
+  if (site.role === 'office') return motif <= 3 ? RoomType.OFFICE : RoomType.STORAGE;
+  return motif === 0 ? RoomType.BATHROOM : motif === 1 ? RoomType.KITCHEN : RoomType.COMMON;
+}
+
+function hasAuthoredVoronoiTerritory(world: World): boolean {
+  const seen = new Set<ZoneFaction>();
+  for (let i = 0; i < world.factionControl.length; i += 64) {
+    seen.add(world.factionControl[i] as ZoneFaction);
+    if (seen.size >= 3) return true;
+  }
+  return false;
 }
 
 function assignLaguerreCells(world: World, sites: readonly Site[]): Int16Array {
@@ -545,7 +777,7 @@ function placeRidgeDoors(
   const extras = sortedCandidates(edgeMap)
     .filter(edge => !spanning.some(keep => samePair(edge, keep)))
     .filter(edge => shouldAddExtraRidge(sites[edge.a]!, sites[edge.b]!))
-    .slice(0, 14);
+    .slice(0, Math.min(170, sites.length * 3));
   const edges = [...spanning, ...extras];
   let lockedPass = 0;
   let supplyConnector = 0;
@@ -603,6 +835,373 @@ function buildRoomsFromOwners(world: World, sites: readonly Site[], owner: Int16
   }
 }
 
+function placeFactionMiniHqs(world: World, sites: readonly Site[], owner: Int16Array, seed: number): void {
+  for (let i = 0; i < FACTION_HQ_SPECS.length; i++) {
+    const spec = FACTION_HQ_SPECS[i]!;
+    const base = sitePoint(world, owner, sites, spec.key, spec.dx, spec.dy);
+    const hq = tryStampQuarantineRoom(world, owner, sites, siteId(sites, spec.key), base.x, base.y, spec.w, spec.h, RoomType.HQ, spec.name, spec.wallTex, spec.floorTex, spec.owner, true, seed ^ (i * 0x9d));
+    if (!hq) continue;
+    decorateQuarantineRoom(world, hq, RoomType.HQ, i);
+    paintRoomTerritory(world, hq, spec.owner);
+    for (let j = 0; j < spec.support.length; j++) {
+      const support = spec.support[j]!;
+      const point = sitePoint(world, owner, sites, spec.key, spec.dx + support.dx, spec.dy + support.dy);
+      const room = tryStampQuarantineRoom(
+        world,
+        owner,
+        sites,
+        siteId(sites, spec.key),
+        point.x,
+        point.y,
+        support.w,
+        support.h,
+        support.type,
+        `${spec.name}: ${support.name}`,
+        support.wallTex,
+        support.floorTex,
+        spec.owner,
+        false,
+        seed ^ (i * 0x111 + j * 0x51),
+      );
+      if (room) {
+        decorateQuarantineRoom(world, room, support.type, i * 7 + j);
+        paintRoomTerritory(world, room, spec.owner);
+      }
+    }
+  }
+}
+
+function placeQuarantineMidMicroRooms(world: World, sites: readonly Site[], owner: Int16Array, seed: number): QuarantineCellStats {
+  const microSites = buildMicroVoronoiSites(world, sites, owner, seed);
+  const build = buildVoronoiRoomCells(world, {
+    sites: microSites,
+    minX: CORE_MIN,
+    minY: CORE_MIN,
+    maxX: CORE_MAX,
+    maxY: CORE_MAX,
+    seed,
+    bucketSize: 10,
+    bucketSearchRadius: 3,
+    minRoomCells: 3,
+    extraDoorRatio: MICRO_EXTRA_DOOR_RATIO,
+    doorTex: Tex.DOOR_WOOD,
+    doorState: DoorState.CLOSED,
+    cellParentId: (idx) => {
+      const parentId = owner[idx];
+      if (parentId < 0 || world.roomMap[idx] !== parentId) return -1;
+      if (world.cells[idx] !== Cell.FLOOR && world.cells[idx] !== Cell.WATER) return -1;
+      return parentId;
+    },
+    createRoom: (site, bounds, roomId) => ({
+      id: roomId,
+      type: site.data.roomType,
+      x: bounds.minX,
+      y: bounds.minY,
+      w: Math.max(2, bounds.maxX - bounds.minX + 1),
+      h: Math.max(2, bounds.maxY - bounds.minY + 1),
+      doors: [],
+      sealed: false,
+      name: site.data.name,
+      apartmentId: -1,
+      wallTex: site.data.wallTex,
+      floorTex: site.data.floorTex,
+    }),
+    paintCell: (idx, site) => {
+      world.floorTex[idx] = world.cells[idx] === Cell.WATER ? Tex.F_WATER : site.data.floorTex;
+      world.wallTex[idx] = site.data.wallTex;
+      world.factionControl[idx] = site.data.faction;
+    },
+    wallTexForCell: (_idx, parentId) => {
+      const site = sites[parentId];
+      return site?.infected ? Tex.HERMO_WALL : (site?.wallTex ?? Tex.PANEL);
+    },
+  });
+  return { mid: 0, micro: build.rooms, microDoors: build.doors };
+}
+
+function buildMicroVoronoiSites(world: World, sites: readonly Site[], owner: Int16Array, seed: number): MicroVoronoiSite[] {
+  const bounds = siteBounds(world, sites, owner);
+  const eligible = sites
+    .map(site => ({ site, bounds: bounds[site.id]!, exact: 0, quota: 0 }))
+    .filter(entry => entry.bounds.count >= 420);
+  const totalArea = eligible.reduce((sum, entry) => sum + entry.bounds.count, 0);
+  if (totalArea <= 0) return [];
+
+  let allocated = 0;
+  for (const entry of eligible) {
+    entry.exact = entry.bounds.count / totalArea * MICRO_ROOM_TARGET_MIN;
+    entry.quota = Math.max(1, Math.floor(entry.exact));
+    allocated += entry.quota;
+  }
+
+  const byRemainder = [...eligible].sort((a, b) => (b.exact - Math.floor(b.exact)) - (a.exact - Math.floor(a.exact)) || a.site.id - b.site.id);
+  for (let i = 0; allocated < MICRO_ROOM_TARGET_MIN && byRemainder.length > 0; i++) {
+    byRemainder[i % byRemainder.length]!.quota++;
+    allocated++;
+  }
+  const bySize = [...eligible].sort((a, b) => b.quota - a.quota || b.bounds.count - a.bounds.count);
+  for (let i = 0; allocated > MICRO_ROOM_TARGET_MIN && bySize.length > 0; i++) {
+    const entry = bySize[i % bySize.length]!;
+    if (entry.quota <= 1) continue;
+    entry.quota--;
+    allocated--;
+  }
+
+  const out: MicroVoronoiSite[] = [];
+  for (const entry of eligible) placeMicroVoronoiSitesForParent(world, owner, entry.site, entry.bounds, entry.quota, seed, out);
+  return out;
+}
+
+function placeMicroVoronoiSitesForParent(
+  world: World,
+  owner: Int16Array,
+  parent: Site,
+  bounds: Bounds,
+  target: number,
+  seed: number,
+  out: MicroVoronoiSite[],
+): void {
+  const width = Math.max(1, bounds.maxX - bounds.minX + 1);
+  const height = Math.max(1, bounds.maxY - bounds.minY + 1);
+  const cols = Math.max(1, Math.round(Math.sqrt(target * width / Math.max(1, height))));
+  const rows = Math.max(1, Math.ceil(target / cols));
+  const used = new Set<number>();
+  let serial = 0;
+
+  for (let row = 0; row < rows && serial < target; row++) {
+    for (let col = 0; col < cols && serial < target; col++) {
+      const jitterX = (hash01(seed, parent.id, serial, 701) - 0.5) * 0.62;
+      const jitterY = (hash01(seed, parent.id, serial, 709) - 0.5) * 0.62;
+      const x = bounds.minX + Math.round((col + 0.5 + jitterX) / cols * width);
+      const y = bounds.minY + Math.round((row + 0.5 + jitterY) / rows * height);
+      const radius = Math.max(5, Math.ceil(Math.max(width / cols, height / rows) * 0.66));
+      const point = findNearbyParentFloorCell(world, owner, parent.id, x, y, radius, used);
+      if (!point) continue;
+      used.add(world.idx(point.x, point.y));
+      out.push(makeMicroVoronoiSite(parent, point.x, point.y, serial, out.length, seed));
+      serial++;
+    }
+  }
+
+  for (let attempt = 0; serial < target && attempt < target * MICRO_SITE_SAMPLE_ATTEMPTS; attempt++) {
+    const x = bounds.minX + Math.floor(hash01(seed, parent.id, attempt, 719) * width);
+    const y = bounds.minY + Math.floor(hash01(seed, parent.id, attempt, 727) * height);
+    const point = findNearbyParentFloorCell(world, owner, parent.id, x, y, 12, used);
+    if (!point) continue;
+    used.add(world.idx(point.x, point.y));
+    out.push(makeMicroVoronoiSite(parent, point.x, point.y, serial, out.length, seed));
+    serial++;
+  }
+}
+
+function findNearbyParentFloorCell(
+  world: World,
+  owner: Int16Array,
+  parentSiteId: number,
+  x: number,
+  y: number,
+  radius: number,
+  used: ReadonlySet<number>,
+): { x: number; y: number } | null {
+  const sx = clamp(x, CORE_MIN + 2, CORE_MAX - 2);
+  const sy = clamp(y, CORE_MIN + 2, CORE_MAX - 2);
+  for (let r = 0; r <= radius; r++) {
+    for (let dy = -r; dy <= r; dy++) {
+      for (let dx = -r; dx <= r; dx++) {
+        if (Math.abs(dx) !== r && Math.abs(dy) !== r) continue;
+        const px = clamp(sx + dx, CORE_MIN + 2, CORE_MAX - 2);
+        const py = clamp(sy + dy, CORE_MIN + 2, CORE_MAX - 2);
+        const idx = world.idx(px, py);
+        if (used.has(idx)) continue;
+        if (owner[idx] !== parentSiteId) continue;
+        if (world.roomMap[idx] !== parentSiteId) continue;
+        if (world.cells[idx] !== Cell.FLOOR && world.cells[idx] !== Cell.WATER) continue;
+        return { x: px, y: py };
+      }
+    }
+  }
+  return null;
+}
+
+function makeMicroVoronoiSite(parent: Site, x: number, y: number, serial: number, id: number, seed: number): MicroVoronoiSite {
+  const role = microRoleForParent(parent, serial);
+  const roomType = quarantineRoomType({ ...parent, role }, serial, 'micro');
+  return {
+    id,
+    parentId: parent.id,
+    x,
+    y,
+    weight: 2 + hash01(seed, parent.id, serial, 733) * 5,
+    data: {
+      parentSiteId: parent.id,
+      serial,
+      role,
+      faction: parent.faction,
+      roomType,
+      wallTex: wallTexForGeneratedRole(role, parent.faction),
+      floorTex: floorTexForGeneratedRole(role, parent.faction),
+      name: `Вороной-микроячейка ${parent.name}: ${serial + 1}`,
+    },
+  };
+}
+
+function microRoleForParent(parent: Site, serial: number): SiteRole {
+  const motif = (parent.id * 5 + serial) % 9;
+  if (parent.role === 'checkpoint') return motif < 4 ? 'checkpoint' : motif < 7 ? 'supply' : 'office';
+  if (parent.role === 'clinic') return motif < 5 ? 'clinic' : motif < 7 ? 'triage' : 'office';
+  if (parent.role === 'triage') return motif < 5 ? 'triage' : motif < 7 ? 'clinic' : 'supply';
+  if (parent.role === 'ward') return motif < 6 ? 'ward' : motif === 6 ? 'triage' : 'supply';
+  if (parent.role === 'kitchen') return motif < 5 ? 'kitchen' : motif < 7 ? 'supply' : 'office';
+  if (parent.role === 'corpse_pit') return motif < 6 ? 'corpse_pit' : 'ward';
+  if (parent.role === 'supply') return motif < 6 ? 'supply' : 'office';
+  return motif < 6 ? parent.role : 'supply';
+}
+
+function countMicroVoronoiDoors(world: World): number {
+  let count = 0;
+  for (const door of world.doors.values()) {
+    const a = world.rooms[door.roomA]?.name ?? '';
+    const b = world.rooms[door.roomB]?.name ?? '';
+    if (a.includes('Вороной-микроячейка') || b.includes('Вороной-микроячейка')) count++;
+  }
+  return count;
+}
+
+function tryStampQuarantineRoom(
+  world: World,
+  owner: Int16Array,
+  sites: readonly Site[],
+  siteIdValue: number,
+  cx: number,
+  cy: number,
+  w: number,
+  h: number,
+  type: RoomType,
+  name: string,
+  wallTex: Tex,
+  floorTex: Tex,
+  territoryOwner: TerritoryOwner,
+  sealed: boolean,
+  seed: number,
+): Room | null {
+  const rx = clamp(Math.round(cx - w / 2), CORE_MIN + 3, CORE_MAX - w - 3);
+  const ry = clamp(Math.round(cy - h / 2), CORE_MIN + 3, CORE_MAX - h - 3);
+  for (let dy = -1; dy <= h; dy++) {
+    for (let dx = -1; dx <= w; dx++) {
+      const idx = world.idx(rx + dx, ry + dy);
+      if (owner[idx] !== siteIdValue) return null;
+      if (world.cells[idx] !== Cell.FLOOR && world.cells[idx] !== Cell.WATER) return null;
+      if (world.roomMap[idx] !== siteIdValue) return null;
+      if (world.doors.has(idx)) return null;
+    }
+  }
+
+  const room: Room = {
+    id: world.rooms.length,
+    type,
+    x: rx,
+    y: ry,
+    w,
+    h,
+    doors: [],
+    sealed,
+    name,
+    apartmentId: -1,
+    wallTex,
+    floorTex,
+  };
+  world.rooms.push(room);
+
+  for (let dy = -1; dy <= h; dy++) {
+    for (let dx = -1; dx <= w; dx++) {
+      const border = dx < 0 || dx >= w || dy < 0 || dy >= h;
+      const idx = world.idx(rx + dx, ry + dy);
+      world.cells[idx] = border ? Cell.WALL : Cell.FLOOR;
+      world.roomMap[idx] = border ? -1 : room.id;
+      world.wallTex[idx] = sealed && border ? Tex.HERMO_WALL : wallTex;
+      world.floorTex[idx] = floorTex;
+      world.hermoWall[idx] = sealed && border ? 1 : 0;
+      world.factionControl[idx] = territoryOwner;
+      if (border) world.features[idx] = Feature.NONE;
+      else world.fog[idx] = Math.max(2, Math.min(world.fog[idx], sealed ? 12 : 18));
+    }
+  }
+
+  const side = Math.floor(hash01(seed, siteIdValue, room.id, 91) * 4);
+  const doorX = side === 2 ? rx - 1 : side === 3 ? rx + w : rx + 1 + Math.floor(hash01(seed, room.id, 1, 0) * Math.max(1, w - 2));
+  const doorY = side === 0 ? ry - 1 : side === 1 ? ry + h : ry + 1 + Math.floor(hash01(seed, room.id, 2, 0) * Math.max(1, h - 2));
+  const doorIdx = world.idx(doorX, doorY);
+  world.cells[doorIdx] = Cell.DOOR;
+  world.roomMap[doorIdx] = room.id;
+  world.hermoWall[doorIdx] = 0;
+  world.wallTex[doorIdx] = sealed ? Tex.DOOR_METAL : Tex.DOOR_WOOD;
+  world.features[doorIdx] = Feature.NONE;
+  world.doors.set(doorIdx, {
+    idx: doorIdx,
+    state: sealed ? DoorState.HERMETIC_CLOSED : DoorState.CLOSED,
+    roomA: room.id,
+    roomB: sites[siteIdValue]?.id ?? -1,
+    keyId: '',
+    timer: 0,
+  });
+  room.doors.push(doorIdx);
+  const parent = world.rooms[siteIdValue];
+  if (parent && !parent.doors.includes(doorIdx)) parent.doors.push(doorIdx);
+  return room;
+}
+
+function siteBounds(world: World, sites: readonly Site[], owner: Int16Array): Bounds[] {
+  const bounds: Bounds[] = sites.map(() => ({ minX: W, minY: W, maxX: -1, maxY: -1, count: 0 }));
+  for (let y = CORE_MIN; y <= CORE_MAX; y++) {
+    for (let x = CORE_MIN; x <= CORE_MAX; x++) {
+      const idx = world.idx(x, y);
+      const id = owner[idx];
+      if (id < 0 || world.cells[idx] !== Cell.FLOOR || world.roomMap[idx] !== id) continue;
+      const b = bounds[id]!;
+      b.count++;
+      if (x < b.minX) b.minX = x;
+      if (y < b.minY) b.minY = y;
+      if (x > b.maxX) b.maxX = x;
+      if (y > b.maxY) b.maxY = y;
+    }
+  }
+  return bounds;
+}
+
+function paintRoomTerritory(world: World, room: Room, owner: TerritoryOwner): void {
+  for (let dy = -1; dy <= room.h; dy++) {
+    for (let dx = -1; dx <= room.w; dx++) {
+      world.factionControl[world.idx(room.x + dx, room.y + dy)] = owner;
+    }
+  }
+}
+
+function decorateQuarantineRoom(world: World, room: Room, type: RoomType, serial: number): void {
+  if (type === RoomType.HQ || type === RoomType.OFFICE) {
+    setFeature(world, room.x + 2, room.y + 2, Feature.DESK);
+    setFeature(world, room.x + room.w - 3, room.y + 2, Feature.SCREEN);
+    setFeature(world, room.x + room.w - 3, room.y + room.h - 3, Feature.SHELF);
+  } else if (type === RoomType.MEDICAL) {
+    for (let x = room.x + 2; x < room.x + room.w - 2; x += 5) setFeature(world, x, room.y + 2, Feature.BED);
+    setFeature(world, room.x + room.w - 3, room.y + room.h - 3, Feature.APPARATUS);
+  } else if (type === RoomType.KITCHEN) {
+    setFeature(world, room.x + 2, room.y + 2, Feature.STOVE);
+    setFeature(world, room.x + room.w - 3, room.y + 2, Feature.SINK);
+    setFeature(world, room.x + (room.w >> 1), room.y + room.h - 3, Feature.TABLE);
+  } else if (type === RoomType.BATHROOM) {
+    setFeature(world, room.x + 2, room.y + 2, Feature.SINK);
+    setFeature(world, room.x + room.w - 3, room.y + room.h - 3, Feature.TOILET);
+  } else if (type === RoomType.STORAGE) {
+    for (let x = room.x + 2; x < room.x + room.w - 2; x += 4) setFeature(world, x, room.y + 2, Feature.SHELF);
+  } else if (type === RoomType.PRODUCTION) {
+    setFeature(world, room.x + 3, room.y + 2, Feature.MACHINE);
+    setFeature(world, room.x + room.w - 4, room.y + room.h - 3, Feature.APPARATUS);
+  } else {
+    setFeature(world, room.x + 2, room.y + 2, serial % 2 === 0 ? Feature.TABLE : Feature.CHAIR);
+    setFeature(world, room.x + room.w - 3, room.y + room.h - 3, Feature.LAMP);
+  }
+}
+
 function decorateSites(world: World, sites: readonly Site[], owner: Int16Array, seed: number): void {
   for (let y = CORE_MIN; y <= CORE_MAX; y++) {
     for (let x = CORE_MIN; x <= CORE_MAX; x++) {
@@ -616,7 +1215,7 @@ function decorateSites(world: World, sites: readonly Site[], owner: Int16Array, 
   }
 
   for (const site of sites) {
-    const center = findSiteCell(world, owner, site.id);
+    const center = findSiteCell(world, owner, sites, site.id);
     if (site.role === 'checkpoint') {
       setFeature(world, center.x - 4, center.y, Feature.DESK);
       setFeature(world, center.x + 4, center.y, Feature.SCREEN);
@@ -631,8 +1230,8 @@ function decorateSites(world: World, sites: readonly Site[], owner: Int16Array, 
 }
 
 function placeLifts(world: World, sites: readonly Site[], owner: Int16Array): void {
-  const up = findSiteCell(world, owner, siteId(sites, 'northCheckpoint'));
-  const down = findSiteCell(world, owner, siteId(sites, 'southCheckpoint'));
+  const up = findSiteCell(world, owner, sites, siteId(sites, 'northCheckpoint'));
+  const down = findSiteCell(world, owner, sites, siteId(sites, 'southCheckpoint'));
   forceOpenDisc(world, owner, sites, siteId(sites, 'northCheckpoint'), up.x, up.y, 3);
   forceOpenDisc(world, owner, sites, siteId(sites, 'southCheckpoint'), down.x, down.y, 3);
   placeLift(world, up.x, up.y, up.x - 3, up.y, LiftDirection.UP);
@@ -713,6 +1312,52 @@ function spawnThreats(world: World, entities: Entity[], nextId: { v: number }, s
   spawnMonster(world, entities, nextId, MonsterKind.BEZEKHIY, sitePoint(world, owner, sites, 'corpsePitWest', -10, -8), 3, 'Безэхий у санитарной стены');
 }
 
+function isVoronoiAmbientNpc(entity: Entity): boolean {
+  return entity.type === EntityType.NPC &&
+    !entity.plotNpcId &&
+    !entity.persistentNpcId &&
+    entity.alifeId === undefined &&
+    entity.questId === -1 &&
+    entity.faction !== undefined;
+}
+
+function voronoiTerritorySpawnCells(world: World): Map<TerritoryOwner, number[]> {
+  const cells = new Map<TerritoryOwner, number[]>();
+  for (const spec of FACTION_HQ_SPECS) cells.set(spec.owner, []);
+  for (let i = 0; i < W * W; i++) {
+    const cell = world.cells[i];
+    if (cell !== Cell.FLOOR && cell !== Cell.WATER) continue;
+    if (world.aptMask[i] || world.containerMap.has(i) || world.features[i] === Feature.LIFT_BUTTON) continue;
+    const owner = world.factionControl[i] as TerritoryOwner;
+    const list = cells.get(owner);
+    if (list) list.push(i);
+  }
+  return cells;
+}
+
+export function alignVoronoiQuarantineAmbientNpcTerritory(world: World, entities: Entity[]): void {
+  const cells = voronoiTerritorySpawnCells(world);
+  const offsets = new Uint16Array(8);
+  for (const entity of entities) {
+    if (!isVoronoiAmbientNpc(entity) || entity.faction === undefined) continue;
+    const owner = factionToTerritoryOwner(entity.faction);
+    const list = cells.get(owner);
+    if (!list || list.length === 0) continue;
+    const offset = offsets[owner]++ | 0;
+    const cell = list[(entity.id * 131 + offset * 467) % list.length]!;
+    entity.x = (cell % W) + 0.5;
+    entity.y = ((cell / W) | 0) + 0.5;
+    entity.assignedRoomId = world.roomMap[cell] >= 0 ? world.roomMap[cell] : -1;
+    if (entity.ai) {
+      entity.ai.tx = cell % W;
+      entity.ai.ty = (cell / W) | 0;
+      entity.ai.path = [];
+      entity.ai.pi = 0;
+      entity.ai.stuck = 0;
+    }
+  }
+}
+
 function stampContamination(world: World, sites: readonly Site[], seed: number): void {
   for (const site of sites) {
     if (!site.infected) continue;
@@ -756,6 +1401,7 @@ function openOwnedCell(world: World, idx: number, roomId: number, site: Site, no
   world.floorTex[idx] = world.cells[idx] === Cell.WATER ? Tex.F_WATER : site.floorTex;
   world.wallTex[idx] = site.wallTex;
   world.hermoWall[idx] = 0;
+  world.factionControl[idx] = site.faction;
   world.fog[idx] = site.infected ? Math.max(world.fog[idx], site.role === 'corpse_pit' ? 58 : 34) : Math.max(2, world.fog[idx] - 3);
   world.light[idx] = site.infected ? 0.1 : site.role === 'clinic' || site.role === 'checkpoint' ? 0.32 : 0.18;
 }
@@ -1069,11 +1715,11 @@ function sitePoint(
   const preferred = { x: world.wrap(site.x + ox), y: world.wrap(site.y + oy) };
   const preferredIdx = world.idx(preferred.x, preferred.y);
   if ((world.cells[preferredIdx] === Cell.FLOOR || world.cells[preferredIdx] === Cell.WATER) && owner[preferredIdx] === site.id) return preferred;
-  return findSiteCell(world, owner, site.id);
+  return findSiteCell(world, owner, sites, site.id);
 }
 
-function findSiteCell(world: World, owner: Int16Array, id: number): { x: number; y: number } {
-  const site = SITE_SEEDS[id]!;
+function findSiteCell(world: World, owner: Int16Array, sites: readonly Site[], id: number): { x: number; y: number } {
+  const site = sites[id]!;
   const sx = Math.round(site.x);
   const sy = Math.round(site.y);
   for (let r = 0; r <= 96; r++) {
@@ -1115,7 +1761,7 @@ function countSiteCells(owner: Int16Array, siteCount: number): number[] {
 }
 
 function siteRoleByRoomName(name: string): SiteRole | undefined {
-  const seed = SITE_SEEDS.find(item => VORONOI_QUARANTINE_ROOM_NAMES[item.key] === name);
+  const seed = SITE_SEEDS.find(item => item.key && VORONOI_QUARANTINE_ROOM_NAMES[item.key] === name);
   return seed?.role;
 }
 

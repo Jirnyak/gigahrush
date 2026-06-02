@@ -18,11 +18,13 @@ import {
   type Entity,
   type GameState,
   type Room,
+  type TerritoryOwner,
   type WorldEvent,
   type WorldContainer,
 } from '../../core/types';
 import { World } from '../../core/world';
 import { ITEMS, freshNeeds } from '../../data/catalog';
+import { HUMAN_TERRITORY_OWNERS, factionToTerritoryOwner } from '../../data/factions';
 import { type PlotNpcDef, registerSideQuest } from '../../data/plot';
 import { MONSTERS } from '../../entities/monster';
 import { Spr } from '../../render/sprite_index';
@@ -713,6 +715,261 @@ function addCatwalkBypass(world: World, mask: Uint8Array, x: number, y0: number,
   }
 }
 
+function dressSupportRoom(world: World, room: Room, rng: () => number): void {
+  switch (room.type) {
+    case RoomType.PRODUCTION:
+      dressMachineIsland(world, room, rng);
+      break;
+    case RoomType.STORAGE:
+      dressStorageBay(world, room, rng);
+      break;
+    case RoomType.KITCHEN:
+      setFeature(world, room.x + 2, room.y + 2, Feature.STOVE);
+      setFeature(world, room.x + 4, room.y + 2, Feature.SINK);
+      setFeature(world, room.x + Math.max(5, room.w - 4), room.y + Math.max(4, room.h - 3), Feature.TABLE);
+      break;
+    case RoomType.BATHROOM:
+      setFeature(world, room.x + 2, room.y + 2, Feature.SINK);
+      setFeature(world, room.x + Math.max(4, room.w - 3), room.y + Math.max(3, room.h - 3), Feature.TOILET);
+      break;
+    case RoomType.MEDICAL:
+      setFeature(world, room.x + 2, room.y + 2, Feature.APPARATUS);
+      setFeature(world, room.x + Math.max(5, room.w - 4), room.y + 2, Feature.DESK);
+      setFeature(world, room.x + 3, room.y + Math.max(4, room.h - 3), Feature.LAMP);
+      break;
+    case RoomType.OFFICE:
+      setFeature(world, room.x + 2, room.y + 2, Feature.DESK);
+      setFeature(world, room.x + Math.max(5, room.w - 4), room.y + 2, Feature.SCREEN);
+      setFeature(world, room.x + 3, room.y + Math.max(4, room.h - 3), Feature.SHELF);
+      break;
+    case RoomType.COMMON:
+      setFeature(world, room.x + 2, room.y + 2, Feature.TABLE);
+      setFeature(world, room.x + 4, room.y + 2, Feature.CHAIR);
+      setFeature(world, room.x + Math.max(5, room.w - 4), room.y + Math.max(4, room.h - 3), Feature.LAMP);
+      break;
+    case RoomType.HQ:
+      dressShiftGate(world, room);
+      break;
+  }
+}
+
+function connectSupportRoom(world: World, room: Room | null, corridor: Room | null): Room | null {
+  if (!room || !corridor) return room;
+  placeDoor(world, room, corridor, '', false);
+  return room;
+}
+
+function paintOwnedRoom(world: World, room: Room | null, owner: TerritoryOwner, level: number): void {
+  if (!room) return;
+  applyZoneRole(world, room, owner, level);
+}
+
+interface ProductionBeltHqSpec {
+  owner: TerritoryOwner;
+  x: number;
+  y: number;
+  title: string;
+  floorTex: Tex;
+  wallTex: Tex;
+  laneY: number;
+  strong?: boolean;
+}
+
+function addFactionHqCluster(world: World, mask: Uint8Array, spec: ProductionBeltHqSpec, rng: () => number): void {
+  const corridor = macroCorridor(world, mask, spec.x + 8, spec.y + 18, spec.strong ? 118 : 96, 5, `${spec.title}: внутренний коридор`, spec.floorTex);
+  const hq = macroRoom(world, mask, RoomType.HQ, spec.x + 38, spec.y + 4, spec.strong ? 28 : 22, 13, `${spec.title}: гермоядро`, Tex.HERMO_WALL, Tex.F_LINO, 0);
+  const storage = macroRoom(world, mask, RoomType.STORAGE, spec.x + 8, spec.y + 5, 20, 12, `${spec.title}: склад и пломбы`, spec.wallTex, Tex.F_CONCRETE, 0);
+  const office = macroRoom(world, mask, spec.owner === ZoneFaction.SCIENTIST ? RoomType.MEDICAL : RoomType.OFFICE, spec.x + 72, spec.y + 5, spec.strong ? 24 : 20, 12, `${spec.title}: учетный пост`, spec.wallTex, spec.floorTex, 0);
+  const kitchen = macroRoom(world, mask, spec.owner === ZoneFaction.WILD ? RoomType.COMMON : RoomType.KITCHEN, spec.x + 8, spec.y + 24, 22, 12, `${spec.title}: бытовка`, spec.wallTex, Tex.F_LINO, 0);
+  const bathroom = macroRoom(world, mask, RoomType.BATHROOM, spec.x + 35, spec.y + 24, 13, 10, `${spec.title}: санузел`, Tex.CONCRETE, Tex.F_TILE, 0);
+  const workshop = macroRoom(world, mask, spec.owner === ZoneFaction.CITIZEN ? RoomType.PRODUCTION : RoomType.STORAGE, spec.x + 58, spec.y + 24, spec.strong ? 38 : 30, 12, `${spec.title}: мастерская поддержки`, spec.wallTex, Tex.F_CONCRETE, 0);
+  const extraPost = spec.strong
+    ? macroRoom(world, mask, RoomType.HQ, spec.x + 100, spec.y + 5, 20, 12, `${spec.title}: внешний кордон`, Tex.HERMO_WALL, Tex.F_LINO, 0)
+    : null;
+  const laneFrom = Math.min(spec.laneY, spec.y + 16);
+  const laneTo = Math.max(spec.laneY, spec.y + 24);
+  const spur = macroCorridor(world, mask, spec.x + 54, laneFrom, 5, Math.max(5, laneTo - laneFrom), `${spec.title}: связь с лентой`, Tex.F_TILE);
+  markConveyorSpine(world, spec.x + 56, laneFrom, spec.x + 56, laneTo, spec.x + spec.y + spec.owner * 23);
+
+  for (const room of [hq, storage, office, kitchen, bathroom, workshop, extraPost]) {
+    connectSupportRoom(world, room, corridor);
+    if (room) dressSupportRoom(world, room, rng);
+    paintOwnedRoom(world, room, spec.owner, spec.strong ? 4 : 3);
+  }
+  connectSupportRoom(world, corridor, spur);
+  paintOwnedRoom(world, corridor, spec.owner, spec.strong ? 4 : 3);
+  paintOwnedRoom(world, spur, spec.owner, spec.strong ? 4 : 3);
+}
+
+interface ProductionBeltBaySpec {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  name: string;
+  serial: number;
+}
+
+function bayRoomType(serial: number): RoomType {
+  switch (serial % 9) {
+    case 0: return RoomType.PRODUCTION;
+    case 1: return RoomType.STORAGE;
+    case 2: return RoomType.OFFICE;
+    case 3: return RoomType.BATHROOM;
+    case 4: return RoomType.KITCHEN;
+    case 5: return RoomType.COMMON;
+    case 6: return RoomType.MEDICAL;
+    default: return RoomType.STORAGE;
+  }
+}
+
+function bayRoomName(type: RoomType, name: string, serial: number, micro: boolean): string {
+  const prefix = micro ? 'микроузел' : 'ячейка';
+  switch (type) {
+    case RoomType.PRODUCTION: return `${name}: ${prefix} станка ${serial}`;
+    case RoomType.STORAGE: return `${name}: ${prefix} тары ${serial}`;
+    case RoomType.OFFICE: return `${name}: ${prefix} учета ${serial}`;
+    case RoomType.BATHROOM: return `${name}: ${prefix} санобработки ${serial}`;
+    case RoomType.KITCHEN: return `${name}: ${prefix} пайка ${serial}`;
+    case RoomType.COMMON: return `${name}: ${prefix} ожидания ${serial}`;
+    case RoomType.MEDICAL: return `${name}: ${prefix} травмпункта ${serial}`;
+    default: return `${name}: ${prefix} ${serial}`;
+  }
+}
+
+function addProductionBayCell(world: World, mask: Uint8Array, spec: ProductionBeltBaySpec, rng: () => number): void {
+  const axisY = spec.y + Math.floor(spec.h / 2) - 2;
+  const axis = macroCorridor(world, mask, spec.x + 8, axisY, Math.max(24, spec.w - 16), 5, `${spec.name}: осевой проход`, Tex.F_CONCRETE);
+  const spurX = spec.x + Math.floor(spec.w / 2) - 2;
+  const spur = macroCorridor(world, mask, spurX, spec.y, 5, spec.h, `${spec.name}: вертикальная подача`, Tex.F_TILE);
+  markConveyorSpine(world, spec.x + 8, axisY + 2, spec.x + spec.w - 8, axisY + 2, spec.serial * 11 + 3);
+  markConveyorSpine(world, spurX + 2, spec.y + 2, spurX + 2, spec.y + spec.h - 2, spec.serial * 13 + 7);
+
+  const columns = Math.max(4, Math.floor((spec.w - 34) / 32));
+  const step = (spec.w - 34) / columns;
+  for (let c = 0; c < columns; c++) {
+    const baseX = Math.floor(spec.x + 14 + c * step);
+    for (let side = 0; side < 2; side++) {
+      const serial = spec.serial * 100 + c * 2 + side;
+      const type = bayRoomType(serial);
+      const rw = Math.min(24, Math.max(11, Math.floor(step) - 4 + Math.floor(rng() * 5)));
+      const rh = 8 + Math.floor(rng() * 6);
+      const rx = baseX + Math.floor(rng() * 3);
+      const ry = side === 0 ? axisY - rh - 1 : axisY + 6;
+      const room = macroRoom(world, mask, type, rx, ry, rw, rh, bayRoomName(type, spec.name, serial, false), type === RoomType.PRODUCTION ? Tex.PIPE : Tex.METAL, type === RoomType.BATHROOM ? Tex.F_TILE : Tex.F_CONCRETE, 0);
+      connectSupportRoom(world, room, axis);
+      if (room) dressSupportRoom(world, room, rng);
+    }
+  }
+
+  const microRows = Math.max(4, Math.floor((spec.h - 20) / 22));
+  for (let r = 0; r < microRows; r++) {
+    const serial = spec.serial * 1000 + r;
+    const type = bayRoomType(serial + 5);
+    const rw = 7 + (serial % 4);
+    const rh = 6 + ((serial >> 2) % 3);
+    const ry = spec.y + 10 + r * 22;
+    const leftRoom = macroRoom(world, mask, type, spurX - rw - 1, ry, rw, rh, bayRoomName(type, spec.name, serial, true), Tex.PANEL, type === RoomType.BATHROOM ? Tex.F_TILE : Tex.F_LINO, 0);
+    const rightRoom = macroRoom(world, mask, bayRoomType(serial + 2), spurX + 6, ry + 8, rw + 2, rh, bayRoomName(bayRoomType(serial + 2), spec.name, serial + 1, true), Tex.PANEL, Tex.F_LINO, 0);
+    connectSupportRoom(world, leftRoom, spur);
+    connectSupportRoom(world, rightRoom, spur);
+    if (leftRoom) dressSupportRoom(world, leftRoom, rng);
+    if (rightRoom) dressSupportRoom(world, rightRoom, rng);
+  }
+}
+
+function productionBeltAuthoredOwner(roomName: string): TerritoryOwner | undefined {
+  if (roomName.startsWith('Гражданский миништаб смены 14:')) return ZoneFaction.CITIZEN;
+  if (roomName.startsWith('Ликвидаторский штаб ленты 14:')) return ZoneFaction.LIQUIDATOR;
+  if (roomName.startsWith('Скрытый культовый миништаб:')) return ZoneFaction.CULTIST;
+  if (roomName.startsWith('Научный миништаб контроля брака:')) return ZoneFaction.SCIENTIST;
+  if (roomName.startsWith('Дикий миништаб ночной тары:')) return ZoneFaction.WILD;
+  return undefined;
+}
+
+function hardenProductionBeltHqRoom(world: World, room: Room, owner: TerritoryOwner): void {
+  room.type = RoomType.HQ;
+  room.sealed = true;
+  room.wallTex = Tex.HERMO_WALL;
+  for (let dy = -1; dy <= room.h; dy++) {
+    for (let dx = -1; dx <= room.w; dx++) {
+      const idx = world.idx(room.x + dx, room.y + dy);
+      const interior = dx >= 0 && dx < room.w && dy >= 0 && dy < room.h;
+      if (interior) {
+        if (world.roomMap[idx] === room.id) {
+          world.factionControl[idx] = owner;
+          if (world.features[idx] === Feature.NONE && ((dx * 13 + dy * 29 + owner) % 17) === 0) {
+            world.features[idx] = Feature.DESK;
+          }
+        }
+        continue;
+      }
+      if (world.cells[idx] !== Cell.WALL || world.aptMask[idx]) continue;
+      world.hermoWall[idx] = 1;
+      world.wallTex[idx] = Tex.HERMO_WALL;
+    }
+  }
+}
+
+export function reinforceProductionBeltAuthoredHqTerritory(world: World): void {
+  for (const room of world.rooms) {
+    const owner = productionBeltAuthoredOwner(room.name);
+    if (owner === undefined) continue;
+    paintOwnedRoom(world, room, owner, owner === ZoneFaction.LIQUIDATOR ? 4 : 3);
+    if (room.type === RoomType.HQ) hardenProductionBeltHqRoom(world, room, owner);
+  }
+  world.markWallTexDirty();
+  world.markFeaturesDirty(false);
+}
+
+function productionBeltTerritorySpawnCells(world: World): Map<TerritoryOwner, number[]> {
+  const cells = new Map<TerritoryOwner, number[]>();
+  for (const owner of HUMAN_TERRITORY_OWNERS) cells.set(owner, []);
+  for (let i = 0; i < W * W; i++) {
+    const cell = world.cells[i];
+    if (cell !== Cell.FLOOR && cell !== Cell.WATER) continue;
+    if (world.aptMask[i] || world.hermoWall[i] || world.containerMap.has(i) || world.features[i] === Feature.LIFT_BUTTON) continue;
+    const owner = world.factionControl[i] as TerritoryOwner;
+    const list = cells.get(owner);
+    if (list) list.push(i);
+  }
+  return cells;
+}
+
+function isProductionBeltAmbientNpc(entity: Entity): boolean {
+  return entity.type === EntityType.NPC &&
+    entity.alive &&
+    entity.name?.startsWith('Производственный пояс: работник') === true &&
+    entity.plotNpcId === undefined &&
+    entity.persistentNpcId === undefined &&
+    entity.alifeId === undefined &&
+    entity.questId === -1 &&
+    entity.faction !== undefined;
+}
+
+export function alignProductionBeltAmbientNpcTerritory(world: World, entities: Entity[]): void {
+  const cells = productionBeltTerritorySpawnCells(world);
+  const offsets = new Uint16Array(8);
+  for (const entity of entities) {
+    if (!isProductionBeltAmbientNpc(entity) || entity.faction === undefined) continue;
+    const owner = factionToTerritoryOwner(entity.faction);
+    const list = cells.get(owner);
+    if (!list || list.length === 0) continue;
+    const offset = offsets[owner]++ | 0;
+    const cell = list[(entity.id * 127 + offset * 463) % list.length];
+    entity.x = (cell % W) + 0.5;
+    entity.y = ((cell / W) | 0) + 0.5;
+    entity.assignedRoomId = world.roomMap[cell] >= 0 ? world.roomMap[cell] : -1;
+    if (entity.ai) {
+      entity.ai.tx = cell % W;
+      entity.ai.ty = (cell / W) | 0;
+      entity.ai.path = [];
+      entity.ai.pi = 0;
+      entity.ai.stuck = 0;
+    }
+  }
+}
+
 function isRoom(room: Room | null): room is Room {
   return room !== null;
 }
@@ -791,6 +1048,27 @@ export function expandProductionBeltGeometry(world: World, rng: () => number): v
   addCatwalkBypass(world, mask, 382, 150, 876, 'Левый ремонтный мостик');
   addCatwalkBypass(world, mask, 642, 150, 876, 'Правый ремонтный мостик');
 
+  for (const spec of [
+    { owner: ZoneFaction.CITIZEN, x: 182, y: 82, title: 'Гражданский миништаб смены 14', floorTex: Tex.F_LINO, wallTex: Tex.PANEL, laneY: 150 },
+    { owner: ZoneFaction.LIQUIDATOR, x: 442, y: 562, title: 'Ликвидаторский штаб ленты 14', floorTex: Tex.F_LINO, wallTex: Tex.METAL, laneY: 626, strong: true },
+    { owner: ZoneFaction.CULTIST, x: 162, y: 910, title: 'Скрытый культовый миништаб', floorTex: Tex.F_LINO, wallTex: Tex.ROTTEN, laneY: 874 },
+    { owner: ZoneFaction.SCIENTIST, x: 724, y: 82, title: 'Научный миништаб контроля брака', floorTex: Tex.F_TILE, wallTex: Tex.PANEL, laneY: 150 },
+    { owner: ZoneFaction.WILD, x: 728, y: 910, title: 'Дикий миништаб ночной тары', floorTex: Tex.F_CONCRETE, wallTex: Tex.ROTTEN, laneY: 874 },
+  ] as const) {
+    addFactionHqCluster(world, mask, spec, rng);
+  }
+
+  for (const spec of [
+    { x: 372, y: 176, w: 226, h: 86, name: 'Верхний сортировочный бай', serial: 1 },
+    { x: 372, y: 300, w: 226, h: 86, name: 'Бай холодной приемки', serial: 2 },
+    { x: 150, y: 430, w: 248, h: 168, name: 'Западный ремонтный остров', serial: 3 },
+    { x: 626, y: 430, w: 248, h: 168, name: 'Восточный ревизионный остров', serial: 4 },
+    { x: 372, y: 654, w: 226, h: 86, name: 'Бай обратной выдачи', serial: 5 },
+    { x: 372, y: 778, w: 226, h: 86, name: 'Нижний бай грязной тары', serial: 6 },
+  ] as const) {
+    addProductionBayCell(world, mask, spec, rng);
+  }
+
   for (let i = 0; i < laneYs.length; i++) {
     addLaneBlockages(world, mask, laneYs[i], 56, 968, rng);
     addSideRoomsForLane(world, mask, laneYs[i], i, rng);
@@ -806,6 +1084,15 @@ export function expandProductionBeltGeometry(world: World, rng: () => number): v
     macroRoom(world, mask, RoomType.STORAGE, 850, 698, 58, 28, 'Док ночной погрузки', Tex.METAL, Tex.F_CONCRETE),
   ];
   for (const room of loadingRooms) if (room) dressLoadingDock(world, room);
+
+  for (const spec of [
+    { x: 104, y: 226, w: 170, h: 166, name: 'Западный двор ручной приемки', serial: 21 },
+    { x: 760, y: 226, w: 170, h: 166, name: 'Восточный двор пломбированной выдачи', serial: 22 },
+    { x: 104, y: 606, w: 170, h: 166, name: 'Двор возврата брака', serial: 23 },
+    { x: 760, y: 606, w: 170, h: 166, name: 'Двор ночной погрузки', serial: 24 },
+  ] as const) {
+    addProductionBayCell(world, mask, spec, rng);
+  }
 
   const hazardRooms: Room[] = [];
   for (const spec of [

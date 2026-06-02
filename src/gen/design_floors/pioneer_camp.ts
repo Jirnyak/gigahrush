@@ -24,6 +24,7 @@ import {
   type Entity,
   type Item,
   type Room,
+  type TerritoryOwner,
   type WorldContainer,
 } from '../../core/types';
 import { World } from '../../core/world';
@@ -32,6 +33,7 @@ import { freshNeeds } from '../../data/catalog';
 import { type PlotNpcDef, registerSideQuest } from '../../data/plot';
 import { MONSTERS } from '../../entities/monster';
 import { monsterSpr, Spr } from '../../render/sprite_index';
+import { setTerritoryOwnerAtIndex, syncZoneMetadataFromTerritory } from '../../systems/territory';
 import { ensureConnectivity, generateZones, sanitizeDoors, stampRoom } from '../shared';
 import type { FloorGeneration } from '../floor_manifest';
 
@@ -75,6 +77,95 @@ interface CampRooms {
   sport: Room;
   oldCabin: Room;
 }
+
+interface CampClusterSpec {
+  name: string;
+  x: number;
+  y: number;
+  linkX: number;
+  linkY: number;
+  floorTex: Tex;
+}
+
+interface CampHqSite {
+  owner: TerritoryOwner;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  name: string;
+  linkX: number;
+  linkY: number;
+  wallTex: Tex;
+  floorTex: Tex;
+}
+
+interface CampTerritoryTarget {
+  owner: TerritoryOwner;
+  share: number;
+}
+
+interface CampTerritorySeed {
+  owner: TerritoryOwner;
+  x: number;
+  y: number;
+  radius: number;
+  weight: number;
+}
+
+const CAMP_OWNER_BUCKETS = 8;
+const CAMP_TERRITORY_ITERATIONS = 8;
+
+const CAMP_TERRITORY_TARGETS: readonly CampTerritoryTarget[] = [
+  { owner: ZoneFaction.CITIZEN, share: 0.58 },
+  { owner: ZoneFaction.LIQUIDATOR, share: 0.12 },
+  { owner: ZoneFaction.CULTIST, share: 0.07 },
+  { owner: ZoneFaction.SCIENTIST, share: 0.09 },
+  { owner: ZoneFaction.WILD, share: 0.14 },
+] as const;
+
+const CAMP_CLUSTER_SPECS: readonly CampClusterSpec[] = [
+  { name: 'Северо-западный парк бетонных берёз', x: 238, y: 236, linkX: 210, linkY: 210, floorTex: Tex.F_CONCRETE },
+  { name: 'Северная линейка спальных бараков', x: 516, y: 178, linkX: 512, linkY: 132, floorTex: Tex.F_WOOD },
+  { name: 'Северо-восточный двор зарядки', x: 778, y: 238, linkX: 800, linkY: 210, floorTex: Tex.F_CONCRETE },
+  { name: 'Восточный парк неподвижных качелей', x: 842, y: 520, linkX: 864, linkY: 512, floorTex: Tex.F_CONCRETE },
+  { name: 'Юго-восточная костровая поляна', x: 764, y: 784, linkX: 790, linkY: 790, floorTex: Tex.F_WOOD },
+  { name: 'Южный двор тихого часа', x: 514, y: 850, linkX: 512, linkY: 888, floorTex: Tex.F_WOOD },
+  { name: 'Юго-западный парк мокрых турников', x: 246, y: 800, linkX: 210, linkY: 756, floorTex: Tex.F_CONCRETE },
+  { name: 'Западная площадка кружков', x: 154, y: 512, linkX: 160, linkY: 512, floorTex: Tex.F_WOOD },
+] as const;
+
+const CAMP_LANDSCAPE_COURTS: readonly { name: string; x: number; y: number; w: number; h: number; linkX: number; linkY: number; floorTex: Tex }[] = [
+  { name: 'Большой парк бетонных берёз', x: 124, y: 148, w: 96, h: 72, linkX: 210, linkY: 210, floorTex: Tex.F_CONCRETE },
+  { name: 'Двор утренней зарядки', x: 744, y: 132, w: 118, h: 78, linkX: 800, linkY: 210, floorTex: Tex.F_CONCRETE },
+  { name: 'Поляна костровой сирены', x: 710, y: 624, w: 136, h: 86, linkX: 790, linkY: 790, floorTex: Tex.F_WOOD },
+  { name: 'Парк мокрых качелей', x: 116, y: 690, w: 126, h: 88, linkX: 210, linkY: 756, floorTex: Tex.F_CONCRETE },
+] as const;
+
+const CAMP_HQ_SITES: readonly CampHqSite[] = [
+  { owner: ZoneFaction.CITIZEN, x: 438, y: 616, w: 30, h: 18, name: 'Штаб гражданской смены', linkX: 512, linkY: 590, wallTex: Tex.PANEL, floorTex: Tex.F_WOOD },
+  { owner: ZoneFaction.LIQUIDATOR, x: 804, y: 156, w: 28, h: 18, name: 'Пост ликвидаторов у ворот лагеря', linkX: 800, linkY: 210, wallTex: Tex.METAL, floorTex: Tex.F_CONCRETE },
+  { owner: ZoneFaction.SCIENTIST, x: 644, y: 360, w: 28, h: 18, name: 'НИИ-штаб радиосмены', linkX: 602, linkY: 446, wallTex: Tex.METAL, floorTex: Tex.F_CONCRETE },
+  { owner: ZoneFaction.WILD, x: 244, y: 326, w: 30, h: 18, name: 'Дикий штаб старшего отряда', linkX: 332, linkY: 375, wallTex: Tex.ROTTEN, floorTex: Tex.F_WOOD },
+  { owner: ZoneFaction.CULTIST, x: 164, y: 744, w: 28, h: 18, name: 'Скрытый культовый штаб костра', linkX: 160, linkY: 756, wallTex: Tex.ROTTEN, floorTex: Tex.F_MEAT },
+] as const;
+
+const CAMP_TERRITORY_SEEDS: readonly CampTerritorySeed[] = [
+  { owner: ZoneFaction.CITIZEN, x: CX, y: CY, radius: 330, weight: 2.8 },
+  { owner: ZoneFaction.CITIZEN, x: 438, y: 625, radius: 210, weight: 1.35 },
+  { owner: ZoneFaction.CITIZEN, x: 570, y: 552, radius: 180, weight: 1.2 },
+  { owner: ZoneFaction.LIQUIDATOR, x: 818, y: 165, radius: 210, weight: 1.4 },
+  { owner: ZoneFaction.LIQUIDATOR, x: CX, y: 132, radius: 150, weight: 0.95 },
+  { owner: ZoneFaction.SCIENTIST, x: 658, y: 370, radius: 200, weight: 1.35 },
+  { owner: ZoneFaction.SCIENTIST, x: 592, y: 458, radius: 150, weight: 0.95 },
+  { owner: ZoneFaction.CULTIST, x: 178, y: 752, radius: 180, weight: 1.3 },
+  { owner: ZoneFaction.CULTIST, x: 764, y: 784, radius: 150, weight: 0.65 },
+  { owner: ZoneFaction.WILD, x: 252, y: 340, radius: 210, weight: 1.45 },
+  { owner: ZoneFaction.WILD, x: CX, y: CY - 380, radius: 150, weight: 0.9 },
+  { owner: ZoneFaction.WILD, x: CX - 352, y: CY, radius: 150, weight: 0.9 },
+  { owner: ZoneFaction.WILD, x: CX + 352, y: CY, radius: 150, weight: 0.8 },
+  { owner: ZoneFaction.WILD, x: CX, y: CY + 376, radius: 150, weight: 0.8 },
+] as const;
 
 const NPC_DEFS: Record<CampNpcId, PlotNpcDef> = {
   camp_shift_tamara: {
@@ -295,6 +386,9 @@ export function expandPioneerCampFullFloor(world: World, rng: () => number): voi
     if (i % 3 === 0) markPosterWall(world, room.x + 6, room.y - 1, 31 + i);
   }
 
+  buildCampLandscapeCourts(world, mask, rng);
+  buildCampMidMicroLayer(world, mask);
+  buildCampFactionHqs(world, mask);
   scatterConcreteForestTrailPoints(world, mask, rng);
 
   for (let i = 0; i < 34; i++) {
@@ -318,6 +412,8 @@ export function expandPioneerCampFullFloor(world: World, rng: () => number): voi
 export function tunePioneerCampPopulationZones(world: World): void {
   const trailDistance = campTrailDistances(world, CX, CY);
   const zoneBestDistance = campZoneBestTrailDistances(world, trailDistance);
+  paintPioneerCampTerritory(world, trailDistance);
+  syncZoneMetadataFromTerritory(world);
 
   for (const zone of world.zones) {
     const centerD = world.dist(zone.cx, zone.cy, CX, CY);
@@ -332,36 +428,318 @@ export function tunePioneerCampPopulationZones(world: World): void {
       world.dist(zone.cx, zone.cy, CX + 352, CY),
     );
 
-    if (oldCabinD < 150 || trailD < 0 || trailD > CAMP_BUFFER_TRAIL_STEPS || centerD > 390 || trailEdgeD < 130) {
-      zone.faction = ZoneFaction.WILD;
-      zone.level = 4;
-    } else if (trailD > CAMP_SAFE_TRAIL_STEPS || bathhouseD < 120 || boatD < 130 || centerD > 245) {
-      zone.faction = ZoneFaction.LIQUIDATOR;
-      zone.level = 3;
-    } else {
-      zone.faction = ZoneFaction.CITIZEN;
-      zone.level = 2;
-    }
+    const owner = zone.faction;
+    if (owner === ZoneFaction.CULTIST || oldCabinD < 150 || trailD < 0 || trailD > CAMP_BUFFER_TRAIL_STEPS || centerD > 430 || trailEdgeD < 110) zone.level = 4;
+    else if (owner === ZoneFaction.WILD || owner === ZoneFaction.LIQUIDATOR || owner === ZoneFaction.SCIENTIST || trailD > CAMP_SAFE_TRAIL_STEPS || bathhouseD < 120 || boatD < 130 || centerD > 245) zone.level = 3;
+    else zone.level = 2;
     zone.fogged = false;
     zone.hasLift = false;
   }
 
   for (let i = 0; i < W * W; i++) {
-    const d = trailDistance[i];
-    if (d >= 0 && d <= CAMP_SAFE_TRAIL_STEPS) world.factionControl[i] = ZoneFaction.CITIZEN;
-    else if (d >= 0 && d <= CAMP_BUFFER_TRAIL_STEPS) world.factionControl[i] = ZoneFaction.LIQUIDATOR;
-    else world.factionControl[i] = world.zones[world.zoneMap[i]]?.faction ?? ZoneFaction.CITIZEN;
-  }
-  stampCampFaction(world, CX, CY, 58, ZoneFaction.CITIZEN);
-  stampCampFaction(world, CX - 197, CY - 137, 58, ZoneFaction.WILD);
-  stampCampFaction(world, CX, CY - 380, 64, ZoneFaction.WILD);
-  stampCampFaction(world, CX, CY + 376, 64, ZoneFaction.WILD);
-  stampCampFaction(world, CX - 352, CY, 64, ZoneFaction.WILD);
-  stampCampFaction(world, CX + 352, CY, 64, ZoneFaction.WILD);
-  for (let i = 0; i < W * W; i++) {
     if (world.cells[i] !== Cell.LIFT) continue;
     const zone = world.zones[world.zoneMap[i]];
     if (zone) zone.hasLift = true;
+  }
+  ensureCampHqHermeticDoors(world);
+  syncZoneMetadataFromTerritory(world);
+}
+
+function buildCampLandscapeCourts(world: World, mask: Uint8Array, rng: () => number): void {
+  for (let i = 0; i < CAMP_LANDSCAPE_COURTS.length; i++) {
+    const spec = CAMP_LANDSCAPE_COURTS[i];
+    const court = addOpenArea(world, RoomType.COMMON, spec.x, spec.y, spec.w, spec.h, spec.name, spec.floorTex);
+    decorateCampCourt(world, court, rng, i);
+    carveSafeLine(world, mask, court.x + (court.w >> 1), court.y + (court.h >> 1), spec.linkX, spec.linkY, 3, spec.floorTex);
+  }
+}
+
+function decorateCampCourt(world: World, room: Room, rng: () => number, serial: number): void {
+  const featureCount = Math.max(14, Math.floor((room.w * room.h) / 360));
+  for (let i = 0; i < featureCount; i++) {
+    const x = room.x + 4 + Math.floor(rng() * Math.max(1, room.w - 8));
+    const y = room.y + 4 + Math.floor(rng() * Math.max(1, room.h - 8));
+    const roll = (i + serial) % 5;
+    setFeature(world, x, y, roll === 0 ? Feature.SLIDE : roll === 1 ? Feature.LAMP : roll === 2 ? Feature.TABLE : roll === 3 ? Feature.CHAIR : Feature.CANDLE);
+  }
+  for (let x = room.x + 8; x < room.x + room.w - 8; x += 16) {
+    setFeature(world, x, room.y + 6, Feature.LAMP);
+    if ((x + serial) % 3 === 0) setFeature(world, x, room.y + room.h - 7, Feature.SLIDE);
+  }
+}
+
+function buildCampMidMicroLayer(world: World, mask: Uint8Array): void {
+  for (let ci = 0; ci < CAMP_CLUSTER_SPECS.length; ci++) {
+    const cluster = CAMP_CLUSTER_SPECS[ci];
+    const yard = addOpenArea(world, RoomType.COMMON, cluster.x - 24, cluster.y - 18, 48, 36, cluster.name, cluster.floorTex);
+    decorateCampClusterYard(world, yard, ci);
+    carveSafeLine(world, mask, cluster.x, cluster.y, cluster.linkX, cluster.linkY, 2, cluster.floorTex);
+    const specs = campMicroRoomSpecs(ci);
+    for (let ri = 0; ri < specs.length; ri++) {
+      const spec = specs[ri];
+      const room = addCampRoom(
+        world,
+        spec.type,
+        cluster.x + spec.dx,
+        cluster.y + spec.dy,
+        spec.w,
+        spec.h,
+        `${cluster.name}: ${spec.name}`,
+        spec.wallTex,
+        spec.floorTex,
+      );
+      connectCampRoomToHub(world, room, cluster.x, cluster.y, DoorState.CLOSED, cluster.floorTex);
+      decorateCampMicroRoom(world, room, ri + ci * 11);
+    }
+  }
+}
+
+function campMicroRoomSpecs(serial: number): readonly { type: RoomType; dx: number; dy: number; w: number; h: number; name: string; wallTex: Tex; floorTex: Tex }[] {
+  const wet = serial % 2 === 0;
+  return [
+    { type: RoomType.LIVING, dx: -48, dy: -26, w: 16, h: 10, name: 'малая спальня', wallTex: Tex.PANEL, floorTex: Tex.F_WOOD },
+    { type: RoomType.STORAGE, dx: 30, dy: -25, w: 13, h: 9, name: 'кладовая инвентаря', wallTex: Tex.BRICK, floorTex: Tex.F_CONCRETE },
+    { type: RoomType.BATHROOM, dx: -48, dy: 14, w: 11, h: 9, name: 'умывальная будка', wallTex: Tex.TILE_W, floorTex: wet ? Tex.F_WATER : Tex.F_TILE },
+    { type: RoomType.KITCHEN, dx: 31, dy: 13, w: 15, h: 10, name: 'чайная комната', wallTex: Tex.TILE_W, floorTex: Tex.F_TILE },
+    { type: RoomType.COMMON, dx: -12, dy: -43, w: 22, h: 9, name: 'комната совета отряда', wallTex: Tex.PANEL, floorTex: Tex.F_WOOD },
+    { type: RoomType.STORAGE, dx: -10, dy: 35, w: 18, h: 9, name: 'шкафы формы', wallTex: Tex.ROTTEN, floorTex: Tex.F_WOOD },
+  ] as const;
+}
+
+function decorateCampClusterYard(world: World, yard: Room, serial: number): void {
+  for (let x = yard.x + 8; x < yard.x + yard.w - 7; x += 12) {
+    setFeature(world, x, yard.y + 7, serial % 2 === 0 ? Feature.SLIDE : Feature.CHAIR);
+    setFeature(world, x, yard.y + yard.h - 8, Feature.LAMP);
+  }
+  setFeature(world, yard.x + (yard.w >> 1), yard.y + (yard.h >> 1), serial % 3 === 0 ? Feature.APPARATUS : Feature.TABLE);
+}
+
+function decorateCampMicroRoom(world: World, room: Room, serial: number): void {
+  switch (room.type) {
+    case RoomType.LIVING:
+      setFeature(world, room.x + 3, room.y + 3, Feature.BED);
+      setFeature(world, room.x + room.w - 4, room.y + 3, Feature.BED);
+      setFeature(world, room.x + 5, room.y + room.h - 3, Feature.TABLE);
+      break;
+    case RoomType.BATHROOM:
+      setFeature(world, room.x + 3, room.y + 3, Feature.SINK);
+      setFeature(world, room.x + room.w - 4, room.y + room.h - 3, Feature.TOILET);
+      break;
+    case RoomType.KITCHEN:
+      setFeature(world, room.x + 3, room.y + 3, Feature.STOVE);
+      setFeature(world, room.x + room.w - 4, room.y + 3, Feature.SINK);
+      setFeature(world, room.x + 5, room.y + room.h - 3, Feature.TABLE);
+      break;
+    case RoomType.STORAGE:
+      for (let y = room.y + 3; y < room.y + room.h - 2; y += 4) {
+        setFeature(world, room.x + 3, y, Feature.SHELF);
+        setFeature(world, room.x + room.w - 4, y, Feature.SHELF);
+      }
+      break;
+    case RoomType.PRODUCTION:
+      setFeature(world, room.x + 4, room.y + 4, Feature.MACHINE);
+      setFeature(world, room.x + room.w - 5, room.y + 4, Feature.SCREEN);
+      break;
+    default:
+      setFeature(world, room.x + 4, room.y + 4, Feature.TABLE);
+      setFeature(world, room.x + room.w - 5, room.y + room.h - 4, serial % 2 === 0 ? Feature.CHAIR : Feature.CANDLE);
+      break;
+  }
+}
+
+function buildCampFactionHqs(world: World, mask: Uint8Array): void {
+  for (const site of CAMP_HQ_SITES) {
+    const core = addCampRoom(world, RoomType.HQ, site.x, site.y, site.w, site.h, site.name, site.wallTex, site.floorTex);
+    core.sealed = true;
+    markHermeticCampRoom(world, core);
+    connectCampRoomToHub(world, core, site.linkX, site.linkY, DoorState.HERMETIC_OPEN, site.floorTex);
+    decorateCampHqCore(world, core, site.owner);
+    buildCampHqSupportRooms(world, site);
+    carveSafeLine(world, mask, site.x + (site.w >> 1), site.y + (site.h >> 1), site.linkX, site.linkY, 2, site.floorTex);
+  }
+}
+
+function ensureCampHqHermeticDoors(world: World): void {
+  for (const site of CAMP_HQ_SITES) {
+    const room = world.rooms.find(candidate => candidate.name === site.name);
+    if (!room) continue;
+    const hasHermeticDoor = room.doors.some(doorIdx => {
+      const door = world.doors.get(doorIdx);
+      return door?.state === DoorState.HERMETIC_OPEN || door?.state === DoorState.HERMETIC_CLOSED;
+    });
+    if (hasHermeticDoor) continue;
+    connectCampRoomToHub(world, room, site.linkX, site.linkY, DoorState.HERMETIC_OPEN, site.floorTex);
+  }
+}
+
+function decorateCampHqCore(world: World, room: Room, owner: TerritoryOwner): void {
+  setFeature(world, room.x + 4, room.y + 4, owner === ZoneFaction.CULTIST ? Feature.CANDLE : Feature.DESK);
+  setFeature(world, room.x + room.w - 5, room.y + 4, owner === ZoneFaction.SCIENTIST ? Feature.APPARATUS : Feature.SCREEN);
+  setFeature(world, room.x + 5, room.y + room.h - 5, Feature.SHELF);
+  setFeature(world, room.x + room.w - 6, room.y + room.h - 5, Feature.LAMP);
+}
+
+function buildCampHqSupportRooms(world: World, site: CampHqSite): void {
+  const supports = campHqSupportSpecs(site.owner);
+  const placements = [
+    { dx: 2, dy: -15, w: 13, h: 9 },
+    { dx: site.w + 8, dy: 2, w: 16, h: 10 },
+    { dx: 2, dy: site.h + 8, w: 18, h: 10 },
+    { dx: -21, dy: 2, w: 15, h: 10 },
+  ] as const;
+  const hubX = site.x + (site.w >> 1);
+  const hubY = site.y + (site.h >> 1);
+  for (let i = 0; i < supports.length; i++) {
+    const support = supports[i];
+    const place = placements[i];
+    const room = addCampRoom(
+      world,
+      support.type,
+      site.x + place.dx,
+      site.y + place.dy,
+      place.w,
+      place.h,
+      `${site.name}: ${support.name}`,
+      support.wallTex,
+      support.floorTex,
+    );
+    connectCampRoomToHub(world, room, hubX, hubY, DoorState.CLOSED, site.floorTex);
+    decorateCampMicroRoom(world, room, i);
+  }
+}
+
+function campHqSupportSpecs(owner: TerritoryOwner): readonly { type: RoomType; name: string; wallTex: Tex; floorTex: Tex }[] {
+  switch (owner) {
+    case ZoneFaction.LIQUIDATOR:
+      return [
+        { type: RoomType.OFFICE, name: 'дежурная', wallTex: Tex.METAL, floorTex: Tex.F_CONCRETE },
+        { type: RoomType.STORAGE, name: 'оружейная ниша', wallTex: Tex.METAL, floorTex: Tex.F_CONCRETE },
+        { type: RoomType.MEDICAL, name: 'перевязочная', wallTex: Tex.TILE_W, floorTex: Tex.F_TILE },
+        { type: RoomType.BATHROOM, name: 'санузел поста', wallTex: Tex.TILE_W, floorTex: Tex.F_TILE },
+      ] as const;
+    case ZoneFaction.SCIENTIST:
+      return [
+        { type: RoomType.PRODUCTION, name: 'лабораторный стол', wallTex: Tex.METAL, floorTex: Tex.F_CONCRETE },
+        { type: RoomType.MEDICAL, name: 'изолятор наблюдения', wallTex: Tex.TILE_W, floorTex: Tex.F_TILE },
+        { type: RoomType.STORAGE, name: 'шкаф приборов', wallTex: Tex.METAL, floorTex: Tex.F_CONCRETE },
+        { type: RoomType.OFFICE, name: 'журнал эфира', wallTex: Tex.PANEL, floorTex: Tex.F_WOOD },
+      ] as const;
+    case ZoneFaction.WILD:
+      return [
+        { type: RoomType.STORAGE, name: 'свалка трофеев', wallTex: Tex.ROTTEN, floorTex: Tex.F_WOOD },
+        { type: RoomType.KITCHEN, name: 'коптилка', wallTex: Tex.ROTTEN, floorTex: Tex.F_CONCRETE },
+        { type: RoomType.SMOKING, name: 'лежанки дозора', wallTex: Tex.ROTTEN, floorTex: Tex.F_WOOD },
+        { type: RoomType.BATHROOM, name: 'ржавая вода', wallTex: Tex.TILE_W, floorTex: Tex.F_WATER },
+      ] as const;
+    case ZoneFaction.CULTIST:
+      return [
+        { type: RoomType.COMMON, name: 'круг шепота', wallTex: Tex.ROTTEN, floorTex: Tex.F_MEAT },
+        { type: RoomType.STORAGE, name: 'кладовая масок', wallTex: Tex.ROTTEN, floorTex: Tex.F_WOOD },
+        { type: RoomType.MEDICAL, name: 'тихая перевязка', wallTex: Tex.TILE_W, floorTex: Tex.F_TILE },
+        { type: RoomType.BATHROOM, name: 'умывальная золы', wallTex: Tex.TILE_W, floorTex: Tex.F_WATER },
+      ] as const;
+    case ZoneFaction.CITIZEN:
+    default:
+      return [
+        { type: RoomType.KITCHEN, name: 'чайная штаба', wallTex: Tex.TILE_W, floorTex: Tex.F_TILE },
+        { type: RoomType.STORAGE, name: 'шкаф пайков', wallTex: Tex.BRICK, floorTex: Tex.F_CONCRETE },
+        { type: RoomType.MEDICAL, name: 'медицинский угол', wallTex: Tex.TILE_W, floorTex: Tex.F_TILE },
+        { type: RoomType.BATHROOM, name: 'санузел смены', wallTex: Tex.TILE_W, floorTex: Tex.F_TILE },
+      ] as const;
+  }
+}
+
+function markHermeticCampRoom(world: World, room: Room): void {
+  for (let dy = -1; dy <= room.h; dy++) {
+    for (let dx = -1; dx <= room.w; dx++) {
+      if (dx >= 0 && dx < room.w && dy >= 0 && dy < room.h) continue;
+      const ci = world.idx(room.x + dx, room.y + dy);
+      if (world.cells[ci] !== Cell.WALL) continue;
+      world.hermoWall[ci] = 1;
+      world.wallTex[ci] = Tex.HERMO_WALL;
+    }
+  }
+}
+
+function paintPioneerCampTerritory(world: World, trailDistance: Int32Array): void {
+  const ownerWeights = new Float64Array(CAMP_OWNER_BUCKETS);
+  const counts = new Uint32Array(CAMP_OWNER_BUCKETS);
+  ownerWeights.fill(1);
+  for (const target of CAMP_TERRITORY_TARGETS) ownerWeights[target.owner] = Math.max(0.1, target.share);
+
+  for (let pass = 0; pass < CAMP_TERRITORY_ITERATIONS; pass++) {
+    counts.fill(0);
+    for (let ci = 0; ci < W * W; ci++) counts[bestCampTerritoryOwner(world, ci, trailDistance, ownerWeights)]++;
+    for (const target of CAMP_TERRITORY_TARGETS) {
+      const desired = target.share * W * W;
+      const actual = Math.max(1, counts[target.owner]);
+      const adjust = Math.max(0.55, Math.min(1.45, Math.sqrt(desired / actual)));
+      ownerWeights[target.owner] *= adjust;
+    }
+  }
+
+  for (let ci = 0; ci < W * W; ci++) {
+    setTerritoryOwnerAtIndex(world, ci, bestCampTerritoryOwner(world, ci, trailDistance, ownerWeights));
+  }
+  reinforceCampTerritoryAnchors(world);
+}
+
+function bestCampTerritoryOwner(
+  world: World,
+  cell: number,
+  trailDistance: Int32Array,
+  ownerWeights: Float64Array,
+): TerritoryOwner {
+  const x = cell % W;
+  const y = (cell / W) | 0;
+  const trailD = trailDistance[cell];
+  const room = world.roomMap[cell] >= 0 ? world.rooms[world.roomMap[cell]] : undefined;
+  let bestOwner: TerritoryOwner = ZoneFaction.CITIZEN;
+  let bestScore = Infinity;
+  for (const seed of CAMP_TERRITORY_SEEDS) {
+    const ownerWeight = Math.max(0.05, ownerWeights[seed.owner] ?? 1);
+    let score = world.dist2(x + 0.5, y + 0.5, seed.x, seed.y) / Math.max(1, seed.radius * seed.radius * seed.weight * ownerWeight);
+    if (trailD >= 0) {
+      if (seed.owner === ZoneFaction.CITIZEN && trailD <= CAMP_SAFE_TRAIL_STEPS) score *= 0.72;
+      else if (seed.owner === ZoneFaction.LIQUIDATOR && trailD > CAMP_SAFE_TRAIL_STEPS && trailD <= CAMP_BUFFER_TRAIL_STEPS) score *= 0.74;
+      else if (seed.owner === ZoneFaction.WILD && trailD > CAMP_BUFFER_TRAIL_STEPS) score *= 0.78;
+    }
+    if (world.cells[cell] === Cell.WATER) {
+      if (seed.owner === ZoneFaction.WILD) score *= 0.72;
+      if (seed.owner === ZoneFaction.CITIZEN) score *= 1.18;
+    }
+    if (room) {
+      if (seed.owner === ZoneFaction.SCIENTIST && (room.type === RoomType.MEDICAL || room.type === RoomType.PRODUCTION)) score *= 0.78;
+      if (seed.owner === ZoneFaction.CITIZEN && (room.type === RoomType.KITCHEN || room.type === RoomType.LIVING || room.type === RoomType.COMMON)) score *= 0.86;
+      if (seed.owner === ZoneFaction.LIQUIDATOR && room.type === RoomType.HQ) score *= 0.92;
+      if (seed.owner === ZoneFaction.WILD && room.type === RoomType.STORAGE) score *= 0.88;
+      if (seed.owner === ZoneFaction.CULTIST && room.floorTex === Tex.F_MEAT) score *= 0.62;
+    }
+    if (score < bestScore) {
+      bestScore = score;
+      bestOwner = seed.owner;
+    }
+  }
+  return bestOwner;
+}
+
+function reinforceCampTerritoryAnchors(world: World): void {
+  for (const site of CAMP_HQ_SITES) {
+    stampCampFaction(world, site.x + (site.w >> 1), site.y + (site.h >> 1), 32, site.owner);
+    paintCampRoomRectangle(world, site.x, site.y, site.w, site.h, site.owner);
+  }
+  stampCampFaction(world, CX, CY, 62, ZoneFaction.CITIZEN);
+  stampCampFaction(world, CX - 197, CY - 137, 46, ZoneFaction.WILD);
+  stampCampFaction(world, 658, 370, 40, ZoneFaction.SCIENTIST);
+  stampCampFaction(world, 818, 165, 42, ZoneFaction.LIQUIDATOR);
+  stampCampFaction(world, 178, 752, 38, ZoneFaction.CULTIST);
+}
+
+function paintCampRoomRectangle(world: World, x: number, y: number, w: number, h: number, owner: TerritoryOwner): void {
+  for (let dy = -1; dy <= h; dy++) {
+    for (let dx = -1; dx <= w; dx++) {
+      setTerritoryOwnerAtIndex(world, world.idx(x + dx, y + dy), owner);
+    }
   }
 }
 
@@ -370,7 +748,7 @@ function stampCampFaction(world: World, cx: number, cy: number, radius: number, 
   for (let dy = -radius; dy <= radius; dy++) {
     for (let dx = -radius; dx <= radius; dx++) {
       if (dx * dx + dy * dy > r2) continue;
-      world.factionControl[world.idx(cx + dx, cy + dy)] = faction;
+      setTerritoryOwnerAtIndex(world, world.idx(cx + dx, cy + dy), faction);
     }
   }
 }
@@ -771,9 +1149,54 @@ function connectCampRoom(
   carveLineWidth(world, pathX, pathY, pathX + world.delta(pathX, doorX), pathY + world.delta(pathY, doorY), 2, Tex.F_WOOD);
 }
 
+function connectCampRoomToHub(
+  world: World,
+  room: Room,
+  hubX: number,
+  hubY: number,
+  state = DoorState.CLOSED,
+  floorTex = Tex.F_WOOD,
+): void {
+  const cx = room.x + (room.w >> 1);
+  const cy = room.y + (room.h >> 1);
+  let doorX: number;
+  let doorY: number;
+  let pathX: number;
+  let pathY: number;
+  if (Math.abs(hubX - cx) >= Math.abs(hubY - cy)) {
+    if (hubX < cx) {
+      doorX = room.x - 1;
+      pathX = doorX - 1;
+    } else {
+      doorX = room.x + room.w;
+      pathX = doorX + 1;
+    }
+    doorY = cy;
+    pathY = doorY;
+  } else {
+    if (hubY < cy) {
+      doorY = room.y - 1;
+      pathY = doorY - 1;
+    } else {
+      doorY = room.y + room.h;
+      pathY = doorY + 1;
+    }
+    doorX = cx;
+    pathX = doorX;
+  }
+  addCampDoor(world, room, doorX, doorY, state);
+  carveLineWidth(world, pathX, pathY, hubX, hubY, 1, floorTex);
+}
+
 function addCampDoor(world: World, room: Room, x: number, y: number, state: DoorState, keyId = ''): number {
   const idx = world.idx(x, y);
   world.cells[idx] = Cell.DOOR;
+  if (state === DoorState.HERMETIC_OPEN || state === DoorState.HERMETIC_CLOSED) {
+    world.wallTex[idx] = Tex.HERMO_WALL;
+    world.hermoWall[idx] = 1;
+  } else {
+    world.wallTex[idx] = Tex.DOOR_WOOD;
+  }
   world.doors.set(idx, {
     idx,
     state,

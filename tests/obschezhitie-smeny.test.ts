@@ -11,7 +11,9 @@ import {
   NpcState,
   RoomType,
   W,
+  ZoneFaction,
 } from '../src/core/types';
+import { auditReachability } from '../src/core/world';
 import {
   designFloorAtZ,
   designFloorById,
@@ -24,6 +26,7 @@ import {
   OBSCHEZHITIE_SMENY_DESIGN_FLOOR_ID,
   OBSCHEZHITIE_SMENY_ROUTE_Z,
 } from '../src/gen/design_floors/obschezhitie_smeny';
+import { countTerritoryCells, territoryHqAnchors } from '../src/systems/territory';
 
 let cachedGeneration: ReturnType<typeof generateDesignFloor> | undefined;
 
@@ -65,6 +68,49 @@ test('obschezhitie_smeny generator creates bunks, witnesses, patrol and shelter 
   assert.equal(gen.world.containers.some(container => container.tags.includes('patrol') && container.tags.includes('witness')), true);
 });
 
+test('obschezhitie_smeny scale exposes dorm rings, room stacks and reachable micro rooms', () => {
+  const gen = generatedObschezhitieSmeny();
+  const ringRooms = gen.world.rooms.filter(room => room.name.startsWith('Кольцо'));
+  const hqRooms = gen.world.rooms.filter(room => room.type === RoomType.HQ);
+
+  assert.equal(gen.world.rooms.length >= 240, true);
+  assert.equal(gen.world.doors.size >= 250, true);
+  assert.equal(countPlayableCells(gen) >= 120_000, true);
+  assert.equal(countReachableCells(gen) >= 120_000, true);
+  assert.equal(ringRooms.length >= 160, true);
+  assert.equal(hqRooms.length >= 5, true);
+});
+
+test('obschezhitie_smeny territory starts from every human faction HQ and matches control brief', () => {
+  const gen = generatedObschezhitieSmeny();
+  const anchors = territoryHqAnchors(gen.world);
+  const anchorByOwner = new Map(anchors.map(anchor => [anchor.owner, anchor]));
+  const counts = new Map(countTerritoryCells(gen.world).map(row => [row.owner, row.cells]));
+  const targetShares = new Map([
+    [ZoneFaction.CITIZEN, 0.56],
+    [ZoneFaction.LIQUIDATOR, 0.16],
+    [ZoneFaction.CULTIST, 0.07],
+    [ZoneFaction.SCIENTIST, 0.08],
+    [ZoneFaction.WILD, 0.13],
+  ]);
+
+  for (const [owner, targetShare] of targetShares) {
+    const anchor = anchorByOwner.get(owner);
+    const room = anchor ? gen.world.rooms[anchor.roomId] : undefined;
+    const share = (counts.get(owner) ?? 0) / (W * W);
+    assert.equal(room?.type, RoomType.HQ, `owner ${owner} should have an HQ anchor`);
+    assert.equal((counts.get(owner) ?? 0) > 0, true, `owner ${owner} cells`);
+    assert.equal(Math.abs(share - targetShare) <= 0.015, true, `owner ${owner} share ${share}`);
+  }
+
+  let dominant = ZoneFaction.CITIZEN;
+  for (const [owner, cells] of counts) {
+    if (owner === ZoneFaction.SAMOSBOR) continue;
+    if (cells > (counts.get(dominant) ?? 0)) dominant = owner;
+  }
+  assert.equal(dominant, ZoneFaction.CITIZEN);
+});
+
 test('obschezhitie_smeny uses a bounded A-Life-compatible dorm population profile', () => {
   const route = designFloorById(OBSCHEZHITIE_SMENY_DESIGN_FLOOR_ID);
   assert.ok(route);
@@ -100,5 +146,21 @@ function countRoomFeatures(gen: ReturnType<typeof generateDesignFloor>, rooms: r
     if (!roomIds.has(gen.world.roomMap[i])) continue;
     if (gen.world.features[i] === feature) count++;
   }
+  return count;
+}
+
+function countPlayableCells(gen: ReturnType<typeof generateDesignFloor>): number {
+  let count = 0;
+  for (const cell of gen.world.cells) {
+    if (cell === Cell.FLOOR || cell === Cell.WATER || cell === Cell.DOOR || cell === Cell.LIFT) count++;
+  }
+  return count;
+}
+
+function countReachableCells(gen: ReturnType<typeof generateDesignFloor>): number {
+  const start = gen.world.idx(Math.floor(gen.spawnX), Math.floor(gen.spawnY));
+  const reachable = auditReachability(gen.world, start).reachable;
+  let count = 0;
+  for (const value of reachable) count += value;
   return count;
 }

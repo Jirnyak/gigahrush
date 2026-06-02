@@ -96,6 +96,16 @@ function wallSnakeWallSnapshot(world: World, path: readonly number[]): string {
   return path.map(ci => world.cells[ci] === Cell.WALL ? '1' : '0').join('');
 }
 
+function wallSnakeLarvaTextureSnapshot(world: World, path: readonly number[]): string {
+  return path.map(ci => {
+    if (world.cells[ci] !== Cell.WALL) return '.';
+    if (world.wallTex[ci] === Tex.DARK) return 'H';
+    if (world.wallTex[ci] === Tex.LARVA_BODY) return 'B';
+    if (world.wallTex[ci] === Tex.MEAT || world.wallTex[ci] === Tex.GUT) return 'M';
+    return '?';
+  }).join('');
+}
+
 test('runtime topology features publish safety contracts', () => {
   assert.deepEqual(
     RUNTIME_TOPOLOGY_CONTRACTS.map(row => row.id).sort(),
@@ -250,8 +260,28 @@ test('wall snake runtime path preserves route-critical cells and marks solidity 
   updateWallSnakeAnomaly(world, makeTestPlayer({ x: 80.5, y: 80.5, hp: 100 }), makeGameState(), 1);
 
   assert.ok(world.cellVersion > before.cells);
+  assert.ok(world.wallTexVersion > before.wallTex);
+  assert.ok(world.floorTexVersion > before.floorTex);
   assert.equal(world.cells[protectedIdx], Cell.LIFT);
   assert.equal(world.features[protectedIdx], Feature.LIFT_BUTTON);
+});
+
+test('wall snake topology dirtying is batched instead of every frame', () => {
+  const world = new World();
+  addTestRoom(world, { id: 0, x: 20, y: 20, w: 16, h: 16, name: 'Тестовая змейка [wall_snake:21,21,12,12]' });
+  const state = makeGameState();
+  const player = makeTestPlayer({ x: 80.5, y: 80.5, hp: 100 });
+
+  updateWallSnakeAnomaly(world, player, state, 0);
+  const afterInit = topologyVersions(world);
+  updateWallSnakeAnomaly(world, player, state, 0.2);
+  assert.deepEqual(topologyVersions(world), afterInit);
+
+  state.time += 0.8;
+  updateWallSnakeAnomaly(world, player, state, 0.8);
+  assert.ok(world.cellVersion > afterInit.cells);
+  assert.ok(world.wallTexVersion > afterInit.wallTex);
+  assert.ok(world.floorTexVersion > afterInit.floorTex);
 });
 
 test('wall snake field runs multiple independent phased snakes', () => {
@@ -268,13 +298,39 @@ test('wall snake field runs multiple independent phased snakes', () => {
   assert.notEqual(firstStart, secondStart);
 
   for (let i = 0; i < 5; i++) {
-    state.time += 0.12;
-    updateWallSnakeAnomaly(world, player, state, 0.12);
+    state.time += 0.2;
+    updateWallSnakeAnomaly(world, player, state, 0.2);
   }
 
   assert.notEqual(wallSnakeWallSnapshot(world, firstPath), firstStart);
   assert.notEqual(wallSnakeWallSnapshot(world, secondPath), secondStart);
   assert.notEqual(wallSnakeWallSnapshot(world, firstPath), wallSnakeWallSnapshot(world, secondPath));
+});
+
+test('wall snake larvae are white blocks with black heads and eat meat into cavities', () => {
+  const world = new World();
+  addTestRoom(world, { id: 0, x: 20, y: 20, w: 22, h: 18, name: 'Тестовая мясная змейка [wall_snake:22,22,18,14]' });
+  const path = wallSnakePathCells(world, 22, 22, 18, 14);
+  for (const ci of path) {
+    world.cells[ci] = Cell.WALL;
+    world.wallTex[ci] = Tex.MEAT;
+    world.floorTex[ci] = Tex.F_MEAT;
+  }
+  const state = makeGameState();
+  const player = makeTestPlayer({ x: 90.5, y: 90.5, hp: 100 });
+
+  updateWallSnakeAnomaly(world, player, state, 0);
+  const initial = wallSnakeLarvaTextureSnapshot(world, path);
+  assert.equal((initial.match(/H/g) ?? []).length, 1);
+  assert.equal((initial.match(/B/g) ?? []).length >= 8, true);
+  assert.equal((initial.match(/M/g) ?? []).length >= 12, true);
+
+  state.time += 0.9;
+  updateWallSnakeAnomaly(world, player, state, 0.9);
+
+  const after = wallSnakeLarvaTextureSnapshot(world, path);
+  assert.equal((after.match(/H/g) ?? []).length, 1);
+  assert.equal(path.some(ci => world.cells[ci] === Cell.FLOOR && world.floorTex[ci] === Tex.F_GUT), true);
 });
 
 test('wall snake control bait shortens and pauses the moving wall', () => {

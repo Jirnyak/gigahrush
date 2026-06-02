@@ -549,6 +549,7 @@ export function debugSpawnBadAppleWorld(world: World, player: Entity, state: Gam
 export function relightBadAppleWorld(world: World): void {
   let touched = false;
   for (const room of world.rooms) {
+    if (!room) continue;
     if (!BAD_APPLE_TAG_RE.test(room.name)) continue;
     for (let dy = 0; dy < BAD_APPLE_HEIGHT; dy++) {
       for (let dx = 0; dx < BAD_APPLE_WIDTH; dx++) {

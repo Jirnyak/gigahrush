@@ -236,7 +236,7 @@ test('controls menu draws reset row before keyboard bindings', () => {
 
   assert.ok(ctx.texts.includes('Сбросить клавиши'));
   assert.ok(ctx.texts.includes(CONTROL_ACTIONS[0].label));
-  assert.ok(ctx.texts.includes('ENTER'));
+  assert.ok(ctx.texts.includes('ENTER / BACKSPACE'));
 });
 
 test('HUD event summary lane ends before the fixed top-right minimap lane', () => {

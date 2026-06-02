@@ -126,10 +126,11 @@ const ADMIN_MIX: readonly WeightedDesignValue<Faction>[] = [
 ];
 
 const UPPER_BUREAU_MIX: readonly WeightedDesignValue<Faction>[] = [
-  { value: Faction.CITIZEN, weight: 64 },
-  { value: Faction.LIQUIDATOR, weight: 25 },
-  { value: Faction.SCIENTIST, weight: 8 },
-  { value: Faction.WILD, weight: 3 },
+  { value: Faction.CITIZEN, weight: 42 },
+  { value: Faction.LIQUIDATOR, weight: 26 },
+  { value: Faction.CULTIST, weight: 8 },
+  { value: Faction.SCIENTIST, weight: 16 },
+  { value: Faction.WILD, weight: 8 },
 ];
 
 const INDUSTRIAL_MIX: readonly WeightedDesignValue<Faction>[] = [
@@ -429,7 +430,7 @@ const DESIGN_FLOOR_POPULATION_OVERRIDES: Readonly<Record<DesignFloorId, DesignFl
       noiseStrength: 0.12,
       openWeight: 0.04,
       roomWeights: { [RoomType.PRODUCTION]: 1.8, [RoomType.HQ]: 1.7, [RoomType.OFFICE]: 1.45, [RoomType.STORAGE]: 1.34, [RoomType.CORRIDOR]: 0.28, [RoomType.COMMON]: 0.18, [RoomType.LIVING]: 0.12 },
-      zoneWeights: { [ZoneFaction.LIQUIDATOR]: 1.8, [ZoneFaction.CITIZEN]: 0.52, [ZoneFaction.WILD]: 0.18, [ZoneFaction.SAMOSBOR]: 0.06, [ZoneFaction.CULTIST]: 0.08 },
+      zoneWeights: { [ZoneFaction.LIQUIDATOR]: 1.8, [ZoneFaction.SCIENTIST]: 1.65, [ZoneFaction.CITIZEN]: 0.52, [ZoneFaction.WILD]: 0.18, [ZoneFaction.SAMOSBOR]: 0.06, [ZoneFaction.CULTIST]: 0.08 },
       anchors: ANTENNA_COURT_ENCLAVE_ANCHORS,
       bucketSize: 48,
       maxPerBucket: 6,
@@ -441,7 +442,7 @@ const DESIGN_FLOOR_POPULATION_OVERRIDES: Readonly<Record<DesignFloorId, DesignFl
       noiseStrength: 0.16,
       openWeight: 1.42,
       roomWeights: { [RoomType.PRODUCTION]: 1.24, [RoomType.CORRIDOR]: 1.18, [RoomType.STORAGE]: 1.02, [RoomType.COMMON]: 0.72, [RoomType.OFFICE]: 0.48, [RoomType.HQ]: 0.36, [RoomType.LIVING]: 0.28 },
-      zoneWeights: { [ZoneFaction.WILD]: 1.32, [ZoneFaction.SAMOSBOR]: 1.24, [ZoneFaction.CITIZEN]: 0.82, [ZoneFaction.LIQUIDATOR]: 0.58, [ZoneFaction.CULTIST]: 0.88 },
+      zoneWeights: { [ZoneFaction.WILD]: 1.32, [ZoneFaction.SAMOSBOR]: 1.24, [ZoneFaction.CULTIST]: 0.88, [ZoneFaction.CITIZEN]: 0.82, [ZoneFaction.LIQUIDATOR]: 0.58, [ZoneFaction.SCIENTIST]: 0.52 },
       anchors: ANTENNA_COURT_MONSTER_ANCHORS,
       bucketSize: 28,
       maxPerBucket: 9,
@@ -592,7 +593,7 @@ const DESIGN_FLOOR_POPULATION_OVERRIDES: Readonly<Record<DesignFloorId, DesignFl
     npcTarget: 760,
     monsterTarget: 980,
     npcNoun: 'проситель',
-    npcFactions: [{ value: Faction.CITIZEN, weight: 58 }, { value: Faction.LIQUIDATOR, weight: 28 }, { value: Faction.SCIENTIST, weight: 10 }, { value: Faction.WILD, weight: 4 }],
+    npcFactions: [{ value: Faction.SCIENTIST, weight: 34 }, { value: Faction.CITIZEN, weight: 26 }, { value: Faction.LIQUIDATOR, weight: 20 }, { value: Faction.CULTIST, weight: 10 }, { value: Faction.WILD, weight: 10 }],
     npcOccupations: [{ value: Occupation.SECRETARY, weight: 34 }, { value: Occupation.TRAVELER, weight: 20 }, { value: Occupation.HUNTER, weight: 14 }, { value: Occupation.SCIENTIST, weight: 10 }, { value: Occupation.STOREKEEPER, weight: 10 }, { value: Occupation.DIRECTOR, weight: 7 }, { value: Occupation.LOCKSMITH, weight: 5 }],
     monsterBiasKinds: [MonsterKind.PARAGRAPH, MonsterKind.PECHATEED, MonsterKind.KONTORSHCHIK, MonsterKind.PROTOKOLNIK, MonsterKind.KANTSELYARSKIY_IDOL],
     monsterTags: ['cayley_byuro', 'cayley_graph', 'documents', 'bureaucracy', 'forgery', 'queue'],
@@ -602,10 +603,20 @@ const DESIGN_FLOOR_POPULATION_OVERRIDES: Readonly<Record<DesignFloorId, DesignFl
       noiseScale: 88,
       noiseStrength: 0.16,
       openWeight: 0.74,
+      zoneWeights: {
+        [ZoneFaction.SCIENTIST]: 1.56,
+        [ZoneFaction.CITIZEN]: 1.2,
+        [ZoneFaction.LIQUIDATOR]: 1.08,
+        [ZoneFaction.CULTIST]: 0.86,
+        [ZoneFaction.WILD]: 0.86,
+        [ZoneFaction.SAMOSBOR]: 0.08,
+      },
       anchors: [
-        { x: 512, y: 502, radius: 120, weight: 1.52 },
-        { x: 238, y: 484, radius: 92, weight: 1.32 },
-        { x: 790, y: 484, radius: 102, weight: 1.18 },
+        { x: 626, y: 500, radius: 150, weight: 1.62 },
+        { x: 176, y: 176, radius: 120, weight: 1.28 },
+        { x: 856, y: 184, radius: 118, weight: 1.22 },
+        { x: 178, y: 822, radius: 96, weight: 1.08 },
+        { x: 856, y: 850, radius: 98, weight: 1.08 },
       ],
     },
     monsterPlacement: {
@@ -881,7 +892,7 @@ const DESIGN_FLOOR_POPULATION_OVERRIDES: Readonly<Record<DesignFloorId, DesignFl
     npcTarget: 820,
     monsterTarget: 980,
     npcNoun: 'счётчик маршей',
-    npcFactions: [{ value: Faction.CITIZEN, weight: 48 }, { value: Faction.LIQUIDATOR, weight: 26 }, { value: Faction.SCIENTIST, weight: 18 }, { value: Faction.WILD, weight: 8 }],
+    npcFactions: [{ value: Faction.CITIZEN, weight: 40 }, { value: Faction.LIQUIDATOR, weight: 24 }, { value: Faction.CULTIST, weight: 10 }, { value: Faction.SCIENTIST, weight: 14 }, { value: Faction.WILD, weight: 12 }],
     npcOccupations: [{ value: Occupation.SECRETARY, weight: 24 }, { value: Occupation.TRAVELER, weight: 22 }, { value: Occupation.HUNTER, weight: 16 }, { value: Occupation.LOCKSMITH, weight: 14 }, { value: Occupation.SCIENTIST, weight: 12 }, { value: Occupation.STOREKEEPER, weight: 8 }, { value: Occupation.ELECTRICIAN, weight: 4 }],
     monsterBiasKinds: [MonsterKind.BEZEKHIY, MonsterKind.SHADOW, MonsterKind.PARAGRAPH, MonsterKind.SLEPOGLAZ, MonsterKind.TONKAYA_TEN],
     monsterTags: ['stairs', 'sequence', 'wayfinding', 'shortcut', 'documents', 'low_light'],
@@ -894,10 +905,15 @@ const DESIGN_FLOOR_POPULATION_OVERRIDES: Readonly<Record<DesignFloorId, DesignFl
       bucketSize: 34,
       maxPerBucket: 5,
       roomWeights: { [RoomType.CORRIDOR]: 1.55, [RoomType.OFFICE]: 1.26, [RoomType.STORAGE]: 1.08, [RoomType.PRODUCTION]: 0.92, [RoomType.KITCHEN]: 0.86, [RoomType.BATHROOM]: 0.58 },
+      zoneWeights: { [ZoneFaction.CITIZEN]: 1.28, [ZoneFaction.LIQUIDATOR]: 1.16, [ZoneFaction.SCIENTIST]: 1.08, [ZoneFaction.WILD]: 0.96, [ZoneFaction.CULTIST]: 0.78, [ZoneFaction.SAMOSBOR]: 0.08 },
       anchors: [
-        { x: 512, y: 320, radius: 120, weight: 1.45 },
-        { x: 512, y: 512, radius: 150, weight: 1.28 },
-        { x: 665, y: 520, radius: 130, weight: 1.18 },
+        { x: 423, y: 65, radius: 118, weight: 1.34 },
+        { x: 818, y: 86, radius: 104, weight: 1.2 },
+        { x: 128, y: 86, radius: 88, weight: 1.06 },
+        { x: 818, y: 860, radius: 98, weight: 1.12 },
+        { x: 128, y: 860, radius: 102, weight: 1.1 },
+        { x: 512, y: 512, radius: 150, weight: 1.22 },
+        { x: 665, y: 520, radius: 130, weight: 1.12 },
       ],
     },
     monsterPlacement: {
@@ -947,6 +963,7 @@ const DESIGN_FLOOR_POPULATION_OVERRIDES: Readonly<Record<DesignFloorId, DesignFl
     npcPlacementKind: 'slime',
     monsterPlacementKind: 'slime',
     npcPlacement: {
+      zoneWeights: { [ZoneFaction.SCIENTIST]: 1.46, [ZoneFaction.LIQUIDATOR]: 1.18, [ZoneFaction.CITIZEN]: 1.04, [ZoneFaction.WILD]: 0.68, [ZoneFaction.CULTIST]: 0.5 },
       anchors: [
         { x: 512, y: 720, radius: 116, weight: 1.5 },
         { x: 512, y: 604, radius: 150, weight: 1.35 },
@@ -955,6 +972,7 @@ const DESIGN_FLOOR_POPULATION_OVERRIDES: Readonly<Record<DesignFloorId, DesignFl
       ],
     },
     monsterPlacement: {
+      zoneWeights: { [ZoneFaction.WILD]: 1.36, [ZoneFaction.CULTIST]: 1.18, [ZoneFaction.CITIZEN]: 0.82, [ZoneFaction.LIQUIDATOR]: 0.72, [ZoneFaction.SCIENTIST]: 0.66 },
       anchors: [
         { x: 250, y: 548, radius: 130, weight: 1.85 },
         { x: 252, y: 670, radius: 130, weight: 1.65 },

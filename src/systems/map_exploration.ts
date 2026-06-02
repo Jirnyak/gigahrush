@@ -16,6 +16,7 @@ interface MapExplorationRuntime {
   initialZoneId: number;
   lastCell: number;
   lastSamosborWaveFogKey: string;
+  version: number;
 }
 
 const explorationByWorld = new WeakMap<World, MapExplorationRuntime>();
@@ -29,6 +30,7 @@ function emptyRuntime(): MapExplorationRuntime {
     initialZoneId: -1,
     lastCell: -1,
     lastSamosborWaveFogKey: '',
+    version: 0,
   };
 }
 
@@ -46,7 +48,9 @@ function walkableMapCell(cell: number): boolean {
 }
 
 function revealCell(runtime: MapExplorationRuntime, idx: number): void {
-  if (idx >= 0 && idx < runtime.explored.length) runtime.explored[idx] = 1;
+  if (idx < 0 || idx >= runtime.explored.length || runtime.explored[idx]) return;
+  runtime.explored[idx] = 1;
+  runtime.version = (runtime.version + 1) | 0;
 }
 
 export function resetMapExploration(world: World): void {
@@ -99,6 +103,7 @@ export function revealMapArea(world: World, x: number, y: number, radius: number
 export function revealWholeMap(world: World): number {
   const runtime = runtimeFor(world);
   runtime.explored.fill(1);
+  runtime.version = (runtime.version + 1) | 0;
   runtime.revealedRooms.clear();
   for (const room of world.rooms) if (room) runtime.revealedRooms.add(room.id);
   runtime.revealedZones.clear();
@@ -119,7 +124,10 @@ function hideMapArea(world: World, x: number, y: number, radius: number): void {
     for (let dx = -r; dx <= r; dx++) {
       if (dx * dx + dy * dy > r2) continue;
       const idx = world.idx(cx + dx, cy + dy);
-      runtime.explored[idx] = 0;
+      if (runtime.explored[idx]) {
+        runtime.explored[idx] = 0;
+        runtime.version = (runtime.version + 1) | 0;
+      }
       const roomId = world.roomMap[idx];
       if (roomId >= 0) hiddenRooms.add(roomId);
       hiddenZones.add(world.zoneMap[idx]);
@@ -253,6 +261,10 @@ export function syncMapExplorationAfterSamosborWave(world: World, state: GameSta
 export function isMapCellExplored(world: World, idx: number): boolean {
   const runtime = explorationByWorld.get(world);
   return !runtime || runtime.explored[idx] !== 0;
+}
+
+export function mapExplorationVersion(world: World): number {
+  return explorationByWorld.get(world)?.version ?? 0;
 }
 
 export function mapExplorationStats(world: World): { cells: number; rooms: number; initialZoneId: number } {

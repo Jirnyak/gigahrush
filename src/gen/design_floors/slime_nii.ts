@@ -21,11 +21,13 @@ import {
   type Entity,
   type Item,
   type Room,
+  type TerritoryOwner,
   type WorldContainer,
 } from '../../core/types';
 import { World } from '../../core/world';
 import { hashSeed, withSeededRandom } from '../../core/rand';
 import { freshNeeds } from '../../data/catalog';
+import { factionToTerritoryOwner } from '../../data/factions';
 import { type PlotNpcDef, registerSideQuest } from '../../data/plot';
 import { MONSTERS } from '../../entities/monster';
 import { monsterSpr, Spr } from '../../render/sprite_index';
@@ -81,6 +83,39 @@ interface DoorSite {
   y: number;
   ox: number;
   oy: number;
+}
+
+interface SlimeNiiHqSpec {
+  owner: TerritoryOwner;
+  x: number;
+  y: number;
+  name: string;
+  supportPrefix: string;
+  wallTex: Tex;
+  floorTex: Tex;
+}
+
+interface SlimeNiiDistrictSpec {
+  x: number;
+  y: number;
+  name: string;
+  owner: TerritoryOwner;
+  type: RoomType;
+  wallTex: Tex;
+  floorTex: Tex;
+  wet: boolean;
+}
+
+interface SlimeNiiCabinetStripSpec {
+  x: number;
+  y: number;
+  cols: number;
+  rows: number;
+  name: string;
+  owner: TerritoryOwner;
+  wallTex: Tex;
+  floorTex: Tex;
+  roomTypes: readonly RoomType[];
 }
 
 const NPC_DEFS: Record<SlimeNiiNpcId, PlotNpcDef> = {
@@ -173,6 +208,86 @@ const NPC_DEFS: Record<SlimeNiiNpcId, PlotNpcDef> = {
     ],
   },
 };
+
+const SLIME_NII_HQ_SPECS: readonly SlimeNiiHqSpec[] = [
+  {
+    owner: ZoneFaction.SCIENTIST,
+    x: 602,
+    y: 268,
+    name: 'Герметичный штаб научного совета НИИ',
+    supportPrefix: 'научного совета',
+    wallTex: Tex.HERMO_WALL,
+    floorTex: Tex.F_TILE,
+  },
+  {
+    owner: ZoneFaction.LIQUIDATOR,
+    x: 238,
+    y: 650,
+    name: 'Герметичный штаб карантинной зачистки',
+    supportPrefix: 'карантинной зачистки',
+    wallTex: Tex.METAL,
+    floorTex: Tex.F_CONCRETE,
+  },
+  {
+    owner: ZoneFaction.CITIZEN,
+    x: 276,
+    y: 250,
+    name: 'Герметичный штаб очереди добровольцев',
+    supportPrefix: 'очереди добровольцев',
+    wallTex: Tex.PANEL,
+    floorTex: Tex.F_LINO,
+  },
+  {
+    owner: ZoneFaction.CULTIST,
+    x: 742,
+    y: 708,
+    name: 'Скрытый штаб мокрой молитвы',
+    supportPrefix: 'мокрой молитвы',
+    wallTex: Tex.BRICK,
+    floorTex: Tex.F_WATER,
+  },
+  {
+    owner: ZoneFaction.WILD,
+    x: 756,
+    y: 292,
+    name: 'Разорённый штаб расхитителей проб',
+    supportPrefix: 'расхитителей проб',
+    wallTex: Tex.BRICK,
+    floorTex: Tex.F_CONCRETE,
+  },
+];
+
+const SLIME_NII_DISTRICTS: readonly SlimeNiiDistrictSpec[] = [
+  { x: 126, y: 118, name: 'северо-западный санитарный филиал', owner: ZoneFaction.CITIZEN, type: RoomType.MEDICAL, wallTex: Tex.TILE_W, floorTex: Tex.F_TILE, wet: false },
+  { x: 300, y: 112, name: 'кабинетная линия добровольцев', owner: ZoneFaction.CITIZEN, type: RoomType.OFFICE, wallTex: Tex.PANEL, floorTex: Tex.F_LINO, wet: false },
+  { x: 482, y: 104, name: 'верхняя клеточная галерея', owner: ZoneFaction.SCIENTIST, type: RoomType.MEDICAL, wallTex: Tex.TILE_W, floorTex: Tex.F_TILE, wet: false },
+  { x: 660, y: 116, name: 'северо-восточный опытный филиал', owner: ZoneFaction.SCIENTIST, type: RoomType.PRODUCTION, wallTex: Tex.TILE_W, floorTex: Tex.F_TILE, wet: true },
+  { x: 820, y: 130, name: 'архив сухих этикеток', owner: ZoneFaction.WILD, type: RoomType.STORAGE, wallTex: Tex.METAL, floorTex: Tex.F_CONCRETE, wet: false },
+  { x: 116, y: 328, name: 'блок промывочных кабинетов', owner: ZoneFaction.LIQUIDATOR, type: RoomType.PRODUCTION, wallTex: Tex.PIPE, floorTex: Tex.F_WATER, wet: true },
+  { x: 284, y: 356, name: 'длинный кабинет микробиологов', owner: ZoneFaction.SCIENTIST, type: RoomType.MEDICAL, wallTex: Tex.TILE_W, floorTex: Tex.F_TILE, wet: false },
+  { x: 688, y: 358, name: 'пост хранения живых чашек', owner: ZoneFaction.SCIENTIST, type: RoomType.STORAGE, wallTex: Tex.METAL, floorTex: Tex.F_CONCRETE, wet: false },
+  { x: 836, y: 348, name: 'руинированный склад реагентов', owner: ZoneFaction.WILD, type: RoomType.STORAGE, wallTex: Tex.BRICK, floorTex: Tex.F_CONCRETE, wet: true },
+  { x: 104, y: 560, name: 'юго-западная промывочная секция', owner: ZoneFaction.LIQUIDATOR, type: RoomType.PRODUCTION, wallTex: Tex.PIPE, floorTex: Tex.F_WATER, wet: true },
+  { x: 292, y: 602, name: 'карантинная приёмная ликвидаторов', owner: ZoneFaction.LIQUIDATOR, type: RoomType.OFFICE, wallTex: Tex.METAL, floorTex: Tex.F_CONCRETE, wet: false },
+  { x: 660, y: 602, name: 'холодная линия белых проб', owner: ZoneFaction.SCIENTIST, type: RoomType.MEDICAL, wallTex: Tex.HERMO_WALL, floorTex: Tex.F_TILE, wet: false },
+  { x: 832, y: 582, name: 'закутки мокрой молитвы', owner: ZoneFaction.CULTIST, type: RoomType.COMMON, wallTex: Tex.BRICK, floorTex: Tex.F_WATER, wet: true },
+  { x: 118, y: 802, name: 'нижний дренажный архив', owner: ZoneFaction.LIQUIDATOR, type: RoomType.STORAGE, wallTex: Tex.PIPE, floorTex: Tex.F_CONCRETE, wet: true },
+  { x: 334, y: 826, name: 'кабинеты журнала утечек', owner: ZoneFaction.SCIENTIST, type: RoomType.OFFICE, wallTex: Tex.MARBLE, floorTex: Tex.F_PARQUET, wet: false },
+  { x: 510, y: 830, name: 'нижняя клеточная галерея', owner: ZoneFaction.SCIENTIST, type: RoomType.PRODUCTION, wallTex: Tex.TILE_W, floorTex: Tex.F_TILE, wet: true },
+  { x: 690, y: 820, name: 'юго-восточный архив проб', owner: ZoneFaction.SCIENTIST, type: RoomType.STORAGE, wallTex: Tex.METAL, floorTex: Tex.F_CONCRETE, wet: false },
+  { x: 842, y: 808, name: 'тёмный склад просроченных чашек', owner: ZoneFaction.CULTIST, type: RoomType.STORAGE, wallTex: Tex.BRICK, floorTex: Tex.F_WATER, wet: true },
+];
+
+const SLIME_NII_CABINET_STRIPS: readonly SlimeNiiCabinetStripSpec[] = [
+  { x: 70, y: 220, cols: 10, rows: 4, name: 'северная линия микрокабинетов', owner: ZoneFaction.CITIZEN, wallTex: Tex.PANEL, floorTex: Tex.F_LINO, roomTypes: [RoomType.OFFICE, RoomType.STORAGE, RoomType.BATHROOM] },
+  { x: 392, y: 210, cols: 11, rows: 4, name: 'сухие шкафы верхней галереи', owner: ZoneFaction.SCIENTIST, wallTex: Tex.TILE_W, floorTex: Tex.F_TILE, roomTypes: [RoomType.MEDICAL, RoomType.STORAGE, RoomType.OFFICE] },
+  { x: 682, y: 222, cols: 10, rows: 4, name: 'северный архив проб', owner: ZoneFaction.SCIENTIST, wallTex: Tex.METAL, floorTex: Tex.F_CONCRETE, roomTypes: [RoomType.STORAGE, RoomType.MEDICAL, RoomType.OFFICE] },
+  { x: 74, y: 448, cols: 9, rows: 5, name: 'мокрые шкафы западного слива', owner: ZoneFaction.LIQUIDATOR, wallTex: Tex.PIPE, floorTex: Tex.F_WATER, roomTypes: [RoomType.STORAGE, RoomType.PRODUCTION, RoomType.BATHROOM] },
+  { x: 718, y: 452, cols: 9, rows: 5, name: 'тёмные боксы восточного слива', owner: ZoneFaction.WILD, wallTex: Tex.BRICK, floorTex: Tex.F_CONCRETE, roomTypes: [RoomType.STORAGE, RoomType.SMOKING, RoomType.PRODUCTION] },
+  { x: 94, y: 722, cols: 11, rows: 4, name: 'нижние шкафы дезраствора', owner: ZoneFaction.LIQUIDATOR, wallTex: Tex.METAL, floorTex: Tex.F_CONCRETE, roomTypes: [RoomType.STORAGE, RoomType.PRODUCTION, RoomType.BATHROOM] },
+  { x: 384, y: 712, cols: 12, rows: 4, name: 'нижний ряд кабинетов НИИ', owner: ZoneFaction.SCIENTIST, wallTex: Tex.TILE_W, floorTex: Tex.F_TILE, roomTypes: [RoomType.MEDICAL, RoomType.OFFICE, RoomType.STORAGE] },
+  { x: 716, y: 704, cols: 10, rows: 4, name: 'культовые кладовые чашек', owner: ZoneFaction.CULTIST, wallTex: Tex.BRICK, floorTex: Tex.F_WATER, roomTypes: [RoomType.STORAGE, RoomType.COMMON, RoomType.SMOKING] },
+];
 
 registerSideQuest('slime_nii_director_larisa', NPC_DEFS.slime_nii_director_larisa, [
   {
@@ -294,6 +409,96 @@ export function generateSlimeNiiDesignFloor(seed = SEED): FloorGeneration {
 }
 
 export function expandSlimeNiiRouteGeometry(world: World, rng: () => number): void {
+  carveSlimeNiiMacroNetwork(world);
+  buildSlimeNiiHqSuites(world);
+  buildSlimeNiiResearchDistricts(world, rng);
+  buildSlimeNiiCabinetStrips(world, rng);
+  buildSlimeNiiOuterAnnexes(world, rng);
+
+  stampSlimeReactionBands(world, [
+    { x: 154, y: 162, radius: 96, weight: 0.86 },
+    { x: 812, y: 156, radius: 94, weight: 0.84 },
+    { x: 146, y: 814, radius: 100, weight: 0.92 },
+    { x: 812, y: 818, radius: 102, weight: 0.9 },
+    { x: 512, y: 142, radius: 76, weight: 0.72 },
+    { x: 512, y: 858, radius: 78, weight: 0.76 },
+    { x: 306, y: 526, radius: 132, weight: 0.62 },
+    { x: 708, y: 536, radius: 138, weight: 0.64 },
+  ], SEED ^ 0x7a551);
+
+  world.markCellsDirty();
+  world.markFloorTexDirty();
+  world.markWallTexDirty();
+  world.markFeaturesDirty(true);
+}
+
+function carveSlimeNiiMacroNetwork(world: World): void {
+  const ring = [
+    { x: 112, y: 168 },
+    { x: 512, y: 108 },
+    { x: 904, y: 172 },
+    { x: 922, y: 512 },
+    { x: 892, y: 852 },
+    { x: 512, y: 908 },
+    { x: 112, y: 846 },
+    { x: 88, y: 512 },
+    { x: 112, y: 168 },
+  ] as const;
+  carvePointRoute(world, ring, 7, Tex.F_TILE);
+  carvePointRoute(world, [
+    { x: 96, y: 512 },
+    { x: 308, y: 512 },
+    { x: CX, y: CY },
+    { x: 716, y: 512 },
+    { x: 928, y: 512 },
+  ], 5, Tex.F_CONCRETE);
+  carvePointRoute(world, [
+    { x: 512, y: 104 },
+    { x: 512, y: 306 },
+    { x: CX, y: CY },
+    { x: 512, y: 720 },
+    { x: 512, y: 920 },
+  ], 5, Tex.F_CONCRETE);
+  carvePointRoute(world, [
+    { x: 168, y: 168 },
+    { x: 336, y: 330 },
+    { x: CX, y: CY },
+    { x: 692, y: 698 },
+    { x: 854, y: 852 },
+  ], 3, Tex.F_TILE);
+  carvePointRoute(world, [
+    { x: 852, y: 170 },
+    { x: 686, y: 330 },
+    { x: CX, y: CY },
+    { x: 330, y: 694 },
+    { x: 166, y: 848 },
+  ], 3, Tex.F_TILE);
+}
+
+function buildSlimeNiiHqSuites(world: World): void {
+  for (let i = 0; i < SLIME_NII_HQ_SPECS.length; i++) {
+    const spec = SLIME_NII_HQ_SPECS[i];
+    const hq = tryAddSlimeRoom(world, RoomType.HQ, spec.x, spec.y, 42, 26, spec.name, spec.wallTex, spec.floorTex, true);
+    if (!hq) continue;
+    paintRoomTerritory(world, hq, spec.owner);
+    decorateHqCore(world, hq, i);
+    connectRoomToPoint(world, hq, spec.x < CX ? 'east' : 'west', CX, CY, DoorState.HERMETIC_CLOSED);
+
+    const kitchen = tryAddSlimeRoom(world, RoomType.KITCHEN, spec.x - 34, spec.y + 34, 28, 18, `Кухня ${spec.supportPrefix}`, spec.wallTex, Tex.F_LINO);
+    const toilet = tryAddSlimeRoom(world, RoomType.BATHROOM, spec.x + 10, spec.y + 36, 22, 16, `Санузел ${spec.supportPrefix}`, Tex.TILE_W, Tex.F_TILE);
+    const store = tryAddSlimeRoom(world, RoomType.STORAGE, spec.x + 48, spec.y + 2, 28, 22, `Склад ${spec.supportPrefix}`, spec.wallTex, Tex.F_CONCRETE);
+    const office = tryAddSlimeRoom(world, spec.owner === ZoneFaction.SCIENTIST ? RoomType.MEDICAL : RoomType.OFFICE, spec.x - 40, spec.y + 2, 30, 22, `Рабочая комната ${spec.supportPrefix}`, spec.wallTex, spec.floorTex);
+    const support = [kitchen, toilet, store, office];
+    for (const room of support) {
+      if (!room) continue;
+      paintRoomTerritory(world, room, spec.owner);
+      decorateSupportRoom(world, room, i);
+      connectRooms(world, hq, room.x < hq.x ? 'west' : room.x > hq.x + hq.w ? 'east' : 'south', room, room.y > hq.y ? 'north' : 'east', DoorState.CLOSED);
+    }
+  }
+}
+
+function buildSlimeNiiResearchDistricts(world: World, rng: () => number): void {
   const anchors = [
     { x: 136, y: 148, name: 'северо-западный санитарный филиал', flip: false },
     { x: 770, y: 140, name: 'северо-восточный опытный филиал', flip: true },
@@ -303,11 +508,49 @@ export function expandSlimeNiiRouteGeometry(world: World, rng: () => number): vo
     { x: 482, y: 840, name: 'нижняя клеточная галерея', flip: true },
   ];
 
+  for (let i = 0; i < SLIME_NII_DISTRICTS.length; i++) {
+    const spec = SLIME_NII_DISTRICTS[i];
+    const ox = Math.floor((rng() - 0.5) * 22);
+    const oy = Math.floor((rng() - 0.5) * 18);
+    const lab = tryAddSlimeRoom(
+      world,
+      spec.type,
+      spec.x + ox,
+      spec.y + oy,
+      62 + (i % 3) * 8,
+      34 + (i % 2) * 8,
+      `НИИ слизи: ${spec.name}`,
+      spec.wallTex,
+      spec.floorTex,
+    );
+    if (!lab) continue;
+    paintRoomTerritory(world, lab, spec.owner);
+    decorateResearchLab(world, lab, i, spec.wet);
+    connectRoomToPoint(world, lab, lab.x < CX ? 'east' : 'west', CX, CY, DoorState.CLOSED);
+
+    const store = tryAddSlimeRoom(world, RoomType.STORAGE, lab.x + lab.w + 10, lab.y + 4, 26, 22, `Склад проб: ${spec.name}`, Tex.METAL, Tex.F_CONCRETE);
+    const office = tryAddSlimeRoom(world, RoomType.OFFICE, lab.x - 36, lab.y + 4, 28, 20, `Кабинет наблюдения: ${spec.name}`, spec.wallTex, spec.floorTex);
+    const wash = tryAddSlimeRoom(world, RoomType.BATHROOM, lab.x + 8, lab.y + lab.h + 10, 24, 16, `Мокрый шлюз: ${spec.name}`, Tex.TILE_W, Tex.F_WATER);
+    const camera = tryAddSlimeRoom(world, RoomType.MEDICAL, lab.x + lab.w - 28, lab.y + lab.h + 10, 30, 20, `${SLIME_NII_CAMERA_ROOM_PREFIX}: ${spec.name}`, Tex.HERMO_WALL, Tex.F_TILE, true);
+    for (const room of [store, office, wash, camera]) {
+      if (!room) continue;
+      paintRoomTerritory(world, room, spec.owner);
+      if (room === camera) {
+        shapeVoronoiSealedChamber(world, room, 40 + i);
+        decorateCamera(world, room, 40 + i);
+      } else {
+        decorateSupportRoom(world, room, 10 + i);
+      }
+      connectRooms(world, lab, room.y > lab.y + lab.h ? 'south' : room.x < lab.x ? 'west' : 'east', room, room.y > lab.y + lab.h ? 'north' : room.x < lab.x ? 'east' : 'west', room === camera ? DoorState.HERMETIC_CLOSED : DoorState.CLOSED);
+    }
+    buildSlimeNiiMicroBlock(world, lab, spec.owner, `микрокабинет ${spec.name}`, 4 + (i % 3), 3 + (i % 2), i);
+  }
+
   for (let i = 0; i < anchors.length; i++) {
     const anchor = anchors[i];
     const ox = Math.floor((rng() - 0.5) * 34);
     const oy = Math.floor((rng() - 0.5) * 30);
-    const lab = addRoom(
+    const lab = tryAddSlimeRoom(
       world,
       i % 2 === 0 ? RoomType.MEDICAL : RoomType.PRODUCTION,
       anchor.x + ox,
@@ -318,7 +561,9 @@ export function expandSlimeNiiRouteGeometry(world: World, rng: () => number): vo
       Tex.TILE_W,
       Tex.F_TILE,
     );
-    const store = addRoom(
+    if (!lab) continue;
+    paintRoomTerritory(world, lab, ZoneFaction.SCIENTIST);
+    const store = tryAddSlimeRoom(
       world,
       RoomType.STORAGE,
       lab.x + (anchor.flip ? -40 : 62),
@@ -329,7 +574,7 @@ export function expandSlimeNiiRouteGeometry(world: World, rng: () => number): vo
       Tex.METAL,
       Tex.F_CONCRETE,
     );
-    const camera = addRoom(
+    const camera = tryAddSlimeRoom(
       world,
       RoomType.MEDICAL,
       lab.x + (anchor.flip ? 62 : -42),
@@ -341,6 +586,9 @@ export function expandSlimeNiiRouteGeometry(world: World, rng: () => number): vo
       Tex.F_TILE,
       true,
     );
+    if (!store || !camera) continue;
+    paintRoomTerritory(world, store, ZoneFaction.SCIENTIST);
+    paintRoomTerritory(world, camera, ZoneFaction.SCIENTIST);
     shapeVoronoiSealedChamber(world, camera, i);
 
     connectRooms(world, lab, anchor.flip ? 'west' : 'east', store, anchor.flip ? 'east' : 'west', DoorState.CLOSED);
@@ -348,15 +596,288 @@ export function expandSlimeNiiRouteGeometry(world: World, rng: () => number): vo
     carveLineWidth(world, lab.x + (lab.w >> 1), lab.y + (lab.h >> 1), CX, CY, 3, Tex.F_TILE);
     decorateLabAnnex(world, lab, store, camera, i);
   }
+}
 
-  stampSlimeReactionBands(world, [
-    { x: 154, y: 162, radius: 96, weight: 0.86 },
-    { x: 812, y: 156, radius: 94, weight: 0.84 },
-    { x: 146, y: 814, radius: 100, weight: 0.92 },
-    { x: 812, y: 818, radius: 102, weight: 0.9 },
-    { x: 512, y: 142, radius: 76, weight: 0.72 },
-    { x: 512, y: 858, radius: 78, weight: 0.76 },
-  ], SEED ^ 0x7a551);
+function buildSlimeNiiCabinetStrips(world: World, rng: () => number): void {
+  for (let i = 0; i < SLIME_NII_CABINET_STRIPS.length; i++) {
+    const spec = SLIME_NII_CABINET_STRIPS[i];
+    let stripFirst: Room | null = null;
+    let previousRowFirst: Room | null = null;
+    for (let row = 0; row < spec.rows; row++) {
+      let previous: Room | null = null;
+      let rowFirst: Room | null = null;
+      for (let col = 0; col < spec.cols; col++) {
+        const serial = i * 100 + row * 17 + col;
+        const w = 10 + (serial % 4);
+        const h = 8 + ((serial + 2) % 4);
+        const x = spec.x + col * 18 + Math.floor(rng() * 3);
+        const y = spec.y + row * 15 + Math.floor(rng() * 3);
+        const type = spec.roomTypes[serial % spec.roomTypes.length];
+        const room = tryAddSlimeRoom(world, type, x, y, w, h, `${spec.name}: шкаф ${row + 1}-${col + 1}`, spec.wallTex, spec.floorTex);
+        if (!room) continue;
+        paintRoomTerritory(world, room, spec.owner);
+        decorateMicroRoom(world, room, serial);
+        if (!stripFirst) stripFirst = room;
+        if (!rowFirst) rowFirst = room;
+        if (previous) connectRoomsNarrow(world, previous, 'east', room, 'west', serial % 7 === 0 ? DoorState.CLOSED : DoorState.OPEN);
+        previous = room;
+      }
+      if (rowFirst && previousRowFirst) connectRoomsNarrow(world, previousRowFirst, 'south', rowFirst, 'north', DoorState.CLOSED);
+      previousRowFirst = rowFirst;
+    }
+    if (stripFirst) connectRoomToPoint(world, stripFirst, stripFirst.x < CX ? 'east' : 'west', CX, CY, DoorState.CLOSED);
+  }
+}
+
+function buildSlimeNiiOuterAnnexes(world: World, rng: () => number): void {
+  const annexes = [
+    { x: 62, y: 88, cols: 6, rows: 4, owner: ZoneFaction.CITIZEN, name: 'краевой санпропускник' },
+    { x: 860, y: 92, cols: 5, rows: 4, owner: ZoneFaction.WILD, name: 'краевой склад украденных проб' },
+    { x: 64, y: 850, cols: 6, rows: 4, owner: ZoneFaction.LIQUIDATOR, name: 'нижний пост промывки' },
+    { x: 852, y: 852, cols: 5, rows: 4, owner: ZoneFaction.CULTIST, name: 'нижний мокрый скит' },
+  ] as const;
+  for (let i = 0; i < annexes.length; i++) {
+    const annex = annexes[i];
+    const anchor = tryAddSlimeRoom(world, RoomType.PRODUCTION, annex.x, annex.y, 50, 28, `НИИ слизи: ${annex.name}`, Tex.PIPE, Tex.F_CONCRETE);
+    if (!anchor) continue;
+    paintRoomTerritory(world, anchor, annex.owner);
+    decorateResearchLab(world, anchor, 80 + i, annex.owner !== ZoneFaction.CITIZEN);
+    connectRoomToPoint(world, anchor, annex.x < CX ? 'east' : 'west', CX, CY, DoorState.CLOSED);
+    for (let row = 0; row < annex.rows; row++) {
+      let prev: Room | null = null;
+      for (let col = 0; col < annex.cols; col++) {
+        const serial = 500 + i * 64 + row * 9 + col;
+        const room = tryAddSlimeRoom(
+          world,
+          col % 3 === 0 ? RoomType.STORAGE : col % 3 === 1 ? RoomType.OFFICE : RoomType.BATHROOM,
+          annex.x + 64 + col * 17 + Math.floor(rng() * 3),
+          annex.y + row * 15 + Math.floor(rng() * 3),
+          11 + (serial % 3),
+          8 + (serial % 4),
+          `${annex.name}: малый отсек ${row + 1}-${col + 1}`,
+          annex.owner === ZoneFaction.CULTIST ? Tex.BRICK : Tex.METAL,
+          annex.owner === ZoneFaction.CULTIST ? Tex.F_WATER : Tex.F_CONCRETE,
+        );
+        if (!room) continue;
+        paintRoomTerritory(world, room, annex.owner);
+        decorateMicroRoom(world, room, serial);
+        connectRoomsNarrow(world, prev ?? anchor, prev ? 'east' : 'east', room, 'west', DoorState.CLOSED);
+        prev = room;
+      }
+    }
+  }
+}
+
+function carvePointRoute(world: World, points: readonly { x: number; y: number }[], width: number, floorTex: Tex): void {
+  for (let i = 1; i < points.length; i++) {
+    carveLineWidth(world, points[i - 1].x, points[i - 1].y, points[i].x, points[i].y, width, floorTex);
+  }
+}
+
+function buildSlimeNiiMicroBlock(
+  world: World,
+  lab: Room,
+  owner: TerritoryOwner,
+  name: string,
+  cols: number,
+  rows: number,
+  seed: number,
+): void {
+  let previousRowFirst: Room | null = null;
+  for (let row = 0; row < rows; row++) {
+    let previous: Room | null = null;
+    let rowFirst: Room | null = null;
+    for (let col = 0; col < cols; col++) {
+      const serial = seed * 64 + row * 11 + col;
+      const room = tryAddSlimeRoom(
+        world,
+        col % 5 === 0 ? RoomType.BATHROOM : col % 4 === 0 ? RoomType.OFFICE : col % 3 === 0 ? RoomType.MEDICAL : RoomType.STORAGE,
+        lab.x - 26 + col * 18,
+        lab.y + lab.h + 34 + row * 15,
+        10 + (serial % 5),
+        8 + ((serial + 3) % 4),
+        `${name}: ${row + 1}-${col + 1}`,
+        col % 3 === 0 ? Tex.TILE_W : Tex.METAL,
+        col % 3 === 0 ? Tex.F_TILE : Tex.F_CONCRETE,
+      );
+      if (!room) continue;
+      paintRoomTerritory(world, room, owner);
+      decorateMicroRoom(world, room, serial);
+      if (!rowFirst) rowFirst = room;
+      if (previous) connectRoomsNarrow(world, previous, 'east', room, 'west', serial % 6 === 0 ? DoorState.CLOSED : DoorState.OPEN);
+      previous = room;
+    }
+    if (rowFirst) {
+      connectRoomsNarrow(world, previousRowFirst ?? lab, 'south', rowFirst, 'north', DoorState.CLOSED);
+      previousRowFirst = rowFirst;
+    }
+  }
+}
+
+function connectRoomsNarrow(world: World, a: Room, sideA: DoorSide, b: Room, sideB: DoorSide, state: DoorState, keyId = ''): void {
+  const da = doorSite(a, sideA);
+  const db = doorSite(b, sideB);
+  const ai = addDoorAt(world, a, da.x, da.y, state, keyId);
+  const bi = addDoorAt(world, b, db.x, db.y, state === DoorState.LOCKED ? DoorState.CLOSED : state, keyId);
+  const ad = world.doors.get(ai);
+  const bd = world.doors.get(bi);
+  if (ad) ad.roomB = b.id;
+  if (bd) bd.roomB = a.id;
+  carveLineWidth(world, da.ox, da.oy, db.ox, db.oy, 1, a.floorTex);
+}
+
+function tryAddSlimeRoom(
+  world: World,
+  type: RoomType,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  name: string,
+  wallTex: Tex,
+  floorTex: Tex,
+  sealed = false,
+): Room | null {
+  const rx = Math.floor(x);
+  const ry = Math.floor(y);
+  if (!canStampSlimeRoom(world, rx, ry, w, h)) return null;
+  return addRoom(world, type, rx, ry, w, h, name, wallTex, floorTex, sealed);
+}
+
+function canStampSlimeRoom(world: World, x: number, y: number, w: number, h: number): boolean {
+  if (x < 2 || y < 2 || x + w >= W - 2 || y + h >= W - 2) return false;
+  for (let dy = -1; dy <= h; dy++) {
+    for (let dx = -1; dx <= w; dx++) {
+      const idx = world.idx(x + dx, y + dy);
+      if (world.aptMask[idx] || world.hermoWall[idx]) return false;
+      if (world.cells[idx] === Cell.LIFT || world.cells[idx] === Cell.DOOR) return false;
+      if (world.roomMap[idx] >= 0) return false;
+    }
+  }
+  return true;
+}
+
+function paintRoomTerritory(world: World, room: Room, owner: TerritoryOwner): void {
+  for (let dy = 0; dy < room.h; dy++) {
+    for (let dx = 0; dx < room.w; dx++) {
+      world.factionControl[world.idx(room.x + dx, room.y + dy)] = owner;
+    }
+  }
+}
+
+function decorateHqCore(world: World, room: Room, serial: number): void {
+  setFeature(world, room.x + 8, room.y + 8, Feature.DESK);
+  setFeature(world, room.x + room.w - 9, room.y + 8, Feature.SHELF);
+  setFeature(world, room.x + 10, room.y + room.h - 8, Feature.TABLE);
+  setFeature(world, room.x + room.w - 10, room.y + room.h - 8, Feature.LAMP);
+  markScreenWall(world, room.x + (room.w >> 1), room.y - 1, serial + 2);
+}
+
+function decorateResearchLab(world: World, room: Room, serial: number, wet: boolean): void {
+  for (let y = room.y + 7; y < room.y + room.h - 5; y += 7) {
+    for (let x = room.x + 8; x < room.x + room.w - 8; x += 16) {
+      setFeature(world, x, y, Feature.APPARATUS);
+      if (wet && ((x + y + serial) & 1) === 0) addWetCell(world, x + 2, y);
+    }
+  }
+  if (room.type === RoomType.STORAGE) {
+    for (let x = room.x + 7; x < room.x + room.w - 6; x += 12) setFeature(world, x, room.y + 8, Feature.SHELF);
+  }
+  setFeature(world, room.x + room.w - 8, room.y + room.h - 7, wet ? Feature.SINK : Feature.LAMP);
+  markScreenWall(world, room.x + 10 + (serial % Math.max(1, room.w - 20)), room.y - 1, serial);
+  if (wet) {
+    stampSurfaceSplat(world, room.x + (room.w >> 1), room.y + (room.h >> 1), 0.5, 0.5, 7, 0.22, SEED ^ serial, 35, 145, 82, false);
+  }
+}
+
+function decorateSupportRoom(world: World, room: Room, serial: number): void {
+  switch (room.type) {
+    case RoomType.KITCHEN:
+      setFeature(world, room.x + 7, room.y + 7, Feature.STOVE);
+      setFeature(world, room.x + room.w - 7, room.y + 7, Feature.SINK);
+      setFeature(world, room.x + (room.w >> 1), room.y + room.h - 7, Feature.TABLE);
+      break;
+    case RoomType.BATHROOM:
+      setFeature(world, room.x + 6, room.y + 6, Feature.TOILET);
+      setFeature(world, room.x + room.w - 7, room.y + room.h - 7, Feature.SINK);
+      break;
+    case RoomType.STORAGE:
+      for (let x = room.x + 6; x < room.x + room.w - 5; x += 9) setFeature(world, x, room.y + 6, Feature.SHELF);
+      break;
+    case RoomType.MEDICAL:
+    case RoomType.PRODUCTION:
+      setFeature(world, room.x + 7, room.y + 7, Feature.APPARATUS);
+      setFeature(world, room.x + room.w - 7, room.y + room.h - 7, Feature.SINK);
+      break;
+    case RoomType.OFFICE:
+    case RoomType.COMMON:
+    default:
+      setFeature(world, room.x + 7, room.y + 7, Feature.DESK);
+      setFeature(world, room.x + room.w - 8, room.y + 7, Feature.SHELF);
+      setFeature(world, room.x + (room.w >> 1), room.y + room.h - 7, Feature.CHAIR);
+      break;
+  }
+  if (serial % 3 === 0) markScreenWall(world, room.x + (room.w >> 1), room.y - 1, serial);
+}
+
+function decorateMicroRoom(world: World, room: Room, serial: number): void {
+  const primary = room.type === RoomType.BATHROOM ? Feature.SINK
+    : room.type === RoomType.MEDICAL || room.type === RoomType.PRODUCTION ? Feature.APPARATUS
+      : room.type === RoomType.OFFICE ? Feature.DESK
+        : room.type === RoomType.COMMON || room.type === RoomType.SMOKING ? Feature.TABLE
+          : Feature.SHELF;
+  setFeature(world, room.x + Math.max(2, Math.min(room.w - 3, 3 + (serial % 4))), room.y + Math.max(2, Math.min(room.h - 3, 3 + (serial % 3))), primary);
+  if (room.w > 9 && room.h > 7) {
+    const secondary = primary === Feature.SHELF ? Feature.APPARATUS : Feature.SHELF;
+    setFeature(world, room.x + room.w - 4, room.y + room.h - 4, secondary);
+  }
+  if (serial % 13 === 0) markScreenWall(world, room.x + (room.w >> 1), room.y - 1, serial);
+}
+
+function isSlimeNiiAmbientNpc(entity: Entity): boolean {
+  return entity.type === EntityType.NPC &&
+    !entity.plotNpcId &&
+    !entity.persistentNpcId &&
+    entity.alifeId === undefined &&
+    entity.questId === -1 &&
+    entity.faction !== undefined;
+}
+
+function slimeNiiTerritorySpawnCells(world: World): Map<TerritoryOwner, number[]> {
+  const cells = new Map<TerritoryOwner, number[]>();
+  for (const spec of SLIME_NII_HQ_SPECS) cells.set(spec.owner, []);
+  for (let i = 0; i < W * W; i++) {
+    const cell = world.cells[i];
+    if (cell !== Cell.FLOOR && cell !== Cell.WATER) continue;
+    if (world.aptMask[i] || world.hermoWall[i] || world.containerMap.has(i) || world.features[i] === Feature.LIFT_BUTTON) continue;
+    const owner = world.factionControl[i] as TerritoryOwner;
+    const list = cells.get(owner);
+    if (list) list.push(i);
+  }
+  return cells;
+}
+
+export function alignSlimeNiiAmbientNpcTerritory(world: World, entities: Entity[]): void {
+  const cells = slimeNiiTerritorySpawnCells(world);
+  const offsets = new Uint16Array(8);
+  for (const entity of entities) {
+    if (!isSlimeNiiAmbientNpc(entity) || entity.faction === undefined) continue;
+    const owner = factionToTerritoryOwner(entity.faction);
+    const list = cells.get(owner);
+    if (!list || list.length === 0) continue;
+    const offset = offsets[owner]++ | 0;
+    const cell = list[(entity.id * 113 + offset * 431) % list.length];
+    entity.x = (cell % W) + 0.5;
+    entity.y = ((cell / W) | 0) + 0.5;
+    entity.assignedRoomId = world.roomMap[cell] >= 0 ? world.roomMap[cell] : -1;
+    if (entity.ai) {
+      entity.ai.tx = cell % W;
+      entity.ai.ty = (cell / W) | 0;
+      entity.ai.path = [];
+      entity.ai.pi = 0;
+      entity.ai.stuck = 0;
+    }
+  }
 }
 
 function initWorld(world: World): void {

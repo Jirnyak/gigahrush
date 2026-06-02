@@ -1,8 +1,9 @@
 import { test } from 'node:test';
 import * as assert from 'node:assert/strict';
 
-import { EntityType, Faction, MonsterKind, Occupation, RoomType, Tex, type Entity } from '../src/core/types';
+import { EntityType, Faction, MonsterKind, Occupation, RoomType, Tex, W, ZoneFaction, type Entity } from '../src/core/types';
 import { auditReachability } from '../src/core/world';
+import { HUMAN_TERRITORY_OWNERS, factionToTerritoryOwner } from '../src/data/factions';
 import { designFloorById } from '../src/data/design_floors';
 import { designFloorPopulationProfile } from '../src/data/design_floor_population';
 import { generateDesignFloor } from '../src/gen/design_floors/manifest';
@@ -10,6 +11,7 @@ import type { ProductionBeltGeneration } from '../src/gen/design_floors/producti
 import { craftStationCells } from '../src/gen/craft_stations';
 import { getCellHazardMoveMultiplier } from '../src/systems/cell_hazards';
 import { getRouteCueMarkers } from '../src/systems/route_cues';
+import { countTerritoryCells, territoryHqAnchors, territoryOwnerAt, territoryRoomOwner } from '../src/systems/territory';
 
 function roomTypeForEntity(gen: ProductionBeltGeneration, entity: { x: number; y: number }): RoomType | undefined {
   const cell = gen.world.idx(Math.floor(entity.x), Math.floor(entity.y));
@@ -19,6 +21,19 @@ function roomTypeForEntity(gen: ProductionBeltGeneration, entity: { x: number; y
 
 function weightOf<T>(items: readonly { value: T; weight: number }[], value: T): number {
   return items.find(item => item.value === value)?.weight ?? 0;
+}
+
+function hermeticShellCells(gen: ProductionBeltGeneration, roomId: number): number {
+  const room = gen.world.rooms[roomId];
+  let cells = 0;
+  for (let dy = -1; dy <= room.h; dy++) {
+    for (let dx = -1; dx <= room.w; dx++) {
+      if (dx >= 0 && dx < room.w && dy >= 0 && dy < room.h) continue;
+      const idx = gen.world.idx(room.x + dx, room.y + dy);
+      if (gen.world.hermoWall[idx]) cells++;
+    }
+  }
+  return cells;
 }
 
 test('production belt profile matches the Floor 13 industrial density target', () => {
@@ -98,6 +113,76 @@ test('production belt generation exposes repair, theft, bad batch and industrial
   assert.equal(workerBand >= 100, true, `worker band ${workerBand}`);
   assert.equal(monsterBand >= Math.floor(monsters.length * 0.65), true, `monster band ${monsterBand}/${monsters.length}`);
   assert.equal(monsters.some(entity => entity.monsterKind === MonsterKind.ROBOT || entity.monsterKind === MonsterKind.TRUBNYY_AVTOMAT), true);
+});
+
+test('production belt full route adds mid/micro bays and cell-first faction HQs', () => {
+  const gen = generateDesignFloor('production_belt', 61061) as ProductionBeltGeneration;
+  const reachable = auditReachability(gen.world, gen.world.idx(Math.floor(gen.spawnX), Math.floor(gen.spawnY))).reachable;
+  const reachableCells = reachable.reduce((sum, value) => sum + value, 0);
+  const bayRooms = gen.world.rooms.filter(room =>
+    room.name.includes('бай') ||
+    room.name.includes('остров') ||
+    room.name.includes('двор') ||
+    room.name.includes('миништаб') ||
+    room.name.includes('штаб ленты')
+  );
+  const microRooms = gen.world.rooms.filter(room => room.name.includes('микроузел'));
+  const anchors = territoryHqAnchors(gen.world);
+  const counts = new Map(countTerritoryCells(gen.world).map(row => [row.owner, row.cells]));
+  const targetShares = new Map<ZoneFaction, number>([
+    [ZoneFaction.CITIZEN, 0.14],
+    [ZoneFaction.LIQUIDATOR, 0.50],
+    [ZoneFaction.CULTIST, 0.06],
+    [ZoneFaction.SCIENTIST, 0.18],
+    [ZoneFaction.WILD, 0.12],
+  ]);
+  const hqTitles = new Map<ZoneFaction, string>([
+    [ZoneFaction.CITIZEN, 'Гражданский миништаб смены 14'],
+    [ZoneFaction.LIQUIDATOR, 'Ликвидаторский штаб ленты 14'],
+    [ZoneFaction.CULTIST, 'Скрытый культовый миништаб'],
+    [ZoneFaction.SCIENTIST, 'Научный миништаб контроля брака'],
+    [ZoneFaction.WILD, 'Дикий миништаб ночной тары'],
+  ]);
+
+  assert.equal(gen.world.rooms.length >= 340, true, `rooms ${gen.world.rooms.length}`);
+  assert.equal(gen.world.doors.size >= 280, true, `doors ${gen.world.doors.size}`);
+  assert.equal(reachableCells >= 190_000, true, `reachable ${reachableCells}`);
+  assert.equal(bayRooms.length >= 120, true, `bay rooms ${bayRooms.length}`);
+  assert.equal(microRooms.length >= 80, true, `micro rooms ${microRooms.length}`);
+
+  const anchorBuckets = new Set<string>();
+  for (const owner of HUMAN_TERRITORY_OWNERS) {
+    const anchor = anchors.find(candidate => candidate.owner === owner);
+    const targetShare = targetShares.get(owner)!;
+    const share = (counts.get(owner) ?? 0) / (W * W);
+    const title = hqTitles.get(owner)!;
+    assert.ok(anchor, `missing HQ anchor ${ZoneFaction[owner]}`);
+    const room = gen.world.rooms[anchor.roomId];
+    const supportRooms = gen.world.rooms.filter(candidate => candidate.id !== room.id && candidate.name.startsWith(`${title}:`));
+    anchorBuckets.add(`${Math.floor(anchor.x / 128)}:${Math.floor(anchor.y / 128)}`);
+    assert.equal(room.type, RoomType.HQ, `HQ type ${ZoneFaction[owner]}`);
+    assert.equal(room.sealed, true, `HQ sealed ${ZoneFaction[owner]}`);
+    assert.equal(room.name, `${title}: гермоядро`);
+    assert.equal(supportRooms.length >= 5, true, `support rooms ${ZoneFaction[owner]}: ${supportRooms.length}`);
+    assert.equal(hermeticShellCells(gen, room.id) > 0, true, `hermetic shell ${ZoneFaction[owner]}`);
+    assert.equal(territoryRoomOwner(gen.world, room.id), owner, `room owner ${ZoneFaction[owner]}`);
+    assert.equal(territoryOwnerAt(gen.world, anchor.x, anchor.y), owner, `anchor owner ${ZoneFaction[owner]}`);
+    assert.equal((counts.get(owner) ?? 0) > 0, true, `owned cells ${ZoneFaction[owner]}`);
+    assert.equal(Math.abs(share - targetShare) <= 0.025, true, `share ${ZoneFaction[owner]}: ${share}`);
+  }
+  assert.equal(anchorBuckets.size >= HUMAN_TERRITORY_OWNERS.length, true, `anchor buckets ${anchorBuckets.size}`);
+  assert.equal((counts.get(ZoneFaction.LIQUIDATOR) ?? 0) > (counts.get(ZoneFaction.SCIENTIST) ?? 0), true);
+
+  const ambientNpcs = gen.entities.filter(entity =>
+    entity.type === EntityType.NPC &&
+    entity.name?.startsWith('Производственный пояс: работник') === true &&
+    entity.faction !== undefined
+  );
+  const ownTerritoryNpcs = ambientNpcs.filter(entity =>
+    territoryOwnerAt(gen.world, entity.x, entity.y) === factionToTerritoryOwner(entity.faction!)
+  );
+  assert.equal(ambientNpcs.length >= 900, true, `ambient npcs ${ambientNpcs.length}`);
+  assert.equal(ownTerritoryNpcs.length >= Math.floor(ambientNpcs.length * 0.9), true, `own territory ${ownTerritoryNpcs.length}/${ambientNpcs.length}`);
 });
 
 test('production belt exposes reachable craft lathe and disassembly workbench', () => {

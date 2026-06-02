@@ -85,7 +85,9 @@ export const enum Tex {
   F_CARPET_EDGE_BASE = 181, // 16 variants: 181..196
   // procedural wall-mounted screens: 8 program variants × 4 animation frames
   SCREEN_BASE     = 197, // 32 variants: 197..228
-  COUNT           = 229,
+  // wall-snake larva body block
+  LARVA_BODY      = 229,
+  COUNT           = 230,
 }
 
 // ── Floor levels (Z-axis) ────────────────────────────────────────
@@ -289,7 +291,10 @@ export enum ZoneFaction {
   CULTIST,     // культисты
   SAMOSBOR,    // самосбор (захваченная зона)
   WILD,        // дикие
+  SCIENTIST,   // ученые / НИИ
 }
+
+export type TerritoryOwner = ZoneFaction;
 
 // ── Zones (64 macro-regions ~128×128) ────────────────────────────
 export interface Zone {
@@ -1154,6 +1159,9 @@ export interface GameState {
   uiSettingsView: 'interface' | 'graphics';
   uiSettingsSel: number;
   uiSettingsScroll: number;
+  showMapLegend: boolean;       // separate full-map legend/settings screen
+  mapLegendSel: number;
+  mapLegendScroll: number;
   npcLogRadiusMeters?: number;  // audible NPC bark/log radius; default supplied by AI bark context
   msgLog: LogEntry[];          // persistent message log with timestamps
   dmgFlash: number;           // damage vignette intensity 0..1, decays over time
@@ -1244,12 +1252,13 @@ export interface InputState {
   sprint: boolean;              // Shift by default — movement speed burst
   attack: boolean; interact: boolean; pickup: boolean;
   interactHeld: boolean;       // raw hold state for pressure/resistance mechanics
-  map: boolean; inv: boolean;
+  map: boolean; mapLegend: boolean; inv: boolean;
   invUp: boolean; invDn: boolean; invLeft: boolean; invRight: boolean;
   use: boolean;
   escape: boolean;
   questLog: boolean;
   mouseAttack: boolean;
+  mouseUse: boolean;
   attrStr: boolean; attrAgi: boolean; attrInt: boolean;  // 1,2,3 keys for attribute spending
   debugScreen: boolean;
   pee: boolean;                 // P key — urinate
@@ -1260,8 +1269,8 @@ export interface InputState {
   controls: boolean;            // Tab by default — hotkey / rebind screen
   uiSettings: boolean;          // U key — configurable HUD element screen
   controlEdit: boolean;         // reserved fixed command slot for hotkey screens
-  controlReset: boolean;        // reserved fixed command slot for settings screens
-  controlClose: boolean;        // fixed Backspace/Delete close/back command
+  controlReset: boolean;        // fixed Backspace default-bind reset command
+  controlClose: boolean;        // fixed Space close/back command
   mouse: { dx: number; dy: number; locked: boolean; };
   touch: { moveX: number; moveY: number; lookX: number; lookY: number; active: boolean; };
 }

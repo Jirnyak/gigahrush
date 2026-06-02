@@ -51,15 +51,15 @@ export const RUNTIME_TOPOLOGY_LIMITS = {
 export const RUNTIME_TOPOLOGY_CONTRACTS: readonly RuntimeTopologyContract[] = [
   {
     id: 'wall_snake',
-    cadence: '0.24-0.54s independent phased head step per snake; contact warning checked every update',
+    cadence: '0.78s batched larva topology tick; snakes keep internal phase but cell dirty/path cache invalidation happens only on the batch, with one bounded flesh regrowth attempt',
     maxArenaCells: RUNTIME_TOPOLOGY_LIMITS.wallSnakeMaxSnakes * RUNTIME_TOPOLOGY_LIMITS.wallSnakeMaxPathCells,
     maxArenaCount: RUNTIME_TOPOLOGY_LIMITS.wallSnakeMaxSnakes,
-    cacheKey: 'WeakMap<World, SnakeFieldRuntime | null> from [wall_snake:*] room tags',
+    cacheKey: 'WeakMap<World, SnakeFieldRuntime | null> from [wall_snake:*] room tags and current meat/larva cells; visual ticks are batched to avoid per-frame navigation rebakes',
     invalidatesOn: ['new World object', 'route transition/load', 'samosbor rebuild'],
-    dirtyFlags: ['cells'],
+    dirtyFlags: ['cells', 'wallTex', 'floorTex'],
     routeCriticalProtections: ['lift cells', 'doors', 'abyss', 'aptMask', 'hermoWall', 'containers'],
-    counterplay: ['step off the warned head cell', 'bait with metal/food/mushroom mass', 'wait for the tail gap'],
-    saveBehavior: 'No custom save section; rebuilt from room tag and current World cells.',
+    counterplay: ['step off the warned black head cell', 'bait with metal/food/raw meat/mushroom mass', 'wait for the eaten tail cavern'],
+    saveBehavior: 'No custom save section; larvae and flesh regrowth are rebuilt from room tags and current World cells/textures.',
   },
   {
     id: 'living_tunnels',

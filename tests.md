@@ -19,7 +19,7 @@ Use the existing npm scripts as separate gates:
 
 Do not weaken a test just to make the fast gate pass. Move broad coverage to the correct gate, shrink duplicated setup, or replace runtime generation with a cheaper direct invariant.
 
-`npm run test:unit` is selected by `scripts/run-unit-tests.mjs`. The selector skips per-item content files named `items_*.test.ts` and files that import `src/gen/*`; those files are reserved for `npm run test:generation`, which still runs the full `tests/*.test.ts` set with `GIGAHRUSH_GENERATION_MATRIX=1`.
+`npm run test:unit` is selected by `scripts/run-unit-tests.mjs`. The selector skips per-item content files named `items_*.test.ts` and files that import `src/gen/*`; those files are reserved for `npm run test:generation`. The generation runner uses the matching selector in `scripts/run-generation-tests.mjs`, sets `GIGAHRUSH_GENERATION_MATRIX=1`, and runs selected files one by one so the current slow or failing generator file is visible in the log.
 
 ## Unit Gate Budget
 

@@ -5,7 +5,7 @@ import {
   FloorLevel, ZoneFaction, EntityType, AIGoal,
   MonsterKind, ContainerKind,
   type Entity, type Room, type Item, type WorldContainer,
-  type GameState, type WorldEvent,
+  type GameState, type WorldEvent, type TerritoryOwner,
 } from '../../core/types';
 import { World } from '../../core/world';
 import { MONSTERS } from '../../entities/monster';
@@ -199,9 +199,116 @@ interface DarknessRoomSpec {
   fog?: number;
 }
 
+interface DarknessSupportRoomSpec {
+  type: RoomType;
+  name: string;
+  dx: number;
+  dy: number;
+  w: number;
+  h: number;
+  feature: Feature;
+}
+
+interface DarknessHqCompoundSpec {
+  owner: TerritoryOwner;
+  cx: number;
+  cy: number;
+  hqName: string;
+  support: readonly DarknessSupportRoomSpec[];
+}
+
+interface DarknessStationSpec {
+  cx: number;
+  cy: number;
+  name: string;
+  fog: number;
+  owner?: TerritoryOwner;
+}
+
 const ROOM_ORIGIN_X = (W >> 1) - 36;
 const ROOM_ORIGIN_Y = (W >> 1) - 10;
 const DARKNESS_LIGHT_BUDGET = 8;
+
+const DARKNESS_HQ_COMPOUNDS: readonly DarknessHqCompoundSpec[] = [
+  {
+    owner: ZoneFaction.CITIZEN,
+    cx: 176,
+    cy: 438,
+    hqName: 'Гражданский штаб последней лампы',
+    support: [
+      { type: RoomType.KITCHEN, name: 'Кухня гражданского светового пайка', dx: -54, dy: -6, w: 22, h: 10, feature: Feature.STOVE },
+      { type: RoomType.BATHROOM, name: 'Санузел гражданского убежища', dx: -10, dy: 22, w: 18, h: 9, feature: Feature.TOILET },
+      { type: RoomType.STORAGE, name: 'Склад лампового стекла граждан', dx: 30, dy: -6, w: 20, h: 10, feature: Feature.SHELF },
+      { type: RoomType.MEDICAL, name: 'Медпункт темного привала', dx: -10, dy: -28, w: 22, h: 10, feature: Feature.DESK },
+      { type: RoomType.COMMON, name: 'Общая комната тихого счета', dx: -54, dy: 18, w: 24, h: 10, feature: Feature.TABLE },
+    ],
+  },
+  {
+    owner: ZoneFaction.LIQUIDATOR,
+    cx: 822,
+    cy: 226,
+    hqName: 'Пост ликвидаторов черного сектора',
+    support: [
+      { type: RoomType.STORAGE, name: 'Оружейный шкаф черного сектора', dx: -54, dy: -6, w: 22, h: 10, feature: Feature.SHELF },
+      { type: RoomType.BATHROOM, name: 'Санпропускник черного сектора', dx: -8, dy: 22, w: 18, h: 9, feature: Feature.SINK },
+      { type: RoomType.OFFICE, name: 'Журнал темной зачистки', dx: 30, dy: -6, w: 22, h: 10, feature: Feature.DESK },
+      { type: RoomType.MEDICAL, name: 'Медкомната после вспышки', dx: -10, dy: -28, w: 22, h: 10, feature: Feature.TABLE },
+      { type: RoomType.COMMON, name: 'Комната смены без света', dx: 30, dy: 18, w: 24, h: 10, feature: Feature.CHAIR },
+    ],
+  },
+  {
+    owner: ZoneFaction.SCIENTIST,
+    cx: 246,
+    cy: 214,
+    hqName: 'НИИ остаточного фотона',
+    support: [
+      { type: RoomType.OFFICE, name: 'Кабинет протокола фотона', dx: -54, dy: -6, w: 24, h: 10, feature: Feature.DESK },
+      { type: RoomType.PRODUCTION, name: 'Мастерская темного спектра', dx: 30, dy: -6, w: 24, h: 10, feature: Feature.APPARATUS },
+      { type: RoomType.MEDICAL, name: 'Измерительная медкомната фотона', dx: -10, dy: -28, w: 22, h: 10, feature: Feature.SCREEN },
+      { type: RoomType.STORAGE, name: 'Архив погасших колб', dx: -10, dy: 22, w: 20, h: 9, feature: Feature.SHELF },
+      { type: RoomType.KITCHEN, name: 'Чайник лабораторной темноты', dx: -54, dy: 18, w: 22, h: 10, feature: Feature.STOVE },
+    ],
+  },
+  {
+    owner: ZoneFaction.WILD,
+    cx: 806,
+    cy: 806,
+    hqName: 'Дикий штаб слепого привала',
+    support: [
+      { type: RoomType.STORAGE, name: 'Разобранная кладовая слепого привала', dx: -54, dy: -6, w: 24, h: 10, feature: Feature.SHELF },
+      { type: RoomType.SMOKING, name: 'Курилка людей без фонаря', dx: 30, dy: -6, w: 22, h: 10, feature: Feature.TABLE },
+      { type: RoomType.KITCHEN, name: 'Кухня копченого пайка', dx: -10, dy: 22, w: 22, h: 9, feature: Feature.STOVE },
+      { type: RoomType.BATHROOM, name: 'Разбитый умывальник диких', dx: -10, dy: -28, w: 18, h: 10, feature: Feature.SINK },
+      { type: RoomType.COMMON, name: 'Общий угол самозахвата тьмы', dx: 30, dy: 18, w: 24, h: 10, feature: Feature.CHAIR },
+    ],
+  },
+  {
+    owner: ZoneFaction.CULTIST,
+    cx: 240,
+    cy: 806,
+    hqName: 'Скрытый культовый штаб черного имени',
+    support: [
+      { type: RoomType.COMMON, name: 'Тихая комната черного имени', dx: -54, dy: -6, w: 24, h: 10, feature: Feature.TABLE },
+      { type: RoomType.STORAGE, name: 'Кладовая свечей без огня', dx: 30, dy: -6, w: 22, h: 10, feature: Feature.SHELF },
+      { type: RoomType.KITCHEN, name: 'Кухня ритуального кипятка во тьме', dx: -10, dy: 22, w: 24, h: 9, feature: Feature.STOVE },
+      { type: RoomType.OFFICE, name: 'Писарская комната возвращаемого имени', dx: -10, dy: -28, w: 22, h: 10, feature: Feature.DESK },
+      { type: RoomType.BATHROOM, name: 'Умывальник свечного следа', dx: -54, dy: 18, w: 20, h: 10, feature: Feature.SINK },
+    ],
+  },
+];
+
+const DARKNESS_STATIONS: readonly DarknessStationSpec[] = [
+  { cx: 502, cy: 146, name: 'Верхняя линза потухших ламп', fog: 70, owner: ZoneFaction.SCIENTIST },
+  { cx: 696, cy: 130, name: 'Пультовая слепого контура', fog: 76, owner: ZoneFaction.LIQUIDATOR },
+  { cx: 890, cy: 404, name: 'Правая станция черной тяги', fog: 84, owner: ZoneFaction.WILD },
+  { cx: 874, cy: 624, name: 'Биржа чужого дыхания', fog: 88, owner: ZoneFaction.WILD },
+  { cx: 520, cy: 888, name: 'Нижний архив возвращенного следа', fog: 82, owner: ZoneFaction.CULTIST },
+  { cx: 128, cy: 664, name: 'Левый двор низкого света', fog: 80, owner: ZoneFaction.CULTIST },
+  { cx: 124, cy: 282, name: 'Северный шкаф аварийного быта', fog: 72, owner: ZoneFaction.CITIZEN },
+  { cx: 512, cy: 704, name: 'Центральный карман пустого коридора', fog: 92, owner: ZoneFaction.SAMOSBOR },
+  { cx: 344, cy: 904, name: 'Склад темного обхода', fog: 86, owner: ZoneFaction.WILD },
+  { cx: 928, cy: 870, name: 'Угловой пост нижнего выдоха', fog: 90, owner: ZoneFaction.LIQUIDATOR },
+];
 
 const ROOM_SPECS: readonly DarknessRoomSpec[] = [
   {
@@ -963,6 +1070,11 @@ function carveDarknessDisc(
       if (dx * dx + dy * dy > r2) continue;
       const ci = world.idx(cx + dx, cy + dy);
       if (world.cells[ci] === Cell.LIFT) continue;
+      if (world.cells[ci] === Cell.DOOR) {
+        world.floorTex[ci] = floorTex;
+        world.fog[ci] = Math.max(world.fog[ci], fog);
+        continue;
+      }
       world.cells[ci] = Cell.FLOOR;
       if (world.roomMap[ci] < 0) world.roomMap[ci] = roomId;
       world.floorTex[ci] = floorTex;
@@ -1437,6 +1549,316 @@ function carveLightPocket(world: World, cx: number, cy: number, radius: number, 
   setFloorFeature(world, cx + 2, cy + 1, Feature.SHELF);
 }
 
+function canStampDarknessExpandedRoom(world: World, x: number, y: number, w: number, h: number): boolean {
+  if (x < 3 || y < 3 || x + w >= W - 3 || y + h >= W - 3) return false;
+  for (let dy = -1; dy <= h; dy++) {
+    for (let dx = -1; dx <= w; dx++) {
+      const ci = world.idx(x + dx, y + dy);
+      if (world.aptMask[ci]) return false;
+      if (world.cells[ci] !== Cell.WALL) return false;
+      if (world.roomMap[ci] >= 0) return false;
+      if (world.hermoWall[ci]) return false;
+    }
+  }
+  return true;
+}
+
+function stampDarknessExpandedRoom(
+  world: World,
+  type: RoomType,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  name: string,
+  fog: number,
+  wallTex = Tex.DARK,
+  floorTex = Tex.F_VOID,
+): Room | null {
+  if (!canStampDarknessExpandedRoom(world, x, y, w, h)) return null;
+  const room = stampRoom(world, world.rooms.length, type, x, y, w, h, -1);
+  room.name = name;
+  applyRoomLook(world, room, wallTex, floorTex, fog);
+  return room;
+}
+
+function paintDarknessRoomOwner(world: World, room: Room, owner: TerritoryOwner): void {
+  for (let dy = 0; dy < room.h; dy++) {
+    for (let dx = 0; dx < room.w; dx++) {
+      const ci = world.idx(room.x + dx, room.y + dy);
+      if (world.roomMap[ci] === room.id && !world.aptMask[ci]) world.factionControl[ci] = owner;
+    }
+  }
+  for (const doorIdx of room.doors) {
+    if (!world.aptMask[doorIdx]) world.factionControl[doorIdx] = owner;
+  }
+}
+
+function decorateDarknessSupportRoom(world: World, room: Room, feature: Feature): void {
+  setFloorFeature(world, room.x + Math.max(1, Math.floor(room.w / 3)), room.y + Math.max(1, Math.floor(room.h / 2)), feature);
+  if (room.type === RoomType.BATHROOM) {
+    setFloorFeature(world, room.x + room.w - 3, room.y + Math.max(1, Math.floor(room.h / 2)), Feature.SINK);
+  } else if (room.type === RoomType.KITCHEN) {
+    setFloorFeature(world, room.x + room.w - 3, room.y + Math.max(1, Math.floor(room.h / 2)), Feature.TABLE);
+  } else if (room.type === RoomType.PRODUCTION || room.type === RoomType.MEDICAL) {
+    setFloorFeature(world, room.x + room.w - 3, room.y + 2, Feature.APPARATUS);
+  } else if (room.type === RoomType.OFFICE) {
+    setFloorFeature(world, room.x + room.w - 3, room.y + 2, Feature.SCREEN);
+  }
+}
+
+function hardenDarknessHqRoom(world: World, room: Room, owner: TerritoryOwner): void {
+  room.type = RoomType.HQ;
+  room.sealed = true;
+  room.wallTex = Tex.HERMO_WALL;
+  for (let dy = -1; dy <= room.h; dy++) {
+    for (let dx = -1; dx <= room.w; dx++) {
+      const ci = world.idx(room.x + dx, room.y + dy);
+      const inside = dx >= 0 && dx < room.w && dy >= 0 && dy < room.h;
+      if (inside) {
+        if (world.roomMap[ci] === room.id) world.factionControl[ci] = owner;
+        continue;
+      }
+      if (world.cells[ci] !== Cell.WALL || world.aptMask[ci]) continue;
+      world.hermoWall[ci] = 1;
+      world.wallTex[ci] = Tex.HERMO_WALL;
+    }
+  }
+  for (const doorIdx of room.doors) {
+    const door = world.doors.get(doorIdx);
+    if (door) {
+      door.state = DoorState.HERMETIC_OPEN;
+      door.timer = 0;
+    }
+    world.hermoWall[doorIdx] = 1;
+    world.wallTex[doorIdx] = Tex.HERMO_WALL;
+    world.factionControl[doorIdx] = owner;
+  }
+}
+
+export function reinforceDarknessAuthoredHqTerritory(world: World): void {
+  for (const compound of DARKNESS_HQ_COMPOUNDS) {
+    const hq = world.rooms.find(room => room.name === compound.hqName);
+    if (!hq) continue;
+    hardenDarknessHqRoom(world, hq, compound.owner);
+    paintDarknessRoomOwner(world, hq, compound.owner);
+    for (const support of compound.support) {
+      const room = world.rooms.find(candidate => candidate.name === support.name);
+      if (!room) continue;
+      room.type = support.type;
+      paintDarknessRoomOwner(world, room, compound.owner);
+      for (const doorIdx of room.doors) world.factionControl[doorIdx] = compound.owner;
+    }
+  }
+  world.markWallTexDirty();
+  world.markFeaturesDirty(false);
+}
+
+function buildDarknessHqCompound(world: World, spec: DarknessHqCompoundSpec): Room | null {
+  const hq = stampDarknessExpandedRoom(
+    world,
+    RoomType.HQ,
+    spec.cx - 11,
+    spec.cy - 7,
+    22,
+    14,
+    spec.hqName,
+    44,
+    Tex.HERMO_WALL,
+    Tex.F_CONCRETE,
+  );
+  if (!hq) return null;
+  paintDarknessRoomOwner(world, hq, spec.owner);
+  setFloorFeature(world, spec.cx - 4, spec.cy, Feature.TABLE);
+  setFloorFeature(world, spec.cx + 4, spec.cy, Feature.SCREEN);
+
+  for (const support of spec.support) {
+    const room = stampDarknessExpandedRoom(
+      world,
+      support.type,
+      spec.cx + support.dx,
+      spec.cy + support.dy,
+      support.w,
+      support.h,
+      support.name,
+      52,
+      support.type === RoomType.BATHROOM ? Tex.TILE_W : Tex.DARK,
+      support.type === RoomType.BATHROOM ? Tex.F_TILE : Tex.F_CONCRETE,
+    );
+    if (!room) continue;
+    paintDarknessRoomOwner(world, room, spec.owner);
+    decorateDarknessSupportRoom(world, room, support.feature);
+    connectRoomCenters(world, hq, room);
+  }
+
+  return hq;
+}
+
+function buildDarknessStationBlock(world: World, spec: DarknessStationSpec, ordinal: number, rng: () => number): Room | null {
+  const hub = stampDarknessExpandedRoom(
+    world,
+    RoomType.COMMON,
+    spec.cx - 17,
+    spec.cy - 10,
+    34,
+    20,
+    spec.name,
+    spec.fog,
+    Tex.VOID_WALL,
+    Tex.F_VOID,
+  );
+  if (!hub) return null;
+  if (spec.owner !== undefined) paintDarknessRoomOwner(world, hub, spec.owner);
+  setFloorFeature(world, spec.cx - 5, spec.cy, Feature.APPARATUS);
+  setFloorFeature(world, spec.cx + 5, spec.cy, Feature.SHELF);
+
+  const supportTypes = [
+    RoomType.STORAGE,
+    RoomType.PRODUCTION,
+    RoomType.OFFICE,
+    RoomType.BATHROOM,
+    RoomType.COMMON,
+    RoomType.STORAGE,
+  ] as const;
+  const supports = [
+    { x: spec.cx - 58, y: spec.cy - 6, w: 20, h: 10 },
+    { x: spec.cx + 38, y: spec.cy - 6, w: 22, h: 10 },
+    { x: spec.cx - 10, y: spec.cy - 38, w: 22, h: 10 },
+    { x: spec.cx - 10, y: spec.cy + 28, w: 18, h: 9 },
+    { x: spec.cx - 42, y: spec.cy + 24, w: 22, h: 9 },
+    { x: spec.cx + 22, y: spec.cy + 24, w: 20, h: 9 },
+  ] as const;
+  for (let i = 0; i < supports.length; i++) {
+    const p = supports[i];
+    const room = stampDarknessExpandedRoom(
+      world,
+      supportTypes[i],
+      p.x,
+      p.y,
+      p.w,
+      p.h,
+      `${spec.name}: боковой отсек ${i + 1}`,
+      spec.fog + 4,
+      Tex.DARK,
+      i === 3 ? Tex.F_TILE : Tex.F_CONCRETE,
+    );
+    if (!room) continue;
+    if (spec.owner !== undefined) paintDarknessRoomOwner(world, room, spec.owner);
+    decorateDarknessSupportRoom(world, room, i === 0 || i === 5 ? Feature.SHELF : i === 1 ? Feature.MACHINE : Feature.TABLE);
+    connectRoomCenters(world, hub, room);
+  }
+
+  const microTypes = [
+    RoomType.STORAGE,
+    RoomType.OFFICE,
+    RoomType.BATHROOM,
+    RoomType.COMMON,
+    RoomType.STORAGE,
+    RoomType.PRODUCTION,
+    RoomType.SMOKING,
+    RoomType.STORAGE,
+  ] as const;
+  for (let i = 0; i < 10; i++) {
+    const angle = ((Math.PI * 2) / 10) * i + ordinal * 0.17;
+    const radius = 46 + (i % 3) * 8 + Math.floor(rng() * 5);
+    const w = 7 + (i % 2) * 3;
+    const h = 5 + (i % 3);
+    const x = world.wrap(Math.round(spec.cx + Math.cos(angle) * radius) - (w >> 1));
+    const y = world.wrap(Math.round(spec.cy + Math.sin(angle) * radius) - (h >> 1));
+    if (x < 3 || y < 3 || x + w >= W - 3 || y + h >= W - 3) continue;
+    const room = stampDarknessExpandedRoom(
+      world,
+      microTypes[i % microTypes.length],
+      x,
+      y,
+      w,
+      h,
+      `${spec.name}: микрокомната ${i + 1}`,
+      spec.fog + 8,
+      Tex.DARK,
+      i % 4 === 2 ? Tex.F_TILE : Tex.F_VOID,
+    );
+    if (!room) continue;
+    if (spec.owner !== undefined && i % 3 !== 0) paintDarknessRoomOwner(world, room, spec.owner);
+    decorateDarknessSupportRoom(world, room, i % 4 === 0 ? Feature.SHELF : i % 4 === 1 ? Feature.DESK : i % 4 === 2 ? Feature.SINK : Feature.CHAIR);
+    connectRoomCenters(world, hub, room);
+  }
+
+  return hub;
+}
+
+function widenDarknessRoute(world: World, a: Room, b: Room, radius: number, fog: number): void {
+  connectRoomCenters(world, a, b);
+  carveDarknessPathCells(world, centerX(a), centerY(a), centerX(b), centerY(b), radius, fog, Tex.F_VOID);
+  addDeadLampRow(world, a, b);
+}
+
+function retouchDarknessExpansion(world: World): void {
+  for (let i = 0; i < W * W; i++) {
+    const cell = world.cells[i];
+    if (cell === Cell.WALL) {
+      if (world.wallTex[i] !== Tex.HERMO_WALL && world.wallTex[i] !== Tex.VOID_WALL) world.wallTex[i] = Tex.DARK;
+      continue;
+    }
+    if (cell === Cell.FLOOR || cell === Cell.DOOR) {
+      if (world.roomMap[i] < 0) {
+        world.floorTex[i] = Tex.F_VOID;
+        world.fog[i] = Math.max(world.fog[i], 70);
+      }
+    }
+  }
+  world.markFloorTexDirty();
+  world.markWallTexDirty();
+  world.markFogDirty();
+  world.markFeaturesDirty(false);
+}
+
+function expandDarknessMidMicroLayer(world: World, rng: () => number): void {
+  const entry = darknessRoomByKey(world, 'entry');
+  const generator = darknessRoomByKey(world, 'generator');
+  const tollGate = darknessRoomByKey(world, 'toll_gate');
+  const emergency = darknessRoomByKey(world, 'emergency');
+  const trace = darknessRoomByKey(world, 'trace');
+  if (!entry || !generator || !tollGate || !emergency || !trace) return;
+
+  const hqRooms: Room[] = [];
+  for (const compound of DARKNESS_HQ_COMPOUNDS) {
+    const hq = buildDarknessHqCompound(world, compound);
+    if (hq) hqRooms.push(hq);
+  }
+
+  const stationRooms: Room[] = [];
+  for (let i = 0; i < DARKNESS_STATIONS.length; i++) {
+    const station = buildDarknessStationBlock(world, DARKNESS_STATIONS[i], i, rng);
+    if (station) stationRooms.push(station);
+  }
+
+  const humanLoop = [entry, hqRooms[0], stationRooms[6], hqRooms[2], stationRooms[0], stationRooms[1], hqRooms[1], tollGate, trace]
+    .filter((room): room is Room => room !== undefined);
+  for (let i = 0; i < humanLoop.length - 1; i++) {
+    widenDarknessRoute(world, humanLoop[i], humanLoop[i + 1], i % 3 === 0 ? 2 : 1, 78 + (i % 3) * 8);
+  }
+
+  const lowerLoop = [trace, stationRooms[2], stationRooms[3], hqRooms[3], stationRooms[9], stationRooms[4], hqRooms[4], stationRooms[5], emergency, trace]
+    .filter((room): room is Room => room !== undefined);
+  for (let i = 0; i < lowerLoop.length - 1; i++) {
+    widenDarknessRoute(world, lowerLoop[i], lowerLoop[i + 1], i % 2 === 0 ? 2 : 1, 84 + (i % 4) * 6);
+  }
+
+  const crossLoop = [generator, stationRooms[7], stationRooms[8], stationRooms[4], emergency, stationRooms[5], entry]
+    .filter((room): room is Room => room !== undefined);
+  for (let i = 0; i < crossLoop.length - 1; i++) {
+    widenDarknessRoute(world, crossLoop[i], crossLoop[i + 1], 1, 88);
+  }
+
+  for (const hq of hqRooms) {
+    const owner = world.factionControl[world.idx(centerX(hq), centerY(hq))] as TerritoryOwner;
+    hardenDarknessHqRoom(world, hq, owner);
+  }
+  sanitizeDoors(world);
+  retouchDarknessExpansion(world);
+}
+
 export function expandDarknessRouteGeometry(world: World, entities: Entity[], rng: () => number): void {
   for (let i = 0; i < W * W; i++) {
     if (world.cells[i] === Cell.WALL) {
@@ -1475,6 +1897,7 @@ export function expandDarknessRouteGeometry(world: World, entities: Entity[], rn
   carveDarknessPathCells(world, southPocket.x, southPocket.y, tracePocket.x, tracePocket.y, 1, 90);
   carveDarknessPathCells(world, tracePocket.x, tracePocket.y, centerX(trace), centerY(trace), 1, 62);
   addDeadLampRow(world, junction, tollGate);
+  expandDarknessMidMicroLayer(world, rng);
 
   const nextId = { v: entities.reduce((mx, e) => Math.max(mx, e.id), 0) + 1 };
   const shadowCount = 4 + Math.floor(rng() * 3);

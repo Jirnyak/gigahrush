@@ -8,6 +8,7 @@ import {
   type Room,
   RoomType,
 } from '../../core/types';
+import { roomAffordanceWeight, type RoomAffordanceId } from '../../data/room_affordances';
 
 export const NPC_UTILITY_INTENTS = [
   'safety',
@@ -531,32 +532,42 @@ export function npcUtilityRoomTypeWeightForIntent(
   occupation?: Occupation,
 ): number {
   if (roomType === undefined) return 0;
+  if (intent === 'safety' || intent === 'flee') return npcUtilityRoutineShelterWeight(roomType);
+  const baseAffordance = NPC_UTILITY_INTENT_ROOM_AFFORDANCE[intent];
+  if (baseAffordance) return roomAffordanceWeight(roomType, baseAffordance);
   switch (intent) {
-    case 'safety':
-    case 'flee':
-      return roomType === RoomType.LIVING ? 24 : roomType === RoomType.HQ ? 18 : roomType === RoomType.COMMON ? 8 : 0;
-    case 'toilet':
-      return roomType === RoomType.BATHROOM ? 38 : 0;
-    case 'drink':
-      return roomType === RoomType.KITCHEN ? 28 : roomType === RoomType.BATHROOM ? 14 : 0;
-    case 'eat':
-      return roomType === RoomType.KITCHEN ? 34 : roomType === RoomType.COMMON ? 8 : 0;
-    case 'sleep':
-      return roomType === RoomType.LIVING ? 34 : 0;
     case 'work':
       return npcUtilityWorkRoomTypeWeight(occupation, roomType);
-    case 'heal':
-      return roomType === RoomType.MEDICAL ? 40 : 0;
-    case 'social':
-      return roomType === RoomType.COMMON ? 24 : roomType === RoomType.SMOKING || roomType === RoomType.KITCHEN ? 17 : roomType === RoomType.HQ ? 10 : 0;
-    case 'patrol':
-      return roomType === RoomType.CORRIDOR ? 24 : roomType === RoomType.HQ ? 20 : roomType === RoomType.COMMON ? 12 : 0;
-    case 'wander':
-      return roomType === RoomType.CORRIDOR || roomType === RoomType.COMMON ? 9 : 0;
     case 'combat':
       return roomType === RoomType.CORRIDOR ? 8 : roomType === RoomType.HQ ? 10 : 0;
+    case 'toilet':
+    case 'drink':
+    case 'eat':
+    case 'sleep':
+    case 'heal':
+    case 'social':
+    case 'patrol':
+    case 'wander':
+      return 0;
   }
 }
+
+function npcUtilityRoutineShelterWeight(roomType: RoomType): number {
+  return roomType === RoomType.LIVING || roomType === RoomType.HQ || roomType === RoomType.COMMON
+    ? roomAffordanceWeight(roomType, 'shelter')
+    : 0;
+}
+
+const NPC_UTILITY_INTENT_ROOM_AFFORDANCE: Partial<Record<NpcUtilityIntentId, RoomAffordanceId>> = {
+  toilet: 'toilet',
+  drink: 'drink',
+  eat: 'eat',
+  sleep: 'sleep',
+  heal: 'heal',
+  social: 'social',
+  patrol: 'patrol',
+  wander: 'wander',
+};
 
 export function scoreNpcUtilityTargetPreference(
   target: NpcUtilityTargetCandidate,

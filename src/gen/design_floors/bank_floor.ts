@@ -16,6 +16,7 @@ import {
   Tex,
   W,
   ZoneFaction,
+  type TerritoryOwner,
   type Entity,
   type GameState,
   type Item,
@@ -27,7 +28,8 @@ import { World } from '../../core/world';
 import { freshNeeds } from '../../data/catalog';
 import { type PlotNpcDef, registerSideQuest } from '../../data/plot';
 import { publishEvent } from '../../systems/events';
-import { stampRoom } from '../shared';
+import { setTerritoryOwnerAtIndex, syncZoneMetadataFromTerritory } from '../../systems/territory';
+import { canPlaceRoom, stampRoom } from '../shared';
 import type { FloorGeneration } from '../floor_manifest';
 
 export const BANK_FLOOR_ROUTE_ID = 'bank_floor' as const;
@@ -48,6 +50,14 @@ export const BANK_ROOM_NAMES = {
   bribeQueue: 'Нулевая очередь подкупщиков Б-22',
   vaultShell: 'Наружная оболочка хранилища Б-22',
   bypassGate: 'Черный пост служебного обхода Б-22',
+} as const;
+
+export const BANK_HQ_ROOM_NAMES = {
+  citizen: 'Герметическая комната гражданского баланса Б-22',
+  liquidator: 'Герметический пост инкассаторов Б-22',
+  cultist: 'Герметическая свечная долгового культа Б-22',
+  scientist: 'Герметическая лаборатория счетчиков НИИ Б-22',
+  wild: 'Герметическая ночная касса диких Б-22',
 } as const;
 
 export const BANK_VAULT_RISK_RADIUS = 96;
@@ -94,6 +104,115 @@ export interface BankFloorGeneration extends FloorGeneration {
 type BankActionKind = 'deposit' | 'loan' | 'repay' | 'forgery' | 'vault_theft';
 
 const BANK_TAGS = ['banking', BANK_FLOOR_ROUTE_ID];
+
+interface BankMicroBlockSpec {
+  name: string;
+  type: RoomType;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  count: number;
+  stepX: number;
+  stepY: number;
+  wallTex: Tex;
+  floorTex: Tex;
+}
+
+interface BankHqClusterSpec {
+  owner: TerritoryOwner;
+  hqName: string;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  wallTex: Tex;
+  floorTex: Tex;
+  support: readonly Omit<BankMicroBlockSpec, 'count' | 'stepX' | 'stepY'>[];
+}
+
+const BANK_HQ_CLUSTERS: readonly BankHqClusterSpec[] = [
+  {
+    owner: ZoneFaction.CITIZEN,
+    hqName: BANK_HQ_ROOM_NAMES.citizen,
+    x: 156,
+    y: 438,
+    w: 28,
+    h: 20,
+    wallTex: Tex.HERMO_WALL,
+    floorTex: Tex.F_PARQUET,
+    support: [
+      { name: 'Общая банка гражданского штаба Б-22', type: RoomType.COMMON, x: 156, y: 410, w: 26, h: 16, wallTex: Tex.MARBLE, floorTex: Tex.F_MARBLE_TILE },
+      { name: 'Кухня гражданского баланса Б-22', type: RoomType.KITCHEN, x: 156, y: 466, w: 24, h: 16, wallTex: Tex.TILE_W, floorTex: Tex.F_TILE },
+      { name: 'Санузел гражданского баланса Б-22', type: RoomType.BATHROOM, x: 190, y: 438, w: 16, h: 14, wallTex: Tex.TILE_W, floorTex: Tex.F_TILE },
+      { name: 'Склад квитанций гражданского баланса Б-22', type: RoomType.STORAGE, x: 84, y: 438, w: 24, h: 16, wallTex: Tex.PANEL, floorTex: Tex.F_LINO },
+    ],
+  },
+  {
+    owner: ZoneFaction.LIQUIDATOR,
+    hqName: BANK_HQ_ROOM_NAMES.liquidator,
+    x: 832,
+    y: 436,
+    w: 30,
+    h: 22,
+    wallTex: Tex.HERMO_WALL,
+    floorTex: Tex.F_CONCRETE,
+    support: [
+      { name: 'Оружейный шкаф инкассаторов Б-22', type: RoomType.STORAGE, x: 928, y: 436, w: 24, h: 16, wallTex: Tex.METAL, floorTex: Tex.F_CONCRETE },
+      { name: 'Медпункт инкассаторов Б-22', type: RoomType.MEDICAL, x: 832, y: 464, w: 26, h: 16, wallTex: Tex.TILE_W, floorTex: Tex.F_TILE },
+      { name: 'Дежурка инкассаторов Б-22', type: RoomType.OFFICE, x: 832, y: 408, w: 28, h: 16, wallTex: Tex.METAL, floorTex: Tex.F_GREEN_CARPET },
+      { name: 'Склад пломб инкассаторов Б-22', type: RoomType.STORAGE, x: 768, y: 436, w: 24, h: 16, wallTex: Tex.METAL, floorTex: Tex.F_CONCRETE },
+    ],
+  },
+  {
+    owner: ZoneFaction.CULTIST,
+    hqName: BANK_HQ_ROOM_NAMES.cultist,
+    x: 744,
+    y: 764,
+    w: 26,
+    h: 20,
+    wallTex: Tex.HERMO_WALL,
+    floorTex: Tex.F_RED_CARPET,
+    support: [
+      { name: 'Свечная книга долгов Б-22', type: RoomType.COMMON, x: 744, y: 792, w: 28, h: 16, wallTex: Tex.DARK, floorTex: Tex.F_CARPET },
+      { name: 'Кладовая восковых процентов Б-22', type: RoomType.STORAGE, x: 708, y: 764, w: 26, h: 16, wallTex: Tex.DARK, floorTex: Tex.F_CONCRETE },
+      { name: 'Курилка долгового культа Б-22', type: RoomType.SMOKING, x: 780, y: 764, w: 26, h: 16, wallTex: Tex.PANEL, floorTex: Tex.F_LINO },
+      { name: 'Санузел свечной очереди Б-22', type: RoomType.BATHROOM, x: 680, y: 710, w: 18, h: 14, wallTex: Tex.TILE_W, floorTex: Tex.F_TILE },
+    ],
+  },
+  {
+    owner: ZoneFaction.SCIENTIST,
+    hqName: BANK_HQ_ROOM_NAMES.scientist,
+    x: 474,
+    y: 142,
+    w: 28,
+    h: 20,
+    wallTex: Tex.HERMO_WALL,
+    floorTex: Tex.F_CONCRETE,
+    support: [
+      { name: 'Лаборатория процентного шума Б-22', type: RoomType.PRODUCTION, x: 508, y: 142, w: 30, h: 16, wallTex: Tex.PIPE, floorTex: Tex.F_CONCRETE },
+      { name: 'Медкабинет счетчиков НИИ Б-22', type: RoomType.MEDICAL, x: 438, y: 142, w: 26, h: 16, wallTex: Tex.TILE_W, floorTex: Tex.F_TILE },
+      { name: 'Кабинет статистики вкладов Б-22', type: RoomType.OFFICE, x: 474, y: 114, w: 30, h: 16, wallTex: Tex.MARBLE, floorTex: Tex.F_PARQUET },
+      { name: 'Склад мерных квитанций Б-22', type: RoomType.STORAGE, x: 548, y: 170, w: 26, h: 14, wallTex: Tex.PANEL, floorTex: Tex.F_LINO },
+    ],
+  },
+  {
+    owner: ZoneFaction.WILD,
+    hqName: BANK_HQ_ROOM_NAMES.wild,
+    x: 238,
+    y: 764,
+    w: 28,
+    h: 20,
+    wallTex: Tex.HERMO_WALL,
+    floorTex: Tex.F_CONCRETE,
+    support: [
+      { name: 'Кухня ночной кассы Б-22', type: RoomType.KITCHEN, x: 238, y: 792, w: 24, h: 16, wallTex: Tex.TILE_W, floorTex: Tex.F_TILE },
+      { name: 'Склад залоговых мешков диких Б-22', type: RoomType.STORAGE, x: 202, y: 764, w: 26, h: 16, wallTex: Tex.BRICK, floorTex: Tex.F_CONCRETE },
+      { name: 'Курилка ночной кассы Б-22', type: RoomType.SMOKING, x: 274, y: 764, w: 26, h: 16, wallTex: Tex.PANEL, floorTex: Tex.F_LINO },
+      { name: 'Санузел ночной кассы Б-22', type: RoomType.BATHROOM, x: 202, y: 732, w: 18, h: 14, wallTex: Tex.TILE_W, floorTex: Tex.F_TILE },
+    ],
+  },
+];
 
 const DIRECTOR_DEF: PlotNpcDef = {
   name: 'Зинаида Балансовна',
@@ -425,14 +544,14 @@ export function expandBankFloorRouteGeometry(world: World, rng: () => number): v
     stampBankRoom(world, RoomType.OFFICE, 250, 282, 38, 22, 'Северная бухгалтерия банка Б-22', Tex.MARBLE, Tex.F_PARQUET),
     stampBankRoom(world, RoomType.STORAGE, 736, 282, 38, 22, 'Архив просроченных вкладов Б-22', Tex.METAL, Tex.F_GREEN_CARPET),
     stampBankRoom(world, RoomType.OFFICE, 252, 718, 40, 22, 'Комната сверки вкладчиков Б-22', Tex.MARBLE, Tex.F_PARQUET),
-    stampBankRoom(world, RoomType.HQ, 728, 718, 44, 24, 'Пост инкассации банка Б-22', Tex.METAL, Tex.F_CONCRETE),
+    stampBankRoom(world, RoomType.OFFICE, 728, 718, 44, 24, 'Пост инкассации банка Б-22', Tex.METAL, Tex.F_CONCRETE),
     stampBankRoom(world, RoomType.STORAGE, 482, 280, 62, 20, 'Полка невыплаченных процентов Б-22', Tex.PANEL, Tex.F_GREEN_CARPET),
     stampBankRoom(world, RoomType.CORRIDOR, 482, 724, 62, 18, 'Нижний банковский обход Б-22', Tex.PANEL, Tex.F_LINO),
     stampBankRoom(world, RoomType.COMMON, 368, 338, 128, 34, 'Очередной зал вкладчиков Б-22', Tex.MARBLE, Tex.F_MARBLE_TILE),
     stampBankRoom(world, RoomType.COMMON, 528, 338, 128, 34, 'Очередной зал должников Б-22', Tex.MARBLE, Tex.F_MARBLE_TILE),
     stampBankRoom(world, RoomType.OFFICE, 334, 472, 90, 34, 'Кассовая галерея мелких выплат Б-22', Tex.MARBLE, Tex.F_GREEN_CARPET),
     stampBankRoom(world, RoomType.OFFICE, 334, 530, 104, 34, 'Кредитная кишка просрочек Б-22', Tex.PANEL, Tex.F_LINO),
-    stampBankRoom(world, RoomType.HQ, 622, 458, 64, 38, 'Сейфовый пост ликвидаторов Б-22', Tex.METAL, Tex.F_CONCRETE),
+    stampBankRoom(world, RoomType.OFFICE, 622, 458, 64, 38, 'Сейфовый пост ликвидаторов Б-22', Tex.METAL, Tex.F_CONCRETE),
     stampBankRoom(world, RoomType.STORAGE, 632, 536, 82, 44, 'Архив испорченных депозитов Б-22', Tex.METAL, Tex.F_GREEN_CARPET),
     stampBankRoom(world, RoomType.CORRIDOR, 548, 638, 140, 30, 'Черная кассовая перемычка Б-22', Tex.PANEL, Tex.F_LINO),
     stampBankRoom(world, RoomType.STORAGE, 326, 636, 84, 42, 'Склад залогового хлама Б-22', Tex.PANEL, Tex.F_CONCRETE),
@@ -445,13 +564,14 @@ export function expandBankFloorRouteGeometry(world: World, rng: () => number): v
   const tellerLane = stampBankRoom(world, RoomType.COMMON, 306, 392, 160, 32, BANK_ROOM_NAMES.tellerLane, Tex.MARBLE, Tex.F_MARBLE_TILE);
   const debtorCircuit = stampBankRoom(world, RoomType.COMMON, 306, 578, 160, 34, BANK_ROOM_NAMES.debtorCircuit, Tex.PANEL, Tex.F_LINO);
   const bribeQueue = stampBankRoom(world, RoomType.OFFICE, 472, 580, 52, 30, BANK_ROOM_NAMES.bribeQueue, Tex.PANEL, Tex.F_GREEN_CARPET);
-  const vaultShell = stampBankRoom(world, RoomType.HQ, 594, 392, 104, 52, BANK_ROOM_NAMES.vaultShell, Tex.METAL, Tex.F_CONCRETE);
+  const vaultShell = stampBankRoom(world, RoomType.STORAGE, 594, 392, 104, 52, BANK_ROOM_NAMES.vaultShell, Tex.METAL, Tex.F_CONCRETE);
   const bypassGate = stampBankRoom(world, RoomType.CORRIDOR, 692, 582, 70, 32, BANK_ROOM_NAMES.bypassGate, Tex.PANEL, Tex.F_LINO);
   const circuitRooms = [tellerLane, debtorCircuit, bribeQueue, vaultShell, bypassGate];
   for (const room of circuitRooms) openRoomToNearestCorridor(world, room);
   decorateExpandedBankDecisionRooms(world, { tellerLane, debtorCircuit, bribeQueue, vaultShell, bypassGate });
   buildDebtCircuitLoop(world);
   addExpandedBankContainers(world, { bribeQueue, vaultShell, bypassGate });
+  buildBankMicroLayer(world, rng);
   applyBankVaultRiskSdf(world);
 
   for (let i = 0; i < 32; i++) {
@@ -618,6 +738,152 @@ function addExpandedBankContainers(
     tags: ['bypass', 'service_bypass', 'escape_pressure', 'vault_risk_sdf'],
     lockDifficulty: 3,
   });
+}
+
+function buildBankMicroLayer(world: World, rng: () => number): void {
+  carveBankWingCorridors(world);
+  for (const cluster of BANK_HQ_CLUSTERS) {
+    stampOptionalBankRoom(world, RoomType.HQ, cluster.x, cluster.y, cluster.w, cluster.h, cluster.hqName, cluster.wallTex, cluster.floorTex, rng);
+    for (const support of cluster.support) {
+      stampOptionalBankRoom(world, support.type, support.x, support.y, support.w, support.h, support.name, support.wallTex, support.floorTex, rng);
+    }
+  }
+
+  const blocks: readonly BankMicroBlockSpec[] = [
+    { name: 'Северная депозитная ячейка Б-22', type: RoomType.STORAGE, x: 250, y: 154, w: 22, h: 12, count: 7, stepX: 64, stepY: 0, wallTex: Tex.METAL, floorTex: Tex.F_CONCRETE },
+    { name: 'Северный кабинет вкладов Б-22', type: RoomType.OFFICE, x: 250, y: 206, w: 22, h: 12, count: 7, stepX: 64, stepY: 0, wallTex: Tex.MARBLE, floorTex: Tex.F_PARQUET },
+    { name: 'Южная долговая клетка Б-22', type: RoomType.OFFICE, x: 318, y: 794, w: 22, h: 12, count: 6, stepX: 66, stepY: 0, wallTex: Tex.PANEL, floorTex: Tex.F_LINO },
+    { name: 'Южный склад залога Б-22', type: RoomType.STORAGE, x: 318, y: 866, w: 22, h: 12, count: 6, stepX: 66, stepY: 0, wallTex: Tex.PANEL, floorTex: Tex.F_CONCRETE },
+    { name: 'Западный кассовый кабинет Б-22', type: RoomType.OFFICE, x: 78, y: 318, w: 18, h: 18, count: 5, stepX: 0, stepY: 84, wallTex: Tex.MARBLE, floorTex: Tex.F_GREEN_CARPET },
+    { name: 'Западный склад очереди Б-22', type: RoomType.STORAGE, x: 154, y: 318, w: 18, h: 18, count: 5, stepX: 0, stepY: 84, wallTex: Tex.PANEL, floorTex: Tex.F_LINO },
+    { name: 'Восточный сейфовый кабинет Б-22', type: RoomType.OFFICE, x: 834, y: 318, w: 18, h: 18, count: 5, stepX: 0, stepY: 84, wallTex: Tex.METAL, floorTex: Tex.F_CONCRETE },
+    { name: 'Восточная архивная клетка Б-22', type: RoomType.STORAGE, x: 916, y: 318, w: 18, h: 18, count: 5, stepX: 0, stepY: 84, wallTex: Tex.METAL, floorTex: Tex.F_CONCRETE },
+  ];
+
+  for (const block of blocks) {
+    for (let i = 0; i < block.count; i++) {
+      stampOptionalBankRoom(
+        world,
+        block.type,
+        block.x + block.stepX * i,
+        block.y + block.stepY * i,
+        block.w,
+        block.h,
+        `${block.name} ${i + 1}`,
+        block.wallTex,
+        block.floorTex,
+        rng,
+      );
+    }
+  }
+}
+
+function carveBankWingCorridors(world: World): void {
+  carveRun(world, 512, 318, 512, 188, 4, Tex.F_GREEN_CARPET, Tex.MARBLE);
+  carveRun(world, 244, 188, 768, 188, 4, Tex.F_MARBLE_TILE, Tex.MARBLE);
+  carveRun(world, 512, 706, 512, 842, 4, Tex.F_GREEN_CARPET, Tex.PANEL);
+  carveRun(world, 238, 842, 786, 842, 4, Tex.F_LINO, Tex.PANEL);
+  carveRun(world, 220, 512, 128, 512, 4, Tex.F_MARBLE_TILE, Tex.MARBLE);
+  carveRun(world, 128, 310, 128, 714, 4, Tex.F_MARBLE_TILE, Tex.MARBLE);
+  carveRun(world, 804, 512, 894, 512, 4, Tex.F_CONCRETE, Tex.METAL);
+  carveRun(world, 894, 310, 894, 714, 4, Tex.F_CONCRETE, Tex.METAL);
+}
+
+function stampOptionalBankRoom(
+  world: World,
+  type: RoomType,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  name: string,
+  wallTex: Tex,
+  floorTex: Tex,
+  rng: () => number,
+): Room | null {
+  if (!canPlaceRoom(world, x, y, w, h)) return null;
+  const room = stampBankRoom(world, type, x, y, w, h, name, wallTex, floorTex);
+  openRoomToNearestCorridor(world, room);
+  decorateBankMicroRoom(world, room, rng);
+  return room;
+}
+
+function decorateBankMicroRoom(world: World, room: Room, rng: () => number): void {
+  const fixtures = Math.max(2, Math.min(8, Math.floor((room.w * room.h) / 32)));
+  for (let i = 0; i < fixtures; i++) {
+    const x = room.x + 1 + Math.floor(rng() * Math.max(1, room.w - 2));
+    const y = room.y + 1 + Math.floor(rng() * Math.max(1, room.h - 2));
+    let feature = Feature.CHAIR;
+    switch (room.type) {
+      case RoomType.HQ:
+        feature = i % 3 === 0 ? Feature.DESK : i % 3 === 1 ? Feature.SCREEN : Feature.LAMP;
+        break;
+      case RoomType.KITCHEN:
+        feature = i % 3 === 0 ? Feature.STOVE : i % 3 === 1 ? Feature.SINK : Feature.TABLE;
+        break;
+      case RoomType.BATHROOM:
+        feature = i % 2 === 0 ? Feature.TOILET : Feature.SINK;
+        break;
+      case RoomType.MEDICAL:
+        feature = i % 2 === 0 ? Feature.BED : Feature.APPARATUS;
+        break;
+      case RoomType.PRODUCTION:
+        feature = i % 2 === 0 ? Feature.MACHINE : Feature.APPARATUS;
+        break;
+      case RoomType.STORAGE:
+        feature = Feature.SHELF;
+        break;
+      case RoomType.OFFICE:
+        feature = i % 3 === 0 ? Feature.DESK : i % 3 === 1 ? Feature.CHAIR : Feature.SCREEN;
+        break;
+      case RoomType.SMOKING:
+        feature = i % 2 === 0 ? Feature.TABLE : Feature.CHAIR;
+        break;
+      case RoomType.COMMON:
+      default:
+        feature = i % 3 === 0 ? Feature.TABLE : i % 3 === 1 ? Feature.CHAIR : Feature.LAMP;
+        break;
+    }
+    setFeature(world, x, y, feature);
+  }
+}
+
+export function applyBankFloorTerritorySeeds(world: World): void {
+  for (const cluster of BANK_HQ_CLUSTERS) {
+    const hq = world.rooms.find(room => room.name === cluster.hqName);
+    if (!hq) continue;
+    hq.type = RoomType.HQ;
+    hq.sealed = true;
+    paintBankRoomTerritory(world, hq, cluster.owner);
+    paintBankOwnerPatch(world, hq.x + (hq.w >> 1), hq.y + (hq.h >> 1), 44, cluster.owner);
+    for (const support of cluster.support) {
+      const room = world.rooms.find(candidate => candidate.name === support.name);
+      if (room) paintBankRoomTerritory(world, room, cluster.owner);
+    }
+  }
+  syncZoneMetadataFromTerritory(world);
+}
+
+function paintBankRoomTerritory(world: World, room: Room, owner: TerritoryOwner): void {
+  for (let dy = 0; dy < room.h; dy++) {
+    for (let dx = 0; dx < room.w; dx++) {
+      const idx = world.idx(room.x + dx, room.y + dy);
+      if (world.aptMask[idx] || world.cells[idx] === Cell.LIFT) continue;
+      setTerritoryOwnerAtIndex(world, idx, owner);
+    }
+  }
+}
+
+function paintBankOwnerPatch(world: World, cx: number, cy: number, radius: number, owner: TerritoryOwner): void {
+  const r2 = radius * radius;
+  for (let dy = -radius; dy <= radius; dy++) {
+    for (let dx = -radius; dx <= radius; dx++) {
+      if (dx * dx + dy * dy > r2) continue;
+      const idx = world.idx(cx + dx, cy + dy);
+      if (world.aptMask[idx] || world.cells[idx] === Cell.LIFT) continue;
+      setTerritoryOwnerAtIndex(world, idx, owner);
+    }
+  }
 }
 
 function applyBankVaultRiskSdf(world: World): void {

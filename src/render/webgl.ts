@@ -10,7 +10,7 @@ import {
   type Entity, EntityType, ProjType, MonsterKind,
 } from '../core/types';
 import { World, type WorldGridDirtyRect } from '../core/world';
-import { getActiveSamosborVariant } from '../data/samosbor_variants';
+import { getActiveSamosborVariant } from '../systems/samosbor_variants_runtime';
 import { entityUsesProceduralSprite, generateProceduralEntitySprite, proceduralEntitySpriteKey } from '../entities/procedural_visuals';
 import type { TexData } from './textures';
 import type { SpriteData } from './sprites';
@@ -183,7 +183,7 @@ bool organicLightCell(ivec2 p) {
   ivec2 wp = ivec2(wrapI(p.x), wrapI(p.y));
   uint wallTex = texelFetch(uWallTex, wp, 0).r;
   uint floorTex = texelFetch(uFloorTex, wp, 0).r;
-  return wallTex == ${Tex.MEAT}u || wallTex == ${Tex.GUT}u ||
+  return wallTex == ${Tex.MEAT}u || wallTex == ${Tex.GUT}u || wallTex == ${Tex.LARVA_BODY}u ||
          floorTex == ${Tex.F_MEAT}u || floorTex == ${Tex.F_GUT}u;
 }
 
@@ -750,16 +750,12 @@ uniform sampler2D uTex;
 uniform float uGlitch;
 uniform float uTime;
 uniform float uSamosborActive; // 1.0 during samosbor
-uniform int uSamosborStyle; // 3 = Veretar dry overexposure
+uniform int uSamosborStyle; // data-driven SamosborScreenFxId code
+uniform float uSamosborPost;
+uniform vec3 uSamosborTint;
 out vec4 fragColor;
 
 /* ── Noise helpers ────────────────────────────────────────────── */
-float hash11(float p) {
-  p = fract(p * 0.1031);
-  p *= p + 33.33;
-  p *= p + p;
-  return fract(p);
-}
 float hash21(vec2 p) {
   vec3 p3 = fract(vec3(p.xyx) * 0.1031);
   p3 += dot(p3, p3.yzx + 33.33);
@@ -775,32 +771,16 @@ void main() {
   float fastWiggle = sin(uv.y * 23.0 + t * 3.1) * 0.0004;
   uv.x += slowWave + fastWiggle;
 
-  /* ── Samosbor glitch: heavy horizontal shift ────────────────── */
+  /* ── Samosbor glitch: coherent band drift without expensive per-pixel hashes ── */
   if (uGlitch > 0.0) {
-    float scanline = floor(uv.y * 200.0);
-    float glitchTick = floor(t * 8.0);
-    float h = hash11(scanline * 12.9898 + glitchTick * 31.7);
-    if (h < uGlitch * 0.35) {
-      uv.x += (h - 0.5) * uGlitch * 0.08;
-    }
-    // Block glitch: shift entire horizontal bands
-    float blockY = floor(uv.y * 25.0);
-    float blockH = hash11(blockY * 17.0 + floor(t * 4.0) * 113.0);
-    if (blockH > 1.0 - uGlitch * 0.12) {
-      uv.x += (blockH - 0.5) * 0.05 * uGlitch;
-      uv.y += (hash11(blockY * 29.0 + floor(t * 6.0) * 71.0) - 0.5) * 0.008 * uGlitch;
-    }
-  }
-
-  /* ── Random sporadic glitch bars ────────────────────────────── */
-  if (uGlitch > 0.02) {
-    float barSeed = floor(t * 2.5);
-    float barY = floor(uv.y * 200.0);
-    float barH = hash11(barY * 0.37 + barSeed * 43.0);
-    float threshold = 0.997 - uGlitch * 0.05;
-    if (barH > threshold) {
-      uv.x += (hash11(barY * 13.0 + floor(t * 12.0)) - 0.5) * 0.025;
-    }
+    float bandId = floor(uv.y * 42.0);
+    float tick = floor(t * 7.0);
+    float bandPhase = fract(bandId * 0.6180339 + tick * 0.173);
+    float bandMask = step(0.92 - uGlitch * 0.9, bandPhase);
+    float fineMask = step(0.985 - uGlitch * 0.22, fract(uv.y * 180.0 + t * 0.85));
+    float shift = ((bandPhase - 0.5) * bandMask * 0.032 + fineMask * 0.006) * uGlitch;
+    uv.x += shift;
+    uv.y += (fract(bandId * 0.37 + tick * 0.29) - 0.5) * bandMask * uGlitch * 0.0035;
   }
 
   /* ── Chromatic aberration + VHS color bleed (combined for fewer texture reads) ── */
@@ -839,22 +819,6 @@ void main() {
   grain += (hash21(vUV * 400.0 + fract(t * 7.7 + 1.0)) - 0.5) * 0.02;
   color += grain;
 
-  /* ── Procedural glitch bursts (rare pixel displacement) ─────── */
-  if (uGlitch > 0.02) {
-    float band = floor(uv.y * 90.0);
-    float tick = floor(t * 4.0);
-    float gate = hash11(band * 0.53 + tick * 97.0);
-    if (gate > 0.982 - uGlitch * 0.04) {
-      float lane = floor(uv.x * 16.0);
-      float laneGate = hash11((lane + band) * 19.0 + (tick + 17.0) * 41.0);
-      float intensity = smoothstep(0.35, 1.0, laneGate) * uGlitch;
-      float shift = (hash11(band * 23.0 + (tick + 31.0) * 67.0) - 0.5) * 0.035 * intensity;
-      vec2 displaced = clamp(uv + vec2(shift, (laneGate - 0.5) * 0.004 * intensity), vec2(0.001), vec2(0.999));
-      vec3 glitchCol = texture(uTex, displaced).rgb;
-      color = mix(color, glitchCol, intensity * 0.62);
-    }
-  }
-
   /* ── Subtle vignette ────────────────────────────────────────── */
   vec2 vc = uv - 0.5;
   float vig = 1.0 - dot(vc, vc) * 0.6;
@@ -864,26 +828,20 @@ void main() {
   color.g *= 1.02;
   color.b *= 0.98;
 
-  /* ── Samosbor: variant-shaped post noise ────────────────────── */
-  if (uSamosborActive > 0.5) {
-    vec2 noiseTile = floor(vUV * 60.0);
-    float noiseBurst = hash11(noiseTile.x + noiseTile.y * 173.0 + floor(t * 5.0) * 31.0) * 0.06;
-    if (uSamosborStyle == 3) {
-      float luma = dot(color, vec3(0.299, 0.587, 0.114));
-      color = mix(color, vec3(luma), 0.58);
-      color = mix(color, vec3(0.96, 0.94, 0.84), 0.12);
-      color += (hash11(floor(vUV.x * 500.0) + floor(vUV.y * 280.0) * 331.0 + floor(t * 9.0) * 47.0) - 0.5) * 0.045;
-      float whiteLine = hash11(floor(uv.y * 120.0) * 7.0 + floor(t * 5.0) * 59.0);
-      if (whiteLine > 0.985) color += vec3(0.08, 0.075, 0.055);
-    } else {
-      color.r += noiseBurst * 0.5;
-      color.b += noiseBurst;
-      // Occasional white flash lines
-      float flashLine = hash11(floor(uv.y * 100.0) * 11.0 + floor(t * 8.0) * 79.0);
-      if (flashLine > 0.993) {
-        color += 0.15;
-      }
-    }
+  /* ── Samosbor: cheap variant-shaped post grade ──────────────── */
+  if (uSamosborActive > 0.5 && uSamosborPost > 0.01) {
+    float post = clamp(uSamosborPost, 0.0, 1.0);
+    float luma = dot(color, vec3(0.299, 0.587, 0.114));
+    float desat = uSamosborStyle == 6 ? 0.48 : (uSamosborStyle == 5 ? 0.12 : 0.0);
+    float tintMix = uSamosborStyle == 6 ? 0.13 : 0.06;
+    color = mix(color, vec3(luma), desat * post);
+    color = mix(color, uSamosborTint, tintMix * post);
+
+    vec2 tile = floor(vUV * vec2(72.0, 46.0));
+    float gridNoise = fract(tile.x * 0.7548777 + tile.y * 0.5698403 + floor(t * 5.0) * 0.137) - 0.5;
+    float scanPulse = step(0.972, fract(gl_FragCoord.y * 0.067 + t * 1.6));
+    float stylePulse = (uSamosborStyle == 2 || uSamosborStyle == 4 || uSamosborStyle == 6) ? 1.25 : 0.85;
+    color += uSamosborTint * (gridNoise * 0.08 + scanPulse * 0.045 * stylePulse) * post;
   }
 
   fragColor = vec4(clamp(color, 0.0, 1.0), 1.0);
@@ -1498,7 +1456,7 @@ export function initWebGL(
   // ── Blit program ──
   const blitProgram = createProgram(gl, BLIT_VERT_SRC, BLIT_FRAG_SRC);
   const blitVAO = createQuadVAO(gl, blitProgram);
-  const blitUniforms = getUniforms(gl, blitProgram, ['uTex', 'uGlitch', 'uTime', 'uSamosborActive', 'uSamosborStyle']);
+  const blitUniforms = getUniforms(gl, blitProgram, ['uTex', 'uGlitch', 'uTime', 'uSamosborActive', 'uSamosborStyle', 'uSamosborPost', 'uSamosborTint']);
 
   // ── Sprite program ──
   const spriteProgram = createProgram(gl, SPRITE_VERT_SRC, SPRITE_FRAG_SRC);
@@ -1804,7 +1762,8 @@ export function renderSceneGL(
   const activeVariant = getActiveSamosborVariant();
   const defaultFogRgb: [number, number, number] = [80, 20, 120];
   const fogRgb: readonly [number, number, number] = activeVariant?.fogColor ?? defaultFogRgb;
-  const samosborStyle = activeVariant?.def.id === 'veretar' ? 3 : 0;
+  const samosborStyle = samosborScreenFxCode(activeVariant?.visual.screenFx);
+  const samosborPost = samosborActive ? activeVariant?.visual.postIntensity ?? 0 : 0;
 
   // ── Pass 1: Raycaster into FBO ──
   gl.bindFramebuffer(gl.FRAMEBUFFER, glState.rayFBO);
@@ -1889,6 +1848,8 @@ export function renderSceneGL(
   gl.uniform1f(glState.blitUniforms['uTime']!, time);
   gl.uniform1f(glState.blitUniforms['uSamosborActive']!, samosborActive ? 1.0 : 0.0);
   gl.uniform1i(glState.blitUniforms['uSamosborStyle']!, samosborStyle);
+  gl.uniform1f(glState.blitUniforms['uSamosborPost']!, samosborPost);
+  gl.uniform3f(glState.blitUniforms['uSamosborTint']!, fogRgb[0] / 255, fogRgb[1] / 255, fogRgb[2] / 255);
 
   gl.bindVertexArray(glState.blitVAO);
   gl.drawArrays(gl.TRIANGLES, 0, 6);
@@ -1903,6 +1864,19 @@ function toroidalDelta(a: number, b: number): number {
 
 function wrapWorldFloat(v: number): number {
   return ((v % W) + W) % W;
+}
+
+function samosborScreenFxCode(screenFx: string | undefined): number {
+  switch (screenFx) {
+    case 'wet_noise': return 1;
+    case 'electric_static': return 2;
+    case 'meat_pulse': return 3;
+    case 'green_signal': return 4;
+    case 'gold_bell': return 5;
+    case 'white_exposure': return 6;
+    case 'violet_noise':
+    default: return 0;
+  }
 }
 
 function hasTumannikRenderOffset(e: Entity): boolean {

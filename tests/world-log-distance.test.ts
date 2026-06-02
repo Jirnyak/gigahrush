@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import { FloorLevel, msg, setMsgLocationProvider } from '../src/core/types';
-import { createWorldEventState, publishEvent } from '../src/systems/events';
+import { createWorldEventState, getRecentEvents, publishEvent } from '../src/systems/events';
 import { setWorldLogSpatialContext, worldLogDistanceForLocation } from '../src/systems/world_log';
 import { makeGameState } from './helpers';
 
@@ -85,6 +85,35 @@ test('localized world log events fall back to zone center distance', () => {
     assert.equal(state.msgLog.at(-1)?.distanceMeters, 55);
     assert.equal(state.msgs.at(-1)?.distanceMeters, 55);
     assert.equal(worldLogDistanceForLocation({ floor: FloorLevel.KVARTIRY, zoneId: 54 }), undefined);
+  } finally {
+    setWorldLogSpatialContext();
+  }
+});
+
+test('territory capture faction events stay out of HUD and full log', () => {
+  const state = makeGameState({ currentFloor: FloorLevel.LIVING, worldEvents: createWorldEventState() });
+  setWorldLogSpatialContext({
+    floor: FloorLevel.LIVING,
+    playerX: 10,
+    playerY: 10,
+    dist2: (ax, ay, bx, by) => (ax - bx) ** 2 + (ay - by) ** 2,
+  });
+
+  try {
+    publishEvent(state, {
+      type: 'faction_event',
+      zoneId: 36,
+      x: 12,
+      y: 10,
+      severity: 4,
+      privacy: 'local',
+      tags: ['faction_event', 'territory_capture', 'cell_territory'],
+      data: { phase: 'territory_capture', name: 'Захват клеток', cells: 24 },
+    });
+
+    assert.equal(state.msgLog.length, 0);
+    assert.equal(state.msgs.length, 0);
+    assert.equal(getRecentEvents(state, { tags: ['territory_capture'], limit: 1 }).length, 1);
   } finally {
     setWorldLogSpatialContext();
   }

@@ -16,6 +16,7 @@ const ZONE_FACTION_NAMES: Record<ZoneFaction, string> = {
   [ZoneFaction.CULTIST]: 'Культ',
   [ZoneFaction.SAMOSBOR]: 'Самосбор',
   [ZoneFaction.WILD]: 'Дикие',
+  [ZoneFaction.SCIENTIST]: 'Учёные',
 };
 const ZONE_FACTION_COLORS: Record<ZoneFaction, string> = {
   [ZoneFaction.CITIZEN]: '#4abe91',
@@ -23,6 +24,7 @@ const ZONE_FACTION_COLORS: Record<ZoneFaction, string> = {
   [ZoneFaction.CULTIST]: '#bc59ff',
   [ZoneFaction.SAMOSBOR]: '#e64e5c',
   [ZoneFaction.WILD]: '#e0a745',
+  [ZoneFaction.SCIENTIST]: '#67d8e8',
 };
 const FACTION_SHORT: Record<Faction, string> = {
   [Faction.PLAYER]: 'ИГР',
@@ -117,7 +119,7 @@ function drawFactionSnapshotPanel(
   ctx.textBaseline = 'top';
   ctx.font = `bold ${9 * sy}px monospace`;
   ctx.fillStyle = '#0ca';
-  ctx.fillText('ЗОНЫ И СОБЫТИЯ', x + 6, y + 5);
+  ctx.fillText('ТЕРРИТОРИИ И СОБЫТИЯ', x + 6, y + 5);
 
   ctx.font = `${8 * sy}px monospace`;
   if (!snapshot) {
@@ -128,15 +130,15 @@ function drawFactionSnapshotPanel(
 
   let yy = y + 19 * sy;
   ctx.fillStyle = snapshot.contestedZones > 0 ? '#ffd36a' : '#688';
-  ctx.fillText(`Спорные зоны: ${snapshot.contestedZones}`, x + 6, yy);
+  ctx.fillText(`Спорные фронты: ${snapshot.contestedZones}`, x + 6, yy);
   yy += 11 * sy;
 
   for (const owner of snapshot.owners) {
-    if (owner.zones <= 0) continue;
+    if (owner.cells <= 0) continue;
     ctx.fillStyle = ZONE_FACTION_COLORS[owner.faction];
     ctx.fillRect(x + 7, yy + 2, 6, 6);
-    ctx.fillStyle = owner.contested > 0 ? '#ffd36a' : '#bbb';
-    const line = `${ZONE_FACTION_NAMES[owner.faction]}: ${owner.zones}${owner.contested > 0 ? `, спор ${owner.contested}` : ''}`;
+    ctx.fillStyle = owner.fronts > 0 ? '#ffd36a' : '#bbb';
+    const line = `${ZONE_FACTION_NAMES[owner.faction]}: ${Math.round(owner.cells / 1000)}k кл.${owner.fronts > 0 ? `, фронт ${owner.fronts}` : ''}`;
     ctx.fillText(fitText(ctx, line, w - 20), x + 17, yy);
     yy += 10 * sy;
   }
@@ -149,7 +151,7 @@ function drawFactionSnapshotPanel(
   for (const zone of snapshot.zones) {
     if (!zone.contested) continue;
     if (drawnContested >= 4 || yy > y + h - 54 * sy) break;
-    const line = `З${zone.zoneId + 1}: ${ZONE_FACTION_NAMES[zone.owner]} / ${ZONE_FACTION_NAMES[zone.dominant]} ${Math.round(zone.pressure * 100)}%`;
+    const line = `С${zone.zoneId + 1}: ${ZONE_FACTION_NAMES[zone.owner]} / ${ZONE_FACTION_NAMES[zone.dominant]} ${Math.round(zone.pressure * 100)}%`;
     ctx.fillStyle = '#ffd36a';
     ctx.fillText(fitText(ctx, line, w - 12), x + 6, yy);
     yy += 10 * sy;
@@ -173,7 +175,7 @@ function drawFactionSnapshotPanel(
   for (const event of snapshot.recentEvents) {
     if (yy > y + h - 10 * sy) break;
     const age = Math.max(0, Math.round(snapshot.time - event.time));
-    const zone = event.zoneId >= 0 ? `З${event.zoneId + 1}` : 'зона ?';
+    const zone = event.zoneId >= 0 ? `С${event.zoneId + 1}` : 'сектор ?';
     const phase = event.phase === 'aftermath' ? ' итог' : event.phase === 'start' ? ' старт' : '';
     const name = event.name || String(event.type);
     ctx.fillStyle = eventColor(event.severity);

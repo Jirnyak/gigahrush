@@ -30,6 +30,7 @@ import {
   SPETSPRIEMNIK_ROUTE_ID,
   SPETSPRIEMNIK_Z,
 } from '../src/gen/design_floors/spetspriemnik';
+import { countTerritoryCells, territoryHqAnchors } from '../src/systems/territory';
 
 let cachedGeneration: ReturnType<typeof generateDesignFloor> | undefined;
 
@@ -97,6 +98,62 @@ test('spetspriemnik builds cellblock BSP, guard loops, bars and permit gates', (
   assert.equal(lockedDoors.some(door => door.keyId === SPETSPRIEMNIK_GUARD_KEY), true);
   assert.equal(zoneFactions.has(ZoneFaction.LIQUIDATOR), true);
   assert.equal(zoneFactions.has(ZoneFaction.WILD), true);
+});
+
+test('spetspriemnik expands into route-scale mid and micro detention geometry', () => {
+  const gen = generatedSpetspriemnik();
+  const audit = auditReachability(gen.world, gen.world.idx(Math.floor(gen.spawnX), Math.floor(gen.spawnY)));
+  let passable = 0;
+  let reachable = 0;
+  let smallRooms = 0;
+  for (let i = 0; i < W * W; i++) {
+    const cell = gen.world.cells[i];
+    if (cell === Cell.FLOOR || cell === Cell.WATER || cell === Cell.DOOR || cell === Cell.LIFT) passable++;
+    if (audit.reachable[i]) reachable++;
+  }
+  for (const room of gen.world.rooms) {
+    if (room.w <= 32 && room.h <= 22) smallRooms++;
+  }
+
+  assert.equal(gen.world.rooms.length >= 190, true, `rooms ${gen.world.rooms.length}`);
+  assert.equal(smallRooms >= 150, true, `small rooms ${smallRooms}`);
+  assert.equal(gen.world.doors.size >= 200, true, `doors ${gen.world.doors.size}`);
+  assert.equal(passable >= 275_000, true, `passable ${passable}`);
+  assert.equal(reachable >= passable - 8, true, `reachable ${reachable}/${passable}`);
+});
+
+test('spetspriemnik cell territory starts from five human HQ anchors and target shares', () => {
+  const gen = generatedSpetspriemnik();
+  const anchors = territoryHqAnchors(gen.world);
+  const byOwner = new Map(anchors.map(anchor => [anchor.owner, anchor]));
+  const counts = new Map(countTerritoryCells(gen.world).map(row => [row.owner, row.cells]));
+  const total = W * W;
+
+  for (const owner of [
+    ZoneFaction.CITIZEN,
+    ZoneFaction.LIQUIDATOR,
+    ZoneFaction.CULTIST,
+    ZoneFaction.SCIENTIST,
+    ZoneFaction.WILD,
+  ] as const) {
+    assert.ok(byOwner.get(owner), `missing HQ owner ${owner}`);
+    assert.ok((counts.get(owner) ?? 0) > 0, `missing territory cells ${owner}`);
+  }
+
+  for (let i = 0; i < anchors.length; i++) {
+    for (let j = i + 1; j < anchors.length; j++) {
+      assert.equal(gen.world.dist2(anchors[i].x, anchors[i].y, anchors[j].x, anchors[j].y) > 96 * 96, true);
+    }
+  }
+
+  const share = (owner: ZoneFaction) => (counts.get(owner) ?? 0) / total;
+  assert.equal(share(ZoneFaction.LIQUIDATOR) > share(ZoneFaction.CITIZEN), true);
+  assert.equal(share(ZoneFaction.LIQUIDATOR) > share(ZoneFaction.WILD), true);
+  assert.ok(share(ZoneFaction.CITIZEN) >= 0.22 && share(ZoneFaction.CITIZEN) <= 0.26, `citizen ${share(ZoneFaction.CITIZEN)}`);
+  assert.ok(share(ZoneFaction.LIQUIDATOR) >= 0.41 && share(ZoneFaction.LIQUIDATOR) <= 0.47, `liquidator ${share(ZoneFaction.LIQUIDATOR)}`);
+  assert.ok(share(ZoneFaction.CULTIST) >= 0.08 && share(ZoneFaction.CULTIST) <= 0.12, `cultist ${share(ZoneFaction.CULTIST)}`);
+  assert.ok(share(ZoneFaction.SCIENTIST) >= 0.06 && share(ZoneFaction.SCIENTIST) <= 0.10, `scientist ${share(ZoneFaction.SCIENTIST)}`);
+  assert.ok(share(ZoneFaction.WILD) >= 0.12 && share(ZoneFaction.WILD) <= 0.16, `wild ${share(ZoneFaction.WILD)}`);
 });
 
 test('spetspriemnik exposes release, names, bribe, riot and shelter decisions', () => {

@@ -1,13 +1,19 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { FloorLevel } from '../src/core/types';
+import { EntityType, Faction, FloorLevel, ZoneFaction, type TerritoryOwner } from '../src/core/types';
+import { factionToTerritoryOwner } from '../src/data/factions';
 import { generateFloor } from '../src/gen/floor_manifest';
 import {
   getKvartirySocialMacroGraph,
   measureKvartiryArticulation,
 } from '../src/gen/kvartiry/social_macro_graph';
 import { getRouteCueMarkers } from '../src/systems/route_cues';
+import {
+  countTerritoryCells,
+  territoryHqAnchors,
+  territoryOwnerAtIndex,
+} from '../src/systems/territory';
 import { auditReachability, hasReachableAdjacentCell } from '../src/core/world';
 
 let generated: ReturnType<typeof generateFloor> | null = null;
@@ -15,6 +21,22 @@ let generated: ReturnType<typeof generateFloor> | null = null;
 function kvartiry(): ReturnType<typeof generateFloor> {
   generated ??= generateFloor(FloorLevel.KVARTIRY, 20_260_530);
   return generated;
+}
+
+const KVARTIRY_TERRITORY_TARGETS: readonly { owner: TerritoryOwner; share: number }[] = [
+  { owner: ZoneFaction.CITIZEN, share: 0.66 },
+  { owner: ZoneFaction.LIQUIDATOR, share: 0.12 },
+  { owner: ZoneFaction.CULTIST, share: 0.06 },
+  { owner: ZoneFaction.SCIENTIST, share: 0.07 },
+  { owner: ZoneFaction.WILD, share: 0.09 },
+];
+
+function roomMappedCells(gen: ReturnType<typeof generateFloor>, roomId: number): number {
+  let cells = 0;
+  for (const id of gen.world.roomMap) {
+    if (id === roomId) cells++;
+  }
+  return cells;
 }
 
 test('Kvartiry generation exposes a social macro graph with domain descriptors and route choices', () => {
@@ -69,4 +91,39 @@ test('Kvartiry social macro anchors stay reachable and do not leave large isolat
   assert.equal(metric.largeIsolatedRegionCells, 0);
   assert.equal(metric.largestRegionCells > 100_000, true);
   assert.equal(graph.articulation.largeIsolatedRegionCount, 0);
+});
+
+test('Kvartiry keeps cell-first faction territory shares, HQ anchors, and own-land population bias', () => {
+  const gen = kvartiry();
+  const totalCells = gen.world.factionControl.length;
+  const counts = new Map(countTerritoryCells(gen.world).map(row => [row.owner, row.cells]));
+  const anchors = territoryHqAnchors(gen.world);
+  const anchorOwners = new Set(anchors.map(anchor => anchor.owner));
+
+  for (const target of KVARTIRY_TERRITORY_TARGETS) {
+    const cells = counts.get(target.owner) ?? 0;
+    assert.equal(cells > 0, true, `owner ${target.owner} should control cells`);
+    assert.equal(anchorOwners.has(target.owner), true, `owner ${target.owner} should have an HQ anchor`);
+    const share = cells / totalCells;
+    assert.equal(Math.abs(share - target.share) <= 0.025, true, `owner ${target.owner} share ${share}`);
+  }
+
+  for (const anchor of anchors) {
+    assert.equal(roomMappedCells(gen, anchor.roomId) > 0, true, `anchor room ${anchor.roomId} should own mapped cells`);
+  }
+
+  const byFaction = new Map<Faction, { total: number; own: number }>();
+  for (const entity of gen.entities) {
+    if (entity.type !== EntityType.NPC || entity.faction === undefined) continue;
+    const row = byFaction.get(entity.faction) ?? { total: 0, own: 0 };
+    row.total++;
+    const owner = factionToTerritoryOwner(entity.faction);
+    const idx = gen.world.idx(Math.floor(entity.x), Math.floor(entity.y));
+    if (territoryOwnerAtIndex(gen.world, idx) === owner) row.own++;
+    byFaction.set(entity.faction, row);
+  }
+
+  assert.equal((byFaction.get(Faction.CITIZEN)?.own ?? 0) / (byFaction.get(Faction.CITIZEN)?.total ?? 1) >= 0.78, true);
+  assert.equal((byFaction.get(Faction.WILD)?.own ?? 0) / (byFaction.get(Faction.WILD)?.total ?? 1) >= 0.35, true);
+  assert.equal((byFaction.get(Faction.LIQUIDATOR)?.own ?? 0) / (byFaction.get(Faction.LIQUIDATOR)?.total ?? 1) >= 0.35, true);
 });

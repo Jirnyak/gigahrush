@@ -12,6 +12,9 @@ import {
 } from '../../core/types';
 import type { World } from '../../core/world';
 import { isPlayerEntity } from '../player_actor';
+import { roomSupports } from '../../data/room_affordances';
+import { factionToTerritoryOwner } from '../../data/factions';
+import { territoryOwnerAt, territoryOwnerAtIndex } from '../territory';
 
 export const NPC_EMERGENCY_DEFAULT_CANDIDATE_CAP = 12;
 export const NPC_EMERGENCY_MAX_CANDIDATE_CAP = 24;
@@ -491,17 +494,7 @@ function isCandidateRoom(room: Room, sources: readonly NpcEmergencyShelterSource
 }
 
 function isShelterLikeRoom(room: Room): boolean {
-  switch (room.type) {
-    case RoomType.LIVING:
-    case RoomType.MEDICAL:
-    case RoomType.STORAGE:
-    case RoomType.OFFICE:
-    case RoomType.HQ:
-    case RoomType.COMMON:
-      return true;
-    default:
-      return false;
-  }
+  return roomSupports(room.type, 'shelter');
 }
 
 function resolveRoomTarget(world: World, room: Room): { x: number; y: number; passable: boolean } {
@@ -632,27 +625,14 @@ function baseRoomBias(type: RoomType): number {
 
 function roomFactionScore(world: World, npc: Entity, room: Room, targetX: number, targetY: number): number {
   void room;
-  const zone = world.zones[world.zoneMap[world.idx(targetX, targetY)]];
-  if (!zone) return 0;
-  if (zone.faction === ZoneFaction.SAMOSBOR) return npc.faction === Faction.CULTIST ? -4 : -18;
-  const own = zoneFactionForNpc(npc);
-  if (zone.faction === own) return 11;
-  if (npc.faction === Faction.SCIENTIST && zone.faction === ZoneFaction.CITIZEN) return 7;
-  if (npc.faction === Faction.CITIZEN && zone.faction === ZoneFaction.WILD) return -12;
-  if (npc.faction === Faction.WILD && zone.faction === ZoneFaction.CITIZEN) return -6;
+  const owner = territoryOwnerAt(world, targetX, targetY);
+  if (owner === ZoneFaction.SAMOSBOR) return npc.faction === Faction.CULTIST ? -4 : -18;
+  const own = npc.faction === undefined ? ZoneFaction.CITIZEN : factionToTerritoryOwner(npc.faction);
+  if (owner === own) return 11;
+  if (npc.faction === Faction.SCIENTIST && owner === ZoneFaction.CITIZEN) return 7;
+  if (npc.faction === Faction.CITIZEN && owner === ZoneFaction.WILD) return -12;
+  if (npc.faction === Faction.WILD && owner === ZoneFaction.CITIZEN) return -6;
   return -8;
-}
-
-function zoneFactionForNpc(npc: Entity): ZoneFaction {
-  switch (npc.faction) {
-    case Faction.LIQUIDATOR: return ZoneFaction.LIQUIDATOR;
-    case Faction.CULTIST: return ZoneFaction.CULTIST;
-    case Faction.WILD: return ZoneFaction.WILD;
-    case Faction.SCIENTIST:
-    case Faction.CITIZEN:
-    default:
-      return ZoneFaction.CITIZEN;
-  }
 }
 
 function roomDangerPenalty(world: World, room: Room, targetX: number, targetY: number, intent: NpcEmergencyIntent, options: NpcEmergencyOptions): number {
@@ -660,7 +640,7 @@ function roomDangerPenalty(world: World, room: Room, targetX: number, targetY: n
   const zone = world.zones[world.zoneMap[idx]];
   let penalty = world.fog[idx] / 12;
   if (zone?.fogged) penalty += 8;
-  if (zone?.faction === ZoneFaction.SAMOSBOR) penalty += 12;
+  if (territoryOwnerAtIndex(world, idx) === ZoneFaction.SAMOSBOR) penalty += 12;
   if (options.pressureX !== undefined && options.pressureY !== undefined) {
     const d = Math.sqrt(world.dist2(room.x + room.w / 2, room.y + room.h / 2, options.pressureX, options.pressureY));
     penalty += Math.max(0, 24 - d) * 0.45;

@@ -43,6 +43,7 @@ import { dropMonsterRareLoot } from './systems/monster_drops';
 import { generateNpcTradeItems } from './data/dialogue';
 import { generateTalkText } from './systems/dialogue';
 import { updateSamosbor, rebuildWorld, clearFogInZone, updateIstotitBellCompulsion } from './systems/samosbor';
+import { getActiveSamosborVariant } from './systems/samosbor_variants_runtime';
 import { cleanCellHazardsNear, getCellHazardMoveMultiplier, tickCellHazards } from './systems/cell_hazards';
 import { adjustMonsterProjectileDamage, recordMonsterMeleeDeath, recordMonsterProjectileDeath } from './systems/monster_counterplay';
 import { applyMonsterArmorHit } from './systems/monster_armor';
@@ -74,11 +75,16 @@ import {
   mobileLookSensitivity,
   mouseLookSensitivity,
   resetCameraFov,
+  resetMapLegendSettings,
   resetUiSettings,
   toggleAutoPickup,
   toggleUiElement,
+  toggleMapColorMode,
+  toggleMapLegendToggle,
   uiElementEnabled,
   type UiSettingsView,
+  mapLegendRowAt,
+  mapLegendRowCount,
   uiSettingsRowAt,
   uiSettingsRowCount,
 } from './systems/ui_orchestrator';
@@ -330,9 +336,9 @@ import {
 import {
   applyDamageRelationPenalty,
   updateFactionCapture, initFactionControl,
-  zoneFactionToFaction,
   updateFactionActivity,
 } from './systems/factions';
+import { territoryFactionAt } from './systems/territory';
 import {
   captureAlifeFloorState,
   currentAlifeFloorKey,
@@ -731,6 +737,7 @@ function requirePointerCaptureGate(reason: PointerCaptureGateReason, clearInputs
   if (clearInputs && typeof input !== 'undefined') {
     clearControlInputs(input);
     input.mouseAttack = false;
+    input.mouseUse = false;
     input.mouse.dx = 0;
     input.mouse.dy = 0;
   }
@@ -1777,6 +1784,9 @@ function initGame(runSeedOverride?: number): void {
     uiSettingsView: 'interface',
     uiSettingsSel: 0,
     uiSettingsScroll: 0,
+    showMapLegend: false,
+    mapLegendSel: 0,
+    mapLegendScroll: 0,
     npcLogRadiusMeters: 100,
     msgLog: [{ text: 'Добро пожаловать в ГИГАХРУЩ. Закройте дверь.', color: '#aaa', day: 0, hour: 8, minute: 0, distanceMeters: 0 }],
     dmgFlash: 0,
@@ -2096,7 +2106,7 @@ function movePlayer(dt: number): void {
     const statusMod = zhelemishMoveMult(actor, state.time);
     const coldMod = hladonColdMoveMultiplier(world, actor);
     const toolLightMod = passiveToolLightMoveMultiplier(actor.tool) *
-      (input.use ? activeToolLightMoveMultiplier(actor.tool) : 1);
+      ((input.use || input.mouseUse) ? activeToolLightMoveMultiplier(actor.tool) : 1);
     const sprintMod = playerSprintMoveMultiplier(actor);
     const moveMod = sleepMod * agiMod * hazardMod * statusMod * coldMod * toolLightMod * sprintMod;
     mx = mx / len * speed * moveMod;
@@ -3794,6 +3804,7 @@ function closeInterfacesForCraftMenu(): void {
   state.showLog = false;
   state.showControls = false;
   state.showUiSettings = false;
+  state.showMapLegend = false;
   cancelControlCapture();
   state.mapMode = 0;
   closeNetSphere();
@@ -4428,11 +4439,7 @@ function applyUrinationPenalty(dt: number): void {
   const room = world.roomAt(player.x, player.y);
   if (room && room.type === RoomType.BATHROOM) return; // toilet — no penalty
 
-  const pci = world.idx(Math.floor(player.x), Math.floor(player.y));
-  const zid = world.zoneMap[pci];
-  const zone = world.zones[zid];
-  if (!zone) return;
-  const ownerFaction = zoneFactionToFaction(zone.faction);
+  const ownerFaction = territoryFactionAt(world, player.x, player.y);
   if (ownerFaction === null) return;
 
   // Immediate penalty when urination starts
@@ -4509,14 +4516,15 @@ function cleanSurfaceArea(cx: number, cy: number, radiusCells: number): number {
 
 function updateEquippedTool(dt: number, actor = player): void {
   if (!actor.alive) {
-    _prevToolUse = input.use;
+    _prevToolUse = input.use || input.mouseUse;
     return;
   }
   const player = actor;
   if (_toolActionCd > 0) _toolActionCd = Math.max(0, _toolActionCd - dt);
   const toolId = player.tool ?? '';
-  const useEdge = input.use && !_prevToolUse;
-  _prevToolUse = input.use;
+  const wantsToolUse = input.use || input.mouseUse;
+  const useEdge = wantsToolUse && !_prevToolUse;
+  _prevToolUse = wantsToolUse;
   if (!toolId) return;
 
   const hasTool = (player.inventory ?? []).some(s => s.defId === toolId);
@@ -4529,12 +4537,12 @@ function updateEquippedTool(dt: number, actor = player): void {
   }
   const activeLightDrain = activeToolLightDrainPerSecond(toolId);
   if (activeLightDrain > 0) {
-    if (input.use) consumeToolDurability(player, dt * activeLightDrain, state.msgs, state.time, state);
+    if (wantsToolUse) consumeToolDurability(player, dt * activeLightDrain, state.msgs, state.time, state);
     return;
   }
 
   if (toolId === UV_SPOTLIGHT_ID) {
-    if (!input.use || _toolActionCd > 0) return;
+    if (!wantsToolUse || _toolActionCd > 0) return;
     const result = useUvSpotlight(world, entities, player, state);
     if (result) {
       state.uvBeamFx = UV_SPOTLIGHT_FX_SECONDS;
@@ -4548,7 +4556,7 @@ function updateEquippedTool(dt: number, actor = player): void {
   }
 
   if (toolId === CHALK_ITEM_ID) {
-    if (!input.use || _toolActionCd > 0) return;
+    if (!wantsToolUse || _toolActionCd > 0) return;
     const def = ITEMS[CHALK_ITEM_ID];
     if (drawEquippedChalkPixel(world, player, def?.durability ?? 0)) {
       consumeToolDurability(player, 0.1, state.msgs, state.time, state);
@@ -4575,7 +4583,7 @@ function updateEquippedTool(dt: number, actor = player): void {
   }
 
   if (toolId === 'jackhammer') {
-    if (!input.use || _toolActionCd > 0) return;
+    if (!wantsToolUse || _toolActionCd > 0) return;
     if (world.hermoWall[ci] || world.aptMask[ci]) {
       state.msgs.push(msg('Гермостена неразрушима', state.time, '#f44'));
       _toolActionCd = 0.2;
@@ -4659,7 +4667,7 @@ function updateEquippedTool(dt: number, actor = player): void {
 
   const cleanupTool = cleanupToolProfile(toolId);
   if (cleanupTool) {
-    if (!input.use || _toolActionCd > 0) return;
+    if (!wantsToolUse || _toolActionCd > 0) return;
     const cleaned = cleanSurfaceArea(tx, ty, cleanupTool.surfaceRadius);
     const cleanedHazards = cleanCellHazardsNear(world, tx, ty, cleanupTool.hazardRadius, state, player, cleanupTool.hazardReason);
     consumeToolDurability(player, cleanupTool.wear, state.msgs, state.time, state);
@@ -4668,8 +4676,7 @@ function updateEquippedTool(dt: number, actor = player): void {
       if (cleanupTool.relationEvery > 0) _cleanRelAccum += 1;
       if (cleanupTool.relationEvery > 0 && _cleanRelAccum >= cleanupTool.relationEvery) {
         _cleanRelAccum = 0;
-        const z = world.zones[world.zoneMap[world.idx(Math.floor(player.x), Math.floor(player.y))]];
-        const owner = z ? zoneFactionToFaction(z.faction) : null;
+        const owner = territoryFactionAt(world, player.x, player.y);
         if (owner !== null) {
           addFactionRelMutual(Faction.PLAYER, owner, 1);
           state.msgs.push(msg('Местные ценят вашу уборку (+отношения)', state.time, '#8f8'));
@@ -4681,7 +4688,7 @@ function updateEquippedTool(dt: number, actor = player): void {
   }
 
   if (toolId === 'vacuum') {
-    if (!input.use || _toolActionCd > 0) return;
+    if (!wantsToolUse || _toolActionCd > 0) return;
     const pcx = Math.floor(player.x);
     const pcy = Math.floor(player.y);
     let clearedFog = 0;
@@ -4712,6 +4719,8 @@ let prevFactionMenu = false;
 let prevLogMenu = false;
 let prevControlsMenu = false;
 let prevUiSettingsMenu = false;
+let prevMapLegendMenu = false;
+let prevControlReset = false;
 let prevControlClose = false;
 type MenuRepeatKey = 'up' | 'down' | 'left' | 'right';
 const MENU_REPEAT_DELAY = 0.30;
@@ -4763,6 +4772,8 @@ function syncMenuInputBaselines(): void {
   prevLogMenu = input.logMenu;
   prevControlsMenu = input.controls;
   prevUiSettingsMenu = input.uiSettings;
+  prevMapLegendMenu = input.mapLegend;
+  prevControlReset = input.controlReset;
   prevControlClose = input.controlClose;
   prevMap = input.map;
 }
@@ -4803,7 +4814,7 @@ function mobileGestureUnlock(): void {
 function syncPauseState(): void {
   if (typeof state === 'undefined') return;
   state.paused = pointerCaptureGateVisible() || pageHiddenPause || platformPause || state.showMenu || state.showInventory || state.showNpcMenu || state.showContainerMenu || state.showCraftMenu ||
-    state.showQuests || state.showDebug || state.showFactions || state.showLog || state.showControls || state.showUiSettings ||
+    state.showQuests || state.showDebug || state.showFactions || state.showLog || state.showControls || state.showUiSettings || state.showMapLegend ||
     isNetSphereOpen() || isNetTerminalGenOpen() || isInteractableOverlayOpen() || isEmergencyPanelMenuOpen() || isMapEditorOpen();
   syncPointerCursorClasses();
   syncPlatformGameplayState();
@@ -4821,7 +4832,7 @@ function syncPlatformGameplayState(): void {
 function isMobileMenuOpen(): boolean {
   if (typeof state === 'undefined') return false;
   return state.showMenu || state.showInventory || state.showNpcMenu || state.showContainerMenu || state.showCraftMenu ||
-    state.showQuests || state.showDebug || state.showFactions || state.showLog || state.showControls || state.showUiSettings ||
+    state.showQuests || state.showDebug || state.showFactions || state.showLog || state.showControls || state.showUiSettings || state.showMapLegend ||
     state.mapMode === 2 || isNetSphereOpen() || isNetTerminalGenOpen() || isInteractableOverlayOpen() || isEmergencyPanelMenuOpen() || isMapEditorOpen();
 }
 
@@ -4840,6 +4851,7 @@ function closeMobilePanels(includeMap = true): void {
   state.showLog = false;
   state.showControls = false;
   state.showUiSettings = false;
+  state.showMapLegend = false;
   cancelControlCapture();
   if (includeMap) state.mapMode = 0;
   closeNetSphere();
@@ -4892,6 +4904,25 @@ function closeFullMapMenu(): void {
 function toggleFullMapMenu(): void {
   if (state.mapMode === 2) closeFullMapMenu();
   else openFullMapMenu();
+}
+
+function openMapLegendMenu(): void {
+  if (typeof state === 'undefined') return;
+  closeInterfacesForFullMap();
+  state.mapMode = 0;
+  state.showMapLegend = true;
+  state.mapLegendSel = Math.max(0, Math.min(mapLegendRowCount() - 1, state.mapLegendSel));
+  keepMapLegendSelectionVisible();
+  resetMenuRepeats();
+  syncPauseState();
+  updateMobileContext(true);
+}
+
+function closeMapLegendMenu(): void {
+  if (typeof state === 'undefined') return;
+  state.showMapLegend = false;
+  syncPauseState();
+  updateMobileContext(true);
 }
 
 function closeActiveMobileMenu(): void {
@@ -5263,6 +5294,22 @@ function keepUiSettingsSelectionVisible(): void {
   state.uiSettingsScroll = Math.max(0, Math.min(maxScroll, state.uiSettingsScroll));
 }
 
+function mapLegendVisibleRows(): number {
+  const { sy } = menuScale();
+  return Math.max(4, Math.floor((hudCanvas.height - 92 * sy) / Math.max(1, 13 * sy)));
+}
+
+function keepMapLegendSelectionVisible(): void {
+  const count = mapLegendRowCount();
+  const maxSel = Math.max(0, count - 1);
+  state.mapLegendSel = Math.max(0, Math.min(maxSel, state.mapLegendSel));
+  const visible = mapLegendVisibleRows();
+  const maxScroll = Math.max(0, count - visible);
+  if (state.mapLegendSel < state.mapLegendScroll) state.mapLegendScroll = state.mapLegendSel;
+  if (state.mapLegendSel >= state.mapLegendScroll + visible) state.mapLegendScroll = state.mapLegendSel - visible + 1;
+  state.mapLegendScroll = Math.max(0, Math.min(maxScroll, state.mapLegendScroll));
+}
+
 function openControlsMenu(view: GameState['controlView'] = 'keys'): void {
   state.showMenu = false;
   state.showInventory = false;
@@ -5274,6 +5321,7 @@ function openControlsMenu(view: GameState['controlView'] = 'keys'): void {
   state.showFactions = false;
   state.showLog = false;
   state.showUiSettings = false;
+  state.showMapLegend = false;
   state.mapMode = 0;
   state.controlView = view;
   state.showControls = true;
@@ -5307,6 +5355,7 @@ function openUiSettingsMenu(view: UiSettingsView = 'interface', focusKind?: stri
   state.showLog = false;
   state.showControls = false;
   state.mapMode = 0;
+  state.showMapLegend = false;
   state.showUiSettings = true;
   state.uiSettingsView = view;
   state.uiSettingsSel = 0;
@@ -5362,6 +5411,23 @@ function applyUiSettingsSelection(index: number): void {
   toggleUiElement(row.element.id);
 }
 
+function applyMapLegendSelection(index: number): void {
+  const row = mapLegendRowAt(index);
+  if (!row) return;
+  if (row.kind === 'reset_map_legend') {
+    resetMapLegendSettings();
+    state.msgs.push(msg('Легенда карты сброшена', state.time, '#8cf'));
+    return;
+  }
+  if (row.kind === 'map_color_mode') {
+    const mode = toggleMapColorMode();
+    state.msgs.push(msg(`Карта: цвет клеток - ${mode === 'factions' ? 'контроль фракций' : 'типы комнат'}`, state.time, '#8cf'));
+    return;
+  }
+  const enabled = toggleMapLegendToggle(row.toggle.id);
+  state.msgs.push(msg(`Карта: ${row.toggle.label} ${enabled ? 'вкл' : 'выкл'}`, state.time, enabled ? '#8cf' : '#fc8'));
+}
+
 function pointInRect(x: number, y: number, rx: number, ry: number, rw: number, rh: number): boolean {
   return x >= rx && x <= rx + rw && y >= ry && y <= ry + rh;
 }
@@ -5376,6 +5442,11 @@ function handleMobileHudTap(x: number, y: number): void {
 
   if (state.mapMode === 2 && !state.showInventory && !state.showQuests && !state.showLog && !state.showFactions && !state.showMenu && !state.showControls && !state.showUiSettings && !state.showNpcMenu && !state.showContainerMenu && !state.showCraftMenu) {
     state.mapMode = 0;
+    return;
+  }
+
+  if (state.showMapLegend && !state.showInventory && !state.showQuests && !state.showLog && !state.showFactions && !state.showMenu && !state.showControls && !state.showUiSettings && !state.showNpcMenu && !state.showContainerMenu && !state.showCraftMenu) {
+    state.showMapLegend = false;
     return;
   }
 
@@ -5739,6 +5810,7 @@ function handleMenuInput(): void {
     state.showLog = false;
     state.showControls = false;
     state.showUiSettings = false;
+    state.showMapLegend = false;
     cancelControlCapture();
     closeNetSphere();
     closeNetTerminalGen();
@@ -5760,6 +5832,8 @@ function handleMenuInput(): void {
     prevLogMenu = input.logMenu;
     prevControlsMenu = input.controls;
     prevUiSettingsMenu = input.uiSettings;
+    prevMapLegendMenu = input.mapLegend;
+    prevControlReset = input.controlReset;
     prevControlClose = input.controlClose;
     prevMap = input.map;
     return;
@@ -5773,8 +5847,22 @@ function handleMenuInput(): void {
   }
 
   const globalMapEdge = input.map && !prevMap;
+  const globalMapLegendEdge = input.mapLegend && !prevMapLegendMenu;
+  if (globalMapLegendEdge && !isMapEditorOpen()) {
+    if (state.showMapLegend) closeMapLegendMenu();
+    else if (state.mapMode === 2) {
+      closeFullMapMenu();
+      openMapLegendMenu();
+    } else if (!isMobileMenuOpen()) openMapLegendMenu();
+    syncMenuInputBaselines();
+    return;
+  }
   if (globalMapEdge && !isMapEditorOpen()) {
     if (state.mapMode === 2) closeFullMapMenu();
+    else if (state.showMapLegend) {
+      closeMapLegendMenu();
+      openFullMapMenu();
+    }
     else if (!isMobileMenuOpen()) openFullMapMenu();
     syncMenuInputBaselines();
     return;
@@ -5847,6 +5935,8 @@ function handleMenuInput(): void {
     prevLogMenu = input.logMenu;
     prevControlsMenu = input.controls;
     prevUiSettingsMenu = input.uiSettings;
+    prevMapLegendMenu = input.mapLegend;
+    prevControlReset = input.controlReset;
     prevControlClose = input.controlClose;
     prevMap = input.map;
     return;
@@ -5902,6 +5992,8 @@ function handleMenuInput(): void {
     prevLogMenu = input.logMenu;
     prevControlsMenu = input.controls;
     prevUiSettingsMenu = input.uiSettings;
+    prevMapLegendMenu = input.mapLegend;
+    prevControlReset = input.controlReset;
     prevControlClose = input.controlClose;
     prevMap = input.map;
     return;
@@ -5951,6 +6043,8 @@ function handleMenuInput(): void {
     prevLogMenu = input.logMenu;
     prevControlsMenu = input.controls;
     prevUiSettingsMenu = input.uiSettings;
+    prevMapLegendMenu = input.mapLegend;
+    prevControlReset = input.controlReset;
     prevControlClose = input.controlClose;
     prevMap = input.map;
     return;
@@ -5984,12 +6078,15 @@ function handleMenuInput(): void {
     prevLogMenu = input.logMenu;
     prevControlsMenu = input.controls;
     prevUiSettingsMenu = input.uiSettings;
+    prevMapLegendMenu = input.mapLegend;
+    prevControlReset = input.controlReset;
     prevControlClose = input.controlClose;
     return;
   }
 
   const acceptEdge = input.escape && !prevEsc;
   const closeEdge = input.controlClose && !prevControlClose;
+  const resetEdge = input.controlReset && !prevControlReset;
   const upEdge = input.invUp && !prevMenuUp;
   const dnEdge = input.invDn && !prevMenuDn;
   const leftEdge = input.invLeft && !prevMenuLeft;
@@ -6001,8 +6098,10 @@ function handleMenuInput(): void {
   const logEdge = input.logMenu && !prevLogMenu;
   const controlsEdge = input.controls && !prevControlsMenu;
   const uiSettingsEdge = input.uiSettings && !prevUiSettingsMenu;
+  const mapLegendEdge = input.mapLegend && !prevMapLegendMenu;
+  const dbgEdge = input.debugScreen && !prevDebug;
   const anyRepeatMenuOpen = state.showMenu || state.showInventory || state.showQuests ||
-    state.showContainerMenu || state.showCraftMenu || state.showNpcMenu || state.showDebug || state.showFactions || state.showLog || state.showControls || state.showUiSettings;
+    state.showContainerMenu || state.showCraftMenu || state.showNpcMenu || state.showDebug || state.showFactions || state.showLog || state.showControls || state.showUiSettings || state.showMapLegend;
   if (!anyRepeatMenuOpen) resetMenuRepeats();
 
   const controlsOpenedThisFrame = controlsEdge && !state.showControls && !anyRepeatMenuOpen && state.mapMode !== 2;
@@ -6012,8 +6111,14 @@ function handleMenuInput(): void {
   // ── Hotkey / rebind screen ───────────────────────────────
   if (state.showControls) {
     if (!getControlCaptureAction()) {
+      if (controlsEdge && !controlsOpenedThisFrame) {
+        closeControlsMenu();
+        syncMenuInputBaselines();
+        updateMobileContext(true);
+        return;
+      }
       const effectiveAcceptEdge = !controlsOpenedThisFrame && acceptEdge;
-      const fixedControlsCommand = effectiveAcceptEdge || closeEdge;
+      const fixedControlsCommand = effectiveAcceptEdge || closeEdge || resetEdge;
       const upNav = !fixedControlsCommand && menuRepeatStep('up', input.invUp, upEdge);
       const dnNav = !fixedControlsCommand && menuRepeatStep('down', input.invDn, dnEdge);
       if (upNav) state.controlSel = Math.max(0, state.controlSel - 1);
@@ -6022,7 +6127,10 @@ function handleMenuInput(): void {
       const mouseSensitivitySelected = controlMouseSensitivitySelected();
       const leftNav = !fixedControlsCommand && mouseSensitivitySelected ? menuRepeatStep('left', input.invLeft, leftEdge) : false;
       const rightNav = !fixedControlsCommand && mouseSensitivitySelected ? menuRepeatStep('right', input.invRight, rightEdge) : false;
-      if (mouseSensitivitySelected && (leftNav || rightNav || effectiveAcceptEdge)) {
+      if (resetEdge && state.controlView === 'keys') {
+        resetAllControlBindings();
+        state.msgs.push(msg('Клавиши сброшены по умолчанию', state.time, '#8cf'));
+      } else if (mouseSensitivitySelected && (leftNav || rightNav || effectiveAcceptEdge)) {
         const sensitivity = adjustMouseLookSensitivity(leftNav ? -1 : 1);
         state.msgs.push(msg(`Чувствительность мыши: ${Math.round(sensitivity * 100)}%`, state.time, '#8cf'));
       } else if (effectiveAcceptEdge && controlResetSelected()) {
@@ -6050,6 +6158,45 @@ function handleMenuInput(): void {
     prevLogMenu = input.logMenu;
     prevControlsMenu = input.controls;
     prevUiSettingsMenu = input.uiSettings;
+    prevMapLegendMenu = input.mapLegend;
+    prevControlReset = input.controlReset;
+    prevControlClose = input.controlClose;
+    syncPauseState();
+    return;
+  }
+
+  // ── Full-map legend/settings screen ─────────────────────
+  if (state.showMapLegend) {
+    if (mapLegendEdge) {
+      closeMapLegendMenu();
+      syncMenuInputBaselines();
+      updateMobileContext(true);
+      return;
+    }
+    const fixedLegendCommand = acceptEdge || closeEdge;
+    const upNav = !fixedLegendCommand && menuRepeatStep('up', input.invUp, upEdge);
+    const dnNav = !fixedLegendCommand && menuRepeatStep('down', input.invDn, dnEdge);
+    if (upNav) state.mapLegendSel = Math.max(0, state.mapLegendSel - 1);
+    if (dnNav) state.mapLegendSel = Math.min(mapLegendRowCount() - 1, state.mapLegendSel + 1);
+    keepMapLegendSelectionVisible();
+    if (acceptEdge) applyMapLegendSelection(state.mapLegendSel);
+    if (closeEdge) closeMapLegendMenu();
+
+    prevEsc = input.escape;
+    prevMenuUp = input.invUp;
+    prevMenuDn = input.invDn;
+    prevMenuLeft = input.invLeft;
+    prevMenuRight = input.invRight;
+    prevDrop = input.drop;
+    prevInvMenu = input.inv;
+    prevQuestMenu = input.questLog;
+    prevDebug = input.debugScreen;
+    prevFactionMenu = input.factionMenu;
+    prevLogMenu = input.logMenu;
+    prevControlsMenu = input.controls;
+    prevUiSettingsMenu = input.uiSettings;
+    prevMapLegendMenu = input.mapLegend;
+    prevControlReset = input.controlReset;
     prevControlClose = input.controlClose;
     syncPauseState();
     return;
@@ -6057,6 +6204,12 @@ function handleMenuInput(): void {
 
   // ── Configurable HUD element screen ─────────────────────
   if (state.showUiSettings) {
+    if (uiSettingsEdge) {
+      closeUiSettingsMenu();
+      syncMenuInputBaselines();
+      updateMobileContext(true);
+      return;
+    }
     const fixedUiCommand = acceptEdge || closeEdge;
     const upNav = !fixedUiCommand && menuRepeatStep('up', input.invUp, upEdge);
     const dnNav = !fixedUiCommand && menuRepeatStep('down', input.invDn, dnEdge);
@@ -6081,6 +6234,8 @@ function handleMenuInput(): void {
     prevLogMenu = input.logMenu;
     prevControlsMenu = input.controls;
     prevUiSettingsMenu = input.uiSettings;
+    prevMapLegendMenu = input.mapLegend;
+    prevControlReset = input.controlReset;
     prevControlClose = input.controlClose;
     syncPauseState();
     return;
@@ -6187,13 +6342,17 @@ function handleMenuInput(): void {
   }
   // ── Quest log toggle ─────────────────────────────────────
   else if (state.showQuests) {
-    const totalQ = questLogEntries().length;
-    const upNav = menuRepeatStep('up', input.invUp, upEdge);
-    const dnNav = menuRepeatStep('down', input.invDn, dnEdge);
-    if (upNav) state.questPage = Math.max(0, state.questPage - 1);
-    if (dnNav) state.questPage = Math.min(Math.max(0, totalQ - 1), state.questPage + 1);
-    if (acceptEdge) {
-      toggleSelectedQuestActive();
+    if (questEdge) {
+      state.showQuests = false;
+    } else {
+      const totalQ = questLogEntries().length;
+      const upNav = menuRepeatStep('up', input.invUp, upEdge);
+      const dnNav = menuRepeatStep('down', input.invDn, dnEdge);
+      if (upNav) state.questPage = Math.max(0, state.questPage - 1);
+      if (dnNav) state.questPage = Math.min(Math.max(0, totalQ - 1), state.questPage + 1);
+      if (acceptEdge) {
+        toggleSelectedQuestActive();
+      }
     }
   }
   // ── Container menu navigation ────────────────────────────
@@ -6370,7 +6529,7 @@ function handleMenuInput(): void {
   }
   // ── Debug menu navigation ────────────────────────────────
   else if (state.showDebug) {
-    if (closeEdge) { state.showDebug = false; }
+    if (closeEdge || dbgEdge) { state.showDebug = false; }
     else {
       const upNav = menuRepeatStep('up', input.invUp, upEdge);
       const dnNav = menuRepeatStep('down', input.invDn, dnEdge);
@@ -6388,18 +6547,26 @@ function handleMenuInput(): void {
   }
   // ── Faction relations menu ───────────────────────────────
   else if (state.showFactions) {
-    const upNav = menuRepeatStep('up', input.invUp, upEdge);
-    const dnNav = menuRepeatStep('down', input.invDn, dnEdge);
-    if (upNav) state.factionRankScroll = Math.max(0, state.factionRankScroll - 3);
-    if (dnNav) state.factionRankScroll = Math.min(99, state.factionRankScroll + 3);
+    if (factionEdge) {
+      state.showFactions = false;
+    } else {
+      const upNav = menuRepeatStep('up', input.invUp, upEdge);
+      const dnNav = menuRepeatStep('down', input.invDn, dnEdge);
+      if (upNav) state.factionRankScroll = Math.max(0, state.factionRankScroll - 3);
+      if (dnNav) state.factionRankScroll = Math.min(99, state.factionRankScroll + 3);
+    }
   }
   // ── Message log menu ─────────────────────────────────────
   else if (state.showLog) {
-    const maxScroll = Math.max(0, state.msgLog.length * 3); // generous; draw clamps
-    const upNav = menuRepeatStep('up', input.invUp, upEdge);
-    const dnNav = menuRepeatStep('down', input.invDn, dnEdge);
-    if (upNav) state.logScroll = Math.min(maxScroll, state.logScroll + 3);
-    if (dnNav) state.logScroll = Math.max(0, state.logScroll - 3);
+    if (logEdge) {
+      state.showLog = false;
+    } else {
+      const maxScroll = Math.max(0, state.msgLog.length * 3); // generous; draw clamps
+      const upNav = menuRepeatStep('up', input.invUp, upEdge);
+      const dnNav = menuRepeatStep('down', input.invDn, dnEdge);
+      if (upNav) state.logScroll = Math.min(maxScroll, state.logScroll + 3);
+      if (dnNav) state.logScroll = Math.max(0, state.logScroll - 3);
+    }
   }
   // ── Full map menu ───────────────────────────────────────
   else if (state.mapMode === 2) {
@@ -6407,7 +6574,6 @@ function handleMenuInput(): void {
   }
   // ── Normal gameplay toggles ──────────────────────────────
   else {
-    const dbgEdge = input.debugScreen && !prevDebug;
     if (dbgEdge) { state.showDebug = true; state.debugSel = 0; resetDebugInfoPage(); }
     if (invEdge) { state.showInventory = true; state.invSel = 0; }
     if (questEdge) { state.showQuests = true; }
@@ -6429,6 +6595,8 @@ function handleMenuInput(): void {
   prevLogMenu = input.logMenu;
   prevControlsMenu = input.controls;
   prevUiSettingsMenu = input.uiSettings;
+  prevMapLegendMenu = input.mapLegend;
+  prevControlReset = input.controlReset;
   prevControlClose = input.controlClose;
   prevMap = input.map;
 
@@ -6550,6 +6718,7 @@ function clearExternalPauseInputs(): void {
   clearControlInputs(input);
   mobileControls?.resetInput();
   input.mouseAttack = false;
+  input.mouseUse = false;
   input.mouse.dx = 0;
   input.mouse.dy = 0;
   input.touch.moveX = 0;
@@ -6780,9 +6949,9 @@ function gameLoop(now: number): void {
     }
     if (pendingLoad) { requestAnimationFrame(gameLoop); return; }
     syncMapExplorationAfterSamosborWave(world, state);
-    // Faction zone capture (cell-based territory control)
+    // Faction cell capture
     const factionStart = performance.now();
-    updateFactionCapture(world, entities, dt);
+    updateFactionCapture(world, entities, dt, state);
     updateFactionActivity(world, entities, player, state, nextEntityId, dt, currentFloorAllowsNpcPopulation());
     lastFactionUpdateMs = performance.now() - factionStart;
     contentStart = performance.now();
@@ -6959,7 +7128,7 @@ function gameLoop(now: number): void {
     }
     if (pendingLoad) { requestAnimationFrame(gameLoop); return; }
     syncMapExplorationAfterSamosborWave(world, state);
-    updateFactionCapture(world, entities, dt);
+    updateFactionCapture(world, entities, dt, state);
     updateFactionActivity(world, entities, player, state, nextEntityId, dt, currentFloorAllowsNpcPopulation());
     if (updateContentRuntimeHooks({ world, entities, player, state, nextEntityId, dt, phase: 'floor_activity', gameOver: true })) updateWorldData(world);
     bloodTrailAccum += dt;
@@ -6989,9 +7158,12 @@ function gameLoop(now: number): void {
   if (state.currentFloor === FloorLevel.MAINTENANCE) baseFog = 0.08;
   if (state.currentFloor === FloorLevel.HELL) baseFog = 0.05; // less fog, more horror visibility
   const smogFogBonus = !state.gameOver ? proceduralSmogFogDensityBonus(world, player, state) : 0;
-  const fogDensity = (state.samosborActive ? baseFog + 0.03 : baseFog) + smogFogBonus;
+  const samosborVariant = state.samosborActive ? getActiveSamosborVariant() : null;
+  const samosborVisual = samosborVariant?.visual;
+  const samosborGlitchPulse = 0.85 + ((Math.sin(uiTime * 5) + 1) * 0.5) * 0.15;
+  const fogDensity = baseFog + smogFogBonus + (state.samosborActive ? (samosborVisual?.fogDensityBonus ?? 0.02) : 0);
   const glitch = state.samosborActive
-    ? 0.3 + Math.sin(uiTime * 5) * 0.15
+    ? (samosborVisual?.glitchIntensity ?? 0.06) * samosborGlitchPulse
     : Math.min(0.18, smogFogBonus * 4);
 
   const renderActor = player;
@@ -7001,7 +7173,7 @@ function gameLoop(now: number): void {
   const passiveFlashlight = state.gameOver
     ? 0
     : passiveToolLightRenderIntensity(renderActor.tool, getEquippedToolDurability(renderActor));
-  const activeToolLight = state.gameOver || !input.use
+  const activeToolLight = state.gameOver || !(input.use || input.mouseUse)
     ? 0
     : activeToolLightRenderIntensity(renderActor.tool, getEquippedToolDurability(renderActor));
   const flashlight = state.gameOver
@@ -7070,6 +7242,7 @@ function returnToTitleScreen(): void {
   input.invRight = false;
   input.drop = false;
   input.uiSettings = false;
+  input.mapLegend = false;
   input.controlEdit = false;
   input.controlReset = false;
   input.controlClose = false;

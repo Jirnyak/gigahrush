@@ -19,10 +19,12 @@ import {
   ZoneFaction,
   type Entity,
   type Room,
+  type TerritoryOwner,
   type WorldContainer,
 } from '../../core/types';
 import { World } from '../../core/world';
 import { freshNeeds } from '../../data/catalog';
+import { HUMAN_TERRITORY_OWNERS, factionToTerritoryOwner } from '../../data/factions';
 import { MONSTERS } from '../../entities/monster';
 import { monsterSpr } from '../../render/sprite_index';
 import { placeEmergencyPanel } from '../../systems/emergency_panels';
@@ -68,6 +70,39 @@ interface DoorSite {
   y: number;
   ox: number;
   oy: number;
+}
+
+interface AttractorHqSupportSpec {
+  type: RoomType;
+  name: string;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  doorSide: DoorSide;
+  targetX: number;
+  targetY: number;
+}
+
+interface AttractorHqSpec {
+  owner: TerritoryOwner;
+  name: string;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  doorSide: DoorSide;
+  targetX: number;
+  targetY: number;
+  supports: readonly AttractorHqSupportSpec[];
+}
+
+interface AttractorStationSpec {
+  x: number;
+  y: number;
+  owner: TerritoryOwner;
+  vertical?: boolean;
+  label: string;
 }
 
 interface AttractorRooms {
@@ -174,6 +209,149 @@ const FLOW_SPECS: readonly Omit<AttractorStreamline, 'cellCount'>[] = [
   },
 ];
 
+const ATTRACTOR_HQ_COMPOUNDS: readonly AttractorHqSpec[] = [
+  {
+    owner: ZoneFaction.CITIZEN,
+    name: 'Аттракторный двор: гражданский штаб расходной очереди',
+    x: 142,
+    y: 168,
+    w: 38,
+    h: 22,
+    doorSide: 'east',
+    targetX: 214,
+    targetY: 180,
+    supports: [
+      { type: RoomType.KITCHEN, name: 'Аттракторный двор: кухня расходной очереди', x: 112, y: 170, w: 20, h: 14, doorSide: 'east', targetX: 214, targetY: 180 },
+      { type: RoomType.COMMON, name: 'Аттракторный двор: комната старших потока', x: 145, y: 198, w: 34, h: 16, doorSide: 'north', targetX: 214, targetY: 180 },
+      { type: RoomType.STORAGE, name: 'Аттракторный двор: склад общих прокладок', x: 188, y: 168, w: 22, h: 14, doorSide: 'west', targetX: 214, targetY: 180 },
+      { type: RoomType.MEDICAL, name: 'Аттракторный двор: медпункт слабого напора', x: 146, y: 140, w: 24, h: 14, doorSide: 'south', targetX: 214, targetY: 180 },
+    ],
+  },
+  {
+    owner: ZoneFaction.LIQUIDATOR,
+    name: 'Аттракторный двор: главный ликвидаторский штаб петли',
+    x: 778,
+    y: 144,
+    w: 48,
+    h: 28,
+    doorSide: 'south',
+    targetX: 802,
+    targetY: 206,
+    supports: [
+      { type: RoomType.STORAGE, name: 'Аттракторный двор: оружейная быстрой струи', x: 744, y: 150, w: 24, h: 16, doorSide: 'east', targetX: 802, targetY: 206 },
+      { type: RoomType.OFFICE, name: 'Аттракторный двор: журнал петлевой охраны', x: 834, y: 150, w: 28, h: 16, doorSide: 'west', targetX: 802, targetY: 206 },
+      { type: RoomType.MEDICAL, name: 'Аттракторный двор: санитарный шлюз ликвидаторов', x: 782, y: 108, w: 30, h: 16, doorSide: 'south', targetX: 802, targetY: 206 },
+      { type: RoomType.KITCHEN, name: 'Аттракторный двор: полевая кухня петли', x: 782, y: 184, w: 32, h: 16, doorSide: 'north', targetX: 802, targetY: 206 },
+    ],
+  },
+  {
+    owner: ZoneFaction.SCIENTIST,
+    name: 'Аттракторный двор: НИИ-штаб фазовой решетки',
+    x: 476,
+    y: 112,
+    w: 44,
+    h: 26,
+    doorSide: 'south',
+    targetX: 512,
+    targetY: 166,
+    supports: [
+      { type: RoomType.OFFICE, name: 'Аттракторный двор: кабинет фазовых протоколов', x: 430, y: 116, w: 30, h: 16, doorSide: 'east', targetX: 512, targetY: 166 },
+      { type: RoomType.STORAGE, name: 'Аттракторный двор: архив датчиков притяжения', x: 530, y: 116, w: 28, h: 16, doorSide: 'west', targetX: 512, targetY: 166 },
+      { type: RoomType.MEDICAL, name: 'Аттракторный двор: измерительная медкомната', x: 478, y: 76, w: 30, h: 16, doorSide: 'south', targetX: 512, targetY: 166 },
+      { type: RoomType.PRODUCTION, name: 'Аттракторный двор: стенд сухого вихря', x: 482, y: 150, w: 34, h: 18, doorSide: 'north', targetX: 512, targetY: 166 },
+    ],
+  },
+  {
+    owner: ZoneFaction.CULTIST,
+    name: 'Аттракторный двор: скрытый культовый штаб обратной струи',
+    x: 182,
+    y: 792,
+    w: 34,
+    h: 22,
+    doorSide: 'east',
+    targetX: 236,
+    targetY: 804,
+    supports: [
+      { type: RoomType.COMMON, name: 'Аттракторный двор: тихая комната кругового следа', x: 142, y: 790, w: 26, h: 16, doorSide: 'east', targetX: 236, targetY: 804 },
+      { type: RoomType.STORAGE, name: 'Аттракторный двор: кладовая свечей потока', x: 226, y: 790, w: 24, h: 16, doorSide: 'west', targetX: 236, targetY: 804 },
+      { type: RoomType.KITCHEN, name: 'Аттракторный двор: кухня ритуального кипятка', x: 182, y: 824, w: 26, h: 16, doorSide: 'north', targetX: 236, targetY: 804 },
+      { type: RoomType.BATHROOM, name: 'Аттракторный двор: мокрый предбанник обратной струи', x: 184, y: 756, w: 24, h: 16, doorSide: 'south', targetX: 236, targetY: 804 },
+    ],
+  },
+  {
+    owner: ZoneFaction.WILD,
+    name: 'Аттракторный двор: дикий штаб сухого кармана',
+    x: 796,
+    y: 812,
+    w: 42,
+    h: 24,
+    doorSide: 'west',
+    targetX: 760,
+    targetY: 824,
+    supports: [
+      { type: RoomType.STORAGE, name: 'Аттракторный двор: разобранная кладовая диких', x: 848, y: 814, w: 28, h: 16, doorSide: 'west', targetX: 760, targetY: 824 },
+      { type: RoomType.SMOKING, name: 'Аттракторный двор: курилка самозахвата', x: 760, y: 850, w: 28, h: 16, doorSide: 'north', targetX: 760, targetY: 824 },
+      { type: RoomType.COMMON, name: 'Аттракторный двор: общий угол сухого кармана', x: 756, y: 786, w: 30, h: 16, doorSide: 'south', targetX: 760, targetY: 824 },
+      { type: RoomType.BATHROOM, name: 'Аттракторный двор: сломанный душ сухого кармана', x: 842, y: 790, w: 24, h: 16, doorSide: 'west', targetX: 760, targetY: 824 },
+    ],
+  },
+  {
+    owner: ZoneFaction.LIQUIDATOR,
+    name: 'Аттракторный двор: ликвидаторский форпост восточного завихрения',
+    x: 884,
+    y: 454,
+    w: 36,
+    h: 20,
+    doorSide: 'west',
+    targetX: 842,
+    targetY: 466,
+    supports: [
+      { type: RoomType.STORAGE, name: 'Аттракторный двор: шкаф восточного форпоста', x: 928, y: 454, w: 22, h: 14, doorSide: 'west', targetX: 842, targetY: 466 },
+      { type: RoomType.OFFICE, name: 'Аттракторный двор: стол восточного дозора', x: 884, y: 486, w: 28, h: 14, doorSide: 'north', targetX: 842, targetY: 466 },
+    ],
+  },
+  {
+    owner: ZoneFaction.LIQUIDATOR,
+    name: 'Аттракторный двор: ликвидаторский форпост нижней петли',
+    x: 454,
+    y: 846,
+    w: 38,
+    h: 20,
+    doorSide: 'north',
+    targetX: 480,
+    targetY: 810,
+    supports: [
+      { type: RoomType.STORAGE, name: 'Аттракторный двор: шкаф нижнего форпоста', x: 410, y: 846, w: 24, h: 14, doorSide: 'east', targetX: 480, targetY: 810 },
+      { type: RoomType.MEDICAL, name: 'Аттракторный двор: перевязочный угол нижней петли', x: 500, y: 846, w: 26, h: 14, doorSide: 'west', targetX: 480, targetY: 810 },
+    ],
+  },
+];
+
+const ATTRACTOR_STATIONS: readonly AttractorStationSpec[] = [
+  { x: 118, y: 118, owner: ZoneFaction.CITIZEN, label: 'северо-западный расход' },
+  { x: 314, y: 126, owner: ZoneFaction.LIQUIDATOR, label: 'северный затвор' },
+  { x: 626, y: 126, owner: ZoneFaction.SCIENTIST, label: 'северная фазовая полка' },
+  { x: 904, y: 122, owner: ZoneFaction.LIQUIDATOR, label: 'северо-восточный пост' },
+  { x: 126, y: 334, owner: ZoneFaction.WILD, vertical: true, label: 'левая дальняя струя' },
+  { x: 300, y: 304, owner: ZoneFaction.CITIZEN, label: 'пункт выдачи сухих талонов' },
+  { x: 726, y: 306, owner: ZoneFaction.SCIENTIST, label: 'стенд бокового сдвига' },
+  { x: 904, y: 344, owner: ZoneFaction.LIQUIDATOR, vertical: true, label: 'правый патрульный крюк' },
+  { x: 118, y: 522, owner: ZoneFaction.CULTIST, vertical: true, label: 'серая обратная щель' },
+  { x: 260, y: 524, owner: ZoneFaction.WILD, label: 'дикий разборный остров' },
+  { x: 764, y: 520, owner: ZoneFaction.LIQUIDATOR, label: 'узел внешней петли' },
+  { x: 910, y: 526, owner: ZoneFaction.WILD, vertical: true, label: 'правый сухой карман' },
+  { x: 128, y: 708, owner: ZoneFaction.CULTIST, label: 'нижний след струи' },
+  { x: 330, y: 736, owner: ZoneFaction.WILD, label: 'паечная свалка' },
+  { x: 530, y: 748, owner: ZoneFaction.LIQUIDATOR, label: 'нижний пульт напора' },
+  { x: 720, y: 730, owner: ZoneFaction.SCIENTIST, label: 'сухая лаборатория завихрения' },
+  { x: 904, y: 730, owner: ZoneFaction.WILD, label: 'крайний самозахват' },
+  { x: 126, y: 910, owner: ZoneFaction.CULTIST, label: 'нижняя скрытая петля' },
+  { x: 332, y: 900, owner: ZoneFaction.CITIZEN, label: 'нижний жилой остров' },
+  { x: 520, y: 908, owner: ZoneFaction.WILD, label: 'разгрузка сухих труб' },
+  { x: 710, y: 896, owner: ZoneFaction.LIQUIDATOR, label: 'нижний ликвидаторский проход' },
+  { x: 910, y: 904, owner: ZoneFaction.WILD, label: 'юго-восточный сухой двор' },
+];
+
 export function generateAttractorDvorDesignFloor(): FloorGeneration {
   const world = new World();
   const entities: Entity[] = [];
@@ -234,6 +412,7 @@ export function generateAttractorDvorDesignFloor(): FloorGeneration {
 }
 
 export function expandAttractorDvorRouteGeometry(world: World, rng: () => number): void {
+  carveAttractorOuterFlowField(world, rng);
   const expansionFlows = [
     [{ x: 42, y: 214 }, { x: 236, y: 158 }, { x: 514, y: 216 }, { x: 812, y: 154 }, { x: 990, y: 236 }],
     [{ x: 34, y: 824 }, { x: 246, y: 762 }, { x: 520, y: 804 }, { x: 780, y: 748 }, { x: 986, y: 822 }],
@@ -259,13 +438,16 @@ export function expandAttractorDvorRouteGeometry(world: World, rng: () => number
     );
     decoratePocket(world, room, i);
   }
+  buildAttractorHqCompounds(world);
+  buildAttractorMidStations(world);
+  buildAttractorServiceBays(world, rng);
   world.markCellsDirty();
   world.markFloorTexDirty();
   world.markWallTexDirty();
   world.markFeaturesDirty(true);
 }
 
-export function tuneAttractorDvorRouteZones(world: World): void {
+export function tuneAttractorDvorRouteZones(world: World, syncCellField = true): void {
   for (const zone of world.zones) {
     const d = world.dist(zone.cx, zone.cy, CX, CY);
     const inCore = d < 178;
@@ -286,8 +468,11 @@ export function tuneAttractorDvorRouteZones(world: World): void {
     }
     zone.fogged = false;
   }
-  for (let i = 0; i < W * W; i++) {
-    world.factionControl[i] = world.zones[world.zoneMap[i]]?.faction ?? ZoneFaction.LIQUIDATOR;
+  if (syncCellField) {
+    for (let i = 0; i < W * W; i++) {
+      world.factionControl[i] = world.zones[world.zoneMap[i]]?.faction ?? ZoneFaction.LIQUIDATOR;
+    }
+    paintAttractorAuthoredHqOwners(world);
   }
 }
 
@@ -329,7 +514,7 @@ function buildRooms(world: World): AttractorRooms {
     westSpine: addRoom(world, RoomType.CORRIDOR, CX - 166, CY - 136, 30, 274, ATTRACTOR_DVOR_ROOM_NAMES.westSpine, Tex.PIPE, FLOW_FLOOR),
     pumpCore: addRoom(world, RoomType.PRODUCTION, CX - 42, CY - 38, 84, 70, ATTRACTOR_DVOR_ROOM_NAMES.pumpCore, Tex.METAL, FLOW_FLOOR),
     deadZone: addRoom(world, RoomType.STORAGE, CX - 58, CY + 46, 116, 62, ATTRACTOR_DVOR_ROOM_NAMES.deadZone, Tex.HERMO_WALL, DEAD_FLOOR, true),
-    guardLoop: addRoom(world, RoomType.HQ, CX - 44, CY - 108, 88, 40, ATTRACTOR_DVOR_ROOM_NAMES.guardLoop, Tex.METAL, FLOW_FLOOR),
+    guardLoop: addRoom(world, RoomType.OFFICE, CX - 44, CY - 108, 88, 40, ATTRACTOR_DVOR_ROOM_NAMES.guardLoop, Tex.METAL, FLOW_FLOOR),
     westSwitch: addRoom(world, RoomType.OFFICE, CX - 232, CY - 34, 58, 44, ATTRACTOR_DVOR_ROOM_NAMES.westSwitch, Tex.METAL, FLOW_FLOOR),
     eastSwitch: addRoom(world, RoomType.OFFICE, CX + 174, CY - 34, 58, 44, ATTRACTOR_DVOR_ROOM_NAMES.eastSwitch, Tex.METAL, FLOW_FLOOR),
     northSwitch: addRoom(world, RoomType.PRODUCTION, CX - 40, CY - 226, 80, 44, ATTRACTOR_DVOR_ROOM_NAMES.northSwitch, Tex.PIPE, FLOW_FLOOR),
@@ -410,6 +595,345 @@ function decoratePocket(world: World, room: Room, serial: number): void {
   setFeature(world, room.x + room.w - 9, room.y + room.h - 9, serial % 2 === 0 ? Feature.LAMP : Feature.CHAIR);
 }
 
+function carveAttractorOuterFlowField(world: World, rng: () => number): void {
+  const flows: readonly (readonly Point[])[] = [
+    [{ x: 42, y: 128 }, { x: 250, y: 92 }, { x: 512, y: 134 }, { x: 774, y: 92 }, { x: 982, y: 130 }],
+    [{ x: 42, y: 884 }, { x: 256, y: 930 }, { x: 512, y: 884 }, { x: 766, y: 930 }, { x: 982, y: 882 }],
+    [{ x: 112, y: 42 }, { x: 76, y: 260 }, { x: 124, y: 512 }, { x: 78, y: 760 }, { x: 118, y: 982 }],
+    [{ x: 904, y: 42 }, { x: 942, y: 264 }, { x: 896, y: 512 }, { x: 944, y: 760 }, { x: 902, y: 982 }],
+    [{ x: 66, y: 334 }, { x: 262, y: 302 }, { x: 512, y: 352 }, { x: 762, y: 302 }, { x: 958, y: 338 }],
+    [{ x: 66, y: 704 }, { x: 262, y: 746 }, { x: 512, y: 706 }, { x: 762, y: 746 }, { x: 958, y: 704 }],
+  ];
+  for (let i = 0; i < flows.length; i++) {
+    const flow = flows[i].map(point => ({
+      x: point.x + Math.round((rng() * 2 - 1) * 9),
+      y: point.y + Math.round((rng() * 2 - 1) * 9),
+    }));
+    carvePolyline(world, flow, i < 4 ? 4 : 3, FLOW_FLOOR, 0x8a00 + i * 97, i % 2 === 0 ? [92, 158, 220] : [210, 180, 84]);
+  }
+  for (const target of [
+    { x: 112, y: 128 }, { x: 904, y: 128 },
+    { x: 112, y: 884 }, { x: 904, y: 884 },
+    { x: 512, y: 128 }, { x: 512, y: 884 },
+    { x: 112, y: 512 }, { x: 904, y: 512 },
+  ]) {
+    carveLineWidth(world, target.x, target.y, CX, CY, 2, FLOW_FLOOR, 0x8ad0 + target.x + target.y, [86, 138, 186]);
+  }
+}
+
+function buildAttractorHqCompounds(world: World): void {
+  for (const spec of ATTRACTOR_HQ_COMPOUNDS) {
+    const target = nearestAttractorFlowPoint(world, spec.targetX, spec.targetY);
+    carveLineWidth(world, spec.targetX, spec.targetY, target.x, target.y, 2, FLOW_FLOOR, 0x8b00 + spec.owner * 41 + spec.x, [130, 160, 190]);
+    const hq = tryAddAttractorRoom(world, RoomType.HQ, spec.x, spec.y, spec.w, spec.h, spec.name, Tex.HERMO_WALL, FLOW_FLOOR, true);
+    if (!hq) continue;
+    paintAttractorRoomOwner(world, hq, spec.owner);
+    connectRoomToPoint(world, hq, spec.doorSide, spec.targetX, spec.targetY, DoorState.HERMETIC_OPEN);
+    decorateAttractorExpansionRoom(world, hq, spec.owner, 0);
+    for (let i = 0; i < spec.supports.length; i++) {
+      const support = spec.supports[i];
+      const room = tryAddAttractorRoom(
+        world,
+        support.type,
+        support.x,
+        support.y,
+        support.w,
+        support.h,
+        support.name,
+        wallTexForAttractorRoom(support.type),
+        floorTexForAttractorRoom(support.type),
+      );
+      if (!room) continue;
+      paintAttractorRoomOwner(world, room, spec.owner);
+      connectRoomToPoint(world, room, support.doorSide, support.targetX, support.targetY, DoorState.CLOSED);
+      decorateAttractorExpansionRoom(world, room, spec.owner, i + 1);
+    }
+  }
+}
+
+function buildAttractorMidStations(world: World): void {
+  for (let i = 0; i < ATTRACTOR_STATIONS.length; i++) {
+    const spec = ATTRACTOR_STATIONS[i];
+    const w = spec.vertical ? 22 : 70;
+    const h = spec.vertical ? 70 : 22;
+    const room = tryAddAttractorRoom(
+      world,
+      i % 3 === 0 ? RoomType.PRODUCTION : RoomType.CORRIDOR,
+      spec.x - (w >> 1),
+      spec.y - (h >> 1),
+      w,
+      h,
+      `Аттракторный двор: средний распределитель ${spec.label}`,
+      Tex.METAL,
+      FLOW_FLOOR,
+    );
+    if (!room) continue;
+    paintAttractorRoomOwner(world, room, spec.owner);
+    const target = nearestAttractorFlowPoint(world, spec.x, spec.y);
+    connectRoomToPoint(world, room, sideTowardPoint(room, target.x, target.y), target.x, target.y, DoorState.CLOSED);
+    decorateAttractorExpansionRoom(world, room, spec.owner, i);
+    stampAttractorStationMicros(world, room, spec, i);
+  }
+}
+
+function stampAttractorStationMicros(world: World, hall: Room, spec: AttractorStationSpec, serial: number): void {
+  const base: readonly AttractorHqSupportSpec[] = spec.vertical
+    ? [
+        { type: RoomType.STORAGE, name: 'шкаф фильтров', x: hall.x - 24, y: hall.y + 4, w: 16, h: 12, doorSide: 'east', targetX: hall.x + (hall.w >> 1), targetY: hall.y + 12 },
+        { type: RoomType.OFFICE, name: 'будка наблюдения', x: hall.x + hall.w + 8, y: hall.y + 6, w: 18, h: 12, doorSide: 'west', targetX: hall.x + (hall.w >> 1), targetY: hall.y + 18 },
+        { type: RoomType.BATHROOM, name: 'мокрый шкаф', x: hall.x - 24, y: hall.y + hall.h - 18, w: 16, h: 12, doorSide: 'east', targetX: hall.x + (hall.w >> 1), targetY: hall.y + hall.h - 16 },
+        { type: RoomType.COMMON, name: 'угол ожидания', x: hall.x + hall.w + 8, y: hall.y + hall.h - 20, w: 18, h: 14, doorSide: 'west', targetX: hall.x + (hall.w >> 1), targetY: hall.y + hall.h - 16 },
+      ]
+    : [
+        { type: RoomType.STORAGE, name: 'шкаф фильтров', x: hall.x + 4, y: hall.y - 22, w: 18, h: 12, doorSide: 'south', targetX: hall.x + 12, targetY: hall.y + (hall.h >> 1) },
+        { type: RoomType.OFFICE, name: 'будка наблюдения', x: hall.x + 26, y: hall.y - 22, w: 18, h: 12, doorSide: 'south', targetX: hall.x + 34, targetY: hall.y + (hall.h >> 1) },
+        { type: RoomType.BATHROOM, name: 'мокрый шкаф', x: hall.x + 4, y: hall.y + hall.h + 8, w: 18, h: 12, doorSide: 'north', targetX: hall.x + 12, targetY: hall.y + (hall.h >> 1) },
+        { type: RoomType.COMMON, name: 'угол ожидания', x: hall.x + 28, y: hall.y + hall.h + 8, w: 22, h: 14, doorSide: 'north', targetX: hall.x + 40, targetY: hall.y + (hall.h >> 1) },
+      ];
+  for (let i = 0; i < base.length; i++) {
+    const item = base[i];
+    const room = tryAddAttractorRoom(
+      world,
+      item.type,
+      item.x,
+      item.y,
+      item.w,
+      item.h,
+      `Аттракторный двор: микрокамера ${spec.label}: ${item.name}`,
+      wallTexForAttractorRoom(item.type),
+      floorTexForAttractorRoom(item.type),
+    );
+    if (!room) continue;
+    paintAttractorRoomOwner(world, room, spec.owner);
+    connectRoomToPoint(world, room, item.doorSide, item.targetX, item.targetY, DoorState.CLOSED);
+    decorateAttractorExpansionRoom(world, room, spec.owner, serial * 7 + i);
+  }
+}
+
+function buildAttractorServiceBays(world: World, rng: () => number): void {
+  const rows = [82, 236, 792, 944] as const;
+  for (let row = 0; row < rows.length; row++) {
+    const y = rows[row];
+    for (let n = 0; n < 23; n++) {
+      const x = 68 + n * 40 + Math.round((rng() * 2 - 1) * 5);
+      const above = (n + row) % 2 === 0;
+      const roomY = y + (above ? -25 : 15);
+      const w = 15 + ((n + row) % 4) * 3;
+      const h = 10 + ((n + row) % 3);
+      const owner = attractorOwnerForPoint(x, roomY);
+      const type = attractorMicroRoomType(n + row * 31);
+      const room = tryAddAttractorRoom(
+        world,
+        type,
+        x - (w >> 1),
+        roomY,
+        w,
+        h,
+        `Аттракторный двор: поточный шкаф ${row + 1}-${n + 1}`,
+        wallTexForAttractorRoom(type),
+        floorTexForAttractorRoom(type),
+      );
+      if (!room) continue;
+      paintAttractorRoomOwner(world, room, owner);
+      connectRoomToPoint(world, room, above ? 'south' : 'north', x, y, DoorState.CLOSED);
+      decorateAttractorExpansionRoom(world, room, owner, n);
+    }
+  }
+
+  const cols = [82, 234, 790, 942] as const;
+  for (let col = 0; col < cols.length; col++) {
+    const x = cols[col];
+    for (let n = 0; n < 18; n++) {
+      const y = 82 + n * 48 + Math.round((rng() * 2 - 1) * 5);
+      const left = (n + col) % 2 === 0;
+      const roomX = x + (left ? -28 : 15);
+      const w = 14 + ((n + col) % 3) * 3;
+      const h = 11 + ((n + col) % 4);
+      const owner = attractorOwnerForPoint(roomX, y);
+      const type = attractorMicroRoomType(n + col * 23 + 11);
+      const room = tryAddAttractorRoom(
+        world,
+        type,
+        roomX,
+        y - (h >> 1),
+        w,
+        h,
+        `Аттракторный двор: боковая будка ${col + 1}-${n + 1}`,
+        wallTexForAttractorRoom(type),
+        floorTexForAttractorRoom(type),
+      );
+      if (!room) continue;
+      paintAttractorRoomOwner(world, room, owner);
+      connectRoomToPoint(world, room, left ? 'east' : 'west', x, y, DoorState.CLOSED);
+      decorateAttractorExpansionRoom(world, room, owner, n + 100);
+    }
+  }
+}
+
+function attractorMicroRoomType(serial: number): RoomType {
+  switch (serial % 7) {
+    case 0: return RoomType.STORAGE;
+    case 1: return RoomType.OFFICE;
+    case 2: return RoomType.BATHROOM;
+    case 3: return RoomType.KITCHEN;
+    case 4: return RoomType.COMMON;
+    case 5: return RoomType.SMOKING;
+    default: return RoomType.PRODUCTION;
+  }
+}
+
+function attractorOwnerForPoint(x: number, y: number): TerritoryOwner {
+  if (x < 300 && y > 620) return ZoneFaction.CULTIST;
+  if (x > 680 && y < 620) return ZoneFaction.LIQUIDATOR;
+  if (y < 220 && x >= 360 && x <= 700) return ZoneFaction.SCIENTIST;
+  if (y > 700 || x > 850) return ZoneFaction.WILD;
+  if (x < 340 && y < 430) return ZoneFaction.CITIZEN;
+  return ZoneFaction.LIQUIDATOR;
+}
+
+function nearestAttractorFlowPoint(world: World, x: number, y: number): Point {
+  const candidates: readonly Point[] = [
+    { x: CX, y: CY },
+    { x, y: 128 },
+    { x, y: 334 },
+    { x, y: 704 },
+    { x, y: 884 },
+    { x: 112, y },
+    { x: 904, y },
+    { x: CX, y },
+    { x, y: CY },
+  ];
+  let best = candidates[0];
+  let bestD2 = Infinity;
+  for (const candidate of candidates) {
+    const d2 = world.dist2(x, y, candidate.x, candidate.y);
+    if (d2 < bestD2) {
+      best = candidate;
+      bestD2 = d2;
+    }
+  }
+  return best;
+}
+
+function tryAddAttractorRoom(
+  world: World,
+  type: RoomType,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  name: string,
+  wallTex: Tex,
+  floorTex: Tex,
+  sealed = false,
+): Room | undefined {
+  const ix = Math.floor(x);
+  const iy = Math.floor(y);
+  if (!canStampAttractorRoom(world, ix, iy, w, h)) return undefined;
+  return addRoom(world, type, ix, iy, w, h, name, wallTex, floorTex, sealed);
+}
+
+function canStampAttractorRoom(world: World, x: number, y: number, w: number, h: number): boolean {
+  if (x < 4 || y < 4 || x + w >= W - 4 || y + h >= W - 4) return false;
+  for (let dy = -1; dy <= h; dy++) {
+    for (let dx = -1; dx <= w; dx++) {
+      const idx = world.idx(x + dx, y + dy);
+      if (world.aptMask[idx] || world.hermoWall[idx]) return false;
+      if (world.cells[idx] === Cell.LIFT || world.cells[idx] === Cell.DOOR) return false;
+      if (world.features[idx] === Feature.LIFT_BUTTON) return false;
+      if (world.containerMap.has(idx)) return false;
+      if (world.roomMap[idx] >= 0) return false;
+    }
+  }
+  return true;
+}
+
+function connectRoomToPoint(world: World, room: Room, side: DoorSide, targetX: number, targetY: number, state: DoorState): void {
+  const site = doorSite(room, side);
+  const vx = Math.sign(site.x - site.ox);
+  const vy = Math.sign(site.y - site.oy);
+  const outsideX = site.x + vx;
+  const outsideY = site.y + vy;
+  carveLineWidth(world, outsideX, outsideY, targetX, targetY, 2, FLOW_FLOOR, 0x8c00 + room.id * 17, [112, 146, 168]);
+  setRoomDoorToRoute(world, room, site.x, site.y, state);
+}
+
+function setRoomDoorToRoute(world: World, room: Room, x: number, y: number, state: DoorState): void {
+  const idx = world.idx(x, y);
+  world.cells[idx] = Cell.DOOR;
+  world.wallTex[idx] = state === DoorState.HERMETIC_OPEN || state === DoorState.HERMETIC_CLOSED ? Tex.HERMO_WALL : Tex.DOOR_METAL;
+  if (state === DoorState.HERMETIC_OPEN || state === DoorState.HERMETIC_CLOSED) world.hermoWall[idx] = 1;
+  world.doors.set(idx, { idx, state, roomA: room.id, roomB: -1, keyId: '', timer: 0 });
+  if (!room.doors.includes(idx)) room.doors.push(idx);
+}
+
+function paintAttractorRoomOwner(world: World, room: Room, owner: TerritoryOwner): void {
+  for (let dy = 0; dy < room.h; dy++) {
+    for (let dx = 0; dx < room.w; dx++) {
+      const idx = world.idx(room.x + dx, room.y + dy);
+      if (world.roomMap[idx] === room.id) world.factionControl[idx] = owner;
+    }
+  }
+  for (const idx of room.doors) world.factionControl[idx] = owner;
+}
+
+function paintAttractorAuthoredHqOwners(world: World): void {
+  const seeds: { name: string; owner: TerritoryOwner }[] =
+    ATTRACTOR_HQ_COMPOUNDS.map(spec => ({ name: spec.name, owner: spec.owner }));
+  for (const seed of seeds) {
+    const room = roomByName(world, seed.name);
+    if (!room) continue;
+    room.type = RoomType.HQ;
+    room.sealed = true;
+    paintAttractorRoomOwner(world, room, seed.owner);
+  }
+}
+
+function decorateAttractorExpansionRoom(world: World, room: Room, owner: TerritoryOwner, serial: number): void {
+  const feature = featureForAttractorRoom(room.type, serial);
+  setFeature(world, room.x + Math.max(2, Math.min(room.w - 3, 4 + (serial * 7) % Math.max(1, room.w - 6))), room.y + Math.max(2, Math.min(room.h - 3, 4 + (serial * 5) % Math.max(1, room.h - 6))), feature);
+  if (room.w > 14 && room.h > 10) {
+    setFeature(world, room.x + room.w - 4, room.y + room.h - 4, owner === ZoneFaction.SCIENTIST ? Feature.SCREEN : owner === ZoneFaction.WILD ? Feature.SHELF : Feature.CHAIR);
+  }
+}
+
+function featureForAttractorRoom(type: RoomType, serial: number): Feature {
+  switch (type) {
+    case RoomType.KITCHEN: return serial % 2 === 0 ? Feature.STOVE : Feature.SINK;
+    case RoomType.BATHROOM: return serial % 2 === 0 ? Feature.TOILET : Feature.SINK;
+    case RoomType.MEDICAL: return Feature.TABLE;
+    case RoomType.OFFICE: return Feature.DESK;
+    case RoomType.STORAGE: return Feature.SHELF;
+    case RoomType.SMOKING: return Feature.CHAIR;
+    case RoomType.HQ: return Feature.SCREEN;
+    case RoomType.PRODUCTION: return Feature.APPARATUS;
+    default: return Feature.LAMP;
+  }
+}
+
+function wallTexForAttractorRoom(type: RoomType): Tex {
+  if (type === RoomType.BATHROOM || type === RoomType.KITCHEN || type === RoomType.MEDICAL) return Tex.TILE_W;
+  if (type === RoomType.HQ) return Tex.HERMO_WALL;
+  if (type === RoomType.COMMON || type === RoomType.SMOKING) return Tex.PANEL;
+  return Tex.METAL;
+}
+
+function floorTexForAttractorRoom(type: RoomType): Tex {
+  if (type === RoomType.BATHROOM) return Tex.F_WATER;
+  if (type === RoomType.KITCHEN || type === RoomType.MEDICAL) return Tex.F_TILE;
+  if (type === RoomType.COMMON || type === RoomType.SMOKING) return Tex.F_LINO;
+  return FLOW_FLOOR;
+}
+
+function sideTowardPoint(room: Room, x: number, y: number): DoorSide {
+  const cx = room.x + (room.w >> 1);
+  const cy = room.y + (room.h >> 1);
+  const dx = x - cx;
+  const dy = y - cy;
+  if (Math.abs(dx) > Math.abs(dy)) return dx < 0 ? 'west' : 'east';
+  return dy < 0 ? 'north' : 'south';
+}
+
 function placeLifts(world: World, rooms: AttractorRooms): void {
   placeLift(world, rooms.entry.x + 126, rooms.entry.y + 17, rooms.entry.x + 116, rooms.entry.y + 16, LiftDirection.UP);
   placeLift(world, rooms.northSpine.x + 20, rooms.northSpine.y + 14, rooms.northSpine.x + 30, rooms.northSpine.y + 14, LiftDirection.DOWN);
@@ -444,6 +968,52 @@ function spawnActors(world: World, entities: Entity[], nextId: { v: number }, ro
   spawnMonster(world, entities, nextId, MonsterKind.TRUBNYY_AVTOMAT, rooms.transitCache.x + 34, rooms.transitCache.y + 28, 4, 'Трубный автомат обходного течения');
   spawnMonster(world, entities, nextId, MonsterKind.RZHAVNIK, rooms.westSpine.x + 14, rooms.westSpine.y + 180, 3, 'Ржавник желтой петли');
   void world;
+}
+
+function isAttractorAmbientNpc(entity: Entity): boolean {
+  return entity.type === EntityType.NPC &&
+    entity.alive &&
+    entity.plotNpcId === undefined &&
+    entity.persistentNpcId === undefined &&
+    entity.alifeId === undefined &&
+    entity.questId === -1 &&
+    entity.faction !== undefined;
+}
+
+function attractorTerritorySpawnCells(world: World): Map<TerritoryOwner, number[]> {
+  const cells = new Map<TerritoryOwner, number[]>();
+  for (const owner of HUMAN_TERRITORY_OWNERS) cells.set(owner, []);
+  for (let i = 0; i < W * W; i++) {
+    const cell = world.cells[i];
+    if (cell !== Cell.FLOOR && cell !== Cell.WATER) continue;
+    if (world.aptMask[i] || world.hermoWall[i] || world.containerMap.has(i) || world.features[i] === Feature.LIFT_BUTTON) continue;
+    const list = cells.get(world.factionControl[i] as TerritoryOwner);
+    if (list) list.push(i);
+  }
+  return cells;
+}
+
+export function alignAttractorDvorAmbientNpcTerritory(world: World, entities: Entity[]): void {
+  const cells = attractorTerritorySpawnCells(world);
+  const offsets = new Uint16Array(8);
+  for (const entity of entities) {
+    if (!isAttractorAmbientNpc(entity) || entity.faction === undefined) continue;
+    const owner = factionToTerritoryOwner(entity.faction);
+    const list = cells.get(owner);
+    if (!list || list.length === 0) continue;
+    const offset = offsets[owner]++ | 0;
+    const cell = list[(entity.id * 131 + offset * 457) % list.length];
+    entity.x = (cell % W) + 0.5;
+    entity.y = ((cell / W) | 0) + 0.5;
+    entity.assignedRoomId = world.roomMap[cell] >= 0 ? world.roomMap[cell] : -1;
+    if (entity.ai) {
+      entity.ai.tx = cell % W;
+      entity.ai.ty = (cell / W) | 0;
+      entity.ai.path = [];
+      entity.ai.pi = 0;
+      entity.ai.stuck = 0;
+    }
+  }
 }
 
 function registerAttractorRouteCues(world: World, rooms: AttractorRooms): void {

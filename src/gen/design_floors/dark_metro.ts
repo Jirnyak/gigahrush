@@ -22,12 +22,14 @@ import {
   type GameState,
   type RailTrainTrack,
   type Room,
+  type TerritoryOwner,
   type Zone,
   type WorldContainer,
 } from '../../core/types';
 import { World } from '../../core/world';
 import { hashSeed, withSeededRandom } from '../../core/rand';
 import { freshNeeds } from '../../data/catalog';
+import { HUMAN_TERRITORY_OWNERS, factionToTerritoryOwner } from '../../data/factions';
 import { type PlotNpcDef, registerSideQuest } from '../../data/plot';
 import { MONSTERS } from '../../entities/monster';
 import { Spr } from '../../render/sprite_index';
@@ -37,6 +39,7 @@ import { registerRouteCue } from '../../systems/route_cues';
 import { randomRPG, scaleMonsterHp, scaleMonsterSpeed } from '../../systems/rpg';
 import { ensureConnectivity, generateZones, sanitizeDoors, stampRoom } from '../shared';
 import type { FloorGeneration } from '../floor_manifest';
+import { setTerritoryOwnerAtIndex, syncZoneMetadataFromTerritory, territoryOwnerAtIndex } from '../../systems/territory';
 
 export const DESIGN_FLOOR_ID = 'dark_metro' as const;
 export const DARK_METRO_DISPLAY_NAME = 'Темная пересадка';
@@ -489,8 +492,94 @@ interface DarkMetroFullFloorStyle {
   floorTex: Tex;
 }
 
+type DarkMetroRoomSide = 'north' | 'south' | 'west' | 'east';
+
+interface DarkMetroOwnedRoomSpec {
+  name: string;
+  type: RoomType;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  side: DarkMetroRoomSide;
+  targetX: number;
+  targetY: number;
+  wallTex: Tex;
+  floorTex: Tex;
+  doorState?: DoorState;
+}
+
+interface DarkMetroHqCompoundSpec {
+  owner: TerritoryOwner;
+  core: DarkMetroOwnedRoomSpec;
+  support: readonly DarkMetroOwnedRoomSpec[];
+}
+
 const DARK_METRO_FULL_LINE_YS = [118, 260, 402, 642, 786, 920] as const;
 const DARK_METRO_SAFETY_SHELL_RADIUS = 18;
+
+export const DARK_METRO_HQ_ROOM_NAMES = {
+  citizen: 'Гермокасса белой петли',
+  liquidator: 'Гермопост короткого хода',
+  cultist: 'Гермосвечная неверной станции',
+  scientist: 'Гермолаборатория стрелочного шума',
+  wild: 'Гермобаррикада черного перегона',
+} as const;
+
+const DARK_METRO_HQ_COMPOUNDS: readonly DarkMetroHqCompoundSpec[] = [
+  {
+    owner: ZoneFaction.CITIZEN,
+    core: { name: DARK_METRO_HQ_ROOM_NAMES.citizen, type: RoomType.HQ, x: 84, y: 168, w: 26, h: 14, side: 'east', targetX: 176, targetY: 184, wallTex: Tex.HERMO_WALL, floorTex: Tex.F_LINO, doorState: DoorState.HERMETIC_OPEN },
+    support: [
+      { name: 'Кухня белой петли', type: RoomType.KITCHEN, x: 46, y: 190, w: 24, h: 12, side: 'east', targetX: 84, targetY: 182, wallTex: Tex.TILE_W, floorTex: Tex.F_TILE },
+      { name: 'Общая комната ожидающих пересадку', type: RoomType.COMMON, x: 122, y: 188, w: 28, h: 13, side: 'west', targetX: 110, targetY: 182, wallTex: Tex.PANEL, floorTex: Tex.F_LINO },
+      { name: 'Санузел кассовой петли', type: RoomType.BATHROOM, x: 50, y: 142, w: 18, h: 10, side: 'east', targetX: 84, targetY: 168, wallTex: Tex.TILE_W, floorTex: Tex.F_TILE },
+      { name: 'Кладовая честных жетонов', type: RoomType.STORAGE, x: 126, y: 142, w: 22, h: 10, side: 'west', targetX: 110, targetY: 168, wallTex: Tex.METAL, floorTex: Tex.F_CONCRETE },
+    ],
+  },
+  {
+    owner: ZoneFaction.LIQUIDATOR,
+    core: { name: DARK_METRO_HQ_ROOM_NAMES.liquidator, type: RoomType.HQ, x: 742, y: 150, w: 28, h: 15, side: 'south', targetX: 690, targetY: 130, wallTex: Tex.HERMO_WALL, floorTex: Tex.F_CONCRETE, doorState: DoorState.HERMETIC_OPEN },
+    support: [
+      { name: 'Оружейная короткого хода', type: RoomType.STORAGE, x: 704, y: 170, w: 28, h: 12, side: 'east', targetX: 742, targetY: 158, wallTex: Tex.METAL, floorTex: Tex.F_CONCRETE },
+      { name: 'Медшкаф белых ламп', type: RoomType.MEDICAL, x: 780, y: 170, w: 24, h: 12, side: 'west', targetX: 770, targetY: 158, wallTex: Tex.TILE_W, floorTex: Tex.F_TILE },
+      { name: 'Кабинет рейсового журнала', type: RoomType.OFFICE, x: 704, y: 126, w: 28, h: 11, side: 'east', targetX: 742, targetY: 150, wallTex: Tex.MARBLE, floorTex: Tex.F_GREEN_CARPET },
+      { name: 'Санузел поста короткого хода', type: RoomType.BATHROOM, x: 784, y: 126, w: 18, h: 10, side: 'west', targetX: 770, targetY: 150, wallTex: Tex.TILE_W, floorTex: Tex.F_TILE },
+    ],
+  },
+  {
+    owner: ZoneFaction.CULTIST,
+    core: { name: DARK_METRO_HQ_ROOM_NAMES.cultist, type: RoomType.HQ, x: 244, y: 846, w: 26, h: 14, side: 'south', targetX: 304, targetY: 908, wallTex: Tex.HERMO_WALL, floorTex: Tex.F_RED_CARPET, doorState: DoorState.HERMETIC_OPEN },
+    support: [
+      { name: 'Свечная кухня неверной станции', type: RoomType.KITCHEN, x: 204, y: 870, w: 24, h: 12, side: 'east', targetX: 244, targetY: 854, wallTex: Tex.DARK, floorTex: Tex.F_GREEN_CARPET },
+      { name: 'Тихая комната объявления без голоса', type: RoomType.COMMON, x: 284, y: 870, w: 30, h: 12, side: 'west', targetX: 270, targetY: 854, wallTex: Tex.DARK, floorTex: Tex.F_RED_CARPET },
+      { name: 'Кладовая копченых билетов', type: RoomType.STORAGE, x: 202, y: 822, w: 24, h: 10, side: 'east', targetX: 244, targetY: 846, wallTex: Tex.ROTTEN, floorTex: Tex.F_CONCRETE },
+      { name: 'Санузел свечной платформы', type: RoomType.BATHROOM, x: 286, y: 822, w: 18, h: 10, side: 'west', targetX: 270, targetY: 846, wallTex: Tex.TILE_W, floorTex: Tex.F_TILE },
+    ],
+  },
+  {
+    owner: ZoneFaction.SCIENTIST,
+    core: { name: DARK_METRO_HQ_ROOM_NAMES.scientist, type: RoomType.HQ, x: 748, y: 708, w: 28, h: 15, side: 'north', targetX: 690, targetY: 775, wallTex: Tex.HERMO_WALL, floorTex: Tex.F_CONCRETE, doorState: DoorState.HERMETIC_OPEN },
+    support: [
+      { name: 'Лаборатория стрелочного шума', type: RoomType.PRODUCTION, x: 706, y: 734, w: 30, h: 13, side: 'east', targetX: 748, targetY: 716, wallTex: Tex.PIPE, floorTex: Tex.F_CONCRETE },
+      { name: 'Медкабинет повторной станции', type: RoomType.MEDICAL, x: 790, y: 734, w: 28, h: 12, side: 'west', targetX: 776, targetY: 716, wallTex: Tex.TILE_W, floorTex: Tex.F_TILE },
+      { name: 'Кабинет фазового расписания', type: RoomType.OFFICE, x: 706, y: 682, w: 28, h: 11, side: 'east', targetX: 748, targetY: 708, wallTex: Tex.MARBLE, floorTex: Tex.F_PARQUET },
+      { name: 'Склад измеренных ламп', type: RoomType.STORAGE, x: 792, y: 682, w: 24, h: 10, side: 'west', targetX: 776, targetY: 708, wallTex: Tex.METAL, floorTex: Tex.F_CONCRETE },
+    ],
+  },
+  {
+    owner: ZoneFaction.WILD,
+    core: { name: DARK_METRO_HQ_ROOM_NAMES.wild, type: RoomType.HQ, x: 568, y: 506, w: 36, h: 18, side: 'west', targetX: 512, targetY: 520, wallTex: Tex.HERMO_WALL, floorTex: Tex.F_CONCRETE, doorState: DoorState.HERMETIC_OPEN },
+    support: [
+      { name: 'Кухня черного перегона', type: RoomType.KITCHEN, x: 528, y: 532, w: 28, h: 14, side: 'east', targetX: 568, targetY: 520, wallTex: Tex.TILE_W, floorTex: Tex.F_TILE },
+      { name: 'Общак пассажиров без билета', type: RoomType.COMMON, x: 612, y: 532, w: 32, h: 14, side: 'west', targetX: 604, targetY: 520, wallTex: Tex.PANEL, floorTex: Tex.F_LINO },
+      { name: 'Склад сорванных поручней', type: RoomType.STORAGE, x: 528, y: 482, w: 30, h: 12, side: 'east', targetX: 568, targetY: 506, wallTex: Tex.BRICK, floorTex: Tex.F_CONCRETE },
+      { name: 'Санузел разбитой платформы', type: RoomType.BATHROOM, x: 618, y: 482, w: 18, h: 10, side: 'west', targetX: 604, targetY: 506, wallTex: Tex.TILE_W, floorTex: Tex.F_TILE },
+      { name: 'Западный герморазвал черного перегона', type: RoomType.HQ, x: 104, y: 520, w: 22, h: 12, side: 'east', targetX: 176, targetY: 520, wallTex: Tex.HERMO_WALL, floorTex: Tex.F_CONCRETE, doorState: DoorState.HERMETIC_OPEN },
+      { name: 'Восточный герморазвал черного перегона', type: RoomType.HQ, x: 900, y: 520, w: 22, h: 12, side: 'west', targetX: 842, targetY: 520, wallTex: Tex.HERMO_WALL, floorTex: Tex.F_CONCRETE, doorState: DoorState.HERMETIC_OPEN },
+    ],
+  },
+];
 
 const DARK_METRO_TRANSFER_NODES = [
   { x: 524, y: 184, w: 18, h: 14, name: 'Пересадочный узел линий 1-2', a: [580, 133], b: [484, 246] },
@@ -595,6 +684,10 @@ export function expandDarkMetroFullFloorGeometry(
   addDarkMetroTransferNodes(world, protectedCells, style);
   addDarkMetroRailBaitEdges(world, style);
   addDarkMetroDefendedPlatforms(world, protectedCells, style);
+  addDarkMetroHqCompounds(world, protectedCells);
+  addDarkMetroStationBlocks(world, protectedCells, style, rng);
+  addDarkMetroServiceIslands(world, protectedCells, style, rng);
+  addDarkMetroBlindCells(world, protectedCells, style, rng);
   applyDarkMetroPlatformSafetyShells(world);
   linkDarkMetroCoreToInterchange(world, style);
   if (entities) seedFullFloorMetroTrains(world, entities);
@@ -614,6 +707,356 @@ function darkMetroProtectedMask(world: World): Uint8Array {
   for (const idx of world.doors.keys()) mask[idx] = 1;
   for (const container of world.containers) mask[world.idx(container.x, container.y)] = 1;
   return mask;
+}
+
+function clampDarkMetroRoomCoord(v: number, size: number): number {
+  return Math.max(8, Math.min(W - size - 8, v));
+}
+
+function canStampDarkMetroRoom(world: World, mask: Uint8Array, x: number, y: number, w: number, h: number): boolean {
+  for (let dy = -1; dy <= h; dy++) {
+    for (let dx = -1; dx <= w; dx++) {
+      const ci = world.idx(x + dx, y + dy);
+      if (mask[ci] || world.cells[ci] === Cell.LIFT || world.cells[ci] === Cell.WATER) return false;
+      if (world.doors.has(ci) || world.roomMap[ci] >= 0) return false;
+    }
+  }
+  return true;
+}
+
+function findDarkMetroRoomSpot(
+  world: World,
+  mask: Uint8Array,
+  desiredX: number,
+  desiredY: number,
+  w: number,
+  h: number,
+  radius: number,
+): { x: number; y: number } | null {
+  const baseX = clampDarkMetroRoomCoord(desiredX, w);
+  const baseY = clampDarkMetroRoomCoord(desiredY, h);
+  if (canStampDarkMetroRoom(world, mask, baseX, baseY, w, h)) return { x: baseX, y: baseY };
+  for (let r = 4; r <= radius; r += 4) {
+    for (let dy = -r; dy <= r; dy += 4) {
+      for (let dx = -r; dx <= r; dx += 4) {
+        if (Math.abs(dx) !== r && Math.abs(dy) !== r) continue;
+        const x = clampDarkMetroRoomCoord(baseX + dx, w);
+        const y = clampDarkMetroRoomCoord(baseY + dy, h);
+        if (canStampDarkMetroRoom(world, mask, x, y, w, h)) return { x, y };
+      }
+    }
+  }
+  return null;
+}
+
+function rememberDarkMetroRoomMask(world: World, mask: Uint8Array, room: Room): void {
+  markMetroMask(mask, world, room.x - 2, room.y - 2, room.w + 4, room.h + 4);
+}
+
+function paintDarkMetroRoomOwner(world: World, room: Room, owner: TerritoryOwner): void {
+  for (let dy = 0; dy < room.h; dy++) {
+    for (let dx = 0; dx < room.w; dx++) {
+      const ci = world.idx(room.x + dx, room.y + dy);
+      if (world.cells[ci] !== Cell.LIFT && !world.aptMask[ci]) setTerritoryOwnerAtIndex(world, ci, owner);
+    }
+  }
+  for (const doorIdx of room.doors) setTerritoryOwnerAtIndex(world, doorIdx, owner);
+}
+
+function decorateDarkMetroOwnedRoom(world: World, room: Room, owner: TerritoryOwner, seed: number): void {
+  const cx = room.x + (room.w >> 1);
+  const cy = room.y + (room.h >> 1);
+  const put = (x: number, y: number, feature: Feature): void => {
+    const ci = world.idx(x, y);
+    if (world.roomMap[ci] === room.id && world.features[ci] === Feature.NONE) world.features[ci] = feature;
+  };
+  if (room.type === RoomType.KITCHEN) {
+    put(room.x + 2, room.y + 2, Feature.STOVE);
+    put(room.x + room.w - 3, room.y + 2, Feature.SINK);
+    put(cx, cy, Feature.TABLE);
+    return;
+  }
+  if (room.type === RoomType.BATHROOM) {
+    put(room.x + 2, room.y + 2, Feature.TOILET);
+    put(room.x + room.w - 3, room.y + 2, Feature.SINK);
+    return;
+  }
+  if (room.type === RoomType.STORAGE) {
+    put(room.x + 2, room.y + 2, Feature.SHELF);
+    put(room.x + room.w - 3, room.y + room.h - 3, Feature.SHELF);
+    return;
+  }
+  if (room.type === RoomType.PRODUCTION) {
+    put(room.x + 3, room.y + 2, Feature.MACHINE);
+    put(room.x + room.w - 4, room.y + room.h - 3, Feature.APPARATUS);
+    return;
+  }
+  if (room.type === RoomType.MEDICAL) {
+    put(room.x + 2, room.y + 2, Feature.BED);
+    put(room.x + room.w - 3, room.y + 2, Feature.SHELF);
+    return;
+  }
+  if (room.type === RoomType.OFFICE) {
+    put(cx, cy, Feature.TABLE);
+    put(room.x + room.w - 3, room.y + 2, Feature.SCREEN);
+    return;
+  }
+  if (room.type === RoomType.HQ) {
+    put(room.x + 3, room.y + 2, owner === ZoneFaction.CULTIST ? Feature.CANDLE : Feature.LAMP);
+    put(cx, cy, Feature.TABLE);
+    put(room.x + room.w - 4, room.y + room.h - 3, owner === ZoneFaction.SCIENTIST ? Feature.APPARATUS : Feature.SHELF);
+    return;
+  }
+  put(cx, cy, Feature.TABLE);
+  put(room.x + 3 + (seed % Math.max(1, room.w - 6)), room.y + Math.max(2, room.h - 3), Feature.CHAIR);
+}
+
+function addDarkMetroDoor(
+  world: World,
+  x: number,
+  y: number,
+  room: Room,
+  state: DoorState,
+  keyId = '',
+): number {
+  const ci = world.idx(x, y);
+  if (world.cells[ci] === Cell.LIFT) return ci;
+  world.cells[ci] = Cell.DOOR;
+  world.roomMap[ci] = -1;
+  world.wallTex[ci] = Tex.DOOR_METAL;
+  world.floorTex[ci] = room.floorTex;
+  world.doors.set(ci, { idx: ci, state, roomA: room.id, roomB: -1, keyId, timer: 0 });
+  if (!room.doors.includes(ci)) room.doors.push(ci);
+  return ci;
+}
+
+function connectDarkMetroRoomToPoint(
+  world: World,
+  room: Room,
+  side: DarkMetroRoomSide,
+  targetX: number,
+  targetY: number,
+  state: DoorState,
+): void {
+  const midX = room.x + (room.w >> 1);
+  const midY = room.y + (room.h >> 1);
+  const doorX = side === 'west' ? room.x - 1 : side === 'east' ? room.x + room.w : midX;
+  const doorY = side === 'north' ? room.y - 1 : side === 'south' ? room.y + room.h : midY;
+  addDarkMetroDoor(world, doorX, doorY, room, state);
+  const startX = side === 'west' ? doorX - 1 : side === 'east' ? doorX + 1 : doorX;
+  const startY = side === 'north' ? doorY - 1 : side === 'south' ? doorY + 1 : doorY;
+  carveMetroLine(world, null, startX, startY, targetX, targetY, 0, room.floorTex);
+}
+
+function hardenDarkMetroHqRoom(world: World, room: Room, owner: TerritoryOwner): void {
+  room.type = RoomType.HQ;
+  room.sealed = true;
+  room.wallTex = Tex.HERMO_WALL;
+  paintDarkMetroRoomOwner(world, room, owner);
+  for (let dy = -1; dy <= room.h; dy++) {
+    for (let dx = -1; dx <= room.w; dx++) {
+      const ci = world.idx(room.x + dx, room.y + dy);
+      const inside = dx >= 0 && dx < room.w && dy >= 0 && dy < room.h;
+      if (inside) continue;
+      if (world.cells[ci] !== Cell.WALL || world.aptMask[ci]) continue;
+      world.hermoWall[ci] = 1;
+      world.wallTex[ci] = Tex.HERMO_WALL;
+    }
+  }
+  for (const doorIdx of room.doors) {
+    const door = world.doors.get(doorIdx);
+    if (!door) continue;
+    door.state = DoorState.HERMETIC_OPEN;
+    door.keyId = '';
+    world.hermoWall[doorIdx] = 1;
+    world.wallTex[doorIdx] = Tex.HERMO_WALL;
+    setTerritoryOwnerAtIndex(world, doorIdx, owner);
+  }
+}
+
+function addDarkMetroOwnedRoom(
+  world: World,
+  mask: Uint8Array,
+  spec: DarkMetroOwnedRoomSpec,
+  owner: TerritoryOwner,
+  seed: number,
+): Room | null {
+  const spot = findDarkMetroRoomSpot(world, mask, spec.x, spec.y, spec.w, spec.h, spec.type === RoomType.HQ ? 18 : 36);
+  if (!spot) return null;
+  const room = styledRoom(world, spec.type, spot.x, spot.y, spec.w, spec.h, spec.name, spec.wallTex, spec.floorTex);
+  paintDarkMetroRoomOwner(world, room, owner);
+  decorateDarkMetroOwnedRoom(world, room, owner, seed);
+  connectDarkMetroRoomToPoint(world, room, spec.side, spec.targetX, spec.targetY, spec.doorState ?? DoorState.CLOSED);
+  if (spec.type === RoomType.HQ || spec.doorState === DoorState.HERMETIC_OPEN) hardenDarkMetroHqRoom(world, room, owner);
+  rememberDarkMetroRoomMask(world, mask, room);
+  return room;
+}
+
+function addDarkMetroHqCompounds(world: World, mask: Uint8Array): void {
+  for (const compound of DARK_METRO_HQ_COMPOUNDS) {
+    addDarkMetroOwnedRoom(world, mask, compound.core, compound.owner, compound.owner * 101);
+    for (let i = 0; i < compound.support.length; i++) {
+      addDarkMetroOwnedRoom(world, mask, compound.support[i], compound.owner, compound.owner * 101 + i + 1);
+    }
+  }
+}
+
+function darkMetroStationOwner(line: number, slot: number): TerritoryOwner {
+  const owners = [
+    ZoneFaction.LIQUIDATOR,
+    ZoneFaction.WILD,
+    ZoneFaction.CULTIST,
+    ZoneFaction.SCIENTIST,
+    ZoneFaction.WILD,
+    ZoneFaction.CITIZEN,
+  ] as const;
+  return owners[(line * 2 + slot) % owners.length];
+}
+
+function darkMetroMicroSpec(
+  prefix: string,
+  serial: number,
+  type: RoomType,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  side: DarkMetroRoomSide,
+  targetX: number,
+  targetY: number,
+  wallTex: Tex,
+  floorTex: Tex,
+): DarkMetroOwnedRoomSpec {
+  return { name: `${prefix} ${serial}`, type, x, y, w, h, side, targetX, targetY, wallTex, floorTex, doorState: type === RoomType.STORAGE || type === RoomType.OFFICE ? DoorState.CLOSED : DoorState.OPEN };
+}
+
+function addDarkMetroStationBlocks(
+  world: World,
+  mask: Uint8Array,
+  style: DarkMetroFullFloorStyle,
+  rng: () => number,
+): void {
+  let serial = 1;
+  const microTypes = [
+    RoomType.STORAGE,
+    RoomType.BATHROOM,
+    RoomType.OFFICE,
+    RoomType.PRODUCTION,
+    RoomType.KITCHEN,
+    RoomType.SMOKING,
+  ] as const;
+  for (let line = 0; line < DARK_METRO_FULL_LINE_YS.length; line++) {
+    const lineY = DARK_METRO_FULL_LINE_YS[line];
+    const platformY = darkMetroPlatformY(lineY, line);
+    const blockSide = line % 2 === 0 ? -1 : 1;
+    const stations = darkMetroStationXs(line);
+    for (let slot = 0; slot < stations.length; slot++) {
+      const owner = darkMetroStationOwner(line, slot);
+      const hallW = 38;
+      const hallH = 12;
+      const hallX = stations[slot] - (hallW >> 1);
+      const hallY = blockSide < 0 ? platformY - hallH - 20 : platformY + 20;
+      const hall = addDarkMetroOwnedRoom(world, mask, {
+        name: `Станционный блок темной пересадки ${line + 1}-${slot + 1}`,
+        type: RoomType.COMMON,
+        x: hallX,
+        y: hallY,
+        w: hallW,
+        h: hallH,
+        side: blockSide < 0 ? 'south' : 'north',
+        targetX: stations[slot],
+        targetY: platformY,
+        wallTex: style.wallTex,
+        floorTex: Tex.F_TILE,
+        doorState: DoorState.OPEN,
+      }, owner, line * 97 + slot);
+      if (!hall) continue;
+
+      const backY = blockSide < 0 ? hall.y - 17 : hall.y + hall.h + 8;
+      const backSide: DarkMetroRoomSide = blockSide < 0 ? 'south' : 'north';
+      const sideY = hall.y + 2;
+      const specs = [
+        darkMetroMicroSpec('Кладовая станции темной пересадки', serial++, microTypes[(line + slot) % microTypes.length], hall.x - 20, sideY, 12, 8, 'east', hall.x, hall.y + 5, Tex.METAL, Tex.F_CONCRETE),
+        darkMetroMicroSpec('Будка станции темной пересадки', serial++, microTypes[(line + slot + 1) % microTypes.length], hall.x + hall.w + 8, sideY, 12, 8, 'west', hall.x + hall.w - 1, hall.y + 5, Tex.PIPE, style.floorTex),
+        darkMetroMicroSpec('Задняя ячейка темной пересадки', serial++, microTypes[(line + slot + 2) % microTypes.length], hall.x, backY, 12, 8, backSide, hall.x + 6, hall.y + (blockSide < 0 ? 0 : hall.h - 1), Tex.PANEL, Tex.F_LINO),
+        darkMetroMicroSpec('Ламповая ячейка темной пересадки', serial++, microTypes[(line + slot + 3) % microTypes.length], hall.x + 13, backY + Math.floor(rng() * 3) - 1, 12, 8, backSide, hall.x + 19, hall.y + (blockSide < 0 ? 0 : hall.h - 1), Tex.DARK, Tex.F_CONCRETE),
+        darkMetroMicroSpec('Архивная ячейка темной пересадки', serial++, microTypes[(line + slot + 4) % microTypes.length], hall.x + 26, backY, 12, 8, backSide, hall.x + 31, hall.y + (blockSide < 0 ? 0 : hall.h - 1), Tex.METAL, Tex.F_CONCRETE),
+        darkMetroMicroSpec('Боковой карман темной пересадки', serial++, microTypes[(line + slot + 5) % microTypes.length], hall.x + 8, blockSide < 0 ? hall.y + hall.h + 7 : hall.y - 15, 18, 7, blockSide < 0 ? 'north' : 'south', hall.x + 19, hall.y + (blockSide < 0 ? hall.h - 1 : 0), Tex.CONCRETE, style.floorTex),
+      ];
+      for (let i = 0; i < specs.length; i++) {
+        addDarkMetroOwnedRoom(world, mask, specs[i], owner, line * 409 + slot * 31 + i);
+      }
+    }
+  }
+}
+
+function addDarkMetroServiceIslands(
+  world: World,
+  mask: Uint8Array,
+  style: DarkMetroFullFloorStyle,
+  rng: () => number,
+): void {
+  let serial = 1;
+  const ys = [158, 214, 324, 468, 560, 706, 852, 902] as const;
+  for (const tunnel of [{ x: 176, side: 1 }, { x: 842, side: -1 }] as const) {
+    for (let i = 0; i < ys.length; i++) {
+      const y = ys[i] + Math.floor(rng() * 5) - 2;
+      const owner = i % 3 === 0 ? ZoneFaction.LIQUIDATOR : i % 3 === 1 ? ZoneFaction.WILD : ZoneFaction.SCIENTIST;
+      const x = tunnel.x + tunnel.side * (tunnel.side > 0 ? 18 : 42);
+      const side: DarkMetroRoomSide = tunnel.side > 0 ? 'west' : 'east';
+      addDarkMetroOwnedRoom(world, mask, {
+        name: `Сервисный остров темной пересадки ${serial++}`,
+        type: i % 4 === 0 ? RoomType.PRODUCTION : i % 4 === 1 ? RoomType.STORAGE : i % 4 === 2 ? RoomType.OFFICE : RoomType.BATHROOM,
+        x,
+        y,
+        w: i % 2 === 0 ? 24 : 18,
+        h: i % 2 === 0 ? 10 : 9,
+        side,
+        targetX: tunnel.x,
+        targetY: y + 4,
+        wallTex: i % 2 === 0 ? Tex.PIPE : Tex.METAL,
+        floorTex: style.floorTex,
+        doorState: DoorState.CLOSED,
+      }, owner, serial * 13);
+    }
+  }
+}
+
+function addDarkMetroBlindCells(
+  world: World,
+  mask: Uint8Array,
+  style: DarkMetroFullFloorStyle,
+  rng: () => number,
+): void {
+  let serial = 1;
+  const bands = [
+    { y: 178, targetY: 130 },
+    { y: 326, targetY: 249 },
+    { y: 520, targetY: 414 },
+    { y: 708, targetY: 654 },
+    { y: 850, targetY: 797 },
+  ] as const;
+  for (const band of bands) {
+    for (let x = 250; x <= 754; x += 84) {
+      const owner = x % 4 === 0 ? ZoneFaction.CULTIST : x % 3 === 0 ? ZoneFaction.SCIENTIST : ZoneFaction.WILD;
+      const side: DarkMetroRoomSide = band.y < band.targetY ? 'south' : 'north';
+      const room = addDarkMetroOwnedRoom(world, mask, {
+        name: `Слепая подсобка темной пересадки ${serial++}`,
+        type: serial % 5 === 0 ? RoomType.KITCHEN : serial % 5 === 1 ? RoomType.STORAGE : serial % 5 === 2 ? RoomType.OFFICE : serial % 5 === 3 ? RoomType.BATHROOM : RoomType.COMMON,
+        x: x + Math.floor(rng() * 7) - 3,
+        y: band.y + Math.floor(rng() * 7) - 3,
+        w: 18 + (serial % 3) * 4,
+        h: 8 + (serial % 2) * 3,
+        side,
+        targetX: x,
+        targetY: band.targetY,
+        wallTex: serial % 2 === 0 ? Tex.DARK : style.wallTex,
+        floorTex: serial % 2 === 0 ? Tex.F_CONCRETE : Tex.F_LINO,
+        doorState: serial % 4 === 0 ? DoorState.LOCKED : DoorState.CLOSED,
+      }, owner, serial * 29);
+      if (room && serial % 6 === 0) setDarkMetroFog(world, room.x + (room.w >> 1), room.y + (room.h >> 1), 28);
+    }
+  }
 }
 
 function carveDarkMetroStationLine(
@@ -1657,6 +2100,79 @@ function registerDarkMetroRouteCues(ctx: BuildCtx, layout: DarkMetroLayout): voi
     followedText: 'Служебный выход найден. Можно потратить предохранитель на путь или сохранить его для ремонта.',
     ignoredText: 'Стрелочный коридор погас. Служебный короткий путь остался на табло.',
   });
+}
+
+export function reinforceDarkMetroAuthoredHqTerritory(world: World): void {
+  for (const compound of DARK_METRO_HQ_COMPOUNDS) {
+    const names = new Set([compound.core.name, ...compound.support.map(room => room.name)]);
+    for (const room of world.rooms) {
+      if (!room || !names.has(room.name)) continue;
+      paintDarkMetroRoomOwner(world, room, compound.owner);
+      decorateDarkMetroOwnedRoom(world, room, compound.owner, room.id);
+      if (room.name === compound.core.name || room.type === RoomType.HQ) {
+        hardenDarkMetroHqRoom(world, room, compound.owner);
+      }
+    }
+  }
+  world.markWallTexDirty();
+  world.markFloorTexDirty();
+  world.markFeaturesDirty(false);
+  syncZoneMetadataFromTerritory(world);
+}
+
+function isDarkMetroAmbientNpc(entity: Entity): boolean {
+  return entity.type === EntityType.NPC &&
+    !entity.plotNpcId &&
+    !entity.persistentNpcId &&
+    entity.alifeId === undefined &&
+    entity.questId === -1 &&
+    entity.faction !== undefined;
+}
+
+function darkMetroTerritorySpawnCells(world: World): Map<TerritoryOwner, number[]> {
+  const cells = new Map<TerritoryOwner, number[]>();
+  for (const owner of HUMAN_TERRITORY_OWNERS) cells.set(owner, []);
+  for (let i = 0; i < W * W; i++) {
+    const cell = world.cells[i];
+    if (cell !== Cell.FLOOR && cell !== Cell.DOOR) continue;
+    const owner = territoryOwnerAtIndex(world, i);
+    const list = cells.get(owner);
+    if (!list) continue;
+    const roomId = world.roomMap[i];
+    if (roomId >= 0) {
+      const room = world.rooms[roomId];
+      if (room?.type === RoomType.HQ || room?.type === RoomType.COMMON || room?.type === RoomType.STORAGE || room?.type === RoomType.PRODUCTION) {
+        list.push(i);
+        list.push(i);
+        continue;
+      }
+    }
+    list.push(i);
+  }
+  return cells;
+}
+
+export function alignDarkMetroAmbientNpcTerritory(world: World, entities: Entity[]): void {
+  const cells = darkMetroTerritorySpawnCells(world);
+  const offsets = new Uint16Array(8);
+  for (const entity of entities) {
+    if (!isDarkMetroAmbientNpc(entity) || entity.faction === undefined) continue;
+    const owner = factionToTerritoryOwner(entity.faction);
+    const list = cells.get(owner);
+    if (!list || list.length === 0) continue;
+    const offset = offsets[owner]++ | 0;
+    const cell = list[(entity.id * 193 + offset * 421) % list.length];
+    entity.x = (cell % W) + 0.5;
+    entity.y = ((cell / W) | 0) + 0.5;
+    entity.assignedRoomId = world.roomMap[cell] >= 0 ? world.roomMap[cell] : -1;
+    if (entity.ai) {
+      entity.ai.tx = cell % W;
+      entity.ai.ty = (cell / W) | 0;
+      entity.ai.path = [];
+      entity.ai.pi = 0;
+      entity.ai.stuck = 0;
+    }
+  }
 }
 
 function applyDarkMetroAmbientLight(world: World, layout: DarkMetroLayout, packedState: DarkMetroPackedState): void {

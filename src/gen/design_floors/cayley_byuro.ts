@@ -20,6 +20,7 @@ import {
   type Entity,
   type Item,
   type Room,
+  type TerritoryOwner,
   type WorldContainer,
 } from '../../core/types';
 import { World } from '../../core/world';
@@ -29,6 +30,7 @@ import { MONSTERS } from '../../entities/monster';
 import { Spr, monsterSpr } from '../../render/sprite_index';
 import { registerRouteCue } from '../../systems/route_cues';
 import { randomRPG, scaleMonsterHp, scaleMonsterSpeed } from '../../systems/rpg';
+import { syncZoneMetadataFromTerritory } from '../../systems/territory';
 import { carveCorridor, ensureConnectivity, generateZones, sanitizeDoors, stampRoom } from '../shared';
 import type { FloorGeneration } from '../floor_manifest';
 
@@ -99,6 +101,115 @@ export interface CayleyByuroGeneration extends FloorGeneration {
 }
 
 const CAYLEY_TAGS = ['cayley_byuro', 'cayley_graph', 'forms'];
+
+interface Point {
+  x: number;
+  y: number;
+}
+
+interface CayleyHqSpec {
+  owner: TerritoryOwner;
+  x: number;
+  y: number;
+  name: string;
+  supportPrefix: string;
+  wallTex: Tex;
+  floorTex: Tex;
+  coreW: number;
+  coreH: number;
+  strong?: boolean;
+}
+
+const CAYLEY_GRAPH_POINTS: Readonly<Record<CayleyElement, Point>> = {
+  e: { x: 512, y: 168 },
+  r: { x: 800, y: 310 },
+  rr: { x: 800, y: 674 },
+  s: { x: 512, y: 858 },
+  sr: { x: 224, y: 674 },
+  srr: { x: 224, y: 310 },
+} as const;
+
+const CAYLEY_LATTICE_X = [96, 224, 352, 512, 672, 800, 928] as const;
+const CAYLEY_LATTICE_Y = [96, 224, 352, 512, 672, 800, 928] as const;
+
+export const CAYLEY_BYURO_TARGET_TERRITORY_SHARES: Readonly<Record<TerritoryOwner, number>> = {
+  [ZoneFaction.CITIZEN]: 0.26,
+  [ZoneFaction.LIQUIDATOR]: 0.20,
+  [ZoneFaction.CULTIST]: 0.10,
+  [ZoneFaction.SAMOSBOR]: 0,
+  [ZoneFaction.WILD]: 0.10,
+  [ZoneFaction.SCIENTIST]: 0.34,
+} as const;
+
+const CAYLEY_TERRITORY_GRID: readonly (readonly TerritoryOwner[])[] = [
+  [ZoneFaction.CITIZEN, ZoneFaction.CITIZEN, ZoneFaction.CITIZEN, ZoneFaction.SCIENTIST, ZoneFaction.SCIENTIST, ZoneFaction.LIQUIDATOR, ZoneFaction.LIQUIDATOR, ZoneFaction.LIQUIDATOR],
+  [ZoneFaction.CITIZEN, ZoneFaction.CITIZEN, ZoneFaction.CITIZEN, ZoneFaction.SCIENTIST, ZoneFaction.SCIENTIST, ZoneFaction.SCIENTIST, ZoneFaction.LIQUIDATOR, ZoneFaction.LIQUIDATOR],
+  [ZoneFaction.CITIZEN, ZoneFaction.CITIZEN, ZoneFaction.CITIZEN, ZoneFaction.SCIENTIST, ZoneFaction.SCIENTIST, ZoneFaction.LIQUIDATOR, ZoneFaction.LIQUIDATOR, ZoneFaction.LIQUIDATOR],
+  [ZoneFaction.CITIZEN, ZoneFaction.CITIZEN, ZoneFaction.SCIENTIST, ZoneFaction.SCIENTIST, ZoneFaction.SCIENTIST, ZoneFaction.LIQUIDATOR, ZoneFaction.LIQUIDATOR, ZoneFaction.SCIENTIST],
+  [ZoneFaction.CITIZEN, ZoneFaction.CITIZEN, ZoneFaction.CITIZEN, ZoneFaction.SCIENTIST, ZoneFaction.SCIENTIST, ZoneFaction.SCIENTIST, ZoneFaction.LIQUIDATOR, ZoneFaction.WILD],
+  [ZoneFaction.CITIZEN, ZoneFaction.CULTIST, ZoneFaction.CULTIST, ZoneFaction.SCIENTIST, ZoneFaction.SCIENTIST, ZoneFaction.SCIENTIST, ZoneFaction.WILD, ZoneFaction.WILD],
+  [ZoneFaction.CULTIST, ZoneFaction.CULTIST, ZoneFaction.CULTIST, ZoneFaction.SCIENTIST, ZoneFaction.SCIENTIST, ZoneFaction.SCIENTIST, ZoneFaction.WILD, ZoneFaction.WILD],
+  [ZoneFaction.CULTIST, ZoneFaction.CITIZEN, ZoneFaction.SCIENTIST, ZoneFaction.SCIENTIST, ZoneFaction.SCIENTIST, ZoneFaction.LIQUIDATOR, ZoneFaction.LIQUIDATOR, ZoneFaction.WILD],
+] as const;
+
+const CAYLEY_HQ_SPECS: readonly CayleyHqSpec[] = [
+  {
+    owner: ZoneFaction.CITIZEN,
+    x: 176,
+    y: 176,
+    name: 'Гражданская приемная очередей Кэли',
+    supportPrefix: 'Гражданская очередь',
+    wallTex: Tex.PANEL,
+    floorTex: Tex.F_LINO,
+    coreW: 50,
+    coreH: 34,
+  },
+  {
+    owner: ZoneFaction.LIQUIDATOR,
+    x: 856,
+    y: 184,
+    name: 'Ликвидаторский пост проверки порядка',
+    supportPrefix: 'Пост проверки',
+    wallTex: Tex.METAL,
+    floorTex: Tex.F_CONCRETE,
+    coreW: 54,
+    coreH: 36,
+  },
+  {
+    owner: ZoneFaction.CULTIST,
+    x: 178,
+    y: 822,
+    name: 'Скрытый культовый фактор-узел',
+    supportPrefix: 'Факторная келья',
+    wallTex: Tex.DARK,
+    floorTex: Tex.F_RED_CARPET,
+    coreW: 42,
+    coreH: 30,
+  },
+  {
+    owner: ZoneFaction.SCIENTIST,
+    x: 626,
+    y: 500,
+    name: 'НИИ Кэли: герметичное ядро алгоритма',
+    supportPrefix: 'НИИ Кэли',
+    wallTex: Tex.HERMO_WALL,
+    floorTex: Tex.F_MARBLE_TILE,
+    coreW: 76,
+    coreH: 46,
+    strong: true,
+  },
+  {
+    owner: ZoneFaction.WILD,
+    x: 856,
+    y: 850,
+    name: 'Дикий выбитый архив смежности',
+    supportPrefix: 'Выбитый архив',
+    wallTex: Tex.ROTTEN,
+    floorTex: Tex.F_CONCRETE,
+    coreW: 44,
+    coreH: 32,
+  },
+] as const;
 
 const CLERK_DEF: PlotNpcDef = {
   name: 'Григорий Кэли',
@@ -295,6 +406,51 @@ function addRoom(
   return styleRoom(world, room, wallTex, floorTex);
 }
 
+function roomCoord(value: number, size: number): number {
+  return Math.max(2, Math.min(W - size - 3, Math.round(value)));
+}
+
+function addAutoRoom(
+  world: World,
+  type: RoomType,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  name: string,
+  wallTex = Tex.MARBLE,
+  floorTex = Tex.F_PARQUET,
+): Room {
+  return addRoom(world, world.rooms.length, type, roomCoord(x, w), roomCoord(y, h), w, h, name, wallTex, floorTex);
+}
+
+function canStampGeneratedRoom(world: World, x: number, y: number, w: number, h: number): boolean {
+  const rx = roomCoord(x, w);
+  const ry = roomCoord(y, h);
+  for (let dy = -1; dy <= h; dy++) {
+    for (let dx = -1; dx <= w; dx++) {
+      const ci = world.idx(rx + dx, ry + dy);
+      if (world.aptMask[ci] || world.cells[ci] === Cell.LIFT || world.cells[ci] === Cell.DOOR || world.roomMap[ci] >= 0) return false;
+    }
+  }
+  return true;
+}
+
+function tryAddAutoRoom(
+  world: World,
+  type: RoomType,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  name: string,
+  wallTex = Tex.MARBLE,
+  floorTex = Tex.F_PARQUET,
+): Room | null {
+  if (!canStampGeneratedRoom(world, x, y, w, h)) return null;
+  return addAutoRoom(world, type, x, y, w, h, name, wallTex, floorTex);
+}
+
 function center(room: Room): { x: number; y: number } {
   return {
     x: worldClamp(room.x + Math.floor(room.w / 2)),
@@ -304,6 +460,82 @@ function center(room: Room): { x: number; y: number } {
 
 function worldClamp(value: number): number {
   return Math.max(0, Math.min(W - 1, value));
+}
+
+function setCellFeature(world: World, x: number, y: number, feature: Feature): void {
+  const ci = world.idx(x, y);
+  if (world.cells[ci] === Cell.FLOOR && world.features[ci] === Feature.NONE) world.features[ci] = feature;
+}
+
+function carveCayleyDisc(world: World, cx: number, cy: number, radius: number, wallTex: Tex, floorTex: Tex): void {
+  const floorR2 = radius * radius;
+  const shoulder = radius + 2;
+  const shoulderR2 = shoulder * shoulder;
+  for (let dy = -shoulder; dy <= shoulder; dy++) {
+    for (let dx = -shoulder; dx <= shoulder; dx++) {
+      const d2 = dx * dx + dy * dy;
+      if (d2 > shoulderR2) continue;
+      const ci = world.idx(cx + dx, cy + dy);
+      if (world.aptMask[ci] || world.cells[ci] === Cell.LIFT || world.cells[ci] === Cell.DOOR || world.roomMap[ci] >= 0) continue;
+      if (d2 <= floorR2) {
+        world.cells[ci] = Cell.FLOOR;
+        world.floorTex[ci] = floorTex;
+        world.wallTex[ci] = wallTex;
+        world.features[ci] = Feature.NONE;
+        world.hermoWall[ci] = 0;
+      } else if (world.cells[ci] === Cell.WALL) {
+        world.wallTex[ci] = wallTex;
+        world.features[ci] = Feature.NONE;
+      }
+    }
+  }
+}
+
+function carveCayleySegment(world: World, a: Point, b: Point, radius: number, wallTex: Tex, floorTex: Tex): void {
+  const dx = b.x - a.x;
+  const dy = b.y - a.y;
+  const steps = Math.max(1, Math.abs(dx), Math.abs(dy));
+  for (let step = 0; step <= steps; step++) {
+    const t = step / steps;
+    const x = Math.round(a.x + dx * t);
+    const y = Math.round(a.y + dy * t);
+    carveCayleyDisc(world, x, y, radius, wallTex, floorTex);
+    if (step % 47 === 0) setCellFeature(world, x, y, step % 94 === 0 ? Feature.SCREEN : Feature.SHELF);
+  }
+}
+
+function carveCayleyPolyline(world: World, points: readonly Point[], radius: number, wallTex: Tex, floorTex: Tex): void {
+  for (let i = 1; i < points.length; i++) carveCayleySegment(world, points[i - 1], points[i], radius, wallTex, floorTex);
+}
+
+function carveCayleyGraphField(world: World): void {
+  for (const y of CAYLEY_LATTICE_Y) carveCayleySegment(world, { x: 0, y }, { x: W - 1, y }, 2, Tex.MARBLE, Tex.F_PARQUET);
+  for (const x of CAYLEY_LATTICE_X) carveCayleySegment(world, { x, y: 0 }, { x, y: W - 1 }, 2, Tex.MARBLE, Tex.F_PARQUET);
+
+  for (const [a, b] of [['e', 'r'], ['r', 'rr'], ['rr', 'e'], ['s', 'sr'], ['sr', 'srr'], ['srr', 's']] as const) {
+    carveCayleySegment(world, CAYLEY_GRAPH_POINTS[a], CAYLEY_GRAPH_POINTS[b], 5, Tex.MARBLE, Tex.F_GREEN_CARPET);
+  }
+  for (const [a, b] of [['e', 's'], ['r', 'srr'], ['rr', 'sr']] as const) {
+    carveCayleySegment(world, CAYLEY_GRAPH_POINTS[a], CAYLEY_GRAPH_POINTS[b], 4, Tex.METAL, Tex.F_RED_CARPET);
+  }
+
+  const centerPoint = { x: 512, y: 502 };
+  carveCayleyPolyline(world, [
+    { x: 0, y: centerPoint.y },
+    centerPoint,
+    { x: W - 1, y: centerPoint.y },
+  ], 3, Tex.MARBLE, Tex.F_MARBLE_TILE);
+  carveCayleyPolyline(world, [
+    { x: centerPoint.x, y: 0 },
+    centerPoint,
+    { x: centerPoint.x, y: W - 1 },
+  ], 3, Tex.MARBLE, Tex.F_MARBLE_TILE);
+
+  for (const element of ['e', 'r', 'rr', 's', 'sr', 'srr'] as const) {
+    const p = CAYLEY_GRAPH_POINTS[element];
+    carveCayleyDisc(world, p.x, p.y, 28, Tex.MARBLE, Tex.F_MARBLE_TILE);
+    setCellFeature(world, p.x, p.y, cayleyCosetOf(element) === 'odd' ? Feature.SCREEN : Feature.DESK);
+  }
 }
 
 function connectRooms(
@@ -426,6 +658,276 @@ function decorateRoom(world: World, room: Room, element?: CayleyElement): void {
   if (element && cayleyCosetOf(element) === 'odd') setFeature(world, room, room.w - 5, room.h - 5, Feature.SCREEN);
 }
 
+function decorateGeneratedRoom(world: World, room: Room, serial: number): void {
+  switch (room.type) {
+    case RoomType.KITCHEN:
+      for (let x = 2; x < room.w - 2; x += 5) setFeature(world, room, x, 2, Feature.STOVE);
+      setFeature(world, room, room.w - 4, room.h - 3, Feature.SINK);
+      setFeature(world, room, 3, room.h - 3, Feature.TABLE);
+      break;
+    case RoomType.BATHROOM:
+      for (let x = 2; x < room.w - 2; x += 5) setFeature(world, room, x, 2, Feature.SINK);
+      setFeature(world, room, room.w - 4, room.h - 3, Feature.TOILET);
+      break;
+    case RoomType.MEDICAL:
+      for (let x = 3; x < room.w - 3; x += 7) setFeature(world, room, x, 3, Feature.APPARATUS);
+      setFeature(world, room, room.w - 4, room.h - 4, Feature.SCREEN);
+      break;
+    case RoomType.PRODUCTION:
+      for (let x = 3; x < room.w - 3; x += 6) setFeature(world, room, x, 3, Feature.MACHINE);
+      for (let x = 5; x < room.w - 4; x += 8) setFeature(world, room, x, room.h - 4, Feature.APPARATUS);
+      break;
+    case RoomType.STORAGE:
+      for (let y = 2; y < room.h - 2; y += 4) {
+        setFeature(world, room, 2, y, Feature.SHELF);
+        setFeature(world, room, room.w - 3, y, Feature.SHELF);
+      }
+      break;
+    case RoomType.HQ:
+      for (let x = 4; x < room.w - 4; x += 8) setFeature(world, room, x, 4, Feature.DESK);
+      setFeature(world, room, room.w - 5, 4, Feature.SCREEN);
+      setFeature(world, room, 4, room.h - 5, Feature.LAMP);
+      break;
+    case RoomType.COMMON:
+      for (let x = 4; x < room.w - 4; x += 10) setFeature(world, room, x, room.h >> 1, Feature.TABLE);
+      setFeature(world, room, room.w - 5, 4, Feature.LAMP);
+      break;
+    case RoomType.OFFICE:
+    default:
+      for (let x = 3; x < room.w - 3; x += 6) setFeature(world, room, x, 3, serial % 3 === 0 ? Feature.SCREEN : Feature.DESK);
+      setFeature(world, room, room.w - 4, room.h - 4, Feature.SHELF);
+      break;
+  }
+}
+
+function connectRoomToPoint(world: World, room: Room, target: Point, state?: DoorState, keyId = ''): void {
+  const c = center(room);
+  const dx = target.x - c.x;
+  const dy = target.y - c.y;
+  let wx: number;
+  let wy: number;
+  let ox: number;
+  let oy: number;
+
+  if (Math.abs(dx) >= Math.abs(dy)) {
+    wy = worldClamp(room.y + Math.max(1, Math.min(room.h - 2, Math.round(target.y - room.y))));
+    if (dx >= 0) {
+      wx = room.x + room.w;
+      ox = wx + 1;
+    } else {
+      wx = room.x - 1;
+      ox = wx - 1;
+    }
+    oy = wy;
+  } else {
+    wx = worldClamp(room.x + Math.max(1, Math.min(room.w - 2, Math.round(target.x - room.x))));
+    if (dy >= 0) {
+      wy = room.y + room.h;
+      oy = wy + 1;
+    } else {
+      wy = room.y - 1;
+      oy = wy - 1;
+    }
+    ox = wx;
+  }
+
+  carveOrthogonalShortcut(world, ox, oy, target.x, target.y);
+  placeBoundaryDoor(world, room, wx, wy, ox, oy, state ?? DoorState.CLOSED, keyId);
+}
+
+function hardenHermeticCore(world: World, room: Room): void {
+  room.wallTex = Tex.HERMO_WALL;
+  for (let dy = -1; dy <= room.h; dy++) {
+    for (let dx = -1; dx <= room.w; dx++) {
+      const border = dx < 0 || dx >= room.w || dy < 0 || dy >= room.h;
+      const ci = world.idx(room.x + dx, room.y + dy);
+      if (border && world.cells[ci] === Cell.WALL) {
+        world.wallTex[ci] = Tex.HERMO_WALL;
+        world.hermoWall[ci] = 1;
+      }
+    }
+  }
+  for (const doorIdx of room.doors) {
+    const door = world.doors.get(doorIdx);
+    if (!door) continue;
+    door.state = DoorState.HERMETIC_OPEN;
+    door.keyId = '';
+    world.wallTex[doorIdx] = Tex.DOOR_METAL;
+  }
+}
+
+function createCayleyArchiveWing(world: World, hall: Room, element: CayleyElement, state: CayleyByuroState): void {
+  const c = center(hall);
+  const serialBase = hall.id * 100;
+  const roomTypes = [
+    RoomType.OFFICE,
+    RoomType.STORAGE,
+    RoomType.OFFICE,
+    RoomType.BATHROOM,
+    RoomType.KITCHEN,
+    RoomType.STORAGE,
+    RoomType.MEDICAL,
+  ] as const;
+  let serial = 0;
+  for (let i = 0; i < 8; i++) {
+    const top = tryAddAutoRoom(world, roomTypes[i % roomTypes.length], c.x - 92 + i * 24, c.y - 98, 14, 10, `Архив ${element}: верхняя ячейка ${i + 1}`);
+    if (top) {
+      decorateGeneratedRoom(world, top, serialBase + serial++);
+      connectRooms(world, hall, top, state, 'plain');
+    }
+    const bottom = tryAddAutoRoom(world, roomTypes[(i + 3) % roomTypes.length], c.x - 92 + i * 24, c.y + 88, 14, 10, `Архив ${element}: нижняя ячейка ${i + 1}`);
+    if (bottom) {
+      decorateGeneratedRoom(world, bottom, serialBase + serial++);
+      connectRooms(world, hall, bottom, state, 'plain');
+    }
+  }
+  for (let i = 0; i < 7; i++) {
+    const left = tryAddAutoRoom(world, roomTypes[(i + 1) % roomTypes.length], c.x - 126, c.y - 62 + i * 20, 13, 11, `Кабинка ${element}: левая ${i + 1}`);
+    if (left) {
+      decorateGeneratedRoom(world, left, serialBase + serial++);
+      connectRooms(world, hall, left, state, 'plain');
+    }
+    const right = tryAddAutoRoom(world, roomTypes[(i + 4) % roomTypes.length], c.x + 112, c.y - 62 + i * 20, 13, 11, `Кабинка ${element}: правая ${i + 1}`);
+    if (right) {
+      decorateGeneratedRoom(world, right, serialBase + serial++);
+      connectRooms(world, hall, right, state, 'plain');
+    }
+  }
+}
+
+function createCayleyMacroCampuses(
+  world: World,
+  authoredRooms: ReturnType<typeof createRooms>,
+  state: CayleyByuroState,
+): Record<CayleyElement, Room> {
+  const macroRooms = {} as Record<CayleyElement, Room>;
+  for (const element of ['e', 'r', 'rr', 's', 'sr', 'srr'] as const) {
+    const p = CAYLEY_GRAPH_POINTS[element];
+    const hall = addAutoRoom(
+      world,
+      RoomType.COMMON,
+      p.x - 38,
+      p.y - 24,
+      76,
+      48,
+      `Макроузел графа Кэли ${element}: ${CAYLEY_BYURO_ROOM_NAMES[element]}`,
+      Tex.MARBLE,
+      cayleyCosetOf(element) === 'odd' ? Tex.F_RED_CARPET : Tex.F_GREEN_CARPET,
+    );
+    macroRooms[element] = hall;
+    decorateRoom(world, hall, element);
+    setFeature(world, hall, hall.w >> 1, hall.h >> 1, Feature.SCREEN);
+    connectRooms(world, hall, authoredRooms[element], state, 'plain');
+    createCayleyArchiveWing(world, hall, element, state);
+  }
+  return macroRooms;
+}
+
+function connectCayleyMacroGraph(world: World, macroRooms: Record<CayleyElement, Room>, state: CayleyByuroState): void {
+  for (const [a, b] of [['e', 'r'], ['r', 'rr'], ['rr', 'e'], ['s', 'sr'], ['sr', 'srr'], ['srr', 's']] as const) {
+    connectRooms(world, macroRooms[a], macroRooms[b], state, 'generator_r');
+  }
+  for (const [a, b] of [['e', 's'], ['r', 'srr'], ['rr', 'sr']] as const) {
+    connectRooms(world, macroRooms[a], macroRooms[b], state, 'plain');
+  }
+}
+
+function nearestMacroRoom(spec: CayleyHqSpec, macroRooms: Record<CayleyElement, Room>): Room {
+  if (spec.owner === ZoneFaction.CITIZEN) return macroRooms.e;
+  if (spec.owner === ZoneFaction.LIQUIDATOR) return macroRooms.r;
+  if (spec.owner === ZoneFaction.CULTIST) return macroRooms.sr;
+  if (spec.owner === ZoneFaction.WILD) return macroRooms.rr;
+  return macroRooms.r;
+}
+
+function createHqSupportRooms(world: World, core: Room, spec: CayleyHqSpec, state: CayleyByuroState): void {
+  const c = center(core);
+  const support = [
+    { type: RoomType.KITCHEN, x: c.x - 78, y: c.y - 18, w: 24, h: 14, suffix: 'кухня и выдача' },
+    { type: RoomType.BATHROOM, x: c.x - 76, y: c.y + 22, w: 22, h: 12, suffix: 'санузел гермы' },
+    { type: RoomType.STORAGE, x: c.x + 54, y: c.y - 22, w: 26, h: 16, suffix: 'склад допусков' },
+    { type: spec.owner === ZoneFaction.SCIENTIST ? RoomType.MEDICAL : RoomType.OFFICE, x: c.x + 56, y: c.y + 22, w: 28, h: 16, suffix: spec.owner === ZoneFaction.SCIENTIST ? 'медико-измерительная' : 'канцелярия' },
+    { type: spec.owner === ZoneFaction.WILD ? RoomType.SMOKING : RoomType.PRODUCTION, x: c.x - 18, y: c.y + 54, w: 34, h: 16, suffix: spec.owner === ZoneFaction.WILD ? 'разбитая курилка' : 'мастерская' },
+  ] as const;
+
+  for (let i = 0; i < support.length; i++) {
+    const s = support[i];
+    const room = tryAddAutoRoom(world, s.type, s.x, s.y, s.w, s.h, `${spec.supportPrefix}: ${s.suffix}`, spec.wallTex, spec.floorTex);
+    if (!room) continue;
+    decorateGeneratedRoom(world, room, core.id * 10 + i);
+    connectRooms(world, core, room, state, 'plain');
+  }
+}
+
+function createScientistOutposts(world: World, core: Room, state: CayleyByuroState): void {
+  const outposts = [
+    { x: 690, y: 424, name: 'НИИ Кэли: пост генератора R' },
+    { x: 696, y: 566, name: 'НИИ Кэли: пост факторного обхода' },
+  ] as const;
+  for (const outpost of outposts) {
+    const room = tryAddAutoRoom(world, RoomType.HQ, outpost.x - 24, outpost.y - 16, 48, 32, outpost.name, Tex.HERMO_WALL, Tex.F_MARBLE_TILE);
+    if (!room) continue;
+    decorateGeneratedRoom(world, room, room.id);
+    connectRooms(world, core, room, state, 'plain');
+    hardenHermeticCore(world, room);
+  }
+}
+
+function createCayleyHqClusters(world: World, macroRooms: Record<CayleyElement, Room>, state: CayleyByuroState): void {
+  for (const spec of CAYLEY_HQ_SPECS) {
+    const core = addAutoRoom(
+      world,
+      RoomType.HQ,
+      spec.x - Math.floor(spec.coreW / 2),
+      spec.y - Math.floor(spec.coreH / 2),
+      spec.coreW,
+      spec.coreH,
+      spec.name,
+      spec.wallTex,
+      spec.floorTex,
+    );
+    decorateGeneratedRoom(world, core, core.id);
+    createHqSupportRooms(world, core, spec, state);
+    connectRooms(world, core, nearestMacroRoom(spec, macroRooms), state, 'plain');
+    if (spec.strong) createScientistOutposts(world, core, state);
+    hardenHermeticCore(world, core);
+  }
+}
+
+function createCayleyLatticeBooths(world: World): void {
+  const boothTypes = [RoomType.OFFICE, RoomType.STORAGE, RoomType.OFFICE, RoomType.BATHROOM] as const;
+  let serial = 0;
+  for (const x of CAYLEY_LATTICE_X) {
+    for (const y of CAYLEY_LATTICE_Y) {
+      const offsets = [
+        { dx: -31, dy: -27, w: 12, h: 9 },
+        { dx: 18, dy: -27, w: 12, h: 9 },
+        { dx: -31, dy: 18, w: 12, h: 9 },
+        { dx: 18, dy: 18, w: 12, h: 9 },
+      ] as const;
+      for (let i = 0; i < offsets.length; i++) {
+        if ((serial + i) % 11 === 0) continue;
+        const o = offsets[i];
+        const room = tryAddAutoRoom(
+          world,
+          boothTypes[(serial + i) % boothTypes.length],
+          x + o.dx,
+          y + o.dy,
+          o.w,
+          o.h,
+          `Микроокно алгоритма ${serial + 1}.${i + 1}`,
+          Tex.PANEL,
+          Tex.F_LINO,
+        );
+        if (!room) continue;
+        decorateGeneratedRoom(world, room, serial + i);
+        connectRoomToPoint(world, room, { x, y });
+      }
+      serial++;
+    }
+  }
+}
+
 function createRooms(world: World, state: CayleyByuroState): Record<CayleyElement | 'lobby' | 'bribe' | 'audit' | 'quotient', Room> {
   let roomId = 0;
   const rooms = {
@@ -437,7 +939,7 @@ function createRooms(world: World, state: CayleyByuroState): Record<CayleyElemen
     sr: addRoom(world, roomId++, RoomType.OFFICE, 316, 540, 66, 34, CAYLEY_BYURO_ROOM_NAMES.sr),
     srr: addRoom(world, roomId++, RoomType.OFFICE, 316, 350, 66, 34, CAYLEY_BYURO_ROOM_NAMES.srr),
     bribe: addRoom(world, roomId++, RoomType.OFFICE, 202, 464, 72, 40, CAYLEY_BYURO_ROOM_NAMES.bribe, Tex.PANEL, Tex.F_GREEN_CARPET),
-    audit: addRoom(world, roomId++, RoomType.HQ, 750, 464, 74, 42, CAYLEY_BYURO_ROOM_NAMES.audit, Tex.METAL, Tex.F_CONCRETE),
+    audit: addRoom(world, roomId++, RoomType.OFFICE, 750, 464, 74, 42, CAYLEY_BYURO_ROOM_NAMES.audit, Tex.METAL, Tex.F_CONCRETE),
     quotient: addRoom(world, roomId++, RoomType.CORRIDOR, 470, 590, 84, 34, CAYLEY_BYURO_ROOM_NAMES.quotient, Tex.METAL, Tex.F_RED_CARPET),
   };
 
@@ -678,19 +1180,68 @@ function populateAuthoredContent(
   spawnMonster(world, entities, nextId, rooms.rr, 12, 12, MonsterKind.KONTORSHCHIK);
 }
 
-function tuneInitialZones(world: World): void {
-  generateZones(world);
+function ownerForCayleyTerritoryTile(x: number, y: number): TerritoryOwner {
+  const tx = Math.max(0, Math.min(7, Math.floor(x / 128)));
+  const ty = Math.max(0, Math.min(7, Math.floor(y / 128)));
+  return CAYLEY_TERRITORY_GRID[ty][tx];
+}
+
+function paintRoomTerritory(world: World, room: Room, owner: TerritoryOwner): void {
+  for (let dy = 0; dy < room.h; dy++) {
+    for (let dx = 0; dx < room.w; dx++) {
+      const ci = world.idx(room.x + dx, room.y + dy);
+      if (!world.aptMask[ci]) world.factionControl[ci] = owner;
+    }
+  }
+  for (const doorIdx of room.doors) world.factionControl[doorIdx] = owner;
+}
+
+function paintNearbyTerritoryPatch(world: World, x: number, y: number, radius: number, owner: TerritoryOwner): void {
+  const r2 = radius * radius;
+  for (let dy = -radius; dy <= radius; dy++) {
+    for (let dx = -radius; dx <= radius; dx++) {
+      if (dx * dx + dy * dy > r2) continue;
+      const ci = world.idx(x + dx, y + dy);
+      if (!world.aptMask[ci]) world.factionControl[ci] = owner;
+    }
+  }
+}
+
+export function retuneCayleyByuroTerritory(world: World): void {
+  for (let y = 0; y < W; y++) {
+    for (let x = 0; x < W; x++) {
+      world.factionControl[world.idx(x, y)] = ownerForCayleyTerritoryTile(x, y);
+    }
+  }
+
+  for (const spec of CAYLEY_HQ_SPECS) {
+    paintNearbyTerritoryPatch(world, spec.x, spec.y, spec.strong ? 82 : 58, spec.owner);
+  }
+
+  for (const room of world.rooms) {
+    const c = center(room);
+    if (room.type === RoomType.HQ) {
+      paintRoomTerritory(world, room, ownerForCayleyTerritoryTile(c.x, c.y));
+    } else if (room.name === CAYLEY_BYURO_ROOM_NAMES.bribe) {
+      paintRoomTerritory(world, room, ZoneFaction.CITIZEN);
+    } else if (room.name === CAYLEY_BYURO_ROOM_NAMES.audit) {
+      paintRoomTerritory(world, room, ZoneFaction.LIQUIDATOR);
+    } else if (room.name === CAYLEY_BYURO_ROOM_NAMES.quotient || room.name.includes('факторного обхода')) {
+      paintRoomTerritory(world, room, ZoneFaction.WILD);
+    }
+  }
+
   for (const zone of world.zones) {
-    const nearAudit = world.dist(zone.cx, zone.cy, 790, 484) < 190;
-    const nearQuotient = world.dist(zone.cx, zone.cy, 512, 606) < 160;
-    zone.faction = nearAudit ? ZoneFaction.LIQUIDATOR : nearQuotient ? ZoneFaction.WILD : ZoneFaction.CITIZEN;
-    zone.level = nearAudit || nearQuotient ? 4 : 3;
+    const owner = ownerForCayleyTerritoryTile(zone.cx, zone.cy);
+    zone.level = owner === ZoneFaction.CULTIST || owner === ZoneFaction.WILD ? 4 : owner === ZoneFaction.SCIENTIST ? 3 : 2;
     zone.fogged = false;
   }
-  for (let i = 0; i < W * W; i++) {
-    const zone = world.zones[world.zoneMap[i]];
-    world.factionControl[i] = zone?.faction ?? ZoneFaction.CITIZEN;
-  }
+  syncZoneMetadataFromTerritory(world);
+}
+
+function tuneInitialZones(world: World): void {
+  generateZones(world);
+  retuneCayleyByuroTerritory(world);
 }
 
 function registerCayleyRouteCue(world: World, rooms: ReturnType<typeof createRooms>): void {
@@ -727,6 +1278,11 @@ function registerCayleyRouteCue(world: World, rooms: ReturnType<typeof createRoo
   });
 }
 
+function retainLiveCayleyDoorIds(world: World, state: CayleyByuroState): void {
+  state.generatorDoorIds = state.generatorDoorIds.filter(idx => world.doors.has(idx));
+  state.quotientShortcutDoorIds = state.quotientShortcutDoorIds.filter(idx => world.doors.has(idx));
+}
+
 export function generateCayleyByuroDesignFloor(): CayleyByuroGeneration {
   const world = new World();
   const entities: Entity[] = [];
@@ -739,15 +1295,21 @@ export function generateCayleyByuroDesignFloor(): CayleyByuroGeneration {
     world.floorTex[i] = Tex.F_PARQUET;
   }
 
+  carveCayleyGraphField(world);
   const rooms = createRooms(world, state);
   placeLift(world, rooms.lobby.x + 8, rooms.lobby.y + 24, rooms.lobby.x + 11, rooms.lobby.y + 24, LiftDirection.UP);
   placeLift(world, rooms.lobby.x + rooms.lobby.w - 9, rooms.lobby.y + 24, rooms.lobby.x + rooms.lobby.w - 12, rooms.lobby.y + 24, LiftDirection.DOWN);
+  const macroRooms = createCayleyMacroCampuses(world, rooms, state);
+  createCayleyHqClusters(world, macroRooms, state);
+  createCayleyLatticeBooths(world);
   connectCayleyGraph(world, rooms, state);
+  connectCayleyMacroGraph(world, macroRooms, state);
   tuneInitialZones(world);
   populateAuthoredContent(world, entities, rooms, state);
   registerCayleyRouteCue(world, rooms);
   ensureConnectivity(world, spawnX, spawnY);
   sanitizeDoors(world);
+  retainLiveCayleyDoorIds(world, state);
   world.rebuildContainerMap();
   world.bakeLights();
 

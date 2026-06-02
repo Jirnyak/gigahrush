@@ -68,6 +68,7 @@ import {
   learnCraftRecipe,
   learnCraftRecipesFromSource,
 } from './crafting';
+import { territoryOwnerAtIndex } from './territory';
 
 const PROCEDURAL_QUEST_GIVER_CHANCE = 0.10;
 
@@ -1361,6 +1362,7 @@ function buildQuestContext(npc: Entity, world: World, entities: Entity[], state:
   const cellIdx = world.idx(Math.floor(npc.x), Math.floor(npc.y));
   const zoneId = world.zoneMap[cellIdx] ?? 0;
   const zone = world.zones[zoneId];
+  const territoryOwner = territoryOwnerAtIndex(world, cellIdx);
   let nearbyMonster: Entity | undefined;
   let bestD2 = 30 * 30;
   for (const e of entities) {
@@ -1373,9 +1375,9 @@ function buildQuestContext(npc: Entity, world: World, entities: Entity[], state:
     roomName: room?.name ?? 'коридоре',
     roomType: room?.type,
     zoneId,
-    zoneFaction: zone?.faction,
+    zoneFaction: territoryOwner,
     zoneLevel: zone?.level ?? 1,
-    samosborDanger: state.samosborActive || zone?.fogged === true || zone?.faction === ZoneFaction.SAMOSBOR,
+    samosborDanger: state.samosborActive || zone?.fogged === true || territoryOwner === ZoneFaction.SAMOSBOR,
     nearbyMonster,
   };
 }

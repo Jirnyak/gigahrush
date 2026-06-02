@@ -278,7 +278,7 @@ function isCultVisualOccupation(occupation: Occupation): boolean {
   return occupation === Occupation.PILGRIM || occupation === Occupation.PRIEST;
 }
 
-function legacyNpcBaseSprite(occupation: Occupation): Uint32Array {
+function npcBaseSpriteForOccupation(occupation: Occupation): Uint32Array {
   const generator = occupation >= 0 && occupation < NPC_SPRITE_GENERATORS.length
     ? NPC_SPRITE_GENERATORS[occupation]
     : undefined;
@@ -304,7 +304,7 @@ function blendRgb(a: RGB, b: RGB, k: number): RGB {
   ];
 }
 
-function legacyZoneTint(y: number, seed: number, occupation: Occupation, faction: Faction | undefined): { tint: RGB; strength: number } {
+function npcZoneTint(y: number, seed: number, occupation: Occupation, faction: Faction | undefined): { tint: RGB; strength: number } {
   const pal = npcPalette(occupation, faction, seed);
   if (y < 22) return { tint: rgbJitter(pickRgb(SKIN, seed, 812), seed, 813, 18), strength: 0.08 };
   if (y < 44) return { tint: pal.top, strength: 0.16 };
@@ -321,7 +321,7 @@ function paintMaskedRect(t: Uint32Array, x0: number, y0: number, w: number, h: n
   }
 }
 
-function isLegacyFaceFeaturePixel(c: number, occupation: Occupation): boolean {
+function isNpcFaceFeaturePixel(c: number, occupation: Occupation): boolean {
   const [r, g, b] = pixelRgb(c);
   const max = Math.max(r, g, b);
   const min = Math.min(r, g, b);
@@ -331,16 +331,16 @@ function isLegacyFaceFeaturePixel(c: number, occupation: Occupation): boolean {
   return max - min > 65 && max <= 120;
 }
 
-function restoreLegacyFaceFeatures(t: Uint32Array, base: Uint32Array, occupation: Occupation): void {
+function restoreNpcFaceFeatures(t: Uint32Array, base: Uint32Array, occupation: Occupation): void {
   for (let y = 0; y < 22; y++) for (let x = 0; x < S; x++) {
     const i = y * S + x;
     const c = base[i];
     if ((c >>> 24) === 0) continue;
-    if (isLegacyFaceFeaturePixel(c, occupation)) t[i] = c;
+    if (isNpcFaceFeaturePixel(c, occupation)) t[i] = c;
   }
 }
 
-function addLegacyNpcDetails(t: Uint32Array, occupation: Occupation, seed: number, female: boolean): void {
+function addNpcSpriteDetails(t: Uint32Array, occupation: Occupation, seed: number, female: boolean): void {
   const accent = rgbJitter([174, 126, 72], seed, 830, 36);
   if (female && occupation !== Occupation.HUNTER && rnd(seed, 831) > 0.45) {
     paintMaskedRect(t, 25, 23, 14, 3, accent, seed + 832);
@@ -353,13 +353,13 @@ function addLegacyNpcDetails(t: Uint32Array, occupation: Occupation, seed: numbe
   if (rnd(seed, 839) > 0.62) paintMaskedRect(t, 27, 42, 10, 2, accent, seed + 840);
 }
 
-function generateLegacyNpcSprite(
+function generateOccupationNpcSprite(
   seed: number,
   occupation: Occupation,
   faction: Faction | undefined,
   isFemale: boolean | undefined,
 ): Uint32Array {
-  const base = legacyNpcBaseSprite(occupation);
+  const base = npcBaseSpriteForOccupation(occupation);
   const out = new Uint32Array(S * S).fill(CLEAR);
   const female = isFemale ?? rnd(seed, 811) > 0.56;
 
@@ -368,14 +368,14 @@ function generateLegacyNpcSprite(
     const c = base[i];
     const a = c >>> 24;
     if (a === 0) continue;
-    const { tint, strength } = legacyZoneTint(y, seed, occupation, faction);
+    const { tint, strength } = npcZoneTint(y, seed, occupation, faction);
     const mixed = blendRgb(pixelRgb(c), tint, strength);
     const n = Math.floor((noise(x, y, seed + 850) - 0.5) * 10);
     out[i] = col(mixed, n, a);
   }
 
-  addLegacyNpcDetails(out, occupation, seed, female);
-  restoreLegacyFaceFeatures(out, base, occupation);
+  addNpcSpriteDetails(out, occupation, seed, female);
+  restoreNpcFaceFeatures(out, base, occupation);
   return out;
 }
 
@@ -436,7 +436,7 @@ export function generateProceduralNpcSprite(
   const occ = inferOccupation(occupation, spriteHint);
   return isCultVisualOccupation(occ)
     ? generateDetailedNpcSprite(seed, occupation, faction, isFemale, spriteHint)
-    : generateLegacyNpcSprite(seed, occ, faction, isFemale);
+    : generateOccupationNpcSprite(seed, occ, faction, isFemale);
 }
 
 function component(c: number, shift: number): number {

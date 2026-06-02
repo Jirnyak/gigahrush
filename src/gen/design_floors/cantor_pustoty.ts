@@ -17,6 +17,7 @@ import {
   type Entity,
   type Item,
   type Room,
+  type TerritoryOwner,
   type WorldContainer,
 } from '../../core/types';
 import { World, auditReachability } from '../../core/world';
@@ -24,7 +25,7 @@ import { MONSTERS } from '../../entities/monster';
 import { monsterSpr, Spr } from '../../render/sprite_index';
 import { randomRPG, scaleMonsterHp, scaleMonsterSpeed } from '../../systems/rpg';
 import { registerRouteCue } from '../../systems/route_cues';
-import { ensureConnectivity, generateZones, sanitizeDoors, stampRoom } from '../shared';
+import { ensureConnectivity, generateZones, placeDoor, sanitizeDoors, stampRoom } from '../shared';
 import type { FloorGeneration } from '../floor_manifest';
 
 export const CANTOR_PUSTOTY_ROUTE_ID = 'cantor_pustoty' as const;
@@ -86,6 +87,14 @@ interface CantorRooms {
   downLift: Room;
 }
 
+interface CantorHqSpec {
+  owner: TerritoryOwner;
+  point: Point;
+  name: string;
+  supportPrefix: string;
+  supportTypes: readonly [RoomType, RoomType, RoomType, RoomType];
+}
+
 const PROXY_SIZE = 81;
 const PROXY_TILE = 12;
 const PROXY_ORIGIN = 26;
@@ -104,6 +113,52 @@ const DOWN_PROXY: Point = { x: 67, y: 67 };
 const REPAIR_PROXY: Point = { x: 13, y: 67 };
 const DUST_PROXY: Point = { x: 67, y: 13 };
 const HIDDEN_PROXY: Point = { x: 40, y: 8 };
+
+const CANTOR_HQ_SPECS: readonly CantorHqSpec[] = [
+  {
+    owner: ZoneFaction.CITIZEN,
+    point: { x: 35, y: 43 },
+    name: 'Кантор пустоты: гражданский штаб счетчиков шага',
+    supportPrefix: 'гражданской полки',
+    supportTypes: [RoomType.KITCHEN, RoomType.STORAGE, RoomType.MEDICAL, RoomType.COMMON],
+  },
+  {
+    owner: ZoneFaction.LIQUIDATOR,
+    point: { x: 18, y: 18 },
+    name: 'Кантор пустоты: пост ликвидаторов на верхней скобе',
+    supportPrefix: 'ликвидаторской скобы',
+    supportTypes: [RoomType.STORAGE, RoomType.OFFICE, RoomType.MEDICAL, RoomType.BATHROOM],
+  },
+  {
+    owner: ZoneFaction.SCIENTIST,
+    point: { x: 62, y: 20 },
+    name: 'Кантор пустоты: НИИ пыльной меры',
+    supportPrefix: 'НИИ пыльной меры',
+    supportTypes: [RoomType.OFFICE, RoomType.MEDICAL, RoomType.PRODUCTION, RoomType.STORAGE],
+  },
+  {
+    owner: ZoneFaction.CULTIST,
+    point: { x: 40, y: 16 },
+    name: 'Кантор пустоты: культовый штаб разрыва',
+    supportPrefix: 'культового разрыва',
+    supportTypes: [RoomType.COMMON, RoomType.STORAGE, RoomType.KITCHEN, RoomType.SMOKING],
+  },
+  {
+    owner: ZoneFaction.WILD,
+    point: { x: 61, y: 62 },
+    name: 'Кантор пустоты: дикий штаб обратной лестницы',
+    supportPrefix: 'дикой лестницы',
+    supportTypes: [RoomType.STORAGE, RoomType.SMOKING, RoomType.COMMON, RoomType.KITCHEN],
+  },
+];
+
+const CANTOR_MID_PROXIES: readonly Point[] = [
+  { x: 23, y: 23 }, { x: 57, y: 23 }, { x: 23, y: 57 }, { x: 57, y: 57 },
+  { x: 40, y: 23 }, { x: 23, y: 40 }, { x: 57, y: 40 }, { x: 40, y: 57 },
+  { x: 8, y: 40 }, { x: 72, y: 40 }, { x: 40, y: 72 },
+  { x: 18, y: 62 }, { x: 62, y: 18 }, { x: 32, y: 66 }, { x: 66, y: 32 },
+  { x: 50, y: 50 }, { x: 30, y: 30 },
+];
 
 const CANTOR_METRICS = new WeakMap<World, Omit<CantorPustotyMetrics, 'reachableStashContainers' | 'abyssCells' | 'ungatedUpLiftReachable' | 'ungatedDownLiftReachable'>>();
 
@@ -159,6 +214,8 @@ function buildInitialProxyMask(): Uint8Array {
   forceProxyDisk(mask, REPAIR_PROXY, 3, STASH);
   forceProxyDisk(mask, DUST_PROXY, 3, STASH);
   forceProxyDisk(mask, HIDDEN_PROXY, 2, STASH);
+  for (const spec of CANTOR_HQ_SPECS) forceProxyDisk(mask, spec.point, 3, ANCHOR);
+  for (const point of CANTOR_MID_PROXIES) forceProxyDisk(mask, point, 2, BRIDGE);
   return mask;
 }
 
@@ -263,7 +320,16 @@ function bridgeImportantComponents(mask: Uint8Array, important: readonly Point[]
 function buildCantorProxy(): CantorBuild {
   const mask = buildInitialProxyMask();
   const before = labelProxyComponents(mask);
-  const important = [ENTRY_PROXY, UP_PROXY, DOWN_PROXY, REPAIR_PROXY, DUST_PROXY, HIDDEN_PROXY];
+  const important = [
+    ENTRY_PROXY,
+    UP_PROXY,
+    DOWN_PROXY,
+    REPAIR_PROXY,
+    DUST_PROXY,
+    HIDDEN_PROXY,
+    ...CANTOR_HQ_SPECS.map(spec => spec.point),
+    ...CANTOR_MID_PROXIES,
+  ];
   const bridge = bridgeImportantComponents(mask, important);
 
   forceProxyDisk(mask, ENTRY_PROXY, 3, ANCHOR);
@@ -272,6 +338,8 @@ function buildCantorProxy(): CantorBuild {
   forceProxyDisk(mask, REPAIR_PROXY, 3, STASH);
   forceProxyDisk(mask, DUST_PROXY, 3, STASH);
   forceProxyDisk(mask, HIDDEN_PROXY, 2, STASH);
+  for (const spec of CANTOR_HQ_SPECS) forceProxyDisk(mask, spec.point, 3, ANCHOR);
+  for (const point of CANTOR_MID_PROXIES) forceProxyDisk(mask, point, 2, BRIDGE);
 
   let proxyOpenCells = 0;
   for (const cell of mask) if (cell !== GAP) proxyOpenCells++;
@@ -355,6 +423,244 @@ function addDoor(world: World, room: Room, side: 'north' | 'south' | 'west' | 'e
   world.doors.set(idx, { idx, state: DoorState.CLOSED, roomA: room.id, roomB: -1, keyId: '', timer: 0 });
   room.doors.push(idx);
   carveWorldCell(world, outsideX, outsideY, BRIDGE);
+}
+
+function canStampCantorRoom(world: World, x: number, y: number, w: number, h: number): boolean {
+  if (x < 2 || y < 2 || x + w >= W - 2 || y + h >= W - 2) return false;
+  for (let dy = -1; dy <= h; dy++) {
+    for (let dx = -1; dx <= w; dx++) {
+      const ci = world.idx(x + dx, y + dy);
+      if (world.aptMask[ci]) return false;
+      if (world.cells[ci] === Cell.LIFT || world.cells[ci] === Cell.DOOR) return false;
+      if (world.features[ci] === Feature.LIFT_BUTTON) return false;
+      if (world.roomMap[ci] >= 0) return false;
+    }
+  }
+  return true;
+}
+
+function stampCantorRoom(
+  world: World,
+  type: RoomType,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  name: string,
+  floorTex: Tex,
+  fog: number,
+): Room | null {
+  const rx = Math.round(x);
+  const ry = Math.round(y);
+  if (!canStampCantorRoom(world, rx, ry, w, h)) return null;
+  const room = stampRoom(world, world.rooms.length, type, rx, ry, w, h, -1);
+  room.name = name;
+  applyRoomLook(world, room, Tex.VOID_WALL, floorTex, fog);
+  return room;
+}
+
+function paintRoomTerritorySeed(world: World, room: Room, owner: TerritoryOwner): void {
+  for (let dy = 0; dy < room.h; dy++) {
+    for (let dx = 0; dx < room.w; dx++) {
+      const idx = world.idx(room.x + dx, room.y + dy);
+      if (world.roomMap[idx] === room.id) world.factionControl[idx] = owner;
+    }
+  }
+  for (const doorIdx of room.doors) world.factionControl[doorIdx] = owner;
+}
+
+function featureForRoom(type: RoomType): Feature {
+  switch (type) {
+    case RoomType.KITCHEN: return Feature.STOVE;
+    case RoomType.BATHROOM: return Feature.SINK;
+    case RoomType.MEDICAL: return Feature.APPARATUS;
+    case RoomType.PRODUCTION: return Feature.MACHINE;
+    case RoomType.OFFICE: return Feature.DESK;
+    case RoomType.STORAGE: return Feature.SHELF;
+    case RoomType.SMOKING: return Feature.CHAIR;
+    case RoomType.HQ: return Feature.SCREEN;
+    default: return Feature.TABLE;
+  }
+}
+
+function decorateCantorSupportRoom(world: World, room: Room): void {
+  const cx = room.x + (room.w >> 1);
+  const cy = room.y + (room.h >> 1);
+  world.features[world.idx(cx, cy)] = featureForRoom(room.type);
+  if (room.w > 7 && room.h > 5) {
+    world.features[world.idx(room.x + 2, room.y + 2)] = room.type === RoomType.BATHROOM ? Feature.TOILET : Feature.SHELF;
+    world.features[world.idx(room.x + room.w - 3, room.y + room.h - 3)] = room.type === RoomType.KITCHEN ? Feature.SINK : Feature.TABLE;
+  }
+}
+
+function stampCantorStation(world: World, point: Point, serial: number): void {
+  const center = proxyCenter(point);
+  const hall = stampCantorRoom(
+    world,
+    serial % 4 === 0 ? RoomType.COMMON : RoomType.CORRIDOR,
+    center.x - 18,
+    center.y - 6,
+    36,
+    12,
+    `Кантор пустоты: средний узел разрывов ${serial + 1}`,
+    serial % 3 === 0 ? Tex.F_CONCRETE : Tex.F_VOID,
+    58 + (serial % 3) * 8,
+  );
+  if (!hall) return;
+  decorateCantorSupportRoom(world, hall);
+  addDoor(world, hall, serial % 2 === 0 ? 'east' : 'west');
+
+  const supports = [
+    { type: RoomType.STORAGE, x: hall.x + 2, y: hall.y - 9, w: 14, h: 8, name: 'кладовая' },
+    { type: RoomType.OFFICE, x: hall.x + hall.w - 17, y: hall.y - 9, w: 15, h: 8, name: 'пост учета' },
+    { type: RoomType.PRODUCTION, x: hall.x + 3, y: hall.y + hall.h + 1, w: 16, h: 9, name: 'ремонтная' },
+    { type: RoomType.COMMON, x: hall.x + hall.w - 18, y: hall.y + hall.h + 1, w: 16, h: 9, name: 'ожидальня' },
+  ];
+  for (let i = 0; i < supports.length; i++) {
+    const spec = supports[i];
+    const room = stampCantorRoom(
+      world,
+      spec.type,
+      spec.x,
+      spec.y,
+      spec.w,
+      spec.h,
+      `Кантор пустоты: ${spec.name} среднего узла ${serial + 1}`,
+      spec.type === RoomType.PRODUCTION ? Tex.F_CONCRETE : Tex.F_VOID,
+      62 + ((serial + i) % 4) * 5,
+    );
+    if (!room) continue;
+    placeDoor(world, hall, room, '', false);
+    decorateCantorSupportRoom(world, room);
+  }
+}
+
+function stampCantorHqCompound(world: World, spec: CantorHqSpec): void {
+  const center = proxyCenter(spec.point);
+  const hall = stampCantorRoom(
+    world,
+    RoomType.COMMON,
+    center.x - 20,
+    center.y - 5,
+    40,
+    10,
+    `${spec.name}: приемная полка`,
+    Tex.F_CONCRETE,
+    42,
+  );
+  const hq = stampCantorRoom(
+    world,
+    RoomType.HQ,
+    center.x - 12,
+    center.y - 19,
+    24,
+    13,
+    spec.name,
+    Tex.F_CONCRETE,
+    36,
+  );
+  if (!hall || !hq) return;
+  placeDoor(world, hall, hq, '', false);
+  paintRoomTerritorySeed(world, hall, spec.owner);
+  paintRoomTerritorySeed(world, hq, spec.owner);
+  decorateCantorSupportRoom(world, hall);
+  decorateCantorSupportRoom(world, hq);
+
+  const supports = [
+    { type: spec.supportTypes[0], x: center.x - 37, y: center.y - 5, w: 16, h: 10 },
+    { type: spec.supportTypes[1], x: center.x + 21, y: center.y - 5, w: 16, h: 10 },
+    { type: spec.supportTypes[2], x: center.x - 18, y: center.y + 6, w: 17, h: 10 },
+    { type: spec.supportTypes[3], x: center.x + 3, y: center.y + 6, w: 17, h: 10 },
+  ];
+  for (let i = 0; i < supports.length; i++) {
+    const support = supports[i];
+    const room = stampCantorRoom(
+      world,
+      support.type,
+      support.x,
+      support.y,
+      support.w,
+      support.h,
+      `${spec.name}: ${spec.supportPrefix} ${i + 1}`,
+      support.type === RoomType.BATHROOM ? Tex.F_TILE : Tex.F_CONCRETE,
+      44 + i * 4,
+    );
+    if (!room) continue;
+    placeDoor(world, hall, room, '', false);
+    paintRoomTerritorySeed(world, room, spec.owner);
+    decorateCantorSupportRoom(world, room);
+  }
+}
+
+function microRoomType(gx: number, gy: number): RoomType {
+  const roll = (gx * 7 + gy * 11) % 9;
+  if (roll === 0) return RoomType.KITCHEN;
+  if (roll === 1) return RoomType.BATHROOM;
+  if (roll === 2) return RoomType.OFFICE;
+  if (roll === 3) return RoomType.SMOKING;
+  if (roll === 4 || roll === 5) return RoomType.COMMON;
+  return RoomType.STORAGE;
+}
+
+function microDoorSide(gx: number, gy: number): 'north' | 'south' | 'west' | 'east' {
+  switch ((gx * 13 + gy * 5) & 3) {
+    case 0: return 'north';
+    case 1: return 'south';
+    case 2: return 'west';
+    default: return 'east';
+  }
+}
+
+function shouldSkipMicroRoom(point: Point): boolean {
+  const protectedPoints = [ENTRY_PROXY, UP_PROXY, DOWN_PROXY, REPAIR_PROXY, DUST_PROXY, HIDDEN_PROXY, ...CANTOR_HQ_SPECS.map(spec => spec.point)];
+  for (const protectedPoint of protectedPoints) {
+    const dx = point.x - protectedPoint.x;
+    const dy = point.y - protectedPoint.y;
+    if (dx * dx + dy * dy <= 5 * 5) return true;
+  }
+  return false;
+}
+
+function stampCantorMicroRooms(world: World, mask: Uint8Array): number {
+  let stamped = 0;
+  for (let gy = 1; gy < PROXY_SIZE - 1; gy++) {
+    for (let gx = 1; gx < PROXY_SIZE - 1; gx++) {
+      const kind = mask[proxyIdx(gx, gy)];
+      if (kind === GAP || kind === ANCHOR || kind === STASH) continue;
+      if (shouldSkipMicroRoom({ x: gx, y: gy })) continue;
+      const hash = ((gx * 73856093) ^ (gy * 19349663)) >>> 0;
+      if (hash % (kind === BRIDGE ? 7 : 5) !== 0) continue;
+      const w = 6 + (hash % 3);
+      const h = 4 + ((hash >>> 3) % 3);
+      const x0 = PROXY_ORIGIN + gx * PROXY_TILE;
+      const y0 = PROXY_ORIGIN + gy * PROXY_TILE;
+      const x = x0 + 2 + ((hash >>> 7) % Math.max(1, PROXY_TILE - w - 3));
+      const y = y0 + 2 + ((hash >>> 11) % Math.max(1, PROXY_TILE - h - 3));
+      const type = microRoomType(gx, gy);
+      const room = stampCantorRoom(
+        world,
+        type,
+        x,
+        y,
+        w,
+        h,
+        `Кантор пустоты: рекурсивная клетка ${stamped + 1}`,
+        type === RoomType.BATHROOM ? Tex.F_TILE : kind === BRIDGE ? Tex.F_CONCRETE : Tex.F_VOID,
+        kind === BRIDGE ? 54 : 72,
+      );
+      if (!room) continue;
+      addDoor(world, room, microDoorSide(gx, gy));
+      decorateCantorSupportRoom(world, room);
+      stamped++;
+    }
+  }
+  return stamped;
+}
+
+function stampCantorMidAndMicroLayer(world: World, mask: Uint8Array): number {
+  for (const spec of CANTOR_HQ_SPECS) stampCantorHqCompound(world, spec);
+  for (const [i, point] of CANTOR_MID_PROXIES.entries()) stampCantorStation(world, point, i);
+  return stampCantorMicroRooms(world, mask);
 }
 
 function placeLift(world: World, room: Room, direction: LiftDirection, dx: number): void {
@@ -577,6 +883,15 @@ function tuneCantorZones(world: World): void {
   for (let i = 0; i < W * W; i++) world.factionControl[i] = ZoneFaction.SAMOSBOR;
 }
 
+export function reinforceCantorPustotyAuthoredHqTerritory(world: World): void {
+  for (const spec of CANTOR_HQ_SPECS) {
+    for (const room of world.rooms) {
+      if (!room || !room.name.startsWith(spec.name)) continue;
+      paintRoomTerritorySeed(world, room, spec.owner);
+    }
+  }
+}
+
 function reachableLifts(world: World, spawnX: number, spawnY: number): { up: boolean; down: boolean } {
   const audit = auditReachability(world, world.idx(Math.floor(spawnX), Math.floor(spawnY)));
   let up = false;
@@ -641,11 +956,13 @@ export function generateCantorPustotyDesignFloor(): FloorGeneration {
   const cantor = buildCantorProxy();
   carveProxyMaskToWorld(world, cantor.mask);
   const rooms = stampRooms(world);
+  const microRooms = stampCantorMidAndMicroLayer(world, cantor.mask);
   const spawnX = rooms.entry.x + (rooms.entry.w >> 1) + 0.5;
   const spawnY = rooms.entry.y + (rooms.entry.h >> 1) + 0.5;
 
   generateZones(world);
   tuneCantorZones(world);
+  reinforceCantorPustotyAuthoredHqTerritory(world);
   placeContainers(world, rooms);
   placeEntities(world, entities, nextId, rooms);
   registerCantorRouteCues(world, rooms);
@@ -663,7 +980,7 @@ export function generateCantorPustotyDesignFloor(): FloorGeneration {
     largestComponentBeforeBridge: cantor.largestComponentBeforeBridge,
     bridgedComponents: cantor.bridgedComponents,
     bridgeProxyCells: cantor.bridgeCells,
-    stashIslandCount: 3,
+    stashIslandCount: 3 + Math.floor(microRooms / 160),
   });
 
   return { world, entities, spawnX, spawnY };

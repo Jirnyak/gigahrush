@@ -5,6 +5,8 @@
 import { FloorLevel, type Entity } from '../core/types';
 import { World } from '../core/world';
 import { hashSeed, withSeededRandom } from '../core/rand';
+import { territorySharesForStoryFloor } from '../data/floor_territory';
+import { initializeCellTerritory } from '../systems/territory';
 import { generateMinistry } from './ministry';
 import { generateKvartiry, resetKvPopulationState } from './kvartiry';
 import { generateWorld } from './living';
@@ -47,7 +49,7 @@ export function resetGeneratedFloorPopulationState(): void {
   resetKvPopulationState();
 }
 
-const FLOOR_GENERATORS: Record<FloorLevel, () => FloorGeneration> = {
+const FLOOR_GENERATORS: Record<FloorLevel, (generationSeed?: number) => FloorGeneration> = {
   [FloorLevel.MINISTRY]: generateMinistry,
   [FloorLevel.KVARTIRY]: generateKvartiry,
   [FloorLevel.LIVING]: generateWorld,
@@ -71,7 +73,12 @@ function applyStoryFloorObjects(floor: FloorLevel, generation: FloorGeneration):
 }
 
 export function generateFloor(floor: FloorLevel, runSeed = DEFAULT_STORY_FLOOR_SEED): FloorGeneration {
-  const generation = withSeededRandom(storyFloorGenerationSeed(floor, runSeed), () => FLOOR_GENERATORS[floor]());
+  const seed = storyFloorGenerationSeed(floor, runSeed);
+  const generation = withSeededRandom(seed, () => FLOOR_GENERATORS[floor](seed));
   applyStoryFloorObjects(floor, generation);
+  initializeCellTerritory(generation.world, {
+    seed,
+    targetShares: territorySharesForStoryFloor(floor),
+  });
   return floor === FloorLevel.VOID ? withoutNpcEntities(generation) : generation;
 }

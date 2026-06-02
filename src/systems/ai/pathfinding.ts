@@ -42,6 +42,7 @@ let _navReachable = 0;
 let _frozenNavWorld: World | null = null;
 let _frozenNavCellVersion = -1;
 let _frozenNavRoomCount = -1;
+let _frozenNavRefCount = 0;
 let _flowFieldTouch = 0;
 let _routinePathUsed = 0;
 let _routinePathDenied = 0;
@@ -166,7 +167,10 @@ function navigationCacheRoomCount(world: World): number {
 }
 
 export function freezeNavigationCacheForWorld(world: World): void {
-  if (_frozenNavWorld === world) return;
+  if (_frozenNavWorld === world) {
+    _frozenNavRefCount++;
+    return;
+  }
   const frozenCellVersion = world.cellVersion;
   if (_navWorld !== world || _navCellVersion !== frozenCellVersion) {
     bakeNavigationTree(world, frozenCellVersion);
@@ -174,13 +178,26 @@ export function freezeNavigationCacheForWorld(world: World): void {
   _frozenNavWorld = world;
   _frozenNavCellVersion = frozenCellVersion;
   _frozenNavRoomCount = world.rooms.length;
+  _frozenNavRefCount = 1;
 }
 
 export function unfreezeNavigationCacheForWorld(world?: World): void {
-  if (world && _frozenNavWorld && _frozenNavWorld !== world) return;
+  if (!world) {
+    _frozenNavWorld = null;
+    _frozenNavCellVersion = -1;
+    _frozenNavRoomCount = -1;
+    _frozenNavRefCount = 0;
+    return;
+  }
+  if (_frozenNavWorld && _frozenNavWorld !== world) return;
+  if (_frozenNavRefCount > 1) {
+    _frozenNavRefCount--;
+    return;
+  }
   _frozenNavWorld = null;
   _frozenNavCellVersion = -1;
   _frozenNavRoomCount = -1;
+  _frozenNavRefCount = 0;
 }
 
 function isNavPassable(world: World, i: number): boolean {

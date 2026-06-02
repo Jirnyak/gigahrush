@@ -47,6 +47,7 @@ import { ENTITY_MASK_ACTOR, ENTITY_MASK_ITEM_DROP, ENTITY_MASK_MONSTER, ENTITY_M
 import { notifyActorDamaged } from '../combat_stimulus';
 import { updateSlimevikMonster } from '../slimevik';
 import { updateGnilushkaMonster } from '../gnilushka';
+import { territoryOwnerAtIndex } from '../territory';
 import { HEAD_SLUG_DETACHED_STAGE, HEAD_SLUG_HOSTED_STAGE } from '../../entities/head_slug';
 import { updateKhorovayaMatka } from './khorovaya_matka';
 import {
@@ -528,7 +529,7 @@ function fogSharkHasFogPressure(world: World, e: Entity): boolean {
   if (world.fog[idx] >= FOG_SHARK_FOG_THRESHOLD) return true;
   const zid = world.zoneMap[idx];
   const zone = zid >= 0 ? world.zones[zid] : undefined;
-  return zone?.fogged === true || zone?.faction === ZoneFaction.SAMOSBOR;
+  return zone?.fogged === true || territoryOwnerAtIndex(world, idx) === ZoneFaction.SAMOSBOR;
 }
 
 export function fogSharkMoveMultiplierForTests(world: World, e: Entity): number {

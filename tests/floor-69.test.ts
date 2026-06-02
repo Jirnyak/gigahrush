@@ -15,6 +15,7 @@ import {
 } from '../src/core/types';
 import { designFloorAtZ, designFloorById } from '../src/data/design_floors';
 import { designFloorPopulationProfile } from '../src/data/design_floor_population';
+import { HUMAN_TERRITORY_OWNERS } from '../src/data/factions';
 import { getSideQuestRegistrySnapshot } from '../src/data/plot';
 import { generateDesignFloor } from '../src/gen/design_floors/manifest';
 import {
@@ -23,6 +24,12 @@ import {
   FLOOR_69_RAID_SHUTTER_GATES,
   FLOOR_69_RAID_SHUTTER_KEY,
 } from '../src/gen/design_floors/floor_69';
+import {
+  countTerritoryCells,
+  territoryHqAnchors,
+  territoryOwnerAt,
+  territoryRoomOwner,
+} from '../src/systems/territory';
 
 type Floor69Generation = ReturnType<typeof generateDesignFloor>;
 
@@ -80,6 +87,14 @@ function roomCountMatching(gen: Floor69Generation, pattern: RegExp): number {
   return gen.world.rooms.filter(room => pattern.test(room.name)).length;
 }
 
+function floorCellCount(gen: Floor69Generation): number {
+  let count = 0;
+  for (let i = 0; i < W * W; i++) {
+    if (gen.world.cells[i] === Cell.FLOOR) count++;
+  }
+  return count;
+}
+
 test('floor_69 is registered as an authored Maintenance-band route', () => {
   const route = designFloorById(DESIGN_FLOOR_ID);
   assert.equal(route?.z, DESIGN_FLOOR_Z);
@@ -133,6 +148,9 @@ test('floor_69 exposes public, backstage, debt and refuge loops with decision ac
   assert.equal(roomCountMatching(gen, /^(Гримерная|Костюмерная)/) >= 8, true);
   assert.equal(roomCountMatching(gen, /^(Долговой кабинет|Архив расписок)/) >= 10, true);
   assert.equal(roomCountMatching(gen, /^(Верхний тихий шкаф|Служебное укрытие|Нижний тихий шкаф|Скрытая комната)/) >= 10, true);
+  assert.equal(gen.world.rooms.length >= 200, true, `rooms ${gen.world.rooms.length}`);
+  assert.equal(gen.world.doors.size >= 180, true, `doors ${gen.world.doors.size}`);
+  assert.equal(floorCellCount(gen) >= 100_000, true, `floor cells ${floorCellCount(gen)}`);
 
   for (const npcId of [
     'f69_madam_roza',
@@ -165,11 +183,41 @@ test('floor_69 exposes public, backstage, debt and refuge loops with decision ac
   }
 });
 
-test('floor_69 heatmap marks visible control and hidden backstage pressure', () => {
+test('floor_69 uses cell-first wild-dominant territory with mini HQ anchors', () => {
   const gen = floor69();
-  assert.equal(gen.world.factionControl[gen.world.idx(482, 502)], ZoneFaction.LIQUIDATOR);
-  assert.equal(gen.world.factionControl[gen.world.idx(504, 520)], ZoneFaction.CITIZEN);
-  assert.equal(gen.world.factionControl[gen.world.idx(736, 812)], ZoneFaction.WILD);
+  const counts = new Map(countTerritoryCells(gen.world).map(row => [row.owner, row.cells]));
+  const total = W * W;
+  const share = (owner: ZoneFaction): number => (counts.get(owner) ?? 0) / total;
+  const dominant = [...counts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0];
+  const anchors = territoryHqAnchors(gen.world);
+
+  assert.equal(territoryOwnerAt(gen.world, 482, 502), ZoneFaction.LIQUIDATOR);
+  assert.equal(territoryOwnerAt(gen.world, 504, 520), ZoneFaction.CITIZEN);
+  assert.equal(dominant, ZoneFaction.WILD);
+  assert.equal(share(ZoneFaction.CITIZEN) >= 0.16 && share(ZoneFaction.CITIZEN) <= 0.20, true, `citizen share ${share(ZoneFaction.CITIZEN)}`);
+  assert.equal(share(ZoneFaction.LIQUIDATOR) >= 0.08 && share(ZoneFaction.LIQUIDATOR) <= 0.11, true, `liquidator share ${share(ZoneFaction.LIQUIDATOR)}`);
+  assert.equal(share(ZoneFaction.CULTIST) >= 0.07 && share(ZoneFaction.CULTIST) <= 0.10, true, `cultist share ${share(ZoneFaction.CULTIST)}`);
+  assert.equal(share(ZoneFaction.SCIENTIST) >= 0.06 && share(ZoneFaction.SCIENTIST) <= 0.09, true, `scientist share ${share(ZoneFaction.SCIENTIST)}`);
+  assert.equal(share(ZoneFaction.WILD) >= 0.55 && share(ZoneFaction.WILD) <= 0.60, true, `wild share ${share(ZoneFaction.WILD)}`);
+
+  for (const owner of HUMAN_TERRITORY_OWNERS) {
+    assert.equal((counts.get(owner) ?? 0) > 0, true, `owned cells ${owner}`);
+    assert.equal(anchors.some(anchor => anchor.owner === owner), true, `hq anchor ${owner}`);
+  }
+
+  for (const [name, owner] of [
+    ['Гражданский общак 69: гермокор', ZoneFaction.CITIZEN],
+    ['Пост досмотра 69', ZoneFaction.LIQUIDATOR],
+    ['Свечная исповедальня 69: гермокор', ZoneFaction.CULTIST],
+    ['Санитарный НИИ 69: гермокор', ZoneFaction.SCIENTIST],
+    ['Дикий развал должников 69: гермокор', ZoneFaction.WILD],
+  ] as const) {
+    const room = gen.world.rooms.find(candidate => candidate.name === name);
+    assert.ok(room, name);
+    assert.equal(room.type, RoomType.HQ, name);
+    assert.equal(room.sealed, true, name);
+    assert.equal(territoryRoomOwner(gen.world, room.id), owner, name);
+  }
 });
 
 test('floor_69 raid shutters have bypass min-cuts that do not softlock', () => {

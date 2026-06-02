@@ -12,14 +12,18 @@ import {
   Occupation,
   RoomType,
   Tex,
+  W,
+  ZoneFaction,
   type Entity,
   type Item,
   type Room,
+  type TerritoryOwner,
   type WorldContainer,
 } from '../../core/types';
 import { World } from '../../core/world';
 import { hashSeed, withSeededRandom } from '../../core/rand';
 import { freshNeeds } from '../../data/catalog';
+import { HUMAN_TERRITORY_OWNERS, factionToTerritoryOwner } from '../../data/factions';
 import { MONSTERS } from '../../entities/monster';
 import { monsterSpr } from '../../render/sprite_index';
 import { randomRPG } from '../../systems/rpg';
@@ -69,6 +73,56 @@ interface NextId {
   v: number;
 }
 
+type DoorSide = 'north' | 'south' | 'west' | 'east';
+
+interface DoorSite {
+  x: number;
+  y: number;
+  ox: number;
+  oy: number;
+}
+
+interface MoebiusDistrictSpec {
+  x: number;
+  y: number;
+  cols: number;
+  rows: number;
+  linkX: number;
+  linkY: number;
+  name: string;
+  owner: TerritoryOwner;
+  reverse: boolean;
+  wallTex: Tex;
+  floorTex: Tex;
+}
+
+interface MoebiusHqSite {
+  owner: TerritoryOwner;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  name: string;
+  linkX: number;
+  linkY: number;
+  wallTex: Tex;
+  floorTex: Tex;
+}
+
+interface MoebiusStationSpec {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  type: RoomType;
+  name: string;
+  owner: TerritoryOwner;
+  linkX: number;
+  linkY: number;
+  wallTex: Tex;
+  floorTex: Tex;
+}
+
 const LOOP_LEFT = 168;
 const LOOP_RIGHT = 856;
 const UPPER_Y = 398;
@@ -83,6 +137,40 @@ const NORTH_GATE_Y = 492;
 const SOUTH_GATE_Y = 528;
 const SEAM_KEY_ID = 'rubber_door_wedge';
 const FLAT_LABELS = ['17-А', '17-Б', '18-А', '18-Б', '19-А', '19-Б', '20-А', '20-Б'] as const;
+const MICRO_ROOM_W = 18;
+const MICRO_ROOM_H = 11;
+const MICRO_GAP_X = 6;
+const MICRO_GAP_Y = 5;
+const MICRO_SPINE_H = 8;
+
+const MOEBIUS_HQ_SITES: readonly MoebiusHqSite[] = [
+  { owner: ZoneFaction.CITIZEN, x: 74, y: 458, w: 42, h: 24, name: 'Герметичный штаб жильцов прямой стороны', linkX: 184, linkY: 512, wallTex: Tex.PANEL, floorTex: Tex.F_LINO },
+  { owner: ZoneFaction.LIQUIDATOR, x: 760, y: 454, w: 40, h: 22, name: 'Герметичный штаб ликвидаторов обратного обхода', linkX: 842, linkY: 512, wallTex: Tex.METAL, floorTex: Tex.F_CONCRETE },
+  { owner: ZoneFaction.CULTIST, x: 876, y: 686, w: 34, h: 20, name: 'Скрытый культовый штаб паритетного шва', linkX: 846, linkY: 619, wallTex: Tex.ROTTEN, floorTex: Tex.F_MEAT },
+  { owner: ZoneFaction.SCIENTIST, x: 458, y: 248, w: 40, h: 22, name: 'Герметичный штаб учёных зеркального паритета', linkX: 512, linkY: 398, wallTex: Tex.TILE_W, floorTex: Tex.F_TILE },
+  { owner: ZoneFaction.WILD, x: 72, y: 688, w: 36, h: 20, name: 'Разорённый штаб диких у нижней петли', linkX: 178, linkY: 619, wallTex: Tex.ROTTEN, floorTex: Tex.F_WOOD },
+] as const;
+
+const MOEBIUS_DISTRICTS: readonly MoebiusDistrictSpec[] = [
+  { x: 52, y: 74, cols: 11, rows: 5, linkX: 184, linkY: 405, name: 'Северо-западная зеркальная гряда', owner: ZoneFaction.CITIZEN, reverse: false, wallTex: Tex.PANEL, floorTex: Tex.F_CARPET },
+  { x: 362, y: 78, cols: 12, rows: 5, linkX: 512, linkY: 398, name: 'Северная лабораторная гряда паритета', owner: ZoneFaction.SCIENTIST, reverse: true, wallTex: Tex.TILE_W, floorTex: Tex.F_TILE },
+  { x: 696, y: 76, cols: 11, rows: 5, linkX: 846, linkY: 405, name: 'Северо-восточная гряда обратного обхода', owner: ZoneFaction.LIQUIDATOR, reverse: false, wallTex: Tex.METAL, floorTex: Tex.F_CONCRETE },
+  { x: 62, y: 236, cols: 10, rows: 5, linkX: 184, linkY: 405, name: 'Западный подъезд повторной нумерации', owner: ZoneFaction.CITIZEN, reverse: true, wallTex: Tex.PANEL, floorTex: Tex.F_LINO },
+  { x: 714, y: 236, cols: 10, rows: 5, linkX: 846, linkY: 405, name: 'Восточный подъезд служебной нумерации', owner: ZoneFaction.LIQUIDATOR, reverse: true, wallTex: Tex.METAL, floorTex: Tex.F_CONCRETE },
+  { x: 72, y: 706, cols: 10, rows: 5, linkX: 178, linkY: 619, name: 'Западная нижняя гряда сбитых дверей', owner: ZoneFaction.WILD, reverse: false, wallTex: Tex.ROTTEN, floorTex: Tex.F_WOOD },
+  { x: 714, y: 704, cols: 10, rows: 5, linkX: 846, linkY: 619, name: 'Восточная нижняя гряда шовных слухов', owner: ZoneFaction.CULTIST, reverse: false, wallTex: Tex.ROTTEN, floorTex: Tex.F_MEAT },
+  { x: 50, y: 852, cols: 11, rows: 5, linkX: 178, linkY: 619, name: 'Юго-западная жилая лента возвращения', owner: ZoneFaction.CITIZEN, reverse: true, wallTex: Tex.PANEL, floorTex: Tex.F_CARPET },
+  { x: 362, y: 848, cols: 12, rows: 5, linkX: 512, linkY: 626, name: 'Южная кладовая лента маршрутных меток', owner: ZoneFaction.WILD, reverse: false, wallTex: Tex.BRICK, floorTex: Tex.F_CONCRETE },
+  { x: 698, y: 852, cols: 11, rows: 5, linkX: 846, linkY: 619, name: 'Юго-восточная обратная лента печатей', owner: ZoneFaction.CULTIST, reverse: true, wallTex: Tex.ROTTEN, floorTex: Tex.F_WOOD },
+] as const;
+
+const MOEBIUS_STATIONS: readonly MoebiusStationSpec[] = [
+  { x: 278, y: 292, w: 70, h: 34, type: RoomType.KITCHEN, name: 'Станция кипятка на прямой стороне Мёбиуса', owner: ZoneFaction.CITIZEN, linkX: 256, linkY: 405, wallTex: Tex.TILE_W, floorTex: Tex.F_TILE },
+  { x: 636, y: 292, w: 72, h: 34, type: RoomType.OFFICE, name: 'Станция сверки обратной стороны Мёбиуса', owner: ZoneFaction.LIQUIDATOR, linkX: 768, linkY: 405, wallTex: Tex.METAL, floorTex: Tex.F_CONCRETE },
+  { x: 318, y: 666, w: 76, h: 36, type: RoomType.STORAGE, name: 'Склад одинаковых дверей нижней стороны', owner: ZoneFaction.WILD, linkX: 256, linkY: 619, wallTex: Tex.BRICK, floorTex: Tex.F_CONCRETE },
+  { x: 620, y: 666, w: 74, h: 36, type: RoomType.COMMON, name: 'Круг слушателей паритетного шва', owner: ZoneFaction.CULTIST, linkX: 768, linkY: 619, wallTex: Tex.ROTTEN, floorTex: Tex.F_MEAT },
+  { x: 466, y: 704, w: 58, h: 38, type: RoomType.MEDICAL, name: 'Пункт измерения тошноты от ориентации', owner: ZoneFaction.SCIENTIST, linkX: 512, linkY: 626, wallTex: Tex.TILE_W, floorTex: Tex.F_TILE },
+] as const;
 
 export interface MoebiusPodezdDecisionMetrics {
   mirroredFlatRooms: number;
@@ -129,6 +217,551 @@ export function moebiusPodezdDecisionMetrics(gen: FloorGeneration): MoebiusPodez
     reversedPatrolNpcs: gen.entities.filter(entity => entity.type === EntityType.NPC && entity.name?.includes('обратного обхода')).length,
     seamHunterMonsters: gen.entities.filter(entity => entity.type === EntityType.MONSTER && entity.monsterKind === MonsterKind.SHOVNIK).length,
   };
+}
+
+export function expandMoebiusPodezdRouteGeometry(world: World, rng: () => number): void {
+  carveMoebiusOuterRibbon(world);
+  buildMoebiusFactionHqs(world);
+  buildMoebiusStations(world);
+  buildMoebiusDistricts(world, rng);
+  world.markFloorTexDirty();
+  world.markWallTexDirty();
+  world.markFeaturesDirty(false);
+}
+
+export function reinforceMoebiusPodezdAuthoredTerritory(world: World): void {
+  for (const site of MOEBIUS_HQ_SITES) {
+    const hq = world.rooms.find(room => room.name === site.name);
+    if (!hq) continue;
+    hq.type = RoomType.HQ;
+    hq.sealed = true;
+    hq.wallTex = Tex.HERMO_WALL;
+    markMoebiusHermeticRoom(world, hq);
+    paintRoomOwner(world, hq, site.owner);
+    for (const support of world.rooms) {
+      if (support.name.startsWith(`${site.name}:`)) paintRoomOwner(world, support, site.owner);
+    }
+  }
+  for (const station of MOEBIUS_STATIONS) {
+    const room = world.rooms.find(candidate => candidate.name === station.name);
+    if (room) paintRoomOwner(world, room, station.owner);
+  }
+  for (const district of MOEBIUS_DISTRICTS) {
+    for (const room of world.rooms) {
+      if (room.name.startsWith(`${district.name}:`)) paintRoomOwner(world, room, district.owner);
+    }
+  }
+  world.markWallTexDirty();
+}
+
+export function alignMoebiusPodezdAmbientNpcTerritory(world: World, entities: Entity[]): void {
+  const cells = moebiusTerritorySpawnCells(world);
+  const offsets = new Uint16Array(8);
+  for (const entity of entities) {
+    if (!isMoebiusAmbientNpc(entity) || entity.faction === undefined) continue;
+    const owner = factionToTerritoryOwner(entity.faction);
+    const list = cells.get(owner);
+    if (!list || list.length === 0) continue;
+    const offset = offsets[owner]++ | 0;
+    const cell = list[(entity.id * 109 + offset * 397) % list.length];
+    entity.x = (cell % W) + 0.5;
+    entity.y = ((cell / W) | 0) + 0.5;
+    entity.assignedRoomId = world.roomMap[cell] >= 0 ? world.roomMap[cell] : -1;
+    if (entity.ai) {
+      entity.ai.tx = cell % W;
+      entity.ai.ty = (cell / W) | 0;
+      entity.ai.path = [];
+      entity.ai.pi = 0;
+      entity.ai.stuck = 0;
+    }
+  }
+}
+
+function carveMoebiusOuterRibbon(world: World): void {
+  const upper = [
+    { x: 0, y: 196 },
+    { x: 180, y: 196 },
+    { x: 382, y: 338 },
+    { x: 624, y: 338 },
+    { x: 824, y: 196 },
+    { x: W - 1, y: 196 },
+  ];
+  const lower = [
+    { x: 0, y: 828 },
+    { x: 184, y: 828 },
+    { x: 382, y: 684 },
+    { x: 624, y: 684 },
+    { x: 824, y: 828 },
+    { x: W - 1, y: 828 },
+  ];
+  for (let i = 1; i < upper.length; i++) carveLineWidth(world, upper[i - 1].x, upper[i - 1].y, upper[i].x, upper[i].y, 9, Tex.F_LINO, ZoneFaction.CITIZEN);
+  for (let i = 1; i < lower.length; i++) carveLineWidth(world, lower[i - 1].x, lower[i - 1].y, lower[i].x, lower[i].y, 9, Tex.F_LINO, ZoneFaction.CITIZEN);
+  carveLineWidth(world, 36, 196, 36, 828, 9, Tex.F_LINO, ZoneFaction.CITIZEN);
+  carveLineWidth(world, W - 37, 196, W - 37, 828, 9, Tex.F_LINO, ZoneFaction.LIQUIDATOR);
+  carveLineWidth(world, 512, 338, 512, 398, 7, Tex.F_TILE, ZoneFaction.SCIENTIST);
+  carveLineWidth(world, 512, 626, 512, 684, 7, Tex.F_TILE, ZoneFaction.WILD);
+}
+
+function buildMoebiusFactionHqs(world: World): void {
+  for (const site of MOEBIUS_HQ_SITES) {
+    const core = addMoebiusRoom(world, RoomType.HQ, site.x, site.y, site.w, site.h, site.name, Tex.HERMO_WALL, site.floorTex, true);
+    decorateMoebiusHqCore(world, core, site.owner);
+    paintRoomOwner(world, core, site.owner);
+    connectRoomToPoint(world, core, site.linkX, site.linkY, DoorState.HERMETIC_OPEN, site.floorTex, site.owner);
+    buildMoebiusHqSupportRooms(world, site, core);
+  }
+}
+
+function buildMoebiusHqSupportRooms(world: World, site: MoebiusHqSite, core: Room): void {
+  const supports = moebiusHqSupportSpecs(site.owner);
+  const placements = [
+    { dx: 4, dy: -17, w: 18, h: 10 },
+    { dx: site.w + 8, dy: 2, w: 18, h: 10 },
+    { dx: 5, dy: site.h + 8, w: 18, h: 10 },
+    { dx: -24, dy: 2, w: 17, h: 10 },
+  ] as const;
+  const hubX = core.x + (core.w >> 1);
+  const hubY = core.y + (core.h >> 1);
+  for (let i = 0; i < supports.length; i++) {
+    const support = supports[i]!;
+    const placement = placements[i]!;
+    const room = tryAddMoebiusRoom(
+      world,
+      support.type,
+      site.x + placement.dx,
+      site.y + placement.dy,
+      placement.w,
+      placement.h,
+      `${site.name}: ${support.name}`,
+      support.wallTex,
+      support.floorTex,
+    );
+    if (!room) continue;
+    paintRoomOwner(world, room, site.owner);
+    decorateMoebiusMicroRoom(world, room, i, site.owner, false);
+    const side = sideToward(world, room, hubX, hubY);
+    connectRooms(world, room, side, core, oppositeSide(side), DoorState.CLOSED, site.owner);
+  }
+}
+
+function moebiusHqSupportSpecs(owner: TerritoryOwner): readonly { type: RoomType; name: string; wallTex: Tex; floorTex: Tex }[] {
+  switch (owner) {
+    case ZoneFaction.LIQUIDATOR:
+      return [
+        { type: RoomType.OFFICE, name: 'дежурная обратного обхода', wallTex: Tex.METAL, floorTex: Tex.F_CONCRETE },
+        { type: RoomType.STORAGE, name: 'оружейная резиновых клиньев', wallTex: Tex.METAL, floorTex: Tex.F_CONCRETE },
+        { type: RoomType.MEDICAL, name: 'перевязочная шовных ушибов', wallTex: Tex.TILE_W, floorTex: Tex.F_TILE },
+        { type: RoomType.BATHROOM, name: 'санузел поста', wallTex: Tex.TILE_W, floorTex: Tex.F_TILE },
+      ] as const;
+    case ZoneFaction.SCIENTIST:
+      return [
+        { type: RoomType.PRODUCTION, name: 'стол измерения паритета', wallTex: Tex.TILE_W, floorTex: Tex.F_TILE },
+        { type: RoomType.OFFICE, name: 'кабинет графа ориентации', wallTex: Tex.PANEL, floorTex: Tex.F_LINO },
+        { type: RoomType.STORAGE, name: 'шкаф меловых меток', wallTex: Tex.METAL, floorTex: Tex.F_CONCRETE },
+        { type: RoomType.BATHROOM, name: 'раковина после зеркального обхода', wallTex: Tex.TILE_W, floorTex: Tex.F_TILE },
+      ] as const;
+    case ZoneFaction.CULTIST:
+      return [
+        { type: RoomType.COMMON, name: 'круг одинаковых дверей', wallTex: Tex.ROTTEN, floorTex: Tex.F_MEAT },
+        { type: RoomType.STORAGE, name: 'кладовая чужих табличек', wallTex: Tex.ROTTEN, floorTex: Tex.F_WOOD },
+        { type: RoomType.SMOKING, name: 'тёмная курилка шва', wallTex: Tex.ROTTEN, floorTex: Tex.F_WOOD },
+        { type: RoomType.BATHROOM, name: 'умывальная мела', wallTex: Tex.TILE_W, floorTex: Tex.F_TILE },
+      ] as const;
+    case ZoneFaction.WILD:
+      return [
+        { type: RoomType.STORAGE, name: 'свалка дверных глазков', wallTex: Tex.ROTTEN, floorTex: Tex.F_WOOD },
+        { type: RoomType.KITCHEN, name: 'коптилка подъездной еды', wallTex: Tex.ROTTEN, floorTex: Tex.F_CONCRETE },
+        { type: RoomType.SMOKING, name: 'лежанки сбитой нумерации', wallTex: Tex.ROTTEN, floorTex: Tex.F_WOOD },
+        { type: RoomType.BATHROOM, name: 'ржавый санузел нижней петли', wallTex: Tex.TILE_W, floorTex: Tex.F_WATER },
+      ] as const;
+    case ZoneFaction.CITIZEN:
+    default:
+      return [
+        { type: RoomType.KITCHEN, name: 'общая кухня прямой стороны', wallTex: Tex.TILE_W, floorTex: Tex.F_TILE },
+        { type: RoomType.STORAGE, name: 'кладовая подписанных дверей', wallTex: Tex.BRICK, floorTex: Tex.F_CONCRETE },
+        { type: RoomType.MEDICAL, name: 'медуголок от головокружения', wallTex: Tex.TILE_W, floorTex: Tex.F_TILE },
+        { type: RoomType.BATHROOM, name: 'санузел жильцов', wallTex: Tex.TILE_W, floorTex: Tex.F_TILE },
+      ] as const;
+  }
+}
+
+function buildMoebiusStations(world: World): void {
+  for (const spec of MOEBIUS_STATIONS) {
+    const room = tryAddMoebiusRoom(world, spec.type, spec.x, spec.y, spec.w, spec.h, spec.name, spec.wallTex, spec.floorTex);
+    if (!room) continue;
+    paintRoomOwner(world, room, spec.owner);
+    decorateMoebiusStation(world, room, spec.owner);
+    connectRoomToPoint(world, room, spec.linkX, spec.linkY, DoorState.CLOSED, spec.floorTex, spec.owner);
+  }
+}
+
+function buildMoebiusDistricts(world: World, rng: () => number): void {
+  for (const spec of MOEBIUS_DISTRICTS) buildMoebiusMicroBlock(world, spec, rng);
+}
+
+function buildMoebiusMicroBlock(world: World, spec: MoebiusDistrictSpec, rng: () => number): void {
+  const topRows = Math.ceil(spec.rows / 2);
+  const blockW = spec.cols * MICRO_ROOM_W + (spec.cols - 1) * MICRO_GAP_X + 10;
+  const spineY = spec.y + topRows * (MICRO_ROOM_H + MICRO_GAP_Y) + 2;
+  const spine = tryAddMoebiusRoom(world, RoomType.CORRIDOR, spec.x, spineY, blockW, MICRO_SPINE_H, `${spec.name}: средний коридор ленты`, spec.wallTex, spec.floorTex);
+  if (!spine) return;
+  paintRoomOwner(world, spine, spec.owner);
+  decorateMoebiusRibbonSpine(world, spine, spec.owner);
+
+  let serial = 0;
+  for (let row = 0; row < spec.rows; row++) {
+    const aboveSpine = row < topRows;
+    const localRow = aboveSpine ? row : row - topRows;
+    const y = aboveSpine
+      ? spec.y + localRow * (MICRO_ROOM_H + MICRO_GAP_Y)
+      : spine.y + spine.h + 6 + localRow * (MICRO_ROOM_H + MICRO_GAP_Y);
+    for (let col = 0; col < spec.cols; col++) {
+      const effectiveCol = spec.reverse ? spec.cols - 1 - col : col;
+      const x = spec.x + 5 + col * (MICRO_ROOM_W + MICRO_GAP_X);
+      const type = moebiusMicroRoomType(spec.owner, row, effectiveCol);
+      const room = tryAddMoebiusRoom(
+        world,
+        type,
+        x,
+        y,
+        MICRO_ROOM_W,
+        MICRO_ROOM_H,
+        `${spec.name}: ${spec.reverse ? 'обратная' : 'прямая'} ${moebiusMicroRoomName(type, spec.owner)} ${serial + 1}`,
+        moebiusMicroWallTex(type, spec.wallTex),
+        moebiusMicroFloorTex(type, spec.floorTex),
+      );
+      if (!room) continue;
+      paintRoomOwner(world, room, spec.owner);
+      connectRoomToPoint(world, room, room.x + (room.w >> 1), spine.y + (spine.h >> 1), DoorState.CLOSED, spec.floorTex, spec.owner);
+      decorateMoebiusMicroRoom(world, room, serial, spec.owner, rng() < 0.18);
+      serial++;
+    }
+  }
+  connectRoomToPoint(world, spine, spec.linkX, spec.linkY, DoorState.CLOSED, spec.floorTex, spec.owner);
+}
+
+function moebiusMicroRoomType(owner: TerritoryOwner, row: number, col: number): RoomType {
+  const citizen = [RoomType.LIVING, RoomType.KITCHEN, RoomType.BATHROOM, RoomType.STORAGE, RoomType.COMMON, RoomType.LIVING] as const;
+  const liquidator = [RoomType.OFFICE, RoomType.STORAGE, RoomType.MEDICAL, RoomType.BATHROOM, RoomType.COMMON, RoomType.STORAGE] as const;
+  const scientist = [RoomType.OFFICE, RoomType.MEDICAL, RoomType.PRODUCTION, RoomType.STORAGE, RoomType.BATHROOM, RoomType.OFFICE] as const;
+  const wild = [RoomType.STORAGE, RoomType.SMOKING, RoomType.KITCHEN, RoomType.LIVING, RoomType.BATHROOM, RoomType.COMMON] as const;
+  const cultist = [RoomType.COMMON, RoomType.STORAGE, RoomType.SMOKING, RoomType.BATHROOM, RoomType.LIVING, RoomType.COMMON] as const;
+  const list = owner === ZoneFaction.LIQUIDATOR
+    ? liquidator
+    : owner === ZoneFaction.SCIENTIST
+      ? scientist
+      : owner === ZoneFaction.WILD
+        ? wild
+        : owner === ZoneFaction.CULTIST
+          ? cultist
+          : citizen;
+  return list[(row * 3 + col * 5 + owner) % list.length];
+}
+
+function moebiusMicroRoomName(type: RoomType, owner: TerritoryOwner): string {
+  if (type === RoomType.KITCHEN) return owner === ZoneFaction.WILD ? 'кухня-перехват' : 'микрокухня';
+  if (type === RoomType.BATHROOM) return 'микросанузел';
+  if (type === RoomType.STORAGE) return owner === ZoneFaction.CULTIST ? 'кладовая табличек' : 'кладовка';
+  if (type === RoomType.MEDICAL) return 'медшкаф';
+  if (type === RoomType.OFFICE) return 'кабинет нумерации';
+  if (type === RoomType.PRODUCTION) return 'аппаратная зеркал';
+  if (type === RoomType.SMOKING) return 'курилка сбитого обхода';
+  if (type === RoomType.COMMON) return owner === ZoneFaction.CULTIST ? 'тихий круг' : 'общая ниша';
+  return 'зеркальная комната';
+}
+
+function moebiusMicroWallTex(type: RoomType, fallback: Tex): Tex {
+  if (type === RoomType.BATHROOM || type === RoomType.MEDICAL) return Tex.TILE_W;
+  if (type === RoomType.PRODUCTION || type === RoomType.OFFICE) return Tex.METAL;
+  return fallback;
+}
+
+function moebiusMicroFloorTex(type: RoomType, fallback: Tex): Tex {
+  if (type === RoomType.BATHROOM || type === RoomType.MEDICAL) return Tex.F_TILE;
+  if (type === RoomType.PRODUCTION || type === RoomType.STORAGE) return Tex.F_CONCRETE;
+  return fallback;
+}
+
+function decorateMoebiusHqCore(world: World, room: Room, owner: TerritoryOwner): void {
+  setFeature(world, room.x + 5, room.y + 5, owner === ZoneFaction.SCIENTIST ? Feature.APPARATUS : Feature.TABLE);
+  setFeature(world, room.x + room.w - 6, room.y + 5, owner === ZoneFaction.LIQUIDATOR ? Feature.DESK : Feature.SHELF);
+  setFeature(world, room.x + (room.w >> 1), room.y + room.h - 5, owner === ZoneFaction.CULTIST ? Feature.CANDLE : Feature.LAMP);
+}
+
+function decorateMoebiusStation(world: World, room: Room, owner: TerritoryOwner): void {
+  setFeature(world, room.x + 8, room.y + 7, owner === ZoneFaction.SCIENTIST ? Feature.APPARATUS : Feature.TABLE);
+  setFeature(world, room.x + room.w - 9, room.y + 7, owner === ZoneFaction.LIQUIDATOR ? Feature.DESK : Feature.SHELF);
+  setFeature(world, room.x + (room.w >> 1), room.y + room.h - 8, room.type === RoomType.KITCHEN ? Feature.STOVE : Feature.LAMP);
+}
+
+function decorateMoebiusRibbonSpine(world: World, room: Room, owner: TerritoryOwner): void {
+  const feature = owner === ZoneFaction.CULTIST ? Feature.CANDLE : owner === ZoneFaction.SCIENTIST ? Feature.SCREEN : Feature.LAMP;
+  for (let x = room.x + 12; x < room.x + room.w - 8; x += 42) setFeature(world, x, room.y + (room.h >> 1), feature);
+}
+
+function decorateMoebiusMicroRoom(world: World, room: Room, serial: number, owner: TerritoryOwner, distressed: boolean): void {
+  switch (room.type) {
+    case RoomType.KITCHEN:
+      setFeature(world, room.x + 3, room.y + 3, Feature.STOVE);
+      setFeature(world, room.x + room.w - 4, room.y + 3, Feature.SINK);
+      break;
+    case RoomType.BATHROOM:
+      setFeature(world, room.x + 3, room.y + 3, Feature.SINK);
+      setFeature(world, room.x + room.w - 4, room.y + room.h - 3, Feature.TOILET);
+      break;
+    case RoomType.MEDICAL:
+      setFeature(world, room.x + 3, room.y + 3, Feature.BED);
+      setFeature(world, room.x + room.w - 4, room.y + 3, Feature.APPARATUS);
+      break;
+    case RoomType.OFFICE:
+      setFeature(world, room.x + 4, room.y + 3, Feature.DESK);
+      setFeature(world, room.x + room.w - 4, room.y + room.h - 3, Feature.SHELF);
+      break;
+    case RoomType.PRODUCTION:
+      setFeature(world, room.x + 4, room.y + 4, Feature.APPARATUS);
+      setFeature(world, room.x + room.w - 5, room.y + 4, Feature.MACHINE);
+      break;
+    case RoomType.SMOKING:
+      setFeature(world, room.x + 4, room.y + 4, Feature.CHAIR);
+      setFeature(world, room.x + room.w - 5, room.y + 5, owner === ZoneFaction.CULTIST ? Feature.CANDLE : Feature.TABLE);
+      break;
+    case RoomType.STORAGE:
+      setFeature(world, room.x + 3, room.y + 3, Feature.SHELF);
+      setFeature(world, room.x + room.w - 4, room.y + room.h - 3, distressed ? Feature.APPARATUS : Feature.SHELF);
+      break;
+    default:
+      setFeature(world, room.x + 4, room.y + 4, serial % 2 === 0 ? Feature.BED : Feature.TABLE);
+      setFeature(world, room.x + room.w - 5, room.y + room.h - 4, Feature.SHELF);
+      break;
+  }
+}
+
+function addMoebiusRoom(
+  world: World,
+  type: RoomType,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  name: string,
+  wallTex: Tex,
+  floorTex: Tex,
+  sealed = false,
+): Room {
+  const room = stampRoom(world, world.rooms.length, type, Math.floor(x), Math.floor(y), w, h, -1);
+  room.name = name;
+  room.wallTex = wallTex;
+  room.floorTex = floorTex;
+  room.sealed = sealed;
+  for (let dy = -1; dy <= room.h; dy++) {
+    for (let dx = -1; dx <= room.w; dx++) {
+      const idx = world.idx(room.x + dx, room.y + dy);
+      if (dx >= 0 && dx < room.w && dy >= 0 && dy < room.h) {
+        world.floorTex[idx] = floorTex;
+      } else {
+        world.wallTex[idx] = sealed ? Tex.HERMO_WALL : wallTex;
+        if (sealed) world.hermoWall[idx] = 1;
+      }
+    }
+  }
+  return room;
+}
+
+function tryAddMoebiusRoom(
+  world: World,
+  type: RoomType,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  name: string,
+  wallTex: Tex,
+  floorTex: Tex,
+): Room | null {
+  const rx = Math.floor(x);
+  const ry = Math.floor(y);
+  if (rx < 2 || ry < 2 || rx + w >= W - 2 || ry + h >= W - 2) return null;
+  for (let dy = -1; dy <= h; dy++) {
+    for (let dx = -1; dx <= w; dx++) {
+      const idx = world.idx(rx + dx, ry + dy);
+      if (world.cells[idx] === Cell.LIFT || world.cells[idx] === Cell.DOOR || world.hermoWall[idx]) return null;
+      if (world.roomMap[idx] >= 0) return null;
+    }
+  }
+  return addMoebiusRoom(world, type, rx, ry, w, h, name, wallTex, floorTex);
+}
+
+function markMoebiusHermeticRoom(world: World, room: Room): void {
+  for (let dy = -1; dy <= room.h; dy++) {
+    for (let dx = -1; dx <= room.w; dx++) {
+      if (dx >= 0 && dx < room.w && dy >= 0 && dy < room.h) continue;
+      const idx = world.idx(room.x + dx, room.y + dy);
+      if (world.cells[idx] === Cell.DOOR || world.cells[idx] === Cell.LIFT) {
+        world.hermoWall[idx] = 0;
+        continue;
+      }
+      if (world.cells[idx] !== Cell.WALL) continue;
+      world.hermoWall[idx] = 1;
+      world.wallTex[idx] = Tex.HERMO_WALL;
+    }
+  }
+}
+
+function paintRoomOwner(world: World, room: Room, owner: TerritoryOwner): void {
+  for (let dy = 0; dy < room.h; dy++) {
+    for (let dx = 0; dx < room.w; dx++) {
+      const idx = world.idx(room.x + dx, room.y + dy);
+      if (world.roomMap[idx] === room.id) world.factionControl[idx] = owner;
+    }
+  }
+  for (const idx of room.doors) world.factionControl[idx] = owner;
+}
+
+function doorSite(room: Room, side: DoorSide): DoorSite {
+  switch (side) {
+    case 'north': {
+      const x = room.x + (room.w >> 1);
+      const y = room.y - 1;
+      return { x, y, ox: x, oy: room.y };
+    }
+    case 'south': {
+      const x = room.x + (room.w >> 1);
+      const y = room.y + room.h;
+      return { x, y, ox: x, oy: room.y + room.h - 1 };
+    }
+    case 'west': {
+      const x = room.x - 1;
+      const y = room.y + (room.h >> 1);
+      return { x, y, ox: room.x, oy: y };
+    }
+    case 'east': {
+      const x = room.x + room.w;
+      const y = room.y + (room.h >> 1);
+      return { x, y, ox: room.x + room.w - 1, oy: y };
+    }
+  }
+}
+
+function sideToward(world: World, room: Room, x: number, y: number): DoorSide {
+  const cx = room.x + (room.w >> 1);
+  const cy = room.y + (room.h >> 1);
+  const dx = world.delta(cx, x);
+  const dy = world.delta(cy, y);
+  if (Math.abs(dx) > Math.abs(dy)) return dx >= 0 ? 'east' : 'west';
+  return dy >= 0 ? 'south' : 'north';
+}
+
+function oppositeSide(side: DoorSide): DoorSide {
+  if (side === 'north') return 'south';
+  if (side === 'south') return 'north';
+  if (side === 'west') return 'east';
+  return 'west';
+}
+
+function addDoorAt(world: World, room: Room, x: number, y: number, state: DoorState, keyId = '', roomB = -1): number {
+  const idx = world.idx(x, y);
+  world.cells[idx] = Cell.DOOR;
+  world.hermoWall[idx] = 0;
+  world.wallTex[idx] = state === DoorState.LOCKED || state === DoorState.HERMETIC_OPEN || state === DoorState.HERMETIC_CLOSED
+    ? Tex.DOOR_METAL
+    : Tex.DOOR_WOOD;
+  const existing = world.doors.get(idx);
+  if (existing) {
+    existing.state = state;
+    existing.keyId = keyId;
+    if (existing.roomA < 0) existing.roomA = room.id;
+    if (existing.roomB < 0) existing.roomB = roomB;
+  } else {
+    world.doors.set(idx, { idx, state, roomA: room.id, roomB, keyId, timer: 0 });
+  }
+  if (!room.doors.includes(idx)) room.doors.push(idx);
+  return idx;
+}
+
+function connectRoomToPoint(
+  world: World,
+  room: Room,
+  tx: number,
+  ty: number,
+  state: DoorState,
+  floorTex: Tex,
+  owner: TerritoryOwner,
+): void {
+  const site = doorSite(room, sideToward(world, room, tx, ty));
+  addDoorAt(world, room, site.x, site.y, state);
+  carveLineWidth(world, site.ox, site.oy, tx, ty, 3, floorTex, owner);
+}
+
+function connectRooms(
+  world: World,
+  a: Room,
+  sideA: DoorSide,
+  b: Room,
+  sideB: DoorSide,
+  state: DoorState,
+  owner: TerritoryOwner,
+): void {
+  const da = doorSite(a, sideA);
+  const db = doorSite(b, sideB);
+  const ai = addDoorAt(world, a, da.x, da.y, state, '', b.id);
+  const bi = addDoorAt(world, b, db.x, db.y, state, '', a.id);
+  const ad = world.doors.get(ai);
+  const bd = world.doors.get(bi);
+  if (ad) ad.roomB = b.id;
+  if (bd) bd.roomB = a.id;
+  carveLineWidth(world, da.ox, da.oy, db.ox, db.oy, 3, a.floorTex, owner);
+}
+
+function carveLineWidth(world: World, ax: number, ay: number, bx: number, by: number, width: number, floorTex: Tex, owner: TerritoryOwner): void {
+  if (ax !== bx && ay !== by) {
+    carveLineWidth(world, ax, ay, bx, ay, width, floorTex, owner);
+    carveLineWidth(world, bx, ay, bx, by, width, floorTex, owner);
+    return;
+  }
+  const half = width >> 1;
+  const from = ax === bx ? Math.min(ay, by) : Math.min(ax, bx);
+  const to = ax === bx ? Math.max(ay, by) : Math.max(ax, bx);
+  for (let p = from; p <= to; p++) {
+    for (let n = 0; n < width; n++) {
+      const o = n - half;
+      openTile(world, ax === bx ? ax + o : p, ax === bx ? p : ay + o, floorTex, owner);
+    }
+  }
+}
+
+function openTile(world: World, x: number, y: number, floorTex: Tex, owner: TerritoryOwner): void {
+  const idx = world.idx(x, y);
+  if (world.cells[idx] === Cell.LIFT || world.cells[idx] === Cell.DOOR || world.hermoWall[idx]) return;
+  world.cells[idx] = Cell.FLOOR;
+  if (world.roomMap[idx] < 0) world.roomMap[idx] = -1;
+  world.floorTex[idx] = floorTex;
+  world.factionControl[idx] = owner;
+  if (world.features[idx] !== Feature.NONE) world.features[idx] = Feature.NONE;
+}
+
+function isMoebiusAmbientNpc(entity: Entity): boolean {
+  return entity.type === EntityType.NPC &&
+    entity.alive &&
+    entity.name?.startsWith('Мёбиус-подъезд:') === true &&
+    entity.plotNpcId === undefined &&
+    entity.persistentNpcId === undefined &&
+    entity.alifeId === undefined &&
+    entity.questId === -1 &&
+    entity.faction !== undefined;
+}
+
+function moebiusTerritorySpawnCells(world: World): Map<TerritoryOwner, number[]> {
+  const cells = new Map<TerritoryOwner, number[]>();
+  for (const owner of HUMAN_TERRITORY_OWNERS) cells.set(owner, []);
+  for (let i = 0; i < W * W; i++) {
+    const cell = world.cells[i];
+    if (cell !== Cell.FLOOR && cell !== Cell.WATER) continue;
+    if (world.aptMask[i] || world.hermoWall[i] || world.containerMap.has(i) || world.features[i] === Feature.LIFT_BUTTON) continue;
+    const owner = world.factionControl[i] as TerritoryOwner;
+    const list = cells.get(owner);
+    if (list) list.push(i);
+  }
+  return cells;
 }
 
 function buildMoebiusRooms(world: World): MoebiusRooms {

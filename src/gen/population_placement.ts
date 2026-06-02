@@ -1,5 +1,6 @@
 import { Cell, Feature, W, type RoomType, type ZoneFaction } from '../core/types';
 import type { World } from '../core/world';
+import { territoryOwnerAtIndex } from '../systems/territory';
 
 export interface PlacementFieldAnchor {
   x: number;
@@ -19,6 +20,8 @@ export interface PlacementFieldProfile {
   anchors?: readonly PlacementFieldAnchor[];
   bucketSize?: number;
   maxPerBucket?: number;
+  preferredTerritory?: ZoneFaction;
+  preferredTerritoryShare?: number;
 }
 
 export type NaturalPopulationProfile = PlacementFieldProfile;
@@ -68,15 +71,40 @@ export function samplePlacementFieldCells(
   if (cells.length === 0) return [];
 
   const field = createPlacementField(world, profile, seed);
-  const strata = populationStrata(cells, count, seed);
   const out: number[] = [];
   const used = new Set<number>();
   const maxPerBucket = profile.maxPerBucket && profile.maxPerBucket > 0 ? Math.floor(profile.maxPerBucket) : 0;
   const bucketSize = Math.max(1, Math.floor(profile.bucketSize ?? 32));
   const bucketSide = Math.ceil(W / bucketSize);
   const bucketCounts = maxPerBucket > 0 ? new Int32Array(bucketSide * bucketSide) : undefined;
-  for (let i = 0; i < count; i++) {
-    const cell = pickContextCell(world, cells, strata, field.weights, seed, i, used, bucketCounts, bucketSize, bucketSide, maxPerBucket);
+
+  let serial = 0;
+  const appendSamples = (candidateCells: Int32Array, wanted: number, salt: number): void => {
+    if (wanted <= 0 || candidateCells.length === 0) return;
+    const strata = populationStrata(candidateCells, wanted, seed + salt);
+    for (let i = 0; i < wanted; i++) {
+      const cell = pickContextCell(world, candidateCells, strata, field.weights, seed + salt, serial++, used, bucketCounts, bucketSize, bucketSide, maxPerBucket);
+      if (cell >= 0) {
+        out.push(cell);
+        used.add(cell);
+        if (bucketCounts) bucketCounts[bucketIndexForCell(cell, bucketSize, bucketSide)]++;
+      }
+    }
+  };
+
+  const preferredShare = Math.max(0, Math.min(1, profile.preferredTerritoryShare ?? 0));
+  if (preferredShare > 0 && profile.preferredTerritory !== undefined && hasCellTerritoryField(world)) {
+    const preferred: number[] = [];
+    for (const cell of cells) {
+      if (territoryOwnerAtIndex(world, cell) === profile.preferredTerritory) preferred.push(cell);
+    }
+    appendSamples(Int32Array.from(preferred), Math.min(count, Math.floor(count * preferredShare)), 17);
+  }
+
+  const remaining = count - out.length;
+  const strata = populationStrata(cells, remaining, seed);
+  for (let i = 0; i < remaining; i++) {
+    const cell = pickContextCell(world, cells, strata, field.weights, seed, serial++, used, bucketCounts, bucketSize, bucketSide, maxPerBucket);
     if (cell >= 0) {
       out.push(cell);
       used.add(cell);
@@ -88,8 +116,9 @@ export function samplePlacementFieldCells(
 
 export function createPlacementField(world: World, profile: PlacementFieldProfile, seed: number): PlacementField {
   const weights = new Float32Array(CELL_COUNT);
+  const useCellTerritory = hasCellTerritoryField(world);
   for (let cell = 0; cell < CELL_COUNT; cell++) {
-    if (isPopulationPlacementCandidateCell(world, cell)) weights[cell] = cellPlacementWeight(world, cell, profile, seed);
+    if (isPopulationPlacementCandidateCell(world, cell)) weights[cell] = cellPlacementWeight(world, cell, profile, seed, useCellTerritory);
   }
   smoothPlacementField(world, weights, profile.smoothingPasses ?? 2, profile.smoothingBlend ?? 0.55);
   return { width: W, cellVersion: world.cellVersion, seed, weights };
@@ -245,7 +274,14 @@ function pickStratumCell(
   return -1;
 }
 
-function cellPlacementWeight(world: World, cell: number, profile: PlacementFieldProfile, seed: number): number {
+function hasCellTerritoryField(world: World): boolean {
+  for (let i = 0; i < world.factionControl.length; i += 257) {
+    if (world.factionControl[i] !== 0) return true;
+  }
+  return false;
+}
+
+function cellPlacementWeight(world: World, cell: number, profile: PlacementFieldProfile, seed: number, useCellTerritory: boolean): number {
   const x = cell % W;
   const y = (cell / W) | 0;
   let score = profile.openWeight ?? 1;
@@ -257,7 +293,8 @@ function cellPlacementWeight(world: World, cell: number, profile: PlacementField
   }
 
   const zone = world.zones[world.zoneMap[cell]];
-  if (zone) score *= profile.zoneWeights?.[zone.faction] ?? 1;
+  const owner = useCellTerritory ? territoryOwnerAtIndex(world, cell) : zone?.faction;
+  if (owner !== undefined) score *= profile.zoneWeights?.[owner] ?? 1;
 
   const scale = Math.max(24, profile.noiseScale);
   const coarse = valueNoise(x + 0.5, y + 0.5, scale, seed);

@@ -49,7 +49,7 @@ class FakeCanvas extends FakeEventTarget {
   }
 }
 
-function installInputDom(): { canvas: FakeCanvas; restore: () => void } {
+function installInputDom(): { canvas: FakeCanvas; document: FakeDocument; restore: () => void } {
   const doc = new FakeDocument();
   const win = new FakeWindow();
   const canvas = new FakeCanvas(doc);
@@ -59,6 +59,7 @@ function installInputDom(): { canvas: FakeCanvas; restore: () => void } {
   Object.defineProperty(globalThis, 'window', { configurable: true, value: win });
   return {
     canvas,
+    document: doc,
     restore: () => {
       if (previousDocument) Object.defineProperty(globalThis, 'document', previousDocument);
       else Reflect.deleteProperty(globalThis, 'document');
@@ -69,7 +70,7 @@ function installInputDom(): { canvas: FakeCanvas; restore: () => void } {
 }
 
 function mouseEvent(type: string, button = 0): MouseEvent {
-  const event = new Event(type) as MouseEvent;
+  const event = new Event(type, { cancelable: true }) as MouseEvent;
   Object.defineProperty(event, 'button', { value: button });
   return event;
 }
@@ -115,6 +116,37 @@ test('canvas click does not request pointer lock after a menu click closes the m
     env.canvas.dispatch('mousedown', mouseEvent('mousedown'));
     env.canvas.dispatch('click');
     assert.equal(env.canvas.requestCount, 1);
+    unbind();
+  } finally {
+    env.restore();
+  }
+});
+
+test('right mouse button drives equipped tool input under pointer lock', () => {
+  const env = installInputDom();
+  try {
+    const input = createInput();
+    const unbind = bindInput(input, env.canvas as unknown as HTMLCanvasElement, {
+      shouldRequestPointerLock: () => true,
+    });
+
+    env.canvas.dispatch('mousedown', mouseEvent('mousedown', 2));
+    assert.equal(input.mouseUse, false);
+
+    env.document.pointerLockElement = env.canvas as unknown as Element;
+    const down = mouseEvent('mousedown', 2);
+    env.canvas.dispatch('mousedown', down);
+    assert.equal(input.mouseUse, true);
+    assert.equal(down.defaultPrevented, true);
+
+    const context = mouseEvent('contextmenu', 2);
+    env.canvas.dispatch('contextmenu', context);
+    assert.equal(context.defaultPrevented, true);
+
+    const up = mouseEvent('mouseup', 2);
+    env.document.dispatch('mouseup', up);
+    assert.equal(input.mouseUse, false);
+    assert.equal(up.defaultPrevented, true);
     unbind();
   } finally {
     env.restore();

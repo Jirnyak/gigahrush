@@ -721,6 +721,16 @@ test('Net Sphere sanitizers remove unsafe text and truncate bounded fields', () 
 
 test('Net Sphere input binding opens after game input prevention but ignores control capture', async () => {
   const browser = installNetSphereBrowser();
+  const realFetch = globalThis.fetch;
+  const chatBodies: string[] = [];
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = String(input);
+    if (url.endsWith('/chat')) chatBodies.push(String(init?.body ?? ''));
+    return new Response(JSON.stringify({ ok: true, chat: [] }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json; charset=utf-8' },
+    });
+  }) as typeof fetch;
   try {
     const controls = await import('../src/systems/controls');
     const net = await import('../src/systems/net_sphere');
@@ -728,8 +738,9 @@ test('Net Sphere input binding opens after game input prevention but ignores con
     net.closeNetSphere();
     assert.equal(controls.matchesControlAction('netSubmit', 'KeyE'), false);
     assert.equal(controls.matchesControlAction('netSubmit', 'Enter'), true);
-    assert.equal(controls.matchesControlAction('netClose', 'Backspace'), true);
+    assert.equal(controls.matchesControlAction('netClose', 'Backspace'), false);
     assert.equal(controls.matchesControlAction('netClose', 'Delete'), true);
+    assert.equal(controls.matchesControlAction('netErase', 'Backspace'), true);
     assert.equal(controls.matchesControlAction('netClose', 'Enter'), false);
     assert.equal(controls.matchesControlAction('netClose', 'Escape'), false);
 
@@ -758,12 +769,44 @@ test('Net Sphere input binding opens after game input prevention but ignores con
     assert.equal(open.immediatePropagationStopped, true);
     assert.equal(browser.document.pointerLockElement, lockedElement);
 
+    browser.document.dispatch('keydown', new FakeKeyboardEvent('KeyH', 'h'));
+    browser.document.dispatch('keydown', new FakeKeyboardEvent('Space', ' '));
+    browser.document.dispatch('keydown', new FakeKeyboardEvent('KeyI', 'i'));
+    assert.equal(net.getNetSphereSnapshot().draft, 'h i');
+    const erase = new FakeKeyboardEvent('Backspace', 'Backspace');
+    browser.document.dispatch('keydown', erase);
+    assert.equal(net.isNetSphereOpen(), true);
+    assert.equal(net.getNetSphereSnapshot().draft, 'h ');
+    assert.equal(erase.defaultPrevented, true);
+    assert.equal(erase.immediatePropagationStopped, true);
+
     const leakedCodes: string[] = [];
     const leakListener = (event: Event) => {
       leakedCodes.push((event as unknown as FakeKeyboardEvent).code);
     };
     browser.document.addEventListener('keydown', leakListener);
-    const close = new FakeKeyboardEvent('Backspace', 'Backspace');
+    const submit = new FakeKeyboardEvent('Enter', 'Enter');
+    browser.document.dispatch('keydown', submit);
+    assert.equal(net.isNetSphereOpen(), false);
+    assert.equal(net.getNetSphereSnapshot().draft, '');
+    assert.equal(submit.defaultPrevented, true);
+    assert.equal(submit.immediatePropagationStopped, true);
+    assert.equal(chatBodies.length, 1);
+    assert.match(chatBodies[0], /"body":"h"/);
+
+    browser.document.dispatch('keydown', new FakeKeyboardEvent('KeyN', 'n'));
+    assert.equal(net.isNetSphereOpen(), true);
+    const emptySubmit = new FakeKeyboardEvent('Enter', 'Enter');
+    browser.document.dispatch('keydown', emptySubmit);
+    assert.equal(net.isNetSphereOpen(), false);
+    assert.equal(net.getNetSphereSnapshot().draft, '');
+    assert.equal(emptySubmit.defaultPrevented, true);
+    assert.equal(emptySubmit.immediatePropagationStopped, true);
+    assert.equal(chatBodies.length, 1);
+
+    browser.document.dispatch('keydown', new FakeKeyboardEvent('KeyN', 'n'));
+    assert.equal(net.isNetSphereOpen(), true);
+    const close = new FakeKeyboardEvent('Delete', 'Delete');
     browser.document.dispatch('keydown', close);
     assert.equal(net.isNetSphereOpen(), false);
     assert.equal(close.defaultPrevented, true);
@@ -778,6 +821,7 @@ test('Net Sphere input binding opens after game input prevention but ignores con
     unbind();
     assert.equal(browser.document.listenerCount('keydown'), 0);
   } finally {
+    globalThis.fetch = realFetch;
     browser.restore();
   }
 });
@@ -819,6 +863,7 @@ test('Net Sphere aborts stalled client fetches and releases busy flags', async (
 
     browser.document.dispatch('keydown', new FakeKeyboardEvent('KeyH', 'h'));
     browser.document.dispatch('keydown', new FakeKeyboardEvent('Enter', 'Enter'));
+    assert.equal(net.isNetSphereOpen(), false);
     net.tickNetSphere(minimalNetSphereState(), minimalNetSpherePlayer());
     assert.equal(net.getNetSphereSnapshot().busy, true);
 
@@ -830,7 +875,6 @@ test('Net Sphere aborts stalled client fetches and releases busy flags', async (
     assert.equal(snapshot.status, 'offline');
     assert.equal(requests.some(url => url.endsWith('/chat')), true);
     assert.equal(requests.some(url => url.endsWith('/hello')), true);
-    assert.equal(requests.some(url => url.endsWith('/market')), true);
     assert.equal(aborted.length, requests.length);
 
     unbind();

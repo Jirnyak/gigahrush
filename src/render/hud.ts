@@ -14,7 +14,7 @@ import { formatLastPlayerDamageCause } from '../systems/damage';
 import { RPG_LEVEL_CAP, xpForLevel } from '../systems/rpg';
 import { zhelemishHudLine } from '../systems/status';
 import { drawDebugOverlay } from '../systems/debug';
-import { ZONE_COLORS, drawMinimap, drawFullMap } from './map_ui';
+import { ZONE_COLORS, drawMinimap, drawFullMap, drawMapLegendMenu } from './map_ui';
 import { drawInventory } from './stats_ui';
 import { drawQuestLog } from './quest_ui';
 import { drawLogMenu } from './log_ui';
@@ -35,6 +35,7 @@ import { drawNetTerminalGenDenied } from './net_terminal_gen_ui';
 import { drawMapEditor } from './map_editor_ui';
 import { entityDisplayName } from '../entities/monster';
 import { isHostile } from '../systems/factions';
+import { territoryOwnerAtIndex } from '../systems/territory';
 import { getNpcPlayerRelation } from '../systems/npc_relations';
 import {
   getSamosborActiveInstructionSnapshot,
@@ -110,6 +111,7 @@ const ZONE_FACTION_NAMES: Record<ZoneFaction, string> = {
   [ZoneFaction.CULTIST]: 'Культисты',
   [ZoneFaction.SAMOSBOR]: 'Самосбор',
   [ZoneFaction.WILD]: 'Дикие',
+  [ZoneFaction.SCIENTIST]: 'Учёные',
 };
 const MSG_MAX = 12;
 const MSG_SCAN_MAX = 32;
@@ -946,8 +948,8 @@ export function drawPointerCaptureGate(ctx: CanvasRenderingContext2D, time = 0):
   ctx.fillText(fitHudText(ctx, 'Данная игра является шутером от первого лица', panelW - 24 * s), w * 0.5, y + 61 * s);
   ctx.fillText(fitHudText(ctx, 'и не использует мышку.', panelW - 24 * s), w * 0.5, y + 75 * s);
   ctx.fillStyle = '#9ab';
-  ctx.fillText(fitHudText(ctx, 'Enter: меню / принять. Backspace/Del: назад.', panelW - 24 * s), w * 0.5, y + 91 * s);
-  ctx.fillText(fitHudText(ctx, 'E: взаимодействие в мире, двери, предметы, NPC.', panelW - 24 * s), w * 0.5, y + 105 * s);
+  ctx.fillText(fitHudText(ctx, 'Enter: меню / принять. Space: назад.', panelW - 24 * s), w * 0.5, y + 91 * s);
+  ctx.fillText(fitHudText(ctx, 'ЛКМ: атака. ПКМ: инструмент. E: мир.', panelW - 24 * s), w * 0.5, y + 105 * s);
 
   ctx.strokeStyle = 'rgba(100,220,255,0.25)';
   ctx.beginPath();
@@ -968,8 +970,8 @@ export function drawPointerCaptureGate(ctx: CanvasRenderingContext2D, time = 0):
   ctx.fillText(fitHudText(ctx, 'This game is a first-person shooter', panelW - 24 * s), w * 0.5, y + 186 * s);
   ctx.fillText(fitHudText(ctx, 'and does not use the mouse cursor.', panelW - 24 * s), w * 0.5, y + 200 * s);
   ctx.fillStyle = '#9ab';
-  ctx.fillText(fitHudText(ctx, 'Enter: menu / accept. Backspace/Del: back.', panelW - 24 * s), w * 0.5, y + 216 * s);
-  ctx.fillText(fitHudText(ctx, 'E: world interaction, doors, items, NPCs.', panelW - 24 * s), w * 0.5, y + 230 * s);
+  ctx.fillText(fitHudText(ctx, 'Enter: menu / accept. Space: back.', panelW - 24 * s), w * 0.5, y + 216 * s);
+  ctx.fillText(fitHudText(ctx, 'LMB: attack. RMB: tool. E: world.', panelW - 24 * s), w * 0.5, y + 230 * s);
   ctx.fillStyle = '#708888';
   ctx.font = `${Math.round(7 * s)}px monospace`;
   ctx.fillText(fitHudText(ctx, 'После клика игра продолжится. / Game resumes after click.', panelW - 24 * s), w * 0.5, y + 240 * s);
@@ -1002,7 +1004,7 @@ function drawPointerLockPrompt(
   ctx.shadowBlur = 0;
   ctx.font = `${7 * sy}px monospace`;
   ctx.fillStyle = '#9ab';
-  ctx.fillText(fitHudText(ctx, `После захвата ЛКМ/${controlHint('attack')} стреляет. ${controlHint('gameMenu')} меню/принять.`, panelW - 14 * sx), w * 0.5, y + 20 * sy);
+  ctx.fillText(fitHudText(ctx, `После захвата ЛКМ стреляет. ПКМ использует инструмент. ${controlHint('gameMenu')} меню/принять.`, panelW - 14 * sx), w * 0.5, y + 20 * sy);
   ctx.fillText(fitHudText(ctx, `${menuCloseHint()} назад/закрыть. ${controlHint('interact')} действует в мире. Esc отпускает курсор браузером.`, panelW - 14 * sx), w * 0.5, y + 32 * sy);
   ctx.textAlign = 'left';
   ctx.restore();
@@ -1543,6 +1545,7 @@ export function drawHUD(
     const pci = world.idx(Math.floor(player.x), Math.floor(player.y));
     const zid = world.zoneMap[pci];
     const zone = world.zones[zid];
+    const territoryOwner = territoryOwnerAtIndex(world, pci);
     const floorEntry = currentFloorRunEntry(state);
 
     // Game clock + day counter — just above status bar
@@ -1559,13 +1562,13 @@ export function drawHUD(
     // Zone
     if (zone) {
       const [zr, zg, zb] = ZONE_COLORS[zid % 64];
-      const fLabel = ZONE_FACTION_NAMES[zone.faction];
+      const fLabel = ZONE_FACTION_NAMES[territoryOwner];
       const zj = textJitter(time, 410);
       ctx.fillStyle = `rgba(${zr},${zg},${zb},${flicker(time, 411)})`;
       ctx.font = `${8 * sy}px monospace`;
-      ctx.fillText(fitHudText(ctx, `■ Зона ${zid + 1}  Ур.${zone.level ?? 1}`, leftInfoW), leftX + zj.dx, barY - 32 * sy + zj.dy);
-      const fColor = zone.faction === ZoneFaction.SAMOSBOR ? '#c4f' : '#7aa';
-      drawGlitchText(ctx, fitHudText(ctx, fLabel, leftInfoW), leftX, barY - 22 * sy, time, 412, fColor, 7 * sy);
+      ctx.fillText(fitHudText(ctx, `■ Сектор ${zid + 1}  Ур.${zone.level ?? 1}`, leftInfoW), leftX + zj.dx, barY - 32 * sy + zj.dy);
+      const fColor = territoryOwner === ZoneFaction.SAMOSBOR ? '#c4f' : '#7aa';
+      drawGlitchText(ctx, fitHudText(ctx, `Терр. ${fLabel}`, leftInfoW), leftX, barY - 22 * sy, time, 412, fColor, 7 * sy);
       ctx.font = `${7 * sy}px monospace`;
     }
 
@@ -1590,6 +1593,10 @@ export function drawHUD(
   // ── Full map menu ────────────────────────────────────────
   if (state.mapMode === 2) {
     drawFullMap(ctx, world, entities, player, sx, sy, state.quests, currentFloorInstanceLabel(state), state.currentFloor, state, time);
+  }
+
+  if (state.showMapLegend) {
+    drawMapLegendMenu(ctx, world, player, state, sx, sy, time);
   }
 
   // ── Inventory (if toggled) ───────────────────────────────

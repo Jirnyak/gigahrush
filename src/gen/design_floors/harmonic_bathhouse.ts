@@ -5,6 +5,7 @@ import {
   AIGoal,
   Cell,
   ContainerKind,
+  DoorState,
   EntityType,
   Faction,
   Feature,
@@ -19,11 +20,13 @@ import {
   type Entity,
   type Item,
   type Room,
+  type TerritoryOwner,
   type WorldContainer,
 } from '../../core/types';
 import { World } from '../../core/world';
 import { hashSeed, withSeededRandom } from '../../core/rand';
 import { freshNeeds } from '../../data/catalog';
+import { HUMAN_TERRITORY_OWNERS, factionToTerritoryOwner } from '../../data/factions';
 import { MONSTERS } from '../../entities/monster';
 import { monsterSpr, Spr } from '../../render/sprite_index';
 import { placeEmergencyPanel } from '../../systems/emergency_panels';
@@ -114,6 +117,34 @@ const FIELD_H = 171;
 const FIELD_STEP = 2;
 const FIELD_ORIGIN_X = CX - Math.floor(FIELD_W * FIELD_STEP / 2);
 const FIELD_ORIGIN_Y = CY - 176;
+const SERVICE_GRID_X = [112, 272, 432, 592, 752, 912] as const;
+const SERVICE_GRID_Y = [118, 278, 438, 598, 758, 918] as const;
+
+interface BathhouseHqSpec {
+  owner: TerritoryOwner;
+  name: string;
+  x: number;
+  y: number;
+  floorTex: Tex;
+  wallTex: Tex;
+}
+
+const BATHHOUSE_HQ_SPECS: readonly BathhouseHqSpec[] = [
+  { owner: ZoneFaction.CITIZEN, name: 'Миништаб общей помывочной очереди', x: 122, y: 826, floorTex: Tex.F_TILE, wallTex: Tex.TILE_W },
+  { owner: ZoneFaction.LIQUIDATOR, name: 'Миништаб напорной вахты ликвидаторов', x: 828, y: 144, floorTex: Tex.F_CONCRETE, wallTex: Tex.METAL },
+  { owner: ZoneFaction.SCIENTIST, name: 'Миништаб НИИ тепловой гармоники', x: 126, y: 138, floorTex: Tex.F_TILE, wallTex: Tex.HERMO_WALL },
+  { owner: ZoneFaction.CULTIST, name: 'Скрытый миништаб хора конденсата', x: 338, y: 846, floorTex: Tex.F_CARPET, wallTex: Tex.CROSS },
+  { owner: ZoneFaction.WILD, name: 'Разорённый миништаб мокрых диких', x: 806, y: 826, floorTex: Tex.F_CONCRETE, wallTex: Tex.ROTTEN },
+];
+
+const BATHHOUSE_OWNER_SEQUENCE = [
+  ZoneFaction.LIQUIDATOR,
+  ZoneFaction.CITIZEN,
+  ZoneFaction.SCIENTIST,
+  ZoneFaction.WILD,
+  ZoneFaction.LIQUIDATOR,
+  ZoneFaction.CULTIST,
+] as const;
 
 function idxField(x: number, y: number): number {
   return y * FIELD_W + x;
@@ -343,10 +374,19 @@ function connectDoorToPoint(
   target: Point,
   width: number,
   floorTex: Tex,
+  owner?: TerritoryOwner,
+  hermetic = false,
 ): void {
   const door = doorPoint(room, side, offset);
   placeDoorAt(world, door.wall.x, door.wall.y, room.id);
-  carveLine(world, door.outside.x, door.outside.y, target.x, target.y, width, floorTex);
+  const doorInfo = world.doors.get(world.idx(door.wall.x, door.wall.y));
+  if (doorInfo && hermetic) doorInfo.state = DoorState.HERMETIC_OPEN;
+  if (owner !== undefined) {
+    const doorIdx = world.idx(door.wall.x, door.wall.y);
+    world.factionControl[doorIdx] = owner;
+  }
+  carveLine(world, door.outside.x, door.outside.y, target.x, target.y, width, floorTex, owner);
+  restoreDoorJambs(world, room, side, door.wall, owner, hermetic);
 }
 
 function doorPoint(room: Room, side: 'north' | 'south' | 'west' | 'east', offset: number): { wall: Point; outside: Point } {
@@ -366,7 +406,31 @@ function doorPoint(room: Room, side: 'north' | 'south' | 'west' | 'east', offset
   return { wall: { x: room.x + room.w, y }, outside: { x: room.x + room.w + 1, y } };
 }
 
-function carveLine(world: World, ax: number, ay: number, bx: number, by: number, width: number, floorTex: Tex): void {
+function restoreDoorJambs(
+  world: World,
+  room: Room,
+  side: 'north' | 'south' | 'west' | 'east',
+  wall: Point,
+  owner: TerritoryOwner | undefined,
+  hermetic: boolean,
+): void {
+  const offsets = side === 'north' || side === 'south'
+    ? [[-1, 0], [1, 0]] as const
+    : [[0, -1], [0, 1]] as const;
+  for (const [dx, dy] of offsets) {
+    const idx = world.idx(wall.x + dx, wall.y + dy);
+    if (world.aptMask[idx] || world.cells[idx] === Cell.LIFT || world.cells[idx] === Cell.DOOR) continue;
+    if (world.roomMap[idx] >= 0) continue;
+    world.cells[idx] = Cell.WALL;
+    world.roomMap[idx] = -1;
+    world.wallTex[idx] = hermetic ? Tex.HERMO_WALL : room.wallTex;
+    world.features[idx] = Feature.NONE;
+    if (hermetic) world.hermoWall[idx] = 1;
+    if (owner !== undefined) world.factionControl[idx] = owner;
+  }
+}
+
+function carveLine(world: World, ax: number, ay: number, bx: number, by: number, width: number, floorTex: Tex, owner?: TerritoryOwner): void {
   let x = Math.round(ax);
   let y = Math.round(ay);
   const mx = Math.round(bx);
@@ -374,17 +438,17 @@ function carveLine(world: World, ax: number, ay: number, bx: number, by: number,
   const sx = mx === x ? 0 : mx > x ? 1 : -1;
   const sy = my === y ? 0 : my > y ? 1 : -1;
   while (x !== mx) {
-    carveDisc(world, x, y, width, floorTex);
+    carveDisc(world, x, y, width, floorTex, owner);
     x += sx;
   }
   while (y !== my) {
-    carveDisc(world, x, y, width, floorTex);
+    carveDisc(world, x, y, width, floorTex, owner);
     y += sy;
   }
-  carveDisc(world, x, y, width, floorTex);
+  carveDisc(world, x, y, width, floorTex, owner);
 }
 
-function carveDisc(world: World, cx: number, cy: number, r: number, floorTex: Tex): void {
+function carveDisc(world: World, cx: number, cy: number, r: number, floorTex: Tex, owner?: TerritoryOwner): void {
   const r2 = r * r;
   for (let dy = -r; dy <= r; dy++) {
     for (let dx = -r; dx <= r; dx++) {
@@ -393,10 +457,13 @@ function carveDisc(world: World, cx: number, cy: number, r: number, floorTex: Te
       const y = world.wrap(cy + dy);
       const ci = world.idx(x, y);
       if (world.aptMask[ci]) continue;
+      if (world.cells[ci] === Cell.LIFT || world.cells[ci] === Cell.DOOR || world.hermoWall[ci]) continue;
+      if (owner !== undefined && world.roomMap[ci] >= 0) continue;
       world.cells[ci] = Cell.FLOOR;
       world.roomMap[ci] = -1;
       world.floorTex[ci] = floorTex;
       world.wallTex[ci] = Tex.PIPE;
+      if (owner !== undefined) world.factionControl[ci] = owner;
     }
   }
 }
@@ -548,6 +615,407 @@ function tuneBathhouseZones(world: World): void {
     zone.fogged = false;
   }
   for (let i = 0; i < W * W; i++) world.factionControl[i] = world.zones[world.zoneMap[i]]?.faction ?? ZoneFaction.LIQUIDATOR;
+}
+
+export function expandHarmonicBathhouseRouteGeometry(world: World, rng: () => number): void {
+  carveBathhouseSecondaryLoops(world);
+  buildBathhouseHqCompounds(world);
+  buildBathhouseServiceBlocks(world, rng);
+  repairBathhouseDoorFrames(world);
+  world.markCellsDirty();
+  world.markFloorTexDirty();
+  world.markWallTexDirty();
+  world.markFeaturesDirty(false);
+  world.markFogDirty();
+}
+
+function carveBathhouseSecondaryLoops(world: World): void {
+  const pressureLoop = [
+    { x: CX - 352, y: CY - 268 },
+    { x: CX + 324, y: CY - 268 },
+    { x: CX + 372, y: CY + 238 },
+    { x: CX - 348, y: CY + 266 },
+    { x: CX - 352, y: CY - 268 },
+  ];
+  const hotLoop = [
+    { x: CX - 98, y: CY - 342 },
+    { x: CX + 268, y: CY - 332 },
+    { x: CX + 390, y: CY - 104 },
+    { x: CX + 330, y: CY + 154 },
+    { x: CX + 126, y: CY + 172 },
+  ];
+  const coldLoop = [
+    { x: CX - 148, y: CY + 180 },
+    { x: CX - 372, y: CY + 184 },
+    { x: CX - 408, y: CY - 48 },
+    { x: CX - 278, y: CY - 264 },
+    { x: CX - 78, y: CY - 216 },
+  ];
+
+  carveOwnedPolyline(world, pressureLoop, 3, Tex.F_CONCRETE, ZoneFaction.LIQUIDATOR);
+  carveOwnedPolyline(world, hotLoop, 3, Tex.F_TILE, ZoneFaction.LIQUIDATOR);
+  carveOwnedPolyline(world, coldLoop, 3, Tex.F_WATER, ZoneFaction.WILD, Cell.WATER);
+  carveLine(world, CX - 278, CY - 264, CX - 162, CY - 78, 2, Tex.F_WATER, ZoneFaction.WILD);
+  carveLine(world, CX + 268, CY - 332, CX + 122, CY - 78, 2, Tex.F_TILE, ZoneFaction.LIQUIDATOR);
+  carveLine(world, CX - 348, CY + 266, CX - 124, CY + 150, 2, Tex.F_CONCRETE, ZoneFaction.CITIZEN);
+  carveLine(world, CX + 372, CY + 238, CX + 132, CY + 150, 2, Tex.F_CONCRETE, ZoneFaction.LIQUIDATOR);
+}
+
+function carveOwnedPolyline(
+  world: World,
+  points: readonly Point[],
+  width: number,
+  floorTex: Tex,
+  owner: TerritoryOwner,
+  cell = Cell.FLOOR,
+): void {
+  for (let i = 1; i < points.length; i++) {
+    carveOwnedLine(world, points[i - 1].x, points[i - 1].y, points[i].x, points[i].y, width, floorTex, owner, cell);
+  }
+}
+
+function carveOwnedLine(
+  world: World,
+  ax: number,
+  ay: number,
+  bx: number,
+  by: number,
+  width: number,
+  floorTex: Tex,
+  owner: TerritoryOwner,
+  cell = Cell.FLOOR,
+): void {
+  if (ax !== bx && ay !== by) {
+    carveOwnedLine(world, ax, ay, bx, ay, width, floorTex, owner, cell);
+    carveOwnedLine(world, bx, ay, bx, by, width, floorTex, owner, cell);
+    return;
+  }
+  const from = ax === bx ? Math.min(ay, by) : Math.min(ax, bx);
+  const to = ax === bx ? Math.max(ay, by) : Math.max(ax, bx);
+  for (let p = from; p <= to; p++) {
+    for (let o = -width; o <= width; o++) {
+      openBathhouseTile(world, ax === bx ? ax + o : p, ax === bx ? p : ay + o, floorTex, owner, cell);
+    }
+  }
+}
+
+function openBathhouseTile(world: World, x: number, y: number, floorTex: Tex, owner: TerritoryOwner, cell: Cell): void {
+  const idx = world.idx(x, y);
+  if (world.aptMask[idx] || world.cells[idx] === Cell.LIFT || world.cells[idx] === Cell.DOOR || world.hermoWall[idx]) return;
+  if (world.roomMap[idx] >= 0) return;
+  world.cells[idx] = cell;
+  world.roomMap[idx] = -1;
+  world.floorTex[idx] = cell === Cell.WATER ? Tex.F_WATER : floorTex;
+  world.wallTex[idx] = Tex.PIPE;
+  world.factionControl[idx] = owner;
+  if (world.features[idx] !== Feature.LIFT_BUTTON) world.features[idx] = Feature.NONE;
+  if (cell === Cell.WATER) world.fog[idx] = Math.max(world.fog[idx], 26);
+}
+
+function buildBathhouseHqCompounds(world: World): void {
+  for (const spec of BATHHOUSE_HQ_SPECS) {
+    const cx = spec.x + 18;
+    const cy = spec.y + 10;
+    carveOwnedLine(world, cx - 42, cy + 26, cx + 76, cy + 26, 2, spec.floorTex, spec.owner);
+    const hq = tryAddBathhouseRoom(world, RoomType.HQ, spec.x, spec.y, 36, 20, spec.name, Tex.HERMO_WALL, spec.floorTex, spec.owner);
+    if (!hq) continue;
+    hq.sealed = true;
+    markBathhouseHermeticRoom(world, hq);
+    connectDoorToPoint(world, hq, 'south', hq.w >> 1, { x: cx, y: cy + 26 }, 2, spec.floorTex, spec.owner, true);
+    paintRoomOwner(world, hq, spec.owner);
+    decorateBathhouseRoom(world, hq, 0, spec.owner);
+
+    const supports = [
+      { type: RoomType.BATHROOM, name: `${spec.name}: саншлюз`, x: spec.x - 30, y: spec.y + 30, w: 24, h: 12, side: 'east' as const },
+      { type: RoomType.KITCHEN, name: `${spec.name}: чайная`, x: spec.x + 40, y: spec.y + 30, w: 24, h: 12, side: 'west' as const },
+      { type: RoomType.STORAGE, name: `${spec.name}: склад`, x: spec.x + 70, y: spec.y + 4, w: 22, h: 12, side: 'west' as const },
+      { type: spec.owner === ZoneFaction.SCIENTIST ? RoomType.MEDICAL : RoomType.OFFICE, name: `${spec.name}: журнал`, x: spec.x - 28, y: spec.y + 4, w: 22, h: 12, side: 'east' as const },
+      { type: RoomType.COMMON, name: `${spec.name}: предбанник`, x: spec.x + 12, y: spec.y + 46, w: 30, h: 12, side: 'north' as const },
+    ];
+    for (let i = 0; i < supports.length; i++) {
+      const support = supports[i];
+      const room = tryAddBathhouseRoom(world, support.type, support.x, support.y, support.w, support.h, support.name, spec.wallTex, spec.floorTex, spec.owner);
+      if (!room) continue;
+      connectDoorToPoint(world, room, support.side, support.side === 'north' ? room.w >> 1 : room.h >> 1, { x: cx, y: cy + 26 }, 2, spec.floorTex, spec.owner);
+      decorateBathhouseRoom(world, room, i + 1, spec.owner);
+      paintRoomOwner(world, room, spec.owner);
+    }
+  }
+}
+
+function buildBathhouseServiceBlocks(world: World, rng: () => number): void {
+  let serial = 0;
+  for (let gy = 0; gy < SERVICE_GRID_Y.length; gy++) {
+    for (let gx = 0; gx < SERVICE_GRID_X.length; gx++) {
+      const cx = SERVICE_GRID_X[gx];
+      const cy = SERVICE_GRID_Y[gy];
+      if (cx >= 330 && cx <= 700 && cy >= 305 && cy <= 730) continue;
+      const owner = BATHHOUSE_OWNER_SEQUENCE[(gx + gy * 2) % BATHHOUSE_OWNER_SEQUENCE.length];
+      const floorTex = bathhouseOwnerFloor(owner, serial);
+      const wallTex = bathhouseOwnerWall(owner);
+      buildBathhouseServiceBlock(world, cx, cy, owner, floorTex, wallTex, serial++, rng);
+    }
+  }
+}
+
+function buildBathhouseServiceBlock(
+  world: World,
+  cx: number,
+  cy: number,
+  owner: TerritoryOwner,
+  floorTex: Tex,
+  wallTex: Tex,
+  serial: number,
+  rng: () => number,
+): void {
+  const wobble = Math.round((rng() - 0.5) * 10);
+  carveOwnedLine(world, cx - 66, cy, cx + 66, cy + wobble, 2, floorTex, owner);
+  carveOwnedLine(world, cx, cy - 44, cx + Math.sign(wobble), cy + 44, 1, floorTex, owner);
+  const hall = tryAddBathhouseRoom(world, RoomType.COMMON, cx - 22, cy - 8, 44, 16, `Гармоническая баня: смесительный узел ${serial + 1}`, wallTex, floorTex, owner);
+  if (hall) {
+    connectDoorToPoint(world, hall, 'west', hall.h >> 1, { x: cx - 66, y: cy }, 2, floorTex, owner);
+    connectDoorToPoint(world, hall, 'east', hall.h >> 1, { x: cx + 66, y: cy + wobble }, 2, floorTex, owner);
+    connectDoorToPoint(world, hall, 'north', hall.w >> 1, { x: cx, y: cy - 44 }, 1, floorTex, owner);
+    connectDoorToPoint(world, hall, 'south', hall.w >> 1, { x: cx, y: cy + 44 }, 1, floorTex, owner);
+    decorateBathhouseRoom(world, hall, serial, owner);
+    paintRoomOwner(world, hall, owner);
+  }
+
+  const rooms = bathhouseMicroSpecs(cx, cy, serial, owner);
+  for (let i = 0; i < rooms.length; i++) {
+    const spec = rooms[i];
+    const room = tryAddBathhouseRoom(world, spec.type, spec.x, spec.y, spec.w, spec.h, spec.name, wallTex, spec.floorTex ?? floorTex, owner);
+    if (!room) continue;
+    connectDoorToPoint(world, room, spec.side, spec.side === 'north' || spec.side === 'south' ? room.w >> 1 : room.h >> 1, { x: cx, y: cy }, 1, floorTex, owner);
+    decorateBathhouseRoom(world, room, i + serial, owner);
+    paintRoomOwner(world, room, owner);
+  }
+}
+
+function bathhouseMicroSpecs(cx: number, cy: number, serial: number, owner: TerritoryOwner): {
+  type: RoomType;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  side: 'north' | 'south' | 'west' | 'east';
+  name: string;
+  floorTex?: Tex;
+}[] {
+  const prefix = `Гармоническая баня: ${bathhouseOwnerLabel(owner)} блок ${serial + 1}`;
+  return [
+    { type: RoomType.BATHROOM, x: cx - 62, y: cy - 34, w: 18, h: 11, side: 'south', name: `${prefix}: душевая А`, floorTex: Tex.F_TILE },
+    { type: RoomType.STORAGE, x: cx - 40, y: cy - 36, w: 16, h: 12, side: 'south', name: `${prefix}: шкаф пара` },
+    { type: RoomType.PRODUCTION, x: cx - 18, y: cy - 38, w: 20, h: 13, side: 'south', name: `${prefix}: насосная` },
+    { type: RoomType.MEDICAL, x: cx + 8, y: cy - 34, w: 17, h: 11, side: 'south', name: `${prefix}: ожоговая`, floorTex: Tex.F_TILE },
+    { type: RoomType.BATHROOM, x: cx + 32, y: cy - 36, w: 18, h: 12, side: 'south', name: `${prefix}: душевая Б`, floorTex: Tex.F_WATER },
+    { type: RoomType.KITCHEN, x: cx + 54, y: cy - 32, w: 18, h: 10, side: 'south', name: `${prefix}: чайник` },
+    { type: RoomType.STORAGE, x: cx - 66, y: cy + 23, w: 18, h: 11, side: 'north', name: `${prefix}: сухая кладовая` },
+    { type: RoomType.BATHROOM, x: cx - 42, y: cy + 25, w: 18, h: 12, side: 'north', name: `${prefix}: мокрый закуток`, floorTex: Tex.F_WATER },
+    { type: RoomType.OFFICE, x: cx - 18, y: cy + 27, w: 18, h: 11, side: 'north', name: `${prefix}: журнал давления` },
+    { type: RoomType.PRODUCTION, x: cx + 8, y: cy + 25, w: 20, h: 13, side: 'north', name: `${prefix}: венткамера` },
+    { type: RoomType.STORAGE, x: cx + 36, y: cy + 24, w: 18, h: 11, side: 'north', name: `${prefix}: соляной шкаф` },
+    { type: RoomType.SMOKING, x: cx + 58, y: cy + 22, w: 18, h: 10, side: 'north', name: `${prefix}: курилка полотенец` },
+    { type: RoomType.CORRIDOR, x: cx - 82, y: cy - 8, w: 14, h: 16, side: 'east', name: `${prefix}: боковой шлюз` },
+    { type: RoomType.COMMON, x: cx + 70, y: cy - 8, w: 16, h: 16, side: 'west', name: `${prefix}: боковой предбанник` },
+  ];
+}
+
+function tryAddBathhouseRoom(
+  world: World,
+  type: RoomType,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  name: string,
+  wallTex: Tex,
+  floorTex: Tex,
+  owner: TerritoryOwner,
+): Room | null {
+  if (!canStampBathhouseRoom(world, x, y, w, h)) return null;
+  const room = addRoom(world, type, x, y, w, h, name, wallTex, floorTex);
+  paintRoomOwner(world, room, owner);
+  return room;
+}
+
+function canStampBathhouseRoom(world: World, x: number, y: number, w: number, h: number): boolean {
+  if (x < 2 || y < 2 || x + w + 2 >= W || y + h + 2 >= W) return false;
+  for (let dy = -1; dy <= h; dy++) {
+    for (let dx = -1; dx <= w; dx++) {
+      const idx = world.idx(x + dx, y + dy);
+      if (world.aptMask[idx] || world.cells[idx] === Cell.LIFT || world.cells[idx] === Cell.DOOR) return false;
+      if (world.roomMap[idx] >= 0) return false;
+    }
+  }
+  return true;
+}
+
+function markBathhouseHermeticRoom(world: World, room: Room): void {
+  room.wallTex = Tex.HERMO_WALL;
+  for (let dy = -1; dy <= room.h; dy++) {
+    for (let dx = -1; dx <= room.w; dx++) {
+      const idx = world.idx(room.x + dx, room.y + dy);
+      const interior = dx >= 0 && dx < room.w && dy >= 0 && dy < room.h;
+      if (interior) continue;
+      if (world.cells[idx] !== Cell.WALL || world.aptMask[idx]) continue;
+      world.hermoWall[idx] = 1;
+      world.wallTex[idx] = Tex.HERMO_WALL;
+    }
+  }
+}
+
+function repairBathhouseDoorFrames(world: World): void {
+  for (const [idx, door] of world.doors) {
+    if (world.cells[idx] !== Cell.DOOR) continue;
+    const room = world.rooms[door.roomA];
+    if (!room) continue;
+    const x = idx % W;
+    const y = (idx / W) | 0;
+    const left = world.idx(x - 1, y);
+    const right = world.idx(x + 1, y);
+    const up = world.idx(x, y - 1);
+    const down = world.idx(x, y + 1);
+    const verticalPass = world.roomMap[up] === room.id || world.roomMap[down] === room.id;
+    const jambs = verticalPass ? [left, right] : [up, down];
+    const hermetic = door.state === DoorState.HERMETIC_OPEN || door.state === DoorState.HERMETIC_CLOSED;
+    for (const jamb of jambs) {
+      if (world.aptMask[jamb] || world.cells[jamb] === Cell.LIFT || world.cells[jamb] === Cell.DOOR) continue;
+      if (world.roomMap[jamb] >= 0) continue;
+      world.cells[jamb] = Cell.WALL;
+      world.roomMap[jamb] = -1;
+      world.wallTex[jamb] = hermetic ? Tex.HERMO_WALL : room.wallTex;
+      world.features[jamb] = Feature.NONE;
+      if (hermetic) world.hermoWall[jamb] = 1;
+      world.factionControl[jamb] = world.factionControl[idx];
+    }
+  }
+}
+
+function paintRoomOwner(world: World, room: Room, owner: TerritoryOwner): void {
+  forRoomCells(world, room, idx => {
+    world.factionControl[idx] = owner;
+  });
+  for (const door of room.doors) world.factionControl[door] = owner;
+}
+
+function decorateBathhouseRoom(world: World, room: Room, serial: number, owner: TerritoryOwner): void {
+  switch (room.type) {
+    case RoomType.BATHROOM:
+      for (let x = room.x + 2; x < room.x + room.w - 1; x += 4) {
+        setFeature(world, x, room.y + 2, Feature.SINK);
+        if (x + 1 < room.x + room.w - 1) setFeature(world, x + 1, room.y + room.h - 3, Feature.TOILET);
+      }
+      break;
+    case RoomType.KITCHEN:
+      setFeature(world, room.x + 2, room.y + 2, Feature.STOVE);
+      setFeature(world, room.x + room.w - 4, room.y + 2, Feature.SINK);
+      setFeature(world, room.x + room.w - 5, room.y + room.h - 3, Feature.TABLE);
+      break;
+    case RoomType.STORAGE:
+      for (let x = room.x + 2; x < room.x + room.w - 2; x += 3) setFeature(world, x, room.y + 2, Feature.SHELF);
+      break;
+    case RoomType.PRODUCTION:
+      for (let x = room.x + 3; x < room.x + room.w - 3; x += 5) {
+        setFeature(world, x, room.y + 2, Feature.MACHINE);
+        setFeature(world, x + 1, room.y + room.h - 3, Feature.APPARATUS);
+      }
+      break;
+    case RoomType.MEDICAL:
+      setFeature(world, room.x + 3, room.y + 2, Feature.BED);
+      setFeature(world, room.x + room.w - 4, room.y + 2, Feature.APPARATUS);
+      break;
+    case RoomType.OFFICE:
+    case RoomType.HQ:
+      setFeature(world, room.x + 3, room.y + 2, Feature.DESK);
+      setFeature(world, room.x + room.w - 4, room.y + 2, Feature.SCREEN);
+      setFeature(world, room.x + room.w - 5, room.y + room.h - 3, owner === ZoneFaction.CULTIST ? Feature.CANDLE : Feature.LAMP);
+      break;
+    default:
+      setFeature(world, room.x + 3, room.y + 2, serial % 2 === 0 ? Feature.TABLE : Feature.CHAIR);
+      setFeature(world, room.x + room.w - 4, room.y + room.h - 3, Feature.LAMP);
+      break;
+  }
+  if (room.floorTex === Tex.F_WATER) {
+    forRoomCells(world, room, (idx, x, y) => {
+      if ((x + y + serial) % 3 === 0 && world.features[idx] === Feature.NONE) {
+        world.cells[idx] = Cell.WATER;
+        world.fog[idx] = Math.max(world.fog[idx], 24);
+      }
+    });
+  }
+}
+
+function bathhouseOwnerFloor(owner: TerritoryOwner, serial: number): Tex {
+  if (owner === ZoneFaction.CITIZEN) return serial % 2 === 0 ? Tex.F_TILE : Tex.F_LINO;
+  if (owner === ZoneFaction.SCIENTIST) return Tex.F_TILE;
+  if (owner === ZoneFaction.WILD) return serial % 2 === 0 ? Tex.F_WATER : Tex.F_CONCRETE;
+  if (owner === ZoneFaction.CULTIST) return Tex.F_CARPET;
+  return Tex.F_CONCRETE;
+}
+
+function bathhouseOwnerWall(owner: TerritoryOwner): Tex {
+  if (owner === ZoneFaction.CITIZEN) return Tex.TILE_W;
+  if (owner === ZoneFaction.SCIENTIST) return Tex.HERMO_WALL;
+  if (owner === ZoneFaction.WILD) return Tex.ROTTEN;
+  if (owner === ZoneFaction.CULTIST) return Tex.CROSS;
+  return Tex.METAL;
+}
+
+function bathhouseOwnerLabel(owner: TerritoryOwner): string {
+  if (owner === ZoneFaction.CITIZEN) return 'гражданский';
+  if (owner === ZoneFaction.SCIENTIST) return 'лабораторный';
+  if (owner === ZoneFaction.WILD) return 'дикий';
+  if (owner === ZoneFaction.CULTIST) return 'культовый';
+  return 'ликвидаторский';
+}
+
+export function alignHarmonicBathhouseAmbientNpcTerritory(world: World, entities: Entity[]): void {
+  const cells = bathhouseTerritorySpawnCells(world);
+  const offsets = new Uint16Array(8);
+  for (const entity of entities) {
+    if (!isHarmonicBathhouseAmbientNpc(entity) || entity.faction === undefined) continue;
+    const owner = factionToTerritoryOwner(entity.faction);
+    const list = cells.get(owner);
+    if (!list || list.length === 0) continue;
+    const offset = offsets[owner]++ | 0;
+    const cell = list[(entity.id * 149 + offset * 431) % list.length];
+    entity.x = (cell % W) + 0.5;
+    entity.y = ((cell / W) | 0) + 0.5;
+    entity.assignedRoomId = world.roomMap[cell] >= 0 ? world.roomMap[cell] : -1;
+    if (entity.ai) {
+      entity.ai.tx = cell % W;
+      entity.ai.ty = (cell / W) | 0;
+      entity.ai.path = [];
+      entity.ai.pi = 0;
+      entity.ai.stuck = 0;
+    }
+  }
+}
+
+function isHarmonicBathhouseAmbientNpc(entity: Entity): boolean {
+  return entity.type === EntityType.NPC &&
+    entity.alive &&
+    entity.name?.startsWith('Гармоническая баня:') === true &&
+    entity.plotNpcId === undefined &&
+    entity.persistentNpcId === undefined &&
+    entity.alifeId === undefined &&
+    entity.questId === -1 &&
+    entity.faction !== undefined;
+}
+
+function bathhouseTerritorySpawnCells(world: World): Map<TerritoryOwner, number[]> {
+  const cells = new Map<TerritoryOwner, number[]>();
+  for (const owner of HUMAN_TERRITORY_OWNERS) cells.set(owner, []);
+  for (let i = 0; i < W * W; i++) {
+    const cell = world.cells[i];
+    if (cell !== Cell.FLOOR && cell !== Cell.WATER) continue;
+    if (world.aptMask[i] || world.hermoWall[i] || world.containerMap.has(i) || world.features[i] === Feature.LIFT_BUTTON) continue;
+    const owner = world.factionControl[i] as TerritoryOwner;
+    const list = cells.get(owner);
+    if (list) list.push(i);
+  }
+  return cells;
 }
 
 function placePanels(world: World, rooms: BathhouseRooms): string[] {

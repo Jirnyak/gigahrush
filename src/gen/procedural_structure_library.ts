@@ -36,7 +36,6 @@ const GEOMETRY_OWNING_ANOMALIES: ReadonlySet<FloorAnomalyId> = new Set([
   'bad_apple_world',
   'conway_life',
   'fractal_floor',
-  'living_tunnels',
   'rail_trains',
   'sandpile_perekrytie',
   'section_shift',
@@ -203,7 +202,8 @@ function simulateCellularBraid(seed: number, size: number, density: number, gene
 function stampCellularBraid(world: World, spec: ProceduralFloorSpec, samples: number[]): number {
   const size = 64 + ((spec.seed >>> 4) % 4) * 8;
   const cell = Math.max(8, Math.floor(W / size));
-  const cells = simulateCellularBraid(spec.seed ^ 0xcebada, size, 0.32 + spec.danger * 0.015, 5 + (spec.seed & 3));
+  const conveyorBonus = spec.anomalyId === 'conveyor_sorter' ? 0.03 : 0;
+  const cells = simulateCellularBraid(spec.seed ^ 0xcebada, size, 0.32 + spec.danger * 0.015 + conveyorBonus, 5 + (spec.seed & 3));
   let carved = 0;
   for (let gy = 0; gy < size; gy++) {
     for (let gx = 0; gx < size; gx++) {
@@ -221,27 +221,90 @@ function stampCellularBraid(world: World, spec: ProceduralFloorSpec, samples: nu
 }
 
 function stampPrimeXorRegistry(world: World, spec: ProceduralFloorSpec, samples: number[]): number {
-  const grid = 96;
+  const grid = 24;
   const step = Math.floor(W / grid);
   const saltX = spec.seed & 255;
   const saltY = (spec.seed >>> 8) & 255;
+  const hubs: { x: number; y: number; gx: number; gy: number; value: number }[] = [];
   let carved = 0;
   for (let gy = 1; gy < grid - 1; gy++) {
     for (let gx = 1; gx < grid - 1; gx++) {
       const value = Math.abs(((gx + saltX) ^ (gy + saltY)) + gx * 31 - gy * 17);
       if (!isPrimeSmall(value)) continue;
-      const x = gx * step + ((value + spec.ordinal) % Math.max(1, step - 3));
-      const y = gy * step + ((value >>> 3) % Math.max(1, step - 3));
-      const wide = (value & 3) === 0;
-      carved += carveStructureRect(world, x, y, wide ? 4 : 2, wide ? 2 : 4, Tex.F_MARBLE_TILE, Tex.MARBLE, 1, samples);
-      if (isPrimeSmall(Math.abs(((gx + 1 + saltX) ^ (gy + saltY)) + (gx + 1) * 31 - gy * 17))) {
-        carved += carveStructureLine(world, x, y, x + step, y, 0, Tex.F_MARBLE_TILE, Tex.MARBLE, 1, samples);
+      if (hash01(spec.seed, gx, gy, 0xad11) > 0.68) continue;
+      const x = world.wrap(gx * step + 5 + ((value + spec.ordinal) % Math.max(1, step - 10)));
+      const y = world.wrap(gy * step + 5 + ((value >>> 3) % Math.max(1, step - 10)));
+      const w = 18 + (value % 5) * 4;
+      const h = 14 + ((value >>> 3) % 5) * 3;
+      carved += carveStructureRect(world, x - (w >> 1), y - (h >> 1), w, h, Tex.F_MARBLE_TILE, Tex.MARBLE, 1, samples);
+      hubs.push({ x, y, gx, gy, value });
+
+      const alcoveCount = 2 + (value % 3);
+      for (let k = 0; k < alcoveCount; k++) {
+        const side = (value + k * 5) & 3;
+        const aw = 5 + ((value >>> (k + 1)) % 6);
+        const ah = 4 + ((value >>> (k + 3)) % 5);
+        const offset = -Math.floor((side < 2 ? h : w) / 2) + 2 + ((value + k * 11) % Math.max(3, (side < 2 ? h : w) - 4));
+        const ax = side === 2
+          ? x - (w >> 1) - aw
+          : side === 3
+            ? x + (w >> 1)
+            : x + offset;
+        const ay = side === 0
+          ? y - (h >> 1) - ah
+          : side === 1
+            ? y + (h >> 1)
+            : y + offset;
+        carved += carveStructureRect(world, ax, ay, aw, ah, Tex.F_PARQUET, Tex.MARBLE, 2, samples);
       }
-      if ((value & 15) === 1) {
-        const ci = world.idx(x, y);
-        if (world.cells[ci] === Cell.FLOOR && world.features[ci] === Feature.NONE) world.features[ci] = Feature.DESK;
+
+      const stackSpacing = 5 + (value % 4);
+      const horizontalStacks = (value & 1) === 0;
+      for (let offset = -Math.floor((horizontalStacks ? h : w) / 2) + 3; offset <= Math.floor((horizontalStacks ? h : w) / 2) - 3; offset += stackSpacing) {
+        for (let run = -Math.floor((horizontalStacks ? w : h) / 2) + 4; run <= Math.floor((horizontalStacks ? w : h) / 2) - 4; run++) {
+          if ((run + value) % 9 === 0) continue;
+          const ox = horizontalStacks ? x + run : x + offset;
+          const oy = horizontalStacks ? y + offset : y + run;
+          carved += setStructureObstacle(world, ox, oy, Tex.MARBLE);
+        }
       }
+
+      const desk = world.idx(x, y);
+      if (world.cells[desk] === Cell.FLOOR && world.features[desk] === Feature.NONE) {
+        world.features[desk] = (value & 7) === 1 ? Feature.SCREEN : Feature.DESK;
+      }
+      if (world.cells[desk] === Cell.FLOOR && samples.length < 512) samples.push(desk);
     }
+  }
+
+  const sorted = hubs.slice().sort((a, b) => a.gy - b.gy || a.gx - b.gx);
+  for (let i = 0; i < sorted.length; i++) {
+    const hub = sorted[i];
+    let right: typeof hub | undefined;
+    let down: typeof hub | undefined;
+    for (let j = i + 1; j < sorted.length; j++) {
+      const other = sorted[j];
+      if (!right && other.gy === hub.gy && other.gx > hub.gx && other.gx - hub.gx <= 4) right = other;
+      if (!down && other.gx === hub.gx && other.gy > hub.gy && other.gy - hub.gy <= 4) down = other;
+      if (right && down) break;
+      if (other.gy - hub.gy > 4) break;
+    }
+    if (right) carved += carveStructureLine(world, hub.x, hub.y, right.x, right.y, 1, Tex.F_MARBLE_TILE, Tex.MARBLE, 1, samples);
+    if (down) carved += carveStructureLine(world, hub.x, hub.y, down.x, down.y, 1, Tex.F_MARBLE_TILE, Tex.MARBLE, 1, samples);
+  }
+
+  const railCount = 6 + spec.danger;
+  for (let i = 0; i < railCount; i++) {
+    const horizontal = (i & 1) === 0;
+    const a = hubs[(spec.seed + i * 11) % Math.max(1, hubs.length)];
+    const b = hubs[(spec.seed + i * 17 + Math.floor(hubs.length / 2)) % Math.max(1, hubs.length)];
+    if (!a || !b || a === b) continue;
+    carved += horizontal
+      ? carveStructureLine(world, a.x, a.y, b.x, a.y, 1, Tex.F_MARBLE_TILE, Tex.MARBLE, 1, samples)
+      : carveStructureLine(world, a.x, a.y, a.x, b.y, 1, Tex.F_MARBLE_TILE, Tex.MARBLE, 1, samples);
+    carved += horizontal
+      ? carveStructureLine(world, b.x, a.y, b.x, b.y, 0, Tex.F_MARBLE_TILE, Tex.MARBLE, 1, samples)
+      : carveStructureLine(world, a.x, b.y, b.x, b.y, 0, Tex.F_MARBLE_TILE, Tex.MARBLE, 1, samples);
   }
   return carved;
 }
@@ -309,6 +372,9 @@ function stampFactoryIslands(world: World, spec: ProceduralFloorSpec, samples: n
 }
 
 export function proceduralStructureFamilyForSpec(spec: ProceduralFloorSpec): ProceduralStructureFamily {
+  if (spec.anomalyId === 'rail_trains' && spec.geometryId === 'admin_pockets') {
+    return GEOMETRY_STRUCTURE_FAMILY[spec.geometryId] ?? 'none';
+  }
   if (GEOMETRY_OWNING_ANOMALIES.has(spec.anomalyId)) return 'none';
   return GEOMETRY_STRUCTURE_FAMILY[spec.geometryId] ?? 'none';
 }
@@ -398,8 +464,14 @@ export function applyProceduralStructureLibrary(
   else if (family === 'prime_xor_registry') carvedCells = stampPrimeXorRegistry(world, spec, samples);
   else if (family === 'braided_maintenance_maze') carvedCells = stampBraidedMaintenanceMaze(world, spec, spawnX, spawnY, samples);
   else if (family === 'factory_islands') carvedCells = stampFactoryIslands(world, spec, samples);
-  if (carvedCells > 0) {
+  if (samples.length === 0 && rooms.length > 0) {
+    const room = rooms[Math.min(rooms.length - 1, Math.max(0, Math.floor(rooms.length * 0.67)))];
+    samples.push(world.idx(room.x + Math.floor(room.w / 2), room.y + Math.floor(room.h / 2)));
+  }
+  if (samples.length > 0) {
     registerStructureCue(world, rooms, spec, family, samples);
+  }
+  if (carvedCells > 0) {
     world.markCellsDirty();
     world.markWallTexDirty();
     world.markFloorTexDirty();

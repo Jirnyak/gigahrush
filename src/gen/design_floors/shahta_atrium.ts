@@ -16,6 +16,7 @@ import {
   ZoneFaction,
   type Entity,
   type Room,
+  type TerritoryOwner,
   type WorldContainer,
 } from '../../core/types';
 import { World } from '../../core/world';
@@ -25,6 +26,7 @@ import { Spr } from '../../render/sprite_index';
 import { placeEmergencyPanel } from '../../systems/emergency_panels';
 import { registerRouteCue } from '../../systems/route_cues';
 import { randomRPG } from '../../systems/rpg';
+import { setTerritoryOwnerAtIndex, syncZoneMetadataFromTerritory } from '../../systems/territory';
 import {
   ensureConnectivity,
   generateZones,
@@ -45,6 +47,134 @@ const MID_R = 212;
 const OUTER_R = 304;
 const VOID_R = 116;
 
+const SHAHTA_MICRO_TYPES: readonly RoomType[] = [
+  RoomType.STORAGE,
+  RoomType.PRODUCTION,
+  RoomType.OFFICE,
+  RoomType.BATHROOM,
+  RoomType.COMMON,
+  RoomType.STORAGE,
+  RoomType.SMOKING,
+  RoomType.MEDICAL,
+];
+
+interface ShahtaHqSupportSpec {
+  type: RoomType;
+  name: string;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  hermetic?: boolean;
+}
+
+interface ShahtaHqSpec {
+  owner: TerritoryOwner;
+  key: string;
+  hall: [number, number, number, number];
+  connect: [number, number];
+  wallTex: Tex;
+  floorTex: Tex;
+  support: readonly ShahtaHqSupportSpec[];
+}
+
+interface ShahtaHqCompound {
+  owner: TerritoryOwner;
+  hall: Room;
+  core: Room;
+  support: Room[];
+}
+
+interface ShahtaMidMicroStats {
+  serviceCells: number;
+  microRooms: number;
+  hqCompounds: number;
+}
+
+const SHAHTA_HQ_SPECS: readonly ShahtaHqSpec[] = [
+  {
+    owner: ZoneFaction.LIQUIDATOR,
+    key: 'ликвидаторов восточной шахты',
+    hall: [842, 430, 94, 7],
+    connect: [936, 464],
+    wallTex: Tex.METAL,
+    floorTex: Tex.F_CONCRETE,
+    support: [
+      { type: RoomType.HQ, name: 'Гермоядро ликвидаторов восточной шахты', x: 870, y: 438, w: 28, h: 14, hermetic: true },
+      { type: RoomType.STORAGE, name: 'Оружейный шкаф ликвидаторов шахты', x: 842, y: 414, w: 21, h: 10 },
+      { type: RoomType.OFFICE, name: 'Журнал мостовых нарядов', x: 866, y: 414, w: 22, h: 10 },
+      { type: RoomType.MEDICAL, name: 'Перевязочная страховочных тросов', x: 902, y: 438, w: 19, h: 10 },
+      { type: RoomType.BATHROOM, name: 'Санузел восточного поста', x: 923, y: 438, w: 11, h: 10 },
+      { type: RoomType.COMMON, name: 'Общая караула обода', x: 898, y: 414, w: 27, h: 10 },
+      { type: RoomType.PRODUCTION, name: 'Мастерская мостовых щитов', x: 842, y: 438, w: 24, h: 12 },
+    ],
+  },
+  {
+    owner: ZoneFaction.CITIZEN,
+    key: 'граждан ремонтного притвора',
+    hall: [122, 274, 94, 7],
+    connect: [86, 286],
+    wallTex: Tex.PANEL,
+    floorTex: Tex.F_LINO,
+    support: [
+      { type: RoomType.HQ, name: 'Гермоядро граждан ремонтного притвора', x: 150, y: 282, w: 26, h: 13, hermetic: true },
+      { type: RoomType.KITCHEN, name: 'Кухня сухого пайка шахты', x: 122, y: 258, w: 22, h: 10 },
+      { type: RoomType.BATHROOM, name: 'Санузел гражданского притвора', x: 146, y: 258, w: 12, h: 10 },
+      { type: RoomType.STORAGE, name: 'Кладовая семейных касок', x: 180, y: 282, w: 21, h: 10 },
+      { type: RoomType.MEDICAL, name: 'Медуголок ремонтных семей', x: 160, y: 258, w: 21, h: 10 },
+      { type: RoomType.COMMON, name: 'Общая ожидания безопасного обхода', x: 122, y: 282, w: 24, h: 12 },
+    ],
+  },
+  {
+    owner: ZoneFaction.SCIENTIST,
+    key: 'ученых тросовой лаборатории',
+    hall: [340, 146, 96, 7],
+    connect: [512, 150],
+    wallTex: Tex.PIPE,
+    floorTex: Tex.F_TILE,
+    support: [
+      { type: RoomType.HQ, name: 'Гермоядро НИИ тросовой лаборатории', x: 370, y: 154, w: 26, h: 13, hermetic: true },
+      { type: RoomType.MEDICAL, name: 'Измерительная травм от высоты', x: 340, y: 130, w: 24, h: 10 },
+      { type: RoomType.OFFICE, name: 'Кабинет формулы тяги', x: 366, y: 130, w: 22, h: 10 },
+      { type: RoomType.PRODUCTION, name: 'Стенд натяжения мостов', x: 400, y: 154, w: 26, h: 12 },
+      { type: RoomType.STORAGE, name: 'Архив датчиков провала', x: 390, y: 130, w: 22, h: 10 },
+      { type: RoomType.BATHROOM, name: 'Санузел НИИ у обрыва', x: 418, y: 130, w: 12, h: 10 },
+    ],
+  },
+  {
+    owner: ZoneFaction.CULTIST,
+    key: 'культа нижнего эха',
+    hall: [158, 846, 96, 7],
+    connect: [150, 874],
+    wallTex: Tex.ROTTEN,
+    floorTex: Tex.F_CARPET,
+    support: [
+      { type: RoomType.HQ, name: 'Гермоядро культа нижнего эха', x: 190, y: 854, w: 24, h: 13, hermetic: true },
+      { type: RoomType.COMMON, name: 'Тихая комната слушания шахты', x: 158, y: 830, w: 25, h: 10 },
+      { type: RoomType.STORAGE, name: 'Кладовая свечей у провала', x: 216, y: 854, w: 20, h: 10 },
+      { type: RoomType.KITCHEN, name: 'Кухня черного кипятка', x: 184, y: 830, w: 21, h: 10 },
+      { type: RoomType.BATHROOM, name: 'Санузел следа нижнего эха', x: 238, y: 854, w: 12, h: 10 },
+      { type: RoomType.SMOKING, name: 'Курилка шепчущей решетки', x: 208, y: 830, w: 24, h: 10 },
+    ],
+  },
+  {
+    owner: ZoneFaction.WILD,
+    key: 'диких южной клети',
+    hall: [708, 846, 96, 7],
+    connect: [874, 874],
+    wallTex: Tex.DARK,
+    floorTex: Tex.F_CONCRETE,
+    support: [
+      { type: RoomType.HQ, name: 'Гермоядро диких южной клети', x: 738, y: 854, w: 24, h: 13, hermetic: true },
+      { type: RoomType.STORAGE, name: 'Разобранная кладовая южной клети', x: 708, y: 830, w: 24, h: 10 },
+      { type: RoomType.SMOKING, name: 'Курилка сорванных перил', x: 764, y: 854, w: 20, h: 10 },
+      { type: RoomType.COMMON, name: 'Общий угол самозахвата шахты', x: 734, y: 830, w: 25, h: 10 },
+      { type: RoomType.KITCHEN, name: 'Печь сухих консервов', x: 782, y: 854, w: 18, h: 10 },
+      { type: RoomType.BATHROOM, name: 'Санузел ободранной клети', x: 762, y: 830, w: 12, h: 10 },
+    ],
+  },
+];
+
 export interface ShahtaAtriumBridgeState {
   id: string;
   name: string;
@@ -62,6 +192,9 @@ export interface ShahtaAtriumState {
   ringCells: number;
   bridgeCount: number;
   serviceBypassCells: number;
+  outerServiceCells: number;
+  microRoomCount: number;
+  hqCompoundCount: number;
   coverIslands: number;
   losCoverScore: number;
   repairableBridgeId: string;
@@ -396,6 +529,304 @@ function dressRooms(world: World, rooms: ReturnType<typeof buildServiceRooms>): 
   setFeature(world, rooms.cache.x + 7, rooms.cache.y + rooms.cache.h - 5, Feature.LAMP);
 }
 
+function decorateShahtaRoom(world: World, room: Room, serial: number): void {
+  const fixtures = Math.max(2, Math.min(8, Math.floor((room.w * room.h) / 34)));
+  for (let i = 0; i < fixtures; i++) {
+    const x = room.x + 1 + ((serial * 7 + i * 5) % Math.max(1, room.w - 2));
+    const y = room.y + 1 + ((serial * 11 + i * 3) % Math.max(1, room.h - 2));
+    let feature = Feature.LAMP;
+    switch (room.type) {
+      case RoomType.HQ:
+        feature = i % 3 === 0 ? Feature.DESK : i % 3 === 1 ? Feature.SCREEN : Feature.LAMP;
+        break;
+      case RoomType.KITCHEN:
+        feature = i % 3 === 0 ? Feature.STOVE : i % 3 === 1 ? Feature.SINK : Feature.TABLE;
+        break;
+      case RoomType.BATHROOM:
+        feature = i % 2 === 0 ? Feature.TOILET : Feature.SINK;
+        break;
+      case RoomType.MEDICAL:
+        feature = i % 2 === 0 ? Feature.BED : Feature.APPARATUS;
+        break;
+      case RoomType.PRODUCTION:
+        feature = i % 2 === 0 ? Feature.MACHINE : Feature.APPARATUS;
+        break;
+      case RoomType.STORAGE:
+        feature = Feature.SHELF;
+        break;
+      case RoomType.OFFICE:
+        feature = i % 3 === 0 ? Feature.DESK : i % 3 === 1 ? Feature.CHAIR : Feature.SCREEN;
+        break;
+      case RoomType.SMOKING:
+        feature = i % 2 === 0 ? Feature.TABLE : Feature.CHAIR;
+        break;
+      case RoomType.COMMON:
+      default:
+        feature = i % 3 === 0 ? Feature.TABLE : i % 3 === 1 ? Feature.CHAIR : Feature.LAMP;
+        break;
+    }
+    setFeature(world, x, y, feature);
+  }
+}
+
+function markHermeticShell(world: World, room: Room): void {
+  room.sealed = true;
+  room.wallTex = Tex.HERMO_WALL;
+  for (let dy = -1; dy <= room.h; dy++) {
+    for (let dx = -1; dx <= room.w; dx++) {
+      if (dx >= 0 && dx < room.w && dy >= 0 && dy < room.h) continue;
+      const idx = world.idx(room.x + dx, room.y + dy);
+      if (world.cells[idx] !== Cell.WALL || world.aptMask[idx]) continue;
+      world.hermoWall[idx] = 1;
+      world.wallTex[idx] = Tex.HERMO_WALL;
+    }
+  }
+}
+
+function paintShahtaRoomTerritory(world: World, room: Room, owner: TerritoryOwner): void {
+  for (let dy = 0; dy < room.h; dy++) {
+    for (let dx = 0; dx < room.w; dx++) {
+      const idx = world.idx(room.x + dx, room.y + dy);
+      if (world.aptMask[idx] || world.cells[idx] === Cell.LIFT || world.cells[idx] === Cell.ABYSS) continue;
+      setTerritoryOwnerAtIndex(world, idx, owner);
+    }
+  }
+  for (const idx of room.doors) {
+    if (world.aptMask[idx]) continue;
+    setTerritoryOwnerAtIndex(world, idx, owner);
+  }
+}
+
+function paintShahtaOwnerPatch(world: World, cx: number, cy: number, radius: number, owner: TerritoryOwner): void {
+  const r2 = radius * radius;
+  for (let dy = -radius; dy <= radius; dy++) {
+    for (let dx = -radius; dx <= radius; dx++) {
+      if (dx * dx + dy * dy > r2) continue;
+      const idx = world.idx(cx + dx, cy + dy);
+      if (world.aptMask[idx] || world.cells[idx] === Cell.LIFT || world.cells[idx] === Cell.ABYSS) continue;
+      setTerritoryOwnerAtIndex(world, idx, owner);
+    }
+  }
+}
+
+function buildOuterServiceLayer(world: World): { rooms: Room[]; cells: number } {
+  const north = logicalRoom(world, RoomType.CORRIDOR, 'Внешнее северное кольцо шахты-атриума', 146, 146, 728, 7, Tex.PIPE, Tex.F_CONCRETE);
+  const south = logicalRoom(world, RoomType.CORRIDOR, 'Внешнее южное кольцо шахты-атриума', 146, 871, 728, 7, Tex.PIPE, Tex.F_CONCRETE);
+  const west = logicalRoom(world, RoomType.CORRIDOR, 'Внешнее западное кольцо шахты-атриума', 146, 146, 7, 728, Tex.PIPE, Tex.F_CONCRETE);
+  const east = logicalRoom(world, RoomType.CORRIDOR, 'Внешнее восточное кольцо шахты-атриума', 871, 146, 7, 728, Tex.PIPE, Tex.F_CONCRETE);
+  let cells = 0;
+  cells += carveRect(world, north, 146, 146, 728, 7);
+  cells += carveRect(world, south, 146, 871, 728, 7);
+  cells += carveRect(world, west, 146, 146, 7, 728);
+  cells += carveRect(world, east, 871, 146, 7, 728);
+  cells += carveLine(world, north, CX, 86, CX, CY - OUTER_R, 5, Tex.F_CONCRETE).length;
+  cells += carveLine(world, south, CX, CY + OUTER_R, CX, 936, 5, Tex.F_CONCRETE).length;
+  cells += carveLine(world, west, 86, CY, CX - OUTER_R, CY, 5, Tex.F_CONCRETE).length;
+  cells += carveLine(world, east, CX + OUTER_R, CY, 936, CY, 5, Tex.F_CONCRETE).length;
+  cells += carveLine(world, north, 146, 146, 83, 83, 5, Tex.F_CONCRETE).length;
+  cells += carveLine(world, north, 874, 146, 936, 83, 5, Tex.F_CONCRETE).length;
+  cells += carveLine(world, south, 146, 874, 83, 936, 5, Tex.F_CONCRETE).length;
+  cells += carveLine(world, south, 874, 874, 936, 936, 5, Tex.F_CONCRETE).length;
+  return { rooms: [north, south, west, east], cells };
+}
+
+function microType(serial: number): RoomType {
+  return SHAHTA_MICRO_TYPES[serial % SHAHTA_MICRO_TYPES.length];
+}
+
+function buildHorizontalMicroRooms(world: World, corridor: Room, label: string, above: boolean, serialBase: number): number {
+  let rooms = 0;
+  for (let n = 0; n < 9; n++) {
+    const w = 14 + ((serialBase + n * 5) % 10);
+    const h = 8 + ((serialBase + n * 3) % 5);
+    const x = 170 + n * 76 + ((n % 3) * 4);
+    const y = above ? corridor.y - h - 1 : corridor.y + corridor.h + 1;
+    const type = microType(serialBase + n);
+    const room = boxRoom(
+      world,
+      type,
+      x,
+      y,
+      w,
+      h,
+      `Микроячейка ${label} ${n + 1}`,
+      type === RoomType.BATHROOM ? Tex.TILE_W : Tex.METAL,
+      type === RoomType.BATHROOM ? Tex.F_TILE : Tex.F_CONCRETE,
+    );
+    placeDoor(world, room, corridor, '', false);
+    decorateShahtaRoom(world, room, serialBase + n);
+    rooms++;
+  }
+  return rooms;
+}
+
+function buildVerticalMicroRooms(world: World, corridor: Room, label: string, left: boolean, serialBase: number): number {
+  let rooms = 0;
+  for (let n = 0; n < 9; n++) {
+    const w = 8 + ((serialBase + n * 7) % 5);
+    const h = 14 + ((serialBase + n * 5) % 10);
+    const x = left ? corridor.x - w - 1 : corridor.x + corridor.w + 1;
+    const y = 170 + n * 76 + ((n % 3) * 4);
+    const type = microType(serialBase + n);
+    const room = boxRoom(
+      world,
+      type,
+      x,
+      y,
+      w,
+      h,
+      `Микроячейка ${label} ${n + 1}`,
+      type === RoomType.SMOKING ? Tex.ROTTEN : Tex.METAL,
+      type === RoomType.SMOKING ? Tex.F_WOOD : Tex.F_CONCRETE,
+    );
+    placeDoor(world, room, corridor, '', false);
+    decorateShahtaRoom(world, room, serialBase + n);
+    rooms++;
+  }
+  return rooms;
+}
+
+function buildCantileverDeck(
+  world: World,
+  name: string,
+  x: number,
+  y: number,
+  connectA: [number, number],
+  connectB: [number, number],
+  serialBase: number,
+): { room: Room; microRooms: number; cells: number } {
+  const deck = boxRoom(world, RoomType.CORRIDOR, x, y, 122, 7, `Консольная палуба ${name}`, Tex.PIPE, Tex.F_CONCRETE);
+  let cells = 0;
+  cells += carveLine(world, deck, x + 6, y + 3, connectA[0], connectA[1], 4, Tex.F_CONCRETE).length;
+  cells += carveLine(world, deck, x + 116, y + 3, connectB[0], connectB[1], 4, Tex.F_CONCRETE).length;
+  let microRooms = 0;
+  for (let n = 0; n < 6; n++) {
+    const type = microType(serialBase + n);
+    const w = n % 2 === 0 ? 16 : 20;
+    const h = n % 3 === 0 ? 10 : 9;
+    const rx = x + 6 + n * 19;
+    const above = n % 2 === 0;
+    const ry = above ? y - h - 1 : y + deck.h + 1;
+    const room = boxRoom(
+      world,
+      type,
+      rx,
+      ry,
+      w,
+      h,
+      `Подвесная ячейка ${name} ${n + 1}`,
+      type === RoomType.BATHROOM ? Tex.TILE_W : Tex.METAL,
+      type === RoomType.BATHROOM ? Tex.F_TILE : Tex.F_CONCRETE,
+    );
+    placeDoor(world, room, deck, '', false);
+    decorateShahtaRoom(world, room, serialBase + n);
+    microRooms++;
+  }
+  return { room: deck, microRooms, cells };
+}
+
+function buildMidMicroServiceFabric(world: World): ShahtaMidMicroStats {
+  const outer = buildOuterServiceLayer(world);
+  let microRooms = 0;
+  microRooms += buildHorizontalMicroRooms(world, outer.rooms[0], 'северного внешнего обода сверху', true, 11);
+  microRooms += buildHorizontalMicroRooms(world, outer.rooms[0], 'северного внешнего обода снизу', false, 29);
+  microRooms += buildHorizontalMicroRooms(world, outer.rooms[1], 'южного внешнего обода сверху', true, 47);
+  microRooms += buildHorizontalMicroRooms(world, outer.rooms[1], 'южного внешнего обода снизу', false, 71);
+  microRooms += buildVerticalMicroRooms(world, outer.rooms[2], 'западного внешнего обода слева', true, 101);
+  microRooms += buildVerticalMicroRooms(world, outer.rooms[2], 'западного внешнего обода справа', false, 131);
+  microRooms += buildVerticalMicroRooms(world, outer.rooms[3], 'восточного внешнего обода слева', true, 167);
+  microRooms += buildVerticalMicroRooms(world, outer.rooms[3], 'восточного внешнего обода справа', false, 199);
+  let serviceCells = outer.cells;
+  for (const deck of [
+    buildCantileverDeck(world, 'северо-западного зазора', 214, 258, [146, 146], [CX - 214, CY - 214], 233),
+    buildCantileverDeck(world, 'северо-восточного зазора', 688, 258, [CX + 214, CY - 214], [874, 146], 251),
+    buildCantileverDeck(world, 'юго-западного зазора', 214, 758, [146, 874], [CX - 214, CY + 214], 269),
+    buildCantileverDeck(world, 'юго-восточного зазора', 688, 758, [CX + 214, CY + 214], [874, 874], 287),
+  ]) {
+    microRooms += deck.microRooms;
+    serviceCells += deck.cells;
+  }
+  return { serviceCells, microRooms, hqCompounds: 0 };
+}
+
+function buildShahtaFactionHqs(world: World): ShahtaHqCompound[] {
+  const compounds: ShahtaHqCompound[] = [];
+  for (const spec of SHAHTA_HQ_SPECS) {
+    const [x, y, w, h] = spec.hall;
+    const hall = boxRoom(world, RoomType.CORRIDOR, x, y, w, h, `Штабной коридор ${spec.key}`, spec.wallTex, spec.floorTex);
+    carveLine(
+      world,
+      hall,
+      x + (w >> 1),
+      y + (h >> 1),
+      spec.connect[0],
+      spec.connect[1],
+      5,
+      spec.floorTex,
+    );
+    decorateShahtaRoom(world, hall, spec.owner * 101);
+    const support: Room[] = [];
+    let core = hall;
+    for (let i = 0; i < spec.support.length; i++) {
+      const roomSpec = spec.support[i];
+      const room = boxRoom(world, roomSpec.type, roomSpec.x, roomSpec.y, roomSpec.w, roomSpec.h, roomSpec.name, spec.wallTex, spec.floorTex);
+      if (roomSpec.hermetic) {
+        markHermeticShell(world, room);
+        core = room;
+      }
+      placeDoor(world, room, hall, '', !!roomSpec.hermetic);
+      decorateShahtaRoom(world, room, spec.owner * 113 + i);
+      support.push(room);
+    }
+    compounds.push({ owner: spec.owner, hall, core, support });
+  }
+  return compounds;
+}
+
+function paintShahtaHqTerritory(world: World, compounds: readonly ShahtaHqCompound[]): void {
+  for (const compound of compounds) {
+    paintShahtaRoomTerritory(world, compound.hall, compound.owner);
+    for (const room of compound.support) paintShahtaRoomTerritory(world, room, compound.owner);
+    paintShahtaOwnerPatch(
+      world,
+      compound.core.x + (compound.core.w >> 1),
+      compound.core.y + (compound.core.h >> 1),
+      compound.owner === ZoneFaction.LIQUIDATOR ? 46 : 34,
+      compound.owner,
+    );
+  }
+}
+
+export function reinforceShahtaAtriumAuthoredHqTerritory(world: World): void {
+  for (const spec of SHAHTA_HQ_SPECS) {
+    const hall = world.rooms.find(room => room?.name === `Штабной коридор ${spec.key}`);
+    let core: Room | undefined;
+    if (hall) paintShahtaRoomTerritory(world, hall, spec.owner);
+    for (const roomSpec of spec.support) {
+      const room = world.rooms.find(candidate => candidate?.name === roomSpec.name);
+      if (!room) continue;
+      if (roomSpec.hermetic) {
+        room.type = RoomType.HQ;
+        markHermeticShell(world, room);
+        core = room;
+      }
+      paintShahtaRoomTerritory(world, room, spec.owner);
+    }
+    if (core) {
+      paintShahtaOwnerPatch(
+        world,
+        core.x + (core.w >> 1),
+        core.y + (core.h >> 1),
+        spec.owner === ZoneFaction.LIQUIDATOR ? 46 : 34,
+        spec.owner,
+      );
+    }
+  }
+  syncZoneMetadataFromTerritory(world);
+  world.markWallTexDirty();
+  world.markFeaturesDirty(false);
+}
+
 function addContainer(
   world: World,
   room: Room,
@@ -580,6 +1011,9 @@ function buildState(
   voidCells: number,
   ringCells: number,
   serviceBypassCells: number,
+  outerServiceCells: number,
+  microRoomCount: number,
+  hqCompoundCount: number,
   coverIslands: number,
   bridges: readonly BridgeBuild[],
 ): ShahtaAtriumState {
@@ -594,6 +1028,9 @@ function buildState(
     ringCells,
     bridgeCount: bridgeStates.filter(bridge => !bridge.repairable).length,
     serviceBypassCells,
+    outerServiceCells,
+    microRoomCount,
+    hqCompoundCount,
     coverIslands,
     losCoverScore: Math.round(totalCover * 1000 / Math.max(1, totalBridgeCells)),
     repairableBridgeId: 'shahta_repair_chord',
@@ -616,6 +1053,8 @@ export function generateShahtaAtriumDesignFloor(): ShahtaAtriumGeneration {
   const { bridges, coverIslands: bridgeCover } = buildBridges(world);
   const ringCover = placeCoverIslandsOnRings(world);
   const rooms = buildServiceRooms(world, rim.rooms);
+  const midMicro = buildMidMicroServiceFabric(world);
+  const hqCompounds = buildShahtaFactionHqs(world);
   dressRooms(world, rooms);
 
   placeLift(world, CX, 82, CX, 84, LiftDirection.UP);
@@ -627,6 +1066,7 @@ export function generateShahtaAtriumDesignFloor(): ShahtaAtriumGeneration {
   ensureConnectivity(world, CX + OUTER_R + 8.5, CY + 0.5);
   generateZones(world);
   tuneShahtaZones(world);
+  paintShahtaHqTerritory(world, hqCompounds);
 
   placeEmergencyPanel(world, rooms.repair.x + 7, rooms.repair.y + 6, 'panel_doors', 7103);
   addContainer(world, rooms.repair, rooms.repair.x + 6, rooms.repair.y + 30, ContainerKind.TOOL_LOCKER, 'Шкаф ремонта перемычки', [
@@ -652,7 +1092,16 @@ export function generateShahtaAtriumDesignFloor(): ShahtaAtriumGeneration {
   dropItem(entities, nextId, rooms.control.x + 18, rooms.control.y + 7, 'relay_diagram');
   dropItem(entities, nextId, rooms.cache.x + 9, rooms.cache.y + 9, 'wire_coil');
 
-  const state = buildState(voidCells, ringCells, rim.cells, bridgeCover + ringCover, bridges);
+  const state = buildState(
+    voidCells,
+    ringCells,
+    rim.cells,
+    midMicro.serviceCells,
+    midMicro.microRooms,
+    hqCompounds.length,
+    bridgeCover + ringCover,
+    bridges,
+  );
   registerCues(world, rooms, state);
 
   world.markCellsDirty();

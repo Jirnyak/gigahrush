@@ -4,6 +4,7 @@ import {
   AIGoal,
   Cell,
   ContainerKind,
+  DoorState,
   EntityType,
   Faction,
   Feature,
@@ -21,10 +22,12 @@ import {
   type GameState,
   type Item,
   type Room,
+  type TerritoryOwner,
   type WorldContainer,
 } from '../../core/types';
 import { World } from '../../core/world';
 import { freshNeeds } from '../../data/catalog';
+import { factionToTerritoryOwner } from '../../data/factions';
 import { type PlotNpcDef, registerSideQuest } from '../../data/plot';
 import { MONSTERS } from '../../entities/monster';
 import { monsterSpr } from '../../render/sprite_index';
@@ -33,6 +36,7 @@ import { publishEvent } from '../../systems/events';
 import { publishNoise } from '../../systems/noise';
 import { registerRouteCue } from '../../systems/route_cues';
 import { randomRPG } from '../../systems/rpg';
+import { setTerritoryOwnerAtIndex, syncZoneMetadataFromTerritory, territoryOwnerAtIndex } from '../../systems/territory';
 import { carveCorridor, ensureConnectivity, generateZones, sanitizeDoors, stampRoom } from '../shared';
 import type { FloorGeneration } from '../floor_manifest';
 
@@ -123,6 +127,84 @@ const NPC_ID = 'spectral_bellwarden_miron' as const;
 const BELL_COOLDOWN_SEC = 18;
 const BELL_INTERACTION_RANGE = 2.6;
 const BELL_LOOK_RADIUS = 1.45;
+const SPECTRAL_CENTER_X = W >> 1;
+const SPECTRAL_CENTER_Y = W >> 1;
+const SPECTRAL_AMBIENT_NPC_PREFIX = 'Спектральная часовня: слушатель ';
+
+interface SpectralHqSupportSpec {
+  name: string;
+  type: RoomType;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
+interface SpectralHqSpec {
+  owner: TerritoryOwner;
+  title: string;
+  hq: SpectralHqSupportSpec;
+  support: readonly SpectralHqSupportSpec[];
+}
+
+const SPECTRAL_HQ_SPECS: readonly SpectralHqSpec[] = [
+  {
+    owner: ZoneFaction.CITIZEN,
+    title: 'Гражданский слуховой двор',
+    hq: { name: 'Гражданский слуховой двор: гермоядро', type: RoomType.HQ, x: 132, y: 150, w: 28, h: 16 },
+    support: [
+      { name: 'Гражданский слуховой двор: кухня тихого кипятка', type: RoomType.KITCHEN, x: 96, y: 128, w: 24, h: 12 },
+      { name: 'Гражданский слуховой двор: общая комната шепота', type: RoomType.COMMON, x: 164, y: 128, w: 30, h: 14 },
+      { name: 'Гражданский слуховой двор: кладовая ватных дверей', type: RoomType.STORAGE, x: 96, y: 174, w: 22, h: 12 },
+      { name: 'Гражданский слуховой двор: медугол слуха', type: RoomType.MEDICAL, x: 164, y: 174, w: 24, h: 12 },
+    ],
+  },
+  {
+    owner: ZoneFaction.LIQUIDATOR,
+    title: 'Ликвидаторский пост глушения',
+    hq: { name: 'Ликвидаторский пост глушения: гермоядро', type: RoomType.HQ, x: 836, y: 148, w: 28, h: 16 },
+    support: [
+      { name: 'Ликвидаторский пост глушения: оружейная тишины', type: RoomType.STORAGE, x: 798, y: 128, w: 26, h: 12 },
+      { name: 'Ликвидаторский пост глушения: журнал эха', type: RoomType.OFFICE, x: 868, y: 128, w: 28, h: 12 },
+      { name: 'Ликвидаторский пост глушения: санитарный шлюз', type: RoomType.BATHROOM, x: 798, y: 174, w: 24, h: 12 },
+      { name: 'Ликвидаторский пост глушения: мастерская наушников', type: RoomType.PRODUCTION, x: 868, y: 174, w: 28, h: 12 },
+    ],
+  },
+  {
+    owner: ZoneFaction.SCIENTIST,
+    title: 'НИИ стоячей волны',
+    hq: { name: 'НИИ стоячей волны: гермоядро', type: RoomType.HQ, x: 142, y: 804, w: 28, h: 16 },
+    support: [
+      { name: 'НИИ стоячей волны: лаборатория тишины', type: RoomType.PRODUCTION, x: 100, y: 782, w: 30, h: 13 },
+      { name: 'НИИ стоячей волны: кабинет спектра', type: RoomType.OFFICE, x: 176, y: 782, w: 28, h: 13 },
+      { name: 'НИИ стоячей волны: медизмерительная', type: RoomType.MEDICAL, x: 100, y: 828, w: 24, h: 12 },
+      { name: 'НИИ стоячей волны: склад камертонов', type: RoomType.STORAGE, x: 176, y: 828, w: 24, h: 12 },
+    ],
+  },
+  {
+    owner: ZoneFaction.WILD,
+    title: 'Дикий притон сорванного хора',
+    hq: { name: 'Дикий притон сорванного хора: гермоядро', type: RoomType.HQ, x: 836, y: 804, w: 28, h: 16 },
+    support: [
+      { name: 'Дикий притон сорванного хора: кухня жестянок', type: RoomType.KITCHEN, x: 798, y: 782, w: 24, h: 12 },
+      { name: 'Дикий притон сорванного хора: курилка глухих', type: RoomType.SMOKING, x: 868, y: 782, w: 26, h: 12 },
+      { name: 'Дикий притон сорванного хора: разборная кладовая', type: RoomType.STORAGE, x: 798, y: 828, w: 28, h: 12 },
+      { name: 'Дикий притон сорванного хора: общий костяк', type: RoomType.COMMON, x: 868, y: 828, w: 28, h: 12 },
+    ],
+  },
+  {
+    owner: ZoneFaction.CULTIST,
+    title: 'Культовая ризница низкого звона',
+    hq: { name: 'Культовая ризница низкого звона: гермоядро', type: RoomType.HQ, x: 486, y: 708, w: 32, h: 18 },
+    support: [
+      { name: 'Культовая ризница низкого звона: общая хора', type: RoomType.COMMON, x: 444, y: 686, w: 30, h: 14 },
+      { name: 'Культовая ризница низкого звона: кухня свечного жира', type: RoomType.KITCHEN, x: 528, y: 686, w: 26, h: 13 },
+      { name: 'Культовая ризница низкого звона: кладовая свечей', type: RoomType.STORAGE, x: 444, y: 734, w: 26, h: 13 },
+      { name: 'Культовая ризница низкого звона: исповедальная радиопомех', type: RoomType.OFFICE, x: 528, y: 734, w: 30, h: 13 },
+      { name: 'Культовая ризница низкого звона: костяной медугол', type: RoomType.MEDICAL, x: 486, y: 760, w: 30, h: 13 },
+    ],
+  },
+] as const;
 
 const MIRON_DEF: PlotNpcDef = {
   name: 'Мирон Звонарь',
@@ -283,6 +365,426 @@ function countRoomFloorCells(world: World, room: Room): number {
     }
   }
   return count;
+}
+
+function canStampSpectralRect(world: World, x: number, y: number, w: number, h: number): boolean {
+  if (x <= 2 || y <= 2 || x + w >= W - 2 || y + h >= W - 2) return false;
+  for (let dy = -1; dy <= h; dy++) {
+    for (let dx = -1; dx <= w; dx++) {
+      const idx = world.idx(x + dx, y + dy);
+      if (world.aptMask[idx]) return false;
+      if (world.roomMap[idx] >= 0) return false;
+      if (world.cells[idx] !== Cell.WALL) return false;
+    }
+  }
+  return true;
+}
+
+function tryStampSpectralRoom(
+  world: World,
+  type: RoomType,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  name: string,
+  wallTex: Tex,
+  floorTex: Tex,
+  fog = 0,
+): Room | null {
+  const rx = Math.floor(x);
+  const ry = Math.floor(y);
+  const rw = Math.floor(w);
+  const rh = Math.floor(h);
+  if (!canStampSpectralRect(world, rx, ry, rw, rh)) return null;
+  const room = stampSpectralRoom(world, type, rx, ry, rw, rh, name, wallTex, floorTex, fog);
+  decorateSpectralRoom(world, room);
+  return room;
+}
+
+function decorateSpectralRoom(world: World, room: Room): void {
+  if (room.w < 4 || room.h < 4) return;
+  const salt = room.id * 17 + room.w * 3 + room.h;
+  if (room.type === RoomType.KITCHEN) {
+    placeFeature(world, room.x + 2, room.y + 2, Feature.STOVE);
+    placeFeature(world, room.x + room.w - 3, room.y + 2, Feature.SINK);
+  } else if (room.type === RoomType.BATHROOM) {
+    placeFeature(world, room.x + 2, room.y + 2, Feature.TOILET);
+    placeFeature(world, room.x + room.w - 3, room.y + 2, Feature.SINK);
+  } else if (room.type === RoomType.STORAGE) {
+    for (let x = room.x + 2; x < room.x + room.w - 2; x += 6) placeFeature(world, x, room.y + 2, Feature.SHELF);
+  } else if (room.type === RoomType.OFFICE) {
+    placeFeature(world, room.x + 2, room.y + 2, Feature.DESK);
+    placeFeature(world, room.x + room.w - 3, room.y + 2, Feature.SCREEN);
+  } else if (room.type === RoomType.PRODUCTION) {
+    for (let y = room.y + 3; y < room.y + room.h - 2; y += 7) {
+      placeFeature(world, room.x + 3, y, Feature.MACHINE);
+      placeFeature(world, room.x + room.w - 4, y, Feature.APPARATUS);
+    }
+  } else if (room.type === RoomType.MEDICAL) {
+    placeFeature(world, room.x + 2, room.y + 2, Feature.BED);
+    placeFeature(world, room.x + room.w - 3, room.y + 2, Feature.SHELF);
+  } else if (room.type === RoomType.HQ || room.type === RoomType.COMMON) {
+    for (let x = room.x + 4; x < room.x + room.w - 3; x += 9) {
+      placeFeature(world, x, room.y + 3, (x + salt) % 3 === 0 ? Feature.CANDLE : Feature.TABLE);
+    }
+  }
+}
+
+function decorateEchoCourt(world: World, room: Room, serial: number): void {
+  const vertical = serial % 2 === 0;
+  if (vertical) {
+    for (let x = room.x + 10; x < room.x + room.w - 9; x += 18) {
+      for (let y = room.y + 7; y < room.y + room.h - 7; y++) {
+        if (y % 13 === 0 || y % 13 === 1) continue;
+        const idx = world.idx(x, y);
+        if (world.roomMap[idx] !== room.id) continue;
+        world.cells[idx] = Cell.WALL;
+        world.wallTex[idx] = room.wallTex;
+      }
+    }
+  } else {
+    for (let y = room.y + 8; y < room.y + room.h - 7; y += 16) {
+      for (let x = room.x + 9; x < room.x + room.w - 9; x++) {
+        if (x % 15 === 0 || x % 15 === 1) continue;
+        const idx = world.idx(x, y);
+        if (world.roomMap[idx] !== room.id) continue;
+        world.cells[idx] = Cell.WALL;
+        world.wallTex[idx] = room.wallTex;
+      }
+    }
+  }
+  for (let y = room.y + 6; y < room.y + room.h - 5; y += 14) {
+    for (let x = room.x + 6; x < room.x + room.w - 5; x += 14) {
+      placeFeature(world, x, y, (x + y + serial) % 4 === 0 ? Feature.CANDLE : Feature.APPARATUS);
+    }
+  }
+}
+
+function carveWideCorridor(world: World, ax: number, ay: number, bx: number, by: number, radius: number): void {
+  const dx = Math.abs(world.delta(ax, bx));
+  const dy = Math.abs(world.delta(ay, by));
+  const horizontal = dx >= dy;
+  for (let offset = -radius; offset <= radius; offset++) {
+    if (horizontal) carveCorridor(world, ax, ay + offset, bx, by + offset);
+    else carveCorridor(world, ax + offset, ay, bx + offset, by);
+  }
+}
+
+function connectRoomToPoint(world: World, room: Room, x: number, y: number, wide = 0): void {
+  const c = roomCenter(room);
+  if (wide > 0) carveWideCorridor(world, Math.floor(c.x), Math.floor(c.y), Math.floor(x), Math.floor(y), wide);
+  else carveCorridor(world, Math.floor(c.x), Math.floor(c.y), Math.floor(x), Math.floor(y));
+}
+
+function roomByNearestAngle(rooms: readonly Room[], angle: number): Room | undefined {
+  let best: Room | undefined;
+  let bestDelta = Infinity;
+  for (const room of rooms) {
+    const c = roomCenter(room);
+    const a = Math.atan2(c.y - SPECTRAL_CENTER_Y, c.x - SPECTRAL_CENTER_X);
+    const d = Math.abs(Math.atan2(Math.sin(a - angle), Math.cos(a - angle)));
+    if (d < bestDelta) {
+      bestDelta = d;
+      best = room;
+    }
+  }
+  return best;
+}
+
+function styleForOwner(owner: TerritoryOwner): { wallTex: Tex; floorTex: Tex; fog: number } {
+  switch (owner) {
+    case ZoneFaction.CITIZEN:
+      return { wallTex: Tex.PANEL, floorTex: Tex.F_LINO, fog: 10 };
+    case ZoneFaction.LIQUIDATOR:
+      return { wallTex: Tex.METAL, floorTex: Tex.F_CONCRETE, fog: 8 };
+    case ZoneFaction.SCIENTIST:
+      return { wallTex: Tex.SCREEN_BASE, floorTex: Tex.F_TILE, fog: 12 };
+    case ZoneFaction.WILD:
+      return { wallTex: Tex.ROTTEN, floorTex: Tex.F_CONCRETE, fog: 22 };
+    case ZoneFaction.CULTIST:
+    default:
+      return { wallTex: Tex.CROSS, floorTex: Tex.F_GUT, fog: 24 };
+  }
+}
+
+function stampSpectralHqCompound(world: World, spec: SpectralHqSpec): Room[] {
+  const out: Room[] = [];
+  const style = styleForOwner(spec.owner);
+  const hq = tryStampSpectralRoom(world, RoomType.HQ, spec.hq.x, spec.hq.y, spec.hq.w, spec.hq.h, spec.hq.name, style.wallTex, style.floorTex, style.fog);
+  if (hq) {
+    out.push(hq);
+    hq.sealed = true;
+    paintRoomOwner(world, hq, spec.owner);
+  }
+  for (const support of spec.support) {
+    const room = tryStampSpectralRoom(world, support.type, support.x, support.y, support.w, support.h, support.name, style.wallTex, style.floorTex, style.fog);
+    if (!room) continue;
+    out.push(room);
+    paintRoomOwner(world, room, spec.owner);
+    if (hq) connectCenters(world, hq, room);
+  }
+  if (hq) hardenSpectralHqCore(world, hq, spec.owner);
+  return out;
+}
+
+function paintRoomOwner(world: World, room: Room, owner: TerritoryOwner): void {
+  for (let dy = 0; dy < room.h; dy++) {
+    for (let dx = 0; dx < room.w; dx++) {
+      const idx = world.idx(room.x + dx, room.y + dy);
+      if (world.roomMap[idx] !== room.id || world.aptMask[idx]) continue;
+      setTerritoryOwnerAtIndex(world, idx, owner);
+    }
+  }
+  for (const doorIdx of room.doors) {
+    if (!world.aptMask[doorIdx]) setTerritoryOwnerAtIndex(world, doorIdx, owner);
+  }
+}
+
+function paintOwnerPatch(world: World, x: number, y: number, owner: TerritoryOwner, radius = 18): void {
+  for (let dy = -radius; dy <= radius; dy++) {
+    for (let dx = -radius; dx <= radius; dx++) {
+      if (dx * dx + dy * dy > radius * radius) continue;
+      const idx = world.idx(x + dx, y + dy);
+      if (world.aptMask[idx] || world.cells[idx] === Cell.ABYSS || world.cells[idx] === Cell.LIFT) continue;
+      setTerritoryOwnerAtIndex(world, idx, owner);
+    }
+  }
+}
+
+function hardenSpectralHqCore(world: World, room: Room, owner: TerritoryOwner): void {
+  room.type = RoomType.HQ;
+  room.sealed = true;
+  room.wallTex = Tex.HERMO_WALL;
+  paintRoomOwner(world, room, owner);
+  const center = roomCenter(room);
+  paintOwnerPatch(world, Math.floor(center.x), Math.floor(center.y), owner, 10);
+  for (let dy = -1; dy <= room.h; dy++) {
+    for (let dx = -1; dx <= room.w; dx++) {
+      const idx = world.idx(room.x + dx, room.y + dy);
+      const interior = dx >= 0 && dx < room.w && dy >= 0 && dy < room.h;
+      if (interior) continue;
+      if (world.aptMask[idx]) continue;
+      if (world.cells[idx] === Cell.WALL || world.cells[idx] === Cell.DOOR) {
+        world.hermoWall[idx] = 1;
+        world.wallTex[idx] = Tex.HERMO_WALL;
+      }
+    }
+  }
+  for (const doorIdx of room.doors) {
+    const door = world.doors.get(doorIdx);
+    if (door) door.state = DoorState.HERMETIC_OPEN;
+    world.hermoWall[doorIdx] = 1;
+    world.wallTex[doorIdx] = Tex.HERMO_WALL;
+  }
+}
+
+function stampSpectralEchoCourts(world: World): Room[] {
+  const rooms: Room[] = [];
+  const specs = [
+    [250, 238, 96, 54],
+    [438, 202, 104, 58],
+    [646, 238, 96, 54],
+    [198, 418, 94, 58],
+    [732, 418, 94, 58],
+    [208, 570, 96, 58],
+    [724, 570, 96, 58],
+    [250, 744, 96, 54],
+    [628, 744, 104, 54],
+    [424, 830, 112, 52],
+    [88, 478, 74, 72],
+    [862, 478, 74, 72],
+  ] as const;
+  for (let i = 0; i < specs.length; i++) {
+    const [x, y, w, h] = specs[i];
+    const type = i % 4 === 0 ? RoomType.COMMON : i % 4 === 1 ? RoomType.PRODUCTION : i % 4 === 2 ? RoomType.STORAGE : RoomType.MEDICAL;
+    const room = tryStampSpectralRoom(
+      world,
+      type,
+      x,
+      y,
+      w,
+      h,
+      `Эхо-двор спектральной часовни ${i + 1}`,
+      i % 3 === 0 ? Tex.CROSS : Tex.GUT,
+      i % 3 === 1 ? Tex.F_MEAT : Tex.F_GUT,
+      18 + (i % 4) * 6,
+    );
+    if (!room) continue;
+    decorateEchoCourt(world, room, i);
+    rooms.push(room);
+  }
+  return rooms;
+}
+
+function stampSpectralOuterDistricts(world: World): Room[] {
+  const rooms: Room[] = [];
+  const courts = [
+    [352, 70, 96, 44, RoomType.COMMON, 'Верхний слуховой двор гражданских помех'],
+    [572, 70, 96, 44, RoomType.PRODUCTION, 'Верхняя машинная глухого звона'],
+    [352, 908, 96, 44, RoomType.STORAGE, 'Нижний склад сломанных псалмов'],
+    [572, 908, 96, 44, RoomType.COMMON, 'Нижний хор без голоса'],
+    [48, 300, 58, 92, RoomType.MEDICAL, 'Западный меддвор акустической тени'],
+    [48, 632, 58, 92, RoomType.STORAGE, 'Западная кладовая обратного эха'],
+    [918, 300, 58, 92, RoomType.PRODUCTION, 'Восточная будка резонаторной пилы'],
+    [918, 632, 58, 92, RoomType.COMMON, 'Восточный двор шепчущих свечей'],
+  ] as const;
+  for (let i = 0; i < courts.length; i++) {
+    const [x, y, w, h, type, name] = courts[i];
+    const room = tryStampSpectralRoom(world, type, x, y, w, h, name, i % 2 === 0 ? Tex.GUT : Tex.CROSS, i % 2 === 0 ? Tex.F_GUT : Tex.F_MEAT, 20 + (i % 3) * 8);
+    if (!room) continue;
+    decorateEchoCourt(world, room, i + 20);
+    rooms.push(room);
+  }
+
+  const perimeter: Room[] = [];
+  const types = [RoomType.STORAGE, RoomType.BATHROOM, RoomType.KITCHEN, RoomType.OFFICE, RoomType.SMOKING, RoomType.COMMON] as const;
+  for (let i = 0; i < 30; i++) {
+    const x = 46 + i * 31;
+    const top = tryStampSpectralRoom(world, types[i % types.length], x, 24, 13, 8, `Верхняя микрокелья спектральной стены ${i + 1}`, Tex.GUT, Tex.F_CONCRETE, 22);
+    const bottom = tryStampSpectralRoom(world, types[(i + 2) % types.length], x, 988, 13, 8, `Нижняя микрокелья спектральной стены ${i + 1}`, Tex.GUT, Tex.F_CONCRETE, 28);
+    if (top) perimeter.push(top);
+    if (bottom) perimeter.push(bottom);
+  }
+  for (let i = 0; i < 28; i++) {
+    const y = 88 + i * 30;
+    const left = tryStampSpectralRoom(world, types[(i + 1) % types.length], 24, y, 9, 13, `Западная микрокелья спектральной стены ${i + 1}`, Tex.GUT, Tex.F_CONCRETE, 24);
+    const right = tryStampSpectralRoom(world, types[(i + 4) % types.length], 991, y, 9, 13, `Восточная микрокелья спектральной стены ${i + 1}`, Tex.GUT, Tex.F_CONCRETE, 24);
+    if (left) perimeter.push(left);
+    if (right) perimeter.push(right);
+  }
+
+  carveWideCorridor(world, 42, 48, 982, 48, 2);
+  carveWideCorridor(world, 42, 976, 982, 976, 2);
+  carveWideCorridor(world, 48, 42, 48, 982, 2);
+  carveWideCorridor(world, 976, 42, 976, 982, 2);
+  for (const room of [...rooms, ...perimeter]) {
+    const c = roomCenter(room);
+    if (c.y < 160) connectRoomToPoint(world, room, c.x, 48);
+    else if (c.y > 864) connectRoomToPoint(world, room, c.x, 976);
+    else if (c.x < 160) connectRoomToPoint(world, room, 48, c.y);
+    else connectRoomToPoint(world, room, 976, c.y);
+  }
+  rooms.push(...perimeter);
+  return rooms;
+}
+
+function stampSpectralRingStations(world: World): Room[] {
+  const halls: Room[] = [];
+  const rings = [
+    { radius: 155, yScale: 0.74, count: 16, w: 38, h: 22, label: 'низкий обертон' },
+    { radius: 286, yScale: 0.82, count: 24, w: 42, h: 24, label: 'средний обертон' },
+    { radius: 412, yScale: 0.88, count: 28, w: 44, h: 24, label: 'дальний обертон' },
+  ] as const;
+  for (let r = 0; r < rings.length; r++) {
+    const ring = rings[r];
+    const ringRooms: Room[] = [];
+    for (let i = 0; i < ring.count; i++) {
+      const angle = (Math.PI * 2 * i) / ring.count + r * 0.17;
+      const cx = Math.round(SPECTRAL_CENTER_X + Math.cos(angle) * ring.radius);
+      const cy = Math.round(SPECTRAL_CENTER_Y + Math.sin(angle) * ring.radius * ring.yScale);
+      const type = i % 6 === 0 ? RoomType.PRODUCTION : i % 5 === 0 ? RoomType.OFFICE : i % 4 === 0 ? RoomType.STORAGE : RoomType.COMMON;
+      const hall = tryStampSpectralRoom(
+        world,
+        type,
+        cx - (ring.w >> 1),
+        cy - (ring.h >> 1),
+        ring.w,
+        ring.h,
+        `Слуховая станция ${ring.label} ${i + 1}`,
+        i % 3 === 0 ? Tex.CROSS : Tex.GUT,
+        i % 2 === 0 ? Tex.F_GUT : Tex.F_MEAT,
+        18 + r * 8,
+      );
+      if (!hall) continue;
+      decorateStandingWave(world, hall, 3 + ((i + r) % 4));
+      ringRooms.push(hall);
+      halls.push(hall);
+      stampSpectralStationMicroRooms(world, hall, r, i, angle);
+    }
+    for (let i = 0; i < ringRooms.length; i++) {
+      const a = ringRooms[i];
+      const b = ringRooms[(i + 1) % ringRooms.length];
+      connectCenters(world, a, b);
+      if (i % 4 === 0 && ringRooms.length > 6) connectCenters(world, a, ringRooms[(i + Math.floor(ringRooms.length / 2)) % ringRooms.length]);
+    }
+  }
+  return halls;
+}
+
+function stampSpectralStationMicroRooms(world: World, hall: Room, ringIndex: number, stationIndex: number, angle: number): void {
+  const types = [RoomType.STORAGE, RoomType.BATHROOM, RoomType.KITCHEN, RoomType.OFFICE, RoomType.SMOKING] as const;
+  const dirs = [
+    { a: angle, dist: 34 },
+    { a: angle + Math.PI / 2, dist: 31 },
+    { a: angle - Math.PI / 2, dist: 31 },
+    { a: angle + Math.PI, dist: 28 },
+  ];
+  for (let i = 0; i < dirs.length; i++) {
+    const dir = dirs[i];
+    const w = 10 + ((stationIndex + i) % 3) * 2;
+    const h = 7 + ((ringIndex + i) % 2) * 2;
+    const c = roomCenter(hall);
+    const cx = Math.round(c.x + Math.cos(dir.a) * dir.dist);
+    const cy = Math.round(c.y + Math.sin(dir.a) * dir.dist);
+    const type = types[(stationIndex + i + ringIndex) % types.length];
+    const room = tryStampSpectralRoom(
+      world,
+      type,
+      cx - (w >> 1),
+      cy - (h >> 1),
+      w,
+      h,
+      `${hall.name}: микрокелья ${i + 1}`,
+      type === RoomType.BATHROOM ? Tex.TILE_W : Tex.GUT,
+      type === RoomType.BATHROOM ? Tex.F_TILE : Tex.F_CONCRETE,
+      16 + ringIndex * 6,
+    );
+    if (room) connectCenters(world, hall, room);
+  }
+}
+
+function carveSpectralMacroNetwork(world: World, rooms: SpectralRooms, halls: readonly Room[], courts: readonly Room[], hqs: readonly Room[]): void {
+  const innerNorth = roomByNearestAngle(halls, -Math.PI / 2);
+  const innerEast = roomByNearestAngle(halls, 0);
+  const innerSouth = roomByNearestAngle(halls, Math.PI / 2);
+  const innerWest = roomByNearestAngle(halls, Math.PI);
+  for (const room of [innerNorth, innerEast, innerSouth, innerWest]) {
+    if (room) connectCenters(world, rooms.nave, room);
+  }
+
+  carveWideCorridor(world, SPECTRAL_CENTER_X, SPECTRAL_CENTER_Y, 0, SPECTRAL_CENTER_Y, 3);
+  carveWideCorridor(world, SPECTRAL_CENTER_X, SPECTRAL_CENTER_Y, W - 1, SPECTRAL_CENTER_Y, 3);
+  carveWideCorridor(world, SPECTRAL_CENTER_X, SPECTRAL_CENTER_Y, SPECTRAL_CENTER_X, 0, 3);
+  carveWideCorridor(world, SPECTRAL_CENTER_X, SPECTRAL_CENTER_Y, SPECTRAL_CENTER_X, W - 1, 3);
+  carveWideCorridor(world, 96, 96, 928, 928, 2);
+  carveWideCorridor(world, 928, 96, 96, 928, 2);
+
+  for (let i = 0; i < courts.length; i++) {
+    const nearest = roomByNearestAngle(halls, Math.atan2(roomCenter(courts[i]).y - SPECTRAL_CENTER_Y, roomCenter(courts[i]).x - SPECTRAL_CENTER_X));
+    if (nearest) connectCenters(world, courts[i], nearest);
+    if (i > 0 && i % 3 !== 0) connectCenters(world, courts[i - 1], courts[i]);
+  }
+  for (const hq of hqs) {
+    const c = roomCenter(hq);
+    const nearest = roomByNearestAngle(halls, Math.atan2(c.y - SPECTRAL_CENTER_Y, c.x - SPECTRAL_CENTER_X));
+    if (nearest) connectCenters(world, hq, nearest);
+    else connectRoomToPoint(world, hq, SPECTRAL_CENTER_X, SPECTRAL_CENTER_Y);
+  }
+}
+
+function expandSpectralRouteGeometry(world: World, rooms: SpectralRooms): void {
+  const hqRooms: Room[] = [];
+  for (const spec of SPECTRAL_HQ_SPECS) hqRooms.push(...stampSpectralHqCompound(world, spec).filter(room => room.type === RoomType.HQ));
+  const courts = stampSpectralEchoCourts(world);
+  const outer = stampSpectralOuterDistricts(world);
+  const halls = stampSpectralRingStations(world);
+  carveSpectralMacroNetwork(world, rooms, halls, [...courts, ...outer], hqRooms);
+  world.markCellsDirty();
+  world.markWallTexDirty();
+  world.markFloorTexDirty();
+  world.markFeaturesDirty(false);
+  world.markFogDirty();
 }
 
 function buildRooms(world: World): SpectralRooms {
@@ -567,6 +1069,72 @@ function placeContent(world: World, entities: Entity[], nextId: NextId, rooms: S
   ], ['spectral_chasovnya', 'crypt', 'sound_counterplay']);
 }
 
+export function reinforceSpectralChasovnyaAuthoredHqTerritory(world: World): void {
+  for (const spec of SPECTRAL_HQ_SPECS) {
+    const hq = world.rooms.find(room => room?.name === spec.hq.name);
+    if (hq) hardenSpectralHqCore(world, hq, spec.owner);
+    for (const support of spec.support) {
+      const room = world.rooms.find(candidate => candidate?.name === support.name);
+      if (room) paintRoomOwner(world, room, spec.owner);
+    }
+    if (hq) {
+      const c = roomCenter(hq);
+      paintOwnerPatch(world, Math.floor(c.x), Math.floor(c.y), spec.owner, 22);
+    }
+  }
+  syncZoneMetadataFromTerritory(world);
+  world.markWallTexDirty();
+  world.markFeaturesDirty(false);
+}
+
+function ambientSpectralNpc(entity: Entity): boolean {
+  return entity.type === EntityType.NPC &&
+    !entity.plotNpcId &&
+    entity.name?.startsWith(SPECTRAL_AMBIENT_NPC_PREFIX) === true &&
+    entity.faction !== undefined;
+}
+
+export function alignSpectralChasovnyaAmbientNpcTerritory(world: World, entities: Entity[]): void {
+  const slots = new Map<TerritoryOwner, number[]>();
+  for (let idx = 0; idx < world.cells.length; idx++) {
+    if (world.cells[idx] !== Cell.FLOOR || world.features[idx] !== Feature.NONE || world.containerMap.has(idx)) continue;
+    const owner = territoryOwnerAtIndex(world, idx);
+    if (owner === ZoneFaction.SAMOSBOR) continue;
+    let list = slots.get(owner);
+    if (!list) {
+      list = [];
+      slots.set(owner, list);
+    }
+    list.push(idx);
+  }
+
+  const used = new Set<number>();
+  for (const entity of entities) {
+    if (!ambientSpectralNpc(entity)) continue;
+    const owner = factionToTerritoryOwner(entity.faction!);
+    const list = slots.get(owner);
+    if (!list || list.length === 0) continue;
+    let pickIndex = (entity.id * 1103515245 + owner * 97) >>> 0;
+    let cell = -1;
+    for (let attempt = 0; attempt < Math.min(96, list.length); attempt++) {
+      const candidate = list[(pickIndex + attempt * 37) % list.length];
+      if (used.has(candidate)) continue;
+      cell = candidate;
+      break;
+    }
+    if (cell < 0) cell = list[pickIndex % list.length];
+    used.add(cell);
+    entity.x = (cell % W) + 0.5;
+    entity.y = ((cell / W) | 0) + 0.5;
+    if (entity.ai) {
+      entity.ai.tx = entity.x;
+      entity.ai.ty = entity.y;
+      entity.ai.path.length = 0;
+      entity.ai.pi = 0;
+    }
+  }
+}
+
 function registerSpectralRouteCues(world: World, rooms: SpectralRooms, state: SpectralChasovnyaState): void {
   const entry = roomCenter(rooms.entry);
   const quiet = roomCenter(rooms.quietSouth);
@@ -799,6 +1367,7 @@ export function generateSpectralChasovnyaDesignFloor(): SpectralChasovnyaGenerat
   world.fog.fill(22);
 
   const rooms = buildRooms(world);
+  expandSpectralRouteGeometry(world, rooms);
   const spawnX = rooms.entry.x + 8.5;
   const spawnY = rooms.entry.y + (rooms.entry.h >> 1) + 0.5;
   dressRooms(world, rooms);

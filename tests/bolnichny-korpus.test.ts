@@ -13,6 +13,7 @@ import {
   Occupation,
   RoomType,
   W,
+  ZoneFaction,
 } from '../src/core/types';
 import {
   designFloorAtZ,
@@ -28,6 +29,7 @@ import {
   BOLNICHNY_KORPUS_Z,
   BOLNICHNY_ROOM_NAMES,
 } from '../src/gen/design_floors/bolnichny_korpus';
+import { countTerritoryCells, territoryHqAnchors } from '../src/systems/territory';
 
 let cachedGeneration: ReturnType<typeof generateDesignFloor> | undefined;
 
@@ -62,6 +64,19 @@ function reachableLiftGate(gen: ReturnType<typeof generateDesignFloor>, directio
     }
   }
   return best;
+}
+
+function hermeticShellCells(gen: ReturnType<typeof generateDesignFloor>, roomId: number): number {
+  const room = gen.world.rooms[roomId];
+  assert.ok(room);
+  let cells = 0;
+  for (let dy = -1; dy <= room.h; dy++) {
+    for (let dx = -1; dx <= room.w; dx++) {
+      if (dx >= 0 && dx < room.w && dy >= 0 && dy < room.h) continue;
+      if (gen.world.hermoWall[gen.world.idx(room.x + dx, room.y + dy)]) cells++;
+    }
+  }
+  return cells;
 }
 
 test('bolnichny_korpus is registered as a Kvartiry-band authored hospital route', () => {
@@ -115,6 +130,48 @@ test('bolnichny_korpus generator ships clean and dirty routes without trapping l
   ]) {
     assert.equal(reachableRoomCells(gen, name) > 0, true, name);
   }
+});
+
+test('bolnichny_korpus expands into hospital micro rooms and cell-first territory shares', () => {
+  const gen = generatedBolnichnyKorpus();
+  const audit = auditReachability(gen.world, gen.world.idx(Math.floor(gen.spawnX), Math.floor(gen.spawnY)));
+  let reachable = 0;
+  for (const value of audit.reachable) reachable += value;
+  const microRooms = gen.world.rooms.filter(room =>
+    room.name.includes('микропалата') ||
+    room.name.includes('микроблок') ||
+    room.name.includes('бокс') ||
+    room.name.includes('шкаф стерильных') ||
+    room.name.includes('шкаф заражённых'));
+  const hqAnchors = territoryHqAnchors(gen.world);
+  const territoryRows = countTerritoryCells(gen.world);
+  const territoryTotal = territoryRows.reduce((sum, row) => sum + row.cells, 0);
+  const territoryShare = (owner: ZoneFaction): number => (territoryRows.find(row => row.owner === owner)?.cells ?? 0) / territoryTotal;
+  const targetShares = new Map<ZoneFaction, number>([
+    [ZoneFaction.CITIZEN, 0.24],
+    [ZoneFaction.LIQUIDATOR, 0.22],
+    [ZoneFaction.CULTIST, 0.06],
+    [ZoneFaction.SCIENTIST, 0.38],
+    [ZoneFaction.WILD, 0.1],
+  ]);
+
+  assert.equal(gen.world.rooms.length >= 220, true, `rooms ${gen.world.rooms.length}`);
+  assert.equal(gen.world.doors.size >= 170, true, `doors ${gen.world.doors.size}`);
+  assert.equal(reachable >= 170_000, true, `reachable ${reachable}`);
+  assert.equal(microRooms.length >= 80, true, `micro rooms ${microRooms.length}`);
+
+  for (const [owner, targetShare] of targetShares) {
+    const anchor = hqAnchors.find(candidate => candidate.owner === owner);
+    assert.ok(anchor, `HQ anchor ${owner}`);
+    const room = gen.world.rooms[anchor.roomId];
+    assert.equal(room.type, RoomType.HQ, `HQ type ${owner}`);
+    assert.equal(room.sealed, true, `HQ sealed ${owner}`);
+    assert.equal(hermeticShellCells(gen, anchor.roomId) > 0, true, `HQ hermetic shell ${owner}`);
+    assert.equal(territoryShare(owner) > 0, true, `territory cells ${owner}`);
+    assert.equal(Math.abs(territoryShare(owner) - targetShare) <= 0.025, true, `owner ${owner} share ${territoryShare(owner)}`);
+  }
+  assert.equal(territoryShare(ZoneFaction.SCIENTIST) > territoryShare(ZoneFaction.CITIZEN), true);
+  assert.equal(territoryShare(ZoneFaction.SCIENTIST) > territoryShare(ZoneFaction.LIQUIDATOR), true);
 });
 
 test('bolnichny_korpus gates pharmacy loot but keeps it reachable through clearance paths', () => {

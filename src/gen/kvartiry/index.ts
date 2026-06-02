@@ -17,8 +17,10 @@ import { placeProceduralScreens } from '../procedural_screens';
 import { randomName, freshNeeds } from '../../data/catalog';
 import { KVARTIRY_POPULATION_PROFILE, type NpcPopulationProfile } from '../../data/population_profiles';
 import { activeActorCountAtDefaultSoftLimit } from '../../data/entity_limits';
+import { territorySharesForStoryFloor } from '../../data/floor_territory';
 import { sampleNaturalPopulationCells } from '../population_placement';
 import { registerContentRuntimeHook } from '../../systems/content_hooks';
+import { initializeCellTerritory } from '../../systems/territory';
 import { calcZoneLevel, randomRPG, gaussianLevel, getMaxHp } from '../../systems/rpg';
 import { entitySpawnSlots } from '../../systems/entity_limits';
 import { Spr } from '../../render/sprite_index';
@@ -234,7 +236,7 @@ function seedNpcPopulation(
    World starts as FLOOR; walls grow from a regular grid of sources.
    Each source grows exactly 2 wall segments, creating small rooms.
    ══════════════════════════════════════════════════════════════════ */
-export function generateKvartiry(): { world: World; entities: Entity[]; spawnX: number; spawnY: number } {
+export function generateKvartiry(territorySeed = 0): { world: World; entities: Entity[]; spawnX: number; spawnY: number } {
   const world = new World();
   const entities: Entity[] = [];
   let nextId = 1;
@@ -546,6 +548,12 @@ export function generateKvartiry(): { world: World; entities: Entity[]; spawnX: 
 
   // ── Phase 8: Light map ────────────────────────────────────────
   world.bakeLights();
+
+  // ── Phase 8b: Cell territory before population placement ─────
+  initializeCellTerritory(world, {
+    seed: territorySeed,
+    targetShares: territorySharesForStoryFloor(FloorLevel.KVARTIRY),
+  });
 
   // ── Phase 9: Spawn NPCs (whole-floor natural baseline)
   const nid = { v: nextId };

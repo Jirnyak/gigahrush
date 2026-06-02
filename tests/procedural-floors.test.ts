@@ -3,6 +3,7 @@ import * as assert from 'node:assert/strict';
 
 import { Cell, ContainerKind, DoorState, EntityType, Faction, Feature, FloorLevel, LiftDirection, MonsterKind, Occupation, QuestType, RoomType, Tex, W, ZoneFaction } from '../src/core/types';
 import {
+  FALSE_SAFE_BLOCK_ROOM_PREFIX,
   FLOOR_ANOMALIES,
   FLOOR_GEOMETRIES,
   FLOOR_RUN_MAX_Z,
@@ -19,6 +20,7 @@ import {
 import { DESIGN_FLOOR_ROUTES } from '../src/data/design_floors';
 import { designFloorPopulationProfile } from '../src/data/design_floor_population';
 import { ACTIVE_ACTOR_SOFT_LIMIT, ENTITY_SOFT_LIMITS } from '../src/data/entity_limits';
+import { HUMAN_TERRITORY_OWNERS, territoryOwnerToFaction } from '../src/data/factions';
 import { getMonsterEcology } from '../src/data/monster_ecology';
 import { SIDE_QUESTS } from '../src/data/plot';
 import { PROCEDURAL_POPULATION_PROFILES, proceduralPopulationBudget } from '../src/data/population_profiles';
@@ -61,6 +63,7 @@ import { getProceduralSmogStatus, updateProceduralAnomalies } from '../src/syste
 import { updateLivingTunnelsAnomaly } from '../src/systems/procedural_anomalies/living_tunnels';
 import { tryZombieApocalypseInfection } from '../src/systems/procedural_anomalies/zombie_apocalypse';
 import { getRecentEvents } from '../src/systems/events';
+import { countTerritoryCells, territoryHqAnchors, territoryOwnerAtIndex } from '../src/systems/territory';
 import { questTargetLiftDirection } from '../src/systems/contracts';
 import { getObjectiveRouteHud, getRouteCueMarkers, routeCueCount, routeObjectiveLiftPromptSuffix } from '../src/systems/route_cues';
 import { getEmergencyPanels } from '../src/systems/emergency_panels';
@@ -170,6 +173,15 @@ function countReachableCells(reachable: Uint8Array): number {
   let count = 0;
   for (const value of reachable) count += value;
   return count;
+}
+
+function territoryCellCount(world: World, owner: ZoneFaction): number {
+  return countTerritoryCells(world).find(row => row.owner === owner)?.cells ?? 0;
+}
+
+function assertTerritoryShare(world: World, owner: ZoneFaction, min: number, max: number): void {
+  const share = territoryCellCount(world, owner) / (W * W);
+  assert.equal(share >= min && share <= max, true, `${ZoneFaction[owner]} share ${share.toFixed(3)} expected ${min}..${max}`);
 }
 
 function reachableBucketCount(world: World, reachable: Uint8Array, bucketSize: number): number {
@@ -341,6 +353,13 @@ function assertAuditReachable(world: World, audit: ReachabilityAudit, idx: numbe
 function roomHasReachableCell(world: World, audit: ReachabilityAudit, room: { id: number }): boolean {
   for (let i = 0; i < world.cells.length; i++) {
     if (world.roomMap[i] === room.id && audit.reachable[i]) return true;
+  }
+  return false;
+}
+
+function roomHasMaskCell(world: World, mask: Uint8Array, room: { id: number }): boolean {
+  for (let i = 0; i < world.cells.length; i++) {
+    if (world.roomMap[i] === room.id && mask[i]) return true;
   }
   return false;
 }
@@ -1142,6 +1161,304 @@ testGenerationMatrix('archive warrens geometry builds a fair document maze with 
   }
 });
 
+testGenerationMatrix('genfix 018 archive warrens citizens floor has registry microstructure and target territory', () => {
+  const spec = makeProceduralFloorSpec(61_061, 33);
+  assert.equal(spec.geometryId, 'archive_warrens');
+  assert.equal(spec.majorityId, 'citizens');
+  assert.equal(spec.anomalyId, 'none');
+  assert.equal(spec.danger, 2);
+
+  const gen = timedProceduralSpec(spec, 'genfix 018 archive_warrens citizens seed=61061');
+  const audit = reachabilityAudit(gen);
+  const reachable = countReachableCells(audit.reachable);
+  const archiveMicroRooms = gen.world.rooms.filter(room =>
+    room.name.startsWith('Архивная ячейка') ||
+    room.name.startsWith('Архивная будка') ||
+    room.name.startsWith('Боковой регистр'));
+  const hqRooms = gen.world.rooms.filter(room => room.type === RoomType.HQ);
+  const hqSupportRooms = gen.world.rooms.filter(room => room.name.startsWith('Архивная опора'));
+  const hqOwners = new Set(hqRooms.map(room => territoryOwnerAtIndex(gen.world, gen.world.idx(room.x + (room.w >> 1), room.y + (room.h >> 1)))));
+  const anchors = territoryHqAnchors(gen.world);
+  const counts = new Map(countTerritoryCells(gen.world).map(row => [row.owner, row.cells]));
+  const share = (owner: ZoneFaction): number => (counts.get(owner) ?? 0) / (W * W);
+  const dominant = [...counts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0];
+
+  assert.equal(gen.world.rooms.length >= 1200, true, `rooms ${gen.world.rooms.length}`);
+  assert.equal(gen.world.doors.size >= 1800, true, `doors ${gen.world.doors.size}`);
+  assert.equal(reachable >= 110_000, true, `reachable ${reachable}`);
+  assert.equal(archiveMicroRooms.length >= 900, true, `archive micro rooms ${archiveMicroRooms.length}`);
+  assert.equal(hqRooms.length >= 7, true, `archive HQ rooms ${hqRooms.length}`);
+  assert.equal(hqSupportRooms.length >= 15, true, `archive HQ support rooms ${hqSupportRooms.length}`);
+  assert.equal(hasReachableLift(gen, audit, LiftDirection.UP), true);
+  assert.equal(hasReachableLift(gen, audit, LiftDirection.DOWN), true);
+
+  for (const owner of HUMAN_TERRITORY_OWNERS) {
+    assert.equal(anchors.some(anchor => anchor.owner === owner), true, `missing HQ anchor ${owner}`);
+    assert.equal(hqOwners.has(owner), true, `missing HQ room owner ${owner}`);
+    assert.equal((counts.get(owner) ?? 0) > 0, true, `missing territory cells ${owner}`);
+  }
+  assert.equal(dominant, ZoneFaction.CITIZEN);
+  assert.equal(share(ZoneFaction.CITIZEN) >= 0.54 && share(ZoneFaction.CITIZEN) <= 0.58, true, `citizen share ${share(ZoneFaction.CITIZEN)}`);
+  assert.equal(share(ZoneFaction.LIQUIDATOR) >= 0.15 && share(ZoneFaction.LIQUIDATOR) <= 0.19, true, `liquidator share ${share(ZoneFaction.LIQUIDATOR)}`);
+  assert.equal(share(ZoneFaction.CULTIST) >= 0.05 && share(ZoneFaction.CULTIST) <= 0.09, true, `cultist share ${share(ZoneFaction.CULTIST)}`);
+  assert.equal(share(ZoneFaction.SCIENTIST) >= 0.06 && share(ZoneFaction.SCIENTIST) <= 0.10, true, `scientist share ${share(ZoneFaction.SCIENTIST)}`);
+  assert.equal(share(ZoneFaction.WILD) >= 0.10 && share(ZoneFaction.WILD) <= 0.14, true, `wild share ${share(ZoneFaction.WILD)}`);
+});
+
+testGenerationMatrix('genfix 022 procedural archive warrens z29 citizens floor has dense micro rooms and cell territory', () => {
+  const spec = makeProceduralFloorSpec(61_061, 29);
+  assert.equal(spec.z, 29);
+  assert.equal(spec.geometryId, 'archive_warrens');
+  assert.equal(spec.majorityId, 'citizens');
+  assert.equal(spec.anomalyId, 'none');
+  assert.equal(spec.danger, 2);
+
+  const gen = timedProceduralSpec(spec, 'genfix 022 archive_warrens citizens seed=61061');
+  const audit = reachabilityAudit(gen);
+  const reachable = countReachableCells(audit.reachable);
+  const archiveMicroRooms = gen.world.rooms.filter(room =>
+    room.name.startsWith('Архивная ячейка') ||
+    room.name.startsWith('Архивная будка') ||
+    room.name.startsWith('Боковой регистр'));
+  const hqRooms = gen.world.rooms.filter(room => room.type === RoomType.HQ);
+  const hqSupportRooms = gen.world.rooms.filter(room => room.name.startsWith('Архивная опора'));
+  const hqOwners = new Set(hqRooms.map(room => territoryOwnerAtIndex(gen.world, gen.world.idx(room.x + (room.w >> 1), room.y + (room.h >> 1)))));
+  const anchors = territoryHqAnchors(gen.world);
+  const counts = new Map(countTerritoryCells(gen.world).map(row => [row.owner, row.cells]));
+  const totalCells = [...counts.values()].reduce((sum, count) => sum + count, 0);
+  const share = (owner: ZoneFaction): number => (counts.get(owner) ?? 0) / totalCells;
+  const dominant = [...counts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0];
+  const npcs = gen.entities.filter(entity => entity.type === EntityType.NPC);
+  const ownTerritoryNpcs = npcs.filter(entity => {
+    if (entity.faction === undefined) return false;
+    const owner = territoryOwnerAtIndex(gen.world, gen.world.idx(Math.floor(entity.x), Math.floor(entity.y)));
+    return territoryOwnerToFaction(owner) === entity.faction;
+  });
+
+  assert.equal(gen.world.rooms.length >= 1500, true, `rooms ${gen.world.rooms.length}`);
+  assert.equal(gen.world.doors.size >= 2400, true, `doors ${gen.world.doors.size}`);
+  assert.equal(reachable >= 130_000, true, `reachable ${reachable}`);
+  assert.equal(archiveMicroRooms.length >= 1300, true, `archive micro rooms ${archiveMicroRooms.length}`);
+  assert.equal(hqRooms.length >= 7, true, `archive HQ rooms ${hqRooms.length}`);
+  assert.equal(hqRooms.every(room => room.sealed), true, 'archive HQ rooms should be sealed shelter cores');
+  assert.equal(hqSupportRooms.length >= 15, true, `archive HQ support rooms ${hqSupportRooms.length}`);
+  assert.equal(hasReachableLift(gen, audit, LiftDirection.UP), true);
+  assert.equal(hasReachableLift(gen, audit, LiftDirection.DOWN), true);
+
+  for (const owner of HUMAN_TERRITORY_OWNERS) {
+    assert.equal(anchors.some(anchor => anchor.owner === owner), true, `missing HQ anchor ${owner}`);
+    assert.equal(hqOwners.has(owner), true, `missing HQ room owner ${owner}`);
+    assert.equal((counts.get(owner) ?? 0) > 0, true, `missing territory cells ${owner}`);
+  }
+  assert.equal(dominant, ZoneFaction.CITIZEN);
+  assert.equal(share(ZoneFaction.CITIZEN) >= 0.54 && share(ZoneFaction.CITIZEN) <= 0.58, true, `citizen share ${share(ZoneFaction.CITIZEN)}`);
+  assert.equal(share(ZoneFaction.LIQUIDATOR) >= 0.15 && share(ZoneFaction.LIQUIDATOR) <= 0.19, true, `liquidator share ${share(ZoneFaction.LIQUIDATOR)}`);
+  assert.equal(share(ZoneFaction.CULTIST) >= 0.05 && share(ZoneFaction.CULTIST) <= 0.09, true, `cultist share ${share(ZoneFaction.CULTIST)}`);
+  assert.equal(share(ZoneFaction.SCIENTIST) >= 0.06 && share(ZoneFaction.SCIENTIST) <= 0.10, true, `scientist share ${share(ZoneFaction.SCIENTIST)}`);
+  assert.equal(share(ZoneFaction.WILD) >= 0.10 && share(ZoneFaction.WILD) <= 0.14, true, `wild share ${share(ZoneFaction.WILD)}`);
+  assert.equal(npcs.length === 0 || ownTerritoryNpcs.length / npcs.length >= 0.7, true, `own territory NPC share ${npcs.length ? ownTerritoryNpcs.length / npcs.length : 1}`);
+});
+
+testGenerationMatrix('genfix 024 procedural archive smog citizens floor keeps macro, micro rooms and target territory', () => {
+  const spec = makeProceduralFloorSpec(61_061, 27);
+  assert.equal(spec.z, 27);
+  assert.equal(spec.geometryId, 'archive_warrens');
+  assert.equal(spec.majorityId, 'citizens');
+  assert.equal(spec.anomalyId, 'smog');
+  assert.equal(spec.danger, 3);
+
+  const gen = timedProceduralSpec(spec, 'genfix 024 archive_warrens smog citizens seed=61061');
+  const audit = reachabilityAudit(gen);
+  const reachable = countReachableCells(audit.reachable);
+  const archiveMicroRooms = gen.world.rooms.filter(room =>
+    room.name.startsWith('Архивная ячейка') ||
+    room.name.startsWith('Архивная будка') ||
+    room.name.startsWith('Боковой регистр'));
+  const hqRooms = gen.world.rooms.filter(room => room.type === RoomType.HQ);
+  const hqSupportRooms = gen.world.rooms.filter(room => room.name.startsWith('Архивная опора'));
+  const hqOwners = new Set(hqRooms.map(room => territoryOwnerAtIndex(gen.world, gen.world.idx(room.x + (room.w >> 1), room.y + (room.h >> 1)))));
+  const anchors = territoryHqAnchors(gen.world);
+  const counts = new Map(countTerritoryCells(gen.world).map(row => [row.owner, row.cells]));
+  const totalCells = [...counts.values()].reduce((sum, count) => sum + count, 0);
+  const share = (owner: ZoneFaction): number => (counts.get(owner) ?? 0) / totalCells;
+  const dominant = [...counts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0];
+  const npcs = gen.entities.filter(entity => entity.type === EntityType.NPC);
+  const ownTerritoryNpcs = npcs.filter(entity => {
+    if (entity.faction === undefined) return false;
+    const owner = territoryOwnerAtIndex(gen.world, gen.world.idx(Math.floor(entity.x), Math.floor(entity.y)));
+    return territoryOwnerToFaction(owner) === entity.faction;
+  });
+
+  assert.equal(gen.world.rooms.length >= 1500, true, `rooms ${gen.world.rooms.length}`);
+  assert.equal(gen.world.doors.size >= 2400, true, `doors ${gen.world.doors.size}`);
+  assert.equal(reachable >= 125_000, true, `reachable ${reachable}`);
+  assert.equal(archiveMicroRooms.length >= 1300, true, `archive micro rooms ${archiveMicroRooms.length}`);
+  assert.equal((gen.world.anomalySmogCells?.length ?? 0) >= 400, true, `smog cells ${gen.world.anomalySmogCells?.length ?? 0}`);
+  assert.equal(hqRooms.length >= 7, true, `archive HQ rooms ${hqRooms.length}`);
+  assert.equal(hqRooms.every(room => room.sealed), true, 'archive HQ rooms should be sealed shelter cores');
+  assert.equal(hqSupportRooms.length >= 15, true, `archive HQ support rooms ${hqSupportRooms.length}`);
+  assert.equal(hasReachableLift(gen, audit, LiftDirection.UP), true);
+  assert.equal(hasReachableLift(gen, audit, LiftDirection.DOWN), true);
+
+  for (const owner of HUMAN_TERRITORY_OWNERS) {
+    assert.equal(anchors.some(anchor => anchor.owner === owner), true, `missing HQ anchor ${owner}`);
+    assert.equal(hqOwners.has(owner), true, `missing HQ room owner ${owner}`);
+    assert.equal((counts.get(owner) ?? 0) > 0, true, `missing territory cells ${owner}`);
+  }
+  assert.equal(dominant, ZoneFaction.CITIZEN);
+  assert.equal(share(ZoneFaction.CITIZEN) >= 0.54 && share(ZoneFaction.CITIZEN) <= 0.58, true, `citizen share ${share(ZoneFaction.CITIZEN)}`);
+  assert.equal(share(ZoneFaction.LIQUIDATOR) >= 0.15 && share(ZoneFaction.LIQUIDATOR) <= 0.19, true, `liquidator share ${share(ZoneFaction.LIQUIDATOR)}`);
+  assert.equal(share(ZoneFaction.CULTIST) >= 0.05 && share(ZoneFaction.CULTIST) <= 0.09, true, `cultist share ${share(ZoneFaction.CULTIST)}`);
+  assert.equal(share(ZoneFaction.SCIENTIST) >= 0.06 && share(ZoneFaction.SCIENTIST) <= 0.10, true, `scientist share ${share(ZoneFaction.SCIENTIST)}`);
+  assert.equal(share(ZoneFaction.WILD) >= 0.10 && share(ZoneFaction.WILD) <= 0.14, true, `wild share ${share(ZoneFaction.WILD)}`);
+  assert.equal(npcs.length === 0 || ownTerritoryNpcs.length / npcs.length >= 0.7, true, `own territory NPC share ${npcs.length ? ownTerritoryNpcs.length / npcs.length : 1}`);
+});
+
+testGenerationMatrix('genfix 026 procedural archive false-safe citizen floor has cult foothold and target territory', () => {
+  const spec = makeProceduralFloorSpec(61_061, 25);
+  assert.equal(spec.z, 25);
+  assert.equal(spec.geometryId, 'archive_warrens');
+  assert.equal(spec.majorityId, 'citizens');
+  assert.equal(spec.anomalyId, 'false_safe_block');
+  assert.equal(spec.danger, 3);
+
+  const gen = timedProceduralSpec(spec, 'genfix 026 procedural archive false-safe citizens seed=61061 z25');
+  const audit = reachabilityAudit(gen);
+  const reachable = countReachableCells(audit.reachable);
+  const archiveMicroRooms = gen.world.rooms.filter(room =>
+    room.name.startsWith('Архивная ячейка') ||
+    room.name.startsWith('Архивная будка') ||
+    room.name.startsWith('Боковой регистр'));
+  const hqRooms = gen.world.rooms.filter(room => room.type === RoomType.HQ);
+  const hqSupportRooms = gen.world.rooms.filter(room => room.name.startsWith('Архивная опора'));
+  const hqOwners = new Set(hqRooms.map(room => territoryOwnerAtIndex(gen.world, gen.world.idx(room.x + (room.w >> 1), room.y + (room.h >> 1)))));
+  const falseSafeRooms = gen.world.rooms.filter(room => room.name.startsWith(FALSE_SAFE_BLOCK_ROOM_PREFIX));
+  const anchors = territoryHqAnchors(gen.world);
+  const counts = new Map(countTerritoryCells(gen.world).map(row => [row.owner, row.cells]));
+  const totalCells = [...counts.values()].reduce((sum, count) => sum + count, 0);
+  const share = (owner: ZoneFaction): number => (counts.get(owner) ?? 0) / totalCells;
+  const dominant = [...counts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0];
+  const npcs = gen.entities.filter(entity => entity.type === EntityType.NPC);
+  const ownTerritoryNpcs = npcs.filter(entity => {
+    if (entity.faction === undefined) return false;
+    const owner = territoryOwnerAtIndex(gen.world, gen.world.idx(Math.floor(entity.x), Math.floor(entity.y)));
+    return territoryOwnerToFaction(owner) === entity.faction;
+  });
+
+  assert.equal(gen.world.rooms.length >= 1500, true, `rooms ${gen.world.rooms.length}`);
+  assert.equal(gen.world.doors.size >= 2400, true, `doors ${gen.world.doors.size}`);
+  assert.equal(reachable >= 125_000, true, `reachable ${reachable}`);
+  assert.equal(archiveMicroRooms.length >= 1200, true, `archive micro rooms ${archiveMicroRooms.length}`);
+  assert.equal(hqRooms.length >= 7, true, `archive HQ rooms ${hqRooms.length}`);
+  assert.equal(hqRooms.every(room => room.sealed), true, 'archive HQ rooms should be sealed shelter cores');
+  assert.equal(hqSupportRooms.length >= 15, true, `archive HQ support rooms ${hqSupportRooms.length}`);
+  assert.equal(falseSafeRooms.length >= 4, true, `false-safe rooms ${falseSafeRooms.length}`);
+  assert.equal(hasReachableLift(gen, audit, LiftDirection.UP), true);
+  assert.equal(hasReachableLift(gen, audit, LiftDirection.DOWN), true);
+
+  for (const owner of HUMAN_TERRITORY_OWNERS) {
+    assert.equal(anchors.some(anchor => anchor.owner === owner), true, `missing HQ anchor ${owner}`);
+    assert.equal(hqOwners.has(owner), true, `missing HQ room owner ${owner}`);
+    assert.equal((counts.get(owner) ?? 0) > 0, true, `missing territory cells ${owner}`);
+  }
+  for (const room of falseSafeRooms) {
+    const centerOwner = territoryOwnerAtIndex(gen.world, gen.world.idx(room.x + (room.w >> 1), room.y + (room.h >> 1)));
+    assert.equal(centerOwner, ZoneFaction.CULTIST, `${room.name} should be cult territory`);
+  }
+  assert.equal(dominant, ZoneFaction.CITIZEN);
+  assert.equal(share(ZoneFaction.CITIZEN) >= 0.52 && share(ZoneFaction.CITIZEN) <= 0.55, true, `citizen share ${share(ZoneFaction.CITIZEN)}`);
+  assert.equal(share(ZoneFaction.LIQUIDATOR) >= 0.15 && share(ZoneFaction.LIQUIDATOR) <= 0.17, true, `liquidator share ${share(ZoneFaction.LIQUIDATOR)}`);
+  assert.equal(share(ZoneFaction.CULTIST) >= 0.11 && share(ZoneFaction.CULTIST) <= 0.13, true, `cultist share ${share(ZoneFaction.CULTIST)}`);
+  assert.equal(share(ZoneFaction.SCIENTIST) >= 0.07 && share(ZoneFaction.SCIENTIST) <= 0.09, true, `scientist share ${share(ZoneFaction.SCIENTIST)}`);
+  assert.equal(share(ZoneFaction.WILD) >= 0.10 && share(ZoneFaction.WILD) <= 0.12, true, `wild share ${share(ZoneFaction.WILD)}`);
+  assert.equal(npcs.length === 0 || ownTerritoryNpcs.length / npcs.length >= 0.7, true, `own territory NPC share ${npcs.length ? ownTerritoryNpcs.length / npcs.length : 1}`);
+});
+
+testGenerationMatrix('genfix 034 procedural apartment samosbor route has dense blocks and cell territory anchors', () => {
+  const spec = makeProceduralFloorSpec(61_061, 17);
+  assert.equal(spec.z, 17);
+  assert.equal(spec.geometryId, 'apartment_pressure');
+  assert.equal(spec.majorityId, 'citizens');
+  assert.equal(spec.anomalyId, 'samosbor_seed');
+  assert.equal(spec.danger, 4);
+
+  const gen = timedProceduralSpec(spec, 'genfix 034 apartment_pressure samosbor citizens seed=61061 z17');
+  const audit = reachabilityAudit(gen);
+  const reachable = countReachableCells(audit.reachable);
+  const anchors = territoryHqAnchors(gen.world);
+  const anchorOwners = new Set(anchors.map(anchor => anchor.owner));
+
+  assert.equal(gen.world.rooms.length >= 900, true, `rooms ${gen.world.rooms.length}`);
+  assert.equal(gen.world.doors.size >= 900, true, `doors ${gen.world.doors.size}`);
+  assert.equal(reachable >= 125_000, true, `reachable ${reachable}`);
+  assert.equal(hasReachableLift(gen, audit, LiftDirection.UP), true);
+  assert.equal(hasReachableLift(gen, audit, LiftDirection.DOWN), true);
+
+  for (const owner of HUMAN_TERRITORY_OWNERS) {
+    assert.equal(anchorOwners.has(owner), true, `missing HQ anchor ${owner}`);
+    assert.equal(territoryCellCount(gen.world, owner) > 0, true, `missing territory cells ${owner}`);
+  }
+
+  assertTerritoryShare(gen.world, ZoneFaction.CITIZEN, 0.47, 0.56);
+  assertTerritoryShare(gen.world, ZoneFaction.LIQUIDATOR, 0.12, 0.18);
+  assertTerritoryShare(gen.world, ZoneFaction.CULTIST, 0.04, 0.09);
+  assertTerritoryShare(gen.world, ZoneFaction.SCIENTIST, 0.05, 0.10);
+  assertTerritoryShare(gen.world, ZoneFaction.WILD, 0.08, 0.14);
+  assertTerritoryShare(gen.world, ZoneFaction.SAMOSBOR, 0.08, 0.13);
+});
+
+testGenerationMatrix('genfix 046 procedural apartment cement-memory citizens floor has courts and target territory', () => {
+  const spec = makeProceduralFloorSpec(61_061, 5);
+  assert.equal(spec.z, 5);
+  assert.equal(spec.geometryId, 'apartment_pressure');
+  assert.equal(spec.majorityId, 'citizens');
+  assert.equal(spec.anomalyId, 'cement_memory');
+  assert.equal(spec.danger, 3);
+
+  const gen = timedProceduralSpec(spec, 'genfix 046 apartment_pressure cement_memory citizens seed=61061 z5');
+  const audit = reachabilityAudit(gen);
+  const reachable = countReachableCells(audit.reachable);
+  const anchors = territoryHqAnchors(gen.world);
+  const anchorOwners = new Set(anchors.map(anchor => anchor.owner));
+  const memoryCourtRooms = gen.world.rooms.filter(room => room.name.startsWith('Цементный двор памяти'));
+  let reachableMemoryCourtRooms = 0;
+  for (const room of memoryCourtRooms) {
+    let roomReachable = false;
+    for (let dy = 0; dy < room.h && !roomReachable; dy++) {
+      for (let dx = 0; dx < room.w && !roomReachable; dx++) {
+        const ci = gen.world.idx(room.x + dx, room.y + dy);
+        if (gen.world.roomMap[ci] === room.id && audit.reachable[ci]) roomReachable = true;
+      }
+    }
+    if (roomReachable) reachableMemoryCourtRooms++;
+  }
+  const npcs = gen.entities.filter(entity => entity.type === EntityType.NPC);
+  const ownTerritoryNpcs = npcs.filter(entity => {
+    const owner = territoryOwnerAtIndex(gen.world, gen.world.idx(Math.floor(entity.x), Math.floor(entity.y)));
+    return territoryOwnerToFaction(owner) === entity.faction;
+  });
+
+  assert.equal(gen.world.rooms.length >= 3_000, true, `rooms ${gen.world.rooms.length}`);
+  assert.equal(gen.world.doors.size >= 4_300, true, `doors ${gen.world.doors.size}`);
+  assert.equal(reachable >= 255_000, true, `reachable ${reachable}`);
+  assert.equal(memoryCourtRooms.length >= 240, true, `cement-memory rooms ${memoryCourtRooms.length}`);
+  assert.equal(reachableMemoryCourtRooms, memoryCourtRooms.length, `reachable cement-memory rooms ${reachableMemoryCourtRooms}/${memoryCourtRooms.length}`);
+  assert.equal(hasReachableLift(gen, audit, LiftDirection.UP), true);
+  assert.equal(hasReachableLift(gen, audit, LiftDirection.DOWN), true);
+
+  for (const owner of HUMAN_TERRITORY_OWNERS) {
+    assert.equal(anchorOwners.has(owner), true, `missing HQ anchor ${owner}`);
+    assert.equal(territoryCellCount(gen.world, owner) > 0, true, `missing territory cells ${owner}`);
+  }
+
+  assertTerritoryShare(gen.world, ZoneFaction.CITIZEN, 0.54, 0.58);
+  assertTerritoryShare(gen.world, ZoneFaction.LIQUIDATOR, 0.15, 0.19);
+  assertTerritoryShare(gen.world, ZoneFaction.CULTIST, 0.055, 0.085);
+  assertTerritoryShare(gen.world, ZoneFaction.SCIENTIST, 0.065, 0.095);
+  assertTerritoryShare(gen.world, ZoneFaction.WILD, 0.105, 0.135);
+  assert.equal(npcs.length === 0 || ownTerritoryNpcs.length / npcs.length >= 0.78, true, `own territory NPC share ${npcs.length ? ownTerritoryNpcs.length / npcs.length : 1}`);
+});
+
 testGenerationMatrix('collector geometry records wet basins, dry causeways and valve route choices', () => {
   const def = FLOOR_GEOMETRIES.find(item => item.id === 'collectors');
   assert.equal(def?.tags.includes('water'), true);
@@ -1248,6 +1565,297 @@ testGenerationMatrix('sandpile perekrytie anomaly seeds a cracked arena with saf
   );
 });
 
+testGenerationMatrix('genfix 062 collector zombie apocalypse floor has residential scale and target territory', () => {
+  const spec = makeProceduralFloorSpec(61_061, -11);
+  assert.equal(spec.geometryId, 'collectors');
+  assert.equal(spec.majorityId, 'wild');
+  assert.equal(spec.anomalyId, 'zombie_apocalypse');
+  assert.equal(spec.danger, 4);
+
+  const gen = timedProceduralSpec(spec, 'genfix_062 collectors zombie wild seed=61061 z-11');
+  const audit = reachabilityAudit(gen);
+  const reachable = countReachableCells(audit.reachable);
+  const infectedResidentialRooms = gen.world.rooms.filter(room => room.name.startsWith('Зараженный жилблок'));
+  const reachableResidentialRooms = infectedResidentialRooms.filter(room => roomHasReachableCell(gen.world, audit, room));
+  const stationRooms = gen.world.rooms.filter(room =>
+    room.name.startsWith('Насосная станция коллектора') ||
+    room.name.startsWith('Кладовая вентилей коллектора') ||
+    room.name.startsWith('Смотровая будка коллектора') ||
+    room.name.startsWith('Санузел смены коллектора') ||
+    room.name.startsWith('Сухая бытовка коллектора'));
+  const reachableStationRooms = stationRooms.filter(room => roomHasReachableCell(gen.world, audit, room));
+  const microStationRooms = stationRooms.filter(room => room.w * room.h <= 90);
+  const routeCues = getRouteCueMarkers(gen.world).filter(marker =>
+    marker.tags.includes('collectors') &&
+    marker.tags.includes('zombie_apocalypse') &&
+    marker.tags.includes('residential_infill'));
+  const anchors = territoryHqAnchors(gen.world);
+  const hqOwners = new Set(anchors.map(anchor => anchor.owner));
+  const hqRooms = anchors
+    .map(anchor => gen.world.rooms[anchor.roomId])
+    .filter(room => room?.type === RoomType.HQ);
+  const supportRooms = gen.world.rooms.filter(room => room.name.includes('штаба') && room.type !== RoomType.HQ);
+  const counts = new Map(countTerritoryCells(gen.world).map(row => [row.owner, row.cells]));
+  const dominant = [...counts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0];
+  const npcs = gen.entities.filter(entity => entity.type === EntityType.NPC);
+  const ownTerritoryNpcs = npcs.filter(entity => {
+    const ci = gen.world.idx(Math.floor(entity.x), Math.floor(entity.y));
+    return territoryOwnerToFaction(territoryOwnerAtIndex(gen.world, ci)) === entity.faction;
+  });
+
+  assertFullFootprint(gen.world, 'genfix_062 collectors zombie apocalypse');
+  assert.equal(hasReachableLift(gen, audit, LiftDirection.UP), true);
+  assert.equal(hasReachableLift(gen, audit, LiftDirection.DOWN), true);
+  assert.equal(reachableBucketCount(gen.world, audit.reachable, 128) >= 63, true);
+  assert.equal(gen.world.rooms.length >= 1_900, true, `rooms ${gen.world.rooms.length}`);
+  assert.equal(gen.world.doors.size >= 2_800, true, `doors ${gen.world.doors.size}`);
+  assert.equal(reachable >= 300_000, true, `reachable ${reachable}`);
+  assert.equal(infectedResidentialRooms.length >= 1_600, true, `infected residential rooms ${infectedResidentialRooms.length}`);
+  assert.equal(reachableResidentialRooms.length >= 1_500, true, `reachable infected residential rooms ${reachableResidentialRooms.length}`);
+  assert.equal(stationRooms.length >= 130, true, `collector station rooms ${stationRooms.length}`);
+  assert.equal(reachableStationRooms.length >= 120, true, `reachable collector station rooms ${reachableStationRooms.length}`);
+  assert.equal(microStationRooms.length >= 120, true, `collector micro rooms ${microStationRooms.length}`);
+  assert.equal(routeCues.length >= 1, true, 'collector zombie residential route cue');
+
+  for (const owner of HUMAN_TERRITORY_OWNERS) {
+    assert.equal(hqOwners.has(owner), true, `missing HQ owner ${ZoneFaction[owner]}`);
+    assert.equal((counts.get(owner) ?? 0) > 0, true, `empty territory ${ZoneFaction[owner]}`);
+    const anchor = anchors.find(item => item.owner === owner);
+    const room = anchor ? gen.world.rooms[anchor.roomId] : undefined;
+    assert.equal(room?.type, RoomType.HQ, `HQ room type ${ZoneFaction[owner]}`);
+    assert.equal(room?.sealed, true, `HQ sealed ${ZoneFaction[owner]}`);
+  }
+  assert.equal(hqRooms.length >= HUMAN_TERRITORY_OWNERS.length, true, `HQ rooms ${hqRooms.length}`);
+  assert.equal(supportRooms.length >= 15, true, `HQ support rooms ${supportRooms.length}`);
+  assert.equal(dominant, ZoneFaction.WILD);
+  assertTerritoryShare(gen.world, ZoneFaction.CITIZEN, 0.24, 0.26);
+  assertTerritoryShare(gen.world, ZoneFaction.LIQUIDATOR, 0.11, 0.13);
+  assertTerritoryShare(gen.world, ZoneFaction.CULTIST, 0.11, 0.13);
+  assertTerritoryShare(gen.world, ZoneFaction.SCIENTIST, 0.08, 0.10);
+  assertTerritoryShare(gen.world, ZoneFaction.WILD, 0.41, 0.43);
+  assert.equal(npcs.length === 0 || ownTerritoryNpcs.length / npcs.length >= 0.75, true, `own territory NPC share ${npcs.length ? ownTerritoryNpcs.length / npcs.length : 1}`);
+});
+
+testGenerationMatrix('genfix 072 sandpile collectors liquidator floor has station scale and target territory', () => {
+  const spec = makeProceduralFloorSpec(61_061, -21);
+  assert.equal(spec.geometryId, 'collectors');
+  assert.equal(spec.majorityId, 'liquidators');
+  assert.equal(spec.anomalyId, 'sandpile_perekrytie');
+  assert.equal(spec.danger, 4);
+
+  const gen = timedProceduralSpec(spec, 'genfix_072 collectors sandpile liquidators seed=61061 z-21');
+  const audit = reachabilityAudit(gen);
+  const reachable = countReachableCells(audit.reachable);
+  const stationRooms = gen.world.rooms.filter(room =>
+    room.name.startsWith('Насосная станция коллектора') ||
+    room.name.startsWith('Кладовая вентилей коллектора') ||
+    room.name.startsWith('Смотровая будка коллектора') ||
+    room.name.startsWith('Санузел смены коллектора') ||
+    room.name.startsWith('Сухая бытовка коллектора'));
+  const reachableStationRooms = stationRooms.filter(room => roomHasReachableCell(gen.world, audit, room));
+  const microRooms = stationRooms.filter(room => room.w * room.h <= 90);
+  const sandpileRooms = gen.world.rooms.filter(room => room.name.includes('[sandpile_perekrytie:'));
+  const metrics = measureCollectorDecisionMetrics(gen);
+  const anchors = territoryHqAnchors(gen.world);
+  const hqOwners = new Set(anchors.map(anchor => anchor.owner));
+  const hqRooms = anchors
+    .map(anchor => gen.world.rooms[anchor.roomId])
+    .filter(room => room?.type === RoomType.HQ);
+  const supportRooms = gen.world.rooms.filter(room => room.name.includes('штаба') && room.type !== RoomType.HQ);
+  const counts = new Map(countTerritoryCells(gen.world).map(row => [row.owner, row.cells]));
+  const dominant = [...counts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0];
+  const npcs = gen.entities.filter(entity => entity.type === EntityType.NPC);
+  const ownTerritoryNpcs = npcs.filter(entity => {
+    const ci = gen.world.idx(Math.floor(entity.x), Math.floor(entity.y));
+    return territoryOwnerToFaction(territoryOwnerAtIndex(gen.world, ci)) === entity.faction;
+  });
+
+  assertFullFootprint(gen.world, 'genfix_072 collectors sandpile');
+  assert.equal(hasReachableLift(gen, audit, LiftDirection.UP), true);
+  assert.equal(hasReachableLift(gen, audit, LiftDirection.DOWN), true);
+  assert.equal(reachableBucketCount(gen.world, audit.reachable, 128) >= 63, true);
+  assert.equal(gen.world.rooms.length >= 320, true, `rooms ${gen.world.rooms.length}`);
+  assert.equal(gen.world.doors.size >= 730, true, `doors ${gen.world.doors.size}`);
+  assert.equal(reachable >= 225_000, true, `reachable ${reachable}`);
+  assert.equal(stationRooms.length >= 200, true, `collector station rooms ${stationRooms.length}`);
+  assert.equal(reachableStationRooms.length >= 200, true, `reachable collector station rooms ${reachableStationRooms.length}`);
+  assert.equal(microRooms.length >= 200, true, `collector micro rooms ${microRooms.length}`);
+  assert.equal(sandpileRooms.length >= 1, true, `sandpile rooms ${sandpileRooms.length}`);
+  assert.equal(metrics.wetBasinCells >= 120_000, true, `wet basin cells ${metrics.wetBasinCells}`);
+  assert.equal(metrics.dryCausewayCells >= 9_000, true, `dry causeway cells ${metrics.dryCausewayCells}`);
+  assert.equal(metrics.valveRoomCount >= 3, true, `valve rooms ${metrics.valveRoomCount}`);
+  assert.equal(metrics.dryReachableUpLifts >= 1, true, `dry up lifts ${metrics.dryReachableUpLifts}`);
+  assert.equal(metrics.dryReachableDownLifts >= 1, true, `dry down lifts ${metrics.dryReachableDownLifts}`);
+
+  for (const owner of HUMAN_TERRITORY_OWNERS) {
+    assert.equal(hqOwners.has(owner), true, `missing HQ owner ${ZoneFaction[owner]}`);
+    assert.equal((counts.get(owner) ?? 0) > 0, true, `empty territory ${ZoneFaction[owner]}`);
+    const anchor = anchors.find(item => item.owner === owner);
+    const room = anchor ? gen.world.rooms[anchor.roomId] : undefined;
+    assert.equal(room?.type, RoomType.HQ, `HQ room type ${ZoneFaction[owner]}`);
+    assert.equal(room?.sealed, true, `HQ sealed ${ZoneFaction[owner]}`);
+  }
+  assert.equal(hqRooms.length >= HUMAN_TERRITORY_OWNERS.length, true, `HQ rooms ${hqRooms.length}`);
+  assert.equal(supportRooms.length >= 15, true, `HQ support rooms ${supportRooms.length}`);
+  assert.equal(dominant, ZoneFaction.LIQUIDATOR);
+  assertTerritoryShare(gen.world, ZoneFaction.CITIZEN, 0.15, 0.19);
+  assertTerritoryShare(gen.world, ZoneFaction.LIQUIDATOR, 0.54, 0.58);
+  assertTerritoryShare(gen.world, ZoneFaction.CULTIST, 0.05, 0.09);
+  assertTerritoryShare(gen.world, ZoneFaction.SCIENTIST, 0.06, 0.10);
+  assertTerritoryShare(gen.world, ZoneFaction.WILD, 0.10, 0.14);
+  assert.equal(npcs.length === 0 || ownTerritoryNpcs.length / npcs.length >= 0.75, true, `own territory NPC share ${npcs.length ? ownTerritoryNpcs.length / npcs.length : 1}`);
+});
+
+testGenerationMatrix('genfix 090 smog collectors liquidator floor has dense stations, smog pockets and target territory', () => {
+  const spec = makeProceduralFloorSpec(61_061, -39);
+  assert.equal(spec.geometryId, 'collectors');
+  assert.equal(spec.majorityId, 'liquidators');
+  assert.equal(spec.anomalyId, 'smog');
+  assert.equal(spec.danger, 4);
+
+  const gen = timedProceduralSpec(spec, 'genfix_090 collectors smog liquidators seed=61061 z-39');
+  const audit = reachabilityAudit(gen);
+  const reachable = countReachableCells(audit.reachable);
+  const stationRooms = gen.world.rooms.filter(room =>
+    room.name.startsWith('Насосная станция коллектора') ||
+    room.name.startsWith('Кладовая вентилей коллектора') ||
+    room.name.startsWith('Смотровая будка коллектора') ||
+    room.name.startsWith('Санузел смены коллектора') ||
+    room.name.startsWith('Сухая бытовка коллектора'));
+  const reachableStationRooms = stationRooms.filter(room => roomHasReachableCell(gen.world, audit, room));
+  const microRooms = stationRooms.filter(room => room.w * room.h <= 90);
+  const metrics = measureCollectorDecisionMetrics(gen);
+  const anchors = territoryHqAnchors(gen.world);
+  const hqOwners = new Set(anchors.map(anchor => anchor.owner));
+  const hqRooms = anchors
+    .map(anchor => gen.world.rooms[anchor.roomId])
+    .filter(room => room?.type === RoomType.HQ);
+  const supportRooms = gen.world.rooms.filter(room => room.name.includes('штаба') && room.type !== RoomType.HQ);
+  const counts = new Map(countTerritoryCells(gen.world).map(row => [row.owner, row.cells]));
+  const dominant = [...counts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0];
+  const npcs = gen.entities.filter(entity => entity.type === EntityType.NPC);
+  const ownTerritoryNpcs = npcs.filter(entity => {
+    const ci = gen.world.idx(Math.floor(entity.x), Math.floor(entity.y));
+    return territoryOwnerToFaction(territoryOwnerAtIndex(gen.world, ci)) === entity.faction;
+  });
+
+  assertFullFootprint(gen.world, 'genfix_090 collectors smog');
+  assert.equal(hasReachableLift(gen, audit, LiftDirection.UP), true);
+  assert.equal(hasReachableLift(gen, audit, LiftDirection.DOWN), true);
+  assert.equal(reachableBucketCount(gen.world, audit.reachable, 128) >= 63, true);
+  assert.equal(gen.world.rooms.length >= 370, true, `rooms ${gen.world.rooms.length}`);
+  assert.equal(gen.world.doors.size >= 800, true, `doors ${gen.world.doors.size}`);
+  assert.equal(reachable >= 245_000, true, `reachable ${reachable}`);
+  assert.equal(stationRooms.length >= 260, true, `collector station rooms ${stationRooms.length}`);
+  assert.equal(reachableStationRooms.length >= 260, true, `reachable collector station rooms ${reachableStationRooms.length}`);
+  assert.equal(microRooms.length >= 260, true, `collector micro rooms ${microRooms.length}`);
+  assert.equal((gen.world.anomalySmogCells?.length ?? 0) >= 900, true, `smog cells ${gen.world.anomalySmogCells?.length ?? 0}`);
+  assert.equal(metrics.wetBasinCells >= 120_000, true, `wet basin cells ${metrics.wetBasinCells}`);
+  assert.equal(metrics.dryCausewayCells >= 9_000, true, `dry causeway cells ${metrics.dryCausewayCells}`);
+  assert.equal(metrics.valveRoomCount >= 3, true, `valve rooms ${metrics.valveRoomCount}`);
+  assert.equal(metrics.dryReachableUpLifts >= 1, true, `dry up lifts ${metrics.dryReachableUpLifts}`);
+  assert.equal(metrics.dryReachableDownLifts >= 1, true, `dry down lifts ${metrics.dryReachableDownLifts}`);
+  assert.equal(gen.world.containers.some(container => container.tags.includes('collector_valve')), true, 'collector valve container');
+  assert.equal(gen.world.containers.some(container => container.tags.includes('liquidator_checkpoint')), true, 'liquidator checkpoint container');
+
+  for (const owner of HUMAN_TERRITORY_OWNERS) {
+    assert.equal(hqOwners.has(owner), true, `missing HQ owner ${ZoneFaction[owner]}`);
+    assert.equal((counts.get(owner) ?? 0) > 0, true, `empty territory ${ZoneFaction[owner]}`);
+    const anchor = anchors.find(item => item.owner === owner);
+    const room = anchor ? gen.world.rooms[anchor.roomId] : undefined;
+    assert.equal(room?.type, RoomType.HQ, `HQ room type ${ZoneFaction[owner]}`);
+    assert.equal(room?.sealed, true, `HQ sealed ${ZoneFaction[owner]}`);
+  }
+  assert.equal(hqRooms.length >= HUMAN_TERRITORY_OWNERS.length, true, `HQ rooms ${hqRooms.length}`);
+  assert.equal(supportRooms.length >= 15, true, `HQ support rooms ${supportRooms.length}`);
+  assert.equal(dominant, ZoneFaction.LIQUIDATOR);
+  assertTerritoryShare(gen.world, ZoneFaction.CITIZEN, 0.15, 0.19);
+  assertTerritoryShare(gen.world, ZoneFaction.LIQUIDATOR, 0.54, 0.58);
+  assertTerritoryShare(gen.world, ZoneFaction.CULTIST, 0.05, 0.09);
+  assertTerritoryShare(gen.world, ZoneFaction.SCIENTIST, 0.06, 0.10);
+  assertTerritoryShare(gen.world, ZoneFaction.WILD, 0.10, 0.14);
+  assert.equal(npcs.length === 0 || ownTerritoryNpcs.length / npcs.length >= 0.75, true, `own territory NPC share ${npcs.length ? ownTerritoryNpcs.length / npcs.length : 1}`);
+});
+
+testGenerationMatrix('genfix 088 mirror collectors citizen floor has mirrored infill and target territory', () => {
+  const spec = makeProceduralFloorSpec(61_061, -37);
+  assert.equal(spec.geometryId, 'collectors');
+  assert.equal(spec.majorityId, 'citizens');
+  assert.equal(spec.anomalyId, 'mirror_run');
+  assert.equal(spec.danger, 4);
+
+  const gen = timedProceduralSpec(spec, 'genfix_088 collectors mirror citizens seed=61061 z-37');
+  const audit = reachabilityAudit(gen);
+  const reachable = countReachableCells(audit.reachable);
+  const stationRooms = gen.world.rooms.filter(room =>
+    room.name.startsWith('Насосная станция коллектора') ||
+    room.name.startsWith('Кладовая вентилей коллектора') ||
+    room.name.startsWith('Смотровая будка коллектора') ||
+    room.name.startsWith('Санузел смены коллектора') ||
+    room.name.startsWith('Сухая бытовка коллектора'));
+  const mirrorRooms = gen.world.rooms.filter(room =>
+    room.name.startsWith('Зеркальная галерея коллектора') ||
+    room.name.startsWith('Санузел зеркальной смены') ||
+    room.name.startsWith('Кухня сухой проводки') ||
+    room.name.startsWith('Кабельная насосная зеркала') ||
+    room.name.startsWith('Будка сверки зеркала') ||
+    room.name.startsWith('Склад зеркального кабеля') ||
+    room.name.startsWith('Бытовка зеркальной проводки'));
+  const reachableMirrorRooms = mirrorRooms.filter(room => roomHasReachableCell(gen.world, audit, room));
+  const mirrorGalleryRooms = gen.world.rooms.filter(room => room.name.startsWith('Зеркальная галерея коллектора'));
+  const routeCues = getRouteCueMarkers(gen.world).filter(marker => marker.tags.includes('collector_mirror_infill'));
+  const metrics = measureCollectorDecisionMetrics(gen);
+  const anchors = territoryHqAnchors(gen.world);
+  const hqOwners = new Set(anchors.map(anchor => anchor.owner));
+  const hqRooms = anchors
+    .map(anchor => gen.world.rooms[anchor.roomId])
+    .filter(room => room?.type === RoomType.HQ);
+  const supportRooms = gen.world.rooms.filter(room => room.name.includes('штаба') && room.type !== RoomType.HQ);
+  const counts = new Map(countTerritoryCells(gen.world).map(row => [row.owner, row.cells]));
+  const dominant = [...counts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0];
+  const npcs = gen.entities.filter(entity => entity.type === EntityType.NPC);
+  const ownTerritoryNpcs = npcs.filter(entity => {
+    const ci = gen.world.idx(Math.floor(entity.x), Math.floor(entity.y));
+    return territoryOwnerToFaction(territoryOwnerAtIndex(gen.world, ci)) === entity.faction;
+  });
+
+  assertFullFootprint(gen.world, 'genfix_088 collectors mirror');
+  assert.equal(hasReachableLift(gen, audit, LiftDirection.UP), true);
+  assert.equal(hasReachableLift(gen, audit, LiftDirection.DOWN), true);
+  assert.equal(reachableBucketCount(gen.world, audit.reachable, 128) >= 63, true);
+  assert.equal(gen.world.rooms.length >= 500, true, `rooms ${gen.world.rooms.length}`);
+  assert.equal(gen.world.doors.size >= 1_200, true, `doors ${gen.world.doors.size}`);
+  assert.equal(reachable >= 250_000, true, `reachable ${reachable}`);
+  assert.equal(stationRooms.length >= 200, true, `collector station rooms ${stationRooms.length}`);
+  assert.equal(mirrorRooms.length >= 160, true, `collector mirror rooms ${mirrorRooms.length}`);
+  assert.equal(reachableMirrorRooms.length >= 160, true, `reachable mirror rooms ${reachableMirrorRooms.length}`);
+  assert.equal(mirrorGalleryRooms.length >= 20, true, `mirror galleries ${mirrorGalleryRooms.length}`);
+  assert.equal(routeCues.length >= 1, true, 'collector mirror infill route cue');
+  assert.equal(metrics.wetBasinCells >= 120_000, true, `wet basin cells ${metrics.wetBasinCells}`);
+  assert.equal(metrics.dryCausewayCells >= 9_000, true, `dry causeway cells ${metrics.dryCausewayCells}`);
+  assert.equal(metrics.valveRoomCount >= 3, true, `valve rooms ${metrics.valveRoomCount}`);
+  assert.equal(metrics.dryReachableUpLifts >= 1, true, `dry up lifts ${metrics.dryReachableUpLifts}`);
+  assert.equal(metrics.dryReachableDownLifts >= 1, true, `dry down lifts ${metrics.dryReachableDownLifts}`);
+
+  for (const owner of HUMAN_TERRITORY_OWNERS) {
+    assert.equal(hqOwners.has(owner), true, `missing HQ owner ${ZoneFaction[owner]}`);
+    assert.equal((counts.get(owner) ?? 0) > 0, true, `empty territory ${ZoneFaction[owner]}`);
+    const anchor = anchors.find(item => item.owner === owner);
+    const room = anchor ? gen.world.rooms[anchor.roomId] : undefined;
+    assert.equal(room?.type, RoomType.HQ, `HQ room type ${ZoneFaction[owner]}`);
+    assert.equal(room?.sealed, true, `HQ sealed ${ZoneFaction[owner]}`);
+  }
+  assert.equal(hqRooms.length >= HUMAN_TERRITORY_OWNERS.length, true, `HQ rooms ${hqRooms.length}`);
+  assert.equal(supportRooms.length >= 15, true, `HQ support rooms ${supportRooms.length}`);
+  assert.equal(dominant, ZoneFaction.CITIZEN);
+  assertTerritoryShare(gen.world, ZoneFaction.CITIZEN, 0.54, 0.58);
+  assertTerritoryShare(gen.world, ZoneFaction.LIQUIDATOR, 0.15, 0.19);
+  assertTerritoryShare(gen.world, ZoneFaction.CULTIST, 0.05, 0.09);
+  assertTerritoryShare(gen.world, ZoneFaction.SCIENTIST, 0.06, 0.10);
+  assertTerritoryShare(gen.world, ZoneFaction.WILD, 0.10, 0.14);
+  assert.equal(npcs.length === 0 || ownTerritoryNpcs.length / npcs.length >= 0.75, true, `own territory NPC share ${npcs.length ? ownTerritoryNpcs.length / npcs.length : 1}`);
+});
+
 testGenerationMatrix('mushroom mycelium anomaly grows visible reachable food and spore territory', () => {
   const base = makeProceduralFloorSpec(53_053, 9);
   const gen = timedProceduralSpec({
@@ -1341,6 +1949,107 @@ testGenerationMatrix('apartment pressure geometry exposes legal, crowd, cut-thro
   assert.equal(hasReachableLift(gen, audit, LiftDirection.DOWN), true);
 });
 
+testGenerationMatrix('genfix 038 apartment pressure z13 citizens floor has dense blocks and target territory', () => {
+  const spec = makeProceduralFloorSpec(61_061, 13);
+  assert.equal(spec.geometryId, 'apartment_pressure');
+  assert.equal(spec.majorityId, 'citizens');
+  assert.equal(spec.anomalyId, 'none');
+  assert.equal(spec.danger, 2);
+
+  const gen = timedProceduralSpec(spec, 'genfix_038 apartment_pressure citizens seed=61061');
+  const audit = reachabilityAudit(gen);
+  const reachable = countReachableCells(audit.reachable);
+  const denseRooms = gen.world.rooms.filter(room => room.name.startsWith('Квартирная давка'));
+  const hqRooms = gen.world.rooms.filter(room => room.type === RoomType.HQ);
+  const hqSupportRooms = gen.world.rooms.filter(room => room.name.includes('штаба') && room.type !== RoomType.HQ);
+  const hqOwners = new Set(hqRooms.map(room => territoryOwnerAtIndex(gen.world, gen.world.idx(room.x + (room.w >> 1), room.y + (room.h >> 1)))));
+  const anchors = territoryHqAnchors(gen.world);
+  const counts = new Map(countTerritoryCells(gen.world).map(row => [row.owner, row.cells]));
+  const totalCells = [...counts.values()].reduce((sum, count) => sum + count, 0);
+  const share = (owner: ZoneFaction): number => (counts.get(owner) ?? 0) / totalCells;
+  const dominant = [...counts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0];
+  const npcs = gen.entities.filter(entity => entity.type === EntityType.NPC);
+  const ownTerritoryNpcs = npcs.filter(entity => {
+    if (entity.faction === undefined) return false;
+    const owner = territoryOwnerAtIndex(gen.world, gen.world.idx(Math.floor(entity.x), Math.floor(entity.y)));
+    return territoryOwnerToFaction(owner) === entity.faction;
+  });
+
+  assert.equal(gen.world.rooms.length >= 950, true, `rooms ${gen.world.rooms.length}`);
+  assert.equal(gen.world.doors.size >= 1500, true, `doors ${gen.world.doors.size}`);
+  assert.equal(reachable >= 120_000, true, `reachable ${reachable}`);
+  assert.equal(denseRooms.length >= 800, true, `dense rooms ${denseRooms.length}`);
+  assert.equal(hqRooms.length >= HUMAN_TERRITORY_OWNERS.length, true, `HQ rooms ${hqRooms.length}`);
+  assert.equal(hqRooms.every(room => room.sealed), true, 'HQ rooms should be sealed shelter cores');
+  assert.equal(hqSupportRooms.length >= 15, true, `HQ support rooms ${hqSupportRooms.length}`);
+  assert.equal(hasReachableLift(gen, audit, LiftDirection.UP), true);
+  assert.equal(hasReachableLift(gen, audit, LiftDirection.DOWN), true);
+
+  for (const owner of HUMAN_TERRITORY_OWNERS) {
+    assert.equal(anchors.some(anchor => anchor.owner === owner), true, `missing HQ anchor ${ZoneFaction[owner]}`);
+    assert.equal(hqOwners.has(owner), true, `missing HQ room owner ${ZoneFaction[owner]}`);
+    assert.equal((counts.get(owner) ?? 0) > 0, true, `empty territory ${ZoneFaction[owner]}`);
+  }
+  assert.equal(dominant, ZoneFaction.CITIZEN);
+  assert.equal(share(ZoneFaction.CITIZEN) >= 0.54 && share(ZoneFaction.CITIZEN) <= 0.58, true, `citizen share ${share(ZoneFaction.CITIZEN)}`);
+  assert.equal(share(ZoneFaction.LIQUIDATOR) >= 0.15 && share(ZoneFaction.LIQUIDATOR) <= 0.19, true, `liquidator share ${share(ZoneFaction.LIQUIDATOR)}`);
+  assert.equal(share(ZoneFaction.CULTIST) >= 0.05 && share(ZoneFaction.CULTIST) <= 0.09, true, `cultist share ${share(ZoneFaction.CULTIST)}`);
+  assert.equal(share(ZoneFaction.SCIENTIST) >= 0.06 && share(ZoneFaction.SCIENTIST) <= 0.10, true, `scientist share ${share(ZoneFaction.SCIENTIST)}`);
+  assert.equal(share(ZoneFaction.WILD) >= 0.10 && share(ZoneFaction.WILD) <= 0.14, true, `wild share ${share(ZoneFaction.WILD)}`);
+  assert.equal(npcs.length === 0 || ownTerritoryNpcs.length / npcs.length >= 0.75, true, `own territory NPC share ${npcs.length ? ownTerritoryNpcs.length / npcs.length : 1}`);
+});
+
+testGenerationMatrix('genfix 042 apartment pressure z9 citizens floor has multi-scale dense apartments and target territory', () => {
+  const spec = makeProceduralFloorSpec(61_061, 9);
+  assert.equal(spec.z, 9);
+  assert.equal(spec.geometryId, 'apartment_pressure');
+  assert.equal(spec.majorityId, 'citizens');
+  assert.equal(spec.anomalyId, 'none');
+  assert.equal(spec.danger, 3);
+
+  const gen = timedProceduralSpec(spec, 'genfix_042 apartment_pressure citizens seed=61061');
+  const audit = reachabilityAudit(gen);
+  const reachable = countReachableCells(audit.reachable);
+  const denseRooms = gen.world.rooms.filter(room => room.name.startsWith('Квартирная давка'));
+  const hqRooms = gen.world.rooms.filter(room => room.type === RoomType.HQ);
+  const hqSupportRooms = gen.world.rooms.filter(room => room.name.includes('штаба') && room.type !== RoomType.HQ);
+  const hqOwners = new Set(hqRooms.map(room => territoryOwnerAtIndex(gen.world, gen.world.idx(room.x + (room.w >> 1), room.y + (room.h >> 1)))));
+  const anchors = territoryHqAnchors(gen.world);
+  const counts = new Map(countTerritoryCells(gen.world).map(row => [row.owner, row.cells]));
+  const totalCells = [...counts.values()].reduce((sum, count) => sum + count, 0);
+  const share = (owner: ZoneFaction): number => (counts.get(owner) ?? 0) / totalCells;
+  const dominant = [...counts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0];
+  const npcs = gen.entities.filter(entity => entity.type === EntityType.NPC);
+  const ownTerritoryNpcs = npcs.filter(entity => {
+    if (entity.faction === undefined) return false;
+    const owner = territoryOwnerAtIndex(gen.world, gen.world.idx(Math.floor(entity.x), Math.floor(entity.y)));
+    return territoryOwnerToFaction(owner) === entity.faction;
+  });
+
+  assert.equal(gen.world.rooms.length >= 2500, true, `rooms ${gen.world.rooms.length}`);
+  assert.equal(gen.world.doors.size >= 3800, true, `doors ${gen.world.doors.size}`);
+  assert.equal(reachable >= 220_000, true, `reachable ${reachable}`);
+  assert.equal(denseRooms.length >= 2400, true, `dense rooms ${denseRooms.length}`);
+  assert.equal(hqRooms.length >= HUMAN_TERRITORY_OWNERS.length, true, `HQ rooms ${hqRooms.length}`);
+  assert.equal(hqRooms.every(room => room.sealed), true, 'HQ rooms should be sealed shelter cores');
+  assert.equal(hqSupportRooms.length >= 15, true, `HQ support rooms ${hqSupportRooms.length}`);
+  assert.equal(hasReachableLift(gen, audit, LiftDirection.UP), true);
+  assert.equal(hasReachableLift(gen, audit, LiftDirection.DOWN), true);
+
+  for (const owner of HUMAN_TERRITORY_OWNERS) {
+    assert.equal(anchors.some(anchor => anchor.owner === owner), true, `missing HQ anchor ${ZoneFaction[owner]}`);
+    assert.equal(hqOwners.has(owner), true, `missing HQ room owner ${ZoneFaction[owner]}`);
+    assert.equal((counts.get(owner) ?? 0) > 0, true, `empty territory ${ZoneFaction[owner]}`);
+  }
+  assert.equal(dominant, ZoneFaction.CITIZEN);
+  assert.equal(share(ZoneFaction.CITIZEN) >= 0.54 && share(ZoneFaction.CITIZEN) <= 0.58, true, `citizen share ${share(ZoneFaction.CITIZEN)}`);
+  assert.equal(share(ZoneFaction.LIQUIDATOR) >= 0.15 && share(ZoneFaction.LIQUIDATOR) <= 0.19, true, `liquidator share ${share(ZoneFaction.LIQUIDATOR)}`);
+  assert.equal(share(ZoneFaction.CULTIST) >= 0.05 && share(ZoneFaction.CULTIST) <= 0.09, true, `cultist share ${share(ZoneFaction.CULTIST)}`);
+  assert.equal(share(ZoneFaction.SCIENTIST) >= 0.06 && share(ZoneFaction.SCIENTIST) <= 0.10, true, `scientist share ${share(ZoneFaction.SCIENTIST)}`);
+  assert.equal(share(ZoneFaction.WILD) >= 0.10 && share(ZoneFaction.WILD) <= 0.14, true, `wild share ${share(ZoneFaction.WILD)}`);
+  assert.equal(npcs.length === 0 || ownTerritoryNpcs.length / npcs.length >= 0.8, true, `own territory NPC share ${npcs.length ? ownTerritoryNpcs.length / npcs.length : 1}`);
+});
+
 testGenerationMatrix('living block geometry builds apartment blocks with route choices and usable lifts', () => {
   const def = FLOOR_GEOMETRIES.find(item => item.id === 'living_blocks');
   assert.equal(def?.baseFloor, FloorLevel.LIVING);
@@ -1394,6 +2103,426 @@ testGenerationMatrix('living block geometry builds apartment blocks with route c
   }
   assert.equal(hasReachableLift(gen, audit, LiftDirection.UP), true);
   assert.equal(hasReachableLift(gen, audit, LiftDirection.DOWN), true);
+});
+
+testGenerationMatrix('genfix 050 living rail citizens floor fills map with blocks trains and target territory', () => {
+  const spec = makeProceduralFloorSpec(61_061, 1);
+  assert.equal(spec.geometryId, 'living_blocks');
+  assert.equal(spec.majorityId, 'citizens');
+  assert.equal(spec.anomalyId, 'rail_trains');
+  assert.equal(spec.danger, 2);
+
+  const gen = timedProceduralSpec(spec, 'genfix_050 living_blocks rail citizens seed=61061 z1');
+  const audit = reachabilityAudit(gen);
+  const blockRooms = gen.world.rooms.filter(room => room.name.startsWith('Домовой блок'));
+  const platformRooms = gen.world.rooms.filter(room => room.name.includes('платформ') || room.name.includes('Платформ'));
+  const reachablePlatformRooms = platformRooms.filter(room => roomHasReachableCell(gen.world, audit, room));
+  const territoryRows = countTerritoryCells(gen.world);
+  const territoryByOwner = new Map(territoryRows.map(row => [row.owner, row.cells]));
+  const hqOwners = new Set(territoryHqAnchors(gen.world).map(anchor => anchor.owner));
+  const npcs = gen.entities.filter(e => e.type === EntityType.NPC);
+  const ownTerritoryNpcs = npcs.filter(entity => {
+    const ownerFaction = territoryOwnerToFaction(territoryOwnerAtIndex(gen.world, gen.world.idx(Math.floor(entity.x), Math.floor(entity.y))));
+    return ownerFaction === entity.faction;
+  });
+
+  assert.equal(gen.world.rooms.length >= 900, true, `rooms ${gen.world.rooms.length}`);
+  assert.equal(gen.world.doors.size >= 900, true, `doors ${gen.world.doors.size}`);
+  assert.equal(blockRooms.length >= 850, true, `block rooms ${blockRooms.length}`);
+  assert.equal(countReachableCells(audit.reachable) >= 180_000, true, `reachable ${countReachableCells(audit.reachable)}`);
+  assert.equal(reachableBucketCount(gen.world, audit.reachable, 64) >= 200, true, 'living rail floor should occupy most map-scale buckets');
+  assert.equal(platformRooms.length >= 8, true, `platform service rooms ${platformRooms.length}`);
+  assert.equal(reachablePlatformRooms.length >= 8, true, `reachable platform rooms ${reachablePlatformRooms.length}`);
+  assert.equal(gen.world.railTracks.length >= 2, true, `rail tracks ${gen.world.railTracks.length}`);
+  assert.equal(gen.world.railTrains.length >= 2, true, `rail trains ${gen.world.railTrains.length}`);
+  assert.equal(hasReachableLift(gen, audit, LiftDirection.UP), true);
+  assert.equal(hasReachableLift(gen, audit, LiftDirection.DOWN), true);
+  for (const owner of HUMAN_TERRITORY_OWNERS) {
+    assert.equal((territoryByOwner.get(owner) ?? 0) > 0, true, `territory cells for ${owner}`);
+    assert.equal(hqOwners.has(owner), true, `HQ owner ${owner}`);
+  }
+  assertTerritoryShare(gen.world, ZoneFaction.CITIZEN, 0.54, 0.58);
+  assertTerritoryShare(gen.world, ZoneFaction.LIQUIDATOR, 0.15, 0.19);
+  assertTerritoryShare(gen.world, ZoneFaction.CULTIST, 0.05, 0.09);
+  assertTerritoryShare(gen.world, ZoneFaction.SCIENTIST, 0.06, 0.10);
+  assertTerritoryShare(gen.world, ZoneFaction.WILD, 0.10, 0.14);
+  assert.equal(npcs.length === 0 || ownTerritoryNpcs.length / npcs.length >= 0.75, true, `own territory NPC share ${npcs.length ? ownTerritoryNpcs.length / npcs.length : 1}`);
+});
+
+testGenerationMatrix('genfix 048 procedural living blocks z3 scientific shift fills floor and owns territory', () => {
+  const spec = makeProceduralFloorSpec(61_061, 3);
+  assert.equal(spec.key, 'z3');
+  assert.equal(spec.geometryId, 'living_blocks');
+  assert.equal(spec.majorityId, 'scientists');
+  assert.equal(spec.anomalyId, 'none');
+  assert.equal(spec.danger, 1);
+
+  const gen = timedProceduralSpec(spec, 'genfix_048 living_blocks scientists seed=61061 z3');
+  const audit = reachabilityAudit(gen);
+  const blockRooms = gen.world.rooms.filter(room => room.name.startsWith('Домовой блок'));
+  const territoryRows = countTerritoryCells(gen.world);
+  const territoryByOwner = new Map(territoryRows.map(row => [row.owner, row.cells]));
+  const hqAnchors = territoryHqAnchors(gen.world);
+  const hqOwners = new Set(hqAnchors.map(anchor => anchor.owner));
+  const hqRooms = hqAnchors
+    .map(anchor => gen.world.rooms[anchor.roomId])
+    .filter(room => room?.type === RoomType.HQ);
+  const supportRooms = gen.world.rooms.filter(room => room.name.includes('штаба') && room.type !== RoomType.HQ);
+  const dominant = [...territoryByOwner.entries()].sort((a, b) => b[1] - a[1])[0]?.[0];
+  const npcs = gen.entities.filter(e => e.type === EntityType.NPC);
+  const ownTerritoryNpcs = npcs.filter(entity => {
+    const ownerFaction = territoryOwnerToFaction(territoryOwnerAtIndex(gen.world, gen.world.idx(Math.floor(entity.x), Math.floor(entity.y))));
+    return ownerFaction === entity.faction;
+  });
+
+  assert.equal(gen.world.rooms.length >= 1000, true, `rooms ${gen.world.rooms.length}`);
+  assert.equal(gen.world.doors.size >= 900, true, `doors ${gen.world.doors.size}`);
+  assert.equal(blockRooms.length >= 1000, true, `block rooms ${blockRooms.length}`);
+  assert.equal(countReachableCells(audit.reachable) >= 220_000, true, `reachable ${countReachableCells(audit.reachable)}`);
+  assert.equal(reachableBucketCount(gen.world, audit.reachable, 64) >= 220, true, 'living blocks should occupy most map-scale buckets');
+  assert.equal(hasReachableLift(gen, audit, LiftDirection.UP), true);
+  assert.equal(hasReachableLift(gen, audit, LiftDirection.DOWN), true);
+
+  assert.equal(hqRooms.length >= HUMAN_TERRITORY_OWNERS.length, true, `HQ rooms ${hqRooms.length}`);
+  assert.equal(hqRooms.every(room => room?.sealed), true, 'HQ rooms should be sealed shelter cores');
+  assert.equal(supportRooms.length >= 15, true, `HQ support rooms ${supportRooms.length}`);
+  for (const owner of HUMAN_TERRITORY_OWNERS) {
+    assert.equal((territoryByOwner.get(owner) ?? 0) > 0, true, `territory cells for ${owner}`);
+    assert.equal(hqOwners.has(owner), true, `HQ owner ${owner}`);
+  }
+  assert.equal(dominant, ZoneFaction.SCIENTIST);
+  assertTerritoryShare(gen.world, ZoneFaction.CITIZEN, 0.20, 0.24);
+  assertTerritoryShare(gen.world, ZoneFaction.LIQUIDATOR, 0.14, 0.18);
+  assertTerritoryShare(gen.world, ZoneFaction.CULTIST, 0.06, 0.10);
+  assertTerritoryShare(gen.world, ZoneFaction.SCIENTIST, 0.40, 0.44);
+  assertTerritoryShare(gen.world, ZoneFaction.WILD, 0.10, 0.14);
+  assert.equal(npcs.length === 0 || ownTerritoryNpcs.length / npcs.length >= 0.75, true, `own territory NPC share ${npcs.length ? ownTerritoryNpcs.length / npcs.length : 1}`);
+});
+
+testGenerationMatrix('genfix 052 procedural living blocks scientific shift fills floor and owns territory from HQ anchors', () => {
+  const spec = makeProceduralFloorSpec(61_061, -1);
+  assert.equal(spec.geometryId, 'living_blocks');
+  assert.equal(spec.majorityId, 'scientists');
+  assert.equal(spec.anomalyId, 'none');
+  assert.equal(spec.danger, 2);
+
+  const gen = timedProceduralSpec(spec, 'genfix_052 living_blocks scientists seed=61061 z-1');
+  const audit = reachabilityAudit(gen);
+  const blockRooms = gen.world.rooms.filter(room => room.name.startsWith('Домовой блок'));
+  const territoryRows = countTerritoryCells(gen.world);
+  const territoryByOwner = new Map(territoryRows.map(row => [row.owner, row.cells]));
+  const hqOwners = new Set(territoryHqAnchors(gen.world).map(anchor => anchor.owner));
+  const npcs = gen.entities.filter(e => e.type === EntityType.NPC);
+  const ownTerritoryNpcs = npcs.filter(entity => {
+    const ownerFaction = territoryOwnerToFaction(territoryOwnerAtIndex(gen.world, gen.world.idx(Math.floor(entity.x), Math.floor(entity.y))));
+    return ownerFaction === entity.faction;
+  });
+
+  assert.equal(gen.world.rooms.length >= 1100, true, `rooms ${gen.world.rooms.length}`);
+  assert.equal(gen.world.doors.size >= 1000, true, `doors ${gen.world.doors.size}`);
+  assert.equal(blockRooms.length >= 1000, true, `block rooms ${blockRooms.length}`);
+  assert.equal(countReachableCells(audit.reachable) >= 220_000, true, `reachable ${countReachableCells(audit.reachable)}`);
+  assert.equal(reachableBucketCount(gen.world, audit.reachable, 64) >= 180, true, 'living blocks should occupy most map-scale buckets');
+  assert.equal(hasReachableLift(gen, audit, LiftDirection.UP), true);
+  assert.equal(hasReachableLift(gen, audit, LiftDirection.DOWN), true);
+  for (const owner of HUMAN_TERRITORY_OWNERS) {
+    assert.equal((territoryByOwner.get(owner) ?? 0) > 0, true, `territory cells for ${owner}`);
+    assert.equal(hqOwners.has(owner), true, `HQ owner ${owner}`);
+  }
+  assertTerritoryShare(gen.world, ZoneFaction.CITIZEN, 0.20, 0.24);
+  assertTerritoryShare(gen.world, ZoneFaction.LIQUIDATOR, 0.14, 0.18);
+  assertTerritoryShare(gen.world, ZoneFaction.CULTIST, 0.06, 0.10);
+  assertTerritoryShare(gen.world, ZoneFaction.SCIENTIST, 0.40, 0.44);
+  assertTerritoryShare(gen.world, ZoneFaction.WILD, 0.10, 0.14);
+  assert.equal(npcs.length === 0 || ownTerritoryNpcs.length / npcs.length >= 0.75, true, `own territory NPC share ${npcs.length ? ownTerritoryNpcs.length / npcs.length : 1}`);
+});
+
+testGenerationMatrix('genfix 056 procedural living smog citizens floor fills map and keeps target territory', () => {
+  const spec = makeProceduralFloorSpec(61_061, -5);
+  assert.equal(spec.geometryId, 'living_blocks');
+  assert.equal(spec.majorityId, 'citizens');
+  assert.equal(spec.anomalyId, 'smog');
+  assert.equal(spec.danger, 2);
+
+  const gen = timedProceduralSpec(spec, 'genfix_056 living_blocks smog citizens seed=61061 z-5');
+  const audit = reachabilityAudit(gen);
+  const blockRooms = gen.world.rooms.filter(room => room.name.startsWith('Домовой блок'));
+  const territoryRows = countTerritoryCells(gen.world);
+  const territoryByOwner = new Map(territoryRows.map(row => [row.owner, row.cells]));
+  const hqAnchors = territoryHqAnchors(gen.world);
+  const hqOwners = new Set(hqAnchors.map(anchor => anchor.owner));
+  const hqRooms = hqAnchors
+    .map(anchor => gen.world.rooms[anchor.roomId])
+    .filter(room => room?.type === RoomType.HQ);
+  const supportRooms = gen.world.rooms.filter(room => room.name.includes('штаба') && room.type !== RoomType.HQ);
+  const npcs = gen.entities.filter(e => e.type === EntityType.NPC);
+  const ownTerritoryNpcs = npcs.filter(entity => {
+    const ownerFaction = territoryOwnerToFaction(territoryOwnerAtIndex(gen.world, gen.world.idx(Math.floor(entity.x), Math.floor(entity.y))));
+    return ownerFaction === entity.faction;
+  });
+
+  assert.equal(gen.world.rooms.length >= 850, true, `rooms ${gen.world.rooms.length}`);
+  assert.equal(gen.world.doors.size >= 900, true, `doors ${gen.world.doors.size}`);
+  assert.equal(blockRooms.length >= 820, true, `block rooms ${blockRooms.length}`);
+  assert.equal(countReachableCells(audit.reachable) >= 180_000, true, `reachable ${countReachableCells(audit.reachable)}`);
+  assert.equal(reachableBucketCount(gen.world, audit.reachable, 64) >= 170, true, 'living smog floor should occupy most map-scale buckets');
+  assert.equal(gen.world.anomalySmogCells.length >= 500, true, `smog cells ${gen.world.anomalySmogCells.length}`);
+  assert.equal(hasReachableLift(gen, audit, LiftDirection.UP), true);
+  assert.equal(hasReachableLift(gen, audit, LiftDirection.DOWN), true);
+  for (const owner of HUMAN_TERRITORY_OWNERS) {
+    assert.equal((territoryByOwner.get(owner) ?? 0) > 0, true, `territory cells for ${owner}`);
+    assert.equal(hqOwners.has(owner), true, `HQ owner ${owner}`);
+    const anchor = hqAnchors.find(item => item.owner === owner);
+    const room = anchor ? gen.world.rooms[anchor.roomId] : undefined;
+    assert.equal(room?.sealed, true, `HQ sealed ${owner}`);
+    assert.equal(room?.doors.some(doorIdx => {
+      const door = gen.world.doors.get(doorIdx);
+      return door?.state === DoorState.HERMETIC_OPEN || door?.state === DoorState.HERMETIC_CLOSED;
+    }), true, `HQ hermetic door ${owner}`);
+  }
+  assert.equal(hqRooms.length >= HUMAN_TERRITORY_OWNERS.length, true, `HQ rooms ${hqRooms.length}`);
+  assert.equal(supportRooms.length >= 15, true, `HQ support rooms ${supportRooms.length}`);
+  assertTerritoryShare(gen.world, ZoneFaction.CITIZEN, 0.54, 0.58);
+  assertTerritoryShare(gen.world, ZoneFaction.LIQUIDATOR, 0.15, 0.19);
+  assertTerritoryShare(gen.world, ZoneFaction.CULTIST, 0.05, 0.09);
+  assertTerritoryShare(gen.world, ZoneFaction.SCIENTIST, 0.06, 0.10);
+  assertTerritoryShare(gen.world, ZoneFaction.WILD, 0.10, 0.14);
+  assert.equal(npcs.length === 0 || ownTerritoryNpcs.length / npcs.length >= 0.75, true, `own territory NPC share ${npcs.length ? ownTerritoryNpcs.length / npcs.length : 1}`);
+});
+
+testGenerationMatrix('genfix 060 procedural hladon living blocks scientific shift fills floor from HQ territory', () => {
+  const spec = makeProceduralFloorSpec(61_061, -9);
+  assert.equal(spec.geometryId, 'living_blocks');
+  assert.equal(spec.majorityId, 'scientists');
+  assert.equal(spec.anomalyId, 'hladon');
+  assert.equal(spec.danger, 3);
+
+  const gen = timedProceduralSpec(spec, 'genfix_060 living_blocks hladon scientists seed=61061 z-9');
+  const audit = reachabilityAudit(gen);
+  const blockRooms = gen.world.rooms.filter(room => room.name.startsWith('Домовой блок'));
+  const coldRooms = gen.world.rooms.filter(room => room.name.startsWith('Хладон:'));
+  const hqRooms = gen.world.rooms.filter(room => room.type === RoomType.HQ);
+  const hermeticHqs = hqRooms.filter(room =>
+    room.sealed &&
+    room.doors.some(doorIdx => {
+      const door = gen.world.doors.get(doorIdx);
+      return door?.state === DoorState.HERMETIC_OPEN || door?.state === DoorState.HERMETIC_CLOSED;
+    })
+  );
+  const territoryRows = countTerritoryCells(gen.world);
+  const territoryByOwner = new Map(territoryRows.map(row => [row.owner, row.cells]));
+  const hqOwners = new Set(territoryHqAnchors(gen.world).map(anchor => anchor.owner));
+  const npcs = gen.entities.filter(e => e.type === EntityType.NPC);
+  const ownTerritoryNpcs = npcs.filter(entity => {
+    const ownerFaction = territoryOwnerToFaction(territoryOwnerAtIndex(gen.world, gen.world.idx(Math.floor(entity.x), Math.floor(entity.y))));
+    return ownerFaction === entity.faction;
+  });
+
+  assert.equal(gen.world.rooms.length >= 1000, true, `rooms ${gen.world.rooms.length}`);
+  assert.equal(gen.world.doors.size >= 900, true, `doors ${gen.world.doors.size}`);
+  assert.equal(blockRooms.length >= 950, true, `block rooms ${blockRooms.length}`);
+  assert.equal(countReachableCells(audit.reachable) >= 200_000, true, `reachable ${countReachableCells(audit.reachable)}`);
+  assert.equal(reachableBucketCount(gen.world, audit.reachable, 64) >= 180, true, 'hladon living floor should occupy most map-scale buckets');
+  assert.equal(coldRooms.length >= 3, true, `cold rooms ${coldRooms.length}`);
+  assert.equal(hermeticHqs.length >= HUMAN_TERRITORY_OWNERS.length, true, `hermetic HQs ${hermeticHqs.length}`);
+  assert.equal(hasReachableLift(gen, audit, LiftDirection.UP), true);
+  assert.equal(hasReachableLift(gen, audit, LiftDirection.DOWN), true);
+  for (const owner of HUMAN_TERRITORY_OWNERS) {
+    assert.equal((territoryByOwner.get(owner) ?? 0) > 0, true, `territory cells for ${owner}`);
+    assert.equal(hqOwners.has(owner), true, `HQ owner ${owner}`);
+  }
+  assertTerritoryShare(gen.world, ZoneFaction.CITIZEN, 0.20, 0.24);
+  assertTerritoryShare(gen.world, ZoneFaction.LIQUIDATOR, 0.14, 0.18);
+  assertTerritoryShare(gen.world, ZoneFaction.CULTIST, 0.06, 0.10);
+  assertTerritoryShare(gen.world, ZoneFaction.SCIENTIST, 0.40, 0.44);
+  assertTerritoryShare(gen.world, ZoneFaction.WILD, 0.10, 0.14);
+  assert.equal(npcs.length === 0 || ownTerritoryNpcs.length / npcs.length >= 0.75, true, `own territory NPC share ${npcs.length ? ownTerritoryNpcs.length / npcs.length : 1}`);
+});
+
+testGenerationMatrix('genfix 058 workshop liquidator floor adds mid micro rooms and target territory', () => {
+  const spec = makeProceduralFloorSpec(61_061, -7);
+  assert.equal(spec.geometryId, 'workshops');
+  assert.equal(spec.majorityId, 'liquidators');
+  assert.equal(spec.anomalyId, 'none');
+  assert.equal(spec.danger, 2);
+
+  const gen = timedProceduralSpec(spec, 'genfix_058 workshops liquidators seed=61061 z-7');
+  const audit = reachabilityAudit(gen);
+  const clusterRooms = gen.world.rooms.filter(room =>
+    room.name.startsWith('Цеховой остров') ||
+    room.name.startsWith('Инструментальная ячейка') ||
+    room.name.startsWith('Малый станочный бокс') ||
+    room.name.startsWith('Мастерская контора') ||
+    room.name.startsWith('Цеховой туалет') ||
+    room.name.startsWith('Комната кипятка цеха') ||
+    room.name.startsWith('Бытовка цеха'));
+  const microRooms = clusterRooms.filter(room => room.w * room.h <= 90);
+  const reachableClusterRooms = clusterRooms.filter(room => roomHasReachableCell(gen.world, audit, room));
+  const anchors = territoryHqAnchors(gen.world);
+  const hqOwners = new Set(anchors.map(anchor => anchor.owner));
+  const hqRooms = anchors
+    .map(anchor => gen.world.rooms[anchor.roomId])
+    .filter(room => room?.type === RoomType.HQ);
+  const supportRooms = gen.world.rooms.filter(room => room.name.includes('штаба') && room.type !== RoomType.HQ);
+  const counts = new Map(countTerritoryCells(gen.world).map(row => [row.owner, row.cells]));
+  const dominant = [...counts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0];
+  const npcs = gen.entities.filter(entity => entity.type === EntityType.NPC);
+  const ownTerritoryNpcs = npcs.filter(entity => {
+    const ci = gen.world.idx(Math.floor(entity.x), Math.floor(entity.y));
+    return territoryOwnerToFaction(territoryOwnerAtIndex(gen.world, ci)) === entity.faction;
+  });
+
+  assert.equal(gen.world.rooms.length >= 180, true, `rooms ${gen.world.rooms.length}`);
+  assert.equal(gen.world.doors.size >= 500, true, `doors ${gen.world.doors.size}`);
+  assert.equal(countReachableCells(audit.reachable) >= 115_000, true, `reachable ${countReachableCells(audit.reachable)}`);
+  assert.equal(clusterRooms.length >= 75, true, `workshop cluster rooms ${clusterRooms.length}`);
+  assert.equal(microRooms.length >= 55, true, `workshop micro rooms ${microRooms.length}`);
+  assert.equal(reachableClusterRooms.length >= 70, true, `reachable workshop cluster rooms ${reachableClusterRooms.length}`);
+  assert.equal(hasReachableLift(gen, audit, LiftDirection.UP), true);
+  assert.equal(hasReachableLift(gen, audit, LiftDirection.DOWN), true);
+
+  for (const owner of HUMAN_TERRITORY_OWNERS) {
+    assert.equal(hqOwners.has(owner), true, `missing HQ owner ${ZoneFaction[owner]}`);
+    assert.equal((counts.get(owner) ?? 0) > 0, true, `empty territory ${ZoneFaction[owner]}`);
+    const anchor = anchors.find(item => item.owner === owner);
+    const room = anchor ? gen.world.rooms[anchor.roomId] : undefined;
+    assert.equal(room?.type, RoomType.HQ, `HQ room type ${ZoneFaction[owner]}`);
+    assert.equal(room?.sealed, true, `HQ sealed ${ZoneFaction[owner]}`);
+  }
+  assert.equal(hqRooms.length >= HUMAN_TERRITORY_OWNERS.length, true, `HQ rooms ${hqRooms.length}`);
+  assert.equal(supportRooms.length >= 15, true, `HQ support rooms ${supportRooms.length}`);
+  assert.equal(dominant, ZoneFaction.LIQUIDATOR);
+  assertTerritoryShare(gen.world, ZoneFaction.CITIZEN, 0.15, 0.19);
+  assertTerritoryShare(gen.world, ZoneFaction.LIQUIDATOR, 0.54, 0.58);
+  assertTerritoryShare(gen.world, ZoneFaction.CULTIST, 0.05, 0.09);
+  assertTerritoryShare(gen.world, ZoneFaction.SCIENTIST, 0.06, 0.10);
+  assertTerritoryShare(gen.world, ZoneFaction.WILD, 0.10, 0.14);
+  assert.equal(npcs.length === 0 || ownTerritoryNpcs.length / npcs.length >= 0.75, true, `own territory NPC share ${npcs.length ? ownTerritoryNpcs.length / npcs.length : 1}`);
+});
+
+testGenerationMatrix('genfix 063 service spines scientist floor has stations micro rooms and target territory', () => {
+  const spec = makeProceduralFloorSpec(61_061, -12);
+  assert.equal(spec.geometryId, 'service_spines');
+  assert.equal(spec.majorityId, 'scientists');
+  assert.equal(spec.anomalyId, 'none');
+  assert.equal(spec.danger, 2);
+
+  const gen = timedProceduralSpec(spec, 'genfix_063 service_spines scientists seed=61061 z-12');
+  const audit = reachabilityAudit(gen);
+  const reachable = countReachableCells(audit.reachable);
+  const serviceRooms = gen.world.rooms.filter(room => room.name.includes('сервисного штрека') || room.name.includes('штрека'));
+  const reachableServiceRooms = serviceRooms.filter(room => roomHasReachableCell(gen.world, audit, room));
+  const stationRooms = serviceRooms.filter(room => room.name.includes('станция') || room.name.includes('станции'));
+  const inspectionRooms = serviceRooms.filter(room => room.name.includes('инспекционная клетка'));
+  const hqAnchors = territoryHqAnchors(gen.world);
+  const hqOwners = new Set(hqAnchors.map(anchor => anchor.owner));
+  const hqRooms = hqAnchors
+    .map(anchor => gen.world.rooms[anchor.roomId])
+    .filter(room => room?.type === RoomType.HQ);
+  const supportRooms = gen.world.rooms.filter(room => room.name.includes('штаба') && room.type !== RoomType.HQ);
+  const territoryRows = countTerritoryCells(gen.world);
+  const dominant = [...territoryRows].sort((a, b) => b.cells - a.cells)[0]?.owner;
+  const npcs = gen.entities.filter(entity => entity.type === EntityType.NPC);
+  const ownTerritoryNpcs = npcs.filter(entity => {
+    const ci = gen.world.idx(Math.floor(entity.x), Math.floor(entity.y));
+    return territoryOwnerToFaction(territoryOwnerAtIndex(gen.world, ci)) === entity.faction;
+  });
+
+  assert.equal(hasReachableLift(gen, audit, LiftDirection.UP), true);
+  assert.equal(hasReachableLift(gen, audit, LiftDirection.DOWN), true);
+  assert.equal(gen.world.rooms.length >= 600, true, `rooms ${gen.world.rooms.length}`);
+  assert.equal(gen.world.doors.size >= 1_100, true, `doors ${gen.world.doors.size}`);
+  assert.equal(reachable >= 175_000, true, `reachable ${reachable}`);
+  assert.equal(serviceRooms.length >= 350, true, `service rooms ${serviceRooms.length}`);
+  assert.equal(reachableServiceRooms.length >= 350, true, `reachable service rooms ${reachableServiceRooms.length}`);
+  assert.equal(stationRooms.length >= 120, true, `station rooms ${stationRooms.length}`);
+  assert.equal(inspectionRooms.length >= 50, true, `inspection rooms ${inspectionRooms.length}`);
+  assert.equal(getRouteCueMarkers(gen.world).some(marker => marker.tags.includes('service_spines')), true);
+
+  for (const room of serviceRooms.slice(0, 64)) {
+    assert.equal(roomHasReachableCell(gen.world, audit, room), true, `${room.name} reachable`);
+  }
+  for (const owner of HUMAN_TERRITORY_OWNERS) {
+    assert.equal(hqOwners.has(owner), true, `missing HQ owner ${ZoneFaction[owner]}`);
+    assert.equal(territoryCellCount(gen.world, owner) > 0, true, `empty territory ${ZoneFaction[owner]}`);
+    const anchor = hqAnchors.find(item => item.owner === owner);
+    const room = anchor ? gen.world.rooms[anchor.roomId] : undefined;
+    assert.equal(room?.type, RoomType.HQ, `HQ room type ${ZoneFaction[owner]}`);
+    assert.equal(room?.sealed, true, `HQ sealed ${ZoneFaction[owner]}`);
+    assert.equal(room?.doors.some(doorIdx => {
+      const door = gen.world.doors.get(doorIdx);
+      return door?.state === DoorState.HERMETIC_OPEN || door?.state === DoorState.HERMETIC_CLOSED;
+    }), true, `HQ hermetic door ${ZoneFaction[owner]}`);
+  }
+  assert.equal(hqRooms.length >= HUMAN_TERRITORY_OWNERS.length, true, `HQ rooms ${hqRooms.length}`);
+  assert.equal(supportRooms.length >= 12, true, `HQ support rooms ${supportRooms.length}`);
+  assert.equal(dominant, ZoneFaction.SCIENTIST);
+  assertTerritoryShare(gen.world, ZoneFaction.CITIZEN, 0.205, 0.235);
+  assertTerritoryShare(gen.world, ZoneFaction.LIQUIDATOR, 0.145, 0.175);
+  assertTerritoryShare(gen.world, ZoneFaction.CULTIST, 0.065, 0.095);
+  assertTerritoryShare(gen.world, ZoneFaction.SCIENTIST, 0.405, 0.435);
+  assertTerritoryShare(gen.world, ZoneFaction.WILD, 0.105, 0.135);
+  assert.equal(npcs.length === 0 || ownTerritoryNpcs.length / npcs.length >= 0.78, true, `own territory NPC share ${npcs.length ? ownTerritoryNpcs.length / npcs.length : 1}`);
+});
+
+testGenerationMatrix('genfix 070 service smog citizen floor fills spines and target territory', () => {
+  const spec = makeProceduralFloorSpec(61_061, -19);
+  assert.equal(spec.geometryId, 'service_spines');
+  assert.equal(spec.majorityId, 'citizens');
+  assert.equal(spec.anomalyId, 'smog');
+  assert.equal(spec.danger, 3);
+
+  const gen = timedProceduralSpec(spec, 'genfix_070 service_spines smog citizens seed=61061 z-19');
+  const audit = reachabilityAudit(gen);
+  const reachable = countReachableCells(audit.reachable);
+  const serviceRooms = gen.world.rooms.filter(room => room.name.includes('сервисного штрека') || room.name.includes('штрека'));
+  const reachableServiceRooms = serviceRooms.filter(room => roomHasReachableCell(gen.world, audit, room));
+  const microServiceRooms = serviceRooms.filter(room => room.w * room.h <= 90);
+  const anchors = territoryHqAnchors(gen.world);
+  const hqOwners = new Set(anchors.map(anchor => anchor.owner));
+  const hqRooms = anchors
+    .map(anchor => gen.world.rooms[anchor.roomId])
+    .filter(room => room?.type === RoomType.HQ);
+  const supportRooms = gen.world.rooms.filter(room => room.name.includes('штаба') && room.type !== RoomType.HQ);
+  const counts = new Map(countTerritoryCells(gen.world).map(row => [row.owner, row.cells]));
+  const dominant = [...counts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0];
+  const npcs = gen.entities.filter(entity => entity.type === EntityType.NPC);
+  const ownTerritoryNpcs = npcs.filter(entity => {
+    const owner = territoryOwnerAtIndex(gen.world, gen.world.idx(Math.floor(entity.x), Math.floor(entity.y)));
+    return territoryOwnerToFaction(owner) === entity.faction;
+  });
+
+  assert.equal(gen.world.rooms.length >= 600, true, `rooms ${gen.world.rooms.length}`);
+  assert.equal(gen.world.doors.size >= 1200, true, `doors ${gen.world.doors.size}`);
+  assert.equal(reachable >= 180_000, true, `reachable ${reachable}`);
+  assert.equal(serviceRooms.length >= 350, true, `service rooms ${serviceRooms.length}`);
+  assert.equal(reachableServiceRooms.length >= 340, true, `reachable service rooms ${reachableServiceRooms.length}`);
+  assert.equal(microServiceRooms.length >= 300, true, `micro service rooms ${microServiceRooms.length}`);
+  assert.equal((gen.world.anomalySmogCells?.length ?? 0) >= 1000, true, `smog cells ${gen.world.anomalySmogCells?.length ?? 0}`);
+  assert.equal(hasReachableLift(gen, audit, LiftDirection.UP), true);
+  assert.equal(hasReachableLift(gen, audit, LiftDirection.DOWN), true);
+
+  for (const owner of HUMAN_TERRITORY_OWNERS) {
+    assert.equal(hqOwners.has(owner), true, `missing HQ owner ${ZoneFaction[owner]}`);
+    assert.equal((counts.get(owner) ?? 0) > 0, true, `empty territory ${ZoneFaction[owner]}`);
+    const anchor = anchors.find(item => item.owner === owner);
+    const room = anchor ? gen.world.rooms[anchor.roomId] : undefined;
+    assert.equal(room?.type, RoomType.HQ, `HQ room type ${ZoneFaction[owner]}`);
+    assert.equal(room?.sealed, true, `HQ sealed ${ZoneFaction[owner]}`);
+    assert.equal(room?.doors.some(doorIdx => {
+      const door = gen.world.doors.get(doorIdx);
+      return door?.state === DoorState.HERMETIC_OPEN || door?.state === DoorState.HERMETIC_CLOSED;
+    }), true, `HQ hermetic door ${ZoneFaction[owner]}`);
+  }
+  assert.equal(hqRooms.length >= HUMAN_TERRITORY_OWNERS.length, true, `HQ rooms ${hqRooms.length}`);
+  assert.equal(supportRooms.length >= 15, true, `HQ support rooms ${supportRooms.length}`);
+  assert.equal(dominant, ZoneFaction.CITIZEN);
+  assertTerritoryShare(gen.world, ZoneFaction.CITIZEN, 0.54, 0.58);
+  assertTerritoryShare(gen.world, ZoneFaction.LIQUIDATOR, 0.15, 0.19);
+  assertTerritoryShare(gen.world, ZoneFaction.CULTIST, 0.05, 0.09);
+  assertTerritoryShare(gen.world, ZoneFaction.SCIENTIST, 0.06, 0.10);
+  assertTerritoryShare(gen.world, ZoneFaction.WILD, 0.10, 0.14);
+  assert.equal(npcs.length === 0 || ownTerritoryNpcs.length / npcs.length >= 0.8, true, `own territory NPC share ${npcs.length ? ownTerritoryNpcs.length / npcs.length : 1}`);
 });
 
 testGenerationMatrix('cultist procedural majority imprints optional ritual geometry without locking route lifts', () => {
@@ -1576,6 +2705,598 @@ testGenerationMatrix('admin pocket geometry exposes legal queue, staff chord and
   }
 });
 
+testGenerationMatrix('genfix 002 procedural admin teleport scientist floor has multi-scale rooms and target territory', () => {
+  const spec = makeProceduralFloorSpec(61_061, 49);
+  assert.equal(spec.geometryId, 'admin_pockets');
+  assert.equal(spec.majorityId, 'scientists');
+  assert.equal(spec.anomalyId, 'teleport_cells');
+  assert.equal(spec.danger, 3);
+
+  const gen = timedProceduralSpec(spec, 'genfix_002 admin teleport scientists seed=61061');
+  const audit = reachabilityAudit(gen);
+  const reachable = countReachableCells(audit.reachable);
+  const clusterRooms = gen.world.rooms.filter(room =>
+    room.name.includes('грозди') ||
+    room.name.includes('гроздь') ||
+    room.name.startsWith('Окно приема') ||
+    room.name.startsWith('Юридическая очередь') ||
+    room.name.startsWith('Кабина справки') ||
+    room.name.startsWith('Архивная ячейка') ||
+    room.name.startsWith('Туалет очереди') ||
+    room.name.startsWith('Комната кипятка') ||
+    room.name.startsWith('Кабинет справки о здоровье') ||
+    room.name.includes('штаба'));
+  const anchors = territoryHqAnchors(gen.world);
+  const hqOwners = new Set(anchors.map(anchor => anchor.owner));
+  const territoryCounts = new Map(countTerritoryCells(gen.world, 4).map(row => [row.owner, row.cells]));
+  const share = (owner: ZoneFaction): number => (territoryCounts.get(owner) ?? 0) / (W * W);
+  const dominant = [...territoryCounts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0];
+  const hqRooms = anchors
+    .map(anchor => gen.world.rooms[anchor.roomId])
+    .filter(room => room?.type === RoomType.HQ);
+  const supportRooms = gen.world.rooms.filter(room => room.name.includes('штаба') && room.type !== RoomType.HQ);
+  let hermeticShellCells = 0;
+  for (const room of hqRooms) {
+    for (let dy = -1; dy <= room.h; dy++) {
+      for (let dx = -1; dx <= room.w; dx++) {
+        if (dx >= 0 && dx < room.w && dy >= 0 && dy < room.h) continue;
+        hermeticShellCells += gen.world.hermoWall[gen.world.idx(room.x + dx, room.y + dy)] ? 1 : 0;
+      }
+    }
+  }
+
+  assert.equal(gen.world.rooms.length >= 550, true, `rooms ${gen.world.rooms.length}`);
+  assert.equal(gen.world.doors.size >= 1500, true, `doors ${gen.world.doors.size}`);
+  assert.equal(reachable >= 120_000, true, `reachable ${reachable}`);
+  assert.equal(clusterRooms.length >= 220, true, `admin/science cluster rooms ${clusterRooms.length}`);
+  assert.equal(gen.world.anomalyTeleports.size >= 12, true, `teleport endpoints ${gen.world.anomalyTeleports.size}`);
+  assert.equal(hasReachableLift(gen, audit, LiftDirection.UP), true);
+  assert.equal(hasReachableLift(gen, audit, LiftDirection.DOWN), true);
+
+  for (const owner of HUMAN_TERRITORY_OWNERS) {
+    assert.equal(hqOwners.has(owner), true, `missing HQ owner ${ZoneFaction[owner]}`);
+    assert.equal((territoryCounts.get(owner) ?? 0) > 0, true, `empty territory ${ZoneFaction[owner]}`);
+    const anchor = anchors.find(item => item.owner === owner);
+    const room = anchor ? gen.world.rooms[anchor.roomId] : undefined;
+    assert.equal(room?.type, RoomType.HQ, `HQ room type ${ZoneFaction[owner]}`);
+    assert.equal(room?.sealed, true, `HQ sealed ${ZoneFaction[owner]}`);
+  }
+  for (let i = 0; i < anchors.length; i++) {
+    for (let j = i + 1; j < anchors.length; j++) {
+      assert.equal(gen.world.dist2(anchors[i].x, anchors[i].y, anchors[j].x, anchors[j].y) >= 120 * 120, true, `HQ spacing ${i}/${j}`);
+    }
+  }
+  assert.equal(hqRooms.length >= HUMAN_TERRITORY_OWNERS.length, true, `HQ rooms ${hqRooms.length}`);
+  assert.equal(supportRooms.length >= 15, true, `HQ support rooms ${supportRooms.length}`);
+  assert.equal(hermeticShellCells >= hqRooms.length * 8, true, `hermetic shell cells ${hermeticShellCells}`);
+  assert.equal(dominant, ZoneFaction.SCIENTIST);
+  assert.equal(share(ZoneFaction.CITIZEN) >= 0.20 && share(ZoneFaction.CITIZEN) <= 0.24, true, `citizen share ${share(ZoneFaction.CITIZEN)}`);
+  assert.equal(share(ZoneFaction.LIQUIDATOR) >= 0.14 && share(ZoneFaction.LIQUIDATOR) <= 0.18, true, `liquidator share ${share(ZoneFaction.LIQUIDATOR)}`);
+  assert.equal(share(ZoneFaction.CULTIST) >= 0.06 && share(ZoneFaction.CULTIST) <= 0.10, true, `cultist share ${share(ZoneFaction.CULTIST)}`);
+  assert.equal(share(ZoneFaction.SCIENTIST) >= 0.40 && share(ZoneFaction.SCIENTIST) <= 0.44, true, `scientist share ${share(ZoneFaction.SCIENTIST)}`);
+  assert.equal(share(ZoneFaction.WILD) >= 0.10 && share(ZoneFaction.WILD) <= 0.14, true, `wild share ${share(ZoneFaction.WILD)}`);
+});
+
+testGenerationMatrix('genfix 006 admin smog liquidator floor has clustered rooms and target territory', () => {
+  const base = makeProceduralFloorSpec(61_061, 45);
+  const gen = timedProceduralSpec({
+    ...base,
+    geometryId: 'admin_pockets',
+    baseFloor: FloorLevel.MINISTRY,
+    majorityId: 'liquidators',
+    anomalyId: 'smog',
+    danger: 3,
+    title: `говнячный смог: административные карманы, этаж ликвидаторов`,
+  }, 'genfix 006 admin smog liquidators seed=61061');
+  const audit = reachabilityAudit(gen);
+  const clusterRooms = gen.world.rooms.filter(room =>
+    room.name.includes('грозди') ||
+    room.name.includes('гроздь') ||
+    room.name.startsWith('Туалет при очереди') ||
+    room.name.startsWith('Чайная при коридоре'));
+  const reachableClusterRooms = clusterRooms.filter(room => roomHasReachableCell(gen.world, audit, room));
+  const anchors = territoryHqAnchors(gen.world);
+  const counts = new Map(countTerritoryCells(gen.world).map(row => [row.owner, row.cells]));
+  const share = (owner: ZoneFaction): number => (counts.get(owner) ?? 0) / (W * W);
+  const dominant = [...counts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0];
+
+  assert.equal(gen.world.rooms.length >= 190, true, `rooms ${gen.world.rooms.length}`);
+  assert.equal(gen.world.doors.size >= 330, true, `doors ${gen.world.doors.size}`);
+  assert.equal(clusterRooms.length >= 45, true, `admin cluster rooms ${clusterRooms.length}`);
+  assert.equal(reachableClusterRooms.length >= 35, true, `reachable admin cluster rooms ${reachableClusterRooms.length}`);
+  assert.equal(gen.world.anomalySmogCells.length >= 500, true, `smog cells ${gen.world.anomalySmogCells.length}`);
+  assert.equal(hasReachableLift(gen, audit, LiftDirection.UP), true);
+  assert.equal(hasReachableLift(gen, audit, LiftDirection.DOWN), true);
+
+  for (const owner of HUMAN_TERRITORY_OWNERS) {
+    assert.equal(anchors.some(anchor => anchor.owner === owner), true, `missing HQ anchor ${owner}`);
+    assert.equal((counts.get(owner) ?? 0) > 0, true, `missing territory cells ${owner}`);
+  }
+  assert.equal(dominant, ZoneFaction.LIQUIDATOR);
+  assert.equal(share(ZoneFaction.CITIZEN) >= 0.14 && share(ZoneFaction.CITIZEN) <= 0.21, true, `citizen share ${share(ZoneFaction.CITIZEN)}`);
+  assert.equal(share(ZoneFaction.LIQUIDATOR) >= 0.52 && share(ZoneFaction.LIQUIDATOR) <= 0.60, true, `liquidator share ${share(ZoneFaction.LIQUIDATOR)}`);
+  assert.equal(share(ZoneFaction.CULTIST) >= 0.04 && share(ZoneFaction.CULTIST) <= 0.10, true, `cultist share ${share(ZoneFaction.CULTIST)}`);
+  assert.equal(share(ZoneFaction.SCIENTIST) >= 0.05 && share(ZoneFaction.SCIENTIST) <= 0.11, true, `scientist share ${share(ZoneFaction.SCIENTIST)}`);
+  assert.equal(share(ZoneFaction.WILD) >= 0.09 && share(ZoneFaction.WILD) <= 0.16, true, `wild share ${share(ZoneFaction.WILD)}`);
+});
+
+testGenerationMatrix('genfix 016 admin teleport wild floor has dense pockets and target territory', () => {
+  const base = makeProceduralFloorSpec(61_061, 35);
+  const gen = timedProceduralSpec({
+    ...base,
+    geometryId: 'admin_pockets',
+    baseFloor: FloorLevel.MINISTRY,
+    majorityId: 'wild',
+    anomalyId: 'teleport_cells',
+    danger: 3,
+    title: `перескоки клеток: административные карманы, дикий этаж`,
+  }, 'genfix 016 admin teleport wild seed=61061');
+  const audit = reachabilityAudit(gen);
+  const clusterRooms = gen.world.rooms.filter(room =>
+    room.name.includes('грозди') ||
+    room.name.includes('гроздь') ||
+    room.name.startsWith('Туалет при очереди') ||
+    room.name.startsWith('Чайная при коридоре'));
+  const reachableClusterRooms = clusterRooms.filter(room => roomHasReachableCell(gen.world, audit, room));
+  const anchors = territoryHqAnchors(gen.world);
+  const counts = new Map(countTerritoryCells(gen.world).map(row => [row.owner, row.cells]));
+  const share = (owner: ZoneFaction): number => (counts.get(owner) ?? 0) / (W * W);
+  const dominant = [...counts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0];
+  const hqRooms = anchors
+    .map(anchor => gen.world.rooms[anchor.roomId])
+    .filter(room => room?.type === RoomType.HQ);
+  const supportRooms = gen.world.rooms.filter(room => room.name.includes('штаба') && room.type !== RoomType.HQ);
+  let hermeticShellCells = 0;
+  for (const room of hqRooms) {
+    for (let dy = -1; dy <= room.h; dy++) {
+      for (let dx = -1; dx <= room.w; dx++) {
+        if (dx >= 0 && dx < room.w && dy >= 0 && dy < room.h) continue;
+        hermeticShellCells += gen.world.hermoWall[gen.world.idx(room.x + dx, room.y + dy)] ? 1 : 0;
+      }
+    }
+  }
+  const npcs = gen.entities.filter(entity => entity.type === EntityType.NPC);
+  const ownTerritoryNpcs = npcs.filter(entity => {
+    const ci = gen.world.idx(Math.floor(entity.x), Math.floor(entity.y));
+    return territoryOwnerToFaction(territoryOwnerAtIndex(gen.world, ci)) === entity.faction;
+  });
+
+  assert.equal(gen.world.rooms.length >= 190, true, `rooms ${gen.world.rooms.length}`);
+  assert.equal(gen.world.doors.size >= 320, true, `doors ${gen.world.doors.size}`);
+  assert.equal(clusterRooms.length >= 45, true, `admin cluster rooms ${clusterRooms.length}`);
+  assert.equal(reachableClusterRooms.length >= 35, true, `reachable admin cluster rooms ${reachableClusterRooms.length}`);
+  assert.equal(gen.world.anomalyTeleports.size >= 12, true, `teleport endpoints ${gen.world.anomalyTeleports.size}`);
+  assert.equal(hasReachableLift(gen, audit, LiftDirection.UP), true);
+  assert.equal(hasReachableLift(gen, audit, LiftDirection.DOWN), true);
+
+  for (const owner of HUMAN_TERRITORY_OWNERS) {
+    assert.equal(anchors.some(anchor => anchor.owner === owner), true, `missing HQ anchor ${owner}`);
+    assert.equal((counts.get(owner) ?? 0) > 0, true, `missing territory cells ${owner}`);
+  }
+  assert.equal(hqRooms.length >= HUMAN_TERRITORY_OWNERS.length, true, `HQ rooms ${hqRooms.length}`);
+  assert.equal(supportRooms.length >= 15, true, `HQ support rooms ${supportRooms.length}`);
+  assert.equal(hermeticShellCells >= hqRooms.length * 8, true, `hermetic shell cells ${hermeticShellCells}`);
+  assert.equal(dominant, ZoneFaction.WILD);
+  assert.equal(share(ZoneFaction.CITIZEN) >= 0.14 && share(ZoneFaction.CITIZEN) <= 0.20, true, `citizen share ${share(ZoneFaction.CITIZEN)}`);
+  assert.equal(share(ZoneFaction.LIQUIDATOR) >= 0.10 && share(ZoneFaction.LIQUIDATOR) <= 0.16, true, `liquidator share ${share(ZoneFaction.LIQUIDATOR)}`);
+  assert.equal(share(ZoneFaction.CULTIST) >= 0.09 && share(ZoneFaction.CULTIST) <= 0.15, true, `cultist share ${share(ZoneFaction.CULTIST)}`);
+  assert.equal(share(ZoneFaction.SCIENTIST) >= 0.055 && share(ZoneFaction.SCIENTIST) <= 0.105, true, `scientist share ${share(ZoneFaction.SCIENTIST)}`);
+  assert.equal(share(ZoneFaction.WILD) >= 0.47 && share(ZoneFaction.WILD) <= 0.53, true, `wild share ${share(ZoneFaction.WILD)}`);
+  assert.equal(npcs.length === 0 || ownTerritoryNpcs.length / npcs.length >= 0.5, true, `own territory NPC share ${npcs.length ? ownTerritoryNpcs.length / npcs.length : 1}`);
+});
+
+testGenerationMatrix('genfix 032 procedural admin mirror citizens floor has multi-scale pockets and target territory', () => {
+  const spec = makeProceduralFloorSpec(61_061, 19);
+  assert.equal(spec.geometryId, 'admin_pockets');
+  assert.equal(spec.majorityId, 'citizens');
+  assert.equal(spec.anomalyId, 'mirror_run');
+  assert.equal(spec.danger, 3);
+
+  const gen = timedProceduralSpec(spec, 'genfix_032 admin mirror citizens seed=61061');
+  const audit = reachabilityAudit(gen);
+  const reachable = countReachableCells(audit.reachable);
+  const clusterRooms = gen.world.rooms.filter(room =>
+    room.name.includes('грозди') ||
+    room.name.includes('гроздь') ||
+    room.name.startsWith('Окно приема') ||
+    room.name.startsWith('Юридическая очередь') ||
+    room.name.startsWith('Кабина справки') ||
+    room.name.startsWith('Архивная ячейка') ||
+    room.name.startsWith('Туалет очереди') ||
+    room.name.startsWith('Комната кипятка') ||
+    room.name.startsWith('Кабинет справки о здоровье') ||
+    room.name.startsWith('Малый кабинет') ||
+    room.name.startsWith('Архивный шкаф-карман') ||
+    room.name.startsWith('Служебный туалет') ||
+    room.name.startsWith('Чайная в кармане') ||
+    room.name.startsWith('Пункт холодной помощи') ||
+    room.name.startsWith('Малая очередь') ||
+    room.name.includes('штаба'));
+  const reachableClusterRooms = clusterRooms.filter(room => roomHasReachableCell(gen.world, audit, room));
+  const routeCueTags = new Set(getRouteCueMarkers(gen.world).flatMap(cue => cue.tags));
+  const anchors = territoryHqAnchors(gen.world);
+  const hqOwners = new Set(anchors.map(anchor => anchor.owner));
+  const hqRooms = anchors
+    .map(anchor => gen.world.rooms[anchor.roomId])
+    .filter(room => room?.type === RoomType.HQ);
+  const supportRooms = gen.world.rooms.filter(room => room.name.includes('штаба') && room.type !== RoomType.HQ);
+  const territoryCounts = new Map(countTerritoryCells(gen.world).map(row => [row.owner, row.cells]));
+  const share = (owner: ZoneFaction): number => (territoryCounts.get(owner) ?? 0) / (W * W);
+  const dominant = [...territoryCounts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0];
+  const npcs = gen.entities.filter(entity => entity.type === EntityType.NPC);
+  let alignedNpcs = 0;
+  for (const npc of npcs) {
+    const cellOwner = territoryOwnerAtIndex(gen.world, gen.world.idx(Math.floor(npc.x), Math.floor(npc.y)));
+    if (territoryOwnerToFaction(cellOwner) === npc.faction) alignedNpcs++;
+  }
+  let mirrorTeleportScreens = 0;
+  let staffChordCells = 0;
+  let hermeticShellCells = 0;
+  for (let i = 0; i < gen.world.cells.length; i++) {
+    if (gen.world.features[i] === Feature.SCREEN && gen.world.floorTex[i] === Tex.F_VOID) mirrorTeleportScreens++;
+    if (audit.reachable[i] && gen.world.roomMap[i] < 0 && gen.world.cells[i] === Cell.FLOOR && gen.world.floorTex[i] === Tex.F_GREEN_CARPET) {
+      staffChordCells++;
+    }
+  }
+  for (const room of hqRooms) {
+    for (let dy = -1; dy <= room.h; dy++) {
+      for (let dx = -1; dx <= room.w; dx++) {
+        if (dx >= 0 && dx < room.w && dy >= 0 && dy < room.h) continue;
+        hermeticShellCells += gen.world.hermoWall[gen.world.idx(room.x + dx, room.y + dy)] ? 1 : 0;
+      }
+    }
+  }
+
+  assert.equal(gen.world.rooms.length >= 590, true, `rooms ${gen.world.rooms.length}`);
+  assert.equal(gen.world.doors.size >= 1700, true, `doors ${gen.world.doors.size}`);
+  assert.equal(reachable >= 130_000, true, `reachable ${reachable}`);
+  assert.equal(clusterRooms.length >= 290, true, `admin/mirror cluster rooms ${clusterRooms.length}`);
+  assert.equal(reachableClusterRooms.length >= 280, true, `reachable admin/mirror cluster rooms ${reachableClusterRooms.length}`);
+  assert.equal(staffChordCells >= 1000, true, `staff chord cells ${staffChordCells}`);
+  assert.equal(mirrorTeleportScreens >= 6, true, `mirror teleport screens ${mirrorTeleportScreens}`);
+  assert.equal(routeCueTags.has('mirror_run'), true, 'missing mirror route cue');
+  assert.equal(routeCueTags.has('admin_pockets'), true, 'missing admin route cue');
+  assert.equal(hasReachableLift(gen, audit, LiftDirection.UP), true);
+  assert.equal(hasReachableLift(gen, audit, LiftDirection.DOWN), true);
+
+  for (const owner of HUMAN_TERRITORY_OWNERS) {
+    assert.equal(hqOwners.has(owner), true, `missing HQ owner ${ZoneFaction[owner]}`);
+    assert.equal((territoryCounts.get(owner) ?? 0) > 0, true, `empty territory ${ZoneFaction[owner]}`);
+    const anchor = anchors.find(item => item.owner === owner);
+    const room = anchor ? gen.world.rooms[anchor.roomId] : undefined;
+    assert.equal(room?.type, RoomType.HQ, `HQ room type ${ZoneFaction[owner]}`);
+    assert.equal(room?.sealed, true, `HQ sealed ${ZoneFaction[owner]}`);
+  }
+  for (let i = 0; i < anchors.length; i++) {
+    for (let j = i + 1; j < anchors.length; j++) {
+      assert.equal(gen.world.dist2(anchors[i].x, anchors[i].y, anchors[j].x, anchors[j].y) >= 120 * 120, true, `HQ spacing ${i}/${j}`);
+    }
+  }
+  assert.equal(hqRooms.length >= HUMAN_TERRITORY_OWNERS.length, true, `HQ rooms ${hqRooms.length}`);
+  assert.equal(supportRooms.length >= 15, true, `HQ support rooms ${supportRooms.length}`);
+  assert.equal(hermeticShellCells >= hqRooms.length * 8, true, `hermetic shell cells ${hermeticShellCells}`);
+  assert.equal(npcs.length > 0, true, `npcs ${npcs.length}`);
+  assert.equal(alignedNpcs / npcs.length >= 0.75, true, `aligned NPC share ${alignedNpcs / npcs.length}`);
+  assert.equal(dominant, ZoneFaction.CITIZEN);
+  assert.equal(share(ZoneFaction.CITIZEN) >= 0.54 && share(ZoneFaction.CITIZEN) <= 0.58, true, `citizen share ${share(ZoneFaction.CITIZEN)}`);
+  assert.equal(share(ZoneFaction.LIQUIDATOR) >= 0.15 && share(ZoneFaction.LIQUIDATOR) <= 0.19, true, `liquidator share ${share(ZoneFaction.LIQUIDATOR)}`);
+  assert.equal(share(ZoneFaction.CULTIST) >= 0.055 && share(ZoneFaction.CULTIST) <= 0.085, true, `cultist share ${share(ZoneFaction.CULTIST)}`);
+  assert.equal(share(ZoneFaction.SCIENTIST) >= 0.065 && share(ZoneFaction.SCIENTIST) <= 0.10, true, `scientist share ${share(ZoneFaction.SCIENTIST)}`);
+  assert.equal(share(ZoneFaction.WILD) >= 0.10 && share(ZoneFaction.WILD) <= 0.14, true, `wild share ${share(ZoneFaction.WILD)}`);
+});
+
+testGenerationMatrix('genfix 010 procedural admin hladon wild floor adds micro rooms and target territory', () => {
+  const spec = makeProceduralFloorSpec(61_061, 41);
+  assert.equal(spec.geometryId, 'admin_pockets');
+  assert.equal(spec.majorityId, 'wild');
+  assert.equal(spec.anomalyId, 'hladon');
+  assert.equal(spec.danger, 4);
+
+  const gen = timedProceduralSpec(spec, 'genfix_010 admin hladon wild seed=61061');
+  const audit = reachabilityAudit(gen);
+  const reachable = countReachableCells(audit.reachable);
+  const clusterRooms = gen.world.rooms.filter(room =>
+    room.name.includes('грозди') ||
+    room.name.includes('гроздь') ||
+    room.name.startsWith('Туалет при очереди') ||
+    room.name.startsWith('Чайная при коридоре'));
+  const reachableClusterRooms = clusterRooms.filter(room => roomHasReachableCell(gen.world, audit, room));
+  const smallRooms = gen.world.rooms.filter(room => room.w * room.h <= 54);
+  const hladonRooms = gen.world.rooms.filter(room => room.name.startsWith('Хладон:'));
+  const anchors = territoryHqAnchors(gen.world);
+  const hqRooms = anchors.map(anchor => gen.world.rooms[anchor.roomId]).filter(room => room?.type === RoomType.HQ);
+  const supportRooms = gen.world.rooms.filter(room => room.name.includes('штаба') && room.type !== RoomType.HQ);
+  const counts = new Map(countTerritoryCells(gen.world).map(row => [row.owner, row.cells]));
+  const share = (owner: ZoneFaction): number => (counts.get(owner) ?? 0) / (W * W);
+  const dominant = [...counts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0];
+  let hermeticShellCells = 0;
+  for (const room of hqRooms) {
+    for (let dy = -1; dy <= room.h; dy++) {
+      for (let dx = -1; dx <= room.w; dx++) {
+        if (dx >= 0 && dx < room.w && dy >= 0 && dy < room.h) continue;
+        hermeticShellCells += gen.world.hermoWall[gen.world.idx(room.x + dx, room.y + dy)] ? 1 : 0;
+      }
+    }
+  }
+
+  assert.equal(gen.world.rooms.length >= 430, true, `rooms ${gen.world.rooms.length}`);
+  assert.equal(smallRooms.length >= 180, true, `small rooms ${smallRooms.length}`);
+  assert.equal(gen.world.doors.size >= 900, true, `doors ${gen.world.doors.size}`);
+  assert.equal(reachable >= 190_000, true, `reachable ${reachable}`);
+  assert.equal(clusterRooms.length >= 80, true, `admin cluster rooms ${clusterRooms.length}`);
+  assert.equal(reachableClusterRooms.length >= 60, true, `reachable admin cluster rooms ${reachableClusterRooms.length}`);
+  assert.equal(hladonRooms.length >= 4, true, `hladon rooms ${hladonRooms.length}`);
+  assert.equal(hasReachableLift(gen, audit, LiftDirection.UP), true);
+  assert.equal(hasReachableLift(gen, audit, LiftDirection.DOWN), true);
+
+  for (const owner of HUMAN_TERRITORY_OWNERS) {
+    assert.equal(anchors.some(anchor => anchor.owner === owner), true, `missing HQ anchor ${ZoneFaction[owner]}`);
+    assert.equal((counts.get(owner) ?? 0) > 0, true, `missing territory cells ${ZoneFaction[owner]}`);
+  }
+  assert.equal(anchors.some(anchor => anchor.roomId === 0), false, 'arrival room must not become an automatic HQ');
+  assert.equal(hqRooms.length >= HUMAN_TERRITORY_OWNERS.length, true, `HQ rooms ${hqRooms.length}`);
+  assert.equal(supportRooms.length >= 15, true, `HQ support rooms ${supportRooms.length}`);
+  assert.equal(hermeticShellCells >= hqRooms.length * 12, true, `hermetic shell cells ${hermeticShellCells}`);
+  assert.equal(dominant, ZoneFaction.WILD);
+  assert.equal(Math.abs(share(ZoneFaction.CITIZEN) - 0.17) <= 0.02, true, `citizen share ${share(ZoneFaction.CITIZEN)}`);
+  assert.equal(Math.abs(share(ZoneFaction.LIQUIDATOR) - 0.13) <= 0.02, true, `liquidator share ${share(ZoneFaction.LIQUIDATOR)}`);
+  assert.equal(Math.abs(share(ZoneFaction.CULTIST) - 0.12) <= 0.02, true, `cultist share ${share(ZoneFaction.CULTIST)}`);
+  assert.equal(Math.abs(share(ZoneFaction.SCIENTIST) - 0.08) <= 0.02, true, `scientist share ${share(ZoneFaction.SCIENTIST)}`);
+  assert.equal(Math.abs(share(ZoneFaction.WILD) - 0.5) <= 0.02, true, `wild share ${share(ZoneFaction.WILD)}`);
+});
+
+testGenerationMatrix('genfix 020 admin pockets wild floor has multi-scale rooms and target territory', () => {
+  const base = makeProceduralFloorSpec(61_061, 31);
+  const gen = timedProceduralSpec({
+    ...base,
+    geometryId: 'admin_pockets',
+    baseFloor: FloorLevel.MINISTRY,
+    majorityId: 'wild',
+    anomalyId: 'none',
+    danger: 3,
+    title: `genfix 020: административные карманы, дикий этаж`,
+  }, 'genfix_020 admin pockets wild seed=61061');
+  const audit = reachabilityAudit(gen);
+  const reachable = countReachableCells(audit.reachable);
+  const clusterRooms = gen.world.rooms.filter(room =>
+    room.name.includes('грозди') ||
+    room.name.includes('гроздь') ||
+    room.name.startsWith('Окно приема') ||
+    room.name.startsWith('Юридическая очередь') ||
+    room.name.startsWith('Кабина справки') ||
+    room.name.startsWith('Архивная ячейка') ||
+    room.name.startsWith('Туалет очереди') ||
+    room.name.startsWith('Комната кипятка') ||
+    room.name.startsWith('Кабинет справки о здоровье'));
+  const anchors = territoryHqAnchors(gen.world);
+  const hqOwners = new Set(anchors.map(anchor => anchor.owner));
+  const territoryCounts = new Map(countTerritoryCells(gen.world).map(row => [row.owner, row.cells]));
+  const share = (owner: ZoneFaction): number => (territoryCounts.get(owner) ?? 0) / (W * W);
+
+  assert.equal(gen.world.rooms.length >= 550, true, `rooms ${gen.world.rooms.length}`);
+  assert.equal(gen.world.doors.size >= 1500, true, `doors ${gen.world.doors.size}`);
+  assert.equal(reachable >= 120_000, true, `reachable ${reachable}`);
+  assert.equal(clusterRooms.length >= 180, true, `admin cluster rooms ${clusterRooms.length}`);
+  assert.equal(hasReachableLift(gen, audit, LiftDirection.UP), true);
+  assert.equal(hasReachableLift(gen, audit, LiftDirection.DOWN), true);
+
+  for (const owner of HUMAN_TERRITORY_OWNERS) {
+    assert.equal(hqOwners.has(owner), true, `missing HQ owner ${ZoneFaction[owner]}`);
+    assert.equal((territoryCounts.get(owner) ?? 0) > 0, true, `empty territory ${ZoneFaction[owner]}`);
+    const anchor = anchors.find(item => item.owner === owner);
+    const room = anchor ? gen.world.rooms[anchor.roomId] : undefined;
+    assert.equal(room?.type, RoomType.HQ, `HQ room type ${ZoneFaction[owner]}`);
+    assert.equal(room?.sealed, true, `HQ sealed ${ZoneFaction[owner]}`);
+  }
+  assert.equal(share(ZoneFaction.CITIZEN) >= 0.15 && share(ZoneFaction.CITIZEN) <= 0.19, true, `citizen share ${share(ZoneFaction.CITIZEN)}`);
+  assert.equal(share(ZoneFaction.LIQUIDATOR) >= 0.11 && share(ZoneFaction.LIQUIDATOR) <= 0.15, true, `liquidator share ${share(ZoneFaction.LIQUIDATOR)}`);
+  assert.equal(share(ZoneFaction.CULTIST) >= 0.10 && share(ZoneFaction.CULTIST) <= 0.14, true, `cultist share ${share(ZoneFaction.CULTIST)}`);
+  assert.equal(share(ZoneFaction.SCIENTIST) >= 0.06 && share(ZoneFaction.SCIENTIST) <= 0.10, true, `scientist share ${share(ZoneFaction.SCIENTIST)}`);
+  assert.equal(share(ZoneFaction.WILD) >= 0.48 && share(ZoneFaction.WILD) <= 0.52, true, `wild share ${share(ZoneFaction.WILD)}`);
+});
+
+testGenerationMatrix('genfix 028 procedural admin rail liquidator floor has dense stations and target territory', () => {
+  const spec = makeProceduralFloorSpec(61_061, 23);
+  assert.equal(spec.z, 23);
+  assert.equal(spec.geometryId, 'admin_pockets');
+  assert.equal(spec.majorityId, 'liquidators');
+  assert.equal(spec.anomalyId, 'rail_trains');
+  assert.equal(spec.danger, 2);
+  assert.equal(proceduralStructureFamilyForSpec(spec), 'prime_xor_registry');
+
+  const gen = timedProceduralSpec(spec, 'genfix_028 admin rail liquidators seed=61061');
+  const audit = reachabilityAudit(gen);
+  const reachable = countReachableCells(audit.reachable);
+  const clusterRooms = gen.world.rooms.filter(room =>
+    room.name.includes('грозди') ||
+    room.name.includes('гроздь') ||
+    room.name.startsWith('Окно приема') ||
+    room.name.startsWith('Юридическая очередь') ||
+    room.name.startsWith('Кабина справки') ||
+    room.name.startsWith('Архивная ячейка') ||
+    room.name.startsWith('Туалет очереди') ||
+    room.name.startsWith('Комната кипятка') ||
+    room.name.startsWith('Кабинет справки о здоровье') ||
+    room.name.includes('платформ') ||
+    room.name.includes('Платформ'));
+  const platformRooms = gen.world.rooms.filter(room => room.name.includes('платформ') || room.name.includes('Платформ'));
+  const reachablePlatformRooms = platformRooms.filter(room => roomHasReachableCell(gen.world, audit, room));
+  const anchors = territoryHqAnchors(gen.world);
+  const hqOwners = new Set(anchors.map(anchor => anchor.owner));
+  const territoryCounts = new Map(countTerritoryCells(gen.world).map(row => [row.owner, row.cells]));
+  const share = (owner: ZoneFaction): number => (territoryCounts.get(owner) ?? 0) / (W * W);
+  const dominant = [...territoryCounts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0];
+  const npcs = gen.entities.filter(entity => entity.type === EntityType.NPC);
+  const ownTerritoryNpcs = npcs.filter(entity => {
+    const ci = gen.world.idx(Math.floor(entity.x), Math.floor(entity.y));
+    return territoryOwnerToFaction(territoryOwnerAtIndex(gen.world, ci)) === entity.faction;
+  });
+
+  assert.equal(gen.world.rooms.length >= 540, true, `rooms ${gen.world.rooms.length}`);
+  assert.equal(gen.world.doors.size >= 1_300, true, `doors ${gen.world.doors.size}`);
+  assert.equal(reachable >= 180_000, true, `reachable ${reachable}`);
+  assert.equal(clusterRooms.length >= 250, true, `admin/rail cluster rooms ${clusterRooms.length}`);
+  assert.equal(platformRooms.length >= 12, true, `platform service rooms ${platformRooms.length}`);
+  assert.equal(reachablePlatformRooms.length >= 12, true, `reachable platform service rooms ${reachablePlatformRooms.length}`);
+  assert.equal(gen.world.railTracks.length >= 2, true, `rail tracks ${gen.world.railTracks.length}`);
+  assert.equal(gen.world.railTrains.length >= 2, true, `rail trains ${gen.world.railTrains.length}`);
+  assert.equal(hasReachableLift(gen, audit, LiftDirection.UP), true);
+  assert.equal(hasReachableLift(gen, audit, LiftDirection.DOWN), true);
+
+  for (const owner of HUMAN_TERRITORY_OWNERS) {
+    assert.equal(hqOwners.has(owner), true, `missing HQ owner ${ZoneFaction[owner]}`);
+    assert.equal((territoryCounts.get(owner) ?? 0) > 0, true, `empty territory ${ZoneFaction[owner]}`);
+  }
+  assert.equal(dominant, ZoneFaction.LIQUIDATOR);
+  assert.equal(Math.abs(share(ZoneFaction.CITIZEN) - 0.17) <= 0.02, true, `citizen share ${share(ZoneFaction.CITIZEN)}`);
+  assert.equal(Math.abs(share(ZoneFaction.LIQUIDATOR) - 0.56) <= 0.02, true, `liquidator share ${share(ZoneFaction.LIQUIDATOR)}`);
+  assert.equal(Math.abs(share(ZoneFaction.CULTIST) - 0.07) <= 0.02, true, `cultist share ${share(ZoneFaction.CULTIST)}`);
+  assert.equal(Math.abs(share(ZoneFaction.SCIENTIST) - 0.08) <= 0.02, true, `scientist share ${share(ZoneFaction.SCIENTIST)}`);
+  assert.equal(Math.abs(share(ZoneFaction.WILD) - 0.12) <= 0.02, true, `wild share ${share(ZoneFaction.WILD)}`);
+  assert.equal(npcs.length === 0 || ownTerritoryNpcs.length / npcs.length >= 0.6, true, `own territory NPC share ${npcs.length ? ownTerritoryNpcs.length / npcs.length : 1}`);
+});
+
+testGenerationMatrix('genfix 036 procedural admin teleport citizens floor keeps macro pockets micro rooms and target territory', () => {
+  const spec = makeProceduralFloorSpec(61_061, 15);
+  assert.equal(spec.ordinal, 36);
+  assert.equal(spec.geometryId, 'admin_pockets');
+  assert.equal(spec.majorityId, 'citizens');
+  assert.equal(spec.anomalyId, 'teleport_cells');
+  assert.equal(spec.danger, 3);
+
+  const gen = timedProceduralSpec(spec, 'genfix_036 admin teleport citizens seed=61061');
+  const audit = reachabilityAudit(gen);
+  const reachable = countReachableCells(audit.reachable);
+  const clusterRooms = gen.world.rooms.filter(room =>
+    room.name.includes('грозди') ||
+    room.name.includes('гроздь') ||
+    room.name.startsWith('Окно приема') ||
+    room.name.startsWith('Юридическая очередь') ||
+    room.name.startsWith('Кабина справки') ||
+    room.name.startsWith('Архивная ячейка') ||
+    room.name.startsWith('Туалет очереди') ||
+    room.name.startsWith('Комната кипятка') ||
+    room.name.startsWith('Кабинет справки о здоровье') ||
+    room.name.startsWith('Архивный шкаф-карман') ||
+    room.name.startsWith('Служебный туалет') ||
+    room.name.startsWith('Чайная в кармане') ||
+    room.name.startsWith('Пункт холодной помощи') ||
+    room.name.startsWith('Малая очередь') ||
+    room.name.startsWith('Малый кабинет'));
+  const reachableClusterRooms = clusterRooms.filter(room => roomHasReachableCell(gen.world, audit, room));
+  const hqAnchors = territoryHqAnchors(gen.world);
+  const hqOwners = new Set(hqAnchors.map(anchor => anchor.owner));
+  const territoryCounts = new Map(countTerritoryCells(gen.world).map(row => [row.owner, row.cells]));
+  const share = (owner: ZoneFaction): number => (territoryCounts.get(owner) ?? 0) / (W * W);
+  const npcs = gen.entities.filter(entity => entity.type === EntityType.NPC);
+  const ownTerritoryNpcs = npcs.filter(entity => {
+    const ci = gen.world.idx(Math.floor(entity.x), Math.floor(entity.y));
+    return territoryOwnerToFaction(territoryOwnerAtIndex(gen.world, ci)) === entity.faction;
+  });
+  const supportRooms = gen.world.rooms.filter(room => room.name.includes('штаба') && room.type !== RoomType.HQ);
+
+  assert.equal(gen.world.rooms.length >= 540, true, `rooms ${gen.world.rooms.length}`);
+  assert.equal(gen.world.doors.size >= 1_350, true, `doors ${gen.world.doors.size}`);
+  assert.equal(reachable >= 220_000, true, `reachable ${reachable}`);
+  assert.equal(clusterRooms.length >= 240, true, `admin cluster rooms ${clusterRooms.length}`);
+  assert.equal(reachableClusterRooms.length >= 220, true, `reachable admin cluster rooms ${reachableClusterRooms.length}`);
+  assert.equal(gen.world.anomalyTeleports.size >= 14, true, `teleport endpoints ${gen.world.anomalyTeleports.size}`);
+  assert.equal(getRouteCueMarkers(gen.world).some(marker => marker.tags.includes('admin_pockets')), true);
+  assert.equal(hasReachableLift(gen, audit, LiftDirection.UP), true);
+  assert.equal(hasReachableLift(gen, audit, LiftDirection.DOWN), true);
+
+  for (const owner of HUMAN_TERRITORY_OWNERS) {
+    assert.equal(hqOwners.has(owner), true, `missing HQ owner ${ZoneFaction[owner]}`);
+    assert.equal((territoryCounts.get(owner) ?? 0) > 0, true, `empty territory ${ZoneFaction[owner]}`);
+    const anchor = hqAnchors.find(item => item.owner === owner);
+    const room = anchor ? gen.world.rooms[anchor.roomId] : undefined;
+    assert.equal(room?.type, RoomType.HQ, `HQ room type ${ZoneFaction[owner]}`);
+    assert.equal(room?.sealed, true, `HQ sealed ${ZoneFaction[owner]}`);
+    assert.equal(room?.doors.some(doorIdx => gen.world.doors.get(doorIdx)?.state === DoorState.HERMETIC_OPEN), true, `HQ hermetic door ${ZoneFaction[owner]}`);
+  }
+  assert.equal(supportRooms.length >= 15, true, `HQ support rooms ${supportRooms.length}`);
+  assert.equal(Math.abs(share(ZoneFaction.CITIZEN) - 0.56) <= 0.02, true, `citizen share ${share(ZoneFaction.CITIZEN)}`);
+  assert.equal(Math.abs(share(ZoneFaction.LIQUIDATOR) - 0.17) <= 0.02, true, `liquidator share ${share(ZoneFaction.LIQUIDATOR)}`);
+  assert.equal(Math.abs(share(ZoneFaction.CULTIST) - 0.07) <= 0.02, true, `cultist share ${share(ZoneFaction.CULTIST)}`);
+  assert.equal(Math.abs(share(ZoneFaction.SCIENTIST) - 0.08) <= 0.02, true, `scientist share ${share(ZoneFaction.SCIENTIST)}`);
+  assert.equal(Math.abs(share(ZoneFaction.WILD) - 0.12) <= 0.02, true, `wild share ${share(ZoneFaction.WILD)}`);
+  assert.equal(npcs.length === 0 || ownTerritoryNpcs.length / npcs.length >= 0.7, true, `own territory NPC share ${npcs.length ? ownTerritoryNpcs.length / npcs.length : 1}`);
+});
+
+testGenerationMatrix('genfix 030 procedural admin conveyor scientist floor has sorter annexes and target territory', () => {
+  const spec = makeProceduralFloorSpec(61_061, 21);
+  assert.equal(spec.geometryId, 'admin_pockets');
+  assert.equal(spec.majorityId, 'scientists');
+  assert.equal(spec.anomalyId, 'conveyor_sorter');
+  assert.equal(spec.danger, 3);
+
+  const gen = timedProceduralSpec(spec, 'genfix_030 admin conveyor scientists seed=61061');
+  const audit = reachabilityAudit(gen);
+  const reachable = countReachableCells(audit.reachable);
+  const sorterAnnexRooms = gen.world.rooms.filter(room => room.name.startsWith('Сортировочная станция'));
+  const conveyorRooms = gen.world.rooms.filter(room => room.name.startsWith('Сортировочный конвейер'));
+  const smallRooms = gen.world.rooms.filter(room => room.w * room.h <= 54);
+  const clusterRooms = gen.world.rooms.filter(room =>
+    room.name.includes('грозди') ||
+    room.name.includes('гроздь') ||
+    room.name.startsWith('Окно приема') ||
+    room.name.startsWith('Юридическая очередь') ||
+    room.name.startsWith('Кабина справки') ||
+    room.name.startsWith('Архивная ячейка') ||
+    room.name.startsWith('Туалет очереди') ||
+    room.name.startsWith('Комната кипятка') ||
+    room.name.startsWith('Кабинет справки о здоровье') ||
+    room.name.startsWith('Сортировочная станция'));
+  const reachableClusterRooms = clusterRooms.filter(room => roomHasReachableCell(gen.world, audit, room));
+  const anchors = territoryHqAnchors(gen.world);
+  const hqOwners = new Set(anchors.map(anchor => anchor.owner));
+  const hqRooms = anchors.map(anchor => gen.world.rooms[anchor.roomId]).filter(room => room?.type === RoomType.HQ);
+  const supportRooms = gen.world.rooms.filter(room => room.name.includes('штаба') && room.type !== RoomType.HQ);
+  const territoryCounts = new Map(countTerritoryCells(gen.world).map(row => [row.owner, row.cells]));
+  const share = (owner: ZoneFaction): number => (territoryCounts.get(owner) ?? 0) / (W * W);
+  const dominant = [...territoryCounts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0];
+  let hermeticShellCells = 0;
+  for (const room of hqRooms) {
+    for (let dy = -1; dy <= room.h; dy++) {
+      for (let dx = -1; dx <= room.w; dx++) {
+        if (dx >= 0 && dx < room.w && dy >= 0 && dy < room.h) continue;
+        hermeticShellCells += gen.world.hermoWall[gen.world.idx(room.x + dx, room.y + dy)] ? 1 : 0;
+      }
+    }
+  }
+  const npcs = gen.entities.filter(entity => entity.type === EntityType.NPC);
+  const ownTerritoryNpcs = npcs.filter(entity => {
+    const ci = gen.world.idx(Math.floor(entity.x), Math.floor(entity.y));
+    return territoryOwnerToFaction(territoryOwnerAtIndex(gen.world, ci)) === entity.faction;
+  });
+
+  assert.equal(gen.world.rooms.length >= 620, true, `rooms ${gen.world.rooms.length}`);
+  assert.equal(gen.world.doors.size >= 1600, true, `doors ${gen.world.doors.size}`);
+  assert.equal(reachable >= 130_000, true, `reachable ${reachable}`);
+  assert.equal(smallRooms.length >= 260, true, `small rooms ${smallRooms.length}`);
+  assert.equal(sorterAnnexRooms.length >= 36, true, `sorter annex rooms ${sorterAnnexRooms.length}`);
+  assert.equal(conveyorRooms.length >= 8, true, `conveyor rooms ${conveyorRooms.length}`);
+  assert.equal(clusterRooms.length >= 280, true, `admin/conveyor cluster rooms ${clusterRooms.length}`);
+  assert.equal(reachableClusterRooms.length >= 260, true, `reachable admin/conveyor cluster rooms ${reachableClusterRooms.length}`);
+  assert.equal(hasReachableLift(gen, audit, LiftDirection.UP), true);
+  assert.equal(hasReachableLift(gen, audit, LiftDirection.DOWN), true);
+
+  for (const owner of HUMAN_TERRITORY_OWNERS) {
+    assert.equal(hqOwners.has(owner), true, `missing HQ owner ${ZoneFaction[owner]}`);
+    assert.equal((territoryCounts.get(owner) ?? 0) > 0, true, `empty territory ${ZoneFaction[owner]}`);
+  }
+  assert.equal(hqRooms.length >= HUMAN_TERRITORY_OWNERS.length, true, `HQ rooms ${hqRooms.length}`);
+  assert.equal(supportRooms.length >= 15, true, `HQ support rooms ${supportRooms.length}`);
+  assert.equal(hermeticShellCells >= hqRooms.length * 12, true, `hermetic shell cells ${hermeticShellCells}`);
+  assert.equal(dominant, ZoneFaction.SCIENTIST);
+  assert.equal(Math.abs(share(ZoneFaction.CITIZEN) - 0.22) <= 0.025, true, `citizen share ${share(ZoneFaction.CITIZEN)}`);
+  assert.equal(Math.abs(share(ZoneFaction.LIQUIDATOR) - 0.16) <= 0.025, true, `liquidator share ${share(ZoneFaction.LIQUIDATOR)}`);
+  assert.equal(Math.abs(share(ZoneFaction.CULTIST) - 0.08) <= 0.025, true, `cultist share ${share(ZoneFaction.CULTIST)}`);
+  assert.equal(Math.abs(share(ZoneFaction.SCIENTIST) - 0.42) <= 0.025, true, `scientist share ${share(ZoneFaction.SCIENTIST)}`);
+  assert.equal(Math.abs(share(ZoneFaction.WILD) - 0.12) <= 0.025, true, `wild share ${share(ZoneFaction.WILD)}`);
+  assert.equal(npcs.length === 0 || ownTerritoryNpcs.length / npcs.length >= 0.65, true, `own territory NPC share ${npcs.length ? ownTerritoryNpcs.length / npcs.length : 1}`);
+});
+
 testGenerationMatrix('communal knots geometry builds service and through-flat loops with grievance landmarks', () => {
   const def = FLOOR_GEOMETRIES.find(item => item.id === 'communal_knots');
   assert.equal(def?.roomTypes.includes(RoomType.BATHROOM), true);
@@ -1621,6 +3342,369 @@ testGenerationMatrix('communal knots geometry builds service and through-flat lo
   assert.equal(gen.world.containers.some(container => container.tags.includes('service_loop') && container.tags.includes('expose_notice')), true);
   assert.equal(gen.world.containers.some(container => container.tags.includes('bypass_loop') && container.tags.includes('through_flat')), true);
   assert.equal(gen.entities.filter(entity => entity.type === EntityType.NPC).length <= ENTITY_SOFT_LIMITS[EntityType.NPC], true);
+});
+
+testGenerationMatrix('genfix 040 communal liquidator floor keeps macro and adds mid micro territory', () => {
+  const spec = makeProceduralFloorSpec(61_061, 11);
+  assert.equal(spec.geometryId, 'communal_knots');
+  assert.equal(spec.majorityId, 'liquidators');
+  assert.equal(spec.anomalyId, 'none');
+  assert.equal(spec.danger, 2);
+
+  const gen = timedProceduralSpec(spec, 'genfix 040 communal liquidators seed=61061');
+  const audit = reachabilityAudit(gen);
+  const reachable = countReachableCells(audit.reachable);
+  const clusterRooms = gen.world.rooms.filter(room => room.name.startsWith('Очередной блок'));
+  const microRooms = clusterRooms.filter(room => room.w * room.h <= 72);
+  const serviceRooms = gen.world.rooms.filter(room =>
+    room.name.includes('Общая кухня') ||
+    room.name.includes('Водяная очередь') ||
+    room.name.includes('Кладовая общака') ||
+    room.name.includes('Очередь у курилки') ||
+    room.name.includes('Коммунальная очередь'),
+  );
+  const bypassRooms = gen.world.rooms.filter(room => room.name.includes('Сквозная коммуналка'));
+  const grievanceRooms = gen.world.rooms.filter(room => room.name.startsWith('Домен жалобы'));
+  const liquidatorPosts = gen.world.rooms.filter(room => room.name.includes('пост ликвидаторов'));
+  const checkpointContainers = gen.world.containers.filter(container => container.tags.includes('liquidator_checkpoint'));
+  const anchors = territoryHqAnchors(gen.world);
+  const hqOwners = new Set(anchors.map(anchor => anchor.owner));
+  const hqRooms = anchors
+    .map(anchor => gen.world.rooms[anchor.roomId])
+    .filter(room => room?.type === RoomType.HQ);
+  const supportRooms = gen.world.rooms.filter(room => room.name.includes('штаба') && room.type !== RoomType.HQ);
+  const counts = new Map(countTerritoryCells(gen.world).map(row => [row.owner, row.cells]));
+  const share = (owner: ZoneFaction): number => (counts.get(owner) ?? 0) / (W * W);
+  const dominant = [...counts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0];
+  const npcs = gen.entities.filter(entity => entity.type === EntityType.NPC);
+  const ownTerritoryNpcs = npcs.filter(entity => {
+    const ci = gen.world.idx(Math.floor(entity.x), Math.floor(entity.y));
+    return territoryOwnerToFaction(territoryOwnerAtIndex(gen.world, ci)) === entity.faction;
+  });
+  let hermeticShellCells = 0;
+  for (const room of hqRooms) {
+    for (let dy = -1; dy <= room.h; dy++) {
+      for (let dx = -1; dx <= room.w; dx++) {
+        if (dx >= 0 && dx < room.w && dy >= 0 && dy < room.h) continue;
+        hermeticShellCells += gen.world.hermoWall[gen.world.idx(room.x + dx, room.y + dy)] ? 1 : 0;
+      }
+    }
+  }
+
+  assert.equal(gen.world.rooms.length >= 240, true, `rooms ${gen.world.rooms.length}`);
+  assert.equal(gen.world.doors.size >= 600, true, `doors ${gen.world.doors.size}`);
+  assert.equal(reachable >= 175_000, true, `reachable ${reachable}`);
+  assert.equal(clusterRooms.length >= 90, true, `communal cluster rooms ${clusterRooms.length}`);
+  assert.equal(microRooms.length >= 80, true, `communal micro rooms ${microRooms.length}`);
+  assert.equal(serviceRooms.length >= 4, true, `service rooms ${serviceRooms.length}`);
+  assert.equal(bypassRooms.length >= 3, true, `bypass rooms ${bypassRooms.length}`);
+  assert.equal(grievanceRooms.length >= 2, true, `grievance rooms ${grievanceRooms.length}`);
+  assert.equal(liquidatorPosts.length >= 4, true, `liquidator posts ${liquidatorPosts.length}`);
+  assert.equal(checkpointContainers.length >= 5, true, `checkpoint containers ${checkpointContainers.length}`);
+  assert.equal(hasReachableLift(gen, audit, LiftDirection.UP), true);
+  assert.equal(hasReachableLift(gen, audit, LiftDirection.DOWN), true);
+
+  for (const room of [...clusterRooms.slice(0, 12), ...liquidatorPosts]) {
+    const ci = gen.world.idx(room.x + Math.floor(room.w / 2), room.y + Math.floor(room.h / 2));
+    assertAuditReachable(gen.world, audit, ci, `${room.name} center`);
+  }
+  for (const owner of HUMAN_TERRITORY_OWNERS) {
+    assert.equal(hqOwners.has(owner), true, `missing HQ owner ${ZoneFaction[owner]}`);
+    assert.equal((counts.get(owner) ?? 0) > 0, true, `empty territory ${ZoneFaction[owner]}`);
+    const anchor = anchors.find(item => item.owner === owner);
+    const room = anchor ? gen.world.rooms[anchor.roomId] : undefined;
+    assert.equal(room?.type, RoomType.HQ, `HQ room type ${ZoneFaction[owner]}`);
+    assert.equal(room?.sealed, true, `HQ sealed ${ZoneFaction[owner]}`);
+  }
+  assert.equal(hqRooms.length >= HUMAN_TERRITORY_OWNERS.length, true, `HQ rooms ${hqRooms.length}`);
+  assert.equal(supportRooms.length >= 12, true, `HQ support rooms ${supportRooms.length}`);
+  assert.equal(hermeticShellCells >= hqRooms.length * 8, true, `hermetic shell cells ${hermeticShellCells}`);
+  assert.equal(dominant, ZoneFaction.LIQUIDATOR);
+  assert.equal(Math.abs(share(ZoneFaction.CITIZEN) - 0.17) <= 0.02, true, `citizen share ${share(ZoneFaction.CITIZEN)}`);
+  assert.equal(Math.abs(share(ZoneFaction.LIQUIDATOR) - 0.56) <= 0.02, true, `liquidator share ${share(ZoneFaction.LIQUIDATOR)}`);
+  assert.equal(Math.abs(share(ZoneFaction.CULTIST) - 0.07) <= 0.02, true, `cultist share ${share(ZoneFaction.CULTIST)}`);
+  assert.equal(Math.abs(share(ZoneFaction.SCIENTIST) - 0.08) <= 0.02, true, `scientist share ${share(ZoneFaction.SCIENTIST)}`);
+  assert.equal(Math.abs(share(ZoneFaction.WILD) - 0.12) <= 0.02, true, `wild share ${share(ZoneFaction.WILD)}`);
+  assert.equal(npcs.length === 0 || ownTerritoryNpcs.length / npcs.length >= 0.65, true, `own territory NPC share ${npcs.length ? ownTerritoryNpcs.length / npcs.length : 1}`);
+});
+
+testGenerationMatrix('genfix 054 communal conveyor wild floor has scaled clusters and target territory', () => {
+  const spec = makeProceduralFloorSpec(61_061, -3);
+  assert.equal(spec.geometryId, 'communal_knots');
+  assert.equal(spec.majorityId, 'wild');
+  assert.equal(spec.anomalyId, 'conveyor_sorter');
+  assert.equal(spec.danger, 2);
+
+  const gen = timedProceduralSpec(spec, 'genfix 054 communal conveyor wild seed=61061');
+  const audit = reachabilityAudit(gen);
+  const reachable = countReachableCells(audit.reachable);
+  const clusterRooms = gen.world.rooms.filter(room => room.name.startsWith('Очередной блок'));
+  const microRooms = clusterRooms.filter(room => room.w * room.h <= 72);
+  const reachableClusterRooms = clusterRooms.filter(room => roomHasReachableCell(gen.world, audit, room));
+  const sorterAnnexRooms = gen.world.rooms.filter(room => room.name.startsWith('Сортировочная станция'));
+  const reachableSorterAnnexRooms = sorterAnnexRooms.filter(room => roomHasReachableCell(gen.world, audit, room));
+  const conveyorRooms = gen.world.rooms.filter(room => room.name.startsWith('Сортировочный конвейер'));
+  const serviceRooms = gen.world.rooms.filter(room =>
+    room.name.includes('Общая кухня') ||
+    room.name.includes('Водяная очередь') ||
+    room.name.includes('Кладовая общака') ||
+    room.name.includes('Очередь у курилки') ||
+    room.name.includes('Коммунальная очередь'),
+  );
+  const bypassRooms = gen.world.rooms.filter(room => room.name.includes('Сквозная коммуналка'));
+  const grievanceRooms = gen.world.rooms.filter(room => room.name.startsWith('Домен жалобы'));
+  const anchors = territoryHqAnchors(gen.world);
+  const hqOwners = new Set(anchors.map(anchor => anchor.owner));
+  const hqRooms = anchors
+    .map(anchor => gen.world.rooms[anchor.roomId])
+    .filter(room => room?.type === RoomType.HQ);
+  const territoryCounts = new Map(countTerritoryCells(gen.world).map(row => [row.owner, row.cells]));
+  const share = (owner: ZoneFaction): number => (territoryCounts.get(owner) ?? 0) / (W * W);
+  const dominant = [...territoryCounts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0];
+  const npcs = gen.entities.filter(entity => entity.type === EntityType.NPC);
+  const ownTerritoryNpcs = npcs.filter(entity => {
+    const ci = gen.world.idx(Math.floor(entity.x), Math.floor(entity.y));
+    return territoryOwnerToFaction(territoryOwnerAtIndex(gen.world, ci)) === entity.faction;
+  });
+  const supportTypes = new Set([
+    RoomType.KITCHEN,
+    RoomType.BATHROOM,
+    RoomType.STORAGE,
+    RoomType.MEDICAL,
+    RoomType.OFFICE,
+    RoomType.COMMON,
+    RoomType.PRODUCTION,
+    RoomType.SMOKING,
+  ]);
+  let hermeticShellCells = 0;
+  let hqAnchorsWithSupport = 0;
+  for (const anchor of anchors) {
+    const hq = gen.world.rooms[anchor.roomId];
+    if (!hq) continue;
+    const cx = hq.x + (hq.w >> 1);
+    const cy = hq.y + (hq.h >> 1);
+    let supportCount = 0;
+    for (const room of gen.world.rooms) {
+      if (!room || room.id === hq.id || room.type === RoomType.HQ || room.apartmentId >= 0 || !supportTypes.has(room.type)) continue;
+      if (gen.world.dist2(cx, cy, room.x + (room.w >> 1), room.y + (room.h >> 1)) <= 120 * 120) supportCount++;
+    }
+    if (supportCount >= 4) hqAnchorsWithSupport++;
+    for (let dy = -1; dy <= hq.h; dy++) {
+      for (let dx = -1; dx <= hq.w; dx++) {
+        if (dx >= 0 && dx < hq.w && dy >= 0 && dy < hq.h) continue;
+        hermeticShellCells += gen.world.hermoWall[gen.world.idx(hq.x + dx, hq.y + dy)] ? 1 : 0;
+      }
+    }
+  }
+
+  assert.equal(gen.world.rooms.length >= 370, true, `rooms ${gen.world.rooms.length}`);
+  assert.equal(gen.world.doors.size >= 900, true, `doors ${gen.world.doors.size}`);
+  assert.equal(reachable >= 205_000, true, `reachable ${reachable}`);
+  assert.equal(clusterRooms.length >= 200, true, `communal cluster rooms ${clusterRooms.length}`);
+  assert.equal(microRooms.length >= 170, true, `communal micro rooms ${microRooms.length}`);
+  assert.equal(reachableClusterRooms.length >= 190, true, `reachable communal cluster rooms ${reachableClusterRooms.length}`);
+  assert.equal(sorterAnnexRooms.length >= 24, true, `sorter annex rooms ${sorterAnnexRooms.length}`);
+  assert.equal(reachableSorterAnnexRooms.length >= 24, true, `reachable sorter annex rooms ${reachableSorterAnnexRooms.length}`);
+  assert.equal(conveyorRooms.length >= 9, true, `conveyor rooms ${conveyorRooms.length}`);
+  assert.equal(serviceRooms.length >= 5, true, `service rooms ${serviceRooms.length}`);
+  assert.equal(bypassRooms.length >= 4, true, `bypass rooms ${bypassRooms.length}`);
+  assert.equal(grievanceRooms.length >= 2, true, `grievance rooms ${grievanceRooms.length}`);
+  assert.equal(hasReachableLift(gen, audit, LiftDirection.UP), true);
+  assert.equal(hasReachableLift(gen, audit, LiftDirection.DOWN), true);
+
+  for (const owner of HUMAN_TERRITORY_OWNERS) {
+    assert.equal(hqOwners.has(owner), true, `missing HQ owner ${ZoneFaction[owner]}`);
+    assert.equal((territoryCounts.get(owner) ?? 0) > 0, true, `empty territory ${ZoneFaction[owner]}`);
+    const anchor = anchors.find(item => item.owner === owner);
+    const room = anchor ? gen.world.rooms[anchor.roomId] : undefined;
+    assert.equal(room?.type, RoomType.HQ, `HQ room type ${ZoneFaction[owner]}`);
+    assert.equal(room?.sealed, true, `HQ sealed ${ZoneFaction[owner]}`);
+  }
+  assert.equal(hqRooms.length >= HUMAN_TERRITORY_OWNERS.length, true, `HQ rooms ${hqRooms.length}`);
+  assert.equal(hqAnchorsWithSupport >= HUMAN_TERRITORY_OWNERS.length, true, `HQ anchors with support ${hqAnchorsWithSupport}`);
+  assert.equal(hermeticShellCells >= hqRooms.length * 8, true, `hermetic shell cells ${hermeticShellCells}`);
+  assert.equal(dominant, ZoneFaction.WILD);
+  assert.equal(Math.abs(share(ZoneFaction.CITIZEN) - 0.17) <= 0.02, true, `citizen share ${share(ZoneFaction.CITIZEN)}`);
+  assert.equal(Math.abs(share(ZoneFaction.LIQUIDATOR) - 0.13) <= 0.02, true, `liquidator share ${share(ZoneFaction.LIQUIDATOR)}`);
+  assert.equal(Math.abs(share(ZoneFaction.CULTIST) - 0.12) <= 0.02, true, `cultist share ${share(ZoneFaction.CULTIST)}`);
+  assert.equal(Math.abs(share(ZoneFaction.SCIENTIST) - 0.08) <= 0.02, true, `scientist share ${share(ZoneFaction.SCIENTIST)}`);
+  assert.equal(Math.abs(share(ZoneFaction.WILD) - 0.50) <= 0.02, true, `wild share ${share(ZoneFaction.WILD)}`);
+  assert.equal(npcs.length === 0 || ownTerritoryNpcs.length / npcs.length >= 0.75, true, `own territory NPC share ${npcs.length ? ownTerritoryNpcs.length / npcs.length : 1}`);
+});
+
+testGenerationMatrix('genfix 044 communal citizen floor keeps macro, queue rings and target territory', () => {
+  const spec = makeProceduralFloorSpec(61_061, 7);
+  assert.equal(spec.geometryId, 'communal_knots');
+  assert.equal(spec.majorityId, 'citizens');
+  assert.equal(spec.anomalyId, 'none');
+  assert.equal(spec.danger, 1);
+
+  const gen = timedProceduralSpec(spec, 'genfix 044 communal citizens seed=61061');
+  const audit = reachabilityAudit(gen);
+  const reachable = countReachableCells(audit.reachable);
+  const macroHalls = gen.world.rooms.filter(room =>
+    room.name.startsWith('Общий тамбур') ||
+    (room.w * room.h >= 140 && Math.max(room.w, room.h) >= 18),
+  );
+  const clusterRooms = gen.world.rooms.filter(room => room.name.startsWith('Очередной блок'));
+  const microRooms = clusterRooms.filter(room => room.w * room.h <= 72);
+  const serviceRooms = gen.world.rooms.filter(room =>
+    room.name.includes('Общая кухня') ||
+    room.name.includes('Водяная очередь') ||
+    room.name.includes('Кладовая общака') ||
+    room.name.includes('Очередь у курилки') ||
+    room.name.includes('Коммунальная очередь'),
+  );
+  const bypassRooms = gen.world.rooms.filter(room => room.name.includes('Сквозная коммуналка'));
+  const grievanceRooms = gen.world.rooms.filter(room => room.name.startsWith('Домен жалобы'));
+  const anchors = territoryHqAnchors(gen.world);
+  const hqOwners = new Set(anchors.map(anchor => anchor.owner));
+  const hqRooms = anchors
+    .map(anchor => gen.world.rooms[anchor.roomId])
+    .filter(room => room?.type === RoomType.HQ);
+  const supportRooms = gen.world.rooms.filter(room => room.name.includes('штаба') && room.type !== RoomType.HQ);
+  const counts = new Map(countTerritoryCells(gen.world).map(row => [row.owner, row.cells]));
+  const totalCells = [...counts.values()].reduce((sum, count) => sum + count, 0);
+  const share = (owner: ZoneFaction): number => (counts.get(owner) ?? 0) / totalCells;
+  const dominant = [...counts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0];
+  const npcs = gen.entities.filter(entity => entity.type === EntityType.NPC);
+  const ownTerritoryNpcs = npcs.filter(entity => {
+    if (entity.faction === undefined) return false;
+    const owner = territoryOwnerAtIndex(gen.world, gen.world.idx(Math.floor(entity.x), Math.floor(entity.y)));
+    return territoryOwnerToFaction(owner) === entity.faction;
+  });
+  const structureCues = getRouteCueMarkers(gen.world).filter(marker =>
+    marker.tags.includes('structure_library') &&
+    marker.tags.includes('cellular_braid') &&
+    marker.tags.includes('communal_knots'),
+  );
+
+  assert.equal(gen.world.rooms.length >= 270, true, `rooms ${gen.world.rooms.length}`);
+  assert.equal(gen.world.doors.size >= 670, true, `doors ${gen.world.doors.size}`);
+  assert.equal(reachable >= 198_000, true, `reachable ${reachable}`);
+  assert.equal(macroHalls.length >= 24, true, `macro halls ${macroHalls.length}`);
+  assert.equal(clusterRooms.length >= 140, true, `communal cluster rooms ${clusterRooms.length}`);
+  assert.equal(microRooms.length >= 120, true, `communal micro rooms ${microRooms.length}`);
+  assert.equal(serviceRooms.length >= 4, true, `service rooms ${serviceRooms.length}`);
+  assert.equal(bypassRooms.length >= 3, true, `bypass rooms ${bypassRooms.length}`);
+  assert.equal(grievanceRooms.length >= 2, true, `grievance rooms ${grievanceRooms.length}`);
+  assert.equal(structureCues.length >= 1, true, `structure cues ${structureCues.length}`);
+  assert.equal(hasReachableLift(gen, audit, LiftDirection.UP), true);
+  assert.equal(hasReachableLift(gen, audit, LiftDirection.DOWN), true);
+
+  for (const room of [...clusterRooms.slice(0, 16), ...serviceRooms, ...bypassRooms]) {
+    assert.equal(roomHasReachableCell(gen.world, audit, room), true, `${room.name} reachable cell`);
+  }
+  for (const owner of HUMAN_TERRITORY_OWNERS) {
+    assert.equal(hqOwners.has(owner), true, `missing HQ owner ${ZoneFaction[owner]}`);
+    assert.equal((counts.get(owner) ?? 0) > 0, true, `empty territory ${ZoneFaction[owner]}`);
+    const anchor = anchors.find(item => item.owner === owner);
+    const room = anchor ? gen.world.rooms[anchor.roomId] : undefined;
+    assert.equal(room?.type, RoomType.HQ, `HQ room type ${ZoneFaction[owner]}`);
+    assert.equal(room?.sealed, true, `HQ sealed ${ZoneFaction[owner]}`);
+    assert.equal(room?.doors.some(doorIdx => gen.world.doors.get(doorIdx)?.state === DoorState.HERMETIC_OPEN), true, `HQ hermetic door ${ZoneFaction[owner]}`);
+  }
+  assert.equal(hqRooms.length >= HUMAN_TERRITORY_OWNERS.length, true, `HQ rooms ${hqRooms.length}`);
+  assert.equal(supportRooms.length >= 12, true, `HQ support rooms ${supportRooms.length}`);
+  assert.equal(dominant, ZoneFaction.CITIZEN);
+  assert.equal(Math.abs(share(ZoneFaction.CITIZEN) - 0.56) <= 0.02, true, `citizen share ${share(ZoneFaction.CITIZEN)}`);
+  assert.equal(Math.abs(share(ZoneFaction.LIQUIDATOR) - 0.17) <= 0.02, true, `liquidator share ${share(ZoneFaction.LIQUIDATOR)}`);
+  assert.equal(Math.abs(share(ZoneFaction.CULTIST) - 0.07) <= 0.02, true, `cultist share ${share(ZoneFaction.CULTIST)}`);
+  assert.equal(Math.abs(share(ZoneFaction.SCIENTIST) - 0.08) <= 0.02, true, `scientist share ${share(ZoneFaction.SCIENTIST)}`);
+  assert.equal(Math.abs(share(ZoneFaction.WILD) - 0.12) <= 0.02, true, `wild share ${share(ZoneFaction.WILD)}`);
+  assert.equal(npcs.length === 0 || ownTerritoryNpcs.length / npcs.length >= 0.75, true, `own territory NPC share ${npcs.length ? ownTerritoryNpcs.length / npcs.length : 1}`);
+});
+
+testGenerationMatrix('genfix 064 communal mushroom citizens floor keeps macro mid micro mycelium and target territory', () => {
+  const spec = makeProceduralFloorSpec(61_061, -13);
+  assert.equal(spec.geometryId, 'communal_knots');
+  assert.equal(spec.majorityId, 'citizens');
+  assert.equal(spec.anomalyId, 'mushroom_mycelium');
+  assert.equal(spec.danger, 2);
+
+  const gen = timedProceduralSpec(spec, 'genfix 064 communal mushroom citizens seed=61061 z-13');
+  const audit = reachabilityAudit(gen);
+  const reachable = countReachableCells(audit.reachable);
+  const macroHalls = gen.world.rooms.filter(room =>
+    room.name.startsWith('Общий тамбур') ||
+    (room.w * room.h >= 140 && Math.max(room.w, room.h) >= 18),
+  );
+  const clusterRooms = gen.world.rooms.filter(room => room.name.startsWith('Очередной блок'));
+  const microRooms = clusterRooms.filter(room => room.w * room.h <= 72);
+  const reachableClusterRooms = clusterRooms.filter(room => roomHasReachableCell(gen.world, audit, room));
+  const myceliumRooms = gen.world.rooms.filter(room => room.name.startsWith('Грибничный карман'));
+  const reachableMyceliumRooms = myceliumRooms.filter(room => roomHasReachableCell(gen.world, audit, room));
+  const serviceRooms = gen.world.rooms.filter(room =>
+    room.name.includes('Общая кухня') ||
+    room.name.includes('Водяная очередь') ||
+    room.name.includes('Кладовая общака') ||
+    room.name.includes('Очередь у курилки') ||
+    room.name.includes('Коммунальная очередь'),
+  );
+  const bypassRooms = gen.world.rooms.filter(room => room.name.includes('Сквозная коммуналка'));
+  const grievanceRooms = gen.world.rooms.filter(room => room.name.startsWith('Домен жалобы'));
+  const foodBasins = gen.world.containers.filter(container => container.tags.includes('mycelium_basin') && container.tags.includes('food_reward'));
+  const sporeBasins = gen.world.containers.filter(container => container.tags.includes('mycelium_basin') && container.tags.includes('spore_reward'));
+  const anchors = territoryHqAnchors(gen.world);
+  const hqOwners = new Set(anchors.map(anchor => anchor.owner));
+  const hqRooms = anchors
+    .map(anchor => gen.world.rooms[anchor.roomId])
+    .filter(room => room?.type === RoomType.HQ);
+  const supportRooms = gen.world.rooms.filter(room => room.name.includes('штаба') && room.type !== RoomType.HQ);
+  const counts = new Map(countTerritoryCells(gen.world).map(row => [row.owner, row.cells]));
+  const totalCells = [...counts.values()].reduce((sum, count) => sum + count, 0);
+  const share = (owner: ZoneFaction): number => (counts.get(owner) ?? 0) / totalCells;
+  const dominant = [...counts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0];
+  const npcs = gen.entities.filter(entity => entity.type === EntityType.NPC);
+  const ownTerritoryNpcs = npcs.filter(entity => {
+    if (entity.faction === undefined) return false;
+    const owner = territoryOwnerAtIndex(gen.world, gen.world.idx(Math.floor(entity.x), Math.floor(entity.y)));
+    return territoryOwnerToFaction(owner) === entity.faction;
+  });
+  let visibleReachableMyceliumCells = 0;
+  for (let i = 0; i < gen.world.cells.length; i++) {
+    const roomId = gen.world.roomMap[i];
+    if (roomId < 0 || !audit.reachable[i]) continue;
+    if (!gen.world.rooms[roomId]?.name.startsWith('Грибничный карман')) continue;
+    if (gen.world.floorTex[i] === Tex.F_GUT || gen.world.fog[i] >= 32) visibleReachableMyceliumCells++;
+  }
+
+  assert.equal(gen.world.rooms.length >= 290, true, `rooms ${gen.world.rooms.length}`);
+  assert.equal(gen.world.doors.size >= 730, true, `doors ${gen.world.doors.size}`);
+  assert.equal(reachable >= 195_000, true, `reachable ${reachable}`);
+  assert.equal(macroHalls.length >= 24, true, `macro halls ${macroHalls.length}`);
+  assert.equal(clusterRooms.length >= 155, true, `communal cluster rooms ${clusterRooms.length}`);
+  assert.equal(microRooms.length >= 135, true, `communal micro rooms ${microRooms.length}`);
+  assert.equal(reachableClusterRooms.length >= 150, true, `reachable communal cluster rooms ${reachableClusterRooms.length}`);
+  assert.equal(serviceRooms.length >= 4, true, `service rooms ${serviceRooms.length}`);
+  assert.equal(bypassRooms.length >= 3, true, `bypass rooms ${bypassRooms.length}`);
+  assert.equal(grievanceRooms.length >= 2, true, `grievance rooms ${grievanceRooms.length}`);
+  assert.equal(myceliumRooms.length >= 10, true, `mycelium rooms ${myceliumRooms.length}`);
+  assert.equal(reachableMyceliumRooms.length >= 10, true, `reachable mycelium rooms ${reachableMyceliumRooms.length}`);
+  assert.equal(visibleReachableMyceliumCells >= 300, true, `visible mycelium cells ${visibleReachableMyceliumCells}`);
+  assert.equal(foodBasins.length >= 2, true, `food basins ${foodBasins.length}`);
+  assert.equal(sporeBasins.length >= 2, true, `spore basins ${sporeBasins.length}`);
+  assert.equal(hasReachableLift(gen, audit, LiftDirection.UP), true);
+  assert.equal(hasReachableLift(gen, audit, LiftDirection.DOWN), true);
+
+  for (const owner of HUMAN_TERRITORY_OWNERS) {
+    assert.equal(hqOwners.has(owner), true, `missing HQ owner ${ZoneFaction[owner]}`);
+    assert.equal((counts.get(owner) ?? 0) > 0, true, `empty territory ${ZoneFaction[owner]}`);
+    const anchor = anchors.find(item => item.owner === owner);
+    const room = anchor ? gen.world.rooms[anchor.roomId] : undefined;
+    assert.equal(room?.type, RoomType.HQ, `HQ room type ${ZoneFaction[owner]}`);
+    assert.equal(room?.sealed, true, `HQ sealed ${ZoneFaction[owner]}`);
+    assert.equal(room?.doors.some(doorIdx => gen.world.doors.get(doorIdx)?.state === DoorState.HERMETIC_OPEN), true, `HQ hermetic door ${ZoneFaction[owner]}`);
+  }
+  assert.equal(hqRooms.length >= HUMAN_TERRITORY_OWNERS.length, true, `HQ rooms ${hqRooms.length}`);
+  assert.equal(supportRooms.length >= 12, true, `HQ support rooms ${supportRooms.length}`);
+  assert.equal(dominant, ZoneFaction.CITIZEN);
+  assert.equal(Math.abs(share(ZoneFaction.CITIZEN) - 0.56) <= 0.02, true, `citizen share ${share(ZoneFaction.CITIZEN)}`);
+  assert.equal(Math.abs(share(ZoneFaction.LIQUIDATOR) - 0.17) <= 0.02, true, `liquidator share ${share(ZoneFaction.LIQUIDATOR)}`);
+  assert.equal(Math.abs(share(ZoneFaction.CULTIST) - 0.07) <= 0.02, true, `cultist share ${share(ZoneFaction.CULTIST)}`);
+  assert.equal(Math.abs(share(ZoneFaction.SCIENTIST) - 0.08) <= 0.02, true, `scientist share ${share(ZoneFaction.SCIENTIST)}`);
+  assert.equal(Math.abs(share(ZoneFaction.WILD) - 0.12) <= 0.02, true, `wild share ${share(ZoneFaction.WILD)}`);
+  assert.equal(npcs.length === 0 || ownTerritoryNpcs.length / npcs.length >= 0.75, true, `own territory NPC share ${npcs.length ? ownTerritoryNpcs.length / npcs.length : 1}`);
 });
 
 testGenerationMatrix('service spine geometry carves connected maintenance trunks with usable lifts', () => {
@@ -1688,6 +3772,403 @@ testGenerationMatrix('service spine geometry carves connected maintenance trunks
   assert.equal(serviceFixtures > 0, true);
 });
 
+testGenerationMatrix('genfix 066 service rail citizens floor has stations micro rooms and target territory', () => {
+  const spec = makeProceduralFloorSpec(61_061, -15);
+  assert.equal(spec.geometryId, 'service_spines');
+  assert.equal(spec.majorityId, 'citizens');
+  assert.equal(spec.anomalyId, 'rail_trains');
+  assert.equal(spec.danger, 3);
+
+  const gen = timedProceduralSpec(spec, 'genfix_066 service_spines rail citizens seed=61061 z-15');
+  const audit = reachabilityAudit(gen);
+  const reachable = countReachableCells(audit.reachable);
+  const serviceRooms = gen.world.rooms.filter(room => room.name.includes('сервисного штрека'));
+  const reachableServiceRooms = serviceRooms.filter(room => roomHasReachableCell(gen.world, audit, room));
+  const stationRooms = gen.world.rooms.filter(room => room.name.includes('станция') || room.name.includes('станции'));
+  const inspectionRooms = gen.world.rooms.filter(room => room.name.includes('инспекционная клетка'));
+  const microServiceRooms = serviceRooms.filter(room => room.w * room.h <= 90);
+  const hqAnchors = territoryHqAnchors(gen.world);
+  const hqOwners = new Set(hqAnchors.map(anchor => anchor.owner));
+  const territoryRows = countTerritoryCells(gen.world);
+  const dominant = [...territoryRows].sort((a, b) => b.cells - a.cells)[0]?.owner;
+  const npcs = gen.entities.filter(entity => entity.type === EntityType.NPC);
+  const ownTerritoryNpcs = npcs.filter(entity => {
+    const ci = gen.world.idx(Math.floor(entity.x), Math.floor(entity.y));
+    return territoryOwnerToFaction(territoryOwnerAtIndex(gen.world, ci)) === entity.faction;
+  });
+
+  assert.equal(hasReachableLift(gen, audit, LiftDirection.UP), true);
+  assert.equal(hasReachableLift(gen, audit, LiftDirection.DOWN), true);
+  assert.equal(gen.world.rooms.length >= 680, true, `rooms ${gen.world.rooms.length}`);
+  assert.equal(gen.world.doors.size >= 1_300, true, `doors ${gen.world.doors.size}`);
+  assert.equal(reachable >= 150_000, true, `reachable ${reachable}`);
+  assert.equal(reachableBucketCount(gen.world, audit.reachable, 64) >= 240, true, 'service rail floor should span most map buckets');
+  assert.equal(serviceRooms.length >= 350, true, `service rooms ${serviceRooms.length}`);
+  assert.equal(reachableServiceRooms.length >= 340, true, `reachable service rooms ${reachableServiceRooms.length}`);
+  assert.equal(stationRooms.length >= 200, true, `station rooms ${stationRooms.length}`);
+  assert.equal(inspectionRooms.length >= 70, true, `inspection rooms ${inspectionRooms.length}`);
+  assert.equal(microServiceRooms.length >= 320, true, `micro service rooms ${microServiceRooms.length}`);
+  assert.equal(gen.world.railTracks.length >= 3, true, `rail tracks ${gen.world.railTracks.length}`);
+  assert.equal(gen.world.railTrains.length >= 3, true, `rail trains ${gen.world.railTrains.length}`);
+  assert.equal(getRouteCueMarkers(gen.world).some(marker => marker.tags.includes('service_spines')), true);
+  assert.equal(getRouteCueMarkers(gen.world).some(marker => marker.tags.includes('rail_trains')), true);
+
+  for (const room of serviceRooms.slice(0, 64)) {
+    assert.equal(roomHasReachableCell(gen.world, audit, room), true, `${room.name} reachable`);
+  }
+  for (const owner of HUMAN_TERRITORY_OWNERS) {
+    assert.equal(hqOwners.has(owner), true, `missing HQ owner ${ZoneFaction[owner]}`);
+    assert.equal(territoryCellCount(gen.world, owner) > 0, true, `empty territory ${ZoneFaction[owner]}`);
+    const anchor = hqAnchors.find(item => item.owner === owner);
+    const room = anchor ? gen.world.rooms[anchor.roomId] : undefined;
+    assert.equal(room?.type, RoomType.HQ, `HQ room type ${ZoneFaction[owner]}`);
+    assert.equal(room?.sealed, true, `HQ sealed ${ZoneFaction[owner]}`);
+    assert.equal(room?.doors.some(doorIdx => {
+      const door = gen.world.doors.get(doorIdx);
+      return door?.state === DoorState.HERMETIC_OPEN || door?.state === DoorState.HERMETIC_CLOSED;
+    }), true, `HQ hermetic door ${ZoneFaction[owner]}`);
+  }
+  assert.equal(dominant, ZoneFaction.CITIZEN);
+  assertTerritoryShare(gen.world, ZoneFaction.CITIZEN, 0.54, 0.58);
+  assertTerritoryShare(gen.world, ZoneFaction.LIQUIDATOR, 0.15, 0.19);
+  assertTerritoryShare(gen.world, ZoneFaction.CULTIST, 0.05, 0.09);
+  assertTerritoryShare(gen.world, ZoneFaction.SCIENTIST, 0.06, 0.10);
+  assertTerritoryShare(gen.world, ZoneFaction.WILD, 0.10, 0.14);
+  assert.equal(npcs.length === 0 || ownTerritoryNpcs.length / npcs.length >= 0.8, true, `own territory NPC share ${npcs.length ? ownTerritoryNpcs.length / npcs.length : 1}`);
+});
+
+testGenerationMatrix('genfix 067 service spines scientist floor fills mid micro layers and target territory', () => {
+  const spec = makeProceduralFloorSpec(61_061, -16);
+  assert.equal(spec.geometryId, 'service_spines');
+  assert.equal(spec.majorityId, 'scientists');
+  assert.equal(spec.anomalyId, 'none');
+  assert.equal(spec.danger, 2);
+
+  const gen = timedProceduralSpec(spec, 'genfix_067 service_spines scientists seed=61061 z-16');
+  const audit = reachabilityAudit(gen);
+  const reachable = countReachableCells(audit.reachable);
+  const serviceRooms = gen.world.rooms.filter(room => room.name.includes('сервисного штрека'));
+  const reachableServiceRooms = serviceRooms.filter(room => roomHasReachableCell(gen.world, audit, room));
+  const stationRooms = serviceRooms.filter(room => room.name.includes('станция') || room.name.includes('станции'));
+  const inspectionRooms = serviceRooms.filter(room => room.name.includes('инспекционная клетка'));
+  const microServiceRooms = serviceRooms.filter(room => room.w * room.h <= 90);
+  const hqAnchors = territoryHqAnchors(gen.world);
+  const hqOwners = new Set(hqAnchors.map(anchor => anchor.owner));
+  const hqRooms = hqAnchors
+    .map(anchor => gen.world.rooms[anchor.roomId])
+    .filter(room => room?.type === RoomType.HQ);
+  const supportRooms = gen.world.rooms.filter(room => room.name.includes('штаба') && room.type !== RoomType.HQ);
+  const territoryRows = countTerritoryCells(gen.world);
+  const dominant = [...territoryRows].sort((a, b) => b.cells - a.cells)[0]?.owner;
+  const npcs = gen.entities.filter(entity => entity.type === EntityType.NPC);
+  const ownTerritoryNpcs = npcs.filter(entity => {
+    const ci = gen.world.idx(Math.floor(entity.x), Math.floor(entity.y));
+    return territoryOwnerToFaction(territoryOwnerAtIndex(gen.world, ci)) === entity.faction;
+  });
+  let minHqDistance = Infinity;
+  for (let i = 0; i < hqAnchors.length; i++) {
+    for (let j = i + 1; j < hqAnchors.length; j++) {
+      minHqDistance = Math.min(minHqDistance, Math.sqrt(gen.world.dist2(hqAnchors[i].x, hqAnchors[i].y, hqAnchors[j].x, hqAnchors[j].y)));
+    }
+  }
+
+  assert.equal(hasReachableLift(gen, audit, LiftDirection.UP), true);
+  assert.equal(hasReachableLift(gen, audit, LiftDirection.DOWN), true);
+  assert.equal(reachableBucketCount(gen.world, audit.reachable, 128) >= 63, true);
+  assert.equal(gen.world.rooms.length >= 560, true, `rooms ${gen.world.rooms.length}`);
+  assert.equal(gen.world.doors.size >= 1_050, true, `doors ${gen.world.doors.size}`);
+  assert.equal(reachable >= 180_000, true, `reachable ${reachable}`);
+  assert.equal(serviceRooms.length >= 280, true, `service rooms ${serviceRooms.length}`);
+  assert.equal(reachableServiceRooms.length >= 275, true, `reachable service rooms ${reachableServiceRooms.length}`);
+  assert.equal(stationRooms.length >= 105, true, `station rooms ${stationRooms.length}`);
+  assert.equal(inspectionRooms.length >= 55, true, `inspection rooms ${inspectionRooms.length}`);
+  assert.equal(microServiceRooms.length >= 250, true, `micro service rooms ${microServiceRooms.length}`);
+  assert.equal(getRouteCueMarkers(gen.world).some(marker => marker.tags.includes('service_spines')), true);
+
+  for (const room of serviceRooms.slice(0, 64)) {
+    assert.equal(roomHasReachableCell(gen.world, audit, room), true, `${room.name} reachable`);
+  }
+  for (const owner of HUMAN_TERRITORY_OWNERS) {
+    assert.equal(hqOwners.has(owner), true, `missing HQ owner ${ZoneFaction[owner]}`);
+    assert.equal(territoryCellCount(gen.world, owner) > 0, true, `empty territory ${ZoneFaction[owner]}`);
+    const anchor = hqAnchors.find(item => item.owner === owner);
+    const room = anchor ? gen.world.rooms[anchor.roomId] : undefined;
+    assert.equal(room?.type, RoomType.HQ, `HQ room type ${ZoneFaction[owner]}`);
+    assert.equal(room?.sealed, true, `HQ sealed ${ZoneFaction[owner]}`);
+    assert.equal(room?.doors.some(doorIdx => {
+      const door = gen.world.doors.get(doorIdx);
+      return door?.state === DoorState.HERMETIC_OPEN || door?.state === DoorState.HERMETIC_CLOSED;
+    }), true, `HQ hermetic door ${ZoneFaction[owner]}`);
+  }
+  assert.equal(hqRooms.length >= HUMAN_TERRITORY_OWNERS.length, true, `HQ rooms ${hqRooms.length}`);
+  assert.equal(supportRooms.length >= 12, true, `HQ support rooms ${supportRooms.length}`);
+  assert.equal(minHqDistance >= 180, true, `HQ min distance ${minHqDistance}`);
+  assert.equal(dominant, ZoneFaction.SCIENTIST);
+  assertTerritoryShare(gen.world, ZoneFaction.CITIZEN, 0.205, 0.235);
+  assertTerritoryShare(gen.world, ZoneFaction.LIQUIDATOR, 0.145, 0.175);
+  assertTerritoryShare(gen.world, ZoneFaction.CULTIST, 0.065, 0.095);
+  assertTerritoryShare(gen.world, ZoneFaction.SCIENTIST, 0.405, 0.435);
+  assertTerritoryShare(gen.world, ZoneFaction.WILD, 0.105, 0.135);
+  assert.equal(npcs.length === 0 || ownTerritoryNpcs.length / npcs.length >= 0.75, true, `own territory NPC share ${npcs.length ? ownTerritoryNpcs.length / npcs.length : 1}`);
+});
+
+testGenerationMatrix('genfix 076 service spines citizen floor fills mid micro layers and target territory', () => {
+  const spec = makeProceduralFloorSpec(61_061, -25);
+  assert.equal(spec.geometryId, 'service_spines');
+  assert.equal(spec.majorityId, 'citizens');
+  assert.equal(spec.anomalyId, 'none');
+  assert.equal(spec.danger, 3);
+
+  const gen = timedProceduralSpec(spec, 'genfix_076 service_spines citizens seed=61061 z-25');
+  const audit = reachabilityAudit(gen);
+  const reachable = countReachableCells(audit.reachable);
+  const serviceRooms = gen.world.rooms.filter(room => room.name.includes('сервисного штрека'));
+  const reachableServiceRooms = serviceRooms.filter(room => roomHasReachableCell(gen.world, audit, room));
+  const stationRooms = serviceRooms.filter(room => room.name.includes('станция') || room.name.includes('станции'));
+  const inspectionRooms = serviceRooms.filter(room => room.name.includes('инспекционная клетка'));
+  const microServiceRooms = serviceRooms.filter(room => room.w * room.h <= 90);
+  const hqAnchors = territoryHqAnchors(gen.world);
+  const hqOwners = new Set(hqAnchors.map(anchor => anchor.owner));
+  const hqRooms = hqAnchors
+    .map(anchor => gen.world.rooms[anchor.roomId])
+    .filter(room => room?.type === RoomType.HQ);
+  const supportRooms = gen.world.rooms.filter(room => room.name.includes('штаба'));
+  const territoryRows = countTerritoryCells(gen.world);
+  const dominant = [...territoryRows].sort((a, b) => b.cells - a.cells)[0]?.owner;
+  const npcs = gen.entities.filter(entity => entity.type === EntityType.NPC);
+  const ownTerritoryNpcs = npcs.filter(entity => {
+    const ci = gen.world.idx(Math.floor(entity.x), Math.floor(entity.y));
+    return territoryOwnerToFaction(territoryOwnerAtIndex(gen.world, ci)) === entity.faction;
+  });
+
+  assert.equal(hasReachableLift(gen, audit, LiftDirection.UP), true);
+  assert.equal(hasReachableLift(gen, audit, LiftDirection.DOWN), true);
+  assert.equal(gen.world.rooms.length >= 600, true, `rooms ${gen.world.rooms.length}`);
+  assert.equal(gen.world.doors.size >= 1_000, true, `doors ${gen.world.doors.size}`);
+  assert.equal(reachable >= 185_000, true, `reachable ${reachable}`);
+  assert.equal(serviceRooms.length >= 300, true, `service rooms ${serviceRooms.length}`);
+  assert.equal(reachableServiceRooms.length >= 290, true, `reachable service rooms ${reachableServiceRooms.length}`);
+  assert.equal(stationRooms.length >= 120, true, `station rooms ${stationRooms.length}`);
+  assert.equal(inspectionRooms.length >= 60, true, `inspection rooms ${inspectionRooms.length}`);
+  assert.equal(microServiceRooms.length >= 250, true, `micro service rooms ${microServiceRooms.length}`);
+  assert.equal(getRouteCueMarkers(gen.world).some(marker => marker.tags.includes('service_spines')), true);
+
+  for (const room of serviceRooms.slice(0, 64)) {
+    assert.equal(roomHasReachableCell(gen.world, audit, room), true, `${room.name} reachable`);
+  }
+  for (const owner of HUMAN_TERRITORY_OWNERS) {
+    assert.equal(hqOwners.has(owner), true, `missing HQ owner ${ZoneFaction[owner]}`);
+    assert.equal(territoryCellCount(gen.world, owner) > 0, true, `empty territory ${ZoneFaction[owner]}`);
+    const anchor = hqAnchors.find(item => item.owner === owner);
+    const room = anchor ? gen.world.rooms[anchor.roomId] : undefined;
+    assert.equal(room?.type, RoomType.HQ, `HQ room type ${ZoneFaction[owner]}`);
+    assert.equal(room?.sealed, true, `HQ sealed ${ZoneFaction[owner]}`);
+    assert.equal(room?.doors.some(doorIdx => {
+      const door = gen.world.doors.get(doorIdx);
+      return door?.state === DoorState.HERMETIC_OPEN || door?.state === DoorState.HERMETIC_CLOSED;
+    }), true, `HQ hermetic door ${ZoneFaction[owner]}`);
+  }
+  assert.equal(hqRooms.length >= HUMAN_TERRITORY_OWNERS.length, true, `HQ rooms ${hqRooms.length}`);
+  assert.equal(supportRooms.length >= 12, true, `HQ support rooms ${supportRooms.length}`);
+  assert.equal(dominant, ZoneFaction.CITIZEN);
+  assertTerritoryShare(gen.world, ZoneFaction.CITIZEN, 0.54, 0.58);
+  assertTerritoryShare(gen.world, ZoneFaction.LIQUIDATOR, 0.15, 0.19);
+  assertTerritoryShare(gen.world, ZoneFaction.CULTIST, 0.05, 0.09);
+  assertTerritoryShare(gen.world, ZoneFaction.SCIENTIST, 0.06, 0.10);
+  assertTerritoryShare(gen.world, ZoneFaction.WILD, 0.10, 0.14);
+  assert.equal(npcs.length === 0 || ownTerritoryNpcs.length / npcs.length >= 0.8, true, `own territory NPC share ${npcs.length ? ownTerritoryNpcs.length / npcs.length : 1}`);
+});
+
+testGenerationMatrix('genfix 068 service spines cult samosbor floor has stations micro rooms and target territory', () => {
+  const spec = makeProceduralFloorSpec(61_061, -17);
+  assert.equal(spec.geometryId, 'service_spines');
+  assert.equal(spec.majorityId, 'cultists');
+  assert.equal(spec.anomalyId, 'samosbor_seed');
+  assert.equal(spec.danger, 4);
+
+  const gen = timedProceduralSpec(spec, 'genfix_068 service_spines cult samosbor seed=61061 z-17');
+  const audit = reachabilityAudit(gen);
+  const reachable = countReachableCells(audit.reachable);
+  const serviceRooms = gen.world.rooms.filter(room => room.name.includes('сервисного штрека'));
+  const stationRooms = gen.world.rooms.filter(room => room.name.includes('станция') && room.name.includes('сервисного штрека'));
+  const inspectionRooms = gen.world.rooms.filter(room => room.name.includes('инспекционная клетка') && room.name.includes('сервисного штрека'));
+  const hqAnchors = territoryHqAnchors(gen.world);
+  const hqOwners = new Set(hqAnchors.map(anchor => anchor.owner));
+  const hqRooms = hqAnchors
+    .map(anchor => gen.world.rooms[anchor.roomId])
+    .filter(room => room?.type === RoomType.HQ);
+  const supportRooms = gen.world.rooms.filter(room => room.name.includes('штаба'));
+  const territoryRows = countTerritoryCells(gen.world);
+  const dominant = [...territoryRows].sort((a, b) => b.cells - a.cells)[0]?.owner;
+  const npcs = gen.entities.filter(entity => entity.type === EntityType.NPC);
+  const ownTerritoryNpcs = npcs.filter(entity => {
+    const ci = gen.world.idx(Math.floor(entity.x), Math.floor(entity.y));
+    return territoryOwnerToFaction(territoryOwnerAtIndex(gen.world, ci)) === entity.faction;
+  });
+
+  assert.equal(hasReachableLift(gen, audit, LiftDirection.UP), true);
+  assert.equal(hasReachableLift(gen, audit, LiftDirection.DOWN), true);
+  assert.equal(gen.world.rooms.length >= 700, true, `rooms ${gen.world.rooms.length}`);
+  assert.equal(gen.world.doors.size >= 1_300, true, `doors ${gen.world.doors.size}`);
+  assert.equal(reachable >= 190_000, true, `reachable ${reachable}`);
+  assert.equal(serviceRooms.length >= 380, true, `service rooms ${serviceRooms.length}`);
+  assert.equal(stationRooms.length >= 150, true, `station rooms ${stationRooms.length}`);
+  assert.equal(inspectionRooms.length >= 80, true, `inspection rooms ${inspectionRooms.length}`);
+  assert.equal(getRouteCueMarkers(gen.world).some(marker => marker.tags.includes('service_spines')), true);
+
+  for (const room of serviceRooms.slice(0, 64)) {
+    assert.equal(roomHasReachableCell(gen.world, audit, room), true, `${room.name} reachable`);
+  }
+  for (const owner of HUMAN_TERRITORY_OWNERS) {
+    assert.equal(hqOwners.has(owner), true, `missing HQ owner ${ZoneFaction[owner]}`);
+    assert.equal(territoryCellCount(gen.world, owner) > 0, true, `empty territory ${ZoneFaction[owner]}`);
+    const anchor = hqAnchors.find(item => item.owner === owner);
+    const room = anchor ? gen.world.rooms[anchor.roomId] : undefined;
+    assert.equal(room?.type, RoomType.HQ, `HQ room type ${ZoneFaction[owner]}`);
+    assert.equal(room?.sealed, true, `HQ sealed ${ZoneFaction[owner]}`);
+    assert.equal(room?.doors.some(doorIdx => gen.world.doors.get(doorIdx)?.state === DoorState.HERMETIC_OPEN), true, `HQ hermetic door ${ZoneFaction[owner]}`);
+  }
+  assert.equal(hqRooms.length >= HUMAN_TERRITORY_OWNERS.length, true, `HQ rooms ${hqRooms.length}`);
+  assert.equal(supportRooms.length >= 12, true, `HQ support rooms ${supportRooms.length}`);
+  assert.equal(dominant, ZoneFaction.CULTIST);
+  assertTerritoryShare(gen.world, ZoneFaction.CITIZEN, 0.13, 0.18);
+  assertTerritoryShare(gen.world, ZoneFaction.LIQUIDATOR, 0.09, 0.13);
+  assertTerritoryShare(gen.world, ZoneFaction.CULTIST, 0.34, 0.39);
+  assertTerritoryShare(gen.world, ZoneFaction.SCIENTIST, 0.05, 0.09);
+  assertTerritoryShare(gen.world, ZoneFaction.WILD, 0.20, 0.24);
+  assertTerritoryShare(gen.world, ZoneFaction.SAMOSBOR, 0.07, 0.11);
+  assert.equal(npcs.length === 0 || ownTerritoryNpcs.length / npcs.length >= 0.68, true, `own territory NPC share ${npcs.length ? ownTerritoryNpcs.length / npcs.length : 1}`);
+});
+
+testGenerationMatrix('genfix 080 conveyor service spines scale up stations and scientist territory control', () => {
+  const spec = makeProceduralFloorSpec(61_061, -29);
+  assert.equal(spec.geometryId, 'service_spines');
+  assert.equal(spec.majorityId, 'scientists');
+  assert.equal(spec.anomalyId, 'conveyor_sorter');
+  assert.equal(spec.danger, 4);
+
+  const gen = timedProceduralSpec(spec, 'genfix_080 conveyor service_spines scientists seed=61061 z-29');
+  const audit = reachabilityAudit(gen);
+  const reachable = countReachableCells(audit.reachable);
+  const serviceRooms = gen.world.rooms.filter(room => room.name.includes('сервисного штрека'));
+  const stationRooms = gen.world.rooms.filter(room => room.name.includes('станция') || room.name.includes('станции'));
+  const conveyorRooms = gen.world.rooms.filter(room => room.name.includes('Сортиров'));
+  const hqAnchors = territoryHqAnchors(gen.world);
+  const hqOwners = new Set(hqAnchors.map(anchor => anchor.owner));
+  const hqRooms = hqAnchors
+    .map(anchor => gen.world.rooms[anchor.roomId])
+    .filter(room => room?.type === RoomType.HQ);
+  const supportRooms = gen.world.rooms.filter(room => room.name.includes('штаба'));
+  const npcs = gen.entities.filter(entity => entity.type === EntityType.NPC);
+  const ownTerritoryNpcs = npcs.filter(entity => {
+    const ci = gen.world.idx(Math.floor(entity.x), Math.floor(entity.y));
+    return territoryOwnerToFaction(territoryOwnerAtIndex(gen.world, ci)) === entity.faction;
+  });
+
+  assert.equal(hasReachableLift(gen, audit, LiftDirection.UP), true);
+  assert.equal(hasReachableLift(gen, audit, LiftDirection.DOWN), true);
+  assert.equal(gen.world.rooms.length >= 650, true, `rooms ${gen.world.rooms.length}`);
+  assert.equal(gen.world.doors.size >= 1_000, true, `doors ${gen.world.doors.size}`);
+  assert.equal(reachable >= 190_000, true, `reachable ${reachable}`);
+  assert.equal(serviceRooms.length >= 320, true, `service rooms ${serviceRooms.length}`);
+  assert.equal(stationRooms.length >= 180, true, `station rooms ${stationRooms.length}`);
+  assert.equal(conveyorRooms.length >= 40, true, `conveyor rooms ${conveyorRooms.length}`);
+  assert.equal(getRouteCueMarkers(gen.world).some(marker => marker.tags.includes('service_spines')), true);
+
+  for (const room of serviceRooms.slice(0, 48)) {
+    assert.equal(roomHasReachableCell(gen.world, audit, room), true, `${room.name} reachable`);
+  }
+  for (const owner of HUMAN_TERRITORY_OWNERS) {
+    assert.equal(hqOwners.has(owner), true, `missing HQ owner ${ZoneFaction[owner]}`);
+    assert.equal(territoryCellCount(gen.world, owner) > 0, true, `empty territory ${ZoneFaction[owner]}`);
+    const anchor = hqAnchors.find(item => item.owner === owner);
+    const room = anchor ? gen.world.rooms[anchor.roomId] : undefined;
+    assert.equal(room?.type, RoomType.HQ, `HQ room type ${ZoneFaction[owner]}`);
+    assert.equal(room?.sealed, true, `HQ sealed ${ZoneFaction[owner]}`);
+    assert.equal(room?.doors.some(doorIdx => gen.world.doors.get(doorIdx)?.state === DoorState.HERMETIC_OPEN), true, `HQ hermetic door ${ZoneFaction[owner]}`);
+  }
+  assert.equal(hqRooms.length >= HUMAN_TERRITORY_OWNERS.length, true, `HQ rooms ${hqRooms.length}`);
+  assert.equal(supportRooms.length >= 12, true, `HQ support rooms ${supportRooms.length}`);
+  assertTerritoryShare(gen.world, ZoneFaction.CITIZEN, 0.205, 0.235);
+  assertTerritoryShare(gen.world, ZoneFaction.LIQUIDATOR, 0.145, 0.175);
+  assertTerritoryShare(gen.world, ZoneFaction.CULTIST, 0.065, 0.095);
+  assertTerritoryShare(gen.world, ZoneFaction.SCIENTIST, 0.405, 0.435);
+  assertTerritoryShare(gen.world, ZoneFaction.WILD, 0.105, 0.135);
+  assert.equal(npcs.length === 0 || ownTerritoryNpcs.length / npcs.length >= 0.8, true, `own territory NPC share ${npcs.length ? ownTerritoryNpcs.length / npcs.length : 1}`);
+});
+
+testGenerationMatrix('genfix 082 procedural workshop wild floor fills factory islands and target territory control', () => {
+  const spec = makeProceduralFloorSpec(61_061, -31);
+  assert.equal(spec.geometryId, 'workshops');
+  assert.equal(spec.majorityId, 'wild');
+  assert.equal(spec.anomalyId, 'none');
+  assert.equal(spec.danger, 4);
+
+  const gen = timedProceduralSpec(spec, 'genfix_082 workshops wild seed=61061 z-31');
+  const audit = reachabilityAudit(gen);
+  const reachable = countReachableCells(audit.reachable);
+  const islandRooms = gen.world.rooms.filter(room => room.name.includes('Цеховой остров'));
+  const supportRooms = gen.world.rooms.filter(room =>
+    /^(Цеховой туалет|Комната кипятка цеха|Мастерская контора|Инструментальная ячейка|Бытовка цеха)/.test(room.name),
+  );
+  const factoryRooms = gen.world.rooms.filter(room =>
+    room.name.startsWith('Цех металла') ||
+    room.name.startsWith('Плавильня гильз') ||
+    room.name.startsWith('Оружейная мастерская') ||
+    room.name.startsWith('Технический склад'),
+  );
+  const hqAnchors = territoryHqAnchors(gen.world);
+  const hqOwners = new Set(hqAnchors.map(anchor => anchor.owner));
+  const hqRooms = hqAnchors
+    .map(anchor => gen.world.rooms[anchor.roomId])
+    .filter(room => room?.type === RoomType.HQ);
+  const hqSupportRooms = gen.world.rooms.filter(room => room.name.includes('штаба') && room.type !== RoomType.HQ);
+  const npcs = gen.entities.filter(entity => entity.type === EntityType.NPC);
+  const ownTerritoryNpcs = npcs.filter(entity => {
+    const ci = gen.world.idx(Math.floor(entity.x), Math.floor(entity.y));
+    return territoryOwnerToFaction(territoryOwnerAtIndex(gen.world, ci)) === entity.faction;
+  });
+  let minHqDistance = Infinity;
+  for (let i = 0; i < hqAnchors.length; i++) {
+    for (let j = i + 1; j < hqAnchors.length; j++) {
+      minHqDistance = Math.min(minHqDistance, Math.sqrt(gen.world.dist2(hqAnchors[i].x, hqAnchors[i].y, hqAnchors[j].x, hqAnchors[j].y)));
+    }
+  }
+
+  assert.equal(hasReachableLift(gen, audit, LiftDirection.UP), true);
+  assert.equal(hasReachableLift(gen, audit, LiftDirection.DOWN), true);
+  assert.equal(gen.world.rooms.length >= 360, true, `rooms ${gen.world.rooms.length}`);
+  assert.equal(gen.world.rooms.every(room => room.w > 0 && room.h > 0), true, 'workshop rooms should have positive dimensions');
+  assert.equal(gen.world.doors.size >= 1_000, true, `doors ${gen.world.doors.size}`);
+  assert.equal(reachable >= 160_000, true, `reachable ${reachable}`);
+  assert.equal(islandRooms.length >= 28, true, `workshop island rooms ${islandRooms.length}`);
+  assert.equal(supportRooms.length >= 160, true, `workshop support rooms ${supportRooms.length}`);
+  assert.equal(factoryRooms.length >= 60, true, `factory rooms ${factoryRooms.length}`);
+  assert.equal(getRouteCueMarkers(gen.world).some(marker => marker.tags.includes('factory_islands')), true);
+
+  for (const room of supportRooms.slice(0, 80)) {
+    assert.equal(roomHasReachableCell(gen.world, audit, room), true, `${room.name} reachable`);
+  }
+  for (const owner of HUMAN_TERRITORY_OWNERS) {
+    assert.equal(hqOwners.has(owner), true, `missing HQ owner ${ZoneFaction[owner]}`);
+    assert.equal(territoryCellCount(gen.world, owner) > 0, true, `empty territory ${ZoneFaction[owner]}`);
+    const anchor = hqAnchors.find(item => item.owner === owner);
+    const room = anchor ? gen.world.rooms[anchor.roomId] : undefined;
+    assert.equal(room?.type, RoomType.HQ, `HQ room type ${ZoneFaction[owner]}`);
+    assert.equal(room?.sealed, true, `HQ sealed ${ZoneFaction[owner]}`);
+    assert.equal(room?.doors.some(doorIdx => gen.world.doors.get(doorIdx)?.state === DoorState.HERMETIC_OPEN), true, `HQ hermetic door ${ZoneFaction[owner]}`);
+  }
+  assert.equal(hqRooms.length >= HUMAN_TERRITORY_OWNERS.length, true, `HQ rooms ${hqRooms.length}`);
+  assert.equal(hqSupportRooms.length >= 12, true, `HQ support rooms ${hqSupportRooms.length}`);
+  assert.equal(minHqDistance >= 260, true, `HQ min distance ${minHqDistance}`);
+  assertTerritoryShare(gen.world, ZoneFaction.CITIZEN, 0.145, 0.195);
+  assertTerritoryShare(gen.world, ZoneFaction.LIQUIDATOR, 0.105, 0.155);
+  assertTerritoryShare(gen.world, ZoneFaction.CULTIST, 0.095, 0.145);
+  assertTerritoryShare(gen.world, ZoneFaction.SCIENTIST, 0.055, 0.105);
+  assertTerritoryShare(gen.world, ZoneFaction.WILD, 0.475, 0.525);
+  assert.equal(npcs.length === 0 || ownTerritoryNpcs.length / npcs.length >= 0.78, true, `own territory NPC share ${npcs.length ? ownTerritoryNpcs.length / npcs.length : 1}`);
+});
+
 testGenerationMatrix('attic weatherworks geometry exposes wind lanes, crawl pockets, repair and document choices', () => {
   const def = FLOOR_GEOMETRIES.find(item => item.id === 'attic_weatherworks');
   assert.equal(def?.tags.includes('wind'), true);
@@ -1737,6 +4218,247 @@ testGenerationMatrix('attic weatherworks geometry exposes wind lanes, crawl pock
   const atticCues = getRouteCueMarkers(gen.world).filter(marker => marker.tags.includes('attic_weatherworks'));
   assert.equal(atticCues.some(marker => marker.tags.includes('wind_lane') && marker.tags.includes('exposed_service_run')), true);
   assert.equal(atticCues.some(marker => marker.tags.includes('document_cache') && marker.tags.includes('crawl_bypass')), true);
+});
+
+testGenerationMatrix('genfix 008 procedural false-safe attic liquidator floor keeps scaled weatherworks and target territory shares', () => {
+  const spec = makeProceduralFloorSpec(61_061, 43);
+  assert.equal(spec.geometryId, 'attic_weatherworks');
+  assert.equal(spec.majorityId, 'liquidators');
+  assert.equal(spec.anomalyId, 'false_safe_block');
+  assert.equal(spec.danger, 4);
+
+  const gen = timedProceduralSpec(spec, 'genfix_008 attic false-safe liquidators seed=61061 z43');
+  const audit = reachabilityAudit(gen);
+  const reachable = countReachableCells(audit.reachable);
+  const atticRooms = gen.world.rooms.filter(room => room.name.startsWith('Чердачный '));
+  const smallRooms = gen.world.rooms.filter(room => room.w * room.h <= 54);
+  const falseSafeRooms = gen.world.rooms.filter(room => room.name.startsWith('Тихий блок'));
+  const hqAnchors = territoryHqAnchors(gen.world);
+  const hqOwners = new Set(hqAnchors.map(anchor => anchor.owner));
+  const hqRooms = hqAnchors
+    .map(anchor => gen.world.rooms[anchor.roomId])
+    .filter(room => room?.type === RoomType.HQ);
+  const supportRooms = gen.world.rooms.filter(room =>
+    room.name.includes('штаба') ||
+    room.name.startsWith('Чердачная опора'));
+  const territoryCounts = new Map(countTerritoryCells(gen.world).map(row => [row.owner, row.cells]));
+  const share = (owner: ZoneFaction): number => (territoryCounts.get(owner) ?? 0) / (W * W);
+  const npcs = gen.entities.filter(entity => entity.type === EntityType.NPC);
+  const ownTerritoryNpcs = npcs.filter(entity => {
+    const ci = gen.world.idx(Math.floor(entity.x), Math.floor(entity.y));
+    return territoryOwnerToFaction(territoryOwnerAtIndex(gen.world, ci)) === entity.faction;
+  });
+
+  assertFullFootprint(gen.world, 'genfix_008 attic false-safe');
+  assert.equal(hasReachableLift(gen, audit, LiftDirection.UP), true);
+  assert.equal(hasReachableLift(gen, audit, LiftDirection.DOWN), true);
+  assert.equal(reachableBucketCount(gen.world, audit.reachable, 128), 64);
+  assert.equal(gen.world.rooms.length >= 540, true, `rooms ${gen.world.rooms.length}`);
+  assert.equal(gen.world.doors.size >= 1_300, true, `doors ${gen.world.doors.size}`);
+  assert.equal(reachable >= 165_000, true, `reachable ${reachable}`);
+  assert.equal(atticRooms.length >= 75, true, `attic rooms ${atticRooms.length}`);
+  assert.equal(smallRooms.length >= 150, true, `small rooms ${smallRooms.length}`);
+  assert.equal(falseSafeRooms.length >= 4, true, `false-safe rooms ${falseSafeRooms.length}`);
+  assert.equal(hqRooms.length >= HUMAN_TERRITORY_OWNERS.length, true, `HQ rooms ${hqRooms.length}`);
+  assert.equal(supportRooms.length >= 20, true, `HQ support rooms ${supportRooms.length}`);
+  assert.equal(getRouteCueMarkers(gen.world).some(marker => marker.tags.includes('attic_weatherworks')), true);
+  assert.equal(gen.world.containers.some(container => container.tags.includes('false_safe_block')), true);
+  assert.equal(gen.world.containers.some(container => container.tags.includes('attic_weatherworks') && container.tags.includes('duct_repair')), true);
+  assert.equal(gen.world.containers.some(container => container.tags.includes('attic_weatherworks') && container.tags.includes('document_cache')), true);
+
+  for (const owner of HUMAN_TERRITORY_OWNERS) {
+    assert.equal(hqOwners.has(owner), true, `missing HQ owner ${ZoneFaction[owner]}`);
+    assert.equal((territoryCounts.get(owner) ?? 0) > 0, true, `empty territory ${ZoneFaction[owner]}`);
+    const anchor = hqAnchors.find(item => item.owner === owner);
+    const room = anchor ? gen.world.rooms[anchor.roomId] : undefined;
+    assert.equal(room?.type, RoomType.HQ, `HQ room type ${ZoneFaction[owner]}`);
+    assert.equal(room?.sealed, true, `HQ sealed core ${ZoneFaction[owner]}`);
+    assert.equal(room?.doors.some(doorIdx => gen.world.doors.get(doorIdx)?.state === DoorState.HERMETIC_OPEN), true, `HQ hermetic door ${ZoneFaction[owner]}`);
+  }
+  assert.equal(Math.abs(share(ZoneFaction.CITIZEN) - 0.16) <= 0.015, true, `citizen share ${share(ZoneFaction.CITIZEN)}`);
+  assert.equal(Math.abs(share(ZoneFaction.LIQUIDATOR) - 0.53) <= 0.015, true, `liquidator share ${share(ZoneFaction.LIQUIDATOR)}`);
+  assert.equal(Math.abs(share(ZoneFaction.CULTIST) - 0.12) <= 0.015, true, `cultist share ${share(ZoneFaction.CULTIST)}`);
+  assert.equal(Math.abs(share(ZoneFaction.SCIENTIST) - 0.08) <= 0.015, true, `scientist share ${share(ZoneFaction.SCIENTIST)}`);
+  assert.equal(Math.abs(share(ZoneFaction.WILD) - 0.11) <= 0.015, true, `wild share ${share(ZoneFaction.WILD)}`);
+  assert.equal(npcs.length === 0 || ownTerritoryNpcs.length / npcs.length >= 0.75, true, `own territory NPC share ${npcs.length ? ownTerritoryNpcs.length / npcs.length : 1}`);
+});
+
+testGenerationMatrix('genfix 003 attic living tunnels scale up rooms and wild territory control', () => {
+  const base = makeProceduralFloorSpec(61_061, 48);
+  const gen = timedProceduralSpec({
+    ...base,
+    geometryId: 'attic_weatherworks',
+    baseFloor: FloorLevel.MINISTRY,
+    majorityId: 'wild',
+    anomalyId: 'living_tunnels',
+    danger: 5,
+    title: `genfix 003: ${base.title}`,
+  }, 'genfix_003 attic living tunnels seed=61061');
+  const audit = reachabilityAudit(gen);
+  const reachable = countReachableCells(audit.reachable);
+  const hqAnchors = territoryHqAnchors(gen.world);
+  const hqOwners = new Set(hqAnchors.map(anchor => anchor.owner));
+  const territoryCounts = new Map(countTerritoryCells(gen.world).map(row => [row.owner, row.cells]));
+  const share = (owner: ZoneFaction): number => (territoryCounts.get(owner) ?? 0) / (W * W);
+
+  assert.equal(gen.world.rooms.length >= 420, true, `rooms ${gen.world.rooms.length}`);
+  assert.equal(gen.world.doors.size >= 760, true, `doors ${gen.world.doors.size}`);
+  assert.equal(reachable >= 130_000, true, `reachable ${reachable}`);
+  assert.equal(getRouteCueMarkers(gen.world).some(marker => marker.tags.includes('living_tunnels')), true);
+  assert.equal(getRouteCueMarkers(gen.world).some(marker => marker.tags.includes('attic_weatherworks')), true);
+  for (const owner of HUMAN_TERRITORY_OWNERS) {
+    assert.equal(hqOwners.has(owner), true, `missing HQ owner ${ZoneFaction[owner]}`);
+    assert.equal((territoryCounts.get(owner) ?? 0) > 0, true, `empty territory ${ZoneFaction[owner]}`);
+  }
+  assert.equal(share(ZoneFaction.CITIZEN) >= 0.14 && share(ZoneFaction.CITIZEN) <= 0.20, true, `citizen share ${share(ZoneFaction.CITIZEN)}`);
+  assert.equal(share(ZoneFaction.LIQUIDATOR) >= 0.10 && share(ZoneFaction.LIQUIDATOR) <= 0.16, true, `liquidator share ${share(ZoneFaction.LIQUIDATOR)}`);
+  assert.equal(share(ZoneFaction.CULTIST) >= 0.09 && share(ZoneFaction.CULTIST) <= 0.15, true, `cultist share ${share(ZoneFaction.CULTIST)}`);
+  assert.equal(share(ZoneFaction.SCIENTIST) >= 0.06 && share(ZoneFaction.SCIENTIST) <= 0.10, true, `scientist share ${share(ZoneFaction.SCIENTIST)}`);
+  assert.equal(share(ZoneFaction.WILD) >= 0.46 && share(ZoneFaction.WILD) <= 0.54, true, `wild share ${share(ZoneFaction.WILD)}`);
+});
+
+testGenerationMatrix('genfix 004 procedural attic mirror scientists floor has multi-scale rooms and target territory shares', () => {
+  const spec = makeProceduralFloorSpec(61_061, 47);
+  assert.equal(spec.geometryId, 'attic_weatherworks');
+  assert.equal(spec.majorityId, 'scientists');
+  assert.equal(spec.anomalyId, 'mirror_run');
+  assert.equal(spec.danger, 4);
+
+  const gen = timedProceduralSpec(spec, 'genfix_004 attic mirror scientists seed=61061');
+  const audit = reachabilityAudit(gen);
+  const reachable = countReachableCells(audit.reachable);
+  const atticRooms = gen.world.rooms.filter(room => room.name.startsWith('Чердачный '));
+  const smallRooms = gen.world.rooms.filter(room => room.w * room.h <= 54);
+  const mirrorRooms = gen.world.rooms.filter(room => room.name.includes('Зеркало '));
+  const hqAnchors = territoryHqAnchors(gen.world);
+  const hqOwners = new Set(hqAnchors.map(anchor => anchor.owner));
+  const territoryCounts = new Map(countTerritoryCells(gen.world).map(row => [row.owner, row.cells]));
+  const share = (owner: ZoneFaction): number => (territoryCounts.get(owner) ?? 0) / (W * W);
+  const npcs = gen.entities.filter(entity => entity.type === EntityType.NPC);
+  const ownTerritoryNpcs = npcs.filter(entity => {
+    const ci = gen.world.idx(Math.floor(entity.x), Math.floor(entity.y));
+    return territoryOwnerToFaction(territoryOwnerAtIndex(gen.world, ci)) === entity.faction;
+  });
+
+  assert.equal(hasReachableLift(gen, audit, LiftDirection.UP), true);
+  assert.equal(hasReachableLift(gen, audit, LiftDirection.DOWN), true);
+  assert.equal(gen.world.rooms.length >= 540, true, `rooms ${gen.world.rooms.length}`);
+  assert.equal(gen.world.doors.size >= 1_200, true, `doors ${gen.world.doors.size}`);
+  assert.equal(reachable >= 160_000, true, `reachable ${reachable}`);
+  assert.equal(atticRooms.length >= 70, true, `attic rooms ${atticRooms.length}`);
+  assert.equal(smallRooms.length >= 150, true, `small rooms ${smallRooms.length}`);
+  assert.equal(mirrorRooms.length >= 10, true, `mirror rooms ${mirrorRooms.length}`);
+  assert.equal(gen.world.anomalyTeleports.size >= 2, true, `mirror teleports ${gen.world.anomalyTeleports.size}`);
+  assert.equal(getRouteCueMarkers(gen.world).some(marker => marker.tags.includes('attic_weatherworks')), true);
+  assert.equal(getRouteCueMarkers(gen.world).some(marker => marker.tags.includes('mirror_run')), true);
+
+  for (const owner of HUMAN_TERRITORY_OWNERS) {
+    assert.equal(hqOwners.has(owner), true, `missing HQ owner ${ZoneFaction[owner]}`);
+    assert.equal((territoryCounts.get(owner) ?? 0) > 0, true, `empty territory ${ZoneFaction[owner]}`);
+    const anchor = hqAnchors.find(item => item.owner === owner);
+    const room = anchor ? gen.world.rooms[anchor.roomId] : undefined;
+    assert.equal(room?.type, RoomType.HQ, `HQ room type ${ZoneFaction[owner]}`);
+    assert.equal(room?.sealed, true, `HQ sealed core ${ZoneFaction[owner]}`);
+    assert.equal(room?.doors.some(doorIdx => gen.world.doors.get(doorIdx)?.state === DoorState.HERMETIC_OPEN), true, `HQ hermetic door ${ZoneFaction[owner]}`);
+  }
+  assert.equal(Math.abs(share(ZoneFaction.CITIZEN) - 0.22) <= 0.02, true, `citizen share ${share(ZoneFaction.CITIZEN)}`);
+  assert.equal(Math.abs(share(ZoneFaction.LIQUIDATOR) - 0.16) <= 0.02, true, `liquidator share ${share(ZoneFaction.LIQUIDATOR)}`);
+  assert.equal(Math.abs(share(ZoneFaction.CULTIST) - 0.08) <= 0.02, true, `cultist share ${share(ZoneFaction.CULTIST)}`);
+  assert.equal(Math.abs(share(ZoneFaction.SCIENTIST) - 0.42) <= 0.02, true, `scientist share ${share(ZoneFaction.SCIENTIST)}`);
+  assert.equal(Math.abs(share(ZoneFaction.WILD) - 0.12) <= 0.02, true, `wild share ${share(ZoneFaction.WILD)}`);
+  assert.equal(share(ZoneFaction.SCIENTIST) > share(ZoneFaction.CITIZEN), true);
+  assert.equal(npcs.length === 0 || ownTerritoryNpcs.length / npcs.length >= 0.75, true, `own territory NPC share ${npcs.length ? ownTerritoryNpcs.length / npcs.length : 1}`);
+});
+
+testGenerationMatrix('genfix 012 procedural attic smog citizen floor has multi-scale weatherworks and target territory shares', () => {
+  const spec = makeProceduralFloorSpec(61_061, 39);
+  assert.equal(spec.geometryId, 'attic_weatherworks');
+  assert.equal(spec.majorityId, 'citizens');
+  assert.equal(spec.anomalyId, 'smog');
+  assert.equal(spec.danger, 4);
+
+  const gen = timedProceduralSpec(spec, 'genfix_012 attic smog citizens seed=61061');
+  const audit = reachabilityAudit(gen);
+  const reachable = countReachableCells(audit.reachable);
+  const atticRooms = gen.world.rooms.filter(room => room.name.startsWith('Чердачный '));
+  const smallRooms = gen.world.rooms.filter(room => room.w * room.h <= 54);
+  const hqAnchors = territoryHqAnchors(gen.world);
+  const hqOwners = new Set(hqAnchors.map(anchor => anchor.owner));
+  const territoryCounts = new Map(countTerritoryCells(gen.world).map(row => [row.owner, row.cells]));
+  const share = (owner: ZoneFaction): number => (territoryCounts.get(owner) ?? 0) / (W * W);
+  const npcs = gen.entities.filter(entity => entity.type === EntityType.NPC);
+  const ownTerritoryNpcs = npcs.filter(entity => {
+    const ci = gen.world.idx(Math.floor(entity.x), Math.floor(entity.y));
+    return territoryOwnerToFaction(territoryOwnerAtIndex(gen.world, ci)) === entity.faction;
+  });
+
+  assert.equal(hasReachableLift(gen, audit, LiftDirection.UP), true);
+  assert.equal(hasReachableLift(gen, audit, LiftDirection.DOWN), true);
+  assert.equal(gen.world.rooms.length >= 520, true, `rooms ${gen.world.rooms.length}`);
+  assert.equal(gen.world.doors.size >= 1_200, true, `doors ${gen.world.doors.size}`);
+  assert.equal(reachable >= 160_000, true, `reachable ${reachable}`);
+  assert.equal(atticRooms.length >= 70, true, `attic rooms ${atticRooms.length}`);
+  assert.equal(smallRooms.length >= 140, true, `small rooms ${smallRooms.length}`);
+  assert.equal(gen.world.anomalySmogCells.length >= 500, true, `smog cells ${gen.world.anomalySmogCells.length}`);
+  assert.equal(getRouteCueMarkers(gen.world).some(marker => marker.tags.includes('attic_weatherworks')), true);
+
+  for (const owner of HUMAN_TERRITORY_OWNERS) {
+    assert.equal(hqOwners.has(owner), true, `missing HQ owner ${ZoneFaction[owner]}`);
+    assert.equal((territoryCounts.get(owner) ?? 0) > 0, true, `empty territory ${ZoneFaction[owner]}`);
+    const anchor = hqAnchors.find(item => item.owner === owner);
+    const room = anchor ? gen.world.rooms[anchor.roomId] : undefined;
+    assert.equal(room?.type, RoomType.HQ, `HQ room type ${ZoneFaction[owner]}`);
+    assert.equal(room?.sealed, true, `HQ sealed core ${ZoneFaction[owner]}`);
+    assert.equal(room?.doors.some(doorIdx => gen.world.doors.get(doorIdx)?.state === DoorState.HERMETIC_OPEN), true, `HQ hermetic door ${ZoneFaction[owner]}`);
+  }
+  assert.equal(Math.abs(share(ZoneFaction.CITIZEN) - 0.56) <= 0.02, true, `citizen share ${share(ZoneFaction.CITIZEN)}`);
+  assert.equal(Math.abs(share(ZoneFaction.LIQUIDATOR) - 0.17) <= 0.02, true, `liquidator share ${share(ZoneFaction.LIQUIDATOR)}`);
+  assert.equal(Math.abs(share(ZoneFaction.CULTIST) - 0.07) <= 0.02, true, `cultist share ${share(ZoneFaction.CULTIST)}`);
+  assert.equal(Math.abs(share(ZoneFaction.SCIENTIST) - 0.08) <= 0.02, true, `scientist share ${share(ZoneFaction.SCIENTIST)}`);
+  assert.equal(Math.abs(share(ZoneFaction.WILD) - 0.12) <= 0.02, true, `wild share ${share(ZoneFaction.WILD)}`);
+  assert.equal(npcs.length === 0 || ownTerritoryNpcs.length / npcs.length >= 0.65, true, `own territory NPC share ${npcs.length ? ownTerritoryNpcs.length / npcs.length : 1}`);
+});
+
+testGenerationMatrix('genfix 014 procedural radio chess attic wild floor keeps multi-scale geometry and target territory shares', () => {
+  const base = makeProceduralFloorSpec(61_061, 37);
+  const gen = timedProceduralSpec({
+    ...base,
+    geometryId: 'attic_weatherworks',
+    baseFloor: FloorLevel.MINISTRY,
+    majorityId: 'wild',
+    anomalyId: 'radio_chess',
+    danger: 4,
+    title: `genfix 014: ${base.title}`,
+  }, 'genfix_014 attic radio chess seed=61061');
+  const audit = reachabilityAudit(gen);
+  const reachable = countReachableCells(audit.reachable);
+  const hqAnchors = territoryHqAnchors(gen.world);
+  const hqOwners = new Set(hqAnchors.map(anchor => anchor.owner));
+  const territoryCounts = new Map(countTerritoryCells(gen.world).map(row => [row.owner, row.cells]));
+  const share = (owner: ZoneFaction): number => (territoryCounts.get(owner) ?? 0) / (W * W);
+
+  assert.equal(hasReachableLift(gen, audit, LiftDirection.UP), true);
+  assert.equal(hasReachableLift(gen, audit, LiftDirection.DOWN), true);
+  assert.equal(gen.world.rooms.length >= 500, true, `rooms ${gen.world.rooms.length}`);
+  assert.equal(gen.world.doors.size >= 1_000, true, `doors ${gen.world.doors.size}`);
+  assert.equal(reachable >= 160_000, true, `reachable ${reachable}`);
+  assert.equal(getRouteCueMarkers(gen.world).some(marker => marker.tags.includes('attic_weatherworks')), true);
+  assert.equal(getRouteCueMarkers(gen.world).some(marker => marker.tags.includes('radio_chess')), true);
+
+  for (const owner of HUMAN_TERRITORY_OWNERS) {
+    assert.equal(hqOwners.has(owner), true, `missing HQ owner ${ZoneFaction[owner]}`);
+    assert.equal((territoryCounts.get(owner) ?? 0) > 0, true, `empty territory ${ZoneFaction[owner]}`);
+    const anchor = hqAnchors.find(item => item.owner === owner);
+    const room = anchor ? gen.world.rooms[anchor.roomId] : undefined;
+    assert.equal(room?.type, RoomType.HQ, `HQ room type ${ZoneFaction[owner]}`);
+    assert.equal(room?.sealed, true, `HQ sealed core ${ZoneFaction[owner]}`);
+    assert.equal(room?.doors.some(doorIdx => gen.world.doors.get(doorIdx)?.state === DoorState.HERMETIC_OPEN), true, `HQ hermetic door ${ZoneFaction[owner]}`);
+  }
+  assert.equal(share(ZoneFaction.CITIZEN) >= 0.13 && share(ZoneFaction.CITIZEN) <= 0.21, true, `citizen share ${share(ZoneFaction.CITIZEN)}`);
+  assert.equal(share(ZoneFaction.LIQUIDATOR) >= 0.09 && share(ZoneFaction.LIQUIDATOR) <= 0.17, true, `liquidator share ${share(ZoneFaction.LIQUIDATOR)}`);
+  assert.equal(share(ZoneFaction.CULTIST) >= 0.08 && share(ZoneFaction.CULTIST) <= 0.16, true, `cultist share ${share(ZoneFaction.CULTIST)}`);
+  assert.equal(share(ZoneFaction.SCIENTIST) >= 0.05 && share(ZoneFaction.SCIENTIST) <= 0.11, true, `scientist share ${share(ZoneFaction.SCIENTIST)}`);
+  assert.equal(share(ZoneFaction.WILD) >= 0.46 && share(ZoneFaction.WILD) <= 0.54, true, `wild share ${share(ZoneFaction.WILD)}`);
 });
 
 testGenerationMatrix('sump causeway geometry builds dry repair spans and off-path stash islands', () => {
@@ -1789,6 +4511,611 @@ testGenerationMatrix('sump causeway geometry builds dry repair spans and off-pat
     assert.equal(stashRoomIds.has(stash.roomId ?? -1), true, `${stash.name} should be on a stash island`);
     assertAuditReachable(gen.world, audit, gen.world.idx(stash.x, stash.y), stash.name);
   }
+});
+
+testGenerationMatrix('genfix 078 sump conveyor cultist floor has dense stations, micro rooms and target territory', () => {
+  const spec = makeProceduralFloorSpec(61_061, -27);
+  assert.equal(spec.geometryId, 'sump_causeways');
+  assert.equal(spec.majorityId, 'cultists');
+  assert.equal(spec.anomalyId, 'conveyor_sorter');
+  assert.equal(spec.danger, 5);
+
+  const gen = timedProceduralSpec(spec, 'genfix_078 sump conveyor cultists seed=61061 z-27');
+  const audit = reachabilityAudit(gen);
+  const dryReachable = dryReachableFromSpawn(gen);
+  const reachable = countReachableCells(audit.reachable);
+  const stations = gen.world.rooms.filter(room => room.name.startsWith('Сухая станция эстакады'));
+  const microRooms = gen.world.rooms.filter(room => room.name.startsWith('Боковая будка эстакады'));
+  const dryStations = stations.filter(room => roomHasMaskCell(gen.world, dryReachable, room));
+  const dryMicroRooms = microRooms.filter(room => roomHasMaskCell(gen.world, dryReachable, room));
+  const sorterAnnexRooms = gen.world.rooms.filter(room => room.name.startsWith('Сортировочная станция'));
+  const conveyorRooms = gen.world.rooms.filter(room => room.name.startsWith('Сортировочный конвейер'));
+  const smallRooms = gen.world.rooms.filter(room => room.w * room.h <= 72);
+  const hqAnchors = territoryHqAnchors(gen.world);
+  const hqOwners = new Set(hqAnchors.map(anchor => anchor.owner));
+  const hqRooms = hqAnchors.map(anchor => gen.world.rooms[anchor.roomId]).filter(room => room?.type === RoomType.HQ);
+  const supportRooms = gen.world.rooms.filter(room => room.name.includes('штаба') && room.type !== RoomType.HQ);
+  const territoryCounts = new Map(countTerritoryCells(gen.world).map(row => [row.owner, row.cells]));
+  const share = (owner: ZoneFaction): number => (territoryCounts.get(owner) ?? 0) / (W * W);
+  const npcs = gen.entities.filter(entity => entity.type === EntityType.NPC);
+  const ownTerritoryNpcs = npcs.filter(entity => {
+    const ci = gen.world.idx(Math.floor(entity.x), Math.floor(entity.y));
+    return territoryOwnerToFaction(territoryOwnerAtIndex(gen.world, ci)) === entity.faction;
+  });
+  let waterCells = 0;
+  for (const cell of gen.world.cells) if (cell === Cell.WATER) waterCells++;
+
+  assert.equal(gen.world.rooms.length >= 400, true, `rooms ${gen.world.rooms.length}`);
+  assert.equal(gen.world.doors.size >= 500, true, `doors ${gen.world.doors.size}`);
+  assert.equal(reachable >= 140_000, true, `reachable ${reachable}`);
+  assert.equal(reachableBucketCount(gen.world, audit.reachable, 128), 64);
+  assert.equal(waterCells >= 50_000, true, `water cells ${waterCells}`);
+  assert.equal(smallRooms.length >= 220, true, `small rooms ${smallRooms.length}`);
+  assert.equal(stations.length >= 45, true, `sump stations ${stations.length}`);
+  assert.equal(microRooms.length >= 190, true, `sump micro rooms ${microRooms.length}`);
+  assert.equal(dryStations.length >= 30, true, `dry stations ${dryStations.length}`);
+  assert.equal(dryMicroRooms.length >= 130, true, `dry micro rooms ${dryMicroRooms.length}`);
+  assert.equal(sorterAnnexRooms.length >= 32, true, `sorter annex rooms ${sorterAnnexRooms.length}`);
+  assert.equal(conveyorRooms.length >= 12, true, `conveyor rooms ${conveyorRooms.length}`);
+  assert.equal(hasReachableLift(gen, audit, LiftDirection.UP), true);
+  assert.equal(hasReachableLift(gen, audit, LiftDirection.DOWN), true);
+  assert.equal(hasDryReachableLift(gen, dryReachable, LiftDirection.UP), true);
+  assert.equal(hasDryReachableLift(gen, dryReachable, LiftDirection.DOWN), true);
+
+  for (const owner of HUMAN_TERRITORY_OWNERS) {
+    assert.equal(hqOwners.has(owner), true, `missing HQ owner ${ZoneFaction[owner]}`);
+    assert.equal((territoryCounts.get(owner) ?? 0) > 0, true, `empty territory ${ZoneFaction[owner]}`);
+    const anchor = hqAnchors.find(item => item.owner === owner);
+    const room = anchor ? gen.world.rooms[anchor.roomId] : undefined;
+    assert.equal(room?.type, RoomType.HQ, `HQ room type ${ZoneFaction[owner]}`);
+    assert.equal(room?.sealed, true, `HQ sealed ${ZoneFaction[owner]}`);
+    assert.equal(room?.doors.some(doorIdx => gen.world.doors.get(doorIdx)?.state === DoorState.HERMETIC_OPEN), true, `HQ hermetic door ${ZoneFaction[owner]}`);
+  }
+  assert.equal(hqRooms.length >= HUMAN_TERRITORY_OWNERS.length, true, `HQ rooms ${hqRooms.length}`);
+  assert.equal(supportRooms.length >= 15, true, `HQ support rooms ${supportRooms.length}`);
+  assert.equal(Math.abs(share(ZoneFaction.CITIZEN) - 0.16) <= 0.02, true, `citizen share ${share(ZoneFaction.CITIZEN)}`);
+  assert.equal(Math.abs(share(ZoneFaction.LIQUIDATOR) - 0.12) <= 0.02, true, `liquidator share ${share(ZoneFaction.LIQUIDATOR)}`);
+  assert.equal(Math.abs(share(ZoneFaction.CULTIST) - 0.40) <= 0.02, true, `cultist share ${share(ZoneFaction.CULTIST)}`);
+  assert.equal(Math.abs(share(ZoneFaction.SCIENTIST) - 0.08) <= 0.02, true, `scientist share ${share(ZoneFaction.SCIENTIST)}`);
+  assert.equal(Math.abs(share(ZoneFaction.WILD) - 0.24) <= 0.02, true, `wild share ${share(ZoneFaction.WILD)}`);
+  assert.equal(npcs.length === 0 || ownTerritoryNpcs.length / npcs.length >= 0.75, true, `own territory NPC share ${npcs.length ? ownTerritoryNpcs.length / npcs.length : 1}`);
+});
+
+testGenerationMatrix('genfix 097 bad apple sump cultist floor has dense causeways, edge rooms and target territory', () => {
+  const spec = makeProceduralFloorSpec(61_061, -46);
+  assert.equal(spec.geometryId, 'sump_causeways');
+  assert.equal(spec.majorityId, 'cultists');
+  assert.equal(spec.anomalyId, 'bad_apple_world');
+  assert.equal(spec.danger, 5);
+
+  const gen = timedProceduralSpec(spec, 'genfix_097 bad apple sump cultists seed=61061 z-46');
+  const audit = reachabilityAudit(gen);
+  const dryReachable = dryReachableFromSpawn(gen);
+  const reachable = countReachableCells(audit.reachable);
+  const stations = gen.world.rooms.filter(room => room.name.startsWith('Сухая станция эстакады'));
+  const microRooms = gen.world.rooms.filter(room => room.name.startsWith('Боковая будка эстакады'));
+  const edgeBooths = gen.world.rooms.filter(room => room.name.startsWith('Боковой отсек эстакады'));
+  const dryStations = stations.filter(room => roomHasMaskCell(gen.world, dryReachable, room));
+  const dryMicroRooms = microRooms.filter(room => roomHasMaskCell(gen.world, dryReachable, room));
+  const dryEdgeBooths = edgeBooths.filter(room => roomHasMaskCell(gen.world, dryReachable, room));
+  const smallRooms = gen.world.rooms.filter(room => room.w * room.h <= 72);
+  const badAppleRoom = gen.world.rooms.find(room => room.name.startsWith('Bad Apple!'));
+  const hqAnchors = territoryHqAnchors(gen.world);
+  const hqOwners = new Set(hqAnchors.map(anchor => anchor.owner));
+  const territoryCounts = new Map(countTerritoryCells(gen.world).map(row => [row.owner, row.cells]));
+  const share = (owner: ZoneFaction): number => (territoryCounts.get(owner) ?? 0) / (W * W);
+  const npcs = gen.entities.filter(entity => entity.type === EntityType.NPC);
+  const ownTerritoryNpcs = npcs.filter(entity => {
+    const ci = gen.world.idx(Math.floor(entity.x), Math.floor(entity.y));
+    return territoryOwnerToFaction(territoryOwnerAtIndex(gen.world, ci)) === entity.faction;
+  });
+  let waterCells = 0;
+  for (const cell of gen.world.cells) if (cell === Cell.WATER) waterCells++;
+
+  assert.equal(gen.world.rooms.length >= 620, true, `rooms ${gen.world.rooms.length}`);
+  assert.equal(gen.world.doors.size >= 700, true, `doors ${gen.world.doors.size}`);
+  assert.equal(reachable >= 185_000, true, `reachable ${reachable}`);
+  assert.equal(reachableBucketCount(gen.world, audit.reachable, 128), 64);
+  assert.equal(waterCells >= 80_000, true, `water cells ${waterCells}`);
+  assert.equal(smallRooms.length >= 430, true, `small rooms ${smallRooms.length}`);
+  assert.equal(stations.length >= 80, true, `sump stations ${stations.length}`);
+  assert.equal(microRooms.length >= 300, true, `sump micro rooms ${microRooms.length}`);
+  assert.equal(edgeBooths.length >= 100, true, `edge booths ${edgeBooths.length}`);
+  assert.equal(dryStations.length >= 50, true, `dry stations ${dryStations.length}`);
+  assert.equal(dryMicroRooms.length >= 160, true, `dry micro rooms ${dryMicroRooms.length}`);
+  assert.equal(dryEdgeBooths.length >= 80, true, `dry edge booths ${dryEdgeBooths.length}`);
+  assert.equal(badAppleRoom?.w, BAD_APPLE_WIDTH);
+  assert.equal(badAppleRoom?.h, BAD_APPLE_HEIGHT);
+  assert.equal(hasReachableLift(gen, audit, LiftDirection.UP), true);
+  assert.equal(hasReachableLift(gen, audit, LiftDirection.DOWN), true);
+  assert.equal(hasDryReachableLift(gen, dryReachable, LiftDirection.UP), true);
+  assert.equal(hasDryReachableLift(gen, dryReachable, LiftDirection.DOWN), true);
+
+  for (const owner of HUMAN_TERRITORY_OWNERS) {
+    assert.equal(hqOwners.has(owner), true, `missing HQ owner ${ZoneFaction[owner]}`);
+    assert.equal((territoryCounts.get(owner) ?? 0) > 0, true, `empty territory ${ZoneFaction[owner]}`);
+    const anchor = hqAnchors.find(item => item.owner === owner);
+    const room = anchor ? gen.world.rooms[anchor.roomId] : undefined;
+    assert.equal(room?.type, RoomType.HQ, `HQ room type ${ZoneFaction[owner]}`);
+    assert.equal(room?.sealed, true, `HQ sealed ${ZoneFaction[owner]}`);
+    assert.equal(room?.doors.some(doorIdx => gen.world.doors.get(doorIdx)?.state === DoorState.HERMETIC_OPEN), true, `HQ hermetic door ${ZoneFaction[owner]}`);
+  }
+  assert.equal(Math.abs(share(ZoneFaction.CITIZEN) - 0.16) <= 0.02, true, `citizen share ${share(ZoneFaction.CITIZEN)}`);
+  assert.equal(Math.abs(share(ZoneFaction.LIQUIDATOR) - 0.12) <= 0.02, true, `liquidator share ${share(ZoneFaction.LIQUIDATOR)}`);
+  assert.equal(Math.abs(share(ZoneFaction.CULTIST) - 0.40) <= 0.02, true, `cultist share ${share(ZoneFaction.CULTIST)}`);
+  assert.equal(Math.abs(share(ZoneFaction.SCIENTIST) - 0.08) <= 0.02, true, `scientist share ${share(ZoneFaction.SCIENTIST)}`);
+  assert.equal(Math.abs(share(ZoneFaction.WILD) - 0.24) <= 0.02, true, `wild share ${share(ZoneFaction.WILD)}`);
+  assert.equal(npcs.length === 0 || ownTerritoryNpcs.length / npcs.length >= 0.75, true, `own territory NPC share ${npcs.length ? ownTerritoryNpcs.length / npcs.length : 1}`);
+});
+
+testGenerationMatrix('genfix 092 sump rail wild floor has station yards, micro rooms and target territory', () => {
+  const spec = makeProceduralFloorSpec(61_061, -41);
+  assert.equal(spec.geometryId, 'sump_causeways');
+  assert.equal(spec.majorityId, 'wild');
+  assert.equal(spec.anomalyId, 'rail_trains');
+  assert.equal(spec.danger, 5);
+
+  const gen = timedProceduralSpec(spec, 'genfix_092 sump rail wild seed=61061 z-41');
+  const audit = reachabilityAudit(gen);
+  const dryReachable = dryReachableFromSpawn(gen);
+  const reachable = countReachableCells(audit.reachable);
+  const stations = gen.world.rooms.filter(room => room.name.startsWith('Сухая станция эстакады'));
+  const microRooms = gen.world.rooms.filter(room => room.name.startsWith('Боковая будка эстакады'));
+  const railServiceRooms = gen.world.rooms.filter(room => room.name.startsWith('Служба пути') || room.name.startsWith('Карман платформы'));
+  const smallRooms = gen.world.rooms.filter(room => room.w * room.h <= 72);
+  const hqAnchors = territoryHqAnchors(gen.world);
+  const hqOwners = new Set(hqAnchors.map(anchor => anchor.owner));
+  const territoryCounts = new Map(countTerritoryCells(gen.world).map(row => [row.owner, row.cells]));
+  const share = (owner: ZoneFaction): number => (territoryCounts.get(owner) ?? 0) / (W * W);
+  const npcs = gen.entities.filter(entity => entity.type === EntityType.NPC);
+  const ownTerritoryNpcs = npcs.filter(entity => {
+    const ci = gen.world.idx(Math.floor(entity.x), Math.floor(entity.y));
+    return territoryOwnerToFaction(territoryOwnerAtIndex(gen.world, ci)) === entity.faction;
+  });
+  let waterCells = 0;
+  for (const cell of gen.world.cells) if (cell === Cell.WATER) waterCells++;
+
+  assert.equal(gen.world.rooms.length >= 640, true, `rooms ${gen.world.rooms.length}`);
+  assert.equal(gen.world.doors.size >= 650, true, `doors ${gen.world.doors.size}`);
+  assert.equal(reachable >= 450_000, true, `reachable ${reachable}`);
+  assert.equal(reachableBucketCount(gen.world, audit.reachable, 128), 64);
+  assert.equal(waterCells >= 280_000, true, `water cells ${waterCells}`);
+  assert.equal(stations.length >= 80, true, `sump stations ${stations.length}`);
+  assert.equal(microRooms.length >= 280, true, `sump micro rooms ${microRooms.length}`);
+  assert.equal(railServiceRooms.length >= 16, true, `rail service rooms ${railServiceRooms.length}`);
+  assert.equal(smallRooms.length >= 450, true, `small rooms ${smallRooms.length}`);
+  assert.equal(gen.world.railTracks.length >= 3, true, `rail tracks ${gen.world.railTracks.length}`);
+  assert.equal(gen.world.railTrains.length >= 3, true, `rail trains ${gen.world.railTrains.length}`);
+  assert.equal(getRouteCueMarkers(gen.world).filter(marker => marker.tags.includes('rail_trains')).length >= 10, true);
+  assert.equal(hasReachableLift(gen, audit, LiftDirection.UP), true);
+  assert.equal(hasReachableLift(gen, audit, LiftDirection.DOWN), true);
+  assert.equal(hasDryReachableLift(gen, dryReachable, LiftDirection.UP), true);
+  assert.equal(hasDryReachableLift(gen, dryReachable, LiftDirection.DOWN), true);
+
+  for (const owner of HUMAN_TERRITORY_OWNERS) {
+    assert.equal(hqOwners.has(owner), true, `missing HQ owner ${ZoneFaction[owner]}`);
+    assert.equal((territoryCounts.get(owner) ?? 0) > 0, true, `empty territory ${ZoneFaction[owner]}`);
+    const anchor = hqAnchors.find(item => item.owner === owner);
+    const room = anchor ? gen.world.rooms[anchor.roomId] : undefined;
+    assert.equal(room?.type, RoomType.HQ, `HQ room type ${ZoneFaction[owner]}`);
+    assert.equal(room?.sealed, true, `HQ sealed ${ZoneFaction[owner]}`);
+    assert.equal(room?.doors.some(doorIdx => gen.world.doors.get(doorIdx)?.state === DoorState.HERMETIC_OPEN), true, `HQ hermetic door ${ZoneFaction[owner]}`);
+  }
+  assert.equal(Math.abs(share(ZoneFaction.CITIZEN) - 0.17) <= 0.02, true, `citizen share ${share(ZoneFaction.CITIZEN)}`);
+  assert.equal(Math.abs(share(ZoneFaction.LIQUIDATOR) - 0.13) <= 0.02, true, `liquidator share ${share(ZoneFaction.LIQUIDATOR)}`);
+  assert.equal(Math.abs(share(ZoneFaction.CULTIST) - 0.12) <= 0.02, true, `cultist share ${share(ZoneFaction.CULTIST)}`);
+  assert.equal(Math.abs(share(ZoneFaction.SCIENTIST) - 0.08) <= 0.02, true, `scientist share ${share(ZoneFaction.SCIENTIST)}`);
+  assert.equal(Math.abs(share(ZoneFaction.WILD) - 0.50) <= 0.02, true, `wild share ${share(ZoneFaction.WILD)}`);
+  assert.equal(npcs.length === 0 || ownTerritoryNpcs.length / npcs.length >= 0.78, true, `own territory NPC share ${npcs.length ? ownTerritoryNpcs.length / npcs.length : 1}`);
+});
+
+testGenerationMatrix('genfix 098 sump none citizens floor has flooded multi-scale causeways and target territory', () => {
+  const spec = makeProceduralFloorSpec(61_061, -47);
+  assert.equal(spec.geometryId, 'sump_causeways');
+  assert.equal(spec.majorityId, 'citizens');
+  assert.equal(spec.anomalyId, 'none');
+  assert.equal(spec.danger, 4);
+
+  const gen = timedProceduralSpec(spec, 'genfix_098 sump none citizens seed=61061 z-47');
+  const audit = reachabilityAudit(gen);
+  const dryReachable = dryReachableFromSpawn(gen);
+  const reachable = countReachableCells(audit.reachable);
+  const stations = gen.world.rooms.filter(room => room.name.startsWith('Сухая станция эстакады'));
+  const microRooms = gen.world.rooms.filter(room => room.name.startsWith('Боковая будка эстакады'));
+  const edgeBooths = gen.world.rooms.filter(room => room.name.startsWith('Боковой отсек эстакады'));
+  const dryStations = stations.filter(room => roomHasMaskCell(gen.world, dryReachable, room));
+  const dryMicroRooms = microRooms.filter(room => roomHasMaskCell(gen.world, dryReachable, room));
+  const dryEdgeBooths = edgeBooths.filter(room => roomHasMaskCell(gen.world, dryReachable, room));
+  const smallRooms = gen.world.rooms.filter(room => room.w * room.h <= 72);
+  const hqAnchors = territoryHqAnchors(gen.world);
+  const hqOwners = new Set(hqAnchors.map(anchor => anchor.owner));
+  const hqRooms = hqAnchors.map(anchor => gen.world.rooms[anchor.roomId]).filter(room => room?.type === RoomType.HQ);
+  const supportRooms = gen.world.rooms.filter(room => room.name.includes('штаба') && room.type !== RoomType.HQ);
+  const territoryCounts = new Map(countTerritoryCells(gen.world).map(row => [row.owner, row.cells]));
+  const share = (owner: ZoneFaction): number => (territoryCounts.get(owner) ?? 0) / (W * W);
+  const npcs = gen.entities.filter(entity => entity.type === EntityType.NPC);
+  const ownTerritoryNpcs = npcs.filter(entity => {
+    const ci = gen.world.idx(Math.floor(entity.x), Math.floor(entity.y));
+    return territoryOwnerToFaction(territoryOwnerAtIndex(gen.world, ci)) === entity.faction;
+  });
+  let waterCells = 0;
+  for (const cell of gen.world.cells) if (cell === Cell.WATER) waterCells++;
+
+  assert.equal(gen.world.rooms.length >= 600, true, `rooms ${gen.world.rooms.length}`);
+  assert.equal(gen.world.doors.size >= 650, true, `doors ${gen.world.doors.size}`);
+  assert.equal(reachable >= 430_000, true, `reachable ${reachable}`);
+  assert.equal(reachableBucketCount(gen.world, audit.reachable, 128), 64);
+  assert.equal(waterCells >= 250_000, true, `water cells ${waterCells}`);
+  assert.equal(smallRooms.length >= 450, true, `small rooms ${smallRooms.length}`);
+  assert.equal(stations.length >= 70, true, `sump stations ${stations.length}`);
+  assert.equal(microRooms.length >= 250, true, `sump micro rooms ${microRooms.length}`);
+  assert.equal(edgeBooths.length >= 160, true, `edge booths ${edgeBooths.length}`);
+  assert.equal(dryStations.length >= 35, true, `dry stations ${dryStations.length}`);
+  assert.equal(dryMicroRooms.length + dryEdgeBooths.length >= 240, true, `dry micro layer ${dryMicroRooms.length + dryEdgeBooths.length}`);
+  assert.equal(hasReachableLift(gen, audit, LiftDirection.UP), true);
+  assert.equal(hasReachableLift(gen, audit, LiftDirection.DOWN), true);
+  assert.equal(hasDryReachableLift(gen, dryReachable, LiftDirection.UP), true);
+  assert.equal(hasDryReachableLift(gen, dryReachable, LiftDirection.DOWN), true);
+
+  for (const owner of HUMAN_TERRITORY_OWNERS) {
+    assert.equal(hqOwners.has(owner), true, `missing HQ owner ${ZoneFaction[owner]}`);
+    assert.equal((territoryCounts.get(owner) ?? 0) > 0, true, `empty territory ${ZoneFaction[owner]}`);
+    const anchor = hqAnchors.find(item => item.owner === owner);
+    const room = anchor ? gen.world.rooms[anchor.roomId] : undefined;
+    assert.equal(room?.type, RoomType.HQ, `HQ room type ${ZoneFaction[owner]}`);
+    assert.equal(room?.sealed, true, `HQ sealed ${ZoneFaction[owner]}`);
+    assert.equal(room?.doors.some(doorIdx => gen.world.doors.get(doorIdx)?.state === DoorState.HERMETIC_OPEN), true, `HQ hermetic door ${ZoneFaction[owner]}`);
+  }
+  assert.equal(hqRooms.length >= HUMAN_TERRITORY_OWNERS.length, true, `HQ rooms ${hqRooms.length}`);
+  assert.equal(supportRooms.length >= 15, true, `HQ support rooms ${supportRooms.length}`);
+  assert.equal(Math.abs(share(ZoneFaction.CITIZEN) - 0.56) <= 0.02, true, `citizen share ${share(ZoneFaction.CITIZEN)}`);
+  assert.equal(Math.abs(share(ZoneFaction.LIQUIDATOR) - 0.17) <= 0.02, true, `liquidator share ${share(ZoneFaction.LIQUIDATOR)}`);
+  assert.equal(Math.abs(share(ZoneFaction.CULTIST) - 0.07) <= 0.02, true, `cultist share ${share(ZoneFaction.CULTIST)}`);
+  assert.equal(Math.abs(share(ZoneFaction.SCIENTIST) - 0.08) <= 0.02, true, `scientist share ${share(ZoneFaction.SCIENTIST)}`);
+  assert.equal(Math.abs(share(ZoneFaction.WILD) - 0.12) <= 0.02, true, `wild share ${share(ZoneFaction.WILD)}`);
+  assert.equal(npcs.length === 0 || ownTerritoryNpcs.length / npcs.length >= 0.75, true, `own territory NPC share ${npcs.length ? ownTerritoryNpcs.length / npcs.length : 1}`);
+});
+
+testGenerationMatrix('genfix 100 deep sump none scientist floor has flooded field, edge booths and target territory', () => {
+  const spec = makeProceduralFloorSpec(61_061, -49);
+  assert.equal(spec.geometryId, 'sump_causeways');
+  assert.equal(spec.majorityId, 'scientists');
+  assert.equal(spec.anomalyId, 'none');
+  assert.equal(spec.danger, 4);
+  assert.equal(floorRunZAllowsNpcs(spec.z), false);
+
+  const gen = timedProceduralSpec(spec, 'genfix_100 sump none scientists seed=61061 z-49');
+  const audit = reachabilityAudit(gen);
+  const dryReachable = dryReachableFromSpawn(gen);
+  const reachable = countReachableCells(audit.reachable);
+  const stations = gen.world.rooms.filter(room => room.name.startsWith('Сухая станция эстакады'));
+  const microRooms = gen.world.rooms.filter(room => room.name.startsWith('Боковая будка эстакады'));
+  const edgeBooths = gen.world.rooms.filter(room => room.name.startsWith('Боковой отсек эстакады'));
+  const dryStations = stations.filter(room => roomHasMaskCell(gen.world, dryReachable, room));
+  const dryMicroRooms = microRooms.filter(room => roomHasMaskCell(gen.world, dryReachable, room));
+  const dryEdgeBooths = edgeBooths.filter(room => roomHasMaskCell(gen.world, dryReachable, room));
+  const hqAnchors = territoryHqAnchors(gen.world);
+  const hqOwners = new Set(hqAnchors.map(anchor => anchor.owner));
+  const hqRooms = hqAnchors.map(anchor => gen.world.rooms[anchor.roomId]).filter(room => room?.type === RoomType.HQ);
+  const supportRooms = gen.world.rooms.filter(room => room.name.includes('штаба') && room.type !== RoomType.HQ);
+  const territoryRows = countTerritoryCells(gen.world);
+  const dominant = [...territoryRows].sort((a, b) => b.cells - a.cells)[0]?.owner;
+  const npcs = gen.entities.filter(entity => entity.type === EntityType.NPC);
+  let waterCells = 0;
+  for (const cell of gen.world.cells) if (cell === Cell.WATER) waterCells++;
+
+  assert.equal(gen.world.rooms.length >= 620, true, `rooms ${gen.world.rooms.length}`);
+  assert.equal(gen.world.doors.size >= 640, true, `doors ${gen.world.doors.size}`);
+  assert.equal(reachable >= 420_000, true, `reachable ${reachable}`);
+  assert.equal(reachableBucketCount(gen.world, audit.reachable, 128), 64);
+  assert.equal(waterCells >= 250_000, true, `water cells ${waterCells}`);
+  assert.equal(stations.length >= 75, true, `sump stations ${stations.length}`);
+  assert.equal(microRooms.length >= 260, true, `sump micro rooms ${microRooms.length}`);
+  assert.equal(edgeBooths.length >= 170, true, `edge booths ${edgeBooths.length}`);
+  assert.equal(dryStations.length >= 40, true, `dry stations ${dryStations.length}`);
+  assert.equal(dryMicroRooms.length >= 110, true, `dry micro rooms ${dryMicroRooms.length}`);
+  assert.equal(dryEdgeBooths.length >= 90, true, `dry edge booths ${dryEdgeBooths.length}`);
+  assert.equal(hasReachableLift(gen, audit, LiftDirection.UP), true);
+  assert.equal(hasReachableLift(gen, audit, LiftDirection.DOWN), true);
+  assert.equal(hasDryReachableLift(gen, dryReachable, LiftDirection.UP), true);
+  assert.equal(hasDryReachableLift(gen, dryReachable, LiftDirection.DOWN), true);
+
+  for (const owner of HUMAN_TERRITORY_OWNERS) {
+    assert.equal(hqOwners.has(owner), true, `missing HQ owner ${ZoneFaction[owner]}`);
+    assert.equal(territoryCellCount(gen.world, owner) > 0, true, `empty territory ${ZoneFaction[owner]}`);
+    const anchor = hqAnchors.find(item => item.owner === owner);
+    const room = anchor ? gen.world.rooms[anchor.roomId] : undefined;
+    assert.equal(room?.type, RoomType.HQ, `HQ room type ${ZoneFaction[owner]}`);
+    assert.equal(room?.sealed, true, `HQ sealed ${ZoneFaction[owner]}`);
+    assert.equal(room?.doors.some(doorIdx => gen.world.doors.get(doorIdx)?.state === DoorState.HERMETIC_OPEN), true, `HQ hermetic door ${ZoneFaction[owner]}`);
+  }
+
+  assert.equal(hqRooms.length >= HUMAN_TERRITORY_OWNERS.length, true, `HQ rooms ${hqRooms.length}`);
+  assert.equal(supportRooms.length >= 15, true, `HQ support rooms ${supportRooms.length}`);
+  assert.equal(dominant, ZoneFaction.SCIENTIST);
+  assertTerritoryShare(gen.world, ZoneFaction.CITIZEN, 0.20, 0.24);
+  assertTerritoryShare(gen.world, ZoneFaction.LIQUIDATOR, 0.14, 0.18);
+  assertTerritoryShare(gen.world, ZoneFaction.CULTIST, 0.06, 0.10);
+  assertTerritoryShare(gen.world, ZoneFaction.SCIENTIST, 0.40, 0.44);
+  assertTerritoryShare(gen.world, ZoneFaction.WILD, 0.10, 0.14);
+  assert.equal(npcs.length, 0, 'z-49 route floor should stay NPC-free');
+});
+
+testGenerationMatrix('genfix 084 procedural sump conway liquidator floor keeps macro and fills mid micro territory', () => {
+  const spec = makeProceduralFloorSpec(61_061, -33);
+  assert.equal(spec.geometryId, 'sump_causeways');
+  assert.equal(spec.majorityId, 'liquidators');
+  assert.equal(spec.anomalyId, 'conway_life');
+  assert.equal(spec.danger, 5);
+
+  const gen = timedProceduralSpec(spec, 'genfix_084 sump conway liquidators seed=61061 z-33');
+  const audit = reachabilityAudit(gen);
+  const dryReachable = dryReachableFromSpawn(gen);
+  const reachable = countReachableCells(audit.reachable);
+  const dryReachableCells = countReachableCells(dryReachable);
+  const stations = gen.world.rooms.filter(room => room.name.startsWith('Сухая станция эстакады'));
+  const microRooms = gen.world.rooms.filter(room => room.name.startsWith('Боковая будка эстакады'));
+  const lifeStations = gen.world.rooms.filter(room => room.name.startsWith('Клеточная станция эстакады'));
+  const lifeMicroRooms = gen.world.rooms.filter(room => room.name.startsWith('Клеточная будка эстакады'));
+  const dryLifeStations = lifeStations.filter(room => roomHasMaskCell(gen.world, dryReachable, room));
+  const dryLifeMicroRooms = lifeMicroRooms.filter(room => roomHasMaskCell(gen.world, dryReachable, room));
+  const smallRooms = gen.world.rooms.filter(room => room.w * room.h <= 72);
+  const hqAnchors = territoryHqAnchors(gen.world);
+  const hqOwners = new Set(hqAnchors.map(anchor => anchor.owner));
+  const hqRooms = hqAnchors.map(anchor => gen.world.rooms[anchor.roomId]).filter(room => room?.type === RoomType.HQ);
+  const supportRooms = gen.world.rooms.filter(room => room.name.includes('штаба') && room.type !== RoomType.HQ);
+  const territoryCounts = new Map(countTerritoryCells(gen.world).map(row => [row.owner, row.cells]));
+  const share = (owner: ZoneFaction): number => (territoryCounts.get(owner) ?? 0) / (W * W);
+  const npcs = gen.entities.filter(entity => entity.type === EntityType.NPC);
+  const ownTerritoryNpcs = npcs.filter(entity => {
+    const ci = gen.world.idx(Math.floor(entity.x), Math.floor(entity.y));
+    return territoryOwnerToFaction(territoryOwnerAtIndex(gen.world, ci)) === entity.faction;
+  });
+  const cues = getRouteCueMarkers(gen.world);
+  let waterCells = 0;
+  for (const cell of gen.world.cells) if (cell === Cell.WATER) waterCells++;
+
+  assert.equal(gen.world.rooms.length >= 400, true, `rooms ${gen.world.rooms.length}`);
+  assert.equal(gen.world.doors.size >= 300, true, `doors ${gen.world.doors.size}`);
+  assert.equal(reachable >= 780_000, true, `reachable ${reachable}`);
+  assert.equal(reachableBucketCount(gen.world, audit.reachable, 128), 64);
+  assert.equal(dryReachableCells >= 500_000, true, `dry reachable ${dryReachableCells}`);
+  assert.equal(waterCells >= 70_000, true, `water cells ${waterCells}`);
+  assert.equal(smallRooms.length >= 270, true, `small rooms ${smallRooms.length}`);
+  assert.equal(stations.length >= 50, true, `sump stations ${stations.length}`);
+  assert.equal(microRooms.length >= 180, true, `sump micro rooms ${microRooms.length}`);
+  assert.equal(lifeStations.length >= 24, true, `life stations ${lifeStations.length}`);
+  assert.equal(lifeMicroRooms.length >= 70, true, `life micro rooms ${lifeMicroRooms.length}`);
+  assert.equal(dryLifeStations.length >= 24, true, `dry life stations ${dryLifeStations.length}`);
+  assert.equal(dryLifeMicroRooms.length >= 70, true, `dry life micro rooms ${dryLifeMicroRooms.length}`);
+  assert.equal(hasReachableLift(gen, audit, LiftDirection.UP), true);
+  assert.equal(hasReachableLift(gen, audit, LiftDirection.DOWN), true);
+  assert.equal(hasDryReachableLift(gen, dryReachable, LiftDirection.UP), true);
+  assert.equal(hasDryReachableLift(gen, dryReachable, LiftDirection.DOWN), true);
+  assert.equal(cues.some(cue => cue.tags.includes('sump_causeways') && cue.tags.includes('conway_life') && cue.tags.includes('mid_geometry')), true);
+  assert.equal(cues.some(cue => cue.tags.includes('conway_life') && cue.tags.includes('visible_anomaly')), true);
+
+  for (const owner of HUMAN_TERRITORY_OWNERS) {
+    assert.equal(hqOwners.has(owner), true, `missing HQ owner ${ZoneFaction[owner]}`);
+    assert.equal((territoryCounts.get(owner) ?? 0) > 0, true, `empty territory ${ZoneFaction[owner]}`);
+    const anchor = hqAnchors.find(item => item.owner === owner);
+    const room = anchor ? gen.world.rooms[anchor.roomId] : undefined;
+    assert.equal(room?.type, RoomType.HQ, `HQ room type ${ZoneFaction[owner]}`);
+    assert.equal(room?.sealed, true, `HQ sealed ${ZoneFaction[owner]}`);
+    assert.equal(room?.doors.some(doorIdx => gen.world.doors.get(doorIdx)?.state === DoorState.HERMETIC_OPEN), true, `HQ hermetic door ${ZoneFaction[owner]}`);
+  }
+  assert.equal(hqRooms.length >= HUMAN_TERRITORY_OWNERS.length, true, `HQ rooms ${hqRooms.length}`);
+  assert.equal(supportRooms.length >= 15, true, `HQ support rooms ${supportRooms.length}`);
+  assert.equal(Math.abs(share(ZoneFaction.CITIZEN) - 0.17) <= 0.02, true, `citizen share ${share(ZoneFaction.CITIZEN)}`);
+  assert.equal(Math.abs(share(ZoneFaction.LIQUIDATOR) - 0.56) <= 0.02, true, `liquidator share ${share(ZoneFaction.LIQUIDATOR)}`);
+  assert.equal(Math.abs(share(ZoneFaction.CULTIST) - 0.07) <= 0.02, true, `cultist share ${share(ZoneFaction.CULTIST)}`);
+  assert.equal(Math.abs(share(ZoneFaction.SCIENTIST) - 0.08) <= 0.02, true, `scientist share ${share(ZoneFaction.SCIENTIST)}`);
+  assert.equal(Math.abs(share(ZoneFaction.WILD) - 0.12) <= 0.02, true, `wild share ${share(ZoneFaction.WILD)}`);
+  assert.equal(npcs.length >= 1_000, true, `NPCs ${npcs.length}`);
+  assert.equal(ownTerritoryNpcs.length / npcs.length >= 0.75, true, `own territory NPC share ${ownTerritoryNpcs.length / npcs.length}`);
+});
+
+testGenerationMatrix('genfix 094 sump mushroom citizens floor has dense causeways mycelium and target territory', () => {
+  const spec = makeProceduralFloorSpec(61_061, -43);
+  assert.equal(spec.geometryId, 'sump_causeways');
+  assert.equal(spec.majorityId, 'citizens');
+  assert.equal(spec.anomalyId, 'mushroom_mycelium');
+  assert.equal(spec.danger, 4);
+
+  const gen = timedProceduralSpec(spec, 'genfix_094 sump mushroom citizens seed=61061 z-43');
+  const audit = reachabilityAudit(gen);
+  const dryReachable = dryReachableFromSpawn(gen);
+  const reachable = countReachableCells(audit.reachable);
+  const stations = gen.world.rooms.filter(room => room.name.startsWith('Сухая станция эстакады'));
+  const microRooms = gen.world.rooms.filter(room => room.name.startsWith('Боковая будка эстакады'));
+  const dryStations = stations.filter(room => roomHasMaskCell(gen.world, dryReachable, room));
+  const dryMicroRooms = microRooms.filter(room => roomHasMaskCell(gen.world, dryReachable, room));
+  const myceliumRooms = gen.world.rooms.filter(room => room.name.startsWith('Грибничный карман'));
+  const reachableMyceliumRooms = myceliumRooms.filter(room => roomHasReachableCell(gen.world, audit, room));
+  const repairRooms = gen.world.rooms.filter(room => room.name.startsWith('Ремонтный пролет эстакады'));
+  const stashRooms = gen.world.rooms.filter(room => room.name.startsWith('Сухой остров черной воды'));
+  const smallRooms = gen.world.rooms.filter(room => room.w * room.h <= 72);
+  const hqAnchors = territoryHqAnchors(gen.world);
+  const hqOwners = new Set(hqAnchors.map(anchor => anchor.owner));
+  const supportRooms = gen.world.rooms.filter(room => room.name.includes('штаба') && room.type !== RoomType.HQ);
+  const territoryCounts = new Map(countTerritoryCells(gen.world).map(row => [row.owner, row.cells]));
+  const share = (owner: ZoneFaction): number => (territoryCounts.get(owner) ?? 0) / (W * W);
+  const npcs = gen.entities.filter(entity => entity.type === EntityType.NPC);
+  const ownTerritoryNpcs = npcs.filter(entity => {
+    const ci = gen.world.idx(Math.floor(entity.x), Math.floor(entity.y));
+    return territoryOwnerToFaction(territoryOwnerAtIndex(gen.world, ci)) === entity.faction;
+  });
+  let waterCells = 0;
+  for (const cell of gen.world.cells) if (cell === Cell.WATER) waterCells++;
+
+  assert.equal(gen.world.rooms.length >= 430, true, `rooms ${gen.world.rooms.length}`);
+  assert.equal(gen.world.doors.size >= 540, true, `doors ${gen.world.doors.size}`);
+  assert.equal(reachable >= 160_000, true, `reachable ${reachable}`);
+  assert.equal(reachableBucketCount(gen.world, audit.reachable, 128), 64);
+  assert.equal(waterCells >= 70_000, true, `water cells ${waterCells}`);
+  assert.equal(smallRooms.length >= 260, true, `small rooms ${smallRooms.length}`);
+  assert.equal(stations.length >= 60, true, `sump stations ${stations.length}`);
+  assert.equal(microRooms.length >= 240, true, `sump micro rooms ${microRooms.length}`);
+  assert.equal(dryStations.length >= 30, true, `dry stations ${dryStations.length}`);
+  assert.equal(dryMicroRooms.length >= 140, true, `dry micro rooms ${dryMicroRooms.length}`);
+  assert.equal(myceliumRooms.length >= 16, true, `mycelium rooms ${myceliumRooms.length}`);
+  assert.equal(reachableMyceliumRooms.length >= 16, true, `reachable mycelium rooms ${reachableMyceliumRooms.length}`);
+  assert.equal(repairRooms.length >= 2, true, `repair rooms ${repairRooms.length}`);
+  assert.equal(stashRooms.length >= 2, true, `stash rooms ${stashRooms.length}`);
+  assert.equal(hasReachableLift(gen, audit, LiftDirection.UP), true);
+  assert.equal(hasReachableLift(gen, audit, LiftDirection.DOWN), true);
+  assert.equal(hasDryReachableLift(gen, dryReachable, LiftDirection.UP), true);
+  assert.equal(hasDryReachableLift(gen, dryReachable, LiftDirection.DOWN), true);
+
+  for (const owner of HUMAN_TERRITORY_OWNERS) {
+    assert.equal(hqOwners.has(owner), true, `missing HQ owner ${ZoneFaction[owner]}`);
+    assert.equal((territoryCounts.get(owner) ?? 0) > 0, true, `empty territory ${ZoneFaction[owner]}`);
+    const anchor = hqAnchors.find(item => item.owner === owner);
+    const room = anchor ? gen.world.rooms[anchor.roomId] : undefined;
+    assert.equal(room?.type, RoomType.HQ, `HQ room type ${ZoneFaction[owner]}`);
+    assert.equal(room?.sealed, true, `HQ sealed ${ZoneFaction[owner]}`);
+    assert.equal(room?.doors.some(doorIdx => gen.world.doors.get(doorIdx)?.state === DoorState.HERMETIC_OPEN), true, `HQ hermetic door ${ZoneFaction[owner]}`);
+  }
+  assert.equal(supportRooms.length >= 15, true, `HQ support rooms ${supportRooms.length}`);
+  assert.equal(Math.abs(share(ZoneFaction.CITIZEN) - 0.56) <= 0.02, true, `citizen share ${share(ZoneFaction.CITIZEN)}`);
+  assert.equal(Math.abs(share(ZoneFaction.LIQUIDATOR) - 0.17) <= 0.02, true, `liquidator share ${share(ZoneFaction.LIQUIDATOR)}`);
+  assert.equal(Math.abs(share(ZoneFaction.CULTIST) - 0.07) <= 0.02, true, `cultist share ${share(ZoneFaction.CULTIST)}`);
+  assert.equal(Math.abs(share(ZoneFaction.SCIENTIST) - 0.08) <= 0.02, true, `scientist share ${share(ZoneFaction.SCIENTIST)}`);
+  assert.equal(Math.abs(share(ZoneFaction.WILD) - 0.12) <= 0.02, true, `wild share ${share(ZoneFaction.WILD)}`);
+  assert.equal(npcs.length === 0 || ownTerritoryNpcs.length / npcs.length >= 0.75, true, `own territory NPC share ${npcs.length ? ownTerritoryNpcs.length / npcs.length : 1}`);
+});
+
+testGenerationMatrix('genfix 096 procedural sump bad apple wild floor fills blank spans from HQ territory', () => {
+  const spec = makeProceduralFloorSpec(61_061, -45);
+  assert.equal(spec.geometryId, 'sump_causeways');
+  assert.equal(spec.majorityId, 'wild');
+  assert.equal(spec.anomalyId, 'bad_apple_world');
+  assert.equal(spec.danger, 5);
+
+  const gen = timedProceduralSpec(spec, 'genfix_096 sump bad apple wild seed=61061 z-45');
+  const audit = reachabilityAudit(gen);
+  const dryReachable = dryReachableFromSpawn(gen);
+  const reachable = countReachableCells(audit.reachable);
+  const stations = gen.world.rooms.filter(room => room.name.startsWith('Сухая станция эстакады'));
+  const microRooms = gen.world.rooms.filter(room => room.name.startsWith('Боковая будка эстакады'));
+  const dryStations = stations.filter(room => roomHasMaskCell(gen.world, dryReachable, room));
+  const dryMicroRooms = microRooms.filter(room => roomHasMaskCell(gen.world, dryReachable, room));
+  const smallRooms = gen.world.rooms.filter(room => room.w * room.h <= 72);
+  const badAppleRooms = gen.world.rooms.filter(room => room.name.startsWith('Bad Apple!'));
+  const hqAnchors = territoryHqAnchors(gen.world);
+  const hqOwners = new Set(hqAnchors.map(anchor => anchor.owner));
+  const hqRooms = hqAnchors.map(anchor => gen.world.rooms[anchor.roomId]).filter(room => room?.type === RoomType.HQ);
+  const supportRooms = gen.world.rooms.filter(room => room.name.includes('штаба') && room.type !== RoomType.HQ);
+  const territoryCounts = new Map(countTerritoryCells(gen.world).map(row => [row.owner, row.cells]));
+  const share = (owner: ZoneFaction): number => (territoryCounts.get(owner) ?? 0) / (W * W);
+  const npcs = gen.entities.filter(entity => entity.type === EntityType.NPC);
+  const ownTerritoryNpcs = npcs.filter(entity => {
+    const ci = gen.world.idx(Math.floor(entity.x), Math.floor(entity.y));
+    return territoryOwnerToFaction(territoryOwnerAtIndex(gen.world, ci)) === entity.faction;
+  });
+  let waterCells = 0;
+  for (const cell of gen.world.cells) if (cell === Cell.WATER) waterCells++;
+
+  assert.equal(gen.world.rooms.length >= 540, true, `rooms ${gen.world.rooms.length}`);
+  assert.equal(gen.world.doors.size >= 620, true, `doors ${gen.world.doors.size}`);
+  assert.equal(reachable >= 175_000, true, `reachable ${reachable}`);
+  assert.equal(reachableBucketCount(gen.world, audit.reachable, 128), 64);
+  assert.equal(waterCells >= 75_000, true, `water cells ${waterCells}`);
+  assert.equal(stations.length >= 90, true, `sump stations ${stations.length}`);
+  assert.equal(microRooms.length >= 330, true, `sump micro rooms ${microRooms.length}`);
+  assert.equal(dryStations.length >= 55, true, `dry stations ${dryStations.length}`);
+  assert.equal(dryMicroRooms.length >= 160, true, `dry micro rooms ${dryMicroRooms.length}`);
+  assert.equal(smallRooms.length >= 340, true, `small rooms ${smallRooms.length}`);
+  assert.equal(badAppleRooms.length >= 1, true, 'bad apple room');
+  assert.equal(hasReachableLift(gen, audit, LiftDirection.UP), true);
+  assert.equal(hasReachableLift(gen, audit, LiftDirection.DOWN), true);
+  assert.equal(hasDryReachableLift(gen, dryReachable, LiftDirection.UP), true);
+  assert.equal(hasDryReachableLift(gen, dryReachable, LiftDirection.DOWN), true);
+
+  for (const owner of HUMAN_TERRITORY_OWNERS) {
+    assert.equal(hqOwners.has(owner), true, `missing HQ owner ${ZoneFaction[owner]}`);
+    assert.equal((territoryCounts.get(owner) ?? 0) > 0, true, `empty territory ${ZoneFaction[owner]}`);
+    const anchor = hqAnchors.find(item => item.owner === owner);
+    const room = anchor ? gen.world.rooms[anchor.roomId] : undefined;
+    assert.equal(room?.type, RoomType.HQ, `HQ room type ${ZoneFaction[owner]}`);
+    assert.equal(room?.sealed, true, `HQ sealed ${ZoneFaction[owner]}`);
+    assert.equal(room?.doors.some(doorIdx => gen.world.doors.get(doorIdx)?.state === DoorState.HERMETIC_OPEN), true, `HQ hermetic door ${ZoneFaction[owner]}`);
+  }
+  assert.equal(hqRooms.length >= HUMAN_TERRITORY_OWNERS.length, true, `HQ rooms ${hqRooms.length}`);
+  assert.equal(supportRooms.length >= 15, true, `HQ support rooms ${supportRooms.length}`);
+  assert.equal(Math.abs(share(ZoneFaction.CITIZEN) - 0.17) <= 0.02, true, `citizen share ${share(ZoneFaction.CITIZEN)}`);
+  assert.equal(Math.abs(share(ZoneFaction.LIQUIDATOR) - 0.13) <= 0.02, true, `liquidator share ${share(ZoneFaction.LIQUIDATOR)}`);
+  assert.equal(Math.abs(share(ZoneFaction.CULTIST) - 0.12) <= 0.02, true, `cultist share ${share(ZoneFaction.CULTIST)}`);
+  assert.equal(Math.abs(share(ZoneFaction.SCIENTIST) - 0.08) <= 0.02, true, `scientist share ${share(ZoneFaction.SCIENTIST)}`);
+  assert.equal(Math.abs(share(ZoneFaction.WILD) - 0.50) <= 0.02, true, `wild share ${share(ZoneFaction.WILD)}`);
+  assert.equal(npcs.length === 0 || ownTerritoryNpcs.length / npcs.length >= 0.8, true, `own territory NPC share ${npcs.length ? ownTerritoryNpcs.length / npcs.length : 1}`);
+});
+
+testGenerationMatrix('genfix 086 sump fractal citizens floor has filled causeways and target territory', () => {
+  const spec = makeProceduralFloorSpec(61_061, -35);
+  assert.equal(spec.geometryId, 'sump_causeways');
+  assert.equal(spec.majorityId, 'citizens');
+  assert.equal(spec.anomalyId, 'fractal_floor');
+  assert.equal(spec.danger, 5);
+
+  const gen = timedProceduralSpec(spec, 'genfix_086 sump fractal citizens seed=61061 z-35');
+  const audit = reachabilityAudit(gen);
+  const dryReachable = dryReachableFromSpawn(gen);
+  const reachable = countReachableCells(audit.reachable);
+  const stations = gen.world.rooms.filter(room => room.name.startsWith('Сухая станция эстакады'));
+  const microRooms = gen.world.rooms.filter(room => room.name.startsWith('Боковая будка эстакады'));
+  const dryStations = stations.filter(room => roomHasMaskCell(gen.world, dryReachable, room));
+  const dryMicroRooms = microRooms.filter(room => roomHasMaskCell(gen.world, dryReachable, room));
+  const smallRooms = gen.world.rooms.filter(room => room.w * room.h <= 72);
+  const fractalRooms = gen.world.rooms.filter(room => room.name.startsWith('Фрактал'));
+  const hqAnchors = territoryHqAnchors(gen.world);
+  const hqOwners = new Set(hqAnchors.map(anchor => anchor.owner));
+  const hqRooms = hqAnchors.map(anchor => gen.world.rooms[anchor.roomId]).filter(room => room?.type === RoomType.HQ);
+  const supportRooms = gen.world.rooms.filter(room => room.name.includes('штаба') && room.type !== RoomType.HQ);
+  const territoryCounts = new Map(countTerritoryCells(gen.world).map(row => [row.owner, row.cells]));
+  const share = (owner: ZoneFaction): number => (territoryCounts.get(owner) ?? 0) / (W * W);
+  const npcs = gen.entities.filter(entity => entity.type === EntityType.NPC);
+  const ownTerritoryNpcs = npcs.filter(entity => {
+    const ci = gen.world.idx(Math.floor(entity.x), Math.floor(entity.y));
+    return territoryOwnerToFaction(territoryOwnerAtIndex(gen.world, ci)) === entity.faction;
+  });
+  let waterCells = 0;
+  for (const cell of gen.world.cells) if (cell === Cell.WATER) waterCells++;
+
+  assert.equal(gen.world.rooms.length >= 400, true, `rooms ${gen.world.rooms.length}`);
+  assert.equal(gen.world.doors.size >= 500, true, `doors ${gen.world.doors.size}`);
+  assert.equal(reachable >= 150_000, true, `reachable ${reachable}`);
+  assert.equal(reachableBucketCount(gen.world, audit.reachable, 128), 64);
+  assert.equal(waterCells >= 60_000, true, `water cells ${waterCells}`);
+  assert.equal(smallRooms.length >= 230, true, `small rooms ${smallRooms.length}`);
+  assert.equal(stations.length >= 55, true, `sump stations ${stations.length}`);
+  assert.equal(microRooms.length >= 220, true, `sump micro rooms ${microRooms.length}`);
+  assert.equal(dryStations.length >= 40, true, `dry stations ${dryStations.length}`);
+  assert.equal(dryMicroRooms.length >= 130, true, `dry micro rooms ${dryMicroRooms.length}`);
+  assert.equal(fractalRooms.length >= 4, true, `fractal rooms ${fractalRooms.length}`);
+  assert.equal(gen.world.anomalyTeleports.size >= 1, true, `fractal teleports ${gen.world.anomalyTeleports.size}`);
+  assert.equal(hasReachableLift(gen, audit, LiftDirection.UP), true);
+  assert.equal(hasReachableLift(gen, audit, LiftDirection.DOWN), true);
+  assert.equal(hasDryReachableLift(gen, dryReachable, LiftDirection.UP), true);
+  assert.equal(hasDryReachableLift(gen, dryReachable, LiftDirection.DOWN), true);
+
+  for (const owner of HUMAN_TERRITORY_OWNERS) {
+    assert.equal(hqOwners.has(owner), true, `missing HQ owner ${ZoneFaction[owner]}`);
+    assert.equal((territoryCounts.get(owner) ?? 0) > 0, true, `empty territory ${ZoneFaction[owner]}`);
+    const anchor = hqAnchors.find(item => item.owner === owner);
+    const room = anchor ? gen.world.rooms[anchor.roomId] : undefined;
+    assert.equal(room?.type, RoomType.HQ, `HQ room type ${ZoneFaction[owner]}`);
+    assert.equal(room?.sealed, true, `HQ sealed ${ZoneFaction[owner]}`);
+    assert.equal(room?.doors.some(doorIdx => gen.world.doors.get(doorIdx)?.state === DoorState.HERMETIC_OPEN), true, `HQ hermetic door ${ZoneFaction[owner]}`);
+  }
+  assert.equal(hqRooms.length >= HUMAN_TERRITORY_OWNERS.length, true, `HQ rooms ${hqRooms.length}`);
+  assert.equal(supportRooms.length >= 15, true, `HQ support rooms ${supportRooms.length}`);
+  assert.equal(Math.abs(share(ZoneFaction.CITIZEN) - 0.56) <= 0.02, true, `citizen share ${share(ZoneFaction.CITIZEN)}`);
+  assert.equal(Math.abs(share(ZoneFaction.LIQUIDATOR) - 0.17) <= 0.02, true, `liquidator share ${share(ZoneFaction.LIQUIDATOR)}`);
+  assert.equal(Math.abs(share(ZoneFaction.CULTIST) - 0.07) <= 0.02, true, `cultist share ${share(ZoneFaction.CULTIST)}`);
+  assert.equal(Math.abs(share(ZoneFaction.SCIENTIST) - 0.08) <= 0.02, true, `scientist share ${share(ZoneFaction.SCIENTIST)}`);
+  assert.equal(Math.abs(share(ZoneFaction.WILD) - 0.12) <= 0.02, true, `wild share ${share(ZoneFaction.WILD)}`);
+  assert.equal(npcs.length === 0 || ownTerritoryNpcs.length / npcs.length >= 0.8, true, `own territory NPC share ${npcs.length ? ownTerritoryNpcs.length / npcs.length : 1}`);
 });
 
 testGenerationMatrix('procedural monster pressure stays capped and registers a route cue', () => {
@@ -2006,13 +5333,36 @@ testGenerationMatrix('wall snake anomaly places a visible nearby map cue and loo
   const hermoIslands = gen.world.rooms.filter(room =>
     room.sealed && room.doors.some(doorIdx => gen.world.doors.get(doorIdx)?.state === DoorState.HERMETIC_OPEN)
   );
-  let paintedLoopCells = 0;
+  let meatBlocks = 0;
+  let gutCaverns = 0;
+  let larvaTrackCells = 0;
+  let sphincterLamps = 0;
+  const macroSide = 32;
+  const macroCols = W / macroSide;
+  const macroFloor = new Int32Array(macroCols * macroCols);
+  const macroWall = new Int32Array(macroCols * macroCols);
   for (let ci = 0; ci < gen.world.cells.length; ci++) {
-    if (gen.world.cells[ci] === Cell.FLOOR && gen.world.floorTex[ci] === Tex.F_CONCRETE && gen.world.fog[ci] >= 22) paintedLoopCells++;
+    if (gen.world.cells[ci] === Cell.WALL && (gen.world.wallTex[ci] === Tex.MEAT || gen.world.wallTex[ci] === Tex.GUT)) meatBlocks++;
+    if (gen.world.cells[ci] === Cell.FLOOR && (gen.world.floorTex[ci] === Tex.F_GUT || gen.world.floorTex[ci] === Tex.F_MEAT)) gutCaverns++;
+    if (gen.world.fog[ci] >= 28 && (gen.world.wallTex[ci] === Tex.MEAT || gen.world.wallTex[ci] === Tex.GUT)) larvaTrackCells++;
+    if (gen.world.features[ci] === Feature.LAMP && (gen.world.floorTex[ci] === Tex.F_GUT || gen.world.floorTex[ci] === Tex.F_MEAT)) sphincterLamps++;
+    const x = ci % W;
+    const y = (ci / W) | 0;
+    const macro = Math.floor(y / macroSide) * macroCols + Math.floor(x / macroSide);
+    if (gen.world.cells[ci] === Cell.FLOOR && (gen.world.floorTex[ci] === Tex.F_GUT || gen.world.floorTex[ci] === Tex.F_MEAT)) macroFloor[macro]++;
+    if (gen.world.cells[ci] === Cell.WALL && (gen.world.wallTex[ci] === Tex.MEAT || gen.world.wallTex[ci] === Tex.GUT)) macroWall[macro]++;
   }
+  const macroArea = macroSide * macroSide;
+  const largeLacunae = Array.from(macroFloor).filter(count => count >= macroArea * 0.82).length;
+  const largeFleshMasses = Array.from(macroWall).filter(count => count >= macroArea * 0.34).length;
   assert.equal(fieldCues.length >= 6, true, `wall snake macro cues ${fieldCues.length}`);
   assert.equal(hermoIslands.length >= 12, true, `wall snake hermo islands ${hermoIslands.length}`);
-  assert.equal(paintedLoopCells >= 2000, true, `painted wall snake cells ${paintedLoopCells}`);
+  assert.equal(meatBlocks >= 250_000, true, `wall snake meat blocks ${meatBlocks}`);
+  assert.equal(gutCaverns >= 100_000, true, `wall snake gut caverns ${gutCaverns}`);
+  assert.equal(larvaTrackCells >= 2000, true, `wall snake larva track cells ${larvaTrackCells}`);
+  assert.equal(sphincterLamps >= 48, true, `wall snake sphincter lamps ${sphincterLamps}`);
+  assert.equal(largeLacunae >= 40, true, `wall snake large lacunae ${largeLacunae}`);
+  assert.equal(largeFleshMasses >= 40, true, `wall snake large flesh masses ${largeFleshMasses}`);
 });
 
 testGenerationMatrix('conway life anomaly seeds multiple visible nearby arenas', () => {
@@ -2379,14 +5729,28 @@ testGenerationMatrix('upper bureau preserves legal, forged, stolen-key and staff
   assert.equal(reachableRoomCellCount(gen, fullStaffRoute, 'Черный ход печатей') > 0, true);
 });
 
-testGenerationMatrix('antenna court is a monster-owned signal yard with bounded specialist enclaves', () => {
+testGenerationMatrix('antenna court keeps signal macrostructure with mid micro faction territories', () => {
   const gen = timeFloorGeneration('design antenna_court population field', () => generateDesignFloor('antenna_court'));
   const ambientNpcs = gen.entities.filter(e => e.type === EntityType.NPC && !e.plotNpcId && !e.persistentNpcId && e.alifeId === undefined);
   const monsters = gen.entities.filter(e => e.type === EntityType.MONSTER);
-  const openHostileZones = gen.world.zones.filter(zone => zone.faction === ZoneFaction.WILD || zone.faction === ZoneFaction.SAMOSBOR);
   const legalNpcFactions = new Set([Faction.SCIENTIST, Faction.LIQUIDATOR]);
   const routeChoices = reachableRoomCount(gen, ['Релейная будка', 'Пост сигнал-инспекции', 'Кабина глушения', 'Архив мониторинга']);
   const audit = auditReachability(gen.world, gen.world.idx(Math.floor(gen.spawnX), Math.floor(gen.spawnY)));
+  const microRooms = gen.world.rooms.filter(room =>
+    room.name.includes('малые радиокомнаты') ||
+    room.name.includes('сектор') ||
+    room.name.includes('ячейки'));
+  const territoryCounts = countTerritoryCells(gen.world);
+  const totalTerritoryCells = territoryCounts.reduce((sum, row) => sum + row.cells, 0);
+  const territoryByOwner = new Map(territoryCounts.map(row => [row.owner, row.cells]));
+  const hqOwners = new Set(territoryHqAnchors(gen.world).map(anchor => anchor.owner));
+  const targetShares = [
+    [ZoneFaction.CITIZEN, 0.18],
+    [ZoneFaction.LIQUIDATOR, 0.36],
+    [ZoneFaction.CULTIST, 0.08],
+    [ZoneFaction.SCIENTIST, 0.24],
+    [ZoneFaction.WILD, 0.14],
+  ] as const;
   let signalCableCells = 0;
   let signalYardFixtures = 0;
   for (let i = 0; i < gen.world.cells.length; i++) {
@@ -2400,10 +5764,21 @@ testGenerationMatrix('antenna court is a monster-owned signal yard with bounded 
   assert.equal(ambientNpcs.every(e => e.faction !== undefined && legalNpcFactions.has(e.faction)), true);
   assert.equal(ambientNpcs.every(e => e.name?.includes('сигнал-специалист')), true);
   assert.equal(monsters.length >= 2200 && monsters.length <= ACTIVE_ACTOR_SOFT_LIMIT, true);
-  assert.equal(openHostileZones.length >= 20, true);
+  assert.equal(gen.world.rooms.length >= 400, true, `rooms ${gen.world.rooms.length}`);
+  assert.equal(gen.world.doors.size >= 400, true, `doors ${gen.world.doors.size}`);
+  assert.equal(microRooms.length >= 280, true, `micro rooms ${microRooms.length}`);
   assert.equal(routeChoices >= 3, true);
   assert.equal(signalCableCells >= 900, true);
   assert.equal(signalYardFixtures >= 40, true);
+  for (const [owner, targetShare] of targetShares) {
+    const cells = territoryByOwner.get(owner) ?? 0;
+    const share = cells / totalTerritoryCells;
+    assert.equal(cells > 0, true, `territory cells for ${owner}`);
+    assert.equal(Math.abs(share - targetShare) <= 0.025, true, `territory share ${owner}: ${share}`);
+    assert.equal(hqOwners.has(owner), true, `HQ owner ${owner}`);
+  }
+  const liquidatorCells = territoryByOwner.get(ZoneFaction.LIQUIDATOR) ?? 0;
+  assert.equal(liquidatorCells > (territoryByOwner.get(ZoneFaction.SCIENTIST) ?? 0), true);
 });
 
 testGenerationMatrix('silicon net well creates protected science pockets and silicon monster pressure', () => {
@@ -2496,6 +5871,7 @@ testGenerationMatrix('pioneer camp keeps a populated protected center and danger
   const edgeMonsters = monsters.filter(e => gen.world.dist(e.x, e.y, W / 2, W / 2) > 250);
   const factionAt = (x: number, y: number) => gen.world.factionControl[gen.world.idx(x, y)];
   const roomNames = new Set(gen.world.rooms.map(room => room.name));
+  const reachable = auditReachability(gen.world, gen.world.idx(Math.floor(gen.spawnX), Math.floor(gen.spawnY))).reachable;
   const forestTrailPoints = gen.world.features.reduce((count, feature, cell) => {
     if (feature !== Feature.SLIDE) return count;
     if (gen.world.cells[cell] !== Cell.FLOOR || gen.world.roomMap[cell] >= 0) return count;
@@ -2504,9 +5880,38 @@ testGenerationMatrix('pioneer camp keeps a populated protected center and danger
     const d = gen.world.dist(x + 0.5, y + 0.5, W / 2, W / 2);
     return d >= 180 && d <= 470 ? count + 1 : count;
   }, 0);
+  const territoryRows = countTerritoryCells(gen.world);
+  const territoryTotal = territoryRows.reduce((sum, row) => sum + row.cells, 0);
+  const territoryShare = (owner: ZoneFaction): number => (territoryRows.find(row => row.owner === owner)?.cells ?? 0) / territoryTotal;
+  const hqOwners = new Set(territoryHqAnchors(gen.world).map(anchor => anchor.owner));
+  const hermeticHqs = gen.world.rooms.filter(room =>
+    room.type === RoomType.HQ &&
+    room.sealed &&
+    room.doors.some(doorIdx => {
+      const door = gen.world.doors.get(doorIdx);
+      return door?.state === DoorState.HERMETIC_OPEN || door?.state === DoorState.HERMETIC_CLOSED;
+    })
+  );
+  const campMicroRooms = gen.world.rooms.filter(room =>
+    room.name.includes(': малая спальня') ||
+    room.name.includes(': кладовая инвентаря') ||
+    room.name.includes(': умывальная будка') ||
+    room.name.includes(': чайная комната') ||
+    room.name.includes(': комната совета отряда') ||
+    room.name.includes(': шкафы формы')
+  );
+  const landscapeCourts = gen.world.rooms.filter(room =>
+    room.name === 'Большой парк бетонных берёз' ||
+    room.name === 'Двор утренней зарядки' ||
+    room.name === 'Поляна костровой сирены' ||
+    room.name === 'Парк мокрых качелей'
+  );
 
   assert.equal(profile.npcTarget, 1100);
   assert.equal(profile.monsterTarget, 900);
+  assert.equal(gen.world.rooms.length >= 110, true, `pioneer camp rooms ${gen.world.rooms.length}`);
+  assert.equal(gen.world.doors.size >= 80, true, `pioneer camp doors ${gen.world.doors.size}`);
+  assert.equal(countReachableCells(reachable) >= 130_000, true, `pioneer camp reachable ${countReachableCells(reachable)}`);
   assert.equal(npcs.length >= 700 && npcs.length <= 1400, true);
   assert.equal(monsters.length >= 500 && monsters.length <= 1200, true);
   assert.equal(childNpcs.length >= Math.floor(npcs.length * 0.6), true);
@@ -2517,13 +5922,21 @@ testGenerationMatrix('pioneer camp keeps a populated protected center and danger
   assert.equal(gen.world.containers.filter(container => container.tags.includes('pioneer_camp')).length >= 5, true);
   assert.equal(roomNames.has('Громкоговоритель строевого сбора'), true);
   assert.equal(roomNames.has('Склад смены с чужими бирками'), true);
+  assert.equal(landscapeCourts.length, 4);
+  assert.equal(campMicroRooms.length >= 48, true, `pioneer camp micro rooms ${campMicroRooms.length}`);
+  assert.equal(hermeticHqs.length >= 5, true, `pioneer camp hermetic hqs ${hermeticHqs.length}`);
+  for (const owner of [ZoneFaction.CITIZEN, ZoneFaction.LIQUIDATOR, ZoneFaction.CULTIST, ZoneFaction.SCIENTIST, ZoneFaction.WILD] as const) {
+    assert.equal(hqOwners.has(owner), true, `pioneer camp hq owner ${owner}`);
+    assert.equal(territoryShare(owner) > 0, true, `pioneer camp owned cells ${owner}`);
+  }
+  assert.equal(territoryShare(ZoneFaction.CITIZEN) >= 0.53 && territoryShare(ZoneFaction.CITIZEN) <= 0.63, true, `citizen share ${territoryShare(ZoneFaction.CITIZEN)}`);
+  assert.equal(territoryShare(ZoneFaction.LIQUIDATOR) >= 0.09 && territoryShare(ZoneFaction.LIQUIDATOR) <= 0.15, true, `liquidator share ${territoryShare(ZoneFaction.LIQUIDATOR)}`);
+  assert.equal(territoryShare(ZoneFaction.CULTIST) >= 0.045 && territoryShare(ZoneFaction.CULTIST) <= 0.095, true, `cultist share ${territoryShare(ZoneFaction.CULTIST)}`);
+  assert.equal(territoryShare(ZoneFaction.SCIENTIST) >= 0.065 && territoryShare(ZoneFaction.SCIENTIST) <= 0.12, true, `scientist share ${territoryShare(ZoneFaction.SCIENTIST)}`);
+  assert.equal(territoryShare(ZoneFaction.WILD) >= 0.11 && territoryShare(ZoneFaction.WILD) <= 0.18, true, `wild share ${territoryShare(ZoneFaction.WILD)}`);
   assert.equal(forestTrailPoints >= 36, true);
-  assert.notEqual(factionAt(W / 2, W / 2), ZoneFaction.WILD);
-  assert.notEqual(factionAt(W / 2, W / 2), ZoneFaction.SAMOSBOR);
-  assert.equal(factionAt(W / 2, W / 2 - 150), ZoneFaction.CITIZEN);
-  assert.equal(factionAt(W / 2, W / 2 - 300), ZoneFaction.LIQUIDATOR);
-  assert.equal(factionAt(W / 2 - 197, W / 2 - 137), ZoneFaction.WILD);
-  assert.equal(factionAt(W / 2, W / 2 - 380), ZoneFaction.WILD);
+  assert.equal(factionAt(W / 2, W / 2), ZoneFaction.CITIZEN);
+  assert.equal(factionAt(W / 2, W / 2 - 150), ZoneFaction.SCIENTIST);
 });
 
 testGenerationMatrix('chthonic attic keeps a zero-ordinary-NPC monster service maze', () => {
@@ -2541,7 +5954,7 @@ testGenerationMatrix('chthonic attic keeps a zero-ordinary-NPC monster service m
   assert.equal(npcs.length <= 40, true);
   assert.equal(monsters.length >= 2500 && monsters.length <= ACTIVE_ACTOR_SOFT_LIMIT, true);
   assert.equal(maxEntitiesInArea(gen.entities, EntityType.MONSTER, 32) <= 36, true);
-  assert.equal(gen.world.zones.some(zone => zone.fogged && zone.faction === ZoneFaction.SAMOSBOR), true);
+  assert.equal(gen.world.zones.some(zone => zone.fogged && zone.level >= 4), true);
   assert.equal(cacheCount >= 4, true);
   assert.equal(serviceRooms.length >= 4, true);
 });

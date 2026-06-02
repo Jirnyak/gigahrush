@@ -12,6 +12,7 @@ import { type PlotNpcDef, registerSideQuest } from '../../data/plot';
 import { MONSTERS } from '../../entities/monster';
 import { Spr } from '../../render/sprite_index';
 import { publishEvent } from '../../systems/events';
+import { setTerritoryOwnerAtIndex, syncZoneMetadataFromTerritory } from '../../systems/territory';
 import {
   connectRoomsMST,
   ensureConnectivity,
@@ -120,6 +121,42 @@ interface AntennaSignalSite {
   y: number;
   weight: number;
 }
+
+interface AntennaMicroBlockSpec {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  owner: ZoneFaction;
+  name: string;
+  connectX?: number;
+  connectY?: number;
+}
+
+interface AntennaMiniHqSpec {
+  owner: ZoneFaction;
+  x: number;
+  y: number;
+  name: string;
+  wallTex: Tex;
+  floorTex: Tex;
+  support: RoomType;
+}
+
+interface AntennaTerritorySeed {
+  owner: ZoneFaction;
+  x: number;
+  y: number;
+  weight: number;
+}
+
+const ANTENNA_TERRITORY_TARGETS = [
+  { owner: ZoneFaction.CITIZEN, share: 0.18 },
+  { owner: ZoneFaction.LIQUIDATOR, share: 0.36 },
+  { owner: ZoneFaction.CULTIST, share: 0.08 },
+  { owner: ZoneFaction.SCIENTIST, share: 0.24 },
+  { owner: ZoneFaction.WILD, share: 0.14 },
+] as const;
 
 const SIGNAL_CLUES: Record<AntennaRouteId, SignalClueDef> = {
   roof: {
@@ -529,6 +566,8 @@ export function expandAntennaCourtRouteGeometry(world: World, rng: () => number)
   placeCentralMastCluster(world, hubX, hubY, protectedCells);
   placeMaintenanceCabins(world, rng, hubs, protectedCells);
   placeWeatherScreenWalls(world, hubs, protectedCells);
+  placeAntennaFactionMiniHqs(world, rng, protectedCells);
+  placeAntennaMicroRoomFabric(world, rng, hubs, protectedCells);
 }
 
 export function retuneAntennaCourtRouteZones(world: World): void {
@@ -537,28 +576,20 @@ export function retuneAntennaCourtRouteZones(world: World): void {
     const hubD = nearestAntennaHubDistance(world, zone.cx, zone.cy, hubs);
     const centerD = world.dist(zone.cx, zone.cy, CX, CY);
     const enclave = centerD < 170 || hubD < 96;
-    zone.faction = enclave
-      ? ZoneFaction.LIQUIDATOR
-      : zone.id % 5 === 0
-        ? ZoneFaction.SAMOSBOR
-        : ZoneFaction.WILD;
     zone.level = Math.max(zone.level, enclave ? 4 : 5);
     zone.fogged = false;
   }
 
-  for (let i = 0; i < W * W; i++) {
-    const zone = world.zones[world.zoneMap[i]];
-    world.factionControl[i] = zone?.faction ?? ZoneFaction.WILD;
-  }
+  applyAntennaCourtTerritory(world);
 
   for (const room of world.rooms) {
     if (!room) continue;
-    if (isAntennaSpecialistRoom(room)) {
-      if (room.name.includes('НИИ')) room.sealed = true;
-      paintRoomFaction(world, room, ZoneFaction.LIQUIDATOR);
-    }
-    else if (room.name === 'Кабина глушения') paintRoomFaction(world, room, ZoneFaction.WILD);
+    const owner = antennaRoomOwnerOverride(room);
+    if (owner === undefined) continue;
+    if (room.name.includes('НИИ') || room.name.includes('гермоядро')) room.sealed = true;
+    paintRoomFaction(world, room, owner);
   }
+  syncZoneMetadataFromTerritory(world);
 }
 
 function nearestAntennaHubDistance(world: World, x: number, y: number, hubs: readonly AntennaHub[]): number {
@@ -567,13 +598,13 @@ function nearestAntennaHubDistance(world: World, x: number, y: number, hubs: rea
   return best;
 }
 
-function isAntennaSpecialistRoom(room: Room): boolean {
-  return room.name.includes('НИИ') ||
-    room.name === 'Радиоклуб взрослых детей' ||
-    room.name === 'Релейная будка' ||
-    room.name === 'Архив мониторинга' ||
-    room.name === 'Батарейная кладовая' ||
-    room.name === 'Пост сигнал-инспекции';
+function antennaRoomOwnerOverride(room: Room): ZoneFaction | undefined {
+  if (room.name.includes('граждан')) return ZoneFaction.CITIZEN;
+  if (room.name.includes('ликвидатор') || room.name === 'Батарейная кладовая' || room.name === 'Пост сигнал-инспекции') return ZoneFaction.LIQUIDATOR;
+  if (room.name.includes('культист')) return ZoneFaction.CULTIST;
+  if (room.name.includes('НИИ') || room.name.includes('учен') || room.name === 'Радиоклуб взрослых детей' || room.name === 'Релейная будка' || room.name === 'Архив мониторинга') return ZoneFaction.SCIENTIST;
+  if (room.name.includes('дик') || room.name === 'Кабина глушения') return ZoneFaction.WILD;
+  return undefined;
 }
 
 export function generateAntennaCourtDesignFloor(seed = 0): AntennaCourtGeneration {
@@ -1101,7 +1132,7 @@ function placeMaintenanceCabins(
         i % 2 === 0 ? Tex.METAL : Tex.PIPE,
         Tex.F_CONCRETE,
       );
-      if (niiPod) room.sealed = true;
+      if (niiPod) markHermeticRoomShell(world, room);
       decorateRouteCabin(world, room, rng);
       openRouteRoomToPoint(world, room, hub.x, hub.y, protectedCells, niiPod ? DoorState.HERMETIC_OPEN : DoorState.CLOSED);
       break;
@@ -1175,6 +1206,381 @@ function placeWeatherScreenWalls(world: World, hubs: AntennaHub[], protectedCell
   }
 }
 
+function antennaMiniHqSpecs(): AntennaMiniHqSpec[] {
+  return [
+    { owner: ZoneFaction.LIQUIDATOR, x: 556, y: 456, name: 'ликвидаторов частотной зачистки', wallTex: Tex.METAL, floorTex: Tex.F_CONCRETE, support: RoomType.OFFICE },
+    { owner: ZoneFaction.SCIENTIST, x: 458, y: 104, name: 'ученых эфирной НИИ', wallTex: Tex.PIPE, floorTex: Tex.F_CONCRETE, support: RoomType.MEDICAL },
+    { owner: ZoneFaction.CITIZEN, x: 102, y: 462, name: 'граждан радиодвора', wallTex: Tex.PANEL, floorTex: Tex.F_LINO, support: RoomType.KITCHEN },
+    { owner: ZoneFaction.WILD, x: 704, y: 718, name: 'диких кабельщиков', wallTex: Tex.DARK, floorTex: Tex.F_CONCRETE, support: RoomType.SMOKING },
+    { owner: ZoneFaction.CULTIST, x: 204, y: 206, name: 'культистов шепчущей мачты', wallTex: Tex.METAL, floorTex: Tex.F_CARPET, support: RoomType.COMMON },
+  ];
+}
+
+function placeAntennaFactionMiniHqs(world: World, rng: () => number, protectedCells: Uint8Array): void {
+  for (const spec of antennaMiniHqSpecs()) {
+    placeAntennaMiniHqBlock(world, rng, spec, protectedCells);
+  }
+
+  const outposts: AntennaMicroBlockSpec[] = [
+    { x: 696, y: 232, w: 74, h: 46, owner: ZoneFaction.LIQUIDATOR, name: 'Верхний ликвидаторский пост', connectX: 770, connectY: 254 },
+    { x: 688, y: 500, w: 74, h: 46, owner: ZoneFaction.LIQUIDATOR, name: 'Восточный ликвидаторский пост', connectX: 870, connectY: CY },
+  ];
+  for (const outpost of outposts) {
+    placeAntennaMicroBlock(world, rng, outpost, protectedCells, 4);
+  }
+}
+
+function placeAntennaMiniHqBlock(
+  world: World,
+  rng: () => number,
+  spec: AntennaMiniHqSpec,
+  protectedCells: Uint8Array,
+): void {
+  const hallY = spec.y + 25;
+  carveAntennaHall(world, spec.x + 3, hallY, 74, 2, protectedCells, spec.floorTex);
+  const rooms = [
+    { type: RoomType.HQ, x: spec.x + 6, y: spec.y + 7, w: 16, h: 12, name: `Гермоядро ${spec.name}`, side: 'south' as const, hermetic: true },
+    { type: RoomType.COMMON, x: spec.x + 26, y: spec.y + 7, w: 16, h: 10, name: `Общая ${spec.name}`, side: 'south' as const },
+    { type: spec.support, x: spec.x + 48, y: spec.y + 7, w: 13, h: 10, name: `Опора ${spec.name}`, side: 'south' as const },
+    { type: RoomType.BATHROOM, x: spec.x + 64, y: spec.y + 7, w: 8, h: 10, name: `Санузел ${spec.name}`, side: 'south' as const },
+    { type: RoomType.STORAGE, x: spec.x + 6, y: spec.y + 32, w: 13, h: 10, name: `Кладовая ${spec.name}`, side: 'north' as const },
+    { type: RoomType.PRODUCTION, x: spec.x + 23, y: spec.y + 32, w: 17, h: 10, name: `Мастерская ${spec.name}`, side: 'north' as const },
+    { type: RoomType.MEDICAL, x: spec.x + 44, y: spec.y + 32, w: 14, h: 10, name: `Медугол ${spec.name}`, side: 'north' as const },
+    { type: RoomType.OFFICE, x: spec.x + 62, y: spec.y + 32, w: 11, h: 10, name: `Журнал ${spec.name}`, side: 'north' as const },
+  ];
+
+  for (const def of rooms) {
+    const room = tryStampAntennaRoom(world, def.type, def.x, def.y, def.w, def.h, def.name, spec.wallTex, spec.floorTex, protectedCells);
+    if (!room) continue;
+    if (def.hermetic) markHermeticRoomShell(world, room);
+    paintRoomFaction(world, room, spec.owner);
+    decorateAntennaRoomByType(world, room, rng, spec.owner);
+    openAntennaRoomDoor(world, room, def.side, def.hermetic ? DoorState.HERMETIC_OPEN : DoorState.CLOSED);
+  }
+}
+
+function placeAntennaMicroRoomFabric(
+  world: World,
+  rng: () => number,
+  hubs: readonly AntennaHub[],
+  protectedCells: Uint8Array,
+): void {
+  for (let i = 0; i < hubs.length; i++) {
+    const hub = hubs[i];
+    const owner = antennaHubOwner(i);
+    const spec: AntennaMicroBlockSpec = {
+      x: hub.x - (hub.w >> 1) + 8,
+      y: hub.y - (hub.h >> 1) + 8,
+      w: hub.w - 16,
+      h: hub.h - 16,
+      owner,
+      name: `${hub.name}: малые радиокомнаты`,
+      connectX: hub.x,
+      connectY: hub.y,
+    };
+    placeAntennaMicroBlock(world, rng, spec, protectedCells, 18);
+  }
+
+  const innerBlocks: AntennaMicroBlockSpec[] = [
+    { x: 346, y: 350, w: 104, h: 72, owner: ZoneFaction.SCIENTIST, name: 'Северо-западные архивные ячейки', connectX: CX, connectY: CY },
+    { x: 618, y: 350, w: 104, h: 72, owner: ZoneFaction.LIQUIDATOR, name: 'Северо-восточные караульные ячейки', connectX: CX, connectY: CY },
+    { x: 346, y: 612, w: 104, h: 72, owner: ZoneFaction.CITIZEN, name: 'Юго-западные бытовые ячейки', connectX: CX, connectY: CY },
+    { x: 618, y: 612, w: 104, h: 72, owner: ZoneFaction.WILD, name: 'Юго-восточные кабельные ячейки', connectX: CX, connectY: CY },
+    { x: 462, y: 686, w: 86, h: 76, owner: ZoneFaction.CULTIST, name: 'Нижние шепчущие ячейки', connectX: CX, connectY: CY + 174 },
+    { x: 114, y: 332, w: 94, h: 62, owner: ZoneFaction.CULTIST, name: 'Западный скрытый сектор', connectX: 154, connectY: CY },
+    { x: 286, y: 118, w: 94, h: 62, owner: ZoneFaction.SCIENTIST, name: 'Северный сектор измерителей', connectX: 254, connectY: 254 },
+    { x: 624, y: 118, w: 94, h: 62, owner: ZoneFaction.LIQUIDATOR, name: 'Северный сектор патруля', connectX: 770, connectY: 254 },
+    { x: 826, y: 332, w: 94, h: 62, owner: ZoneFaction.LIQUIDATOR, name: 'Восточный сектор досмотра', connectX: 870, connectY: CY },
+    { x: 826, y: 620, w: 94, h: 62, owner: ZoneFaction.WILD, name: 'Восточный сектор растяжек', connectX: 870, connectY: CY },
+    { x: 624, y: 836, w: 94, h: 62, owner: ZoneFaction.WILD, name: 'Южный сектор мокрых кабелей', connectX: 770, connectY: 770 },
+    { x: 286, y: 836, w: 94, h: 62, owner: ZoneFaction.CITIZEN, name: 'Южный сектор ночлега', connectX: 254, connectY: 770 },
+    { x: 114, y: 620, w: 94, h: 62, owner: ZoneFaction.CITIZEN, name: 'Западный сектор очереди', connectX: 154, connectY: CY },
+    { x: 446, y: 258, w: 86, h: 62, owner: ZoneFaction.SCIENTIST, name: 'Верхние ячейки журналов', connectX: CX, connectY: 154 },
+    { x: 446, y: 802, w: 86, h: 62, owner: ZoneFaction.CITIZEN, name: 'Нижние ячейки ночевки', connectX: CX, connectY: 870 },
+  ];
+  for (const block of innerBlocks) {
+    placeAntennaMicroBlock(world, rng, block, protectedCells, 14);
+  }
+}
+
+function antennaHubOwner(index: number): ZoneFaction {
+  switch (index) {
+    case 0: return ZoneFaction.SCIENTIST;
+    case 1: return ZoneFaction.LIQUIDATOR;
+    case 2: return ZoneFaction.LIQUIDATOR;
+    case 3: return ZoneFaction.WILD;
+    case 4: return ZoneFaction.CITIZEN;
+    case 5: return ZoneFaction.WILD;
+    case 6: return ZoneFaction.CITIZEN;
+    case 7: return ZoneFaction.CULTIST;
+    default: return ZoneFaction.LIQUIDATOR;
+  }
+}
+
+function placeAntennaMicroBlock(
+  world: World,
+  rng: () => number,
+  spec: AntennaMicroBlockSpec,
+  protectedCells: Uint8Array,
+  maxRooms: number,
+): void {
+  const hallY = spec.y + (spec.h >> 1);
+  carveAntennaHall(world, spec.x + 3, hallY, Math.max(1, spec.w - 6), 1, protectedCells, Tex.F_CONCRETE);
+  if (spec.connectX !== undefined && spec.connectY !== undefined) {
+    carveSignalCableLine(
+      world,
+      spec.x + (spec.w >> 1),
+      hallY,
+      spec.connectX,
+      spec.connectY,
+      1,
+      protectedCells,
+      Tex.F_CONCRETE,
+    );
+  }
+  let serial = 0;
+  for (const side of ['north', 'south'] as const) {
+    let cursor = spec.x + 5;
+    while (serial < maxRooms && cursor < spec.x + spec.w - 8) {
+      const rw = 5 + ((serial * 3 + spec.owner) % 4);
+      const rh = 4 + ((serial + spec.owner) % 3);
+      const y = side === 'north' ? hallY - rh - 1 : hallY + 2;
+      if (cursor + rw >= spec.x + spec.w - 4 || y < spec.y + 2 || y + rh > spec.y + spec.h - 2) break;
+      const type = antennaMicroRoomType(spec.owner, serial);
+      const room = tryStampAntennaRoom(
+        world,
+        type,
+        cursor,
+        y,
+        rw,
+        rh,
+        `${spec.name} ${serial + 1}`,
+        antennaOwnerWallTex(spec.owner),
+        antennaOwnerFloorTex(spec.owner, type),
+        protectedCells,
+      );
+      if (room) {
+        paintRoomFaction(world, room, spec.owner);
+        decorateAntennaRoomByType(world, room, rng, spec.owner);
+        openAntennaRoomDoor(world, room, side === 'north' ? 'south' : 'north');
+      }
+      cursor += rw + 3;
+      serial++;
+    }
+  }
+}
+
+function carveAntennaHall(
+  world: World,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  protectedCells: Uint8Array,
+  floorTex: Tex,
+): void {
+  for (let dy = 0; dy < h; dy++) {
+    for (let dx = 0; dx < w; dx++) setRouteFloor(world, x + dx, y + dy, floorTex, protectedCells);
+  }
+}
+
+function tryStampAntennaRoom(
+  world: World,
+  type: RoomType,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  name: string,
+  wallTex: Tex,
+  floorTex: Tex,
+  protectedCells: Uint8Array,
+): Room | undefined {
+  if (!canStampAntennaRoom(world, x, y, w, h, protectedCells)) return undefined;
+  return stampNamedRoom(world, type, x, y, w, h, name, wallTex, floorTex);
+}
+
+function canStampAntennaRoom(
+  world: World,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  protectedCells: Uint8Array,
+): boolean {
+  for (let dy = -1; dy <= h; dy++) {
+    for (let dx = -1; dx <= w; dx++) {
+      const ci = world.idx(x + dx, y + dy);
+      if (protectedCells[ci] || world.aptMask[ci] || world.hermoWall[ci] || world.doors.has(ci)) return false;
+      if (world.cells[ci] === Cell.LIFT || world.cells[ci] === Cell.DOOR || world.cells[ci] === Cell.ABYSS) return false;
+      if (world.roomMap[ci] >= 0) return false;
+    }
+  }
+  return true;
+}
+
+function openAntennaRoomDoor(
+  world: World,
+  room: Room,
+  side: 'north' | 'south' | 'west' | 'east',
+  state = DoorState.CLOSED,
+): boolean {
+  const horizontal = side === 'north' || side === 'south';
+  const span = horizontal ? room.w : room.h;
+  const mid = Math.floor(span / 2);
+  const sx = side === 'east' ? 1 : side === 'west' ? -1 : 0;
+  const sy = side === 'south' ? 1 : side === 'north' ? -1 : 0;
+  for (let offset = 0; offset <= mid; offset++) {
+    for (const signed of offset === 0 ? [0] : [-offset, offset]) {
+      const doorX = horizontal ? room.x + mid + signed : room.x + (sx > 0 ? room.w : -1);
+      const doorY = horizontal ? room.y + (sy > 0 ? room.h : -1) : room.y + mid + signed;
+      const insideX = doorX - sx;
+      const insideY = doorY - sy;
+      const outsideX = doorX + sx;
+      const outsideY = doorY + sy;
+      const insideIdx = world.idx(insideX, insideY);
+      const outsideIdx = world.idx(outsideX, outsideY);
+      if (world.roomMap[insideIdx] !== room.id) continue;
+      if (world.cells[outsideIdx] !== Cell.FLOOR && world.cells[outsideIdx] !== Cell.WATER && world.cells[outsideIdx] !== Cell.DOOR) {
+        setRouteFloor(world, outsideX, outsideY, room.floorTex);
+      }
+      placeAntennaGate(world, doorX, doorY, room.id, -1, '', state);
+      return true;
+    }
+  }
+  return false;
+}
+
+function markHermeticRoomShell(world: World, room: Room): void {
+  room.sealed = true;
+  for (let dy = -1; dy <= room.h; dy++) {
+    for (let dx = -1; dx <= room.w; dx++) {
+      if (dx >= 0 && dx < room.w && dy >= 0 && dy < room.h) continue;
+      const ci = world.idx(room.x + dx, room.y + dy);
+      if (world.cells[ci] !== Cell.WALL) continue;
+      world.hermoWall[ci] = 1;
+      world.wallTex[ci] = Tex.HERMO_WALL;
+    }
+  }
+}
+
+function antennaMicroRoomType(owner: ZoneFaction, serial: number): RoomType {
+  if (serial % 11 === 0) return RoomType.BATHROOM;
+  if (serial % 7 === 0) return RoomType.KITCHEN;
+  if (owner === ZoneFaction.SCIENTIST) return serial % 3 === 0 ? RoomType.OFFICE : RoomType.PRODUCTION;
+  if (owner === ZoneFaction.LIQUIDATOR) return serial % 4 === 0 ? RoomType.HQ : serial % 2 === 0 ? RoomType.STORAGE : RoomType.OFFICE;
+  if (owner === ZoneFaction.CULTIST) return serial % 3 === 0 ? RoomType.COMMON : RoomType.STORAGE;
+  if (owner === ZoneFaction.WILD) return serial % 2 === 0 ? RoomType.SMOKING : RoomType.STORAGE;
+  return serial % 3 === 0 ? RoomType.LIVING : RoomType.COMMON;
+}
+
+function antennaOwnerWallTex(owner: ZoneFaction): Tex {
+  switch (owner) {
+    case ZoneFaction.LIQUIDATOR: return Tex.METAL;
+    case ZoneFaction.SCIENTIST: return Tex.PIPE;
+    case ZoneFaction.CULTIST: return Tex.DARK;
+    case ZoneFaction.WILD: return Tex.BRICK;
+    case ZoneFaction.CITIZEN:
+    default: return Tex.PANEL;
+  }
+}
+
+function antennaOwnerFloorTex(owner: ZoneFaction, type: RoomType): Tex {
+  if (type === RoomType.BATHROOM || type === RoomType.MEDICAL) return Tex.F_TILE;
+  if (type === RoomType.KITCHEN) return Tex.F_LINO;
+  if (owner === ZoneFaction.CULTIST) return Tex.F_CARPET;
+  if (owner === ZoneFaction.CITIZEN) return Tex.F_LINO;
+  return Tex.F_CONCRETE;
+}
+
+function decorateAntennaRoomByType(world: World, room: Room, rng: () => number, owner: ZoneFaction): void {
+  const fixtures = Math.max(1, Math.min(5, Math.floor(room.w * room.h / 24)));
+  for (let i = 0; i < fixtures; i++) {
+    const x = room.x + 1 + Math.floor(rng() * Math.max(1, room.w - 2));
+    const y = room.y + 1 + Math.floor(rng() * Math.max(1, room.h - 2));
+    let feature = Feature.TABLE;
+    switch (room.type) {
+      case RoomType.KITCHEN: feature = i % 2 === 0 ? Feature.STOVE : Feature.SINK; break;
+      case RoomType.BATHROOM: feature = i % 2 === 0 ? Feature.TOILET : Feature.SINK; break;
+      case RoomType.STORAGE: feature = Feature.SHELF; break;
+      case RoomType.MEDICAL: feature = i % 2 === 0 ? Feature.BED : Feature.APPARATUS; break;
+      case RoomType.PRODUCTION: feature = i % 2 === 0 ? Feature.MACHINE : Feature.APPARATUS; break;
+      case RoomType.OFFICE: feature = i % 2 === 0 ? Feature.DESK : Feature.CHAIR; break;
+      case RoomType.HQ: feature = i % 2 === 0 ? Feature.DESK : owner === ZoneFaction.CULTIST ? Feature.CANDLE : Feature.LAMP; break;
+      case RoomType.SMOKING: feature = i % 2 === 0 ? Feature.TABLE : Feature.CHAIR; break;
+      case RoomType.LIVING: feature = i % 2 === 0 ? Feature.BED : Feature.TABLE; break;
+      case RoomType.COMMON:
+      case RoomType.CORRIDOR:
+      default: feature = i % 3 === 0 ? Feature.LAMP : i % 2 === 0 ? Feature.TABLE : Feature.CHAIR; break;
+    }
+    setFeatureIfFloor(world, x, y, feature);
+  }
+}
+
+function applyAntennaCourtTerritory(world: World): void {
+  const seeds = antennaTerritorySeeds(world);
+  for (let i = 0; i < W * W; i++) {
+    const x = i % W;
+    const y = (i / W) | 0;
+    setTerritoryOwnerAtIndex(world, i, nearestAntennaTerritoryOwner(world, x, y, seeds));
+  }
+}
+
+function antennaTerritorySeeds(world: World): AntennaTerritorySeed[] {
+  const seeds: AntennaTerritorySeed[] = [
+    { owner: ZoneFaction.LIQUIDATOR, x: CX + 48, y: CY - 12, weight: 1.38 },
+    { owner: ZoneFaction.LIQUIDATOR, x: 760, y: 254, weight: 1.22 },
+    { owner: ZoneFaction.LIQUIDATOR, x: 870, y: CY, weight: 1.2 },
+    { owner: ZoneFaction.SCIENTIST, x: CX, y: 154, weight: 1.28 },
+    { owner: ZoneFaction.SCIENTIST, x: 360, y: 360, weight: 1.08 },
+    { owner: ZoneFaction.CITIZEN, x: 154, y: CY, weight: 1.12 },
+    { owner: ZoneFaction.CITIZEN, x: CX, y: 870, weight: 1.04 },
+    { owner: ZoneFaction.WILD, x: 770, y: 770, weight: 1.08 },
+    { owner: ZoneFaction.WILD, x: 254, y: 770, weight: 0.98 },
+    { owner: ZoneFaction.CULTIST, x: 254, y: 254, weight: 0.92 },
+  ];
+  for (const room of world.rooms) {
+    const owner = antennaRoomOwnerOverride(room);
+    if (owner === undefined) continue;
+    seeds.push({
+      owner,
+      x: room.x + (room.w >> 1),
+      y: room.y + (room.h >> 1),
+      weight: room.type === RoomType.HQ ? antennaOwnerTerritoryWeight(owner) : 0.78,
+    });
+  }
+  return seeds;
+}
+
+function nearestAntennaTerritoryOwner(world: World, x: number, y: number, seeds: readonly AntennaTerritorySeed[]): ZoneFaction {
+  let best = ZoneFaction.LIQUIDATOR;
+  let bestScore = Infinity;
+  for (const seed of seeds) {
+    const ownerTarget = ANTENNA_TERRITORY_TARGETS.find(entry => entry.owner === seed.owner)?.share ?? 0.1;
+    const ownerScale = 0.72 + ownerTarget * 2.2;
+    const d2 = world.dist2(x, y, seed.x, seed.y);
+    const scale = Math.max(0.1, seed.weight * ownerScale);
+    const wave = Math.sin((x + seed.owner * 31) * 0.019) + Math.cos((y - seed.owner * 17) * 0.017);
+    const score = d2 / (scale * scale) - wave * 520;
+    if (score < bestScore) {
+      bestScore = score;
+      best = seed.owner;
+    }
+  }
+  return best;
+}
+
+function antennaOwnerTerritoryWeight(owner: ZoneFaction): number {
+  switch (owner) {
+    case ZoneFaction.LIQUIDATOR: return 1.46;
+    case ZoneFaction.SCIENTIST: return 1.34;
+    case ZoneFaction.CITIZEN: return 1.16;
+    case ZoneFaction.WILD: return 1.08;
+    case ZoneFaction.CULTIST: return 0.96;
+    default: return 1;
+  }
+}
+
 function setFeatureIfUnprotectedFloor(
   world: World,
   x: number,
@@ -1234,7 +1640,7 @@ function stampAntennaCourtRooms(world: World): Record<string, Room> {
     battery: stampNamedRoom(world, RoomType.STORAGE, CX + 14, CY - 34, 10, 10, 'Батарейная кладовая', Tex.METAL, Tex.F_CONCRETE),
     dorm: stampNamedRoom(world, RoomType.LIVING, CX - 10, CY + 19, 20, 9, 'Операторская спальня', Tex.PANEL, Tex.F_LINO),
     jammer: stampNamedRoom(world, RoomType.SMOKING, CX - 38, CY + 1, 12, 11, 'Кабина глушения', Tex.DARK, Tex.F_CARPET),
-    inspection: stampNamedRoom(world, RoomType.HQ, CX + 26, CY + 1, 12, 11, 'Пост сигнал-инспекции', Tex.MARBLE, Tex.F_RED_CARPET),
+    inspection: stampNamedRoom(world, RoomType.OFFICE, CX + 26, CY + 1, 12, 11, 'Пост сигнал-инспекции', Tex.MARBLE, Tex.F_RED_CARPET),
     entry: stampNamedRoom(world, RoomType.CORRIDOR, CX - 24, CY + 33, 11, 8, 'Входной лифтовый тамбур', Tex.CONCRETE, Tex.F_CONCRETE),
     exit: stampNamedRoom(world, RoomType.CORRIDOR, CX - 24, CY - 44, 11, 8, 'Верхний лифтовый тамбур', Tex.CONCRETE, Tex.F_CONCRETE),
   };

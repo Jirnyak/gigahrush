@@ -530,6 +530,7 @@ function eventText(e: WorldEvent): string {
 }
 
 function shouldLog(e: WorldEvent): boolean {
+  if (e.tags.includes('territory_capture') || e.tags.includes('cell_territory')) return false;
   if (e.tags.includes('pneumomail')) return e.severity >= 2;
   if (e.tags.includes('false_safe_block')) return e.severity >= 3;
   if (TELEMETRY_ONLY.has(e.type) && !(e.type === 'container_opened' && e.tags.includes('quarantine'))) return false;

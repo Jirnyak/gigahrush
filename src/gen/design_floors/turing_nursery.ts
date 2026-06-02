@@ -21,11 +21,13 @@ import {
   type Entity,
   type Item,
   type Room,
+  type TerritoryOwner,
   type WorldContainer,
 } from '../../core/types';
 import { World } from '../../core/world';
 import { hashSeed, withSeededRandom } from '../../core/rand';
 import { freshNeeds } from '../../data/catalog';
+import { factionToTerritoryOwner } from '../../data/factions';
 import { type PlotNpcDef, registerSideQuest } from '../../data/plot';
 import { MONSTERS } from '../../entities/monster';
 import { monsterSpr, Spr } from '../../render/sprite_index';
@@ -86,6 +88,39 @@ interface NurseryRooms {
   nodes: Room[];
 }
 
+interface TuringHqSpec {
+  owner: TerritoryOwner;
+  x: number;
+  y: number;
+  name: string;
+  supportPrefix: string;
+  wallTex: Tex;
+  floorTex: Tex;
+}
+
+interface TuringDistrictSpec {
+  owner: TerritoryOwner;
+  x: number;
+  y: number;
+  name: string;
+  type: RoomType;
+  wallTex: Tex;
+  floorTex: Tex;
+  wet: boolean;
+}
+
+interface TuringCabinetStripSpec {
+  owner: TerritoryOwner;
+  x: number;
+  y: number;
+  cols: number;
+  rows: number;
+  name: string;
+  wallTex: Tex;
+  floorTex: Tex;
+  roomTypes: readonly RoomType[];
+}
+
 export interface TuringNurseryMetrics {
   routeId: typeof TURING_NURSERY_ROUTE_ID;
   reactionRooms: number;
@@ -94,6 +129,98 @@ export interface TuringNurseryMetrics {
   bridgeCells: number;
   decisionContainers: number;
 }
+
+const TURING_HQ_SPECS: readonly TuringHqSpec[] = [
+  {
+    owner: ZoneFaction.SCIENTIST,
+    x: 592,
+    y: 238,
+    name: 'Герметичный штаб матриц НИИ',
+    supportPrefix: 'матриц НИИ',
+    wallTex: Tex.HERMO_WALL,
+    floorTex: Tex.F_TILE,
+  },
+  {
+    owner: ZoneFaction.SCIENTIST,
+    x: 574,
+    y: 760,
+    name: 'Герметичный штаб нижней линии обучения',
+    supportPrefix: 'нижней линии обучения',
+    wallTex: Tex.HERMO_WALL,
+    floorTex: Tex.F_TILE,
+  },
+  {
+    owner: ZoneFaction.LIQUIDATOR,
+    x: 230,
+    y: 642,
+    name: 'Герметичный штаб прожига узора',
+    supportPrefix: 'прожига узора',
+    wallTex: Tex.HERMO_WALL,
+    floorTex: Tex.F_CONCRETE,
+  },
+  {
+    owner: ZoneFaction.CITIZEN,
+    x: 224,
+    y: 226,
+    name: 'Герметичный штаб родителей контрольной группы',
+    supportPrefix: 'родителей контрольной группы',
+    wallTex: Tex.HERMO_WALL,
+    floorTex: Tex.F_LINO,
+  },
+  {
+    owner: ZoneFaction.CULTIST,
+    x: 874,
+    y: 694,
+    name: 'Скрытый герметичный штаб мокрой рекурсии',
+    supportPrefix: 'мокрой рекурсии',
+    wallTex: Tex.HERMO_WALL,
+    floorTex: Tex.F_WATER,
+  },
+  {
+    owner: ZoneFaction.WILD,
+    x: 782,
+    y: 278,
+    name: 'Разорённый герметичный штаб сбежавших образцов',
+    supportPrefix: 'сбежавших образцов',
+    wallTex: Tex.HERMO_WALL,
+    floorTex: Tex.F_CONCRETE,
+  },
+] as const;
+
+const TURING_DISTRICTS: readonly TuringDistrictSpec[] = [
+  { owner: ZoneFaction.CITIZEN, x: 106, y: 108, name: 'северо-западная очередь родителей', type: RoomType.COMMON, wallTex: Tex.PANEL, floorTex: Tex.F_LINO, wet: false },
+  { owner: ZoneFaction.CITIZEN, x: 286, y: 122, name: 'приёмная сухих справок', type: RoomType.OFFICE, wallTex: Tex.PANEL, floorTex: Tex.F_LINO, wet: false },
+  { owner: ZoneFaction.SCIENTIST, x: 466, y: 104, name: 'верхняя лента состояний', type: RoomType.MEDICAL, wallTex: Tex.TILE_W, floorTex: Tex.F_TILE, wet: false },
+  { owner: ZoneFaction.SCIENTIST, x: 642, y: 126, name: 'северо-восточная чаша диффузии', type: RoomType.PRODUCTION, wallTex: Tex.TILE_W, floorTex: Tex.F_TILE, wet: true },
+  { owner: ZoneFaction.WILD, x: 822, y: 118, name: 'краевой склад украденных чашек', type: RoomType.STORAGE, wallTex: Tex.BRICK, floorTex: Tex.F_CONCRETE, wet: true },
+  { owner: ZoneFaction.LIQUIDATOR, x: 96, y: 330, name: 'западная линия прожига', type: RoomType.PRODUCTION, wallTex: Tex.PIPE, floorTex: Tex.F_CONCRETE, wet: false },
+  { owner: ZoneFaction.SCIENTIST, x: 278, y: 346, name: 'лаборатория конечных автоматов', type: RoomType.MEDICAL, wallTex: Tex.TILE_W, floorTex: Tex.F_TILE, wet: false },
+  { owner: ZoneFaction.SCIENTIST, x: 514, y: 334, name: 'центральная обучающая чаша', type: RoomType.MEDICAL, wallTex: Tex.TILE_W, floorTex: Tex.F_TILE, wet: true },
+  { owner: ZoneFaction.SCIENTIST, x: 684, y: 354, name: 'пост хранения синих переходов', type: RoomType.STORAGE, wallTex: Tex.METAL, floorTex: Tex.F_CONCRETE, wet: false },
+  { owner: ZoneFaction.WILD, x: 842, y: 346, name: 'руины пробных шкафов', type: RoomType.STORAGE, wallTex: Tex.BRICK, floorTex: Tex.F_CONCRETE, wet: true },
+  { owner: ZoneFaction.LIQUIDATOR, x: 104, y: 552, name: 'юго-западная дезлиния мостов', type: RoomType.PRODUCTION, wallTex: Tex.PIPE, floorTex: Tex.F_CONCRETE, wet: true },
+  { owner: ZoneFaction.LIQUIDATOR, x: 286, y: 598, name: 'пост сухой границы', type: RoomType.OFFICE, wallTex: Tex.METAL, floorTex: Tex.F_CONCRETE, wet: false },
+  { owner: ZoneFaction.SCIENTIST, x: 486, y: 580, name: 'чаша обратного вычисления', type: RoomType.MEDICAL, wallTex: Tex.TILE_W, floorTex: Tex.F_TILE, wet: true },
+  { owner: ZoneFaction.SCIENTIST, x: 666, y: 604, name: 'архив мокрых поколений', type: RoomType.OFFICE, wallTex: Tex.MARBLE, floorTex: Tex.F_PARQUET, wet: false },
+  { owner: ZoneFaction.CULTIST, x: 832, y: 578, name: 'закутки мокрой молитвы', type: RoomType.COMMON, wallTex: Tex.BRICK, floorTex: Tex.F_WATER, wet: true },
+  { owner: ZoneFaction.LIQUIDATOR, x: 112, y: 804, name: 'нижний прожиговый склад', type: RoomType.STORAGE, wallTex: Tex.METAL, floorTex: Tex.F_CONCRETE, wet: false },
+  { owner: ZoneFaction.SCIENTIST, x: 326, y: 824, name: 'нижняя лента клеточных ковров', type: RoomType.PRODUCTION, wallTex: Tex.TILE_W, floorTex: Tex.F_TILE, wet: true },
+  { owner: ZoneFaction.SCIENTIST, x: 512, y: 826, name: 'архив вычисленных детей', type: RoomType.OFFICE, wallTex: Tex.MARBLE, floorTex: Tex.F_PARQUET, wet: false },
+  { owner: ZoneFaction.SCIENTIST, x: 692, y: 820, name: 'юго-восточный банк проб', type: RoomType.STORAGE, wallTex: Tex.METAL, floorTex: Tex.F_CONCRETE, wet: false },
+  { owner: ZoneFaction.CULTIST, x: 840, y: 806, name: 'тёмные чаши рекурсии', type: RoomType.STORAGE, wallTex: Tex.BRICK, floorTex: Tex.F_WATER, wet: true },
+] as const;
+
+const TURING_CABINET_STRIPS: readonly TuringCabinetStripSpec[] = [
+  { owner: ZoneFaction.CITIZEN, x: 62, y: 208, cols: 10, rows: 5, name: 'северная детская сетка', wallTex: Tex.PANEL, floorTex: Tex.F_LINO, roomTypes: [RoomType.LIVING, RoomType.KITCHEN, RoomType.BATHROOM, RoomType.STORAGE] },
+  { owner: ZoneFaction.SCIENTIST, x: 388, y: 202, cols: 12, rows: 5, name: 'верхние микроячейки обучения', wallTex: Tex.TILE_W, floorTex: Tex.F_TILE, roomTypes: [RoomType.MEDICAL, RoomType.OFFICE, RoomType.STORAGE] },
+  { owner: ZoneFaction.SCIENTIST, x: 682, y: 210, cols: 10, rows: 5, name: 'северный архив ленты', wallTex: Tex.METAL, floorTex: Tex.F_CONCRETE, roomTypes: [RoomType.STORAGE, RoomType.MEDICAL, RoomType.OFFICE] },
+  { owner: ZoneFaction.LIQUIDATOR, x: 70, y: 444, cols: 10, rows: 6, name: 'западные шкафы прожига', wallTex: Tex.PIPE, floorTex: Tex.F_CONCRETE, roomTypes: [RoomType.STORAGE, RoomType.PRODUCTION, RoomType.BATHROOM] },
+  { owner: ZoneFaction.SCIENTIST, x: 342, y: 444, cols: 12, rows: 6, name: 'центральные микроячейки чаши', wallTex: Tex.TILE_W, floorTex: Tex.F_TILE, roomTypes: [RoomType.MEDICAL, RoomType.PRODUCTION, RoomType.STORAGE] },
+  { owner: ZoneFaction.WILD, x: 718, y: 446, cols: 10, rows: 6, name: 'восточные разорённые боксы', wallTex: Tex.BRICK, floorTex: Tex.F_CONCRETE, roomTypes: [RoomType.STORAGE, RoomType.SMOKING, RoomType.PRODUCTION] },
+  { owner: ZoneFaction.LIQUIDATOR, x: 84, y: 716, cols: 11, rows: 5, name: 'нижние шкафы дезраствора', wallTex: Tex.METAL, floorTex: Tex.F_CONCRETE, roomTypes: [RoomType.STORAGE, RoomType.PRODUCTION, RoomType.BATHROOM] },
+  { owner: ZoneFaction.SCIENTIST, x: 382, y: 708, cols: 13, rows: 5, name: 'нижний ряд микроячеек НИИ', wallTex: Tex.TILE_W, floorTex: Tex.F_TILE, roomTypes: [RoomType.MEDICAL, RoomType.OFFICE, RoomType.STORAGE] },
+  { owner: ZoneFaction.CULTIST, x: 718, y: 700, cols: 10, rows: 5, name: 'культовые ячейки рекурсии', wallTex: Tex.BRICK, floorTex: Tex.F_WATER, roomTypes: [RoomType.STORAGE, RoomType.COMMON, RoomType.SMOKING] },
+] as const;
 
 const NPC_DEFS: Record<TuringNpcId, PlotNpcDef> = {
   turing_nursery_mother_agafya: {
@@ -307,29 +434,272 @@ export function generateTuringNurseryDesignFloor(seed = SEED): FloorGeneration {
 
 export function expandTuringNurseryRouteGeometry(world: World, rng: () => number): void {
   const field = reactionField(SEED ^ 0x7a710);
-  const anchors = [
-    { x: 134, y: 160, name: 'северо-западная контрольная чашка' },
-    { x: 806, y: 154, name: 'северо-восточный учебный рост' },
-    { x: 136, y: 802, name: 'юго-западный сухой инкубатор' },
-    { x: 808, y: 810, name: 'юго-восточный мокрый инкубатор' },
-    { x: 504, y: 142, name: 'верхний ряд клеточных ковров' },
-    { x: 512, y: 850, name: 'нижний ряд мостовых проб' },
-  ];
+  carveTuringMacroNetwork(world, field);
+  buildTuringHqSuites(world);
+  buildTuringDistricts(world, field, rng);
+  buildTuringCabinetStrips(world, rng);
+  buildTuringOuterAnnexes(world, field, rng);
+  buildTuringStateGraphRooms(world, field, rng);
 
-  for (let i = 0; i < anchors.length; i++) {
-    const a = anchors[i];
-    const x = a.x + Math.floor((rng() - 0.5) * 34);
-    const y = a.y + Math.floor((rng() - 0.5) * 28);
-    const lab = addRoom(world, i % 2 === 0 ? RoomType.MEDICAL : RoomType.PRODUCTION, x, y, 52, 30, `${TURING_NURSERY_ROOM_PREFIX}: ${a.name}`, Tex.TILE_W, Tex.F_TILE);
-    carveReactionLane(world, field, x + 26, y + 15, CX, CY, 3, Tex.F_TILE, false);
-    stainReactionRoom(world, lab, field, SEED ^ i);
-    if (i % 2 === 1) {
-      const store = addRoom(world, RoomType.STORAGE, x + (x < CX ? 62 : -36), y + 4, 28, 22, `${TURING_NURSERY_ROOM_PREFIX}: шкаф ${i + 1}`, Tex.METAL, Tex.F_CONCRETE);
-      connectRooms(world, lab, x < CX ? 'east' : 'west', store, x < CX ? 'west' : 'east', DoorState.CLOSED);
+  stampReactionWater(world, field, SEED ^ 0x7070, 1600);
+  world.markCellsDirty();
+  world.markFloorTexDirty();
+  world.markWallTexDirty();
+  world.markFeaturesDirty(true);
+}
+
+export function reinforceTuringNurseryAuthoredHqTerritory(world: World): void {
+  for (const spec of TURING_HQ_SPECS) {
+    const room = world.rooms.find(candidate => candidate?.type === RoomType.HQ && candidate.name === spec.name);
+    if (!room) continue;
+    hardenTuringHqRoom(world, room, spec.owner, spec.wallTex, spec.floorTex);
+  }
+}
+
+function hardenTuringHqRoom(world: World, room: Room, owner: TerritoryOwner, wallTex: Tex, floorTex: Tex): void {
+  room.type = RoomType.HQ;
+  room.sealed = true;
+  room.wallTex = wallTex;
+  room.floorTex = floorTex;
+  for (let dy = -1; dy <= room.h; dy++) {
+    for (let dx = -1; dx <= room.w; dx++) {
+      const idx = world.idx(room.x + dx, room.y + dy);
+      const interior = dx >= 0 && dx < room.w && dy >= 0 && dy < room.h;
+      if (interior) {
+        if (world.roomMap[idx] === room.id) {
+          world.factionControl[idx] = owner;
+          world.floorTex[idx] = floorTex;
+        }
+      } else if (world.cells[idx] === Cell.WALL && !world.aptMask[idx]) {
+        world.hermoWall[idx] = 1;
+        world.wallTex[idx] = wallTex;
+      }
     }
   }
+  for (const idx of room.doors) world.factionControl[idx] = owner;
+}
 
-  stampReactionWater(world, field, SEED ^ 0x7070, 540);
+function carveTuringMacroNetwork(world: World, field: ReactionField): void {
+  carvePointRoute(world, [
+    { x: 104, y: 168 },
+    { x: 512, y: 104 },
+    { x: 920, y: 170 },
+    { x: 928, y: 512 },
+    { x: 900, y: 854 },
+    { x: 512, y: 916 },
+    { x: 108, y: 844 },
+    { x: 92, y: 512 },
+    { x: 104, y: 168 },
+  ], 8, Tex.F_TILE);
+
+  carvePointRoute(world, [
+    { x: 78, y: 512 },
+    { x: 260, y: 512 },
+    { x: CX, y: CY },
+    { x: 764, y: 512 },
+    { x: 948, y: 512 },
+  ], 6, Tex.F_CONCRETE);
+  carvePointRoute(world, [
+    { x: 512, y: 90 },
+    { x: 512, y: 284 },
+    { x: CX, y: CY },
+    { x: 512, y: 742 },
+    { x: 512, y: 936 },
+  ], 6, Tex.F_CONCRETE);
+  carvePointRoute(world, [
+    { x: 150, y: 170 },
+    { x: 326, y: 326 },
+    { x: CX, y: CY },
+    { x: 700, y: 700 },
+    { x: 862, y: 852 },
+  ], 4, Tex.F_TILE);
+  carvePointRoute(world, [
+    { x: 862, y: 168 },
+    { x: 694, y: 326 },
+    { x: CX, y: CY },
+    { x: 328, y: 696 },
+    { x: 158, y: 850 },
+  ], 4, Tex.F_TILE);
+
+  const tapeRows = [184, 336, 512, 688, 840];
+  for (let row = 0; row < tapeRows.length; row++) {
+    carveReactionLane(world, field, 82, tapeRows[row], 942, tapeRows[row] + (row % 2 === 0 ? 18 : -18), 3, Tex.F_TILE, true);
+  }
+  const tapeCols = [184, 336, 512, 688, 840];
+  for (let col = 0; col < tapeCols.length; col++) {
+    carveReactionLane(world, field, tapeCols[col], 88, tapeCols[col] + (col % 2 === 0 ? -16 : 16), 938, 3, Tex.F_TILE, col % 2 === 0);
+  }
+}
+
+function buildTuringHqSuites(world: World): void {
+  for (let i = 0; i < TURING_HQ_SPECS.length; i++) {
+    const spec = TURING_HQ_SPECS[i];
+    const hq = tryAddTuringRoom(world, RoomType.HQ, spec.x, spec.y, spec.owner === ZoneFaction.SCIENTIST ? 50 : 42, 28, spec.name, spec.wallTex, spec.floorTex, true);
+    if (!hq) continue;
+    paintRoomTerritory(world, hq, spec.owner);
+    decorateHqCore(world, hq, i);
+    connectRoomToPoint(world, hq, spec.x < CX ? 'east' : 'west', CX, CY, DoorState.HERMETIC_CLOSED);
+
+    const kitchen = tryAddTuringRoom(world, RoomType.KITCHEN, spec.x - 38, spec.y + 38, 30, 18, `Кухня ${spec.supportPrefix}`, Tex.PANEL, Tex.F_LINO);
+    const toilet = tryAddTuringRoom(world, RoomType.BATHROOM, spec.x + 10, spec.y + 40, 24, 16, `Санузел ${spec.supportPrefix}`, Tex.TILE_W, Tex.F_TILE);
+    const store = tryAddTuringRoom(world, RoomType.STORAGE, spec.x + 58, spec.y + 3, 30, 24, `Склад ${spec.supportPrefix}`, spec.owner === ZoneFaction.CULTIST ? Tex.BRICK : Tex.METAL, Tex.F_CONCRETE);
+    const work = tryAddTuringRoom(world, spec.owner === ZoneFaction.SCIENTIST ? RoomType.MEDICAL : RoomType.OFFICE, spec.x - 44, spec.y + 4, 34, 24, `Рабочая комната ${spec.supportPrefix}`, spec.owner === ZoneFaction.CITIZEN ? Tex.PANEL : spec.wallTex, spec.floorTex);
+    for (const room of [kitchen, toilet, store, work]) {
+      if (!room) continue;
+      paintRoomTerritory(world, room, spec.owner);
+      decorateSupportRoom(world, room, i);
+      connectRooms(world, hq, room.x < hq.x ? 'west' : room.x > hq.x + hq.w ? 'east' : 'south', room, room.y > hq.y ? 'north' : room.x < hq.x ? 'east' : 'west', DoorState.CLOSED);
+    }
+  }
+}
+
+function buildTuringDistricts(world: World, field: ReactionField, rng: () => number): void {
+  for (let i = 0; i < TURING_DISTRICTS.length; i++) {
+    const spec = TURING_DISTRICTS[i];
+    const lab = tryAddTuringRoom(
+      world,
+      spec.type,
+      spec.x + Math.floor((rng() - 0.5) * 18),
+      spec.y + Math.floor((rng() - 0.5) * 16),
+      64 + (i % 4) * 8,
+      34 + (i % 3) * 8,
+      `${TURING_NURSERY_ROOM_PREFIX}: ${spec.name}`,
+      spec.wallTex,
+      spec.floorTex,
+    );
+    if (!lab) continue;
+    paintRoomTerritory(world, lab, spec.owner);
+    decorateResearchLab(world, lab, field, i, spec.wet);
+    connectRoomToPoint(world, lab, lab.x < CX ? 'east' : 'west', CX, CY, DoorState.CLOSED);
+
+    const store = tryAddTuringRoom(world, RoomType.STORAGE, lab.x + lab.w + 10, lab.y + 4, 28, 22, `Шкаф проб: ${spec.name}`, Tex.METAL, Tex.F_CONCRETE);
+    const office = tryAddTuringRoom(world, RoomType.OFFICE, lab.x - 38, lab.y + 4, 30, 20, `Кабинет наблюдения: ${spec.name}`, spec.wallTex, spec.floorTex);
+    const wash = tryAddTuringRoom(world, RoomType.BATHROOM, lab.x + 8, lab.y + lab.h + 10, 26, 16, `Мокрый шлюз: ${spec.name}`, Tex.TILE_W, spec.wet ? Tex.F_WATER : Tex.F_TILE);
+    const bowl = tryAddTuringRoom(world, RoomType.MEDICAL, lab.x + lab.w - 28, lab.y + lab.h + 10, 32, 22, `${TURING_NURSERY_ROOM_PREFIX}: малая чаша ${i + 1}`, Tex.HERMO_WALL, Tex.F_TILE, true);
+    for (const room of [store, office, wash, bowl]) {
+      if (!room) continue;
+      paintRoomTerritory(world, room, spec.owner);
+      if (room === bowl) decorateSmallBowl(world, room, field, i);
+      else decorateSupportRoom(world, room, 20 + i);
+      connectRooms(world, lab, room.y > lab.y + lab.h ? 'south' : room.x < lab.x ? 'west' : 'east', room, room.y > lab.y + lab.h ? 'north' : room.x < lab.x ? 'east' : 'west', room === bowl ? DoorState.HERMETIC_CLOSED : DoorState.CLOSED);
+    }
+    buildTuringMicroBlock(world, lab, spec.owner, `микроячейка ${spec.name}`, 5 + (i % 3), 3 + (i % 2), i);
+  }
+}
+
+function buildTuringCabinetStrips(world: World, rng: () => number): void {
+  for (let i = 0; i < TURING_CABINET_STRIPS.length; i++) {
+    const spec = TURING_CABINET_STRIPS[i];
+    let stripFirst: Room | null = null;
+    let previousRowFirst: Room | null = null;
+    for (let row = 0; row < spec.rows; row++) {
+      let previous: Room | null = null;
+      let rowFirst: Room | null = null;
+      for (let col = 0; col < spec.cols; col++) {
+        const serial = i * 100 + row * 17 + col;
+        const room = tryAddTuringRoom(
+          world,
+          spec.roomTypes[serial % spec.roomTypes.length],
+          spec.x + col * 18 + Math.floor(rng() * 3),
+          spec.y + row * 15 + Math.floor(rng() * 3),
+          10 + (serial % 5),
+          8 + ((serial + 2) % 4),
+          `${TURING_NURSERY_ROOM_PREFIX}: ${spec.name}: шкаф ${row + 1}-${col + 1}`,
+          spec.wallTex,
+          spec.floorTex,
+        );
+        if (!room) continue;
+        paintRoomTerritory(world, room, spec.owner);
+        decorateMicroRoom(world, room, serial);
+        if (!stripFirst) stripFirst = room;
+        if (!rowFirst) rowFirst = room;
+        if (previous) connectRoomsNarrow(world, previous, 'east', room, 'west', serial % 6 === 0 ? DoorState.CLOSED : DoorState.OPEN);
+        previous = room;
+      }
+      if (rowFirst && previousRowFirst) connectRoomsNarrow(world, previousRowFirst, 'south', rowFirst, 'north', DoorState.CLOSED);
+      previousRowFirst = rowFirst;
+    }
+    if (stripFirst) connectRoomToPoint(world, stripFirst, stripFirst.x < CX ? 'east' : 'west', CX, CY, DoorState.CLOSED);
+  }
+}
+
+function buildTuringOuterAnnexes(world: World, field: ReactionField, rng: () => number): void {
+  const annexes = [
+    { x: 58, y: 76, cols: 7, rows: 4, owner: ZoneFaction.CITIZEN, name: 'краевая очередь родителей' },
+    { x: 852, y: 80, cols: 6, rows: 4, owner: ZoneFaction.WILD, name: 'краевой склад сбежавших проб' },
+    { x: 58, y: 856, cols: 7, rows: 4, owner: ZoneFaction.LIQUIDATOR, name: 'нижний пост прожига' },
+    { x: 850, y: 852, cols: 6, rows: 4, owner: ZoneFaction.CULTIST, name: 'нижний мокрый скит' },
+  ] as const;
+
+  for (let i = 0; i < annexes.length; i++) {
+    const annex = annexes[i];
+    const anchor = tryAddTuringRoom(world, RoomType.PRODUCTION, annex.x, annex.y, 54, 30, `${TURING_NURSERY_ROOM_PREFIX}: ${annex.name}`, Tex.PIPE, Tex.F_CONCRETE);
+    if (!anchor) continue;
+    paintRoomTerritory(world, anchor, annex.owner);
+    decorateResearchLab(world, anchor, field, 90 + i, annex.owner !== ZoneFaction.CITIZEN);
+    connectRoomToPoint(world, anchor, annex.x < CX ? 'east' : 'west', CX, CY, DoorState.CLOSED);
+    for (let row = 0; row < annex.rows; row++) {
+      let prev: Room | null = null;
+      for (let col = 0; col < annex.cols; col++) {
+        const serial = 600 + i * 64 + row * 9 + col;
+        const room = tryAddTuringRoom(
+          world,
+          col % 3 === 0 ? RoomType.STORAGE : col % 3 === 1 ? RoomType.OFFICE : RoomType.BATHROOM,
+          annex.x + 66 + col * 17 + Math.floor(rng() * 3),
+          annex.y + row * 15 + Math.floor(rng() * 3),
+          11 + (serial % 4),
+          8 + ((serial + 1) % 4),
+          `${TURING_NURSERY_ROOM_PREFIX}: ${annex.name}: малый отсек ${row + 1}-${col + 1}`,
+          annex.owner === ZoneFaction.CULTIST ? Tex.BRICK : Tex.METAL,
+          annex.owner === ZoneFaction.CULTIST ? Tex.F_WATER : Tex.F_CONCRETE,
+        );
+        if (!room) continue;
+        paintRoomTerritory(world, room, annex.owner);
+        decorateMicroRoom(world, room, serial);
+        connectRoomsNarrow(world, prev ?? anchor, 'east', room, 'west', DoorState.CLOSED);
+        prev = room;
+      }
+    }
+  }
+}
+
+function buildTuringStateGraphRooms(world: World, field: ReactionField, rng: () => number): void {
+  const columns = [170, 300, 430, 560, 690, 820];
+  const rows = [156, 276, 396, 516, 636, 756, 876];
+  let previousLayerFirst: Room | null = null;
+  for (let y = 0; y < rows.length; y++) {
+    let previous: Room | null = null;
+    let layerFirst: Room | null = null;
+    for (let x = 0; x < columns.length; x++) {
+      if (((x * 7 + y * 5) % 4) === 0 && rng() < 0.45) continue;
+      const owner = x < 2 ? (y < 3 ? ZoneFaction.CITIZEN : ZoneFaction.LIQUIDATOR)
+        : x > 4 ? (y < 3 ? ZoneFaction.WILD : ZoneFaction.CULTIST)
+          : ZoneFaction.SCIENTIST;
+      const serial = y * 16 + x;
+      const node = tryAddTuringRoom(
+        world,
+        serial % 5 === 0 ? RoomType.PRODUCTION : serial % 3 === 0 ? RoomType.OFFICE : RoomType.MEDICAL,
+        columns[x] + Math.floor((rng() - 0.5) * 16),
+        rows[y] + Math.floor((rng() - 0.5) * 14),
+        24 + (serial % 4) * 4,
+        18 + (serial % 3) * 3,
+        `${TURING_NURSERY_ROOM_PREFIX}: состояние автомата ${y + 1}.${x + 1}`,
+        owner === ZoneFaction.CITIZEN ? Tex.PANEL : owner === ZoneFaction.WILD || owner === ZoneFaction.CULTIST ? Tex.BRICK : Tex.TILE_W,
+        owner === ZoneFaction.CULTIST ? Tex.F_WATER : owner === ZoneFaction.CITIZEN ? Tex.F_LINO : Tex.F_TILE,
+      );
+      if (!node) continue;
+      paintRoomTerritory(world, node, owner);
+      decorateResearchLab(world, node, field, 120 + serial, owner !== ZoneFaction.CITIZEN);
+      if (!layerFirst) layerFirst = node;
+      if (previous) connectRoomsNarrow(world, previous, 'east', node, 'west', serial % 3 === 0 ? DoorState.CLOSED : DoorState.OPEN);
+      if (previousLayerFirst && x === 0) connectRoomsNarrow(world, previousLayerFirst, 'south', node, 'north', DoorState.CLOSED);
+      previous = node;
+    }
+    if (layerFirst) {
+      connectRoomToPoint(world, layerFirst, layerFirst.x < CX ? 'east' : 'west', CX, CY, DoorState.CLOSED);
+      previousLayerFirst = layerFirst;
+    }
+  }
 }
 
 export function measureTuringNurseryMetrics(generation: FloorGeneration): TuringNurseryMetrics {
@@ -366,7 +736,7 @@ function buildNurseryRooms(world: World, field: ReactionField): NurseryRooms {
   const basin = addRoom(world, RoomType.MEDICAL, CX - 70, CY + 48, 140, 74, 'Ясли Тьюринга: вычислительная чаша инокуляции', Tex.TILE_W, Tex.F_TILE);
   const bridge = addRoom(world, RoomType.CORRIDOR, CX - 188, CY - 16, 126, 32, 'Ясли Тьюринга: слизевой мост', Tex.HERMO_WALL, Tex.F_WATER);
   const sample = addRoom(world, RoomType.STORAGE, CX + 100, CY + 42, 84, 48, 'Ясли Тьюринга: синяя пробная кладовая', Tex.METAL, Tex.F_CONCRETE);
-  const burn = addRoom(world, RoomType.HQ, CX - 72, CY - 158, 96, 44, 'Ясли Тьюринга: пост прожига моста', Tex.METAL, Tex.F_CONCRETE);
+  const burn = addRoom(world, RoomType.OFFICE, CX - 72, CY - 158, 96, 44, 'Ясли Тьюринга: пост прожига моста', Tex.METAL, Tex.F_CONCRETE);
   const exposure = addRoom(world, RoomType.OFFICE, CX + 86, CY - 150, 92, 46, 'Ясли Тьюринга: комната экспозиции роста', Tex.MARBLE, Tex.F_PARQUET);
   const ward = addRoom(world, RoomType.LIVING, CX - 30, CY - 74, 72, 38, 'Ясли Тьюринга: палата нулевого ребёнка', Tex.PANEL, Tex.F_CARPET);
   const lowerLift = addRoom(world, RoomType.CORRIDOR, CX - 34, CY - 236, 70, 24, 'Ясли Тьюринга: нижняя кабина узора', Tex.PIPE, Tex.F_CONCRETE);
@@ -686,6 +1056,189 @@ function registerNurseryRouteCues(world: World, rooms: NurseryRooms, containers:
   });
 }
 
+function carvePointRoute(world: World, points: readonly { x: number; y: number }[], width: number, floorTex: Tex): void {
+  for (let i = 1; i < points.length; i++) {
+    carveLineWidth(world, points[i - 1].x, points[i - 1].y, points[i].x, points[i].y, width, floorTex);
+  }
+}
+
+function tryAddTuringRoom(
+  world: World,
+  type: RoomType,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  name: string,
+  wallTex: Tex,
+  floorTex: Tex,
+  sealed = false,
+): Room | null {
+  const rx = Math.floor(x);
+  const ry = Math.floor(y);
+  if (!canStampTuringRoom(world, rx, ry, w, h)) return null;
+  return addRoom(world, type, rx, ry, w, h, name, wallTex, floorTex, sealed);
+}
+
+function canStampTuringRoom(world: World, x: number, y: number, w: number, h: number): boolean {
+  if (x < 2 || y < 2 || x + w >= W - 2 || y + h >= W - 2) return false;
+  for (let dy = -1; dy <= h; dy++) {
+    for (let dx = -1; dx <= w; dx++) {
+      const idx = world.idx(x + dx, y + dy);
+      if (world.aptMask[idx] || world.hermoWall[idx]) return false;
+      if (world.cells[idx] === Cell.LIFT || world.cells[idx] === Cell.DOOR) return false;
+      if (world.roomMap[idx] >= 0) return false;
+    }
+  }
+  return true;
+}
+
+function connectRoomsNarrow(world: World, a: Room, sideA: DoorSide, b: Room, sideB: DoorSide, state: DoorState, keyId = ''): void {
+  const da = doorSite(a, sideA);
+  const db = doorSite(b, sideB);
+  carveLineWidth(world, da.ox, da.oy, db.ox, db.oy, 1, a.floorTex);
+  const ai = addDoorAt(world, a, da.x, da.y, state, keyId);
+  const bi = addDoorAt(world, b, db.x, db.y, state === DoorState.LOCKED ? DoorState.CLOSED : state, keyId);
+  const ad = world.doors.get(ai);
+  const bd = world.doors.get(bi);
+  if (ad) ad.roomB = b.id;
+  if (bd) bd.roomB = a.id;
+}
+
+function connectRoomToPoint(world: World, room: Room, side: DoorSide, tx: number, ty: number, state: DoorState, keyId = ''): void {
+  const d = doorSite(room, side);
+  carveLineWidth(world, d.ox, d.oy, tx, ty, 3, Tex.F_TILE);
+  addDoorAt(world, room, d.x, d.y, state, keyId);
+}
+
+function paintRoomTerritory(world: World, room: Room, owner: TerritoryOwner): void {
+  for (let dy = 0; dy < room.h; dy++) {
+    for (let dx = 0; dx < room.w; dx++) {
+      world.factionControl[world.idx(room.x + dx, room.y + dy)] = owner;
+    }
+  }
+  for (const idx of room.doors) world.factionControl[idx] = owner;
+}
+
+function buildTuringMicroBlock(
+  world: World,
+  lab: Room,
+  owner: TerritoryOwner,
+  name: string,
+  cols: number,
+  rows: number,
+  seed: number,
+): void {
+  let previousRowFirst: Room | null = null;
+  for (let row = 0; row < rows; row++) {
+    let previous: Room | null = null;
+    let rowFirst: Room | null = null;
+    for (let col = 0; col < cols; col++) {
+      const serial = seed * 64 + row * 13 + col;
+      const room = tryAddTuringRoom(
+        world,
+        col % 5 === 0 ? RoomType.BATHROOM : col % 4 === 0 ? RoomType.OFFICE : col % 3 === 0 ? RoomType.MEDICAL : RoomType.STORAGE,
+        lab.x - 26 + col * 18,
+        lab.y + lab.h + 34 + row * 15,
+        10 + (serial % 5),
+        8 + ((serial + 3) % 4),
+        `${TURING_NURSERY_ROOM_PREFIX}: ${name}: ${row + 1}-${col + 1}`,
+        col % 3 === 0 ? Tex.TILE_W : Tex.METAL,
+        col % 3 === 0 ? Tex.F_TILE : Tex.F_CONCRETE,
+      );
+      if (!room) continue;
+      paintRoomTerritory(world, room, owner);
+      decorateMicroRoom(world, room, serial);
+      if (!rowFirst) rowFirst = room;
+      if (previous) connectRoomsNarrow(world, previous, 'east', room, 'west', serial % 6 === 0 ? DoorState.CLOSED : DoorState.OPEN);
+      previous = room;
+    }
+    if (rowFirst) {
+      connectRoomsNarrow(world, previousRowFirst ?? lab, 'south', rowFirst, 'north', DoorState.CLOSED);
+      previousRowFirst = rowFirst;
+    }
+  }
+}
+
+function decorateHqCore(world: World, room: Room, serial: number): void {
+  setFeature(world, room.x + 8, room.y + 8, Feature.DESK);
+  setFeature(world, room.x + room.w - 9, room.y + 8, Feature.SHELF);
+  setFeature(world, room.x + 10, room.y + room.h - 8, Feature.TABLE);
+  setFeature(world, room.x + room.w - 10, room.y + room.h - 8, Feature.LAMP);
+  markScreenWall(world, room.x + (room.w >> 1), room.y - 1, serial + 2);
+}
+
+function decorateResearchLab(world: World, room: Room, field: ReactionField, serial: number, wet: boolean): void {
+  for (let y = room.y + 7; y < room.y + room.h - 5; y += 7) {
+    for (let x = room.x + 8; x < room.x + room.w - 8; x += 16) {
+      setFeature(world, x, y, Feature.APPARATUS);
+      if (wet && laneScore(reactionAt(field, x, y)) > 0.45) addWetCell(world, x + 2, y);
+    }
+  }
+  if (room.type === RoomType.STORAGE) {
+    for (let x = room.x + 7; x < room.x + room.w - 6; x += 12) setFeature(world, x, room.y + 8, Feature.SHELF);
+  }
+  setFeature(world, room.x + room.w - 8, room.y + room.h - 7, wet ? Feature.SINK : Feature.LAMP);
+  markScreenWall(world, room.x + 10 + (serial % Math.max(1, room.w - 20)), room.y - 1, serial);
+  stainReactionRoom(world, room, field, SEED ^ serial);
+  if (wet) stampSurfaceSplat(world, room.x + (room.w >> 1), room.y + (room.h >> 1), 0.5, 0.5, 7, 0.22, SEED ^ serial, 35, 145, 82, false);
+}
+
+function decorateSmallBowl(world: World, room: Room, field: ReactionField, serial: number): void {
+  stainReactionRoom(world, room, field, SEED ^ (serial * 19));
+  for (let y = room.y + 5; y < room.y + room.h - 4; y += 5) {
+    for (let x = room.x + 6; x < room.x + room.w - 5; x += 8) {
+      if (((x + y + serial) & 1) === 0) addWetCell(world, x, y);
+      else setFeature(world, x, y, Feature.APPARATUS);
+    }
+  }
+  markScreenWall(world, room.x + (room.w >> 1), room.y - 1, serial);
+}
+
+function decorateSupportRoom(world: World, room: Room, serial: number): void {
+  switch (room.type) {
+    case RoomType.KITCHEN:
+      setFeature(world, room.x + 7, room.y + 7, Feature.STOVE);
+      setFeature(world, room.x + room.w - 7, room.y + 7, Feature.SINK);
+      setFeature(world, room.x + (room.w >> 1), room.y + room.h - 7, Feature.TABLE);
+      break;
+    case RoomType.BATHROOM:
+      setFeature(world, room.x + 6, room.y + 6, Feature.TOILET);
+      setFeature(world, room.x + room.w - 7, room.y + room.h - 7, Feature.SINK);
+      break;
+    case RoomType.STORAGE:
+      for (let x = room.x + 6; x < room.x + room.w - 5; x += 9) setFeature(world, x, room.y + 6, Feature.SHELF);
+      break;
+    case RoomType.MEDICAL:
+    case RoomType.PRODUCTION:
+      setFeature(world, room.x + 7, room.y + 7, Feature.APPARATUS);
+      setFeature(world, room.x + room.w - 7, room.y + room.h - 7, Feature.SINK);
+      break;
+    case RoomType.OFFICE:
+    case RoomType.COMMON:
+    default:
+      setFeature(world, room.x + 7, room.y + 7, Feature.DESK);
+      setFeature(world, room.x + room.w - 8, room.y + 7, Feature.SHELF);
+      setFeature(world, room.x + (room.w >> 1), room.y + room.h - 7, Feature.CHAIR);
+      break;
+  }
+  if (serial % 3 === 0) markScreenWall(world, room.x + (room.w >> 1), room.y - 1, serial);
+}
+
+function decorateMicroRoom(world: World, room: Room, serial: number): void {
+  const primary = room.type === RoomType.BATHROOM ? Feature.SINK
+    : room.type === RoomType.MEDICAL || room.type === RoomType.PRODUCTION ? Feature.APPARATUS
+      : room.type === RoomType.OFFICE ? Feature.DESK
+        : room.type === RoomType.COMMON || room.type === RoomType.SMOKING ? Feature.TABLE
+          : Feature.SHELF;
+  setFeature(world, room.x + Math.max(2, Math.min(room.w - 3, 3 + (serial % 4))), room.y + Math.max(2, Math.min(room.h - 3, 3 + (serial % 3))), primary);
+  if (room.w > 9 && room.h > 7) {
+    const secondary = primary === Feature.SHELF ? Feature.APPARATUS : Feature.SHELF;
+    setFeature(world, room.x + room.w - 4, room.y + room.h - 4, secondary);
+  }
+  if (serial % 13 === 0) markScreenWall(world, room.x + (room.w >> 1), room.y - 1, serial);
+}
+
 function addRoom(
   world: World,
   type: RoomType,
@@ -696,11 +1249,13 @@ function addRoom(
   name: string,
   wallTex: Tex,
   floorTex: Tex,
+  sealed = false,
 ): Room {
   const room = stampRoom(world, world.rooms.length, type, Math.floor(x), Math.floor(y), w, h, -1);
   room.name = name;
   room.wallTex = wallTex;
   room.floorTex = floorTex;
+  room.sealed = sealed;
   for (let dy = -1; dy <= room.h; dy++) {
     for (let dx = -1; dx <= room.w; dx++) {
       const idx = world.idx(room.x + dx, room.y + dy);
@@ -708,7 +1263,7 @@ function addRoom(
         world.floorTex[idx] = floorTex;
       } else if (world.cells[idx] === Cell.WALL) {
         world.wallTex[idx] = wallTex;
-        if (wallTex === Tex.HERMO_WALL) world.hermoWall[idx] = 1;
+        if (wallTex === Tex.HERMO_WALL || sealed) world.hermoWall[idx] = 1;
       }
     }
   }
@@ -718,13 +1273,13 @@ function addRoom(
 function connectRooms(world: World, a: Room, sideA: DoorSide, b: Room, sideB: DoorSide, state: DoorState, keyId = ''): void {
   const da = doorSite(a, sideA);
   const db = doorSite(b, sideB);
+  carveLineWidth(world, da.ox, da.oy, db.ox, db.oy, 3, a.floorTex);
   const ai = addDoorAt(world, a, da.x, da.y, state, keyId);
   const bi = addDoorAt(world, b, db.x, db.y, state === DoorState.LOCKED ? DoorState.CLOSED : state, keyId);
   const ad = world.doors.get(ai);
   const bd = world.doors.get(bi);
   if (ad) ad.roomB = b.id;
   if (bd) bd.roomB = a.id;
-  carveLineWidth(world, da.ox, da.oy, db.ox, db.oy, 3, a.floorTex);
 }
 
 function addDoorAt(world: World, room: Room, x: number, y: number, state: DoorState, keyId = ''): number {
@@ -1123,6 +1678,55 @@ function spawnAmbientNpc(
     occupation,
     questId: -1,
   });
+}
+
+function isTuringAmbientNpc(entity: Entity): boolean {
+  return entity.type === EntityType.NPC &&
+    entity.alive &&
+    entity.plotNpcId === undefined &&
+    entity.persistentNpcId === undefined &&
+    entity.alifeId === undefined &&
+    entity.questId === -1 &&
+    entity.faction !== undefined;
+}
+
+function turingTerritorySpawnCells(world: World): Map<TerritoryOwner, number[]> {
+  const cells = new Map<TerritoryOwner, number[]>();
+  for (const spec of TURING_HQ_SPECS) {
+    if (!cells.has(spec.owner)) cells.set(spec.owner, []);
+  }
+  for (let i = 0; i < W * W; i++) {
+    const cell = world.cells[i];
+    if (cell !== Cell.FLOOR && cell !== Cell.WATER) continue;
+    if (world.aptMask[i] || world.hermoWall[i] || world.containerMap.has(i) || world.features[i] === Feature.LIFT_BUTTON) continue;
+    const owner = world.factionControl[i] as TerritoryOwner;
+    const list = cells.get(owner);
+    if (list) list.push(i);
+  }
+  return cells;
+}
+
+export function alignTuringNurseryAmbientNpcTerritory(world: World, entities: Entity[]): void {
+  const cells = turingTerritorySpawnCells(world);
+  const offsets = new Uint16Array(8);
+  for (const entity of entities) {
+    if (!isTuringAmbientNpc(entity) || entity.faction === undefined) continue;
+    const owner = factionToTerritoryOwner(entity.faction);
+    const list = cells.get(owner);
+    if (!list || list.length === 0) continue;
+    const offset = offsets[owner]++ | 0;
+    const cell = list[(entity.id * 127 + offset * 443) % list.length];
+    entity.x = (cell % W) + 0.5;
+    entity.y = ((cell / W) | 0) + 0.5;
+    entity.assignedRoomId = world.roomMap[cell] >= 0 ? world.roomMap[cell] : -1;
+    if (entity.ai) {
+      entity.ai.tx = cell % W;
+      entity.ai.ty = (cell / W) | 0;
+      entity.ai.path = [];
+      entity.ai.pi = 0;
+      entity.ai.stuck = 0;
+    }
+  }
 }
 
 function spawnMonster(

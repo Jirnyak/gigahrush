@@ -9,6 +9,8 @@ import {
   LiftDirection,
   MonsterKind,
   Occupation,
+  W,
+  ZoneFaction,
 } from '../src/core/types';
 import {
   DESIGN_FLOOR_ROUTES,
@@ -30,11 +32,16 @@ import {
   BANK_FLOOR_BASE_FLOOR,
   BANK_FLOOR_ROUTE_ID,
   BANK_FLOOR_Z,
+  BANK_HQ_ROOM_NAMES,
   BANK_ROOM_NAMES,
   BANK_VAULT_RISK_RADIUS,
   bankVaultRiskSources,
   bankVaultRiskTierAt,
 } from '../src/gen/design_floors/bank_floor';
+import {
+  countTerritoryCells,
+  territoryHqAnchors,
+} from '../src/systems/territory';
 import { makeGameState, makeTestPlayer } from './helpers';
 
 let cachedReadOnlyGeneration: ReturnType<typeof generateDesignFloor> | undefined;
@@ -165,15 +172,63 @@ test('bank_floor generator creates named banking rooms, NPCs, containers and pas
     'Сейфовый пост ликвидаторов Б-22',
     'Архив испорченных депозитов Б-22',
     'Черная кассовая перемычка Б-22',
+    'Северная депозитная ячейка Б-22 1',
+    'Южная долговая клетка Б-22 1',
+    'Западный кассовый кабинет Б-22 1',
+    'Восточный сейфовый кабинет Б-22 1',
   ]) {
     assert.equal(names.has(roomName), true, roomName);
   }
+  assert.equal(gen.world.rooms.length >= 96, true);
+  assert.equal(gen.world.doors.size >= 96, true);
   assert.equal(npcs.length >= 5, true);
   assert.equal(npcs.some(e => e.plotNpcId === 'bank_cashier_lyuba'), true);
   assert.equal(npcs.some(e => e.plotNpcId === 'bank_credit_prokhor'), true);
   assert.equal(gen.world.containers.some(c => c.tags.includes('banking') && c.tags.includes('deposit')), true);
   assert.equal(gen.world.containers.some(c => c.tags.includes('banking') && c.tags.includes('vault')), true);
   assert.equal(gen.world.containers.some(c => c.tags.includes('banking') && c.tags.includes('bribe') && c.tags.includes('buyable')), true);
+});
+
+test('bank_floor has named mini-HQs and cell territory near target shares', () => {
+  const gen = bankFloorForRead();
+  const names = new Set(gen.world.rooms.map(room => room.name));
+  const anchors = territoryHqAnchors(gen.world);
+  const anchorByOwner = new Map(anchors.map(anchor => [anchor.owner, anchor]));
+  const expectedHqs = new Map([
+    [ZoneFaction.CITIZEN, BANK_HQ_ROOM_NAMES.citizen],
+    [ZoneFaction.LIQUIDATOR, BANK_HQ_ROOM_NAMES.liquidator],
+    [ZoneFaction.CULTIST, BANK_HQ_ROOM_NAMES.cultist],
+    [ZoneFaction.SCIENTIST, BANK_HQ_ROOM_NAMES.scientist],
+    [ZoneFaction.WILD, BANK_HQ_ROOM_NAMES.wild],
+  ]);
+
+  for (const [owner, roomName] of expectedHqs) {
+    const anchor = anchorByOwner.get(owner);
+    assert.ok(anchor, ZoneFaction[owner]);
+    assert.equal(gen.world.rooms[anchor.roomId]?.name, roomName);
+  }
+  for (const supportRoom of [
+    'Кухня гражданского баланса Б-22',
+    'Санузел гражданского баланса Б-22',
+    'Оружейный шкаф инкассаторов Б-22',
+    'Медпункт инкассаторов Б-22',
+    'Санузел свечной очереди Б-22',
+    'Лаборатория процентного шума Б-22',
+    'Кухня ночной кассы Б-22',
+  ]) {
+    assert.equal(names.has(supportRoom), true, supportRoom);
+  }
+
+  const counts = new Map(countTerritoryCells(gen.world).map(row => [row.owner, row.cells]));
+  const total = W * W;
+  const shares = new Map([...counts].map(([owner, cells]) => [owner, cells / total]));
+  assert.equal([...counts].every(([, cells]) => cells >= 0), true);
+  assert.equal((counts.get(ZoneFaction.CITIZEN) ?? 0) > (counts.get(ZoneFaction.LIQUIDATOR) ?? 0), true);
+  assert.ok((shares.get(ZoneFaction.CITIZEN) ?? 0) >= 0.40 && (shares.get(ZoneFaction.CITIZEN) ?? 0) <= 0.44);
+  assert.ok((shares.get(ZoneFaction.LIQUIDATOR) ?? 0) >= 0.26 && (shares.get(ZoneFaction.LIQUIDATOR) ?? 0) <= 0.30);
+  assert.ok((shares.get(ZoneFaction.CULTIST) ?? 0) >= 0.06 && (shares.get(ZoneFaction.CULTIST) ?? 0) <= 0.10);
+  assert.ok((shares.get(ZoneFaction.SCIENTIST) ?? 0) >= 0.08 && (shares.get(ZoneFaction.SCIENTIST) ?? 0) <= 0.12);
+  assert.ok((shares.get(ZoneFaction.WILD) ?? 0) >= 0.10 && (shares.get(ZoneFaction.WILD) ?? 0) <= 0.14);
 });
 
 test('bank_floor full route keeps crowd density and guarded vault pressure in playable bands', () => {

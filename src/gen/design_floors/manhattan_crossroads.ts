@@ -19,6 +19,7 @@ import {
   ZoneFaction,
   type Entity,
   type Room,
+  type TerritoryOwner,
   type WorldContainer,
 } from '../../core/types';
 import { REACH_GATE_KEY, REACH_GATE_NONE, World, auditReachability } from '../../core/world';
@@ -992,11 +993,11 @@ function placeFloorplanDoor(world: World, a: Room, b: Room, x: number, y: number
 function floorplanSegments(start: number, end: number, rng: () => number): { from: number; size: number }[] {
   const out: { from: number; size: number }[] = [];
   let cursor = start;
-  while (cursor + 8 <= end) {
+  while (cursor + 6 <= end) {
     const remaining = end - cursor + 1;
-    const target = 10 + Math.floor(rng() * 13);
-    const size = remaining <= target + 10 ? remaining : Math.min(target, remaining - 10);
-    if (size < 8) break;
+    const target = 7 + Math.floor(rng() * 8);
+    const size = remaining <= target + 7 ? remaining : Math.min(target, remaining - 7);
+    if (size < 6) break;
     out.push({ from: cursor, size });
     cursor += size + 1;
   }
@@ -1043,14 +1044,15 @@ function stampHorizontalFloorplanRow(
   wallTex: Tex,
   rng: () => number,
 ): number {
-  if (h < 7) return 0;
+  if (h < 6) return 0;
   const rowRooms: Room[] = [];
   const segments = floorplanSegments(x0, x1, rng);
   const above = y < corridor.y;
   for (let i = 0; i < segments.length; i++) {
     const type = blockRoomType(blockIndex * 17 + rowIndex * 7 + i);
     const tex = blockRoomTex(type);
-    const depth = randomFloorplanDepth(h, Math.min(9, h), rng);
+    const maxDepth = Math.min(h, 12 + Math.floor(rng() * 8));
+    const depth = randomFloorplanDepth(maxDepth, Math.min(6, maxDepth), rng);
     const roomY = above ? corridor.y - 1 - depth : corridor.y + corridor.h + 1;
     const room = addFloorplanRoom(
       world,
@@ -1085,14 +1087,15 @@ function stampVerticalFloorplanRow(
   wallTex: Tex,
   rng: () => number,
 ): number {
-  if (w < 8) return 0;
+  if (w < 6) return 0;
   const rowRooms: Room[] = [];
   const segments = floorplanSegments(y0, y1, rng);
   const left = x < corridor.x;
   for (let i = 0; i < segments.length; i++) {
     const type = blockRoomType(blockIndex * 19 + rowIndex * 5 + i);
     const tex = blockRoomTex(type);
-    const depth = randomFloorplanDepth(w, Math.min(9, w), rng);
+    const maxDepth = Math.min(w, 12 + Math.floor(rng() * 8));
+    const depth = randomFloorplanDepth(maxDepth, Math.min(6, maxDepth), rng);
     const roomX = left ? corridor.x - 1 - depth : corridor.x + corridor.w + 1;
     const room = addFloorplanRoom(
       world,
@@ -1221,25 +1224,280 @@ function stampManhattanBlockInteriors(world: World, sidewalkRoomId: number, rng:
   }
 }
 
+const FRONTAGE_ROOM_CAP = 360;
+
+function frontageRoomType(serial: number): RoomType {
+  const types = [
+    RoomType.STORAGE,
+    RoomType.OFFICE,
+    RoomType.KITCHEN,
+    RoomType.BATHROOM,
+    RoomType.LIVING,
+    RoomType.SMOKING,
+  ] as const;
+  return types[serial % types.length];
+}
+
+function frontageRoomName(type: RoomType, serial: number): string {
+  const prefix =
+    type === RoomType.KITCHEN ? 'чайная' :
+    type === RoomType.BATHROOM ? 'санузел' :
+    type === RoomType.OFFICE ? 'будка' :
+    type === RoomType.LIVING ? 'ночлежка' :
+    type === RoomType.SMOKING ? 'курилка' :
+    'кладовая';
+  return `Микролавка перекрестка ${serial + 1}: ${prefix}`;
+}
+
+function maybeStampFrontageRoom(
+  world: World,
+  sidewalkRoomId: number,
+  span: RoadSpan,
+  side: -1 | 1,
+  pos: number,
+  serial: number,
+  rng: () => number,
+): boolean {
+  const half = Math.floor(span.width / 2) + SIDEWALK;
+  const type = frontageRoomType(serial);
+  const tex = blockRoomTex(type);
+  const main = 7 + Math.floor(rng() * 8);
+  const depth = 6 + Math.floor(rng() * 8);
+  let x = 0;
+  let y = 0;
+  let w = 0;
+  let h = 0;
+
+  if (span.axis === 'vertical') {
+    if (nearAnyCenter(pos, SHELL_STREET_CENTERS, 24)) return false;
+    w = depth;
+    h = main;
+    x = side > 0 ? span.center + half + 4 : span.center - half - 4 - w;
+    y = pos;
+  } else {
+    if (nearAnyCenter(pos, SHELL_AVENUE_CENTERS, 24)) return false;
+    w = main;
+    h = depth;
+    x = pos;
+    y = side > 0 ? span.center + half + 4 : span.center - half - 4 - h;
+  }
+
+  if (x < 3 || y < 3 || x + w >= W - 3 || y + h >= W - 3) return false;
+  if (!canStampShellRoom(world, x, y, w, h)) return false;
+
+  const room = stampNamedRoom(world, frontageRoomName(type, serial), type, x, y, w, h, tex.wall, tex.floor);
+  connectRoomToStreet(world, room, sidewalkRoomId);
+  decorateBlockInteriorRoom(world, room, type, rng);
+  return room.doors.length > 0;
+}
+
+function stampStreetFrontageRooms(
+  world: World,
+  sidewalkRoomId: number,
+  spans: readonly RoadSpan[],
+  rng: () => number,
+): void {
+  let placed = 0;
+  for (const span of spans) {
+    const start = Math.max(12, Math.min(span.from, span.to) + 22);
+    const end = Math.min(W - 18, Math.max(span.from, span.to) - 22);
+    for (let pos = start; pos <= end && placed < FRONTAGE_ROOM_CAP; pos += 15 + Math.floor(rng() * 7)) {
+      if (maybeStampFrontageRoom(world, sidewalkRoomId, span, -1, pos, placed, rng)) placed++;
+      if (placed >= FRONTAGE_ROOM_CAP) break;
+      if (maybeStampFrontageRoom(world, sidewalkRoomId, span, 1, pos, placed, rng)) placed++;
+    }
+  }
+  if (placed > 0) {
+    world.markCellsDirty();
+    world.markWallTexDirty();
+    world.markFloorTexDirty();
+    world.markFeaturesDirty(true);
+  }
+}
+
+interface ManhattanHqCampusSpec {
+  owner: TerritoryOwner;
+  label: string;
+  x: number;
+  y: number;
+  coreName: string;
+}
+
+const MANHATTAN_HQ_CAMPUSES: readonly ManhattanHqCampusSpec[] = [
+  { owner: ZoneFaction.CITIZEN, label: 'граждан', x: 286, y: 742, coreName: 'Гермодвор гражданского обхода' },
+  { owner: ZoneFaction.CITIZEN, label: 'граждан западного объезда', x: 146, y: 286, coreName: 'Домком западного объезда' },
+  { owner: ZoneFaction.LIQUIDATOR, label: 'ликвидаторов', x: 520, y: 472, coreName: 'Гермопост регулировщиков' },
+  { owner: ZoneFaction.CULTIST, label: 'культистов', x: 856, y: 734, coreName: 'Скрытый молельный светофор' },
+  { owner: ZoneFaction.SCIENTIST, label: 'ученых', x: 742, y: 286, coreName: 'Измерительный штаб разметки' },
+  { owner: ZoneFaction.WILD, label: 'диких', x: 152, y: 724, coreName: 'Разбитый штаб съезда' },
+];
+
+function roomMappedCellCount(world: World, room: Room): number {
+  let count = 0;
+  for (let dy = 0; dy < room.h; dy++) {
+    for (let dx = 0; dx < room.w; dx++) {
+      if (world.roomMap[world.idx(room.x + dx, room.y + dy)] === room.id) count++;
+    }
+  }
+  return count;
+}
+
+function retintRoom(world: World, room: Room, wallTex: Tex, floorTex: Tex): void {
+  room.wallTex = wallTex;
+  room.floorTex = floorTex;
+  for (let dy = -1; dy <= room.h; dy++) {
+    for (let dx = -1; dx <= room.w; dx++) {
+      const ci = world.idx(room.x + dx, room.y + dy);
+      if (dx >= 0 && dx < room.w && dy >= 0 && dy < room.h) {
+        if (world.roomMap[ci] === room.id) world.floorTex[ci] = floorTex;
+      } else if (world.cells[ci] === Cell.WALL) {
+        world.wallTex[ci] = wallTex;
+      }
+    }
+  }
+}
+
+function paintRoomOwnerCells(world: World, room: Room, owner: TerritoryOwner): void {
+  for (let dy = 0; dy < room.h; dy++) {
+    for (let dx = 0; dx < room.w; dx++) {
+      const ci = world.idx(room.x + dx, room.y + dy);
+      if (world.roomMap[ci] === room.id) world.factionControl[ci] = owner;
+    }
+  }
+  for (const doorIdx of room.doors) world.factionControl[doorIdx] = owner;
+}
+
+function hardenAuthoredHqCore(world: World, room: Room, owner: TerritoryOwner, name: string): void {
+  room.type = RoomType.HQ;
+  room.name = name;
+  room.sealed = true;
+  retintRoom(world, room, Tex.HERMO_WALL, Tex.F_CONCRETE);
+  paintRoomOwnerCells(world, room, owner);
+  for (let dy = -1; dy <= room.h; dy++) {
+    for (let dx = -1; dx <= room.w; dx++) {
+      if (dx >= 0 && dx < room.w && dy >= 0 && dy < room.h) continue;
+      const ci = world.idx(room.x + dx, room.y + dy);
+      if (world.cells[ci] !== Cell.WALL) continue;
+      world.hermoWall[ci] = 1;
+      world.wallTex[ci] = Tex.HERMO_WALL;
+    }
+  }
+  for (const doorIdx of room.doors) {
+    const door = world.doors.get(doorIdx);
+    if (!door) continue;
+    door.state = DoorState.HERMETIC_OPEN;
+    door.keyId = '';
+  }
+  setFeatureIfFloor(world, room.x + Math.floor(room.w / 2), room.y + Math.floor(room.h / 2), Feature.SCREEN);
+}
+
+function retuneSupportRoom(world: World, room: Room, owner: TerritoryOwner, label: string, index: number): void {
+  const pattern = [
+    { type: RoomType.KITCHEN, name: `Кухня штаба ${label}`, wall: Tex.PANEL, floor: Tex.F_TILE },
+    { type: RoomType.BATHROOM, name: `Санузел штаба ${label}`, wall: Tex.TILE_W, floor: Tex.F_TILE },
+    { type: RoomType.STORAGE, name: `Склад штаба ${label}`, wall: Tex.METAL, floor: Tex.F_CONCRETE },
+    { type: RoomType.MEDICAL, name: `Медпункт штаба ${label}`, wall: Tex.PANEL, floor: Tex.F_TILE },
+    { type: RoomType.OFFICE, name: `Канцелярия штаба ${label}`, wall: Tex.CONCRETE, floor: Tex.F_LINO },
+  ] as const;
+  const spec = pattern[index % pattern.length];
+  room.type = spec.type;
+  room.name = spec.name;
+  room.sealed = false;
+  retintRoom(world, room, spec.wall, spec.floor);
+  paintRoomOwnerCells(world, room, owner);
+  decorateBlockInteriorRoom(world, room, spec.type, () => 0.5);
+}
+
+function manhattanRoomCenter(room: Room): { x: number; y: number } {
+  return { x: room.x + Math.floor(room.w / 2), y: room.y + Math.floor(room.h / 2) };
+}
+
+function hqCandidateRooms(world: World, spec: ManhattanHqCampusSpec, used: Set<number>): Room[] {
+  return world.rooms
+    .filter(room =>
+      room &&
+      !used.has(room.id) &&
+      room.type !== RoomType.CORRIDOR &&
+      room.w >= 6 &&
+      room.h >= 6 &&
+      room.w * room.h <= 360 &&
+      roomMappedCellCount(world, room) >= 24 &&
+      (
+        room.name.startsWith('Внутренний квартал') ||
+        room.name.startsWith('Микролавка перекрестка') ||
+        room.name.includes('закрытая витрина') ||
+        room.name.includes('кладовая') ||
+        room.name.includes('касса')
+      )
+    )
+    .sort((a, b) => {
+      const ac = manhattanRoomCenter(a);
+      const bc = manhattanRoomCenter(b);
+      const ad = world.dist2(ac.x, ac.y, spec.x, spec.y);
+      const bd = world.dist2(bc.x, bc.y, spec.x, spec.y);
+      return ad - bd || a.id - b.id;
+    });
+}
+
+function claimManhattanHqCampuses(world: World): void {
+  const used = new Set<number>();
+  for (const spec of MANHATTAN_HQ_CAMPUSES) {
+    const candidates = hqCandidateRooms(world, spec, used);
+    const core = candidates.find(room => {
+      const c = manhattanRoomCenter(room);
+      return world.dist2(c.x, c.y, spec.x, spec.y) <= 230 * 230;
+    }) ?? candidates[0];
+    if (!core) continue;
+    used.add(core.id);
+    hardenAuthoredHqCore(world, core, spec.owner, spec.coreName);
+
+    let supportIndex = 0;
+    for (const room of candidates) {
+      if (supportIndex >= 5) break;
+      if (used.has(room.id)) continue;
+      const c = manhattanRoomCenter(room);
+      const cc = manhattanRoomCenter(core);
+      if (world.dist2(c.x, c.y, cc.x, cc.y) > 120 * 120) continue;
+      used.add(room.id);
+      retuneSupportRoom(world, room, spec.owner, spec.label, supportIndex++);
+    }
+  }
+  world.markWallTexDirty();
+  world.markFloorTexDirty();
+  world.markFeaturesDirty(false);
+}
+
+export function reinforceManhattanCrossroadsAuthoredHqTerritory(world: World): void {
+  for (const spec of MANHATTAN_HQ_CAMPUSES) {
+    for (const room of world.rooms) {
+      if (room.name === spec.coreName) hardenAuthoredHqCore(world, room, spec.owner, spec.coreName);
+      else if (room.name.includes(`штаба ${spec.label}`)) paintRoomOwnerCells(world, room, spec.owner);
+    }
+  }
+  world.markWallTexDirty();
+  world.markFloorTexDirty();
+  world.markFeaturesDirty(false);
+}
+
 export function expandManhattanCrossroadsRouteShell(world: World, rng: () => number): void {
   const roadRoom = logicalRoomByName(world, 'Асфальтовая сетка авеню', RoomType.CORRIDOR, ROAD_TEX);
   const sidewalkRoom = logicalRoomByName(world, 'Бордюры и служебные края', RoomType.COMMON, SIDEWALK_TEX);
   const markRoom = logicalRoomByName(world, CROSSWALK_ROOM_NAME, RoomType.MEDICAL, MARK_TEX);
   const shellSpans: readonly RoadSpan[] = [
-    { axis: 'vertical', center: 104, from: 32, to: W - 36, width: 9, name: 'Ложная западная авеню' },
-    { axis: 'vertical', center: 232, from: 32, to: W - 36, width: 9, name: 'Западная окраинная авеню' },
-    { axis: 'vertical', center: 344, from: 32, to: W - 36, width: AVENUE_WIDTH, name: 'Западная авеню' },
-    { axis: 'vertical', center: 512, from: 32, to: W - 36, width: AVENUE_WIDTH, name: 'Центральная авеню' },
-    { axis: 'vertical', center: 680, from: 32, to: W - 36, width: AVENUE_WIDTH, name: 'Восточная авеню' },
-    { axis: 'vertical', center: 792, from: 32, to: W - 36, width: 9, name: 'Крайняя восточная авеню' },
-    { axis: 'vertical', center: 920, from: 32, to: W - 36, width: 9, name: 'Ложная восточная авеню' },
-    { axis: 'horizontal', center: 104, from: 32, to: W - 36, width: 7, name: 'Северный фальшобъезд' },
-    { axis: 'horizontal', center: 232, from: 32, to: W - 36, width: STREET_WIDTH, name: 'Северный въезд' },
-    { axis: 'horizontal', center: 344, from: 32, to: W - 36, width: STREET_WIDTH, name: 'Северная улица' },
-    { axis: 'horizontal', center: 512, from: 32, to: W - 36, width: STREET_WIDTH, name: 'Главный кросс' },
-    { axis: 'horizontal', center: 680, from: 32, to: W - 36, width: STREET_WIDTH, name: 'Южная улица' },
-    { axis: 'horizontal', center: 792, from: 32, to: W - 36, width: STREET_WIDTH, name: 'Южный объезд' },
-    { axis: 'horizontal', center: 920, from: 32, to: W - 36, width: 7, name: 'Нижний фальшобъезд' },
+    { axis: 'vertical', center: 104, from: 0, to: W - 1, width: 9, name: 'Ложная западная авеню' },
+    { axis: 'vertical', center: 232, from: 0, to: W - 1, width: 9, name: 'Западная окраинная авеню' },
+    { axis: 'vertical', center: 344, from: 0, to: W - 1, width: AVENUE_WIDTH, name: 'Западная авеню' },
+    { axis: 'vertical', center: 512, from: 0, to: W - 1, width: AVENUE_WIDTH, name: 'Центральная авеню' },
+    { axis: 'vertical', center: 680, from: 0, to: W - 1, width: AVENUE_WIDTH, name: 'Восточная авеню' },
+    { axis: 'vertical', center: 792, from: 0, to: W - 1, width: 9, name: 'Крайняя восточная авеню' },
+    { axis: 'vertical', center: 920, from: 0, to: W - 1, width: 9, name: 'Ложная восточная авеню' },
+    { axis: 'horizontal', center: 104, from: 0, to: W - 1, width: 7, name: 'Северный фальшобъезд' },
+    { axis: 'horizontal', center: 232, from: 0, to: W - 1, width: STREET_WIDTH, name: 'Северный въезд' },
+    { axis: 'horizontal', center: 344, from: 0, to: W - 1, width: STREET_WIDTH, name: 'Северная улица' },
+    { axis: 'horizontal', center: 512, from: 0, to: W - 1, width: STREET_WIDTH, name: 'Главный кросс' },
+    { axis: 'horizontal', center: 680, from: 0, to: W - 1, width: STREET_WIDTH, name: 'Южная улица' },
+    { axis: 'horizontal', center: 792, from: 0, to: W - 1, width: STREET_WIDTH, name: 'Южный объезд' },
+    { axis: 'horizontal', center: 920, from: 0, to: W - 1, width: 7, name: 'Нижний фальшобъезд' },
   ];
 
   for (const span of shellSpans) carveRoadSpanSafe(world, span, roadRoom.id, sidewalkRoom.id);
@@ -1253,6 +1511,8 @@ export function expandManhattanCrossroadsRouteShell(world: World, rng: () => num
   placeBarrierRect(world, 98, 676, 7, 46);
   stampShellStorefronts(world, sidewalkRoom.id, rng);
   stampManhattanBlockInteriors(world, sidewalkRoom.id, rng);
+  stampStreetFrontageRooms(world, sidewalkRoom.id, shellSpans, rng);
+  claimManhattanHqCampuses(world);
   for (const [x, y] of [[104, 104], [920, 104], [104, 920], [920, 920], [512, 920], [920, 512]] as const) {
     placeSignalCluster(world, x, y);
   }

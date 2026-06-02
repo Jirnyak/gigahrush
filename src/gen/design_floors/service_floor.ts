@@ -22,11 +22,13 @@ import {
   type GameState,
   type Item,
   type Room,
+  type TerritoryOwner,
   type WorldContainer,
   type WorldEvent,
 } from '../../core/types';
 import { World } from '../../core/world';
 import { freshNeeds } from '../../data/catalog';
+import { factionToTerritoryOwner } from '../../data/factions';
 import { type PlotNpcDef, registerSideQuest } from '../../data/plot';
 import { MONSTERS } from '../../entities/monster';
 import { Spr } from '../../render/sprite_index';
@@ -34,6 +36,7 @@ import { publishEvent } from '../../systems/events';
 import { placeEmergencyPanel } from '../../systems/emergency_panels';
 import { registerRouteCue } from '../../systems/route_cues';
 import { randomRPG, scaleMonsterHp, scaleMonsterSpeed } from '../../systems/rpg';
+import { setTerritoryOwnerAtIndex } from '../../systems/territory';
 import { stampRoom } from '../shared';
 import type { FloorGeneration } from '../floor_manifest';
 
@@ -53,6 +56,109 @@ const DRAINAGE_BASIN_NW = 'Дренажный бассейн северо-зап
 const DRAINAGE_BASIN_NE = 'Дренажный бассейн северо-восточного кабельного фронта С-15';
 const DRAINAGE_BASIN_SW = 'Дренажный бассейн юго-западного кабельного фронта С-15';
 const DRAINAGE_BASIN_SE = 'Дренажный бассейн юго-восточного кабельного фронта С-15';
+
+type ServiceDoorSide = 'north' | 'south' | 'west' | 'east';
+
+interface ServiceRoomDoorSpec {
+  side: ServiceDoorSide;
+  targetX: number;
+  targetY: number;
+  state?: DoorState;
+  keyId?: string;
+}
+
+interface ServiceHqCompoundSpec {
+  owner: ZoneFaction;
+  label: string;
+  corridor: readonly [number, number, number, number];
+  route: readonly [number, number, number, number];
+  core: readonly [number, number, number, number, ServiceDoorSide, string];
+  supportPrefix: string;
+}
+
+interface ServiceBayRowSpec {
+  label: string;
+  owner: ZoneFaction;
+  typeSeed: number;
+  horizontal: boolean;
+  corridor: number;
+  start: number;
+  end: number;
+  side: -1 | 1;
+  step: number;
+  span: number;
+}
+
+const SERVICE_HQ_COMPOUNDS: readonly ServiceHqCompoundSpec[] = [
+  {
+    owner: ZoneFaction.CITIZEN,
+    label: 'Гражданский узел бытового обхода С-15',
+    corridor: [92, 270, 202, 270],
+    route: [202, 270, 244, 270],
+    core: [132, 248, 28, 13, 'south', 'Гражданский гермокор бытового обхода С-15'],
+    supportPrefix: 'Гражданский обход С-15',
+  },
+  {
+    owner: ZoneFaction.LIQUIDATOR,
+    label: 'Главный пост ликвидаторов С-15',
+    corridor: [566, 228, 744, 228],
+    route: [612, 228, 612, 188],
+    core: [638, 206, 34, 13, 'south', 'Гермопост ликвидаторов С-15'],
+    supportPrefix: 'Пост ликвидаторов С-15',
+  },
+  {
+    owner: ZoneFaction.SCIENTIST,
+    label: 'НИИ-служба измерения шахт С-15',
+    corridor: [832, 300, 972, 300],
+    route: [780, 300, 832, 300],
+    core: [884, 278, 28, 13, 'south', 'Гермолаборатория шахт С-15'],
+    supportPrefix: 'НИИ шахт С-15',
+  },
+  {
+    owner: ZoneFaction.CULTIST,
+    label: 'Скрытый культовый лаз С-15',
+    corridor: [86, 742, 214, 742],
+    route: [214, 742, 244, 742],
+    core: [138, 720, 28, 13, 'south', 'Скрытый культовый гермолаз С-15'],
+    supportPrefix: 'Культовый лаз С-15',
+  },
+  {
+    owner: ZoneFaction.WILD,
+    label: 'Дикий разборный лагерь С-15',
+    corridor: [830, 744, 972, 744],
+    route: [780, 744, 830, 744],
+    core: [884, 708, 30, 13, 'south', 'Разбитый гермокор диких С-15'],
+    supportPrefix: 'Дикий лагерь С-15',
+  },
+];
+
+const SERVICE_BAY_ROWS: readonly ServiceBayRowSpec[] = [
+  { label: 'Северная кабельная кассета', owner: ZoneFaction.LIQUIDATOR, typeSeed: 0, horizontal: true, corridor: 188, start: 268, end: 424, side: -1, step: 27, span: 12 },
+  { label: 'Северный ремонтный шкаф', owner: ZoneFaction.SCIENTIST, typeSeed: 3, horizontal: true, corridor: 188, start: 270, end: 420, side: 1, step: 26, span: 13 },
+  { label: 'Северо-восточная кабельная кассета', owner: ZoneFaction.LIQUIDATOR, typeSeed: 5, horizontal: true, corridor: 188, start: 604, end: 744, side: -1, step: 26, span: 12 },
+  { label: 'Верхняя венткамера', owner: ZoneFaction.SCIENTIST, typeSeed: 7, horizontal: true, corridor: 324, start: 270, end: 490, side: -1, step: 25, span: 12 },
+  { label: 'Пультовая верхнего пролёта', owner: ZoneFaction.LIQUIDATOR, typeSeed: 11, horizontal: true, corridor: 324, start: 542, end: 760, side: -1, step: 25, span: 12 },
+  { label: 'Нижняя венткамера', owner: ZoneFaction.WILD, typeSeed: 13, horizontal: true, corridor: 324, start: 270, end: 488, side: 1, step: 28, span: 13 },
+  { label: 'Запасной щиток пролёта', owner: ZoneFaction.LIQUIDATOR, typeSeed: 17, horizontal: true, corridor: 324, start: 544, end: 760, side: 1, step: 28, span: 13 },
+  { label: 'Западная насосная гряда', owner: ZoneFaction.WILD, typeSeed: 19, horizontal: true, corridor: 700, start: 270, end: 488, side: 1, step: 27, span: 13 },
+  { label: 'Восточная насосная гряда', owner: ZoneFaction.LIQUIDATOR, typeSeed: 23, horizontal: true, corridor: 700, start: 544, end: 760, side: 1, step: 27, span: 13 },
+  { label: 'Южная кабельная кассета', owner: ZoneFaction.LIQUIDATOR, typeSeed: 29, horizontal: true, corridor: 836, start: 270, end: 424, side: -1, step: 27, span: 12 },
+  { label: 'Южный ремонтный шкаф', owner: ZoneFaction.CULTIST, typeSeed: 31, horizontal: true, corridor: 836, start: 270, end: 424, side: 1, step: 27, span: 12 },
+  { label: 'Юго-восточная кабельная кассета', owner: ZoneFaction.LIQUIDATOR, typeSeed: 37, horizontal: true, corridor: 836, start: 604, end: 744, side: -1, step: 26, span: 12 },
+  { label: 'Южный склад обратного хода', owner: ZoneFaction.WILD, typeSeed: 41, horizontal: true, corridor: 836, start: 604, end: 744, side: 1, step: 26, span: 12 },
+  { label: 'Западный вертикальный обход', owner: ZoneFaction.CITIZEN, typeSeed: 43, horizontal: false, corridor: 244, start: 220, end: 804, side: -1, step: 31, span: 22 },
+  { label: 'Западная внутренняя полка', owner: ZoneFaction.LIQUIDATOR, typeSeed: 47, horizontal: false, corridor: 244, start: 220, end: 804, side: 1, step: 31, span: 22 },
+  { label: 'Центральная левая полка', owner: ZoneFaction.LIQUIDATOR, typeSeed: 53, horizontal: false, corridor: 520, start: 214, end: 806, side: -1, step: 29, span: 19 },
+  { label: 'Центральная правая полка', owner: ZoneFaction.SCIENTIST, typeSeed: 59, horizontal: false, corridor: 520, start: 214, end: 806, side: 1, step: 29, span: 19 },
+  { label: 'Восточная внутренняя полка', owner: ZoneFaction.LIQUIDATOR, typeSeed: 61, horizontal: false, corridor: 780, start: 220, end: 804, side: -1, step: 31, span: 22 },
+  { label: 'Восточный вертикальный обход', owner: ZoneFaction.WILD, typeSeed: 67, horizontal: false, corridor: 780, start: 220, end: 804, side: 1, step: 31, span: 22 },
+];
+
+const SERVICE_LIQUIDATOR_OUTPOST_NAMES = [
+  'Пост ликвидаторов у западной перемычки С-15',
+  'Пост ликвидаторов у восточной перемычки С-15',
+  'Караульная нижнего машинного кольца С-15',
+] as const;
 
 export type ServiceUtilityDomain = 'lift' | 'power' | 'water' | 'vent';
 export type ServiceUtilityFront = 'staff_safe' | 'machine_maze' | 'pressure_basin' | 'route_transfer';
@@ -933,6 +1039,10 @@ export function expandServiceFloorMachineMaze(
   carveCableTrench(world, 244, 590, 780, 590, rng);
 
   dressServiceRoutes(world, rng);
+  buildServiceHqCompounds(world);
+  buildLiquidatorServiceOutposts(world);
+  buildServiceBayRows(world, rng);
+  buildServiceBypassWallStations(world);
   registerExpandedServiceUtilityGraph(world, cores, booths, pumps, basins);
 }
 
@@ -1208,6 +1318,520 @@ function openRouteTile(world: World, x: number, y: number, floorTex = Tex.F_CONC
   world.cells[ci] = Cell.FLOOR;
   world.roomMap[ci] = -1;
   world.floorTex[ci] = floorTex;
+}
+
+function clampDoorCoord(v: number, lo: number, hi: number): number {
+  return Math.max(lo, Math.min(hi, Math.floor(v)));
+}
+
+function serviceOwnerWallTex(owner: ZoneFaction): Tex {
+  if (owner === ZoneFaction.SCIENTIST) return Tex.TILE_W;
+  if (owner === ZoneFaction.CULTIST) return Tex.DARK;
+  if (owner === ZoneFaction.WILD) return Tex.ROTTEN;
+  if (owner === ZoneFaction.CITIZEN) return Tex.PANEL;
+  return Tex.METAL;
+}
+
+function serviceOwnerFloorTex(owner: ZoneFaction): Tex {
+  if (owner === ZoneFaction.SCIENTIST) return Tex.F_TILE;
+  if (owner === ZoneFaction.CULTIST) return Tex.F_RED_CARPET;
+  if (owner === ZoneFaction.WILD) return Tex.F_CONCRETE;
+  if (owner === ZoneFaction.CITIZEN) return Tex.F_LINO;
+  return Tex.F_CONCRETE;
+}
+
+function serviceSupportType(owner: ZoneFaction, slot: number): RoomType {
+  if (slot === 0) return RoomType.KITCHEN;
+  if (slot === 1) return RoomType.BATHROOM;
+  if (slot === 2) return owner === ZoneFaction.SCIENTIST ? RoomType.MEDICAL : RoomType.STORAGE;
+  if (slot === 3) return owner === ZoneFaction.LIQUIDATOR || owner === ZoneFaction.SCIENTIST ? RoomType.OFFICE : RoomType.COMMON;
+  return owner === ZoneFaction.WILD ? RoomType.SMOKING : RoomType.STORAGE;
+}
+
+function serviceBayType(seed: number): RoomType {
+  const types = [
+    RoomType.PRODUCTION,
+    RoomType.STORAGE,
+    RoomType.OFFICE,
+    RoomType.BATHROOM,
+    RoomType.COMMON,
+    RoomType.KITCHEN,
+    RoomType.STORAGE,
+    RoomType.PRODUCTION,
+  ] as const;
+  return types[Math.abs(seed) % types.length];
+}
+
+function canStampOwnedServiceRoom(world: World, x: number, y: number, w: number, h: number): boolean {
+  if (x < 2 || y < 2 || x + w >= W - 2 || y + h >= W - 2) return false;
+  for (let dy = -1; dy <= h; dy++) {
+    for (let dx = -1; dx <= w; dx++) {
+      const idx = world.idx(x + dx, y + dy);
+      if (world.aptMask[idx]) return false;
+      if (world.cells[idx] !== Cell.WALL) return false;
+      if (dx >= 0 && dx < w && dy >= 0 && dy < h && world.roomMap[idx] >= 0) return false;
+    }
+  }
+  return true;
+}
+
+function paintServiceRoomOwner(world: World, room: Room, owner: ZoneFaction): void {
+  for (let dy = 0; dy < room.h; dy++) {
+    for (let dx = 0; dx < room.w; dx++) {
+      const idx = world.idx(room.x + dx, room.y + dy);
+      if (world.roomMap[idx] === room.id) setTerritoryOwnerAtIndex(world, idx, owner);
+    }
+  }
+  for (const idx of room.doors) setTerritoryOwnerAtIndex(world, idx, owner);
+}
+
+function hardenServiceHqRoom(world: World, room: Room, owner: ZoneFaction): void {
+  room.type = RoomType.HQ;
+  room.sealed = true;
+  room.wallTex = Tex.HERMO_WALL;
+  room.floorTex = serviceOwnerFloorTex(owner);
+  for (let dy = -1; dy <= room.h; dy++) {
+    for (let dx = -1; dx <= room.w; dx++) {
+      const idx = world.idx(room.x + dx, room.y + dy);
+      const interior = dx >= 0 && dx < room.w && dy >= 0 && dy < room.h;
+      if (interior) {
+        if (world.roomMap[idx] === room.id) world.floorTex[idx] = room.floorTex;
+        continue;
+      }
+      if (world.cells[idx] !== Cell.WALL || world.aptMask[idx]) continue;
+      world.hermoWall[idx] = 1;
+      world.wallTex[idx] = Tex.HERMO_WALL;
+    }
+  }
+  paintServiceRoomOwner(world, room, owner);
+}
+
+function decorateOwnedServiceRoom(world: World, room: Room, owner: ZoneFaction, salt: number): void {
+  if (room.type === RoomType.KITCHEN) {
+    setFeature(world, room.x + 2, room.y + 2, Feature.STOVE);
+    setFeature(world, room.x + room.w - 3, room.y + 2, Feature.SINK);
+    setFeature(world, room.x + (room.w >> 1), room.y + room.h - 3, Feature.TABLE);
+  } else if (room.type === RoomType.BATHROOM) {
+    setFeature(world, room.x + 2, room.y + 2, Feature.TOILET);
+    setFeature(world, room.x + room.w - 3, room.y + room.h - 3, Feature.SINK);
+  } else if (room.type === RoomType.MEDICAL) {
+    setFeature(world, room.x + 3, room.y + 2, Feature.APPARATUS);
+    setFeature(world, room.x + room.w - 4, room.y + room.h - 3, Feature.BED);
+  } else if (room.type === RoomType.OFFICE || room.type === RoomType.HQ) {
+    setFeature(world, room.x + 2, room.y + 2, Feature.DESK);
+    setFeature(world, room.x + 4, room.y + 2, Feature.SCREEN);
+    setFeature(world, room.x + room.w - 3, room.y + 2, Feature.SHELF);
+  } else if (room.type === RoomType.PRODUCTION) {
+    setFeature(world, room.x + 3, room.y + 2, Feature.MACHINE);
+    setFeature(world, room.x + room.w - 4, room.y + room.h - 3, Feature.APPARATUS);
+  } else {
+    setFeature(world, room.x + 2, room.y + 2, owner === ZoneFaction.CULTIST ? Feature.CANDLE : Feature.TABLE);
+    setFeature(world, room.x + room.w - 3, room.y + room.h - 3, Feature.SHELF);
+  }
+  setFeature(world, room.x + (room.w >> 1), room.y + (room.h >> 1), owner === ZoneFaction.CULTIST ? Feature.CANDLE : Feature.LAMP);
+  if (owner === ZoneFaction.WILD && (salt & 1) === 0) {
+    stampSurfaceSplat(world, room.x + (room.w >> 1), room.y + (room.h >> 1), 0.5, 0.5, 1.9, 0.16, salt * 977, 72, 54, 36);
+  }
+}
+
+function stampOwnedServiceRoom(
+  world: World,
+  type: RoomType,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  name: string,
+  owner: ZoneFaction,
+  protectedCore = false,
+): Room | undefined {
+  if (!canStampOwnedServiceRoom(world, x, y, w, h)) return undefined;
+  const room = stampServiceRoom(
+    world,
+    type,
+    x,
+    y,
+    w,
+    h,
+    name,
+    protectedCore ? Tex.HERMO_WALL : serviceOwnerWallTex(owner),
+    serviceOwnerFloorTex(owner),
+  );
+  if (protectedCore) hardenServiceHqRoom(world, room, owner);
+  else paintServiceRoomOwner(world, room, owner);
+  decorateOwnedServiceRoom(world, room, owner, room.id * 31 + x + y);
+  return room;
+}
+
+function connectOwnedServiceRoom(world: World, room: Room, owner: ZoneFaction, spec: ServiceRoomDoorSpec): void {
+  const state = spec.state ?? DoorState.CLOSED;
+  const keyId = spec.keyId ?? '';
+  let doorId = -1;
+  if (spec.side === 'north') {
+    doorId = connectRoomUp(
+      world,
+      room,
+      clampDoorCoord(spec.targetX, room.x + 1, room.x + room.w - 2),
+      spec.targetY,
+      state,
+      keyId,
+    );
+  } else if (spec.side === 'south') {
+    doorId = connectRoomDown(
+      world,
+      room,
+      clampDoorCoord(spec.targetX, room.x + 1, room.x + room.w - 2),
+      spec.targetY,
+      state,
+      keyId,
+    );
+  } else if (spec.side === 'west') {
+    doorId = connectRoomLeft(
+      world,
+      room,
+      spec.targetX,
+      clampDoorCoord(spec.targetY, room.y + 1, room.y + room.h - 2),
+      state,
+      keyId,
+    );
+  } else {
+    doorId = connectRoomRight(
+      world,
+      room,
+      spec.targetX,
+      clampDoorCoord(spec.targetY, room.y + 1, room.y + room.h - 2),
+      state,
+      keyId,
+    );
+  }
+  if (doorId >= 0) setTerritoryOwnerAtIndex(world, doorId, owner);
+  paintServiceRoomOwner(world, room, owner);
+}
+
+function carveOwnedServiceRun(
+  world: World,
+  ax: number,
+  ay: number,
+  bx: number,
+  by: number,
+  width: number,
+  owner: ZoneFaction,
+  floorTex: Tex,
+  wallTex: Tex,
+): void {
+  carveServiceRun(world, ax, ay, bx, by, width, floorTex, wallTex);
+  const half = width >> 1;
+  if (ay === by) {
+    const minX = Math.min(ax, bx);
+    const maxX = Math.max(ax, bx);
+    for (let y = ay - half; y <= ay + half; y++) {
+      for (let x = minX; x <= maxX; x++) {
+        const idx = world.idx(x, y);
+        if (world.cells[idx] === Cell.FLOOR || world.cells[idx] === Cell.WATER) {
+          setTerritoryOwnerAtIndex(world, idx, owner);
+        }
+      }
+    }
+    return;
+  }
+  const minY = Math.min(ay, by);
+  const maxY = Math.max(ay, by);
+  for (let y = minY; y <= maxY; y++) {
+    for (let x = ax - half; x <= ax + half; x++) {
+      const idx = world.idx(x, y);
+      if (world.cells[idx] === Cell.FLOOR || world.cells[idx] === Cell.WATER) {
+        setTerritoryOwnerAtIndex(world, idx, owner);
+      }
+    }
+  }
+}
+
+function serviceSupportName(prefix: string, type: RoomType, slot: number): string {
+  switch (type) {
+    case RoomType.KITCHEN: return `${prefix}: кухня ${slot}`;
+    case RoomType.BATHROOM: return `${prefix}: санузел ${slot}`;
+    case RoomType.MEDICAL: return `${prefix}: медпункт ${slot}`;
+    case RoomType.OFFICE: return `${prefix}: журнал ${slot}`;
+    case RoomType.PRODUCTION: return `${prefix}: мастерская ${slot}`;
+    case RoomType.SMOKING: return `${prefix}: курилка ${slot}`;
+    case RoomType.COMMON: return `${prefix}: общая ${slot}`;
+    case RoomType.STORAGE:
+    default: return `${prefix}: кладовая ${slot}`;
+  }
+}
+
+function buildServiceHqCompounds(world: World): void {
+  for (const spec of SERVICE_HQ_COMPOUNDS) {
+    const floorTex = serviceOwnerFloorTex(spec.owner);
+    const wallTex = serviceOwnerWallTex(spec.owner);
+    carveOwnedServiceRun(world, spec.route[0], spec.route[1], spec.route[2], spec.route[3], 3, spec.owner, floorTex, wallTex);
+    carveOwnedServiceRun(world, spec.corridor[0], spec.corridor[1], spec.corridor[2], spec.corridor[3], 3, spec.owner, floorTex, wallTex);
+
+    const [coreX, coreY, coreW, coreH, coreSide, coreName] = spec.core;
+    const core = stampOwnedServiceRoom(world, RoomType.HQ, coreX, coreY, coreW, coreH, coreName, spec.owner, true);
+    if (core) {
+      connectOwnedServiceRoom(world, core, spec.owner, {
+        side: coreSide,
+        targetX: core.x + (core.w >> 1),
+        targetY: spec.corridor[1],
+        state: DoorState.HERMETIC_OPEN,
+      });
+      hardenServiceHqRoom(world, core, spec.owner);
+    }
+
+    const x1 = Math.min(spec.corridor[0], spec.corridor[2]);
+    const x2 = Math.max(spec.corridor[0], spec.corridor[2]);
+    const y = spec.corridor[1];
+    const supportTypes = [0, 1, 2, 3, 4].map(slot => serviceSupportType(spec.owner, slot));
+    for (let i = 0; i < supportTypes.length; i++) {
+      const type = supportTypes[i];
+      const w = type === RoomType.KITCHEN || type === RoomType.MEDICAL || type === RoomType.OFFICE ? 18 : 15;
+      const h = 10;
+      const px = x1 + 6 + i * Math.max(19, Math.floor((x2 - x1 - 12) / Math.max(1, supportTypes.length)));
+      const above = (i & 1) === 0;
+      const roomY = above ? y - h - 5 : y + 5;
+      const room = stampOwnedServiceRoom(
+        world,
+        type,
+        px,
+        roomY,
+        w,
+        h,
+        serviceSupportName(spec.supportPrefix, type, i + 1),
+        spec.owner,
+      );
+      if (!room) continue;
+      connectOwnedServiceRoom(world, room, spec.owner, {
+        side: above ? 'south' : 'north',
+        targetX: room.x + (room.w >> 1),
+        targetY: y,
+      });
+    }
+  }
+}
+
+function buildLiquidatorServiceOutposts(world: World): void {
+  const posts = [
+    { name: SERVICE_LIQUIDATOR_OUTPOST_NAMES[0], x: 394, y: 410, w: 22, h: 12, side: 'south' as ServiceDoorSide, tx: 404, ty: 438 },
+    { name: SERVICE_LIQUIDATOR_OUTPOST_NAMES[1], x: 608, y: 410, w: 22, h: 12, side: 'south' as ServiceDoorSide, tx: 618, ty: 438 },
+    { name: SERVICE_LIQUIDATOR_OUTPOST_NAMES[2], x: 496, y: 716, w: 24, h: 12, side: 'north' as ServiceDoorSide, tx: 508, ty: 700 },
+  ] as const;
+  for (const post of posts) {
+    const room = stampOwnedServiceRoom(world, RoomType.HQ, post.x, post.y, post.w, post.h, post.name, ZoneFaction.LIQUIDATOR, true);
+    if (!room) continue;
+    connectOwnedServiceRoom(world, room, ZoneFaction.LIQUIDATOR, {
+      side: post.side,
+      targetX: post.tx,
+      targetY: post.ty,
+      state: DoorState.HERMETIC_OPEN,
+    });
+    hardenServiceHqRoom(world, room, ZoneFaction.LIQUIDATOR);
+  }
+}
+
+function buildServiceBayRows(world: World, rng: () => number): void {
+  let serial = 0;
+  for (const row of SERVICE_BAY_ROWS) {
+    for (let p = row.start; p <= row.end; p += row.step) {
+      const jitter = Math.floor(rng() * 5) - 2;
+      const type = serviceBayType(row.typeSeed + serial);
+      const span = row.span + ((serial + row.typeSeed) % 3);
+      let x: number;
+      let y: number;
+      let w: number;
+      let h: number;
+      let door: ServiceRoomDoorSpec;
+      if (row.horizontal) {
+        w = 12 + ((serial + row.typeSeed) % 4) * 3;
+        h = span;
+        x = p + jitter;
+        y = row.side < 0 ? row.corridor - h - 4 : row.corridor + 4;
+        door = {
+          side: row.side < 0 ? 'south' : 'north',
+          targetX: x + (w >> 1),
+          targetY: row.corridor,
+          state: type === RoomType.OFFICE && row.owner === ZoneFaction.LIQUIDATOR ? DoorState.LOCKED : DoorState.CLOSED,
+          keyId: type === RoomType.OFFICE && row.owner === ZoneFaction.LIQUIDATOR ? 'key' : '',
+        };
+      } else {
+        w = span;
+        h = 12 + ((serial + row.typeSeed) % 4) * 3;
+        x = row.side < 0 ? row.corridor - w - 4 : row.corridor + 4;
+        y = p + jitter;
+        door = {
+          side: row.side < 0 ? 'east' : 'west',
+          targetX: row.corridor,
+          targetY: y + (h >> 1),
+          state: type === RoomType.STORAGE && row.owner === ZoneFaction.WILD ? DoorState.LOCKED : DoorState.CLOSED,
+          keyId: type === RoomType.STORAGE && row.owner === ZoneFaction.WILD ? 'key' : '',
+        };
+      }
+      const room = stampOwnedServiceRoom(
+        world,
+        type,
+        x,
+        y,
+        w,
+        h,
+        `${row.label} ${serial + 1}`,
+        row.owner,
+      );
+      if (!room) {
+        serial++;
+        continue;
+      }
+      connectOwnedServiceRoom(world, room, row.owner, door);
+      serial++;
+    }
+  }
+}
+
+function carveServiceRoomBypassWall(world: World, room: Room, vertical: boolean, salt: number): void {
+  if (vertical) {
+    const x = room.x + (room.w >> 1);
+    for (let y = room.y + 6; y < room.y + room.h - 6; y++) {
+      if (y < room.y + 10 || y > room.y + room.h - 11) continue;
+      const idx = world.idx(x, y);
+      if (world.roomMap[idx] !== room.id) continue;
+      if (world.cells[idx] !== Cell.FLOOR && world.cells[idx] !== Cell.WATER) continue;
+      world.cells[idx] = Cell.WALL;
+      world.roomMap[idx] = -1;
+      world.wallTex[idx] = Tex.PIPE;
+      world.features[idx] = Feature.NONE;
+    }
+    setFeature(world, x - 2, room.y + 8 + (salt % 3), Feature.SCREEN);
+    setFeature(world, x + 2, room.y + room.h - 9 - (salt % 3), Feature.APPARATUS);
+    return;
+  }
+  const y = room.y + (room.h >> 1);
+  for (let x = room.x + 8; x < room.x + room.w - 8; x++) {
+    if (x < room.x + 13 || x > room.x + room.w - 14) continue;
+    const idx = world.idx(x, y);
+    if (world.roomMap[idx] !== room.id) continue;
+    if (world.cells[idx] !== Cell.FLOOR && world.cells[idx] !== Cell.WATER) continue;
+    world.cells[idx] = Cell.WALL;
+    world.roomMap[idx] = -1;
+    world.wallTex[idx] = Tex.PIPE;
+    world.features[idx] = Feature.NONE;
+  }
+  setFeature(world, room.x + 8 + (salt % 4), y - 2, Feature.SCREEN);
+  setFeature(world, room.x + room.w - 9 - (salt % 4), y + 2, Feature.APPARATUS);
+}
+
+function buildServiceBypassWallStations(world: World): void {
+  const rooms = [
+    findServiceRoom(world, DRAINAGE_BASIN_NW),
+    findServiceRoom(world, DRAINAGE_BASIN_NE),
+    findServiceRoom(world, DRAINAGE_BASIN_SW),
+    findServiceRoom(world, DRAINAGE_BASIN_SE),
+    findServiceRoom(world, 'Северо-западное лифтовое ядро С-15'),
+    findServiceRoom(world, 'Северо-восточное лифтовое ядро С-15'),
+    findServiceRoom(world, 'Юго-западное лифтовое ядро С-15'),
+    findServiceRoom(world, 'Юго-восточное лифтовое ядро С-15'),
+  ].filter((room): room is Room => room !== undefined);
+  for (let i = 0; i < rooms.length; i++) carveServiceRoomBypassWall(world, rooms[i], i % 2 === 0, i);
+
+  const booths = [
+    { x: 300, y: 424, side: 'south' as ServiceDoorSide, tx: 310, ty: 438, name: 'Будка обхода северо-западной стены С-15' },
+    { x: 668, y: 424, side: 'south' as ServiceDoorSide, tx: 678, ty: 438, name: 'Будка обхода северо-восточной стены С-15' },
+    { x: 342, y: 578, side: 'south' as ServiceDoorSide, tx: 352, ty: 590, name: 'Будка обхода юго-западной стены С-15' },
+    { x: 642, y: 578, side: 'south' as ServiceDoorSide, tx: 652, ty: 590, name: 'Будка обхода юго-восточной стены С-15' },
+  ] as const;
+  for (const booth of booths) {
+    const room = stampOwnedServiceRoom(world, RoomType.OFFICE, booth.x, booth.y, 20, 10, booth.name, ZoneFaction.LIQUIDATOR);
+    if (!room) continue;
+    connectOwnedServiceRoom(world, room, ZoneFaction.LIQUIDATOR, {
+      side: booth.side,
+      targetX: booth.tx,
+      targetY: booth.ty,
+      state: DoorState.CLOSED,
+    });
+  }
+}
+
+export function reinforceServiceFloorAuthoredHqTerritory(world: World): void {
+  for (const spec of SERVICE_HQ_COMPOUNDS) {
+    const coreName = spec.core[5];
+    for (const room of world.rooms) {
+      if (!room) continue;
+      if (room.name === coreName) {
+        hardenServiceHqRoom(world, room, spec.owner);
+        for (const doorIdx of room.doors) {
+          const door = world.doors.get(doorIdx);
+          if (!door) continue;
+          door.state = DoorState.HERMETIC_OPEN;
+          door.keyId = '';
+          setTerritoryOwnerAtIndex(world, doorIdx, spec.owner);
+        }
+      } else if (room.name.startsWith(`${spec.supportPrefix}:`)) {
+        paintServiceRoomOwner(world, room, spec.owner);
+      }
+    }
+  }
+  for (const name of SERVICE_LIQUIDATOR_OUTPOST_NAMES) {
+    const room = findServiceRoom(world, name);
+    if (!room) continue;
+    hardenServiceHqRoom(world, room, ZoneFaction.LIQUIDATOR);
+    for (const doorIdx of room.doors) {
+      const door = world.doors.get(doorIdx);
+      if (!door) continue;
+      door.state = DoorState.HERMETIC_OPEN;
+      door.keyId = '';
+      setTerritoryOwnerAtIndex(world, doorIdx, ZoneFaction.LIQUIDATOR);
+    }
+  }
+  world.markWallTexDirty();
+  world.markFloorTexDirty();
+  world.markFeaturesDirty(false);
+}
+
+function isServiceAmbientNpc(entity: Entity): boolean {
+  return entity.type === EntityType.NPC &&
+    !entity.plotNpcId &&
+    !entity.persistentNpcId &&
+    entity.alifeId === undefined &&
+    entity.questId === -1 &&
+    (entity.name?.startsWith('Служебный этаж: ремонтник ') ?? false);
+}
+
+function serviceTerritorySpawnCells(world: World): Map<TerritoryOwner, number[]> {
+  const cells = new Map<TerritoryOwner, number[]>([
+    [ZoneFaction.CITIZEN, []],
+    [ZoneFaction.LIQUIDATOR, []],
+    [ZoneFaction.CULTIST, []],
+    [ZoneFaction.SCIENTIST, []],
+    [ZoneFaction.WILD, []],
+  ]);
+  for (let i = 0; i < W * W; i++) {
+    const cell = world.cells[i];
+    if (cell !== Cell.FLOOR && cell !== Cell.WATER && cell !== Cell.DOOR) continue;
+    const list = cells.get(world.factionControl[i] as TerritoryOwner);
+    if (list) list.push(i);
+  }
+  return cells;
+}
+
+export function alignServiceFloorAmbientNpcTerritory(world: World, entities: Entity[]): void {
+  const cells = serviceTerritorySpawnCells(world);
+  const offsets = new Uint16Array(8);
+  for (const entity of entities) {
+    if (!isServiceAmbientNpc(entity) || entity.faction === undefined) continue;
+    const owner = factionToTerritoryOwner(entity.faction);
+    const list = cells.get(owner);
+    if (!list || list.length === 0) continue;
+    const offset = offsets[owner]++ | 0;
+    const cell = list[(entity.id * 127 + offset * 421) % list.length];
+    entity.x = (cell % W) + 0.5;
+    entity.y = ((cell / W) | 0) + 0.5;
+    entity.assignedRoomId = world.roomMap[cell] >= 0 ? world.roomMap[cell] : -1;
+    if (entity.ai) {
+      entity.ai.tx = cell % W;
+      entity.ai.ty = (cell / W) | 0;
+      entity.ai.path = [];
+      entity.ai.pi = 0;
+      entity.ai.stuck = 0;
+    }
+  }
 }
 
 function stampMachineCore(

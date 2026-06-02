@@ -5,6 +5,7 @@ import { W, Cell, DoorState, type Entity, type GameState } from '../core/types';
 import { World } from '../core/world';
 import { publishEvent } from './events';
 import { isPlayerEntity } from './player_actor';
+import { territoryOwnerAtIndex } from './territory';
 
 export { ContainerKind, Faction, FloorLevel, Occupation } from '../core/types';
 
@@ -147,8 +148,8 @@ function isFloorExit(world: World, idx: number): boolean {
 
 function targetDanger(world: World, idx: number): number {
   let danger = world.fog[idx] > 40 ? 2 : 0;
-  const zone = world.zones[world.zoneMap[idx]];
-  if (zone && zone.faction > 2) danger++;
+  const owner = territoryOwnerAtIndex(world, idx);
+  if (owner > 2) danger++;
   return danger;
 }
 

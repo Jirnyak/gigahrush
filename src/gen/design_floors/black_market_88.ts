@@ -24,11 +24,14 @@ import {
   type Entity,
   type Item,
   type Room,
+  type TerritoryOwner,
   type WorldContainer,
 } from '../../core/types';
 import { World } from '../../core/world';
 import { ITEMS, freshNeeds } from '../../data/catalog';
+import { factionToTerritoryOwner } from '../../data/factions';
 import { type PlotNpcDef, type SideQuestStep, registerSideQuest } from '../../data/plot';
+import { syncZoneMetadataFromTerritory } from '../../systems/territory';
 import { generateZones, sanitizeDoors, stampRoom } from '../shared';
 import type { FloorGeneration } from '../floor_manifest';
 
@@ -937,6 +940,57 @@ interface Market88BazaarRooms {
   coldStorage: Room | null;
 }
 
+interface Market88RoomPlacement {
+  room: Room;
+  side: Market88RoomSide;
+  targetX: number;
+  targetY: number;
+  doorState: DoorState;
+  keyId: string;
+}
+
+interface Market88HqClusterSpec {
+  owner: ZoneFaction;
+  hqName: string;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  side: Market88RoomSide;
+  targetX: number;
+  targetY: number;
+  wallTex: Tex;
+  floorTex: Tex;
+  support: readonly {
+    name: string;
+    type: RoomType;
+    x: number;
+    y: number;
+    w: number;
+    h: number;
+    side: Market88RoomSide;
+    targetX: number;
+    targetY: number;
+    wallTex: Tex;
+    floorTex: Tex;
+  }[];
+}
+
+interface Market88MidBlockSpec {
+  name: string;
+  type: RoomType;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  side: Market88RoomSide;
+  targetX: number;
+  targetY: number;
+  wallTex: Tex;
+  floorTex: Tex;
+  doorState?: DoorState;
+}
+
 const MARKET88_WEST = 136;
 const MARKET88_EAST = W - 136;
 const MARKET88_NORTH = 344;
@@ -950,6 +1004,95 @@ const MARKET88_STALL_NAMES = [
   'Стол чужих документов 88',
   'Занавес обмена 88',
   'Склад без вывески 88',
+] as const;
+
+export const MARKET88_HQ_ROOM_NAMES = {
+  citizen: 'Гермокасса гражданского обмена 88',
+  liquidator: 'Гермопост рейдового досмотра 88',
+  cultist: 'Гермосвечная долгового шепота 88',
+  scientist: 'Гермолаборатория ценового шума 88',
+  wild: 'Гермобарак диких поставщиков 88',
+} as const;
+
+const MARKET88_HQ_CLUSTERS: readonly Market88HqClusterSpec[] = [
+  {
+    owner: ZoneFaction.CITIZEN,
+    hqName: MARKET88_HQ_ROOM_NAMES.citizen,
+    x: 224, y: 214, w: 24, h: 14,
+    side: 'south', targetX: 236, targetY: 280,
+    wallTex: Tex.HERMO_WALL, floorTex: Tex.F_LINO,
+    support: [
+      { name: 'Кухня гражданской очереди 88', type: RoomType.KITCHEN, x: 192, y: 238, w: 22, h: 12, side: 'east', targetX: 224, targetY: 260, wallTex: Tex.TILE_W, floorTex: Tex.F_TILE },
+      { name: 'Общая комната обменщиков 88', type: RoomType.COMMON, x: 256, y: 238, w: 26, h: 12, side: 'west', targetX: 248, targetY: 260, wallTex: Tex.PANEL, floorTex: Tex.F_LINO },
+      { name: 'Санузел входной кассы 88', type: RoomType.BATHROOM, x: 196, y: 196, w: 16, h: 10, side: 'south', targetX: 224, targetY: 238, wallTex: Tex.TILE_W, floorTex: Tex.F_TILE },
+      { name: 'Склад честных талонов 88', type: RoomType.STORAGE, x: 288, y: 214, w: 22, h: 10, side: 'west', targetX: 282, targetY: 238, wallTex: Tex.METAL, floorTex: Tex.F_CONCRETE },
+    ],
+  },
+  {
+    owner: ZoneFaction.LIQUIDATOR,
+    hqName: MARKET88_HQ_ROOM_NAMES.liquidator,
+    x: 764, y: 214, w: 26, h: 14,
+    side: 'south', targetX: 778, targetY: 280,
+    wallTex: Tex.HERMO_WALL, floorTex: Tex.F_CONCRETE,
+    support: [
+      { name: 'Оружейная рейдового досмотра 88', type: RoomType.STORAGE, x: 724, y: 236, w: 28, h: 12, side: 'east', targetX: 764, targetY: 260, wallTex: Tex.METAL, floorTex: Tex.F_CONCRETE },
+      { name: 'Комната протокола задвижек 88', type: RoomType.OFFICE, x: 804, y: 236, w: 28, h: 12, side: 'west', targetX: 790, targetY: 260, wallTex: Tex.MARBLE, floorTex: Tex.F_GREEN_CARPET },
+      { name: 'Медшкаф рейдовой смены 88', type: RoomType.MEDICAL, x: 724, y: 194, w: 22, h: 10, side: 'south', targetX: 764, targetY: 238, wallTex: Tex.TILE_W, floorTex: Tex.F_TILE },
+      { name: 'Санузел поста досмотра 88', type: RoomType.BATHROOM, x: 806, y: 194, w: 18, h: 10, side: 'south', targetX: 790, targetY: 238, wallTex: Tex.TILE_W, floorTex: Tex.F_TILE },
+    ],
+  },
+  {
+    owner: ZoneFaction.CULTIST,
+    hqName: MARKET88_HQ_ROOM_NAMES.cultist,
+    x: 196, y: 798, w: 24, h: 14,
+    side: 'north', targetX: 208, targetY: 760,
+    wallTex: Tex.HERMO_WALL, floorTex: Tex.F_RED_CARPET,
+    support: [
+      { name: 'Свечная кухня долгов 88', type: RoomType.KITCHEN, x: 160, y: 824, w: 24, h: 12, side: 'east', targetX: 196, targetY: 814, wallTex: Tex.DARK, floorTex: Tex.F_GREEN_CARPET },
+      { name: 'Исповедальня чужой сдачи 88', type: RoomType.COMMON, x: 232, y: 824, w: 26, h: 12, side: 'west', targetX: 220, targetY: 814, wallTex: Tex.DARK, floorTex: Tex.F_RED_CARPET },
+      { name: 'Склад копченых расписок 88', type: RoomType.STORAGE, x: 158, y: 782, w: 24, h: 10, side: 'east', targetX: 196, targetY: 798, wallTex: Tex.ROTTEN, floorTex: Tex.F_CONCRETE },
+      { name: 'Санузел свечной очереди 88', type: RoomType.BATHROOM, x: 236, y: 782, w: 18, h: 10, side: 'west', targetX: 220, targetY: 798, wallTex: Tex.TILE_W, floorTex: Tex.F_TILE },
+    ],
+  },
+  {
+    owner: ZoneFaction.SCIENTIST,
+    hqName: MARKET88_HQ_ROOM_NAMES.scientist,
+    x: 764, y: 798, w: 26, h: 14,
+    side: 'north', targetX: 778, targetY: 760,
+    wallTex: Tex.HERMO_WALL, floorTex: Tex.F_CONCRETE,
+    support: [
+      { name: 'Лаборатория серого спроса 88', type: RoomType.PRODUCTION, x: 724, y: 824, w: 30, h: 12, side: 'east', targetX: 764, targetY: 814, wallTex: Tex.PIPE, floorTex: Tex.F_CONCRETE },
+      { name: 'Медкабинет ценового шума 88', type: RoomType.MEDICAL, x: 804, y: 824, w: 28, h: 12, side: 'west', targetX: 790, targetY: 814, wallTex: Tex.TILE_W, floorTex: Tex.F_TILE },
+      { name: 'Кабинет измерения дефицита 88', type: RoomType.OFFICE, x: 724, y: 782, w: 28, h: 10, side: 'east', targetX: 764, targetY: 798, wallTex: Tex.MARBLE, floorTex: Tex.F_PARQUET },
+      { name: 'Склад мерных фильтров 88', type: RoomType.STORAGE, x: 806, y: 782, w: 24, h: 10, side: 'west', targetX: 790, targetY: 798, wallTex: Tex.METAL, floorTex: Tex.F_CONCRETE },
+    ],
+  },
+  {
+    owner: ZoneFaction.WILD,
+    hqName: MARKET88_HQ_ROOM_NAMES.wild,
+    x: 486, y: 802, w: 34, h: 18,
+    side: 'north', targetX: 504, targetY: 760,
+    wallTex: Tex.HERMO_WALL, floorTex: Tex.F_CONCRETE,
+    support: [
+      { name: 'Кухня диких поставщиков 88', type: RoomType.KITCHEN, x: 448, y: 830, w: 28, h: 14, side: 'east', targetX: 486, targetY: 820, wallTex: Tex.TILE_W, floorTex: Tex.F_TILE },
+      { name: 'Общак ночной выдачи 88', type: RoomType.COMMON, x: 532, y: 830, w: 30, h: 14, side: 'west', targetX: 520, targetY: 820, wallTex: Tex.PANEL, floorTex: Tex.F_LINO },
+      { name: 'Западный герморазвал диких 88', type: RoomType.HQ, x: 88, y: 736, w: 22, h: 12, side: 'east', targetX: 136, targetY: 744, wallTex: Tex.HERMO_WALL, floorTex: Tex.F_CONCRETE },
+      { name: 'Восточный герморазвал диких 88', type: RoomType.HQ, x: 920, y: 736, w: 22, h: 12, side: 'west', targetX: MARKET88_EAST, targetY: 744, wallTex: Tex.HERMO_WALL, floorTex: Tex.F_CONCRETE },
+      { name: 'Склад грязной партии 88', type: RoomType.STORAGE, x: 448, y: 782, w: 30, h: 12, side: 'east', targetX: 486, targetY: 802, wallTex: Tex.BRICK, floorTex: Tex.F_CONCRETE },
+      { name: 'Санузел барака поставщиков 88', type: RoomType.BATHROOM, x: 536, y: 782, w: 18, h: 10, side: 'west', targetX: 520, targetY: 802, wallTex: Tex.TILE_W, floorTex: Tex.F_TILE },
+    ],
+  },
+] as const;
+
+const MARKET88_MID_BLOCKS: readonly Market88MidBlockSpec[] = [
+  { name: 'Северная биржа краденых тюков 88', type: RoomType.COMMON, x: 344, y: 222, w: 46, h: 24, side: 'south', targetX: 368, targetY: 280, wallTex: Tex.METAL, floorTex: Tex.F_CONCRETE, doorState: DoorState.OPEN },
+  { name: 'Северный зал поддельной гарантии 88', type: RoomType.OFFICE, x: 594, y: 222, w: 44, h: 24, side: 'south', targetX: 616, targetY: 280, wallTex: Tex.MARBLE, floorTex: Tex.F_GREEN_CARPET, doorState: DoorState.CLOSED },
+  { name: 'Южная биржа мокрых фильтров 88', type: RoomType.COMMON, x: 316, y: 830, w: 46, h: 22, side: 'north', targetX: 338, targetY: 760, wallTex: Tex.BRICK, floorTex: Tex.F_LINO, doorState: DoorState.OPEN },
+  { name: 'Южный архив без накладных 88', type: RoomType.STORAGE, x: 628, y: 830, w: 44, h: 22, side: 'north', targetX: 650, targetY: 760, wallTex: Tex.METAL, floorTex: Tex.F_CONCRETE, doorState: DoorState.CLOSED },
+  { name: 'Западный двор шепотной приемки 88', type: RoomType.COMMON, x: 34, y: 424, w: 34, h: 30, side: 'east', targetX: 56, targetY: 438, wallTex: Tex.PANEL, floorTex: Tex.F_LINO, doorState: DoorState.OPEN },
+  { name: 'Восточный двор сухих имен 88', type: RoomType.COMMON, x: 956, y: 424, w: 28, h: 30, side: 'west', targetX: 968, targetY: 438, wallTex: Tex.PANEL, floorTex: Tex.F_LINO, doorState: DoorState.OPEN },
+  { name: 'Западная станция чужого веса 88', type: RoomType.PRODUCTION, x: 34, y: 560, w: 34, h: 28, side: 'east', targetX: 56, targetY: 574, wallTex: Tex.PIPE, floorTex: Tex.F_CONCRETE, doorState: DoorState.CLOSED },
+  { name: 'Восточная станция рейдовой тишины 88', type: RoomType.PRODUCTION, x: 956, y: 560, w: 28, h: 28, side: 'west', targetX: 968, targetY: 574, wallTex: Tex.PIPE, floorTex: Tex.F_CONCRETE, doorState: DoorState.CLOSED },
 ] as const;
 
 export const MARKET88_HUB_DEGREE_CAP = 5;
@@ -998,12 +1141,19 @@ export const MARKET88_RAID_SHUTTER_GATES = [
 export function expandBlackMarket88Bazaar(world: World, rng: () => number): void {
   const rooms = addBazaarLandmarks(world);
   const serviceGuts = addBazaarServiceGuts(world, rng);
+  const hqRooms = addBazaarHqCompounds(world);
+  const midBlocks = addBazaarMidBlocks(world, rng);
+  const microRooms = addBazaarMicroRooms(world, rng);
   const stalls = addBazaarStallRooms(world, rng);
 
   carveBazaarAlleys(world);
+  carveBazaarOuterRings(world);
   carveBazaarHubChords(world);
   connectBazaarLandmarks(world, rooms);
   connectBazaarServiceGuts(world, serviceGuts);
+  connectBazaarRoomPlacements(world, hqRooms);
+  connectBazaarRoomPlacements(world, midBlocks);
+  connectBazaarRoomPlacements(world, microRooms);
   connectStallsToAlleys(world, stalls);
   addRaidShutters(world);
   decorateBazaarLandmarks(world, rooms);
@@ -1011,6 +1161,7 @@ export function expandBlackMarket88Bazaar(world: World, rng: () => number): void
   decorateBazaarServiceGuts(world, serviceGuts, rng);
   decorateSmugglingTunnels(world);
   seedBazaarCaches(world, rooms, serviceGuts);
+  seedBazaarExpansionCaches(world);
 }
 
 function addBazaarLandmarks(world: World): Market88BazaarRooms {
@@ -1074,6 +1225,109 @@ function addBazaarServiceGuts(world: World, rng: () => number): Market88ServiceG
   return placements;
 }
 
+function addBazaarHqCompounds(world: World): Market88RoomPlacement[] {
+  const placements: Market88RoomPlacement[] = [];
+  for (const spec of MARKET88_HQ_CLUSTERS) {
+    const hq = tryBazaarRoom(world, RoomType.HQ, spec.x, spec.y, spec.w, spec.h, spec.hqName, spec.wallTex, spec.floorTex);
+    if (hq) {
+      hq.sealed = true;
+      paintBazaarRoomOwner(world, hq, spec.owner);
+      paintBazaarOwnerPatch(world, hq.x + (hq.w >> 1), hq.y + (hq.h >> 1), spec.owner, spec.owner === ZoneFaction.WILD ? 32 : 24);
+      decorateBazaarOwnedRoom(world, hq, spec.owner, hq.id);
+      placements.push({ room: hq, side: spec.side, targetX: spec.targetX, targetY: spec.targetY, doorState: DoorState.HERMETIC_OPEN, keyId: '' });
+    }
+    for (const support of spec.support) {
+      const room = tryBazaarRoom(world, support.type, support.x, support.y, support.w, support.h, support.name, support.wallTex, support.floorTex);
+      if (!room) continue;
+      if (support.type === RoomType.HQ) room.sealed = true;
+      paintBazaarRoomOwner(world, room, spec.owner);
+      decorateBazaarOwnedRoom(world, room, spec.owner, room.id);
+      placements.push({
+        room,
+        side: support.side,
+        targetX: support.targetX,
+        targetY: support.targetY,
+        doorState: support.type === RoomType.HQ ? DoorState.HERMETIC_OPEN : support.type === RoomType.STORAGE ? DoorState.CLOSED : DoorState.OPEN,
+        keyId: '',
+      });
+    }
+  }
+  return placements;
+}
+
+function addBazaarMidBlocks(world: World, rng: () => number): Market88RoomPlacement[] {
+  const placements: Market88RoomPlacement[] = [];
+  for (const spec of MARKET88_MID_BLOCKS) {
+    const room = tryBazaarRoom(world, spec.type, spec.x, spec.y, spec.w, spec.h, spec.name, spec.wallTex, spec.floorTex);
+    if (!room) continue;
+    decorateStallRoom(world, room, rng, spec.type === RoomType.STORAGE || spec.type === RoomType.PRODUCTION);
+    placements.push({
+      room,
+      side: spec.side,
+      targetX: spec.targetX,
+      targetY: spec.targetY,
+      doorState: spec.doorState ?? DoorState.CLOSED,
+      keyId: '',
+    });
+  }
+  return placements;
+}
+
+function addBazaarMicroRooms(world: World, rng: () => number): Market88RoomPlacement[] {
+  const placements: Market88RoomPlacement[] = [];
+  let serial = 1;
+  const addMicro = (
+    prefix: string,
+    type: RoomType,
+    x: number,
+    y: number,
+    w: number,
+    h: number,
+    side: Market88RoomSide,
+    targetX: number,
+    targetY: number,
+    wallTex: Tex,
+    floorTex: Tex,
+  ): void => {
+    const room = tryBazaarRoom(world, type, x, y, w, h, `${prefix} ${serial++}`, wallTex, floorTex);
+    if (!room) return;
+    decorateStallRoom(world, room, rng, type === RoomType.STORAGE);
+    placements.push({
+      room,
+      side,
+      targetX,
+      targetY,
+      doorState: type === RoomType.STORAGE ? DoorState.CLOSED : DoorState.OPEN,
+      keyId: '',
+    });
+  };
+
+  for (let x = 148; x <= 870; x += 26) {
+    const upperType = serial % 6 === 0 ? RoomType.STORAGE : RoomType.COMMON;
+    const lowerType = serial % 7 === 0 ? RoomType.STORAGE : RoomType.COMMON;
+    addMicro('Микролавка северной верхней дуги 88', upperType, x + Math.floor(rng() * 3), 252 + Math.floor(rng() * 2), 6 + (serial % 3), 5 + (serial % 2), 'south', x + 4, 280, Tex.PANEL, upperType === RoomType.STORAGE ? Tex.F_CONCRETE : Tex.F_LINO);
+    addMicro('Микросклад северной нижней дуги 88', lowerType, x + 11 + Math.floor(rng() * 3), 292 + Math.floor(rng() * 2), 6 + (serial % 3), 5 + (serial % 2), 'north', x + 14, 280, Tex.METAL, lowerType === RoomType.STORAGE ? Tex.F_CONCRETE : Tex.F_LINO);
+  }
+
+  for (let x = 148; x <= 870; x += 26) {
+    const upperType = serial % 5 === 0 ? RoomType.STORAGE : RoomType.COMMON;
+    const lowerType = serial % 8 === 0 ? RoomType.STORAGE : RoomType.COMMON;
+    addMicro('Микролавка южной верхней дуги 88', upperType, x + Math.floor(rng() * 3), 724 + Math.floor(rng() * 2), 6 + (serial % 3), 5 + (serial % 2), 'south', x + 4, 760, Tex.PANEL, upperType === RoomType.STORAGE ? Tex.F_CONCRETE : Tex.F_LINO);
+    addMicro('Микросклад южной нижней дуги 88', lowerType, x + 11 + Math.floor(rng() * 3), 776 + Math.floor(rng() * 2), 6 + (serial % 3), 5 + (serial % 2), 'north', x + 14, 760, Tex.BRICK, lowerType === RoomType.STORAGE ? Tex.F_CONCRETE : Tex.F_LINO);
+  }
+
+  for (let y = 344; y <= 694; y += 28) {
+    const westType = serial % 5 === 0 ? RoomType.STORAGE : RoomType.COMMON;
+    const eastType = serial % 6 === 0 ? RoomType.STORAGE : RoomType.COMMON;
+    addMicro('Западная микронить приемки 88', westType, 14 + Math.floor(rng() * 2), y + Math.floor(rng() * 3), 7, 6, 'east', 56, y + 3, Tex.PANEL, westType === RoomType.STORAGE ? Tex.F_CONCRETE : Tex.F_LINO);
+    addMicro('Западная внутренняя микроклетка 88', RoomType.COMMON, 72 + Math.floor(rng() * 2), y + 10 + Math.floor(rng() * 3), 7, 6, 'west', 56, y + 12, Tex.METAL, Tex.F_CONCRETE);
+    addMicro('Восточная внутренняя микроклетка 88', RoomType.COMMON, 944 + Math.floor(rng() * 2), y + 10 + Math.floor(rng() * 3), 7, 6, 'east', 968, y + 12, Tex.METAL, Tex.F_CONCRETE);
+    addMicro('Восточная микронить приемки 88', eastType, 986 + Math.floor(rng() * 2), y + Math.floor(rng() * 3), 7, 6, 'west', 968, y + 3, Tex.PANEL, eastType === RoomType.STORAGE ? Tex.F_CONCRETE : Tex.F_LINO);
+  }
+
+  return placements;
+}
+
 function addBazaarStallRooms(world: World, rng: () => number): Market88StallPlacement[] {
   const placements: Market88StallPlacement[] = [];
   for (let row = 0; row < MARKET88_LANE_Y.length; row++) {
@@ -1113,6 +1367,22 @@ function carveBazaarAlleys(world: World): void {
   carveMarketLine(world, 535, 508, MARKET88_EAST, 628, 1, Tex.F_LINO);
   carveMarketLine(world, 484, 504, MARKET88_WEST + 28, 632, 1, Tex.F_LINO);
   carveMarketLine(world, 620, 444, 724, MARKET88_NORTH, 1, Tex.F_LINO);
+}
+
+function carveBazaarOuterRings(world: World): void {
+  carveMarketLine(world, 144, 280, 888, 280, 2, Tex.F_CONCRETE);
+  carveMarketLine(world, 144, 760, 888, 760, 2, Tex.F_CONCRETE);
+  carveMarketLine(world, 56, 344, 56, 720, 2, Tex.F_LINO);
+  carveMarketLine(world, 968, 344, 968, 720, 2, Tex.F_LINO);
+
+  for (const x of [184, 280, 376, 472, 568, 664, 760, 856]) {
+    carveMarketLine(world, x, 280, x, MARKET88_NORTH, 1, Tex.F_CONCRETE);
+    carveMarketLine(world, x, MARKET88_SOUTH, x, 760, 1, Tex.F_CONCRETE);
+  }
+  for (const y of [384, 500, 628]) {
+    carveMarketLine(world, 56, y, MARKET88_WEST, y, 1, Tex.F_LINO);
+    carveMarketLine(world, MARKET88_EAST, y, 968, y, 1, Tex.F_LINO);
+  }
 }
 
 function carveBazaarHubChords(world: World): void {
@@ -1183,6 +1453,12 @@ function connectBazaarServiceGuts(world: World, placements: Market88ServiceGutPl
       placement.storage ? DoorState.LOCKED : DoorState.HERMETIC_CLOSED,
       placement.storage ? 'key' : '',
     );
+  }
+}
+
+function connectBazaarRoomPlacements(world: World, placements: readonly Market88RoomPlacement[]): void {
+  for (const placement of placements) {
+    connectRoomToPoint(world, placement.room, placement.side, placement.targetX, placement.targetY, placement.doorState, placement.keyId);
   }
 }
 
@@ -1265,6 +1541,47 @@ function decorateBazaarServiceGuts(world: World, placements: Market88ServiceGutP
     if (!placements[i].storage && room.w > 10) setMarketFeature(world, room.x + room.w - 4, room.y + room.h - 4, Feature.APPARATUS);
     if (i % 3 === 0) setMarketFeature(world, room.x + 3, room.y + room.h - 3, Feature.CANDLE);
   }
+}
+
+function decorateBazaarOwnedRoom(world: World, room: Room, owner: ZoneFaction, salt: number): void {
+  if (room.type === RoomType.BATHROOM) {
+    setMarketFeature(world, room.x + 2, room.y + 2, Feature.SINK);
+    setMarketFeature(world, room.x + Math.max(3, room.w - 3), room.y + Math.max(3, room.h - 3), Feature.TOILET);
+    return;
+  }
+  if (room.type === RoomType.KITCHEN) {
+    setMarketFeature(world, room.x + 2, room.y + 2, Feature.SINK);
+    setMarketFeature(world, room.x + Math.max(3, room.w - 4), room.y + 2, Feature.TABLE);
+    setMarketFeature(world, room.x + (room.w >> 1), room.y + Math.max(3, room.h - 3), Feature.SHELF);
+    return;
+  }
+  if (room.type === RoomType.MEDICAL) {
+    setMarketFeature(world, room.x + 2, room.y + 2, Feature.APPARATUS);
+    setMarketFeature(world, room.x + Math.max(3, room.w - 4), room.y + 2, Feature.SHELF);
+    setMarketFeature(world, room.x + (room.w >> 1), room.y + Math.max(3, room.h - 3), Feature.LAMP);
+    return;
+  }
+  if (room.type === RoomType.PRODUCTION) {
+    setMarketFeature(world, room.x + 2, room.y + 2, Feature.MACHINE);
+    setMarketFeature(world, room.x + Math.max(3, room.w - 4), room.y + Math.max(3, room.h - 3), Feature.APPARATUS);
+    return;
+  }
+  if (room.type === RoomType.STORAGE) {
+    decorateStallRoom(world, room, () => ((salt * 37) % 100) / 100, true);
+    return;
+  }
+  if (room.type === RoomType.HQ) {
+    setMarketFeature(world, room.x + 3, room.y + 2, owner === ZoneFaction.CULTIST ? Feature.CANDLE : Feature.SCREEN);
+    setMarketFeature(world, room.x + Math.max(4, room.w - 4), room.y + 2, Feature.DESK);
+    setMarketFeature(world, room.x + (room.w >> 1), room.y + Math.max(4, room.h - 4), owner === ZoneFaction.WILD ? Feature.SHELF : Feature.LAMP);
+    if (owner === ZoneFaction.CULTIST) {
+      stampSurfaceSplat(world, room.x + (room.w >> 1), room.y + (room.h >> 1), 0.5, 0.5, 3, 0.2, 88200 + salt, 118, 42, 164, true);
+    }
+    return;
+  }
+  setMarketFeature(world, room.x + 2, room.y + 2, Feature.TABLE);
+  setMarketFeature(world, room.x + Math.max(3, room.w - 4), room.y + 2, Feature.SHELF);
+  setMarketFeature(world, room.x + (room.w >> 1), room.y + Math.max(3, room.h - 3), owner === ZoneFaction.CULTIST ? Feature.CANDLE : Feature.LAMP);
 }
 
 function decorateSmugglingTunnels(world: World): void {
@@ -1376,6 +1693,214 @@ function seedBazaarCaches(world: World, rooms: Market88BazaarRooms, serviceGuts:
   }
 }
 
+function seedBazaarExpansionCaches(world: World): void {
+  const cacheDefs: readonly {
+    roomName: string;
+    name: string;
+    kind: ContainerKind;
+    access: ContainerAccess;
+    inventory: Item[];
+    tags: string[];
+    owner: ZoneFaction;
+    lockDifficulty?: number;
+    discovered?: boolean;
+  }[] = [
+    {
+      roomName: 'Склад честных талонов 88',
+      name: 'Ящик гражданских талонов 88',
+      kind: ContainerKind.METAL_CABINET,
+      access: 'faction',
+      inventory: [{ defId: 'water_coupon', count: 2 }, { defId: 'bread', count: 2 }, { defId: 'voluntary_receipt', count: 1 }],
+      tags: ['market88', 'hq_support', 'citizen', 'ration'],
+      owner: ZoneFaction.CITIZEN,
+      lockDifficulty: 3,
+    },
+    {
+      roomName: 'Оружейная рейдового досмотра 88',
+      name: 'Шкаф рейдового досмотра 88',
+      kind: ContainerKind.TOOL_LOCKER,
+      access: 'faction',
+      inventory: [{ defId: 'ammo_9mm', count: 12 }, { defId: 'door_kit', count: 1 }, { defId: 'liquidator_token', count: 1 }],
+      tags: ['market88', 'hq_support', 'liquidator', 'raid'],
+      owner: ZoneFaction.LIQUIDATOR,
+      lockDifficulty: 5,
+    },
+    {
+      roomName: 'Склад копченых расписок 88',
+      name: 'Коптилка долговых расписок 88',
+      kind: ContainerKind.SECRET_STASH,
+      access: 'secret',
+      inventory: [{ defId: 'voluntary_receipt', count: 2 }, { defId: 'cigs', count: 2 }, { defId: 'denunciation', count: 1 }],
+      tags: ['market88', 'hq_support', 'cultist', 'debt'],
+      owner: ZoneFaction.CULTIST,
+      lockDifficulty: 4,
+      discovered: false,
+    },
+    {
+      roomName: 'Склад мерных фильтров 88',
+      name: 'Холодный ящик мерных фильтров 88',
+      kind: ContainerKind.MEDICAL_CABINET,
+      access: 'faction',
+      inventory: [{ defId: 'gasmask_filter', count: 1 }, { defId: 'antibiotic', count: 1 }, { defId: 'blank_form', count: 1 }],
+      tags: ['market88', 'hq_support', 'scientist', 'measurement'],
+      owner: ZoneFaction.SCIENTIST,
+      lockDifficulty: 5,
+    },
+    {
+      roomName: 'Склад грязной партии 88',
+      name: 'Тюк грязной партии 88',
+      kind: ContainerKind.SECRET_STASH,
+      access: 'secret',
+      inventory: [{ defId: 'stolen_filter_pack', count: 1 }, { defId: 'ammo_9mm', count: 8 }, { defId: 'metro_ticket', count: 1 }],
+      tags: ['market88', 'hq_support', 'wild', 'contraband'],
+      owner: ZoneFaction.WILD,
+      lockDifficulty: 5,
+      discovered: false,
+    },
+    {
+      roomName: 'Южный архив без накладных 88',
+      name: 'Архивный сейф без накладных 88',
+      kind: ContainerKind.SAFE,
+      access: 'locked',
+      inventory: [{ defId: 'fake_pass', count: 1 }, { defId: 'caravan_route', count: 1 }, { defId: 'forged_bank_debt_paper', count: 1 }],
+      tags: ['market88', 'mid_block', 'documents', 'contraband_cache'],
+      owner: ZoneFaction.WILD,
+      lockDifficulty: 7,
+    },
+  ];
+  for (const def of cacheDefs) {
+    const room = world.rooms.find(candidate => candidate.name === def.roomName);
+    if (!room) continue;
+    addContainer(
+      world,
+      room,
+      Math.max(2, room.w - 4),
+      Math.max(2, Math.floor(room.h / 2)),
+      def.kind,
+      def.name,
+      def.access,
+      6,
+      def.inventory,
+      def.tags,
+      undefined,
+      market88OwnerFaction(def.owner),
+      def.lockDifficulty,
+      def.discovered ?? true,
+    );
+  }
+}
+
+function market88OwnerFaction(owner: ZoneFaction): Faction {
+  switch (owner) {
+    case ZoneFaction.LIQUIDATOR: return Faction.LIQUIDATOR;
+    case ZoneFaction.CULTIST: return Faction.CULTIST;
+    case ZoneFaction.SCIENTIST: return Faction.SCIENTIST;
+    case ZoneFaction.WILD: return Faction.WILD;
+    case ZoneFaction.CITIZEN:
+    default:
+      return Faction.CITIZEN;
+  }
+}
+
+function market88AuthoredRoomOwner(room: Room): ZoneFaction | undefined {
+  for (const spec of MARKET88_HQ_CLUSTERS) {
+    if (room.name === spec.hqName) return spec.owner;
+    for (const support of spec.support) {
+      if (room.name === support.name) return spec.owner;
+    }
+  }
+  return undefined;
+}
+
+function market88AuthoredConnection(room: Room): Market88RoomPlacement | undefined {
+  for (const spec of MARKET88_HQ_CLUSTERS) {
+    if (room.name === spec.hqName) {
+      return { room, side: spec.side, targetX: spec.targetX, targetY: spec.targetY, doorState: DoorState.HERMETIC_OPEN, keyId: '' };
+    }
+    for (const support of spec.support) {
+      if (room.name !== support.name) continue;
+      return {
+        room,
+        side: support.side,
+        targetX: support.targetX,
+        targetY: support.targetY,
+        doorState: support.type === RoomType.HQ ? DoorState.HERMETIC_OPEN : support.type === RoomType.STORAGE ? DoorState.CLOSED : DoorState.OPEN,
+        keyId: '',
+      };
+    }
+  }
+  return undefined;
+}
+
+function restoreBlackMarket88FallbackRoomType(room: Room): void {
+  if (market88AuthoredRoomOwner(room) !== undefined) return;
+  if (room.type !== RoomType.HQ) return;
+  if (room.name === 'Рыночные ряды 88') room.type = RoomType.COMMON;
+  else if (room.name === 'Служебный люк 88') room.type = RoomType.PRODUCTION;
+  else if (room.name === 'Долговой суд 88' || room.name === 'Документальный кордон 88') room.type = RoomType.OFFICE;
+  else if (room.name.startsWith('Будка ')) room.type = RoomType.OFFICE;
+}
+
+function hasHermeticOpenDoor(world: World, room: Room): boolean {
+  return room.doors.some(doorIdx => world.doors.get(doorIdx)?.state === DoorState.HERMETIC_OPEN);
+}
+
+export function reinforceBlackMarket88AuthoredHqTerritory(world: World): void {
+  for (const room of world.rooms) {
+    if (room) restoreBlackMarket88FallbackRoomType(room);
+  }
+  for (const room of world.rooms) {
+    if (!room) continue;
+    const owner = market88AuthoredRoomOwner(room);
+    if (owner === undefined) continue;
+    const isCore = room.name === MARKET88_HQ_ROOM_NAMES.citizen ||
+      room.name === MARKET88_HQ_ROOM_NAMES.liquidator ||
+      room.name === MARKET88_HQ_ROOM_NAMES.cultist ||
+      room.name === MARKET88_HQ_ROOM_NAMES.scientist ||
+      room.name === MARKET88_HQ_ROOM_NAMES.wild ||
+      room.name === 'Западный герморазвал диких 88' ||
+      room.name === 'Восточный герморазвал диких 88';
+    if (isCore) {
+      room.type = RoomType.HQ;
+      room.sealed = true;
+      room.wallTex = Tex.HERMO_WALL;
+      if (!hasHermeticOpenDoor(world, room)) {
+        const connection = market88AuthoredConnection(room);
+        if (connection) connectRoomToPoint(world, room, connection.side, connection.targetX, connection.targetY, DoorState.HERMETIC_OPEN, '');
+      }
+      for (let dy = -1; dy <= room.h; dy++) {
+        for (let dx = -1; dx <= room.w; dx++) {
+          const idx = world.idx(room.x + dx, room.y + dy);
+          const inside = dx >= 0 && dx < room.w && dy >= 0 && dy < room.h;
+          if (!inside && world.cells[idx] === Cell.WALL && !world.aptMask[idx]) {
+            world.hermoWall[idx] = 1;
+            world.wallTex[idx] = Tex.HERMO_WALL;
+          }
+        }
+      }
+      paintBazaarOwnerPatch(world, room.x + (room.w >> 1), room.y + (room.h >> 1), owner, owner === ZoneFaction.WILD ? 36 : 26);
+    }
+    paintBazaarRoomOwner(world, room, owner);
+  }
+  addRaidShutters(world);
+  syncZoneMetadataFromTerritory(world);
+  markBlackMarket88ServiceGutZonesHostile(world);
+  world.markWallTexDirty();
+}
+
+function markBlackMarket88ServiceGutZonesHostile(world: World): void {
+  for (const zone of world.zones) {
+    const northSouthGuts = zone.cx >= 180 && zone.cx <= 844 &&
+      ((zone.cy >= 286 && zone.cy <= 356) || (zone.cy >= 676 && zone.cy <= 736));
+    const westEastGuts = zone.cy >= 344 && zone.cy <= 660 &&
+      (zone.cx <= 180 || zone.cx >= 844);
+    if (!northSouthGuts && !westEastGuts) continue;
+    zone.faction = zone.id % 5 === 0 ? ZoneFaction.SAMOSBOR : ZoneFaction.WILD;
+    zone.level = Math.max(zone.level, 4);
+    zone.fogged = false;
+  }
+}
+
 function tryBazaarRoom(
   world: World,
   type: RoomType,
@@ -1389,6 +1914,30 @@ function tryBazaarRoom(
 ): Room | null {
   if (!canFitBazaarRoom(world, x, y, w, h)) return null;
   return makeRoom(world, world.rooms.length, type, x, y, w, h, name, wallTex, floorTex);
+}
+
+function paintBazaarRoomOwner(world: World, room: Room, owner: TerritoryOwner): void {
+  for (let dy = 0; dy < room.h; dy++) {
+    for (let dx = 0; dx < room.w; dx++) {
+      const idx = world.idx(room.x + dx, room.y + dy);
+      if (world.roomMap[idx] === room.id && !world.aptMask[idx]) world.factionControl[idx] = owner;
+    }
+  }
+  for (const idx of room.doors) {
+    if (!world.aptMask[idx]) world.factionControl[idx] = owner;
+  }
+}
+
+function paintBazaarOwnerPatch(world: World, cx: number, cy: number, owner: TerritoryOwner, radius: number): void {
+  const r2 = radius * radius;
+  for (let dy = -radius; dy <= radius; dy++) {
+    for (let dx = -radius; dx <= radius; dx++) {
+      if (dx * dx + dy * dy > r2) continue;
+      const idx = world.idx(cx + dx, cy + dy);
+      if (world.aptMask[idx] || world.cells[idx] === Cell.LIFT || world.cells[idx] === Cell.ABYSS) continue;
+      world.factionControl[idx] = owner;
+    }
+  }
 }
 
 function canFitBazaarRoom(world: World, x: number, y: number, w: number, h: number): boolean {
@@ -1882,6 +2431,58 @@ function tuneMarketZones(world: World): void {
     zone.fogged = false;
     zone.faction = zone.id % 5 === 0 ? ZoneFaction.LIQUIDATOR : ZoneFaction.CITIZEN;
     zone.hasLift = false;
+  }
+}
+
+function isBlackMarket88AmbientNpc(entity: Entity): boolean {
+  return entity.type === EntityType.NPC &&
+    entity.alive &&
+    !entity.plotNpcId &&
+    !entity.persistentNpcId &&
+    entity.alifeId === undefined &&
+    entity.questId === -1 &&
+    entity.faction !== undefined;
+}
+
+function blackMarket88TerritorySpawnCells(world: World): Map<TerritoryOwner, number[]> {
+  const cells = new Map<TerritoryOwner, number[]>([
+    [ZoneFaction.CITIZEN, []],
+    [ZoneFaction.LIQUIDATOR, []],
+    [ZoneFaction.CULTIST, []],
+    [ZoneFaction.SCIENTIST, []],
+    [ZoneFaction.WILD, []],
+  ]);
+  for (let i = 0; i < W * W; i++) {
+    const cell = world.cells[i];
+    if (cell !== Cell.FLOOR && cell !== Cell.WATER) continue;
+    if (world.aptMask[i] || world.hermoWall[i] || world.containerMap.has(i) || world.features[i] === Feature.LIFT_BUTTON) continue;
+    const owner = world.factionControl[i] as TerritoryOwner;
+    const list = cells.get(owner);
+    if (list) list.push(i);
+  }
+  return cells;
+}
+
+export function alignBlackMarket88AmbientNpcTerritory(world: World, entities: Entity[]): void {
+  const cells = blackMarket88TerritorySpawnCells(world);
+  const offsets = new Uint16Array(8);
+  for (const entity of entities) {
+    if (!isBlackMarket88AmbientNpc(entity) || entity.faction === undefined) continue;
+    const owner = factionToTerritoryOwner(entity.faction);
+    const list = cells.get(owner);
+    if (!list || list.length === 0) continue;
+    const offset = offsets[owner]++ | 0;
+    const cell = list[(entity.id * 139 + offset * 487) % list.length];
+    entity.x = (cell % W) + 0.5;
+    entity.y = ((cell / W) | 0) + 0.5;
+    entity.assignedRoomId = world.roomMap[cell] >= 0 ? world.roomMap[cell] : -1;
+    if (entity.ai) {
+      entity.ai.tx = cell % W;
+      entity.ai.ty = (cell / W) | 0;
+      entity.ai.path = [];
+      entity.ai.pi = 0;
+      entity.ai.stuck = 0;
+    }
   }
 }
 

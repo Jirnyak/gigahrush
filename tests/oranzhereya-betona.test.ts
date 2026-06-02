@@ -3,17 +3,22 @@ import * as assert from 'node:assert/strict';
 
 import {
   Cell,
+  DoorState,
   EntityType,
+  Feature,
   FloorLevel,
   LiftDirection,
   MonsterKind,
   RoomType,
   W,
+  ZoneFaction,
+  type Entity,
 } from '../src/core/types';
 import { auditReachability, hasReachableAdjacentCell } from '../src/core/world';
 import { designFloorAtZ, designFloorById } from '../src/data/design_floors';
 import { designFloorPopulationProfile } from '../src/data/design_floor_population';
 import { ACTIVE_ACTOR_SOFT_LIMIT } from '../src/data/entity_limits';
+import { HUMAN_TERRITORY_OWNERS, factionToTerritoryOwner } from '../src/data/factions';
 import { getSideQuestRegistrySnapshot } from '../src/data/plot';
 import { generateDesignFloor } from '../src/gen/design_floors/manifest';
 import {
@@ -21,9 +26,11 @@ import {
   ORANZHEREYA_BETONA_DISPLAY_NAME,
   ORANZHEREYA_BETONA_ROUTE_ID,
   ORANZHEREYA_BETONA_Z,
+  ORANZHEREYA_MICRO_ROOM_PREFIXES,
   ORANZHEREYA_ROOM_NAMES,
   measureOranzhereyaBetonaGeometry,
 } from '../src/gen/design_floors/oranzhereya_betona';
+import { countTerritoryCells, territoryHqAnchors, territoryOwnerAt, territoryRoomOwner } from '../src/systems/territory';
 import type { FloorGeneration } from '../src/gen/floor_manifest';
 
 let cached: FloorGeneration | undefined;
@@ -111,6 +118,84 @@ test('oranzhereya_betona exposes harvest, poison, burn, reroute, and guard choic
     container.inventory.some(item => item.defId === 'acid_bottle')), true);
 });
 
+test('oranzhereya_betona expands greenhouse macro, mid blocks, and micro storage', () => {
+  const gen = oranzhereya();
+  const audit = auditReachability(gen.world, gen.world.idx(Math.floor(gen.spawnX), Math.floor(gen.spawnY)));
+  let floorCells = 0;
+  let reachableCells = 0;
+  let waterCells = 0;
+  let tables = 0;
+  let shelves = 0;
+  let screens = 0;
+  for (let i = 0; i < W * W; i++) {
+    const cell = gen.world.cells[i];
+    if (cell === Cell.FLOOR || cell === Cell.DOOR || cell === Cell.WATER || cell === Cell.LIFT) floorCells++;
+    if (audit.reachable[i]) reachableCells++;
+    if (cell === Cell.WATER) waterCells++;
+    if (gen.world.features[i] === Feature.TABLE) tables++;
+    if (gen.world.features[i] === Feature.SHELF) shelves++;
+    if (gen.world.features[i] === Feature.SCREEN) screens++;
+  }
+  const microRooms = gen.world.rooms.filter(room => ORANZHEREYA_MICRO_ROOM_PREFIXES.some(prefix => room.name.includes(prefix)));
+
+  assert.equal(gen.world.rooms.length >= 260, true, `rooms ${gen.world.rooms.length}`);
+  assert.equal(gen.world.doors.size >= 600, true, `doors ${gen.world.doors.size}`);
+  assert.equal(floorCells >= 250_000, true, `floor cells ${floorCells}`);
+  assert.equal(reachableCells >= 250_000, true, `reachable ${reachableCells}`);
+  assert.equal(waterCells >= 20_000, true, `water ${waterCells}`);
+  assert.equal(microRooms.length >= 220, true, `micro rooms ${microRooms.length}`);
+  assert.equal(tables >= 1_000, true, `tables ${tables}`);
+  assert.equal(shelves >= 300, true, `shelves ${shelves}`);
+  assert.equal(screens >= 60, true, `screens ${screens}`);
+});
+
+test('oranzhereya_betona owns cell territory from greenhouse HQ anchors', () => {
+  const gen = oranzhereya();
+  const anchors = territoryHqAnchors(gen.world);
+  const anchorOwners = new Set(anchors.map(anchor => anchor.owner));
+  const rows = countTerritoryCells(gen.world, 4);
+  const counts = new Map(rows.map(row => [row.owner, row.cells]));
+  const share = (owner: ZoneFaction): number => (counts.get(owner) ?? 0) / (W * W);
+  let dominant = ZoneFaction.CITIZEN;
+  let dominantCells = -1;
+
+  for (const owner of HUMAN_TERRITORY_OWNERS) {
+    assert.equal(anchorOwners.has(owner), true, `missing HQ anchor ${ZoneFaction[owner]}`);
+    assert.equal((counts.get(owner) ?? 0) > 30_000, true, `owned cells ${ZoneFaction[owner]}`);
+    if ((counts.get(owner) ?? 0) > dominantCells) {
+      dominant = owner;
+      dominantCells = counts.get(owner) ?? 0;
+    }
+    const anchor = anchors.find(candidate => candidate.owner === owner);
+    const room = anchor ? gen.world.rooms[anchor.roomId] : undefined;
+    assert.ok(room, `HQ room ${ZoneFaction[owner]}`);
+    assert.equal(room.type, RoomType.HQ, `HQ type ${ZoneFaction[owner]}`);
+    assert.equal(room.sealed, true, `sealed HQ ${ZoneFaction[owner]}`);
+    assert.equal(territoryRoomOwner(gen.world, room.id), owner, `HQ owner ${ZoneFaction[owner]}`);
+    assert.equal(room.doors.some(doorIdx => {
+      const door = gen.world.doors.get(doorIdx);
+      return door?.state === DoorState.HERMETIC_OPEN || door?.state === DoorState.HERMETIC_CLOSED;
+    }), true, `hermetic door ${ZoneFaction[owner]}`);
+  }
+
+  assert.equal(dominant, ZoneFaction.CITIZEN);
+  assert.equal(share(ZoneFaction.CITIZEN) >= 0.40 && share(ZoneFaction.CITIZEN) <= 0.52, true, `citizen share ${share(ZoneFaction.CITIZEN)}`);
+  assert.equal(share(ZoneFaction.LIQUIDATOR) >= 0.07 && share(ZoneFaction.LIQUIDATOR) <= 0.14, true, `liquidator share ${share(ZoneFaction.LIQUIDATOR)}`);
+  assert.equal(share(ZoneFaction.CULTIST) >= 0.035 && share(ZoneFaction.CULTIST) <= 0.09, true, `cultist share ${share(ZoneFaction.CULTIST)}`);
+  assert.equal(share(ZoneFaction.SCIENTIST) >= 0.19 && share(ZoneFaction.SCIENTIST) <= 0.29, true, `scientist share ${share(ZoneFaction.SCIENTIST)}`);
+  assert.equal(share(ZoneFaction.WILD) >= 0.10 && share(ZoneFaction.WILD) <= 0.18, true, `wild share ${share(ZoneFaction.WILD)}`);
+
+  let ambientOwned = 0;
+  let ambientTotal = 0;
+  for (const entity of gen.entities) {
+    if (!isAmbientNpcTemplate(entity) || entity.faction === undefined) continue;
+    ambientTotal++;
+    if (territoryOwnerAt(gen.world, entity.x, entity.y) === factionToTerritoryOwner(entity.faction)) ambientOwned++;
+  }
+  assert.equal(ambientTotal > 0, true);
+  assert.equal(ambientOwned / ambientTotal >= 0.95, true, `own-territory NPC ratio ${ambientOwned / ambientTotal}`);
+});
+
 test('oranzhereya_betona uses a bounded food-water population profile', () => {
   const route = designFloorById(ORANZHEREYA_BETONA_ROUTE_ID);
   assert.ok(route);
@@ -131,6 +216,14 @@ test('oranzhereya_betona uses a bounded food-water population profile', () => {
   assert.equal(npcs.length >= profile.npcTarget && npcs.length <= ACTIVE_ACTOR_SOFT_LIMIT, true);
   assert.equal(monsters.length >= profile.monsterTarget && monsters.length <= ACTIVE_ACTOR_SOFT_LIMIT, true);
 });
+
+function isAmbientNpcTemplate(entity: Entity): boolean {
+  return entity.type === EntityType.NPC &&
+    !entity.plotNpcId &&
+    !entity.persistentNpcId &&
+    entity.alifeId === undefined &&
+    entity.questId === -1;
+}
 
 function hasReachableLift(
   gen: FloorGeneration,
