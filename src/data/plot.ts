@@ -32,6 +32,8 @@ export interface PlotNpcDef {
   homeFloorKey?: string;
   hp: number;
   maxHp: number;
+  /** Authored RPG level for plot NPCs; omitted NPCs keep the low default. */
+  level?: number;
   money: number;
   accountRubles?: number;
   speed: number;
@@ -71,7 +73,7 @@ export const PLOT_NPCS: Record<string, PlotNpcDef> = {
     occupation: Occupation.DOCTOR,
     sprite: Occupation.DOCTOR,
     homeFloorKey: storyNpcFloorKey(FloorLevel.LIVING),
-    hp: 500, maxHp: 500, money: 50, speed: 1.2,
+    hp: 1000, maxHp: 1000, level: 10, money: 50, speed: 1.2,
     inventory: [
       { defId: 'bandage', count: 3 },
       { defId: 'pills', count: 1 },
@@ -118,7 +120,7 @@ export const PLOT_NPCS: Record<string, PlotNpcDef> = {
     occupation: Occupation.HUNTER,
     sprite: Occupation.HUNTER,
     homeFloorKey: storyNpcFloorKey(FloorLevel.LIVING),
-    hp: 600, maxHp: 600, money: 80, speed: 1.4,
+    hp: 1200, maxHp: 1200, level: 10, money: 80, speed: 1.4,
     inventory: [
       { defId: 'makarov', count: 1 },
       { defId: 'ammo_9mm', count: 8 },
@@ -159,7 +161,7 @@ export const PLOT_NPCS: Record<string, PlotNpcDef> = {
     occupation: Occupation.SCIENTIST,
     sprite: Occupation.SCIENTIST,
     homeFloorKey: storyNpcFloorKey(FloorLevel.LIVING),
-    hp: 400, maxHp: 400, money: 60, speed: 1.0,
+    hp: 800, maxHp: 800, level: 10, money: 60, speed: 1.0,
     inventory: [
       { defId: 'psi_strike', count: 1 },
       { defId: 'antidep', count: 1 },
@@ -200,7 +202,7 @@ export const PLOT_NPCS: Record<string, PlotNpcDef> = {
     occupation: Occupation.ALCOHOLIC,
     sprite: Occupation.ALCOHOLIC,
     homeFloorKey: storyNpcFloorKey(FloorLevel.LIVING),
-    hp: 300, maxHp: 300, money: 5, speed: 0.9,
+    hp: 300, maxHp: 300, level: 2, money: 5, speed: 0.9,
     inventory: [
       { defId: 'bread', count: 1 },
       { defId: 'cigs', count: 2 },
@@ -244,7 +246,7 @@ export const PLOT_NPCS: Record<string, PlotNpcDef> = {
     occupation: Occupation.HUNTER,
     sprite: Occupation.HUNTER,
     homeFloorKey: storyNpcFloorKey(FloorLevel.MAINTENANCE),
-    hp: 10000, maxHp: 10000, money: 120, speed: 1.5,
+    hp: 10000, maxHp: 10000, level: 10, money: 120, speed: 1.5,
     inventory: [
       { defId: 'makarov', count: 1 },
       { defId: 'ammo_9mm', count: 12 },
@@ -283,7 +285,7 @@ export const PLOT_NPCS: Record<string, PlotNpcDef> = {
     occupation: Occupation.PILGRIM,
     sprite: Occupation.PILGRIM,
     homeFloorKey: storyNpcFloorKey(FloorLevel.HELL),
-    hp: 450, maxHp: 450, money: 12, speed: 0.9,
+    hp: 900, maxHp: 900, level: 10, money: 12, speed: 0.9,
     inventory: [
       { defId: 'holy_water', count: 1 },
       { defId: 'antidep', count: 1 },
@@ -312,7 +314,7 @@ export const PLOT_NPCS: Record<string, PlotNpcDef> = {
     occupation: Occupation.PRIEST,
     sprite: Occupation.PRIEST,
     homeFloorKey: designNpcFloorKey('podad'),
-    hp: 520, maxHp: 520, money: 0, speed: 0.8,
+    hp: 1040, maxHp: 1040, level: 10, money: 0, speed: 0.8,
     inventory: [
       { defId: 'bottled_voice', count: 1 },
       { defId: 'holy_water', count: 1 },
@@ -339,7 +341,7 @@ export const PLOT_NPCS: Record<string, PlotNpcDef> = {
     occupation: Occupation.SCIENTIST,
     sprite: Occupation.SCIENTIST,
     homeFloorKey: storyNpcFloorKey(FloorLevel.VOID),
-    hp: 350, maxHp: 350, money: 0, speed: 1.0,
+    hp: 700, maxHp: 700, level: 10, money: 0, speed: 1.0,
     inventory: [
       { defId: 'antidep', count: 2 },
       { defId: 'psi_stabilizer', count: 1 },

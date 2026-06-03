@@ -896,44 +896,12 @@ function questCandidateChance(): number {
   return 0.10;
 }
 
-function cashCapForProfile(
-  faction: Faction,
-  occupation: Occupation,
-  floorKey: string,
-  floor: FloorLevel,
-  level: number,
-): number {
-  let cap = faction === Faction.SCIENTIST || faction === Faction.LIQUIDATOR ? 700
-    : faction === Faction.WILD || faction === Faction.CULTIST ? 120
-      : 80;
-  if (
-    occupation === Occupation.STOREKEEPER ||
-    occupation === Occupation.COOK ||
-    occupation === Occupation.DOCTOR ||
-    occupation === Occupation.SECRETARY ||
-    occupation === Occupation.DIRECTOR
-  ) {
-    cap = Math.max(cap, floorKey === floorKeyForDesign('bank_floor') || floor === FloorLevel.MINISTRY ? 1600 : 500);
-  }
-  if (level >= 45) cap = Math.round(cap * 1.35);
-  return Math.min(2_000, cap);
-}
-
-function cashForWealth(
-  wealth: number,
-  faction: Faction,
-  occupation: Occupation,
-  floorKey: string,
-  floor: FloorLevel,
-  level: number,
-  seed: number,
-  index: number,
-): number {
+function cashForWealth(wealth: number, seed: number, index: number): number {
   const total = Math.max(0, Math.min(ALIFE_MONEY_CAP, Math.floor(wealth)));
-  const cap = cashCapForProfile(faction, occupation, floorKey, floor, level);
-  if (total <= cap) return total;
-  const spread = 0.65 + unit(seed, index, 96) * 0.7;
-  return Math.max(0, Math.min(total, cap, Math.round(cap * spread)));
+  if (total <= 0) return 0;
+  const share = 0.08 + unit(seed, index, 96) * 0.06;
+  const targetCash = Math.max(1, Math.round(total * share));
+  return Math.max(0, Math.min(total, targetCash));
 }
 
 function splitClampedMoney(cash: unknown, accountRubles: unknown): { money: number; accountRubles: number } {
@@ -953,7 +921,7 @@ function createRecord(alife: AlifeState, id: number, plan: AlifeFloorPlan, seed:
   const maxHp = getMaxHp(rpg);
   const named = nameForRecord(faction, seed, id);
   const wealth = wealthForRecord(plan, profile, level, seed, id);
-  const money = cashForWealth(wealth, faction, occupation, plan.key, plan.floor, level, seed, id);
+  const money = cashForWealth(wealth, seed, id);
   const record: AlifeNpcRecord = {
     id,
     name: named.name,
@@ -1003,6 +971,7 @@ function reservedNpcFromData(def: AlifeReservedIdentityDef): AlifePopulationRese
     occupation: def.occupation,
     sprite: def.sprite,
     npcVisualId: def.npcVisualId,
+    level: def.level,
     hp: def.hp,
     maxHp: def.maxHp,
     money: def.money,

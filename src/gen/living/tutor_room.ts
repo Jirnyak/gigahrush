@@ -23,6 +23,7 @@ import { stampRoom, protectRoom } from '../shared';
 import { drawTextCentered } from '../../render/text';
 import { S, rgba, noise, clamp } from '../../render/pixutil';
 import { Spr } from '../../render/sprite_index';
+import { freshRPG } from '../../systems/rpg';
 
 function protectTutorialWallsAsHermetic(world: World, x: number, y: number, w: number, h: number): void {
   for (let dy = -1; dy <= h; dy++) {
@@ -173,6 +174,7 @@ export function generateTutorRoom(
     spriteSeed: 90, // authored visual seed for the starting doctor
     name: olgaDef.name, isFemale: olgaDef.isFemale,
     needs: freshNeeds(), hp: olgaDef.hp, maxHp: olgaDef.maxHp, money: olgaDef.money,
+    rpg: freshRPG(olgaDef.level ?? 1),
     ai: { goal: AIGoal.IDLE, tx: 0, ty: 0, path: [], pi: 0, stuck: 0, timer: 0 },
     inventory: olgaDef.inventory.map(i => ({ ...i })),
     faction: olgaDef.faction, occupation: olgaDef.occupation,
@@ -257,6 +259,7 @@ export function generateTutorRoom(
     sprite: barniDef.sprite,
     name: barniDef.name, isFemale: barniDef.isFemale,
     needs: freshNeeds(), hp: barniDef.hp, maxHp: barniDef.maxHp, money: barniDef.money,
+    rpg: freshRPG(barniDef.level ?? 1),
     ai: { goal: AIGoal.IDLE, tx: 0, ty: 0, path: [], pi: 0, stuck: 0, timer: 0 },
     inventory: barniDef.inventory.map(i => ({ ...i })),
     faction: barniDef.faction, occupation: barniDef.occupation,

@@ -175,7 +175,7 @@ A-Life now has the right universal money boundary:
 - `AlifeNpcRecord.accountRubles` is the NPC bank/account balance.
 - NPC wealth is `money + accountRubles`, same conceptual split as player cash plus account.
 - Rich records are rare and total wealth is capped at `5_000_000`.
-- Pocket cash should stay bounded; account balance carries millionaire status.
+- Ordinary generation keeps about `8..14%` of each NPC's capital as cash and puts the rest on account; there is no artificial pocket cap.
 
 Keep that boundary and make it player-facing.
 
@@ -183,15 +183,15 @@ Wealth tiers:
 
 | Tier | Total wealth | Pocket cash | Gameplay meaning |
 | --- | ---: | ---: | --- |
-| poor | `0..100₽` | `0..60₽` | resident, queue, ration, small debt |
-| stable | `100..2_000₽` | `20..300₽` | ordinary trader, worker, minor official |
-| official | `2_000..50_000₽` | `100..1_500₽` | permit access, better trade reserve, documents |
-| rich | `50_000..1_000_000₽` | `500..5_000₽` | protected assets, safe keys, debt papers |
-| millionaire | `1_000_000₽+` | `1_000..10_000₽` | rare A-Life actor, faction protection, vault/route event |
+| poor | `0..100₽` | about `8..14%` | resident, queue, ration, small debt |
+| stable | `100..2_000₽` | about `8..14%` | ordinary trader, worker, minor official |
+| official | `2_000..50_000₽` | about `8..14%` | permit access, better trade reserve, documents |
+| rich | `50_000..1_000_000₽` | about `8..14%` | protected assets, safe keys, debt papers |
+| millionaire | `1_000_000₽+` | about `8..14%` | rare A-Life actor, faction protection, vault/route event |
 
 Rules:
 
-- Killing rich NPC drops bounded pocket cash or a cash-note item, not total wealth.
+- Killing rich NPC exposes the cash share, not the full account balance.
 - Rich wealth converts into assets: bank ledger, debt note, safe ownership, caravan share, protected storage, trade reserve, rumors, faction response.
 - Selling to a rich trader should use a bounded trade reserve derived from wealth and role. It must still be depleted and folded back.
 - Persistent NPC trade inventory should be deterministic or event-gated. Do not let menu-open random restock become an infinite faucet.

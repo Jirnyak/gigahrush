@@ -412,24 +412,31 @@ test('A-Life design-floor records use Floor 69 social population mix', () => {
   assert.ok(industrialTrades.length < floor69.length * 0.05, 'floor_69 should not inherit the generic Maintenance worker mix');
 });
 
-test('A-Life generation keeps broad level and account wealth tails bounded', () => {
+test('A-Life generation keeps broad level tail and splits wealth mostly into account balance', () => {
   const state = minimalState();
   setAlifeState(state, { seed: 12345, total: 100_000 });
   let lowLevel = 0;
   let maxLevel = 0;
   let millionaires = 0;
-  let richPocket = 0;
+  let totalCash = 0;
+  let totalWealth = 0;
+  let maxCash = 0;
   forEachAlifeNpcRecordSlice(state, 0, defaultAlifePopulation(), snapshot => {
+    const wealth = snapshot.money + snapshot.accountRubles;
     if (snapshot.level <= 10) lowLevel++;
     if (snapshot.level > maxLevel) maxLevel = snapshot.level;
-    if (snapshot.money + snapshot.accountRubles >= 1_000_000) millionaires++;
-    if (snapshot.money > richPocket) richPocket = snapshot.money;
+    if (wealth >= 1_000_000) millionaires++;
+    totalCash += snapshot.money;
+    totalWealth += wealth;
+    if (snapshot.money > maxCash) maxCash = snapshot.money;
   });
 
   assert.ok(lowLevel > 50_000, 'most generated NPCs should stay in levels 1-10');
   assert.equal(maxLevel, 100);
   assert.ok(millionaires > 0 && millionaires < 10, 'procedural millionaires should exist but stay rare');
-  assert.ok(richPocket <= 2_000, 'generated NPC cash stays pocket-sized while accountRubles carries wealth');
+  assert.ok(totalCash / totalWealth > 0.08, 'generated NPCs should keep some capital as cash');
+  assert.ok(totalCash / totalWealth < 0.14, 'generated NPCs should keep most capital on account');
+  assert.ok(maxCash > 2_000, 'generated NPC cash has no artificial pocket cap');
 });
 
 test('A-Life materialization preserves template sprite identity for special floors', () => {

@@ -45,7 +45,7 @@ test('save payload includes compact crafting section and bumped shape version', 
   const payload = createGameSavePayload(player, state, []);
 
   assert.equal(payload.version, SAVE_SHAPE_VERSION);
-  assert.equal(payload.version, 16);
+  assert.equal(payload.version, 17);
   const crafting = payload.state.crafting as ReturnType<typeof craftingForSave>;
   assert.equal(Array.isArray(crafting.materials), true);
   assert.equal(crafting.materials.length, 9);

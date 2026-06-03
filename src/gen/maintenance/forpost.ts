@@ -13,7 +13,7 @@ import { freshNeeds, randomName } from '../../data/catalog';
 import { PLOT_NPCS } from '../../data/plot';
 import { PLOT_ROOMS } from '../../data/plot_rooms';
 import { stampRoom, protectRoom, connectProtectedRoom, findClearArea } from '../shared';
-import { randomRPG, getMaxHp } from '../../systems/rpg';
+import { freshRPG, randomRPG, getMaxHp } from '../../systems/rpg';
 import { Spr } from '../../render/sprite_index';
 
 export function generateForpost(
@@ -73,6 +73,7 @@ export function generateForpost(
     sprite: majorDef.sprite,
     name: majorDef.name, isFemale: majorDef.isFemale,
     needs: freshNeeds(), hp: majorDef.hp, maxHp: majorDef.maxHp, money: majorDef.money,
+    rpg: freshRPG(majorDef.level ?? 1),
     ai: { goal: AIGoal.IDLE, tx: 0, ty: 0, path: [], pi: 0, stuck: 0, timer: 0 },
     inventory: majorDef.inventory.map(i => ({ ...i })),
     faction: majorDef.faction, occupation: majorDef.occupation,

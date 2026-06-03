@@ -40,6 +40,7 @@ export const CAMERA_FOV_MIN_DEGREES = 60;
 export const CAMERA_FOV_MAX_DEGREES = 110;
 export const CAMERA_FOV_STEP_DEGREES = 5;
 export const AUTO_PICKUP_DEFAULT = true;
+export const MAP_HIGH_CONTRAST_DEFAULT = false;
 
 export const MAP_COLOR_MODES = [
   { id: 'rooms', label: 'Типы комнат' },
@@ -74,11 +75,13 @@ type UiSettings = Record<UiElementId, boolean> & {
   cameraFovDegrees: number;
   autoPickupEnabled: boolean;
   mapColorMode: MapColorMode;
+  mapHighContrast: boolean;
 } & Record<MapLegendToggleId, boolean>;
 
 export type MapLegendRow =
   | { kind: 'reset_map_legend'; id: 'reset_map_legend'; group: 'Сервис'; label: 'Сбросить легенду' }
   | { kind: 'map_color_mode'; id: 'map_color_mode'; group: 'Цвет'; label: 'Цвет клеток' }
+  | { kind: 'map_contrast'; id: 'map_contrast'; group: 'Цвет'; label: 'Контраст карты' }
   | { kind: 'map_toggle'; toggle: typeof MAP_LEGEND_TOGGLE_DEFS[number] };
 
 const MAP_LEGEND_RESET_ROW: MapLegendRow = {
@@ -237,6 +240,7 @@ function settingsFromEnabledIds(enabledIds: readonly UiElementId[]): UiSettings 
   out.cameraFovDegrees = CAMERA_FOV_DEFAULT_DEGREES;
   out.autoPickupEnabled = AUTO_PICKUP_DEFAULT;
   out.mapColorMode = 'rooms';
+  out.mapHighContrast = MAP_HIGH_CONTRAST_DEFAULT;
   for (const def of MAP_LEGEND_TOGGLE_DEFS) out[def.id] = def.defaultEnabled;
   return out;
 }
@@ -262,6 +266,7 @@ function normalizeUiSettings(raw: unknown): UiSettings {
   out.cameraFovDegrees = normalizeCameraFovDegrees(src.cameraFovDegrees);
   out.autoPickupEnabled = typeof src.autoPickupEnabled === 'boolean' ? src.autoPickupEnabled : AUTO_PICKUP_DEFAULT;
   out.mapColorMode = normalizeMapColorMode(src.mapColorMode);
+  out.mapHighContrast = typeof src.mapHighContrast === 'boolean' ? src.mapHighContrast : MAP_HIGH_CONTRAST_DEFAULT;
   for (const def of MAP_LEGEND_TOGGLE_DEFS) {
     const value = src[def.id];
     if (typeof value === 'boolean') out[def.id] = value;
@@ -376,6 +381,7 @@ export function applyUiPreset(id: UiPresetId): boolean {
   const fov = cameraFovDegrees();
   const autoPickup = autoPickupEnabled();
   const colorMode = mapColorMode();
+  const highContrast = mapHighContrastEnabled();
   const mapToggles = MAP_LEGEND_TOGGLE_DEFS.map(def => [def.id, mapLegendToggleEnabled(def.id)] as const);
   settings = settingsFromEnabledIds(preset.enabled);
   settings.mouseLookSensitivity = mouseSensitivity;
@@ -383,6 +389,7 @@ export function applyUiPreset(id: UiPresetId): boolean {
   settings.cameraFovDegrees = fov;
   settings.autoPickupEnabled = autoPickup;
   settings.mapColorMode = colorMode;
+  settings.mapHighContrast = highContrast;
   for (const [id, enabled] of mapToggles) settings[id] = enabled;
   saveUiSettings();
   return true;
@@ -490,6 +497,21 @@ export function toggleMapColorMode(): MapColorMode {
   return setMapColorMode(mapColorMode() === 'rooms' ? 'factions' : 'rooms');
 }
 
+export function mapHighContrastEnabled(): boolean {
+  if (typeof settings.mapHighContrast !== 'boolean') settings.mapHighContrast = MAP_HIGH_CONTRAST_DEFAULT;
+  return settings.mapHighContrast;
+}
+
+export function setMapHighContrastEnabled(enabled: boolean): boolean {
+  settings.mapHighContrast = enabled;
+  saveUiSettings();
+  return settings.mapHighContrast;
+}
+
+export function toggleMapHighContrast(): boolean {
+  return setMapHighContrastEnabled(!mapHighContrastEnabled());
+}
+
 export function mapLegendToggleEnabled(id: MapLegendToggleId): boolean {
   const def = MAP_LEGEND_TOGGLE_DEFS.find(entry => entry.id === id);
   if (!def) return false;
@@ -511,19 +533,21 @@ export function toggleMapLegendToggle(id: MapLegendToggleId): boolean {
 
 export function resetMapLegendSettings(): void {
   settings.mapColorMode = 'rooms';
+  settings.mapHighContrast = MAP_HIGH_CONTRAST_DEFAULT;
   for (const def of MAP_LEGEND_TOGGLE_DEFS) settings[def.id] = def.defaultEnabled;
   saveUiSettings();
 }
 
 export function mapLegendRowCount(): number {
-  return 2 + MAP_LEGEND_TOGGLE_DEFS.length;
+  return 3 + MAP_LEGEND_TOGGLE_DEFS.length;
 }
 
 export function mapLegendRowAt(index: number): MapLegendRow | undefined {
   if (index < 0) return undefined;
   if (index === 0) return MAP_LEGEND_RESET_ROW;
   if (index === 1) return { kind: 'map_color_mode', id: 'map_color_mode', group: 'Цвет', label: 'Цвет клеток' };
-  const toggle = MAP_LEGEND_TOGGLE_DEFS[index - 2];
+  if (index === 2) return { kind: 'map_contrast', id: 'map_contrast', group: 'Цвет', label: 'Контраст карты' };
+  const toggle = MAP_LEGEND_TOGGLE_DEFS[index - 3];
   return toggle ? { kind: 'map_toggle', toggle } : undefined;
 }
 

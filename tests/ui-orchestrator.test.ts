@@ -5,6 +5,7 @@ import {
   CAMERA_FOV_DEFAULT_DEGREES,
   DEFAULT_UI_PRESET_ID,
   MAP_LEGEND_TOGGLE_DEFS,
+  MAP_HIGH_CONTRAST_DEFAULT,
   MOBILE_LOOK_SENSITIVITY_DEFAULT,
   MOUSE_LOOK_SENSITIVITY_DEFAULT,
   UI_ELEMENT_DEFS,
@@ -17,6 +18,7 @@ import {
   applyUiPreset,
   cameraFovDegrees,
   mapColorMode,
+  mapHighContrastEnabled,
   mapLegendRowAt,
   mapLegendRowCount,
   mapLegendToggleEnabled,
@@ -30,6 +32,7 @@ import {
   resetUiElement,
   resetUiSettings,
   toggleAutoPickup,
+  toggleMapHighContrast,
   toggleMapColorMode,
   toggleMapLegendToggle,
   setUiElementEnabled,
@@ -66,6 +69,7 @@ test('UI orchestrator defaults to the novice-safe HUD enabled', () => {
   assert.equal(cameraFovDegrees(), CAMERA_FOV_DEFAULT_DEGREES);
   assert.equal(autoPickupEnabled(), true);
   assert.equal(mapColorMode(), 'rooms');
+  assert.equal(mapHighContrastEnabled(), MAP_HIGH_CONTRAST_DEFAULT);
   assert.deepEqual(
     MAP_LEGEND_TOGGLE_DEFS.map(def => [def.id, mapLegendToggleEnabled(def.id)]),
     [
@@ -83,18 +87,22 @@ test('UI orchestrator defaults to the novice-safe HUD enabled', () => {
 
 test('map legend settings are local toggles outside HUD presets', () => {
   resetUiSettings();
-  assert.equal(mapLegendRowCount(), 2 + MAP_LEGEND_TOGGLE_DEFS.length);
+  assert.equal(mapLegendRowCount(), 3 + MAP_LEGEND_TOGGLE_DEFS.length);
   assert.equal(mapLegendRowAt(0)?.kind, 'reset_map_legend');
   assert.equal(mapLegendRowAt(1)?.kind, 'map_color_mode');
+  assert.equal(mapLegendRowAt(2)?.kind, 'map_contrast');
   assert.equal(toggleMapColorMode(), 'factions');
+  assert.equal(toggleMapHighContrast(), true);
   assert.equal(toggleMapLegendToggle('map_items'), false);
   assert.equal(toggleMapLegendToggle('map_room_labels'), true);
   assert.equal(applyUiPreset('off'), true);
   assert.equal(mapColorMode(), 'factions');
+  assert.equal(mapHighContrastEnabled(), true);
   assert.equal(mapLegendToggleEnabled('map_items'), false);
   assert.equal(mapLegendToggleEnabled('map_room_labels'), true);
   resetMapLegendSettings();
   assert.equal(mapColorMode(), 'rooms');
+  assert.equal(mapHighContrastEnabled(), false);
   assert.equal(mapLegendToggleEnabled('map_items'), true);
   assert.equal(mapLegendToggleEnabled('map_room_labels'), false);
 });

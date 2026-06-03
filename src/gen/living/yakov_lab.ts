@@ -19,6 +19,7 @@ import { PLOT_NPCS } from '../../data/plot';
 import { stampRoom, protectRoom, findClearArea } from '../shared';
 import { Spr } from '../../render/sprite_index';
 import { placeCraftStationAt, type CraftStationDefId } from '../craft_stations';
+import { freshRPG } from '../../systems/rpg';
 
 const LAB_MIN_DIST = 10;
 const LAB_MAX_DIST = 50;
@@ -124,6 +125,7 @@ export function generateYakovLab(
     sprite: yakovDef.sprite,
     name: yakovDef.name, isFemale: yakovDef.isFemale,
     needs: freshNeeds(), hp: yakovDef.hp, maxHp: yakovDef.maxHp, money: yakovDef.money,
+    rpg: freshRPG(yakovDef.level ?? 1),
     ai: { goal: AIGoal.IDLE, tx: 0, ty: 0, path: [], pi: 0, stuck: 0, timer: 0 },
     inventory: yakovDef.inventory.map(i => ({ ...i })),
     faction: yakovDef.faction, occupation: yakovDef.occupation,

@@ -21,6 +21,7 @@ import { controlHint, menuCloseHint } from '../systems/controls';
 import {
   MAP_COLOR_MODES,
   type MapColorMode,
+  mapHighContrastEnabled,
   mapColorMode,
   mapLegendRowAt,
   mapLegendRowCount,
@@ -31,6 +32,9 @@ import { isPlayerEntity } from '../systems/player_actor';
 import { fitTextStable } from './ui_text';
 
 const MAP_SIZE = 80;
+const FULL_MAP_RADIUS_DEFAULT = 200;
+const FULL_MAP_RADIUS_MIN = 48;
+const FULL_MAP_RADIUS_MAX = W / 2;
 type QuestKind = 'plot' | 'side' | 'system';
 type MapMarkerStyle = { stroke: string; fill: string };
 
@@ -114,6 +118,20 @@ const ROOM_TYPE_RGB: Record<RoomType, [number, number, number]> = {
   [RoomType.HQ]: [86, 72, 96],
 };
 
+const ROOM_TYPE_RGB_CONTRAST: Record<RoomType, [number, number, number]> = {
+  [RoomType.LIVING]: [112, 138, 255],
+  [RoomType.KITCHEN]: [224, 202, 96],
+  [RoomType.BATHROOM]: [96, 224, 232],
+  [RoomType.STORAGE]: [222, 148, 82],
+  [RoomType.MEDICAL]: [112, 238, 214],
+  [RoomType.COMMON]: [164, 174, 184],
+  [RoomType.PRODUCTION]: [232, 184, 72],
+  [RoomType.CORRIDOR]: [154, 166, 178],
+  [RoomType.SMOKING]: [204, 184, 126],
+  [RoomType.OFFICE]: [178, 160, 232],
+  [RoomType.HQ]: [220, 146, 244],
+};
+
 const TERRITORY_RGB: Record<ZoneFaction, [number, number, number]> = {
   [ZoneFaction.CITIZEN]: [74, 190, 145],
   [ZoneFaction.LIQUIDATOR]: [91, 158, 238],
@@ -153,13 +171,22 @@ function dimRgb(rgb: readonly [number, number, number], factor: number): [number
   ];
 }
 
-function roomTypeRgb(type: RoomType | undefined): [number, number, number] {
-  return type === undefined ? [51, 51, 51] : ROOM_TYPE_RGB[type] ?? [51, 51, 51];
+function boostRgb(rgb: readonly [number, number, number], factor: number, add = 0): [number, number, number] {
+  return [
+    Math.min(255, Math.round(rgb[0] * factor + add)),
+    Math.min(255, Math.round(rgb[1] * factor + add)),
+    Math.min(255, Math.round(rgb[2] * factor + add)),
+  ];
 }
 
-function territoryRgb(owner: number | undefined, factor = 0.62): [number, number, number] {
+function roomTypeRgb(type: RoomType | undefined, highContrast = false): [number, number, number] {
+  if (type === undefined) return highContrast ? [120, 132, 144] : [51, 51, 51];
+  return (highContrast ? ROOM_TYPE_RGB_CONTRAST[type] : ROOM_TYPE_RGB[type]) ?? (highContrast ? [120, 132, 144] : [51, 51, 51]);
+}
+
+function territoryRgb(owner: number | undefined, factor = 0.62, highContrast = false): [number, number, number] {
   const rgb = TERRITORY_RGB[owner as ZoneFaction] ?? TERRITORY_RGB[ZoneFaction.CITIZEN];
-  return dimRgb(rgb, factor);
+  return highContrast ? boostRgb(rgb, Math.max(1, factor), 24) : dimRgb(rgb, factor);
 }
 
 function shortMapLabel(text: string, max = 22): string {
@@ -635,6 +662,7 @@ function drawMapBaseRaster(
   cellH: number,
   questLiftDir: LiftDirection | undefined,
   colorMode: MapColorMode,
+  highContrast: boolean,
 ): void {
   const cols = radius * 2;
   const rows = cols;
@@ -676,20 +704,24 @@ function drawMapBaseRaster(
         const cell = world.cells[ci];
         if (cell === Cell.WALL) {
           if (world.hermoWall[ci]) {
-            cr = 110;
-            cg = 195;
+            cr = highContrast ? 136 : 110;
+            cg = highContrast ? 228 : 195;
             cb = 255;
+          } else if (highContrast) {
+            cr = 8;
+            cg = 10;
+            cb = 12;
           } else {
             alpha = 0;
           }
         } else if (cell === Cell.ABYSS) {
-          cr = 16;
-          cg = 8;
-          cb = 16;
+          cr = highContrast ? 30 : 16;
+          cg = highContrast ? 18 : 8;
+          cb = highContrast ? 34 : 16;
         } else if (cell === Cell.LIFT) {
-          cr = 204;
-          cg = 204;
-          cb = 0;
+          cr = highContrast ? 245 : 204;
+          cg = highContrast ? 224 : 204;
+          cb = highContrast ? 48 : 0;
           const liftDir = world.liftDir[ci];
           if (mapLegendToggleEnabled('map_lifts')) {
             recordMapLiftMarker(
@@ -700,33 +732,37 @@ function drawMapBaseRaster(
             );
           }
         } else if (cell === Cell.WATER) {
-          cr = 34;
-          cg = 51;
-          cb = 85;
+          cr = highContrast ? 46 : 34;
+          cg = highContrast ? 128 : 51;
+          cb = highContrast ? 190 : 85;
         } else {
           if (colorMode === 'factions') {
-            [cr, cg, cb] = territoryRgb(territoryOwnerAtIndex(world, ci));
+            [cr, cg, cb] = territoryRgb(territoryOwnerAtIndex(world, ci), highContrast ? 1 : 0.62, highContrast);
           } else {
             const rid = world.roomMap[ci];
             if (rid >= 0) {
-              [cr, cg, cb] = roomTypeRgb(world.rooms[rid]?.type);
+              [cr, cg, cb] = roomTypeRgb(world.rooms[rid]?.type, highContrast);
             } else {
               const zid = world.zoneMap[ci];
               const [zr, zg, zb] = ZONE_COLORS[zid % 64];
-              cr = zr >> 1;
-              cg = zg >> 1;
-              cb = zb >> 1;
+              if (highContrast) {
+                [cr, cg, cb] = boostRgb([zr, zg, zb], 1.18, 28);
+              } else {
+                cr = zr >> 1;
+                cg = zg >> 1;
+                cb = zb >> 1;
+              }
             }
           }
           if (cell === Cell.DOOR) {
             if (colorMode === 'factions') {
-              cr = Math.round(cr * 0.68 + 136 * 0.32);
-              cg = Math.round(cg * 0.68 + 100 * 0.32);
-              cb = Math.round(cb * 0.68 + 68 * 0.32);
+              cr = Math.round(cr * 0.68 + (highContrast ? 226 : 136) * 0.32);
+              cg = Math.round(cg * 0.68 + (highContrast ? 180 : 100) * 0.32);
+              cb = Math.round(cb * 0.68 + (highContrast ? 86 : 68) * 0.32);
             } else {
-              cr = 136;
-              cg = 100;
-              cb = 68;
+              cr = highContrast ? 226 : 136;
+              cg = highContrast ? 180 : 100;
+              cb = highContrast ? 86 : 68;
             }
           }
 
@@ -1002,6 +1038,7 @@ function drawMap(
   const cellW = mapW / (radius * 2);
   const cellH = mapH / (radius * 2);
   const colorMode = mapColorMode();
+  const highContrast = mapHighContrastEnabled();
   const showNpcs = mapLegendToggleEnabled('map_npcs');
   const showMonsters = mapLegendToggleEnabled('map_monsters');
   const showItems = mapLegendToggleEnabled('map_items');
@@ -1039,7 +1076,7 @@ function drawMap(
     clearActiveQuestMarkers();
   }
 
-  drawMapBaseRaster(ctx, world, pxI, pyI, mapX, mapY, mapW, mapH, radius, cellW, cellH, questLiftDir, colorMode);
+  drawMapBaseRaster(ctx, world, pxI, pyI, mapX, mapY, mapW, mapH, radius, cellW, cellH, questLiftDir, colorMode, highContrast);
   if (showQuests) drawMapRoomQuestMarkers(ctx, world, pxI, pyI, mapX, mapY, radius, cellW, cellH);
   if (showSurfaceMarks) drawSurfaceMapMarks(ctx, world, pxI, pyI, mapX, mapY, radius, cellW, cellH);
 
@@ -1191,10 +1228,11 @@ function factionSampleHash(world: World): number {
   return h >>> 0;
 }
 
-function overviewSignature(world: World, colorMode: MapColorMode): string {
+function overviewSignature(world: World, colorMode: MapColorMode, highContrast: boolean): string {
   const factionHash = colorMode === 'factions' ? factionSampleHash(world) : 0;
   return [
     colorMode,
+    highContrast ? 'contrast' : 'default',
     world.cellVersion,
     world.wallTexVersion,
     world.floorTexVersion,
@@ -1205,26 +1243,26 @@ function overviewSignature(world: World, colorMode: MapColorMode): string {
   ].join(':');
 }
 
-function overviewCellRgb(world: World, ci: number, colorMode: MapColorMode): [number, number, number] {
+function overviewCellRgb(world: World, ci: number, colorMode: MapColorMode, highContrast: boolean): [number, number, number] {
   const cell = world.cells[ci];
   if (cell === Cell.WALL) {
-    if (world.hermoWall[ci]) return [42, 102, 130];
-    return [20, 22, 23];
+    if (world.hermoWall[ci]) return highContrast ? [88, 180, 222] : [42, 102, 130];
+    return highContrast ? [8, 10, 12] : [20, 22, 23];
   }
-  if (cell === Cell.ABYSS) return [5, 4, 8];
-  if (cell === Cell.LIFT) return [92, 160, 210];
-  if (cell === Cell.DOOR) return [190, 150, 68];
-  if (cell === Cell.WATER) return [32, 78, 96];
-  if (colorMode === 'factions') return territoryRgb(territoryOwnerAtIndex(world, ci), 0.74);
+  if (cell === Cell.ABYSS) return highContrast ? [28, 18, 34] : [5, 4, 8];
+  if (cell === Cell.LIFT) return highContrast ? [245, 224, 48] : [92, 160, 210];
+  if (cell === Cell.DOOR) return highContrast ? [226, 180, 86] : [190, 150, 68];
+  if (cell === Cell.WATER) return highContrast ? [46, 128, 190] : [32, 78, 96];
+  if (colorMode === 'factions') return territoryRgb(territoryOwnerAtIndex(world, ci), highContrast ? 1 : 0.74, highContrast);
 
   const rid = world.roomMap[ci];
-  if (rid >= 0) return roomTypeRgb(world.rooms[rid]?.type);
+  if (rid >= 0) return roomTypeRgb(world.rooms[rid]?.type, highContrast);
   const [zr, zg, zb] = ZONE_COLORS[world.zoneMap[ci] % 64];
-  return [zr >> 1, zg >> 1, zb >> 1];
+  return highContrast ? boostRgb([zr, zg, zb], 1.18, 28) : [zr >> 1, zg >> 1, zb >> 1];
 }
 
-function floorOverviewCanvas(ctx: CanvasRenderingContext2D, world: World, colorMode: MapColorMode): HTMLCanvasElement | null {
-  const signature = overviewSignature(world, colorMode);
+function floorOverviewCanvas(ctx: CanvasRenderingContext2D, world: World, colorMode: MapColorMode, highContrast: boolean): HTMLCanvasElement | null {
+  const signature = overviewSignature(world, colorMode, highContrast);
   const cached = floorOverviewCache.get(world);
   if (cached && cached.signature === signature) return cached.canvas;
 
@@ -1242,7 +1280,7 @@ function floorOverviewCanvas(ctx: CanvasRenderingContext2D, world: World, colorM
   let out = 0;
   for (let ci = 0; ci < W * W; ci++) {
     if (isMapCellExplored(world, ci)) {
-      const [r, g, b] = overviewCellRgb(world, ci, colorMode);
+      const [r, g, b] = overviewCellRgb(world, ci, colorMode, highContrast);
       data[out++] = r;
       data[out++] = g;
       data[out++] = b;
@@ -1261,18 +1299,18 @@ function floorOverviewCanvas(ctx: CanvasRenderingContext2D, world: World, colorM
   return canvas;
 }
 
-function drawMapLegendSwatches(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, sy: number, colorMode: MapColorMode): void {
+function drawMapLegendSwatches(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, sy: number, colorMode: MapColorMode, highContrast: boolean): void {
   const rows = colorMode === 'factions'
     ? Object.values(ZoneFaction).filter((value): value is ZoneFaction => typeof value === 'number')
-        .map(owner => ({ label: TERRITORY_NAMES[owner], rgb: TERRITORY_RGB[owner] }))
+        .map(owner => ({ label: TERRITORY_NAMES[owner], rgb: highContrast ? boostRgb(TERRITORY_RGB[owner], 1, 24) : TERRITORY_RGB[owner] }))
     : [
-        { label: 'Жилая', rgb: ROOM_TYPE_RGB[RoomType.LIVING] },
-        { label: 'Кухня', rgb: ROOM_TYPE_RGB[RoomType.KITCHEN] },
-        { label: 'Санузел', rgb: ROOM_TYPE_RGB[RoomType.BATHROOM] },
-        { label: 'Склад', rgb: ROOM_TYPE_RGB[RoomType.STORAGE] },
-        { label: 'Мед', rgb: ROOM_TYPE_RGB[RoomType.MEDICAL] },
-        { label: 'Цех', rgb: ROOM_TYPE_RGB[RoomType.PRODUCTION] },
-        { label: 'Штаб', rgb: ROOM_TYPE_RGB[RoomType.HQ] },
+        { label: 'Жилая', rgb: roomTypeRgb(RoomType.LIVING, highContrast) },
+        { label: 'Кухня', rgb: roomTypeRgb(RoomType.KITCHEN, highContrast) },
+        { label: 'Санузел', rgb: roomTypeRgb(RoomType.BATHROOM, highContrast) },
+        { label: 'Склад', rgb: roomTypeRgb(RoomType.STORAGE, highContrast) },
+        { label: 'Мед', rgb: roomTypeRgb(RoomType.MEDICAL, highContrast) },
+        { label: 'Цех', rgb: roomTypeRgb(RoomType.PRODUCTION, highContrast) },
+        { label: 'Штаб', rgb: roomTypeRgb(RoomType.HQ, highContrast) },
       ];
   ctx.save();
   ctx.font = `${7 * sy}px monospace`;
@@ -1329,6 +1367,12 @@ function drawLegendMenuRow(
     const mode = MAP_COLOR_MODES.find(entry => entry.id === mapColorMode());
     value = mode?.label ?? 'Типы комнат';
     valueColor = '#8cf';
+  } else if (row.kind === 'map_contrast') {
+    group = row.group;
+    label = row.label;
+    const enabled = mapHighContrastEnabled();
+    value = enabled ? 'ВКЛ' : 'ВЫКЛ';
+    valueColor = enabled ? '#8f8' : '#b66';
   } else if (row.kind === 'reset_map_legend') {
     group = row.group;
     label = row.label;
@@ -1366,6 +1410,7 @@ export function drawMapLegendMenu(
   const pad = 14 * s;
   const gap = 16 * s;
   const colorMode = mapColorMode();
+  const highContrast = mapHighContrastEnabled();
   const rightW = Math.min(w * 0.46, Math.max(240 * s, h * 0.72));
   const rightX = w - pad - rightW;
   const leftX = pad;
@@ -1408,7 +1453,7 @@ export function drawMapLegendMenu(
     drawLegendMenuRow(ctx, state, rowIndex, leftX, top + i * rowH, leftW, rowH, s);
   }
 
-  drawMapLegendSwatches(ctx, leftX, swatchY, leftW, s, colorMode);
+  drawMapLegendSwatches(ctx, leftX, swatchY, leftW, s, colorMode, highContrast);
 
   const overviewTop = 52 * s;
   const overviewSide = Math.min(rightW - 16 * s, h - overviewTop - 24 * s);
@@ -1422,7 +1467,7 @@ export function drawMapLegendMenu(
   ctx.textBaseline = 'alphabetic';
   ctx.font = `${8 * s}px monospace`;
   ctx.fillText('СХЕМА ВСЕГО ЭТАЖА', overviewX, overviewTop + 11 * s);
-  const overview = floorOverviewCanvas(ctx, world, colorMode);
+  const overview = floorOverviewCanvas(ctx, world, colorMode, highContrast);
   if (overview) {
     ctx.save();
     const smoothing = ctx.imageSmoothingEnabled;
@@ -1468,10 +1513,15 @@ export function drawFullMap(
   const pad = 4 * sx;
   const mapW = cw - pad * 2;
   const mapH = ch - pad * 2;
-  drawMap(ctx, world, entities, player, sx, sy, pad, pad, mapW, mapH, 200, 0.85, quests, currentFloor, state);
+  const rawRadius = state?.fullMapRadius;
+  const radius = Math.max(
+    FULL_MAP_RADIUS_MIN,
+    Math.min(FULL_MAP_RADIUS_MAX, Math.round(typeof rawRadius === 'number' && Number.isFinite(rawRadius) ? rawRadius : FULL_MAP_RADIUS_DEFAULT)),
+  );
+  drawMap(ctx, world, entities, player, sx, sy, pad, pad, mapW, mapH, radius, 0.85, quests, currentFloor, state);
 
   ctx.fillStyle = '#666';
   ctx.font = `${8 * sy}px monospace`;
-  const hint = `${controlHint('map')} закрыть карту  |  ${controlHint('mapLegend')} легенда/настройка карты  |  ${menuCloseHint()} закрыть`;
+  const hint = `${controlHint('map')} закрыть карту  |  wheel масштаб  |  ${controlHint('mapLegend')} легенда/настройка карты  |  ${menuCloseHint()} закрыть`;
   ctx.fillText(fitTextStable(ctx, hint, mapW - 8 * sx), pad + 4, pad + mapH - 4);
 }

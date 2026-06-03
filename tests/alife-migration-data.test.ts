@@ -118,6 +118,11 @@ test('A-Life population plan resolves authored NPC floor keys from their content
   assert.equal(reserved.get('rotenbergov')?.accountRubles, 4_990_000);
   assert.equal(reserved.get('rotenbergov')?.hp, 3000);
   assert.equal(reserved.get('rotenbergov')?.maxHp, 3000);
+  assert.equal(reserved.get('yakov')?.level, 10);
+  assert.equal(reserved.get('yakov')?.hp, 800);
+  assert.equal(reserved.get('yakov')?.maxHp, 800);
+  assert.equal(reserved.get('vanka')?.level, 2);
+  assert.equal(reserved.get('vanka')?.hp, 300);
 });
 
 test('A-Life migration profiles validate statically', () => {

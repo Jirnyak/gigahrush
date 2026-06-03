@@ -20,7 +20,7 @@ import { entitySpawnSlots } from './entity_limits';
 import { assignPersistentAlifeNpcFromEntity, bindReservedPlotNpcAlifeRecord, currentAlifeFloorKey, isPlotNpcDead } from './alife';
 import { publishEvent } from './events';
 import { currentFloorRunEntry } from './procedural_floors';
-import { randomRPG, getMaxHp } from './rpg';
+import { freshRPG, randomRPG, getMaxHp } from './rpg';
 import { tryAssignPathToCell } from './ai/pathfinding';
 
 const HOLDOUT_TAG = 'hell_holdout';
@@ -120,6 +120,7 @@ function spawnMajor(
     sprite: def.sprite,
     name: def.name, isFemale: def.isFemale,
     needs: freshNeeds(), hp: def.hp, maxHp: def.maxHp, money: def.money,
+    rpg: freshRPG(def.level ?? 1),
     ai: { goal: AIGoal.IDLE, tx: 0, ty: 0, path: [], pi: 0, stuck: 0, timer: 0 },
     inventory: def.inventory.map(item => ({ ...item })),
     weapon: 'ak47',

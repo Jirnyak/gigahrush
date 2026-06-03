@@ -1121,6 +1121,7 @@ export interface GameState {
   gameOver: boolean;
   showInventory: boolean;
   mapMode: number;          // 0=closed, 2=full map overlay; minimap is a UI setting
+  fullMapRadius?: number;   // transient full-map zoom radius in cells; not part of save shape
   showQuests: boolean;
   invSel: number;
   msgs: Msg[];

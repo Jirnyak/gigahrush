@@ -5,8 +5,8 @@
 import { type Entity } from '../../core/types';
 import { World } from '../../core/world';
 import { syncNextEntityId, withPoiGenerationMetadata } from '../content_manifest_utils';
-import { spawnNavelny } from './navelny';
-import { spawnZhirinovsky } from './zhirinovsky';
+import { spawnListovoy } from './listovoy';
+import { spawnGorlanov } from './gorlanov';
 import { spawnTyotyaKlava } from './tyotya_klava';
 import { spawnSeryGopnik } from './sery_gopnik';
 import { spawnPahomBratishka } from './pakhom';
@@ -59,10 +59,10 @@ export function spawnKvartiryNamedNpcs(
   entities: Entity[],
   nextId: number,
 ): number {
-  spawnNavelny(world, entities, { v: nextId });
+  spawnListovoy(world, entities, { v: nextId });
   nextId = syncNextEntityId(entities, nextId);
 
-  spawnZhirinovsky(world, entities, { v: nextId });
+  spawnGorlanov(world, entities, { v: nextId });
   nextId = syncNextEntityId(entities, nextId);
 
   spawnTyotyaKlava(world, entities, { v: nextId });

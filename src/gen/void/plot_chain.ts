@@ -11,6 +11,7 @@ import { PLOT_NPCS } from '../../data/plot';
 import { PLOT_ROOMS } from '../../data/plot_rooms';
 import { stampRoom, protectRoom, connectProtectedRoom, findClearArea } from '../shared';
 import { Spr } from '../../render/sprite_index';
+import { freshRPG } from '../../systems/rpg';
 
 export function generateVoidPlotChain(
   world: World,
@@ -68,6 +69,7 @@ function spawnVoidWarning(
     sprite: def.sprite,
     name: def.name, isFemale: def.isFemale,
     needs: freshNeeds(), hp: def.hp, maxHp: def.maxHp, money: def.money,
+    rpg: freshRPG(def.level ?? 1),
     ai: { goal: AIGoal.IDLE, tx: 0, ty: 0, path: [], pi: 0, stuck: 0, timer: 0 },
     inventory: def.inventory.map(i => ({ ...i })),
     faction: def.faction, occupation: def.occupation,

@@ -1,6 +1,6 @@
 /* ── Ministry NPC spawning ─────────────────────────────────────── */
 /*   Directors, officials in suits, scientists, liquidators.        */
-/*   Special NPCs: GenSec Khrushchev, Minister Rotenbergov.        */
+/*   Special NPCs: Chairman Kantselev, Minister Rotenbergov.       */
 
 import {
   W, Cell,
@@ -35,8 +35,8 @@ function ministryWeaponLoadout(faction: Faction, occupation: Occupation): { weap
 }
 
 /* ── Special NPCs definitions ─────────────────────────────────── */
-const KHRUSHCHEV_DEF: PlotNpcDef = {
-  name: 'Генсек Хрущёв',
+const KANTSELEV_DEF: PlotNpcDef = {
+  name: 'Председатель Канцелев',
   isFemale: false,
   faction: Faction.CITIZEN,
   occupation: Occupation.DIRECTOR,
@@ -47,7 +47,7 @@ const KHRUSHCHEV_DEF: PlotNpcDef = {
     { defId: 'cigs', count: 3 },
   ],
   talkLines: [
-    'Генеральный секретарь Хрущёв. Докладывайте коротко: у меня лифт за дверью и три окна без печати.',
+    'Председатель Совета Канцелев. Докладывайте коротко: у меня лифт за дверью и три окна без печати.',
     'Дом стоит не потому, что красивый. Его каждый день подпирают стояки, наряды и люди, которым некогда спорить.',
     'Каждый стояк, актовый зал и коллектор внесён в план. Даже те, что ночью уходят в другой шкаф.',
     'В коллекторах Махно режет кабель, берет пайки и срывает пломбы. Потом называет это волей.',
@@ -87,16 +87,16 @@ const ROTENBERGOV_DEF: PlotNpcDef = {
 
 /* ── Register side quests ─────────────────────────────────────── */
 registerAuthoredNpc({
-  id: 'khrushchev',
-  npc: KHRUSHCHEV_DEF,
+  id: 'kantselev',
+  npc: KANTSELEV_DEF,
   homeFloorKey: storyNpcFloorKey(FloorLevel.MINISTRY),
   tags: ['ministry', 'leader'],
   quests: [
     {
-      id: 'khrushchev_kill_makhno',
-      giverNpcId: 'khrushchev',
+      id: 'kantselev_kill_makhno',
+      giverNpcId: 'kantselev',
       type: QuestType.KILL,
-      desc: 'Генсек Хрущёв: «Махно режет кабель и срывает пломбы в коллекторах. Убери атамана, пока ремонтники не ходят туда только с охраной.»',
+      desc: 'Председатель Канцелев: «Махно режет кабель и срывает пломбы в коллекторах. Убери атамана, пока ремонтники не ходят туда только с охраной.»',
       targetPlotNpcId: 'makhno',
       killNeeded: 1,
       rewardItem: 'psi_brainburn', rewardCount: 1,
@@ -206,8 +206,8 @@ export function spawnMinistryNpcs(
     if (npcCount === prevCount) break;
   }
 
-  /* ── Spawn Генсек Хрущёв ────────────────────────────────────── */
-  spawnPlotNpc(world, entities, nextId, 'khrushchev', KHRUSHCHEV_DEF);
+  /* ── Spawn Председатель Канцелев ────────────────────────────── */
+  spawnPlotNpc(world, entities, nextId, 'kantselev', KANTSELEV_DEF);
 
   /* ── Spawn Министр Ротенбергов ──────────────────────────────── */
   spawnPlotNpc(world, entities, nextId, 'rotenbergov', ROTENBERGOV_DEF);

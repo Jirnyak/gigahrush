@@ -79,6 +79,7 @@ import {
   resetMapLegendSettings,
   resetUiSettings,
   toggleAutoPickup,
+  toggleMapHighContrast,
   toggleUiElement,
   toggleMapColorMode,
   toggleMapLegendToggle,
@@ -465,6 +466,10 @@ const PLAYER_NAME_KEY = 'gigahrush_player_name';
 const TITLE_LANGUAGE_KEY = 'gigahrush_title_language';
 const TITLE_ACTIVE_ACTOR_SOFT_LIMIT_KEY = 'gigahrush_active_actor_soft_limit';
 const NET_GEN_NAME_RE = /^NET-[A-Z0-9-]{4,28}$/;
+const FULL_MAP_RADIUS_DEFAULT = 200;
+const FULL_MAP_RADIUS_MIN = 48;
+const FULL_MAP_RADIUS_MAX = W / 2;
+const FULL_MAP_ZOOM_STEP = 1.18;
 type TitleInputField = Extract<TitleHitField, 'language' | 'name' | 'seed' | 'actorCap' | 'start'>;
 const TITLE_SETUP_FIELDS: readonly TitleInputField[] = ['start', 'language', 'name', 'seed', 'actorCap'];
 let started = false;
@@ -1756,6 +1761,7 @@ function initGame(runSeedOverride?: number): void {
     gameOver: false,
     showInventory: false,
     mapMode: 0,
+    fullMapRadius: FULL_MAP_RADIUS_DEFAULT,
     showQuests: false,
     invSel: 0,
     msgs: [msg('Добро пожаловать в ГИГАХРУЩ. Закройте дверь.', 0, '#aaa', 0)],
@@ -4960,10 +4966,28 @@ function closeInterfacesForFullMap(): void {
   closeMapEditor();
 }
 
+function clampFullMapRadius(value: unknown): number {
+  const numeric = typeof value === 'number' && Number.isFinite(value) ? value : FULL_MAP_RADIUS_DEFAULT;
+  return Math.max(FULL_MAP_RADIUS_MIN, Math.min(FULL_MAP_RADIUS_MAX, Math.round(numeric)));
+}
+
+function currentFullMapRadius(): number {
+  state.fullMapRadius = clampFullMapRadius(state.fullMapRadius);
+  return state.fullMapRadius;
+}
+
+function adjustFullMapZoom(steps: number): void {
+  const boundedSteps = Math.max(-4, Math.min(4, Math.trunc(steps)));
+  if (boundedSteps === 0) return;
+  const current = currentFullMapRadius();
+  state.fullMapRadius = clampFullMapRadius(current / Math.pow(FULL_MAP_ZOOM_STEP, boundedSteps));
+}
+
 function openFullMapMenu(): void {
   if (typeof state === 'undefined') return;
   closeInterfacesForFullMap();
   state.mapMode = 2;
+  currentFullMapRadius();
   resetMenuRepeats();
   syncPauseState();
   updateMobileContext(true);
@@ -5534,6 +5558,11 @@ function applyMapLegendSelection(index: number): void {
   if (row.kind === 'map_color_mode') {
     const mode = toggleMapColorMode();
     state.msgs.push(msg(`Карта: цвет клеток - ${mode === 'factions' ? 'контроль фракций' : 'типы комнат'}`, state.time, '#8cf'));
+    return;
+  }
+  if (row.kind === 'map_contrast') {
+    const enabled = toggleMapHighContrast();
+    state.msgs.push(msg(`Карта: контраст ${enabled ? 'вкл' : 'выкл'}`, state.time, enabled ? '#8cf' : '#fc8'));
     return;
   }
   const enabled = toggleMapLegendToggle(row.toggle.id);
@@ -6783,6 +6812,8 @@ function handleMenuInput(): void {
   }
   // ── Full map menu ───────────────────────────────────────
   else if (state.mapMode === 2) {
+    const wheelZoom = Math.max(-4, Math.min(4, -pointerWheel));
+    if (wheelZoom !== 0) adjustFullMapZoom(wheelZoom);
     // Backspace/Delete closes the full map; other menu hotkeys wait for the map to close.
   }
   // ── Normal gameplay toggles ──────────────────────────────

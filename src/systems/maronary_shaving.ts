@@ -60,7 +60,7 @@ function classifyBuyer(npc: Entity, state: GameState): ShavingOutcome {
     state.currentFloor === FloorLevel.MINISTRY
     && (
       npc.plotNpcId === 'rotenbergov'
-      || npc.plotNpcId === 'khrushchev'
+      || npc.plotNpcId === 'kantselev'
       || npc.occupation === Occupation.DIRECTOR
       || npc.occupation === Occupation.SECRETARY
       || npc.faction === Faction.CITIZEN

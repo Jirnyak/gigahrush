@@ -431,6 +431,24 @@ testGenerationMatrix('living generation places AG89 Istotit supply cache quest c
   }
 });
 
+testGenerationMatrix('living plot NPCs spawn with authored survivability and levels', () => {
+  const generated = floorForRead(FloorLevel.LIVING);
+  const byPlotNpcId = new Map(generated.entities
+    .filter(e => e.type === EntityType.NPC && e.plotNpcId)
+    .map(e => [e.plotNpcId, e]));
+  const yakov = byPlotNpcId.get('yakov');
+  const vanka = byPlotNpcId.get('vanka');
+
+  assert.ok(yakov, 'Yakov should spawn on Living floor');
+  assert.equal(yakov.hp, 800);
+  assert.equal(yakov.maxHp, 800);
+  assert.equal(yakov.rpg?.level, 10);
+  assert.ok(vanka, 'Vanka should spawn on Living floor');
+  assert.equal(vanka.hp, 300);
+  assert.equal(vanka.maxHp, 300);
+  assert.equal(vanka.rpg?.level, 2);
+});
+
 testGenerationMatrix('living start tutorial rooms keep samosbor-proof hermowalls', () => {
   const generated = floorForRead(FloorLevel.LIVING);
   for (const name of ['Актовый зал', 'Оружейная']) {

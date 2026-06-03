@@ -15,7 +15,7 @@ import { PLOT_NPCS } from '../../data/plot';
 import { PLOT_ROOMS } from '../../data/plot_rooms';
 import { MONSTERS } from '../../entities/monster';
 import { stampRoom, protectRoom, findClearArea } from '../shared';
-import { randomRPG, scaleMonsterHp, scaleMonsterSpeed } from '../../systems/rpg';
+import { freshRPG, randomRPG, scaleMonsterHp, scaleMonsterSpeed } from '../../systems/rpg';
 
 const DEN_MIN_DIST = 100;
 const DEN_MAX_DIST = 200;
@@ -96,6 +96,7 @@ function spawnVanka(_world: World, room: Room, entities: Entity[], nextId: { v: 
     sprite: vankaDef.sprite,
     name: vankaDef.name, isFemale: vankaDef.isFemale,
     needs: freshNeeds(), hp: vankaDef.hp, maxHp: vankaDef.maxHp, money: vankaDef.money,
+    rpg: freshRPG(vankaDef.level ?? 1),
     ai: { goal: AIGoal.IDLE, tx: 0, ty: 0, path: [], pi: 0, stuck: 0, timer: 0 },
     inventory: vankaDef.inventory.map(i => ({ ...i })),
     faction: vankaDef.faction, occupation: vankaDef.occupation,

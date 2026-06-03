@@ -31,6 +31,7 @@ export function makeGameState(overrides: Partial<GameState> = {}): GameState {
     gameOver: false,
     showInventory: false,
     mapMode: 0,
+    fullMapRadius: 200,
     showQuests: false,
     invSel: 0,
     msgs: [] as Msg[],

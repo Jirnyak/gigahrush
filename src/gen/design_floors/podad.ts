@@ -11,7 +11,7 @@ import { freshNeeds } from '../../data/catalog';
 import { PLOT_NPCS } from '../../data/plot';
 import { MONSTERS } from '../../entities/monster';
 import { monsterSpr, Spr } from '../../render/sprite_index';
-import { calcZoneLevel, randomRPG, scaleMonsterHp, scaleMonsterSpeed } from '../../systems/rpg';
+import { calcZoneLevel, freshRPG, randomRPG, scaleMonsterHp, scaleMonsterSpeed } from '../../systems/rpg';
 import { entitySpawnSlots } from '../../systems/entity_limits';
 import { registerRouteCue } from '../../systems/route_cues';
 import {
@@ -1041,6 +1041,7 @@ function spawnPlotNpc(
     sprite: def.sprite,
     name: def.name, isFemale: def.isFemale,
     needs: freshNeeds(), hp: def.hp, maxHp: def.maxHp, money: def.money,
+    rpg: freshRPG(def.level ?? 1),
     ai: { goal: AIGoal.IDLE, tx: 0, ty: 0, path: [], pi: 0, stuck: 0, timer: 0 },
     inventory: def.inventory.map(i => ({ ...i })),
     faction: def.faction, occupation: def.occupation,

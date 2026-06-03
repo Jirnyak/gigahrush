@@ -10,7 +10,7 @@ The browser save lives in `localStorage` under `gigahrush_save`.
 
 Current authoritative shape:
 
-- `SAVE_SHAPE_VERSION = 16`;
+- `SAVE_SHAPE_VERSION = 17`;
 - old or unversioned saves are rejected;
 - newer saves are rejected;
 - cross-version migration code is not required by default.

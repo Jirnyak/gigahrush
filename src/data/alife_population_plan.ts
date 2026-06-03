@@ -45,6 +45,7 @@ export interface AlifeReservedIdentityDef {
   occupation?: Occupation;
   sprite?: number;
   npcVisualId?: string;
+  level?: number;
   hp?: number;
   maxHp?: number;
   money?: number;
@@ -201,6 +202,7 @@ function buildReservedIdentities(): AlifeReservedIdentityDef[] {
     occupation: def.occupation,
     sprite: def.sprite,
     npcVisualId: def.npcVisualId,
+    level: def.level,
     hp: def.hp,
     maxHp: def.maxHp,
     money: def.money,
