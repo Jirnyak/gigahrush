@@ -10,7 +10,7 @@ The browser save lives in `localStorage` under `gigahrush_save`.
 
 Current authoritative shape:
 
-- `SAVE_SHAPE_VERSION = 15`;
+- `SAVE_SHAPE_VERSION = 16`;
 - old or unversioned saves are rejected;
 - newer saves are rejected;
 - cross-version migration code is not required by default.
@@ -35,6 +35,7 @@ Current runtime save sections include:
 - `floorInstances`;
 - optional `voidReturnPortal`;
 - `alife`;
+- `alifeMobility`;
 - `liftArachna`;
 - `pseudolift`;
 - `floorMemory`;
@@ -87,6 +88,7 @@ A-Life saves compact identity state, not live NPC arrays:
 - up to `65_536` dead procedural A-Life ids;
 - dead plot ids;
 - sparse changed-record overrides;
+- capped mobility state for cold journeys, pending active-floor arrivals and migration cursor/cadence;
 - player social/rank inputs through the current player entity state.
 
 Live materialized NPCs fold back before transitions, samosbor rebuilds and save. Ordinary killed people are not silently replaced by background refill.

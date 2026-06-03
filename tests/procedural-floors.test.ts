@@ -25,6 +25,7 @@ import { getMonsterEcology } from '../src/data/monster_ecology';
 import { SIDE_QUESTS } from '../src/data/plot';
 import { PROCEDURAL_POPULATION_PROFILES, proceduralPopulationBudget } from '../src/data/population_profiles';
 import { isFloor69FemaleSprite } from '../src/entities/procedural_visuals';
+import { NPC_VISUAL_FLOOR69_FEMALE } from '../src/entities/npc_visuals';
 import {
   BAD_APPLE_HEIGHT,
   BAD_APPLE_WIDTH,
@@ -5850,11 +5851,15 @@ testGenerationMatrix('floor 69 uses the shared field as an adult social-debt rou
   assert.equal(socialStaffNpcs.length > 400, true);
   assert.equal(floor69FemaleSprites.length >= 300, true);
   assert.equal(floor69FemaleSprites.length, generatedWorkers.length);
-  assert.equal(floor69FemaleSprites.every(e => e.isFemale === true && e.name?.startsWith('Этаж 69: работница ')), true);
+  assert.equal(floor69FemaleSprites.every(e =>
+    e.isFemale === true &&
+    e.npcVisualId === NPC_VISUAL_FLOOR69_FEMALE &&
+    e.name?.startsWith('Этаж 69: работница ')
+  ), true);
   assert.equal(generatedWorkers.every(e => isFloor69FemaleSprite(e.sprite)), true);
   assert.equal(generatedVisitors.every(e => !isFloor69FemaleSprite(e.sprite)), true);
   assert.deepEqual(femaleQuestNpcs.map(e => e.plotNpcId).sort(), ['f69_doctor_sima', 'f69_madam_roza', 'f69_performer_ira']);
-  assert.equal(femaleQuestNpcs.every(e => isFloor69FemaleSprite(e.sprite)), true);
+  assert.equal(femaleQuestNpcs.every(e => isFloor69FemaleSprite(e.sprite) && e.npcVisualId === NPC_VISUAL_FLOOR69_FEMALE), true);
   assert.equal(maxEntitiesInArea(gen.entities, EntityType.NPC, 32) <= 26, true);
 });
 

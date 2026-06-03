@@ -22,10 +22,10 @@ test('betonoed is a standalone weak-wall monster package', () => {
   assert.match(DEF.counterplay ?? '', /герметик|блок-комплект|шум|огонь/);
 });
 
-test('betonoed ecology is authored-only and has no old variant id', () => {
+test('betonoed ecology stays rare and has no old variant id', () => {
   const ecology = getMonsterEcology(MonsterKind.BETONOED);
   assert.ok(ecology);
-  assert.equal(ecology.spawnWeight, 0);
+  assert.equal(ecology.spawnWeight > 0 && ecology.spawnWeight < 0.2, true);
   assert.equal(ecology.rare, true);
   assert.equal(ecology.rumorIds.includes('monster_betonoed_weak_wall'), true);
   assert.equal(ecology.rumorIds.includes('ecology_betonoed_shortcut'), true);

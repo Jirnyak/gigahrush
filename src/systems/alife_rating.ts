@@ -1,7 +1,7 @@
 import { EntityType, Faction, Occupation, type Entity } from '../core/types';
 
-export const KARMA_MIN = -128;
-export const KARMA_MAX = 128;
+export const KARMA_MIN = -127;
+export const KARMA_MAX = 127;
 export const PLAYER_START_KARMA = 0;
 export const PLAYER_SELF_RELATION = 100;
 

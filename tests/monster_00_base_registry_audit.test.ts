@@ -20,10 +20,8 @@ import {
 import { S } from '../src/render/pixutil';
 
 const ZERO_WEIGHT_MONSTERS = new Set<MonsterKind>([
-  MonsterKind.BETONOED,
   MonsterKind.CREATOR,
   MonsterKind.PSEUDOLIFT,
-  MonsterKind.BLACK_LIQUIDATOR,
 ]);
 
 interface TacticalAudit {

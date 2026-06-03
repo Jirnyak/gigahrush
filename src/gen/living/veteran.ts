@@ -5,18 +5,21 @@
 import {
   W, Cell,
   type Entity, EntityType, AIGoal, Faction, Occupation, QuestType, MonsterKind,
+  FloorLevel,
 } from '../../core/types';
 import { World } from '../../core/world';
 import { freshNeeds } from '../../data/catalog';
-import { type PlotNpcDef, registerSideQuest } from '../../data/plot';
-import { Spr } from '../../render/sprite_index';
+import { type PlotNpcDef, registerAuthoredNpc, storyNpcFloorKey } from '../../data/plot';
+import { authoredNpcSpr } from '../../render/sprite_index';
+
+const NPC_ID = 'veteran_stepanych';
 
 const NPC_DEF: PlotNpcDef = {
   name: 'Ветеран Степаныч',
   isFemale: false,
   faction: Faction.LIQUIDATOR,
   occupation: Occupation.HUNTER,
-  sprite: Spr.VETERAN,
+  sprite: authoredNpcSpr(NPC_ID),
   hp: 220, maxHp: 220, money: 60, speed: 1.0,
   inventory: [
     { defId: 'pipe', count: 1 },
@@ -36,19 +39,25 @@ const NPC_DEF: PlotNpcDef = {
   ],
 };
 
-registerSideQuest('veteran_stepanych', NPC_DEF, [
-  {
-    id: 'stepanych_zombies',
-    giverNpcId: 'veteran_stepanych',
-    type: QuestType.KILL,
-    desc: 'Степаныч: «Прибей пятерых мертвяков. За мой взвод. Для счёта.»',
-    targetMonsterKind: MonsterKind.ZOMBIE,
-    killNeeded: 5,
-    rewardItem: 'rebar', rewardCount: 1,
-    extraRewards: [{ defId: 'kompot', count: 2 }, { defId: 'bandage', count: 2 }],
-    relationDelta: 20, xpReward: 60, moneyReward: 80,
-  },
-]);
+registerAuthoredNpc({
+  id: NPC_ID,
+  npc: NPC_DEF,
+  homeFloorKey: storyNpcFloorKey(FloorLevel.LIVING),
+  tags: ['living', 'liquidator'],
+  quests: [
+    {
+      id: 'stepanych_zombies',
+      giverNpcId: NPC_ID,
+      type: QuestType.KILL,
+      desc: 'Степаныч: «Прибей пятерых мертвяков. За мой взвод. Для счёта.»',
+      targetMonsterKind: MonsterKind.ZOMBIE,
+      killNeeded: 5,
+      rewardItem: 'rebar', rewardCount: 1,
+      extraRewards: [{ defId: 'kompot', count: 2 }, { defId: 'bandage', count: 2 }],
+      relationDelta: 20, xpReward: 60, moneyReward: 80,
+    },
+  ],
+});
 
 export function spawnVeteran(
   world: World, entities: Entity[], nextId: { v: number },
@@ -68,7 +77,7 @@ export function spawnVeteran(
       inventory: NPC_DEF.inventory.map(i => ({ ...i })),
       weapon: 'pipe',
       faction: NPC_DEF.faction, occupation: NPC_DEF.occupation,
-      plotNpcId: 'veteran_stepanych', canGiveQuest: true, questId: -1,
+      plotNpcId: NPC_ID, canGiveQuest: true, questId: -1,
       isTraveler: true,
     });
     return;

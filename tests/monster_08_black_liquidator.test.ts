@@ -109,7 +109,8 @@ test('black liquidator is standalone aftermath monster content with capped patro
   assert.deepEqual(DEF.aiFlags, ['falsePatrol']);
   assert.deepEqual(DEF.floors, [FloorLevel.MINISTRY, FloorLevel.KVARTIRY, FloorLevel.LIVING]);
   assert.equal(NEW_MONSTERS_BY_FLOOR[FloorLevel.LIVING].includes(MonsterKind.BLACK_LIQUIDATOR), true);
-  assert.equal(ecology?.spawnWeight, 0);
+  assert.equal((ecology?.spawnWeight ?? 0) > 0 && (ecology?.spawnWeight ?? 1) < 0.2, true);
+  assert.equal(ecology?.minSamosborCount, 3);
   assert.equal(ecology?.rare, true);
   assert.deepEqual(ecology?.rumorIds, ['monster_black_liquidator_wrong_count', 'ecology_black_liquidator_masks', 'samosbor_false_cleanup_patrol']);
   assert.ok(beat);

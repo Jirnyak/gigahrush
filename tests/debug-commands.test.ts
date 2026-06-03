@@ -53,6 +53,17 @@ test('revealmap debug command has a stable id', () => {
   assert.ok(getDebugCommandIndex('revealmap') >= 0, 'revealmap must resolve to a debug menu command');
 });
 
+test('map editor debug command stays in the top cheat block', () => {
+  const ids = getDebugCommandIds();
+  const openEditor = getDebugCommandIndex('open_map_editor');
+  const teleportLiving = getDebugCommandIndex('teleport_living');
+  const firstDesignTeleport = ids.findIndex(id => id.startsWith('teleport_design_floor:'));
+
+  assert.ok(openEditor >= 0, 'open_map_editor must resolve to a debug menu command');
+  assert.ok(openEditor < teleportLiving, 'map editor must stay above story-floor teleports');
+  assert.ok(firstDesignTeleport < 0 || openEditor < firstDesignTeleport, 'map editor must stay above routed design teleports');
+});
+
 test('smoke playability script calls hooks by stable ids', () => {
   const here = path.dirname(fileURLToPath(import.meta.url));
   const source = readFileSync(path.resolve(here, '../scripts/smoke-playability.mjs'), 'utf8');

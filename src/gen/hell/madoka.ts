@@ -3,19 +3,21 @@
 
 import {
   W, Cell,
-  type Entity, EntityType, AIGoal, Faction, Occupation,
+  type Entity, EntityType, AIGoal, Faction, FloorLevel, Occupation,
 } from '../../core/types';
 import { World } from '../../core/world';
 import { freshNeeds } from '../../data/catalog';
-import { type PlotNpcDef, registerSideQuest } from '../../data/plot';
-import { Spr } from '../../render/sprite_index';
+import { type PlotNpcDef, registerAuthoredNpc, storyNpcFloorKey } from '../../data/plot';
+import { authoredNpcSpr } from '../../render/sprite_index';
+
+const NPC_ID = 'meduka_meguku';
 
 const NPC_DEF: PlotNpcDef = {
   name: 'Мегука ПСИ-дежурная',
   isFemale: true,
   faction: Faction.SCIENTIST,
   occupation: Occupation.HUNTER,
-  sprite: Spr.MADOKA,
+  sprite: authoredNpcSpr(NPC_ID),
   hp: 3333, maxHp: 3333, money: 0, speed: 1.5,
   inventory: [
     { defId: 'psi_beam', count: 1 },
@@ -42,7 +44,12 @@ const NPC_DEF: PlotNpcDef = {
   ],
 };
 
-registerSideQuest('meduka_meguku', NPC_DEF, []);
+registerAuthoredNpc({
+  id: NPC_ID,
+  npc: NPC_DEF,
+  homeFloorKey: storyNpcFloorKey(FloorLevel.HELL),
+  tags: ['hell', 'psi'],
+});
 
 export function spawnMedukaMeguku(
   world: World, entities: Entity[], nextId: { v: number },
@@ -62,7 +69,7 @@ export function spawnMedukaMeguku(
       inventory: NPC_DEF.inventory.map(i => ({ ...i })),
       weapon: 'psi_beam',
       faction: NPC_DEF.faction, occupation: NPC_DEF.occupation,
-      plotNpcId: 'meduka_meguku', canGiveQuest: false, questId: -1,
+      plotNpcId: NPC_ID, canGiveQuest: false, questId: -1,
       isTraveler: true,
       rpg: {
         level: 12, xp: 0, attrPoints: 0,

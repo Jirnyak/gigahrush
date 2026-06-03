@@ -578,3 +578,11 @@ export function generatePakhomSprite(): Uint32Array {
   return t;
 }
 
+export const AUTHORED_NPC_SPRITE_GENERATORS = [
+  { id: 'veteran_stepanych', generate: generateVeteranSprite },
+  { id: 'gordon_freeman', generate: generateGordonSprite },
+  { id: 'meduka_meguku', generate: generateMadokaSprite },
+  { id: 'pahom_bratishka', generate: generatePakhomSprite },
+] as const;
+
+export type AuthoredNpcSpriteId = typeof AUTHORED_NPC_SPRITE_GENERATORS[number]['id'];

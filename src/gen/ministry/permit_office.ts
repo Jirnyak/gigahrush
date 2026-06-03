@@ -13,7 +13,7 @@ import {
   type WorldContainer,
 } from '../../core/types';
 import { World } from '../../core/world';
-import { type PlotNpcDef, registerSideQuest } from '../../data/plot';
+import { type PlotNpcDef, registerFloorSideQuest, storyNpcFloorKey } from '../../data/plot';
 import {
   type NextId, createAdminRoom, setFeature, addItemDrop, spawnAdminNpc, spawnNamedCivilian,
 } from './admin_common';
@@ -27,6 +27,7 @@ const PERMIT_CHOICE_IDS = [
   'permit_threaten_window',
   'queue_water',
 ] as const;
+const HOME_FLOOR_KEY = storyNpcFloorKey(FloorLevel.MINISTRY);
 
 function otherPermitChoices(id: string): string[] {
   return PERMIT_CHOICE_IDS.filter(choiceId => choiceId !== id);
@@ -155,7 +156,7 @@ const THREAT_CLERK_DEF: PlotNpcDef = {
   ],
 };
 
-registerSideQuest('vera_propuskova', VERA_DEF, [
+registerFloorSideQuest(HOME_FLOOR_KEY, 'vera_propuskova', VERA_DEF, [
   {
     id: 'permit_ballot_blanks',
     giverNpcId: 'vera_propuskova',
@@ -177,7 +178,7 @@ registerSideQuest('vera_propuskova', VERA_DEF, [
   },
 ]);
 
-registerSideQuest('permit_wait_registrar', WAIT_REGISTRAR_DEF, [
+registerFloorSideQuest(HOME_FLOOR_KEY, 'permit_wait_registrar', WAIT_REGISTRAR_DEF, [
   {
     id: 'permit_wait_queue',
     giverNpcId: 'permit_wait_registrar',
@@ -196,7 +197,7 @@ registerSideQuest('permit_wait_registrar', WAIT_REGISTRAR_DEF, [
   },
 ]);
 
-registerSideQuest('permit_pay_clerk', PAY_CLERK_DEF, [
+registerFloorSideQuest(HOME_FLOOR_KEY, 'permit_pay_clerk', PAY_CLERK_DEF, [
   {
     id: 'permit_pay_accelerator',
     giverNpcId: 'permit_pay_clerk',
@@ -223,7 +224,7 @@ registerSideQuest('permit_pay_clerk', PAY_CLERK_DEF, [
   },
 ]);
 
-registerSideQuest('permit_forger_fedya', FORGER_DEF, [
+registerFloorSideQuest(HOME_FLOOR_KEY, 'permit_forger_fedya', FORGER_DEF, [
   {
     id: 'permit_forge_slip',
     giverNpcId: 'permit_forger_fedya',
@@ -249,7 +250,7 @@ registerSideQuest('permit_forger_fedya', FORGER_DEF, [
   },
 ]);
 
-registerSideQuest('permit_threat_gleb', THREAT_CLERK_DEF, [
+registerFloorSideQuest(HOME_FLOOR_KEY, 'permit_threat_gleb', THREAT_CLERK_DEF, [
   {
     id: 'permit_threaten_window',
     giverNpcId: 'permit_threat_gleb',

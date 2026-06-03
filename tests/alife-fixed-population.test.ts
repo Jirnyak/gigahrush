@@ -10,7 +10,18 @@ import {
   type Entity,
   type GameState,
 } from '../src/core/types';
-import { alifeForSave, assignPersistentAlifeNpcFromEntity, defaultAlifePopulation, setAlifeState } from '../src/systems/alife';
+import {
+  ALIFE_POPULATION_BASELINE,
+  ALIFE_POPULATION_CAPACITY,
+  alifePopulationTotalForSeed,
+} from '../src/data/alife_population_plan';
+import {
+  alifeForSave,
+  assignPersistentAlifeNpcFromEntity,
+  defaultAlifePopulation,
+  ensureAlifeState,
+  setAlifeState,
+} from '../src/systems/alife';
 import { setFloorRunState } from '../src/systems/procedural_floors';
 
 function restoreGlobalProperty(name: 'navigator' | 'performance' | 'window', descriptor: PropertyDescriptor | undefined): void {
@@ -24,7 +35,7 @@ function minimalState(): GameState {
   return state;
 }
 
-test('A-Life default population is fixed across runtime memory and mobile hints', () => {
+test('A-Life baseline population is independent from runtime memory and mobile hints', () => {
   const navigatorDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'navigator');
   const performanceDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'performance');
   const windowDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'window');
@@ -46,7 +57,7 @@ test('A-Life default population is fixed across runtime memory and mobile hints'
       value: { innerWidth: 3840, innerHeight: 2160 },
     });
 
-    assert.equal(defaultAlifePopulation(), 100_000);
+    assert.equal(defaultAlifePopulation(), ALIFE_POPULATION_BASELINE);
 
     Object.defineProperty(globalThis, 'navigator', {
       configurable: true,
@@ -65,7 +76,7 @@ test('A-Life default population is fixed across runtime memory and mobile hints'
       value: { innerWidth: 844, innerHeight: 390 },
     });
 
-    assert.equal(defaultAlifePopulation(), 100_000);
+    assert.equal(defaultAlifePopulation(), ALIFE_POPULATION_BASELINE);
   } finally {
     restoreGlobalProperty('navigator', navigatorDescriptor);
     restoreGlobalProperty('performance', performanceDescriptor);
@@ -73,26 +84,37 @@ test('A-Life default population is fixed across runtime memory and mobile hints'
   }
 });
 
-test('A-Life clamps oversized saved totals to the fixed population size', () => {
+test('A-Life new run population uses seed-sized total below technical capacity', () => {
+  const state = minimalState();
+  const alife = ensureAlifeState(state) as { total: number; npcs: unknown[] };
+  const expected = alifePopulationTotalForSeed(1);
+
+  assert.equal(alife.total, expected);
+  assert.equal(alife.npcs.length, expected);
+  assert.ok(alife.total < ALIFE_POPULATION_CAPACITY);
+});
+
+test('A-Life clamps oversized saved totals to the technical population capacity', () => {
   const alife = setAlifeState(minimalState(), { seed: 12345, total: 1_000_000 }) as {
     total: number;
     npcs: unknown[];
   };
 
-  assert.equal(alife.total, 100_000);
-  assert.equal(alife.npcs.length, 100_000);
+  assert.equal(alife.total, ALIFE_POPULATION_CAPACITY);
+  assert.equal(alife.npcs.length, ALIFE_POPULATION_CAPACITY);
 });
 
-test('A-Life clamps undersized saved totals to the fixed population size', () => {
+test('A-Life rejects implausibly undersized saved totals back to the run-sized total', () => {
   const state = minimalState();
   const alife = setAlifeState(state, { seed: 12345, total: 999 }) as {
     total: number;
     npcs: unknown[];
   };
+  const expected = alifePopulationTotalForSeed(1);
 
-  assert.equal(alife.total, 100_000);
-  assert.equal(alife.npcs.length, 100_000);
-  assert.equal(alifeForSave(state).total, 100_000);
+  assert.equal(alife.total, expected);
+  assert.equal(alife.npcs.length, expected);
+  assert.equal(alifeForSave(state).total, expected);
 });
 
 test('A-Life event arrivals reserve fixed-pool identities without growing the pool', () => {
@@ -121,8 +143,8 @@ test('A-Life event arrivals reserve fixed-pool identities without growing the po
   };
 
   assert.equal(assignPersistentAlifeNpcFromEntity(state, npc, []), true);
-  assert.equal(alife.total, 100_000);
-  assert.equal(alife.npcs.length, 100_000);
+  assert.equal(alife.total, ALIFE_POPULATION_CAPACITY);
+  assert.equal(alife.npcs.length, ALIFE_POPULATION_CAPACITY);
   assert.equal(typeof npc.alifeId, 'number');
   assert.equal(npc.persistentNpcId, `alife:${npc.alifeId}`);
 });

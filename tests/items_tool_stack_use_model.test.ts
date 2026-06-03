@@ -10,6 +10,7 @@ import {
   itemStackableByDefault,
   spawnCount,
 } from '../src/data/items';
+import { MAX_ITEM_STACK } from '../src/data/inventory_limits';
 import {
   activeToolLightDrainPerSecond,
   activeToolLightRenderIntensity,
@@ -35,7 +36,7 @@ test('equipable tools default to single-item stacks', () => {
   }
 
   assert.equal(getStack(ITEMS.smoke_candle_check), 6);
-  assert.equal(getStack(ITEMS.ammo_9mm), 999);
+  assert.equal(getStack(ITEMS.ammo_9mm), MAX_ITEM_STACK);
 });
 
 test('default stack model separates bulk consumables from non-use objects', () => {
@@ -53,8 +54,8 @@ test('default stack model separates bulk consumables from non-use objects', () =
   assert.equal(itemStackableByDefault(ITEMS.key), false);
   assert.equal(itemStackableByDefault(ITEMS.note), false);
 
-  assert.equal(getStack(ITEMS.bread), 999);
-  assert.equal(getStack(ITEMS.ammo_9mm), 999);
+  assert.equal(getStack(ITEMS.bread), MAX_ITEM_STACK);
+  assert.equal(getStack(ITEMS.ammo_9mm), MAX_ITEM_STACK);
   assert.equal(getStack(ITEMS.manometer), 1);
   assert.equal(getStack(ITEMS.key), 1);
   assert.equal(getStack(ITEMS.note), 1);

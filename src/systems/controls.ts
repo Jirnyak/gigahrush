@@ -20,9 +20,9 @@ export const CONTROL_ACTIONS = [
   { id: 'strafeLeft', group: 'Движение', label: 'Шаг влево', input: 'strafeL', defaultKeys: ['KeyA'] },
   { id: 'strafeRight', group: 'Движение', label: 'Шаг вправо', input: 'strafeR', defaultKeys: ['KeyD'] },
   { id: 'sprint', group: 'Движение', label: 'Спринт, удерживать', input: 'sprint', defaultKeys: ['ShiftLeft', 'ShiftRight'] },
-  { id: 'attack', group: 'Бой', label: 'Атака / выстрел', input: 'attack', defaultKeys: [] },
+  { id: 'attack', group: 'Бой', label: 'Атака / выстрел', input: 'attack', defaultKeys: ['MouseLeft'] },
   { id: 'interact', group: 'Бой', label: 'Взаимодействовать в мире', input: 'interact', defaultKeys: ['KeyE'] },
-  { id: 'useTool', group: 'Бой', label: 'Использовать инструмент', input: 'use', defaultKeys: ['KeyR'] },
+  { id: 'useTool', group: 'Бой', label: 'Использовать инструмент', input: 'use', defaultKeys: ['KeyR', 'MouseRight'] },
   { id: 'sleep', group: 'Состояние', label: 'Спать, удерживать', input: 'sleep', defaultKeys: ['KeyZ'] },
   { id: 'pee', group: 'Состояние', label: 'Пописать', input: 'pee', defaultKeys: ['KeyP'] },
   { id: 'gameMenu', group: 'Экраны', label: 'Меню / принять', input: 'escape', defaultKeys: ['Enter'] },
@@ -37,7 +37,9 @@ export const CONTROL_ACTIONS = [
   { id: 'log', group: 'Экраны', label: 'Журнал сообщений', input: 'logMenu', defaultKeys: ['KeyL'] },
   { id: 'netSphere', group: 'Экраны', label: 'НЕТ-СФЕРА', defaultKeys: ['KeyN'] },
   { id: 'debug', group: 'Экраны', label: 'Отладка', input: 'debugScreen', defaultKeys: ['Backquote'] },
-  { id: 'netSubmit', group: 'НЕТ-СФЕРА', label: 'Отправить и закрыть / принять', defaultKeys: ['Enter'] },
+  { id: 'menuClose', group: 'Меню', label: 'Закрыть / назад', input: 'controlClose', defaultKeys: [] },
+  { id: 'controlClear', group: 'Меню', label: 'Очистить выбранную строку', input: 'controlReset', defaultKeys: ['Backspace'] },
+  { id: 'netSubmit', group: 'НЕТ-СФЕРА', label: 'Отправить строку', defaultKeys: ['Enter'] },
   { id: 'netClose', group: 'НЕТ-СФЕРА', label: 'Закрыть окно', defaultKeys: ['Delete'] },
   { id: 'netErase', group: 'НЕТ-СФЕРА', label: 'Удалить символ', defaultKeys: ['Backspace'] },
   { id: 'menuUp', group: 'Меню', label: 'Выбор вверх', input: 'invUp', defaultKeys: ['KeyW', 'ArrowUp'] },
@@ -53,7 +55,7 @@ export const CONTROL_ACTIONS = [
 export type ControlActionId = typeof CONTROL_ACTIONS[number]['id'];
 type ControlBindings = Record<ControlActionId, string[]>;
 
-const CONTROL_STORAGE_KEY = 'gigahrush_control_bindings_v5';
+const CONTROL_STORAGE_KEY = 'gigahrush_control_bindings_v7';
 const MAX_BINDINGS_PER_ACTION = 16;
 
 const CODE_LABELS: Record<string, string> = {
@@ -66,27 +68,40 @@ const CODE_LABELS: Record<string, string> = {
   Delete: 'Del',
   Enter: 'Enter',
   Escape: 'Esc',
+  MouseLeft: 'ЛКМ',
+  MouseMiddle: 'СКМ',
+  MouseRight: 'ПКМ',
+  MouseBack: 'Mouse 4',
+  MouseForward: 'Mouse 5',
   Space: 'Пробел',
   Tab: 'Tab',
 };
 
-export const MENU_CLOSE_CODES = ['Space'] as const;
-const CONTROL_RESET_CODES = ['Backspace'] as const;
+export function mouseButtonCode(button: number): string {
+  if (button === 0) return 'MouseLeft';
+  if (button === 1) return 'MouseMiddle';
+  if (button === 2) return 'MouseRight';
+  if (button === 3) return 'MouseBack';
+  if (button === 4) return 'MouseForward';
+  return `Mouse${Math.max(0, Math.floor(button))}`;
+}
 
 export function isMenuCloseCode(code: string): boolean {
-  return (MENU_CLOSE_CODES as readonly string[]).includes(code);
+  return matchesControlAction('menuClose', code);
 }
 
 export function isControlResetCode(code: string): boolean {
-  return (CONTROL_RESET_CODES as readonly string[]).includes(code);
+  return matchesControlAction('controlClear', code);
 }
 
 export function menuCloseLabel(): string {
-  return MENU_CLOSE_CODES.map(keyCodeLabel).join(' / ');
+  return controlBindingLabel('menuClose');
 }
 
 export function menuCloseHint(): string {
-  return `[${menuCloseLabel()}]`;
+  const label = menuCloseLabel();
+  if (label === '—') return '[ПКМ]';
+  return label.includes('ПКМ') ? `[${label}]` : `[${label} / ПКМ]`;
 }
 
 let bindings = loadControlBindings();
@@ -113,9 +128,6 @@ export function controlActionLocked(actionId: ControlActionId): boolean {
 
 function codeAssignableTo(actionId: ControlActionId, code: string): boolean {
   if (!actionDef(actionId)) return false;
-  if (code === 'Escape') return false;
-  if (isMenuCloseCode(code)) return false;
-  if (isControlResetCode(code) && actionId !== 'netErase') return false;
   if (typeof code !== 'string' || code.length < 2 || code.length > 32) return false;
   return true;
 }
@@ -132,7 +144,6 @@ function uniqueCodes(codes: readonly unknown[]): string[] {
   const out: string[] = [];
   for (const raw of codes) {
     if (typeof raw !== 'string' || raw.length < 2 || raw.length > 32) continue;
-    if (raw === 'Escape') continue;
     if (!out.includes(raw)) out.push(raw);
     if (out.length >= MAX_BINDINGS_PER_ACTION) break;
   }
@@ -230,6 +241,9 @@ export function clearControlInputs(input: InputState): void {
   input.controlEdit = false;
   input.controlReset = false;
   input.controlClose = false;
+  input.menuAccept = false;
+  input.menuClose = false;
+  input.menuWheel = 0;
 }
 
 export function setControlPrimaryBinding(actionId: ControlActionId, code: string): boolean {
@@ -270,10 +284,6 @@ export function getControlCaptureAction(): ControlActionId | null {
 
 export function consumeControlCaptureCode(code: string): boolean {
   if (!captureAction) return false;
-  if (code === 'Escape') {
-    captureAction = null;
-    return true;
-  }
   const actionId = captureAction;
   captureAction = null;
   if (!codeAssignableTo(actionId, code)) return true;

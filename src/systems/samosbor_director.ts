@@ -24,6 +24,7 @@ import { publishEvent, getRecentEvents } from './events';
 import { observeRumorEvent } from './rumor';
 import { canSpawnEntityType, entitySpawnSlots } from './entity_limits';
 import { isPlayerEntity } from './player_actor';
+import { assignPersistentAlifeNpcFromEntity, currentAlifeFloorKey } from './alife';
 
 const TRACE_CAP = 300;
 
@@ -350,6 +351,9 @@ function publishDirectorBeatEvent(
   const itemId = typeof extra.itemId === 'string' ? extra.itemId : undefined;
   const itemName = typeof extra.itemName === 'string' ? extra.itemName : undefined;
   const containerId = typeof extra.containerId === 'number' ? extra.containerId : undefined;
+  const migrationTags = typeof extra.reason === 'string'
+    ? ['alife_migration', extra.reason, typeof extra.intent === 'string' ? extra.intent : 'arrival']
+    : [];
   publishEvent(state, {
     type: eventTypeForBeat(beat),
     zoneId: snapshot.zoneId,
@@ -360,7 +364,7 @@ function publishDirectorBeatEvent(
     containerId,
     severity: beat.severity,
     privacy: 'public',
-    tags: ['samosbor', 'director', `samosbor_${snapshot.variantId}`, ...beat.tags].slice(0, 8),
+    tags: ['samosbor', 'director', `samosbor_${snapshot.variantId}`, ...migrationTags, ...beat.tags].slice(0, 8),
     data: {
       beatId: beat.id,
       effectId: beat.effectId,
@@ -415,18 +419,27 @@ function countAliveByType(entities: Entity[], type: EntityType): number {
   return n;
 }
 
-function spawnPatrol(world: World, entities: Entity[], nextId: { v: number }, snapshot: SamosborDirectorSnapshot): number {
+function spawnPatrol(
+  world: World,
+  entities: Entity[],
+  state: GameState,
+  nextId: { v: number },
+  snapshot: SamosborDirectorSnapshot,
+): { spawned: number; alifeIds: number[]; toFloorKey: string; fromFloorKey: string } {
+  const toFloorKey = currentAlifeFloorKey(state);
+  const fromFloorKey = 'story:ministry';
   const localSlots = 1100 - countAliveByType(entities, EntityType.NPC);
-  if (localSlots <= 0) return 0;
+  if (localSlots <= 0) return { spawned: 0, alifeIds: [], toFloorKey, fromFloorKey };
   const slots = entitySpawnSlots(entities, EntityType.NPC, Math.min(2, localSlots));
   let spawned = 0;
+  const alifeIds: number[] = [];
   for (let i = 0; i < slots; i++) {
     const pos = findWalkableNear(world, snapshot.playerX, snapshot.playerY, 5, 12);
     if (!pos) continue;
     const rpg = randomRPG(Math.max(1, snapshot.zoneLevel));
     const maxHp = Math.round(getMaxHp(rpg) * 1.2);
     const nm = randomName(Faction.LIQUIDATOR);
-    entities.push({
+    const npc: Entity = {
       id: nextId.v++,
       type: EntityType.NPC,
       x: pos.x + 0.5,
@@ -449,10 +462,13 @@ function spawnPatrol(world: World, entities: Entity[], nextId: { v: number }, sn
       isTraveler: true,
       questId: -1,
       rpg,
-    });
+    };
+    if (!assignPersistentAlifeNpcFromEntity(state, npc, entities, toFloorKey)) continue;
+    entities.push(npc);
+    if (npc.alifeId !== undefined) alifeIds.push(npc.alifeId);
     spawned++;
   }
-  return spawned;
+  return { spawned, alifeIds, toFloorKey, fromFloorKey };
 }
 
 function applyResourceShortage(state: GameState, beat: SamosborBeatDef): boolean {
@@ -581,9 +597,18 @@ function applyBeat(
       return { ok };
     }
     case 'extra_patrol': {
-      const spawned = spawnPatrol(world, entities, nextId, snapshot);
-      if (spawned > 0) pushDirectorLine(state, beat);
-      return { ok: spawned > 0, extra: { spawned } };
+      const patrol = spawnPatrol(world, entities, state, nextId, snapshot);
+      if (patrol.spawned > 0) pushDirectorLine(state, beat);
+      return {
+        ok: patrol.spawned > 0,
+        extra: {
+          alifeIds: patrol.alifeIds,
+          fromFloorKey: patrol.fromFloorKey,
+          toFloorKey: patrol.toFloorKey,
+          reason: 'samosbor',
+          intent: 'active_liquidator_patrol',
+        },
+      };
     }
     case 'resource_shortage': {
       const ok = applyResourceShortage(state, beat);

@@ -19,6 +19,7 @@ import { drawInventory } from './stats_ui';
 import { drawQuestLog } from './quest_ui';
 import { drawLogMenu } from './log_ui';
 import { drawFactionMenu } from './factions_ui';
+import { drawDemosMenu } from './demos_ui';
 import { drawGameMenu } from './menu_ui';
 import { drawControlsMenu } from './controls_ui';
 import { drawUiSettingsMenu } from './ui_settings_ui';
@@ -39,7 +40,9 @@ import { territoryOwnerAtIndex } from '../systems/territory';
 import { getNpcPlayerRelation } from '../systems/npc_relations';
 import {
   getSamosborActiveInstructionSnapshot,
+  getSamosborWarningSnapshot,
   type SamosborActiveInstructionSnapshot,
+  type SamosborWarningSnapshot,
 } from '../systems/samosbor';
 import { currentFloorInstanceLabel } from '../systems/floor_instances';
 import { getLiftArachnaWarningSnapshot, type LiftArachnaWarningSnapshot } from '../systems/lift_arachna';
@@ -255,6 +258,41 @@ function drawSamosborActiveInstruction(
   ctx.fillText(fittedTitle, w * 0.5 + sj.dx * 3, y + 8 * sy + sj.dy * 2);
   ctx.fillStyle = `rgba(0,255,200,${sAlpha * 0.2})`;
   ctx.fillText(fittedTitle, w * 0.5 + sj.dx * 3 + 2, y + 8 * sy + sj.dy * 2 + 1);
+  ctx.textAlign = 'left';
+  ctx.restore();
+}
+
+function drawSamosborWarningInstruction(
+  ctx: CanvasRenderingContext2D,
+  w: number,
+  sx: number,
+  sy: number,
+  time: number,
+  warning: SamosborWarningSnapshot,
+  y: number,
+  compact = false,
+): void {
+  const title = 'ВНИМАНИЕ';
+  const detail = `через ${warning.secondsLeft} секунд объявляется самосбор`;
+  const sj = textJitter(time * 2.4, 641);
+  const titleSize = (compact ? 14 : 16) * sy;
+  const detailSize = (compact ? 6.4 : 7) * sy;
+
+  ctx.save();
+  ctx.textAlign = 'center';
+  ctx.font = `bold ${titleSize}px monospace`;
+  const fittedTitle = fitHudText(ctx, title, w - 16 * sx);
+  ctx.fillStyle = 'rgba(0,0,0,0.72)';
+  ctx.fillText(fittedTitle, w * 0.5 + sj.dx * 2.2 + 1, y + 8 * sy + sj.dy * 1.4 + 1);
+  ctx.fillStyle = '#ff3030';
+  ctx.fillText(fittedTitle, w * 0.5 + sj.dx * 2.2, y + 8 * sy + sj.dy * 1.4);
+
+  ctx.font = `${detailSize}px monospace`;
+  const fittedDetail = fitHudText(ctx, detail, w - 18 * sx);
+  ctx.fillStyle = 'rgba(0,0,0,0.72)';
+  ctx.fillText(fittedDetail, w * 0.5 + 1, y + 22 * sy + 1);
+  ctx.fillStyle = '#ff6b6b';
+  ctx.fillText(fittedDetail, w * 0.5, y + 22 * sy);
   ctx.textAlign = 'left';
   ctx.restore();
 }
@@ -949,7 +987,7 @@ export function drawPointerCaptureGate(ctx: CanvasRenderingContext2D, time = 0):
   ctx.fillText(fitHudText(ctx, 'Данная игра является шутером от первого лица', panelW - 24 * s), w * 0.5, y + 61 * s);
   ctx.fillText(fitHudText(ctx, 'и не использует мышку.', panelW - 24 * s), w * 0.5, y + 75 * s);
   ctx.fillStyle = '#9ab';
-  ctx.fillText(fitHudText(ctx, 'Enter: меню / принять. Space: назад.', panelW - 24 * s), w * 0.5, y + 91 * s);
+  ctx.fillText(fitHudText(ctx, 'Enter: меню / принять. ПКМ: назад.', panelW - 24 * s), w * 0.5, y + 91 * s);
   ctx.fillText(fitHudText(ctx, 'ЛКМ: атака. ПКМ: инструмент. E: мир.', panelW - 24 * s), w * 0.5, y + 105 * s);
 
   ctx.strokeStyle = 'rgba(100,220,255,0.25)';
@@ -971,7 +1009,7 @@ export function drawPointerCaptureGate(ctx: CanvasRenderingContext2D, time = 0):
   ctx.fillText(fitHudText(ctx, 'This game is a first-person shooter', panelW - 24 * s), w * 0.5, y + 186 * s);
   ctx.fillText(fitHudText(ctx, 'and does not use the mouse cursor.', panelW - 24 * s), w * 0.5, y + 200 * s);
   ctx.fillStyle = '#9ab';
-  ctx.fillText(fitHudText(ctx, 'Enter: menu / accept. Space: back.', panelW - 24 * s), w * 0.5, y + 216 * s);
+  ctx.fillText(fitHudText(ctx, 'Enter: menu / accept. RMB: back.', panelW - 24 * s), w * 0.5, y + 216 * s);
   ctx.fillText(fitHudText(ctx, 'LMB: attack. RMB: tool. E: world.', panelW - 24 * s), w * 0.5, y + 230 * s);
   ctx.fillStyle = '#708888';
   ctx.font = `${Math.round(7 * s)}px monospace`;
@@ -1215,7 +1253,7 @@ export function drawHUD(
   const computerOpen = isComputerOverlayOpen();
   const hackOpen = isNetHackOverlayOpen();
   const centerModalOpen = state.showInventory || state.showQuests || state.showLog ||
-    state.showFactions || state.showMenu || state.showControls || state.showUiSettings ||
+    state.showFactions || state.showDemos || state.showMenu || state.showControls || state.showUiSettings ||
     state.showNpcMenu || state.showContainerMenu || state.showCraftMenu || netSphereOpen || netTerminalGenOpen ||
     emergencyPanelOpen || mapEditorOpen || gamblingOpen || computerOpen || hackOpen ||
     netTerminalGenDeniedOpen || netTerminalBankOpen;
@@ -1615,6 +1653,11 @@ export function drawHUD(
     drawFactionMenu(ctx, player, entities, state, msx, msy, time);
   }
 
+  // ── Инфосеть Демос ─────────────────────────────────────
+  if (state.showDemos) {
+    drawDemosMenu(ctx, state, entities, msx, msy, time);
+  }
+
   // ── Message log (L) ─────────────────────────────────────
   if (state.showLog) {
     drawLogMenu(ctx, state, msx, msy, time);
@@ -1662,6 +1705,19 @@ export function drawHUD(
       'center',
     );
     drawLiftArachnaWarning(ctx, w, sx, sy, time, liftArachnaWarning, rect.y);
+  }
+  if (showSamosborText && !state.samosborActive && !state.gameOver) {
+    const samosborWarning = getSamosborWarningSnapshot(state);
+    if (samosborWarning) {
+      const compactCritical = centerModalOpen;
+      const rect = allocateHudSlot(
+        slots.topCenterCritical,
+        (compactCritical ? 24 : 32) * sy,
+        Math.min(w - 12 * sx, (compactCritical ? 250 : 310) * sx),
+        'center',
+      );
+      drawSamosborWarningInstruction(ctx, w, sx, sy, time, samosborWarning, rect.y, compactCritical);
+    }
   }
   if (hazardWarningVisible && hazardWarning && !state.gameOver && (!centerModalOpen || hazardWarning.critical)) {
     const panelW = Math.min(w - 16 * sx, 230 * sx);

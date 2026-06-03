@@ -3,19 +3,21 @@
 
 import {
   W, Cell,
-  type Entity, EntityType, AIGoal, Faction, Occupation,
+  type Entity, EntityType, AIGoal, Faction, FloorLevel, Occupation,
 } from '../../core/types';
 import { World } from '../../core/world';
 import { freshNeeds } from '../../data/catalog';
-import { type PlotNpcDef, registerSideQuest } from '../../data/plot';
-import { Spr } from '../../render/sprite_index';
+import { type PlotNpcDef, registerAuthoredNpc, storyNpcFloorKey } from '../../data/plot';
+import { authoredNpcSpr } from '../../render/sprite_index';
+
+const NPC_ID = 'pahom_bratishka';
 
 const NPC_DEF: PlotNpcDef = {
   name: 'Пахом Братишка',
   isFemale: false,
   faction: Faction.CITIZEN,
   occupation: Occupation.ALCOHOLIC,
-  sprite: Spr.PAKHOM,
+  sprite: authoredNpcSpr(NPC_ID),
   hp: 250, maxHp: 250, money: 30, speed: 1.0,
   inventory: [
     { defId: 'kasha', count: 3 },
@@ -42,7 +44,12 @@ const NPC_DEF: PlotNpcDef = {
   ],
 };
 
-registerSideQuest('pahom_bratishka', NPC_DEF, []);
+registerAuthoredNpc({
+  id: NPC_ID,
+  npc: NPC_DEF,
+  homeFloorKey: storyNpcFloorKey(FloorLevel.KVARTIRY),
+  tags: ['kvartiry', 'social'],
+});
 
 export function spawnPahomBratishka(
   world: World, entities: Entity[], nextId: { v: number },
@@ -62,7 +69,7 @@ export function spawnPahomBratishka(
       inventory: NPC_DEF.inventory.map(i => ({ ...i })),
       weapon: 'knife',
       faction: NPC_DEF.faction, occupation: NPC_DEF.occupation,
-      plotNpcId: 'pahom_bratishka', canGiveQuest: false, questId: -1,
+      plotNpcId: NPC_ID, canGiveQuest: false, questId: -1,
       isTraveler: true,
     });
     return;

@@ -4,7 +4,7 @@
 >
 > Роль: описывает optional future multiplayer/online mode, Cloudflare/Durable Object direction, relaxed trust, shared facts and budget constraints. It must not affect the core single-player browser game, which remains primary and fully playable offline.
 
-Status: feasibility roadmap and implementation decision, not shipped behavior and not a public promise. Created 2026-05-24, revised 2026-05-25 after second architecture review, no-anti-cheat correction and critical host-AOI review.
+Status: feasibility roadmap and implementation decision, not shipped behavior and not a public promise. Created 2026-05-24, revised 2026-05-25 after second architecture review, no-anti-cheat correction and critical host-AOI review, revised 2026-06-02 after host-player Cloudflare test planning and hundreds-player server-track review.
 
 Scope: полноценный опциональный online mode через Cloudflare Workers/Durable Objects, где Cloudflare является sync/interaction authority для shared facts, а не полной удаленной копией offline-симуляции. Локальная single-player игра, `npm run dev`, single-file build и local save остаются полностью playable без Cloudflare, WebSocket, D1 и сети.
 
@@ -172,6 +172,80 @@ When WebRTC/player-host becomes useful:
 - if DO relay bandwidth/cost becomes too high;
 - if a specific co-op expedition needs host to stream richer state;
 - after the WebSocket relay POC proves the gameplay loop.
+
+## Server Scale Addendum 2026-06-02
+
+Cloudflare host-player testing is the right next experiment, but it must not become the hidden final architecture for public high-cap rooms. It proves whether two people can meet on one route floor while one browser keeps the living offline simulation running and Cloudflare relays ordered facts. It does **not** prove that one player browser can host dozens or hundreds of players.
+
+If the target becomes "сотни игроков", the design needs a real server track:
+
+- host-browser relay remains the small co-op/public-test path: 2 players first, then 4, then 8, 16 only as an experiment;
+- WebRTC remains a possible private-room bandwidth optimization after WebSocket relay proves gameplay;
+- public 32/64/128+ rooms require a headless floor simulator or equivalent dedicated server authority;
+- hundreds of players require server-owned AOI, actor slots, snapshots, room lifetime and reconnect, not a player tab with a weak uplink and browser sleep risk.
+
+The server track is not an anti-cheat requirement. It exists for capacity, uptime, reconnect, hostless public rooms, predictable cost and consistent shared state. Cheating is still out of scope unless a future mode explicitly introduces protected scarcity or competitive stakes.
+
+Do not treat a Durable Object full simulator as the automatic hundreds-player server. A single DO is useful for room relay, ordering, queueing and small state, but it is single-threaded and cost-sensitive under action-game message rates. A serious high-cap room likely needs:
+
+- a headless Node/JS/TS or native server process that runs the current-floor simulation without render, audio, DOM, canvas or local save;
+- Cloudflare Worker/D1/DO kept as identity, lobby, token, status, metrics, ambient Net Sphere and optional relay/fallback;
+- direct or proxied WebSocket connection from clients to the selected headless room server using a short-lived token minted by the Worker/Lobby;
+- a room registry/heartbeat so the Worker can reject joins, queue players, expose capacity and close rooms before cost or health limits are crossed;
+- the same protocol ids as host-relay mode: `slotId`, `actorNetId`, `eventSeq`, `patchSeq`, route identity and ruleset/build version.
+
+Preferred minimal combination:
+
+```txt
+Cloudflare Worker/Wrangler
+  -> serves the game and all `/api/net/*` / `/api/online/*`
+  -> owns status, tokens, version checks, budget gates and kill switches
+  -> routes small realtime rooms to Durable Objects
+  -> routes high-cap rooms to a headless room server
+
+D1
+  -> Net Sphere profile, chat, event summaries, market impulses, optional strict ledgers
+
+Durable Objects
+  -> room registry, queue, host lease, reconnect reservation, small event rings
+
+Cloudflare Containers or external headless server
+  -> hot 32/64/128+ current-floor simulation when host-browser relay is too small
+```
+
+This keeps Cloudflare as one control plane instead of adding a separate online stack. Cloudflare Containers are the first server candidate because they can be managed from the Worker/Wrangler deployment shape already used by the project, but they must still pass pricing, startup, WebSocket, regional placement and long-room soak tests. If Containers do not fit always-hot action rooms, the same control plane can point at an external VPS/bare-metal/headless service through a signed endpoint token.
+
+Plan early to avoid repainting the code later:
+
+- online protocol must have an explicit authority mode: `host_relay`, `webrtc_host`, `headless_server`, `strict_do_shard`;
+- browser clients must not assume slot 0 is always a player-host forever;
+- remote actor movement/action shims must be written as generic "authority applies actor intent", not "peer talks only to local host player";
+- AOI, snapshot, reliable event and sparse patch code must be usable by both host-browser and headless-server modes;
+- server-facing simulation code must be extractable from `main.ts` into systems-level hooks without WebGL/canvas/input dependencies.
+- Wrangler config must stay the single deploy/config surface where possible: existing D1 binding, future DO namespaces and optional container/server routing should be reviewed together.
+
+Server-track triggers:
+
+- product goal changes from 2/4/8 co-op test to 32+ public players on one floor;
+- host upstream, frame time, tab throttling or disconnect rates dominate 4/8-player tests;
+- normal host loss can no longer freeze/end public rooms acceptably;
+- NPC/monster/samosbor persistence must survive without any player host;
+- Cloudflare relay cost is acceptable for coordination but not for per-frame high-cap traffic;
+- the phrase "сотни игроков" becomes a public or design target instead of a private stretch question.
+
+Server-track first milestone:
+
+1. Run one headless online floor room with the same `{runSeed, floorKey, z, rulesetVersion}` identity as the host-relay POC.
+2. Simulate player slots, simple movement, basic shooting, simple drops, doors and capped NPC/monster mirrors without render/UI/audio.
+3. Keep the base floor generated from seed, but send only AOI snapshots and reliable events.
+4. Let two browsers connect without any browser host.
+5. Then test 8, 16, 32 and 64 synthetic clients before claiming real public capacity.
+
+Hundreds-player target:
+
+- 100+ is not "same as 8 but more seats". It needs load-tested AOI, sector/bucket ownership, outbound byte budgets, action token buckets, degradation policy and likely multiple server processes or sector workers behind one floor identity.
+- 128 remains a protocol ceiling and stretch target until 128-client soak passes.
+- 200-500 players on one floor is a separate architecture program. It may require sector servers, lower action cadence, event-only far actors, crowd compression, soft PvE outside AOI and explicit UX language that far players are not all fully simulated at combat fidelity.
 
 Six-role architecture verdict for full current-floor online:
 
@@ -451,7 +525,7 @@ Relevant shipped architecture:
 - `src/systems/procedural_floors.ts`: per-run vertical route uses `runSeed`, route ids and `z=-50..+50`.
 - `src/systems/floor_memory.ts`: visited floors persist as live or packed snapshots keyed by route floor identity.
 - `src/systems/alife.ts`: persistent ordinary NPC identity is compact and only materializes on the active floor.
-- `src/systems/save_runtime.ts`: current local save shape version is `13`; old shapes are rejected, not migrated.
+- `src/systems/save_runtime.ts`: current local save shape version is `15`; old shapes are rejected, not migrated.
 - `src/systems/save_payload.ts`: local save caps inventory, containers, quests, status, event data and avoids full live entity serialization.
 - `src/systems/interactions.ts`: shared `E` dispatcher owns doors, lifts, NPCs, containers, terminals and generated interactables.
 - `src/systems/events.ts`: bounded public/private event buffers already provide compact cross-system facts.
@@ -513,6 +587,9 @@ Keep one deployed Worker as the ingress and asset host:
 - `ONLINE_LOBBY`: Durable Object namespace for queues and shard assignment.
 - `ONLINE_FLOORS`: Durable Object namespace for floor shards.
 - `ONLINE_MARKET`: Durable Object namespace for hot exchange state.
+- `ONLINE_ROOM_REGISTRY`: optional Durable Object namespace for headless room registry, capacity, region and heartbeat if `LobbyDO` grows too large.
+- Optional Cloudflare Containers deployment for headless room servers, controlled/routed by the Worker after the host-relay cap is proven too small.
+- Optional external `HEADLESS_ROOM_ENDPOINT` only if Cloudflare Containers fail cost/startup/latency/soak gates.
 - Optional `ONLINE_REPLAYS` R2 bucket for compressed historical snapshots/replay/audit exports.
 - Optional KV for public config only: protocol version, news, kill switch cache. KV must not be authority for seats, trades or inventory.
 
@@ -531,6 +608,15 @@ Proposed routes:
 - `POST /api/online/v1/economy/claim`
 
 Existing `/api/net/*` remains compatible and should not be broken by online rollout.
+
+Cloudflare control-plane rule:
+
+- Wrangler/Worker remains the single public entrypoint for static game, Net Sphere, online status, join tokens, caps and kill switches.
+- D1 keeps durable profile/economy/event facts, not hot movement/combat ticks.
+- Durable Objects own lobby/room coordination and small realtime state.
+- Containers or an external headless server own only hot high-cap floor simulation when the chosen authority mode is `headless_server`.
+- Clients should not care whether the room authority is host-browser, DO relay, Cloudflare Container or external server; `/api/online/v1/join` returns `authorityMode`, endpoint details and a short-lived token.
+- Do not fork Net Sphere. Its identity/profile/status surfaces become the stable base used by realtime online.
 
 ### 4.2 Durable Object Classes
 
@@ -1078,6 +1164,70 @@ Recommended capacities for the chosen host-browser relay path:
 
 The UX can say "до 128 на этаже" only when queue, degradation and soak tests prove it.
 
+### 9.1.1 Hundreds-Player Server Track
+
+The host-browser relay path has a deliberate scale ceiling. It is for proving gameplay with a living floor and for small relaxed rooms, not for hundreds of players.
+
+Hard rule:
+
+- 2/4/8 players: host-browser relay through Cloudflare DO is the planned test path.
+- 16 players: experiment only, after 8-player soak and cost review.
+- 32+ public players: start server-track work before raising public cap.
+- 100+ players: requires a headless/server authority track; do not attempt it by raising the browser-host cap.
+
+Why a server is required for hundreds:
+
+- a player browser cannot be treated as reliable public infrastructure;
+- foreground-only desktop host, tab throttling and sleep are incompatible with long-lived public rooms;
+- host upstream becomes the bottleneck before game design does;
+- public rooms need hostless lifetime, clean reconnect and controlled degradation;
+- AOI and outbound bandwidth must be enforced by infrastructure, not by one player's tab;
+- a real server gives a fixed place for metrics, load tests, crash handling and controlled room shutdown.
+
+The first server should not be a new game. It should be a headless authority for the same online floor contract:
+
+- input: route identity, ruleset/build version, join tokens and player intents;
+- output: AOI snapshots, reliable events, sparse patches and close/freeze reasons;
+- no render, WebGL, sound, HUD, canvas UI, local save or DOM;
+- no full hidden A-Life simulation beyond the active online floor;
+- no full `World` blob broadcast during play;
+- bounded actor/projectile/drop arrays and sector buckets;
+- same toroidal movement/collision semantics as the browser floor.
+
+Cloudflare role in server-track:
+
+- Worker/Lobby mints signed join tokens and exposes `/api/online/v1/status`;
+- D1 stores profiles, summaries, soft market facts and optional strict economy ledgers;
+- DOs can still own small queues, room registry, reconnect reservations or fallback relay;
+- the headless room server owns hot per-frame simulation and snapshots;
+- if direct server WebSocket is used, Worker returns endpoint + token instead of proxying every hot frame through DO.
+
+Server placement preference:
+
+1. Cloudflare Containers as the first minimal integration candidate, because they keep Worker/Wrangler deployment, routing, tokens and room registry in one provider family.
+2. External VPS/bare-metal/headless host behind Cloudflare only if Containers fail always-hot room economics, startup time, regional placement or sustained WebSocket soak.
+3. Durable Object full sim only for narrow strict systems or very small shards, not as the default 100+ player action server.
+
+Do not duplicate the API surface for each placement. Both Cloudflare Container and external headless server should consume the same join token, room key, authority mode and protocol envelope. The difference is routing and operations, not gameplay shape.
+
+Server room capacity should move through gates:
+
+- 8 synthetic clients: sanity check against host-relay behavior.
+- 16 synthetic clients: basic AOI/backpressure.
+- 32 synthetic clients: first public-server candidate.
+- 64 synthetic clients: public shard candidate only after p99 snapshot age, bytes/client and CPU headroom are measured.
+- 128 synthetic clients: stretch target soak before any public claim.
+- 200+ synthetic clients: separate sectorization/crowd-compression program, not a normal cap bump.
+
+Server-track stop signs:
+
+- server code begins to duplicate render/UI/local-save logic;
+- `main.ts` gains content-specific online branches;
+- per-frame full-world scans appear in the server loop;
+- Cloudflare D1 is used as a hot tick database;
+- clients receive full-floor entity/world state instead of AOI slices;
+- public copy promises hundreds before synthetic and real-client soak tests pass.
+
 ### 9.2 Interest Management
 
 Use toroidal AOI:
@@ -1319,6 +1469,47 @@ Exit:
 
 - Written go/no-go on host relay vs WebRTC vs headless/VPS vs DO strict shards.
 
+### Phase 4.7: Headless Server Foundation, Only If Public 32+ Is The Goal
+
+Deliver:
+
+- Start only if 8-player host relay is not enough, public 32+ becomes an explicit target, or host loss/upstream/sleep makes browser-host rooms unacceptable.
+- Define authority mode values: `host_relay`, `webrtc_host`, `headless_server`, `strict_do_shard`.
+- Extract the minimum reusable online floor authority contract from the host POC: actor slots, input intents, action application, AOI snapshots, reliable event ring, sparse patch stream and room close reasons.
+- Build a headless floor harness with no render, audio, HUD, DOM, pointer-lock, canvas, local save or browser-only APIs.
+- Keep floor generation seed-compatible enough for the same `{runSeed, floorKey, z, rulesetVersion}` room identity.
+- Run basic server-owned movement, shooting, simple drops, one door class and capped NPC/monster mirrors.
+- Worker/Lobby returns `{ endpoint, joinToken, roomKey, authorityMode }` for a headless room.
+- Prototype Cloudflare Containers first if the current Cloudflare product limits, pricing and local `wrangler` workflow fit the room harness.
+- Keep an external headless endpoint path as the fallback with the same Worker-minted token and same protocol envelope.
+- Add room registry heartbeat from headless authority to Worker/DO: region, capacity, active seats, tick p95/p99, outbound bytes/client, build/ruleset, close reason.
+- Keep D1 out of the hot loop.
+
+Exit:
+
+- Two browsers connect to the same headless room with no browser host.
+- 8 synthetic clients match or exceed host-relay stability.
+- 16 and 32 synthetic clients run with measured AOI, CPU and byte budgets.
+- Server shutdown, crash or token expiry returns clients to local/degraded play without corrupting offline save.
+- Written decision on whether public 32+ proceeds through headless server, stays capped at 8/16, or waits.
+
+### Phase 4.8: 64/128 Server Scale Gates, Only After Phase 4.7
+
+Deliver:
+
+- 32-client real/synthetic soak before any 32 public cap.
+- 64-client soak before any public large-shard label.
+- 128-client soak before any `до 128 игроков` public claim.
+- Sector/bucket AOI ownership if one headless room process cannot hold p99 snapshot age and outbound bytes.
+- Degradation policy: lower Hz, drop cosmetics, far-actor compression, queue new joins, then close room before overload.
+- Cost model comparing direct server WebSocket, Cloudflare-relayed WebSocket and WebRTC/private rooms.
+
+Exit:
+
+- p99 snapshot age, tick time, outbound bytes/client, reconnect success and crash recovery meet the published cap.
+- Public copy names only the cap that passed soak.
+- 200+ remains a separate sectorization program unless tested.
+
 ### Phase 5: Shared Interactions And Sparse World Patches
 
 Deliver:
@@ -1405,8 +1596,12 @@ Exit:
 | --- | --- | --- | --- |
 | `$10/month` treated as enough for unlimited realtime | Critical | always-on 128-player action floors can exceed budget from WS messages/duration | budget gate, low Hz, caps 2/4/8 first, 16+ only after host-relay soak |
 | Player-host treated as scalable infrastructure | Critical | host disconnects, mobile sleep, weak uplink and no persistence break rooms | first POC may freeze/end; later normal leave uses loading checkpoint handoff; do not use as public high-cap backbone |
+| Hundreds-player goal planned too late | Critical | host-relay code can bake in player-host assumptions and make server migration expensive | define authority modes early; keep actor/AOI/event/patch protocol reusable by host and headless server |
+| Cloudflare DO mistaken for hundreds-player game server | Critical | one DO full sim is single-threaded, cost-sensitive and not a natural full-floor engine host | use DO for relay/queue/ordering/small state; use headless room server for 32/64/128+ hot simulation if needed |
+| Cloudflare Container treated as magic VPS | Critical | containers may have startup, pricing, regional or always-hot room constraints that differ from a fixed server | prototype Containers first inside Cloudflare control plane, but keep the same protocol usable by external headless endpoint |
 | D1 used for realtime | Critical | query latency, single DB throughput, cost, queue overload | Durable Objects for realtime; D1 only durable summaries/economy |
 | One DO overloaded by 128 players | Critical | 128 at high Hz exceeds practical single-object budget | prove 2/4/8 relay first; 32+ needs separate scale architecture |
+| Headless server becomes a second game | Critical | duplicated render/UI/save/local systems drift from browser gameplay | server owns only authority loop: seed floor, actor intents, AOI snapshots, events, sparse patches, no render/UI/local save |
 | Soft economy accidentally presented as protected scarcity | Critical | players expect fair scarce trade from client-claimed data | label soft economy clearly; strict ledger only for strict features |
 | `NET-GEN` treated as password | Critical | visible/recoverable id can be stolen | private `netSecret` + short-lived join token |
 | Client/server floor mismatch | High | players see different walls/doors | build id, ruleset version, route seed, floor key and patch version in handshake |
@@ -1518,6 +1713,11 @@ Do not add migration promises for local saves. If online save shape breaks, bump
 - Make PvP authority mode explicit: host-authoritative is fine for relaxed rooms; server-authoritative is optional for stricter shards.
 - Treat 128 players as a proven scale/cost target, not the first MVP.
 - Start caps at 2, then 4, then 8 for host-browser full-sim relay. Treat 16+ as a later experimental branch and 128 as a proven scale/cost target only after soak and budget gates.
+- Treat 32+ public rooms and any "сотни игроков" goal as a headless/server-authority track, not as a browser-host cap increase.
+- Keep the protocol authority-mode aware from the start so `host_relay` can later become `headless_server` without rewriting actor ids, AOI snapshots, event rings and patch streams.
+- Use Cloudflare for identity, lobby, status, budget gates, ambient Net Sphere, queues and small-state relay; do not make D1 or one full-sim DO the hot hundreds-player server.
+- Prefer one Cloudflare control plane: existing Net Sphere, Worker/Wrangler, D1, Durable Objects, optional Containers and optional external headless endpoints all hang off `/api/net/*` and `/api/online/*`.
+- Try Cloudflare Containers first for a headless room server if current pricing/startup/soak limits fit; keep external headless server as fallback without changing gameplay protocol.
 - Start with soft client-claimed economy; add server-minted ledger only if a feature needs protected scarcity.
 - Add kill switches and budget gates before public online.
 
@@ -1552,9 +1752,11 @@ Local project sources:
 - `src/systems/stock_market.ts`
 - `src/systems/inventory.ts`
 
-Official Cloudflare sources checked on 2026-05-24, with pricing rechecked on 2026-05-25:
+Official Cloudflare sources checked on 2026-05-24, with pricing rechecked on 2026-05-25 and Containers/control-plane direction rechecked on 2026-06-02:
 
 - Durable Objects WebSockets and hibernation: https://developers.cloudflare.com/durable-objects/best-practices/websockets/
+- Cloudflare Containers overview: https://developers.cloudflare.com/containers/
+- Cloudflare Containers product page: https://workers.cloudflare.com/product/containers/
 - Durable Objects pricing: https://developers.cloudflare.com/durable-objects/platform/pricing/
 - Durable Objects limits: https://developers.cloudflare.com/durable-objects/platform/limits/
 - Durable Objects rules: https://developers.cloudflare.com/durable-objects/best-practices/rules-of-durable-objects/

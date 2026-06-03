@@ -561,6 +561,7 @@ export interface Entity {
   speed: number;
   sprite: number;             // sprite sheet index
   spriteSeed?: number;        // deterministic per-entity procedural visual seed
+  npcVisualId?: string;        // optional special NPC visual generator family
   // optional components
   needs?: Needs;
   hp?: number;
@@ -583,7 +584,7 @@ export interface Entity {
   faction?: Faction;
   occupation?: Occupation;
   playerRelation?: number;    // personal attitude to player, -100..100; below hostile threshold attacks
-  karma?: number;             // A-Life moral/social charge, -128..128; player starts at 0
+  karma?: number;             // A-Life moral/social charge, -127..127; player starts at 0
   kills?: number;             // total actor kills for A-Life ranking
   npcKills?: number;          // NPC kills for A-Life ranking
   monsterKills?: number;      // monster kills for A-Life ranking
@@ -945,6 +946,7 @@ export const WORLD_EVENT_TYPES = [
   'faction_event',
   'faction_patrol_clash',
   'floor_transition',
+  'alife_migration',
   'elevator_anomaly',
   'elevator_loop_exit',
   'lift_arachna_warned',
@@ -1155,6 +1157,10 @@ export interface GameState {
   debugSel: number;
   showFactions: boolean;       // faction relations matrix (F key)
   factionRankScroll: number;   // A-Life leaderboard scroll inside F menu
+  showDemos: boolean;           // read-only NPC infoset profile browser
+  demosCursor: number;          // zero-based A-Life profile cursor
+  demosSearch: string;          // transient in-menu search query
+  demosSearchActive: boolean;   // text input focus for Demos search
   showLog: boolean;            // message log menu (L key)
   logScroll: number;           // scroll offset in log menu
   showControls: boolean;       // hotkey / rebind screen (Tab by default)
@@ -1265,6 +1271,10 @@ export interface InputState {
   questLog: boolean;
   mouseAttack: boolean;
   mouseUse: boolean;
+  menuAccept: boolean;          // latched LMB accept/select while a canvas menu is open
+  menuClose: boolean;           // latched RMB back/close while a canvas menu is open
+  menuWheel: number;            // latched wheel menu navigation, negative=up, positive=down
+  textInput: string;            // transient printable chars for focused canvas text fields
   attrStr: boolean; attrAgi: boolean; attrInt: boolean;  // 1,2,3 keys for attribute spending
   debugScreen: boolean;
   pee: boolean;                 // P key — urinate
@@ -1274,9 +1284,9 @@ export interface InputState {
   sleep: boolean;               // Z key — hold to sleep
   controls: boolean;            // Tab by default — hotkey / rebind screen
   uiSettings: boolean;          // U key — configurable HUD element screen
-  controlEdit: boolean;         // reserved fixed command slot for hotkey screens
-  controlReset: boolean;        // fixed Backspace default-bind reset command
-  controlClose: boolean;        // fixed Space close/back command
+  controlEdit: boolean;         // reserved command slot for hotkey screens
+  controlReset: boolean;        // selected-bind clear command from current controls
+  controlClose: boolean;        // keyboard close/back command from current controls
   mouse: { dx: number; dy: number; locked: boolean; };
   touch: { moveX: number; moveY: number; lookX: number; lookY: number; active: boolean; };
 }

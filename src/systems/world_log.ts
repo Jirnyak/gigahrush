@@ -13,6 +13,7 @@ import {
 
 const LOG_MAX = 500;
 const DEDUPE_SECONDS = 4;
+const FACT_DEDUPE_SCAN = 96;
 const TELEMETRY_ONLY = new Set<string>([
   'ammo_consumed',
   'container_opened',
@@ -551,6 +552,30 @@ function pushLog(state: GameState, entry: LogEntry): void {
   if (state.msgLog.length > LOG_MAX) state.msgLog.splice(0, state.msgLog.length - LOG_MAX);
 }
 
+function isDeathFact(e: WorldEvent): boolean {
+  return e.type === 'player_kill_monster' ||
+    e.type === 'player_kill_npc' ||
+    e.type === 'npc_kill_monster' ||
+    e.type === 'npc_kill_npc' ||
+    e.type === 'death_seen' ||
+    e.type === 'fog_boss_killed' ||
+    e.tags.includes('kill') ||
+    e.tags.includes('death');
+}
+
+function deathFactAlreadyLogged(state: GameState, event: WorldEvent, text: string, color: string): boolean {
+  if (!isDeathFact(event) || event.targetId === undefined) return false;
+  const start = Math.max(0, state.msgLog.length - FACT_DEDUPE_SCAN);
+  for (let i = state.msgLog.length - 1; i >= start; i--) {
+    const entry = state.msgLog[i];
+    if (entry.text !== text || entry.color !== color) continue;
+    if (entry.targetId !== event.targetId) continue;
+    if (entry.floor !== undefined && entry.floor !== event.floor) continue;
+    return true;
+  }
+  return false;
+}
+
 export function recordWorldLogEvent(state: GameState, event: WorldEvent): void {
   if (!state.worldEvents || !shouldLog(event)) return;
   const key = eventKey(event);
@@ -571,6 +596,7 @@ export function recordWorldLogEvent(state: GameState, event: WorldEvent): void {
   };
   const distanceMeters = worldLogDistanceForLocation(location);
   if (!worldLogLocationIsAudible(location, distanceMeters)) return;
+  if (deathFactAlreadyLogged(state, event, text, color)) return;
   state.worldEvents.lastLogKey = key;
   state.worldEvents.lastLogTime = event.time;
   const stampedDistanceMeters = distanceMeters ?? 0;

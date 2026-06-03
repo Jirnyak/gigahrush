@@ -9,7 +9,7 @@ import {
 } from '../../core/types';
 import { World } from '../../core/world';
 import { MONSTERS, entityDisplayName, type MonsterAIFlag, type MonsterDef } from '../../entities/monster';
-import { ITEMS, ITEM_TAGS } from '../../data/items';
+import { ITEMS, ITEM_TAGS, getStack } from '../../data/items';
 import { droppedToolLightScore, equippedToolLightScore } from '../../data/tool_lights';
 import {
   playGrowl,
@@ -1303,7 +1303,10 @@ function containerHasMukhozhukFood(container: WorldContainer): boolean {
 }
 
 function addSpoiledRation(container: WorldContainer): void {
-  const existing = container.inventory.find(item => item.defId === 'sand_spoiled_ration');
+  const def = ITEMS.sand_spoiled_ration;
+  if (!def) return;
+  const stackMax = getStack(def);
+  const existing = container.inventory.find(item => item.defId === 'sand_spoiled_ration' && item.data === undefined && item.count < stackMax);
   if (existing) {
     existing.count++;
   } else if (container.inventory.length < container.capacitySlots) {

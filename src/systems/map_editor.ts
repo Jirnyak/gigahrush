@@ -280,6 +280,10 @@ export function isMapEditorOpen(): boolean {
   return runtime.open;
 }
 
+export function isMapEditorMapMode(): boolean {
+  return runtime.mode === 'map';
+}
+
 function cycleIndex(value: number, delta: number, length: number): number {
   if (length <= 0) return 0;
   return (value + delta + length) % length;
@@ -950,7 +954,7 @@ function menuEntries(): readonly MapEditorMenuEntry[] {
 }
 
 function modeHints(): readonly string[] {
-  if (runtime.mode === 'map') return [`${controlBindingLabel('menuUp')}/${controlBindingLabel('menuDown')} курсор`, `${controlHint('gameMenu')} поставить`, `${menuCloseHint()} назад`, `${controlBindingLabel('map')} zoom`];
+  if (runtime.mode === 'map') return [`${controlBindingLabel('menuUp')}/${controlBindingLabel('menuDown')} курсор`, 'wheel масштаб', `${controlHint('gameMenu')} поставить`, `${menuCloseHint()} назад`];
   if (runtime.mode === 'menu') return [`${controlBindingLabel('menuUp')}/${controlBindingLabel('menuDown')} пункт`, `${controlHint('gameMenu')} выбрать`, `${menuCloseHint()} карта`];
   if (runtime.mode === 'brush') return [`${controlBindingLabel('menuLeft')}/${controlBindingLabel('menuRight')} тип кисти`, `${controlBindingLabel('menuUp')}/${controlBindingLabel('menuDown')} значение`, `${controlHint('gameMenu')} выбрать`, `${menuCloseHint()} назад`];
   if (runtime.mode === 'objects') return [`${controlBindingLabel('menuLeft')}/${controlBindingLabel('menuRight')} группа`, `${controlBindingLabel('menuUp')}/${controlBindingLabel('menuDown')} объект`, `${controlHint('gameMenu')} выбрать`, `${menuCloseHint()} назад`];

@@ -12,7 +12,7 @@
 /*            ArtNude variants | F69 female NPCs ]               */
 
 import { ContainerKind, Feature, MonsterKind } from '../core/types';
-import { NPC_SPRITE_GENERATORS } from '../entities/npc';
+import { AUTHORED_NPC_SPRITE_GENERATORS, NPC_SPRITE_GENERATORS } from '../entities/npc';
 import { ART_NUDE_VARIANTS, F69_FEMALE_NPC_VARIANTS } from './art_sprites';
 
 export const SPRITE_MONSTER_KINDS = Object.values(MonsterKind)
@@ -32,6 +32,7 @@ export const SPRITE_CONTAINER_KINDS = Object.values(ContainerKind)
 const NPC_COUNT     = NPC_SPRITE_GENERATORS.length;
 const TRAVELER_COUNT = 3;
 const PRIEST_COUNT   = 1;
+const AUTHORED_NPC_COUNT = AUTHORED_NPC_SPRITE_GENERATORS.length;
 const MONSTER_COUNT  = SPRITE_MONSTER_KINDS.length;
 const FEATURE_SPRITE_COUNT = SPRITE_FEATURES.length; // Feature.DESK reuses the standalone Desk slot.
 const CONTAINER_SPRITE_COUNT = SPRITE_CONTAINER_KINDS.length;
@@ -40,10 +41,7 @@ let _i = 0;
 _i += NPC_COUNT;          // occupation NPC sprites
 _i += TRAVELER_COUNT;     // traveler sprites
 _i += PRIEST_COUNT;       // priest sprite
-const _VETERAN   = _i++;  // veteran sprite (Степаныч)
-const _GORDON    = _i++;  // Gordon Freeman (maintenance)
-const _MADOKA    = _i++;  // Мегука ПСИ-дежурная (hell)
-const _PAKHOM    = _i++;  // Пахом Братишка (kvartiry)
+const _AUTHORED_NPC_BASE = _i; _i += AUTHORED_NPC_COUNT;
 const _ITEM_DROP = _i++;
 const _MON_BASE  = _i; _i += MONSTER_COUNT;
 const _EYE_BOLT  = _i++;
@@ -70,8 +68,34 @@ const _TRAIN_CAR   = _i++;
 const _ART_NUDE_BASE = _i; _i += ART_NUDE_VARIANTS;
 const _F69_FEMALE_NPC_BASE = _i; _i += F69_FEMALE_NPC_VARIANTS;
 
+export function authoredNpcSpriteOffset(id: string): number {
+  return AUTHORED_NPC_SPRITE_GENERATORS.findIndex(def => def.id === id);
+}
+
+export function authoredNpcSpr(id: string): number {
+  const offset = authoredNpcSpriteOffset(id);
+  if (offset < 0) throw new Error(`[SPRITE] unknown authored NPC sprite "${id}"`);
+  return _AUTHORED_NPC_BASE + offset;
+}
+
+export function authoredNpcSpriteGeneratorOffset(sprite: number): number {
+  const offset = Math.trunc(sprite) - _AUTHORED_NPC_BASE;
+  return offset >= 0 && offset < AUTHORED_NPC_COUNT ? offset : -1;
+}
+
+export function isAuthoredNpcSpr(sprite: number): boolean {
+  return authoredNpcSpriteGeneratorOffset(sprite) >= 0;
+}
+
+const _VETERAN = authoredNpcSpr('veteran_stepanych');
+const _GORDON = authoredNpcSpr('gordon_freeman');
+const _MADOKA = authoredNpcSpr('meduka_meguku');
+const _PAKHOM = authoredNpcSpr('pahom_bratishka');
+
 /** Named sprite indices — import these instead of magic numbers */
 export const Spr = {
+  AUTHORED_NPC_BASE: _AUTHORED_NPC_BASE,
+  AUTHORED_NPC_COUNT,
   VETERAN:   _VETERAN,
   GORDON:    _GORDON,
   MADOKA:    _MADOKA,

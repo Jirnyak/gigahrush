@@ -58,7 +58,7 @@ export function drawControlsMenu(
   ctx.fillText(
     fitText(ctx, isButtons
       ? `${menuCloseHint()} закрыть`
-      : `${controlHint('gameMenu')} принять/изменить  |  ${menuCloseHint()} закрыть  |  Backspace сброс  |  ←/→ слайдер`,
+      : `${controlHint('gameMenu')} принять/изменить  |  ${menuCloseHint()} закрыть  |  Backspace очистить строку  |  ←/→ слайдер`,
     w - 24 * sx),
     12 * sx,
     26 * sy,
@@ -104,7 +104,7 @@ export function drawControlsMenu(
     ctx.fillText(isSel ? '▶' : ' ', x, textY);
     ctx.fillStyle = '#689';
     const group = isButtons ? button?.group ?? '' : isReset ? 'Сервис' : isMouseSensitivity ? 'Мышь' : action?.group ?? '';
-    const label = isButtons ? button?.label ?? '' : isReset ? 'Сбросить клавиши' : isMouseSensitivity ? 'Чувствительность мыши' : action?.label ?? '';
+    const label = isButtons ? button?.label ?? '' : isReset ? 'Вернуть дефолты' : isMouseSensitivity ? 'Чувствительность мыши' : action?.label ?? '';
     ctx.fillText(fitText(ctx, group, groupW - 10 * sx), x + 14 * sx, textY);
     ctx.fillStyle = isSel ? '#dff' : '#9bb';
     ctx.fillText(fitText(ctx, label, labelW - 8 * sx), x + groupW + 18 * sx, textY);
@@ -114,7 +114,7 @@ export function drawControlsMenu(
       : isMouseSensitivity
         ? mouseSensitivitySliderText()
         : isReset
-          ? 'ENTER / BACKSPACE'
+          ? 'ENTER'
         : isCapture
           ? 'НАЖМИТЕ КЛАВИШУ...'
           : action ? controlBindingLabel(action.id) : '';
@@ -138,10 +138,10 @@ export function drawControlsMenu(
   ctx.textBaseline = 'alphabetic';
   ctx.fillText(
     capture
-      ? 'Нажатая клавиша добавится к действию. Enter и E можно назначить; Backspace сбросит дефолты, Esc отменит ввод.'
+      ? 'Нажатая клавиша или кнопка мыши добавится к действию. Space, Backspace и Esc тоже назначаются.'
       : isButtons
         ? 'Экранные кнопки и мобильная рельса живут отдельно от клавиатурных биндов.'
-        : 'Клавиши можно повторять между действиями. Backspace сбрасывает клавиши по умолчанию.',
+        : 'Клавиши можно повторять между действиями. Backspace очищает выбранное действие; верхняя строка Enter возвращает дефолты.',
     12 * sx,
     h - 10 * sy,
   );

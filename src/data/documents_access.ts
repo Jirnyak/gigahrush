@@ -8,12 +8,28 @@ import {
   type WorldEventPrivacy,
   type WorldEventSeverity,
 } from '../core/types';
+import { MAX_INVENTORY_SLOTS, MAX_ITEM_STACK } from './inventory_limits';
+
+function addDocumentUseOutput(e: Entity, defId: string, count: number): void {
+  const inv = e.inventory ?? (e.inventory = []);
+  let left = Math.floor(count);
+  if (!Number.isFinite(left) || left <= 0) return;
+  for (const slot of inv) {
+    if (left <= 0) return;
+    if (slot.defId !== defId || slot.data !== undefined || slot.count >= MAX_ITEM_STACK) continue;
+    const add = Math.min(left, MAX_ITEM_STACK - slot.count);
+    slot.count += add;
+    left -= add;
+  }
+  while (left > 0 && inv.length < MAX_INVENTORY_SLOTS) {
+    const add = Math.min(left, MAX_ITEM_STACK);
+    inv.push({ defId, count: add });
+    left -= add;
+  }
+}
 
 function redeemRifleCoupon(e: Entity): string {
-  const inv = e.inventory ?? (e.inventory = []);
-  const slot = inv.find(item => item.defId === 'ammo_762' && item.data === undefined);
-  if (slot) slot.count += 6;
-  else inv.push({ defId: 'ammo_762', count: 6 });
+  addDocumentUseOutput(e, 'ammo_762', 6);
   return 'Талон на винтовочные патроны погашен: выдали шесть 7.62.';
 }
 

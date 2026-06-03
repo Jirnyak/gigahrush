@@ -17,6 +17,36 @@ This file is the central optimization document and also preserves the full May 2
 - "Safe optimization" here means semantics-preserving: cache, index, defer, split dirty state or remove duplicate work. Any visible simplification must be treated as a separate design change.
 - Validate performance changes with `npm run check`; use `npm run check:browser` or `npm run check:full` for render, input, UI, mobile and browser-storage changes.
 
+## Numeric Storage Contract
+
+Date: 2026-06-03.
+
+For systems that can touch the full persistent population, small numeric facts must be columnar typed-array data first and object fields only as boundary snapshots. This matters even for "tiny" values because the fixed A-Life pool is `100_000` NPC identities before Demos/social graph growth.
+
+The default target ranges are:
+
+- Level and RPG attributes: `Uint8Array`. Runtime `RPG_LEVEL_CAP` is byte-safe at `255`, not `256`; unsigned byte stores `0..255`, and direct level values use `1..255` with `0` available as unset/fallback storage value.
+- Social relations and karma: `Int8Array` with game range `[-127, 127]`; keep `-128` reserved as sentinel/unset/corrupt, not as an ordinary score.
+- Floor route number / compact floor index: signed byte when storing route `z`-like values in `[-127, 127]`, or unsigned byte for dictionary indexes. Save/debug may keep `floorKey` strings, but hot or full-population storage must not duplicate strings per NPC.
+- Normal inventory slot stack count: target one byte per physical slot, `1..255`. Quantities above `255` must split into multiple physical slots, move into a bulk/resource container, or remain a deliberate virtual resource system. Do not keep arbitrary `999` stack counts as the long-term object model for actor inventories.
+- XP: do not force into byte storage under the current soft-quadratic formula. With level cap `255`, `xpForLevel(256) - 1` is about `654k`, so current per-level XP needs at least `Uint32Array` if it becomes a mass persistent column. A byte progress meter would be a separate gameplay/save-shape redesign.
+- HP, PSI, needs and timers: active entities may keep JS numbers where fractional regeneration, cooldowns or interpolation are already gameplay-visible. Persistent/off-floor storage can be quantized later, but only after checking formulas and tests; do not break fractional HP behavior to save one byte.
+- Money, account balances, ids, seeds and kill counters are not byte fields by default. Pick `Uint16Array`, `Uint32Array` or sparse overrides according to real caps.
+
+Implementation rules:
+
+- Never assign a value capped above the typed-array range into that typed array; JavaScript typed arrays wrap/truncate silently.
+- Keep live current-floor `Entity` objects ergonomic when they are not the 100k storage problem; compact the cold/persistent columns and expose snapshots through helpers.
+- Save payloads may remain JSON numbers/strings when that is the current shape, but load must sanitize to the same caps used by runtime columns.
+- Add tests for max-value round trips whenever a field moves into a typed array.
+
+Current A-Life implementation:
+
+- `src/systems/alife.ts` keeps the fixed `100_000` persistent pool in a mixed columnar form. Record objects keep sparse identity/string/position facts such as `id`, `name`, reserved ids, optional coordinates and touched custom loadout.
+- Full-population route/numeric facts are typed columns: `floorKeyIndex`, `floor`, `danger`, `faction`, `occupation`, flags, RPG bytes, HP/max HP, money/account rubles, family id, sprite/sprite seed, kill counters, `playerRelation` and `karma`. Route strings are interned once in an A-Life floor-key dictionary.
+- Ordinary generated loadout is deterministic and lazy. Untouched records do not carry a `weapon` string or `inventory` array; materialization reconstructs loadout from seed, faction, occupation, danger and level. Captured or save-overridden loadout is sparse and flagged as custom.
+- Actor inventory stack counts are byte-capped at `255`; oversized save/runtime stacks split into physical slots where the actor inventory model is used.
+
 ## Review Pass
 
 The initial requested six-agent review was run as read-only analysis. No subagent edited code during that review. Two broad data/registry attempts failed on remote compact service errors, then a narrow replacement lane completed.

@@ -3,13 +3,11 @@
 import { type InputState } from './core/types';
 import {
   applyControlCode,
-  cancelControlCapture,
   clearControlInputs,
   consumeControlCaptureCode,
   getControlCaptureAction,
-  isControlResetCode,
-  isMenuCloseCode,
   matchesControlAction,
+  mouseButtonCode,
 } from './systems/controls';
 
 export function createInput(): InputState {
@@ -21,6 +19,7 @@ export function createInput(): InputState {
     use: false, escape: false,
     questLog: false,
     mouseAttack: false, mouseUse: false,
+    menuAccept: false, menuClose: false, menuWheel: 0, textInput: '',
     attrStr: false, attrAgi: false, attrInt: false,
     debugScreen: false,
     pee: false,
@@ -42,6 +41,9 @@ interface InputBindOptions {
   onFullscreenToggle?: () => void;
   shouldRequestPointerLock?: () => boolean;
   shouldHandleGameplayPointer?: () => boolean;
+  shouldHandleMenuPointer?: () => boolean;
+  shouldHandleMenuWheel?: () => boolean;
+  shouldCaptureTextInput?: () => boolean;
 }
 
 function clearMouseGameplayState(input: InputState): void {
@@ -49,6 +51,7 @@ function clearMouseGameplayState(input: InputState): void {
   input.mouse.dy = 0;
   input.mouseAttack = false;
   input.mouseUse = false;
+  for (let button = 0; button <= 4; button++) applyControlCode(input, mouseButtonCode(button), false);
 }
 
 function clearPointerState(input: InputState): void {
@@ -65,6 +68,10 @@ function clearLostInputState(input: InputState, canvas: HTMLCanvasElement): void
   input.controlEdit = false;
   input.controlReset = false;
   input.controlClose = false;
+  input.menuAccept = false;
+  input.menuClose = false;
+  input.menuWheel = 0;
+  input.textInput = '';
   clearPointerState(input);
   input.mouse.locked = document.pointerLockElement === canvas;
 }
@@ -83,56 +90,36 @@ function requestPointerLockSafe(canvas: HTMLCanvasElement): void {
   }
 }
 
+function captureTextInput(input: InputState, e: KeyboardEvent): void {
+  if (e.ctrlKey || e.metaKey || e.altKey) return;
+  let text = '';
+  if (e.key === 'Backspace') text = '\b';
+  else if (e.key === 'Delete') text = '\x7f';
+  else if (e.key.length === 1) text = e.key;
+  if (!text) return;
+  input.textInput = (input.textInput + text).slice(-64);
+}
+
 export function bindInput(input: InputState, canvas: HTMLCanvasElement, options: InputBindOptions = {}): () => void {
   let pointerLockClickStarted = false;
   let pointerLockAllowedAtMouseDown = false;
 
   const onDown = (e: KeyboardEvent) => {
     if (getControlCaptureAction()) {
-      if (isControlResetCode(e.code)) {
-        cancelControlCapture();
-        input.controlReset = true;
-        e.preventDefault();
-        return;
-      }
-      if (isMenuCloseCode(e.code)) {
-        cancelControlCapture();
-        input.controlClose = true;
-        e.preventDefault();
-        return;
-      }
-      if (!e.metaKey && !e.ctrlKey && !e.altKey) consumeControlCaptureCode(e.code);
+      consumeControlCaptureCode(e.code);
       e.preventDefault();
       return;
     }
     if (matchesControlAction('fullscreen', e.code)) {
       e.preventDefault();
       options.onFullscreenToggle?.();
-      return;
     }
-    if (isControlResetCode(e.code)) {
-      input.controlReset = true;
-      e.preventDefault();
-      return;
-    }
-    if (isMenuCloseCode(e.code)) {
-      input.controlClose = true;
-      e.preventDefault();
-      return;
-    }
+    if (options.shouldCaptureTextInput?.() === true) captureTextInput(input, e);
     applyControlCode(input, e.code, true);
     e.preventDefault();
   };
 
   const onUp = (e: KeyboardEvent) => {
-    if (isControlResetCode(e.code)) {
-      input.controlReset = false;
-      return;
-    }
-    if (isMenuCloseCode(e.code)) {
-      input.controlClose = false;
-      return;
-    }
     applyControlCode(input, e.code, false);
   };
 
@@ -157,30 +144,74 @@ export function bindInput(input: InputState, canvas: HTMLCanvasElement, options:
     requestPointerLockSafe(canvas);
   };
 
+  const onMenuMouseDown = (e: MouseEvent) => {
+    if (getControlCaptureAction()) {
+      consumeControlCaptureCode(mouseButtonCode(e.button));
+      pointerLockClickStarted = true;
+      pointerLockAllowedAtMouseDown = false;
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      return;
+    }
+    if (options.shouldHandleMenuPointer?.() === true) {
+      if (e.button === 0) {
+        input.menuAccept = true;
+      } else if (e.button === 2) {
+        input.menuClose = true;
+      } else {
+        return;
+      }
+      pointerLockClickStarted = true;
+      pointerLockAllowedAtMouseDown = false;
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      return;
+    }
+  };
+
   const onMouseDown = (e: MouseEvent) => {
+    if (getControlCaptureAction()) {
+      consumeControlCaptureCode(mouseButtonCode(e.button));
+      pointerLockClickStarted = true;
+      pointerLockAllowedAtMouseDown = false;
+      e.preventDefault();
+      return;
+    }
+    const code = mouseButtonCode(e.button);
     if (e.button === 0) {
       pointerLockClickStarted = true;
       pointerLockAllowedAtMouseDown = options.shouldRequestPointerLock?.() !== false;
-      if (document.pointerLockElement === canvas && options.shouldHandleGameplayPointer?.() !== false) input.mouseAttack = true;
-      else input.mouseAttack = false;
-    } else if (e.button === 2) {
-      if (document.pointerLockElement === canvas && options.shouldHandleGameplayPointer?.() !== false) input.mouseUse = true;
-      else input.mouseUse = false;
+    }
+    if (document.pointerLockElement === canvas && options.shouldHandleGameplayPointer?.() !== false) {
+      applyControlCode(input, code, true);
+    } else {
+      applyControlCode(input, code, false);
+    }
+    if (e.button === 2) {
       e.preventDefault();
     }
   };
 
   const onMouseUp = (e: MouseEvent) => {
-    if (e.button === 0) {
-      input.mouseAttack = false;
-    } else if (e.button === 2) {
-      input.mouseUse = false;
+    applyControlCode(input, mouseButtonCode(e.button), false);
+    if (e.button === 2) {
       e.preventDefault();
     }
   };
 
   const onContextMenu = (e: MouseEvent) => {
     e.preventDefault();
+  };
+
+  const onWheel = (e: WheelEvent) => {
+    const shouldHandle = options.shouldHandleMenuWheel ?? options.shouldHandleMenuPointer;
+    if (shouldHandle?.() !== true) return;
+    const dy = Number(e.deltaY);
+    if (Number.isFinite(dy) && dy !== 0) {
+      input.menuWheel += dy < 0 ? -1 : 1;
+    }
+    e.preventDefault();
+    e.stopImmediatePropagation();
   };
 
   const onLockChange = () => {
@@ -191,6 +222,10 @@ export function bindInput(input: InputState, canvas: HTMLCanvasElement, options:
       input.controlEdit = false;
       input.controlReset = false;
       input.controlClose = false;
+      input.menuAccept = false;
+      input.menuClose = false;
+      input.menuWheel = 0;
+      input.textInput = '';
     } else if (options.shouldHandleGameplayPointer?.() === false) {
       clearMouseGameplayState(input);
     }
@@ -207,9 +242,11 @@ export function bindInput(input: InputState, canvas: HTMLCanvasElement, options:
   document.addEventListener('keydown', onDown);
   document.addEventListener('keyup', onUp);
   document.addEventListener('mousemove', onMouse);
+  document.addEventListener('mousedown', onMenuMouseDown, { capture: true });
   canvas.addEventListener('click', onClick);
   canvas.addEventListener('mousedown', onMouseDown);
   document.addEventListener('mouseup', onMouseUp);
+  document.addEventListener('wheel', onWheel, { capture: true, passive: false });
   canvas.addEventListener('contextmenu', onContextMenu);
   document.addEventListener('pointerlockchange', onLockChange);
   window.addEventListener('blur', onBlur);
@@ -220,9 +257,11 @@ export function bindInput(input: InputState, canvas: HTMLCanvasElement, options:
     document.removeEventListener('keydown', onDown);
     document.removeEventListener('keyup', onUp);
     document.removeEventListener('mousemove', onMouse);
+    document.removeEventListener('mousedown', onMenuMouseDown, { capture: true });
     canvas.removeEventListener('click', onClick);
     canvas.removeEventListener('mousedown', onMouseDown);
     document.removeEventListener('mouseup', onMouseUp);
+    document.removeEventListener('wheel', onWheel, { capture: true });
     canvas.removeEventListener('contextmenu', onContextMenu);
     document.removeEventListener('pointerlockchange', onLockChange);
     window.removeEventListener('blur', onBlur);

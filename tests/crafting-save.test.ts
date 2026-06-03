@@ -6,6 +6,7 @@ import { craftRecipeByItemId } from '../src/data/craft_recipes';
 import {
   craftMaterialIndex,
 } from '../src/data/craft_materials';
+import { MAX_ITEM_STACK } from '../src/data/inventory_limits';
 import {
   craftingForSave,
   ensureCraftingState,
@@ -44,12 +45,23 @@ test('save payload includes compact crafting section and bumped shape version', 
   const payload = createGameSavePayload(player, state, []);
 
   assert.equal(payload.version, SAVE_SHAPE_VERSION);
-  assert.equal(payload.version, 15);
+  assert.equal(payload.version, 16);
   const crafting = payload.state.crafting as ReturnType<typeof craftingForSave>;
   assert.equal(Array.isArray(crafting.materials), true);
   assert.equal(crafting.materials.length, 9);
   assert.equal(crafting.materials[craftMaterialIndex('metal')], 7);
   assert.equal(crafting.knownRecipes.includes(recipe.id), true);
+});
+
+test('save payload splits oversized physical inventory stacks to byte slots', () => {
+  const state = makeGameState();
+  const player = savePlayer({
+    inventory: [{ defId: 'bread', count: MAX_ITEM_STACK * 2 + 90 }],
+  });
+
+  const payload = createGameSavePayload(player, state, []);
+
+  assert.deepEqual(payload.player.inventory?.map(item => item.count), [MAX_ITEM_STACK, MAX_ITEM_STACK, 90]);
 });
 
 test('restore sanitizes malformed material vector to exactly nine clamped integers', () => {

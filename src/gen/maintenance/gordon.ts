@@ -3,19 +3,21 @@
 
 import {
   W, Cell,
-  type Entity, EntityType, AIGoal, Faction, Occupation,
+  type Entity, EntityType, AIGoal, Faction, FloorLevel, Occupation,
 } from '../../core/types';
 import { World } from '../../core/world';
 import { freshNeeds } from '../../data/catalog';
-import { type PlotNpcDef, registerSideQuest } from '../../data/plot';
-import { Spr } from '../../render/sprite_index';
+import { type PlotNpcDef, registerAuthoredNpc, storyNpcFloorKey } from '../../data/plot';
+import { authoredNpcSpr } from '../../render/sprite_index';
+
+const NPC_ID = 'gordon_freeman';
 
 const NPC_DEF: PlotNpcDef = {
   name: 'Гордон Фримен',
   isFemale: false,
   faction: Faction.SCIENTIST,
   occupation: Occupation.SCIENTIST,
-  sprite: Spr.GORDON,
+  sprite: authoredNpcSpr(NPC_ID),
   hp: 350, maxHp: 350, money: 0, speed: 1.3,
   inventory: [
     { defId: 'wrench', count: 1 },
@@ -41,7 +43,12 @@ const NPC_DEF: PlotNpcDef = {
 };
 
 // No quest — just a silent reference NPC
-registerSideQuest('gordon_freeman', NPC_DEF, []);
+registerAuthoredNpc({
+  id: NPC_ID,
+  npc: NPC_DEF,
+  homeFloorKey: storyNpcFloorKey(FloorLevel.MAINTENANCE),
+  tags: ['maintenance', 'silent'],
+});
 
 export function spawnGordonFreeman(
   world: World, entities: Entity[], nextId: { v: number },
@@ -61,7 +68,7 @@ export function spawnGordonFreeman(
       inventory: NPC_DEF.inventory.map(i => ({ ...i })),
       weapon: 'wrench',
       faction: NPC_DEF.faction, occupation: NPC_DEF.occupation,
-      plotNpcId: 'gordon_freeman', canGiveQuest: false, questId: -1,
+      plotNpcId: NPC_ID, canGiveQuest: false, questId: -1,
       isTraveler: true,
     });
     return;

@@ -17,6 +17,7 @@ import {
   FloorLevel,
 } from '../core/types';
 import type { QuestRouteTarget } from './contracts';
+import { designFloorAtZ, designFloorById } from './design_floors';
 
 /* ── Story NPC definition ─────────────────────────────────────── */
 export interface PlotNpcDef {
@@ -25,18 +26,40 @@ export interface PlotNpcDef {
   faction: Faction;
   occupation: Occupation;
   sprite: number;
+  /** Optional visual generator family; sprite remains the atlas/fallback slot. */
+  npcVisualId?: string;
+  /** Stable route key where A-Life reserves this authored NPC. */
+  homeFloorKey?: string;
   hp: number;
   maxHp: number;
   money: number;
+  accountRubles?: number;
   speed: number;
   weapon?: string;
   inventory: { defId: string; count: number }[];
+  /** Compact package tags for authored population/debug surfaces. */
+  authoredTags?: readonly string[];
   /** Sequential talk lines (cycled via _plotTalkIdx) */
   talkLines: string[];
   /** Talk lines after plotDone flag is set (random pick) */
   talkLinesPost: string[];
   /** Response when completing a TALK quest targeting this NPC */
   talkQuestResponse?: string | readonly string[];
+}
+
+export function storyNpcFloorKey(floor: FloorLevel): string {
+  switch (floor) {
+    case FloorLevel.MINISTRY: return 'story:ministry';
+    case FloorLevel.KVARTIRY: return 'story:kvartiry';
+    case FloorLevel.LIVING: return 'story:living';
+    case FloorLevel.MAINTENANCE: return 'story:maintenance';
+    case FloorLevel.HELL: return 'story:hell';
+    case FloorLevel.VOID: return 'story:void';
+  }
+}
+
+export function designNpcFloorKey(routeId: string): string {
+  return routeId.startsWith('design:') ? routeId : `design:${routeId}`;
 }
 
 /* ── Story NPC registry ───────────────────────────────────────── */
@@ -47,6 +70,7 @@ export const PLOT_NPCS: Record<string, PlotNpcDef> = {
     faction: Faction.SCIENTIST,
     occupation: Occupation.DOCTOR,
     sprite: Occupation.DOCTOR,
+    homeFloorKey: storyNpcFloorKey(FloorLevel.LIVING),
     hp: 500, maxHp: 500, money: 50, speed: 1.2,
     inventory: [
       { defId: 'bandage', count: 3 },
@@ -93,6 +117,7 @@ export const PLOT_NPCS: Record<string, PlotNpcDef> = {
     faction: Faction.LIQUIDATOR,
     occupation: Occupation.HUNTER,
     sprite: Occupation.HUNTER,
+    homeFloorKey: storyNpcFloorKey(FloorLevel.LIVING),
     hp: 600, maxHp: 600, money: 80, speed: 1.4,
     inventory: [
       { defId: 'makarov', count: 1 },
@@ -133,6 +158,7 @@ export const PLOT_NPCS: Record<string, PlotNpcDef> = {
     faction: Faction.SCIENTIST,
     occupation: Occupation.SCIENTIST,
     sprite: Occupation.SCIENTIST,
+    homeFloorKey: storyNpcFloorKey(FloorLevel.LIVING),
     hp: 400, maxHp: 400, money: 60, speed: 1.0,
     inventory: [
       { defId: 'psi_strike', count: 1 },
@@ -173,6 +199,7 @@ export const PLOT_NPCS: Record<string, PlotNpcDef> = {
     faction: Faction.CULTIST,
     occupation: Occupation.ALCOHOLIC,
     sprite: Occupation.ALCOHOLIC,
+    homeFloorKey: storyNpcFloorKey(FloorLevel.LIVING),
     hp: 300, maxHp: 300, money: 5, speed: 0.9,
     inventory: [
       { defId: 'bread', count: 1 },
@@ -216,6 +243,7 @@ export const PLOT_NPCS: Record<string, PlotNpcDef> = {
     faction: Faction.LIQUIDATOR,
     occupation: Occupation.HUNTER,
     sprite: Occupation.HUNTER,
+    homeFloorKey: storyNpcFloorKey(FloorLevel.MAINTENANCE),
     hp: 10000, maxHp: 10000, money: 120, speed: 1.5,
     inventory: [
       { defId: 'makarov', count: 1 },
@@ -254,6 +282,7 @@ export const PLOT_NPCS: Record<string, PlotNpcDef> = {
     faction: Faction.CULTIST,
     occupation: Occupation.PILGRIM,
     sprite: Occupation.PILGRIM,
+    homeFloorKey: storyNpcFloorKey(FloorLevel.HELL),
     hp: 450, maxHp: 450, money: 12, speed: 0.9,
     inventory: [
       { defId: 'holy_water', count: 1 },
@@ -282,6 +311,7 @@ export const PLOT_NPCS: Record<string, PlotNpcDef> = {
     faction: Faction.CULTIST,
     occupation: Occupation.PRIEST,
     sprite: Occupation.PRIEST,
+    homeFloorKey: designNpcFloorKey('podad'),
     hp: 520, maxHp: 520, money: 0, speed: 0.8,
     inventory: [
       { defId: 'bottled_voice', count: 1 },
@@ -308,6 +338,7 @@ export const PLOT_NPCS: Record<string, PlotNpcDef> = {
     faction: Faction.SCIENTIST,
     occupation: Occupation.SCIENTIST,
     sprite: Occupation.SCIENTIST,
+    homeFloorKey: storyNpcFloorKey(FloorLevel.VOID),
     hp: 350, maxHp: 350, money: 0, speed: 1.0,
     inventory: [
       { defId: 'antidep', count: 2 },
@@ -335,6 +366,7 @@ export const PLOT_NPCS: Record<string, PlotNpcDef> = {
     faction: Faction.CITIZEN,
     occupation: Occupation.SCIENTIST,
     sprite: Occupation.SCIENTIST,
+    homeFloorKey: storyNpcFloorKey(FloorLevel.LIVING),
     hp: 1, maxHp: 1, money: 0, speed: 0,
     inventory: [],
     talkLines: [],
@@ -787,15 +819,124 @@ export function registerSideQuestSteps(quests: readonly SideQuestStep[]): void {
   }
 }
 
+export interface AuthoredNpcRegistrationOptions {
+  homeFloorKey?: string;
+  tags?: readonly string[];
+}
+
+export interface AuthoredNpcPack extends AuthoredNpcRegistrationOptions {
+  id: string;
+  npc: PlotNpcDef;
+  quests?: readonly SideQuestStep[];
+}
+
+const FLOOR_KEY_RE = /^(story|design|procedural|floor_instance):[a-z0-9_-]+$/;
+
+function checkedHomeFloorKey(floorKey: string | undefined): string | undefined {
+  if (floorKey === undefined) return undefined;
+  const trimmed = floorKey.trim();
+  if (!trimmed) throw new Error('[AUTHORED_NPC] missing home floor key');
+  if (trimmed !== floorKey) throw new Error(`[AUTHORED_NPC] home floor key "${floorKey}" must be trimmed`);
+  if (!FLOOR_KEY_RE.test(trimmed)) throw new Error(`[AUTHORED_NPC] invalid home floor key "${floorKey}"`);
+  return trimmed;
+}
+
+function routeFloorKeyFromValue(value: unknown): string | undefined {
+  if (typeof value !== 'string') return undefined;
+  const routeId = value.trim();
+  if (!routeId) return undefined;
+  if (FLOOR_KEY_RE.test(routeId)) return routeId;
+  return designFloorById(routeId) ? designNpcFloorKey(routeId) : undefined;
+}
+
+function routeFloorKeyFromTarget(route: QuestRouteTarget | undefined): string | undefined {
+  if (!route) return undefined;
+  if (route.designFloorId) return designNpcFloorKey(route.designFloorId);
+  if (typeof route.z === 'number' && Number.isFinite(route.z)) {
+    const design = designFloorAtZ(Math.trunc(route.z));
+    if (design) return designNpcFloorKey(design.id);
+  }
+  return undefined;
+}
+
+function questHomeFloorKey(q: PlotStep): string | undefined {
+  return routeFloorKeyFromTarget(q.targetRoute) ??
+    (q.targetFloor !== undefined ? storyNpcFloorKey(q.targetFloor) : undefined) ??
+    (q.visitFloor !== undefined ? storyNpcFloorKey(q.visitFloor) : undefined) ??
+    routeFloorKeyFromValue(q.eventData?.routeId);
+}
+
+function inferredQuestHomeFloorKey(quests: readonly PlotStep[]): string | undefined {
+  for (const q of quests) {
+    const floorKey = questHomeFloorKey(q);
+    if (floorKey) return floorKey;
+  }
+  return undefined;
+}
+
+function uniqueAuthoredTags(input: readonly string[] | undefined, existing: readonly string[] | undefined): readonly string[] | undefined {
+  const out: string[] = [];
+  for (const raw of [...(existing ?? []), ...(input ?? [])]) {
+    const tag = raw.trim();
+    if (!tag || out.includes(tag)) continue;
+    out.push(tag.slice(0, 32));
+    if (out.length >= 16) break;
+  }
+  return out.length > 0 ? out : undefined;
+}
+
+function npcWithRegistrationOptions(
+  npc: PlotNpcDef,
+  quests: readonly PlotStep[],
+  options: AuthoredNpcRegistrationOptions | undefined,
+): PlotNpcDef {
+  const homeFloorKey = checkedHomeFloorKey(options?.homeFloorKey) ??
+    checkedHomeFloorKey(npc.homeFloorKey) ??
+    inferredQuestHomeFloorKey(quests);
+  const authoredTags = uniqueAuthoredTags(options?.tags, npc.authoredTags);
+  return {
+    ...npc,
+    ...(homeFloorKey ? { homeFloorKey } : {}),
+    ...(authoredTags ? { authoredTags } : {}),
+  };
+}
+
+export function plotNpcHomeFloorKey(plotNpcId: string, defInput?: PlotNpcDef): string | undefined {
+  const def = defInput ?? PLOT_NPCS[plotNpcId];
+  const explicit = checkedHomeFloorKey(def?.homeFloorKey);
+  if (explicit) return explicit;
+  return inferredQuestHomeFloorKey([
+    ...PLOT_CHAIN.filter(q => q.giverNpcId === plotNpcId),
+    ...SIDE_QUESTS.filter(q => q.giverNpcId === plotNpcId),
+  ]);
+}
+
 /** Register a side quest content pack (called by content modules at import) */
 export function registerSideQuest(
-  npcId: string, npc: PlotNpcDef, quests: readonly SideQuestStep[],
+  npcId: string, npc: PlotNpcDef, quests: readonly SideQuestStep[], options?: AuthoredNpcRegistrationOptions,
 ): void {
   const checkedNpcId = checkedRegistryId(npcId, 'NPC');
   if (PLOT_NPCS[checkedNpcId]) throw new Error(`[SIDE_QUEST] duplicate NPC id "${checkedNpcId}"`);
   assertSideQuestStepsCanRegister(quests);
-  PLOT_NPCS[checkedNpcId] = npc;
+  PLOT_NPCS[checkedNpcId] = npcWithRegistrationOptions(npc, quests, options);
   registerSideQuestSteps(quests);
+}
+
+export function registerFloorSideQuest(
+  homeFloorKey: string,
+  npcId: string,
+  npc: PlotNpcDef,
+  quests: readonly SideQuestStep[],
+  tags?: readonly string[],
+): void {
+  registerSideQuest(npcId, npc, quests, { homeFloorKey, tags });
+}
+
+export function registerAuthoredNpc(pack: AuthoredNpcPack): void {
+  registerSideQuest(pack.id, pack.npc, pack.quests ?? [], {
+    homeFloorKey: pack.homeFloorKey,
+    tags: pack.tags,
+  });
 }
 
 export interface SideQuestRegistrySnapshot {

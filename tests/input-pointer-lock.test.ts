@@ -1,7 +1,17 @@
-import { test } from 'node:test';
+import { afterEach, test } from 'node:test';
 import * as assert from 'node:assert/strict';
 
 import { bindInput, createInput } from '../src/input';
+import {
+  beginControlCapture,
+  controlBindings,
+  getControlCaptureAction,
+  resetAllControlBindings,
+} from '../src/systems/controls';
+
+afterEach(() => {
+  resetAllControlBindings();
+});
 
 class FakeEventTarget {
   private readonly listeners = new Map<string, Set<EventListenerOrEventListenerObject>>();
@@ -77,6 +87,12 @@ function mouseEvent(type: string, button = 0, movementX = 0, movementY = 0): Mou
   return event;
 }
 
+function wheelEvent(deltaY: number): WheelEvent {
+  const event = new Event('wheel', { cancelable: true }) as WheelEvent;
+  Object.defineProperty(event, 'deltaY', { value: deltaY });
+  return event;
+}
+
 test('canvas click requests pointer lock only when gameplay capture is allowed', () => {
   const env = installInputDom();
   try {
@@ -124,7 +140,108 @@ test('canvas click does not request pointer lock after a menu click closes the m
   }
 });
 
-test('right mouse button drives equipped tool input under pointer lock', () => {
+test('menu mouse buttons latch accept and close without requesting pointer lock', () => {
+  const env = installInputDom();
+  try {
+    let menuOpen = true;
+    const input = createInput();
+    const unbind = bindInput(input, env.canvas as unknown as HTMLCanvasElement, {
+      shouldRequestPointerLock: () => true,
+      shouldHandleMenuPointer: () => menuOpen,
+    });
+
+    const accept = mouseEvent('mousedown', 0);
+    env.document.dispatch('mousedown', accept);
+    assert.equal(input.menuAccept, true);
+    assert.equal(input.menuClose, false);
+    assert.equal(accept.defaultPrevented, true);
+
+    env.canvas.dispatch('click');
+    assert.equal(env.canvas.requestCount, 0);
+
+    input.menuAccept = false;
+    const close = mouseEvent('mousedown', 2);
+    env.document.dispatch('mousedown', close);
+    assert.equal(input.menuAccept, false);
+    assert.equal(input.menuClose, true);
+    assert.equal(close.defaultPrevented, true);
+
+    menuOpen = false;
+    env.canvas.dispatch('click');
+    assert.equal(env.canvas.requestCount, 0);
+    env.canvas.dispatch('mousedown', mouseEvent('mousedown', 0));
+    env.canvas.dispatch('click');
+    assert.equal(env.canvas.requestCount, 1);
+    unbind();
+  } finally {
+    env.restore();
+  }
+});
+
+test('mouse buttons can be captured as key binding codes', () => {
+  const env = installInputDom();
+  try {
+    const input = createInput();
+    const unbind = bindInput(input, env.canvas as unknown as HTMLCanvasElement, {
+      shouldRequestPointerLock: () => true,
+      shouldHandleMenuPointer: () => true,
+    });
+
+    beginControlCapture('quests');
+    const left = mouseEvent('mousedown', 0);
+    env.document.dispatch('mousedown', left);
+    assert.deepEqual([...controlBindings('quests')], ['KeyQ', 'MouseLeft']);
+    assert.equal(getControlCaptureAction(), null);
+    assert.equal(input.menuAccept, false);
+    assert.equal(left.defaultPrevented, true);
+    env.canvas.dispatch('click');
+    assert.equal(env.canvas.requestCount, 0);
+
+    beginControlCapture('quests');
+    const right = mouseEvent('mousedown', 2);
+    env.document.dispatch('mousedown', right);
+    assert.deepEqual([...controlBindings('quests')], ['KeyQ', 'MouseLeft', 'MouseRight']);
+    assert.equal(getControlCaptureAction(), null);
+    assert.equal(input.menuClose, false);
+    assert.equal(right.defaultPrevented, true);
+    unbind();
+  } finally {
+    env.restore();
+  }
+});
+
+test('menu wheel can be latched independently from menu pointer buttons', () => {
+  const env = installInputDom();
+  try {
+    let menuWheelOpen = true;
+    const input = createInput();
+    const unbind = bindInput(input, env.canvas as unknown as HTMLCanvasElement, {
+      shouldHandleMenuPointer: () => true,
+      shouldHandleMenuWheel: () => menuWheelOpen,
+    });
+
+    const down = wheelEvent(120);
+    env.document.dispatch('wheel', down);
+    assert.equal(input.menuWheel, 1);
+    assert.equal(down.defaultPrevented, true);
+
+    const up = wheelEvent(-120);
+    env.document.dispatch('wheel', up);
+    assert.equal(input.menuWheel, 0);
+    assert.equal(up.defaultPrevented, true);
+
+    menuWheelOpen = false;
+    const ignored = wheelEvent(120);
+    env.document.dispatch('wheel', ignored);
+    assert.equal(input.menuWheel, 0);
+    assert.equal(ignored.defaultPrevented, false);
+    unbind();
+  } finally {
+    env.restore();
+  }
+});
+
+test('right mouse button drives its bound equipped tool input under pointer lock', () => {
   const env = installInputDom();
   try {
     const input = createInput();
@@ -133,12 +250,12 @@ test('right mouse button drives equipped tool input under pointer lock', () => {
     });
 
     env.canvas.dispatch('mousedown', mouseEvent('mousedown', 2));
-    assert.equal(input.mouseUse, false);
+    assert.equal(input.use, false);
 
     env.document.pointerLockElement = env.canvas as unknown as Element;
     const down = mouseEvent('mousedown', 2);
     env.canvas.dispatch('mousedown', down);
-    assert.equal(input.mouseUse, true);
+    assert.equal(input.use, true);
     assert.equal(down.defaultPrevented, true);
 
     const context = mouseEvent('contextmenu', 2);
@@ -147,7 +264,7 @@ test('right mouse button drives equipped tool input under pointer lock', () => {
 
     const up = mouseEvent('mouseup', 2);
     env.document.dispatch('mouseup', up);
-    assert.equal(input.mouseUse, false);
+    assert.equal(input.use, false);
     assert.equal(up.defaultPrevented, true);
     unbind();
   } finally {
@@ -195,18 +312,18 @@ test('mouse buttons are ignored while gameplay pointer input is blocked', () => 
 
     env.document.pointerLockElement = env.canvas as unknown as Element;
     env.canvas.dispatch('mousedown', mouseEvent('mousedown'));
-    assert.equal(input.mouseAttack, false);
+    assert.equal(input.attack, false);
     const blockedTool = mouseEvent('mousedown', 2);
     env.canvas.dispatch('mousedown', blockedTool);
-    assert.equal(input.mouseUse, false);
+    assert.equal(input.use, false);
     assert.equal(blockedTool.defaultPrevented, true);
 
     gameplayPointerActive = true;
     env.canvas.dispatch('mousedown', mouseEvent('mousedown'));
-    assert.equal(input.mouseAttack, true);
-    input.mouseAttack = false;
+    assert.equal(input.attack, true);
+    input.attack = false;
     env.canvas.dispatch('mousedown', mouseEvent('mousedown', 2));
-    assert.equal(input.mouseUse, true);
+    assert.equal(input.use, true);
     unbind();
   } finally {
     env.restore();

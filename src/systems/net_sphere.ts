@@ -81,6 +81,8 @@ export interface NetSphereSnapshot {
   chat: readonly NetSphereChatLine[];
   events: readonly NetSphereEventLine[];
   draft: string;
+  chatInputActive: boolean;
+  chatScroll: number;
   busy: boolean;
   currentRunSeed?: number;
 }
@@ -117,6 +119,8 @@ interface NetSphereRuntime {
   chat: NetSphereChatLine[];
   events: NetSphereEventLine[];
   draft: string;
+  chatInputActive: boolean;
+  chatScroll: number;
   busy: boolean;
   chatBusy: boolean;
   marketBusy: boolean;
@@ -170,6 +174,8 @@ const runtime: NetSphereRuntime = {
   chat: [],
   events: [],
   draft: '',
+  chatInputActive: false,
+  chatScroll: 0,
   busy: false,
   chatBusy: false,
   marketBusy: false,
@@ -182,6 +188,11 @@ const runtime: NetSphereRuntime = {
 };
 let inputUnbind: (() => void) | null = null;
 const NET_SPHERE_INPUT_LISTENER_OPTIONS: AddEventListenerOptions = { capture: true };
+const NET_SPHERE_WHEEL_LISTENER_OPTIONS: AddEventListenerOptions = { capture: true, passive: false };
+
+interface NetSphereInputOptions {
+  canOpen?: () => boolean;
+}
 
 function storageGet(storage: Storage, key: string): string {
   try {
@@ -226,6 +237,23 @@ function consumeNetSphereKeyboardEvent(e: KeyboardEvent): void {
 function consumeNetSphereClipboardEvent(e: ClipboardEvent): void {
   e.preventDefault();
   e.stopImmediatePropagation();
+}
+
+function consumeNetSphereWheelEvent(e: WheelEvent): void {
+  e.preventDefault();
+  e.stopImmediatePropagation();
+}
+
+function maxChatScroll(): number {
+  return Math.max(0, runtime.chat.length - 1);
+}
+
+function setChatScroll(value: number): void {
+  runtime.chatScroll = Math.max(0, Math.min(maxChatScroll(), Math.floor(value)));
+}
+
+function adjustChatScroll(delta: number): void {
+  setChatScroll(runtime.chatScroll + delta);
 }
 
 function ensureIdentity(): void {
@@ -438,7 +466,13 @@ function applyServerPayload(payload: unknown): void {
       });
       runtime.lastChatId = Math.max(runtime.lastChatId, line.id);
     }
-    if (runtime.chat.length > CHAT_LIMIT) runtime.chat.splice(0, runtime.chat.length - CHAT_LIMIT);
+    if (runtime.chat.length > CHAT_LIMIT) {
+      const removed = runtime.chat.length - CHAT_LIMIT;
+      runtime.chat.splice(0, removed);
+      setChatScroll(runtime.chatScroll - removed);
+    } else {
+      setChatScroll(runtime.chatScroll);
+    }
   }
   if (Array.isArray(data.events)) {
     runtime.events = data.events
@@ -623,6 +657,7 @@ function submitDraft(): void {
       runtime.profile = null;
       runtime.chat = [];
       runtime.events = [];
+      runtime.chatScroll = 0;
       runtime.lastChatId = 0;
       storageSet(localStorage, NET_GEN_KEY, runtime.netGen);
       runtime.nextHeartbeatAt = 0;
@@ -634,6 +669,7 @@ function submitDraft(): void {
       runtime.profile = null;
       runtime.chat = [];
       runtime.events = [];
+      runtime.chatScroll = 0;
       runtime.lastChatId = 0;
       storageSet(localStorage, NET_GEN_KEY, runtime.netGen);
       runtime.nextHeartbeatAt = 0;
@@ -642,6 +678,7 @@ function submitDraft(): void {
     }
     if (command === '/clear') {
       runtime.chat = [];
+      runtime.chatScroll = 0;
       runtime.lastChatId = 0;
       return;
     }
@@ -651,7 +688,7 @@ function submitDraft(): void {
   void sendChat(draft);
 }
 
-export function bindNetSphereInput(): () => void {
+export function bindNetSphereInput(options: NetSphereInputOptions = {}): () => void {
   if (!portalAllowsOptionalNetwork()) return () => {};
   if (runtime.bound && inputUnbind) return inputUnbind;
   runtime.bound = true;
@@ -664,7 +701,8 @@ export function bindNetSphereInput(): () => void {
         !e.ctrlKey &&
         !e.metaKey &&
         !e.altKey &&
-        matchesControlAction('netSphere', e.code)
+        matchesControlAction('netSphere', e.code) &&
+        options.canOpen?.() !== false
       ) {
         openNetSphere();
         consumeNetSphereKeyboardEvent(e);
@@ -673,45 +711,101 @@ export function bindNetSphereInput(): () => void {
     }
 
     if (e.metaKey || e.ctrlKey || e.altKey) return;
-    if (matchesControlAction('netClose', e.code)) {
-      runtime.open = false;
-      consumeNetSphereKeyboardEvent(e);
-      return;
-    }
-    if (matchesControlAction('netSubmit', e.code)) {
-      submitDraft();
+    if (matchesControlAction('netSphere', e.code) && !runtime.chatInputActive) {
       closeNetSphere();
       consumeNetSphereKeyboardEvent(e);
       return;
     }
+    if (matchesControlAction('netClose', e.code)) {
+      closeNetSphere();
+      consumeNetSphereKeyboardEvent(e);
+      return;
+    }
+    if (matchesControlAction('netSubmit', e.code)) {
+      if (runtime.chatInputActive) {
+        submitDraft();
+        runtime.chatScroll = 0;
+        runtime.chatInputActive = false;
+      } else {
+        runtime.chatInputActive = true;
+      }
+      consumeNetSphereKeyboardEvent(e);
+      return;
+    }
     if (matchesControlAction('netErase', e.code)) {
-      runtime.draft = runtime.draft.slice(0, -1);
+      if (runtime.chatInputActive) {
+        runtime.draft = runtime.draft.slice(0, -1);
+        consumeNetSphereKeyboardEvent(e);
+      }
+      return;
+    }
+    if (e.code === 'PageUp') {
+      adjustChatScroll(8);
+      consumeNetSphereKeyboardEvent(e);
+      return;
+    }
+    if (e.code === 'PageDown') {
+      adjustChatScroll(-8);
+      consumeNetSphereKeyboardEvent(e);
+      return;
+    }
+    if (e.code === 'ArrowUp') {
+      adjustChatScroll(1);
+      consumeNetSphereKeyboardEvent(e);
+      return;
+    }
+    if (e.code === 'ArrowDown') {
+      adjustChatScroll(-1);
+      consumeNetSphereKeyboardEvent(e);
+      return;
+    }
+    if (e.code === 'Home') {
+      setChatScroll(maxChatScroll());
+      consumeNetSphereKeyboardEvent(e);
+      return;
+    }
+    if (e.code === 'End') {
+      runtime.chatScroll = 0;
       consumeNetSphereKeyboardEvent(e);
       return;
     }
     const char = printableKey(e.key);
-    if (char && runtime.draft.length < DRAFT_LIMIT) {
+    if (runtime.chatInputActive && char && runtime.draft.length < DRAFT_LIMIT) {
       runtime.draft += char;
       consumeNetSphereKeyboardEvent(e);
     }
   };
 
   const onPaste = (e: ClipboardEvent) => {
-    if (!runtime.open) return;
+    if (!runtime.open || !runtime.chatInputActive) return;
     const text = e.clipboardData?.getData('text/plain') ?? '';
     if (!text) return;
     runtime.draft = (runtime.draft + cleanOutgoingText(text)).slice(0, DRAFT_LIMIT);
     consumeNetSphereClipboardEvent(e);
   };
 
+  const onWheel = (e: WheelEvent) => {
+    if (!runtime.open) return;
+    const dy = Number(e.deltaY);
+    if (!Number.isFinite(dy) || dy === 0) {
+      consumeNetSphereWheelEvent(e);
+      return;
+    }
+    const step = Math.max(1, Math.min(8, Math.ceil(Math.abs(dy) / 80)));
+    adjustChatScroll(dy < 0 ? step : -step);
+    consumeNetSphereWheelEvent(e);
+  };
+
   document.addEventListener('keydown', onDown, NET_SPHERE_INPUT_LISTENER_OPTIONS);
   document.addEventListener('paste', onPaste, NET_SPHERE_INPUT_LISTENER_OPTIONS);
+  document.addEventListener('wheel', onWheel, NET_SPHERE_WHEEL_LISTENER_OPTIONS);
   inputUnbind = () => {
     if (!runtime.bound) return;
     runtime.bound = false;
     inputUnbind = null;
     document.removeEventListener('keydown', onDown, NET_SPHERE_INPUT_LISTENER_OPTIONS);
     document.removeEventListener('paste', onPaste, NET_SPHERE_INPUT_LISTENER_OPTIONS);
+    document.removeEventListener('wheel', onWheel, NET_SPHERE_WHEEL_LISTENER_OPTIONS);
   };
   return inputUnbind;
 }
@@ -720,16 +814,23 @@ export function isNetSphereOpen(): boolean {
   return runtime.open;
 }
 
+export function isNetSphereChatInputActive(): boolean {
+  return runtime.open && runtime.chatInputActive;
+}
+
 export function openNetSphere(): void {
   if (!portalAllowsOptionalNetwork()) return;
   ensureIdentity();
   runtime.open = true;
+  runtime.chatInputActive = false;
+  runtime.chatScroll = 0;
   runtime.nextPollAt = 0;
   runtime.error = '';
 }
 
 export function closeNetSphere(): void {
   runtime.open = false;
+  runtime.chatInputActive = false;
 }
 
 export function tickNetSphere(state: GameState, player: Entity): void {
@@ -814,6 +915,8 @@ export function getNetSphereSnapshot(): NetSphereSnapshot {
       chat: [],
       events: [],
       draft: '',
+      chatInputActive: false,
+      chatScroll: 0,
       busy: false,
     };
   }
@@ -833,6 +936,8 @@ export function getNetSphereSnapshot(): NetSphereSnapshot {
     chat: runtime.chat,
     events: runtime.events,
     draft: runtime.draft,
+    chatInputActive: runtime.chatInputActive,
+    chatScroll: runtime.chatScroll,
     busy: runtime.busy || runtime.chatBusy || runtime.marketBusy,
     currentRunSeed: runtime.lastProgress?.runSeed,
   };

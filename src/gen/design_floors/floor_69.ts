@@ -9,7 +9,8 @@ import {
 import { World } from '../../core/world';
 import { withSeededRandom } from '../../core/rand';
 import { freshNeeds } from '../../data/catalog';
-import { type PlotNpcDef, registerSideQuest } from '../../data/plot';
+import { designNpcFloorKey, type PlotNpcDef, registerFloorSideQuest } from '../../data/plot';
+import { NPC_VISUAL_FLOOR69_FEMALE } from '../../entities/npc_visuals';
 import { Spr } from '../../render/sprite_index';
 import { registerRouteCue } from '../../systems/route_cues';
 import { calcZoneLevel } from '../../systems/rpg';
@@ -28,6 +29,7 @@ import type { FloorGeneration } from '../floor_manifest';
 export const DESIGN_FLOOR_ID = 'floor_69' as const;
 export const DESIGN_FLOOR_Z = -4;
 export const FLOOR_69_DEFAULT_SEED = 690004;
+const HOME_FLOOR_KEY = designNpcFloorKey(DESIGN_FLOOR_ID);
 export const FLOOR_69_RAID_SHUTTER_KEY = 'f69_raid_shutter';
 
 export const FLOOR_69_RAID_SHUTTER_GATES = [
@@ -171,6 +173,7 @@ function promoteFloor69Worker(entity: Entity): void {
   }
   if (!isFloor69Worker(entity)) return;
   entity.sprite = floor69FemaleSprite(entity);
+  entity.npcVisualId = NPC_VISUAL_FLOOR69_FEMALE;
   entity.isFemale = true;
   entity.spriteScale = 1;
 }
@@ -315,6 +318,7 @@ const NPC_DEFS: Record<string, PlotNpcDef> = {
     faction: Faction.CITIZEN,
     occupation: Occupation.DIRECTOR,
     sprite: Spr.F69_FEMALE_NPC_0,
+    npcVisualId: NPC_VISUAL_FLOOR69_FEMALE,
     hp: 160, maxHp: 160, money: 340, speed: 0.75,
     inventory: [
       { defId: 'fake_pass', count: 1 },
@@ -371,6 +375,7 @@ const NPC_DEFS: Record<string, PlotNpcDef> = {
     faction: Faction.CITIZEN,
     occupation: Occupation.TRAVELER,
     sprite: Spr.F69_FEMALE_NPC_3,
+    npcVisualId: NPC_VISUAL_FLOOR69_FEMALE,
     hp: 90, maxHp: 90, money: 28, speed: 1.0,
     inventory: [
       { defId: 'sealed_complaint', count: 1 },
@@ -386,6 +391,7 @@ const NPC_DEFS: Record<string, PlotNpcDef> = {
     faction: Faction.SCIENTIST,
     occupation: Occupation.DOCTOR,
     sprite: Spr.F69_FEMALE_NPC_5,
+    npcVisualId: NPC_VISUAL_FLOOR69_FEMALE,
     hp: 130, maxHp: 130, money: 85, speed: 0.8,
     inventory: [
       { defId: 'bandage', count: 4 },
@@ -440,7 +446,7 @@ function floor69RouteEventData(choice: string, risk: string, reward: string): Re
   return { routeId: DESIGN_FLOOR_ID, z: DESIGN_FLOOR_Z, choice, risk, reward };
 }
 
-registerSideQuest('f69_madam_roza', NPC_DEFS.f69_madam_roza, [
+registerFloorSideQuest(HOME_FLOOR_KEY, 'f69_madam_roza', NPC_DEFS.f69_madam_roza, [
   {
     id: 'f69_blackmail_profit',
     giverNpcId: 'f69_madam_roza',
@@ -462,7 +468,7 @@ registerSideQuest('f69_madam_roza', NPC_DEFS.f69_madam_roza, [
   },
 ]);
 
-registerSideQuest('f69_guard_venya', NPC_DEFS.f69_guard_venya, [
+registerFloorSideQuest(HOME_FLOOR_KEY, 'f69_guard_venya', NPC_DEFS.f69_guard_venya, [
   {
     id: 'f69_raid_choice',
     giverNpcId: 'f69_guard_venya',
@@ -503,7 +509,7 @@ registerSideQuest('f69_guard_venya', NPC_DEFS.f69_guard_venya, [
   },
 ]);
 
-registerSideQuest('f69_performer_ira', NPC_DEFS.f69_performer_ira, [
+registerFloorSideQuest(HOME_FLOOR_KEY, 'f69_performer_ira', NPC_DEFS.f69_performer_ira, [
   {
     id: 'f69_blackmail_protect',
     giverNpcId: 'f69_performer_ira',
@@ -544,7 +550,7 @@ registerSideQuest('f69_performer_ira', NPC_DEFS.f69_performer_ira, [
   },
 ]);
 
-registerSideQuest('f69_doctor_sima', NPC_DEFS.f69_doctor_sima, [
+registerFloorSideQuest(HOME_FLOOR_KEY, 'f69_doctor_sima', NPC_DEFS.f69_doctor_sima, [
   {
     id: 'f69_clinic_supply',
     giverNpcId: 'f69_doctor_sima',
@@ -566,7 +572,7 @@ registerSideQuest('f69_doctor_sima', NPC_DEFS.f69_doctor_sima, [
   },
 ]);
 
-registerSideQuest('f69_accountant_nil', NPC_DEFS.f69_accountant_nil, [
+registerFloorSideQuest(HOME_FLOOR_KEY, 'f69_accountant_nil', NPC_DEFS.f69_accountant_nil, [
   {
     id: 'f69_debt_ledger',
     giverNpcId: 'f69_accountant_nil',
@@ -1727,6 +1733,7 @@ function spawnNpc(
     alive: true,
     speed: def.speed,
     sprite: def.sprite,
+    npcVisualId: def.npcVisualId,
     name: def.name,
     isFemale: def.isFemale,
     needs: freshNeeds(),

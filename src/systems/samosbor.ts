@@ -1533,8 +1533,8 @@ function samosborWarningLogName(variant: ActiveSamosborVariant): string {
 }
 
 function samosborWarningLogLine(seconds: number, variant: ActiveSamosborVariant): string {
-  const minutes = Math.max(0, Math.ceil(seconds));
-  return `Через ${minutes} мин ожидается ${samosborWarningLogName(variant)}.`;
+  const left = Math.max(0, Math.ceil(seconds));
+  return `Через ${left}с ожидается ${samosborWarningLogName(variant)}.`;
 }
 
 function warningAudioLine(variant: ActiveSamosborVariant): string {
@@ -2874,14 +2874,19 @@ function addAftermathContainerTag(container: WorldContainer, tag: string): void 
 }
 
 function canReceiveContainerItem(container: WorldContainer, itemId: string): boolean {
-  if (!ITEMS[itemId]) return false;
-  return container.inventory.some(item => item.defId === itemId) || container.inventory.length < container.capacitySlots;
+  const def = ITEMS[itemId];
+  if (!def) return false;
+  const stackMax = getStack(def);
+  return container.inventory.some(item => item.defId === itemId && item.data === undefined && item.count < stackMax)
+    || container.inventory.length < container.capacitySlots;
 }
 
 function addOneContainerItem(container: WorldContainer, itemId: string, data?: unknown): boolean {
-  if (!ITEMS[itemId]) return false;
+  const def = ITEMS[itemId];
+  if (!def) return false;
+  const stackMax = getStack(def);
   for (const item of container.inventory) {
-    if (item.defId !== itemId) continue;
+    if (item.defId !== itemId || item.data !== undefined || data !== undefined || item.count >= stackMax) continue;
     item.count++;
     return true;
   }
@@ -3555,7 +3560,9 @@ function createIstotitThingAtCell(
       familyId: Math.floor(Math.random() * 1_000_000_000),
       money: Math.floor(Math.random() * (40 + rpg.level * 8)),
     };
-    assignPersistentAlifeNpcFromEntity(state, entity, entities);
+    // Истотит is the diegetic non-natural human creation path; the new body
+    // must still receive a persistent A-Life identity before it can remain.
+    if (!assignPersistentAlifeNpcFromEntity(state, entity, entities)) return '';
     entities.push(entity);
     return 'npc_created';
   }
@@ -3603,7 +3610,11 @@ function applyIstotitFogEffectAtCell(
     severity: effect.includes('created') ? 4 : 3,
     privacy: 'local',
     tags: ['samosbor', 'fog_effect', 'istotit', 'create', `samosbor_${variant.def.id}`],
-    data: { effect, fog: world.fog[ci] },
+    data: {
+      effect,
+      fog: world.fog[ci],
+      ...(effect === 'npc_created' ? { reason: 'samosbor', intent: 'istotit_creation' } : {}),
+    },
   });
   return true;
 }

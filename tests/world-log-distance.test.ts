@@ -62,6 +62,56 @@ test('localized world log events fall back to actor coordinates', () => {
   }
 });
 
+test('death world log facts dedupe by target id after unrelated events', () => {
+  const state = makeGameState({ currentFloor: FloorLevel.LIVING, worldEvents: createWorldEventState() });
+
+  publishEvent(state, {
+    type: 'npc_kill_monster',
+    actorId: 91,
+    actorName: 'Светлана Петрова',
+    targetId: 92,
+    targetName: 'Тень',
+    severity: 3,
+    privacy: 'local',
+    tags: ['combat', 'kill', 'monster'],
+  });
+  publishEvent(state, {
+    type: 'door_opened',
+    zoneId: 3,
+    severity: 3,
+    privacy: 'local',
+    tags: [],
+  });
+  state.time = 70;
+  state.clock.totalMinutes = 1;
+  state.clock.minute = 1;
+  publishEvent(state, {
+    type: 'npc_kill_monster',
+    actorId: 91,
+    actorName: 'Светлана Петрова',
+    targetId: 92,
+    targetName: 'Тень',
+    severity: 3,
+    privacy: 'local',
+    tags: ['combat', 'kill', 'monster'],
+  });
+  publishEvent(state, {
+    type: 'npc_kill_monster',
+    actorId: 91,
+    actorName: 'Светлана Петрова',
+    targetId: 93,
+    targetName: 'Тень',
+    severity: 3,
+    privacy: 'local',
+    tags: ['combat', 'kill', 'monster'],
+  });
+
+  const killLogs = state.msgLog.filter(entry => entry.text === 'Светлана Петрова убил Тень.');
+  const killMsgs = state.msgs.filter(entry => entry.text === 'Светлана Петрова убил Тень.');
+  assert.equal(killLogs.length, 2);
+  assert.equal(killMsgs.length, 2);
+});
+
 test('localized world log events fall back to zone center distance', () => {
   const state = makeGameState({ currentFloor: FloorLevel.LIVING, worldEvents: createWorldEventState() });
   setWorldLogSpatialContext({

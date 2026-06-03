@@ -17,7 +17,8 @@ import { World } from '../core/world';
 import { freshNeeds, randomName } from '../data/catalog';
 import { PLOT_CHAIN, PLOT_NPCS } from '../data/plot';
 import { entitySpawnSlots } from './entity_limits';
-import { isPlotNpcDead } from './alife';
+import { assignPersistentAlifeNpcFromEntity, bindReservedPlotNpcAlifeRecord, currentAlifeFloorKey, isPlotNpcDead } from './alife';
+import { publishEvent } from './events';
 import { currentFloorRunEntry } from './procedural_floors';
 import { randomRPG, getMaxHp } from './rpg';
 import { tryAssignPathToCell } from './ai/pathfinding';
@@ -100,7 +101,15 @@ function sendToAnchor(world: World, entity: Entity, anchor: { x: number; y: numb
   if (status === 'not_found') entity.ai.goal = AIGoal.WANDER;
 }
 
-function spawnMajor(world: World, entities: Entity[], nextId: { v: number }, cell: number, anchor: { x: number; y: number }): void {
+function spawnMajor(
+  world: World,
+  entities: Entity[],
+  state: GameState,
+  nextId: { v: number },
+  cell: number,
+  anchor: { x: number; y: number },
+  floorKey: string,
+): boolean {
   const def = PLOT_NPCS.major_grom;
   const x = cell % W;
   const y = (cell / W) | 0;
@@ -118,14 +127,25 @@ function spawnMajor(world: World, entities: Entity[], nextId: { v: number }, cel
     plotNpcId: 'major_grom', canGiveQuest: true, questId: -1,
     isTraveler: true,
   };
+  if (!bindReservedPlotNpcAlifeRecord(state, major, 'major_grom', floorKey)) return false;
   sendToAnchor(world, major, anchor);
   entities.push(major);
+  return true;
 }
 
-function spawnLiquidator(world: World, entities: Entity[], nextId: { v: number }, cell: number, anchor: { x: number; y: number }, idx: number): void {
+function spawnLiquidator(
+  world: World,
+  entities: Entity[],
+  state: GameState,
+  nextId: { v: number },
+  cell: number,
+  anchor: { x: number; y: number },
+  idx: number,
+  floorKey: string,
+): number | null {
   const x = world.wrap((cell % W) + (idx % 3) - 1);
   const y = world.wrap(((cell / W) | 0) + Math.floor(idx / 3));
-  if (!passable(world, x, y)) return;
+  if (!passable(world, x, y)) return null;
   const name = randomName(Faction.LIQUIDATOR);
   const rpg = randomRPG(8);
   const maxHp = Math.round(getMaxHp(rpg) * 1.5);
@@ -152,17 +172,42 @@ function spawnLiquidator(world: World, entities: Entity[], nextId: { v: number }
     questId: -1,
     rpg,
   };
+  if (!assignPersistentAlifeNpcFromEntity(state, npc, entities, floorKey)) return null;
   sendToAnchor(world, npc, anchor);
   entities.push(npc);
+  return npc.alifeId ?? null;
 }
 
 export function updateScriptedArrivals(world: World, entities: Entity[], player: Entity, state: GameState, nextId: { v: number }): boolean {
   if (!shouldSpawnHellHoldoutArrivals(state, entities)) return false;
   const anchor = holdoutAnchor(state, world, player);
   const cell = arrivalCellNearLift(world, anchor.x, anchor.y, player.x, player.y);
-  spawnMajor(world, entities, nextId, cell, anchor);
+  const toFloorKey = currentAlifeFloorKey(state);
+  if (!spawnMajor(world, entities, state, nextId, cell, anchor, toFloorKey)) return false;
+  const fromFloorKey = 'story:ministry';
+  const guardAlifeIds: number[] = [];
   const slots = entitySpawnSlots(entities, EntityType.NPC, 5);
-  for (let i = 0; i < slots; i++) spawnLiquidator(world, entities, nextId, cell, anchor, i);
+  for (let i = 0; i < slots; i++) {
+    const alifeId = spawnLiquidator(world, entities, state, nextId, cell, anchor, i, toFloorKey);
+    if (alifeId !== null) guardAlifeIds.push(alifeId);
+  }
+  publishEvent(state, {
+    type: 'faction_event',
+    x: cell % W,
+    y: (cell / W) | 0,
+    targetName: PLOT_NPCS.major_grom.name,
+    targetFaction: Faction.LIQUIDATOR,
+    severity: 4,
+    privacy: 'public',
+    tags: ['scripted_arrival', 'alife_migration', HOLDOUT_TAG, 'liquidator', 'quest', 'faction'],
+    data: {
+      plotNpcId: 'major_grom',
+      fromFloorKey,
+      toFloorKey,
+      guardCount: guardAlifeIds.length,
+      guardAlifeIds,
+    },
+  });
   state.msgs.push(msg('Лифт выплюнул группу Громного. Они идут к зоне закрепления, оружие уже на руках.', state.time, '#8cf'));
   return true;
 }

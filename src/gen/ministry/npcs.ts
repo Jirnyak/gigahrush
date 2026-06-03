@@ -4,7 +4,7 @@
 
 import {
   W, Cell,
-  type Entity, EntityType, AIGoal, Faction, Occupation, QuestType, RoomType,
+  type Entity, EntityType, AIGoal, Faction, FloorLevel, Occupation, QuestType, RoomType,
 } from '../../core/types';
 import { World } from '../../core/world';
 import { freshNeeds, randomName } from '../../data/catalog';
@@ -12,7 +12,7 @@ import { activeActorCountAtDefaultSoftLimit } from '../../data/entity_limits';
 import { rng } from '../shared';
 import { gaussianLevel, randomRPG, getMaxHp } from '../../systems/rpg';
 import { canSpawnEntityType, entitySpawnSlots } from '../../systems/entity_limits';
-import { type PlotNpcDef, registerSideQuest } from '../../data/plot';
+import { type PlotNpcDef, registerAuthoredNpc, storyNpcFloorKey } from '../../data/plot';
 import { spawnArkhivariusKafkin } from './arkhivarius';
 import { spawnPolkovnikStreltsov } from './streltsov';
 import { spawnBufetchitsaGlafira } from './glafira';
@@ -66,7 +66,7 @@ const ROTENBERGOV_DEF: PlotNpcDef = {
   faction: Faction.CITIZEN,
   occupation: Occupation.DIRECTOR,
   sprite: Occupation.DIRECTOR,
-  hp: 3000, maxHp: 3000, money: 10000, speed: 0.6,
+  hp: 3000, maxHp: 3000, money: 10000, accountRubles: 4_990_000, speed: 0.6,
   inventory: [
     { defId: 'tea', count: 3 },
     { defId: 'book', count: 1 },
@@ -86,32 +86,44 @@ const ROTENBERGOV_DEF: PlotNpcDef = {
 };
 
 /* ── Register side quests ─────────────────────────────────────── */
-registerSideQuest('khrushchev', KHRUSHCHEV_DEF, [
-  {
-    id: 'khrushchev_kill_makhno',
-    giverNpcId: 'khrushchev',
-    type: QuestType.KILL,
-    desc: 'Генсек Хрущёв: «Махно режет кабель и срывает пломбы в коллекторах. Убери атамана, пока ремонтники не ходят туда только с охраной.»',
-    targetPlotNpcId: 'makhno',
-    killNeeded: 1,
-    rewardItem: 'psi_brainburn', rewardCount: 1,
-    extraRewards: [{ defId: 'bandage', count: 5 }, { defId: 'ammo_9mm', count: 20 }],
-    relationDelta: 30, xpReward: 200, moneyReward: 5000,
-  },
-]);
+registerAuthoredNpc({
+  id: 'khrushchev',
+  npc: KHRUSHCHEV_DEF,
+  homeFloorKey: storyNpcFloorKey(FloorLevel.MINISTRY),
+  tags: ['ministry', 'leader'],
+  quests: [
+    {
+      id: 'khrushchev_kill_makhno',
+      giverNpcId: 'khrushchev',
+      type: QuestType.KILL,
+      desc: 'Генсек Хрущёв: «Махно режет кабель и срывает пломбы в коллекторах. Убери атамана, пока ремонтники не ходят туда только с охраной.»',
+      targetPlotNpcId: 'makhno',
+      killNeeded: 1,
+      rewardItem: 'psi_brainburn', rewardCount: 1,
+      extraRewards: [{ defId: 'bandage', count: 5 }, { defId: 'ammo_9mm', count: 20 }],
+      relationDelta: 30, xpReward: 200, moneyReward: 5000,
+    },
+  ],
+});
 
-registerSideQuest('rotenbergov', ROTENBERGOV_DEF, [
-  {
-    id: 'rotenbergov_taxes',
-    giverNpcId: 'rotenbergov',
-    type: QuestType.FETCH,
-    desc: 'Министр Ротенбергов: «Налог чрезвычайный. Принеси 1 000 000 рублей: нужны пломбы, вода и тишина в архиве.»',
-    targetItem: 'money', targetCount: 1000000,
-    rewardItem: 'psi_control', rewardCount: 1,
-    extraRewards: [{ defId: 'antidep', count: 3 }],
-    relationDelta: 50, xpReward: 500, moneyReward: 0,
-  },
-]);
+registerAuthoredNpc({
+  id: 'rotenbergov',
+  npc: ROTENBERGOV_DEF,
+  homeFloorKey: storyNpcFloorKey(FloorLevel.MINISTRY),
+  tags: ['ministry', 'economy'],
+  quests: [
+    {
+      id: 'rotenbergov_taxes',
+      giverNpcId: 'rotenbergov',
+      type: QuestType.FETCH,
+      desc: 'Министр Ротенбергов: «Налог чрезвычайный. Принеси 1 000 000 рублей: нужны пломбы, вода и тишина в архиве.»',
+      targetItem: 'money', targetCount: 1000000,
+      rewardItem: 'psi_control', rewardCount: 1,
+      extraRewards: [{ defId: 'antidep', count: 3 }],
+      relationDelta: 50, xpReward: 500, moneyReward: 0,
+    },
+  ],
+});
 
 /* ── Spawn all ministry NPCs ─────────────────────────────────── */
 export function spawnMinistryNpcs(
@@ -227,7 +239,7 @@ function spawnPlotNpc(
       angle: Math.random() * Math.PI * 2, pitch: 0,
       alive: true, speed: def.speed, sprite: def.sprite,
       name: def.name, isFemale: def.isFemale,
-      needs: freshNeeds(), hp: def.hp, maxHp: def.maxHp, money: def.money,
+      needs: freshNeeds(), hp: def.hp, maxHp: def.maxHp, money: def.money, accountRubles: def.accountRubles,
       ai: { goal: AIGoal.IDLE, tx: 0, ty: 0, path: [], pi: 0, stuck: 0, timer: 0 },
       inventory: def.inventory.map(i => ({ ...i })),
       faction: def.faction, occupation: def.occupation,

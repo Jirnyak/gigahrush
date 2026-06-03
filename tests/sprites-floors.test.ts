@@ -3,7 +3,8 @@ import * as assert from 'node:assert/strict';
 
 import { Cell, ContainerKind, DoorState, EntityType, Feature, FloorLevel, LiftDirection, MonsterKind, Occupation, Tex, W, type Entity } from '../src/core/types';
 import { auditReachability } from '../src/core/world';
-import { entityUsesProceduralSprite, generateProceduralEntitySprite, isFloor69FemaleSprite } from '../src/entities/procedural_visuals';
+import { entityUsesProceduralSprite, generateNpcProfileSprite, generateProceduralEntitySprite, isFloor69FemaleSprite } from '../src/entities/procedural_visuals';
+import { NPC_VISUAL_FLOOR69_FEMALE } from '../src/entities/npc_visuals';
 import { generateDesignFloor } from '../src/gen/design_floors/manifest';
 import { generateFloor, isFloorLevel } from '../src/gen/floor_manifest';
 import { measureLivingShelterShells } from '../src/gen/living/geometry';
@@ -12,6 +13,8 @@ import {
   containerSpr,
   featureSpr,
   monsterSpr,
+  authoredNpcSpr,
+  authoredNpcSpriteGeneratorOffset,
   Spr,
   SPRITE_CONTAINER_KINDS,
   SPRITE_FEATURES,
@@ -169,6 +172,20 @@ test('sprite registry and generated sheet stay aligned', () => {
   }
 });
 
+test('NPC profile sprite helper keeps authored slots and special NPC visual families', () => {
+  const sprites = generateSprites();
+  const gordonSlot = authoredNpcSpr('gordon_freeman');
+  const gordon = generateNpcProfileSprite(123, Occupation.SCIENTIST, undefined, false, gordonSlot);
+  const ira = generateNpcProfileSprite(456, Occupation.TRAVELER, undefined, true, Spr.F69_FEMALE_NPC_3, NPC_VISUAL_FLOOR69_FEMALE);
+  const traveler = generateNpcProfileSprite(456, Occupation.TRAVELER, undefined, true, Occupation.TRAVELER);
+
+  assert.equal(gordonSlot, Spr.GORDON);
+  assert.equal(authoredNpcSpriteGeneratorOffset(gordonSlot) >= 0, true);
+  assert.equal(spriteHash(gordon), spriteHash(sprites[Spr.GORDON]));
+  assert.notEqual(spriteHash(ira), spriteHash(traveler));
+  assert.notEqual(spriteHash(ira), spriteHash(sprites[Spr.F69_FEMALE_NPC_3]));
+});
+
 test('texture atlas procedural ranges stay allocated and filled', () => {
   const textures = generateTextures();
 
@@ -202,7 +219,7 @@ test('texture atlas procedural ranges stay allocated and filled', () => {
   }
 });
 
-test('F69 authored NPC sprites stay on the atlas path instead of default procedural NPC sprites', () => {
+test('special NPC visual family overrides occupation procedural fallback when present', () => {
   const f69Npc: Entity = {
     id: 6901,
     type: EntityType.NPC,
@@ -213,6 +230,7 @@ test('F69 authored NPC sprites stay on the atlas path instead of default procedu
     alive: true,
     speed: 1,
     sprite: Spr.F69_FEMALE_NPC_0,
+    npcVisualId: NPC_VISUAL_FLOOR69_FEMALE,
     occupation: Occupation.TRAVELER,
     isFemale: true,
   };
@@ -225,11 +243,20 @@ test('F69 authored NPC sprites stay on the atlas path instead of default procedu
     ...f69Npc,
     id: 6904,
     sprite: Spr.VETERAN,
+    npcVisualId: undefined,
+  };
+  const f69AtlasFallback: Entity = {
+    ...f69Npc,
+    id: 6905,
+    npcVisualId: undefined,
   };
 
   assert.equal(isFloor69FemaleSprite(f69Npc.sprite), true);
-  assert.equal(entityUsesProceduralSprite(f69Npc), false);
-  assert.equal(generateProceduralEntitySprite(f69Npc), null);
+  assert.equal(entityUsesProceduralSprite(f69Npc), true);
+  assert.equal(generateProceduralEntitySprite(f69Npc)?.length, S * S);
+  assert.notEqual(spriteHash(generateProceduralEntitySprite(f69Npc)!), spriteHash(generateSprites()[Spr.F69_FEMALE_NPC_0]));
+  assert.equal(entityUsesProceduralSprite(f69AtlasFallback), false);
+  assert.equal(generateProceduralEntitySprite(f69AtlasFallback), null);
   assert.equal(entityUsesProceduralSprite(travelerNpc), true);
   assert.equal(generateProceduralEntitySprite(travelerNpc)?.length, S * S);
   assert.equal(entityUsesProceduralSprite(authoredNpc), false);

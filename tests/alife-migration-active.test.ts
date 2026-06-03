@@ -1,0 +1,305 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+
+import { AIGoal, Cell, Faction, Feature, FloorLevel, Occupation, RoomType, type Entity, type GameState } from '../src/core/types';
+import { World } from '../src/core/world';
+import { alifeForSave, captureAlifeFloorState, materializeAlifeFloorPopulation, moveAlifeNpcRecord, setAlifeState } from '../src/systems/alife';
+import {
+  enqueueAlifeArrival,
+  findAlifeArrivalAnchor,
+  processAlifePendingArrivals,
+  startActiveAlifeDeparture,
+  updateActiveAlifeDepartures,
+  type ActiveAlifeDeparture,
+  type AlifeArrival,
+} from '../src/systems/alife_migration';
+import { activeActorSoftLimit, setActiveActorSoftLimit } from '../src/data/entity_limits';
+import { createWorldEventState } from '../src/systems/events';
+import { setFloorRunState } from '../src/systems/procedural_floors';
+import { addTestRoom, makeGameState, makeTestNpc, makeTestPlayer } from './helpers';
+
+interface TestAlifeState {
+  npcs: Array<{ id: number }>;
+  floorIndex: Record<string, number[]>;
+}
+
+interface TestMigrationHost extends GameState {
+  alifeMobility?: {
+    pendingArrivals: AlifeArrival[];
+    activeDepartures: ActiveAlifeDeparture[];
+  };
+}
+
+function stateAtLiving(overrides: Partial<GameState> = {}): GameState {
+  const state = makeGameState({
+    currentFloor: FloorLevel.LIVING,
+    worldEvents: createWorldEventState(),
+    ...overrides,
+  });
+  setFloorRunState(state, { runSeed: 17, currentZ: 0 }, FloorLevel.LIVING);
+  setAlifeState(state, { seed: 12345, total: 100_000 });
+  return state;
+}
+
+function stateAtVoid(): GameState {
+  const state = makeGameState({
+    currentFloor: FloorLevel.VOID,
+    worldEvents: createWorldEventState(),
+  });
+  setFloorRunState(state, { runSeed: 17, currentZ: -50 }, FloorLevel.VOID);
+  setAlifeState(state, { seed: 12345, total: 100_000 });
+  return state;
+}
+
+function migrationState(state: GameState): TestMigrationHost['alifeMobility'] {
+  return (state as TestMigrationHost).alifeMobility;
+}
+
+function arrival(
+  alifeId: number,
+  toFloorKey = 'story:living',
+  overrides: Partial<AlifeArrival> = {},
+): AlifeArrival {
+  return {
+    journeyId: `test_journey_${alifeId}`,
+    alifeId,
+    fromFloorKey: 'story:kvartiry',
+    toFloorKey,
+    intentId: `test_arrival_${alifeId}`,
+    reason: 'routine',
+    risk: 1,
+    etaAt: 0,
+    queuedAt: 0,
+    ...overrides,
+  };
+}
+
+function makeLiftWorld(): World {
+  const world = new World();
+  addTestRoom(world, {
+    id: 1,
+    x: 20,
+    y: 20,
+    w: 8,
+    h: 8,
+    type: RoomType.COMMON,
+    name: 'Лифтовой тестовый узел',
+    zoneId: 0,
+  });
+  world.zones[0].hasLift = true;
+  world.cells[world.idx(23, 22)] = Cell.LIFT;
+  world.features[world.idx(24, 23)] = Feature.LIFT_BUTTON;
+  return world;
+}
+
+function makeNoAnchorWorld(): World {
+  const world = new World();
+  addTestRoom(world, {
+    id: 1,
+    x: 40,
+    y: 40,
+    w: 5,
+    h: 5,
+    type: RoomType.COMMON,
+    name: 'Комната без лифта',
+  });
+  return world;
+}
+
+function templateNpc(id: number, x: number, y: number): Entity {
+  return makeTestNpc({
+    id,
+    x,
+    y,
+    angle: 0,
+    speed: 1.2,
+    sprite: Occupation.TRAVELER,
+    ai: { goal: AIGoal.IDLE, tx: 0, ty: 0, path: [], pi: 0, stuck: 0, timer: 0 },
+    occupation: Occupation.TRAVELER,
+    faction: Faction.CITIZEN,
+    questId: -1,
+    persistentNpcId: undefined,
+  });
+}
+
+function persistentNpc(id: number, alifeId: number, x: number, y: number): Entity {
+  return makeTestNpc({
+    id,
+    x,
+    y,
+    angle: 0,
+    speed: 1.2,
+    sprite: Occupation.TRAVELER,
+    ai: { goal: AIGoal.IDLE, tx: 0, ty: 0, path: [], pi: 0, stuck: 0, timer: 0 },
+    occupation: Occupation.TRAVELER,
+    faction: Faction.CITIZEN,
+    questId: -1,
+    alifeId,
+    persistentNpcId: `alife:${alifeId}`,
+    canGiveQuest: false,
+  });
+}
+
+function putRecordOnLiving(state: GameState, alifeId: number): void {
+  assert.equal(moveAlifeNpcRecord(state, alifeId, 'story:living', { floor: FloorLevel.LIVING }), true);
+}
+
+test('floor activation consumes only prefilled A-Life bucket records', () => {
+  const state = stateAtLiving();
+  const alife = setAlifeState(state, { seed: 12345, total: 100_000 }) as TestAlifeState;
+  assert.equal(moveAlifeNpcRecord(state, alife.npcs[0].id, 'story:living', { floor: FloorLevel.LIVING, markTouched: false }), true);
+  alife.floorIndex['story:living'] = [0];
+  const world = makeNoAnchorWorld();
+  world.cells[world.idx(41, 41)] = Cell.FLOOR;
+  world.cells[world.idx(42, 41)] = Cell.FLOOR;
+  world.cells[world.idx(43, 41)] = Cell.FLOOR;
+  const entities = [
+    templateNpc(1, 41.5, 41.5),
+    templateNpc(2, 42.5, 41.5),
+    templateNpc(3, 43.5, 41.5),
+  ];
+
+  materializeAlifeFloorPopulation(state, world, entities, { v: 10 }, 'story:living');
+
+  assert.equal(entities.length, 1);
+  assert.equal(entities[0].alifeId, 1);
+  assert.equal(entities[0].persistentNpcId, 'alife:1');
+});
+
+test('pending arrival to the active floor materializes the same A-Life id near a lift', () => {
+  const state = stateAtLiving();
+  const world = makeLiftWorld();
+  const entities: Entity[] = [];
+  assert.equal(enqueueAlifeArrival(state, arrival(1, 'story:living', { intentId: 'test_arrival' })), true);
+
+  assert.equal(processAlifePendingArrivals(state, world, entities, { v: 100 }), 1);
+
+  assert.equal(entities.length, 1);
+  assert.equal(entities[0].alifeId, 1);
+  assert.equal(entities[0].persistentNpcId, 'alife:1');
+  assert.equal(world.cells[world.idx(Math.floor(entities[0].x), Math.floor(entities[0].y))], Cell.FLOOR);
+  assert.ok(world.dist2(entities[0].x, entities[0].y, 23.5, 22.5) <= 2.1);
+  assert.equal(migrationState(state)?.pendingArrivals.length, 0);
+});
+
+test('arrival anchor finder prefers passable cells around lift cells over solid cells', () => {
+  const world = makeLiftWorld();
+  const anchor = findAlifeArrivalAnchor(world, 22.5, 22.5);
+
+  assert.ok(anchor);
+  assert.equal(world.cells[world.idx(Math.floor(anchor.x), Math.floor(anchor.y))], Cell.FLOOR);
+  assert.notEqual(world.cells[world.idx(Math.floor(anchor.x), Math.floor(anchor.y))], Cell.LIFT);
+  assert.ok(world.dist2(anchor.x, anchor.y, 23.5, 22.5) <= 2.1);
+});
+
+test('pending arrival is delayed when actor cap fails or no lift anchor exists', () => {
+  const previousCap = activeActorSoftLimit();
+  try {
+    setActiveActorSoftLimit(1024);
+    const cappedState = stateAtLiving();
+    const cappedWorld = makeLiftWorld();
+    const cappedEntities = Array.from({ length: 1024 }, (_, index) =>
+      persistentNpc(2000 + index, 10_000 + index, 21.5, 21.5));
+    assert.equal(enqueueAlifeArrival(cappedState, arrival(2, 'story:living', { intentId: 'cap_test' })), true);
+
+    assert.equal(processAlifePendingArrivals(cappedState, cappedWorld, cappedEntities, { v: 9000 }), 0);
+    assert.equal(migrationState(cappedState)?.pendingArrivals[0]?.tries, 1);
+
+    const noAnchorState = stateAtLiving();
+    assert.equal(enqueueAlifeArrival(noAnchorState, arrival(3, 'story:living', { intentId: 'no_anchor_test' })), true);
+    assert.equal(processAlifePendingArrivals(noAnchorState, makeNoAnchorWorld(), [], { v: 10 }), 0);
+    assert.equal(migrationState(noAnchorState)?.pendingArrivals[0]?.tries, 1);
+  } finally {
+    setActiveActorSoftLimit(previousCap);
+  }
+});
+
+test('pending arrival to another floor stays queued for off-floor migration', () => {
+  const state = stateAtLiving();
+  const world = makeLiftWorld();
+  assert.equal(enqueueAlifeArrival(state, arrival(4, 'design:bank_floor', { intentId: 'other_floor' })), true);
+
+  assert.equal(processAlifePendingArrivals(state, world, [], { v: 10 }), 0);
+  assert.equal(migrationState(state)?.pendingArrivals.length, 1);
+  assert.equal(migrationState(state)?.pendingArrivals[0].toFloorKey, 'design:bank_floor');
+});
+
+test('normal pending arrival is delayed while active samosbor is running', () => {
+  const state = stateAtLiving({ samosborActive: true });
+  assert.equal(enqueueAlifeArrival(state, arrival(5, 'story:living', { intentId: 'samosbor_delay' })), true);
+
+  assert.equal(processAlifePendingArrivals(state, makeLiftWorld(), [], { v: 10 }), 0);
+  assert.equal(migrationState(state)?.pendingArrivals[0].tries, 1);
+});
+
+test('pending arrival is delayed when the active route disallows NPCs', () => {
+  const state = stateAtVoid();
+  assert.equal(enqueueAlifeArrival(state, arrival(6, 'story:void', { intentId: 'void_delay' })), true);
+
+  assert.equal(processAlifePendingArrivals(state, makeLiftWorld(), [], { v: 10 }), 0);
+  assert.equal(migrationState(state)?.pendingArrivals[0].tries, 1);
+});
+
+test('active departure assigns GOTO to a lift anchor', () => {
+  const state = stateAtLiving();
+  const world = makeLiftWorld();
+  putRecordOnLiving(state, 7);
+  const npc = persistentNpc(7, 7, 21.5, 22.5);
+
+  assert.equal(startActiveAlifeDeparture(state, world, npc, 'design:bank_floor', 'leave_for_bank', 'routine'), true);
+
+  assert.equal(npc.isTraveler, true);
+  assert.equal(npc.ai?.goal, AIGoal.GOTO);
+  assert.equal(npc.ai?.tx, 22);
+  assert.equal(npc.ai?.ty, 22);
+  assert.equal(migrationState(state)?.activeDepartures.length, 1);
+});
+
+test('departure does not start for player, plot NPC, quest NPC or dead NPC', () => {
+  const state = stateAtLiving();
+  const world = makeLiftWorld();
+  for (const alifeId of [1, 2, 3, 4]) putRecordOnLiving(state, alifeId);
+  const player = makeTestPlayer({ id: 1, x: 21.5, y: 22.5, alifeId: 1 });
+  const plotNpc = persistentNpc(2, 2, 21.5, 22.5);
+  plotNpc.plotNpcId = 'olga';
+  const questNpc = persistentNpc(3, 3, 21.5, 22.5);
+  questNpc.questId = 99;
+  const deadNpc = persistentNpc(4, 4, 21.5, 22.5);
+  deadNpc.alive = false;
+
+  assert.equal(startActiveAlifeDeparture(state, world, player, 'story:kvartiry', 'player', 'routine'), false);
+  assert.equal(startActiveAlifeDeparture(state, world, plotNpc, 'story:kvartiry', 'plot', 'routine'), false);
+  assert.equal(startActiveAlifeDeparture(state, world, questNpc, 'story:kvartiry', 'quest', 'routine'), false);
+  assert.equal(startActiveAlifeDeparture(state, world, deadNpc, 'story:kvartiry', 'dead', 'routine'), false);
+  assert.equal(migrationState(state)?.activeDepartures?.length ?? 0, 0);
+});
+
+test('departure reaching a lift removes live entity and moves the record to target key', () => {
+  const state = stateAtLiving();
+  const world = makeLiftWorld();
+  putRecordOnLiving(state, 8);
+  const npc = persistentNpc(8, 8, 22.5, 22.5);
+  const entities = [npc];
+
+  assert.equal(startActiveAlifeDeparture(state, world, npc, 'story:kvartiry', 'leave_to_queue', 'routine'), true);
+  assert.equal(updateActiveAlifeDepartures(state, world, entities, 1 / 60), 1);
+
+  assert.equal(entities.length, 0);
+  assert.equal(migrationState(state)?.activeDepartures.length, 0);
+  assert.equal(alifeForSave(state).overrides.some(item => item.id === 8 && item.floorKey === 'story:kvartiry'), true);
+});
+
+test('unfinished departure captured before reaching lift does not teleport the record', () => {
+  const state = stateAtLiving();
+  const world = makeLiftWorld();
+  putRecordOnLiving(state, 9);
+  const npc = persistentNpc(9, 9, 80.5, 80.5);
+  const entities = [npc];
+
+  assert.equal(startActiveAlifeDeparture(state, world, npc, 'story:kvartiry', 'not_reached', 'routine'), true);
+  captureAlifeFloorState(state, entities);
+
+  assert.equal(entities.length, 1);
+  assert.equal(alifeForSave(state).overrides.some(item => item.id === 9 && item.floorKey === 'story:living'), true);
+  assert.equal(alifeForSave(state).overrides.some(item => item.id === 9 && item.floorKey === 'story:kvartiry'), false);
+});

@@ -26,6 +26,7 @@ import {
 } from '../data/factories';
 import { ITEMS } from '../data/catalog';
 import { CONTAINER_DEFS } from '../data/container_defs';
+import { getStack } from '../data/items';
 import { ensureRoomContainers } from './containers';
 import { canSpendResources, spendResources } from './economy';
 import { publishEvent } from './events';
@@ -262,7 +263,7 @@ function canFitOutputs(
   inputItems: readonly ItemStackDef[] = [],
   maxOutputItemCount?: number,
 ): boolean {
-  const slots = container.inventory.map(i => ({ defId: i.defId, count: i.count }));
+  const slots = container.inventory.map(i => ({ defId: i.defId, count: i.count, data: i.data }));
   for (const input of inputItems) {
     let left = input.count;
     for (const slot of slots) {
@@ -278,16 +279,29 @@ function canFitOutputs(
     if (slots[i].count <= 0) slots.splice(i, 1);
   }
   for (const out of outputs) {
-    if (!ITEMS[out.defId]) return false;
-    let slot = slots.find(i => i.defId === out.defId);
-    if (!slot) {
-      if (slots.length >= container.capacitySlots) return false;
-      slot = { defId: out.defId, count: 0 };
-      slots.push(slot);
+    const def = ITEMS[out.defId];
+    if (!def) return false;
+    const stackMax = getStack(def);
+    let left = Math.floor(out.count);
+    if (!Number.isFinite(left) || left <= 0) continue;
+    if (maxOutputItemCount !== undefined) {
+      let total = left;
+      for (const slot of slots) if (slot.defId === out.defId) total += Math.max(0, slot.count);
+      if (total > maxOutputItemCount) return false;
     }
-    const nextCount = slot.count + out.count;
-    if (maxOutputItemCount !== undefined && nextCount > maxOutputItemCount) return false;
-    slot.count = nextCount;
+    for (const slot of slots) {
+      if (left <= 0) break;
+      if (slot.defId !== out.defId || slot.data !== undefined || slot.count >= stackMax) continue;
+      const add = Math.min(left, stackMax - slot.count);
+      slot.count += add;
+      left -= add;
+    }
+    while (left > 0) {
+      if (slots.length >= container.capacitySlots) return false;
+      const add = Math.min(left, stackMax);
+      slots.push({ defId: out.defId, count: add, data: undefined });
+      left -= add;
+    }
   }
   return true;
 }
@@ -502,9 +516,23 @@ function consumeInputItems(container: WorldContainer, recipe: FactoryRecipeDef):
 
 function addOutputStacks(container: WorldContainer, outputs: readonly ItemStackDef[]): void {
   for (const out of outputs) {
-    const existing = container.inventory.find(i => i.defId === out.defId);
-    if (existing) existing.count += out.count;
-    else container.inventory.push({ defId: out.defId, count: out.count });
+    const def = ITEMS[out.defId];
+    if (!def) continue;
+    const stackMax = getStack(def);
+    let left = Math.floor(out.count);
+    if (!Number.isFinite(left) || left <= 0) continue;
+    for (const item of container.inventory) {
+      if (left <= 0) break;
+      if (item.defId !== out.defId || item.data !== undefined || item.count >= stackMax) continue;
+      const add = Math.min(left, stackMax - item.count);
+      item.count += add;
+      left -= add;
+    }
+    while (left > 0 && container.inventory.length < container.capacitySlots) {
+      const add = Math.min(left, stackMax);
+      container.inventory.push({ defId: out.defId, count: add });
+      left -= add;
+    }
   }
 }
 

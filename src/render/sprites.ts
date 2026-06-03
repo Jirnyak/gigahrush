@@ -1,15 +1,12 @@
 /* ── Procedural sprite generator ──────────────────────────────── */
 
 import {
+  AUTHORED_NPC_SPRITE_GENERATORS,
   NPC_SPRITE_GENERATORS,
   generateTravelerSprite,
   generatePilgrimSprite,
   generateHunterSprite,
-  generatePriestSprite,
-  generateVeteranSprite,
-  generateGordonSprite,
-  generateMadokaSprite,
-  generatePakhomSprite } from '../entities/npc';
+  generatePriestSprite } from '../entities/npc';
 import { MONSTERS,
   MONSTER_SPRITES,
   EYE_BOLT_SPRITE } from '../entities/monster';
@@ -36,14 +33,7 @@ export function generateSprites(): SpriteData[] {
   sprites.push(generateHunterSprite());
   // Priest: Батюшка
   sprites.push(generatePriestSprite());
-  // Veteran: Степаныч
-  sprites.push(generateVeteranSprite());
-  // Gordon Freeman (maintenance)
-  sprites.push(generateGordonSprite());
-  // Мегука ПСИ-дежурная (hell)
-  sprites.push(generateMadokaSprite());
-  // Пахом Братишка (kvartiry)
-  sprites.push(generatePakhomSprite());
+  for (const def of AUTHORED_NPC_SPRITE_GENERATORS) sprites.push(def.generate());
   // Item drop
   sprites.push(gen_itemDrop());
   // Monsters (keyed by MonsterKind — auto-indexed)

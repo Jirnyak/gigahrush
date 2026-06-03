@@ -6,7 +6,7 @@ import { World } from '../src/core/world';
 import { ITEMS } from '../src/data/catalog';
 import { MAX_INVENTORY_SLOTS } from '../src/data/inventory_limits';
 import { getRecentEvents } from '../src/systems/events';
-import { addItem, pickupNearby } from '../src/systems/inventory';
+import { addItem, dropItem, pickupDrop, pickupNearby } from '../src/systems/inventory';
 import { checkQuests } from '../src/systems/quests';
 import { countInventoryItem, makeGameState, makeTestNpc, makeTestPlayer } from './helpers';
 
@@ -79,6 +79,38 @@ test('pickupNearby keeps unconsumed stacks on a multi-stack drop', () => {
   assert.equal(countInventoryItem(player, 'bread'), 1);
   assert.equal(countInventoryItem(player, 'pipe'), MAX_INVENTORY_SLOTS - 1);
   assert.equal(player.inventory?.length, MAX_INVENTORY_SLOTS);
+});
+
+test('tool drops preserve durability data through pickup', () => {
+  installNoopAudioContext();
+  const world = new World();
+  const state = makeGameState({ time: 7 });
+  const player = makeTestPlayer({
+    id: 1,
+    x: 10,
+    y: 10,
+    angle: 0,
+    tool: 'flashlight',
+    inventory: [{ defId: 'flashlight', count: 1, data: { dur: 123 } }],
+  });
+  const entities: Entity[] = [player];
+  const nextId = { v: 2 };
+
+  dropItem(player, 0, entities, state.msgs, state.time, nextId, state, world);
+
+  assert.equal(player.tool, '');
+  assert.deepEqual(player.inventory, []);
+  const drop = entities.find(entity => entity.type === EntityType.ITEM_DROP);
+  assert.ok(drop);
+  assert.deepEqual(drop.inventory, [{ defId: 'flashlight', count: 1, data: { dur: 123 } }]);
+  assert.equal(state.msgs.some(entry => entry.text.includes('сломан')), false);
+
+  const result = pickupDrop(world, drop, player, state.msgs, state.time, state);
+
+  assert.equal(result.pickedAny, true);
+  assert.equal(drop.alive, false);
+  const flashlight = player.inventory?.find(item => item.defId === 'flashlight');
+  assert.equal((flashlight?.data as { dur?: number } | undefined)?.dur, 123);
 });
 
 test('cleanup tongs recover green acid samples with durability instead of filter layer', () => {

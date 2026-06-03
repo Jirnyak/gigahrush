@@ -1,11 +1,11 @@
 # ГИГАХРУЩ: Экономика
 
 Дата: 2026-05-27
-Статус: центральный документ макроэкономики, лута, наград и численного прогресса. Ниже сохранен полный план фундаментального реворка и внедренного фундамента; shipped facts отражаются в `README.md`. `balance.md` остается текущим баланс-контрактом, `alife.md` - контрактом постоянного населения, `ai.md` - контрактом активного AI.
+Статус: центральный документ макроэкономики, лута, наград и численного прогресса. Ниже сохранен полный план фундаментального реворка и внедренного фундамента; shipped facts отражаются в `README.md`. `balance.md` остается текущим баланс-контрактом, `alife.md` - контрактом постоянного населения, `korovan.md` - контрактом холодной A-Life/караванной логистики, `ai.md` - контрактом активного AI.
 
 > Центральный документ экономики.
 >
-> Роль: описывает деньги, цены, производство, ресурсы, фракционные рынки, зоны, scarcity, караваны, банк, контракты and inter-floor macro pressure. Связан с `balance.md`, `alife.md`, `items.md`, `floors.md` and `quests.md`.
+> Роль: описывает деньги, цены, производство, ресурсы, фракционные рынки, зоны, scarcity, караваны, банк, контракты and inter-floor macro pressure. Связан с `balance.md`, `alife.md`, `korovan.md`, `items.md`, `floors.md` and `quests.md`.
 
 Документ собран после чтения `README.md`, `architecture.md`, `balance.md`, `alife.md`, `ai.md` и релевантных `src/` файлов. Шесть параллельных обзоров были разделены по зонам: экономика/торговля, лут, оружие/PSI/RPG, квестовые награды, A-Life wealth, AI/опасность. Три исходных обзора оборвались на удаленной компакции инструмента, поэтому недостающие зоны были повторены короткими срезами.
 
@@ -112,7 +112,7 @@ The current code already has useful pieces, but they do not yet form one long ec
 - Generated container caps are still small and local; they do not express a long ladder from empty early floor to deep high-value stash.
 - Quest rewards are stored and paid as flat numbers in many places. Distance, route depth, plot phase, giver level and objective risk are not one canonical reward calculation.
 - Passive finance can outrun the expedition loop if capital grows enough. Deposits and stock movement must not become the best low-risk activity.
-- Caravans move resources but are weakly connected to persistent A-Life member identity and save continuity.
+- Caravans have limited persistent A-Life member ids and saved active-run continuity, but ownership, escorts, debt and asset risk are not yet one economy contract.
 
 ## 5. Target Money Scale
 
@@ -425,8 +425,8 @@ Production:
 Caravans:
 
 - tariffs and seat fees must be paid in rubles, item, debt or faction consequence;
-- caravan state should be saved if active run continuity matters;
-- small caravan members should be persistent A-Life ids or explicit temporary event actors;
+- active caravan state and persistent member ids should stay bounded and save-shaped;
+- small caravan members should remain persistent A-Life ids or explicit temporary event actors;
 - resource movement should happen over events/ticks and publish scarcity changes, not erase shortage instantly.
 
 ## 13. Implementation Campaign

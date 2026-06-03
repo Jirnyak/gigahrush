@@ -15,8 +15,17 @@ import type { World } from '../core/world';
 import { CARAVAN_LANE_BY_ID, CARAVAN_LANES, SMALL_CARAVAN_TEMPLATES, type CaravanLaneDef, type SmallCaravanTemplateDef } from '../data/caravans';
 import type { EconomyFloorRef } from '../data/economy_rules';
 import { addFactionRelMutual } from '../data/relations';
+import {
+  assignPersistentAlifeNpcFromEntity,
+  captureAlifeFloorState,
+  currentAlifeFloorKey,
+  moveAlifeNpcRecord,
+  recordAlifeNpcDeath,
+  sampleAlifeFloorRecordIds,
+} from './alife';
 import { changeResourceStock, invalidateEconomyPrices, registerEconomyTariffProvider } from './economy';
 import { publishEvent, registerWorldEventObserver } from './events';
+import { cleanFloorKey, floorKeyForStory } from './floor_keys';
 
 export const CARAVAN_TICK_SECONDS = 30;
 export const MAX_CARAVAN_LANES_PER_TICK = 2;
@@ -29,6 +38,7 @@ const SMALL_CARAVAN_ACTIVE_SECONDS = 9 * 60;
 const SMALL_CARAVAN_TERMINAL_SECONDS = 90;
 const MAX_ACTIVE_SMALL_CARAVANS = 3;
 const SMALL_CARAVAN_SPAWN_RADIUS = 72;
+const SMALL_CARAVAN_MEMBER_ALIFE_CAP = 8;
 
 export type SmallCaravanStatus =
   | 'waiting'
@@ -67,6 +77,9 @@ export interface SmallCaravanRunState {
   progress: number;
   risk: number;
   memberIds: number[];
+  memberAlifeIds?: number[];
+  fromFloorKey?: string;
+  toFloorKey?: string;
 }
 
 export interface CaravanState {
@@ -170,17 +183,40 @@ function normalizeMemberIds(value: unknown): number[] {
   return out;
 }
 
+function normalizeMemberAlifeIds(value: unknown, limit: number): number[] {
+  if (!Array.isArray(value)) return [];
+  const out: number[] = [];
+  const cap = Math.max(0, Math.min(SMALL_CARAVAN_MEMBER_ALIFE_CAP, Math.floor(limit)));
+  for (const raw of value) {
+    if (out.length >= cap) break;
+    const id = Math.floor(Number(raw));
+    if (Number.isFinite(id) && id > 0 && !out.includes(id)) out.push(id);
+  }
+  return out;
+}
+
+function lanePrimaryFromFloorKey(def: CaravanLaneDef): string {
+  return cleanFloorKey(def.fromFloorKeys?.[0] ?? floorKeyForStory(def.fromFloor));
+}
+
+function lanePrimaryToFloorKey(def: CaravanLaneDef): string {
+  return cleanFloorKey(def.toFloorKeys?.[0] ?? floorKeyForStory(def.toFloor));
+}
+
 function normalizeSmallCaravanRun(raw: unknown, now: number): SmallCaravanRunState | undefined {
   if (!isRecord(raw)) return undefined;
   const templateId = typeof raw.templateId === 'string' ? raw.templateId : '';
   const template = SMALL_CARAVAN_TEMPLATES.find(item => item.id === templateId);
   const laneId = typeof raw.laneId === 'string' ? raw.laneId : template?.laneId ?? '';
-  if (!template || !CARAVAN_LANE_BY_ID[laneId]) return undefined;
+  const def = CARAVAN_LANE_BY_ID[laneId];
+  if (!template || !def) return undefined;
   const id = typeof raw.id === 'string' && raw.id.length > 0 ? raw.id.slice(0, 48) : `${template.id}_${Math.floor(now)}`;
-  const floor = typeof raw.floor === 'number' ? raw.floor as FloorLevel : CARAVAN_LANE_BY_ID[laneId].toFloor;
+  const floor = typeof raw.floor === 'number' ? raw.floor as FloorLevel : def.toFloor;
   if (!Object.values(FloorLevel).includes(floor)) return undefined;
   const status = normalizeSmallCaravanStatus(raw.status);
   const expiresAt = saneNumber(raw.expiresAt, now + SMALL_CARAVAN_ACTIVE_SECONDS);
+  const fromFloorKey = cleanFloorKey(raw.fromFloorKey) || lanePrimaryFromFloorKey(def);
+  const toFloorKey = cleanFloorKey(raw.toFloorKey) || lanePrimaryToFloorKey(def);
   return {
     id,
     templateId,
@@ -195,6 +231,9 @@ function normalizeSmallCaravanRun(raw: unknown, now: number): SmallCaravanRunSta
     progress: clamp(saneNumber(raw.progress, 0), 0, 1),
     risk: clamp(saneNumber(raw.risk, template.risk), 1, 5),
     memberIds: normalizeMemberIds(raw.memberIds),
+    memberAlifeIds: normalizeMemberAlifeIds(raw.memberAlifeIds, template.memberCount),
+    fromFloorKey,
+    toFloorKey,
   };
 }
 
@@ -319,6 +358,7 @@ function publishSmallCaravanEvent(
   extraTags: readonly string[],
   counts?: readonly number[],
   source?: WorldEvent,
+  extraData?: Record<string, unknown>,
 ): void {
   publishEvent(state, {
     type: 'faction_relation_changed',
@@ -349,6 +389,7 @@ function publishSmallCaravanEvent(
       tariffMultiplier: getCaravanLaneTariffMultiplier(state, def.id),
       stability: Number(lane.stability.toFixed(2)),
       rumorIds: rumorIdsFor(def),
+      ...extraData,
     },
   });
 }
@@ -362,6 +403,7 @@ function publishCaravanEvent(
   extraTags: readonly string[],
   counts?: readonly number[],
   source?: WorldEvent,
+  extraData?: Record<string, unknown>,
 ): void {
   publishEvent(state, {
     type: 'faction_relation_changed',
@@ -391,8 +433,26 @@ function publishCaravanEvent(
       stability: Number(lane.stability.toFixed(2)),
       corpId: def.corpIds?.[0],
       rumorIds: rumorIdsFor(def),
+      ...extraData,
     },
   });
+}
+
+function migrateLaneAlifeRecords(state: GameState, def: CaravanLaneDef, lane: CaravanLaneState, paid: boolean): number {
+  const fromFloorKey = lanePrimaryFromFloorKey(def);
+  const toFloorKey = lanePrimaryToFloorKey(def);
+  if (!fromFloorKey || !toFloorKey || fromFloorKey === toFloorKey) return 0;
+  if (lane.stability < 0.65 || lane.runs % (paid ? 2 : 4) !== 0) return 0;
+  const limit = paid && lane.stability >= 0.95 ? 2 : 1;
+  const ids = sampleAlifeFloorRecordIds(state, fromFloorKey, limit, lane.runs + def.id.length, {
+    faction: def.faction,
+    maxAttempts: 96,
+  });
+  let moved = 0;
+  for (const id of ids) {
+    if (moveAlifeNpcRecord(state, id, toFloorKey, { floor: def.toFloor, preservePosition: false })) moved++;
+  }
+  return moved;
 }
 
 function processLane(state: GameState, def: CaravanLaneDef, lane: CaravanLaneState, force: boolean): boolean {
@@ -421,7 +481,12 @@ function processLane(state: GameState, def: CaravanLaneDef, lane: CaravanLaneSta
   }
 
   invalidateEconomyPrices(state);
-  publishCaravanEvent(state, def, lane, 'tick', 3, paid ? ['paid'] : ['unpaid'], counts);
+  const migratedMembers = migrateLaneAlifeRecords(state, def, lane, paid);
+  publishCaravanEvent(state, def, lane, 'tick', 3, paid ? ['paid'] : ['unpaid'], counts, undefined, {
+    memberAlifeMoved: migratedMembers,
+    fromFloorKey: lanePrimaryFromFloorKey(def),
+    toFloorKey: lanePrimaryToFloorKey(def),
+  });
   return true;
 }
 
@@ -512,7 +577,30 @@ function nearbyMemberPosition(world: World, x: number, y: number, index: number)
   return { x, y };
 }
 
+function smallCaravanMemberEligible(state: GameState, npc: Entity, template: SmallCaravanTemplateDef, usedIds: ReadonlySet<number>): boolean {
+  if (!npc.alive || npc.type !== EntityType.NPC || !npc.ai) return false;
+  if (usedIds.has(npc.id) || npc.faction !== template.faction) return false;
+  if (npc.plotNpcId || npc.canGiveQuest || (npc.questId !== undefined && npc.questId !== -1)) return false;
+  if (npc.persistentNpcId === 'player' || npc.faction === Faction.PLAYER) return false;
+  if (state.showNpcMenu && state.npcMenuTarget === npc.id) return false;
+  if (npc.alifeId === undefined && npc.persistentNpcId) return false;
+  return true;
+}
+
+function ensureSmallCaravanMemberAlifeId(
+  state: GameState,
+  entities: readonly Entity[],
+  npc: Entity,
+  run: SmallCaravanRunState,
+): number | undefined {
+  const sourceFloorKey = run.fromFloorKey || currentAlifeFloorKey(state);
+  if (npc.alifeId !== undefined) return npc.alifeId;
+  if (!assignPersistentAlifeNpcFromEntity(state, npc, entities, sourceFloorKey)) return undefined;
+  return npc.alifeId;
+}
+
 function claimSmallCaravanMember(
+  state: GameState,
   world: World,
   entities: Entity[],
   template: SmallCaravanTemplateDef,
@@ -522,15 +610,15 @@ function claimSmallCaravanMember(
   let best: Entity | null = null;
   let bestD2 = Infinity;
   for (const npc of entities) {
-    if (!npc.alive || npc.type !== EntityType.NPC || !npc.ai) continue;
-    if (usedIds.has(npc.id) || npc.plotNpcId || npc.canGiveQuest || (npc.questId !== undefined && npc.questId !== -1)) continue;
-    if (npc.faction !== template.faction) continue;
+    if (!smallCaravanMemberEligible(state, npc, template, usedIds)) continue;
     const d2 = world.dist2(run.x, run.y, npc.x, npc.y);
     if (d2 >= bestD2) continue;
     best = npc;
     bestD2 = d2;
   }
   if (!best) return null;
+  const alifeId = ensureSmallCaravanMemberAlifeId(state, entities, best, run);
+  if (alifeId === undefined) return null;
   const pos = nearbyMemberPosition(world, Math.floor(run.x), Math.floor(run.y), run.memberIds.length);
   const ai = best.ai;
   if (!ai) return null;
@@ -543,19 +631,22 @@ function claimSmallCaravanMember(
   ai.pi = 0;
   ai.timer = 0;
   run.memberIds.push(best.id);
+  run.memberAlifeIds = normalizeMemberAlifeIds([...(run.memberAlifeIds ?? []), alifeId], template.memberCount);
   return best;
 }
 
 function spawnSmallCaravanMembers(
+  state: GameState,
   world: World,
   entities: Entity[],
   template: SmallCaravanTemplateDef,
   run: SmallCaravanRunState,
-): void {
+): number {
   const usedIds = new Set<number>();
   for (let i = 0; i < template.memberCount; i++) {
-    if (!claimSmallCaravanMember(world, entities, template, run, usedIds)) return;
+    if (!claimSmallCaravanMember(state, world, entities, template, run, usedIds)) return run.memberIds.length;
   }
+  return run.memberIds.length;
 }
 
 function currentFloorActiveSmallCaravanCount(caravans: CaravanState, floor: FloorLevel, now: number): number {
@@ -582,7 +673,7 @@ export function spawnSmallCaravanNear(
   if (!pos) return undefined;
 
   const run: SmallCaravanRunState = {
-    id: `small_${caravans.nextRunSeq++}`,
+    id: `small_${caravans.nextRunSeq}`,
     templateId: template.id,
     laneId: template.laneId,
     floor: state.currentFloor,
@@ -595,8 +686,12 @@ export function spawnSmallCaravanNear(
     progress: 0,
     risk: template.risk,
     memberIds: [],
+    memberAlifeIds: [],
+    fromFloorKey: currentAlifeFloorKey(state),
+    toFloorKey: lanePrimaryToFloorKey(CARAVAN_LANE_BY_ID[template.laneId]),
   };
-  spawnSmallCaravanMembers(world, entities, template, run);
+  if (spawnSmallCaravanMembers(state, world, entities, template, run) === 0) return undefined;
+  caravans.nextRunSeq++;
   caravans.active[run.id] = run;
   caravans.nextSmallSpawnAt = state.time + SMALL_CARAVAN_SPAWN_SECONDS;
   const def = CARAVAN_LANE_BY_ID[template.laneId];
@@ -624,13 +719,35 @@ function updateSmallCaravanPosition(run: SmallCaravanRunState, entities: Entity[
   return true;
 }
 
-function completeSmallCaravanArrival(state: GameState, run: SmallCaravanRunState): void {
+function moveSmallCaravanAlifeMembers(
+  state: GameState,
+  run: SmallCaravanRunState,
+  def: CaravanLaneDef,
+  entities?: readonly Entity[],
+): number {
+  const toFloorKey = cleanFloorKey(run.toFloorKey) || lanePrimaryToFloorKey(def);
+  const ids = normalizeMemberAlifeIds(run.memberAlifeIds, SMALL_CARAVAN_MEMBER_ALIFE_CAP);
+  let moved = 0;
+  for (const id of ids) {
+    const live = entities?.find(entity => entity.type === EntityType.NPC && entity.alifeId === id);
+    if (live && !live.alive) {
+      recordAlifeNpcDeath(state, live);
+      continue;
+    }
+    if (live) captureAlifeFloorState(state, [live]);
+    if (moveAlifeNpcRecord(state, id, toFloorKey, { floor: def.toFloor, preservePosition: false })) moved++;
+  }
+  return moved;
+}
+
+function completeSmallCaravanArrival(state: GameState, run: SmallCaravanRunState, entities?: readonly Entity[]): void {
   const def = CARAVAN_LANE_BY_ID[run.laneId];
   if (!def) return;
   const caravans = ensureCaravanState(state);
   const lane = caravans.lanes[def.id];
   const template = SMALL_CARAVAN_TEMPLATES.find(item => item.id === run.templateId);
   const counts = applyLaneCargo(state, def, template?.cargo ?? def.resourceDeltas, 0.55, 'small_caravan_arrival');
+  const migratedMembers = moveSmallCaravanAlifeMembers(state, run, def, entities);
   lane.runs++;
   lane.stability = clamp(lane.stability + 0.04, MIN_STABILITY, MAX_STABILITY);
   lane.tariffPressure = clamp(lane.tariffPressure - 0.04, 0, 1.75);
@@ -639,7 +756,11 @@ function completeSmallCaravanArrival(state: GameState, run: SmallCaravanRunState
   run.updatedAt = state.time;
   run.expiresAt = state.time + SMALL_CARAVAN_TERMINAL_SECONDS;
   invalidateEconomyPrices(state);
-  publishSmallCaravanEvent(state, def, lane, run, 'arrived', 3, ['arrived'], counts);
+  publishSmallCaravanEvent(state, def, lane, run, 'arrived', 3, ['arrived'], counts, undefined, {
+    memberAlifeMoved: migratedMembers,
+    fromFloorKey: run.fromFloorKey ?? lanePrimaryFromFloorKey(def),
+    toFloorKey: run.toFloorKey ?? lanePrimaryToFloorKey(def),
+  });
 }
 
 function markSmallCaravanLost(state: GameState, run: SmallCaravanRunState, status: 'raided' | 'abandoned'): void {
@@ -687,7 +808,7 @@ function updateSmallCaravans(
       }
       run.progress = clamp(run.progress + elapsed / (210 + run.risk * 35), 0, 1);
       run.updatedAt = state.time;
-      if (run.progress >= 1) completeSmallCaravanArrival(state, run);
+      if (run.progress >= 1) completeSmallCaravanArrival(state, run, entities);
     }
   }
 

@@ -234,9 +234,9 @@ test('controls menu draws reset row before keyboard bindings', () => {
 
   drawControlsMenu(ctx as unknown as CanvasRenderingContext2D, state, 2, 2, 0);
 
-  assert.ok(ctx.texts.includes('Сбросить клавиши'));
+  assert.ok(ctx.texts.includes('Вернуть дефолты'));
   assert.ok(ctx.texts.includes(CONTROL_ACTIONS[0].label));
-  assert.ok(ctx.texts.includes('ENTER / BACKSPACE'));
+  assert.ok(ctx.texts.includes('ENTER'));
 });
 
 test('HUD event summary lane ends before the fixed top-right minimap lane', () => {

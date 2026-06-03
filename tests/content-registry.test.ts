@@ -32,10 +32,8 @@ const FLOOR_LEVEL_IDS = new Set(Object.values(FloorLevel).filter(v => typeof v =
 const RESOURCE_IDS = new Set(RESOURCES.map(r => r.id));
 const RUMORS_BY_ID = new Map(RUMORS.map(r => [r.id, r]));
 const ZERO_WEIGHT_MONSTERS = new Set<MonsterKind>([
-  MonsterKind.BETONOED,
   MonsterKind.CREATOR,
   MonsterKind.PSEUDOLIFT,
-  MonsterKind.BLACK_LIQUIDATOR,
 ]);
 
 function assertUnique(values: readonly string[], label: string): void {

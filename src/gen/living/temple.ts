@@ -5,11 +5,11 @@
 import {
   W, Cell, Tex, Feature, RoomType,
   type Room, type Entity, EntityType, AIGoal, Faction, Occupation, QuestType, MonsterKind,
-  msg,
+  FloorLevel, msg,
 } from '../../core/types';
 import { World } from '../../core/world';
 import { freshNeeds } from '../../data/catalog';
-import { type PlotNpcDef, registerSideQuest } from '../../data/plot';
+import { type PlotNpcDef, registerAuthoredNpc, storyNpcFloorKey } from '../../data/plot';
 import { registerZoneContent } from './zone_content';
 import { MONSTERS } from '../../entities/monster';
 import { monsterSpr } from '../../render/sprite_index';
@@ -46,17 +46,23 @@ const NPC_DEF: PlotNpcDef = {
 };
 
 /* ── Register NPC + quest into global data ───────────────────── */
-registerSideQuest('batushka', NPC_DEF, [
-  {
-    id: 'batushka_eggs',
-    giverNpcId: 'batushka',
-    type: QuestType.FETCH,
-    desc: 'Батюшка: «Принеси три пасхальных яйца, чадо. Одним похристосуемся, второе отдадим детям, третье оставим дежурному у гермы.»',
-    targetItem: 'easter_egg', targetCount: 3,
-    rewardItem: 'holy_water', rewardCount: 3,
-    relationDelta: 20, xpReward: 25, moneyReward: 50,
-  },
-]);
+registerAuthoredNpc({
+  id: 'batushka',
+  npc: NPC_DEF,
+  homeFloorKey: storyNpcFloorKey(FloorLevel.KVARTIRY),
+  tags: ['kvartiry', 'temple'],
+  quests: [
+    {
+      id: 'batushka_eggs',
+      giverNpcId: 'batushka',
+      type: QuestType.FETCH,
+      desc: 'Батюшка: «Принеси три пасхальных яйца, чадо. Одним похристосуемся, второе отдадим детям, третье оставим дежурному у гермы.»',
+      targetItem: 'easter_egg', targetCount: 3,
+      rewardItem: 'holy_water', rewardCount: 3,
+      relationDelta: 20, xpReward: 25, moneyReward: 50,
+    },
+  ],
+});
 
 /* ── Cross-shaped temple layout ────────────────────────────────
  *   Nave (central vertical):  NAVE_W × NAVE_H  (7 × 17)

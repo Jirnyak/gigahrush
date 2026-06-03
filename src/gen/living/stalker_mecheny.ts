@@ -7,7 +7,9 @@ import {
 } from '../../core/types';
 import { World } from '../../core/world';
 import { freshNeeds } from '../../data/catalog';
-import { type PlotNpcDef, registerSideQuest } from '../../data/plot';
+import { type PlotNpcDef, designNpcFloorKey, registerAuthoredNpc } from '../../data/plot';
+
+const NPC_ID = 'stalker_mecheny';
 
 const NPC_DEF: PlotNpcDef = {
   name: 'Сталкер Меченый',
@@ -36,18 +38,24 @@ const NPC_DEF: PlotNpcDef = {
   ],
 };
 
-registerSideQuest('stalker_mecheny', NPC_DEF, [
-  {
-    id: 'mecheny_idols',
-    giverNpcId: 'stalker_mecheny',
-    type: QuestType.FETCH,
-    desc: 'Меченый: «Три идола Чернобога. Цена — пси-сгусток и патроны. Без вопросов.»',
-    targetItem: 'idol_chernobog', targetCount: 3,
-    rewardItem: 'psi_madness', rewardCount: 1,
-    extraRewards: [{ defId: 'ammo_9mm', count: 16 }, { defId: 'antidep', count: 1 }],
-    relationDelta: 10, xpReward: 80, moneyReward: 150,
-  },
-]);
+registerAuthoredNpc({
+  id: NPC_ID,
+  npc: NPC_DEF,
+  homeFloorKey: designNpcFloorKey('black_market_88'),
+  tags: ['black_market_88', 'artifact'],
+  quests: [
+    {
+      id: 'mecheny_idols',
+      giverNpcId: NPC_ID,
+      type: QuestType.FETCH,
+      desc: 'Меченый: «Три идола Чернобога. Цена — пси-сгусток и патроны. Без вопросов.»',
+      targetItem: 'idol_chernobog', targetCount: 3,
+      rewardItem: 'psi_madness', rewardCount: 1,
+      extraRewards: [{ defId: 'ammo_9mm', count: 16 }, { defId: 'antidep', count: 1 }],
+      relationDelta: 10, xpReward: 80, moneyReward: 150,
+    },
+  ],
+});
 
 export function spawnStalkerMecheny(
   world: World, entities: Entity[], nextId: { v: number },
@@ -67,7 +75,7 @@ export function spawnStalkerMecheny(
       inventory: NPC_DEF.inventory.map(i => ({ ...i })),
       weapon: 'makarov',
       faction: NPC_DEF.faction, occupation: NPC_DEF.occupation,
-      plotNpcId: 'stalker_mecheny', canGiveQuest: true, questId: -1,
+      plotNpcId: NPC_ID, canGiveQuest: true, questId: -1,
       isTraveler: true,
     });
     return;

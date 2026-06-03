@@ -2011,15 +2011,6 @@ export function dropItem(
     player.tool = '';
   }
 
-  // Tools are destroyed on drop (picking up would reset charge)
-  if (def.type === ItemType.TOOL) {
-    player.inventory.splice(slotIdx, 1);
-    msgs.push(msg(`${def.name} выброшен и сломан`, time, '#f84'));
-    publishPlayerItemEvent(state, player, 'player_drop_item', def.id, dropCount, 2);
-    publishPlayerItemEvent(state, player, 'tool_broke', def.id, dropCount, 3);
-    return;
-  }
-
   // Place drop 3 cells in front of player (far enough to avoid auto-pickup)
   const dx = Math.cos(player.angle);
   const dy = Math.sin(player.angle);

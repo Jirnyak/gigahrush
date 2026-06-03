@@ -50,7 +50,19 @@ export {
 } from './craft_recipes';
 export { randomName, type NameResult, freshNeeds } from './names';
 export { NOTES } from './notes';
-export { PLOT_NPCS, PLOT_CHAIN, isPlotNpc, getPlotDef, type PlotNpcDef, type PlotStep } from './plot';
+export {
+  PLOT_NPCS,
+  PLOT_CHAIN,
+  designNpcFloorKey,
+  getPlotDef,
+  isPlotNpc,
+  plotNpcHomeFloorKey,
+  registerAuthoredNpc,
+  registerFloorSideQuest,
+  storyNpcFloorKey,
+  type PlotNpcDef,
+  type PlotStep,
+} from './plot';
 export { PLOT_ROOMS, type PlotRoomDef } from './plot_rooms';
 export { generateNpcTradeItems } from './dialogue';
 export { ZHELEMISH_DEFS, ZHELEMISH_ITEM_IDS, getZhelemishDef, validateZhelemishDefs, type ZhelemishDef, type ZhelemishItemId } from './zhelemish_defs';

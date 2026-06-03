@@ -9,13 +9,23 @@ import { generateRobotSprite } from './robot';
 import { generateBlackLiquidatorSprite } from './black_liquidator';
 import { HEAD_SLUG_DETACHED_STAGE, generateSlugSprite } from './head_slug';
 import {
+  AUTHORED_NPC_SPRITE_GENERATORS,
   NPC_SPRITE_GENERATORS,
   generateTravelerSprite,
   generatePilgrimSprite,
   generateHunterSprite,
   generatePriestSprite,
 } from './npc';
-import { Spr } from '../render/sprite_index';
+import {
+  generateNpcVisualSprite,
+  isFloor69FemaleSprite,
+  isNpcSpecialSprite,
+  NPC_VISUAL_FLOOR69_FEMALE,
+  npcVisualUsesProceduralSprite,
+} from './npc_visuals';
+import { authoredNpcSpriteGeneratorOffset } from '../render/sprite_index';
+
+export { isFloor69FemaleSprite } from './npc_visuals';
 
 type RGB = readonly [number, number, number];
 
@@ -439,6 +449,28 @@ export function generateProceduralNpcSprite(
     : generateOccupationNpcSprite(seed, occ, faction, isFemale);
 }
 
+export function generateNpcProfileSprite(
+  seed: number,
+  occupation: Occupation | undefined,
+  faction: Faction | undefined,
+  isFemale: boolean | undefined,
+  spriteHint: number | undefined,
+  npcVisualId?: string,
+): Uint32Array {
+  const special = generateNpcVisualSprite(npcVisualId, { seed, occupation, faction, isFemale, sprite: spriteHint });
+  if (special) return special;
+  if (spriteHint !== undefined) {
+    const authoredOffset = authoredNpcSpriteGeneratorOffset(spriteHint);
+    const authored = authoredOffset >= 0 ? AUTHORED_NPC_SPRITE_GENERATORS[authoredOffset] : undefined;
+    if (authored) return authored.generate();
+  }
+  if (spriteHint !== undefined && isFloor69FemaleSprite(spriteHint)) {
+    return generateNpcVisualSprite(NPC_VISUAL_FLOOR69_FEMALE, { seed, occupation, faction, isFemale, sprite: spriteHint })
+      ?? generateProceduralNpcSprite(seed, occupation, faction, isFemale, spriteHint);
+  }
+  return generateProceduralNpcSprite(seed, occupation, faction, isFemale, spriteHint);
+}
+
 function component(c: number, shift: number): number {
   return (c >>> shift) & 0xff;
 }
@@ -573,11 +605,9 @@ export function generateProceduralMonsterSprite(kind: MonsterKind, seed: number,
 export function entityUsesProceduralSprite(e: Entity): boolean {
   if (e.type === EntityType.MONSTER) return true;
   if (e.type !== EntityType.NPC) return false;
+  if (npcVisualUsesProceduralSprite(e.npcVisualId)) return true;
+  if (isNpcSpecialSprite(e.sprite)) return false;
   return e.sprite >= 0 && e.sprite <= Occupation.PRIEST;
-}
-
-export function isFloor69FemaleSprite(sprite: number): boolean {
-  return sprite >= Spr.F69_FEMALE_NPC_BASE && sprite <= Spr.F69_FEMALE_NPC_7;
 }
 
 function deriveEntitySpriteSeed(e: Entity): number {
@@ -606,6 +636,8 @@ export function proceduralEntitySpriteKey(e: Entity): number {
   if (e.monsterKind === MonsterKind.PROTOKOLNIK) h = mix32(h ^ Math.imul((e.protocolPressureTier ?? 0) + 1, 0x6d2b79f5));
   if (e.monsterKind === MonsterKind.ZAKALENNAYA_ARMATURA) h = mix32(h ^ Math.imul((e.monsterArmorStacks ?? ZAK_ARMOR_MAX_STACKS) + 1, 0x7feb352d));
   h = mix32(h ^ Math.imul(e.type, 0x9e3779b1) ^ Math.imul(kind + 1, 0x85ebca6b) ^ Math.imul(occ + 1, 0xc2b2ae35));
+  h = mix32(h ^ Math.imul((e.sprite ?? 0) + 1, 0x165667b1));
+  if (e.npcVisualId) h = hashText(e.npcVisualId, h);
   if (e.isFemale) h = mix32(h ^ 0x51ed270b);
   if (e.faction !== undefined) h = mix32(h ^ Math.imul(e.faction + 1, 0x27d4eb2d));
   return h || 1;
@@ -614,6 +646,14 @@ export function proceduralEntitySpriteKey(e: Entity): number {
 export function generateProceduralEntitySprite(e: Entity): Uint32Array | null {
   const seed = proceduralEntitySpriteKey(e);
   if (e.type === EntityType.NPC && entityUsesProceduralSprite(e)) {
+    const special = generateNpcVisualSprite(e.npcVisualId, {
+      seed,
+      occupation: e.occupation,
+      faction: e.faction,
+      isFemale: e.isFemale,
+      sprite: e.sprite,
+    });
+    if (special) return special;
     return generateProceduralNpcSprite(seed, e.occupation, e.faction, e.isFemale, e.sprite);
   }
   if (e.type === EntityType.MONSTER) {

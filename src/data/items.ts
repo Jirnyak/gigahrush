@@ -3,6 +3,7 @@
 import { RoomType, ItemType, type ItemDef, type Entity } from '../core/types';
 import { CHERNOBOG_DOCKET_ITEMS, CHERNOBOG_DOCKET_ITEM_TAGS } from './chernobog_docket';
 import { DOCUMENT_ACCESS_ITEMS, DOCUMENT_ACCESS_ITEM_TAGS } from './documents_access';
+import { MAX_INVENTORY_SLOTS, MAX_ITEM_STACK } from './inventory_limits';
 
 export const SILVER_SLIME_SEALED_ID = 'slime_sample_silver';
 export const SILVER_SLIME_OPENED_ID = 'slime_sample_silver_open';
@@ -19,12 +20,32 @@ function antiemeticDose(e: Entity) { e.hp = Math.min((e.maxHp ?? 100), (e.hp ?? 
 function sleepingPillsDose(e: Entity) { const beforeSleep = e.needs?.sleep ?? 0; if (e.needs) { e.needs.sleep = Math.min(100, e.needs.sleep + 45); e.needs.water = Math.max(0, e.needs.water - 16); e.needs.food = Math.max(0, e.needs.food - 8); } if (e.hp != null) e.hp = Math.max(1, e.hp - 4); const sleepGain = e.needs ? Math.round(e.needs.sleep - beforeSleep) : 0; return `Сон +${sleepGain}, вода -16, еда -8, HP -4. «Попобава» кладёт быстро; просыпаться всё равно вам`; }
 function technicalSpiritDose(e: Entity) { e.hp = Math.min((e.maxHp ?? 100), (e.hp ?? 0) + 6); if (e.needs) e.needs.water = Math.max(0, e.needs.water - 5); return 'Стерилизация +6 HP, вода -5. Горит лучше, чем лечит; посту лучше не показывать'; }
 function psiMedicine(hp: number, psi: number) { return (e: Entity) => { e.hp = Math.min((e.maxHp ?? 100), (e.hp ?? 0) + hp); if (e.rpg) e.rpg.psi = Math.min(e.rpg.maxPsi, e.rpg.psi + psi); return hp > 0 ? `Лечение +${hp}, ПСИ +${psi}` : `ПСИ +${psi}. Запас для сгустков восстановлен`; }; }
-function openBlueGlowSample(e: Entity) { if (e.inventory) e.inventory.push({ defId: 'blue_glow_sample_open', count: 1 }); if (e.hp != null) e.hp = Math.max(1, e.hp - 6); return 'Пломба снята: открыт синий образец. Ожог -6 HP, контаминация локальная'; }
+function openBlueGlowSample(e: Entity) { addStackedUseOutput(e, 'blue_glow_sample_open', 1); if (e.hp != null) e.hp = Math.max(1, e.hp - 6); return 'Пломба снята: открыт синий образец. Ожог -6 HP, контаминация локальная'; }
 function useOpenBlueGlowSample(e: Entity) { if (e.rpg) e.rpg.psi = Math.min(e.rpg.maxPsi, e.rpg.psi + 18); if (e.needs) e.needs.sleep = Math.min(100, e.needs.sleep + 10); if (e.hp != null) e.hp = Math.max(1, e.hp - 8); return 'Синий образец дал короткий прилив: ПСИ +18, бодрость +10, ожог -8 HP'; }
-function unpackBlackMarketShells(e: Entity) { const inv = e.inventory ?? (e.inventory = []); const slot = inv.find(i => i.defId === 'ammo_shells' && i.data === undefined); if (slot) slot.count += 4; else inv.push({ defId: 'ammo_shells', count: 4 }); return 'Чёрнорыночная дробь разобрана на четыре обычных патрона. Серийные гильзы лучше не показывать посту'; }
-function unpackStolenFilterPack(e: Entity) { const inv = e.inventory ?? (e.inventory = []); const slot = inv.find(i => i.defId === 'gasmask_filter' && i.data === undefined); if (slot) slot.count += 2; else inv.push({ defId: 'gasmask_filter', count: 2 }); return 'Краденая пачка вскрыта: два сухих фильтра переложены к снаряжению. Номера пачки лучше не светить на складе'; }
-function unpackHomemade9mm(e: Entity) { const inv = e.inventory ?? (e.inventory = []); const slot = inv.find(i => i.defId === 'ammo_9mm' && i.data === undefined); if (slot) slot.count += 6; else inv.push({ defId: 'ammo_9mm', count: 6 }); return 'Кустарные 9мм перебраны: шесть пригодных патронов переложены в обычный подсумок. Остальное лучше не показывать посту'; }
-function unpackChemicalShell(e: Entity) { const inv = e.inventory ?? (e.inventory = []); const slot = inv.find(i => i.defId === 'decon_fluid' && i.data === undefined); if (slot) slot.count += 1; else inv.push({ defId: 'decon_fluid', count: 1 }); return 'Химический патрон вскрыт: реагент перелит в флакон обеззараживания. Из обычного подсумка такой выстрел не собрать'; }
+function addStackedUseOutput(e: Entity, defId: string, count: number): void {
+  const def = ITEMS[defId];
+  if (!def) return;
+  const inv = e.inventory ?? (e.inventory = []);
+  const stackMax = getStack(def);
+  let left = Math.floor(count);
+  if (!Number.isFinite(left) || left <= 0) return;
+  for (const slot of inv) {
+    if (left <= 0) return;
+    if (slot.defId !== defId || slot.data !== undefined || slot.count >= stackMax) continue;
+    const add = Math.min(left, stackMax - slot.count);
+    slot.count += add;
+    left -= add;
+  }
+  while (left > 0 && inv.length < MAX_INVENTORY_SLOTS) {
+    const add = Math.min(left, stackMax);
+    inv.push({ defId, count: add });
+    left -= add;
+  }
+}
+function unpackBlackMarketShells(e: Entity) { addStackedUseOutput(e, 'ammo_shells', 4); return 'Чёрнорыночная дробь разобрана на четыре обычных патрона. Серийные гильзы лучше не показывать посту'; }
+function unpackStolenFilterPack(e: Entity) { addStackedUseOutput(e, 'gasmask_filter', 2); return 'Краденая пачка вскрыта: два сухих фильтра переложены к снаряжению. Номера пачки лучше не светить на складе'; }
+function unpackHomemade9mm(e: Entity) { addStackedUseOutput(e, 'ammo_9mm', 6); return 'Кустарные 9мм перебраны: шесть пригодных патронов переложены в обычный подсумок. Остальное лучше не показывать посту'; }
+function unpackChemicalShell(e: Entity) { addStackedUseOutput(e, 'decon_fluid', 1); return 'Химический патрон вскрыт: реагент перелит в флакон обеззараживания. Из обычного подсумка такой выстрел не собрать'; }
 
 export type ItemEquipSlot = 'weapon' | 'tool';
 
@@ -53,8 +74,11 @@ export function itemStackableByDefault(def: ItemDef): boolean {
 
 /** Stack size: explicit def.stack marks bulk goods; durable/equipped/non-use items are single-slot by default. */
 export function getStack(def: ItemDef): number {
-  if (def.stack != null) return def.stack;
-  return itemStackableByDefault(def) ? 999 : 1;
+  if (def.stack != null) {
+    const stack = Math.floor(def.stack);
+    return Number.isFinite(stack) ? Math.max(1, Math.min(MAX_ITEM_STACK, stack)) : 1;
+  }
+  return itemStackableByDefault(def) ? MAX_ITEM_STACK : 1;
 }
 
 /** Max spawn count for generic world/NPC loot: cheap -> more, expensive -> less, never above stack rules. */
@@ -394,7 +418,7 @@ export const ITEMS: Record<string, ItemDef> = {
   nailgun:   { id:'nailgun',   name:'Гвоздомёт',    type:ItemType.WEAPON,    desc:'Промышленный гвоздомёт. Урон 14. Точный рабочий выстрел, гвозди дефицитны',      spawnRooms:[RoomType.PRODUCTION],                  spawnW:1, value:360 },
   ak47:      { id:'ak47',      name:'Калашников',    type:ItemType.WEAPON,    desc:'Старый АК-47 из довоенной оружейки. Урон 26. Точнее уставного автомата, но каждая очередь жжёт редкие 7.62.', spawnRooms:[], spawnW:0, value:5500, tags:['weapon','old_world','rifle','ammo_burn','story_reward'] },
   machinegun:{ id:'machinegun', name:'Пулемёт',     type:ItemType.WEAPON,    desc:'ПКМ. Урон 13. Самый злой расход, широкий разброс. Ленточное питание', spawnRooms:[], spawnW:0, value:9000 },
-  grenade:   { id:'grenade',   name:'Граната',      type:ItemType.WEAPON,   desc:'РГД-5. Урон 90 по площади. Кидай и прячься', spawnRooms:[RoomType.STORAGE], spawnW:1, value:160, stack:999 },
+  grenade:   { id:'grenade',   name:'Граната',      type:ItemType.WEAPON,   desc:'РГД-5. Урон 90 по площади. Кидай и прячься', spawnRooms:[RoomType.STORAGE], spawnW:1, value:160, stack:MAX_ITEM_STACK },
   gauss:     { id:'gauss',     name:'Гаусс-винтовка', type:ItemType.WEAPON,  desc:'Рельсотрон. Урон 180. Медленный точный выстрел за энергоячейку', spawnRooms:[], spawnW:0, value:60000 },
   plasma:    { id:'plasma',    name:'Плазмаган',    type:ItemType.WEAPON,    desc:'Плазменное оружие. Урон 26. Быстрая неточная трата энергоячеек', spawnRooms:[], spawnW:0, value:45000 },
   bfg:       { id:'bfg',       name:'БФГ-9000',     type:ItemType.WEAPON,    desc:'Тяжёлый опытный ствол НИИ. Урон 270 по большой площади. Энергоячейки исчезают вместе с комнатой', spawnRooms:[], spawnW:0, value:180000 },
@@ -633,7 +657,7 @@ export const ITEMS: Record<string, ItemDef> = {
   sealant_tube:{ id:'sealant_tube', name:'Тюбик герметика', type:ItemType.MISC, desc:'Серый состав для щелей, труб и ликвидаторских зачисток. Дёшево закрывает шов, но тюбик уходит целиком.', spawnRooms:[RoomType.PRODUCTION,RoomType.STORAGE,RoomType.BATHROOM], spawnW:1, value:20 },
   hermetic_tape:{ id:'hermetic_tape', name:'Гермолента', type:ItemType.MISC, desc:'Плотная лента для быстрых временных швов. Заклейте щель роя сейчас или оставьте рулон для медпункта до сирены.', spawnRooms:[RoomType.STORAGE,RoomType.MEDICAL], spawnW:0.75, value:26, tags:['repair','seal','sealant','temporary_seal','cleanup','technical_cleanup','samosbor','counterplay'], stack:8 },
   psi_dust:{ id:'psi_dust', name:'ПСИ-пыль', type:ItemType.MISC, desc:'Мерцающая пыль из-под старой печати. В НИИ её собирают шпателем, не дыханием.', spawnRooms:[RoomType.MEDICAL,RoomType.OFFICE], spawnW:1, value:120 },
-  deactivated_residue:{ id:'deactivated_residue', name:'Гашёный остаток', type:ItemType.MISC, desc:'Серый сухой осадок после печи или кипятка. Уже не тянется к пальцам, но акт всё равно нужен.', spawnRooms:[], spawnW:0, value:55, tags:['slime','sample','deactivated','burned','reagent'] },
+  deactivated_residue:{ id:'deactivated_residue', name:'Гашёный остаток', type:ItemType.MISC, desc:'Серый сухой осадок после печи или кипятка. Уже не тянется к пальцам, но акт всё равно нужен.', spawnRooms:[], spawnW:0, value:55, tags:['slime','sample','deactivated','burned','reagent'], stack:MAX_ITEM_STACK },
   maronary_shaving:{ id:'maronary_shaving', name:'Зелёная стружка', type:ItemType.MISC, desc:'Тонкая стружка после зелёного инцидента. Дорогой образец, контрабанда и улика: учёные платят, культисты молятся, Министерство оформляет владельца.', spawnRooms:[], spawnW:0, value:260, tags:['maronary','contraband','evidence','science','cult'] },
   veretar_sand:{ id:'veretar_sand', name:'Белый песок', type:ItemType.MISC, desc:'Сухой белый песок с белого окна Веретара. Открытая проба портит еду и бумаги; запечатай, сдай или вытряхни как опасную улику.', spawnRooms:[], spawnW:0, value:160, tags:['veretar','evidence','reagent','unsealed','contaminant'], stack:6 },
   sealed_veretar_sand:{ id:'sealed_veretar_sand', name:'Белый песок в гермопакете', type:ItemType.MISC, desc:'Запечатанная проба Веретара. Пакет не даёт песку сушить пайки, фото и пропуска; Министерство и НИИ принимают как улику.', spawnRooms:[], spawnW:0, value:260, tags:['veretar','evidence','reagent','sealed','sample'], stack:3 },

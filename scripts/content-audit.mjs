@@ -753,7 +753,7 @@ function topLevelContentRegistrations(relPath) {
     const expr = unwrapConstExpression(stmt.expression);
     if (!expr || !ts.isCallExpression(expr) || !ts.isIdentifier(expr.expression)) continue;
     const call = expr.expression.text;
-    if (!['registerSideQuest', 'registerSideQuestSteps', 'registerZoneContent'].includes(call)) continue;
+    if (!['registerSideQuest', 'registerFloorSideQuest', 'registerAuthoredNpc', 'registerSideQuestSteps', 'registerZoneContent'].includes(call)) continue;
     registrations.push({ call, file: relPath, line: lineOf(sf, expr) });
     if (call === 'registerZoneContent') {
       const generator = identifierName(expr.arguments[2]);
@@ -967,10 +967,12 @@ for (const abs of files) {
   }
   forEachNode(sf, node => {
     if (ts.isCallExpression(node) && ts.isIdentifier(node.expression)) {
-      if (node.expression.text === 'registerSideQuest') {
-        const npcId = stringValue(node.arguments[0], stringConstants);
+      if (node.expression.text === 'registerSideQuest' || node.expression.text === 'registerFloorSideQuest') {
+        const npcArgIndex = node.expression.text === 'registerFloorSideQuest' ? 1 : 0;
+        const questArgIndex = node.expression.text === 'registerFloorSideQuest' ? 3 : 2;
+        const npcId = stringValue(node.arguments[npcArgIndex], stringConstants);
         if (npcId) sideQuestNpcEntries.push({ id: npcId, file: rel, line: lineOf(sf, node) });
-        const questArg = node.arguments[2];
+        const questArg = node.arguments[questArgIndex];
         if (questArg && ts.isArrayLiteralExpression(questArg)) {
           for (const element of questArg.elements) {
             if (!ts.isObjectLiteralExpression(element)) continue;
@@ -979,6 +981,24 @@ for (const abs of files) {
               file: rel,
               line: lineOf(sf, element),
             });
+          }
+        }
+      }
+      if (node.expression.text === 'registerAuthoredNpc') {
+        const packArg = unwrapConstExpression(node.arguments[0]);
+        if (packArg && ts.isObjectLiteralExpression(packArg)) {
+          const npcId = getObjectString(packArg, 'id', stringConstants);
+          if (npcId) sideQuestNpcEntries.push({ id: npcId, file: rel, line: lineOf(sf, node) });
+          const questArg = unwrapConstExpression(getObjectProp(packArg, 'quests'));
+          if (questArg && ts.isArrayLiteralExpression(questArg)) {
+            for (const element of questArg.elements) {
+              if (!ts.isObjectLiteralExpression(element)) continue;
+              sideQuestEntries.push({
+                id: getObjectString(element, 'id', stringConstants),
+                file: rel,
+                line: lineOf(sf, element),
+              });
+            }
           }
         }
       }

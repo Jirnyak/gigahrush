@@ -28,3 +28,16 @@ test('active samosbor HUD text avoids expensive Canvas2D blur shadows', () => {
   assert.equal(crawl.includes('shadowBlur'), false, 'fullscreen samosbor crawl must not use shadowBlur');
   assert.match(crawl, /Math\.min\(7,\s*Math\.round\(w \/ 220\)\)/, 'crawl text count must stay bounded');
 });
+
+test('pre-active samosbor warning uses locked samosbor text channel', () => {
+  const source = readFileSync(new URL('../src/render/hud.ts', import.meta.url), 'utf8');
+  const warningTitle = functionBody(source, 'drawSamosborWarningInstruction');
+
+  assert.equal(warningTitle.includes('shadowBlur'), false, 'pre-active samosbor warning must stay cheap');
+  assert.equal(warningTitle.includes('fillRect'), false, 'pre-active samosbor warning should be text-only');
+  assert.equal(warningTitle.includes('drawStaticNoise'), false, 'pre-active samosbor warning should not draw a panel effect');
+  assert.match(warningTitle, /ВНИМАНИЕ/, 'pre-active samosbor warning should use a minimal red attention title');
+  assert.match(warningTitle, /через \$\{warning\.secondsLeft\} секунд объявляется самосбор/, 'pre-active samosbor warning should use the requested countdown wording');
+  assert.match(source, /showSamosborText && !state\.samosborActive/, 'pre-active warning should use the locked samosbor_text surface');
+  assert.match(source, /getSamosborWarningSnapshot\(state\)/, 'HUD must read the warning snapshot directly instead of relying on messages');
+});

@@ -347,6 +347,24 @@ class FakeKeyboardEvent {
   }
 }
 
+class FakeWheelEvent {
+  readonly deltaY: number;
+  defaultPrevented = false;
+  immediatePropagationStopped = false;
+
+  constructor(deltaY: number) {
+    this.deltaY = deltaY;
+  }
+
+  preventDefault(): void {
+    this.defaultPrevented = true;
+  }
+
+  stopImmediatePropagation(): void {
+    this.immediatePropagationStopped = true;
+  }
+}
+
 class FakeBrowserDocument {
   pointerLockElement: Element | null = null;
   private readonly listeners = new Map<string, {
@@ -748,6 +766,7 @@ test('Net Sphere input binding opens after game input prevention but ignores con
     const repeatedUnbind = net.bindNetSphereInput();
     assert.equal(browser.document.listenerCount('keydown'), 1);
     assert.equal(browser.document.listenerCount('paste'), 1);
+    assert.equal(browser.document.listenerCount('wheel'), 1);
 
     const prevented = new FakeKeyboardEvent('KeyN', 'n');
     prevented.preventDefault();
@@ -768,7 +787,17 @@ test('Net Sphere input binding opens after game input prevention but ignores con
     assert.equal(open.defaultPrevented, true);
     assert.equal(open.immediatePropagationStopped, true);
     assert.equal(browser.document.pointerLockElement, lockedElement);
+    assert.equal(net.getNetSphereSnapshot().chatInputActive, false);
 
+    const ignoredChat = new FakeKeyboardEvent('KeyH', 'h');
+    browser.document.dispatch('keydown', ignoredChat);
+    assert.equal(net.getNetSphereSnapshot().draft, '');
+    assert.equal(ignoredChat.defaultPrevented, false);
+
+    const focusChat = new FakeKeyboardEvent('Enter', 'Enter');
+    browser.document.dispatch('keydown', focusChat);
+    assert.equal(net.getNetSphereSnapshot().chatInputActive, true);
+    assert.equal(focusChat.defaultPrevented, true);
     browser.document.dispatch('keydown', new FakeKeyboardEvent('KeyH', 'h'));
     browser.document.dispatch('keydown', new FakeKeyboardEvent('Space', ' '));
     browser.document.dispatch('keydown', new FakeKeyboardEvent('KeyI', 'i'));
@@ -787,25 +816,26 @@ test('Net Sphere input binding opens after game input prevention but ignores con
     browser.document.addEventListener('keydown', leakListener);
     const submit = new FakeKeyboardEvent('Enter', 'Enter');
     browser.document.dispatch('keydown', submit);
-    assert.equal(net.isNetSphereOpen(), false);
+    assert.equal(net.isNetSphereOpen(), true);
+    assert.equal(net.getNetSphereSnapshot().chatInputActive, false);
     assert.equal(net.getNetSphereSnapshot().draft, '');
     assert.equal(submit.defaultPrevented, true);
     assert.equal(submit.immediatePropagationStopped, true);
     assert.equal(chatBodies.length, 1);
     assert.match(chatBodies[0], /"body":"h"/);
 
-    browser.document.dispatch('keydown', new FakeKeyboardEvent('KeyN', 'n'));
-    assert.equal(net.isNetSphereOpen(), true);
+    const activateEmpty = new FakeKeyboardEvent('Enter', 'Enter');
+    browser.document.dispatch('keydown', activateEmpty);
+    assert.equal(net.getNetSphereSnapshot().chatInputActive, true);
     const emptySubmit = new FakeKeyboardEvent('Enter', 'Enter');
     browser.document.dispatch('keydown', emptySubmit);
-    assert.equal(net.isNetSphereOpen(), false);
+    assert.equal(net.isNetSphereOpen(), true);
+    assert.equal(net.getNetSphereSnapshot().chatInputActive, false);
     assert.equal(net.getNetSphereSnapshot().draft, '');
     assert.equal(emptySubmit.defaultPrevented, true);
     assert.equal(emptySubmit.immediatePropagationStopped, true);
     assert.equal(chatBodies.length, 1);
 
-    browser.document.dispatch('keydown', new FakeKeyboardEvent('KeyN', 'n'));
-    assert.equal(net.isNetSphereOpen(), true);
     const close = new FakeKeyboardEvent('Delete', 'Delete');
     browser.document.dispatch('keydown', close);
     assert.equal(net.isNetSphereOpen(), false);
@@ -818,8 +848,124 @@ test('Net Sphere input binding opens after game input prevention but ignores con
     repeatedUnbind();
     assert.equal(browser.document.listenerCount('keydown'), 0);
     assert.equal(browser.document.listenerCount('paste'), 0);
+    assert.equal(browser.document.listenerCount('wheel'), 0);
     unbind();
     assert.equal(browser.document.listenerCount('keydown'), 0);
+  } finally {
+    globalThis.fetch = realFetch;
+    browser.restore();
+  }
+});
+
+test('Net Sphere hotkey only opens when gameplay menu shortcuts are allowed', async () => {
+  const browser = installNetSphereBrowser();
+  try {
+    const net = await import('../src/systems/net_sphere');
+    net.closeNetSphere();
+    let canOpen = false;
+    const unbind = net.bindNetSphereInput({ canOpen: () => canOpen });
+
+    const blocked = new FakeKeyboardEvent('KeyN', 'n');
+    browser.document.dispatch('keydown', blocked);
+    assert.equal(net.isNetSphereOpen(), false);
+    assert.equal(blocked.defaultPrevented, false);
+    assert.equal(blocked.immediatePropagationStopped, false);
+
+    canOpen = true;
+    const opened = new FakeKeyboardEvent('KeyN', 'n');
+    browser.document.dispatch('keydown', opened);
+    assert.equal(net.isNetSphereOpen(), true);
+    assert.equal(opened.defaultPrevented, true);
+    assert.equal(opened.immediatePropagationStopped, true);
+
+    unbind();
+    net.closeNetSphere();
+  } finally {
+    browser.restore();
+  }
+});
+
+test('Net Sphere hotkey closes only when chat input is not active', async () => {
+  const browser = installNetSphereBrowser();
+  try {
+    const net = await import('../src/systems/net_sphere');
+    net.closeNetSphere();
+    const unbind = net.bindNetSphereInput();
+
+    net.openNetSphere();
+    const closeInactive = new FakeKeyboardEvent('KeyN', 'n');
+    browser.document.dispatch('keydown', closeInactive);
+    assert.equal(net.isNetSphereOpen(), false);
+    assert.equal(closeInactive.defaultPrevented, true);
+
+    net.openNetSphere();
+    browser.document.dispatch('keydown', new FakeKeyboardEvent('Enter', 'Enter'));
+    assert.equal(net.getNetSphereSnapshot().chatInputActive, true);
+    const typedN = new FakeKeyboardEvent('KeyN', 'n');
+    browser.document.dispatch('keydown', typedN);
+    assert.equal(net.isNetSphereOpen(), true);
+    assert.equal(net.getNetSphereSnapshot().draft, 'n');
+    assert.equal(typedN.defaultPrevented, true);
+    browser.document.dispatch('keydown', new FakeKeyboardEvent('Backspace', 'Backspace'));
+    assert.equal(net.getNetSphereSnapshot().draft, '');
+
+    unbind();
+    net.closeNetSphere();
+  } finally {
+    browser.restore();
+  }
+});
+
+test('Net Sphere input scrolls loaded chat history and consumes wheel events', async () => {
+  const browser = installNetSphereBrowser();
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = (async () => new Response(JSON.stringify({
+    ok: true,
+    chat: [
+      { id: 101, nickname: 'Первый', body: 'старое', createdAt: 10_000 },
+      { id: 102, nickname: 'Второй', body: 'середина', createdAt: 11_000 },
+      { id: 103, nickname: 'Третий', body: 'новое', createdAt: 12_000 },
+    ],
+  }), {
+    status: 200,
+    headers: { 'Content-Type': 'application/json; charset=utf-8' },
+  })) as typeof fetch;
+
+  try {
+    const net = await import('../src/systems/net_sphere');
+    net.closeNetSphere();
+    const unbind = net.bindNetSphereInput();
+    net.openNetSphere();
+    net.tickNetSphere(minimalNetSphereState(), minimalNetSpherePlayer());
+    await new Promise<void>(resolve => setImmediate(resolve));
+    await new Promise<void>(resolve => setImmediate(resolve));
+
+    assert.ok(net.getNetSphereSnapshot().chat.length >= 3);
+    assert.equal(net.getNetSphereSnapshot().chatScroll, 0);
+
+    const wheelUp = new FakeWheelEvent(-160);
+    browser.document.dispatch('wheel', wheelUp);
+    assert.equal(wheelUp.defaultPrevented, true);
+    assert.equal(wheelUp.immediatePropagationStopped, true);
+    assert.ok(net.getNetSphereSnapshot().chatScroll > 0);
+
+    const end = new FakeKeyboardEvent('End', 'End');
+    browser.document.dispatch('keydown', end);
+    assert.equal(end.defaultPrevented, true);
+    assert.equal(net.getNetSphereSnapshot().chatScroll, 0);
+
+    const pageUp = new FakeKeyboardEvent('PageUp', 'PageUp');
+    browser.document.dispatch('keydown', pageUp);
+    assert.equal(pageUp.defaultPrevented, true);
+    assert.ok(net.getNetSphereSnapshot().chatScroll > 0);
+
+    const pageDown = new FakeKeyboardEvent('PageDown', 'PageDown');
+    browser.document.dispatch('keydown', pageDown);
+    assert.equal(pageDown.defaultPrevented, true);
+    assert.equal(net.getNetSphereSnapshot().chatScroll, 0);
+
+    unbind();
+    net.closeNetSphere();
   } finally {
     globalThis.fetch = realFetch;
     browser.restore();
@@ -860,10 +1006,18 @@ test('Net Sphere aborts stalled client fetches and releases busy flags', async (
     net.closeNetSphere();
     const unbind = net.bindNetSphereInput();
     net.openNetSphere();
+    browser.document.dispatch('keydown', new FakeKeyboardEvent('Enter', 'Enter'));
+    browser.document.dispatch('keydown', new FakeKeyboardEvent('Slash', '/'));
+    browser.document.dispatch('keydown', new FakeKeyboardEvent('KeyN', 'n'));
+    browser.document.dispatch('keydown', new FakeKeyboardEvent('KeyE', 'e'));
+    browser.document.dispatch('keydown', new FakeKeyboardEvent('KeyW', 'w'));
+    browser.document.dispatch('keydown', new FakeKeyboardEvent('Enter', 'Enter'));
+    net.openNetSphere();
 
+    browser.document.dispatch('keydown', new FakeKeyboardEvent('Enter', 'Enter'));
     browser.document.dispatch('keydown', new FakeKeyboardEvent('KeyH', 'h'));
     browser.document.dispatch('keydown', new FakeKeyboardEvent('Enter', 'Enter'));
-    assert.equal(net.isNetSphereOpen(), false);
+    assert.equal(net.isNetSphereOpen(), true);
     net.tickNetSphere(minimalNetSphereState(), minimalNetSpherePlayer());
     assert.equal(net.getNetSphereSnapshot().busy, true);
 

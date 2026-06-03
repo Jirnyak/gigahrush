@@ -2,7 +2,7 @@
 
 > Центральный документ живого мира.
 >
-> Роль: описывает persistent NPC identity, deaths, foldback, off-floor records, macro consequences, faction/economy/quest context and future migration/resettlement rules. Связан с `ai.md` for live active-floor behavior, `economics.md` for resources and wealth, and `balance.md` for progression pressure.
+> Роль: описывает persistent NPC identity, deaths, foldback, off-floor records, macro consequences, faction/economy/quest context and future migration/resettlement rules. Связан с `ai.md` for live active-floor behavior, `economics.md` for resources and wealth, `korovan.md` for cold A-Life/caravan macro logistics, and `balance.md` for progression pressure.
 
 Persistent A-Life is a central game feature of ГИГАХРУЩ: the building is not a spawn faucet, it is inhabited.
 
@@ -12,9 +12,9 @@ The player does not enter an empty procedural map that slowly fills itself. The 
 
 The next implementation target is:
 
-- Exactly `100_000` procedural NPC identities per run on every supported runtime.
+- A seed-sized population around `100_000` procedural NPC identities per run on every supported runtime, bounded by a `131_072` technical capacity.
 - No million-size pool, no memory/device/browser tier and no fallback population branch.
-- Every ordinary NPC has a stable identity, floor assignment, faction, occupation, level, inventory, family/friend graph, rank state, quest potential and death state.
+- Every ordinary NPC has a stable identity, floor assignment, faction, occupation, level, deterministic default loadout, family/friend graph, rank state, quest potential and death state.
 - Quest NPCs are part of the same identity model instead of being a separate magical category.
 - Only the active floor is materialized into live `entities`.
 - Off-floor NPCs do not pathfind, fight, tick needs or run frame AI.
@@ -22,14 +22,18 @@ The next implementation target is:
 
 Current shipped baseline:
 
-- `src/systems/alife.ts` now uses the fixed `100_000` population contract. There is no million-size runtime branch and no mobile/memory fallback population branch.
-- Records are distributed across story floors, routed design floors and the per-run procedural floor deck.
+- `src/systems/alife.ts` now uses a seed-sized population plan around the `100_000` baseline with `131_072` as the technical identity capacity. There is no million-size runtime branch and no mobile/memory fallback population branch.
+- A run-start population plan distributes every created record across story floors, routed design floors and the per-run procedural floor deck before first active-floor generation. Plot/authored/event reserved identities are counted inside the same pool and skipped by ordinary ambient materialization.
 - Live `entities` still contain only the active floor.
 - Generator-owned ambient NPCs become placement templates; A-Life records are materialized into those slots.
-- `alifeId` and `persistentNpcId` identify materialized procedural NPCs.
+- `alifeId` and `persistentNpcId` identify materialized procedural NPCs and converted reserved plot arrivals such as the Hell holdout Major Grom arrival.
 - `plotNpcId` deaths are tracked by A-Life so killed named NPCs do not reappear on later generation.
 - Materialized A-Life NPCs carry personal `playerRelation`; AI hostility checks it before falling back to faction hostility.
-- Browser saves store A-Life seed, total population, up to `65_536` dead A-Life ids, dead plot ids and bounded changed-record overrides. Full live entities are not serialized.
+- Core persistent route/numeric fields are no longer stored as JS string/number properties on every A-Life record: `floorKey` is interned through a route-key dictionary plus `Uint16Array` index, and base floor, danger, faction, occupation, flags, `level`, `str`, `agi`, `int`, HP, money/account balance, family id, sprite, sprite seed, kill counters, `playerRelation` and `karma` live in typed-array columns inside the A-Life state, while snapshots expose ordinary strings/numbers to callers.
+- Ordinary generated loadout is deterministic from seed, faction, occupation, danger and level; it is not stored as a `weapon` string plus `inventory` array on every untouched A-Life record. Only captured/overridden custom loadout is kept as a sparse per-record override.
+- Browser saves store A-Life seed, total population, up to `65_536` dead A-Life ids, dead plot ids, bounded changed-record overrides and capped persistent mobility state. Full live entities are not serialized.
+- `src/systems/alife_migration.ts` runs a bounded cold migration cadence: inactive-floor journeys move records between route keys, active-floor arrivals materialize near lift anchors, and active departures require live NPCs to reach a lift anchor before the record moves.
+- Small caravan runs can carry `memberAlifeIds`; surviving members are moved to the destination route key on arrival.
 
 Active-floor behavior, full-pass AI, pathfinding, NPC intent selection, short mass-combat step, monster behavior and samosbor reactions are specified in [ai.md](ai.md). This file owns persistent identity and population facts; `ai.md` owns what materialized live actors decide to do.
 
@@ -37,11 +41,10 @@ Active-floor behavior, full-pass AI, pathfinding, NPC intent selection, short ma
 
 These are current implementation limits, not new design goals:
 
-- Death is permanent in memory, but save/load persistence for procedural A-Life deaths is capped at `65_536` ids. A player can depopulate active floors, but "depopulate the whole fixed `100_000` pool and preserve every death through save/load" is not fully true yet.
-- Caravan supply lanes move resources, stability, tariffs and events between floors. Small caravans can recruit live member `entity.id`s for the current encounter, but arrival does not currently move those members' `alifeId`/`persistentNpcId` records to a new `floorKey`.
-- The A-Life module has APIs for assigning/moving records and creating persistent records from live entities, but broad migration/resettlement is not wired into caravans as actual record movement yet.
+- Death is permanent in memory, but save/load persistence for procedural A-Life deaths is capped at `65_536` ids. A player can depopulate active floors, but "depopulate the whole run-sized A-Life pool and preserve every death through save/load" is not fully true yet.
 - Contract/assignment quest conversion can still use a live giver id or a synthetic fallback id; it does not consistently bind generated quest givers to `persistentNpcId`.
-- Off-floor macro life is represented mainly by caravans, contracts, economy/faction state and compact events. There is not yet a separate slow batch A-Life simulation that processes off-floor NPC records for migration, rank summaries or family/friend consequences.
+- Some authored plot NPC generators still use `plotNpcId` as the live identity path; reserved A-Life plot identities exist inside the fixed pool budget, and Hell holdout Major Grom now binds to his reserved record, but not every authored plot actor has been converted to materialize directly from that reserved record.
+- Off-floor macro life is represented by cold migration, caravans, contracts, economy/faction state and compact events. There is not yet a separate slow batch A-Life simulation for rank summaries or family/friend consequences.
 
 ## Core Rule
 
@@ -77,8 +80,10 @@ If a system needs a person, it should first ask whether that person is:
 
 ```txt
 Run start
+  -> build route/floor run
+  -> build one population plan
   -> create A-Life identity pool
-  -> distribute identities by floor route key
+  -> distribute every identity by floor route key
 
 Enter floor
   -> generate world geometry and content
@@ -114,22 +119,32 @@ An A-Life record should be able to answer:
 Current fields:
 
 - `id`: stable numeric A-Life id.
-- `floorKey`: story/design/procedural route key.
-- `floor`: base `FloorLevel`.
-- `faction`: current faction.
-- `occupation`: runtime sprite/role.
+- `floorKey`: story/design/procedural route key, stored internally as an interned dictionary index.
+- `floor`: base `FloorLevel`, stored as a byte column.
+- `danger`: floor/context danger `1..5`, stored as a byte column and used for deterministic loadout.
+- `faction`: current faction, stored as a byte column.
+- `occupation`: runtime sprite/role, stored as a byte column.
 - `name`, `female`: display and grammar.
 - `familyId`: current compact family grouping.
 - `canGiveQuest`: active/authored quest affordance; persistent A-Life NPCs get a stable `10%` candidate roll instead of a special quest-giver caste or a universal offer flag.
 - `level`, `str`, `agi`, `int`: RPG state.
 - `hp`, `maxHp`: folded health.
-- `money`, `accountRubles`, `weapon`, `inventory`: folded cash/account economy and loadout.
-- `sprite`, `spriteSeed`: folded visual identity when a floor template provides special NPC art.
-- `kills`, `npcKills`, `monsterKills`: optional changed counters; default is zero by absence.
+- `money`, `accountRubles`: folded cash/account economy in unsigned integer columns.
+- `weapon`, `inventory`: only custom/touched loadout overrides. Untouched ordinary loadout is generated lazily from seed and compact columns during materialization.
+- `sprite`, `spriteSeed`, `npcVisualId`: folded visual identity. `npcVisualId` selects a special procedural visual family for any authored or procedural NPC; `sprite` remains the atlas/static/fallback slot, and occupation sprites are generated only when no special visual is present.
+- `kills`, `npcKills`, `monsterKills`: unsigned integer columns; default is zero.
 - `playerRelation`: optional personal attitude to the player. Absence means "not individually initialized yet"; on first materialization it is initialized from the NPC faction's current relation to the player plus a small deterministic fluctuation.
-- `karma`: compact moral/social charge in `[-128, 128]`. Scientists skew high, cultists skew low, every NPC still has deterministic fluctuation.
+- `karma`: compact moral/social charge in `[-127, 127]`. Scientists skew high, cultists skew low, every NPC still has deterministic fluctuation.
 - `x`, `y`, `angle`: optional last known position.
-- `dead`: permanent removal flag.
+- `dead`: permanent removal flag stored in the A-Life flags byte.
+
+Storage note:
+
+- Route key index, base floor, danger, faction, occupation, boolean flags, RPG byte stats, health, cash/account wealth, family id, sprite fields, kill counters, `playerRelation` and `karma` are stored as typed-array columns, not as own properties on each persistent record object.
+- `level`, `str`, `agi` and `int` use byte-safe caps; the shared runtime RPG level cap is `255`.
+- `playerRelation` uses an `Int8Array` with an unset sentinel; `karma` uses signed-char-compatible `[-127, 127]`.
+- Current-floor live `Entity` objects still expose normal number/string/array fields. The compact form is the cold persistent pool, and `getAlifeNpcRecordSnapshot()` is the public boundary view.
+- `getAlifeNpcRecordSnapshot()` remains the public view API for systems and UI that need ordinary number fields.
 
 Target fields:
 
@@ -193,9 +208,9 @@ Wealth distribution:
 
 Inventory generation:
 
-- Initial inventory comes from faction, occupation, danger and common pockets.
-- Weapons remain loadout items and are stored in inventory too.
-- NPC looting/trading can change inventory later; touched inventory folds back into A-Life overrides.
+- Initial inventory comes from faction, occupation, danger and common pockets, but for untouched ordinary records it is regenerated lazily instead of persisted per NPC.
+- Weapons remain loadout items and are included in the materialized inventory.
+- NPC looting/trading can change inventory later; touched inventory folds back into A-Life custom loadout overrides.
 - Inventories stay small and capped. Variety should come from weighted profiles and floor context, not huge per-NPC arrays.
 
 Counters and relation:
@@ -402,6 +417,7 @@ A-Life save data stores:
 - dead A-Life ids
 - dead plot NPC ids
 - bounded changed-record overrides: position, health, cash, account balance, inventory, RPG state, visual seed/sprite and changed counters
+- capped mobility state: journeys, pending arrivals, cursor and tick accumulator
 
 The full pool is regenerated deterministically from seed and run route state, then overrides are applied.
 
@@ -414,9 +430,9 @@ Rules:
 
 ## Scaling Target
 
-The selected population target is fixed:
+The selected population target is seed-sized:
 
-- Use `100_000` procedural NPC identities on every supported runtime.
+- Use around `100_000` procedural NPC identities on every supported runtime, with deterministic per-run jitter and `131_072` as the technical capacity.
 - Do not branch population size by browser heap, device memory, mobile/touch status or platform.
 - Keep active-floor materialization around the existing floor population budgets, roughly thousands of live NPCs, not the full bucket.
 
@@ -424,7 +440,7 @@ Measured on 2026-05-20 with the current JS object pool in Node/V8:
 
 - `100_000` records: about `42.6 MB` heap, about `101 ms` creation.
 
-The architecture still stays compact because `100_000` identities are persistent records, not live actors:
+The architecture still stays compact because the cold A-Life identities are persistent records, not live actors:
 
 - Use ids and compact numeric fields.
 - Prefer deterministic generation from seed.
@@ -458,7 +474,7 @@ Useful telemetry:
 
 Decisions recorded on 2026-05-26:
 
-1. Target population is fixed at `100_000` procedural NPC identities for every supported runtime. The old million target and adaptive fallback branch are retired.
+1. Target population is around `100_000` procedural NPC identities per run with `131_072` as technical capacity. The old million target and adaptive fallback branch are retired.
 2. Active floor population remains bounded by the existing floor budgets, roughly thousands of NPCs, not the whole floor bucket.
 3. NPCs can migrate between floors only through explicit implemented events, caravans, quests or resettlement logic.
 4. Off-floor migration/event work may process records in bounded batches of `N`; it must not become full simulation.

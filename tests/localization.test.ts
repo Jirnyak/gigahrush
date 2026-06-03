@@ -29,6 +29,7 @@ globalThis.__GIGAHRUSH_EN_LOCALE__ = [
     exact('руб.', 'rub.'),
     exact('выбрать', 'select'),
     exact('Пробел', 'Space'),
+    exact('ПКМ', 'RMB'),
     exact('закрыть', 'close'),
     exact('AI факт', 'AI facts'),
     exact('Этаж 69: работница', 'Floor 69: worker'),
@@ -142,8 +143,8 @@ test('localization keeps decimal numbers intact while translating delimited tips
 
 test('localization translates English debug overlay fragments', () => {
   setLocalizationLanguage('en');
-  const translated = translateText('15/130  Enter выбрать  ~/[Пробел] закрыть');
-  assert.equal(translated, '15/130  Enter select  ~/[Space] close');
+  const translated = translateText('15/130  Enter выбрать  ~/[ПКМ] закрыть');
+  assert.equal(translated, '15/130  Enter select  ~/[RMB] close');
   assert.doesNotMatch(translated, /[А-Яа-яЁё]/);
   assert.equal(translateText('AI факт: plot 92 boss 0 atk 83 proj 2/2'), 'AI facts: plot 92 boss 0 atk 83 proj 2/2');
 });

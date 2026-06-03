@@ -49,7 +49,6 @@ const KEY = {
   l: ['KeyL', 'l', 76],
   backquote: ['Backquote', '`', 192],
   arrowDown: ['ArrowDown', 'ArrowDown', 40],
-  space: ['Space', ' ', 32],
 };
 
 const SMOKE_HOOK_ID = {
@@ -572,6 +571,10 @@ async function pressCanvasCenter(client, button = 'left', buttons = 1, holdMs = 
 
 async function clickCanvasCenter(client) {
   await pressCanvasCenter(client);
+}
+
+async function rightClickCanvasCenter(client) {
+  await pressCanvasCenter(client, 'right', 2);
 }
 
 async function installInputTrace(client) {
@@ -1321,7 +1324,7 @@ async function runDebugCommand(client, index, label, failures, options = {}) {
   await selectDebugCommand(client, index, label);
   for (let i = 0; i < repeat; i++) await tapDebugMenuSelect(client);
   if (!closesOverlay) {
-    await tapKey(client, KEY.space, 120, 160);
+    await rightClickCanvasCenter(client);
     await waitForGameDebug(client, `${label} debug close`, state => !state.showDebug);
   } else {
     await waitForGameDebug(client, `${label} debug action close`, state => !state.showDebug);
@@ -1466,7 +1469,7 @@ async function main() {
         await tapKey(client, KEY.e, 90, 200);
         const afterInteract = await readGameDebug(client);
         if (afterInteract?.showNpcMenu) {
-          await tapKey(client, KEY.space, 120, 160);
+          await rightClickCanvasCenter(client);
           await waitForGameDebug(client, 'close first NPC interaction menu', state => !state.showNpcMenu);
         }
         await waitPage(client, 1800);
@@ -1497,7 +1500,7 @@ async function main() {
         await waitFrames(client, 2);
         const inventory = await sampleCanvases(client);
         requirePanelTelemetry(before, inventory, 'inventory panel', failures);
-        await tapKey(client, KEY.space, 120, 160);
+        await tapKey(client, KEY.i, 120, 160);
         await waitForGameDebug(client, 'inventory panel close', state => !state.showInventory);
         await waitFrames(client, 2);
         running = await sampleRunning(client);
@@ -1589,7 +1592,7 @@ async function main() {
         await waitFrames(client, 2);
         const questPanel = await sampleCanvases(client);
         requirePanelTelemetry(before, questPanel, 'quest panel after contract', failures);
-        await tapKey(client, KEY.space, 120, 160);
+        await tapKey(client, KEY.q, 120, 160);
         await waitForGameDebug(client, 'quest panel close', state => !state.showQuests);
         await waitFrames(client, 2);
         return questPanel;

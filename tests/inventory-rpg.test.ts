@@ -6,6 +6,7 @@ import { World } from '../src/core/world';
 import { CONTAINER_DEFS } from '../src/data/container_defs';
 import { ITEMS, WEAPON_STATS } from '../src/data/catalog';
 import { CONTRACTS } from '../src/data/contracts';
+import { MAX_ITEM_STACK } from '../src/data/inventory_limits';
 import { getPermitDef } from '../src/data/permits';
 import { PSI_WEAPON_STATS } from '../src/data/psi';
 import { RESOURCES, resourceForItem, resourceForItemType } from '../src/data/resources';
@@ -90,14 +91,14 @@ function descNumber(desc: string, re: RegExp): number | undefined {
 }
 
 test('item stack rules keep weapons single-slot and commodities stackable', () => {
-  assert.equal(getStack(ITEMS.bread), 999);
+  assert.equal(getStack(ITEMS.bread), MAX_ITEM_STACK);
   assert.equal(getStack(ITEMS.pipe), 1);
   assert.equal(spawnCount(ITEMS.ammo_9mm), 4);
   assert.equal(spawnCount(ITEMS.pipe), 1);
 
   const player = makePlayer();
   assert.equal(addItem(player, 'bread', 1200), true);
-  assert.deepEqual(player.inventory?.map(i => i.count), [999, 201]);
+  assert.deepEqual(player.inventory?.map(i => i.count), [255, 255, 255, 255, 180]);
 
   assert.equal(addItem(player, 'pipe', 2), true);
   const pipes = player.inventory?.filter(i => i.defId === 'pipe') ?? [];
@@ -679,6 +680,9 @@ test('RPG rewards, attribute spend, and scaling formulas remain stable', () => {
 });
 
 test('RPG progression clamps runtime levels and attributes to the shared cap', () => {
+  assert.equal(RPG_LEVEL_CAP <= 255, true);
+  assert.equal(RPG_ATTRIBUTE_CAP <= 255, true);
+
   const player = makePlayer();
   const msgs: Msg[] = [];
   player.rpg = freshRPG(RPG_LEVEL_CAP - 1);

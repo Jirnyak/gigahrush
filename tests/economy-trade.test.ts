@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { FloorLevel, type GameState } from '../src/core/types';
 import { createEconomyFloorState } from '../src/data/economy';
-import { MAX_INVENTORY_SLOTS } from '../src/data/inventory_limits';
+import { MAX_INVENTORY_SLOTS, MAX_ITEM_STACK } from '../src/data/inventory_limits';
 import { ensureEconomyState, getEconomyQuote } from '../src/systems/economy';
 import { buyFromNpc, sellToNpc } from '../src/systems/trade';
 import { getRecentEvents } from '../src/systems/events';
@@ -116,7 +116,7 @@ test('failed trades do not mutate money, inventories or resource stock', () => {
   const fullNpc = makeTestNpc({
     id: 4,
     name: 'Торговец',
-    inventory: Array.from({ length: MAX_INVENTORY_SLOTS }, () => ({ defId: 'water', count: 999 })),
+    inventory: Array.from({ length: MAX_INVENTORY_SLOTS }, () => ({ defId: 'water', count: MAX_ITEM_STACK })),
     money: 20,
   });
   const stockBeforeSell = resourceStock(noSpaceState, FloorLevel.LIVING, 'drink_water');

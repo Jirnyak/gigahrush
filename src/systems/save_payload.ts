@@ -13,7 +13,8 @@ import {
   PRODUCTION_SAVE_STATE_CAP,
   type ProductionState,
 } from './production';
-import { MAX_INVENTORY_SLOTS } from '../data/inventory_limits';
+import { MAX_INVENTORY_SLOTS, MAX_ITEM_STACK } from '../data/inventory_limits';
+import { ITEMS, getStack } from '../data/items';
 
 export const SAVE_PLAYER_INVENTORY_CAP = MAX_INVENTORY_SLOTS;
 export const SAVE_CONTAINER_CAP = 128;
@@ -43,6 +44,7 @@ export interface SavePayloadSections {
   pseudolift: unknown;
   floorMemory: unknown;
   alife: unknown;
+  alifeMobility: unknown;
   netTerminalGen: unknown;
   mapEditorPatches: unknown;
   worldEvents: unknown;
@@ -98,6 +100,7 @@ export interface SavePayload {
     pseudolift: unknown;
     floorMemory: unknown;
     alife: unknown;
+    alifeMobility: unknown;
     netTerminalGen: unknown;
     mapEditorPatches: unknown;
     worldEvents: unknown;
@@ -161,13 +164,18 @@ export function compactSaveData(value: unknown, depth = 0): unknown {
   return undefined;
 }
 
-function itemForSave(item: Item): Item | null {
+function itemStackForSave(defId: string): number {
+  const def = ITEMS[defId];
+  return def ? getStack(def) : MAX_ITEM_STACK;
+}
+
+function itemForSave(item: Item, count: number): Item | null {
   if (typeof item.defId !== 'string' || item.defId.length === 0) return null;
-  const count = Math.max(1, Math.min(9999, Math.floor(Number(item.count) || 1)));
+  const cleanCount = Math.max(1, Math.min(MAX_ITEM_STACK, Math.floor(Number(count) || 1)));
   const data = compactSaveData(item.data);
   return data === undefined
-    ? { defId: item.defId.slice(0, 64), count }
-    : { defId: item.defId.slice(0, 64), count, data };
+    ? { defId: item.defId.slice(0, 64), count: cleanCount }
+    : { defId: item.defId.slice(0, 64), count: cleanCount, data };
 }
 
 export function inventoryForSave(input: readonly Item[] | undefined, cap = SAVE_PLAYER_INVENTORY_CAP): Item[] | undefined {
@@ -175,8 +183,16 @@ export function inventoryForSave(input: readonly Item[] | undefined, cap = SAVE_
   const out: Item[] = [];
   for (const item of input) {
     if (out.length >= cap) break;
-    const saved = itemForSave(item);
-    if (saved) out.push(saved);
+    if (typeof item.defId !== 'string' || item.defId.length === 0) continue;
+    const stackMax = itemStackForSave(item.defId);
+    let remaining = Math.max(1, Math.floor(Number(item.count) || 1));
+    while (remaining > 0 && out.length < cap) {
+      const moved = Math.min(remaining, stackMax);
+      const saved = itemForSave(item, moved);
+      if (!saved) break;
+      out.push(saved);
+      remaining -= moved;
+    }
   }
   return out;
 }
@@ -274,6 +290,7 @@ export function buildSavePayload(input: SavePayloadBuildInput): SavePayload {
       pseudolift: sections.pseudolift,
       floorMemory: sections.floorMemory,
       alife: sections.alife,
+      alifeMobility: sections.alifeMobility,
       netTerminalGen: sections.netTerminalGen,
       mapEditorPatches: sections.mapEditorPatches,
       worldEvents: sections.worldEvents,
@@ -330,6 +347,7 @@ export function summarizeSavePayload(
     { label: 'events', value: payload.state.worldEvents, count: countWorldEvents(payload.state.worldEvents) },
     { label: 'crafting', value: payload.state.crafting },
     { label: 'alife', value: payload.state.alife },
+    { label: 'alifeMobility', value: payload.state.alifeMobility },
     { label: 'mapEditor', value: payload.state.mapEditorPatches, count: countMapEditorOps(payload.state.mapEditorPatches) },
     { label: 'economy', value: payload.state.economy },
     { label: 'banking', value: payload.state.banking },
@@ -433,6 +451,7 @@ export function createPortalCompactSavePayload<T extends VersionedSavePayload>(p
       floorRun: compactFloorRunForPortal(payload.state.floorRun),
       floorMemory: { version: 1, entries: [] },
       alife: compactAlifeForPortal(payload.state.alife),
+      alifeMobility: undefined,
       mapEditorPatches: undefined,
       worldEvents: undefined,
       banking: compactBankingForPortal(payload.state.banking),

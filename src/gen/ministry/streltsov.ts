@@ -3,11 +3,13 @@
 
 import {
   W, Cell,
-  type Entity, EntityType, AIGoal, Faction, Occupation, QuestType, MonsterKind,
+  type Entity, EntityType, AIGoal, Faction, FloorLevel, Occupation, QuestType, MonsterKind,
 } from '../../core/types';
 import { World } from '../../core/world';
 import { freshNeeds } from '../../data/catalog';
-import { type PlotNpcDef, registerSideQuest } from '../../data/plot';
+import { type PlotNpcDef, registerAuthoredNpc, storyNpcFloorKey } from '../../data/plot';
+
+const NPC_ID = 'polkovnik_streltsov';
 
 const NPC_DEF: PlotNpcDef = {
   name: 'Полковник Стрельцов',
@@ -35,23 +37,29 @@ const NPC_DEF: PlotNpcDef = {
   ],
 };
 
-registerSideQuest('polkovnik_streltsov', NPC_DEF, [
-  {
-    id: 'streltsov_spirits',
-    giverNpcId: 'polkovnik_streltsov',
-    type: QuestType.KILL,
-    desc: 'Стрельцов: «Четыре духа. Где встретите - там и уничтожить.»',
-    targetMonsterKind: MonsterKind.SPIRIT,
-    killNeeded: 4,
-    rewardItem: 'gauss', rewardCount: 1,
-    extraRewards: [
-      { defId: 'ammo_energy', count: 4 },
-      { defId: 'grenade', count: 3 },
-      { defId: 'bandage', count: 4 },
-    ],
-    relationDelta: 25, xpReward: 150, moneyReward: 800,
-  },
-]);
+registerAuthoredNpc({
+  id: NPC_ID,
+  npc: NPC_DEF,
+  homeFloorKey: storyNpcFloorKey(FloorLevel.MINISTRY),
+  tags: ['ministry', 'liquidator'],
+  quests: [
+    {
+      id: 'streltsov_spirits',
+      giverNpcId: NPC_ID,
+      type: QuestType.KILL,
+      desc: 'Стрельцов: «Четыре духа. Где встретите - там и уничтожить.»',
+      targetMonsterKind: MonsterKind.SPIRIT,
+      killNeeded: 4,
+      rewardItem: 'gauss', rewardCount: 1,
+      extraRewards: [
+        { defId: 'ammo_energy', count: 4 },
+        { defId: 'grenade', count: 3 },
+        { defId: 'bandage', count: 4 },
+      ],
+      relationDelta: 25, xpReward: 150, moneyReward: 800,
+    },
+  ],
+});
 
 export function spawnPolkovnikStreltsov(
   world: World, entities: Entity[], nextId: { v: number },
@@ -72,7 +80,7 @@ export function spawnPolkovnikStreltsov(
       inventory: NPC_DEF.inventory.map(i => ({ ...i })),
       weapon: 'ppsh',
       faction: NPC_DEF.faction, occupation: NPC_DEF.occupation,
-      plotNpcId: 'polkovnik_streltsov', canGiveQuest: true, questId: -1,
+      plotNpcId: NPC_ID, canGiveQuest: true, questId: -1,
     });
     return;
   }

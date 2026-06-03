@@ -1,4 +1,5 @@
 import { Faction, FloorLevel, Occupation } from '../core/types';
+import { designFloorById } from './design_floors';
 import { RESOURCE_BY_ID } from './resources';
 
 export interface CaravanResourceDelta {
@@ -11,6 +12,8 @@ export interface CaravanLaneDef {
   name: string;
   fromFloor: FloorLevel;
   toFloor: FloorLevel;
+  fromFloorKeys?: readonly string[];
+  toFloorKeys?: readonly string[];
   resourceDeltas: readonly CaravanResourceDelta[];
   tariffResourceIds: readonly string[];
   feeRubles: number;
@@ -45,12 +48,31 @@ const FLOOR_IDS = new Set(
   Object.values(FloorLevel).filter((value): value is FloorLevel => typeof value === 'number'),
 );
 
+const STORY_FLOOR_KEYS = new Set([
+  'story:ministry',
+  'story:kvartiry',
+  'story:living',
+  'story:maintenance',
+  'story:hell',
+  'story:void',
+]);
+
+function routeKeyValid(key: string): boolean {
+  if (STORY_FLOOR_KEYS.has(key)) return true;
+  if (key.startsWith('design:')) return !!designFloorById(key.slice('design:'.length));
+  if (key.startsWith('procedural:')) return /^procedural:[A-Za-z0-9_-]+$/.test(key);
+  if (key.startsWith('floor_instance:')) return /^floor_instance:[A-Za-z0-9_-]+$/.test(key);
+  return false;
+}
+
 export const CARAVAN_LANES: readonly CaravanLaneDef[] = [
   {
     id: 'kvartiry_living_food_water',
     name: 'Квартиры -> Жилая: еда и вода',
     fromFloor: FloorLevel.KVARTIRY,
     toFloor: FloorLevel.LIVING,
+    fromFloorKeys: ['story:kvartiry'],
+    toFloorKeys: ['story:living'],
     resourceDeltas: [{ resourceId: 'food', count: 6 }, { resourceId: 'drink_water', count: 5 }],
     tariffResourceIds: ['food', 'drink_water'],
     feeRubles: 18,
@@ -62,6 +84,8 @@ export const CARAVAN_LANES: readonly CaravanLaneDef[] = [
     name: 'Коллекторы -> Жилая: металл и инструмент',
     fromFloor: FloorLevel.MAINTENANCE,
     toFloor: FloorLevel.LIVING,
+    fromFloorKeys: ['story:maintenance'],
+    toFloorKeys: ['story:living'],
     resourceDeltas: [{ resourceId: 'metal', count: 5 }, { resourceId: 'tools', count: 3 }],
     tariffResourceIds: ['metal', 'tools'],
     feeRubles: 24,
@@ -73,6 +97,8 @@ export const CARAVAN_LANES: readonly CaravanLaneDef[] = [
     name: 'Производственный пояс -> рынок 88',
     fromFloor: FloorLevel.MAINTENANCE,
     toFloor: FloorLevel.LIVING,
+    fromFloorKeys: ['design:production_belt'],
+    toFloorKeys: ['design:black_market_88'],
     resourceDeltas: [{ resourceId: 'contraband', count: 3 }, { resourceId: 'ammo', count: 4 }],
     tariffResourceIds: ['contraband', 'ammo'],
     feeRubles: 36,
@@ -85,6 +111,8 @@ export const CARAVAN_LANES: readonly CaravanLaneDef[] = [
     name: 'Министерство -> Жилая: бумаги и бланки',
     fromFloor: FloorLevel.MINISTRY,
     toFloor: FloorLevel.LIVING,
+    fromFloorKeys: ['story:ministry'],
+    toFloorKeys: ['story:living'],
     resourceDeltas: [{ resourceId: 'documents', count: 5 }, { resourceId: 'paper', count: 4 }],
     tariffResourceIds: ['documents', 'paper'],
     feeRubles: 30,
@@ -97,6 +125,8 @@ export const CARAVAN_LANES: readonly CaravanLaneDef[] = [
     name: 'Мясной низ -> культовые ПСИ-грузы',
     fromFloor: FloorLevel.HELL,
     toFloor: FloorLevel.LIVING,
+    fromFloorKeys: ['story:hell'],
+    toFloorKeys: ['story:living'],
     resourceDeltas: [{ resourceId: 'psi', count: 2 }, { resourceId: 'contraband', count: 2 }],
     tariffResourceIds: ['psi', 'contraband'],
     feeRubles: 42,
@@ -108,6 +138,8 @@ export const CARAVAN_LANES: readonly CaravanLaneDef[] = [
     name: 'Министерство -> Жилая: НЕТ-схемы и бумаги',
     fromFloor: FloorLevel.MINISTRY,
     toFloor: FloorLevel.LIVING,
+    fromFloorKeys: ['design:silicon_net_well'],
+    toFloorKeys: ['story:living'],
     resourceDeltas: [{ resourceId: 'electronics', count: 3 }, { resourceId: 'documents', count: 2 }],
     tariffResourceIds: ['electronics', 'documents'],
     feeRubles: 28,
@@ -222,6 +254,12 @@ export function validateCaravanLanes(lanes: readonly CaravanLaneDef[] = CARAVAN_
     seen.add(lane.id);
     if (!FLOOR_IDS.has(lane.fromFloor)) errors.push(`${lane.id}:fromFloor`);
     if (!FLOOR_IDS.has(lane.toFloor)) errors.push(`${lane.id}:toFloor`);
+    for (const key of lane.fromFloorKeys ?? []) {
+      if (!routeKeyValid(key)) errors.push(`${lane.id}:fromFloorKey:${key}`);
+    }
+    for (const key of lane.toFloorKeys ?? []) {
+      if (!routeKeyValid(key)) errors.push(`${lane.id}:toFloorKey:${key}`);
+    }
     if (lane.resourceDeltas.length === 0) errors.push(`${lane.id}:resourceDeltas`);
     for (const delta of lane.resourceDeltas) {
       if (!RESOURCE_BY_ID[delta.resourceId]) errors.push(`${lane.id}:resource:${delta.resourceId}`);
