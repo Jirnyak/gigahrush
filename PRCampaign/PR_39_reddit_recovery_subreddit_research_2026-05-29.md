@@ -65,7 +65,7 @@ Only allowed Reddit work today: owner-side manual captcha/checkpoint/account ver
 5. Open the profile create-post UI and confirm the image/GIF upload button works. Do not publish.
 6. Reply in chat: `Reddit clear`.
 
-Future native-media post must be manual UI upload from `gatbage/tmp/media/prcampaign_screenshot_hunt_2026-05-23/selected_best/`, not remote media URLs and not Reddit API/automation.
+Future native-media post must be manual UI upload from `../gatbage/tmp/media/prcampaign_screenshot_hunt_2026-05-23/selected_best/`, not remote media URLs and not Reddit API/automation.
 
 ## Current Copy To Use Later
 

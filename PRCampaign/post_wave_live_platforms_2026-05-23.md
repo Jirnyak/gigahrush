@@ -7,11 +7,11 @@ Source context read for this draft:
 - `KPI.md`
 - `PRCampaign/campaign_plan_ru.md`
 - `PRCampaign/next_wave_targets_2026-05-23.md`
-- `gatbage/tmp/media/prcampaign_screenshot_hunt_2026-05-23/selected_best/`
+- `../gatbage/tmp/media/prcampaign_screenshot_hunt_2026-05-23/selected_best/`
 
 Media source of truth:
 
-- `gatbage/tmp/media/prcampaign_screenshot_hunt_2026-05-23/selected_best/`
+- `../gatbage/tmp/media/prcampaign_screenshot_hunt_2026-05-23/selected_best/`
 
 ## Campaign Guardrails
 
@@ -25,7 +25,7 @@ Media source of truth:
 
 ## Exact Media Selection
 
-Use only these files from `gatbage/tmp/media/prcampaign_screenshot_hunt_2026-05-23/selected_best/`.
+Use only these files from `../gatbage/tmp/media/prcampaign_screenshot_hunt_2026-05-23/selected_best/`.
 
 ### Game Jolt Media Order
 

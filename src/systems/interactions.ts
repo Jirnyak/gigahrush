@@ -109,6 +109,7 @@ export interface InteractionContext {
   nextEntityId: { v: number };
   lookX: number;
   lookY: number;
+  readOnly?: boolean;
   switchFloor?: (direction: LiftDirection, message?: string, color?: string, allowElevatorAnomaly?: boolean) => void;
   movePlayerToMetroRoom?: (roomName: string) => boolean;
   openNpcMenu?: (npc: Entity) => void;

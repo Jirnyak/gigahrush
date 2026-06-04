@@ -25,6 +25,7 @@ export const FOG_SHARK_IGNITION_RADIUS = 2.65;
 export const FOG_SHARK_IGNITION_DAMAGE = 16;
 export const FOG_SHARK_IGNITION_TARGET_CAP = 8;
 
+const FOG_SHARK_IGNITION_QUERY_CAP = FOG_SHARK_IGNITION_TARGET_CAP * 4 + 1;
 const FOG_SHARK_RUMOR_IDS = ['monster_fog_shark_fog', 'ecology_fog_shark_fire'] as const;
 const FOG_SHARK_FIRE_WEAPONS = new Set(['fire_hook']);
 const fogSharkIgnitionQuery: Entity[] = [];
@@ -83,15 +84,15 @@ export function recordFogSharkIgnited(
     radius,
     fogSharkIgnitionQuery,
     ENTITY_MASK_ACTOR,
-    FOG_SHARK_IGNITION_TARGET_CAP + 1,
+    FOG_SHARK_IGNITION_QUERY_CAP,
   );
 
-  for (const target of fogSharkIgnitionQuery) {
-    if (hitCount >= FOG_SHARK_IGNITION_TARGET_CAP) break;
-    if (!target.alive || target.id === shark.id || target.hp === undefined) continue;
-    if (!isPlayerEntity(target) && target.type !== EntityType.NPC && target.type !== EntityType.MONSTER) continue;
+  const hitTarget = (target: Entity): void => {
+    if (hitCount >= FOG_SHARK_IGNITION_TARGET_CAP) return;
+    if (!target.alive || target.id === shark.id || target.hp === undefined) return;
+    if (!isPlayerEntity(target) && target.type !== EntityType.NPC && target.type !== EntityType.MONSTER) return;
     const d2 = world.dist2(shark.x, shark.y, target.x, target.y);
-    if (d2 > radiusSq) continue;
+    if (d2 > radiusSq) return;
     const dist = Math.sqrt(d2);
     const falloff = 1 - (dist / radius) * 0.45;
     const damage = Math.max(3, Math.round(FOG_SHARK_IGNITION_DAMAGE * falloff));
@@ -120,6 +121,15 @@ export function recordFogSharkIgnited(
       killCount++;
       onKill?.(target, blastVx, blastVy, target.type === EntityType.MONSTER ? 2 : 1);
     }
+  };
+
+  for (const target of fogSharkIgnitionQuery) {
+    if (target.monsterKind === MonsterKind.FOG_SHARK) continue;
+    hitTarget(target);
+  }
+  for (const target of fogSharkIgnitionQuery) {
+    if (target.monsterKind !== MonsterKind.FOG_SHARK) continue;
+    hitTarget(target);
   }
 
   const cx = Math.floor(shark.x);

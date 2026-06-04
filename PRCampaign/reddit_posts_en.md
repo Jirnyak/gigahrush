@@ -194,7 +194,7 @@ Thanks for taking a look. A few notes that may help set expectations:
 
 ## r/PBBG
 
-Risk level: medium. r/PBBG explicitly welcomes developer promotion when the post adds value, but GIGAH|RUSH is an edge-case fit: browser-based and persistent through local save/world consequences, but currently single-player rather than MMO/PvP/server-economy PBBG. Do not overclaim. Use `Game Advertisement` flair if available and attach systems-focused media from `gatbage/tmp/media/prcampaign_screenshot_hunt_2026-05-23/selected_best/`.
+Risk level: medium. r/PBBG explicitly welcomes developer promotion when the post adds value, but GIGAH|RUSH is an edge-case fit: browser-based and persistent through local save/world consequences, but currently single-player rather than MMO/PvP/server-economy PBBG. Do not overclaim. Use `Game Advertisement` flair if available and attach systems-focused media from `../gatbage/tmp/media/prcampaign_screenshot_hunt_2026-05-23/selected_best/`.
 
 Recommended media order: `contact_sheet_3x3.png`, `11_factions_alife_rank_panel.png`, `07_contract_quest_log.png`, `09_trade_grid.png`, `08_inventory_prep_loadout.png`, `10_full_map_route_context.png`, optional `02_gif_underhell_maronary_samosbor_loop.gif`.
 

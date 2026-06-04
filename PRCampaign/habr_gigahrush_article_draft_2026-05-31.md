@@ -16,15 +16,15 @@ Do not ask for likes, karma, votes or coordinated comments. If publishing from S
 
 Primary media if Habr image upload is available:
 
-- `gatbage/tmp/media/prcampaign_screenshot_hunt_2026-05-23/selected_best/01_hero_gif_hell_blinking_eyes.gif`
+- `../gatbage/tmp/media/prcampaign_screenshot_hunt_2026-05-23/selected_best/01_hero_gif_hell_blinking_eyes.gif`
 
 Fallback static media:
 
-- `gatbage/tmp/media/prcampaign_screenshot_hunt_2026-05-23/selected_best/contact_sheet_3x3.png`
+- `../gatbage/tmp/media/prcampaign_screenshot_hunt_2026-05-23/selected_best/contact_sheet_3x3.png`
 
 Actually uploaded as feed cover:
 
-- `gatbage/tmp/media/habr_post_2026-05-31/habr_cover_samosbor_780x440.jpg`
+- `../gatbage/tmp/media/habr_post_2026-05-31/habr_cover_samosbor_780x440.jpg`
 
 ## Body
 

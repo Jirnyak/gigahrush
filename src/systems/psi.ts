@@ -8,7 +8,7 @@ import { World } from '../core/world';
 import { randSeed } from '../core/rand';
 import { stampMark, MarkType } from './surface_marks';
 import { WEAPON_STATS } from '../data/catalog';
-import { spawnBloodHit, spawnDeathPool } from '../render/blood';
+import { spawnBloodHit, spawnDeathPool } from './blood_fx';
 import { MONSTERS, entityDisplayName } from '../entities/monster';
 import { ENTITY_MASK_ACTOR, ensureEntityIndex } from './entity_index';
 import { applyMonsterIncomingDamage } from './monster_traits';

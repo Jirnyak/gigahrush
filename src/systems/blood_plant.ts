@@ -15,6 +15,7 @@ import { World } from '../core/world';
 import { ITEMS } from '../data/items';
 import { Spr } from '../render/sprite_index';
 import { entityDisplayName } from '../entities/monster';
+import { setDoorState } from './door_state';
 import { publishEvent, registerWorldEventObserver } from './events';
 import { registerInventoryUseHandler, type InventoryUseHandlerContext } from './inventory';
 import { isPlayerEntity } from './player_actor';
@@ -131,7 +132,7 @@ function openRootCells(world: World, site: BloodRootSite): number {
     world.cells[cell] = Cell.FLOOR;
     if (old === Cell.DOOR) {
       const door = world.doors.get(cell);
-      if (door) door.state = DoorState.OPEN;
+      if (door) setDoorState(world, door, DoorState.OPEN);
     }
     opened++;
   }

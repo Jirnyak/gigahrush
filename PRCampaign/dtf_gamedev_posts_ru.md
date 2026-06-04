@@ -1,6 +1,6 @@
 # DTF / GameDev.ru Posts: ГИГАХРУЩ
 
-Готовые варианты для русскоязычной PR-волны. Тексты используют только факты из `README.md`, `gatbage/media/itch_page_pack/description_ru_approved.md`, `PRCampaign/campaign_plan_ru.md` и `PRCampaign/copy_pack_ru.md`.
+Готовые варианты для русскоязычной PR-волны. Тексты используют только факты из `README.md`, `../gatbage/media/itch_page_pack/description_ru_approved.md`, `PRCampaign/campaign_plan_ru.md` и `PRCampaign/copy_pack_ru.md`.
 
 2026-05-27 update: the owner-requested DTF follow-up is now live at `https://dtf.ru/indie/5086991-gigahrusha-novaya-versiya-myindie-i-kadry-iz-samosbora`. `PRCampaign/dtf_followup_myindie_post_2026-05-27.md` is the source/record copy, not an unposted draft; the older variants below are historical source material and should not be reposted as-is.
 

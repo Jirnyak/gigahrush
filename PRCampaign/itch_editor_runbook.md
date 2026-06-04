@@ -91,26 +91,26 @@ After saving, verify the page that itch actually serves while logged out. The no
 Dry-run the configured URL and required markers:
 
 ```bash
-node gatbage/media/itch_page_pack/probe_itch_editor.js --dry-run
+node ../gatbage/media/itch_page_pack/probe_itch_editor.js --dry-run
 ```
 
 Probe the public page from `upload_manifest.json`:
 
 ```bash
-node gatbage/media/itch_page_pack/probe_itch_editor.js
+node ../gatbage/media/itch_page_pack/probe_itch_editor.js
 ```
 
 Override the URL if checking a staging or renamed itch page:
 
 ```bash
-node gatbage/media/itch_page_pack/probe_itch_editor.js --url https://tenevik.itch.io/gigahrush
+node ../gatbage/media/itch_page_pack/probe_itch_editor.js --url https://tenevik.itch.io/gigahrush
 ```
 
 If a browser/cache mismatch is suspected, save the logged-out HTML and check the exact file:
 
 ```bash
 curl -L https://tenevik.itch.io/gigahrush -o /tmp/gigahrush-itch.html
-node gatbage/media/itch_page_pack/probe_itch_editor.js --html /tmp/gigahrush-itch.html
+node ../gatbage/media/itch_page_pack/probe_itch_editor.js --html /tmp/gigahrush-itch.html
 ```
 
 For a quick manual marker scan:

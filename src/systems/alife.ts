@@ -1,6 +1,7 @@
 import {
   W,
   Cell,
+  type CharacterSex,
   EntityType,
   AIGoal,
   Faction,
@@ -32,8 +33,21 @@ import {
 import { MAX_ITEM_STACK } from '../data/inventory_limits';
 import { RPG_ATTRIBUTE_CAP, RPG_LEVEL_CAP } from '../data/rpg_progression';
 import { freshNeeds } from '../data/catalog';
+import {
+  CHARACTER_SEX_MALE,
+  characterSexCode,
+  characterSexFromCode,
+  characterSexFromFemale,
+  clampCharacterAge,
+  sanitizeCharacterSex,
+} from '../data/demographics';
 import { sanitizeNpcVisualId } from '../entities/npc_visuals';
-import { ensureFloorRunState, floorRunEntryFloorKey, currentFloorRunEntry } from './procedural_floors';
+import {
+  ensureFloorRunState,
+  floorRunEntryFloorKey,
+  currentFloorRunEntry,
+  floorRunEntryForDesignFloor,
+} from './procedural_floors';
 import { cleanFloorKey, floorKeyForDesign, floorKeyForProcedural, floorKeyForStory } from './floor_keys';
 import { getMaxHp, getMaxPsi } from './rpg';
 import {
@@ -73,6 +87,8 @@ export interface AlifePopulationReservedNpc {
   plotNpcId?: string;
   name?: string;
   female?: boolean;
+  age?: number;
+  sex?: CharacterSex;
   faction?: Faction;
   occupation?: Occupation;
   sprite?: number;
@@ -84,6 +100,7 @@ export interface AlifePopulationReservedNpc {
   maxHp?: number;
   money?: number;
   accountRubles?: number;
+  playerRelation?: number;
   karma?: number;
 }
 
@@ -115,6 +132,8 @@ export interface AlifeNpcSnapshot {
   occupation: Occupation;
   name: string;
   female: boolean;
+  age: number;
+  sex: CharacterSex;
   level: number;
   hp: number;
   maxHp: number;
@@ -174,6 +193,8 @@ export interface AlifeNpcOverride {
   floor?: FloorLevel;
   name?: string;
   female?: boolean;
+  age?: number;
+  sex?: CharacterSex;
   faction?: Faction;
   occupation?: Occupation;
   familyId?: number;
@@ -212,6 +233,8 @@ interface AlifeNumericColumns {
   danger: Uint8Array;
   faction: Uint8Array;
   occupation: Uint8Array;
+  age: Uint8Array;
+  sex: Uint8Array;
   flags: Uint8Array;
   level: Uint8Array;
   str: Uint8Array;
@@ -290,6 +313,8 @@ function createAlifeNumericColumns(total: number): AlifeNumericColumns {
     danger: new Uint8Array(bounded),
     faction: new Uint8Array(bounded),
     occupation: new Uint8Array(bounded),
+    age: new Uint8Array(bounded),
+    sex: new Uint8Array(bounded),
     flags: new Uint8Array(bounded),
     level: new Uint8Array(bounded),
     str: new Uint8Array(bounded),
@@ -309,6 +334,7 @@ function createAlifeNumericColumns(total: number): AlifeNumericColumns {
     karma: new Int8Array(bounded),
   };
   columns.sprite.fill(ALIFE_SPRITE_UNSET);
+  columns.sex.fill(CHARACTER_SEX_MALE);
   columns.playerRelation.fill(ALIFE_PLAYER_RELATION_UNSET);
   return columns;
 }
@@ -352,6 +378,10 @@ function ensureAlifeColumnCapacity(alife: AlifeState, requiredId: number): void 
   alife.columns.danger = growUint8Array(alife.columns.danger, next);
   alife.columns.faction = growUint8Array(alife.columns.faction, next);
   alife.columns.occupation = growUint8Array(alife.columns.occupation, next);
+  alife.columns.age = growUint8Array(alife.columns.age, next);
+  const previousSexLength = alife.columns.sex.length;
+  alife.columns.sex = growUint8Array(alife.columns.sex, next);
+  if (previousSexLength < alife.columns.sex.length) alife.columns.sex.fill(CHARACTER_SEX_MALE, previousSexLength);
   alife.columns.flags = growUint8Array(alife.columns.flags, next);
   alife.columns.level = growUint8Array(alife.columns.level, next);
   alife.columns.str = growUint8Array(alife.columns.str, next);
@@ -448,6 +478,34 @@ function recordFemale(alife: AlifeState, record: AlifeNpcRecord): boolean {
 
 function setRecordFemale(alife: AlifeState, record: AlifeNpcRecord, value: boolean): void {
   setRecordFlag(alife, record, ALIFE_FLAG_FEMALE, value);
+}
+
+function recordAge(alife: AlifeState, record: AlifeNpcRecord): number {
+  return clampCharacterAge(alife.columns.age[recordColumnIndex(record)], 25);
+}
+
+function setRecordAge(alife: AlifeState, record: AlifeNpcRecord, value: unknown, fallback = 25): void {
+  ensureAlifeColumnCapacity(alife, record.id);
+  alife.columns.age[recordColumnIndex(record)] = clampCharacterAge(value, fallback);
+}
+
+function recordSex(alife: AlifeState, record: AlifeNpcRecord): CharacterSex {
+  return characterSexFromCode(alife.columns.sex[recordColumnIndex(record)], recordFemale(alife, record) ? 'female' : 'male');
+}
+
+function setRecordSex(alife: AlifeState, record: AlifeNpcRecord, value: CharacterSex): void {
+  const sex = sanitizeCharacterSex(value);
+  ensureAlifeColumnCapacity(alife, record.id);
+  alife.columns.sex[recordColumnIndex(record)] = characterSexCode(sex);
+  setRecordFemale(alife, record, sex === 'female');
+}
+
+function setRecordSexFromInput(alife: AlifeState, record: AlifeNpcRecord, sexInput: unknown, femaleInput?: unknown): void {
+  if (sexInput === 'male' || sexInput === 'female') {
+    setRecordSex(alife, record, sexInput);
+  } else if (typeof femaleInput === 'boolean') {
+    setRecordSex(alife, record, characterSexFromFemale(femaleInput));
+  }
 }
 
 function recordCanGiveQuest(alife: AlifeState, record: AlifeNpcRecord): boolean {
@@ -765,29 +823,87 @@ function occupationForRecord(plan: AlifeFloorPlan, profile: AlifeFactionProfile,
   return pickWeighted(profile.occupations, seed, index, 24);
 }
 
-function nameForRecord(faction: Faction, seed: number, index: number): { name: string; female: boolean } {
+function nameForRecord(
+  plan: AlifeFloorPlan,
+  faction: Faction,
+  occupation: Occupation,
+  seed: number,
+  index: number,
+): { name: string; female: boolean; sex: CharacterSex } {
   if (faction === Faction.LIQUIDATOR) {
     return {
       name: `${pickDet(LIQ_RANKS, seed, index, 31)} ${pickDet(LIQ_LAST, seed, index, 32)}`,
       female: false,
+      sex: 'male',
     };
   }
   if (faction === Faction.CULTIST) {
     return {
       name: `${pickDet(CULT_ADJ, seed, index, 33)} ${pickDet(CULT_NOUN, seed, index, 34)}`,
       female: false,
+      sex: 'male',
     };
   }
   if (faction === Faction.WILD) {
     return {
       name: `${pickDet(WILD_NAMES, seed, index, 35)} "${pickDet(WILD_NICKS, seed, index, 36)}"`,
       female: false,
+      sex: 'male',
     };
   }
-  const female = unit(seed, index, 37) < 0.5;
+  const floor69Adult = plan.key === floorKeyForDesign('floor_69') && occupation !== Occupation.HUNTER;
+  const female = unit(seed, index, 37) < (floor69Adult ? 0.72 : 0.5);
   const first = pickDet(female ? CITIZEN_FEMALE : CITIZEN_MALE, seed, index, 38);
   const last = pickDet(CITIZEN_LAST, seed, index, 39);
-  return { name: `${first} ${last}${female ? 'а' : ''}`, female };
+  return { name: `${first} ${last}${female ? 'а' : ''}`, female, sex: characterSexFromFemale(female) };
+}
+
+function ageForRecord(
+  plan: AlifeFloorPlan,
+  faction: Faction,
+  occupation: Occupation,
+  level: number,
+  seed: number,
+  index: number,
+): number {
+  if (occupation === Occupation.CHILD) {
+    return clampCharacterAge(7 + Math.floor(unit(seed, index, 45) * 9) + (level > 12 ? 1 : 0), 12);
+  }
+
+  let min = 18;
+  let max = 67;
+  if (plan.key === floorKeyForDesign('floor_69')) {
+    min = occupation === Occupation.HUNTER ? 24 : 20;
+    max = occupation === Occupation.DIRECTOR ? 43 : occupation === Occupation.DOCTOR ? 38 : 34;
+  } else if (faction === Faction.LIQUIDATOR) {
+    min = 22;
+    max = 58;
+  } else if (faction === Faction.SCIENTIST || occupation === Occupation.SCIENTIST) {
+    min = 24;
+    max = 72;
+  } else if (occupation === Occupation.DIRECTOR) {
+    min = 34;
+    max = 74;
+  } else if (occupation === Occupation.HOUSEWIFE || occupation === Occupation.COOK) {
+    min = 24;
+    max = 63;
+  } else if (occupation === Occupation.SECRETARY || occupation === Occupation.TRAVELER) {
+    min = 18;
+    max = 52;
+  } else if (occupation === Occupation.ALCOHOLIC || faction === Faction.WILD) {
+    min = 18;
+    max = 61;
+  } else if (faction === Faction.CULTIST) {
+    min = 18;
+    max = 70;
+  }
+
+  const spread = Math.max(0, max - min);
+  const base = min + Math.floor(Math.pow(unit(seed, index, 46), 1.18) * (spread + 1));
+  const levelBias = Math.round(Math.sqrt(Math.max(1, level)) * (0.85 + unit(seed, index, 47) * 1.2));
+  const prodigyPenalty = unit(seed, index, 48) < 0.11 ? Math.round(unit(seed, index, 49) * 9) : 0;
+  const veteranBonus = unit(seed, index, 50) > 0.93 ? Math.round(unit(seed, index, 52) * 12) : 0;
+  return clampCharacterAge(Math.max(min, Math.min(max + 10, base + levelBias + veteranBonus - prodigyPenalty)), min);
 }
 
 function rpgForRecord(level: number, seed: number, index: number): RPGStats {
@@ -919,7 +1035,8 @@ function createRecord(alife: AlifeState, id: number, plan: AlifeFloorPlan, seed:
   const level = levelForRecord(plan, faction, seed, id);
   const rpg = rpgForRecord(level, seed, id);
   const maxHp = getMaxHp(rpg);
-  const named = nameForRecord(faction, seed, id);
+  const named = nameForRecord(plan, faction, occupation, seed, id);
+  const age = ageForRecord(plan, faction, occupation, level, seed, id);
   const wealth = wealthForRecord(plan, profile, level, seed, id);
   const money = cashForWealth(wealth, seed, id);
   const record: AlifeNpcRecord = {
@@ -931,7 +1048,8 @@ function createRecord(alife: AlifeState, id: number, plan: AlifeFloorPlan, seed:
   setRecordDanger(alife, record, plan.danger);
   setRecordFaction(alife, record, faction);
   setRecordOccupation(alife, record, occupation);
-  setRecordFemale(alife, record, named.female);
+  setRecordSex(alife, record, named.sex);
+  setRecordAge(alife, record, age);
   setRecordFamilyId(alife, record, Math.floor((id - 1) / 4));
   setRecordCanGiveQuest(alife, record, unit(seed, id, 94) < questCandidateChance());
   setRecordMoney(alife, record, money, Math.max(0, wealth - money));
@@ -967,6 +1085,8 @@ function reservedNpcFromData(def: AlifeReservedIdentityDef): AlifePopulationRese
     plotNpcId: def.plotNpcId,
     name: def.name,
     female: def.female,
+    age: def.age,
+    sex: def.sex,
     faction: def.faction,
     occupation: def.occupation,
     sprite: def.sprite,
@@ -1021,20 +1141,23 @@ function normalizePopulationPlan(plan: AlifePopulationPlan | AlifePopulationPlan
 
 function buildCurrentRunPopulationPlan(state: GameState, total?: number): AlifePopulationPlan {
   const run = ensureFloorRunState(state);
-  const proceduralSpecs = Object.values(run.specs);
-  const routeKeys = [
+  const routeKeySet = new Set<string>([
     floorKeyForStory(FloorLevel.MINISTRY),
     floorKeyForStory(FloorLevel.KVARTIRY),
     floorKeyForStory(FloorLevel.LIVING),
     floorKeyForStory(FloorLevel.MAINTENANCE),
     floorKeyForStory(FloorLevel.HELL),
     floorKeyForStory(FloorLevel.VOID),
-    ...DESIGN_FLOOR_ROUTES.map(route => floorKeyForDesign(route.id)),
-    ...proceduralSpecs.map(spec => floorKeyForProcedural(spec.key)),
-  ];
+  ]);
+  for (const route of DESIGN_FLOOR_ROUTES) {
+    const entry = floorRunEntryForDesignFloor(state, route.id);
+    if (entry) routeKeySet.add(floorRunEntryFloorKey(entry));
+  }
+  const proceduralSpecs = Object.values(run.specs);
+  for (const spec of proceduralSpecs) routeKeySet.add(floorKeyForProcedural(spec.key));
   return normalizePopulationPlan(buildAlifePopulationPlan({
     runSeed: run.runSeed,
-    routeKeys,
+    routeKeys: [...routeKeySet],
     proceduralSpecs,
     total,
   }));
@@ -1088,9 +1211,14 @@ function applyReservedNpcToRecord(alife: AlifeState, record: AlifeNpcRecord, res
   if (reserved.kind) record.reservedKind = reserved.kind;
   if (reserved.plotNpcId) record.plotNpcId = reserved.plotNpcId.slice(0, 96);
   if (reserved.name) record.name = reserved.name.slice(0, 80);
-  if (typeof reserved.female === 'boolean') setRecordFemale(alife, record, reserved.female);
+  setRecordSexFromInput(alife, record, reserved.sex, reserved.female);
   if (reserved.faction !== undefined) setRecordFaction(alife, record, reserved.faction);
   if (reserved.occupation !== undefined) setRecordOccupation(alife, record, reserved.occupation);
+  if (reserved.age !== undefined) {
+    setRecordAge(alife, record, reserved.age, recordAge(alife, record));
+  } else if (reserved.occupation === Occupation.CHILD) {
+    setRecordAge(alife, record, 7 + Math.floor(unit(alife.seed, record.id, 121) * 10), 12);
+  }
   if (reserved.sprite !== undefined) setRecordSprite(alife, record, clampInt(reserved.sprite, recordOccupation(alife, record), 0, 4096));
   record.npcVisualId = sanitizeNpcVisualId(reserved.npcVisualId) ?? record.npcVisualId;
   if (reserved.familyId !== undefined) setRecordFamilyId(alife, record, reserved.familyId);
@@ -1117,6 +1245,7 @@ function applyReservedNpcToRecord(alife: AlifeState, record: AlifeNpcRecord, res
       reserved.accountRubles ?? recordAccountRubles(alife, record),
     );
   }
+  if (reserved.playerRelation !== undefined) setRecordPlayerRelation(alife, record, reserved.playerRelation);
   if (reserved.karma !== undefined) setRecordKarma(alife, record, reserved.karma);
 }
 
@@ -1284,6 +1413,8 @@ function captureEntityToRecord(alife: AlifeState, record: AlifeNpcRecord, entity
     entity.money ?? recordMoney(alife, record),
     entity.accountRubles ?? recordAccountRubles(alife, record),
   );
+  if (entity.age !== undefined) setRecordAge(alife, record, entity.age, recordAge(alife, record));
+  setRecordSexFromInput(alife, record, entity.sex, entity.isFemale);
   record.weapon = entity.weapon;
   record.inventory = inventoryCopy(entity.inventory);
   setRecordCustomLoadout(alife, record);
@@ -1347,7 +1478,8 @@ export function rewriteAlifeNpcIdentityFromEntity(state: GameState, entity: Enti
   const record = alife.npcs[entity.alifeId - 1];
   if (!record) return;
   if (entity.name) record.name = entity.name.slice(0, 80);
-  setRecordFemale(alife, record, entity.isFemale === true);
+  if (entity.age !== undefined) setRecordAge(alife, record, entity.age, recordAge(alife, record));
+  setRecordSexFromInput(alife, record, entity.sex, entity.isFemale);
   if (entity.faction !== undefined) setRecordFaction(alife, record, entity.faction);
   if (entity.occupation !== undefined) setRecordOccupation(alife, record, entity.occupation);
   if (entity.familyId !== undefined) setRecordFamilyId(alife, record, entity.familyId);
@@ -1448,6 +1580,8 @@ export function getAlifeNpcRecordSnapshot(state: GameState, alifeId: number): Al
     occupation: recordOccupation(alife, record),
     name: record.name,
     female: recordFemale(alife, record),
+    age: recordAge(alife, record),
+    sex: recordSex(alife, record),
     level: recordLevel(alife, record),
     hp: recordHp(alife, record),
     maxHp: recordMaxHp(alife, record),
@@ -1564,7 +1698,8 @@ function arrivalRecordFromEntity(alife: AlifeState, id: number, state: GameState
   setRecordDanger(alife, record, storyDanger(state.currentFloor));
   setRecordFaction(alife, record, faction);
   setRecordOccupation(alife, record, occupation);
-  setRecordFemale(alife, record, entity.isFemale === true);
+  setRecordSexFromInput(alife, record, entity.sex, entity.isFemale);
+  setRecordAge(alife, record, entity.age, 25);
   setRecordFamilyId(alife, record, entity.familyId ?? id);
   setRecordCanGiveQuest(alife, record, entity.canGiveQuest === true);
   setRecordSprite(alife, record, entity.sprite);
@@ -1975,7 +2110,8 @@ function applyOverride(alife: AlifeState, input: unknown): void {
   }
   setRecordFloor(alife, record, sanitizeFloor(input.floor, recordFloor(alife, record)));
   if (typeof input.name === 'string' && input.name.length > 0) record.name = input.name.slice(0, 80);
-  if (typeof input.female === 'boolean') setRecordFemale(alife, record, input.female);
+  setRecordSexFromInput(alife, record, input.sex, input.female);
+  if (input.age !== undefined) setRecordAge(alife, record, input.age, recordAge(alife, record));
   if (typeof input.faction === 'number' && Number.isFinite(input.faction)) {
     setRecordFaction(alife, record, clampInt(input.faction, recordFaction(alife, record), Faction.CITIZEN, Faction.PLAYER) as Faction);
   }
@@ -2074,6 +2210,8 @@ export function alifeForSave(state: GameState): AlifeSaveState {
       floor: recordFloor(alife, record),
       name: record.name,
       female: recordFemale(alife, record),
+      age: recordAge(alife, record),
+      sex: recordSex(alife, record),
       faction: recordFaction(alife, record),
       occupation: recordOccupation(alife, record),
       familyId: recordFamilyId(alife, record),

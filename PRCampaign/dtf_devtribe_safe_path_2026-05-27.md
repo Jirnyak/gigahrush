@@ -38,7 +38,7 @@ Safe DTF path:
 
 1. Keep MyIndie as the first RU/CIS playable link.
 2. Assign the draft to `Инди` or the intended DTF topic; do not publish under `Без темы`.
-3. Attach native media before the first external-link block, starting with `01_hero_gif_hell_blinking_eyes.gif`, then the Samosbor, inventory, contract, trade and factions PNGs from `gatbage/tmp/media/prcampaign_screenshot_hunt_2026-05-23/selected_best/`.
+3. Attach native media before the first external-link block, starting with `01_hero_gif_hell_blinking_eyes.gif`, then the Samosbor, inventory, contract, trade and factions PNGs from `../gatbage/tmp/media/prcampaign_screenshot_hunt_2026-05-23/selected_best/`.
 4. Use preview or public DOM to verify MyIndie, direct build, itch and Telegram are clickable links or DTF redirect links with clear visible labels.
 5. Then publish is allowed by the current owner instruction; no extra owner approval is required, but no blind final click.
 

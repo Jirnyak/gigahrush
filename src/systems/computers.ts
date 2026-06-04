@@ -16,6 +16,8 @@ import {
   type CraftRecipeLearnResult,
 } from './crafting';
 import { publishEvent } from './events';
+import { floorKeyForStory } from './floor_keys';
+import { currentFloorRunEntry, floorRunEntryFloorKey } from './procedural_floors';
 
 export interface ComputerTerminal {
   idx: number;
@@ -40,6 +42,14 @@ export interface ComputerOverlaySnapshot {
 
 const computerRegistry = new Map<number, ComputerTerminal>();
 const copiedKeys = new Set<string>();
+const COMPUTER_SAVE_VERSION = 1;
+const COMPUTER_COPIED_KEY_CAP = 512;
+const COMPUTER_KEY_LEN_CAP = 96;
+
+export interface ComputerSaveState {
+  version: 1;
+  copiedKeys: string[];
+}
 
 const runtime = {
   open: false,
@@ -61,8 +71,22 @@ function currentDef(): ComputerDef {
   return COMPUTER_DEFS[runtime.activeDefId] ?? COMPUTER_DEFS.floor_archive;
 }
 
+function currentFloorKey(state: GameState): string {
+  try {
+    return floorRunEntryFloorKey(currentFloorRunEntry(state));
+  } catch {
+    return floorKeyForStory(state.currentFloor);
+  }
+}
+
 function copiedKey(state: GameState, terminalIdx: number): string {
-  return `${state.currentFloor}:${terminalIdx}`;
+  return `${currentFloorKey(state)}:${terminalIdx}`;
+}
+
+function cleanTerminalKey(raw: unknown): string {
+  return String(raw ?? '')
+    .replace(/[^a-zA-Z0-9_.:-]/g, '_')
+    .slice(0, COMPUTER_KEY_LEN_CAP);
 }
 
 function clampPage(): void {
@@ -108,6 +132,31 @@ function allComputerRecipeIds(def: ComputerDef): string[] {
 
 export function clearComputers(): void {
   computerRegistry.clear();
+}
+
+export function resetComputerState(): void {
+  copiedKeys.clear();
+  closeComputer();
+}
+
+export function computersStateForSave(): ComputerSaveState | undefined {
+  if (copiedKeys.size === 0) return undefined;
+  return {
+    version: COMPUTER_SAVE_VERSION,
+    copiedKeys: [...copiedKeys].slice(-COMPUTER_COPIED_KEY_CAP),
+  };
+}
+
+export function restoreComputersFromSave(input: unknown): void {
+  copiedKeys.clear();
+  if (!input || typeof input !== 'object' || Array.isArray(input)) return;
+  const raw = input as { version?: unknown; copiedKeys?: unknown };
+  if (raw.version !== COMPUTER_SAVE_VERSION || !Array.isArray(raw.copiedKeys)) return;
+  for (const item of raw.copiedKeys) {
+    if (copiedKeys.size >= COMPUTER_COPIED_KEY_CAP) break;
+    const key = cleanTerminalKey(item);
+    if (key) copiedKeys.add(key);
+  }
 }
 
 export function getComputerAt(world: World, x: number, y: number): ComputerTerminal | undefined {

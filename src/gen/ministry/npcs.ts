@@ -8,6 +8,7 @@ import {
 } from '../../core/types';
 import { World } from '../../core/world';
 import { freshNeeds, randomName } from '../../data/catalog';
+import { characterSexFromFemale } from '../../data/demographics';
 import { activeActorCountAtDefaultSoftLimit } from '../../data/entity_limits';
 import { rng } from '../shared';
 import { gaussianLevel, randomRPG, getMaxHp } from '../../systems/rpg';
@@ -63,6 +64,8 @@ const KANTSELEV_DEF: PlotNpcDef = {
 const ROTENBERGOV_DEF: PlotNpcDef = {
   name: 'Министр Ротенбергов',
   isFemale: false,
+  age: 70,
+  sex: 'male',
   faction: Faction.CITIZEN,
   occupation: Occupation.DIRECTOR,
   sprite: Occupation.DIRECTOR,
@@ -177,6 +180,7 @@ export function spawnMinistryNpcs(
         const rpg = randomRPG(npcLevel);
         const maxHp = Math.round(getMaxHp(rpg) * 1.5);
         const nm = randomName(fDef.faction);
+        const sex = characterSexFromFemale(nm.female);
         const loadout = ministryWeaponLoadout(fDef.faction, fDef.occupation);
         entities.push({
           id: nextId.v++, type: EntityType.NPC,
@@ -187,6 +191,7 @@ export function spawnMinistryNpcs(
           sprite: fDef.occupation,
           name: nm.name,
           isFemale: nm.female,
+          sex,
           needs: freshNeeds(),
           hp: maxHp, maxHp,
           money: rng(50, 500),
@@ -239,6 +244,7 @@ function spawnPlotNpc(
       angle: Math.random() * Math.PI * 2, pitch: 0,
       alive: true, speed: def.speed, sprite: def.sprite,
       name: def.name, isFemale: def.isFemale,
+      age: def.age, sex: def.sex,
       needs: freshNeeds(), hp: def.hp, maxHp: def.maxHp, money: def.money, accountRubles: def.accountRubles,
       ai: { goal: AIGoal.IDLE, tx: 0, ty: 0, path: [], pi: 0, stuck: 0, timer: 0 },
       inventory: def.inventory.map(i => ({ ...i })),

@@ -6,8 +6,9 @@ import { pathToFileURL } from 'node:url';
 import { collectGameTextEntries } from './extract-game-texts.mjs';
 
 const ROOT = process.cwd();
+const ARCHIVE_ROOT = path.resolve(ROOT, '..', 'gatbage');
 export const LOCALE_DIR = path.join(ROOT, 'locales');
-export const REPORT_DIR = path.join(ROOT, 'gatbage/reference/localization');
+export const REPORT_DIR = path.join(ARCHIVE_ROOT, 'reference/localization');
 export const SOURCE_LOCALE = 'ru';
 const DEFAULT_LOCALES = ['en'];
 

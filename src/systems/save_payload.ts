@@ -1,4 +1,5 @@
 import type {
+  CharacterSex,
   Entity,
   GameState,
   Item,
@@ -15,6 +16,7 @@ import {
 } from './production';
 import { MAX_INVENTORY_SLOTS, MAX_ITEM_STACK } from '../data/inventory_limits';
 import { ITEMS, getStack } from '../data/items';
+import { clampCharacterAge, DEFAULT_PLAYER_AGE, DEFAULT_PLAYER_SEX, sanitizeCharacterSex } from '../data/demographics';
 
 export const SAVE_PLAYER_INVENTORY_CAP = MAX_INVENTORY_SLOTS;
 export const SAVE_CONTAINER_CAP = 128;
@@ -45,10 +47,13 @@ export interface SavePayloadSections {
   floorMemory: unknown;
   alife: unknown;
   alifeMobility: unknown;
+  computers?: unknown;
+  netHack?: unknown;
   netTerminalGen: unknown;
   mapEditorPatches: unknown;
   worldEvents: unknown;
   crafting: unknown;
+  demosSocial?: unknown;
   economy: unknown;
   banking: unknown;
   stockMarket: unknown;
@@ -76,6 +81,8 @@ export interface SavePayload {
     rpg?: RPGStats;
     statuses?: PlayerStatus[];
     money?: number;
+    age?: number;
+    sex?: CharacterSex;
     playerRelation?: number;
     karma?: number;
     kills?: number;
@@ -101,10 +108,13 @@ export interface SavePayload {
     floorMemory: unknown;
     alife: unknown;
     alifeMobility: unknown;
+    computers?: unknown;
+    netHack?: unknown;
     netTerminalGen: unknown;
     mapEditorPatches: unknown;
     worldEvents: unknown;
     crafting: unknown;
+    demosSocial?: unknown;
     economy: unknown;
     banking: unknown;
     stockMarket: unknown;
@@ -266,6 +276,8 @@ export function buildSavePayload(input: SavePayloadBuildInput): SavePayload {
       rpg: player.rpg ? { ...player.rpg } : undefined,
       statuses: statusesForSave(player.statuses),
       money: player.money,
+      age: clampCharacterAge(player.age, DEFAULT_PLAYER_AGE),
+      sex: sanitizeCharacterSex(player.sex, player.isFemale ? 'female' : DEFAULT_PLAYER_SEX),
       playerRelation: player.playerRelation,
       karma: player.karma,
       kills: player.kills,
@@ -291,10 +303,13 @@ export function buildSavePayload(input: SavePayloadBuildInput): SavePayload {
       floorMemory: sections.floorMemory,
       alife: sections.alife,
       alifeMobility: sections.alifeMobility,
+      computers: sections.computers,
+      netHack: sections.netHack,
       netTerminalGen: sections.netTerminalGen,
       mapEditorPatches: sections.mapEditorPatches,
       worldEvents: sections.worldEvents,
       crafting: sections.crafting,
+      demosSocial: sections.demosSocial,
       economy: sections.economy,
       banking: sections.banking,
       stockMarket: sections.stockMarket,
@@ -346,8 +361,11 @@ export function summarizeSavePayload(
     { label: 'quests', value: payload.state.quests, count: payload.state.quests.length, cap: SAVE_QUEST_CAP },
     { label: 'events', value: payload.state.worldEvents, count: countWorldEvents(payload.state.worldEvents) },
     { label: 'crafting', value: payload.state.crafting },
+    { label: 'demosSocial', value: payload.state.demosSocial },
     { label: 'alife', value: payload.state.alife },
     { label: 'alifeMobility', value: payload.state.alifeMobility },
+    { label: 'computers', value: payload.state.computers },
+    { label: 'netHack', value: payload.state.netHack },
     { label: 'mapEditor', value: payload.state.mapEditorPatches, count: countMapEditorOps(payload.state.mapEditorPatches) },
     { label: 'economy', value: payload.state.economy },
     { label: 'banking', value: payload.state.banking },
@@ -454,6 +472,7 @@ export function createPortalCompactSavePayload<T extends VersionedSavePayload>(p
       alifeMobility: undefined,
       mapEditorPatches: undefined,
       worldEvents: undefined,
+      demosSocial: undefined,
       banking: compactBankingForPortal(payload.state.banking),
       stockMarket: compactStockMarketForPortal(payload.state.stockMarket),
       production: payload.state.production.slice(0, PORTAL_COMPACT_PRODUCTION_CAP),

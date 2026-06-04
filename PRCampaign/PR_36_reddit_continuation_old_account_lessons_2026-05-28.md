@@ -94,7 +94,7 @@ Hold/no-go:
 
 Use after PR 35 profile post survives. Native media first:
 
-- Main: `gatbage/tmp/media/prcampaign_screenshot_hunt_2026-05-23/selected_best/02_gif_underhell_maronary_samosbor_loop.gif`
+- Main: `../gatbage/tmp/media/prcampaign_screenshot_hunt_2026-05-23/selected_best/02_gif_underhell_maronary_samosbor_loop.gif`
 - Backup: a 20-40 second raw gameplay clip if owner records one.
 
 Title:
@@ -143,8 +143,8 @@ I am keeping this focused on critique, not traffic. The most useful notes are ab
 
 Native media:
 
-- Main: `gatbage/tmp/media/prcampaign_screenshot_hunt_2026-05-23/selected_best/04_active_samosbor_monsters.png`
-- Optional: `gatbage/tmp/media/prcampaign_screenshot_hunt_2026-05-23/selected_best/08_inventory_prep_loadout.png`
+- Main: `../gatbage/tmp/media/prcampaign_screenshot_hunt_2026-05-23/selected_best/04_active_samosbor_monsters.png`
+- Optional: `../gatbage/tmp/media/prcampaign_screenshot_hunt_2026-05-23/selected_best/08_inventory_prep_loadout.png`
 
 Title:
 
@@ -175,8 +175,8 @@ No link in the body. Add a single itch link only if rules allow or someone asks 
 
 Native media:
 
-- Main: `gatbage/tmp/media/prcampaign_screenshot_hunt_2026-05-23/selected_best/contact_sheet_3x3.png`
-- Optional: `gatbage/tmp/media/prcampaign_screenshot_hunt_2026-05-23/selected_best/10_full_map_route_context.png` only if cropped/captioned without revealing implementation geometry as the public hook.
+- Main: `../gatbage/tmp/media/prcampaign_screenshot_hunt_2026-05-23/selected_best/contact_sheet_3x3.png`
+- Optional: `../gatbage/tmp/media/prcampaign_screenshot_hunt_2026-05-23/selected_best/10_full_map_route_context.png` only if cropped/captioned without revealing implementation geometry as the public hook.
 
 Title:
 

@@ -2,6 +2,7 @@ import { DoorState, type Door } from '../core/types';
 import type { World } from '../core/world';
 
 function blocksNavigation(state: DoorState): boolean {
+  // Ordinary closed doors are actor/interaction state, not navigation topology.
   return state === DoorState.LOCKED || state === DoorState.HERMETIC_CLOSED;
 }
 

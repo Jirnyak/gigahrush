@@ -238,6 +238,7 @@ export class EntityIndex {
     this.needs.length = 0;
     this.projectiles.length = 0;
     this.addEntityTailToCachedBuckets(entities);
+    const staticStats = this.reindexStaticEntities();
 
     let liveDynamicEntityCount = 0;
     let dynamicUsedBucketCount = 0;
@@ -245,7 +246,7 @@ export class EntityIndex {
     let dynamicBucketedCount = 0;
     let npcCount = 0;
     let monsterCount = 0;
-    const itemCount = this.staticIndexedIds.size;
+    const itemCount = staticStats.itemCount;
 
     for (let dynamicOrder = 0; dynamicOrder < this.dynamicEntities.length; dynamicOrder++) {
       const e = this.dynamicEntities[dynamicOrder];
@@ -278,13 +279,13 @@ export class EntityIndex {
     this.version++;
     this.simulationFrame = simulationFrame;
     const usedBucketCount = dynamicUsedBucketCount + this.staticUsedBucketCount;
-    const bucketedCount = dynamicBucketedCount + this.staticIndexedIds.size;
+    const bucketedCount = dynamicBucketedCount + staticStats.liveCount;
     this.debugStats = {
       version: this.version,
       rebuildReason: 'simulation',
       simulationFrame,
       entityCount: entities.length,
-      liveEntityCount: liveDynamicEntityCount + this.staticIndexedIds.size,
+      liveEntityCount: liveDynamicEntityCount + staticStats.liveCount,
       actorCount: this.actors.length,
       aiCount: this.ai.length,
       needsCount: this.needs.length,
@@ -311,6 +312,27 @@ export class EntityIndex {
       this.staticUsedBucketCount++;
       if (bucket.length > this.staticMaxBucketSize) this.staticMaxBucketSize = bucket.length;
     }
+  }
+
+  private reindexStaticEntities(): { liveCount: number; itemCount: number } {
+    this.staticIndexedIds.clear();
+    let liveCount = 0;
+    let itemCount = 0;
+    for (const bucket of this.staticBuckets) {
+      let write = 0;
+      for (const e of bucket) {
+        if (!e || !e.alive || (entityMask(e) & ENTITY_MASK_STATIC_VISIBLE) === 0) continue;
+        bucket[write++] = e;
+        this.staticIndexedIds.add(e.id);
+        this.byId.set(e.id, e);
+        this.entityOrder.set(e.id, Number.MAX_SAFE_INTEGER - liveCount);
+        liveCount++;
+        if (e.type === EntityType.ITEM_DROP) itemCount++;
+      }
+      bucket.length = write;
+    }
+    this.recomputeStaticBucketStats();
+    return { liveCount, itemCount };
   }
 
   private addEntityTailToCachedBuckets(entities: readonly Entity[]): void {
@@ -457,6 +479,24 @@ export class EntityIndex {
   ): number {
     out.length = 0;
     if (maxResults <= 0) return 0;
+    const capped = Number.isFinite(maxResults);
+    const cap = capped ? Math.max(0, Math.floor(maxResults)) : Infinity;
+    const distances: number[] = [];
+    const addCandidate = (e: Entity, d2: number): void => {
+      if (!capped) {
+        out.push(e);
+        return;
+      }
+      let pos = distances.length;
+      while (pos > 0 && d2 < distances[pos - 1]) pos--;
+      if (pos >= cap) return;
+      distances.splice(pos, 0, d2);
+      out.splice(pos, 0, e);
+      if (out.length > cap) {
+        out.length = cap;
+        distances.length = cap;
+      }
+    };
     const bx = wrappedBucketCoord(x);
     const by = wrappedBucketCoord(y);
     const span = Math.ceil(radius / BUCKET_SIZE);
@@ -478,12 +518,9 @@ export class EntityIndex {
             if ((entityMask(e) & typeMask) === 0) continue;
             const dx = wrappedDelta(x, e.x);
             const dy = wrappedDelta(y, e.y);
-            if (dx * dx + dy * dy > r2) continue;
-            out.push(e);
-            if (out.length >= maxResults) {
-              this.recordQuery(typeMask, bucketChecks, out.length, false);
-              return out.length;
-            }
+            const d2 = dx * dx + dy * dy;
+            if (d2 > r2) continue;
+            addCandidate(e, d2);
           }
           if (!includeStatic) continue;
           const staticBucket = this.staticBuckets[bucketIndex];
@@ -493,12 +530,9 @@ export class EntityIndex {
             if ((entityMask(e) & typeMask) === 0) continue;
             const dx = wrappedDelta(x, e.x);
             const dy = wrappedDelta(y, e.y);
-            if (dx * dx + dy * dy > r2) continue;
-            out.push(e);
-            if (out.length >= maxResults) {
-              this.recordQuery(typeMask, bucketChecks, out.length, false);
-              return out.length;
-            }
+            const d2 = dx * dx + dy * dy;
+            if (d2 > r2) continue;
+            addCandidate(e, d2);
           }
         }
       }

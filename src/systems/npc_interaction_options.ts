@@ -5,6 +5,7 @@ import { craftRecipeLearnedMessage, isCraftRecipeKnown, learnCraftRecipe } from 
 import { closeDiceGame, diceStakeFromNpc, startDiceGame } from './dice';
 import { closeDominoGame, dominoStakeFromNpc, startDominoGame } from './domino';
 import { closeDurakGame, durakStakeFromNpc, startDurakGame } from './durak';
+import { canOpenDemosProfileForNpc, demosCursorForNpcProfile } from './demos_profiles';
 import { portalAllowsCasinoLikeContent } from './platform_bridge';
 import { npcHasQuestMarker } from './quests';
 import { controlBindingLabel } from './controls';
@@ -272,6 +273,29 @@ export function activateNpcCustomMenuOption(ctx: NpcInteractionContext, optionId
   def.activate(ctx);
   return true;
 }
+
+registerNpcInteractionOption({
+  id: 'demos_profile',
+  order: 5,
+  label: () => 'Профиль Демоса',
+  visible: ctx => canOpenDemosProfileForNpc(ctx.npc),
+  activate: ctx => {
+    const cursor = demosCursorForNpcProfile(ctx.state, ctx.npc);
+    if (cursor === undefined) {
+      ctx.state.msgs.push(msg('Профиль Демоса не найден.', ctx.state.time, '#888'));
+      return;
+    }
+    closeNpcInteractionInterface(ctx.state);
+    ctx.state.showNpcMenu = false;
+    ctx.state.showDemos = true;
+    ctx.state.demosCursor = cursor;
+    ctx.state.demosSearch = '';
+    ctx.state.demosSearchActive = false;
+    ctx.state.demosTab = 'profile';
+    ctx.state.demosFeedScroll = 0;
+    ctx.state.demosPostCursor = 0;
+  },
+});
 
 registerNpcInteractionOption({
   id: 'craft_recipe_lesson',

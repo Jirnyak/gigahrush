@@ -6,7 +6,7 @@
 
 `ecology.md` - не batch-план и не перечень заявок. Это активный root-док, который фиксирует контракт системы: каждый монстр должен быть маленьким правилом мира, а не только HP/speed/sprite. Правило должно менять хотя бы одно решение игрока, NPC или генерации: маршрут, дистанцию, свет, воду, дверь, шум, документ, приманку, толпу, укрытие, самосборное убежище, слух или решение "драться/обходить/кормить/запирать/жечь/докладывать/бежать".
 
-Текущая реализация проверяется по `src/entities/monster.ts`, `src/data/monster_ecology.ts`, `src/systems/ai/monster.ts`, `src/systems/ai/tactics.ts`, ecology-related helpers under `src/systems/`, generation call sites and focused `tests/monster_*.test.ts`. Старые `ecology_0.md`..`ecology_11.md` являются batch/orchestration материалом и лежат в `gatbage/history/batches/ecology/`.
+Текущая реализация проверяется по `src/entities/monster.ts`, `src/data/monster_ecology.ts`, `src/systems/ai/monster.ts`, `src/systems/ai/tactics.ts`, ecology-related helpers under `src/systems/`, generation call sites and focused `tests/monster_*.test.ts`. Старые `ecology_0.md`..`ecology_11.md` являются batch/orchestration материалом и лежат в `../gatbage/history/batches/ecology/`.
 
 ## Current Baseline
 

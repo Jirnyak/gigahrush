@@ -13,6 +13,8 @@ import { ITEMS, isSilverSlimeItem } from '../data/items';
 import { RUMORS, type RumorDef, type RumorLead, type RumorReveal, type RumorTopic } from '../data/rumors';
 import { monsterTypeName } from '../entities/monster';
 import { type ContextSnapshot } from './context';
+import { renderMarkovRumorFlavor } from './markov_rumor';
+import { routeAdapterSpeech } from './markov_router_adapters';
 import {
   flagEventRumor,
   getNpcMemory,
@@ -379,13 +381,26 @@ function renderRumor(
   const idx = Math.abs((memory.entityId * 31 + rumor.id.length * 17 + memory.knownRumorIds.length) | 0) % rumor.text.length;
   const text = fillSlots(rumor.text[idx], snapshot);
   const lead = formatLeadLine(rumor, event);
+  let fallback: string;
   if (lead) {
     rememberRecentLead(rumor, lead, now, event);
-    return `${text} Зацепка: ${lead}.`;
+    fallback = `${text} Зацепка: ${lead}.`;
+  } else {
+    const reveal = formatRevealLine(rumor.reveals);
+    if (reveal) rememberRecentLead(rumor, reveal.slice('Зацепка: '.length).replace(/\.$/, ''), now, event);
+    fallback = reveal ? `${text} ${reveal}` : text;
   }
-  const reveal = formatRevealLine(rumor.reveals);
-  if (reveal) rememberRecentLead(rumor, reveal.slice('Зацепка: '.length).replace(/\.$/, ''), now, event);
-  return reveal ? `${text} ${reveal}` : text;
+  return renderMarkovRumorFlavor({
+    rumor,
+    snapshot,
+    memory,
+    event,
+    exactFallback: fallback,
+    seed: rumor.id,
+    repeatIndex: memory.knownRumorIds.length,
+    now,
+    routeSpeech: routeAdapterSpeech,
+  }).text;
 }
 
 const FLOOR_NAMES: Record<FloorLevel, string> = {

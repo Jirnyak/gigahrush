@@ -55,6 +55,7 @@ export interface ContentInteractionContext {
   nextEntityId: { v: number };
   lookX: number;
   lookY: number;
+  readOnly?: boolean;
   openContainerMenu?: (container: WorldContainer) => void;
   openCraftMenu?: (request: ContentCraftMenuRequest) => void;
   learnRecipe?: (request: ContentRecipeLearnRequest) => boolean;

@@ -9,6 +9,10 @@ export interface TitleLanguageDef {
   subtitle: string;
   nameLabel: string;
   namePlaceholder: string;
+  ageLabel: string;
+  sexLabel: string;
+  sexMaleLabel: string;
+  sexFemaleLabel: string;
   seedLabel: string;
   seedPlaceholder: string;
   startPrompt: string;
@@ -19,6 +23,8 @@ export interface TitleLanguageDef {
   setupLanguageLabel: string;
   setupActorCapLabel: string;
   setupNameHint: string;
+  setupAgeHint: string;
+  setupSexHint: string;
   setupSeedHint: string;
   setupLanguageHint: string;
   setupActorCapHint: string;
@@ -41,6 +47,10 @@ export const TITLE_LANGUAGES: readonly TitleLanguageDef[] = [
     subtitle: 'бесконечный бетонный лабиринт',
     nameLabel: 'НЕТ-ИМЯ',
     namePlaceholder: 'введите имя',
+    ageLabel: 'ВОЗРАСТ',
+    sexLabel: 'ПОЛ',
+    sexMaleLabel: 'мужской',
+    sexFemaleLabel: 'женский',
     seedLabel: 'СИД',
     seedPlaceholder: 'пусто = случайный',
     startPrompt: 'Выберите язык и нажмите ENTER',
@@ -51,6 +61,8 @@ export const TITLE_LANGUAGES: readonly TitleLanguageDef[] = [
     setupLanguageLabel: 'ЯЗЫК',
     setupActorCapLabel: 'ЛИМИТ NPC/МОБОВ',
     setupNameHint: 'текст вводится прямо с клавиатуры',
+    setupAgeHint: '1-100; влияет на соц. контекст персонажа',
+    setupSexHint: '←/→ переключить',
     setupSeedHint: 'пусто оставит случайный маршрутный сид',
     setupLanguageHint: '←/→ переключить язык',
     setupActorCapHint: '←/→ шаг 1024',
@@ -71,6 +83,10 @@ export const TITLE_LANGUAGES: readonly TitleLanguageDef[] = [
     subtitle: 'endless concrete labyrinth',
     nameLabel: 'NET-NAME',
     namePlaceholder: 'enter name',
+    ageLabel: 'AGE',
+    sexLabel: 'SEX',
+    sexMaleLabel: 'male',
+    sexFemaleLabel: 'female',
     seedLabel: 'SEED',
     seedPlaceholder: 'blank = random',
     startPrompt: 'Choose language and press ENTER',
@@ -81,6 +97,8 @@ export const TITLE_LANGUAGES: readonly TitleLanguageDef[] = [
     setupLanguageLabel: 'LANGUAGE',
     setupActorCapLabel: 'NPC/MOB LIMIT',
     setupNameHint: 'type directly while this row is selected',
+    setupAgeHint: '1-100; affects social context',
+    setupSexHint: '←/→ switch',
     setupSeedHint: 'blank keeps a random route seed',
     setupLanguageHint: '←/→ switch language',
     setupActorCapHint: '←/→ step 1024',

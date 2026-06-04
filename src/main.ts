@@ -1,10 +1,11 @@
 /* ── ГИГАХРУЩ — main entry point ──────────────────────────────── */
 import './index.css';
+import './systems/demos_runtime';
 import { registerPwaServiceWorker } from './pwa';
 
 import {
   W, Cell, DoorState, FloorLevel, Tex, RoomType, LiftDirection, ItemType,
-  type Entity, type GameClock, type GameState, type Item, type Needs, type Quest, type RPGStats, type WorldContainer,
+  type CharacterSex, type Entity, type GameClock, type GameState, type Item, type Needs, type Quest, type RPGStats, type WorldContainer,
   type PlayerDamageSourceKind, type WorldEventPrivacy, type WorldEventSeverity,
   EntityType, Faction, MonsterKind, Occupation, ProjType, QuestType, AIGoal,
   msg, setMsgClock,
@@ -34,6 +35,8 @@ import {
   spawnBloodHit, spawnDeathPool, updateBloodTrails, updateParticles, particles,
   spawnProjectileBodyImpact, spawnProjectileFloorImpact, spawnProjectileWallImpact, isEnergyProjectileImpact,
 } from './render/blood';
+import { resetComputerState, restoreComputersFromSave } from './systems/computers';
+import { resetNetHackState, restoreNetHackFromSave } from './systems/net_hack';
 import { stampMark, MarkType } from './systems/surface_marks';
 import { containerMenuGridLayout, craftMenuLayout, fullscreenInventoryLayout, tradeMenuGridLayout } from './render/ui_layout';
 import { updateNeeds } from './systems/needs';
@@ -354,6 +357,7 @@ import {
   findDemosCursor,
   moveDemosCursor,
 } from './systems/demos';
+import { restoreDemosSocialFromSave } from './systems/demos_save';
 import {
   PLAYER_SELF_RELATION,
   PLAYER_START_KARMA,
@@ -456,6 +460,14 @@ import {
   normalizeActiveActorSoftLimit,
   setActiveActorSoftLimit,
 } from './data/entity_limits';
+import {
+  characterSexCode,
+  characterSexFromCode,
+  clampCharacterAge,
+  DEFAULT_PLAYER_AGE,
+  DEFAULT_PLAYER_SEX,
+  sanitizeCharacterSex,
+} from './data/demographics';
 
 /* ── Canvas setup ─────────────────────────────────────────────── */
 const canvas = document.getElementById('game') as HTMLCanvasElement;
@@ -463,6 +475,8 @@ const hudCanvas = document.getElementById('hud') as HTMLCanvasElement;
 const ctx = hudCanvas.getContext('2d')!;
 registerPwaServiceWorker();
 const PLAYER_NAME_KEY = 'gigahrush_player_name';
+const PLAYER_AGE_KEY = 'gigahrush_player_age';
+const PLAYER_SEX_KEY = 'gigahrush_player_sex';
 const TITLE_LANGUAGE_KEY = 'gigahrush_title_language';
 const TITLE_ACTIVE_ACTOR_SOFT_LIMIT_KEY = 'gigahrush_active_actor_soft_limit';
 const NET_GEN_NAME_RE = /^NET-[A-Z0-9-]{4,28}$/;
@@ -470,10 +484,13 @@ const FULL_MAP_RADIUS_DEFAULT = 200;
 const FULL_MAP_RADIUS_MIN = 48;
 const FULL_MAP_RADIUS_MAX = W / 2;
 const FULL_MAP_ZOOM_STEP = 1.18;
-type TitleInputField = Extract<TitleHitField, 'language' | 'name' | 'seed' | 'actorCap' | 'start'>;
-const TITLE_SETUP_FIELDS: readonly TitleInputField[] = ['start', 'language', 'name', 'seed', 'actorCap'];
+type TitleInputField = Extract<TitleHitField, 'language' | 'name' | 'age' | 'sex' | 'seed' | 'actorCap' | 'start'>;
+const TITLE_SETUP_FIELDS: readonly TitleInputField[] = ['start', 'language', 'name', 'age', 'sex', 'seed', 'actorCap'];
 let started = false;
 let playerNickname = loadPlayerNickname();
+let playerAge = loadPlayerAge();
+let playerSex = loadPlayerSex();
+let titlePlayerAgeText = String(playerAge);
 let titleRunSeedText = '';
 let titleStartNeedsInit = true;
 let titleMode: TitleScreenMode = 'language';
@@ -524,6 +541,54 @@ function savePlayerNickname(value: string): string {
     // Local storage can be unavailable; the name still stays for this run.
   }
   return next;
+}
+
+function loadPlayerAge(): number {
+  try {
+    return clampCharacterAge(Number(localStorage.getItem(PLAYER_AGE_KEY)), DEFAULT_PLAYER_AGE);
+  } catch {
+    return DEFAULT_PLAYER_AGE;
+  }
+}
+
+function savePlayerAge(value: unknown): number {
+  const next = clampCharacterAge(value, DEFAULT_PLAYER_AGE);
+  playerAge = next;
+  titlePlayerAgeText = String(next);
+  try {
+    localStorage.setItem(PLAYER_AGE_KEY, String(next));
+  } catch {
+    // Local storage can be unavailable; the age still stays for this run.
+  }
+  return next;
+}
+
+function loadPlayerSex(): CharacterSex {
+  try {
+    const raw = localStorage.getItem(PLAYER_SEX_KEY);
+    const asCode = raw === null ? undefined : Number(raw);
+    return Number.isFinite(asCode)
+      ? characterSexFromCode(asCode, DEFAULT_PLAYER_SEX)
+      : sanitizeCharacterSex(raw, DEFAULT_PLAYER_SEX);
+  } catch {
+    return DEFAULT_PLAYER_SEX;
+  }
+}
+
+function savePlayerSex(value: unknown): CharacterSex {
+  const next = sanitizeCharacterSex(value, DEFAULT_PLAYER_SEX);
+  playerSex = next;
+  try {
+    localStorage.setItem(PLAYER_SEX_KEY, String(characterSexCode(next)));
+  } catch {
+    // Local storage can be unavailable; the sex still stays for this run.
+  }
+  return next;
+}
+
+function cyclePlayerSex(): void {
+  playerSex = playerSex === 'female' ? 'male' : 'female';
+  showTitle();
 }
 
 function playerDisplayName(): string {
@@ -636,6 +701,17 @@ function editTitleFieldFromPointer(field: TitleInputField): void {
     showTitle();
     return;
   }
+  if (field === 'age') {
+    const lang = titleLanguageDef(titleLanguageId);
+    const next = typeof window !== 'undefined' ? window.prompt(lang.ageLabel, titlePlayerAgeText || String(DEFAULT_PLAYER_AGE)) : null;
+    if (next !== null) titlePlayerAgeText = String(clampCharacterAge(Number(next), DEFAULT_PLAYER_AGE));
+    showTitle();
+    return;
+  }
+  if (field === 'sex') {
+    cyclePlayerSex();
+    return;
+  }
   titleInputField = field;
   const lang = titleLanguageDef(titleLanguageId);
   const label = field === 'seed' ? lang.seedLabel : lang.nameLabel;
@@ -655,13 +731,18 @@ function titleSetupRows(cursorOn: boolean): TitleSetupRowView[] {
   const lang = titleLanguageDef(titleLanguageId);
   const selected = (field: TitleInputField) => titleMode === 'setup' && titleInputField === field;
   const shownName = playerNickname || lang.namePlaceholder;
+  const shownAge = titlePlayerAgeText || String(DEFAULT_PLAYER_AGE);
+  const shownSex = playerSex === 'female' ? lang.sexFemaleLabel : lang.sexMaleLabel;
   const shownSeed = titleRunSeedText || lang.seedPlaceholder;
   const nameCursor = cursorOn && selected('name') ? '_' : '';
+  const ageCursor = cursorOn && selected('age') ? '_' : '';
   const seedCursor = cursorOn && selected('seed') ? '_' : '';
   return [
     { field: 'start', label: lang.setupStartLabel, value: lang.setupStartValue, hint: lang.setupStartHint, selected: selected('start') },
     { field: 'language', label: lang.setupLanguageLabel, value: titleLanguageDef(titleLanguageId).name, hint: lang.setupLanguageHint, selected: selected('language') },
     { field: 'name', label: lang.nameLabel, value: `${shownName}${nameCursor}`, hint: lang.setupNameHint, selected: selected('name') },
+    { field: 'age', label: lang.ageLabel, value: `${shownAge}${ageCursor}`, hint: lang.setupAgeHint, selected: selected('age') },
+    { field: 'sex', label: lang.sexLabel, value: shownSex, hint: lang.setupSexHint, selected: selected('sex') },
     { field: 'seed', label: lang.seedLabel, value: `${shownSeed}${seedCursor}`, hint: lang.setupSeedHint, selected: selected('seed') },
     {
       field: 'actorCap',
@@ -673,9 +754,20 @@ function titleSetupRows(cursorOn: boolean): TitleSetupRowView[] {
   ];
 }
 
-function playerAlifeFields(source: Partial<Entity> = {}): Pick<Entity, 'persistentNpcId' | 'playerRelation' | 'karma' | 'kills' | 'npcKills' | 'monsterKills'> {
+function playerDemographicSex(source: Partial<Entity>): CharacterSex {
+  if (source.sex === 'male' || source.sex === 'female') return sanitizeCharacterSex(source.sex, playerSex);
+  if (typeof source.isFemale === 'boolean') return source.isFemale ? 'female' : 'male';
+  return playerSex;
+}
+
+function playerAlifeFields(source: Partial<Entity> = {}): Pick<Entity, 'persistentNpcId' | 'age' | 'sex' | 'isFemale' | 'playerRelation' | 'karma' | 'kills' | 'npcKills' | 'monsterKills'> {
+  const age = clampCharacterAge(source.age, playerAge);
+  const sex = playerDemographicSex(source);
   return {
     persistentNpcId: 'player',
+    age,
+    sex,
+    isFemale: sex === 'female',
     playerRelation: PLAYER_SELF_RELATION,
     karma: clampInt(source.karma, PLAYER_START_KARMA, -128, 128),
     kills: clampInt(source.kills, 0, 0, 1_000_000),
@@ -1799,6 +1891,9 @@ function initGame(runSeedOverride?: number): void {
     demosCursor: 0,
     demosSearch: '',
     demosSearchActive: false,
+    demosTab: 'profile',
+    demosFeedScroll: 0,
+    demosPostCursor: 0,
     showLog: false,
     logScroll: 0,
     showControls: false,
@@ -1835,6 +1930,8 @@ function initGame(runSeedOverride?: number): void {
   ensureStockMarketState(state);
   closeNetSphere();
   closeNetTerminalGen();
+  resetComputerState();
+  resetNetHackState();
   closeMapEditor();
   setFloorRunState(state, { runSeed: initialRunSeed }, FloorLevel.LIVING);
   if (runSeedOverride !== undefined) {
@@ -4333,6 +4430,7 @@ function loadGame(): boolean {
     setMapEditorPatchState(state, dataState.mapEditorPatches as Parameters<typeof setMapEditorPatchState>[1]);
     setAlifeState(state, dataState.alife);
     setAlifeMobilityState(state, dataState.alifeMobility);
+    restoreDemosSocialFromSave(state, dataState.demosSocial);
     const loadedRunEntry = currentFloorRunEntry(state);
     const floor = loadedFloorInstances.current?.baseFloor ?? loadedRunEntry.baseFloor ?? savedFloor;
     const generatedRunEntry = loadedFloorInstances.current ? null : loadedRunEntry;
@@ -4343,6 +4441,9 @@ function loadGame(): boolean {
     state.showUiSettings = false;
     state.showDemos = false;
     state.demosSearchActive = false;
+    state.demosTab = 'profile';
+    state.demosFeedScroll = 0;
+    state.demosPostCursor = 0;
     cancelControlCapture();
     closeNetTerminalGen();
     closeMapEditor();
@@ -4416,7 +4517,10 @@ function loadGame(): boolean {
       setPseudoliftState(state, dataState.pseudolift as Parameters<typeof setPseudoliftState>[1]);
       state.worldEvents = normalizeWorldEventState(dataState.worldEvents as Parameters<typeof normalizeWorldEventState>[0]);
       setAlifeMobilityState(state, dataState.alifeMobility);
+      restoreComputersFromSave(dataState.computers);
+      restoreNetHackFromSave(dataState.netHack);
       state.crafting = restoreCraftingState(dataState.crafting);
+      restoreDemosSocialFromSave(state, dataState.demosSocial);
       normalizeGameEconomy(state, dataState.economy);
       (state as GameState & { banking?: BankingState }).banking = normalizeBankingState(dataState.banking);
       normalizeGameStockMarket(state, dataState.stockMarket);
@@ -4440,6 +4544,9 @@ function loadGame(): boolean {
       state.showUiSettings = false;
       state.showDemos = false;
       state.demosSearchActive = false;
+      state.demosTab = 'profile';
+      state.demosFeedScroll = 0;
+      state.demosPostCursor = 0;
       cancelControlCapture();
       state.showContainerMenu = false;
       state.containerMenuTarget = -1;
@@ -5200,6 +5307,39 @@ function openDemosMenu(): void {
   syncPauseState();
 }
 
+const DEMOS_TABS: GameState['demosTab'][] = ['profile', 'links', 'feed', 'post', 'quests'];
+
+function shiftDemosTab(delta: number): void {
+  const current = DEMOS_TABS.indexOf(state.demosTab);
+  const at = current >= 0 ? current : 0;
+  state.demosTab = DEMOS_TABS[(at + delta + DEMOS_TABS.length) % DEMOS_TABS.length];
+  state.demosSearchActive = false;
+}
+
+function demosSavedPostCount(): number {
+  const posts = (state as GameState & { demosSocial?: { posts?: unknown[] } }).demosSocial?.posts;
+  return Array.isArray(posts) ? posts.length : 0;
+}
+
+function clampDemosPanelState(): void {
+  state.demosFeedScroll = Math.max(0, Math.min(Math.max(0, demosSavedPostCount() - 1), Math.floor(state.demosFeedScroll || 0)));
+  state.demosPostCursor = Math.max(0, Math.min(Math.max(0, demosSavedPostCount() - 1), Math.floor(state.demosPostCursor || 0)));
+}
+
+function moveDemosPanelCursor(delta: number): void {
+  if (state.demosTab === 'feed') {
+    state.demosFeedScroll += delta;
+    clampDemosPanelState();
+    return;
+  }
+  if (state.demosTab === 'post') {
+    state.demosPostCursor += delta;
+    clampDemosPanelState();
+    return;
+  }
+  state.demosCursor = moveDemosCursor(state, state.demosCursor, delta, state.demosSearch);
+}
+
 function closeDemosMenu(): void {
   state.showDemos = false;
   state.demosSearchActive = false;
@@ -5753,7 +5893,8 @@ function handleMobileHudTap(x: number, y: number): void {
       return;
     }
     state.demosSearchActive = false;
-    state.demosCursor = moveDemosCursor(state, state.demosCursor, x < w / 2 ? -1 : 1, state.demosSearch);
+    shiftDemosTab(x < w / 2 ? -1 : 1);
+    clampDemosPanelState();
   } else if (state.showFactions) {
     state.showFactions = false;
     syncPauseState();
@@ -6055,8 +6196,16 @@ function handleMenuInput(): void {
       const dnNav = menuDownNav();
       const leftNav = menuRepeatStep('left', input.invLeft, leftEdge);
       const rightNav = menuRepeatStep('right', input.invRight || input.drop, rightEdge || dropEdge);
-      if (upNav || leftNav) state.demosCursor = moveDemosCursor(state, state.demosCursor, -1, state.demosSearch);
-      if (dnNav || rightNav) state.demosCursor = moveDemosCursor(state, state.demosCursor, 1, state.demosSearch);
+      if (leftNav) {
+        shiftDemosTab(-1);
+        clampDemosPanelState();
+      }
+      if (rightNav) {
+        shiftDemosTab(1);
+        clampDemosPanelState();
+      }
+      if (upNav) moveDemosPanelCursor(-1);
+      if (dnNav) moveDemosPanelCursor(1);
     }
 
     prevEsc = input.escape;
@@ -7506,6 +7655,9 @@ function returnToTitleScreen(): void {
 
 function finishStartGameFromTitle(): void {
   player.name = playerDisplayName();
+  player.age = playerAge;
+  player.sex = playerSex;
+  player.isFemale = playerSex === 'female';
   started = true;
   input.escape = false;
   input.controlEdit = false;
@@ -7524,6 +7676,8 @@ function startGameFromTitle(): void {
   mobileGestureUnlock();
   saveTitleActiveActorSoftLimit(titleActiveActorSoftLimit);
   savePlayerNickname(playerNickname);
+  savePlayerAge(Number(titlePlayerAgeText));
+  savePlayerSex(playerSex);
   const seedOverride = titleRunSeedOverride();
   if (seedOverride !== undefined || titleStartNeedsInit) {
     scheduleLoading(() => {
@@ -7573,6 +7727,11 @@ function startHandler(e: KeyboardEvent): void {
   if (e.code === 'ArrowLeft' || e.code === 'ArrowRight') {
     if (titleInputField === 'language') cycleTitleLanguage(e.code === 'ArrowRight' ? 1 : -1);
     else if (titleInputField === 'actorCap') adjustTitleActiveActorSoftLimit(e.code === 'ArrowRight' ? 1 : -1);
+    else if (titleInputField === 'age') {
+      titlePlayerAgeText = String(clampCharacterAge(Number(titlePlayerAgeText || DEFAULT_PLAYER_AGE) + (e.code === 'ArrowRight' ? 1 : -1), DEFAULT_PLAYER_AGE));
+      showTitle();
+    }
+    else if (titleInputField === 'sex') cyclePlayerSex();
     else showTitle();
     e.preventDefault();
     return;
@@ -7582,6 +7741,8 @@ function startHandler(e: KeyboardEvent): void {
     if (titleInputField === 'start') startGameFromTitle();
     else if (titleInputField === 'language') cycleTitleLanguage(1);
     else if (titleInputField === 'actorCap') adjustTitleActiveActorSoftLimit(1);
+    else if (titleInputField === 'age') moveTitleSelection(1);
+    else if (titleInputField === 'sex') cyclePlayerSex();
     else moveTitleSelection(1);
     return;
   }
@@ -7591,6 +7752,8 @@ function startHandler(e: KeyboardEvent): void {
       titleStartNeedsInit = true;
     } else if (titleInputField === 'name') {
       playerNickname = playerNickname.slice(0, -1);
+    } else if (titleInputField === 'age') {
+      titlePlayerAgeText = titlePlayerAgeText.slice(0, -1);
     }
     showTitle();
     e.preventDefault();
@@ -7610,6 +7773,10 @@ function startHandler(e: KeyboardEvent): void {
         playerNickname = next;
         showTitle();
       }
+    } else if (titleInputField === 'age' && /[0-9]/.test(e.key) && titlePlayerAgeText.length < 3) {
+      const next = titlePlayerAgeText + e.key;
+      titlePlayerAgeText = next === '0' ? '' : next;
+      showTitle();
     }
     e.preventDefault();
   }

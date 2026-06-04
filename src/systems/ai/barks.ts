@@ -14,6 +14,8 @@ import {
   CONTEXT_BARK_THIRST,
   CONTEXT_BARK_WOUNDED,
 } from '../../data/context_lines';
+import { generateMarkovBark } from '../markov_barks';
+import { routeBarkSpeech } from '../markov_router_adapters';
 
 /* ── Phrase pools ─────────────────────────────────────────────── */
 
@@ -1713,7 +1715,23 @@ export function bark(e: Entity, msgs: Msg[], time: number, pool: string[], poolF
   const line = pickReadonly(selected);
   const last = lastBarkByEntity.get(e.id);
   if (last && time - last.time < BARK_ENTITY_COOLDOWN_S && last.text === line) return;
-  const heard = pushNpcBarkMessage(e, msgs, time, line, color, { signal: barkSignalForPool(pool) });
+  const signal = barkSignalForPool(pool);
+  const routed = selected.length > 1
+    ? generateMarkovBark({
+      actor: {
+        id: e.id,
+        name: e.name,
+        faction: e.faction,
+        occupation: e.occupation,
+      },
+      signal,
+      exactFallback: line,
+      seed: e.alifeId ?? e.id,
+      repeatIndex: Math.floor(time),
+      routeSpeech: routeBarkSpeech,
+    })
+    : undefined;
+  const heard = pushNpcBarkMessage(e, msgs, time, routed?.text ?? line, color, { signal });
   if (!heard) return;
   lastBarkByEntity.set(e.id, { time, text: line });
   if (lastBarkByEntity.size > MAX_BARK_COOLDOWNS) pruneBarkCooldowns();

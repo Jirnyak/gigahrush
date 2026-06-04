@@ -14,7 +14,7 @@ import { applyDamageRelationPenalty, isHostile } from '../factions';
 import { clearFogInZone } from '../samosbor';
 import { agiAttackSpeedMult, meleeDamage } from '../rpg';
 import { zhelemishIncomingMeleeDamage } from '../status';
-import { spawnBloodHit, spawnDeathPool } from '../../render/blood';
+import { spawnBloodHit, spawnDeathPool } from '../blood_fx';
 import { consumeAmmo, consumeDurability } from '../inventory';
 import { isDebugOnePunchManEnabled, keepDebugOnePunchManAlive } from '../debug_cheats';
 import { entityDisplayName } from '../../entities/monster';
@@ -252,7 +252,14 @@ export function tryFactionCombat(
   const bestDist = Math.sqrt(world.dist2(e.x, e.y, target.x, target.y));
   const atkSpeedMod = e.rpg ? agiAttackSpeedMult(e.rpg) : 1;
 
-  if (simple && ws.isRanged && rangedProfile && bestDist < rangedProfile.maxRange && bestDist > rangedProfile.minRange) {
+  if (
+    simple &&
+    ws.isRanged &&
+    rangedProfile &&
+    bestDist < rangedProfile.maxRange &&
+    bestDist > rangedProfile.minRange &&
+    hasClearLineOfFire(world, e, target, rangedProfile.maxRange)
+  ) {
     e.attackCd = (e.attackCd ?? 0) - dt;
     if (e.attackCd! <= 0) {
       if (npcCommitRangedShot(world, e, target, ws, entities, nextId, atkSpeedMod, true, _time, state)) return true;

@@ -6,7 +6,7 @@ Reference success case: https://dtf.ru/indie/5077801-gigahrush-brauzernyj-surviv
 
 DTF was explicitly marked successful by the owner on 2026-05-23. Fresh API recheck at 21:44 UTC / 22:44 BST: published/not removed, `1999` views, `472` hits, `12` comments, `10` favorites, `6` reactions, `total=2499`; the public page renders roughly `2.4K` views. Working pattern: native UGC/devlog, 1 GIF + 3-5 screenshots, direct playable links, developer disclosure and concrete feedback questions.
 
-Use `gatbage/tmp/media/prcampaign_screenshot_hunt_2026-05-23/selected_best/` as the current best media source for these candidates. For quick square previews use `contact_sheet_3x3.png`; for native galleries use the individual GIF/PNG files from the same folder.
+Use `../gatbage/tmp/media/prcampaign_screenshot_hunt_2026-05-23/selected_best/` as the current best media source for these candidates. For quick square previews use `contact_sheet_3x3.png`; for native galleries use the individual GIF/PNG files from the same folder.
 
 ## Candidates
 

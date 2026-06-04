@@ -1,6 +1,7 @@
 /* ── AI system — orchestrator ─────────────────────────────────── */
 
-export { forceHide, getNpcStateText } from './npc_fsm';
+export { forceHide } from './npc_fsm';
+export { getNpcStateText } from './npc_state_text';
 export { tryMonsterProjectileStagger } from './monster';
 
 import {

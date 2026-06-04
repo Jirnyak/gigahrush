@@ -52,7 +52,7 @@ Scope: owner explicitly opened VK, Gmail and Telegram Desktop/Web and asked for 
 | --- | --- | --- |
 | Telegram main channel post | Not available | Web Telegram opened `@gigah_rush`, but the current session exposed only `Leave a comment`, not an admin channel-post composer. To make a main channel post, owner must open/promote an account with admin posting rights and a visible channel compose field. |
 | Corch `/games/` thread | Not published | Attempted to reply in the existing GIGAH|RUSH thread `https://corch.net/games/res/68`; the form contains `CAP-WIDGET`, empty `cap-token` and `kcaptcha_answer`. The click did not create a new post. Owner must solve the visible `Ботохуета` / captcha in browser, then click `Ответить`. |
-| IXBT / НАШЫ ИГРЫ bot | Still blocked | Bot still asks for a YouTube or VK Video trailer URL. Upload `gatbage/tmp/media/prcampaign_2026-06-01_ixbt/gigahrush_ixbt_trailer_20s_2026-06-01.mp4` to VK Video or YouTube, then paste that URL into `@ixbtgamesbot` with 3-5 Russian screenshots. |
+| IXBT / НАШЫ ИГРЫ bot | Still blocked | Bot still asks for a YouTube or VK Video trailer URL. Upload `../gatbage/tmp/media/prcampaign_2026-06-01_ixbt/gigahrush_ixbt_trailer_20s_2026-06-01.mp4` to VK Video or YouTube, then paste that URL into `@ixbtgamesbot` with 3-5 Russian screenshots. |
 | GameLuster form | Still not sent | PR 54 REST attempt returned JSON `mail_failed`. Use normal browser form or a displayed editor/reviews email; do not count the previous HTTP 200 as sent. |
 | Unrelated local `spamer` process | Not used | A separate `/Users/jirnyak/Mirror/spamer` process was running for unrelated outreach under another Gmail identity. It was not used for GIGAH|RUSH PR. |
 

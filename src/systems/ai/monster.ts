@@ -25,12 +25,13 @@ import {
 import { isHostile } from '../factions';
 import { scaleMonsterDmg, strMeleeDmgMult } from '../rpg';
 import { applySporeHaze, hasSporeHazeProtection, zhelemishIncomingMeleeDamage } from '../status';
-import { spawnBloodHit, spawnDeathPool } from '../../render/blood';
+import { spawnBloodHit, spawnDeathPool } from '../blood_fx';
 import { MarkType, stampMark } from '../surface_marks';
 import { followPath, tryAssignPathToCell, wanderNearby } from './pathfinding';
 import { Spr } from '../../render/sprite_index';
 import { getRecentEvents, publishEvent } from '../events';
 import { recordPlayerDamage } from '../damage';
+import { setDoorState } from '../door_state';
 import { findNoiseForActor, findNoiseInvestigationTarget, type NoiseRecord } from '../noise';
 import { ROOM_MEMORY_BITS, getRoomMemory, roomMemoryHas } from '../room_memory';
 import {
@@ -1621,9 +1622,8 @@ function trySobrannyyBreakWeakDoor(
   if (world.dist2(e.x, e.y, dx, dy) > SOBRANNYY_DOOR_BREAK_RANGE_SQ) return false;
   const door = world.doors.get(doorIdx);
   if (!door) return false;
-  door.state = DoorState.OPEN;
+  setDoorState(world, door, DoorState.OPEN);
   door.timer = Math.max(door.timer, 4);
-  world.markCellsDirty();
   e.attackCd = 1.8;
   msgs.push(msg('Собранный человек выбил слабую дверь, но гермопорог не тронул.', time, '#f84'));
   if (state) {

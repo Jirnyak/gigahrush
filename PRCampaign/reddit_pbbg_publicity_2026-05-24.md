@@ -23,7 +23,7 @@ Existing context:
 - Current 2ch thread: https://2ch.org/b/res/333348764.html
 - Direct browser build: https://gigahrush.bileter.workers.dev
 - itch.io page: https://tenevik.itch.io/gigahrush
-- Current media source: `gatbage/tmp/media/prcampaign_screenshot_hunt_2026-05-23/selected_best/`
+- Current media source: `../gatbage/tmp/media/prcampaign_screenshot_hunt_2026-05-23/selected_best/`
 
 ## Decision
 
@@ -61,7 +61,7 @@ Current decision after owner correction: monitor only, no new Reddit posts, no r
 
 ## Media Matrix
 
-Base path: `gatbage/tmp/media/prcampaign_screenshot_hunt_2026-05-23/selected_best/`
+Base path: `../gatbage/tmp/media/prcampaign_screenshot_hunt_2026-05-23/selected_best/`
 
 | Target | First media | Fallback | Notes |
 | --- | --- | --- | --- |
@@ -337,7 +337,7 @@ browser, survival horror, rpg, arpg, shooter, single-player, persistent, simulat
 Main image used in final PBBG.com submission:
 
 ```text
-gatbage/tmp/media/prcampaign_screenshot_hunt_2026-05-23/selected_best/11_factions_alife_rank_panel.png
+../gatbage/tmp/media/prcampaign_screenshot_hunt_2026-05-23/selected_best/11_factions_alife_rank_panel.png
 ```
 
 ## Owner Needed

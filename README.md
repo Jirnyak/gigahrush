@@ -42,6 +42,7 @@ Active docs are the project monument. Use them by role:
 - `fight.md`: dynamic full-floor combat, projectiles, target pressure and tactical simplicity.
 - `alife.md`: persistent procedural NPC identity, deaths and macro world consequences.
 - `korovan.md`: cold A-Life migrations, caravan identity logistics and `Инфосеть Демос` NPC profile surface.
+- `demos.md`: `Инфосеть Демос` social A-Life surface: NPC profiles, links, feed, reactions, quest notices, save/runtime caps and extension boundaries.
 - `samosbor.md`: samosbor warning, shelter, local rebuild, variants and aftermath contract.
 - `save.md`: current save shape, payload sections, sanitization and persistence contract.
 - `floors.md`: vertical world, route stops, floor memory, geometry and floor ownership.
@@ -66,28 +67,32 @@ Active docs are the project monument. Use them by role:
 - `LICENSE.md`: source-available non-commercial license for the game and repository.
 - `PRCampaign/`: active PR, media, portal, KPI and public-campaign continuity docs.
 
-Default engineering intake is `README.md`, the relevant root system docs above, current `src/` and focused tests. Do not search or read `gatbage/**`, `dist/**`, `itch/**`, `pikabu/**`, `portal/**` or `screenshots/**` during ordinary code work unless the task explicitly asks for archive/media/release context. `.rgignore` excludes those paths so normal `rg` stays focused on code and primary docs.
+The appendix archive lives outside this repository at `../gatbage/`. It preserves historical prompts, reference packets, media picks, local reports and scratch artifacts without making them part of ordinary repository context.
 
-Task-specific optional references:
+Default engineering intake is `README.md`, the relevant root system docs above, current `src/` and focused tests. Do not search or read `../gatbage/**`, `dist/**`, `itch/**`, `pikabu/**`, `portal/**` or `screenshots/**` during ordinary code work unless the task explicitly asks for archive/media/release context. Normal searches from the repository should stay focused on code and primary docs.
 
-- `gatbage/reference/design_floors/`, `gatbage/reference/procedural_floors/` and `gatbage/reference/expansions/`: design/reference packets for floor, route and anomaly authoring tasks only.
-- `gatbage/reference/ux_rework/`: cautious UX rework briefs based on player feedback; not shipped-behavior facts until implemented and verified.
-- `gatbage/reference/localization/`: localization pipeline notes and generated missing-translation reports.
-- `gatbage/reference/scenario_writers/`: subordinate voice/domain packets for text passes only. Read `gatbage/reference/scenario_writers/README.md` before using them.
+Task-specific optional appendix references:
 
-Archived root planning and item-orchestration documents, including old `expansion.md`, `plans.md`, `scaling.md`, `items_orchestrator.md` and `items_000_manifest.md`, live under `gatbage/history/` and are not active source of truth.
+- `../gatbage/reference/design_floors/`, `../gatbage/reference/procedural_floors/` and `../gatbage/reference/expansions/`: design/reference packets for floor, route and anomaly authoring tasks only.
+- `../gatbage/reference/ux_rework/`: cautious UX rework briefs based on player feedback; not shipped-behavior facts until implemented and verified.
+- `../gatbage/reference/localization/`: localization pipeline notes and generated missing-translation reports.
+- `../gatbage/reference/scenario_writers/`: subordinate voice/domain packets for text passes only. Read `../gatbage/reference/scenario_writers/README.md` before using them.
 
-Root `genfix_*.md` and `architecture_fix_*.md` batch/orchestration notes now live under `gatbage/history/batches/genfix/` and `gatbage/history/batches/architecture_fix/`. Verify archived notes against active docs and current `src/` before using them.
+Archived root planning and item-orchestration documents, including old `expansion.md`, `plans.md`, `scaling.md`, `items_orchestrator.md` and `items_000_manifest.md`, live under `../gatbage/history/` and are not active source of truth.
 
-Root `kraft_0.md`..`kraft_7.md` were orchestration prompts for the crafting implementation batch. They now live under `gatbage/history/batches/kraft/`. Use active [kraft.md](kraft.md), README and current `src/` instead of those archived prompts for shipped crafting facts.
+Root `genfix_*.md` and `architecture_fix_*.md` batch/orchestration notes now live under `../gatbage/history/batches/genfix/` and `../gatbage/history/batches/architecture_fix/`. Verify archived notes against active docs and current `src/` before using them.
 
-Root `ecology_0.md`..`ecology_11.md` were orchestration prompts for the monster ecology implementation batch. They now live under `gatbage/history/batches/ecology/`. Use active [ecology.md](ecology.md), [monsters.md](monsters.md), README and current `src/` instead of those archived prompts for shipped ecology facts.
+Root `kraft_0.md`..`kraft_7.md` were orchestration prompts for the crafting implementation batch. They now live under `../gatbage/history/batches/kraft/`. Use active [kraft.md](kraft.md), README and current `src/` instead of those archived prompts for shipped crafting facts.
 
-Root `MACRO2_*.md` files were orchestration prompts, not documentation source of truth. They now live under `gatbage/history/batches/macro2/` with the old parallel contract. Verify any archived prompt against the active docs and current `src/` before implementation.
+Root `ecology_0.md`..`ecology_11.md` were orchestration prompts for the monster ecology implementation batch. They now live under `../gatbage/history/batches/ecology/`. Use active [ecology.md](ecology.md), [monsters.md](monsters.md), README and current `src/` instead of those archived prompts for shipped ecology facts.
 
-Root `korovan_0.md`..`korovan_6.md` were orchestration prompts for the cold A-Life/caravan migration implementation batch. They now live under `gatbage/history/batches/korovan/`. Use active [korovan.md](korovan.md), [alife.md](alife.md), [economics.md](economics.md), README and current `src/` instead of those archived prompts for shipped macro A-Life/caravan facts.
+Root `MACRO2_*.md` files were orchestration prompts, not documentation source of truth. They now live under `../gatbage/history/batches/macro2/` with the old parallel contract. Verify any archived prompt against the active docs and current `src/` before implementation.
 
-Historical agent prompts, statuses, logs, batch files, retired root planning passes, root itch-page ZIP archives, scratch notes and the former appendix live under `gatbage/` with paths preserved where practical. `gatbage/**` is archive-only context unless a task explicitly asks for historical comparison. Do not recreate `gatbage/history/agent_tasks`, `gatbage/history/agent_logs`, `gatbage/history/agent_prompts` or `gatbage/reference/design_floors/AgentPrompts` for routine work.
+Root `korovan_0.md`..`korovan_6.md` were orchestration prompts for the cold A-Life/caravan migration implementation batch. They now live under `../gatbage/history/batches/korovan/`. Use active [korovan.md](korovan.md), [alife.md](alife.md), [economics.md](economics.md), README and current `src/` instead of those archived prompts for shipped macro A-Life/caravan facts.
+
+Root `demos_0.md`..`demos_6.md` were orchestration prompts for the `Инфосеть Демос` implementation batch. They now live under `../gatbage/history/agent_tasks/demos/`. Use active [demos.md](demos.md), README, [alife.md](alife.md), [korovan.md](korovan.md), [quests.md](quests.md) and current `src/` instead of those archived prompts for shipped Demos facts.
+
+Historical agent prompts, statuses, logs, batch files, retired root planning passes, root itch-page ZIP archives, scratch notes and the former appendix live under `../gatbage/` with paths preserved where practical. `../gatbage/**` is archive-only context unless a task explicitly asks for historical comparison. Do not recreate `../gatbage/history/agent_tasks`, `../gatbage/history/agent_logs`, `../gatbage/history/agent_prompts` or `../gatbage/reference/design_floors/AgentPrompts` for routine work.
 
 ## Build And Commands
 
@@ -125,9 +130,9 @@ Stack: TypeScript, Vite, `vite-plugin-singlefile`, WebGL/canvas, browser APIs. `
 | `npm run test:unit` | none | none | Node unit tests via `tsx --test`; no separate emitted Node build. |
 | `npm run test:generation` | none | none | Expanded procedural/design generation matrix enabled by `GIGAHRUSH_GENERATION_MATRIX=1`. |
 | `npm run content:audit` | none | none | Static source/content audit. |
-| `npm run l10n:extract` | `gatbage/reference/scenario_writers/game_text_inventory.md` | none | Writes the scenario-writer player-facing text inventory from source strings. |
+| `npm run l10n:extract` | `../gatbage/reference/scenario_writers/game_text_inventory.md` | none | Writes the scenario-writer player-facing text inventory from source strings. |
 | `npm run l10n:audit` | none | none | Localization coverage audit: extracts canonical Russian player-facing text and compares it with `locales/*.json`. |
-| `npm run l10n:report` | `gatbage/reference/localization/audit.json`, `gatbage/reference/localization/missing-<locale>.md` | none | Writes localization coverage reports for missing/todo/orphan translations. |
+| `npm run l10n:report` | `../gatbage/reference/localization/audit.json`, `../gatbage/reference/localization/missing-<locale>.md` | none | Writes localization coverage reports for missing/todo/orphan translations. |
 | `npm run l10n:seed` | `locales/<locale>.json` | existing translations | Merges missing canonical strings into a locale as `todo` records; pass `-- --locale <code>` for non-English locales. |
 | `npm run l10n:apply` | `locales/<locale>.json` | translation batch file | Applies a reviewed batch such as `locales/_en_core.json` and fails on placeholder/source errors. |
 | `npm run check:readonly` | none | none | Safe preflight for agents: typecheck, unit tests and content audit. |
@@ -149,7 +154,7 @@ Cloudflare scripts are optional and only matter for Net Sphere deployment.
 
 ## Cloudflare Net Sphere
 
-When deployed as a Cloudflare Worker with Assets and the D1 binding described in [cloudflare.md](cloudflare.md), the game exposes an optional in-game `НЕТ-СФЕРА` terminal on `N`. Inside that terminal, `Enter` selects the chat line when it is inactive, and submits the current line and leaves chat input when it is active, including an empty line that sends nothing. `Backspace` erases chat characters only while chat input is active, `Space` stays printable chat input only while chat input is active, `N` closes the terminal only when chat input is not active, `Delete` and right mouse close the terminal, and mouse wheel / `PageUp` / `PageDown` / arrow keys scroll the loaded chat history; `Esc` is deliberately left to the browser/pointer-lock path and is not a gameplay window key. The title flow first asks for language, then `Enter` opens a launch menu for `НЕТ-ИМЯ`, optional run seed and the active NPC/monster soft cap; blank seed means a fresh random route seed, while a typed numeric/text seed fixes the per-run route deck and the seed-scoped story/design/procedural floor generation used for first construction and samosbor regrowth. The actor cap defaults to `4096` and can be set from `1024` to `16384` in `1024` steps before a run starts; story, procedural and authored-route floor population densities resolve their NPC/monster target counts from that cap, so the default cap preserves current shipped density. Each browser also gets a persistent private `НЕТ-ГЕН` id in `localStorage` and a session id in `sessionStorage`. `/netgen NET-...` switches back to an existing cloud profile, `/new` creates a new `НЕТ-ГЕН`, and `/clear` clears local chat history. The terminal polls while open, sends a 30-second heartbeat, records active sessions, route seed/current `z`/route id, samosbor events, deaths, compact progress, recent dry event summaries such as `Жилец умер. Последний сигнал: Жилая зона, д2 08:30.`, and short sanitized chat messages labeled by nickname. The Worker also exposes an optional `/api/net/market` endpoint for compact global market impulses and bounded aggregate quote snapshots. If the binding is missing or the API is offline, the game continues as a local single-file build.
+When deployed as a Cloudflare Worker with Assets and the D1 binding described in [cloudflare.md](cloudflare.md), the game exposes an optional in-game `НЕТ-СФЕРА` terminal on `N`. Inside that terminal, `Enter` selects the chat line when it is inactive, and submits the current line and leaves chat input when it is active, including an empty line that sends nothing. `Backspace` erases chat characters only while chat input is active, `Space` stays printable chat input only while chat input is active, `N` closes the terminal only when chat input is not active, `Delete` and right mouse close the terminal, and mouse wheel / `PageUp` / `PageDown` / arrow keys scroll the loaded chat history; `Esc` is deliberately left to the browser/pointer-lock path and is not a gameplay window key. The title flow first asks for language, then `Enter` opens a launch menu for `НЕТ-ИМЯ`, player age, player sex, optional run seed and the active NPC/monster soft cap; age defaults to `25`, sex defaults to male, and both are saved in browser-local setup state and copied into the player entity/save payload. Blank seed means a fresh random route seed, while a typed numeric/text seed fixes the per-run route deck and the seed-scoped story/design/procedural floor generation used for first construction and samosbor regrowth. The actor cap defaults to `4096` and can be set from `1024` to `16384` in `1024` steps before a run starts; story, procedural and authored-route floor population densities resolve their NPC/monster target counts from that cap, so the default cap preserves current shipped density. Each browser also gets a persistent private `НЕТ-ГЕН` id in `localStorage` and a session id in `sessionStorage`. `/netgen NET-...` switches back to an existing cloud profile, `/new` creates a new `НЕТ-ГЕН`, and `/clear` clears local chat history. The terminal polls while open, sends a 30-second heartbeat, records active sessions, route seed/current `z`/route id, samosbor events, deaths, compact progress, recent dry event summaries such as `Жилец умер. Последний сигнал: Жилая зона, д2 08:30.`, and short sanitized chat messages labeled by nickname. The Worker also exposes an optional `/api/net/market` endpoint for compact global market impulses and bounded aggregate quote snapshots. If the binding is missing or the API is offline, the game continues as a local single-file build.
 
 Direct HTTPS builds also expose PWA metadata. Desktop play has a remappable `F11` fullscreen action that requests browser fullscreen with hidden navigation UI and never auto-opens on load. The mobile `FULL` control requests browser fullscreen only on compatible non-iOS browsers. Embedded mobile hosts show a direct-page launcher instead. iPhone/WebKit does not get the forced fullscreen path because it can reload the web view; iOS standalone Home Screen launch remains supported through the manifest and Apple web-app meta tags.
 
@@ -221,7 +226,7 @@ New runs create a compact in-memory pool around `100_000` procedural NPC records
 
 Persistent NPC generation uses data profiles in `src/data/alife_generation.ts`: faction weights, level tail, wealth tail, pockets and occupation mixes remain expandable without rewriting the runtime system.
 
-Authored plot/side NPC packages can carry `homeFloorKey`, tags, stats, inventory, sprite id, `spriteSeed`, optional `npcVisualId` and quests through the shared plot registry. Floor packages can register NPCs with `registerAuthoredNpc()` or `registerFloorSideQuest()`, so the A-Life population plan reserves named NPCs on their story/design/procedural route key from package data instead of a separate per-id hint table. NPC visuals use one shared contract: `npcVisualId` can select a special procedural visual family for any authored or procedural NPC, `sprite` remains the atlas/static/fallback slot, and ordinary occupation sprites are generated only when no special visual or authored slot is present.
+Authored plot/side NPC packages can carry `homeFloorKey`, tags, age, sex, stats, inventory, sprite id, `spriteSeed`, optional `npcVisualId` and quests through the shared plot registry. Floor packages can register NPCs with `registerAuthoredNpc()` or `registerFloorSideQuest()`, so the A-Life population plan reserves named NPCs on their story/design/procedural route key from package data instead of a separate per-id hint table. NPC visuals use one shared contract: `npcVisualId` can select a special procedural visual family for any authored or procedural NPC, `sprite` remains the atlas/static/fallback slot, and ordinary occupation sprites are generated only when no special visual or authored slot is present.
 
 The persistent pool keeps full-population route and numeric fields in typed-array columns: `floorKey` is interned through a route-key dictionary plus `Uint16Array` index, while floor, danger, faction, occupation, flags, `level`, `str`, `agi`, `int`, HP, money/account balance, family id, sprite/sprite seed, kill counters, `playerRelation` and `karma` are not own JS number properties on every A-Life record. Untouched ordinary loadout is regenerated from seed/faction/occupation/danger/level during materialization instead of storing `weapon` and `inventory` on every cold record; captured or overridden loadout remains sparse. Snapshot helpers expose ordinary route strings and numbers for UI, save, migration and materialization.
 
@@ -229,11 +234,13 @@ When a floor is generated, ambient generator NPCs are used as placement template
 
 The player is an A-Life actor too: the player has `karma`, kill counters, rank score inputs and `playerRelation = 100` to self. The Faction/A-Life panel includes a cached `A-LIFE РЕЙТИНГ ТОП 100` with the player's own global rank among alive persistent NPCs.
 
-The `Enter` game menu opens `Инфосеть Демос`, a read-only NPC profile browser over the same A-Life pool. It keeps only a transient cursor/search string, resolves the current profile from A-Life snapshots on demand, draws the top of the NPC's folded procedural or authored sprite as a portrait when the page is open, shows `alife:<id>` / optional `plot:<id>`, name, personal relation band, faction, occupation, level, route floor number, location, health, account balance, karma and quest affordance, and can page/search by id or name without saving UI state or pre-rendering the full population.
+The `Enter` game menu opens `Инфосеть Демос`, a tabbed NPC social surface over the same A-Life pool. It keeps cursor/search/tab/scroll as transient UI state, resolves the current profile from A-Life snapshots on demand, draws the top of the NPC's folded procedural or authored sprite as a portrait, and shows `alife:<id>` / optional `plot:<id>`, name, personal relation band, faction, occupation, level, route floor number, location, health, account balance, karma, traits, outgoing social links and quest affordance without pre-rendering the full population. The tabs are `Профиль`, `Связи`, `Лента`, `Пост` and `Квесты`; face-to-face NPC menus can open `Профиль Демоса` for materialized NPCs with an `alifeId`. A slow `demos_social_runtime` content hook consumes bounded recent `WorldEvent` slices and current-floor A-Life samples every 30 seconds, creates persistent compact posts/reactions in the `demosSocial` save section, creates runtime quest notices, applies small relation overrides through the Demos social API and may request at most one bounded social migration. Demos quest notices are read-only in the Demos UI: the player must visit and talk to the giver, where normal quest/contract systems create the actual quest and publish the handoff event.
+
+Ordinary procedural NPC speech uses the bounded Markov speech layer. Plot/authored dialogue, side/design quest copy, exact combat alerts, samosbor safety instructions and structural `world_log.ts` telemetry remain exact text. Ordinary NPC talk, selected rumor flavor, procedural quest speech around already-created quest facts, non-critical ambient/lead/witness barks and Demos posts/reactions route through `systems/speech_router.ts` via focused adapters; render only draws ready strings.
 
 Periodic background NPC/monster refill is disabled. NPC updates now come from current-floor AI, explicit faction/events/caravans, cold A-Life migration, samosbor rebuild materialization and quest/scripted spawns. The cold migration system processes a bounded record slice on a slow cadence, stores at most 512 journeys and 256 pending arrivals, moves inactive records directly, and materializes active-floor arrivals near lift anchors. Active departures walk live NPCs toward lift anchors before their records move. Caravans move resources, stability, tariffs and events, and small caravan runs can carry persistent `memberAlifeIds` so surviving members move to the destination route key. Monsters still appear through initial generation, samosbor, quests, lift encounters, hack backlash and authored consequences.
 
-The detailed product and engineering contract for this system lives in [alife.md](alife.md).
+The detailed A-Life product and engineering contract lives in [alife.md](alife.md); the detailed Demos social surface contract lives in [demos.md](demos.md).
 
 ## Project Shape
 
@@ -295,7 +302,9 @@ src/
     ai/            NPC/monster AI, utility intent executor, combat, pathfinding
     alife.ts       persistent procedural NPC pool and floor materialization
     alife_migration.ts bounded cold A-Life journeys, active arrivals and departures
-    demos.ts       read-only A-Life NPC profile/search view-model for Инфосеть Демос
+    demos.ts       A-Life NPC profile/search view-model and persistent Демос feed views
+    demos_runtime.ts slow persistent Demos social/feed/notice/migration hook
+    markov_text.ts / speech_router.ts bounded Markov NPC speech core and router
     net_sphere.ts  optional Cloudflare identity, heartbeat, stats, chat and event client
     samosbor.ts    siren, fog, seals, rebuild, boss/monster spawns
     events.ts      structured world event buffers
@@ -324,6 +333,7 @@ src/
     room_memory.ts local room facts from noise, violence and witnesses
     noise.ts       bounded sound records for doors, shots and footsteps
     rumor.ts       rumors from static data and events
+    markov_*       speech adapters for dialogue, rumors, barks, procedural quests and Demos posts/reactions
     context.ts     dialogue context snapshot
     rpg.ts         levels, XP, stat scaling
     psi.ts         PSI effects
@@ -334,7 +344,8 @@ src/
   render/
     webgl.ts        raycaster and shader effects
     hud.ts          canvas HUD
-    demos_ui.ts     Инфосеть Демос A-Life profile browser
+    demos_ui.ts     Инфосеть Демос tabbed A-Life profile, links, feed, post and quest notice browser
+    demos_feed_ui.ts bounded canvas feed panel for ready Demos post/reaction strings
     craft_ui.ts     craft/disassembly canvas overlay
     net_sphere_ui.ts Cloudflare stats/chat terminal overlay
     *_ui.ts         maps, quests, logs, containers, NPC menu, factions, computers, gambling, hacks, emergency panels
@@ -728,7 +739,7 @@ The pneumomail station is a static Maintenance POI with intake, intercept, jam a
 7. Spawn loot and monsters with seed-biased weights.
 8. Apply the anomaly: fog, teleport pairs, samosbor-tainted zones/marks, mushroom growth with carnivorous fungus rooms, cold pockets, false safe blocks, fractal/mirror/radio/conveyor topology, cement memory, moving walls/tunnels, rail trains, Bad Apple media space, Conway arenas, section shifts or zombie-apocalypse crowd/infection.
 
-Geometry and anomaly authoring contracts for future agents live in `gatbage/reference/procedural_floors/geometry.md` and `gatbage/reference/procedural_floors/anomaly.md`.
+Geometry and anomaly authoring contracts for future agents live in `../gatbage/reference/procedural_floors/geometry.md` and `../gatbage/reference/procedural_floors/anomaly.md`.
 
 ### Procedural Screens
 
@@ -987,7 +998,7 @@ Debug menu currently has 130 commands including 41 routed design-floor teleports
 
 ## Save And Load
 
-Save/load goes through browser `localStorage`. Saves include player state, game clock, quests, current base floor, `FloorRun` state, numbered lift anomaly state, lift arachna state, byte-aware floor memory snapshots, Net Terminal Gen access, map-editor patches, trimmed world events, economy, banking, stock market, production, crafting materials/known recipes and valid containers. Runtime camera mode and interpolation state are transient and are reset on new run/load/restart; player angle and browser-local FOV settings remain the persistent facts. On load, packed visited-floor snapshots are restored before the active target floor is selected, so opened doors, edited cells, surfaces, containers and non-player/non-projectile entities survive a browser save/load cycle for remembered floors.
+Save/load goes through browser `localStorage`. Saves include player state, age, sex, game clock, quests, current base floor, `FloorRun` state, numbered lift anomaly state, lift arachna state, byte-aware floor memory snapshots, Net Terminal Gen access, map-editor patches, trimmed world events, economy, banking, stock market, production, crafting materials/known recipes and valid containers. Runtime camera mode and interpolation state are transient and are reset on new run/load/restart; player angle and browser-local FOV settings remain the persistent facts. On load, packed visited-floor snapshots are restored before the active target floor is selected, so opened doors, edited cells, surfaces, containers and non-player/non-projectile entities survive a browser save/load cycle for remembered floors.
 
 Only the current save shape version is accepted. Current-version sections are sanitized by their systems so malformed `localStorage` data cannot crash loading, but old or unversioned save shapes are rejected instead of migrated.
 

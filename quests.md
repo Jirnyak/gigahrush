@@ -21,7 +21,7 @@
 
 Главный plot начинается в tutorial/living path через Ольгу Дмитриевну, сержанта Баринова и Якова Давидовича, затем ведет игрока через природу Самосбора, НИИ/документы/фракции, нижние этажи, Вестников, Ад, VOID и финальный конфликт с Творцом. Это не "коридорный туториал"; это позвоночник, который объясняет игроку вылазку, подготовку, взаимодействие, бой, исследование этажей и цену решений.
 
-Сюжетные NPC должны иметь stable `plotNpcId`, room/content anchor, readable dialogue, death handling and quest state. Если NPC может умереть, квестовая система должна либо принять смерть как consequence, либо иметь явный authored replacement/event path. Нельзя тихо респавнить quest giver как будто смерти не было.
+Сюжетные NPC должны иметь stable `plotNpcId`, room/content anchor, readable dialogue, age/sex demographic context, death handling and quest state. Если NPC может умереть, квестовая система должна либо принять смерть как consequence, либо иметь явный authored replacement/event path. Нельзя тихо респавнить quest giver как будто смерти не было.
 
 ## Побочные квесты и персонажи этажей
 
@@ -33,6 +33,7 @@
 - имеет персонажа, голос, бытовую причину and material target;
 - дает выбор: trade, steal, repair, escort, kill, hide, forge, expose, reroute, flee;
 - использует existing items/resources/documents/monsters/factions where possible;
+- уважает age/sex context, если задание связано с детьми, взрослыми ролями, семьёй, Floor 69, медпомощью, долгами или социальными поручениями;
 - публикует событие for public consequences;
 - переживает samosbor или явно объясняет why it is exempt/current-floor only.
 
@@ -48,6 +49,7 @@ Contracts/assignments live in `src/data/contracts.ts` and runtime conversion in 
 - `balance.md`: XP, деньги, level pressure, reward bands.
 - `economics.md`: item/resource/faction reward value, scarcity, contract payouts, caravan/economy consequences.
 - `alife.md`: persistent NPC identity, deaths, personal relation, future migration.
+- `demos.md`: age/sex tags, profile graph and social context for procedural notices and posts.
 - `ai.md` and `fight.md`: NPC survival, hostility, escort/combat consequences, witness reaction.
 - `floors.md`: route targets, room anchors, floor memory, samosbor aftermath.
 - `items.md`: quest items, documents, tools, rewards, contraband, samples.

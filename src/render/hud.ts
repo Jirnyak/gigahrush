@@ -1509,6 +1509,7 @@ export function drawHUD(
       nextEntityId: { v: 0 },
       lookX,
       lookY,
+      readOnly: true,
       routeHintsVisible,
       manualItemPickup,
     });

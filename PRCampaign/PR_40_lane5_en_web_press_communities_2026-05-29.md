@@ -40,7 +40,7 @@ This pass deliberately excludes fast follow-ups to already contacted outlets rec
 
 ## Three Highest-Priority Fresh Pitches
 
-These are not recorded as already sent in KPI/campaign docs. Send at most one to three in a sitting from `Tenevik Games <tenevik.games@gmail.com>` if owner/operator chooses outbound. Attach or link one GIF plus the 3x3 contact sheet from `gatbage/tmp/media/prcampaign_screenshot_hunt_2026-05-23/selected_best/`; do not attach a large ZIP unless requested.
+These are not recorded as already sent in KPI/campaign docs. Send at most one to three in a sitting from `Tenevik Games <tenevik.games@gmail.com>` if owner/operator chooses outbound. Attach or link one GIF plus the 3x3 contact sheet from `../gatbage/tmp/media/prcampaign_screenshot_hunt_2026-05-23/selected_best/`; do not attach a large ZIP unless requested.
 
 ### Bloody Disgusting
 

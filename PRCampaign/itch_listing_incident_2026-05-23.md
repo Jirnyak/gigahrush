@@ -176,10 +176,10 @@ Avoid active Newgrounds links until the RIP/upload blocker is resolved. Keep DTF
 
 Use current approved assets, not random screenshots. Current local media source:
 
-- `gatbage/tmp/media/prcampaign_screenshot_hunt_2026-05-23/selected_best/`
-- square overview: `gatbage/tmp/media/prcampaign_screenshot_hunt_2026-05-23/selected_best/contact_sheet_3x3.png`
+- `../gatbage/tmp/media/prcampaign_screenshot_hunt_2026-05-23/selected_best/`
+- square overview: `../gatbage/tmp/media/prcampaign_screenshot_hunt_2026-05-23/selected_best/contact_sheet_3x3.png`
 - motion hooks: `01_hero_gif_hell_blinking_eyes.gif`, `02_gif_underhell_maronary_samosbor_loop.gif`
-- static screenshot set: the nine PNGs currently present in `gatbage/tmp/media/prcampaign_screenshot_hunt_2026-05-23/selected_best/`
+- static screenshot set: the nine PNGs currently present in `../gatbage/tmp/media/prcampaign_screenshot_hunt_2026-05-23/selected_best/`
 
 First-choice public assets:
 

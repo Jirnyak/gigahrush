@@ -11,7 +11,7 @@ Current identity and link rule:
 - RU/CIS primary link: https://myindie.ru/games/game/gigahrush
 - EN/international page: https://tenevik.itch.io/gigahrush
 - Direct browser build: https://gigahrush.bileter.workers.dev
-- Media source: `gatbage/tmp/media/prcampaign_screenshot_hunt_2026-05-23/selected_best/` plus the public itch GIFs/cover already recorded in `PRCampaign/media_pitch_targets_ru.md`.
+- Media source: `../gatbage/tmp/media/prcampaign_screenshot_hunt_2026-05-23/selected_best/` plus the public itch GIFs/cover already recorded in `PRCampaign/media_pitch_targets_ru.md`.
 - Public wording must not expose map size/topology. Use `unbounded concrete megastructure` / `bezgranichnaya betonnaya struktura` style wording.
 
 ## Send-Now Targets

@@ -48,7 +48,7 @@ Effective for new campaign copy after this report:
 
 ## Post Pack
 
-Use current media from `gatbage/tmp/media/prcampaign_screenshot_hunt_2026-05-23/selected_best/` first. Preferred attachments: `01_hero_gif_hell_blinking_eyes.gif`, `04_active_samosbor_monsters.png`, `08_inventory_prep_loadout.png`, `07_contract_quest_log.png`, `09_trade_grid.png`, `11_factions_alife_rank_panel.png`, or `contact_sheet_3x3.png`.
+Use current media from `../gatbage/tmp/media/prcampaign_screenshot_hunt_2026-05-23/selected_best/` first. Preferred attachments: `01_hero_gif_hell_blinking_eyes.gif`, `04_active_samosbor_monsters.png`, `08_inventory_prep_loadout.png`, `07_contract_quest_log.png`, `09_trade_grid.png`, `11_factions_alife_rank_panel.png`, or `contact_sheet_3x3.png`.
 
 ### Owned RU Short Post
 

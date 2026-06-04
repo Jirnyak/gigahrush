@@ -7,8 +7,8 @@
 - MyIndie RU/CIS primary page: https://myindie.ru/games/game/gigahrush
 - direct browser build: https://gigahrush.bileter.workers.dev
 - itch.io mirror / EN page: https://tenevik.itch.io/gigahrush
-- 30-60 second gameplay GIF or clip with Samosbor / combat / HUD; current GIF hooks are in `gatbage/tmp/media/prcampaign_screenshot_hunt_2026-05-23/selected_best/`.
-- 5-8 screenshots from `gatbage/tmp/media/prcampaign_screenshot_hunt_2026-05-23/selected_best/`; this is the current owner-updated best-pick folder.
+- 30-60 second gameplay GIF or clip with Samosbor / combat / HUD; current GIF hooks are in `../gatbage/tmp/media/prcampaign_screenshot_hunt_2026-05-23/selected_best/`.
+- 5-8 screenshots from `../gatbage/tmp/media/prcampaign_screenshot_hunt_2026-05-23/selected_best/`; this is the current owner-updated best-pick folder.
 - capsule / cover image from the current public itch cover or a freshly regenerated portal asset; the old local binary asset backup was removed.
 - RU fact sheet: жанр, платформа, статус, author, current build features.
 - EN fact sheet: genre, platform, status, author, current build features.
@@ -35,9 +35,9 @@
 
 ## First Assets To Use
 
-- Current local source of truth: `gatbage/tmp/media/prcampaign_screenshot_hunt_2026-05-23/selected_best/`.
-- Square 3x3 overview: `gatbage/tmp/media/prcampaign_screenshot_hunt_2026-05-23/selected_best/contact_sheet_3x3.png`.
-- Legacy-compatible same sheet filename: `gatbage/tmp/media/prcampaign_screenshot_hunt_2026-05-23/selected_best/contact_sheet_png.png`.
+- Current local source of truth: `../gatbage/tmp/media/prcampaign_screenshot_hunt_2026-05-23/selected_best/`.
+- Square 3x3 overview: `../gatbage/tmp/media/prcampaign_screenshot_hunt_2026-05-23/selected_best/contact_sheet_3x3.png`.
+- Legacy-compatible same sheet filename: `../gatbage/tmp/media/prcampaign_screenshot_hunt_2026-05-23/selected_best/contact_sheet_png.png`.
 - Motion hooks: `01_hero_gif_hell_blinking_eyes.gif`, `02_gif_underhell_maronary_samosbor_loop.gif`.
 - Static 3x3 set: `04_active_samosbor_monsters.png`, `06_underhell_gate_pack.png`, `12_living_monster_ring_clean.png`, `07_contract_quest_log.png`, `08_inventory_prep_loadout.png`, `09_trade_grid.png`, `08_living_full_map.png`, `10_full_map_route_context.png`, `11_factions_alife_rank_panel.png`.
 - GIF: https://img.itch.zone/aW1hZ2UvNDU4NzE2MC8yNzQwNDQ4OS5naWY=/original/LTioNh.gif

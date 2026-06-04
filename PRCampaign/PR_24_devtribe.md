@@ -60,7 +60,7 @@ No DevTribe post was published because the account cannot access the editor yet.
 2. Confirm only `tenevik.games@gmail.com`; do not use old `jirnyak` identity.
 3. Reopen `https://devtribe.ru/p/games-dev/add`.
 4. If the editor opens, publish a unique DevTribe diary, not the DTF text:
-   - media first from `gatbage/tmp/media/prcampaign_screenshot_hunt_2026-05-23/selected_best/`;
+   - media first from `../gatbage/tmp/media/prcampaign_screenshot_hunt_2026-05-23/selected_best/`;
    - MyIndie first: `https://myindie.ru/games/game/gigahrush`;
    - direct build second: `https://gigahrush.bileter.workers.dev`;
    - itch only as mirror/EN fallback;

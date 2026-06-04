@@ -31,12 +31,12 @@ Opened the authenticated GamePush panel:
 Uploaded the existing local GamePush promo pack:
 
 ```txt
-gatbage/tmp/media/gamepush_promo_2026-05-28/gigahrush_icon_1024.png
-gatbage/tmp/media/gamepush_promo_2026-05-28/gigahrush_cover_1920x1080.png
-gatbage/tmp/media/gamepush_promo_2026-05-28/gigahrush_screen_1_underhell_gate_1280x720.png
-gatbage/tmp/media/gamepush_promo_2026-05-28/gigahrush_screen_2_living_monster_1280x720.png
-gatbage/tmp/media/gamepush_promo_2026-05-28/gigahrush_screen_3_inventory_1280x720.png
-gatbage/tmp/media/gamepush_promo_2026-05-28/gigahrush_screen_4_alife_1280x720.png
+../gatbage/tmp/media/gamepush_promo_2026-05-28/gigahrush_icon_1024.png
+../gatbage/tmp/media/gamepush_promo_2026-05-28/gigahrush_cover_1920x1080.png
+../gatbage/tmp/media/gamepush_promo_2026-05-28/gigahrush_screen_1_underhell_gate_1280x720.png
+../gatbage/tmp/media/gamepush_promo_2026-05-28/gigahrush_screen_2_living_monster_1280x720.png
+../gatbage/tmp/media/gamepush_promo_2026-05-28/gigahrush_screen_3_inventory_1280x720.png
+../gatbage/tmp/media/gamepush_promo_2026-05-28/gigahrush_screen_4_alife_1280x720.png
 ```
 
 The GamePush Promo Materials page then showed icon and cover slots without the upload placeholder, and `Screenshot (album)` changed to `Upload more`.

@@ -45,9 +45,9 @@ Target: Tenevik profile first. Do not post to `r/SurvivalGaming` until the profi
 
 Manual attachment:
 
-- Main: `gatbage/tmp/media/prcampaign_screenshot_hunt_2026-05-23/selected_best/02_gif_underhell_maronary_samosbor_loop.gif`
-- Fallback still if GIF upload fails: `gatbage/tmp/media/prcampaign_screenshot_hunt_2026-05-23/selected_best/contact_sheet_3x3.png`
-- Optional second media only if Reddit gallery upload works cleanly: `gatbage/tmp/media/prcampaign_screenshot_hunt_2026-05-23/selected_best/08_inventory_prep_loadout.png`
+- Main: `../gatbage/tmp/media/prcampaign_screenshot_hunt_2026-05-23/selected_best/02_gif_underhell_maronary_samosbor_loop.gif`
+- Fallback still if GIF upload fails: `../gatbage/tmp/media/prcampaign_screenshot_hunt_2026-05-23/selected_best/contact_sheet_3x3.png`
+- Optional second media only if Reddit gallery upload works cleanly: `../gatbage/tmp/media/prcampaign_screenshot_hunt_2026-05-23/selected_best/08_inventory_prep_loadout.png`
 
 Title:
 

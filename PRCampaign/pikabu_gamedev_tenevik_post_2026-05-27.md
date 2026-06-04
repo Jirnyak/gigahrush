@@ -21,28 +21,28 @@ If body editing stays unavailable, do not submit another correction while commen
 
 Upload media natively when possible. The post should read like a developer story with screenshots, not a bare external-link announcement.
 
-1. `gatbage/tmp/media/prcampaign_screenshot_hunt_2026-05-23/selected_best/01_hero_gif_hell_blinking_eyes.gif`
+1. `../gatbage/tmp/media/prcampaign_screenshot_hunt_2026-05-23/selected_best/01_hero_gif_hell_blinking_eyes.gif`
    - Alt: `ГИГАХРУЩ: стены с глазами в красном коридоре`
    - Caption: `Короткий horror-hook: дом смотрит на игрока еще до объяснения систем.`
-2. `gatbage/tmp/media/prcampaign_screenshot_hunt_2026-05-23/selected_best/04_active_samosbor_monsters.png`
+2. `../gatbage/tmp/media/prcampaign_screenshot_hunt_2026-05-23/selected_best/04_active_samosbor_monsters.png`
    - Alt: `ГИГАХРУЩ: САМОСБОР, монстры и боевой HUD`
    - Caption: `САМОСБОР как игровое давление: сирена, туман, враги и решение бежать или добивать цель.`
-3. `gatbage/tmp/media/prcampaign_screenshot_hunt_2026-05-23/selected_best/08_inventory_prep_loadout.png`
+3. `../gatbage/tmp/media/prcampaign_screenshot_hunt_2026-05-23/selected_best/08_inventory_prep_loadout.png`
    - Alt: `ГИГАХРУЩ: инвентарь перед вылазкой`
    - Caption: `Петля начинается до боя: еда, вода, патроны, бинты и оружие решают, насколько далеко можно уйти.`
-4. `gatbage/tmp/media/prcampaign_screenshot_hunt_2026-05-23/selected_best/07_contract_quest_log.png`
+4. `../gatbage/tmp/media/prcampaign_screenshot_hunt_2026-05-23/selected_best/07_contract_quest_log.png`
    - Alt: `ГИГАХРУЩ: журнал задания с наградой, сроком и маршрутом`
    - Caption: `Контракты дают конкретный повод выйти из жилой зоны: цель, срок, риск и награда.`
-5. `gatbage/tmp/media/prcampaign_screenshot_hunt_2026-05-23/selected_best/09_trade_grid.png`
+5. `../gatbage/tmp/media/prcampaign_screenshot_hunt_2026-05-23/selected_best/09_trade_grid.png`
    - Alt: `ГИГАХРУЩ: экран торговли с NPC`
    - Caption: `Торговля и дефицит ресурсов: патроны и тушенка важны не меньше стрельбы.`
-6. `gatbage/tmp/media/prcampaign_screenshot_hunt_2026-05-23/selected_best/11_factions_alife_rank_panel.png`
+6. `../gatbage/tmp/media/prcampaign_screenshot_hunt_2026-05-23/selected_best/11_factions_alife_rank_panel.png`
    - Alt: `ГИГАХРУЩ: отношения фракций и A-Life рейтинг NPC`
    - Caption: `Фракции, отношения и A-Life: NPC живут, конфликтуют и могут исчезать навсегда.`
 
 Fallback:
 
-- If Pikabu accepts only one strong preview, use `gatbage/tmp/media/prcampaign_screenshot_hunt_2026-05-23/selected_best/contact_sheet_3x3.png`.
+- If Pikabu accepts only one strong preview, use `../gatbage/tmp/media/prcampaign_screenshot_hunt_2026-05-23/selected_best/contact_sheet_3x3.png`.
 - If GIF upload fails, start with `04_active_samosbor_monsters.png`.
 - Do not upload both `contact_sheet_3x3.png` and `contact_sheet_png.png`; they are the same image.
 

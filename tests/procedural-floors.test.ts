@@ -36,6 +36,7 @@ import {
   currentFloorRunEntry,
   currentFloorRunLabel,
   ensureFloorRunState,
+  floorRunEntryForDesignFloor,
   floorRunArrivalLead,
   floorRunEntryFloorKey,
   floorRunEntryKind,
@@ -593,6 +594,33 @@ test('floor run UX labels avoid duplicate procedural z and keep return path', ()
   assert.match(floorRunEntryRouteCard(authored!), /РУЧНОЙ МАРШРУТ Z-4 floor_69: .+\. населенный сбой, сделки, слухи\./);
   assert.match(floorRunArrivalLead(authored!, LiftDirection.UP), /населенный сбой, сделки, слухи/);
   assert.match(floorRunArrivalLead(authored!, LiftDirection.UP), /Возврат: лифт ↑ к предыдущему Z/);
+});
+
+test('strict portal mode resolves blocked Floor 69 as procedural route entry', () => {
+  const originalLocation = Object.getOwnPropertyDescriptor(globalThis, 'location');
+  Object.defineProperty(globalThis, 'location', {
+    configurable: true,
+    value: { search: '?portal=pikabu' },
+  });
+
+  try {
+    const state = makeGameState({ currentFloor: FloorLevel.LIVING });
+    setFloorRunState(state, { runSeed: 123, currentZ: -3, specs: {}, visited: {} }, FloorLevel.LIVING);
+
+    const routeEntry = resolveFloorRunRoute(state, LiftDirection.DOWN);
+    assert.equal(routeEntry?.z, -4);
+    assert.equal(routeEntry?.procedural, true);
+    assert.equal(routeEntry?.designFloorId, undefined);
+    assert.equal(floorRunEntryFloorKey(routeEntry!), 'procedural:z-4');
+
+    const directEntry = floorRunEntryForDesignFloor(state, 'floor_69');
+    assert.equal(directEntry?.procedural, true);
+    assert.equal(floorRunEntryFloorKey(directEntry!), 'procedural:z-4');
+    assert.ok(ensureFloorRunState(state).specs['z-4']);
+  } finally {
+    if (originalLocation) Object.defineProperty(globalThis, 'location', originalLocation);
+    else delete (globalThis as typeof globalThis & { location?: Location }).location;
+  }
 });
 
 test('floor run reads keep normalized state identity', () => {

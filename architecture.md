@@ -38,8 +38,8 @@ Critical runtime facts:
 - `systems/events.ts` is the current EventBus analogue: fixed-size ring buffers, public event publication, and query filters.
 - Shared `E` interaction goes through `systems/interactions.ts`; generated gambling machines, local computers, NPC table-game interfaces, NET-hack terminals, emergency panels, Net Terminal Gen and special floor interactions plug into that dispatcher.
 - `systems/interactive.ts` is the generic sparse cell-bound interactive layer. Definitions live in `src/data/interactive.ts`, explicit generation helpers live in `src/gen/interactive_placement.ts`, broken fixture placement lives in `src/gen/interactive_fixtures.ts`, and one `ContentInteractionHook` exposes feature-like objects and container adapters to the shared dispatcher. Current shipped adapters are transient: lazy `Feature.SINK` drinking, lazy `Feature.TOILET` needs relief, repair-pending broken sink/toilet fixtures, explicit `workbench_basic` placement and visible `WorldContainer` delegation. `src/data/floor_object_placement.ts` defines story-floor, design-route and procedural-geometry profiles for static decor features, explicit interactives, broken fixture overlays and craft-station subprofiles; `src/gen/floor_object_placement.ts` applies them once during generation through reachable bounded placement. Complex runtime-owned objects such as moving trains stay in their authored/anomaly systems. The contract is feature-first: floor generators own how many visual primitives exist and where they are, while `InteractiveDef` ids own what `E` does when a matching primitive is targeted. They do not change save shape.
-- `systems/alife.ts` owns persistent procedural NPC identity. A run creates a compact NPC pool around `100_000` procedural identities within a `131_072` technical capacity, materializes only the active floor into live `entities`, folds live state back on transitions/rebuilds/saves, and records permanent deaths. Browser saves keep dead procedural A-Life ids with a current cap of `65_536`. `systems/npc_relations.ts` owns compact personal relation-to-player math shared by A-Life, quests and hostility. `alife.md` is the detailed design contract for this feature.
-- Save/load uses `systems/save_runtime.ts` and `systems/save_payload.ts`. Current save shape version is `17`; old or unversioned saves are rejected rather than migrated. `save.md` is the detailed persistence contract.
+- `systems/alife.ts` owns persistent procedural NPC identity. A run creates a compact NPC pool around `100_000` procedural identities within a `131_072` technical capacity, materializes only the active floor into live `entities`, folds live state back on transitions/rebuilds/saves, and records permanent deaths. Browser saves keep dead procedural A-Life ids with a current cap of `65_536`. Age is stored as a byte column and sex as a byte code column in the cold pool; snapshots expose ordinary `number`/`CharacterSex` values for Demos, quests, AI and UI. `systems/npc_relations.ts` owns compact personal relation-to-player math shared by A-Life, quests and hostility. `alife.md` is the detailed design contract for this feature.
+- Save/load uses `systems/save_runtime.ts` and `systems/save_payload.ts`. Current save shape version is `20`; old or unversioned saves are rejected rather than migrated. `save.md` is the detailed persistence contract.
 - Existing content extensibility already exists in `registerSideQuest`, `registerZoneContent`, floor content manifests, `SAMOSBOR_VARIANTS`, `getSamosborBeatDefs()`, contract/economy registries, route/design-floor ids and `publishEvent`. `samosbor.md` is the detailed samosbor contract.
 
 ## 1.1 Project Bible And Honest Scope
@@ -252,7 +252,7 @@ Green files, safe for one agent:
 - New `src/gen/<floor>/<module>.ts`
 - New `src/data/<domain>_<module>.ts` or a new small domain file
 - New `src/entities/<monster>.ts`
-- New docs under `gatbage/reference/`
+- New focused reference docs under external `../gatbage/reference/` only when the task explicitly asks for appendix/reference work
 
 Yellow files, edit only with a narrow reason:
 
@@ -601,9 +601,9 @@ System telemetry entry:
   last action flags
 ```
 
-Store the last 300 relevant samples, not infinite history. In browser runtime, dumps should go to debug UI, console, downloadable blob, or save data. In Node-side tooling, durable dumps should stay outside active docs unless an explicit orchestration/debug task asks for an archived `gatbage/history/agent_logs/` record.
+Store the last 300 relevant samples, not infinite history. In browser runtime, dumps should go to debug UI, console, downloadable blob, or save data. In Node-side tooling, durable dumps should stay outside active docs unless an explicit orchestration/debug task asks for an external appendix record under `../gatbage/history/agent_logs/`.
 
-Historical `gatbage/history/agent_logs`, task statuses and prompts were consolidated into `gatbage/history/root_notes/appendix.md` and archived under `gatbage/`. Recreate those directories only for an explicit orchestration/debug-dump task; routine patches should keep their durable notes compact and update `gatbage/history/root_notes/appendix.md` only when the context will be useful later.
+Historical `../gatbage/history/agent_logs`, task statuses and prompts were consolidated into `../gatbage/history/root_notes/appendix.md` in the external appendix. Recreate those directories only for an explicit orchestration/debug-dump task; routine patches should keep their durable notes compact and update appendix notes only when the context will be useful later.
 
 ## 16. Verification Checklist
 

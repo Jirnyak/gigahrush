@@ -15,6 +15,8 @@ const NPC_ID = 'meduka_meguku';
 const NPC_DEF: PlotNpcDef = {
   name: 'Мегука ПСИ-дежурная',
   isFemale: true,
+  age: 14,
+  sex: 'female',
   faction: Faction.SCIENTIST,
   occupation: Occupation.HUNTER,
   sprite: authoredNpcSpr(NPC_ID),
@@ -63,7 +65,7 @@ export function spawnMedukaMeguku(
       x: x + 0.5, y: y + 0.5,
       angle: Math.random() * Math.PI * 2, pitch: 0,
       alive: true, speed: NPC_DEF.speed, sprite: NPC_DEF.sprite,
-      name: NPC_DEF.name, isFemale: NPC_DEF.isFemale,
+      name: NPC_DEF.name, isFemale: NPC_DEF.isFemale, age: NPC_DEF.age, sex: NPC_DEF.sex,
       needs: freshNeeds(), hp: NPC_DEF.hp, maxHp: NPC_DEF.maxHp, money: NPC_DEF.money,
       ai: { goal: AIGoal.IDLE, tx: 0, ty: 0, path: [], pi: 0, stuck: 0, timer: 0 },
       inventory: NPC_DEF.inventory.map(i => ({ ...i })),

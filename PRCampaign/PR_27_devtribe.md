@@ -82,7 +82,7 @@ Use a unique DevTribe diary, media first, with this angle:
 
 `Как я собираю вылазку в ГИГАХРУЩЕ: подготовка, САМОСБОР, контракты и A-Life в браузерном survival horror`
 
-Recommended media order from `gatbage/tmp/media/prcampaign_screenshot_hunt_2026-05-23/selected_best/`:
+Recommended media order from `../gatbage/tmp/media/prcampaign_screenshot_hunt_2026-05-23/selected_best/`:
 
 1. `01_hero_gif_hell_blinking_eyes.gif`
 2. `08_inventory_prep_loadout.png`

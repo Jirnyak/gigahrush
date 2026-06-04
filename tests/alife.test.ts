@@ -86,6 +86,8 @@ test('A-Life population plan pre-fills records, reserved identities and empty bu
           female: true,
           faction: Faction.SCIENTIST,
           occupation: Occupation.SCIENTIST,
+          age: 31,
+          sex: 'female',
           canGiveQuest: true,
           level: 9,
           maxHp: 3000,
@@ -114,13 +116,15 @@ test('A-Life population plan pre-fills records, reserved identities and empty bu
   assert.equal(reserved?.name, 'Резервная Ольга');
   assert.equal(reserved?.faction, Faction.SCIENTIST);
   assert.equal(reserved?.occupation, Occupation.SCIENTIST);
+  assert.equal(reserved?.age, 31);
+  assert.equal(reserved?.sex, 'female');
   assert.equal(reserved?.canGiveQuest, true);
   assert.equal(reserved?.level, 9);
   assert.equal(reserved?.hp, 2700);
   assert.equal(reserved?.maxHp, 3000);
   assert.equal(reserved?.money, 10_000);
   assert.equal(reserved?.accountRubles, 1_000_000);
-  for (const columnField of ['floorKey', 'floor', 'danger', 'faction', 'occupation', 'female', 'level', 'hp', 'maxHp', 'money', 'accountRubles', 'familyId', 'canGiveQuest', 'sprite', 'spriteSeed', 'weapon', 'inventory', 'kills', 'npcKills', 'monsterKills', 'dead', 'touched']) {
+  for (const columnField of ['floorKey', 'floor', 'danger', 'faction', 'occupation', 'female', 'age', 'sex', 'level', 'hp', 'maxHp', 'money', 'accountRubles', 'familyId', 'canGiveQuest', 'sprite', 'spriteSeed', 'weapon', 'inventory', 'kills', 'npcKills', 'monsterKills', 'dead', 'touched']) {
     assert.equal(Object.hasOwn(alife.npcs[0], columnField), false, `${columnField} should not live as a per-record object field`);
   }
 });
@@ -410,6 +414,31 @@ test('A-Life design-floor records use Floor 69 social population mix', () => {
   assert.ok(floor69.some(npc => npc.occupation === Occupation.DOCTOR), 'floor_69 should include clinic records');
   assert.ok(floor69.some(npc => npc.occupation === Occupation.SECRETARY || npc.occupation === Occupation.STOREKEEPER), 'floor_69 should include staff/accounting records');
   assert.ok(industrialTrades.length < floor69.length * 0.05, 'floor_69 should not inherit the generic Maintenance worker mix');
+});
+
+test('A-Life current route plan replaces blocked Floor 69 in strict portal mode', () => {
+  const originalLocation = Object.getOwnPropertyDescriptor(globalThis, 'location');
+  Object.defineProperty(globalThis, 'location', {
+    configurable: true,
+    value: { search: '?portal=pikabu' },
+  });
+
+  try {
+    const state = minimalState();
+    setAlifeState(state, { seed: 12345, total: 100_000 });
+    let blockedDesignRecords = 0;
+    let replacementRecords = 0;
+    forEachAlifeNpcRecordSlice(state, 0, defaultAlifePopulation(), snapshot => {
+      if (snapshot.floorKey === 'design:floor_69') blockedDesignRecords++;
+      if (snapshot.floorKey === 'procedural:z-4') replacementRecords++;
+    });
+
+    assert.equal(blockedDesignRecords, 0);
+    assert.ok(replacementRecords > 0, 'strict portal route should allocate A-Life to the procedural replacement floor');
+  } finally {
+    if (originalLocation) Object.defineProperty(globalThis, 'location', originalLocation);
+    else delete (globalThis as typeof globalThis & { location?: Location }).location;
+  }
 });
 
 test('A-Life generation keeps broad level tail and splits wealth mostly into account balance', () => {

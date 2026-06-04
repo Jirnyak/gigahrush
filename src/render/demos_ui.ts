@@ -3,13 +3,43 @@
 import { type Entity, type GameState } from '../core/types';
 import { generateNpcProfileSprite } from '../entities/procedural_visuals';
 import { type DemosProfile, getDemosSnapshot } from '../systems/demos';
+import {
+  buildDemosProfileFeedView,
+  buildDemosSocialLinksView,
+  getDemosProfileDetails,
+} from '../systems/demos_profiles';
+import {
+  renderDemosMarkovPostText,
+  type DemosMarkovPost,
+} from '../systems/demos_posts';
+import type {
+  DemosPersistentPost,
+  DemosPersistentReaction,
+  DemosSocialSaveState,
+} from '../systems/demos_save';
 import { controlBindingLabel, menuCloseHint } from '../systems/controls';
+import { routeDemosSpeech } from '../systems/markov_router_adapters';
 import { S } from './pixutil';
 import { drawGlitchText, drawNeuroPanel } from './hud_fx';
+import { drawDemosFeedPanel } from './demos_feed_ui';
+import {
+  drawDemosProfileFeedPanel,
+  drawDemosProfilePanel,
+  drawDemosTabsHeader,
+} from './demos_profile_ui';
+import { drawDemosSocialLinksPanel } from './demos_social_ui';
 import { fitText } from './ui_text';
 
 const PORTRAIT_CACHE_MAX = 24;
 const portraitCache = new Map<string, HTMLCanvasElement>();
+const DEMOS_TAB_LABELS: Record<GameState['demosTab'], string> = {
+  profile: 'Профиль',
+  links: 'Связи',
+  feed: 'Лента',
+  post: 'Пост',
+  quests: 'Квесты',
+};
+const DEMOS_TAB_ORDER: GameState['demosTab'][] = ['profile', 'links', 'feed', 'post', 'quests'];
 
 function cacheKey(profile: DemosProfile): string {
   return `${profile.npcVisualId ?? ''}:${profile.spriteSeed}:${profile.sprite}:${profile.occupation}:${profile.faction}:${profile.female ? 1 : 0}`;
@@ -132,6 +162,180 @@ function drawLine(
   ctx.fillText(fitText(ctx, value, Math.max(16, w - labelW - 4 * sy)), x + labelW, y);
 }
 
+function demosSocialState(state: GameState): DemosSocialSaveState | undefined {
+  return (state as GameState & { demosSocial?: DemosSocialSaveState }).demosSocial;
+}
+
+function savedPostAtCursor(state: GameState): DemosPersistentPost | undefined {
+  const posts = demosSocialState(state)?.posts ?? [];
+  if (posts.length === 0) return undefined;
+  const cursor = Math.max(0, Math.min(posts.length - 1, Math.floor(state.demosPostCursor || 0)));
+  return posts[posts.length - 1 - cursor];
+}
+
+function postAsMarkov(post: DemosPersistentPost): DemosMarkovPost {
+  return {
+    id: post.id,
+    authorAlifeId: post.authorAlifeId,
+    createdAt: post.createdAt,
+    sourceEventId: post.sourceEventId,
+    floorKey: post.floorKey,
+    parentPostId: post.parentPostId,
+    templateId: post.templateId,
+    seed: post.seed,
+    args: post.args,
+    mentionedAlifeIds: post.mentionedAlifeIds,
+    privacy: post.privacy,
+    tags: post.tags,
+    score: post.score,
+  };
+}
+
+function reactionsForPost(state: GameState, postId: number): readonly DemosPersistentReaction[] {
+  return (demosSocialState(state)?.reactions ?? [])
+    .filter(reaction => reaction.postId === postId)
+    .slice(-8)
+    .reverse();
+}
+
+function drawDemosEmptyPanel(
+  ctx: CanvasRenderingContext2D,
+  text: string,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  sx: number,
+  sy: number,
+): void {
+  ctx.fillStyle = 'rgba(0,10,14,0.84)';
+  ctx.fillRect(x, y, w, h);
+  ctx.strokeStyle = 'rgba(0,220,190,0.34)';
+  ctx.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1);
+  ctx.font = `${8 * sy}px monospace`;
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'top';
+  ctx.fillStyle = '#789';
+  ctx.fillText(fitText(ctx, text, w - 14 * sx), x + 7 * sx, y + 8 * sy);
+}
+
+function drawDemosPostPanel(
+  ctx: CanvasRenderingContext2D,
+  state: GameState,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  sx: number,
+  sy: number,
+): void {
+  const post = savedPostAtCursor(state);
+  if (!post) {
+    drawDemosEmptyPanel(ctx, 'Постов пока нет. Директор Демоса пишет только из реальных событий.', x, y, w, h, sx, sy);
+    return;
+  }
+  ctx.fillStyle = 'rgba(0,10,14,0.84)';
+  ctx.fillRect(x, y, w, h);
+  ctx.strokeStyle = 'rgba(0,220,190,0.42)';
+  ctx.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1);
+
+  const pad = 7 * sx;
+  let rowY = y + 7 * sy;
+  const rowW = w - pad * 2;
+  const rendered = renderDemosMarkovPostText(postAsMarkov(post), { routeSpeech: routeDemosSpeech });
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'top';
+  ctx.font = `bold ${9 * sy}px monospace`;
+  ctx.fillStyle = '#25ffd0';
+  ctx.fillText(fitText(ctx, `post:${post.id}  alife:${post.authorAlifeId}`, rowW), x + pad, rowY);
+  rowY += 15 * sy;
+
+  ctx.font = `${7 * sy}px monospace`;
+  ctx.fillStyle = '#6a9';
+  const parent = post.parentPostId !== undefined ? `  parent:post:${post.parentPostId}` : '';
+  ctx.fillText(fitText(ctx, `${Math.floor(post.createdAt)}s${parent}  ${post.privacy}`, rowW), x + pad, rowY);
+  rowY += 12 * sy;
+
+  ctx.font = `${8 * sy}px monospace`;
+  ctx.fillStyle = '#d9f1ed';
+  const text = fitText(ctx, rendered.text, rowW);
+  ctx.fillText(text, x + pad, rowY);
+  rowY += 16 * sy;
+
+  ctx.font = `${7 * sy}px monospace`;
+  ctx.fillStyle = '#789';
+  const mentions = post.mentionedAlifeIds?.length ? post.mentionedAlifeIds.map(id => `alife:${id}`).join(', ') : 'нет';
+  ctx.fillText(fitText(ctx, `упоминания: ${mentions}`, rowW), x + pad, rowY);
+  rowY += 11 * sy;
+  ctx.fillText(fitText(ctx, `теги: ${post.tags.slice(0, 6).join(', ') || 'нет'}`, rowW), x + pad, rowY);
+  rowY += 15 * sy;
+
+  ctx.fillStyle = '#25ffd0';
+  ctx.fillText('реакции', x + pad, rowY);
+  rowY += 11 * sy;
+  const reactions = reactionsForPost(state, post.id);
+  if (reactions.length === 0) {
+    ctx.fillStyle = '#789';
+    ctx.fillText(fitText(ctx, 'Реакций пока нет.', rowW), x + pad, rowY);
+    return;
+  }
+  const bottom = y + h - 6 * sy;
+  for (const reaction of reactions) {
+    if (rowY + 10 * sy > bottom) break;
+    const delta = reaction.relationDelta !== undefined ? ` ${reaction.relationDelta > 0 ? '+' : ''}${reaction.relationDelta}` : '';
+    ctx.fillStyle = (reaction.relationDelta ?? 0) < 0 ? '#e99' : '#9dc';
+    ctx.fillText(fitText(ctx, `alife:${reaction.reactorAlifeId} ${reaction.kind}${delta}`, rowW), x + pad, rowY);
+    rowY += 10 * sy;
+  }
+}
+
+function drawDemosQuestPanel(
+  ctx: CanvasRenderingContext2D,
+  profile: DemosProfile | undefined,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  sx: number,
+  sy: number,
+): void {
+  ctx.fillStyle = 'rgba(0,10,14,0.84)';
+  ctx.fillRect(x, y, w, h);
+  ctx.strokeStyle = 'rgba(0,220,190,0.38)';
+  ctx.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1);
+  const pad = 7 * sx;
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'top';
+  ctx.font = `bold ${9 * sy}px monospace`;
+  ctx.fillStyle = '#25ffd0';
+  ctx.fillText(fitText(ctx, 'ЗАЯВКИ ДЕМОСА', w - pad * 2), x + pad, y + 6 * sy);
+  let rowY = y + 24 * sy;
+  const rowW = w - pad * 2;
+  ctx.font = `${7.2 * sy}px monospace`;
+  ctx.fillStyle = '#89a';
+  ctx.fillText(fitText(ctx, 'Чтобы принять дело, нужно найти человека на этаже и поговорить лично.', rowW), x + pad, rowY);
+  rowY += 14 * sy;
+  const notices = profile?.questNotices ?? [];
+  if (notices.length === 0) {
+    ctx.fillStyle = '#789';
+    ctx.fillText(fitText(ctx, 'У выбранного профиля нет активных заявок.', rowW), x + pad, rowY);
+    return;
+  }
+  const bottom = y + h - 6 * sy;
+  for (const notice of notices) {
+    if (rowY + 28 * sy > bottom) break;
+    ctx.fillStyle = 'rgba(2,18,22,0.72)';
+    ctx.fillRect(x + pad, rowY, rowW, 25 * sy);
+    ctx.strokeStyle = notice.canAcceptHere ? 'rgba(70,220,130,0.34)' : 'rgba(0,140,130,0.22)';
+    ctx.strokeRect(x + pad + 0.5, rowY + 0.5, rowW - 1, 25 * sy - 1);
+    ctx.fillStyle = notice.canAcceptHere ? '#9fd' : '#d9f1ed';
+    ctx.fillText(fitText(ctx, `${notice.urgencyLabel}: ${notice.label}`, rowW - 8 * sx), x + pad + 4 * sx, rowY + 3 * sy);
+    ctx.fillStyle = '#89a';
+    ctx.fillText(fitText(ctx, `${notice.floorLabel} / ${notice.detail}`, rowW - 8 * sx), x + pad + 4 * sx, rowY + 14 * sy);
+    rowY += 29 * sy;
+  }
+}
+
 export function drawDemosMenu(
   ctx: CanvasRenderingContext2D,
   state: GameState,
@@ -145,8 +349,10 @@ export function drawDemosMenu(
   ctx.fillStyle = 'rgba(0,0,5,0.88)';
   ctx.fillRect(0, 0, w, h);
 
-  const panelW = Math.min(w - 14 * sx, 520 * sx);
-  const panelH = Math.min(h - 14 * sy, 326 * sy);
+  const marginX = Math.max(6 * sx, Math.min(24 * sx, w * 0.025));
+  const marginY = Math.max(6 * sy, Math.min(18 * sy, h * 0.025));
+  const panelW = Math.max(1, w - marginX * 2);
+  const panelH = Math.max(1, h - marginY * 2);
   const px = (w - panelW) / 2;
   const py = (h - panelH) / 2;
   drawNeuroPanel(ctx, px, py, panelW, panelH, uiTime, 913);
@@ -154,7 +360,6 @@ export function drawDemosMenu(
   ctx.textBaseline = 'top';
   drawGlitchText(ctx, 'ИНФОСЕТЬ ДЕМОС', px + 12 * sx, py + 10 * sy, uiTime, 914, '#25ffd0', 13 * sy);
 
-  const snapshot = getDemosSnapshot(state, entities, state.demosCursor, state.demosSearchActive ? '' : state.demosSearch);
   const searchX = px + 12 * sx;
   const searchY = py + 32 * sy;
   const searchW = panelW - 24 * sx;
@@ -170,48 +375,90 @@ export function drawDemosMenu(
   const query = state.demosSearch || 'alife:ID / имя / plot:ID';
   ctx.fillText(fitText(ctx, `поиск: ${query}${cursor}`, searchW - 10 * sx), searchX + 5 * sx, searchY + 4 * sy);
 
+  const tabLabels = DEMOS_TAB_ORDER.map(tab => DEMOS_TAB_LABELS[tab]);
+  const selectedTab = DEMOS_TAB_LABELS[state.demosTab] ?? DEMOS_TAB_LABELS.profile;
+  const tabsY = searchY + searchH + 5 * sy;
+  drawDemosTabsHeader(ctx, tabLabels, selectedTab, searchX, tabsY, searchW, sy);
+
+  const snapshot = getDemosSnapshot(state, entities, state.demosCursor, state.demosSearchActive ? '' : state.demosSearch);
+  const contentX = px + 12 * sx;
+  const contentY = tabsY + 17 * sy;
+  const contentW = panelW - 24 * sx;
+  const contentH = Math.max(42 * sy, py + panelH - 28 * sy - contentY);
   if (!snapshot.profile) {
-    ctx.font = `${10 * sy}px monospace`;
-    ctx.fillStyle = snapshot.notFound ? '#f86' : '#789';
     const text = snapshot.notFound ? 'Профиль не найден в текущей A-Life популяции.' : 'A-Life популяция ещё не готова.';
-    ctx.fillText(fitText(ctx, text, panelW - 24 * sx), px + 12 * sx, py + 72 * sy);
+    drawDemosEmptyPanel(ctx, text, contentX, contentY, contentW, contentH, sx, sy);
   } else {
     const p = snapshot.profile;
-    const portraitW = Math.min(116 * sx, panelW * 0.28);
-    const portraitH = Math.min(142 * sy, panelH - 106 * sy);
-    const portraitX = px + 14 * sx;
-    const portraitY = py + 62 * sy;
-    drawProfilePortrait(ctx, p, portraitX, portraitY, portraitW, portraitH);
+    if (state.demosTab === 'profile') {
+      const portraitW = Math.min(116 * sx, contentW * 0.32);
+      const portraitH = Math.max(64 * sy, Math.min(contentH, 142 * sy));
+      const portraitX = contentX;
+      const portraitY = contentY;
+      drawProfilePortrait(ctx, p, portraitX, portraitY, portraitW, portraitH);
 
-    ctx.font = `bold ${10.5 * sy}px monospace`;
-    ctx.textAlign = 'left';
-    ctx.fillStyle = p.dead ? '#a77' : '#eff';
-    const infoX = portraitX + portraitW + 12 * sx;
-    const infoY = portraitY;
-    const infoW = px + panelW - infoX - 14 * sx;
-    ctx.fillText(fitText(ctx, p.name, infoW), infoX, infoY);
-    ctx.font = `${7.5 * sy}px monospace`;
-    ctx.fillStyle = '#789';
-    ctx.fillText(fitText(ctx, `${p.idLabel}${p.plotIdLabel ? `  ${p.plotIdLabel}` : ''}`, infoW), infoX, infoY + 14 * sy);
+      const infoX = portraitX;
+      let y = portraitY + portraitH + 6 * sy;
+      const infoW = portraitW;
+      ctx.font = `bold ${8.5 * sy}px monospace`;
+      ctx.textAlign = 'left';
+      ctx.fillStyle = p.dead ? '#a77' : '#eff';
+      ctx.fillText(fitText(ctx, p.name, infoW), infoX, y); y += 12 * sy;
+      ctx.font = `${7 * sy}px monospace`;
+      ctx.fillStyle = '#789';
+      ctx.fillText(fitText(ctx, `${p.idLabel}${p.plotIdLabel ? ` ${p.plotIdLabel}` : ''}`, infoW), infoX, y); y += 12 * sy;
+      drawLine(ctx, 'фракция', p.factionLabel, infoX, y, infoW, sy); y += 11 * sy;
+      drawLine(ctx, 'где', p.locationLabel, infoX, y, infoW, sy, p.dead ? '#b77' : '#9cf');
 
-    let y = infoY + 32 * sy;
-    drawLine(ctx, 'отношение', `${p.relationScore} / ${p.relationLabel}`, infoX, y, infoW, sy, p.relationColor); y += 12 * sy;
-    drawLine(ctx, 'фракция', p.factionLabel, infoX, y, infoW, sy); y += 12 * sy;
-    drawLine(ctx, 'занятие', p.occupationLabel, infoX, y, infoW, sy); y += 12 * sy;
-    drawLine(ctx, 'уровень', `L${p.level}`, infoX, y, infoW, sy, '#edb'); y += 12 * sy;
-    drawLine(ctx, 'где сейчас', p.locationLabel, infoX, y, infoW, sy, p.dead ? '#b77' : '#9cf'); y += 12 * sy;
-    drawLine(ctx, 'статус', `${p.statusLabel}, ${p.questLabel}`, infoX, y, infoW, sy); y += 12 * sy;
-    drawLine(ctx, 'здоровье', p.healthLabel, infoX, y, infoW, sy, p.dead ? '#b77' : '#cfd'); y += 12 * sy;
-    drawLine(ctx, 'счёт', p.moneyLabel, infoX, y, infoW, sy, '#dcb'); y += 12 * sy;
-    drawLine(ctx, 'карма', p.karmaLabel, infoX, y, infoW, sy, Number(p.karmaLabel) < 0 ? '#fa8' : '#9d9');
-
-    ctx.font = `${7 * sy}px monospace`;
-    ctx.fillStyle = '#688';
-    ctx.fillText(
-      fitText(ctx, `профиль ${p.cursor + 1}/${p.total}  ${p.floorKey}`, panelW - 28 * sx),
-      px + 14 * sx,
-      py + panelH - 38 * sy,
-    );
+      const details = getDemosProfileDetails(state, p.alifeId);
+      const rightX = portraitX + portraitW + 8 * sx;
+      const rightW = contentX + contentW - rightX;
+      if (details && rightW > 80 * sx) {
+        const upperH = Math.max(94 * sy, Math.floor(contentH * 0.58));
+        drawDemosProfilePanel(ctx, details, rightX, contentY, rightW, Math.min(upperH, contentH), sx, sy, {
+          title: p.name,
+        });
+        if (contentH - upperH > 42 * sy) {
+          drawDemosProfileFeedPanel(
+            ctx,
+            buildDemosProfileFeedView(state, p.alifeId, 4),
+            rightX,
+            contentY + upperH + 6 * sy,
+            rightW,
+            contentH - upperH - 6 * sy,
+            sx,
+            sy,
+          );
+        }
+      }
+    } else if (state.demosTab === 'links') {
+      drawDemosSocialLinksPanel(
+        ctx,
+        buildDemosSocialLinksView(state, p.alifeId, 8),
+        contentX,
+        contentY,
+        contentW,
+        contentH,
+        sx,
+        sy,
+      );
+    } else if (state.demosTab === 'feed') {
+      drawDemosFeedPanel(
+        ctx,
+        snapshot.feed,
+        contentX,
+        contentY,
+        contentW,
+        contentH,
+        sx,
+        sy,
+        { scroll: state.demosFeedScroll },
+      );
+    } else if (state.demosTab === 'post') {
+      drawDemosPostPanel(ctx, state, contentX, contentY, contentW, contentH, sx, sy);
+    } else {
+      drawDemosQuestPanel(ctx, p, contentX, contentY, contentW, contentH, sx, sy);
+    }
   }
 
   ctx.font = `${7 * sy}px monospace`;
@@ -219,7 +466,7 @@ export function drawDemosMenu(
   ctx.fillStyle = '#456';
   const searchHint = state.demosSearchActive
     ? 'печать — фильтр  |  Backspace — стереть  |  Del — очистить  |  Enter — применить'
-    : `${controlBindingLabel('menuUp')}/${controlBindingLabel('menuDown')} или колесо — листать  |  Enter — поиск`;
+    : `${controlBindingLabel('menuLeft')}/${controlBindingLabel('menuRight')} — вкладки  |  ${controlBindingLabel('menuUp')}/${controlBindingLabel('menuDown')} или колесо — листать  |  Enter — поиск`;
   ctx.fillText(
     fitText(ctx, `${searchHint}  |  ${menuCloseHint()} — закрыть`, panelW - 18 * sx),
     px + panelW / 2,

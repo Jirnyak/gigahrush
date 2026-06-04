@@ -8,12 +8,21 @@ import {
 } from '../core/types';
 import { PLOT_NPCS, type PlotNpcDef } from '../data/plot';
 import { cleanFloorKey, floorKeyForStory, floorKeyZ } from './floor_keys';
-import { currentFloorRunEntry } from './procedural_floors';
 import {
   alifeNpcRecordCount,
   getAlifeNpcRecordSnapshot,
   type AlifeNpcSnapshot,
 } from './alife';
+import {
+  buildDemosFeedView,
+  createDemosPostQueue,
+  type DemosFeedView,
+  type DemosMarkovPost,
+} from './demos_posts';
+import { getDemosQuestNoticesForProfile } from './demos_quest_notices';
+import type { DemosSocialSaveState } from './demos_save';
+import type { DemosQuestNoticeView } from '../data/demos_quest_notices';
+import { routeDemosSpeech } from './markov_router_adapters';
 
 export const DEMOS_SEARCH_MAX = 48;
 
@@ -76,6 +85,12 @@ interface DemosMobilityLike {
   };
 }
 
+interface DemosFloorRunLike {
+  floorRun?: {
+    currentZ?: unknown;
+  };
+}
+
 export interface DemosRelationBand {
   label: string;
   color: string;
@@ -99,6 +114,8 @@ export interface DemosProfile {
   locationLabel: string;
   statusLabel: string;
   questLabel: string;
+  questSectionLabel: string;
+  questNotices: readonly DemosQuestNoticeView[];
   healthLabel: string;
   moneyLabel: string;
   karmaLabel: string;
@@ -115,6 +132,7 @@ export interface DemosSnapshot {
   cursor: number;
   query: string;
   profile?: DemosProfile;
+  feed: DemosFeedView;
   notFound: boolean;
 }
 
@@ -232,6 +250,11 @@ function demosFloorKeyZ(state: GameState, floorKeyInput: unknown, fallbackFloor?
     ?? (fallbackFloor !== undefined ? floorKeyZ(floorKeyForStory(fallbackFloor)) : undefined);
 }
 
+function demosCurrentRouteZ(state: GameState): number | undefined {
+  const z = (state as GameState & DemosFloorRunLike).floorRun?.currentZ;
+  return typeof z === 'number' && Number.isFinite(z) ? Math.trunc(z) : undefined;
+}
+
 function demosFloorKeyLabel(state: GameState, floorKeyInput: unknown, fallbackFloor?: FloorLevel): string {
   const key = cleanLabel(floorKeyInput);
   const floorNumber = demosFloorNumberLabel(demosFloorKeyZ(state, key, fallbackFloor));
@@ -265,7 +288,7 @@ function locationLabel(state: GameState, entities: readonly Entity[], snapshot: 
   if (snapshot.dead) return 'нет в живых';
   const live = liveEntityForAlifeId(entities, snapshot.id);
   if (live) {
-    const floorNumber = demosFloorNumberLabel(currentFloorRunEntry(state).z);
+    const floorNumber = demosFloorNumberLabel(demosCurrentRouteZ(state));
     return `${floorNumber ? `${floorNumber}, ` : ''}сейчас здесь, ${Math.floor(live.x)}:${Math.floor(live.y)}`;
   }
   const mobility = findMobilityLabel(state, snapshot.id);
@@ -303,6 +326,21 @@ function demosProfileVisualId(live: Entity | undefined, snapshot: AlifeNpcSnapsh
   return live?.npcVisualId ?? snapshot.npcVisualId ?? plotDef?.npcVisualId;
 }
 
+function demosSocialState(state: GameState): DemosSocialSaveState | undefined {
+  return (state as GameState & { demosSocial?: DemosSocialSaveState }).demosSocial;
+}
+
+function buildDemosSavedFeedView(state: GameState): DemosFeedView {
+  const queue = createDemosPostQueue();
+  const social = demosSocialState(state);
+  if (social) {
+    queue.nextId = social.nextPostId;
+    queue.lastSourceEventId = social.eventCursor;
+    queue.posts = social.posts.slice(-queue.capacity).map(post => ({ ...post })) as DemosMarkovPost[];
+  }
+  return buildDemosFeedView(queue, { routeSpeech: routeDemosSpeech });
+}
+
 function buildDemosProfile(
   state: GameState,
   entities: readonly Entity[],
@@ -319,6 +357,7 @@ function buildDemosProfile(
   const maxHp = Math.max(1, Math.round(live?.maxHp ?? snapshot.maxHp));
   const faction = live?.faction ?? snapshot.faction;
   const occupation = live?.occupation ?? snapshot.occupation;
+  const questNotices = getDemosQuestNoticesForProfile(state, snapshot.id);
   return {
     alifeId: snapshot.id,
     cursor,
@@ -337,6 +376,8 @@ function buildDemosProfile(
     locationLabel: locationLabel(state, entities, snapshot),
     statusLabel: snapshot.dead ? 'мертвый профиль' : live ? 'на активном этаже' : 'макро A-Life',
     questLabel: snapshot.canGiveQuest ? 'может дать дело' : 'заявок нет',
+    questSectionLabel: 'Квесты',
+    questNotices,
     healthLabel: `${hp}/${maxHp}`,
     moneyLabel: `${accountRubles}₽`,
     karmaLabel: String(Math.round(live?.karma ?? snapshot.karma)),
@@ -357,18 +398,20 @@ export function getDemosSnapshot(
 ): DemosSnapshot {
   const total = alifeNpcRecordCount(state);
   const query = cleanDemosSearchQuery(queryInput);
-  if (total <= 0) return { total: 0, cursor: 0, query, notFound: query.trim().length > 0 };
+  const feed = buildDemosSavedFeedView(state);
+  if (total <= 0) return { total: 0, cursor: 0, query, feed, notFound: query.trim().length > 0 };
 
   let cursor = normalizeCursor(cursorInput, total);
   let snapshot = getAlifeNpcRecordSnapshot(state, cursor + 1);
   if (!snapshot || !demosSnapshotMatchesQuery(snapshot, query)) {
-    return { total, cursor, query, notFound: query.trim().length > 0 };
+    return { total, cursor, query, feed, notFound: query.trim().length > 0 };
   }
   return {
     total,
     cursor,
     query,
     profile: buildDemosProfile(state, entities, snapshot, cursor, total),
+    feed,
     notFound: false,
   };
 }

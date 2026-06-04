@@ -3,7 +3,7 @@ import { controlBindingLabel } from '../systems/controls';
 import { fitText } from './ui_text';
 
 export type TitleScreenMode = 'language' | 'setup';
-export type TitleHitField = 'language' | 'name' | 'seed' | 'actorCap' | 'start';
+export type TitleHitField = 'language' | 'name' | 'age' | 'sex' | 'seed' | 'actorCap' | 'start';
 
 export interface TitleLanguageHit {
   id?: TitleLanguageId;
@@ -77,7 +77,7 @@ export function drawTitleScreen(ctx: CanvasRenderingContext2D, options: DrawTitl
   ctx.fillText(lang.subtitle, cx, cy - 76 * s);
 
   const hits = options.mode === 'setup'
-    ? drawSetupMenu(ctx, cx, cy - 48 * s, s, options)
+    ? drawSetupMenu(ctx, cx, cy - (options.setupRows.length > 5 ? 88 : 48) * s, s, options)
     : drawLanguageMenu(ctx, cx, cy - 44 * s, s, options.languageId);
 
   ctx.fillStyle = '#555';

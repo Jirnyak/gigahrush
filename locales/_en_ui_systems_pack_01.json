@@ -1,6 +1,6 @@
 {
   "locale": "en",
-  "notes": "EN UI/runtime systems batch 01 from gatbage/reference/localization/missing-en.md. Covers requested src/main.ts, src/mobile.ts, src/render/**, and listed src/systems files only.",
+  "notes": "EN UI/runtime systems batch 01 from ../gatbage/reference/localization/missing-en.md. Covers requested src/main.ts, src/mobile.ts, src/render/**, and listed src/systems files only.",
   "entries": {
     "gt_004b4c54f8c8c8": "shelter mark",
     "gt_008c3338a15ab3": "Thirst...",

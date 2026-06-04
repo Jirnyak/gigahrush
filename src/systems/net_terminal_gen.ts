@@ -47,6 +47,7 @@ import { publishEvent } from './events';
 import {
   currentFloorRunEntry,
   ensureFloorRunState,
+  floorRunEntryForDesignFloor,
   floorRunEntryFloorKey,
   type FloorRunEntry,
 } from './procedural_floors';
@@ -227,9 +228,20 @@ function buildRouteDeck(state: GameState): NetTerminalGenRouteTarget[] {
 
     const design = designFloorAtZ(z);
     if (design) {
+      const entry = floorRunEntryForDesignFloor(state, design.id);
+      if (entry?.spec) {
+        deck.push({
+          z,
+          key: routeKeyForEntry(entry),
+          kind: 'procedural',
+          baseFloor: entry.baseFloor,
+          label: entry.spec.title,
+        });
+        continue;
+      }
       deck.push({
         z,
-        key: floorKeyForDesign(design.id),
+        key: entry ? routeKeyForEntry(entry) : floorKeyForDesign(design.id),
         kind: 'design',
         baseFloor: design.baseFloor,
         label: design.displayName,

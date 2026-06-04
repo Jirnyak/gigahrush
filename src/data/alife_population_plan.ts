@@ -1,4 +1,4 @@
-import { Faction, FloorLevel, Occupation } from '../core/types';
+import { type CharacterSex, Faction, FloorLevel, Occupation } from '../core/types';
 import type { WeightedValue } from './alife_generation';
 import { DESIGN_FLOOR_ROUTES, type DesignFloorRouteDef } from './design_floors';
 import { designFloorPopulationProfile } from './design_floor_population';
@@ -41,6 +41,8 @@ export interface AlifeReservedIdentityDef {
   plotNpcId?: string;
   name?: string;
   female?: boolean;
+  age?: number;
+  sex?: CharacterSex;
   faction?: Faction;
   occupation?: Occupation;
   sprite?: number;
@@ -198,6 +200,8 @@ function buildReservedIdentities(): AlifeReservedIdentityDef[] {
     plotNpcId,
     name: def.name,
     female: def.isFemale,
+    age: def.age,
+    sex: def.sex,
     faction: def.faction,
     occupation: def.occupation,
     sprite: def.sprite,

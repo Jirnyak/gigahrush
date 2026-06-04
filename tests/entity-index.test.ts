@@ -121,6 +121,21 @@ test('entity index capped radius queries stop at the requested count', () => {
   assert.ok(out.every(e => e.type === EntityType.NPC));
 });
 
+test('entity index capped radius query keeps nearest results instead of first bucket entries', () => {
+  const index = new EntityIndex();
+  index.rebuild([
+    entity(1, EntityType.NPC, 41, 40),
+    entity(2, EntityType.NPC, 63, 40),
+    entity(3, EntityType.NPC, 40.25, 40),
+  ]);
+
+  const out: Entity[] = [];
+  const count = index.queryRadiusCapped(40, 40, 32, out, ENTITY_MASK_NPC, 2);
+
+  assert.equal(count, 2);
+  assert.deepEqual(out.map(e => e.id), [3, 1]);
+});
+
 test('entity index exposes debug version, entity counts and bucket stats', () => {
   const index = new EntityIndex();
   index.rebuild([
@@ -173,6 +188,25 @@ test('runtime ensure uses the dynamic simulation path when the flat entity array
 
   assert.equal(rebuilt.byId.get(2)?.id, 2);
   assert.equal(rebuilt.getDebugStats().rebuildReason, 'simulation');
+});
+
+test('simulation rebuild preserves static visible byId entries and prunes dead ones', () => {
+  const entities = [
+    entity(1, EntityType.NPC, 20, 20),
+    entity(2, EntityType.ITEM_DROP, 24, 20),
+    entity(3, EntityType.BILLBOARD, 25, 20),
+  ];
+
+  const index = new EntityIndex();
+  index.rebuildForSimulation(entities, 1);
+  assert.equal(index.byId.get(2)?.id, 2);
+  assert.equal(index.byId.get(3)?.id, 3);
+
+  entities[1].alive = false;
+  index.rebuildForSimulation(entities, 2);
+
+  assert.equal(index.byId.has(2), false);
+  assert.equal(index.byId.get(3)?.id, 3);
 });
 
 test('runtime dirty mark forces ensure to rebuild moved entity buckets', () => {

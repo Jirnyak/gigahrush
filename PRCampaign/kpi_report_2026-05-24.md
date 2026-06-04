@@ -6,7 +6,7 @@
 | --- | --- | --- | --- | --- |
 | 2ch /b/ | Live | Thread `https://2ch.org/b/res/333348764.html`; public recheck 2026-05-23 23:26 UTC found 14 posts, 11 files, 6 posters, OP media from selected pack, direct build + itch links. | High-noise board; duplicate threads, bumps, fake-user replies or link dumps can backfire. | Monitor real replies only; extract concrete first-run feedback. |
 | Comment responses | Ready | New internal RU playbook: `PRCampaign/comment_response_playbook_ru_2026-05-24.md`; includes agent input/output format, tone rules and Asder-style reply variants. | Over-aggressive replies can turn useful criticism into bump drama or self-promo backlash. | Use one hard-but-factual answer only when there is a concrete thesis; otherwise no-reply. |
-| Selected media pack | Ready and used | OP used both GIFs and `contact_sheet_3x3.png`; local source remains `gatbage/tmp/media/prcampaign_screenshot_hunt_2026-05-23/selected_best/`. | No public hosted press-kit URL yet; some platforms may reject GIF or local-only attachments. | Use the same pack in every next post/pitch; consider hosted press-kit later. |
+| Selected media pack | Ready and used | OP used both GIFs and `contact_sheet_3x3.png`; local source remains `../gatbage/tmp/media/prcampaign_screenshot_hunt_2026-05-23/selected_best/`. | No public hosted press-kit URL yet; some platforms may reject GIF or local-only attachments. | Use the same pack in every next post/pitch; consider hosted press-kit later. |
 | Reddit PR 13 | Live / monitor | r/PBBG, r/WebGames and r/Games Indie Sunday were published on 2026-05-24; live comments were corrected at 17:06 UTC with playable links plus direct GIF/screenshot URLs. r/IndieDev was removed by moderator/automoderation. | Any additional Reddit post now would look like a promo burst; r/indiegames needs native media-first handling, not a link dump. | Monitor live threads, answer concrete questions only, and do not repost removed content. |
 | RU communities | Ready/account-gated | DevTribe and Pikabu gamedev are best DTF-like next posts; Pikabu has Yandex ID login. | Captcha/account trust/moderation; Yandex is not universal. | Owner logs in manually; post one native media-rich devlog, not a link dump. |
 | Live portals | Ready for media update | Game Jolt needs more gallery media; IndieDB can take a formal article/news update. | Duplicate launch spam if posted without a real media/update angle. | Add gallery media first; then one media update. |
@@ -121,7 +121,7 @@ Corrective actions:
 
 New standing rule:
 
-- Every future public campaign post, devlog, forum thread, portal listing or announcement needs visible project media and a platform-compliant playable route when the format allows it. Use `gatbage/tmp/media/prcampaign_screenshot_hunt_2026-05-23/selected_best/` or public itch media URLs for media.
+- Every future public campaign post, devlog, forum thread, portal listing or announcement needs visible project media and a platform-compliant playable route when the format allows it. Use `../gatbage/tmp/media/prcampaign_screenshot_hunt_2026-05-23/selected_best/` or public itch media URLs for media.
 - Direct-link-only platforms are acceptable when the submission URL is the playable route and media is added through the first permitted comment, gallery, profile/media field, platform thumbnail or documented exception. If external links are forbidden, do not evade rules; use a self-contained native media post or skip the surface.
 
 ## PR 14 Continuation / Fix Addendum - 17:32-17:44 UTC / 18:32-18:44 BST

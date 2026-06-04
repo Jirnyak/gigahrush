@@ -180,6 +180,26 @@ test('ordinary closed doors are routeable while locked and hermetic doors block 
   assert.deepEqual(bfsPath(world, 0, 10, 21, 10), []);
 });
 
+test('ordinary door open and close does not dirty navigation topology', () => {
+  const world = makeCorridorWorld();
+  const doorIdx = world.idx(10, 10);
+  world.cells[doorIdx] = Cell.DOOR;
+  world.doors.set(doorIdx, { idx: doorIdx, state: DoorState.CLOSED, roomA: -1, roomB: 0, keyId: '', timer: 0 });
+
+  setPathContext([], 0);
+  assert.equal(bfsPath(world, 0, 10, 21, 10).length > 0, true);
+
+  const beforeOpen = world.cellVersion;
+  assert.equal(setDoorState(world, world.doors.get(doorIdx), DoorState.OPEN), true);
+  assert.equal(world.cellVersion, beforeOpen);
+  assert.equal(bfsPath(world, 0, 10, 21, 10).length > 0, true);
+
+  const beforeClose = world.cellVersion;
+  assert.equal(setDoorState(world, world.doors.get(doorIdx), DoorState.CLOSED), true);
+  assert.equal(world.cellVersion, beforeClose);
+  assert.equal(bfsPath(world, 0, 10, 21, 10).length > 0, true);
+});
+
 test('door state helper invalidates baked navigation when passability changes', () => {
   const world = makeCorridorWorld();
   const doorIdx = world.idx(10, 10);

@@ -7,6 +7,7 @@ import {
 } from '../../core/types';
 import { World } from '../../core/world';
 import { getCellHazardMoveMultiplier } from '../cell_hazards';
+import { setDoorState } from '../door_state';
 import { bark, BARK_ARRIVE, BARK_ARRIVE_F, BARK_CHANCE_ARRIVE } from './barks';
 
 let _barkMsgs: Msg[] = [];
@@ -570,7 +571,7 @@ function openPathDoor(world: World, cell: number): void {
   if (world.cells[cell] !== Cell.DOOR) return;
   const door = world.doors.get(cell);
   if (door && door.state === DoorState.CLOSED) {
-    door.state = DoorState.OPEN;
+    setDoorState(world, door, DoorState.OPEN);
     door.timer = 5;
   }
 }

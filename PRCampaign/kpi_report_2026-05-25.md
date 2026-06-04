@@ -38,7 +38,7 @@
 ## Next Actions
 
 1. Owner chooses one immediate community lane and logs in: Pikabu, forum.indie.ru, HTML5GameDevs, GameDev.net or TIGSource.
-2. Agent prepares one unique media-first post for that lane using `gatbage/tmp/media/prcampaign_screenshot_hunt_2026-05-23/selected_best/`, shows preview copy, then publishes only after owner confirms final submit.
+2. Agent prepares one unique media-first post for that lane using `../gatbage/tmp/media/prcampaign_screenshot_hunt_2026-05-23/selected_best/`, shows preview copy, then publishes only after owner confirms final submit.
 3. Recheck IndieDB news authorisation in browser/account context.
 4. Recheck PBBG.com dedicated game URL later; do not resubmit.
 5. Send the next media/creator email batch only if owner approves outbound email use: Rely on Horror, Big Boss Battle, The Indie Informer, Dread Central, Get Indie Gaming, Splattercat.

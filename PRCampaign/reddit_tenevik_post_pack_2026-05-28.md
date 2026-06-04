@@ -15,7 +15,7 @@ Primary links for Reddit:
 
 Primary media folder:
 
-- `gatbage/tmp/media/prcampaign_screenshot_hunt_2026-05-23/selected_best/`
+- `../gatbage/tmp/media/prcampaign_screenshot_hunt_2026-05-23/selected_best/`
 
 Best attachments:
 

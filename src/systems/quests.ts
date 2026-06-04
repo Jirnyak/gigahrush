@@ -43,6 +43,8 @@ import { calculateQuestReward, scaleAuthoredQuestRewards, type QuestRewardObject
 import { MONSTERS } from '../entities/monster';
 import { publishEvent } from './events';
 import { entitySpawnSlots } from './entity_limits';
+import { renderProceduralQuestSpeech, type ProceduralQuestSpeechPhase } from './markov_procedural_quests';
+import { routeAdapterSpeech } from './markov_router_adapters';
 import {
   assignProceduralQuestDeadline,
   deadlineMessageSuffix,
@@ -57,6 +59,11 @@ import {
   completedQuestGiverRelationDelta,
   getNpcPlayerRelation,
 } from './npc_relations';
+import {
+  activeDemosQuestNoticeForGiver,
+  markDemosNoticeFailed,
+  recordDemosNoticeQuestCreatedForGiver,
+} from './demos_quest_notices';
 import { pushNpcLogMessage } from './ai/barks';
 import { hearingRadiusMetersForActor } from './hearing';
 import { getAlifeNpcTotalMoney } from './alife';
@@ -154,6 +161,26 @@ function questSpawnMonstersOnAccept(q: Quest): number {
   if (q.plotStepIndex !== undefined) return PLOT_CHAIN[q.plotStepIndex]?.spawnMonstersOnAccept ?? 0;
   if (q.sideQuestId) return SIDE_QUESTS.find(sq => sq.id === q.sideQuestId)?.spawnMonstersOnAccept ?? 0;
   return 0;
+}
+
+function proceduralQuestSpeechLine(
+  q: Quest,
+  phase: ProceduralQuestSpeechPhase,
+  state: GameState,
+  fallback = q.desc,
+  contractDef = q.contractId ? CONTRACTS.find(c => c.id === q.contractId) : undefined,
+): string {
+  if (q.plotStepIndex !== undefined || q.sideQuestId !== undefined) return fallback;
+  return renderProceduralQuestSpeech({
+    quest: q,
+    contractDef,
+    phase,
+    exactFallback: fallback,
+    seed: q.contractId ?? q.id,
+    repeatIndex: phase === 'offer' ? 0 : Math.floor(state.clock.totalMinutes),
+    nowMinutes: state.clock.totalMinutes,
+    routeSpeech: routeAdapterSpeech,
+  }).text;
 }
 
 function visitNeedsConcreteTarget(q: Quest): boolean {
@@ -442,11 +469,25 @@ export function offerQuest(
   state.quests.push(quest);
   npc.questId = quest.id;
   if (!isPlotNpc(npc)) npc.canGiveQuest = false;
-  pushNpcQuestMessage(npc, player, world, state, msgs, `Новое поручение: ${quest.desc}${deadlineMessageSuffix(quest, state.clock.totalMinutes)}`, '#4af');
   const contractId = quest.contractId;
   const contractDef = contractId ? CONTRACTS.find(c => c.id === contractId) : undefined;
-  publishEvent(state, {
-    type: contractId ? 'contract_created' : 'quest_created',
+  const offerText = proceduralQuestSpeechLine(quest, 'offer', state, quest.desc, contractDef);
+  pushNpcQuestMessage(npc, player, world, state, msgs, `Новое поручение: ${offerText}${deadlineMessageSuffix(quest, state.clock.totalMinutes)}`, '#4af');
+  const questEventData = {
+    contractId,
+    questId: quest.id,
+    questType: quest.type,
+    plotStepIndex: quest.plotStepIndex,
+    sideQuestId: quest.sideQuestId,
+    contractFaction: quest.contractFaction,
+    contractRank: quest.contractRank,
+    rewardResourceId: contractDef?.rewardResourceId,
+    timeLimitMinutes: quest.timeLimitMinutes,
+    expiresAtMinutes: quest.expiresAtMinutes,
+    ...quest.eventData,
+    ...questTargetEventData(quest),
+  };
+  const demosNoticeEvent = recordDemosNoticeQuestCreatedForGiver(state, npc.alifeId, quest, {
     actorId: npc.id,
     actorName: npc.name ?? '???',
     actorFaction: npc.faction,
@@ -454,21 +495,21 @@ export function offerQuest(
     severity: quest.eventSeverity ?? 3,
     privacy: quest.eventPrivacy ?? 'local',
     tags: questTags(quest, 'created', contractDef),
-    data: {
-      contractId,
-      questId: quest.id,
-      questType: quest.type,
-      plotStepIndex: quest.plotStepIndex,
-      sideQuestId: quest.sideQuestId,
-      contractFaction: quest.contractFaction,
-      contractRank: quest.contractRank,
-      rewardResourceId: contractDef?.rewardResourceId,
-      timeLimitMinutes: quest.timeLimitMinutes,
-      expiresAtMinutes: quest.expiresAtMinutes,
-      ...quest.eventData,
-      ...questTargetEventData(quest),
-    },
+    data: questEventData,
   });
+  if (!demosNoticeEvent) {
+    publishEvent(state, {
+      type: contractId ? 'contract_created' : 'quest_created',
+      actorId: npc.id,
+      actorName: npc.name ?? '???',
+      actorFaction: npc.faction,
+      targetName: quest.desc,
+      severity: quest.eventSeverity ?? 3,
+      privacy: quest.eventPrivacy ?? 'local',
+      tags: questTags(quest, 'created', contractDef),
+      data: questEventData,
+    });
+  }
 
   // Spawn monsters around quest giver when authored quest asks for route pressure.
   if (nextEntityId) {
@@ -713,7 +754,7 @@ function failQuest(
   if (giver?.questId === q.id) giver.questId = -1;
   const contractDef = q.contractId ? CONTRACTS.find(c => c.id === q.contractId) : undefined;
 
-  if (msgs) msgs.push(msg(`Поручение сорвано: ${q.desc}`, state.time, '#f66'));
+  if (msgs) msgs.push(msg(`Поручение сорвано: ${proceduralQuestSpeechLine(q, 'failure', state, q.desc, contractDef)}`, state.time, '#f66'));
   publishEvent(state, {
     type: q.contractId ? 'contract_failed' : 'quest_failed',
     actorId: q.giverId,
@@ -921,8 +962,8 @@ function completeQuest(
     if (q.sideQuestId) giver.plotDone = true;
   }
 
-  msgs.push(msg(`Поручение закрыто: ${q.desc}`, state.time, '#4f4'));
   const contractDef = q.contractId ? CONTRACTS.find(c => c.id === q.contractId) : undefined;
+  msgs.push(msg(`Поручение закрыто: ${proceduralQuestSpeechLine(q, 'completion', state, q.desc, contractDef)}`, state.time, '#4f4'));
   publishEvent(state, {
     type: q.contractId ? 'contract_completed' : 'quest_completed',
     actorId: q.giverId,
@@ -1016,7 +1057,7 @@ function expireQuestIfNeeded(q: Quest, player: Entity, entities: Entity[], state
   const contractDef = q.contractId ? CONTRACTS.find(c => c.id === q.contractId) : undefined;
   if (isGovnyakCourierContractId(q.contractId)) removeItem(player, GOVNYAK_COURIER_PACKAGE_ITEM, 1);
 
-  msgs.push(msg(`Срок вышел: ${q.desc}`, state.time, '#f66'));
+  msgs.push(msg(`Срок вышел: ${proceduralQuestSpeechLine(q, 'failure', state, q.desc, contractDef)}`, state.time, '#f66'));
   publishEvent(state, {
     type: q.contractId ? 'contract_failed' : 'quest_failed',
     actorId: q.giverId,
@@ -1476,7 +1517,37 @@ function proceduralReward(
   });
 }
 
-function pickSystemQuest(npc: Entity, player: Entity, ctx: QuestContext, state: GameState): Quest | null {
+function questFromSystemContract(
+  picked: ContractDef,
+  npc: Entity,
+  player: Entity,
+  state: GameState,
+): Quest {
+  const quest = contractToQuest(picked, state.nextQuestId++, { id: npc.id, name: npc.name });
+  prepareAcceptedContract(quest, state);
+  applyContractRewardAtAcceptance(quest, picked, state, player, npc);
+  return quest;
+}
+
+function pickSystemQuest(
+  npc: Entity,
+  player: Entity,
+  ctx: QuestContext,
+  state: GameState,
+  preferredContractId?: string,
+): Quest | null {
+  if (preferredContractId) {
+    const preferred = CONTRACTS.find(c => c.id === preferredContractId);
+    if (!preferred || isContractHiddenForAssignment(preferred)) return null;
+    if (state.quests.some(q => q.contractId === preferred.id)) return null;
+    const quest = questFromSystemContract(preferred, npc, player, state);
+    return assignProceduralQuestDeadline(quest, state.clock.totalMinutes, {
+      samosborDanger: ctx.samosborDanger,
+      nearbyMonster: ctx.nearbyMonster !== undefined,
+      crossFloor: quest.targetFloor !== undefined && quest.targetFloor !== state.currentFloor,
+    });
+  }
+
   const scored = CONTRACTS
     .filter(c => !isContractHiddenForAssignment(c))
     .filter(c => !state.quests.some(q => q.contractId === c.id))
@@ -1485,10 +1556,7 @@ function pickSystemQuest(npc: Entity, player: Entity, ctx: QuestContext, state: 
     .sort((a, b) => b.score - a.score);
   if (scored.length === 0) return null;
   const top = scored.slice(0, Math.min(3, scored.length));
-  const picked = top[Math.floor(Math.random() * top.length)].def;
-  const quest = contractToQuest(picked, state.nextQuestId++, { id: npc.id, name: npc.name });
-  prepareAcceptedContract(quest, state);
-  applyContractRewardAtAcceptance(quest, picked, state, player, npc);
+  const quest = questFromSystemContract(top[Math.floor(Math.random() * top.length)].def, npc, player, state);
   return assignProceduralQuestDeadline(quest, state.clock.totalMinutes, {
     samosborDanger: ctx.samosborDanger,
     nearbyMonster: ctx.nearbyMonster !== undefined,
@@ -1515,6 +1583,12 @@ function generateQuest(
 
   const occ = npc.occupation;
   const ctx = buildQuestContext(npc, world, entities, state);
+  const demosNotice = activeDemosQuestNoticeForGiver(state, npc.alifeId);
+  if (demosNotice?.contractId) {
+    const noticedQuest = pickSystemQuest(npc, player, ctx, state, demosNotice.contractId);
+    if (noticedQuest) return noticedQuest;
+    markDemosNoticeFailed(state, demosNotice.id, 'contract_unavailable');
+  }
   if (shouldOfferSystemQuest(npc, ctx)) {
     const systemQuest = pickSystemQuest(npc, player, ctx, state);
     if (systemQuest) return systemQuest;

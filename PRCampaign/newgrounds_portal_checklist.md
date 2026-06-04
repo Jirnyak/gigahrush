@@ -14,13 +14,13 @@
 
 Уже есть в репозитории:
 
-- `gatbage/media/itch_page_pack/description_ru_approved.md` и `.html` - утвержденное RU-описание itch.
-- `gatbage/media/itch_page_pack/itch_fields_ru.md` - title, short description, tags, screenshot order.
+- `../gatbage/media/itch_page_pack/description_ru_approved.md` и `.html` - утвержденное RU-описание itch.
+- `../gatbage/media/itch_page_pack/itch_fields_ru.md` - title, short description, tags, screenshot order.
 - `PRCampaign/copy_pack_ru.md` - RU/EN copy, pitch, письма и one-liners.
 - `PRCampaign/itch_release_announcement.md` - готовый itch forum post.
 - `PRCampaign/press_kit_checklist.md` - структура press-kit.
-- `gatbage/tmp/media/prcampaign_screenshot_hunt_2026-05-23/selected_best/` - текущий owner-updated best media set для PR/порталов; брать GIF/PNG и 3x3 sheet отсюда.
-- `gatbage/tmp/media/prcampaign_screenshot_hunt_2026-05-23/selected_best/contact_sheet_3x3.png` - квадратный 3x3 обзор для social/portal preview.
+- `../gatbage/tmp/media/prcampaign_screenshot_hunt_2026-05-23/selected_best/` - текущий owner-updated best media set для PR/порталов; брать GIF/PNG и 3x3 sheet отсюда.
+- `../gatbage/tmp/media/prcampaign_screenshot_hunt_2026-05-23/selected_best/contact_sheet_3x3.png` - квадратный 3x3 обзор для social/portal preview.
 
 Старые локальные binary backup-папки gallery/capsules/assets удалены во время уборки. Для новых порталов бери `selected_best/`, публичную itch cover и регенерируй portal assets под требования площадки.
 
@@ -39,7 +39,7 @@
 
 | Площадка | Что можно сделать | Уже есть | Не хватает / риск |
 | --- | --- | --- | --- |
-| IndieDB | Создать страницу игры, добавить изображения/GIF, ссылку на itch и онлайн-версию, затем опубликовать news/update. IndieDB позиционирует профиль как developer-driven promo toolkit с profile, news, image gallery, video hosting и download hosting. | RU/EN pitch в `PRCampaign/copy_pack_ru.md`; screenshots/GIF в `gatbage/tmp/media/prcampaign_screenshot_hunt_2026-05-23/selected_best/`; current public itch cover or freshly regenerated portal assets; live links из `PRCampaign/campaign_plan_ru.md`. | Нужен аккаунт/логин; лучше подготовить EN long description и 3-6 EN captions. Для страницы без downloadable build можно сразу вести на itch/Cloudflare, но для сильной страницы нужен trailer или gameplay video. |
+| IndieDB | Создать страницу игры, добавить изображения/GIF, ссылку на itch и онлайн-версию, затем опубликовать news/update. IndieDB позиционирует профиль как developer-driven promo toolkit с profile, news, image gallery, video hosting и download hosting. | RU/EN pitch в `PRCampaign/copy_pack_ru.md`; screenshots/GIF в `../gatbage/tmp/media/prcampaign_screenshot_hunt_2026-05-23/selected_best/`; current public itch cover or freshly regenerated portal assets; live links из `PRCampaign/campaign_plan_ru.md`. | Нужен аккаунт/логин; лучше подготовить EN long description и 3-6 EN captions. Для страницы без downloadable build можно сразу вести на itch/Cloudflare, но для сильной страницы нужен trailer или gameplay video. |
 | IndieDB | Загрузить файл как download, если решено давать HTML ZIP не только ссылкой. | `itch/gigahrush-itch.zip` уже маленький и содержит `index.html` в корне. | Проверить лицензионный текст/README внутри download pack. Может понадобиться отдельный archive note: "open index.html / browser build". |
 | ИграйТут | Предварительно собрать заявку/метаданные и проверить контент на соответствие: название, short/long description, screenshots, возрастной рейтинг, отсутствие внешних ссылок в описании. | RU-описание, screenshots, 16:9 background/banner/media wall. | Для реальной публикации, если используется SDK ИграйТут, потребуется SDK init и облачные сохранения; не хватает 512x512 icon, 1280x720 cover, 640x360 thumbnail, 16:9 screenshots без альфа в нужной сетке. |
 | Пикабу Игры | Подготовить письмо на `games@pikabu.ru` или заявку через официальное сообщество, приложив MyIndie/direct-build links и медиа. | RU-copy, публичная MyIndie page, онлайн-версия, itch mirror, PNG/GIF. | Реальная публикация требует GamePush-кабинет/договорные условия и облачные сохранения. Также нужен аудит контента: Пикабу запрещает 18+, казино-механики, ненормативную лексику и внешние ссылки в игре кроме поддержки. |

@@ -10,7 +10,7 @@ The browser save lives in `localStorage` under `gigahrush_save`.
 
 Current authoritative shape:
 
-- `SAVE_SHAPE_VERSION = 17`;
+- `SAVE_SHAPE_VERSION = 20`;
 - old or unversioned saves are rejected;
 - newer saves are rejected;
 - cross-version migration code is not required by default.
@@ -29,13 +29,15 @@ The save is not a full object graph. Save ids, seeds, compact facts and sparse o
 
 Current runtime save sections include:
 
-- player state, inventory, equipment, money, RPG and needs;
+- player state, age, sex, inventory, equipment, money, RPG and needs;
 - current floor id/key, position and route context;
 - `floorRun`;
 - `floorInstances`;
 - optional `voidReturnPortal`;
 - `alife`;
 - `alifeMobility`;
+- `computers`;
+- `netHack`;
 - `liftArachna`;
 - `pseudolift`;
 - `floorMemory`;
@@ -43,6 +45,7 @@ Current runtime save sections include:
 - `mapEditorPatches`;
 - `worldEvents`;
 - `crafting`;
+- `demosSocial`;
 - `economy`;
 - `banking`;
 - `stockMarket`;

@@ -24,20 +24,20 @@
 
 ## Media pack
 
-Источник: `gatbage/tmp/media/prcampaign_screenshot_hunt_2026-05-23/selected_best/`.
+Источник: `../gatbage/tmp/media/prcampaign_screenshot_hunt_2026-05-23/selected_best/`.
 
 Рекомендуемые вложения для короткого pitch:
 
-- `gatbage/tmp/media/prcampaign_screenshot_hunt_2026-05-23/selected_best/01_hero_gif_hell_blinking_eyes.gif` - главный horror hook.
-- `gatbage/tmp/media/prcampaign_screenshot_hunt_2026-05-23/selected_best/contact_sheet_3x3.png` - компактный квадратный обзор для Telegram/редактора.
-- `gatbage/tmp/media/prcampaign_screenshot_hunt_2026-05-23/selected_best/04_active_samosbor_monsters.png` - САМОСБОР и монстры.
-- `gatbage/tmp/media/prcampaign_screenshot_hunt_2026-05-23/selected_best/07_contract_quest_log.png` - контракты/маршрут/дедлайн.
-- `gatbage/tmp/media/prcampaign_screenshot_hunt_2026-05-23/selected_best/08_inventory_prep_loadout.png` - подготовка вылазки.
-- `gatbage/tmp/media/prcampaign_screenshot_hunt_2026-05-23/selected_best/11_factions_alife_rank_panel.png` - фракции и A-Life.
+- `../gatbage/tmp/media/prcampaign_screenshot_hunt_2026-05-23/selected_best/01_hero_gif_hell_blinking_eyes.gif` - главный horror hook.
+- `../gatbage/tmp/media/prcampaign_screenshot_hunt_2026-05-23/selected_best/contact_sheet_3x3.png` - компактный квадратный обзор для Telegram/редактора.
+- `../gatbage/tmp/media/prcampaign_screenshot_hunt_2026-05-23/selected_best/04_active_samosbor_monsters.png` - САМОСБОР и монстры.
+- `../gatbage/tmp/media/prcampaign_screenshot_hunt_2026-05-23/selected_best/07_contract_quest_log.png` - контракты/маршрут/дедлайн.
+- `../gatbage/tmp/media/prcampaign_screenshot_hunt_2026-05-23/selected_best/08_inventory_prep_loadout.png` - подготовка вылазки.
+- `../gatbage/tmp/media/prcampaign_screenshot_hunt_2026-05-23/selected_best/11_factions_alife_rank_panel.png` - фракции и A-Life.
 
 Запасной motion hook:
 
-- `gatbage/tmp/media/prcampaign_screenshot_hunt_2026-05-23/selected_best/02_gif_underhell_maronary_samosbor_loop.gif`
+- `../gatbage/tmp/media/prcampaign_screenshot_hunt_2026-05-23/selected_best/02_gif_underhell_maronary_samosbor_loop.gif`
 
 ## 1. Indie Spotlight / ИНДИ.РФ
 

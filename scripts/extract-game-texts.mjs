@@ -5,7 +5,8 @@ import ts from 'typescript';
 
 const ROOT = process.cwd();
 const SRC_DIR = path.join(ROOT, 'src');
-const OUT_FILE = path.join(ROOT, 'gatbage/reference/scenario_writers/game_text_inventory.md');
+const ARCHIVE_ROOT = path.resolve(ROOT, '..', 'gatbage');
+const OUT_FILE = path.join(ARCHIVE_ROOT, 'reference/scenario_writers/game_text_inventory.md');
 const EXTRA_TEXT_FILES = ['index.html', 'public/manifest.webmanifest'];
 
 const PLAYER_KEYS = new Set([
@@ -384,6 +385,7 @@ function collectExtraTextFiles() {
 }
 
 function writeMarkdown(entries) {
+  fs.mkdirSync(path.dirname(OUT_FILE), { recursive: true });
   let lastSection = '';
   const fileCounts = new Map();
   for (const entry of entries) fileCounts.set(entry.file, (fileCounts.get(entry.file) ?? 0) + 1);

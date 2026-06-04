@@ -2,7 +2,7 @@
 
 > Центральный документ игровых текстов.
 >
-> Роль: описывает стиль, язык, лор, tone, NPC voices, barks, rumors, notes, quest copy and UI text discipline. Связан с `quests.md`, `taste.md`, `README.md` and `gatbage/reference/scenario_writers/`.
+> Роль: описывает стиль, язык, лор, tone, NPC voices, barks, rumors, notes, quest copy and UI text discipline. Связан с `quests.md`, `taste.md`, `README.md`; внешний appendix `../gatbage/reference/scenario_writers/` открывается только для конкретных text-pass задач.
 
 Этот файл - активный тон-бриф для всех игровых текстов. Он задает стиль
 player-facing строк, но не документирует shipped behavior: факты проверять по
@@ -12,7 +12,7 @@ player-facing строк, но не документирует shipped behavior:
 - `README.md`
 - `architecture.md`
 - этот файл
-- релевантный пакет из `gatbage/reference/scenario_writers/` после его `README.md`, если
+- релевантный appendix-пакет из `../gatbage/reference/scenario_writers/` после его `README.md`, если
   задача касается конкретного голоса или домена
 - конкретные `src/data/*`, `src/gen/*`, `src/systems/*` файлы, которые меняются
 
@@ -44,7 +44,7 @@ player-facing строк, но не документирует shipped behavior:
 
 ## Канон Ручной Правки Лида
 
-Ручная правка `gatbage/reference/scenario_writers/game_text_inventory.md` до строки 5000 -
+Ручная правка `../gatbage/reference/scenario_writers/game_text_inventory.md` до строки 5000 -
 канон для следующих партий. В споре между старым `current` и ручным `revised`
 верить `revised`. Если правка выглядит грубой, сухой, канцелярской или
 нарочито бытовой, это не ошибка стиля: это направление.

@@ -31,10 +31,10 @@ Size warnings are present but non-blocking:
 
 ## Current Selected Media
 
-Owner-updated best picks are now in `gatbage/tmp/media/prcampaign_screenshot_hunt_2026-05-23/selected_best/`. Future PR/upload agents should take screenshots, GIFs and the contact sheet from that folder first, not from older loose hunt folders.
+Owner-updated best picks are now in `../gatbage/tmp/media/prcampaign_screenshot_hunt_2026-05-23/selected_best/`. Future PR/upload agents should take screenshots, GIFs and the contact sheet from that folder first, not from older loose hunt folders.
 
-- Square 3x3 sheet: `gatbage/tmp/media/prcampaign_screenshot_hunt_2026-05-23/selected_best/contact_sheet_3x3.png`, 1 920 x 1 920 PNG, 2 253 839 bytes, SHA-256 `c9a45173c944fa6074aa4cf2a0b9894acff484c4d3082251c1ea522a96f37c39`.
-- Compatibility filename: `gatbage/tmp/media/prcampaign_screenshot_hunt_2026-05-23/selected_best/contact_sheet_png.png` is the same 3x3 image.
+- Square 3x3 sheet: `../gatbage/tmp/media/prcampaign_screenshot_hunt_2026-05-23/selected_best/contact_sheet_3x3.png`, 1 920 x 1 920 PNG, 2 253 839 bytes, SHA-256 `c9a45173c944fa6074aa4cf2a0b9894acff484c4d3082251c1ea522a96f37c39`.
+- Compatibility filename: `../gatbage/tmp/media/prcampaign_screenshot_hunt_2026-05-23/selected_best/contact_sheet_png.png` is the same 3x3 image.
 - Motion hooks: `01_hero_gif_hell_blinking_eyes.gif`, `02_gif_underhell_maronary_samosbor_loop.gif`.
 - Static 3x3 source PNGs: `04_active_samosbor_monsters.png`, `06_underhell_gate_pack.png`, `12_living_monster_ring_clean.png`, `07_contract_quest_log.png`, `08_inventory_prep_loadout.png`, `09_trade_grid.png`, `08_living_full_map.png`, `10_full_map_route_context.png`, `11_factions_alife_rank_panel.png`.
 

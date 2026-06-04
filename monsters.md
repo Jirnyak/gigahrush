@@ -4,7 +4,7 @@
 >
 > Роль: описывает monster packages, procedural sprites, ecology, simple AI, special tactic profiles, counterplay and scaling rules for thousands-capable active floors. Связан с `fight.md`, `ai.md`, `items.md` and `balance.md`.
 
-Актуально на 2026-05-30. Это активный root-док по монстрам: не архив prompt-файлов и не список отдельных заявок. Старые подробные monster bible/prompt-аудиты остаются в `gatbage/` только как исторический материал; реализация проверяется по `src/entities/`, `src/data/monster_ecology.ts`, `src/systems/ai/monster.ts`, `src/systems/ai/tactics.ts`, `src/render/sprite_index.ts` и `src/render/sprites.ts`.
+Актуально на 2026-05-30. Это активный root-док по монстрам: не архив prompt-файлов и не список отдельных заявок. Старые подробные monster bible/prompt-аудиты остаются в `../gatbage/` только как исторический материал; реализация проверяется по `src/entities/`, `src/data/monster_ecology.ts`, `src/systems/ai/monster.ts`, `src/systems/ai/tactics.ts`, `src/render/sprite_index.ts` и `src/render/sprites.ts`.
 
 ## Что такое пакет монстра
 

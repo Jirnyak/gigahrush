@@ -4,7 +4,7 @@
 >
 > Роль: описывает items, tools, weapons, PSI clots, loot, resources, crafting/production, food, water, value, use effects, procedural sprites and economy hooks. Связан с `economics.md`, `balance.md`, `alife.md`, `fight.md` and `quests.md`.
 
-Актуально на 2026-05-30. Этот файл описывает уже работающую предметную систему, а не список будущих item-кандидатов. Архивные item-манифесты и оркестратор перенесены в `gatbage/`.
+Актуально на 2026-05-30. Этот файл описывает уже работающую предметную систему, а не список будущих item-кандидатов. Архивные item-манифесты и оркестратор перенесены в `../gatbage/`.
 
 ## Слой данных
 

@@ -36,7 +36,7 @@ Before changing gameplay, content, generation, systems, rendering, save/load, or
 3. Read the relevant source files under `src/`; never implement from docs alone.
 4. Check `git status --short` and do not overwrite unrelated dirty work.
 
-Default search/read scope is code and primary docs: root `*.md`, `src/`, `tests/`, `scripts/`, `package.json` and task-specific files. Do not search or read `gatbage/**`, `dist/**`, `itch/**`, `pikabu/**`, `portal/**` or `screenshots/**` unless the user explicitly asks for archive/media/release context or a listed task area below requires a specific file there. Normal `rg` is intentionally scoped by `.rgignore`; use an explicit path or `--no-ignore` only when the task needs archived/generated material.
+Default search/read scope is code and primary docs: root `*.md`, `src/`, `tests/`, `scripts/`, `package.json` and task-specific files. The archive appendix lives outside this repository at `../gatbage/`; do not search or read it by default. Open `../gatbage/**`, `dist/**`, `itch/**`, `pikabu/**`, `portal/**` or `screenshots/**` only when the user explicitly asks for archive/media/release context or a listed task area below requires a specific file there.
 
 Read additional docs only when relevant to the task:
 
@@ -48,10 +48,11 @@ Read additional docs only when relevant to the task:
 | Active-floor AI, NPC utility, pathfinding, tactics, actor cadence | `ai.md` |
 | Dynamic combat, projectiles, damage, tactical readability | `fight.md` |
 | Persistent NPC identity, deaths, relations, off-floor population | `alife.md` |
+| `Инфосеть Демос`, NPC social graph, feed, reactions, quest notices | `demos.md` |
 | Samosbor warning, shelter, local rebuild, variants, aftermath | `samosbor.md` |
 | Save/load shape, `localStorage`, payload sections, sanitization | `save.md` |
 | Vertical route, route keys, floor memory, geometry ownership | `floors.md` |
-| Procedural floor anomalies, cellular-world effects, anomaly runtime | `anomalies.md`; use `gatbage/reference/procedural_floors/` only for authoring docs |
+| Procedural floor anomalies, cellular-world effects, anomaly runtime | `anomalies.md`; use `../gatbage/reference/procedural_floors/` only for authoring docs |
 | Economy, resources, factories, production, caravans, banking, markets | `economics.md` |
 | Numeric tuning, rewards, HP/XP, scarcity, progression pressure | `balance.md` |
 | Items, weapons, PSI, resources, loot, production inputs | `items.md` |
@@ -64,18 +65,18 @@ Read additional docs only when relevant to the task:
 | Mobile input, touch controls, viewport, mobile validation | `mobile.md` |
 | Optional online mode design boundaries; single-player remains primary | `online.md` |
 | Optional Cloudflare Net Sphere deployment, Worker/D1, network payloads | `cloudflare.md` |
-| Player-facing text, lore voice, scenario/domain packets | `scenarist.md`; use `gatbage/reference/scenario_writers/README.md` only for broad text-pass work |
+| Player-facing text, lore voice, scenario/domain packets | `scenarist.md`; use `../gatbage/reference/scenario_writers/README.md` only for broad text-pass work |
 | Visual/audio/UI/atmosphere taste decisions | `taste.md` |
-| Authored route-floor briefs and expansion packets | `gatbage/reference/design_floors/`, `gatbage/reference/expansions/` only for floor/route planning tasks |
-| Cautious UX rework plans; not shipped facts until implemented | `gatbage/reference/ux_rework/` only for UX rework tasks |
-| Localization pipeline, generated reports, locale seeding/applying | `gatbage/reference/localization/` only for localization tasks |
+| Authored route-floor briefs and expansion packets | `../gatbage/reference/design_floors/`, `../gatbage/reference/expansions/` only for floor/route planning tasks |
+| Cautious UX rework plans; not shipped facts until implemented | `../gatbage/reference/ux_rework/` only for UX rework tasks |
+| Localization pipeline, generated reports, locale seeding/applying | `../gatbage/reference/localization/` only for localization tasks |
 | PR, media, KPI monitoring, public campaign continuity | `PRCampaign/KPI.md`, `PRCampaign/campaign_plan_ru.md`, latest `PRCampaign/kpi_report_*.md` |
 | Portal/store artifact work | `PRCampaign/portal.md` |
 | Release commit/deploy runbook | `commit.md`, only for explicit commit/release tasks |
-| Historical context and archived notes | `gatbage/**` only for explicit historical comparison |
+| Historical context and archived notes | `../gatbage/**` only for explicit historical comparison |
 | License/legal text changes | `LICENSE.md` |
 
-`gatbage/**` and archived root prompt/status files are historical context only. Do not recreate old agent-log or task-status directories for routine work.
+`../gatbage/**` and archived root prompt/status files are external appendix context only. Do not recreate old agent-log or task-status directories for routine work.
 
 ## Stack And Commands
 
@@ -171,7 +172,7 @@ Keep the five-layer contract intact:
 
 - `README.md` documents shipped behavior only. Update it when implementation facts change, not for intent.
 - `architecture.md` documents engineering contracts and ownership rules.
-- `desdoc.md` may describe future intent; verify against current code before implementation. Archived root plans under `gatbage/` are historical comparison only.
+- `desdoc.md` may describe future intent; verify against current code before implementation. Archived root plans under `../gatbage/` are historical comparison only.
 - Active scenario/localization docs guide text passes; they are not substitutes for source inspection.
 - Do not copy implementation counts from memory. If a count matters, verify it from source, scripts, or the current README.
 
@@ -185,7 +186,7 @@ Green, usually safe for additive work:
 - New `src/data/<domain>_<module>.ts` or a small domain definition file
 - New `src/entities/<monster>.ts`
 - New focused tests under `tests/`
-- New focused reference docs under `gatbage/reference/` only when the task explicitly asks for reference/doc work
+- New focused reference docs under `../gatbage/reference/` only when the task explicitly asks for reference/doc work
 
 Yellow, edit narrowly:
 
@@ -394,7 +395,7 @@ Russian player-facing text is canonical unless a task explicitly asks for transl
 
 For text-heavy tasks:
 
-- Read `scenarist.md`; open `gatbage/reference/scenario_writers/` only for broad scenario/text-pass work.
+- Read `scenarist.md`; open `../gatbage/reference/scenario_writers/` only for broad scenario/text-pass work.
 - Keep tone consistent with existing in-game strings.
 - Run localization audit/report scripts when changing broad player-facing text or locale data.
 - Use the l10n scripts for generated inventories, reports and locale seeding/applying; do not hand-maintain generated reports casually.

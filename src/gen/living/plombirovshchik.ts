@@ -10,6 +10,7 @@ import { MONSTERS } from '../../entities/monster';
 import { MarkType, stampMark } from '../../systems/surface_marks';
 import { monsterSpr, Spr } from '../../render/sprite_index';
 import { publishEvent, registerWorldEventObserver } from '../../systems/events';
+import { setDoorState } from '../../systems/door_state';
 import { randomRPG, scaleMonsterHp, scaleMonsterSpeed } from '../../systems/rpg';
 import { findClearArea, protectRoom } from '../shared';
 import { genLog } from '../log';
@@ -331,7 +332,7 @@ function publishPlombEvent(
 function openSealedDoor(ctx: PlombContext, state: GameState): boolean {
   const door = ctx.world.doors.get(ctx.sealedDoorIdx);
   if (!door || door.state === DoorState.OPEN || door.state === DoorState.HERMETIC_OPEN) return false;
-  door.state = DoorState.HERMETIC_OPEN;
+  setDoorState(ctx.world, door, DoorState.HERMETIC_OPEN);
   door.timer = 0;
   ctx.routeOpened = true;
   markSeal(ctx.world, ctx.sealedDoorIdx, 30_200 + Math.floor(state.time), false);

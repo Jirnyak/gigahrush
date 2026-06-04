@@ -18,28 +18,28 @@ Rationale:
 
 This is the media order restored in the existing DTF post. The 20:48 UTC public recheck found all six intended captions in the article bootstrap data.
 
-1. `gatbage/tmp/media/prcampaign_screenshot_hunt_2026-05-23/selected_best/01_hero_gif_hell_blinking_eyes.gif`
+1. `../gatbage/tmp/media/prcampaign_screenshot_hunt_2026-05-23/selected_best/01_hero_gif_hell_blinking_eyes.gif`
    - Alt: `ГИГАХРУЩ: коридор со стенами-глазами`
    - Caption: `Хоррор-хук: дом смотрит на игрока до того, как он понял правила.`
-2. `gatbage/tmp/media/prcampaign_screenshot_hunt_2026-05-23/selected_best/04_active_samosbor_monsters.png`
+2. `../gatbage/tmp/media/prcampaign_screenshot_hunt_2026-05-23/selected_best/04_active_samosbor_monsters.png`
    - Alt: `ГИГАХРУЩ: САМОСБОР, монстры и боевой HUD`
    - Caption: `САМОСБОР как давление на маршрут: сирена, туман, монстры и вопрос, бежать или добивать цель.`
-3. `gatbage/tmp/media/prcampaign_screenshot_hunt_2026-05-23/selected_best/08_inventory_prep_loadout.png`
+3. `../gatbage/tmp/media/prcampaign_screenshot_hunt_2026-05-23/selected_best/08_inventory_prep_loadout.png`
    - Alt: `ГИГАХРУЩ: инвентарь перед вылазкой`
    - Caption: `Подготовка до выстрелов: еда, вода, патроны, бинты, оружие и лишний вес.`
-4. `gatbage/tmp/media/prcampaign_screenshot_hunt_2026-05-23/selected_best/07_contract_quest_log.png`
+4. `../gatbage/tmp/media/prcampaign_screenshot_hunt_2026-05-23/selected_best/07_contract_quest_log.png`
    - Alt: `ГИГАХРУЩ: журнал контракта`
    - Caption: `Контракты дают повод выйти из жилой зоны: цель, срок, риск, награда.`
-5. `gatbage/tmp/media/prcampaign_screenshot_hunt_2026-05-23/selected_best/09_trade_grid.png`
+5. `../gatbage/tmp/media/prcampaign_screenshot_hunt_2026-05-23/selected_best/09_trade_grid.png`
    - Alt: `ГИГАХРУЩ: торговля с NPC`
    - Caption: `Ресурсы и торговля: иногда патроны важнее героизма.`
-6. `gatbage/tmp/media/prcampaign_screenshot_hunt_2026-05-23/selected_best/11_factions_alife_rank_panel.png`
+6. `../gatbage/tmp/media/prcampaign_screenshot_hunt_2026-05-23/selected_best/11_factions_alife_rank_panel.png`
    - Alt: `ГИГАХРУЩ: фракции и A-Life рейтинг`
    - Caption: `A-Life, отношения и фракции: NPC не обязаны возвращаться после смерти.`
 
 Fallback:
 
-- If the editor needs one compact preview, use `gatbage/tmp/media/prcampaign_screenshot_hunt_2026-05-23/selected_best/contact_sheet_3x3.png`.
+- If the editor needs one compact preview, use `../gatbage/tmp/media/prcampaign_screenshot_hunt_2026-05-23/selected_best/contact_sheet_3x3.png`.
 - If GIF upload fails, lead with `04_active_samosbor_monsters.png`.
 - Do not upload both `contact_sheet_3x3.png` and `contact_sheet_png.png`; they are duplicate overview images.
 

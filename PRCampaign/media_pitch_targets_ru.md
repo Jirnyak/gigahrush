@@ -12,8 +12,8 @@
 - GIF 1: https://img.itch.zone/aW1hZ2UvNDU4NzE2MC8yNzQwNDQ4OS5naWY=/original/LTioNh.gif
 - GIF 2: https://img.itch.zone/aW1hZ2UvNDU4NzE2MC8yNzQwNDQ5MC5naWY=/original/xkmr2K.gif
 - Cover: https://img.itch.zone/aW1nLzI3MzI4NTE0LnBuZw==/original/Pp7K5P.png
-- Local current best media: `gatbage/tmp/media/prcampaign_screenshot_hunt_2026-05-23/selected_best/`.
-- Square 3x3 sheet: `gatbage/tmp/media/prcampaign_screenshot_hunt_2026-05-23/selected_best/contact_sheet_3x3.png` (`contact_sheet_png.png` is the same image for older references).
+- Local current best media: `../gatbage/tmp/media/prcampaign_screenshot_hunt_2026-05-23/selected_best/`.
+- Square 3x3 sheet: `../gatbage/tmp/media/prcampaign_screenshot_hunt_2026-05-23/selected_best/contact_sheet_3x3.png` (`contact_sheet_png.png` is the same image for older references).
 
 ## A: отправить первыми
 
@@ -52,7 +52,7 @@
 - Subject RU: `ГИГАХРУЩ - браузерный survival horror про вылазки в бесконечной хрущевке`
 - 1 абзац hook из `PRCampaign/copy_pack_ru.md`.
 - 2 ссылки: itch.io и direct web build.
-- 1 GIF + 2 screenshots from `gatbage/tmp/media/prcampaign_screenshot_hunt_2026-05-23/selected_best/`, не тяжелые вложения; лучше links. Use `contact_sheet_3x3.png` only when a compact square overview is useful.
+- 1 GIF + 2 screenshots from `../gatbage/tmp/media/prcampaign_screenshot_hunt_2026-05-23/selected_best/`, не тяжелые вложения; лучше links. Use `contact_sheet_3x3.png` only when a compact square overview is useful.
 - 3 факта: browser/no install, Samosbor, A-Life/persistent consequences.
 - Content warning: survival horror, violence, body horror / disturbing atmosphere.
 - Ask: "consider for news, roundup, stream, curator list, or short post".

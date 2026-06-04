@@ -434,6 +434,11 @@ function entryForZ(state: GameState, z: number): FloorRunEntry | null {
   };
 }
 
+export function floorRunEntryForDesignFloor(state: GameState, designFloorId: DesignFloorId): FloorRunEntry | null {
+  const designFloor = designFloorById(designFloorId);
+  return designFloor ? entryForZ(state, designFloor.z) : null;
+}
+
 export function currentFloorRunEntry(state: GameState): FloorRunEntry {
   const run = ensureFloorRunState(state);
   return entryForZ(state, run.currentZ) ?? {

@@ -23,8 +23,8 @@ The body was restored from the local Habr draft, checked in the editor, and subm
 
 Created and uploaded a Habr feed cover from the existing PR screenshot set:
 
-- Local generated cover: `gatbage/tmp/media/habr_post_2026-05-31/habr_cover_samosbor_780x440.jpg`.
-- Source image: `gatbage/tmp/media/prcampaign_screenshot_hunt_2026-05-23/selected_best/04_active_samosbor_monsters.png`.
+- Local generated cover: `../gatbage/tmp/media/habr_post_2026-05-31/habr_cover_samosbor_780x440.jpg`.
+- Source image: `../gatbage/tmp/media/prcampaign_screenshot_hunt_2026-05-23/selected_best/04_active_samosbor_monsters.png`.
 - Cover dimensions/size: `780x440`, about `143K`.
 
 After submission, the article page exposed these clickable article links:

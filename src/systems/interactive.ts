@@ -246,12 +246,66 @@ function targetInRange(ctx: ContentInteractionContext, instance: InteractiveInst
   return ctx.world.dist2(ctx.player.x, ctx.player.y, instance.x + 0.5, instance.y + 0.5) <= range * range;
 }
 
+function transientInstance(
+  world: World,
+  idx: number,
+  def: InteractiveDef,
+  container?: WorldContainer,
+): InteractiveInstance {
+  return {
+    id: -((idx & 0x7fffff) + 1),
+    defId: def.id,
+    idx,
+    x: idx % W,
+    y: (idx / W) | 0,
+    roomId: idxRoom(world, idx),
+    zoneId: idxZone(world, idx),
+    seed: instanceSeed(idx, def.id),
+    layer: def.layer,
+    state: {},
+    containerId: container?.id,
+    tags: [...def.tags],
+  };
+}
+
+function readOnlyResolved(ctx: ContentInteractionContext, idx: number): ResolvedInteractive | null {
+  const candidates: ResolvedInteractive[] = [];
+  const flaggedDefId = interactiveDefIdForSurfaceFlags(ctx.world.surfaceFlags[idx] ?? 0);
+  if (flaggedDefId && !existingAt(ctx.world, idx, flaggedDefId)) {
+    const def = getInteractiveDef(flaggedDefId);
+    if (def && (def.visual.kind !== 'feature' || ctx.world.features[idx] === def.visual.feature)) {
+      candidates.push({ instance: transientInstance(ctx.world, idx, def), def });
+    }
+  }
+
+  const featureDefId = autoFeatureDefs.get(ctx.world.features[idx] as Feature);
+  if (featureDefId && !existingAt(ctx.world, idx, featureDefId)) {
+    const def = getInteractiveDef(featureDefId);
+    if (def) candidates.push({ instance: transientInstance(ctx.world, idx, def), def });
+  }
+
+  const container = visibleContainerAt(ctx.world, idx % W, (idx / W) | 0);
+  if (container && !existingAt(ctx.world, idx, 'container_adapter', container.id)) {
+    const def = getInteractiveDef('container_adapter');
+    if (def) candidates.push({ instance: transientInstance(ctx.world, idx, def, container), def, container });
+  }
+
+  let best: ResolvedInteractive | null = null;
+  for (const candidate of candidates) {
+    if (!targetInRange(ctx, candidate.instance, candidate.def)) continue;
+    if (!best || candidate.def.target.priority > best.def.target.priority) best = candidate;
+  }
+  return best;
+}
+
 function resolveInteractive(ctx: ContentInteractionContext): ResolvedInteractive | null {
   const x = Math.floor(ctx.lookX);
   const y = Math.floor(ctx.lookY);
   const idx = ctx.world.idx(x, y);
-  ensureAutoFeatureInstance(ctx.world, idx);
-  ensureContainerInstance(ctx, idx);
+  if (!ctx.readOnly) {
+    ensureAutoFeatureInstance(ctx.world, idx);
+    ensureContainerInstance(ctx, idx);
+  }
 
   const list = worldState(ctx.world).byIdx.get(idx);
   if (!list || list.length === 0) return null;
@@ -260,14 +314,15 @@ function resolveInteractive(ctx: ContentInteractionContext): ResolvedInteractive
   for (const instance of list.slice()) {
     const def = getInteractiveDef(instance.defId);
     if (!def || !validInstance(ctx.world, instance, def)) {
-      removeInteractiveAt(ctx.world, instance.idx, item => item.id === instance.id);
+      if (!ctx.readOnly) removeInteractiveAt(ctx.world, instance.idx, item => item.id === instance.id);
       continue;
     }
     if (!targetInRange(ctx, instance, def)) continue;
     const container = containerForInstance(ctx.world, instance);
     if (!best || def.target.priority > best.def.target.priority) best = { instance, def, container };
   }
-  return best;
+  if (best) return best;
+  return ctx.readOnly ? readOnlyResolved(ctx, idx) : null;
 }
 
 function promptForResolved(resolved: ResolvedInteractive): string {

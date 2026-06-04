@@ -14,7 +14,7 @@ The next implementation target is:
 
 - A seed-sized population around `100_000` procedural NPC identities per run on every supported runtime, bounded by a `131_072` technical capacity.
 - No million-size pool, no memory/device/browser tier and no fallback population branch.
-- Every ordinary NPC has a stable identity, floor assignment, faction, occupation, level, deterministic default loadout, family/friend graph, rank state, quest potential and death state.
+- Every ordinary NPC has a stable identity, floor assignment, faction, occupation, age, sex, level, deterministic default loadout, family/friend graph, rank state, quest potential and death state.
 - Quest NPCs are part of the same identity model instead of being a separate magical category.
 - Only the active floor is materialized into live `entities`.
 - Off-floor NPCs do not pathfind, fight, tick needs or run frame AI.
@@ -29,7 +29,7 @@ Current shipped baseline:
 - `alifeId` and `persistentNpcId` identify materialized procedural NPCs and converted reserved plot arrivals such as the Hell holdout Major Grom arrival.
 - `plotNpcId` deaths are tracked by A-Life so killed named NPCs do not reappear on later generation.
 - Materialized A-Life NPCs carry personal `playerRelation`; AI hostility checks it before falling back to faction hostility.
-- Core persistent route/numeric fields are no longer stored as JS string/number properties on every A-Life record: `floorKey` is interned through a route-key dictionary plus `Uint16Array` index, and base floor, danger, faction, occupation, flags, `level`, `str`, `agi`, `int`, HP, money/account balance, family id, sprite, sprite seed, kill counters, `playerRelation` and `karma` live in typed-array columns inside the A-Life state, while snapshots expose ordinary strings/numbers to callers.
+- Core persistent route/numeric fields are no longer stored as JS string/number properties on every A-Life record: `floorKey` is interned through a route-key dictionary plus `Uint16Array` index, and base floor, danger, faction, occupation, age, sex code, flags, `level`, `str`, `agi`, `int`, HP, money/account balance, family id, sprite, sprite seed, kill counters, `playerRelation` and `karma` live in typed-array columns inside the A-Life state, while snapshots expose ordinary strings/numbers to callers.
 - Ordinary generated loadout is deterministic from seed, faction, occupation, danger and level; it is not stored as a `weapon` string plus `inventory` array on every untouched A-Life record. Only captured/overridden custom loadout is kept as a sparse per-record override.
 - Browser saves store A-Life seed, total population, up to `65_536` dead A-Life ids, dead plot ids, bounded changed-record overrides and capped persistent mobility state. Full live entities are not serialized.
 - `src/systems/alife_migration.ts` runs a bounded cold migration cadence: inactive-floor journeys move records between route keys, active-floor arrivals materialize near lift anchors, and active departures require live NPCs to reach a lift anchor before the record moves.
@@ -124,7 +124,7 @@ Current fields:
 - `danger`: floor/context danger `1..5`, stored as a byte column and used for deterministic loadout.
 - `faction`: current faction, stored as a byte column.
 - `occupation`: runtime sprite/role, stored as a byte column.
-- `name`, `female`: display and grammar.
+- `name`, `female`, `age`, `sex`: display, grammar and demographic context. Age is clamped to `1..100`; sex is a compact `male`/`female` value mirrored to the legacy female flag for grammar.
 - `familyId`: current compact family grouping.
 - `canGiveQuest`: active/authored quest affordance; persistent A-Life NPCs get a stable `10%` candidate roll instead of a special quest-giver caste or a universal offer flag.
 - `level`, `str`, `agi`, `int`: RPG state.
@@ -140,7 +140,8 @@ Current fields:
 
 Storage note:
 
-- Route key index, base floor, danger, faction, occupation, boolean flags, RPG byte stats, health, cash/account wealth, family id, sprite fields, kill counters, `playerRelation` and `karma` are stored as typed-array columns, not as own properties on each persistent record object.
+- Route key index, base floor, danger, faction, occupation, age, sex, boolean flags, RPG byte stats, health, cash/account wealth, family id, sprite fields, kill counters, `playerRelation` and `karma` are stored as typed-array columns, not as own properties on each persistent record object.
+- Age uses `Uint8Array`; sex uses a byte code column with `0` as unset, `1` male and `2` female.
 - `level`, `str`, `agi` and `int` use byte-safe caps; the shared runtime RPG level cap is `255`.
 - `playerRelation` uses an `Int8Array` with an unset sentinel; `karma` uses signed-char-compatible `[-127, 127]`.
 - Current-floor live `Entity` objects still expose normal number/string/array fields. The compact form is the cold persistent pool, and `getAlifeNpcRecordSnapshot()` is the public boundary view.
@@ -181,6 +182,14 @@ Level distribution:
 - High levels are a long tail, not a flat random range.
 - Current implementation uses a logarithmic/asymptotic distribution close to `1/L`, with danger and elite factions shifting the tail upward.
 - Level `100` exists, but should be rare enough that reaching it still feels exceptional.
+
+Age distribution:
+
+- Ordinary age is deterministic from run seed, floor route key, faction, occupation and level.
+- Level is only one soft input: higher level nudges age upward, but rare prodigies and veterans prevent "all strong NPCs are old" and "all low-level NPCs are children".
+- `Occupation.CHILD` records receive child ages; reserved child identities without an authored age get a deterministic child fallback.
+- `floor_69` ordinary and authored staff stay adult but young-biased; its authored workers are in their twenties unless a role explicitly says otherwise.
+- Authored NPC packages can set exact age/sex through `PlotNpcDef`, and those values reserve into A-Life, live spawn and Demos snapshots.
 
 Faction distribution:
 

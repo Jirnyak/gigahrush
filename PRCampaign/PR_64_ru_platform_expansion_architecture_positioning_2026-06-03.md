@@ -31,7 +31,7 @@ Keep the public wording as `безграничная бетонная струк
 
 | Priority | Surface | URL / contact | Fit | Current route | Blocker | Exact next action |
 | --- | --- | --- | --- | --- | --- | --- |
-| A | Indie Hub | `https://t.me/indie_hub`; bot `@indie_hub_bot`; current public evidence: `https://telemetr.io/ru/channels/2401124400-indie_hub/posts` | Strong for weird/free indie. Recent posts include horror, survival, itch/free games and subscriber-suggested projects. | Public channel text says games can be proposed through `@indie_hub_bot`; it asks for title, genre, short description, why it is interesting, game link and a few screenshots. | Telegram login/bot composer required. | Owner/agent with Telegram access sends the ready Indie Hub copy below once, with MyIndie first, direct build second, and 2-3 screenshots/GIF from `gatbage/tmp/media/prcampaign_screenshot_hunt_2026-05-23/selected_best/`. |
+| A | Indie Hub | `https://t.me/indie_hub`; bot `@indie_hub_bot`; current public evidence: `https://telemetr.io/ru/channels/2401124400-indie_hub/posts` | Strong for weird/free indie. Recent posts include horror, survival, itch/free games and subscriber-suggested projects. | Public channel text says games can be proposed through `@indie_hub_bot`; it asks for title, genre, short description, why it is interesting, game link and a few screenshots. | Telegram login/bot composer required. | Owner/agent with Telegram access sends the ready Indie Hub copy below once, with MyIndie first, direct build second, and 2-3 screenshots/GIF from `../gatbage/tmp/media/prcampaign_screenshot_hunt_2026-05-23/selected_best/`. |
 | A | ИНДИ.РФ / Indie Spotlight | `https://xn--d1ahbs.xn--p1ai/`; Telegram link from site footer; VK link from site footer | Strong RU indie discovery audience; site describes the channel as about little-known worthy indie projects. | Landing page exposes registration/login and rights-confirmation flow; public search/landing routes mention game proposal. | Needs site login or Telegram/VK/editor route visible in browser; no safe unauthenticated shell submit. | Owner opens the site, uses `Предложить игру` if visible, or registers/logs in and submits through the game/right-confirmation flow. If Telegram route is easier, send a compact proposal and media pack once. |
 | A | GcUp / Форум игроделов | `https://gcup.ru/forum/`, section `Ваши проекты -> Проекты в разработке` | High dev-feedback fit; public forum text explicitly allows beta/demo project information, raw versions, screenshots and changelog. | Create one thread under `Проекты в разработке`; later updates go into same thread. | Account required; captcha unknown. | Create a Tenevik thread with title `ГИГАХРУЩ - браузерный survival horror / ARPG shooter без движка`, attach media, MyIndie/direct/itch links, and ask for first 5-10 minute feedback. |
 | A | XGM.guru | `https://xgm.guru/`; `https://xgm.guru/p/xgm/how-xgm-works`; project create route visible as `Создать проект` | Good devlog/project hub. XGM describes projects as a way to show content and resources as posts/news/video/game/docs. | Create one project, then one resource/article in Game Dev. | Account required. | Create project `ГИГАХРУЩ`, then publish one resource using the architecture angle: no engine, WebGL/canvas, browser access, A-Life, Самосбор. |
@@ -72,10 +72,10 @@ https://t.me/gigah_rush
 
 Attach 2-3 media items from:
 
-- `gatbage/tmp/media/prcampaign_screenshot_hunt_2026-05-23/selected_best/01_hero_gif_hell_blinking_eyes.gif`
-- `gatbage/tmp/media/prcampaign_screenshot_hunt_2026-05-23/selected_best/02_gif_underhell_maronary_samosbor_loop.gif`
-- `gatbage/tmp/media/prcampaign_screenshot_hunt_2026-05-23/selected_best/contact_sheet_3x3.png`
-- `gatbage/tmp/media/prcampaign_screenshot_hunt_2026-05-23/selected_best/08_inventory_prep_loadout.png`
+- `../gatbage/tmp/media/prcampaign_screenshot_hunt_2026-05-23/selected_best/01_hero_gif_hell_blinking_eyes.gif`
+- `../gatbage/tmp/media/prcampaign_screenshot_hunt_2026-05-23/selected_best/02_gif_underhell_maronary_samosbor_loop.gif`
+- `../gatbage/tmp/media/prcampaign_screenshot_hunt_2026-05-23/selected_best/contact_sheet_3x3.png`
+- `../gatbage/tmp/media/prcampaign_screenshot_hunt_2026-05-23/selected_best/08_inventory_prep_loadout.png`
 
 ## Ready Outline - Architecture Article For StopGame / XGM / GcUp / PlayGround / DTF
 
@@ -118,4 +118,4 @@ Short close:
 - VK: open logged-in VK in the controllable browser before any VK group/profile route.
 - DTF: approve/resolve Yandex OAuth only if the owner is comfortable with the unverified app consent and selected identity.
 - Forum accounts: create or unlock Tenevik accounts on GcUp/XGM/StopGame/PlayGround if those routes are desired.
-- Media: upload `gatbage/tmp/media/prcampaign_2026-06-01_ixbt/gigahrush_ixbt_trailer_20s_2026-06-01.mp4` to VK Video or YouTube before restarting IXBT bot.
+- Media: upload `../gatbage/tmp/media/prcampaign_2026-06-01_ixbt/gigahrush_ixbt_trailer_20s_2026-06-01.mp4` to VK Video or YouTube before restarting IXBT bot.

@@ -111,9 +111,17 @@ test('A-Life population plan resolves authored NPC floor keys from their content
   const reserved = new Map(plan.reserved.map(identity => [identity.plotNpcId, identity]));
 
   assert.equal(reserved.get('gordon_freeman')?.floorKey, 'story:maintenance');
+  assert.equal(reserved.get('gordon_freeman')?.age, 28);
+  assert.equal(reserved.get('gordon_freeman')?.sex, 'male');
   assert.equal(reserved.get('meduka_meguku')?.floorKey, 'story:hell');
+  assert.equal(reserved.get('meduka_meguku')?.age, 14);
+  assert.equal(reserved.get('meduka_meguku')?.sex, 'female');
   assert.equal(reserved.get('f69_performer_ira')?.floorKey, 'design:floor_69');
+  assert.equal(reserved.get('f69_performer_ira')?.age, 22);
+  assert.equal(reserved.get('f69_performer_ira')?.sex, 'female');
   assert.equal(reserved.get('rotenbergov')?.floorKey, 'story:ministry');
+  assert.equal(reserved.get('rotenbergov')?.age, 70);
+  assert.equal(reserved.get('rotenbergov')?.sex, 'male');
   assert.equal(reserved.get('rotenbergov')?.money, 10_000);
   assert.equal(reserved.get('rotenbergov')?.accountRubles, 4_990_000);
   assert.equal(reserved.get('rotenbergov')?.hp, 3000);

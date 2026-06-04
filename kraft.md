@@ -4,7 +4,7 @@
 >
 > Роль: источник истины по player-facing crafting в коде игры: материалы, составы предметов, рецепты, источники рецептов, станции, runtime-действия, UI/save-интеграция и правила расширения. Для фактической проверки всегда сверяйся с `src/data/craft_*.ts`, `src/data/item_composition.ts`, `src/systems/crafting.ts`, `src/render/craft_ui.ts`, `src/gen/craft_stations.ts` and focused crafting tests.
 
-Актуально на 2026-06-02. Этот файл описывает уже реализованную систему, а не план будущего апдейта. Старые параллельные prompts `kraft_0.md`..`kraft_7.md` являются архивом реализации и лежат в `gatbage/history/batches/kraft/`.
+Актуально на 2026-06-02. Этот файл описывает уже реализованную систему, а не план будущего апдейта. Старые параллельные prompts `kraft_0.md`..`kraft_7.md` являются архивом реализации и лежат в `../gatbage/history/batches/kraft/`.
 
 ## Статус
 

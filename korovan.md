@@ -4,7 +4,7 @@
 >
 > Роль: описывает, как в текущем коде холодный A-Life, миграции, scripted arrivals and caravans соединяют фиксированную популяцию `100_000`, route floors, экономику и player-facing следы. Этот документ дополняет `README.md`, `alife.md` и `economics.md`: `README.md` фиксирует shipped facts, `alife.md` владеет persistent identity, `economics.md` владеет ресурсами/ценами/караванами, а `korovan.md` описывает их общую макро-идею и системный мост.
 
-Archived implementation batch prompts `korovan_0.md`..`korovan_6.md` moved to `gatbage/history/batches/korovan/`. They are historical orchestration notes, not source of truth.
+Archived implementation batch prompts `korovan_0.md`..`korovan_6.md` moved to `../gatbage/history/batches/korovan/`. They are historical orchestration notes, not source of truth.
 
 ## Design Promise
 
@@ -13,6 +13,7 @@ Archived implementation batch prompts `korovan_0.md`..`korovan_6.md` moved to `g
 The macro layer should make NPCs feel like people with a place in the structure:
 
 - every ordinary person belongs to the fixed A-Life population;
+- age and sex are part of that identity, not renderer-only labels;
 - movement between floors changes that person's real `floorKey`;
 - caravans carry resources and, when they carry people, persistent identities;
 - scripted arrivals should be named/reserved identities or migrated ordinary records;
@@ -38,6 +39,7 @@ Current facts:
 - `materializeAlifeFloorPopulation()` removes ambient templates and materializes A-Life records from `floorIndex[floorKey]`.
 - Reserved records are skipped as ordinary ambient slots, so a plot identity does not steal a generic crowd body.
 - Dead records are not replaced; their materialization slot stays empty.
+- Age is byte-sized and sex is a byte code in A-Life cold storage; snapshots expose them for Demos, quests, AI context and UI.
 
 The important invariant:
 
@@ -131,11 +133,11 @@ The departure assigns `GOTO` to a lift anchor. Only after the live entity reache
 
 ### Save Shape
 
-Current save shape is `SAVE_SHAPE_VERSION = 16`.
+Current save shape is `SAVE_SHAPE_VERSION = 20`.
 
 Save sections relevant to Korovan:
 
-- `alife`: seed, dead ids cap, dead plot ids, changed-record overrides;
+- `alife`: seed, dead ids cap, dead plot ids, changed-record overrides including age/sex when touched;
 - `alifeMobility`: tick cursor, journey queue and pending arrivals;
 - `caravans`: active run state and lane/resource state through the existing caravan save path;
 - floor memory: visited floor geometry snapshots, separate from A-Life identity.

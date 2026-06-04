@@ -56,7 +56,7 @@ The visible editor remained empty until that restore action is completed in the 
 If owner approves this Habr angle:
 
 1. In the open Habr Sandbox tab, click `Восстановить` on the backup banner, or paste from `PRCampaign/habr_gigahrush_article_draft_2026-05-31.md` if restore fails.
-2. Upload one native media asset, preferably `gatbage/tmp/media/prcampaign_screenshot_hunt_2026-05-23/selected_best/01_hero_gif_hell_blinking_eyes.gif`; use `contact_sheet_3x3.png` if GIF upload fails.
+2. Upload one native media asset, preferably `../gatbage/tmp/media/prcampaign_screenshot_hunt_2026-05-23/selected_best/01_hero_gif_hell_blinking_eyes.gif`; use `contact_sheet_3x3.png` if GIF upload fails.
 3. Use preview and verify that the three end links are visible/clickable.
 4. Submit to Sandbox/moderation once. Do not create duplicate Habr attempts if moderation rejects or the account lacks permissions.
 

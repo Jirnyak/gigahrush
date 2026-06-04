@@ -9,6 +9,8 @@ import {
 import { World } from '../core/world';
 import { getNetHackTerminalDef, NET_HACK_TERMINALS, type NetHackTerminalDef, type NetHackTerminalDefId } from '../data/net_hack';
 import { publishEvent } from './events';
+import { floorKeyForStory } from './floor_keys';
+import { currentFloorRunEntry, floorRunEntryFloorKey } from './procedural_floors';
 
 export interface NetHackTerminal {
   idx: number;
@@ -46,6 +48,16 @@ export interface NetHackOverlaySnapshot {
 const netHackRegistry = new Map<number, NetHackTerminal>();
 const solvedKeys = new Set<string>();
 const lockedUntil = new Map<string, number>();
+const NET_HACK_SAVE_VERSION = 1;
+const NET_HACK_SOLVED_KEY_CAP = 512;
+const NET_HACK_LOCK_CAP = 256;
+const NET_HACK_KEY_LEN_CAP = 96;
+
+export interface NetHackSaveState {
+  version: 1;
+  solvedKeys: string[];
+  lockedUntil: Array<[string, number]>;
+}
 
 const runtime = {
   open: false,
@@ -75,8 +87,27 @@ function currentDef(): NetHackTerminalDef {
   return NET_HACK_TERMINALS[runtime.activeDefId] ?? NET_HACK_TERMINALS.service_gate;
 }
 
+function currentFloorKey(state: GameState): string {
+  try {
+    return floorRunEntryFloorKey(currentFloorRunEntry(state));
+  } catch {
+    return floorKeyForStory(state.currentFloor);
+  }
+}
+
 function terminalKey(state: GameState, terminalIdx: number): string {
-  return `${state.currentFloor}:${terminalIdx}`;
+  return `${currentFloorKey(state)}:${terminalIdx}`;
+}
+
+function cleanTerminalKey(raw: unknown): string {
+  return String(raw ?? '')
+    .replace(/[^a-zA-Z0-9_.:-]/g, '_')
+    .slice(0, NET_HACK_KEY_LEN_CAP);
+}
+
+function cleanSaveTime(raw: unknown): number {
+  const n = typeof raw === 'number' && Number.isFinite(raw) ? raw : 0;
+  return Math.max(0, Math.min(10_000_000, Math.floor(n)));
 }
 
 function terminalRandom(def: NetHackTerminalDef, terminal: NetHackTerminal): number {
@@ -109,6 +140,50 @@ export function netHackChance(input: NetHackChanceInput): number {
 
 export function clearNetHackTerminals(): void {
   netHackRegistry.clear();
+}
+
+export function resetNetHackState(): void {
+  solvedKeys.clear();
+  lockedUntil.clear();
+  closeNetHackTerminal();
+}
+
+export function netHackStateForSave(): NetHackSaveState | undefined {
+  if (solvedKeys.size === 0 && lockedUntil.size === 0) return undefined;
+  const locks: Array<[string, number]> = [];
+  for (const [key, until] of lockedUntil) {
+    if (locks.length >= NET_HACK_LOCK_CAP) break;
+    if (until > 0) locks.push([key, cleanSaveTime(until)]);
+  }
+  return {
+    version: NET_HACK_SAVE_VERSION,
+    solvedKeys: [...solvedKeys].slice(-NET_HACK_SOLVED_KEY_CAP),
+    lockedUntil: locks,
+  };
+}
+
+export function restoreNetHackFromSave(input: unknown): void {
+  solvedKeys.clear();
+  lockedUntil.clear();
+  if (!input || typeof input !== 'object' || Array.isArray(input)) return;
+  const raw = input as { version?: unknown; solvedKeys?: unknown; lockedUntil?: unknown };
+  if (raw.version !== NET_HACK_SAVE_VERSION) return;
+  if (Array.isArray(raw.solvedKeys)) {
+    for (const item of raw.solvedKeys) {
+      if (solvedKeys.size >= NET_HACK_SOLVED_KEY_CAP) break;
+      const key = cleanTerminalKey(item);
+      if (key) solvedKeys.add(key);
+    }
+  }
+  if (Array.isArray(raw.lockedUntil)) {
+    for (const item of raw.lockedUntil) {
+      if (lockedUntil.size >= NET_HACK_LOCK_CAP) break;
+      if (!Array.isArray(item) || item.length < 2) continue;
+      const key = cleanTerminalKey(item[0]);
+      const until = cleanSaveTime(item[1]);
+      if (key && until > 0) lockedUntil.set(key, until);
+    }
+  }
 }
 
 export function getNetHackTerminalAt(world: World, x: number, y: number): NetHackTerminal | undefined {

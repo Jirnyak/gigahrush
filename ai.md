@@ -76,7 +76,7 @@ Global time can remain a soft rhythm input, but it must not force all NPCs into 
 
 ## AI And A-Life Boundary
 
-AI may read live fields such as `alifeId`, `persistentNpcId`, `plotNpcId`, `faction`, `occupation`, `needs`, `playerRelation`, `karma`, `rpg`, weapon and inventory. It may change live position, combat target, needs, health, inventory and compact transient AI state.
+AI may read live fields such as `alifeId`, `persistentNpcId`, `plotNpcId`, `faction`, `occupation`, `age`, `sex`, `needs`, `playerRelation`, `karma`, `rpg`, weapon and inventory. It may change live position, combat target, needs, health, inventory and compact transient AI state.
 
 AI must not:
 
@@ -88,6 +88,8 @@ AI must not:
 - serialize navigation caches, flow fields, actor-local cooldown internals or full behavior histories.
 
 Persistent effects go through A-Life foldback, floor memory, compact events, faction/economy/quest state or an explicit current save section. Required persistent AI fields require a save shape bump, not legacy migration scaffolding.
+
+Age and sex are demographic context, not a new per-frame scheduler. Routine AI and Markov/social adapters may use them for role fit, dialogue tone, family/adult checks, quest plausibility and fear/social context, but they must come from live entity fields or A-Life snapshots and must not trigger full-pool scans.
 
 ## Individual NPC State
 

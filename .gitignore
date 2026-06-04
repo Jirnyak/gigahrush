@@ -11,6 +11,7 @@ pikabu/
 coverage/
 tmp/
 bad_apple/
+gatbage/
 
 .env
 .env.*

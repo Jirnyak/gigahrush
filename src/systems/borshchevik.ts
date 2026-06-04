@@ -14,6 +14,7 @@ import { World } from '../core/world';
 import { Spr } from '../render/sprite_index';
 import { publishEvent } from './events';
 import { cleanCellHazardsNear } from './cell_hazards';
+import { setDoorState } from './door_state';
 import { hasAirborneHazardProtection } from './status';
 import { isPlayerEntity } from './player_actor';
 
@@ -284,7 +285,7 @@ export function damageBorshchevikRootSite(world: World, state: GameState, plant:
       world.cells[cell] = Cell.FLOOR;
       if (old === Cell.DOOR) {
         const door = world.doors.get(cell);
-        if (door) door.state = DoorState.OPEN;
+        if (door) setDoorState(world, door, DoorState.OPEN);
       }
       world.markCellsDirty();
       publishEvent(state, {

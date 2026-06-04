@@ -2,7 +2,7 @@
 
 Задача: подготовить publish-ready тексты для ручной публикации на DevTribe и Пикабу gamedev. Агент не использовал браузер/UI для публикации и ничего не отправлял.
 
-Контекст кампании: DTF-паттерн сработал лучше всего - нативный UGC/devlog, 1 GIF, 3-5 скриншотов, явное раскрытие разработчика, прямые ссылки и конкретный запрос фидбека. Источник медиа для этой волны только `gatbage/tmp/media/prcampaign_screenshot_hunt_2026-05-23/selected_best/`.
+Контекст кампании: DTF-паттерн сработал лучше всего - нативный UGC/devlog, 1 GIF, 3-5 скриншотов, явное раскрытие разработчика, прямые ссылки и конкретный запрос фидбека. Источник медиа для этой волны только `../gatbage/tmp/media/prcampaign_screenshot_hunt_2026-05-23/selected_best/`.
 
 Проверенные rule-fit источники:
 
@@ -57,12 +57,12 @@
 
 Рекомендуемый порядок галереи:
 
-1. GIF: `gatbage/tmp/media/prcampaign_screenshot_hunt_2026-05-23/selected_best/02_gif_underhell_maronary_samosbor_loop.gif`
-2. PNG: `gatbage/tmp/media/prcampaign_screenshot_hunt_2026-05-23/selected_best/04_active_samosbor_monsters.png`
-3. PNG: `gatbage/tmp/media/prcampaign_screenshot_hunt_2026-05-23/selected_best/08_inventory_prep_loadout.png`
-4. PNG: `gatbage/tmp/media/prcampaign_screenshot_hunt_2026-05-23/selected_best/07_contract_quest_log.png`
-5. PNG: `gatbage/tmp/media/prcampaign_screenshot_hunt_2026-05-23/selected_best/11_factions_alife_rank_panel.png`
-6. Опциональный PNG, если DevTribe принимает 5 PNG: `gatbage/tmp/media/prcampaign_screenshot_hunt_2026-05-23/selected_best/10_full_map_route_context.png`
+1. GIF: `../gatbage/tmp/media/prcampaign_screenshot_hunt_2026-05-23/selected_best/02_gif_underhell_maronary_samosbor_loop.gif`
+2. PNG: `../gatbage/tmp/media/prcampaign_screenshot_hunt_2026-05-23/selected_best/04_active_samosbor_monsters.png`
+3. PNG: `../gatbage/tmp/media/prcampaign_screenshot_hunt_2026-05-23/selected_best/08_inventory_prep_loadout.png`
+4. PNG: `../gatbage/tmp/media/prcampaign_screenshot_hunt_2026-05-23/selected_best/07_contract_quest_log.png`
+5. PNG: `../gatbage/tmp/media/prcampaign_screenshot_hunt_2026-05-23/selected_best/11_factions_alife_rank_panel.png`
+6. Опциональный PNG, если DevTribe принимает 5 PNG: `../gatbage/tmp/media/prcampaign_screenshot_hunt_2026-05-23/selected_best/10_full_map_route_context.png`
 
 ### Ссылки
 
@@ -122,16 +122,16 @@
 
 Рекомендуемый порядок галереи:
 
-1. GIF: `gatbage/tmp/media/prcampaign_screenshot_hunt_2026-05-23/selected_best/01_hero_gif_hell_blinking_eyes.gif`
-2. PNG: `gatbage/tmp/media/prcampaign_screenshot_hunt_2026-05-23/selected_best/04_active_samosbor_monsters.png`
-3. PNG: `gatbage/tmp/media/prcampaign_screenshot_hunt_2026-05-23/selected_best/06_underhell_gate_pack.png`
-4. PNG: `gatbage/tmp/media/prcampaign_screenshot_hunt_2026-05-23/selected_best/09_trade_grid.png`
-5. PNG: `gatbage/tmp/media/prcampaign_screenshot_hunt_2026-05-23/selected_best/08_living_full_map.png`
-6. Опциональный PNG, если нужно 5 PNG: `gatbage/tmp/media/prcampaign_screenshot_hunt_2026-05-23/selected_best/12_living_monster_ring_clean.png`
+1. GIF: `../gatbage/tmp/media/prcampaign_screenshot_hunt_2026-05-23/selected_best/01_hero_gif_hell_blinking_eyes.gif`
+2. PNG: `../gatbage/tmp/media/prcampaign_screenshot_hunt_2026-05-23/selected_best/04_active_samosbor_monsters.png`
+3. PNG: `../gatbage/tmp/media/prcampaign_screenshot_hunt_2026-05-23/selected_best/06_underhell_gate_pack.png`
+4. PNG: `../gatbage/tmp/media/prcampaign_screenshot_hunt_2026-05-23/selected_best/09_trade_grid.png`
+5. PNG: `../gatbage/tmp/media/prcampaign_screenshot_hunt_2026-05-23/selected_best/08_living_full_map.png`
+6. Опциональный PNG, если нужно 5 PNG: `../gatbage/tmp/media/prcampaign_screenshot_hunt_2026-05-23/selected_best/12_living_monster_ring_clean.png`
 
 Если Пикабу лучше принимает один сильный превью-кадр вместо длинной галереи, fallback:
 
-- `gatbage/tmp/media/prcampaign_screenshot_hunt_2026-05-23/selected_best/contact_sheet_3x3.png`
+- `../gatbage/tmp/media/prcampaign_screenshot_hunt_2026-05-23/selected_best/contact_sheet_3x3.png`
 
 ### Ссылки
 

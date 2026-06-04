@@ -117,7 +117,7 @@ Actual same-pass actions:
 
 1. Authenticated GamePush Distribution recheck confirmed `In progress`, `Actual draft version: 3`.
 2. Hosted v3 `https://s3.eponesh.com/games/28314/v3/` returned `200`, title `ГИГАХРУЩ - САМОСБОР`, `content-length: 11246051`, `last-modified: Fri, 29 May 2026 01:53:56 GMT`, and `gigahrush-portal=pikabu`.
-3. Uploaded the local promo pack from `gatbage/tmp/media/gamepush_promo_2026-05-28/`: icon `1024x1024`, cover `1920x1080`, and four landscape screenshots `1280x720`.
+3. Uploaded the local promo pack from `../gatbage/tmp/media/gamepush_promo_2026-05-28/`: icon `1024x1024`, cover `1920x1080`, and four landscape screenshots `1280x720`.
 4. Ran GamePush `Generate for all platforms` for `Pikabu`, with English and Russian selected.
 5. Distribution no longer showed the top warning panels for missing icon, cover or screenshots.
 6. Browser opened hosted v3 with visible canvases, but no full sandbox/cloud-save/mobile QA was completed.
@@ -195,8 +195,8 @@ Current release artifact:
 
 - `itch/gigahrush-itch.zip`: 4 999 557 bytes, SHA-256 `fa63dd2be47292814989234482f40597b23fa58df2ec3ab823992953f6c66321`.
 - local upload/media archive manifest: `PRCampaign/release_artifacts_2026-05-23.md`; old generated archive bundles were removed during repository cleanup. Regenerate current upload/media archives before attaching ZIPs.
-- current owner-updated best media folder: `gatbage/tmp/media/prcampaign_screenshot_hunt_2026-05-23/selected_best/`.
-- square 3x3 contact sheet for social/portal preview: `gatbage/tmp/media/prcampaign_screenshot_hunt_2026-05-23/selected_best/contact_sheet_3x3.png`; `contact_sheet_png.png` is the same image under the older filename.
+- current owner-updated best media folder: `../gatbage/tmp/media/prcampaign_screenshot_hunt_2026-05-23/selected_best/`.
+- square 3x3 contact sheet for social/portal preview: `../gatbage/tmp/media/prcampaign_screenshot_hunt_2026-05-23/selected_best/contact_sheet_3x3.png`; `contact_sheet_png.png` is the same image under the older filename.
 - PR agents should take GIFs/screenshots from `selected_best/` first: two GIF motion hooks plus the nine PNGs used in the 3x3 sheet.
 - Flexible media-first rule after PR 13 and PR_18: every public post, listing, devlog, forum thread or announcement must include visible project media: native screenshot/GIF/video/gallery/thumbnail or platform media upload. Use audience-appropriate links: MyIndie first for RU/CIS, direct build as fallback, itch mirror/EN for international contexts. If external links are forbidden or discouraged, do not evade the rule; make the post self-contained with native media, strong game description, developer disclosure and a legal platform-native path such as profile/listing/search wording where appropriate. If a platform allows neither links nor media, hold and record the blocker.
 
@@ -293,8 +293,8 @@ Recommended link order for this surface:
 
 Recommended attachment:
 
-- Primary: `gatbage/tmp/media/prcampaign_screenshot_hunt_2026-05-23/selected_best/01_hero_gif_hell_blinking_eyes.gif`
-- Fallback: `gatbage/tmp/media/prcampaign_screenshot_hunt_2026-05-23/selected_best/contact_sheet_3x3.png`
+- Primary: `../gatbage/tmp/media/prcampaign_screenshot_hunt_2026-05-23/selected_best/01_hero_gif_hell_blinking_eyes.gif`
+- Fallback: `../gatbage/tmp/media/prcampaign_screenshot_hunt_2026-05-23/selected_best/contact_sheet_3x3.png`
 
 Guardrails:
 
@@ -331,7 +331,7 @@ These are not blocked by passwords, but they need a working outbound mail channe
 - Second batch sent on 2026-05-23: Armor Games, TapCraftBox and Indie Games Plus. Gamemoor support request was also sent. Pause email outreach and monitor replies/bounces.
 - Third targeted email batch sent on 2026-05-24 00:28-00:31 BST: VK Play Media, HorrorFam, Indie Game Buzz and Into Indie Games. Pause broad email outreach and monitor replies/bounces.
 - Before sending, add 2-3 direct media links if available. If no public press-kit URL exists yet, use itch/direct/IndieDB links and offer ZIP/screens/GIFs on request.
-- Current media source for all drafts in this file: `gatbage/tmp/media/prcampaign_screenshot_hunt_2026-05-23/selected_best/`. Use the 3x3 sheet when a platform wants one compact square preview; use the individual GIF/PNG files from the same folder for galleries and pitches.
+- Current media source for all drafts in this file: `../gatbage/tmp/media/prcampaign_screenshot_hunt_2026-05-23/selected_best/`. Use the 3x3 sheet when a platform wants one compact square preview; use the individual GIF/PNG files from the same folder for galleries and pitches.
 
 ## P0 Message Drafts
 
@@ -566,13 +566,13 @@ Source pack: `PRCampaign/reddit_pbbg_publicity_2026-05-24.md`.
 
 Historical `r/PBBG` media order from the prep pass:
 
-1. `gatbage/tmp/media/prcampaign_screenshot_hunt_2026-05-23/selected_best/contact_sheet_3x3.png`
-2. `gatbage/tmp/media/prcampaign_screenshot_hunt_2026-05-23/selected_best/11_factions_alife_rank_panel.png`
-3. `gatbage/tmp/media/prcampaign_screenshot_hunt_2026-05-23/selected_best/07_contract_quest_log.png`
-4. `gatbage/tmp/media/prcampaign_screenshot_hunt_2026-05-23/selected_best/09_trade_grid.png`
-5. `gatbage/tmp/media/prcampaign_screenshot_hunt_2026-05-23/selected_best/08_inventory_prep_loadout.png`
-6. `gatbage/tmp/media/prcampaign_screenshot_hunt_2026-05-23/selected_best/10_full_map_route_context.png`
-7. Optional motion: `gatbage/tmp/media/prcampaign_screenshot_hunt_2026-05-23/selected_best/02_gif_underhell_maronary_samosbor_loop.gif`
+1. `../gatbage/tmp/media/prcampaign_screenshot_hunt_2026-05-23/selected_best/contact_sheet_3x3.png`
+2. `../gatbage/tmp/media/prcampaign_screenshot_hunt_2026-05-23/selected_best/11_factions_alife_rank_panel.png`
+3. `../gatbage/tmp/media/prcampaign_screenshot_hunt_2026-05-23/selected_best/07_contract_quest_log.png`
+4. `../gatbage/tmp/media/prcampaign_screenshot_hunt_2026-05-23/selected_best/09_trade_grid.png`
+5. `../gatbage/tmp/media/prcampaign_screenshot_hunt_2026-05-23/selected_best/08_inventory_prep_loadout.png`
+6. `../gatbage/tmp/media/prcampaign_screenshot_hunt_2026-05-23/selected_best/10_full_map_route_context.png`
+7. Optional motion: `../gatbage/tmp/media/prcampaign_screenshot_hunt_2026-05-23/selected_best/02_gif_underhell_maronary_samosbor_loop.gif`
 
 Current Reddit rule after PR 13:
 

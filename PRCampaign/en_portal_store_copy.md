@@ -2,7 +2,7 @@
 
 Metadata pack for Newgrounds, IndieDB, iDev.Games and CrazyGames Basic submission prep.
 
-Source facts used: `README.md`, `PRCampaign/copy_pack_ru.md`, `PRCampaign/newgrounds_portal_checklist.md`, `gatbage/media/itch_page_pack/description_ru_approved.md`, `gatbage/media/itch_page_pack/itch_fields_ru.md`.
+Source facts used: `README.md`, `PRCampaign/copy_pack_ru.md`, `PRCampaign/newgrounds_portal_checklist.md`, `../gatbage/media/itch_page_pack/description_ru_approved.md`, `../gatbage/media/itch_page_pack/itch_fields_ru.md`.
 
 Current public links:
 
@@ -176,8 +176,8 @@ Suggested IndieDB tags / keywords:
 
 Media / profile notes:
 
-- Use current owner-updated screenshots and GIFs from `gatbage/tmp/media/prcampaign_screenshot_hunt_2026-05-23/selected_best/`.
-- Use `gatbage/tmp/media/prcampaign_screenshot_hunt_2026-05-23/selected_best/contact_sheet_3x3.png` as the compact square overview when a portal/social post wants one image.
+- Use current owner-updated screenshots and GIFs from `../gatbage/tmp/media/prcampaign_screenshot_hunt_2026-05-23/selected_best/`.
+- Use `../gatbage/tmp/media/prcampaign_screenshot_hunt_2026-05-23/selected_best/contact_sheet_3x3.png` as the compact square overview when a portal/social post wants one image.
 - Old local binary gallery/capsule backup folders were removed during repository cleanup; use `selected_best/` plus the public itch cover first.
 - Regenerate cover, social and capsule assets from the current build/media set when a portal requires local uploads.
 - A download can point to the current HTML5 ZIP, but a short archive note should explain that it is a browser build with `index.html` at the archive root.

@@ -6,6 +6,7 @@
 /*   4. Add room spec to plot_rooms.ts (optional)                  */
 
 import {
+  type CharacterSex,
   type Entity,
   type Quest,
   type WorldEventPrivacy,
@@ -23,6 +24,8 @@ import { designFloorAtZ, designFloorById } from './design_floors';
 export interface PlotNpcDef {
   name: string;
   isFemale: boolean;
+  age?: number;
+  sex?: CharacterSex;
   faction: Faction;
   occupation: Occupation;
   sprite: number;
@@ -69,6 +72,8 @@ export const PLOT_NPCS: Record<string, PlotNpcDef> = {
   olga: {
     name: 'Ольга Дмитриевна',
     isFemale: true,
+    age: 31,
+    sex: 'female',
     faction: Faction.SCIENTIST,
     occupation: Occupation.DOCTOR,
     sprite: Occupation.DOCTOR,
@@ -116,6 +121,8 @@ export const PLOT_NPCS: Record<string, PlotNpcDef> = {
   barni: {
     name: 'Сержант Баринов',
     isFemale: false,
+    age: 39,
+    sex: 'male',
     faction: Faction.LIQUIDATOR,
     occupation: Occupation.HUNTER,
     sprite: Occupation.HUNTER,
@@ -157,6 +164,8 @@ export const PLOT_NPCS: Record<string, PlotNpcDef> = {
   yakov: {
     name: 'Яков Давидович',
     isFemale: false,
+    age: 61,
+    sex: 'male',
     faction: Faction.SCIENTIST,
     occupation: Occupation.SCIENTIST,
     sprite: Occupation.SCIENTIST,
@@ -198,6 +207,8 @@ export const PLOT_NPCS: Record<string, PlotNpcDef> = {
   vanka: {
     name: 'Ванька Банчиный',
     isFemale: false,
+    age: 25,
+    sex: 'male',
     faction: Faction.CULTIST,
     occupation: Occupation.ALCOHOLIC,
     sprite: Occupation.ALCOHOLIC,
@@ -242,6 +253,8 @@ export const PLOT_NPCS: Record<string, PlotNpcDef> = {
   major_grom: {
     name: 'Майор Громный',
     isFemale: false,
+    age: 50,
+    sex: 'male',
     faction: Faction.LIQUIDATOR,
     occupation: Occupation.HUNTER,
     sprite: Occupation.HUNTER,
@@ -281,6 +294,8 @@ export const PLOT_NPCS: Record<string, PlotNpcDef> = {
   hell_contact: {
     name: 'Никанор Обожжённый',
     isFemale: false,
+    age: 46,
+    sex: 'male',
     faction: Faction.CULTIST,
     occupation: Occupation.PILGRIM,
     sprite: Occupation.PILGRIM,
@@ -310,6 +325,8 @@ export const PLOT_NPCS: Record<string, PlotNpcDef> = {
   herald_clue: {
     name: 'Марфа Пороговая',
     isFemale: true,
+    age: 58,
+    sex: 'female',
     faction: Faction.CULTIST,
     occupation: Occupation.PRIEST,
     sprite: Occupation.PRIEST,
@@ -337,6 +354,8 @@ export const PLOT_NPCS: Record<string, PlotNpcDef> = {
   void_warning: {
     name: 'Жан Пустотник',
     isFemale: false,
+    age: 44,
+    sex: 'male',
     faction: Faction.SCIENTIST,
     occupation: Occupation.SCIENTIST,
     sprite: Occupation.SCIENTIST,
@@ -365,6 +384,8 @@ export const PLOT_NPCS: Record<string, PlotNpcDef> = {
   voice: {
     name: 'Таинственный голос',
     isFemale: false,
+    age: 25,
+    sex: 'male',
     faction: Faction.CITIZEN,
     occupation: Occupation.SCIENTIST,
     sprite: Occupation.SCIENTIST,

@@ -315,6 +315,8 @@ const NPC_DEFS: Record<string, PlotNpcDef> = {
   f69_madam_roza: {
     name: 'Роза Красная',
     isFemale: true,
+    age: 42,
+    sex: 'female',
     faction: Faction.CITIZEN,
     occupation: Occupation.DIRECTOR,
     sprite: Spr.F69_FEMALE_NPC_0,
@@ -342,6 +344,8 @@ const NPC_DEFS: Record<string, PlotNpcDef> = {
   f69_guard_venya: {
     name: 'Веня Шлагбаум',
     isFemale: false,
+    age: 34,
+    sex: 'male',
     faction: Faction.LIQUIDATOR,
     occupation: Occupation.HUNTER,
     sprite: Occupation.HUNTER,
@@ -372,6 +376,8 @@ const NPC_DEFS: Record<string, PlotNpcDef> = {
   f69_performer_ira: {
     name: 'Ира Сцена',
     isFemale: true,
+    age: 22,
+    sex: 'female',
     faction: Faction.CITIZEN,
     occupation: Occupation.TRAVELER,
     sprite: Spr.F69_FEMALE_NPC_3,
@@ -388,6 +394,8 @@ const NPC_DEFS: Record<string, PlotNpcDef> = {
   f69_doctor_sima: {
     name: 'Доктор Сима',
     isFemale: true,
+    age: 29,
+    sex: 'female',
     faction: Faction.SCIENTIST,
     occupation: Occupation.DOCTOR,
     sprite: Spr.F69_FEMALE_NPC_5,
@@ -413,6 +421,8 @@ const NPC_DEFS: Record<string, PlotNpcDef> = {
   f69_accountant_nil: {
     name: 'Нил Расписочный',
     isFemale: false,
+    age: 31,
+    sex: 'male',
     faction: Faction.CITIZEN,
     occupation: Occupation.STOREKEEPER,
     sprite: Occupation.STOREKEEPER,
@@ -1736,6 +1746,8 @@ function spawnNpc(
     npcVisualId: def.npcVisualId,
     name: def.name,
     isFemale: def.isFemale,
+    age: def.age,
+    sex: def.sex,
     needs: freshNeeds(),
     hp: def.hp,
     maxHp: def.maxHp,

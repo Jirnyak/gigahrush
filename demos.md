@@ -1,14 +1,14 @@
 # Инфосеть Демос
 
-> Технический план социальной A-Life системы.
+> Системный дизайн-документ активной социальной A-Life системы.
 >
-> Роль: описывает, как расширить текущую read-only страницу `Инфосеть Демос` в системную социальную сеть NPC: связи, друзья/враги, посты, реакции, сообщения, холодные социальные события и будущие визиты. Это план разработки, а не shipped fact. Фактическое состояние проверять по `README.md`, `korovan.md`, `alife.md` и текущему `src/`.
+> Роль: описывает, как фактически устроена `Инфосеть Демос` в текущем коде: A-Life профили, связи, друзья/враги, посты, реакции, квестовые заявки, холодные социальные события, social-journey requests и границы зарезервированных extension points. Это активный системный том наряду с `README.md`, `architecture.md`, `alife.md` и `korovan.md`; он фиксирует shipped behavior и проверяемые инженерные контракты, а не отдельное batch-задание.
 
-Связанный текстовый план: [markov.md](markov.md) описывает шаблонно-марковскую генерацию коротких NPC-реплик, постов и реакций из Demos/A-Life/gameplay context.
+Связанный системный документ: [markov.md](markov.md) описывает шаблонно-марковскую генерацию коротких NPC-реплик, постов и реакций из Demos/A-Life/gameplay context.
 
 ## Назначение
 
-`Инфосеть Демос` должна сделать фиксированную A-Life популяцию видимой как общество, а не как список записей.
+`Инфосеть Демос` делает фиксированную A-Life популяцию видимой как общество, а не как список записей.
 
 Цель - эмерджентная социальная поверхность:
 
@@ -17,30 +17,32 @@
 - страница NPC показывает друзей, врагов, близких и следы событий;
 - NPC иногда пишут посты из реального игрового контекста;
 - другие NPC реагируют на эти посты через свои отношения, фракцию, работу, страх, долг, семью и текущие события;
-- будущие действия могут превращаться в холодную миграцию, визит, встречу, просьбу, долг, торговлю или конфликт.
+- социальные факты могут превращаться в холодную миграцию, визит, встречу, просьбу, долг, торговлю или конфликт только через owner systems.
 
 Главное ограничение: это не скрытый Sims на `100_000` акторов. Активный этаж остаётся честной live-симуляцией. Off-floor Демос работает как компактная A-Life социальная память и медленный директор событий.
 
-## Текущая Опора
+## Текущие Shipped Facts
 
-Текущие факты, на которые должен опираться план:
+Текущие shipped facts, на которые опирается система:
 
 - A-Life создаёт фиксированные `100_000` NPC records на каждый run.
 - Только активный этаж материализуется в `entities`.
 - Off-floor NPC не pathfind-ят, не дерутся, не тикают needs и не сканируют комнаты.
 - Холодное движение уже выражено через bounded migration/caravan/scripted arrival paths.
-- Существующий `Инфосеть Демос` - read-only профиль A-Life NPC: поиск/курсор, имя, id, отношение к игроку, фракция, occupation, уровень, место, HP, деньги, карма, quest affordance и ленивый портрет.
+- Существующий `Инфосеть Демос` - tabbed A-Life NPC surface: поиск/курсор, профиль, связи, лента, отдельный пост и квестовые заявки. UI state (`demosCursor`, `demosSearch`, `demosTab`, scroll/cursor) transient; социальная память хранится отдельно.
+- Текущий shipped feed persistent: `systems/demos_runtime.ts` регистрирует slow `ContentRuntimeHook` с 30-секундной cadence, читает bounded recent `WorldEvent` slice и bounded текущие A-Life snapshots, создаёт compact posts/reactions через `demos_save.ts`, создаёт runtime quest notices через `demos_quest_notices.ts`, строит post view через `systems/demos_posts.ts` и Markov speech router, а `render/demos_ui.ts` только рисует готовые строки.
+- Save shape bumped to `20`; `demosSocial` stores relation overrides, post ring and reaction ring, while generated computer and NET-hack terminal reward/cooldown keys persist as compact route-keyed runtime facts. Demos quest notices remain runtime state outside the save section unless they are represented by posts/relation facts; accepting a notice still happens only through face-to-face NPC talk and normal quest/contract systems.
 - `systems/npc_relations.ts` задаёт отношение NPC к игроку как `[-100, 100]`.
 - `HOSTILE_RELATION_THRESHOLD = -50`, `FRIENDLY_RELATION_THRESHOLD = 50`.
 - `karma` теперь использует signed-char совместимый диапазон `[-127, 127]`.
 - Faction relation matrix хранится в `Int8Array` и фактически допускает `[-128, 127]`, но player relation намеренно клампится в `[-100, 100]`.
-- Demos social edge должен быть ещё компактнее: один signed byte на отношение, без `number[]`, объектов и JSON-графа.
+- Demos social edge хранится компактно: один signed byte на отношение, без `number[]`, объектов и JSON-графа для базового графа.
 - Активный floor actor soft cap остаётся около `4096` NPC+monster actors.
 - `WorldEvent` уже даёт bounded ring buffers и public/local/witnessed/private/secret privacy.
 
 Вывод по числам: социальное отношение NPC-NPC должно быть `char`-масштабом, то есть `Int8Array` с игровым диапазоном `[-127, 127]`. Значение `-128` лучше держать зарезервированным sentinel для "нет/сломано/неинициализировано", даже если пустой slot обычно выражается `targetId = 0`. Это не даёт больше памяти, чем `[-100, 100]`, но использует весь полезный signed-byte диапазон и оставляет систему честно byte-sized.
 
-Рекомендуемые константы:
+Фактические контрактные константы:
 
 ```txt
 DEMOS_RELATION_EMPTY = -128
@@ -68,7 +70,7 @@ relations: Int8Array   // npcCount * slots
 flags: Uint8Array      // npcCount * slots
 ```
 
-То есть в будущей реализации Demos social graph не должен быть:
+То есть Demos social graph не должен быть:
 
 - `Array<{ targetId, relation, flags }>`;
 - `Map<alifeId, Edge[]>`;
@@ -88,9 +90,11 @@ UI и AI могут получать обычный `number` из helper API, н
 
 Existing `playerRelation` к игроку остаётся текущим `[-100, 100]` semantic field, но в persistent A-Life pool он уже хранится как `Int8Array` с unset sentinel. Для live `Entity` на активном этаже обычные JS numbers остаются нормальными: это не `100_000` cold storage problem.
 
-Текущий A-Life core уже держит массовые числовые поля columnar: base floor, danger, faction, occupation, flags, RPG bytes, HP, money/account, family id, sprite/spriteSeed, kill counters, `playerRelation` and `karma`. Поэтому Demos social graph не должен добавлять новые number fields в A-Life record objects; он должен продолжать эту колонковую модель отдельным graph pack.
+Demos profile and context read age/sex only through `getAlifeNpcRecordSnapshot()`. The profile row shows age, age band and sex label; social adult buckets use `age >= 18`; Markov/social quest adapters receive `age.*` and `sex.*` context tags before ordinary trait tags.
 
-Текущая/целевая форма A-Life core и следующего social storage:
+Текущий A-Life core уже держит массовые числовые поля columnar: base floor, danger, faction, occupation, age, sex code, flags, RPG bytes, HP, money/account, family id, sprite/spriteSeed, kill counters, `playerRelation` and `karma`. Поэтому Demos social graph не должен добавлять новые number fields в A-Life record objects; он должен продолжать эту колонковую модель отдельным graph pack.
+
+Текущая форма A-Life core и Demos social storage contract:
 
 ```txt
 ids: implicit index 1..npcCount
@@ -98,6 +102,8 @@ floorKeyIndex: Uint16Array or Uint32Array
 floor/danger: Uint8Array
 faction: Uint8Array
 occupation: Uint8Array
+age: Uint8Array                    // 1..100
+sex: Uint8Array                    // 0 unset, 1 male, 2 female
 level: Uint8Array
 str/agi/int: Uint8Array
 hp/maxHp: Uint16Array
@@ -159,24 +165,24 @@ Strings, inventories, special sprites, plot ids and changed rare facts stay inte
 
 4. `Demos UI`
 
-   Canvas view: профиль, связи, лента, пост, будущие действия. UI читает view models, не владеет решениями.
+   Canvas view: профиль, связи, лента, пост, квестовые заявки и reserved action surfaces. UI читает view models, не владеет решениями.
 
 Идентификаторы остаются теми же:
 
 - `alife:<id>` - основной id NPC;
 - `plot:<plotNpcId>` - временная совместимость там, где authored actor ещё не привязан к reserved A-Life record;
 - `post:<id>` - id поста внутри run/save Demos feed;
-- future `thread:<id>` - bounded private message thread, если он будет нужен.
+- reserved `thread:<id>` - bounded private message thread, если этот extension point будет реализован owner systems.
 
 ## Социальные Рёбра
 
 ### Сколько Связей На NPC
 
-Рекомендуемый первый рабочий бюджет:
+Текущий рабочий бюджет:
 
 ```txt
-DEMOS_SOCIAL_SLOTS = 6
-DEMOS_SOCIAL_SLOTS_MAX = 8
+DEMOS_SOCIAL_NPC_SLOTS = 6
+DEMOS_SOCIAL_PUBLIC_SLOTS = 7 // player slot + 6 NPC slots
 ```
 
 Почему 6:
@@ -204,7 +210,7 @@ flags: Uint8Array      // 1 byte bitset
 | 8 | 800,000 | 4,800,000 | 4.8 MB |
 | 12 | 1,200,000 | 7,200,000 | 7.2 MB |
 
-Даже 8 slots выглядит безопасно по raw bytes, но старый A-Life heap baseline после columnar-storage правки нужно перемерить. Стартовать лучше с 6 и увеличивать только после проверки heap/build/browser smoke.
+Даже 8 slots выглядит безопасно по raw bytes, но текущий shipped path держит 6 NPC slots и 1 player slot. Увеличивать бюджет можно только после проверки heap/build/browser smoke.
 
 Не хранить в базовом edge:
 
@@ -393,15 +399,16 @@ interface DemosPost {
 }
 ```
 
-`args` capped, strings short. Текст собирается через templates, а не хранится как длинный произвольный blob на каждом NPC.
+`args` capped, strings short. Текст собирается через templates и Markov router adapters, а не хранится как длинный произвольный blob на каждом NPC.
 
-Первый persistent feed:
+Текущий feed/storage budget:
 
 ```txt
-DEMOS_POST_RING_CAP = 512
-DEMOS_REACTION_RING_CAP = 2048
+DEMOS_POST_RING_CAP = 48              // transient/view queue
+DEMOS_PERSISTENT_POST_CAP = 512
+DEMOS_PERSISTENT_REACTION_CAP = 2048
 DEMOS_POSTS_PER_TICK_CAP = 4
-DEMOS_REACTIONS_PER_POST_CAP = 6
+DEMOS_REACTIONS_PER_POST_CAP = 4
 ```
 
 512 постов - достаточно для свежей инфосети и поиска recent stories. Более старые факты остаются в A-Life, events, floor memory, quests, deaths and rank, а не в бесконечной ленте.
@@ -498,7 +505,7 @@ Reactions must not recursively create infinite reactions. One post may get one r
 
 ## Messages And Threads
 
-Private messages are future work. They should not be implemented before posts/reactions are useful.
+Private messages are a reserved extension point. They are not part of the shipped Demos runtime; posts, reactions, quest notices and social journeys are the active system.
 
 Possible shape:
 
@@ -517,19 +524,22 @@ Use cases:
 - quest lead;
 - threat.
 
-Messages should not imply instant off-floor action. If a message causes movement, it must create or request a normal A-Life migration intent.
+Messages must not imply instant off-floor action. If this extension point is implemented and a message causes movement, it must create or request a normal A-Life migration intent.
 
 ## Cold Social Director
 
 The cold director is the system that slowly turns social graph and events into posts, relation changes and rare migration requests.
 
-Recommended cadence:
+Shipped cadence:
 
 ```txt
-DEMOS_SOCIAL_TICK_SECONDS = 30
-DEMOS_SOCIAL_RECORDS_PER_TICK = 64
-DEMOS_SOCIAL_FORCE_RECORD_CAP = 256
-DEMOS_SOCIAL_OUTCOMES_PER_TICK = 4
+DEMOS_RUNTIME_TICK_SECONDS = 30
+DEMOS_RUNTIME_RECORDS_PER_TICK = 64
+DEMOS_RUNTIME_EVENT_LIMIT = 64
+DEMOS_RUNTIME_OUTCOMES_PER_TICK = 4
+DEMOS_RUNTIME_POSTS_PER_TICK = 4
+DEMOS_RUNTIME_REACTIONS_PER_TICK = 4
+DEMOS_QUEST_NOTICES_PER_SOCIAL_TICK = 2
 ```
 
 This mirrors the cold migration budget style. It means a full `100_000` pass is slow, which is fine: off-floor social life is cinematic and aggregate.
@@ -552,9 +562,9 @@ The director must not:
 - mutate `alife.npcs` directly;
 - bypass `moveAlifeNpcRecord()` or active arrival/departure systems.
 
-## Active-Floor AI Hooks
+## Reserved Active-Floor AI Hooks
 
-Active-floor AI can use social graph because every materialized actor already receives the AI pass.
+Active-floor AI can use social graph because every materialized actor already receives the AI pass. This is an extension point, not an authority already owned by Demos: any shipped hook must read only the actor's outgoing edges and then let the existing AI/faction/combat systems own behavior.
 
 Cheap hooks:
 
@@ -578,9 +588,9 @@ No actor should query "who knows me?" by scanning `100_000` records during frame
 
 ## Social Visits
 
-Future "friend goes to friend" behavior uses existing migration concepts.
+Shipped "friend goes to friend" behavior uses existing migration concepts through Demos social journey requests. `demos_social_runtime` may request at most one bounded journey from inspected social edges, and `demos_social_feedback.ts` queues it through A-Life migration-compatible data.
 
-Possible migration intents:
+Registered migration intents:
 
 - `social_visit`;
 - `family_visit`;
@@ -602,7 +612,7 @@ Rules:
 - active-floor arrival must materialize near lift/route anchor;
 - off-floor move uses `moveAlifeNpcRecord()` through migration, not direct Demos mutation.
 
-First social visits should be rare:
+Social visits are rare:
 
 ```txt
 DEMOS_SOCIAL_JOURNEYS_PER_TICK_CAP = 1
@@ -613,13 +623,14 @@ The point is not crowd travel. The point is that a friend/enemy relation can occ
 
 ## UI Shape
 
-The current Demos profile browser can grow into tabs without becoming DOM:
+The current Demos profile browser is a canvas tabbed UI without DOM:
 
 ```txt
 Профиль
 Связи
 Лента
 Пост
+Квесты
 ```
 
 ### Профиль
@@ -659,7 +670,7 @@ Shows only non-hidden local slots:
 Семья    alife:1901  Мария ... +88
 ```
 
-No full "mutual friends" scan in first pass. Mutual count can be future bounded query.
+No full "mutual friends" scan. Mutual count is a reserved bounded query, not a per-frame/profile full-population scan.
 
 ### Лента
 
@@ -674,11 +685,11 @@ Recent posts:
 
 ### Пост
 
-Shows one post, compact reaction list and involved NPC ids. Future action buttons can appear only if normal systems support them.
+Shows one post, compact reaction list and involved NPC ids. Reserved action buttons may appear only if normal systems support them.
 
 ## Save Model
 
-There are three implementation levels.
+There are three storage levels.
 
 ### Level 0: Read-Only Profiles
 
@@ -690,6 +701,9 @@ Current profile/search state stays transient:
 - `demosCursor`;
 - `demosSearch`;
 - `demosSearchActive`.
+- `demosTab`;
+- `demosFeedScroll`;
+- `demosPostCursor`.
 
 ### Level 1: Deterministic Base Graph
 
@@ -699,11 +713,11 @@ No save shape change if:
 - no relation changes persist;
 - UI only displays generated friends/enemies.
 
-This is the safest first social graph slice.
+This is the deterministic base graph layer.
 
 ### Level 2: Persistent Social Consequences
 
-Requires save shape bump and current-shape sanitization.
+Shipped. Requires save shape bump and current-shape sanitization; current shape is `20`.
 
 Save section:
 
@@ -711,7 +725,9 @@ Save section:
 interface DemosSocialSaveState {
   version: 1;
   cursor: number;
+  eventCursor: number;
   nextPostId: number;
+  nextReactionId: number;
   relationOverrides: DemosRelationOverride[];
   posts: DemosPost[];
   reactions: DemosReaction[];
@@ -775,7 +791,7 @@ Quest direction:
 
 - generated quest givers should resolve to persistent A-Life ids;
 - Demos can show `может дать дело`, `ждёт ответа`, `цель задания`, `пропал`;
-- taking quest from Demos is future work and must call normal quest systems;
+- Demos notice view does not accept quests directly; face-to-face NPC talk hands the notice to normal quest/contract systems and publishes compact handoff data;
 - killing a quest giver can produce family/friend posts and fallback quest consequences.
 
 Economy direction:
@@ -795,7 +811,7 @@ Allowed:
 - active-floor samosbor facts create posts/reactions;
 - aftermath death/missing/shelter events update relations;
 - friends/family can react to a known death;
-- future `shelter_rejoin` migration may move a person after samosbor if normal migration allows it.
+- registered `shelter_rejoin` migration intent may move a person after samosbor only if normal migration rules allow it.
 
 Forbidden:
 
@@ -827,138 +843,144 @@ Debug commands should inspect, not mutate, unless explicitly named:
 - force relation delta between two A-Life ids;
 - force social visit through migration path.
 
-## Implementation Slices
+## Shipped Modules And Extension Points
 
-### Slice 1: Demos Social Graph, Read-Only
+### Shipped: Demos Social Graph
 
-Files likely touched:
+Core files:
 
-- `src/systems/demos_social.ts` new;
-- `src/data/demos_social.ts` new;
-- `src/systems/demos.ts` narrow view-model extension;
-- `src/render/demos_ui.ts` narrow tab/list extension;
+- `src/systems/demos_social.ts`;
+- `src/data/demos_social.ts`;
+- `src/systems/demos.ts`;
+- `src/systems/demos_profiles.ts`;
+- `src/render/demos_ui.ts`;
 - focused tests under `tests/`.
 
-Work:
+Runtime contract:
 
-1. Build deterministic graph pack from A-Life seed and record snapshots.
-2. Expose `getDemosSocialEdges(state, alifeId)`.
-3. Expose relation band helper for NPC-NPC edges.
-4. Add profile social summary.
-5. Add `Связи` tab capped to local slots.
-6. Tests for determinism, no self edges, dedupe, range clamp, memory budget.
+1. Builds deterministic graph pack from A-Life seed and record snapshots.
+2. Exposes `getDemosSocialEdges(state, alifeId)` / NPC-only edge helpers.
+3. Exposes relation band helper for NPC-NPC edges.
+4. Adds profile social summary and traits.
+5. Draws `Связи` tab capped to local slots.
+6. Tests cover determinism, no self edges, dedupe, range clamp and memory budget.
 
 No save shape change.
 
-Acceptance:
+Verified behavior:
 
 - profile shows friends/enemies from A-Life ids;
 - 100k graph builds within measured budget;
 - UI never scans all 100k per frame;
 - no code path creates NPCs.
 
-### Slice 2: Event-To-Post Feed
+### Shipped: Event-To-Post Feed
 
-Files likely touched:
+Core files:
 
-- `src/data/demos_posts.ts` new;
-- `src/systems/demos_posts.ts` new;
-- `src/systems/events.ts` only if observer hook is insufficient;
+- `src/data/demos_posts.ts`;
+- `src/systems/demos_posts.ts`;
+- `src/systems/demos_social_director.ts`;
+- `src/systems/demos_runtime.ts`;
 - `src/render/demos_ui.ts` feed tab;
 - tests.
 
-Work:
+Runtime contract:
 
-1. Define post templates and compact args.
-2. Queue Demos post candidates from existing `WorldEvent`.
-3. Add capped post ring in runtime state.
-4. Add `Лента` tab for recent posts.
-5. Keep posts transient first if save shape is not being changed.
+1. Defines post templates and compact args.
+2. Consumes bounded recent `WorldEvent` slices.
+3. Stores capped persistent post/reaction rings in `demosSocial`.
+4. Draws `Лента` tab for recent posts.
+5. Rebuilds rendered text from compact post fields; generated strings are not saved.
 
-Acceptance:
+Verified behavior:
 
 - death/migration/caravan/samosbor/quest facts can create posts;
 - cap prevents feed growth;
 - post text resolves names lazily;
 - no inactive floor loading.
 
-### Slice 3: Reactions And Relation Overrides
+### Shipped: Reactions And Relation Overrides
 
-Files likely touched:
+Core files:
 
 - `src/systems/demos_social.ts`;
 - `src/systems/demos_posts.ts`;
+- `src/systems/demos_social_director.ts`;
+- `src/systems/demos_social_feedback.ts`;
+- `src/systems/demos_save.ts`;
 - `src/systems/save_payload.ts`;
 - `src/systems/save_runtime.ts`;
 - tests.
 
-Work:
+Runtime contract:
 
-1. Add relation override store with cap.
-2. Add reaction ring.
-3. Generate reactions from social edges.
-4. Apply small relation deltas through Demos social API.
-5. Bump save shape if persistence is enabled.
-6. Add sanitizer tests.
+1. Stores relation overrides with cap.
+2. Stores reaction ring.
+3. Generates reactions from social edges.
+4. Applies small relation deltas through Demos social API.
+5. Persists compact state under current save shape.
+6. Sanitizer tests cover malformed current-shape state.
 
-Acceptance:
+Verified behavior:
 
 - friend reacts differently from enemy;
-- relation override persists after save/load if enabled;
+- relation override persists after save/load;
 - old save shape is rejected according to project policy;
 - cap pressure drops oldest/weakest low-importance overrides deterministically.
 
-### Slice 4: Active AI Social Hooks
+### Reserved: Active AI Social Hooks
 
-Files likely touched:
+Likely owner files if this extension ships:
 
 - `src/systems/ai/npc_utility.ts`;
 - `src/systems/ai/npc_fsm.ts` only if needed;
 - `src/systems/entity_index.ts` only if existing lookup is insufficient;
 - tests.
 
-Work:
+Required contract:
 
 1. Build cheap active `alifeId -> entity` lookup from existing entity index or AI pass context.
 2. Score only outgoing edges of the actor.
 3. Add social/escort/flee/combat biases.
 4. Publish compact witnessed social events.
 
-Acceptance:
+Required verification:
 
 - live friends may talk/help/escort;
 - live enemies may avoid/threaten/fight when other conditions support it;
 - no incoming full graph scan in frame loop;
 - active-floor AI remains full-pass and bounded.
 
-### Slice 5: Cold Social Visits
+### Shipped: Cold Social Visits
 
-Files likely touched:
+Core files:
 
-- `src/data/alife_migration.ts`;
-- `src/systems/alife_migration.ts`;
+- `src/data/demos_social_visits.ts`;
+- `src/systems/demos_runtime.ts`;
+- `src/systems/demos_social_feedback.ts`;
 - `src/systems/demos_social.ts`;
 - tests.
 
-Work:
+Runtime contract:
 
-1. Add migration intent defs for social visit reasons.
-2. Let Demos director request rare journeys.
-3. Reuse active departure/arrival paths.
-4. Publish Demos posts on arrival/failure.
+1. Registers migration-compatible intent defs for social visit reasons.
+2. Lets Demos runtime request rare journeys at cap.
+3. Reuses active departure/arrival paths through A-Life migration-compatible state.
+4. Publishes Demos/social events around relation consequences and journey requests.
 
-Acceptance:
+Verified behavior:
 
 - off-floor friend visit changes `floorKey` only through migration;
 - active-floor arrival appears at route/lift anchor;
 - NPC-forbidden route floors stay blocked;
 - samosbor restrictions are respected.
 
-### Slice 6: Demos Actions
+### Reserved: Demos Actions
 
-Only after the passive social system works.
+Action buttons are reserved extension points. The shipped UI exposes profiles, links, feed, posts and read-only quest notices; accepting a Demos quest notice happens through face-to-face NPC talk and normal quest/contract systems.
 
-Possible actions:
+Allowed reserved action shapes:
 
 - message NPC;
 - request meeting;
@@ -990,36 +1012,36 @@ Minimum tests by slice:
 
 Command expectations:
 
-- docs-only planning: `git diff --check`;
-- read-only graph/data slice: `npm run check:readonly`;
+- docs-only edits: `git diff --check`;
+- graph/data edits: `npm run check:readonly`;
 - save/runtime/AI/UI slices: `npm run check`;
 - render/UI changes: also `npm run check:browser` when Chrome is available.
 
-## Open Decisions
+## Current Decisions And Reserved Questions
 
-1. Keep `DEMOS_SOCIAL_SLOTS = 6` or start with `8` immediately?
+1. Slot budget
 
-   Recommendation: start with 6. Increase only after heap/browser measurement.
+   Current answer: 6 NPC slots plus the player slot. Increase only after heap/browser measurement.
 
-2. Should base graph live inside `systems/alife.ts` or a separate `systems/demos_social.ts`?
+2. Base graph ownership
 
-   Recommendation: separate module, but treat it as A-Life-adjacent. It reads snapshots and exposes APIs; it does not mutate raw A-Life arrays directly.
+   Current answer: separate module, but A-Life-adjacent. It reads snapshots and exposes APIs; it does not mutate raw A-Life arrays directly.
 
-3. Are posts persistent in the first feed slice?
+3. Post persistence
 
-   Recommendation: no. Start transient, then add save shape only when reactions/relation overrides create durable gameplay.
+   Current answer: yes. `demosSocial` persists compact posts, reactions and relation overrides under save shape `20`.
 
-4. Should relation overrides create missing edges?
+4. Missing-edge relation overrides
 
-   Recommendation: only through a bounded helper that replaces the weakest non-family slot. Never append.
+   Current answer: only through a bounded helper that replaces the weakest non-family slot. Never append.
 
-5. Should enemies be generated as explicit slots or derived from negative relation among ordinary acquaintances?
+5. Enemy representation
 
-   Recommendation: both. Use `ENEMY` flag for strong narrative/rival edges; allow negative work/debt/faction edges without the flag.
+   Current answer: both. Use `ENEMY` flag for strong narrative/rival edges; allow negative work/debt/faction edges without the flag.
 
-6. How many reactions per post?
+6. Reactions per post
 
-   Recommendation: max 6. It matches the default edge count and keeps a post readable.
+   Current answer: max 4 in the shipped constants. It keeps the feed readable and matches runtime budget.
 
 ## Anti-Patterns
 
@@ -1036,9 +1058,9 @@ Reject:
 - hiding weak simulation under vague text;
 - putting Demos social logic in render.
 
-## Definition Of Done
+## Shipped Contract
 
-The social Demos system is ready when:
+The social Demos system currently guarantees:
 
 - every ordinary A-Life NPC can expose a small, deterministic social circle;
 - profile pages show friends/enemies without pre-rendering the population;
@@ -1046,7 +1068,7 @@ The social Demos system is ready when:
 - real game events can create capped posts;
 - NPCs react through their social edges;
 - durable relation changes are sparse, capped and save-sanitized;
-- active-floor AI can use social edges with no full graph scan;
+- reserved active-floor AI hooks can use social edges only with no full graph scan;
 - cold visits use migration/arrival infrastructure;
 - deaths, samosbor, caravans, quests and economy facts can surface socially;
 - no ordinary NPC refill or hidden off-floor simulation is introduced.

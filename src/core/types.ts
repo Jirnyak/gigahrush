@@ -260,6 +260,8 @@ export enum MonsterKind {
   LISHENNYY,  // deep light-following shadow guardian — лишенный
 }
 
+export type CharacterSex = 'male' | 'female';
+
 export type PlayerDamageSourceKind = 'monster' | 'npc' | 'projectile' | 'hazard' | 'need' | 'samosbor' | 'void' | 'unknown';
 
 export interface PlayerDamageRecord {
@@ -583,6 +585,8 @@ export interface Entity {
   tool?: string;              // equipped tool def id
   faction?: Faction;
   occupation?: Occupation;
+  age?: number;                // compact character age; cold A-Life stores it as one byte
+  sex?: CharacterSex;          // social/gameplay sex code; isFemale remains the grammar mirror
   playerRelation?: number;    // personal attitude to player, -100..100; below hostile threshold attacks
   karma?: number;             // A-Life moral/social charge, -127..127; player starts at 0
   kills?: number;             // total actor kills for A-Life ranking
@@ -1162,6 +1166,9 @@ export interface GameState {
   demosCursor: number;          // zero-based A-Life profile cursor
   demosSearch: string;          // transient in-menu search query
   demosSearchActive: boolean;   // text input focus for Demos search
+  demosTab: 'profile' | 'links' | 'feed' | 'post' | 'quests';
+  demosFeedScroll: number;
+  demosPostCursor: number;
   showLog: boolean;            // message log menu (L key)
   logScroll: number;           // scroll offset in log menu
   showControls: boolean;       // hotkey / rebind screen (Tab by default)

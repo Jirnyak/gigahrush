@@ -5,9 +5,14 @@ import ts from 'typescript';
 
 const root = process.cwd();
 const srcRoot = path.join(root, 'src');
+const archiveRoot = path.resolve(root, '..', 'gatbage');
 
 function toRel(abs) {
   return path.relative(root, abs).replaceAll(path.sep, '/');
+}
+
+function archiveRel(...parts) {
+  return toRel(path.join(archiveRoot, ...parts));
 }
 
 function walk(dir) {
@@ -377,7 +382,9 @@ function arrayPropStringRefs(relPath, name, prop) {
 }
 
 function documentedProfileIds(relPath) {
-  const text = fs.readFileSync(path.join(root, relPath), 'utf8');
+  const abs = path.resolve(root, relPath);
+  if (!fs.existsSync(abs)) return null;
+  const text = fs.readFileSync(abs, 'utf8');
   const heading = /^## Existing Profiles\s*$/m.exec(text);
   if (!heading) return [];
   const sectionStart = heading.index + heading[0].length;
@@ -1079,8 +1086,10 @@ const interactiveEntries = arrayIds('src/data/interactive.ts', 'INTERACTIVE_DEFS
 const floorGeometryEntries = arrayIds('src/data/procedural_floors.ts', 'FLOOR_GEOMETRIES');
 const floorMajorityEntries = arrayIds('src/data/procedural_floors.ts', 'FLOOR_MAJORITY_FACTIONS');
 const floorAnomalyEntries = arrayIds('src/data/procedural_floors.ts', 'FLOOR_ANOMALIES');
-const floorGeometryDocEntries = documentedProfileIds('gatbage/reference/procedural_floors/geometry.md');
-const floorAnomalyDocEntries = documentedProfileIds('gatbage/reference/procedural_floors/anomaly.md');
+const floorGeometryDocPath = archiveRel('reference/procedural_floors/geometry.md');
+const floorAnomalyDocPath = archiveRel('reference/procedural_floors/anomaly.md');
+const floorGeometryDocEntries = documentedProfileIds(floorGeometryDocPath);
+const floorAnomalyDocEntries = documentedProfileIds(floorAnomalyDocPath);
 const proceduralLootRefs = objectStringArrayRefs('src/data/procedural_floors.ts', 'LOOT_BY_TAG');
 const monsterKindEntries = enumMembers('src/core/types.ts', 'MonsterKind');
 const worldEventTypeEntries = arrayInitializer('src/core/types.ts', varInitializer('src/core/types.ts', 'WORLD_EVENT_TYPES'))?.elements
@@ -1198,6 +1207,7 @@ function addTerritoryArchitectureErrors() {
 }
 
 function addDocProfileSyncErrors(label, sourceEntries, docEntries, docPath) {
+  if (docEntries === null) return;
   if (docEntries.length === 0) {
     errors.push(`${docPath} missing Existing Profiles ${label} list`);
     return;
@@ -1259,8 +1269,8 @@ addDuplicateErrors('CRAFT_RECIPE_SOURCES', craftRecipeSourceEntriesList);
 
 addTerritoryArchitectureErrors();
 
-addDocProfileSyncErrors('procedural geometry profile', floorGeometryEntries, floorGeometryDocEntries, 'gatbage/reference/procedural_floors/geometry.md');
-addDocProfileSyncErrors('procedural anomaly profile', floorAnomalyEntries, floorAnomalyDocEntries, 'gatbage/reference/procedural_floors/anomaly.md');
+addDocProfileSyncErrors('procedural geometry profile', floorGeometryEntries, floorGeometryDocEntries, floorGeometryDocPath);
+addDocProfileSyncErrors('procedural anomaly profile', floorAnomalyEntries, floorAnomalyDocEntries, floorAnomalyDocPath);
 
 for (const relPath of craftRequiredPaths) {
   if (!relExists(relPath)) errors.push(`${relPath}:1 missing required crafting data module`);

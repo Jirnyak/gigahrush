@@ -200,7 +200,7 @@ Browser support:
 Desktop Chrome/Firefox/Safari/Edge target; mobile support exists but needs a fresh portal QA pass before claiming strong mobile readiness.
 
 Screenshots:
-Use at least three PNGs from `gatbage/tmp/media/prcampaign_screenshot_hunt_2026-05-23/selected_best/`.
+Use at least three PNGs from `../gatbage/tmp/media/prcampaign_screenshot_hunt_2026-05-23/selected_best/`.
 
 Licensing:
 Owner decision required. Do not select exclusive or site-lock license without explicit approval.

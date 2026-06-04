@@ -2,12 +2,15 @@ import { type Entity, type GameState, type WorldContainer } from '../core/types'
 import { alifeMobilityForSave } from './alife_migration';
 import { bankingForSave } from './banking';
 import { alifeForSave } from './alife';
+import { computersStateForSave } from './computers';
 import { craftingForSave } from './crafting';
+import { demosSocialForSave } from './demos_save';
 import { economyForSave } from './economy';
 import { trimEventHistoryForSave } from './events';
 import { floorInstanceStateForSave } from './floor_instances';
 import { liftArachnaStateForSave } from './lift_arachna';
 import { mapEditorPatchStateForSave } from './map_editor';
+import { netHackStateForSave } from './net_hack';
 import { netTerminalGenStateForSave } from './net_terminal_gen';
 import { productionForSave } from './production';
 import { pseudoliftStateForSave } from './pseudolift';
@@ -15,7 +18,7 @@ import { floorRunStateForSave } from './procedural_floors';
 import { buildSavePayload, type SavePayload } from './save_payload';
 import { stockMarketForSave } from './stock_market';
 
-export const SAVE_SHAPE_VERSION = 17;
+export const SAVE_SHAPE_VERSION = 20;
 export type SaveShapeVersionStatus = 'missing' | 'old' | 'current' | 'newer' | 'invalid';
 
 export interface SaveRuntimeExtras {
@@ -66,10 +69,13 @@ export function createGameSavePayload(
       floorMemory: extras.floorMemory,
       alife: alifeForSave(state),
       alifeMobility: alifeMobilityForSave(state),
+      computers: computersStateForSave(),
+      netHack: netHackStateForSave(),
       netTerminalGen: netTerminalGenStateForSave(state),
       mapEditorPatches: mapEditorPatchStateForSave(state),
       worldEvents: trimEventHistoryForSave(state),
       crafting: craftingForSave(state),
+      demosSocial: demosSocialForSave(state),
       economy: economyForSave(state),
       banking: bankingForSave(state),
       stockMarket: stockMarketForSave(state),

@@ -17,6 +17,7 @@ import { chernobogDocketGateItems } from '../../data/chernobog_docket';
 import { publishEvent, registerWorldEventObserver } from '../../systems/events';
 import { registerInventoryUseHandler, type InventoryUseHandlerContext } from '../../systems/inventory';
 import { recordPermitAccess, recordPermitExposure } from '../../systems/permits';
+import { setDoorState } from '../../systems/door_state';
 import {
   type NextId, addItemDrop, setFeature, spawnAdminMonster, spawnAdminNpc, spawnNamedCivilian,
 } from './admin_common';
@@ -441,7 +442,7 @@ function findDocumentGateTarget(world: World, actor: Entity): DocumentGateTarget
 
 function openDocumentGateDoor(target: DocumentGateTarget): boolean {
   if (target.door.state === DoorState.OPEN) return false;
-  target.door.state = DoorState.OPEN;
+  setDoorState(target.world, target.door, DoorState.OPEN);
   target.door.timer = 0;
   return true;
 }

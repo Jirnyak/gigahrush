@@ -38,7 +38,14 @@ import { monsterSpr, Spr } from '../render/sprite_index';
 import { getResourceContractPressure } from './economy';
 import { publishEvent } from './events';
 import { addItem, removeItem } from './inventory';
-import { currentFloorRunEntry, ensureFloorRunState, isCurrentStoryFloor, type FloorRunEntry } from './procedural_floors';
+import {
+  currentFloorRunEntry,
+  ensureFloorRunState,
+  floorRunEntryFloorKey,
+  floorRunEntryForDesignFloor,
+  isCurrentStoryFloor,
+  type FloorRunEntry,
+} from './procedural_floors';
 import {
   FLOOR_ANOMALIES,
   FLOOR_GEOMETRIES,
@@ -309,7 +316,10 @@ export function questRouteTargetShortLabel(q: Quest): string {
 function entryMatchesRouteTarget(entry: FloorRunEntry, route: QuestRouteTarget, state: GameState): boolean {
   const normalizedZ = routeZ(route.z) ?? (route.designFloorId ? designFloorById(route.designFloorId)?.z : undefined);
   if (normalizedZ !== undefined && entry.z !== normalizedZ) return false;
-  if (route.designFloorId !== undefined && entry.designFloorId !== route.designFloorId) return false;
+  if (route.designFloorId !== undefined && entry.designFloorId !== route.designFloorId) {
+    const effective = floorRunEntryForDesignFloor(state, route.designFloorId);
+    if (!effective || floorRunEntryFloorKey(effective) !== floorRunEntryFloorKey(entry)) return false;
+  }
   if (route.anomalyId !== undefined && entry.spec?.anomalyId !== route.anomalyId) return false;
   if (route.tags?.length) {
     if (!entry.spec) return false;
