@@ -3,7 +3,6 @@
 import {
   Faction,
   FloorLevel,
-  Occupation,
   type GameState,
   type Quest,
   type WorldEvent,
@@ -16,6 +15,7 @@ import {
   type ContractDef,
   type QuestRouteTarget,
 } from '../data/contracts';
+import { occupationHasProfileTag } from '../data/occupation_profiles';
 import {
   DEMOS_QUEST_NOTICE_CAP,
   DEMOS_QUEST_NOTICES_PER_PROFILE,
@@ -243,14 +243,14 @@ function activeNotice(notice: DemosQuestNotice, now: number): boolean {
 function contractOccupationScore(def: ContractDef, snapshot: AlifeNpcSnapshot): number {
   const tags = new Set(def.tags);
   let score = 0;
-  if (tags.has('maintenance') && (snapshot.occupation === Occupation.LOCKSMITH || snapshot.occupation === Occupation.MECHANIC)) score += 5;
-  if (tags.has('medicine') && snapshot.occupation === Occupation.DOCTOR) score += 5;
-  if (tags.has('science') && (snapshot.occupation === Occupation.SCIENTIST || snapshot.faction === Faction.SCIENTIST)) score += 5;
-  if ((tags.has('paper') || tags.has('documents') || tags.has('admin')) && snapshot.occupation === Occupation.SECRETARY) score += 4;
-  if ((tags.has('food') || tags.has('kitchen')) && snapshot.occupation === Occupation.COOK) score += 4;
-  if ((tags.has('combat') || tags.has('monster')) && (snapshot.occupation === Occupation.HUNTER || snapshot.faction === Faction.LIQUIDATOR)) score += 4;
-  if (tags.has('black_market') && snapshot.occupation === Occupation.STOREKEEPER) score += 4;
-  if (tags.has('cult') && (snapshot.occupation === Occupation.PILGRIM || snapshot.occupation === Occupation.PRIEST)) score += 4;
+  if (tags.has('maintenance') && occupationHasProfileTag(snapshot.occupation, 'maintenance')) score += 5;
+  if (tags.has('medicine') && occupationHasProfileTag(snapshot.occupation, 'medicine')) score += 5;
+  if (tags.has('science') && (occupationHasProfileTag(snapshot.occupation, 'science') || snapshot.faction === Faction.SCIENTIST)) score += 5;
+  if ((tags.has('paper') || tags.has('documents') || tags.has('admin')) && occupationHasProfileTag(snapshot.occupation, 'paper')) score += 4;
+  if ((tags.has('food') || tags.has('kitchen')) && occupationHasProfileTag(snapshot.occupation, 'food')) score += 4;
+  if ((tags.has('combat') || tags.has('monster')) && (occupationHasProfileTag(snapshot.occupation, 'combat') || snapshot.faction === Faction.LIQUIDATOR)) score += 4;
+  if (tags.has('black_market') && occupationHasProfileTag(snapshot.occupation, 'black_market')) score += 4;
+  if (tags.has('cult') && occupationHasProfileTag(snapshot.occupation, 'cult')) score += 4;
   return score;
 }
 

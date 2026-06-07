@@ -9,13 +9,11 @@ import {
   EntityType, AIGoal,
 } from '../../core/types';
 import { World } from '../../core/world';
-import { freshNeeds } from '../../data/catalog';
-
-import { PLOT_NPCS } from '../../data/plot';
 import { PLOT_ROOMS } from '../../data/plot_rooms';
 import { MONSTERS } from '../../entities/monster';
 import { stampRoom, protectRoom, findClearArea } from '../shared';
-import { freshRPG, randomRPG, scaleMonsterHp, scaleMonsterSpeed } from '../../systems/rpg';
+import { requireSpawnedPlotNpcFromPackage } from '../plot_npc_spawn';
+import { randomRPG, scaleMonsterHp, scaleMonsterSpeed } from '../../systems/rpg';
 
 const DEN_MIN_DIST = 100;
 const DEN_MAX_DIST = 200;
@@ -86,22 +84,9 @@ export function generateVankaDen(
 }
 
 function spawnVanka(_world: World, room: Room, entities: Entity[], nextId: { v: number }): void {
-  const vankaDef = PLOT_NPCS['vanka'];
   const rcx = room.x + Math.floor(room.w / 2);
   const rcy = room.y + Math.floor(room.h / 2);
-  entities.push({
-    id: nextId.v++, type: EntityType.NPC,
-    x: rcx + 0.5, y: rcy + 0.5,
-    angle: Math.PI, pitch: 0, alive: true, speed: vankaDef.speed,
-    sprite: vankaDef.sprite,
-    name: vankaDef.name, isFemale: vankaDef.isFemale,
-    needs: freshNeeds(), hp: vankaDef.hp, maxHp: vankaDef.maxHp, money: vankaDef.money,
-    rpg: freshRPG(vankaDef.level ?? 1),
-    ai: { goal: AIGoal.IDLE, tx: 0, ty: 0, path: [], pi: 0, stuck: 0, timer: 0 },
-    inventory: vankaDef.inventory.map(i => ({ ...i })),
-    faction: vankaDef.faction, occupation: vankaDef.occupation,
-    plotNpcId: 'vanka', canGiveQuest: true, questId: -1,
-  });
+  requireSpawnedPlotNpcFromPackage(entities, nextId, 'vanka', rcx + 0.5, rcy + 0.5, { angle: Math.PI });
 }
 
 /** Scatter shadow monsters around Vanka's den — must be called AFTER volatile maze exists. */

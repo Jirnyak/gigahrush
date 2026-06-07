@@ -4,18 +4,18 @@ import {
   AIGoal,
   Cell,
   EntityType,
-  Faction,
-  FloorLevel,
   LiftDirection,
-  Occupation,
   W,
   msg,
   type Entity,
   type GameState,
+  type Item,
 } from '../core/types';
 import { World } from '../core/world';
 import { freshNeeds, randomName } from '../data/catalog';
-import { PLOT_CHAIN, PLOT_NPCS } from '../data/plot';
+import { getNpcPackageByPlotNpcId, npcPackageDisplayName, type NpcPackageDef } from '../data/npc_packages';
+import { PLOT_CHAIN } from '../data/plot';
+import { SCRIPTED_ARRIVALS, type ScriptedArrivalDef, type ScriptedArrivalEscortDef } from '../data/scripted_arrivals';
 import { entitySpawnSlots } from './entity_limits';
 import { assignPersistentAlifeNpcFromEntity, bindReservedPlotNpcAlifeRecord, currentAlifeFloorKey, isPlotNpcDead } from './alife';
 import { publishEvent } from './events';
@@ -23,21 +23,19 @@ import { currentFloorRunEntry } from './procedural_floors';
 import { freshRPG, randomRPG, getMaxHp } from './rpg';
 import { tryAssignPathToCell } from './ai/pathfinding';
 
-const HOLDOUT_TAG = 'hell_holdout';
-const GUARD_WEAPONS = ['ak47', 'ppsh', 'shotgun', 'makarov'] as const;
-
-function hellHoldoutStepIndex(): number {
-  return PLOT_CHAIN.findIndex(step => step.eventTags?.includes(HOLDOUT_TAG));
+function scriptedArrivalStepIndex(def: ScriptedArrivalDef): number {
+  return PLOT_CHAIN.findIndex(step => step.eventTags?.includes(def.triggerPlotEventTag));
 }
 
-function shouldSpawnHellHoldoutArrivals(state: GameState, entities: readonly Entity[]): boolean {
-  const stepIndex = hellHoldoutStepIndex();
+function shouldSpawnScriptedArrival(def: ScriptedArrivalDef, state: GameState, entities: readonly Entity[]): boolean {
+  const stepIndex = scriptedArrivalStepIndex(def);
   if (stepIndex < 0) return false;
-  if (state.currentFloor !== FloorLevel.HELL || currentFloorRunEntry(state).storyFloor !== FloorLevel.HELL) return false;
+  if (state.currentFloor !== def.currentFloor) return false;
+  if (def.currentStoryFloor !== undefined && currentFloorRunEntry(state).storyFloor !== def.currentStoryFloor) return false;
   if (!state.quests.some(q => q.plotStepIndex === stepIndex && q.done && !q.failed)) return false;
   if (state.quests.some(q => q.plotStepIndex !== undefined && q.plotStepIndex > stepIndex)) return false;
-  if (entities.some(e => e.type === EntityType.NPC && e.alive && e.plotNpcId === 'major_grom')) return false;
-  return !isPlotNpcDead(state, 'major_grom');
+  if (entities.some(e => e.type === EntityType.NPC && e.alive && e.plotNpcId === def.leaderPlotNpcId)) return false;
+  return !isPlotNpcDead(state, def.leaderPlotNpcId);
 }
 
 function passable(world: World, x: number, y: number): boolean {
@@ -61,7 +59,14 @@ function nearestStandCell(world: World, cell: number): number {
   return cell;
 }
 
-function arrivalCellNearLift(world: World, targetX: number, targetY: number, fallbackX: number, fallbackY: number): number {
+function arrivalCellNearLift(
+  world: World,
+  targetX: number,
+  targetY: number,
+  fallbackX: number,
+  fallbackY: number,
+  preferredDirection?: LiftDirection,
+): number {
   let best = -1;
   let bestScore = Number.POSITIVE_INFINITY;
   for (let i = 0; i < world.cells.length; i++) {
@@ -70,7 +75,7 @@ function arrivalCellNearLift(world: World, targetX: number, targetY: number, fal
     const lx = i % W;
     const ly = (i / W) | 0;
     const stand = nearestStandCell(world, i);
-    const score = world.dist2(targetX, targetY, lx + 0.5, ly + 0.5) + (dir === LiftDirection.UP ? 0 : 64);
+    const score = world.dist2(targetX, targetY, lx + 0.5, ly + 0.5) + (preferredDirection === undefined || dir === preferredDirection ? 0 : 64);
     if (score < bestScore) {
       best = stand;
       bestScore = score;
@@ -80,8 +85,8 @@ function arrivalCellNearLift(world: World, targetX: number, targetY: number, fal
   return nearestStandCell(world, world.idx(Math.floor(fallbackX), Math.floor(fallbackY)));
 }
 
-function holdoutAnchor(state: GameState, world: World, player: Entity): { x: number; y: number } {
-  const stepIndex = hellHoldoutStepIndex();
+function arrivalAnchor(def: ScriptedArrivalDef, state: GameState, world: World, player: Entity): { x: number; y: number } {
+  const stepIndex = scriptedArrivalStepIndex(def);
   const quest = state.quests.find(q => q.plotStepIndex === stepIndex);
   const room = quest?.targetRoom !== undefined
     ? world.rooms[quest.targetRoom]
@@ -101,7 +106,24 @@ function sendToAnchor(world: World, entity: Entity, anchor: { x: number; y: numb
   if (status === 'not_found') entity.ai.goal = AIGoal.WANDER;
 }
 
-function spawnMajor(
+function packageItems(items: readonly Item[] | undefined): Item[] {
+  return (items ?? []).map(item => ({ ...item }));
+}
+
+function packageMaxHp(pack: NpcPackageDef): number {
+  return Math.max(1, pack.runtime?.maxHp ?? pack.runtime?.hp ?? 100);
+}
+
+function packageHp(pack: NpcPackageDef): number {
+  return Math.max(1, Math.min(pack.runtime?.hp ?? packageMaxHp(pack), packageMaxHp(pack)));
+}
+
+function packageSpeed(pack: NpcPackageDef): number {
+  return Math.max(0.1, Math.min(20, pack.runtime?.speed ?? 1.2));
+}
+
+function spawnArrivalLeader(
+  def: ScriptedArrivalDef,
   world: World,
   entities: Entity[],
   state: GameState,
@@ -110,31 +132,48 @@ function spawnMajor(
   anchor: { x: number; y: number },
   floorKey: string,
 ): boolean {
-  const def = PLOT_NPCS.major_grom;
+  const pack = getNpcPackageByPlotNpcId(def.leaderPlotNpcId);
+  const plotNpcId = pack?.content?.plotNpcId;
+  if (!pack || plotNpcId !== def.leaderPlotNpcId) return false;
   const x = cell % W;
   const y = (cell / W) | 0;
-  const major: Entity = {
+  const major: Entity & { npcPackageId: string } = {
     id: nextId.v++, type: EntityType.NPC,
     x: x + 0.5, y: y + 0.5,
-    angle: 0, pitch: 0, alive: true, speed: def.speed,
-    sprite: def.sprite,
-    name: def.name, isFemale: def.isFemale,
-    needs: freshNeeds(), hp: def.hp, maxHp: def.maxHp, money: def.money,
-    rpg: freshRPG(def.level ?? 1),
+    angle: 0, pitch: 0, alive: true, speed: packageSpeed(pack),
+    sprite: pack.visual.sprite ?? pack.affiliation.occupation,
+    spriteSeed: pack.visual.spriteSeed,
+    npcVisualId: pack.visual.npcVisualId,
+    name: npcPackageDisplayName(pack),
+    isFemale: pack.demographics.sex === 'female',
+    age: pack.demographics.age,
+    sex: pack.demographics.sex,
+    needs: freshNeeds(),
+    hp: packageHp(pack),
+    maxHp: packageMaxHp(pack),
+    money: pack.wealth.cashRubles ?? 0,
+    accountRubles: pack.wealth.accountRubles,
+    rpg: freshRPG(pack.rpg.level),
     ai: { goal: AIGoal.IDLE, tx: 0, ty: 0, path: [], pi: 0, stuck: 0, timer: 0 },
-    inventory: def.inventory.map(item => ({ ...item })),
-    weapon: 'ak47',
-    faction: def.faction, occupation: def.occupation,
-    plotNpcId: 'major_grom', canGiveQuest: true, questId: -1,
-    isTraveler: true,
+    inventory: packageItems(pack.loadout.inventory),
+    weapon: def.leaderWeapon ?? pack.loadout.weapon,
+    tool: pack.loadout.tool,
+    faction: pack.affiliation.faction,
+    occupation: pack.affiliation.occupation,
+    plotNpcId,
+    npcPackageId: pack.id,
+    canGiveQuest: pack.runtime?.canGiveQuest ?? true,
+    questId: -1,
+    isTraveler: def.leaderTraveler === true,
   };
-  if (!bindReservedPlotNpcAlifeRecord(state, major, 'major_grom', floorKey)) return false;
+  if (!bindReservedPlotNpcAlifeRecord(state, major, plotNpcId, floorKey)) return false;
   sendToAnchor(world, major, anchor);
   entities.push(major);
   return true;
 }
 
-function spawnLiquidator(
+function spawnArrivalEscort(
+  def: ScriptedArrivalEscortDef,
   world: World,
   entities: Entity[],
   state: GameState,
@@ -147,29 +186,29 @@ function spawnLiquidator(
   const x = world.wrap((cell % W) + (idx % 3) - 1);
   const y = world.wrap(((cell / W) | 0) + Math.floor(idx / 3));
   if (!passable(world, x, y)) return null;
-  const name = randomName(Faction.LIQUIDATOR);
-  const rpg = randomRPG(8);
-  const maxHp = Math.round(getMaxHp(rpg) * 1.5);
-  const weapon = GUARD_WEAPONS[idx % GUARD_WEAPONS.length];
-  const ammo = weapon === 'shotgun' ? 'ammo_shells' : weapon === 'ak47' ? 'ammo_762' : 'ammo_9mm';
+  const name = randomName(def.faction);
+  const rpg = randomRPG(def.level);
+  const maxHp = Math.round(getMaxHp(rpg) * def.hpMultiplier);
+  const weapon = def.weapons[idx % def.weapons.length] ?? def.weapons[0] ?? 'makarov';
+  const ammo = def.ammoByWeapon[weapon] ?? def.defaultAmmo;
   const npc: Entity = {
     id: nextId.v++, type: EntityType.NPC,
     x: x + 0.5, y: y + 0.5,
-    angle: 0, pitch: 0, alive: true, speed: 1.35 + Math.random() * 0.25,
-    sprite: Occupation.HUNTER,
+    angle: 0, pitch: 0, alive: true, speed: def.speedBase + Math.random() * def.speedSpread,
+    sprite: def.occupation,
     name: name.name, isFemale: name.female,
     needs: freshNeeds(), hp: maxHp, maxHp,
     money: 20 + Math.floor(Math.random() * 50),
     ai: { goal: AIGoal.IDLE, tx: 0, ty: 0, path: [], pi: 0, stuck: 0, timer: 0 },
     inventory: [
       { defId: weapon, count: 1 },
-      { defId: ammo, count: weapon === 'shotgun' ? 8 : 24 },
-      { defId: 'bandage', count: 1 },
+      { defId: ammo.defId, count: ammo.count },
+      ...def.inventory.map(item => ({ ...item })),
     ],
     weapon,
-    faction: Faction.LIQUIDATOR,
-    occupation: Occupation.HUNTER,
-    isTraveler: true,
+    faction: def.faction,
+    occupation: def.occupation,
+    isTraveler: def.traveler === true,
     questId: -1,
     rpg,
   };
@@ -179,36 +218,46 @@ function spawnLiquidator(
   return npc.alifeId ?? null;
 }
 
-export function updateScriptedArrivals(world: World, entities: Entity[], player: Entity, state: GameState, nextId: { v: number }): boolean {
-  if (!shouldSpawnHellHoldoutArrivals(state, entities)) return false;
-  const anchor = holdoutAnchor(state, world, player);
-  const cell = arrivalCellNearLift(world, anchor.x, anchor.y, player.x, player.y);
+function executeScriptedArrival(def: ScriptedArrivalDef, world: World, entities: Entity[], player: Entity, state: GameState, nextId: { v: number }): boolean {
+  const anchor = arrivalAnchor(def, state, world, player);
+  const cell = arrivalCellNearLift(world, anchor.x, anchor.y, player.x, player.y, def.preferredLiftDirection);
   const toFloorKey = currentAlifeFloorKey(state);
-  if (!spawnMajor(world, entities, state, nextId, cell, anchor, toFloorKey)) return false;
-  const fromFloorKey = 'story:ministry';
+  if (!spawnArrivalLeader(def, world, entities, state, nextId, cell, anchor, toFloorKey)) return false;
   const guardAlifeIds: number[] = [];
-  const slots = entitySpawnSlots(entities, EntityType.NPC, 5);
+  const escort = def.escort;
+  const slots = escort ? entitySpawnSlots(entities, EntityType.NPC, escort.count) : 0;
   for (let i = 0; i < slots; i++) {
-    const alifeId = spawnLiquidator(world, entities, state, nextId, cell, anchor, i, toFloorKey);
+    const alifeId = escort ? spawnArrivalEscort(escort, world, entities, state, nextId, cell, anchor, i, toFloorKey) : null;
     if (alifeId !== null) guardAlifeIds.push(alifeId);
   }
+  const leaderPack = getNpcPackageByPlotNpcId(def.leaderPlotNpcId);
   publishEvent(state, {
     type: 'faction_event',
     x: cell % W,
     y: (cell / W) | 0,
-    targetName: PLOT_NPCS.major_grom.name,
-    targetFaction: Faction.LIQUIDATOR,
-    severity: 4,
+    targetName: leaderPack ? npcPackageDisplayName(leaderPack) : def.leaderPlotNpcId,
+    targetFaction: leaderPack?.affiliation.faction,
+    severity: def.eventSeverity,
     privacy: 'public',
-    tags: ['scripted_arrival', 'alife_migration', HOLDOUT_TAG, 'liquidator', 'quest', 'faction'],
+    tags: [...def.eventTags],
     data: {
-      plotNpcId: 'major_grom',
-      fromFloorKey,
+      arrivalId: def.id,
+      plotNpcId: def.leaderPlotNpcId,
+      fromFloorKey: def.sourceFloorKey,
       toFloorKey,
       guardCount: guardAlifeIds.length,
       guardAlifeIds,
     },
   });
-  state.msgs.push(msg('Лифт выплюнул группу Громного. Они идут к зоне закрепления, оружие уже на руках.', state.time, '#8cf'));
+  state.msgs.push(msg(def.message, state.time, '#8cf'));
   return true;
+}
+
+export function updateScriptedArrivals(world: World, entities: Entity[], player: Entity, state: GameState, nextId: { v: number }): boolean {
+  for (const def of SCRIPTED_ARRIVALS) {
+    if (shouldSpawnScriptedArrival(def, state, entities)) {
+      return executeScriptedArrival(def, world, entities, player, state, nextId);
+    }
+  }
+  return false;
 }

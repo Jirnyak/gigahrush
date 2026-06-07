@@ -7,12 +7,12 @@ import {
   type GameState, type Room, type WorldContainer, type WorldEvent,
 } from '../../core/types';
 import { World } from '../../core/world';
-import { freshNeeds } from '../../data/catalog';
-import { type PlotNpcDef, registerSideQuest } from '../../data/plot';
+import { designNpcFloorKey, type PlotNpcDef, registerFloorSideQuest } from '../../data/plot';
 import { MONSTERS } from '../../entities/monster';
 import { Spr } from '../../render/sprite_index';
 import { publishEvent } from '../../systems/events';
 import { setTerritoryOwnerAtIndex, syncZoneMetadataFromTerritory } from '../../systems/territory';
+import { requireSpawnedPlotNpcFromPackage } from '../plot_npc_spawn';
 import {
   connectRoomsMST,
   ensureConnectivity,
@@ -22,6 +22,8 @@ import {
 } from '../shared';
 import { placeProceduralScreens, SCREEN_FRAMES } from '../procedural_screens';
 import type { FloorGeneration } from '../floor_manifest';
+
+const DESIGN_NPC_HOME_FLOOR_KEY = designNpcFloorKey('antenna_court');
 
 export const DESIGN_FLOOR_ID = 'antenna_court' as const;
 export const ANTENNA_COURT_ROUTE_Z = 42 as const;
@@ -335,7 +337,7 @@ const NPC_DEFS: Record<string, PlotNpcDef> = {
   },
 };
 
-registerSideQuest('antenna_pasha_grown', NPC_DEFS.antenna_pasha_grown, [
+registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'antenna_pasha_grown', NPC_DEFS.antenna_pasha_grown, [
   {
     id: 'antenna_tune_floor',
     giverNpcId: 'antenna_pasha_grown',
@@ -367,7 +369,7 @@ registerSideQuest('antenna_pasha_grown', NPC_DEFS.antenna_pasha_grown, [
   },
 ]);
 
-registerSideQuest('antenna_mirra_jammer', NPC_DEFS.antenna_mirra_jammer, [
+registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'antenna_mirra_jammer', NPC_DEFS.antenna_mirra_jammer, [
   {
     id: 'antenna_jam_raid',
     giverNpcId: 'antenna_mirra_jammer',
@@ -380,7 +382,7 @@ registerSideQuest('antenna_mirra_jammer', NPC_DEFS.antenna_mirra_jammer, [
   },
 ]);
 
-registerSideQuest('antenna_captain_krug', NPC_DEFS.antenna_captain_krug, [
+registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'antenna_captain_krug', NPC_DEFS.antenna_captain_krug, [
   {
     id: 'antenna_battery_theft',
     giverNpcId: 'antenna_captain_krug',
@@ -403,7 +405,10 @@ registerSideQuest('antenna_captain_krug', NPC_DEFS.antenna_captain_krug, [
   },
 ]);
 
-registerSideQuest('antenna_echo_zhenya', NPC_DEFS.antenna_echo_zhenya, [
+registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'antenna_guard_frequency_sergeant', NPC_DEFS.antenna_guard_frequency_sergeant, [], ['antenna_court', 'guard']);
+registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'antenna_guard_hz_watch', NPC_DEFS.antenna_guard_hz_watch, [], ['antenna_court', 'guard']);
+
+registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'antenna_echo_zhenya', NPC_DEFS.antenna_echo_zhenya, [
   {
     id: 'antenna_record_void',
     giverNpcId: 'antenna_echo_zhenya',
@@ -1770,34 +1775,10 @@ function spawnPlotNpc(
   angle: number,
   extra?: Partial<Entity>,
 ): Entity {
-  const def = NPC_DEFS[plotNpcId];
-  const npc: Entity = {
-    id: nextId.v++,
-    type: EntityType.NPC,
-    x: room.x + dx + 0.5,
-    y: room.y + dy + 0.5,
+  return requireSpawnedPlotNpcFromPackage(entities, nextId, plotNpcId, room.x + dx + 0.5, room.y + dy + 0.5, {
     angle,
-    pitch: 0,
-    alive: true,
-    speed: def.speed,
-    sprite: def.sprite,
-    name: def.name,
-    isFemale: def.isFemale,
-    needs: freshNeeds(),
-    hp: def.hp,
-    maxHp: def.maxHp,
-    money: def.money,
-    ai: { goal: AIGoal.IDLE, tx: 0, ty: 0, path: [], pi: 0, stuck: 0, timer: 0 },
-    inventory: def.inventory.map(i => ({ ...i })),
-    faction: def.faction,
-    occupation: def.occupation,
-    plotNpcId,
-    canGiveQuest: true,
-    questId: -1,
-    ...extra,
-  };
-  entities.push(npc);
-  return npc;
+    extra,
+  });
 }
 
 function spawnSignalMonsters(

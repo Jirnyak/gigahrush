@@ -1,6 +1,7 @@
 /* ── Инфосеть Демос: read-only A-Life profile browser ─────────── */
 
 import { type Entity, type GameState } from '../core/types';
+import { DEMOS_SOCIAL_NPC_SLOTS } from '../data/demos_social';
 import { generateNpcProfileSprite } from '../entities/procedural_visuals';
 import { type DemosProfile, getDemosSnapshot } from '../systems/demos';
 import {
@@ -406,7 +407,8 @@ export function drawDemosMenu(
       ctx.fillText(fitText(ctx, p.name, infoW), infoX, y); y += 12 * sy;
       ctx.font = `${7 * sy}px monospace`;
       ctx.fillStyle = '#789';
-      ctx.fillText(fitText(ctx, `${p.idLabel}${p.plotIdLabel ? ` ${p.plotIdLabel}` : ''}`, infoW), infoX, y); y += 12 * sy;
+      const ids = [p.idLabel, p.packageIdLabel, p.plotIdLabel].filter((item): item is string => !!item).join(' ');
+      ctx.fillText(fitText(ctx, ids, infoW), infoX, y); y += 12 * sy;
       drawLine(ctx, 'фракция', p.factionLabel, infoX, y, infoW, sy); y += 11 * sy;
       drawLine(ctx, 'где', p.locationLabel, infoX, y, infoW, sy, p.dead ? '#b77' : '#9cf');
 
@@ -434,7 +436,7 @@ export function drawDemosMenu(
     } else if (state.demosTab === 'links') {
       drawDemosSocialLinksPanel(
         ctx,
-        buildDemosSocialLinksView(state, p.alifeId, 8),
+        buildDemosSocialLinksView(state, p.alifeId, DEMOS_SOCIAL_NPC_SLOTS),
         contentX,
         contentY,
         contentW,

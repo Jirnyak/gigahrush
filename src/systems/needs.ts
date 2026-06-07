@@ -7,15 +7,16 @@ import {
   EntityType,
   msg,
   NpcState,
-  Occupation,
   RoomType,
 } from '../core/types';
 import type { World } from '../core/world';
+import { occupationProfile } from '../data/occupation_profiles';
 import { Spr } from '../render/sprite_index';
 import { recordPlayerDamage } from './damage';
 import { isDebugOnePunchManEnabled, keepDebugOnePunchManAlive } from './debug_cheats';
 import { ENTITY_MASK_NPC, ensureEntityIndex } from './entity_index';
 import { entitySpawnSlots } from './entity_limits';
+import { stampUrineTraceCadenced } from './urination';
 
 // Rates per second
 const FOOD_RATE  = 0.08;
@@ -274,22 +275,33 @@ function rememberNeedsTouch(id: number, time: number): void {
   }
 }
 
-function applyColdResidentCadence(e: Entity, dt: number, _time: number, world: World | undefined): void {
+function applyColdResidentCadence(e: Entity, dt: number, time: number, world: World | undefined): void {
   const n = e.needs;
   if (!n || e.type !== EntityType.NPC || dt <= 0) return;
   const room = world?.roomAt(e.x, e.y);
   if (room?.type === RoomType.KITCHEN) {
-    const food = e.occupation === Occupation.COOK ? 5 : 3.5;
+    const food = occupationProfile(e.occupation)?.kitchenFoodRestore ?? 3.5;
     n.food = Math.min(100, n.food + food * dt);
     n.water = Math.min(100, n.water + 4.5 * dt);
     n.pendingPoo = (n.pendingPoo ?? 0) + food * 0.35 * dt;
     n.pendingPee = (n.pendingPee ?? 0) + 2.1 * dt;
   } else if (room?.type === RoomType.BATHROOM) {
     n.water = Math.min(100, n.water + 2 * dt);
+    if (n.pee > 5 && world) {
+      stampUrineTraceCadenced(world, e, time, {
+        pressure: n.pee / 100,
+        streamLength: 0.6,
+        intervalSeconds: 0.35,
+        streamSteps: n.pee > 60 ? 12 : 8,
+        width: 0.04,
+        dropCount: 0,
+        intensityScale: 0.8,
+      });
+    }
     n.pee = Math.max(0, n.pee - 12 * dt);
     n.poo = Math.max(0, n.poo - 9 * dt);
   } else if (room?.type === RoomType.MEDICAL && e.hp !== undefined && e.maxHp !== undefined) {
-    e.hp = Math.min(e.maxHp, e.hp + (e.occupation === Occupation.DOCTOR ? 2 : 1) * dt);
+    e.hp = Math.min(e.maxHp, e.hp + (occupationProfile(e.occupation)?.medicalRecoveryMultiplier ?? 1) * dt);
   }
 
   if (e.ai?.npcState === NpcState.SLEEPING && (room?.type === RoomType.LIVING || room?.type === RoomType.OFFICE)) {

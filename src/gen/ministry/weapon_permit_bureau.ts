@@ -13,13 +13,15 @@ import {
   type WorldContainer,
 } from '../../core/types';
 import { World } from '../../core/world';
-import { type PlotNpcDef, registerSideQuest } from '../../data/plot';
+import { type PlotNpcDef, registerAuthoredNpc, registerSideQuest, storyNpcFloorKey } from '../../data/plot';
 import {
-  type NextId, addItemDrop, createAdminRoom, setFeature, spawnAdminNpc, spawnNamedCivilian,
+  type NextId, addItemDrop, createAdminRoom, setFeature, spawnAdminNpc,
 } from './admin_common';
 import { genLog } from '../log';
 
 const CONTENT_TAG = 'weapon_permit_bureau';
+const HOME_FLOOR_KEY = storyNpcFloorKey(FloorLevel.MINISTRY);
+const WITNESS_LIDIYA_ID = 'weapon_permit_witness_lidiya';
 
 const GALINA_DEF: PlotNpcDef = {
   name: 'Галина Короткоствольная',
@@ -94,6 +96,26 @@ const STEPAN_DEF: PlotNpcDef = {
   talkLinesPost: [
     'Выдано по минимуму. Этого хватит уйти, если не начинать войну.',
     'Следующий патрон бюро будет считать уже с вашим именем.',
+  ],
+};
+
+const WITNESS_LIDIYA_DEF: PlotNpcDef = {
+  name: 'Понятая Лидия Сейфовая',
+  isFemale: true,
+  faction: Faction.CITIZEN,
+  occupation: Occupation.SECRETARY,
+  sprite: Occupation.SECRETARY,
+  hp: 70, maxHp: 70, money: 15, speed: 0.8,
+  inventory: [
+    { defId: 'note', count: 1 },
+    { defId: 'official_permit_slip', count: 1 },
+  ],
+  talkLines: [
+    'Я понятая. Сейф открывался при мне, но не для меня.',
+    'Бумага у оружейного окна тяжелее пистолета.',
+  ],
+  talkLinesPost: [
+    'Подпись поставлена. Теперь главное не узнать, под чем.',
   ],
 };
 
@@ -179,6 +201,13 @@ registerSideQuest('stepan_patronov', STEPAN_DEF, [
   },
 ]);
 
+registerAuthoredNpc({
+  id: WITNESS_LIDIYA_ID,
+  npc: WITNESS_LIDIYA_DEF,
+  homeFloorKey: HOME_FLOOR_KEY,
+  tags: ['ministry', CONTENT_TAG, 'witness'],
+});
+
 function nextContainerId(world: World): number {
   let id = world.containers.length + 1;
   while (world.containerById.has(id) || world.containers.some(c => c.id === id)) id++;
@@ -259,11 +288,7 @@ export function generateWeaponPermitBureau(
   spawnAdminNpc(entities, nextId, BORIS_DEF, 'boris_podchistkin', midX + 1, deskY - 1);
   const guardId = nextId.v;
   spawnAdminNpc(entities, nextId, STEPAN_DEF, 'stepan_patronov', room.x + room.w - 3, room.y + room.h - 3, true, 'karkarov_pistol');
-  spawnNamedCivilian(
-    entities, nextId, 'Понятая Лидия Сейфовая', true,
-    room.x + 2, room.y + room.h - 3, Occupation.SECRETARY, Faction.CITIZEN,
-    [{ defId: 'note', count: 1 }, { defId: 'official_permit_slip', count: 1 }],
-  );
+  spawnAdminNpc(entities, nextId, WITNESS_LIDIYA_DEF, WITNESS_LIDIYA_ID, room.x + 2, room.y + room.h - 3, false);
 
   const lockerX = room.x + room.w - 2;
   const lockerY = cy;

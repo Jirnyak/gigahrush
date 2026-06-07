@@ -9,6 +9,7 @@ import {
 } from '../core/types';
 import type { World } from '../core/world';
 import { ITEMS } from '../data/items';
+import { spawnBreachDust } from './blood_fx';
 import { publishEvent } from './events';
 import { isPlayerEntity } from './player_actor';
 
@@ -104,7 +105,7 @@ function applyFloorOpening(world: World, candidate: BreachCandidate, info: Neigh
   world.roomMap[idx] = info.roomId;
   world.zoneMap[idx] = info.zoneId;
   world.setFeatureAt(idx, Feature.NONE, true);
-  if (world.surfaceMap.delete(idx)) world.surfaceVersion = (world.surfaceVersion + 1) | 0;
+  if (world.surfaceMap.delete(idx)) world.markSurfaceDirty();
 }
 
 function collectBreachCandidates(world: World, x: number, y: number, radius: number): BreachCandidate[] {
@@ -241,6 +242,7 @@ export function resolveBreachChargeExplosion(
     world.markWallTexDirty();
     world.markFloorTexDirty();
     world.markFeaturesDirty();
+    spawnBreachDust(world, x, y, radius, result.changedCells, result.breachedBiomass > 0);
   }
   publishBreachEvent(world, state, actor, x, y, radius, result);
   return result;

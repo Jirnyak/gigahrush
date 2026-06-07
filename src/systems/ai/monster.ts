@@ -3,13 +3,14 @@
 import {
   W,
   type Entity, type GameState, type MonsterBaitLineState, type Msg, type Room, type WorldContainer,
-  Cell, DoorState, Faction, Feature, ItemType, Occupation, ProjType, RoomType, Tex, ZoneFaction,
+  Cell, DoorState, Faction, Feature, ItemType, ProjType, RoomType, Tex, ZoneFaction,
   EntityType, AIGoal, MonsterKind,
   msg,
 } from '../../core/types';
 import { World } from '../../core/world';
 import { MONSTERS, entityDisplayName, type MonsterAIFlag, type MonsterDef } from '../../entities/monster';
 import { ITEMS, ITEM_TAGS, getStack } from '../../data/items';
+import { occupationHasProfileTag } from '../../data/occupation_profiles';
 import { droppedToolLightScore, equippedToolLightScore } from '../../data/tool_lights';
 import {
   playGrowl,
@@ -39,6 +40,7 @@ import {
   MONSTER_BAIT_CONSUME_RADIUS_SQ,
   clearDeadBaitDrop,
   consumeMonsterBait,
+  getActiveMonsterBaits,
   findMonsterBaitTarget,
   type MonsterBaitMarker,
 } from '../monster_bait';
@@ -85,9 +87,16 @@ const MONSTER_DETECT = 20;
 const MONSTER_MELEE_DETECT = 30;
 const MONSTER_DETECT_SQ = MONSTER_DETECT * MONSTER_DETECT;
 const MONSTER_MELEE_DETECT_SQ = MONSTER_MELEE_DETECT * MONSTER_MELEE_DETECT;
-const IMMEDIATE_THREAT_RADIUS_SQ = 10 * 10;
+const IMMEDIATE_THREAT_RADIUS = 10;
+const IMMEDIATE_THREAT_RADIUS_SQ = IMMEDIATE_THREAT_RADIUS * IMMEDIATE_THREAT_RADIUS;
 const COMBAT_TARGET_SCAN_CAP = 80;
 const IMMEDIATE_THREAT_SCAN_CAP = 40;
+const IMMEDIATE_CACHE_BUCKET_SHIFT = 4;
+const IMMEDIATE_CACHE_BUCKET_SIZE = 1 << IMMEDIATE_CACHE_BUCKET_SHIFT;
+const IMMEDIATE_CACHE_BUCKETS_PER_AXIS = W >> IMMEDIATE_CACHE_BUCKET_SHIFT;
+const IMMEDIATE_CACHE_BUCKET_MASK = IMMEDIATE_CACHE_BUCKETS_PER_AXIS - 1;
+const IMMEDIATE_CACHE_BUCKET_CENTER_OFFSET = IMMEDIATE_CACHE_BUCKET_SIZE * 0.5;
+const IMMEDIATE_CACHE_BUCKET_EXTRA_RADIUS = Math.SQRT2 * IMMEDIATE_CACHE_BUCKET_CENTER_OFFSET;
 const OLGOY_SCENT_SCAN_CAP = 64;
 const LISHENNYY_LIGHT_SCAN_CAP = 72;
 const CHERNOSLIZ_SCAN_CAP = 64;
@@ -251,6 +260,7 @@ const ZHORNAYA_HIT_RANGE_SQ = 1.45 * 1.45;
 const ZHORNAYA_MISS_RECOVERY_SEC = 1.45;
 const ZHORNAYA_HIT_RECOVERY_SEC = 0.72;
 const ZHORNAYA_MISS_COOLDOWN_SEC = 3.1;
+const ZHORNAYA_SCENT_SCAN_SEC = 0.14;
 const OLGOY_DETECT_RADIUS = 24;
 const OLGOY_BLOOD_RADIUS = 30;
 const OLGOY_CORPSE_RADIUS = 26;
@@ -460,6 +470,10 @@ let _entityById = new Map<number, Entity>();
 export function setEntityMap(m: Map<number, Entity>): void { _entityById = m; }
 
 const combatQuery: Entity[] = [];
+const immediateCacheQuery: Entity[] = [];
+const immediateTopCandidates: Entity[] = [];
+const immediateTopDists: number[] = [];
+const immediateTopIds: number[] = [];
 const documentHunterQuery: Entity[] = [];
 const chernoslizTargetQuery: Entity[] = [];
 const zhornayaCarrierQuery: Entity[] = [];
@@ -476,6 +490,20 @@ const sporeCarpetPuffQuery: Entity[] = [];
 const lishennyyLightQuery: Entity[] = [];
 const olgoyFedCorpses = new WeakSet<Entity>();
 const lampPoweredRuntime = new WeakMap<Entity, boolean>();
+
+interface ImmediateCombatCacheEntry {
+  candidates: Entity[];
+}
+
+const immediateCombatCache = new Map<string, ImmediateCombatCacheEntry>();
+let immediateCombatCacheVersion = -1;
+
+interface ZhornayaScentRuntime {
+  nextScanAt: number;
+  scent: ZhornayaScentTarget | null;
+}
+
+const zhornayaScentRuntime = new WeakMap<Entity, ZhornayaScentRuntime>();
 
 interface SobrannyyRuntime {
   lastHp: number;
@@ -1235,8 +1263,8 @@ function mukhozhukCommandableNpc(npc: Entity, target: Entity): boolean {
   if (npc.plotNpcId !== undefined) return false;
   const guard = npc.faction === Faction.LIQUIDATOR ||
     npc.faction === Faction.WILD ||
-    npc.occupation === Occupation.HUNTER;
-  const cult = npc.faction === Faction.CULTIST || npc.occupation === Occupation.PILGRIM;
+    occupationHasProfileTag(npc.occupation, 'combat');
+  const cult = npc.faction === Faction.CULTIST || occupationHasProfileTag(npc.occupation, 'cult');
   return guard || cult || isHostile(npc, target);
 }
 
@@ -2784,7 +2812,8 @@ export function findCombatTarget(
     ai.combatScanCd = scanCd;
     let newTarget: Entity | null = null;
     let newBest = rangeSq;
-    ensureEntityIndex(entities).queryRadiusCapped(e.x, e.y, Math.sqrt(rangeSq), combatQuery, ENTITY_MASK_ACTOR, COMBAT_TARGET_SCAN_CAP);
+    const queryMask = combatTargetQueryMask(typeFilter);
+    ensureEntityIndex(entities).queryRadiusCapped(e.x, e.y, Math.sqrt(rangeSq), combatQuery, queryMask, COMBAT_TARGET_SCAN_CAP);
     for (const other of combatQuery) {
       if (!other.alive || other.id === e.id) continue;
       if (!typeFilter(other)) continue;
@@ -2811,8 +2840,10 @@ function findImmediateCombatTarget(
 ): Entity | null {
   let target: Entity | null = null;
   let best = rangeSq;
-  getEntityIndex().queryRadiusCapped(e.x, e.y, Math.sqrt(rangeSq), combatQuery, ENTITY_MASK_ACTOR, IMMEDIATE_THREAT_SCAN_CAP);
-  for (const other of combatQuery) {
+  const queryMask = combatTargetQueryMask(typeFilter);
+  const candidates = immediateCombatCandidates(e, rangeSq, queryMask);
+  collectImmediateTopCandidates(world, e, candidates, rangeSq);
+  for (const other of immediateTopCandidates) {
     if (!other.alive || other.id === e.id) continue;
     if (!typeFilter(other)) continue;
     if (!isHostile(e, other)) continue;
@@ -2824,8 +2855,78 @@ function findImmediateCombatTarget(
   return target;
 }
 
+function immediateCacheBucketCoord(v: number): number {
+  return ((Math.floor(v) & (W - 1)) >> IMMEDIATE_CACHE_BUCKET_SHIFT) & IMMEDIATE_CACHE_BUCKET_MASK;
+}
+
+function immediateCombatCandidates(e: Entity, rangeSq: number, queryMask: number): readonly Entity[] {
+  const index = getEntityIndex();
+  const version = index.getVersion();
+  if (version !== immediateCombatCacheVersion) {
+    immediateCombatCache.clear();
+    immediateCombatCacheVersion = version;
+  }
+  const bx = immediateCacheBucketCoord(e.x);
+  const by = immediateCacheBucketCoord(e.y);
+  const bucketIndex = by * IMMEDIATE_CACHE_BUCKETS_PER_AXIS + bx;
+  const key = `${bucketIndex}:${queryMask}:${rangeSq}`;
+  const cached = immediateCombatCache.get(key);
+  if (cached) return cached.candidates;
+
+  const cx = bx * IMMEDIATE_CACHE_BUCKET_SIZE + IMMEDIATE_CACHE_BUCKET_CENTER_OFFSET;
+  const cy = by * IMMEDIATE_CACHE_BUCKET_SIZE + IMMEDIATE_CACHE_BUCKET_CENTER_OFFSET;
+  index.queryRadius(cx, cy, Math.sqrt(rangeSq) + IMMEDIATE_CACHE_BUCKET_EXTRA_RADIUS, immediateCacheQuery, queryMask);
+  const entry = { candidates: immediateCacheQuery.slice() };
+  immediateCombatCache.set(key, entry);
+  return entry.candidates;
+}
+
+function collectImmediateTopCandidates(
+  world: World,
+  e: Entity,
+  candidates: readonly Entity[],
+  rangeSq: number,
+): void {
+  immediateTopCandidates.length = 0;
+  immediateTopDists.length = 0;
+  immediateTopIds.length = 0;
+  let count = 0;
+  for (const other of candidates) {
+    if (!other.alive) continue;
+    const d2 = world.dist2(e.x, e.y, other.x, other.y);
+    if (d2 > rangeSq) continue;
+    const full = count >= IMMEDIATE_THREAT_SCAN_CAP;
+    if (
+      full &&
+      (d2 > immediateTopDists[IMMEDIATE_THREAT_SCAN_CAP - 1] ||
+        (d2 === immediateTopDists[IMMEDIATE_THREAT_SCAN_CAP - 1] && other.id >= immediateTopIds[IMMEDIATE_THREAT_SCAN_CAP - 1]))
+    ) {
+      continue;
+    }
+    let pos = count;
+    while (pos > 0 && (d2 < immediateTopDists[pos - 1] || (d2 === immediateTopDists[pos - 1] && other.id < immediateTopIds[pos - 1]))) pos--;
+    const writeEnd = full ? IMMEDIATE_THREAT_SCAN_CAP - 1 : count;
+    for (let i = writeEnd; i > pos; i--) {
+      immediateTopDists[i] = immediateTopDists[i - 1];
+      immediateTopIds[i] = immediateTopIds[i - 1];
+      immediateTopCandidates[i] = immediateTopCandidates[i - 1];
+    }
+    immediateTopDists[pos] = d2;
+    immediateTopIds[pos] = other.id;
+    immediateTopCandidates[pos] = other;
+    if (!full) count++;
+  }
+  immediateTopCandidates.length = count;
+  immediateTopDists.length = count;
+  immediateTopIds.length = count;
+}
+
 function canBeMonsterTarget(other: Entity): boolean {
   return isPlayerEntity(other) || other.type === EntityType.NPC;
+}
+
+function combatTargetQueryMask(typeFilter: (other: Entity) => boolean): number {
+  return typeFilter === canBeMonsterTarget ? ENTITY_MASK_NPC : ENTITY_MASK_ACTOR;
 }
 
 function hasAIFlag(e: Entity, flag: MonsterAIFlag): boolean {
@@ -3262,6 +3363,83 @@ function findZhornayaDropTarget(world: World, e: Entity, target: Entity | null):
   return best;
 }
 
+function zhornayaScentScanInterval(e: Entity): number {
+  return ZHORNAYA_SCENT_SCAN_SEC + (e.id & 3) * 0.018;
+}
+
+function zhornayaTargetFallback(target: Entity | null): ZhornayaScentTarget | null {
+  return target ? { x: target.x, y: target.y, entity: target, source: 'target', score: 0.35 } : null;
+}
+
+function validCachedZhornayaScent(
+  world: World,
+  e: Entity,
+  target: Entity | null,
+  scent: ZhornayaScentTarget | null,
+  time: number,
+): ZhornayaScentTarget | null {
+  if (!scent) return null;
+  if (scent.bait) {
+    if (!getActiveMonsterBaits().includes(scent.bait)) return null;
+    if (scent.bait.expiresAt <= time || scent.bait.attractedCount >= scent.bait.maxAttractions) return null;
+    if (!pointOffPlayerPath(world, e, target, scent.bait.x, scent.bait.y)) return null;
+    scent.x = scent.bait.x;
+    scent.y = scent.bait.y;
+    scent.score = scent.bait.strength + scent.bait.risk * 0.2;
+    return scent;
+  }
+  const entity = scent.entity;
+  if (!entity?.alive) return null;
+  if (scent.source === 'drop') {
+    if (entity.type !== EntityType.ITEM_DROP) return null;
+    const score = droppedScentScore(entity);
+    if (score <= 0.4 || !pointOffPlayerPath(world, e, target, entity.x, entity.y)) return null;
+    if (world.dist2(e.x, e.y, entity.x, entity.y) > ZHORNAYA_DROP_SCAN_RADIUS * ZHORNAYA_DROP_SCAN_RADIUS) return null;
+    scent.x = entity.x;
+    scent.y = entity.y;
+    scent.score = score;
+    return scent;
+  }
+  if (scent.source === 'carrier') {
+    if (!canBeMonsterTarget(entity) || !isHostile(e, entity)) return null;
+    const score = inventoryScentScore(entity);
+    if (score <= 0.6 || world.dist2(e.x, e.y, entity.x, entity.y) > ZHORNAYA_SCENT_RADIUS_SQ) return null;
+    scent.x = entity.x;
+    scent.y = entity.y;
+    scent.score = score;
+    return scent;
+  }
+  if (scent.source === 'target') {
+    if (target?.id !== entity.id || !isHostile(e, entity)) return null;
+    scent.x = entity.x;
+    scent.y = entity.y;
+    return scent;
+  }
+  return null;
+}
+
+function findZhornayaCadencedScentTarget(
+  world: World,
+  e: Entity,
+  target: Entity | null,
+  time: number,
+): ZhornayaScentTarget | null {
+  let runtime = zhornayaScentRuntime.get(e);
+  if (runtime && time < runtime.nextScanAt) {
+    const cached = validCachedZhornayaScent(world, e, target, runtime.scent, time);
+    if (cached) return cached;
+    return zhornayaTargetFallback(target);
+  }
+
+  if (!runtime) {
+    runtime = { nextScanAt: 0, scent: null };
+    zhornayaScentRuntime.set(e, runtime);
+  }
+  runtime.nextScanAt = time + zhornayaScentScanInterval(e);
+  runtime.scent = findZhornayaDropTarget(world, e, target) ?? findZhornayaCarrierTarget(world, e) ?? zhornayaTargetFallback(target);
+  return runtime.scent;
+}
+
 function findZhornayaScentTarget(
   world: World,
   e: Entity,
@@ -3283,14 +3461,7 @@ function findZhornayaScentTarget(
     return { x: bait.x, y: bait.y, bait, source: 'bait', score: bait.strength + bait.risk * 0.2 };
   }
 
-  const drop = findZhornayaDropTarget(world, e, target);
-  if (drop) return drop;
-
-  const carrier = findZhornayaCarrierTarget(world, e);
-  if (carrier) return carrier;
-
-  if (target) return { x: target.x, y: target.y, entity: target, source: 'target', score: 0.35 };
-  return null;
+  return findZhornayaCadencedScentTarget(world, e, target, time);
 }
 
 function hasRawMeatItem(e: Entity): boolean {
@@ -5807,6 +5978,7 @@ function finishZhornayaLunge(
   ai.staggerTimer = connected ? ZHORNAYA_HIT_RECOVERY_SEC : ZHORNAYA_MISS_RECOVERY_SEC;
   e.attackCd = connected ? MONSTERS[MonsterKind.ZHORNAYA_TVAR].attackRate : ZHORNAYA_MISS_COOLDOWN_SEC;
   e.spriteScale = connected ? 1.04 : 0.88;
+  zhornayaScentRuntime.delete(e);
   playSoundAt(playGrowl, e.x, e.y);
 }
 
@@ -5847,11 +6019,13 @@ function updateZhornayaTvar(
     }
     msgs.push(msg(`${entityDisplayName(e)} сожрала приманку`, time, '#ca6'));
     ai.baitMarkerId = undefined;
+    zhornayaScentRuntime.delete(e);
     return true;
   }
   if (scent.entity?.type === EntityType.ITEM_DROP && d2 <= MONSTER_BAIT_CONSUME_RADIUS_SQ) {
     clearDeadBaitDrop(scent.entity);
     msgs.push(msg(`${entityDisplayName(e)} сожрала пахнущий сброс`, time, '#ca6'));
+    zhornayaScentRuntime.delete(e);
     return true;
   }
 
@@ -6572,7 +6746,8 @@ function fireMonsterProjectile(
 }
 
 function monsterProjectileScale(kind: MonsterKind | undefined, sprite: number): number {
-  if (kind === MonsterKind.PAUPSINA) return 0.24;
+  if (sprite === Spr.WEB_BOLT || kind === MonsterKind.PAUPSINA) return 0.42;
+  if (sprite === Spr.WET_LINE_BOLT) return 0.5;
   if (sprite === Spr.PARAGRAPH_BOLT) return 0.34;
   if (sprite === Spr.HOSTILE_FLAME_BOLT) return 0.52;
   if (sprite === Spr.HOSTILE_PLASMA_BOLT) return 0.34;
@@ -6581,7 +6756,8 @@ function monsterProjectileScale(kind: MonsterKind | undefined, sprite: number): 
 }
 
 function monsterProjectileSound(kind: MonsterKind | undefined, sprite: number): () => void {
-  if (kind === MonsterKind.PAUPSINA) return playGrowl;
+  if (sprite === Spr.WEB_BOLT || kind === MonsterKind.PAUPSINA) return playGrowl;
+  if (sprite === Spr.WET_LINE_BOLT) return playHostileEnergyShot;
   if (kind === MonsterKind.EYE || kind === MonsterKind.CHERNOSLIZ || sprite === Spr.EYE_BOLT) return playHostileEyeShot;
   if (kind === MonsterKind.PARAGRAPH || sprite === Spr.PARAGRAPH_BOLT) return playHostileParagraphShot;
   if (sprite === Spr.HOSTILE_FLAME_BOLT) return playHostileFlame;

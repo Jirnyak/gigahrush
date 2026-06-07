@@ -26,6 +26,7 @@ export function createInput(): InputState {
     drop: false,
     factionMenu: false,
     logMenu: false,
+    help: false,
     sleep: false,
     controls: false,
     uiSettings: false,

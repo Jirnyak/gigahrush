@@ -21,6 +21,10 @@ const D1_SQL_FILES = [
   'cloudflare/d1/net_sphere_names.sql',
   'cloudflare/d1/net_sphere_market.sql',
 ];
+const SETUP_SQL_FILES = [
+  ...D1_SQL_FILES,
+  'gigahrush-npc-intake/hosted/cloudflare/npc_intake.sql',
+];
 
 const EXPECTED_D1_TABLE_COLUMNS: Record<string, string[]> = {
   net_players: [
@@ -569,11 +573,12 @@ test('Net Sphere Cloudflare config keeps concrete D1 binding and covers every D1
 
   const setup = readFileSync('scripts/cloudflare-net-setup.mjs', 'utf8');
   assert.deepEqual(d1SqlFiles(), [...D1_SQL_FILES].sort());
-  assert.deepEqual(setupSqlFiles(setup), D1_SQL_FILES);
+  assert.deepEqual(setupSqlFiles(setup), SETUP_SQL_FILES);
   assert.match(setup, /schemaOnly/);
   assert.match(setup, /cloudflare\/d1\/net_sphere_names\.sql', mode: 'guarded'/);
   assert.match(setup, /function applyGuardedSqlFile/);
-  assert.match(setup, /applySchema\(\);/);
+  assert.match(setup, /applySchema\(netDatabaseName, netSchemaFiles\);/);
+  assert.match(setup, /applySchema\(npcDatabaseName, npcSchemaFiles\);/);
 });
 
 test('Net Sphere docs describe migration order, optional D1 tables, and local build boundary', () => {

@@ -12,6 +12,7 @@ test('save runtime accepts only the current shape version', () => {
   assert.equal(saveShapeVersionSupported({ version: SAVE_SHAPE_VERSION }), true);
 
   assert.equal(saveShapeVersionStatus({ version: 1 }), 'old');
+  assert.equal(saveShapeVersionStatus({ version: 20 }), 'old');
   assert.equal(saveShapeVersionStatus({ version: SAVE_SHAPE_VERSION - 1 }), 'old');
   assert.equal(saveShapeVersionSupported({ version: SAVE_SHAPE_VERSION - 1 }), false);
   assert.equal(saveShapeVersionStatus({ version: undefined }), 'missing');

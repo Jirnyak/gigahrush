@@ -3,7 +3,8 @@ import * as assert from 'node:assert/strict';
 
 import '../src/gen/kvartiry/content_manifest';
 import { FloorLevel, MonsterKind, QuestType, RoomType } from '../src/core/types';
-import { PLOT_NPCS, SIDE_QUESTS } from '../src/data/plot';
+import { getNpcPackageByPlotNpcId } from '../src/data/npc_packages';
+import { SIDE_QUESTS } from '../src/data/plot';
 import {
   COMMUNAL_KITCHEN_FEUD_FINAL_BRANCH_IDS,
   COMMUNAL_KITCHEN_FEUD_QUEST_IDS,
@@ -43,7 +44,7 @@ test('communal kitchen feud registers five mutually resolving branches', () => {
     const quest = SIDE_QUESTS.find(q => q.id === id);
     assert.ok(quest, `missing kitchen feud quest ${id}`);
     assert.equal(quest.type, QuestType.FETCH);
-    assert.equal(quest.giverNpcId in PLOT_NPCS, true, `${id} has missing giver`);
+    assert.ok(getNpcPackageByPlotNpcId(quest.giverNpcId), `${id} has missing giver package`);
     assert.equal(quest.targetFloor, FloorLevel.KVARTIRY);
     assert.equal(quest.targetRoomType, RoomType.KITCHEN);
     assert.equal(quest.targetZoneTag, 'kitchen_feud');

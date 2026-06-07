@@ -23,9 +23,9 @@ import {
   type WorldContainer,
 } from '../../core/types';
 import { World } from '../../core/world';
-import { ITEMS, freshNeeds } from '../../data/catalog';
+import { ITEMS } from '../../data/catalog';
 import { HUMAN_TERRITORY_OWNERS, factionToTerritoryOwner } from '../../data/factions';
-import { type PlotNpcDef, registerSideQuest } from '../../data/plot';
+import { designNpcFloorKey, type PlotNpcDef, registerFloorSideQuest } from '../../data/plot';
 import { MONSTERS } from '../../entities/monster';
 import { Spr } from '../../render/sprite_index';
 import { registerCellHazardSite } from '../../systems/cell_hazards';
@@ -40,6 +40,9 @@ import {
   stampRoom,
 } from '../shared';
 import type { FloorGeneration } from '../floor_manifest';
+import { requireSpawnedPlotNpcFromPackage } from '../plot_npc_spawn';
+
+const DESIGN_NPC_HOME_FLOOR_KEY = designNpcFloorKey('production_belt');
 
 export const DESIGN_FLOOR_ID = 'production_belt' as const;
 export const PRODUCTION_BELT_ROUTE_Z = -14;
@@ -281,7 +284,7 @@ export function registerProductionBeltContent(): void {
   if (contentRegistered) return;
   contentRegistered = true;
 
-  registerSideQuest('prod_foreman_galina', FOREMAN_DEF, [{
+  registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'prod_foreman_galina', FOREMAN_DEF, [{
     id: 'prod_worker_escort',
     giverNpcId: 'prod_foreman_galina',
     type: QuestType.TALK,
@@ -295,7 +298,7 @@ export function registerProductionBeltContent(): void {
     moneyReward: 45,
   }]);
 
-  registerSideQuest('prod_mechanic_rustam', MECHANIC_DEF, [{
+  registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'prod_mechanic_rustam', MECHANIC_DEF, [{
     id: 'prod_restore_line',
     giverNpcId: 'prod_mechanic_rustam',
     type: QuestType.FETCH,
@@ -310,7 +313,7 @@ export function registerProductionBeltContent(): void {
     moneyReward: 70,
   }]);
 
-  registerSideQuest('prod_worker_egor', WORKER_DEF, [{
+  registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'prod_worker_egor', WORKER_DEF, [{
     id: 'prod_steal_crate',
     giverNpcId: 'prod_worker_egor',
     type: QuestType.FETCH,
@@ -325,7 +328,7 @@ export function registerProductionBeltContent(): void {
     moneyReward: 55,
   }]);
 
-  registerSideQuest('prod_auditor_bot', AUDITOR_DEF, [{
+  registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'prod_auditor_bot', AUDITOR_DEF, [{
     id: 'prod_bad_batch',
     giverNpcId: 'prod_auditor_bot',
     type: QuestType.FETCH,
@@ -1185,41 +1188,24 @@ function spawnNpc(
   entities: Entity[],
   nextId: { v: number },
   plotNpcId: string,
-  def: PlotNpcDef,
+  _def: PlotNpcDef,
   room: Room,
   salt: number,
   angle: number,
   weapon?: string,
 ): number {
   const pos = roomCellForActor(room, salt);
-  const id = nextId.v++;
-  entities.push({
-    id,
-    type: EntityType.NPC,
-    x: pos.x,
-    y: pos.y,
+  const npc = requireSpawnedPlotNpcFromPackage(entities, nextId, plotNpcId, pos.x, pos.y, {
     angle,
-    pitch: 0,
-    alive: true,
-    speed: def.speed,
-    sprite: def.sprite,
-    needs: freshNeeds(),
-    hp: def.hp,
-    maxHp: def.maxHp,
-    ai: { goal: AIGoal.IDLE, tx: 0, ty: 0, path: [], pi: 0, stuck: 0, timer: 0 },
-    inventory: cloneInventory(def.inventory),
-    name: def.name,
-    faction: def.faction,
-    occupation: def.occupation,
-    assignedRoomId: room.id,
     canGiveQuest: true,
-    money: def.money,
-    plotNpcId,
-    isFemale: def.isFemale,
     weapon,
-    rpg: randomRPG(3),
+    aiTarget: { x: 0, y: 0 },
+    extra: {
+      assignedRoomId: room.id,
+      rpg: randomRPG(3),
+    },
   });
-  return id;
+  return npc.id;
 }
 
 function roomCellForActor(room: Room, salt: number): { x: number; y: number } {

@@ -110,10 +110,25 @@ test('World dirty markers are monotonic signed counters', () => {
   assert.equal(world.fogVersion, (fogVersion + 1) | 0);
 });
 
+function carveLightTestFloor(world: World, cx: number, cy: number, radius: number): void {
+  for (let y = cy - radius; y <= cy + radius; y++) {
+    for (let x = cx - radius; x <= cx + radius; x++) {
+      world.cells[world.idx(x, y)] = Cell.FLOOR;
+    }
+  }
+}
+
+function carveLightTestCorridor(world: World, x0: number, y: number, length: number): void {
+  for (let x = x0; x < x0 + length; x++) {
+    world.cells[world.idx(x, y)] = Cell.FLOOR;
+  }
+}
+
 test('World bakeLights lights nearby cells without leaking past radius', () => {
   const world = new World();
   const cx = 100;
   const cy = 100;
+  carveLightTestFloor(world, cx, cy, 10);
   world.features[world.idx(cx, cy)] = Feature.LAMP;
 
   world.bakeLights();
@@ -121,4 +136,59 @@ test('World bakeLights lights nearby cells without leaking past radius', () => {
   assert.equal(world.light[world.idx(cx, cy)], 1);
   assert.ok(world.light[world.idx(cx + 4, cy)] > 0);
   assert.equal(world.light[world.idx(cx + 9, cy)], 0);
+});
+
+test('World bakeLights blocks lamp propagation behind walls', () => {
+  const world = new World();
+  const cx = 120;
+  const cy = 120;
+  carveLightTestCorridor(world, cx, cy, 7);
+  world.features[world.idx(cx, cy)] = Feature.LAMP;
+  const wall = world.idx(cx + 2, cy);
+  world.cells[wall] = Cell.WALL;
+
+  world.bakeLights();
+
+  assert.ok(world.light[wall] > 0);
+  assert.equal(world.light[world.idx(cx + 4, cy)], 0);
+});
+
+test('World bakeLights blocks closed doors and passes open doors', () => {
+  const world = new World();
+  const cx = 140;
+  const cy = 140;
+  carveLightTestCorridor(world, cx, cy, 7);
+  world.features[world.idx(cx, cy)] = Feature.LAMP;
+  const doorIdx = world.idx(cx + 2, cy);
+  world.cells[doorIdx] = Cell.DOOR;
+  world.doors.set(doorIdx, { idx: doorIdx, state: DoorState.CLOSED, roomA: -1, roomB: -1, keyId: '', timer: 0 });
+
+  world.bakeLights();
+
+  assert.ok(world.light[doorIdx] > 0);
+  assert.equal(world.light[world.idx(cx + 4, cy)], 0);
+
+  world.doors.get(doorIdx)!.state = DoorState.OPEN;
+  world.bakeLights();
+
+  assert.ok(world.light[world.idx(cx + 4, cy)] > 0);
+});
+
+test('World bakeLights makes candles smaller and weaker than lamps', () => {
+  const lampWorld = new World();
+  const candleWorld = new World();
+  const cx = 160;
+  const cy = 160;
+  carveLightTestFloor(lampWorld, cx, cy, 10);
+  carveLightTestFloor(candleWorld, cx, cy, 10);
+  lampWorld.features[lampWorld.idx(cx, cy)] = Feature.LAMP;
+  candleWorld.features[candleWorld.idx(cx, cy)] = Feature.CANDLE;
+
+  lampWorld.bakeLights();
+  candleWorld.bakeLights();
+
+  assert.equal(lampWorld.light[lampWorld.idx(cx, cy)], 1);
+  assert.ok(candleWorld.light[candleWorld.idx(cx, cy)] < lampWorld.light[lampWorld.idx(cx, cy)]);
+  assert.ok(candleWorld.light[candleWorld.idx(cx + 4, cy)] > 0);
+  assert.equal(candleWorld.light[candleWorld.idx(cx + 6, cy)], 0);
 });

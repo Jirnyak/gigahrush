@@ -8,6 +8,7 @@ import {
 import { World } from '../../core/world';
 import { getCellHazardMoveMultiplier } from '../cell_hazards';
 import { setDoorState } from '../door_state';
+import { aiPathMoveSpeed } from '../rpg';
 import { bark, BARK_ARRIVE, BARK_ARRIVE_F, BARK_CHANCE_ARRIVE } from './barks';
 
 let _barkMsgs: Msg[] = [];
@@ -32,6 +33,7 @@ const PATH_LOOKAHEAD_CELLS = 6;
 const PATH_DIRECT_GOAL_RANGE = 12;
 const PATH_LINE_SAMPLE_STEP = 0.35;
 const PATH_WAYPOINT_REACH = 0.34;
+const PATH_WAYPOINT_REACH_SQ = PATH_WAYPOINT_REACH * PATH_WAYPOINT_REACH;
 const PATH_WAYPOINT_OFFSET = 0.18;
 const BEHAVIOR_FLOW_FIELD_CACHE_MAX = 16;
 const ROUTINE_WANDER_ATTEMPTS = 4;
@@ -813,7 +815,7 @@ export function followPath(world: World, e: Entity, dt: number): void {
     const cell = ai.path[ai.pi];
     const cx = (cell % W) + 0.5;
     const cy = ((cell / W) | 0) + 0.5;
-    if (world.dist(e.x, e.y, cx, cy) >= PATH_WAYPOINT_REACH) break;
+    if (world.dist2(e.x, e.y, cx, cy) >= PATH_WAYPOINT_REACH_SQ) break;
     ai.pi++;
     ai.stuck = 0;
   }
@@ -825,19 +827,20 @@ export function followPath(world: World, e: Entity, dt: number): void {
 
   let dx = world.delta(e.x, waypoint.x);
   let dy = world.delta(e.y, waypoint.y);
-  const dist = Math.sqrt(dx * dx + dy * dy);
+  const distSq = dx * dx + dy * dy;
 
-  if (dist < PATH_WAYPOINT_REACH) {
+  if (distSq < PATH_WAYPOINT_REACH_SQ) {
     ai.pi = Math.max(ai.pi + 1, waypoint.index + 1);
     ai.stuck = 0;
     return;
   }
+  const dist = Math.sqrt(distSq);
 
   // Open doors in the way (never open hermetic doors — they protect apartments during samosbor)
   openPathDoor(world, waypoint.cell);
 
   // Move toward target
-  const speed = e.speed * getCellHazardMoveMultiplier(world, e) * dt;
+  const speed = aiPathMoveSpeed(e) * getCellHazardMoveMultiplier(world, e) * dt;
   const nx = e.x + (dx / dist) * speed;
   const ny = e.y + (dy / dist) * speed;
   let moved = false;

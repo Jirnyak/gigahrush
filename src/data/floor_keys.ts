@@ -11,6 +11,10 @@ import {
   storyFloorAtZ,
   zForStoryFloor,
 } from './procedural_floors';
+import {
+  floorInstanceAllowsNpcs,
+  floorInstanceById,
+} from './floor_instances';
 
 export type FloorKeyKind = 'story' | 'design' | 'procedural' | 'floor_instance' | 'unknown';
 
@@ -109,6 +113,7 @@ export function floorKeyBaseFloor(keyInput: string, context?: FloorKeyResolveCon
   if (kind === 'story') return STORY_FLOOR_BY_KEY[key];
   if (kind === 'design') return designFloorById(floorKeyRouteId(key))?.baseFloor;
   if (kind === 'procedural') return context?.proceduralSpecs?.[floorKeyRouteId(key)]?.baseFloor;
+  if (kind === 'floor_instance') return floorInstanceById(floorKeyRouteId(key))?.baseFloor;
   return undefined;
 }
 
@@ -118,11 +123,13 @@ export function floorKeyKnown(keyInput: string, context?: FloorKeyResolveContext
   if (kind === 'story') return STORY_FLOOR_BY_KEY[key] !== undefined;
   if (kind === 'design') return designFloorById(floorKeyRouteId(key)) !== undefined;
   if (kind === 'procedural') return proceduralZForRouteId(floorKeyRouteId(key), context) !== undefined || extraKeyKnown(key, context?.extraKnownKeys);
-  if (kind === 'floor_instance') return true;
+  if (kind === 'floor_instance') return floorInstanceById(floorKeyRouteId(key)) !== undefined || extraKeyKnown(key, context?.extraKnownKeys);
   return false;
 }
 
 export function floorKeyAllowsNpcs(keyInput: string, context?: FloorKeyResolveContext): boolean | undefined {
+  const key = cleanFloorKey(keyInput);
+  if (floorKeyKind(key) === 'floor_instance') return floorInstanceAllowsNpcs(floorKeyRouteId(key));
   const z = floorKeyZ(keyInput, context);
   return z === undefined ? undefined : floorRunZAllowsNpcs(z);
 }

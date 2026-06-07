@@ -21,7 +21,7 @@ export const UI_ELEMENT_DEFS = [
   { id: 'status_hints', group: 'Состояние', label: 'Статусы и мутации', defaultEnabled: false, locked: false },
   { id: 'anomaly_hints', group: 'Аномалии', label: 'Смог и аномальные индикаторы', defaultEnabled: false, locked: false },
   { id: 'fps_counter', group: 'Отладка', label: 'FPS в левом углу', defaultEnabled: false, locked: false },
-  { id: 'screen_fx', group: 'Экран', label: 'Нейрошум и помехи', defaultEnabled: false, locked: false },
+  { id: 'screen_fx', group: 'Экран', label: 'Нейрошум и помехи', defaultEnabled: true, locked: false },
   { id: 'samosbor_text', group: 'Системное', label: 'Текст самосбора', defaultEnabled: true, locked: true },
   { id: 'credits', group: 'Системное', label: 'Титры и финальные экраны', defaultEnabled: true, locked: true },
 ] as const satisfies readonly UiElementDef[];
@@ -41,13 +41,21 @@ export const CAMERA_FOV_MAX_DEGREES = 110;
 export const CAMERA_FOV_STEP_DEGREES = 5;
 export const AUTO_PICKUP_DEFAULT = true;
 export const MAP_HIGH_CONTRAST_DEFAULT = false;
-
-export const MAP_COLOR_MODES = [
-  { id: 'rooms', label: 'Типы комнат' },
-  { id: 'factions', label: 'Контроль фракций' },
+export const SCREEN_INTERFERENCE_MODES = [
+  { id: 'off', label: 'Выкл' },
+  { id: 'critical', label: 'Слабо' },
+  { id: 'full', label: 'Полно' },
 ] as const;
+export type ScreenInterferenceMode = typeof SCREEN_INTERFERENCE_MODES[number]['id'];
+export const SCREEN_INTERFERENCE_DEFAULT: ScreenInterferenceMode = 'critical';
+export const HUD_MOTION_MODES = [
+  { id: 'reduced', label: 'Меньше' },
+  { id: 'normal', label: 'Норма' },
+] as const;
+export type HudMotionMode = typeof HUD_MOTION_MODES[number]['id'];
+export const HUD_MOTION_DEFAULT: HudMotionMode = 'reduced';
 
-export type MapColorMode = typeof MAP_COLOR_MODES[number]['id'];
+export type MapColorMode = 'rooms';
 
 export interface MapLegendToggleDef {
   id: string;
@@ -76,11 +84,12 @@ type UiSettings = Record<UiElementId, boolean> & {
   autoPickupEnabled: boolean;
   mapColorMode: MapColorMode;
   mapHighContrast: boolean;
+  screenInterferenceMode: ScreenInterferenceMode;
+  hudMotionMode: HudMotionMode;
 } & Record<MapLegendToggleId, boolean>;
 
 export type MapLegendRow =
   | { kind: 'reset_map_legend'; id: 'reset_map_legend'; group: 'Сервис'; label: 'Сбросить легенду' }
-  | { kind: 'map_color_mode'; id: 'map_color_mode'; group: 'Цвет'; label: 'Цвет клеток' }
   | { kind: 'map_contrast'; id: 'map_contrast'; group: 'Цвет'; label: 'Контраст карты' }
   | { kind: 'map_toggle'; toggle: typeof MAP_LEGEND_TOGGLE_DEFS[number] };
 
@@ -108,7 +117,7 @@ export const UI_PRESETS = [
   {
     id: 'novice',
     label: 'Новичок',
-    hint: 'Первый запуск: бой, угрозы, миникарта и чистый экран.',
+    hint: 'Первый запуск: бой, угрозы, миникарта и слабый нейрошум.',
     enabled: [
       'bottom_tabs',
       'weapon_panel',
@@ -117,6 +126,7 @@ export const UI_PRESETS = [
       'damage_feedback',
       'hazard_warning',
       'minimap',
+      'screen_fx',
     ],
   },
   {
@@ -129,6 +139,7 @@ export const UI_PRESETS = [
       'damage_feedback',
       'hazard_warning',
       'minimap',
+      'screen_fx',
     ],
   },
   {
@@ -144,6 +155,7 @@ export const UI_PRESETS = [
       'hazard_warning',
       'messages',
       'minimap',
+      'screen_fx',
     ],
   },
   {
@@ -158,6 +170,7 @@ export const UI_PRESETS = [
       'messages',
       'minimap',
       'route_hints',
+      'screen_fx',
     ],
   },
   {
@@ -196,7 +209,10 @@ const GAMEPLAY_SETTINGS_ROWS = [
 ] as const;
 
 const GRAPHICS_SETTINGS_ROWS = [
+  { kind: 'screen_interference', id: 'screen_interference', group: 'Экран', label: 'Помехи экрана' },
+  { kind: 'hud_motion', id: 'hud_motion', group: 'HUD', label: 'Движение HUD' },
   { kind: 'camera_fov', id: 'camera_fov', group: 'Графика', label: 'FOV / угол обзора' },
+  { kind: 'map_contrast', id: 'map_contrast', group: 'Карта', label: 'Контраст карты' },
 ] as const;
 
 const UI_RESET_ROWS = {
@@ -241,6 +257,8 @@ function settingsFromEnabledIds(enabledIds: readonly UiElementId[]): UiSettings 
   out.autoPickupEnabled = AUTO_PICKUP_DEFAULT;
   out.mapColorMode = 'rooms';
   out.mapHighContrast = MAP_HIGH_CONTRAST_DEFAULT;
+  out.screenInterferenceMode = SCREEN_INTERFERENCE_DEFAULT;
+  out.hudMotionMode = HUD_MOTION_DEFAULT;
   for (const def of MAP_LEGEND_TOGGLE_DEFS) out[def.id] = def.defaultEnabled;
   return out;
 }
@@ -267,6 +285,8 @@ function normalizeUiSettings(raw: unknown): UiSettings {
   out.autoPickupEnabled = typeof src.autoPickupEnabled === 'boolean' ? src.autoPickupEnabled : AUTO_PICKUP_DEFAULT;
   out.mapColorMode = normalizeMapColorMode(src.mapColorMode);
   out.mapHighContrast = typeof src.mapHighContrast === 'boolean' ? src.mapHighContrast : MAP_HIGH_CONTRAST_DEFAULT;
+  out.screenInterferenceMode = normalizeScreenInterferenceMode(src.screenInterferenceMode);
+  out.hudMotionMode = normalizeHudMotionMode(src.hudMotionMode);
   for (const def of MAP_LEGEND_TOGGLE_DEFS) {
     const value = src[def.id];
     if (typeof value === 'boolean') out[def.id] = value;
@@ -274,8 +294,20 @@ function normalizeUiSettings(raw: unknown): UiSettings {
   return out;
 }
 
-function normalizeMapColorMode(value: unknown): MapColorMode {
-  return value === 'factions' ? 'factions' : 'rooms';
+function normalizeMapColorMode(_value: unknown): MapColorMode {
+  return 'rooms';
+}
+
+function normalizeScreenInterferenceMode(value: unknown): ScreenInterferenceMode {
+  return SCREEN_INTERFERENCE_MODES.some(mode => mode.id === value)
+    ? value as ScreenInterferenceMode
+    : SCREEN_INTERFERENCE_DEFAULT;
+}
+
+function normalizeHudMotionMode(value: unknown): HudMotionMode {
+  return HUD_MOTION_MODES.some(mode => mode.id === value)
+    ? value as HudMotionMode
+    : HUD_MOTION_DEFAULT;
 }
 
 function normalizeMouseLookSensitivity(value: unknown): number {
@@ -380,16 +412,19 @@ export function applyUiPreset(id: UiPresetId): boolean {
   const sensitivity = mobileLookSensitivity();
   const fov = cameraFovDegrees();
   const autoPickup = autoPickupEnabled();
-  const colorMode = mapColorMode();
   const highContrast = mapHighContrastEnabled();
+  const interference = screenInterferenceMode();
+  const hudMotion = hudMotionMode();
   const mapToggles = MAP_LEGEND_TOGGLE_DEFS.map(def => [def.id, mapLegendToggleEnabled(def.id)] as const);
   settings = settingsFromEnabledIds(preset.enabled);
   settings.mouseLookSensitivity = mouseSensitivity;
   settings.mobileLookSensitivity = sensitivity;
   settings.cameraFovDegrees = fov;
   settings.autoPickupEnabled = autoPickup;
-  settings.mapColorMode = colorMode;
+  settings.mapColorMode = 'rooms';
   settings.mapHighContrast = highContrast;
+  settings.screenInterferenceMode = interference;
+  settings.hudMotionMode = hudMotion;
   for (const [id, enabled] of mapToggles) settings[id] = enabled;
   saveUiSettings();
   return true;
@@ -463,6 +498,38 @@ export function resetCameraFov(): number {
   return settings.cameraFovDegrees;
 }
 
+export function screenInterferenceMode(): ScreenInterferenceMode {
+  settings.screenInterferenceMode = normalizeScreenInterferenceMode(settings.screenInterferenceMode);
+  return settings.screenInterferenceMode;
+}
+
+export function cycleScreenInterferenceMode(deltaSteps: number): ScreenInterferenceMode {
+  const current = SCREEN_INTERFERENCE_MODES.findIndex(mode => mode.id === screenInterferenceMode());
+  const steps = SCREEN_INTERFERENCE_MODES.length;
+  const next = (Math.max(0, current) + Math.trunc(deltaSteps) + steps) % steps;
+  settings.screenInterferenceMode = SCREEN_INTERFERENCE_MODES[next].id;
+  saveUiSettings();
+  return settings.screenInterferenceMode;
+}
+
+export function hudMotionMode(): HudMotionMode {
+  settings.hudMotionMode = normalizeHudMotionMode(settings.hudMotionMode);
+  return settings.hudMotionMode;
+}
+
+export function cycleHudMotionMode(): HudMotionMode {
+  settings.hudMotionMode = hudMotionMode() === 'reduced' ? 'normal' : 'reduced';
+  saveUiSettings();
+  return settings.hudMotionMode;
+}
+
+export function resetGraphicsSettings(): void {
+  settings.cameraFovDegrees = CAMERA_FOV_DEFAULT_DEGREES;
+  settings.screenInterferenceMode = SCREEN_INTERFERENCE_DEFAULT;
+  settings.hudMotionMode = HUD_MOTION_DEFAULT;
+  saveUiSettings();
+}
+
 export function autoPickupEnabled(): boolean {
   if (typeof settings.autoPickupEnabled !== 'boolean') settings.autoPickupEnabled = AUTO_PICKUP_DEFAULT;
   return settings.autoPickupEnabled;
@@ -491,10 +558,6 @@ export function setMapColorMode(mode: MapColorMode): MapColorMode {
   settings.mapColorMode = normalizeMapColorMode(mode);
   saveUiSettings();
   return settings.mapColorMode;
-}
-
-export function toggleMapColorMode(): MapColorMode {
-  return setMapColorMode(mapColorMode() === 'rooms' ? 'factions' : 'rooms');
 }
 
 export function mapHighContrastEnabled(): boolean {
@@ -539,15 +602,14 @@ export function resetMapLegendSettings(): void {
 }
 
 export function mapLegendRowCount(): number {
-  return 3 + MAP_LEGEND_TOGGLE_DEFS.length;
+  return 2 + MAP_LEGEND_TOGGLE_DEFS.length;
 }
 
 export function mapLegendRowAt(index: number): MapLegendRow | undefined {
   if (index < 0) return undefined;
   if (index === 0) return MAP_LEGEND_RESET_ROW;
-  if (index === 1) return { kind: 'map_color_mode', id: 'map_color_mode', group: 'Цвет', label: 'Цвет клеток' };
-  if (index === 2) return { kind: 'map_contrast', id: 'map_contrast', group: 'Цвет', label: 'Контраст карты' };
-  const toggle = MAP_LEGEND_TOGGLE_DEFS[index - 3];
+  if (index === 1) return { kind: 'map_contrast', id: 'map_contrast', group: 'Цвет', label: 'Контраст карты' };
+  const toggle = MAP_LEGEND_TOGGLE_DEFS[index - 2];
   return toggle ? { kind: 'map_toggle', toggle } : undefined;
 }
 

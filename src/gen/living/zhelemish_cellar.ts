@@ -2,15 +2,15 @@
 
 import { stampSurfaceSplat } from '../../systems/surface_marks';
 import {
-  AIGoal, Cell, ContainerKind, EntityType, Faction, Feature, FloorLevel,
+  Cell, ContainerKind, Faction, Feature, FloorLevel,
   Occupation, QuestType, RoomType, Tex,
   type Entity, type Room, type WorldContainer,
 } from '../../core/types';
 import { World } from '../../core/world';
-import { freshNeeds } from '../../data/catalog';
 import { type PlotNpcDef, registerSideQuest } from '../../data/plot';
 import { connectProtectedRoom, protectRoom } from '../shared';
 import { genLog } from '../log';
+import { requireSpawnedPlotNpcFromPackage } from '../plot_npc_spawn';
 import { registerZoneContent } from './zone_content';
 
 const CONTENT_TAG = 'ag102_zhelemish_cellar';
@@ -75,11 +75,6 @@ const WITNESS_DEF: PlotNpcDef = {
     'Партия локальная. По коридору желемыш не ходит, если люди не носят его в карманах.',
   ],
   talkQuestResponse: 'Записал: общий поддон под очередь, запертый ящик под свидетеля. Теперь кража будет не голодом, а выбором.',
-};
-
-const NPC_DEFS: Record<string, PlotNpcDef> = {
-  [OWNER_ID]: OWNER_DEF,
-  [WITNESS_ID]: WITNESS_DEF,
 };
 
 registerSideQuest(OWNER_ID, OWNER_DEF, [
@@ -293,34 +288,13 @@ function spawnNpc(
 ): number {
   const existing = entities.find(e => e.alive && e.plotNpcId === plotNpcId);
   if (existing) return existing.id;
-  const def = NPC_DEFS[plotNpcId];
-  const id = nextId.v++;
-  entities.push({
-    id,
-    type: EntityType.NPC,
-    x: x + 0.5,
-    y: y + 0.5,
+  const npc = requireSpawnedPlotNpcFromPackage(entities, nextId, plotNpcId, x + 0.5, y + 0.5, {
     angle,
-    pitch: 0,
-    alive: true,
-    speed: def.speed,
-    sprite: def.sprite,
-    name: def.name,
-    isFemale: def.isFemale,
-    needs: freshNeeds(),
-    hp: def.hp,
-    maxHp: def.maxHp,
-    money: def.money,
-    ai: { goal: AIGoal.IDLE, tx: x + 0.5, ty: y + 0.5, path: [], pi: 0, stuck: 0, timer: 0 },
-    inventory: def.inventory.map(i => ({ ...i })),
     weapon,
-    faction: def.faction,
-    occupation: def.occupation,
-    plotNpcId,
     canGiveQuest: true,
-    questId: -1,
+    aiTarget: { x: x + 0.5, y: y + 0.5 },
   });
-  return id;
+  return npc.id;
 }
 
 function decorateCellar(world: World, room: Room): void {

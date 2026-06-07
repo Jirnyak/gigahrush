@@ -92,6 +92,29 @@ function makeLiftWorld(): World {
   return world;
 }
 
+function makeMultiLiftWorld(): World {
+  const world = new World();
+  for (let i = 0; i < 4; i++) {
+    const x = 20 + i * 18;
+    const y = 20 + i * 11;
+    addTestRoom(world, {
+      id: i + 1,
+      x,
+      y,
+      w: 8,
+      h: 8,
+      type: RoomType.COMMON,
+      name: `Лифтовой тестовый узел ${i + 1}`,
+      zoneId: i,
+    });
+    world.zones[i].hasLift = true;
+    world.cells[world.idx(x + 3, y + 2)] = Cell.LIFT;
+    world.cells[world.idx(x + 4, y + 2)] = Cell.FLOOR;
+    world.features[world.idx(x + 4, y + 3)] = Feature.LIFT_BUTTON;
+  }
+  return world;
+}
+
 function makeNoAnchorWorld(): World {
   const world = new World();
   addTestRoom(world, {
@@ -190,6 +213,18 @@ test('arrival anchor finder prefers passable cells around lift cells over solid 
   assert.equal(world.cells[world.idx(Math.floor(anchor.x), Math.floor(anchor.y))], Cell.FLOOR);
   assert.notEqual(world.cells[world.idx(Math.floor(anchor.x), Math.floor(anchor.y))], Cell.LIFT);
   assert.ok(world.dist2(anchor.x, anchor.y, 23.5, 22.5) <= 2.1);
+});
+
+test('arrival anchor finder rotates unpreferred anchors by A-Life salt', () => {
+  const world = makeMultiLiftWorld();
+  const chosen = new Set<number>();
+  for (let alifeId = 1; alifeId <= 12; alifeId++) {
+    const anchor = findAlifeArrivalAnchor(world, undefined, undefined, alifeId);
+    assert.ok(anchor);
+    chosen.add(world.idx(Math.floor(anchor.x), Math.floor(anchor.y)));
+  }
+
+  assert.equal(chosen.size > 1, true, 'unpreferred arrivals must not all use the first cached lift anchor');
 });
 
 test('pending arrival is delayed when actor cap fails or no lift anchor exists', () => {

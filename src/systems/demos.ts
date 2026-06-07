@@ -6,13 +6,20 @@ import {
   type Entity,
   type GameState,
 } from '../core/types';
-import { PLOT_NPCS, type PlotNpcDef } from '../data/plot';
+import { occupationProfile } from '../data/occupation_profiles';
 import { cleanFloorKey, floorKeyForStory, floorKeyZ } from './floor_keys';
 import {
   alifeNpcRecordCount,
   getAlifeNpcRecordSnapshot,
+  packageIdFromReservedIdentityId,
   type AlifeNpcSnapshot,
 } from './alife';
+import {
+  getNpcPackage,
+  getNpcPackageByPlotNpcId,
+  npcPackageDisplayName,
+  type NpcPackageDef,
+} from '../data/npc_packages';
 import {
   buildDemosFeedView,
   createDemosPostQueue,
@@ -33,26 +40,6 @@ const FACTION_LABELS: Record<Faction, string> = {
   [Faction.SCIENTIST]: 'Учёные',
   [Faction.WILD]: 'Дикие',
   [Faction.PLAYER]: 'Игрок',
-};
-
-const OCCUPATION_LABELS: Record<Occupation, string> = {
-  [Occupation.HOUSEWIFE]: 'домохозяйка',
-  [Occupation.LOCKSMITH]: 'слесарь',
-  [Occupation.SECRETARY]: 'секретарь',
-  [Occupation.ELECTRICIAN]: 'электрик',
-  [Occupation.COOK]: 'повар',
-  [Occupation.DOCTOR]: 'врач',
-  [Occupation.TURNER]: 'токарь',
-  [Occupation.MECHANIC]: 'механик',
-  [Occupation.STOREKEEPER]: 'кладовщик',
-  [Occupation.ALCOHOLIC]: 'алкоголик',
-  [Occupation.SCIENTIST]: 'учёный',
-  [Occupation.CHILD]: 'ребёнок',
-  [Occupation.DIRECTOR]: 'директор',
-  [Occupation.TRAVELER]: 'путник',
-  [Occupation.PILGRIM]: 'паломник',
-  [Occupation.HUNTER]: 'охотник',
-  [Occupation.PRIEST]: 'батюшка',
 };
 
 const FLOOR_LABELS: Record<FloorLevel, string> = {
@@ -102,6 +89,7 @@ export interface DemosProfile {
   total: number;
   idLabel: string;
   plotIdLabel?: string;
+  packageIdLabel?: string;
   name: string;
   faction: Faction;
   factionLabel: string;
@@ -123,6 +111,7 @@ export interface DemosProfile {
   sprite: number;
   npcVisualId?: string;
   spriteSeed: number;
+  portraitHint?: string;
   female: boolean;
   dead: boolean;
 }
@@ -312,18 +301,23 @@ function fallbackSpriteSeed(snapshot: AlifeNpcSnapshot): number {
   return (h >>> 0) || 1;
 }
 
-function plotDefForSnapshot(snapshot: AlifeNpcSnapshot): PlotNpcDef | undefined {
-  return snapshot.plotNpcId ? PLOT_NPCS[snapshot.plotNpcId] : undefined;
+function packageForSnapshot(snapshot: AlifeNpcSnapshot): NpcPackageDef | undefined {
+  const packageId = packageIdFromReservedIdentityId(snapshot.reservedIdentityId);
+  if (packageId) {
+    const pack = getNpcPackage(packageId);
+    if (pack) return pack;
+  }
+  return snapshot.plotNpcId ? getNpcPackageByPlotNpcId(snapshot.plotNpcId) : undefined;
 }
 
-function demosProfileSprite(live: Entity | undefined, snapshot: AlifeNpcSnapshot, plotDef: PlotNpcDef | undefined): number {
+function demosProfileSprite(live: Entity | undefined, snapshot: AlifeNpcSnapshot, pack: NpcPackageDef | undefined): number {
   if (live?.sprite !== undefined) return live.sprite;
-  if (plotDef && (snapshot.sprite === undefined || snapshot.sprite === snapshot.occupation)) return plotDef.sprite;
-  return snapshot.sprite ?? plotDef?.sprite ?? snapshot.occupation;
+  if (pack?.visual?.sprite !== undefined) return pack.visual.sprite;
+  return snapshot.sprite ?? snapshot.occupation;
 }
 
-function demosProfileVisualId(live: Entity | undefined, snapshot: AlifeNpcSnapshot, plotDef: PlotNpcDef | undefined): string | undefined {
-  return live?.npcVisualId ?? snapshot.npcVisualId ?? plotDef?.npcVisualId;
+function demosProfileVisualId(live: Entity | undefined, snapshot: AlifeNpcSnapshot, pack: NpcPackageDef | undefined): string | undefined {
+  return live?.npcVisualId ?? snapshot.npcVisualId ?? pack?.visual?.npcVisualId;
 }
 
 function demosSocialState(state: GameState): DemosSocialSaveState | undefined {
@@ -349,7 +343,8 @@ function buildDemosProfile(
   total: number,
 ): DemosProfile {
   const live = liveEntityForAlifeId(entities, snapshot.id);
-  const plotDef = plotDefForSnapshot(snapshot);
+  const pack = packageForSnapshot(snapshot);
+  const packageId = packageIdFromReservedIdentityId(snapshot.reservedIdentityId);
   const relationScore = Math.round(live?.playerRelation ?? snapshot.playerRelation ?? 0);
   const relation = demosRelationBand(relationScore);
   const accountRubles = Math.max(0, Math.floor(live?.accountRubles ?? snapshot.accountRubles));
@@ -364,11 +359,12 @@ function buildDemosProfile(
     total,
     idLabel: `alife:${snapshot.id}`,
     plotIdLabel: snapshot.plotNpcId ? `plot:${snapshot.plotNpcId}` : undefined,
-    name: live?.name ?? snapshot.name,
+    packageIdLabel: packageId ? `npc:${packageId}` : undefined,
+    name: live?.name ?? (pack ? npcPackageDisplayName(pack) : undefined) ?? snapshot.name,
     faction,
     factionLabel: FACTION_LABELS[faction] ?? 'неизвестно',
     occupation,
-    occupationLabel: OCCUPATION_LABELS[occupation] ?? 'житель',
+    occupationLabel: occupationProfile(occupation)?.demosLabel ?? 'житель',
     level: Math.max(1, Math.floor(live?.rpg?.level ?? snapshot.level)),
     relationScore,
     relationLabel: relation.label,
@@ -382,10 +378,11 @@ function buildDemosProfile(
     moneyLabel: `${accountRubles}₽`,
     karmaLabel: String(Math.round(live?.karma ?? snapshot.karma)),
     floorKey: snapshot.floorKey,
-    sprite: demosProfileSprite(live, snapshot, plotDef),
-    npcVisualId: demosProfileVisualId(live, snapshot, plotDef),
-    spriteSeed: snapshot.spriteSeed ?? fallbackSpriteSeed(snapshot),
-    female: live?.isFemale ?? plotDef?.isFemale ?? snapshot.female,
+    sprite: demosProfileSprite(live, snapshot, pack),
+    npcVisualId: demosProfileVisualId(live, snapshot, pack),
+    spriteSeed: pack?.visual?.spriteSeed ?? snapshot.spriteSeed ?? fallbackSpriteSeed(snapshot),
+    portraitHint: pack?.visual?.portraitHint,
+    female: live?.isFemale ?? (pack ? pack.demographics.sex === 'female' : snapshot.female),
     dead: snapshot.dead,
   };
 }

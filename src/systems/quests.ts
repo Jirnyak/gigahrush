@@ -10,9 +10,24 @@ import { World } from '../core/world';
 import { ITEMS } from '../data/catalog';
 import { isSilverSlimeItem, SILVER_SLIME_SEALED_ID } from '../data/items';
 import { craftRecipeSourcesForQuest, getCraftRecipeSource } from '../data/craft_recipe_sources';
+import {
+  occupationHasProfileTag,
+  occupationQuestFetchItems,
+  occupationQuestRewardItems,
+  occupationPreferredVisitRooms,
+} from '../data/occupation_profiles';
 
 import { addFactionRelMutual, getFactionRel } from '../data/relations';
-import { PLOT_CHAIN, PLOT_NPCS, SIDE_QUESTS, hasAvailableQuest, isPlotNpc, sideQuestPrereqsMet, type PlotStep } from '../data/plot';
+import {
+  PLOT_CHAIN,
+  SIDE_QUESTS,
+  hasAvailableQuest,
+  isPlotNpc,
+  sideQuestPrereqsMet,
+  type KillPressureDef,
+  type PlotStep,
+} from '../data/plot';
+import type { StoryQuestOutcomeDef, StoryQuestSelector } from '../data/story_outcomes';
 import {
   CONTRACTS,
   GOVNYAK_COURIER_PACKAGE_ITEM,
@@ -68,6 +83,11 @@ import { pushNpcLogMessage } from './ai/barks';
 import { hearingRadiusMetersForActor } from './hearing';
 import { getAlifeNpcTotalMoney } from './alife';
 import { revealQuestTargetOnMap } from './map_exploration';
+import {
+  resolveNpcPackageForEntity,
+  selectNpcLockedQuestResponse,
+} from './npc_package_speech';
+import { getNpcPackageByPlotNpcId, npcPackageDisplayName } from '../data/npc_packages';
 import {
   craftRecipeExists,
   craftRecipeLearnedMessage,
@@ -390,10 +410,10 @@ export function getCurrentObjective(state: Pick<GameState, 'quests' | 'activeQue
 
   const available = nextAvailablePlotStep(state.quests);
   if (!available) return null;
-  const giverDef = PLOT_NPCS[available.step.giverNpcId];
+  const giverName = plotNpcDisplayName(available.step.giverNpcId) ?? available.step.giverNpcId;
   const target = entities.find(e => e.plotNpcId === available.step.giverNpcId && e.alive);
   return {
-    line: available.step.offerObjective ?? `Цель: поговорить с ${giverDef?.name ?? available.step.giverNpcId}.`,
+    line: available.step.offerObjective ?? `Цель: поговорить с ${giverName}.`,
     detail: available.step.offerObjective ? undefined : available.step.desc,
     source: 'plot_offer',
     plotStepIndex: available.index,
@@ -615,6 +635,109 @@ function countMonstersNear(world: World, entities: readonly Entity[], x: number,
   return count;
 }
 
+const killPressureLastSpawnAt = new Map<number, number>();
+
+function plotStepKillPressure(q: Quest): KillPressureDef | undefined {
+  return q.plotStepIndex === undefined ? undefined : PLOT_CHAIN[q.plotStepIndex]?.killPressure;
+}
+
+function resolveKillPressureAnchor(def: KillPressureDef, entities: readonly Entity[]): Entity | undefined {
+  if (def.anchor.kind === 'plot_npc') {
+    return entities.find(e => e.type === EntityType.NPC && e.alive && e.plotNpcId === def.anchor.plotNpcId);
+  }
+  return undefined;
+}
+
+function spawnKillPressureMonstersAt(
+  x: number,
+  y: number,
+  def: KillPressureDef,
+  world: World,
+  entities: Entity[],
+  nextEntityId: { v: number },
+  msgs: Msg[],
+  time: number,
+): void {
+  const min = Math.max(0, Math.floor(def.spawnCountMin));
+  const max = Math.max(min, Math.floor(def.spawnCountMax));
+  const count = min + Math.floor(Math.random() * (max - min + 1));
+  const slots = entitySpawnSlots(entities, EntityType.MONSTER, count);
+  let spawned = 0;
+  for (let i = 0; i < slots; i++) {
+    const angle = (Math.PI * 2 * i) / Math.max(1, slots) + (Math.random() - 0.5) * 0.5;
+    const baseDist = 3 + Math.random() * 5;
+    let mx = -1;
+    let my = -1;
+    for (let attempt = 0; attempt < 60; attempt++) {
+      const a = angle + (attempt > 0 ? (Math.random() - 0.5) * 1.5 : 0);
+      const d = baseDist + (attempt > 0 ? (Math.random() - 0.5) * 4 : 0);
+      const tx = ((Math.floor(x) + Math.round(Math.cos(a) * d)) % W + W) % W;
+      const ty = ((Math.floor(y) + Math.round(Math.sin(a) * d)) % W + W) % W;
+      if (world.cells[world.idx(tx, ty)] === Cell.FLOOR) {
+        mx = tx;
+        my = ty;
+        break;
+      }
+    }
+    if (mx < 0) continue;
+    const kind = def.monsterKinds[Math.floor(Math.random() * def.monsterKinds.length)] ?? MonsterKind.TVAR;
+    const mdef = MONSTERS[kind];
+    if (!mdef) continue;
+    const ci = world.idx(mx, my);
+    const zid = world.zoneMap[ci];
+    const zoneLevel = (zid >= 0 && world.zones[zid]) ? (world.zones[zid].level ?? 6) : 6;
+    const hp = scaleMonsterHp(mdef.hp, zoneLevel);
+    entities.push({
+      id: nextEntityId.v++, type: EntityType.MONSTER,
+      x: mx + 0.5, y: my + 0.5,
+      angle: Math.atan2(y - my - 0.5, x - mx - 0.5),
+      pitch: 0, alive: true,
+      speed: scaleMonsterSpeed(mdef.speed, zoneLevel),
+      sprite: mdef.sprite,
+      hp, maxHp: hp,
+      monsterKind: kind, attackCd: 0,
+      ai: { goal: AIGoal.WANDER, tx: Math.floor(x), ty: Math.floor(y), path: [], pi: 0, stuck: 0, timer: 0 },
+      rpg: randomRPG(zoneLevel),
+    });
+    spawned++;
+  }
+  if (spawned > 0) msgs.push(msg('В коридорах рвётся новая волна тварей.', time, '#f44'));
+}
+
+export function updateKillQuestPressure(
+  world: World,
+  entities: Entity[],
+  state: GameState,
+  msgs: Msg[],
+  nextEntityId: { v: number },
+): boolean {
+  let spawned = false;
+  const activeQuestIds = new Set<number>();
+  for (const q of state.quests) {
+    if (q.done || q.failed || q.type !== QuestType.KILL) continue;
+    const pressure = plotStepKillPressure(q);
+    if (!pressure || pressure.monsterKinds.length <= 0) continue;
+    activeQuestIds.add(q.id);
+    const anchor = resolveKillPressureAnchor(pressure, entities);
+    if (!anchor) continue;
+    const last = killPressureLastSpawnAt.get(q.id);
+    if (last === undefined) {
+      killPressureLastSpawnAt.set(q.id, state.time);
+      continue;
+    }
+    if (state.time - last < pressure.intervalSeconds) continue;
+    if (countMonstersNear(world, entities, anchor.x, anchor.y, pressure.radius) >= pressure.maxAliveNearAnchor) continue;
+    killPressureLastSpawnAt.set(q.id, state.time);
+    const before = entities.length;
+    spawnKillPressureMonstersAt(anchor.x, anchor.y, pressure, world, entities, nextEntityId, msgs, state.time);
+    spawned = spawned || entities.length > before;
+  }
+  for (const questId of Array.from(killPressureLastSpawnAt.keys())) {
+    if (!activeQuestIds.has(questId)) killPressureLastSpawnAt.delete(questId);
+  }
+  return spawned;
+}
+
 function updateHoldoutQuest(
   q: Quest,
   player: Entity,
@@ -737,6 +860,50 @@ export function notifyNpcKill(plotNpcId: string, state: GameState): void {
   }
 }
 
+export function questMatchesStorySelector(q: Quest, selector: StoryQuestSelector | undefined): boolean {
+  if (!selector) return true;
+  if (selector.questId !== undefined && q.id !== selector.questId) return false;
+  if (selector.plotStepIndex !== undefined && q.plotStepIndex !== selector.plotStepIndex) return false;
+  if (selector.sideQuestId !== undefined && q.sideQuestId !== selector.sideQuestId) return false;
+  if (selector.contractId !== undefined && q.contractId !== selector.contractId) return false;
+  if (selector.type !== undefined && q.type !== selector.type) return false;
+  if (selector.targetItem !== undefined && q.targetItem !== selector.targetItem) return false;
+  if (selector.targetPlotNpcId !== undefined && q.targetPlotNpcId !== selector.targetPlotNpcId) return false;
+  if (selector.targetMonsterKind !== undefined && q.targetMonsterKind !== selector.targetMonsterKind) return false;
+  return true;
+}
+
+export function hasStoryQuest(
+  state: Pick<GameState, 'quests'>,
+  selector: StoryQuestSelector | undefined,
+  mode: 'active' | 'completed',
+): boolean {
+  return state.quests.some(q => {
+    if (!questMatchesStorySelector(q, selector)) return false;
+    return mode === 'completed'
+      ? q.done && !q.failed
+      : !q.done && !q.failed;
+  });
+}
+
+export function applyStoryQuestOutcome(
+  outcome: StoryQuestOutcomeDef,
+  player: Entity,
+  entities: Entity[],
+  state: GameState,
+  msgs: Msg[],
+  itemId?: string,
+): boolean {
+  if (outcome.kind !== 'complete_quest') return false;
+  const quest = state.quests.find(q => !q.done && !q.failed && questMatchesStorySelector(q, outcome.quest));
+  if (!quest) return false;
+  const completed = completeQuest(quest, player, entities, state, msgs);
+  if (completed && outcome.consumeItem && itemId && !(quest.type === QuestType.FETCH && quest.targetItem === itemId)) {
+    removeItem(player, itemId, 1);
+  }
+  return completed;
+}
+
 function failQuest(
   q: Quest,
   entities: Entity[],
@@ -794,20 +961,16 @@ export function checkTalkQuest(
     const matchById = q.targetNpcId === targetNpc.id;
     const matchByPlotId = q.targetPlotNpcId && targetNpc.plotNpcId === q.targetPlotNpcId;
     if (!matchById && !matchByPlotId) continue;
-    const plotDef = targetNpc.plotNpcId ? PLOT_NPCS[targetNpc.plotNpcId] : undefined;
-    const talkQuestResponse = plotDef?.talkQuestResponse;
-    if (talkQuestResponse) {
-      pushNpcQuestMessage(targetNpc, player, world, state, msgs, `${targetNpc.name}: «${pickTalkQuestResponse(talkQuestResponse)}»`, '#aaf');
-    } else {
-      pushNpcQuestMessage(targetNpc, player, world, state, msgs, `${targetNpc.name}: «Передам, спасибо.»`, '#aaf');
+    const pack = resolveNpcPackageForEntity(targetNpc);
+    const talkQuestResponse = pack ? selectNpcLockedQuestResponse(pack, q.id) : undefined;
+    if (completeQuest(q, player, entities, state, msgs)) {
+      if (talkQuestResponse) {
+        pushNpcQuestMessage(targetNpc, player, world, state, msgs, `${targetNpc.name}: «${talkQuestResponse.text}»`, '#aaf');
+      } else {
+        pushNpcQuestMessage(targetNpc, player, world, state, msgs, `${targetNpc.name}: «Передам, спасибо.»`, '#aaf');
+      }
     }
-    completeQuest(q, player, entities, state, msgs);
   }
-}
-
-function pickTalkQuestResponse(response: string | readonly string[]): string {
-  if (typeof response === 'string') return response;
-  return response[Math.floor(Math.random() * response.length)] ?? 'Передам, спасибо.';
 }
 
 function contractCompletionTags(contractDef: ContractDef | undefined): string[] {
@@ -1151,6 +1314,11 @@ function nearestRoomByName(world: World, npc: Entity, roomName: string): Room | 
   return best;
 }
 
+function plotNpcDisplayName(plotNpcId: string): string | undefined {
+  const pack = getNpcPackageByPlotNpcId(plotNpcId);
+  return pack ? npcPackageDisplayName(pack) : undefined;
+}
+
 /* ── Generate plot quest from PLOT_CHAIN ──────────────────────── */
 function generatePlotQuest(
   npc: Entity, world: World, entities: Entity[], state: GameState,
@@ -1179,12 +1347,12 @@ function generatePlotQuest(
         // Target NPC on a different floor — strip {dir} placeholder
         desc = desc.replace('{dir}', 'на другом уровне');
       }
-      const targetDef = PLOT_NPCS[step.targetNpcId];
+      const targetName = plotNpcDisplayName(step.targetNpcId);
       return {
         id, type: step.type,
         giverId: npc.id, giverName: npc.name ?? '???',
         desc,
-        targetNpcId: target?.id, targetNpcName: target?.name ?? targetDef?.name,
+        targetNpcId: target?.id, targetNpcName: target?.name ?? targetName,
         targetPlotNpcId: step.targetNpcId,
         rewardItem: step.rewardItem, rewardCount: step.rewardCount,
         extraRewards: step.extraRewards,
@@ -1317,7 +1485,7 @@ function generatePlotQuest(
       if (!targetPlotNpcId) continue;
       const id = state.nextQuestId++;
       const target = entities.find(e => e.plotNpcId === targetPlotNpcId && e.alive);
-      const targetDef = PLOT_NPCS[targetPlotNpcId];
+      const targetName = plotNpcDisplayName(targetPlotNpcId);
       let desc = sq.desc;
       if (desc.includes('{dir}')) {
         desc = desc.replace('{dir}', target
@@ -1329,7 +1497,7 @@ function generatePlotQuest(
         giverId: npc.id, giverName: npc.name ?? '???',
         desc,
         targetNpcId: target?.id,
-        targetNpcName: target?.name ?? targetDef?.name ?? targetPlotNpcId,
+        targetNpcName: target?.name ?? targetName ?? targetPlotNpcId,
         targetPlotNpcId,
         rewardItem: sq.rewardItem, rewardCount: sq.rewardCount,
         extraRewards: sq.extraRewards,
@@ -1427,16 +1595,16 @@ function pickQuestChoice(npc: Entity, ctx: QuestContext): QuestChoice {
   const weights: Record<QuestChoice, number> = { fetch: 35, visit: 18, kill: 20, talk: 15 };
   if (ctx.samosborDanger) { weights.kill += 30; weights.fetch += 10; }
   if (ctx.nearbyMonster) weights.kill += 25;
-  if (npc.faction === Faction.LIQUIDATOR || npc.occupation === Occupation.HUNTER) weights.kill += 30;
-  if (npc.faction === Faction.CULTIST || npc.occupation === Occupation.PILGRIM || npc.occupation === Occupation.PRIEST) {
+  if (npc.faction === Faction.LIQUIDATOR || occupationHasProfileTag(npc.occupation, 'combat')) weights.kill += 30;
+  if (npc.faction === Faction.CULTIST || occupationHasProfileTag(npc.occupation, 'cult')) {
     weights.fetch += 12;
     weights.talk += 8;
   }
-  if (npc.occupation === Occupation.SECRETARY || npc.occupation === Occupation.DIRECTOR) {
+  if (occupationHasProfileTag(npc.occupation, 'admin')) {
     weights.visit += 18;
     weights.talk += 12;
   }
-  if (npc.occupation === Occupation.SCIENTIST || npc.faction === Faction.SCIENTIST) {
+  if (occupationHasProfileTag(npc.occupation, 'science') || npc.faction === Faction.SCIENTIST) {
     weights.fetch += 16;
     weights.visit += 10;
   }
@@ -1464,16 +1632,16 @@ function contractScore(def: ContractDef, npc: Entity, ctx: QuestContext): number
   if (def.target.roomType !== undefined && def.target.roomType === ctx.roomType) score += 3;
   if (npc.faction === def.faction) score += 7;
   if (def.faction === Faction.CITIZEN && (npc.faction === Faction.CITIZEN || npc.faction === undefined)) score += 3;
-  if (def.tags.includes('combat') && (ctx.samosborDanger || ctx.nearbyMonster || npc.occupation === Occupation.HUNTER)) score += 5;
+  if (def.tags.includes('combat') && (ctx.samosborDanger || ctx.nearbyMonster || occupationHasProfileTag(npc.occupation, 'combat'))) score += 5;
   if (def.tags.includes('admin') && ctx.roomType === RoomType.OFFICE) score += 5;
-  if (def.tags.includes('paper') && (ctx.roomType === RoomType.OFFICE || npc.occupation === Occupation.SECRETARY)) score += 4;
+  if (def.tags.includes('paper') && (ctx.roomType === RoomType.OFFICE || occupationHasProfileTag(npc.occupation, 'paper'))) score += 4;
   if (def.tags.includes('food') && ctx.roomType === RoomType.KITCHEN) score += 5;
   if (def.tags.includes('supply') && (ctx.roomType === RoomType.STORAGE || ctx.roomType === RoomType.KITCHEN)) score += 3;
-  if (def.tags.includes('maintenance') && (ctx.roomType === RoomType.PRODUCTION || npc.occupation === Occupation.LOCKSMITH || npc.occupation === Occupation.MECHANIC)) score += 5;
-  if (def.tags.includes('science') && (npc.faction === Faction.SCIENTIST || npc.occupation === Occupation.SCIENTIST)) score += 6;
-  if (def.tags.includes('cult') && (npc.faction === Faction.CULTIST || npc.occupation === Occupation.PILGRIM || npc.occupation === Occupation.PRIEST)) score += 6;
+  if (def.tags.includes('maintenance') && (ctx.roomType === RoomType.PRODUCTION || occupationHasProfileTag(npc.occupation, 'maintenance'))) score += 5;
+  if (def.tags.includes('science') && (npc.faction === Faction.SCIENTIST || occupationHasProfileTag(npc.occupation, 'science'))) score += 6;
+  if (def.tags.includes('cult') && (npc.faction === Faction.CULTIST || occupationHasProfileTag(npc.occupation, 'cult'))) score += 6;
   if (def.tags.includes('wild') && npc.faction === Faction.WILD) score += 6;
-  if (def.tags.includes('black_market') && (ctx.roomName.includes('88') || ctx.roomName.includes('Толкучка') || npc.occupation === Occupation.STOREKEEPER)) score += 7;
+  if (def.tags.includes('black_market') && (ctx.roomName.includes('88') || ctx.roomName.includes('Толкучка') || occupationHasProfileTag(npc.occupation, 'black_market'))) score += 7;
   if (def.tags.includes('medicine') && (ctx.roomType === RoomType.MEDICAL || ctx.samosborDanger)) score += 4;
   if (def.rank > Math.max(1, ctx.zoneLevel + 1)) score -= 2;
   return score;
@@ -1566,7 +1734,7 @@ function pickSystemQuest(
 
 function shouldOfferSystemQuest(npc: Entity, ctx: QuestContext): boolean {
   let chance = 0.20;
-  if (npc.faction === Faction.LIQUIDATOR || npc.occupation === Occupation.HUNTER) chance += 0.18;
+  if (npc.faction === Faction.LIQUIDATOR || occupationHasProfileTag(npc.occupation, 'combat')) chance += 0.18;
   if (ctx.samosborDanger || ctx.nearbyMonster) chance += 0.12;
   if (ctx.roomType === RoomType.OFFICE || ctx.roomType === RoomType.STORAGE || ctx.roomType === RoomType.PRODUCTION) chance += 0.08;
   return Math.random() < Math.min(0.45, chance);
@@ -1693,18 +1861,7 @@ function generateQuest(
   });
 }
 
-/* ── Occupation-specific item picks ───────────────────────────── */
-const FETCH_ITEMS: Partial<Record<Occupation, string[]>> = {
-  [Occupation.COOK]: ['bread', 'canned', 'kasha', 'rawmeat', 'water'],
-  [Occupation.DOCTOR]: ['bandage', 'pills', 'antidep', 'water'],
-  [Occupation.HUNTER]: ['knife', 'pipe', 'wrench', 'canned'],
-  [Occupation.LOCKSMITH]: ['wrench', 'flashlight'],
-  [Occupation.SCIENTIST]: ['note', 'book', 'flashlight', 'govnyak_sample'],
-  [Occupation.SECRETARY]: ['book', 'cigs', 'note'],
-  [Occupation.STOREKEEPER]: ['cigs', 'toiletpaper', 'canned', 'water', 'govnyak_roll', 'govnyak_brick'],
-};
-
-function pushUnique(pool: string[], items: string[]): void {
+function pushUnique(pool: string[], items: readonly string[]): void {
   for (const item of items) if (ITEMS[item] && !pool.includes(item)) pool.push(item);
 }
 
@@ -1716,12 +1873,12 @@ function pickFetchItem(occ: Occupation | undefined, npc: Entity, ctx: QuestConte
   if (ctx.roomType === RoomType.PRODUCTION) pushUnique(pool, ['pipe', 'wrench', 'rebar', 'door_kit']);
   if (ctx.roomType === RoomType.OFFICE) pushUnique(pool, ['note', 'book', 'ballot']);
   if (ctx.roomType === RoomType.STORAGE) pushUnique(pool, ['canned', 'pipe', 'ammo_9mm', 'flashlight']);
-  if (npc.faction === Faction.CULTIST || occ === Occupation.PILGRIM || occ === Occupation.PRIEST) {
+  if (npc.faction === Faction.CULTIST || occupationHasProfileTag(occ, 'cult')) {
     pushUnique(pool, ['idol_chernobog', 'strange_clot', 'cigs', 'govnyak_bad_batch']);
   }
-  if (npc.faction === Faction.SCIENTIST || occ === Occupation.SCIENTIST) pushUnique(pool, ['strange_clot', 'note', 'book', 'pills', 'govnyak_sample']);
-  if (npc.faction === Faction.LIQUIDATOR || occ === Occupation.HUNTER) pushUnique(pool, ['ammo_9mm', 'bandage', 'canned']);
-  if (occ !== undefined && FETCH_ITEMS[occ]) pushUnique(pool, FETCH_ITEMS[occ]!);
+  if (npc.faction === Faction.SCIENTIST || occupationHasProfileTag(occ, 'science')) pushUnique(pool, ['strange_clot', 'note', 'book', 'pills', 'govnyak_sample']);
+  if (npc.faction === Faction.LIQUIDATOR || occupationHasProfileTag(occ, 'combat')) pushUnique(pool, ['ammo_9mm', 'bandage', 'canned']);
+  pushUnique(pool, occupationQuestFetchItems(occ));
   pushUnique(pool, ['bread', 'water', 'bandage', 'cigs']);
   return pool.length > 0 ? pool[Math.floor(Math.random() * pool.length)] : null;
 }
@@ -1734,34 +1891,20 @@ function targetCountForItem(item: string, ctx: QuestContext): number {
   return 1;
 }
 
-const REWARD_ITEMS: Partial<Record<Occupation, string[]>> = {
-  [Occupation.COOK]: ['bread', 'kasha', 'kompot'],
-  [Occupation.DOCTOR]: ['bandage', 'pills', 'antidep'],
-  [Occupation.HUNTER]: ['canned', 'rawmeat', 'knife'],
-  [Occupation.LOCKSMITH]: ['flashlight', 'wrench'],
-  [Occupation.SCIENTIST]: ['note', 'pills'],
-  [Occupation.SECRETARY]: ['tea', 'book'],
-  [Occupation.STOREKEEPER]: ['cigs', 'water', 'bread'],
-};
-
 function pickRewardItem(occ?: Occupation, ctx?: QuestContext): string {
   const pool: string[] = [];
   if (ctx?.samosborDanger) pushUnique(pool, ['bandage', 'ammo_9mm', 'water']);
   if (ctx?.roomType === RoomType.OFFICE) pushUnique(pool, ['note', 'book', 'tea']);
   if (ctx?.roomType === RoomType.PRODUCTION) pushUnique(pool, ['wrench', 'pipe', 'flashlight']);
-  if (occ !== undefined && REWARD_ITEMS[occ]) pushUnique(pool, REWARD_ITEMS[occ]!);
+  pushUnique(pool, occupationQuestRewardItems(occ));
   pushUnique(pool, ['bread', 'water', 'bandage']);
   return pool[Math.floor(Math.random() * pool.length)];
 }
 
 function preferredVisitRooms(npc: Entity, ctx: QuestContext): RoomType[] {
-  if (npc.occupation === Occupation.DOCTOR) return [RoomType.MEDICAL, RoomType.STORAGE];
-  if (npc.occupation === Occupation.COOK) return [RoomType.KITCHEN, RoomType.STORAGE];
-  if (npc.occupation === Occupation.LOCKSMITH || npc.occupation === Occupation.MECHANIC || npc.occupation === Occupation.TURNER) {
-    return [RoomType.PRODUCTION, RoomType.STORAGE];
-  }
-  if (npc.occupation === Occupation.SECRETARY || npc.occupation === Occupation.DIRECTOR) return [RoomType.OFFICE, RoomType.HQ];
-  if (npc.occupation === Occupation.SCIENTIST || npc.faction === Faction.SCIENTIST) return [RoomType.MEDICAL, RoomType.OFFICE];
+  const profileRooms = occupationPreferredVisitRooms(npc.occupation);
+  if (profileRooms.length > 0) return [...profileRooms];
+  if (npc.faction === Faction.SCIENTIST) return [RoomType.MEDICAL, RoomType.OFFICE];
   if (ctx.samosborDanger) return [RoomType.HQ, RoomType.MEDICAL, RoomType.STORAGE];
   return [];
 }
@@ -1779,7 +1922,7 @@ function pickVisitRoom(world: World, npc: Entity, preferred: RoomType[] = []): {
 
 function pickKillKind(npc: Entity, ctx: QuestContext): MonsterKind {
   if (ctx.nearbyMonster?.monsterKind !== undefined) return ctx.nearbyMonster.monsterKind;
-  if (npc.faction === Faction.LIQUIDATOR || npc.occupation === Occupation.HUNTER) {
+  if (npc.faction === Faction.LIQUIDATOR || occupationHasProfileTag(npc.occupation, 'combat')) {
     const pool = [MonsterKind.SBORKA, MonsterKind.TVAR, MonsterKind.POLZUN, MonsterKind.SHADOW];
     return pool[Math.floor(Math.random() * pool.length)];
   }

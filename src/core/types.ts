@@ -328,6 +328,7 @@ export enum Occupation {
   PILGRIM,     // паломник — бродит по лабиринту (культист)
   HUNTER,      // охотник — бродит по лабиринту (ликвидатор)
   PRIEST,      // батюшка — священник в храме
+  PERFORMER,   // перформер — сцена, слухи, служебные двери
 }
 
 export interface Needs {
@@ -1171,6 +1172,7 @@ export interface GameState {
   demosPostCursor: number;
   showLog: boolean;            // message log menu (L key)
   logScroll: number;           // scroll offset in log menu
+  showHelp: boolean;           // one-page HELP poster (F1 by default)
   showControls: boolean;       // hotkey / rebind screen (Tab by default)
   controlView: 'keys' | 'buttons';
   controlSel: number;
@@ -1289,6 +1291,7 @@ export interface InputState {
   drop: boolean;                // D key — drop item (inventory)
   factionMenu: boolean;         // F key — faction relations matrix
   logMenu: boolean;             // L key — message log
+  help: boolean;                // F1 by default — one-page HELP poster
   sleep: boolean;               // Z key — hold to sleep
   controls: boolean;            // Tab by default — hotkey / rebind screen
   uiSettings: boolean;          // U key — configurable HUD element screen

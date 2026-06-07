@@ -7,12 +7,12 @@ import {
   type ContainerAccess, type Entity, type GameState, type Room, type WorldContainer, type WorldEvent,
 } from '../../core/types';
 import { World } from '../../core/world';
-import { freshNeeds } from '../../data/catalog';
 import { type PlotNpcDef, registerSideQuest } from '../../data/plot';
 import { Spr } from '../../render/sprite_index';
 import { publishEvent, registerWorldEventObserver } from '../../systems/events';
 import { protectRoom } from '../shared';
 import { genLog } from '../log';
+import { requireSpawnedPlotNpcFromPackage } from '../plot_npc_spawn';
 import { registerZoneContent } from './zone_content';
 
 export const BELAYA_PRISLUSHKA_ID = 'belaya_prislushka';
@@ -518,46 +518,24 @@ function spawnNpc(
   canGiveQuest: boolean,
   opts: { weapon?: string; compelledPath?: number[] } = {},
 ): Entity {
-  const def = NPC_DEFS[plotNpcId];
   const wx = world.wrap(x);
   const wy = world.wrap(y);
-  const npc: Entity = {
-    id: nextId.v++,
-    type: EntityType.NPC,
-    x: wx + 0.5,
-    y: wy + 0.5,
-    angle,
-    pitch: 0,
-    alive: true,
-    speed: def.speed,
-    sprite: def.sprite,
-    name: def.name,
-    isFemale: def.isFemale,
-    needs: freshNeeds(),
-    hp: def.hp,
-    maxHp: def.maxHp,
-    money: def.money,
-    ai: {
-      goal: opts.compelledPath ? AIGoal.GOTO : AIGoal.IDLE,
-      tx: wx,
-      ty: wy,
-      path: opts.compelledPath ?? [],
-      pi: 0,
-      stuck: 0,
-      timer: opts.compelledPath ? 600 : 0,
-      npcState: opts.compelledPath ? NpcState.TRAVELING : undefined,
-    },
-    inventory: def.inventory.map(i => ({ ...i })),
-    weapon: opts.weapon,
-    faction: def.faction,
-    occupation: def.occupation,
-    plotNpcId,
-    canGiveQuest,
-    questId: -1,
-    isTraveler: opts.compelledPath !== undefined,
+  const ai = {
+    goal: opts.compelledPath ? AIGoal.GOTO : AIGoal.IDLE,
+    tx: wx,
+    ty: wy,
+    path: opts.compelledPath ?? [],
+    pi: 0,
+    stuck: 0,
+    timer: opts.compelledPath ? 600 : 0,
+    npcState: opts.compelledPath ? NpcState.TRAVELING : undefined,
   };
-  entities.push(npc);
-  return npc;
+  return requireSpawnedPlotNpcFromPackage(entities, nextId, plotNpcId, wx + 0.5, wy + 0.5, {
+    angle,
+    weapon: opts.weapon,
+    canGiveQuest,
+    extra: { ai, isTraveler: opts.compelledPath !== undefined },
+  });
 }
 
 function decorate(world: World, main: Room, source: Room, entities: Entity[], nextId: { v: number }): void {

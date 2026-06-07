@@ -23,14 +23,16 @@ import {
   type WorldContainer,
 } from '../../core/types';
 import { SURFACE_FLAG_CHALK_MAP, World } from '../../core/world';
-import { freshNeeds } from '../../data/catalog';
-import { type PlotNpcDef, registerSideQuest } from '../../data/plot';
+import { designNpcFloorKey, type PlotNpcDef, registerFloorSideQuest } from '../../data/plot';
 import { MONSTERS } from '../../entities/monster';
 import { monsterSpr } from '../../render/sprite_index';
 import { stampSurfaceSplat } from '../../systems/surface_marks';
 import { randomRPG, scaleMonsterHp, scaleMonsterSpeed } from '../../systems/rpg';
+import { requireSpawnedPlotNpcFromPackage } from '../plot_npc_spawn';
 import { ensureConnectivity, generateZones, sanitizeDoors, stampRoom } from '../shared';
 import type { FloorGeneration } from '../floor_manifest';
+
+const DESIGN_NPC_HOME_FLOOR_KEY = designNpcFloorKey('istinniy_labirint');
 
 export const ISTINNIY_LABIRINT_ROUTE_ID = 'istinniy_labirint' as const;
 export const ISTINNIY_LABIRINT_Z = 28;
@@ -211,7 +213,7 @@ const LOST_PAVEL_DEF: PlotNpcDef = {
   ],
 };
 
-registerSideQuest(NPC_IDS.ariadna, ARIADNA_DEF, [{
+registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, NPC_IDS.ariadna, ARIADNA_DEF, [{
   id: 'labyrinth_rechalk_safe_wall',
   giverNpcId: NPC_IDS.ariadna,
   type: QuestType.FETCH,
@@ -231,7 +233,7 @@ registerSideQuest(NPC_IDS.ariadna, ARIADNA_DEF, [{
   eventTags: ['istinniy_labirint', 'chalk_route_mark', 'safe_wall'],
 }]);
 
-registerSideQuest(NPC_IDS.lostPavel, LOST_PAVEL_DEF, [{
+registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, NPC_IDS.lostPavel, LOST_PAVEL_DEF, [{
   id: 'labyrinth_rescue_lost_pavel',
   giverNpcId: NPC_IDS.lostPavel,
   type: QuestType.TALK,
@@ -1142,39 +1144,17 @@ function spawnPlotNpc(
   entities: Entity[],
   nextId: { v: number },
   npcId: string,
-  def: PlotNpcDef,
+  _def: PlotNpcDef,
   x: number,
   y: number,
   angle = 0,
 ): number {
-  const id = nextId.v++;
-  entities.push({
-    id,
-    type: EntityType.NPC,
-    x: x + 0.5,
-    y: y + 0.5,
+  const npc = requireSpawnedPlotNpcFromPackage(entities, nextId, npcId, x + 0.5, y + 0.5, {
     angle,
-    pitch: 0,
-    alive: true,
-    speed: def.speed,
-    sprite: def.sprite,
-    name: def.name,
-    isFemale: def.isFemale,
-    needs: freshNeeds(),
-    hp: def.hp,
-    maxHp: def.maxHp,
-    money: def.money,
-    ai: { goal: AIGoal.IDLE, tx: x, ty: y, path: [], pi: 0, stuck: 0, timer: 0 },
-    inventory: def.inventory.map(item => ({ ...item })),
-    weapon: def.weapon,
-    faction: def.faction,
-    occupation: def.occupation,
-    plotNpcId: npcId,
-    canGiveQuest: true,
-    questId: -1,
-    rpg: randomRPG(3),
+    aiTarget: { x, y },
+    extra: { rpg: randomRPG(3) },
   });
-  return id;
+  return npc.id;
 }
 
 function spawnMonster(

@@ -22,7 +22,7 @@ import {
   type WorldContainer,
 } from '../../core/types';
 import { World } from '../../core/world';
-import { type PlotNpcDef, registerSideQuest } from '../../data/plot';
+import { designNpcFloorKey, type PlotNpcDef, registerFloorSideQuest } from '../../data/plot';
 import { calcZoneLevel } from '../../systems/rpg';
 import { publishEvent } from '../../systems/events';
 import { setTerritoryOwnerAtIndex, syncZoneMetadataFromTerritory } from '../../systems/territory';
@@ -32,6 +32,8 @@ import { genLog } from '../log';
 import {
   type NextId, addItemDrop, setFeature, spawnAdminMonster, spawnAdminNpc, spawnNamedCivilian,
 } from '../ministry/admin_common';
+
+const DESIGN_NPC_HOME_FLOOR_KEY = designNpcFloorKey('upper_bureau');
 
 export const UPPER_BUREAU_ROUTE_ID = 'upper_bureau' as const;
 export const UPPER_BUREAU_DISPLAY_NAME = 'Верхнее бюро' as const;
@@ -502,7 +504,7 @@ const AMBUSH_DEF: PlotNpcDef = {
   ],
 };
 
-registerSideQuest('bureau_madam_iskra', ISKRA_DEF, [
+registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'bureau_madam_iskra', ISKRA_DEF, [
   {
     id: 'bureau_preapproval_legal',
     giverNpcId: 'bureau_madam_iskra',
@@ -543,7 +545,7 @@ registerSideQuest('bureau_madam_iskra', ISKRA_DEF, [
   },
 ]);
 
-registerSideQuest('bureau_cleaner_tolik', TOLIK_DEF, [
+registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'bureau_cleaner_tolik', TOLIK_DEF, [
   {
     id: 'bureau_cleaner_keys_help',
     giverNpcId: 'bureau_cleaner_tolik',
@@ -584,7 +586,7 @@ registerSideQuest('bureau_cleaner_tolik', TOLIK_DEF, [
   },
 ]);
 
-registerSideQuest('bureau_auditor_lev', LEV_DEF, [
+registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'bureau_auditor_lev', LEV_DEF, [
   {
     id: 'bureau_audit_market88_help',
     giverNpcId: 'bureau_auditor_lev',
@@ -607,7 +609,7 @@ registerSideQuest('bureau_auditor_lev', LEV_DEF, [
   },
 ]);
 
-registerSideQuest('bureau_archive_toll_keeper', TOLL_KEEPER_DEF, [
+registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'bureau_archive_toll_keeper', TOLL_KEEPER_DEF, [
   {
     id: 'bureau_archive_toll_pay',
     giverNpcId: 'bureau_archive_toll_keeper',
@@ -648,7 +650,7 @@ registerSideQuest('bureau_archive_toll_keeper', TOLL_KEEPER_DEF, [
   },
 ]);
 
-registerSideQuest('bureau_permit_ambush_guard', AMBUSH_DEF, [
+registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'bureau_permit_ambush_guard', AMBUSH_DEF, [
   {
     id: 'bureau_permit_ambush_expose',
     giverNpcId: 'bureau_permit_ambush_guard',
@@ -670,7 +672,7 @@ registerSideQuest('bureau_permit_ambush_guard', AMBUSH_DEF, [
   },
 ]);
 
-registerSideQuest('bureau_visitor_anna', ANNA_DEF, [
+registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'bureau_visitor_anna', ANNA_DEF, [
   {
     id: 'bureau_erase_name_file',
     giverNpcId: 'bureau_visitor_anna',

@@ -252,7 +252,7 @@ export function updateSeroburmalineExposure(world: World, player: Entity, state:
 }
 
 function muteSurfaceArea(world: World, cx: number, cy: number, radiusCells: number): void {
-  let touched = false;
+  const touchedCells: number[] = [];
   for (let y = Math.floor(cy - radiusCells) - 1; y <= Math.floor(cy + radiusCells) + 1; y++) {
     for (let x = Math.floor(cx - radiusCells) - 1; x <= Math.floor(cx + radiusCells) + 1; x++) {
       const wx = world.wrap(x);
@@ -272,12 +272,12 @@ function muteSurfaceArea(world: World, cx: number, cy: number, radiusCells: numb
           cell[idx + 1] = Math.floor(cell[idx + 1] * 0.25 + 78 * 0.75);
           cell[idx + 2] = Math.floor(cell[idx + 2] * 0.25 + 76 * 0.75);
           cell[idx + 3] = Math.floor(a * 0.42);
-          touched = true;
+          if (!touchedCells.includes(ci)) touchedCells.push(ci);
         }
       }
     }
   }
-  if (touched) world.surfaceVersion++;
+  if (touchedCells.length > 0) world.markSurfaceCellsDirty(touchedCells);
 }
 
 function coverSource(world: World, source: SeroburmalineSource, seed: number): void {

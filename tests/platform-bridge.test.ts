@@ -22,6 +22,7 @@ import {
 import { SAVE_SHAPE_VERSION } from '../src/systems/save_runtime';
 import { createPortalCompactSavePayload, summarizeSavePayload, type SavePayload } from '../src/systems/save_payload';
 import { FloorLevel, QuestType } from '../src/core/types';
+import { designFloorAmbientLight, designFloorProfile, designFloorPseudoliftChance } from '../src/data/design_floor_profiles';
 
 test('platform bridge detects explicit portal query safely', () => {
   assert.equal(requestedPortalFromSearch('?portal=yandex'), 'yandex');
@@ -196,6 +197,7 @@ test('strict portal mode blocks casino-like and adult-route surfaces', () => {
   });
 
   try {
+    assert.equal(designFloorProfile('floor_69')?.portalPolicy?.strictPortalBlocked, true);
     assert.equal(portalAllowsCasinoLikeContent(), false);
     assert.equal(portalAllowsOptionalNetwork(), false);
     assert.equal(portalBlocksDesignFloor('floor_69'), true);
@@ -204,6 +206,14 @@ test('strict portal mode blocks casino-like and adult-route surfaces', () => {
     if (original) Object.defineProperty(globalThis, 'location', original);
     else delete (globalThis as typeof globalThis & { location?: Location }).location;
   }
+});
+
+test('design floor profile owns route-specific render and trap policy', () => {
+  assert.equal(designFloorAmbientLight('darkness', 0.12), 0);
+  assert.equal(designFloorAmbientLight('service_floor', 0.12), 0.12);
+  assert.equal(designFloorPseudoliftChance('dark_metro'), 0.18);
+  assert.equal(designFloorPseudoliftChance('service_floor'), 0.18);
+  assert.equal(designFloorPseudoliftChance('floor_69'), 0);
 });
 
 test('platform cloud save uses the larger GamePush raw progress budget', async () => {

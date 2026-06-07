@@ -2,17 +2,17 @@
 
 import { stampSurfaceSplat } from '../../systems/surface_marks';
 import {
-  AIGoal, Cell, ContainerKind, DoorState, EntityType, Faction, Feature, FloorLevel, Occupation, QuestType,
+  Cell, ContainerKind, DoorState, EntityType, Faction, Feature, FloorLevel, Occupation, QuestType,
   RoomType, Tex,
   type ContainerAccess, type Entity, type Room, type WorldContainer,
 } from '../../core/types';
 import { World } from '../../core/world';
-import { freshNeeds } from '../../data/catalog';
 import { type PlotNpcDef, registerSideQuest } from '../../data/plot';
 import { Spr } from '../../render/sprite_index';
 import { registerRouteCue } from '../../systems/route_cues';
 import { protectRoom } from '../shared';
 import { genLog } from '../log';
+import { requireSpawnedPlotNpcFromPackage } from '../plot_npc_spawn';
 import { registerZoneContent } from './zone_content';
 
 const ROOM_NAME = 'Комната живой карты';
@@ -209,31 +209,11 @@ function spawnCartographer(world: World, entities: Entity[], nextId: { v: number
   if (existing) return existing;
   const x = world.wrap(room.x + Math.floor(ROOM_W / 2));
   const y = world.wrap(room.y + 3);
-  const npc: Entity = {
-    id: nextId.v++,
-    type: EntityType.NPC,
-    x: x + 0.5,
-    y: y + 0.5,
+  const npc = requireSpawnedPlotNpcFromPackage(entities, nextId, CARTOGRAPHER_ID, x + 0.5, y + 0.5, {
     angle: Math.PI / 2,
-    pitch: 0,
-    alive: true,
-    speed: NPC_DEF.speed,
-    sprite: NPC_DEF.sprite,
-    name: NPC_DEF.name,
-    isFemale: NPC_DEF.isFemale,
-    needs: freshNeeds(),
-    hp: NPC_DEF.hp,
-    maxHp: NPC_DEF.maxHp,
-    money: NPC_DEF.money,
-    ai: { goal: AIGoal.IDLE, tx: x + 0.5, ty: y + 0.5, path: [], pi: 0, stuck: 0, timer: 0 },
-    inventory: NPC_DEF.inventory.map(i => ({ ...i })),
-    faction: NPC_DEF.faction,
-    occupation: NPC_DEF.occupation,
-    plotNpcId: CARTOGRAPHER_ID,
     canGiveQuest: true,
-    questId: -1,
-  };
-  entities.push(npc);
+    aiTarget: { x: x + 0.5, y: y + 0.5 },
+  });
   return npc;
 }
 
@@ -295,12 +275,12 @@ function seedClues(world: World, entities: Entity[], nextId: { v: number }, room
   dropItem(entities, nextId, room.x + ROOM_W - 4, room.y + ROOM_H - 3, 'siren_instruction', 1);
 }
 
-function registerPaidMapCue(world: World, room: Room): void {
+function registerPaidRouteAdviceCue(world: World, room: Room): void {
   const tableX = world.wrap(room.x + Math.floor(ROOM_W / 2)) + 0.5;
   const tableY = world.wrap(room.y + 5) + 0.5;
   const markerCell = world.idx(Math.floor(tableX), Math.floor(tableY));
   registerRouteCue(world, {
-    id: 'living_cartographer_paid_map',
+    id: 'living_cartographer_paid_route_advice',
     x: tableX,
     y: tableY,
     targetX: tableX,
@@ -310,21 +290,19 @@ function registerPaidMapCue(world: World, room: Room): void {
     targetRoomId: room.id,
     zoneId: world.zoneMap[markerCell],
     label: 'живая карта Севы',
-    hint: '100₽: раскрыть один полезный участок тумана карты',
-    targetName: 'платное раскрытие карты',
+    hint: '100₽: получить короткую маршрутную сводку',
+    targetName: 'платная маршрутная сводка',
     color: '#8fd',
-    tags: ['living', 'cartographer', 'paid_map', 'route_planning'],
+    tags: ['living', 'cartographer', 'paid_route_advice', 'route_planning'],
     toneSeed: room.id * 43043 + 57,
     radius: 4,
     targetRadius: 1.8,
     cooldownSec: 9,
-    paidMapReveal: {
+    paidRouteAdvice: {
       priceRubles: 100,
-      radius: 18,
-      roomScanCap: 640,
       sellerName: NPC_DEF.name,
     },
-    heardText: 'На столе живая карта шевелит нитями маршрута. За 100₽ она снимет туман с одного полезного участка карты.',
+    heardText: 'На столе живая карта шевелит нитями маршрута. За 100₽ Сева даст короткую сводку без всеведения карты.',
     followedText: 'Живая карта держит открытую бумагу достаточно долго, чтобы сверить вылазку.',
     ignoredText: 'Карта свернулась обратно в бумагу: бесплатного маршрута не получилось.',
   });
@@ -344,7 +322,7 @@ function generateCartographerZoneMap(
   decorateRoom(world, room);
   const cartographer = spawnCartographer(world, entities, nextId, room);
   seedClues(world, entities, nextId, room, cartographer);
-  registerPaidMapCue(world, room);
+  registerPaidRouteAdviceCue(world, room);
   genLog(`[AG43] ${ROOM_NAME} at (${room.x}, ${room.y}) room #${room.id}`);
   return { nextRoomId };
 }

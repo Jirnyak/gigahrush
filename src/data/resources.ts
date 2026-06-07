@@ -42,36 +42,34 @@ export const RESOURCES: ResourceDef[] = [
   { id: 'labor', name: 'Трудочасы', baseStock: 180, lowStock: 45, roomTypes: [RoomType.PRODUCTION, RoomType.KITCHEN, RoomType.MEDICAL, RoomType.OFFICE], itemIds: [] },
 ];
 
-const ITEM144_RESOURCE_ITEMS: Record<string, readonly string[]> = {
+function appendResourceItems(packs: Record<string, readonly string[]>): void {
+  for (const [resourceId, itemIds] of Object.entries(packs)) {
+    const resource = RESOURCES.find(r => r.id === resourceId);
+    if (!resource) continue;
+    for (const itemId of itemIds) {
+      if (!resource.itemIds.includes(itemId)) resource.itemIds.push(itemId);
+    }
+  }
+}
+
+const TECHNICAL_SPIRIT_RESOURCE_ITEMS: Record<string, readonly string[]> = {
   medicine: ['technical_spirit'],
   fuel: ['technical_spirit'],
   contraband: ['technical_spirit'],
 };
 
-for (const [resourceId, itemIds] of Object.entries(ITEM144_RESOURCE_ITEMS)) {
-  const resource = RESOURCES.find(r => r.id === resourceId);
-  if (!resource) continue;
-  for (const itemId of itemIds) {
-    if (!resource.itemIds.includes(itemId)) resource.itemIds.push(itemId);
-  }
-}
+appendResourceItems(TECHNICAL_SPIRIT_RESOURCE_ITEMS);
 
-const ITEM4_RESOURCE_ITEMS: Record<string, readonly string[]> = {
+const SAMPLE_EVIDENCE_DOCUMENT_RESOURCE_ITEMS: Record<string, readonly string[]> = {
   documents: [
     'slime_age_label_brown', 'slime_age_label_orange', 'slime_age_label_violet',
     'water_reservoir_sample',
   ],
 };
 
-for (const [resourceId, itemIds] of Object.entries(ITEM4_RESOURCE_ITEMS)) {
-  const resource = RESOURCES.find(r => r.id === resourceId);
-  if (!resource) continue;
-  for (const itemId of itemIds) {
-    if (!resource.itemIds.includes(itemId)) resource.itemIds.push(itemId);
-  }
-}
+appendResourceItems(SAMPLE_EVIDENCE_DOCUMENT_RESOURCE_ITEMS);
 
-const ITEM5_RESOURCE_ITEMS: Record<string, readonly string[]> = {
+const UTILITY_SCRAP_RESOURCE_ITEMS: Record<string, readonly string[]> = {
   food: ['sugar_pack'],
   metal: ['scrubbed_serial_plate', 'electrode_pack', 'pump_impeller', 'rail_switch_handle', 'rail_spike_pack'],
   ammo: ['black_market_shells', 'rpl23_lmg'],
@@ -110,50 +108,26 @@ const ITEM5_RESOURCE_ITEMS: Record<string, readonly string[]> = {
   ],
 };
 
-for (const [resourceId, itemIds] of Object.entries(ITEM5_RESOURCE_ITEMS)) {
-  const resource = RESOURCES.find(r => r.id === resourceId);
-  if (!resource) continue;
-  for (const itemId of itemIds) {
-    if (!resource.itemIds.includes(itemId)) resource.itemIds.push(itemId);
-  }
-}
+appendResourceItems(UTILITY_SCRAP_RESOURCE_ITEMS);
 
-const ITEM79_RESOURCE_ITEMS: Record<string, readonly string[]> = {
+const HOMEMADE_AMMO_RESOURCE_ITEMS: Record<string, readonly string[]> = {
   ammo: ['homemade_9mm'],
   contraband: ['homemade_9mm'],
 };
 
-for (const [resourceId, itemIds] of Object.entries(ITEM79_RESOURCE_ITEMS)) {
-  const resource = RESOURCES.find(r => r.id === resourceId);
-  if (!resource) continue;
-  for (const itemId of itemIds) {
-    if (!resource.itemIds.includes(itemId)) resource.itemIds.push(itemId);
-  }
-}
+appendResourceItems(HOMEMADE_AMMO_RESOURCE_ITEMS);
 
-const ITEM68_RESOURCE_ITEMS: Record<string, readonly string[]> = {
+const BREACH_CHARGE_RESOURCE_ITEMS: Record<string, readonly string[]> = {
   ammo: ['breach_charge'],
 };
 
-for (const [resourceId, itemIds] of Object.entries(ITEM68_RESOURCE_ITEMS)) {
-  const resource = RESOURCES.find(r => r.id === resourceId);
-  if (!resource) continue;
-  for (const itemId of itemIds) {
-    if (!resource.itemIds.includes(itemId)) resource.itemIds.push(itemId);
-  }
-}
+appendResourceItems(BREACH_CHARGE_RESOURCE_ITEMS);
 
-const ITEM69_RESOURCE_ITEMS: Record<string, readonly string[]> = {
+const CONCRETE_BREAKER_RESOURCE_ITEMS: Record<string, readonly string[]> = {
   ammo: ['concrete_breaker_grenade'],
 };
 
-for (const [resourceId, itemIds] of Object.entries(ITEM69_RESOURCE_ITEMS)) {
-  const resource = RESOURCES.find(r => r.id === resourceId);
-  if (!resource) continue;
-  for (const itemId of itemIds) {
-    if (!resource.itemIds.includes(itemId)) resource.itemIds.push(itemId);
-  }
-}
+appendResourceItems(CONCRETE_BREAKER_RESOURCE_ITEMS);
 
 for (const resourceId of ['tools', 'electronics']) {
   const resource = RESOURCES.find(r => r.id === resourceId);

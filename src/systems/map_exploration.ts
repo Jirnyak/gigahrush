@@ -7,15 +7,21 @@ import { getSamosborWaveDebugSnapshot } from './samosbor_wave';
 
 const LOCAL_TRAIL_RADIUS = 2;
 const QUEST_MARKER_REVEAL_RADIUS = 8;
+const MAP_FOG_TICK_SECONDS = 4;
+const MAP_FOG_START_SECONDS = 36;
+const MAP_FOG_FULL_SECONDS = 120;
+const MAP_FOG_TICK_WRAP = 0x10000;
 
 interface MapExplorationRuntime {
   explored: Uint8Array;
+  seenTick: Uint16Array;
   revealedRooms: Set<number>;
   revealedZones: Set<number>;
   initialized: boolean;
   initialZoneId: number;
   lastCell: number;
   lastSamosborWaveFogKey: string;
+  currentTick: number;
   version: number;
 }
 
@@ -24,12 +30,14 @@ const explorationByWorld = new WeakMap<World, MapExplorationRuntime>();
 function emptyRuntime(): MapExplorationRuntime {
   return {
     explored: new Uint8Array(W * W),
+    seenTick: new Uint16Array(W * W),
     revealedRooms: new Set(),
     revealedZones: new Set(),
     initialized: false,
     initialZoneId: -1,
     lastCell: -1,
     lastSamosborWaveFogKey: '',
+    currentTick: 1,
     version: 0,
   };
 }
@@ -47,10 +55,36 @@ function walkableMapCell(cell: number): boolean {
   return cell === Cell.FLOOR || cell === Cell.DOOR || cell === Cell.LIFT || cell === Cell.WATER || cell === Cell.ABYSS;
 }
 
-function revealCell(runtime: MapExplorationRuntime, idx: number): void {
-  if (idx < 0 || idx >= runtime.explored.length || runtime.explored[idx]) return;
-  runtime.explored[idx] = 1;
+function mapFogTick(time: number): number {
+  const seconds = Number.isFinite(time) ? Math.max(0, time) : 0;
+  const tick = (Math.floor(seconds / MAP_FOG_TICK_SECONDS) + 1) & 0xffff;
+  return tick === 0 ? 1 : tick;
+}
+
+function tickAgeSeconds(current: number, seen: number): number {
+  if (seen === 0) return MAP_FOG_FULL_SECONDS;
+  return (((current - seen + MAP_FOG_TICK_WRAP) & 0xffff) * MAP_FOG_TICK_SECONDS);
+}
+
+function syncRuntimeTime(runtime: MapExplorationRuntime, time: number): void {
+  const tick = mapFogTick(time);
+  if (tick === runtime.currentTick) return;
+  runtime.currentTick = tick;
   runtime.version = (runtime.version + 1) | 0;
+}
+
+function touchCell(runtime: MapExplorationRuntime, idx: number): void {
+  if (idx < 0 || idx >= runtime.explored.length) return;
+  let changed = false;
+  if (!runtime.explored[idx]) {
+    runtime.explored[idx] = 1;
+    changed = true;
+  }
+  if (runtime.seenTick[idx] !== runtime.currentTick) {
+    runtime.seenTick[idx] = runtime.currentTick;
+    changed = true;
+  }
+  if (changed) runtime.version = (runtime.version + 1) | 0;
 }
 
 export function resetMapExploration(world: World): void {
@@ -66,10 +100,10 @@ export function revealMapRoom(world: World, roomId: number): void {
   for (let y = room.y; y < room.y + room.h; y++) {
     for (let x = room.x; x < room.x + room.w; x++) {
       const idx = world.idx(x, y);
-      if (world.roomMap[idx] === room.id || walkableMapCell(world.cells[idx])) revealCell(runtime, idx);
+      if (world.roomMap[idx] === room.id || walkableMapCell(world.cells[idx])) touchCell(runtime, idx);
     }
   }
-  for (const doorIdx of room.doors) revealCell(runtime, doorIdx);
+  for (const doorIdx of room.doors) touchCell(runtime, doorIdx);
 }
 
 export function revealMapZone(world: World, zoneId: number): void {
@@ -79,7 +113,7 @@ export function revealMapZone(world: World, zoneId: number): void {
   runtime.revealedZones.add(zoneId);
   for (let idx = 0; idx < runtime.explored.length; idx++) {
     if (world.zoneMap[idx] !== zoneId) continue;
-    if (walkableMapCell(world.cells[idx])) revealCell(runtime, idx);
+    if (walkableMapCell(world.cells[idx])) touchCell(runtime, idx);
     const roomId = world.roomMap[idx];
     if (roomId >= 0) revealMapRoom(world, roomId);
   }
@@ -95,7 +129,7 @@ export function revealMapArea(world: World, x: number, y: number, radius: number
     for (let dx = -r; dx <= r; dx++) {
       if (dx * dx + dy * dy > r2) continue;
       const idx = world.idx(cx + dx, cy + dy);
-      if (walkableMapCell(world.cells[idx])) revealCell(runtime, idx);
+      if (walkableMapCell(world.cells[idx])) touchCell(runtime, idx);
     }
   }
 }
@@ -103,6 +137,7 @@ export function revealMapArea(world: World, x: number, y: number, radius: number
 export function revealWholeMap(world: World): number {
   const runtime = runtimeFor(world);
   runtime.explored.fill(1);
+  runtime.seenTick.fill(runtime.currentTick);
   runtime.version = (runtime.version + 1) | 0;
   runtime.revealedRooms.clear();
   for (const room of world.rooms) if (room) runtime.revealedRooms.add(room.id);
@@ -126,6 +161,7 @@ function hideMapArea(world: World, x: number, y: number, radius: number): void {
       const idx = world.idx(cx + dx, cy + dy);
       if (runtime.explored[idx]) {
         runtime.explored[idx] = 0;
+        runtime.seenTick[idx] = 0;
         runtime.version = (runtime.version + 1) | 0;
       }
       const roomId = world.roomMap[idx];
@@ -233,6 +269,7 @@ export function revealQuestTargetOnMap(
 
 export function updateMapExploration(world: World, player: Entity, _state: GameState): void {
   const runtime = runtimeFor(world);
+  syncRuntimeTime(runtime, _state.time);
   const px = Math.floor(player.x);
   const py = Math.floor(player.y);
   const cellIdx = world.idx(px, py);
@@ -241,7 +278,7 @@ export function updateMapExploration(world: World, player: Entity, _state: GameS
     runtime.initialZoneId = world.zoneMap[cellIdx];
     revealMapZone(world, runtime.initialZoneId);
   }
-  if (cellIdx !== runtime.lastCell) {
+  if (cellIdx !== runtime.lastCell || runtime.seenTick[cellIdx] !== runtime.currentTick) {
     runtime.lastCell = cellIdx;
     revealMapArea(world, px, py, LOCAL_TRAIL_RADIUS);
   }
@@ -261,6 +298,20 @@ export function syncMapExplorationAfterSamosborWave(world: World, state: GameSta
 export function isMapCellExplored(world: World, idx: number): boolean {
   const runtime = explorationByWorld.get(world);
   return !runtime || runtime.explored[idx] !== 0;
+}
+
+export function mapCellFogAmount(world: World, idx: number): number {
+  const runtime = explorationByWorld.get(world);
+  if (!runtime || runtime.explored[idx] === 0) return 0;
+  const age = tickAgeSeconds(runtime.currentTick, runtime.seenTick[idx]);
+  if (age <= MAP_FOG_START_SECONDS) return 0;
+  if (age >= MAP_FOG_FULL_SECONDS) return 1;
+  const t = (age - MAP_FOG_START_SECONDS) / (MAP_FOG_FULL_SECONDS - MAP_FOG_START_SECONDS);
+  return t * t * (3 - 2 * t);
+}
+
+export function isMapCellFreshForMarkers(world: World, idx: number): boolean {
+  return mapCellFogAmount(world, idx) <= 0.05;
 }
 
 export function mapExplorationVersion(world: World): number {

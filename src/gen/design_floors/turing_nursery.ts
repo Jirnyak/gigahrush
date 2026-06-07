@@ -28,15 +28,18 @@ import { World } from '../../core/world';
 import { hashSeed, withSeededRandom } from '../../core/rand';
 import { freshNeeds } from '../../data/catalog';
 import { factionToTerritoryOwner } from '../../data/factions';
-import { type PlotNpcDef, registerSideQuest } from '../../data/plot';
+import { designNpcFloorKey, type PlotNpcDef, registerFloorSideQuest } from '../../data/plot';
 import { MONSTERS } from '../../entities/monster';
 import { monsterSpr, Spr } from '../../render/sprite_index';
 import { registerCellHazardSite } from '../../systems/cell_hazards';
 import { placeEmergencyPanel } from '../../systems/emergency_panels';
 import { registerRouteCue } from '../../systems/route_cues';
 import { randomRPG } from '../../systems/rpg';
+import { requireSpawnedPlotNpcFromPackage } from '../plot_npc_spawn';
 import { ensureConnectivity, generateZones, sanitizeDoors, stampRoom } from '../shared';
 import type { FloorGeneration } from '../floor_manifest';
+
+const DESIGN_NPC_HOME_FLOOR_KEY = designNpcFloorKey('turing_nursery');
 
 export const TURING_NURSERY_ROUTE_ID = 'turing_nursery' as const;
 export const TURING_NURSERY_Z = 10 as const;
@@ -313,7 +316,7 @@ const NPC_DEFS: Record<TuringNpcId, PlotNpcDef> = {
   },
 };
 
-registerSideQuest('turing_nursery_mother_agafya', NPC_DEFS.turing_nursery_mother_agafya, [
+registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'turing_nursery_mother_agafya', NPC_DEFS.turing_nursery_mother_agafya, [
   {
     id: 'turing_nursery_inoculate_basin',
     giverNpcId: 'turing_nursery_mother_agafya',
@@ -334,7 +337,7 @@ registerSideQuest('turing_nursery_mother_agafya', NPC_DEFS.turing_nursery_mother
   },
 ]);
 
-registerSideQuest('turing_nursery_liquidator_bryzga', NPC_DEFS.turing_nursery_liquidator_bryzga, [
+registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'turing_nursery_liquidator_bryzga', NPC_DEFS.turing_nursery_liquidator_bryzga, [
   {
     id: 'turing_nursery_burn_bridge',
     giverNpcId: 'turing_nursery_liquidator_bryzga',
@@ -355,7 +358,7 @@ registerSideQuest('turing_nursery_liquidator_bryzga', NPC_DEFS.turing_nursery_li
   },
 ]);
 
-registerSideQuest('turing_nursery_child_sava', NPC_DEFS.turing_nursery_child_sava, [
+registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'turing_nursery_child_sava', NPC_DEFS.turing_nursery_child_sava, [
   {
     id: 'turing_nursery_expose_growth_child',
     giverNpcId: 'turing_nursery_child_sava',
@@ -373,7 +376,7 @@ registerSideQuest('turing_nursery_child_sava', NPC_DEFS.turing_nursery_child_sav
   },
 ]);
 
-registerSideQuest('turing_nursery_registrar_milena', NPC_DEFS.turing_nursery_registrar_milena, [
+registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'turing_nursery_registrar_milena', NPC_DEFS.turing_nursery_registrar_milena, [
   {
     id: 'turing_nursery_growth_audit',
     giverNpcId: 'turing_nursery_registrar_milena',
@@ -1610,39 +1613,20 @@ function spawnPlotNpc(
   entities: Entity[],
   nextId: NextId,
   npcId: TuringNpcId,
-  def: PlotNpcDef,
+  _def: PlotNpcDef,
   x: number,
   y: number,
   angle: number,
-  weapon = def.weapon,
+  weapon?: string,
 ): number {
-  const id = nextId.v++;
-  entities.push({
-    id,
-    type: EntityType.NPC,
-    x: x + 0.5,
-    y: y + 0.5,
+  const px = x + 0.5;
+  const py = y + 0.5;
+  const npc = requireSpawnedPlotNpcFromPackage(entities, nextId, npcId, px, py, {
     angle,
-    pitch: 0,
-    alive: true,
-    speed: def.speed,
-    sprite: def.sprite,
-    name: def.name,
-    isFemale: def.isFemale,
-    needs: freshNeeds(),
-    hp: def.hp,
-    maxHp: def.maxHp,
-    money: def.money,
-    ai: { goal: AIGoal.IDLE, tx: x + 0.5, ty: y + 0.5, path: [], pi: 0, stuck: 0, timer: 0 },
-    inventory: def.inventory.map(item => ({ ...item })),
     weapon,
-    faction: def.faction,
-    occupation: def.occupation,
-    plotNpcId: npcId,
-    canGiveQuest: true,
-    questId: -1,
+    aiTarget: { x: px, y: py },
   });
-  return id;
+  return npc.id;
 }
 
 function spawnAmbientNpc(

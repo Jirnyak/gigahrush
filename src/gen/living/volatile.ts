@@ -359,7 +359,7 @@ export function pruneVolatileSideArrays(world: World): { screenCells: number; su
     world.surfaceFlags[ci] = 0;
     removedSurfaces++;
   }
-  if (removedSurfaces > 0) world.surfaceVersion++;
+  if (removedSurfaces > 0) world.markSurfaceDirty();
 
   return { screenCells: removedScreens, surfaceCells: removedSurfaces };
 }

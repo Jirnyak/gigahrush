@@ -12,6 +12,8 @@ import {
 import { World } from '../core/world';
 import {
   FLOOR_INSTANCES,
+  floorInstanceAllowsNpcs,
+  floorInstanceAllowsSamosbor,
   floorInstanceById,
   type FloorInstanceDef,
 } from '../data/floor_instances';
@@ -128,6 +130,8 @@ export function floorInstanceWorldKey(instance: Pick<ActiveFloorInstance, 'id'> 
   const id = typeof instance === 'string' ? instance : instance.id;
   return floorKeyForFloorInstance(id);
 }
+
+export { floorInstanceAllowsNpcs, floorInstanceAllowsSamosbor };
 
 function normalizeActive(input: Partial<ActiveFloorInstance> | null | undefined): ActiveFloorInstance | null {
   if (!isRecord(input) || typeof input.id !== 'string') return null;

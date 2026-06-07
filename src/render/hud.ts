@@ -22,6 +22,7 @@ import { drawFactionMenu } from './factions_ui';
 import { drawDemosMenu } from './demos_ui';
 import { drawGameMenu } from './menu_ui';
 import { drawControlsMenu } from './controls_ui';
+import { drawHelpMenu } from './help_ui';
 import { drawUiSettingsMenu } from './ui_settings_ui';
 import { drawNpcMenu } from './npc_ui';
 import { drawContainerMenu } from './container_ui';
@@ -82,7 +83,7 @@ import {
 } from './hud_fx';
 import { fitTextStable as fitUiText, setUiTextTime } from './ui_text';
 import { allocateHudSlot, createHudSlots, getMobileHudSafeContext, type UiRect } from './ui_layout';
-import { autoPickupEnabled, cameraPlaneLen, uiElementEnabled } from '../systems/ui_orchestrator';
+import { autoPickupEnabled, cameraPlaneLen, hudMotionMode, screenInterferenceMode, uiElementEnabled } from '../systems/ui_orchestrator';
 import { getLocalizationLanguage } from '../systems/localization';
 
 const BAR_W = 50, BAR_H = 4;
@@ -106,6 +107,33 @@ function toPercent(current: number, max: number): number {
 function formatVitalPercent(pct: number): string {
   if (!Number.isFinite(pct)) return '0%';
   return `${Math.round(Math.max(0, Math.min(100, pct)))}%`;
+}
+
+function routineJitter(reducedMotion: boolean, time: number, seed: number): { dx: number; dy: number } {
+  return reducedMotion ? { dx: 0, dy: 0 } : textJitter(time, seed);
+}
+
+function drawRoutineHudText(
+  ctx: CanvasRenderingContext2D,
+  text: string,
+  x: number,
+  y: number,
+  time: number,
+  seed: number,
+  color: string,
+  fontSize: number,
+  reducedMotion: boolean,
+): void {
+  if (!reducedMotion) {
+    drawGlitchText(ctx, text, x, y, time, seed, color, fontSize);
+    return;
+  }
+  ctx.save();
+  ctx.globalAlpha = 0.94;
+  ctx.fillStyle = color;
+  ctx.font = `${fontSize}px monospace`;
+  ctx.fillText(text, x, y);
+  ctx.restore();
 }
 
 const ZONE_FACTION_NAMES: Record<ZoneFaction, string> = {
@@ -1243,6 +1271,8 @@ export function drawHUD(
   const showAnomalyHints = uiElementEnabled('anomaly_hints');
   const showScreenFx = uiElementEnabled('screen_fx');
   const showSamosborText = uiElementEnabled('samosbor_text');
+  const reducedHudMotion = hudMotionMode() === 'reduced';
+  const interferenceMode = screenInterferenceMode();
   const netSphereOpen = isNetSphereOpen();
   const netTerminalGenOpen = isNetTerminalGenOpen();
   const emergencyPanelOpen = isEmergencyPanelMenuOpen();
@@ -1253,13 +1283,13 @@ export function drawHUD(
   const computerOpen = isComputerOverlayOpen();
   const hackOpen = isNetHackOverlayOpen();
   const centerModalOpen = state.showInventory || state.showQuests || state.showLog ||
-    state.showFactions || state.showDemos || state.showMenu || state.showControls || state.showUiSettings ||
+    state.showFactions || state.showDemos || state.showMenu || state.showHelp || state.showControls || state.showUiSettings ||
     state.showNpcMenu || state.showContainerMenu || state.showCraftMenu || netSphereOpen || netTerminalGenOpen ||
     emergencyPanelOpen || mapEditorOpen || gamblingOpen || computerOpen || hackOpen ||
     netTerminalGenDeniedOpen || netTerminalBankOpen;
   const quietHud = centerModalOpen || state.mapMode === 2;
   const showCompactPanels = !quietHud;
-  const screenFxVisible = showScreenFx && !quietHud;
+  const screenFxVisible = !quietHud && showScreenFx && interferenceMode !== 'off';
   const combatFxVisible = !quietHud;
   const damageFeedbackVisible = showDamageFeedback && !quietHud;
   const smogStatus = getProceduralSmogStatus(world, player, state);
@@ -1300,10 +1330,10 @@ export function drawHUD(
       const pct = toPercent(current, max);
       const labelFont = VITAL_LABEL_FONT * vitalTextScale;
       const percentFont = VITAL_PERCENT_FONT * vitalTextScale;
-      drawGlitchText(ctx, label, bx, by, time, i * 13 + 7, '#8cc', labelFont);
+      drawRoutineHudText(ctx, label, bx, by, time, i * 13 + 7, '#8cc', labelFont, reducedHudMotion);
       ctx.save();
       ctx.textAlign = 'right';
-      drawGlitchText(ctx, formatVitalPercent(pct), bx + barW, by + 0.6 * sy, time, i * 19 + 101, '#9ac', percentFont);
+      drawRoutineHudText(ctx, formatVitalPercent(pct), bx + barW, by + 0.6 * sy, time, i * 19 + 101, '#9ac', percentFont, reducedHudMotion);
       ctx.restore();
       ctx.font = `${labelFont}px monospace`;
       // Holo bar
@@ -1431,7 +1461,7 @@ export function drawHUD(
         const alpha = age > HUD_MESSAGE_FADE_START_SECONDS
           ? 1 - (age - HUD_MESSAGE_FADE_START_SECONDS) / (HUD_MESSAGE_TTL_SECONDS - HUD_MESSAGE_FADE_START_SECONDS)
           : 1;
-        const rowJitter = textJitter(time, item.index * 17 + 300);
+        const rowJitter = routineJitter(reducedHudMotion, time, item.index * 17 + 300);
         const rowY = my + rowJitter.dy * 0.28;
         ctx.globalAlpha = alpha * flicker(time, item.index + 300);
         ctx.font = `${5.3 * s}px monospace`;
@@ -1551,7 +1581,7 @@ export function drawHUD(
 
   // ── Crosshair (neuro-style) ──────────────────────────────
   if (showCompactPanels && showCrosshair) {
-    const cj = textJitter(time, 999);
+    const cj = routineJitter(reducedHudMotion, time, 999);
     const cAlpha = 0.4 + Math.sin(time * 2) * 0.08;
     const crossRgb = combatWeapon?.cannotFireReason ? '255,95,55'
       : combatTarget ? '255,210,80'
@@ -1595,30 +1625,32 @@ export function drawHUD(
     const floorInstance = currentFloorInstanceLabel(state);
     const leftX = bottomVitals.x + 4 * sx;
     const leftInfoW = Math.max(70 * sx, Math.min(220 * sx, bottomVitals.w - 8 * sx));
-    if (floorInstance) drawGlitchText(ctx, fitHudText(ctx, `Лифт ${floorInstance}`, leftInfoW), leftX, barY - 52 * sy, time, 404, '#f4a', 8 * sy);
-    drawGlitchText(ctx, `День ${day}  ${hh}:${mm}`, leftX, barY - 42 * sy, time, 400, '#8ac', 9 * sy);
+    if (floorInstance) {
+      drawRoutineHudText(ctx, fitHudText(ctx, `Лифт ${floorInstance}`, leftInfoW), leftX, barY - 52 * sy, time, 404, '#f4a', 8 * sy, reducedHudMotion);
+    }
+    drawRoutineHudText(ctx, `День ${day}  ${hh}:${mm}`, leftX, barY - 42 * sy, time, 400, '#8ac', 9 * sy, reducedHudMotion);
     ctx.font = `${9 * sy}px monospace`;
 
     // Zone
     if (zone) {
       const [zr, zg, zb] = ZONE_COLORS[zid % 64];
       const fLabel = ZONE_FACTION_NAMES[territoryOwner];
-      const zj = textJitter(time, 410);
+      const zj = routineJitter(reducedHudMotion, time, 410);
       ctx.fillStyle = `rgba(${zr},${zg},${zb},${flicker(time, 411)})`;
       ctx.font = `${8 * sy}px monospace`;
       ctx.fillText(fitHudText(ctx, `■ Сектор ${zid + 1}  Ур.${zone.level ?? 1}`, leftInfoW), leftX + zj.dx, barY - 32 * sy + zj.dy);
       const fColor = territoryOwner === ZoneFaction.SAMOSBOR ? '#c4f' : '#7aa';
-      drawGlitchText(ctx, fitHudText(ctx, `Терр. ${fLabel}`, leftInfoW), leftX, barY - 22 * sy, time, 412, fColor, 7 * sy);
+      drawRoutineHudText(ctx, fitHudText(ctx, `Терр. ${fLabel}`, leftInfoW), leftX, barY - 22 * sy, time, 412, fColor, 7 * sy, reducedHudMotion);
       ctx.font = `${7 * sy}px monospace`;
     }
 
     // Room info
     const room = world.roomAt(player.x, player.y);
     if (room) {
-      drawGlitchText(ctx, fitHudText(ctx, room.name, leftInfoW), leftX, barY - 13 * sy, time, 420, '#688', 7 * sy);
+      drawRoutineHudText(ctx, fitHudText(ctx, room.name, leftInfoW), leftX, barY - 13 * sy, time, 420, '#688', 7 * sy, reducedHudMotion);
       ctx.font = `${7 * sy}px monospace`;
     }
-    drawGlitchText(
+    drawRoutineHudText(
       ctx,
       fitHudText(ctx, compactFloorLabel(floorEntry), leftInfoW),
       leftX,
@@ -1627,6 +1659,7 @@ export function drawHUD(
       424,
       floorEntry.color,
       5.6 * sy,
+      reducedHudMotion,
     );
   }
 
@@ -1667,6 +1700,11 @@ export function drawHUD(
   // ── Controls / keybinds (Tab) ────────────────────────────
   if (state.showControls) {
     drawControlsMenu(ctx, state, msx, msy, time);
+  }
+
+  // ── One-page HELP poster (F1) ────────────────────────────
+  if (state.showHelp) {
+    drawHelpMenu(ctx, state, msx, msy, time);
   }
 
   // ── UI orchestrator (U) ──────────────────────────────────
@@ -1826,6 +1864,8 @@ export function drawHUD(
     ctx.fillText(fitHudText(ctx, deathCause.detail, w * 0.82), w / 2, h / 2 + 24 * sy);
     ctx.font = `${10 * sy}px monospace`;
     ctx.fillText('[R] — заново', w / 2, h / 2 + 44 * sy);
+    ctx.fillText('[Enter] — продолжить путь', w / 2, h / 2 + 60 * sy);
+    ctx.fillText('за случайного человека', w / 2, h / 2 + 74 * sy);
     ctx.textAlign = 'left';
     ctx.restore();
   }
@@ -1894,8 +1934,11 @@ export function drawHUD(
     ctx.textAlign = 'left';
   }
 
-  // ── Global neuro-interface overlay (always-on) ───────────
-  if (screenFxVisible) drawGlitchLine(ctx, w, h, time);
+  // ── Global neuro-interface overlay ──────────────────────
+  if (screenFxVisible) {
+    drawStaticNoise(ctx, 0, 0, w, h, time * 0.55, interferenceMode === 'full' ? 0.008 : 0.0035);
+    drawGlitchLine(ctx, w, h, time);
+  }
 
   if (options.pointerCaptureGate) {
     drawPointerCaptureGate(ctx, time);

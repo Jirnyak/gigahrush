@@ -1,4 +1,4 @@
-import { type CharacterSex, Faction, FloorLevel, Occupation } from '../core/types';
+import { type CharacterSex, Faction, FloorLevel, Occupation, type Item, type RPGStats } from '../core/types';
 import type { WeightedValue } from './alife_generation';
 import { DESIGN_FLOOR_ROUTES, type DesignFloorRouteDef } from './design_floors';
 import { designFloorPopulationProfile } from './design_floor_population';
@@ -15,7 +15,15 @@ import {
   proceduralPopulationBudget,
   proceduralPopulationProfileId,
 } from './population_profiles';
-import { PLOT_NPCS, plotNpcHomeFloorKey } from './plot';
+import {
+  allNpcPackages,
+  npcPackageDisplayName,
+  npcPackageRuntimeEligible,
+  plotNpcIdFromPackage,
+  type NpcPackageDef,
+  type NpcPackagePresence,
+} from './npc_packages';
+import { MAIN_PLOT_NPC_PACKAGES } from './npc_plot_packages';
 import {
   themeForDesignRoute,
   themeForProceduralSpec,
@@ -37,6 +45,7 @@ export interface AlifePopulationBucketDef {
 export interface AlifeReservedIdentityDef {
   id: string;
   kind: 'plot' | 'authored' | 'event_reserved';
+  presence?: 'population' | 'event_only';
   floorKey: string;
   plotNpcId?: string;
   name?: string;
@@ -47,11 +56,24 @@ export interface AlifeReservedIdentityDef {
   occupation?: Occupation;
   sprite?: number;
   npcVisualId?: string;
+  familyId?: number;
+  canGiveQuest?: boolean;
   level?: number;
+  rpg?: RPGStats;
   hp?: number;
   maxHp?: number;
+  speed?: number;
+  isTraveler?: boolean;
+  weapon?: string;
+  tool?: string;
+  inventory?: readonly Item[];
   money?: number;
   accountRubles?: number;
+  kills?: number;
+  npcKills?: number;
+  monsterKills?: number;
+  playerRelation?: number;
+  karma?: number;
   tags: readonly string[];
 }
 
@@ -188,31 +210,111 @@ function proceduralBucket(spec: ProceduralFloorSpec): WeightedBucket {
   };
 }
 
-function plotNpcFloorKey(id: string, def: (typeof PLOT_NPCS)[string]): string {
-  return plotNpcHomeFloorKey(id, def) ?? floorKeyForStory(FloorLevel.LIVING);
+function tagId(input: string): string {
+  return input
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9:_-]/g, '_')
+    .replace(/_+/g, '_')
+    .slice(0, 32);
 }
 
-function buildReservedIdentities(): AlifeReservedIdentityDef[] {
-  return Object.entries(PLOT_NPCS).map(([plotNpcId, def]) => ({
-    id: `plot:${plotNpcId}`,
-    kind: 'plot' as const,
-    floorKey: plotNpcFloorKey(plotNpcId, def),
+function reservedKindForPackage(pack: NpcPackageDef): AlifeReservedIdentityDef['kind'] {
+  if (pack.kind === 'plot') return 'plot';
+  if (pack.placement.presence === 'event_only') return 'event_reserved';
+  return 'authored';
+}
+
+function reservedPresenceForPackage(presence: NpcPackagePresence): AlifeReservedIdentityDef['presence'] {
+  return presence === 'population' ? 'population' : 'event_only';
+}
+
+function packageTags(pack: NpcPackageDef, kind: AlifeReservedIdentityDef['kind']): readonly string[] {
+  return uniqueTags([
+    ...(pack.tags ?? []).map(tagId),
+    kind,
+    tagId(pack.kind),
+    `npc:${tagId(pack.id)}`,
+    `presence:${tagId(pack.placement.presence)}`,
+    ...(pack.content?.plotNpcId ? [`plot:${tagId(pack.content.plotNpcId)}`] : []),
+    ...(pack.content?.tags ?? []).map(tagId),
+    ...(pack.content?.questIds ?? []).map(id => `quest:${tagId(id)}`),
+    ...(pack.content?.roomContentId ? [`room:${tagId(pack.content.roomContentId)}`] : []),
+  ].filter(Boolean));
+}
+
+function packageCanReserveOnFloor(pack: NpcPackageDef): boolean {
+  if (!npcPackageRuntimeEligible(pack)) return false;
+  const allowed = floorKeyAllowsNpcs(pack.placement.homeFloorKey);
+  if (allowed === false && pack.placement.presence !== 'event_only' && pack.kind !== 'plot') {
+    return false;
+  }
+  return true;
+}
+
+export function alifeReservedIdentityFromNpcPackage(pack: NpcPackageDef): AlifeReservedIdentityDef | null {
+  if (!packageCanReserveOnFloor(pack)) return null;
+  const kind = reservedKindForPackage(pack);
+  const plotNpcId = plotNpcIdFromPackage(pack);
+  const maxHp = pack.runtime?.maxHp ?? pack.runtime?.hp;
+  return {
+    id: `npc:${pack.id}`,
+    kind,
+    presence: reservedPresenceForPackage(pack.placement.presence),
+    floorKey: pack.placement.homeFloorKey,
     plotNpcId,
-    name: def.name,
-    female: def.isFemale,
-    age: def.age,
-    sex: def.sex,
-    faction: def.faction,
-    occupation: def.occupation,
-    sprite: def.sprite,
-    npcVisualId: def.npcVisualId,
-    level: def.level,
-    hp: def.hp,
-    maxHp: def.maxHp,
-    money: def.money,
-    accountRubles: def.accountRubles,
-    tags: uniqueTags(['plot', 'authored', plotNpcId]),
-  }));
+    name: npcPackageDisplayName(pack),
+    female: pack.demographics.sex === 'female',
+    age: pack.demographics.age,
+    sex: pack.demographics.sex,
+    faction: pack.affiliation.faction,
+    occupation: pack.affiliation.occupation,
+    sprite: pack.visual?.sprite,
+    npcVisualId: pack.visual?.npcVisualId,
+    familyId: pack.affiliation.familyId,
+    canGiveQuest: pack.runtime?.canGiveQuest,
+    level: pack.rpg?.level,
+    hp: pack.runtime?.hp ?? maxHp,
+    maxHp,
+    speed: pack.runtime?.speed,
+    isTraveler: pack.runtime?.isTraveler,
+    money: pack.wealth?.cashRubles,
+    accountRubles: pack.wealth?.accountRubles,
+    kills: pack.runtime?.initialKills,
+    npcKills: pack.runtime?.initialNpcKills,
+    monsterKills: pack.runtime?.initialMonsterKills,
+    playerRelation: pack.social?.playerRelation,
+    karma: pack.social?.karma,
+    tags: packageTags(pack, kind),
+  };
+}
+
+function defaultReservedPackageSource(): readonly NpcPackageDef[] {
+  const out: NpcPackageDef[] = [];
+  const seen = new Set<string>();
+  for (const pack of [...MAIN_PLOT_NPC_PACKAGES, ...allNpcPackages()]) {
+    if (seen.has(pack.id)) continue;
+    seen.add(pack.id);
+    out.push(pack);
+  }
+  return out;
+}
+
+function buildReservedIdentities(packages?: readonly NpcPackageDef[]): AlifeReservedIdentityDef[] {
+  const sourcePackages = packages ?? defaultReservedPackageSource();
+  const out: AlifeReservedIdentityDef[] = [];
+  const reservedIds = new Set<string>();
+  const plotNpcIds = new Set<string>();
+  for (const pack of sourcePackages) {
+    const identity = alifeReservedIdentityFromNpcPackage(pack);
+    if (!identity) continue;
+    if (reservedIds.has(identity.id)) continue;
+    if (identity.plotNpcId && plotNpcIds.has(identity.plotNpcId)) continue;
+    reservedIds.add(identity.id);
+    if (identity.plotNpcId) plotNpcIds.add(identity.plotNpcId);
+    out.push(identity);
+  }
+  return out;
 }
 
 function allocateCounts(buckets: readonly WeightedBucket[], ordinaryTotal: number): number[] {
@@ -272,6 +374,7 @@ export function buildAlifePopulationPlan(input: {
   routeKeys: readonly string[];
   proceduralSpecs?: readonly ProceduralFloorSpec[];
   total?: number;
+  npcPackages?: readonly NpcPackageDef[];
 }): AlifePopulationPlanDef {
   const allowed = input.routeKeys.length > 0 ? new Set(input.routeKeys) : undefined;
   const weighted: WeightedBucket[] = [];
@@ -288,7 +391,7 @@ export function buildAlifePopulationPlan(input: {
     if (routeAllowed(bucket.floorKey, allowed)) weighted.push(bucket);
   }
 
-  const reserved = buildReservedIdentities().filter(identity => routeAllowed(identity.floorKey, allowed));
+  const reserved = buildReservedIdentities(input.npcPackages).filter(identity => routeAllowed(identity.floorKey, allowed));
   const fallbackTotal = alifePopulationTotalForSeed(input.runSeed);
   const total = clampAlifePopulationTotal(input.total, fallbackTotal, reserved.length);
   const ordinaryTotal = Math.max(0, total - reserved.length);
@@ -349,7 +452,7 @@ export function validateAlifePopulationPlan(plan?: AlifePopulationPlanDef): stri
   for (const reserved of checked.reserved) {
     if (reservedIds.has(reserved.id)) errors.push(`duplicate reserved identity ${reserved.id}`);
     reservedIds.add(reserved.id);
-    if (!reserved.id.startsWith(`${reserved.kind}:`) && reserved.kind === 'plot') errors.push(`plot reserved identity ${reserved.id} must use plot: prefix`);
+    if (reserved.kind === 'plot' && !reserved.plotNpcId) errors.push(`plot reserved identity ${reserved.id} must carry plotNpcId`);
     if (!floorKeyKnown(reserved.floorKey, knownContext)) errors.push(`unknown reserved floor key ${reserved.floorKey}`);
     if (reserved.plotNpcId) {
       if (plotIds.has(reserved.plotNpcId)) errors.push(`duplicate reserved plot NPC ${reserved.plotNpcId}`);

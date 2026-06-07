@@ -20,6 +20,12 @@ import { generateItemSprite, itemDropDefId, itemSpriteKey } from './item_sprites
 import { ENTITY_MASK_VISIBLE, getEntityIndex } from '../systems/entity_index';
 import type { CameraView } from '../systems/camera';
 import { isPlayerEntity } from '../systems/player_actor';
+import {
+  EMPTY_RESOLVED_VISUAL_DETAIL_PROFILE,
+  VISUAL_DETAIL_FAMILY_CODES,
+  type ResolvedVisualDetailFamily,
+  type ResolvedVisualDetailProfile,
+} from '../data/visual_detail_profiles';
 
 export interface DynamicSkyTexture {
   readonly width: number;
@@ -137,6 +143,20 @@ uniform vec3  uBaseFogColor;
 uniform sampler2D uSurfaceAtlas;      // 512×512 RGBA atlas of 16×16 cell overlays
 uniform highp usampler2D uSurfaceIdx; // W×W: cell → atlas slot (0=none, 1+ = slot)
 
+/* ── Render-only deterministic micro-detail families ─────────── */
+uniform int uDetailFloorCount;
+uniform vec4 uDetailFloor0;      // family code, density 0..1, scale, seed
+uniform vec4 uDetailFloor1;
+uniform vec4 uDetailFloorColor0; // RGB color, unused alpha
+uniform vec4 uDetailFloorColor1;
+uniform int uDetailWallCount;
+uniform vec4 uDetailWall0;
+uniform vec4 uDetailWall1;
+uniform vec4 uDetailWallColor0;
+uniform vec4 uDetailWallColor1;
+uniform vec4 uDetailLightDust;
+uniform vec4 uDetailLightDustColor;
+
 /* ── Depth output (for sprite clipping on CPU) ────────────────── */
 // We write depth into a color attachment that gets read back
 out vec4 fragColor;
@@ -241,7 +261,13 @@ vec3 applyFogV(vec3 c, float f) {
   return mix(c, fc, f);
 }
 
-vec3 applyCellFog(vec3 c, ivec2 p, float baseF) {
+float distanceFog(float dist) {
+  if (uFogDensity <= 0.0) return 0.0;
+  float x = max(0.0, dist * uFogDensity);
+  return clamp(1.0 - exp(-x * x * 1.35), 0.0, 0.985);
+}
+
+vec3 applyLocalFog(vec3 c, ivec2 p, float baseF) {
   vec3 outColor = applyFogV(c, baseF);
   float localFog = float(sampleFog(p)) / 255.0;
   if (localFog <= 0.02) return outColor;
@@ -249,6 +275,74 @@ vec3 applyCellFog(vec3 c, ivec2 p, float baseF) {
   float pulse = 0.82 + 0.18 * sin(uTime * 1.65 + phase);
   float f = clamp(localFog * 0.78 * pulse, 0.0, 0.88);
   return mix(outColor, uFogColor, f);
+}
+
+bool lightBoundary(uint cell, uint doorState) {
+  if (cell == ${Cell.WALL}u || cell == ${Cell.LIFT}u || cell == ${Cell.ABYSS}u) return true;
+  if (cell != ${Cell.DOOR}u) return false;
+  return doorState != 0u && doorState != 3u;
+}
+
+bool lightBoundaryAt(ivec2 p) {
+  uint cell = sampleCell(p);
+  uint doorState = cell == ${Cell.DOOR}u ? sampleDoor(p) : 0u;
+  return lightBoundary(cell, doorState);
+}
+
+float contactAoFloor(ivec2 cell) {
+  float n = 0.0;
+  n += lightBoundaryAt(cell + ivec2( 1,  0)) ? 1.0 : 0.0;
+  n += lightBoundaryAt(cell + ivec2(-1,  0)) ? 1.0 : 0.0;
+  n += lightBoundaryAt(cell + ivec2( 0,  1)) ? 1.0 : 0.0;
+  n += lightBoundaryAt(cell + ivec2( 0, -1)) ? 1.0 : 0.0;
+  return clamp(1.0 - n * 0.095, 0.62, 1.0);
+}
+
+float contactAoWall(ivec2 cell, int side, int texY) {
+  float bottom = smoothstep(38.0, 63.0, float(texY)) * 0.22;
+  ivec2 a = side == 0 ? ivec2(0, 1) : ivec2(1, 0);
+  float corner = 0.0;
+  corner += lightBoundaryAt(cell + a) ? 1.0 : 0.0;
+  corner += lightBoundaryAt(cell - a) ? 1.0 : 0.0;
+  float sideShade = side == 1 ? 0.13 : 0.0;
+  return clamp(1.0 - bottom - corner * 0.045 - sideShade, 0.56, 1.0);
+}
+
+vec3 materialResponse(uint texId, vec3 base, int tx, int ty, ivec2 cell, float lit, float beam) {
+  float luma = dot(base, vec3(0.299, 0.587, 0.114));
+  vec3 color = base;
+
+  if (texId == ${Tex.CONCRETE}u || texId == ${Tex.BRICK}u || texId == ${Tex.PANEL}u ||
+      texId == ${Tex.HERMO_WALL}u || texId == ${Tex.F_CONCRETE}u || texId == ${Tex.F_LINO}u) {
+    float panelSeam = max(1.0 - smoothstep(0.0, 2.0, float(tx & 15)),
+                          1.0 - smoothstep(0.0, 2.0, float(ty & 15)));
+    color = mix(vec3(luma), color, 1.10);
+    color = mix(color, color * vec3(0.70, 0.68, 0.63), panelSeam * 0.18);
+    color += vec3(0.030, 0.027, 0.022) * smoothstep(0.18, 0.72, luma);
+  } else if (texId == ${Tex.TILE_W}u || texId == ${Tex.METAL}u || texId == ${Tex.PIPE}u ||
+             texId == ${Tex.F_TILE}u || texId == ${Tex.F_MARBLE_TILE}u || texId == ${Tex.MARBLE}u) {
+    float seam = max(1.0 - smoothstep(0.0, 1.4, float(tx & 7)),
+                     1.0 - smoothstep(0.0, 1.4, float(ty & 7)));
+    float cold = smoothstep(0.22, 0.96, lit + beam * 0.65);
+    color = mix(color, color * vec3(0.72, 0.78, 0.83), seam * 0.16);
+    color += vec3(0.030, 0.050, 0.070) * cold;
+  } else if (texId == ${Tex.F_WATER}u) {
+    float edge = smoothstep(0.30, 1.0, lit + beam);
+    color = mix(color, vec3(0.07, 0.12, 0.13), 0.14);
+    color += vec3(0.020, 0.050, 0.060) * edge;
+  } else if (texId == ${Tex.MEAT}u || texId == ${Tex.GUT}u || texId == ${Tex.LARVA_BODY}u ||
+             texId == ${Tex.F_MEAT}u || texId == ${Tex.F_GUT}u) {
+    float wet = smoothstep(0.25, 0.95, lit + beam) * organicLightPulse(cell);
+    color = mix(color, color * vec3(1.09, 0.82, 0.76), 0.18);
+    color += vec3(0.055, 0.012, 0.009) * wet;
+  } else if (texId == ${Tex.VOID_WALL}u || texId == ${Tex.F_VOID}u || texId == ${Tex.F_ABYSS}u || texId == ${Tex.DARK}u) {
+    int proof = (tx * 3 + ty * 5 + cell.x * 7 + cell.y * 11) & 31;
+    float sharp = proof == 0 ? 1.0 : 0.0;
+    color = mix(color, color * vec3(0.78, 0.95, 0.82), 0.13);
+    color += vec3(0.018, 0.090, 0.034) * sharp * smoothstep(0.18, 0.9, lit + beam);
+  }
+
+  return clamp(color, 0.0, 1.0);
 }
 
 float flashlightBoost(float dist) {
@@ -381,6 +475,196 @@ vec3 applyHellLamp(vec3 base, int texXi, int texYi, int cellX, int cellY, float 
   return min(color, vec3(1.0));
 }
 
+float detailRect(vec2 uv, vec2 center, vec2 size) {
+  vec2 d = abs(uv - center) / max(size, vec2(0.001));
+  return 1.0 - smoothstep(0.82, 1.0, max(d.x, d.y));
+}
+
+float detailLine(float v, float width) {
+  return 1.0 - smoothstep(width, width + 0.025, abs(v));
+}
+
+float detailMaterialBoost(int family, uint texId, bool floorSurface) {
+  if (texId == ${Tex.F_ABYSS}u || texId == ${Tex.DARK}u) {
+    return family == ${VISUAL_DETAIL_FAMILY_CODES.proof_specks} ? 0.65 : 0.0;
+  }
+  bool organic = texId == ${Tex.MEAT}u || texId == ${Tex.GUT}u || texId == ${Tex.LARVA_BODY}u ||
+                 texId == ${Tex.F_MEAT}u || texId == ${Tex.F_GUT}u;
+  bool voidTex = texId == ${Tex.VOID_WALL}u || texId == ${Tex.F_VOID}u;
+  bool industrial = texId == ${Tex.METAL}u || texId == ${Tex.PIPE}u || texId == ${Tex.F_WATER}u;
+  bool paperOk = texId == ${Tex.F_LINO}u || texId == ${Tex.F_PARQUET}u || texId == ${Tex.F_WOOD}u || texId == ${Tex.F_CONCRETE}u;
+  bool concrete = texId == ${Tex.CONCRETE}u || texId == ${Tex.PANEL}u || texId == ${Tex.BRICK}u ||
+                  texId == ${Tex.HERMO_WALL}u || texId == ${Tex.F_CONCRETE}u || texId == ${Tex.F_LINO}u;
+
+  if (family == ${VISUAL_DETAIL_FAMILY_CODES.paper_scraps} || family == ${VISUAL_DETAIL_FAMILY_CODES.newspaper_bits}) {
+    return floorSurface && paperOk && !organic && !voidTex ? 1.0 : 0.0;
+  }
+  if (family == ${VISUAL_DETAIL_FAMILY_CODES.crumbs}) {
+    return floorSurface && !organic && !voidTex ? 0.85 : 0.0;
+  }
+  if (family == ${VISUAL_DETAIL_FAMILY_CODES.floor_dust}) {
+    return floorSurface && !organic ? (voidTex ? 0.25 : 0.85) : 0.0;
+  }
+  if (family == ${VISUAL_DETAIL_FAMILY_CODES.wall_cracks} || family == ${VISUAL_DETAIL_FAMILY_CODES.chipped_concrete}) {
+    return concrete || texId == ${Tex.MARBLE}u ? 1.0 : (industrial ? 0.45 : 0.2);
+  }
+  if (family == ${VISUAL_DETAIL_FAMILY_CODES.cobweb_corner}) {
+    return !floorSurface && !organic && !voidTex && !industrial ? 0.85 : 0.0;
+  }
+  if (family == ${VISUAL_DETAIL_FAMILY_CODES.rust_grit}) {
+    return industrial || texId == ${Tex.F_CONCRETE}u || texId == ${Tex.CONCRETE}u ? 1.0 : 0.0;
+  }
+  if (family == ${VISUAL_DETAIL_FAMILY_CODES.wet_dirt}) {
+    return floorSurface && !voidTex ? (industrial || texId == ${Tex.F_TILE}u || texId == ${Tex.F_CONCRETE}u ? 1.0 : 0.38) : 0.0;
+  }
+  if (family == ${VISUAL_DETAIL_FAMILY_CODES.bone_crumbs}) {
+    return floorSurface && !voidTex ? (organic ? 1.0 : 0.48) : 0.0;
+  }
+  if (family == ${VISUAL_DETAIL_FAMILY_CODES.gut_threads}) {
+    return organic ? 1.0 : 0.0;
+  }
+  if (family == ${VISUAL_DETAIL_FAMILY_CODES.proof_specks}) {
+    return voidTex ? 1.0 : 0.22;
+  }
+  return 0.0;
+}
+
+vec3 applyMicroDetailSlot(vec3 base, vec4 slot, vec4 slotColor, bool floorSurface, uint texId, ivec2 cell, int tx, int ty) {
+  int family = int(slot.x + 0.5);
+  float density = clamp(slot.y, 0.0, 1.0);
+  if (family <= 0 || density <= 0.0) return base;
+  float materialBoost = detailMaterialBoost(family, texId, floorSurface);
+  if (materialBoost <= 0.0) return base;
+
+  vec2 uv = (vec2(float(tx), float(ty)) + 0.5) / TEX_F;
+  int seed = int(slot.w);
+  float cellRoll = noiseI(cell.x + family * 23, cell.y - family * 31, seed + 17);
+  float local = noiseI(cell.x * 7 + tx * 13, cell.y * 11 + ty * 5, seed + family * 41);
+  vec3 detail = slotColor.rgb;
+  float scale = max(0.25, slot.z);
+  float a = 0.0;
+
+  if (family == ${VISUAL_DETAIL_FAMILY_CODES.paper_scraps} || family == ${VISUAL_DETAIL_FAMILY_CODES.newspaper_bits}) {
+    if (cellRoll < density * 3.8) {
+      vec2 center = vec2(
+        0.18 + 0.64 * noiseI(cell.x, cell.y, seed + 101),
+        0.20 + 0.60 * noiseI(cell.y, cell.x, seed + 103)
+      );
+      vec2 size = vec2(0.040, 0.018) * scale * (family == ${VISUAL_DETAIL_FAMILY_CODES.newspaper_bits} ? 0.72 : 1.0);
+      float ink = family == ${VISUAL_DETAIL_FAMILY_CODES.newspaper_bits}
+        ? step(0.56, noiseI(tx, ty, seed + cell.x * 3 + cell.y * 5))
+        : 0.0;
+      a = detailRect(uv, center, size) * (0.34 + ink * 0.15);
+      detail = mix(detail, vec3(0.09, 0.10, 0.09), ink * 0.38);
+    }
+  } else if (family == ${VISUAL_DETAIL_FAMILY_CODES.crumbs} || family == ${VISUAL_DETAIL_FAMILY_CODES.bone_crumbs} ||
+             family == ${VISUAL_DETAIL_FAMILY_CODES.proof_specks}) {
+    float chance = density * (family == ${VISUAL_DETAIL_FAMILY_CODES.proof_specks} ? 0.55 : 0.72);
+    float speck = step(1.0 - chance, local);
+    float edge = step(0.88, noiseI(tx + cell.x, ty + cell.y, seed + 7));
+    a = speck * (0.16 + edge * 0.18);
+    if (family == ${VISUAL_DETAIL_FAMILY_CODES.proof_specks}) {
+      detail += vec3(0.06, 0.20, 0.10) * edge;
+      a *= 0.75;
+    }
+  } else if (family == ${VISUAL_DETAIL_FAMILY_CODES.floor_dust}) {
+    float n = noiseI(cell.x * 3 + (tx >> 2), cell.y * 5 + (ty >> 2), seed + 29);
+    a = smoothstep(0.72, 0.98, n) * density * 0.34;
+    detail = mix(base * 0.72, detail, 0.35);
+  } else if (family == ${VISUAL_DETAIL_FAMILY_CODES.wall_cracks}) {
+    if (cellRoll < density * 4.2) {
+      float x = uv.x - (0.16 + 0.68 * noiseI(cell.x, cell.y, seed + 131));
+      float kink = sin(uv.y * 24.0 + cellRoll * 6.2831853) * 0.028;
+      a = detailLine(x + kink, 0.010 + density * 0.018) * (0.22 + density * 0.55);
+    }
+  } else if (family == ${VISUAL_DETAIL_FAMILY_CODES.chipped_concrete}) {
+    if (cellRoll < density * 3.4) {
+      vec2 center = vec2(
+        0.14 + 0.72 * noiseI(cell.x, cell.y, seed + 151),
+        0.16 + 0.68 * noiseI(cell.y, cell.x, seed + 157)
+      );
+      float chip = detailRect(uv, center, vec2(0.026, 0.020) * scale);
+      a = chip * (0.20 + local * 0.20);
+    }
+  } else if (family == ${VISUAL_DETAIL_FAMILY_CODES.cobweb_corner}) {
+    float corner = max(
+      1.0 - smoothstep(0.0, 0.22, length(uv - vec2(0.03, 0.03))),
+      1.0 - smoothstep(0.0, 0.22, length(uv - vec2(0.97, 0.03)))
+    );
+    float strand = max(detailLine(uv.x + uv.y - 0.22, 0.009), detailLine(uv.x - uv.y, 0.007));
+    a = corner * strand * density * 0.55 * step(0.42, cellRoll);
+  } else if (family == ${VISUAL_DETAIL_FAMILY_CODES.rust_grit}) {
+    float streak = floorSurface
+      ? smoothstep(0.83, 0.99, local)
+      : detailLine(uv.x - 0.22 - noiseI(cell.x, cell.y, seed + 181) * 0.55, 0.015);
+    a = streak * density * (floorSurface ? 0.72 : 0.46);
+  } else if (family == ${VISUAL_DETAIL_FAMILY_CODES.wet_dirt}) {
+    float puddle = detailRect(uv, vec2(0.5 + (cellRoll - 0.5) * 0.42, 0.55), vec2(0.16, 0.055) * scale);
+    float edge = smoothstep(0.40, 0.96, local);
+    a = puddle * edge * density * 0.95;
+    detail = mix(detail, vec3(0.04, 0.05, 0.04), 0.55);
+  } else if (family == ${VISUAL_DETAIL_FAMILY_CODES.gut_threads}) {
+    float thread = max(
+      detailLine(sin(uv.x * 18.0 + cellRoll * 4.0) * 0.08 + uv.y - 0.35, 0.014),
+      detailLine(cos(uv.y * 15.0 + cellRoll * 5.0) * 0.07 + uv.x - 0.62, 0.012)
+    );
+    a = thread * density * 0.74 * step(0.34, cellRoll);
+  }
+
+  a = clamp(a * materialBoost, 0.0, 0.45);
+  return mix(base, detail, a);
+}
+
+vec3 applyFloorMicroDetail(vec3 base, uint texId, ivec2 cell, int tx, int ty) {
+  vec3 color = base;
+  if (uDetailFloorCount > 0) color = applyMicroDetailSlot(color, uDetailFloor0, uDetailFloorColor0, true, texId, cell, tx, ty);
+  if (uDetailFloorCount > 1) color = applyMicroDetailSlot(color, uDetailFloor1, uDetailFloorColor1, true, texId, cell, tx, ty);
+  return color;
+}
+
+vec3 applyWallMicroDetail(vec3 base, uint texId, ivec2 cell, int tx, int ty) {
+  vec3 color = base;
+  if (uDetailWallCount > 0) color = applyMicroDetailSlot(color, uDetailWall0, uDetailWallColor0, false, texId, cell, tx, ty);
+  if (uDetailWallCount > 1) color = applyMicroDetailSlot(color, uDetailWall1, uDetailWallColor1, false, texId, cell, tx, ty);
+  return color;
+}
+
+vec3 applyLightDust(vec3 base, vec2 fragCoord, float dist, float rayDX, float rayDY, float fogF) {
+  float density = clamp(uDetailLightDust.y, 0.0, 1.0);
+  if (density <= 0.0) return base;
+  float beam = max(flashlightBoost(dist), toolBeamBoost(dist, rayDX, rayDY));
+  if (beam <= 0.015) return base;
+  float nearFade = 1.0 - smoothstep(2.0, MAX_DIST * 0.72, dist);
+  float fogFade = 1.0 - smoothstep(0.18, 0.82, fogF);
+  float sparkle = step(1.0 - density * 0.13, noiseI(int(fragCoord.x) * 5, int(fragCoord.y) * 7, int(uDetailLightDust.w) + 601));
+  float a = sparkle * beam * nearFade * fogFade * density * 0.55;
+  return min(base + uDetailLightDustColor.rgb * a, vec3(1.0));
+}
+
+vec3 shadeWall(uint texId, vec3 base, ivec2 cell, int side, int texX, int texY, float dist, float lit, float beam) {
+  vec3 color = applyWallMicroDetail(base, texId, cell, texX, texY);
+  color = materialResponse(texId, color, texX, texY, cell, lit, beam);
+  color = blendSurface(color, cell, texX >> 2, texY >> 2);
+  if (texId == ${Tex.MEAT}u || texId == ${Tex.GUT}u) {
+    color = applyHellEye(color, texX, texY, cell.x, cell.y);
+  }
+  color *= contactAoWall(cell, side, texY);
+  color *= lit;
+  return applyToolBeamTint(color, beam);
+}
+
+vec3 shadePlane(uint texId, vec3 base, ivec2 cell, int tx, int ty, float dist, float lit, float beam, bool ceiling, bool surface) {
+  vec3 color = base;
+  if (ceiling && texId == ${Tex.CEIL}u) color = applyWallMicroDetail(color, texId, cell, tx, ty);
+  else if (surface) color = applyFloorMicroDetail(color, texId, cell, tx, ty);
+  color = materialResponse(texId, color, tx, ty, cell, lit, beam);
+  if (surface) color = blendSurface(color, cell, tx >> 2, ty >> 2);
+  float ao = contactAoFloor(cell);
+  if (ceiling) ao = mix(1.0, ao, 0.45);
+  color *= ao * lit;
+  return applyToolBeamTint(color, beam);
+}
+
 /* ── Main fragment shader ─────────────────────────────────────── */
 void main() {
   vec2 fragCoord = gl_FragCoord.xy;
@@ -474,7 +758,7 @@ void main() {
   if (side == 0 && rayDX < 0.0) texXi = TEX_I - 1 - texXi;
   if (side == 1 && rayDY > 0.0) texXi = TEX_I - 1 - texXi;
 
-  float fogF = min(1.0, dist * uFogDensity);
+  float fogF = distanceFog(dist);
 
   vec3 pixel = fogColor(); // default = fog
   if (hit && row >= drawStart && row <= drawEnd) {
@@ -492,16 +776,8 @@ void main() {
         vec3 cut = vec3(30.0/255.0, 8.0/255.0, 46.0/255.0);
         c = mix(dark, cut, scan * (0.35 + glitch * 0.45));
       }
-      // Surface overlay (blood, bullet holes)
-      c = blendSurface(c, hitCell, texXi >> 2, texYi >> 2);
-      // Hell eye overlay on organic walls
-      if (wallTexId == ${Tex.MEAT}u || wallTexId == ${Tex.GUT}u) {
-        c = applyHellEye(c, texXi, texYi, hitCell.x, hitCell.y);
-      }
-      if (side == 1) c *= 0.7;
-      c *= cellLit;
-      c = applyToolBeamTint(c, toolBeam);
-      pixel = applyCellFog(c, hitCell, fogF);
+      c = shadeWall(wallTexId, c, hitCell, side, texXi, texYi, dist, cellLit, toolBeam);
+      pixel = applyLocalFog(c, hitCell, fogF);
       pixelDepth = min(1.0, dist / MAX_DIST);
   } else if (row > (hit ? drawEnd : HALF_H)) {
       // ── Floor ──
@@ -515,7 +791,7 @@ void main() {
           ivec2 fCell = ivec2(wrapI(int(floor(floorX))), wrapI(int(floor(floorY))));
           int ftx = int(floor(floorX * TEX_F)) & (TEX_I - 1);
           int fty = int(floor(floorY * TEX_F)) & (TEX_I - 1);
-          float ff = min(1.0, currentDist * uFogDensity);
+          float ff = distanceFog(currentDist);
           float toolBeam = toolBeamBoost(currentDist, rayDX, rayDY);
           float fLit = min(1.0, uAmbient + sampleLight(fCell) * (1.0 - uAmbient) + flashlightBoost(currentDist) + toolBeam * 0.82);
 
@@ -524,7 +800,8 @@ void main() {
             vec3 fc = sampleAtlas(${Tex.F_ABYSS}u, ftx, fty).rgb;
             float scan = step(0.78, fract((float(fty) + uTime * 26.0) * 0.23));
             fc = mix(fc * 0.35, vec3(22.0/255.0, 6.0/255.0, 34.0/255.0), scan * 0.45);
-            pixel = applyCellFog(fc, fCell, ff);
+            fc = shadePlane(${Tex.F_ABYSS}u, fc, fCell, ftx, fty, currentDist, fLit, toolBeam, false, false);
+            pixel = applyLocalFog(fc, fCell, ff);
             pixelDepth = min(1.0, currentDist / MAX_DIST);
           } else {
             uint floorTexId = fCellType == ${Cell.WATER}u
@@ -532,11 +809,8 @@ void main() {
               : texelFetch(uFloorTex, fCell, 0).r;
             if (floorTexId == 0u) floorTexId = ${Tex.F_CONCRETE}u;
             vec3 fc = sampleAtlas(floorTexId, ftx, fty).rgb;
-            // Surface overlay (blood, urine, etc.)
-            fc = blendSurface(fc, fCell, ftx >> 2, fty >> 2);
-            fc *= fLit;
-            fc = applyToolBeamTint(fc, toolBeam);
-            pixel = applyCellFog(fc, fCell, ff);
+            fc = shadePlane(floorTexId, fc, fCell, ftx, fty, currentDist, fLit, toolBeam, false, true);
+            pixel = applyLocalFog(fc, fCell, ff);
             pixelDepth = min(1.0, currentDist / MAX_DIST);
           }
         }
@@ -553,7 +827,7 @@ void main() {
           ivec2 cCell = ivec2(wrapI(int(floor(floorX))), wrapI(int(floor(floorY))));
           int ftx = int(floor(floorX * TEX_F)) & (TEX_I - 1);
           int fty = int(floor(floorY * TEX_F)) & (TEX_I - 1);
-          float ff = min(1.0, currentDist * uFogDensity);
+          float ff = distanceFog(currentDist);
           float toolBeam = toolBeamBoost(currentDist, rayDX, rayDY);
           float cLit = min(1.0, uAmbient + sampleLight(cCell) * (1.0 - uAmbient) + flashlightBoost(currentDist) + toolBeam * 0.82);
 
@@ -562,7 +836,8 @@ void main() {
             vec3 cc = sampleAtlas(${Tex.DARK}u, ftx, fty).rgb * 0.22;
             float scan = step(0.8, fract((float(ftx) + uTime * 21.0) * 0.21));
             cc = mix(cc, vec3(18.0/255.0, 5.0/255.0, 28.0/255.0), scan * 0.42);
-            pixel = applyCellFog(cc, cCell, ff);
+            cc = shadePlane(${Tex.DARK}u, cc, cCell, ftx, fty, currentDist, cLit, toolBeam, true, false);
+            pixel = applyLocalFog(cc, cCell, ff);
             pixelDepth = min(1.0, currentDist / MAX_DIST);
           } else {
             uint feat = texelFetch(uFeatures, cCell, 0).r;
@@ -570,14 +845,14 @@ void main() {
               float glow = max(0.0, 1.0 - currentDist * 0.15);
               if (organicLightCell(cCell)) {
                 vec3 cc = sampleAtlas(${Tex.CEIL}u, ftx, fty).rgb * (0.25 + cLit * 0.35);
-                pixel = applyCellFog(applyHellLamp(cc, ftx, fty, cCell.x, cCell.y, currentDist), cCell, ff);
+                pixel = applyLocalFog(applyHellLamp(cc, ftx, fty, cCell.x, cCell.y, currentDist), cCell, ff);
               } else {
-                pixel = applyCellFog(vec3(220.0/255.0 * glow, 180.0/255.0 * glow, 80.0/255.0 * glow), cCell, ff);
+                pixel = applyLocalFog(vec3(220.0/255.0 * glow, 180.0/255.0 * glow, 80.0/255.0 * glow), cCell, ff);
               }
               pixelDepth = min(1.0, currentDist / MAX_DIST);
             } else if (feat == ${Feature.CANDLE}u) {
               float glow = max(0.0, 1.0 - currentDist * 0.18);
-              pixel = applyCellFog(vec3(240.0/255.0 * glow, 180.0/255.0 * glow, 50.0/255.0 * glow), cCell, ff);
+              pixel = applyLocalFog(vec3(240.0/255.0 * glow, 180.0/255.0 * glow, 50.0/255.0 * glow), cCell, ff);
               pixelDepth = min(1.0, currentDist / MAX_DIST);
             } else {
               vec3 cc;
@@ -587,16 +862,18 @@ void main() {
                 cc *= 0.45 + cLit * 0.55;
               } else {
                 cc = sampleAtlas(${Tex.CEIL}u, ftx, fty).rgb;
-                cc *= cLit;
+                cc = shadePlane(${Tex.CEIL}u, cc, cCell, ftx, fty, currentDist, cLit, toolBeam, true, false);
               }
-              cc = applyToolBeamTint(cc, toolBeam);
-              pixel = applyCellFog(cc, cCell, ff);
+              if (uUseDynamicSky == 1) cc = applyToolBeamTint(cc, toolBeam);
+              pixel = applyLocalFog(cc, cCell, ff);
               pixelDepth = min(1.0, currentDist / MAX_DIST);
             }
           }
         }
       }
   }
+
+  pixel = applyLightDust(pixel, fragCoord, pixelDepth * MAX_DIST, rayDX, rayDY, distanceFog(pixelDepth * MAX_DIST));
 
   // Encode depth into alpha for CPU readback (sprite clipping)
   float normDist = dist / MAX_DIST;
@@ -753,6 +1030,7 @@ uniform float uSamosborActive; // 1.0 during samosbor
 uniform int uSamosborStyle; // data-driven SamosborScreenFxId code
 uniform float uSamosborPost;
 uniform vec3 uSamosborTint;
+uniform float uScreenInterference;
 out vec4 fragColor;
 
 /* ── Noise helpers ────────────────────────────────────────────── */
@@ -763,74 +1041,79 @@ float hash21(vec2 p) {
 }
 
 void main() {
-  vec2 uv = vUV;
+  vec2 uv = clamp(vUV, vec2(0.001), vec2(0.999));
   float t = uTime;
+  float interferenceMode = clamp(uScreenInterference, 0.0, 1.0);
+  float baselineStrength = interferenceMode * 0.34;
+  float glitchStrength = clamp(uGlitch, 0.0, 1.0);
+  float samosborStrength = uSamosborActive > 0.5 ? clamp(uSamosborPost, 0.0, 1.0) : 0.0;
+  float postStrength = max(max(glitchStrength, samosborStrength), baselineStrength);
 
-  /* ── VHS tracking distortion (always-on, subtle) ────────────── */
-  float slowWave = sin(uv.y * 2.7 + t * 0.5) * 0.0008;
-  float fastWiggle = sin(uv.y * 23.0 + t * 3.1) * 0.0004;
-  uv.x += slowWave + fastWiggle;
+  if (postStrength <= 0.001) {
+    fragColor = texture(uTex, vUV);
+    return;
+  }
+
+  /* ── State distortion: weak neuro-interface drift, stronger only for hazards ── */
+  if (glitchStrength > 0.0 || baselineStrength > 0.0) {
+    float driftStrength = max(glitchStrength, baselineStrength * 0.72);
+    float slowWave = sin(uv.y * 2.7 + t * 0.5) * 0.0008;
+    float fastWiggle = sin(uv.y * 23.0 + t * 3.1) * 0.0004;
+    uv.x += (slowWave + fastWiggle) * driftStrength;
+  }
 
   /* ── Samosbor glitch: coherent band drift without expensive per-pixel hashes ── */
-  if (uGlitch > 0.0) {
+  if (glitchStrength > 0.0) {
     float bandId = floor(uv.y * 42.0);
     float tick = floor(t * 7.0);
     float bandPhase = fract(bandId * 0.6180339 + tick * 0.173);
-    float bandMask = step(0.92 - uGlitch * 0.9, bandPhase);
-    float fineMask = step(0.985 - uGlitch * 0.22, fract(uv.y * 180.0 + t * 0.85));
-    float shift = ((bandPhase - 0.5) * bandMask * 0.032 + fineMask * 0.006) * uGlitch;
+    float bandMask = step(0.92 - glitchStrength * 0.9, bandPhase);
+    float fineMask = step(0.985 - glitchStrength * 0.22, fract(uv.y * 180.0 + t * 0.85));
+    float shift = ((bandPhase - 0.5) * bandMask * 0.032 + fineMask * 0.006) * glitchStrength;
     uv.x += shift;
-    uv.y += (fract(bandId * 0.37 + tick * 0.29) - 0.5) * bandMask * uGlitch * 0.0035;
+    uv.y += (fract(bandId * 0.37 + tick * 0.29) - 0.5) * bandMask * glitchStrength * 0.0035;
   }
 
-  /* ── Chromatic aberration + VHS color bleed (combined for fewer texture reads) ── */
-  float caBase = 0.0008;
-  float caGlitch = uGlitch * 0.004;
-  float caPulse = sin(t * 1.3) * 0.0002;
-  float ca = caBase + caGlitch + caPulse;
-  vec2 caOff = vec2(ca, ca * 0.3);
   vec2 sampleUv = clamp(uv, vec2(0.001), vec2(0.999));
-  vec4 cL = texture(uTex, clamp(sampleUv + caOff, vec2(0.001), vec2(0.999)));
-  vec4 cC = texture(uTex, sampleUv);
-  vec4 cR = texture(uTex, clamp(sampleUv - caOff, vec2(0.001), vec2(0.999)));
-  vec3 color = vec3(cL.r, cC.g, cR.b);
+  vec3 color = texture(uTex, sampleUv).rgb;
+  float filterStrength = max(glitchStrength, baselineStrength);
+  if (filterStrength > 0.0) {
+    float ca = baselineStrength * 0.0011 + glitchStrength * 0.004 + sin(t * 1.3) * 0.0002 * filterStrength;
+    vec2 caOff = vec2(ca, ca * 0.3);
+    vec4 cL = texture(uTex, clamp(sampleUv + caOff, vec2(0.001), vec2(0.999)));
+    vec4 cC = texture(uTex, sampleUv);
+    vec4 cR = texture(uTex, clamp(sampleUv - caOff, vec2(0.001), vec2(0.999)));
+    color = vec3(cL.r, cC.g, cR.b);
 
-  /* VHS color bleed: approximate horizontal chroma smear using same 3 samples */
-  float bleedStr = 0.12 + uGlitch * 0.1;
-  vec3 bleed = (cL.rgb + cC.rgb + cR.rgb) / 3.0;
-  color = mix(color, bleed, bleedStr);
+    float bleedStr = 0.24 * baselineStrength + 0.22 * glitchStrength;
+    vec3 bleed = (cL.rgb + cC.rgb + cR.rgb) / 3.0;
+    color = mix(color, bleed, bleedStr);
 
-  /* ── Scanlines (subtle CRT) ─────────────────────────────────── */
-  float scanY = gl_FragCoord.y;
-  float scanPhase = mod(scanY, 3.0);
-  float scanDark = 0.0;
-  if (scanPhase < 1.0) scanDark = 0.06;
-  else if (scanPhase < 2.0) scanDark = 0.02;
-  scanDark += uGlitch * 0.04;
-  color *= 1.0 - scanDark;
+    float scanY = gl_FragCoord.y;
+    float scanWave = 0.5 + 0.5 * sin(scanY * 3.14159265);
+    float scanNoise = hash21(vec2(floor(scanY / 4.0), floor(t * 8.0)));
+    float scanDark = (0.016 + scanNoise * 0.014) * filterStrength + glitchStrength * 0.045;
+    color *= 1.0 - scanWave * scanDark;
+    color *= 1.0 + sin(scanY * 0.19 + t * 1.4) * 0.006 * filterStrength;
 
-  /* ── Interlace jitter (odd/even frame shift) ────────────────── */
-  float framePhase = mod(floor(t * 30.0), 2.0); // ~30fps flicker
-  float interlace = mod(scanY + framePhase, 2.0) < 1.0 ? 0.97 : 1.0;
-  color *= interlace;
+    float grain = (hash21(vUV * 680.0 + fract(t * 8.3)) - 0.5) * 0.055;
+    grain += (hash21(vUV * 220.0 + fract(t * 4.9 + 1.0)) - 0.5) * 0.018;
+    color += grain * filterStrength;
 
-  /* ── Film grain / sensor noise ──────────────────────────────── */
-  float grain = hash21(vUV * 800.0 + fract(t * 11.3)) * 0.07 - 0.035;
-  grain += (hash21(vUV * 400.0 + fract(t * 7.7 + 1.0)) - 0.5) * 0.02;
-  color += grain;
+    vec2 vc = uv - 0.5;
+    float vig = 1.0 - dot(vc, vc) * 0.6;
+    color *= mix(1.0, vig, min(0.55, filterStrength));
 
-  /* ── Subtle vignette ────────────────────────────────────────── */
-  vec2 vc = uv - 0.5;
-  float vig = 1.0 - dot(vc, vc) * 0.6;
-  color *= vig;
-
-  /* ── Phosphor glow tint (slight cyan-green shift like old CRT) ─ */
-  color.g *= 1.02;
-  color.b *= 0.98;
+    float luma = dot(color, vec3(0.299, 0.587, 0.114));
+    vec3 phosphor = mix(vec3(luma), color, 0.78) * vec3(0.96, 1.025, 0.99);
+    color = mix(color, phosphor, 0.18 * filterStrength);
+    color = (color - 0.5) * (1.0 + 0.035 * filterStrength) + 0.5;
+    color += vec3(0.0, 0.004, 0.002) * filterStrength;
+  }
 
   /* ── Samosbor: cheap variant-shaped post grade ──────────────── */
-  if (uSamosborActive > 0.5 && uSamosborPost > 0.01) {
-    float post = clamp(uSamosborPost, 0.0, 1.0);
+  if (uSamosborActive > 0.5 && samosborStrength > 0.01) {
+    float post = samosborStrength;
     float luma = dot(color, vec3(0.299, 0.587, 0.114));
     float desat = uSamosborStyle == 6 ? 0.48 : (uSamosborStyle == 5 ? 0.12 : 0.0);
     float tintMix = uSamosborStyle == 6 ? 0.13 : 0.06;
@@ -921,6 +1204,7 @@ interface GLState {
   spriteProgram: WebGLProgram;
   spriteVAO: WebGLVertexArrayObject;
   spriteTextures: WebGLTexture[];   // individual sprite textures
+  spriteGroundInsets: Float32Array;  // transparent bottom rows per sprite, normalized 0..1
   proceduralSpriteTextures: Map<number, ProceduralSpriteCacheEntry>;
   itemSpriteTextures: Map<string, ProceduralSpriteCacheEntry>;
   proceduralSpriteUseTick: number;
@@ -929,6 +1213,9 @@ interface GLState {
   surfaceIdxTex: WebGLTexture;      // W×W R16UI cell→slot mapping
   surfacePixels: Uint8Array;
   surfaceIndex: Uint16Array;
+  surfaceSlotByCell: Map<number, number>;
+  surfaceCellBySlot: Int32Array;
+  surfaceIndexPatch: Uint16Array;
   surfaceVersion: number;
   surfaceUploadMs: number;
   surfaceCamTileX: number;
@@ -1010,6 +1297,54 @@ function planeLenForFov(fovRadians: number): number {
   const fov = Number.isFinite(fovRadians) ? fovRadians : DEFAULT_FOV_RADIANS;
   const clamped = Math.max(Math.PI / 3, Math.min((110 * Math.PI) / 180, fov));
   return Math.tan(clamped * 0.5);
+}
+
+function detailDensity01(row: ResolvedVisualDetailFamily | undefined): number {
+  if (!row || !Number.isFinite(row.density)) return 0;
+  return Math.max(0, Math.min(1, row.density / 255));
+}
+
+function uploadVisualDetailSlot(
+  gl: WebGL2RenderingContext,
+  uniforms: Record<string, WebGLUniformLocation | null>,
+  slotName: string,
+  colorName: string,
+  row: ResolvedVisualDetailFamily | undefined,
+): void {
+  if (!row) {
+    gl.uniform4f(uniforms[slotName], 0, 0, 1, 0);
+    gl.uniform4f(uniforms[colorName], 0, 0, 0, 0);
+    return;
+  }
+  gl.uniform4f(
+    uniforms[slotName],
+    row.familyCode,
+    detailDensity01(row),
+    Math.max(0.1, Math.min(4, row.scale)),
+    row.seed & 0xffff,
+  );
+  gl.uniform4f(
+    uniforms[colorName],
+    row.color[0] / 255,
+    row.color[1] / 255,
+    row.color[2] / 255,
+    1,
+  );
+}
+
+function uploadVisualDetailUniforms(
+  gl: WebGL2RenderingContext,
+  uniforms: Record<string, WebGLUniformLocation | null>,
+  profile: ResolvedVisualDetailProfile | undefined,
+): void {
+  const resolved = profile ?? EMPTY_RESOLVED_VISUAL_DETAIL_PROFILE;
+  gl.uniform1i(uniforms['uDetailFloorCount'], Math.min(2, resolved.floorFamilies.length));
+  uploadVisualDetailSlot(gl, uniforms, 'uDetailFloor0', 'uDetailFloorColor0', resolved.floorFamilies[0]);
+  uploadVisualDetailSlot(gl, uniforms, 'uDetailFloor1', 'uDetailFloorColor1', resolved.floorFamilies[1]);
+  gl.uniform1i(uniforms['uDetailWallCount'], Math.min(2, resolved.wallFamilies.length));
+  uploadVisualDetailSlot(gl, uniforms, 'uDetailWall0', 'uDetailWallColor0', resolved.wallFamilies[0]);
+  uploadVisualDetailSlot(gl, uniforms, 'uDetailWall1', 'uDetailWallColor1', resolved.wallFamilies[1]);
+  uploadVisualDetailSlot(gl, uniforms, 'uDetailLightDust', 'uDetailLightDustColor', resolved.lightDust);
 }
 
 /* ── Create fullscreen quad VAO ───────────────────────────────── */
@@ -1155,11 +1490,36 @@ function createSpriteTexture(gl: WebGL2RenderingContext, spr: SpriteData): WebGL
   return tex;
 }
 
+function spriteGroundInset(sprite: SpriteData): number {
+  const size = Math.sqrt(sprite.length) | 0;
+  if (size <= 0 || size * size !== sprite.length) return 0;
+  for (let y = size - 1; y >= 0; y--) {
+    const row = y * size;
+    for (let x = 0; x < size; x++) {
+      if ((sprite[row + x] >>> 24) !== 0) {
+        return (size - 1 - y) / size;
+      }
+    }
+  }
+  return 0;
+}
+
+function buildSpriteGroundInsets(sprites: SpriteData[]): Float32Array {
+  const insets = new Float32Array(sprites.length);
+  for (let i = 0; i < sprites.length; i++) insets[i] = spriteGroundInset(sprites[i]);
+  return insets;
+}
+
 /* ── Build individual sprite textures ─────────────────────────── */
 function buildSpriteTextures(gl: WebGL2RenderingContext, sprites: SpriteData[]): WebGLTexture[] {
   const result: WebGLTexture[] = [];
   for (const spr of sprites) result.push(createSpriteTexture(gl, spr));
   return result;
+}
+
+function usesStaticObjectGroundInset(source: VisibleSpriteSource): boolean {
+  return source === VisibleSpriteSource.FEATURE
+    || source === VisibleSpriteSource.CONTAINER;
 }
 
 function trimProceduralSpriteCache(): void {
@@ -1219,9 +1579,8 @@ function itemDropTexture(e: Entity | null): WebGLTexture | null {
 
 function visibleEntitySpriteSource(e: Entity): VisibleSpriteSource {
   // Only real inventory payload drops use generated item textures and small world scale.
-  return e.type === EntityType.ITEM_DROP && itemDropDefId(e)
-    ? VisibleSpriteSource.ITEM_DROP
-    : VisibleSpriteSource.ENTITY;
+  if (e.type === EntityType.ITEM_DROP && itemDropDefId(e)) return VisibleSpriteSource.ITEM_DROP;
+  return VisibleSpriteSource.ENTITY;
 }
 
 function proceduralEntityTexture(e: Entity): WebGLTexture | null {
@@ -1314,13 +1673,35 @@ const SURF_UPLOAD_MIN_INTERVAL_MS = 100;
 interface SurfaceUploadData {
   pixels: Uint8Array;
   index: Uint16Array;
+  slotByCell: Map<number, number>;
+  cellBySlot: Int32Array;
+}
+
+function copySurfaceCellToAtlas(pixels: Uint8Array, slot: number, cellData: Uint8Array): void {
+  const s = slot - 1;
+  const ax = (s % SURF_ATLAS_COLS) * 16;
+  const ay = Math.floor(s / SURF_ATLAS_COLS) * 16;
+  for (let py = 0; py < 16; py++) {
+    for (let px = 0; px < 16; px++) {
+      const si = (py * 16 + px) << 2;
+      const di = ((ay + py) * SURF_ATLAS_SIZE + (ax + px)) * 4;
+      pixels[di]     = cellData[si];
+      pixels[di + 1] = cellData[si + 1];
+      pixels[di + 2] = cellData[si + 2];
+      pixels[di + 3] = cellData[si + 3];
+    }
+  }
 }
 
 function buildSurfaceData(world: World, camX: number, camY: number, out?: SurfaceUploadData): SurfaceUploadData {
   const pixels = out?.pixels ?? new Uint8Array(SURF_ATLAS_SIZE * SURF_ATLAS_SIZE * 4);
   const index = out?.index ?? new Uint16Array(W * W); // 0 = no mark
+  const slotByCell = out?.slotByCell ?? new Map<number, number>();
+  const cellBySlot = out?.cellBySlot ?? new Int32Array(SURF_MAX_SLOTS);
   pixels.fill(0);
   index.fill(0);
+  slotByCell.clear();
+  cellBySlot.fill(-1);
 
   // Sort cells by toroidal distance to camera — nearest 1024 get atlas slots
   const entries = Array.from(world.surfaceMap.entries());
@@ -1342,21 +1723,76 @@ function buildSurfaceData(world: World, camX: number, camY: number, out?: Surfac
     if (slot >= SURF_MAX_SLOTS) break;
     slot++; // 1-based slot numbers (0 = "no mark")
     index[ci] = slot;
-    const s = slot - 1;
-    const ax = (s % SURF_ATLAS_COLS) * 16;
-    const ay = Math.floor(s / SURF_ATLAS_COLS) * 16;
-    for (let py = 0; py < 16; py++) {
-      for (let px = 0; px < 16; px++) {
-        const si = (py * 16 + px) << 2;
-        const di = ((ay + py) * SURF_ATLAS_SIZE + (ax + px)) * 4;
-        pixels[di]     = cellData[si];
-        pixels[di + 1] = cellData[si + 1];
-        pixels[di + 2] = cellData[si + 2];
-        pixels[di + 3] = cellData[si + 3];
-      }
-    }
+    slotByCell.set(ci, slot);
+    cellBySlot[slot - 1] = ci;
+    copySurfaceCellToAtlas(pixels, slot, cellData);
   }
-  return { pixels, index };
+  return { pixels, index, slotByCell, cellBySlot };
+}
+
+function findFreeSurfaceSlot(cellBySlot: Int32Array): number {
+  for (let i = 0; i < cellBySlot.length; i++) {
+    if (cellBySlot[i] < 0) return i + 1;
+  }
+  return 0;
+}
+
+function uploadSurfaceAtlasTile(gl: WebGL2RenderingContext, glState: GLState, slot: number): void {
+  const s = slot - 1;
+  const ax = (s % SURF_ATLAS_COLS) * 16;
+  const ay = Math.floor(s / SURF_ATLAS_COLS) * 16;
+  gl.bindTexture(gl.TEXTURE_2D, glState.surfaceAtlasTex);
+  gl.pixelStorei(gl.UNPACK_ROW_LENGTH, SURF_ATLAS_SIZE);
+  gl.pixelStorei(gl.UNPACK_SKIP_PIXELS, ax);
+  gl.pixelStorei(gl.UNPACK_SKIP_ROWS, ay);
+  try {
+    gl.texSubImage2D(gl.TEXTURE_2D, 0, ax, ay, 16, 16, gl.RGBA, gl.UNSIGNED_BYTE, glState.surfacePixels);
+  } finally {
+    gl.pixelStorei(gl.UNPACK_ROW_LENGTH, 0);
+    gl.pixelStorei(gl.UNPACK_SKIP_PIXELS, 0);
+    gl.pixelStorei(gl.UNPACK_SKIP_ROWS, 0);
+  }
+}
+
+function uploadSurfaceIndexCell(gl: WebGL2RenderingContext, glState: GLState, ci: number, slot: number): void {
+  glState.surfaceIndexPatch[0] = slot;
+  gl.bindTexture(gl.TEXTURE_2D, glState.surfaceIdxTex);
+  gl.texSubImage2D(
+    gl.TEXTURE_2D,
+    0,
+    ci % W,
+    (ci / W) | 0,
+    1,
+    1,
+    gl.RED_INTEGER,
+    gl.UNSIGNED_SHORT,
+    glState.surfaceIndexPatch,
+  );
+}
+
+function uploadSurfaceDirtyCells(world: World, glState: GLState, dirtyCells: readonly number[]): boolean {
+  if (dirtyCells.length <= 0) return false;
+  const { gl } = glState;
+  for (const ci of dirtyCells) {
+    const cellData = world.surfaceMap.get(ci);
+    if (!cellData) return false;
+
+    let slot = glState.surfaceSlotByCell.get(ci) ?? 0;
+    if (slot > 0 && glState.surfaceCellBySlot[slot - 1] !== ci) return false;
+    if (slot <= 0) {
+      if (world.surfaceMap.size > SURF_MAX_SLOTS) return false;
+      slot = findFreeSurfaceSlot(glState.surfaceCellBySlot);
+      if (slot <= 0) return false;
+      glState.surfaceSlotByCell.set(ci, slot);
+      glState.surfaceCellBySlot[slot - 1] = ci;
+      glState.surfaceIndex[ci] = slot;
+      uploadSurfaceIndexCell(gl, glState, ci, slot);
+    }
+
+    copySurfaceCellToAtlas(glState.surfacePixels, slot, cellData);
+    uploadSurfaceAtlasTile(gl, glState, slot);
+  }
+  return true;
 }
 
 function createDataTexR16UI(gl: WebGL2RenderingContext, w: number, h: number, data: Uint16Array): WebGLTexture {
@@ -1451,12 +1887,15 @@ export function initWebGL(
     'uCells', 'uWallTex', 'uFloorTex', 'uFeatures', 'uLight', 'uFog',
     'uDoorStates', 'uAtlas', 'uAtlasSize', 'uUseDynamicSky', 'uDynamicSky',
     'uDynamicSkyTint', 'uBaseFogColor', 'uSurfaceAtlas', 'uSurfaceIdx',
+    'uDetailFloorCount', 'uDetailFloor0', 'uDetailFloor1', 'uDetailFloorColor0', 'uDetailFloorColor1',
+    'uDetailWallCount', 'uDetailWall0', 'uDetailWall1', 'uDetailWallColor0', 'uDetailWallColor1',
+    'uDetailLightDust', 'uDetailLightDustColor',
   ]);
 
   // ── Blit program ──
   const blitProgram = createProgram(gl, BLIT_VERT_SRC, BLIT_FRAG_SRC);
   const blitVAO = createQuadVAO(gl, blitProgram);
-  const blitUniforms = getUniforms(gl, blitProgram, ['uTex', 'uGlitch', 'uTime', 'uSamosborActive', 'uSamosborStyle', 'uSamosborPost', 'uSamosborTint']);
+  const blitUniforms = getUniforms(gl, blitProgram, ['uTex', 'uGlitch', 'uTime', 'uSamosborActive', 'uSamosborStyle', 'uSamosborPost', 'uSamosborTint', 'uScreenInterference']);
 
   // ── Sprite program ──
   const spriteProgram = createProgram(gl, SPRITE_VERT_SRC, SPRITE_FRAG_SRC);
@@ -1518,6 +1957,7 @@ export function initWebGL(
 
   // ── Sprite textures ──
   const spriteTextures = buildSpriteTextures(gl, sprites);
+  const spriteGroundInsets = buildSpriteGroundInsets(sprites);
 
   glState = {
     gl,
@@ -1535,13 +1975,16 @@ export function initWebGL(
     dynamicSkyTex,
     dynamicSkyW: 1,
     dynamicSkyH: 1,
-    spriteProgram, spriteVAO, spriteTextures,
+    spriteProgram, spriteVAO, spriteTextures, spriteGroundInsets,
     proceduralSpriteTextures: new Map(),
     itemSpriteTextures: new Map(),
     proceduralSpriteUseTick: 0,
     surfaceAtlasTex, surfaceIdxTex,
     surfacePixels: surfData.pixels,
     surfaceIndex: surfData.index,
+    surfaceSlotByCell: surfData.slotByCell,
+    surfaceCellBySlot: surfData.cellBySlot,
+    surfaceIndexPatch: new Uint16Array(1),
     surfaceVersion: world.surfaceVersion,
     surfaceUploadMs: 0,
     surfaceCamTileX: 0,
@@ -1555,6 +1998,7 @@ export function initWebGL(
     doorStatesData,
     rayUniforms, blitUniforms, spriteUniforms,
   };
+  world.clearPendingSurfaceDirtyCells();
   uploadDynamicSkyTexture();
 
   return gl;
@@ -1710,14 +2154,23 @@ export function updateDynamicData(world: World, camX = 0, camY = 0): void {
     const now = performance.now();
     const forceUpload = glState.surfaceVersion < 0;
     if (!forceUpload && now - glState.surfaceUploadMs < SURF_UPLOAD_MIN_INTERVAL_MS) return;
-    const surfData = buildSurfaceData(world, camX, camY, {
-      pixels: glState.surfacePixels,
-      index: glState.surfaceIndex,
-    });
-    gl.bindTexture(gl.TEXTURE_2D, glState.surfaceAtlasTex);
-    gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, SURF_ATLAS_SIZE, SURF_ATLAS_SIZE, gl.RGBA, gl.UNSIGNED_BYTE, surfData.pixels);
-    gl.bindTexture(gl.TEXTURE_2D, glState.surfaceIdxTex);
-    gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, W, W, gl.RED_INTEGER, gl.UNSIGNED_SHORT, surfData.index);
+    const dirtyCells = forceUpload || surfaceCameraDirty ? null : world.pendingSurfaceDirtyCells();
+    const partialUpload = dirtyCells !== null && dirtyCells.length > 0
+      ? uploadSurfaceDirtyCells(world, glState, dirtyCells)
+      : false;
+    if (!partialUpload) {
+      const surfData = buildSurfaceData(world, camX, camY, {
+        pixels: glState.surfacePixels,
+        index: glState.surfaceIndex,
+        slotByCell: glState.surfaceSlotByCell,
+        cellBySlot: glState.surfaceCellBySlot,
+      });
+      gl.bindTexture(gl.TEXTURE_2D, glState.surfaceAtlasTex);
+      gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, SURF_ATLAS_SIZE, SURF_ATLAS_SIZE, gl.RGBA, gl.UNSIGNED_BYTE, surfData.pixels);
+      gl.bindTexture(gl.TEXTURE_2D, glState.surfaceIdxTex);
+      gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, W, W, gl.RED_INTEGER, gl.UNSIGNED_SHORT, surfData.index);
+    }
+    world.clearPendingSurfaceDirtyCells();
     glState.surfaceVersion = world.surfaceVersion;
     glState.surfaceUploadMs = now;
     glState.surfaceCamTileX = surfaceCamTileX;
@@ -1741,6 +2194,8 @@ export function renderSceneGL(
   ambientLight = 0.12,
   toolBeam = 0,
   toolBeamRange = 0,
+  screenInterference = 0,
+  visualDetailProfile: ResolvedVisualDetailProfile = EMPTY_RESOLVED_VISUAL_DETAIL_PROFILE,
 ): void {
   if (!glState) {
     lastRenderSceneDebugStats.visibleSprites = 0;
@@ -1801,6 +2256,7 @@ export function renderSceneGL(
     skyFog ? skyFog.g / 255 : 5 / 255,
     skyFog ? skyFog.b / 255 : 8 / 255,
   );
+  uploadVisualDetailUniforms(gl, ru, visualDetailProfile);
 
   // Bind data textures to texture units.
   bindTextureUnit(gl, glState.cellsTex, ru['uCells']!, 0);
@@ -1829,7 +2285,7 @@ export function renderSceneGL(
   gl.depthFunc(gl.LESS);
   renderSpritesGL(world, sprites, entities, px, py, pAngle, pPitch, fogDensity, purpleFog, camHeight, time, fogRgb, planeLen);
 
-  // ── Render blood particles into FBO ──
+  // ── Render transient particles into FBO ──
   if (bloodParticles.length > 0) {
     renderParticlesGL(bloodParticles, px, py, pAngle, pPitch, camHeight, fogDensity, purpleFog, fogRgb, planeLen);
   }
@@ -1850,6 +2306,7 @@ export function renderSceneGL(
   gl.uniform1i(glState.blitUniforms['uSamosborStyle']!, samosborStyle);
   gl.uniform1f(glState.blitUniforms['uSamosborPost']!, samosborPost);
   gl.uniform3f(glState.blitUniforms['uSamosborTint']!, fogRgb[0] / 255, fogRgb[1] / 255, fogRgb[2] / 255);
+  gl.uniform1f(glState.blitUniforms['uScreenInterference']!, Math.max(0, Math.min(1, screenInterference)));
 
   gl.bindVertexArray(glState.blitVAO);
   gl.drawArrays(gl.TRIANGLES, 0, 6);
@@ -1864,6 +2321,12 @@ function toroidalDelta(a: number, b: number): number {
 
 function wrapWorldFloat(v: number): number {
   return ((v % W) + W) % W;
+}
+
+function distanceFogFactor(dist: number, fogDensity: number): number {
+  if (fogDensity <= 0 || dist <= 0) return 0;
+  const x = dist * fogDensity;
+  return Math.min(0.985, Math.max(0, 1 - Math.exp(-x * x * 1.35)));
 }
 
 function samosborScreenFxCode(screenFx: string | undefined): number {
@@ -2164,10 +2627,12 @@ function renderSpritesGL(
     const spriteW = spriteH;
 
     const spriteZ = visibleSpriteZ[vi];
+    const sprIdx = visibleSpriteIdx[vi];
+    const groundInset = usesStaticObjectGroundInset(source) ? glState.spriteGroundInsets[sprIdx] ?? 0 : 0;
     const footY = halfH + Math.floor(rawH * camHeight) - Math.floor(rawH * spriteZ);
-    const startY = footY - spriteH;
+    const startY = footY - spriteH + Math.floor(spriteH * groundInset);
 
-    const ff = Math.min(1, Math.sqrt(dist) * fogDensity);
+    const ff = distanceFogFactor(Math.sqrt(dist), fogDensity);
     const isProjectile = visibleProjectile[vi];
     const normDepth = Math.min(1.0, tyf / MAX_DRAW);
 
@@ -2196,7 +2661,6 @@ function renderSpritesGL(
     // the shared atlas without changing saved entity payloads.
     let spriteTex = source === VisibleSpriteSource.ITEM_DROP ? itemDropTexture(e) : null;
     if (!spriteTex && e) spriteTex = proceduralEntityTexture(e);
-    const sprIdx = visibleSpriteIdx[vi];
     if (!spriteTex && sprIdx >= 0 && sprIdx < glState.spriteTextures.length) {
       spriteTex = glState.spriteTextures[sprIdx];
     }
@@ -2216,7 +2680,7 @@ function renderSpritesGL(
   gl.disable(gl.BLEND);
 }
 
-/* ── Blood particle rendering ─────────────────────────────────── */
+/* ── Transient particle rendering ─────────────────────────────── */
 function renderParticlesGL(
   particles: BloodParticle[],
   px: number, py: number, pAngle: number, pPitch: number,
@@ -2275,8 +2739,8 @@ function renderParticlesGL(
     const distFade = dist <= PARTICLE_FADE_START
       ? 1
       : Math.max(0, (PARTICLE_CULL_DIST - dist) / (PARTICLE_CULL_DIST - PARTICLE_FADE_START));
-    const fogF = Math.min(1, dist * fogDensity);
-    const alpha = Math.min(1, p.life * 5) * distFade * (1 - fogF * 0.75);
+    const fogF = distanceFogFactor(dist, fogDensity);
+    const alpha = Math.min(1, p.life * 5) * (p.alpha ?? 1) * distFade * (1 - fogF * 0.75);
     if (alpha <= 0.03) continue;
     const invFogF = 1 - fogF;
     const normDepth = Math.min(0.999, tyf / MAX_DRAW);

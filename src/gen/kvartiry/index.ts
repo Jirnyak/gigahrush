@@ -47,6 +47,8 @@ const AMBIENT_UPRISING_CHANCE = KV_POPULATION.uprising.ambientChance;
 const AMBIENT_UPRISING_MIN_CITIZENS = KV_POPULATION.uprising.minCitizens;
 const AMBIENT_UPRISING_MAX_CONVERTED = KV_POPULATION.uprising.maxConverted;
 const AMBIENT_UPRISING_MAX_RESPONDERS = KV_POPULATION.uprising.maxResponders;
+const KV_SEGMENT_DOOR_CANDIDATE_CHANCE = 1;
+const KV_CONNECTOR_DOOR_OPEN_CHANCE = 0.10;
 const KV_DOOR_LINK_DX = [1, -1, 0, 0] as const;
 const KV_DOOR_LINK_DY = [0, 0, 1, -1] as const;
 
@@ -197,7 +199,7 @@ function spawnNpcAtCell(
     inventory: loadout.inv.map(i => ({ ...i })),
     weapon: loadout.weapon || undefined,
     faction, occupation,
-    questId: -1, isTraveler: true,
+    questId: -1, isTraveler: false,
     rpg,
   });
   return true;
@@ -317,7 +319,7 @@ export function generateKvartiry(territorySeed = 0): { world: World; entities: E
           const ni = world.idx(cx, cy);
           // Don't overwrite another source
           if (isSource[ni]) continue;
-          if (j + 1 === Math.floor(WALL_L / 2)) {
+          if (j + 1 === Math.floor(WALL_L / 2) && Math.random() < KV_SEGMENT_DOOR_CANDIDATE_CHANCE) {
             world.cells[ni] = Cell.DOOR;
           } else {
             world.cells[ni] = Cell.WALL;
@@ -334,8 +336,9 @@ export function generateKvartiry(territorySeed = 0): { world: World; entities: E
     world.cells[idx] = Cell.WALL;
   }
 
-  // ── Phase 3: C++ door connectivity — flood-fill + open doors ──
-  // Find a random FLOOR cell and flood-fill through FLOOR + DOOR
+  // ── Phase 3: C++ door connectivity — flood-fill + open candidate doors ──
+  // Candidate midpoint doors are barriers here. Connectivity opens a sparse
+  // subset, then all unopened candidates collapse back into walls.
   let startCell = -1;
   for (let i = 0; i < W * W; i++) {
     if (world.cells[i] === Cell.FLOOR) { startCell = i; break; }
@@ -346,78 +349,66 @@ export function generateKvartiry(territorySeed = 0): { world: World; entities: E
     const queue: number[] = [startCell];
     visited[startCell] = 1;
     let head = 0;
+    const candidates: number[] = [];
 
-    while (head < queue.length) {
-      const ci = queue[head++];
-      const cx = ci % W, cy = (ci / W) | 0;
-      for (let s = 0; s < 4; s++) {
-        const nx = world.wrap(cx + DX[s]);
-        const ny = world.wrap(cy + DY[s]);
-        const ni = world.idx(nx, ny);
-        if (visited[ni]) continue;
-        if (world.cells[ni] === Cell.FLOOR) {
-          visited[ni] = 1;
-          queue.push(ni);
-        } else if (world.cells[ni] === Cell.DOOR) {
-          visited[ni] = 1;
-          queue.push(ni);
-          // Also reach through door to the other side
-          const fx = world.wrap(nx + DX[s]);
-          const fy = world.wrap(ny + DY[s]);
-          const fi = world.idx(fx, fy);
-          if (!visited[fi] && (world.cells[fi] === Cell.FLOOR || world.cells[fi] === Cell.DOOR)) {
-            visited[fi] = 1;
-            queue.push(fi);
-          }
-        }
-      }
-    }
-
-    // Open doors between unreached and reached areas to improve connectivity
-    let changed = true;
-    while (changed) {
-      changed = false;
-      for (let i = 0; i < W * W; i++) {
-        if (visited[i]) continue;
-        if (world.cells[i] !== Cell.DOOR && world.cells[i] !== Cell.FLOOR) continue;
-        const ix = i % W, iy = (i / W) | 0;
-        for (let s = 0; s < 4; s++) {
-          const ni = world.idx(world.wrap(ix + DX[s]), world.wrap(iy + DY[s]));
-          if (visited[ni]) {
-            // Convert door to floor to open passage
-            if (world.cells[i] === Cell.DOOR) world.cells[i] = Cell.FLOOR;
-            visited[i] = 1;
-            queue.push(i);
-            changed = true;
-            break;
-          }
-        }
-      }
-      // Re-flood from newly connected cells
+    const floodFloors = (): void => {
       while (head < queue.length) {
         const ci = queue[head++];
         const cx = ci % W, cy = (ci / W) | 0;
         for (let s = 0; s < 4; s++) {
-          const nx = world.wrap(cx + DX[s]);
-          const ny = world.wrap(cy + DY[s]);
-          const ni = world.idx(nx, ny);
+          const ni = world.idx(world.wrap(cx + DX[s]), world.wrap(cy + DY[s]));
           if (visited[ni]) continue;
           if (world.cells[ni] === Cell.FLOOR) {
-            visited[ni] = 1;
-            queue.push(ni);
-          } else if (world.cells[ni] === Cell.DOOR) {
             visited[ni] = 1;
             queue.push(ni);
           }
         }
       }
+    };
+
+    const addConnectorCandidates = (): void => {
+      candidates.length = 0;
+      for (let i = 0; i < W * W; i++) {
+        if (world.cells[i] !== Cell.DOOR) continue;
+        const x = i % W, y = (i / W) | 0;
+        for (let s = 0; s < 4; s++) {
+          const ai = world.idx(world.wrap(x - DX[s]), world.wrap(y - DY[s]));
+          const bi = world.idx(world.wrap(x + DX[s]), world.wrap(y + DY[s]));
+          if (
+            (visited[ai] && world.cells[bi] === Cell.FLOOR && !visited[bi]) ||
+            (visited[bi] && world.cells[ai] === Cell.FLOOR && !visited[ai])
+          ) {
+            candidates.push(i);
+            break;
+          }
+        }
+      }
+    };
+
+    floodFloors();
+    while (true) {
+      addConnectorCandidates();
+      if (candidates.length === 0) break;
+      let opened = 0;
+      for (const idx of candidates) {
+        if (Math.random() >= KV_CONNECTOR_DOOR_OPEN_CHANCE) continue;
+        world.cells[idx] = Cell.FLOOR;
+        visited[idx] = 1;
+        queue.push(idx);
+        opened++;
+      }
+      if (opened === 0) {
+        const idx = candidates[rng(0, candidates.length - 1)];
+        world.cells[idx] = Cell.FLOOR;
+        visited[idx] = 1;
+        queue.push(idx);
+      }
+      floodFloors();
     }
 
-    // C++ phase: convert remaining unvisited DOORs to WALL
+    // C++ cleanup: convert remaining candidate DOORs to WALL.
     for (let i = 0; i < W * W; i++) {
-      if (world.cells[i] === Cell.DOOR && !visited[i]) {
-        world.cells[i] = Cell.WALL;
-      }
+      if (world.cells[i] === Cell.DOOR) world.cells[i] = Cell.WALL;
     }
   }
 
@@ -431,7 +422,7 @@ export function generateKvartiry(territorySeed = 0): { world: World; entities: E
     const westIdx  = world.idx(world.wrap(x - 1), y);
     const ns = world.cells[northIdx] === Cell.WALL && world.cells[southIdx] === Cell.WALL;
     const ew = world.cells[eastIdx] === Cell.WALL && world.cells[westIdx] === Cell.WALL;
-    if ((ns || ew) && Math.random() < 0.12) {
+    if (ns || ew) {
       world.cells[i] = Cell.DOOR;
     }
   }
@@ -622,6 +613,8 @@ export function generateKvartiry(territorySeed = 0): { world: World; entities: E
 
   // ── Phase 13: Manifest-owned permanent themed rooms ──────────
   nextId = runKvartiryPermanentContent(world, entities, nextId, spawnX, spawnY);
+  ensureConnectivity(world, spawnX, spawnY);
+  linkKvartiryDoorsToRooms(world);
 
   // ── Phase 13b: Generation-time social macro routes and debug domains
   buildKvartirySocialMacroGraph(world, spawnX, spawnY);

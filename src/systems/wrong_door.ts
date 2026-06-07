@@ -108,7 +108,10 @@ export function chooseWrongDoorRouteOption(
     const routeSpan = Math.sqrt(option.distance2);
     const sourceNearness = -Math.sqrt(option.sourceDist2) * 3.5;
     const dangerBias = option.targetDanger * 18;
-    const score = routeSpan + sourceNearness + dangerBias + jitter(seed, i) * 12;
+    const jitterKey = option.sourceIdx
+      ^ Math.imul(option.targetIdx + 1, 131)
+      ^ Math.imul(option.targetDoorIdx + 1, 977);
+    const score = routeSpan + sourceNearness + dangerBias + jitter(seed, jitterKey) * 12;
     if (score > bestScore) {
       bestScore = score;
       best = option;
@@ -180,7 +183,7 @@ function collectSourceDoors(world: World, originX: number, originY: number, pref
     const dist2 = world.dist2(ox, oy, x, y);
     out.push({ idx, roomId: doorRoomId(door), dist2 });
   }
-  out.sort((a, b) => a.dist2 - b.dist2);
+  out.sort((a, b) => a.dist2 - b.dist2 || a.idx - b.idx);
   const near = out.filter(source => source.dist2 <= WRONG_DOOR_SOURCE_RADIUS2);
   return (near.length > 0 ? near : out).slice(0, WRONG_DOOR_MAX_SOURCES);
 }

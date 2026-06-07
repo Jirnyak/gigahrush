@@ -272,6 +272,8 @@ registerSideQuest(WITNESS_ID, WITNESS, [{
   eventTargetName: 'Список снабжения Чернобожьего Свода вынесен к соседям.',
 }]);
 
+registerSideQuest(CUSTODIAN_ID, CUSTODIAN, []);
+
 registerWorldEventObserver(handleSvodEvents);
 
 function handleSvodEvents(state: GameState, event: WorldEvent): void {

@@ -23,13 +23,15 @@ import {
   type WorldContainer,
 } from '../../core/types';
 import { auditReachability, hasReachableAdjacentCell, World } from '../../core/world';
-import { freshNeeds } from '../../data/catalog';
-import { type PlotNpcDef, registerSideQuest } from '../../data/plot';
+import { designNpcFloorKey, type PlotNpcDef, registerFloorSideQuest } from '../../data/plot';
 import { MONSTERS } from '../../entities/monster';
 import { monsterSpr, Spr } from '../../render/sprite_index';
 import { stampSurfaceSplat } from '../../systems/surface_marks';
+import { requireSpawnedPlotNpcFromPackage } from '../plot_npc_spawn';
 import { generateZones, sanitizeDoors, stampRoom } from '../shared';
 import type { FloorGeneration } from '../floor_manifest';
+
+const DESIGN_NPC_HOME_FLOOR_KEY = designNpcFloorKey('markov_stairwell');
 
 export const MARKOV_STAIRWELL_ROUTE_ID = 'markov_stairwell' as const;
 export const MARKOV_STAIRWELL_Z = 20;
@@ -273,7 +275,7 @@ const WATCHER_DEF: PlotNpcDef = {
   talkQuestResponse: 'Лифтограмму принёс? Хорошо. Теперь хотя бы один маршрут не будет считаться на пальцах.',
 };
 
-registerSideQuest(NPC_IDS.watcher, WATCHER_DEF, [{
+registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, NPC_IDS.watcher, WATCHER_DEF, [{
   id: 'markov_stairwell_pattern_stash',
   giverNpcId: NPC_IDS.watcher,
   type: QuestType.FETCH,
@@ -658,37 +660,16 @@ function spawnPlotNpc(
   entities: Entity[],
   nextId: { v: number },
   plotNpcId: string,
-  def: PlotNpcDef,
+  _def: PlotNpcDef,
   x: number,
   y: number,
   angle: number,
 ): number {
-  const id = nextId.v++;
-  entities.push({
-    id,
-    type: EntityType.NPC,
-    x: x + 0.5,
-    y: y + 0.5,
+  const npc = requireSpawnedPlotNpcFromPackage(entities, nextId, plotNpcId, x + 0.5, y + 0.5, {
     angle,
-    pitch: 0,
-    alive: true,
-    speed: def.speed ?? 0.85,
-    sprite: def.sprite,
-    name: def.name,
-    hp: def.hp,
-    maxHp: def.maxHp,
-    faction: def.faction,
-    occupation: def.occupation,
-    isFemale: def.isFemale,
-    plotNpcId,
-    canGiveQuest: true,
-    money: def.money,
-    inventory: def.inventory ? def.inventory.map(item => ({ ...item })) : [],
-    weapon: def.weapon,
-    needs: freshNeeds(),
-    ai: { goal: AIGoal.IDLE, tx: x, ty: y, path: [], pi: 0, stuck: 0, timer: 0 },
+    aiTarget: { x, y },
   });
-  return id;
+  return npc.id;
 }
 
 function spawnMonster(

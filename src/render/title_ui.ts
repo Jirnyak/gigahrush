@@ -3,7 +3,7 @@ import { controlBindingLabel } from '../systems/controls';
 import { fitText } from './ui_text';
 
 export type TitleScreenMode = 'language' | 'setup';
-export type TitleHitField = 'language' | 'name' | 'age' | 'sex' | 'seed' | 'actorCap' | 'start';
+export type TitleHitField = 'language' | 'name' | 'age' | 'sex' | 'seed' | 'actorCap' | 'addNpc' | 'start';
 
 export interface TitleLanguageHit {
   id?: TitleLanguageId;
@@ -71,13 +71,15 @@ export function drawTitleScreen(ctx: CanvasRenderingContext2D, options: DrawTitl
   ctx.textAlign = 'center';
   ctx.fillStyle = '#c00';
   ctx.font = `bold ${Math.round(48 * s)}px monospace`;
-  ctx.fillText(lang.title, cx, cy - 122 * s);
+  const titleY = options.mode === 'setup' ? cy - 160 * s : cy - 122 * s;
+  const subtitleY = options.mode === 'setup' ? cy - 118 * s : cy - 76 * s;
+  ctx.fillText(lang.title, cx, titleY);
   ctx.fillStyle = '#666';
   ctx.font = `${Math.round(16 * s)}px monospace`;
-  ctx.fillText(lang.subtitle, cx, cy - 76 * s);
+  ctx.fillText(lang.subtitle, cx, subtitleY);
 
   const hits = options.mode === 'setup'
-    ? drawSetupMenu(ctx, cx, cy - (options.setupRows.length > 5 ? 88 : 48) * s, s, options)
+    ? drawSetupMenu(ctx, cx, cy - (options.setupRows.length > 7 ? 104 : options.setupRows.length > 5 ? 88 : 48) * s, s, options)
     : drawLanguageMenu(ctx, cx, cy - 44 * s, s, options.languageId);
 
   ctx.fillStyle = '#555';
@@ -138,8 +140,8 @@ function drawSetupMenu(
   const lang = titleLanguageDef(options.languageId);
   const hits: TitleLanguageHit[] = [];
   const panelW = Math.min(w * 0.92, 560 * s);
-  const rowH = Math.max(28, 30 * s);
-  const gap = Math.max(4, 5 * s);
+  const rowH = Math.max(24, 28 * s);
+  const gap = Math.max(3, 4 * s);
   const panelH = 64 * s + options.setupRows.length * rowH + Math.max(0, options.setupRows.length - 1) * gap + 24 * s;
   const x = cx - panelW / 2;
   const y = top;
@@ -171,11 +173,12 @@ function drawSetupMenu(
     ctx.font = `bold ${Math.round(11 * s)}px monospace`;
     ctx.fillText(fitText(ctx, `${selected ? '> ' : '  '}${row.label}`, panelW * 0.4), x + 18 * s, rowY + 13 * s);
 
-    ctx.textAlign = row.field === 'start' ? 'center' : 'right';
-    ctx.fillStyle = row.field === 'start' ? (selected ? '#ffd46a' : '#9a7b44') : (selected ? '#8fffd2' : '#698b88');
+    const commandRow = row.field === 'start' || row.field === 'addNpc';
+    ctx.textAlign = commandRow ? 'center' : 'right';
+    ctx.fillStyle = commandRow ? (selected ? '#ffd46a' : '#9a7b44') : (selected ? '#8fffd2' : '#698b88');
     ctx.font = `${Math.round(11 * s)}px monospace`;
-    const valueMaxW = row.field === 'start' ? panelW - 52 * s : panelW * 0.48;
-    const valueX = row.field === 'start' ? cx : x + panelW - 18 * s;
+    const valueMaxW = commandRow ? panelW - 52 * s : panelW * 0.48;
+    const valueX = commandRow ? cx : x + panelW - 18 * s;
     ctx.fillText(fitText(ctx, row.value, valueMaxW), valueX, rowY + 13 * s);
 
     if (row.hint) {

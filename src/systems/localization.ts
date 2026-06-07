@@ -354,6 +354,65 @@ function localizedCanvasText(value: unknown): string {
   return translateText(String(value));
 }
 
+const CANVAS_TEXT_GLITCH_CHARS = '#%&*+=?/\\<>[]{}';
+const CANVAS_TEXT_GLITCH_RE = /[A-Za-zА-Яа-яЁё]/;
+const CANVAS_TEXT_GLITCH_BASE_PER_MILLE = 10;
+const CANVAS_TEXT_GLITCH_SAMOSBOR_BASE_PER_MILLE = 50;
+const CANVAS_TEXT_GLITCH_MAX_PER_MILLE = 100;
+
+let canvasTextGlitchPerMille = CANVAS_TEXT_GLITCH_BASE_PER_MILLE;
+
+function clamp01(value: number): number {
+  return Math.max(0, Math.min(1, value));
+}
+
+function smoothstep01(value: number): number {
+  const t = clamp01(value);
+  return t * t * (3 - 2 * t);
+}
+
+export function setCanvasTextGlitchPressure(context: { healthRatio?: number; samosborActive?: boolean } = {}): void {
+  const healthRatio = Number.isFinite(context.healthRatio) ? clamp01(context.healthRatio ?? 1) : 1;
+  const base = context.samosborActive ? CANVAS_TEXT_GLITCH_SAMOSBOR_BASE_PER_MILLE : CANVAS_TEXT_GLITCH_BASE_PER_MILLE;
+  const lowHealth = smoothstep01(1 - healthRatio);
+  canvasTextGlitchPerMille = Math.round(base + (CANVAS_TEXT_GLITCH_MAX_PER_MILLE - base) * lowHealth);
+}
+
+function canvasTextGlitchTick(): number {
+  const now = typeof performance !== 'undefined' && typeof performance.now === 'function'
+    ? performance.now()
+    : Date.now();
+  return Math.floor(now / 85);
+}
+
+function canvasTextGlitchHash(text: string, index: number, x: number, y: number, tick: number): number {
+  let h = (0x811c9dc5 ^ tick ^ Math.round(x * 7) ^ Math.round(y * 13)) >>> 0;
+  for (let i = 0; i < text.length; i++) {
+    h ^= text.charCodeAt(i) + i * 17;
+    h = Math.imul(h, 0x01000193) >>> 0;
+  }
+  h ^= Math.imul(index + 1, 0x9e3779b9);
+  h ^= h >>> 16;
+  return h >>> 0;
+}
+
+function canvasTextGlitch(text: string, x: number, y: number): string {
+  if (text.length < 4) return text;
+  const chars = Array.from(text);
+  const maxChanges = Math.max(1, Math.min(4, Math.floor(chars.length / 16)));
+  const tick = canvasTextGlitchTick();
+  let changed = 0;
+  for (let i = 0; i < chars.length && changed < maxChanges; i++) {
+    const ch = chars[i];
+    if (!CANVAS_TEXT_GLITCH_RE.test(ch)) continue;
+    const h = canvasTextGlitchHash(text, i, x, y, tick);
+    if ((h % 1000) >= canvasTextGlitchPerMille) continue;
+    chars[i] = CANVAS_TEXT_GLITCH_CHARS[(h >>> 10) % CANVAS_TEXT_GLITCH_CHARS.length];
+    changed++;
+  }
+  return changed > 0 ? chars.join('') : text;
+}
+
 export function installCanvasLocalization(): void {
   if (canvasLocalizationInstalled || typeof CanvasRenderingContext2D === 'undefined') return;
   canvasLocalizationInstalled = true;
@@ -369,8 +428,10 @@ export function installCanvasLocalization(): void {
     y: number,
     maxWidth?: number,
   ): void {
-    if (maxWidth === undefined) fillText.call(this, localizedCanvasText(text), x, y);
-    else fillText.call(this, localizedCanvasText(text), x, y, maxWidth);
+    const localized = localizedCanvasText(text);
+    const visible = canvasTextGlitch(localized, x, y);
+    if (maxWidth === undefined) fillText.call(this, visible, x, y);
+    else fillText.call(this, visible, x, y, maxWidth);
   };
 
   proto.strokeText = function localizedStrokeText(
@@ -379,8 +440,10 @@ export function installCanvasLocalization(): void {
     y: number,
     maxWidth?: number,
   ): void {
-    if (maxWidth === undefined) strokeText.call(this, localizedCanvasText(text), x, y);
-    else strokeText.call(this, localizedCanvasText(text), x, y, maxWidth);
+    const localized = localizedCanvasText(text);
+    const visible = canvasTextGlitch(localized, x, y);
+    if (maxWidth === undefined) strokeText.call(this, visible, x, y);
+    else strokeText.call(this, visible, x, y, maxWidth);
   };
 
   proto.measureText = function localizedMeasureText(text: string): TextMetrics {

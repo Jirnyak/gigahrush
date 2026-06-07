@@ -5,6 +5,7 @@ import {
   type RPGStats,
   type Msg,
   W,
+  EntityType,
   MonsterKind,
   FloorLevel,
   msg,
@@ -36,7 +37,8 @@ const BASE_PSI = 10;
 const PSI_PER_LEVEL = 1;
 const STR_HP_PER_POINT = 1;
 const STR_MELEE_DAMAGE_PER_POINT = 0.01;
-const AGI_MOVE_SPEED_PER_POINT = 0.01;
+export const HUMANOID_BASE_MOVE_SPEED = 2.0;
+const AGI_MOVE_SPEED_PER_POINT = 0.05;
 const AGI_ATTACK_COOLDOWN_PER_POINT = 0.1;
 const AGI_SPREAD_PER_POINT = 0.12;
 const INT_PSI_PER_POINT = 1;
@@ -144,6 +146,19 @@ export function meleeDamage(rpg: RPGStats | undefined, weaponId: string | undefi
   return Math.round(meleeBaseDamage(rpg, weaponId, weaponDamage) * (rpg ? strMeleeDmgMult(rpg) : 1));
 }
 export function agiSpeedMult(rpg: RPGStats): number { return 1 + positivePoints(rpg.agi) * AGI_MOVE_SPEED_PER_POINT; }
+export function actorMoveSpeed(e: Entity): number {
+  const base = e.type === EntityType.NPC ? HUMANOID_BASE_MOVE_SPEED : Math.max(0, e.speed);
+  return base * (e.rpg ? agiSpeedMult(e.rpg) : 1);
+}
+export function aiPathMoveSpeed(e: Entity): number {
+  return e.type === EntityType.NPC ? actorMoveSpeed(e) : Math.max(0, e.speed);
+}
+export function normalizeHumanoidBaseMoveSpeed(e: Entity): void {
+  if (e.type === EntityType.NPC) e.speed = HUMANOID_BASE_MOVE_SPEED;
+}
+export function normalizeHumanoidBaseMoveSpeeds(entities: Iterable<Entity>): void {
+  for (const e of entities) normalizeHumanoidBaseMoveSpeed(e);
+}
 export function agiAttackSpeedMult(rpg: RPGStats): number {
   return inverseStatMult(rpg.agi, AGI_ATTACK_COOLDOWN_PER_POINT);
 } // lower cooldown

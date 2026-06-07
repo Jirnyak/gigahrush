@@ -751,7 +751,10 @@ function collectSourceAnchor(
 
 function collectRoomAnchors(world: World, liftAnchors: Anchor[], buttonAnchors: Anchor[]): void {
   let scanned = 0;
-  for (const room of world.rooms) {
+  const roomCount = world.rooms.length;
+  const start = roomCount > 0 ? hash32(roomCount, world.cellVersion, world.featureVersion) % roomCount : 0;
+  for (let offset = 0; offset < roomCount; offset++) {
+    const room = world.rooms[(start + offset) % roomCount];
     if (!room) continue;
     for (let y = room.y - 1; y <= room.y + room.h; y++) {
       for (let x = room.x - 1; x <= room.x + room.w; x++) {
@@ -804,9 +807,11 @@ function getAnchorCache(world: World): AnchorCache {
   return next;
 }
 
-function nearestAnchor(world: World, anchors: readonly Anchor[], preferredX?: number, preferredY?: number): Anchor | null {
+function nearestAnchor(world: World, anchors: readonly Anchor[], preferredX?: number, preferredY?: number, salt = 0): Anchor | null {
   if (anchors.length === 0) return null;
-  if (!finiteCoord(preferredX) || !finiteCoord(preferredY)) return anchors[0];
+  if (!finiteCoord(preferredX) || !finiteCoord(preferredY)) {
+    return anchors[hash32(anchors.length, salt, world.cellVersion ^ world.featureVersion) % anchors.length];
+  }
   let best = anchors[0];
   let bestScore = world.dist2(best.x, best.y, preferredX, preferredY);
   for (let i = 1; i < anchors.length; i++) {
@@ -820,14 +825,14 @@ function nearestAnchor(world: World, anchors: readonly Anchor[], preferredX?: nu
   return best;
 }
 
-function findLiftOrButtonAnchor(world: World, preferredX?: number, preferredY?: number): Anchor | null {
+function findLiftOrButtonAnchor(world: World, preferredX?: number, preferredY?: number, salt = 0): Anchor | null {
   const localLift = scanPreferredAnchors(world, preferredX, preferredY, 'lift');
   if (localLift) return localLift;
   const localButton = scanPreferredAnchors(world, preferredX, preferredY, 'button');
   if (localButton) return localButton;
   const cached = getAnchorCache(world);
-  return nearestAnchor(world, cached.liftAnchors, preferredX, preferredY)
-    ?? nearestAnchor(world, cached.buttonAnchors, preferredX, preferredY);
+  return nearestAnchor(world, cached.liftAnchors, preferredX, preferredY, salt)
+    ?? nearestAnchor(world, cached.buttonAnchors, preferredX, preferredY, salt);
 }
 
 function fallbackPreferredAnchor(world: World, preferredX?: number, preferredY?: number): Anchor | null {
@@ -856,8 +861,8 @@ function fallbackPreferredAnchor(world: World, preferredX?: number, preferredY?:
   return null;
 }
 
-export function findAlifeArrivalAnchor(world: World, preferredX?: number, preferredY?: number): { x: number; y: number; angle?: number } | null {
-  return findLiftOrButtonAnchor(world, preferredX, preferredY)
+export function findAlifeArrivalAnchor(world: World, preferredX?: number, preferredY?: number, salt = 0): { x: number; y: number; angle?: number } | null {
+  return findLiftOrButtonAnchor(world, preferredX, preferredY, salt)
     ?? fallbackPreferredAnchor(world, preferredX, preferredY);
 }
 
@@ -938,8 +943,8 @@ export function processAlifePendingArrivals(
       delayed = delayedArrival(arrival);
     } else {
       const anchor = finiteCoord(arrival.preferredX) && finiteCoord(arrival.preferredY)
-        ? findAlifeArrivalAnchor(world, arrival.preferredX, arrival.preferredY)
-        : findLiftOrButtonAnchor(world);
+        ? findAlifeArrivalAnchor(world, arrival.preferredX, arrival.preferredY, arrival.alifeId)
+        : findLiftOrButtonAnchor(world, undefined, undefined, arrival.alifeId);
       if (!anchor) {
         delayed = delayedArrival(arrival);
       } else {

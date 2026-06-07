@@ -6,19 +6,28 @@ import { World } from '../src/core/world';
 import { createWorldEventState } from '../src/systems/events';
 import {
   isMapCellExplored,
+  isMapCellFreshForMarkers,
+  mapCellFogAmount,
   mapExplorationStats,
   mapExplorationVersion,
   resetMapExploration,
+  revealMapArea,
   revealQuestTargetOnMap,
   revealWholeMap,
   revealMapZone,
   syncMapExplorationAfterSamosborWave,
   updateMapExploration,
 } from '../src/systems/map_exploration';
-import { PLOT_NPCS } from '../src/data/plot';
+import { getNpcPackageByPlotNpcId, npcPackageDisplayName } from '../src/data/npc_packages';
 import { offerQuest } from '../src/systems/quests';
 import { cancelSamosborWave, finishSamosborWave, startSamosborWave } from '../src/systems/samosbor_wave';
 import { makeGameState } from './helpers';
+
+function plotNpcName(plotNpcId: string): string {
+  const pack = getNpcPackageByPlotNpcId(plotNpcId);
+  assert.ok(pack, `missing NPC package for plot NPC ${plotNpcId}`);
+  return npcPackageDisplayName(pack);
+}
 
 test('map zone reveal includes corridor geometry without revealing other zones', () => {
   const world = new World();
@@ -159,6 +168,36 @@ test('player movement reveals only local cell trail, not the whole entered room'
   assert.equal(mapExplorationVersion(world) > firstVersion, true);
 });
 
+test('explored map cells age into fog of war until revisited', () => {
+  const world = new World();
+  carveMapTestFloor(world, 12, 12, 2, 0, 0);
+  carveMapTestFloor(world, 40, 40, 2, 1, 1);
+  resetMapExploration(world);
+  const player = makeMapPlayer(12, 12);
+  const state = makeGameState({
+    currentFloor: FloorLevel.LIVING,
+    worldEvents: createWorldEventState(),
+  });
+
+  updateMapExploration(world, player, state);
+  const remote = world.idx(40, 40);
+  revealMapArea(world, 40, 40, 1);
+  assert.equal(isMapCellExplored(world, remote), true);
+  assert.equal(isMapCellFreshForMarkers(world, remote), true);
+
+  state.time = 140;
+  updateMapExploration(world, player, state);
+  assert.equal(isMapCellExplored(world, remote), true);
+  assert.equal(isMapCellFreshForMarkers(world, remote), false);
+  assert.ok(mapCellFogAmount(world, remote) > 0.8);
+
+  player.x = 40.5;
+  player.y = 40.5;
+  updateMapExploration(world, player, state);
+  assert.equal(isMapCellFreshForMarkers(world, remote), true);
+  assert.equal(mapCellFogAmount(world, remote), 0);
+});
+
 test('active talk quest reveals the target NPC room on the map', () => {
   const world = new World();
   carveMapTestFloor(world, 12, 12, 2, 0, 0);
@@ -286,7 +325,7 @@ test('accepting a quest from an NPC reveals the target room once', () => {
     alive: true,
     speed: 1,
     sprite: 0,
-    name: PLOT_NPCS.olga.name,
+    name: plotNpcName('olga'),
     faction: Faction.CITIZEN,
     plotNpcId: 'olga',
     canGiveQuest: true,
@@ -301,7 +340,7 @@ test('accepting a quest from an NPC reveals the target room once', () => {
     alive: true,
     speed: 1,
     sprite: 0,
-    name: PLOT_NPCS.barni.name,
+    name: plotNpcName('barni'),
     faction: Faction.CITIZEN,
     plotNpcId: 'barni',
     canGiveQuest: true,

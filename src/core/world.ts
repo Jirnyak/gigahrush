@@ -60,6 +60,7 @@ function nextVersion(version: number): number {
 }
 
 const MAX_GRID_DIRTY_RECTS = 32;
+const MAX_SURFACE_DIRTY_CELLS = 512;
 type GridDirtyRectsInput = WorldGridDirtyRect | readonly WorldGridDirtyRect[] | undefined;
 type PendingGridDirtyRects = WorldGridDirtyRect[] | null;
 
@@ -104,10 +105,45 @@ function markWorldReplaced(world: World, versions: {
   world.lightVersion = nextVersion(versions.lightVersion);
   world.fogVersion = nextVersion(versions.fogVersion);
   world.clearPendingGridDirtyRects();
+  world.markSurfaceUploadDirty();
 }
 
 function lightFeature(feature: number): boolean {
   return feature === Feature.LAMP || feature === Feature.CANDLE;
+}
+
+const LIGHT_MAX_RADIUS = 8;
+const LIGHT_GRID_SIZE = LIGHT_MAX_RADIUS * 2 + 1;
+const LIGHT_QUEUE_CAP = LIGHT_GRID_SIZE * LIGHT_GRID_SIZE;
+const LIGHT_QUEUE_DX = new Int16Array(LIGHT_QUEUE_CAP);
+const LIGHT_QUEUE_DY = new Int16Array(LIGHT_QUEUE_CAP);
+const LIGHT_SEEN = new Uint8Array(LIGHT_QUEUE_CAP);
+const LIGHT_DIR_X = [1, -1, 0, 0] as const;
+const LIGHT_DIR_Y = [0, 0, 1, -1] as const;
+
+function localLightIndex(dx: number, dy: number): number {
+  return (dy + LIGHT_MAX_RADIUS) * LIGHT_GRID_SIZE + dx + LIGHT_MAX_RADIUS;
+}
+
+function lightPassesCell(world: World, idx: number): boolean {
+  if (world.hermoWall[idx]) return false;
+  switch (world.cells[idx]) {
+    case Cell.FLOOR:
+    case Cell.WATER:
+      return true;
+    case Cell.DOOR: {
+      const door = world.doors.get(idx);
+      return door?.state === DoorState.OPEN || door?.state === DoorState.HERMETIC_OPEN;
+    }
+    default:
+      return false;
+  }
+}
+
+function featureLightParams(feature: Feature): { radius: number; intensity: number } | null {
+  if (feature === Feature.LAMP) return { radius: 8, intensity: 1.0 };
+  if (feature === Feature.CANDLE) return { radius: 5, intensity: 0.62 };
+  return null;
 }
 
 export class World {
@@ -153,6 +189,8 @@ export class World {
   private floorTexDirtyRects: PendingGridDirtyRects = [];
   private featureDirtyRects: PendingGridDirtyRects = [];
   private fogDirtyRects: PendingGridDirtyRects = [];
+  private surfaceDirtyCells: Set<number> = new Set();
+  private surfaceDirtyFull = true;
 
   constructor() {
     const n = W * W;
@@ -203,23 +241,55 @@ export class World {
     return out;
   }
 
-  /* rebuild lightmap from lamp features */
+  /* rebuild lightmap from local feature light sources */
   bakeLights(): void {
     this.light.fill(0);
-    const R = 8;  // lamp radius in cells
     for (let i = 0; i < W * W; i++) {
-      if (this.features[i] !== Feature.LAMP && this.features[i] !== Feature.CANDLE) continue;
+      const params = featureLightParams(this.features[i] as Feature);
+      if (!params) continue;
       const lx = i % W;
       const ly = (i / W) | 0;
-      for (let dy = -R; dy <= R; dy++) {
-        for (let dx = -R; dx <= R; dx++) {
-          const d2 = dx * dx + dy * dy;
-          if (d2 > R * R) continue;
-          const wx = this.wrap(lx + dx);
-          const wy = this.wrap(ly + dy);
+      const radius = params.radius;
+      const radius2 = radius * radius;
+      LIGHT_SEEN.fill(0);
+
+      let head = 0;
+      let tail = 0;
+      LIGHT_QUEUE_DX[tail] = 0;
+      LIGHT_QUEUE_DY[tail] = 0;
+      tail++;
+      LIGHT_SEEN[localLightIndex(0, 0)] = 1;
+
+      const sourceBrightness = params.intensity;
+      if (sourceBrightness > this.light[i]) this.light[i] = sourceBrightness;
+
+      while (head < tail) {
+        const dx = LIGHT_QUEUE_DX[head];
+        const dy = LIGHT_QUEUE_DY[head];
+        head++;
+        for (let dir = 0; dir < 4; dir++) {
+          const ndx = dx + LIGHT_DIR_X[dir];
+          const ndy = dy + LIGHT_DIR_Y[dir];
+          if (ndx < -radius || ndx > radius || ndy < -radius || ndy > radius) continue;
+          const d2 = ndx * ndx + ndy * ndy;
+          if (d2 > radius2) continue;
+          const localIdx = localLightIndex(ndx, ndy);
+          if (LIGHT_SEEN[localIdx]) continue;
+          LIGHT_SEEN[localIdx] = 1;
+
+          const wx = this.wrap(lx + ndx);
+          const wy = this.wrap(ly + ndy);
           const ti = wy * W + wx;
-          const brightness = 1.0 - Math.sqrt(d2) / R;
+          const dist = Math.sqrt(d2);
+          const falloff = Math.max(0, 1 - dist / radius);
+          const candleSoftness = params.intensity < 1 ? 0.75 + falloff * 0.25 : 1;
+          const passable = lightPassesCell(this, ti);
+          const brightness = sourceBrightness * falloff * candleSoftness * (passable ? 1 : 0.46);
           if (brightness > this.light[ti]) this.light[ti] = brightness;
+          if (!passable || tail >= LIGHT_QUEUE_CAP) continue;
+          LIGHT_QUEUE_DX[tail] = ndx;
+          LIGHT_QUEUE_DY[tail] = ndy;
+          tail++;
         }
       }
     }
@@ -276,6 +346,53 @@ export class World {
     const rects = this.fogDirtyRects;
     this.fogDirtyRects = [];
     return rects === null ? null : rects.slice();
+  }
+
+  markSurfaceCellDirty(idx: number): void {
+    if (!this.surfaceDirtyFull) {
+      this.surfaceDirtyCells.add(idx);
+      if (this.surfaceDirtyCells.size > MAX_SURFACE_DIRTY_CELLS) {
+        this.surfaceDirtyFull = true;
+        this.surfaceDirtyCells.clear();
+      }
+    }
+    this.surfaceVersion = nextVersion(this.surfaceVersion);
+  }
+
+  markSurfaceCellsDirty(cells: readonly number[]): void {
+    if (cells.length <= 0) return;
+    if (!this.surfaceDirtyFull) {
+      for (const idx of cells) {
+        this.surfaceDirtyCells.add(idx);
+        if (this.surfaceDirtyCells.size > MAX_SURFACE_DIRTY_CELLS) {
+          this.surfaceDirtyFull = true;
+          this.surfaceDirtyCells.clear();
+          break;
+        }
+      }
+    }
+    this.surfaceVersion = nextVersion(this.surfaceVersion);
+  }
+
+  markSurfaceDirty(): void {
+    this.surfaceDirtyFull = true;
+    this.surfaceDirtyCells.clear();
+    this.surfaceVersion = nextVersion(this.surfaceVersion);
+  }
+
+  markSurfaceUploadDirty(): void {
+    this.surfaceDirtyFull = true;
+    this.surfaceDirtyCells.clear();
+  }
+
+  pendingSurfaceDirtyCells(): readonly number[] | null {
+    if (this.surfaceDirtyFull) return null;
+    return Array.from(this.surfaceDirtyCells);
+  }
+
+  clearPendingSurfaceDirtyCells(): void {
+    this.surfaceDirtyFull = false;
+    this.surfaceDirtyCells.clear();
   }
 
   markWallTexDirty(rects?: GridDirtyRectsInput): void {

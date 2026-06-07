@@ -30,10 +30,13 @@ import {
 import { World } from '../../core/world';
 import { ITEMS, freshNeeds } from '../../data/catalog';
 import { factionToTerritoryOwner } from '../../data/factions';
-import { type PlotNpcDef, type SideQuestStep, registerSideQuest } from '../../data/plot';
+import { designNpcFloorKey, type PlotNpcDef, type SideQuestStep, registerFloorSideQuest } from '../../data/plot';
 import { syncZoneMetadataFromTerritory } from '../../systems/territory';
 import { generateZones, sanitizeDoors, stampRoom } from '../shared';
 import type { FloorGeneration } from '../floor_manifest';
+import { requireSpawnedPlotNpcFromPackage } from '../plot_npc_spawn';
+
+const DESIGN_NPC_HOME_FLOOR_KEY = designNpcFloorKey('black_market_88');
 
 export const BLACK_MARKET_88_ROUTE_ID = 'black_market_88' as const;
 export const BLACK_MARKET_88_DISPLAY_NAME = 'Черный рынок 88';
@@ -682,7 +685,7 @@ export function registerBlackMarket88DesignFloorContent(): void {
   if (contentRegistered) return;
   for (const npcId of Object.keys(NPC_DEFS)) {
     const quests = SIDE_QUESTS.filter(q => q.giverNpcId === npcId);
-    registerSideQuest(npcId, NPC_DEFS[npcId], quests);
+    registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, npcId, NPC_DEFS[npcId], quests);
   }
   contentRegistered = true;
 }
@@ -2230,7 +2233,9 @@ function spawnMarketNpcs(
   npcs.market88_mikhail_debt = spawnNpc(world, entities, nextId, rooms.debtOffice, 'market88_mikhail_debt', 5, 5, Math.PI / 2, true);
   npcs.market88_zlata_silence = spawnNpc(world, entities, nextId, rooms.documentBooth, 'market88_zlata_silence', 5, 5, Math.PI, true);
   npcs.market88_zhoka_knife = spawnNpc(world, entities, nextId, rooms.weaponStall, 'market88_zhoka_knife', 6, 5, -Math.PI / 2, true, 'makarov');
-  npcs.market88_uliana_cash = spawnNpc(world, entities, nextId, rooms.mainLane, 'market88_uliana_cash', 23, 12, -Math.PI / 2, false);
+  npcs.market88_uliana_cash = spawnNpc(world, entities, nextId, rooms.mainLane, 'market88_uliana_cash', 23, 12, -Math.PI / 2, false, undefined, {
+    spriteScale: 0.72,
+  });
   npcs.market88_courier_sasha = spawnNpc(world, entities, nextId, rooms.courierHideout, 'market88_courier_sasha', 5, 4, Math.PI, false);
   return npcs;
 }
@@ -2246,36 +2251,17 @@ function spawnNpc(
   angle: number,
   canGiveQuest: boolean,
   weapon?: string,
+  extra?: Partial<Entity>,
 ): Entity {
-  const def = NPC_DEFS[plotNpcId];
   const x = world.wrap(room.x + dx);
   const y = world.wrap(room.y + dy);
-  const entity: Entity = {
-    id: nextId.v++,
-    type: EntityType.NPC,
-    x: x + 0.5,
-    y: y + 0.5,
+  const entity = requireSpawnedPlotNpcFromPackage(entities, nextId, plotNpcId, x + 0.5, y + 0.5, {
     angle,
-    pitch: 0,
-    alive: true,
-    speed: def.speed,
-    sprite: def.sprite,
-    name: def.name,
-    isFemale: def.isFemale,
-    needs: freshNeeds(),
-    hp: def.hp,
-    maxHp: def.maxHp,
-    money: def.money,
-    ai: { goal: AIGoal.IDLE, tx: x + 0.5, ty: y + 0.5, path: [], pi: 0, stuck: 0, timer: 0 },
-    inventory: def.inventory.map(i => ({ ...i })),
     weapon,
-    faction: def.faction,
-    occupation: def.occupation,
-    plotNpcId,
     canGiveQuest,
-    questId: -1,
-  };
-  entities.push(entity);
+    aiTarget: { x: x + 0.5, y: y + 0.5 },
+    extra,
+  });
   return entity;
 }
 

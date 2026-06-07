@@ -7,7 +7,8 @@ import {
   BELAYA_PRISLUSHKA_ZONE_HUD,
 } from '../src/gen/living/belaya_prislushka';
 import { FloorLevel, QuestType } from '../src/core/types';
-import { PLOT_NPCS, SIDE_QUESTS } from '../src/data/plot';
+import { getNpcPackageByPlotNpcId } from '../src/data/npc_packages';
+import { SIDE_QUESTS } from '../src/data/plot';
 import { getZoneContentRegistrySnapshot } from '../src/gen/living/zone_content';
 import { publishEvent, getRecentEvents } from '../src/systems/events';
 import { makeGameState } from './helpers';
@@ -16,10 +17,10 @@ test('Белая Прислушка registers one living-zone POI and the expect
   const content = getZoneContentRegistrySnapshot().filter(entry => entry.label === 'Белая Прислушка');
   assert.equal(content.some(entry => entry.zoneHudId === BELAYA_PRISLUSHKA_ZONE_HUD), true);
 
-  assert.ok(PLOT_NPCS.m13_anya_prislushka, 'missing at-risk witness NPC');
-  assert.ok(PLOT_NPCS.m13_stepan_quiet_door, 'missing source-clear NPC');
-  assert.ok(PLOT_NPCS.m13_ira_white_sample, 'missing risky sample NPC');
-  assert.ok(PLOT_NPCS.m13_efim_quiet_act, 'missing loss-branch NPC');
+  assert.ok(getNpcPackageByPlotNpcId('m13_anya_prislushka'), 'missing at-risk witness NPC package');
+  assert.ok(getNpcPackageByPlotNpcId('m13_stepan_quiet_door'), 'missing source-clear NPC package');
+  assert.ok(getNpcPackageByPlotNpcId('m13_ira_white_sample'), 'missing risky sample NPC package');
+  assert.ok(getNpcPackageByPlotNpcId('m13_efim_quiet_act'), 'missing loss-branch NPC package');
 
   const rescue = SIDE_QUESTS.find(q => q.id === BELAYA_PRISLUSHKA_QUEST_IDS.rescue);
   assert.equal(rescue?.type, QuestType.TALK);

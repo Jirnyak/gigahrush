@@ -24,12 +24,14 @@ import {
   type WorldContainer,
 } from '../../core/types';
 import { World } from '../../core/world';
-import { freshNeeds } from '../../data/catalog';
-import { type PlotNpcDef, registerSideQuest } from '../../data/plot';
+import { designNpcFloorKey, type PlotNpcDef, registerFloorSideQuest } from '../../data/plot';
 import { MONSTERS } from '../../entities/monster';
 import { monsterSpr } from '../../render/sprite_index';
+import { requireSpawnedPlotNpcFromPackage } from '../plot_npc_spawn';
 import { generateZones, sanitizeDoors, stampRoom } from '../shared';
 import type { FloorGeneration } from '../floor_manifest';
+
+const DESIGN_NPC_HOME_FLOOR_KEY = designNpcFloorKey('spetspriemnik');
 
 export const SPETSPRIEMNIK_ROUTE_ID = 'spetspriemnik' as const;
 export const SPETSPRIEMNIK_Z = 40 as const;
@@ -307,7 +309,7 @@ const NPC_DEFS: Record<NpcId, PlotNpcDef> = {
   },
 };
 
-registerSideQuest('spetspriemnik_nachalnik_krivda', NPC_DEFS.spetspriemnik_nachalnik_krivda, [
+registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'spetspriemnik_nachalnik_krivda', NPC_DEFS.spetspriemnik_nachalnik_krivda, [
   {
     id: 'spetspriemnik_shelter_cell_check',
     giverNpcId: 'spetspriemnik_nachalnik_krivda',
@@ -328,7 +330,7 @@ registerSideQuest('spetspriemnik_nachalnik_krivda', NPC_DEFS.spetspriemnik_nacha
   },
 ]);
 
-registerSideQuest('spetspriemnik_guard_savva', NPC_DEFS.spetspriemnik_guard_savva, [
+registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'spetspriemnik_guard_savva', NPC_DEFS.spetspriemnik_guard_savva, [
   {
     id: 'spetspriemnik_bribe_guard',
     giverNpcId: 'spetspriemnik_guard_savva',
@@ -349,7 +351,7 @@ registerSideQuest('spetspriemnik_guard_savva', NPC_DEFS.spetspriemnik_guard_savv
   },
 ]);
 
-registerSideQuest('spetspriemnik_prisoner_mira', NPC_DEFS.spetspriemnik_prisoner_mira, [
+registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'spetspriemnik_prisoner_mira', NPC_DEFS.spetspriemnik_prisoner_mira, [
   {
     id: 'spetspriemnik_release_cell_row',
     giverNpcId: 'spetspriemnik_prisoner_mira',
@@ -395,7 +397,7 @@ registerSideQuest('spetspriemnik_prisoner_mira', NPC_DEFS.spetspriemnik_prisoner
   },
 ]);
 
-registerSideQuest('spetspriemnik_informant_tolya', NPC_DEFS.spetspriemnik_informant_tolya, [
+registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'spetspriemnik_informant_tolya', NPC_DEFS.spetspriemnik_informant_tolya, [
   {
     id: 'spetspriemnik_trade_names',
     giverNpcId: 'spetspriemnik_informant_tolya',
@@ -418,7 +420,7 @@ registerSideQuest('spetspriemnik_informant_tolya', NPC_DEFS.spetspriemnik_inform
   },
 ]);
 
-registerSideQuest('spetspriemnik_clerk_alla', NPC_DEFS.spetspriemnik_clerk_alla, [
+registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'spetspriemnik_clerk_alla', NPC_DEFS.spetspriemnik_clerk_alla, [
   {
     id: 'spetspriemnik_stamp_release_form',
     giverNpcId: 'spetspriemnik_clerk_alla',
@@ -1078,33 +1080,12 @@ function spawnPlotNpc(
   angle: number,
   canGiveQuest = true,
 ): number {
-  const def = NPC_DEFS[plotNpcId];
-  const id = nextId.v++;
-  entities.push({
-    id,
-    type: EntityType.NPC,
-    x: room.x + dx + 0.5,
-    y: room.y + dy + 0.5,
+  const npc = requireSpawnedPlotNpcFromPackage(entities, nextId, plotNpcId, room.x + dx + 0.5, room.y + dy + 0.5, {
     angle,
-    pitch: 0,
-    alive: true,
-    speed: def.speed,
-    sprite: def.sprite,
-    name: def.name,
-    hp: def.hp,
-    maxHp: def.maxHp,
-    faction: def.faction,
-    occupation: def.occupation,
-    isFemale: def.isFemale,
-    plotNpcId,
+    aiTarget: { x: room.x + dx, y: room.y + dy },
     canGiveQuest,
-    money: def.money,
-    inventory: def.inventory.map(item => ({ ...item })),
-    weapon: def.weapon,
-    needs: freshNeeds(),
-    ai: { goal: AIGoal.IDLE, tx: room.x + dx, ty: room.y + dy, path: [], pi: 0, stuck: 0, timer: 0 },
   });
-  return id;
+  return npc.id;
 }
 
 function spawnMonster(

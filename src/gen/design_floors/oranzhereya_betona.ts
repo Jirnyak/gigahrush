@@ -29,12 +29,13 @@ import {
 } from '../../core/types';
 import { World } from '../../core/world';
 import { hashSeed, withSeededRandom } from '../../core/rand';
-import { ITEMS, freshNeeds } from '../../data/catalog';
+import { ITEMS } from '../../data/catalog';
 import { factionToTerritoryOwner } from '../../data/factions';
-import { type PlotNpcDef, registerSideQuest } from '../../data/plot';
+import { designNpcFloorKey, type PlotNpcDef, registerFloorSideQuest } from '../../data/plot';
 import { MONSTERS } from '../../entities/monster';
 import { monsterSpr, Spr } from '../../render/sprite_index';
 import { randomRPG } from '../../systems/rpg';
+import { requireSpawnedPlotNpcFromPackage } from '../plot_npc_spawn';
 import {
   carveCorridor,
   ensureConnectivity,
@@ -44,6 +45,8 @@ import {
   stampRoom,
 } from '../shared';
 import type { FloorGeneration } from '../floor_manifest';
+
+const DESIGN_NPC_HOME_FLOOR_KEY = designNpcFloorKey('oranzhereya_betona');
 
 export const ORANZHEREYA_BETONA_ROUTE_ID = 'oranzhereya_betona' as const;
 export const ORANZHEREYA_BETONA_Z = -2 as const;
@@ -338,7 +341,7 @@ const NPC_DEFS: Record<GreenhouseNpcId, PlotNpcDef> = {
   },
 };
 
-registerSideQuest('oranzhereya_agronom_nadya', NPC_DEFS.oranzhereya_agronom_nadya, [{
+registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'oranzhereya_agronom_nadya', NPC_DEFS.oranzhereya_agronom_nadya, [{
   id: 'oranzhereya_save_clean_crop',
   giverNpcId: 'oranzhereya_agronom_nadya',
   type: QuestType.FETCH,
@@ -356,7 +359,7 @@ registerSideQuest('oranzhereya_agronom_nadya', NPC_DEFS.oranzhereya_agronom_nady
   eventSeverity: 3,
 }]);
 
-registerSideQuest('oranzhereya_irrigator_gleb', NPC_DEFS.oranzhereya_irrigator_gleb, [{
+registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'oranzhereya_irrigator_gleb', NPC_DEFS.oranzhereya_irrigator_gleb, [{
   id: 'oranzhereya_reroute_water',
   giverNpcId: 'oranzhereya_irrigator_gleb',
   type: QuestType.FETCH,
@@ -374,7 +377,7 @@ registerSideQuest('oranzhereya_irrigator_gleb', NPC_DEFS.oranzhereya_irrigator_g
   eventSeverity: 3,
 }]);
 
-registerSideQuest('oranzhereya_guard_arsen', NPC_DEFS.oranzhereya_guard_arsen, [{
+registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'oranzhereya_guard_arsen', NPC_DEFS.oranzhereya_guard_arsen, [{
   id: 'oranzhereya_burn_infestation',
   giverNpcId: 'oranzhereya_guard_arsen',
   type: QuestType.KILL,
@@ -392,7 +395,7 @@ registerSideQuest('oranzhereya_guard_arsen', NPC_DEFS.oranzhereya_guard_arsen, [
   eventSeverity: 4,
 }]);
 
-registerSideQuest('oranzhereya_market_sonya', NPC_DEFS.oranzhereya_market_sonya, [{
+registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'oranzhereya_market_sonya', NPC_DEFS.oranzhereya_market_sonya, [{
   id: 'oranzhereya_poison_market_crop',
   giverNpcId: 'oranzhereya_market_sonya',
   type: QuestType.FETCH,
@@ -1209,37 +1212,19 @@ function spawnPlotNpc(
   angle: number,
   weapon = NPC_DEFS[npcId].weapon,
 ): number {
-  const def = NPC_DEFS[npcId];
   const pos = roomCell(room, salt);
-  const id = nextId.v++;
-  entities.push({
-    id,
-    type: EntityType.NPC,
-    x: pos.x + 0.5,
-    y: pos.y + 0.5,
+  const px = pos.x + 0.5;
+  const py = pos.y + 0.5;
+  const npc = requireSpawnedPlotNpcFromPackage(entities, nextId, npcId, px, py, {
     angle,
-    pitch: 0,
-    alive: true,
-    speed: def.speed,
-    sprite: def.sprite,
-    name: def.name,
-    isFemale: def.isFemale,
-    needs: freshNeeds(),
-    hp: def.hp,
-    maxHp: def.maxHp,
-    money: def.money,
-    ai: { goal: AIGoal.IDLE, tx: pos.x + 0.5, ty: pos.y + 0.5, path: [], pi: 0, stuck: 0, timer: 0 },
-    inventory: cloneInventory(def.inventory),
     weapon,
-    faction: def.faction,
-    occupation: def.occupation,
-    assignedRoomId: room.id,
-    plotNpcId: npcId,
-    canGiveQuest: true,
-    questId: -1,
-    rpg: randomRPG(3),
+    aiTarget: { x: px, y: py },
+    extra: {
+      assignedRoomId: room.id,
+      rpg: randomRPG(3),
+    },
   });
-  return id;
+  return npc.id;
 }
 
 function placeContainers(

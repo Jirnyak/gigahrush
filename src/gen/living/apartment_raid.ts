@@ -1,16 +1,16 @@
 /* -- Living apartment raid: steal, fight, flee, or bargain ------- */
 
 import {
-  AIGoal, Cell, ContainerKind, DoorState, EntityType, Faction, Feature,
+  Cell, ContainerKind, DoorState, Faction, Feature,
   FloorLevel, Occupation, QuestType, RoomType, Tex,
   type ContainerAccess, type Entity, type GameState, type Room, type WorldContainer, type WorldEvent,
 } from '../../core/types';
 import { World } from '../../core/world';
-import { freshNeeds } from '../../data/catalog';
 import { type PlotNpcDef, registerSideQuest } from '../../data/plot';
 import { publishEvent, registerWorldEventObserver } from '../../systems/events';
 import { protectRoom } from '../shared';
 import { genLog } from '../log';
+import { requireSpawnedPlotNpcFromPackage } from '../plot_npc_spawn';
 import { registerZoneContent } from './zone_content';
 
 const ZONE_HUD = 54;
@@ -463,13 +463,6 @@ function addRaidContainer(
   });
 }
 
-function npcDef(plotNpcId: string): PlotNpcDef {
-  if (plotNpcId === RESIDENT_ID) return MIRA;
-  if (plotNpcId === RUNNER_ID) return VIKA;
-  if (plotNpcId === RAIDER_ID) return STEPAN;
-  return TAMARA;
-}
-
 function spawnNpc(
   world: World,
   entities: Entity[],
@@ -481,36 +474,13 @@ function spawnNpc(
   angle: number,
   canGiveQuest: boolean,
 ): Entity {
-  const def = npcDef(plotNpcId);
   const x = world.wrap(room.x + dx);
   const y = world.wrap(room.y + dy);
-  const npc: Entity = {
-    id: nextId.v++,
-    type: EntityType.NPC,
-    x: x + 0.5,
-    y: y + 0.5,
+  return requireSpawnedPlotNpcFromPackage(entities, nextId, plotNpcId, x + 0.5, y + 0.5, {
     angle,
-    pitch: 0,
-    alive: true,
-    speed: def.speed,
-    sprite: def.sprite,
-    name: def.name,
-    isFemale: def.isFemale,
-    needs: freshNeeds(),
-    hp: def.hp,
-    maxHp: def.maxHp,
-    money: def.money,
-    ai: { goal: AIGoal.IDLE, tx: x + 0.5, ty: y + 0.5, path: [], pi: 0, stuck: 0, timer: 0 },
-    inventory: def.inventory.map(item => ({ ...item })),
-    weapon: def.weapon,
-    faction: def.faction,
-    occupation: def.occupation,
-    plotNpcId,
     canGiveQuest,
-    questId: -1,
-  };
-  entities.push(npc);
-  return npc;
+    aiTarget: { x: x + 0.5, y: y + 0.5 },
+  });
 }
 
 function seedContainers(world: World, raidRoom: Room, exitRoom: Room, resident: Entity, raider: Entity): void {

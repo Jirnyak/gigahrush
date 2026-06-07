@@ -4,11 +4,12 @@
 
 import {
   type Entity, type GameState,
-  EntityType, AIGoal, Faction, ZoneFaction, Occupation,
+  EntityType, AIGoal, Faction, ZoneFaction,
   type FloorLevel, type WorldEventSeverity, type WorldEventType,
 } from '../core/types';
 import { World } from '../core/world';
 import { ITEMS } from '../data/catalog';
+import { occupationHasAnyProfileTag, occupationHasProfileTag } from '../data/occupation_profiles';
 import {
   HUMAN_TERRITORY_OWNERS,
 } from '../data/factions';
@@ -377,8 +378,9 @@ function canRespondToNoise(e: Entity): boolean {
   return e.faction === Faction.LIQUIDATOR ||
     e.faction === Faction.CULTIST ||
     e.faction === Faction.WILD ||
-    e.occupation === Occupation.HUNTER ||
-    e.isTraveler === true;
+    occupationHasAnyProfileTag(e.occupation, ['combat', 'patrol']) ||
+    e.isTraveler === true ||
+    occupationHasProfileTag(e.occupation, 'traveler');
 }
 
 function noiseZoneId(world: World, record: NoiseRecord): number {

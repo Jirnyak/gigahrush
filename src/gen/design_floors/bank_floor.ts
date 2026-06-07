@@ -1,11 +1,9 @@
 /* -- Design floor: bank_floor - cash desks, debt and vault risk -- */
 
 import {
-  AIGoal,
   Cell,
   ContainerKind,
   DoorState,
-  EntityType,
   Faction,
   Feature,
   FloorLevel,
@@ -25,12 +23,14 @@ import {
   type WorldEvent,
 } from '../../core/types';
 import { World } from '../../core/world';
-import { freshNeeds } from '../../data/catalog';
-import { type PlotNpcDef, registerSideQuest } from '../../data/plot';
+import { designNpcFloorKey, type PlotNpcDef, registerFloorSideQuest } from '../../data/plot';
 import { publishEvent } from '../../systems/events';
 import { setTerritoryOwnerAtIndex, syncZoneMetadataFromTerritory } from '../../systems/territory';
 import { canPlaceRoom, stampRoom } from '../shared';
 import type { FloorGeneration } from '../floor_manifest';
+import { requireSpawnedPlotNpcFromPackage } from '../plot_npc_spawn';
+
+const DESIGN_NPC_HOME_FLOOR_KEY = designNpcFloorKey('bank_floor');
 
 export const BANK_FLOOR_ROUTE_ID = 'bank_floor' as const;
 export const BANK_FLOOR_Z = 26;
@@ -330,7 +330,7 @@ const DEBTOR_DEF: PlotNpcDef = {
   ],
 };
 
-registerSideQuest('bank_director_zinaida', DIRECTOR_DEF, [
+registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'bank_director_zinaida', DIRECTOR_DEF, [
   {
     id: 'bank_report_forged_debt_paper',
     giverNpcId: 'bank_director_zinaida',
@@ -347,7 +347,7 @@ registerSideQuest('bank_director_zinaida', DIRECTOR_DEF, [
   },
 ]);
 
-registerSideQuest('bank_cashier_lyuba', CASHIER_DEF, [
+registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'bank_cashier_lyuba', CASHIER_DEF, [
   {
     id: 'bank_wait_teller_lane',
     giverNpcId: 'bank_cashier_lyuba',
@@ -375,7 +375,7 @@ registerSideQuest('bank_cashier_lyuba', CASHIER_DEF, [
   },
 ]);
 
-registerSideQuest('bank_credit_prokhor', CREDIT_DEF, [
+registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'bank_credit_prokhor', CREDIT_DEF, [
   {
     id: 'bank_take_corridor_loan',
     giverNpcId: 'bank_credit_prokhor',
@@ -404,9 +404,9 @@ registerSideQuest('bank_credit_prokhor', CREDIT_DEF, [
   },
 ]);
 
-registerSideQuest('bank_guard_semyon', GUARD_DEF, []);
+registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'bank_guard_semyon', GUARD_DEF, []);
 
-registerSideQuest('bank_debtor_mitya', DEBTOR_DEF, [
+registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'bank_debtor_mitya', DEBTOR_DEF, [
   {
     id: 'bank_cash_forged_debt_paper',
     giverNpcId: 'bank_debtor_mitya',
@@ -1110,33 +1110,13 @@ function spawnBankNpc(
   dy: number,
   angle: number,
 ): number {
-  const id = nextId.v++;
-  entities.push({
-    id,
-    type: EntityType.NPC,
-    x: room.x + dx + 0.5,
-    y: room.y + dy + 0.5,
+  const npc = requireSpawnedPlotNpcFromPackage(entities, nextId, npcId, room.x + dx + 0.5, room.y + dy + 0.5, {
     angle,
-    pitch: 0,
-    alive: true,
-    speed: def.speed,
-    sprite: def.sprite,
-    name: def.name,
-    isFemale: def.isFemale,
-    needs: freshNeeds(),
-    hp: def.hp,
-    maxHp: def.maxHp,
-    ai: { goal: AIGoal.IDLE, tx: room.x + dx, ty: room.y + dy, path: [], pi: 0, stuck: 0, timer: 0 },
-    inventory: def.inventory.map(i => ({ ...i })),
-    money: def.money,
-    faction: def.faction,
-    occupation: def.occupation,
-    plotNpcId: npcId,
     canGiveQuest: npcId !== 'bank_guard_semyon',
-    questId: -1,
     weapon: def.inventory.some(i => i.defId === 'makarov') ? 'makarov' : undefined,
+    aiTarget: { x: room.x + dx, y: room.y + dy },
   });
-  return id;
+  return npc.id;
 }
 
 function addBankContainers(

@@ -16,7 +16,12 @@ import { CONTRACTS } from '../src/data/contracts';
 import { FACTORIES } from '../src/data/factories';
 import { MONSTER_ECOLOGY } from '../src/data/monster_ecology';
 import {
-  PLOT_NPCS, PLOT_CHAIN, SIDE_QUESTS, getSideQuestRegistrySnapshot, type PlotStep,
+  PLOT_CHAIN,
+  SIDE_QUESTS,
+  allPlotNpcIds,
+  getSideQuestRegistrySnapshot,
+  hasPlotNpc,
+  type PlotStep,
 } from '../src/data/plot';
 import { PLOT_ROOMS } from '../src/data/plot_rooms';
 import { RESOURCES } from '../src/data/resources';
@@ -75,12 +80,12 @@ function rumorReveals(reveals: RumorDef['reveals']): readonly RumorReveal[] {
 }
 
 function assertPlotStep(step: PlotStep, scope: string): void {
-  assert.equal(step.giverNpcId in PLOT_NPCS, true, `${scope} has missing giverNpcId "${step.giverNpcId}"`);
+  assert.equal(hasPlotNpc(step.giverNpcId), true, `${scope} has missing giverNpcId "${step.giverNpcId}"`);
   if (step.targetNpcId) {
-    assert.equal(step.targetNpcId in PLOT_NPCS, true, `${scope} has missing targetNpcId "${step.targetNpcId}"`);
+    assert.equal(hasPlotNpc(step.targetNpcId), true, `${scope} has missing targetNpcId "${step.targetNpcId}"`);
   }
   if (step.targetPlotNpcId) {
-    assert.equal(step.targetPlotNpcId in PLOT_NPCS, true, `${scope} has missing targetPlotNpcId "${step.targetPlotNpcId}"`);
+    assert.equal(hasPlotNpc(step.targetPlotNpcId), true, `${scope} has missing targetPlotNpcId "${step.targetPlotNpcId}"`);
   }
   assertItem(step.targetItem, `${scope}.targetItem`);
   assertItem(step.rewardItem, `${scope}.rewardItem`);
@@ -117,17 +122,17 @@ test('side quest registry snapshot exposes unique ids after floor manifests impo
   assertUnique(entries.map(entry => entry.id), 'SIDE_QUESTS snapshot id');
 });
 
-test('registered content ids are unique', () => {
+test('registered content ids and plot NPC package ids are unique', () => {
   assertUnique(Object.keys(ITEMS), 'ITEMS');
   assertUnique(CONTRACTS.map(c => c.id), 'CONTRACTS');
   assertUnique(RESOURCES.map(r => r.id), 'RESOURCES');
   assertUnique(FACTORIES.map(f => f.id), 'FACTORIES');
   assertUnique(RUMORS.map(r => r.id), 'RUMORS');
   assertUnique(SIDE_QUESTS.map(q => q.id), 'SIDE_QUESTS');
-  assertUnique(Object.keys(PLOT_NPCS), 'PLOT_NPCS');
+  assertUnique(allPlotNpcIds(), 'plot NPC package ids');
 });
 
-test('plot chain and side quest references resolve', () => {
+test('plot chain and side quest references resolve through NPC packages', () => {
   PLOT_CHAIN.forEach((step, index) => assertPlotStep(step, `PLOT_CHAIN[${index}]`));
   SIDE_QUESTS.forEach(step => assertPlotStep(step, `SIDE_QUESTS.${step.id}`));
 });
@@ -163,7 +168,7 @@ test('contracts, rumors, rooms, and variants reference existing ids', () => {
     for (const reward of contract.extraRewards ?? []) assertItem(reward.defId, `CONTRACTS.${contract.id}.extraRewards`);
     assertMonster(contract.targetMonsterKind, `CONTRACTS.${contract.id}.targetMonsterKind`);
     if (contract.targetPlotNpcId) {
-      assert.equal(contract.targetPlotNpcId in PLOT_NPCS, true, `CONTRACTS.${contract.id}.targetPlotNpcId references missing plot NPC "${contract.targetPlotNpcId}"`);
+      assert.equal(hasPlotNpc(contract.targetPlotNpcId), true, `CONTRACTS.${contract.id}.targetPlotNpcId references missing plot NPC "${contract.targetPlotNpcId}"`);
     }
     if (contract.rewardResourceId) {
       assert.equal(RESOURCE_IDS.has(contract.rewardResourceId), true, `CONTRACTS.${contract.id}.rewardResourceId references missing resource "${contract.rewardResourceId}"`);
@@ -191,7 +196,7 @@ test('contracts, rumors, rooms, and variants reference existing ids', () => {
 
   for (const room of Object.values(PLOT_ROOMS)) {
     for (const plotNpcId of room.plotNpcs) {
-      assert.equal(plotNpcId in PLOT_NPCS, true, `PLOT_ROOMS.${room.id} references missing plot NPC "${plotNpcId}"`);
+      assert.equal(hasPlotNpc(plotNpcId), true, `PLOT_ROOMS.${room.id} references missing plot NPC "${plotNpcId}"`);
     }
   }
 

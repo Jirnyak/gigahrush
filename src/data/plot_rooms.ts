@@ -15,7 +15,7 @@ export interface PlotRoomDef {
   wallTex: Tex;
   floorTex: Tex;
   roomType: RoomType;
-  /** Keys into PLOT_NPCS that spawn in this room */
+  /** Stable plot NPC ids resolved through NPC packages */
   plotNpcs: string[];
   /** Distance constraints from player spawn (for non-start rooms) */
   minDist?: number;

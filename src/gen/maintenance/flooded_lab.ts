@@ -3,16 +3,20 @@
 /* NPC: Профессор Тесла — gives FETCH quest for energy cells.      */
 
 import {
-  Cell, Tex, Feature, RoomType,
+  Cell, Tex, Feature, FloorLevel, RoomType,
   type Room, type Entity,
-  EntityType, AIGoal, Faction, Occupation, QuestType,
+  EntityType, Faction, Occupation, QuestType,
 } from '../../core/types';
 import { World } from '../../core/world';
-import { freshNeeds } from '../../data/catalog';
-import { type PlotNpcDef, registerSideQuest } from '../../data/plot';
+import { type PlotNpcDef, registerAuthoredNpc, registerSideQuest, storyNpcFloorKey } from '../../data/plot';
 import { stampRoom, protectRoom, connectProtectedRoom, findClearArea } from '../shared';
 import { Spr } from '../../render/sprite_index';
 import { genLog } from '../log';
+import { requireSpawnedPlotNpcFromPackage } from '../plot_npc_spawn';
+
+const PROFESSOR_ID = 'prof_tesla';
+const ASSISTANT_KLIM_ID = 'flooded_lab_assistant_klim';
+const ASSISTANT_SONYA_ID = 'flooded_lab_assistant_sonya';
 
 /* ── NPC definition ──────────────────────────────────────────── */
 const NPC_DEF: PlotNpcDef = {
@@ -41,10 +45,10 @@ const NPC_DEF: PlotNpcDef = {
   ],
 };
 
-registerSideQuest('prof_tesla', NPC_DEF, [
+registerSideQuest(PROFESSOR_ID, NPC_DEF, [
   {
     id: 'tesla_energy',
-    giverNpcId: 'prof_tesla',
+    giverNpcId: PROFESSOR_ID,
     type: QuestType.FETCH,
     desc: 'Тесла: «Пять энергоячеек. Без них ПСИ-излучатель останется мокрой кучей проводов.»',
     targetItem: 'ammo_energy', targetCount: 5,
@@ -57,6 +61,48 @@ registerSideQuest('prof_tesla', NPC_DEF, [
     relationDelta: 25, xpReward: 120, moneyReward: 200,
   },
 ]);
+
+const ASSISTANT_DEFS: readonly { id: string; npc: PlotNpcDef }[] = [
+  {
+    id: ASSISTANT_KLIM_ID,
+    npc: {
+      name: 'Лаборант Клим',
+      isFemale: false,
+      sex: 'male',
+      faction: Faction.SCIENTIST,
+      occupation: Occupation.SCIENTIST,
+      sprite: Occupation.SCIENTIST,
+      hp: 80, maxHp: 80, money: 20, speed: 1.0,
+      inventory: [{ defId: 'note', count: 1 }, { defId: 'antidep', count: 1 }],
+      talkLines: ['Клим держит блокнот выше воды и делает вид, что генератор не бьет током.'],
+      talkLinesPost: ['Клим сушит записи над лампой и не доверяет отражениям в луже.'],
+    },
+  },
+  {
+    id: ASSISTANT_SONYA_ID,
+    npc: {
+      name: 'Лаборант Соня',
+      isFemale: true,
+      sex: 'female',
+      faction: Faction.SCIENTIST,
+      occupation: Occupation.SCIENTIST,
+      sprite: Occupation.SCIENTIST,
+      hp: 80, maxHp: 80, money: 20, speed: 1.0,
+      inventory: [{ defId: 'note', count: 1 }, { defId: 'antidep', count: 1 }],
+      talkLines: ['Соня отмечает уровень воды и просит не трогать катушки мокрыми руками.'],
+      talkLinesPost: ['Соня уже подписала ячейки как утонувшие, чтобы лаборатория могла работать дальше.'],
+    },
+  },
+];
+
+for (const assistant of ASSISTANT_DEFS) {
+  registerAuthoredNpc({
+    id: assistant.id,
+    npc: assistant.npc,
+    homeFloorKey: storyNpcFloorKey(FloorLevel.MAINTENANCE),
+    tags: ['maintenance', 'flooded_lab', 'assistant'],
+  });
+}
 
 /* ── Generate Затопленная лаборатория ─────────────────────────── */
 const LAB_W = 11;
@@ -139,36 +185,20 @@ export function generateFloodedLab(
   }
 
   // NPC: Профессор Тесла in the center
-  entities.push({
-    id: nextId.v++, type: EntityType.NPC,
-    x: rcx + 0.5, y: rcy + 0.5,
-    angle: Math.PI / 2, pitch: 0,
-    alive: true, speed: NPC_DEF.speed, sprite: NPC_DEF.sprite,
-    name: NPC_DEF.name, isFemale: NPC_DEF.isFemale,
-    needs: freshNeeds(), hp: NPC_DEF.hp, maxHp: NPC_DEF.maxHp, money: NPC_DEF.money,
-    ai: { goal: AIGoal.IDLE, tx: 0, ty: 0, path: [], pi: 0, stuck: 0, timer: 0 },
-    inventory: NPC_DEF.inventory.map(i => ({ ...i })),
-    faction: NPC_DEF.faction, occupation: NPC_DEF.occupation,
-    plotNpcId: 'prof_tesla', canGiveQuest: true, questId: -1,
+  requireSpawnedPlotNpcFromPackage(entities, nextId, PROFESSOR_ID, rcx + 0.5, rcy + 0.5, {
+    angle: Math.PI / 2,
+    canGiveQuest: true,
   });
 
   // Two assistant scientist NPCs (named, lower HP, no quests)
   const assistants = [
-    { name: 'Лаборант Клим', x: labX + 2, y: rcy + 1 },
-    { name: 'Лаборант Соня',  x: labX + LAB_W - 3, y: rcy + 1 },
+    { id: ASSISTANT_KLIM_ID, x: labX + 2, y: rcy + 1 },
+    { id: ASSISTANT_SONYA_ID, x: labX + LAB_W - 3, y: rcy + 1 },
   ];
   for (const a of assistants) {
-    entities.push({
-      id: nextId.v++, type: EntityType.NPC,
-      x: a.x + 0.5, y: a.y + 0.5,
-      angle: Math.PI / 2, pitch: 0,
-      alive: true, speed: 1.0, sprite: Occupation.SCIENTIST,
-      name: a.name, isFemale: a.name === 'Лаборант Соня',
-      needs: freshNeeds(), hp: 80, maxHp: 80, money: 20,
-      ai: { goal: AIGoal.IDLE, tx: 0, ty: 0, path: [], pi: 0, stuck: 0, timer: 0 },
-      inventory: [{ defId: 'note', count: 1 }, { defId: 'antidep', count: 1 }],
-      faction: Faction.SCIENTIST, occupation: Occupation.SCIENTIST,
-      questId: -1,
+    requireSpawnedPlotNpcFromPackage(entities, nextId, a.id, a.x + 0.5, a.y + 0.5, {
+      angle: Math.PI / 2,
+      canGiveQuest: false,
     });
   }
 

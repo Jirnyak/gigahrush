@@ -8,6 +8,11 @@ import {
   type Room,
   RoomType,
 } from '../../core/types';
+import {
+  occupationHasProfileTag,
+  occupationProfile,
+  occupationWorkRoomTypeWeight,
+} from '../../data/occupation_profiles';
 import { roomAffordanceWeight, type RoomAffordanceId } from '../../data/room_affordances';
 
 export const NPC_UTILITY_INTENTS = [
@@ -344,7 +349,7 @@ export function scoreNpcUtilities(context: NpcUtilityScoreContext, out: NpcUtili
   setScore(out, 'sleep', clampScore(
     sleepPressure * 76 +
     npcUtilityRhythmBias('sleep', minute, identity, 17) +
-    (occupation === Occupation.CHILD ? 7 : 0) +
+    (occupationProfile(occupation)?.sleepScoreBonus ?? 0) +
     localScore(context, 'sleep') +
     currentStickiness(context, 'sleep', stickiness) -
     threatPressure * 30 -
@@ -366,7 +371,7 @@ export function scoreNpcUtilities(context: NpcUtilityScoreContext, out: NpcUtili
 
   setScore(out, 'heal', clampScore(
     hpPressure * 105 +
-    (occupation === Occupation.DOCTOR && hpPressure < 0.01 ? 6 : 0) +
+    (hpPressure < 0.01 ? (occupationProfile(occupation)?.healIdleScoreBonus ?? 0) : 0) +
     localScore(context, 'heal') +
     currentStickiness(context, 'heal', stickiness) -
     threatPressure * 10 -
@@ -491,39 +496,7 @@ export function selectNpcUtilityIntent(
 }
 
 export function npcUtilityWorkRoomTypeWeight(occupation: Occupation | undefined, roomType: RoomType): number {
-  switch (occupation) {
-    case Occupation.COOK:
-      return roomType === RoomType.KITCHEN ? 34 : roomType === RoomType.STORAGE ? 10 : 0;
-    case Occupation.DOCTOR:
-      return roomType === RoomType.MEDICAL ? 36 : roomType === RoomType.OFFICE ? 8 : 0;
-    case Occupation.LOCKSMITH:
-    case Occupation.ELECTRICIAN:
-    case Occupation.TURNER:
-    case Occupation.MECHANIC:
-      return roomType === RoomType.PRODUCTION ? 35 : roomType === RoomType.STORAGE ? 12 : 0;
-    case Occupation.SECRETARY:
-      return roomType === RoomType.OFFICE ? 34 : roomType === RoomType.COMMON ? 8 : 0;
-    case Occupation.STOREKEEPER:
-      return roomType === RoomType.STORAGE ? 34 : roomType === RoomType.PRODUCTION ? 8 : 0;
-    case Occupation.SCIENTIST:
-      return roomType === RoomType.OFFICE || roomType === RoomType.MEDICAL ? 26 : roomType === RoomType.PRODUCTION ? 10 : 0;
-    case Occupation.DIRECTOR:
-      return roomType === RoomType.OFFICE ? 28 : roomType === RoomType.COMMON ? 18 : 0;
-    case Occupation.HOUSEWIFE:
-      return roomType === RoomType.LIVING ? 23 : roomType === RoomType.KITCHEN ? 20 : 0;
-    case Occupation.CHILD:
-      return roomType === RoomType.LIVING ? 17 : roomType === RoomType.COMMON ? 15 : 0;
-    case Occupation.ALCOHOLIC:
-      return roomType === RoomType.SMOKING ? 24 : roomType === RoomType.COMMON || roomType === RoomType.KITCHEN ? 15 : 0;
-    case Occupation.HUNTER:
-    case Occupation.TRAVELER:
-    case Occupation.PILGRIM:
-      return roomType === RoomType.CORRIDOR ? 24 : roomType === RoomType.COMMON ? 15 : 0;
-    case Occupation.PRIEST:
-      return roomType === RoomType.HQ ? 25 : roomType === RoomType.COMMON ? 18 : 0;
-    default:
-      return roomType === RoomType.PRODUCTION ? 16 : roomType === RoomType.OFFICE ? 14 : 0;
-  }
+  return occupationWorkRoomTypeWeight(occupation, roomType);
 }
 
 export function npcUtilityRoomTypeWeightForIntent(
@@ -708,37 +681,12 @@ function highNeedPressure(value: number | undefined): number {
 }
 
 function occupationWorkDrive(occupation: Occupation | undefined): number {
-  switch (occupation) {
-    case Occupation.CHILD:
-    case Occupation.TRAVELER:
-    case Occupation.PILGRIM:
-      return 0.25;
-    case Occupation.ALCOHOLIC:
-      return 0.35;
-    case Occupation.HOUSEWIFE:
-    case Occupation.HUNTER:
-    case Occupation.PRIEST:
-      return 0.55;
-    case Occupation.DIRECTOR:
-    case Occupation.SCIENTIST:
-    case Occupation.DOCTOR:
-      return 0.8;
-    case Occupation.COOK:
-    case Occupation.LOCKSMITH:
-    case Occupation.SECRETARY:
-    case Occupation.ELECTRICIAN:
-    case Occupation.TURNER:
-    case Occupation.MECHANIC:
-    case Occupation.STOREKEEPER:
-      return 0.72;
-    default:
-      return 0.5;
-  }
+  return occupationProfile(occupation)?.workDrive ?? 0.5;
 }
 
 function patrolDrive(faction: Faction | undefined, occupation: Occupation | undefined): number {
-  if (occupation === Occupation.HUNTER) return 0.9;
-  if (occupation === Occupation.PILGRIM || occupation === Occupation.PRIEST) return 0.55;
+  const occupationDrive = occupationProfile(occupation)?.patrolDrive;
+  if (occupationDrive !== undefined) return occupationDrive;
   if (faction === Faction.LIQUIDATOR) return 0.82;
   if (faction === Faction.CULTIST) return 0.58;
   if (faction === Faction.WILD) return 0.42;
@@ -749,32 +697,23 @@ function defaultDuty(faction: Faction | undefined, occupation: Occupation | unde
   if (faction === Faction.LIQUIDATOR) return 0.82;
   if (faction === Faction.SCIENTIST) return 0.74;
   if (faction === Faction.CULTIST) return 0.62;
-  switch (occupation) {
-    case Occupation.CHILD: return 0.15;
-    case Occupation.ALCOHOLIC: return 0.22;
-    case Occupation.TRAVELER:
-    case Occupation.PILGRIM: return 0.3;
-    case Occupation.DIRECTOR:
-    case Occupation.DOCTOR:
-    case Occupation.SCIENTIST: return 0.74;
-    default: return 0.55;
-  }
+  return occupationProfile(occupation)?.duty ?? 0.55;
 }
 
 function defaultSociability(faction: Faction | undefined, occupation: Occupation | undefined): number {
-  if (occupation === Occupation.CHILD || occupation === Occupation.ALCOHOLIC) return 0.72;
-  if (occupation === Occupation.SECRETARY || occupation === Occupation.COOK || occupation === Occupation.HOUSEWIFE) return 0.62;
+  const occupationValue = occupationProfile(occupation)?.sociability;
+  if (occupationValue !== undefined) return occupationValue;
   if (faction === Faction.CULTIST) return 0.32;
   if (faction === Faction.WILD) return 0.25;
   return 0.48;
 }
 
 function defaultRiskTolerance(faction: Faction | undefined, occupation: Occupation | undefined): number {
-  if (occupation === Occupation.HUNTER) return 0.78;
+  const occupationValue = occupationProfile(occupation)?.riskTolerance;
+  if (occupationHasProfileTag(occupation, 'combat') && occupationValue !== undefined) return occupationValue;
   if (faction === Faction.LIQUIDATOR) return 0.74;
   if (faction === Faction.CULTIST || faction === Faction.WILD) return 0.6;
-  if (occupation === Occupation.CHILD) return 0.15;
-  if (occupation === Occupation.DOCTOR || occupation === Occupation.SCIENTIST) return 0.38;
+  if (occupationValue !== undefined) return occupationValue;
   return 0.32;
 }
 

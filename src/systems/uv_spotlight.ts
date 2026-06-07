@@ -272,6 +272,7 @@ function revealUvSurfaceMarks(world: World, player: Entity, beamLen: number): nu
   const sideX = -dirY;
   const sideY = dirX;
   const touched = new Set<number>();
+  const changedCells: number[] = [];
   let revealed = 0;
 
   for (let d = 0.7; d <= beamLen; d += UV_SCAN_STEP) {
@@ -284,11 +285,14 @@ function revealUvSurfaceMarks(world: World, player: Entity, beamLen: number): nu
       touched.add(ci);
       const cell = world.surfaceMap.get(ci);
       if (!cell) continue;
-      if (revealSurfaceCell(cell)) revealed++;
+      if (revealSurfaceCell(cell)) {
+        revealed++;
+        changedCells.push(ci);
+      }
     }
   }
 
-  if (revealed > 0) world.surfaceVersion++;
+  if (changedCells.length > 0) world.markSurfaceCellsDirty(changedCells);
   return revealed;
 }
 

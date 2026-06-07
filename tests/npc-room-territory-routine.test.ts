@@ -112,6 +112,34 @@ test('routine work keeps a friendly assigned work room as the strongest anchor',
   assert.equal(npc.ai?.ty, assigned.y + Math.floor(assigned.h / 2));
 });
 
+test('routine work can target an assigned room beyond the first scan window', () => {
+  const world = makeRoutineWorld();
+  for (let id = 1; id <= 130; id++) {
+    addTestRoom(world, {
+      id,
+      x: 4 + (id % 12) * 7,
+      y: 4 + Math.floor(id / 12) * 7,
+      w: 4,
+      h: 4,
+      type: RoomType.STORAGE,
+      zoneId: id,
+      zoneFaction: ZoneFaction.CITIZEN,
+    });
+  }
+  const assigned = addTestRoom(world, { id: 160, x: 58, y: 58, w: 6, h: 6, type: RoomType.PRODUCTION, zoneId: 160, zoneFaction: ZoneFaction.CITIZEN });
+  const npc = makeNpc(15, {
+    assignedRoomId: assigned.id,
+    occupation: Occupation.MECHANIC,
+    needs: { food: 100, water: 100, sleep: 100, pee: 0, poo: 0 },
+  });
+
+  tickNpc(world, npc);
+
+  assert.equal(npc.ai?.goal, AIGoal.WORK);
+  assert.equal(npc.ai?.tx, assigned.x + Math.floor(assigned.w / 2));
+  assert.equal(npc.ai?.ty, assigned.y + Math.floor(assigned.h / 2));
+});
+
 test('survival need can trespass only after no friendly room candidate exists', () => {
   const world = makeRoutineWorld();
   const hostileKitchen = addTestRoom(world, { id: 1, x: 16, y: 8, w: 5, h: 5, type: RoomType.KITCHEN, zoneId: 1, zoneFaction: ZoneFaction.CULTIST });

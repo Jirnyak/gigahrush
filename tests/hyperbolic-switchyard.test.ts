@@ -81,7 +81,7 @@ test('hyperbolic_switchyard exposes guide, switch family, shortcut and false-pla
     assert.equal(cueTags.has(tag) || containerTags.has(tag), true, tag);
   }
 
-  assert.equal(cues.some(cue => cue.paidMapReveal?.priceRubles === 45 && cue.tags.includes('pay_guide')), true);
+  assert.equal(cues.some(cue => cue.paidRouteAdvice?.priceRubles === 45 && cue.tags.includes('pay_guide')), true);
   assert.equal(gen.world.containers.some(container => container.tags.includes('switch_family') && container.tags.includes('repair')), true);
   assert.equal(gen.world.containers.some(container => container.tags.includes('geodesic_shortcut') && container.tags.includes('monster_heavy')), true);
   assert.equal(gen.world.containers.some(container => container.tags.includes('false_platform') && container.tags.includes('sabotage')), true);

@@ -7,11 +7,9 @@ import {
 } from '../../core/types';
 import { World } from '../../core/world';
 import { withSeededRandom } from '../../core/rand';
-import { freshNeeds } from '../../data/catalog';
-import { PLOT_NPCS } from '../../data/plot';
 import { MONSTERS } from '../../entities/monster';
 import { monsterSpr, Spr } from '../../render/sprite_index';
-import { calcZoneLevel, freshRPG, randomRPG, scaleMonsterHp, scaleMonsterSpeed } from '../../systems/rpg';
+import { calcZoneLevel, randomRPG, scaleMonsterHp, scaleMonsterSpeed } from '../../systems/rpg';
 import { entitySpawnSlots } from '../../systems/entity_limits';
 import { registerRouteCue } from '../../systems/route_cues';
 import {
@@ -25,6 +23,7 @@ import {
   sanitizeDoors,
   stampRoom,
 } from '../shared';
+import { requireSpawnedPlotNpcFromPackage } from '../plot_npc_spawn';
 import type { FloorGeneration } from '../floor_manifest';
 
 export const PODAD_DESIGN_FLOOR_ID = 'podad' as const;
@@ -1031,22 +1030,9 @@ function spawnPlotNpc(
   entities: Entity[],
   nextId: { v: number },
 ): void {
-  const def = PLOT_NPCS[plotNpcId];
   const x = world.wrap(room.x + (room.w >> 1));
   const y = world.wrap(room.y + (room.h >> 1));
-  entities.push({
-    id: nextId.v++, type: EntityType.NPC,
-    x: x + 0.5, y: y + 0.5,
-    angle: Math.PI, pitch: 0, alive: true, speed: def.speed,
-    sprite: def.sprite,
-    name: def.name, isFemale: def.isFemale,
-    needs: freshNeeds(), hp: def.hp, maxHp: def.maxHp, money: def.money,
-    rpg: freshRPG(def.level ?? 1),
-    ai: { goal: AIGoal.IDLE, tx: 0, ty: 0, path: [], pi: 0, stuck: 0, timer: 0 },
-    inventory: def.inventory.map(i => ({ ...i })),
-    faction: def.faction, occupation: def.occupation,
-    plotNpcId, canGiveQuest: true, questId: -1,
-  });
+  requireSpawnedPlotNpcFromPackage(entities, nextId, plotNpcId, x + 0.5, y + 0.5, { angle: Math.PI });
 }
 
 function spawnPodadHeralds(world: World, entities: Entity[], nextId: { v: number }, spawnX: number, spawnY: number): void {

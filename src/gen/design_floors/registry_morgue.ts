@@ -26,8 +26,7 @@ import {
   type WorldContainer,
 } from '../../core/types';
 import { World } from '../../core/world';
-import { freshNeeds } from '../../data/catalog';
-import { type PlotNpcDef, registerSideQuest } from '../../data/plot';
+import { designNpcFloorKey, type PlotNpcDef, registerFloorSideQuest } from '../../data/plot';
 import { MONSTERS } from '../../entities/monster';
 import { monsterSpr, Spr } from '../../render/sprite_index';
 import { setTerritoryOwnerAtIndex } from '../../systems/territory';
@@ -40,6 +39,9 @@ import {
 } from '../shared';
 import { genLog } from '../log';
 import type { FloorGeneration } from '../floor_manifest';
+import { requireSpawnedPlotNpcFromPackage } from '../plot_npc_spawn';
+
+const DESIGN_NPC_HOME_FLOOR_KEY = designNpcFloorKey('registry_morgue');
 
 export const REGISTRY_MORGUE_ROUTE_ID = 'registry_morgue' as const;
 export const REGISTRY_MORGUE_FUTURE_Z = 18 as const;
@@ -306,7 +308,7 @@ const NPC_DEFS: Record<string, PlotNpcDef> = {
   },
 };
 
-registerSideQuest('morgue_registrar_faina', NPC_DEFS.morgue_registrar_faina, [
+registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'morgue_registrar_faina', NPC_DEFS.morgue_registrar_faina, [
   {
     id: 'morgue_find_tag',
     giverNpcId: 'morgue_registrar_faina',
@@ -344,7 +346,7 @@ registerSideQuest('morgue_registrar_faina', NPC_DEFS.morgue_registrar_faina, [
   },
 ]);
 
-registerSideQuest('morgue_orderly_stepan', NPC_DEFS.morgue_orderly_stepan, [
+registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'morgue_orderly_stepan', NPC_DEFS.morgue_orderly_stepan, [
   {
     id: 'morgue_missing_body',
     giverNpcId: 'morgue_orderly_stepan',
@@ -365,7 +367,7 @@ registerSideQuest('morgue_orderly_stepan', NPC_DEFS.morgue_orderly_stepan, [
   },
 ]);
 
-registerSideQuest('morgue_relative_ira', NPC_DEFS.morgue_relative_ira, [
+registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'morgue_relative_ira', NPC_DEFS.morgue_relative_ira, [
   {
     id: 'morgue_name_return',
     giverNpcId: 'morgue_relative_ira',
@@ -404,7 +406,7 @@ registerSideQuest('morgue_relative_ira', NPC_DEFS.morgue_relative_ira, [
   },
 ]);
 
-registerSideQuest('morgue_quarantine_sanitar', NPC_DEFS.morgue_quarantine_sanitar, [
+registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'morgue_quarantine_sanitar', NPC_DEFS.morgue_quarantine_sanitar, [
   {
     id: 'morgue_medicine_lock',
     giverNpcId: 'morgue_quarantine_sanitar',
@@ -1177,29 +1179,20 @@ function addDrop(
 function spawnMorgueNpc(
   entities: Entity[],
   nextId: NextId,
-  def: PlotNpcDef,
+  _def: PlotNpcDef,
   plotNpcId: string,
   x: number,
   y: number,
   canGiveQuest = true,
   weapon?: string,
 ): Entity {
-  const npc: Entity = {
-    id: nextId.v++, type: EntityType.NPC,
-    x: x + 0.5, y: y + 0.5,
-    angle: Math.random() * Math.PI * 2, pitch: 0,
-    alive: true, speed: def.speed, sprite: def.sprite,
-    name: def.name, isFemale: def.isFemale,
-    needs: freshNeeds(), hp: def.hp, maxHp: def.maxHp, money: def.money,
-    ai: { goal: AIGoal.IDLE, tx: 0, ty: 0, path: [], pi: 0, stuck: 0, timer: 0 },
-    inventory: def.inventory.map(i => ({ ...i })),
+  return requireSpawnedPlotNpcFromPackage(entities, nextId, plotNpcId, x + 0.5, y + 0.5, {
+    angle: Math.random() * Math.PI * 2,
     weapon,
-    faction: def.faction, occupation: def.occupation,
-    plotNpcId, canGiveQuest, questId: -1,
+    canGiveQuest,
     isTraveler: false,
-  };
-  entities.push(npc);
-  return npc;
+    aiTarget: { x: 0, y: 0 },
+  });
 }
 
 function spawnMorgueMonster(

@@ -710,7 +710,7 @@ test('RPG stat effects avoid hard caps and appear in weapon readiness', () => {
   assert.equal(effects.maxPsi, 89);
   assert.equal(effects.meleeDamageMult, 1.5);
   assert.equal(round3(effects.heavyWeaponSpeedMult), 0.286);
-  assert.equal(effects.moveSpeedMult, 1.5);
+  assert.equal(effects.moveSpeedMult, 3.5);
   assert.equal(round3(effects.attackCooldownMult), 0.167);
   assert.equal(round3(effects.rangedSpreadMult), 0.143);
   assert.equal(round3(effects.xpMult), 1.982);

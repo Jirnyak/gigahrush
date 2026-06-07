@@ -27,9 +27,8 @@ import {
   type WorldEvent,
 } from '../../core/types';
 import { World } from '../../core/world';
-import { freshNeeds } from '../../data/catalog';
 import { factionToTerritoryOwner } from '../../data/factions';
-import { type PlotNpcDef, registerSideQuest } from '../../data/plot';
+import { designNpcFloorKey, type PlotNpcDef, registerFloorSideQuest } from '../../data/plot';
 import { MONSTERS } from '../../entities/monster';
 import { Spr } from '../../render/sprite_index';
 import { publishEvent } from '../../systems/events';
@@ -37,8 +36,11 @@ import { placeEmergencyPanel } from '../../systems/emergency_panels';
 import { registerRouteCue } from '../../systems/route_cues';
 import { randomRPG, scaleMonsterHp, scaleMonsterSpeed } from '../../systems/rpg';
 import { setTerritoryOwnerAtIndex } from '../../systems/territory';
+import { requireSpawnedPlotNpcFromPackage } from '../plot_npc_spawn';
 import { stampRoom } from '../shared';
 import type { FloorGeneration } from '../floor_manifest';
+
+const DESIGN_NPC_HOME_FLOOR_KEY = designNpcFloorKey('service_floor');
 
 export const DESIGN_FLOOR_ID = 'service_floor' as const;
 export const SERVICE_FLOOR_Z = -18;
@@ -491,7 +493,7 @@ const MITKA_DEF: PlotNpcDef = {
   ],
 };
 
-registerSideQuest('service_liftmaster_boris', BORIS_DEF, [
+registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'service_liftmaster_boris', BORIS_DEF, [
   {
     id: 'service_fix_lift_machine',
     giverNpcId: 'service_liftmaster_boris',
@@ -504,7 +506,7 @@ registerSideQuest('service_liftmaster_boris', BORIS_DEF, [
   },
 ]);
 
-registerSideQuest('service_janitor_nadya', NADYA_DEF, [
+registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'service_janitor_nadya', NADYA_DEF, [
   {
     id: 'service_steal_master_key',
     giverNpcId: 'service_janitor_nadya',
@@ -517,7 +519,7 @@ registerSideQuest('service_janitor_nadya', NADYA_DEF, [
   },
 ]);
 
-registerSideQuest('service_electrician_roma', ROMA_DEF, [
+registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'service_electrician_roma', ROMA_DEF, [
   {
     id: 'service_restore_lights',
     giverNpcId: 'service_electrician_roma',
@@ -530,7 +532,7 @@ registerSideQuest('service_electrician_roma', ROMA_DEF, [
   },
 ]);
 
-registerSideQuest('service_locked_out_clerk', CLERK_DEF, [
+registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'service_locked_out_clerk', CLERK_DEF, [
   {
     id: 'service_reroute_raid',
     giverNpcId: 'service_locked_out_clerk',
@@ -543,7 +545,7 @@ registerSideQuest('service_locked_out_clerk', CLERK_DEF, [
   },
 ]);
 
-registerSideQuest('service_trapped_pump_worker', MITKA_DEF, [
+registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'service_trapped_pump_worker', MITKA_DEF, [
   {
     id: 'service_rescue_pump_worker',
     giverNpcId: 'service_trapped_pump_worker',
@@ -2199,24 +2201,15 @@ function spawnPlotNpc(
   entities: Entity[],
   nextId: { v: number },
   npcId: string,
-  def: PlotNpcDef,
+  _def: PlotNpcDef,
   x: number,
   y: number,
   angle: number,
 ): number {
-  const id = nextId.v++;
-  entities.push({
-    id, type: EntityType.NPC,
-    x: x + 0.5, y: y + 0.5, angle, pitch: 0,
-    alive: true, speed: def.speed, sprite: def.sprite,
-    name: def.name, isFemale: def.isFemale,
-    needs: freshNeeds(), hp: def.hp, maxHp: def.maxHp, money: def.money,
-    ai: { goal: AIGoal.IDLE, tx: 0, ty: 0, path: [], pi: 0, stuck: 0, timer: 0 },
-    inventory: def.inventory.map(i => ({ ...i })),
-    faction: def.faction, occupation: def.occupation,
-    plotNpcId: npcId, canGiveQuest: true, questId: -1,
+  const npc = requireSpawnedPlotNpcFromPackage(entities, nextId, npcId, x + 0.5, y + 0.5, {
+    angle,
   });
-  return id;
+  return npc.id;
 }
 
 function addServiceContainer(

@@ -29,13 +29,15 @@ import {
 } from '../../core/types';
 import { World } from '../../core/world';
 import { hashSeed, withSeededRandom } from '../../core/rand';
-import { freshNeeds } from '../../data/catalog';
-import { type PlotNpcDef, registerSideQuest } from '../../data/plot';
+import { designNpcFloorKey, type PlotNpcDef, registerFloorSideQuest } from '../../data/plot';
 import { MONSTERS } from '../../entities/monster';
 import { monsterSpr, Spr } from '../../render/sprite_index';
 import { setTerritoryOwnerAtIndex, syncZoneMetadataFromTerritory } from '../../systems/territory';
+import { requireSpawnedPlotNpcFromPackage } from '../plot_npc_spawn';
 import { ensureConnectivity, generateZones, sanitizeDoors, stampRoom } from '../shared';
 import type { FloorGeneration } from '../floor_manifest';
+
+const DESIGN_NPC_HOME_FLOOR_KEY = designNpcFloorKey('pioneer_camp');
 
 export const PIONEER_CAMP_DESIGN_FLOOR_ID = 'pioneer_camp' as const;
 export const PIONEER_CAMP_ROUTE_Z = 38;
@@ -258,7 +260,7 @@ const NPC_DEFS: Record<CampNpcId, PlotNpcDef> = {
   },
 };
 
-registerSideQuest(NPC_IDS.shift, NPC_DEFS.camp_shift_tamara, [{
+registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, NPC_IDS.shift, NPC_DEFS.camp_shift_tamara, [{
   id: 'camp_verify_roster',
   giverNpcId: NPC_IDS.shift,
   type: QuestType.FETCH,
@@ -273,7 +275,7 @@ registerSideQuest(NPC_IDS.shift, NPC_DEFS.camp_shift_tamara, [{
   moneyReward: 35,
 }]);
 
-registerSideQuest(NPC_IDS.radio, NPC_DEFS.camp_radio_egor, [{
+registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, NPC_IDS.radio, NPC_DEFS.camp_radio_egor, [{
   id: 'camp_repair_loudspeaker',
   giverNpcId: NPC_IDS.radio,
   type: QuestType.FETCH,
@@ -288,7 +290,7 @@ registerSideQuest(NPC_IDS.radio, NPC_DEFS.camp_radio_egor, [{
   moneyReward: 30,
 }]);
 
-registerSideQuest(NPC_IDS.medic, NPC_DEFS.camp_medic_ira, [{
+registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, NPC_IDS.medic, NPC_DEFS.camp_medic_ira, [{
   id: 'camp_medpost_choice',
   giverNpcId: NPC_IDS.medic,
   type: QuestType.FETCH,
@@ -303,7 +305,7 @@ registerSideQuest(NPC_IDS.medic, NPC_DEFS.camp_medic_ira, [{
   moneyReward: 28,
 }]);
 
-registerSideQuest(NPC_IDS.cook, NPC_DEFS.camp_canteen_zoya, [{
+registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, NPC_IDS.cook, NPC_DEFS.camp_canteen_zoya, [{
   id: 'camp_canteen_compote',
   giverNpcId: NPC_IDS.cook,
   type: QuestType.FETCH,
@@ -1273,39 +1275,20 @@ function spawnPlotNpc(
   entities: Entity[],
   nextId: { v: number },
   npcId: CampNpcId,
-  def: PlotNpcDef,
+  _def: PlotNpcDef,
   x: number,
   y: number,
   angle: number,
   weapon?: string,
 ): number {
-  const id = nextId.v++;
-  entities.push({
-    id,
-    type: EntityType.NPC,
-    x: x + 0.5,
-    y: y + 0.5,
+  const px = x + 0.5;
+  const py = y + 0.5;
+  const npc = requireSpawnedPlotNpcFromPackage(entities, nextId, npcId, px, py, {
     angle,
-    pitch: 0,
-    alive: true,
-    speed: def.speed,
-    sprite: def.sprite,
-    name: def.name,
-    isFemale: def.isFemale,
-    needs: freshNeeds(),
-    hp: def.hp,
-    maxHp: def.maxHp,
-    money: def.money,
-    ai: { goal: AIGoal.IDLE, tx: x + 0.5, ty: y + 0.5, path: [], pi: 0, stuck: 0, timer: 0 },
-    inventory: def.inventory.map(item => ({ ...item })),
     weapon,
-    faction: def.faction,
-    occupation: def.occupation,
-    plotNpcId: npcId,
-    canGiveQuest: true,
-    questId: -1,
+    aiTarget: { x: px, y: py },
   });
-  return id;
+  return npc.id;
 }
 
 function addCampContainer(

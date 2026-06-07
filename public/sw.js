@@ -46,6 +46,10 @@ self.addEventListener('fetch', event => {
 
   const url = new URL(request.url);
   if (url.origin !== location.origin || url.pathname.includes('/api/')) return;
+  if (url.pathname === '/npc-intake' || url.pathname.startsWith('/npc-intake/')) {
+    event.respondWith(fetch(request));
+    return;
+  }
   if (IS_DEV_HOST || url.pathname.startsWith('/src/') || url.pathname.startsWith('/@vite/')) {
     event.respondWith(fetch(request));
     return;

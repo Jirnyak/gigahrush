@@ -13,11 +13,14 @@ import {
   type WorldContainer,
 } from '../../core/types';
 import { World } from '../../core/world';
-import { type PlotNpcDef, registerSideQuest } from '../../data/plot';
+import { type PlotNpcDef, registerAuthoredNpc, registerSideQuest, storyNpcFloorKey } from '../../data/plot';
 import {
-  type NextId, addItemDrop, createAdminRoom, setFeature, spawnAdminNpc, spawnNamedCivilian,
+  type NextId, addItemDrop, createAdminRoom, setFeature, spawnAdminNpc,
 } from './admin_common';
 import { genLog } from '../log';
+
+const HOME_FLOOR_KEY = storyNpcFloorKey(FloorLevel.MINISTRY);
+const POSTOVOY_FORMULYAR_ID = 'raionsovet_archive_postovoy_formulyar';
 
 const MARFA_DEF: PlotNpcDef = {
   name: 'Марфа Паспортная',
@@ -41,6 +44,28 @@ const MARFA_DEF: PlotNpcDef = {
   talkLinesPost: [
     'Допуск выдан. Не сгибайте его у дверей.',
     'Если карточка пахнет мокрым бетоном, не называйте ее своей.',
+  ],
+};
+
+const POSTOVOY_FORMULYAR_DEF: PlotNpcDef = {
+  name: 'Постовой Формуляр',
+  isFemale: false,
+  faction: Faction.LIQUIDATOR,
+  occupation: Occupation.HUNTER,
+  sprite: Occupation.HUNTER,
+  hp: 70, maxHp: 70, money: 15, speed: 0.8,
+  weapon: 'makarov',
+  inventory: [
+    { defId: 'makarov', count: 1 },
+    { defId: 'ammo_9mm', count: 10 },
+    { defId: 'denunciation', count: 1 },
+  ],
+  talkLines: [
+    'Формуляр на посту. Руки держите поверх дела.',
+    'Архив любит тишину, а я люблю, когда архив не зовет меня внутрь.',
+  ],
+  talkLinesPost: [
+    'Дело закрыто? Тогда идите, пока оно не открылось заново.',
   ],
 };
 
@@ -176,6 +201,13 @@ registerSideQuest('timur_nedostacha', TIMUR_DEF, [
   },
 ]);
 
+registerAuthoredNpc({
+  id: POSTOVOY_FORMULYAR_ID,
+  npc: POSTOVOY_FORMULYAR_DEF,
+  homeFloorKey: HOME_FLOOR_KEY,
+  tags: ['ministry', 'raionsovet_archive', 'guard'],
+});
+
 function addArchiveContainer(
   world: World,
   roomId: number,
@@ -247,12 +279,7 @@ export function generateRaionsovetArchive(
   spawnAdminNpc(entities, nextId, IPPOLIT_DEF, 'ippolit_podshtampov', midX - 1, deskY - 1);
   spawnAdminNpc(entities, nextId, KIRA_DEF, 'kira_kartotechnaya', midX + 2, deskY - 1);
   spawnAdminNpc(entities, nextId, TIMUR_DEF, 'timur_nedostacha', midX + 5, deskY - 1, true, 'makarov');
-  spawnNamedCivilian(
-    entities, nextId, 'Постовой Формуляр', false,
-    room.x + room.w - 3, room.y + room.h - 2, Occupation.HUNTER, Faction.LIQUIDATOR,
-    [{ defId: 'makarov', count: 1 }, { defId: 'ammo_9mm', count: 10 }, { defId: 'denunciation', count: 1 }],
-    'makarov',
-  );
+  spawnAdminNpc(entities, nextId, POSTOVOY_FORMULYAR_DEF, POSTOVOY_FORMULYAR_ID, room.x + room.w - 3, room.y + room.h - 2, false, 'makarov');
 
   addArchiveContainer(
     world, room.id, room.x + 1, room.y + 2,

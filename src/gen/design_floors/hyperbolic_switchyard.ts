@@ -24,9 +24,8 @@ import {
 } from '../../core/types';
 import { World } from '../../core/world';
 import { hashSeed, withSeededRandom } from '../../core/rand';
-import { freshNeeds } from '../../data/catalog';
 import { HUMAN_TERRITORY_OWNERS, factionToTerritoryOwner } from '../../data/factions';
-import { type PlotNpcDef, registerSideQuest } from '../../data/plot';
+import { designNpcFloorKey, type PlotNpcDef, registerFloorSideQuest } from '../../data/plot';
 import { MONSTERS } from '../../entities/monster';
 import { monsterSpr } from '../../render/sprite_index';
 import { placeEmergencyPanel } from '../../systems/emergency_panels';
@@ -34,6 +33,9 @@ import { registerRouteCue } from '../../systems/route_cues';
 import { randomRPG } from '../../systems/rpg';
 import { ensureConnectivity, generateZones, sanitizeDoors, stampRoom } from '../shared';
 import type { FloorGeneration } from '../floor_manifest';
+import { requireSpawnedPlotNpcFromPackage } from '../plot_npc_spawn';
+
+const DESIGN_NPC_HOME_FLOOR_KEY = designNpcFloorKey('hyperbolic_switchyard');
 
 export const HYPERBOLIC_SWITCHYARD_DESIGN_FLOOR_ID = 'hyperbolic_switchyard' as const;
 export const HYPERBOLIC_SWITCHYARD_ROUTE_Z = -20;
@@ -204,7 +206,7 @@ const GUIDE_DEF: PlotNpcDef = {
   ],
 };
 
-registerSideQuest(GUIDE_NPC_ID, GUIDE_DEF, [{
+registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, GUIDE_NPC_ID, GUIDE_DEF, [{
   id: 'hyperbolic_switchyard_pay_guide',
   giverNpcId: GUIDE_NPC_ID,
   type: QuestType.FETCH,
@@ -958,32 +960,15 @@ function placeSwitchyardPanels(world: World, rooms: SwitchyardRooms): number[] {
 }
 
 function spawnGuide(entities: Entity[], nextId: { v: number }, room: Room): void {
-  entities.push({
-    id: nextId.v++,
-    type: EntityType.NPC,
-    x: room.x + 8.5,
-    y: room.y + room.h - 6.5,
+  requireSpawnedPlotNpcFromPackage(entities, nextId, GUIDE_NPC_ID, room.x + 8.5, room.y + room.h - 6.5, {
     angle: Math.PI / 2,
-    pitch: 0,
-    alive: true,
-    speed: GUIDE_DEF.speed,
-    sprite: GUIDE_DEF.sprite,
-    needs: freshNeeds(),
-    hp: GUIDE_DEF.hp,
-    maxHp: GUIDE_DEF.maxHp,
-    ai: { goal: AIGoal.IDLE, tx: room.x + 8, ty: room.y + room.h - 6, path: [], pi: 0, stuck: 0, timer: 0 },
-    inventory: GUIDE_DEF.inventory.map(item => ({ ...item })),
-    name: GUIDE_DEF.name,
-    faction: GUIDE_DEF.faction,
-    occupation: GUIDE_DEF.occupation,
     isTraveler: true,
-    assignedRoomId: room.id,
-    questId: -1,
     canGiveQuest: true,
-    money: GUIDE_DEF.money,
-    plotNpcId: GUIDE_NPC_ID,
-    isFemale: true,
-    rpg: randomRPG(5),
+    aiTarget: { x: room.x + 8, y: room.y + room.h - 6 },
+    extra: {
+      assignedRoomId: room.id,
+      rpg: randomRPG(5),
+    },
   });
 }
 
@@ -1138,10 +1123,10 @@ function registerSwitchyardCues(world: World, rooms: SwitchyardRooms): void {
     room: rooms.guide,
     target: rooms.central,
     label: 'Проводник кривых дуг',
-    hint: 'Заплатить проводнику за разметку безопасной дуги и карту ближайшей ошибки.',
-    tags: ['hyperbolic_switchyard', 'pay_guide', 'paid_map'],
+    hint: 'Заплатить проводнику за разметку безопасной дуги и устную проверку ближайшей ошибки.',
+    tags: ['hyperbolic_switchyard', 'pay_guide', 'paid_route_advice'],
     color: '#7ff0b8',
-    paidMapReveal: { priceRubles: 45, radius: 34, roomScanCap: 720, sellerName: GUIDE_DEF.name },
+    paidRouteAdvice: { priceRubles: 45, sellerName: GUIDE_DEF.name },
   });
   registerSwitchyardCue(world, {
     id: 'hyperbolic_switchyard_switch_family',
@@ -1182,7 +1167,7 @@ function registerSwitchyardCue(
     hint: string;
     tags: readonly string[];
     color: string;
-    paidMapReveal?: { priceRubles: number; radius: number; roomScanCap: number; sellerName: string };
+    paidRouteAdvice?: { priceRubles: number; sellerName: string };
   },
 ): void {
   const x = opts.room.x + opts.room.w / 2;
@@ -1210,12 +1195,12 @@ function registerSwitchyardCue(
     heardText: opts.hint,
     followedText: `${opts.label}: цель рядом.`,
     ignoredText: `${opts.label}: дуга уходит в сторону.`,
-    paidMapReveal: opts.paidMapReveal,
+    paidRouteAdvice: opts.paidRouteAdvice,
     routeGroup: {
       id: opts.id,
       lead: opts.label,
       risk: opts.tags.includes('monster_heavy') ? 'много монстров на коротком ходе' : 'ложная смежность стрелочной',
-      decision: opts.tags.includes('paid_map') ? 'заплатить проводнику' : opts.tags.includes('sabotage') ? 'сорвать пломбу' : 'сменить путь',
+      decision: opts.tags.includes('paid_route_advice') ? 'заплатить проводнику' : opts.tags.includes('sabotage') ? 'сорвать пломбу' : 'сменить путь',
       reward: opts.tags.includes('sabotage') ? 'снять ложную платформу с маршрута' : 'сократить путь и не потерять ориентир',
       mapLabel: opts.label,
       mapHint: opts.hint,

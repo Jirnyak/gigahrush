@@ -4,13 +4,13 @@
 
 import {
   Cell, Tex, Feature, RoomType, ContainerKind, FloorLevel,
-  type Room, type Entity, EntityType, AIGoal, Faction, Occupation, QuestType,
+  type Room, type Entity, EntityType, Faction, Occupation, QuestType,
   type Item, type WorldContainer,
 } from '../../core/types';
 import { World } from '../../core/world';
-import { freshNeeds } from '../../data/catalog';
 import { type PlotNpcDef, registerSideQuest } from '../../data/plot';
 import { genLog } from '../log';
+import { requireSpawnedPlotNpcFromPackage } from '../plot_npc_spawn';
 import { registerZoneContent } from './zone_content';
 import { Spr } from '../../render/sprite_index';
 
@@ -209,19 +209,20 @@ function generateLibrary(
   // Phase 8: NPC — librarian behind central reading row
   const npcX = rx + Math.floor(LIB_W / 2) + 0.5;
   const npcY = ry + 1 + 0.5;
-  const librarian: Entity = {
-    id: nextId.v++, type: EntityType.NPC,
-    x: npcX, y: npcY,
-    angle: Math.PI / 2, pitch: 0,
-    alive: true, speed: NPC_DEF.speed, sprite: NPC_DEF.sprite,
-    name: NPC_DEF.name, isFemale: NPC_DEF.isFemale,
-    needs: freshNeeds(), hp: NPC_DEF.hp, maxHp: NPC_DEF.maxHp, money: NPC_DEF.money,
-    ai: { goal: AIGoal.IDLE, tx: 0, ty: 0, path: [], pi: 0, stuck: 0, timer: 0 },
-    inventory: [...NPC_DEF.inventory.map(i => ({ ...i })), ...libraryIndexInventory()],
-    faction: NPC_DEF.faction, occupation: NPC_DEF.occupation,
-    plotNpcId: 'margarita_librarian', canGiveQuest: true, questId: -1,
-  };
-  entities.push(librarian);
+  const librarian = requireSpawnedPlotNpcFromPackage(
+    entities,
+    nextId,
+    'margarita_librarian',
+    npcX,
+    npcY,
+    {
+      angle: Math.PI / 2,
+      canGiveQuest: true,
+      extra: {
+        inventory: [...NPC_DEF.inventory.map(i => ({ ...i })), ...libraryIndexInventory()],
+      },
+    },
+  );
   addRumorIndexContainer(world, room, librarian);
 
   genLog(`[LIBRARY] Информаторий at (${rx}, ${ry}) room #${roomId}`);

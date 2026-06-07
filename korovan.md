@@ -33,11 +33,12 @@ Current facts:
 - `src/data/alife_population_plan.ts` builds a run-start population plan.
 - The plan covers story floors, routed design floors and the per-run procedural route deck.
 - Plot/authored/event reserved identities occupy slots inside the same fixed budget.
+- `npc:*` package reservations marked `presence: 'population'` can materialize as named inhabitants through ordinary floor population slots.
 - NPC-forbidden route stops receive no ordinary ambient population.
 - `createAlifeState()` and `setAlifeState()` prefill all records before active-floor materialization.
 - Floor generators may still create ambient NPC entities, but those are placement templates.
 - `materializeAlifeFloorPopulation()` removes ambient templates and materializes A-Life records from `floorIndex[floorKey]`.
-- Reserved records are skipped as ordinary ambient slots, so a plot identity does not steal a generic crowd body.
+- `event_only` and legacy plot reserved records are skipped as ordinary ambient slots, so an event or plot identity does not steal a generic crowd body.
 - Dead records are not replaced; their materialization slot stays empty.
 - Age is byte-sized and sex is a byte code in A-Life cold storage; snapshots expose them for Demos, quests, AI context and UI.
 
@@ -133,7 +134,7 @@ The departure assigns `GOTO` to a lift anchor. Only after the live entity reache
 
 ### Save Shape
 
-Current save shape is `SAVE_SHAPE_VERSION = 20`.
+Current save shape is `SAVE_SHAPE_VERSION = 21`.
 
 Save sections relevant to Korovan:
 

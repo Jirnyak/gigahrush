@@ -4,6 +4,8 @@ import { onRequestPost as postEvent } from './api/net/event';
 import { onRequestPost as postHello } from './api/net/hello';
 import { onRequestGet as getMarket, onRequestPost as postMarket } from './api/net/market';
 import { apiError, type Env as NetEnv, type PagesContext } from './api/net/common';
+// @ts-ignore The hosted intake worker is a dependency-free MJS subproject.
+import npcIntakeWorker from '../gigahrush-npc-intake/hosted/worker.mjs';
 
 interface AssetBinding {
   fetch(request: Request): Promise<Response>;
@@ -11,6 +13,10 @@ interface AssetBinding {
 
 interface WorkerEnv extends NetEnv {
   ASSETS: AssetBinding;
+  NPC_DB?: unknown;
+  NPC_SUBMISSIONS?: unknown;
+  TENEVIK_REVIEW_TOKEN?: string;
+  TURNSTILE_SECRET_KEY?: string;
 }
 
 type Handler = (context: PagesContext) => Promise<Response>;
@@ -38,9 +44,30 @@ function isNetApiPath(pathname: string): boolean {
   return pathname === '/api/net' || pathname.startsWith('/api/net/');
 }
 
+function isNpcIntakeApiPath(pathname: string): boolean {
+  return pathname === '/api/npc-intake' || pathname.startsWith('/api/npc-intake/');
+}
+
+function npcIntakeRequest(request: Request): Request {
+  const url = new URL(request.url);
+  if (url.pathname === '/api/npc-intake/health') {
+    url.pathname = '/api/health';
+  } else if (url.pathname === '/api/npc-intake/submit') {
+    url.pathname = '/api/submit';
+  } else if (url.pathname === '/api/npc-intake/review/submissions') {
+    url.pathname = '/api/review/submissions';
+  } else if (url.pathname.startsWith('/api/npc-intake/review/submissions/')) {
+    url.pathname = url.pathname.replace('/api/npc-intake/review/submissions/', '/api/review/submissions/');
+  }
+  return new Request(url, request);
+}
+
 export default {
   async fetch(request: Request, env: WorkerEnv): Promise<Response> {
     const url = new URL(request.url);
+    if (isNpcIntakeApiPath(url.pathname)) {
+      return npcIntakeWorker.fetch(npcIntakeRequest(request), env);
+    }
     if (isNetApiPath(url.pathname)) {
       const route = NET_ROUTES[url.pathname];
       if (!route) return notFound();

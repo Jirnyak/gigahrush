@@ -48,6 +48,7 @@ Read additional docs only when relevant to the task:
 | Active-floor AI, NPC utility, pathfinding, tactics, actor cadence | `ai.md` |
 | Dynamic combat, projectiles, damage, tactical readability | `fight.md` |
 | Persistent NPC identity, deaths, relations, off-floor population | `alife.md` |
+| NPC packages, questionnaires, author-facing NPC kinds, intake transition | `npc.md` |
 | `Инфосеть Демос`, NPC social graph, feed, reactions, quest notices | `demos.md` |
 | Samosbor warning, shelter, local rebuild, variants, aftermath | `samosbor.md` |
 | Save/load shape, `localStorage`, payload sections, sanitization | `save.md` |

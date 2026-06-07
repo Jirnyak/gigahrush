@@ -619,6 +619,111 @@ function nestedRumorIdRefs(relPath) {
   return out;
 }
 
+const NPC_PACKAGE_ID_RE = /^[a-z][a-z0-9]*(?:_[a-z0-9]+)*$/;
+const NPC_PACKAGE_ENTITY_ID_RE = /\b(?:entity\.id|entityId|liveEntityId|persistentNpcId|alifeId)\b/;
+const NPC_PACKAGE_GEOMETRY_LEAK_RE = /\b(1024\s*x\s*1024|1024x1024|toroid(?:al)?|W\s*=|world\.idx|world\.wrap|FloorLevel|route\s*z\s*=|z\s*=\s*[-+]?\d+)\b|тороид|1024 на 1024/i;
+const NPC_COMMUNITY_PACKAGE_FILES = new Set(['npc.json', 'sprite.rle.json', 'README.md', 'consent.json']);
+
+function stringLiteralsIn(node) {
+  const out = [];
+  function visit(child) {
+    if (ts.isStringLiteral(child) || ts.isNoSubstitutionTemplateLiteral(child)) {
+      out.push({ text: child.text, file: toRel(child.getSourceFile().fileName), line: lineOf(child.getSourceFile(), child) });
+    }
+    ts.forEachChild(child, visit);
+  }
+  visit(node);
+  return out;
+}
+
+function getObjectLiteralProp(obj, key) {
+  const value = unwrapConstExpression(getObjectProp(obj, key));
+  return value && ts.isObjectLiteralExpression(value) ? value : undefined;
+}
+
+function getObjectArrayProp(obj, key) {
+  const value = unwrapConstExpression(getObjectProp(obj, key));
+  return value && ts.isArrayLiteralExpression(value) ? value : undefined;
+}
+
+function nestedPackageSocialRefs(obj, constants) {
+  const out = [];
+  const social = getObjectLiteralProp(obj, 'social');
+  const links = social ? getObjectArrayProp(social, 'links') : undefined;
+  if (!links) return out;
+  for (const element of links.elements) {
+    const link = unwrapConstExpression(element);
+    if (!link || !ts.isObjectLiteralExpression(link)) continue;
+    const id = getObjectString(link, 'targetNpcId', constants);
+    if (id) out.push({ id, file: toRel(link.getSourceFile().fileName), line: lineOf(link.getSourceFile(), link) });
+  }
+  return out;
+}
+
+function npcPackageSourceEntries() {
+  const packageCallNames = new Set([
+    'registerNpcPackage',
+    'plotNpcPackage',
+  ]);
+  const entries = [];
+  const refs = [];
+  const textRefs = [];
+  for (const abs of files) {
+    const rel = toRel(abs);
+    const sf = sourceFile(rel);
+    const constants = stringConstants(rel);
+    forEachNode(sf, node => {
+      if (!ts.isCallExpression(node)) return;
+      const name = callName(node.expression);
+      if (!packageCallNames.has(name)) return;
+      const arg = unwrapConstExpression(node.arguments[0]);
+      if (!arg || !ts.isObjectLiteralExpression(arg)) return;
+      const id = getObjectString(arg, 'id', constants);
+      entries.push({ id, file: rel, line: lineOf(sf, arg), call: name });
+      refs.push(...nestedPackageSocialRefs(arg, constants).map(ref => ({ ...ref, owner: id })));
+      for (const literal of stringLiteralsIn(arg)) {
+        textRefs.push({ ...literal, owner: id, packageFile: rel, packageLine: lineOf(sf, arg) });
+      }
+      const raw = arg.getText(sf);
+      if (NPC_PACKAGE_ENTITY_ID_RE.test(raw)) {
+        entries.push({ id: `__entity_id_leak__:${rel}:${lineOf(sf, arg)}`, file: rel, line: lineOf(sf, arg), entityIdLeak: true, owner: id });
+      }
+    });
+  }
+  return { entries, refs, textRefs };
+}
+
+function npcCommunityFolderEntries() {
+  if (!relExists('src/data/npc_packages/community/index.ts')) return [];
+  const constants = stringConstants('src/data/npc_packages/community/index.ts');
+  return arrayObjects('src/data/npc_packages/community/index.ts', 'COMMUNITY_NPC_PACKAGE_FOLDERS')
+    .map(entry => {
+      const npc = getObjectLiteralProp(entry.node, 'npc');
+      return {
+        ...entry,
+        folderName: getObjectString(entry.node, 'folderName', constants),
+        npcId: npc ? getObjectString(npc, 'id', constants) : undefined,
+        hasNpc: !!npc,
+        hasSprite: !!getObjectProp(entry.node, 'spriteRle'),
+        hasReadme: !!getObjectProp(entry.node, 'readme'),
+        hasConsent: !!getObjectProp(entry.node, 'consent'),
+        files: getObjectStringArray(entry.node, 'files', constants),
+      };
+    });
+}
+
+function functionCallsFunction(relPath, functionName, call) {
+  if (!relExists(relPath)) return false;
+  const sf = sourceFile(relPath);
+  let found = false;
+  forEachNode(sf, node => {
+    if (found) return;
+    if (!ts.isFunctionDeclaration(node) || node.name?.text !== functionName) return;
+    found = callsIdentifier(node.body ?? node, call);
+  });
+  return found;
+}
+
 function nestedWarningTagRefs(relPath, arrayName) {
   const constants = stringConstants(relPath);
   const out = [];
@@ -1123,6 +1228,11 @@ for (const abs of files) {
   if (!/^src\/(data|gen|systems)\//.test(rel)) continue;
   nestedRumorRefs.push(...nestedRumorIdRefs(rel));
 }
+const npcPackageScan = npcPackageSourceEntries();
+const npcPackageEntries = npcPackageScan.entries.filter(entry => !entry.entityIdLeak);
+const npcPackageEntityIdLeaks = npcPackageScan.entries.filter(entry => entry.entityIdLeak);
+const mainPlotNpcPackageEntries = npcPackageEntries.filter(entry => entry.call === 'plotNpcPackage');
+const npcCommunityFolderEntriesList = npcCommunityFolderEntries();
 const resourceEntries = arrayIds('src/data/resources.ts', 'RESOURCES');
 const caravanEntries = arrayIds('src/data/caravans.ts', 'CARAVAN_LANES');
 const factoryEntries = arrayIds('src/data/factories.ts', 'FACTORIES');
@@ -1162,7 +1272,7 @@ const itemIds = new Set(itemEntries.map(v => v.id));
 const interactiveIds = new Set(interactiveEntries.map(v => v.id));
 const questTargetItemIds = new Set([...itemIds, 'money']);
 const itemOrMoneyIds = new Set([...itemIds, 'money']);
-const plotNpcIds = new Set([...plotNpcEntries, ...localNpcDefEntries].map(v => v.id));
+const plotNpcIds = new Set([...mainPlotNpcPackageEntries, ...plotNpcEntries, ...localNpcDefEntries].map(v => v.id));
 const rumorIds = new Set(rumorEntries.map(v => v.id));
 const resourceIds = new Set(resourceEntries.map(v => v.id));
 const worldEventTypes = new Set(worldEventTypeEntries.map(v => v.id));
@@ -1232,7 +1342,7 @@ function addDocProfileSyncErrors(label, sourceEntries, docEntries, docPath) {
 }
 
 addDuplicateErrors('ITEMS', itemEntries);
-addDuplicateErrors('PLOT_NPCS/registerSideQuest', plotNpcEntries);
+addDuplicateErrors('PLOT_NPCS/registerSideQuest', [...mainPlotNpcPackageEntries, ...plotNpcEntries]);
 addDuplicateErrors('SIDE_QUESTS', sideQuestEntries);
 addDuplicateErrors('CONTRACTS', contractEntries);
 addDuplicateErrors('RUMORS', rumorEntries);
@@ -1266,6 +1376,57 @@ addDuplicateErrors('CRAFT_MATERIAL_IDS', craftMaterialEntries);
 addDuplicateErrors('ITEM_COMPOSITIONS', itemCompositionEntries);
 addDuplicateErrors('CRAFT_RECIPES', craftRecipeEntriesList);
 addDuplicateErrors('CRAFT_RECIPE_SOURCES', craftRecipeSourceEntriesList);
+addDuplicateErrors('NPC_PACKAGES', npcPackageEntries);
+
+const npcPackageIds = new Set(npcPackageEntries.map(entry => entry.id).filter(Boolean));
+for (const pack of npcPackageEntries) {
+  if (!pack.id) {
+    errors.push(`${pack.file}:${pack.line} NPC package source through ${pack.call} must use a static id`);
+    continue;
+  }
+  if (!NPC_PACKAGE_ID_RE.test(pack.id)) {
+    errors.push(`${pack.file}:${pack.line} NPC package id "${pack.id}" is not lowercase snake_case`);
+  }
+}
+for (const leak of npcPackageEntityIdLeaks) {
+  errors.push(`${leak.file}:${leak.line} NPC package "${leak.owner ?? '<unknown>'}" mentions live entity id state`);
+}
+for (const ref of npcPackageScan.refs) {
+  if (!npcPackageIds.has(ref.id)) {
+    errors.push(`${ref.file}:${ref.line} NPC package "${ref.owner ?? '<unknown>'}" social link references missing package "${ref.id}"`);
+  }
+}
+for (const text of npcPackageScan.textRefs) {
+  if (text.text.length > 520) {
+    errors.push(`${text.file}:${text.line} NPC package "${text.owner ?? '<unknown>'}" authored text exceeds 520 chars`);
+  }
+  if (NPC_PACKAGE_GEOMETRY_LEAK_RE.test(text.text)) {
+    errors.push(`${text.file}:${text.line} NPC package "${text.owner ?? '<unknown>'}" public/community text leaks implementation geometry`);
+  }
+}
+if (!functionCallsFunction('src/data/plot.ts', 'registerSideQuest', 'registerNpcPackageFromPlotNpc')) {
+  errors.push('src/data/plot.ts:1 registerSideQuest must register an NPC package for authored NPC data');
+}
+for (const base of objectKeys('src/data/plot.ts', 'PLOT_NPCS')) {
+  if (!npcPackageIds.has(base.id)) {
+    errors.push(`${base.file}:${base.line} direct PLOT_NPCS source "${base.id}" is not backed by an NPC package source`);
+  }
+}
+for (const folder of npcCommunityFolderEntriesList) {
+  if (!folder.folderName) errors.push(`${folder.file}:${folder.line} community NPC folder must use static folderName`);
+  if (!folder.hasNpc) errors.push(`${folder.file}:${folder.line} community NPC folder "${folder.folderName ?? '<unknown>'}" missing npc package object`);
+  if (!folder.hasSprite) errors.push(`${folder.file}:${folder.line} community NPC folder "${folder.folderName ?? '<unknown>'}" missing spriteRle`);
+  if (!folder.hasReadme) errors.push(`${folder.file}:${folder.line} community NPC folder "${folder.folderName ?? '<unknown>'}" missing readme`);
+  if (!folder.hasConsent) errors.push(`${folder.file}:${folder.line} community NPC folder "${folder.folderName ?? '<unknown>'}" missing consent`);
+  if (folder.folderName && folder.npcId && folder.folderName !== folder.npcId) {
+    errors.push(`${folder.file}:${folder.line} community NPC folder "${folder.folderName}" must equal npc package id "${folder.npcId}"`);
+  }
+  for (const file of folder.files) {
+    if (!NPC_COMMUNITY_PACKAGE_FILES.has(file.id)) {
+      errors.push(`${file.file}:${file.line} community NPC folder "${folder.folderName ?? '<unknown>'}" includes non-runtime file "${file.id}"`);
+    }
+  }
+}
 
 addTerritoryArchitectureErrors();
 
@@ -1580,7 +1741,9 @@ for (const abs of files) {
 console.log('Content QA registry audit');
 console.log('');
 console.log('Counts');
-console.log(`- plot NPC ids: ${plotNpcEntries.length} (${objectKeys('src/data/plot.ts', 'PLOT_NPCS').length} base + ${sideQuestNpcEntries.length} side-effect registered)`);
+console.log(`- plot NPC ids: ${plotNpcIds.size} (${mainPlotNpcPackageEntries.length} packaged base + ${sideQuestNpcEntries.length} side-effect registered + ${localNpcDefEntries.length} local defs)`);
+console.log(`- NPC package sources: ${npcPackageEntries.length}`);
+console.log(`- community NPC folders: ${npcCommunityFolderEntriesList.length}`);
 console.log(`- local NPC defs found: ${localNpcDefEntries.length}`);
 console.log(`- plot chain steps: ${plotChainEntries.length}`);
 console.log(`- side quest steps: ${sideQuestEntries.filter(v => v.id).length}`);

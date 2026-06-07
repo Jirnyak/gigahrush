@@ -11,7 +11,7 @@ import {
 } from '../../core/types';
 import { World } from '../../core/world';
 import { freshNeeds } from '../../data/catalog';
-import { type PlotNpcDef, registerSideQuest } from '../../data/plot';
+import { designNpcFloorKey, type PlotNpcDef, registerFloorSideQuest } from '../../data/plot';
 import { MONSTERS } from '../../entities/monster';
 import { Spr, monsterSpr } from '../../render/sprite_index';
 import { publishEvent } from '../../systems/events';
@@ -22,6 +22,9 @@ import {
   roomExit, stampRoom,
 } from '../shared';
 import type { FloorGeneration } from '../floor_manifest';
+import { requireSpawnedPlotNpcFromPackage } from '../plot_npc_spawn';
+
+const DESIGN_NPC_HOME_FLOOR_KEY = designNpcFloorKey('raionsovet_archive');
 
 export const RAIONSOVET_ARCHIVE_ROUTE_ID = 'raionsovet_archive' as const;
 export const RAIONSOVET_ARCHIVE_Z = 22;
@@ -315,7 +318,7 @@ const FALSE_HEIR_DEF: PlotNpcDef = {
   ],
 };
 
-registerSideQuest('archive_lida_index', LIDA_DEF, [
+registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'archive_lida_index', LIDA_DEF, [
   {
     id: 'archive_get_floor_permit',
     giverNpcId: 'archive_lida_index',
@@ -332,7 +335,7 @@ registerSideQuest('archive_lida_index', LIDA_DEF, [
   },
 ]);
 
-registerSideQuest('archive_paper_grandfather', GRANDFATHER_DEF, [
+registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'archive_paper_grandfather', GRANDFATHER_DEF, [
   {
     id: 'archive_swap_card',
     giverNpcId: 'archive_paper_grandfather',
@@ -349,7 +352,7 @@ registerSideQuest('archive_paper_grandfather', GRANDFATHER_DEF, [
   },
 ]);
 
-registerSideQuest('archive_fire_liquidator', FIRE_LIQUIDATOR_DEF, [
+registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'archive_fire_liquidator', FIRE_LIQUIDATOR_DEF, [
   {
     id: 'archive_save_or_burn',
     giverNpcId: 'archive_fire_liquidator',
@@ -366,7 +369,7 @@ registerSideQuest('archive_fire_liquidator', FIRE_LIQUIDATOR_DEF, [
   },
 ]);
 
-registerSideQuest('archive_false_heir', FALSE_HEIR_DEF, [
+registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'archive_false_heir', FALSE_HEIR_DEF, [
   {
     id: 'archive_market_license',
     giverNpcId: 'archive_false_heir',
@@ -1569,36 +1572,17 @@ function addDrop(entities: Entity[], nextId: { v: number }, x: number, y: number
 function spawnArchiveNpc(
   entities: Entity[],
   nextId: { v: number },
-  def: PlotNpcDef,
+  _def: PlotNpcDef,
   plotNpcId: string,
   x: number,
   y: number,
   weapon?: string,
 ): void {
-  entities.push({
-    id: nextId.v++,
-    type: EntityType.NPC,
-    x: x + 0.5,
-    y: y + 0.5,
+  requireSpawnedPlotNpcFromPackage(entities, nextId, plotNpcId, x + 0.5, y + 0.5, {
     angle: Math.PI,
-    pitch: 0,
-    alive: true,
-    speed: def.speed,
-    sprite: def.sprite,
-    name: def.name,
-    isFemale: def.isFemale,
-    needs: freshNeeds(),
-    hp: def.hp,
-    maxHp: def.maxHp,
-    money: def.money,
-    ai: { goal: AIGoal.IDLE, tx: x + 0.5, ty: y + 0.5, path: [], pi: 0, stuck: 0, timer: 0 },
-    inventory: def.inventory.map(i => ({ ...i })),
     weapon,
-    faction: def.faction,
-    occupation: def.occupation,
-    plotNpcId,
     canGiveQuest: true,
-    questId: -1,
+    aiTarget: { x: x + 0.5, y: y + 0.5 },
   });
 }
 

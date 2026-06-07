@@ -2,8 +2,8 @@
 /*   Adding a new monster? Just add to MonsterKind enum and       */
 /*   monster.ts registry. All sprite indices adjust automatically.*/
 /*                                                                 */
-/*   Layout: [NPCs | Travelers | Priest | named NPCs | ItemDrop | */
-/*            Monsters | EyeBolt | ParagraphBolt | Desk |        */
+/*   Layout: [NPCs | Travelers | Priest | Performer | named NPCs | ItemDrop | */
+/*            Monsters | EyeBolt | ParagraphBolt | WebBolt | WetLineBolt | Desk | */
 /*            Feature objects |                                    */
 /*            Container objects |                                 */
 /*            Bullet | Pellet | Nail | PsiBolt | PlasmaBolt |     */
@@ -32,6 +32,7 @@ export const SPRITE_CONTAINER_KINDS = Object.values(ContainerKind)
 const NPC_COUNT     = NPC_SPRITE_GENERATORS.length;
 const TRAVELER_COUNT = 3;
 const PRIEST_COUNT   = 1;
+const PERFORMER_COUNT = 1;
 const AUTHORED_NPC_COUNT = AUTHORED_NPC_SPRITE_GENERATORS.length;
 const MONSTER_COUNT  = SPRITE_MONSTER_KINDS.length;
 const FEATURE_SPRITE_COUNT = SPRITE_FEATURES.length; // Feature.DESK reuses the standalone Desk slot.
@@ -41,11 +42,14 @@ let _i = 0;
 _i += NPC_COUNT;          // occupation NPC sprites
 _i += TRAVELER_COUNT;     // traveler sprites
 _i += PRIEST_COUNT;       // priest sprite
+_i += PERFORMER_COUNT;    // performer sprite
 const _AUTHORED_NPC_BASE = _i; _i += AUTHORED_NPC_COUNT;
 const _ITEM_DROP = _i++;
 const _MON_BASE  = _i; _i += MONSTER_COUNT;
 const _EYE_BOLT  = _i++;
 const _PARAGRAPH_BOLT = _i++;
+const _WEB_BOLT = _i++;
+const _WET_LINE_BOLT = _i++;
 const _DESK      = _i++;
 const _FEATURE_BASE = _i; _i += FEATURE_SPRITE_COUNT;
 const _CONTAINER_BASE = _i; _i += CONTAINER_SPRITE_COUNT;
@@ -103,6 +107,8 @@ export const Spr = {
   ITEM_DROP: _ITEM_DROP,
   EYE_BOLT:  _EYE_BOLT,
   PARAGRAPH_BOLT: _PARAGRAPH_BOLT,
+  WEB_BOLT: _WEB_BOLT,
+  WET_LINE_BOLT: _WET_LINE_BOLT,
   DESK:      _DESK,
   FEATURE_BASE: _FEATURE_BASE,
   CONTAINER_BASE: _CONTAINER_BASE,

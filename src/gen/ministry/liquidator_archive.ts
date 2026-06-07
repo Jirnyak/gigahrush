@@ -17,23 +17,114 @@ import {
 } from '../../core/types';
 import { World } from '../../core/world';
 import { ITEMS } from '../../data/catalog';
+import { type PlotNpcDef, registerAuthoredNpc, storyNpcFloorKey } from '../../data/plot';
 import { changeResourceStock } from '../../systems/economy';
 import { publishEvent } from '../../systems/events';
 import { addItem, registerInventoryUseHandler, removeItem, type InventoryUseHandlerContext } from '../../systems/inventory';
 import {
-  type NextId, addItemDrop, createAdminRoom, setFeature, spawnAdminMonster, spawnNamedCivilian,
+  type NextId, addItemDrop, createAdminRoom, setFeature, spawnAdminMonster, spawnAdminNpc,
 } from './admin_common';
 import { genLog } from '../log';
 
 const LIQUIDATOR_ISSUE_CARD = 'liquidator_issue_card';
 const LIQUIDATOR_ISSUE_RADIUS = 2.4;
 const LIQUIDATOR_ISSUE_RADIUS2 = LIQUIDATOR_ISSUE_RADIUS * LIQUIDATOR_ISSUE_RADIUS;
+const HOME_FLOOR_KEY = storyNpcFloorKey(FloorLevel.MINISTRY);
+const LADA_OPIS_ID = 'liquidator_archive_lada_opis';
+const INTENDANT_L47_ID = 'liquidator_archive_intendant_l47';
+const POSTOVOY_NEVYNOS_ID = 'liquidator_archive_postovoy_nevynos';
 const LIQUIDATOR_FIELD_KIT = [
   { defId: 'filter_canister', count: 1 },
   { defId: 'decon_fluid', count: 1 },
   { defId: 'sterile_bandage', count: 1 },
   { defId: 'liquidator_ration', count: 1 },
 ] as const;
+
+const LADA_OPIS_DEF: PlotNpcDef = {
+  name: 'Лада Опись',
+  isFemale: true,
+  faction: Faction.CITIZEN,
+  occupation: Occupation.SECRETARY,
+  sprite: Occupation.SECRETARY,
+  hp: 70, maxHp: 70, money: 15, speed: 0.8,
+  inventory: [
+    { defId: 'blank_form', count: 2 },
+    { defId: 'unsigned_order', count: 1 },
+    { defId: 'tea', count: 1 },
+  ],
+  talkLines: [
+    'Опись Л-47 ведется в двух экземплярах: бумажном и испуганном.',
+    'Карточка выдачи работает только у шкафа. В кармане она просто красная вина.',
+  ],
+  talkLinesPost: [
+    'Выдача прошла по строке. Строка пока не спорит.',
+  ],
+};
+
+const INTENDANT_L47_DEF: PlotNpcDef = {
+  name: 'Интендант Л-47',
+  isFemale: false,
+  faction: Faction.LIQUIDATOR,
+  occupation: Occupation.HUNTER,
+  sprite: Occupation.HUNTER,
+  hp: 70, maxHp: 70, money: 15, speed: 0.8,
+  weapon: 'tt_pistol',
+  inventory: [
+    { defId: 'tt_pistol', count: 1 },
+    { defId: 'ammo_762tt', count: 14 },
+    { defId: 'liquidator_token', count: 1 },
+  ],
+  talkLines: [
+    'Л-47 выдает комплект только тем, кто принес карточку, а не историю.',
+    'Жетон из описи считается живым, пока не лег в чужой карман.',
+  ],
+  talkLinesPost: [
+    'Снаряжение списано. Теперь несите себя обратно целиком.',
+  ],
+};
+
+const POSTOVOY_NEVYNOS_DEF: PlotNpcDef = {
+  name: 'Постовой Невынос',
+  isFemale: false,
+  faction: Faction.LIQUIDATOR,
+  occupation: Occupation.HUNTER,
+  sprite: Occupation.HUNTER,
+  hp: 70, maxHp: 70, money: 15, speed: 0.8,
+  weapon: 'makarov',
+  inventory: [
+    { defId: 'makarov', count: 1 },
+    { defId: 'ammo_9mm', count: 18 },
+    { defId: 'liquidator_ration', count: 1 },
+  ],
+  talkLines: [
+    'Дверь в опись не тяжелая. Тяжелое начинается после нее.',
+    'Параграф внутри не кусает бумагу. Он кусает того, кто ее несет.',
+  ],
+  talkLinesPost: [
+    'Проход видели, выход не обещали.',
+  ],
+};
+
+registerAuthoredNpc({
+  id: LADA_OPIS_ID,
+  npc: LADA_OPIS_DEF,
+  homeFloorKey: HOME_FLOOR_KEY,
+  tags: ['ministry', 'liquidator_archive', 'secretary', 'issue_card'],
+});
+
+registerAuthoredNpc({
+  id: INTENDANT_L47_ID,
+  npc: INTENDANT_L47_DEF,
+  homeFloorKey: HOME_FLOOR_KEY,
+  tags: ['ministry', 'liquidator_archive', 'liquidator', 'issue_card'],
+});
+
+registerAuthoredNpc({
+  id: POSTOVOY_NEVYNOS_ID,
+  npc: POSTOVOY_NEVYNOS_DEF,
+  homeFloorKey: HOME_FLOOR_KEY,
+  tags: ['ministry', 'liquidator_archive', 'guard'],
+});
 
 function nextContainerId(world: World): number {
   return world.containers.reduce((mx, c) => Math.max(mx, c.id), 0) + 1;
@@ -89,11 +180,6 @@ function addRecordsGate(world: World, roomId: number, gateX: number, topY: numbe
   });
   const room = world.rooms[roomId];
   if (room && !room.doors.includes(doorIdx)) room.doors.push(doorIdx);
-}
-
-function markLastNpcAsQuestGiver(entities: Entity[]): void {
-  const npc = entities[entities.length - 1];
-  if (npc) npc.canGiveQuest = true;
 }
 
 function spawnNamedThreat(
@@ -273,25 +359,9 @@ export function generateLiquidatorArchive(
   addItemDrop(entities, nextId, rx + 4, ry + room.h - 2, 'samosbor_tally', 1);
   addItemDrop(entities, nextId, gateX + 1, ry + 2, 'denunciation', 1);
 
-  spawnNamedCivilian(
-    entities, nextId, 'Лада Опись', true,
-    rx + 4, deskY - 1, Occupation.SECRETARY, Faction.CITIZEN,
-    [{ defId: 'blank_form', count: 2 }, { defId: 'unsigned_order', count: 1 }, { defId: 'tea', count: 1 }],
-  );
-  markLastNpcAsQuestGiver(entities);
-  spawnNamedCivilian(
-    entities, nextId, 'Интендант Л-47', false,
-    rx + 7, deskY - 1, Occupation.HUNTER, Faction.LIQUIDATOR,
-    [{ defId: 'tt_pistol', count: 1 }, { defId: 'ammo_762tt', count: 14 }, { defId: 'liquidator_token', count: 1 }],
-    'tt_pistol',
-  );
-  markLastNpcAsQuestGiver(entities);
-  spawnNamedCivilian(
-    entities, nextId, 'Постовой Невынос', false,
-    gateX - 1, cy, Occupation.HUNTER, Faction.LIQUIDATOR,
-    [{ defId: 'makarov', count: 1 }, { defId: 'ammo_9mm', count: 18 }, { defId: 'liquidator_ration', count: 1 }],
-    'makarov',
-  );
+  spawnAdminNpc(entities, nextId, LADA_OPIS_DEF, LADA_OPIS_ID, rx + 4, deskY - 1, true);
+  spawnAdminNpc(entities, nextId, INTENDANT_L47_DEF, INTENDANT_L47_ID, rx + 7, deskY - 1, true, 'tt_pistol');
+  spawnAdminNpc(entities, nextId, POSTOVOY_NEVYNOS_DEF, POSTOVOY_NEVYNOS_ID, gateX - 1, cy, false, 'makarov');
 
   addLiquidatorContainer(
     world, room.id, gateX + 2, ry + 2,

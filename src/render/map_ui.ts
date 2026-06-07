@@ -2,7 +2,7 @@
 
 import {
   type Entity, type GameState, type Quest, EntityType, Cell, RoomType, W, QuestType,
-  LiftDirection, MonsterKind, FloorLevel, ZoneFaction,
+  LiftDirection, MonsterKind, FloorLevel,
 } from '../core/types';
 import { SURFACE_FLAG_CHALK_MAP, World } from '../core/world';
 import {
@@ -13,16 +13,17 @@ import {
 } from '../systems/contracts';
 import { getActiveQuest, npcQuestMarkerState } from '../systems/quests';
 import { isHostile } from '../systems/factions';
-import { territoryOwnerAtIndex } from '../systems/territory';
 import { ENTITY_MASK_ITEM_DROP, ENTITY_MASK_VISIBLE, getEntityIndex } from '../systems/entity_index';
-import { isMapCellExplored, mapExplorationVersion } from '../systems/map_exploration';
+import {
+  isMapCellExplored,
+  isMapCellFreshForMarkers,
+  mapCellFogAmount,
+  mapExplorationVersion,
+} from '../systems/map_exploration';
 import { FRIENDLY_RELATION_THRESHOLD, getNpcPlayerRelation } from '../systems/npc_relations';
 import { controlHint, menuCloseHint } from '../systems/controls';
 import {
-  MAP_COLOR_MODES,
-  type MapColorMode,
   mapHighContrastEnabled,
-  mapColorMode,
   mapLegendRowAt,
   mapLegendRowCount,
   mapLegendToggleEnabled,
@@ -60,6 +61,7 @@ const MAP_CROWD_GROUP_NEUTRAL_NPC = 1;
 const MAP_CROWD_GROUP_HOSTILE_NPC = 2;
 const MAP_CROWD_GROUP_MONSTER = 3;
 const MAP_CROWD_GROUP_ITEM = 4;
+const MAP_FOG_THREAT_PULSE_BUDGET = 24;
 const MAP_AUTHORED_IDLE_NPC_MARKER = { stroke: '#064225', fill: '#35d072' };
 const MAP_AUTHORED_ACTIVE_NPC_MARKER = { stroke: '#8a5c00', fill: '#ffd21f' };
 const MAP_PROCEDURAL_NPC_MARKER = { stroke: '#04375c', fill: '#49b8ff' };
@@ -132,24 +134,6 @@ const ROOM_TYPE_RGB_CONTRAST: Record<RoomType, [number, number, number]> = {
   [RoomType.HQ]: [220, 146, 244],
 };
 
-const TERRITORY_RGB: Record<ZoneFaction, [number, number, number]> = {
-  [ZoneFaction.CITIZEN]: [74, 190, 145],
-  [ZoneFaction.LIQUIDATOR]: [91, 158, 238],
-  [ZoneFaction.CULTIST]: [188, 89, 255],
-  [ZoneFaction.SAMOSBOR]: [230, 78, 92],
-  [ZoneFaction.WILD]: [224, 167, 69],
-  [ZoneFaction.SCIENTIST]: [103, 216, 232],
-};
-
-const TERRITORY_NAMES: Record<ZoneFaction, string> = {
-  [ZoneFaction.CITIZEN]: 'Граждане',
-  [ZoneFaction.LIQUIDATOR]: 'Ликвидаторы',
-  [ZoneFaction.CULTIST]: 'Культ',
-  [ZoneFaction.SAMOSBOR]: 'Самосбор',
-  [ZoneFaction.WILD]: 'Дикие',
-  [ZoneFaction.SCIENTIST]: 'Учёные',
-};
-
 interface FloorOverviewCache {
   canvas: HTMLCanvasElement;
   ctx: CanvasRenderingContext2D;
@@ -163,14 +147,6 @@ function routeFloor(q: Quest): FloorLevel | undefined {
   return questRouteFloor(q);
 }
 
-function dimRgb(rgb: readonly [number, number, number], factor: number): [number, number, number] {
-  return [
-    Math.round(rgb[0] * factor),
-    Math.round(rgb[1] * factor),
-    Math.round(rgb[2] * factor),
-  ];
-}
-
 function boostRgb(rgb: readonly [number, number, number], factor: number, add = 0): [number, number, number] {
   return [
     Math.min(255, Math.round(rgb[0] * factor + add)),
@@ -182,11 +158,6 @@ function boostRgb(rgb: readonly [number, number, number], factor: number, add = 
 function roomTypeRgb(type: RoomType | undefined, highContrast = false): [number, number, number] {
   if (type === undefined) return highContrast ? [120, 132, 144] : [51, 51, 51];
   return (highContrast ? ROOM_TYPE_RGB_CONTRAST[type] : ROOM_TYPE_RGB[type]) ?? (highContrast ? [120, 132, 144] : [51, 51, 51]);
-}
-
-function territoryRgb(owner: number | undefined, factor = 0.62, highContrast = false): [number, number, number] {
-  const rgb = TERRITORY_RGB[owner as ZoneFaction] ?? TERRITORY_RGB[ZoneFaction.CITIZEN];
-  return highContrast ? boostRgb(rgb, Math.max(1, factor), 24) : dimRgb(rgb, factor);
 }
 
 function shortMapLabel(text: string, max = 22): string {
@@ -499,7 +470,6 @@ function drawActiveQuestDirectionArrow(
   cellW: number,
   cellH: number,
 ): void {
-  if (state?.mapMode !== 2) return;
   const target = activeQuestMapTargetPoint(world, player, state);
   if (!target) return;
 
@@ -594,6 +564,61 @@ function unexploredMapCellPackedRgb(wx: number, wy: number, fadeBand: number): n
   return (r << 16) | (g << 8) | b;
 }
 
+function mapNoiseHash(a: number, b: number): number {
+  let h = (Math.imul(a + 0x2d, 0x45d9f3b) ^ Math.imul(b + 0x51, 0x27d4eb2d)) >>> 0;
+  h ^= h >>> 15;
+  h = Math.imul(h, 0x85ebca6b) >>> 0;
+  return (h ^ (h >>> 13)) >>> 0;
+}
+
+function packRgb(r: number, g: number, b: number): number {
+  return (
+    (Math.max(0, Math.min(255, Math.round(r))) << 16) |
+    (Math.max(0, Math.min(255, Math.round(g))) << 8) |
+    Math.max(0, Math.min(255, Math.round(b)))
+  );
+}
+
+function memoryFogPackedRgb(
+  world: World,
+  ci: number,
+  wx: number,
+  wy: number,
+  cr: number,
+  cg: number,
+  cb: number,
+  highContrast: boolean,
+  uiTime: number,
+): number {
+  const fog = mapCellFogAmount(world, ci);
+  if (fog <= 0) return packRgb(cr, cg, cb);
+
+  const dim = highContrast ? 0.54 : 0.4;
+  const targetR = highContrast ? 16 : 4;
+  const targetG = highContrast ? 24 : 10;
+  const targetB = highContrast ? 28 : 15;
+  cr = cr * (1 - fog * (1 - dim)) + targetR * fog * 0.42;
+  cg = cg * (1 - fog * (1 - dim)) + targetG * fog * 0.5;
+  cb = cb * (1 - fog * (1 - dim)) + targetB * fog * 0.58;
+
+  const light = world.light[ci];
+  if (uiTime > 0 && light > 0.14 && fog > 0.22) {
+    const tick = Math.floor(uiTime * 9);
+    const hash = mapNoiseHash(wx, wy);
+    if (((hash + tick) & 15) === 0) {
+      const spark = Math.min(1, light) * fog * (highContrast ? 36 : 24);
+      cr += spark * 0.55;
+      cg += spark * 0.8;
+      cb += spark;
+    }
+  }
+  return packRgb(cr, cg, cb);
+}
+
+function mapCellShowsLiveMarkers(world: World, idx: number): boolean {
+  return isMapCellExplored(world, idx) && isMapCellFreshForMarkers(world, idx);
+}
+
 function mapRasterBufferFor(ctx: CanvasRenderingContext2D, width: number, height: number): MapRasterBuffer | null {
   const key = (width << 16) ^ height;
   const cached = mapRasterBuffers.get(key);
@@ -661,8 +686,8 @@ function drawMapBaseRaster(
   cellW: number,
   cellH: number,
   questLiftDir: LiftDirection | undefined,
-  colorMode: MapColorMode,
   highContrast: boolean,
+  uiTime: number,
 ): void {
   const cols = radius * 2;
   const rows = cols;
@@ -736,34 +761,24 @@ function drawMapBaseRaster(
           cg = highContrast ? 128 : 51;
           cb = highContrast ? 190 : 85;
         } else {
-          if (colorMode === 'factions') {
-            [cr, cg, cb] = territoryRgb(territoryOwnerAtIndex(world, ci), highContrast ? 1 : 0.62, highContrast);
+          const rid = world.roomMap[ci];
+          if (rid >= 0) {
+            [cr, cg, cb] = roomTypeRgb(world.rooms[rid]?.type, highContrast);
           } else {
-            const rid = world.roomMap[ci];
-            if (rid >= 0) {
-              [cr, cg, cb] = roomTypeRgb(world.rooms[rid]?.type, highContrast);
+            const zid = world.zoneMap[ci];
+            const [zr, zg, zb] = ZONE_COLORS[zid % 64];
+            if (highContrast) {
+              [cr, cg, cb] = boostRgb([zr, zg, zb], 1.18, 28);
             } else {
-              const zid = world.zoneMap[ci];
-              const [zr, zg, zb] = ZONE_COLORS[zid % 64];
-              if (highContrast) {
-                [cr, cg, cb] = boostRgb([zr, zg, zb], 1.18, 28);
-              } else {
-                cr = zr >> 1;
-                cg = zg >> 1;
-                cb = zb >> 1;
-              }
+              cr = zr >> 1;
+              cg = zg >> 1;
+              cb = zb >> 1;
             }
           }
           if (cell === Cell.DOOR) {
-            if (colorMode === 'factions') {
-              cr = Math.round(cr * 0.68 + (highContrast ? 226 : 136) * 0.32);
-              cg = Math.round(cg * 0.68 + (highContrast ? 180 : 100) * 0.32);
-              cb = Math.round(cb * 0.68 + (highContrast ? 86 : 68) * 0.32);
-            } else {
-              cr = highContrast ? 226 : 136;
-              cg = highContrast ? 180 : 100;
-              cb = highContrast ? 86 : 68;
-            }
+            cr = highContrast ? 226 : 136;
+            cg = highContrast ? 180 : 100;
+            cb = highContrast ? 86 : 68;
           }
 
           if (world.fog[ci] > 50) {
@@ -774,6 +789,10 @@ function drawMapBaseRaster(
             cb = Math.round(cb * (1 - f) + fogB * f);
           }
         }
+        const packed = memoryFogPackedRgb(world, ci, wx, wy, cr, cg, cb, highContrast, uiTime);
+        cr = (packed >> 16) & 255;
+        cg = (packed >> 8) & 255;
+        cb = packed & 255;
       }
 
       data[out++] = cr;
@@ -979,7 +998,7 @@ function drawMapNpcLabels(
   for (const e of mapEntityQuery) {
     if (!e.alive || e.type !== EntityType.NPC || isPlayerEntity(e)) continue;
     const eCell = world.idx(Math.floor(e.x), Math.floor(e.y));
-    if (!isMapCellExplored(world, eCell)) continue;
+    if (!mapCellShowsLiveMarkers(world, eCell)) continue;
     const edx = world.delta(pxI, Math.floor(e.x));
     const edy = world.delta(pyI, Math.floor(e.y));
     if (Math.abs(edx) > radius || Math.abs(edy) > radius) continue;
@@ -992,6 +1011,70 @@ function drawMapNpcLabels(
     ctx.fillText(label, x, y);
     drawn++;
     if (drawn >= MAP_LABEL_NPC_CAP) break;
+  }
+  ctx.restore();
+}
+
+function mapActorLooksLikeCombat(e: Entity): boolean {
+  const ai = e.ai;
+  if (ai?.combatTargetId === undefined) return false;
+  const target = getEntityIndex().byId.get(ai.combatTargetId);
+  if (!target?.alive) return false;
+  return (ai.windupTimer ?? 0) > 0 || (e.attackCd ?? 0) > 0 || (ai.tacticTargetId !== undefined);
+}
+
+function drawFogThreatPulses(
+  ctx: CanvasRenderingContext2D,
+  world: World,
+  player: Entity,
+  pxI: number,
+  pyI: number,
+  mapX: number,
+  mapY: number,
+  mapW: number,
+  mapH: number,
+  radius: number,
+  cellW: number,
+  cellH: number,
+  uiTime: number,
+): void {
+  let drawn = 0;
+  const compact = mapW <= 180 || mapH <= 180;
+  const pulseStep = Math.floor(uiTime * 4);
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  for (const e of mapEntityQuery) {
+    if (!e.alive || isPlayerEntity(e)) continue;
+    const eCell = world.idx(Math.floor(e.x), Math.floor(e.y));
+    const fog = mapCellFogAmount(world, eCell);
+    if (fog <= 0.08) continue;
+    const group = mapEntityCrowdGroup(e, player);
+    const dangerous = group === MAP_CROWD_GROUP_MONSTER || group === MAP_CROWD_GROUP_HOSTILE_NPC;
+    const combat = mapActorLooksLikeCombat(e);
+    if (!dangerous && !combat) continue;
+
+    const hash = mapNoiseHash(e.id, pulseStep);
+    const mask = combat ? 3 : 15;
+    if ((hash & mask) !== 0) continue;
+
+    const edx = world.delta(pxI, Math.floor(e.x));
+    const edy = world.delta(pyI, Math.floor(e.y));
+    if (Math.abs(edx) > radius || Math.abs(edy) > radius) continue;
+
+    const jitter = compact ? 2.2 : 4.6;
+    const jx = (((hash >>> 8) & 15) - 7.5) / 7.5 * jitter;
+    const jy = (((hash >>> 13) & 15) - 7.5) / 7.5 * jitter;
+    const x = mapX + (edx + radius) * cellW + jx;
+    const y = mapY + (edy + radius) * cellH + jy;
+    const size = Math.max(compact ? 4 : 6, Math.min(compact ? 8 : 14, Math.max(cellW, cellH) * (combat ? 3.2 : 2.4)));
+    const alpha = Math.min(0.38, (combat ? 0.24 : 0.14) + fog * 0.14);
+    ctx.shadowColor = `rgba(255,42,38,${alpha})`;
+    ctx.shadowBlur = size * (combat ? 1.8 : 1.35);
+    ctx.globalAlpha = alpha;
+    ctx.fillStyle = combat ? '#f33' : '#b21';
+    ctx.fillRect(Math.round(x - size * 0.5), Math.round(y - size * 0.5), size, size);
+    drawn++;
+    if (drawn >= MAP_FOG_THREAT_PULSE_BUDGET) break;
   }
   ctx.restore();
 }
@@ -1029,6 +1112,7 @@ function drawMap(
   quests?: Quest[],
   currentFloor?: FloorLevel,
   state?: GameState,
+  uiTime = state?.time ?? 0,
 ): void {
   ctx.fillStyle = `rgba(0,0,0,${bgAlpha})`;
   ctx.fillRect(mapX, mapY, mapW, mapH);
@@ -1037,7 +1121,6 @@ function drawMap(
   const pyI = Math.floor(player.y);
   const cellW = mapW / (radius * 2);
   const cellH = mapH / (radius * 2);
-  const colorMode = mapColorMode();
   const highContrast = mapHighContrastEnabled();
   const showNpcs = mapLegendToggleEnabled('map_npcs');
   const showMonsters = mapLegendToggleEnabled('map_monsters');
@@ -1076,7 +1159,7 @@ function drawMap(
     clearActiveQuestMarkers();
   }
 
-  drawMapBaseRaster(ctx, world, pxI, pyI, mapX, mapY, mapW, mapH, radius, cellW, cellH, questLiftDir, colorMode, highContrast);
+  drawMapBaseRaster(ctx, world, pxI, pyI, mapX, mapY, mapW, mapH, radius, cellW, cellH, questLiftDir, highContrast, uiTime);
   if (showQuests) drawMapRoomQuestMarkers(ctx, world, pxI, pyI, mapX, mapY, radius, cellW, cellH);
   if (showSurfaceMarks) drawSurfaceMapMarks(ctx, world, pxI, pyI, mapX, mapY, radius, cellW, cellH);
 
@@ -1095,7 +1178,7 @@ function drawMap(
   for (const e of mapEntityQuery) {
     if (!e.alive || isPlayerEntity(e)) continue;
     const eCell = world.idx(Math.floor(e.x), Math.floor(e.y));
-    if (!isMapCellExplored(world, eCell)) continue;
+    if (!mapCellShowsLiveMarkers(world, eCell)) continue;
     const edx = world.delta(pxI, Math.floor(e.x));
     const edy = world.delta(pyI, Math.floor(e.y));
     if (Math.abs(edx) > radius || Math.abs(edy) > radius) continue;
@@ -1116,12 +1199,17 @@ function drawMap(
     if (group >= 0) addMapCrowdDot(esx, esy, by * 2048 + bx, group);
   }
   drawMapCrowdBins(ctx, mapW, mapH);
+  drawFogThreatPulses(ctx, world, player, pxI, pyI, mapX, mapY, mapW, mapH, radius, cellW, cellH, uiTime);
+
+  const pcx = mapX + radius * cellW;
+  const pcy = mapY + radius * cellH;
+  if (showQuests) drawActiveQuestDirectionArrow(ctx, world, player, state, pcx, pcy, cellW, cellH);
 
   if (showQuests) {
     for (const e of mapEntityQuery) {
       if (!e.alive || e.type !== EntityType.ITEM_DROP) continue;
       const eCell = world.idx(Math.floor(e.x), Math.floor(e.y));
-      if (!isMapCellExplored(world, eCell)) continue;
+      if (!mapCellShowsLiveMarkers(world, eCell)) continue;
       const edx = world.delta(pxI, Math.floor(e.x));
       const edy = world.delta(pyI, Math.floor(e.y));
       if (Math.abs(edx) > radius || Math.abs(edy) > radius) continue;
@@ -1149,7 +1237,7 @@ function drawMap(
       const markerState = state ? npcQuestMarkerState(e, state) : null;
       if (!markerState) continue;
       const eCell = world.idx(Math.floor(e.x), Math.floor(e.y));
-      if (!isMapCellExplored(world, eCell)) continue;
+      if (!mapCellShowsLiveMarkers(world, eCell)) continue;
       const edx = world.delta(pxI, Math.floor(e.x));
       const edy = world.delta(pyI, Math.floor(e.y));
       if (Math.abs(edx) > radius || Math.abs(edy) > radius) continue;
@@ -1182,7 +1270,7 @@ function drawMap(
       for (const e of mapEntityQuery) {
         if (!e.alive || !isActiveKillQuestTarget(e)) continue;
         const eCell = world.idx(Math.floor(e.x), Math.floor(e.y));
-        if (!isMapCellExplored(world, eCell)) continue;
+        if (!mapCellShowsLiveMarkers(world, eCell)) continue;
         const edx = world.delta(pxI, Math.floor(e.x));
         const edy = world.delta(pyI, Math.floor(e.y));
         if (Math.abs(edx) > radius || Math.abs(edy) > radius) continue;
@@ -1194,9 +1282,6 @@ function drawMap(
   }
 
   // Player dot
-  const pcx = mapX + radius * cellW;
-  const pcy = mapY + radius * cellH;
-
   // Lift direction arrows
   if (mapLegendToggleEnabled('map_lifts')) drawRecordedMapLiftArrows(ctx);
   ctx.fillStyle = '#fff';
@@ -1210,7 +1295,6 @@ function drawMap(
     pcy + Math.sin(player.angle) * 4 * cellH,
   );
   ctx.stroke();
-  if (showQuests) drawActiveQuestDirectionArrow(ctx, world, player, state, pcx, pcy, cellW, cellH);
   if (fullMap && mapLegendToggleEnabled('map_room_labels')) {
     drawMapRoomLabels(ctx, world, pxI, pyI, mapX, mapY, radius, cellW, cellH);
   }
@@ -1219,19 +1303,9 @@ function drawMap(
   }
 }
 
-function factionSampleHash(world: World): number {
-  let h = 0x811c9dc5;
-  for (let i = 0; i < world.factionControl.length; i += 997) {
-    h ^= territoryOwnerAtIndex(world, i) + i;
-    h = Math.imul(h, 0x01000193) >>> 0;
-  }
-  return h >>> 0;
-}
-
-function overviewSignature(world: World, colorMode: MapColorMode, highContrast: boolean): string {
-  const factionHash = colorMode === 'factions' ? factionSampleHash(world) : 0;
+function overviewSignature(world: World, highContrast: boolean): string {
   return [
-    colorMode,
+    'rooms',
     highContrast ? 'contrast' : 'default',
     world.cellVersion,
     world.wallTexVersion,
@@ -1239,30 +1313,39 @@ function overviewSignature(world: World, colorMode: MapColorMode, highContrast: 
     world.rooms.length,
     world.doors.size,
     mapExplorationVersion(world),
-    factionHash,
   ].join(':');
 }
 
-function overviewCellRgb(world: World, ci: number, colorMode: MapColorMode, highContrast: boolean): [number, number, number] {
+function overviewCellRgb(world: World, ci: number, highContrast: boolean): [number, number, number] {
+  let rgb: [number, number, number];
   const cell = world.cells[ci];
   if (cell === Cell.WALL) {
-    if (world.hermoWall[ci]) return highContrast ? [88, 180, 222] : [42, 102, 130];
-    return highContrast ? [8, 10, 12] : [20, 22, 23];
+    rgb = world.hermoWall[ci]
+      ? (highContrast ? [88, 180, 222] : [42, 102, 130])
+      : (highContrast ? [8, 10, 12] : [20, 22, 23]);
+  } else if (cell === Cell.ABYSS) {
+    rgb = highContrast ? [28, 18, 34] : [5, 4, 8];
+  } else if (cell === Cell.LIFT) {
+    rgb = highContrast ? [245, 224, 48] : [92, 160, 210];
+  } else if (cell === Cell.DOOR) {
+    rgb = highContrast ? [226, 180, 86] : [190, 150, 68];
+  } else if (cell === Cell.WATER) {
+    rgb = highContrast ? [46, 128, 190] : [32, 78, 96];
+  } else {
+    const rid = world.roomMap[ci];
+    if (rid >= 0) {
+      rgb = roomTypeRgb(world.rooms[rid]?.type, highContrast);
+    } else {
+      const [zr, zg, zb] = ZONE_COLORS[world.zoneMap[ci] % 64];
+      rgb = highContrast ? boostRgb([zr, zg, zb], 1.18, 28) : [zr >> 1, zg >> 1, zb >> 1];
+    }
   }
-  if (cell === Cell.ABYSS) return highContrast ? [28, 18, 34] : [5, 4, 8];
-  if (cell === Cell.LIFT) return highContrast ? [245, 224, 48] : [92, 160, 210];
-  if (cell === Cell.DOOR) return highContrast ? [226, 180, 86] : [190, 150, 68];
-  if (cell === Cell.WATER) return highContrast ? [46, 128, 190] : [32, 78, 96];
-  if (colorMode === 'factions') return territoryRgb(territoryOwnerAtIndex(world, ci), highContrast ? 1 : 0.74, highContrast);
-
-  const rid = world.roomMap[ci];
-  if (rid >= 0) return roomTypeRgb(world.rooms[rid]?.type, highContrast);
-  const [zr, zg, zb] = ZONE_COLORS[world.zoneMap[ci] % 64];
-  return highContrast ? boostRgb([zr, zg, zb], 1.18, 28) : [zr >> 1, zg >> 1, zb >> 1];
+  const packed = memoryFogPackedRgb(world, ci, ci % W, (ci / W) | 0, rgb[0], rgb[1], rgb[2], highContrast, 0);
+  return [(packed >> 16) & 255, (packed >> 8) & 255, packed & 255];
 }
 
-function floorOverviewCanvas(ctx: CanvasRenderingContext2D, world: World, colorMode: MapColorMode, highContrast: boolean): HTMLCanvasElement | null {
-  const signature = overviewSignature(world, colorMode, highContrast);
+function floorOverviewCanvas(ctx: CanvasRenderingContext2D, world: World, highContrast: boolean): HTMLCanvasElement | null {
+  const signature = overviewSignature(world, highContrast);
   const cached = floorOverviewCache.get(world);
   if (cached && cached.signature === signature) return cached.canvas;
 
@@ -1280,7 +1363,7 @@ function floorOverviewCanvas(ctx: CanvasRenderingContext2D, world: World, colorM
   let out = 0;
   for (let ci = 0; ci < W * W; ci++) {
     if (isMapCellExplored(world, ci)) {
-      const [r, g, b] = overviewCellRgb(world, ci, colorMode, highContrast);
+      const [r, g, b] = overviewCellRgb(world, ci, highContrast);
       data[out++] = r;
       data[out++] = g;
       data[out++] = b;
@@ -1299,19 +1382,16 @@ function floorOverviewCanvas(ctx: CanvasRenderingContext2D, world: World, colorM
   return canvas;
 }
 
-function drawMapLegendSwatches(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, sy: number, colorMode: MapColorMode, highContrast: boolean): void {
-  const rows = colorMode === 'factions'
-    ? Object.values(ZoneFaction).filter((value): value is ZoneFaction => typeof value === 'number')
-        .map(owner => ({ label: TERRITORY_NAMES[owner], rgb: highContrast ? boostRgb(TERRITORY_RGB[owner], 1, 24) : TERRITORY_RGB[owner] }))
-    : [
-        { label: 'Жилая', rgb: roomTypeRgb(RoomType.LIVING, highContrast) },
-        { label: 'Кухня', rgb: roomTypeRgb(RoomType.KITCHEN, highContrast) },
-        { label: 'Санузел', rgb: roomTypeRgb(RoomType.BATHROOM, highContrast) },
-        { label: 'Склад', rgb: roomTypeRgb(RoomType.STORAGE, highContrast) },
-        { label: 'Мед', rgb: roomTypeRgb(RoomType.MEDICAL, highContrast) },
-        { label: 'Цех', rgb: roomTypeRgb(RoomType.PRODUCTION, highContrast) },
-        { label: 'Штаб', rgb: roomTypeRgb(RoomType.HQ, highContrast) },
-      ];
+function drawMapLegendSwatches(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, sy: number, highContrast: boolean): void {
+  const rows = [
+    { label: 'Жилая', rgb: roomTypeRgb(RoomType.LIVING, highContrast) },
+    { label: 'Кухня', rgb: roomTypeRgb(RoomType.KITCHEN, highContrast) },
+    { label: 'Санузел', rgb: roomTypeRgb(RoomType.BATHROOM, highContrast) },
+    { label: 'Склад', rgb: roomTypeRgb(RoomType.STORAGE, highContrast) },
+    { label: 'Мед', rgb: roomTypeRgb(RoomType.MEDICAL, highContrast) },
+    { label: 'Цех', rgb: roomTypeRgb(RoomType.PRODUCTION, highContrast) },
+    { label: 'Штаб', rgb: roomTypeRgb(RoomType.HQ, highContrast) },
+  ];
   ctx.save();
   ctx.font = `${7 * sy}px monospace`;
   ctx.textBaseline = 'middle';
@@ -1361,13 +1441,7 @@ function drawLegendMenuRow(
   let label = '';
   let value = 'ENTER';
   let valueColor = '#fd6';
-  if (row.kind === 'map_color_mode') {
-    group = row.group;
-    label = row.label;
-    const mode = MAP_COLOR_MODES.find(entry => entry.id === mapColorMode());
-    value = mode?.label ?? 'Типы комнат';
-    valueColor = '#8cf';
-  } else if (row.kind === 'map_contrast') {
+  if (row.kind === 'map_contrast') {
     group = row.group;
     label = row.label;
     const enabled = mapHighContrastEnabled();
@@ -1409,7 +1483,6 @@ export function drawMapLegendMenu(
   const s = Math.max(1, Math.min(1.35, Math.min(sx, sy)));
   const pad = 14 * s;
   const gap = 16 * s;
-  const colorMode = mapColorMode();
   const highContrast = mapHighContrastEnabled();
   const rightW = Math.min(w * 0.46, Math.max(240 * s, h * 0.72));
   const rightX = w - pad - rightW;
@@ -1453,7 +1526,7 @@ export function drawMapLegendMenu(
     drawLegendMenuRow(ctx, state, rowIndex, leftX, top + i * rowH, leftW, rowH, s);
   }
 
-  drawMapLegendSwatches(ctx, leftX, swatchY, leftW, s, colorMode, highContrast);
+  drawMapLegendSwatches(ctx, leftX, swatchY, leftW, s, highContrast);
 
   const overviewTop = 52 * s;
   const overviewSide = Math.min(rightW - 16 * s, h - overviewTop - 24 * s);
@@ -1467,7 +1540,7 @@ export function drawMapLegendMenu(
   ctx.textBaseline = 'alphabetic';
   ctx.font = `${8 * s}px monospace`;
   ctx.fillText('СХЕМА ВСЕГО ЭТАЖА', overviewX, overviewTop + 11 * s);
-  const overview = floorOverviewCanvas(ctx, world, colorMode, highContrast);
+  const overview = floorOverviewCanvas(ctx, world, highContrast);
   if (overview) {
     ctx.save();
     const smoothing = ctx.imageSmoothingEnabled;
@@ -1499,7 +1572,7 @@ export function drawMinimap(
   const mh = rect?.h ?? MAP_SIZE * sy;
   const mx = rect?.x ?? ctx.canvas.width - mw - 4 * sx;
   const my = rect?.y ?? 4 * sy;
-  drawMap(ctx, world, entities, player, sx, sy, mx, my, mw, mh, 40, 0.75, quests, currentFloor, state);
+  drawMap(ctx, world, entities, player, sx, sy, mx, my, mw, mh, 40, 0.75, quests, currentFloor, state, _uiTime);
 }
 
 /* ── Full world map (fullscreen) ─────────────────────────────── */
@@ -1518,7 +1591,7 @@ export function drawFullMap(
     FULL_MAP_RADIUS_MIN,
     Math.min(FULL_MAP_RADIUS_MAX, Math.round(typeof rawRadius === 'number' && Number.isFinite(rawRadius) ? rawRadius : FULL_MAP_RADIUS_DEFAULT)),
   );
-  drawMap(ctx, world, entities, player, sx, sy, pad, pad, mapW, mapH, radius, 0.85, quests, currentFloor, state);
+  drawMap(ctx, world, entities, player, sx, sy, pad, pad, mapW, mapH, radius, 0.85, quests, currentFloor, state, _uiTime);
 
   ctx.fillStyle = '#666';
   ctx.font = `${8 * sy}px monospace`;

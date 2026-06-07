@@ -26,6 +26,7 @@ import {
   materializeAlifeArrival,
   materializeAlifeFloorPopulation,
   moveAlifeNpcRecord,
+  packageIdFromReservedIdentityId,
   recordAlifeNpcDeath,
   sampleAlifeFloorRecordIds,
   setAlifeState,
@@ -293,6 +294,205 @@ test('A-Life materializes ambient slots and leaves killed slots empty', () => {
   assert.equal(alifeForSave(state).deadIds.includes(killedAlifeId), true);
 });
 
+test('A-Life population package reservations materialize with exact runtime defaults and loadout', () => {
+  const state = minimalState();
+  createPrefilledAlifeState(state, 12345, 2, {
+    buckets: [{
+      floorKey: 'story:living',
+      floor: FloorLevel.LIVING,
+      targetCount: 2,
+      reserved: [{
+        id: 'npc:quiet_mechanic',
+        kind: 'authored',
+        presence: 'population',
+        name: 'Тихий механик',
+        sex: 'male',
+        age: 36,
+        faction: Faction.CITIZEN,
+        occupation: Occupation.MECHANIC,
+        canGiveQuest: true,
+        rpg: { level: 7, xp: 0, attrPoints: 0, str: 2, agi: 1, int: 3, psi: 13, maxPsi: 13 },
+        maxHp: 222,
+        hp: 111,
+        speed: 1.7,
+        isTraveler: false,
+        weapon: 'makarov',
+        tool: 'radio',
+        inventory: [
+          { defId: 'makarov', count: 1 },
+          { defId: 'ammo_9mm', count: 9 },
+          { defId: 'radio', count: 1 },
+        ],
+        money: 123,
+        accountRubles: 456,
+        kills: 2,
+        npcKills: 1,
+        monsterKills: 1,
+        playerRelation: 42,
+        karma: 7,
+      }],
+    }],
+  });
+  const world = new World();
+  world.cells[world.idx(20, 20)] = Cell.FLOOR;
+  world.cells[world.idx(21, 20)] = Cell.FLOOR;
+  const entities = [ambientTemplate(1, 20.5, 20.5), ambientTemplate(2, 21.5, 20.5)];
+
+  materializeAlifeFloorPopulation(state, world, entities, { v: 10 }, 'story:living');
+
+  assert.equal(entities.length, 2);
+  const packaged = entities.find(entity => entity.alifeId === 1);
+  assert.ok(packaged);
+  assert.equal(packaged.name, 'Тихий механик');
+  assert.equal(packaged.weapon, 'makarov');
+  assert.equal(packaged.tool, 'radio');
+  assert.deepEqual(packaged.inventory, [
+    { defId: 'makarov', count: 1 },
+    { defId: 'ammo_9mm', count: 9 },
+    { defId: 'radio', count: 1 },
+  ]);
+  assert.equal(packaged.money, 123);
+  assert.equal(packaged.accountRubles, 456);
+  assert.equal(packaged.hp, 111);
+  assert.equal(packaged.maxHp, 222);
+  assert.equal(packaged.speed, 2.0);
+  assert.equal(packaged.isTraveler, false);
+  assert.equal(packaged.canGiveQuest, true);
+  assert.equal(packaged.rpg?.level, 7);
+  assert.equal(packaged.rpg?.str, 2);
+  assert.equal(packaged.kills, 2);
+  assert.equal(packaged.npcKills, 1);
+  assert.equal(packaged.monsterKills, 1);
+  assert.equal(packaged.playerRelation, 42);
+  assert.equal(packaged.karma, 7);
+
+  const snapshot = getAlifeNpcRecordSnapshot(state, 1);
+  assert.equal(packageIdFromReservedIdentityId(snapshot?.reservedIdentityId), 'quiet_mechanic');
+  assert.equal(snapshot?.reservedPresence, 'population');
+  assert.deepEqual(sampleAlifeFloorRecordIds(state, 'story:living', 0, 3), { ids: [1, 2], nextCursor: 0 });
+});
+
+test('A-Life killed population package reservation does not rematerialize on floor revisit', () => {
+  const state = minimalState();
+  createPrefilledAlifeState(state, 12345, 1, {
+    buckets: [{
+      floorKey: 'story:living',
+      floor: FloorLevel.LIVING,
+      targetCount: 1,
+      reserved: [{
+        id: 'npc:doomed_resident',
+        kind: 'authored',
+        presence: 'population',
+        name: 'Обреченный жилец',
+      }],
+    }],
+  });
+  const world = new World();
+  world.cells[world.idx(22, 20)] = Cell.FLOOR;
+  const entities = [ambientTemplate(1, 22.5, 20.5)];
+
+  materializeAlifeFloorPopulation(state, world, entities, { v: 10 }, 'story:living');
+  assert.equal(entities.length, 1);
+  assert.equal(entities[0].alifeId, 1);
+
+  recordAlifeNpcDeath(state, entities[0]);
+  const revisited = [ambientTemplate(2, 22.5, 20.5)];
+  materializeAlifeFloorPopulation(state, world, revisited, { v: 20 }, 'story:living');
+
+  assert.equal(revisited.length, 0);
+  assert.equal(alifeForSave(state).deadIds.includes(1), true);
+});
+
+test('A-Life event-only package reservation stays out of ordinary materialization slots', () => {
+  const state = minimalState();
+  createPrefilledAlifeState(state, 12345, 2, {
+    buckets: [{
+      floorKey: 'story:living',
+      floor: FloorLevel.LIVING,
+      targetCount: 2,
+      reserved: [{
+        id: 'npc:alarm_only',
+        kind: 'event_reserved',
+        presence: 'event_only',
+        name: 'Только событие',
+      }],
+    }],
+  });
+  const world = new World();
+  world.cells[world.idx(23, 20)] = Cell.FLOOR;
+  world.cells[world.idx(24, 20)] = Cell.FLOOR;
+  const entities = [ambientTemplate(1, 23.5, 20.5), ambientTemplate(2, 24.5, 20.5)];
+
+  materializeAlifeFloorPopulation(state, world, entities, { v: 10 }, 'story:living');
+
+  assert.equal(packageIdFromReservedIdentityId(getAlifeNpcRecordSnapshot(state, 1)?.reservedIdentityId), 'alarm_only');
+  assert.equal(getAlifeNpcRecordSnapshot(state, 1)?.reservedPresence, 'event_only');
+  assert.deepEqual(sampleAlifeFloorRecordIds(state, 'story:living', 0, 3), { ids: [2], nextCursor: 0 });
+  assert.equal(entities.length, 1);
+  assert.equal(entities[0].alifeId, 2);
+  assert.notEqual(entities[0].name, 'Только событие');
+});
+
+test('A-Life population package foldback stores changed sparse state without live entities', () => {
+  const state = minimalState();
+  createPrefilledAlifeState(state, 12345, 1, {
+    buckets: [{
+      floorKey: 'story:living',
+      floor: FloorLevel.LIVING,
+      targetCount: 1,
+      reserved: [{
+        id: 'npc:foldback_resident',
+        kind: 'authored',
+        presence: 'population',
+        name: 'Жилец фолдбэка',
+        weapon: 'knife',
+        tool: 'flashlight',
+        inventory: [{ defId: 'knife', count: 1 }],
+        money: 50,
+        accountRubles: 500,
+        playerRelation: 5,
+        karma: 1,
+      }],
+    }],
+  });
+  const world = new World();
+  world.cells[world.idx(25, 20)] = Cell.FLOOR;
+  const entities = [ambientTemplate(1, 25.5, 20.5)];
+
+  materializeAlifeFloorPopulation(state, world, entities, { v: 10 }, 'story:living');
+  const npc = entities[0];
+  npc.money = 777;
+  npc.accountRubles = 888;
+  npc.weapon = 'makarov';
+  npc.tool = 'radio';
+  npc.inventory = [{ defId: 'bandage', count: 2 }];
+  npc.playerRelation = -33;
+  npc.karma = -12;
+  npc.rpg = { level: 9, xp: 0, attrPoints: 0, str: 4, agi: 2, int: 1, psi: 11, maxPsi: 11 };
+  npc.kills = 4;
+  npc.npcKills = 3;
+  npc.monsterKills = 2;
+
+  captureAlifeFloorState(state, entities);
+  const save = alifeForSave(state);
+  const override = save.overrides.find(item => item.id === 1);
+
+  assert.ok(override);
+  assert.equal(override.money, 777);
+  assert.equal(override.accountRubles, 888);
+  assert.equal(override.weapon, 'makarov');
+  assert.equal(override.tool, 'radio');
+  assert.deepEqual(override.inventory, [{ defId: 'bandage', count: 2 }]);
+  assert.equal(override.playerRelation, -33);
+  assert.equal(override.karma, -12);
+  assert.equal(override.rpg?.level, 9);
+  assert.equal(override.rpg?.str, 4);
+  assert.equal(override.kills, 4);
+  assert.equal(override.npcKills, 3);
+  assert.equal(override.monsterKills, 2);
+  assert.equal(Object.hasOwn(save as unknown as Record<string, unknown>, 'entities'), false);
+});
+
 test('event-created ordinary NPC receives persistent A-Life identity', () => {
   const state = minimalState();
   setAlifeState(state, { seed: 12345, total: 100_000 });
@@ -411,6 +611,7 @@ test('A-Life design-floor records use Floor 69 social population mix', () => {
   assert.ok(floor69.length > 1000, 'floor_69 should receive a dense A-Life allocation');
   assert.equal(floor69.some(npc => npc.occupation === Occupation.CHILD), false);
   assert.ok(floor69.some(npc => npc.faction === Faction.LIQUIDATOR), 'floor_69 should include guard/liquidator records');
+  assert.ok(floor69.some(npc => npc.occupation === Occupation.PERFORMER), 'floor_69 should preserve performer records in the A-Life occupation column');
   assert.ok(floor69.some(npc => npc.occupation === Occupation.DOCTOR), 'floor_69 should include clinic records');
   assert.ok(floor69.some(npc => npc.occupation === Occupation.SECRETARY || npc.occupation === Occupation.STOREKEEPER), 'floor_69 should include staff/accounting records');
   assert.ok(industrialTrades.length < floor69.length * 0.05, 'floor_69 should not inherit the generic Maintenance worker mix');

@@ -111,3 +111,68 @@ test('stealing stamp room forged output publishes witness and audit risk', () =>
 
   initFactionRelations();
 });
+
+test('container theft witnesses are chosen by distance instead of entity array order', () => {
+  initFactionRelations();
+  const state = makeGameState({
+    currentFloor: FloorLevel.MINISTRY,
+    time: 440,
+    worldEvents: createWorldEventState(),
+  });
+  const world = new World();
+  addTestRoom(world, {
+    id: 0,
+    x: 10,
+    y: 10,
+    w: 8,
+    h: 8,
+    type: RoomType.STORAGE,
+    name: 'Комната печатей',
+    zoneId: 0,
+  });
+  const player = makeTestPlayer({ id: 0, x: 11.5, y: 11.5 });
+  const farWitness = makeTestEntity({
+    id: 88,
+    type: EntityType.NPC,
+    x: 16.4,
+    y: 12.5,
+    name: 'Дальний свидетель',
+    faction: Faction.CITIZEN,
+    inventory: [],
+  });
+  const nearWitness = makeTestEntity({
+    id: 66,
+    type: EntityType.NPC,
+    x: 13.1,
+    y: 12.5,
+    name: 'Ближний свидетель',
+    faction: Faction.CITIZEN,
+    inventory: [],
+  });
+  const ledger = makeTestContainer({
+    id: 23,
+    x: 12,
+    y: 12,
+    floor: FloorLevel.MINISTRY,
+    roomId: 0,
+    zoneId: 0,
+    kind: ContainerKind.FILING_CABINET,
+    name: 'Чужой журнал печатей',
+    access: 'owner',
+    ownerNpcId: 55,
+    ownerName: 'Зоя Сургучная',
+    faction: Faction.CITIZEN,
+    inventory: [{ defId: 'forged_stamp_sheet', count: 1 }],
+    capacitySlots: 4,
+    tags: ['ministry', 'stamp_room', 'paper', 'forgery', 'audit', 'witness'],
+  });
+  world.addContainer(ledger);
+
+  assert.equal(takeFromContainer(ledger, player, 0, 1, { state, world, entities: [player, farWitness, nearWitness] }), true);
+
+  const theft = getRecentEvents(state, { type: 'item_stolen', limit: 1 })[0];
+  assert.equal(theft.targetId, 66);
+  assert.deepEqual(theft.data?.witnessIds, [66, 88]);
+
+  initFactionRelations();
+});

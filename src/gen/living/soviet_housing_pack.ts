@@ -8,12 +8,12 @@ import {
   type Room, type Entity, EntityType, AIGoal, Faction, Occupation, QuestType, MonsterKind,
 } from '../../core/types';
 import { World } from '../../core/world';
-import { freshNeeds } from '../../data/catalog';
 import { type PlotNpcDef, registerSideQuest } from '../../data/plot';
 import { MONSTERS } from '../../entities/monster';
 import { monsterSpr, Spr } from '../../render/sprite_index';
 import { protectRoom } from '../shared';
 import { genLog } from '../log';
+import { requireSpawnedPlotNpcFromPackage } from '../plot_npc_spawn';
 import { registerZoneContent } from './zone_content';
 
 type PoiKey = 'concierge' | 'radio' | 'lostFound' | 'repair' | 'kitchen';
@@ -316,32 +316,11 @@ function pushNpc(
   spawn: NpcSpawn,
 ): void {
   if (hasPlotNpc(entities, spawn.id)) return;
-  const def = NPC_DEFS[spawn.id];
   const spot = findSpawnSpot(world, spawn);
-  entities.push({
-    id: nextId.v++,
-    type: EntityType.NPC,
-    x: spot.x + 0.5,
-    y: spot.y + 0.5,
+  requireSpawnedPlotNpcFromPackage(entities, nextId, spawn.id, spot.x + 0.5, spot.y + 0.5, {
     angle: spawn.angle,
-    pitch: 0,
-    alive: true,
-    speed: def.speed,
-    sprite: def.sprite,
-    name: def.name,
-    isFemale: def.isFemale,
-    needs: freshNeeds(),
-    hp: def.hp,
-    maxHp: def.maxHp,
-    money: def.money,
-    ai: { goal: AIGoal.IDLE, tx: 0, ty: 0, path: [], pi: 0, stuck: 0, timer: 0 },
-    inventory: def.inventory.map(i => ({ ...i })),
     weapon: spawn.weapon,
-    faction: def.faction,
-    occupation: def.occupation,
-    plotNpcId: spawn.id,
     canGiveQuest: true,
-    questId: -1,
   });
 }
 

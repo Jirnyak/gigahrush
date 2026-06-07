@@ -9,13 +9,13 @@ import {
   type Entity, EntityType, AIGoal, type Room,
 } from '../../core/types';
 import { World } from '../../core/world';
-import { freshNeeds } from '../../data/names';
 import { type PlotNpcDef, registerSideQuest } from '../../data/plot';
 import { MONSTERS } from '../../entities/monster';
 import { monsterSpr, Spr } from '../../render/sprite_index';
 import { learnRumor } from '../../systems/npc_memory';
 import { protectRoom } from '../shared';
 import { genLog } from '../log';
+import { requireSpawnedPlotNpcFromPackage } from '../plot_npc_spawn';
 import { registerZoneContent } from './zone_content';
 
 type PoiKey = 'laundry' | 'domkom';
@@ -465,34 +465,12 @@ function findSpawnSpot(world: World, spawn: NpcSpawn): { x: number; y: number; p
 
 function pushNpc(world: World, entities: Entity[], nextId: { v: number }, spawn: NpcSpawn): void {
   if (hasPlotNpc(entities, spawn.id)) return;
-  const def = NPC_DEFS[spawn.id];
   const spot = findSpawnSpot(world, spawn);
-  const npc: Entity = {
-    id: nextId.v++,
-    type: EntityType.NPC,
-    x: spot.x + 0.5,
-    y: spot.y + 0.5,
+  const npc = requireSpawnedPlotNpcFromPackage(entities, nextId, spawn.id, spot.x + 0.5, spot.y + 0.5, {
     angle: spawn.angle,
-    pitch: 0,
-    alive: true,
-    speed: def.speed,
-    sprite: def.sprite,
-    name: def.name,
-    isFemale: def.isFemale,
-    needs: freshNeeds(),
-    hp: def.hp,
-    maxHp: def.maxHp,
-    money: def.money,
-    ai: { goal: AIGoal.IDLE, tx: 0, ty: 0, path: [], pi: 0, stuck: 0, timer: 0 },
-    inventory: def.inventory.map(i => ({ ...i })),
     weapon: spawn.weapon,
-    faction: def.faction,
-    occupation: def.occupation,
-    plotNpcId: spawn.id,
     canGiveQuest: true,
-    questId: -1,
-  };
-  entities.push(npc);
+  });
   if (spot.poi) seedRumorMemory(npc, spot.poi);
 }
 

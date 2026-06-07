@@ -22,6 +22,10 @@ import {
 } from '../data/demos_posts';
 import { Faction, FloorLevel, type WorldEvent, type WorldEventType } from '../core/types';
 import type { AlifeNpcSnapshot } from './alife';
+import {
+  npcPackageSpeechContextTags,
+  resolveNpcPackageForAlifeSnapshot,
+} from './npc_package_speech';
 
 export type DemosMarkovIntent = 'demos_post' | 'demos_reaction';
 export type DemosMarkovSource = 'generated_markov' | 'curated_pool' | 'locked_author_text';
@@ -93,6 +97,7 @@ export interface DemosPostAuthorFact {
   faction?: Faction;
   floorKey?: string;
   dead?: boolean;
+  packageTags?: readonly string[];
 }
 
 export interface DemosPostCandidateOptions {
@@ -417,12 +422,14 @@ function finiteTime(value: unknown, fallback = 0): number {
 }
 
 export function demosPostAuthorFactFromSnapshot(snapshot: AlifeNpcSnapshot): DemosPostAuthorFact {
+  const pack = resolveNpcPackageForAlifeSnapshot(snapshot);
   return {
     alifeId: snapshot.id,
     name: snapshot.name,
     faction: snapshot.faction,
     floorKey: snapshot.floorKey,
     dead: snapshot.dead,
+    packageTags: pack ? npcPackageSpeechContextTags(pack, snapshot, 'demos_post') : undefined,
   };
 }
 
@@ -462,6 +469,10 @@ export function enqueueDemosPostFromEvent(
   }
   const targetId = targetAlifeId(event, opts);
   const target = targetId !== undefined ? opts.snapshotForAlifeId?.(targetId) : undefined;
+  const packageTags = [
+    ...(author?.packageTags ?? []),
+    ...(target?.packageTags ?? []),
+  ];
   const seed = postSeed(event, template.id, authorAlifeId, opts.seedSalt);
   const post: DemosMarkovPost = {
     id: queue.nextId++,
@@ -474,7 +485,7 @@ export function enqueueDemosPostFromEvent(
     args: buildArgs(template, event, authorAlifeId, author, target),
     mentionedAlifeIds: mentionedAlifeIdsForEvent(event, opts, authorAlifeId, targetId),
     privacy: privacyForEvent(event),
-    tags: cleanTags([template.domain, event.type, ...template.tags, ...event.tags]),
+    tags: cleanTags([template.domain, event.type, ...template.tags, ...event.tags, ...packageTags]),
     score: 0,
   };
   pushPost(queue, post);

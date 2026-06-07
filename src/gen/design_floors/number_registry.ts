@@ -23,9 +23,8 @@ import {
   type WorldContainer,
 } from '../../core/types';
 import { World } from '../../core/world';
-import { freshNeeds } from '../../data/catalog';
 import { factionToTerritoryOwner } from '../../data/factions';
-import { type PlotNpcDef, registerSideQuest } from '../../data/plot';
+import { designNpcFloorKey, type PlotNpcDef, registerFloorSideQuest } from '../../data/plot';
 import { MONSTERS } from '../../entities/monster';
 import { monsterSpr } from '../../render/sprite_index';
 import { registerRouteCue } from '../../systems/route_cues';
@@ -33,6 +32,9 @@ import { randomRPG, scaleMonsterHp, scaleMonsterSpeed } from '../../systems/rpg'
 import { syncZoneMetadataFromTerritory } from '../../systems/territory';
 import { ensureConnectivity, generateZones, sanitizeDoors, stampRoom } from '../shared';
 import type { FloorGeneration } from '../floor_manifest';
+import { requireSpawnedPlotNpcFromPackage } from '../plot_npc_spawn';
+
+const DESIGN_NPC_HOME_FLOOR_KEY = designNpcFloorKey('number_registry');
 
 export const NUMBER_REGISTRY_ROUTE_ID = 'number_registry' as const;
 export const NUMBER_REGISTRY_Z = 32 as const;
@@ -267,7 +269,7 @@ const COMPOSITE_DEF: PlotNpcDef = {
   ],
 };
 
-registerSideQuest('number_registry_vera_modulus', REGISTRAR_DEF, [
+registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'number_registry_vera_modulus', REGISTRAR_DEF, [
   {
     id: 'number_registry_buy_modulus',
     giverNpcId: 'number_registry_vera_modulus',
@@ -316,7 +318,7 @@ registerSideQuest('number_registry_vera_modulus', REGISTRAR_DEF, [
   },
 ]);
 
-registerSideQuest('number_registry_prime_guard', PRIME_GUARD_DEF, [
+registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'number_registry_prime_guard', PRIME_GUARD_DEF, [
   {
     id: 'number_registry_clear_prime_corridor',
     giverNpcId: 'number_registry_prime_guard',
@@ -342,7 +344,7 @@ registerSideQuest('number_registry_prime_guard', PRIME_GUARD_DEF, [
   },
 ]);
 
-registerSideQuest('number_registry_composite_witness', COMPOSITE_DEF, [
+registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'number_registry_composite_witness', COMPOSITE_DEF, [
   {
     id: 'number_registry_file_composite_path',
     giverNpcId: 'number_registry_composite_witness',
@@ -516,40 +518,20 @@ function addRegistryContainer(
 function spawnNpc(
   entities: Entity[],
   nextId: NextId,
-  def: PlotNpcDef,
+  _def: PlotNpcDef,
   plotNpcId: string,
   x: number,
   y: number,
   weapon?: string,
 ): number {
-  const id = nextId.v++;
-  entities.push({
-    id,
-    type: EntityType.NPC,
-    x: x + 0.5,
-    y: y + 0.5,
+  const npc = requireSpawnedPlotNpcFromPackage(entities, nextId, plotNpcId, x + 0.5, y + 0.5, {
     angle: Math.random() * Math.PI * 2,
-    pitch: 0,
-    alive: true,
-    speed: def.speed,
-    sprite: def.sprite,
-    name: def.name,
-    isFemale: def.isFemale,
-    needs: freshNeeds(),
-    hp: def.hp,
-    maxHp: def.maxHp,
-    money: def.money,
-    ai: { goal: AIGoal.IDLE, tx: x, ty: y, path: [], pi: 0, stuck: 0, timer: 0 },
-    inventory: def.inventory.map(item => ({ ...item })),
-    weapon: weapon ?? def.weapon,
-    faction: def.faction,
-    occupation: def.occupation,
-    plotNpcId,
     canGiveQuest: true,
-    questId: -1,
+    weapon,
+    aiTarget: { x, y },
     isTraveler: false,
   });
-  return id;
+  return npc.id;
 }
 
 function spawnMonster(

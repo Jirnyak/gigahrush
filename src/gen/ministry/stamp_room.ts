@@ -16,17 +16,20 @@ import {
   type WorldEvent,
 } from '../../core/types';
 import { World } from '../../core/world';
-import { type PlotNpcDef, registerSideQuest } from '../../data/plot';
+import { type PlotNpcDef, registerAuthoredNpc, registerSideQuest, storyNpcFloorKey } from '../../data/plot';
 import { addFactionRelMutual } from '../../data/relations';
 import { publishEvent, registerWorldEventObserver } from '../../systems/events';
 import {
-  type NextId, createAdminRoom, setFeature, addItemDrop, spawnAdminNpc, spawnNamedCivilian,
+  type NextId, createAdminRoom, setFeature, addItemDrop, spawnAdminNpc,
 } from './admin_common';
 import { genLog } from '../log';
 
 const QUEST_WITNESSED_FORGERY = 'stamp_room_witnessed_forgery';
 const STAMP_ROOM_FORGERY_TAG = 'stamp_room_forgery';
 const FORGED_STAMP_SHEET = 'forged_stamp_sheet';
+const HOME_FLOOR_KEY = storyNpcFloorKey(FloorLevel.MINISTRY);
+const GUARD_MATVEY_ID = 'stamp_room_guard_matvey';
+const WITNESS_RAISA_ID = 'stamp_room_witness_raisa';
 const FORGERY_USE_PATHS = [
   'archive_forged_stamp_supply',
   'ministry_weapon_permit_forgery',
@@ -61,6 +64,48 @@ const ZOYA_DEF: PlotNpcDef = {
     'Вера получит отметку. Очередь получит повод.',
   ],
   talkQuestResponse: 'Корешок принят. Скажите Вере: печать не спорила, только шипела.',
+};
+
+const GUARD_MATVEY_DEF: PlotNpcDef = {
+  name: 'Охранник Матвей Пломба',
+  isFemale: false,
+  faction: Faction.LIQUIDATOR,
+  occupation: Occupation.HUNTER,
+  sprite: Occupation.HUNTER,
+  hp: 70, maxHp: 70, money: 15, speed: 0.8,
+  weapon: 'makarov',
+  inventory: [
+    { defId: 'makarov', count: 1 },
+    { defId: 'ammo_9mm', count: 8 },
+    { defId: 'note', count: 1 },
+  ],
+  talkLines: [
+    'Пломба стоит, пока печать не решила ползти сама.',
+    'Поддельная бумага здесь пахнет не чернилами, а будущим протоколом.',
+  ],
+  talkLinesPost: [
+    'Штамп прошел. Я этого не одобрил, только видел.',
+  ],
+};
+
+const WITNESS_RAISA_DEF: PlotNpcDef = {
+  name: 'Понятая Раиса Подпись',
+  isFemale: true,
+  faction: Faction.CITIZEN,
+  occupation: Occupation.SECRETARY,
+  sprite: Occupation.SECRETARY,
+  hp: 70, maxHp: 70, money: 15, speed: 0.8,
+  inventory: [
+    { defId: 'neighbor_complaint', count: 1 },
+    { defId: 'note', count: 1 },
+  ],
+  talkLines: [
+    'Я подпись. Раисой меня называют до журнала.',
+    'Свидетель видит не правду, а момент, когда ее прижимают печатью.',
+  ],
+  talkLinesPost: [
+    'Печать легла при мне. Этого достаточно, чтобы потом не спать.',
+  ],
 };
 
 registerSideQuest('zoya_surguchnaya', ZOYA_DEF, [
@@ -107,6 +152,20 @@ registerSideQuest('zoya_surguchnaya', ZOYA_DEF, [
     },
   },
 ]);
+
+registerAuthoredNpc({
+  id: GUARD_MATVEY_ID,
+  npc: GUARD_MATVEY_DEF,
+  homeFloorKey: HOME_FLOOR_KEY,
+  tags: ['ministry', 'stamp_room', 'guard'],
+});
+
+registerAuthoredNpc({
+  id: WITNESS_RAISA_ID,
+  npc: WITNESS_RAISA_DEF,
+  homeFloorKey: HOME_FLOOR_KEY,
+  tags: ['ministry', 'stamp_room', 'witness'],
+});
 
 function nextContainerId(world: World): number {
   let id = world.containers.reduce((mx, c) => Math.max(mx, c.id), 0) + 1;
@@ -249,17 +308,8 @@ export function generateStampRoom(
   addItemDrop(entities, nextId, cx + 2, cy + 1, 'ink_bottle', 1);
   const zoyaId = nextId.v;
   spawnAdminNpc(entities, nextId, ZOYA_DEF, 'zoya_surguchnaya', cx, cy - 1);
-  spawnNamedCivilian(
-    entities, nextId, 'Охранник Матвей Пломба', false,
-    room.x + 1, room.y + room.h - 2, Occupation.HUNTER, Faction.LIQUIDATOR,
-    [{ defId: 'makarov', count: 1 }, { defId: 'ammo_9mm', count: 8 }, { defId: 'note', count: 1 }],
-    'makarov',
-  );
-  spawnNamedCivilian(
-    entities, nextId, 'Понятая Раиса Подпись', true,
-    room.x + room.w - 2, cy + 1, Occupation.SECRETARY, Faction.CITIZEN,
-    [{ defId: 'neighbor_complaint', count: 1 }, { defId: 'note', count: 1 }],
-  );
+  spawnAdminNpc(entities, nextId, GUARD_MATVEY_DEF, GUARD_MATVEY_ID, room.x + 1, room.y + room.h - 2, false, 'makarov');
+  spawnAdminNpc(entities, nextId, WITNESS_RAISA_DEF, WITNESS_RAISA_ID, room.x + room.w - 2, cy + 1, false);
   addStampAuditContainer(world, room.id, room.x + room.w - 2, cy, zoyaId);
 
   genLog(`[MINISTRY_ADMIN] ${room.name} at (${room.x}, ${room.y}) room #${room.id}`);

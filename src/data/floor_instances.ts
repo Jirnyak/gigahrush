@@ -2,6 +2,12 @@
 
 import { FloorLevel } from '../core/types';
 
+export type FloorInstanceGeneratorId = 'story_pocket';
+export type FloorInstanceExitRuleId = 'next_lift_returns';
+export type FloorInstanceNpcPolicyId = 'none' | 'generator';
+export type FloorInstanceMonsterPolicyId = 'generator' | 'none';
+export type FloorInstanceSamosborPolicyId = 'normal' | 'exempt';
+
 export interface FloorInstanceFollowupDef {
   id: string;
   title: string;
@@ -16,6 +22,14 @@ export interface FloorInstanceDef {
   title: string;
   baseFloor: FloorLevel;
   seedTag: string;
+  generatorId: FloorInstanceGeneratorId;
+  exitRule: FloorInstanceExitRuleId;
+  npcPolicy: FloorInstanceNpcPolicyId;
+  monsterPolicy: FloorInstanceMonsterPolicyId;
+  samosborPolicy: FloorInstanceSamosborPolicyId;
+  debugCommandId: string;
+  lore: string;
+  tags: readonly string[];
   risk: 1 | 2 | 3 | 4 | 5;
   weight: number;
   discovered: boolean;
@@ -30,6 +44,14 @@ export const FLOOR_INSTANCES: readonly FloorInstanceDef[] = [
     title: 'Не найден',
     baseFloor: FloorLevel.LIVING,
     seedTag: 'not_found',
+    generatorId: 'story_pocket',
+    exitRule: 'next_lift_returns',
+    npcPolicy: 'none',
+    monsterPolicy: 'generator',
+    samosborPolicy: 'normal',
+    debugCommandId: 'arm_floor_instance',
+    lore: 'Лифт открывает копию жилого этажа без жильцов: двери помнят людей, но сами люди не входят в эту петлю.',
+    tags: ['horror_labyrinth', 'empty_residential', 'numbered_lift'],
     risk: 4,
     weight: 18,
     discovered: false,
@@ -41,6 +63,14 @@ export const FLOOR_INSTANCES: readonly FloorInstanceDef[] = [
     title: 'П-46',
     baseFloor: FloorLevel.KVARTIRY,
     seedTag: 'p46_protocol',
+    generatorId: 'story_pocket',
+    exitRule: 'next_lift_returns',
+    npcPolicy: 'none',
+    monsterPolicy: 'generator',
+    samosborPolicy: 'normal',
+    debugCommandId: 'arm_floor_instance',
+    lore: 'Очередной протокол квартирного этажа, вынесенный из нормальной вертикали в отдельный номерной цикл.',
+    tags: ['residential_protocol', 'queue_loop', 'numbered_lift'],
     risk: 3,
     weight: 12,
     discovered: false,
@@ -52,6 +82,14 @@ export const FLOOR_INSTANCES: readonly FloorInstanceDef[] = [
     title: 'Счастливый',
     baseFloor: FloorLevel.LIVING,
     seedTag: 'lucky_shelter',
+    generatorId: 'story_pocket',
+    exitRule: 'next_lift_returns',
+    npcPolicy: 'none',
+    monsterPolicy: 'generator',
+    samosborPolicy: 'normal',
+    debugCommandId: 'arm_floor_instance',
+    lore: 'Тихий номерной карман с привычными стенами и неправильным ощущением безопасности.',
+    tags: ['false_shelter', 'quiet_loop', 'numbered_lift'],
     risk: 2,
     weight: 10,
     discovered: false,
@@ -63,6 +101,14 @@ export const FLOOR_INSTANCES: readonly FloorInstanceDef[] = [
     title: 'Элитный',
     baseFloor: FloorLevel.MAINTENANCE,
     seedTag: 'radio_code',
+    generatorId: 'story_pocket',
+    exitRule: 'next_lift_returns',
+    npcPolicy: 'none',
+    monsterPolicy: 'generator',
+    samosborPolicy: 'normal',
+    debugCommandId: 'arm_floor_instance',
+    lore: 'Техническая шахта с радиокодом вместо этажа: маршрутная колода ее не видит.',
+    tags: ['radio_code', 'maintenance_loop', 'numbered_lift'],
     risk: 4,
     weight: 8,
     discovered: false,
@@ -74,6 +120,14 @@ export const FLOOR_INSTANCES: readonly FloorInstanceDef[] = [
     title: 'Служебный',
     baseFloor: FloorLevel.MINISTRY,
     seedTag: 'service_order',
+    generatorId: 'story_pocket',
+    exitRule: 'next_lift_returns',
+    npcPolicy: 'none',
+    monsterPolicy: 'generator',
+    samosborPolicy: 'normal',
+    debugCommandId: 'arm_floor_instance',
+    lore: 'Приказной карман Министерства: бумага есть, адреса в обычной вертикали нет.',
+    tags: ['ministry_order', 'service_loop', 'numbered_lift'],
     risk: 3,
     weight: 8,
     discovered: false,
@@ -85,6 +139,14 @@ export const FLOOR_INSTANCES: readonly FloorInstanceDef[] = [
     title: 'Теплый лифт',
     baseFloor: FloorLevel.MAINTENANCE,
     seedTag: 'warm_shaft',
+    generatorId: 'story_pocket',
+    exitRule: 'next_lift_returns',
+    npcPolicy: 'none',
+    monsterPolicy: 'generator',
+    samosborPolicy: 'normal',
+    debugCommandId: 'arm_floor_instance',
+    lore: 'Теплая шахта сбивает вертикаль, но после выхода временно стабилизирует обычный маршрут.',
+    tags: ['warm_shaft', 'route_guard', 'numbered_lift'],
     risk: 3,
     weight: 7,
     discovered: false,
@@ -103,6 +165,14 @@ export const FLOOR_INSTANCES: readonly FloorInstanceDef[] = [
     title: 'Нулевой список',
     baseFloor: FloorLevel.VOID,
     seedTag: 'zero_register',
+    generatorId: 'story_pocket',
+    exitRule: 'next_lift_returns',
+    npcPolicy: 'none',
+    monsterPolicy: 'generator',
+    samosborPolicy: 'normal',
+    debugCommandId: 'arm_floor_instance',
+    lore: 'Пустотный номер, где список этажей начинается с нуля и не входит в обычный маршрут.',
+    tags: ['void_register', 'zero_loop', 'numbered_lift'],
     risk: 5,
     weight: 3,
     discovered: false,
@@ -114,6 +184,14 @@ export const FLOOR_INSTANCES: readonly FloorInstanceDef[] = [
     title: 'Чужая очередь',
     baseFloor: FloorLevel.KVARTIRY,
     seedTag: 'wrong_queue',
+    generatorId: 'story_pocket',
+    exitRule: 'next_lift_returns',
+    npcPolicy: 'none',
+    monsterPolicy: 'generator',
+    samosborPolicy: 'normal',
+    debugCommandId: 'arm_floor_instance',
+    lore: 'Квартирный номер, в котором очередь уже ушла, но ее маршрутная ошибка осталась.',
+    tags: ['wrong_queue', 'residential_loop', 'numbered_lift'],
     risk: 2,
     weight: 9,
     discovered: false,
@@ -125,4 +203,14 @@ const FLOOR_INSTANCE_BY_ID = new Map(FLOOR_INSTANCES.map(def => [def.id, def]));
 
 export function floorInstanceById(id: string): FloorInstanceDef | undefined {
   return FLOOR_INSTANCE_BY_ID.get(id);
+}
+
+export function floorInstanceAllowsNpcs(instance: FloorInstanceDef | string): boolean {
+  const def = typeof instance === 'string' ? floorInstanceById(instance) : instance;
+  return !!def && def.npcPolicy !== 'none';
+}
+
+export function floorInstanceAllowsSamosbor(instance: FloorInstanceDef | string): boolean {
+  const def = typeof instance === 'string' ? floorInstanceById(instance) : instance;
+  return !!def && def.samosborPolicy !== 'exempt';
 }

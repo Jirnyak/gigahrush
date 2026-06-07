@@ -11,15 +11,13 @@
 import {
   W, Cell, Tex, RoomType, Feature,
   type Room, type Entity,
-  EntityType, AIGoal,
+  EntityType,
 } from '../../core/types';
 import { World } from '../../core/world';
-import { freshNeeds } from '../../data/catalog';
-import { PLOT_NPCS } from '../../data/plot';
 import { stampRoom, protectRoom, findClearArea } from '../shared';
+import { requireSpawnedPlotNpcFromPackage } from '../plot_npc_spawn';
 import { Spr } from '../../render/sprite_index';
 import { placeCraftStationAt, type CraftStationDefId } from '../craft_stations';
-import { freshRPG } from '../../systems/rpg';
 
 const LAB_MIN_DIST = 10;
 const LAB_MAX_DIST = 50;
@@ -114,23 +112,9 @@ export function generateYakovLab(
 
   placeYakovLabCraftStations(world, room);
 
-  // ── NPC: Яков Давидович — PSI researcher ──
   const labCx = room.x + Math.floor(room.w / 2);
   const labCy = room.y + Math.floor(room.h / 2);
-  const yakovDef = PLOT_NPCS['yakov'];
-  entities.push({
-    id: nextId.v++, type: EntityType.NPC,
-    x: labCx + 0.5, y: labCy + 0.5,
-    angle: Math.PI, pitch: 0, alive: true, speed: yakovDef.speed,
-    sprite: yakovDef.sprite,
-    name: yakovDef.name, isFemale: yakovDef.isFemale,
-    needs: freshNeeds(), hp: yakovDef.hp, maxHp: yakovDef.maxHp, money: yakovDef.money,
-    rpg: freshRPG(yakovDef.level ?? 1),
-    ai: { goal: AIGoal.IDLE, tx: 0, ty: 0, path: [], pi: 0, stuck: 0, timer: 0 },
-    inventory: yakovDef.inventory.map(i => ({ ...i })),
-    faction: yakovDef.faction, occupation: yakovDef.occupation,
-    plotNpcId: 'yakov', canGiveQuest: true, questId: -1,
-  });
+  requireSpawnedPlotNpcFromPackage(entities, nextId, 'yakov', labCx + 0.5, labCy + 0.5, { angle: Math.PI });
 
   // ── Guaranteed idol spawn within 50 cells of Yakov's lab ──
   const IDOL_SEARCH_R = 50;

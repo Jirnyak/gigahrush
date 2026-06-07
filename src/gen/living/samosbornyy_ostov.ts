@@ -7,12 +7,12 @@ import {
   type Entity, type Room, type WorldContainer,
 } from '../../core/types';
 import { World } from '../../core/world';
-import { freshNeeds } from '../../data/catalog';
 import { type PlotNpcDef, registerSideQuest } from '../../data/plot';
 import { MONSTERS } from '../../entities/monster';
 import { monsterSpr, Spr } from '../../render/sprite_index';
 import { connectProtectedRoom, protectRoom } from '../shared';
 import { genLog } from '../log';
+import { requireSpawnedPlotNpcFromPackage } from '../plot_npc_spawn';
 import { registerZoneContent } from './zone_content';
 
 export const SAMOSBORNYY_OSTOV_ID = 'samosbornyy_ostov' as const;
@@ -299,35 +299,14 @@ function spawnLiquidator(
 ): number {
   const existing = entities.find(e => e.alive && e.plotNpcId === SAMOSBORNYY_OSTOV_LIQUIDATOR_ID);
   if (existing) return existing.id;
-  const def = LIQUIDATOR_DEF;
-  const id = nextId.v++;
-  entities.push({
-    id,
-    type: EntityType.NPC,
-    x: x + 0.5,
-    y: y + 0.5,
+  const npc = requireSpawnedPlotNpcFromPackage(entities, nextId, SAMOSBORNYY_OSTOV_LIQUIDATOR_ID, x + 0.5, y + 0.5, {
     angle: 0,
-    pitch: 0,
-    alive: true,
-    speed: def.speed,
-    sprite: def.sprite,
-    name: def.name,
-    isFemale: def.isFemale,
-    needs: freshNeeds(),
-    hp: def.hp,
-    maxHp: def.maxHp,
-    money: def.money,
-    ai: { goal: AIGoal.IDLE, tx: x, ty: y, path: [], pi: 0, stuck: 0, timer: 0 },
-    inventory: def.inventory.map(item => ({ ...item })),
     weapon: 'makarov',
-    faction: def.faction,
-    occupation: def.occupation,
-    plotNpcId: SAMOSBORNYY_OSTOV_LIQUIDATOR_ID,
     canGiveQuest: true,
-    questId: -1,
-    isTraveler: false,
+    aiTarget: { x, y },
+    extra: { isTraveler: false },
   });
-  return id;
+  return npc.id;
 }
 
 function spawnOstov(world: World, entities: Entity[], nextId: { v: number }, room: Room): void {

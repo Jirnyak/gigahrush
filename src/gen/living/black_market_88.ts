@@ -2,14 +2,14 @@
 
 import {
   Cell, ContainerKind, DoorState, Feature, FloorLevel, RoomType, Tex,
-  type ContainerAccess, type Entity, EntityType, AIGoal, Faction, Occupation, QuestType,
+  type ContainerAccess, type Entity, Faction, Occupation, QuestType,
   type Room, type WorldContainer,
 } from '../../core/types';
 import { World } from '../../core/world';
-import { freshNeeds } from '../../data/catalog';
 import { type PlotNpcDef, registerSideQuest } from '../../data/plot';
 import { protectRoom } from '../shared';
 import { genLog } from '../log';
+import { requireSpawnedPlotNpcFromPackage } from '../plot_npc_spawn';
 import { registerZoneContent } from './zone_content';
 
 const ROOM_W = 21;
@@ -396,33 +396,13 @@ function spawnNpc(
   weapon?: string,
 ): void {
   if (entities.some(e => e.alive && e.plotNpcId === plotNpcId)) return;
-  const def = NPC_DEFS[plotNpcId];
   const x = world.wrap(room.x + dx);
   const y = world.wrap(room.y + dy);
-  entities.push({
-    id: nextId.v++,
-    type: EntityType.NPC,
-    x: x + 0.5,
-    y: y + 0.5,
+  requireSpawnedPlotNpcFromPackage(entities, nextId, plotNpcId, x + 0.5, y + 0.5, {
     angle,
-    pitch: 0,
-    alive: true,
-    speed: def.speed,
-    sprite: def.sprite,
-    name: def.name,
-    isFemale: def.isFemale,
-    needs: freshNeeds(),
-    hp: def.hp,
-    maxHp: def.maxHp,
-    money: def.money,
-    ai: { goal: AIGoal.IDLE, tx: x + 0.5, ty: y + 0.5, path: [], pi: 0, stuck: 0, timer: 0 },
-    inventory: def.inventory.map(i => ({ ...i })),
     weapon,
-    faction: def.faction,
-    occupation: def.occupation,
-    plotNpcId,
     canGiveQuest,
-    questId: -1,
+    aiTarget: { x: x + 0.5, y: y + 0.5 },
   });
 }
 

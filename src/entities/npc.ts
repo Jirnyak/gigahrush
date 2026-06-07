@@ -190,6 +190,19 @@ function genDirector(): Uint32Array {
   return t;
 }
 
+function genPerformer(): Uint32Array {
+  const t = genHumanoid(190, 155, 145, 118, 42, 72, 36, 34, 44, 17, H_TOP, H_BOT, B_TOP, B_BOT, L_BOT);
+  const cx = S / 2;
+  addStripe(t, 215, 166, 80, B_TOP + 3, B_TOP + 14);
+  for (let y = B_TOP + 5; y < B_TOP + 9; y++) {
+    for (let x = cx - 6; x <= cx + 6; x++) {
+      if (x >= 0 && x < S) t[y * S + x] = rgba(145, 52, 88);
+    }
+  }
+  addHair(t, 60, 35, 28, H_TOP, H_BOT);
+  return t;
+}
+
 function genPriest(): Uint32Array {
   // Black robe with golden cross on chest
   const t = genHumanoid(175, 150, 130, 20, 20, 22, 20, 20, 22, 160, H_TOP, H_BOT, B_TOP, B_BOT, L_BOT);
@@ -212,6 +225,9 @@ function genPriest(): Uint32Array {
 
 /** Priest sprite: Батюшка (black robe + golden cross) */
 export function generatePriestSprite(): Uint32Array { return genPriest(); }
+
+/** Performer sprite: Перформер (scene/service worker) */
+export function generatePerformerSprite(): Uint32Array { return genPerformer(); }
 
 /** Sprite generators indexed by Occupation enum value (0..12 = resident occupations) */
 export const NPC_SPRITE_GENERATORS: (() => Uint32Array)[] = [

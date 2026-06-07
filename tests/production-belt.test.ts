@@ -157,15 +157,22 @@ test('production belt full route adds mid/micro bays and cell-first faction HQs'
     const share = (counts.get(owner) ?? 0) / (W * W);
     const title = hqTitles.get(owner)!;
     assert.ok(anchor, `missing HQ anchor ${ZoneFaction[owner]}`);
-    const room = gen.world.rooms[anchor.roomId];
-    const supportRooms = gen.world.rooms.filter(candidate => candidate.id !== room.id && candidate.name.startsWith(`${title}:`));
+    const anchorRoom = gen.world.rooms[anchor.roomId];
+    const coreRoom = gen.world.rooms.find(candidate =>
+      candidate.name === `${title}: гермоядро` &&
+      candidate.type === RoomType.HQ &&
+      territoryRoomOwner(gen.world, candidate.id) === owner
+    );
+    assert.ok(coreRoom, `missing authored HQ core ${ZoneFaction[owner]}`);
+    const supportRooms = gen.world.rooms.filter(candidate => candidate.id !== coreRoom.id && candidate.name.startsWith(`${title}:`));
     anchorBuckets.add(`${Math.floor(anchor.x / 128)}:${Math.floor(anchor.y / 128)}`);
-    assert.equal(room.type, RoomType.HQ, `HQ type ${ZoneFaction[owner]}`);
-    assert.equal(room.sealed, true, `HQ sealed ${ZoneFaction[owner]}`);
-    assert.equal(room.name, `${title}: гермоядро`);
+    assert.equal(anchorRoom.type, RoomType.HQ, `HQ anchor type ${ZoneFaction[owner]}`);
+    assert.equal(anchorRoom.sealed, true, `HQ anchor sealed ${ZoneFaction[owner]}`);
+    assert.equal(coreRoom.sealed, true, `HQ core sealed ${ZoneFaction[owner]}`);
     assert.equal(supportRooms.length >= 5, true, `support rooms ${ZoneFaction[owner]}: ${supportRooms.length}`);
-    assert.equal(hermeticShellCells(gen, room.id) > 0, true, `hermetic shell ${ZoneFaction[owner]}`);
-    assert.equal(territoryRoomOwner(gen.world, room.id), owner, `room owner ${ZoneFaction[owner]}`);
+    assert.equal(hermeticShellCells(gen, coreRoom.id) > 0, true, `hermetic shell ${ZoneFaction[owner]}`);
+    assert.equal(territoryRoomOwner(gen.world, anchorRoom.id), owner, `anchor room owner ${ZoneFaction[owner]}`);
+    assert.equal(territoryRoomOwner(gen.world, coreRoom.id), owner, `core room owner ${ZoneFaction[owner]}`);
     assert.equal(territoryOwnerAt(gen.world, anchor.x, anchor.y), owner, `anchor owner ${ZoneFaction[owner]}`);
     assert.equal((counts.get(owner) ?? 0) > 0, true, `owned cells ${ZoneFaction[owner]}`);
     assert.equal(Math.abs(share - targetShare) <= 0.025, true, `share ${ZoneFaction[owner]}: ${share}`);

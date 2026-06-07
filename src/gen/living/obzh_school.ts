@@ -5,14 +5,14 @@
 import { stampSurfaceSplat } from '../../systems/surface_marks';
 import {
   Cell, DoorState, Tex, Feature, RoomType,
-  type Room, type Entity, EntityType, AIGoal, Faction, Occupation, QuestType, MonsterKind,
+  type Room, type Entity, EntityType, Faction, Occupation, QuestType, MonsterKind,
 } from '../../core/types';
 import { World } from '../../core/world';
-import { freshNeeds } from '../../data/catalog';
 import { type PlotNpcDef, registerSideQuest } from '../../data/plot';
 import { Spr } from '../../render/sprite_index';
 import { protectRoom } from '../shared';
 import { genLog } from '../log';
+import { requireSpawnedPlotNpcFromPackage } from '../plot_npc_spawn';
 import { registerZoneContent } from './zone_content';
 
 const CLASSROOM_NAME = 'Кабинет ОБЖ';
@@ -361,33 +361,12 @@ function spawnNpc(
   shelter: Room,
 ): void {
   if (entities.some(e => e.alive && e.plotNpcId === spawn.id)) return;
-  const def = NPC_DEFS[spawn.id];
   const room = spawn.room === 'classroom' ? classRoom : shelter;
-  entities.push({
-    id: nextId.v++,
-    type: EntityType.NPC,
-    x: room.x + spawn.dx + 0.5,
-    y: room.y + spawn.dy + 0.5,
+  requireSpawnedPlotNpcFromPackage(entities, nextId, spawn.id, room.x + spawn.dx + 0.5, room.y + spawn.dy + 0.5, {
     angle: spawn.angle,
-    pitch: 0,
-    alive: true,
-    speed: def.speed,
-    sprite: def.sprite,
-    spriteScale: spawn.scale,
-    name: def.name,
-    isFemale: def.isFemale,
-    needs: freshNeeds(),
-    hp: def.hp,
-    maxHp: def.maxHp,
-    money: def.money,
-    ai: { goal: AIGoal.IDLE, tx: 0, ty: 0, path: [], pi: 0, stuck: 0, timer: 0 },
-    inventory: def.inventory.map(i => ({ ...i })),
     weapon: spawn.weapon,
-    faction: def.faction,
-    occupation: def.occupation,
-    plotNpcId: spawn.id,
     canGiveQuest: spawn.canGiveQuest === true,
-    questId: -1,
+    extra: { spriteScale: spawn.scale },
   });
 }
 

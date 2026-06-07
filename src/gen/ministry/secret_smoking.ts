@@ -3,16 +3,20 @@
 /* gives FETCH quest for compromising notes about samosbor cover-up. */
 
 import {
-  Cell, Tex, Feature, RoomType,
+  Cell, Tex, Feature, FloorLevel, RoomType,
   type Room, type Entity,
-  EntityType, AIGoal, Faction, Occupation, QuestType,
+  EntityType, Faction, Occupation, QuestType,
 } from '../../core/types';
 import { World } from '../../core/world';
-import { freshNeeds } from '../../data/catalog';
-import { type PlotNpcDef, registerSideQuest } from '../../data/plot';
+import { type PlotNpcDef, registerAuthoredNpc, registerSideQuest, storyNpcFloorKey } from '../../data/plot';
 import { stampRoom, protectRoom, connectProtectedRoom, findClearArea } from '../shared';
 import { Spr } from '../../render/sprite_index';
 import { genLog } from '../log';
+import { requireSpawnedPlotNpcFromPackage } from '../plot_npc_spawn';
+
+const AVRORA_ID = 'zhurnalistka_avrora';
+const CLERK_SEMYON_ID = 'secret_smoking_clerk_semyon';
+const STENOGRAPHER_LIZA_ID = 'secret_smoking_stenographer_liza';
 
 /* ── NPC definition ──────────────────────────────────────────── */
 const NPC_DEF: PlotNpcDef = {
@@ -43,10 +47,10 @@ const NPC_DEF: PlotNpcDef = {
   ],
 };
 
-registerSideQuest('zhurnalistka_avrora', NPC_DEF, [
+registerSideQuest(AVRORA_ID, NPC_DEF, [
   {
     id: 'avrora_compromat',
-    giverNpcId: 'zhurnalistka_avrora',
+    giverNpcId: AVRORA_ID,
     type: QuestType.FETCH,
     desc: 'Аврора: «Восемь записок. Любых. Я найду в них коды и сошлю в самиздат.»',
     targetItem: 'note', targetCount: 8,
@@ -60,6 +64,47 @@ registerSideQuest('zhurnalistka_avrora', NPC_DEF, [
     relationDelta: 22, xpReward: 110, moneyReward: 350,
   },
 ]);
+
+const FRIEND_DEFS: readonly { id: string; npc: PlotNpcDef }[] = [
+  {
+    id: CLERK_SEMYON_ID,
+    npc: {
+      name: 'Делопроизводитель Семён',
+      isFemale: false,
+      faction: Faction.CITIZEN,
+      occupation: Occupation.SECRETARY,
+      sprite: Occupation.SECRETARY,
+      hp: 90, maxHp: 90, money: 30, speed: 0.9,
+      inventory: [{ defId: 'cigs', count: 2 }, { defId: 'note', count: 1 }],
+      talkLines: ['Семён прячет папку под пепельницей и просит говорить тише.'],
+      talkLinesPost: ['Семён уже переписывает компромат в три копии.'],
+    },
+  },
+  {
+    id: STENOGRAPHER_LIZA_ID,
+    npc: {
+      name: 'Стенографистка Лиза',
+      isFemale: true,
+      sex: 'female',
+      faction: Faction.CITIZEN,
+      occupation: Occupation.SECRETARY,
+      sprite: Occupation.SECRETARY,
+      hp: 90, maxHp: 90, money: 30, speed: 0.9,
+      inventory: [{ defId: 'cigs', count: 2 }, { defId: 'note', count: 1 }],
+      talkLines: ['Лиза слушает стену и пишет только то, что потом можно доказать.'],
+      talkLinesPost: ['Лиза ставит дату под каждой строкой, чтобы дым не съел показания.'],
+    },
+  },
+];
+
+for (const friend of FRIEND_DEFS) {
+  registerAuthoredNpc({
+    id: friend.id,
+    npc: friend.npc,
+    homeFloorKey: storyNpcFloorKey(FloorLevel.MINISTRY),
+    tags: ['ministry', 'secret_smoking', 'witness'],
+  });
+}
 
 /* ── Generate Тайная курилка ─────────────────────────────────── */
 const ROOM_W = 9;
@@ -140,39 +185,23 @@ export function generateSecretSmokingRoom(
   // NPC: Журналистка Аврора near the table
   const npcX = rcx + 1;
   const npcY = rcy;
-  entities.push({
-    id: nextId.v++, type: EntityType.NPC,
-    x: npcX + 0.5, y: npcY + 0.5,
-    angle: Math.PI, pitch: 0,
-    alive: true, speed: NPC_DEF.speed, sprite: NPC_DEF.sprite,
-    name: NPC_DEF.name, isFemale: NPC_DEF.isFemale,
-    needs: freshNeeds(), hp: NPC_DEF.hp, maxHp: NPC_DEF.maxHp, money: NPC_DEF.money,
-    ai: { goal: AIGoal.IDLE, tx: 0, ty: 0, path: [], pi: 0, stuck: 0, timer: 0 },
-    inventory: NPC_DEF.inventory.map(i => ({ ...i })),
+  requireSpawnedPlotNpcFromPackage(entities, nextId, AVRORA_ID, npcX + 0.5, npcY + 0.5, {
+    angle: Math.PI,
     weapon: 'makarov',
-    faction: NPC_DEF.faction, occupation: NPC_DEF.occupation,
-    plotNpcId: 'zhurnalistka_avrora', canGiveQuest: true, questId: -1,
+    canGiveQuest: true,
   });
 
   // Two co-conspirator clerks (named, no quests)
-  const friends: { name: string; isFemale: boolean; occ: Occupation; x: number; y: number }[] = [
-    { name: 'Делопроизводитель Семён', isFemale: false, occ: Occupation.SECRETARY, x: rcx - 1, y: rcy },
-    { name: 'Стенографистка Лиза',     isFemale: true,  occ: Occupation.SECRETARY, x: rcx,     y: rcy + 1 },
+  const friends: { id: string; x: number; y: number }[] = [
+    { id: CLERK_SEMYON_ID, x: rcx - 1, y: rcy },
+    { id: STENOGRAPHER_LIZA_ID, x: rcx, y: rcy + 1 },
   ];
   for (const f of friends) {
     const ci = world.idx(f.x, f.y);
     if (world.cells[ci] !== Cell.FLOOR) continue;
-    entities.push({
-      id: nextId.v++, type: EntityType.NPC,
-      x: f.x + 0.5, y: f.y + 0.5,
-      angle: Math.random() * Math.PI * 2, pitch: 0,
-      alive: true, speed: 0.9, sprite: f.occ,
-      name: f.name, isFemale: f.isFemale,
-      needs: freshNeeds(), hp: 90, maxHp: 90, money: 30,
-      ai: { goal: AIGoal.IDLE, tx: 0, ty: 0, path: [], pi: 0, stuck: 0, timer: 0 },
-      inventory: [{ defId: 'cigs', count: 2 }, { defId: 'note', count: 1 }],
-      faction: Faction.CITIZEN, occupation: f.occ,
-      questId: -1,
+    requireSpawnedPlotNpcFromPackage(entities, nextId, f.id, f.x + 0.5, f.y + 0.5, {
+      angle: Math.random() * Math.PI * 2,
+      canGiveQuest: false,
     });
   }
 

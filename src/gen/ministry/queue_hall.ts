@@ -13,12 +13,13 @@ import {
   type WorldContainer,
 } from '../../core/types';
 import { World } from '../../core/world';
-import { type PlotNpcDef, registerSideQuest } from '../../data/plot';
+import { type PlotNpcDef, registerAuthoredNpc, registerSideQuest, storyNpcFloorKey } from '../../data/plot';
 import {
-  type NextId, createAdminRoom, setFeature, addItemDrop, spawnAdminNpc, spawnNamedCivilian,
+  type NextId, createAdminRoom, setFeature, addItemDrop, spawnAdminNpc,
 } from './admin_common';
 import { genLog } from '../log';
 
+const HOME_FLOOR_KEY = storyNpcFloorKey(FloorLevel.MINISTRY);
 const PERMIT_CHOICE_IDS = [
   'permit_wait_queue',
   'permit_pay_accelerator',
@@ -29,6 +30,42 @@ const PERMIT_CHOICE_IDS = [
 
 function otherPermitChoices(id: string): string[] {
   return PERMIT_CHOICE_IDS.filter(choiceId => choiceId !== id);
+}
+
+interface QueueCivilianSpec {
+  id: string;
+  name: string;
+  isFemale: boolean;
+  dx: number;
+  dy: number;
+  occupation: Occupation;
+}
+
+const QUEUE_CIVILIANS: readonly QueueCivilianSpec[] = [
+  { id: 'queue_hall_platon_bezokoshechny', name: 'Платон Безокошечный', isFemale: false, dx: 5, dy: 5, occupation: Occupation.SECRETARY },
+  { id: 'queue_hall_nina_vtoraya_sleva', name: 'Нина Вторая-Слева', isFemale: true, dx: 8, dy: 6, occupation: Occupation.DOCTOR },
+  { id: 'queue_hall_egor_nomernoy', name: 'Егор Номерной', isFemale: false, dx: 11, dy: 5, occupation: Occupation.STOREKEEPER },
+  { id: 'queue_hall_tamara_beztalonnaya', name: 'Тамара Безталонная', isFemale: true, dx: 6, dy: 8, occupation: Occupation.COOK },
+  { id: 'queue_hall_saveliy_konets_stroki', name: 'Савелий Конец-Строки', isFemale: false, dx: 12, dy: 8, occupation: Occupation.LOCKSMITH },
+];
+
+function queueCivilianDef(spec: QueueCivilianSpec): PlotNpcDef {
+  return {
+    name: spec.name,
+    isFemale: spec.isFemale,
+    faction: Faction.CITIZEN,
+    occupation: spec.occupation,
+    sprite: spec.occupation,
+    hp: 70, maxHp: 70, money: 15, speed: 0.8,
+    inventory: [{ defId: 'note', count: 1 }],
+    talkLines: [
+      'Очередь идет, но место не двигается.',
+      'Если назовут мой номер, скажите, что я уже был человеком.',
+    ],
+    talkLinesPost: [
+      'Номер услышал себя и снова замолчал.',
+    ],
+  };
 }
 
 const OSIP_DEF: PlotNpcDef = {
@@ -131,6 +168,15 @@ registerSideQuest('klavdiya_ocherednaya', KLAVDIYA_DEF, [
   },
 ]);
 
+for (const spec of QUEUE_CIVILIANS) {
+  registerAuthoredNpc({
+    id: spec.id,
+    npc: queueCivilianDef(spec),
+    homeFloorKey: HOME_FLOOR_KEY,
+    tags: ['ministry', 'queue_hall', 'queue'],
+  });
+}
+
 function nextContainerId(world: World): number {
   let id = 1;
   for (const c of world.containers) if (c.id >= id) id = c.id + 1;
@@ -207,15 +253,8 @@ export function generateQueueHall(
   spawnAdminNpc(entities, nextId, KLAVDIYA_DEF, 'klavdiya_ocherednaya', room.x + 3, room.y + room.h - 3);
   addQueueAuditCabinet(world, room.id, room.x + room.w - 2, room.y + room.h - 2, osipId);
 
-  const civilians: [string, boolean, number, number, Occupation][] = [
-    ['Платон Безокошечный', false, 5, 5, Occupation.SECRETARY],
-    ['Нина Вторая-Слева', true, 8, 6, Occupation.DOCTOR],
-    ['Егор Номерной', false, 11, 5, Occupation.STOREKEEPER],
-    ['Тамара Безталонная', true, 6, 8, Occupation.COOK],
-    ['Савелий Конец-Строки', false, 12, 8, Occupation.LOCKSMITH],
-  ];
-  for (const [name, female, dx, dy, occ] of civilians) {
-    spawnNamedCivilian(entities, nextId, name, female, room.x + dx, room.y + dy, occ);
+  for (const spec of QUEUE_CIVILIANS) {
+    spawnAdminNpc(entities, nextId, queueCivilianDef(spec), spec.id, room.x + spec.dx, room.y + spec.dy, false);
   }
 
   genLog(`[MINISTRY_ADMIN] ${room.name} at (${room.x}, ${room.y}) room #${room.id}`);

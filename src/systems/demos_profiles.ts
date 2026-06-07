@@ -17,6 +17,7 @@ import {
   type DemosTraitDef,
   type DemosTraitKind,
 } from '../data/demos_traits';
+import { occupationHasProfileTag, occupationProfile } from '../data/occupation_profiles';
 import {
   DEMOS_EDGE_DEBT,
   DEMOS_EDGE_ENEMY,
@@ -26,7 +27,8 @@ import {
   DEMOS_EDGE_WORK,
   DEMOS_RELATION_FRIENDLY_THRESHOLD,
   DEMOS_RELATION_HOSTILE_THRESHOLD,
-  DemosSocialRoleId as DemosGraphRoleId,
+  DEMOS_SOCIAL_NPC_SLOTS,
+  DemosSocialRoleId,
 } from '../data/demos_social';
 import {
   characterAgeBandLabelRu,
@@ -37,26 +39,20 @@ import {
   alifeNpcRecordCount,
   alifeSeed,
   getAlifeNpcRecordSnapshot,
+  packageIdFromReservedIdentityId,
   type AlifeNpcSnapshot,
 } from './alife';
+import {
+  getNpcPackage,
+  npcPackageDisplayName,
+  type NpcPackageDef,
+} from '../data/npc_packages';
 import { demosRelationBand } from './demos';
 import { getDemosNpcOnlySocialEdges, type DemosSocialEdgeView } from './demos_social';
 
 const DEMOS_PROFILE_RECENT_LIMIT = 48;
 const DEMOS_SOCIAL_FALLBACK_TRIES = 24;
 const DEMOS_FAMILY_PROBE_RANGE = 18;
-
-export type DemosSocialRoleId =
-  | 'acquaintance'
-  | 'friend'
-  | 'rival'
-  | 'enemy'
-  | 'parent'
-  | 'child'
-  | 'partner'
-  | 'work'
-  | 'debt'
-  | 'quest';
 
 export interface DemosTraitView {
   index: number;
@@ -106,17 +102,27 @@ export interface DemosProfileFeedEntry {
 
 export interface DemosProfileDetails {
   alifeId: number;
+  packageId?: string;
+  packageDisplayName?: string;
+  packagePublicLine?: string;
+  packageBioLine?: string;
+  packageOriginLabel?: string;
+  packageWorkLabel?: string;
+  packagePortraitHint?: string;
   age: number;
   ageBandLabel: string;
   sexLabel: string;
   accountRubles: number;
   accountLabel: string;
+  capitalRubles: number;
+  capitalLabel: string;
   familyStatusLabel: string;
   relationToPlayerLabel: string;
   friendsCount: number;
   enemiesCount: number;
   familyCount: number;
   traits: readonly DemosTraitView[];
+  packageFlavorTags: readonly string[];
   interests: readonly string[];
   favoriteWorkLabel?: string;
   fearLabel?: string;
@@ -138,56 +144,29 @@ interface DemosProfileHost {
 }
 
 const ROLE_LABELS: Record<DemosSocialRoleId, string> = {
-  acquaintance: 'знакомый',
-  friend: 'друг',
-  rival: 'спор',
-  enemy: 'враг',
-  parent: 'родитель',
-  child: 'ребёнок',
-  partner: 'пара',
-  work: 'смена',
-  debt: 'долг',
-  quest: 'дело',
+  [DemosSocialRoleId.ACQUAINTANCE]: 'знакомый',
+  [DemosSocialRoleId.FRIEND]: 'друг',
+  [DemosSocialRoleId.RIVAL]: 'спор',
+  [DemosSocialRoleId.ENEMY]: 'враг',
+  [DemosSocialRoleId.PARENT]: 'родитель',
+  [DemosSocialRoleId.CHILD]: 'ребёнок',
+  [DemosSocialRoleId.PARTNER]: 'пара',
+  [DemosSocialRoleId.WORK]: 'смена',
+  [DemosSocialRoleId.DEBT]: 'долг',
+  [DemosSocialRoleId.QUEST]: 'дело',
 };
 
-const OCCUPATION_WORK_LABELS: Record<Occupation, string> = {
-  [Occupation.HOUSEWIFE]: 'держит быт',
-  [Occupation.LOCKSMITH]: 'чинит замки и трубы',
-  [Occupation.SECRETARY]: 'ведёт журнал',
-  [Occupation.ELECTRICIAN]: 'смотрит щитки',
-  [Occupation.COOK]: 'держит кухню',
-  [Occupation.DOCTOR]: 'дежурит в медпункте',
-  [Occupation.TURNER]: 'стоит у станка',
-  [Occupation.MECHANIC]: 'чинит механизмы',
-  [Occupation.STOREKEEPER]: 'считает склад',
-  [Occupation.ALCOHOLIC]: 'знает курилку',
-  [Occupation.SCIENTIST]: 'пишет протокол',
-  [Occupation.CHILD]: 'ходит по поручениям',
-  [Occupation.DIRECTOR]: 'гоняет смены',
-  [Occupation.TRAVELER]: 'ходит маршрутами',
-  [Occupation.PILGRIM]: 'держит обет',
-  [Occupation.HUNTER]: 'берёт зачистки',
-  [Occupation.PRIEST]: 'держит храм',
-};
-
-const OCCUPATION_INTERESTS: Record<Occupation, readonly string[]> = {
-  [Occupation.HOUSEWIFE]: ['чайник', 'прачечная', 'соседи'],
-  [Occupation.LOCKSMITH]: ['ключи', 'гермы', 'инструмент'],
-  [Occupation.SECRETARY]: ['журнал', 'печати', 'очередь'],
-  [Occupation.ELECTRICIAN]: ['щиток', 'кабель', 'сухие перчатки'],
-  [Occupation.COOK]: ['пайка', 'вода', 'общая кухня'],
-  [Occupation.DOCTOR]: ['бинты', 'йод', 'медкарта'],
-  [Occupation.TURNER]: ['станок', 'резьба', 'масло'],
-  [Occupation.MECHANIC]: ['насос', 'болты', 'привод'],
-  [Occupation.STOREKEEPER]: ['кладовая', 'накладная', 'остатки'],
-  [Occupation.ALCOHOLIC]: ['курилка', 'бутылка', 'занять рубль'],
-  [Occupation.SCIENTIST]: ['образец', 'колба', 'протокол'],
-  [Occupation.CHILD]: ['мел', 'домино', 'сладкий чай'],
-  [Occupation.DIRECTOR]: ['план', 'норма', 'доска заявок'],
-  [Occupation.TRAVELER]: ['лифт', 'карта', 'сухарь'],
-  [Occupation.PILGRIM]: ['обет', 'свеча', 'тихий угол'],
-  [Occupation.HUNTER]: ['патроны', 'следы', 'дверной клин'],
-  [Occupation.PRIEST]: ['свечи', 'кружка воды', 'исповедь'],
+const ROLE_BY_STRING: Readonly<Record<string, DemosSocialRoleId>> = {
+  acquaintance: DemosSocialRoleId.ACQUAINTANCE,
+  friend: DemosSocialRoleId.FRIEND,
+  rival: DemosSocialRoleId.RIVAL,
+  enemy: DemosSocialRoleId.ENEMY,
+  parent: DemosSocialRoleId.PARENT,
+  child: DemosSocialRoleId.CHILD,
+  partner: DemosSocialRoleId.PARTNER,
+  work: DemosSocialRoleId.WORK,
+  debt: DemosSocialRoleId.DEBT,
+  quest: DemosSocialRoleId.QUEST,
 };
 
 const FACTION_INTERESTS: Record<Faction, readonly string[]> = {
@@ -257,7 +236,7 @@ function traitIdByHash(kind: DemosTraitKind, seed: number, snapshot: AlifeNpcSna
 function temperTraitId(seed: number, snapshot: AlifeNpcSnapshot): string {
   const relation = snapshot.playerRelation ?? 0;
   if (relation <= -55 || snapshot.karma <= -50) return 'vengeful';
-  if (snapshot.occupation === Occupation.HUNTER || relation >= 55) return 'brave';
+  if (occupationHasProfileTag(snapshot.occupation, 'combat') || relation >= 55) return 'brave';
   if (snapshot.faction === Faction.LIQUIDATOR || snapshot.faction === Faction.SCIENTIST) return 'orderly';
   if ((hash32(seed, snapshot.id, 1) & 3) === 0) return 'cowardly';
   return traitIdByHash('temper', seed, snapshot, 11);
@@ -272,59 +251,15 @@ function socialTraitId(seed: number, snapshot: AlifeNpcSnapshot): string {
 }
 
 function workTraitId(snapshot: AlifeNpcSnapshot): string {
-  switch (snapshot.occupation) {
-    case Occupation.COOK:
-      return 'kitchen_shift';
-    case Occupation.LOCKSMITH:
-    case Occupation.ELECTRICIAN:
-    case Occupation.TURNER:
-    case Occupation.MECHANIC:
-    case Occupation.HUNTER:
-      return 'tool_hands';
-    case Occupation.SECRETARY:
-    case Occupation.SCIENTIST:
-    case Occupation.DOCTOR:
-    case Occupation.DIRECTOR:
-    case Occupation.STOREKEEPER:
-      return 'paper_soul';
-    default:
-      return 'work_pride';
-  }
+  return occupationProfile(snapshot.occupation)?.demosTraits.work ?? 'work_pride';
 }
 
 function tasteTraitId(snapshot: AlifeNpcSnapshot): string {
-  switch (snapshot.occupation) {
-    case Occupation.COOK:
-    case Occupation.HOUSEWIFE:
-    case Occupation.ALCOHOLIC:
-    case Occupation.CHILD:
-      return 'taste_food';
-    case Occupation.DOCTOR:
-      return 'taste_medicine';
-    case Occupation.SECRETARY:
-    case Occupation.SCIENTIST:
-    case Occupation.DIRECTOR:
-      return 'taste_documents';
-    default:
-      return 'taste_tools';
-  }
+  return occupationProfile(snapshot.occupation)?.demosTraits.taste ?? 'taste_tools';
 }
 
 function questTraitId(snapshot: AlifeNpcSnapshot): string {
-  switch (snapshot.occupation) {
-    case Occupation.LOCKSMITH:
-    case Occupation.ELECTRICIAN:
-    case Occupation.MECHANIC:
-    case Occupation.TURNER:
-      return 'quest_repair';
-    case Occupation.HUNTER:
-      return 'quest_hunt';
-    case Occupation.STOREKEEPER:
-    case Occupation.COOK:
-      return 'quest_trade';
-    default:
-      return 'quest_fetch';
-  }
+  return occupationProfile(snapshot.occupation)?.demosTraits.quest ?? 'quest_fetch';
 }
 
 function fourthTraitId(seed: number, snapshot: AlifeNpcSnapshot): string {
@@ -400,13 +335,17 @@ function relationLabel(score: number): { label: string; color: string } {
 }
 
 function roleFromRelation(relation: number): DemosSocialRoleId {
-  if (relation <= DEMOS_RELATION_HOSTILE_THRESHOLD) return 'enemy';
-  if (relation >= DEMOS_RELATION_FRIENDLY_THRESHOLD) return 'friend';
-  return relation < 0 ? 'rival' : 'acquaintance';
+  if (relation <= DEMOS_RELATION_HOSTILE_THRESHOLD) return DemosSocialRoleId.ENEMY;
+  if (relation >= DEMOS_RELATION_FRIENDLY_THRESHOLD) return DemosSocialRoleId.FRIEND;
+  return relation < 0 ? DemosSocialRoleId.RIVAL : DemosSocialRoleId.ACQUAINTANCE;
 }
 
 function normalizeRole(role: unknown, fallback: DemosSocialRoleId): DemosSocialRoleId {
-  return typeof role === 'string' && Object.prototype.hasOwnProperty.call(ROLE_LABELS, role) ? role as DemosSocialRoleId : fallback;
+  if (typeof role === 'number' && Number.isInteger(role) && role >= DemosSocialRoleId.ACQUAINTANCE && role <= DemosSocialRoleId.QUEST) {
+    return role as DemosSocialRoleId;
+  }
+  if (typeof role === 'string') return ROLE_BY_STRING[role] ?? fallback;
+  return fallback;
 }
 
 function readInjectedSocialEdges(state: GameState, alifeId: number): readonly DemosSocialLinkSeed[] | undefined {
@@ -416,26 +355,18 @@ function readInjectedSocialEdges(state: GameState, alifeId: number): readonly De
   return edges[alifeId];
 }
 
-function roleFromGraphRole(role: DemosGraphRoleId, relation: number): DemosSocialRoleId {
+function roleFromGraphRole(role: DemosSocialRoleId, relation: number): DemosSocialRoleId {
   switch (role) {
-    case DemosGraphRoleId.FRIEND:
-      return 'friend';
-    case DemosGraphRoleId.RIVAL:
-      return 'rival';
-    case DemosGraphRoleId.ENEMY:
-      return 'enemy';
-    case DemosGraphRoleId.PARENT:
-      return 'parent';
-    case DemosGraphRoleId.CHILD:
-      return 'child';
-    case DemosGraphRoleId.PARTNER:
-      return 'partner';
-    case DemosGraphRoleId.WORK:
-      return 'work';
-    case DemosGraphRoleId.DEBT:
-      return 'debt';
-    case DemosGraphRoleId.QUEST:
-      return 'quest';
+    case DemosSocialRoleId.FRIEND:
+    case DemosSocialRoleId.RIVAL:
+    case DemosSocialRoleId.ENEMY:
+    case DemosSocialRoleId.PARENT:
+    case DemosSocialRoleId.CHILD:
+    case DemosSocialRoleId.PARTNER:
+    case DemosSocialRoleId.WORK:
+    case DemosSocialRoleId.DEBT:
+    case DemosSocialRoleId.QUEST:
+      return role;
     default:
       return roleFromRelation(relation);
   }
@@ -480,7 +411,9 @@ function addLinkSeed(out: DemosSocialLinkSeed[], seen: Set<number>, seed: DemosS
 }
 
 function relationForSnapshots(seed: number, source: AlifeNpcSnapshot, target: AlifeNpcSnapshot, role: DemosSocialRoleId): number {
-  if (role === 'parent' || role === 'child' || role === 'partner') return 92 - (hash32(seed, source.id, target.id, 1) % 14);
+  if (role === DemosSocialRoleId.PARENT || role === DemosSocialRoleId.CHILD || role === DemosSocialRoleId.PARTNER) {
+    return 92 - (hash32(seed, source.id, target.id, 1) % 14);
+  }
   let relation = (hash32(seed, source.id, target.id, 2) % 63) - 24;
   if (source.faction === target.faction) relation += 36;
   else relation -= 28;
@@ -492,9 +425,9 @@ function relationForSnapshots(seed: number, source: AlifeNpcSnapshot, target: Al
 
 function familyRole(source: AlifeNpcSnapshot, target: AlifeNpcSnapshot): DemosSocialRoleId | undefined {
   if (source.familyId <= 0 || source.familyId !== target.familyId) return undefined;
-  if (source.occupation === Occupation.CHILD && target.occupation !== Occupation.CHILD) return 'parent';
-  if (source.occupation !== Occupation.CHILD && target.occupation === Occupation.CHILD) return 'child';
-  if (source.occupation !== Occupation.CHILD && target.occupation !== Occupation.CHILD) return 'partner';
+  if (source.occupation === Occupation.CHILD && target.occupation !== Occupation.CHILD) return DemosSocialRoleId.PARENT;
+  if (source.occupation !== Occupation.CHILD && target.occupation === Occupation.CHILD) return DemosSocialRoleId.CHILD;
+  if (source.occupation !== Occupation.CHILD && target.occupation !== Occupation.CHILD) return DemosSocialRoleId.PARTNER;
   return undefined;
 }
 
@@ -537,9 +470,9 @@ function fallbackSocialSeeds(state: GameState, source: AlifeNpcSnapshot, limit: 
     if (!target) continue;
     const family = familyRole(source, target);
     const role = family
-      ?? (source.occupation === target.occupation ? 'work'
-        : source.faction !== target.faction && (hash32(seed, source.id, target.id, 3) & 1) === 0 ? 'rival'
-          : roleFromRelation(relationForSnapshots(seed, source, target, 'acquaintance')));
+      ?? (source.occupation === target.occupation ? DemosSocialRoleId.WORK
+        : source.faction !== target.faction && (hash32(seed, source.id, target.id, 3) & 1) === 0 ? DemosSocialRoleId.RIVAL
+          : roleFromRelation(relationForSnapshots(seed, source, target, DemosSocialRoleId.ACQUAINTANCE)));
     addLinkSeed(out, seen, {
       targetAlifeId: target.id,
       relation: relationForSnapshots(seed, source, target, role),
@@ -580,7 +513,7 @@ function linkViewFromSeed(
 export function buildDemosSocialLinksView(
   state: GameState,
   alifeId: number,
-  limit = 6,
+  limit = DEMOS_SOCIAL_NPC_SLOTS,
 ): readonly DemosSocialLinkView[] {
   const total = alifeNpcRecordCount(state);
   if (!Number.isInteger(alifeId) || alifeId <= 0 || alifeId > total) return [];
@@ -604,15 +537,15 @@ export function buildDemosSocialLinksView(
 }
 
 function isFamilyRole(role: DemosSocialRoleId): boolean {
-  return role === 'parent' || role === 'child' || role === 'partner';
+  return role === DemosSocialRoleId.PARENT || role === DemosSocialRoleId.CHILD || role === DemosSocialRoleId.PARTNER;
 }
 
 function familyStatusLabel(snapshot: AlifeNpcSnapshot, links: readonly DemosSocialLinkView[]): string {
-  const partner = links.find(link => link.role === 'partner');
+  const partner = links.find(link => link.role === DemosSocialRoleId.PARTNER);
   if (partner) return `семейное: вместе с alife:${partner.targetAlifeId}`;
-  const parent = links.find(link => link.role === 'parent');
+  const parent = links.find(link => link.role === DemosSocialRoleId.PARENT);
   if (snapshot.occupation === Occupation.CHILD && parent) return `семейное: ребёнок, родитель alife:${parent.targetAlifeId}`;
-  if (links.some(link => link.role === 'child')) return 'семейное: есть дети';
+  if (links.some(link => link.role === DemosSocialRoleId.CHILD)) return 'семейное: есть дети';
   return 'семейное: один по журналу';
 }
 
@@ -620,9 +553,46 @@ function pushUnique(out: string[], value: string, cap: number): void {
   if (out.length < cap && value && !out.includes(value)) out.push(value);
 }
 
+function packageForSnapshot(snapshot: AlifeNpcSnapshot): { packageId: string; pack: NpcPackageDef } | undefined {
+  const packageId = packageIdFromReservedIdentityId(snapshot.reservedIdentityId);
+  const pack = packageId ? getNpcPackage(packageId) : undefined;
+  return packageId && pack ? { packageId, pack } : undefined;
+}
+
+function cleanPackageLine(value: unknown, cap: number): string | undefined {
+  if (typeof value !== 'string') return undefined;
+  const out = value.replace(/\s+/g, ' ').trim().slice(0, cap);
+  return out.length > 0 ? out : undefined;
+}
+
+function packageFlavorTags(pack: NpcPackageDef | undefined): readonly string[] {
+  const out: string[] = [];
+  for (const perk of pack?.rpg?.perks ?? []) {
+    pushUnique(out, `perk:${perk.id}`, 8);
+    for (const tag of perk.tags ?? []) pushUnique(out, tag, 8);
+  }
+  for (const tag of pack?.tags ?? []) pushUnique(out, tag, 8);
+  for (const tag of pack?.bio?.markovTags ?? []) pushUnique(out, tag, 8);
+  return out;
+}
+
+function capitalLabel(snapshot: AlifeNpcSnapshot, pack: NpcPackageDef | undefined): { rubles: number; label: string } {
+  const cash = Math.max(0, Math.floor(snapshot.money));
+  const account = Math.max(0, Math.floor(snapshot.accountRubles));
+  const total = cash + account;
+  const debt = typeof pack?.wealth?.debtRubles === 'number' && Number.isFinite(pack.wealth.debtRubles)
+    ? Math.max(0, Math.floor(pack.wealth.debtRubles))
+    : 0;
+  const assets = (pack?.wealth?.assetTags ?? []).slice(0, 2).join(', ');
+  const parts = [`${total}₽`];
+  if (debt > 0) parts.push(`долг ${debt}₽`);
+  if (assets) parts.push(assets);
+  return { rubles: total, label: parts.join(' / ') };
+}
+
 function buildInterests(snapshot: AlifeNpcSnapshot, traits: readonly DemosTraitView[]): readonly string[] {
   const out: string[] = [];
-  for (const item of OCCUPATION_INTERESTS[snapshot.occupation] ?? []) pushUnique(out, item, 5);
+  for (const item of occupationProfile(snapshot.occupation)?.interests ?? []) pushUnique(out, item, 5);
   for (const item of FACTION_INTERESTS[snapshot.faction] ?? []) pushUnique(out, item, 5);
   for (const trait of traits) {
     if (trait.kind === 'taste' || trait.kind === 'fear') {
@@ -719,27 +689,40 @@ export function getDemosProfileDetails(state: GameState, alifeId: number): Demos
   const snapshot = getAlifeNpcRecordSnapshot(state, alifeId);
   if (!snapshot) return undefined;
   const traits = getDemosTraitViews(state, alifeId);
-  const links = buildDemosSocialLinksView(state, alifeId, 8);
+  const links = buildDemosSocialLinksView(state, alifeId, DEMOS_SOCIAL_NPC_SLOTS);
   const feed = buildDemosProfileFeedView(state, alifeId, 1);
   const relationScore = Math.round(snapshot.playerRelation ?? 0);
   const relation = demosRelationBand(relationScore);
   const fear = traits.find(trait => trait.kind === 'fear');
   const accountRubles = Math.max(0, Math.floor(snapshot.accountRubles));
+  const packageView = packageForSnapshot(snapshot);
+  const pack = packageView?.pack;
+  const capital = capitalLabel(snapshot, pack);
   return {
     alifeId,
+    packageId: packageView?.packageId,
+    packageDisplayName: pack ? npcPackageDisplayName(pack) : undefined,
+    packagePublicLine: cleanPackageLine(pack?.bio?.publicLine, 120),
+    packageBioLine: cleanPackageLine(pack?.bio?.short, 160),
+    packageOriginLabel: cleanPackageLine(pack?.bio?.origin, 96),
+    packageWorkLabel: cleanPackageLine(pack?.bio?.work, 96),
+    packagePortraitHint: cleanPackageLine(pack?.visual?.portraitHint, 64),
     age: snapshot.age,
     ageBandLabel: characterAgeBandLabelRu(snapshot.age),
     sexLabel: characterSexLabelRu(snapshot.sex),
     accountRubles,
     accountLabel: `${accountRubles}₽`,
+    capitalRubles: capital.rubles,
+    capitalLabel: capital.label,
     familyStatusLabel: familyStatusLabel(snapshot, links),
     relationToPlayerLabel: `${relationScore} / ${relation.label}`,
-    friendsCount: links.filter(link => link.relation >= DEMOS_RELATION_FRIENDLY_THRESHOLD || link.role === 'friend').length,
-    enemiesCount: links.filter(link => link.relation <= DEMOS_RELATION_HOSTILE_THRESHOLD || link.role === 'enemy').length,
+    friendsCount: links.filter(link => link.relation >= DEMOS_RELATION_FRIENDLY_THRESHOLD || link.role === DemosSocialRoleId.FRIEND).length,
+    enemiesCount: links.filter(link => link.relation <= DEMOS_RELATION_HOSTILE_THRESHOLD || link.role === DemosSocialRoleId.ENEMY).length,
     familyCount: links.filter(link => isFamilyRole(link.role)).length,
     traits,
+    packageFlavorTags: packageFlavorTags(pack),
     interests: buildInterests(snapshot, traits),
-    favoriteWorkLabel: OCCUPATION_WORK_LABELS[snapshot.occupation],
+    favoriteWorkLabel: occupationProfile(snapshot.occupation)?.workLabel,
     fearLabel: fear?.label,
     lastPostId: feed[0]?.postId,
     mentionsRecent: recentMentionCount(state, alifeId),

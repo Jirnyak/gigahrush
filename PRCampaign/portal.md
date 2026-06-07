@@ -22,6 +22,14 @@ npm run check:release
 
 If `GAMEPUSH_PROJECT_ID` / `GP_PROJECT_ID` and `GAMEPUSH_PUBLIC_TOKEN` / `GP_PUBLIC_TOKEN` are present in the environment, matching GamePush meta credentials are injected into the artifact without committing secrets.
 
+## Current Pikabu/GamePush State
+
+As of 2026-06-05, GamePush project `28314` has a fresh Pikabu hosting v4 published from `pikabu/gigahrush-pikabu.zip`. Public hosting `https://s3.eponesh.com/games/28314/` returns `HTTP/2 200`, `content-length: 13098262`, and `last-modified: Fri, 05 Jun 2026 20:15:05 GMT`.
+
+The current local ZIP is `5,778,238` bytes, SHA-256 `e44a2af01310df177d37b59f65fbe9c835ef1a1abd9e632216f00d6bc10656a2`, contains `index.html` at the archive root, declares `gigahrush-portal=pikabu`, and does not embed GamePush credential meta tags.
+
+The Distribution request remains `ACCEPTED` for `PIKABU`, but there is still no confirmed public Pikabu catalog URL. The active blocker is owner-side self-employed / NPD and `My Company` legal data, followed by real GamePush/Pikabu iframe QA.
+
 ## Portal SDK Bridge
 
 The optional portal bridge in `src/systems/platform_bridge.ts` activates only when one of these is true:

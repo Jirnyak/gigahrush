@@ -8,6 +8,7 @@ import {
   msg,
   type Entity,
   type GameState,
+  type Item,
   type WorldContainer,
 } from '../core/types';
 import { World } from '../core/world';
@@ -120,7 +121,7 @@ export interface InteractionContext {
   playDoor?: () => void;
   routeHintsVisible?: boolean;
   manualItemPickup?: boolean;
-  onPickedDrop?: (drop: Entity) => void;
+  onPickedDrop?: (drop: Entity, pickedItems: readonly Item[]) => void;
 }
 
 export interface InteractionTarget {

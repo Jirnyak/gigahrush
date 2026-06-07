@@ -5,7 +5,6 @@ import {
   Cell,
   ContainerKind,
   DoorState,
-  EntityType,
   Faction,
   Feature,
   FloorLevel,
@@ -24,10 +23,12 @@ import {
 } from '../../core/types';
 import { World } from '../../core/world';
 import { hashSeed } from '../../core/rand';
-import { freshNeeds } from '../../data/catalog';
-import { type PlotNpcDef, registerSideQuest } from '../../data/plot';
+import { designNpcFloorKey, type PlotNpcDef, registerFloorSideQuest } from '../../data/plot';
 import { generateZones, sanitizeDoors, stampRoom } from '../shared';
 import type { FloorGeneration } from '../floor_manifest';
+import { requireSpawnedPlotNpcFromPackage } from '../plot_npc_spawn';
+
+const DESIGN_NPC_HOME_FLOOR_KEY = designNpcFloorKey('critical_leak_archive');
 
 export const CRITICAL_LEAK_ARCHIVE_ROUTE_ID = 'critical_leak_archive' as const;
 export const CRITICAL_LEAK_ARCHIVE_Z = 24;
@@ -210,7 +211,7 @@ const LIQUIDATOR_DEF: PlotNpcDef = {
   ],
 };
 
-registerSideQuest('critical_leak_archivist_varvara', ARCHIVIST_DEF, [
+registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'critical_leak_archivist_varvara', ARCHIVIST_DEF, [
   {
     id: 'critical_leak_carry_dry_packet',
     giverNpcId: 'critical_leak_archivist_varvara',
@@ -231,7 +232,7 @@ registerSideQuest('critical_leak_archivist_varvara', ARCHIVIST_DEF, [
   },
 ]);
 
-registerSideQuest('critical_leak_liquidator_egor', LIQUIDATOR_DEF, [
+registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'critical_leak_liquidator_egor', LIQUIDATOR_DEF, [
   {
     id: 'critical_leak_raise_floodgate',
     giverNpcId: 'critical_leak_liquidator_egor',
@@ -933,37 +934,21 @@ function decorateArchiveRooms(world: World, rooms: Record<keyof typeof CRITICAL_
 function spawnLeakNpc(
   entities: Entity[],
   nextId: NextId,
-  def: PlotNpcDef,
+  _def: PlotNpcDef,
   plotNpcId: string,
   x: number,
   y: number,
   weapon?: string,
 ): Entity {
-  const entity: Entity = {
-    id: nextId.v++,
-    type: EntityType.NPC,
-    x: x + 0.5,
-    y: y + 0.5,
+  return requireSpawnedPlotNpcFromPackage(entities, nextId, plotNpcId, x + 0.5, y + 0.5, {
     angle: 0,
-    pitch: 0,
-    alive: true,
-    speed: def.speed ?? 0.8,
-    sprite: def.sprite ?? def.occupation,
-    name: def.name,
-    hp: def.hp,
-    maxHp: def.maxHp,
-    faction: def.faction,
-    occupation: def.occupation,
-    ai: { goal: AIGoal.WANDER, tx: x, ty: y, path: [], pi: 0, stuck: 0, timer: 0 },
-    inventory: [...(def.inventory ?? [])],
-    needs: freshNeeds(),
-    questId: -1,
     canGiveQuest: true,
-    plotNpcId,
-  };
-  if (weapon) entity.weapon = weapon;
-  entities.push(entity);
-  return entity;
+    weapon,
+    aiTarget: { x, y },
+    extra: {
+      ai: { goal: AIGoal.WANDER, tx: x, ty: y, path: [], pi: 0, stuck: 0, timer: 0 },
+    },
+  });
 }
 
 function carveContaminatedShortcut(world: World, from: Point, to: Point, state: CriticalLeakArchiveState): void {

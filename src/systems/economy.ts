@@ -11,6 +11,7 @@ import {
 } from '../core/types';
 import { ITEMS } from '../data/catalog';
 import { type EconomyState, createEconomyFloorState, createEconomyState, normalizeEconomyState } from '../data/economy';
+import { occupationHasTradeTag } from '../data/occupation_profiles';
 import {
   DEFAULT_TRADE_SPREAD,
   ECONOMY_DEMAND_RULES,
@@ -525,8 +526,8 @@ export function recordPlayerItemSale(
   const def = ITEMS[defId];
   const silver = isSilverSlimeItem(defId);
   const govnyak = isGovnyakItem(defId);
-  const scienceBuyer = buyer.faction === Faction.SCIENTIST || buyer.occupation === Occupation.SCIENTIST;
-  const blackMarketBuyer = buyer.occupation === Occupation.STOREKEEPER
+  const scienceBuyer = buyer.faction === Faction.SCIENTIST || occupationHasTradeTag(buyer.occupation, 'science');
+  const blackMarketBuyer = occupationHasTradeTag(buyer.occupation, 'black_market')
     || buyer.faction === Faction.WILD
     || buyer.faction === Faction.CULTIST;
   const liquidatorConfiscation = govnyak && buyer.faction === Faction.LIQUIDATOR;

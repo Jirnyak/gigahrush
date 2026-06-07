@@ -46,6 +46,7 @@ import {
   publishShelterTallyEvent,
 } from './shelter_tally';
 import { isPlayerEntity } from './player_actor';
+import { ENTITY_MASK_NPC, ensureEntityIndex } from './entity_index';
 
 const THEFT_WITNESS_RADIUS = 7;
 const THEFT_WITNESS_SCAN_CAP = 160;
@@ -65,6 +66,8 @@ const CONTAINER_UNLOCK_ITEM_IDS = [
 ] as const;
 
 let theftAuditCursor = 0;
+const theftWitnessQuery: Entity[] = [];
+const theftAuditQuery: Entity[] = [];
 
 export type ContainerAccessMode = 'free' | 'steal' | 'buy' | 'unlock' | 'locked' | 'secret';
 
@@ -803,24 +806,26 @@ function findTheftWitnesses(
   if (!world || !entities) return { witnesses: [], scannedNpcs: 0, capped: false };
 
   const witnesses: Entity[] = [];
-  const radiusSq = THEFT_WITNESS_RADIUS * THEFT_WITNESS_RADIUS;
   let scannedNpcs = 0;
-  let capped = false;
-  for (const entity of entities) {
+  ensureEntityIndex(entities).queryRadiusCapped(
+    container.x + 0.5,
+    container.y + 0.5,
+    THEFT_WITNESS_RADIUS,
+    theftWitnessQuery,
+    ENTITY_MASK_NPC,
+    THEFT_WITNESS_SCAN_CAP,
+  );
+  const capped = theftWitnessQuery.length >= THEFT_WITNESS_SCAN_CAP;
+  for (const entity of theftWitnessQuery) {
     if (witnesses.length >= THEFT_WITNESS_REPORT_CAP) {
-      capped = true;
       break;
     }
     if (!entity.alive || entity.type !== EntityType.NPC || entity.id === actor.id) continue;
     scannedNpcs++;
-    if (scannedNpcs > THEFT_WITNESS_SCAN_CAP) {
-      capped = true;
-      break;
-    }
     if (!Number.isFinite(entity.x) || !Number.isFinite(entity.y)) continue;
-    if (world.dist2(container.x + 0.5, container.y + 0.5, entity.x, entity.y) > radiusSq) continue;
     witnesses.push(entity);
   }
+  theftWitnessQuery.length = 0;
   return { witnesses, scannedNpcs, capped };
 }
 
@@ -838,25 +843,27 @@ function findTheftAuditors(
   if (!world || !entities) return { auditors: [], scannedNpcs: 0, capped: false };
 
   const auditors: Entity[] = [];
-  const radiusSq = THEFT_AUDIT_RADIUS * THEFT_AUDIT_RADIUS;
   let scannedNpcs = 0;
-  let capped = false;
-  for (const entity of entities) {
+  ensureEntityIndex(entities).queryRadiusCapped(
+    container.x + 0.5,
+    container.y + 0.5,
+    THEFT_AUDIT_RADIUS,
+    theftAuditQuery,
+    ENTITY_MASK_NPC,
+    THEFT_AUDIT_SCAN_CAP,
+  );
+  const capped = theftAuditQuery.length >= THEFT_AUDIT_SCAN_CAP;
+  for (const entity of theftAuditQuery) {
     if (auditors.length >= THEFT_AUDIT_REPORT_CAP) {
-      capped = true;
       break;
     }
     if (!entity.alive || entity.type !== EntityType.NPC || entity.id === actor.id) continue;
     scannedNpcs++;
-    if (scannedNpcs > THEFT_AUDIT_SCAN_CAP) {
-      capped = true;
-      break;
-    }
     if (!canAuditContainerTheft(entity, container)) continue;
     if (!Number.isFinite(entity.x) || !Number.isFinite(entity.y)) continue;
-    if (world.dist2(container.x + 0.5, container.y + 0.5, entity.x, entity.y) > radiusSq) continue;
     auditors.push(entity);
   }
+  theftAuditQuery.length = 0;
   return { auditors, scannedNpcs, capped };
 }
 

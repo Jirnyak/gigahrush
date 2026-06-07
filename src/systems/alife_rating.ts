@@ -1,4 +1,5 @@
 import { EntityType, Faction, Occupation, type Entity } from '../core/types';
+import { occupationProfile } from '../data/occupation_profiles';
 
 export const KARMA_MIN = -127;
 export const KARMA_MAX = 127;
@@ -68,12 +69,7 @@ export function initialNpcKarma(faction: Faction, occupation: Occupation, roll: 
         : faction === Faction.WILD ? -14
           : faction === Faction.CULTIST ? -42
             : 0;
-  const occupationBonus = occupation === Occupation.DOCTOR ? 10
-    : occupation === Occupation.PRIEST ? 8
-      : occupation === Occupation.CHILD ? 6
-        : occupation === Occupation.DIRECTOR ? -4
-          : occupation === Occupation.ALCOHOLIC ? -6
-            : 0;
+  const occupationBonus = occupationProfile(occupation)?.karmaOffset ?? 0;
   const jitter = Math.round((Math.max(0, Math.min(1, roll)) * 2 - 1) * 34);
   return clampKarma(factionBase + occupationBonus + jitter);
 }

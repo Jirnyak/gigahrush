@@ -2,19 +2,19 @@
 
 import { stampSurfaceSplat } from '../../systems/surface_marks';
 import {
-  AIGoal, Cell, ContainerKind, DoorState, EntityType, Faction, Feature, FloorLevel, Occupation,
+  Cell, ContainerKind, DoorState, EntityType, Faction, Feature, FloorLevel, Occupation,
   QuestType, RoomType, Tex,
   type ContainerAccess, type Entity, type GameState, type Room, type WorldContainer, type WorldEvent,
   type WorldEventPrivacy, type WorldEventSeverity,
 } from '../../core/types';
 import { World } from '../../core/world';
-import { freshNeeds } from '../../data/catalog';
 import { type PlotNpcDef, registerSideQuest, registerSideQuestSteps } from '../../data/plot';
 import { addFactionRelMutual } from '../../data/relations';
 import { publishEvent, registerWorldEventObserver } from '../../systems/events';
 import { Spr } from '../../render/sprite_index';
 import { protectRoom } from '../shared';
 import { genLog } from '../log';
+import { requireSpawnedPlotNpcFromPackage } from '../plot_npc_spawn';
 import { registerZoneContent } from './zone_content';
 
 const CONTENT_TAG = 'ag77_external_cell_neighbor';
@@ -614,31 +614,11 @@ function spawnRecruiter(world: World, entities: Entity[], nextId: { v: number },
   if (existing) return existing;
   const x = world.wrap(room.x + 6);
   const y = world.wrap(room.y + 4);
-  const npc: Entity = {
-    id: nextId.v++,
-    type: EntityType.NPC,
-    x: x + 0.5,
-    y: y + 0.5,
+  const npc = requireSpawnedPlotNpcFromPackage(entities, nextId, RECRUITER_ID, x + 0.5, y + 0.5, {
     angle: Math.PI / 2,
-    pitch: 0,
-    alive: true,
-    speed: NPC_DEF.speed,
-    sprite: NPC_DEF.sprite,
-    name: NPC_DEF.name,
-    isFemale: NPC_DEF.isFemale,
-    needs: freshNeeds(),
-    hp: NPC_DEF.hp,
-    maxHp: NPC_DEF.maxHp,
-    money: NPC_DEF.money,
-    ai: { goal: AIGoal.IDLE, tx: x + 0.5, ty: y + 0.5, path: [], pi: 0, stuck: 0, timer: 0 },
-    inventory: NPC_DEF.inventory.map(i => ({ ...i })),
-    faction: NPC_DEF.faction,
-    occupation: NPC_DEF.occupation,
-    plotNpcId: RECRUITER_ID,
     canGiveQuest: true,
-    questId: -1,
-  };
-  entities.push(npc);
+    aiTarget: { x: x + 0.5, y: y + 0.5 },
+  });
   return npc;
 }
 
@@ -647,31 +627,11 @@ function spawnWitness(world: World, entities: Entity[], nextId: { v: number }, r
   if (existing) return existing;
   const x = world.wrap(room.x + 8);
   const y = world.wrap(room.y + 6);
-  const npc: Entity = {
-    id: nextId.v++,
-    type: EntityType.NPC,
-    x: x + 0.5,
-    y: y + 0.5,
+  const npc = requireSpawnedPlotNpcFromPackage(entities, nextId, WITNESS_ID, x + 0.5, y + 0.5, {
     angle: -Math.PI / 2,
-    pitch: 0,
-    alive: true,
-    speed: WITNESS_DEF.speed,
-    sprite: WITNESS_DEF.sprite,
-    name: WITNESS_DEF.name,
-    isFemale: WITNESS_DEF.isFemale,
-    needs: freshNeeds(),
-    hp: WITNESS_DEF.hp,
-    maxHp: WITNESS_DEF.maxHp,
-    money: WITNESS_DEF.money,
-    ai: { goal: AIGoal.IDLE, tx: x + 0.5, ty: y + 0.5, path: [], pi: 0, stuck: 0, timer: 0 },
-    inventory: WITNESS_DEF.inventory.map(i => ({ ...i })),
-    faction: WITNESS_DEF.faction,
-    occupation: WITNESS_DEF.occupation,
-    plotNpcId: WITNESS_ID,
     canGiveQuest: true,
-    questId: -1,
-  };
-  entities.push(npc);
+    aiTarget: { x: x + 0.5, y: y + 0.5 },
+  });
   return npc;
 }
 

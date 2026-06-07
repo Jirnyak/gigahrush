@@ -35,6 +35,7 @@ import { ITEMS } from '../data/catalog';
 import { addFactionRelMutual } from '../data/relations';
 import { MONSTERS } from '../entities/monster';
 import { monsterSpr, Spr } from '../render/sprite_index';
+import { hashSeed } from '../core/rand';
 import { getResourceContractPressure } from './economy';
 import { publishEvent } from './events';
 import { addItem, removeItem } from './inventory';
@@ -1164,24 +1165,34 @@ function assignedContractIds(state: GameState): Set<string> {
 
 export function listAvailableContracts(state: GameState, limit = 6) {
   const assignedIds = assignedContractIds(state);
-  const sliceLimit = Number.isFinite(limit) ? Math.trunc(limit) : limit;
+  const sliceLimit = Number.isFinite(limit) ? Math.trunc(limit) : Number.POSITIVE_INFINITY;
   if (sliceLimit === 0) return [];
 
   const currentFloor: ContractDef[] = [];
   const otherFloors: ContractDef[] = [];
-  const bounded = sliceLimit > 0;
   for (const def of CONTRACTS) {
     if (isContractHiddenForAssignment(def) || assignedIds.has(def.id)) continue;
     if (def.target.floor === state.currentFloor) {
       currentFloor.push(def);
-      if (bounded && currentFloor.length >= sliceLimit) return currentFloor;
-    } else if (!bounded || otherFloors.length < sliceLimit) {
+    } else {
       otherFloors.push(def);
     }
   }
 
-  if (bounded) return currentFloor.concat(otherFloors.slice(0, sliceLimit - currentFloor.length));
-  return currentFloor.concat(otherFloors).slice(0, limit);
+  const floorRunSeed = (state as { floorRun?: { runSeed?: number } }).floorRun?.runSeed ?? 0;
+  const assignmentSeed = hashSeed(`contracts:${state.currentFloor}:${assignedIds.size}`, floorRunSeed);
+  const ordered = orderedContractsForAssignment(currentFloor, assignmentSeed)
+    .concat(orderedContractsForAssignment(otherFloors, assignmentSeed ^ 0x9e3779b9));
+  return sliceLimit > 0 ? ordered.slice(0, sliceLimit) : ordered;
+}
+
+function orderedContractsForAssignment(defs: readonly ContractDef[], seed: number): ContractDef[] {
+  return defs.slice().sort((a, b) => {
+    const rankDelta = a.rank - b.rank;
+    if (rankDelta !== 0) return rankDelta;
+    const hashDelta = hashSeed(a.id, seed) - hashSeed(b.id, seed);
+    return hashDelta !== 0 ? hashDelta : a.id.localeCompare(b.id);
+  });
 }
 
 export function spawnContract(state: GameState): boolean {

@@ -2,14 +2,14 @@
 
 import {
   type Entity, type Msg,
-  EntityType, AIGoal, RoomType, NpcState, Occupation, Faction,
+  EntityType, AIGoal, RoomType, NpcState, Faction,
   ZoneFaction, type GameClock, Cell, type TerritoryOwner, type Room,
 } from '../../core/types';
 import { World } from '../../core/world';
 import { WEAPON_STATS } from '../../data/catalog';
 import { ENTITY_MASK_ACTOR, ensureEntityIndex } from '../entity_index';
 import { isHostile } from '../factions';
-import { stampMark, MarkType } from '../surface_marks';
+import { stampUrineTraceCadenced } from '../urination';
 import {
   followPath,
   findFamilyRoom,
@@ -29,7 +29,13 @@ import {
 import { chooseNpcEmergencyDecision } from './npc_emergency';
 import { tickNpcMemoryLowFrequency } from '../npc_memory';
 import { tickNpcRumorLowFrequency } from '../rumor';
+import { tickNpcSpecialRoutine } from '../npc_special_routines';
 import { factionToTerritoryOwner } from '../../data/factions';
+import {
+  occupationHasAnyRoutineTag,
+  occupationHasRoutineTag,
+  occupationWorkRoomTypes,
+} from '../../data/occupation_profiles';
 import { territoryOwnerAtIndex, territoryRoomOwner } from '../territory';
 import {
   NPC_UTILITY_INTENTS,
@@ -63,11 +69,14 @@ const UTILITY_RETHINK_BASE_SEC = 1.5;
 const UTILITY_RETHINK_SPREAD_SEC = 2.5;
 const TERRITORY_ROOM_TARGET_SCAN_CAP = 96;
 const ROUTINE_ROOM_CANDIDATE_CAP = 8;
+const NPC_TOILET_PEE_RATE = 20;
+const NPC_TOILET_POO_RATE = 15;
 const emergencyLocalActors: Entity[] = [];
 const utilityLocalActors: Entity[] = [];
 const utilityScoreBuffer = createNpcUtilityScoreBuffer();
 const routineFriendlyRoomCandidates: NpcUtilityTargetCandidate[] = [];
 const routineFallbackRoomCandidates: NpcUtilityTargetCandidate[] = [];
+const routineSeenRoomIds = new Set<number>();
 const utilityIntentByNpc = new WeakMap<Entity, NpcUtilityIntentId>();
 const utilityScoreByNpc = new WeakMap<Entity, number>();
 const utilityNextDecisionAtByNpc = new WeakMap<Entity, number>();
@@ -95,13 +104,17 @@ function territoryFriendlyForNpc(e: Entity, owner: TerritoryOwner): boolean {
 
 function isRoutineTrespassRelaxed(e: Entity): boolean {
   return e.isTraveler === true ||
-    e.occupation === Occupation.TRAVELER ||
-    e.occupation === Occupation.PILGRIM ||
-    e.occupation === Occupation.HUNTER;
+    occupationHasAnyRoutineTag(e.occupation, ['traveler', 'patrol']);
 }
 
 function routineIntentAllowsSurvivalTrespass(intent: NpcUtilityIntentId): boolean {
   return intent === 'toilet' || intent === 'drink' || intent === 'eat' || intent === 'sleep' || intent === 'heal';
+}
+
+function usesWildOpenUrinationRule(e: Entity): boolean {
+  // Intentional rare faction hardcode: Wilds are the design experiment that makes
+  // faction identity visible through in-place public urination instead of bathrooms.
+  return e.faction === Faction.WILD;
 }
 
 function utilityRethinkInterval(e: Entity): number {
@@ -172,9 +185,9 @@ function initialIntentForNpc(e: Entity, samosborActive: boolean, profile: NpcAiP
   if (samosborActive && e.faction !== Faction.LIQUIDATOR && e.faction !== Faction.CULTIST && e.faction !== Faction.WILD) {
     return 'safety';
   }
-  if (e.isTraveler || e.occupation === Occupation.TRAVELER || e.occupation === Occupation.PILGRIM) return 'wander';
-  if (e.faction === Faction.LIQUIDATOR || e.occupation === Occupation.HUNTER) return 'patrol';
-  if (profile === 'ministry' && (e.assignedRoomId !== undefined || e.occupation === Occupation.DIRECTOR || e.occupation === Occupation.SECRETARY)) {
+  if (e.isTraveler || occupationHasRoutineTag(e.occupation, 'traveler')) return 'wander';
+  if (e.faction === Faction.LIQUIDATOR || occupationHasRoutineTag(e.occupation, 'patrol')) return 'patrol';
+  if (profile === 'ministry' && (e.assignedRoomId !== undefined || occupationHasAnyRoutineTag(e.occupation, ['admin', 'paperwork']))) {
     return 'work';
   }
   return 'wander';
@@ -245,54 +258,26 @@ function enterUtilityIntent(e: Entity, intent: NpcUtilityIntentId, score: number
   ai.timer = 0;
 }
 
+function clearUtilityState(e: Entity): void {
+  utilityIntentByNpc.delete(e);
+  utilityScoreByNpc.delete(e);
+  utilityNextDecisionAtByNpc.delete(e);
+}
+
 export function primeNpcAlifeState(
   e: Entity,
-  _clock: GameClock,
+  clock: GameClock,
   samosborActive: boolean,
   profile: NpcAiProfile = 'default',
 ): void {
   const ai = e.ai;
   if (!ai) return;
-  if (e.plotNpcId === 'olga' && !e.plotDone) return;
+  const special = tickNpcSpecialRoutine(e, clock);
+  if (special.clearUtility) clearUtilityState(e);
+  if (special.held) return;
   if (utilityIntentByNpc.get(e) === undefined || ai.npcState === undefined) {
     const intent = initialIntentForNpc(e, samosborActive, profile);
     enterUtilityIntent(e, intent, 0, profile);
-  }
-}
-
-/* ── Work room types by occupation ────────────────────────────── */
-const WORK_KITCHEN = [RoomType.KITCHEN] as const;
-const WORK_MEDICAL = [RoomType.MEDICAL] as const;
-const WORK_PRODUCTION = [RoomType.PRODUCTION] as const;
-const WORK_OFFICE = [RoomType.OFFICE] as const;
-const WORK_STORAGE = [RoomType.STORAGE] as const;
-const WORK_SCIENTIST = [RoomType.OFFICE, RoomType.MEDICAL] as const;
-const WORK_DIRECTOR = [RoomType.OFFICE, RoomType.COMMON] as const;
-const WORK_HOUSEWIFE = [RoomType.LIVING, RoomType.KITCHEN] as const;
-const WORK_CHILD = [RoomType.LIVING, RoomType.COMMON] as const;
-const WORK_ALCOHOLIC = [RoomType.SMOKING, RoomType.COMMON, RoomType.KITCHEN] as const;
-const WORK_HUNTER = [RoomType.CORRIDOR, RoomType.COMMON] as const;
-const WORK_PRIEST = [RoomType.HQ, RoomType.COMMON] as const;
-const WORK_DEFAULT = [RoomType.PRODUCTION, RoomType.OFFICE] as const;
-
-function getWorkRoomTypes(occ: Occupation | undefined): readonly RoomType[] {
-  switch (occ) {
-    case Occupation.COOK:        return WORK_KITCHEN;
-    case Occupation.DOCTOR:      return WORK_MEDICAL;
-    case Occupation.LOCKSMITH:
-    case Occupation.ELECTRICIAN:
-    case Occupation.TURNER:
-    case Occupation.MECHANIC:    return WORK_PRODUCTION;
-    case Occupation.SECRETARY:   return WORK_OFFICE;
-    case Occupation.STOREKEEPER: return WORK_STORAGE;
-    case Occupation.SCIENTIST:   return WORK_SCIENTIST;
-    case Occupation.DIRECTOR:    return WORK_DIRECTOR;
-    case Occupation.HOUSEWIFE:   return WORK_HOUSEWIFE;
-    case Occupation.CHILD:       return WORK_CHILD;
-    case Occupation.ALCOHOLIC:   return WORK_ALCOHOLIC;
-    case Occupation.HUNTER:      return WORK_HUNTER;
-    case Occupation.PRIEST:      return WORK_PRIEST;
-    default:                     return WORK_DEFAULT;
   }
 }
 
@@ -309,25 +294,17 @@ export function updateNPC(
 ): void {
   const ai = e.ai!;
 
-  if (utilityIntentByNpc.get(e) === undefined || ai.npcState === undefined) {
-    enterUtilityIntent(e, initialIntentForNpc(e, samosborActive, profile), 0, profile);
+  const special = tickNpcSpecialRoutine(e, clock);
+  if (special.clearUtility) {
+    ai.stateTimer = 0;
+    clearUtilityState(e);
+  }
+  if (special.held) {
+    return;
   }
 
-  // ── Ольга Дмитриевна: tutor → ordinary local AI after 1 game hour ──
-  if (e.plotNpcId === 'olga' && !e.plotDone && clock.totalMinutes >= 60) {
-    e.plotDone = true;
-    ai.path = [];
-    ai.pi = 0;
-    ai.goal = AIGoal.IDLE;
-    ai.stateTimer = 0;
-    utilityIntentByNpc.delete(e);
-    utilityScoreByNpc.delete(e);
-    utilityNextDecisionAtByNpc.delete(e);
-  }
-  if (e.plotNpcId === 'olga' && !e.plotDone) {
-    ai.goal = AIGoal.IDLE;
-    ai.timer = 1;
-    return;
+  if (utilityIntentByNpc.get(e) === undefined || ai.npcState === undefined) {
+    enterUtilityIntent(e, initialIntentForNpc(e, samosborActive, profile), 0, profile);
   }
 
   const decision = selectAndEnterUtilityIntent(world, entities, e, clock, samosborActive, profile);
@@ -343,7 +320,7 @@ export function updateNPC(
     return;
   }
 
-  applyRoomRestoration(world, e, dt, profile);
+  applyRoomRestoration(world, e, dt, time, profile);
 
   switch (intent) {
     case 'safety':
@@ -351,7 +328,7 @@ export function updateNPC(
       handleHiding(world, entities, e, dt, clock, profile);
       break;
     case 'toilet':
-      handleToilet(world, e, dt);
+      handleToilet(world, e, dt, time);
       break;
     case 'drink':
       handleDrink(world, e, dt);
@@ -415,7 +392,7 @@ function selectAndEnterUtilityIntent(
       occupation: e.occupation,
       armed: npcIsArmed(e),
       hasRangedWeapon: npcHasRangedWeapon(e),
-      isTraveler: e.isTraveler === true || e.occupation === Occupation.TRAVELER || e.occupation === Occupation.PILGRIM,
+      isTraveler: e.isTraveler === true || occupationHasRoutineTag(e.occupation, 'traveler'),
     },
     local: buildLocalUtilityScores(world, e, samosborActive, profile),
   }, utilityScoreBuffer);
@@ -467,11 +444,11 @@ function buildLocalUtilityScores(
     }
   }
 
-  if (e.isTraveler || e.occupation === Occupation.TRAVELER || e.occupation === Occupation.PILGRIM) {
+  if (e.isTraveler || occupationHasRoutineTag(e.occupation, 'traveler')) {
     addLocalScore(local, 'wander', 12);
     addLocalScore(local, 'work', -8);
   }
-  if (e.faction === Faction.LIQUIDATOR || e.occupation === Occupation.HUNTER) addLocalScore(local, 'patrol', 10);
+  if (e.faction === Faction.LIQUIDATOR || occupationHasRoutineTag(e.occupation, 'patrol')) addLocalScore(local, 'patrol', 10);
   if (e.faction === Faction.WILD) addLocalScore(local, 'wander', 6);
   if (samosborActive) {
     if (e.faction === Faction.LIQUIDATOR) {
@@ -543,7 +520,7 @@ function npcHasRangedWeapon(e: Entity): boolean {
   return WEAPON_STATS[e.weapon ?? '']?.isRanged === true;
 }
 
-function applyRoomRestoration(world: World, e: Entity, dt: number, profile: NpcAiProfile): void {
+function applyRoomRestoration(world: World, e: Entity, dt: number, time: number, profile: NpcAiProfile): void {
   const n = e.needs;
   const currentRoom = world.roomAt(e.x, e.y);
   if (!n || !currentRoom) return;
@@ -557,13 +534,8 @@ function applyRoomRestoration(world: World, e: Entity, dt: number, profile: NpcA
   if (currentRoom.type === RoomType.BATHROOM) {
     n.water = Math.min(100, n.water + 12 * dt);
     n.pendingPee = (n.pendingPee ?? 0) + 12 * 0.6 * dt;
-    if (n.pee > 15 && Math.random() < 0.3) {
-      const fx = ((e.x % 1) + 1) % 1;
-      const fy = ((e.y % 1) + 1) % 1;
-      stampMark(world, Math.floor(e.x), Math.floor(e.y), fx, fy, 0.1, MarkType.DRIP, Math.floor(e.id * 1000 + n.pee), 200, 180, 30, 40);
-    }
-    n.pee = Math.max(0, n.pee - 20 * dt);
-    n.poo = Math.max(0, n.poo - 15 * dt);
+    applyNpcUrineRelief(world, e, dt, time, 0.72, 0.18);
+    n.poo = Math.max(0, n.poo - NPC_TOILET_POO_RATE * dt);
   }
   if (currentRoom.type === RoomType.MEDICAL && e.hp !== undefined && e.maxHp !== undefined) {
     e.hp = Math.min(e.maxHp, e.hp + 3 * dt);
@@ -610,9 +582,47 @@ function handleSleeping(world: World, e: Entity, dt: number, profile: NpcAiProfi
   followPath(world, e, dt);
 }
 
-function handleToilet(world: World, e: Entity, dt: number): void {
+function applyNpcUrineRelief(
+  world: World,
+  e: Entity,
+  dt: number,
+  time: number,
+  streamLength: number,
+  intervalSeconds: number,
+): void {
+  const n = e.needs;
+  if (!n || n.pee <= 0) return;
+  const before = n.pee;
+  if (before > 5) {
+    stampUrineTraceCadenced(world, e, time, {
+      pressure: before / 100,
+      streamLength,
+      intervalSeconds,
+      streamSteps: before > 60 ? 18 : 14,
+      width: 0.05,
+      dropCount: 1,
+    });
+  }
+  n.pee = Math.max(0, before - NPC_TOILET_PEE_RATE * dt);
+}
+
+function handleWildOpenUrination(world: World, e: Entity, dt: number, time: number): boolean {
   const ai = e.ai!;
   const n = e.needs;
+  if (!n || !usesWildOpenUrinationRule(e) || n.pee <= 15) return false;
+  ai.goal = AIGoal.IDLE;
+  ai.path = [];
+  ai.pi = 0;
+  ai.stuck = 0;
+  ai.timer = 0.25;
+  applyNpcUrineRelief(world, e, dt, time, 0.95, 0.16);
+  return true;
+}
+
+function handleToilet(world: World, e: Entity, dt: number, time: number): void {
+  const ai = e.ai!;
+  const n = e.needs;
+  if (handleWildOpenUrination(world, e, dt, time)) return;
   if (ai.timer <= 0 || ai.goal === AIGoal.IDLE) {
     ai.goal = AIGoal.TOILET;
     if (!gotoRoutineRoomOfTypes(world, e, [RoomType.BATHROOM], 'toilet', { allowTrespassFallback: true })) wanderNearby(world, e);
@@ -673,7 +683,7 @@ function handleWorking(world: World, e: Entity, dt: number, profile: NpcAiProfil
         wanderNearby(world, e);
       }
     } else if (!tryGotoAssignedWorkRoom(world, e)) {
-      const types = getWorkRoomTypes(e.occupation);
+      const types = occupationWorkRoomTypes(e.occupation);
       if (!gotoRoutineRoomOfTypes(world, e, types, 'work')) wanderNearby(world, e);
     }
     ai.timer = stableTimer(e, 'work_rethink', 14, 18);
@@ -740,7 +750,7 @@ function handleWander(world: World, e: Entity, dt: number): void {
   const ai = e.ai!;
   if (ai.timer <= 0 || ai.goal === AIGoal.IDLE) {
     ai.goal = AIGoal.WANDER;
-    if (e.isTraveler || e.occupation === Occupation.TRAVELER || e.occupation === Occupation.PILGRIM) {
+    if (e.isTraveler || occupationHasRoutineTag(e.occupation, 'traveler')) {
       wanderFar(world, e);
       ai.timer = stableTimer(e, 'traveler_rethink', 10, 20);
     } else {
@@ -787,20 +797,32 @@ function gotoRoutineRoomOfTypes(
   if (types.length === 0) return false;
   routineFriendlyRoomCandidates.length = 0;
   routineFallbackRoomCandidates.length = 0;
+  routineSeenRoomIds.clear();
   const allowFallback = options.allowTrespassFallback === true ||
     routineIntentAllowsSurvivalTrespass(intent) ||
     isRoutineTrespassRelaxed(e);
-  let scanned = 0;
-  for (const room of world.rooms) {
-    if (!room) continue;
-    if (++scanned > TERRITORY_ROOM_TARGET_SCAN_CAP) break;
-    if (!types.includes(room.type)) continue;
+  const considerRoom = (room: Room | undefined): void => {
+    if (!room || routineSeenRoomIds.has(room.id)) return;
+    routineSeenRoomIds.add(room.id);
+    if (!types.includes(room.type)) return;
     const utility = npcUtilityRoomTypeWeightForIntent(intent, room.type, e.occupation);
-    if (utility <= 0 && room.id !== options.preferredRoomId && room.id !== e.assignedRoomId) continue;
+    if (utility <= 0 && room.id !== options.preferredRoomId && room.id !== e.assignedRoomId) return;
     const friendly = territoryFriendlyForNpc(e, territoryRoomOwner(world, room.id));
-    if (!friendly && !allowFallback) continue;
+    if (!friendly && !allowFallback) return;
     const target = routineRoomTargetCandidate(world, e, room, intent, friendly, options.preferredRoomId);
     pushRoutineRoomCandidate(friendly ? routineFriendlyRoomCandidates : routineFallbackRoomCandidates, target);
+  };
+
+  considerRoom(options.preferredRoomId !== undefined ? world.rooms[options.preferredRoomId] : undefined);
+  considerRoom(e.assignedRoomId !== undefined ? world.rooms[e.assignedRoomId] : undefined);
+
+  const roomCount = world.rooms.length;
+  const scanCount = Math.min(roomCount, TERRITORY_ROOM_TARGET_SCAN_CAP);
+  const scanStart = roomCount > 0
+    ? Math.floor(stableUnit(e, `routine_room_scan:${intent}`) * roomCount) % roomCount
+    : 0;
+  for (let scanned = 0; scanned < scanCount; scanned++) {
+    considerRoom(world.rooms[(scanStart + scanned) % roomCount]);
   }
   routineFriendlyRoomCandidates.sort(compareRoutineRoomCandidates);
   if (tryAssignRoutineRoomCandidate(world, e, routineFriendlyRoomCandidates)) return true;

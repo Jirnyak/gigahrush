@@ -28,8 +28,8 @@
     "check:release": "npm run check:readonly && npm run itch:build && npm run artifacts:verify && npm run itch:verify",
     "cf:setup": "node scripts/cloudflare-net-setup.mjs",
     "cf:schema": "node scripts/cloudflare-net-setup.mjs --schema-only",
-    "cf:dev": "npm run build && wrangler dev",
-    "cf:deploy": "npm run build && wrangler deploy",
+    "cf:dev": "npm run build -- --mode cloudflare && wrangler dev",
+    "cf:deploy": "npm run build -- --mode cloudflare && wrangler deploy",
     "check": "npm run typecheck && npm run test:unit && npm run content:audit && npm run build",
     "check:full": "npm run check && npm run smoke"
   },

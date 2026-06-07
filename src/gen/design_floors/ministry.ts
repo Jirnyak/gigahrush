@@ -6,13 +6,15 @@ import {
   type Entity, type Room, type WorldContainer,
 } from '../../core/types';
 import { World } from '../../core/world';
-import { type PlotNpcDef, registerSideQuest } from '../../data/plot';
+import { storyNpcFloorKey, type PlotNpcDef, registerFloorSideQuest } from '../../data/plot';
 import { Spr } from '../../render/sprite_index';
 import {
   type NextId, addItemDrop, createAdminRoom, setFeature, spawnAdminMonster,
   spawnAdminNpc,
 } from '../ministry/admin_common';
 import { genLog } from '../log';
+
+const STORY_MINISTRY_NPC_HOME_FLOOR_KEY = storyNpcFloorKey(FloorLevel.MINISTRY);
 
 export const DESIGN_FLOOR_ID = 'ministry' as const;
 
@@ -110,7 +112,7 @@ const LIFT_NOTARY_DEF: PlotNpcDef = {
   ],
 };
 
-registerSideQuest('ministry_route_clerk', ROUTE_CLERK_DEF, [
+registerFloorSideQuest(STORY_MINISTRY_NPC_HOME_FLOOR_KEY, 'ministry_route_clerk', ROUTE_CLERK_DEF, [
   {
     id: 'ministry_floor_pass',
     giverNpcId: 'ministry_route_clerk',
@@ -123,7 +125,7 @@ registerSideQuest('ministry_route_clerk', ROUTE_CLERK_DEF, [
   },
 ]);
 
-registerSideQuest('ministry_anti_market_inspector', MARKET_INSPECTOR_DEF, [
+registerFloorSideQuest(STORY_MINISTRY_NPC_HOME_FLOOR_KEY, 'ministry_anti_market_inspector', MARKET_INSPECTOR_DEF, [
   {
     id: 'ministry_market_case',
     giverNpcId: 'ministry_anti_market_inspector',
@@ -136,7 +138,7 @@ registerSideQuest('ministry_anti_market_inspector', MARKET_INSPECTOR_DEF, [
   },
 ]);
 
-registerSideQuest('ministry_shelter_commissar', SHELTER_COMMISSAR_DEF, [
+registerFloorSideQuest(STORY_MINISTRY_NPC_HOME_FLOOR_KEY, 'ministry_shelter_commissar', SHELTER_COMMISSAR_DEF, [
   {
     id: 'ministry_shelter_list',
     giverNpcId: 'ministry_shelter_commissar',
@@ -149,7 +151,7 @@ registerSideQuest('ministry_shelter_commissar', SHELTER_COMMISSAR_DEF, [
   },
 ]);
 
-registerSideQuest('ministry_lift_notary', LIFT_NOTARY_DEF, [
+registerFloorSideQuest(STORY_MINISTRY_NPC_HOME_FLOOR_KEY, 'ministry_lift_notary', LIFT_NOTARY_DEF, [
   {
     id: 'ministry_monster_clause',
     giverNpcId: 'ministry_lift_notary',

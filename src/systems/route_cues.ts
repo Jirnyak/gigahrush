@@ -8,11 +8,11 @@ import {
   type FloorLevel,
   type GameState,
   type Quest,
-  type Room,
   type WorldEventSeverity,
 } from '../core/types';
 import { type World } from '../core/world';
 import { ITEMS } from '../data/catalog';
+import { ROUTE_OBJECTIVE_FALLBACKS } from '../data/route_objective_fallbacks';
 import {
   isQuestTargetOnCurrentFloor,
   questRouteFloor,
@@ -27,13 +27,6 @@ import {
   floorRunEntryMapLabel,
   formatFloorZ,
 } from './procedural_floors';
-import {
-  isMapCellExplored,
-  mapExplorationStats,
-  revealMapArea,
-  revealMapRoom,
-  revealQuestTargetOnMap,
-} from './map_exploration';
 import { isPlayerEntity } from './player_actor';
 
 const FLOOR_NAMES: Record<FloorLevel, string> = {
@@ -56,10 +49,8 @@ export interface RouteCueGroup {
   logLine?: string;
 }
 
-export interface PaidMapReveal {
+export interface PaidRouteAdvice {
   priceRubles: number;
-  radius?: number;
-  roomScanCap?: number;
   sellerName?: string;
 }
 
@@ -85,7 +76,7 @@ export interface RouteCueMarker {
   heardText?: string;
   followedText?: string;
   ignoredText?: string;
-  paidMapReveal?: PaidMapReveal;
+  paidRouteAdvice?: PaidRouteAdvice;
   routeGroup?: RouteCueGroup;
 }
 
@@ -308,6 +299,22 @@ function objectiveRiskLine(_state: GameState, q: Quest): string {
   return hint || 'Маршрут: по цели';
 }
 
+function fallbackObjectiveForCurrentRoute(state: GameState): ObjectiveRouteHud | undefined {
+  const current = currentFloorRunEntry(state);
+  const def = ROUTE_OBJECTIVE_FALLBACKS.find(hint =>
+    (hint.z === undefined || hint.z === current.z) &&
+    (hint.storyFloor === undefined || hint.storyFloor === current.storyFloor));
+  if (!def) return undefined;
+  return {
+    title: def.title,
+    target: def.target,
+    lift: def.lift,
+    risk: def.risk,
+    returnPath: routeReturnPath(state),
+    color: def.color,
+  };
+}
+
 export function routeObjectiveLiftPromptSuffix(state: GameState, direction: LiftDirection): string {
   const objective = primaryRouteObjective(state);
   if (objective && questTargetLiftDirection(objective, state) === direction) return ' / ЦЕЛЬ';
@@ -323,11 +330,12 @@ export function getObjectiveRouteHud(
   const objective = primaryRouteObjective(state);
   const current = currentFloorRunEntry(state);
   if (!objective) {
-    const livingStart = current.z === 0 && current.storyFloor !== undefined;
+    const fallback = fallbackObjectiveForCurrentRoute(state);
+    if (fallback) return fallback;
     return {
-      title: livingStart ? 'ЦЕЛЬ: Ольга → сержант Баринов → Яков' : 'ЦЕЛЬ: возьмите слух или контракт',
-      target: livingStart ? 'Жилая зона: вводная, оружейная, лаборатория' : floorRunEntryMapLabel(current),
-      lift: livingStart ? 'Лифт: после цели, не вслепую' : 'Лифт: выберите по задаче',
+      title: 'ЦЕЛЬ: возьмите слух или контракт',
+      target: floorRunEntryMapLabel(current),
+      lift: 'Лифт: выберите по задаче',
       risk: 'Маршрут: без активной цели',
       returnPath: routeReturnPath(state),
       color: '#8cf',
@@ -416,89 +424,19 @@ function eventSeverity(action: string): WorldEventSeverity {
   return action === 'followed' ? 4 : 3;
 }
 
-function roomCenter(room: Room): { x: number; y: number } {
-  return { x: room.x + room.w / 2, y: room.y + room.h / 2 };
-}
-
-function roomHasHiddenMapCells(world: World, room: Room): boolean {
-  for (let y = room.y; y < room.y + room.h; y++) {
-    for (let x = room.x; x < room.x + room.w; x++) {
-      const idx = world.idx(x, y);
-      if (world.roomMap[idx] === room.id && !isMapCellExplored(world, idx)) return true;
-    }
-  }
-  return false;
-}
-
-function pickPaidRevealRoom(
-  world: World,
-  player: Entity,
-  marker: RouteCueMarker,
-  scanCap: number,
-): Room | undefined {
-  let best: Room | undefined;
-  let bestScore = -Infinity;
-  let checked = 0;
-  for (const room of world.rooms) {
-    if (!room || room.id === marker.roomId) continue;
-    checked++;
-    if (!roomHasHiddenMapCells(world, room)) {
-      if (checked >= scanCap) break;
-      continue;
-    }
-    const c = roomCenter(room);
-    const zone = world.zones[world.zoneMap[world.idx(Math.floor(c.x), Math.floor(c.y))]];
-    const danger = Math.max(1, Math.min(5, zone?.level ?? 1));
-    const score = danger * 8000 + Math.min(320, room.w * room.h) * 8 - world.dist2(player.x, player.y, c.x, c.y);
-    if (score > bestScore) {
-      bestScore = score;
-      best = room;
-    }
-    if (checked >= scanCap) break;
-  }
-  return best;
-}
-
-function applyPaidMapReveal(
-  world: World,
-  player: Entity,
-  state: GameState,
-  marker: RouteCueMarker,
-): { cells: number; room?: Room; questRevealed: boolean } {
-  const before = mapExplorationStats(world).cells;
-  const objective = primaryRouteObjective(state);
-  if (objective) revealQuestTargetOnMap(world, player, state, objective);
-
-  const afterQuest = mapExplorationStats(world).cells;
-  const def = marker.paidMapReveal;
-  const radius = Math.max(4, Math.min(64, Math.floor(def?.radius ?? 18)));
-  const scanCap = Math.max(16, Math.min(1024, Math.floor(def?.roomScanCap ?? 640)));
-  const room = afterQuest > before ? undefined : pickPaidRevealRoom(world, player, marker, scanCap);
-  if (room) {
-    const c = roomCenter(room);
-    revealMapRoom(world, room.id);
-    revealMapArea(world, c.x, c.y, radius);
-  } else if (afterQuest === before) {
-    revealMapArea(world, marker.x, marker.y, radius);
-  }
-
-  const after = mapExplorationStats(world).cells;
-  return { cells: Math.max(0, after - before), room, questRevealed: afterQuest > before };
-}
-
-function triggerPaidMapReveal(
+function triggerPaidRouteAdvice(
   world: World,
   player: Entity,
   state: GameState,
   marker: RouteCueMarker,
 ): void {
-  const def = marker.paidMapReveal;
+  const def = marker.paidRouteAdvice;
   if (!def) return;
 
   const price = Math.max(0, Math.floor(def.priceRubles));
   const cash = Math.max(0, Math.floor(player.money ?? 0));
   if (cash < price) {
-    state.msgs.push(msg(`Сева держит карту закрытой: нужно ${price}₽. У вас ${cash}₽.`, state.time, '#f84'));
+    state.msgs.push(msg(`Проводник не раскрывает маршрут: нужно ${price}₽. У вас ${cash}₽.`, state.time, '#f84'));
     setCueHud(state, marker);
     publishEvent(state, {
       type: 'rumor_observed',
@@ -513,16 +451,9 @@ function triggerPaidMapReveal(
       targetName: marker.targetName,
       severity: 2,
       privacy: 'private',
-      tags: ['route_cue', 'cartographer_map', 'paid_map', 'no_money'],
+      tags: ['route_cue', 'paid_route_advice', 'no_money'],
       data: { cueId: marker.id, priceRubles: price, playerRubles: cash },
     });
-    return;
-  }
-
-  const reveal = applyPaidMapReveal(world, player, state, marker);
-  if (reveal.cells <= 0) {
-    state.msgs.push(msg('Живая карта шуршит впустую: на этом листе уже нечего открыть.', state.time, '#aaa'));
-    setCueHud(state, marker);
     return;
   }
 
@@ -534,8 +465,7 @@ function triggerPaidMapReveal(
     playSoundAt(() => playRouteCueTone(marker.toneSeed, 1.1), marker.x, marker.y);
   }
   setCueHud(state, marker);
-  const roomText = reveal.room ? `: ${reveal.room.name}` : reveal.questRevealed ? ': цель задания' : '';
-  state.msgs.push(msg(`Живая карта взяла ${price}₽ и сняла туман с участка карты${roomText}.`, state.time, marker.color));
+  state.msgs.push(msg(`${def.sellerName ?? marker.targetName} берёт ${price}₽ и даёт маршрут: ${marker.hint}`, state.time, marker.color));
   publishEvent(state, {
     type: 'player_use_item',
     floor: marker.floor,
@@ -547,17 +477,16 @@ function triggerPaidMapReveal(
     actorName: player.name ?? 'Вы',
     actorFaction: player.faction,
     targetName: def.sellerName ?? marker.targetName,
-    itemName: 'живая карта',
+    itemName: marker.label,
     itemValue: price,
     severity: 3,
     privacy: 'private',
-    tags: ['route_cue', 'cartographer_map', 'paid_map', 'map_reveal'],
+    tags: ['route_cue', 'paid_route_advice'],
     data: {
       cueId: marker.id,
       paidRubles: price,
-      revealedCells: reveal.cells,
-      roomId: reveal.room?.id,
-      questRevealed: reveal.questRevealed,
+      hint: marker.hint,
+      targetName: marker.targetName,
     },
   });
 }
@@ -719,8 +648,8 @@ export function tryUseRouteCue(
 ): boolean {
   const marker = markerAtLook(world, player, lookX, lookY);
   if (!marker) return false;
-  if (marker.paidMapReveal) {
-    triggerPaidMapReveal(world, player, state, marker);
+  if (marker.paidRouteAdvice) {
+    triggerPaidRouteAdvice(world, player, state, marker);
     return true;
   }
   triggerCue(world, player, state, marker, 'inspected', true);

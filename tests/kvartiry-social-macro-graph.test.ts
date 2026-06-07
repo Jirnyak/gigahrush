@@ -132,6 +132,44 @@ test('Kvartiry social macro anchors stay reachable and do not leave large isolat
   assert.equal(graph.articulation.largeIsolatedRegionCount, 0);
 });
 
+test('Kvartiry maze keeps doors sparse and linked after candidate-door pruning', () => {
+  const gen = kvartiry();
+  const doorCount = gen.world.doors.size;
+  const linkedDoors = [...gen.world.doors.values()].filter(door => door.roomA >= 0 || door.roomB >= 0).length;
+  const averageRoomDoors = gen.world.rooms.reduce((sum, room) => sum + (room?.doors.length ?? 0), 0) / gen.world.rooms.length;
+
+  assert.equal(doorCount <= 25_000, true, `Kvartiry door count should stay sparse, got ${doorCount}`);
+  assert.equal(averageRoomDoors <= 4, true, `Kvartiry average room doors should stay sparse, got ${averageRoomDoors}`);
+  assert.equal(linkedDoors / Math.max(1, doorCount) >= 0.95, true, `Kvartiry room-linked door ratio should stay high, got ${linkedDoors}/${doorCount}`);
+});
+
+test('Kvartiry second-stage social rooms expose linked reachable doors', () => {
+  const gen = kvartiry();
+  const startIdx = gen.world.idx(Math.floor(gen.spawnX), Math.floor(gen.spawnY));
+  const audit = auditReachability(gen.world, startIdx);
+  const roomNames = [
+    'Пункт выдачи талонов',
+    'Водораздача у стояка',
+    'Нелегальная типография',
+    'Коммунальная кухня раздора',
+    'Аптечный разменник',
+    'Маршрутный сход Три Двери',
+    'Квартира с пустым соседом',
+  ];
+
+  for (const name of roomNames) {
+    const room = gen.world.rooms.find(row => row?.name === name);
+    assert.ok(room, `${name} should exist`);
+    assert.equal(room.doors.length > 0, true, `${name} should have a linked egress door`);
+    assert.equal(room.doors.some(doorIdx => {
+      const door = gen.world.doors.get(doorIdx);
+      return !!door &&
+        (door.roomA === room.id || door.roomB === room.id) &&
+        (!!audit.reachable[doorIdx] || hasReachableAdjacentCell(gen.world, audit, doorIdx));
+    }), true, `${name} should have a reachable door`);
+  }
+});
+
 test('Kvartiry keeps cell-first faction territory shares, HQ anchors, and own-land population bias', () => {
   const gen = kvartiry();
   const totalCells = gen.world.factionControl.length;

@@ -24,6 +24,7 @@ import { HUMAN_TERRITORY_OWNERS, territoryOwnerToFaction } from '../src/data/fac
 import { getMonsterEcology } from '../src/data/monster_ecology';
 import { SIDE_QUESTS } from '../src/data/plot';
 import { PROCEDURAL_POPULATION_PROFILES, proceduralPopulationBudget } from '../src/data/population_profiles';
+import { ROUTE_GATE_DEFS } from '../src/data/route_gates';
 import { isFloor69FemaleSprite } from '../src/entities/procedural_visuals';
 import { NPC_VISUAL_FLOOR69_FEMALE } from '../src/entities/npc_visuals';
 import {
@@ -69,6 +70,7 @@ import { countTerritoryCells, territoryHqAnchors, territoryOwnerAtIndex } from '
 import { questTargetLiftDirection } from '../src/systems/contracts';
 import { getObjectiveRouteHud, getRouteCueMarkers, routeCueCount, routeObjectiveLiftPromptSuffix } from '../src/systems/route_cues';
 import { getEmergencyPanels } from '../src/systems/emergency_panels';
+import { openRouteGateIds } from '../src/systems/route_gates';
 import { generateProceduralFloor, measureCollectorDecisionMetrics } from '../src/gen/procedural_floor';
 import { getGeometryMetrics, measureAndRecordGeometryMetrics, measureGeometryMetrics } from '../src/gen/geometry_metrics';
 import { generateDarknessDesignFloor } from '../src/gen/design_floors/darkness';
@@ -850,7 +852,7 @@ function expectedProceduralFloorCount(): number {
   return count;
 }
 
-test('floor run lift directions respect roof void and Podad lower gate', () => {
+test('floor run lift directions respect roof void and data-owned Podad lower gate', () => {
   const state = makeGameState();
 
   setFloorRunState(state, { runSeed: 123, currentZ: FLOOR_RUN_MAX_Z, specs: {}, visited: {} }, FloorLevel.MINISTRY);
@@ -861,9 +863,32 @@ test('floor run lift directions respect roof void and Podad lower gate', () => {
 
   setFloorRunState(state, { runSeed: 123, currentZ: -40, specs: {}, visited: {} }, FloorLevel.HELL);
   const podad = currentFloorRunEntry(state);
+  const podadGate = ROUTE_GATE_DEFS.find(gate => gate.id === 'podad_lower_route');
+  assert.equal(podadGate?.targetRouteKind, 'design');
+  assert.equal(podadGate?.targetRouteId, 'podad');
+  assert.equal(podadGate?.targetFloorKey, 'design:podad');
+  assert.equal(podadGate?.blockedDirection, LiftDirection.DOWN);
+  assert.deepEqual(podadGate?.liftMutation.directions, [LiftDirection.DOWN]);
   assert.equal(podad.designFloorId, 'podad');
-  assert.deepEqual(floorRunEntryLiftDirections(podad, false), [LiftDirection.UP]);
-  assert.deepEqual(floorRunEntryLiftDirections(podad, true), [LiftDirection.DOWN, LiftDirection.UP]);
+  assert.deepEqual(floorRunEntryLiftDirections(podad), [LiftDirection.UP]);
+  assert.equal(resolveFloorRunRoute(state, LiftDirection.DOWN), null);
+
+  state.quests.push({
+    id: 1,
+    type: QuestType.KILL,
+    giverId: 0,
+    giverName: 'Марфа',
+    desc: 'Тестовый счет Вестников',
+    targetMonsterKind: MonsterKind.HERALD,
+    killCount: 3,
+    killNeeded: 3,
+    eventTags: ['podad', 'herald_gate', 'lower_route_unlocked'],
+    done: false,
+  });
+  const openGateIds = openRouteGateIds(state);
+  assert.deepEqual([...openGateIds], ['podad_lower_route']);
+  assert.deepEqual(floorRunEntryLiftDirections(podad, openGateIds), [LiftDirection.DOWN, LiftDirection.UP]);
+  assert.equal(resolveFloorRunRoute(state, LiftDirection.DOWN)?.z, -41);
 });
 
 test('procedural floor specs are deterministic from run seed and z', () => {
@@ -5630,7 +5655,7 @@ testGenerationMatrix('underhell ships as a monster-owned veteran threshold', () 
   const npcs = gen.entities.filter(e => e.type === EntityType.NPC);
   const ambientNpcs = npcs.filter(e => !e.plotNpcId && !e.persistentNpcId && e.alifeId === undefined);
   const monsters = gen.entities.filter(e => e.type === EntityType.MONSTER);
-  const lowerSamosborZones = gen.world.zones.filter(zone => zone.cy > W * 0.62 && zone.faction === ZoneFaction.SAMOSBOR);
+  const samosborZones = gen.world.zones.filter(zone => zone.faction === ZoneFaction.SAMOSBOR);
   const legalNpcFactions = new Set([Faction.LIQUIDATOR, Faction.CULTIST]);
 
   assert.equal(npcs.length >= 4 && npcs.length <= 120, true);
@@ -5640,7 +5665,7 @@ testGenerationMatrix('underhell ships as a monster-owned veteran threshold', () 
   assert.equal(monsters.length >= 3900 && monsters.length <= ACTIVE_ACTOR_SOFT_LIMIT, true);
   assert.equal(maxEntitiesInArea(gen.entities, EntityType.MONSTER, 32) <= 64, true);
   assert.equal(routeCueCount(gen.world) >= 4, true);
-  assert.equal(lowerSamosborZones.length > 0, true);
+  assert.equal(samosborZones.length > 0, true);
 });
 
 testGenerationMatrix('dark metro ships as sparse defended bands inside monster-heavy train pressure', () => {

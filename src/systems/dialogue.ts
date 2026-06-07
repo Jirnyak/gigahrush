@@ -1,33 +1,33 @@
 /* ── Runtime NPC dialogue dispatch ───────────────────────────── */
 
 import { type Entity } from '../core/types';
-import { PLOT_CHAIN, getPlotDef } from '../data/plot';
 import { getNpcStateText } from './ai';
 import { buildContextSnapshot, type ContextBuildOptions } from './context';
 import { renderMarkovDialogueTalk } from './markov_dialogue';
 import { routeAdapterSpeech } from './markov_router_adapters';
+import {
+  lowerNpcPackageSpeechContext,
+  resolveNpcPackageForEntity,
+  selectNpcLockedTalkLine,
+} from './npc_package_speech';
 import { markNpcSpokenTo } from './npc_memory';
 import { observeRecentRumorEventsForNpc, selectRumorForNpc } from './rumor';
+import { routeSpeech } from './speech_router';
 
 /* ── Talk text (called from NPC menu "Talk" tab) ─────────────── */
 export function generateTalkText(npc: Entity, options: ContextBuildOptions = {}): string {
-  const def = getPlotDef(npc);
-  if (def) {
-    const plotPostUnlocked = isPlotNpcPostUnlocked(npc, options.state?.quests);
-    if ((npc.plotDone || plotPostUnlocked) && def.talkLinesPost.length > 0 && Math.random() < 0.75) {
-      return def.talkLinesPost[Math.floor(Math.random() * def.talkLinesPost.length)];
-    }
-    if (!npc.plotDone && !plotPostUnlocked && def.talkLines.length > 0) {
-      const idx = (npc._plotTalkIdx ?? 0) % def.talkLines.length;
-      npc._plotTalkIdx = idx + 1;
-      return def.talkLines[idx];
-    }
-    if (def.talkLinesPost.length > 0 && Math.random() < 0.75) {
-      return def.talkLinesPost[Math.floor(Math.random() * def.talkLinesPost.length)];
-    }
+  const now = options.time ?? performanceNowSeconds();
+  const pack = resolveNpcPackageForEntity(npc);
+  const locked = pack ? selectNpcLockedTalkLine(pack, npc, options.state?.quests, now) : undefined;
+  if (pack && locked) {
+    return routeSpeech({
+      intent: 'locked_author_text',
+      source: locked.source,
+      context: lowerNpcPackageSpeechContext(pack, npc, 'dialogue'),
+      lockedText: locked.text,
+    }).text;
   }
 
-  const now = options.time ?? performanceNowSeconds();
   const snapshot = buildContextSnapshot(npc, options);
   const memory = markNpcSpokenTo(npc, now);
   observeRecentRumorEventsForNpc(npc, snapshot, now);
@@ -45,18 +45,6 @@ export function generateTalkText(npc: Entity, options: ContextBuildOptions = {})
     repeatIndex: Math.max(0, Math.floor(now)),
     routeSpeech: routeAdapterSpeech,
   }).text;
-}
-
-function isPlotNpcPostUnlocked(npc: Entity, quests: readonly { plotStepIndex?: number; done?: boolean }[] | undefined): boolean {
-  const plotId = npc.plotNpcId;
-  if (!plotId || !quests) return false;
-  let hasStep = false;
-  for (let i = 0; i < PLOT_CHAIN.length; i++) {
-    if (PLOT_CHAIN[i].giverNpcId !== plotId) continue;
-    hasStep = true;
-    if (!quests.some(q => q.plotStepIndex === i && q.done)) return false;
-  }
-  return hasStep;
 }
 
 function performanceNowSeconds(): number {

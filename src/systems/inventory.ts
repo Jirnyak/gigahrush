@@ -275,6 +275,7 @@ export interface PickupDropResult {
   handled: boolean;
   pickedAny: boolean;
   depleted: boolean;
+  pickedItems?: Item[];
   blockedReason?: 'empty' | 'inventory_full';
 }
 
@@ -2040,7 +2041,7 @@ function pickupDropItems(
   msgs: Msg[],
   time: number,
   state?: GameState,
-  onPickedDrop?: (drop: Entity) => void,
+  onPickedDrop?: (drop: Entity, pickedItems: readonly Item[]) => void,
   manual = false,
 ): PickupDropResult {
   const inv = drop.inventory;
@@ -2049,6 +2050,7 @@ function pickupDropItems(
   }
 
   let pickedAny = false;
+  const pickedItems: Item[] = [];
   let handled = false;
   let blockedByCapacity = false;
   let blockedName = '';
@@ -2099,6 +2101,7 @@ function pickupDropItems(
       }
       msgs.push(msg(`Подобрано: ${def?.name ?? item.defId}`, time, '#dd4'));
       publishPlayerItemEvent(state, player, 'player_pick_item', item.defId, moved, 2, zoneId);
+      pickedItems.push({ defId: item.defId, count: moved, data: acid ? undefined : item.data });
       handleVeretarPickupRisk(player, item.defId, msgs, time, state, zoneId);
       item.count -= moved;
       if (item.count <= 0) inv.splice(itemIndex, 1);
@@ -2114,7 +2117,7 @@ function pickupDropItems(
   if (pickedAny) {
     if (inv.length === 0) {
       removeMonsterBaitForEntity(drop.id, state, time, 'picked_up');
-      onPickedDrop?.(drop);
+      onPickedDrop?.(drop, pickedItems);
       drop.alive = false;
     }
     playPickup();
@@ -2127,6 +2130,7 @@ function pickupDropItems(
     handled,
     pickedAny,
     depleted: !drop.alive || inv.length === 0,
+    pickedItems,
     blockedReason: blockedByCapacity && !pickedAny ? 'inventory_full' : undefined,
   };
 }
@@ -2138,7 +2142,7 @@ export function pickupDrop(
   msgs: Msg[],
   time: number,
   state?: GameState,
-  onPickedDrop?: (drop: Entity) => void,
+  onPickedDrop?: (drop: Entity, pickedItems: readonly Item[]) => void,
 ): PickupDropResult {
   return pickupDropItems(world, drop, player, msgs, time, state, onPickedDrop, true);
 }
@@ -2151,7 +2155,7 @@ export function pickupNearby(
   msgs: Msg[],
   time: number,
   state?: GameState,
-  onPickedDrop?: (drop: Entity) => void,
+  onPickedDrop?: (drop: Entity, pickedItems: readonly Item[]) => void,
 ): void {
   for (let i = entities.length - 1; i >= 0; i--) {
     const drop = entities[i];

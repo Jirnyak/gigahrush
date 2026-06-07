@@ -25,7 +25,7 @@ import {
 import { REACH_GATE_KEY, REACH_GATE_NONE, World, auditReachability } from '../../core/world';
 import { withSeededRandom } from '../../core/rand';
 import { freshNeeds } from '../../data/catalog';
-import { type PlotNpcDef, registerSideQuest } from '../../data/plot';
+import { designNpcFloorKey, type PlotNpcDef, registerFloorSideQuest } from '../../data/plot';
 import { MONSTERS } from '../../entities/monster';
 import { Spr, monsterSpr } from '../../render/sprite_index';
 import {
@@ -34,8 +34,11 @@ import {
   scaleMonsterHp,
   scaleMonsterSpeed,
 } from '../../systems/rpg';
+import { requireSpawnedPlotNpcFromPackage } from '../plot_npc_spawn';
 import { ensureConnectivity, generateZones, sanitizeDoors, stampRoom } from '../shared';
 import type { FloorGeneration } from '../floor_manifest';
+
+const DESIGN_NPC_HOME_FLOOR_KEY = designNpcFloorKey('manhattan_crossroads');
 
 export const DESIGN_FLOOR_ID = 'manhattan_crossroads' as const;
 export const MANHATTAN_CROSSROADS_Z = 8;
@@ -287,7 +290,7 @@ const ROAD_STALKER_KSU: PlotNpcDef = {
   ],
 };
 
-registerSideQuest('crossroads_traffic_militsiya', TRAFFIC_MILITSIYA, [
+registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'crossroads_traffic_militsiya', TRAFFIC_MILITSIYA, [
   {
     id: 'crossroads_open_junction',
     giverNpcId: 'crossroads_traffic_militsiya',
@@ -304,7 +307,7 @@ registerSideQuest('crossroads_traffic_militsiya', TRAFFIC_MILITSIYA, [
   },
 ]);
 
-registerSideQuest('crossroads_zebra_granny', ZEBRA_GRANNY, [
+registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'crossroads_zebra_granny', ZEBRA_GRANNY, [
   {
     id: 'crossroads_zebra_escort',
     giverNpcId: 'crossroads_zebra_granny',
@@ -320,7 +323,7 @@ registerSideQuest('crossroads_zebra_granny', ZEBRA_GRANNY, [
   },
 ]);
 
-registerSideQuest('crossroads_courier_dima', COURIER_DIMA, [
+registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'crossroads_courier_dima', COURIER_DIMA, [
   {
     id: 'crossroads_stolen_cargo',
     giverNpcId: 'crossroads_courier_dima',
@@ -337,7 +340,7 @@ registerSideQuest('crossroads_courier_dima', COURIER_DIMA, [
   },
 ]);
 
-registerSideQuest('crossroads_road_stalker_ksu', ROAD_STALKER_KSU, [
+registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'crossroads_road_stalker_ksu', ROAD_STALKER_KSU, [
   {
     id: 'crossroads_wrong_turn',
     giverNpcId: 'crossroads_road_stalker_ksu',
@@ -543,7 +546,7 @@ function paintSurfaceRect(
       cell[pi + 3] = Math.max(cell[pi + 3], a);
     }
   }
-  world.surfaceVersion++;
+  world.markSurfaceCellDirty(ci);
 }
 
 function markLineCell(world: World, x: number, y: number, axis: Axis, markRoomId: number): void {
@@ -1645,39 +1648,17 @@ function spawnPlotNpc(
   entities: Entity[],
   nextId: { v: number },
   npcId: string,
-  def: PlotNpcDef,
+  _def: PlotNpcDef,
   x: number,
   y: number,
   angle = 0,
   extra?: Partial<Entity>,
 ): number {
-  const id = nextId.v++;
-  entities.push({
-    id,
-    type: EntityType.NPC,
-    x: x + 0.5,
-    y: y + 0.5,
+  const npc = requireSpawnedPlotNpcFromPackage(entities, nextId, npcId, x + 0.5, y + 0.5, {
     angle,
-    pitch: 0,
-    alive: true,
-    speed: def.speed,
-    sprite: def.sprite,
-    name: def.name,
-    isFemale: def.isFemale,
-    needs: freshNeeds(),
-    hp: def.hp,
-    maxHp: def.maxHp,
-    money: def.money,
-    ai: { goal: AIGoal.IDLE, tx: 0, ty: 0, path: [], pi: 0, stuck: 0, timer: 0 },
-    inventory: def.inventory.map(i => ({ ...i })),
-    faction: def.faction,
-    occupation: def.occupation,
-    plotNpcId: npcId,
-    canGiveQuest: true,
-    questId: -1,
-    ...extra,
+    extra,
   });
-  return id;
+  return npc.id;
 }
 
 function spawnAmbientNpc(

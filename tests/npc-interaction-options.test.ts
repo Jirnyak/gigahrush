@@ -3,6 +3,7 @@ import * as assert from 'node:assert/strict';
 
 import { FloorLevel, ItemType } from '../src/core/types';
 import { ITEMS } from '../src/data/catalog';
+import { designFloorProfile } from '../src/data/design_floor_profiles';
 import {
   activateNpcCustomMenuOption,
   CARD_DECK_ITEM_ID,
@@ -206,13 +207,17 @@ test('floor 69 entertainment option is route and worker gated', () => {
     visited: {},
   };
   const player = makeTestPlayer({ money: 45 });
+  const profile = designFloorProfile('floor_69');
   const worker = makeTestNpc({ id: 69, name: 'Ира Сцена', plotNpcId: 'f69_performer_ira', money: 28 });
+  const generatedWorker = makeTestNpc({ id: 71, name: 'Этаж 69: работница 17', money: 28 });
   const visitor = makeTestNpc({ id: 70, name: 'Посетитель у лампы', money: 28 });
 
+  assert.equal(profile?.npcInteractions?.some(option => option.id === 'floor69_entertainment'), true);
   const workerOption = getNpcMenuOptions({ state, player, npc: worker }).find(option => option.id === 'floor69_entertainment');
   assert.ok(workerOption);
   assert.equal(workerOption.disabled, false);
   assert.equal(workerOption.label, 'Развлечься (₽45)');
+  assert.equal(optionIds(getNpcMenuOptions({ state, player, npc: generatedWorker })).includes('floor69_entertainment'), true);
   assert.equal(optionIds(getNpcMenuOptions({ state, player, npc: visitor })).includes('floor69_entertainment'), false);
 
   assert.equal(activateNpcCustomMenuOption({ state, player, npc: worker }, 'floor69_entertainment'), true);

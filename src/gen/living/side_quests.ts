@@ -1,6 +1,6 @@
 /* ── Side quest content registry ──────────────────────────────── */
 /* Importing a content module triggers its registerSideQuest()     */
-/* call, populating PLOT_NPCS + SIDE_QUESTS in data/plot.ts.       */
+/* call, registering NPC packages + SIDE_QUESTS in data/plot.ts.   */
 /*                                                                 */
 /* To add a new side quest:                                        */
 /*   1. Create content module: gen/living/my_quest.ts              */

@@ -17,7 +17,9 @@ import {
   type Quest,
 } from '../src/core/types';
 import { ALIFE_POPULATION_CAPACITY } from '../src/data/alife_population_plan';
+import { getNpcPackageByPlotNpcId, npcPackageDisplayName } from '../src/data/npc_packages';
 import { PLOT_CHAIN } from '../src/data/plot';
+import { SCRIPTED_ARRIVALS } from '../src/data/scripted_arrivals';
 import { initFactionRelations } from '../src/data/relations';
 import { recordAlifeNpcDeath, setAlifeState, alifeForSave } from '../src/systems/alife';
 import { createWorldEventState, getRecentEvents } from '../src/systems/events';
@@ -100,6 +102,9 @@ function plotNpc(id: string): Entity {
 
 test('Hell holdout arrivals keep liquidator guards inside A-Life capacity', () => {
   initFactionRelations();
+  const arrivalDef = SCRIPTED_ARRIVALS.find(def => def.triggerPlotEventTag === 'hell_holdout');
+  assert.equal(arrivalDef?.leaderPlotNpcId, 'major_grom');
+  assert.equal(arrivalDef?.sourceFloorKey, 'story:ministry');
   const state = makeHellState();
   state.quests = [makeHoldoutQuest()];
   const world = makeHellWorld();
@@ -110,7 +115,11 @@ test('Hell holdout arrivals keep liquidator guards inside A-Life capacity', () =
   assert.equal(updateScriptedArrivals(world, entities, player, state, nextId), true);
 
   const major = entities.find(e => e.plotNpcId === 'major_grom');
+  const majorPackage = getNpcPackageByPlotNpcId('major_grom');
   assert.ok(major, 'Major Grom should arrive once as a plot NPC');
+  assert.ok(majorPackage);
+  assert.equal((major as Entity & { npcPackageId?: string }).npcPackageId, majorPackage.id);
+  assert.equal(major.name, npcPackageDisplayName(majorPackage));
   assert.equal(major.alifeId !== undefined, true);
   assert.equal(major.persistentNpcId, `alife:${major.alifeId}`);
   const guards = entities.filter(e => e.faction === Faction.LIQUIDATOR && e.plotNpcId === undefined && e.id !== major.id);
@@ -125,6 +134,7 @@ test('Hell holdout arrivals keep liquidator guards inside A-Life capacity', () =
 
   const event = getRecentEvents(state, { tags: ['scripted_arrival', 'alife_migration'], limit: 1 })[0];
   assert.ok(event);
+  assert.equal(event.data?.arrivalId, arrivalDef?.id);
   assert.equal(event.data?.fromFloorKey, 'story:ministry');
   assert.equal(event.data?.toFloorKey, 'story:hell');
   assert.equal(event.data?.guardCount, guards.length);

@@ -3,16 +3,20 @@
 /* a teacher NPC. Hand-crafted, protected with aptMask.            */
 
 import {
-  Cell, Tex, Feature, RoomType,
+  Cell, Tex, Feature, FloorLevel, RoomType,
   type Room, type Entity,
-  EntityType, AIGoal, Faction, Occupation, QuestType,
+  EntityType, Faction, Occupation, QuestType,
 } from '../../core/types';
 import { World } from '../../core/world';
-import { freshNeeds } from '../../data/catalog';
-import { type PlotNpcDef, registerSideQuest } from '../../data/plot';
+import { type PlotNpcDef, registerAuthoredNpc, registerSideQuest, storyNpcFloorKey } from '../../data/plot';
 import { stampRoom, protectRoom, connectProtectedRoom, findClearArea } from '../shared';
 import { Spr } from '../../render/sprite_index';
 import { genLog } from '../log';
+import { requireSpawnedPlotNpcFromPackage } from '../plot_npc_spawn';
+
+const ZOYA_ID = 'uchitelnitsa_zoya';
+const STUDENT_PETYA_ID = 'red_corner_student_petya';
+const STUDENT_MASHA_ID = 'red_corner_student_masha';
 
 const NPC_DEF: PlotNpcDef = {
   name: 'Учительница Зоя',
@@ -45,10 +49,10 @@ const NPC_DEF: PlotNpcDef = {
   ],
 };
 
-registerSideQuest('uchitelnitsa_zoya', NPC_DEF, [
+registerSideQuest(ZOYA_ID, NPC_DEF, [
   {
     id: 'zoya_ballots',
-    giverNpcId: 'uchitelnitsa_zoya',
+    giverNpcId: ZOYA_ID,
     type: QuestType.FETCH,
     desc: 'Зоя Аркадьевна: «Принесите 25 бюллетеней. Дети будут учиться считать людей, а не только талоны.»',
     targetItem: 'ballot', targetCount: 25,
@@ -61,6 +65,50 @@ registerSideQuest('uchitelnitsa_zoya', NPC_DEF, [
     relationDelta: 22, xpReward: 70, moneyReward: 120,
   },
 ]);
+
+const STUDENT_DEFS: readonly { id: string; npc: PlotNpcDef }[] = [
+  {
+    id: STUDENT_PETYA_ID,
+    npc: {
+      name: 'Ученик Петя',
+      isFemale: false,
+      age: 10,
+      sex: 'male',
+      faction: Faction.CITIZEN,
+      occupation: Occupation.CHILD,
+      sprite: Occupation.CHILD,
+      hp: 30, maxHp: 30, money: 5, speed: 0.8,
+      inventory: [{ defId: 'note', count: 1 }, { defId: 'bread', count: 1 }],
+      talkLines: ['Петя держит тетрадь двумя руками и смотрит на дверь.'],
+      talkLinesPost: ['Петя переписывает бюллетень медленно, чтобы бумага не рвалась.'],
+    },
+  },
+  {
+    id: STUDENT_MASHA_ID,
+    npc: {
+      name: 'Ученица Маша',
+      isFemale: true,
+      age: 10,
+      sex: 'female',
+      faction: Faction.CITIZEN,
+      occupation: Occupation.CHILD,
+      sprite: Occupation.CHILD,
+      hp: 30, maxHp: 30, money: 5, speed: 0.8,
+      inventory: [{ defId: 'note', count: 1 }, { defId: 'bread', count: 1 }],
+      talkLines: ['Маша закрывает строку ладонью, когда в коридоре шумят сапоги.'],
+      talkLinesPost: ['Маша уже умеет писать фамилии ровно, даже когда стена гудит.'],
+    },
+  },
+];
+
+for (const student of STUDENT_DEFS) {
+  registerAuthoredNpc({
+    id: student.id,
+    npc: student.npc,
+    homeFloorKey: storyNpcFloorKey(FloorLevel.KVARTIRY),
+    tags: ['kvartiry', 'red_corner', 'student'],
+  });
+}
 
 const ROOM_W = 13;
 const ROOM_H = 9;
@@ -142,37 +190,21 @@ export function generateRedCorner(
   }
 
   // Teacher NPC at the lectern
-  entities.push({
-    id: nextId.v++, type: EntityType.NPC,
-    x: fcx + 0.5, y: ry + 2 + 0.5,
-    angle: Math.PI / 2, pitch: 0,
-    alive: true, speed: NPC_DEF.speed, sprite: NPC_DEF.sprite,
-    name: NPC_DEF.name, isFemale: NPC_DEF.isFemale,
-    needs: freshNeeds(), hp: NPC_DEF.hp, maxHp: NPC_DEF.maxHp, money: NPC_DEF.money,
-    ai: { goal: AIGoal.IDLE, tx: 0, ty: 0, path: [], pi: 0, stuck: 0, timer: 0 },
-    inventory: NPC_DEF.inventory.map(i => ({ ...i })),
-    faction: NPC_DEF.faction, occupation: NPC_DEF.occupation,
-    plotNpcId: 'uchitelnitsa_zoya', canGiveQuest: true, questId: -1,
+  requireSpawnedPlotNpcFromPackage(entities, nextId, ZOYA_ID, fcx + 0.5, ry + 2 + 0.5, {
+    angle: Math.PI / 2,
+    canGiveQuest: true,
   });
 
   // Two student NPCs (children)
   const studentPositions = [
-    { x: rx + 3, y: ry + 4, name: 'Ученик Петя' },
-    { x: rx + 9, y: ry + 4, name: 'Ученица Маша' },
+    { x: rx + 3, y: ry + 4, id: STUDENT_PETYA_ID },
+    { x: rx + 9, y: ry + 4, id: STUDENT_MASHA_ID },
   ];
   for (const s of studentPositions) {
-    entities.push({
-      id: nextId.v++, type: EntityType.NPC,
-      x: s.x + 0.5, y: s.y + 0.5,
-      angle: -Math.PI / 2, pitch: 0,
-      alive: true, speed: 0.8, sprite: Occupation.CHILD,
-      spriteScale: 0.6,
-      name: s.name, isFemale: s.name === 'Ученица Маша',
-      needs: freshNeeds(), hp: 30, maxHp: 30, money: 5,
-      ai: { goal: AIGoal.IDLE, tx: 0, ty: 0, path: [], pi: 0, stuck: 0, timer: 0 },
-      inventory: [{ defId: 'note', count: 1 }, { defId: 'bread', count: 1 }],
-      faction: Faction.CITIZEN, occupation: Occupation.CHILD,
-      questId: -1,
+    requireSpawnedPlotNpcFromPackage(entities, nextId, s.id, s.x + 0.5, s.y + 0.5, {
+      angle: -Math.PI / 2,
+      canGiveQuest: false,
+      extra: { spriteScale: 0.6 },
     });
   }
 

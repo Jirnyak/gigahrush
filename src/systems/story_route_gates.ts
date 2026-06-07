@@ -5,10 +5,11 @@ import { World } from '../core/world';
 import { ensureFloorRouteLiftLayout } from './floor_memory';
 import {
   currentFloorRunEntry,
+  floorRunEntryFloorKey,
   floorRunEntryLiftDirections,
-  podadLowerRouteOpen,
   ROUTE_LIFTS_PER_DIRECTION,
 } from './procedural_floors';
+import { openRouteGatesForFloor } from './route_gates';
 
 function hasUsableLift(world: World, direction: LiftDirection): boolean {
   for (let i = 0; i < world.cells.length; i++) {
@@ -19,10 +20,14 @@ function hasUsableLift(world: World, direction: LiftDirection): boolean {
 
 export function applyStoryRouteGates(world: World, player: Entity, state: GameState): boolean {
   const entry = currentFloorRunEntry(state);
-  if (entry.designFloorId !== 'podad' || !podadLowerRouteOpen(state)) return false;
-  const hadDownLift = hasUsableLift(world, LiftDirection.DOWN);
-  ensureFloorRouteLiftLayout(world, player.x, player.y, floorRunEntryLiftDirections(entry, true), {
+  const floorKey = floorRunEntryFloorKey(entry);
+  const openGates = openRouteGatesForFloor(floorKey, state);
+  const openDirections = [...new Set(openGates.flatMap(gate => gate.liftMutation.directions))];
+  if (openDirections.length === 0) return false;
+  const openGateIds = new Set(openGates.map(gate => gate.id));
+  const hadOpenLifts = openDirections.every(direction => hasUsableLift(world, direction));
+  ensureFloorRouteLiftLayout(world, player.x, player.y, floorRunEntryLiftDirections(entry, openGateIds), {
     countPerDirection: ROUTE_LIFTS_PER_DIRECTION,
   });
-  return !hadDownLift && hasUsableLift(world, LiftDirection.DOWN);
+  return !hadOpenLifts && openDirections.every(direction => hasUsableLift(world, direction));
 }

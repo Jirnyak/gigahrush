@@ -126,6 +126,8 @@ test('sprite registry and generated sheet stay aligned', () => {
 
   const projectileSprites = [
     Spr.EYE_BOLT,
+    Spr.WEB_BOLT,
+    Spr.WET_LINE_BOLT,
     Spr.BULLET,
     Spr.PELLET,
     Spr.NAIL,
@@ -146,6 +148,8 @@ test('sprite registry and generated sheet stay aligned', () => {
     assert.ok(i >= 0 && i < Spr.TOTAL, `projectile sprite ${i} should be in the atlas`);
     assert.ok(opaquePixels(sprites[i]) > 20, `projectile sprite ${i} should not be blank`);
   }
+  assert.notEqual(spriteHash(sprites[Spr.WEB_BOLT]), spriteHash(sprites[Spr.PARAGRAPH_BOLT]));
+  assert.notEqual(spriteHash(sprites[Spr.WET_LINE_BOLT]), spriteHash(sprites[Spr.HOSTILE_PLASMA_BOLT]));
 
   const worldObjectSprites = [
     featureSpr(Feature.TABLE),
@@ -562,15 +566,26 @@ testGenerationMatrix('living macro routes keep landmarks, lifts and apartment sh
   assert.equal(shell.shellCells > 0, true, 'living generation should expose walkable shelter shell cells');
 });
 
-testGenerationMatrix('living start tutorial desks are billboards, not item drops', () => {
+testGenerationMatrix('living start tutorial desks are feature props, not billboard entities', () => {
   const generated = floorForRead(FloorLevel.LIVING);
-  const tutorDesks = generated.entities.filter(e =>
+  const tutorialRoomIds = new Set(
+    generated.world.rooms
+      .filter(room => room?.name === 'Актовый зал' || room?.name === 'Оружейная')
+      .map(room => room.id),
+  );
+  let tutorDeskFeatures = 0;
+  for (let i = 0; i < generated.world.features.length; i++) {
+    if (generated.world.features[i] === Feature.DESK && tutorialRoomIds.has(generated.world.roomMap[i])) {
+      tutorDeskFeatures++;
+    }
+  }
+  const tutorDeskBillboards = generated.entities.filter(e =>
     e.type === EntityType.BILLBOARD &&
     e.sprite === Spr.DESK &&
-    e.spriteScale === 0.5);
+    tutorialRoomIds.has(generated.world.roomMap[generated.world.idx(Math.floor(e.x), Math.floor(e.y))]));
 
-  assert.ok(tutorDesks.length >= 12, 'tutorial desks and armory counter should be billboard props');
-  assert.equal(tutorDesks.every(e => !e.inventory?.length), true);
+  assert.ok(tutorDeskFeatures >= 19, `tutorial desks and armory counter should be feature props: ${tutorDeskFeatures}`);
+  assert.equal(tutorDeskBillboards.length, 0);
   assert.ok(generated.entities.some(e =>
     e.type === EntityType.ITEM_DROP &&
     e.sprite === Spr.ITEM_DROP &&

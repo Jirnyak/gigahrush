@@ -783,7 +783,7 @@ function worldFromSave(input: unknown): World | null {
   world.screenCells = savedWorld.screenCells;
   world.bakeLights();
   world.markCellsDirty();
-  world.surfaceVersion = (world.surfaceVersion + 1) | 0;
+  world.markSurfaceDirty();
   world.markWallTexDirty();
   world.markFloorTexDirty();
   world.markFeaturesDirty(true);

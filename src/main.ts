@@ -16,6 +16,11 @@ import { updateProceduralScreens } from './gen/procedural_screens';
 import { generateProceduralFloor } from './gen/procedural_floor';
 import { generateDesignFloor, isDesignFloorId } from './gen/design_floors/manifest';
 import {
+  floorInstanceGenerationExtrasForKey,
+  floorInstanceSamosborReplacementAllowed,
+  generateFloorInstance,
+} from './gen/floor_instances/manifest';
+import {
   FLOOR_MESSAGE_COLORS,
   FLOOR_NAMES,
   generateFloor,
@@ -34,10 +39,12 @@ import { drawHUD, drawPointerCaptureGate, type HudPerfDebugSnapshot } from './re
 import {
   spawnBloodHit, spawnDeathPool, updateBloodTrails, updateParticles, particles,
   spawnProjectileBodyImpact, spawnProjectileFloorImpact, spawnProjectileWallImpact, isEnergyProjectileImpact,
+  spawnExplosionParticles,
 } from './render/blood';
 import { resetComputerState, restoreComputersFromSave } from './systems/computers';
 import { resetNetHackState, restoreNetHackFromSave } from './systems/net_hack';
 import { stampMark, MarkType } from './systems/surface_marks';
+import { stampUrineTrace } from './systems/urination';
 import { containerMenuGridLayout, craftMenuLayout, fullscreenInventoryLayout, tradeMenuGridLayout } from './render/ui_layout';
 import { updateNeeds } from './systems/needs';
 import { updateAI, tryMonsterProjectileStagger, getAiStats, type AiStats } from './systems/ai';
@@ -78,6 +85,8 @@ import { GAME_MENU_ITEMS } from './systems/game_menu';
 import { MOBILE_BUTTON_CONTROL_ROWS } from './systems/mobile_actions';
 import {
   adjustCameraFov,
+  cycleHudMotionMode,
+  cycleScreenInterferenceMode,
   adjustMobileLookSensitivity,
   adjustMouseLookSensitivity,
   applyUiPreset,
@@ -85,13 +94,13 @@ import {
   cameraFovRadians,
   mobileLookSensitivity,
   mouseLookSensitivity,
-  resetCameraFov,
+  resetGraphicsSettings,
   resetMapLegendSettings,
   resetUiSettings,
+  screenInterferenceMode,
   toggleAutoPickup,
   toggleMapHighContrast,
   toggleUiElement,
-  toggleMapColorMode,
   toggleMapLegendToggle,
   uiElementEnabled,
   type UiSettingsView,
@@ -103,6 +112,18 @@ import {
 import { freshNeeds, ITEMS, WEAPON_STATS } from './data/catalog';
 import { INVENTORY_GRID_COLS, INVENTORY_GRID_ROWS, MAX_INVENTORY_SLOTS } from './data/inventory_limits';
 import { getStack } from './data/items';
+import { designFloorAmbientLight } from './data/design_floor_profiles';
+import {
+  themeForDesignFloor,
+  themeForProceduralSpec,
+  themeForStoryFloor,
+  type FloorThemeProfile,
+} from './data/floor_theme_profiles';
+import {
+  EMPTY_RESOLVED_VISUAL_DETAIL_PROFILE,
+  resolveVisualDetailProfile,
+  type ResolvedVisualDetailProfile,
+} from './data/visual_detail_profiles';
 import {
   activeToolLightDrainPerSecond,
   activeToolLightMoveMultiplier,
@@ -135,7 +156,9 @@ import {
   npcHasImportantQuestAction,
   npcQuestActionHint,
   toggleActiveQuest,
+  updateKillQuestPressure,
 } from './systems/quests';
+import { applyPickedStoryItemOutcomes, applyStoryItemOutcomes, spawnStoryDeathDrops } from './systems/story_outcomes';
 import { handleDiceInput, isDiceGameOpen } from './systems/dice';
 import { handleDominoInput, isDominoGameOpen } from './systems/domino';
 import { handleDurakInput, isDurakGameOpen } from './systems/durak';
@@ -155,9 +178,12 @@ import { applyStoryRouteGates } from './systems/story_route_gates';
 import { setDoorState } from './systems/door_state';
 import {
   freshRPG, awardXP, xpForMonsterKill, xpForNpcKill,
-  meleeDamage, agiSpeedMult, agiAttackSpeedMult,
+  meleeDamage, actorMoveSpeed, agiAttackSpeedMult,
   spendAttrPoint, getMaxHp, getMaxPsi, randomRPG, xpForLevel,
   RPG_ATTRIBUTE_CAP, RPG_LEVEL_CAP,
+  HUMANOID_BASE_MOVE_SPEED,
+  normalizeHumanoidBaseMoveSpeed,
+  normalizeHumanoidBaseMoveSpeeds,
 } from './systems/rpg';
 import {
   applyPaupsinaWeb,
@@ -237,6 +263,7 @@ import {
 } from './systems/procedural_anomalies';
 import {
   ensureFloorInstanceState,
+  floorInstanceAllowsNpcs,
   floorInstanceLabel,
   getActiveFloorInstance,
   resolveElevatorRoute,
@@ -276,12 +303,12 @@ import {
   forceProceduralFloorAnomaly,
   nextFloorRunSamosborCooldown,
   normalizeFloorRunSeed,
-  podadLowerRouteOpen,
   resolveFloorRunRoute,
   ROUTE_LIFTS_PER_DIRECTION,
   setFloorRunState,
   type FloorRunEntry,
 } from './systems/procedural_floors';
+import { openRouteGateIds } from './systems/route_gates';
 import {
   clearLiftArachnaActive,
   ensureLiftArachnaState,
@@ -459,7 +486,7 @@ import {
   type TitleScreenMode,
   type TitleSetupRowView,
 } from './render/title_ui';
-import { installCanvasLocalization, setLocalizationLanguage } from './systems/localization';
+import { installCanvasLocalization, setCanvasTextGlitchPressure, setLocalizationLanguage } from './systems/localization';
 import {
   ACTIVE_ACTOR_SOFT_LIMIT_STEP,
   MAX_ACTIVE_ACTOR_SOFT_LIMIT,
@@ -491,8 +518,18 @@ const FULL_MAP_RADIUS_DEFAULT = 200;
 const FULL_MAP_RADIUS_MIN = 48;
 const FULL_MAP_RADIUS_MAX = W / 2;
 const FULL_MAP_ZOOM_STEP = 1.18;
-type TitleInputField = Extract<TitleHitField, 'language' | 'name' | 'age' | 'sex' | 'seed' | 'actorCap' | 'start'>;
-const TITLE_SETUP_FIELDS: readonly TitleInputField[] = ['start', 'language', 'name', 'age', 'sex', 'seed', 'actorCap'];
+type TitleInputField = Extract<TitleHitField, 'language' | 'name' | 'age' | 'sex' | 'seed' | 'actorCap' | 'addNpc' | 'start'>;
+const NPC_INTAKE_ENABLED = Boolean((globalThis as { __GIGAHRUSH_NPC_INTAKE_ENABLED__?: boolean }).__GIGAHRUSH_NPC_INTAKE_ENABLED__);
+const TITLE_SETUP_FIELDS: readonly TitleInputField[] = [
+  'start',
+  ...(NPC_INTAKE_ENABLED ? (['addNpc'] as const) : []),
+  'language',
+  'name',
+  'age',
+  'sex',
+  'seed',
+  'actorCap',
+];
 let started = false;
 let playerNickname = loadPlayerNickname();
 let playerAge = loadPlayerAge();
@@ -692,9 +729,25 @@ function openTitleSetupMenu(): void {
   showTitle();
 }
 
+function openNpcIntakePage(): void {
+  if (!NPC_INTAKE_ENABLED) return;
+  try {
+    if (document.pointerLockElement) document.exitPointerLock?.();
+  } catch {
+    // Pointer lock release can fail if the browser already released it.
+  }
+  const target = new URL('./npc-intake/', window.location.href);
+  // With noopener, browsers may return null even when the tab opens.
+  window.open(target.href, '_blank', 'noopener,noreferrer');
+}
+
 function editTitleFieldFromPointer(field: TitleInputField): void {
   if (field === 'start') {
     startGameFromTitle();
+    return;
+  }
+  if (field === 'addNpc') {
+    openNpcIntakePage();
     return;
   }
   if (field === 'language') {
@@ -746,6 +799,13 @@ function titleSetupRows(cursorOn: boolean): TitleSetupRowView[] {
   const seedCursor = cursorOn && selected('seed') ? '_' : '';
   return [
     { field: 'start', label: lang.setupStartLabel, value: lang.setupStartValue, hint: lang.setupStartHint, selected: selected('start') },
+    ...(NPC_INTAKE_ENABLED ? [{
+      field: 'addNpc' as const,
+      label: lang.setupAddNpcLabel,
+      value: lang.setupAddNpcValue,
+      hint: lang.setupAddNpcHint,
+      selected: selected('addNpc'),
+    }] : []),
     { field: 'language', label: lang.setupLanguageLabel, value: titleLanguageDef(titleLanguageId).name, hint: lang.setupLanguageHint, selected: selected('language') },
     { field: 'name', label: lang.nameLabel, value: `${shownName}${nameCursor}`, hint: lang.setupNameHint, selected: selected('name') },
     { field: 'age', label: lang.ageLabel, value: `${shownAge}${ageCursor}`, hint: lang.setupAgeHint, selected: selected('age') },
@@ -955,6 +1015,8 @@ let currentTip = randomTip();
 let activeSkyProvider: (DynamicSkyTexture & { update(deltaSeconds: number): boolean }) | null = null;
 let lastVoidReturnPortalHintTick = -9999;
 let lastAttackFeedbackAt = -999;
+let visualDetailCacheKey = '';
+let visualDetailCacheProfile: ResolvedVisualDetailProfile = EMPTY_RESOLVED_VISUAL_DETAIL_PROFILE;
 
 const PLAYER_BAR_AUDIO_IDS = ['hp', 'psi', 'food', 'water', 'sleep', 'toilet', 'xp'] as const satisfies readonly HudBarAudioId[];
 const PLAYER_BAR_AUDIO_THRESHOLD = 5;
@@ -985,6 +1047,30 @@ function playerBarAudioValues(actor = player): PlayerBarAudioValues {
   };
 }
 
+function floorThemeForRunEntry(entry: FloorRunEntry): FloorThemeProfile {
+  if (entry.spec) return themeForProceduralSpec(entry.spec);
+  if (entry.designFloorId) return themeForDesignFloor(entry.designFloorId);
+  return themeForStoryFloor(entry.storyFloor ?? entry.baseFloor);
+}
+
+function currentVisualDetailProfile(entry: FloorRunEntry): ResolvedVisualDetailProfile {
+  const runSeed = ensureFloorRunState(state).runSeed;
+  const seed = entry.spec?.seed ?? runSeed;
+  const key = [
+    entry.z,
+    entry.baseFloor,
+    entry.storyFloor ?? '',
+    entry.designFloorId ?? '',
+    entry.spec?.key ?? '',
+    seed,
+  ].join('|');
+  if (key !== visualDetailCacheKey) {
+    visualDetailCacheKey = key;
+    visualDetailCacheProfile = resolveVisualDetailProfile(floorThemeForRunEntry(entry), { seed });
+  }
+  return visualDetailCacheProfile;
+}
+
 function syncPlayerBarAudioSnapshot(): void {
   if (typeof player === 'undefined') return;
   const values = playerBarAudioValues();
@@ -1007,12 +1093,53 @@ function syncPlayerRuntimeBaselines(): void {
 
 function makeCurrentPlayer(actor: Entity | undefined): boolean {
   if (!actor) return false;
+  normalizeHumanoidBaseMoveSpeed(actor);
   if (actor.id === player.id) {
     setCurrentPlayerEntity(player);
     return false;
   }
   player = actor;
   syncPlayerRuntimeBaselines();
+  return true;
+}
+
+function randomDeathContinuationNpc(random: () => number = Math.random): Entity | undefined {
+  let selected: Entity | undefined;
+  let seen = 0;
+  for (const candidate of entities) {
+    if (!candidate.alive || candidate.type !== EntityType.NPC) continue;
+    if (candidate.id === player.id || isNativePlayerBodyEntity(candidate) || isPlayerEntity(candidate)) continue;
+    seen++;
+    if (random() * seen < 1) selected = candidate;
+  }
+  return selected;
+}
+
+function continueDeathAsRandomNpc(): boolean {
+  if (!state.gameOver || state.gameWon) return false;
+  const host = randomDeathContinuationNpc();
+  if (!host) {
+    state.msgs.push(msg('На этаже не осталось живого человека для продолжения пути.', state.time, '#f84'));
+    return false;
+  }
+  endPsiPossession(entities, player, undefined, state.time, 'reset');
+  if (host.ai) {
+    host.ai.combatTargetId = undefined;
+    host.ai.goal = AIGoal.IDLE;
+    host.ai.path = [];
+    host.ai.timer = 0;
+  }
+  host.psiControlledBy = undefined;
+  makeCurrentPlayer(host);
+  resetRuntimeCamera(runtimeCamera);
+  state.gameOver = false;
+  state.gameWon = false;
+  state.deathTimer = 0;
+  state.lastDamage = undefined;
+  state.dmgFlash = 0;
+  state.sleeping = false;
+  netDeathReported = false;
+  state.msgs.push(msg(`Продолжаете путь как ${entityDisplayName(host)}.`, state.time, '#8cf'));
   return true;
 }
 
@@ -1372,7 +1499,7 @@ function returnFromVoidPortalToLiving(portal: VoidReturnPortalState): void {
     world = replaceWorldFromGeneration(null, gen);
     entities = gen.entities;
     nextEntityId.v = entities.reduce((mx, e) => Math.max(mx, e.id), 0) + 1;
-    materializeCurrentAlifeFloor();
+    materializeCurrentAlifeFloor(currentFloorMemoryKey());
 
     player = {
       id: nextEntityId.v++,
@@ -1382,7 +1509,7 @@ function returnFromVoidPortalToLiving(portal: VoidReturnPortalState): void {
       angle: savedAngle,
       pitch: 0,
       alive: true,
-      speed: 3.0,
+      speed: HUMANOID_BASE_MOVE_SPEED,
       sprite: 0,
       needs: savedNeeds,
       hp: savedHp,
@@ -1753,7 +1880,7 @@ function placeNetTerminalGenContentForCurrentFloor(): void {
 
 function currentRouteLiftDirections(): LiftDirection[] {
   const entry = currentFloorRunEntry(state);
-  return floorRunEntryLiftDirections(entry, podadLowerRouteOpen(state));
+  return floorRunEntryLiftDirections(entry, openRouteGateIds(state));
 }
 
 function ensureCurrentRouteLiftLayout(mirror?: FloorRouteLiftMirror): void {
@@ -1772,6 +1899,7 @@ function prepareEditableFloor(mirror?: FloorRouteLiftMirror, normalizeRouteLifts
 }
 
 function drawLoading(): void {
+  setCanvasTextGlitchPressure();
   currentTip = randomTip();
   ctx.fillStyle = '#000';
   ctx.fillRect(0, 0, hudCanvas.width, hudCanvas.height);
@@ -1827,7 +1955,7 @@ function initGame(runSeedOverride?: number): void {
     angle: -Math.PI / 2, // face north — toward slides
     pitch: 0,
     alive: true,
-    speed: 3.0,
+    speed: HUMANOID_BASE_MOVE_SPEED,
     sprite: 0,
     needs: freshNeeds(),
     hp: 100, maxHp: 100,
@@ -1903,6 +2031,7 @@ function initGame(runSeedOverride?: number): void {
     demosPostCursor: 0,
     showLog: false,
     logScroll: 0,
+    showHelp: false,
     showControls: false,
     controlView: 'keys',
     controlSel: 0,
@@ -1939,7 +2068,7 @@ function initGame(runSeedOverride?: number): void {
   closeNetTerminalGen();
   resetComputerState();
   resetNetHackState();
-  closeMapEditor();
+  closeMapEditorAndRefreshWorld();
   setFloorRunState(state, { runSeed: initialRunSeed }, FloorLevel.LIVING);
   if (runSeedOverride !== undefined) {
     setAlifeState(state, { seed: runSeedOverride });
@@ -1969,6 +2098,7 @@ function bootInitialGameOrTitle(): void {
   titleStartNeedsInit = true;
   showTitle();
   markPlatformReady();
+  requestAnimationFrame(gameLoop);
 }
 
 /* ── Input ────────────────────────────────────────────────────── */
@@ -2242,18 +2372,16 @@ function movePlayer(dt: number): void {
   // Normalize
   const len = Math.sqrt(mx * mx + my * my);
   if (len > 0) {
-    const speed = actor.speed * dt;
+    const speed = actorMoveSpeed(actor) * dt;
     // Sleep exhaustion reduces speed
     const sleepMod = actor.needs && actor.needs.sleep < 10 ? 0.5 : 1;
-    // AGI bonus to move speed
-    const agiMod = actor.rpg ? agiSpeedMult(actor.rpg) : 1;
     const hazardMod = getCellHazardMoveMultiplier(world, actor);
     const statusMod = zhelemishMoveMult(actor, state.time);
     const coldMod = hladonColdMoveMultiplier(world, actor);
     const toolLightMod = passiveToolLightMoveMultiplier(actor.tool) *
       ((input.use || input.mouseUse) ? activeToolLightMoveMultiplier(actor.tool) : 1);
     const sprintMod = playerSprintMoveMultiplier(actor);
-    const moveMod = sleepMod * agiMod * hazardMod * statusMod * coldMod * toolLightMod * sprintMod;
+    const moveMod = sleepMod * hazardMod * statusMod * coldMod * toolLightMod * sprintMod;
     mx = mx / len * speed * moveMod;
     my = my / len * speed * moveMod;
 
@@ -2421,9 +2549,10 @@ function playerActions(_dt: number): void {
       openMapEditor,
       playDoor,
       manualItemPickup: !autoPickupEnabled(),
-      onPickedDrop: drop => {
+      onPickedDrop: (drop: Entity, pickedItems: readonly Item[] = []) => {
         claimNetTerminalGenFleshDrop(state, drop, player, world);
         recordFactionEventLootTaken(state, world, player, drop);
+        applyPickedStoryItemOutcomes(pickedItems, player, entities, state, state.msgs);
       },
     });
     if (result.worldChanged) updateWorldData(world);
@@ -2657,71 +2786,6 @@ function dropEntityInventory(e: Entity): void {
   e.inventory = [];
 }
 
-/* ── Defense quest continuous monster spawner (step 8) ─────────── */
-let _defenseSpawnAccum = 0;
-function updateDefenseQuestSpawn(dt: number): void {
-  const quest = state.quests.find(q => q.plotStepIndex === 8 && !q.done && q.type === QuestType.KILL);
-  if (!quest) { _defenseSpawnAccum = 0; return; }
-
-  // Find Major Grom's position as spawn anchor
-  const grom = entities.find(e => e.plotNpcId === 'major_grom' && e.alive);
-  if (!grom) return;
-
-  _defenseSpawnAccum += dt;
-  if (_defenseSpawnAccum < 3.0) return; // spawn wave every 3 seconds
-  _defenseSpawnAccum -= 3.0;
-
-  // Count active monsters near Grom
-  let nearbyMonsters = 0;
-  for (const e of entities) {
-    if (e.type === EntityType.MONSTER && e.alive) {
-      if (world.dist(grom.x, grom.y, e.x, e.y) < 25) nearbyMonsters++;
-    }
-  }
-  if (nearbyMonsters >= 8) return; // enough already
-
-  // Spawn 2-3 monsters at ~3-8 cells from Grom (tight corridors)
-  const kinds = [MonsterKind.TVAR, MonsterKind.SBORKA, MonsterKind.ZOMBIE, MonsterKind.SHADOW, MonsterKind.POLZUN];
-  const count = 2 + Math.floor(Math.random() * 2);
-  for (let i = 0; i < count; i++) {
-    const angle = Math.random() * Math.PI * 2;
-    const dist = 3 + Math.random() * 5;
-    let mx = -1, my = -1;
-    for (let attempt = 0; attempt < 60; attempt++) {
-      const a = angle + (attempt > 0 ? (Math.random() - 0.5) * 1.5 : 0);
-      const d = dist + (attempt > 0 ? (Math.random() - 0.5) * 4 : 0);
-      const tx = ((Math.floor(grom.x) + Math.round(Math.cos(a) * d)) % W + W) % W;
-      const ty = ((Math.floor(grom.y) + Math.round(Math.sin(a) * d)) % W + W) % W;
-      if (world.cells[world.idx(tx, ty)] === Cell.FLOOR) {
-        mx = tx; my = ty; break;
-      }
-    }
-    if (mx < 0) continue;
-    const kind = kinds[Math.floor(Math.random() * kinds.length)];
-    const ci = world.idx(mx, my);
-    const zid = world.zoneMap[ci];
-    const zoneLevel = (zid >= 0 && world.zones[zid]) ? (world.zones[zid].level ?? 6) : 6;
-    const mRpg = freshRPG(zoneLevel);
-    const baseHp: Record<number, number> = {
-      [MonsterKind.TVAR]: 40, [MonsterKind.SBORKA]: 5,
-      [MonsterKind.ZOMBIE]: 25, [MonsterKind.SHADOW]: 45, [MonsterKind.POLZUN]: 80,
-    };
-    const hp = Math.round((baseHp[kind] ?? 40) * (1 + 0.12 * (zoneLevel - 1)));
-    entities.push({
-      id: nextEntityId.v++, type: EntityType.MONSTER,
-      x: mx + 0.5, y: my + 0.5,
-      angle: Math.atan2(grom.y - my - 0.5, grom.x - mx - 0.5),
-      pitch: 0, alive: true,
-      speed: 1.5 + Math.random() * 0.8,
-      sprite: monsterSpr(kind),
-      hp, maxHp: hp,
-      monsterKind: kind, attackCd: 0,
-      ai: { goal: AIGoal.WANDER, tx: Math.floor(grom.x), ty: Math.floor(grom.y), path: [], pi: 0, stuck: 0, timer: 0 },
-      rpg: mRpg,
-    });
-  }
-}
-
 /* ── Shared kill handling (melee + projectile) ────────────────── */
 function isBossKillTarget(e: Entity): boolean {
   if (e.type !== EntityType.MONSTER) return false;
@@ -2802,20 +2866,7 @@ function handleKill(e: Entity, killerIsPlayer: boolean, pvx = 0, pvy = 0, goreLe
       const def = ITEMS[rareLoot.itemId];
       state.msgs.push(msg(`На месте боя осталось: ${def?.name ?? rareLoot.itemId}${rareLoot.count > 1 ? ' ×' + rareLoot.count : ''}.`, state.time, '#9cf'));
     }
-    // Drop strange_clot from Shadow when plot KILL quest for shadows is active
-    if (e.monsterKind === MonsterKind.SHADOW && killerIsPlayer) {
-      const hasPlotShadowQuest = state.quests.some(q => !q.done && q.plotStepIndex !== undefined && q.targetMonsterKind === MonsterKind.SHADOW);
-      if (hasPlotShadowQuest && canSpawnEntityType(entities, EntityType.ITEM_DROP)) {
-        entities.push({
-          id: nextEntityId.v++, type: EntityType.ITEM_DROP,
-          x: e.x + (Math.random() - 0.5) * 0.3,
-          y: e.y + (Math.random() - 0.5) * 0.3,
-          angle: 0, pitch: 0, alive: true, speed: 0, sprite: Spr.ITEM_DROP,
-          inventory: [{ defId: 'strange_clot', count: 1 }],
-        });
-        state.msgs.push(msg('Теневик выронил странный пульсирующий сгусток!', state.time, '#c8f'));
-      }
-    }
+    spawnStoryDeathDrops(e, killerIsPlayer, entities, nextEntityId, state, state.msgs);
     if (killerIsPlayer) {
       awardXP(player, xpForMonsterKill(e.monsterKind, e.rpg?.level ?? 1), state.msgs, state.time);
     }
@@ -3182,6 +3233,7 @@ function triggerExplosion(p: Entity, pt: ProjType): void {
   const dmg = p.aoeDmg ?? p.projDmg ?? 80;
   const isPlayer = isPlayerOwnedProjectile(p);
   const actor = projectileActor(p);
+  spawnExplosionParticles(world, p.x, p.y, radius, pt);
 
   // AoE damage to all entities in radius
   let hits = 0;
@@ -3279,6 +3331,11 @@ function triggerExplosion(p: Entity, pt: ProjType): void {
 
 /* ── Restart check ────────────────────────────────────────────── */
 function checkRestart(): void {
+  if (state.gameOver && input.escape) {
+    continueDeathAsRandomNpc();
+    input.escape = false;
+    return;
+  }
   if (state.gameOver && input.use) {
     resetRuntimeCamera(runtimeCamera);
     scheduleLoading(() => { initGame(); });
@@ -3338,7 +3395,12 @@ function safeSpawnNear(savedX: unknown, savedY: unknown, fallbackX: number, fall
 
 function currentRouteRebuildGeneration(): FloorGeneration | undefined {
   invalidateFloorMemory(currentFloorMemoryKey());
-  if (getActiveFloorInstance(state)) return undefined;
+  const activeInstance = getActiveFloorInstance(state);
+  if (activeInstance) {
+    return floorInstanceSamosborReplacementAllowed(activeInstance.id)
+      ? generateFloorInstance(activeInstance.id, ensureFloorRunState(state).runSeed, activeInstance.seed)
+      : undefined;
+  }
   const entry = currentFloorRunEntry(state);
   if (entry.spec) return generateProceduralFloor(entry.spec);
   const runSeed = ensureFloorRunState(state).runSeed;
@@ -3352,7 +3414,12 @@ function currentSamosborPatchSeed(): number {
 
 function currentRouteLocalSamosborPatchGeneration(patchSeed: number): FloorGeneration | undefined {
   invalidateFloorMemory(currentFloorMemoryKey());
-  if (getActiveFloorInstance(state)) return undefined;
+  const activeInstance = getActiveFloorInstance(state);
+  if (activeInstance) {
+    return floorInstanceSamosborReplacementAllowed(activeInstance.id)
+      ? generateFloorInstance(activeInstance.id, patchSeed, activeInstance.seed)
+      : undefined;
+  }
   const entry = currentFloorRunEntry(state);
   if (entry.spec) return generateProceduralFloor({ ...entry.spec, seed: patchSeed });
   if (entry.designFloorId) return generateDesignFloor(entry.designFloorId, patchSeed);
@@ -3377,6 +3444,8 @@ function floorTargetAllowsNpcPopulation(entry: ReturnType<typeof currentFloorRun
 }
 
 function currentFloorAllowsNpcPopulation(): boolean {
+  const activeInstance = getActiveFloorInstance(state);
+  if (activeInstance) return floorInstanceAllowsNpcs(activeInstance.id);
   return floorTargetAllowsNpcPopulation(currentFloorRunEntry(state), state.currentFloor);
 }
 
@@ -3386,6 +3455,7 @@ function captureCurrentAlifeFloor(): void {
 
 function materializeCurrentAlifeFloor(floorKey = currentAlifeFloorKey(state)): void {
   materializeAlifeFloorPopulation(state, world, entities, nextEntityId, floorKey);
+  normalizeHumanoidBaseMoveSpeeds(entities);
 }
 
 function currentFloorMemoryKey(): string {
@@ -3427,6 +3497,10 @@ function captureFloorMemoryByKey(key: string): void {
 }
 
 function generateFloorForTarget(floor: FloorLevel, entry: FloorRunEntry | null | undefined): FloorGeneration {
+  const activeInstance = getActiveFloorInstance(state);
+  if (!entry && activeInstance?.baseFloor === floor) {
+    return generateFloorInstance(activeInstance.id, ensureFloorRunState(state).runSeed, activeInstance.seed);
+  }
   if (entry?.spec) return generateProceduralFloor(entry.spec);
   const runSeed = ensureFloorRunState(state).runSeed;
   if (entry?.designFloorId) return generateDesignFloor(entry.designFloorId, runSeed);
@@ -3434,6 +3508,8 @@ function generateFloorForTarget(floor: FloorLevel, entry: FloorRunEntry | null |
 }
 
 function floorMemoryGenerationExtrasForKey(key: string): Record<string, unknown> | undefined {
+  const instanceExtras = floorInstanceGenerationExtrasForKey(key);
+  if (instanceExtras) return { ...instanceExtras };
   const designPrefix = 'design:';
   if (!key.startsWith(designPrefix)) return undefined;
   const designId = key.slice(designPrefix.length);
@@ -3543,7 +3619,7 @@ function switchFloor(
     world = replaceWorldFromGeneration(null, gen);
     entities = gen.entities;
     nextEntityId.v = entities.reduce((mx, e) => Math.max(mx, e.id), 0) + 1;
-    materializeCurrentAlifeFloor();
+    materializeCurrentAlifeFloor(currentFloorMemoryKey());
 
     const routeLiftMirror = !activeFloorInstance && !route.activeInstance && generatedRunEntry && departureLiftAnchors.length > 0
       ? { direction: returnDirection, anchors: departureLiftAnchors }
@@ -3563,7 +3639,7 @@ function switchFloor(
       angle: savedAngle,
       pitch: 0,
       alive: true,
-      speed: 3.0,
+      speed: HUMANOID_BASE_MOVE_SPEED,
       sprite: 0,
       needs: savedNeeds,
       hp: savedHp,
@@ -3752,7 +3828,7 @@ function debugTeleportTo(target: DebugTeleportTarget): void {
       angle: savedAngle,
       pitch: 0,
       alive: true,
-      speed: 3.0,
+      speed: HUMANOID_BASE_MOVE_SPEED,
       sprite: 0,
       needs: savedNeeds,
       hp: savedHp,
@@ -3951,6 +4027,7 @@ function closeInterfacesForCraftMenu(): void {
   state.showDemos = false;
   state.demosSearchActive = false;
   state.showLog = false;
+  state.showHelp = false;
   state.showControls = false;
   state.showUiSettings = false;
   state.showMapLegend = false;
@@ -3960,7 +4037,7 @@ function closeInterfacesForCraftMenu(): void {
   closeNetTerminalGen();
   closeInteractableOverlay();
   closeEmergencyPanelMenu();
-  closeMapEditor();
+  closeMapEditorAndRefreshWorld();
 }
 
 function openCraftMenu(request: ContentCraftMenuRequest): void {
@@ -4454,6 +4531,7 @@ function loadGame(): boolean {
     const generatedRunEntry = loadedFloorInstances.current ? null : loadedRunEntry;
 
     state.showMenu = false;
+    state.showHelp = false;
     state.showControls = false;
     state.controlView = 'keys';
     state.showUiSettings = false;
@@ -4464,7 +4542,7 @@ function loadGame(): boolean {
     state.demosPostCursor = 0;
     cancelControlCapture();
     closeNetTerminalGen();
-    closeMapEditor();
+    closeMapEditorAndRefreshWorld();
     restoreFloorMemoryFromSave(dataState.floorMemory, {
       generationExtrasForKey: floorMemoryGenerationExtrasForKey,
     });
@@ -4478,7 +4556,7 @@ function loadGame(): boolean {
       world = replaceWorldFromGeneration(null, gen);
       entities = gen.entities;
       nextEntityId.v = entities.reduce((mx, e) => Math.max(mx, e.id), 0) + 1;
-      materializeCurrentAlifeFloor(generatedRunEntry ? floorRunEntryFloorKey(generatedRunEntry) : currentAlifeFloorKey(state));
+      materializeCurrentAlifeFloor(generatedRunEntry ? floorRunEntryFloorKey(generatedRunEntry) : currentFloorMemoryKey());
       const spawn = safeSpawnNear(
         finiteNumber(dataPlayer.x, gen.spawnX),
         finiteNumber(dataPlayer.y, gen.spawnY),
@@ -4494,7 +4572,7 @@ function loadGame(): boolean {
         angle: finiteNumber(dataPlayer.angle, 0),
         pitch: 0,
         alive: true,
-        speed: 3.0,
+        speed: HUMANOID_BASE_MOVE_SPEED,
         sprite: 0,
         needs: normalizedNeeds,
         hp: clampNumber(dataPlayer.hp, normalizedMaxHp, 1, normalizedMaxHp),
@@ -4557,6 +4635,7 @@ function loadGame(): boolean {
       resetRuntimeCamera(runtimeCamera);
       state.lastDamage = undefined;
       state.showMenu = false;
+      state.showHelp = false;
       state.showControls = false;
       state.controlView = 'keys';
       state.showUiSettings = false;
@@ -4648,6 +4727,7 @@ function cleanSurfaceArea(cx: number, cy: number, radiusCells: number): number {
   const maxX = Math.floor(cx + radiusCells) + 1;
   const minY = Math.floor(cy - radiusCells) - 1;
   const maxY = Math.floor(cy + radiusCells) + 1;
+  const changedCells: number[] = [];
   let removed = 0;
 
   for (let y = minY; y <= maxY; y++) {
@@ -4670,12 +4750,13 @@ function cleanSurfaceArea(cx: number, cy: number, radiusCells: number): number {
           const na = Math.max(0, a - dec);
           removed += a - na;
           cell[ai] = na;
+          if (!changedCells.includes(ci)) changedCells.push(ci);
         }
       }
     }
   }
 
-  if (removed > 0) world.surfaceVersion++;
+  if (changedCells.length > 0) world.markSurfaceCellsDirty(changedCells);
   return removed;
 }
 
@@ -4882,6 +4963,7 @@ let prevMenuUp = false, prevMenuDn = false, prevMenuLeft = false, prevMenuRight 
 let prevDrop = false;
 let prevFactionMenu = false;
 let prevLogMenu = false;
+let prevHelpMenu = false;
 let prevControlsMenu = false;
 let prevUiSettingsMenu = false;
 let prevMapLegendMenu = false;
@@ -4935,6 +5017,7 @@ function syncMenuInputBaselines(): void {
   prevDebug = input.debugScreen;
   prevFactionMenu = input.factionMenu;
   prevLogMenu = input.logMenu;
+  prevHelpMenu = input.help;
   prevControlsMenu = input.controls;
   prevUiSettingsMenu = input.uiSettings;
   prevMapLegendMenu = input.mapLegend;
@@ -4991,7 +5074,7 @@ function clearPausedPointerGameplayInputs(): void {
 function shouldHandleMenuPointerInput(): boolean {
   if (!started || pendingLoad || typeof state === 'undefined' || state.gameOver || pointerCaptureGateVisible()) return false;
   return state.showMenu || state.showInventory || state.showNpcMenu || state.showContainerMenu || state.showCraftMenu ||
-    state.showQuests || state.showDebug || state.showFactions || state.showDemos || state.showLog || state.showControls || state.showUiSettings || state.showMapLegend ||
+    state.showQuests || state.showDebug || state.showFactions || state.showDemos || state.showLog || state.showHelp || state.showControls || state.showUiSettings || state.showMapLegend ||
     state.mapMode === 2 || isNetSphereOpen() || isNetTerminalGenOpen() || isInteractableOverlayOpen() || isEmergencyPanelMenuOpen() || isMapEditorOpen();
 }
 
@@ -5003,12 +5086,17 @@ function syncPauseState(): void {
   if (typeof state === 'undefined') return;
   const wasPaused = state.paused;
   const nextPaused = pointerCaptureGateVisible() || pageHiddenPause || platformPause || state.showMenu || state.showInventory || state.showNpcMenu || state.showContainerMenu || state.showCraftMenu ||
-    state.showQuests || state.showDebug || state.showFactions || state.showDemos || state.showLog || state.showControls || state.showUiSettings || state.showMapLegend ||
+    state.showQuests || state.showDebug || state.showFactions || state.showDemos || state.showLog || state.showHelp || state.showControls || state.showUiSettings || state.showMapLegend ||
     isNetSphereOpen() || isNetTerminalGenOpen() || isInteractableOverlayOpen() || isEmergencyPanelMenuOpen() || isMapEditorOpen();
   state.paused = nextPaused;
   if (wasPaused || nextPaused) clearPausedPointerGameplayInputs();
   syncPointerCursorClasses();
   syncPlatformGameplayState();
+}
+
+function closeMapEditorAndRefreshWorld(): void {
+  const result = closeMapEditor();
+  if (result.changed) updateWorldData(world);
 }
 
 function syncPlatformGameplayState(): void {
@@ -5023,7 +5111,7 @@ function syncPlatformGameplayState(): void {
 function isMobileMenuOpen(): boolean {
   if (typeof state === 'undefined') return false;
   return state.showMenu || state.showInventory || state.showNpcMenu || state.showContainerMenu || state.showCraftMenu ||
-    state.showQuests || state.showDebug || state.showFactions || state.showDemos || state.showLog || state.showControls || state.showUiSettings || state.showMapLegend ||
+    state.showQuests || state.showDebug || state.showFactions || state.showDemos || state.showLog || state.showHelp || state.showControls || state.showUiSettings || state.showMapLegend ||
     state.mapMode === 2 || isNetSphereOpen() || isNetTerminalGenOpen() || isInteractableOverlayOpen() || isEmergencyPanelMenuOpen() || isMapEditorOpen();
 }
 
@@ -5053,6 +5141,7 @@ function closeMobilePanels(includeMap = true): void {
   state.showDemos = false;
   state.demosSearchActive = false;
   state.showLog = false;
+  state.showHelp = false;
   state.showControls = false;
   state.showUiSettings = false;
   state.showMapLegend = false;
@@ -5062,7 +5151,7 @@ function closeMobilePanels(includeMap = true): void {
   closeNetTerminalGen();
   closeInteractableOverlay();
   closeEmergencyPanelMenu();
-  closeMapEditor();
+  closeMapEditorAndRefreshWorld();
   syncPauseState();
   updateMobileContext(true);
 }
@@ -5081,6 +5170,7 @@ function closeInterfacesForFullMap(): void {
   state.showDemos = false;
   state.demosSearchActive = false;
   state.showLog = false;
+  state.showHelp = false;
   state.showControls = false;
   state.showUiSettings = false;
   cancelControlCapture();
@@ -5088,7 +5178,7 @@ function closeInterfacesForFullMap(): void {
   closeNetTerminalGen();
   closeInteractableOverlay();
   closeEmergencyPanelMenu();
-  closeMapEditor();
+  closeMapEditorAndRefreshWorld();
 }
 
 function clampFullMapRadius(value: unknown): number {
@@ -5286,6 +5376,9 @@ function runGameMenuSelection(sel: number): void {
     case 'load':
       loadGame();
       break;
+    case 'help':
+      openHelpMenu();
+      return;
     case 'demos':
       openDemosMenu();
       return;
@@ -5312,6 +5405,7 @@ function openDemosMenu(): void {
   state.showDebug = false;
   state.showFactions = false;
   state.showLog = false;
+  state.showHelp = false;
   state.showControls = false;
   state.showUiSettings = false;
   state.showMapLegend = false;
@@ -5365,8 +5459,49 @@ function closeDemosMenu(): void {
   syncPauseState();
 }
 
+function openHelpMenu(): void {
+  clearTradeOffers(state);
+  state.showMenu = false;
+  state.showInventory = false;
+  state.showQuests = false;
+  state.showNpcMenu = false;
+  closeNpcInteractionInterface();
+  closeContainerMenu();
+  closeCraftMenu();
+  state.showDebug = false;
+  state.showFactions = false;
+  state.showDemos = false;
+  state.demosSearchActive = false;
+  state.showLog = false;
+  state.showHelp = false;
+  state.showControls = false;
+  state.showUiSettings = false;
+  state.showMapLegend = false;
+  state.mapMode = 0;
+  state.showHelp = true;
+  cancelControlCapture();
+  resetMenuRepeats();
+  syncPauseState();
+  updateMobileContext(true);
+}
+
+function closeHelpMenu(): void {
+  state.showHelp = false;
+  syncPauseState();
+  updateMobileContext(true);
+}
+
 function useInventorySelection(): void {
   const zoneId = world.zoneMap[world.idx(Math.floor(player.x), Math.floor(player.y))];
+  const slot = player.inventory?.[state.invSel];
+  if (slot && applyStoryItemOutcomes({
+    trigger: 'use',
+    item: { ...slot },
+    player,
+    entities,
+    state,
+    msgs: state.msgs,
+  }) > 0) return;
   useItem(player, state.invSel, state.msgs, state.time, state, zoneId, world);
 }
 
@@ -5612,6 +5747,7 @@ function openControlsMenu(view: GameState['controlView'] = 'keys'): void {
   state.showDemos = false;
   state.demosSearchActive = false;
   state.showLog = false;
+  state.showHelp = false;
   state.showUiSettings = false;
   state.showMapLegend = false;
   state.mapMode = 0;
@@ -5647,6 +5783,7 @@ function openUiSettingsMenu(view: UiSettingsView = 'interface', focusKind?: stri
   state.showDemos = false;
   state.demosSearchActive = false;
   state.showLog = false;
+  state.showHelp = false;
   state.showControls = false;
   state.mapMode = 0;
   state.showMapLegend = false;
@@ -5677,8 +5814,8 @@ function applyUiSettingsSelection(index: number): void {
     return;
   }
   if (row.kind === 'reset_graphics') {
-    const fov = resetCameraFov();
-    state.msgs.push(msg(`Графика сброшена: FOV ${fov}°`, state.time, '#8cf'));
+    resetGraphicsSettings();
+    state.msgs.push(msg('Графика сброшена: FOV 90°, помехи критично, HUD меньше движения', state.time, '#8cf'));
     return;
   }
   if (row.kind === 'preset') {
@@ -5697,6 +5834,22 @@ function applyUiSettingsSelection(index: number): void {
     state.msgs.push(msg(`FOV: ${fov}°`, state.time, '#8cf'));
     return;
   }
+  if (row.kind === 'screen_interference') {
+    const mode = cycleScreenInterferenceMode(1);
+    const label = mode === 'off' ? 'выкл' : mode === 'full' ? 'полные' : 'слабые';
+    state.msgs.push(msg(`Помехи экрана: ${label}`, state.time, mode === 'off' ? '#fc8' : '#8cf'));
+    return;
+  }
+  if (row.kind === 'hud_motion') {
+    const mode = cycleHudMotionMode();
+    state.msgs.push(msg(`Движение HUD: ${mode === 'reduced' ? 'меньше' : 'норма'}`, state.time, '#8cf'));
+    return;
+  }
+  if (row.kind === 'map_contrast') {
+    const enabled = toggleMapHighContrast();
+    state.msgs.push(msg(`Карта: контраст ${enabled ? 'вкл' : 'выкл'}`, state.time, enabled ? '#8cf' : '#fc8'));
+    return;
+  }
   if (row.kind === 'auto_pickup') {
     const enabled = toggleAutoPickup();
     state.msgs.push(msg(`Автоподбор предметов: ${enabled ? 'вкл' : 'выкл'}`, state.time, enabled ? '#8cf' : '#fc8'));
@@ -5711,11 +5864,6 @@ function applyMapLegendSelection(index: number): void {
   if (row.kind === 'reset_map_legend') {
     resetMapLegendSettings();
     state.msgs.push(msg('Легенда карты сброшена', state.time, '#8cf'));
-    return;
-  }
-  if (row.kind === 'map_color_mode') {
-    const mode = toggleMapColorMode();
-    state.msgs.push(msg(`Карта: цвет клеток - ${mode === 'factions' ? 'контроль фракций' : 'типы комнат'}`, state.time, '#8cf'));
     return;
   }
   if (row.kind === 'map_contrast') {
@@ -5739,13 +5887,18 @@ function handleMobileHudTap(x: number, y: number): void {
   const baseSy = h / SCR_H;
   const { sx, sy } = menuScale();
 
-  if (state.mapMode === 2 && !state.showInventory && !state.showQuests && !state.showLog && !state.showFactions && !state.showDemos && !state.showMenu && !state.showControls && !state.showUiSettings && !state.showNpcMenu && !state.showContainerMenu && !state.showCraftMenu) {
+  if (state.mapMode === 2 && !state.showInventory && !state.showQuests && !state.showLog && !state.showFactions && !state.showDemos && !state.showMenu && !state.showHelp && !state.showControls && !state.showUiSettings && !state.showNpcMenu && !state.showContainerMenu && !state.showCraftMenu) {
     state.mapMode = 0;
     return;
   }
 
-  if (state.showMapLegend && !state.showInventory && !state.showQuests && !state.showLog && !state.showFactions && !state.showDemos && !state.showMenu && !state.showControls && !state.showUiSettings && !state.showNpcMenu && !state.showContainerMenu && !state.showCraftMenu) {
+  if (state.showMapLegend && !state.showInventory && !state.showQuests && !state.showLog && !state.showFactions && !state.showDemos && !state.showMenu && !state.showHelp && !state.showControls && !state.showUiSettings && !state.showNpcMenu && !state.showContainerMenu && !state.showCraftMenu) {
     state.showMapLegend = false;
+    return;
+  }
+
+  if (state.showHelp) {
+    closeHelpMenu();
     return;
   }
 
@@ -6118,6 +6271,7 @@ function handleMenuInput(): void {
     state.showDemos = false;
     state.demosSearchActive = false;
     state.showLog = false;
+    state.showHelp = false;
     state.showControls = false;
     state.showUiSettings = false;
     state.showMapLegend = false;
@@ -6126,26 +6280,11 @@ function handleMenuInput(): void {
     closeNetTerminalGen();
     closeInteractableOverlay();
     closeEmergencyPanelMenu();
-    closeMapEditor();
+    closeMapEditorAndRefreshWorld();
     resetMenuRepeats();
     // Keep edge-detection prev states in sync so first frame after
     // respawn doesn't fire a stale edge.
-    prevEsc = input.escape;
-    prevMenuUp = input.invUp;
-    prevMenuDn = input.invDn;
-    prevMenuLeft = input.invLeft;
-    prevMenuRight = input.invRight;
-    prevDrop = input.drop;
-    prevInvMenu = input.inv;
-    prevQuestMenu = input.questLog;
-    prevFactionMenu = input.factionMenu;
-    prevLogMenu = input.logMenu;
-    prevControlsMenu = input.controls;
-    prevUiSettingsMenu = input.uiSettings;
-    prevMapLegendMenu = input.mapLegend;
-    prevControlReset = input.controlReset;
-    prevControlClose = input.controlClose;
-    prevMap = input.map;
+    syncMenuInputBaselines();
     input.menuAccept = false;
     input.menuClose = false;
     input.menuWheel = 0;
@@ -6184,6 +6323,7 @@ function handleMenuInput(): void {
   const questEdge = input.questLog && !prevQuestMenu;
   const factionEdge = input.factionMenu && !prevFactionMenu;
   const logEdge = input.logMenu && !prevLogMenu;
+  const helpEdge = input.help && !prevHelpMenu;
   const controlsEdge = input.controls && !prevControlsMenu;
   const uiSettingsEdge = input.uiSettings && !prevUiSettingsMenu;
   const dbgEdge = input.debugScreen && !prevDebug;
@@ -6226,23 +6366,7 @@ function handleMenuInput(): void {
       if (dnNav) moveDemosPanelCursor(1);
     }
 
-    prevEsc = input.escape;
-    prevMenuUp = input.invUp;
-    prevMenuDn = input.invDn;
-    prevMenuLeft = input.invLeft;
-    prevMenuRight = input.invRight;
-    prevDrop = input.drop;
-    prevInvMenu = input.inv;
-    prevQuestMenu = input.questLog;
-    prevDebug = input.debugScreen;
-    prevFactionMenu = input.factionMenu;
-    prevLogMenu = input.logMenu;
-    prevControlsMenu = input.controls;
-    prevUiSettingsMenu = input.uiSettings;
-    prevMapLegendMenu = input.mapLegend;
-    prevControlReset = input.controlReset;
-    prevControlClose = input.controlClose;
-    prevMap = input.map;
+    syncMenuInputBaselines();
     syncPauseState();
     return;
   }
@@ -6287,6 +6411,7 @@ function handleMenuInput(): void {
     state.showDemos = false;
     state.demosSearchActive = false;
     state.showLog = false;
+    state.showHelp = false;
     state.showDebug = false;
     state.showControls = false;
     state.showUiSettings = false;
@@ -6304,7 +6429,7 @@ function handleMenuInput(): void {
     const rightNav = menuRepeatStep('right', input.invRight || input.drop, rightEdge);
 
     const closeEditor = () => {
-      closeMapEditor();
+      closeMapEditorAndRefreshWorld();
       closeNetTerminalGen();
       syncPauseState();
     };
@@ -6321,31 +6446,14 @@ function handleMenuInput(): void {
       if (acceptEdge) {
         const action = activateMapEditorMode();
         if (action === 'apply') {
-          const result = applyCurrentMapEditorBrush(world, entities, player, state, nextEntityId);
-          if (result.ok) updateWorldData(world);
+          applyCurrentMapEditorBrush(world, entities, player, state, nextEntityId);
         } else if (action === 'close') {
           closeEditor();
         }
       }
     }
 
-    prevEsc = input.escape;
-    prevMenuUp = input.invUp;
-    prevMenuDn = input.invDn;
-    prevMenuLeft = input.invLeft;
-    prevMenuRight = input.invRight;
-    prevDrop = input.drop;
-    prevInvMenu = input.inv;
-    prevQuestMenu = input.questLog;
-    prevDebug = input.debugScreen;
-    prevFactionMenu = input.factionMenu;
-    prevLogMenu = input.logMenu;
-    prevControlsMenu = input.controls;
-    prevUiSettingsMenu = input.uiSettings;
-    prevMapLegendMenu = input.mapLegend;
-    prevControlReset = input.controlReset;
-    prevControlClose = input.controlClose;
-    prevMap = input.map;
+    syncMenuInputBaselines();
     return;
   }
 
@@ -6360,6 +6468,7 @@ function handleMenuInput(): void {
     state.showDemos = false;
     state.demosSearchActive = false;
     state.showLog = false;
+    state.showHelp = false;
     state.showDebug = false;
     state.showControls = false;
     state.showUiSettings = false;
@@ -6384,23 +6493,7 @@ function handleMenuInput(): void {
     if (result.worldChanged) updateWorldData(world);
     if (!isInteractableOverlayOpen()) syncPauseState();
 
-    prevEsc = input.escape;
-    prevMenuUp = input.invUp;
-    prevMenuDn = input.invDn;
-    prevMenuLeft = input.invLeft;
-    prevMenuRight = input.invRight;
-    prevDrop = input.drop;
-    prevInvMenu = input.inv;
-    prevQuestMenu = input.questLog;
-    prevDebug = input.debugScreen;
-    prevFactionMenu = input.factionMenu;
-    prevLogMenu = input.logMenu;
-    prevControlsMenu = input.controls;
-    prevUiSettingsMenu = input.uiSettings;
-    prevMapLegendMenu = input.mapLegend;
-    prevControlReset = input.controlReset;
-    prevControlClose = input.controlClose;
-    prevMap = input.map;
+    syncMenuInputBaselines();
     return;
   }
 
@@ -6415,6 +6508,7 @@ function handleMenuInput(): void {
     state.showDemos = false;
     state.demosSearchActive = false;
     state.showLog = false;
+    state.showHelp = false;
     state.showDebug = false;
     state.showControls = false;
     state.showUiSettings = false;
@@ -6433,23 +6527,7 @@ function handleMenuInput(): void {
     if (result.worldChanged) updateWorldData(world);
     if (!isEmergencyPanelMenuOpen()) syncPauseState();
 
-    prevEsc = input.escape;
-    prevMenuUp = input.invUp;
-    prevMenuDn = input.invDn;
-    prevMenuLeft = input.invLeft;
-    prevMenuRight = input.invRight;
-    prevDrop = input.drop;
-    prevInvMenu = input.inv;
-    prevQuestMenu = input.questLog;
-    prevDebug = input.debugScreen;
-    prevFactionMenu = input.factionMenu;
-    prevLogMenu = input.logMenu;
-    prevControlsMenu = input.controls;
-    prevUiSettingsMenu = input.uiSettings;
-    prevMapLegendMenu = input.mapLegend;
-    prevControlReset = input.controlReset;
-    prevControlClose = input.controlClose;
-    prevMap = input.map;
+    syncMenuInputBaselines();
     return;
   }
 
@@ -6464,6 +6542,7 @@ function handleMenuInput(): void {
     state.showDemos = false;
     state.demosSearchActive = false;
     state.showLog = false;
+    state.showHelp = false;
     state.showDebug = false;
     state.showControls = false;
     state.showUiSettings = false;
@@ -6475,31 +6554,18 @@ function handleMenuInput(): void {
       updateMobileContext(true);
     }
     resetMenuRepeats();
-    prevEsc = input.escape;
-    prevMenuUp = input.invUp;
-    prevMenuDn = input.invDn;
-    prevMenuLeft = input.invLeft;
-    prevMenuRight = input.invRight;
-    prevDrop = input.drop;
-    prevInvMenu = input.inv;
-    prevQuestMenu = input.questLog;
-    prevDebug = input.debugScreen;
-    prevFactionMenu = input.factionMenu;
-    prevLogMenu = input.logMenu;
-    prevControlsMenu = input.controls;
-    prevUiSettingsMenu = input.uiSettings;
-    prevMapLegendMenu = input.mapLegend;
-    prevControlReset = input.controlReset;
-    prevControlClose = input.controlClose;
+    syncMenuInputBaselines();
     return;
   }
 
   const anyRepeatMenuOpen = state.showMenu || state.showInventory || state.showQuests ||
-    state.showContainerMenu || state.showCraftMenu || state.showNpcMenu || state.showDebug || state.showFactions || state.showDemos || state.showLog || state.showControls || state.showUiSettings || state.showMapLegend;
+    state.showContainerMenu || state.showCraftMenu || state.showNpcMenu || state.showDebug || state.showFactions || state.showDemos || state.showLog || state.showHelp || state.showControls || state.showUiSettings || state.showMapLegend;
   if (!anyRepeatMenuOpen) resetMenuRepeats();
 
-  const controlsOpenedThisFrame = controlsEdge && canOpenShortcutMenu;
-  const uiSettingsOpenedThisFrame = uiSettingsEdge && canOpenShortcutMenu && !controlsOpenedThisFrame;
+  const helpOpenedThisFrame = helpEdge && canOpenShortcutMenu;
+  const controlsOpenedThisFrame = controlsEdge && canOpenShortcutMenu && !helpOpenedThisFrame;
+  const uiSettingsOpenedThisFrame = uiSettingsEdge && canOpenShortcutMenu && !helpOpenedThisFrame && !controlsOpenedThisFrame;
+  if (helpOpenedThisFrame) openHelpMenu();
   if (controlsOpenedThisFrame) openControlsMenu();
   if (uiSettingsOpenedThisFrame) openUiSettingsMenu();
 
@@ -6511,6 +6577,11 @@ function handleMenuInput(): void {
   };
 
   if (!shortcutInputActive) {
+    if (state.showHelp && helpEdge && !helpOpenedThisFrame) {
+      closeHelpMenu();
+      finishSameShortcutClose();
+      return;
+    }
     if (state.showControls && controlsEdge && !controlsOpenedThisFrame) {
       closeControlsMenu();
       finishSameShortcutClose();
@@ -6548,6 +6619,14 @@ function handleMenuInput(): void {
     }
   }
 
+  // ── One-page HELP poster ─────────────────────────────────
+  if (state.showHelp) {
+    if ((acceptEdge && !helpOpenedThisFrame) || closeEdge) closeHelpMenu();
+    syncMenuInputBaselines();
+    syncPauseState();
+    return;
+  }
+
   // ── Hotkey / rebind screen ───────────────────────────────
   if (state.showControls) {
     if (!getControlCaptureAction()) {
@@ -6581,22 +6660,7 @@ function handleMenuInput(): void {
     }
     if (closeEdge && !controlsOpenedThisFrame) closeControlsMenu();
 
-    prevEsc = input.escape;
-    prevMenuUp = input.invUp;
-    prevMenuDn = input.invDn;
-    prevMenuLeft = input.invLeft;
-    prevMenuRight = input.invRight;
-    prevDrop = input.drop;
-    prevInvMenu = input.inv;
-    prevQuestMenu = input.questLog;
-    prevDebug = input.debugScreen;
-    prevFactionMenu = input.factionMenu;
-    prevLogMenu = input.logMenu;
-    prevControlsMenu = input.controls;
-    prevUiSettingsMenu = input.uiSettings;
-    prevMapLegendMenu = input.mapLegend;
-    prevControlReset = input.controlReset;
-    prevControlClose = input.controlClose;
+    syncMenuInputBaselines();
     syncPauseState();
     return;
   }
@@ -6612,22 +6676,7 @@ function handleMenuInput(): void {
     if (acceptEdge) applyMapLegendSelection(state.mapLegendSel);
     if (closeEdge) closeMapLegendMenu();
 
-    prevEsc = input.escape;
-    prevMenuUp = input.invUp;
-    prevMenuDn = input.invDn;
-    prevMenuLeft = input.invLeft;
-    prevMenuRight = input.invRight;
-    prevDrop = input.drop;
-    prevInvMenu = input.inv;
-    prevQuestMenu = input.questLog;
-    prevDebug = input.debugScreen;
-    prevFactionMenu = input.factionMenu;
-    prevLogMenu = input.logMenu;
-    prevControlsMenu = input.controls;
-    prevUiSettingsMenu = input.uiSettings;
-    prevMapLegendMenu = input.mapLegend;
-    prevControlReset = input.controlReset;
-    prevControlClose = input.controlClose;
+    syncMenuInputBaselines();
     syncPauseState();
     return;
   }
@@ -6645,22 +6694,7 @@ function handleMenuInput(): void {
     }
     if (closeEdge) closeUiSettingsMenu();
 
-    prevEsc = input.escape;
-    prevMenuUp = input.invUp;
-    prevMenuDn = input.invDn;
-    prevMenuLeft = input.invLeft;
-    prevMenuRight = input.invRight;
-    prevDrop = input.drop;
-    prevInvMenu = input.inv;
-    prevQuestMenu = input.questLog;
-    prevDebug = input.debugScreen;
-    prevFactionMenu = input.factionMenu;
-    prevLogMenu = input.logMenu;
-    prevControlsMenu = input.controls;
-    prevUiSettingsMenu = input.uiSettings;
-    prevMapLegendMenu = input.mapLegend;
-    prevControlReset = input.controlReset;
-    prevControlClose = input.controlClose;
+    syncMenuInputBaselines();
     syncPauseState();
     return;
   }
@@ -6685,6 +6719,7 @@ function handleMenuInput(): void {
     else if (state.showFactions) { state.showFactions = false; }
     else if (state.showDemos) { closeDemosMenu(); }
     else if (state.showLog) { state.showLog = false; }
+    else if (state.showHelp) { closeHelpMenu(); }
     else if (state.showUiSettings) { state.showUiSettings = false; }
     else if (state.mapMode === 2) { closeFullMapMenu(); }
     else if (state.showMenu) { state.showMenu = false; }
@@ -6714,10 +6749,7 @@ function handleMenuInput(): void {
     if (dnNav) state.invSel = wrapMenuIndex(state.invSel + INVENTORY_GRID_COLS, MAX_INVENTORY_SLOTS);
     if (leftNav) state.invSel = wrapMenuIndex(state.invSel - 1, MAX_INVENTORY_SLOTS);
     if (rightNav) state.invSel = wrapMenuIndex(state.invSel + 1, MAX_INVENTORY_SLOTS);
-    if (acceptEdge) {
-      const zoneId = world.zoneMap[world.idx(Math.floor(player.x), Math.floor(player.y))];
-      useItem(player, state.invSel, state.msgs, state.time, state, zoneId, world);
-    }
+    if (acceptEdge) useInventorySelection();
     if (dropEdge) dropItem(player, state.invSel, entities, state.msgs, state.time, nextEntityId, state, world);
     // Attribute spending (1=STR, 2=AGI, 3=INT)
     if (input.attrStr && player.rpg && player.rpg.attrPoints > 0) {
@@ -6991,27 +7023,11 @@ function handleMenuInput(): void {
       if (questEdge) { state.showQuests = true; }
       if (factionEdge) { state.showFactions = true; state.factionRankScroll = 0; }
       if (logEdge) { state.showLog = true; state.logScroll = 0; }
+      if (helpEdge) { openHelpMenu(); }
     }
   }
 
-  // Update prev states
-  prevEsc = input.escape;
-  prevMenuUp = input.invUp;
-  prevMenuDn = input.invDn;
-  prevMenuLeft = input.invLeft;
-  prevMenuRight = input.invRight;
-  prevDrop = input.drop;
-  prevInvMenu = input.inv;
-  prevQuestMenu = input.questLog;
-  prevDebug = input.debugScreen;
-  prevFactionMenu = input.factionMenu;
-  prevLogMenu = input.logMenu;
-  prevControlsMenu = input.controls;
-  prevUiSettingsMenu = input.uiSettings;
-  prevMapLegendMenu = input.mapLegend;
-  prevControlReset = input.controlReset;
-  prevControlClose = input.controlClose;
-  prevMap = input.map;
+  syncMenuInputBaselines();
 
   // Auto-pause when any menu is open
   syncPauseState();
@@ -7228,7 +7244,10 @@ function gameLoop(now: number): void {
 
   // Menu input always processed (even when paused)
   handleMenuInput();
-  if (!started) return;
+  if (!started) {
+    requestAnimationFrame(gameLoop);
+    return;
+  }
   // If menu triggered new game / load, bail out to show loading screen
   if (pendingLoad) { requestAnimationFrame(gameLoop); return; }
 
@@ -7290,15 +7309,15 @@ function gameLoop(now: number): void {
     updateEquippedTool(dt, player);
     // Player urination (P key)
     if (input.pee && player.alive && player.needs && player.needs.pee > 5) {
-      const range = 1.5;
-      const ux = player.x + Math.cos(player.angle) * range;
-      const uy = player.y + Math.sin(player.angle) * range;
-      const cx = ((Math.floor(ux) % W) + W) % W;
-      const cy = ((Math.floor(uy) % W) + W) % W;
-      if (!world.solid(cx, cy)) {
-        const fx = ((ux % 1) + 1) % 1;
-        const fy = ((uy % 1) + 1) % 1;
-        stampMark(world, cx, cy, fx, fy, 0.15, MarkType.DRIP, Math.floor(state.time * 100), 200, 180, 30, 60);
+      const traced = stampUrineTrace(world, player, {
+        seed: Math.floor(state.time * 1000),
+        pressure: player.needs.pee / 100,
+        streamLength: 1.65,
+        streamSteps: player.needs.pee > 60 ? 26 : 20,
+        width: 0.055,
+        dropCount: 1,
+      });
+      if (traced) {
         // Faction penalty for urinating outside bathroom
         applyUrinationPenalty(dt);
         player.needs.pee = Math.max(0, player.needs.pee - 12 * dt);
@@ -7385,16 +7404,15 @@ function gameLoop(now: number): void {
     contentStart = performance.now();
     if (updateContentRuntimeHooks({ world, entities, player, state, nextEntityId, dt, phase: 'floor_activity', gameOver: false })) updateWorldData(world);
     lastContentHookMs += performance.now() - contentStart;
-    const activeAlifeFloorKey = currentAlifeFloorKey(state);
+    const activeAlifeFloorKey = currentFloorMemoryKey();
     tickAlifeMigration(state, dt, { activeFloorKey: activeAlifeFloorKey });
     const alifeArrivals = processAlifePendingArrivals(state, world, entities, nextEntityId, { activeFloorKey: activeAlifeFloorKey });
     const alifeDepartures = updateActiveAlifeDepartures(state, world, entities, dt);
     if (alifeArrivals > 0 || alifeDepartures > 0) {
       rebuildEntityIndexAfterSpawnCleanup(entities);
     }
-    // Continuous monster spawn for Grom's defense quest (step 8)
-    if (state.currentFloor === FloorLevel.MAINTENANCE) {
-      updateDefenseQuestSpawn(dt);
+    if (updateKillQuestPressure(world, entities, state, state.msgs, nextEntityId)) {
+      rebuildEntityIndexAfterSpawnCleanup(entities);
     }
     // PSI does NOT auto-regenerate — only restored via items (pills, antidepressant)
     // Update ongoing PSI spell effects (phase shift, madness, control)
@@ -7449,9 +7467,10 @@ function gameLoop(now: number): void {
 
     // Auto-pickup when walking
     if (autoPickupEnabled() && state.tick % 15 === 0) {
-      pickupNearby(world, entities, player, state.msgs, state.time, state, drop => {
+      pickupNearby(world, entities, player, state.msgs, state.time, state, (drop: Entity, pickedItems: readonly Item[] = []) => {
         claimNetTerminalGenFleshDrop(state, drop, player, world);
         recordFactionEventLootTaken(state, world, player, drop);
+        applyPickedStoryItemOutcomes(pickedItems, player, entities, state, state.msgs);
       });
     }
     if (state.tick % 60 === 0) {
@@ -7582,6 +7601,7 @@ function gameLoop(now: number): void {
     _prevMsgCount = state.msgs.length;
   }
 
+  if (!state.gameOver) updateRuntimeCamera(runtimeCamera, world, dt, player);
   checkRestart();
   if (pendingLoad) { requestAnimationFrame(gameLoop); return; }
   updateMobileContext();
@@ -7597,9 +7617,23 @@ function gameLoop(now: number): void {
   const samosborVisual = samosborVariant?.visual;
   const samosborGlitchPulse = 0.85 + ((Math.sin(uiTime * 5) + 1) * 0.5) * 0.15;
   const fogDensity = baseFog + smogFogBonus + (state.samosborActive ? (samosborVisual?.fogDensityBonus ?? 0.02) : 0);
-  const glitch = state.samosborActive
-    ? (samosborVisual?.glitchIntensity ?? 0.06) * samosborGlitchPulse
-    : Math.min(0.18, smogFogBonus * 4);
+  const interferenceMode = screenInterferenceMode();
+  const neuroScreenFx = uiElementEnabled('screen_fx');
+  const criticalInterference = state.samosborActive || state.gameOver;
+  const screenInterference = interferenceMode === 'off' || !neuroScreenFx
+    ? 0
+    : interferenceMode === 'full'
+      ? 1
+      : criticalInterference
+        ? 0.65
+        : 0.32;
+  const glitch = screenInterference <= 0
+    ? 0
+    : state.samosborActive
+      ? (samosborVisual?.glitchIntensity ?? 0.06) * samosborGlitchPulse
+      : interferenceMode === 'full'
+        ? Math.min(0.18, smogFogBonus * 4)
+        : 0;
 
   const renderActor = player;
   const cameraView = runtimeCameraView(runtimeCamera, renderActor, cameraFovRadians());
@@ -7621,14 +7655,22 @@ function gameLoop(now: number): void {
   updateDynamicData(world, camX, camY);
 
   // WebGL raycaster + sprites
-  const ambientLight = currentFloorRunEntry(state).designFloorId === 'darkness' ? 0 : 0.12;
+  const floorRunEntry = currentFloorRunEntry(state);
+  const ambientLight = designFloorAmbientLight(floorRunEntry.designFloorId, 0.12);
+  const visualDetailProfile = currentVisualDetailProfile(floorRunEntry);
   const renderSceneStart = performance.now();
   renderSceneGL(world, textures, sprites, entities,
     cameraView,
-    fogDensity, glitch, flashlight, uiTime, particles, state.samosborActive, ambientLight, toolBeam, state.uvBeamLen);
+    fogDensity, glitch, flashlight, uiTime, particles, state.samosborActive, ambientLight, toolBeam, state.uvBeamLen, screenInterference, visualDetailProfile);
   lastRenderSceneMs = performance.now() - renderSceneStart;
 
   // Draw HUD on 2D overlay canvas
+  const textGlitchHp = typeof renderActor.hp === 'number' ? renderActor.hp : 100;
+  const textGlitchMaxHp = typeof renderActor.maxHp === 'number' && renderActor.maxHp > 0 ? renderActor.maxHp : 100;
+  setCanvasTextGlitchPressure({
+    healthRatio: textGlitchHp / textGlitchMaxHp,
+    samosborActive: state.samosborActive,
+  });
   ctx.clearRect(0, 0, hudCanvas.width, hudCanvas.height);
   const hudDrawStart = performance.now();
   drawHUD(ctx, hudCanvas.width / SCR_W, hudCanvas.height / SCR_H, renderActor, state, world, entities, uiTime, {
@@ -7644,6 +7686,7 @@ function gameLoop(now: number): void {
 
 /* ── Title screen ─────────────────────────────────────────────── */
 function showTitle(): void {
+  setCanvasTextGlitchPressure();
   const cursorOn = Math.floor(performance.now() / 500) % 2 === 0;
   titleLanguageHits = drawTitleScreen(ctx, {
     mode: titleMode,
@@ -7718,11 +7761,9 @@ function startGameFromTitle(): void {
       titleStartNeedsInit = false;
       finishStartGameFromTitle();
     });
-    requestAnimationFrame(gameLoop);
     return;
   }
   finishStartGameFromTitle();
-  requestAnimationFrame(gameLoop);
 }
 
 function startHandler(e: KeyboardEvent): void {
@@ -7772,6 +7813,7 @@ function startHandler(e: KeyboardEvent): void {
   if (e.code === 'Enter') {
     e.preventDefault();
     if (titleInputField === 'start') startGameFromTitle();
+    else if (titleInputField === 'addNpc') openNpcIntakePage();
     else if (titleInputField === 'language') cycleTitleLanguage(1);
     else if (titleInputField === 'actorCap') adjustTitleActiveActorSoftLimit(1);
     else if (titleInputField === 'age') moveTitleSelection(1);
@@ -7871,6 +7913,7 @@ function handleTitleGamepadInput(frame: InputFrame): void {
 
   if (acceptEdge) {
     if (titleInputField === 'start') startGameFromTitle();
+    else if (titleInputField === 'addNpc') openNpcIntakePage();
     else if (titleInputField === 'language') cycleTitleLanguage(1);
     else if (titleInputField === 'actorCap') adjustTitleActiveActorSoftLimit(1);
     else if (titleInputField === 'sex') cyclePlayerSex();

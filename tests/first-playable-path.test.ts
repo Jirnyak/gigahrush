@@ -3,7 +3,8 @@ import assert from 'node:assert/strict';
 
 import { FloorLevel, LiftDirection, QuestType, type Quest } from '../src/core/types';
 import { World } from '../src/core/world';
-import { PLOT_CHAIN, PLOT_NPCS } from '../src/data/plot';
+import { getNpcPackageByPlotNpcId, npcPackageDisplayName } from '../src/data/npc_packages';
+import { PLOT_CHAIN } from '../src/data/plot';
 import { setFloorRunState } from '../src/systems/procedural_floors';
 import {
   getActiveQuest,
@@ -20,10 +21,16 @@ import {
 import { getObjectiveRouteHud, routeObjectiveLiftPromptSuffix } from '../src/systems/route_cues';
 import { makeGameState, makeTestNpc, makeTestPlayer } from './helpers';
 
+function plotNpcName(plotNpcId: string): string {
+  const pack = getNpcPackageByPlotNpcId(plotNpcId);
+  assert.ok(pack, `missing NPC package for plot NPC ${plotNpcId}`);
+  return npcPackageDisplayName(pack);
+}
+
 test('fresh run exposes Olga as the first soft objective', () => {
   const state = makeGameState();
-  const olga = makeTestNpc({ id: 10, name: PLOT_NPCS.olga.name, plotNpcId: 'olga', canGiveQuest: true });
-  const barni = makeTestNpc({ id: 11, name: PLOT_NPCS.barni.name, plotNpcId: 'barni', canGiveQuest: true });
+  const olga = makeTestNpc({ id: 10, name: plotNpcName('olga'), plotNpcId: 'olga', canGiveQuest: true });
+  const barni = makeTestNpc({ id: 11, name: plotNpcName('barni'), plotNpcId: 'barni', canGiveQuest: true });
 
   const objective = getCurrentObjective(state, [olga, barni]);
 
@@ -40,13 +47,13 @@ test('fresh run exposes Olga as the first soft objective', () => {
 });
 
 test('accepted first plot step points to Sergeant Barinov and the armory range', () => {
-  const olga = makeTestNpc({ id: 10, name: PLOT_NPCS.olga.name, plotNpcId: 'olga', canGiveQuest: true });
-  const barni = makeTestNpc({ id: 11, name: PLOT_NPCS.barni.name, plotNpcId: 'barni', canGiveQuest: true });
+  const olga = makeTestNpc({ id: 10, name: plotNpcName('olga'), plotNpcId: 'olga', canGiveQuest: true });
+  const barni = makeTestNpc({ id: 11, name: plotNpcName('barni'), plotNpcId: 'barni', canGiveQuest: true });
   const quest: Quest = {
     id: 1,
     type: QuestType.TALK,
     giverId: olga.id,
-    giverName: olga.name ?? PLOT_NPCS.olga.name,
+    giverName: olga.name ?? plotNpcName('olga'),
     desc: PLOT_CHAIN[0].desc,
     targetNpcId: barni.id,
     targetNpcName: barni.name,
@@ -76,7 +83,7 @@ test('player-selected active quest overrides the automatic objective and toggles
     id: 1,
     type: QuestType.TALK,
     giverId: 10,
-    giverName: PLOT_NPCS.olga.name,
+    giverName: plotNpcName('olga'),
     desc: PLOT_CHAIN[0].desc,
     targetPlotNpcId: 'barni',
     plotStepIndex: 0,
@@ -134,7 +141,7 @@ test('Olga quest action accepts the first plot step instead of ambient no-op', (
   const player = makeTestPlayer({ id: 1, x: 10, y: 10 });
   const olga = makeTestNpc({
     id: 10,
-    name: PLOT_NPCS.olga.name,
+    name: plotNpcName('olga'),
     plotNpcId: 'olga',
     canGiveQuest: true,
     x: 11,
@@ -173,7 +180,7 @@ test('route objective HUD prioritizes the active plot route and labels its lift'
     id: 21,
     type: QuestType.VISIT,
     giverId: 10,
-    giverName: PLOT_NPCS.olga.name,
+    giverName: plotNpcName('olga'),
     desc: 'Проверить верхний ручной маршрут до отчета Якову.',
     plotStepIndex: 3,
     targetFloor: FloorLevel.KVARTIRY,

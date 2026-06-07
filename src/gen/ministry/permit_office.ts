@@ -13,9 +13,9 @@ import {
   type WorldContainer,
 } from '../../core/types';
 import { World } from '../../core/world';
-import { type PlotNpcDef, registerFloorSideQuest, storyNpcFloorKey } from '../../data/plot';
+import { type PlotNpcDef, registerAuthoredNpc, registerFloorSideQuest, storyNpcFloorKey } from '../../data/plot';
 import {
-  type NextId, createAdminRoom, setFeature, addItemDrop, spawnAdminNpc, spawnNamedCivilian,
+  type NextId, createAdminRoom, setFeature, addItemDrop, spawnAdminNpc,
 } from './admin_common';
 import { genLog } from '../log';
 
@@ -28,6 +28,8 @@ const PERMIT_CHOICE_IDS = [
   'queue_water',
 ] as const;
 const HOME_FLOOR_KEY = storyNpcFloorKey(FloorLevel.MINISTRY);
+const WITNESS_DUSYA_ID = 'permit_office_witness_dusya';
+const WITNESS_ARKADY_ID = 'permit_office_witness_arkady';
 
 function otherPermitChoices(id: string): string[] {
   return PERMIT_CHOICE_IDS.filter(choiceId => choiceId !== id);
@@ -156,6 +158,46 @@ const THREAT_CLERK_DEF: PlotNpcDef = {
   ],
 };
 
+const WITNESS_DUSYA_DEF: PlotNpcDef = {
+  name: 'Свидетельница Дуся Третья',
+  isFemale: true,
+  faction: Faction.CITIZEN,
+  occupation: Occupation.HOUSEWIFE,
+  sprite: Occupation.HOUSEWIFE,
+  hp: 70, maxHp: 70, money: 15, speed: 0.8,
+  inventory: [
+    { defId: 'sealed_complaint', count: 1 },
+    { defId: 'water', count: 1 },
+  ],
+  talkLines: [
+    'Я третья свидетельница, потому что первые две ушли в разные окна.',
+    'Жалоба запечатана. Если ее открыть, очередь станет личной.',
+  ],
+  talkLinesPost: [
+    'Окно видело меня. Я видела окно. Этого достаточно для протокола.',
+  ],
+};
+
+const WITNESS_ARKADY_DEF: PlotNpcDef = {
+  name: 'Понятой Аркадий Крайний',
+  isFemale: false,
+  faction: Faction.CITIZEN,
+  occupation: Occupation.STOREKEEPER,
+  sprite: Occupation.STOREKEEPER,
+  hp: 70, maxHp: 70, money: 15, speed: 0.8,
+  inventory: [
+    { defId: 'note', count: 1 },
+    { defId: 'cigs', count: 1 },
+  ],
+  talkLines: [
+    'Крайний всегда понятой. Так очередь экономит людей.',
+    'Я подписываю только то, где уже не осталось места для правды.',
+  ],
+  talkLinesPost: [
+    'Подпись поставлена с краю. Середина пусть отвечает сама.',
+  ],
+};
+
 registerFloorSideQuest(HOME_FLOOR_KEY, 'vera_propuskova', VERA_DEF, [
   {
     id: 'permit_ballot_blanks',
@@ -269,6 +311,20 @@ registerFloorSideQuest(HOME_FLOOR_KEY, 'permit_threat_gleb', THREAT_CLERK_DEF, [
   },
 ]);
 
+registerAuthoredNpc({
+  id: WITNESS_DUSYA_ID,
+  npc: WITNESS_DUSYA_DEF,
+  homeFloorKey: HOME_FLOOR_KEY,
+  tags: ['ministry', 'permit_office', 'witness'],
+});
+
+registerAuthoredNpc({
+  id: WITNESS_ARKADY_ID,
+  npc: WITNESS_ARKADY_DEF,
+  homeFloorKey: HOME_FLOOR_KEY,
+  tags: ['ministry', 'permit_office', 'witness'],
+});
+
 function nextContainerId(world: World): number {
   let id = world.containers.length + 1;
   while (world.containerById.has(id) || world.containers.some(c => c.id === id)) id++;
@@ -350,16 +406,8 @@ export function generatePermitOffice(
     entities, nextId, THREAT_CLERK_DEF, 'permit_threat_gleb',
     room.x + room.w - 4, deskY - 1, true, THREAT_CLERK_DEF.weapon,
   );
-  spawnNamedCivilian(
-    entities, nextId, 'Свидетельница Дуся Третья', true,
-    room.x + 3, room.y + room.h - 3, Occupation.HOUSEWIFE, Faction.CITIZEN,
-    [{ defId: 'sealed_complaint', count: 1 }, { defId: 'water', count: 1 }],
-  );
-  spawnNamedCivilian(
-    entities, nextId, 'Понятой Аркадий Крайний', false,
-    room.x + room.w - 4, room.y + room.h - 3, Occupation.STOREKEEPER, Faction.CITIZEN,
-    [{ defId: 'note', count: 1 }, { defId: 'cigs', count: 1 }],
-  );
+  spawnAdminNpc(entities, nextId, WITNESS_DUSYA_DEF, WITNESS_DUSYA_ID, room.x + 3, room.y + room.h - 3, false);
+  spawnAdminNpc(entities, nextId, WITNESS_ARKADY_DEF, WITNESS_ARKADY_ID, room.x + room.w - 4, room.y + room.h - 3, false);
 
   const trayX = room.x + room.w - 2;
   const trayY = room.y + room.h - 2;

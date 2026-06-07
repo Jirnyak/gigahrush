@@ -10,9 +10,8 @@ import {
 } from '../../core/types';
 import { auditReachability, World, type ReachabilityAudit } from '../../core/world';
 import { withSeededRandom } from '../../core/rand';
-import { freshNeeds } from '../../data/catalog';
 import { HUMAN_TERRITORY_OWNERS, factionToTerritoryOwner } from '../../data/factions';
-import { type PlotNpcDef, registerSideQuest } from '../../data/plot';
+import { designNpcFloorKey, type PlotNpcDef, registerFloorSideQuest } from '../../data/plot';
 import { MONSTERS } from '../../entities/monster';
 import { Spr, monsterSpr } from '../../render/sprite_index';
 import { publishEvent } from '../../systems/events';
@@ -20,6 +19,9 @@ import { registerRouteCue } from '../../systems/route_cues';
 import { calcZoneLevel, randomRPG, scaleMonsterHp, scaleMonsterSpeed } from '../../systems/rpg';
 import { ensureConnectivity, generateZones, placeDoorAt, stampRoom } from '../shared';
 import { genLog } from '../log';
+import { requireSpawnedPlotNpcFromPackage } from '../plot_npc_spawn';
+
+const DESIGN_NPC_HOME_FLOOR_KEY = designNpcFloorKey('underhell');
 
 export const DESIGN_FLOOR_ID = 'underhell' as const;
 export const UNDERHELL_ROUTE_ID = DESIGN_FLOOR_ID;
@@ -313,7 +315,7 @@ const FALSE_YAKOV_DEF: PlotNpcDef = {
   ],
 };
 
-registerSideQuest('underhell_threshold_marfusha', THRESHOLD_MARFUSHA_DEF, [
+registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'underhell_threshold_marfusha', THRESHOLD_MARFUSHA_DEF, [
   {
     id: 'underhell_pay_threshold',
     giverNpcId: 'underhell_threshold_marfusha',
@@ -325,7 +327,7 @@ registerSideQuest('underhell_threshold_marfusha', THRESHOLD_MARFUSHA_DEF, [
   },
 ]);
 
-registerSideQuest('underhell_debt_cultist', DEBT_CULTIST_DEF, [
+registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'underhell_debt_cultist', DEBT_CULTIST_DEF, [
   {
     id: 'underhell_burn_debt',
     giverNpcId: 'underhell_debt_cultist',
@@ -338,7 +340,7 @@ registerSideQuest('underhell_debt_cultist', DEBT_CULTIST_DEF, [
   },
 ]);
 
-registerSideQuest('underhell_wordless_liquidator', WORDLESS_LIQUIDATOR_DEF, [
+registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'underhell_wordless_liquidator', WORDLESS_LIQUIDATOR_DEF, [
   {
     id: 'underhell_free_witness',
     giverNpcId: 'underhell_wordless_liquidator',
@@ -351,7 +353,7 @@ registerSideQuest('underhell_wordless_liquidator', WORDLESS_LIQUIDATOR_DEF, [
   },
 ]);
 
-registerSideQuest('underhell_false_yakov_echo', FALSE_YAKOV_DEF, [
+registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'underhell_false_yakov_echo', FALSE_YAKOV_DEF, [
   {
     id: 'underhell_open_void_cut',
     giverNpcId: 'underhell_false_yakov_echo',
@@ -1421,7 +1423,7 @@ function spawnUnderhellNpc(
   entities: Entity[],
   nextId: { v: number },
   room: Room,
-  def: PlotNpcDef,
+  _def: PlotNpcDef,
   plotNpcId: string,
   dx: number,
   dy: number,
@@ -1429,33 +1431,15 @@ function spawnUnderhellNpc(
 ): number {
   const x = world.wrap(room.x + dx);
   const y = world.wrap(room.y + dy);
-  const id = nextId.v++;
-  entities.push({
-    id,
-    type: EntityType.NPC,
-    x: x + 0.5,
-    y: y + 0.5,
+  const npc = requireSpawnedPlotNpcFromPackage(entities, nextId, plotNpcId, x + 0.5, y + 0.5, {
     angle,
-    pitch: 0,
-    alive: true,
-    speed: def.speed,
-    sprite: def.sprite,
-    name: def.name,
-    isFemale: def.isFemale,
-    needs: freshNeeds(),
-    hp: def.hp,
-    maxHp: def.maxHp,
-    money: def.money,
-    ai: { goal: AIGoal.IDLE, tx: x + 0.5, ty: y + 0.5, path: [], pi: 0, stuck: 0, timer: 0 },
-    inventory: def.inventory.map(i => ({ ...i })),
-    faction: def.faction,
-    occupation: def.occupation,
-    plotNpcId,
     canGiveQuest: true,
-    questId: -1,
-    rpg: { level: 12, xp: 0, attrPoints: 0, str: 5, agi: 4, int: 5, psi: 20, maxPsi: 20 },
+    aiTarget: { x: x + 0.5, y: y + 0.5 },
+    extra: {
+      rpg: { level: 12, xp: 0, attrPoints: 0, str: 5, agi: 4, int: 5, psi: 20, maxPsi: 20 },
+    },
   });
-  return id;
+  return npc.id;
 }
 
 function spawnUnderhellMonster(

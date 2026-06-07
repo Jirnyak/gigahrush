@@ -16,6 +16,7 @@ import {
 } from '../core/types';
 import { World } from '../core/world';
 import { hashSeed, randSeed, seededRandom } from '../core/rand';
+import { designFloorPseudoliftChance } from '../data/design_floor_profiles';
 import { MONSTERS, entityDisplayName } from '../entities/monster';
 import { monsterSpr } from '../render/sprite_index';
 import { MarkType, stampMark } from './surface_marks';
@@ -219,11 +220,12 @@ function routeCtx(state: GameState): PseudoliftRouteCtx {
       danger,
     };
   }
-  if (entry.designFloorId === 'dark_metro' || entry.designFloorId === 'service_floor') {
+  const designChance = designFloorPseudoliftChance(entry.designFloorId);
+  if (designChance > 0) {
     return {
       routeKey: `design:${entry.designFloorId}`,
       routeKind: 'design',
-      chance: 0.18,
+      chance: designChance,
       danger,
     };
   }

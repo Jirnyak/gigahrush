@@ -47,6 +47,10 @@ function drawChip(
   return chipW;
 }
 
+function prettyTag(text: string): string {
+  return text.replace(/^perk:/, '').replace(/[_:.-]+/g, ' ').slice(0, 32);
+}
+
 export function drawDemosTabsHeader(
   ctx: CanvasRenderingContext2D,
   tabs: readonly string[],
@@ -106,11 +110,27 @@ export function drawDemosProfilePanel(
 
   const rowW = w - pad * 2;
   drawRow(ctx, 'статус', details.dead ? 'мертвый профиль' : 'активная запись', x + pad, rowY, rowW, sy, details.dead ? '#d98' : '#cfd'); rowY += 12 * sy;
+  if (details.packagePublicLine) {
+    drawRow(ctx, 'досье', details.packagePublicLine, x + pad, rowY, rowW, sy, '#d9f1ed');
+    rowY += 12 * sy;
+  }
+  if (details.packageBioLine) {
+    drawRow(ctx, 'био', details.packageBioLine, x + pad, rowY, rowW, sy);
+    rowY += 12 * sy;
+  }
   drawRow(ctx, 'возраст', `${details.age}, ${details.ageBandLabel}, ${details.sexLabel}`, x + pad, rowY, rowW, sy); rowY += 12 * sy;
-  drawRow(ctx, 'счёт', details.accountLabel, x + pad, rowY, rowW, sy, '#edb'); rowY += 12 * sy;
+  drawRow(ctx, 'капитал', details.capitalLabel, x + pad, rowY, rowW, sy, '#edb'); rowY += 12 * sy;
   drawRow(ctx, 'отношение', details.relationToPlayerLabel, x + pad, rowY, rowW, sy); rowY += 12 * sy;
   drawRow(ctx, 'семья', details.familyStatusLabel, x + pad, rowY, rowW, sy); rowY += 12 * sy;
   drawRow(ctx, 'связи', `друзья ${details.friendsCount} / враги ${details.enemiesCount} / семья ${details.familyCount}`, x + pad, rowY, rowW, sy); rowY += 12 * sy;
+  if (details.packageOriginLabel) {
+    drawRow(ctx, 'откуда', details.packageOriginLabel, x + pad, rowY, rowW, sy);
+    rowY += 12 * sy;
+  }
+  if (details.packageWorkLabel) {
+    drawRow(ctx, 'роль', details.packageWorkLabel, x + pad, rowY, rowW, sy, '#edb');
+    rowY += 12 * sy;
+  }
   if (details.favoriteWorkLabel) {
     drawRow(ctx, 'работа', details.favoriteWorkLabel, x + pad, rowY, rowW, sy, '#edb');
     rowY += 12 * sy;
@@ -129,6 +149,14 @@ export function drawDemosProfilePanel(
     if (chipX > x + w - pad - 22 * sx) break;
   }
   rowY += 14 * sy;
+
+  chipX = x + pad;
+  for (const tag of details.packageFlavorTags.slice(0, 5)) {
+    const used = drawChip(ctx, prettyTag(tag), chipX, rowY, Math.min(88 * sx, x + w - pad - chipX), sy, details.dead);
+    chipX += used + 4 * sx;
+    if (chipX > x + w - pad - 22 * sx) break;
+  }
+  if (details.packageFlavorTags.length > 0) rowY += 14 * sy;
 
   chipX = x + pad;
   for (const interest of details.interests.slice(0, 5)) {

@@ -9,15 +9,15 @@ import {
 } from '../core/types';
 import { ITEMS } from '../data/catalog';
 import { MAX_INVENTORY_SLOTS } from '../data/inventory_limits';
+import { ITEM_OUTCOME_RULES, type ItemOutcomeRule } from '../data/item_outcomes';
 import { getStack } from '../data/items';
 import { addFactionRelMutual } from '../data/relations';
 import { publishEvent } from './events';
 import { isPlayerEntity } from './player_actor';
+import { currentFloorRunEntry, floorRunEntryKind, floorRunEntryRouteId } from './procedural_floors';
 
 const ITEM_ID = 'maronary_shaving';
 const BASE_TAGS = ['player', 'inventory', 'maronary', 'contraband', 'evidence'];
-
-type ShavingOutcome = 'science' | 'cult' | 'ministry' | 'sale';
 
 function shavingDef() {
   return ITEMS[ITEM_ID];
@@ -53,64 +53,105 @@ function addToNpcInventory(npc: Entity): boolean {
   return true;
 }
 
-function classifyBuyer(npc: Entity, state: GameState): ShavingOutcome {
-  if (npc.plotNpcId === 'yakov' || npc.faction === Faction.SCIENTIST || npc.occupation === Occupation.SCIENTIST) return 'science';
-  if (npc.faction === Faction.CULTIST || npc.occupation === Occupation.PILGRIM || npc.occupation === Occupation.PRIEST) return 'cult';
-  if (
-    state.currentFloor === FloorLevel.MINISTRY
-    && (
-      npc.plotNpcId === 'rotenbergov'
-      || npc.plotNpcId === 'kantselev'
-      || npc.occupation === Occupation.DIRECTOR
-      || npc.occupation === Occupation.SECRETARY
-      || npc.faction === Faction.CITIZEN
-    )
-  ) return 'ministry';
-  return 'sale';
+function enumTag(prefix: string, registry: object, value: number | undefined): string | undefined {
+  if (value === undefined) return undefined;
+  const name = (registry as Record<number, string>)[value];
+  return name ? `${prefix}:${name.toLowerCase()}` : undefined;
 }
 
-function rewardFor(outcome: ShavingOutcome): number {
-  switch (outcome) {
-    case 'science': return 280;
-    case 'cult': return 320;
-    case 'ministry': return 240;
-    case 'sale': return 190;
+function pushUnique(out: string[], tag: string | undefined): void {
+  if (tag && !out.includes(tag)) out.push(tag);
+}
+
+function buyerRoleTags(npc: Entity): string[] {
+  const tags: string[] = [];
+  const roleSource = npc as Entity & { roleId?: string; roleTags?: readonly string[] };
+  pushUnique(tags, roleSource.roleId ? `role:${roleSource.roleId}` : undefined);
+  for (const tag of roleSource.roleTags ?? []) pushUnique(tags, tag);
+  pushUnique(tags, npc.plotNpcId ? `plot:${npc.plotNpcId}` : undefined);
+  pushUnique(tags, npc.persistentNpcId ? `persistent:${npc.persistentNpcId}` : undefined);
+  pushUnique(tags, npc.npcVisualId ? `visual:${npc.npcVisualId}` : undefined);
+  pushUnique(tags, enumTag('faction', Faction, npc.faction));
+  pushUnique(tags, enumTag('occupation', Occupation, npc.occupation));
+  if (npc.canGiveQuest) pushUnique(tags, 'quest_giver');
+  return tags;
+}
+
+function currentQuestTags(state: GameState): string[] {
+  const tags: string[] = [];
+  for (const quest of state.quests) {
+    if (quest.done || quest.failed) continue;
+    pushUnique(tags, quest.sideQuestId ? `side:${quest.sideQuestId}` : undefined);
+    pushUnique(tags, quest.contractId ? `contract:${quest.contractId}` : undefined);
+    pushUnique(tags, quest.targetItem ? `target_item:${quest.targetItem}` : undefined);
+    for (const tag of quest.eventTags ?? []) pushUnique(tags, tag);
+    for (const tag of quest.targetRoute?.tags ?? []) pushUnique(tags, tag);
+  }
+  return tags;
+}
+
+function currentRouteTags(state: GameState): string[] {
+  const tags: string[] = [];
+  pushUnique(tags, enumTag('floor', FloorLevel, state.currentFloor));
+  const entry = currentFloorRunEntry(state);
+  pushUnique(tags, `route:${floorRunEntryRouteId(entry)}`);
+  pushUnique(tags, `route_kind:${floorRunEntryKind(entry)}`);
+  pushUnique(tags, `z:${entry.z}`);
+  pushUnique(tags, enumTag('base_floor', FloorLevel, entry.baseFloor));
+  return tags;
+}
+
+function matchesAll(required: readonly string[] | undefined, actual: readonly string[]): boolean {
+  return required === undefined || required.every(tag => actual.includes(tag));
+}
+
+function hasAny<T>(required: readonly T[] | undefined, value: T | undefined): boolean {
+  return value !== undefined && required !== undefined && required.includes(value);
+}
+
+function ruleMatchesBuyer(rule: ItemOutcomeRule, npc: Entity, roleTags: readonly string[]): boolean {
+  const match = rule.match;
+  const hasBuyerRule = Boolean(
+    match.buyerPlotNpcIds?.length
+    || match.buyerFactions?.length
+    || match.buyerOccupations?.length
+    || match.buyerRoleTags?.length
+  );
+  if (!hasBuyerRule) return true;
+  if (match.buyerPlotNpcIds?.includes(npc.plotNpcId ?? '')) return true;
+  if (hasAny(match.buyerFactions, npc.faction)) return true;
+  if (hasAny(match.buyerOccupations, npc.occupation)) return true;
+  return Boolean(match.buyerRoleTags?.some(tag => roleTags.includes(tag)));
+}
+
+function ruleMatches(rule: ItemOutcomeRule, npc: Entity, state: GameState): boolean {
+  if (rule.itemId !== ITEM_ID) return false;
+  const defTags = shavingDef()?.tags ?? [];
+  const routeTags = currentRouteTags(state);
+  const questTags = currentQuestTags(state);
+  if (!matchesAll(rule.match.itemTags, defTags)) return false;
+  if (rule.match.floorLevels && !rule.match.floorLevels.includes(state.currentFloor)) return false;
+  if (!matchesAll(rule.match.routeTags, routeTags)) return false;
+  if (!matchesAll(rule.match.questTags, questTags)) return false;
+  return ruleMatchesBuyer(rule, npc, buyerRoleTags(npc));
+}
+
+function resolveOutcomeRule(npc: Entity, state: GameState): ItemOutcomeRule {
+  const rule = ITEM_OUTCOME_RULES.find(entry => ruleMatches(entry, npc, state)) ?? ITEM_OUTCOME_RULES[ITEM_OUTCOME_RULES.length - 1];
+  if (!rule) throw new Error('Missing maronary shaving item outcome rule');
+  return rule;
+}
+
+function applyRelationDeltas(rule: ItemOutcomeRule): void {
+  for (const delta of rule.relationDeltas ?? []) {
+    addFactionRelMutual(delta.faction, delta.targetFaction, delta.delta);
   }
 }
 
-function relationConsequence(outcome: ShavingOutcome): void {
-  switch (outcome) {
-    case 'science':
-      addFactionRelMutual(Faction.PLAYER, Faction.SCIENTIST, 6);
-      addFactionRelMutual(Faction.PLAYER, Faction.CULTIST, -2);
-      return;
-    case 'cult':
-      addFactionRelMutual(Faction.PLAYER, Faction.CULTIST, 7);
-      addFactionRelMutual(Faction.PLAYER, Faction.SCIENTIST, -4);
-      return;
-    case 'ministry':
-      addFactionRelMutual(Faction.PLAYER, Faction.CITIZEN, -2);
-      addFactionRelMutual(Faction.PLAYER, Faction.SCIENTIST, -2);
-      return;
-    case 'sale':
-      addFactionRelMutual(Faction.PLAYER, Faction.CITIZEN, -1);
-      return;
-  }
-}
-
-function handoffText(outcome: ShavingOutcome, npcName: string, reward: number): string {
-  switch (outcome) {
-    case 'science':
-      return npcName === 'Яков Давидович'
-        ? `Яков спрятал зелёную стружку отдельно от бумаг: «Это не покупка, это изъятие из логики». +${reward}₽`
-        : `${npcName} купил стружку для НИИ и сразу спросил, какая дверь повторилась. +${reward}₽`;
-    case 'cult':
-      return `${npcName} принял зелёную стружку как возвращённый слог стены. Деньги отсчитаны без взгляда в глазок. +${reward}₽`;
-    case 'ministry':
-      return `${npcName} оформил стружку как зелёный инцидент. Продажа звучит как признание маршрута. +${reward}₽`;
-    case 'sale':
-      return `${npcName} купил стружку и завернул её дважды. Теперь вопрос купил вас обратно и знает вашу дверь. +${reward}₽`;
-  }
+function renderOutcomeText(rule: ItemOutcomeRule, npcName: string): string {
+  return rule.message
+    .split('{buyer}').join(npcName)
+    .split('{reward}').join(String(rule.rewardMoney));
 }
 
 export function destroyMaronaryShaving(actor: Entity, state: GameState | undefined): string {
@@ -182,20 +223,21 @@ export function tryHandleMaronaryShavingHandoff(
   }
   if (!removeOneFromSlot(inv, slotIdx)) return false;
 
-  const outcome = classifyBuyer(npc, state);
-  const reward = rewardFor(outcome);
+  const rule = resolveOutcomeRule(npc, state);
+  const outcome = rule.outcome;
+  const reward = rule.rewardMoney;
   const def = shavingDef();
   player.money = (player.money ?? 0) + reward;
-  relationConsequence(outcome);
+  applyRelationDeltas(rule);
 
   const npcName = npc.name ?? 'Покупатель';
   state.msgs.push(msg(
-    handoffText(outcome, npcName, reward),
+    renderOutcomeText(rule, npcName),
     state.time,
-    outcome === 'cult' ? '#c8f' : outcome === 'ministry' ? '#fa0' : '#8cf',
+    rule.messageColor,
   ));
   publishEvent(state, {
-    type: outcome === 'sale' ? 'player_sell_item' : 'player_handoff_item',
+    type: rule.kind === 'sale' ? 'player_sell_item' : 'player_handoff_item',
     actorId: player.id,
     actorName: player.name ?? 'Вы',
     actorFaction: player.faction,
@@ -206,18 +248,14 @@ export function tryHandleMaronaryShavingHandoff(
     itemName: def?.name ?? ITEM_ID,
     itemCount: 1,
     itemValue: reward,
-    severity: outcome === 'sale' ? 3 : 4,
-    privacy: outcome === 'sale' ? 'local' : 'witnessed',
-    tags: eventTags('handoff', outcome),
+    severity: rule.severity,
+    privacy: rule.privacy,
+    tags: eventTags(...rule.eventTags),
     data: {
       outcome,
       buyerPlotNpcId: npc.plotNpcId,
       reward,
-      rumorIds: outcome === 'cult'
-        ? ['samosbor_maronary_cult_buyer']
-        : outcome === 'ministry'
-          ? ['samosbor_maronary_ministry_buyer']
-          : ['samosbor_maronary_shaving'],
+      rumorIds: [...rule.rumorIds],
     },
   });
   return true;

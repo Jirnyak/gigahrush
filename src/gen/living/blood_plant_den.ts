@@ -18,19 +18,63 @@ import {
   type WorldContainer,
 } from '../../core/types';
 import { World } from '../../core/world';
-import { freshNeeds } from '../../data/catalog';
+import { type PlotNpcDef, registerSideQuest } from '../../data/plot';
 import { MONSTERS } from '../../entities/monster';
 import { monsterSpr } from '../../render/sprite_index';
 import { randomRPG, scaleMonsterHp, scaleMonsterSpeed } from '../../systems/rpg';
 import { registerBloodPlantRootSite } from '../../systems/blood_plant';
 import { connectProtectedRoom, protectRoom, stampRoom } from '../shared';
 import { genLog } from '../log';
+import { requireSpawnedPlotNpcFromPackage } from '../plot_npc_spawn';
 import { registerZoneContent } from './zone_content';
 
 const ZONE_HUD = 35;
 const ROOM_NAME = 'Красный притон плесени';
 const ROOM_W = 21;
 const ROOM_H = 13;
+const DISTRIBUTOR_ID = 'blood_plant_senya_red_mold';
+const WITNESS_ID = 'blood_plant_raya_witness';
+const SPORE_KEEPER_ID = 'blood_plant_tikhon_spore';
+
+const DEN_NPC_DEFS: Record<string, PlotNpcDef> = {
+  [DISTRIBUTOR_ID]: {
+    name: 'Сеня Красная Плесень',
+    isFemale: false,
+    faction: Faction.CULTIST,
+    occupation: Occupation.PILGRIM,
+    sprite: Occupation.PILGRIM,
+    hp: 86, maxHp: 86, money: 32, speed: 0.9,
+    weapon: 'knife',
+    inventory: [{ defId: 'red_mold_sample', count: 1 }, { defId: 'knife', count: 1 }],
+    talkLines: ['Красная проба греет лучше батареи. Только солью не трогай.'],
+    talkLinesPost: ['Корень живой. Пока корень живой, притон дышит.'],
+  },
+  [WITNESS_ID]: {
+    name: 'Рая Свидетельница',
+    isFemale: true,
+    faction: Faction.CITIZEN,
+    occupation: Occupation.HOUSEWIFE,
+    sprite: Occupation.HOUSEWIFE,
+    hp: 86, maxHp: 86, money: 9, speed: 0.9,
+    inventory: [{ defId: 'note', count: 1 }],
+    talkLines: ['Я видела, как пробу продавали под видом счастливой плесени. Не ешь её.'],
+    talkLinesPost: ['Если режешь корень - режь быстро. Он слушает.'],
+  },
+  [SPORE_KEEPER_ID]: {
+    name: 'Тихон Споровой',
+    isFemale: false,
+    faction: Faction.CULTIST,
+    occupation: Occupation.STOREKEEPER,
+    sprite: Occupation.STOREKEEPER,
+    hp: 86, maxHp: 86, money: 32, speed: 0.9,
+    weapon: 'pipe',
+    inventory: [{ defId: 'red_mold_sample', count: 1 }, { defId: 'knife', count: 1 }],
+    talkLines: ['Плесень не товар. Плесень - сосед. За соседа платят заранее.'],
+    talkLinesPost: ['Спрятал бы пробу глубже, да корень сам выбирает стену.'],
+  },
+};
+
+for (const [id, def] of Object.entries(DEN_NPC_DEFS)) registerSideQuest(id, def, []);
 
 function areaClear(world: World, rx: number, ry: number, w: number, h: number): boolean {
   for (let dy = -1; dy <= h; dy++) {
@@ -168,39 +212,25 @@ function spawnBloodPlant(world: World, entities: Entity[], nextId: { v: number }
 function spawnDenNpc(
   entities: Entity[],
   nextId: { v: number },
-  name: string,
-  faction: Faction,
-  occupation: Occupation,
+  plotNpcId: string,
   x: number,
   y: number,
   weapon = '',
 ): Entity {
-  const npc: Entity = {
-    id: nextId.v++,
-    type: EntityType.NPC,
-    x: x + 0.5,
-    y: y + 0.5,
+  const isWitness = plotNpcId === WITNESS_ID;
+  return requireSpawnedPlotNpcFromPackage(entities, nextId, plotNpcId, x + 0.5, y + 0.5, {
     angle: Math.PI,
-    pitch: 0,
-    alive: true,
-    speed: scaleMonsterSpeed(0.9, 2),
-    sprite: occupation,
-    name,
-    faction,
-    occupation,
-    needs: freshNeeds(),
-    hp: 86,
-    maxHp: 86,
-    money: faction === Faction.CULTIST ? 32 : 9,
-    weapon,
-    inventory: faction === Faction.CULTIST
-      ? [{ defId: 'red_mold_sample', count: 1 }, { defId: 'knife', count: 1 }]
-      : [{ defId: 'note', count: 1, data: 'Свидетельская записка: красную пробу продавали под видом счастливой плесени.' }],
-    ai: { goal: AIGoal.IDLE, tx: x + 0.5, ty: y + 0.5, path: [], pi: 0, stuck: 0, timer: 0 },
-    playerRelation: faction === Faction.CULTIST ? -35 : 0,
-  };
-  entities.push(npc);
-  return npc;
+    weapon: weapon || undefined,
+    canGiveQuest: false,
+    aiTarget: { x: x + 0.5, y: y + 0.5 },
+    extra: {
+      speed: scaleMonsterSpeed(0.9, 2),
+      playerRelation: isWitness ? 0 : -35,
+      ...(isWitness
+        ? { inventory: [{ defId: 'note', count: 1, data: 'Свидетельская записка: красную пробу продавали под видом счастливой плесени.' }] }
+        : {}),
+    },
+  });
 }
 
 function decorateDen(world: World, entities: Entity[], nextId: { v: number }, room: Room): void {
@@ -221,9 +251,9 @@ function decorateDen(world: World, entities: Entity[], nextId: { v: number }, ro
     stampSurfaceSplat(world, x, y, 0.5, 0.5, 0.68, 0.62, 151_000 + i * 41, 142, 14, 28, false);
   }
 
-  const distributor = spawnDenNpc(entities, nextId, 'Сеня Красная Плесень', Faction.CULTIST, Occupation.PILGRIM, room.x + 4, room.y + 8, 'knife');
-  spawnDenNpc(entities, nextId, 'Рая Свидетельница', Faction.CITIZEN, Occupation.HOUSEWIFE, room.x + 3, room.y + 3);
-  spawnDenNpc(entities, nextId, 'Тихон Споровой', Faction.CULTIST, Occupation.STOREKEEPER, room.x + 9, room.y + 4, 'pipe');
+  const distributor = spawnDenNpc(entities, nextId, DISTRIBUTOR_ID, room.x + 4, room.y + 8, 'knife');
+  spawnDenNpc(entities, nextId, WITNESS_ID, room.x + 3, room.y + 3);
+  spawnDenNpc(entities, nextId, SPORE_KEEPER_ID, room.x + 9, room.y + 4, 'pipe');
 
   addContainer(world, room, 5, 6, 'Теплый ящик красной плесени', [
     { defId: 'red_mold_sample', count: 2 },

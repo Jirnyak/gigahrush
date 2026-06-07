@@ -4,7 +4,6 @@ import {
   DoorState,
   EntityType,
   Feature,
-  Occupation,
   RoomType,
   Tex,
   W,
@@ -15,6 +14,7 @@ import {
   type TerritoryOwner,
 } from '../core/types';
 import { World } from '../core/world';
+import { occupationHasProfileTag } from '../data/occupation_profiles';
 import {
   HUMAN_TERRITORY_OWNERS,
   TERRITORY_OWNERS,
@@ -353,6 +353,40 @@ function chooseAnchorRoom(world: World, owner: TerritoryOwner, usedRooms: Set<nu
   return best;
 }
 
+function hqAnchorSelectionScore(world: World, room: Room, owner: TerritoryOwner): number {
+  return roomPreference(owner, room)
+    + Math.min(60, roomArea(room) * 0.05)
+    + Math.min(24, hqShellCapacity(world, room) * 0.02)
+    - room.doors.length * 0.5
+    - room.id * 0.0001;
+}
+
+function chooseExistingHqAnchorRoom(
+  world: World,
+  owner: TerritoryOwner,
+  usedRooms: ReadonlySet<number>,
+  eligible: (world: World, room: Room) => boolean,
+): Room | null {
+  let best: Room | null = null;
+  let bestScore = -Infinity;
+  for (const room of world.rooms) {
+    if (!room || room.type !== RoomType.HQ || usedRooms.has(room.id)) continue;
+    if (!eligible(world, room)) continue;
+    if (territoryRoomOwner(world, room.id) !== owner) continue;
+    const score = hqAnchorSelectionScore(world, room, owner);
+    if (score > bestScore) {
+      best = room;
+      bestScore = score;
+    }
+  }
+  return best;
+}
+
+function pushTerritoryHqAnchor(anchors: TerritoryHqAnchor[], room: Room, owner: TerritoryOwner): void {
+  const center = roomCenter(room);
+  anchors.push({ owner, roomId: room.id, x: center.x, y: center.y });
+}
+
 export function paintRoomTerritory(
   world: World,
   roomId: number,
@@ -522,37 +556,29 @@ function reinforceAllHqAnchors(world: World): void {
 export function territoryHqAnchors(world: World): TerritoryHqAnchor[] {
   const anchors: TerritoryHqAnchor[] = [];
   const seen = new Set<TerritoryOwner>();
-  for (const room of world.rooms) {
+  const usedRooms = new Set<number>();
+  for (const owner of HUMAN_TERRITORY_OWNERS) {
+    const room = chooseExistingHqAnchorRoom(world, owner, usedRooms, hqAnchorEligible);
     if (!room) continue;
-    if (room.type !== RoomType.HQ) continue;
-    if (!hqAnchorEligible(world, room)) continue;
-    const owner = territoryRoomOwner(world, room.id);
-    if (seen.has(owner)) continue;
-    const center = roomCenter(room);
-    anchors.push({ owner, roomId: room.id, x: center.x, y: center.y });
+    pushTerritoryHqAnchor(anchors, room, owner);
     seen.add(owner);
-  }
-  for (const room of world.rooms) {
-    if (!room) continue;
-    if (room.type !== RoomType.HQ) continue;
-    if (!authoredHqAnchorEligible(world, room)) continue;
-    const owner = territoryRoomOwner(world, room.id);
-    if (seen.has(owner)) continue;
-    const center = roomCenter(room);
-    anchors.push({ owner, roomId: room.id, x: center.x, y: center.y });
-    seen.add(owner);
+    usedRooms.add(room.id);
   }
   for (const owner of HUMAN_TERRITORY_OWNERS) {
     if (seen.has(owner)) continue;
-    const room = world.rooms.find(candidate => (
-      candidate !== undefined &&
-      autoHqCandidateEligible(world, candidate) &&
-      roomOwnerHint(world, candidate) === owner
-    ));
+    const room = chooseExistingHqAnchorRoom(world, owner, usedRooms, authoredHqAnchorEligible);
     if (!room) continue;
-    const center = roomCenter(room);
-    anchors.push({ owner, roomId: room.id, x: center.x, y: center.y });
+    pushTerritoryHqAnchor(anchors, room, owner);
     seen.add(owner);
+    usedRooms.add(room.id);
+  }
+  for (const owner of HUMAN_TERRITORY_OWNERS) {
+    if (seen.has(owner)) continue;
+    const room = chooseAnchorRoom(world, owner, usedRooms);
+    if (!room) continue;
+    pushTerritoryHqAnchor(anchors, room, owner);
+    seen.add(owner);
+    usedRooms.add(room.id);
   }
   return anchors;
 }
@@ -714,6 +740,21 @@ function applyTargetTerritoryShares(world: World, shares: readonly TerritoryTarg
   world.markFeaturesDirty(false);
 }
 
+function nearestZoneHqRoom(world: World, zone: { cx: number; cy: number; faction: TerritoryOwner }): Room | undefined {
+  let best: Room | undefined;
+  let bestD2 = Infinity;
+  for (const room of world.rooms) {
+    if (!room || room.type !== RoomType.HQ) continue;
+    if (roomOwnerHint(world, room) !== zone.faction) continue;
+    const center = roomCenter(room);
+    const d2 = world.dist2(zone.cx + 0.5, zone.cy + 0.5, center.x + 0.5, center.y + 0.5);
+    if (d2 > bestD2 || (d2 === bestD2 && best !== undefined && room.id >= best.id)) continue;
+    best = room;
+    bestD2 = d2;
+  }
+  return best;
+}
+
 export function syncZoneMetadataFromTerritory(world: World, zoneIds?: Iterable<number>): void {
   const ids = zoneIds ? [...zoneIds] : world.zones.map(zone => zone.id);
   for (const zoneId of ids) {
@@ -728,7 +769,7 @@ export function syncZoneMetadataFromTerritory(world: World, zoneIds?: Iterable<n
       }
     }
     zone.faction = dominantOwnerFromCounts(zoneCountsScratch, zone.faction);
-    const hq = world.rooms.find(room => room !== undefined && room.type === RoomType.HQ && roomOwnerHint(world, room) === zone.faction);
+    const hq = nearestZoneHqRoom(world, zone);
     zone.hqRoomId = hq?.id ?? zone.hqRoomId;
   }
 }
@@ -745,7 +786,7 @@ export function initializeCellTerritory(world: World, options: TerritoryInitiali
 }
 
 function actorCapturePressure(actor: Entity, owner: TerritoryOwner): boolean {
-  if (actor.occupation === Occupation.HUNTER || actor.ai?.goal === AIGoal.HUNT) return true;
+  if (occupationHasProfileTag(actor.occupation, 'combat') || actor.ai?.goal === AIGoal.HUNT) return true;
   let same = 0;
   let enemy = 0;
   getEntityIndex().queryRadiusCapped(actor.x, actor.y, CAPTURE_ACTOR_SCAN_RADIUS, captureQuery, ENTITY_MASK_NPC, CAPTURE_ACTOR_SCAN_CAP);
@@ -789,7 +830,7 @@ export function updateTerritoryCapture(world: World, entities: Entity[], state: 
   for (const actor of getEntityIndex().actors) {
     if (changedCells >= CAPTURE_GLOBAL_CELL_CAP) break;
     if (!actor.alive || actor.type !== EntityType.NPC || actor.faction === undefined) continue;
-    if (!actor.isTraveler && actor.occupation !== Occupation.HUNTER && actor.ai?.goal !== AIGoal.HUNT) continue;
+    if (!actor.isTraveler && !occupationHasProfileTag(actor.occupation, 'combat') && actor.ai?.goal !== AIGoal.HUNT) continue;
     const owner = factionToTerritoryOwner(actor.faction);
     const x = Math.floor(actor.x);
     const y = Math.floor(actor.y);

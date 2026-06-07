@@ -11,6 +11,7 @@ import { stampRoom, protectRoom, connectProtectedRoom, findClearArea } from '../
 import { Spr, monsterSpr } from '../../render/sprite_index';
 import { randomRPG, scaleMonsterHp, scaleMonsterSpeed } from '../../systems/rpg';
 import { MONSTERS } from '../../entities/monster';
+import { requireSpawnedPlotNpcFromPackage } from '../plot_npc_spawn';
 
 export type NextId = { v: number };
 
@@ -126,21 +127,13 @@ export function addItemDrop(
 }
 
 export function spawnAdminNpc(
-  entities: Entity[], nextId: NextId, def: PlotNpcDef, plotNpcId: string,
+  entities: Entity[], nextId: NextId, _def: PlotNpcDef, plotNpcId: string,
   x: number, y: number, canGiveQuest = true, weapon?: string,
 ): void {
-  entities.push({
-    id: nextId.v++, type: EntityType.NPC,
-    x: x + 0.5, y: y + 0.5,
-    angle: Math.random() * Math.PI * 2, pitch: 0,
-    alive: true, speed: def.speed, sprite: def.sprite,
-    name: def.name, isFemale: def.isFemale,
-    needs: freshNeeds(), hp: def.hp, maxHp: def.maxHp, money: def.money,
-    ai: { goal: AIGoal.IDLE, tx: 0, ty: 0, path: [], pi: 0, stuck: 0, timer: 0 },
-    inventory: def.inventory.map(i => ({ ...i })),
+  requireSpawnedPlotNpcFromPackage(entities, nextId, plotNpcId, x + 0.5, y + 0.5, {
+    angle: Math.random() * Math.PI * 2,
     weapon,
-    faction: def.faction, occupation: def.occupation,
-    plotNpcId, canGiveQuest, questId: -1,
+    canGiveQuest,
     isTraveler: false,
   });
 }

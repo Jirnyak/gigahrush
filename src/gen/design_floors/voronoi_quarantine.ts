@@ -26,16 +26,18 @@ import {
 } from '../../core/types';
 import { World } from '../../core/world';
 import { hashSeed, withSeededRandom } from '../../core/rand';
-import { freshNeeds } from '../../data/catalog';
 import { factionToTerritoryOwner } from '../../data/factions';
-import { type PlotNpcDef, registerSideQuest } from '../../data/plot';
+import { designNpcFloorKey, type PlotNpcDef, registerFloorSideQuest } from '../../data/plot';
 import { MONSTERS } from '../../entities/monster';
 import { monsterSpr, Spr } from '../../render/sprite_index';
 import { placeEmergencyPanel } from '../../systems/emergency_panels';
 import { randomRPG } from '../../systems/rpg';
+import { requireSpawnedPlotNpcFromPackage } from '../plot_npc_spawn';
 import { ensureConnectivity, generateZones, sanitizeDoors } from '../shared';
 import type { FloorGeneration } from '../floor_manifest';
 import { buildVoronoiRoomCells, type VoronoiRoomSite } from '../voronoi_cells';
+
+const DESIGN_NPC_HOME_FLOOR_KEY = designNpcFloorKey('voronoi_quarantine');
 
 export const VORONOI_QUARANTINE_ROUTE_ID = 'voronoi_quarantine' as const;
 export const VORONOI_QUARANTINE_Z = 6 as const;
@@ -336,7 +338,7 @@ const NPC_DEFS: Record<NpcId, PlotNpcDef> = {
   },
 };
 
-registerSideQuest('voronoi_quarantine_doctor_pavel', NPC_DEFS.voronoi_quarantine_doctor_pavel, [
+registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'voronoi_quarantine_doctor_pavel', NPC_DEFS.voronoi_quarantine_doctor_pavel, [
   {
     id: 'voronoi_quarantine_decon_border',
     giverNpcId: 'voronoi_quarantine_doctor_pavel',
@@ -355,7 +357,7 @@ registerSideQuest('voronoi_quarantine_doctor_pavel', NPC_DEFS.voronoi_quarantine
   },
 ]);
 
-registerSideQuest('voronoi_quarantine_clerk_zoya', NPC_DEFS.voronoi_quarantine_clerk_zoya, [
+registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'voronoi_quarantine_clerk_zoya', NPC_DEFS.voronoi_quarantine_clerk_zoya, [
   {
     id: 'voronoi_quarantine_forge_pass',
     giverNpcId: 'voronoi_quarantine_clerk_zoya',
@@ -375,7 +377,7 @@ registerSideQuest('voronoi_quarantine_clerk_zoya', NPC_DEFS.voronoi_quarantine_c
   },
 ]);
 
-registerSideQuest('voronoi_quarantine_infected_lev', NPC_DEFS.voronoi_quarantine_infected_lev, [
+registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'voronoi_quarantine_infected_lev', NPC_DEFS.voronoi_quarantine_infected_lev, [
   {
     id: 'voronoi_quarantine_escort_infected',
     giverNpcId: 'voronoi_quarantine_infected_lev',
@@ -394,7 +396,7 @@ registerSideQuest('voronoi_quarantine_infected_lev', NPC_DEFS.voronoi_quarantine
   },
 ]);
 
-registerSideQuest('voronoi_quarantine_quartermaster_marta', NPC_DEFS.voronoi_quarantine_quartermaster_marta, [
+registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'voronoi_quarantine_quartermaster_marta', NPC_DEFS.voronoi_quarantine_quartermaster_marta, [
   {
     id: 'voronoi_quarantine_open_supply_connector',
     giverNpcId: 'voronoi_quarantine_quartermaster_marta',
@@ -1569,44 +1571,24 @@ function placePanelNearSite(
 }
 
 function spawnPlotNpc(
-  world: World,
+  _world: World,
   entities: Entity[],
   nextId: { v: number },
   npcId: NpcId,
-  def: PlotNpcDef,
+  _def: PlotNpcDef,
   point: { x: number; y: number },
   angle: number,
-  weapon = def.weapon,
+  weapon?: string,
 ): number {
-  const id = nextId.v++;
-  entities.push({
-    id,
-    type: EntityType.NPC,
-    x: point.x + 0.5,
-    y: point.y + 0.5,
+  const px = point.x + 0.5;
+  const py = point.y + 0.5;
+  const npc = requireSpawnedPlotNpcFromPackage(entities, nextId, npcId, px, py, {
     angle,
-    pitch: 0,
-    alive: true,
-    speed: def.speed,
-    sprite: def.sprite,
-    name: def.name,
-    isFemale: def.isFemale,
-    needs: freshNeeds(),
-    hp: def.hp,
-    maxHp: def.maxHp,
-    money: def.money,
-    ai: { goal: AIGoal.IDLE, tx: point.x + 0.5, ty: point.y + 0.5, path: [], pi: 0, stuck: 0, timer: 0 },
-    inventory: def.inventory.map(item => ({ ...item })),
     weapon,
-    faction: def.faction,
-    occupation: def.occupation,
-    plotNpcId: npcId,
-    canGiveQuest: true,
-    questId: -1,
-    rpg: randomRPG(3),
+    aiTarget: { x: px, y: py },
+    extra: { rpg: randomRPG(3) },
   });
-  void world;
-  return id;
+  return npc.id;
 }
 
 function spawnMonster(

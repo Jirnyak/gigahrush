@@ -13,6 +13,7 @@ import {
   resetCombatStimulus,
 } from '../src/systems/combat_stimulus';
 import { createWorldEventState, getRecentEvents } from '../src/systems/events';
+import { setCurrentPlayerEntity } from '../src/systems/player_actor';
 
 function makeOpenWorld(): World {
   const world = new World();
@@ -213,6 +214,29 @@ test('monster target acquisition works during scan cooldown', () => {
 
   assert.equal(m.ai?.combatTargetId, p.id);
   assert.equal(m.ai?.goal, AIGoal.HUNT);
+});
+
+test('monster target acquisition ignores the player while possessing a monster body', () => {
+  const world = makeOpenWorld();
+  const clock = { hour: 8, minute: 0, totalMinutes: 0 };
+  const body = player();
+  body.x = 300;
+  const possessed = monster(2, 24, MonsterKind.SBORKA);
+  possessed.speed = 1;
+  const hunter = monster(3, 25, MonsterKind.SBORKA);
+  hunter.speed = 1;
+  hunter.ai!.combatScanCd = 10;
+  const entities = [body, possessed, hunter];
+
+  setCurrentPlayerEntity(possessed);
+  try {
+    tick(world, entities, 1 / 60, 0, clock);
+  } finally {
+    setCurrentPlayerEntity(undefined);
+  }
+
+  assert.equal(hunter.ai?.combatTargetId, undefined);
+  assert.notEqual(hunter.ai?.goal, AIGoal.HUNT);
 });
 
 test('monster combat fires physical projectiles through the full AI pass', () => {

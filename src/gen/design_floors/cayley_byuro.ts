@@ -24,8 +24,7 @@ import {
   type WorldContainer,
 } from '../../core/types';
 import { World } from '../../core/world';
-import { freshNeeds } from '../../data/catalog';
-import { type PlotNpcDef, registerSideQuest } from '../../data/plot';
+import { designNpcFloorKey, type PlotNpcDef, registerFloorSideQuest } from '../../data/plot';
 import { MONSTERS } from '../../entities/monster';
 import { Spr, monsterSpr } from '../../render/sprite_index';
 import { registerRouteCue } from '../../systems/route_cues';
@@ -33,6 +32,9 @@ import { randomRPG, scaleMonsterHp, scaleMonsterSpeed } from '../../systems/rpg'
 import { syncZoneMetadataFromTerritory } from '../../systems/territory';
 import { carveCorridor, ensureConnectivity, generateZones, sanitizeDoors, stampRoom } from '../shared';
 import type { FloorGeneration } from '../floor_manifest';
+import { requireSpawnedPlotNpcFromPackage } from '../plot_npc_spawn';
+
+const DESIGN_NPC_HOME_FLOOR_KEY = designNpcFloorKey('cayley_byuro');
 
 export const CAYLEY_BYURO_ROUTE_ID = 'cayley_byuro' as const;
 export const CAYLEY_BYURO_Z = 36;
@@ -288,7 +290,7 @@ const INSPECTOR_DEF: PlotNpcDef = {
   ],
 };
 
-registerSideQuest('cayley_byuro_clerk', CLERK_DEF, [
+registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'cayley_byuro_clerk', CLERK_DEF, [
   {
     id: 'cayley_byuro_bribe_generator_r',
     giverNpcId: 'cayley_byuro_clerk',
@@ -308,7 +310,7 @@ registerSideQuest('cayley_byuro_clerk', CLERK_DEF, [
   },
 ]);
 
-registerSideQuest('cayley_byuro_coset_masha', COSET_DEF, [
+registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'cayley_byuro_coset_masha', COSET_DEF, [
   {
     id: 'cayley_byuro_apply_forms_rs',
     giverNpcId: 'cayley_byuro_coset_masha',
@@ -326,7 +328,7 @@ registerSideQuest('cayley_byuro_coset_masha', COSET_DEF, [
   },
 ]);
 
-registerSideQuest('cayley_byuro_inspector', INSPECTOR_DEF, [
+registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'cayley_byuro_inspector', INSPECTOR_DEF, [
   {
     id: 'cayley_byuro_expose_forged_identity',
     giverNpcId: 'cayley_byuro_inspector',
@@ -976,40 +978,20 @@ function spawnNpc(
   entities: Entity[],
   nextId: { v: number },
   plotNpcId: string,
-  def: PlotNpcDef,
+  _def: PlotNpcDef,
   room: Room,
   dx: number,
   dy: number,
   weapon?: string,
 ): number {
-  const id = nextId.v++;
-  entities.push({
-    id,
-    type: EntityType.NPC,
-    x: room.x + dx + 0.5,
-    y: room.y + dy + 0.5,
+  const npc = requireSpawnedPlotNpcFromPackage(entities, nextId, plotNpcId, room.x + dx + 0.5, room.y + dy + 0.5, {
     angle: Math.random() * Math.PI * 2,
-    pitch: 0,
-    alive: true,
-    speed: def.speed,
-    sprite: def.sprite,
-    name: def.name,
-    isFemale: def.isFemale,
-    needs: freshNeeds(),
-    hp: def.hp,
-    maxHp: def.maxHp,
-    ai: { goal: AIGoal.IDLE, tx: room.x + dx, ty: room.y + dy, path: [], pi: 0, stuck: 0, timer: 0 },
-    inventory: def.inventory.map(item => ({ ...item })),
-    money: def.money,
-    faction: def.faction,
-    occupation: def.occupation,
-    plotNpcId,
     canGiveQuest: true,
-    questId: -1,
     weapon,
-    isTraveler: false,
+    aiTarget: { x: room.x + dx, y: room.y + dy },
+    extra: { isTraveler: false },
   });
-  return id;
+  return npc.id;
 }
 
 function spawnMonster(world: World, entities: Entity[], nextId: { v: number }, room: Room, dx: number, dy: number, kind: MonsterKind): void {

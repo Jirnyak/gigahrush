@@ -9,13 +9,13 @@ import {
   type Entity, type Room, type WorldContainer, type WorldEvent,
 } from '../../core/types';
 import { World } from '../../core/world';
-import { freshNeeds } from '../../data/catalog';
 import { type PlotNpcDef, registerSideQuest } from '../../data/plot';
 import { MONSTERS } from '../../entities/monster';
 import { HEAD_SLUG_HOSTED_STAGE } from '../../entities/head_slug';
 import { monsterSpr, Spr } from '../../render/sprite_index';
 import { publishEvent, registerWorldEventObserver } from '../../systems/events';
 import { genLog } from '../log';
+import { requireSpawnedPlotNpcFromPackage } from '../plot_npc_spawn';
 import { registerZoneContent } from './zone_content';
 
 const HOSPITAL_W = 19;
@@ -501,22 +501,14 @@ function addDrop(entities: Entity[], nextId: { v: number }, x: number, y: number
 }
 
 function pushNpc(
-  entities: Entity[], nextId: { v: number }, def: PlotNpcDef, plotNpcId: string,
+  entities: Entity[], nextId: { v: number }, plotNpcId: string,
   x: number, y: number, canGiveQuest: boolean, weapon?: string,
 ): void {
-  entities.push({
-    id: nextId.v++, type: EntityType.NPC,
-    x: x + 0.5, y: y + 0.5,
-    angle: Math.random() * Math.PI * 2, pitch: 0,
-    alive: true, speed: def.speed, sprite: def.sprite,
-    name: def.name, isFemale: def.isFemale,
-    needs: freshNeeds(), hp: def.hp, maxHp: def.maxHp, money: def.money,
-    ai: { goal: AIGoal.IDLE, tx: 0, ty: 0, path: [], pi: 0, stuck: 0, timer: 0 },
-    inventory: def.inventory.map(i => ({ ...i })),
+  requireSpawnedPlotNpcFromPackage(entities, nextId, plotNpcId, x + 0.5, y + 0.5, {
+    angle: Math.random() * Math.PI * 2,
     weapon,
-    faction: def.faction, occupation: def.occupation,
-    plotNpcId, canGiveQuest, questId: -1,
-    isTraveler: false,
+    canGiveQuest,
+    extra: { isTraveler: false },
   });
 }
 
@@ -723,12 +715,12 @@ export function generateHospitalQuarantine(
     ['medical', 'supplies', 'secret', 'opened'],
   );
 
-  pushNpc(entities, nextId, NPC_DEFS.ag17_mira_triage, 'ag17_mira_triage', rx + 4, ry + 2, true);
-  pushNpc(entities, nextId, NPC_DEFS.ag17_klava_nurse, 'ag17_klava_nurse', rx + 3, ry + 6, false);
-  pushNpc(entities, nextId, NPC_DEFS.ag17_taras_sanitar, 'ag17_taras_sanitar', rx + 10, wardDoorY, true, 'pipe');
-  pushNpc(entities, nextId, NPC_DEFS.ag17_lida_patient, 'ag17_lida_patient', rx + 14, ry + 4, true);
-  pushNpc(entities, nextId, NPC_DEFS.ag17_yura_patient, 'ag17_yura_patient', rx + 16, ry + 9, true);
-  pushNpc(entities, nextId, NPC_DEFS.ag17_varvara_morgue, 'ag17_varvara_morgue', rx + 6, ry + 13, true);
+  pushNpc(entities, nextId, 'ag17_mira_triage', rx + 4, ry + 2, true);
+  pushNpc(entities, nextId, 'ag17_klava_nurse', rx + 3, ry + 6, false);
+  pushNpc(entities, nextId, 'ag17_taras_sanitar', rx + 10, wardDoorY, true, 'pipe');
+  pushNpc(entities, nextId, 'ag17_lida_patient', rx + 14, ry + 4, true);
+  pushNpc(entities, nextId, 'ag17_yura_patient', rx + 16, ry + 9, true);
+  pushNpc(entities, nextId, 'ag17_varvara_morgue', rx + 6, ry + 13, true);
   pushOutbreakMonster(world, entities, nextId, rx + 17, ry + 5);
   pushHeadSlugHost(world, entities, nextId, rx + 15, ry + 7);
 

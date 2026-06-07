@@ -63,6 +63,7 @@ export const enum MarkType {
   SEROBURMALINE, // visual-risk slime — gray/magenta crystalline residue
   BURN,     // fire burn — torn/wispy charred patches, semi-transparent
   WEB,      // pale spider web threads — readable adhesive warning
+  BULLET_WALL, // precise wall bullet chip — clipped to one cell tile
 }
 
 export interface BlackHandMarkCell {
@@ -121,6 +122,32 @@ function shaderBullet(u: number, v: number, seed: number): number {
   // Annular ring around center
   const ring = Math.abs(r - 0.35) < 0.08 ? 1 - Math.abs(r - 0.35) / 0.08 : 0;
   return Math.min(1, Math.max(ring * 0.6, crackAlpha) * (r < 1 ? 1 : 0));
+}
+
+function shaderWallBullet(u: number, v: number, seed: number): number {
+  const r = Math.sqrt(u * u + v * v);
+  if (r > 1) return 0;
+  if (r < 0.22) return 1;
+
+  const chip = Math.abs(r - 0.34) < 0.11 ? (1 - Math.abs(r - 0.34) / 0.11) * 0.38 : 0;
+  const speckle = snoise(u * 10 + seed * 0.17, v * 10 - seed * 0.11, seed + 610) > 0.64 && r < 0.62 ? 0.22 : 0;
+
+  let crackAlpha = 0;
+  const crackCount = Math.floor(hash(seed + 31) * 3); // 0-2 cracks
+  const phase = hash(seed + 37) * Math.PI * 2;
+  for (let i = 0; i < crackCount; i++) {
+    const angle = Math.atan2(v, u);
+    const ca = phase + i * (Math.PI * 0.72) + (hash(seed + 43 + i) - 0.5) * 0.9;
+    let da = Math.abs(angle - ca);
+    if (da > Math.PI) da = Math.PI * 2 - da;
+    const width = 0.045 + hash(seed + 57 + i) * 0.025;
+    const len = 0.52 + hash(seed + 71 + i) * 0.24;
+    if (da < width && r < len && r > 0.2) {
+      crackAlpha = Math.max(crackAlpha, (1 - da / width) * (1 - r / len) * 0.58);
+    }
+  }
+
+  return Math.min(1, Math.max(chip, speckle, crackAlpha));
 }
 
 function shaderScorch(u: number, v: number, seed: number): number {
@@ -284,7 +311,7 @@ function shaderWeb(u: number, v: number, seed: number): number {
 /* ── Shader dispatch ──────────────────────────────────────────── */
 const SHADERS: ((u: number, v: number, seed: number) => number)[] = [
   shaderSplat, shaderBullet, shaderScorch, shaderDrip, shaderPool, shaderPsi, shaderMaronary, shaderBlackHand,
-  shaderSeroburmaline, shaderBurn, shaderWeb,
+  shaderSeroburmaline, shaderBurn, shaderWeb, shaderWallBullet,
 ];
 
 function blackHandCells(world: World): BlackHandMarkCell[] {
@@ -393,8 +420,25 @@ export function paintSurfacePixel(
     cell[idx + 2] = Math.floor((cell[idx + 2] * curA + b * newA) / total);
     cell[idx + 3] = Math.min(255, total);
   }
-  world.surfaceVersion++;
+  world.markSurfaceCellDirty(ci);
   return true;
+}
+
+function writeSurfacePixel(cell: Uint8Array, idx: number, r: number, g: number, b: number, newA: number): void {
+  const curA = cell[idx + 3];
+  if (curA === 0) {
+    cell[idx] = r; cell[idx + 1] = g; cell[idx + 2] = b; cell[idx + 3] = newA;
+  } else {
+    const total = curA + newA;
+    cell[idx]     = Math.floor((cell[idx]     * curA + r * newA) / total);
+    cell[idx + 1] = Math.floor((cell[idx + 1] * curA + g * newA) / total);
+    cell[idx + 2] = Math.floor((cell[idx + 2] * curA + b * newA) / total);
+    cell[idx + 3] = Math.min(255, total);
+  }
+}
+
+function recordTouchedCell(cells: number[], idx: number): void {
+  if (cells.indexOf(idx) < 0) cells.push(idx);
 }
 
 /* ── Generate & stamp a mark onto the world surface grid ──────── *
@@ -424,7 +468,7 @@ export function stampMark(
   const centerPx = fx * 16;
   const centerPy = fy * 16;
   const radiusPx = Math.max(1, radius * 16);
-  let touched = false;
+  const touchedCells: number[] = [];
 
   // Scan bounding box of the mark in surface-pixel space
   const r2 = radiusPx + 1;
@@ -463,20 +507,58 @@ export function stampMark(
       if (!cell) { cell = new Uint8Array(1024); world.surfaceMap.set(ci, cell); }
 
       const idx = (py * 16 + px) << 2;
-      const curA = cell[idx + 3];
-      if (curA === 0) {
-        cell[idx] = r; cell[idx + 1] = g; cell[idx + 2] = b; cell[idx + 3] = newA;
-      } else {
-        const total = curA + newA;
-        cell[idx]     = Math.floor((cell[idx]     * curA + r * newA) / total);
-        cell[idx + 1] = Math.floor((cell[idx + 1] * curA + g * newA) / total);
-        cell[idx + 2] = Math.floor((cell[idx + 2] * curA + b * newA) / total);
-        cell[idx + 3] = Math.min(255, total);
+      writeSurfacePixel(cell, idx, r, g, b, newA);
+      recordTouchedCell(touchedCells, ci);
+    }
+  }
+  if (touchedCells.length > 0) world.markSurfaceCellsDirty(touchedCells);
+}
+
+export function stampLocalMark(
+  world: World,
+  cx: number, cy: number,
+  fx: number, fy: number,
+  radius: number,
+  type: MarkType,
+  seed: number,
+  r: number, g: number, b: number,
+  intensity = 220,
+  wallOk = false,
+): void {
+  const wx = world.wrap(Math.floor(cx));
+  const wy = world.wrap(Math.floor(cy));
+  const ci = world.idx(wx, wy);
+  if (!wallOk && world.cells[ci] === Cell.WALL) return;
+
+  const shader = SHADERS[type] ?? SHADERS[0];
+  const centerPx = fx * 16;
+  const centerPy = fy * 16;
+  const radiusPx = Math.max(1, radius * 16);
+  const r2 = radiusPx + 1;
+  let touched = false;
+  let cell = world.surfaceMap.get(ci);
+
+  for (let dy = -r2; dy <= r2; dy++) {
+    const py = Math.floor(centerPy + dy);
+    if (py < 0 || py >= 16) continue;
+    for (let dx = -r2; dx <= r2; dx++) {
+      const px = Math.floor(centerPx + dx);
+      if (px < 0 || px >= 16) continue;
+
+      const alpha = shader(dx / radiusPx, dy / radiusPx, seed);
+      if (alpha <= 0.01) continue;
+      const newA = Math.min(255, Math.floor(intensity * alpha));
+      if (newA <= 0) continue;
+
+      if (!cell) {
+        cell = new Uint8Array(1024);
+        world.surfaceMap.set(ci, cell);
       }
+      writeSurfacePixel(cell, (py * 16 + px) << 2, r, g, b, newA);
       touched = true;
     }
   }
-  if (touched) world.surfaceVersion++;
+  if (touched) world.markSurfaceCellDirty(ci);
 }
 
 export function stampSurfaceSplat(

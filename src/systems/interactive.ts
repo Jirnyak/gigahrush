@@ -130,7 +130,7 @@ function markSurfaceFlag(world: World, idx: number, def: InteractiveDef): void {
   const after = before | def.surfaceFlag;
   if (after === before) return;
   world.surfaceFlags[idx] = after;
-  world.surfaceVersion = (world.surfaceVersion + 1) | 0;
+  world.markSurfaceDirty();
 }
 
 function existingAt(world: World, idx: number, defId: string, containerId?: number): InteractiveInstance | undefined {

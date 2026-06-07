@@ -27,9 +27,10 @@ import { World } from '../../core/world';
 import { hashSeed, withSeededRandom } from '../../core/rand';
 import { freshNeeds } from '../../data/catalog';
 import { HUMAN_TERRITORY_OWNERS, factionToTerritoryOwner } from '../../data/factions';
-import { type PlotNpcDef, type SideQuestStep, registerSideQuest } from '../../data/plot';
+import { designNpcFloorKey, type PlotNpcDef, type SideQuestStep, registerFloorSideQuest } from '../../data/plot';
 import { MONSTERS } from '../../entities/monster';
 import { monsterSpr, Spr } from '../../render/sprite_index';
+import { requireSpawnedPlotNpcFromPackage } from '../plot_npc_spawn';
 import {
   ensureConnectivity,
   generateZones,
@@ -37,6 +38,8 @@ import {
   stampRoom,
 } from '../shared';
 import type { FloorGeneration } from '../floor_manifest';
+
+const DESIGN_NPC_HOME_FLOOR_KEY = designNpcFloorKey('silicon_net_well');
 
 export const DESIGN_FLOOR_ID = 'silicon_net_well' as const;
 export const SILICON_NET_WELL_Z = -22;
@@ -278,7 +281,7 @@ let contentRegistered = false;
 export function registerSiliconNetWellContent(): void {
   if (contentRegistered) return;
   for (const npcId of Object.keys(NPC_DEFS) as SiliconNpcId[]) {
-    registerSideQuest(npcId, NPC_DEFS[npcId], SIDE_QUESTS.filter(q => q.giverNpcId === npcId));
+    registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, npcId, NPC_DEFS[npcId], SIDE_QUESTS.filter(q => q.giverNpcId === npcId));
   }
   contentRegistered = true;
 }
@@ -1503,39 +1506,20 @@ function spawnPlotNpc(
   entities: Entity[],
   nextId: { v: number },
   npcId: SiliconNpcId,
-  def: PlotNpcDef,
+  _def: PlotNpcDef,
   x: number,
   y: number,
   angle: number,
-  weapon = def.weapon,
+  weapon?: string,
 ): number {
-  const id = nextId.v++;
-  entities.push({
-    id,
-    type: EntityType.NPC,
-    x: x + 0.5,
-    y: y + 0.5,
+  const px = x + 0.5;
+  const py = y + 0.5;
+  const npc = requireSpawnedPlotNpcFromPackage(entities, nextId, npcId, px, py, {
     angle,
-    pitch: 0,
-    alive: true,
-    speed: def.speed,
-    sprite: def.sprite,
-    name: def.name,
-    isFemale: def.isFemale,
-    needs: freshNeeds(),
-    hp: def.hp,
-    maxHp: def.maxHp,
-    money: def.money,
-    ai: { goal: AIGoal.IDLE, tx: x + 0.5, ty: y + 0.5, path: [], pi: 0, stuck: 0, timer: 0 },
-    inventory: def.inventory.map(item => ({ ...item })),
     weapon,
-    faction: def.faction,
-    occupation: def.occupation,
-    plotNpcId: npcId,
-    canGiveQuest: true,
-    questId: -1,
+    aiTarget: { x: px, y: py },
   });
-  return id;
+  return npc.id;
 }
 
 function spawnAmbientNpc(

@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { Cell, FloorLevel, RoomType, W, ZoneFaction, type Room, type TerritoryOwner } from '../src/core/types';
+import { Cell, EntityType, FloorLevel, RoomType, W, ZoneFaction, type Room, type TerritoryOwner } from '../src/core/types';
 import { auditReachability, type World } from '../src/core/world';
 import { HUMAN_TERRITORY_OWNERS, territoryOwnerName } from '../src/data/factions';
 import { generateFloor } from '../src/gen/floor_manifest';
@@ -96,10 +96,30 @@ test('genfix 051 living floor preserves reference geometry and cell-first territ
   assert.equal(world.rooms.length, 10_491, 'living reference room count');
   assert.equal(world.doors.size, 2_135, 'living reference door count');
   assert.equal(world.containers.length, 67, 'living reference container count');
-  assert.equal(gen.entities.length, 9_309, 'living reference entity count');
+  assert.equal(gen.entities.length, 9_289, 'living reference entity count');
   assert.equal(reachableCellCount(world, gen.spawnX, gen.spawnY), 415_803, 'living reference reachability');
   assert.equal(wallCellCount(world), 632_059, 'living reference wall count');
   assert.equal(passableCellCount(world), 416_423, 'living reference passable count');
+
+  for (const plotNpcId of [
+    'shurik_baryga',
+    'market_guard_lysyy',
+    'market_guard_kaban',
+    'blood_plant_senya_red_mold',
+    'blood_plant_raya_witness',
+    'blood_plant_tikhon_spore',
+    'ag17_mira_triage',
+    'ag16_nina_obzh',
+    'ag03_pasha_concierge',
+    'ag03r2_zoya_laundry',
+    'ag108_nina_tariff',
+    'ag43_seva_cartographer',
+    'batushka',
+  ]) {
+    const npc = gen.entities.find(entity => entity.type === EntityType.NPC && entity.plotNpcId === plotNpcId);
+    assert.ok(npc, `${plotNpcId} should spawn on the Living floor`);
+    assert.equal(npc.npcPackageId, plotNpcId, `${plotNpcId} should be package-backed`);
+  }
 
   const shares = territoryShares(world);
   let dominantOwner = ZoneFaction.CITIZEN;

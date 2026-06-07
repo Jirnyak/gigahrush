@@ -19,11 +19,11 @@ import {
   type WorldEvent,
 } from '../../core/types';
 import { World } from '../../core/world';
-import { type PlotNpcDef, registerSideQuest } from '../../data/plot';
+import { type PlotNpcDef, registerAuthoredNpc, registerSideQuest, storyNpcFloorKey } from '../../data/plot';
 import { addFactionRelMutual } from '../../data/relations';
 import { publishEvent, registerWorldEventObserver } from '../../systems/events';
 import {
-  type NextId, addItemDrop, createAdminRoom, setFeature, spawnAdminNpc, spawnNamedCivilian,
+  type NextId, addItemDrop, createAdminRoom, setFeature, spawnAdminNpc,
 } from './admin_common';
 import { genLog } from '../log';
 
@@ -33,6 +33,8 @@ const QUEST_EXPOSE = 'nii_audit_expose_chain';
 const QUEST_SELL = 'nii_audit_sell_sample';
 const QUEST_CONCEAL = 'nii_audit_conceal_forgery';
 const CONTENT_TAGS = ['nii', 'sample', 'contraband', 'ministry'] as const;
+const HOME_FLOOR_KEY = storyNpcFloorKey(FloorLevel.MINISTRY);
+const INTERN_ID = 'nii_audit_intern_without_clearance';
 
 const RUNNER_DEF: PlotNpcDef = {
   name: 'Курьер с нулевой накладной',
@@ -126,6 +128,26 @@ const SENYA_DEF: PlotNpcDef = {
   ],
 };
 
+const INTERN_DEF: PlotNpcDef = {
+  name: 'Практикантка без допуска',
+  isFemale: true,
+  faction: Faction.CITIZEN,
+  occupation: Occupation.SECRETARY,
+  sprite: Occupation.SECRETARY,
+  hp: 70, maxHp: 70, money: 15, speed: 0.8,
+  inventory: [
+    { defId: 'nii_sample_container', count: 1 },
+    { defId: 'note', count: 1 },
+  ],
+  talkLines: [
+    'Мне сказали не заходить за клетку. Значит, самое важное лежит за клеткой.',
+    'Допуска нет, зато есть пробирка, которая всем мешает.',
+  ],
+  talkLinesPost: [
+    'Если меня спросят, я была в коридоре и ничего не поняла.',
+  ],
+};
+
 registerSideQuest('nii_audit_runner', RUNNER_DEF, [
   {
     id: QUEST_FIND_ROOM,
@@ -176,6 +198,13 @@ registerSideQuest('nii_market_senya', SENYA_DEF, [
     relationDelta: 8, xpReward: 70, moneyReward: 260,
   },
 ]);
+
+registerAuthoredNpc({
+  id: INTERN_ID,
+  npc: INTERN_DEF,
+  homeFloorKey: HOME_FLOOR_KEY,
+  tags: ['ministry', 'nii', 'sample', 'intern'],
+});
 
 interface OutcomeDef {
   label: string;
@@ -454,11 +483,7 @@ export function generateNiiContrabandAudit(
   spawnAdminNpc(entities, nextId, MAXIM_DEF, 'nii_liquidator_maxim', gateX - 1, cy, true, 'makarov');
   const senyaId = nextId.v;
   spawnAdminNpc(entities, nextId, SENYA_DEF, 'nii_market_senya', room.x + 7, room.y + room.h - 3);
-  spawnNamedCivilian(
-    entities, nextId, 'Практикантка без допуска', true,
-    room.x + 2, room.y + room.h - 3, Occupation.SECRETARY, Faction.CITIZEN,
-    [{ defId: 'nii_sample_container', count: 1 }, { defId: 'note', count: 1 }],
-  );
+  spawnAdminNpc(entities, nextId, INTERN_DEF, INTERN_ID, room.x + 2, room.y + room.h - 3, false);
   const guideSpot = findGuideSpot(world, spawnX, spawnY, room.id);
   if (guideSpot) spawnAdminNpc(entities, nextId, RUNNER_DEF, 'nii_audit_runner', guideSpot.x, guideSpot.y);
 

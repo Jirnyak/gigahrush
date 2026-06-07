@@ -1,4 +1,5 @@
 import { SAVE_SHAPE_VERSION, saveShapeVersionStatus } from './save_runtime';
+import { designFloorProfile } from '../data/design_floor_profiles';
 
 type PauseChangeHandler = (paused: boolean) => void;
 
@@ -197,7 +198,7 @@ export function portalAllowsOptionalNetwork(): boolean {
 }
 
 export function portalBlocksDesignFloor(id: string | undefined): boolean {
-  return isStrictPortalMode() && id === 'floor_69';
+  return isStrictPortalMode() && designFloorProfile(id)?.portalPolicy?.strictPortalBlocked === true;
 }
 
 function shouldInitYandex(): boolean {

@@ -39,9 +39,12 @@ import { publishEvent } from './events';
 import { applyInfrastructureRelationResponse } from './factions';
 import { territoryFactionAt } from './territory';
 import { setDoorState } from './door_state';
+import { ENTITY_MASK_NPC, ensureEntityIndex } from './entity_index';
 
 type PanelAction = Exclude<EmergencyPanelActionId, 'leave'>;
 type PanelStatus = 'idle' | 'repaired' | 'shutdown' | 'forced' | 'overloaded';
+const PANEL_PATROL_QUERY_CAP = 96;
+const panelPatrolQuery: Entity[] = [];
 
 export interface EmergencyPanelInstance {
   idx: number;
@@ -548,11 +551,18 @@ function alertLocalPatrols(
 ): number {
   if (owner === null) return 0;
   let alerted = 0;
-  for (const entity of entities) {
+  ensureEntityIndex(entities).queryRadiusCapped(
+    panel.x + 0.5,
+    panel.y + 0.5,
+    88,
+    panelPatrolQuery,
+    ENTITY_MASK_NPC,
+    PANEL_PATROL_QUERY_CAP,
+  );
+  for (const entity of panelPatrolQuery) {
     if (alerted >= 6) break;
     if (!entity.alive || entity.type !== EntityType.NPC || entity.faction !== owner || !entity.ai) continue;
     if (world.zoneMap[world.idx(Math.floor(entity.x), Math.floor(entity.y))] !== panel.zoneId) continue;
-    if (world.dist2(entity.x, entity.y, panel.x + 0.5, panel.y + 0.5) > 88 * 88) continue;
     entity.ai.goal = severity >= 4 ? AIGoal.HUNT : AIGoal.GOTO;
     entity.ai.tx = panel.x + 0.5;
     entity.ai.ty = panel.y + 0.5;
@@ -561,6 +571,7 @@ function alertLocalPatrols(
     if (severity >= 4) entity.ai.combatTargetId = player.id;
     alerted++;
   }
+  panelPatrolQuery.length = 0;
   return alerted;
 }
 

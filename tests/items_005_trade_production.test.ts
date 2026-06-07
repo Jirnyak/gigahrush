@@ -10,7 +10,7 @@ import { BLACK_MARKET_88_STOCK } from '../src/gen/design_floors/black_market_88'
 import { useItem } from '../src/systems/inventory';
 import { countInventoryItem, makeGameState, makeTestPlayer } from './helpers';
 
-const ITEM5_ITEM_IDS = [
+const UTILITY_SCRAP_ITEM_IDS = [
   'blueprint_t1_folder',
   'blueprint_t2_folder',
   'blueprint_t3_folder',
@@ -51,7 +51,7 @@ const ITEM5_ITEM_IDS = [
   'market_weight_scale',
 ] as const;
 
-const PRODUCTION_RESOURCE_ITEMS = ITEM5_ITEM_IDS.filter(id => ![
+const PRODUCTION_RESOURCE_ITEMS = UTILITY_SCRAP_ITEM_IDS.filter(id => ![
   'dice_bone',
   'resident_trinket_box',
 ].includes(id));
@@ -64,8 +64,8 @@ function factoryRecipeIds(factoryId: string): Set<string> {
   return new Set(FACTORIES.find(factory => factory.id === factoryId)?.recipes.map(recipe => recipe.id) ?? []);
 }
 
-test('items 5 trade and production definitions are present and keyed', () => {
-  for (const id of ITEM5_ITEM_IDS) {
+test('utility scrap trade and production definitions are present and keyed', () => {
+  for (const id of UTILITY_SCRAP_ITEM_IDS) {
     assert.equal(ITEMS[id]?.id, id, `${id} must exist`);
     assert.ok(ITEMS[id].value >= 0, `${id} must be tradeable`);
   }
@@ -80,7 +80,7 @@ test('items 5 trade and production definitions are present and keyed', () => {
   }
 });
 
-test('items 5 production goods map to explicit economy resources', () => {
+test('utility scrap production goods map to explicit economy resources', () => {
   for (const id of PRODUCTION_RESOURCE_ITEMS) {
     assert.ok(resourceForItem(id), `${id} must map to a resource or be resident loot only`);
   }
@@ -90,7 +90,7 @@ test('items 5 production goods map to explicit economy resources', () => {
   assert.equal(resourceForItem('keyboard_unit')?.id, 'tools');
 });
 
-test('items 5 goods are reachable from containers, black market stock and factories', () => {
+test('utility scrap goods are reachable from containers, black market stock and factories', () => {
   assert.ok(containerPoolIds(ContainerKind.FILING_CABINET).has('blueprint_t1_folder'));
   assert.ok(containerPoolIds(ContainerKind.SAFE).has('blueprint_t3_folder'));
   assert.ok(containerPoolIds(ContainerKind.SECRET_STASH).has('black_market_shells'));

@@ -8,22 +8,49 @@ import {
 } from '../../core/types';
 import { MONSTERS } from '../../entities/monster';
 import { Spr, monsterSpr } from '../../render/sprite_index';
+import { type PlotNpcDef, registerAuthoredNpc, storyNpcFloorKey } from '../../data/plot';
 import { publishEvent, registerWorldEventObserver } from '../../systems/events';
 import { randomRPG, scaleMonsterHp, scaleMonsterSpeed } from '../../systems/rpg';
 import {
   type MaintContentCtx, dropItems, findMaintArea, setFeature, stampMaintRoom,
 } from './content_helpers';
+import { requireSpawnedPlotNpcFromPackage } from '../plot_npc_spawn';
 
 const MODULE_TAG = 'monster_08_filtronos';
 const EVENT_TAG = 'filtronos_event';
 const CACHE_TAG = 'filtronos_cache';
 const THREAT_NAME = 'Фильтронос';
 const CONTAMINATED_GLOVES_ITEM = 'contaminated_gloves';
+const KEEPER_ID = 'filtronos_keeper_matvey';
 const CLEAN_TO_CONTAMINATED: Record<string, string> = {
   gasmask_filter: 'filter_layer',
   filtered_water: 'metal_water',
   water: 'metal_water',
 };
+
+const KEEPER_DEF: PlotNpcDef = {
+  name: 'Матвей Фильтровой',
+  isFemale: false,
+  sex: 'male',
+  faction: Faction.LIQUIDATOR,
+  occupation: Occupation.LOCKSMITH,
+  sprite: Occupation.LOCKSMITH,
+  hp: 105, maxHp: 105, money: 44, speed: 0.95,
+  inventory: [{ defId: 'sealant_tube', count: 1 }, { defId: 'water_coupon', count: 1 }],
+  talkLines: [
+    'Матвей держит пломбу сухой рукой и следит, чтобы фильтр не дышал обратно.',
+  ],
+  talkLinesPost: [
+    'Матвей пересчитывает купоны после каждого плеска в трубе.',
+  ],
+};
+
+registerAuthoredNpc({
+  id: KEEPER_ID,
+  npc: KEEPER_DEF,
+  homeFloorKey: storyNpcFloorKey(FloorLevel.MAINTENANCE),
+  tags: ['maintenance', 'filtronos', 'keeper'],
+});
 
 interface FiltronosContext {
   worldContainerId: number;
@@ -295,22 +322,12 @@ function dropAt(ctx: MaintContentCtx, x: number, y: number, defId: string, count
 }
 
 function spawnKeeper(ctx: MaintContentCtx, room: Room): Entity {
-  const keeper: Entity = {
-    id: ctx.nextId.v++, type: EntityType.NPC,
-    x: room.x + 3.5, y: room.y + room.h - 2.5,
-    angle: 0, pitch: 0,
-    alive: true, speed: 0.95, sprite: Occupation.LOCKSMITH,
-    name: 'Матвей Фильтровой',
+  return requireSpawnedPlotNpcFromPackage(ctx.entities, ctx.nextId, KEEPER_ID, room.x + 3.5, room.y + room.h - 2.5, {
+    angle: 0,
+    aiTarget: { x: room.x + 3.5, y: room.y + room.h - 2.5 },
+    canGiveQuest: false,
     needs: { food: 68, water: 42, sleep: 35, pee: 20, poo: 8 },
-    hp: 105, maxHp: 105, money: 44,
-    ai: { goal: AIGoal.IDLE, tx: 0, ty: 0, path: [], pi: 0, stuck: 0, timer: 0 },
-    inventory: [{ defId: 'sealant_tube', count: 1 }, { defId: 'water_coupon', count: 1 }],
-    faction: Faction.LIQUIDATOR,
-    occupation: Occupation.LOCKSMITH,
-    questId: -1,
-  };
-  ctx.entities.push(keeper);
-  return keeper;
+  });
 }
 
 function spawnFiltronos(ctx: MaintContentCtx, room: Room): number {

@@ -6,13 +6,19 @@ import {
   DEMOS_EDGE_DEBT,
   DEMOS_EDGE_ENEMY,
   DEMOS_EDGE_FRIEND,
+  DEMOS_EDGE_WORK,
   DEMOS_RELATION_EMPTY,
   DEMOS_RELATION_MAX,
   DEMOS_RELATION_MIN,
+  DEMOS_SOCIAL_NPC_SLOT_START,
   DEMOS_SOCIAL_NPC_SLOTS,
+  DEMOS_SOCIAL_PLAYER_SLOT,
+  DEMOS_SOCIAL_PUBLIC_SLOTS,
   DemosSocialRoleId,
 } from '../src/data/demos_social';
+import { registerNpcPackages, type NpcPackageDef } from '../src/data/npc_packages';
 import { initFactionRelations } from '../src/data/relations';
+import { createEmptyDemosSocialSaveState } from '../src/systems/demos_save';
 import {
   captureAlifeFloorState,
   createPrefilledAlifeState,
@@ -50,6 +56,25 @@ function debugGraph(state: GameState): DemosSocialGraphDebug {
   return (state as GameState & { demosSocialGraph: DemosSocialGraphDebug }).demosSocialGraph;
 }
 
+function demosPackage(id: string, displayName: string, social: NpcPackageDef['social'] = {}): NpcPackageDef {
+  return {
+    version: 1,
+    id,
+    kind: 'design',
+    identity: { firstName: displayName, displayName },
+    bio: { publicLine: displayName },
+    demographics: { sex: 'male', age: 33 },
+    affiliation: { faction: Faction.CITIZEN, occupation: Occupation.SECRETARY },
+    rpg: { level: 1 },
+    wealth: {},
+    loadout: {},
+    social,
+    visual: {},
+    placement: { homeFloorKey: 'story:living', presence: 'population' },
+    speech: {},
+  };
+}
+
 function deadAlifeEntity(alifeId: number): Entity {
   return {
     id: 1000 + alifeId,
@@ -79,6 +104,13 @@ test('Demos social graph is deterministic for the same A-Life seed and state', (
 
   const sameSeed = stateWithPopulation(101, 32);
   assert.deepEqual(getDemosNpcOnlySocialEdges(sameSeed, 7), first);
+});
+
+test('Demos social constants expose player plus nine NPC public slots', () => {
+  assert.equal(DEMOS_SOCIAL_PLAYER_SLOT, 0);
+  assert.equal(DEMOS_SOCIAL_NPC_SLOT_START, 1);
+  assert.equal(DEMOS_SOCIAL_NPC_SLOTS, 9);
+  assert.equal(DEMOS_SOCIAL_PUBLIC_SLOTS, 10);
 });
 
 test('Demos social graph changes at least some edges for a different seed', () => {
@@ -203,10 +235,119 @@ test('Demos social graph applies optional authored plot relations', () => {
   assert.equal((rotenbergovToNil?.flags ?? 0) & DEMOS_EDGE_DEBT, DEMOS_EDGE_DEBT);
 });
 
-test('Demos social stats report byte storage under five megabytes for 100k records', () => {
+test('Demos package-authored links resolve package ids to A-Life ids', () => {
+  registerNpcPackages([
+    demosPackage('demos_social_source', 'Источник Демоса', {
+      links: [{
+        targetNpcId: 'demos_social_target',
+        relation: 91,
+        role: DemosSocialRoleId.FRIEND,
+        flags: ['friend', 'work'],
+      }],
+    }),
+    demosPackage('demos_social_target', 'Цель Демоса'),
+  ]);
+  const state = stateWithPopulation(919, 4, [
+    { id: 'npc:demos_social_source', kind: 'authored', name: 'Источник Демоса', faction: Faction.CITIZEN },
+    { id: 'npc:demos_social_target', kind: 'authored', name: 'Цель Демоса', faction: Faction.CITIZEN },
+  ]);
+
+  const edge = getDemosNpcOnlySocialEdges(state, 1).find(item => item.targetAlifeId === 2);
+  assert.equal(edge?.relation, 91);
+  assert.equal(edge?.role, DemosSocialRoleId.FRIEND);
+  assert.equal((edge?.flags ?? 0) & DEMOS_EDGE_FRIEND, DEMOS_EDGE_FRIEND);
+  assert.equal((edge?.flags ?? 0) & DEMOS_EDGE_WORK, DEMOS_EDGE_WORK);
+});
+
+test('Demos bidirectional package link compiles into two directed edges without duplicates', () => {
+  registerNpcPackages([
+    demosPackage('demos_bidir_a', 'Первый Бидир', {
+      links: [{
+        targetNpcId: 'demos_bidir_b',
+        relation: 74,
+        role: DemosSocialRoleId.WORK,
+        flags: ['work'],
+        bidirectional: true,
+      }],
+    }),
+    demosPackage('demos_bidir_b', 'Второй Бидир'),
+  ]);
+  const state = stateWithPopulation(929, 4, [
+    { id: 'npc:demos_bidir_a', kind: 'authored', name: 'Первый Бидир', faction: Faction.CITIZEN },
+    { id: 'npc:demos_bidir_b', kind: 'authored', name: 'Второй Бидир', faction: Faction.CITIZEN },
+  ]);
+
+  const aToB = getDemosNpcOnlySocialEdges(state, 1).filter(item => item.targetAlifeId === 2);
+  const bToA = getDemosNpcOnlySocialEdges(state, 2).filter(item => item.targetAlifeId === 1);
+  assert.equal(aToB.length, 1);
+  assert.equal(bToA.length, 1);
+  assert.equal(aToB[0].relation, 74);
+  assert.equal(bToA[0].relation, 74);
+  assert.equal(aToB[0].role, DemosSocialRoleId.WORK);
+  assert.equal(bToA[0].role, DemosSocialRoleId.WORK);
+});
+
+test('Demos sparse saved relation override wins over package base relation', () => {
+  registerNpcPackages([
+    demosPackage('demos_override_a', 'Оверрайд Первый', {
+      links: [{
+        targetNpcId: 'demos_override_b',
+        relation: 100,
+        role: DemosSocialRoleId.FRIEND,
+        flags: ['friend'],
+      }],
+    }),
+    demosPackage('demos_override_b', 'Оверрайд Второй'),
+  ]);
+  const state = stateWithPopulation(939, 4, [
+    { id: 'npc:demos_override_a', kind: 'authored', name: 'Оверрайд Первый', faction: Faction.CITIZEN },
+    { id: 'npc:demos_override_b', kind: 'authored', name: 'Оверрайд Второй', faction: Faction.CITIZEN },
+  ]);
+  (state as GameState & { demosSocial: ReturnType<typeof createEmptyDemosSocialSaveState> }).demosSocial = {
+    ...createEmptyDemosSocialSaveState(),
+    relationOverrides: [{
+      fromAlifeId: 1,
+      targetKind: 'alife',
+      targetAlifeId: 2,
+      value: -77,
+      reasonTag: 'test_override',
+    }],
+  };
+
+  const edge = getDemosNpcOnlySocialEdges(state, 1).find(item => item.targetAlifeId === 2);
+  assert.equal(edge?.relation, -77);
+  assert.equal(edge?.role, DemosSocialRoleId.ENEMY);
+});
+
+test('Demos package social links keep one-profile views lazy for large pools', () => {
+  registerNpcPackages([
+    demosPackage('demos_lazy_a', 'Ленивый Первый', {
+      links: [{
+        targetNpcId: 'demos_lazy_b',
+        relation: 70,
+        role: DemosSocialRoleId.FRIEND,
+        flags: ['friend'],
+      }],
+    }),
+    demosPackage('demos_lazy_b', 'Ленивый Второй'),
+  ]);
+  const state = stateWithPopulation(949, 100_000, [
+    { id: 'npc:demos_lazy_a', kind: 'authored', name: 'Ленивый Первый', faction: Faction.CITIZEN },
+    { id: 'npc:demos_lazy_b', kind: 'authored', name: 'Ленивый Второй', faction: Faction.CITIZEN },
+  ]);
+
+  const edge = getDemosNpcOnlySocialEdges(state, 1).find(item => item.targetAlifeId === 2);
+  const graph = (state as GameState & { demosSocialGraph: { builtAll: boolean; initialized: Uint8Array } }).demosSocialGraph;
+  assert.equal(edge?.relation, 70);
+  assert.equal(graph.builtAll, false);
+  assert.equal(graph.initialized[1], 1);
+  assert.equal(graph.initialized[99999], 0);
+});
+
+test('Demos social stats report byte storage under seven megabytes for 100k records', () => {
   const stats = getDemosSocialGraphStats(stateWithPopulation(808, 100_000));
   assert.equal(stats.totalRecords, 100_000);
   assert.equal(stats.npcSlots, DEMOS_SOCIAL_NPC_SLOTS);
   assert.equal(stats.heapBytesApprox, 100_000 * DEMOS_SOCIAL_NPC_SLOTS * 7);
-  assert.ok(stats.heapBytesApprox < 5 * 1024 * 1024);
+  assert.ok(stats.heapBytesApprox < 7 * 1024 * 1024);
 });

@@ -4,12 +4,12 @@
 
 import {
   Cell, DoorState, Tex, Feature, RoomType,
-  type Room, type Entity, EntityType, AIGoal, Faction, Occupation, QuestType,
+  type Room, type Entity, EntityType, Faction, Occupation, QuestType,
 } from '../../core/types';
 import { World } from '../../core/world';
-import { freshNeeds } from '../../data/catalog';
 import { type PlotNpcDef, registerSideQuest } from '../../data/plot';
 import { genLog } from '../log';
+import { requireSpawnedPlotNpcFromPackage } from '../plot_npc_spawn';
 import { registerZoneContent } from './zone_content';
 import { Spr } from '../../render/sprite_index';
 
@@ -56,6 +56,35 @@ registerSideQuest('shurik_baryga', NPC_DEF, [
     relationDelta: 12, xpReward: 40, moneyReward: 60,
   },
 ]);
+
+const GUARD_DEFS: Record<string, PlotNpcDef> = {
+  market_guard_lysyy: {
+    name: 'Охранник Лысый',
+    isFemale: false,
+    faction: Faction.LIQUIDATOR,
+    occupation: Occupation.HUNTER,
+    sprite: Occupation.HUNTER,
+    hp: 200, maxHp: 200, money: 30, speed: 1.0,
+    weapon: 'pipe',
+    inventory: [{ defId: 'pipe', count: 1 }],
+    talkLines: ['У прилавка не толпись. Купил, отошёл.'],
+    talkLinesPost: ['Шурик доволен - значит, пока все живы.'],
+  },
+  market_guard_kaban: {
+    name: 'Охранник Кабан',
+    isFemale: false,
+    faction: Faction.LIQUIDATOR,
+    occupation: Occupation.HUNTER,
+    sprite: Occupation.HUNTER,
+    hp: 200, maxHp: 200, money: 30, speed: 1.0,
+    weapon: 'pipe',
+    inventory: [{ defId: 'pipe', count: 1 }],
+    talkLines: ['Соседа с блокнотом видишь? Вот и не ори.'],
+    talkLinesPost: ['Толкучка стоит, пока дверь закрывается быстрее языка.'],
+  },
+};
+
+for (const [id, def] of Object.entries(GUARD_DEFS)) registerSideQuest(id, def, []);
 
 const MKT_W = 17;
 const MKT_H = 13;
@@ -176,38 +205,25 @@ function generateMarket(
   }
 
   // Phase 8: barker NPC — Шурик in center
-  entities.push({
-    id: nextId.v++, type: EntityType.NPC,
-    x: rx + Math.floor(MKT_W / 2) + 0.5,
-    y: ry + Math.floor(MKT_H / 2) + 0.5,
-    angle: Math.PI / 2, pitch: 0,
-    alive: true, speed: NPC_DEF.speed, sprite: NPC_DEF.sprite,
-    name: NPC_DEF.name, isFemale: NPC_DEF.isFemale,
-    needs: freshNeeds(), hp: NPC_DEF.hp, maxHp: NPC_DEF.maxHp, money: NPC_DEF.money,
-    ai: { goal: AIGoal.IDLE, tx: 0, ty: 0, path: [], pi: 0, stuck: 0, timer: 0 },
-    inventory: NPC_DEF.inventory.map(i => ({ ...i })),
-    weapon: 'makarov',
-    faction: NPC_DEF.faction, occupation: NPC_DEF.occupation,
-    plotNpcId: 'shurik_baryga', canGiveQuest: true, questId: -1,
-  });
+  requireSpawnedPlotNpcFromPackage(
+    entities,
+    nextId,
+    'shurik_baryga',
+    rx + Math.floor(MKT_W / 2) + 0.5,
+    ry + Math.floor(MKT_H / 2) + 0.5,
+    { angle: Math.PI / 2, weapon: 'makarov', canGiveQuest: true },
+  );
 
   // Phase 9: a couple of "guards" — wandering hunters near the entrance
   for (let g = 0; g < 2; g++) {
-    entities.push({
-      id: nextId.v++, type: EntityType.NPC,
-      x: rx + 2 + g * (MKT_W - 4) + 0.5,
-      y: ry + MKT_H - 2 + 0.5,
-      angle: Math.PI, pitch: 0,
-      alive: true, speed: 1.0, sprite: Occupation.HUNTER,
-      name: g === 0 ? 'Охранник Лысый' : 'Охранник Кабан',
-      isFemale: false,
-      needs: freshNeeds(), hp: 200, maxHp: 200, money: 30,
-      ai: { goal: AIGoal.IDLE, tx: 0, ty: 0, path: [], pi: 0, stuck: 0, timer: 0 },
-      inventory: [{ defId: 'pipe', count: 1 }],
-      weapon: 'pipe',
-      faction: Faction.LIQUIDATOR, occupation: Occupation.HUNTER,
-      questId: -1,
-    });
+    requireSpawnedPlotNpcFromPackage(
+      entities,
+      nextId,
+      g === 0 ? 'market_guard_lysyy' : 'market_guard_kaban',
+      rx + 2 + g * (MKT_W - 4) + 0.5,
+      ry + MKT_H - 2 + 0.5,
+      { angle: Math.PI, weapon: 'pipe', canGiveQuest: false },
+    );
   }
 
   genLog(`[MARKET] Толкучка at (${rx}, ${ry}) room #${roomId}`);

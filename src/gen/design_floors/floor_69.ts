@@ -9,6 +9,7 @@ import {
 import { World } from '../../core/world';
 import { withSeededRandom } from '../../core/rand';
 import { freshNeeds } from '../../data/catalog';
+import { designFloorProfile, FLOOR_69_WORKER_ROLE_ID } from '../../data/design_floor_profiles';
 import { designNpcFloorKey, type PlotNpcDef, registerFloorSideQuest } from '../../data/plot';
 import { NPC_VISUAL_FLOOR69_FEMALE } from '../../entities/npc_visuals';
 import { Spr } from '../../render/sprite_index';
@@ -25,6 +26,7 @@ import {
 } from '../shared';
 import { genLog } from '../log';
 import type { FloorGeneration } from '../floor_manifest';
+import { requireSpawnedPlotNpcFromPackage } from '../plot_npc_spawn';
 
 export const DESIGN_FLOOR_ID = 'floor_69' as const;
 export const DESIGN_FLOOR_Z = -4;
@@ -42,15 +44,12 @@ export const FLOOR_69_RAID_SHUTTER_GATES = [
 const FLOOR_69_BASE_FLOOR = FloorLevel.MAINTENANCE;
 const FLOOR_69_MAX_FLAGS = 8;
 const FLOOR_69_CHECKPOINT_CROWD_CAP = 12;
-const FLOOR_69_WORKER_RATE = 0.34;
 const FLOOR_69_FEMALE_SPRITE_COUNT = Spr.F69_FEMALE_NPC_7 - Spr.F69_FEMALE_NPC_BASE + 1;
-const FLOOR_69_WORKER_OCCUPATIONS = new Set<Occupation>([
-  Occupation.TRAVELER,
-  Occupation.HOUSEWIFE,
-  Occupation.SECRETARY,
-  Occupation.STOREKEEPER,
-  Occupation.DIRECTOR,
-]);
+const FLOOR_69_PROFILE = designFloorProfile(DESIGN_FLOOR_ID);
+const FLOOR_69_WORKER_ROLE = FLOOR_69_PROFILE?.localRoles?.find(role => role.id === FLOOR_69_WORKER_ROLE_ID);
+const FLOOR_69_WORKER_CANDIDATE_OCCUPATIONS = new Set<Occupation>(
+  FLOOR_69_WORKER_ROLE?.candidateOccupations ?? FLOOR_69_WORKER_ROLE?.baseOccupations ?? [],
+);
 
 const FLOOR_69_CONTROL_ANCHORS: readonly {
   x: number;
@@ -146,34 +145,44 @@ function floor69FemaleSprite(entity: Entity): number {
 }
 
 function isFloor69GeneratedVisitor(entity: Entity): boolean {
+  if (!FLOOR_69_WORKER_ROLE?.sourceNamePrefix) return false;
   return entity.type === EntityType.NPC &&
     !entity.plotNpcId &&
     !entity.persistentNpcId &&
     entity.alifeId === undefined &&
     entity.questId === -1 &&
     entity.occupation !== Occupation.CHILD &&
-    FLOOR_69_WORKER_OCCUPATIONS.has(entity.occupation ?? Occupation.TRAVELER) &&
-    entity.isFemale !== false &&
-    (entity.name?.startsWith('Этаж 69: посетитель ') ?? false);
+    FLOOR_69_WORKER_CANDIDATE_OCCUPATIONS.has(entity.occupation ?? Occupation.TRAVELER) &&
+    (!FLOOR_69_WORKER_ROLE.requiresFemale || entity.isFemale !== false) &&
+    (entity.name?.startsWith(FLOOR_69_WORKER_ROLE.sourceNamePrefix) ?? false);
 }
 
 function shouldPromoteFloor69Worker(entity: Entity): boolean {
   if (!isFloor69GeneratedVisitor(entity)) return false;
-  if (entity.faction !== undefined && entity.faction !== Faction.CITIZEN) return false;
-  return hashFloor69Entity(entity, 0x169) / 0x100000000 < FLOOR_69_WORKER_RATE;
+  if (FLOOR_69_WORKER_ROLE?.candidateFaction !== undefined &&
+    entity.faction !== undefined &&
+    entity.faction !== FLOOR_69_WORKER_ROLE.candidateFaction) {
+    return false;
+  }
+  return hashFloor69Entity(entity, 0x169) / 0x100000000 < (FLOOR_69_WORKER_ROLE?.promotionRate ?? 0);
 }
 
 function isFloor69Worker(entity: Entity): boolean {
-  return entity.type === EntityType.NPC && (entity.name?.startsWith('Этаж 69: работница ') ?? false);
+  return entity.type === EntityType.NPC &&
+    !!FLOOR_69_WORKER_ROLE?.roleNamePrefix &&
+    (entity.name?.startsWith(FLOOR_69_WORKER_ROLE.roleNamePrefix) ?? false);
 }
 
 function promoteFloor69Worker(entity: Entity): void {
-  if (entity.name?.startsWith('Этаж 69: посетитель ')) {
-    entity.name = entity.name.replace('Этаж 69: посетитель ', 'Этаж 69: работница ');
+  const sourcePrefix = FLOOR_69_WORKER_ROLE?.sourceNamePrefix;
+  const rolePrefix = FLOOR_69_WORKER_ROLE?.roleNamePrefix;
+  if (sourcePrefix && rolePrefix && entity.name?.startsWith(sourcePrefix)) {
+    entity.name = entity.name.replace(sourcePrefix, rolePrefix);
   }
   if (!isFloor69Worker(entity)) return;
+  entity.occupation = FLOOR_69_WORKER_ROLE?.outputOccupation ?? Occupation.PERFORMER;
   entity.sprite = floor69FemaleSprite(entity);
-  entity.npcVisualId = NPC_VISUAL_FLOOR69_FEMALE;
+  entity.npcVisualId = FLOOR_69_WORKER_ROLE?.npcVisualId ?? NPC_VISUAL_FLOOR69_FEMALE;
   entity.isFemale = true;
   entity.spriteScale = 1;
 }
@@ -1732,34 +1741,13 @@ function spawnNpc(
   angle: number,
   weapon?: string,
 ): void {
-  const def = NPC_DEFS[plotNpcId];
-  entities.push({
-    id: nextId.v++,
-    type: EntityType.NPC,
-    x: world.wrap(x) + 0.5,
-    y: world.wrap(y) + 0.5,
+  const px = world.wrap(x) + 0.5;
+  const py = world.wrap(y) + 0.5;
+  requireSpawnedPlotNpcFromPackage(entities, nextId, plotNpcId, px, py, {
     angle,
-    pitch: 0,
-    alive: true,
-    speed: def.speed,
-    sprite: def.sprite,
-    npcVisualId: def.npcVisualId,
-    name: def.name,
-    isFemale: def.isFemale,
-    age: def.age,
-    sex: def.sex,
-    needs: freshNeeds(),
-    hp: def.hp,
-    maxHp: def.maxHp,
-    money: def.money,
-    ai: { goal: AIGoal.IDLE, tx: x + 0.5, ty: y + 0.5, path: [], pi: 0, stuck: 0, timer: 0 },
-    inventory: def.inventory.map(item => ({ ...item })),
     weapon,
-    faction: def.faction,
-    occupation: def.occupation,
-    plotNpcId,
     canGiveQuest: true,
-    questId: -1,
+    aiTarget: { x: x + 0.5, y: y + 0.5 },
   });
 }
 

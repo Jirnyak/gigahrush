@@ -14,16 +14,14 @@ import {
   W, Cell, ContainerKind, DoorState, FloorLevel, Tex, RoomType, Feature,
   type Room, type Entity,
   type Item, type WorldContainer,
-  EntityType, AIGoal,
+  EntityType,
 } from '../../core/types';
 import { World } from '../../core/world';
-import { freshNeeds } from '../../data/catalog';
-import { PLOT_NPCS } from '../../data/plot';
 import { stampRoom, protectRoom } from '../shared';
+import { requireSpawnedPlotNpcFromPackage } from '../plot_npc_spawn';
 import { drawTextCentered } from '../../render/text';
 import { S, rgba, noise, clamp } from '../../render/pixutil';
 import { Spr } from '../../render/sprite_index';
-import { freshRPG } from '../../systems/rpg';
 
 function protectTutorialWallsAsHermetic(world: World, x: number, y: number, w: number, h: number): void {
   for (let dy = -1; dy <= h; dy++) {
@@ -123,17 +121,11 @@ export function generateTutorRoom(
   protectRoom(world, hallX, hallY, hallW, hallH, Tex.PANEL, Tex.F_LINO);
   protectTutorialWallsAsHermetic(world, hallX, hallY, hallW, hallH);
 
-  // Desks: rows of half-height desk sprites
-  const DESK_SPRITE = Spr.DESK;
+  // Desks: feature layer props, not live entity billboards.
   for (let dy = 2; dy <= hallH - 3; dy += 2)
     for (let dx = 1; dx < hallW - 1; dx++)
       if (dx % 2 === 1) {
-        entities.push({
-          id: nextId.v++, type: EntityType.BILLBOARD,
-          x: hallX + dx + 0.5, y: hallY + dy + 0.5,
-          angle: 0, pitch: 0, alive: true, speed: 0,
-          sprite: DESK_SPRITE, spriteScale: 0.5,
-        });
+        world.features[world.idx(hallX + dx, hallY + dy)] = Feature.DESK;
       }
 
   // Slide walls: 2 cells on the north wall
@@ -164,22 +156,13 @@ export function generateTutorRoom(
   world.features[world.idx(hallX + hallW - 3, hallY + 2)] = Feature.LAMP;
   addStarterLocker(world, room, hallX + 1, hallY + hallH - 2);
 
-  // Tutorial NPC: Ольга Дмитриевна
-  const olgaDef = PLOT_NPCS['olga'];
-  entities.push({
-    id: nextId.v++, type: EntityType.NPC,
-    x: hallX + Math.floor(hallW / 2) + 0.5, y: hallY + 1 + 0.5,
-    angle: Math.PI / 2, pitch: 0, alive: true, speed: olgaDef.speed,
-    sprite: olgaDef.sprite,
-    spriteSeed: 90, // authored visual seed for the starting doctor
-    name: olgaDef.name, isFemale: olgaDef.isFemale,
-    needs: freshNeeds(), hp: olgaDef.hp, maxHp: olgaDef.maxHp, money: olgaDef.money,
-    rpg: freshRPG(olgaDef.level ?? 1),
-    ai: { goal: AIGoal.IDLE, tx: 0, ty: 0, path: [], pi: 0, stuck: 0, timer: 0 },
-    inventory: olgaDef.inventory.map(i => ({ ...i })),
-    faction: olgaDef.faction, occupation: olgaDef.occupation,
-    plotNpcId: 'olga', canGiveQuest: true, questId: -1,
-  });
+  requireSpawnedPlotNpcFromPackage(entities, nextId, 'olga',
+    hallX + Math.floor(hallW / 2) + 0.5,
+    hallY + 1.5,
+    {
+      angle: Math.PI / 2,
+      spriteSeed: 90,
+    });
 
   /* ================================================================
    *  B. Оружейная / Стрельбище (armory + shooting range)
@@ -227,12 +210,7 @@ export function generateTutorRoom(
   // ── Counter/barrier line at y offset 3 ──
   const counterY = armY + 3;
   for (let dx = 1; dx < armW - 1; dx++) {
-    entities.push({
-      id: nextId.v++, type: EntityType.BILLBOARD,
-      x: armX + dx + 0.5, y: counterY + 0.5,
-      angle: 0, pitch: 0, alive: true, speed: 0,
-      sprite: DESK_SPRITE, spriteScale: 0.5,
-    });
+    world.features[world.idx(armX + dx, counterY)] = Feature.DESK;
   }
 
   // ── Lamps in armory ──
@@ -250,21 +228,7 @@ export function generateTutorRoom(
     inventory: [{ defId: 'ammo_9mm', count: 8 }],
   });
 
-  // ── NPC: Сержант Баринов — armory instructor ──
-  const barniDef = PLOT_NPCS['barni'];
-  entities.push({
-    id: nextId.v++, type: EntityType.NPC,
-    x: armX + 2 + 0.5, y: armY + 1 + 0.5,
-    angle: Math.PI, pitch: 0, alive: true, speed: barniDef.speed,
-    sprite: barniDef.sprite,
-    name: barniDef.name, isFemale: barniDef.isFemale,
-    needs: freshNeeds(), hp: barniDef.hp, maxHp: barniDef.maxHp, money: barniDef.money,
-    rpg: freshRPG(barniDef.level ?? 1),
-    ai: { goal: AIGoal.IDLE, tx: 0, ty: 0, path: [], pi: 0, stuck: 0, timer: 0 },
-    inventory: barniDef.inventory.map(i => ({ ...i })),
-    faction: barniDef.faction, occupation: barniDef.occupation,
-    plotNpcId: 'barni', canGiveQuest: true, questId: -1,
-  });
+  requireSpawnedPlotNpcFromPackage(entities, nextId, 'barni', armX + 2.5, armY + 1.5, { angle: Math.PI });
 
   // ── East wall hint posters ──
   {

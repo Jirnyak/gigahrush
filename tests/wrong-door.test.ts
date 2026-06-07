@@ -81,6 +81,21 @@ test('wrong-door route picker prefers a reachable nearby source over a remote so
   assert.equal(picked?.sourceIdx, 22);
 });
 
+test('wrong-door route picker is invariant to candidate array order', () => {
+  const routes = [
+    option({ sourceIdx: 11, targetIdx: 101, targetDoorIdx: 201, sourceDist2: 16, distance2: 48 * 48, targetDanger: 1 }),
+    option({ sourceIdx: 22, targetIdx: 102, targetDoorIdx: 202, sourceDist2: 16, distance2: 48 * 48, targetDanger: 1 }),
+    option({ sourceIdx: 33, targetIdx: 103, targetDoorIdx: 203, sourceDist2: 16, distance2: 48 * 48, targetDanger: 1 }),
+  ];
+
+  const pickedA = chooseWrongDoorRouteOption(routes, 9123);
+  const pickedB = chooseWrongDoorRouteOption([...routes].reverse(), 9123);
+
+  assert.ok(pickedA);
+  assert.equal(pickedB?.sourceIdx, pickedA.sourceIdx);
+  assert.equal(pickedB?.targetIdx, pickedA.targetIdx);
+});
+
 test('wrong-door map cue tells the player to distrust or wait out the route', () => {
   const cue: WrongDoorMapCue = {
     id: 1,
@@ -175,6 +190,71 @@ test('maronary shaving can be sold to science or hidden as contraband evidence',
   const hidden = getRecentEvents(state, { type: 'item_deposited', tags: ['maronary', 'hidden'], limit: 1 })[0];
   assert.equal(hidden.data?.depositOutcome, 'maronary_hidden');
   assert.deepEqual(hidden.data?.rumorIds, ['samosbor_maronary_shaving_hidden']);
+});
+
+test('maronary shaving handoff uses ordered item outcome rules', () => {
+  initFactionRelations();
+  const state = makeGameState({
+    currentFloor: FloorLevel.MINISTRY,
+    worldEvents: createWorldEventState(),
+  });
+  const player = makeTestPlayer({
+    id: 0,
+    inventory: [{ defId: 'maronary_shaving', count: 1 }],
+    money: 0,
+  });
+  const ministryBuyer = makeTestNpc({
+    id: 2,
+    name: 'Ротенбергов',
+    faction: Faction.WILD,
+    occupation: Occupation.HUNTER,
+    plotNpcId: 'rotenbergov',
+    inventory: [],
+  });
+
+  assert.equal(tryHandleMaronaryShavingHandoff(player, ministryBuyer, 0, state), true);
+  assert.equal(player.money, 240);
+  const ministry = getRecentEvents(state, { type: 'player_handoff_item', tags: ['maronary', 'ministry'], limit: 1 })[0];
+  assert.equal(ministry.data?.outcome, 'ministry');
+  assert.equal(ministry.data?.buyerPlotNpcId, 'rotenbergov');
+
+  player.inventory = [{ defId: 'maronary_shaving', count: 1 }];
+  const cultBuyer = makeTestNpc({
+    id: 3,
+    name: 'Тихий священник',
+    faction: Faction.CITIZEN,
+    occupation: Occupation.PRIEST,
+    inventory: [],
+  });
+
+  assert.equal(tryHandleMaronaryShavingHandoff(player, cultBuyer, 0, state), true);
+  assert.equal(player.money, 560);
+  const cult = getRecentEvents(state, { type: 'player_handoff_item', tags: ['maronary', 'cult'], limit: 1 })[0];
+  assert.equal(cult.data?.outcome, 'cult');
+  assert.equal(cult.data?.reward, 320);
+
+  const saleState = makeGameState({
+    currentFloor: FloorLevel.LIVING,
+    worldEvents: createWorldEventState(),
+  });
+  const salePlayer = makeTestPlayer({
+    id: 4,
+    inventory: [{ defId: 'maronary_shaving', count: 1 }],
+    money: 0,
+  });
+  const saleBuyer = makeTestNpc({
+    id: 5,
+    name: 'Покупатель',
+    faction: Faction.CITIZEN,
+    occupation: Occupation.STOREKEEPER,
+    inventory: [],
+  });
+
+  assert.equal(tryHandleMaronaryShavingHandoff(salePlayer, saleBuyer, 0, saleState), true);
+  assert.equal(salePlayer.money, 190);
+  const sale = getRecentEvents(saleState, { type: 'player_sell_item', tags: ['maronary', 'sale'], limit: 1 })[0];
+  assert.equal(sale.data?.outcome, 'sale');
+  assert.equal(sale.data?.reward, 190);
 });
 
 test('maronary shaving can be destroyed to cut the trace at a PSI cost', () => {

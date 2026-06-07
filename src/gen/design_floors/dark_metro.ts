@@ -28,18 +28,20 @@ import {
 } from '../../core/types';
 import { World } from '../../core/world';
 import { hashSeed, withSeededRandom } from '../../core/rand';
-import { freshNeeds } from '../../data/catalog';
 import { HUMAN_TERRITORY_OWNERS, factionToTerritoryOwner } from '../../data/factions';
-import { type PlotNpcDef, registerSideQuest } from '../../data/plot';
+import { designNpcFloorKey, type PlotNpcDef, registerFloorSideQuest } from '../../data/plot';
 import { MONSTERS } from '../../entities/monster';
 import { Spr } from '../../render/sprite_index';
 import { publishEvent } from '../../systems/events';
 import { addRailTrainRoute } from '../../systems/rail_trains';
 import { registerRouteCue } from '../../systems/route_cues';
 import { randomRPG, scaleMonsterHp, scaleMonsterSpeed } from '../../systems/rpg';
+import { requireSpawnedPlotNpcFromPackage } from '../plot_npc_spawn';
 import { ensureConnectivity, generateZones, sanitizeDoors, stampRoom } from '../shared';
 import type { FloorGeneration } from '../floor_manifest';
 import { setTerritoryOwnerAtIndex, syncZoneMetadataFromTerritory, territoryOwnerAtIndex } from '../../systems/territory';
+
+const DESIGN_NPC_HOME_FLOOR_KEY = designNpcFloorKey('dark_metro');
 
 export const DESIGN_FLOOR_ID = 'dark_metro' as const;
 export const DARK_METRO_DISPLAY_NAME = 'Темная пересадка';
@@ -292,7 +294,7 @@ export function registerDarkMetroContent(): void {
   if (contentRegistered) return;
   contentRegistered = true;
 
-  registerSideQuest('dark_metro_dispatcher_nora', NORA_DEF, [
+  registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'dark_metro_dispatcher_nora', NORA_DEF, [
     {
       id: 'dark_metro_wrong_train',
       giverNpcId: 'dark_metro_dispatcher_nora',
@@ -315,7 +317,7 @@ export function registerDarkMetroContent(): void {
     },
   ]);
 
-  registerSideQuest('dark_metro_lamp_vendor', VENDOR_DEF, [
+  registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'dark_metro_lamp_vendor', VENDOR_DEF, [
     {
       id: 'dark_metro_light_platform',
       giverNpcId: 'dark_metro_lamp_vendor',
@@ -328,7 +330,7 @@ export function registerDarkMetroContent(): void {
     },
   ]);
 
-  registerSideQuest('dark_metro_stranded_liquidator', STRANDED_DEF, [
+  registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'dark_metro_stranded_liquidator', STRANDED_DEF, [
     {
       id: 'dark_metro_rescue_stranded',
       giverNpcId: 'dark_metro_stranded_liquidator',
@@ -341,7 +343,7 @@ export function registerDarkMetroContent(): void {
     },
   ]);
 
-  registerSideQuest('dark_metro_child_omen_misha', MISHA_DEF, []);
+  registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'dark_metro_child_omen_misha', MISHA_DEF, []);
 }
 
 registerDarkMetroContent();
@@ -1893,36 +1895,18 @@ function spawnDarkMetroNpcs(ctx: BuildCtx, layout: DarkMetroLayout): void {
 function spawnPlotNpc(
   ctx: BuildCtx,
   npcId: string,
-  def: PlotNpcDef,
+  _def: PlotNpcDef,
   x: number,
   y: number,
   angle: number,
   extra?: Partial<Entity>,
 ): void {
-  ctx.entities.push({
-    id: ctx.nextId.v++,
-    type: EntityType.NPC,
-    x: x + 0.5,
-    y: y + 0.5,
+  const px = x + 0.5;
+  const py = y + 0.5;
+  requireSpawnedPlotNpcFromPackage(ctx.entities, ctx.nextId, npcId, px, py, {
     angle,
-    pitch: 0,
-    alive: true,
-    speed: def.speed,
-    sprite: def.sprite,
-    name: def.name,
-    isFemale: def.isFemale,
-    needs: freshNeeds(),
-    hp: def.hp,
-    maxHp: def.maxHp,
-    money: def.money,
-    ai: { goal: AIGoal.IDLE, tx: x + 0.5, ty: y + 0.5, path: [], pi: 0, stuck: 0, timer: 0 },
-    inventory: def.inventory.map(i => ({ ...i })),
-    faction: def.faction,
-    occupation: def.occupation,
-    plotNpcId: npcId,
-    canGiveQuest: true,
-    questId: -1,
-    ...extra,
+    aiTarget: { x: px, y: py },
+    extra,
   });
 }
 

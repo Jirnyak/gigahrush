@@ -1,4 +1,5 @@
 import { Faction, Occupation, type Entity } from '../core/types';
+import { occupationIdsWithCraftTag } from './occupation_profiles';
 
 export type CraftRecipeSourceKind = 'item' | 'note' | 'quest' | 'terminal' | 'npc' | 'floor';
 
@@ -180,7 +181,7 @@ export const CRAFT_RECIPE_SOURCES: readonly CraftRecipeSourceDef[] = [
   {
     id: 'npc_mechanic_tool_lesson',
     kind: 'npc',
-    npcOccupations: [Occupation.MECHANIC, Occupation.LOCKSMITH, Occupation.ELECTRICIAN, Occupation.TURNER],
+    npcOccupations: occupationIdsWithCraftTag('mechanic_lesson'),
     recipeIds: [r('wrench'), r('fuse'), r('door_kit')],
     text: 'Слесарь показывает одну рабочую схему из своей практики.',
     tags: ['npc', 'mechanic', 'tier1', 'workbench'],
@@ -188,7 +189,7 @@ export const CRAFT_RECIPE_SOURCES: readonly CraftRecipeSourceDef[] = [
   {
     id: 'npc_scientist_lab_lesson',
     kind: 'npc',
-    npcOccupations: [Occupation.SCIENTIST, Occupation.DOCTOR],
+    npcOccupations: occupationIdsWithCraftTag('lab_lesson'),
     recipeIds: [r('empty_sample_jar'), r('sterile_swab'), r('psi_stabilizer')],
     text: 'Лаборатория учит одной схеме: аккуратно, без лишней поэзии.',
     tags: ['npc', 'scientist', 'lab', 'psi'],
@@ -204,7 +205,7 @@ export const CRAFT_RECIPE_SOURCES: readonly CraftRecipeSourceDef[] = [
   {
     id: 'npc_black_market_weapon_lesson',
     kind: 'npc',
-    npcOccupations: [Occupation.STOREKEEPER],
+    npcOccupations: occupationIdsWithCraftTag('market_lesson'),
     recipeIds: [r('homemade_9mm'), r('radio_jammer'), r('homemade_pistol')],
     text: 'Кладовщик шепчет одну рыночную схему без расписки.',
     tags: ['npc', 'black_market', 'homemade', 'contraband'],

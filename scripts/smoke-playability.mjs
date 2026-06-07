@@ -1666,7 +1666,11 @@ async function main() {
   }
 }
 
-main().catch(err => {
-  console.error(err);
-  process.exitCode = 1;
-});
+main()
+  .then(() => {
+    process.exit(process.exitCode ?? 0);
+  })
+  .catch(err => {
+    console.error(err);
+    process.exit(1);
+  });

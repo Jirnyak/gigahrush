@@ -23,13 +23,15 @@ import {
   type WorldContainer,
 } from '../../core/types';
 import { World } from '../../core/world';
-import { freshNeeds } from '../../data/catalog';
-import { type PlotNpcDef, registerSideQuest } from '../../data/plot';
+import { designNpcFloorKey, type PlotNpcDef, registerFloorSideQuest } from '../../data/plot';
 import { MONSTERS } from '../../entities/monster';
 import { monsterSpr, Spr } from '../../render/sprite_index';
 import { registerRouteCue } from '../../systems/route_cues';
+import { requireSpawnedPlotNpcFromPackage } from '../plot_npc_spawn';
 import { ensureConnectivity, generateZones, sanitizeDoors, stampRoom } from '../shared';
 import type { FloorGeneration } from '../floor_manifest';
+
+const DESIGN_NPC_HOME_FLOOR_KEY = designNpcFloorKey('penrose_laundry');
 
 export const PENROSE_LAUNDRY_ROUTE_ID = 'penrose_laundry' as const;
 export const PENROSE_LAUNDRY_Z = -8;
@@ -242,7 +244,7 @@ const TONYA_DEF: PlotNpcDef = {
   ],
 };
 
-registerSideQuest(NPC_IDS.marfa, MARFA_DEF, [{
+registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, NPC_IDS.marfa, MARFA_DEF, [{
   id: 'penrose_laundry_follow_matching_symbols',
   giverNpcId: NPC_IDS.marfa,
   type: QuestType.VISIT,
@@ -258,7 +260,7 @@ registerSideQuest(NPC_IDS.marfa, MARFA_DEF, [{
   eventData: { routeId: PENROSE_LAUNDRY_ROUTE_ID, choice: 'follow_matching_symbols' },
 }]);
 
-registerSideQuest(NPC_IDS.igor, IGOR_DEF, [{
+registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, NPC_IDS.igor, IGOR_DEF, [{
   id: 'penrose_laundry_break_lock',
   giverNpcId: NPC_IDS.igor,
   type: QuestType.FETCH,
@@ -275,7 +277,7 @@ registerSideQuest(NPC_IDS.igor, IGOR_DEF, [{
   eventData: { routeId: PENROSE_LAUNDRY_ROUTE_ID, choice: 'break_laundry_lock' },
 }]);
 
-registerSideQuest(NPC_IDS.lidia, LIDIA_DEF, [{
+registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, NPC_IDS.lidia, LIDIA_DEF, [{
   id: 'penrose_laundry_divert_steam',
   giverNpcId: NPC_IDS.lidia,
   type: QuestType.FETCH,
@@ -292,7 +294,7 @@ registerSideQuest(NPC_IDS.lidia, LIDIA_DEF, [{
   eventData: { routeId: PENROSE_LAUNDRY_ROUTE_ID, choice: 'divert_steam' },
 }]);
 
-registerSideQuest(NPC_IDS.tonya, TONYA_DEF, [{
+registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, NPC_IDS.tonya, TONYA_DEF, [{
   id: 'penrose_laundry_hidden_washroom_cache',
   giverNpcId: NPC_IDS.tonya,
   type: QuestType.FETCH,
@@ -1349,38 +1351,16 @@ function spawnPlotNpc(
   entities: Entity[],
   nextId: { v: number },
   npcId: string,
-  def: PlotNpcDef,
+  _def: PlotNpcDef,
   room: Room,
   dx: number,
   dy: number,
   angle: number,
 ): number {
-  const id = nextId.v++;
-  entities.push({
-    id,
-    type: EntityType.NPC,
-    x: room.x + dx + 0.5,
-    y: room.y + dy + 0.5,
+  const npc = requireSpawnedPlotNpcFromPackage(entities, nextId, npcId, room.x + dx + 0.5, room.y + dy + 0.5, {
     angle,
-    pitch: 0,
-    alive: true,
-    speed: def.speed,
-    sprite: def.sprite,
-    name: def.name,
-    isFemale: def.isFemale,
-    needs: freshNeeds(),
-    hp: def.hp,
-    maxHp: def.maxHp,
-    money: def.money,
-    ai: { goal: AIGoal.IDLE, tx: 0, ty: 0, path: [], pi: 0, stuck: 0, timer: 0 },
-    inventory: def.inventory.map(item => ({ ...item })),
-    faction: def.faction,
-    occupation: def.occupation,
-    plotNpcId: npcId,
-    canGiveQuest: true,
-    questId: -1,
   });
-  return id;
+  return npc.id;
 }
 
 function spawnMonster(entities: Entity[], nextId: { v: number }, kind: MonsterKind, room: Room, dx: number, dy: number): void {

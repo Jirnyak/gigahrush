@@ -6,13 +6,14 @@ import {
   generateTravelerSprite,
   generatePilgrimSprite,
   generateHunterSprite,
-  generatePriestSprite } from '../entities/npc';
+  generatePriestSprite,
+  generatePerformerSprite } from '../entities/npc';
 import { MONSTERS,
   MONSTER_SPRITES,
   EYE_BOLT_SPRITE } from '../entities/monster';
+import { monsterProjectileFamily, type MonsterProjectileFamily } from '../data/monster_visuals';
 import { ContainerKind,
   Feature,
-  MonsterKind,
 } from '../core/types';
 import { S, rgba, noise, clamp, CLEAR } from './pixutil';
 import { Spr, monsterSpr, SPRITE_CONTAINER_KINDS, SPRITE_FEATURES, SPRITE_MONSTER_KINDS } from './sprite_index';
@@ -33,6 +34,8 @@ export function generateSprites(): SpriteData[] {
   sprites.push(generateHunterSprite());
   // Priest: Батюшка
   sprites.push(generatePriestSprite());
+  // Performer: Перформер
+  sprites.push(generatePerformerSprite());
   for (const def of AUTHORED_NPC_SPRITE_GENERATORS) sprites.push(def.generate());
   // Item drop
   sprites.push(gen_itemDrop());
@@ -45,17 +48,13 @@ export function generateSprites(): SpriteData[] {
     const def = MONSTERS[kind];
     def.sprite = monsterSpr(kind);
     // Auto-assign projSprite for ranged monsters
-    if (def.isRanged && (def.projSprite === undefined || def.projSprite === 0)) {
-      def.projSprite = kind === MonsterKind.EYE || kind === MonsterKind.LAMPOGLAZ ? Spr.EYE_BOLT
-                     : kind === MonsterKind.PARAGRAPH ? Spr.PARAGRAPH_BOLT
-                     : kind === MonsterKind.ROBOT || kind === MonsterKind.TRUBNYY_AVTOMAT ? Spr.HOSTILE_PLASMA_BOLT
-                     : kind === MonsterKind.MANCOBUS ? Spr.HOSTILE_FLAME_BOLT
-                     : Spr.HOSTILE_PSI_BOLT;
-    }
+    if (def.isRanged && (def.projSprite === undefined || def.projSprite === 0)) def.projSprite = projectileSpriteForFamily(monsterProjectileFamily(kind));
   }
   // Eye bolt projectile
   sprites.push(EYE_BOLT_SPRITE());
   sprites.push(gen_paragraphBoltSprite());
+  sprites.push(gen_webBoltSprite());
+  sprites.push(gen_wetLineBoltSprite());
   // Desk
   sprites.push(gen_deskSprite());
   for (const feature of SPRITE_FEATURES) sprites.push(gen_featureSprite(feature));
@@ -87,6 +86,19 @@ export function generateSprites(): SpriteData[] {
     sprites.push(generateFloor69FemaleNpcSprite(i));
   }
   return sprites;
+}
+
+function projectileSpriteForFamily(family: MonsterProjectileFamily | undefined): number {
+  switch (family) {
+    case 'eye_bolt': return Spr.EYE_BOLT;
+    case 'protocol_clause': return Spr.PARAGRAPH_BOLT;
+    case 'web_lash': return Spr.WEB_BOLT;
+    case 'wet_line_shot': return Spr.WET_LINE_BOLT;
+    case 'flame_bloom': return Spr.HOSTILE_FLAME_BOLT;
+    case 'plasma_core': return Spr.HOSTILE_PLASMA_BOLT;
+    case 'psi_pulse':
+    default: return Spr.HOSTILE_PSI_BOLT;
+  }
 }
 
 /* ── Desk: Soviet school desk (green top, metal legs) ─────────── */
@@ -489,6 +501,72 @@ function gen_paragraphBoltSprite(): SpriteData {
     }
   }
 
+  return t;
+}
+
+/* -- Web bolt: pale slow net lash with sticky knots ------------- */
+function gen_webBoltSprite(): SpriteData {
+  const t = new Uint32Array(S * S).fill(CLEAR);
+  const cx = S / 2;
+  const cy = S / 2;
+
+  for (let i = 0; i < 4; i++) {
+    const y0 = cy - 12 + i * 8;
+    for (let x = 10; x <= 54; x++) {
+      const wave = Math.sin(x * 0.28 + i * 1.7) * 4.4;
+      const y = Math.round(y0 + wave);
+      const f = 1 - Math.abs(x - cx) / 32;
+      const a = clamp(Math.floor(64 + f * 155));
+      rect(t, x - 1, y - 1, x + 1, y + 1, 214, 224, 206, 7100 + i, a);
+      if (x % 11 === 0) ellipse(t, x, y, 3, 3, 184, 206, 190, 7110 + i + x, clamp(a + 30));
+    }
+  }
+
+  for (let i = 0; i < 5; i++) {
+    const x = 14 + i * 9;
+    for (let y = 14; y <= 50; y++) {
+      const bend = Math.sin(y * 0.22 + i) * 2;
+      const px = Math.round(x + bend);
+      const a = clamp(Math.floor(82 + (1 - Math.abs(y - cy) / 28) * 105));
+      if (a > 12) rect(t, px, y, px, y, 198, 214, 196, 7160 + i, a);
+    }
+  }
+
+  ellipse(t, cx, cy, 5, 5, 235, 244, 224, 7190, 245);
+  ellipse(t, cx, cy, 2, 2, 108, 154, 122, 7191, 255);
+  return t;
+}
+
+/* -- Wet-line bolt: cyan pipe flash and pressure ring ----------- */
+function gen_wetLineBoltSprite(): SpriteData {
+  const t = new Uint32Array(S * S).fill(CLEAR);
+  const cx = S / 2;
+  const cy = S / 2;
+
+  for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) {
+    const dx = x - cx;
+    const dy = y - cy;
+    const d = Math.sqrt(dx * dx + dy * dy);
+    const ang = Math.atan2(dy, dx);
+    const ring = Math.abs(d - 13) < 2.2 || Math.abs(d - 21) < 1.4;
+    const pipe = Math.abs(dy) < 2.2 && x >= 8 && x <= 56;
+    const spiral = Math.abs(Math.sin(ang * 4 + d * 0.45)) < 0.12 && d < 23;
+    if (!ring && !pipe && !spiral && d > 8) continue;
+    const f = Math.max(0, 1 - Math.min(1, d / 26));
+    const core = d < 6 ? 1 : 0;
+    const n = noise(x * 3, y * 3, 7211) * 0.36;
+    const a = clamp(Math.floor((ring ? 180 : pipe ? 150 : 120) * f + core * 220));
+    if (a <= 8) continue;
+    t[y * S + x] = rgba(
+      clamp(Math.floor(54 * core + 42 * f + n * 20)),
+      clamp(Math.floor(222 * core + 208 * f + n * 42)),
+      clamp(Math.floor(255 * core + 236 * f + n * 30)),
+      a,
+    );
+  }
+
+  rect(t, cx - 9, cy - 1, cx + 10, cy + 1, 210, 250, 255, 7222, 235);
+  ellipse(t, cx, cy, 4, 4, 230, 255, 255, 7223, 255);
   return t;
 }
 

@@ -365,7 +365,17 @@ export const FACTORIES: FactoryDef[] = [
   },
 ];
 
-const ITEM5_FACTORY_RECIPES: Record<string, readonly FactoryRecipeDef[]> = {
+function appendFactoryRecipes(packs: Record<string, readonly FactoryRecipeDef[]>): void {
+  for (const [factoryId, recipes] of Object.entries(packs)) {
+    const factory = FACTORIES.find(f => f.id === factoryId);
+    if (!factory) continue;
+    for (const recipe of recipes) {
+      if (!factory.recipes.some(existing => existing.id === recipe.id)) factory.recipes.push(recipe);
+    }
+  }
+}
+
+const WORKSHOP_SCAVENGE_FACTORY_RECIPES: Record<string, readonly FactoryRecipeDef[]> = {
   illegal_ammo_smelter: [
     {
       id: 'cast_black_market_shells',
@@ -497,15 +507,9 @@ const ITEM5_FACTORY_RECIPES: Record<string, readonly FactoryRecipeDef[]> = {
   ],
 };
 
-for (const [factoryId, recipes] of Object.entries(ITEM5_FACTORY_RECIPES)) {
-  const factory = FACTORIES.find(f => f.id === factoryId);
-  if (!factory) continue;
-  for (const recipe of recipes) {
-    if (!factory.recipes.some(existing => existing.id === recipe.id)) factory.recipes.push(recipe);
-  }
-}
+appendFactoryRecipes(WORKSHOP_SCAVENGE_FACTORY_RECIPES);
 
-const ITEM173_FACTORY_RECIPES: Record<string, readonly FactoryRecipeDef[]> = {
+const FROZEN_SLIME_FACTORY_RECIPES: Record<string, readonly FactoryRecipeDef[]> = {
   communal_kitchen: [
     {
       id: 'thaw_frozen_slime_core',
@@ -521,15 +525,9 @@ const ITEM173_FACTORY_RECIPES: Record<string, readonly FactoryRecipeDef[]> = {
   ],
 };
 
-for (const [factoryId, recipes] of Object.entries(ITEM173_FACTORY_RECIPES)) {
-  const factory = FACTORIES.find(f => f.id === factoryId);
-  if (!factory) continue;
-  for (const recipe of recipes) {
-    if (!factory.recipes.some(existing => existing.id === recipe.id)) factory.recipes.push(recipe);
-  }
-}
+appendFactoryRecipes(FROZEN_SLIME_FACTORY_RECIPES);
 
-const ITEM159_FACTORY_RECIPES: Record<string, readonly FactoryRecipeDef[]> = {
+const FROZEN_BLUEPRINT_FACTORY_RECIPES: Record<string, readonly FactoryRecipeDef[]> = {
   utility_room: [
     {
       id: 'decode_frozen_t3_blueprint',
@@ -546,15 +544,9 @@ const ITEM159_FACTORY_RECIPES: Record<string, readonly FactoryRecipeDef[]> = {
   ],
 };
 
-for (const [factoryId, recipes] of Object.entries(ITEM159_FACTORY_RECIPES)) {
-  const factory = FACTORIES.find(f => f.id === factoryId);
-  if (!factory) continue;
-  for (const recipe of recipes) {
-    if (!factory.recipes.some(existing => existing.id === recipe.id)) factory.recipes.push(recipe);
-  }
-}
+appendFactoryRecipes(FROZEN_BLUEPRINT_FACTORY_RECIPES);
 
-const ITEM79_FACTORY_RECIPES: Record<string, readonly FactoryRecipeDef[]> = {
+const HOMEMADE_AMMO_FACTORY_RECIPES: Record<string, readonly FactoryRecipeDef[]> = {
   illegal_ammo_smelter: [
     {
       id: 'cast_homemade_9mm',
@@ -570,13 +562,7 @@ const ITEM79_FACTORY_RECIPES: Record<string, readonly FactoryRecipeDef[]> = {
   ],
 };
 
-for (const [factoryId, recipes] of Object.entries(ITEM79_FACTORY_RECIPES)) {
-  const factory = FACTORIES.find(f => f.id === factoryId);
-  if (!factory) continue;
-  for (const recipe of recipes) {
-    if (!factory.recipes.some(existing => existing.id === recipe.id)) factory.recipes.push(recipe);
-  }
-}
+appendFactoryRecipes(HOMEMADE_AMMO_FACTORY_RECIPES);
 
 export const FACTORY_BY_ID: Record<string, FactoryDef> = Object.fromEntries(FACTORIES.map(f => [f.id, f]));
 

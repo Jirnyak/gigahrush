@@ -31,7 +31,7 @@
 - Холодное движение уже выражено через bounded migration/caravan/scripted arrival paths.
 - Существующий `Инфосеть Демос` - tabbed A-Life NPC surface: поиск/курсор, профиль, связи, лента, отдельный пост и квестовые заявки. UI state (`demosCursor`, `demosSearch`, `demosTab`, scroll/cursor) transient; социальная память хранится отдельно.
 - Текущий shipped feed persistent: `systems/demos_runtime.ts` регистрирует slow `ContentRuntimeHook` с 30-секундной cadence, читает bounded recent `WorldEvent` slice и bounded текущие A-Life snapshots, создаёт compact posts/reactions через `demos_save.ts`, создаёт runtime quest notices через `demos_quest_notices.ts`, строит post view через `systems/demos_posts.ts` и Markov speech router, а `render/demos_ui.ts` только рисует готовые строки.
-- Save shape bumped to `20`; `demosSocial` stores relation overrides, post ring and reaction ring, while generated computer and NET-hack terminal reward/cooldown keys persist as compact route-keyed runtime facts. Demos quest notices remain runtime state outside the save section unless they are represented by posts/relation facts; accepting a notice still happens only through face-to-face NPC talk and normal quest/contract systems.
+- Save shape bumped to `21`; `demosSocial` stores relation overrides, post ring and reaction ring, while generated computer and NET-hack terminal reward/cooldown keys persist as compact route-keyed runtime facts. Demos quest notices remain runtime state outside the save section unless they are represented by posts/relation facts; accepting a notice still happens only through face-to-face NPC talk and normal quest/contract systems.
 - `systems/npc_relations.ts` задаёт отношение NPC к игроку как `[-100, 100]`.
 - `HOSTILE_RELATION_THRESHOLD = -50`, `FRIENDLY_RELATION_THRESHOLD = 50`.
 - `karma` теперь использует signed-char совместимый диапазон `[-127, 127]`.
@@ -181,15 +181,15 @@ Strings, inventories, special sprites, plot ids and changed rare facts stay inte
 Текущий рабочий бюджет:
 
 ```txt
-DEMOS_SOCIAL_NPC_SLOTS = 6
-DEMOS_SOCIAL_PUBLIC_SLOTS = 7 // player slot + 6 NPC slots
+DEMOS_SOCIAL_NPC_SLOTS = 9
+DEMOS_SOCIAL_PUBLIC_SLOTS = 10 // player slot + 9 NPC slots
 ```
 
-Почему 6:
+Почему 9:
 
 - `alife.md` уже целится в `3-8` friend edges;
-- 6 даёт профиль, где есть 2-4 друга/родственника, 1-2 недруга и 1 слабая связь;
-- на `100_000` NPC это уже `600_000` directed edges;
+- 9 даёт профиль, где есть 2-4 друга/родственника, 1-2 недруга, рабочие/долговые связи и 1-2 слабые связи;
+- на `100_000` NPC это уже `900_000` directed edges;
 - один NPC может иметь больше входящих связей, даже если его собственный список ограничен;
 - этого достаточно для local propagation, постов, реакций, слухов и визитов без раздувания памяти.
 
@@ -199,18 +199,19 @@ DEMOS_SOCIAL_PUBLIC_SLOTS = 7 // player slot + 6 NPC slots
 targetId: Uint32Array  // 4 bytes, 0 means empty
 relation: Int8Array    // 1 byte, clamped -127..127; -128 reserved
 flags: Uint8Array      // 1 byte bitset
+roles: Uint8Array      // 1 byte DemosSocialRoleId
 ```
 
 Память:
 
 | Slots per NPC | Directed edges | Base bytes | Approx |
 | ---: | ---: | ---: | ---: |
-| 4 | 400,000 | 2,400,000 | 2.4 MB |
-| 6 | 600,000 | 3,600,000 | 3.6 MB |
-| 8 | 800,000 | 4,800,000 | 4.8 MB |
-| 12 | 1,200,000 | 7,200,000 | 7.2 MB |
+| 4 | 400,000 | 2,800,000 | 2.8 MB |
+| 6 | 600,000 | 4,200,000 | 4.2 MB |
+| 9 | 900,000 | 6,300,000 | 6.3 MB |
+| 12 | 1,200,000 | 8,400,000 | 8.4 MB |
 
-Даже 8 slots выглядит безопасно по raw bytes, но текущий shipped path держит 6 NPC slots и 1 player slot. Увеличивать бюджет можно только после проверки heap/build/browser smoke.
+Текущий shipped path держит 9 NPC slots и 1 player slot; raw typed-array budget для `100_000` записей остаётся ниже `7 MiB`. Увеличивать бюджет можно только после проверки heap/build/browser smoke.
 
 Не хранить в базовом edge:
 
@@ -548,7 +549,7 @@ Per tick:
 
 1. Consume a small number of queued event candidates first.
 2. Process `64` A-Life records by cursor.
-3. For each alive, non-reserved-blocked record, inspect only its `6` social edges.
+3. For each alive, non-reserved-blocked record, inspect only its `9` social edges.
 4. If recent events match edge context, maybe create a post/reaction/override.
 5. Maybe request a migration action for one rare social visit if route rules allow.
 6. Stop at `DEMOS_SOCIAL_OUTCOMES_PER_TICK`.
@@ -579,7 +580,7 @@ Implementation rule:
 
 ```txt
 live entity -> alifeId
-  -> read up to 6 social edge ids
+  -> read up to 9 social edge ids
   -> resolve only those ids through active alifeId -> entity index
   -> score intent
 ```
@@ -1021,7 +1022,7 @@ Command expectations:
 
 1. Slot budget
 
-   Current answer: 6 NPC slots plus the player slot. Increase only after heap/browser measurement.
+   Current answer: 9 NPC slots plus the player slot. Increase only after heap/browser measurement.
 
 2. Base graph ownership
 

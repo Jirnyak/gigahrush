@@ -8,15 +8,20 @@ import {
   MAP_HIGH_CONTRAST_DEFAULT,
   MOBILE_LOOK_SENSITIVITY_DEFAULT,
   MOUSE_LOOK_SENSITIVITY_DEFAULT,
+  HUD_MOTION_DEFAULT,
+  SCREEN_INTERFERENCE_DEFAULT,
   UI_ELEMENT_DEFS,
   UI_PRESETS,
   autoPickupEnabled,
   adjustCameraFov,
+  cycleHudMotionMode,
+  cycleScreenInterferenceMode,
   adjustMobileLookSensitivity,
   adjustMouseLookSensitivity,
   activeUiPresetId,
   applyUiPreset,
   cameraFovDegrees,
+  hudMotionMode,
   mapColorMode,
   mapHighContrastEnabled,
   mapLegendRowAt,
@@ -26,14 +31,15 @@ import {
   mouseLookSensitivity,
   resetCameraFov,
   resetAutoPickup,
+  resetGraphicsSettings,
   resetMapLegendSettings,
   resetMobileLookSensitivity,
   resetMouseLookSensitivity,
   resetUiElement,
   resetUiSettings,
+  screenInterferenceMode,
   toggleAutoPickup,
   toggleMapHighContrast,
-  toggleMapColorMode,
   toggleMapLegendToggle,
   setUiElementEnabled,
   toggleUiElement,
@@ -54,6 +60,7 @@ test('UI orchestrator defaults to the novice-safe HUD enabled', () => {
     'interaction_prompt',
     'hazard_warning',
     'minimap',
+    'screen_fx',
   ]);
   assert.equal(DEFAULT_UI_PRESET_ID, 'novice');
   assert.equal(activeUiPresetId(), 'novice');
@@ -67,6 +74,8 @@ test('UI orchestrator defaults to the novice-safe HUD enabled', () => {
   assert.equal(mobileLookSensitivity(), MOBILE_LOOK_SENSITIVITY_DEFAULT);
   assert.equal(mouseLookSensitivity(), MOUSE_LOOK_SENSITIVITY_DEFAULT);
   assert.equal(cameraFovDegrees(), CAMERA_FOV_DEFAULT_DEGREES);
+  assert.equal(screenInterferenceMode(), SCREEN_INTERFERENCE_DEFAULT);
+  assert.equal(hudMotionMode(), HUD_MOTION_DEFAULT);
   assert.equal(autoPickupEnabled(), true);
   assert.equal(mapColorMode(), 'rooms');
   assert.equal(mapHighContrastEnabled(), MAP_HIGH_CONTRAST_DEFAULT);
@@ -87,16 +96,14 @@ test('UI orchestrator defaults to the novice-safe HUD enabled', () => {
 
 test('map legend settings are local toggles outside HUD presets', () => {
   resetUiSettings();
-  assert.equal(mapLegendRowCount(), 3 + MAP_LEGEND_TOGGLE_DEFS.length);
+  assert.equal(mapLegendRowCount(), 2 + MAP_LEGEND_TOGGLE_DEFS.length);
   assert.equal(mapLegendRowAt(0)?.kind, 'reset_map_legend');
-  assert.equal(mapLegendRowAt(1)?.kind, 'map_color_mode');
-  assert.equal(mapLegendRowAt(2)?.kind, 'map_contrast');
-  assert.equal(toggleMapColorMode(), 'factions');
+  assert.equal(mapLegendRowAt(1)?.kind, 'map_contrast');
   assert.equal(toggleMapHighContrast(), true);
   assert.equal(toggleMapLegendToggle('map_items'), false);
   assert.equal(toggleMapLegendToggle('map_room_labels'), true);
   assert.equal(applyUiPreset('off'), true);
-  assert.equal(mapColorMode(), 'factions');
+  assert.equal(mapColorMode(), 'rooms');
   assert.equal(mapHighContrastEnabled(), true);
   assert.equal(mapLegendToggleEnabled('map_items'), false);
   assert.equal(mapLegendToggleEnabled('map_room_labels'), true);
@@ -169,7 +176,7 @@ test('UI orchestrator presets cover minimal and full player-safe modes', () => {
   }
   assert.equal(uiElementEnabled('fps_counter'), false);
   assert.equal(uiSettingsRowCount('interface'), UI_PRESETS.length + UI_ELEMENT_DEFS.length + 3);
-  assert.equal(uiSettingsRowCount('graphics'), 2);
+  assert.equal(uiSettingsRowCount('graphics'), 5);
   assert.equal(uiSettingsRowAt(0, 'interface')?.kind, 'reset_interface');
   assert.equal(uiSettingsRowAt(0, 'graphics')?.kind, 'reset_graphics');
 });
@@ -219,6 +226,24 @@ test('UI orchestrator stores camera FOV as a graphics setting outside presets', 
   assert.equal(applyUiPreset('off'), true);
   assert.equal(cameraFovDegrees(), 60);
   assert.equal(resetCameraFov(), 90);
-  const row = uiSettingsRowAt(1, 'graphics');
+  const row = uiSettingsRowAt(3, 'graphics');
   assert.equal(row?.kind, 'camera_fov');
+});
+
+test('UI orchestrator keeps graphics fatigue settings outside interface presets', () => {
+  resetUiSettings();
+  assert.equal(screenInterferenceMode(), 'critical');
+  assert.equal(hudMotionMode(), 'reduced');
+  assert.equal(cycleScreenInterferenceMode(1), 'full');
+  assert.equal(cycleHudMotionMode(), 'normal');
+  assert.equal(applyUiPreset('off'), true);
+  assert.equal(screenInterferenceMode(), 'full');
+  assert.equal(hudMotionMode(), 'normal');
+  resetGraphicsSettings();
+  assert.equal(cameraFovDegrees(), 90);
+  assert.equal(screenInterferenceMode(), 'critical');
+  assert.equal(hudMotionMode(), 'reduced');
+  assert.equal(uiSettingsRowAt(1, 'graphics')?.kind, 'screen_interference');
+  assert.equal(uiSettingsRowAt(2, 'graphics')?.kind, 'hud_motion');
+  assert.equal(uiSettingsRowAt(4, 'graphics')?.kind, 'map_contrast');
 });

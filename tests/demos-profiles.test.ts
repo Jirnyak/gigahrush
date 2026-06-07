@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { EntityType, Faction, FloorLevel, Occupation } from '../src/core/types';
+import { registerNpcPackage } from '../src/data/npc_packages';
 import {
   createPrefilledAlifeState,
   recordAlifeNpcDeath,
@@ -24,7 +25,9 @@ import {
 import {
   DEMOS_EDGE_ENEMY,
   DEMOS_EDGE_FRIEND,
+  DemosSocialRoleId,
 } from '../src/data/demos_social';
+import { NPC_VISUAL_FLOOR69_FEMALE } from '../src/entities/npc_visuals';
 import { createWorldEventState, publishEvent } from '../src/systems/events';
 import { floorKeyForStory } from '../src/systems/floor_keys';
 import { makeGameState, makeTestNpc } from './helpers';
@@ -136,6 +139,72 @@ test('Demos profile details expose live A-Life page fields and recent feed hints
   assert.equal(feed[0]?.postId, 1);
 });
 
+test('Demos profile details expose package bio capital and perk tags', () => {
+  registerNpcPackage({
+    version: 1,
+    id: 'demos_profile_pack',
+    kind: 'design',
+    identity: { firstName: 'Пакетный', displayName: 'Пакетный Профиль' },
+    bio: {
+      publicLine: 'держит чужие анкеты под батареей',
+      short: 'Записывает людей так, будто стены тоже умеют читать.',
+      origin: 'верхняя коммунальная петля',
+      work: 'сводит должников и свидетелей',
+      markovTags: ['demos_clerk'],
+    },
+    demographics: { sex: 'male', age: 44 },
+    affiliation: { faction: Faction.CITIZEN, occupation: Occupation.SECRETARY },
+    placement: { homeFloorKey: floorKeyForStory(FloorLevel.LIVING), presence: 'population' },
+    rpg: {
+      level: 6,
+      perks: [{ id: 'tool_hands', tags: ['paper_memory'] }],
+    },
+    wealth: {
+      debtRubles: 55,
+      assetTags: ['ledger'],
+    },
+    loadout: {},
+    social: {},
+    visual: {
+      npcVisualId: NPC_VISUAL_FLOOR69_FEMALE,
+      spriteSeed: 4242,
+      portraitHint: 'тонкие очки',
+    },
+    speech: {},
+    tags: ['package_profile'],
+  });
+  const state = makeGameState({ currentFloor: FloorLevel.LIVING });
+  createPrefilledAlifeState(state, 9753, 2, {
+    buckets: [{
+      floorKey: floorKeyForStory(FloorLevel.LIVING),
+      floor: FloorLevel.LIVING,
+      targetCount: 2,
+      reserved: [{
+        id: 'npc:demos_profile_pack',
+        kind: 'authored',
+        name: 'Пакетный Профиль',
+        faction: Faction.CITIZEN,
+        occupation: Occupation.SECRETARY,
+        money: 125,
+        accountRubles: 875,
+        level: 6,
+      }],
+    }],
+  });
+
+  const details = getDemosProfileDetails(state, 1);
+  assert.equal(details?.packageId, 'demos_profile_pack');
+  assert.equal(details?.packageDisplayName, 'Пакетный Профиль');
+  assert.equal(details?.packagePublicLine, 'держит чужие анкеты под батареей');
+  assert.equal(details?.packageBioLine, 'Записывает людей так, будто стены тоже умеют читать.');
+  assert.equal(details?.capitalRubles, 1000);
+  assert.equal(details?.capitalLabel.includes('долг 55₽'), true);
+  assert.equal(details?.packagePortraitHint, 'тонкие очки');
+  assert.ok(details?.packageFlavorTags.includes('perk:tool_hands'));
+  assert.ok(details?.packageFlavorTags.includes('paper_memory'));
+  assert.ok(details?.packageFlavorTags.includes('package_profile'));
+});
+
 test('Demos profile interests do not repeat visible perk labels', () => {
   const state = makeProfileState();
   const details = getDemosProfileDetails(state, 3);
@@ -172,8 +241,8 @@ test('Demos profile social links read the shared outgoing graph when no override
 
   assert.equal(details?.friendsCount, 1);
   assert.equal(details?.enemiesCount, 1);
-  assert.equal(links.some(link => link.targetAlifeId === 3 && link.role === 'friend'), true);
-  assert.equal(links.some(link => link.targetAlifeId === 4 && link.role === 'enemy'), true);
+  assert.equal(links.some(link => link.targetAlifeId === 3 && link.role === DemosSocialRoleId.FRIEND), true);
+  assert.equal(links.some(link => link.targetAlifeId === 4 && link.role === DemosSocialRoleId.ENEMY), true);
 });
 
 test('Demos child profile family label comes from outgoing parent edge', () => {
@@ -187,7 +256,7 @@ test('Demos child profile family label comes from outgoing parent edge', () => {
 
   assert.equal(details?.familyStatusLabel, 'семейное: ребёнок, родитель alife:2');
   assert.equal(details?.familyCount, 1);
-  assert.equal(links[0]?.role, 'parent');
+  assert.equal(links[0]?.role, DemosSocialRoleId.PARENT);
 });
 
 test('Demos dead profiles keep traits and outgoing social summary', () => {

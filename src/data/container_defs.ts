@@ -62,7 +62,17 @@ export const CONTAINER_DEFS: Record<ContainerKind, ContainerDef> = {
   },
 };
 
-const ITEM5_CONTAINER_POOLS: Partial<Record<ContainerKind, ContainerDef['itemPool']>> = {
+function appendContainerPools(packs: Partial<Record<ContainerKind, ContainerDef['itemPool']>>): void {
+  for (const [rawKind, entries] of Object.entries(packs)) {
+    const def = CONTAINER_DEFS[Number(rawKind) as ContainerKind];
+    if (!def || !entries) continue;
+    for (const entry of entries) {
+      if (!def.itemPool.some(existing => existing.defId === entry.defId)) def.itemPool.push(entry);
+    }
+  }
+}
+
+const UTILITY_SCRAP_CONTAINER_POOLS: Partial<Record<ContainerKind, ContainerDef['itemPool']>> = {
   [ContainerKind.WOODEN_CHEST]: [
     { defId: 'cardboard_stack', min: 1, max: 3, chance: 0.55 },
     { defId: 'resident_trinket_box', min: 1, max: 1, chance: 0.24 },
@@ -131,13 +141,7 @@ const ITEM5_CONTAINER_POOLS: Partial<Record<ContainerKind, ContainerDef['itemPoo
   ],
 };
 
-for (const [rawKind, entries] of Object.entries(ITEM5_CONTAINER_POOLS)) {
-  const def = CONTAINER_DEFS[Number(rawKind) as ContainerKind];
-  if (!def || !entries) continue;
-  for (const entry of entries) {
-    if (!def.itemPool.some(existing => existing.defId === entry.defId)) def.itemPool.push(entry);
-  }
-}
+appendContainerPools(UTILITY_SCRAP_CONTAINER_POOLS);
 
 const RUBBER_TUBE_CONTAINER_POOLS: Partial<Record<ContainerKind, ContainerDef['itemPool']>> = {
   [ContainerKind.MEDICAL_CABINET]: [
@@ -148,13 +152,7 @@ const RUBBER_TUBE_CONTAINER_POOLS: Partial<Record<ContainerKind, ContainerDef['i
   ],
 };
 
-for (const [rawKind, entries] of Object.entries(RUBBER_TUBE_CONTAINER_POOLS)) {
-  const def = CONTAINER_DEFS[Number(rawKind) as ContainerKind];
-  if (!def || !entries) continue;
-  for (const entry of entries) {
-    if (!def.itemPool.some(existing => existing.defId === entry.defId)) def.itemPool.push(entry);
-  }
-}
+appendContainerPools(RUBBER_TUBE_CONTAINER_POOLS);
 
 const ENGINEER_STASH_WEAPON_CRATE_ITEMS: ContainerDef['itemPool'] = [
   { defId: 'concrete_breaker_grenade', min: 1, max: 1, chance: 0.035 },

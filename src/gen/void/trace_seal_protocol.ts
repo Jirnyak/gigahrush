@@ -7,7 +7,6 @@ import {
   type Entity, type GameState, type Item, type WorldContainer, type WorldEvent, type WorldEventType,
 } from '../../core/types';
 import { World } from '../../core/world';
-import { freshNeeds } from '../../data/catalog';
 import { type PlotNpcDef, registerSideQuest } from '../../data/plot';
 import { MONSTERS } from '../../entities/monster';
 import { monsterSpr, Spr } from '../../render/sprite_index';
@@ -16,6 +15,7 @@ import { hasItem, removeItem } from '../../systems/inventory';
 import { randomRPG, scaleMonsterHp, scaleMonsterSpeed } from '../../systems/rpg';
 import { carveCorridor, findClearArea, placeDoorAt, stampRoom } from '../shared';
 import { isPlayerEntity } from '../../systems/player_actor';
+import { requireSpawnedPlotNpcFromPackage } from '../plot_npc_spawn';
 
 const CLERK_ID = 'floor20_void_protocol_clerk';
 const NEIGHBOR_ID = 'floor20_void_borrowed_neighbor';
@@ -416,33 +416,16 @@ function spawnProtocolNpc(
   entities: Entity[],
   nextId: { v: number },
   plotNpcId: string,
-  def: PlotNpcDef,
+  _def: PlotNpcDef,
   x: number,
   y: number,
 ): void {
-  entities.push({
-    id: nextId.v++,
-    type: EntityType.NPC,
-    x: world.wrap(x) + 0.5,
-    y: world.wrap(y) + 0.5,
+  const px = world.wrap(x) + 0.5;
+  const py = world.wrap(y) + 0.5;
+  requireSpawnedPlotNpcFromPackage(entities, nextId, plotNpcId, px, py, {
     angle: 0,
-    pitch: 0,
-    alive: true,
-    speed: def.speed,
-    sprite: def.sprite,
-    name: def.name,
-    isFemale: def.isFemale,
-    needs: freshNeeds(),
-    hp: def.hp,
-    maxHp: def.maxHp,
-    money: def.money,
-    ai: { goal: AIGoal.IDLE, tx: world.wrap(x) + 0.5, ty: world.wrap(y) + 0.5, path: [], pi: 0, stuck: 0, timer: 0 },
-    inventory: def.inventory.map(item => ({ ...item })),
-    faction: def.faction,
-    occupation: def.occupation,
-    plotNpcId,
     canGiveQuest: false,
-    questId: -1,
+    aiTarget: { x: px, y: py },
   });
 }
 

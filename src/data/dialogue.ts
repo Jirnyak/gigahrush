@@ -3,6 +3,7 @@
 /* lives in systems/dialogue.ts.                                  */
 
 import { Faction, type Entity, Occupation } from '../core/types';
+import { occupationTradeItems } from './occupation_profiles';
 
 /* ── Generic talk pools ──────────────────────────────────────── */
 export const GENERAL_LINES = [
@@ -433,26 +434,6 @@ export const MINISTRY_OCC_LINES: Record<number, readonly string[]> = {
   ],
 };
 
-/* ── Trade item pools by occupation ──────────────────────────── */
-const OCC_TRADE_ITEMS: Record<number, string[]> = {
-  [Occupation.HOUSEWIFE]:   ['bread', 'water', 'cigs'],
-  [Occupation.LOCKSMITH]:   ['wrench', 'pipe', 'flashlight', 'door_kit', 'block_kit', 'electrode_pack', 'water_filter_regulator'],
-  [Occupation.SECRETARY]:   ['book', 'tea', 'cigs'],
-  [Occupation.ELECTRICIAN]: ['wrench', 'flashlight', 'ammo_nails', 'keyboard_unit', 'screen_unit', 'krona_battery', 'rail_signal_lamp'],
-  [Occupation.COOK]:        ['bread', 'kasha', 'kompot', 'canned', 'zhelemish_dried', 'grey_briquette', 'green_briquette', 'red_concentrate', 'protein_mold_cake', 'concentrate_coupon', 'sugar_pack', 'bottle_empty'],
-  [Occupation.DOCTOR]:      ['bandage', 'sterile_bandage', 'pills', 'antidep', 'anti_spore_inhaler', 'burn_gel', 'sleeping_pills', 'permanganate_vial', 'lice_shampoo', 'zhelemish_boiled'],
-  [Occupation.TURNER]:      ['wrench', 'pipe', 'rebar'],
-  [Occupation.MECHANIC]:    ['wrench', 'pipe', 'flashlight', 'jackhammer', 'ammo_nails', 'pump_impeller', 'vent_damper_plate', 'heating_element'],
-  [Occupation.STOREKEEPER]: ['bread', 'water', 'cigs', 'toiletpaper', 'import_toiletpaper', 'bandage', 'sleeping_pills', 'ammo_shells', 'cleaning_kit', 'chalk', 'soap_72', 'lice_shampoo', 'krona_battery', 'zhelemish_raw', 'govnyak_roll', 'govnyak_brick', 'grey_briquette', 'green_briquette', 'red_concentrate', 'liquidator_ration', 'concentrate_coupon', 'dice_bone', 'domino_box', 'cardboard_stack', 'roller_brush', 'plastic_sheet', 'ceramic_shards_pack'],
-  [Occupation.ALCOHOLIC]:   ['bread', 'cigs', 'water', 'govnyak_roll'],
-  [Occupation.SCIENTIST]:   ['flashlight', 'book', 'note', 'ammo_9mm', 'zhelemish_raw', 'govnyak_sample', 'empty_sample_jar', 'sterile_swab', 'sample_chain_form', 'nii_sample_label', 'glass_ampoule_empty', 'blueprint_t2_folder', 'sound_emitter', 'syringe_empty'],
-  [Occupation.CHILD]:       ['bread', 'water', 'chalk'],
-  [Occupation.DIRECTOR]:    ['book', 'tea', 'cigs', 'ammo_9mm', 'blueprint_t1_folder', 'market_weight_scale'],
-  [Occupation.TRAVELER]:    ['bread', 'water', 'filtered_water', 'canned', 'cigs', 'chalk', 'govnyak_roll', 'gasmask_filter', 'caravan_route', 'lift_scheme', 'track_diagram_scrap'],
-  [Occupation.PILGRIM]:     ['bread', 'water', 'knife', 'zhelemish_dried', 'govnyak_bad_batch'],
-  [Occupation.HUNTER]:      ['knife', 'canned', 'rawmeat', 'ammo_9mm', 'ammo_shells', 'gasmask_filter', 'ip4_gasmask', 'filtered_water', 'radio_headset_liquidator'],
-};
-
 interface FactionTradeOffer {
   faction: Faction;
   minRank: number;
@@ -486,7 +467,7 @@ function appendFactionTradeOffers(npc: Entity, items: { defId: string; count: nu
 
 export function generateNpcTradeItems(npc: Entity): { defId: string; count: number }[] {
   const items: { defId: string; count: number }[] = [];
-  const pool = OCC_TRADE_ITEMS[npc.occupation ?? 0] ?? ['bread', 'water'];
+  const pool = occupationTradeItems(npc.occupation);
   const count = 2 + Math.floor(Math.random() * 3);
   for (let i = 0; i < count; i++) {
     const defId = pool[Math.floor(Math.random() * pool.length)];

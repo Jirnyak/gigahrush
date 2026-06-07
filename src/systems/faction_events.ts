@@ -377,11 +377,9 @@ function reactNearbyNpcsToResidue(
   phase: 'start' | 'aftermath',
 ): number {
   let reacted = 0;
-  for (const npc of entities) {
+  for (const npc of nearbyNpcsByDistance(world, entities, x, y, zoneId, RESIDUE_NPC_REACT_DIST2)) {
     if (reacted >= MAX_RESIDUE_NPC_REACTIONS) break;
-    if (!npc.alive || npc.type !== EntityType.NPC || !npc.ai) continue;
-    if (world.zoneMap[world.idx(Math.floor(npc.x), Math.floor(npc.y))] !== zoneId) continue;
-    if (world.dist2(x, y, npc.x, npc.y) > RESIDUE_NPC_REACT_DIST2) continue;
+    if (!npc.ai) continue;
     npc.ai.ambientBarkCd = Math.min(npc.ai.ambientBarkCd ?? 0, phase === 'start' ? 2 : 5);
     if (phase === 'start' && def.severity >= 4 && npc.faction !== def.actorFaction) {
       npc.ai.goal = AIGoal.FLEE;
@@ -815,10 +813,9 @@ function triggerFactionClash(
   }
 
   if (liquidatorIds.length === 0 || cultistIds.length === 0) return blocked('не найдено место для обеих сторон стычки');
-  const firstLiquidator = staged.find(e => e.faction === Faction.LIQUIDATOR);
-  const firstCultist = staged.find(e => e.faction === Faction.CULTIST);
   for (const npc of staged) {
-    npc.ai!.combatTargetId = npc.faction === Faction.LIQUIDATOR ? firstCultist?.id : firstLiquidator?.id;
+    const targetFaction = npc.faction === Faction.LIQUIDATOR ? Faction.CULTIST : Faction.LIQUIDATOR;
+    npc.ai!.combatTargetId = nearestStagedOpponent(world, npc, staged, targetFaction)?.id;
     if (createdIds.has(npc.id)) entities.push(npc);
   }
 
@@ -1124,11 +1121,8 @@ function seedClashOutcomeRumors(
 ): void {
   let seeded = 0;
   const maxDist2 = 54 * 54;
-  for (const e of entities) {
+  for (const e of nearbyNpcsByDistance(world, entities, clash.x, clash.y, clash.zoneId, maxDist2)) {
     if (seeded >= 12) break;
-    if (!e.alive || e.type !== EntityType.NPC) continue;
-    if (world.zoneMap[world.idx(Math.floor(e.x), Math.floor(e.y))] !== clash.zoneId) continue;
-    if (world.dist2(clash.x, clash.y, e.x, e.y) > maxDist2) continue;
     observeRumorEvent(e, {
       id: eventId,
       type: 'faction_event',
@@ -1328,6 +1322,37 @@ function triggerFactionEvent(
 
 function blocked(reason: string): TriggerResult {
   return { ok: false, message: `[FACTION] ${reason}`, npcs: 0, drops: 0, marks: 0, deposited: 0, pressureCells: 0 };
+}
+
+function nearbyNpcsByDistance(
+  world: World,
+  entities: readonly Entity[],
+  x: number,
+  y: number,
+  zoneId: number,
+  maxDist2: number,
+): Entity[] {
+  return entities
+    .filter(e => (
+      e.alive &&
+      e.type === EntityType.NPC &&
+      world.zoneMap[world.idx(Math.floor(e.x), Math.floor(e.y))] === zoneId &&
+      world.dist2(x, y, e.x, e.y) <= maxDist2
+    ))
+    .sort((a, b) => world.dist2(x, y, a.x, a.y) - world.dist2(x, y, b.x, b.y) || a.id - b.id);
+}
+
+function nearestStagedOpponent(world: World, npc: Entity, staged: readonly Entity[], faction: Faction): Entity | undefined {
+  let best: Entity | undefined;
+  let bestD2 = Infinity;
+  for (const other of staged) {
+    if (other.faction !== faction) continue;
+    const d2 = world.dist2(npc.x, npc.y, other.x, other.y);
+    if (d2 > bestD2 || (d2 === bestD2 && best !== undefined && other.id >= best.id)) continue;
+    best = other;
+    bestD2 = d2;
+  }
+  return best;
 }
 
 function pickEligibleDef(
@@ -2011,11 +2036,8 @@ function seedNearbyRumors(
 ): void {
   let seeded = 0;
   const maxDist2 = 42 * 42;
-  for (const e of entities) {
+  for (const e of nearbyNpcsByDistance(world, entities, x, y, zoneId, maxDist2)) {
     if (seeded >= 12) break;
-    if (!e.alive || e.type !== EntityType.NPC) continue;
-    if (world.zoneMap[world.idx(Math.floor(e.x), Math.floor(e.y))] !== zoneId) continue;
-    if (world.dist2(x, y, e.x, e.y) > maxDist2) continue;
     observeRumorEvent(e, {
       id: eventId,
       type: 'faction_event',

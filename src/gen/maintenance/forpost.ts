@@ -10,10 +10,10 @@ import {
 } from '../../core/types';
 import { World } from '../../core/world';
 import { freshNeeds, randomName } from '../../data/catalog';
-import { PLOT_NPCS } from '../../data/plot';
 import { PLOT_ROOMS } from '../../data/plot_rooms';
 import { stampRoom, protectRoom, connectProtectedRoom, findClearArea } from '../shared';
-import { freshRPG, randomRPG, getMaxHp } from '../../systems/rpg';
+import { requireSpawnedPlotNpcFromPackage } from '../plot_npc_spawn';
+import { randomRPG, getMaxHp } from '../../systems/rpg';
 import { Spr } from '../../render/sprite_index';
 
 export function generateForpost(
@@ -64,21 +64,7 @@ export function generateForpost(
   world.features[world.idx(room.x + room.w - 2, room.y + 1)] = Feature.SHELF;
   world.features[world.idx(room.x + 1, room.y + room.h - 2)] = Feature.LAMP;
 
-  // Spawn Major Grom
-  const majorDef = PLOT_NPCS['major_grom'];
-  entities.push({
-    id: nextId.v++, type: EntityType.NPC,
-    x: rcx + 0.5, y: rcy + 0.5,
-    angle: Math.PI, pitch: 0, alive: true, speed: majorDef.speed,
-    sprite: majorDef.sprite,
-    name: majorDef.name, isFemale: majorDef.isFemale,
-    needs: freshNeeds(), hp: majorDef.hp, maxHp: majorDef.maxHp, money: majorDef.money,
-    rpg: freshRPG(majorDef.level ?? 1),
-    ai: { goal: AIGoal.IDLE, tx: 0, ty: 0, path: [], pi: 0, stuck: 0, timer: 0 },
-    inventory: majorDef.inventory.map(i => ({ ...i })),
-    faction: majorDef.faction, occupation: majorDef.occupation,
-    plotNpcId: 'major_grom', canGiveQuest: true, questId: -1,
-  });
+  requireSpawnedPlotNpcFromPackage(entities, nextId, 'major_grom', rcx + 0.5, rcy + 0.5, { angle: Math.PI });
 
   // Spawn 6 liquidator guards
   const guardPositions = [

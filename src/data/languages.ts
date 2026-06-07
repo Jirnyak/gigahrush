@@ -20,8 +20,11 @@ export interface TitleLanguageDef {
   setupSubtitle: string;
   setupStartLabel: string;
   setupStartValue: string;
+  setupAddNpcLabel: string;
+  setupAddNpcValue: string;
   setupLanguageLabel: string;
   setupActorCapLabel: string;
+  setupAddNpcHint: string;
   setupNameHint: string;
   setupAgeHint: string;
   setupSexHint: string;
@@ -58,8 +61,11 @@ export const TITLE_LANGUAGES: readonly TitleLanguageDef[] = [
     setupSubtitle: 'меню запуска',
     setupStartLabel: 'СТАРТ',
     setupStartValue: 'начать игру',
+    setupAddNpcLabel: 'ДОБАВИТЬ ПЕРСОНАЖА',
+    setupAddNpcValue: 'анкета NPC',
     setupLanguageLabel: 'ЯЗЫК',
     setupActorCapLabel: 'ЛИМИТ NPC/МОБОВ',
+    setupAddNpcHint: 'открывает отдельную страницу формы без захвата курсора',
     setupNameHint: 'текст вводится прямо с клавиатуры',
     setupAgeHint: '1-100; влияет на соц. контекст персонажа',
     setupSexHint: '←/→ переключить',
@@ -67,7 +73,7 @@ export const TITLE_LANGUAGES: readonly TitleLanguageDef[] = [
     setupLanguageHint: '←/→ переключить язык',
     setupActorCapHint: '←/→ шаг 1024',
     setupStartHint: 'ENTER запускает выбранный забег',
-    setupControlHint: '↑/↓ выбор  |  ←/→ изменить  |  текст печатается в выбранном поле  |  ENTER старт',
+    setupControlHint: '↑/↓ выбор  |  ←/→ изменить  |  ENTER действие  |  текст в выбранном поле',
     actorCapValue: (value, min, max) => `${value} (${min}-${max})`,
     languageHint: '←/→ язык  |  ENTER далее',
     mobileHint: 'Тап — далее  |  ДЕЙСТ — действие  |  КАРТ/ЗАД/UI — рельса',
@@ -94,8 +100,11 @@ export const TITLE_LANGUAGES: readonly TitleLanguageDef[] = [
     setupSubtitle: 'launch menu',
     setupStartLabel: 'START',
     setupStartValue: 'start game',
+    setupAddNpcLabel: 'ADD CHARACTER',
+    setupAddNpcValue: 'NPC form',
     setupLanguageLabel: 'LANGUAGE',
     setupActorCapLabel: 'NPC/MOB LIMIT',
+    setupAddNpcHint: 'opens the standalone questionnaire page without cursor capture',
     setupNameHint: 'type directly while this row is selected',
     setupAgeHint: '1-100; affects social context',
     setupSexHint: '←/→ switch',
@@ -103,7 +112,7 @@ export const TITLE_LANGUAGES: readonly TitleLanguageDef[] = [
     setupLanguageHint: '←/→ switch language',
     setupActorCapHint: '←/→ step 1024',
     setupStartHint: 'ENTER starts this run',
-    setupControlHint: '↑/↓ select  |  ←/→ change  |  type into the selected text field  |  ENTER start',
+    setupControlHint: '↑/↓ select  |  ←/→ change  |  ENTER action  |  type in selected field',
     actorCapValue: (value, min, max) => `${value} (${min}-${max})`,
     languageHint: '←/→ language  |  ENTER next',
     mobileHint: 'Tap — next  |  ACT — interact  |  MAP/QUEST/UI — rail',

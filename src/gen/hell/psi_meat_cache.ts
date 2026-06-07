@@ -16,6 +16,7 @@ import { publishEvent, registerWorldEventObserver } from '../../systems/events';
 import { randomRPG, scaleMonsterHp, scaleMonsterSpeed } from '../../systems/rpg';
 import { connectProtectedRoom, findClearArea, protectRoom, rng, stampRoom } from '../shared';
 import { isPlayerEntity } from '../../systems/player_actor';
+import { requireSpawnedPlotNpcFromPackage } from '../plot_npc_spawn';
 
 const ROOM_W = 15;
 const ROOM_H = 11;
@@ -505,34 +506,16 @@ function placeFeature(world: World, x: number, y: number, feature: Feature): voi
 function spawnKeeper(world: World, entities: Entity[], nextId: { v: number }, room: Room): number {
   const x = world.wrap(room.x + Math.floor(room.w / 2));
   const y = world.wrap(room.y + room.h - 4);
-  const id = nextId.v++;
-  entities.push({
-    id,
-    type: EntityType.NPC,
-    x: x + 0.5,
-    y: y + 0.5,
+  const keeper = requireSpawnedPlotNpcFromPackage(entities, nextId, KEEPER_ID, x + 0.5, y + 0.5, {
     angle: -Math.PI / 2,
-    pitch: 0,
-    alive: true,
-    speed: KEEPER_DEF.speed,
-    sprite: KEEPER_DEF.sprite,
-    name: KEEPER_DEF.name,
-    isFemale: KEEPER_DEF.isFemale,
-    needs: freshNeeds(),
-    hp: KEEPER_DEF.hp,
-    maxHp: KEEPER_DEF.maxHp,
-    money: KEEPER_DEF.money,
-    ai: { goal: AIGoal.IDLE, tx: x + 0.5, ty: y + 0.5, path: [], pi: 0, stuck: 0, timer: 0 },
-    inventory: KEEPER_DEF.inventory.map(i => ({ ...i })),
     weapon: 'psi_meat_hook',
-    faction: KEEPER_DEF.faction,
-    occupation: KEEPER_DEF.occupation,
-    plotNpcId: KEEPER_ID,
     canGiveQuest: true,
-    questId: -1,
-    rpg: { level: 9, xp: 0, attrPoints: 0, str: 5, agi: 4, int: 9, psi: 40, maxPsi: 40 },
+    aiTarget: { x: x + 0.5, y: y + 0.5 },
+    extra: {
+      rpg: { level: 9, xp: 0, attrPoints: 0, str: 5, agi: 4, int: 9, psi: 40, maxPsi: 40 },
+    },
   });
-  return id;
+  return keeper.id;
 }
 
 function spawnGuard(

@@ -5,6 +5,7 @@ import { Cell, EntityType, FloorLevel, MonsterKind, QuestType, type Entity, type
 import { World } from '../src/core/world';
 import { INVENTORY_GRID_COLS, INVENTORY_GRID_ROWS, MAX_INVENTORY_SLOTS } from '../src/data/inventory_limits';
 import { drawControlsMenu } from '../src/render/controls_ui';
+import { drawHelpMenu } from '../src/render/help_ui';
 import { drawMinimap, mapEntityDotBudget } from '../src/render/map_ui';
 import {
   allocateHudSlot,
@@ -51,12 +52,12 @@ class CanvasStubContext {
   drawImage(..._args: unknown[]): void {}
 }
 
-function drawMinimapPathFills(quest: Quest, target: Entity): string[] {
+function drawMinimapPathFills(quest: Quest, target: Entity, activeQuestId?: number): string[] {
   const world = new World();
   const player = makeTestPlayer({ id: 1, x: 12.5, y: 12.5 });
   for (const entity of [player, target]) world.cells[world.idx(Math.floor(entity.x), Math.floor(entity.y))] = Cell.FLOOR;
   const entities = [player, target];
-  const state = makeGameState({ currentFloor: FloorLevel.LIVING, quests: [quest] });
+  const state = makeGameState({ currentFloor: FloorLevel.LIVING, quests: [quest], activeQuestId });
   rebuildEntityIndex(entities);
   const ctx = new CanvasStubContext();
   drawMinimap(
@@ -193,6 +194,27 @@ test('map renders monster kill quest targets with red diamonds', () => {
   assert.equal(fills.includes('#6cf'), false);
 });
 
+test('minimap renders the selected active quest direction arrow', () => {
+  const target = makeTestNpc({
+    id: 41,
+    x: 18.5,
+    y: 12.5,
+    canGiveQuest: false,
+  });
+  const fills = drawMinimapPathFills({
+    id: 12,
+    type: QuestType.TALK,
+    giverId: 10,
+    giverName: 'Ольга',
+    desc: 'Поговорить с соседом.',
+    targetNpcId: target.id,
+    targetNpcName: target.name,
+    done: false,
+  }, target, 12);
+
+  assert.ok(fills.includes('#ffd21f'));
+});
+
 test('map renders NPC kill quest targets with red diamonds', () => {
   const target = makeTestNpc({
     id: 31,
@@ -237,6 +259,17 @@ test('controls menu draws reset row before keyboard bindings', () => {
   assert.ok(ctx.texts.includes('Вернуть дефолты'));
   assert.ok(ctx.texts.includes(CONTROL_ACTIONS[0].label));
   assert.ok(ctx.texts.includes('ENTER'));
+});
+
+test('F1 help poster draws current help and keybind hints', () => {
+  const state = makeGameState({ showHelp: true });
+  const ctx = new CanvasStubContext(1600, 900);
+
+  drawHelpMenu(ctx as unknown as CanvasRenderingContext2D, state, 2, 2, 0);
+
+  assert.ok(ctx.texts.some(text => text.includes('HELP')));
+  assert.ok(ctx.texts.some(text => text.includes('F1')));
+  assert.ok(ctx.texts.some(text => text.includes('Tab')));
 });
 
 test('HUD event summary lane ends before the fixed top-right minimap lane', () => {

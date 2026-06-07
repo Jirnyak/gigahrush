@@ -26,7 +26,15 @@ import { FLOOR_INSTANCES } from '../src/data/floor_instances';
 import { MONSTER_ECOLOGY } from '../src/data/monster_ecology';
 import { NET_HACK_TERMINALS } from '../src/data/net_hack';
 import { PERMIT_DEFS, PERMIT_FORGERY_RECIPES } from '../src/data/permits';
-import { PLOT_CHAIN, PLOT_NPCS, SIDE_QUESTS, type PlotStep, type SideQuestStep } from '../src/data/plot';
+import {
+  PLOT_CHAIN,
+  SIDE_QUESTS,
+  allPlotNpcEntries,
+  allPlotNpcIds,
+  hasPlotNpc,
+  type PlotStep,
+  type SideQuestStep,
+} from '../src/data/plot';
 import { FLOOR_GEOMETRIES } from '../src/data/procedural_floors';
 import { RESOURCES, resourceForItem } from '../src/data/resources';
 import { RUMORS, type RumorReveal } from '../src/data/rumors';
@@ -228,19 +236,19 @@ test('ammo uses planned sources and explicit scarcity resources', () => {
   assert.deepEqual(mismatchedContracts, [], 'ammo reward contracts must scale against rewarded ammo resources');
 });
 
-test('story and side quest ids are unique and reference existing data', () => {
+test('story and side quest ids are unique and resolve through NPC packages', () => {
   assertUnique('side quest', SIDE_QUESTS.map(q => q.id));
-  assertUnique('plot npc', Object.keys(PLOT_NPCS));
+  assertUnique('plot npc', allPlotNpcIds());
 
   const sideQuestIds = new Set(SIDE_QUESTS.map(q => q.id));
   const rumorIds = new Set(RUMORS.map(rumor => rumor.id));
   const missing: string[] = [];
 
   const validateQuest = (q: QuestLike, id: string): void => {
-    if (!PLOT_NPCS[q.giverNpcId]) missing.push(dataRef('quest', id, 'giverNpcId', q.giverNpcId));
-    if (q.targetNpcId && !PLOT_NPCS[q.targetNpcId]) missing.push(dataRef('quest', id, 'targetNpcId', q.targetNpcId));
-    if (q.targetPlotNpcId && !PLOT_NPCS[q.targetPlotNpcId]) missing.push(dataRef('quest', id, 'targetPlotNpcId', q.targetPlotNpcId));
-    if (q.failOnNpcDeathPlotId && !PLOT_NPCS[q.failOnNpcDeathPlotId]) missing.push(dataRef('quest', id, 'failOnNpcDeathPlotId', q.failOnNpcDeathPlotId));
+    if (!hasPlotNpc(q.giverNpcId)) missing.push(dataRef('quest', id, 'giverNpcId', q.giverNpcId));
+    if (q.targetNpcId && !hasPlotNpc(q.targetNpcId)) missing.push(dataRef('quest', id, 'targetNpcId', q.targetNpcId));
+    if (q.targetPlotNpcId && !hasPlotNpc(q.targetPlotNpcId)) missing.push(dataRef('quest', id, 'targetPlotNpcId', q.targetPlotNpcId));
+    if (q.failOnNpcDeathPlotId && !hasPlotNpc(q.failOnNpcDeathPlotId)) missing.push(dataRef('quest', id, 'failOnNpcDeathPlotId', q.failOnNpcDeathPlotId));
     pushItemRef(missing, 'quest', id, 'targetItem', q.targetItem);
     pushItemRef(missing, 'quest', id, 'rewardItem', q.rewardItem);
     (q.extraRewards ?? []).forEach((reward, index) => pushItemStackRefs(missing, 'quest', id, `extraRewards[${index}]`, reward));
@@ -272,7 +280,7 @@ test('story and side quest ids are unique and reference existing data', () => {
   PLOT_CHAIN.forEach((q, index) => validateQuest(q, `plot_${index}`));
   for (const q of SIDE_QUESTS) validateQuest(q, q.id);
 
-  for (const [id, npc] of Object.entries(PLOT_NPCS)) {
+  for (const [id, npc] of allPlotNpcEntries()) {
     if (npc.weapon && !WEAPON_STATS[npc.weapon]) missing.push(dataRef('plotNpc', id, 'weapon', npc.weapon));
     npc.inventory.forEach((item, index) => pushItemStackRefs(missing, 'plotNpc', id, `inventory[${index}]`, item));
   }
@@ -306,7 +314,7 @@ test('contract, resource, factory, and container ids stay coherent', () => {
     if (c.rewardCount !== undefined && c.rewardCount <= 0) missing.push(dataRef('contract', c.id, 'rewardCount', c.rewardCount));
     if (!isFloorLevel(c.target.floor)) missing.push(dataRef('contract', c.id, 'target.floor', c.target.floor));
     if (c.target.roomType !== undefined && !ROOM_TYPE_IDS.has(c.target.roomType)) missing.push(dataRef('contract', c.id, 'target.roomType', c.target.roomType));
-    if (c.targetPlotNpcId && !PLOT_NPCS[c.targetPlotNpcId]) missing.push(dataRef('contract', c.id, 'targetPlotNpcId', c.targetPlotNpcId));
+    if (c.targetPlotNpcId && !hasPlotNpc(c.targetPlotNpcId)) missing.push(dataRef('contract', c.id, 'targetPlotNpcId', c.targetPlotNpcId));
     if (c.rewardResourceId && !resourceIds.has(c.rewardResourceId)) missing.push(dataRef('contract', c.id, 'rewardResourceId', c.rewardResourceId));
     if (c.targetMonsterKind !== undefined && !monsterExists(c.targetMonsterKind)) missing.push(dataRef('contract', c.id, 'targetMonsterKind', c.targetMonsterKind));
     assertUnique(`contract ${c.id} tag`, [...c.tags]);
@@ -894,6 +902,14 @@ test('monster ecology and floor catalog ids are unique and valid', () => {
     if (!ID_RE.test(f.id)) invalid.push(dataRef('floorInstance', f.id, 'idFormat', f.id));
     if (!isFloorLevel(f.baseFloor)) invalid.push(dataRef('floorInstance', f.id, 'baseFloor', f.baseFloor));
     if (!rumorIds.has(f.rumorId)) invalid.push(dataRef('floorInstance', f.id, 'rumorId', f.rumorId));
+    if (f.generatorId !== 'story_pocket') invalid.push(dataRef('floorInstance', f.id, 'generatorId', f.generatorId));
+    if (f.exitRule !== 'next_lift_returns') invalid.push(dataRef('floorInstance', f.id, 'exitRule', f.exitRule));
+    if (f.npcPolicy !== 'none' && f.npcPolicy !== 'generator') invalid.push(dataRef('floorInstance', f.id, 'npcPolicy', f.npcPolicy));
+    if (f.monsterPolicy !== 'none' && f.monsterPolicy !== 'generator') invalid.push(dataRef('floorInstance', f.id, 'monsterPolicy', f.monsterPolicy));
+    if (f.samosborPolicy !== 'normal' && f.samosborPolicy !== 'exempt') invalid.push(dataRef('floorInstance', f.id, 'samosborPolicy', f.samosborPolicy));
+    if (f.debugCommandId !== 'arm_floor_instance') invalid.push(dataRef('floorInstance', f.id, 'debugCommandId', f.debugCommandId));
+    if (!f.lore.trim()) invalid.push(dataRef('floorInstance', f.id, 'lore', 'empty'));
+    if (!f.tags.includes('numbered_lift')) invalid.push(dataRef('floorInstance', f.id, 'tags', 'missing numbered_lift'));
     if (f.risk < 1 || f.risk > 5) invalid.push(dataRef('floorInstance', f.id, 'risk', f.risk));
     if (f.weight <= 0) invalid.push(dataRef('floorInstance', f.id, 'weight', f.weight));
   }

@@ -24,11 +24,14 @@ import {
 import { World } from '../../core/world';
 import { hashSeed, withSeededRandom } from '../../core/rand';
 import { freshNeeds } from '../../data/catalog';
-import { type PlotNpcDef, registerSideQuest } from '../../data/plot';
+import { designNpcFloorKey, type PlotNpcDef, registerFloorSideQuest } from '../../data/plot';
 import { MONSTERS } from '../../entities/monster';
 import { monsterSpr, Spr } from '../../render/sprite_index';
 import { ensureConnectivity, generateZones, sanitizeDoors, stampRoom } from '../shared';
 import type { FloorGeneration } from '../floor_manifest';
+import { requireSpawnedPlotNpcFromPackage } from '../plot_npc_spawn';
+
+const DESIGN_NPC_HOME_FLOOR_KEY = designNpcFloorKey('communal_ring');
 
 export const COMMUNAL_RING_DESIGN_FLOOR_ID = 'communal_ring' as const;
 export const COMMUNAL_RING_ROUTE_Z = 4;
@@ -163,7 +166,7 @@ const NPC_DEFS: Record<(typeof NPC_IDS)[keyof typeof NPC_IDS], PlotNpcDef> = {
   },
 };
 
-registerSideQuest(NPC_IDS.luba, NPC_DEFS.communal_laundry_luba, [{
+registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, NPC_IDS.luba, NPC_DEFS.communal_laundry_luba, [{
   id: 'communal_clean_bandages',
   giverNpcId: NPC_IDS.luba,
   type: QuestType.FETCH,
@@ -178,7 +181,7 @@ registerSideQuest(NPC_IDS.luba, NPC_DEFS.communal_laundry_luba, [{
   moneyReward: 20,
 }]);
 
-registerSideQuest(NPC_IDS.viktor, NPC_DEFS.communal_shower_viktor, [{
+registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, NPC_IDS.viktor, NPC_DEFS.communal_shower_viktor, [{
   id: 'communal_shower_pressure',
   giverNpcId: NPC_IDS.viktor,
   type: QuestType.FETCH,
@@ -193,7 +196,7 @@ registerSideQuest(NPC_IDS.viktor, NPC_DEFS.communal_shower_viktor, [{
   moneyReward: 25,
 }]);
 
-registerSideQuest(NPC_IDS.tamara, NPC_DEFS.communal_notice_tamara, [{
+registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, NPC_IDS.tamara, NPC_DEFS.communal_notice_tamara, [{
   id: 'communal_notice_dispute',
   giverNpcId: NPC_IDS.tamara,
   type: QuestType.FETCH,
@@ -208,7 +211,7 @@ registerSideQuest(NPC_IDS.tamara, NPC_DEFS.communal_notice_tamara, [{
   moneyReward: 30,
 }]);
 
-registerSideQuest(NPC_IDS.sasha, NPC_DEFS.communal_panhandler_sasha, [{
+registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, NPC_IDS.sasha, NPC_DEFS.communal_panhandler_sasha, [{
   id: 'communal_pantry_theft',
   giverNpcId: NPC_IDS.sasha,
   type: QuestType.FETCH,
@@ -223,7 +226,7 @@ registerSideQuest(NPC_IDS.sasha, NPC_DEFS.communal_panhandler_sasha, [{
   moneyReward: 12,
 }]);
 
-registerSideQuest(NPC_IDS.nina, NPC_DEFS.communal_through_nina, [{
+registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, NPC_IDS.nina, NPC_DEFS.communal_through_nina, [{
   id: 'communal_through_chain_bread',
   giverNpcId: NPC_IDS.nina,
   type: QuestType.FETCH,
@@ -240,7 +243,7 @@ registerSideQuest(NPC_IDS.nina, NPC_DEFS.communal_through_nina, [{
   eventData: { routeChoice: 'feed_through_flat', rumorIds: ['economy_kitchen_stock'] },
 }]);
 
-registerSideQuest(NPC_IDS.yegor, NPC_DEFS.communal_primus_yegor, [{
+registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, NPC_IDS.yegor, NPC_DEFS.communal_primus_yegor, [{
   id: 'communal_primus_valve',
   giverNpcId: NPC_IDS.yegor,
   type: QuestType.FETCH,
@@ -788,39 +791,19 @@ function spawnCommunalNpcSet(entities: Entity[], nextId: { v: number }, rooms: C
 function spawnNpc(
   entities: Entity[],
   nextId: { v: number },
-  npc: PlotNpcDef,
+  _npc: PlotNpcDef,
   plotNpcId: string,
   x: number,
   y: number,
   weapon?: string,
 ): number {
-  const id = nextId.v++;
-  entities.push({
-    id,
-    type: EntityType.NPC,
-    x: x + 0.5,
-    y: y + 0.5,
+  const npc = requireSpawnedPlotNpcFromPackage(entities, nextId, plotNpcId, x + 0.5, y + 0.5, {
     angle: Math.random() * Math.PI * 2,
-    pitch: 0,
-    alive: true,
-    speed: npc.speed,
-    sprite: npc.sprite,
-    name: npc.name,
-    isFemale: npc.isFemale,
-    needs: freshNeeds(),
-    hp: npc.hp,
-    maxHp: npc.maxHp,
-    money: npc.money,
-    ai: { goal: AIGoal.IDLE, tx: x + 0.5, ty: y + 0.5, path: [], pi: 0, stuck: 0, timer: 0 },
-    inventory: npc.inventory.map(item => ({ ...item })),
     weapon,
-    faction: npc.faction,
-    occupation: npc.occupation,
-    plotNpcId,
     canGiveQuest: true,
-    questId: -1,
+    aiTarget: { x: x + 0.5, y: y + 0.5 },
   });
-  return id;
+  return npc.id;
 }
 
 function spawnWitnesses(entities: Entity[], nextId: { v: number }, rooms: CommunalRooms): void {

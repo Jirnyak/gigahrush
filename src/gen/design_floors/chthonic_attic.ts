@@ -8,12 +8,15 @@ import {
   type Entity, type GameState, type Room, type TerritoryOwner, type WorldContainer,
 } from '../../core/types';
 import { World } from '../../core/world';
-import { type PlotNpcDef, registerSideQuest } from '../../data/plot';
+import { designNpcFloorKey, type PlotNpcDef, registerFloorSideQuest } from '../../data/plot';
 import { monsterSpr, Spr } from '../../render/sprite_index';
 import { publishEvent } from '../../systems/events';
 import { generateZones } from '../shared';
 import { genLog } from '../log';
 import { setTerritoryOwnerAtIndex, syncZoneMetadataFromTerritory } from '../../systems/territory';
+import { requireSpawnedPlotNpcFromPackage } from '../plot_npc_spawn';
+
+const DESIGN_NPC_HOME_FLOOR_KEY = designNpcFloorKey('chthonic_attic');
 
 export const DESIGN_FLOOR_ID = 'chthonic_attic' as const;
 export const DESIGN_FLOOR_Z = 46;
@@ -604,7 +607,7 @@ export function registerChthonicAtticContent(): void {
   if (contentRegistered) return;
   contentRegistered = true;
 
-  registerSideQuest('attic_agrafena_rootkeeper', ATTIC_NPCS.attic_agrafena_rootkeeper, [
+  registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'attic_agrafena_rootkeeper', ATTIC_NPCS.attic_agrafena_rootkeeper, [
     {
       id: 'attic_cut_or_feed_root',
       giverNpcId: 'attic_agrafena_rootkeeper',
@@ -617,7 +620,7 @@ export function registerChthonicAtticContent(): void {
     },
   ]);
 
-  registerSideQuest('attic_deacon_ostap', ATTIC_NPCS.attic_deacon_ostap, [
+  registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'attic_deacon_ostap', ATTIC_NPCS.attic_deacon_ostap, [
     {
       id: 'attic_black_hand_report',
       giverNpcId: 'attic_deacon_ostap',
@@ -630,7 +633,7 @@ export function registerChthonicAtticContent(): void {
     },
   ]);
 
-  registerSideQuest('attic_cable_boy_yura', ATTIC_NPCS.attic_cable_boy_yura, [
+  registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'attic_cable_boy_yura', ATTIC_NPCS.attic_cable_boy_yura, [
     {
       id: 'attic_crawl_escort',
       giverNpcId: 'attic_cable_boy_yura',
@@ -644,7 +647,7 @@ export function registerChthonicAtticContent(): void {
     },
   ]);
 
-  registerSideQuest('attic_liquidator_masha', ATTIC_NPCS.attic_liquidator_masha, [
+  registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'attic_liquidator_masha', ATTIC_NPCS.attic_liquidator_masha, [
     {
       id: 'attic_burn_niche',
       giverNpcId: 'attic_liquidator_masha',
@@ -2150,33 +2153,17 @@ function spawnNpc(
   entities: Entity[],
   id: number,
   plotNpcId: string,
-  def: PlotNpcDef,
+  _def: PlotNpcDef,
   x: number,
   y: number,
 ): number {
-  entities.push({
-    id,
-    type: EntityType.NPC,
-    x, y,
+  const nextId = { v: id };
+  requireSpawnedPlotNpcFromPackage(entities, nextId, plotNpcId, x, y, {
     angle: 0,
-    pitch: 0,
-    alive: true,
-    speed: def.speed,
-    sprite: def.sprite,
-    hp: def.hp,
-    maxHp: def.maxHp,
-    ai: { goal: AIGoal.IDLE, tx: x, ty: y, path: [], pi: 0, stuck: 0, timer: 0 },
-    inventory: def.inventory.map(item => ({ ...item })),
-    name: def.name,
-    faction: def.faction,
-    occupation: def.occupation,
-    money: def.money,
-    isFemale: def.isFemale,
-    plotNpcId,
-    questId: -1,
     canGiveQuest: true,
+    aiTarget: { x, y },
   });
-  return id + 1;
+  return nextId.v;
 }
 
 function addItemDrop(

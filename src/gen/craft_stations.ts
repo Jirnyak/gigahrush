@@ -222,7 +222,7 @@ export function placeCraftStationAt(
   const nextFlags = oldFlags | spec.surfaceFlag;
   if (nextFlags !== oldFlags) {
     world.surfaceFlags[idx] = nextFlags;
-    world.surfaceVersion = (world.surfaceVersion + 1) | 0;
+    world.markSurfaceDirty();
   }
 
   const placed = attachStationInteractive(world, wx, wy, defId, {
@@ -233,7 +233,7 @@ export function placeCraftStationAt(
     if (oldFeature !== spec.feature) world.setFeatureAt(idx, oldFeature);
     if (world.surfaceFlags[idx] !== oldFlags) {
       world.surfaceFlags[idx] = oldFlags;
-      world.surfaceVersion = (world.surfaceVersion + 1) | 0;
+      world.markSurfaceDirty();
     }
     return null;
   }

@@ -1,15 +1,15 @@
 /* ── Проверочный коридор документов — Ministry document gate ─── */
 
 import {
-  W, Cell, ContainerKind, DoorState, EntityType, Faction, Feature, FloorLevel,
-  MonsterKind, Occupation, QuestType, RoomType, Tex, AIGoal,
+  W, Cell, ContainerKind, DoorState, Faction, Feature, FloorLevel,
+  MonsterKind, Occupation, QuestType, RoomType, Tex,
   msg,
   type Door, type Entity, type GameState, type ItemDef, type Room, type WorldContainer, type WorldEvent,
   type WorldEventPrivacy, type WorldEventType,
 } from '../../core/types';
 import { World } from '../../core/world';
-import { type PlotNpcDef, registerSideQuest } from '../../data/plot';
-import { ITEMS, freshNeeds } from '../../data/catalog';
+import { type PlotNpcDef, registerAuthoredNpc, registerSideQuest, storyNpcFloorKey } from '../../data/plot';
+import { ITEMS } from '../../data/catalog';
 import { DOCUMENT_MINISTRY_GATE_ACCESS_DEFS } from '../../data/documents_access';
 import { ITEM_TAGS } from '../../data/items';
 import { getPermitDef, type PermitAccessTag } from '../../data/permits';
@@ -19,12 +19,13 @@ import { registerInventoryUseHandler, type InventoryUseHandlerContext } from '..
 import { recordPermitAccess, recordPermitExposure } from '../../systems/permits';
 import { setDoorState } from '../../systems/door_state';
 import {
-  type NextId, addItemDrop, setFeature, spawnAdminMonster, spawnAdminNpc, spawnNamedCivilian,
+  type NextId, addItemDrop, setFeature, spawnAdminMonster, spawnAdminNpc,
 } from './admin_common';
 import { carveCorridor, findClearArea, protectRoom, stampRoom } from '../shared';
 import { genLog } from '../log';
 import { spawnChernobogDocketHandlers } from './chernobog_archive_docket';
 import { isPlayerEntity } from '../../systems/player_actor';
+import { requireSpawnedPlotNpcFromPackage } from '../plot_npc_spawn';
 
 const GATE_ROOM_NAME = 'Проверочный коридор N3';
 const GATE_W = 19;
@@ -33,6 +34,8 @@ const CONTENT_TAG = 'document_gate';
 const ACCESS_SCAN_RADIUS = 10;
 const ACCESS_SCAN_RADIUS2 = ACCESS_SCAN_RADIUS * ACCESS_SCAN_RADIUS;
 const MAX_CONTEXTS = 4;
+const GATE_GUARD_ID = 'document_gate_inspector_sukhar';
+const GATE_WITNESS_ID = 'document_gate_zina_ochevidnaya';
 
 type DocumentGateAccessMethod = 'legal' | 'forged' | 'stolen' | 'bribe' | 'debt' | 'expose' | 'key' | 'violent';
 type DocumentGateAccessOutcome = 'success' | 'failure' | 'theft';
@@ -300,6 +303,46 @@ const BORIS_DEF: PlotNpcDef = {
   ],
 };
 
+const GATE_GUARD_DEF: PlotNpcDef = {
+  name: 'Инспектор Сухарь',
+  isFemale: false,
+  sex: 'male',
+  faction: Faction.LIQUIDATOR,
+  occupation: Occupation.HUNTER,
+  sprite: Occupation.HUNTER,
+  hp: 70, maxHp: 70, money: 15, speed: 0.8,
+  weapon: 'makarov',
+  inventory: [
+    { defId: 'key', count: 1 },
+    { defId: 'makarov', count: 1 },
+    { defId: 'ammo_9mm', count: 8 },
+    { defId: 'official_permit_slip', count: 1 },
+  ],
+  talkLines: [
+    'Сухарь смотрит на корешок так, будто бумага может напасть первой.',
+  ],
+  talkLinesPost: [
+    'Сухарь молча закрывает журнал ладонью.',
+  ],
+};
+
+const GATE_WITNESS_DEF: PlotNpcDef = {
+  name: 'Зина Очевидная',
+  isFemale: true,
+  sex: 'female',
+  faction: Faction.CITIZEN,
+  occupation: Occupation.HOUSEWIFE,
+  sprite: Occupation.HOUSEWIFE,
+  hp: 80, maxHp: 80, money: 12, speed: 0.75,
+  inventory: [{ defId: 'neighbor_complaint', count: 1 }, { defId: 'bread', count: 1 }],
+  talkLines: [
+    'Зина всё видела, но сначала проверяет, кто стоит ближе к двери.',
+  ],
+  talkLinesPost: [
+    'Зина шепчет жалобу так тихо, что ее слышит только журнал.',
+  ],
+};
+
 registerSideQuest('galina_okoshechnaya', GALINA_DEF, [
   {
     id: 'document_gate_official_slip',
@@ -348,6 +391,20 @@ registerSideQuest('boris_bezchekovy', BORIS_DEF, [
     },
   },
 ]);
+
+registerAuthoredNpc({
+  id: GATE_GUARD_ID,
+  npc: GATE_GUARD_DEF,
+  homeFloorKey: storyNpcFloorKey(FloorLevel.MINISTRY),
+  tags: ['ministry', 'document_gate', 'guard'],
+});
+
+registerAuthoredNpc({
+  id: GATE_WITNESS_ID,
+  npc: GATE_WITNESS_DEF,
+  homeFloorKey: storyNpcFloorKey(FloorLevel.MINISTRY),
+  tags: ['ministry', 'document_gate', 'witness'],
+});
 
 function registerDocumentGateContext(ctx: DocumentGateContext): void {
   const existing = documentGateContexts.find(item => item.world === ctx.world && item.roomId === ctx.roomId);
@@ -795,32 +852,19 @@ function addGateContainer(
 
 function spawnGateGuard(entities: Entity[], nextId: NextId, x: number, y: number): number {
   const guardId = nextId.v;
-  spawnNamedCivilian(
-    entities, nextId, 'Инспектор Сухарь', false,
-    x, y, Occupation.HUNTER, Faction.LIQUIDATOR,
-    [
-      { defId: 'key', count: 1 },
-      { defId: 'makarov', count: 1 },
-      { defId: 'ammo_9mm', count: 8 },
-      { defId: 'official_permit_slip', count: 1 },
-    ],
-    'makarov',
-  );
+  requireSpawnedPlotNpcFromPackage(entities, nextId, GATE_GUARD_ID, x + 0.5, y + 0.5, {
+    angle: Math.random() * Math.PI * 2,
+    weapon: 'makarov',
+    canGiveQuest: false,
+  });
   return guardId;
 }
 
 function spawnQueueWitness(entities: Entity[], nextId: NextId, x: number, y: number): void {
-  entities.push({
-    id: nextId.v++, type: EntityType.NPC,
-    x: x + 0.5, y: y + 0.5,
-    angle: Math.PI, pitch: 0,
-    alive: true, speed: 0.75, sprite: Occupation.HOUSEWIFE,
-    name: 'Зина Очевидная', isFemale: true,
-    needs: freshNeeds(), hp: 80, maxHp: 80, money: 12,
-    ai: { goal: AIGoal.IDLE, tx: x, ty: y, path: [], pi: 0, stuck: 0, timer: 0 },
-    inventory: [{ defId: 'neighbor_complaint', count: 1 }, { defId: 'bread', count: 1 }],
-    faction: Faction.CITIZEN, occupation: Occupation.HOUSEWIFE,
-    questId: -1,
+  requireSpawnedPlotNpcFromPackage(entities, nextId, GATE_WITNESS_ID, x + 0.5, y + 0.5, {
+    angle: Math.PI,
+    aiTarget: { x: x + 0.5, y: y + 0.5 },
+    canGiveQuest: false,
   });
 }
 

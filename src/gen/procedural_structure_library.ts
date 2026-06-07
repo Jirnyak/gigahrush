@@ -379,6 +379,31 @@ export function proceduralStructureFamilyForSpec(spec: ProceduralFloorSpec): Pro
   return GEOMETRY_STRUCTURE_FAMILY[spec.geometryId] ?? 'none';
 }
 
+function chooseStructureCueRoom(world: World, rooms: readonly Room[]): Room | undefined {
+  let best: Room | undefined;
+  let bestD2 = Infinity;
+  for (const room of rooms) {
+    const sx = room.x + Math.floor(room.w / 2);
+    const sy = room.y + Math.floor(room.h / 2);
+    const d2 = world.dist2(W / 2, W / 2, sx + 0.5, sy + 0.5);
+    if (
+      !best ||
+      d2 < bestD2 ||
+      (d2 === bestD2 && (
+        room.x < best.x ||
+        (room.x === best.x && room.y < best.y) ||
+        (room.x === best.x && room.y === best.y && room.w < best.w) ||
+        (room.x === best.x && room.y === best.y && room.w === best.w && room.h < best.h) ||
+        (room.x === best.x && room.y === best.y && room.w === best.w && room.h === best.h && room.type < best.type)
+      ))
+    ) {
+      best = room;
+      bestD2 = d2;
+    }
+  }
+  return best;
+}
+
 function registerStructureCue(
   world: World,
   rooms: readonly Room[],
@@ -387,8 +412,9 @@ function registerStructureCue(
   samples: readonly number[],
 ): void {
   if (family === 'none' || samples.length === 0) return;
-  const sx = rooms[0] ? rooms[0].x + Math.floor(rooms[0].w / 2) : W / 2;
-  const sy = rooms[0] ? rooms[0].y + Math.floor(rooms[0].h / 2) : W / 2;
+  const sourceRoom = chooseStructureCueRoom(world, rooms);
+  const sx = sourceRoom ? sourceRoom.x + Math.floor(sourceRoom.w / 2) : W / 2;
+  const sy = sourceRoom ? sourceRoom.y + Math.floor(sourceRoom.h / 2) : W / 2;
   let target = samples[0];
   let best = -1;
   for (const ci of samples) {
@@ -432,7 +458,7 @@ function registerStructureCue(
     targetX: (target % W) + 0.5,
     targetY: ((target / W) | 0) + 0.5,
     floor: spec.baseFloor,
-    roomId: rooms[0]?.id,
+    roomId: sourceRoom?.id,
     zoneId: world.zoneMap[world.idx(sx, sy)],
     label: copy.label,
     hint: copy.hint,

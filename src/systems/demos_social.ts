@@ -16,17 +16,29 @@ import {
   DEMOS_RELATION_MIN,
   DEMOS_SOCIAL_CANDIDATE_TRIES,
   DEMOS_SOCIAL_NPC_SLOTS,
+  DEMOS_SOCIAL_OVERRIDE_CAP,
   DEMOS_SOCIAL_PUBLIC_SLOTS,
   type DemosAuthoredRelationDef,
   DemosSocialRoleId,
+  demosSocialFlagsFromIds,
+  demosSocialRoleIdById,
 } from '../data/demos_social';
+import {
+  getNpcPackage,
+  npcReservedIdentityId,
+  type NpcPackageDef,
+  type NpcSocialLinkDef,
+} from '../data/npc_packages';
 import { getFactionRel } from '../data/relations';
 import {
   alifeNpcRecordCount,
   alifeSeed,
+  findAlifeNpcIdByReservedIdentityId,
   getAlifeNpcRecordSnapshot,
+  packageIdFromReservedIdentityId,
   type AlifeNpcSnapshot,
 } from './alife';
+import type { DemosRelationOverride, DemosSocialSaveState } from './demos_save';
 import { getFactionPlayerRelation } from './npc_relations';
 
 export interface DemosSocialEdgeView {
@@ -99,6 +111,9 @@ interface DemosSocialGraph {
   builtAll: boolean;
   playerOverrides: Map<number, DemosPlayerRelationOverride>;
   overrideKeys: string[];
+  packageAlifeIds: Map<string, number>;
+  socialRef?: DemosSocialSaveState;
+  socialOverrideCount: number;
 }
 
 interface DemosSocialHost {
@@ -304,6 +319,134 @@ function plotIdMapFromSnapshots(
     if (plotNpcId && !out.has(plotNpcId)) out.set(plotNpcId, id);
   }
   return out;
+}
+
+function packageIdForSnapshot(snapshot: AlifeNpcSnapshot): string | undefined {
+  return packageIdFromReservedIdentityId(snapshot.reservedIdentityId);
+}
+
+function packageIdMapFromSnapshots(
+  snapshots: readonly (AlifeNpcSnapshot | undefined)[],
+  total: number,
+): Map<string, number> {
+  const out = new Map<string, number>();
+  for (let id = 1; id <= total; id++) {
+    const snapshot = snapshots[id];
+    if (!snapshot) continue;
+    const packageId = packageIdForSnapshot(snapshot);
+    if (packageId && !out.has(packageId)) out.set(packageId, id);
+  }
+  return out;
+}
+
+function resolvePackageAlifeId(
+  state: GameState,
+  graph: DemosSocialGraph,
+  packageIdInput: string,
+): number | undefined {
+  const packageId = packageIdInput.trim();
+  if (!packageId) return undefined;
+  const cached = graph.packageAlifeIds.get(packageId);
+  if (cached !== undefined) return cached > 0 ? cached : undefined;
+  const pack = getNpcPackage(packageId);
+  const alifeId = findAlifeNpcIdByReservedIdentityId(state, npcReservedIdentityId(packageId), pack?.placement?.homeFloorKey);
+  graph.packageAlifeIds.set(packageId, alifeId ?? 0);
+  return alifeId;
+}
+
+function resolvePackageAlifeIdFromMap(
+  packageIds: ReadonlyMap<string, number>,
+  packageId: string,
+): number | undefined {
+  const alifeId = packageIds.get(packageId);
+  return alifeId && alifeId > 0 ? alifeId : undefined;
+}
+
+function edgeSlotForPackageLink(graph: DemosSocialGraph, sourceId: number, targetId: number): number {
+  let slot = findExistingTargetSlot(graph, sourceId, targetId);
+  if (slot >= 0) return slot;
+  slot = firstEmptySlot(graph, sourceId);
+  return slot;
+}
+
+function setPackageEdgeAtResolvedSlot(
+  graph: DemosSocialGraph,
+  sourceId: number,
+  targetId: number,
+  link: NpcSocialLinkDef,
+  reverse = false,
+): boolean {
+  const slot = edgeSlotForPackageLink(graph, sourceId, targetId);
+  if (slot < 0) return false;
+  const relation = clampRelation(link.relation);
+  const rawFlags = demosSocialFlagsFromIds(link.flags);
+  const role = reverse
+    ? reverseAuthoredRole(demosSocialRoleIdById(link.role))
+    : demosSocialRoleIdById(link.role);
+  return setEdgeAtSlot(graph, sourceId, slot, targetId, relation, relationFlags(relation, rawFlags), role);
+}
+
+function applyPackageLink(
+  graph: DemosSocialGraph,
+  sourceId: number,
+  targetId: number | undefined,
+  link: NpcSocialLinkDef,
+): void {
+  if (targetId === undefined) return;
+  setPackageEdgeAtResolvedSlot(graph, sourceId, targetId, link);
+}
+
+function applyPackageBidirectionalLink(
+  graph: DemosSocialGraph,
+  sourceId: number,
+  targetId: number | undefined,
+  link: NpcSocialLinkDef,
+): void {
+  if (targetId === undefined || sourceId === targetId) return;
+  if (edgeSlotForPackageLink(graph, sourceId, targetId) < 0) return;
+  if (edgeSlotForPackageLink(graph, targetId, sourceId) < 0) return;
+  setPackageEdgeAtResolvedSlot(graph, sourceId, targetId, link);
+  setPackageEdgeAtResolvedSlot(graph, targetId, sourceId, link, true);
+}
+
+function applyPackageRelationsForSource(
+  graph: DemosSocialGraph,
+  source: AlifeNpcSnapshot,
+  pack: NpcPackageDef | undefined,
+  resolveTarget: (packageId: string) => number | undefined,
+): void {
+  const links = pack?.social?.links;
+  if (!links || links.length === 0) return;
+  for (const link of links.slice(0, DEMOS_SOCIAL_NPC_SLOTS)) {
+    const targetId = resolveTarget(link.targetNpcId);
+    if (link.bidirectional) applyPackageBidirectionalLink(graph, source.id, targetId, link);
+    else applyPackageLink(graph, source.id, targetId, link);
+  }
+}
+
+function applyAllPackageRelations(
+  graph: DemosSocialGraph,
+  snapshots: readonly (AlifeNpcSnapshot | undefined)[],
+): void {
+  const byPackageId = packageIdMapFromSnapshots(snapshots, graph.total);
+  if (byPackageId.size === 0) return;
+  for (let id = 1; id <= graph.total; id++) {
+    const source = snapshots[id];
+    if (!source) continue;
+    const packageId = packageIdForSnapshot(source);
+    const pack = packageId ? getNpcPackage(packageId) : undefined;
+    applyPackageRelationsForSource(graph, source, pack, targetPackageId => resolvePackageAlifeIdFromMap(byPackageId, targetPackageId));
+  }
+}
+
+function applyPackageRelationsForLazySource(
+  state: GameState,
+  graph: DemosSocialGraph,
+  source: AlifeNpcSnapshot,
+): void {
+  const packageId = packageIdForSnapshot(source);
+  const pack = packageId ? getNpcPackage(packageId) : undefined;
+  applyPackageRelationsForSource(graph, source, pack, targetPackageId => resolvePackageAlifeId(state, graph, targetPackageId));
 }
 
 function applyAuthoredDirection(
@@ -569,7 +712,49 @@ function graphSignature(state: GameState, seed: number, total: number): string {
   return `${seed}:${total}:${floorKeyCount}:${floorIndexCount}:${populationVersion}`;
 }
 
+function demosSocialState(state: GameState): DemosSocialSaveState | undefined {
+  return (state as GameState & { demosSocial?: DemosSocialSaveState }).demosSocial;
+}
+
+function applySavedRelationOverride(graph: DemosSocialGraph, override: DemosRelationOverride): void {
+  if (override.targetKind !== 'alife') return;
+  if (!validAlifeId(graph, override.fromAlifeId) || !validAlifeId(graph, override.targetAlifeId)) return;
+  if (override.fromAlifeId === override.targetAlifeId) return;
+  let slot = findExistingTargetSlot(graph, override.fromAlifeId, override.targetAlifeId);
+  if (slot < 0) slot = firstEmptySlot(graph, override.fromAlifeId);
+  if (slot < 0) slot = weakestSlot(graph, override.fromAlifeId);
+  const relation = clampRelation(override.value);
+  setEdgeAtSlot(
+    graph,
+    override.fromAlifeId,
+    slot,
+    override.targetAlifeId,
+    relation,
+    relationFlags(relation),
+    roleForRelation(relation),
+  );
+  recordOverride(graph, `${override.fromAlifeId}->alife:${override.targetAlifeId}`);
+}
+
+function applySavedRelationOverridesForSource(
+  graph: DemosSocialGraph,
+  fromAlifeId: number,
+): void {
+  const overrides = graph.socialRef?.relationOverrides;
+  if (!overrides || overrides.length === 0) return;
+  for (const override of overrides) {
+    if (override.fromAlifeId === fromAlifeId) applySavedRelationOverride(graph, override);
+  }
+}
+
+function applyAllSavedRelationOverrides(graph: DemosSocialGraph): void {
+  const overrides = graph.socialRef?.relationOverrides;
+  if (!overrides || overrides.length === 0) return;
+  for (const override of overrides) applySavedRelationOverride(graph, override);
+}
+
 function createGraph(state: GameState, seed: number, total: number, signature: string, alifeRef: AlifeStateLike | undefined): DemosSocialGraph {
+  const social = demosSocialState(state);
   const graph: DemosSocialGraph = {
     signature,
     alifeRef,
@@ -582,6 +767,9 @@ function createGraph(state: GameState, seed: number, total: number, signature: s
     builtAll: false,
     playerOverrides: new Map(),
     overrideKeys: [],
+    packageAlifeIds: new Map(),
+    socialRef: social,
+    socialOverrideCount: social?.relationOverrides.length ?? 0,
   };
   graph.relations.fill(DEMOS_RELATION_EMPTY);
   if (total > DEMOS_FULL_GRAPH_BUILD_LIMIT) return graph;
@@ -589,8 +777,10 @@ function createGraph(state: GameState, seed: number, total: number, signature: s
   for (let id = 1; id <= total; id++) snapshots[id] = getAlifeNpcRecordSnapshot(state, id);
   const buckets = buildBuckets(snapshots, total);
   addFamilyEdges(graph, snapshots, buckets, seed);
-  fillRemainingEdges(graph, snapshots, buckets, seed);
   applyAllAuthoredRelations(graph, snapshots);
+  applyAllPackageRelations(graph, snapshots);
+  fillRemainingEdges(graph, snapshots, buckets, seed);
+  applyAllSavedRelationOverrides(graph);
   graph.initialized.fill(1);
   graph.builtAll = true;
   return graph;
@@ -615,6 +805,8 @@ function initializeLazyRow(state: GameState, graph: DemosSocialGraph, alifeId: n
   const source = getAlifeNpcRecordSnapshot(state, alifeId);
   if (!source) return;
   const seed = graphSeed(graph);
+  applyAuthoredRelationsForSource(state, graph, source);
+  applyPackageRelationsForLazySource(state, graph, source);
   for (let slot = 0; slot < DEMOS_SOCIAL_NPC_SLOTS; slot++) {
     if (graph.targets[edgeOffset(alifeId, slot)] !== 0) continue;
     for (let attempt = 0; attempt < DEMOS_SOCIAL_CANDIDATE_TRIES; attempt++) {
@@ -626,7 +818,7 @@ function initializeLazyRow(state: GameState, graph: DemosSocialGraph, alifeId: n
       if (setEdgeAtSlot(graph, alifeId, slot, targetId, edge.relation, edge.flags, edge.role)) break;
     }
   }
-  applyAuthoredRelationsForSource(state, graph, source);
+  applySavedRelationOverridesForSource(graph, alifeId);
 }
 
 function ensureGraph(state: GameState): DemosSocialGraph {
@@ -634,8 +826,17 @@ function ensureGraph(state: GameState): DemosSocialGraph {
   const total = alifeNpcRecordCount(state);
   const signature = graphSignature(state, seed, total);
   const alifeRef = alifeLike(state);
+  const social = demosSocialState(state);
+  const socialOverrideCount = social?.relationOverrides.length ?? 0;
   const host = state as GameState & DemosSocialHost;
-  if (host.demosSocialGraph?.signature === signature && host.demosSocialGraph.alifeRef === alifeRef) return host.demosSocialGraph;
+  if (
+    host.demosSocialGraph?.signature === signature &&
+    host.demosSocialGraph.alifeRef === alifeRef &&
+    host.demosSocialGraph.socialRef === social &&
+    host.demosSocialGraph.socialOverrideCount === socialOverrideCount
+  ) {
+    return host.demosSocialGraph;
+  }
   host.demosSocialGraph = createGraph(state, seed, total, signature, alifeRef);
   return host.demosSocialGraph;
 }
@@ -776,7 +977,7 @@ export function getDemosSocialGraphStats(state: GameState): DemosSocialGraphStat
 function recordOverride(graph: DemosSocialGraph, key: string): void {
   if (graph.overrideKeys.includes(key)) return;
   graph.overrideKeys.push(key);
-  if (graph.overrideKeys.length <= 8192) return;
+  if (graph.overrideKeys.length <= DEMOS_SOCIAL_OVERRIDE_CAP) return;
   graph.overrideKeys.shift();
 }
 

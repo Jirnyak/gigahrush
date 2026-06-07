@@ -86,6 +86,33 @@ test('entity index type masks filter query results', () => {
   assert.deepEqual(out.map(e => e.id), [2]);
 });
 
+test('entity index type-specific dynamic buckets follow simulation rebuild movement', () => {
+  const index = new EntityIndex();
+  const npc = entity(1, EntityType.NPC, 20, 20);
+  const monster = entity(2, EntityType.MONSTER, 80, 80);
+  const entities = [npc, monster];
+  const out: Entity[] = [];
+
+  index.rebuildForSimulation(entities, 1);
+  index.queryRadius(20, 20, 4, out, ENTITY_MASK_NPC);
+  assert.deepEqual(out.map(e => e.id), [1]);
+  index.queryRadius(80, 80, 4, out, ENTITY_MASK_MONSTER);
+  assert.deepEqual(out.map(e => e.id), [2]);
+
+  npc.x = 96;
+  npc.y = 96;
+  monster.x = 20;
+  monster.y = 20;
+  index.rebuildForSimulation(entities, 2);
+
+  index.queryRadius(20, 20, 4, out, ENTITY_MASK_NPC);
+  assert.deepEqual(out.map(e => e.id), []);
+  index.queryRadius(96, 96, 4, out, ENTITY_MASK_NPC);
+  assert.deepEqual(out.map(e => e.id), [1]);
+  index.queryRadius(20, 20, 4, out, ENTITY_MASK_MONSTER);
+  assert.deepEqual(out.map(e => e.id), [2]);
+});
+
 test('billboard entities are visible but not actors or item drops', () => {
   const index = new EntityIndex();
   index.rebuild([
@@ -134,6 +161,41 @@ test('entity index capped radius query keeps nearest results instead of first bu
 
   assert.equal(count, 2);
   assert.deepEqual(out.map(e => e.id), [3, 1]);
+});
+
+test('entity index capped radius query tie-breaks by stable id instead of storage order', () => {
+  const routesA = [
+    entity(30, EntityType.NPC, 42, 40),
+    entity(10, EntityType.NPC, 42, 40),
+    entity(20, EntityType.NPC, 42, 40),
+  ];
+  const routesB = [...routesA].reverse();
+  const outA: Entity[] = [];
+  const outB: Entity[] = [];
+
+  const indexA = new EntityIndex();
+  indexA.rebuild(routesA);
+  indexA.queryRadiusCapped(40, 40, 4, outA, ENTITY_MASK_NPC, 2);
+
+  const indexB = new EntityIndex();
+  indexB.rebuild(routesB);
+  indexB.queryRadiusCapped(40, 40, 4, outB, ENTITY_MASK_NPC, 2);
+
+  assert.deepEqual(outA.map(e => e.id), [10, 20]);
+  assert.deepEqual(outB.map(e => e.id), [10, 20]);
+});
+
+test('entity index capped radius pruning preserves wrapped bucket ties', () => {
+  const index = new EntityIndex();
+  index.rebuild([
+    entity(10, EntityType.NPC, 2, 40),
+    entity(1, EntityType.NPC, W - 2, 40),
+  ]);
+
+  const out: Entity[] = [];
+  index.queryRadiusCapped(0, 40, 4, out, ENTITY_MASK_NPC, 1);
+
+  assert.deepEqual(out.map(e => e.id), [1]);
 });
 
 test('entity index exposes debug version, entity counts and bucket stats', () => {

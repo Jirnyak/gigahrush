@@ -8,15 +8,19 @@ import {
   Occupation,
   QuestType,
   MonsterKind,
+  FloorLevel,
   type Entity,
 } from '../../core/types';
 import { World } from '../../core/world';
-import { type PlotNpcDef, registerSideQuest } from '../../data/plot';
+import { type PlotNpcDef, registerAuthoredNpc, registerSideQuest, storyNpcFloorKey } from '../../data/plot';
 import {
-  type NextId, createAdminRoom, setFeature, addItemDrop, spawnAdminNpc, spawnNamedCivilian,
+  type NextId, createAdminRoom, setFeature, addItemDrop, spawnAdminNpc,
   spawnAdminMonster,
 } from './admin_common';
 import { genLog } from '../log';
+
+const HOME_FLOOR_KEY = storyNpcFloorKey(FloorLevel.MINISTRY);
+const WITNESS_RIMMA_ID = 'interrogation_witness_rimma';
 
 const LIDIYA_DEF: PlotNpcDef = {
   name: 'Лидия Протокольная',
@@ -47,6 +51,23 @@ const LIDIYA_DEF: PlotNpcDef = {
   ],
 };
 
+const WITNESS_RIMMA_DEF: PlotNpcDef = {
+  name: 'Понятая Римма Нулевая',
+  isFemale: true,
+  faction: Faction.CITIZEN,
+  occupation: Occupation.SECRETARY,
+  sprite: Occupation.SECRETARY,
+  hp: 70, maxHp: 70, money: 15, speed: 0.8,
+  inventory: [{ defId: 'note', count: 1 }],
+  talkLines: [
+    'Я понятая. Нулевая, потому что меня не было до протокола.',
+    'В допросной каждый стул уже что-то подписал.',
+  ],
+  talkLinesPost: [
+    'Если шкаф откроется снова, я этого не видела.',
+  ],
+};
+
 registerSideQuest('lidiya_protokolnaya', LIDIYA_DEF, [
   {
     id: 'interrogation_bandages',
@@ -69,6 +90,13 @@ registerSideQuest('lidiya_protokolnaya', LIDIYA_DEF, [
     relationDelta: 22, xpReward: 120, moneyReward: 220,
   },
 ]);
+
+registerAuthoredNpc({
+  id: WITNESS_RIMMA_ID,
+  npc: WITNESS_RIMMA_DEF,
+  homeFloorKey: HOME_FLOOR_KEY,
+  tags: ['ministry', 'interrogation', 'witness'],
+});
 
 export function generateInterrogationCloset(
   world: World, nextRoomId: number, entities: Entity[], nextId: NextId, spawnX: number, spawnY: number,
@@ -96,7 +124,7 @@ export function generateInterrogationCloset(
   addItemDrop(entities, nextId, room.x + 1, room.y + room.h - 2, 'note', 1);
   addItemDrop(entities, nextId, room.x + room.w - 2, room.y + 2, 'bandage', 1);
   spawnAdminNpc(entities, nextId, LIDIYA_DEF, 'lidiya_protokolnaya', cx + 1, cy - 1, true, 'makarov');
-  spawnNamedCivilian(entities, nextId, 'Понятая Римма Нулевая', true, cx - 1, cy + 1, Occupation.SECRETARY);
+  spawnAdminNpc(entities, nextId, WITNESS_RIMMA_DEF, WITNESS_RIMMA_ID, cx - 1, cy + 1, false);
 
   // Static ambush: already active on floor generation, no quest-engine hook needed.
   spawnAdminMonster(world, entities, nextId, room.x + room.w - 2, room.y + room.h - 2, MonsterKind.SHADOW);

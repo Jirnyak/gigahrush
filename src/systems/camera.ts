@@ -12,6 +12,7 @@ export interface CameraSubject {
   y: number;
   angle: number;
   pitch?: number;
+  alive?: boolean;
 }
 
 export interface CameraPose {
@@ -31,6 +32,7 @@ export interface CameraView extends CameraPose {
 export interface RuntimeCamera {
   mode: CameraMode;
   free: CameraPose;
+  bob: CameraBobState;
 }
 
 export interface FreeCameraMove {
@@ -59,10 +61,27 @@ interface DeathCameraState {
   active: boolean;
 }
 
+interface CameraBobState {
+  phase: number;
+  amount: number;
+  offset: number;
+  lastX: number;
+  lastY: number;
+  ready: boolean;
+}
+
 export const CAMERA_STANDING_HEIGHT = 0.5;
 export const CAMERA_DEATH_FLOOR_HEIGHT = 0.12;
 
 const DEFAULT_CAMERA_FOV_RADIANS = Math.PI / 2;
+const CAMERA_BOB_STEP_RATE = 9.2;
+const CAMERA_BOB_FULL_SPEED = 2.15;
+const CAMERA_BOB_HEIGHT = 0.026;
+const CAMERA_BOB_MIN_MOVE = 0.001;
+const CAMERA_BOB_TELEPORT_DIST = 1.5;
+const CAMERA_BOB_RISE = 8.5;
+const CAMERA_BOB_FALL = 6;
+const CAMERA_BOB_OFFSET_RATE = 16;
 const FREE_CAMERA_SPEED = 5.0;
 const FREE_CAMERA_TURN_SPEED = 2.5;
 const FREE_CAMERA_PITCH_SPEED = 1.6;
@@ -91,11 +110,13 @@ export function createRuntimeCamera(): RuntimeCamera {
   return {
     mode: 'player',
     free: { x: 0, y: 0, angle: 0, pitch: 0, height: CAMERA_STANDING_HEIGHT },
+    bob: createCameraBobState(),
   };
 }
 
 export function resetRuntimeCamera(camera: RuntimeCamera): void {
   camera.mode = 'player';
+  resetCameraBob(camera.bob);
   deathCameraStates.delete(camera);
 }
 
@@ -105,6 +126,7 @@ export function followPlayerCamera(camera: RuntimeCamera): void {
 
 export function setFreeCamera(camera: RuntimeCamera, pose: Partial<CameraPose> & Pick<CameraPose, 'x' | 'y'>): void {
   camera.mode = 'free';
+  resetCameraBob(camera.bob);
   deathCameraStates.delete(camera);
   camera.free = {
     x: wrapCoord(pose.x),
@@ -160,6 +182,7 @@ export function startDeathCamera(
   random: () => number = Math.random,
 ): void {
   camera.mode = 'death';
+  resetCameraBob(camera.bob);
   camera.free = {
     x: wrapCoord(px),
     y: wrapCoord(py),
@@ -171,9 +194,10 @@ export function startDeathCamera(
   deathCameraStates.set(camera, createDeathCameraState(px, py, pAngle, random));
 }
 
-export function updateRuntimeCamera(camera: RuntimeCamera, world: World, dt: number): void {
+export function updateRuntimeCamera(camera: RuntimeCamera, world: World, dt: number, subject?: CameraSubject): void {
   const deathCamera = deathCameraStates.get(camera);
   if (camera.mode === 'death' && deathCamera) updateDeathCamera(deathCamera, world, dt);
+  if (camera.mode === 'player' && subject) updatePlayerCameraBob(camera.bob, world, subject, dt);
 }
 
 export function runtimeCameraView(camera: RuntimeCamera, subject: CameraSubject, fovRadians = DEFAULT_CAMERA_FOV_RADIANS): CameraView {
@@ -198,9 +222,64 @@ export function runtimeCameraView(camera: RuntimeCamera, subject: CameraSubject,
     y: subject.y,
     angle: subject.angle,
     pitch: subject.pitch ?? 0,
-    height: CAMERA_STANDING_HEIGHT,
+    height: playerCameraHeight(camera.bob),
     fovRadians,
   };
+}
+
+function createCameraBobState(): CameraBobState {
+  return { phase: 0, amount: 0, offset: 0, lastX: 0, lastY: 0, ready: false };
+}
+
+function resetCameraBob(bob: CameraBobState): void {
+  bob.phase = 0;
+  bob.amount = 0;
+  bob.offset = 0;
+  bob.lastX = 0;
+  bob.lastY = 0;
+  bob.ready = false;
+}
+
+function updatePlayerCameraBob(bob: CameraBobState, world: World, subject: CameraSubject, dt: number): void {
+  const sx = wrapCoord(subject.x);
+  const sy = wrapCoord(subject.y);
+  if (!bob.ready || dt <= 0) {
+    bob.lastX = sx;
+    bob.lastY = sy;
+    bob.ready = true;
+    return;
+  }
+
+  const dx = world.delta(bob.lastX, sx);
+  const dy = world.delta(bob.lastY, sy);
+  const dist = Math.sqrt(dx * dx + dy * dy);
+  bob.lastX = sx;
+  bob.lastY = sy;
+
+  if (dist > CAMERA_BOB_TELEPORT_DIST || subject.alive === false) {
+    bob.amount = approach(bob.amount, 0, CAMERA_BOB_FALL, dt);
+    bob.offset = approach(bob.offset, 0, CAMERA_BOB_OFFSET_RATE, dt);
+    return;
+  }
+
+  const speed = dist / Math.max(0.001, dt);
+  const speedFrac = Math.min(1, speed / CAMERA_BOB_FULL_SPEED);
+  const target = dist > CAMERA_BOB_MIN_MOVE ? speedFrac * speedFrac : 0;
+  bob.amount = approach(bob.amount, target, target > bob.amount ? CAMERA_BOB_RISE : CAMERA_BOB_FALL, dt);
+  if (target > 0 || bob.amount > 0.001) {
+    bob.phase = (bob.phase + dt * CAMERA_BOB_STEP_RATE) % (Math.PI * 2);
+  }
+  if (bob.amount < 0.0005) bob.amount = 0;
+  bob.offset = approach(bob.offset, Math.sin(bob.phase) * CAMERA_BOB_HEIGHT * bob.amount, CAMERA_BOB_OFFSET_RATE, dt);
+}
+
+function approach(current: number, target: number, rate: number, dt: number): number {
+  const t = 1 - Math.exp(-Math.max(0, rate) * Math.max(0, dt));
+  return current + (target - current) * t;
+}
+
+function playerCameraHeight(bob: CameraBobState): number {
+  return CAMERA_STANDING_HEIGHT + bob.offset;
 }
 
 function createDeathCameraState(px: number, py: number, pAngle: number, random: () => number): DeathCameraState {

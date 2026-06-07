@@ -17,6 +17,7 @@ import { type PlotNpcDef, registerAuthoredNpc, storyNpcFloorKey } from '../../da
 import { spawnArkhivariusKafkin } from './arkhivarius';
 import { spawnPolkovnikStreltsov } from './streltsov';
 import { spawnBufetchitsaGlafira } from './glafira';
+import { requireSpawnedPlotNpcFromPackage } from '../plot_npc_spawn';
 
 const MINISTRY_NPC_TARGET_AT_DEFAULT_CAP = 1000;
 
@@ -229,7 +230,7 @@ export function spawnMinistryNpcs(
 /* ── Spawn a plot NPC at a random floor cell ──────────────────── */
 function spawnPlotNpc(
   world: World, entities: Entity[], nextId: { v: number },
-  plotNpcId: string, def: PlotNpcDef,
+  plotNpcId: string, _def: PlotNpcDef,
 ): void {
   if (!canSpawnEntityType(entities, EntityType.NPC)) return;
   for (let i = 0; i < 2000; i++) {
@@ -238,18 +239,8 @@ function spawnPlotNpc(
     if (world.cells[world.idx(x, y)] !== Cell.FLOOR) continue;
     // Prefer rooms for important NPCs
     if (world.roomMap[world.idx(x, y)] < 0 && i < 1500) continue;
-    entities.push({
-      id: nextId.v++, type: EntityType.NPC,
-      x: x + 0.5, y: y + 0.5,
-      angle: Math.random() * Math.PI * 2, pitch: 0,
-      alive: true, speed: def.speed, sprite: def.sprite,
-      name: def.name, isFemale: def.isFemale,
-      age: def.age, sex: def.sex,
-      needs: freshNeeds(), hp: def.hp, maxHp: def.maxHp, money: def.money, accountRubles: def.accountRubles,
-      ai: { goal: AIGoal.IDLE, tx: 0, ty: 0, path: [], pi: 0, stuck: 0, timer: 0 },
-      inventory: def.inventory.map(i => ({ ...i })),
-      faction: def.faction, occupation: def.occupation,
-      plotNpcId, canGiveQuest: true, questId: -1,
+    requireSpawnedPlotNpcFromPackage(entities, nextId, plotNpcId, x + 0.5, y + 0.5, {
+      angle: Math.random() * Math.PI * 2,
       isTraveler: false,
     });
     return;

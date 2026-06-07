@@ -45,7 +45,7 @@ import {
   SAMOSBOR_DURATION_MIN_SEC,
 } from './procedural_floors';
 import { controlHint } from './controls';
-import { ENTITY_MASK_ACTOR, ENTITY_MASK_VISIBLE, ensureEntityIndex, rebuildEntityIndex } from './entity_index';
+import { ENTITY_MASK_ACTOR, ENTITY_MASK_NPC, ENTITY_MASK_VISIBLE, ensureEntityIndex, rebuildEntityIndex } from './entity_index';
 import { assignPersistentAlifeNpcFromEntity, recordAlifeNpcDeath, rewriteAlifeNpcIdentityFromEntity } from './alife';
 import { getSamosborLocalShelters } from './samosbor_hooks';
 import { replaceCellHazards } from './cell_hazards';
@@ -137,6 +137,7 @@ const ISTOTIT_SHELTER_SEARCH_RADIUS = 46;
 const ISTOTIT_SHELTER_CANDIDATE_CAP = 9;
 const ISTOTIT_SUPPLY_TAG = 'istotit_supply';
 const ISTOTIT_DECISION_RADIUS2 = 4.5 * 4.5;
+const ISTOTIT_DECISION_RADIUS = Math.sqrt(ISTOTIT_DECISION_RADIUS2);
 const PLAYER_SHELTER_DOOR_CAP = 12;
 const UNSHELTERED_HP_DAMAGE = 4;
 const UNSHELTERED_PSI_DAMAGE = 3;
@@ -173,6 +174,7 @@ const RANDOM_NPC_OCCUPATIONS = [
   Occupation.PILGRIM,
   Occupation.HUNTER,
   Occupation.PRIEST,
+  Occupation.PERFORMER,
 ] as const;
 const RANDOM_WALL_TEX = [Tex.CONCRETE, Tex.BRICK, Tex.PANEL, Tex.TILE_W, Tex.METAL, Tex.ROTTEN, Tex.CURTAIN, Tex.DARK, Tex.PIPE, Tex.MEAT, Tex.VOID_WALL, Tex.MARBLE] as const;
 const RANDOM_FLOOR_TEX = [Tex.F_CONCRETE, Tex.F_LINO, Tex.F_TILE, Tex.F_WOOD, Tex.F_CARPET, Tex.F_WATER, Tex.F_MEAT, Tex.F_GUT, Tex.F_VOID, Tex.F_RED_CARPET, Tex.F_GREEN_CARPET, Tex.F_MARBLE_TILE, Tex.F_PARQUET] as const;
@@ -1045,9 +1047,8 @@ function publishIstotitDecision(
 function nearestIstotitNpc(world: World, entities: Entity[], player: Entity, roomId: number): Entity | null {
   let best: Entity | null = null;
   let bestD2 = ISTOTIT_DECISION_RADIUS2;
-  let checked = 0;
-  for (const e of entities) {
-    if (checked++ >= 512) break;
+  ensureEntityIndex(entities).queryRadiusCapped(player.x, player.y, ISTOTIT_DECISION_RADIUS, istotitNpcQuery, ENTITY_MASK_NPC, 64);
+  for (const e of istotitNpcQuery) {
     if (!e.alive || e.type !== EntityType.NPC || e.faction === Faction.WILD) continue;
     const d2 = world.dist2(player.x, player.y, e.x, e.y);
     if (d2 > bestD2) continue;
@@ -1056,6 +1057,7 @@ function nearestIstotitNpc(world: World, entities: Entity[], player: Entity, roo
     best = e;
     bestD2 = d2;
   }
+  istotitNpcQuery.length = 0;
   return best;
 }
 
@@ -1220,28 +1222,53 @@ function stampMaronarySourceMark(world: World, ci: number, seed: number, radius 
   stampMark(world, x, y, 0.5, 0.5, radius, MarkType.MARONARY, seed, 53, 255, 102, 175, world.cells[ci] === Cell.WALL);
 }
 
+interface RankedCellCandidate {
+  idx: number;
+  d2: number;
+  priority: number;
+}
+
+function pushRankedCellCandidate(
+  world: World,
+  out: RankedCellCandidate[],
+  seen: Set<number>,
+  ci: number,
+  cx: number,
+  cy: number,
+  maxRadius: number,
+  priority: number,
+): void {
+  if (seen.has(ci)) return;
+  const x = ci % W;
+  const y = (ci / W) | 0;
+  const d2 = world.dist2(cx + 0.5, cy + 0.5, x + 0.5, y + 0.5);
+  if (d2 > maxRadius * maxRadius) return;
+  seen.add(ci);
+  out.push({ idx: ci, d2, priority });
+}
+
+function compareRankedCellCandidates(a: RankedCellCandidate, b: RankedCellCandidate): number {
+  return a.priority - b.priority || a.d2 - b.d2 || a.idx - b.idx;
+}
+
 function stampMaronarySources(world: World, cx: number, cy: number): number[] {
-  const selected: number[] = [];
-  const r2 = MARONARY_SOURCE_RADIUS * MARONARY_SOURCE_RADIUS;
+  const candidates: RankedCellCandidate[] = [];
+  const seen = new Set<number>();
 
   for (const ci of world.screenCells) {
-    if (selected.length >= MARONARY_SOURCE_CAP) break;
-    const x = ci % W;
-    const y = (ci / W) | 0;
-    if (world.dist2(cx + 0.5, cy + 0.5, x + 0.5, y + 0.5) > r2) continue;
-    selected.push(ci);
+    pushRankedCellCandidate(world, candidates, seen, ci, cx, cy, MARONARY_SOURCE_RADIUS, 0);
   }
 
-  let checkedDoors = 0;
   for (const [di, door] of world.doors) {
-    if (selected.length >= MARONARY_SOURCE_CAP || checkedDoors++ >= 384) break;
     if (door.state === DoorState.LOCKED) continue;
     if (world.aptMask[di]) continue;
-    const x = di % W;
-    const y = (di / W) | 0;
-    if (world.dist2(cx + 0.5, cy + 0.5, x + 0.5, y + 0.5) > r2) continue;
-    selected.push(di);
+    pushRankedCellCandidate(world, candidates, seen, di, cx, cy, MARONARY_SOURCE_RADIUS, 1);
   }
+
+  const selected = candidates
+    .sort(compareRankedCellCandidates)
+    .slice(0, MARONARY_SOURCE_CAP)
+    .map(candidate => candidate.idx);
 
   if (selected.length === 0) {
     const pos = findWalkableNear(world, cx, cy, 1, 10);
@@ -1257,9 +1284,7 @@ function stampMaronarySources(world: World, cx: number, cy: number): number[] {
 function chooseMaronaryWrongDoorClue(world: World, cx: number, cy: number): number {
   let bestIdx = -1;
   let bestD2 = MARONARY_WRONG_DOOR_RADIUS * MARONARY_WRONG_DOOR_RADIUS;
-  let checked = 0;
   for (const [di, door] of world.doors) {
-    if (checked++ >= 512) break;
     if (door.state === DoorState.LOCKED || world.aptMask[di]) continue;
     const x = di % W;
     const y = (di / W) | 0;
@@ -1308,6 +1333,7 @@ function prepareMaronaryWarningClues(
 }
 
 const maronaryGlowActors: Entity[] = [];
+const istotitNpcQuery: Entity[] = [];
 
 function maronaryGlowSourceCenter(ci: number): { x: number; y: number } {
   return { x: (ci % W) + 0.5, y: ((ci / W) | 0) + 0.5 };
@@ -3669,50 +3695,49 @@ export function applySamosborFogEffectAtCellForTests(
 
 function pushVeretarLeakCandidate(
   world: World,
-  out: number[],
+  out: RankedCellCandidate[],
+  seen: Set<number>,
   ci: number,
   cx: number,
   cy: number,
   maxRadius: number,
+  priority: number,
 ): void {
-  if (out.includes(ci)) return;
   if (world.aptMask[ci]) return;
   if (world.cells[ci] !== Cell.FLOOR && world.cells[ci] !== Cell.DOOR) return;
-  const x = ci % W;
-  const y = (ci / W) | 0;
-  if (world.dist2(cx + 0.5, cy + 0.5, x + 0.5, y + 0.5) > maxRadius * maxRadius) return;
-  out.push(ci);
+  pushRankedCellCandidate(world, out, seen, ci, cx, cy, maxRadius, priority);
 }
 
 function pushVeretarLeakFloorNear(
   world: World,
-  out: number[],
+  out: RankedCellCandidate[],
+  seen: Set<number>,
   sx: number,
   sy: number,
   cx: number,
   cy: number,
   maxRadius: number,
+  priority: number,
 ): void {
-  pushVeretarLeakCandidate(world, out, world.idx(sx, sy), cx, cy, maxRadius);
+  pushVeretarLeakCandidate(world, out, seen, world.idx(sx, sy), cx, cy, maxRadius, priority);
   for (let i = 0; i < FOG_DIRS_X.length; i++) {
     const x = world.wrap(sx + FOG_DIRS_X[i]);
     const y = world.wrap(sy + FOG_DIRS_Y[i]);
-    pushVeretarLeakCandidate(world, out, world.idx(x, y), cx, cy, maxRadius);
+    pushVeretarLeakCandidate(world, out, seen, world.idx(x, y), cx, cy, maxRadius, priority);
   }
 }
 
 function collectVeretarLeakCandidates(world: World, cx: number, cy: number, maxRadius: number): number[] {
-  const out: number[] = [];
+  const out: RankedCellCandidate[] = [];
+  const seen = new Set<number>();
   for (const [ci] of world.doors) {
-    pushVeretarLeakCandidate(world, out, ci, cx, cy, maxRadius);
-    if (out.length >= 48) return out;
+    pushVeretarLeakCandidate(world, out, seen, ci, cx, cy, maxRadius, 0);
   }
 
   for (const ci of world.screenCells) {
     const sx = ci % W;
     const sy = (ci / W) | 0;
-    pushVeretarLeakFloorNear(world, out, sx, sy, cx, cy, maxRadius);
-    if (out.length >= 48) return out;
+    pushVeretarLeakFloorNear(world, out, seen, sx, sy, cx, cy, maxRadius, 1);
   }
 
   for (let dy = -maxRadius; dy <= maxRadius; dy++) {
@@ -3722,14 +3747,13 @@ function collectVeretarLeakCandidates(world: World, cx: number, cy: number, maxR
       const y = world.wrap(cy + dy);
       const ci = world.idx(x, y);
       if (world.features[ci] === Feature.SCREEN || world.features[ci] === Feature.LIFT_BUTTON) {
-        pushVeretarLeakFloorNear(world, out, x, y, cx, cy, maxRadius);
+        pushVeretarLeakFloorNear(world, out, seen, x, y, cx, cy, maxRadius, 2);
       }
-      if (out.length >= 64) return out;
     }
   }
 
-  for (let dy = -maxRadius; dy <= maxRadius && out.length < 64; dy++) {
-    for (let dx = -maxRadius; dx <= maxRadius && out.length < 64; dx++) {
+  for (let dy = -maxRadius; dy <= maxRadius; dy++) {
+    for (let dx = -maxRadius; dx <= maxRadius; dx++) {
       if (dx * dx + dy * dy > maxRadius * maxRadius) continue;
       const x = world.wrap(cx + dx);
       const y = world.wrap(cy + dy);
@@ -3738,14 +3762,17 @@ function collectVeretarLeakCandidates(world: World, cx: number, cy: number, maxR
       for (let i = 0; i < FOG_DIRS_X.length; i++) {
         const ni = world.idx(world.wrap(x + FOG_DIRS_X[i]), world.wrap(y + FOG_DIRS_Y[i]));
         if (world.cells[ni] === Cell.WALL) {
-          pushVeretarLeakCandidate(world, out, ci, cx, cy, maxRadius);
+          pushVeretarLeakCandidate(world, out, seen, ci, cx, cy, maxRadius, 3);
           break;
         }
       }
     }
   }
 
-  return out;
+  return out
+    .sort(compareRankedCellCandidates)
+    .slice(0, 64)
+    .map(candidate => candidate.idx);
 }
 
 /* ── Spawn monsters in corridors ──────────────────────────────── */

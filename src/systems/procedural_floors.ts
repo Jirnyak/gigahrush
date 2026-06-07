@@ -36,6 +36,10 @@ import {
   floorKeyForProcedural,
   floorKeyForStory,
 } from './floor_keys';
+import {
+  routeDirectionBlockedByClosedGate,
+  routeGateDirectionIsClosed,
+} from './route_gates';
 import { portalBlocksDesignFloor } from './platform_bridge';
 
 export interface FloorRunState {
@@ -451,17 +455,10 @@ export function currentFloorRunEntry(state: GameState): FloorRunEntry {
   };
 }
 
-export function podadLowerRouteOpen(state: GameState): boolean {
-  return state.quests.some(q =>
-    q.targetMonsterKind === MonsterKind.HERALD &&
-    (q.killNeeded ?? 0) >= 3 &&
-    (q.done || (q.killCount ?? 0) >= (q.killNeeded ?? 3)));
-}
-
 export function resolveFloorRunRoute(state: GameState, direction: LiftDirection): FloorRunEntry | null {
   const run = ensureFloorRunState(state);
   const current = entryForZ(state, run.currentZ);
-  if (current?.designFloorId === 'podad' && direction === LiftDirection.DOWN && !podadLowerRouteOpen(state)) return null;
+  if (current && routeDirectionBlockedByClosedGate(floorRunEntryFloorKey(current), direction, state)) return null;
   const dz = direction === LiftDirection.DOWN ? -1 : 1;
   const targetZ = run.currentZ + dz;
   if (targetZ < FLOOR_RUN_MIN_Z || targetZ > FLOOR_RUN_MAX_Z) return null;
@@ -570,9 +567,12 @@ export function floorRunEntryLiftLabel(entry: FloorRunEntry): string {
   return `${kind} Z${formatFloorZ(entry.z)}${routeId}: ${name}`;
 }
 
-export function floorRunEntryLiftDirections(entry: FloorRunEntry, podadDownOpen = false): LiftDirection[] {
+export function floorRunEntryLiftDirections(
+  entry: FloorRunEntry,
+  openGateIds?: ReadonlySet<string>,
+): LiftDirection[] {
   const directions: LiftDirection[] = [];
-  if (entry.z > FLOOR_RUN_MIN_Z && (entry.designFloorId !== 'podad' || podadDownOpen)) {
+  if (entry.z > FLOOR_RUN_MIN_Z && !routeGateDirectionIsClosed(floorRunEntryFloorKey(entry), LiftDirection.DOWN, openGateIds)) {
     directions.push(LiftDirection.DOWN);
   }
   if (entry.z < FLOOR_RUN_MAX_Z) directions.push(LiftDirection.UP);

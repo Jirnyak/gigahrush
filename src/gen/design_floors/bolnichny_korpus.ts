@@ -27,13 +27,16 @@ import {
 import { World } from '../../core/world';
 import { hashSeed, withSeededRandom } from '../../core/rand';
 import { freshNeeds } from '../../data/catalog';
-import { type PlotNpcDef, registerSideQuest } from '../../data/plot';
+import { designNpcFloorKey, type PlotNpcDef, registerFloorSideQuest } from '../../data/plot';
 import { MONSTERS } from '../../entities/monster';
 import { monsterSpr, Spr } from '../../render/sprite_index';
 import { placeEmergencyPanel } from '../../systems/emergency_panels';
 import { randomRPG } from '../../systems/rpg';
+import { requireSpawnedPlotNpcFromPackage } from '../plot_npc_spawn';
 import { ensureConnectivity, generateZones, sanitizeDoors, stampRoom } from '../shared';
 import type { FloorGeneration } from '../floor_manifest';
+
+const DESIGN_NPC_HOME_FLOOR_KEY = designNpcFloorKey('bolnichny_korpus');
 
 export const BOLNICHNY_KORPUS_ROUTE_ID = 'bolnichny_korpus' as const;
 export const BOLNICHNY_KORPUS_Z = 16 as const;
@@ -276,7 +279,7 @@ const NPC_DEFS: Record<BolnichnyNpcId, PlotNpcDef> = {
   },
 };
 
-registerSideQuest('bolnichny_doctor_galina', NPC_DEFS.bolnichny_doctor_galina, [
+registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'bolnichny_doctor_galina', NPC_DEFS.bolnichny_doctor_galina, [
   {
     id: 'bolnichny_treat_clean_ward',
     giverNpcId: 'bolnichny_doctor_galina',
@@ -297,7 +300,7 @@ registerSideQuest('bolnichny_doctor_galina', NPC_DEFS.bolnichny_doctor_galina, [
   },
 ]);
 
-registerSideQuest('bolnichny_pharmacist_ira', NPC_DEFS.bolnichny_pharmacist_ira, [
+registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'bolnichny_pharmacist_ira', NPC_DEFS.bolnichny_pharmacist_ira, [
   {
     id: 'bolnichny_steal_morphine',
     giverNpcId: 'bolnichny_pharmacist_ira',
@@ -318,7 +321,7 @@ registerSideQuest('bolnichny_pharmacist_ira', NPC_DEFS.bolnichny_pharmacist_ira,
   },
 ]);
 
-registerSideQuest('bolnichny_liquidator_sazan', NPC_DEFS.bolnichny_liquidator_sazan, [
+registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'bolnichny_liquidator_sazan', NPC_DEFS.bolnichny_liquidator_sazan, [
   {
     id: 'bolnichny_kill_black_ward',
     giverNpcId: 'bolnichny_liquidator_sazan',
@@ -338,7 +341,7 @@ registerSideQuest('bolnichny_liquidator_sazan', NPC_DEFS.bolnichny_liquidator_sa
   },
 ]);
 
-registerSideQuest('bolnichny_patient_grisha', NPC_DEFS.bolnichny_patient_grisha, [
+registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'bolnichny_patient_grisha', NPC_DEFS.bolnichny_patient_grisha, [
   {
     id: 'bolnichny_treat_infected_ward',
     giverNpcId: 'bolnichny_patient_grisha',
@@ -374,7 +377,7 @@ registerSideQuest('bolnichny_patient_grisha', NPC_DEFS.bolnichny_patient_grisha,
   },
 ]);
 
-registerSideQuest('bolnichny_clerk_nina', NPC_DEFS.bolnichny_clerk_nina, [
+registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'bolnichny_clerk_nina', NPC_DEFS.bolnichny_clerk_nina, [
   {
     id: 'bolnichny_forge_clearance',
     giverNpcId: 'bolnichny_clerk_nina',
@@ -1357,39 +1360,20 @@ function spawnPlotNpc(
   entities: Entity[],
   nextId: NextId,
   npcId: BolnichnyNpcId,
-  def: PlotNpcDef,
+  _def: PlotNpcDef,
   x: number,
   y: number,
   angle: number,
-  weapon = def.weapon,
+  weapon?: string,
 ): number {
-  const id = nextId.v++;
-  entities.push({
-    id,
-    type: EntityType.NPC,
-    x: x + 0.5,
-    y: y + 0.5,
+  const px = x + 0.5;
+  const py = y + 0.5;
+  const npc = requireSpawnedPlotNpcFromPackage(entities, nextId, npcId, px, py, {
     angle,
-    pitch: 0,
-    alive: true,
-    speed: def.speed,
-    sprite: def.sprite,
-    name: def.name,
-    isFemale: def.isFemale,
-    needs: freshNeeds(),
-    hp: def.hp,
-    maxHp: def.maxHp,
-    money: def.money,
-    ai: { goal: AIGoal.IDLE, tx: x + 0.5, ty: y + 0.5, path: [], pi: 0, stuck: 0, timer: 0 },
-    inventory: def.inventory.map(item => ({ ...item })),
     weapon,
-    faction: def.faction,
-    occupation: def.occupation,
-    plotNpcId: npcId,
-    canGiveQuest: true,
-    questId: -1,
+    aiTarget: { x: px, y: py },
   });
-  return id;
+  return npc.id;
 }
 
 function spawnAmbientNpc(

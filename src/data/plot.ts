@@ -1,6 +1,6 @@
 /* ── Story plot data — quest chain + story NPC definitions ────── */
 /* To grow the story:                                              */
-/*   1. Add NPC to PLOT_NPCS (id, dialogue, stats)                */
+/*   1. Add main plot NPC package to npc_plot_packages.ts         */
 /*   2. Append steps to PLOT_CHAIN (giver → target / item)        */
 /*   3. Create room generator in gen/living/ (optional)            */
 /*   4. Add room spec to plot_rooms.ts (optional)                  */
@@ -8,6 +8,7 @@
 import {
   type CharacterSex,
   type Entity,
+  type Item,
   type Quest,
   type WorldEventPrivacy,
   type WorldEventSeverity,
@@ -19,6 +20,18 @@ import {
 } from '../core/types';
 import type { QuestRouteTarget } from './contracts';
 import { designFloorAtZ, designFloorById } from './design_floors';
+import {
+  MAIN_PLOT_NPC_PACKAGES,
+} from './npc_plot_packages';
+import {
+  allNpcPackages,
+  getNpcPackageByPlotNpcId,
+  npcPackageDisplayName,
+  plotNpcIdFromPackage,
+  registerNpcPackageFromPlotNpc,
+  registerNpcPackages,
+  type NpcPackageDef,
+} from './npc_packages';
 
 /* ── Story NPC definition ─────────────────────────────────────── */
 export interface PlotNpcDef {
@@ -29,8 +42,12 @@ export interface PlotNpcDef {
   faction: Faction;
   occupation: Occupation;
   sprite: number;
+  /** Optional world sprite scale for authored visual size. */
+  spriteScale?: number;
   /** Optional visual generator family; sprite remains the atlas/fallback slot. */
   npcVisualId?: string;
+  /** Optional authored AI override; ordinary occupation routine remains fallback. */
+  specialRoutineId?: string;
   /** Stable route key where A-Life reserves this authored NPC. */
   homeFloorKey?: string;
   hp: number;
@@ -67,335 +84,70 @@ export function designNpcFloorKey(routeId: string): string {
   return routeId.startsWith('design:') ? routeId : `design:${routeId}`;
 }
 
-/* ── Story NPC registry ───────────────────────────────────────── */
-export const PLOT_NPCS: Record<string, PlotNpcDef> = {
-  olga: {
-    name: 'Ольга Дмитриевна',
-    isFemale: true,
-    age: 31,
-    sex: 'female',
-    faction: Faction.SCIENTIST,
-    occupation: Occupation.DOCTOR,
-    sprite: Occupation.DOCTOR,
-    homeFloorKey: storyNpcFloorKey(FloorLevel.LIVING),
-    hp: 1000, maxHp: 1000, level: 10, money: 50, speed: 1.2,
-    inventory: [
-      { defId: 'bandage', count: 3 },
-      { defId: 'pills', count: 1 },
-      { defId: 'water', count: 2 },
-      { defId: 'bread', count: 2 },
-    ],
-    talkLines: [
-      'Руки покажи. Дрожат, но жить будешь. Я Ольга Дмитриевна, врач; поешь, проверь сумку и иди к сержанту Баринову за стволом.',
-      'WASD — ходить, мышь — смотреть. Не крутись в панике, в углу потом трудно перевязывать.',
-      'E — поговорить, открыть дверь, проверить шкаф. Сначала смотри, кто рядом, потом тянись рукой.',
-      'I — сумка. Хлеб, вода, бинт должны быть с собой. Кушайте вовремя.',
-      'Пробел или ЛКМ — удар и выстрел. Сержант Баринов даст ствол, а ты не маши им по людям.',
-      'Кровь пошла — сразу бинт. Не жди, пока ботинок начнёт хлюпать.',
-      'Сирена — это САМОСБОР. Идёшь к ближайшей герме, закрываешь дверь и сидишь тихо.',
-      'Фиолетовый туман не нюхай. Увидел в коридоре — назад, к двери, без разговоров.',
-      'M — карта. Найди ближайшую герму и запомни путь ногами, не только глазами.',
-      'Q — журнал заданий: кто просит, куда идти, чем платит. N — НЕТ-СФЕРА, но воду, еду и талоны проверяй руками.',
-    ],
-    talkLinesPost: [
-      'Руки покажи. Обе. Чистые руки тут редкость, но грязные раны хуже.',
-      'Приходи, если ранен. Только кровь с пола за собой вытри, я одна на смене.',
-      'Бинтов мало. Порезался — перевязался, потом споришь.',
-      'Кушайте вовремя.',
-      'Пей воду заранее. Когда язык сухой, таблетки глотать нечем.',
-      'Кипяток держи при себе. Сегодня труба даёт, завтра может хрипеть и плеваться ржавчиной.',
-      'Не спорь с гермодверью, милый. Закрылась — значит сидишь и ждёшь отбоя.',
-      'Если сержант Баринов орёт, слушай, что он говорит. Громкость у него рабочая.',
-      'Якову не давай мерить себя без причины. Потом будешь чесаться и ругаться на меня.',
-      'Талон на воду не пей. Талон показывают, воду берегут, кружку не теряют.',
-      'Перед вылазкой проверь сумку: вода, бинт, еда, патроны. Характер я не перевяжу.',
-      'После самосбора не беги первым в коридор. Дай пыли сесть и послушай дверь.',
-      'Медпункт открыт, пока я стою. Если меня нет — бинт слева, журнал не трогать.',
-      'Устал? Сядь, поешь, дыхание выровняй. Потом уже иди к лифту.',
-      'Зелёный свет увидел — не пялься. Глаза у нас без обменного фонда.',
-      'Мне на обход. Береги себя и не ходи один, если коридор стал другим.',
-    ],
-    talkQuestResponse: 'Стрельбу видел, Баринов жив, значит, вводная закончилась. Держи бинты, воду и хлеб. Теперь реальная работа: сходи к моему коллеге Якову Давидовичу. Он изучает природу Самосбора, и ему нужны не лишние руки в лаборатории, а человек для поля.',
-  },
+/* ── Story NPC package adapter ───────────────────────────────── */
 
-  barni: {
-    name: 'Сержант Баринов',
-    isFemale: false,
-    age: 39,
-    sex: 'male',
-    faction: Faction.LIQUIDATOR,
-    occupation: Occupation.HUNTER,
-    sprite: Occupation.HUNTER,
-    homeFloorKey: storyNpcFloorKey(FloorLevel.LIVING),
-    hp: 1200, maxHp: 1200, level: 10, money: 80, speed: 1.4,
-    inventory: [
-      { defId: 'makarov', count: 1 },
-      { defId: 'ammo_9mm', count: 8 },
-      { defId: 'canned', count: 1 },
-    ],
-    talkLines: [
-      'Сержант Баринов. Макаров и восемь патронов получишь, но ствол не обещание: он покупает дверь и секунду.',
-      'Мишень стоит. Тварь бежит. Учись попадать до коридора.',
-      'Макаров не спасает сам. Он даёт секунду добежать до двери.',
-      'Магазин проверяй у стойки. В коридоре поздно щёлкать пустым.',
-      'Ствол дрожит — держи двумя руками. Руки дрожат — всё равно держи.',
-      'Своих стволом не води. За такое здесь быстро учат.',
-      'Самосбор завыл — к герме. Не в угол, не к слухам, к герме.',
-      'Бетонника ножом не ковыряй. Держи дистанцию и дверь за спиной.',
-      'Сборка лезет быстро. Не стой прямо, уходи за угол.',
-      'Мишени на стене - стреляй сколько хочешь. Следы от пуль видно.',
-      'Вот Макаров. Стреляй. Следы от пуль видно.',
-      'Самопал бьёт криво. Близко работает, далеко тратит шум.',
-      'Патрон кончается раньше, чем новичок думает.',
-      'Боишься — нормально. Только двигайся.',
-    ],
-    talkLinesPost: [
-      'К Ольге сходил? Значит, паёк есть. Не трать его на бег по кругу.',
-      'Макаров держи сухим. Мокрый ствол клинит без предупреждения.',
-      'Перед вылазкой считай: магазин, вода, бинт, дверь назад.',
-      'Тварь слышишь — не ищи лицо. Ищи угол и дистанцию.',
-      'Своих узнавай до выстрела. После выстрела поздно.',
-      'Самосбор начнётся — бросай спор и иди к герме.',
-      'Патроны на полу не валяются просто так. Кто-то их не донёс.',
-    ],
-    talkQuestResponse: 'Вот Макаров и восемь патронов. Стреляй по мишени, следы от пуль видно. Потом к Ольге: без воды и бинта в коридор не лезь.',
-  },
+registerNpcPackages(MAIN_PLOT_NPC_PACKAGES);
 
-  yakov: {
-    name: 'Яков Давидович',
-    isFemale: false,
-    age: 61,
-    sex: 'male',
-    faction: Faction.SCIENTIST,
-    occupation: Occupation.SCIENTIST,
-    sprite: Occupation.SCIENTIST,
-    homeFloorKey: storyNpcFloorKey(FloorLevel.LIVING),
-    hp: 800, maxHp: 800, level: 10, money: 60, speed: 1.0,
-    inventory: [
-      { defId: 'psi_strike', count: 1 },
-      { defId: 'antidep', count: 1 },
-    ],
-    talkLines: [
-      'Вы ко мне по рекомендации Ольги Дмитриевны? Она хорошая коллега. Если вы не боитесь полевой работы, начнём.',
-      'Яков Давидович, НИИ, ПСИ-исследования. Меня интересуют не чудеса, а повторяемость, вредный эффект и журнал эксперимента.',
-      'Экспериментальные данные по Самосбору грязные, но полезные. Если образец реагирует на свет, пульс и сирену, это уже модель.',
-      'Я изучаю природу Самосбора. В лаборатории мне нужен лаборант, а в коридоре - человек, который донесёт образец целым.',
-      'Культы Чернобога слишком часто появляются рядом с самосборными следами. Я не верю в культ, но верю в совпадения, которые повторяются.',
-      'Протокол простой: банку не вскрывать, держать в сухом прохладном месте, после контакта заполнить журнал эксперимента. Вы ещё здесь?',
-      'ПСИ-сгусток — инструмент. Он даёт результат, расходует ПСИ и оставляет отдачу; это не фокус и не молитва.',
-    ],
-    talkLinesPost: [
-      'Коллега, не кладите сгусток рядом с хлебом. Крошки в протоколе потом выглядят как новая форма жизни.',
-      'Прибор врёт, но врёт последовательно. Для модели это почти подарок, если не стоять рядом.',
-      'Если эффект немыслим, но повторяем, мы называем его экспериментальными данными и усиливаем тару.',
-      'Если образец просит открыть банку голосом матери, банку не открывать. Мать тоже впускать только после проверки.',
-      'Я не верю в Чернобога. Я верю в журналы эксперимента, контрольные группы и сухие крышки.',
-      'Шкаф химзащиты был заперт. Сейчас в нём один костюм, две банки и запись, что доступ был закрыт.',
-      'Протокол четыре-Б: после контакта йод, пульс, запись. Бумагу после чтения не облизывать.',
-      'Образец номер семнадцать шевелится только при начальстве. Для отчёта пишем: реакция на административный шум.',
-      'В журнале эксперимента кто-то вписал вашу фамилию карандашом. Сотрите после разговора, но не голой рукой.',
-      'Формалин закончился утром. К обеду две банки начали вести себя активнее лаборантов.',
-      'ПСИ-сгусток - инструмент, не фокус. У инструмента есть цена, отдача и графа для побочного эффекта.',
-      'Не вскрывать в лифте, коллега. Лифт даёт нам слишком много неконтролируемых переменных.',
-      'После Самосбора голубая проба стала легче на грамм. В модели это плохо, в протоколе - срочно.',
-      'Культисты называют это знаком. Я называю это грязной выборкой с опасно хорошей повторяемостью.',
-      'Иван Захаров, мой бывший студент, не справился с базовой программой по топологии и был исключён. В коридорах его теперь зовут Ванькой Банчиным.',
-    ],
-    talkQuestResponse: 'Вы ко мне по рекомендации Ольги Дмитриевны? Она хорошая коллега, так что допуск дам. Мне нужен полевой помощник: культ Чернобога слишком часто совпадает с Самосбором. Возьмите сгусток, научитесь им пользоваться и принесите мне идол Чернобога целым.',
-  },
+function cloneItems(items: readonly Item[] | undefined): { defId: string; count: number }[] {
+  return (items ?? []).map(item => ({ defId: item.defId, count: item.count }));
+}
 
-  vanka: {
-    name: 'Ванька Банчиный',
-    isFemale: false,
-    age: 25,
-    sex: 'male',
-    faction: Faction.CULTIST,
-    occupation: Occupation.ALCOHOLIC,
-    sprite: Occupation.ALCOHOLIC,
-    homeFloorKey: storyNpcFloorKey(FloorLevel.LIVING),
-    hp: 300, maxHp: 300, level: 2, money: 5, speed: 0.9,
-    inventory: [
-      { defId: 'bread', count: 1 },
-      { defId: 'cigs', count: 2 },
-    ],
-    talkLines: [
-      'А?! Тише. Не ты. Наверное не ты. Банка сама звякнула.',
-      'Батарея шептала до сирены. Сначала шепчет, потом дверь просит открыть. Не открывай.',
-      'Ванька не врал. Ванька только видел: тень у Петли не сзади была, а спереди. Встань к свету.',
-      'Петля бросается с угла. После первого рывка шагни назад, а не вперёд, понял?',
-      'Если тень сжалась по краю - фонарь держи между собой и углом. Она тогда злится, но промахивается.',
-      'Черный идол не в храме ищи. В кладовке, под мокрой тряпкой, где банки потеют без жары.',
-      'Не шуми у кладовки. Там сосед без лица, но с чужой кружкой, и Ванька туда больше не лезет.',
-      'Фиолетовый туман не дым. Дым кашляет, а этот считает двери. Две двери лучше одной.',
-      'Я видел номер. Ноль восемь девять. Лифт теплый был, кнопка будто после языка.',
-      'Культист с пакетом хлеба не всегда добрый. Сначала хлеб, потом вопрос, потом твоя фамилия в углу.',
-      'Сосед если стоит слишком ровно и не моргает - не здоровайся близко. Нелюдь любит вежливых.',
-      'Не я открыл. Я только спросил, кто там. Дверь потом неделю отвечала моим голосом.',
-      'Теневик не любит широкий проход. В тесном углу он как рука в рукаве, а на свету рукав пустой.',
-      'Я не Ванька. Иван Захаров был в журнале, пока топология не съела журнал. Базовую программу я не сдал, зато дверь теперь сама доказывает.',
-      'Грудь вытянулась после зачёта. Яков сказал: деформация модели. А я слышал, как спички внутри щёлкают по клеткам.',
-      'Спички не кости. Спички помнят, где был угол до перестановки. Только не считай вслух.',
-      'Сгусток после Петли в банку. Крышку не трогай. Оно считало имена, пока Ванька спал.',
-      'Якову неси. Он с такими банками умеет: номер, пломба, журнал, и никому на кухне не показывать.',
-      'Тише. У соседней кладовки кто-то шарит по банкам. Если звякнет три раза, Ванька не с вами.',
-    ],
-    talkLinesPost: [
-      'Тише стало. Теперь батарея шепчет по одному слову, не хором.',
-      'Петля ушла, а гвоздь остался. Видишь? Нет? И хорошо.',
-      'Ванька теперь боится углов по порядку. Это лучше, чем всех сразу.',
-      'Банку Якову отдал? И похожие банки не открывай. Крышка целая - голова целее.',
-      'Яков опять Иваном назвал? Пусть сам сдаёт топологию, когда стены утром поменялись местами.',
-      'Спасибо не надо. Просто если дверь спросит Ваньку, скажи: не я.',
-    ],
-    talkQuestResponse: 'Яков послал? Иваном Захаровым назвал? Значит, всё ещё сердится за топологию. Слушай быстро: Петля был жильцом, потом тень пошла впереди. Теневики рядом с Самосбором ходят, Ванька это видел. Убей Петлю в широком коридоре, держи свет, после рывка отходи, а холодный сгусток неси Якову закрытым. Крышку не трогай.',
-  },
+function cloneQuestResponse(response: string | readonly string[] | undefined): string | readonly string[] | undefined {
+  if (Array.isArray(response)) return [...response];
+  return response;
+}
 
-  major_grom: {
-    name: 'Майор Громный',
-    isFemale: false,
-    age: 50,
-    sex: 'male',
-    faction: Faction.LIQUIDATOR,
-    occupation: Occupation.HUNTER,
-    sprite: Occupation.HUNTER,
-    homeFloorKey: storyNpcFloorKey(FloorLevel.MAINTENANCE),
-    hp: 10000, maxHp: 10000, level: 10, money: 120, speed: 1.5,
-    inventory: [
-      { defId: 'makarov', count: 1 },
-      { defId: 'ammo_9mm', count: 12 },
-      { defId: 'canned', count: 2 },
-      { defId: 'bandage', count: 2 },
-    ],
-    talkLines: [
-      'Живой? Докладывай коротко. Мокрый фильтр потом обсудим.',
-      'Майор Громный. Форпост коллекторов держит трубу между водой, тварью и людьми за дверью.',
-      'Здесь не храбрость нужна, а ноги, патроны и чтобы дверь закрылась с первого раза.',
-      'Боекомплект считай до выхода. Внизу магазин короче страха.',
-      'Три коротких по трубе - отход. Два длинных - несут раненого. Никаких песен.',
-      'Страшно - нормально. Глупо - нет. Страх слушай, глупость оставляй наверху.',
-      'Патруль ходит парой. Один смотрит под ноги, второй - в темноту. Самодеятельность хоронят отдельно.',
-      'Фильтр намочил - меняй. Не кашляй для вида, а докладывай и отходи.',
-      'Манкобус не страшный. Страшный тот, кто пошел на него без второго магазина.',
-      'Если Яков опять прислал гражданского с банкой, банку на пол не ставить.',
-      'Раненого не тащат красиво. Тащат быстро, по сухому краю, с оружием впереди.',
-      'Сектор живой, пока в нем есть порядок: кто стреляет, кто закрывает, кто считает.',
-    ],
-    talkLinesPost: [
-      'Форпост держим. Три коротких по трубе услышишь - не спрашивай, отходи.',
-      'Патруль вернулся не весь. Маршрут пока рабочий, потери записаны.',
-      'Якову привет. И скажи, чтобы меньше верил приборам, которые потеют.',
-      'Мокрый фильтр меняем, не сушим на трубе. Боекомплект считаем по людям, не по красивому расчёту.',
-      'За этой трубой люди. Поэтому стоим здесь, а не где суше.',
-      'Если принес доклад - говори. Если принес страх - ставь рядом, он тут у всех есть.',
-    ],
-    talkQuestResponse: 'Яков прислал? Принял. Значит, он закончил с банками и отправил тебя туда, где от полевого человека есть польза. Чем ниже, тем ближе к Самосбору и тем меньше красивых версий. Отбей сектор, убери тварей, не лезь один за рапортом. Вернешься живым - получишь бумагу про теневиков и патроны.',
-  },
+export function plotNpcDefFromPackage(pack: NpcPackageDef): PlotNpcDef {
+  const sex = pack.demographics.sex;
+  return {
+    name: npcPackageDisplayName(pack),
+    isFemale: sex === 'female',
+    age: pack.demographics.age,
+    sex,
+    faction: pack.affiliation.faction,
+    occupation: pack.affiliation.occupation,
+    sprite: pack.visual.sprite ?? pack.affiliation.occupation,
+    npcVisualId: pack.visual.npcVisualId,
+    specialRoutineId: pack.runtime?.specialRoutineId,
+    homeFloorKey: pack.placement.homeFloorKey,
+    hp: pack.runtime?.hp ?? pack.runtime?.maxHp ?? 100,
+    maxHp: pack.runtime?.maxHp ?? pack.runtime?.hp ?? 100,
+    level: pack.rpg.level,
+    money: pack.wealth.cashRubles ?? 0,
+    accountRubles: pack.wealth.accountRubles,
+    speed: pack.runtime?.speed ?? 1.2,
+    weapon: pack.loadout.weapon,
+    inventory: cloneItems(pack.loadout.inventory),
+    authoredTags: pack.tags,
+    talkLines: [...(pack.speech.talkLines ?? [])],
+    talkLinesPost: [...(pack.speech.talkLinesPost ?? [])],
+    talkQuestResponse: cloneQuestResponse(pack.speech.talkQuestResponse),
+  };
+}
 
-  hell_contact: {
-    name: 'Никанор Обожжённый',
-    isFemale: false,
-    age: 46,
-    sex: 'male',
-    faction: Faction.CULTIST,
-    occupation: Occupation.PILGRIM,
-    sprite: Occupation.PILGRIM,
-    homeFloorKey: storyNpcFloorKey(FloorLevel.HELL),
-    hp: 900, maxHp: 900, level: 10, money: 12, speed: 0.9,
-    inventory: [
-      { defId: 'holy_water', count: 1 },
-      { defId: 'antidep', count: 1 },
-      { defId: 'cigs', count: 2 },
-    ],
-    talkLines: [
-      'Тише. Не зови это адом. Это нижний мокрый цех: лифт врёт, пол липнет, Вестники держат проход.',
-      'Громный прислал живого? Сядь у свечи. Манкобус больше не держит проход, но Вестники ещё сторожат порог.',
-      'Не называй Чернобога вслух. У меня от прошлой попытки ладонь в бинт прилипала два дня.',
-      'Вестники не за культ. Они держат заглушку у прохода; пока живы, ниже не пройти нормально.',
-      'Культ тут не молится громко: охрана, ведро, список, свеча и долг на мокрой бумаге.',
-    ],
-    talkLinesPost: [
-      'Не верь голосу из двери. Обещает выход - значит, уже держит ручку.',
-      'Фазовый сгусток береги. Третий Вестник сидит за стеной, вода к нему не доходит.',
-      'В углу свет погас. Свечу не гаси: до Марфы два мокрых поворота и дверь без ручки.',
-      'Если стена теплая, не грей руки. Отойди и проверь, нет ли за ней мясной заслонки.',
-    ],
-    talkQuestResponse: 'Живой после лифта? Тише. Марфа у порога считает сторожей и свечи. Возьми фазовый сгусток: без него один Вестник останется за стеной.',
-  },
+function plotNpcEntriesFromPackages(packs: readonly NpcPackageDef[]): [string, PlotNpcDef][] {
+  return packs.flatMap(pack => {
+    const plotNpcId = plotNpcIdFromPackage(pack);
+    return plotNpcId ? [[plotNpcId, plotNpcDefFromPackage(pack)] as [string, PlotNpcDef]] : [];
+  });
+}
 
-  herald_clue: {
-    name: 'Марфа Пороговая',
-    isFemale: true,
-    age: 58,
-    sex: 'female',
-    faction: Faction.CULTIST,
-    occupation: Occupation.PRIEST,
-    sprite: Occupation.PRIEST,
-    homeFloorKey: designNpcFloorKey('podad'),
-    hp: 1040, maxHp: 1040, level: 10, money: 0, speed: 0.8,
-    inventory: [
-      { defId: 'bottled_voice', count: 1 },
-      { defId: 'holy_water', count: 1 },
-    ],
-    talkLines: [
-      'Считать надо вслух: трое Вестников, две свечи, одна дверь. Не спорь.',
-      'Два ходят по мясу. Третий сидит за стеной и ждёт, кто назовёт его лишним.',
-      'Когда третий упадёт, проход просядет. Сначала смотри под ноги, потом бери трофей.',
-      'Вестник не ангел и не начальник. Сторожит заглушку, пока мясо делает вид, что прохода нет.',
-      'Подпорог начинается за заглушкой. Без счёта Вестников туда идут только потеряться.',
-    ],
-    talkLinesPost: [
-      'Порог открыт. Запиши: открыто не значит спасено.',
-      'Если голос стал мягким, вычеркни его первым и закрой дверь.',
-      'Назад возвращаются не все части человека. Я считаю только тех, кто стоит.',
-    ],
-    talkQuestResponse: 'Никанор ещё дышит? Тогда слушай и не спорь. Три Вестника держат местную заглушку: двое ходят, третий вписан за стеной. Убей троих, и порог провалится.',
-  },
+export function getPlotNpcDef(plotNpcId: string): PlotNpcDef | undefined {
+  const pack = getNpcPackageByPlotNpcId(plotNpcId);
+  return pack ? plotNpcDefFromPackage(pack) : undefined;
+}
 
-  void_warning: {
-    name: 'Жан Пустотник',
-    isFemale: false,
-    age: 44,
-    sex: 'male',
-    faction: Faction.SCIENTIST,
-    occupation: Occupation.SCIENTIST,
-    sprite: Occupation.SCIENTIST,
-    homeFloorKey: storyNpcFloorKey(FloorLevel.VOID),
-    hp: 700, maxHp: 700, level: 10, money: 0, speed: 1.0,
-    inventory: [
-      { defId: 'antidep', count: 2 },
-      { defId: 'psi_stabilizer', count: 1 },
-    ],
-    talkLines: [
-      'Журнал протокола уже листает страницы сам. Слушай коротко: метки ставь мелом, записи делай после выхода.',
-      'Не смотри в зелёный источник дольше трёх вдохов. Потом хуже карта и хуже прицел.',
-      'Если дверь повторилась, не радуйся короткому пути. Проверь метку, воду и обратную сторону.',
-      'Ордер здесь не открывает двери. Он нужен посту: покажешь бумагу, меньше будут трогать сумку.',
-      'Творец не разговаривает. Он давит дистанцией и ошибками маршрута; держи стабилизатор при себе.',
-      'Шип не оружие. Это опасный образец для возврата, держи отдельно от еды и документов.',
-    ],
-    talkLinesPost: [
-      'Запись держится. Не проверяй её вслух, пока рядом зелёный источник.',
-      'Журнал вернулся без меня. Значит, бумага дошла, а я застрял между зелёной стеной и лифтом.',
-      'Если зелёный источник снова пищит, уходи боком и не теряй дверь из вида.',
-    ],
-    talkQuestResponse: 'Ты прошёл порог. Хорошо. Плохая новость: голос в банке не выводит. Он повторяет маршрут чужим голосом, а лишний шаг закрывает дверь за спиной.',
-  },
+export function hasPlotNpc(plotNpcId: string): boolean {
+  return getNpcPackageByPlotNpcId(plotNpcId) !== undefined;
+}
 
-  voice: {
-    name: 'Таинственный голос',
-    isFemale: false,
-    age: 25,
-    sex: 'male',
-    faction: Faction.CITIZEN,
-    occupation: Occupation.SCIENTIST,
-    sprite: Occupation.SCIENTIST,
-    homeFloorKey: storyNpcFloorKey(FloorLevel.LIVING),
-    hp: 1, maxHp: 1, money: 0, speed: 0,
-    inventory: [],
-    talkLines: [],
-    talkLinesPost: [],
-  },
-};
+export function allPlotNpcEntries(): readonly [string, PlotNpcDef][] {
+  return plotNpcEntriesFromPackages(allNpcPackages());
+}
+
+export function allPlotNpcIds(): readonly string[] {
+  return allPlotNpcEntries().map(([id]) => id);
+}
 
 /* ── Linear quest chain ──────────────────────────────────────── */
 /* Step N is available when all steps 0..N-1 are done AND         */
@@ -503,6 +255,15 @@ export const PLOT_CHAIN: PlotStep[] = [
     extraRewards: [{ defId: 'ammo_762', count: 30 }],
     relationDelta: 25, xpReward: 80, moneyReward: 100,
     spawnMonstersOnAccept: 8,
+    killPressure: {
+      anchor: { kind: 'plot_npc', plotNpcId: 'major_grom' },
+      intervalSeconds: 3,
+      spawnCountMin: 2,
+      spawnCountMax: 3,
+      maxAliveNearAnchor: 8,
+      radius: 25,
+      monsterKinds: [MonsterKind.TVAR, MonsterKind.SBORKA, MonsterKind.ZOMBIE, MonsterKind.SHADOW, MonsterKind.POLZUN],
+    },
   },
   // Step 9: Major Grom → storm — kill the Mancobus
   {
@@ -625,6 +386,21 @@ export const PLOT_CHAIN: PlotStep[] = [
   },
 ];
 
+export interface KillPressureAnchorDef {
+  kind: 'plot_npc';
+  plotNpcId: string;
+}
+
+export interface KillPressureDef {
+  anchor: KillPressureAnchorDef;
+  intervalSeconds: number;
+  spawnCountMin: number;
+  spawnCountMax: number;
+  maxAliveNearAnchor: number;
+  radius: number;
+  monsterKinds: readonly MonsterKind[];
+}
+
 /* ── A single step in the linear story quest chain ───────────── */
 export interface PlotStep {
   giverNpcId: string;
@@ -661,6 +437,8 @@ export interface PlotStep {
   abandonsSideQuestIds?: string[];
   /** Spawn N hostile monsters around the quest giver when quest is accepted */
   spawnMonstersOnAccept?: number;
+  /** Bounded ongoing pressure for authored KILL quests. Runtime timer is transient. */
+  killPressure?: KillPressureDef;
   /** Auto-complete VISIT quest when player enters this floor */
   visitFloor?: FloorLevel;
   /** Optional explicit deadline for authored urgent side quests. */
@@ -925,7 +703,7 @@ function npcWithRegistrationOptions(
 }
 
 export function plotNpcHomeFloorKey(plotNpcId: string, defInput?: PlotNpcDef): string | undefined {
-  const def = defInput ?? PLOT_NPCS[plotNpcId];
+  const def = defInput ?? getPlotNpcDef(plotNpcId);
   const explicit = checkedHomeFloorKey(def?.homeFloorKey);
   if (explicit) return explicit;
   return inferredQuestHomeFloorKey([
@@ -939,9 +717,15 @@ export function registerSideQuest(
   npcId: string, npc: PlotNpcDef, quests: readonly SideQuestStep[], options?: AuthoredNpcRegistrationOptions,
 ): void {
   const checkedNpcId = checkedRegistryId(npcId, 'NPC');
-  if (PLOT_NPCS[checkedNpcId]) throw new Error(`[SIDE_QUEST] duplicate NPC id "${checkedNpcId}"`);
+  if (hasPlotNpc(checkedNpcId)) throw new Error(`[SIDE_QUEST] duplicate NPC id "${checkedNpcId}"`);
   assertSideQuestStepsCanRegister(quests);
-  PLOT_NPCS[checkedNpcId] = npcWithRegistrationOptions(npc, quests, options);
+  const registeredNpc = npcWithRegistrationOptions(npc, quests, options);
+  registerNpcPackageFromPlotNpc({
+    id: checkedNpcId,
+    npc: registeredNpc,
+    quests,
+    tags: options?.tags,
+  });
   registerSideQuestSteps(quests);
 }
 
@@ -952,7 +736,10 @@ export function registerFloorSideQuest(
   quests: readonly SideQuestStep[],
   tags?: readonly string[],
 ): void {
-  registerSideQuest(npcId, npc, quests, { homeFloorKey, tags });
+  registerSideQuest(npcId, npc, quests, {
+    homeFloorKey,
+    tags,
+  });
 }
 
 export function registerAuthoredNpc(pack: AuthoredNpcPack): void {
@@ -987,7 +774,7 @@ export function isPlotNpc(e: Entity): boolean {
 
 /** Get the PlotNpcDef for an entity (or undefined) */
 export function getPlotDef(e: Entity): PlotNpcDef | undefined {
-  return e.plotNpcId ? PLOT_NPCS[e.plotNpcId] : undefined;
+  return e.plotNpcId ? getPlotNpcDef(e.plotNpcId) : undefined;
 }
 
 /** Check if a plot NPC has an available quest to give (not yet offered) */

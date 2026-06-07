@@ -28,11 +28,12 @@ import { World } from '../../core/world';
 import { hashSeed, withSeededRandom } from '../../core/rand';
 import { freshNeeds } from '../../data/catalog';
 import { factionToTerritoryOwner } from '../../data/factions';
-import { type PlotNpcDef, registerSideQuest } from '../../data/plot';
+import { designNpcFloorKey, type PlotNpcDef, registerFloorSideQuest } from '../../data/plot';
 import { MONSTERS } from '../../entities/monster';
 import { monsterSpr, Spr } from '../../render/sprite_index';
 import { placeEmergencyPanel } from '../../systems/emergency_panels';
 import { randomRPG } from '../../systems/rpg';
+import { requireSpawnedPlotNpcFromPackage } from '../plot_npc_spawn';
 import {
   ensureConnectivity,
   generateZones,
@@ -40,6 +41,8 @@ import {
   stampRoom,
 } from '../shared';
 import type { FloorGeneration } from '../floor_manifest';
+
+const DESIGN_NPC_HOME_FLOOR_KEY = designNpcFloorKey('slime_nii');
 
 export const DESIGN_FLOOR_ID = 'slime_nii' as const;
 export const SLIME_NII_Z = 12 as const;
@@ -289,7 +292,7 @@ const SLIME_NII_CABINET_STRIPS: readonly SlimeNiiCabinetStripSpec[] = [
   { x: 716, y: 704, cols: 10, rows: 4, name: 'культовые кладовые чашек', owner: ZoneFaction.CULTIST, wallTex: Tex.BRICK, floorTex: Tex.F_WATER, roomTypes: [RoomType.STORAGE, RoomType.COMMON, RoomType.SMOKING] },
 ];
 
-registerSideQuest('slime_nii_director_larisa', NPC_DEFS.slime_nii_director_larisa, [
+registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'slime_nii_director_larisa', NPC_DEFS.slime_nii_director_larisa, [
   {
     id: 'slime_nii_live_green_sample',
     giverNpcId: 'slime_nii_director_larisa',
@@ -309,7 +312,7 @@ registerSideQuest('slime_nii_director_larisa', NPC_DEFS.slime_nii_director_laris
   },
 ]);
 
-registerSideQuest('slime_nii_liquidator_voron', NPC_DEFS.slime_nii_liquidator_voron, [
+registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'slime_nii_liquidator_voron', NPC_DEFS.slime_nii_liquidator_voron, [
   {
     id: 'slime_nii_black_camera_cleanup',
     giverNpcId: 'slime_nii_liquidator_voron',
@@ -329,7 +332,7 @@ registerSideQuest('slime_nii_liquidator_voron', NPC_DEFS.slime_nii_liquidator_vo
   },
 ]);
 
-registerSideQuest('slime_nii_volunteer_mitya', NPC_DEFS.slime_nii_volunteer_mitya, [
+registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'slime_nii_volunteer_mitya', NPC_DEFS.slime_nii_volunteer_mitya, [
   {
     id: 'slime_nii_volunteer_witness',
     giverNpcId: 'slime_nii_volunteer_mitya',
@@ -346,7 +349,7 @@ registerSideQuest('slime_nii_volunteer_mitya', NPC_DEFS.slime_nii_volunteer_mity
   },
 ]);
 
-registerSideQuest('slime_nii_secretary_ada', NPC_DEFS.slime_nii_secretary_ada, [
+registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'slime_nii_secretary_ada', NPC_DEFS.slime_nii_secretary_ada, [
   {
     id: 'slime_nii_manifest_choice',
     giverNpcId: 'slime_nii_secretary_ada',
@@ -1472,39 +1475,20 @@ function spawnPlotNpc(
   entities: Entity[],
   nextId: NextId,
   npcId: SlimeNiiNpcId,
-  def: PlotNpcDef,
+  _def: PlotNpcDef,
   x: number,
   y: number,
   angle: number,
-  weapon = def.weapon,
+  weapon?: string,
 ): number {
-  const id = nextId.v++;
-  entities.push({
-    id,
-    type: EntityType.NPC,
-    x: x + 0.5,
-    y: y + 0.5,
+  const px = x + 0.5;
+  const py = y + 0.5;
+  const npc = requireSpawnedPlotNpcFromPackage(entities, nextId, npcId, px, py, {
     angle,
-    pitch: 0,
-    alive: true,
-    speed: def.speed,
-    sprite: def.sprite,
-    name: def.name,
-    isFemale: def.isFemale,
-    needs: freshNeeds(),
-    hp: def.hp,
-    maxHp: def.maxHp,
-    money: def.money,
-    ai: { goal: AIGoal.IDLE, tx: x + 0.5, ty: y + 0.5, path: [], pi: 0, stuck: 0, timer: 0 },
-    inventory: def.inventory.map(item => ({ ...item })),
     weapon,
-    faction: def.faction,
-    occupation: def.occupation,
-    plotNpcId: npcId,
-    canGiveQuest: true,
-    questId: -1,
+    aiTarget: { x: px, y: py },
   });
-  return id;
+  return npc.id;
 }
 
 function spawnAmbientNpc(

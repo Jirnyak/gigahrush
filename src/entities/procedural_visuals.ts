@@ -15,13 +15,15 @@ import {
   generatePilgrimSprite,
   generateHunterSprite,
   generatePriestSprite,
+  generatePerformerSprite,
 } from './npc';
 import {
   generateNpcVisualSprite,
   isFloor69FemaleSprite,
   isNpcSpecialSprite,
   NPC_VISUAL_FLOOR69_FEMALE,
-  npcVisualUsesProceduralSprite,
+  npcVisualTextureKey,
+  npcVisualUsesDynamicTexture,
 } from './npc_visuals';
 import { authoredNpcSpriteGeneratorOffset } from '../render/sprite_index';
 
@@ -127,7 +129,7 @@ function paintLine(t: Uint32Array, x0: number, y0: number, x1: number, y1: numbe
 
 function inferOccupation(occupation: Occupation | undefined, spriteHint: number | undefined): Occupation {
   if (occupation !== undefined) return occupation;
-  if (spriteHint !== undefined && spriteHint >= 0 && spriteHint <= Occupation.PRIEST) return spriteHint as Occupation;
+  if (spriteHint !== undefined && spriteHint >= 0 && spriteHint <= Occupation.PERFORMER) return spriteHint as Occupation;
   return Occupation.TRAVELER;
 }
 
@@ -159,6 +161,8 @@ function npcPalette(occupation: Occupation, faction: Faction | undefined, seed: 
       return { top: rgbJitter([42, 42, 54], seed, 150, 14), pants: rgbJitter([30, 32, 42], seed, 160, 10), accent: [160, 36, 36] };
     case Occupation.CHILD:
       return { top: rgbJitter(pickRgb(CIVILIAN_TOPS, seed, 170), seed, 171, 30), pants: rgbJitter([72, 74, 106], seed, 180, 18), accent: [210, 154, 78] };
+    case Occupation.PERFORMER:
+      return { top: rgbJitter([128, 48, 84], seed, 185, 26), pants: rgbJitter([38, 34, 48], seed, 186, 16), accent: [218, 164, 72] };
     default:
       return { top: rgbJitter(pickRgb(CIVILIAN_TOPS, seed, 190), seed, 191, 34), pants: rgbJitter(pickRgb(CIVILIAN_PANTS, seed, 200), seed, 201, 18), accent: rgbJitter([174, 126, 72], seed, 210, 34) };
   }
@@ -298,6 +302,7 @@ function npcBaseSpriteForOccupation(occupation: Occupation): Uint32Array {
     case Occupation.PILGRIM: return generatePilgrimSprite();
     case Occupation.HUNTER: return generateHunterSprite();
     case Occupation.PRIEST: return generatePriestSprite();
+    case Occupation.PERFORMER: return generatePerformerSprite();
     default: return generateTravelerSprite();
   }
 }
@@ -359,6 +364,8 @@ function addNpcSpriteDetails(t: Uint32Array, occupation: Occupation, seed: numbe
     paintMaskedRect(t, 41, 25, 4, 14, [76, 64, 48], seed + 836);
   } else if (occupation === Occupation.HUNTER) {
     paintMaskedRect(t, 25, 25, 13, 2, [92, 82, 52], seed + 837);
+  } else if (occupation === Occupation.PERFORMER) {
+    paintMaskedRect(t, 24, 25, 16, 2, [218, 164, 72], seed + 838);
   }
   if (rnd(seed, 839) > 0.62) paintMaskedRect(t, 27, 42, 10, 2, accent, seed + 840);
 }
@@ -605,9 +612,9 @@ export function generateProceduralMonsterSprite(kind: MonsterKind, seed: number,
 export function entityUsesProceduralSprite(e: Entity): boolean {
   if (e.type === EntityType.MONSTER) return true;
   if (e.type !== EntityType.NPC) return false;
-  if (npcVisualUsesProceduralSprite(e.npcVisualId)) return true;
+  if (npcVisualUsesDynamicTexture(e.npcVisualId)) return true;
   if (isNpcSpecialSprite(e.sprite)) return false;
-  return e.sprite >= 0 && e.sprite <= Occupation.PRIEST;
+  return e.sprite >= 0 && e.sprite <= Occupation.PERFORMER;
 }
 
 function deriveEntitySpriteSeed(e: Entity): number {
@@ -633,6 +640,16 @@ export function proceduralEntitySpriteKey(e: Entity): number {
   const kind = e.monsterKind ?? 0;
   const occ = e.occupation ?? inferOccupation(undefined, e.sprite);
   let h = deriveEntitySpriteSeed(e);
+  if (e.type === EntityType.NPC) {
+    const key = npcVisualTextureKey(e.npcVisualId, {
+      seed: h,
+      occupation: e.occupation,
+      faction: e.faction,
+      isFemale: e.isFemale,
+      sprite: e.sprite,
+    });
+    if (key) return hashText(`npc_visual:${key}`, 0x6a09e667) || 1;
+  }
   if (e.monsterKind === MonsterKind.PROTOKOLNIK) h = mix32(h ^ Math.imul((e.protocolPressureTier ?? 0) + 1, 0x6d2b79f5));
   if (e.monsterKind === MonsterKind.ZAKALENNAYA_ARMATURA) h = mix32(h ^ Math.imul((e.monsterArmorStacks ?? ZAK_ARMOR_MAX_STACKS) + 1, 0x7feb352d));
   h = mix32(h ^ Math.imul(e.type, 0x9e3779b1) ^ Math.imul(kind + 1, 0x85ebca6b) ^ Math.imul(occ + 1, 0xc2b2ae35));
@@ -646,8 +663,17 @@ export function proceduralEntitySpriteKey(e: Entity): number {
 export function generateProceduralEntitySprite(e: Entity): Uint32Array | null {
   const seed = proceduralEntitySpriteKey(e);
   if (e.type === EntityType.NPC && entityUsesProceduralSprite(e)) {
+    const visualSeed = npcVisualTextureKey(e.npcVisualId, {
+      seed: deriveEntitySpriteSeed(e),
+      occupation: e.occupation,
+      faction: e.faction,
+      isFemale: e.isFemale,
+      sprite: e.sprite,
+    })
+      ? deriveEntitySpriteSeed(e)
+      : seed;
     const special = generateNpcVisualSprite(e.npcVisualId, {
-      seed,
+      seed: visualSeed,
       occupation: e.occupation,
       faction: e.faction,
       isFemale: e.isFemale,

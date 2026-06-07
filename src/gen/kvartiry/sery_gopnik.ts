@@ -3,11 +3,11 @@
 
 import {
   W, Cell,
-  type Entity, EntityType, AIGoal, Faction, Occupation, QuestType,
+  type Entity, Faction, Occupation, QuestType,
 } from '../../core/types';
 import { World } from '../../core/world';
-import { freshNeeds } from '../../data/catalog';
 import { type PlotNpcDef, registerSideQuest } from '../../data/plot';
+import { requireSpawnedPlotNpcFromPackage } from '../plot_npc_spawn';
 
 const NPC_DEF: PlotNpcDef = {
   name: 'Серый Гопник',
@@ -60,18 +60,10 @@ export function spawnSeryGopnik(
     const x = Math.floor(Math.random() * W);
     const y = Math.floor(Math.random() * W);
     if (world.cells[world.idx(x, y)] !== Cell.FLOOR) continue;
-    entities.push({
-      id: nextId.v++, type: EntityType.NPC,
-      x: x + 0.5, y: y + 0.5,
-      angle: Math.random() * Math.PI * 2, pitch: 0,
-      alive: true, speed: NPC_DEF.speed, sprite: NPC_DEF.sprite,
-      name: NPC_DEF.name, isFemale: NPC_DEF.isFemale,
-      needs: freshNeeds(), hp: NPC_DEF.hp, maxHp: NPC_DEF.maxHp, money: NPC_DEF.money,
-      ai: { goal: AIGoal.IDLE, tx: 0, ty: 0, path: [], pi: 0, stuck: 0, timer: 0 },
-      inventory: NPC_DEF.inventory.map(i => ({ ...i })),
+    requireSpawnedPlotNpcFromPackage(entities, nextId, 'sery_gopnik', x + 0.5, y + 0.5, {
+      angle: Math.random() * Math.PI * 2,
       weapon: 'knife',
-      faction: NPC_DEF.faction, occupation: NPC_DEF.occupation,
-      plotNpcId: 'sery_gopnik', canGiveQuest: true, questId: -1,
+      canGiveQuest: true,
       isTraveler: true,
     });
     return;

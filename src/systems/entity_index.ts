@@ -10,6 +10,7 @@ export const ENTITY_MASK_VISIBLE = ENTITY_MASK_ACTOR | ENTITY_MASK_ITEM_DROP | E
 const ENTITY_MASK_STATIC_VISIBLE = ENTITY_MASK_ITEM_DROP | ENTITY_MASK_BILLBOARD;
 
 const BUCKET_SIZE = 16;
+const BUCKET_HALF_SIZE = BUCKET_SIZE * 0.5;
 const BUCKET_SHIFT = 4;
 const BUCKETS_PER_AXIS = W >> BUCKET_SHIFT;
 const BUCKET_COUNT = BUCKETS_PER_AXIS * BUCKETS_PER_AXIS;
@@ -112,10 +113,25 @@ function wrappedBucketCoord(v: number): number {
   return (Math.floor(v) & (W - 1)) >> BUCKET_SHIFT;
 }
 
+function bucketAxisMinDistance(v: number, bucketCoord: number): number {
+  const center = bucketCoord * BUCKET_SIZE + BUCKET_HALF_SIZE;
+  const d = Math.abs(wrappedDelta(v, center));
+  return d > BUCKET_HALF_SIZE ? d - BUCKET_HALF_SIZE : 0;
+}
+
+function bucketMinDistanceSq(x: number, y: number, bx: number, by: number): number {
+  const dx = bucketAxisMinDistance(x, bx);
+  const dy = bucketAxisMinDistance(y, by);
+  return dx * dx + dy * dy;
+}
+
 export class EntityIndex {
   private readonly buckets: Entity[][];
+  private readonly npcBuckets: Entity[][];
+  private readonly monsterBuckets: Entity[][];
   private readonly staticBuckets: Entity[][];
   private readonly dynamicEntities: Entity[] = [];
+  private readonly usedDynamicBucketIndices: number[] = [];
   private readonly staticIndexedIds = new Set<number>();
   private readonly bucketVisits = new Uint32Array(BUCKET_COUNT);
   private bucketVisitId = 1;
@@ -136,6 +152,8 @@ export class EntityIndex {
 
   constructor() {
     this.buckets = Array.from({ length: BUCKET_COUNT }, () => []);
+    this.npcBuckets = Array.from({ length: BUCKET_COUNT }, () => []);
+    this.monsterBuckets = Array.from({ length: BUCKET_COUNT }, () => []);
     this.staticBuckets = Array.from({ length: BUCKET_COUNT }, () => []);
   }
 
@@ -157,7 +175,7 @@ export class EntityIndex {
     simulationFrame = -1,
   ): void {
     const startedAt = nowMs();
-    for (let i = 0; i < BUCKET_COUNT; i++) this.buckets[i].length = 0;
+    this.clearDynamicBuckets();
     for (let i = 0; i < BUCKET_COUNT; i++) this.staticBuckets[i].length = 0;
     this.dynamicEntities.length = 0;
     this.staticIndexedIds.clear();
@@ -192,9 +210,13 @@ export class EntityIndex {
       const bucketIndex = wrappedBucketCoord(e.y) * BUCKETS_PER_AXIS + wrappedBucketCoord(e.x);
       const bucket = staticVisible ? this.staticBuckets[bucketIndex] : this.buckets[bucketIndex];
       if (bucket.length === 0) usedBucketCount++;
-      bucket.push(e);
-      if (staticVisible) this.staticIndexedIds.add(e.id);
-      else this.dynamicEntities.push(e);
+      if (staticVisible) {
+        bucket.push(e);
+        this.staticIndexedIds.add(e.id);
+      } else {
+        this.addDynamicEntityToBuckets(e, bucketIndex);
+        this.dynamicEntities.push(e);
+      }
       if (bucket.length > maxBucketSize) maxBucketSize = bucket.length;
     }
 
@@ -230,7 +252,7 @@ export class EntityIndex {
 
   private rebuildDynamicForSimulation(entities: readonly Entity[], simulationFrame: number): void {
     const startedAt = nowMs();
-    for (let i = 0; i < BUCKET_COUNT; i++) this.buckets[i].length = 0;
+    this.clearDynamicBuckets();
     this.byId.clear();
     this.entityOrder.clear();
     this.ai.length = 0;
@@ -270,7 +292,7 @@ export class EntityIndex {
       const bucketIndex = wrappedBucketCoord(e.y) * BUCKETS_PER_AXIS + wrappedBucketCoord(e.x);
       const bucket = this.buckets[bucketIndex];
       if (bucket.length === 0) dynamicUsedBucketCount++;
-      bucket.push(e);
+      this.addDynamicEntityToBuckets(e, bucketIndex);
       dynamicBucketedCount++;
       if (bucket.length > dynamicMaxBucketSize) dynamicMaxBucketSize = bucket.length;
     }
@@ -312,6 +334,31 @@ export class EntityIndex {
       this.staticUsedBucketCount++;
       if (bucket.length > this.staticMaxBucketSize) this.staticMaxBucketSize = bucket.length;
     }
+  }
+
+  private clearDynamicBuckets(): void {
+    for (let i = 0; i < this.usedDynamicBucketIndices.length; i++) {
+      const bucketIndex = this.usedDynamicBucketIndices[i];
+      this.buckets[bucketIndex].length = 0;
+      this.npcBuckets[bucketIndex].length = 0;
+      this.monsterBuckets[bucketIndex].length = 0;
+    }
+    this.usedDynamicBucketIndices.length = 0;
+  }
+
+  private addDynamicEntityToBuckets(e: Entity, bucketIndex: number): Entity[] {
+    const bucket = this.buckets[bucketIndex];
+    if (bucket.length === 0) this.usedDynamicBucketIndices.push(bucketIndex);
+    bucket.push(e);
+    if (e.type === EntityType.NPC) this.npcBuckets[bucketIndex].push(e);
+    else if (e.type === EntityType.MONSTER) this.monsterBuckets[bucketIndex].push(e);
+    return bucket;
+  }
+
+  private dynamicBucketsForMask(typeMask: number): Entity[][] {
+    if (typeMask === ENTITY_MASK_NPC) return this.npcBuckets;
+    if (typeMask === ENTITY_MASK_MONSTER) return this.monsterBuckets;
+    return this.buckets;
   }
 
   private reindexStaticEntities(): { liveCount: number; itemCount: number } {
@@ -437,13 +484,14 @@ export class EntityIndex {
     const r2 = radius * radius;
     let bucketChecks = 0;
     const includeStatic = (typeMask & ENTITY_MASK_STATIC_VISIBLE) !== 0;
+    const dynamicBuckets = this.dynamicBucketsForMask(typeMask);
 
     for (let oy = -span; oy <= span; oy++) {
       const yy = (by + oy + BUCKETS_PER_AXIS) & BUCKET_MASK;
       for (let ox = -span; ox <= span; ox++) {
         const xx = (bx + ox + BUCKETS_PER_AXIS) & BUCKET_MASK;
         const bucketIndex = yy * BUCKETS_PER_AXIS + xx;
-        const bucket = this.buckets[bucketIndex];
+        const bucket = dynamicBuckets[bucketIndex];
         bucketChecks++;
         for (const e of bucket) {
           if (!e.alive) continue;
@@ -481,20 +529,24 @@ export class EntityIndex {
     if (maxResults <= 0) return 0;
     const capped = Number.isFinite(maxResults);
     const cap = capped ? Math.max(0, Math.floor(maxResults)) : Infinity;
+    if (cap <= 0) return 0;
     const distances: number[] = [];
+    const ids: number[] = [];
     const addCandidate = (e: Entity, d2: number): void => {
       if (!capped) {
         out.push(e);
         return;
       }
       let pos = distances.length;
-      while (pos > 0 && d2 < distances[pos - 1]) pos--;
+      while (pos > 0 && (d2 < distances[pos - 1] || (d2 === distances[pos - 1] && e.id < ids[pos - 1]))) pos--;
       if (pos >= cap) return;
       distances.splice(pos, 0, d2);
+      ids.splice(pos, 0, e.id);
       out.splice(pos, 0, e);
       if (out.length > cap) {
         out.length = cap;
         distances.length = cap;
+        ids.length = cap;
       }
     };
     const bx = wrappedBucketCoord(x);
@@ -503,6 +555,7 @@ export class EntityIndex {
     const r2 = radius * radius;
     let bucketChecks = 0;
     const includeStatic = (typeMask & ENTITY_MASK_STATIC_VISIBLE) !== 0;
+    const dynamicBuckets = this.dynamicBucketsForMask(typeMask);
 
     for (let ring = 0; ring <= span; ring++) {
       for (let oy = -ring; oy <= ring; oy++) {
@@ -511,7 +564,16 @@ export class EntityIndex {
           const yy = (by + oy + BUCKETS_PER_AXIS) & BUCKET_MASK;
           const xx = (bx + ox + BUCKETS_PER_AXIS) & BUCKET_MASK;
           const bucketIndex = yy * BUCKETS_PER_AXIS + xx;
-          const bucket = this.buckets[bucketIndex];
+          let minBucketD2 = -1;
+          if (span > 1 && ring === span) {
+            minBucketD2 = bucketMinDistanceSq(x, y, xx, yy);
+            if (minBucketD2 > r2) continue;
+          }
+          if (capped && out.length >= cap) {
+            if (minBucketD2 < 0) minBucketD2 = bucketMinDistanceSq(x, y, xx, yy);
+            if (minBucketD2 > distances[cap - 1]) continue;
+          }
+          const bucket = dynamicBuckets[bucketIndex];
           bucketChecks++;
           for (const e of bucket) {
             if (!e.alive) continue;
@@ -567,6 +629,7 @@ export class EntityIndex {
     const visitId = this.nextBucketVisitId();
     let bucketChecks = 0;
     const includeStatic = (typeMask & ENTITY_MASK_STATIC_VISIBLE) !== 0;
+    const dynamicBuckets = this.dynamicBucketsForMask(typeMask);
 
     for (let i = 0; i <= steps; i++) {
       const t = i / steps;
@@ -580,7 +643,7 @@ export class EntityIndex {
           if (this.bucketVisits[bucketIndex] === visitId) continue;
           this.bucketVisits[bucketIndex] = visitId;
           bucketChecks++;
-          const bucket = this.buckets[bucketIndex];
+          const bucket = dynamicBuckets[bucketIndex];
           for (const e of bucket) {
             if (!e.alive) continue;
             if ((entityMask(e) & typeMask) === 0) continue;

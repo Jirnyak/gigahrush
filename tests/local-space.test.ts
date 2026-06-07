@@ -3,8 +3,9 @@ import assert from 'node:assert/strict';
 
 import { Cell, DoorState, ProjType, W } from '../src/core/types';
 import { World } from '../src/core/world';
-import { particles, spawnProjectileWallImpact } from '../src/render/blood';
+import { clearParticles, particles, spawnBloodHit, spawnDustBurst, spawnProjectileWallImpact, updateParticles } from '../src/render/blood';
 import { traceFirstSolidCell } from '../src/systems/local_space';
+import { MarkType, stampMark } from '../src/systems/surface_marks';
 
 function openWorld(): World {
   const world = new World();
@@ -68,6 +69,7 @@ test('local solid trace uses World.solid door semantics', () => {
 });
 
 test('projectile wall impacts use the same surface map and spawn local impact particles', () => {
+  clearParticles();
   const world = openWorld();
   world.set(15, 10, Cell.WALL);
   const beforeVersion = world.surfaceVersion;
@@ -78,4 +80,69 @@ test('projectile wall impacts use the same surface map and spawn local impact pa
   assert.ok(world.surfaceVersion > beforeVersion);
   assert.ok(world.surfaceMap.has(world.idx(15, 10)));
   assert.ok(particles.length > beforeParticles);
+});
+
+test('dust particles expire without persistent surface marks', () => {
+  clearParticles();
+  const world = openWorld();
+  const beforeVersion = world.surfaceVersion;
+
+  spawnDustBurst(world, 10.5, 10.5, 0.1, 12);
+  assert.ok(particles.length > 0);
+  updateParticles(world, 2);
+
+  assert.equal(particles.length, 0);
+  assert.equal(world.surfaceVersion, beforeVersion);
+  assert.equal(world.surfaceMap.size, 0);
+});
+
+test('blood particles still land as splat marks', () => {
+  clearParticles();
+  const world = openWorld();
+
+  spawnBloodHit(world, 10.5, 10.5, 0, 1, false, 0, 0, 0.1);
+  const afterHitVersion = world.surfaceVersion;
+  assert.ok(particles.length > 0);
+  updateParticles(world, 1);
+
+  assert.equal(particles.length, 0);
+  assert.ok(world.surfaceVersion > afterHitVersion);
+});
+
+test('world replacement invalidates transient particles before landing', () => {
+  clearParticles();
+  const oldWorld = openWorld();
+  const newWorld = openWorld();
+
+  spawnDustBurst(oldWorld, 10.5, 10.5, 0.1, 12);
+  assert.ok(particles.length > 0);
+  updateParticles(newWorld, 0.016);
+
+  assert.equal(particles.length, 0);
+  assert.equal(newWorld.surfaceVersion, 0);
+  assert.equal(newWorld.surfaceMap.size, 0);
+});
+
+test('ordinary wall bullet impacts near tile edges do not spill into neighbor cells', () => {
+  const world = openWorld();
+  world.set(15, 10, Cell.WALL);
+  world.set(14, 10, Cell.WALL);
+  world.set(15, 9, Cell.WALL);
+  world.set(14, 9, Cell.WALL);
+
+  spawnProjectileWallImpact(world, 15, 10, 0.01, 0.01, undefined, ProjType.NORMAL, 15, 10);
+
+  assert.ok(world.surfaceMap.has(world.idx(15, 10)));
+  assert.equal(world.surfaceMap.has(world.idx(14, 10)), false);
+  assert.equal(world.surfaceMap.has(world.idx(15, 9)), false);
+  assert.equal(world.surfaceMap.has(world.idx(14, 9)), false);
+});
+
+test('organic surface marks still spill across floor cell edges', () => {
+  const world = openWorld();
+
+  stampMark(world, 20, 20, 0.02, 0.5, 0.35, MarkType.SPLAT, 12003, 140, 10, 10, 220);
+
+  assert.ok(world.surfaceMap.has(world.idx(20, 20)));
+  assert.ok(world.surfaceMap.has(world.idx(19, 20)));
 });

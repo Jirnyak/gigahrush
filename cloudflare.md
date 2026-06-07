@@ -41,7 +41,7 @@ npx wrangler login
 npm run cf:setup
 ```
 
-Скрипт требует Cloudflare auth/Wrangler, сам создаст или найдет D1 `gigahrush-net`, пропишет binding `GIGA_NET` в `wrangler.jsonc` с реальным `database_id` и применит все SQL-файлы из `cloudflare/d1/` в фиксированном порядке ниже. `net_sphere_names.sql` исполняется через PRAGMA guards, чтобы старые базы получили недостающие колонки, а свежие базы не падали на duplicate column.
+Скрипт требует Cloudflare auth/Wrangler, сам создаст или найдет D1 `gigahrush-net`, D1 `gigahrush-npc-intake` и R2 bucket `gigahrush-npc-submissions`, пропишет bindings `GIGA_NET`, `NPC_DB` и `NPC_SUBMISSIONS` в `wrangler.jsonc` с реальными ids/names и применит SQL-схемы. `net_sphere_names.sql` исполняется через PRAGMA guards, чтобы старые базы получили недостающие колонки, а свежие базы не падали на duplicate column.
 
 4. Если Cloudflare Workers уже привязан к GitHub, просто redeploy Worker. `wrangler.jsonc` теперь источник правды: `name`, `main`, `assets`, `compatibility_date`, D1 binding.
 
@@ -78,7 +78,7 @@ Cloudflare docs:
 npm run cf:dev
 ```
 
-`cf:dev` сначала перезаписывает `dist/`, затем запускает `wrangler dev` с `wrangler.jsonc`. Перед ним нужен `npm run cf:setup`, чтобы в конфиге был реальный D1 `database_id`. Это не секрет: Cloudflare Worker нужен конкретный UUID базы для binding, а `cf:setup` перезаписывает его под текущий аккаунт.
+`cf:dev` сначала перезаписывает `dist/` через `vite build --mode cloudflare`, включая статический `/npc-intake/`, затем запускает `wrangler dev` с `wrangler.jsonc`. Перед ним нужен `npm run cf:setup`, чтобы в конфиге был реальный D1 `database_id`. Это не секрет: Cloudflare Worker нужен конкретный UUID базы для binding, а `cf:setup` перезаписывает его под текущий аккаунт.
 
 Чтобы только повторно применить схему и защищенные миграции к уже настроенной базе:
 
@@ -86,20 +86,47 @@ npm run cf:dev
 npm run cf:schema
 ```
 
-`cf:schema` требует Cloudflare auth/Wrangler и пишет только в удаленную D1. Для CLI-деплоя используй:
+`cf:schema` требует Cloudflare auth/Wrangler и пишет только в удаленные D1 базы. Для CLI-деплоя используй:
 
 ```bash
 npm run cf:deploy
 ```
 
-`cf:deploy` перезаписывает `dist/` и деплоит Worker в Cloudflare.
+`cf:deploy` перезаписывает `dist/` через Cloudflare-mode build, включая `/npc-intake/`, и деплоит Worker в Cloudflare.
 
 ## Routing And Cache Headers
 
 - `functions/worker.ts` обрабатывает только namespace `/api/net` и `/api/net/*`; неизвестные Net API пути возвращают JSON `404`.
+- `functions/worker.ts` также прокидывает namespace `/api/npc-intake/*` в inbox handler из `gigahrush-npc-intake/hosted/worker.mjs`. Публичная форма `/npc-intake/` отправляет validated ZIP на `/api/npc-intake/submit`; review endpoints доступны под `/api/npc-intake/review/submissions...` и требуют `TENEVIK_REVIEW_TOKEN`.
 - Поддержанные endpoint-ы возвращают JSON `405` с `Allow` для неподдержанного метода.
 - Все ответы Net API, включая `200`, `400`, `404`, `405`, `429` и `503`, идут с `Cache-Control: no-store`, потому что содержат живые счетчики, чат, профиль или состояние binding-а.
 - Остальные пути передаются в Worker Assets. Если `GIGA_NET` не настроен, API возвращает мягкий `503`, но статический билд игры продолжает обслуживаться через assets.
+
+## NPC Intake Inbox
+
+Only the Cloudflare-mode online build serves the player-facing NPC questionnaire at `/npc-intake/`; default local, itch and single-file builds do not include the intake subproject.
+The form can still export a local ZIP, but its primary online path is:
+
+```txt
+/npc-intake/
+  -> POST /api/npc-intake/submit
+  -> R2 NPC_SUBMISSIONS stores the ZIP/source/preview files
+  -> D1 NPC_DB stores private contact, metadata, status and review pointers
+  -> /api/npc-intake/review/* lets TENEVIK download/export accepted submissions
+```
+
+Required optional bindings for online submission:
+
+```txt
+NPC_SUBMISSIONS  R2 bucket, for example gigahrush-npc-submissions
+NPC_DB           D1 database with gigahrush-npc-intake/hosted/cloudflare/npc_intake.sql applied
+TENEVIK_REVIEW_TOKEN  private review secret
+TURNSTILE_SECRET_KEY  leave unset for the main game form until a client Turnstile token UI exists
+```
+
+If these bindings are missing, `/api/npc-intake/submit` returns `503`; the game
+and static questionnaire still load, and the form tells the player to use
+`Export ZIP` as the manual fallback.
 
 ## In Game
 

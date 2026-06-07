@@ -619,7 +619,7 @@ export function applyRoofLosShelterPockets(world: World, rng: () => number): Roo
     world.markCellsDirty();
     world.markWallTexDirty();
     world.markFeaturesDirty();
-    world.surfaceVersion = (world.surfaceVersion + 1) | 0;
+    world.markSurfaceDirty();
   }
   return summarizeRoofLosExposure(world, heat);
 }

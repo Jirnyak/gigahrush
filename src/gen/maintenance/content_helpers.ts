@@ -31,6 +31,7 @@ import {
 import { randomRPG, scaleMonsterHp, scaleMonsterSpeed } from '../../systems/rpg';
 import { MONSTERS } from '../../entities/monster';
 import { Spr } from '../../render/sprite_index';
+import { requireSpawnedPlotNpcFromPackage } from '../plot_npc_spawn';
 
 export interface MaintContentCtx {
   world: World;
@@ -186,22 +187,16 @@ export function dropItems(ctx: MaintContentCtx, room: Room, itemIds: string[]): 
 }
 
 export function spawnPlotNpc(
-  ctx: MaintContentCtx, npcId: string, def: PlotNpcDef,
+  ctx: MaintContentCtx, npcId: string, _def: PlotNpcDef,
   x: number, y: number, angle = 0,
   extra?: Partial<Entity>,
 ): void {
-  ctx.entities.push({
-    id: ctx.nextId.v++, type: EntityType.NPC,
-    x: x + 0.5, y: y + 0.5,
-    angle, pitch: 0,
-    alive: true, speed: def.speed, sprite: def.sprite,
-    name: def.name, isFemale: def.isFemale,
-    needs: freshNeeds(), hp: def.hp, maxHp: def.maxHp, money: def.money,
-    ai: { goal: AIGoal.IDLE, tx: 0, ty: 0, path: [], pi: 0, stuck: 0, timer: 0 },
-    inventory: def.inventory.map(i => ({ ...i })),
-    faction: def.faction, occupation: def.occupation,
-    plotNpcId: npcId, canGiveQuest: true, questId: -1,
-    ...extra,
+  const px = x + 0.5;
+  const py = y + 0.5;
+  requireSpawnedPlotNpcFromPackage(ctx.entities, ctx.nextId, npcId, px, py, {
+    angle,
+    aiTarget: { x: px, y: py },
+    extra,
   });
 }
 

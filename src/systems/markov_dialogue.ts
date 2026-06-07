@@ -45,6 +45,13 @@ import {
 import { getNpcStateText } from './ai/npc_state_text';
 import { type ContextSnapshot } from './context';
 import { type NpcMemory } from './npc_memory';
+import {
+  npcPackageSpeechContextTags,
+  resolveNpcPackageForEntity,
+  selectNpcCuratedFallback,
+  type NpcSpeechPackageView,
+} from './npc_package_speech';
+import { occupationHasAnyProfileTag, occupationHasProfileTag } from '../data/occupation_profiles';
 
 export type MarkovAdapterIntent =
   | 'talk_context'
@@ -133,9 +140,13 @@ export function renderMarkovDialogueTalk(
 
   const memory = options.memory ?? minimalMemory(npc, options.time ?? 0);
   const seed = options.seed ?? npc.alifeId ?? npc.id;
-  const exactFallback = cleanLine(options.exactFallback) ?? fallbackTalkLine(npc, snapshot, memory, seed, options.repeatIndex ?? 0);
   const intent: MarkovAdapterIntent = hasContextAnchor(snapshot) ? 'talk_context' : 'talk_ambient';
-  const context = dialogueContext(npc, snapshot, memory);
+  const pack = resolveNpcPackageForEntity(npc);
+  const packageFallback = pack ? selectNpcCuratedFallback(pack, intent, seed) : undefined;
+  const exactFallback = cleanLine(options.exactFallback)
+    ?? packageFallback
+    ?? fallbackTalkLine(npc, snapshot, memory, seed, options.repeatIndex ?? 0);
+  const context = dialogueContext(npc, snapshot, memory, pack);
   const maxChars = options.maxChars ?? DEFAULT_MAX_TALK_CHARS;
   const request: MarkovAdapterSpeechRequest = {
     intent,
@@ -183,8 +194,14 @@ export function generateMarkovDialogueText(
   return renderMarkovDialogueTalk(npc, snapshot, options).text;
 }
 
-function dialogueContext(npc: Entity, snapshot: ContextSnapshot, memory: NpcMemory): MarkovAdapterTextContext {
+function dialogueContext(
+  npc: Entity,
+  snapshot: ContextSnapshot,
+  memory: NpcMemory,
+  pack: NpcSpeechPackageView | undefined,
+): MarkovAdapterTextContext {
   const tags: string[] = ['dialogue', 'ordinary_npc'];
+  if (pack) tags.push(...npcPackageSpeechContextTags(pack, npc, 'dialogue'));
   if (snapshot.roomName) tags.push('room');
   if (snapshot.isHungry) tags.push('need.food');
   if (snapshot.isThirsty) tags.push('need.water');
@@ -253,8 +270,8 @@ function dialogueAdvice(snapshot: ContextSnapshot, memory: NpcMemory, npc: Entit
   if (snapshot.hasActiveContract) return 'задание в журнале тяжелее пустого разговора';
   if (memory.trustPlayer > 35) return 'тебе скажу прямо, без лишнего окна';
   if (memory.trustPlayer < -20 || memory.fear > 45) return 'руки держи на виду';
-  if (npc.occupation === Occupation.DOCTOR) return 'медпункт любит чистые руки и короткие жалобы';
-  if (npc.occupation === Occupation.LOCKSMITH || npc.occupation === Occupation.MECHANIC) return 'сухой шов держит лучше обещаний';
+  if (occupationHasProfileTag(npc.occupation, 'medical')) return 'медпункт любит чистые руки и короткие жалобы';
+  if (occupationHasProfileTag(npc.occupation, 'repair')) return 'сухой шов держит лучше обещаний';
   if (npc.faction === Faction.LIQUIDATOR) return 'сначала доклад, потом выстрел, потом отход';
   return 'разговор короткий, пока очередь не сдвинулась';
 }
@@ -353,9 +370,7 @@ function pickContext(pool: readonly string[], memory: NpcMemory, seed: number | 
 function shouldUseOldWorldMemoryLines(npc: Entity): boolean {
   return npc.occupation !== Occupation.CHILD && (
     npc.faction === Faction.CITIZEN ||
-    npc.occupation === Occupation.HOUSEWIFE ||
-    npc.occupation === Occupation.DIRECTOR ||
-    npc.occupation === Occupation.TRAVELER
+    occupationHasAnyProfileTag(npc.occupation, ['domestic', 'admin', 'social', 'traveler'])
   );
 }
 

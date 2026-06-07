@@ -71,6 +71,7 @@ export function makeGameState(overrides: Partial<GameState> = {}): GameState {
     demosSearchActive: false,
     showLog: false,
     logScroll: 0,
+    showHelp: false,
     showControls: false,
     controlView: 'keys',
     controlSel: 0,

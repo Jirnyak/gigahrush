@@ -1,6 +1,7 @@
 /* ── Faction-to-faction relation system ───────────────────────── */
 
 import { Faction, Occupation } from '../core/types';
+import { OCCUPATION_PROFILES } from './occupation_profiles';
 
 /* ── Constants ────────────────────────────────────────────────── */
 export const FACTION_COUNT = 6; // CITIZEN, LIQUIDATOR, CULTIST, SCIENTIST, WILD, PLAYER
@@ -63,24 +64,8 @@ export const FACTION_NAMES: Record<Faction, string> = {
 
 /* ── Occupation names ─────────────────────────────────────────── */
 export const OCCUPATION_NAMES: Record<Occupation, string> = {
-  [Occupation.HOUSEWIFE]:   'Домохозяйка',
-  [Occupation.LOCKSMITH]:   'Слесарь',
-  [Occupation.SECRETARY]:   'Секретарь',
-  [Occupation.ELECTRICIAN]: 'Электрик',
-  [Occupation.COOK]:        'Повар',
-  [Occupation.DOCTOR]:      'Врач',
-  [Occupation.TURNER]:      'Токарь',
-  [Occupation.MECHANIC]:    'Механик',
-  [Occupation.STOREKEEPER]: 'Кладовщик',
-  [Occupation.ALCOHOLIC]:   'Алкоголик',
-  [Occupation.SCIENTIST]:   'Учёный',
-  [Occupation.CHILD]:       'Ребёнок',
-  [Occupation.DIRECTOR]:    'Директор',
-  [Occupation.TRAVELER]:    'Путник',
-  [Occupation.PILGRIM]:     'Паломник',
-  [Occupation.HUNTER]:      'Охотник',
-  [Occupation.PRIEST]:      'Священник',
-};
+  ...Object.fromEntries(Object.values(OCCUPATION_PROFILES).map(profile => [profile.occupation, profile.label])),
+} as Record<Occupation, string>;
 
 /* ── Weighted faction/occupation assignment ────────────────────── */
 export function randomFaction(): Faction {
@@ -96,21 +81,9 @@ export function randomFaction(): Faction {
 // домохозяйка 10%, слесарь 10%, секретарь 10%, электрик 10%, повар 5%,
 // врач 5%, токарь 10%, механик 10%, кладовщик 10%, алкоголик 5%,
 // учёный 5%, ребёнок 10%, директор 1%
-const OCC_WEIGHTS: [Occupation, number][] = [
-  [Occupation.HOUSEWIFE,   10],
-  [Occupation.LOCKSMITH,   10],
-  [Occupation.SECRETARY,   10],
-  [Occupation.ELECTRICIAN, 10],
-  [Occupation.COOK,         5],
-  [Occupation.DOCTOR,       5],
-  [Occupation.TURNER,      10],
-  [Occupation.MECHANIC,    10],
-  [Occupation.STOREKEEPER, 10],
-  [Occupation.ALCOHOLIC,    5],
-  [Occupation.SCIENTIST,    5],
-  [Occupation.CHILD,       10],
-  [Occupation.DIRECTOR,     1],
-];
+const OCC_WEIGHTS: [Occupation, number][] = Object.values(OCCUPATION_PROFILES)
+  .filter(profile => profile.defaultGenerationWeight > 0)
+  .map(profile => [profile.occupation, profile.defaultGenerationWeight] as [Occupation, number]);
 const OCC_TOTAL = OCC_WEIGHTS.reduce((s, [, w]) => s + w, 0);
 
 export function randomOccupation(_faction: Faction): Occupation {

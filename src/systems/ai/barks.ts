@@ -14,8 +14,14 @@ import {
   CONTEXT_BARK_THIRST,
   CONTEXT_BARK_WOUNDED,
 } from '../../data/context_lines';
-import { generateMarkovBark } from '../markov_barks';
+import { occupationHasProfileTag } from '../../data/occupation_profiles';
+import { generateMarkovBark, isUnsafeMarkovBarkSignal } from '../markov_barks';
 import { routeBarkSpeech } from '../markov_router_adapters';
+import {
+  npcPackageSpeechContextTags,
+  resolveNpcPackageForEntity,
+  selectNpcCuratedFallback,
+} from '../npc_package_speech';
 
 /* ── Phrase pools ─────────────────────────────────────────────── */
 
@@ -1716,6 +1722,11 @@ export function bark(e: Entity, msgs: Msg[], time: number, pool: string[], poolF
   const last = lastBarkByEntity.get(e.id);
   if (last && time - last.time < BARK_ENTITY_COOLDOWN_S && last.text === line) return;
   const signal = barkSignalForPool(pool);
+  const pack = resolveNpcPackageForEntity(e);
+  const seed = e.alifeId ?? e.id;
+  const packageFallback = pack && !isUnsafeMarkovBarkSignal(signal)
+    ? selectNpcCuratedFallback(pack, 'bark_ambient', seed)
+    : undefined;
   const routed = selected.length > 1
     ? generateMarkovBark({
       actor: {
@@ -1725,9 +1736,10 @@ export function bark(e: Entity, msgs: Msg[], time: number, pool: string[], poolF
         occupation: e.occupation,
       },
       signal,
-      exactFallback: line,
-      seed: e.alifeId ?? e.id,
+      exactFallback: packageFallback ?? line,
+      seed,
       repeatIndex: Math.floor(time),
+      tags: pack ? npcPackageSpeechContextTags(pack, e, 'bark') : undefined,
       routeSpeech: routeBarkSpeech,
     })
     : undefined;
@@ -1776,9 +1788,9 @@ function selectContextBarkPool(e: Entity, pool: string[], poolF: string[]): read
     if (water < 30 && Math.random() < 0.6) return CONTEXT_BARK_THIRST;
     const cleanupPool = technicalCleanupBarkPool(e);
     if (cleanupPool && Math.random() < 0.65) return cleanupPool;
-    if (e.occupation === Occupation.DOCTOR && Math.random() < 0.65) return BARK_MEDICAL_QUEUE;
-    if (e.occupation === Occupation.ALCOHOLIC && Math.random() < 0.55) return BARK_GENERIC_ALCOHOLIC;
-    if ((e.occupation === Occupation.PILGRIM || e.occupation === Occupation.PRIEST) && Math.random() < 0.65) return BARK_GENERIC_LOW_CULT;
+    if (occupationHasProfileTag(e.occupation, 'medical') && Math.random() < 0.65) return BARK_MEDICAL_QUEUE;
+    if (occupationHasProfileTag(e.occupation, 'alcoholic') && Math.random() < 0.55) return BARK_GENERIC_ALCOHOLIC;
+    if (occupationHasProfileTag(e.occupation, 'cult') && Math.random() < 0.65) return BARK_GENERIC_LOW_CULT;
     if (e.faction === Faction.CULTIST && Math.random() < 0.45) return BARK_GENERIC_CULTIST_FRAY;
     const occupationAmbient = occupationContextPool(CONTEXT_BARK_OCCUPATION_AMBIENT, e);
     if (occupationAmbient && Math.random() < 0.45) return occupationAmbient;
@@ -1814,21 +1826,18 @@ function occupationContextPool(pools: Record<number, readonly string[]>, e: Enti
 }
 
 function technicalCleanupBarkPool(e: Entity): readonly string[] | undefined {
-  if (e.faction === Faction.LIQUIDATOR && e.occupation === Occupation.DOCTOR) return SANITARY_CLEANUP_BARKS;
+  if (e.faction === Faction.LIQUIDATOR && occupationHasProfileTag(e.occupation, 'medical')) return SANITARY_CLEANUP_BARKS;
   if (isTechnicalOccupation(e.occupation)) return TECHNICAL_CLEANUP_BARKS;
   if (e.faction === Faction.LIQUIDATOR && Math.random() < 0.35) return SANITARY_CLEANUP_BARKS;
   return undefined;
 }
 
 function isTechnicalOccupation(occupation: Occupation | undefined): boolean {
-  return occupation === Occupation.LOCKSMITH
-    || occupation === Occupation.ELECTRICIAN
-    || occupation === Occupation.TURNER
-    || occupation === Occupation.MECHANIC;
+  return occupationHasProfileTag(occupation, 'technical');
 }
 
 function isTraderOccupation(occupation: Occupation | undefined): boolean {
-  return occupation === Occupation.STOREKEEPER;
+  return occupationHasProfileTag(occupation, 'trader');
 }
 
 function pickReadonly(arr: readonly string[]): string {

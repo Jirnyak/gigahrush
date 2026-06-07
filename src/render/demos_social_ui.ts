@@ -31,7 +31,7 @@ export function drawDemosSocialLinksPanel(
 
   const rowH = 16 * sy;
   const maxRowsByHeight = Math.max(0, Math.floor((h - 28 * sy) / rowH));
-  const maxRows = Math.min(opts.maxRows ?? 8, maxRowsByHeight);
+  const maxRows = Math.min(opts.maxRows ?? 9, maxRowsByHeight);
   if (links.length === 0 || maxRows <= 0) {
     ctx.font = `${8 * sy}px monospace`;
     ctx.fillStyle = '#789';

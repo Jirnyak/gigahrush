@@ -7,7 +7,6 @@ import {
   type Entity, type GameState, type Room, type WorldContainer, type WorldEvent,
 } from '../../core/types';
 import { World } from '../../core/world';
-import { freshNeeds } from '../../data/catalog';
 import { type PlotNpcDef, registerSideQuest } from '../../data/plot';
 import { MONSTERS } from '../../entities/monster';
 import { stampBlackHandTrail } from '../../systems/surface_marks';
@@ -16,6 +15,7 @@ import { publishEvent, registerWorldEventObserver } from '../../systems/events';
 import { randomRPG, scaleMonsterHp, scaleMonsterSpeed } from '../../systems/rpg';
 import { connectProtectedRoom, findClearArea, protectRoom, stampRoom } from '../shared';
 import { genLog } from '../log';
+import { requireSpawnedPlotNpcFromPackage } from '../plot_npc_spawn';
 
 const CHAPEL_NAME = 'Пост тонкой стены';
 const BLACK_HAND_SCOUT_ID = 'ag78_black_hand_scout';
@@ -232,18 +232,11 @@ function addBlackHandCache(world: World, room: Room): void {
 }
 
 function spawnScout(entities: Entity[], nextId: { v: number }, pos: CellPos, face: CellPos): void {
-  entities.push({
-    id: nextId.v++, type: EntityType.NPC,
-    x: pos.x + 0.5, y: pos.y + 0.5,
-    angle: Math.atan2(face.y - pos.y, face.x - pos.x), pitch: 0,
-    alive: true, speed: SCOUT_DEF.speed, sprite: SCOUT_DEF.sprite,
-    name: SCOUT_DEF.name, isFemale: SCOUT_DEF.isFemale,
-    needs: freshNeeds(), hp: SCOUT_DEF.hp, maxHp: SCOUT_DEF.maxHp, money: SCOUT_DEF.money,
-    ai: { goal: AIGoal.IDLE, tx: pos.x, ty: pos.y, path: [], pi: 0, stuck: 0, timer: 0 },
-    inventory: SCOUT_DEF.inventory.map(i => ({ ...i })),
+  requireSpawnedPlotNpcFromPackage(entities, nextId, BLACK_HAND_SCOUT_ID, pos.x + 0.5, pos.y + 0.5, {
+    angle: Math.atan2(face.y - pos.y, face.x - pos.x),
     weapon: 'makarov',
-    faction: SCOUT_DEF.faction, occupation: SCOUT_DEF.occupation,
-    plotNpcId: BLACK_HAND_SCOUT_ID, canGiveQuest: true, questId: -1,
+    canGiveQuest: true,
+    aiTarget: { x: pos.x, y: pos.y },
   });
 }
 

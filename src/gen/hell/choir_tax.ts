@@ -19,6 +19,7 @@ import {
 } from '../shared';
 import { genLog } from '../log';
 import { isPlayerEntity } from '../../systems/player_actor';
+import { requireSpawnedPlotNpcFromPackage } from '../plot_npc_spawn';
 
 const ROOM_W = 31;
 const ROOM_H = 25;
@@ -738,7 +739,7 @@ function spawnQuestNpc(
   nextId: { v: number },
   room: Room,
   plotNpcId: string,
-  def: PlotNpcDef,
+  _def: PlotNpcDef,
   dx: number,
   dy: number,
   angle: number,
@@ -746,34 +747,16 @@ function spawnQuestNpc(
 ): number {
   const x = world.wrap(room.x + dx);
   const y = world.wrap(room.y + dy);
-  const id = nextId.v++;
-  entities.push({
-    id,
-    type: EntityType.NPC,
-    x: x + 0.5,
-    y: y + 0.5,
+  const npc = requireSpawnedPlotNpcFromPackage(entities, nextId, plotNpcId, x + 0.5, y + 0.5, {
     angle,
-    pitch: 0,
-    alive: true,
-    speed: def.speed,
-    sprite: def.sprite,
-    name: def.name,
-    isFemale: def.isFemale,
-    needs: freshNeeds(),
-    hp: def.hp,
-    maxHp: def.maxHp,
-    money: def.money,
-    ai: { goal: AIGoal.IDLE, tx: x + 0.5, ty: y + 0.5, path: [], pi: 0, stuck: 0, timer: 0 },
-    inventory: def.inventory.map(i => ({ ...i })),
     weapon,
-    faction: def.faction,
-    occupation: def.occupation,
-    plotNpcId,
     canGiveQuest: true,
-    questId: -1,
-    rpg: randomRPG(def.faction === Faction.CULTIST ? 9 : 7),
+    aiTarget: { x: x + 0.5, y: y + 0.5 },
+    extra: {
+      rpg: randomRPG(plotNpcId === TAXMAN_ID ? 9 : 7),
+    },
   });
-  return id;
+  return npc.id;
 }
 
 function spawnChoirCultists(world: World, room: Room, entities: Entity[], nextId: { v: number }): void {

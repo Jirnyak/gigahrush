@@ -51,7 +51,6 @@ export {
 export { randomName, type NameResult, freshNeeds } from './names';
 export { NOTES } from './notes';
 export {
-  PLOT_NPCS,
   PLOT_CHAIN,
   designNpcFloorKey,
   getPlotDef,
@@ -65,4 +64,17 @@ export {
 } from './plot';
 export { PLOT_ROOMS, type PlotRoomDef } from './plot_rooms';
 export { generateNpcTradeItems } from './dialogue';
+export {
+  allNpcPackages,
+  compileNpcPackageForEditor,
+  getNpcPackage,
+  getNpcPackageByPlotNpcId,
+  npcPackageDisplayName,
+  plotNpcIdFromPackage,
+  registerNpcPackage,
+  registerNpcPackageFromPlotNpc,
+  registerNpcPackages,
+  validateNpcPackages,
+  type NpcPackageDef,
+} from './npc_packages';
 export { ZHELEMISH_DEFS, ZHELEMISH_ITEM_IDS, getZhelemishDef, validateZhelemishDefs, type ZhelemishDef, type ZhelemishItemId } from './zhelemish_defs';

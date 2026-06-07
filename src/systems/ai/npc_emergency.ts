@@ -4,7 +4,6 @@ import {
   EntityType,
   Faction,
   NpcState,
-  Occupation,
   RoomType,
   ZoneFaction,
   type Entity,
@@ -12,6 +11,7 @@ import {
 } from '../../core/types';
 import type { World } from '../../core/world';
 import { isPlayerEntity } from '../player_actor';
+import { occupationHasAnyProfileTag, occupationHasProfileTag } from '../../data/occupation_profiles';
 import { roomSupports } from '../../data/room_affordances';
 import { factionToTerritoryOwner } from '../../data/factions';
 import { territoryOwnerAt, territoryOwnerAtIndex } from '../territory';
@@ -161,10 +161,10 @@ export function getNpcEmergencyRole(npc: Entity): NpcEmergencyRole {
     case Faction.SCIENTIST: return 'scientist';
     default: break;
   }
-  if (npc.isTraveler || npc.occupation === Occupation.TRAVELER || npc.occupation === Occupation.PILGRIM || npc.occupation === Occupation.HUNTER) {
+  if (npc.isTraveler || occupationHasAnyProfileTag(npc.occupation, ['traveler', 'patrol', 'combat'])) {
     return 'traveler';
   }
-  if (npc.occupation === Occupation.SCIENTIST || npc.occupation === Occupation.DOCTOR) return 'scientist';
+  if (occupationHasProfileTag(npc.occupation, 'science') || occupationHasProfileTag(npc.occupation, 'medical')) return 'scientist';
   return 'citizen';
 }
 
@@ -174,7 +174,7 @@ export function chooseNpcEmergencyIntent(npc: Entity, options: Pick<NpcEmergency
   const jitter = npcEmergencyJitter(npc, (options.seedSalt ?? 0) ^ (phase === 'active' ? 0x51f15 : 0x31a7));
   const hpRatio = npc.hp !== undefined && npc.maxHp !== undefined && npc.maxHp > 0 ? npc.hp / npc.maxHp : 1;
   const wounded = hpRatio < 0.45;
-  const armed = !!npc.weapon || npc.occupation === Occupation.HUNTER || npc.faction === Faction.LIQUIDATOR;
+  const armed = !!npc.weapon || occupationHasProfileTag(npc.occupation, 'combat') || npc.faction === Faction.LIQUIDATOR;
   const activeBonus = phase === 'active' ? 0.35 : 0;
 
   if (wounded) {

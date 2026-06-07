@@ -161,7 +161,8 @@ const SOCIAL_OCCUPATIONS: readonly WeightedDesignValue<Occupation>[] = [
 ];
 
 const FLOOR_69_OCCUPATIONS: readonly WeightedDesignValue<Occupation>[] = [
-  { value: Occupation.TRAVELER, weight: 24 },
+  { value: Occupation.PERFORMER, weight: 62 },
+  { value: Occupation.TRAVELER, weight: 16 },
   { value: Occupation.SECRETARY, weight: 20 },
   { value: Occupation.STOREKEEPER, weight: 14 },
   { value: Occupation.HUNTER, weight: 13 },

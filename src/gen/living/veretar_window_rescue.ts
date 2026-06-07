@@ -1,17 +1,17 @@
 /* ── Белое окно Веретара: witness rescue POI ─────────────────── */
 
 import {
-  AIGoal, Cell, ContainerKind, DoorState, EntityType, Faction, Feature,
+  Cell, ContainerKind, DoorState, EntityType, Faction, Feature,
   FloorLevel, Occupation, QuestType, RoomType, Tex, W,
   type Entity, type Room, type WorldContainer,
 } from '../../core/types';
 import { World } from '../../core/world';
-import { freshNeeds } from '../../data/catalog';
 import { type PlotNpcDef, registerSideQuest } from '../../data/plot';
 import { MarkType, stampMark } from '../../systems/surface_marks';
 import { Spr } from '../../render/sprite_index';
 import { findClearArea, protectRoom } from '../shared';
 import { genLog } from '../log';
+import { requireSpawnedPlotNpcFromPackage } from '../plot_npc_spawn';
 import { registerZoneContent } from './zone_content';
 
 const CONTENT_TAG = 'ag95_veretar_window';
@@ -319,32 +319,12 @@ function spawnWitness(world: World, entities: Entity[], nextId: { v: number }, r
   if (existing) return existing.id;
   const x = world.wrap(room.x + Math.floor(room.w / 2));
   const y = world.wrap(room.y + 2);
-  const id = nextId.v++;
-  entities.push({
-    id,
-    type: EntityType.NPC,
-    x: x + 0.5,
-    y: y + 0.5,
+  const npc = requireSpawnedPlotNpcFromPackage(entities, nextId, WITNESS_ID, x + 0.5, y + 0.5, {
     angle: -Math.PI / 2,
-    pitch: 0,
-    alive: true,
-    speed: WITNESS.speed,
-    sprite: WITNESS.sprite,
-    name: WITNESS.name,
-    isFemale: WITNESS.isFemale,
-    needs: freshNeeds(),
-    hp: WITNESS.hp,
-    maxHp: WITNESS.maxHp,
-    money: WITNESS.money,
-    ai: { goal: AIGoal.IDLE, tx: x + 0.5, ty: y + 0.5, path: [], pi: 0, stuck: 0, timer: 0 },
-    inventory: WITNESS.inventory.map(i => ({ ...i })),
-    faction: WITNESS.faction,
-    occupation: WITNESS.occupation,
-    plotNpcId: WITNESS_ID,
     canGiveQuest: true,
-    questId: -1,
+    aiTarget: { x: x + 0.5, y: y + 0.5 },
   });
-  return id;
+  return npc.id;
 }
 
 function addDrop(entities: Entity[], nextId: { v: number }, x: number, y: number, defId: string, count = 1): void {

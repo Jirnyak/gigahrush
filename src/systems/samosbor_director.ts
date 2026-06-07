@@ -2,7 +2,7 @@
 
 import {
   Cell, DoorState, EntityType, Faction, FloorLevel, Occupation, AIGoal, MonsterKind, W,
-  type Entity, type GameState, type WorldEventType,
+  type Entity, type GameState, type WorldContainer, type WorldEventType,
   msg,
 } from '../core/types';
 import { World } from '../core/world';
@@ -477,15 +477,27 @@ function applyResourceShortage(state: GameState, beat: SamosborBeatDef): boolean
   return changeResourceStock(state, beat.resourceId, amount);
 }
 
+function nearbyDirectorNpcs(
+  world: World,
+  entities: readonly Entity[],
+  snapshot: SamosborDirectorSnapshot,
+  radius2: number,
+  limit: number,
+): Entity[] {
+  return entities
+    .filter(e => (
+      e.alive &&
+      e.type === EntityType.NPC &&
+      e.faction !== Faction.PLAYER &&
+      world.dist2(snapshot.playerX, snapshot.playerY, e.x, e.y) <= radius2
+    ))
+    .sort((a, b) => world.dist2(snapshot.playerX, snapshot.playerY, a.x, a.y) - world.dist2(snapshot.playerX, snapshot.playerY, b.x, b.y) || a.id - b.id)
+    .slice(0, limit);
+}
+
 function seedRumor(world: World, entities: Entity[], state: GameState, snapshot: SamosborDirectorSnapshot): number {
   let seen = 0;
-  let checked = 0;
-  for (const e of entities) {
-    if (seen >= 4) break;
-    if (checked++ >= 512) break;
-    if (!e.alive || e.type !== EntityType.NPC) continue;
-    if (e.faction === Faction.PLAYER) continue;
-    if (world.dist2(snapshot.playerX, snapshot.playerY, e.x, e.y) > 32 * 32) continue;
+  for (const e of nearbyDirectorNpcs(world, entities, snapshot, 32 * 32, 4)) {
     observeRumorEvent(e, {
       type: 'samosbor_warning',
       severity: 3,
@@ -501,9 +513,7 @@ function seedRumor(world: World, entities: Entity[], state: GameState, snapshot:
 function applyDoorMalfunction(world: World, snapshot: SamosborDirectorSnapshot): number {
   let bestIdx = -1;
   let bestD2 = 12 * 12;
-  let checked = 0;
   for (const [idx, door] of world.doors) {
-    if (checked++ > 256) break;
     if (world.aptMask[idx] || world.hermoWall[idx]) continue;
     if (door.state !== DoorState.OPEN && door.state !== DoorState.HERMETIC_OPEN) continue;
     if (snapshot.samosborActive && door.state === DoorState.HERMETIC_OPEN) continue;
@@ -523,23 +533,31 @@ function applyDoorMalfunction(world: World, snapshot: SamosborDirectorSnapshot):
   return 1;
 }
 
-function applyContainerTheft(world: World): { ok: boolean; itemId?: string; itemName?: string; containerId?: number } {
+function applyContainerTheft(world: World, snapshot: SamosborDirectorSnapshot): { ok: boolean; itemId?: string; itemName?: string; containerId?: number } {
+  let best: WorldContainer | undefined;
+  let bestScore = Infinity;
   for (const c of world.containers) {
     if (!c.inventory || c.inventory.length === 0) continue;
     const slot = c.inventory[c.inventory.length - 1];
     if (!slot || slot.count <= 0) continue;
-    slot.count--;
-    if (slot.count <= 0) c.inventory.pop();
-    if (!c.stolenItemIds) c.stolenItemIds = [];
-    if (!c.stolenItemIds.includes(slot.defId)) c.stolenItemIds.push(slot.defId);
-    return {
-      ok: true,
-      itemId: slot.defId,
-      itemName: ITEMS[slot.defId]?.name ?? slot.defId,
-      containerId: c.id,
-    };
+    const zonePenalty = c.zoneId === snapshot.zoneId ? 0 : 64 * 64;
+    const score = world.dist2(snapshot.playerX, snapshot.playerY, c.x + 0.5, c.y + 0.5) + zonePenalty + c.id * 0.0001;
+    if (score >= bestScore) continue;
+    best = c;
+    bestScore = score;
   }
-  return { ok: false };
+  const slot = best?.inventory?.[best.inventory.length - 1];
+  if (!best || !slot || slot.count <= 0) return { ok: false };
+  slot.count--;
+  if (slot.count <= 0) best.inventory!.pop();
+  if (!best.stolenItemIds) best.stolenItemIds = [];
+  if (!best.stolenItemIds.includes(slot.defId)) best.stolenItemIds.push(slot.defId);
+  return {
+    ok: true,
+    itemId: slot.defId,
+    itemName: ITEMS[slot.defId]?.name ?? slot.defId,
+    containerId: best.id,
+  };
 }
 
 function spawnAftershockMonster(
@@ -626,7 +644,7 @@ function applyBeat(
       return { ok: true, extra: { doors } };
     }
     case 'container_theft': {
-      const theft = applyContainerTheft(world);
+      const theft = applyContainerTheft(world, snapshot);
       if (theft.ok) pushDirectorLine(state, beat);
       return { ok: theft.ok, extra: theft };
     }

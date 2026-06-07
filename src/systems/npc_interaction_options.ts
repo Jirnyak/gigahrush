@@ -1,12 +1,17 @@
 import { EntityType, msg, type Entity, type GameState } from '../core/types';
 import { craftRecipeSourcesForNpc, type CraftRecipeSourceDef } from '../data/craft_recipe_sources';
-import { DESIGN_FLOOR_ROUTES } from '../data/design_floors';
+import {
+  allDesignFloorProfiles,
+  type DesignFloorNpcInteractionProfile,
+  type DesignFloorNpcPredicateProfile,
+} from '../data/design_floor_profiles';
 import { craftRecipeLearnedMessage, isCraftRecipeKnown, learnCraftRecipe } from './crafting';
 import { closeDiceGame, diceStakeFromNpc, startDiceGame } from './dice';
 import { closeDominoGame, dominoStakeFromNpc, startDominoGame } from './domino';
 import { closeDurakGame, durakStakeFromNpc, startDurakGame } from './durak';
 import { canOpenDemosProfileForNpc, demosCursorForNpcProfile } from './demos_profiles';
 import { portalAllowsCasinoLikeContent } from './platform_bridge';
+import { currentFloorRunEntry } from './procedural_floors';
 import { npcHasQuestMarker } from './quests';
 import { controlBindingLabel } from './controls';
 
@@ -119,20 +124,60 @@ function dominoStake(ctx: NpcInteractionContext): number {
   return dominoStakeFromNpc(ctx.npc);
 }
 
-function currentRouteId(state: GameState): string {
-  const z = (state as GameState & { floorRun?: { currentZ?: number } }).floorRun?.currentZ;
-  if (typeof z !== 'number' || !Number.isFinite(z)) return '';
-  return DESIGN_FLOOR_ROUTES.find(route => route.z === Math.trunc(z))?.id ?? '';
+function currentDesignRouteId(state: GameState): string {
+  return currentFloorRunEntry(state).designFloorId ?? '';
 }
 
-function isFloor69Worker(npc: Entity): boolean {
+function npcMatchesProfilePredicate(npc: Entity, predicate: DesignFloorNpcPredicateProfile): boolean {
   if (npc.type !== EntityType.NPC || !npc.alive) return false;
-  if (npc.plotNpcId === 'f69_performer_ira') return true;
-  return npc.name === 'Ира Сцена' || (npc.name?.startsWith('Этаж 69: работница ') ?? false);
+  const name = npc.name ?? '';
+  if (npc.plotNpcId && predicate.plotNpcIds?.includes(npc.plotNpcId)) return true;
+  if (predicate.exactNames?.includes(name)) return true;
+  if (predicate.namePrefixes?.some(prefix => name.startsWith(prefix))) return true;
+  if (npc.npcVisualId && predicate.npcVisualIds?.includes(npc.npcVisualId)) return true;
+  return false;
 }
 
-function floor69EntertainmentPrice(): number {
-  return 45;
+function designFloorInteractionVisible(
+  routeId: string,
+  option: DesignFloorNpcInteractionProfile,
+  ctx: NpcInteractionContext,
+): boolean {
+  if (option.requiresCasinoLikePortalAllowance && !portalAllowsCasinoLikeContent()) return false;
+  return currentDesignRouteId(ctx.state) === routeId && npcMatchesProfilePredicate(ctx.npc, option.npcPredicate);
+}
+
+function designFloorInteractionLabel(option: DesignFloorNpcInteractionProfile): string {
+  return option.priceRubles !== undefined ? `${option.label} (₽${option.priceRubles})` : option.label;
+}
+
+function designFloorInteractionDisabledReason(
+  option: DesignFloorNpcInteractionProfile,
+  ctx: NpcInteractionContext,
+): string | undefined {
+  const price = option.priceRubles ?? 0;
+  if (price > 0 && cleanMoney(ctx.player) < price) return `Нужно ₽${price}.`;
+  return undefined;
+}
+
+function formatDesignFloorInteractionLine(
+  line: string,
+  option: DesignFloorNpcInteractionProfile,
+  ctx: NpcInteractionContext,
+): string {
+  return line
+    .replace(/\{npc\}/g, ctx.npc.name ?? 'NPC')
+    .replace(/\{price\}/g, String(option.priceRubles ?? 0));
+}
+
+function openDesignFloorInteraction(option: DesignFloorNpcInteractionProfile, ctx: NpcInteractionContext): void {
+  openNpcInteractionInterface(ctx, {
+    id: option.id,
+    title: option.title,
+    priceRubles: option.priceRubles,
+    lines: option.lines.map(line => formatDesignFloorInteractionLine(line, option, ctx)),
+    message: option.message,
+  });
 }
 
 function hashString32(value: string): number {
@@ -416,28 +461,15 @@ registerNpcInteractionOption({
   },
 });
 
-registerNpcInteractionOption({
-  id: 'floor69_entertainment',
-  order: 40,
-  label: () => `Развлечься (₽${floor69EntertainmentPrice()})`,
-  visible: ctx => portalAllowsCasinoLikeContent() && currentRouteId(ctx.state) === 'floor_69' && isFloor69Worker(ctx.npc),
-  disabledReason: ctx => {
-    const price = floor69EntertainmentPrice();
-    if (cleanMoney(ctx.player) < price) return `Нужно ₽${price}.`;
-    return undefined;
-  },
-  activate: ctx => {
-    const price = floor69EntertainmentPrice();
-    openNpcInteractionInterface(ctx, {
-      id: 'floor69_entertainment',
-      title: 'ЭТАЖ 69',
-      priceRubles: price,
-      lines: [
-        `${ctx.npc.name ?? 'Работница'} называет цену и смотрит на дверь.`,
-        `Цена: ₽${price}.`,
-        'Закрытая сцена будет реализована позже; сейчас это атмосферный вход в будущий интерфейс.',
-      ],
-      message: 'Оплата пока не списана: сцена не реализована.',
+for (const profile of allDesignFloorProfiles()) {
+  for (const option of profile.npcInteractions ?? []) {
+    registerNpcInteractionOption({
+      id: option.id,
+      order: option.order,
+      label: () => designFloorInteractionLabel(option),
+      visible: ctx => designFloorInteractionVisible(profile.routeId, option, ctx),
+      disabledReason: ctx => designFloorInteractionDisabledReason(option, ctx),
+      activate: ctx => openDesignFloorInteraction(option, ctx),
     });
-  },
-});
+  }
+}

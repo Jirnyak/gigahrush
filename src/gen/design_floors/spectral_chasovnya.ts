@@ -26,9 +26,8 @@ import {
   type WorldContainer,
 } from '../../core/types';
 import { World } from '../../core/world';
-import { freshNeeds } from '../../data/catalog';
 import { factionToTerritoryOwner } from '../../data/factions';
-import { type PlotNpcDef, registerSideQuest } from '../../data/plot';
+import { designNpcFloorKey, type PlotNpcDef, registerFloorSideQuest } from '../../data/plot';
 import { MONSTERS } from '../../entities/monster';
 import { monsterSpr } from '../../render/sprite_index';
 import { registerContentInteractionHook } from '../../systems/content_hooks';
@@ -37,8 +36,11 @@ import { publishNoise } from '../../systems/noise';
 import { registerRouteCue } from '../../systems/route_cues';
 import { randomRPG } from '../../systems/rpg';
 import { setTerritoryOwnerAtIndex, syncZoneMetadataFromTerritory, territoryOwnerAtIndex } from '../../systems/territory';
+import { requireSpawnedPlotNpcFromPackage } from '../plot_npc_spawn';
 import { carveCorridor, ensureConnectivity, generateZones, sanitizeDoors, stampRoom } from '../shared';
 import type { FloorGeneration } from '../floor_manifest';
+
+const DESIGN_NPC_HOME_FLOOR_KEY = designNpcFloorKey('spectral_chasovnya');
 
 export const SPECTRAL_CHASOVNYA_ROUTE_ID = 'spectral_chasovnya' as const;
 export const SPECTRAL_CHASOVNYA_Z = -42 as const;
@@ -232,7 +234,7 @@ const MIRON_DEF: PlotNpcDef = {
   ],
 };
 
-registerSideQuest(NPC_ID, MIRON_DEF, [{
+registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, NPC_ID, MIRON_DEF, [{
   id: 'spectral_tune_radio_sacristy',
   giverNpcId: NPC_ID,
   type: QuestType.FETCH,
@@ -947,33 +949,14 @@ function buildSpectralState(world: World, rooms: SpectralRooms): SpectralChasovn
   };
 }
 
-function spawnPlotNpc(entities: Entity[], nextId: NextId, npcId: typeof NPC_ID, def: PlotNpcDef, x: number, y: number, angle: number): number {
-  const id = nextId.v++;
-  entities.push({
-    id,
-    type: EntityType.NPC,
-    x: x + 0.5,
-    y: y + 0.5,
+function spawnPlotNpc(entities: Entity[], nextId: NextId, npcId: typeof NPC_ID, _def: PlotNpcDef, x: number, y: number, angle: number): number {
+  const px = x + 0.5;
+  const py = y + 0.5;
+  const npc = requireSpawnedPlotNpcFromPackage(entities, nextId, npcId, px, py, {
     angle,
-    pitch: 0,
-    alive: true,
-    speed: def.speed,
-    sprite: def.sprite,
-    name: def.name,
-    isFemale: def.isFemale,
-    needs: freshNeeds(),
-    hp: def.hp,
-    maxHp: def.maxHp,
-    money: def.money,
-    ai: { goal: AIGoal.IDLE, tx: x + 0.5, ty: y + 0.5, path: [], pi: 0, stuck: 0, timer: 0 },
-    inventory: def.inventory.map(item => ({ ...item })),
-    faction: def.faction,
-    occupation: def.occupation,
-    plotNpcId: npcId,
-    canGiveQuest: true,
-    questId: -1,
+    aiTarget: { x: px, y: py },
   });
-  return id;
+  return npc.id;
 }
 
 function spawnSpectralMonster(

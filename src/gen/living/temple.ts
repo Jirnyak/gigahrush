@@ -8,7 +8,6 @@ import {
   FloorLevel, msg,
 } from '../../core/types';
 import { World } from '../../core/world';
-import { freshNeeds } from '../../data/catalog';
 import { type PlotNpcDef, registerAuthoredNpc, storyNpcFloorKey } from '../../data/plot';
 import { registerZoneContent } from './zone_content';
 import { MONSTERS } from '../../entities/monster';
@@ -16,6 +15,7 @@ import { monsterSpr } from '../../render/sprite_index';
 import { registerContentEntityDeathHook } from '../../systems/content_hooks';
 import { randomRPG, scaleMonsterHp, scaleMonsterSpeed } from '../../systems/rpg';
 import { genLog } from '../log';
+import { requireSpawnedPlotNpcFromPackage } from '../plot_npc_spawn';
 
 /* ── NPC definition ──────────────────────────────────────────── */
 const NPC_DEF: PlotNpcDef = {
@@ -234,17 +234,9 @@ function generateTemple(
   // Phase 8: NPC — Батюшка at altar (apse, north-center)
   const priestX = rx + midX + 0.5;
   const priestY = ry + 2 + 0.5;
-  entities.push({
-    id: nextId.v++, type: EntityType.NPC,
-    x: priestX, y: priestY,
-    angle: Math.PI, pitch: 0,
-    alive: true, speed: NPC_DEF.speed, sprite: NPC_DEF.sprite,
-    name: NPC_DEF.name, isFemale: NPC_DEF.isFemale,
-    needs: freshNeeds(), hp: NPC_DEF.hp, maxHp: NPC_DEF.maxHp, money: NPC_DEF.money,
-    ai: { goal: AIGoal.IDLE, tx: 0, ty: 0, path: [], pi: 0, stuck: 0, timer: 0 },
-    inventory: NPC_DEF.inventory.map(i => ({ ...i })),
-    faction: NPC_DEF.faction, occupation: NPC_DEF.occupation,
-    plotNpcId: 'batushka', canGiveQuest: true, questId: -1,
+  requireSpawnedPlotNpcFromPackage(entities, nextId, 'batushka', priestX, priestY, {
+    angle: Math.PI,
+    canGiveQuest: true,
   });
 
   return { nextRoomId };

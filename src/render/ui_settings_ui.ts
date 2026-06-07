@@ -4,7 +4,10 @@ import {
   activeUiPresetId,
   autoPickupEnabled,
   cameraFovDegrees,
+  hudMotionMode,
+  mapHighContrastEnabled,
   mobileLookSensitivity,
+  screenInterferenceMode,
   uiElementEnabled,
   uiSettingsRowAt,
   uiSettingsRowCount,
@@ -33,6 +36,21 @@ export function drawUiSettingsMenu(
   const selected = Math.max(0, Math.min(rowCount - 1, state.uiSettingsSel));
   const activePreset = activeUiPresetId();
   const prevTextBaseline = ctx.textBaseline;
+  const graphicsValue = (kind: string): string => {
+    if (kind === 'screen_interference') {
+      const mode = screenInterferenceMode();
+      if (!uiElementEnabled('screen_fx')) return 'ОТКЛ';
+      return mode === 'off' ? 'ВЫКЛ' : mode === 'full' ? 'ПОЛН' : 'СЛАБ';
+    }
+    if (kind === 'hud_motion') return hudMotionMode() === 'reduced' ? 'МЕНЬШЕ' : 'НОРМ';
+    if (kind === 'map_contrast') return mapHighContrastEnabled() ? 'ВКЛ' : 'ВЫКЛ';
+    if (kind === 'camera_fov') {
+      const fov = cameraFovDegrees();
+      const label = fov < 80 ? 'узко' : fov > 95 ? 'шир' : 'норм';
+      return `${fov}° ${label}`;
+    }
+    return '';
+  };
 
   ctx.fillStyle = '#00040a';
   ctx.fillRect(0, 0, w, h);
@@ -124,7 +142,7 @@ export function drawUiSettingsMenu(
       ctx.fillText(fitTextStable(ctx, item.label, labelW - 8 * sx), x + groupW + 18 * sx, textY);
       ctx.fillStyle = '#fd6';
       ctx.fillText(
-        item.kind === 'camera_fov' ? `${cameraFovDegrees()}°` : `${Math.round(mobileLookSensitivity() * 100)}%`,
+        view === 'graphics' ? graphicsValue(item.kind) : `${Math.round(mobileLookSensitivity() * 100)}%`,
         x + groupW + labelW + 20 * sx,
         textY,
       );
@@ -148,7 +166,7 @@ export function drawUiSettingsMenu(
   ctx.textBaseline = 'alphabetic';
   ctx.fillText(
     fitTextStable(ctx, view === 'graphics'
-      ? 'ENTER меняет FOV; верхняя строка возвращает графику к умолчанию.'
+      ? 'ENTER меняет строку; графический сброс не трогает UI-пресет. Контраст карты дублирует легенду.'
       : 'Новичок используется по умолчанию. ENTER переключает UI, автоподбор и мобильный обзор; верхняя строка сбрасывает.',
     w - 24 * sx),
     12 * sx,

@@ -155,6 +155,8 @@ Each decision tick scores a compact list of intents. The list should stay small 
 - `escort`: help ally/family/quest actor reach shelter or exit.
 - `wander`: low-pressure local movement.
 
+The `toilet` executor uses the same shared actor urination trace path as the player: actual relief paints compact yellow organic surface stains at the projected hit point instead of silently lowering a number. Repeated ticks while turning or moving can draw a line naturally, without laying a long ray in one frame. Ordinary NPCs still prefer bathroom rooms through the routine target model. `Faction.WILD` is the intentional rare faction hardcode and current design experiment: wild residents do not route to a toilet just to pee; when pee pressure wins, they relieve themselves in place and leave the same projected trace. Keep this exception narrow to the Wild faction, and do not use it as a pattern for new routine hardcodes.
+
 Example score shape:
 
 ```txt

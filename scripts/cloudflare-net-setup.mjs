@@ -2,13 +2,20 @@ import { execFileSync } from 'node:child_process';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
-const databaseName = 'gigahrush-net';
-const binding = 'GIGA_NET';
 const configPath = resolve('wrangler.jsonc');
-const schemaFiles = [
+const netDatabaseName = 'gigahrush-net';
+const netBinding = 'GIGA_NET';
+const npcDatabaseName = 'gigahrush-npc-intake';
+const npcBinding = 'NPC_DB';
+const npcBucketName = 'gigahrush-npc-submissions';
+const npcBucketBinding = 'NPC_SUBMISSIONS';
+const netSchemaFiles = [
   { path: 'cloudflare/d1/net_sphere.sql', mode: 'execute' },
   { path: 'cloudflare/d1/net_sphere_names.sql', mode: 'guarded' },
   { path: 'cloudflare/d1/net_sphere_market.sql', mode: 'execute' },
+];
+const npcSchemaFiles = [
+  { path: 'gigahrush-npc-intake/hosted/cloudflare/npc_intake.sql', mode: 'execute' },
 ];
 const schemaOnly = process.argv.includes('--schema-only');
 
@@ -47,7 +54,7 @@ function databaseId(row) {
   return String(row.uuid ?? row.id ?? row.database_id ?? '');
 }
 
-function ensureDatabase() {
+function ensureDatabase(databaseName) {
   let db = listDatabases().find(row => row.name === databaseName);
   if (db) return databaseId(db);
 
@@ -75,7 +82,7 @@ function writeConfig(config) {
   writeFileSync(configPath, `${JSON.stringify(config, null, 2)}\n`);
 }
 
-function ensureBinding(id) {
+function ensureD1Binding(binding, databaseName, id) {
   const config = readConfig();
   const d1 = Array.isArray(config.d1_databases) ? config.d1_databases : [];
   const next = d1.filter(row => row && row.binding !== binding);
@@ -88,14 +95,50 @@ function ensureBinding(id) {
   writeConfig(config);
 }
 
-function applySchema() {
+function listR2Buckets() {
+  let out = '';
+  try {
+    out = run(['r2', 'bucket', 'list', '--json']);
+  } catch {
+    console.error('Could not list R2 buckets. Check Cloudflare auth: `npx wrangler login` or CLOUDFLARE_API_TOKEN.');
+    process.exit(1);
+  }
+  const data = JSON.parse(out);
+  return Array.isArray(data) ? data : [];
+}
+
+function bucketName(row) {
+  if (!row || typeof row !== 'object') return '';
+  return String(row.name ?? row.bucket_name ?? '');
+}
+
+function ensureR2Bucket(bucketNameValue) {
+  const existing = listR2Buckets().find(row => bucketName(row) === bucketNameValue);
+  if (existing) return;
+  console.log(`Creating R2 bucket ${bucketNameValue}...`);
+  run(['r2', 'bucket', 'create', bucketNameValue], { stdio: 'inherit' });
+}
+
+function ensureR2Binding(binding, bucketNameValue) {
+  const config = readConfig();
+  const r2 = Array.isArray(config.r2_buckets) ? config.r2_buckets : [];
+  const next = r2.filter(row => row && row.binding !== binding);
+  next.push({
+    binding,
+    bucket_name: bucketNameValue,
+  });
+  config.r2_buckets = next;
+  writeConfig(config);
+}
+
+function applySchema(databaseName, schemaFiles) {
   for (const schema of schemaFiles) {
     if (schema.mode === 'execute') {
       console.log(`Applying ${schema.path} to ${databaseName}...`);
       run(['d1', 'execute', databaseName, '--remote', '--file', schema.path, '--yes'], { stdio: 'inherit' });
     } else if (schema.mode === 'guarded') {
       console.log(`Applying ${schema.path} to ${databaseName} with guards...`);
-      applyGuardedSqlFile(schema.path);
+      applyGuardedSqlFile(databaseName, schema.path);
     } else {
       console.error(`Unsupported schema mode for ${schema.path}: ${schema.mode}`);
       process.exit(1);
@@ -103,15 +146,15 @@ function applySchema() {
   }
 }
 
-function tableColumns(table) {
+function tableColumns(databaseName, table) {
   const out = run(['d1', 'execute', databaseName, '--remote', '--json', '--command', `PRAGMA table_info(${table})`]);
   const data = JSON.parse(out);
   const rows = Array.isArray(data) ? data.flatMap(item => item.results ?? []) : [];
   return new Set(rows.map(row => row.name).filter(Boolean));
 }
 
-function ensureColumn(table, column, definition) {
-  const columns = tableColumns(table);
+function ensureColumn(databaseName, table, column, definition) {
+  const columns = tableColumns(databaseName, table);
   if (columns.has(column)) return;
   console.log(`Adding ${table}.${column}...`);
   run(['d1', 'execute', databaseName, '--remote', '--command', `ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`], { stdio: 'inherit' });
@@ -125,12 +168,12 @@ function sqlStatements(sql) {
     .filter(Boolean);
 }
 
-function applyGuardedSqlFile(schemaPath) {
+function applyGuardedSqlFile(databaseName, schemaPath) {
   const sql = readFileSync(schemaPath, 'utf8');
   for (const statement of sqlStatements(sql)) {
     const alter = /^ALTER TABLE\s+([a-z_][a-z0-9_]*)\s+ADD COLUMN\s+([a-z_][a-z0-9_]*)\s+([\s\S]+)$/i.exec(statement);
     if (alter) {
-      ensureColumn(alter[1], alter[2], alter[3].trim());
+      ensureColumn(databaseName, alter[1], alter[2], alter[3].trim());
       continue;
     }
 
@@ -145,9 +188,18 @@ function applyGuardedSqlFile(schemaPath) {
 }
 
 ensureLogin();
-const id = schemaOnly ? '' : ensureDatabase();
-if (!schemaOnly) ensureBinding(id);
-applySchema();
+let netId = '';
+let npcId = '';
+if (!schemaOnly) {
+  netId = ensureDatabase(netDatabaseName);
+  ensureD1Binding(netBinding, netDatabaseName, netId);
+  npcId = ensureDatabase(npcDatabaseName);
+  ensureD1Binding(npcBinding, npcDatabaseName, npcId);
+  ensureR2Bucket(npcBucketName);
+  ensureR2Binding(npcBucketBinding, npcBucketName);
+}
+applySchema(netDatabaseName, netSchemaFiles);
+applySchema(npcDatabaseName, npcSchemaFiles);
 console.log(schemaOnly
-  ? `Cloudflare Net Sphere schema is ready: ${databaseName}`
-  : `Cloudflare Net Sphere is ready: ${binding} -> ${databaseName} (${id})`);
+  ? `Cloudflare schemas are ready: ${netDatabaseName}, ${npcDatabaseName}`
+  : `Cloudflare is ready: ${netBinding} -> ${netDatabaseName} (${netId}), ${npcBinding} -> ${npcDatabaseName} (${npcId}), ${npcBucketBinding} -> ${npcBucketName}`);

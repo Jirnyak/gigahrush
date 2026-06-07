@@ -479,7 +479,7 @@ function markDirty(world: World, flags: DirtyFlags, rects?: readonly WorldGridDi
   if (flags.floorTex) world.markFloorTexDirty(rects);
   if (flags.light) world.markFeaturesDirty(true, rects);
   if (flags.fog) world.markFogDirty(rects);
-  if (flags.surface) world.surfaceVersion = (world.surfaceVersion + 1) | 0;
+  if (flags.surface) world.markSurfaceDirty();
 }
 
 function noteTouched(wave: SamosborWave, idx: number): void {
@@ -995,7 +995,7 @@ function applyGeneratedFieldPatch(
   world.markFloorTexDirty(fieldRects);
   world.markFeaturesDirty(true, fieldRects);
   world.markFogDirty(fieldRects);
-  world.surfaceVersion = (world.surfaceVersion + 1) | 0;
+  world.markSurfaceDirty();
   wave.regenerated = true;
 
   const ox = wave.originIdx % W;

@@ -53,6 +53,28 @@ test('runtime camera follows the controlled actor by default', () => {
   assert.equal(view.fovRadians, 0.9);
 });
 
+test('runtime player camera adds bounded inertial head bob from real movement', () => {
+  const camera = createRuntimeCamera();
+  const world = openWorld();
+  const player = makeTestPlayer({ x: 12, y: 20, angle: 1.2, pitch: -0.1, alive: true });
+
+  updateRuntimeCamera(camera, world, 1 / 60, player);
+  for (let i = 0; i < 10; i++) {
+    player.x += 0.034;
+    updateRuntimeCamera(camera, world, 1 / 60, player);
+  }
+  const view = runtimeCameraView(camera, player);
+
+  assert.equal(view.mode, 'player');
+  assert.equal(view.x, player.x);
+  assert.equal(view.y, player.y);
+  assert.equal(view.angle, player.angle);
+  assert.equal(view.pitch, player.pitch);
+  assert.equal(view.height !== CAMERA_STANDING_HEIGHT, true);
+  assert.equal(Math.abs(view.height - CAMERA_STANDING_HEIGHT) > 0.006, true);
+  assert.equal(Math.abs(view.height - CAMERA_STANDING_HEIGHT) < 0.035, true);
+});
+
 test('free camera moves without mutating the controlled actor', () => {
   const camera = createRuntimeCamera();
   const world = openWorld();

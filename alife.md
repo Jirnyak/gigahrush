@@ -23,19 +23,44 @@ The next implementation target is:
 Current shipped baseline:
 
 - `src/systems/alife.ts` now uses a seed-sized population plan around the `100_000` baseline with `131_072` as the technical identity capacity. There is no million-size runtime branch and no mobile/memory fallback population branch.
-- A run-start population plan distributes every created record across story floors, routed design floors and the per-run procedural floor deck before first active-floor generation. Plot/authored/event reserved identities are counted inside the same pool and skipped by ordinary ambient materialization.
+- A run-start population plan distributes every created record across story floors, routed design floors and the per-run procedural floor deck before first active-floor generation. Plot/authored/event reserved identities are counted inside the same pool. Package reservations with `reservedIdentityId = npc:<id>` and `presence: 'population'` can materialize through ordinary floor slots; `event_only` package reservations and legacy plot reservations stay event/authored-owned.
 - Live `entities` still contain only the active floor.
 - Generator-owned ambient NPCs become placement templates; A-Life records are materialized into those slots.
 - `alifeId` and `persistentNpcId` identify materialized procedural NPCs and converted reserved plot arrivals such as the Hell holdout Major Grom arrival.
 - `plotNpcId` deaths are tracked by A-Life so killed named NPCs do not reappear on later generation.
 - Materialized A-Life NPCs carry personal `playerRelation`; AI hostility checks it before falling back to faction hostility.
 - Core persistent route/numeric fields are no longer stored as JS string/number properties on every A-Life record: `floorKey` is interned through a route-key dictionary plus `Uint16Array` index, and base floor, danger, faction, occupation, age, sex code, flags, `level`, `str`, `agi`, `int`, HP, money/account balance, family id, sprite, sprite seed, kill counters, `playerRelation` and `karma` live in typed-array columns inside the A-Life state, while snapshots expose ordinary strings/numbers to callers.
-- Ordinary generated loadout is deterministic from seed, faction, occupation, danger and level; it is not stored as a `weapon` string plus `inventory` array on every untouched A-Life record. Only captured/overridden custom loadout is kept as a sparse per-record override.
+- Ordinary generated loadout is deterministic from seed, faction, occupation, danger and level; it is not stored as a `weapon` string plus `inventory` array on every untouched A-Life record. Only captured/overridden custom loadout is kept as a sparse per-record override, including package-projected exact `weapon`, `tool` and `inventory` loadouts.
 - Browser saves store A-Life seed, total population, up to `65_536` dead A-Life ids, dead plot ids, bounded changed-record overrides and capped persistent mobility state. Full live entities are not serialized.
 - `src/systems/alife_migration.ts` runs a bounded cold migration cadence: inactive-floor journeys move records between route keys, active-floor arrivals materialize near lift anchors, and active departures require live NPCs to reach a lift anchor before the record moves.
 - Small caravan runs can carry `memberAlifeIds`; surviving members are moved to the destination route key on arrival.
 
 Active-floor behavior, full-pass AI, pathfinding, NPC intent selection, short mass-combat step, monster behavior and samosbor reactions are specified in [ai.md](ai.md). This file owns persistent identity and population facts; `ai.md` owns what materialized live actors decide to do.
+
+## Недопустимый Паттерн: Фиксированный Префикс Живого Мира
+
+A-Life, live AI, economy, factions, quests, migrations and shelter/route systems must never turn storage order into gameplay truth. A bounded optimization such as "look at the first 96 rooms", "take `candidates[0]` after insertion order", "scan the first N entities" or "use `anchors[0]` when no preference exists" is unacceptable for any gameplay-visible decision on a large floor.
+
+This is not a style preference. On Kvartiry-scale maps a fixed prefix scan becomes mass behavior: NPCs select the same side of `world.rooms`, arrivals pile into the first lift anchor, work/shelter/economy targets bias toward generation order, and a performance cap silently becomes a world rule.
+
+Allowed bounded scans:
+
+- actor-local rotating cursor stored on AI/runtime state;
+- deterministic window offset keyed by actor id, intent, floor key, room count or migration id;
+- spatial index or radius query with a cap where the index order is not the gameplay score;
+- reservoir/weighted sample before final scoring;
+- full candidate scoring followed by a small top-N only after the score is already meaningful;
+- explicit authored order only when the data contract says order is the feature, such as a plot step list.
+
+Required review checks when touching A-Life-adjacent systems:
+
+- Search for `.slice(0`, `candidates[0]`, `world.rooms.find`, `for (const room of world.rooms)`, `for (let i = 0; i < entities.length`, `SCAN_CAP`, `ROOM_CAP`, `ANCHOR_CAP` and similar bounded scans.
+- If the scan does not cover the full collection, prove that start order is rotated, spatially local, scored before truncation or authored by contract.
+- Add a regression test with more candidates than the cap. The expected target must be able to live beyond the old prefix.
+- For huge story floors such as Kvartiry, run a seed-fixed metric pass: door/room counts, linked-door counts, A-Life traveler/template counts and a check that special rooms and anchors are reachable.
+- Economy and faction systems must follow the same rule: no first-factory, first-zone, first-room or first-resource bias unless the definition order is explicitly the player-facing priority.
+
+If no fair bounded scan can be proven quickly, use a deterministic rotated window first and then score inside that window. A cheap rotating window is acceptable; a stable first-prefix cap is not.
 
 ## Current Gaps Against The Bible
 
@@ -106,6 +131,25 @@ NPC death
 The system is deliberately cinematic and data-oriented. Off-floor life is represented by compact facts and slow aggregate state, not invisible per-NPC simulation.
 
 Active-floor mass combat is allowed to be much simpler than an individual social routine. A materialized NPC still has its own identity, faction, relation to the player, role, current intent, needs, inventory, HP, target and counters, but a dense fight can resolve through the shared short combat-step documented in [ai.md](ai.md): choose a hostile faction target, move, hit or fire a physical projectile, and write real consequences. Those consequences are what A-Life cares about at foldback time.
+
+## Occupation As Routine Driver
+
+`Occupation` is the primary code-level profession template for ordinary A-Life NPCs. It is not flavor text and not a user-extensible questionnaire field. It answers what this person normally does when materialized: where they try to work, what rooms they value, what needs they satisfy efficiently, what they can trade or teach, how Demos describes them, what speech/bark pools fit them, and which economy/factory hooks can use them.
+
+Current implementation already uses occupation across A-Life generation, AI utility, room routine, needs recovery, Demos profiles, trade/economy, factory worker eligibility, craft lessons, dialogue and visual defaults. The design direction is to make that relationship explicit and unified:
+
+- every ordinary A-Life NPC has exactly one base `occupation`;
+- occupation chooses the default work-room affordances, such as kitchen for cooks, medical for doctors, office for secretaries, production for mechanics and electricians, storage for storekeepers, route/corridor pressure for hunters/travelers;
+- faction, territory and floor theme decide where that work can happen, not the occupation alone;
+- generated home/work anchors should bind to concrete rooms when the active floor exists, then fold back as compact ids or sparse overrides when needed;
+- materialized routine should normally cycle through work, need satisfaction, social/rest, patrol/travel and samosbor emergency behavior through shared AI utilities;
+- local roles such as "работница этажа 69" sit below occupation as `roleId`, tags, work text, visual family and placement profile, unless the role becomes a reusable profession across A-Life/economy/AI.
+
+Occupation is the default routine, not the only possible routine. Plot/design NPCs may have explicit special A-Life rules: tutorial lock, quest escort, guard duty, scripted arrival, faction command, shelter behavior or another bounded authored state. Such rules should be data/package/quest driven and temporary or stateful, while the NPC still keeps a normal occupation as the fallback routine. When the special rule expires or is not active, the NPC returns to the occupation-driven ordinary life model.
+
+Adding a new occupation is a developer-level systems change. It must update the code/data profile that drives generation weights, work-room affordances, routine weights, need/economy hooks, labels/speech, Demos and save/schema expectations. A user NPC package may choose from existing occupations and add `roleId`/tags, but it must not invent a new occupation string.
+
+Known documentation/implementation debt: occupation rules are still spread across several files instead of one profile registry. `problems.md` tracks that as a consolidation target; this file defines the intended ownership.
 
 ## Identity Fields
 

@@ -26,6 +26,7 @@ export const CONTROL_ACTIONS = [
   { id: 'sleep', group: 'Состояние', label: 'Спать, удерживать', input: 'sleep', defaultKeys: ['KeyZ'] },
   { id: 'pee', group: 'Состояние', label: 'Пописать', input: 'pee', defaultKeys: ['KeyP'] },
   { id: 'gameMenu', group: 'Экраны', label: 'Меню / принять', input: 'escape', defaultKeys: ['Enter'] },
+  { id: 'help', group: 'Экраны', label: 'HELP / туториал', input: 'help', defaultKeys: ['F1'] },
   { id: 'controlsMenu', group: 'Экраны', label: 'Все клавиши', input: 'controls', defaultKeys: ['Tab'] },
   { id: 'uiSettings', group: 'Экраны', label: 'Настройка UI', input: 'uiSettings', defaultKeys: ['KeyU'] },
   { id: 'fullscreen', group: 'Экраны', label: 'Полный экран', defaultKeys: ['F11'] },

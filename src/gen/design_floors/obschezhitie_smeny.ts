@@ -22,9 +22,12 @@ import {
 import { World } from '../../core/world';
 import { hashSeed, withSeededRandom } from '../../core/rand';
 import { freshNeeds } from '../../data/catalog';
-import { type PlotNpcDef, registerSideQuest } from '../../data/plot';
+import { designNpcFloorKey, type PlotNpcDef, registerFloorSideQuest } from '../../data/plot';
 import { ensureConnectivity, generateZones, sanitizeDoors, stampRoom } from '../shared';
 import type { FloorGeneration } from '../floor_manifest';
+import { requireSpawnedPlotNpcFromPackage } from '../plot_npc_spawn';
+
+const DESIGN_NPC_HOME_FLOOR_KEY = designNpcFloorKey('obschezhitie_smeny');
 
 export const OBSCHEZHITIE_SMENY_DESIGN_FLOOR_ID = 'obschezhitie_smeny' as const;
 export const OBSCHEZHITIE_SMENY_ROUTE_Z = -6;
@@ -117,7 +120,7 @@ const NPC_DEFS: Record<(typeof NPC_IDS)[keyof typeof NPC_IDS], PlotNpcDef> = {
   },
 };
 
-registerSideQuest(NPC_IDS.rita, NPC_DEFS.obschezhitie_rita_starshaya, [{
+registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, NPC_IDS.rita, NPC_DEFS.obschezhitie_rita_starshaya, [{
   id: 'obschezhitie_shelter_rollcall',
   giverNpcId: NPC_IDS.rita,
   type: QuestType.FETCH,
@@ -134,7 +137,7 @@ registerSideQuest(NPC_IDS.rita, NPC_DEFS.obschezhitie_rita_starshaya, [{
   eventData: { routeChoice: 'protect_sleeping_shift', rumorIds: ['samosbor_istotit_shelter_tally'] },
 }]);
 
-registerSideQuest(NPC_IDS.gleb, NPC_DEFS.obschezhitie_gleb_obhod, [{
+registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, NPC_IDS.gleb, NPC_DEFS.obschezhitie_gleb_obhod, [{
   id: 'obschezhitie_patrol_silence',
   giverNpcId: NPC_IDS.gleb,
   type: QuestType.FETCH,
@@ -151,7 +154,7 @@ registerSideQuest(NPC_IDS.gleb, NPC_DEFS.obschezhitie_gleb_obhod, [{
   eventData: { routeChoice: 'buy_patrol_silence', rumorIds: ['smoking_second_round_truth'] },
 }]);
 
-registerSideQuest(NPC_IDS.senya, NPC_DEFS.obschezhitie_senya_tikhiy, [{
+registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, NPC_IDS.senya, NPC_DEFS.obschezhitie_senya_tikhiy, [{
   id: 'obschezhitie_quiet_lockers',
   giverNpcId: NPC_IDS.senya,
   type: QuestType.FETCH,
@@ -759,39 +762,19 @@ function spawnAuthoredDormNpcs(entities: Entity[], nextId: { v: number }, rooms:
 function spawnNpc(
   entities: Entity[],
   nextId: { v: number },
-  npc: PlotNpcDef,
+  _npc: PlotNpcDef,
   plotNpcId: string,
   x: number,
   y: number,
   weapon?: string,
 ): number {
-  const id = nextId.v++;
-  entities.push({
-    id,
-    type: EntityType.NPC,
-    x: x + 0.5,
-    y: y + 0.5,
+  const npc = requireSpawnedPlotNpcFromPackage(entities, nextId, plotNpcId, x + 0.5, y + 0.5, {
     angle: Math.random() * Math.PI * 2,
-    pitch: 0,
-    alive: true,
-    speed: npc.speed,
-    sprite: npc.sprite,
-    name: npc.name,
-    isFemale: npc.isFemale,
-    needs: freshNeeds(),
-    hp: npc.hp,
-    maxHp: npc.maxHp,
-    money: npc.money,
-    ai: { goal: AIGoal.IDLE, tx: x + 0.5, ty: y + 0.5, path: [], pi: 0, stuck: 0, timer: 0 },
-    inventory: npc.inventory.map(item => ({ ...item })),
-    weapon: weapon ?? npc.weapon,
-    faction: npc.faction,
-    occupation: npc.occupation,
-    plotNpcId,
     canGiveQuest: true,
-    questId: -1,
+    weapon,
+    aiTarget: { x: x + 0.5, y: y + 0.5 },
   });
-  return id;
+  return npc.id;
 }
 
 function spawnSleeperTemplates(entities: Entity[], nextId: { v: number }, bunks: readonly Room[]): void {
