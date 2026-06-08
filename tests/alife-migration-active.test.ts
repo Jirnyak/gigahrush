@@ -129,6 +129,34 @@ function makeNoAnchorWorld(): World {
   return world;
 }
 
+function makeUnreachableLiftWorld(): World {
+  const world = new World();
+  addTestRoom(world, {
+    id: 1,
+    x: 10,
+    y: 10,
+    w: 5,
+    h: 5,
+    type: RoomType.COMMON,
+    name: 'Отрезанная стартовая комната',
+    zoneId: 0,
+  });
+  addTestRoom(world, {
+    id: 2,
+    x: 80,
+    y: 80,
+    w: 5,
+    h: 5,
+    type: RoomType.COMMON,
+    name: 'Отрезанный лифтовой узел',
+    zoneId: 1,
+  });
+  world.zones[1].hasLift = true;
+  world.cells[world.idx(82, 82)] = Cell.LIFT;
+  world.cells[world.idx(83, 82)] = Cell.FLOOR;
+  return world;
+}
+
 function templateNpc(id: number, x: number, y: number): Entity {
   return makeTestNpc({
     id,
@@ -287,7 +315,22 @@ test('active departure assigns GOTO to a lift anchor', () => {
   assert.equal(npc.ai?.goal, AIGoal.GOTO);
   assert.equal(npc.ai?.tx, 22);
   assert.equal(npc.ai?.ty, 22);
+  assert.ok((npc.ai?.path.length ?? 0) > 0);
+  assert.ok((npc.ai?.timer ?? 0) > 0);
   assert.equal(migrationState(state)?.activeDepartures.length, 1);
+});
+
+test('active departure does not start without a reachable lift path', () => {
+  const state = stateAtLiving();
+  const world = makeUnreachableLiftWorld();
+  putRecordOnLiving(state, 10);
+  const npc = persistentNpc(10, 10, 12.5, 12.5);
+
+  assert.equal(startActiveAlifeDeparture(state, world, npc, 'story:kvartiry', 'unreachable_lift', 'routine'), false);
+
+  assert.equal(migrationState(state)?.activeDepartures.length ?? 0, 0);
+  assert.equal(npc.ai?.goal, AIGoal.IDLE);
+  assert.equal(npc.isTraveler, undefined);
 });
 
 test('departure does not start for player, plot NPC, quest NPC or dead NPC', () => {
@@ -328,7 +371,7 @@ test('unfinished departure captured before reaching lift does not teleport the r
   const state = stateAtLiving();
   const world = makeLiftWorld();
   putRecordOnLiving(state, 9);
-  const npc = persistentNpc(9, 9, 80.5, 80.5);
+  const npc = persistentNpc(9, 9, 25.5, 25.5);
   const entities = [npc];
 
   assert.equal(startActiveAlifeDeparture(state, world, npc, 'story:kvartiry', 'not_reached', 'routine'), true);

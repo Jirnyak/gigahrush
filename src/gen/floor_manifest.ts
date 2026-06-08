@@ -15,6 +15,8 @@ import { generateHell } from './hell';
 import { generateVoid } from './void';
 import { withoutNpcEntities } from './entity_filters';
 import { applyStoryFloorObjectProfile } from './floor_object_placement';
+import { fillVisualSlotsForWorldFeatures } from './visual_cell_slots';
+import { rebuildGeneratedFloorPathBlockers } from './path_blockers';
 
 export interface FloorGeneration {
   world: World;
@@ -80,5 +82,7 @@ export function generateFloor(floor: FloorLevel, runSeed = DEFAULT_STORY_FLOOR_S
     seed,
     targetShares: territorySharesForStoryFloor(floor),
   });
+  rebuildGeneratedFloorPathBlockers(generation.world, seed, generation.spawnX, generation.spawnY);
+  fillVisualSlotsForWorldFeatures(generation.world, seed);
   return floor === FloorLevel.VOID ? withoutNpcEntities(generation) : generation;
 }

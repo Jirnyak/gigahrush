@@ -1,14 +1,17 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { FloorLevel, type GameState } from '../src/core/types';
+import { Faction, FloorLevel, Occupation, type GameState } from '../src/core/types';
 import {
+  createPrefilledAlifeState,
   getAlifeNpcRecordSnapshot,
   moveAlifeNpcRecord,
   setAlifeState,
+  type AlifePopulationPlan,
 } from '../src/systems/alife';
 import { createGameSavePayload } from '../src/systems/save_runtime';
 import {
+  ALIFE_MIGRATION_TICK_SECONDS,
   ALIFE_MIGRATION_FORCE_RECORD_CAP,
   MAX_ALIFE_JOURNEYS,
   MAX_ALIFE_PENDING_ARRIVALS,
@@ -71,6 +74,30 @@ test('cold A-Life migration starts bounded off-floor journeys without world or e
   assert.ok(Object.keys(mobility.journeys).length > 0, 'forced cold tick should create at least one journey');
   assert.ok(summarizeAlifeMigration(state).some(line => line.includes('journeys=')));
   assert.ok((state.worldEvents?.recentEvents.count ?? 0) <= 3, 'migration event publication is capped per tick');
+});
+
+test('normal cold migration gives traveler occupations a bounded priority lane', () => {
+  const state = minimalState();
+  const reserved = Array.from({ length: 64 }, (_, index) => ({
+    name: `Маршрутный тест ${index + 1}`,
+    faction: Faction.CITIZEN,
+    occupation: index < 32 ? Occupation.HOUSEWIFE : Occupation.TRAVELER,
+  }));
+  const plan: AlifePopulationPlan = {
+    buckets: [{
+      floorKey: 'story:ministry',
+      floor: FloorLevel.MINISTRY,
+      targetCount: 64,
+      reserved,
+    }],
+  };
+  createPrefilledAlifeState(state, 12345, 64, plan);
+
+  const processed = tickAlifeMigration(state, ALIFE_MIGRATION_TICK_SECONDS, { maxRecords: 8, activeFloorKey: 'story:living' });
+  const journeyIds = Object.values(ensureAlifeMobilityState(state).journeys).map(journey => journey.alifeId);
+
+  assert.ok(processed <= 8);
+  assert.ok(journeyIds.some(id => id > 32), 'traveler records beyond the cursor prefix should get migration attempts');
 });
 
 test('cold A-Life migration skips dead records and records already in a journey', () => {

@@ -188,6 +188,33 @@ export const ALIFE_MIGRATION_INTENTS: readonly AlifeMigrationIntentDef[] = [
     eventTags: ['alife_migration', 'migration', 'repair', 'work'],
   },
   {
+    id: 'route_circuit',
+    reason: 'routine',
+    weight: 13,
+    destination: {
+      routeTags: ['transit', 'hub', 'route_pressure', 'market', 'residential', 'industrial', 'service'],
+      minAbsZ: 0,
+      maxAbsZ: 45,
+    },
+    factionBias: [
+      { value: Faction.CITIZEN, weight: 4 },
+      { value: Faction.WILD, weight: 3 },
+      { value: Faction.LIQUIDATOR, weight: 3 },
+      { value: Faction.CULTIST, weight: 2 },
+      { value: Faction.SCIENTIST, weight: 1 },
+    ],
+    occupationBias: [
+      { value: Occupation.TRAVELER, weight: 9 },
+      { value: Occupation.HUNTER, weight: 6 },
+      { value: Occupation.PILGRIM, weight: 6 },
+      { value: Occupation.STOREKEEPER, weight: 2 },
+    ],
+    maxRisk: 4,
+    wealthBias: 'any',
+    cooldownSeconds: 600,
+    eventTags: ['alife_migration', 'migration', 'route_circuit'],
+  },
+  {
     id: 'lower_expedition',
     reason: 'routine',
     weight: 3,

@@ -192,7 +192,7 @@ export function spawnTravelers(
         ...(() => {
           if (def.faction === Faction.CULTIST && Math.random() < 0.3) {
             const psi = _pickPsi();
-            return { inventory: [{ defId: psi, count: 1 }], weapon: psi };
+            return { inventory: [{ defId: 'knife', count: 1 }, { defId: psi, count: 1 }], weapon: 'knife', tool: psi };
           }
           const l = npcWeaponLoadout(def.faction, def.occupation);
           return { inventory: l.inv, weapon: l.weapon || undefined };

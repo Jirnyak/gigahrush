@@ -12,7 +12,7 @@ import {
   type Entity,
   type Room,
 } from '../src/core/types';
-import { World } from '../src/core/world';
+import { World, getVisualSlot, setVisualSlot } from '../src/core/world';
 import { createWorldEventState } from '../src/systems/events';
 import { registerRouteCue, routeCueCount } from '../src/systems/route_cues';
 import {
@@ -325,8 +325,10 @@ test('finished local samosbor wave copies fresh replacement geometry inside the 
   const outsideIdx = world.idx(17, 24);
   world.cells[insideIdx] = Cell.FLOOR;
   world.floorTex[insideIdx] = Tex.F_LINO;
+  setVisualSlot(world, insideIdx, 0, 23);
   world.cells[outsideIdx] = Cell.FLOOR;
   world.floorTex[outsideIdx] = Tex.F_WOOD;
+  setVisualSlot(world, outsideIdx, 0, 24);
 
   assert.equal(startSamosborWave(world, entities, state, 'small', 24, 24, { seed: 77, radius: 4, budgetCellsPerTick: 64 }), true);
   runWaveToEnd(world, entities, state);
@@ -337,6 +339,7 @@ test('finished local samosbor wave copies fresh replacement geometry inside the 
   replacementWorld.cells[insideIdx] = Cell.WATER;
   replacementWorld.floorTex[insideIdx] = Tex.F_ABYSS;
   replacementWorld.wallTex[insideIdx] = Tex.DARK;
+  setVisualSlot(replacementWorld, insideIdx, 0, 3);
   const replacement = { world: replacementWorld, entities: [], spawnX: 24.5, spawnY: 24.5 };
   const finished = finishSamosborWave(world, entities, state, replacement);
 
@@ -344,8 +347,10 @@ test('finished local samosbor wave copies fresh replacement geometry inside the 
   assert.notEqual(beforePatchFloorTex, Tex.F_ABYSS);
   assert.equal(world.cells[insideIdx], Cell.WATER);
   assert.equal(world.floorTex[insideIdx], Tex.F_ABYSS);
+  assert.equal(getVisualSlot(world, insideIdx, 0), 3);
   assert.equal(world.cells[outsideIdx], Cell.FLOOR);
   assert.equal(world.floorTex[outsideIdx], Tex.F_WOOD);
+  assert.equal(getVisualSlot(world, outsideIdx, 0), 24);
   assert.ok((finished?.regeneratedCells ?? 0) > 0);
 });
 

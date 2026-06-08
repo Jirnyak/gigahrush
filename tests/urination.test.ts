@@ -24,7 +24,7 @@ function npc(id: number, faction: Faction, x: number, y: number): Entity {
     speed: 1,
     sprite: 0,
     faction,
-    occupation: faction === Faction.WILD ? Occupation.TRAVELER : Occupation.WORKER,
+    occupation: faction === Faction.WILD ? Occupation.TRAVELER : Occupation.CLEANER,
     needs: { food: 80, water: 80, sleep: 80, pee: 90, poo: 0 },
     hp: 80,
     maxHp: 80,

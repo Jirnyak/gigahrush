@@ -3,7 +3,7 @@
 import {
   type Entity, type Msg,
   EntityType, AIGoal, RoomType, NpcState, Faction,
-  ZoneFaction, type GameClock, Cell, type TerritoryOwner, type Room,
+  ZoneFaction, Occupation, type GameClock, Cell, type TerritoryOwner, type Room,
 } from '../../core/types';
 import { World } from '../../core/world';
 import { WEAPON_STATS } from '../../data/catalog';
@@ -37,6 +37,7 @@ import {
   occupationWorkRoomTypes,
 } from '../../data/occupation_profiles';
 import { territoryOwnerAtIndex, territoryRoomOwner } from '../territory';
+import { cleanSurfaceArea } from '../surface_cleanup';
 import {
   NPC_UTILITY_INTENTS,
   createNpcUtilityScoreBuffer,
@@ -71,6 +72,9 @@ const TERRITORY_ROOM_TARGET_SCAN_CAP = 96;
 const ROUTINE_ROOM_CANDIDATE_CAP = 8;
 const NPC_TOILET_PEE_RATE = 20;
 const NPC_TOILET_POO_RATE = 15;
+const CLEANER_SURFACE_RADIUS = 1.35;
+const CLEANER_SURFACE_RETRY_BASE_SEC = 2.5;
+const CLEANER_SURFACE_RETRY_SPREAD_SEC = 2.5;
 const emergencyLocalActors: Entity[] = [];
 const utilityLocalActors: Entity[] = [];
 const utilityScoreBuffer = createNpcUtilityScoreBuffer();
@@ -80,6 +84,7 @@ const routineSeenRoomIds = new Set<number>();
 const utilityIntentByNpc = new WeakMap<Entity, NpcUtilityIntentId>();
 const utilityScoreByNpc = new WeakMap<Entity, number>();
 const utilityNextDecisionAtByNpc = new WeakMap<Entity, number>();
+const cleanerNextSurfaceAtByNpc = new WeakMap<Entity, number>();
 
 function stableUnit(e: Entity, salt: string | number): number {
   return npcUtilityJitter01(npcUtilityIdentityFromEntity(e), salt);
@@ -102,9 +107,13 @@ function territoryFriendlyForNpc(e: Entity, owner: TerritoryOwner): boolean {
   return false;
 }
 
-function isRoutineTrespassRelaxed(e: Entity): boolean {
+function usesTravelerRoutine(e: Entity): boolean {
   return e.isTraveler === true ||
-    occupationHasAnyRoutineTag(e.occupation, ['traveler', 'patrol']);
+    (e.isTraveler !== false && e.assignedRoomId === undefined && e.familyId === undefined && occupationHasRoutineTag(e.occupation, 'traveler'));
+}
+
+function isRoutineTrespassRelaxed(e: Entity): boolean {
+  return usesTravelerRoutine(e) || occupationHasRoutineTag(e.occupation, 'patrol');
 }
 
 function routineIntentAllowsSurvivalTrespass(intent: NpcUtilityIntentId): boolean {
@@ -133,7 +142,7 @@ function canHoldRoutineFrame(e: Entity, intent: NpcUtilityIntentId): boolean {
 }
 
 function preferredEmergencyRoomId(world: World, e: Entity): number | undefined {
-  const familyRoomId = e.isTraveler ? -1 : findFamilyRoom(world, e, RoomType.LIVING);
+  const familyRoomId = usesTravelerRoutine(e) ? -1 : findFamilyRoom(world, e, RoomType.LIVING);
   if (familyRoomId >= 0) return familyRoomId;
   if (e.assignedRoomId !== undefined && e.assignedRoomId >= 0) return e.assignedRoomId;
   return undefined;
@@ -185,7 +194,7 @@ function initialIntentForNpc(e: Entity, samosborActive: boolean, profile: NpcAiP
   if (samosborActive && e.faction !== Faction.LIQUIDATOR && e.faction !== Faction.CULTIST && e.faction !== Faction.WILD) {
     return 'safety';
   }
-  if (e.isTraveler || occupationHasRoutineTag(e.occupation, 'traveler')) return 'wander';
+  if (usesTravelerRoutine(e)) return 'wander';
   if (e.faction === Faction.LIQUIDATOR || occupationHasRoutineTag(e.occupation, 'patrol')) return 'patrol';
   if (profile === 'ministry' && (e.assignedRoomId !== undefined || occupationHasAnyRoutineTag(e.occupation, ['admin', 'paperwork']))) {
     return 'work';
@@ -213,7 +222,7 @@ function stateForIntent(intent: NpcUtilityIntentId, e: Entity, profile: NpcAiPro
     case 'patrol':
       return NpcState.PATROL;
     case 'wander':
-      return e.isTraveler ? NpcState.TRAVELING : NpcState.FREE_TIME;
+      return usesTravelerRoutine(e) ? NpcState.TRAVELING : NpcState.FREE_TIME;
     case 'heal':
       return NpcState.FREE_TIME;
   }
@@ -314,6 +323,7 @@ export function updateNPC(
   ai.stateTimer = (ai.stateTimer ?? 0) + dt;
 
   if (!decision.rescored && canHoldRoutineFrame(e, intent)) {
+    if (intent === 'work') tryCleanerSurfaceWork(world, e);
     tickNpcMemoryLowFrequency(e, time, clock.totalMinutes, samosborActive);
     tickNpcRumorLowFrequency(e, time, clock.totalMinutes, samosborActive);
     tryAmbientBark(e, dt, samosborActive);
@@ -392,7 +402,7 @@ function selectAndEnterUtilityIntent(
       occupation: e.occupation,
       armed: npcIsArmed(e),
       hasRangedWeapon: npcHasRangedWeapon(e),
-      isTraveler: e.isTraveler === true || occupationHasRoutineTag(e.occupation, 'traveler'),
+      isTraveler: usesTravelerRoutine(e),
     },
     local: buildLocalUtilityScores(world, e, samosborActive, profile),
   }, utilityScoreBuffer);
@@ -422,12 +432,12 @@ function buildLocalUtilityScores(
   } else if (territoryFriendlyForNpc(e, cellOwner)) {
     addLocalScore(local, 'work', 4);
     addLocalScore(local, 'social', 4);
-    addLocalScore(local, 'wander', e.isTraveler ? 0 : 5);
+    addLocalScore(local, 'wander', usesTravelerRoutine(e) ? 0 : 5);
     addLocalScore(local, 'patrol', 5);
   } else if (e.faction !== undefined) {
     addLocalScore(local, 'work', -5);
     addLocalScore(local, 'social', -4);
-    addLocalScore(local, 'wander', e.isTraveler ? 4 : -6);
+    addLocalScore(local, 'wander', usesTravelerRoutine(e) ? 4 : -6);
     addLocalScore(local, 'patrol', 7);
   }
   if (room) {
@@ -444,7 +454,7 @@ function buildLocalUtilityScores(
     }
   }
 
-  if (e.isTraveler || occupationHasRoutineTag(e.occupation, 'traveler')) {
+  if (usesTravelerRoutine(e)) {
     addLocalScore(local, 'wander', 12);
     addLocalScore(local, 'work', -8);
   }
@@ -676,6 +686,7 @@ function handleEat(world: World, e: Entity, dt: number): void {
 
 function handleWorking(world: World, e: Entity, dt: number, profile: NpcAiProfile): void {
   const ai = e.ai!;
+  tryCleanerSurfaceWork(world, e);
   if (ai.timer <= 0 || ai.goal === AIGoal.IDLE) {
     ai.goal = AIGoal.WORK;
     if (profile === 'ministry') {
@@ -698,6 +709,28 @@ function handleWorking(world: World, e: Entity, dt: number, profile: NpcAiProfil
   }
 
   followPath(world, e, dt);
+}
+
+function cleanerCanCleanCell(world: World, e: Entity, idx: number): boolean {
+  if (territoryFriendlyForNpc(e, territoryOwnerAtIndex(world, idx))) return true;
+  const roomId = world.roomMap[idx];
+  if (roomId < 0) return false;
+  if (roomId === e.assignedRoomId) return true;
+  const room = world.rooms[roomId];
+  return !!room && e.familyId !== undefined && e.familyId >= 0 && room.apartmentId === e.familyId;
+}
+
+function tryCleanerSurfaceWork(world: World, e: Entity): void {
+  if (e.occupation !== Occupation.CLEANER && !occupationHasRoutineTag(e.occupation, 'cleaning')) return;
+  const now = _barkTime;
+  if ((cleanerNextSurfaceAtByNpc.get(e) ?? -Infinity) > now) return;
+  cleanerNextSurfaceAtByNpc.set(e, now + stableTimer(e, 'cleaner_surface', CLEANER_SURFACE_RETRY_BASE_SEC, CLEANER_SURFACE_RETRY_SPREAD_SEC));
+  const cleaned = cleanSurfaceArea(world, e.x, e.y, CLEANER_SURFACE_RADIUS, {
+    shouldCleanCell: idx => cleanerCanCleanCell(world, e, idx),
+  });
+  if (cleaned <= 0 || !e.ai) return;
+  e.ai.goal = AIGoal.WORK;
+  e.ai.timer = Math.max(e.ai.timer, 0.4);
 }
 
 function handleHeal(world: World, e: Entity, dt: number): void {
@@ -750,7 +783,7 @@ function handleWander(world: World, e: Entity, dt: number): void {
   const ai = e.ai!;
   if (ai.timer <= 0 || ai.goal === AIGoal.IDLE) {
     ai.goal = AIGoal.WANDER;
-    if (e.isTraveler || occupationHasRoutineTag(e.occupation, 'traveler')) {
+    if (usesTravelerRoutine(e)) {
       wanderFar(world, e);
       ai.timer = stableTimer(e, 'traveler_rethink', 10, 20);
     } else {
@@ -930,7 +963,7 @@ function handleHiding(
     if (!tryAssignEmergencyShelterPath(world, entities, e, clock)) {
       if (profile === 'ministry') {
         gotoAssignedOrNearest(world, e, RoomType.OFFICE);
-      } else if (e.isTraveler) {
+      } else if (usesTravelerRoutine(e)) {
         gotoNearestRoomType(world, e, RoomType.LIVING);
       } else {
         const targetRoom = findFamilyRoom(world, e, RoomType.LIVING);

@@ -49,8 +49,12 @@ function unpackChemicalShell(e: Entity) { addStackedUseOutput(e, 'decon_fluid', 
 
 export type ItemEquipSlot = 'weapon' | 'tool';
 
+export function itemDefHasTag(def: ItemDef, tag: string): boolean {
+  return (ITEM_TAGS[def.id]?.includes(tag) ?? false) || (def.tags?.includes(tag) ?? false);
+}
+
 export function itemEquipSlot(def: ItemDef): ItemEquipSlot | null {
-  if (def.type === ItemType.WEAPON) return 'weapon';
+  if (def.type === ItemType.WEAPON) return itemDefHasTag(def, 'psi') ? 'tool' : 'weapon';
   if (def.type === ItemType.TOOL) return 'tool';
   return null;
 }
@@ -98,6 +102,24 @@ export const ITEM_TAGS: Record<string, readonly string[]> = {
   valve_tag: ['pressure', 'proof', 'heatline'],
   uv_spotlight: ['tool', 'liquidator', 'cleanup', 'uv', 'directed_light', 'counterplay', 'black_slime'],
   smoke_candle_check: ['liquidator', 'cleanup', 'smoke', 'vent_check', 'noise', 'counterplay', 'maintenance'],
+  psi_strike: ['psi', 'psi_clot', 'weapon', 'tool'],
+  psi_rupture: ['psi', 'psi_clot', 'weapon', 'tool', 'aoe'],
+  psi_storm: ['psi', 'psi_clot', 'weapon', 'tool', 'aoe'],
+  psi_brainburn: ['psi', 'psi_clot', 'weapon', 'tool', 'mind'],
+  psi_madness: ['psi', 'psi_clot', 'weapon', 'tool', 'mind'],
+  psi_control: ['psi', 'psi_clot', 'weapon', 'tool', 'mind'],
+  psi_shield: ['psi', 'psi_clot', 'tool', 'defense'],
+  psi_possession: ['psi', 'psi_clot', 'tool', 'mind', 'possession'],
+  psi_phase: ['psi', 'psi_clot', 'tool', 'phase'],
+  psi_mark: ['psi', 'psi_clot', 'tool', 'mark'],
+  psi_recall: ['psi', 'psi_clot', 'tool', 'recall'],
+  psi_beam: ['psi', 'psi_clot', 'weapon', 'tool', 'beam'],
+  psi_concrete_splinter: ['psi', 'psi_clot', 'weapon', 'tool'],
+  psi_shadow_lance: ['psi', 'psi_clot', 'weapon', 'tool'],
+  psi_order_seal: ['psi', 'psi_clot', 'weapon', 'tool', 'aoe'],
+  psi_void_needle: ['psi', 'psi_clot', 'weapon', 'tool'],
+  psi_meat_hook: ['psi', 'psi_clot', 'weapon', 'tool', 'meat'],
+  psi_siren_pulse: ['psi', 'psi_clot', 'weapon', 'tool', 'aoe'],
   vent_damper_plate: ['vent', 'filter', 'repair', 'maintenance', 'temporary_seal', 'counterplay', 'samosbor'],
   liquidator_flashlamp: ['liquidator', 'cleanup', 'light', 'heavy_tool', 'counterplay'],
   slime_scraper: ['tool', 'cleanup', 'manual_cleanup', 'slime', 'brown_slime', 'liquidator'],
@@ -503,11 +525,11 @@ export const ITEMS: Record<string, ItemDef> = {
   psi_rupture:  { id:'psi_rupture',   name:'Сгусток: Разрыв',          type:ItemType.WEAPON, desc:'Нестабильный разрывной сгусток: 8 ПСИ, 18 урона по площади. Работает как аварийный заряд.',                    spawnRooms:[RoomType.MEDICAL,RoomType.STORAGE],               spawnW:0.7, value:16000 },
   psi_storm:    { id:'psi_storm',     name:'Сгусток: Пси буря',        type:ItemType.WEAPON, desc:'Пакетированный многоточечный импульс: 19 ПСИ, бьёт врагов в поле зрения. Дорогой ответ на толпу.',                       spawnRooms:[RoomType.MEDICAL],                                spawnW:0.35, value:36000 },
   psi_brainburn:{ id:'psi_brainburn', name:'Сгусток: Выжиг мозга',     type:ItemType.WEAPON, desc:'Запрещённый импульс НИИ: 22 ПСИ. Убивает цель не выше вашего уровня.',                     spawnRooms:[RoomType.MEDICAL],                                spawnW:0.25, value:52000 },
-  psi_madness:  { id:'psi_madness',   name:'Сгусток: Безумие',         type:ItemType.WEAPON, desc:'Сбойный поведенческий импульс: 10 ПСИ, цель 15с атакует ближайших. Потом объяснения не принимают.',                                 spawnRooms:[RoomType.OFFICE,RoomType.COMMON],                 spawnW:0.65, value:18000 },
-  psi_control:  { id:'psi_control',   name:'Сгусток: Контроль',        type:ItemType.WEAPON, desc:'Принудительный ПСИ-захват: 20 ПСИ, цель 15с считает вас союзником. Используйте это время на отход.',                              spawnRooms:[RoomType.MEDICAL],                                spawnW:0.25, value:64000 },
-  psi_shield:   { id:'psi_shield',    name:'Сгусток: ПСИ-щит',         type:ItemType.WEAPON, desc:'Защитный ПСИ-контур: 12 ПСИ, 15с не дает HP просесть. 10% входящего урона уходит из запаса ПСИ.', spawnRooms:[RoomType.MEDICAL,RoomType.HQ], spawnW:0.3, value:30000 },
-  psi_possession:{ id:'psi_possession', name:'Сгусток: Вселение',       type:ItemType.WEAPON, desc:'Запрещённый перенос НИИ: 26 ПСИ, 15с ведёт чужое тело, если ваш интеллект выше цели. Ваше тело остаётся на месте.', spawnRooms:[RoomType.MEDICAL], spawnW:0.12, value:76000 },
-  psi_phase:    { id:'psi_phase',     name:'Сгусток: Фазовый сдвиг',   type:ItemType.WEAPON, desc:'Проход через стену: 17 ПСИ, 15с. Не останавливайтесь внутри препятствия.',                                 spawnRooms:[RoomType.STORAGE],                                spawnW:0.2, value:70000 },
+  psi_madness:  { id:'psi_madness',   name:'Сгусток: Безумие',         type:ItemType.WEAPON, desc:'Сбойный поведенческий импульс: 10 ПСИ, цель 15с +1с/ИНТ атакует ближайших. Потом объяснения не принимают.',                                 spawnRooms:[RoomType.OFFICE,RoomType.COMMON],                 spawnW:0.65, value:18000 },
+  psi_control:  { id:'psi_control',   name:'Сгусток: Контроль',        type:ItemType.WEAPON, desc:'Принудительный ПСИ-захват: 20 ПСИ, цель 15с +1с/ИНТ считает вас союзником. Используйте это время на отход.',                              spawnRooms:[RoomType.MEDICAL],                                spawnW:0.25, value:64000 },
+  psi_shield:   { id:'psi_shield',    name:'Сгусток: ПСИ-щит',         type:ItemType.WEAPON, desc:'Защитный ПСИ-контур: 12 ПСИ, 15с +1с/ИНТ не дает HP просесть. 10% входящего урона уходит из запаса ПСИ.', spawnRooms:[RoomType.MEDICAL,RoomType.HQ], spawnW:0.3, value:30000 },
+  psi_possession:{ id:'psi_possession', name:'Сгусток: Вселение',       type:ItemType.WEAPON, desc:'Запрещённый перенос НИИ: 26 ПСИ, 15с +1с/ИНТ ведёт чужое тело, если ваш интеллект выше цели. Ваше тело остаётся на месте.', spawnRooms:[RoomType.MEDICAL], spawnW:0.12, value:76000 },
+  psi_phase:    { id:'psi_phase',     name:'Сгусток: Фазовый сдвиг',   type:ItemType.WEAPON, desc:'Проход через стену: 17 ПСИ, 15с +1с/ИНТ. Не останавливайтесь внутри препятствия.',                                 spawnRooms:[RoomType.STORAGE],                                spawnW:0.2, value:70000 },
   psi_mark:     { id:'psi_mark',      name:'Сгусток: Метка',           type:ItemType.WEAPON, desc:'Метка возврата: 4 ПСИ. Ставит точку, куда потом тянет сгусток Возврат.',                              spawnRooms:[RoomType.MEDICAL,RoomType.OFFICE],                spawnW:0.8, value:10000 },
   psi_recall:   { id:'psi_recall',    name:'Сгусток: Возврат',         type:ItemType.WEAPON, desc:'Возврат к ПСИ-метке: 8 ПСИ. Работает лучше, если метка стоит у укрытия или лифта.',                                             spawnRooms:[RoomType.MEDICAL,RoomType.OFFICE],                spawnW:0.65, value:18000 },
   psi_beam:     { id:'psi_beam',      name:'Сгусток: ПСИ-луч',        type:ItemType.WEAPON, desc:'Сфокусированный ПСИ-луч: 14 ПСИ за импульс, 28 урона по линии. Держать как режущий инструмент.', spawnRooms:[RoomType.MEDICAL], spawnW:0.18, value:45000 },

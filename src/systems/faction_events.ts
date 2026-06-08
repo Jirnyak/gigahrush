@@ -14,7 +14,7 @@ import {
   type FactionResidueChoiceKind,
   type FactionResidueMarkDef,
 } from '../data/faction_events';
-import { freshNeeds, ITEMS, randomName } from '../data/catalog';
+import { freshNeeds, ITEMS, randomName, WEAPON_STATS } from '../data/catalog';
 import {
   factionToTerritoryOwner,
   territoryOwnerName,
@@ -1789,8 +1789,11 @@ function createFactionNpc(
   const maxHp = Math.round(getMaxHp(rpg) * 1.15);
   const nm = randomName(faction);
   const occupation = side?.occupation ?? occupationFor(def, faction);
-  const weapon = pickWeapon(def, faction, side?.weapons);
+  const pickedWeapon = pickWeapon(def, faction, side?.weapons);
+  const psiTool = isPsiCombatItem(pickedWeapon) ? pickedWeapon : undefined;
+  const weapon = psiTool ? undefined : pickedWeapon;
   const inventory = cloneItems(side?.npcInventory ?? def.npcInventory);
+  if (psiTool && !inventory.some(item => item.defId === psiTool)) inventory.push({ defId: psiTool, count: 1 });
   addDefaultAmmo(inventory, weapon);
   return {
     id: nextId.v++,
@@ -1810,6 +1813,7 @@ function createFactionNpc(
     ai: { goal: AIGoal.WANDER, tx: 0, ty: 0, path: [], pi: 0, stuck: 0, timer: 0 },
     inventory,
     weapon,
+    tool: psiTool,
     faction,
     occupation,
     isTraveler: true,
@@ -1829,6 +1833,10 @@ function pickWeapon(def: FactionEventDef, faction: Faction, weapons?: readonly s
   const pool = weapons ?? def.weapons ?? defaultWeapons(faction);
   if (pool.length === 0) return undefined;
   return pool[Math.floor(Math.random() * pool.length)];
+}
+
+function isPsiCombatItem(itemId: string | undefined): itemId is string {
+  return !!itemId && !!WEAPON_STATS[itemId]?.psiCost;
 }
 
 function defaultWeapons(faction: Faction): readonly string[] {

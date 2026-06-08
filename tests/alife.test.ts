@@ -35,7 +35,7 @@ import {
 import { setFloorRunState } from '../src/systems/procedural_floors';
 import { getFactionRel, initFactionRelations } from '../src/data/relations';
 import { freshRPG, RPG_LEVEL_CAP } from '../src/systems/rpg';
-import { NPC_VISUAL_FLOOR69_FEMALE } from '../src/entities/npc_visuals';
+import { NPC_VISUAL_FLOOR69_FEMALE, NPC_VISUAL_LIQUIDATOR_MALE } from '../src/entities/npc_visuals';
 
 function minimalState(): GameState {
   const state = { currentFloor: FloorLevel.LIVING } as GameState;
@@ -292,6 +292,70 @@ test('A-Life materializes ambient slots and leaves killed slots empty', () => {
   assert.notEqual(regenerated[0].alifeId, killedAlifeId);
   assert.equal(regenerated[0].x, 11.5);
   assert.equal(alifeForSave(state).deadIds.includes(killedAlifeId), true);
+});
+
+test('A-Life materialization preserves local template anchors separately from social record family', () => {
+  const state = minimalState();
+  createPrefilledAlifeState(state, 12345, 1, {
+    buckets: [{
+      floorKey: 'story:living',
+      floor: FloorLevel.LIVING,
+      targetCount: 1,
+      reserved: [{
+        name: 'Обычный жилец',
+        faction: Faction.CITIZEN,
+        occupation: Occupation.HUNTER,
+        familyId: 999,
+      }],
+    }],
+  });
+  const world = new World();
+  world.cells[world.idx(30, 30)] = Cell.FLOOR;
+  const template = ambientTemplate(1, 30.5, 30.5);
+  template.sprite = Occupation.HOUSEWIFE;
+  template.occupation = Occupation.HOUSEWIFE;
+  template.familyId = 42;
+  template.assignedRoomId = 77;
+  delete template.isTraveler;
+  const entities = [template];
+
+  materializeAlifeFloorPopulation(state, world, entities, { v: 10 }, 'story:living');
+
+  assert.equal(entities.length, 1);
+  assert.equal(entities[0].occupation, Occupation.HUNTER);
+  assert.equal(entities[0].familyId, 42);
+  assert.equal(entities[0].assignedRoomId, 77);
+  assert.equal(entities[0].isTraveler, false);
+  assert.equal(getAlifeNpcRecordSnapshot(state, 1)?.familyId, 999);
+});
+
+test('A-Life ordinary materialization assigns faction art visual ids without overriding templates', () => {
+  const state = minimalState();
+  createPrefilledAlifeState(state, 12345, 1, {
+    buckets: [{
+      floorKey: 'story:living',
+      floor: FloorLevel.LIVING,
+      targetCount: 1,
+      reserved: [{
+        name: 'Ликвидатор без портрета',
+        faction: Faction.LIQUIDATOR,
+        occupation: Occupation.HUNTER,
+      }],
+    }],
+  });
+  const world = new World();
+  world.cells[world.idx(31, 31)] = Cell.FLOOR;
+  const template = ambientTemplate(1, 31.5, 31.5);
+  template.faction = Faction.LIQUIDATOR;
+  template.occupation = Occupation.HUNTER;
+  template.sprite = Occupation.HUNTER;
+  const entities = [template];
+
+  materializeAlifeFloorPopulation(state, world, entities, { v: 20 }, 'story:living');
+
+  assert.equal(entities.length, 1);
+  assert.equal(entities[0].npcVisualId, NPC_VISUAL_LIQUIDATOR_MALE);
+  assert.equal(getAlifeNpcRecordSnapshot(state, 1)?.npcVisualId, NPC_VISUAL_LIQUIDATOR_MALE);
 });
 
 test('A-Life population package reservations materialize with exact runtime defaults and loadout', () => {
@@ -611,7 +675,8 @@ test('A-Life design-floor records use Floor 69 social population mix', () => {
   assert.ok(floor69.length > 1000, 'floor_69 should receive a dense A-Life allocation');
   assert.equal(floor69.some(npc => npc.occupation === Occupation.CHILD), false);
   assert.ok(floor69.some(npc => npc.faction === Faction.LIQUIDATOR), 'floor_69 should include guard/liquidator records');
-  assert.ok(floor69.some(npc => npc.occupation === Occupation.PERFORMER), 'floor_69 should preserve performer records in the A-Life occupation column');
+  assert.ok(floor69.some(npc => npc.occupation === Occupation.WORKER69), 'floor_69 should preserve worker69 records in the A-Life occupation column');
+  assert.ok(floor69.some(npc => npc.occupation === Occupation.PERFORMER), 'floor_69 should still include general performer records');
   assert.ok(floor69.some(npc => npc.occupation === Occupation.DOCTOR), 'floor_69 should include clinic records');
   assert.ok(floor69.some(npc => npc.occupation === Occupation.SECRETARY || npc.occupation === Occupation.STOREKEEPER), 'floor_69 should include staff/accounting records');
   assert.ok(industrialTrades.length < floor69.length * 0.05, 'floor_69 should not inherit the generic Maintenance worker mix');

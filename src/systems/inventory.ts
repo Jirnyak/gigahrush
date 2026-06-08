@@ -1044,6 +1044,7 @@ function isDocumentLike(defId: string, def: ItemDef): boolean {
 export function inventoryItemCategory(defId: string): InventoryItemCategory {
   const def = ITEMS[defId];
   if (!def) return 'other';
+  if (defId.startsWith('psi_') || itemHasTag(defId, 'psi') || itemHasTag(defId, 'psi_restore')) return 'psi';
   if (def.type === ItemType.WEAPON) return 'weapon';
   if (def.type === ItemType.TOOL) return 'tool';
   if (def.type === ItemType.AMMO || itemHasTag(defId, 'ammo')) return 'ammo';
@@ -1051,7 +1052,6 @@ export function inventoryItemCategory(defId: string): InventoryItemCategory {
   if (def.type === ItemType.DRINK) return 'water';
   if (def.type === ItemType.FOOD) return 'food';
   if (isDocumentLike(defId, def)) return 'documents';
-  if (defId.startsWith('psi_') || itemHasTag(defId, 'psi') || itemHasTag(defId, 'psi_restore')) return 'psi';
   if (itemHasTag(defId, 'trade') || itemHasTag(defId, 'contraband') || itemHasTag(defId, 'evidence')) return 'trade';
   return 'other';
 }
@@ -2003,12 +2003,13 @@ export function dropItem(
   if (!def) return;
 
   const dropCount = slot.count;
+  const equipSlot = itemEquipSlot(def);
 
   // If dropping equipped weapon, unequip
-  if (def.type === ItemType.WEAPON && player.weapon === def.id) {
+  if (equipSlot === 'weapon' && player.weapon === def.id) {
     player.weapon = '';
   }
-  if (def.type === ItemType.TOOL && player.tool === def.id) {
+  if (equipSlot === 'tool' && player.tool === def.id) {
     player.tool = '';
   }
 
@@ -2165,9 +2166,18 @@ export function pickupNearby(
   }
 }
 
+function equippedPsiToolId(e: Entity): string {
+  const toolId = e.tool ?? '';
+  return WEAPON_STATS[toolId]?.psiCost ? toolId : '';
+}
+
+export function equippedCombatItemId(e: Entity): string {
+  return (e.weapon && WEAPON_STATS[e.weapon] ? e.weapon : '') || equippedPsiToolId(e);
+}
+
 /* ── Get full weapon stats ────────────────────────────────────── */
-export function getWeaponStats(e: Entity): WeaponStats {
-  const ws = WEAPON_STATS[e.weapon ?? ''] ?? WEAPON_STATS[''];
+export function getWeaponStats(e: Entity, itemId = equippedCombatItemId(e)): WeaponStats {
+  const ws = WEAPON_STATS[itemId] ?? WEAPON_STATS[''];
   const govnyakSpread = govnyakAimSpreadMult(e);
   const sporeSpread = sporeHazeAimSpreadMult(e);
   if (!e.rpg && govnyakSpread === 1 && sporeSpread === 1) return ws;
@@ -2193,10 +2203,10 @@ export function getWeaponStats(e: Entity): WeaponStats {
 }
 
 /* ── Get current durability of equipped melee weapon ──────────── */
-export function getEquippedDurability(e: Entity): { cur: number; max: number } | null {
-  const ws = WEAPON_STATS[e.weapon ?? ''];
+export function getEquippedDurability(e: Entity, itemId = e.weapon ?? ''): { cur: number; max: number } | null {
+  const ws = WEAPON_STATS[itemId];
   if (!ws || ws.isRanged || ws.durability <= 0) return null;
-  const slot = (e.inventory ?? []).find(s => s.defId === e.weapon);
+  const slot = (e.inventory ?? []).find(s => s.defId === itemId);
   if (!slot) return null;
   const d = slot.data as { dur?: number } | undefined;
   return { cur: d?.dur ?? ws.durability, max: ws.durability };
@@ -2214,11 +2224,11 @@ const BREAK_EXCLAIM_F = [
 ];
 
 /* ── Consume durability on melee hit. Returns true if weapon broke */
-export function consumeDurability(e: Entity, msgs: Msg[], time: number, state?: GameState): boolean {
-  const ws = WEAPON_STATS[e.weapon ?? ''];
+export function consumeDurability(e: Entity, msgs: Msg[], time: number, state?: GameState, itemId = e.weapon ?? ''): boolean {
+  const ws = WEAPON_STATS[itemId];
   if (!ws || ws.isRanged || ws.durability <= 0) return false;
   const inv = e.inventory ?? [];
-  const idx = inv.findIndex(s => s.defId === e.weapon);
+  const idx = inv.findIndex(s => s.defId === itemId);
   if (idx < 0) return false;
   const slot = inv[idx];
   const d = (slot.data ?? { dur: ws.durability }) as { dur: number };
@@ -2228,7 +2238,8 @@ export function consumeDurability(e: Entity, msgs: Msg[], time: number, state?: 
   if (d.dur <= 0) {
     const name = ITEMS[slot.defId]?.name ?? slot.defId;
     inv.splice(idx, 1);
-    e.weapon = '';
+    if (e.weapon === itemId) e.weapon = '';
+    if (e.tool === itemId) e.tool = '';
     if (e.type === EntityType.NPC && e.name) {
       const pool = e.isFemale ? BREAK_EXCLAIM_F : BREAK_EXCLAIM;
       const excl = pool[Math.floor(Math.random() * pool.length)];
@@ -2281,8 +2292,8 @@ export function consumeToolDurability(e: Entity, amount: number, msgs: Msg[], ti
 }
 
 /* ── Consume ammo for ranged weapon. Returns true if ammo available */
-export function consumeAmmo(e: Entity, state?: GameState): boolean {
-  const ws = WEAPON_STATS[e.weapon ?? ''];
+export function consumeAmmo(e: Entity, state?: GameState, itemId = equippedCombatItemId(e)): boolean {
+  const ws = WEAPON_STATS[itemId];
   if (!ws || !ws.isRanged || !ws.ammoType) return false;
   const consumed = removeItem(e, ws.ammoType, 1);
   if (consumed) publishPlayerItemEvent(state, e, 'ammo_consumed', ws.ammoType, 1, 0);
@@ -2290,8 +2301,8 @@ export function consumeAmmo(e: Entity, state?: GameState): boolean {
 }
 
 /* ── Count ammo for current ranged weapon ─────────────────────── */
-export function countAmmo(e: Entity): number {
-  const ws = WEAPON_STATS[e.weapon ?? ''];
+export function countAmmo(e: Entity, itemId = equippedCombatItemId(e)): number {
+  const ws = WEAPON_STATS[itemId];
   if (!ws || !ws.isRanged || !ws.ammoType) return 0;
   let total = 0;
   for (const slot of e.inventory ?? []) {
@@ -2378,25 +2389,25 @@ function weaponControlLabel(ws: WeaponStats): string {
   return knockback >= 0.1 ? `стоп ${knockback.toFixed(1)}` : '';
 }
 
-function weaponDamageLabel(e: Entity, ws: WeaponStats): { damage: number; label: string } {
+function weaponDamageLabel(e: Entity, itemId: string, ws: WeaponStats): { damage: number; label: string } {
   if (ws.isRanged || ws.psiCost) {
     const pellets = ws.pellets ?? 1;
     return { damage: ws.dmg, label: pellets > 1 ? `${ws.dmg}x${pellets}` : String(ws.dmg) };
   }
-  const damage = meleeDamage(e.rpg, e.weapon, ws.dmg);
+  const damage = meleeDamage(e.rpg, itemId, ws.dmg);
   return { damage, label: String(damage) };
 }
 
 /* ── Bounded current weapon display state for HUD/inventory ───── */
-export function getWeaponReadiness(e: Entity): WeaponReadiness {
-  const id = e.weapon ?? '';
+export function getWeaponReadiness(e: Entity, itemId = equippedCombatItemId(e)): WeaponReadiness {
+  const id = itemId;
   const baseWs = WEAPON_STATS[id] ?? WEAPON_STATS[''];
-  const ws = getWeaponStats(e);
+  const ws = getWeaponStats(e, id);
   const name = id ? (ITEMS[id]?.name ?? id) : 'Кулаки';
   const cooldown = Math.max(0, e.attackCd ?? 0);
   const cooldownMax = Math.max(0.05, ws.speed * (e.rpg ? agiAttackSpeedMult(e.rpg) : 1));
   const cooldownPct = Math.max(0, Math.min(1, cooldown / cooldownMax));
-  const damage = weaponDamageLabel(e, ws);
+  const damage = weaponDamageLabel(e, id, ws);
   let resourceKind: WeaponReadiness['resourceKind'] = 'none';
   let resourceName = '';
   let resourceCurrent = 0;
@@ -2420,7 +2431,7 @@ export function getWeaponReadiness(e: Entity): WeaponReadiness {
     if (!e.rpg || (e.rpg.psi ?? 0) < cost) cannotFireReason = 'нет ПСИ';
     lowResource = psi < cost * 2;
   } else if (ws.isRanged) {
-    const ammo = countAmmo(e);
+    const ammo = countAmmo(e, id);
     resourceKind = 'ammo';
     resourceName = compactAmmoName(ws.ammoType);
     resourceCurrent = ammo;
@@ -2429,7 +2440,7 @@ export function getWeaponReadiness(e: Entity): WeaponReadiness {
     if (!ws.ammoType || ammo <= 0) cannotFireReason = 'нет патронов';
     lowResource = ammo <= 3;
   } else {
-    const dur = getEquippedDurability(e);
+    const dur = getEquippedDurability(e, id);
     resourceKind = 'durability';
     resourceName = 'прочн';
     if (dur) {

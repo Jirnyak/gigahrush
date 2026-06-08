@@ -48,7 +48,7 @@ The core premise is one honest current-floor simulation. The loaded 1024x1024 to
 
 Storage order is not simulation truth. `world.rooms`, `entities`, `world.zones`, lift anchors, factories, resources, route arrays and registry definitions are storage surfaces; their current order is not physical law, social priority, route pressure, economic priority or AI preference unless a data contract explicitly says the order is authored priority. "First N" over a live/runtime collection is not an optimization by itself; it is a hidden hardcode unless it is rotated, spatially local, actor-keyed, cursor-based, scored before truncation or explicitly ordered by authored data.
 
-The player is an entity reference, not an `EntityType` and not an entity-side control flag. Runtime `player` points at the live actor currently being played; the native player body is an NPC-shaped entity with `persistentNpcId: 'player'` for save/floor-boundary reconstruction, and PSI possession can temporarily swap `player` to another actor. Input, camera, HUD, inventory, needs and save payload creation read that current player entity, while combat, faction hostility, damage, events, A-Life rank/karma and toroidal spatial math stay entity-oriented whenever possible. Runtime camera state is a transient systems layer over the current player entity: player-follow, death camera, free camera and cinematic camera resolve to the same view shape without changing the entity model. Isotropy means shared mechanics and world math across the whole active floor: player proximity affects rendering/camera/HUD only, not whether an actor receives AI. New mechanics should treat player-only branches as integration exceptions, not as the default design shape.
+The player is an entity reference, not an `EntityType` and not an entity-side control flag. Runtime `player` points at the live actor currently being played; the native player body is an NPC-shaped entity with `persistentNpcId: 'player'` for save/floor-boundary reconstruction, and PSI possession can temporarily swap `player` to another actor. Input, camera, HUD, inventory, needs and save payload creation read that current player entity, while combat, faction hostility, damage, events, A-Life rank/karma and toroidal spatial math stay entity-oriented whenever possible. Possession is not a hidden player-attribution layer: unless a future PSI effect explicitly adds a psychic signature, consequences remain attached to the acting entity because the world is isotropic. Runtime camera state is a transient systems layer over the current player entity: player-follow, death camera, free camera and cinematic camera resolve to the same view shape without changing the entity model. Isotropy means shared mechanics and world math across the whole active floor: player proximity affects rendering/camera/HUD only, not whether an actor receives AI. New mechanics should treat player-only branches as integration exceptions, not as the default design shape.
 
 High-density floors should treat actors as dynamic particles over a small faction field. Ordinary NPCs and monsters use the same short actor step across the map: keep current intent/target, choose or retain a hostile faction target through cached local scans, move, hit or fire a physical projectile, and write consequences. This is not a synchronized crowd shortcut: materialized NPCs keep their own A-Life identity, faction, relation to the player, role, current intent, loadout, target memory and foldback consequences. The consequence data must be real even when rendering is coarse. The current active-floor soft cap is one shared 4096 NPC+monster actor pool; item drops, billboards and projectiles use one shared 65536 floor-object pool.
 
@@ -146,6 +146,7 @@ Definitions  ->  Generation  ->  Runtime Systems  ->  Render/UI
 - Owns primitive shape only: enums, interfaces, `World`, constants.
 - Changes here are cross-project changes. They require an integration task.
 - Prefer string ids in new definitions before adding enums.
+- Render-only typed arrays such as `World.visualSlots` may live here only as primitive storage and dirty versions. They must not own render policy or gameplay semantics.
 
 `data/`
 
@@ -153,6 +154,7 @@ Definitions  ->  Generation  ->  Runtime Systems  ->  Render/UI
 - No world mutation here.
 - No frame logic here.
 - Definitions should be plain objects or readonly arrays.
+- Visual mesh definitions live here as data-only registries: visual cell codes, model definitions, geometry profiles and surface profiles.
 
 `gen/`
 
@@ -179,7 +181,25 @@ Definitions  ->  Generation  ->  Runtime Systems  ->  Render/UI
 - Consumes `CameraView` from systems; it must not decide which camera mode is active.
 - Visual feature additions should be data-indexed: texture id, sprite id, mark type, HUD flag.
 - Item visuals derive from `defId` through the procedural item sprite renderer; do not store static item sprite ids in save payloads.
+- The render-only mesh pass is documented in `mesh.md`. It reads `World`, `CameraView`, `visualSlots`, features, containers, corridor topology and resolved floor/generator profiles, then draws bounded low-poly corridor-covering/voxel detail after the raycaster and before sprites. It must not mutate gameplay, collision, save or floor memory truth.
 - Do not put gameplay decisions here.
+
+### Mesh And Fine Blocker Boundary
+
+`mesh.md` is the active contract for the shipped decorative mesh pass.
+`block.md` tracks 8x8 subcell gameplay blockers. The shipped first pass uses
+core `World.pathBlockers` storage, explicit data definitions, generation-time
+feature/container stamping and shared coarse+fine movement occupancy. Projectile
+blocking, movable furniture, debug overlays and subcell pathfinding are still
+future work.
+
+These systems must stay separate:
+
+- `World.visualSlots` and visual model bounds are render inputs, not physical blockers.
+- Path blockers use an explicit gameplay field and must use explicit blocker definitions when object stamping is added.
+- A generator may stamp both a visual slot and a blocker for the same table only through explicit mappings.
+- Renderer code must never own collision, pathfinding or movement decisions.
+- Fine blockers must not turn active-floor pathfinding into a full subcell graph; coarse route/path fields remain cell-level unless a later measured task proves a need for local steering.
 
 ### Field Generation Contract
 
@@ -382,6 +402,14 @@ Current floor matrix:
 `src/data/design_floors.ts` and `src/gen/design_floors/manifest.ts` own routed authored design floors without adding new `FloorLevel` enum values. `src/gen/design_floors/full_floor.ts` is the integration layer that expands small authored POI modules into full 1024x1024 route floors while keeping route-specific content out of `main.ts`. `src/data/procedural_floors.ts`, `src/systems/procedural_floors.ts`, and `src/gen/procedural_floor.ts` own interstitial procedural floors. Add new procedural geometry/anomaly profiles there or through their docs contracts; do not clone named story content into procedural floors.
 
 Generic render hooks are allowed when a floor or item family needs a reusable presentation channel. The roof uses this pattern: `src/gen/design_floors/roof.ts` exposes a 1024x1024 dynamic sky texture provider, and `src/render/webgl.ts` only owns the generic dynamic ceiling texture slot, not roof gameplay. Item drops use the same rule: `render/webgl.ts` only asks for a generic procedural texture by item id, while item-specific visual language lives in `src/render/item_sprites.ts`. Procedural actor/item visuals are allowed, but they must be generated at game/floor load boundaries into the shared renderer cache, not lazily in the hot render path.
+
+The mesh pass follows the same rule at a larger scale: `src/render/webgl.ts` owns only the generic pass seam, `src/render/mesh/` owns collection/buffers/shaders, and content-specific visual language lives in data/profile/generation modules. Physical path blockers for bulky objects are not part of mesh; use the explicit `block.md` field/data/generation contract when implementing collision.
+
+Corridor-volume dressing is part of this render contract. It may derive wall
+relief, ledges, thresholds or organic tunnel silhouettes from local
+`World.cells`/`roomMap` topology and floor profile tags, but it remains
+camera-bounded triangle geometry only. It must not rewrite rooms, carve cells,
+own reachability or become a source for path blockers.
 
 Later, if edit contention is still high, use Vite eager globs:
 
@@ -651,6 +679,14 @@ npm run typecheck
 ```
 
 Use `npm run check:readonly` for most data/content changes. Use `npm run check` for systems, generation, save/load, AI, economy, quests or rendering changes. Use `npm run check:browser` or `npm run check:full` when browser/render/mobile behavior needs smoke coverage and Chrome is available.
+
+For mesh pass changes, also run explicit smoke modes when practical:
+
+```txt
+SMOKE_VISUAL_GEOMETRY_MODE=off npm run smoke
+SMOKE_VISUAL_GEOMETRY_MODE=high npm run smoke
+SMOKE_MOBILE=1 SMOKE_VISUAL_GEOMETRY_MODE=low npm run smoke
+```
 
 For content:
 

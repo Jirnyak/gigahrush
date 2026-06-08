@@ -170,10 +170,10 @@ test('combat weapon HUD copy keeps ammo, cooldown and pellet damage compact', ()
     cooldownLabel: 'ГОТОВ',
     cannotFireReason: 'нет ПСИ',
     resourceKind: 'psi',
-    resourceLabel: 'ПСИ 1/10 -8',
+    resourceLabel: 'ПСИ 1/100 -8',
   });
 
   assert.equal(psiLines.title, 'Разрыв');
   assert.equal(psiLines.state, 'НЕТ ПСИ');
-  assert.equal(psiLines.resource, 'ПСИ 1/10 -8');
+  assert.equal(psiLines.resource, 'ПСИ 1/100 -8');
 });

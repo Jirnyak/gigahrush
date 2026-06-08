@@ -14,6 +14,7 @@ import {
   DEMOS_SOCIAL_NPC_SLOTS,
   DEMOS_SOCIAL_PLAYER_SLOT,
   DEMOS_SOCIAL_PUBLIC_SLOTS,
+  DEMOS_SOCIAL_INITIAL_NPC_SLOTS,
   DemosSocialRoleId,
 } from '../src/data/demos_social';
 import { registerNpcPackages, type NpcPackageDef } from '../src/data/npc_packages';
@@ -26,10 +27,13 @@ import {
   type AlifePopulationReservedNpc,
 } from '../src/systems/alife';
 import {
+  applyDemosRelationDelta,
+  clearDemosNpcSocialEdges,
   getDemosNpcOnlySocialEdges,
   getDemosOutgoingSocialEdges,
   getDemosRelationToPlayerSlot,
   getDemosSocialGraphStats,
+  setDemosSocialEdge,
 } from '../src/systems/demos_social';
 
 interface DemosSocialGraphDebug {
@@ -110,6 +114,7 @@ test('Demos social constants expose player plus nine NPC public slots', () => {
   assert.equal(DEMOS_SOCIAL_PLAYER_SLOT, 0);
   assert.equal(DEMOS_SOCIAL_NPC_SLOT_START, 1);
   assert.equal(DEMOS_SOCIAL_NPC_SLOTS, 9);
+  assert.equal(DEMOS_SOCIAL_INITIAL_NPC_SLOTS, 4);
   assert.equal(DEMOS_SOCIAL_PUBLIC_SLOTS, 10);
 });
 
@@ -141,14 +146,16 @@ test('Demos social graph stores only valid directed NPC targets and relation byt
 
 test('Demos social graph leaves empty NPC slots with the -128 relation sentinel', () => {
   const graph = debugGraph(stateWithPopulation(404, 1));
-  assert.equal(graph.targets.length, DEMOS_SOCIAL_NPC_SLOTS);
-  for (let i = 0; i < graph.targets.length; i++) {
+  assert.equal(graph.targets.length, DEMOS_SOCIAL_PUBLIC_SLOTS);
+  assert.equal(graph.targets[DEMOS_SOCIAL_PLAYER_SLOT], 0);
+  assert.notEqual(graph.relations[DEMOS_SOCIAL_PLAYER_SLOT], DEMOS_RELATION_EMPTY);
+  for (let i = DEMOS_SOCIAL_NPC_SLOT_START; i < graph.targets.length; i++) {
     assert.equal(graph.targets[i], 0);
     assert.equal(graph.relations[i], DEMOS_RELATION_EMPTY);
   }
 });
 
-test('Demos player relation is exposed as virtual public slot zero only', () => {
+test('Demos player relation is stored in public slot zero and exposed with outgoing edges', () => {
   const state = stateWithPopulation(505, 8, [{
     faction: Faction.CULTIST,
   }]);
@@ -164,6 +171,40 @@ test('Demos player relation is exposed as virtual public slot zero only', () => 
   assert.equal(outgoing[0].slot, 0);
   assert.equal(outgoing[0].targetKind, 'player');
   assert.equal(getDemosNpcOnlySocialEdges(state, 1).some(edge => edge.slot === 0 || edge.targetKind === 'player'), false);
+});
+
+test('Demos relation delta to player persists as the same relation override shape', () => {
+  const state = stateWithPopulation(515, 8);
+  const result = applyDemosRelationDelta(state, 1, { targetKind: 'player' }, -12, { reasonTag: 'test_player_delta' });
+  const social = (state as GameState & { demosSocial?: ReturnType<typeof createEmptyDemosSocialSaveState> }).demosSocial;
+
+  assert.equal(result?.targetKind, 'player');
+  assert.equal(getDemosRelationToPlayerSlot(state, 1)?.relation, result?.relation);
+  assert.equal(social?.relationOverrides.some(override =>
+    override.fromAlifeId === 1
+    && override.targetKind === 'player'
+    && override.targetAlifeId === undefined
+    && override.value === result?.relation), true);
+});
+
+test('Demos relation deltas propagate through source friends and enemies', () => {
+  const state = stateWithPopulation(525, 8);
+  for (const id of [1, 2, 3]) clearDemosNpcSocialEdges(state, id);
+  setDemosSocialEdge(state, 1, 2, DEMOS_RELATION_MAX, DEMOS_EDGE_FRIEND);
+  setDemosSocialEdge(state, 1, 3, DEMOS_RELATION_MIN, DEMOS_EDGE_ENEMY);
+  const beforeFriendToPlayer = getDemosRelationToPlayerSlot(state, 2)?.relation ?? 0;
+  const beforeEnemyToPlayer = getDemosRelationToPlayerSlot(state, 3)?.relation ?? 0;
+
+  applyDemosRelationDelta(state, 1, { targetKind: 'player' }, -10, { reasonTag: 'hit_test' });
+
+  assert.equal((getDemosRelationToPlayerSlot(state, 2)?.relation ?? 0) - beforeFriendToPlayer, -10);
+  assert.equal((getDemosRelationToPlayerSlot(state, 3)?.relation ?? 0) - beforeEnemyToPlayer, 10);
+
+  clearDemosNpcSocialEdges(state, 2);
+  setDemosSocialEdge(state, 1, 2, DEMOS_RELATION_MAX, DEMOS_EDGE_FRIEND);
+  applyDemosRelationDelta(state, 1, { targetKind: 'alife', targetAlifeId: 4 }, -12, { reasonTag: 'npc_target_test' });
+
+  assert.equal(getDemosNpcOnlySocialEdges(state, 2).find(edge => edge.targetAlifeId === 4)?.relation, -12);
 });
 
 test('Demos child records receive parent edges from controlled family state', () => {
@@ -348,6 +389,6 @@ test('Demos social stats report byte storage under seven megabytes for 100k reco
   const stats = getDemosSocialGraphStats(stateWithPopulation(808, 100_000));
   assert.equal(stats.totalRecords, 100_000);
   assert.equal(stats.npcSlots, DEMOS_SOCIAL_NPC_SLOTS);
-  assert.equal(stats.heapBytesApprox, 100_000 * DEMOS_SOCIAL_NPC_SLOTS * 7);
+  assert.equal(stats.heapBytesApprox, 100_000 * DEMOS_SOCIAL_PUBLIC_SLOTS * 7);
   assert.ok(stats.heapBytesApprox < 7 * 1024 * 1024);
 });

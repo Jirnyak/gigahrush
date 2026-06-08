@@ -27,7 +27,7 @@ import {
   DEMOS_EDGE_WORK,
   DEMOS_RELATION_FRIENDLY_THRESHOLD,
   DEMOS_RELATION_HOSTILE_THRESHOLD,
-  DEMOS_SOCIAL_NPC_SLOTS,
+  DEMOS_SOCIAL_PUBLIC_SLOTS,
   DemosSocialRoleId,
 } from '../data/demos_social';
 import {
@@ -48,7 +48,7 @@ import {
   type NpcPackageDef,
 } from '../data/npc_packages';
 import { demosRelationBand } from './demos';
-import { getDemosNpcOnlySocialEdges, type DemosSocialEdgeView } from './demos_social';
+import { getDemosOutgoingSocialEdges, type DemosSocialEdgeView } from './demos_social';
 
 const DEMOS_PROFILE_RECENT_LIMIT = 48;
 const DEMOS_SOCIAL_FALLBACK_TRIES = 24;
@@ -66,7 +66,8 @@ export interface DemosTraitView {
 }
 
 export interface DemosSocialLinkSeed {
-  targetAlifeId: number;
+  targetKind?: 'player' | 'alife';
+  targetAlifeId?: number;
   relation: number;
   role?: DemosSocialRoleId;
   flags?: number;
@@ -76,8 +77,8 @@ export interface DemosSocialLinkSeed {
 
 export interface DemosSocialLinkView {
   sourceAlifeId: number;
-  targetKind: 'alife';
-  targetAlifeId: number;
+  targetKind: 'player' | 'alife';
+  targetAlifeId?: number;
   targetLabel: string;
   relation: number;
   relationLabel: string;
@@ -384,9 +385,10 @@ function graphEdgeTags(edge: DemosSocialEdgeView): readonly string[] {
 }
 
 function readGraphSocialEdges(state: GameState, alifeId: number): readonly DemosSocialLinkSeed[] | undefined {
-  const edges = getDemosNpcOnlySocialEdges(state, alifeId);
+  const edges = getDemosOutgoingSocialEdges(state, alifeId);
   if (edges.length === 0) return [];
   return edges.map(edge => ({
+    targetKind: edge.targetKind,
     targetAlifeId: edge.targetAlifeId ?? 0,
     relation: edge.relation,
     role: roleFromGraphRole(edge.role, edge.relation),
@@ -397,9 +399,23 @@ function readGraphSocialEdges(state: GameState, alifeId: number): readonly Demos
 }
 
 function addLinkSeed(out: DemosSocialLinkSeed[], seen: Set<number>, seed: DemosSocialLinkSeed, sourceAlifeId: number, total: number): void {
+  if (seed.targetKind === 'player') {
+    if (seen.has(0)) return;
+    out.push({
+      targetKind: 'player',
+      relation: Math.max(-127, Math.min(127, Math.round(seed.relation))),
+      role: seed.role,
+      flags: seed.flags,
+      hidden: seed.hidden,
+      tags: seed.tags,
+    });
+    seen.add(0);
+    return;
+  }
   const target = clampInt(seed.targetAlifeId, 0, 1, total);
   if (target <= 0 || target === sourceAlifeId || seen.has(target)) return;
   out.push({
+    targetKind: 'alife',
     targetAlifeId: target,
     relation: Math.max(-127, Math.min(127, Math.round(seed.relation))),
     role: seed.role,
@@ -488,6 +504,26 @@ function linkViewFromSeed(
   source: AlifeNpcSnapshot,
   seed: DemosSocialLinkSeed,
 ): DemosSocialLinkView | undefined {
+  if (seed.targetKind === 'player') {
+    const relation = Math.max(-127, Math.min(127, Math.round(seed.relation)));
+    const role = normalizeRole(seed.role, roleFromRelation(relation));
+    const band = relationLabel(relation);
+    return {
+      sourceAlifeId: source.id,
+      targetKind: 'player',
+      targetLabel: 'player: игрок',
+      relation,
+      relationLabel: band.label,
+      relationColor: band.color,
+      role,
+      roleLabel: ROLE_LABELS[role],
+      flags: Math.max(0, Math.min(255, Math.trunc(seed.flags ?? 0))),
+      hidden: seed.hidden === true,
+      dead: false,
+      tags: seed.tags ?? [],
+    };
+  }
+  if (seed.targetAlifeId === undefined) return undefined;
   const target = getAlifeNpcRecordSnapshot(state, seed.targetAlifeId);
   if (!target) return undefined;
   const relation = Math.max(-127, Math.min(127, Math.round(seed.relation)));
@@ -497,7 +533,7 @@ function linkViewFromSeed(
     sourceAlifeId: source.id,
     targetKind: 'alife',
     targetAlifeId: target.id,
-    targetLabel: `alife:${target.id} ${target.name}`,
+    targetLabel: `${target.dead ? 'мертв: ' : ''}alife:${target.id} ${target.name}`,
     relation,
     relationLabel: band.label,
     relationColor: band.color,
@@ -513,7 +549,7 @@ function linkViewFromSeed(
 export function buildDemosSocialLinksView(
   state: GameState,
   alifeId: number,
-  limit = DEMOS_SOCIAL_NPC_SLOTS,
+  limit = DEMOS_SOCIAL_PUBLIC_SLOTS,
 ): readonly DemosSocialLinkView[] {
   const total = alifeNpcRecordCount(state);
   if (!Number.isInteger(alifeId) || alifeId <= 0 || alifeId > total) return [];
@@ -527,10 +563,11 @@ export function buildDemosSocialLinksView(
   const seen = new Set<number>();
   for (const seed of seeds) {
     if (out.length >= cap) break;
-    if (seen.has(seed.targetAlifeId)) continue;
+    const seenKey = seed.targetKind === 'player' ? 0 : seed.targetAlifeId;
+    if (seenKey !== undefined && seen.has(seenKey)) continue;
     const view = linkViewFromSeed(state, source, seed);
     if (!view) continue;
-    seen.add(view.targetAlifeId);
+    seen.add(view.targetKind === 'player' ? 0 : view.targetAlifeId ?? 0);
     out.push(view);
   }
   return out;
@@ -689,7 +726,7 @@ export function getDemosProfileDetails(state: GameState, alifeId: number): Demos
   const snapshot = getAlifeNpcRecordSnapshot(state, alifeId);
   if (!snapshot) return undefined;
   const traits = getDemosTraitViews(state, alifeId);
-  const links = buildDemosSocialLinksView(state, alifeId, DEMOS_SOCIAL_NPC_SLOTS);
+  const links = buildDemosSocialLinksView(state, alifeId, DEMOS_SOCIAL_PUBLIC_SLOTS);
   const feed = buildDemosProfileFeedView(state, alifeId, 1);
   const relationScore = Math.round(snapshot.playerRelation ?? 0);
   const relation = demosRelationBand(relationScore);

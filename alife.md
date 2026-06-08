@@ -33,6 +33,7 @@ Current shipped baseline:
 - Ordinary generated loadout is deterministic from seed, faction, occupation, danger and level; it is not stored as a `weapon` string plus `inventory` array on every untouched A-Life record. Only captured/overridden custom loadout is kept as a sparse per-record override, including package-projected exact `weapon`, `tool` and `inventory` loadouts.
 - Browser saves store A-Life seed, total population, up to `65_536` dead A-Life ids, dead plot ids, bounded changed-record overrides and capped persistent mobility state. Full live entities are not serialized.
 - `src/systems/alife_migration.ts` runs a bounded cold migration cadence: inactive-floor journeys move records between route keys, active-floor arrivals materialize near lift anchors, and active departures require live NPCs to reach a lift anchor before the record moves.
+- `src/systems/demos_social.ts` owns the compact Demos relation graph: slot `0` is `NPC -> player`, slots `1..9` are `NPC -> NPC`, start fill usually reaches up to 5 public relations total, and gameplay/social deltas can grow circles up to 10 public relations without adding object graphs.
 - Small caravan runs can carry `memberAlifeIds`; surviving members are moved to the destination route key on arrival.
 
 Active-floor behavior, full-pass AI, pathfinding, NPC intent selection, short mass-combat step, monster behavior and samosbor reactions are specified in [ai.md](ai.md). This file owns persistent identity and population facts; `ai.md` owns what materialized live actors decide to do.
@@ -69,7 +70,7 @@ These are current implementation limits, not new design goals:
 - Death is permanent in memory, but save/load persistence for procedural A-Life deaths is capped at `65_536` ids. A player can depopulate active floors, but "depopulate the whole run-sized A-Life pool and preserve every death through save/load" is not fully true yet.
 - Contract/assignment quest conversion can still use a live giver id or a synthetic fallback id; it does not consistently bind generated quest givers to `persistentNpcId`.
 - Some authored plot NPC generators still use `plotNpcId` as the live identity path; reserved A-Life plot identities exist inside the fixed pool budget, and Hell holdout Major Grom now binds to his reserved record, but not every authored plot actor has been converted to materialize directly from that reserved record.
-- Off-floor macro life is represented by cold migration, caravans, contracts, economy/faction state and compact events. There is not yet a separate slow batch A-Life simulation for rank summaries or family/friend consequences.
+- Off-floor macro life is represented by cold migration, caravans, contracts, economy/faction state, compact events and bounded Demos social consequences. There is not yet a separate slow batch A-Life simulation for rank summaries.
 
 ## Core Rule
 
@@ -197,7 +198,7 @@ Target fields:
 - `workFloorKey`, `workRoomId` or faction/work anchor.
 - `needProfileId`, `routineSeed` and `roleAiId` for deterministic individual active-floor behavior.
 - `shiftOffsetMinutes`, `duty`, `sociability`, `riskTolerance`, `greed` and `panicBias` as compact numeric traits when the AI implementation needs persistent personality.
-- `friends`: bounded ids, preferably 3-8.
+- `friends`: bounded ids through Demos social graph slots; current storage supports player slot plus up to 9 NPC links, with ordinary start fill usually leaving free slots for later relationships.
 - `family`: spouse/parent/child/sibling ids through compact relation edges.
 - `rank`: faction or global social rank.
 - `playerSeen`, `lastSeenAt`.
@@ -274,6 +275,7 @@ Counters and relation:
 - Initial personal relation is faction relation to the player plus deterministic per-NPC fluctuation. This keeps faction mood recognizable while making individuals vary.
 - If personal relation reaches the same hostile threshold as faction hostility, that NPC treats the player as hostile even if the faction as a whole has not crossed the threshold.
 - Player damage to an NPC lowers that NPC's personal relation and, when the factions are not already hostile, lowers the faction relation too.
+- Personal relation changes that enter Demos propagate through the changed NPC's bounded outgoing social circle with `derivedDelta = round(sourceDelta * circleRelation / 127)`: friends inherit the sign, enemies invert it, weak/zero ties have weak/no effect.
 - Completing a quest gives the issuing faction a small fixed positive relation gain in normal cases (`+1`); the individual giver gets a stronger but capped personal gain because the task mattered to that person.
 - Karma is affected by deeds: attacking a non-enemy, stealing and urinating on owned floor reduce it. Positive karma sources can be added later through rescue, repair, honest quest outcomes and shelter help.
 - Rank menus and leaderboards should be views over level, wealth, kills, karma, quests and survival facts.
@@ -383,7 +385,7 @@ Gameplay effects:
 - Family members can inherit quests, debts, grudges or keys.
 - Friends can report deaths or point to last known positions.
 - Reputation changes can spread through a small local graph rather than all NPCs.
-- The shipped baseline stores compact per-NPC relation-to-player for materialized/touched NPCs. Future family/friend propagation should modify this value through bounded local edges, not by scanning the full population.
+- The shipped baseline stores compact per-NPC relation-to-player and Demos social relation overrides. Family/friend/enemy propagation modifies only bounded local outgoing edges and never scans the full population.
 
 Do not simulate all social relationships every frame. Update graph consequences through event publication and slow, bounded ticks.
 

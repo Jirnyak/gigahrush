@@ -32,16 +32,17 @@ export function totalXpForLevel(level: number): number {
 
 // ── Base stats + per-level linear growth ─────────────────────────
 const BASE_HP = 100;
-const HP_PER_LEVEL = 10;
-const BASE_PSI = 10;
+const HP_PER_LEVEL = 1;
+const BASE_PSI = 100;
 const PSI_PER_LEVEL = 1;
-const STR_HP_PER_POINT = 1;
+const STR_HP_PER_POINT = 0.01;
 const STR_MELEE_DAMAGE_PER_POINT = 0.01;
 export const HUMANOID_BASE_MOVE_SPEED = 2.0;
-const AGI_MOVE_SPEED_PER_POINT = 0.05;
-const AGI_ATTACK_COOLDOWN_PER_POINT = 0.1;
+const AGI_MOVE_SPEED_PER_POINT = 0.01;
+const AGI_ATTACK_COOLDOWN_PER_POINT = 0.02;
 const AGI_SPREAD_PER_POINT = 0.12;
-const INT_PSI_PER_POINT = 1;
+const INT_PSI_PER_POINT = 0.01;
+const INT_PSI_DURATION_SEC_PER_POINT = 1;
 const INT_XP_BONUS_PER_POINT = 0.08;
 const INT_XP_BONUS_ASYMPTOTE = 1.0;
 const INT_CONTRACT_REWARD_PER_POINT = 0.04;
@@ -126,12 +127,12 @@ function asymptoticBonus(points: number, perPoint: number, asymptote: number): n
 
 // ── Compute effective max PSI (level base + INT multiplier) ──────
 export function getMaxPsi(rpg: RPGStats): number {
-  return Math.round(getLevelPsi(rpg.level) + Math.max(0, rpg.int) * INT_PSI_PER_POINT);
+  return Math.round(getLevelPsi(rpg.level) * (1 + Math.max(0, rpg.int) * INT_PSI_PER_POINT));
 }
 
 // ── Compute effective max HP (level base + STR multiplier) ───────
 export function getMaxHp(rpg: RPGStats): number {
-  return Math.round(getLevelHp(rpg.level) + Math.max(0, rpg.str) * STR_HP_PER_POINT);
+  return Math.round(getLevelHp(rpg.level) * (1 + Math.max(0, rpg.str) * STR_HP_PER_POINT));
 }
 
 // ── Attribute multipliers ────────────────────────────────────────
@@ -179,6 +180,9 @@ export function agiRangedSpreadMult(rpg: RPGStats): number {
 export function intPsiCostMult(rpg: RPGStats): number {
   return inverseStatMult(rpg.int, INT_PSI_COST_EFFICIENCY_PER_POINT);
 }
+export function intPsiDurationBonusSec(rpg: RPGStats): number {
+  return positivePoints(rpg.int) * INT_PSI_DURATION_SEC_PER_POINT;
+}
 export function intContractRewardMult(rpg: RPGStats): number {
   return 1 + asymptoticBonus(rpg.int, INT_CONTRACT_REWARD_PER_POINT, INT_CONTRACT_REWARD_ASYMPTOTE);
 }
@@ -202,6 +206,7 @@ export interface RPGStatEffects {
   rangedSpreadMult: number;
   xpMult: number;
   psiCostMult: number;
+  psiDurationBonusSec: number;
   contractRewardMult: number;
   documentRewardMult: number;
 }
@@ -218,6 +223,7 @@ export function rpgStatEffects(rpg: RPGStats): RPGStatEffects {
     rangedSpreadMult: agiRangedSpreadMult(rpg),
     xpMult: intXpMult(rpg),
     psiCostMult: intPsiCostMult(rpg),
+    psiDurationBonusSec: intPsiDurationBonusSec(rpg),
     contractRewardMult: intContractRewardMult(rpg),
     documentRewardMult: intDocumentRewardMult(rpg),
   };

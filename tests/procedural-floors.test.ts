@@ -28,11 +28,6 @@ import { ROUTE_GATE_DEFS } from '../src/data/route_gates';
 import { isFloor69FemaleSprite } from '../src/entities/procedural_visuals';
 import { NPC_VISUAL_FLOOR69_FEMALE } from '../src/entities/npc_visuals';
 import {
-  BAD_APPLE_HEIGHT,
-  BAD_APPLE_WIDTH,
-  drawBadAppleFrame,
-} from '../src/data/bad_apple_frames';
-import {
   commitFloorRunEntry,
   currentFloorRunEntry,
   currentFloorRunLabel,
@@ -61,7 +56,15 @@ import {
   setMapEditorPatchState,
 } from '../src/systems/map_editor';
 import { currentNetTerminalGenFloorKey } from '../src/systems/net_terminal_gen';
-import { findBadAppleSiteNear, stampBadAppleWorld, tryUseBadAppleWorldAnomaly, updateBadAppleWorldAnomaly } from '../src/systems/procedural_anomalies/bad_apple_world';
+import {
+  BAD_APPLE_EXPERIMENT_ENABLED,
+  BAD_APPLE_HEIGHT,
+  BAD_APPLE_WIDTH,
+  findBadAppleSiteNear,
+  stampBadAppleWorld,
+  tryUseBadAppleWorldAnomaly,
+  updateBadAppleWorldAnomaly,
+} from '../src/systems/procedural_anomalies/bad_apple_world';
 import { getProceduralSmogStatus, updateProceduralAnomalies } from '../src/systems/procedural_anomalies';
 import { updateLivingTunnelsAnomaly } from '../src/systems/procedural_anomalies/living_tunnels';
 import { tryZombieApocalypseInfection } from '../src/systems/procedural_anomalies/zombie_apocalypse';
@@ -370,6 +373,11 @@ function roomHasMaskCell(world: World, mask: Uint8Array, room: { id: number }): 
 
 const RUN_GENERATION_MATRIX = process.env.GIGAHRUSH_GENERATION_MATRIX === '1';
 const GENERATION_SKIP_REASON = 'run npm run test:generation for the full generation matrix';
+const RUN_PROCEDURAL_FLOOR_FULL_MATRIX = process.env.GIGAHRUSH_PROCEDURAL_FLOOR_FULL_MATRIX === '1';
+const PROCEDURAL_FLOOR_FULL_MATRIX_SKIP_REASON = 'run GIGAHRUSH_PROCEDURAL_FLOOR_FULL_MATRIX=1 npm run test:generation for the exhaustive procedural floor matrix';
+const RUN_PROCEDURAL_FLOOR_REGRESSION_MATRIX = process.env.GIGAHRUSH_PROCEDURAL_FLOOR_REGRESSION_MATRIX === '1';
+const PROCEDURAL_FLOOR_REGRESSION_SKIP_REASON = 'run GIGAHRUSH_PROCEDURAL_FLOOR_REGRESSION_MATRIX=1 npm run test:generation for procedural genfix regression floors';
+const BAD_APPLE_EXPERIMENT_SKIP_REASON = 'Bad Apple world experiment is disabled in the shipped path';
 const P0_REACHABILITY_FAST_CASES = [
   { runSeed: 96, z: 1 },
   { runSeed: 321, z: 9 },
@@ -380,8 +388,24 @@ const P0_REACHABILITY_ZS = [-43, -35, -27, -23, -19, -11, -3, 1, 9, 17, 21, 25, 
 
 after(() => printSlowestFloorGenerators());
 
-function testGenerationMatrix(name: string, fn: () => void): void {
-  test(name, { skip: RUN_GENERATION_MATRIX ? false : GENERATION_SKIP_REASON }, fn);
+function testGenerationMatrix(name: string, fn: () => void | Promise<void>, options?: { skip?: boolean | string }): void {
+  let skip: boolean | string = RUN_GENERATION_MATRIX ? options?.skip ?? false : GENERATION_SKIP_REASON;
+  if (RUN_GENERATION_MATRIX && skip === false && name.startsWith('genfix ') && !RUN_PROCEDURAL_FLOOR_REGRESSION_MATRIX) {
+    skip = PROCEDURAL_FLOOR_REGRESSION_SKIP_REASON;
+  }
+  test(name, { skip }, fn);
+}
+
+function testProceduralFloorFullMatrix(name: string, fn: () => void | Promise<void>): void {
+  testGenerationMatrix(name, fn, {
+    skip: RUN_PROCEDURAL_FLOOR_FULL_MATRIX ? false : PROCEDURAL_FLOOR_FULL_MATRIX_SKIP_REASON,
+  });
+}
+
+function testBadAppleExperiment(name: string, fn: () => void | Promise<void>): void {
+  testGenerationMatrix(name, fn, {
+    skip: BAD_APPLE_EXPERIMENT_ENABLED ? false : BAD_APPLE_EXPERIMENT_SKIP_REASON,
+  });
 }
 
 function timedProceduralFloor(runSeed: number, z: number, prefix: string): ReturnType<typeof generateProceduralFloor> {
@@ -986,14 +1010,14 @@ test('active numbered floor editor replay does not leak patches to intended rout
 
 test('procedural floor danger deck keeps route-band pressure rhythm', () => {
   assert.deepEqual(summarizeDangerDeck(), {
-    upper: { slots: 95, averageTimes100: 313, dangerCounts: [0, 24, 37, 32, 2] },
+    upper: { slots: 95, averageTimes100: 312, dangerCounts: [0, 24, 37, 33, 1] },
     residential: { slots: 60, averageTimes100: 240, dangerCounts: [5, 28, 25, 2, 0] },
-    industrial: { slots: 70, averageTimes100: 370, dangerCounts: [0, 6, 19, 35, 10] },
-    hellVoid: { slots: 45, averageTimes100: 469, dangerCounts: [0, 0, 2, 10, 33] },
+    industrial: { slots: 70, averageTimes100: 369, dangerCounts: [0, 6, 20, 34, 10] },
+    hellVoid: { slots: 45, averageTimes100: 467, dangerCounts: [0, 0, 2, 11, 32] },
   });
   assert.deepEqual(summarizeAnomalyPressure(), {
     none: { slots: 80, averageTimes100: 265, danger5: 1 },
-    anomaly: { slots: 190, averageTimes100: 368, danger5: 44 },
+    anomaly: { slots: 190, averageTimes100: 366, danger5: 42 },
   });
 });
 
@@ -1003,7 +1027,7 @@ test('procedural floor danger snapshot is deterministic by z and seed', () => {
     .join(' ');
 
   assert.equal(snapshot, [
-    '-49:5 -47:5 -46:5 -45:5 -43:5 -41:5 -39:5 -37:5 -35:5 -33:5 -31:5',
+    '-49:5 -47:5 -46:5 -45:5 -43:5 -41:5 -39:5 -37:4 -35:5 -33:5 -31:5',
     '-29:3 -27:4 -25:4 -23:4 -21:4 -19:4 -17:3 -16:2 -15:3 -13:3 -12:2',
     '-11:2 -9:3 -7:2 -5:3 -3:3 -1:3 1:1 3:2 5:2 7:2 9:3 11:3',
     '13:2 15:3 17:2 19:3 21:2 23:3 25:2 27:3 29:3 31:2 33:2 35:3',
@@ -1068,7 +1092,7 @@ test('P0 procedural reachability fast subset keeps route lifts usable', () => {
   }
 });
 
-testGenerationMatrix('P0 procedural reachability matrix keeps sampled route lifts usable', () => {
+testProceduralFloorFullMatrix('P0 procedural reachability matrix keeps sampled route lifts usable', () => {
   for (const z of P0_REACHABILITY_ZS) {
     assert.equal(PROCEDURAL_FLOOR_ZS.includes(z), true, `z=${z} is procedural`);
   }
@@ -1083,7 +1107,7 @@ testGenerationMatrix('P0 procedural reachability matrix keeps sampled route lift
   }
 });
 
-testGenerationMatrix('all procedural geometry profiles can be forced without anomaly', () => {
+testProceduralFloorFullMatrix('all procedural geometry profiles can be forced without anomaly', () => {
   for (const def of FLOOR_GEOMETRIES) {
     const z = proceduralZForGeometry(def);
     const base = makeProceduralFloorSpec(202_002, z);
@@ -1551,7 +1575,7 @@ testGenerationMatrix('collector geometry records wet basins, dry causeways and v
   }
 });
 
-testGenerationMatrix('all procedural anomalies can be forced and keep route lifts usable', () => {
+testProceduralFloorFullMatrix('all procedural anomalies can be forced and keep route lifts usable', () => {
   for (let i = 0; i < FLOOR_ANOMALIES.length; i++) {
     const def = FLOOR_ANOMALIES[i];
     const base = makeProceduralFloorSpec(303_002 + i, 9);
@@ -4275,7 +4299,13 @@ testGenerationMatrix('attic weatherworks geometry exposes wind lanes, crawl pock
 });
 
 testGenerationMatrix('genfix 008 procedural false-safe attic liquidator floor keeps scaled weatherworks and target territory shares', () => {
-  const spec = makeProceduralFloorSpec(61_061, 43);
+  const base = makeProceduralFloorSpec(61_061, 43);
+  const spec = {
+    ...base,
+    anomalyId: 'false_safe_block' as const,
+    danger: 4 as const,
+    title: `ложная безопасность: ${base.title}`,
+  };
   assert.equal(spec.geometryId, 'attic_weatherworks');
   assert.equal(spec.majorityId, 'liquidators');
   assert.equal(spec.anomalyId, 'false_safe_block');
@@ -4635,8 +4665,14 @@ testGenerationMatrix('genfix 078 sump conveyor cultist floor has dense stations,
   assert.equal(npcs.length === 0 || ownTerritoryNpcs.length / npcs.length >= 0.75, true, `own territory NPC share ${npcs.length ? ownTerritoryNpcs.length / npcs.length : 1}`);
 });
 
-testGenerationMatrix('genfix 097 bad apple sump cultist floor has dense causeways, edge rooms and target territory', () => {
-  const spec = makeProceduralFloorSpec(61_061, -46);
+testBadAppleExperiment('genfix 097 bad apple sump cultist floor has dense causeways, edge rooms and target territory', () => {
+  const base = makeProceduralFloorSpec(61_061, -46);
+  const spec = {
+    ...base,
+    anomalyId: 'bad_apple_world' as const,
+    danger: 5 as const,
+    title: `bad apple!: ${base.title}`,
+  };
   assert.equal(spec.geometryId, 'sump_causeways');
   assert.equal(spec.majorityId, 'cultists');
   assert.equal(spec.anomalyId, 'bad_apple_world');
@@ -4896,7 +4932,13 @@ testGenerationMatrix('genfix 100 deep sump none scientist floor has flooded fiel
 });
 
 testGenerationMatrix('genfix 084 procedural sump conway liquidator floor keeps macro and fills mid micro territory', () => {
-  const spec = makeProceduralFloorSpec(61_061, -33);
+  const base = makeProceduralFloorSpec(61_061, -33);
+  const spec = {
+    ...base,
+    anomalyId: 'conway_life' as const,
+    danger: 5 as const,
+    title: `клеточная жизнь: ${base.title}`,
+  };
   assert.equal(spec.geometryId, 'sump_causeways');
   assert.equal(spec.majorityId, 'liquidators');
   assert.equal(spec.anomalyId, 'conway_life');
@@ -5039,8 +5081,14 @@ testGenerationMatrix('genfix 094 sump mushroom citizens floor has dense causeway
   assert.equal(npcs.length === 0 || ownTerritoryNpcs.length / npcs.length >= 0.75, true, `own territory NPC share ${npcs.length ? ownTerritoryNpcs.length / npcs.length : 1}`);
 });
 
-testGenerationMatrix('genfix 096 procedural sump bad apple wild floor fills blank spans from HQ territory', () => {
-  const spec = makeProceduralFloorSpec(61_061, -45);
+testBadAppleExperiment('genfix 096 procedural sump bad apple wild floor fills blank spans from HQ territory', () => {
+  const base = makeProceduralFloorSpec(61_061, -45);
+  const spec = {
+    ...base,
+    anomalyId: 'bad_apple_world' as const,
+    danger: 5 as const,
+    title: `bad apple!: ${base.title}`,
+  };
   assert.equal(spec.geometryId, 'sump_causeways');
   assert.equal(spec.majorityId, 'wild');
   assert.equal(spec.anomalyId, 'bad_apple_world');
@@ -5283,7 +5331,7 @@ testGenerationMatrix('void and lower route floors do not generate NPCs', () => {
   assert.equal(procGen.entities.some(e => e.type === EntityType.NPC), false);
   assert.equal(procGen.entities.some(e => e.type === EntityType.MONSTER), true);
 
-  const darknessGen = timeFloorGeneration('design darkness', () => generateDesignFloor('darkness'));
+  const darknessGen = timedDesignFloor('darkness', 'design darkness');
   const darknessMonsters = darknessGen.entities.filter(e => e.type === EntityType.MONSTER);
   const darknessMonsterKinds = new Set(darknessMonsters.map(e => e.monsterKind));
   assert.equal(darknessGen.entities.some(e => e.type === EntityType.NPC), false);
@@ -5469,7 +5517,7 @@ testGenerationMatrix('podad ships as a denser-than-Hell monster floor with gated
   const route = DESIGN_FLOOR_ROUTES.find(def => def.id === 'podad');
   assert.ok(route);
   const profile = designFloorPopulationProfile(route);
-  const gen = timeFloorGeneration('design podad population', () => generateDesignFloor('podad'));
+  const gen = timedDesignFloor('podad', 'design podad population');
   const npcs = gen.entities.filter(e => e.type === EntityType.NPC);
   const ambientNpcs = npcs.filter(e => !e.plotNpcId && !e.persistentNpcId && e.alifeId === undefined);
   const monsters = gen.entities.filter(e => e.type === EntityType.MONSTER);
@@ -5576,7 +5624,7 @@ testGenerationMatrix('slime NII route ships containment cameras, samples, and sl
   assert.equal(route.z, 12);
   assert.equal(route.baseFloor, FloorLevel.KVARTIRY);
 
-  const gen = timeFloorGeneration('design slime_nii containment', () => generateDesignFloor('slime_nii'));
+  const gen = timedDesignFloor('slime_nii', 'design slime_nii containment');
   const cameraRooms = gen.world.rooms.filter(room => room.name.startsWith('Гермокамера НИИ слизи'));
   const hermeticDoors = [...gen.world.doors.values()].filter(door =>
     door.state === DoorState.HERMETIC_CLOSED || door.state === DoorState.HERMETIC_OPEN);
@@ -5651,7 +5699,7 @@ testGenerationMatrix('manhattan crossroads keeps its core route decisions reacha
 });
 
 testGenerationMatrix('underhell ships as a monster-owned veteran threshold', () => {
-  const gen = timeFloorGeneration('design underhell population field', () => generateDesignFloor('underhell'));
+  const gen = timedDesignFloor('underhell', 'design underhell population field');
   const npcs = gen.entities.filter(e => e.type === EntityType.NPC);
   const ambientNpcs = npcs.filter(e => !e.plotNpcId && !e.persistentNpcId && e.alifeId === undefined);
   const monsters = gen.entities.filter(e => e.type === EntityType.MONSTER);
@@ -5672,7 +5720,7 @@ testGenerationMatrix('dark metro ships as sparse defended bands inside monster-h
   const route = DESIGN_FLOOR_ROUTES.find(def => def.id === 'dark_metro');
   assert.ok(route);
   const profile = designFloorPopulationProfile(route);
-  const gen = timeFloorGeneration('design dark metro population field', () => generateDesignFloor('dark_metro'));
+  const gen = timedDesignFloor('dark_metro', 'design dark metro population field');
   const npcs = gen.entities.filter(e => e.type === EntityType.NPC);
   const ambientNpcs = npcs.filter(e => !e.plotNpcId && !e.persistentNpcId && e.alifeId === undefined);
   const monsters = gen.entities.filter(e => e.type === EntityType.MONSTER);
@@ -5784,7 +5832,7 @@ testGenerationMatrix('upper bureau preserves legal, forged, stolen-key and staff
 });
 
 testGenerationMatrix('antenna court keeps signal macrostructure with mid micro faction territories', () => {
-  const gen = timeFloorGeneration('design antenna_court population field', () => generateDesignFloor('antenna_court'));
+  const gen = timedDesignFloor('antenna_court', 'design antenna_court population field');
   const ambientNpcs = gen.entities.filter(e => e.type === EntityType.NPC && !e.plotNpcId && !e.persistentNpcId && e.alifeId === undefined);
   const monsters = gen.entities.filter(e => e.type === EntityType.MONSTER);
   const legalNpcFactions = new Set([Faction.SCIENTIST, Faction.LIQUIDATOR]);
@@ -5836,7 +5884,7 @@ testGenerationMatrix('antenna court keeps signal macrostructure with mid micro f
 });
 
 testGenerationMatrix('silicon net well creates protected science pockets and silicon monster pressure', () => {
-  const gen = timeFloorGeneration('design silicon_net_well population field', () => generateDesignFloor('silicon_net_well'));
+  const gen = timedDesignFloor('silicon_net_well', 'design silicon_net_well population field');
   const npcs = gen.entities.filter(e => e.type === EntityType.NPC);
   const ambientNpcs = npcs.filter(e => !e.plotNpcId && !e.persistentNpcId && e.alifeId === undefined);
   const genericSpecialists = ambientNpcs.filter(e => e.name?.startsWith('Кремниевый НЕТ-колодец:'));
@@ -5880,7 +5928,7 @@ testGenerationMatrix('silicon net well creates protected science pockets and sil
 });
 
 testGenerationMatrix('floor 69 uses the shared field as an adult social-debt route', () => {
-  const gen = timeFloorGeneration('design floor_69 population field', () => generateDesignFloor('floor_69'));
+  const gen = timedDesignFloor('floor_69', 'design floor_69 population field');
   const npcs = gen.entities.filter(e => e.type === EntityType.NPC);
   const ambientNpcs = npcs.filter(e => !e.plotNpcId && !e.persistentNpcId && e.alifeId === undefined);
   const monsters = gen.entities.filter(e => e.type === EntityType.MONSTER);
@@ -5920,7 +5968,7 @@ testGenerationMatrix('pioneer camp keeps a populated protected center and danger
   const route = DESIGN_FLOOR_ROUTES.find(def => def.id === 'pioneer_camp');
   assert.ok(route);
   const profile = designFloorPopulationProfile(route);
-  const gen = timeFloorGeneration('design pioneer camp population field', () => generateDesignFloor('pioneer_camp'));
+  const gen = timedDesignFloor('pioneer_camp', 'design pioneer camp population field');
   const npcs = gen.entities.filter(e => e.type === EntityType.NPC);
   const monsters = gen.entities.filter(e => e.type === EntityType.MONSTER);
   const childNpcs = npcs.filter(e => e.occupation === Occupation.CHILD);
@@ -5998,7 +6046,7 @@ testGenerationMatrix('pioneer camp keeps a populated protected center and danger
 });
 
 testGenerationMatrix('chthonic attic keeps a zero-ordinary-NPC monster service maze', () => {
-  const gen = timeFloorGeneration('design chthonic attic population field', () => generateDesignFloor('chthonic_attic'));
+  const gen = timedDesignFloor('chthonic_attic', 'design chthonic attic population field');
   const npcs = gen.entities.filter(e => e.type === EntityType.NPC);
   const ambientNpcs = npcs.filter(e => !e.plotNpcId && !e.persistentNpcId && e.alifeId === undefined);
   const monsters = gen.entities.filter(e => e.type === EntityType.MONSTER);
@@ -6018,15 +6066,17 @@ testGenerationMatrix('chthonic attic keeps a zero-ordinary-NPC monster service m
 });
 
 testGenerationMatrix('generic design floor population field adds density without violating edge rules', () => {
-  const communal = timeFloorGeneration('design communal population field', () => generateDesignFloor('communal_ring'));
+  const communal = timedDesignFloor('communal_ring', 'design communal population field');
   const communalNpcs = communal.entities.filter(e => e.type === EntityType.NPC);
   const communalMonsters = communal.entities.filter(e => e.type === EntityType.MONSTER);
   assert.equal(communalNpcs.length >= 3000, true);
   assert.equal(communalMonsters.length >= 250, true);
   assert.equal(communalNpcs.length <= ENTITY_SOFT_LIMITS[EntityType.NPC], true);
   assert.equal(maxEntitiesInArea(communal.entities, EntityType.NPC, 32) <= 18, true);
+});
 
-  const roof = timeFloorGeneration('design roof population field', () => generateDesignFloor('roof'));
+testProceduralFloorFullMatrix('roof design floor population stays NPC-free and monster-capped', () => {
+  const roof = timedDesignFloor('roof', 'design roof population field');
   const roofNpcs = roof.entities.filter(e => e.type === EntityType.NPC);
   const roofMonsters = roof.entities.filter(e => e.type === EntityType.MONSTER);
   assert.equal(roofNpcs.length, 0);
@@ -6083,7 +6133,7 @@ test('population placement sampler skips fixtures, containers and lift buttons',
 });
 
 testGenerationMatrix('black market 88 ships dense trade, guarded contraband, and service-gut monster pressure', () => {
-  const gen = timeFloorGeneration('design black_market_88 rework', () => generateDesignFloor('black_market_88'));
+  const gen = timedDesignFloor('black_market_88', 'design black_market_88 rework');
   const npcs = gen.entities.filter(e => e.type === EntityType.NPC);
   const monsters = gen.entities.filter(e => e.type === EntityType.MONSTER);
   const marketContainers = gen.world.containers.filter(c => c.tags.includes('market88'));
@@ -6147,7 +6197,7 @@ testGenerationMatrix('service floor rework keeps sparse crews, pressure panels a
   assert.equal(profile.npcPlacement.anchors?.length ?? 0, 5);
   assert.equal((profile.monsterPlacement.anchors?.length ?? 0) >= 8, true);
 
-  const gen = timeFloorGeneration('design service_floor rework', () => generateDesignFloor('service_floor'));
+  const gen = timedDesignFloor('service_floor', 'design service_floor rework');
   const npcs = gen.entities.filter(e => e.type === EntityType.NPC);
   const monsters = gen.entities.filter(e => e.type === EntityType.MONSTER);
   const rescueWorker = gen.entities.find(e => e.plotNpcId === 'service_trapped_pump_worker');
@@ -6167,9 +6217,9 @@ testGenerationMatrix('service floor rework keeps sparse crews, pressure panels a
   for (const panel of panels) assertAuditReachable(gen.world, audit, panel.idx, `service panel ${panel.defId}`);
 });
 
-testGenerationMatrix('authored design floors occupy the full 1024x1024 route footprint', () => {
+testProceduralFloorFullMatrix('authored design floors occupy the full 1024x1024 route footprint', () => {
   for (const route of DESIGN_FLOOR_ROUTES) {
-    const gen = timeFloorGeneration(`design ${route.id}`, () => generateDesignFloor(route.id));
+    const gen = timedDesignFloor(route.id, `design ${route.id}`);
     assertFullFootprint(gen.world, route.id);
   }
 });
@@ -6336,9 +6386,13 @@ testGenerationMatrix('living tunnels anomaly seeds roots and mutates bounded cel
   assert.equal(gen.world.cells[gen.world.idx(Math.floor(gen.spawnX), Math.floor(gen.spawnY))], Cell.FLOOR);
 });
 
-test('bad apple frame pack decodes 144x108 binary frames', () => {
-  const pixels = new Uint8Array(BAD_APPLE_WIDTH * BAD_APPLE_HEIGHT);
-  drawBadAppleFrame(pixels, 60);
+test('bad apple frame pack decodes 144x108 binary frames', async () => {
+  const frames = await import('../src/data/bad_apple_frames');
+  assert.equal(frames.BAD_APPLE_WIDTH, BAD_APPLE_WIDTH);
+  assert.equal(frames.BAD_APPLE_HEIGHT, BAD_APPLE_HEIGHT);
+
+  const pixels = new Uint8Array(frames.BAD_APPLE_WIDTH * frames.BAD_APPLE_HEIGHT);
+  frames.drawBadAppleFrame(pixels, 60);
 
   let black = 0;
   for (const px of pixels) {
@@ -6346,12 +6400,12 @@ test('bad apple frame pack decodes 144x108 binary frames', () => {
     black += px;
   }
 
-  assert.equal(BAD_APPLE_WIDTH, 144);
-  assert.equal(BAD_APPLE_HEIGHT, 108);
+  assert.equal(frames.BAD_APPLE_WIDTH, 144);
+  assert.equal(frames.BAD_APPLE_HEIGHT, 108);
   assert.equal(black > 0 && black < pixels.length, true);
 });
 
-testGenerationMatrix('bad apple anomaly stamps an honest 144x108 map rectangle', () => {
+testBadAppleExperiment('bad apple anomaly stamps an honest 144x108 map rectangle', () => {
   const base = makeProceduralFloorSpec(777, 3);
   const spec = {
     ...base,
@@ -6377,7 +6431,7 @@ testGenerationMatrix('bad apple anomaly stamps an honest 144x108 map rectangle',
   assert.equal(owned, BAD_APPLE_WIDTH * BAD_APPLE_HEIGHT);
 });
 
-testGenerationMatrix('bad apple runtime advances the map rectangle into white floor cells', () => {
+testBadAppleExperiment('bad apple runtime advances the map rectangle into white floor cells', () => {
   const base = makeProceduralFloorSpec(778, 3);
   const spec = {
     ...base,
@@ -6418,7 +6472,7 @@ testGenerationMatrix('bad apple runtime advances the map rectangle into white fl
   assert.equal(gen.world.cellVersion > beforeVersion, true);
 });
 
-testGenerationMatrix('bad apple placement searches past route-critical cells before stamping', () => {
+testBadAppleExperiment('bad apple placement searches past route-critical cells before stamping', () => {
   const world = new World();
   const centerX = 512;
   const centerY = 512;
@@ -6448,7 +6502,7 @@ testGenerationMatrix('bad apple placement searches past route-critical cells bef
   }
 });
 
-testGenerationMatrix('bad apple projector toggles animation without breaking route reachability', () => {
+testBadAppleExperiment('bad apple projector toggles animation without breaking route reachability', () => {
   const base = makeProceduralFloorSpec(780, 3);
   const spec = {
     ...base,

@@ -1,3 +1,9 @@
+import {
+  VISUAL_GEOMETRY_DEFAULT_MODE,
+  normalizeVisualGeometryMode,
+  type VisualGeometryMode,
+} from '../data/visual_geometry_profiles';
+
 export interface UiElementDef {
   id: string;
   group: string;
@@ -54,6 +60,12 @@ export const HUD_MOTION_MODES = [
 ] as const;
 export type HudMotionMode = typeof HUD_MOTION_MODES[number]['id'];
 export const HUD_MOTION_DEFAULT: HudMotionMode = 'reduced';
+export const VISUAL_GEOMETRY_MODE_LABELS: Readonly<Record<VisualGeometryMode, string>> = {
+  off: 'Выкл',
+  low: 'Низкая',
+  medium: 'Средняя',
+  high: 'Высокая',
+};
 
 export type MapColorMode = 'rooms';
 
@@ -86,6 +98,7 @@ type UiSettings = Record<UiElementId, boolean> & {
   mapHighContrast: boolean;
   screenInterferenceMode: ScreenInterferenceMode;
   hudMotionMode: HudMotionMode;
+  visualGeometryMode: VisualGeometryMode;
 } & Record<MapLegendToggleId, boolean>;
 
 export type MapLegendRow =
@@ -211,6 +224,7 @@ const GAMEPLAY_SETTINGS_ROWS = [
 const GRAPHICS_SETTINGS_ROWS = [
   { kind: 'screen_interference', id: 'screen_interference', group: 'Экран', label: 'Помехи экрана' },
   { kind: 'hud_motion', id: 'hud_motion', group: 'HUD', label: 'Движение HUD' },
+  { kind: 'visual_geometry', id: 'visual_geometry', group: 'Графика', label: '3D детализация' },
   { kind: 'camera_fov', id: 'camera_fov', group: 'Графика', label: 'FOV / угол обзора' },
   { kind: 'map_contrast', id: 'map_contrast', group: 'Карта', label: 'Контраст карты' },
 ] as const;
@@ -259,6 +273,7 @@ function settingsFromEnabledIds(enabledIds: readonly UiElementId[]): UiSettings 
   out.mapHighContrast = MAP_HIGH_CONTRAST_DEFAULT;
   out.screenInterferenceMode = SCREEN_INTERFERENCE_DEFAULT;
   out.hudMotionMode = HUD_MOTION_DEFAULT;
+  out.visualGeometryMode = VISUAL_GEOMETRY_DEFAULT_MODE;
   for (const def of MAP_LEGEND_TOGGLE_DEFS) out[def.id] = def.defaultEnabled;
   return out;
 }
@@ -287,6 +302,7 @@ function normalizeUiSettings(raw: unknown): UiSettings {
   out.mapHighContrast = typeof src.mapHighContrast === 'boolean' ? src.mapHighContrast : MAP_HIGH_CONTRAST_DEFAULT;
   out.screenInterferenceMode = normalizeScreenInterferenceMode(src.screenInterferenceMode);
   out.hudMotionMode = normalizeHudMotionMode(src.hudMotionMode);
+  out.visualGeometryMode = normalizeVisualGeometryMode(src.visualGeometryMode);
   for (const def of MAP_LEGEND_TOGGLE_DEFS) {
     const value = src[def.id];
     if (typeof value === 'boolean') out[def.id] = value;
@@ -415,6 +431,7 @@ export function applyUiPreset(id: UiPresetId): boolean {
   const highContrast = mapHighContrastEnabled();
   const interference = screenInterferenceMode();
   const hudMotion = hudMotionMode();
+  const geometryMode = visualGeometryMode();
   const mapToggles = MAP_LEGEND_TOGGLE_DEFS.map(def => [def.id, mapLegendToggleEnabled(def.id)] as const);
   settings = settingsFromEnabledIds(preset.enabled);
   settings.mouseLookSensitivity = mouseSensitivity;
@@ -425,6 +442,7 @@ export function applyUiPreset(id: UiPresetId): boolean {
   settings.mapHighContrast = highContrast;
   settings.screenInterferenceMode = interference;
   settings.hudMotionMode = hudMotion;
+  settings.visualGeometryMode = geometryMode;
   for (const [id, enabled] of mapToggles) settings[id] = enabled;
   saveUiSettings();
   return true;
@@ -523,10 +541,30 @@ export function cycleHudMotionMode(): HudMotionMode {
   return settings.hudMotionMode;
 }
 
+export function visualGeometryMode(): VisualGeometryMode {
+  settings.visualGeometryMode = normalizeVisualGeometryMode(settings.visualGeometryMode);
+  return settings.visualGeometryMode;
+}
+
+export function visualGeometryModeLabel(mode = visualGeometryMode()): string {
+  return VISUAL_GEOMETRY_MODE_LABELS[mode];
+}
+
+export function cycleVisualGeometryMode(deltaSteps: number): VisualGeometryMode {
+  const order: readonly VisualGeometryMode[] = ['off', 'low', 'medium', 'high'];
+  const current = order.findIndex(mode => mode === visualGeometryMode());
+  const steps = order.length;
+  const next = (Math.max(0, current) + Math.trunc(deltaSteps) + steps) % steps;
+  settings.visualGeometryMode = order[next];
+  saveUiSettings();
+  return settings.visualGeometryMode;
+}
+
 export function resetGraphicsSettings(): void {
   settings.cameraFovDegrees = CAMERA_FOV_DEFAULT_DEGREES;
   settings.screenInterferenceMode = SCREEN_INTERFERENCE_DEFAULT;
   settings.hudMotionMode = HUD_MOTION_DEFAULT;
+  settings.visualGeometryMode = VISUAL_GEOMETRY_DEFAULT_MODE;
   saveUiSettings();
 }
 

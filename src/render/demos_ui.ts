@@ -1,7 +1,7 @@
 /* ── Инфосеть Демос: read-only A-Life profile browser ─────────── */
 
 import { type Entity, type GameState } from '../core/types';
-import { DEMOS_SOCIAL_NPC_SLOTS } from '../data/demos_social';
+import { DEMOS_SOCIAL_PUBLIC_SLOTS } from '../data/demos_social';
 import { generateNpcProfileSprite } from '../entities/procedural_visuals';
 import { type DemosProfile, getDemosSnapshot } from '../systems/demos';
 import {
@@ -436,7 +436,7 @@ export function drawDemosMenu(
     } else if (state.demosTab === 'links') {
       drawDemosSocialLinksPanel(
         ctx,
-        buildDemosSocialLinksView(state, p.alifeId, DEMOS_SOCIAL_NPC_SLOTS),
+        buildDemosSocialLinksView(state, p.alifeId, DEMOS_SOCIAL_PUBLIC_SLOTS),
         contentX,
         contentY,
         contentW,

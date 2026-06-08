@@ -5,6 +5,7 @@ import {
 import { World } from '../core/world';
 import { CONTAINER_DEFS, containerKindsForRoom } from '../data/container_defs';
 import { ITEMS } from '../data/catalog';
+import { rebuildPathBlockersFromWorldObjects } from '../gen/path_blockers';
 import { MAX_INVENTORY_SLOTS } from '../data/inventory_limits';
 import {
   getPermitDef,
@@ -285,9 +286,14 @@ function normalizeSavedContainer(
 export function pruneContainersForWorld(world: World, floor: FloorLevel): number {
   const usedIds = new Set<number>();
   const kept: WorldContainer[] = [];
+  const changedCells: number[] = [];
   for (const container of world.containers) {
-    if (!containerCellValid(world, floor, container)) continue;
-    if (usedIds.has(container.id)) continue;
+    if (!containerCellValid(world, floor, container) || usedIds.has(container.id)) {
+      if (Number.isFinite(container.x) && Number.isFinite(container.y)) {
+        changedCells.push(world.idx(container.x, container.y));
+      }
+      continue;
+    }
     container.x = world.wrap(Math.floor(container.x));
     container.y = world.wrap(Math.floor(container.y));
     container.zoneId = world.zoneMap[world.idx(container.x, container.y)];
@@ -297,16 +303,22 @@ export function pruneContainersForWorld(world: World, floor: FloorLevel): number
   const removed = world.containers.length - kept.length;
   world.containers = kept;
   world.rebuildContainerMap();
+  if (changedCells.length > 0) rebuildPathBlockersFromWorldObjects(world, undefined, changedCells);
   return removed;
 }
 
 export function pruneVolatileContainersForRebuild(world: World, floor: FloorLevel): number {
   const kept: WorldContainer[] = [];
+  const changedCells: number[] = [];
   for (const container of world.containers) {
     if (container.floor === floor && Number.isFinite(container.x) && Number.isFinite(container.y)) {
       const x = world.wrap(Math.floor(container.x));
       const y = world.wrap(Math.floor(container.y));
-      if (!world.aptMask[world.idx(x, y)]) continue;
+      const idx = world.idx(x, y);
+      if (!world.aptMask[idx]) {
+        changedCells.push(idx);
+        continue;
+      }
     }
     kept.push(container);
   }
@@ -314,6 +326,7 @@ export function pruneVolatileContainersForRebuild(world: World, floor: FloorLeve
   if (removed > 0) {
     world.containers = kept;
     world.rebuildContainerMap();
+    rebuildPathBlockersFromWorldObjects(world, undefined, changedCells);
   }
   return removed;
 }
@@ -329,6 +342,7 @@ export function restoreValidContainers(world: World, floor: FloorLevel, saved: u
     if (!container) continue;
     world.addContainer(container);
   }
+  rebuildPathBlockersFromWorldObjects(world);
   return world.containers.length;
 }
 
@@ -350,6 +364,7 @@ export function ensureRoomContainers(world: World, floor: FloorLevel, maxContain
     return 0;
   }
   let created = 0;
+  const changedCells: number[] = [];
   for (const room of world.rooms) {
     if (world.containers.length >= maxContainers) break;
     if (!room || room.type === RoomType.CORRIDOR || room.w < 3 || room.h < 3) continue;
@@ -380,10 +395,12 @@ export function ensureRoomContainers(world: World, floor: FloorLevel, maxContain
         tags: [...def.tags],
       };
       world.addContainer(container);
+      changedCells.push(world.idx(container.x, container.y));
       created++;
     }
   }
   ensureShelterTallyStaticPath(world, floor);
+  if (changedCells.length > 0) rebuildPathBlockersFromWorldObjects(world, undefined, changedCells);
   return created;
 }
 

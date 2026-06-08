@@ -416,7 +416,7 @@ export const FLOOR_ANOMALIES: readonly FloorAnomalyDef[] = [
   { id: 'wall_snake', title: 'змейка', weight: 4, minDanger: 2, dangerBias: 2, tags: ['moving_walls', 'predator', 'crush', 'loot_sink'] },
   { id: 'living_tunnels', title: 'живые тоннели', weight: 4, minDanger: 2, dangerBias: 2, tags: ['living_tunnels', 'topology', 'moving_walls', 'repair', 'route_pressure'] },
   { id: 'rail_trains', title: 'поезда', weight: 8, minDanger: 2, dangerBias: 1, tags: ['rail', 'transit', 'crush', 'industrial'] },
-  { id: 'bad_apple_world', title: 'bad apple!', weight: 3, minDanger: 3, dangerBias: 1, tags: ['video', 'screen', 'topology', 'cult_media'] },
+  { id: 'bad_apple_world', title: 'bad apple! (эксперимент отключён)', weight: 0, minDanger: 3, dangerBias: 1, tags: ['video', 'screen', 'topology', 'cult_media'] },
   { id: 'zombie_apocalypse', title: 'зомби-апокалипсис', weight: 4, minDanger: 2, dangerBias: 2, tags: ['zombie', 'crowd', 'infection', 'quarantine', 'residential'] },
   { id: 'sandpile_perekrytie', title: 'песчаное перекрытие', weight: 4, minDanger: 2, dangerBias: 2, tags: ['topology', 'crush', 'pressure', 'industrial', 'route_pressure'] },
   { id: 'section_shift', title: 'секционный сдвиг', weight: 4, minDanger: 3, dangerBias: 2, tags: ['topology', 'moving_rooms', 'crush', 'toroid'] },

@@ -12,6 +12,7 @@ import { spawnBloodHit, spawnDeathPool } from './blood_fx';
 import { MONSTERS, entityDisplayName } from '../entities/monster';
 import { ENTITY_MASK_ACTOR, ensureEntityIndex } from './entity_index';
 import { applyMonsterIncomingDamage } from './monster_traits';
+import { intPsiDurationBonusSec } from './rpg';
 
 // ── Module state (player-only transient effects) ─────────────────
 let phaseTimer = 0;                              // phase shift remaining seconds
@@ -242,9 +243,13 @@ function castBrainBurn(
 }
 
 // ── Безумие / Контроль: targeted PSI effects ─────────────────────
-export const PSI_EFFECT_DURATION = 15; // 15 seconds = 15 game minutes
+export const PSI_EFFECT_DURATION = 15; // base seconds before INT extension
 const POSSESSION_RANGE = 10;
 const POSSESSION_AFTERSHOCK_SEC = 3;
+
+function psiEffectDurationSec(actor: Entity): number {
+  return PSI_EFFECT_DURATION + (actor.rpg ? intPsiDurationBonusSec(actor.rpg) : 0);
+}
 
 function castTargeted(
   player: Entity, entities: Entity[], world: World,
@@ -258,27 +263,27 @@ function castTargeted(
   }
 
   if (mode === 'madness') {
-    target.psiMadness = PSI_EFFECT_DURATION;
+    target.psiMadness = psiEffectDurationSec(player);
     hasActiveMadness = true;
     if (target.ai) target.ai.combatTargetId = undefined;
     msgs.push(msg(`Безумие! ${entityDisplayName(target)} сходит с ума`, time, '#f4f'));
   } else {
     target.psiControlledBy = player.id;
-    controlTimers.set(target.id, PSI_EFFECT_DURATION);
+    controlTimers.set(target.id, psiEffectDurationSec(player));
     if (target.ai) target.ai.combatTargetId = undefined;
     msgs.push(msg(`Контроль! ${entityDisplayName(target)} подчинена`, time, '#4ff'));
   }
 }
 
 // ── Фазовый сдвиг: walk through walls ───────────────────────────
-function castPhase(_player: Entity, msgs: Msg[], time: number): void {
-  phaseTimer = PSI_EFFECT_DURATION;
+function castPhase(player: Entity, msgs: Msg[], time: number): void {
+  phaseTimer = psiEffectDurationSec(player);
   msgs.push(msg('Фазовый сдвиг! Вы проходите сквозь материю', time, '#4af'));
 }
 
 // ── ПСИ-щит: HP loss is paid from PSI until the timer or PSI ends ─
-function castShield(_player: Entity, msgs: Msg[], time: number): void {
-  shieldTimer = PSI_EFFECT_DURATION;
+function castShield(player: Entity, msgs: Msg[], time: number): void {
+  shieldTimer = psiEffectDurationSec(player);
   msgs.push(msg('ПСИ-щит поднят: боль уходит в запас ПСИ', time, '#8cf'));
 }
 
@@ -353,8 +358,9 @@ function castPossession(player: Entity, entities: Entity[], world: World, msgs: 
     target.ai.path = [];
     target.ai.timer = 0;
   }
-  possession = { previousPlayerId: player.id, targetId: target.id, timer: PSI_EFFECT_DURATION };
-  msgs.push(msg(`Вселение: вы внутри ${entityDisplayName(target)} на 15с`, time, '#4ff'));
+  const duration = psiEffectDurationSec(player);
+  possession = { previousPlayerId: player.id, targetId: target.id, timer: duration };
+  msgs.push(msg(`Вселение: вы внутри ${entityDisplayName(target)} на ${Math.round(duration)}с`, time, '#4ff'));
   return target;
 }
 

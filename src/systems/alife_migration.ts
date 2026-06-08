@@ -16,6 +16,7 @@ import {
   type AlifeMigrationReason,
 } from '../data/alife_migration';
 import { ALIFE_POPULATION_CAPACITY } from '../data/alife_population_plan';
+import { occupationHasRoutineTag } from '../data/occupation_profiles';
 import { DESIGN_FLOOR_ROUTES } from '../data/design_floors';
 import {
   anomalyById,
@@ -43,6 +44,7 @@ import { publishEvent } from './events';
 import { cleanFloorKey } from './floor_keys';
 import { currentFloorRunAllowsNpcs, ensureFloorRunState } from './procedural_floors';
 import { isNativePlayerBodyEntity, isPlayerEntity } from './player_actor';
+import { tryAssignPathToCell } from './ai/pathfinding';
 
 export const MAX_ALIFE_JOURNEYS = 512;
 export const MAX_ALIFE_PENDING_ARRIVALS = 256;
@@ -52,6 +54,9 @@ export const ALIFE_MIGRATION_FORCE_RECORD_CAP = 256;
 const MAX_ACTIVE_ALIFE_DEPARTURES = 32;
 const MAX_ACTIVE_DEPARTURE_UPDATES = 8;
 const MAX_ACTIVE_ARRIVAL_TRIES = 12;
+const ALIFE_MIGRATION_TRAVELER_PRIORITY_RECORDS = 16;
+const ALIFE_MIGRATION_TRAVELER_PRIORITY_ATTEMPTS = 256;
+const ALIFE_MIGRATION_TRAVELER_ETA_MULTIPLIER = 0.55;
 const MAX_ROOM_ANCHOR_SCAN_CELLS = 32_768;
 const MAX_SAMPLED_ANCHOR_SCAN_CELLS = 16_384;
 const DEPARTURE_REACHED_DIST2 = 1.8 * 1.8;
@@ -495,6 +500,10 @@ function routeRisk(source: RouteInfo | undefined, destination: RouteInfo): 1 | 2
   return Math.max(source?.danger ?? 3, destination.danger) as 1 | 2 | 3 | 4 | 5;
 }
 
+function usesTravelerMigrationLane(record: AlifeNpcSnapshot): boolean {
+  return occupationHasRoutineTag(record.occupation, 'traveler');
+}
+
 function travelEta(seed: number, state: GameState, record: AlifeNpcSnapshot, source: RouteInfo | undefined, destination: RouteInfo, risk: number): number {
   const zA = source?.z;
   const zB = destination.z;
@@ -502,7 +511,8 @@ function travelEta(seed: number, state: GameState, record: AlifeNpcSnapshot, sou
   const base = 60 + distance * 20;
   const riskFactor = 1 + (risk - 1) * 0.35;
   const jitter = 0.8 + unit(seed, record.id, Math.floor(state.time) ^ 0x51a7) * 0.55;
-  return state.time + base * riskFactor * jitter;
+  const travelerMultiplier = usesTravelerMigrationLane(record) ? ALIFE_MIGRATION_TRAVELER_ETA_MULTIPLIER : 1;
+  return state.time + base * riskFactor * jitter * travelerMultiplier;
 }
 
 function queueArrival(mobility: AlifeMobilityState, journey: AlifeJourney, now: number): boolean {
@@ -581,6 +591,60 @@ function startJourney(
     eventBudget.remaining--;
   }
   return true;
+}
+
+function tryStartColdJourneyForRecord(
+  state: GameState,
+  mobility: AlifeMobilityState,
+  record: AlifeNpcSnapshot,
+  cursor: number,
+  activeFloorKey: string,
+  inJourney: Set<number>,
+  context: readonly RouteInfo[],
+  eventBudget: { remaining: number },
+): boolean {
+  if (record.dead) return false;
+  if (record.reservedKind) return false;
+  if (record.floorKey === activeFloorKey) return false;
+  if (inJourney.has(record.id)) return false;
+  const intent = pickIntent(alifeSeed(state), state.time, record, cursor);
+  if (!intent) return false;
+  const destination = resolveDestination(alifeSeed(state), state.time, record, intent, context);
+  if (!destination || destination.floorKey === record.floorKey) return false;
+  if (!startJourney(state, mobility, record, destination, intent, context, eventBudget)) return false;
+  inJourney.add(record.id);
+  return true;
+}
+
+function processTravelerPriorityRecords(
+  state: GameState,
+  mobility: AlifeMobilityState,
+  activeFloorKey: string,
+  maxRecords: number,
+  inJourney: Set<number>,
+  context: readonly RouteInfo[],
+  eventBudget: { remaining: number },
+): { processed: number; journeysStarted: number } {
+  const total = alifeNpcRecordCount(state);
+  if (total <= 0 || maxRecords <= 0) return { processed: 0, journeysStarted: 0 };
+  let processed = 0;
+  let journeysStarted = 0;
+  const seen = new Set<number>();
+  const seed = alifeSeed(state);
+  const tickBucket = Math.floor(state.time / ALIFE_MIGRATION_TICK_SECONDS);
+  const maxAccepted = Math.min(maxRecords, ALIFE_MIGRATION_TRAVELER_PRIORITY_RECORDS);
+  for (let attempt = 0; attempt < ALIFE_MIGRATION_TRAVELER_PRIORITY_ATTEMPTS && processed < maxAccepted; attempt++) {
+    const id = 1 + (hash32(seed ^ tickBucket, mobility.cursor + attempt, 0x71a7) % total);
+    if (seen.has(id)) continue;
+    seen.add(id);
+    const record = getAlifeNpcRecordSnapshot(state, id);
+    if (!record || !usesTravelerMigrationLane(record)) continue;
+    processed++;
+    if (tryStartColdJourneyForRecord(state, mobility, record, id - 1, activeFloorKey, inJourney, context, eventBudget)) {
+      journeysStarted++;
+    }
+  }
+  return { processed, journeysStarted };
 }
 
 function processDueJourneys(
@@ -1000,6 +1064,39 @@ function canStartDeparture(state: GameState, entity: Entity, reason: AlifeMigrat
   return currentFloorRunAllowsNpcs(state);
 }
 
+function assignActiveDepartureGoal(world: World, entity: Entity, anchorX: number, anchorY: number, force = false): boolean {
+  const tx = Math.floor(anchorX);
+  const ty = Math.floor(anchorY);
+  const ai = entity.ai;
+  if (!force && ai && ai.tx === tx && ai.ty === ty && (ai.path.length > ai.pi || world.dist2(entity.x, entity.y, anchorX, anchorY) <= DEPARTURE_REACHED_DIST2)) {
+    entity.isTraveler = true;
+    ai.goal = AIGoal.GOTO;
+    ai.timer = Math.max(ai.timer, 0.75);
+    return true;
+  }
+  const previousTraveler = entity.isTraveler;
+  const previousAi = entity.ai
+    ? { ...entity.ai, path: [...entity.ai.path] }
+    : undefined;
+  entity.isTraveler = true;
+  entity.ai = entity.ai ?? { goal: AIGoal.IDLE, tx: 0, ty: 0, path: [], pi: 0, stuck: 0, timer: 0 };
+  entity.ai.goal = AIGoal.GOTO;
+  entity.ai.tx = tx;
+  entity.ai.ty = ty;
+  entity.ai.path = [];
+  entity.ai.pi = 0;
+  entity.ai.stuck = 0;
+  entity.ai.timer = 0.75;
+  const status = tryAssignPathToCell(world, entity, entity.ai.tx, entity.ai.ty);
+  entity.ai.goal = AIGoal.GOTO;
+  entity.ai.timer = Math.max(entity.ai.timer, 0.75);
+  if (status !== 'not_found') return true;
+  entity.isTraveler = previousTraveler;
+  if (previousAi) entity.ai = previousAi;
+  else delete entity.ai;
+  return false;
+}
+
 export function startActiveAlifeDeparture(
   state: GameState,
   world: World,
@@ -1017,16 +1114,7 @@ export function startActiveAlifeDeparture(
   const anchor = findLiftOrButtonAnchor(world, entity.x, entity.y);
   const cleanTarget = cleanFloorKey(toFloorKey);
   if (!anchor || !cleanTarget) return false;
-
-  entity.isTraveler = true;
-  entity.ai = entity.ai ?? { goal: AIGoal.IDLE, tx: 0, ty: 0, path: [], pi: 0, stuck: 0, timer: 0 };
-  entity.ai.goal = AIGoal.GOTO;
-  entity.ai.tx = Math.floor(anchor.x);
-  entity.ai.ty = Math.floor(anchor.y);
-  entity.ai.path = [];
-  entity.ai.pi = 0;
-  entity.ai.stuck = 0;
-  entity.ai.timer = 0;
+  if (!assignActiveDepartureGoal(world, entity, anchor.x, anchor.y, true)) return false;
 
   mobility.activeDepartures.push({
     entityId: entity.id,
@@ -1063,11 +1151,10 @@ export function updateActiveAlifeDepartures(
     const entity = entityIndex >= 0 ? entities[entityIndex] : undefined;
     if (!entity || !entity.alive || entity.alifeId !== departure.alifeId) continue;
 
-    entity.isTraveler = true;
-    entity.ai = entity.ai ?? { goal: AIGoal.IDLE, tx: 0, ty: 0, path: [], pi: 0, stuck: 0, timer: 0 };
-    entity.ai.goal = AIGoal.GOTO;
-    entity.ai.tx = Math.floor(departure.anchorX);
-    entity.ai.ty = Math.floor(departure.anchorY);
+    if (!assignActiveDepartureGoal(world, entity, departure.anchorX, departure.anchorY)) {
+      kept.push(departure);
+      continue;
+    }
 
     if (world.dist2(entity.x, entity.y, departure.anchorX, departure.anchorY) > DEPARTURE_REACHED_DIST2) {
       kept.push(departure);
@@ -1122,20 +1209,25 @@ export function tickAlifeMigration(
   const total = alifeNpcRecordCount(state);
   const inJourney = journeyAlifeIds(mobility);
 
+  if (!opts.force && processed < maxRecords && total > 0) {
+    const priority = processTravelerPriorityRecords(
+      state,
+      mobility,
+      activeFloorKey,
+      maxRecords - processed,
+      inJourney,
+      context,
+      eventBudget,
+    );
+    processed += priority.processed;
+    journeysStarted += priority.journeysStarted;
+  }
+
   if (processed < maxRecords && total > 0) {
     const slice = forEachAlifeNpcRecordSlice(state, mobility.cursor, maxRecords - processed, (record, cursor) => {
       processed++;
-      if (record.dead) return;
-      if (record.reservedKind) return;
-      if (record.floorKey === activeFloorKey) return;
-      if (inJourney.has(record.id)) return;
-      const intent = pickIntent(alifeSeed(state), state.time, record, cursor);
-      if (!intent) return;
-      const destination = resolveDestination(alifeSeed(state), state.time, record, intent, context);
-      if (!destination || destination.floorKey === record.floorKey) return;
-      if (startJourney(state, mobility, record, destination, intent, context, eventBudget)) {
+      if (tryStartColdJourneyForRecord(state, mobility, record, cursor, activeFloorKey, inJourney, context, eventBudget)) {
         journeysStarted++;
-        inJourney.add(record.id);
       }
     });
     mobility.cursor = slice.nextCursor;

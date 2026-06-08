@@ -112,7 +112,7 @@ export function recordFogSharkIgnited(
       state.dmgSeed = (state.dmgSeed + 91) | 0;
       recordPlayerDamage(state, shark, damage, `Газовый взрыв туманной акулы: -${damage}`, 'hazard');
     } else if (target.type === EntityType.NPC && actor?.faction === Faction.PLAYER) {
-      applyDamageRelationPenalty(actor.faction, target.faction, damage, target, actor);
+      applyDamageRelationPenalty(actor.faction, target.faction, damage, target, actor, state);
     }
 
     if (target.hp <= 0) {

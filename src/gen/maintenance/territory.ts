@@ -232,6 +232,9 @@ export function spawnMaintenanceFactionNpcSquads(world: World, entities: Entity[
         const nm = randomName(fDef.faction);
         const hasPsi = fDef.faction === Faction.CULTIST && Math.random() < 0.4;
         const psiWeapon = hasPsi ? pickPsi() : undefined;
+        const weapon = psiWeapon ? 'knife' : undefined;
+        const tool = psiWeapon;
+        const inventory = psiWeapon ? [{ defId: 'knife', count: 1 }, { defId: psiWeapon, count: 1 }] : [];
         entities.push({
           id: nextId++, type: EntityType.NPC,
           x: sx + 0.5, y: sy + 0.5,
@@ -245,8 +248,9 @@ export function spawnMaintenanceFactionNpcSquads(world: World, entities: Entity[
           hp: maxHp, maxHp,
           money: rng(10, 80),
           ai: { goal: AIGoal.IDLE, tx: 0, ty: 0, path: [], pi: 0, stuck: 0, timer: 0 },
-          inventory: psiWeapon ? [{ defId: psiWeapon, count: 1 }] : [],
-          weapon: psiWeapon,
+          inventory,
+          weapon,
+          tool,
           faction: fDef.faction,
           occupation: fDef.occupation,
           isTraveler: true,

@@ -100,6 +100,8 @@ import {
 import type { FloorGeneration } from './floor_manifest';
 import { decorateCarnivorousFungusRoom } from './carnivorous_fungus_room';
 import { applyProceduralFloorObjectProfile } from './floor_object_placement';
+import { fillVisualSlotsForWorldFeatures } from './visual_cell_slots';
+import { rebuildGeneratedFloorPathBlockers } from './path_blockers';
 import { applyProceduralAnomalyProfile } from './procedural_anomalies';
 import { applyProceduralStructureLibrary } from './procedural_structure_library';
 import { ensureZombieApocalypseQuarantineDoor } from './procedural_anomalies/zombie_apocalypse';
@@ -3601,13 +3603,13 @@ function occupationForFaction(faction: Faction, roomType: RoomType): Occupation 
   return pick([Occupation.HOUSEWIFE, Occupation.LOCKSMITH, Occupation.COOK, Occupation.TRAVELER]);
 }
 
-function npcLoadout(faction: Faction, danger: number): { weapon?: string; inventory: { defId: string; count: number }[] } {
+function npcLoadout(faction: Faction, danger: number): { weapon?: string; tool?: string; inventory: { defId: string; count: number }[] } {
   if (faction === Faction.LIQUIDATOR) {
     if (danger >= 4 && chance(0.35)) return { weapon: 'ak47', inventory: [{ defId: 'ak47', count: 1 }, { defId: 'ammo_762', count: irng(12, 32) }] };
     return { weapon: 'makarov', inventory: [{ defId: 'makarov', count: 1 }, { defId: 'ammo_9mm', count: irng(8, 24) }] };
   }
   if (faction === Faction.CULTIST) return chance(0.35)
-    ? { weapon: 'psi_strike', inventory: [{ defId: 'psi_strike', count: 1 }] }
+    ? { weapon: 'knife', tool: 'psi_strike', inventory: [{ defId: 'knife', count: 1 }, { defId: 'psi_strike', count: 1 }] }
     : { weapon: 'knife', inventory: [{ defId: 'knife', count: 1 }] };
   if (faction === Faction.WILD) return { weapon: 'pipe', inventory: [{ defId: 'pipe', count: 1 }] };
   if (chance(0.2 + danger * 0.03)) return { weapon: 'knife', inventory: [{ defId: 'knife', count: 1 }] };
@@ -3660,6 +3662,7 @@ function spawnNpcs(world: World, rooms: Room[], entities: Entity[], nextId: { v:
       rpg,
       inventory: loadout.inventory,
       weapon: loadout.weapon,
+      tool: loadout.tool,
     });
   }
 }
@@ -8975,6 +8978,7 @@ function spawnLiquidatorCheckpointGuards(
       rpg,
       inventory: [...loadout.inventory, { defId: 'liquidator_token', count: 1 }],
       weapon: loadout.weapon,
+      tool: loadout.tool,
     });
   }
 }
@@ -14891,6 +14895,7 @@ function spawnFalseSafeCaretaker(
     rpg,
     inventory: loadout.inventory,
     weapon: loadout.weapon,
+    tool: loadout.tool,
   });
 }
 
@@ -15652,6 +15657,8 @@ export function generateProceduralFloor(spec: ProceduralFloorSpec): FloorGenerat
     if (!allowNpcs) removeNpcEntities(entities);
     recordProceduralGeometryMetrics(world, spec, spawn.spawnX, spawn.spawnY);
     syncZoneMetadataFromTerritory(world);
+    rebuildGeneratedFloorPathBlockers(world, spec.seed, spawn.spawnX, spawn.spawnY);
+    fillVisualSlotsForWorldFeatures(world, spec.seed);
 
     world.bakeLights();
     relightBadAppleWorld(world);

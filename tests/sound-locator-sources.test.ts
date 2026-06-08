@@ -3,9 +3,10 @@ import * as assert from 'node:assert/strict';
 
 import { RoomType } from '../src/core/types';
 import { World } from '../src/core/world';
-import { BAD_APPLE_HEIGHT, BAD_APPLE_WIDTH } from '../src/data/bad_apple_frames';
 import {
+  BAD_APPLE_HEIGHT,
   BAD_APPLE_PROJECTOR_SOUND_RADIUS,
+  BAD_APPLE_WIDTH,
   badAppleScreenSoundPosition,
 } from '../src/systems/procedural_anomalies/bad_apple_world';
 import { getSamosborRoomSirenSourcesForTests } from '../src/systems/samosbor';

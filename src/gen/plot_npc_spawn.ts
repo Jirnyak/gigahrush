@@ -17,6 +17,7 @@ export interface PlotNpcSpawnOptions {
   isTraveler?: boolean;
   spriteSeed?: number;
   weapon?: string;
+  tool?: string;
   aiTarget?: { x: number; y: number };
   needs?: Needs;
   extra?: Partial<Entity>;
@@ -76,7 +77,7 @@ export function plotNpcEntityFromPackage(
     ai: { goal: AIGoal.IDLE, tx: target.x, ty: target.y, path: [], pi: 0, stuck: 0, timer: 0 },
     inventory: packageItems(pack.loadout.inventory),
     weapon: options.weapon ?? pack.loadout.weapon,
-    tool: pack.loadout.tool,
+    tool: options.tool ?? pack.loadout.tool,
     faction: pack.affiliation.faction,
     occupation: pack.affiliation.occupation,
     plotNpcId,

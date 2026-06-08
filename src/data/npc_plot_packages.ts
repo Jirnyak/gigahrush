@@ -123,7 +123,6 @@ export const MAIN_PLOT_NPC_PACKAGES = [
     faction: Faction.SCIENTIST,
     occupation: Occupation.DOCTOR,
     sprite: Occupation.DOCTOR,
-    spriteScale: 0.78,
     npcVisualId: NPC_VISUAL_OLGA_DMITRIEVNA,
     homeFloorKey: floorKeyForStory(FloorLevel.LIVING),
     hp: 1000, maxHp: 1000, level: 10, money: 50, speed: 1.2,

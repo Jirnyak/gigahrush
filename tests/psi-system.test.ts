@@ -71,7 +71,7 @@ test('PSI possession requires higher player intelligence and expires into backla
   assert.equal(target.ai?.combatTargetId, undefined);
   assert.equal(getPsiPossessionTarget(entities), target);
 
-  activePlayer = updatePsiEffects(entities, 15.1, activePlayer, msgs, 17).player ?? activePlayer;
+  activePlayer = updatePsiEffects(entities, 19.1, activePlayer, msgs, 17).player ?? activePlayer;
   assert.equal(target.psiControlledBy, undefined);
   assert.equal(activePlayer, player);
   assert.ok((target.psiMadness ?? 0) > 0);

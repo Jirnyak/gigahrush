@@ -508,11 +508,11 @@ function spawnKeeper(world: World, entities: Entity[], nextId: { v: number }, ro
   const y = world.wrap(room.y + room.h - 4);
   const keeper = requireSpawnedPlotNpcFromPackage(entities, nextId, KEEPER_ID, x + 0.5, y + 0.5, {
     angle: -Math.PI / 2,
-    weapon: 'psi_meat_hook',
+    tool: 'psi_meat_hook',
     canGiveQuest: true,
     aiTarget: { x: x + 0.5, y: y + 0.5 },
     extra: {
-      rpg: { level: 9, xp: 0, attrPoints: 0, str: 5, agi: 4, int: 9, psi: 40, maxPsi: 40 },
+      rpg: { level: 9, xp: 0, attrPoints: 0, str: 5, agi: 4, int: 9, psi: 109, maxPsi: 109 },
     },
   });
   return keeper.id;
@@ -530,7 +530,9 @@ function spawnGuard(
 ): void {
   const x = world.wrap(room.x + dx);
   const y = world.wrap(room.y + dy);
-  const inventory = weapon === 'psi_strike'
+  const psiTool = weapon === 'psi_strike' ? weapon : undefined;
+  const weaponId = psiTool ? 'knife' : weapon;
+  const inventory = psiTool
     ? [{ defId: 'psi_strike', count: 1 }, { defId: 'knife', count: 1 }]
     : [{ defId: weapon, count: 1 }, { defId: 'meat_rune', count: 1 }];
   entities.push({
@@ -550,11 +552,12 @@ function spawnGuard(
     money: 8,
     ai: { goal: AIGoal.IDLE, tx: x + 0.5, ty: y + 0.5, path: [], pi: 0, stuck: 0, timer: 0 },
     inventory,
-    weapon,
+    weapon: weaponId,
+    tool: psiTool,
     faction: Faction.CULTIST,
     occupation: Occupation.PILGRIM,
     questId: -1,
-    rpg: { level: 7, xp: 0, attrPoints: 0, str: 5, agi: 3, int: 6, psi: 22, maxPsi: 22 },
+    rpg: { level: 7, xp: 0, attrPoints: 0, str: 5, agi: 3, int: 6, psi: 112, maxPsi: 112 },
   });
 }
 

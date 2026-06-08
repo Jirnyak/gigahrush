@@ -48,6 +48,7 @@ import { entityInActiveCellHazard, registerCellHazardSite } from '../cell_hazard
 import { isDebugOnePunchManEnabled, keepDebugOnePunchManAlive } from '../debug_cheats';
 import { ENTITY_MASK_ACTOR, ENTITY_MASK_ITEM_DROP, ENTITY_MASK_NPC, ensureEntityIndex, getEntityIndex } from '../entity_index';
 import { notifyActorDamaged } from '../combat_stimulus';
+import { applyDemosRelationDelta } from '../demos_social';
 import { updateSlimevikMonster } from '../slimevik';
 import { updateGnilushkaMonster } from '../gnilushka';
 import { territoryOwnerAtIndex } from '../territory';
@@ -1287,7 +1288,16 @@ export function commandMukhozhukNearby(
     npc.ai!.timer = 0;
     npc.ai!.path.length = 0;
     npc.ai!.pi = 0;
-    if (isPlayerEntity(target)) npc.playerRelation = Math.min(npc.playerRelation ?? -70, -70);
+    if (isPlayerEntity(target)) {
+      const previous = npc.playerRelation ?? 0;
+      const next = Math.min(previous, -70);
+      npc.playerRelation = next;
+      if (state && npc.alifeId !== undefined && next !== previous) {
+        applyDemosRelationDelta(state, npc.alifeId, { targetKind: 'player' }, next - previous, {
+          reasonTag: 'mukhozhuk_command',
+        });
+      }
+    }
     commanded++;
   }
   if (commanded <= 0) return 0;

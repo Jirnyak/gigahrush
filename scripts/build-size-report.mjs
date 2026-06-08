@@ -20,19 +20,17 @@ const budgets = {
   htmlBytes: 9_500_000,
   htmlGzipBytes: 4_500_000,
   itchZipBytes: 4_500_000,
-  badAppleSourceBytes: 5_800_000,
-  badAppleGzipBytes: 3_300_000,
 };
 
 const bucketDefs = [
   {
     id: 'generated_frames',
-    label: 'generated frame data',
+    label: 'dormant Bad Apple frame source',
     match: id => id === 'src/data/bad_apple_frames.ts' || id === 'src/data/bad_apple_frame_pack.ts',
   },
   {
     id: 'bad_apple_audio',
-    label: 'Bad Apple audio',
+    label: 'dormant Bad Apple audio source',
     match: id => id === 'src/data/bad_apple_theme_lofi.ts',
   },
   {
@@ -194,8 +192,6 @@ const warnings = [];
 addWarning(warnings, 'single-file HTML', htmlData.length, budgets.htmlBytes);
 addWarning(warnings, 'single-file HTML gzip', htmlGzipBytes, budgets.htmlGzipBytes);
 if (itchStat && !itchStale) addWarning(warnings, 'itch upload ZIP', itchStat.size, budgets.itchZipBytes);
-addWarning(warnings, 'Bad Apple generated frame source', badAppleFrameData.length, budgets.badAppleSourceBytes);
-addWarning(warnings, 'Bad Apple generated frame gzip', badAppleGzipBytes, budgets.badAppleGzipBytes);
 
 const topModules = modules
   .filter(module => (module.renderedLength ?? 0) > 0)
@@ -229,6 +225,7 @@ const report = {
   },
   badApple: {
     ...badApple,
+    shippedInMainBuilds: false,
     sourceBytes: badAppleFrameData.length,
     gzipBytes: badAppleGzipBytes,
     decoderBytes: badAppleDecoderData.length,
@@ -255,11 +252,12 @@ if (itchStat) {
   lines.push('- itch/gigahrush-itch.zip: not found; run npm run itch:build for upload weight');
 }
 lines.push('');
-lines.push('Generated Frame Data');
+lines.push('Dormant Bad Apple Experiment Source');
 lines.push(`- src/data/bad_apple_frames.ts + src/data/bad_apple_frame_pack.ts: ${formatBoth(badAppleFrameData.length)} raw; ${formatBoth(badAppleGzipBytes)} gzip`);
 lines.push(`- Bad Apple frames: ${badApple.frames ?? '?'} at ${badApple.width ?? '?'}x${badApple.height ?? '?'}, source ${badApple.sourceFirst ?? '?'}..${badApple.sourceLast ?? '?'} step ${badApple.sourceStep ?? '?'}`);
 lines.push(`- Keyframe interval: ${badApple.keyframeInterval ?? '?'}; RLE runs: ${badApple.rleRuns ?? '?'} total, ${badApple.rleMaxRuns ?? '?'} max per frame`);
 lines.push(`- Bad Apple low-fi audio: ${formatBoth(badAppleAudioData.length)} raw; ${formatBoth(badAppleAudioGzipBytes)} gzip; duration ${parseNumberConst(badAppleAudioSource, 'BAD_APPLE_THEME_DURATION_SECONDS') ?? '?'}s`);
+lines.push('- Status: retained in source as an engine experiment, excluded from ordinary HTML/itch/Pikabu/Cloudflare build paths.');
 lines.push('');
 lines.push('Source And Rendered Buckets');
 for (const bucket of buckets) {

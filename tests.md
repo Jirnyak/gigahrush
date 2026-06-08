@@ -16,10 +16,25 @@ Use the existing npm scripts as separate gates:
 - `npm run content:audit`: static registry/content consistency. Prefer this for literal id, manifest, registry and source reference coverage instead of adding runtime floor generation.
 - `npm run check:readonly`: broad read-only agent gate: typecheck, unit tests and content audit.
 - `npm run check`: systems/generation/browser-build gate. It writes `dist/`.
+- `npm run check:browser` / `npm run check:full`: browser smoke gates for render, UI, mobile, input and canvas-risk changes when Chrome is available.
 
 Do not weaken a test just to make the fast gate pass. Move broad coverage to the correct gate, shrink duplicated setup, or replace runtime generation with a cheaper direct invariant.
 
+For render-only mesh pass changes, smoke can force the browser-local mesh mode:
+
+```bash
+SMOKE_VISUAL_GEOMETRY_MODE=off npm run smoke
+SMOKE_VISUAL_GEOMETRY_MODE=high npm run smoke
+SMOKE_MOBILE=1 SMOKE_VISUAL_GEOMETRY_MODE=low npm run smoke
+```
+
 `npm run test:unit` is selected by `scripts/run-unit-tests.mjs`. The selector skips per-item content files named `items_*.test.ts` and files that import `src/gen/*`; those files are reserved for `npm run test:generation`. The generation runner uses the matching selector in `scripts/run-generation-tests.mjs`, sets `GIGAHRUSH_GENERATION_MATRIX=1`, and runs selected files one by one so the current slow or failing generator file is visible in the log.
+
+Path blocker core/storage and save-policy tests belong in `test:unit` because
+they use small handmade `World` fixtures. Future blocker tests that import
+`src/gen/path_blockers.ts` or full floor generators belong in
+`test:generation`, while movement-collision tests should stay as small system
+fixtures unless they need a real generated floor.
 
 ## Unit Gate Budget
 
@@ -41,15 +56,24 @@ If a test says "all", "matrix", "every route", "every anomaly", "every geometry"
 
 ## Generation Matrix Gate
 
-Use `test:generation` for exhaustive route and procedural coverage:
+Use `test:generation` for broad route and procedural coverage:
 
-- All procedural geometries can be forced.
-- All procedural anomalies can be forced.
-- Broad seed matrices and route-band sampling.
-- Full authored design-floor footprint checks.
-- Slow regression tests that mainly protect generator diversity, not day-to-day integration.
+- Representative procedural geometries can be forced.
+- Representative procedural anomalies can be forced.
+- Fixed P0 route lift reachability samples.
+- A focused authored design-floor population/readability set.
+- Slow regression tests that protect generator diversity without making normal development rerun every historical floor.
 
 In `node:test`, keep these cases behind an environment guard such as `GIGAHRUSH_GENERATION_MATRIX`, following the existing `testGenerationMatrix(...)` pattern in `tests/procedural-floors.test.ts`. The skipped test should name the command needed to run it.
+
+`tests/procedural-floors.test.ts` has two extra opt-in layers because a single file can otherwise build hundreds of 1024x1024 worlds:
+
+```bash
+GIGAHRUSH_PROCEDURAL_FLOOR_REGRESSION_MATRIX=1 npm run test:generation
+GIGAHRUSH_PROCEDURAL_FLOOR_FULL_MATRIX=1 npm run test:generation
+```
+
+The regression flag enables historical `genfix ...` floors. The full flag enables exhaustive "all geometry", "all anomaly", broad sampled reachability and full authored-design footprint checks. Use them when touching procedural floor generators, anomaly selection, design-floor registration or route-wide reachability; keep normal `npm run test:generation` as the cheaper generator smoke gate.
 
 ## Reuse Generated Floors
 

@@ -219,7 +219,6 @@ export function bindInput(input: InputState, canvas: HTMLCanvasElement, options:
     input.mouse.locked = document.pointerLockElement === canvas;
     if (!input.mouse.locked) {
       clearPointerState(input);
-      clearControlInputs(input);
       input.controlEdit = false;
       input.controlReset = false;
       input.controlClose = false;

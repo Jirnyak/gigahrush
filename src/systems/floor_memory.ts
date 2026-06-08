@@ -231,6 +231,8 @@ function estimateWorldBytes(world: World): number {
     world.floorTex.byteLength +
     world.features.byteLength +
     world.light.byteLength +
+    world.visualSlots.byteLength +
+    world.pathBlockers.byteLength +
     world.aptMask.byteLength +
     world.hermoWall.byteLength +
     world.zoneMap.byteLength +

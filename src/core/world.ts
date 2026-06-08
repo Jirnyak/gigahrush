@@ -9,6 +9,7 @@ import {
   type Zone,
   type WorldContainer,
 } from './types';
+import { PATH_BLOCKER_ROWS_PER_CELL } from './path_blockers';
 
 export interface WorldGenerationLike {
   world: World;
@@ -40,6 +41,8 @@ export const REACH_GATE_KEY = 1 << 0;
 export const REACH_GATE_HERMETIC = 1 << 1;
 export const REACH_UNREACHED = 255;
 export const SURFACE_FLAG_CHALK_MAP = 1 << 0;
+export const VISUAL_SLOTS_PER_CELL = 16;
+export const EMPTY_VISUAL_CELL_CODE = 0;
 
 export interface ReachabilityCell {
   passable: boolean;
@@ -96,6 +99,8 @@ function markWorldReplaced(world: World, versions: {
   featureVersion: number;
   lightVersion: number;
   fogVersion: number;
+  visualSlotVersion: number;
+  pathBlockerVersion: number;
 }): void {
   world.cellVersion = nextVersion(versions.cellVersion);
   world.surfaceVersion = nextVersion(versions.surfaceVersion);
@@ -104,6 +109,10 @@ function markWorldReplaced(world: World, versions: {
   world.featureVersion = nextVersion(versions.featureVersion);
   world.lightVersion = nextVersion(versions.lightVersion);
   world.fogVersion = nextVersion(versions.fogVersion);
+  world.visualSlotVersion = nextVersion(versions.visualSlotVersion);
+  world.visualSlotDirtyVersion = world.visualSlotVersion;
+  world.pathBlockerVersion = nextVersion(versions.pathBlockerVersion);
+  world.pathBlockerDirtyVersion = world.pathBlockerVersion;
   world.clearPendingGridDirtyRects();
   world.markSurfaceUploadDirty();
 }
@@ -153,6 +162,8 @@ export class World {
   floorTex:  Uint8Array;
   features:  Uint8Array;   // Feature enum per cell
   light:     Float32Array; // lightmap 0..1 per cell
+  visualSlots: Uint8Array; // render-only micro-decoration codes, 16 bytes per cell
+  pathBlockers: Uint8Array; // gameplay path blocker row masks, 8 bytes per cell
   rooms:     Room[]  = [];
   doors:     Map<number, Door> = new Map();
   apartmentRoomCount = 0;          // first N rooms are permanent apartments
@@ -180,6 +191,10 @@ export class World {
   featureVersion = 0;              // bumped when runtime feature data changes
   lightVersion = 0;                // bumped when baked feature light changes
   fogVersion = 0;                  // bumped when runtime fog data changes
+  visualSlotVersion = 0;           // bumped when render-only visual slot data changes
+  visualSlotDirtyVersion = 0;      // conservative whole-layer invalidation marker for future mesh cache
+  pathBlockerVersion = 0;          // bumped when path blocker masks change
+  pathBlockerDirtyVersion = 0;     // conservative whole-layer path blocker invalidation marker
   liftDir:   Uint8Array;           // LiftDirection per cell (only meaningful where cells[i] === Cell.LIFT)
   containers: WorldContainer[] = [];
   containerMap: Map<number, number[]> = new Map(); // cell idx -> container ids
@@ -200,6 +215,8 @@ export class World {
     this.floorTex = new Uint8Array(n);
     this.features = new Uint8Array(n);              // Feature.NONE = 0
     this.light    = new Float32Array(n);            // 0 = dark
+    this.visualSlots = new Uint8Array(n * VISUAL_SLOTS_PER_CELL);
+    this.pathBlockers = new Uint8Array(n * PATH_BLOCKER_ROWS_PER_CELL);
     this.aptMask  = new Uint8Array(n);              // 0 = volatile, 1 = apartment-protected
     this.hermoWall = new Uint8Array(n);             // 0 = normal, 1 = unbreakable wall
     this.zoneMap  = new Uint8Array(n);              // zone id
@@ -422,6 +439,11 @@ export class World {
     this.fogDirtyRects = appendGridDirtyRects(this.fogDirtyRects, rects);
   }
 
+  markVisualSlotsDirty(): void {
+    this.visualSlotVersion = nextVersion(this.visualSlotVersion);
+    this.visualSlotDirtyVersion = this.visualSlotVersion;
+  }
+
   setFeatureAt(idx: number, feature: Feature, rebakeLights = true, rects?: GridDirtyRectsInput): boolean {
     const old = this.features[idx] as Feature;
     if (old === feature) return false;
@@ -531,6 +553,59 @@ export class World {
   }
 }
 
+function assertVisualSlotCell(cellIdx: number): number {
+  const idx = Math.floor(cellIdx);
+  if (!Number.isFinite(cellIdx) || idx !== cellIdx || idx < 0 || idx >= W * W) {
+    throw new RangeError(`visual cell index out of range: ${cellIdx}`);
+  }
+  return idx;
+}
+
+function assertVisualSlotIndex(slot: number): number {
+  const idx = Math.floor(slot);
+  if (!Number.isFinite(slot) || idx !== slot || idx < 0 || idx >= VISUAL_SLOTS_PER_CELL) {
+    throw new RangeError(`visual slot index out of range: ${slot}`);
+  }
+  return idx;
+}
+
+function assertVisualCellCode(code: number): number {
+  const normalized = Math.floor(code);
+  if (!Number.isFinite(code) || normalized !== code || normalized < 0 || normalized > 255) {
+    throw new RangeError(`visual cell code out of byte range: ${code}`);
+  }
+  return normalized;
+}
+
+export function visualSlotOffset(cellIdx: number, slot: number): number {
+  return assertVisualSlotCell(cellIdx) * VISUAL_SLOTS_PER_CELL + assertVisualSlotIndex(slot);
+}
+
+export function getVisualSlot(world: World, cellIdx: number, slot: number): number {
+  return world.visualSlots[visualSlotOffset(cellIdx, slot)];
+}
+
+export function setVisualSlot(world: World, cellIdx: number, slot: number, code: number): boolean {
+  const offset = visualSlotOffset(cellIdx, slot);
+  const normalized = assertVisualCellCode(code);
+  if (world.visualSlots[offset] === normalized) return false;
+  world.visualSlots[offset] = normalized;
+  world.markVisualSlotsDirty();
+  return true;
+}
+
+export function clearVisualSlots(world: World, cellIdx: number): boolean {
+  const offset = visualSlotOffset(cellIdx, 0);
+  let changed = false;
+  for (let slot = 0; slot < VISUAL_SLOTS_PER_CELL; slot++) {
+    if (world.visualSlots[offset + slot] === EMPTY_VISUAL_CELL_CODE) continue;
+    world.visualSlots[offset + slot] = EMPTY_VISUAL_CELL_CODE;
+    changed = true;
+  }
+  if (changed) world.markVisualSlotsDirty();
+  return changed;
+}
+
 export function classifyReachabilityCell(world: World, idx: number): ReachabilityCell {
   const cell = world.cells[idx];
   if (cell === Cell.FLOOR) return { passable: true, reason: 'open', gateMask: REACH_GATE_NONE };
@@ -638,6 +713,8 @@ export function replaceWorldFromGeneration(target: World | null | undefined, gen
       featureVersion: source.featureVersion,
       lightVersion: source.lightVersion,
       fogVersion: source.fogVersion,
+      visualSlotVersion: source.visualSlotVersion,
+      pathBlockerVersion: source.pathBlockerVersion,
     });
     return source;
   }
@@ -650,6 +727,8 @@ export function replaceWorldFromGeneration(target: World | null | undefined, gen
     featureVersion: target.featureVersion,
     lightVersion: target.lightVersion,
     fogVersion: target.fogVersion,
+    visualSlotVersion: target.visualSlotVersion,
+    pathBlockerVersion: target.pathBlockerVersion,
   };
 
   target.cells.set(source.cells);
@@ -658,6 +737,8 @@ export function replaceWorldFromGeneration(target: World | null | undefined, gen
   target.floorTex.set(source.floorTex);
   target.features.set(source.features);
   target.light.set(source.light);
+  target.visualSlots.set(source.visualSlots);
+  target.pathBlockers.set(source.pathBlockers);
   target.aptMask.set(source.aptMask);
   target.hermoWall.set(source.hermoWall);
   target.zoneMap.set(source.zoneMap);

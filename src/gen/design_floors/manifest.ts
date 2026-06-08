@@ -10,6 +10,8 @@ import { initializeCellTerritory } from '../../systems/territory';
 import type { FloorGeneration } from '../floor_manifest';
 import { withoutNpcEntities } from '../entity_filters';
 import { applyDesignFloorObjectProfile } from '../floor_object_placement';
+import { fillVisualSlotsForWorldFeatures } from '../visual_cell_slots';
+import { rebuildGeneratedFloorPathBlockers } from '../path_blockers';
 import { generateAntennaCourtDesignFloor } from './antenna_court';
 import { alignAttractorDvorAmbientNpcTerritory, generateAttractorDvorDesignFloor } from './attractor_dvor';
 import { generateBankFloorDesignFloor } from './bank_floor';
@@ -158,6 +160,8 @@ export function generateDesignFloor(id: DesignFloorId, runSeed = DEFAULT_DESIGN_
     }
     if (id === 'upper_bureau') reinforceUpperBureauAuthoredHqTerritory(expanded.world);
     if (id === 'penrose_laundry') reinforcePenroseLaundryAuthoredHqTerritory(expanded.world);
+    rebuildGeneratedFloorPathBlockers(expanded.world, seed, expanded.spawnX, expanded.spawnY);
+    fillVisualSlotsForWorldFeatures(expanded.world, seed);
     return floorRunZAllowsNpcs(route.z) ? expanded : withoutNpcEntities(expanded);
   });
 }

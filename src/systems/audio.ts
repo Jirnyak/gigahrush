@@ -1,7 +1,5 @@
 /* ── Procedural sound engine (Web Audio API) ─────────────────── */
 
-import { BAD_APPLE_THEME_DURATION_SECONDS, BAD_APPLE_THEME_MP3_B64 } from '../data/bad_apple_theme_lofi';
-
 let ctx: AudioContext | null = null;
 let mainGain: GainNode | null = null;
 let scopedGain: GainNode | null = null;
@@ -116,9 +114,6 @@ export function claimAudioCueForTests(id: AudioCueBudgetId, now: number): boolea
 /* ── Distance-based volume attenuation ────────────────────────── */
 const SOUND_MAX_DIST = 25;  // beyond this, sound is silent
 const POSITIONAL_SOUND_MAX_GAIN = 0.78;
-const BAD_APPLE_LOOP_GAIN = 0.34;
-const BAD_APPLE_VIDEO_SECONDS = 6470 / 30;
-const BAD_APPLE_LOOP_RATE = BAD_APPLE_THEME_DURATION_SECONDS / BAD_APPLE_VIDEO_SECONDS;
 export type AudioDistanceProvider = (ax: number, ay: number, bx: number, by: number) => number;
 
 export interface AudioWorldDistanceContext {
@@ -129,12 +124,6 @@ type AudioDistanceSource = AudioDistanceProvider | AudioWorldDistanceContext;
 
 let _playerX = 0, _playerY = 0;
 let _distanceSource: AudioDistanceSource | null = null;
-let badAppleThemeBufferPromise: Promise<AudioBuffer | null> | null = null;
-let badAppleThemeBuffer: AudioBuffer | null = null;
-let badApplePendingStart: { x: number; y: number; frame: number; maxDist: number } | null = null;
-let badAppleLoopSource: AudioBufferSourceNode | null = null;
-let badAppleLoopGain: GainNode | null = null;
-let badAppleLoopFilter: BiquadFilterNode | null = null;
 
 function audioContextCtor(): typeof AudioContext | null {
   return globalThis.AudioContext ?? (globalThis as typeof globalThis & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext ?? null;
@@ -231,88 +220,10 @@ export function resetAudioSuspensionForTests(): void {
   if (ctx.state === 'suspended') void ctx.resume().catch(() => {});
 }
 
-function decodeEmbeddedMp3(input: string): ArrayBuffer {
-  const raw = atob(input);
-  const bytes = new Uint8Array(raw.length);
-  for (let i = 0; i < raw.length; i++) bytes[i] = raw.charCodeAt(i);
-  return bytes.buffer;
-}
-
-function loadBadAppleTheme(ac: AudioContext): Promise<AudioBuffer | null> {
-  if (badAppleThemeBuffer) return Promise.resolve(badAppleThemeBuffer);
-  if (badAppleThemeBufferPromise) return badAppleThemeBufferPromise;
-  badAppleThemeBufferPromise = ac.decodeAudioData(decodeEmbeddedMp3(BAD_APPLE_THEME_MP3_B64))
-    .then(buffer => {
-      badAppleThemeBuffer = buffer;
-      return buffer;
-    })
-    .catch(() => null);
-  return badAppleThemeBufferPromise;
-}
-
-function stopBadAppleProjectorLoop(ac: AudioContext): void {
-  badApplePendingStart = null;
-  if (!badAppleLoopSource || !badAppleLoopGain) return;
-  const now = ac.currentTime;
-  const source = badAppleLoopSource;
-  badAppleLoopGain.gain.cancelScheduledValues(now);
-  badAppleLoopGain.gain.setTargetAtTime(0.001, now, 0.18);
-  try { source.stop(now + 0.7); } catch { /* already stopped */ }
-  badAppleLoopSource = null;
-  badAppleLoopGain = null;
-  badAppleLoopFilter = null;
-}
-
 export function primeBadAppleProjectorAudio(): void {
-  if (!hasAudioContext()) return;
-  const ac = ensureContext();
-  void loadBadAppleTheme(ac);
 }
 
-export function updateBadAppleProjectorLoop(active: boolean, x: number, y: number, frame: number, maxDist = SOUND_MAX_DIST): void {
-  if (!hasAudioContext()) return;
-  const ac = ensureContext();
-  if (!active) {
-    stopBadAppleProjectorLoop(ac);
-    return;
-  }
-
-  const targetGain = Math.max(0, Math.min(BAD_APPLE_LOOP_GAIN, volumeAt(x, y, maxDist) * BAD_APPLE_LOOP_GAIN));
-  if (!badAppleThemeBuffer) {
-    badApplePendingStart = { x, y, frame, maxDist };
-    void loadBadAppleTheme(ac).then(buffer => {
-      if (!buffer || !badApplePendingStart) return;
-      const pending = badApplePendingStart;
-      badApplePendingStart = null;
-      updateBadAppleProjectorLoop(true, pending.x, pending.y, pending.frame, pending.maxDist);
-    });
-    return;
-  }
-
-  const now = ac.currentTime;
-  if (!badAppleLoopSource || !badAppleLoopGain) {
-    const source = ac.createBufferSource();
-    const bus = ac.createGain();
-    const filter = ac.createBiquadFilter();
-    const videoTime = ((Math.floor(frame) % 6470) + 6470) % 6470 / 30;
-    source.buffer = badAppleThemeBuffer;
-    source.loop = true;
-    source.loopStart = 0;
-    source.loopEnd = BAD_APPLE_THEME_DURATION_SECONDS;
-    source.playbackRate.value = BAD_APPLE_LOOP_RATE;
-    filter.type = 'bandpass';
-    filter.frequency.value = 1600;
-    filter.Q.value = 0.55;
-    bus.gain.value = 0.001;
-    source.connect(filter).connect(bus).connect(mainGain!);
-    source.start(now, (videoTime * BAD_APPLE_LOOP_RATE) % BAD_APPLE_THEME_DURATION_SECONDS);
-    badAppleLoopSource = source;
-    badAppleLoopGain = bus;
-    badAppleLoopFilter = filter;
-  }
-
-  badAppleLoopGain.gain.setTargetAtTime(Math.max(0.001, targetGain), now, 0.16);
-  badAppleLoopFilter?.frequency.setTargetAtTime(900 + targetGain / BAD_APPLE_LOOP_GAIN * 900, now, 0.35);
+export function updateBadAppleProjectorLoop(_active: boolean, _x: number, _y: number, _frame: number, _maxDist = SOUND_MAX_DIST): void {
 }
 
 /* ── Footstep: short low thump ───────────────────────────────── */
@@ -1146,7 +1057,6 @@ export function startAmbientDrone(): void {
   applyAmbientDroneMode(ac, droneMode, true);
   droneOsc.start();
   droneSecondOsc.start();
-  void loadBadAppleTheme(ac);
 }
 
 export function setAmbientDroneMode(mode: AmbientDroneMode): void {

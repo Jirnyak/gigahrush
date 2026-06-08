@@ -32,11 +32,11 @@
 - Существующий `Инфосеть Демос` - tabbed A-Life NPC surface: поиск/курсор, профиль, связи, лента, отдельный пост и квестовые заявки. UI state (`demosCursor`, `demosSearch`, `demosTab`, scroll/cursor) transient; социальная память хранится отдельно.
 - Текущий shipped feed persistent: `systems/demos_runtime.ts` регистрирует slow `ContentRuntimeHook` с 30-секундной cadence, читает bounded recent `WorldEvent` slice и bounded текущие A-Life snapshots, создаёт compact posts/reactions через `demos_save.ts`, создаёт runtime quest notices через `demos_quest_notices.ts`, строит post view через `systems/demos_posts.ts` и Markov speech router, а `render/demos_ui.ts` только рисует готовые строки.
 - Save shape bumped to `21`; `demosSocial` stores relation overrides, post ring and reaction ring, while generated computer and NET-hack terminal reward/cooldown keys persist as compact route-keyed runtime facts. Demos quest notices remain runtime state outside the save section unless they are represented by posts/relation facts; accepting a notice still happens only through face-to-face NPC talk and normal quest/contract systems.
-- `systems/npc_relations.ts` задаёт отношение NPC к игроку как `[-100, 100]`.
+- `systems/npc_relations.ts` задаёт gameplay-семантику отношения NPC к игроку как `[-100, 100]`, а Demos показывает и мутирует это отношение через тот же public social slot, что и остальные связи.
 - `HOSTILE_RELATION_THRESHOLD = -50`, `FRIENDLY_RELATION_THRESHOLD = 50`.
 - `karma` теперь использует signed-char совместимый диапазон `[-127, 127]`.
 - Faction relation matrix хранится в `Int8Array` и фактически допускает `[-128, 127]`, но player relation намеренно клампится в `[-100, 100]`.
-- Demos social edge хранится компактно: один signed byte на отношение, без `number[]`, объектов и JSON-графа для базового графа.
+- Demos social edge хранится компактно: один signed byte на отношение, без `number[]`, объектов и JSON-графа для базового графа. Slot `0` в каждой строке зарезервирован под directed edge `NPC -> player`, slots `1..9` - под `NPC -> NPC`.
 - Активный floor actor soft cap остаётся около `4096` NPC+monster actors.
 - `WorldEvent` уже даёт bounded ring buffers и public/local/witnessed/private/secret privacy.
 
@@ -80,7 +80,7 @@ flags: Uint8Array      // npcCount * slots
 Он должен быть отдельным compact pack, например:
 
 ```txt
-edgeIndex = (alifeId - 1) * DEMOS_SOCIAL_SLOTS + slot
+edgeIndex = (alifeId - 1) * DEMOS_SOCIAL_PUBLIC_SLOTS + slot
 targetId = targets[edgeIndex]
 relation = relations[edgeIndex] // signed char -127..127, -128 sentinel
 flags = flags[edgeIndex]
@@ -88,7 +88,7 @@ flags = flags[edgeIndex]
 
 UI и AI могут получать обычный `number` из helper API, но источник должен оставаться `Int8Array`. Иначе `-127..127` будет только красивым диапазоном, а не оптимизацией.
 
-Existing `playerRelation` к игроку остаётся текущим `[-100, 100]` semantic field, но в persistent A-Life pool он уже хранится как `Int8Array` с unset sentinel. Для live `Entity` на активном этаже обычные JS numbers остаются нормальными: это не `100_000` cold storage problem.
+Existing `playerRelation` к игроку остаётся текущим `[-100, 100]` semantic field, но в Demos graph он проецируется в signed-byte edge slot `0` через scale `round(playerRelation * 127 / 100)`. Demos deltas к player-slot записывают sparse social override и синхронизируют A-Life `playerRelation`, чтобы будущая материализация и AI hostility видели тот же факт. Для live `Entity` на активном этаже обычные JS numbers остаются нормальными: это не `100_000` cold storage problem.
 
 Demos profile and context read age/sex only through `getAlifeNpcRecordSnapshot()`. The profile row shows age, age band and sex label; social adult buckets use `age >= 18`; Markov/social quest adapters receive `age.*` and `sex.*` context tags before ordinary trait tags.
 
@@ -181,14 +181,18 @@ Strings, inventories, special sprites, plot ids and changed rare facts stay inte
 Текущий рабочий бюджет:
 
 ```txt
+DEMOS_SOCIAL_PLAYER_SLOT = 0
+DEMOS_SOCIAL_NPC_SLOT_START = 1
 DEMOS_SOCIAL_NPC_SLOTS = 9
+DEMOS_SOCIAL_INITIAL_NPC_SLOTS = 4
 DEMOS_SOCIAL_PUBLIC_SLOTS = 10 // player slot + 9 NPC slots
 ```
 
 Почему 9:
 
-- `alife.md` уже целится в `3-8` friend edges;
-- 9 даёт профиль, где есть 2-4 друга/родственника, 1-2 недруга, рабочие/долговые связи и 1-2 слабые связи;
+- стартовый процедурный круг обычно даёт до `5` public relations: player-slot плюс до `4` NPC slots;
+- оставшиеся NPC slots свободны для событийного роста круга до `10` public relations total;
+- 9 NPC slots дают место для 2-4 друга/родственника, 1-2 недруга, рабочих/долговых связей и новых weak ties без расширения storage;
 - на `100_000` NPC это уже `900_000` directed edges;
 - один NPC может иметь больше входящих связей, даже если его собственный список ограничен;
 - этого достаточно для local propagation, постов, реакций, слухов и визитов без раздувания памяти.
@@ -209,9 +213,10 @@ roles: Uint8Array      // 1 byte DemosSocialRoleId
 | 4 | 400,000 | 2,800,000 | 2.8 MB |
 | 6 | 600,000 | 4,200,000 | 4.2 MB |
 | 9 | 900,000 | 6,300,000 | 6.3 MB |
+| 10 public | 1,000,000 | 7,000,000 | 7.0 MB |
 | 12 | 1,200,000 | 8,400,000 | 8.4 MB |
 
-Текущий shipped path держит 9 NPC slots и 1 player slot; raw typed-array budget для `100_000` записей остаётся ниже `7 MiB`. Увеличивать бюджет можно только после проверки heap/build/browser smoke.
+Текущий shipped path держит 9 NPC slots и 1 player slot; raw typed-array budget для `100_000` записей остаётся ниже `7 MiB` binary threshold в тесте (`7,000,000 < 7 * 1024 * 1024`). Увеличивать бюджет можно только после проверки heap/build/browser smoke.
 
 Не хранить в базовом edge:
 
@@ -222,7 +227,7 @@ roles: Uint8Array      // 1 byte DemosSocialRoleId
 - ссылку на объект record;
 - timestamps для каждого edge.
 
-Если нужен touched state, хранить sparse overrides по изменённым edge, а не расширять все `600_000` базовых связей.
+Если нужен touched state, хранить sparse overrides по изменённым edge, а не расширять все `1_000_000` public slots дополнительными полями.
 
 ### Направленность
 
@@ -280,6 +285,25 @@ NPC-NPC relation:
 
 Пороги масштабируют текущие Demos profile bands на signed-byte relation scale. Для gameplay hostility/friendly решений Demos-edge использует `-64` и `64`, а UI может показывать raw char score или scaled `[-100, 100]` подпись.
 
+### Производное Изменение Отношений
+
+Все gameplay/social изменения отношения проходят через `applyDemosRelationDelta()`. Mutator меняет directed edge `from -> target`, пишет sparse override в `demosSocial.relationOverrides`, а для `targetKind: 'player'` также синхронизирует A-Life `playerRelation`.
+
+После прямого изменения mutator делает bounded propagation по исходящему кругу `from`:
+
+```txt
+derivedDelta = round(sourceDelta * circleRelation / 127)
+```
+
+Это одна формула для друзей и врагов:
+
+- если `circleRelation = +127`, друг получает полный delta с тем же знаком;
+- если `circleRelation = -127`, враг получает полный delta с обратным знаком;
+- если `circleRelation = 0`, эффекта нет;
+- слабые связи дают пропорционально слабый эффект.
+
+Пример: игрок ударил NPC, и edge `NPC -> player` уменьшился на `N`. Каждый живой друг этого NPC получает `-N` к edge `friend -> player` при максимальной дружбе, а максимальный враг получает `+N`. Если target был NPC, создаётся или обновляется edge `friend/enemy -> targetNpcId`. Производные связи создаются только в свободные NPC slots; propagation не вытесняет существующие связи и не каскадирует дальше в том же mutator call.
+
 ## Генерация Графа
 
 Граф создаётся при создании A-Life pool или лениво как deterministic graph pack из seed. Он не должен требовать сохранения всех базовых edges.
@@ -307,7 +331,7 @@ NPC-NPC relation:
    - optional family group index;
    - optional faction bucket cursors;
    - optional occupation bucket cursors.
-2. Для каждого record заполнить до `DEMOS_SOCIAL_SLOTS` slots через deterministic candidate probes.
+2. Для каждого record заполнить player slot и до `DEMOS_SOCIAL_INITIAL_NPC_SLOTS` NPC slots через deterministic candidate probes; остальные public slots остаются для событийного роста.
 3. На каждый slot дать не больше `DEMOS_SOCIAL_CANDIDATE_TRIES`, например `24`.
 4. Candidate source зависит от slot type:
    - family candidate from same `familyId`;
@@ -354,12 +378,13 @@ relation =
 ```ts
 interface DemosRelationOverride {
   fromAlifeId: number;
-  toAlifeId: number;
-  relation?: number;       // clamped -127..127, -128 reserved
-  flagsAdd?: number;
-  flagsRemove?: number;
-  touchedAt?: number;      // game time, optional
+  targetKind: 'alife' | 'player';
+  targetAlifeId?: number;  // only for targetKind: 'alife'
+  value: number;           // clamped -127..127, -128 reserved
+  updatedAt?: number;      // game time, optional
   reasonTag?: string;      // capped, optional
+  postId?: number;
+  reactionId?: number;
 }
 ```
 
@@ -373,11 +398,11 @@ DEMOS_RELATION_OVERRIDE_CAP = 8192
 
 Правила:
 
-- override применяется только к existing directed edge;
-- если связи нет, система может заменить weakest non-family slot или отказаться;
-- family edge нельзя вытеснять debt/rumor событием без специального флага;
+- прямой override может создать missing directed edge; производный propagation создаёт edge только в свободный NPC slot;
+- player override всегда живёт в slot `0` и не вытесняет NPC slots;
+- direct mutator может заменить weakest slot только для прямого изменения, если вызвавший код это не запретил;
 - dead NPC связи остаются видимыми в профиле, но не выбираются для новых визитов/реакций как живые actors;
-- изменение save shape обязательно, если overrides становятся persistent.
+- overrides уже persistent в `demosSocial`, bounded и sanitized.
 
 ## Demos Posts
 
@@ -718,7 +743,7 @@ This is the deterministic base graph layer.
 
 ### Level 2: Persistent Social Consequences
 
-Shipped. Requires save shape bump and current-shape sanitization; current shape is `20`.
+Shipped. Requires save shape bump and current-shape sanitization; current save shape is `21`.
 
 Save section:
 
@@ -1030,11 +1055,11 @@ Command expectations:
 
 3. Post persistence
 
-   Current answer: yes. `demosSocial` persists compact posts, reactions and relation overrides under save shape `20`.
+   Current answer: yes. `demosSocial` persists compact posts, reactions and relation overrides under save shape `21`.
 
 4. Missing-edge relation overrides
 
-   Current answer: only through a bounded helper that replaces the weakest non-family slot. Never append.
+   Current answer: direct changes may create a missing edge through a bounded helper; derived propagation only uses free slots and never appends beyond the fixed public slot budget.
 
 5. Enemy representation
 

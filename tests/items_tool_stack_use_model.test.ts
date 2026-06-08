@@ -42,6 +42,7 @@ test('equipable tools default to single-item stacks', () => {
 test('default stack model separates bulk consumables from non-use objects', () => {
   assert.equal(itemEquipSlot(ITEMS.knife), 'weapon');
   assert.equal(itemEquipSlot(ITEMS.flashlight), 'tool');
+  assert.equal(itemEquipSlot(ITEMS.psi_strike), 'tool');
   assert.equal(itemEquipSlot(ITEMS.bread), null);
 
   assert.equal(itemHasUseAction(ITEMS.bread), true);
@@ -57,6 +58,7 @@ test('default stack model separates bulk consumables from non-use objects', () =
   assert.equal(getStack(ITEMS.bread), MAX_ITEM_STACK);
   assert.equal(getStack(ITEMS.ammo_9mm), MAX_ITEM_STACK);
   assert.equal(getStack(ITEMS.manometer), 1);
+  assert.equal(getStack(ITEMS.psi_strike), 1);
   assert.equal(getStack(ITEMS.key), 1);
   assert.equal(getStack(ITEMS.note), 1);
   assert.equal(getStack(ITEMS.krona_battery), 8, 'explicit finite resource stacks remain data-driven');

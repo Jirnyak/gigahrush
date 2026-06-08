@@ -11,7 +11,12 @@ import {
 } from '../core/types';
 import { World, type WorldGridDirtyRect } from '../core/world';
 import { getActiveSamosborVariant } from '../systems/samosbor_variants_runtime';
-import { entityUsesProceduralSprite, generateProceduralEntitySprite, proceduralEntitySpriteKey } from '../entities/procedural_visuals';
+import {
+  entityUsesProceduralSprite,
+  entityWorldSpriteScale,
+  generateProceduralEntitySprite,
+  proceduralEntitySpriteKey,
+} from '../entities/procedural_visuals';
 import type { TexData } from './textures';
 import type { SpriteData } from './sprites';
 import type { BloodParticle } from './blood';
@@ -26,6 +31,25 @@ import {
   type ResolvedVisualDetailFamily,
   type ResolvedVisualDetailProfile,
 } from '../data/visual_detail_profiles';
+import {
+  EMPTY_RESOLVED_VISUAL_GEOMETRY_PROFILE,
+  type ResolvedVisualGeometryProfile,
+} from '../data/visual_geometry_profiles';
+import {
+  EMPTY_RESOLVED_VISUAL_SURFACE_PROFILE,
+  VISUAL_SURFACE_CEILING_PATTERN_CODES,
+  VISUAL_SURFACE_FLOOR_PATTERN_CODES,
+  VISUAL_SURFACE_TRIM_CODES,
+  VISUAL_SURFACE_WALL_BAND_CODES,
+  type ResolvedVisualSurfaceProfile,
+} from '../data/visual_surface_profiles';
+import {
+  createMeshPass,
+  createMeshPassStats,
+  type MeshPassContext,
+  type MeshPassHandle,
+  type MeshPassStats,
+} from './mesh';
 
 export interface DynamicSkyTexture {
   readonly width: number;
@@ -41,6 +65,10 @@ export interface RenderSceneDebugStats {
   drawnSprites: number;
   visibleEntityQueryResults: number;
   spriteCap: number;
+  meshEnabled: boolean;
+  meshInstances: number;
+  meshTriangles: number;
+  meshDrawCalls: number;
 }
 
 /* ── Constants ─────────────────────────────────────────────────── */
@@ -75,6 +103,10 @@ const lastRenderSceneDebugStats: RenderSceneDebugStats = {
   drawnSprites: 0,
   visibleEntityQueryResults: 0,
   spriteCap: VISIBLE_SPRITE_CAP,
+  meshEnabled: false,
+  meshInstances: 0,
+  meshTriangles: 0,
+  meshDrawCalls: 0,
 };
 
 const enum VisibleSpriteSource {
@@ -86,6 +118,10 @@ const enum VisibleSpriteSource {
 
 export function getRenderSceneDebugStats(): RenderSceneDebugStats {
   return { ...lastRenderSceneDebugStats };
+}
+
+export function getMeshPassDebugStats(): MeshPassStats {
+  return glState?.meshPass?.stats() ?? createMeshPassStats();
 }
 
 /* ── GLSL Shaders ─────────────────────────────────────────────── */
@@ -156,6 +192,11 @@ uniform vec4 uDetailWallColor0;
 uniform vec4 uDetailWallColor1;
 uniform vec4 uDetailLightDust;
 uniform vec4 uDetailLightDustColor;
+
+/* ── Room-scale surface material profile ─────────────────────── */
+uniform vec4 uSurfaceProfileA;   // floor pattern, wall band, ceiling pattern, trim
+uniform vec4 uSurfaceProfileB;   // grime, seam strength, light panel chance, vent chance
+uniform float uSurfaceProfileSeed;
 
 /* ── Depth output (for sprite clipping on CPU) ────────────────── */
 // We write depth into a color attachment that gets read back
@@ -484,6 +525,209 @@ float detailLine(float v, float width) {
   return 1.0 - smoothstep(width, width + 0.025, abs(v));
 }
 
+float surfaceSeam1(int coord, int size, float width) {
+  int s = max(2, size);
+  int c = coord % s;
+  if (c < 0) c += s;
+  float edge = float(min(c, s - 1 - c));
+  return 1.0 - smoothstep(width, width + 1.65, edge);
+}
+
+float surfaceGridSeam(int tx, int ty, int size, float width) {
+  return max(surfaceSeam1(tx, size, width), surfaceSeam1(ty, size, width));
+}
+
+bool architecturalMaterial(uint texId) {
+  return texId == ${Tex.CONCRETE}u || texId == ${Tex.BRICK}u || texId == ${Tex.PANEL}u ||
+         texId == ${Tex.TILE_W}u || texId == ${Tex.METAL}u || texId == ${Tex.PIPE}u ||
+         texId == ${Tex.HERMO_WALL}u || texId == ${Tex.MARBLE}u ||
+         texId == ${Tex.F_CONCRETE}u || texId == ${Tex.F_LINO}u || texId == ${Tex.F_TILE}u ||
+         texId == ${Tex.F_WOOD}u || texId == ${Tex.F_CARPET}u || texId == ${Tex.F_MARBLE_TILE}u ||
+         texId == ${Tex.F_PARQUET}u || texId == ${Tex.CEIL}u;
+}
+
+bool organicOrVoidMaterial(uint texId) {
+  return texId == ${Tex.MEAT}u || texId == ${Tex.GUT}u || texId == ${Tex.LARVA_BODY}u ||
+         texId == ${Tex.F_MEAT}u || texId == ${Tex.F_GUT}u ||
+         texId == ${Tex.VOID_WALL}u || texId == ${Tex.F_VOID}u ||
+         texId == ${Tex.F_ABYSS}u || texId == ${Tex.DARK}u;
+}
+
+int effectiveFloorPattern(uint texId, int profilePattern) {
+  if (texId == ${Tex.F_TILE}u || texId == ${Tex.F_MARBLE_TILE}u) return ${VISUAL_SURFACE_FLOOR_PATTERN_CODES.smallTile};
+  if (texId == ${Tex.F_LINO}u || texId == ${Tex.F_PARQUET}u) return ${VISUAL_SURFACE_FLOOR_PATTERN_CODES.lino};
+  if (texId == ${Tex.F_WATER}u) return ${VISUAL_SURFACE_FLOOR_PATTERN_CODES.wetConcrete};
+  if (texId == ${Tex.METAL}u || texId == ${Tex.PIPE}u) return ${VISUAL_SURFACE_FLOOR_PATTERN_CODES.metalGrid};
+  return profilePattern;
+}
+
+int effectiveWallBand(uint texId, int profileBand) {
+  if (organicOrVoidMaterial(texId)) return ${VISUAL_SURFACE_WALL_BAND_CODES.none};
+  if (texId == ${Tex.TILE_W}u || texId == ${Tex.MARBLE}u) return ${VISUAL_SURFACE_WALL_BAND_CODES.tileWainscot};
+  if (texId == ${Tex.PIPE}u || texId == ${Tex.METAL}u) return ${VISUAL_SURFACE_WALL_BAND_CODES.serviceStrip};
+  if (texId == ${Tex.BRICK}u || texId == ${Tex.CONCRETE}u || texId == ${Tex.HERMO_WALL}u) {
+    return profileBand == ${VISUAL_SURFACE_WALL_BAND_CODES.none} ? ${VISUAL_SURFACE_WALL_BAND_CODES.concreteBlocks} : profileBand;
+  }
+  return profileBand;
+}
+
+int effectiveTrim(uint texId, int profileTrim) {
+  if (organicOrVoidMaterial(texId)) return ${VISUAL_SURFACE_TRIM_CODES.none};
+  if (texId == ${Tex.PIPE}u || texId == ${Tex.METAL}u) return ${VISUAL_SURFACE_TRIM_CODES.metalRail};
+  return profileTrim;
+}
+
+vec3 applySurfaceGrime(vec3 color, ivec2 cell, int tx, int ty, float materialBoost) {
+  float grime = clamp(uSurfaceProfileB.x, 0.0, 1.0) * materialBoost;
+  if (grime <= 0.001) return color;
+  float coarse = noiseI(cell.x * 5 + (tx >> 3), cell.y * 7 + (ty >> 3), int(uSurfaceProfileSeed) + 811);
+  float fine = noiseI(cell.x * 13 + tx, cell.y * 17 + ty, int(uSurfaceProfileSeed) + 823);
+  float mask = smoothstep(0.58, 0.98, coarse * 0.72 + fine * 0.28);
+  return mix(color, color * vec3(0.66, 0.64, 0.58), mask * grime * 0.34);
+}
+
+vec3 applyFloorSurfaceProfile(vec3 base, uint texId, ivec2 cell, int tx, int ty) {
+  int pattern = effectiveFloorPattern(texId, int(uSurfaceProfileA.x + 0.5));
+  float seamStrength = clamp(uSurfaceProfileB.y, 0.0, 1.0);
+  vec3 color = base;
+
+  if (organicOrVoidMaterial(texId)) {
+    color = applySurfaceGrime(color, cell, tx, ty, texId == ${Tex.F_VOID}u || texId == ${Tex.F_ABYSS}u ? 0.35 : 0.85);
+    return color;
+  }
+
+  if (pattern == ${VISUAL_SURFACE_FLOOR_PATTERN_CODES.checker}) {
+    float checker = ((cell.x + cell.y) & 1) == 0 ? 0.0 : 1.0;
+    vec3 low = color * vec3(0.60, 0.61, 0.58);
+    vec3 high = min(color * vec3(1.24, 1.22, 1.14) + vec3(0.035), vec3(1.0));
+    color = mix(low, high, checker);
+    float grout = max(surfaceGridSeam(tx, ty, 64, 0.8), surfaceGridSeam(tx, ty, 32, 0.45) * 0.55);
+    color = mix(color, color * vec3(0.42, 0.43, 0.40), grout * (0.25 + seamStrength * 0.35));
+  } else if (pattern == ${VISUAL_SURFACE_FLOOR_PATTERN_CODES.smallTile}) {
+    float seam = surfaceGridSeam(tx, ty, 16, 0.85);
+    float tileRoll = noiseI(cell.x * 11 + (tx >> 4), cell.y * 13 + (ty >> 4), int(uSurfaceProfileSeed) + 829);
+    color = mix(color * vec3(0.82, 0.86, 0.87), color * vec3(1.10, 1.12, 1.12), tileRoll * 0.35);
+    color = mix(color, color * vec3(0.38, 0.43, 0.45), seam * (0.42 + seamStrength * 0.35));
+  } else if (pattern == ${VISUAL_SURFACE_FLOOR_PATTERN_CODES.lino}) {
+    float seam = surfaceGridSeam(tx, ty, 32, 0.65);
+    float strip = float(((cell.x + (tx >> 5)) & 1) == 0);
+    color = mix(color * vec3(0.84, 0.92, 0.78), color * vec3(1.06, 1.03, 0.92), strip * 0.38);
+    color = mix(color, color * vec3(0.53, 0.55, 0.48), seam * (0.24 + seamStrength * 0.25));
+  } else if (pattern == ${VISUAL_SURFACE_FLOOR_PATTERN_CODES.wetConcrete}) {
+    float seam = surfaceGridSeam(tx, ty, 64, 0.85);
+    float wet = smoothstep(0.60, 0.98, noiseI(cell.x * 3 + (tx >> 2), cell.y * 5 + (ty >> 2), int(uSurfaceProfileSeed) + 839));
+    color = mix(color, color * vec3(0.48, 0.55, 0.52), wet * 0.28);
+    color += vec3(0.018, 0.027, 0.026) * wet;
+    color = mix(color, color * vec3(0.44), seam * (0.20 + seamStrength * 0.28));
+  } else if (pattern == ${VISUAL_SURFACE_FLOOR_PATTERN_CODES.metalGrid}) {
+    float grid = max(surfaceGridSeam(tx, ty, 16, 0.8), surfaceSeam1(tx + ty, 8, 0.5) * 0.45);
+    float plate = float((((cell.x + cell.y) + (tx >> 5) + (ty >> 5)) & 1) == 0);
+    color = mix(color * vec3(0.62, 0.68, 0.69), color * vec3(0.82, 0.88, 0.86), plate * 0.35);
+    color += vec3(0.026, 0.040, 0.042) * (1.0 - grid);
+    color = mix(color, color * vec3(0.32, 0.36, 0.36), grid * (0.50 + seamStrength * 0.38));
+  } else {
+    float slab = surfaceGridSeam(tx, ty, 64, 0.65);
+    color = mix(color, color * vec3(0.55, 0.54, 0.50), slab * seamStrength * 0.28);
+  }
+
+  return clamp(applySurfaceGrime(color, cell, tx, ty, architecturalMaterial(texId) ? 1.0 : 0.45), 0.0, 1.0);
+}
+
+vec3 applyWallSurfaceProfile(vec3 base, uint texId, ivec2 cell, int side, int tx, int ty) {
+  int band = effectiveWallBand(texId, int(uSurfaceProfileA.y + 0.5));
+  int trim = effectiveTrim(texId, int(uSurfaceProfileA.w + 0.5));
+  float seamStrength = clamp(uSurfaceProfileB.y, 0.0, 1.0);
+  vec3 color = base;
+
+  if (organicOrVoidMaterial(texId)) {
+    color = applySurfaceGrime(color, cell, tx, ty, texId == ${Tex.VOID_WALL}u || texId == ${Tex.DARK}u ? 0.25 : 0.82);
+    return color;
+  }
+
+  float lower = smoothstep(34.0, 41.0, float(ty));
+  if (band == ${VISUAL_SURFACE_WALL_BAND_CODES.tileWainscot}) {
+    float seam = surfaceGridSeam(tx, ty, 16, 0.8);
+    vec3 tile = mix(vec3(0.56, 0.62, 0.62), vec3(0.78, 0.82, 0.80), noiseI(cell.x + (tx >> 4), cell.y + (ty >> 4), int(uSurfaceProfileSeed) + 853) * 0.34);
+    tile = mix(tile, tile * vec3(0.34, 0.39, 0.40), seam * (0.48 + seamStrength * 0.28));
+    color = mix(color, tile, lower * 0.68);
+  } else if (band == ${VISUAL_SURFACE_WALL_BAND_CODES.panelLower}) {
+    float seam = max(surfaceSeam1(tx, 24, 0.65), surfaceSeam1(ty, 32, 0.55));
+    vec3 panel = color * vec3(0.60, 0.61, 0.57) + vec3(0.025, 0.022, 0.018);
+    panel = mix(panel, panel * vec3(0.42), seam * (0.32 + seamStrength * 0.22));
+    color = mix(color, panel, lower * 0.62);
+  } else if (band == ${VISUAL_SURFACE_WALL_BAND_CODES.concreteBlocks}) {
+    float seam = max(surfaceSeam1(tx + ((ty >> 4) & 1) * 16, 32, 0.75), surfaceSeam1(ty, 16, 0.65));
+    color = mix(color, color * vec3(0.50, 0.50, 0.47), seam * (0.30 + seamStrength * 0.28));
+  } else if (band == ${VISUAL_SURFACE_WALL_BAND_CODES.serviceStrip}) {
+    float strip = 1.0 - smoothstep(0.0, 3.5, abs(float(ty) - 34.0));
+    float seam = max(surfaceSeam1(tx, 16, 0.7), surfaceSeam1(ty, 8, 0.4));
+    vec3 service = color * vec3(0.42, 0.48, 0.48) + vec3(0.030, 0.042, 0.038);
+    service = mix(service, service * vec3(0.34), seam * 0.45);
+    color = mix(color, service, strip * 0.88);
+  }
+
+  if (trim == ${VISUAL_SURFACE_TRIM_CODES.baseboard}) {
+    float baseboard = smoothstep(56.0, 61.0, float(ty));
+    color = mix(color, color * vec3(0.42, 0.35, 0.25), baseboard * 0.58);
+  } else if (trim == ${VISUAL_SURFACE_TRIM_CODES.concretePlinth}) {
+    float plinth = smoothstep(53.0, 61.0, float(ty));
+    color = mix(color, color * vec3(0.46, 0.46, 0.42), plinth * 0.55);
+  } else if (trim == ${VISUAL_SURFACE_TRIM_CODES.metalRail}) {
+    float rail = max(1.0 - smoothstep(0.0, 2.2, abs(float(ty) - 45.0)),
+                     1.0 - smoothstep(0.0, 1.6, abs(float(ty) - 14.0)));
+    color = mix(color, vec3(0.18, 0.24, 0.24), rail * 0.62);
+    color += vec3(0.030, 0.044, 0.042) * rail;
+  }
+
+  float ventChance = clamp(uSurfaceProfileB.w, 0.0, 1.0);
+  if (ventChance > 0.001 && architecturalMaterial(texId)) {
+    float roll = noiseI(cell.x + side * 19, cell.y - side * 23, int(uSurfaceProfileSeed) + 863);
+    if (roll < ventChance) {
+      vec2 uv = (vec2(float(tx), float(ty)) + 0.5) / TEX_F;
+      float box = detailRect(uv, vec2(0.50, 0.22 + noiseI(cell.x, cell.y, int(uSurfaceProfileSeed) + 867) * 0.18), vec2(0.15, 0.055));
+      float slats = step(0.55, fract(float(ty) * 0.34));
+      vec3 vent = mix(vec3(0.035, 0.045, 0.045), vec3(0.16, 0.18, 0.17), slats * 0.35);
+      color = mix(color, vent, box * 0.66);
+    }
+  }
+
+  return clamp(applySurfaceGrime(color, cell, tx, ty, architecturalMaterial(texId) ? 1.0 : 0.35), 0.0, 1.0);
+}
+
+vec3 applyCeilingSurfaceProfile(vec3 base, uint texId, ivec2 cell, int tx, int ty) {
+  int pattern = int(uSurfaceProfileA.z + 0.5);
+  float seamStrength = clamp(uSurfaceProfileB.y, 0.0, 1.0);
+  vec3 color = base;
+
+  if (pattern == ${VISUAL_SURFACE_CEILING_PATTERN_CODES.panelGrid}) {
+    float seam = surfaceGridSeam(tx, ty, 32, 0.8);
+    color = mix(color, color * vec3(0.46, 0.47, 0.45), seam * (0.35 + seamStrength * 0.32));
+  } else if (pattern == ${VISUAL_SURFACE_CEILING_PATTERN_CODES.servicePanels}) {
+    float seam = max(surfaceGridSeam(tx, ty, 32, 0.8), surfaceGridSeam(tx, ty, 16, 0.45) * 0.48);
+    float strip = surfaceSeam1(tx + cell.x * 3, 12, 0.45) * 0.35;
+    color = mix(color * vec3(0.82, 0.86, 0.84), color * vec3(0.42, 0.47, 0.47), max(seam, strip) * (0.48 + seamStrength * 0.24));
+  } else if (pattern == ${VISUAL_SURFACE_CEILING_PATTERN_CODES.lowConcrete}) {
+    float seam = surfaceGridSeam(tx, ty, 64, 0.75);
+    color = mix(color, color * vec3(0.50, 0.50, 0.47), seam * seamStrength * 0.34);
+  } else if (pattern == ${VISUAL_SURFACE_CEILING_PATTERN_CODES.organicRibs}) {
+    float rib = 1.0 - smoothstep(0.0, 0.055, abs(sin(float(tx + cell.x * 9) * 0.24 + noiseI(cell.x, cell.y, int(uSurfaceProfileSeed) + 877) * 2.4)));
+    color = mix(color, color * vec3(1.18, 0.64, 0.58), rib * 0.34);
+  }
+
+  float panelChance = clamp(uSurfaceProfileB.z, 0.0, 1.0);
+  if (panelChance > 0.001 && pattern != ${VISUAL_SURFACE_CEILING_PATTERN_CODES.organicRibs}) {
+    float roll = noiseI(cell.x * 5, cell.y * 7, int(uSurfaceProfileSeed) + 881);
+    if (roll < panelChance) {
+      vec2 uv = (vec2(float(tx), float(ty)) + 0.5) / TEX_F;
+      float panel = detailRect(uv, vec2(0.5), vec2(0.24, 0.15));
+      color = mix(color, vec3(0.72, 0.76, 0.64), panel * 0.52);
+      color += vec3(0.040, 0.045, 0.026) * panel;
+    }
+  }
+
+  return clamp(applySurfaceGrime(color, cell, tx, ty, architecturalMaterial(texId) ? 0.75 : 0.25), 0.0, 1.0);
+}
+
 float detailMaterialBoost(int family, uint texId, bool floorSurface) {
   if (texId == ${Tex.F_ABYSS}u || texId == ${Tex.DARK}u) {
     return family == ${VISUAL_DETAIL_FAMILY_CODES.proof_specks} ? 0.65 : 0.0;
@@ -642,7 +886,8 @@ vec3 applyLightDust(vec3 base, vec2 fragCoord, float dist, float rayDX, float ra
 }
 
 vec3 shadeWall(uint texId, vec3 base, ivec2 cell, int side, int texX, int texY, float dist, float lit, float beam) {
-  vec3 color = applyWallMicroDetail(base, texId, cell, texX, texY);
+  vec3 color = applyWallSurfaceProfile(base, texId, cell, side, texX, texY);
+  color = applyWallMicroDetail(color, texId, cell, texX, texY);
   color = materialResponse(texId, color, texX, texY, cell, lit, beam);
   color = blendSurface(color, cell, texX >> 2, texY >> 2);
   if (texId == ${Tex.MEAT}u || texId == ${Tex.GUT}u) {
@@ -655,8 +900,13 @@ vec3 shadeWall(uint texId, vec3 base, ivec2 cell, int side, int texX, int texY, 
 
 vec3 shadePlane(uint texId, vec3 base, ivec2 cell, int tx, int ty, float dist, float lit, float beam, bool ceiling, bool surface) {
   vec3 color = base;
-  if (ceiling && texId == ${Tex.CEIL}u) color = applyWallMicroDetail(color, texId, cell, tx, ty);
-  else if (surface) color = applyFloorMicroDetail(color, texId, cell, tx, ty);
+  if (ceiling) {
+    color = applyCeilingSurfaceProfile(color, texId, cell, tx, ty);
+    if (texId == ${Tex.CEIL}u) color = applyWallMicroDetail(color, texId, cell, tx, ty);
+  } else if (surface) {
+    color = applyFloorSurfaceProfile(color, texId, cell, tx, ty);
+    color = applyFloorMicroDetail(color, texId, cell, tx, ty);
+  }
   color = materialResponse(texId, color, tx, ty, cell, lit, beam);
   if (surface) color = blendSurface(color, cell, tx >> 2, ty >> 2);
   float ao = contactAoFloor(cell);
@@ -842,13 +1092,29 @@ void main() {
           } else {
             uint feat = texelFetch(uFeatures, cCell, 0).r;
             if (feat == ${Feature.LAMP}u) {
-              float glow = max(0.0, 1.0 - currentDist * 0.15);
+              vec3 cc;
               if (organicLightCell(cCell)) {
-                vec3 cc = sampleAtlas(${Tex.CEIL}u, ftx, fty).rgb * (0.25 + cLit * 0.35);
-                pixel = applyLocalFog(applyHellLamp(cc, ftx, fty, cCell.x, cCell.y, currentDist), cCell, ff);
+                cc = sampleAtlas(${Tex.CEIL}u, ftx, fty).rgb;
+                cc = shadePlane(${Tex.CEIL}u, cc, cCell, ftx, fty, currentDist, cLit, toolBeam, true, false);
               } else {
-                pixel = applyLocalFog(vec3(220.0/255.0 * glow, 180.0/255.0 * glow, 80.0/255.0 * glow), cCell, ff);
+                if (uUseDynamicSky == 1) {
+                  vec2 skyUv = wrapF(vec2(floorX, floorY)) / float(W_SIZE);
+                  cc = texture(uDynamicSky, skyUv).rgb * uDynamicSkyTint;
+                  cc *= 0.45 + cLit * 0.55;
+                } else {
+                  cc = sampleAtlas(${Tex.CEIL}u, ftx, fty).rgb;
+                  cc = shadePlane(${Tex.CEIL}u, cc, cCell, ftx, fty, currentDist, cLit, toolBeam, true, false);
+                }
               }
+              vec2 lampUv = (vec2(float(ftx), float(fty)) + 0.5) / TEX_F - vec2(0.5);
+              float lampR = length(lampUv);
+              float spot = 1.0 - smoothstep(0.045, 0.16, lampR);
+              float halo = 1.0 - smoothstep(0.10, 0.34, lampR);
+              float distGlow = max(0.0, 1.0 - currentDist * 0.16);
+              vec3 lampTint = organicLightCell(cCell) ? vec3(1.0, 80.0/255.0, 34.0/255.0) : vec3(1.0, 190.0/255.0, 74.0/255.0);
+              cc = min(cc + lampTint * distGlow * (spot * 0.34 + halo * 0.075), vec3(1.0));
+              if (uUseDynamicSky == 1) cc = applyToolBeamTint(cc, toolBeam);
+              pixel = applyLocalFog(cc, cCell, ff);
               pixelDepth = min(1.0, currentDist / MAX_DIST);
             } else if (feat == ${Feature.CANDLE}u) {
               float glow = max(0.0, 1.0 - currentDist * 0.18);
@@ -1231,6 +1497,7 @@ interface GLState {
   rayUniforms: Record<string, WebGLUniformLocation | null>;
   blitUniforms: Record<string, WebGLUniformLocation | null>;
   spriteUniforms: Record<string, WebGLUniformLocation | null>;
+  meshPass?: MeshPassHandle;
 }
 
 interface ProceduralSpriteCacheEntry {
@@ -1345,6 +1612,78 @@ function uploadVisualDetailUniforms(
   uploadVisualDetailSlot(gl, uniforms, 'uDetailWall0', 'uDetailWallColor0', resolved.wallFamilies[0]);
   uploadVisualDetailSlot(gl, uniforms, 'uDetailWall1', 'uDetailWallColor1', resolved.wallFamilies[1]);
   uploadVisualDetailSlot(gl, uniforms, 'uDetailLightDust', 'uDetailLightDustColor', resolved.lightDust);
+}
+
+function uploadVisualSurfaceUniforms(
+  gl: WebGL2RenderingContext,
+  uniforms: Record<string, WebGLUniformLocation | null>,
+  profile: ResolvedVisualSurfaceProfile | undefined,
+): void {
+  const resolved = profile ?? EMPTY_RESOLVED_VISUAL_SURFACE_PROFILE;
+  gl.uniform4f(
+    uniforms['uSurfaceProfileA'],
+    resolved.floorPatternCode,
+    resolved.wallBandCode,
+    resolved.ceilingPatternCode,
+    resolved.trimCode,
+  );
+  gl.uniform4f(
+    uniforms['uSurfaceProfileB'],
+    Math.max(0, Math.min(1, resolved.grime)),
+    Math.max(0, Math.min(1, resolved.seamStrength)),
+    Math.max(0, Math.min(1, resolved.lightPanelChance)),
+    Math.max(0, Math.min(1, resolved.ventChance)),
+  );
+  gl.uniform1f(uniforms['uSurfaceProfileSeed'], resolved.seed & 0xffff);
+}
+
+function meshPassContext(
+  world: World,
+  camera: CameraView,
+  time: number,
+  fogDensity: number,
+  fogColor: readonly [number, number, number],
+  profile: ResolvedVisualGeometryProfile,
+): MeshPassContext {
+  return {
+    world,
+    camera,
+    floorKey: profile.key,
+    seed: profile.seed,
+    time,
+    fogDensity,
+    fogColor,
+    mode: profile.mode,
+    profile,
+  };
+}
+
+function updateAndRenderMeshPass(
+  state: GLState,
+  world: World,
+  camera: CameraView,
+  time: number,
+  fogDensity: number,
+  fogColor: readonly [number, number, number],
+  profile: ResolvedVisualGeometryProfile,
+): void {
+  if (!state.meshPass) return;
+  const context = meshPassContext(world, camera, time, fogDensity, fogColor, profile);
+  const stats = state.meshPass.update(context);
+  lastRenderSceneDebugStats.meshEnabled = stats.enabled;
+  lastRenderSceneDebugStats.meshInstances = stats.visibleInstances;
+  lastRenderSceneDebugStats.meshTriangles = stats.submittedTriangles;
+  lastRenderSceneDebugStats.meshDrawCalls = stats.drawCalls;
+  if (stats.enabled) state.meshPass.render(state.gl, context);
+}
+
+function createOptionalMeshPass(gl: WebGL2RenderingContext): MeshPassHandle | undefined {
+  try {
+    return createMeshPass(gl);
+  } catch (error) {
+    console.warn('Mesh pass disabled:', error);
+    return undefined;
+  }
 }
 
 /* ── Create fullscreen quad VAO ───────────────────────────────── */
@@ -1890,6 +2229,7 @@ export function initWebGL(
     'uDetailFloorCount', 'uDetailFloor0', 'uDetailFloor1', 'uDetailFloorColor0', 'uDetailFloorColor1',
     'uDetailWallCount', 'uDetailWall0', 'uDetailWall1', 'uDetailWallColor0', 'uDetailWallColor1',
     'uDetailLightDust', 'uDetailLightDustColor',
+    'uSurfaceProfileA', 'uSurfaceProfileB', 'uSurfaceProfileSeed',
   ]);
 
   // ── Blit program ──
@@ -1958,6 +2298,7 @@ export function initWebGL(
   // ── Sprite textures ──
   const spriteTextures = buildSpriteTextures(gl, sprites);
   const spriteGroundInsets = buildSpriteGroundInsets(sprites);
+  const meshPass = createOptionalMeshPass(gl);
 
   glState = {
     gl,
@@ -1997,6 +2338,7 @@ export function initWebGL(
     fogVersion: world.fogVersion,
     doorStatesData,
     rayUniforms, blitUniforms, spriteUniforms,
+    meshPass,
   };
   world.clearPendingSurfaceDirtyCells();
   uploadDynamicSkyTexture();
@@ -2196,11 +2538,18 @@ export function renderSceneGL(
   toolBeamRange = 0,
   screenInterference = 0,
   visualDetailProfile: ResolvedVisualDetailProfile = EMPTY_RESOLVED_VISUAL_DETAIL_PROFILE,
+  visualGeometryProfile: ResolvedVisualGeometryProfile = EMPTY_RESOLVED_VISUAL_GEOMETRY_PROFILE,
+  visualSurfaceProfile: ResolvedVisualSurfaceProfile = EMPTY_RESOLVED_VISUAL_SURFACE_PROFILE,
 ): void {
+  lastRenderSceneDebugStats.meshEnabled = visualGeometryProfile.enabled;
+  lastRenderSceneDebugStats.meshInstances = 0;
+  lastRenderSceneDebugStats.meshTriangles = 0;
+  lastRenderSceneDebugStats.meshDrawCalls = 0;
   if (!glState) {
     lastRenderSceneDebugStats.visibleSprites = 0;
     lastRenderSceneDebugStats.drawnSprites = 0;
     lastRenderSceneDebugStats.visibleEntityQueryResults = 0;
+    lastRenderSceneDebugStats.meshEnabled = false;
     return;
   }
   const { gl } = glState;
@@ -2248,6 +2597,11 @@ export function renderSceneGL(
   const skyG = skyTint ? Math.max(0.65, Math.min(1.25, skyTint.g / 120)) : 1;
   const skyB = skyTint ? Math.max(0.65, Math.min(1.25, skyTint.b / 136)) : 1;
   const skyFog = activeDynamicSky?.fogTint;
+  const meshFogRgb: readonly [number, number, number] = purpleFog
+    ? fogRgb
+    : skyFog
+      ? [skyFog.r, skyFog.g, skyFog.b]
+      : [5, 5, 8];
   gl.uniform1i(ru['uUseDynamicSky']!, activeDynamicSky ? 1 : 0);
   gl.uniform3f(ru['uDynamicSkyTint']!, skyR, skyG, skyB);
   gl.uniform3f(
@@ -2257,6 +2611,7 @@ export function renderSceneGL(
     skyFog ? skyFog.b / 255 : 8 / 255,
   );
   uploadVisualDetailUniforms(gl, ru, visualDetailProfile);
+  uploadVisualSurfaceUniforms(gl, ru, visualSurfaceProfile);
 
   // Bind data textures to texture units.
   bindTextureUnit(gl, glState.cellsTex, ru['uCells']!, 0);
@@ -2283,7 +2638,24 @@ export function renderSceneGL(
 
   // ── Render sprites into FBO (with depth test against raycaster) ──
   gl.depthFunc(gl.LESS);
-  renderSpritesGL(world, sprites, entities, px, py, pAngle, pPitch, fogDensity, purpleFog, camHeight, time, fogRgb, planeLen);
+  updateAndRenderMeshPass(glState, world, camera, time, fogDensity, meshFogRgb, visualGeometryProfile);
+  renderSpritesGL(
+    world,
+    sprites,
+    entities,
+    px,
+    py,
+    pAngle,
+    pPitch,
+    fogDensity,
+    purpleFog,
+    camHeight,
+    time,
+    fogRgb,
+    planeLen,
+    !visualGeometryProfile.enabled,
+    visualGeometryProfile.enabled && visualGeometryProfile.includeEntities,
+  );
 
   // ── Render transient particles into FBO ──
   if (bloodParticles.length > 0) {
@@ -2507,6 +2879,8 @@ function renderSpritesGL(
   time: number,
   activeFogRgb: readonly [number, number, number],
   planeLen: number,
+  renderStaticObjectSprites: boolean,
+  meshBackedBillboardSprites: boolean,
 ): void {
   if (!glState) return;
   const { gl } = glState;
@@ -2531,6 +2905,7 @@ function renderSpritesGL(
   lastRenderSceneDebugStats.visibleEntityQueryResults = visibleEntityQuery.length;
   for (const e of visibleEntityQuery) {
     if (!e.alive || isPlayerEntity(e)) continue;
+    if (meshBackedBillboardSprites && e.type === EntityType.BILLBOARD) continue;
     const renderX = hasTumannikRenderOffset(e) ? wrapWorldFloat(e.x + (e.ai?.fogOffsetX ?? 0)) : e.x;
     const renderY = hasTumannikRenderOffset(e) ? wrapWorldFloat(e.y + (e.ai?.fogOffsetY ?? 0)) : e.y;
     const dx = toroidalDelta(renderX, px);
@@ -2547,7 +2922,7 @@ function renderSpritesGL(
         dy,
         dist,
         e.sprite ?? 0,
-        e.spriteScale ?? 1.0,
+        entityWorldSpriteScale(e),
         e.spriteZ ?? 0,
         isProjectile,
         (e.id % 997) * 0.137,
@@ -2568,7 +2943,7 @@ function renderSpritesGL(
           realDy,
           realDist,
           e.sprite ?? 0,
-          Math.min(0.7, e.spriteScale ?? 0.7),
+          Math.min(0.7, entityWorldSpriteScale(e)),
           e.spriteZ ?? 0,
           0,
           (e.id % 997) * 0.137 + 19,
@@ -2578,7 +2953,9 @@ function renderSpritesGL(
       }
     }
   }
-  visibleCount = collectStaticObjectSprites(world, px, py, visibleCount);
+  if (renderStaticObjectSprites) {
+    visibleCount = collectStaticObjectSprites(world, px, py, visibleCount);
+  }
   visibleEntities.length = visibleCount;
   visibleDx.length = visibleCount;
   visibleDy.length = visibleCount;
@@ -2784,6 +3161,7 @@ function renderParticlesGL(
 export function disposeWebGL(): void {
   if (!glState) return;
   const { gl } = glState;
+  glState.meshPass?.dispose(gl);
   gl.deleteProgram(glState.rayProgram);
   gl.deleteProgram(glState.blitProgram);
   gl.deleteProgram(glState.spriteProgram);

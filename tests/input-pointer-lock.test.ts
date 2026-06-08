@@ -87,6 +87,13 @@ function mouseEvent(type: string, button = 0, movementX = 0, movementY = 0): Mou
   return event;
 }
 
+function keyboardEvent(type: string, code: string, key: string): KeyboardEvent {
+  const event = new Event(type, { cancelable: true }) as KeyboardEvent;
+  Object.defineProperty(event, 'code', { value: code });
+  Object.defineProperty(event, 'key', { value: key });
+  return event;
+}
+
 function wheelEvent(deltaY: number): WheelEvent {
   const event = new Event('wheel', { cancelable: true }) as WheelEvent;
   Object.defineProperty(event, 'deltaY', { value: deltaY });
@@ -266,6 +273,38 @@ test('right mouse button drives its bound equipped tool input under pointer lock
     env.document.dispatch('mouseup', up);
     assert.equal(input.use, false);
     assert.equal(up.defaultPrevented, true);
+    unbind();
+  } finally {
+    env.restore();
+  }
+});
+
+test('pointer lock release clears pointer state without erasing keyboard movement', () => {
+  const env = installInputDom();
+  try {
+    const input = createInput();
+    const unbind = bindInput(input, env.canvas as unknown as HTMLCanvasElement, {
+      shouldRequestPointerLock: () => true,
+    });
+
+    env.document.dispatch('keydown', keyboardEvent('keydown', 'KeyW', 'w'));
+    assert.equal(input.fwd, true);
+
+    env.document.pointerLockElement = env.canvas as unknown as Element;
+    env.document.dispatch('pointerlockchange');
+    env.canvas.dispatch('mousedown', mouseEvent('mousedown'));
+    env.document.dispatch('mousemove', mouseEvent('mousemove', 0, 12, -8));
+    assert.equal(input.attack, true);
+    assert.equal(input.mouse.dx, 12);
+
+    env.document.pointerLockElement = null;
+    env.document.dispatch('pointerlockchange');
+    assert.equal(input.fwd, true);
+    assert.equal(input.attack, false);
+    assert.equal(input.mouse.dx, 0);
+
+    env.document.dispatch('keyup', keyboardEvent('keyup', 'KeyW', 'w'));
+    assert.equal(input.fwd, false);
     unbind();
   } finally {
     env.restore();

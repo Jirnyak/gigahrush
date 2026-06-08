@@ -15,7 +15,7 @@ import { clearFogInZone } from '../samosbor';
 import { agiAttackSpeedMult, meleeDamage } from '../rpg';
 import { zhelemishIncomingMeleeDamage } from '../status';
 import { spawnBloodHit, spawnDeathPool } from '../blood_fx';
-import { consumeAmmo, consumeDurability } from '../inventory';
+import { consumeAmmo, consumeDurability, getWeaponStats } from '../inventory';
 import { isDebugOnePunchManEnabled, keepDebugOnePunchManAlive } from '../debug_cheats';
 import { entityDisplayName } from '../../entities/monster';
 import { followPath, tryAssignPathToCell } from './pathfinding';
@@ -28,6 +28,7 @@ import { applyMonsterIncomingDamage } from '../monster_traits';
 import { publishWeaponNoise } from '../noise';
 import { getCurrentPlayerEntity, isPlayerEntity } from '../player_actor';
 import { getRecentCombatThreat, notifyActorDamaged, npcCombatProfile } from '../combat_stimulus';
+import { canActorOccupy } from '../movement_collision';
 import {
   bark,
   BARK_COMBAT_START, BARK_COMBAT_START_F, BARK_CHANCE_COMBAT,
@@ -57,7 +58,7 @@ export function tryFleeFromMonster(
   const isCombatant = npcIsBrave(e);
   if (isCombatant) return false;
 
-  const ws = WEAPON_STATS[e.weapon ?? ''];
+  const ws = WEAPON_STATS[npcCombatItemId(e)];
   if (ws && (ws.dmg > 3 || ws.isRanged)) return false;
 
   const ai = e.ai!;
@@ -166,9 +167,9 @@ function startFleeFromThreat(world: World, e: Entity, threat: Entity, dt: number
   const sx = world.wrap(e.x + nx * step);
   const sy = world.wrap(e.y + ny * step);
   let moved = false;
-  if (!world.solid(Math.floor(sx), Math.floor(e.y))) e.x = sx;
+  if (canActorOccupy(world, sx, e.y, KNOCKBACK_BODY_R)) e.x = sx;
   if (e.x === sx) moved = true;
-  if (!world.solid(Math.floor(e.x), Math.floor(sy))) {
+  if (canActorOccupy(world, e.x, sy, KNOCKBACK_BODY_R)) {
     e.y = sy;
     moved = true;
   }
@@ -182,8 +183,27 @@ function npcIsBrave(e: Entity): boolean {
   return npcCombatProfile(e).brave;
 }
 
+function npcCombatItemScore(e: Entity, itemId: string | undefined): number {
+  const id = itemId ?? '';
+  if (!id) return 0;
+  const ws = getWeaponStats(e, id);
+  if (!ws) return 0;
+  if (ws.psiCost && (!e.rpg || e.rpg.psi < ws.psiCost)) return 0;
+  if (ws.isRanged && ws.ammoType && e.inventory?.some(slot => slot.defId === ws.ammoType && slot.count > 0) !== true) return 0;
+  return ws.isRanged ? ws.dmg * (ws.pellets ?? 1) * 1.6 + (ws.aoeRadius ? 30 : 0) : ws.dmg;
+}
+
+function npcCombatItemId(e: Entity): string {
+  const weaponId = e.weapon ?? '';
+  const toolId = e.tool ?? '';
+  const toolWs = WEAPON_STATS[toolId];
+  const toolScore = toolWs?.psiCost ? npcCombatItemScore(e, toolId) : 0;
+  const weaponScore = npcCombatItemScore(e, weaponId);
+  return toolScore > weaponScore ? toolId : weaponId;
+}
+
 function npcThreatScore(e: Entity): number {
-  const ws = WEAPON_STATS[e.weapon ?? ''] ?? WEAPON_STATS[''];
+  const ws = WEAPON_STATS[npcCombatItemId(e)] ?? WEAPON_STATS[''];
   const weapon = ws.isRanged ? ws.dmg * (ws.pellets ?? 1) * 1.6 : ws.dmg;
   const hp = Math.max(0, e.hp ?? 20) * 0.22;
   const level = Math.max(1, e.rpg?.level ?? 1) * 3;
@@ -202,7 +222,8 @@ function livePlayerTarget(entities: readonly Entity[]): Entity | undefined {
 export function tryFactionCombat(
   world: World, entities: Entity[], e: Entity, dt: number, _time: number, msgs: Msg[], nextId: { v: number }, state?: GameState, player?: Entity | null, options?: FactionCombatOptions,
 ): boolean {
-  const ws = WEAPON_STATS[e.weapon ?? ''] ?? WEAPON_STATS[''];
+  const weaponId = npcCombatItemId(e);
+  const ws = getWeaponStats(e, weaponId);
   const rangedProfile = ws.isRanged ? npcRangedProfile(ws) : undefined;
   const isArmed = ws.dmg > 3 || ws.isRanged;
   const visualProjectiles = options?.visualProjectiles ?? true;
@@ -262,7 +283,7 @@ export function tryFactionCombat(
   ) {
     e.attackCd = (e.attackCd ?? 0) - dt;
     if (e.attackCd! <= 0) {
-      if (npcCommitRangedShot(world, e, target, ws, entities, nextId, atkSpeedMod, true, _time, state)) return true;
+      if (npcCommitRangedShot(world, e, target, weaponId, ws, entities, nextId, atkSpeedMod, true, _time, state)) return true;
       npcAutoEquipBestWeapon(e);
       e.attackCd = Math.max(e.attackCd ?? 0, 0.35);
     }
@@ -290,7 +311,7 @@ export function tryFactionCombat(
       }
 
       if (ai.windupTimer <= 0) {
-        if (npcCommitRangedShot(world, e, target, ws, entities, nextId, atkSpeedMod, visualProjectiles, _time, state)) return true;
+        if (npcCommitRangedShot(world, e, target, weaponId, ws, entities, nextId, atkSpeedMod, visualProjectiles, _time, state)) return true;
         npcAutoEquipBestWeapon(e);
         e.attackCd = Math.max(e.attackCd ?? 0, 0.35);
       }
@@ -316,7 +337,7 @@ export function tryFactionCombat(
   }
 
   // Move toward target if too far for melee
-  const meleeWs = WEAPON_STATS[e.weapon ?? ''] ?? WEAPON_STATS[''];
+  const meleeWs = ws;
   const meleeRange = meleeWs.range || NPC_ATTACK_RANGE;
   if (bestDist > meleeRange) {
     if (ai.path.length === 0 || ai.timer <= 0) {
@@ -331,7 +352,7 @@ export function tryFactionCombat(
   e.attackCd = (e.attackCd ?? 0) - dt;
   if (e.attackCd! <= 0) {
     const baseDmg = meleeWs.dmg > 0 ? meleeWs.dmg : (5 + Math.floor(Math.random() * 8));
-    const rawDmg = meleeDamage(e.rpg, e.weapon, baseDmg);
+    const rawDmg = meleeDamage(e.rpg, weaponId, baseDmg);
     let dmg = zhelemishIncomingMeleeDamage(target, _time, rawDmg);
     if (target.type === EntityType.MONSTER) dmg = applyMonsterIncomingDamage(world, target, dmg);
     if (target.hp !== undefined) {
@@ -343,7 +364,7 @@ export function tryFactionCombat(
         notifyActorDamaged(world, target, e, dmg, 'npc_melee', _time, state);
         if (isPlayerEntity(target)) recordPlayerDamage(state, e, dmg, `${entityDisplayName(e)} задел тебя: -${dmg}`);
         if (target.type === EntityType.NPC) {
-          applyDamageRelationPenalty(e.faction, target.faction, dmg, target, e);
+          applyDamageRelationPenalty(e.faction, target.faction, dmg, target, e, state);
           if (target.hp > 0 && target.hp < (target.maxHp ?? 100) * 0.5) {
             bark(target, msgs, _time, BARK_WOUNDED, BARK_WOUNDED_F, BARK_CHANCE_WOUNDED, '#f88');
           }
@@ -364,11 +385,11 @@ export function tryFactionCombat(
       }
     }
     if (!meleeWs.isRanged && meleeWs.durability > 0) {
-      consumeDurability(e, msgs, _time);
-      if (!e.weapon || e.weapon === '') npcAutoEquipBestWeapon(e);
+      consumeDurability(e, msgs, _time, state, weaponId);
+      if (!e.weapon || (weaponId === e.tool && !e.tool)) npcAutoEquipBestWeapon(e);
     }
     playSoundAt(playAttack, e.x, e.y);
-    publishWeaponNoise(state, e, e.weapon ?? '', meleeWs);
+    publishWeaponNoise(state, e, weaponId, meleeWs);
     e.attackCd = (meleeWs.speed || NPC_COMBAT_CD) * atkSpeedMod;
   }
   return true;
@@ -387,16 +408,10 @@ function applyMeleeKnockback(world: World, source: Entity, target: Entity, ws: W
     len = 1;
   }
 
-  const canOccupy = (x: number, y: number): boolean =>
-    !world.solid(Math.floor(x + KNOCKBACK_BODY_R), Math.floor(y + KNOCKBACK_BODY_R)) &&
-    !world.solid(Math.floor(x + KNOCKBACK_BODY_R), Math.floor(y - KNOCKBACK_BODY_R)) &&
-    !world.solid(Math.floor(x - KNOCKBACK_BODY_R), Math.floor(y + KNOCKBACK_BODY_R)) &&
-    !world.solid(Math.floor(x - KNOCKBACK_BODY_R), Math.floor(y - KNOCKBACK_BODY_R));
-
   const nx = world.wrap(target.x + dx / len * force);
-  if (canOccupy(nx, target.y)) target.x = nx;
+  if (canActorOccupy(world, nx, target.y, KNOCKBACK_BODY_R)) target.x = nx;
   const ny = world.wrap(target.y + dy / len * force);
-  if (canOccupy(target.x, ny)) target.y = ny;
+  if (canActorOccupy(world, target.x, ny, KNOCKBACK_BODY_R)) target.y = ny;
 
   const stagger = Math.min(MELEE_STAGGER_CAP, 0.08 + force * 0.35);
   if (target.ai) target.ai.staggerTimer = Math.max(target.ai.staggerTimer ?? 0, stagger);
@@ -465,6 +480,7 @@ function npcCommitRangedShot(
   world: World,
   e: Entity,
   target: Entity,
+  weaponId: string,
   ws: WeaponStats,
   entities: Entity[],
   nextId: { v: number },
@@ -477,9 +493,9 @@ function npcCommitRangedShot(
     if (!e.rpg || e.rpg.psi < ws.psiCost) return false;
     e.rpg.psi -= ws.psiCost;
     if (visualProjectiles) {
-      npcFireProjectile(world, e, target, ws, entities, nextId);
+      npcFireProjectile(world, e, target, weaponId, ws, entities, nextId);
       playSoundAt(playHostilePsiCast, e.x, e.y);
-      publishWeaponNoise(state, e, e.weapon ?? '', ws);
+      publishWeaponNoise(state, e, weaponId, ws);
     } else {
       npcApplyDistantRangedDamage(world, e, target, ws, entities, nextId, time, state);
     }
@@ -488,11 +504,11 @@ function npcCommitRangedShot(
     e.ai!.windupTargetId = undefined;
     return true;
   }
-  if (ws.ammoType && !consumeAmmo(e)) return false;
+  if (ws.ammoType && !consumeAmmo(e, state, weaponId)) return false;
   if (visualProjectiles) {
-    npcFireProjectile(world, e, target, ws, entities, nextId);
-    playSoundAt(hostileWeaponSound(e.weapon ?? ''), e.x, e.y);
-    publishWeaponNoise(state, e, e.weapon ?? '', ws);
+    npcFireProjectile(world, e, target, weaponId, ws, entities, nextId);
+    playSoundAt(hostileWeaponSound(weaponId), e.x, e.y);
+    publishWeaponNoise(state, e, weaponId, ws);
   } else {
     npcApplyDistantRangedDamage(world, e, target, ws, entities, nextId, time, state);
   }
@@ -538,7 +554,7 @@ function npcApplyDistantRangedDamage(
   target.hp -= dmg;
   notifyActorDamaged(world, target, e, dmg, 'npc_ranged', time, state);
   if (isPlayerEntity(target)) recordPlayerDamage(state, e, dmg, `${entityDisplayName(e)} попал: -${dmg}`);
-  if (target.type === EntityType.NPC) applyDamageRelationPenalty(e.faction, target.faction, dmg, target, e);
+  if (target.type === EntityType.NPC) applyDamageRelationPenalty(e.faction, target.faction, dmg, target, e, state);
   if (target.hp > 0) return;
 
   recordEntityKill(e, target);
@@ -550,7 +566,7 @@ function npcApplyDistantRangedDamage(
 
 /* ── NPC: fire ranged projectile ──────────────────────────────── */
 function npcFireProjectile(
-  world: World, e: Entity, target: Entity, ws: typeof WEAPON_STATS[string],
+  world: World, e: Entity, target: Entity, weaponId: string, ws: typeof WEAPON_STATS[string],
   entities: Entity[], nextId: { v: number },
 ): void {
   const dx = world.delta(e.x, target.x);
@@ -578,6 +594,7 @@ function npcFireProjectile(
       projDmg: ws.dmg,
       projLife: ws.projType === ProjType.FLAME ? 0.7 : 3.0,
       ownerId: e.id,
+      weapon: weaponId,
       spriteScale: ws.projType === ProjType.FLAME ? 0.55 : 0.25,
       spriteZ: 0.5,
       projType: ws.projType,
@@ -592,11 +609,17 @@ function npcFireProjectile(
 
 /* ── NPC: auto-equip best weapon from inventory ───────────────── */
 function npcAutoEquipBestWeapon(e: Entity): void {
-  if (!e.inventory) { e.weapon = ''; return; }
-  let bestDmg = 0;
-  let bestId = '';
+  if (!e.inventory) {
+    e.weapon = '';
+    if (WEAPON_STATS[e.tool ?? '']?.psiCost) e.tool = '';
+    return;
+  }
+  let bestWeaponScore = 0;
+  let bestWeaponId = '';
+  let bestPsiScore = 0;
+  let bestPsiId = '';
   for (const slot of e.inventory) {
-    const w = WEAPON_STATS[slot.defId];
+    const w = getWeaponStats(e, slot.defId);
     if (!w) continue;
     if (w.isRanged && w.ammoType) {
       const hasAmmo = e.inventory.some(s => s.defId === w.ammoType && s.count > 0);
@@ -604,10 +627,17 @@ function npcAutoEquipBestWeapon(e: Entity): void {
     }
     if (w.psiCost && (!e.rpg || e.rpg.psi < w.psiCost)) continue;
     const effectiveDmg = w.isRanged ? w.dmg * (w.pellets ?? 1) * 2 : w.dmg;
-    if (effectiveDmg > bestDmg) {
-      bestDmg = effectiveDmg;
-      bestId = slot.defId;
+    if (w.psiCost) {
+      if (effectiveDmg > bestPsiScore) {
+        bestPsiScore = effectiveDmg;
+        bestPsiId = slot.defId;
+      }
+    } else if (effectiveDmg > bestWeaponScore) {
+      bestWeaponScore = effectiveDmg;
+      bestWeaponId = slot.defId;
     }
   }
-  e.weapon = bestId;
+  e.weapon = bestWeaponId;
+  if (bestPsiId) e.tool = bestPsiId;
+  else if (WEAPON_STATS[e.tool ?? '']?.psiCost) e.tool = '';
 }

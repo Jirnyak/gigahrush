@@ -28,6 +28,7 @@ const runExpedition = envFlag('SMOKE_EXPEDITION')
   || smokeScenario === 'long';
 const runStress = smokeScenario === 'stress' || envFlag('SMOKE_STRESS');
 const runNetSphere = smokeScenario === 'net' || smokeScenario === 'net-sphere' || smokeScenario === 'net_sphere' || envFlag('SMOKE_NET');
+const smokeVisualGeometryMode = normalizeVisualGeometryMode(process.env.SMOKE_VISUAL_GEOMETRY_MODE);
 const stressEntities = Math.max(0, Math.min(12000, Number.parseInt(process.env.SMOKE_STRESS_ENTITIES ?? '10000', 10) || 0));
 const mobileViewportWidth = Math.max(640, Math.min(1200, Number.parseInt(process.env.SMOKE_MOBILE_WIDTH ?? '844', 10) || 844));
 const mobileViewportHeight = Math.max(320, Math.min(700, Number.parseInt(process.env.SMOKE_MOBILE_HEIGHT ?? '390', 10) || 390));
@@ -71,6 +72,26 @@ function envFlag(name) {
   const value = process.env[name];
   if (!value) return false;
   return /^(1|true|yes|on)$/i.test(value);
+}
+
+function normalizeVisualGeometryMode(value) {
+  const mode = String(value ?? '').trim().toLowerCase();
+  return ['off', 'low', 'medium', 'high'].includes(mode) ? mode : '';
+}
+
+function visualGeometryModeInitScript(mode) {
+  if (!mode) return '';
+  return `(() => {
+    const key = 'gigahrush_ui_orchestrator_v6';
+    try {
+      const raw = localStorage.getItem(key);
+      const data = raw ? JSON.parse(raw) : {};
+      data.visualGeometryMode = ${JSON.stringify(mode)};
+      localStorage.setItem(key, JSON.stringify(data));
+    } catch {
+      localStorage.setItem(key, JSON.stringify({ visualGeometryMode: ${JSON.stringify(mode)} }));
+    }
+  })();`;
 }
 
 function freePort() {
@@ -282,8 +303,15 @@ async function waitForGameDebug(client, label, predicate, timeoutMs = 2000) {
 }
 
 async function waitPage(client, ms) {
+  void client;
   const timeout = Math.max(0, Math.min(30000, Math.floor(ms)));
-  await evaluate(client, `new Promise(resolve => setTimeout(resolve, ${timeout}))`);
+  if (timeout <= 0) return;
+  await new Promise(resolve => setTimeout(resolve, timeout));
+}
+
+function waitHost(ms) {
+  const timeout = Math.max(0, Math.min(30000, Math.floor(ms)));
+  return new Promise(resolve => setTimeout(resolve, timeout));
 }
 
 async function waitFrames(client, frames = 2) {
@@ -490,8 +518,30 @@ async function dragSelector(client, selector, dx, dy, holdMs = 360) {
 async function holdKey(client, keySpec, holdMs) {
   const [code, key, vk] = keySpec;
   await dispatchKey(client, 'rawKeyDown', code, key, vk);
-  await waitPage(client, holdMs);
+  await waitFrames(client, 4);
+  await waitHost(holdMs);
+  await waitFrames(client, 4);
   await dispatchKey(client, 'keyUp', code, key, vk);
+  await waitFrames(client, 2);
+}
+
+async function holdKeyForSimulationTicks(client, keySpec, minTicks, timeoutMs = 3500) {
+  const [code, key, vk] = keySpec;
+  const before = await readGameDebug(client).catch(() => null);
+  const targetTick = Math.max(0, Number(before?.tick ?? 0)) + Math.max(1, Math.floor(minTicks));
+  const startedAt = Date.now();
+  let sawHeld = false;
+  await dispatchKey(client, 'rawKeyDown', code, key, vk);
+  try {
+    while (Date.now() - startedAt < timeoutMs) {
+      const state = await readGameDebug(client).catch(() => null);
+      if (state?.inputFwd === true) sawHeld = true;
+      if (Number(state?.tick ?? 0) >= targetTick && sawHeld) break;
+      await waitPage(client, 50);
+    }
+  } finally {
+    await dispatchKey(client, 'keyUp', code, key, vk);
+  }
   await waitFrames(client, 2);
 }
 
@@ -602,6 +652,7 @@ async function readSmokeDiagnostics(client) {
       readyState: document.readyState,
       pointerLocked: document.pointerLockElement?.id ?? '',
       keys: window.__gigahrushSmokeKeys ?? [],
+      game: window.__gigahrushSmokeState?.() ?? null,
       embeddedFrame: frame instanceof HTMLIFrameElement ? {
         src: frame.src,
         contentHref: frameDoc?.location.href ?? '',
@@ -1037,9 +1088,7 @@ function requireMovementDelta(before, after, label, failures) {
   const dx = Number(after.playerX ?? 0) - Number(before.playerX ?? 0);
   const dy = Number(after.playerY ?? 0) - Number(before.playerY ?? 0);
   const moved = Math.hypot(dx, dy);
-  if (moved < 0.02) {
-    failures.push(`${label}: movement input did not move player (${moved.toFixed(3)} cells)`);
-  }
+  if (moved < 0.02) failures.push(`${label}: movement input did not move player (${moved.toFixed(3)} cells)`);
 }
 
 function requirePanelTelemetry(before, after, label, failures) {
@@ -1413,6 +1462,11 @@ async function main() {
     await client.send('Page.enable');
     await client.send('Runtime.enable');
     await client.send('Log.enable');
+    if (smokeVisualGeometryMode) {
+      await client.send('Page.addScriptToEvaluateOnNewDocument', {
+        source: visualGeometryModeInitScript(smokeVisualGeometryMode),
+      });
+    }
     if (runMobile) await configureMobileEmulation(client);
     const loaded = client.once('Page.loadEventFired', 15000).catch(() => undefined);
     await client.send('Page.navigate', { url: gameUrl });
@@ -1454,7 +1508,12 @@ async function main() {
       let movementStart;
       if (runMobile) {
         await tapSelector(client, '#hud', 'mobile title canvas start', 350);
-        const startup = await waitForGameDebug(client, 'mobile title start', state => state.started === true);
+        let startup = await waitForGameDebug(client, 'mobile title one-tap start', state => state.started === true, 700)
+          .catch(() => null);
+        if (!startup) {
+          await tapKey(client, KEY.enter, 120, 300);
+          startup = await waitForGameDebug(client, 'mobile title setup start', state => state.started === true);
+        }
         requireStartupGuidance(startup, 'mobile startup guidance', failures);
         await waitPage(client, 1200);
         movementStart = await readGameDebug(client);
@@ -1474,7 +1533,7 @@ async function main() {
         }
         await waitPage(client, 1800);
         movementStart = await readGameDebug(client);
-        await holdKey(client, KEY.w, 350);
+        await holdKeyForSimulationTicks(client, KEY.w, 3);
       }
       const movementEnd = await readGameDebug(client);
       requireMovementDelta(movementStart, movementEnd, runMobile ? 'mobile movement' : 'desktop movement', failures);
@@ -1657,7 +1716,8 @@ async function main() {
     const thirdWaveText = runThirdWave ? '; thirdWave=on' : '; thirdWave=off';
     const stressText = runStress ? `; stress=${stressEntities}` : '; stress=off';
     const mobileText = runMobile ? `; mobile=${mobileViewportWidth}x${mobileViewportHeight}@${mobileDeviceScaleFactor}` : '; mobile=off';
-    console.log(`Smoke playability passed at ${gameUrl}${scenarioText}${thirdWaveText}${stressText}${mobileText}; hudLit=${running.hudLit}, hudCenterLit=${running.hudCenterLit}, sceneLit=${running.sceneLit}${perfText}`);
+    const meshText = smokeVisualGeometryMode ? `; mesh=${smokeVisualGeometryMode}` : '; mesh=default';
+    console.log(`Smoke playability passed at ${gameUrl}${scenarioText}${thirdWaveText}${stressText}${mobileText}${meshText}; hudLit=${running.hudLit}, hudCenterLit=${running.hudCenterLit}, sceneLit=${running.sceneLit}${perfText}`);
   } finally {
     client?.close();
     await stopProcess(chrome);

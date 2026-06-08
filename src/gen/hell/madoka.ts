@@ -62,7 +62,7 @@ export function spawnMedukaMeguku(
     if (world.cells[world.idx(x, y)] !== Cell.FLOOR) continue;
     requireSpawnedPlotNpcFromPackage(entities, nextId, NPC_ID, x + 0.5, y + 0.5, {
       angle: Math.random() * Math.PI * 2,
-      weapon: 'psi_beam',
+      tool: 'psi_beam',
       canGiveQuest: false,
       isTraveler: true,
       extra: {

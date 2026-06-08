@@ -4,6 +4,7 @@ import {
   NPC_VISUAL_CULTIST_MALE,
   NPC_VISUAL_LIQUIDATOR_MALE,
   NPC_VISUAL_OLGA_DMITRIEVNA,
+  NPC_VISUAL_SCIENTIST_FEMALE,
   NPC_VISUAL_SCIENTIST_MALE,
   NPC_VISUAL_WILD_MALE,
   artSpriteManifestRow,
@@ -38,6 +39,7 @@ export {
   NPC_VISUAL_CULTIST_MALE,
   NPC_VISUAL_LIQUIDATOR_MALE,
   NPC_VISUAL_OLGA_DMITRIEVNA,
+  NPC_VISUAL_SCIENTIST_FEMALE,
   NPC_VISUAL_SCIENTIST_MALE,
   NPC_VISUAL_WILD_MALE,
 };
@@ -56,10 +58,13 @@ export interface NpcVisualFamily {
   id: string;
   source: NpcVisualSource;
   usesDynamicTexture: boolean;
+  worldSpriteScale?: number;
   procedural?: boolean;
   generate(ctx: NpcVisualContext): Uint32Array;
   textureKey?(ctx: NpcVisualContext): string;
 }
+
+export const FIRST_PARTY_NPC_ART_WORLD_SPRITE_SCALE = 0.65;
 
 function mix32(v: number): number {
   v >>>= 0;
@@ -93,13 +98,14 @@ function fixedArtFamily(visualId: string, manifestId = visualId): NpcVisualFamil
     id: visualId,
     source: 'first_party_art',
     usesDynamicTexture: true,
+    worldSpriteScale: FIRST_PARTY_NPC_ART_WORLD_SPRITE_SCALE,
     procedural: false,
     generate: () => firstPartyNpcArt(manifestId) ?? new Uint32Array(0),
     textureKey: () => `first_party_art:${manifestId}`,
   };
 }
 
-const LIQUIDATOR_MALE_ART_VARIANTS = ['liquidator_male_b', 'liquidator_male_d'] as const;
+const LIQUIDATOR_MALE_ART_VARIANTS = ['liquidator_m_1', 'liquidator_m_2'] as const;
 
 function liquidatorMaleArtVariant(ctx: NpcVisualContext): (typeof LIQUIDATOR_MALE_ART_VARIANTS)[number] {
   const seed = mix32((ctx.seed || 1) ^ Math.imul((ctx.sprite ?? 0) + 1, 0x51ed270b));
@@ -250,18 +256,20 @@ export const NPC_VISUAL_FAMILIES: readonly NpcVisualFamily[] = [
     generate: ctx => generateFloor69FemaleNpcSprite(floor69Variant(ctx)),
   },
   fixedArtFamily(NPC_VISUAL_OLGA_DMITRIEVNA),
-  fixedArtFamily(NPC_VISUAL_ALCOHOLIC_MALE),
-  fixedArtFamily(NPC_VISUAL_WILD_MALE),
-  fixedArtFamily(NPC_VISUAL_CULTIST_MALE),
+  fixedArtFamily(NPC_VISUAL_ALCOHOLIC_MALE, 'citizen_m_alcoholic'),
+  fixedArtFamily(NPC_VISUAL_WILD_MALE, 'bandit_m_1'),
+  fixedArtFamily(NPC_VISUAL_CULTIST_MALE, 'cultist_m_1'),
   {
     id: NPC_VISUAL_LIQUIDATOR_MALE,
     source: 'first_party_art',
     usesDynamicTexture: true,
+    worldSpriteScale: FIRST_PARTY_NPC_ART_WORLD_SPRITE_SCALE,
     procedural: false,
     generate: ctx => firstPartyNpcArt(liquidatorMaleArtVariant(ctx)) ?? new Uint32Array(0),
     textureKey: ctx => `first_party_art:${liquidatorMaleArtVariant(ctx)}`,
   },
-  fixedArtFamily(NPC_VISUAL_SCIENTIST_MALE),
+  fixedArtFamily(NPC_VISUAL_SCIENTIST_MALE, 'scientist_m_1'),
+  fixedArtFamily(NPC_VISUAL_SCIENTIST_FEMALE, 'scientist_f_1'),
   ...ROLE_NPC_VISUALS.map(profile => ({
     id: profile.id,
     source: 'procedural' as const,
@@ -278,6 +286,10 @@ export function npcVisualFamily(id: string | undefined): NpcVisualFamily | undef
 
 export function npcVisualUsesDynamicTexture(id: string | undefined): boolean {
   return npcVisualFamily(id)?.usesDynamicTexture === true;
+}
+
+export function npcVisualWorldSpriteScale(id: string | undefined): number | undefined {
+  return npcVisualFamily(id)?.worldSpriteScale;
 }
 
 export function npcVisualUsesProceduralSprite(id: string | undefined): boolean {

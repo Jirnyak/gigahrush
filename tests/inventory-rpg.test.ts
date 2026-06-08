@@ -10,7 +10,7 @@ import { MAX_ITEM_STACK } from '../src/data/inventory_limits';
 import { getPermitDef } from '../src/data/permits';
 import { PSI_WEAPON_STATS } from '../src/data/psi';
 import { RESOURCES, resourceForItem, resourceForItemType } from '../src/data/resources';
-import { ITEM_TAGS, getStack, spawnCount } from '../src/data/items';
+import { ITEM_TAGS, getStack, itemEquipSlot, spawnCount } from '../src/data/items';
 import {
   addItem,
   consumeAmmo,
@@ -255,10 +255,11 @@ test('ammo and durability consumption update equipped combat state', () => {
   assert.equal(consumeAmmo(player), true);
   assert.equal(countAmmo(player), 1);
 
-  player.weapon = 'psi_rupture';
+  player.weapon = '';
+  player.tool = 'psi_rupture';
   player.rpg!.psi = 1;
   readiness = getWeaponReadiness(player);
-  assert.equal(readiness.resourceLabel, `ПСИ 1/10 -${WEAPON_STATS.psi_rupture.psiCost}`);
+  assert.equal(readiness.resourceLabel, `ПСИ 1/100 -${WEAPON_STATS.psi_rupture.psiCost}`);
   assert.equal(readiness.cannotFireReason, 'нет ПСИ');
 
   player.weapon = 'knife';
@@ -480,6 +481,7 @@ test('PSI weapon ids, resources, and effect bindings stay coherent', () => {
     const stats = PSI_WEAPON_STATS[id];
     assert.equal(WEAPON_STATS[id], stats, `${id} must be exported through weapon catalogue`);
     assert.equal(item.type, ItemType.WEAPON, `${id} must be a weapon item`);
+    assert.equal(itemEquipSlot(item), 'tool', `${id} must equip through the tool slot`);
     assert.ok((stats.psiCost ?? 0) > 0, `${id} must spend PSI`);
     assert.equal(stats.durability, 0, `${id} must not use durability`);
     assert.equal(stats.range, 0, `${id} must not masquerade as melee`);
@@ -492,7 +494,7 @@ test('PSI weapon ids, resources, and effect bindings stay coherent', () => {
     }
   }
 
-  assert.ok(PSI_WEAPON_STATS.psi_void_needle.psiCost! > freshRPG(1).maxPsi);
+  assert.ok(PSI_WEAPON_STATS.psi_void_needle.psiCost! < freshRPG(1).maxPsi);
   assert.ok(PSI_WEAPON_STATS.psi_brainburn.psiCost! >= PSI_WEAPON_STATS.psi_storm.psiCost!);
 });
 
@@ -706,15 +708,16 @@ test('RPG stat effects avoid hard caps and appear in weapon readiness', () => {
   high.agi = 50;
   high.int = 50;
   const effects = rpgStatEffects(high);
-  assert.equal(effects.maxHp, 440);
-  assert.equal(effects.maxPsi, 89);
+  assert.equal(effects.maxHp, 194);
+  assert.equal(effects.maxPsi, 194);
   assert.equal(effects.meleeDamageMult, 1.5);
   assert.equal(round3(effects.heavyWeaponSpeedMult), 0.286);
-  assert.equal(effects.moveSpeedMult, 3.5);
-  assert.equal(round3(effects.attackCooldownMult), 0.167);
+  assert.equal(effects.moveSpeedMult, 1.5);
+  assert.equal(round3(effects.attackCooldownMult), 0.5);
   assert.equal(round3(effects.rangedSpreadMult), 0.143);
   assert.equal(round3(effects.xpMult), 1.982);
   assert.equal(round3(effects.psiCostMult), 0.364);
+  assert.equal(effects.psiDurationBonusSec, 50);
 
   const bruiser = makePlayer();
   bruiser.rpg!.str = 3;
@@ -730,15 +733,15 @@ test('RPG stat effects avoid hard caps and appear in weapon readiness', () => {
   assert.equal(heavyReadiness.damage, 54);
   assert.match(heavyReadiness.statLabel, /СИЛ урон \+3%/);
   assert.match(heavyReadiness.statLabel, /тяж\. темп -13%/);
-  assert.match(heavyReadiness.statLabel, /ЛОВ КД -17%/);
+  assert.match(heavyReadiness.statLabel, /ЛОВ КД -4%/);
 
   const psiUser = makePlayer();
   psiUser.rpg!.int = 2;
   psiUser.rpg!.maxPsi = getMaxPsi(psiUser.rpg!);
   psiUser.rpg!.psi = psiUser.rpg!.maxPsi;
-  psiUser.weapon = 'psi_rupture';
+  psiUser.tool = 'psi_rupture';
   const psiReadiness = getWeaponReadiness(psiUser);
-  assert.equal(psiReadiness.resourceLabel, 'ПСИ 12/12 -7.5');
+  assert.equal(psiReadiness.resourceLabel, 'ПСИ 102/102 -7.5');
   assert.match(psiReadiness.statLabel, /ИНТ ПСИ -6%/);
 });
 

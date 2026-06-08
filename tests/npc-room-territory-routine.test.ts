@@ -50,6 +50,28 @@ function tickNpc(world: World, npc: Entity, clock: GameClock = { hour: 9, minute
   updateNPC(world, entities, npc, 0, clock.totalMinutes, clock, false);
 }
 
+function markSurfaceCell(world: World, x: number, y: number, alpha = 220): number {
+  const idx = world.idx(x, y);
+  const pixels = new Uint8Array(16 * 16 * 4);
+  for (let i = 0; i < pixels.length; i += 4) {
+    pixels[i] = 120;
+    pixels[i + 1] = 30;
+    pixels[i + 2] = 25;
+    pixels[i + 3] = alpha;
+  }
+  world.surfaceMap.set(idx, pixels);
+  world.markSurfaceCellDirty(idx);
+  return idx;
+}
+
+function alphaSum(world: World, idx: number): number {
+  const pixels = world.surfaceMap.get(idx);
+  if (!pixels) return 0;
+  let sum = 0;
+  for (let i = 3; i < pixels.length; i += 4) sum += pixels[i];
+  return sum;
+}
+
 test('routine thirst prefers a friendly kitchen over a closer hostile kitchen', () => {
   const world = makeRoutineWorld();
   addTestRoom(world, { id: 1, x: 12, y: 8, w: 5, h: 5, type: RoomType.KITCHEN, zoneId: 1, zoneFaction: ZoneFaction.CULTIST });
@@ -112,6 +134,28 @@ test('routine work keeps a friendly assigned work room as the strongest anchor',
   assert.equal(npc.ai?.ty, assigned.y + Math.floor(assigned.h / 2));
 });
 
+test('cleaner work routine wipes nearby friendly surface marks without scanning the floor', () => {
+  const world = makeRoutineWorld();
+  const assigned = addTestRoom(world, { id: 1, x: 6, y: 6, w: 6, h: 6, type: RoomType.COMMON, zoneId: 1, zoneFaction: ZoneFaction.CITIZEN });
+  const dirtyIdx = markSurfaceCell(world, 8, 8);
+  const beforeAlpha = alphaSum(world, dirtyIdx);
+  const beforeVersion = world.surfaceVersion;
+  const npc = makeNpc(17, {
+    x: 8.5,
+    y: 8.5,
+    assignedRoomId: assigned.id,
+    occupation: Occupation.CLEANER,
+    sprite: Occupation.CLEANER,
+    needs: { food: 100, water: 100, sleep: 100, pee: 0, poo: 0 },
+  });
+
+  tickNpc(world, npc);
+
+  assert.equal(npc.ai?.goal, AIGoal.WORK);
+  assert.ok(alphaSum(world, dirtyIdx) < beforeAlpha);
+  assert.ok(world.surfaceVersion > beforeVersion);
+});
+
 test('routine work can target an assigned room beyond the first scan window', () => {
   const world = makeRoutineWorld();
   for (let id = 1; id <= 130; id++) {
@@ -138,6 +182,34 @@ test('routine work can target an assigned room beyond the first scan window', ()
   assert.equal(npc.ai?.goal, AIGoal.WORK);
   assert.equal(npc.ai?.tx, assigned.x + Math.floor(assigned.w / 2));
   assert.equal(npc.ai?.ty, assigned.y + Math.floor(assigned.h / 2));
+});
+
+test('local family anchor suppresses traveler occupation routine', () => {
+  const world = makeRoutineWorld();
+  const home = addTestRoom(world, {
+    id: 1,
+    x: 54,
+    y: 8,
+    w: 6,
+    h: 6,
+    type: RoomType.LIVING,
+    zoneId: 1,
+    zoneFaction: ZoneFaction.CITIZEN,
+    apartmentId: 42,
+  });
+  const npc = makeNpc(16, {
+    occupation: Occupation.HUNTER,
+    familyId: 42,
+    isTraveler: false,
+    needs: { food: 100, water: 100, sleep: 0, pee: 0, poo: 0 },
+  });
+
+  tickNpc(world, npc, { hour: 23, minute: 0, totalMinutes: 1380 });
+
+  assert.equal(npc.ai?.goal, AIGoal.SLEEP);
+  assert.equal(npc.ai?.npcState, NpcState.SLEEPING);
+  assert.equal(npc.ai?.tx, home.x + Math.floor(home.w / 2));
+  assert.equal(npc.ai?.ty, home.y + Math.floor(home.h / 2));
 });
 
 test('survival need can trespass only after no friendly room candidate exists', () => {

@@ -1832,7 +1832,7 @@ const BASE_CMD_DEFS = [
   { id: 'teleport_section_shift', label: 'ТП: секционный сдвиг' },
   { id: 'teleport_conway_life', label: 'ТП: игра жизнь' },
   { id: 'teleport_rail_trains', label: 'ТП: поезда' },
-  { id: 'spawn_bad_apple_world', label: 'BAD APPLE: экран рядом' },
+  { id: 'spawn_bad_apple_world', label: 'BAD APPLE: эксперимент отключён' },
   { id: 'verification_contract_route', label: 'VERIFY: контрактный маршрут' },
   { id: 'publish_verification_event', label: 'VERIFY: событие в лог/слух' },
   { id: 'route_floor_summary', label: 'ROUTE: floor summary' },

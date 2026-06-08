@@ -35,6 +35,7 @@ import {
   addNpcPlayerRelation,
   isNpcPlayerHostile,
 } from './npc_relations';
+import { applyDemosRelationDelta } from './demos_social';
 import { addKarma } from './alife_rating';
 import { isPassiveDefensiveNeutralMonster } from './monster_traits';
 
@@ -455,6 +456,7 @@ export function applyDamageRelationPenalty(
   damage: number,
   target?: Entity,
   attacker?: Entity,
+  state?: GameState,
 ): void {
   if (attackerFaction === undefined || targetFaction === undefined) return;
   if (attackerFaction === targetFaction) return;
@@ -466,6 +468,15 @@ export function applyDamageRelationPenalty(
   const penalty = -Math.max(1, Math.floor(damage / 5));
   if (attackerFaction === Faction.PLAYER && target?.type === EntityType.NPC) {
     addNpcPlayerRelation(target, penalty);
+    if (state && target.alifeId !== undefined) {
+      applyDemosRelationDelta(state, target.alifeId, { targetKind: 'player' }, penalty, {
+        reasonTag: 'damage',
+      });
+    }
+  } else if (state && target?.type === EntityType.NPC && attacker?.type === EntityType.NPC && target.alifeId !== undefined && attacker.alifeId !== undefined) {
+    applyDemosRelationDelta(state, target.alifeId, { targetKind: 'alife', targetAlifeId: attacker.alifeId }, penalty, {
+      reasonTag: 'damage',
+    });
   }
   // Only penalize factions if they are NOT hostile (hitting allies/neutrals)
   if (wasNonEnemy) {

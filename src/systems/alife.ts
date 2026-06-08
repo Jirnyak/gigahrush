@@ -30,7 +30,8 @@ import {
   type AlifeFactionProfile,
   type WeightedValue,
 } from '../data/alife_generation';
-import { sanitizeOccupation } from '../data/occupation_profiles';
+import { resolveNpcArtVisualId } from '../data/npc_art_visuals';
+import { occupationHasRoutineTag, sanitizeOccupation } from '../data/occupation_profiles';
 import {
   designFloorAgeRange,
   designFloorFactionWeightMultiplier,
@@ -1009,7 +1010,7 @@ function wealthForRecord(plan: AlifeFloorPlan, profile: AlifeFactionProfile, lev
   return Math.max(0, Math.min(ALIFE_MONEY_CAP, money));
 }
 
-function loadoutForRecord(faction: Faction, danger: number, level: number, seed: number, index: number): { weapon?: string; inventory?: Item[] } {
+function loadoutForRecord(faction: Faction, danger: number, level: number, seed: number, index: number): { weapon?: string; tool?: string; inventory?: Item[] } {
   const roll = unit(seed, index, 51);
   if (faction === Faction.LIQUIDATOR) {
     if ((danger >= 4 || level >= 35) && roll < 0.2) return { weapon: 'ak47', inventory: [{ defId: 'ak47', count: 1 }, { defId: 'ammo_762', count: 24 }] };
@@ -1018,7 +1019,9 @@ function loadoutForRecord(faction: Faction, danger: number, level: number, seed:
     return { weapon: 'pipe', inventory: [{ defId: 'pipe', count: 1 }] };
   }
   if (faction === Faction.CULTIST) {
-    if (roll < 0.28 + Math.min(0.22, level * 0.004)) return { weapon: 'psi_strike', inventory: [{ defId: 'psi_strike', count: 1 }] };
+    if (roll < 0.28 + Math.min(0.22, level * 0.004)) {
+      return { weapon: 'knife', tool: 'psi_strike', inventory: [{ defId: 'knife', count: 1 }, { defId: 'psi_strike', count: 1 }] };
+    }
     return { weapon: 'knife', inventory: [{ defId: 'knife', count: 1 }] };
   }
   if (faction === Faction.WILD) {
@@ -1056,7 +1059,7 @@ function pocketItemsForRecord(faction: Faction, occupation: Occupation, danger: 
   return out.length > 0 ? out : undefined;
 }
 
-function defaultLoadoutForRecord(alife: AlifeState, record: AlifeNpcRecord): { weapon?: string; inventory?: Item[] } {
+function defaultLoadoutForRecord(alife: AlifeState, record: AlifeNpcRecord): { weapon?: string; tool?: string; inventory?: Item[] } {
   const faction = recordFaction(alife, record);
   const occupation = recordOccupation(alife, record);
   const danger = recordDanger(alife, record);
@@ -1065,6 +1068,7 @@ function defaultLoadoutForRecord(alife: AlifeState, record: AlifeNpcRecord): { w
   const pockets = pocketItemsForRecord(faction, occupation, danger, alife.seed, record.id);
   return {
     weapon: loadout.weapon,
+    tool: loadout.tool,
     inventory: mergeInventory(loadout.inventory, pockets),
   };
 }
@@ -1708,6 +1712,17 @@ export function getAlifeNpcRecordSnapshot(state: GameState, alifeId: number): Al
   };
 }
 
+export function setAlifeNpcPlayerRelation(state: GameState, alifeId: number, relation: number): boolean {
+  if (!Number.isInteger(alifeId) || alifeId <= 0) return false;
+  const alife = ensureAlifeState(state);
+  const record = alife.npcs[alifeId - 1];
+  if (!record) return false;
+  setRecordPlayerRelation(alife, record, relation);
+  setRecordTouched(alife, record);
+  alife.leaderboardVersion++;
+  return true;
+}
+
 export function sampleAlifeFloorRecordIds(
   state: GameState,
   floorKeyInput: string,
@@ -1986,6 +2001,13 @@ function materializeEntity(record: AlifeNpcRecord, template: Entity | undefined,
     faction = recordFaction(alife, record);
   }
   record.npcVisualId = record.npcVisualId ?? templateVisualId;
+  if (record.npcVisualId === undefined && !templateHasVisualOverride) {
+    record.npcVisualId = resolveNpcArtVisualId({
+      faction,
+      occupation,
+      isFemale: recordFemale(alife, record),
+    });
+  }
   if (recordSprite(alife, record) === undefined) setRecordSprite(alife, record, templateSprite ?? occupation);
   if (recordSpriteSeed(alife, record) === undefined) setRecordSpriteSeed(alife, record, hash32(alife.seed, record.id, 901) || 1);
   const sprite = recordSprite(alife, record) ?? occupation;
@@ -1995,6 +2017,9 @@ function materializeEntity(record: AlifeNpcRecord, template: Entity | undefined,
   const karma = recordKarma(alife, record);
   const rpg = rpgFromRecord(alife, record);
   const generatedLoadout = recordCustomLoadout(alife, record) ? undefined : defaultLoadoutForRecord(alife, record);
+  const templateHasLocalAnchor = template?.familyId !== undefined || template?.assignedRoomId !== undefined;
+  const isTraveler = record.isTraveler ?? template?.isTraveler ?? (templateHasLocalAnchor ? false : occupationHasRoutineTag(occupation, 'traveler'));
+  const familyId = template?.familyId ?? recordFamilyId(alife, record);
   const ai = template?.ai
     ? { goal: template.ai.goal, tx: template.ai.tx, ty: template.ai.ty, path: [], pi: 0, stuck: 0, timer: 0 }
     : { goal: AIGoal.IDLE, tx: 0, ty: 0, path: [], pi: 0, stuck: 0, timer: 0 };
@@ -2021,7 +2046,7 @@ function materializeEntity(record: AlifeNpcRecord, template: Entity | undefined,
     ai,
     inventory: inventoryCopy(record.inventory ?? generatedLoadout?.inventory) ?? [],
     weapon: record.weapon ?? generatedLoadout?.weapon,
-    tool: record.tool,
+    tool: record.tool ?? generatedLoadout?.tool,
     faction,
     occupation,
     playerRelation,
@@ -2029,11 +2054,11 @@ function materializeEntity(record: AlifeNpcRecord, template: Entity | undefined,
     kills: recordKills(alife, record),
     npcKills: recordNpcKills(alife, record),
     monsterKills: recordMonsterKills(alife, record),
-    isTraveler: record.isTraveler ?? template?.isTraveler ?? true,
+    isTraveler,
     assignedRoomId: template?.assignedRoomId,
     questId: -1,
     canGiveQuest: recordCanGiveQuest(alife, record),
-    familyId: recordFamilyId(alife, record),
+    familyId,
     rpg,
     alifeId: record.id,
     persistentNpcId: `alife:${record.id}`,

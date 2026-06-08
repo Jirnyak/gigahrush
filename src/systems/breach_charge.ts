@@ -9,6 +9,7 @@ import {
 } from '../core/types';
 import type { World } from '../core/world';
 import { ITEMS } from '../data/items';
+import { rebuildPathBlockersFromWorldObjects } from '../gen/path_blockers';
 import { spawnBreachDust } from './blood_fx';
 import { publishEvent } from './events';
 import { isPlayerEntity } from './player_actor';
@@ -204,6 +205,7 @@ export function resolveBreachChargeExplosion(
     protectedBlocked: 0,
   };
   if (weaponId !== BREACH_CHARGE_ID) return result;
+  const changedCellIndices: number[] = [];
 
   for (const candidate of collectBreachCandidates(world, x, y, radius)) {
     if (candidate.kind === 'door') {
@@ -216,6 +218,7 @@ export function resolveBreachChargeExplosion(
       if (!info) continue;
       if (world.removeDoorAt(candidate.idx)) {
         applyFloorOpening(world, candidate, info);
+        changedCellIndices.push(candidate.idx);
         result.breachedDoors++;
         result.changedCells++;
       }
@@ -232,12 +235,14 @@ export function resolveBreachChargeExplosion(
     const info = neighborFloorInfo(world, candidate.x, candidate.y);
     if (!info) continue;
     applyFloorOpening(world, candidate, info);
+    changedCellIndices.push(candidate.idx);
     result.breachedWalls++;
     result.changedCells++;
     if (isBiomassTex(wallTex)) result.breachedBiomass++;
   }
 
   if (result.changedCells > 0) {
+    rebuildPathBlockersFromWorldObjects(world, undefined, changedCellIndices);
     world.markCellsDirty();
     world.markWallTexDirty();
     world.markFloorTexDirty();

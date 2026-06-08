@@ -340,7 +340,8 @@ function drawRpgEffectBlock(
     [
       '#68f',
       `ИНТ ПСИ ${current.maxPsi}${suffix(intNext ? statDelta(current, intNext, 'maxPsi') : '')}  ` +
-      `цена ${reducedPct(current.psiCostMult)}  контр ${signedPct(current.contractRewardMult)}  док ${signedPct(current.documentRewardMult)}`,
+      `длит +${Math.round(current.psiDurationBonusSec)}с  цена ${reducedPct(current.psiCostMult)}  ` +
+      `контр ${signedPct(current.contractRewardMult)}  док ${signedPct(current.documentRewardMult)}`,
     ],
   ];
 

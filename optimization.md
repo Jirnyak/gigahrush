@@ -17,6 +17,22 @@ This file is the central optimization document and also preserves the full May 2
 - "Safe optimization" here means semantics-preserving: cache, index, defer, split dirty state or remove duplicate work. Any visible simplification must be treated as a separate design change.
 - Validate performance changes with `npm run check`; use `npm run check:browser` or `npm run check:full` for render, input, UI, mobile and browser-storage changes.
 
+## Path Blocker Core Storage
+
+Date: 2026-06-07.
+
+`World.pathBlockers` is an active-world `Uint8Array` with eight row bytes per
+1024x1024 cell, so the current blocker field costs exactly `1024 * 1024 * 8`
+bytes, about 8 MiB per live `World`. This storage is core gameplay state, not a
+render mesh input. Floor-memory RAM estimates include the byte length, but save
+and packed floor-memory snapshots must not serialize the full array; blockers
+should be rebuilt from persisted cells/features/containers unless a later
+mutable blocker system adds capped sparse overrides.
+
+Fine blockers do not create an `8192x8192` navigation graph. Coarse
+pathfinding remains cell-level unless a measured later pass adds bounded local
+steering.
+
 ## Numeric Storage Contract
 
 Date: 2026-06-03.

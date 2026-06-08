@@ -125,6 +125,9 @@ test('floor object profile places decor, explicit interactives and fixture overl
   assert.equal(summary?.features.test_pump_machines, 2);
   assert.equal(summary?.interactives.test_basic_workbench, 1);
   assert.equal(summary?.brokenFixtures.test_broken_sink, 1);
+  assert.equal((summary?.visualSlotDecor?.wallFixtures ?? 0) > 0, true);
+  assert.equal((summary?.visualSlotDecor?.ceilingDetails ?? 0) > 0, true);
+  assert.equal((summary?.visualSlotDecor?.columns ?? 0) <= 1, true);
   assert.equal(room.wallTex, Tex.METAL);
   assert.equal(room.floorTex, Tex.F_TILE);
   assert.equal(world.floorTex[world.idx(room.x + 2, room.y + 2)], Tex.F_TILE);

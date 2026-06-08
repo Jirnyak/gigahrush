@@ -4,7 +4,7 @@ import './systems/demos_runtime';
 import { registerPwaServiceWorker } from './pwa';
 
 import {
-  W, Cell, DoorState, FloorLevel, Tex, RoomType, LiftDirection, ItemType,
+  W, Cell, DoorState, FloorLevel, Tex, RoomType, LiftDirection,
   type CharacterSex, type Entity, type GameClock, type GameState, type Item, type Needs, type Quest, type RPGStats, type WorldContainer,
   type PlayerDamageSourceKind, type WorldEventPrivacy, type WorldEventSeverity,
   EntityType, Faction, MonsterKind, Occupation, ProjType, QuestType, AIGoal,
@@ -12,6 +12,7 @@ import {
 } from './core/types';
 import { World, replaceWorldFromGeneration } from './core/world';
 import { hashSeed, randSeed } from './core/rand';
+import { canActorOccupy } from './systems/movement_collision';
 import { updateProceduralScreens } from './gen/procedural_screens';
 import { generateProceduralFloor } from './gen/procedural_floor';
 import { generateDesignFloor, isDesignFloorId } from './gen/design_floors/manifest';
@@ -58,7 +59,7 @@ import { cleanCellHazardsNear, getCellHazardMoveMultiplier, tickCellHazards } fr
 import { adjustMonsterProjectileDamage, recordMonsterMeleeDeath, recordMonsterProjectileDeath } from './systems/monster_counterplay';
 import { applyMonsterArmorHit } from './systems/monster_armor';
 import {
-  pickupNearby, useItem, dropItem, getWeaponStats,
+  pickupNearby, useItem, dropItem, getWeaponStats, equippedCombatItemId,
   consumeDurability, consumeAmmo, consumeToolDurability, getEquippedToolDurability,
   updateInventoryConditions,
 } from './systems/inventory';
@@ -87,6 +88,7 @@ import {
   adjustCameraFov,
   cycleHudMotionMode,
   cycleScreenInterferenceMode,
+  cycleVisualGeometryMode,
   adjustMobileLookSensitivity,
   adjustMouseLookSensitivity,
   applyUiPreset,
@@ -103,15 +105,17 @@ import {
   toggleUiElement,
   toggleMapLegendToggle,
   uiElementEnabled,
+  visualGeometryMode,
+  visualGeometryModeLabel,
   type UiSettingsView,
   mapLegendRowAt,
   mapLegendRowCount,
   uiSettingsRowAt,
   uiSettingsRowCount,
 } from './systems/ui_orchestrator';
-import { freshNeeds, ITEMS, WEAPON_STATS } from './data/catalog';
+import { freshNeeds, ITEMS, WEAPON_STATS, type WeaponStats } from './data/catalog';
 import { INVENTORY_GRID_COLS, INVENTORY_GRID_ROWS, MAX_INVENTORY_SLOTS } from './data/inventory_limits';
-import { getStack } from './data/items';
+import { getStack, itemEquipSlot } from './data/items';
 import { designFloorAmbientLight } from './data/design_floor_profiles';
 import {
   themeForDesignFloor,
@@ -124,6 +128,17 @@ import {
   resolveVisualDetailProfile,
   type ResolvedVisualDetailProfile,
 } from './data/visual_detail_profiles';
+import {
+  EMPTY_RESOLVED_VISUAL_GEOMETRY_PROFILE,
+  resolveVisualGeometryProfile,
+  visualGeometryThemeTags,
+  type ResolvedVisualGeometryProfile,
+} from './data/visual_geometry_profiles';
+import {
+  EMPTY_RESOLVED_VISUAL_SURFACE_PROFILE,
+  resolveVisualSurfaceProfile,
+  type ResolvedVisualSurfaceProfile,
+} from './data/visual_surface_profiles';
 import {
   activeToolLightDrainPerSecond,
   activeToolLightMoveMultiplier,
@@ -173,6 +188,7 @@ import {
 } from './systems/npc_interaction_options';
 import { applyContractFloorHooks, notifyCleanupToolUse } from './systems/contracts';
 import { cleanupToolProfile } from './systems/liquidator_cleanup_items';
+import { cleanSurfaceArea as cleanWorldSurfaceArea } from './systems/surface_cleanup';
 import { updateScriptedArrivals } from './systems/scripted_arrivals';
 import { applyStoryRouteGates } from './systems/story_route_gates';
 import { setDoorState } from './systems/door_state';
@@ -520,6 +536,7 @@ const FULL_MAP_RADIUS_MAX = W / 2;
 const FULL_MAP_ZOOM_STEP = 1.18;
 type TitleInputField = Extract<TitleHitField, 'language' | 'name' | 'age' | 'sex' | 'seed' | 'actorCap' | 'addNpc' | 'start'>;
 const NPC_INTAKE_ENABLED = Boolean((globalThis as { __GIGAHRUSH_NPC_INTAKE_ENABLED__?: boolean }).__GIGAHRUSH_NPC_INTAKE_ENABLED__);
+const smokeDebug = new URLSearchParams(window.location.search).has('smoke');
 const TITLE_SETUP_FIELDS: readonly TitleInputField[] = [
   'start',
   ...(NPC_INTAKE_ENABLED ? (['addNpc'] as const) : []),
@@ -865,7 +882,7 @@ function setPlatformPause(paused: boolean): void {
 }
 
 function desktopPointerCaptureRequired(): boolean {
-  return mobileControls?.isEnabled() !== true;
+  return !smokeDebug && mobileControls?.isEnabled() !== true;
 }
 
 function canvasHasPointerLock(): boolean {
@@ -1017,6 +1034,10 @@ let lastVoidReturnPortalHintTick = -9999;
 let lastAttackFeedbackAt = -999;
 let visualDetailCacheKey = '';
 let visualDetailCacheProfile: ResolvedVisualDetailProfile = EMPTY_RESOLVED_VISUAL_DETAIL_PROFILE;
+let visualSurfaceCacheKey = '';
+let visualSurfaceCacheProfile: ResolvedVisualSurfaceProfile = EMPTY_RESOLVED_VISUAL_SURFACE_PROFILE;
+let visualGeometryCacheKey = '';
+let visualGeometryCacheProfile: ResolvedVisualGeometryProfile = EMPTY_RESOLVED_VISUAL_GEOMETRY_PROFILE;
 
 const PLAYER_BAR_AUDIO_IDS = ['hp', 'psi', 'food', 'water', 'sleep', 'toilet', 'xp'] as const satisfies readonly HudBarAudioId[];
 const PLAYER_BAR_AUDIO_THRESHOLD = 5;
@@ -1069,6 +1090,41 @@ function currentVisualDetailProfile(entry: FloorRunEntry): ResolvedVisualDetailP
     visualDetailCacheProfile = resolveVisualDetailProfile(floorThemeForRunEntry(entry), { seed });
   }
   return visualDetailCacheProfile;
+}
+
+function currentVisualGeometryProfile(entry: FloorRunEntry): ResolvedVisualGeometryProfile {
+  const runSeed = ensureFloorRunState(state).runSeed;
+  const seed = entry.spec?.seed ?? runSeed;
+  const theme = floorThemeForRunEntry(entry);
+  const mode = visualGeometryMode();
+  const tags = visualGeometryThemeTags(theme);
+  const key = `${mode}|${theme.floorKey}|${seed}|${tags.join(',')}`;
+  if (key !== visualGeometryCacheKey) {
+    visualGeometryCacheKey = key;
+    visualGeometryCacheProfile = resolveVisualGeometryProfile(mode, theme, { seed });
+  }
+  return visualGeometryCacheProfile;
+}
+
+function currentVisualSurfaceProfile(entry: FloorRunEntry): ResolvedVisualSurfaceProfile {
+  const runSeed = ensureFloorRunState(state).runSeed;
+  const seed = entry.spec?.seed ?? runSeed;
+  const theme = floorThemeForRunEntry(entry);
+  const mode = visualGeometryMode();
+  const key = [
+    mode,
+    theme.floorKey,
+    theme.routeZ ?? '',
+    theme.baseFloor,
+    entry.designFloorId ?? '',
+    entry.spec?.key ?? '',
+    seed,
+  ].join('|');
+  if (key !== visualSurfaceCacheKey) {
+    visualSurfaceCacheKey = key;
+    visualSurfaceCacheProfile = resolveVisualSurfaceProfile(theme, { seed, geometryMode: mode });
+  }
+  return visualSurfaceCacheProfile;
 }
 
 function syncPlayerBarAudioSnapshot(): void {
@@ -1659,8 +1715,6 @@ declare global {
     __gigahrushStressSpawn?: (count: number) => SmokeDebugSnapshot | null;
   }
 }
-
-const smokeDebug = new URLSearchParams(window.location.search).has('smoke');
 
 function installSmokeDebugHook(): void {
   if (!smokeDebug) return;
@@ -2275,10 +2329,7 @@ function needFraction(value: number): number {
 }
 
 function playerCanOccupy(x: number, y: number, r = PLAYER_COLLISION_R): boolean {
-  return !world.solid(Math.floor(x + r), Math.floor(y + r)) &&
-    !world.solid(Math.floor(x + r), Math.floor(y - r)) &&
-    !world.solid(Math.floor(x - r), Math.floor(y + r)) &&
-    !world.solid(Math.floor(x - r), Math.floor(y - r));
+  return canActorOccupy(world, x, y, r);
 }
 
 function nudgeBlockedPlayerToFloor(actor = player): void {
@@ -2389,22 +2440,13 @@ function movePlayer(dt: number): void {
     const canClip = isNoClipActive();
     const beforeX = actor.x;
     const beforeY = actor.y;
-    // X movement – check all 4 AABB corners (skip if noclip effect is active)
+    // X/Y are checked separately so fine blockers still allow sliding.
     const nx = actor.x + mx;
-    if (canClip || (
-        !world.solid(Math.floor(nx + r), Math.floor(actor.y + r)) &&
-        !world.solid(Math.floor(nx + r), Math.floor(actor.y - r)) &&
-        !world.solid(Math.floor(nx - r), Math.floor(actor.y + r)) &&
-        !world.solid(Math.floor(nx - r), Math.floor(actor.y - r)))) {
+    if (canClip || canActorOccupy(world, nx, actor.y, r)) {
       actor.x = ((nx % W) + W) % W;
     }
-    // Y movement – check all 4 AABB corners (use updated X)
     const ny = actor.y + my;
-    if (canClip || (
-        !world.solid(Math.floor(actor.x + r), Math.floor(ny + r)) &&
-        !world.solid(Math.floor(actor.x + r), Math.floor(ny - r)) &&
-        !world.solid(Math.floor(actor.x - r), Math.floor(ny + r)) &&
-        !world.solid(Math.floor(actor.x - r), Math.floor(ny - r)))) {
+    if (canClip || canActorOccupy(world, actor.x, ny, r)) {
       actor.y = ((ny % W) + W) % W;
     }
 
@@ -2519,6 +2561,64 @@ function pushAttackFeedback(text: string, color = '#8cf', minInterval = ATTACK_F
 
 const meleeHitQuery: Entity[] = [];
 
+function castPlayerPsi(psiId: string, ws: WeaponStats): boolean {
+  const cost = ws.psiCost ?? 0;
+  if (cost <= 0) return false;
+  if (!player.rpg || player.rpg.psi < cost) {
+    pushAttackFeedback('Недостаточно ПСИ!', '#f84', 0.3);
+    return false;
+  }
+
+  player.rpg.psi -= cost;
+  if (ws.isRanged) {
+    const cos = Math.cos(player.angle);
+    const sin = Math.sin(player.angle);
+    const spd = ws.projSpeed ?? 14;
+    const proj: Entity = {
+      id: nextEntityId.v++,
+      type: EntityType.PROJECTILE,
+      x: player.x + cos * 0.5,
+      y: player.y + sin * 0.5,
+      angle: player.angle,
+      pitch: 0,
+      alive: true,
+      speed: 0,
+      sprite: ws.projSprite ?? Spr.PSI_BOLT,
+      vx: Math.cos(player.angle) * spd,
+      vy: Math.sin(player.angle) * spd,
+      vz: player.pitch * spd * 0.5,
+      projDmg: ws.dmg,
+      projLife: 3.0,
+      ownerId: player.id,
+      weapon: psiId,
+      spriteScale: 0.3,
+      spriteZ: 0.5,
+    };
+    if (ws.aoeRadius) {
+      proj.aoeRadius = ws.aoeRadius;
+      proj.aoeDmg = ws.dmg;
+    }
+    entities.push(proj);
+  } else {
+    const psiResult = castInstantSpell(
+      ws.psiEffect ?? '', player, entities, world,
+      state.msgs, state.time,
+      (e) => handleKill(e, true),
+    );
+    if (psiResult.beamLen) {
+      state.beamFx = 0.35;
+      state.beamAngle = player.angle;
+      state.beamLen = psiResult.beamLen;
+    }
+    makeCurrentPlayer(psiResult.player);
+  }
+
+  pushAttackFeedback(ws.isRanged ? 'Выстрел ПСИ.' : 'ПСИ-удар.');
+  if (ws.psiEffect === 'beam') playPsiBeam(); else playPsiCast();
+  publishWeaponNoise(state, player, psiId, ws);
+  return true;
+}
+
 /* ── Player actions ───────────────────────────────────────────── */
 function playerActions(_dt: number): void {
   if (!player.alive) return;
@@ -2566,72 +2666,20 @@ function playerActions(_dt: number): void {
   player.attackCd = Math.max(0, (player.attackCd ?? 0) - _dt);
 
   if (wantsAttack && player.attackCd! <= 0) {
-    const ws = getWeaponStats(player);
+    const weaponId = equippedCombatItemId(player);
+    const ws = getWeaponStats(player, weaponId);
     // AGI reduces attack cooldown
     const atkSpeedMod = player.rpg ? agiAttackSpeedMult(player.rpg) : 1;
 
     if (ws.psiCost) {
       // ── PSI spell: consume PSI instead of ammo ──────────
-      if (!player.rpg || player.rpg.psi < ws.psiCost) {
-        pushAttackFeedback('Недостаточно ПСИ!', '#f84', 0.3);
-        player.attackCd = 0.5;
-      } else {
-        player.rpg.psi -= ws.psiCost;
-        if (ws.isRanged) {
-          // Projectile PSI spell
-          const cos = Math.cos(player.angle);
-          const sin = Math.sin(player.angle);
-          const spd = ws.projSpeed ?? 14;
-          const proj: Entity = {
-            id: nextEntityId.v++,
-            type: EntityType.PROJECTILE,
-            x: player.x + cos * 0.5,
-            y: player.y + sin * 0.5,
-            angle: player.angle,
-            pitch: 0,
-            alive: true,
-            speed: 0,
-            sprite: ws.projSprite ?? Spr.PSI_BOLT,
-            vx: Math.cos(player.angle) * spd,
-            vy: Math.sin(player.angle) * spd,
-            vz: player.pitch * spd * 0.5,
-            projDmg: ws.dmg,
-            projLife: 3.0,
-            ownerId: player.id,
-            weapon: player.weapon ?? '',
-            spriteScale: 0.3,
-            spriteZ: 0.5,
-          };
-          if (ws.aoeRadius) {
-            proj.aoeRadius = ws.aoeRadius;
-            proj.aoeDmg = ws.dmg;
-          }
-          entities.push(proj);
-        } else {
-          // Instant PSI spell
-          const psiResult = castInstantSpell(
-            ws.psiEffect ?? '', player, entities, world,
-            state.msgs, state.time,
-            (e) => handleKill(e, true),
-          );
-          if (psiResult.beamLen) {
-            state.beamFx = 0.35;
-            state.beamAngle = player.angle;
-            state.beamLen = psiResult.beamLen;
-          }
-          makeCurrentPlayer(psiResult.player);
-        }
-        pushAttackFeedback(ws.isRanged ? 'Выстрел ПСИ.' : 'ПСИ-удар.');
-        if (ws.psiEffect === 'beam') playPsiBeam(); else playPsiCast();
-        publishWeaponNoise(state, player, player.weapon ?? '', ws);
-        player.attackCd = ws.speed * atkSpeedMod;
-      }
+      player.attackCd = castPlayerPsi(weaponId, ws) ? ws.speed * atkSpeedMod : 0.5;
     } else if (ws.isRanged) {
       // ── Ranged attack: spawn projectile(s) ──────────────
-      if (consumeAmmo(player, state)) {
+      if (consumeAmmo(player, state, weaponId)) {
         if (ws.projType === ProjType.FLAME) reducePaupsinaWeb(player, state.time, state.msgs, state, player, 'fire');
         if (ws.deletionBeam) {
-          const result = fireDeletionBeam(world, entities, player, state, player.weapon ?? '', ws, handleKill);
+          const result = fireDeletionBeam(world, entities, player, state, weaponId, ws, handleKill);
           state.beamFx = 0.45;
           state.beamAngle = player.angle;
           state.beamLen = result.beamLen;
@@ -2660,13 +2708,13 @@ function playerActions(_dt: number): void {
               projDmg: ws.dmg,
               projLife: pt === ProjType.GRENADE ? 1.5 : pt === ProjType.FLAME ? 0.7 : 3.0,
               ownerId: player.id,
-              weapon: player.weapon ?? '',
+              weapon: weaponId,
               spriteScale: pt === ProjType.BFG ? 0.6 : pt === ProjType.FLAME ? (0.55 + Math.random() * 0.25) : pt === ProjType.GRENADE ? 0.35 : 0.25,
               spriteZ: 0.5,
               projType: pt,
               projGore: pt === ProjType.GRENADE || pt === ProjType.BFG ? 3
-                : (player.weapon === 'shotgun' || player.weapon === 'chainsaw') ? 3
-                : (player.weapon === 'ak47' || player.weapon === 'machinegun' || player.weapon === 'nailgun' || player.weapon === 'gauss' || player.weapon === 'plasma') ? 2
+                : (weaponId === 'shotgun' || weaponId === 'chainsaw') ? 3
+                : (weaponId === 'ak47' || weaponId === 'machinegun' || weaponId === 'nailgun' || weaponId === 'gauss' || weaponId === 'plasma') ? 2
                 : pt === ProjType.FLAME ? 1 : 1,
             };
             if (ws.aoeRadius) {
@@ -2678,12 +2726,12 @@ function playerActions(_dt: number): void {
         }
         // Play weapon-specific sound
         pushAttackFeedback('Выстрел.');
-        playWeaponSound(player.weapon ?? '', ws);
-        publishWeaponNoise(state, player, player.weapon ?? '', ws);
-        notifyLiftArachnaNoise(world, player, state, player.weapon ?? '');
+        playWeaponSound(weaponId, ws);
+        publishWeaponNoise(state, player, weaponId, ws);
+        notifyLiftArachnaNoise(world, player, state, weaponId);
         player.attackCd = ws.speed * atkSpeedMod;
       } else {
-        if ((player.weapon ?? '') === 'flamethrower') {
+        if (weaponId === 'flamethrower') {
           pushAttackFeedback('Бензин кончился!', '#f84', 0.3);
           publishFuelEmptyEvent(ws.ammoType);
         } else {
@@ -2693,12 +2741,12 @@ function playerActions(_dt: number): void {
       }
     } else {
       // ── Melee attack: range check + durability ──────────
-      const normalDmg = meleeDamage(player.rpg, player.weapon, ws.dmg);
+      const normalDmg = meleeDamage(player.rpg, weaponId, ws.dmg);
       const range = ws.range;
       const ax = player.x + Math.cos(player.angle) * range;
       const ay = player.y + Math.sin(player.angle) * range;
 
-      let hitSomething = isPaupsinaWebCuttingWeapon(player.weapon)
+      let hitSomething = isPaupsinaWebCuttingWeapon(weaponId)
         ? reducePaupsinaWeb(player, state.time, state.msgs, state, player, 'cut')
         : false;
       const entityIndex = getEntityIndex();
@@ -2722,13 +2770,13 @@ function playerActions(_dt: number): void {
           const armor = applyMonsterArmorHit(world, state, e, {
             damage: rawDmg,
             attacker: player,
-            weaponId: player.weapon ?? '',
+            weaponId,
           });
           const dmg = armor.damage;
           e.hp -= dmg;
           // Relation penalty for hitting non-hostile NPCs
           if (e.type === EntityType.NPC) {
-            applyDamageRelationPenalty(player.faction, e.faction, dmg, e, player);
+            applyDamageRelationPenalty(player.faction, e.faction, dmg, e, player, state);
             recordFactionClashPlayerHit(state, world, player, e, dmg);
           }
           notifyActorDamaged(world, e, player, dmg, 'player_melee', state.time, state);
@@ -2740,14 +2788,14 @@ function playerActions(_dt: number): void {
           state.msgs.push(msg(`Удар! ${entityDisplayName(e)} -${dmg}`, state.time, '#fc4'));
           if (e.hp <= 0) {
             e.alive = false;
-            const meleeGore = (player.weapon === 'chainsaw' || player.weapon === 'axe') ? 3
-              : (player.weapon === 'rebar' || player.weapon === 'pipe') ? 2 : 1;
+            const meleeGore = (weaponId === 'chainsaw' || weaponId === 'axe') ? 3
+              : (weaponId === 'rebar' || weaponId === 'pipe') ? 2 : 1;
             handleKill(e, true, mVx, mVy, meleeGore);
             recordMonsterMeleeDeath(
               world,
               state,
               e,
-              player.weapon,
+              weaponId,
               player,
               (target, vx, vy, gore) => handleKill(target, true, vx, vy, gore),
               entities,
@@ -2756,12 +2804,12 @@ function playerActions(_dt: number): void {
         }
         hitSomething = true;
       }
-      if (player.weapon === 'chainsaw') playChainsaw(); else playAttack();
-      publishWeaponNoise(state, player, player.weapon ?? '', ws);
-      notifyLiftArachnaNoise(world, player, state, player.weapon ?? '');
+      if (weaponId === 'chainsaw') playChainsaw(); else playAttack();
+      publishWeaponNoise(state, player, weaponId, ws);
+      notifyLiftArachnaNoise(world, player, state, weaponId);
       // Consume durability on melee hit
       if (hitSomething) {
-        const broke = consumeDurability(player, state.msgs, state.time, state);
+        const broke = consumeDurability(player, state.msgs, state.time, state, weaponId);
         if (broke) playBreak();
       }
       player.attackCd = ws.speed * atkSpeedMod;
@@ -3138,7 +3186,7 @@ function updateProjectiles(dt: number): void {
             e.hp -= dmg;
             tryMonsterProjectileStagger(world, state, e, p, player.id);
             if (e.type === EntityType.NPC && isPlayerOwnedProjectile(p)) {
-              applyDamageRelationPenalty(player.faction, e.faction, dmg, e, player);
+              applyDamageRelationPenalty(player.faction, e.faction, dmg, e, player, state);
               recordFactionClashPlayerHit(state, world, player, e, dmg);
             }
             notifyActorDamaged(world, e, projectileActor(p), dmg, 'projectile', state.time, state);
@@ -3273,7 +3321,7 @@ function triggerExplosion(p: Entity, pt: ProjType): void {
       const blastVy = dist > 0.1 ? (dy / dist) * 12 : 0;
       spawnBloodHit(world, e.x, e.y, Math.atan2(dy, dx), finalDmg, e.type === EntityType.MONSTER, blastVx, blastVy, 0.4);
       if (e.type === EntityType.NPC && isPlayer) {
-        applyDamageRelationPenalty(player.faction, e.faction, finalDmg, e, player);
+        applyDamageRelationPenalty(player.faction, e.faction, finalDmg, e, player, state);
         recordFactionClashPlayerHit(state, world, player, e, finalDmg);
       }
       notifyActorDamaged(world, e, actor, finalDmg, 'explosion', state.time, state);
@@ -3368,7 +3416,7 @@ function passableSpawnCell(x: number, y: number): boolean {
   if (!Number.isFinite(x) || !Number.isFinite(y)) return false;
   const ci = world.idx(Math.floor(x), Math.floor(y));
   const cell = world.cells[ci];
-  return (cell === Cell.FLOOR || cell === Cell.WATER) && !world.solid(Math.floor(x), Math.floor(y));
+  return (cell === Cell.FLOOR || cell === Cell.WATER) && playerCanOccupy(x, y);
 }
 
 function safeSpawnNear(savedX: unknown, savedY: unknown, fallbackX: number, fallbackY: number): { x: number; y: number } {
@@ -4232,13 +4280,13 @@ function normalizeInventory(input: unknown): Item[] {
 function normalizeEquippedItem(
   value: unknown,
   inventory: readonly Item[],
-  itemType: ItemType.WEAPON | ItemType.TOOL,
+  equipSlot: 'weapon' | 'tool',
 ): string {
   const defId = cleanSaveText(value, '', 64);
   if (!defId || !inventory.some(slot => slot.defId === defId)) return '';
   const def = ITEMS[defId];
-  if (!def || def.type !== itemType) return '';
-  if (itemType === ItemType.WEAPON && !WEAPON_STATS[defId]) return '';
+  if (!def || itemEquipSlot(def) !== equipSlot) return '';
+  if (equipSlot === 'weapon' && !WEAPON_STATS[defId]) return '';
   return defId;
 }
 
@@ -4514,8 +4562,8 @@ function loadGame(): boolean {
     const normalizedMaxHp = getMaxHp(normalizedRpg);
     const normalizedClock = normalizeClock(dataState.clock);
     const normalizedQuests = normalizeQuestList(dataState.quests, dataState.nextQuestId, normalizedClock.totalMinutes);
-    const normalizedWeapon = normalizeEquippedItem(dataPlayer.weapon, normalizedInventory, ItemType.WEAPON);
-    const normalizedTool = normalizeEquippedItem(dataPlayer.tool, normalizedInventory, ItemType.TOOL);
+    const normalizedWeapon = normalizeEquippedItem(dataPlayer.weapon, normalizedInventory, 'weapon');
+    const normalizedTool = normalizeEquippedItem(dataPlayer.tool, normalizedInventory, 'tool');
 
     setFloorRunState(state, savedFloorRun, savedFloor);
     const loadedFloorInstances = setFloorInstanceState(state, dataState.floorInstances as Parameters<typeof setFloorInstanceState>[1], savedFloor);
@@ -4723,41 +4771,7 @@ function addRuntimeDoorToRoom(roomId: number, doorIdx: number): void {
 }
 
 function cleanSurfaceArea(cx: number, cy: number, radiusCells: number): number {
-  const minX = Math.floor(cx - radiusCells) - 1;
-  const maxX = Math.floor(cx + radiusCells) + 1;
-  const minY = Math.floor(cy - radiusCells) - 1;
-  const maxY = Math.floor(cy + radiusCells) + 1;
-  const changedCells: number[] = [];
-  let removed = 0;
-
-  for (let y = minY; y <= maxY; y++) {
-    for (let x = minX; x <= maxX; x++) {
-      const wx = world.wrap(x);
-      const wy = world.wrap(y);
-      const ci = world.idx(wx, wy);
-      const cell = world.surfaceMap.get(ci);
-      if (!cell) continue;
-
-      for (let py = 0; py < 16; py++) {
-        for (let px = 0; px < 16; px++) {
-          const wxf = wx + (px + 0.5) / 16;
-          const wyf = wy + (py + 0.5) / 16;
-          if (world.dist(wxf, wyf, cx, cy) > radiusCells) continue;
-          const ai = ((py * 16 + px) << 2) + 3;
-          const a = cell[ai];
-          if (a <= 0) continue;
-          const dec = Math.max(24, Math.floor(a * 0.45));
-          const na = Math.max(0, a - dec);
-          removed += a - na;
-          cell[ai] = na;
-          if (!changedCells.includes(ci)) changedCells.push(ci);
-        }
-      }
-    }
-  }
-
-  if (changedCells.length > 0) world.markSurfaceCellsDirty(changedCells);
-  return removed;
+  return cleanWorldSurfaceArea(world, cx, cy, radiusCells);
 }
 
 function updateEquippedTool(dt: number, actor = player): void {
@@ -4775,6 +4789,14 @@ function updateEquippedTool(dt: number, actor = player): void {
 
   const hasTool = (player.inventory ?? []).some(s => s.defId === toolId);
   if (!hasTool) { player.tool = ''; return; }
+
+  const psiToolStats = WEAPON_STATS[toolId]?.psiCost ? getWeaponStats(player, toolId) : undefined;
+  if (psiToolStats) {
+    if (!wantsToolUse || _toolActionCd > 0) return;
+    const atkSpeedMod = player.rpg ? agiAttackSpeedMult(player.rpg) : 1;
+    _toolActionCd = castPlayerPsi(toolId, psiToolStats) ? psiToolStats.speed * atkSpeedMod : 0.5;
+    return;
+  }
 
   const passiveLightDrain = passiveToolLightDrainPerSecond(toolId);
   if (passiveLightDrain > 0) {
@@ -5815,7 +5837,7 @@ function applyUiSettingsSelection(index: number): void {
   }
   if (row.kind === 'reset_graphics') {
     resetGraphicsSettings();
-    state.msgs.push(msg('Графика сброшена: FOV 90°, помехи критично, HUD меньше движения', state.time, '#8cf'));
+    state.msgs.push(msg('Графика сброшена: FOV 90°, помехи критично, HUD меньше движения, 3D низкая', state.time, '#8cf'));
     return;
   }
   if (row.kind === 'preset') {
@@ -5843,6 +5865,11 @@ function applyUiSettingsSelection(index: number): void {
   if (row.kind === 'hud_motion') {
     const mode = cycleHudMotionMode();
     state.msgs.push(msg(`Движение HUD: ${mode === 'reduced' ? 'меньше' : 'норма'}`, state.time, '#8cf'));
+    return;
+  }
+  if (row.kind === 'visual_geometry') {
+    const mode = cycleVisualGeometryMode(1);
+    state.msgs.push(msg(`3D детализация: ${visualGeometryModeLabel(mode).toLowerCase()}`, state.time, mode === 'off' ? '#fc8' : '#8cf'));
     return;
   }
   if (row.kind === 'map_contrast') {
@@ -7658,10 +7685,12 @@ function gameLoop(now: number): void {
   const floorRunEntry = currentFloorRunEntry(state);
   const ambientLight = designFloorAmbientLight(floorRunEntry.designFloorId, 0.12);
   const visualDetailProfile = currentVisualDetailProfile(floorRunEntry);
+  const visualGeometryProfile = currentVisualGeometryProfile(floorRunEntry);
+  const visualSurfaceProfile = currentVisualSurfaceProfile(floorRunEntry);
   const renderSceneStart = performance.now();
   renderSceneGL(world, textures, sprites, entities,
     cameraView,
-    fogDensity, glitch, flashlight, uiTime, particles, state.samosborActive, ambientLight, toolBeam, state.uvBeamLen, screenInterference, visualDetailProfile);
+    fogDensity, glitch, flashlight, uiTime, particles, state.samosborActive, ambientLight, toolBeam, state.uvBeamLen, screenInterference, visualDetailProfile, visualGeometryProfile, visualSurfaceProfile);
   lastRenderSceneMs = performance.now() - renderSceneStart;
 
   // Draw HUD on 2D overlay canvas

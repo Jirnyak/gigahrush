@@ -79,6 +79,7 @@ import {
   markDemosNoticeFailed,
   recordDemosNoticeQuestCreatedForGiver,
 } from './demos_quest_notices';
+import { applyDemosRelationDelta } from './demos_social';
 import { pushNpcLogMessage } from './ai/barks';
 import { hearingRadiusMetersForActor } from './hearing';
 import { getAlifeNpcTotalMoney } from './alife';
@@ -1117,6 +1118,11 @@ function completeQuest(
   const giverPlayerRelation = giverPlayerRelationDelta !== 0 && giver
     ? addNpcPlayerRelation(giver, giverPlayerRelationDelta)
     : undefined;
+  if (giverPlayerRelationDelta !== 0 && giver?.type === EntityType.NPC && giver.alifeId !== undefined) {
+    applyDemosRelationDelta(state, giver.alifeId, { targetKind: 'player' }, giverPlayerRelationDelta, {
+      reasonTag: q.contractId ? 'contract_completed' : 'quest_completed',
+    });
+  }
 
   // Clear NPC's questId
   if (giver) {

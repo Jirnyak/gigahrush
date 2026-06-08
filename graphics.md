@@ -174,9 +174,13 @@ Active effects:
 User-facing controls:
 
 - Graphics settings live in the `U` UI settings screen, graphics tab.
-- Rows include screen interference, HUD motion, FOV and map contrast.
+- Rows include screen interference, HUD motion, render-only 3D detailing, FOV
+  and map contrast.
 - Screen interference modes are normalized in `ui_orchestrator`; if the
   `screen_fx` HUD element is disabled, the menu reports interference as off.
+- 3D detailing is stored as browser-local graphics state, resolves through
+  data-only visual geometry profiles and defaults to low. The detailed pass
+  contract, profile caps and validation commands live in [mesh.md](mesh.md).
 
 ## Surface Marks
 
@@ -295,6 +299,44 @@ Impact effects:
 ## Sprites
 
 Sprites are billboard quads with alpha test, depth test and fog blending.
+
+## Render-Only Mesh Pass
+
+`src/render/mesh/` adds a bounded decorative WebGL mesh pass after the
+raycaster depth pass and before sprites. It reads `CameraView`, `World`,
+`visualSlots`, features, containers and data-only visual geometry profiles, then
+draws depth-tested procedural low-poly geometry. It does not mutate gameplay
+cells, entities, AI, collision, save data or floor memory.
+
+[mesh.md](mesh.md) is the authoritative system document for this pass. This
+section is only the graphics overview.
+
+`World.visualSlots` stores 16 render-only byte codes per cell for local
+micro-decoration intent. Scene collection resolves those bytes through
+`src/data/visual_cell_slots.ts` into model instances with radius, scan,
+instance, merge and triangle caps. The browser-local `3D детализация` setting
+uses `src/data/visual_geometry_profiles.ts`; the default `low` mode keeps voxel
+chunks off.
+
+The same pass includes corridor-volume dressing. It reads rectangular 2D
+corridor/tunnel topology from `World.cells`, `roomMap`, `RoomType` and the
+resolved floor profile, then applies the generator-selected covering module:
+concrete relief, technical pipes/cables, collector gutters, cave protrusions or
+smooth meat folds. Placement uses seed/cell hash gates instead of regular
+stride patterns. This is still render-only: corridor roughness does not alter
+pathfinding, collision, save shape or floor memory.
+
+The high profile enables an optional local voxel/chunk layer in
+`src/render/mesh/voxel/`. It samples only camera-near chunks, builds a tiny
+deterministic exposed-wall detail field, extracts greedy cuboid faces under
+solid/triangle/chunk caps, and submits that mesh through the same depth-tested
+mesh batch. Passable cells do not create voxel solids, including ceiling
+slabs over lamps, screens or ceiling visual slots. Marching cubes is currently
+a planned disabled API, not the stable path.
+
+Bulky visual models are not gameplay collision. Future "do not walk through the
+table" behavior belongs to the explicit 2D blocker plan in [block.md](block.md),
+not to `visualSlots` or model bounds.
 
 Static sprite registry:
 

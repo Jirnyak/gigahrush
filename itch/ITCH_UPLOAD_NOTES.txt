@@ -17,5 +17,6 @@ The ZIP includes PWA manifest, icons, and service worker metadata for direct mob
 Release size notes:
 - Run npm run build:size after npm run build for the single-file HTML/gzip report.
 - npm run itch:build runs the same warning-only report after packaging, including current ZIP upload weight.
-- Current warning thresholds: 9.5 MB HTML, 4.5 MB HTML gzip, 4.5 MB itch ZIP, 5.8 MB Bad Apple frame source, 3.3 MB Bad Apple frame gzip.
+- Current warning thresholds: 9.5 MB HTML, 4.5 MB HTML gzip, 4.5 MB itch ZIP.
+- Bad Apple frame/audio data is retained in source as a disabled engine experiment and is not part of ordinary itch/Pikabu/Cloudflare build paths.
 - Warnings do not block this first budget pass. If a release crosses one, keep the content, note the reason, and compact generated frames/sprite/texture code before adding more heavy data.

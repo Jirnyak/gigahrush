@@ -12,10 +12,12 @@ import {
   DEMOS_RELATION_EMPTY,
   DEMOS_RELATION_FRIENDLY_THRESHOLD,
   DEMOS_RELATION_HOSTILE_THRESHOLD,
+  DEMOS_SOCIAL_INITIAL_NPC_SLOTS,
   DEMOS_RELATION_MAX,
   DEMOS_RELATION_MIN,
   DEMOS_SOCIAL_CANDIDATE_TRIES,
   DEMOS_SOCIAL_NPC_SLOTS,
+  DEMOS_SOCIAL_NPC_SLOT_START,
   DEMOS_SOCIAL_OVERRIDE_CAP,
   DEMOS_SOCIAL_PUBLIC_SLOTS,
   type DemosAuthoredRelationDef,
@@ -36,9 +38,10 @@ import {
   findAlifeNpcIdByReservedIdentityId,
   getAlifeNpcRecordSnapshot,
   packageIdFromReservedIdentityId,
+  setAlifeNpcPlayerRelation,
   type AlifeNpcSnapshot,
 } from './alife';
-import type { DemosRelationOverride, DemosSocialSaveState } from './demos_save';
+import { createEmptyDemosSocialSaveState, type DemosRelationOverride, type DemosSocialSaveState } from './demos_save';
 import { getFactionPlayerRelation } from './npc_relations';
 
 export interface DemosSocialEdgeView {
@@ -78,6 +81,8 @@ export interface DemosRelationDeltaTarget {
 export interface DemosRelationDeltaOptions {
   flags?: number;
   createIfMissing?: boolean;
+  replaceWeakestIfMissing?: boolean;
+  propagate?: boolean;
   reasonTag?: string;
 }
 
@@ -93,12 +98,6 @@ export interface DemosRelationDeltaResult {
   reasonTag?: string;
 }
 
-interface DemosPlayerRelationOverride {
-  relation: number;
-  flags: number;
-  role: DemosSocialRoleId;
-}
-
 interface DemosSocialGraph {
   signature: string;
   alifeRef?: AlifeStateLike;
@@ -109,7 +108,6 @@ interface DemosSocialGraph {
   roles: Uint8Array;
   initialized: Uint8Array;
   builtAll: boolean;
-  playerOverrides: Map<number, DemosPlayerRelationOverride>;
   overrideKeys: string[];
   packageAlifeIds: Map<string, number>;
   socialRef?: DemosSocialSaveState;
@@ -160,7 +158,19 @@ function clampRelation(value: number): number {
 }
 
 function edgeOffset(alifeId: number, slot: number): number {
-  return (alifeId - 1) * DEMOS_SOCIAL_NPC_SLOTS + slot;
+  return (alifeId - 1) * DEMOS_SOCIAL_PUBLIC_SLOTS + slot;
+}
+
+function npcSlotEnd(): number {
+  return DEMOS_SOCIAL_NPC_SLOT_START + DEMOS_SOCIAL_NPC_SLOTS;
+}
+
+function npcEdgeCount(graph: DemosSocialGraph, sourceId: number): number {
+  let count = 0;
+  for (let slot = DEMOS_SOCIAL_NPC_SLOT_START; slot < npcSlotEnd(); slot++) {
+    if (graph.targets[edgeOffset(sourceId, slot)] !== 0) count++;
+  }
+  return count;
 }
 
 function pushBucket<K>(map: Map<K, number[]>, key: K, id: number): void {
@@ -213,23 +223,23 @@ function buildBuckets(snapshots: readonly (AlifeNpcSnapshot | undefined)[], tota
 }
 
 function edgeTargetExists(graph: DemosSocialGraph, sourceId: number, targetId: number): boolean {
-  for (let slot = 0; slot < DEMOS_SOCIAL_NPC_SLOTS; slot++) {
+  for (let slot = DEMOS_SOCIAL_NPC_SLOT_START; slot < npcSlotEnd(); slot++) {
     if (graph.targets[edgeOffset(sourceId, slot)] === targetId) return true;
   }
   return false;
 }
 
 function firstEmptySlot(graph: DemosSocialGraph, sourceId: number): number {
-  for (let slot = 0; slot < DEMOS_SOCIAL_NPC_SLOTS; slot++) {
+  for (let slot = DEMOS_SOCIAL_NPC_SLOT_START; slot < npcSlotEnd(); slot++) {
     if (graph.targets[edgeOffset(sourceId, slot)] === 0) return slot;
   }
   return -1;
 }
 
 function weakestSlot(graph: DemosSocialGraph, sourceId: number): number {
-  let out = 0;
+  let out = DEMOS_SOCIAL_NPC_SLOT_START;
   let weakest = Number.POSITIVE_INFINITY;
-  for (let slot = 0; slot < DEMOS_SOCIAL_NPC_SLOTS; slot++) {
+  for (let slot = DEMOS_SOCIAL_NPC_SLOT_START; slot < npcSlotEnd(); slot++) {
     const offset = edgeOffset(sourceId, slot);
     const score = Math.abs(graph.relations[offset] === DEMOS_RELATION_EMPTY ? 0 : graph.relations[offset]);
     if (score < weakest) {
@@ -685,7 +695,8 @@ function fillRemainingEdges(
   for (let id = 1; id <= graph.total; id++) {
     const source = snapshots[id];
     if (!source) continue;
-    for (let slot = 0; slot < DEMOS_SOCIAL_NPC_SLOTS; slot++) {
+    for (let slot = DEMOS_SOCIAL_NPC_SLOT_START; slot < npcSlotEnd(); slot++) {
+      if (npcEdgeCount(graph, source.id) >= DEMOS_SOCIAL_INITIAL_NPC_SLOTS) break;
       if (graph.targets[edgeOffset(source.id, slot)] !== 0) continue;
       for (let attempt = 0; attempt < DEMOS_SOCIAL_CANDIDATE_TRIES; attempt++) {
         const salt = slot * 131 + attempt * 17;
@@ -716,11 +727,45 @@ function demosSocialState(state: GameState): DemosSocialSaveState | undefined {
   return (state as GameState & { demosSocial?: DemosSocialSaveState }).demosSocial;
 }
 
+function playerRelationToDemosRelation(snapshot: AlifeNpcSnapshot): number {
+  const relation = snapshot.playerRelation ?? getFactionPlayerRelation(snapshot.faction);
+  return clampRelation(relation * DEMOS_RELATION_MAX / 100);
+}
+
+function setPlayerEdgeAtSlot(
+  graph: DemosSocialGraph,
+  sourceId: number,
+  relation: number,
+  flags: number,
+  role: DemosSocialRoleId,
+): void {
+  if (!validAlifeId(graph, sourceId)) return;
+  const offset = edgeOffset(sourceId, DEMOS_PLAYER_SOCIAL_SLOT);
+  graph.targets[offset] = 0;
+  graph.relations[offset] = clampRelation(relation);
+  graph.flags[offset] = flags & 0xff;
+  graph.roles[offset] = role & 0xff;
+}
+
+function initializePlayerSlot(graph: DemosSocialGraph, snapshot: AlifeNpcSnapshot): void {
+  const offset = edgeOffset(snapshot.id, DEMOS_PLAYER_SOCIAL_SLOT);
+  if (graph.relations[offset] !== DEMOS_RELATION_EMPTY) return;
+  const relation = playerRelationToDemosRelation(snapshot);
+  setPlayerEdgeAtSlot(graph, snapshot.id, relation, relationFlags(relation), roleForRelation(relation));
+}
+
 function applySavedRelationOverride(graph: DemosSocialGraph, override: DemosRelationOverride): void {
-  if (override.targetKind !== 'alife') return;
-  if (!validAlifeId(graph, override.fromAlifeId) || !validAlifeId(graph, override.targetAlifeId)) return;
-  if (override.fromAlifeId === override.targetAlifeId) return;
-  let slot = findExistingTargetSlot(graph, override.fromAlifeId, override.targetAlifeId);
+  if (!validAlifeId(graph, override.fromAlifeId)) return;
+  if (override.targetKind === 'player') {
+    const relation = clampRelation(override.value);
+    setPlayerEdgeAtSlot(graph, override.fromAlifeId, relation, relationFlags(relation), roleForRelation(relation));
+    recordOverride(graph, `${override.fromAlifeId}->player`);
+    return;
+  }
+  const targetAlifeId = override.targetAlifeId ?? 0;
+  if (!validAlifeId(graph, targetAlifeId)) return;
+  if (override.fromAlifeId === targetAlifeId) return;
+  let slot = findExistingTargetSlot(graph, override.fromAlifeId, targetAlifeId);
   if (slot < 0) slot = firstEmptySlot(graph, override.fromAlifeId);
   if (slot < 0) slot = weakestSlot(graph, override.fromAlifeId);
   const relation = clampRelation(override.value);
@@ -728,7 +773,7 @@ function applySavedRelationOverride(graph: DemosSocialGraph, override: DemosRela
     graph,
     override.fromAlifeId,
     slot,
-    override.targetAlifeId,
+    targetAlifeId,
     relation,
     relationFlags(relation),
     roleForRelation(relation),
@@ -759,13 +804,12 @@ function createGraph(state: GameState, seed: number, total: number, signature: s
     signature,
     alifeRef,
     total,
-    targets: new Uint32Array(total * DEMOS_SOCIAL_NPC_SLOTS),
-    relations: new Int8Array(total * DEMOS_SOCIAL_NPC_SLOTS),
-    flags: new Uint8Array(total * DEMOS_SOCIAL_NPC_SLOTS),
-    roles: new Uint8Array(total * DEMOS_SOCIAL_NPC_SLOTS),
+    targets: new Uint32Array(total * DEMOS_SOCIAL_PUBLIC_SLOTS),
+    relations: new Int8Array(total * DEMOS_SOCIAL_PUBLIC_SLOTS),
+    flags: new Uint8Array(total * DEMOS_SOCIAL_PUBLIC_SLOTS),
+    roles: new Uint8Array(total * DEMOS_SOCIAL_PUBLIC_SLOTS),
     initialized: new Uint8Array(total + 1),
     builtAll: false,
-    playerOverrides: new Map(),
     overrideKeys: [],
     packageAlifeIds: new Map(),
     socialRef: social,
@@ -775,6 +819,10 @@ function createGraph(state: GameState, seed: number, total: number, signature: s
   if (total > DEMOS_FULL_GRAPH_BUILD_LIMIT) return graph;
   const snapshots = new Array<AlifeNpcSnapshot | undefined>(total + 1);
   for (let id = 1; id <= total; id++) snapshots[id] = getAlifeNpcRecordSnapshot(state, id);
+  for (let id = 1; id <= total; id++) {
+    const snapshot = snapshots[id];
+    if (snapshot) initializePlayerSlot(graph, snapshot);
+  }
   const buckets = buildBuckets(snapshots, total);
   addFamilyEdges(graph, snapshots, buckets, seed);
   applyAllAuthoredRelations(graph, snapshots);
@@ -804,10 +852,12 @@ function initializeLazyRow(state: GameState, graph: DemosSocialGraph, alifeId: n
   graph.initialized[alifeId] = 1;
   const source = getAlifeNpcRecordSnapshot(state, alifeId);
   if (!source) return;
+  initializePlayerSlot(graph, source);
   const seed = graphSeed(graph);
   applyAuthoredRelationsForSource(state, graph, source);
   applyPackageRelationsForLazySource(state, graph, source);
-  for (let slot = 0; slot < DEMOS_SOCIAL_NPC_SLOTS; slot++) {
+  for (let slot = DEMOS_SOCIAL_NPC_SLOT_START; slot < npcSlotEnd(); slot++) {
+    if (npcEdgeCount(graph, alifeId) >= DEMOS_SOCIAL_INITIAL_NPC_SLOTS) break;
     if (graph.targets[edgeOffset(alifeId, slot)] !== 0) continue;
     for (let attempt = 0; attempt < DEMOS_SOCIAL_CANDIDATE_TRIES; attempt++) {
       const targetId = lazyCandidateId(graph, alifeId, slot, attempt);
@@ -847,7 +897,7 @@ function viewForNpcEdge(graph: DemosSocialGraph, alifeId: number, slot: number):
   if (targetId <= 0) return undefined;
   const flags = graph.flags[offset];
   return {
-    slot: slot + 1,
+    slot,
     targetKind: 'alife',
     targetAlifeId: targetId,
     relation: graph.relations[offset],
@@ -874,15 +924,18 @@ export function getDemosRelationToPlayerSlot(state: GameState, alifeId: number):
   const snapshot = getAlifeNpcRecordSnapshot(state, alifeId);
   if (!snapshot) return undefined;
   const graph = ensureGraph(state);
-  const override = graph.playerOverrides.get(alifeId);
-  const relation = override?.relation ?? clampRelation((snapshot.playerRelation ?? getFactionPlayerRelation(snapshot.faction)) * DEMOS_RELATION_MAX / 100);
-  const flags = override?.flags ?? relationFlags(relation);
+  if (!validAlifeId(graph, alifeId)) return undefined;
+  initializeLazyRow(state, graph, alifeId);
+  const offset = edgeOffset(alifeId, DEMOS_PLAYER_SOCIAL_SLOT);
+  if (graph.relations[offset] === DEMOS_RELATION_EMPTY) initializePlayerSlot(graph, snapshot);
+  const relation = graph.relations[offset] === DEMOS_RELATION_EMPTY ? playerRelationToDemosRelation(snapshot) : graph.relations[offset];
+  const flags = graph.flags[offset] || relationFlags(relation);
   return {
     slot: DEMOS_PLAYER_SOCIAL_SLOT,
     targetKind: 'player',
     relation,
     flags,
-    role: override?.role ?? roleForRelation(relation),
+    role: graph.roles[offset] as DemosSocialRoleId || roleForRelation(relation),
     hidden: false,
   };
 }
@@ -892,7 +945,7 @@ export function getDemosNpcOnlySocialEdges(state: GameState, alifeId: number): r
   if (!validAlifeId(graph, alifeId)) return [];
   initializeLazyRow(state, graph, alifeId);
   const out: DemosSocialEdgeView[] = [];
-  for (let slot = 0; slot < DEMOS_SOCIAL_NPC_SLOTS; slot++) {
+  for (let slot = DEMOS_SOCIAL_NPC_SLOT_START; slot < npcSlotEnd(); slot++) {
     const edge = viewForNpcEdge(graph, alifeId, slot);
     if (edge) out.push(edge);
   }
@@ -909,7 +962,7 @@ export function clearDemosNpcSocialEdges(state: GameState, alifeId: number): voi
   const graph = ensureGraph(state);
   if (!validAlifeId(graph, alifeId)) return;
   initializeLazyRow(state, graph, alifeId);
-  for (let slot = 0; slot < DEMOS_SOCIAL_NPC_SLOTS; slot++) {
+  for (let slot = DEMOS_SOCIAL_NPC_SLOT_START; slot < npcSlotEnd(); slot++) {
     const offset = edgeOffset(alifeId, slot);
     graph.targets[offset] = 0;
     graph.relations[offset] = DEMOS_RELATION_EMPTY;
@@ -953,7 +1006,11 @@ export function getDemosSocialGraphStats(state: GameState): DemosSocialGraphStat
   let parentEdges = 0;
   let enemyEdges = 0;
   for (let i = 0; i < graph.targets.length; i++) {
-    if (graph.targets[i] === 0) continue;
+    const publicSlot = i % DEMOS_SOCIAL_PUBLIC_SLOTS;
+    const exists = publicSlot === DEMOS_PLAYER_SOCIAL_SLOT
+      ? graph.relations[i] !== DEMOS_RELATION_EMPTY
+      : graph.targets[i] !== 0;
+    if (!exists) continue;
     directedEdges++;
     if ((graph.flags[i] & DEMOS_EDGE_FAMILY) !== 0) familyEdges++;
     if (graph.roles[i] === DemosSocialRoleId.PARENT) parentEdges++;
@@ -982,10 +1039,51 @@ function recordOverride(graph: DemosSocialGraph, key: string): void {
 }
 
 function findExistingTargetSlot(graph: DemosSocialGraph, fromAlifeId: number, targetAlifeId: number): number {
-  for (let slot = 0; slot < DEMOS_SOCIAL_NPC_SLOTS; slot++) {
+  for (let slot = DEMOS_SOCIAL_NPC_SLOT_START; slot < npcSlotEnd(); slot++) {
     if (graph.targets[edgeOffset(fromAlifeId, slot)] === targetAlifeId) return slot;
   }
   return -1;
+}
+
+function ensureWritableDemosSocialState(state: GameState, graph: DemosSocialGraph): DemosSocialSaveState {
+  const host = state as GameState & { demosSocial?: DemosSocialSaveState };
+  if (!host.demosSocial) host.demosSocial = createEmptyDemosSocialSaveState();
+  graph.socialRef = host.demosSocial;
+  graph.socialOverrideCount = host.demosSocial.relationOverrides.length;
+  return host.demosSocial;
+}
+
+function relationOverrideMatches(
+  override: DemosRelationOverride,
+  result: Pick<DemosRelationDeltaResult, 'fromAlifeId' | 'targetKind' | 'targetAlifeId'>,
+): boolean {
+  if (override.fromAlifeId !== result.fromAlifeId || override.targetKind !== result.targetKind) return false;
+  return result.targetKind === 'player' || override.targetAlifeId === result.targetAlifeId;
+}
+
+function persistRelationOverride(state: GameState, graph: DemosSocialGraph, result: DemosRelationDeltaResult): void {
+  const social = ensureWritableDemosSocialState(state, graph);
+  const next: DemosRelationOverride = {
+    fromAlifeId: result.fromAlifeId,
+    targetKind: result.targetKind,
+    targetAlifeId: result.targetKind === 'alife' ? result.targetAlifeId : undefined,
+    value: result.relation,
+    updatedAt: state.time,
+    reasonTag: result.reasonTag,
+  };
+  const existingIndex = social.relationOverrides.findIndex(override => relationOverrideMatches(override, result));
+  if (existingIndex >= 0) social.relationOverrides[existingIndex] = next;
+  else social.relationOverrides.push(next);
+  while (social.relationOverrides.length > DEMOS_SOCIAL_OVERRIDE_CAP) social.relationOverrides.shift();
+  graph.socialOverrideCount = social.relationOverrides.length;
+}
+
+function demosRelationToPlayerRelation(relation: number): number {
+  return Math.max(-100, Math.min(100, Math.round(clampRelation(relation) * 100 / DEMOS_RELATION_MAX)));
+}
+
+function propagationDelta(sourceDelta: number, circleRelation: number): number {
+  return clampInt(Math.round(sourceDelta * clampRelation(circleRelation) / DEMOS_RELATION_MAX), 0, -32, 32);
 }
 
 function applyNpcRelationDelta(
@@ -1002,7 +1100,8 @@ function applyNpcRelationDelta(
   if (slot < 0) {
     if (opts.createIfMissing === false) return undefined;
     slot = firstEmptySlot(graph, fromAlifeId);
-    if (slot < 0) slot = weakestSlot(graph, fromAlifeId);
+    if (slot < 0 && opts.replaceWeakestIfMissing !== false) slot = weakestSlot(graph, fromAlifeId);
+    if (slot < 0) return undefined;
     setEdgeAtSlot(graph, fromAlifeId, slot, targetAlifeId, 0, 0, DemosSocialRoleId.ACQUAINTANCE);
   }
   const offset = edgeOffset(fromAlifeId, slot);
@@ -1037,7 +1136,8 @@ function applyPlayerRelationDelta(
   const previous = current.relation;
   const relation = clampRelation(previous + delta);
   const flags = relationFlags(relation, current.flags | (opts.flags ?? 0));
-  graph.playerOverrides.set(fromAlifeId, { relation, flags, role: roleForRelation(relation) });
+  setPlayerEdgeAtSlot(graph, fromAlifeId, relation, flags, roleForRelation(relation));
+  setAlifeNpcPlayerRelation(state, fromAlifeId, demosRelationToPlayerRelation(relation));
   recordOverride(graph, `${fromAlifeId}->player`);
   return {
     changed: relation !== previous,
@@ -1051,6 +1151,37 @@ function applyPlayerRelationDelta(
   };
 }
 
+function propagateRelationDelta(
+  state: GameState,
+  graph: DemosSocialGraph,
+  result: DemosRelationDeltaResult,
+): void {
+  if (!result.changed || result.delta === 0) return;
+  initializeLazyRow(state, graph, result.fromAlifeId);
+  let processed = 0;
+  for (let slot = DEMOS_SOCIAL_NPC_SLOT_START; slot < npcSlotEnd(); slot++) {
+    if (processed >= DEMOS_SOCIAL_NPC_SLOTS) break;
+    const offset = edgeOffset(result.fromAlifeId, slot);
+    const relatedAlifeId = graph.targets[offset];
+    if (!validAlifeId(graph, relatedAlifeId)) continue;
+    if (result.targetKind === 'alife' && relatedAlifeId === result.targetAlifeId) continue;
+    const related = getAlifeNpcRecordSnapshot(state, relatedAlifeId);
+    if (!related || related.dead) continue;
+    const delta = propagationDelta(result.delta, graph.relations[offset] === DEMOS_RELATION_EMPTY ? 0 : graph.relations[offset]);
+    if (delta === 0) continue;
+    processed++;
+    const target = result.targetKind === 'player'
+      ? { targetKind: 'player' as const }
+      : { targetKind: 'alife' as const, targetAlifeId: result.targetAlifeId };
+    applyDemosRelationDelta(state, relatedAlifeId, target, delta, {
+      createIfMissing: true,
+      replaceWeakestIfMissing: false,
+      propagate: false,
+      reasonTag: result.reasonTag ? `${result.reasonTag}:circle` : 'social_circle',
+    });
+  }
+}
+
 export function applyDemosRelationDelta(
   state: GameState,
   fromAlifeId: number,
@@ -1062,9 +1193,14 @@ export function applyDemosRelationDelta(
   if (!validAlifeId(graph, fromAlifeId)) return undefined;
   const delta = clampInt(deltaInput, 0, -32, 32);
   if (delta === 0) return undefined;
-  if (target.targetKind === 'player') return applyPlayerRelationDelta(state, graph, fromAlifeId, delta, opts);
-  const targetAlifeId = clampInt(target.targetAlifeId, 0, 1, graph.total);
-  return applyNpcRelationDelta(state, graph, fromAlifeId, targetAlifeId, delta, opts);
+  const result = target.targetKind === 'player'
+    ? applyPlayerRelationDelta(state, graph, fromAlifeId, delta, opts)
+    : applyNpcRelationDelta(state, graph, fromAlifeId, clampInt(target.targetAlifeId, 0, 1, graph.total), delta, opts);
+  if (result?.changed) {
+    persistRelationOverride(state, graph, result);
+    if (opts.propagate !== false) propagateRelationDelta(state, graph, result);
+  }
+  return result;
 }
 
 export function setDemosSocialEdge(

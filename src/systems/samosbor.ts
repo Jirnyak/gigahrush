@@ -11,7 +11,7 @@ import {
 import { World, replaceWorldFromGeneration, type WorldGridDirtyRect } from '../core/world';
 import { ITEMS, NOTES, freshNeeds, randomName } from '../data/catalog';
 import { addFactionRelMutual } from '../data/relations';
-import { getStack, spawnCount } from '../data/items';
+import { getStack, itemEquipSlot, spawnCount } from '../data/items';
 import { chooseFloorMonsterKind } from '../data/monster_ecology';
 import { MONSTERS } from '../entities/monster';
 import { Spr } from '../render/sprite_index';
@@ -32,6 +32,7 @@ import { recordPlayerDamage } from './damage';
 import { reassignQuestGivers } from './quests';
 import { regrowMaze } from '../gen/living';
 import { floorLevelDisplayName, generateFloor, type FloorGeneration } from '../gen/floor_manifest';
+import { clearPathBlockerRegion, rebuildPathBlockersFromWorldObjects } from '../gen/path_blockers';
 import { flashSamosborWarningScreens } from '../gen/procedural_screens';
 import { rng, pick, weightedPick } from '../gen/shared';
 import { getMaxHp, scaleMonsterHp, scaleMonsterSpeed, randomRPG } from './rpg';
@@ -2242,6 +2243,7 @@ export function rebuildWorld(
     relocateBlockedEntities(world, entities);
     ensureRoomContainers(world, floor);
     applyPendingSamosborAftermath(world, entities, nextId, floor);
+    refreshPathBlockersAfterSamosborRebuild(world, entities, _samosborCount);
     return;
   }
 
@@ -2300,9 +2302,17 @@ export function rebuildWorld(
   }
   ensureRoomContainers(world, floor);
   applyPendingSamosborAftermath(world, entities, nextId, floor);
+  refreshPathBlockersAfterSamosborRebuild(world, entities, _samosborCount);
 }
 
-function findPlayer(entities: Entity[]): Entity | undefined {
+function refreshPathBlockersAfterSamosborRebuild(world: World, entities: readonly Entity[], seed: number): void {
+  rebuildPathBlockersFromWorldObjects(world, seed);
+  const player = findPlayer(entities);
+  if (!player) return;
+  clearPathBlockerRegion(world, Math.floor(player.x) - 1, Math.floor(player.y) - 1, 3, 3);
+}
+
+function findPlayer(entities: readonly Entity[]): Entity | undefined {
   return entities.find(e => isPlayerEntity(e) && e.alive);
 }
 
@@ -3169,20 +3179,24 @@ function randomNpcLevel(): number {
   return Math.max(1, Math.min(100, 1 + Math.floor(Math.pow(Math.random(), 1.55) * 100)));
 }
 
-function randomNpcInventory(faction: Faction, level: number): { inventory: { defId: string; count: number; data?: unknown }[]; weapon?: string } {
+function randomNpcInventory(faction: Faction, level: number): { inventory: { defId: string; count: number; data?: unknown }[]; weapon?: string; tool?: string } {
   const inventory: { defId: string; count: number; data?: unknown }[] = [];
   let weapon: string | undefined;
+  let tool: string | undefined;
   const weaponIds = Object.values(ITEMS).filter(def => def.type === ItemType.WEAPON).map(def => def.id);
   if (weaponIds.length > 0 && Math.random() < 0.62) {
-    weapon = weaponIds[Math.floor(Math.random() * weaponIds.length)];
-    inventory.push({ defId: weapon, count: 1 });
+    const picked = weaponIds[Math.floor(Math.random() * weaponIds.length)];
+    const slot = itemEquipSlot(ITEMS[picked]);
+    if (slot === 'tool') tool = picked;
+    else weapon = picked;
+    inventory.push({ defId: picked, count: 1 });
   }
   if (faction === Faction.LIQUIDATOR && Math.random() < 0.5) inventory.push({ defId: 'ammo_9mm', count: 12 + Math.floor(level / 4) });
   if (faction === Faction.SCIENTIST && Math.random() < 0.45) inventory.push({ defId: 'nii_sample_container', count: 1 });
   if (faction === Faction.CULTIST && Math.random() < 0.5) inventory.push({ defId: 'istotit_candle', count: 1 });
   const extra = 1 + Math.floor(Math.random() * 4);
   for (let i = 0; i < extra && inventory.length < 8; i++) inventory.push(randomItemStack(randomItemIdDifferent()));
-  return { inventory: inventory.slice(0, 8), weapon };
+  return { inventory: inventory.slice(0, 8), weapon, tool };
 }
 
 function rewriteActorAsRandomNpc(state: GameState, entity: Entity, variant: ActiveSamosborVariant): void {
@@ -3211,6 +3225,7 @@ function rewriteActorAsRandomNpc(state: GameState, entity: Entity, variant: Acti
   entity.money = Math.floor(Math.random() * (40 + rpg.level * 8));
   entity.inventory = loadout.inventory;
   entity.weapon = loadout.weapon;
+  entity.tool = loadout.tool;
   entity.ai = wasPlayer ? entity.ai : { goal: AIGoal.WANDER, tx: 0, ty: 0, path: [], pi: 0, stuck: 0, timer: 0 };
   entity.questId = -1;
   entity.canGiveQuest = !wasPlayer && Math.random() < 0.10;
@@ -3580,6 +3595,7 @@ function createIstotitThingAtCell(
       ai: { goal: AIGoal.WANDER, tx: 0, ty: 0, path: [], pi: 0, stuck: 0, timer: 0 },
       inventory: loadout.inventory,
       weapon: loadout.weapon,
+      tool: loadout.tool,
       rpg,
       questId: -1,
       canGiveQuest: Math.random() < 0.10,

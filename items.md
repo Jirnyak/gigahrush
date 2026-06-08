@@ -36,7 +36,7 @@ World item drops подбираются через тот же inventory transfe
 
 Каждое `ItemType.WEAPON` должно иметь executable stats или быть явно небоевым предметом другого типа. Физические stats задают damage, range, speed, durability, ranged/ammo, projectile speed, pellets/spread, projectile type, AoE, beam flags и sound id. Role tiers дают HUD/readability язык: emergency melee, industrial tool, reach, heavy, control, sidearm, rifle, corridor shotgun, ammo burn, grenade, rare energy, fuel clear, PSI.
 
-ПСИ-сгустки используют тот же weapon contract, но платят `psiCost` и могут иметь `psiEffect`. Они остаются предметами и ресурсом, а не отдельной магической подсистемой вне инвентаря.
+ПСИ-сгустки используют тот же executable weapon contract, но экипируются через `tool` slot, платят `psiCost` и могут иметь `psiEffect`. Они остаются предметами и ресурсом, а не отдельной магической подсистемой вне инвентаря.
 
 ## Ресурсы, крафт и производство
 

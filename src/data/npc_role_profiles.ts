@@ -31,9 +31,10 @@ export const NPC_ROLE_PROFILES: readonly NpcRoleProfile[] = [
     scope: 'design_floor',
     floorKeys: ['design:floor_69'],
     baseOccupations: [
-      Occupation.PERFORMER,
+      Occupation.WORKER69,
     ],
     candidateOccupations: [
+      Occupation.WORKER69,
       Occupation.PERFORMER,
       Occupation.TRAVELER,
       Occupation.HOUSEWIFE,
@@ -41,7 +42,7 @@ export const NPC_ROLE_PROFILES: readonly NpcRoleProfile[] = [
       Occupation.STOREKEEPER,
       Occupation.DIRECTOR,
     ],
-    outputOccupation: Occupation.PERFORMER,
+    outputOccupation: Occupation.WORKER69,
     candidateFaction: Faction.CITIZEN,
     requiresFemale: true,
     sourceNamePrefix: 'Этаж 69: посетитель ',

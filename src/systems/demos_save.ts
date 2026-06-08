@@ -21,8 +21,8 @@ export const DEMOS_REACTION_DELTA_MAX = 8;
 
 export interface DemosRelationOverride {
   fromAlifeId: number;
-  targetKind: 'alife';
-  targetAlifeId: number;
+  targetKind: 'alife' | 'player';
+  targetAlifeId?: number;
   value: number;
   updatedAt?: number;
   reasonTag?: string;
@@ -153,10 +153,11 @@ function reactionKind(input: unknown): DemosReactionKind | undefined {
 }
 
 function sanitizeRelationOverride(raw: unknown): DemosRelationOverride | undefined {
-  if (!isRecord(raw) || raw.targetKind !== 'alife') return undefined;
+  if (!isRecord(raw) || (raw.targetKind !== 'alife' && raw.targetKind !== 'player')) return undefined;
   const fromAlifeId = positiveId(raw.fromAlifeId);
-  const targetAlifeId = positiveId(raw.targetAlifeId);
-  if (fromAlifeId === undefined || targetAlifeId === undefined || fromAlifeId === targetAlifeId) return undefined;
+  const targetAlifeId = raw.targetKind === 'alife' ? positiveId(raw.targetAlifeId) : undefined;
+  if (fromAlifeId === undefined) return undefined;
+  if (raw.targetKind === 'alife' && (targetAlifeId === undefined || fromAlifeId === targetAlifeId)) return undefined;
   const value = intIn(raw.value, DEMOS_RELATION_EMPTY, DEMOS_RELATION_EMPTY, DEMOS_RELATION_MAX);
   if (value === DEMOS_RELATION_EMPTY) return undefined;
   const postId = positiveId(raw.postId);
@@ -164,7 +165,7 @@ function sanitizeRelationOverride(raw: unknown): DemosRelationOverride | undefin
   const updatedAt = typeof raw.updatedAt === 'number' && Number.isFinite(raw.updatedAt) ? raw.updatedAt : undefined;
   return {
     fromAlifeId,
-    targetKind: 'alife',
+    targetKind: raw.targetKind,
     targetAlifeId,
     value,
     updatedAt,

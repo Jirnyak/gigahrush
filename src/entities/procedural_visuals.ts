@@ -24,8 +24,10 @@ import {
   NPC_VISUAL_FLOOR69_FEMALE,
   npcVisualTextureKey,
   npcVisualUsesDynamicTexture,
+  npcVisualWorldSpriteScale,
 } from './npc_visuals';
 import { authoredNpcSpriteGeneratorOffset } from '../render/sprite_index';
+import { resolveNpcArtVisualId } from '../data/npc_art_visuals';
 
 export { isFloor69FemaleSprite } from './npc_visuals';
 
@@ -67,6 +69,14 @@ function hashText(text: string, seed: number): number {
 
 function rnd(seed: number, salt: number): number {
   return mix32((seed + Math.imul(salt, 0x9e3779b9)) >>> 0) / 0x100000000;
+}
+
+const OCCUPATION_SPRITE_VALUES = new Set<Occupation>(
+  Object.values(Occupation).filter((value): value is Occupation => typeof value === 'number'),
+);
+
+function isOccupationSpriteHint(spriteHint: number | undefined): spriteHint is Occupation {
+  return spriteHint !== undefined && OCCUPATION_SPRITE_VALUES.has(spriteHint as Occupation);
 }
 
 function rgbJitter(c: RGB, seed: number, salt: number, amp: number): RGB {
@@ -129,7 +139,7 @@ function paintLine(t: Uint32Array, x0: number, y0: number, x1: number, y1: numbe
 
 function inferOccupation(occupation: Occupation | undefined, spriteHint: number | undefined): Occupation {
   if (occupation !== undefined) return occupation;
-  if (spriteHint !== undefined && spriteHint >= 0 && spriteHint <= Occupation.PERFORMER) return spriteHint as Occupation;
+  if (isOccupationSpriteHint(spriteHint)) return spriteHint;
   return Occupation.TRAVELER;
 }
 
@@ -152,6 +162,7 @@ function npcPalette(occupation: Occupation, faction: Faction | undefined, seed: 
     case Occupation.ELECTRICIAN:
     case Occupation.MECHANIC:
     case Occupation.TURNER:
+    case Occupation.CLEANER:
       return { top: rgbJitter([70, 88, 112], seed, 90, 26), pants: rgbJitter([52, 56, 64], seed, 100, 16), accent: [204, 156, 42] };
     case Occupation.COOK:
       return { top: rgbJitter([224, 224, 216], seed, 110, 18), pants: rgbJitter([58, 58, 64], seed, 120, 12), accent: [238, 238, 228] };
@@ -162,6 +173,7 @@ function npcPalette(occupation: Occupation, faction: Faction | undefined, seed: 
     case Occupation.CHILD:
       return { top: rgbJitter(pickRgb(CIVILIAN_TOPS, seed, 170), seed, 171, 30), pants: rgbJitter([72, 74, 106], seed, 180, 18), accent: [210, 154, 78] };
     case Occupation.PERFORMER:
+    case Occupation.WORKER69:
       return { top: rgbJitter([128, 48, 84], seed, 185, 26), pants: rgbJitter([38, 34, 48], seed, 186, 16), accent: [218, 164, 72] };
     default:
       return { top: rgbJitter(pickRgb(CIVILIAN_TOPS, seed, 190), seed, 191, 34), pants: rgbJitter(pickRgb(CIVILIAN_PANTS, seed, 200), seed, 201, 18), accent: rgbJitter([174, 126, 72], seed, 210, 34) };
@@ -475,6 +487,9 @@ export function generateNpcProfileSprite(
     return generateNpcVisualSprite(NPC_VISUAL_FLOOR69_FEMALE, { seed, occupation, faction, isFemale, sprite: spriteHint })
       ?? generateProceduralNpcSprite(seed, occupation, faction, isFemale, spriteHint);
   }
+  const artVisualId = resolveNpcArtVisualId({ faction, occupation, isFemale });
+  const art = generateNpcVisualSprite(artVisualId, { seed, occupation, faction, isFemale, sprite: spriteHint });
+  if (art) return art;
   return generateProceduralNpcSprite(seed, occupation, faction, isFemale, spriteHint);
 }
 
@@ -614,7 +629,7 @@ export function entityUsesProceduralSprite(e: Entity): boolean {
   if (e.type !== EntityType.NPC) return false;
   if (npcVisualUsesDynamicTexture(e.npcVisualId)) return true;
   if (isNpcSpecialSprite(e.sprite)) return false;
-  return e.sprite >= 0 && e.sprite <= Occupation.PERFORMER;
+  return isOccupationSpriteHint(e.sprite);
 }
 
 function deriveEntitySpriteSeed(e: Entity): number {
@@ -641,7 +656,12 @@ export function proceduralEntitySpriteKey(e: Entity): number {
   const occ = e.occupation ?? inferOccupation(undefined, e.sprite);
   let h = deriveEntitySpriteSeed(e);
   if (e.type === EntityType.NPC) {
-    const key = npcVisualTextureKey(e.npcVisualId, {
+    const visualId = e.npcVisualId ?? resolveNpcArtVisualId({
+      faction: e.faction,
+      occupation: e.occupation,
+      isFemale: e.isFemale,
+    });
+    const key = npcVisualTextureKey(visualId, {
       seed: h,
       occupation: e.occupation,
       faction: e.faction,
@@ -660,10 +680,37 @@ export function proceduralEntitySpriteKey(e: Entity): number {
   return h || 1;
 }
 
+function npcEntityVisualId(e: Entity): string | undefined {
+  return e.npcVisualId ?? resolveNpcArtVisualId({
+    faction: e.faction,
+    occupation: e.occupation,
+    isFemale: e.isFemale,
+  });
+}
+
+export function proceduralEntityDefaultSpriteScale(e: Entity): number | undefined {
+  if (e.type !== EntityType.NPC) return undefined;
+  const visualId = npcEntityVisualId(e);
+  if (!visualId) return undefined;
+  if (!e.npcVisualId && !entityUsesProceduralSprite(e)) return undefined;
+  return npcVisualWorldSpriteScale(visualId);
+}
+
+export function entityWorldSpriteScale(e: Entity): number {
+  const visualScale = proceduralEntityDefaultSpriteScale(e);
+  if (visualScale !== undefined) return (e.spriteScale ?? 1) * visualScale;
+  return e.spriteScale ?? 1;
+}
+
 export function generateProceduralEntitySprite(e: Entity): Uint32Array | null {
   const seed = proceduralEntitySpriteKey(e);
   if (e.type === EntityType.NPC && entityUsesProceduralSprite(e)) {
-    const visualSeed = npcVisualTextureKey(e.npcVisualId, {
+    const visualId = e.npcVisualId ?? resolveNpcArtVisualId({
+      faction: e.faction,
+      occupation: e.occupation,
+      isFemale: e.isFemale,
+    });
+    const visualSeed = npcVisualTextureKey(visualId, {
       seed: deriveEntitySpriteSeed(e),
       occupation: e.occupation,
       faction: e.faction,
@@ -672,7 +719,7 @@ export function generateProceduralEntitySprite(e: Entity): Uint32Array | null {
     })
       ? deriveEntitySpriteSeed(e)
       : seed;
-    const special = generateNpcVisualSprite(e.npcVisualId, {
+    const special = generateNpcVisualSprite(visualId, {
       seed: visualSeed,
       occupation: e.occupation,
       faction: e.faction,

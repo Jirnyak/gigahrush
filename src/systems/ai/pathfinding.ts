@@ -7,6 +7,7 @@ import {
 } from '../../core/types';
 import { World } from '../../core/world';
 import { getCellHazardMoveMultiplier } from '../cell_hazards';
+import { canActorOccupy } from '../movement_collision';
 import { setDoorState } from '../door_state';
 import { aiPathMoveSpeed } from '../rpg';
 import { bark, BARK_ARRIVE, BARK_ARRIVE_F, BARK_CHANCE_ARRIVE } from './barks';
@@ -106,6 +107,7 @@ interface PathWaypoint {
 interface PathWaypointCache {
   world: World;
   cellVersion: number;
+  pathBlockerVersion: number;
   path: readonly number[];
   pathLength: number;
   pi: number;
@@ -656,13 +658,6 @@ export function steerEntityTowardCell(world: World, e: Entity, tx: number, ty: n
   };
 }
 
-function canActorOccupy(world: World, x: number, y: number, r: number): boolean {
-  return !world.solid(Math.floor(x + r), Math.floor(y + r)) &&
-    !world.solid(Math.floor(x + r), Math.floor(y - r)) &&
-    !world.solid(Math.floor(x - r), Math.floor(y + r)) &&
-    !world.solid(Math.floor(x - r), Math.floor(y - r));
-}
-
 function actorRadius(e: Entity): number {
   return e.type === EntityType.MONSTER ? 0.18 : 0.16;
 }
@@ -748,11 +743,13 @@ function selectPathWaypoint(world: World, e: Entity, r: number): PathWaypoint {
   const sourceCell = world.idx(Math.floor(e.x), Math.floor(e.y));
   const goalCell = world.idx(Math.floor(ai.tx), Math.floor(ai.ty));
   const cellVersion = navigationCacheCellVersion(world);
+  const pathBlockerVersion = world.pathBlockerVersion;
   const cached = _pathWaypointCache.get(e);
   if (
     cached &&
     cached.world === world &&
     cached.cellVersion === cellVersion &&
+    cached.pathBlockerVersion === pathBlockerVersion &&
     cached.path === ai.path &&
     cached.pathLength === ai.path.length &&
     cached.pi === ai.pi &&
@@ -767,6 +764,7 @@ function selectPathWaypoint(world: World, e: Entity, r: number): PathWaypoint {
   _pathWaypointCache.set(e, {
     world,
     cellVersion,
+    pathBlockerVersion,
     path: ai.path,
     pathLength: ai.path.length,
     pi: ai.pi,

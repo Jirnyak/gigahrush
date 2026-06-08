@@ -20,6 +20,11 @@ import { placeCraftStationsWithProfile } from './craft_stations';
 import { maybePlaceBrokenFixture } from './interactive_fixtures';
 import { placeInteractiveAt } from './interactive_placement';
 import { isConnectivityWalkable } from './shared';
+import {
+  fillVisualSlotsForRoomDecor,
+  fillVisualSlotsFromFeature,
+  type VisualSlotRoomDecorSummary,
+} from './visual_cell_slots';
 
 interface ObjectCandidate {
   room: Room;
@@ -36,6 +41,7 @@ export interface FloorObjectPlacementSummary {
   features: Record<string, number>;
   interactives: Record<string, number>;
   brokenFixtures: Record<string, number>;
+  visualSlotDecor?: VisualSlotRoomDecorSummary;
   craftStations?: CraftStationPlacementSummary;
 }
 
@@ -325,6 +331,7 @@ function placeFeatureRule(
     usedCells.add(candidate.idx);
     if (!featureCellValid(world, candidate.room, candidate.idx, reachable, rule)) continue;
     if (!world.setFeatureAt(candidate.idx, rule.feature)) continue;
+    fillVisualSlotsFromFeature(world, candidate.idx, seed);
     placed++;
   }
   return placed;
@@ -488,7 +495,9 @@ function placeWallDecorRule(
     if (!wallCellValidForDecor(world, candidate.room, candidate.idx, rule.allowSpecialReplace)) continue;
     world.wallTex[candidate.idx] = wallDecorTexture(rule, seed, candidate.idx, placed);
     wallTexChanged = true;
-    if (rule.decor === 'screen') world.setFeatureAt(candidate.idx, Feature.SCREEN, false);
+    if (rule.decor === 'screen' && world.setFeatureAt(candidate.idx, Feature.SCREEN, false)) {
+      fillVisualSlotsFromFeature(world, candidate.idx, seed);
+    }
     roomDecorCounts.set(candidate.room.id, (roomDecorCounts.get(candidate.room.id) ?? 0) + 1);
     placed++;
   }
@@ -584,6 +593,23 @@ export function applyFloorObjectPlacementProfile(
     placedWallDecor += placed;
     if (rule.decor === 'screen') placedScreens += placed;
   }
+  summary.visualSlotDecor = fillVisualSlotsForRoomDecor(world, rooms, {
+    seed: hash32(seed, profile.id.length, 6),
+    tags: profile.tags,
+    reachable,
+    wallCap: density?.wallDecor === undefined && density?.features === undefined
+      ? undefined
+      : Math.min(160, Math.max(0, (density?.wallDecor ?? 0) + Math.ceil((density?.features ?? 0) * 0.75))),
+    ceilingCap: density?.features === undefined && density?.screens === undefined
+      ? undefined
+      : Math.min(128, Math.max(0, Math.ceil((density?.features ?? 0) * 0.55) + Math.ceil((density?.screens ?? 0) * 1.2))),
+    columnCap: density?.features === undefined
+      ? undefined
+      : Math.min(48, Math.max(0, Math.ceil((density?.features ?? 0) * 0.18))),
+    maxPerRoom: density?.maxPerRoom === undefined ? undefined : Math.max(2, density.maxPerRoom + 1),
+    avoidX: spawnX,
+    avoidY: spawnY,
+  });
 
   return summary;
 }

@@ -318,22 +318,6 @@ test('ordinary procedural NPC sprites keep legacy humanoid silhouettes with seed
       plotNpcId: 'yakov',
       spriteSeed: 13,
     },
-    {
-      id: 7104,
-      type: EntityType.NPC,
-      x: 4,
-      y: 1,
-      angle: 0,
-      pitch: 0,
-      alive: true,
-      speed: 1,
-      sprite: Occupation.ALCOHOLIC,
-      occupation: Occupation.ALCOHOLIC,
-      faction: undefined,
-      isFemale: false,
-      plotNpcId: 'vanka',
-      spriteSeed: 14,
-    },
   ];
   const generatedByPlotNpcId = new Map<string, Uint32Array>();
 
@@ -357,13 +341,10 @@ test('ordinary procedural NPC sprites keep legacy humanoid silhouettes with seed
   assert.equal(spritePixel(yakov, 34, 15), spritePixel(sprites[Occupation.SCIENTIST], 34, 15), 'Yakov should keep the old right pupil pixel');
   assert.equal(spritePixel(yakov, 35, 15), spritePixel(sprites[Occupation.SCIENTIST], 35, 15), 'Yakov should keep the old right glasses pixel');
 
-  const vanka = generatedByPlotNpcId.get('vanka')!;
-  assert.equal(spritePixel(vanka, 32, 18), spritePixel(sprites[Occupation.ALCOHOLIC], 32, 18), 'Vanka should keep the old red nose pixel');
-
-  const vankaA = generateProceduralEntitySprite(cases[3]);
-  const vankaB = generateProceduralEntitySprite({ ...cases[3], id: 7105, spriteSeed: 15 });
-  assert.ok(vankaA && vankaB);
-  assert.notEqual(spriteHash(vankaA), spriteHash(vankaB), 'Vanka variants should remain seeded, not one fixed atlas copy');
+  const barniA = generateProceduralEntitySprite(cases[1]);
+  const barniB = generateProceduralEntitySprite({ ...cases[1], id: 7105, spriteSeed: 15 });
+  assert.ok(barniA && barniB);
+  assert.notEqual(spriteHash(barniA), spriteHash(barniB), 'ordinary non-art NPC variants should remain seeded, not one fixed atlas copy');
 });
 
 test('cult visual NPCs keep the newer procedural hood treatment', () => {

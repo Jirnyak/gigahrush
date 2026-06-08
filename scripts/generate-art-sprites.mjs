@@ -9,14 +9,21 @@ const MANIFEST_PATH = path.join(ROOT, 'src/data/art_sprite_manifest.ts');
 const OUT_PATH = path.join(ROOT, 'src/render/generated_art_sprites.ts');
 const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
 const SIZE = 64;
+const CLEAR = 0x00000000;
 
 function parseManifestRows() {
   const src = readFileSync(MANIFEST_PATH, 'utf8');
-  const rowRe = /\{\s*id: '([^']+)'[\s\S]*?sourcePath: '([^']+)'[\s\S]*?sha256: '([0-9a-f]{64})'[\s\S]*?width: 64,\s*height: 64,/g;
+  const rowRe = /\{\s*id: '([^']+)'[\s\S]*?sourcePath: '([^']+)'[\s\S]*?sha256: '([0-9a-f]{64})'[\s\S]*?width: (\d+),\s*height: (\d+),/g;
   const rows = [];
   let match;
   while ((match = rowRe.exec(src)) !== null) {
-    rows.push({ id: match[1], sourcePath: match[2], sha256: match[3] });
+    rows.push({
+      id: match[1],
+      sourcePath: match[2],
+      sha256: match[3],
+      width: Number(match[4]),
+      height: Number(match[5]),
+    });
   }
   if (rows.length === 0) throw new Error('No art sprite manifest rows found');
   return rows;
@@ -80,13 +87,15 @@ function decodePng(filePath) {
     }
   }
 
-  if (width !== SIZE || height !== SIZE) throw new Error(`${filePath}: expected ${SIZE}x${SIZE}, got ${width}x${height}`);
+  if (width <= 0 || height <= 0) throw new Error(`${filePath}: invalid PNG size ${width}x${height}`);
   if (bitDepth !== 8 || colorType !== 6) throw new Error(`${filePath}: expected 8-bit RGBA PNG`);
   if (compression !== 0 || filterMethod !== 0 || interlace !== 0) throw new Error(`${filePath}: expected non-interlaced PNG with standard filters`);
 
   const raw = inflateSync(Buffer.concat(idat));
   const bytesPerPixel = 4;
   const stride = width * bytesPerPixel;
+  const expectedRawLength = height * (stride + 1);
+  if (raw.length < expectedRawLength) throw new Error(`${filePath}: truncated PNG payload`);
   const pixels = new Uint8Array(height * stride);
   let src = 0;
 
@@ -120,6 +129,50 @@ function decodePng(filePath) {
     out[i] = ((a << 24) | (b << 16) | (g << 8) | r) >>> 0;
   }
   if (opaque === 0) throw new Error(`${filePath}: blank transparent sprite`);
+  return { width, height, pixels: out };
+}
+
+function rowHasOpaquePixel(decoded, y) {
+  const row = y * decoded.width;
+  for (let x = 0; x < decoded.width; x++) {
+    if ((decoded.pixels[row + x] >>> 24) !== 0) return true;
+  }
+  return false;
+}
+
+function trimVerticalTransparency(decoded) {
+  let top = 0;
+  while (top < decoded.height && !rowHasOpaquePixel(decoded, top)) top++;
+  let bottom = decoded.height - 1;
+  while (bottom >= top && !rowHasOpaquePixel(decoded, bottom)) bottom--;
+  if (top === 0 && bottom === decoded.height - 1) return decoded;
+
+  const height = bottom - top + 1;
+  const pixels = new Uint32Array(decoded.width * height);
+  for (let y = 0; y < height; y++) {
+    const srcStart = (top + y) * decoded.width;
+    pixels.set(decoded.pixels.subarray(srcStart, srcStart + decoded.width), y * decoded.width);
+  }
+  return { width: decoded.width, height, pixels };
+}
+
+function normalizeToRuntimeSprite(decoded) {
+  const trimmed = trimVerticalTransparency(decoded);
+  if (trimmed.width === SIZE && trimmed.height === SIZE) return trimmed.pixels;
+  const scale = Math.min(SIZE / trimmed.width, SIZE / trimmed.height);
+  const outW = Math.max(1, Math.min(SIZE, Math.round(trimmed.width * scale)));
+  const outH = Math.max(1, Math.min(SIZE, Math.round(trimmed.height * scale)));
+  const offX = Math.floor((SIZE - outW) / 2);
+  const offY = SIZE - outH;
+  const out = new Uint32Array(SIZE * SIZE).fill(CLEAR);
+
+  for (let y = 0; y < outH; y++) {
+    const srcY = Math.min(trimmed.height - 1, Math.floor((y + 0.5) * trimmed.height / outH));
+    for (let x = 0; x < outW; x++) {
+      const srcX = Math.min(trimmed.width - 1, Math.floor((x + 0.5) * trimmed.width / outW));
+      out[(offY + y) * SIZE + offX + x] = trimmed.pixels[srcY * trimmed.width + srcX] >>> 0;
+    }
+  }
   return out;
 }
 
@@ -184,19 +237,45 @@ function emit(rows, encoded) {
     `}\n`;
 }
 
+function syncManifestSourceFacts(rows, facts) {
+  let src = readFileSync(MANIFEST_PATH, 'utf8');
+  for (const row of rows) {
+    const fact = facts.get(row.id);
+    if (!fact) continue;
+    const needle = `sourcePath: '${row.sourcePath}',`;
+    const sourceIndex = src.indexOf(needle);
+    if (sourceIndex < 0) throw new Error(`Cannot find manifest row for ${row.id}`);
+    const rowStart = src.lastIndexOf('\n  {', sourceIndex);
+    const nextRow = src.indexOf('\n  {', sourceIndex + needle.length);
+    const manifestEnd = src.indexOf('\n] as const', sourceIndex + needle.length);
+    const rowEnd = nextRow >= 0 ? nextRow : manifestEnd;
+    if (rowStart < 0 || rowEnd < 0) throw new Error(`Cannot isolate manifest row for ${row.id}`);
+    const before = src.slice(0, rowStart);
+    const rowBlock = src.slice(rowStart, rowEnd)
+      .replace(/sha256: '[0-9a-f]{64}'/, `sha256: '${fact.sha256}'`)
+      .replace(/width: \d+,\s*\n\s*height: \d+,/, `width: ${fact.width},\n    height: ${fact.height},`);
+    const after = src.slice(rowEnd);
+    src = `${before}${rowBlock}${after}`;
+  }
+  writeFileSync(MANIFEST_PATH, src);
+}
+
 const rows = parseManifestRows();
 const seen = new Set();
 const encoded = new Map();
+const facts = new Map();
 for (const row of rows) {
   if (!/^[a-z][a-z0-9]*(?:_[a-z0-9]+)*$/.test(row.id)) throw new Error(`Invalid art sprite id: ${row.id}`);
   if (seen.has(row.id)) throw new Error(`Duplicate art sprite id: ${row.id}`);
   seen.add(row.id);
   const filePath = resolveSourcePath(row.sourcePath);
   const sha = createHash('sha256').update(readFileSync(filePath)).digest('hex');
-  if (sha !== row.sha256) throw new Error(`${row.sourcePath}: SHA mismatch, got ${sha}`);
-  encoded.set(row.id, encodeRle(decodePng(filePath)));
+  const decoded = decodePng(filePath);
+  facts.set(row.id, { sha256: sha, width: decoded.width, height: decoded.height });
+  encoded.set(row.id, encodeRle(normalizeToRuntimeSprite(decoded)));
 }
 
+syncManifestSourceFacts(rows, facts);
 mkdirSync(path.dirname(OUT_PATH), { recursive: true });
 writeFileSync(OUT_PATH, emit(rows, encoded));
-console.log(`Generated ${path.relative(ROOT, OUT_PATH)} from ${rows.length} art sprites`);
+console.log(`Generated ${path.relative(ROOT, OUT_PATH)} from ${rows.length} art sprites normalized to ${SIZE}x${SIZE}`);

@@ -44,6 +44,7 @@ export const ALIFE_FACTION_PROFILES: readonly AlifeFactionProfile[] = [
       { value: Occupation.LOCKSMITH, weight: 12 },
       { value: Occupation.COOK, weight: 10 },
       { value: Occupation.STOREKEEPER, weight: 8 },
+      { value: Occupation.CLEANER, weight: 6 },
       { value: Occupation.TRAVELER, weight: 18 },
       { value: Occupation.CHILD, weight: 8 },
       { value: Occupation.SECRETARY, weight: 6 },

@@ -241,6 +241,7 @@ test('Demos profile social links read the shared outgoing graph when no override
 
   assert.equal(details?.friendsCount, 1);
   assert.equal(details?.enemiesCount, 1);
+  assert.equal(links[0]?.targetKind, 'player');
   assert.equal(links.some(link => link.targetAlifeId === 3 && link.role === DemosSocialRoleId.FRIEND), true);
   assert.equal(links.some(link => link.targetAlifeId === 4 && link.role === DemosSocialRoleId.ENEMY), true);
 });
@@ -267,12 +268,17 @@ test('Demos dead profiles keep traits and outgoing social summary', () => {
     { targetAlifeId: 2, relation: 92, role: 'parent', tags: ['family'] },
     { targetAlifeId: 4, relation: -90, role: 'enemy' },
   ]);
+  setEdges(state, 2, [
+    { targetAlifeId: 1, relation: 92, role: 'child', tags: ['family'] },
+  ]);
 
   const details = getDemosProfileDetails(state, 1);
   assert.equal(details?.dead, true);
   assert.equal((details?.traits.length ?? 0) > 0, true);
   assert.equal(details?.familyCount, 1);
   assert.equal(details?.enemiesCount, 1);
+  assert.equal(buildDemosSocialLinksView(state, 1).some(link => link.dead && link.targetLabel.startsWith('мертв:')), false);
+  assert.equal(buildDemosSocialLinksView(state, 2).some(link => link.dead && link.targetLabel.startsWith('мертв: alife:1')), true);
 });
 
 test('Demos face-to-face helper rejects NPCs without stable A-Life identity', () => {
