@@ -1,8 +1,10 @@
 /* ── Procedural texture generator (64×64, retro horror style) ── */
 
 import { Tex } from '../core/types';
-import { generateSlideTextures, generateHintTextures, generatePosterTextures } from '../gen/living';
-import { generateProceduralScreenTextures } from '../gen/procedural_screens';
+import { generateSlideTextures } from '../gen/living/slides';
+import { generatePosterTextures } from '../gen/living/posters';
+import { generateHintTextures } from './hint_textures';
+import { generateProceduralScreenTextures } from './procedural_screen_textures';
 import { S, rgba, noise, clamp } from './pixutil';
 
 export type TexData = Uint32Array; // S*S RGBA pixels (0xAABBGGRR little-endian)

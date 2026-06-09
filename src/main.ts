@@ -12,7 +12,8 @@ import {
 } from './core/types';
 import { World, replaceWorldFromGeneration } from './core/world';
 import { hashSeed, randSeed } from './core/rand';
-import { canActorOccupy } from './systems/movement_collision';
+import { canActorOccupy, unstuckActorFromBlockers } from './systems/movement_collision';
+import { selectMeleeTarget } from './systems/melee_targeting';
 import { updateProceduralScreens } from './gen/procedural_screens';
 import { generateProceduralFloor } from './gen/procedural_floor';
 import { generateDesignFloor, isDesignFloorId } from './gen/design_floors/manifest';
@@ -170,6 +171,7 @@ import {
   notifyNpcKill,
   npcHasImportantQuestAction,
   npcQuestActionHint,
+  resetNonStoryQuestsForNewPlayer,
   toggleActiveQuest,
   updateKillQuestPressure,
 } from './systems/quests';
@@ -307,6 +309,7 @@ import {
   ensureFloorRunState,
   floorRunArrivalLead,
   floorRunEntryDanger,
+  floorRunEntryForFloorKey,
   floorRunSaveHasRestorableRoute,
   floorRunEntryAllowsNpcs,
   floorRunEntryFloorKey,
@@ -398,7 +401,10 @@ import {
   captureAlifeFloorState,
   currentAlifeFloorKey,
   materializeAlifeFloorPopulation,
+  materializeAlifeArrival,
   recordAlifeNpcDeath,
+  randomAliveAlifeNpcSnapshot,
+  resetAlifePlayerRelationsForNewPlayer,
   setAlifeState,
 } from './systems/alife';
 import {
@@ -408,6 +414,10 @@ import {
   moveDemosCursor,
 } from './systems/demos';
 import { restoreDemosSocialFromSave } from './systems/demos_save';
+import {
+  existingDemosRelationToNewPlayer,
+  resetDemosPlayerRelationSlotsForNewPlayer,
+} from './systems/demos_social';
 import {
   PLAYER_SELF_RELATION,
   PLAYER_START_KARMA,
@@ -1171,13 +1181,18 @@ function randomDeathContinuationNpc(random: () => number = Math.random): Entity 
   return selected;
 }
 
-function continueDeathAsRandomNpc(): boolean {
-  if (!state.gameOver || state.gameWon) return false;
-  const host = randomDeathContinuationNpc();
-  if (!host) {
-    state.msgs.push(msg('На этаже не осталось живого человека для продолжения пути.', state.time, '#f84'));
-    return false;
+function resetDeathContinuationWorldForHost(host: Entity): void {
+  const removedQuests = resetNonStoryQuestsForNewPlayer(state, entities);
+  resetAlifePlayerRelationsForNewPlayer(state, entities, host, (fromAlifeId, targetAlifeId) =>
+    existingDemosRelationToNewPlayer(state, fromAlifeId, targetAlifeId)
+  );
+  resetDemosPlayerRelationSlotsForNewPlayer(state);
+  if (removedQuests > 0) {
+    state.msgs.push(msg(`Поручения прежнего тела сброшены: ${removedQuests}. Сюжетная нить сохранена.`, state.time, '#8cf'));
   }
+}
+
+function finalizeDeathContinuationHost(host: Entity): void {
   endPsiPossession(entities, player, undefined, state.time, 'reset');
   if (host.ai) {
     host.ai.combatTargetId = undefined;
@@ -1187,6 +1202,7 @@ function continueDeathAsRandomNpc(): boolean {
   }
   host.psiControlledBy = undefined;
   makeCurrentPlayer(host);
+  resetDeathContinuationWorldForHost(host);
   resetRuntimeCamera(runtimeCamera);
   state.gameOver = false;
   state.gameWon = false;
@@ -1196,7 +1212,112 @@ function continueDeathAsRandomNpc(): boolean {
   state.sleeping = false;
   netDeathReported = false;
   state.msgs.push(msg(`Продолжаете путь как ${entityDisplayName(host)}.`, state.time, '#8cf'));
+}
+
+function continueDeathAsFloorNpc(): boolean {
+  const host = randomDeathContinuationNpc();
+  if (!host) return false;
+  finalizeDeathContinuationHost(host);
   return true;
+}
+
+function continueDeathAsAlifePopulationNpc(): boolean {
+  const excluded = new Set<number>();
+  if (player.alifeId !== undefined) excluded.add(player.alifeId);
+  const snapshot = randomAliveAlifeNpcSnapshot(state, Math.random, excluded);
+  if (!snapshot) {
+    state.msgs.push(msg('В A-Life не осталось живого человека для продолжения пути.', state.time, '#f84'));
+    return false;
+  }
+  const targetEntry = floorRunEntryForFloorKey(state, snapshot.floorKey);
+  if (!targetEntry) {
+    state.msgs.push(msg(`Запись A-Life недостижима: ${snapshot.floorKey}.`, state.time, '#f84'));
+    return false;
+  }
+
+  endPsiPossession(entities, player, undefined, state.time, 'reset');
+  captureCurrentAlifeFloor();
+  captureCurrentFloorMemory();
+  clearPseudoliftActive(state, entities);
+  const fromFloor = state.currentFloor;
+  commitFloorRunEntry(state, targetEntry);
+  state.currentFloor = targetEntry.baseFloor;
+  if (targetEntry.baseFloor === FloorLevel.VOID) setVoidEntryFromFloor(state, fromFloor);
+  else setVoidEntryFromFloor(state, undefined);
+  const floorInstances = ensureFloorInstanceState(state, targetEntry.baseFloor);
+  floorInstances.current = null;
+  floorInstances.lastStableFloor = targetEntry.baseFloor;
+
+  scheduleLoading(() => {
+    resetNoiseRecords();
+    resetGeneratedFloorPopulationState();
+    const loaded = loadFloorForTarget(targetEntry.baseFloor, targetEntry);
+    const gen = loaded.generation;
+
+    world = replaceWorldFromGeneration(null, gen);
+    entities = gen.entities;
+    nextEntityId.v = entities.reduce((mx, e) => Math.max(mx, e.id), 0) + 1;
+    materializeCurrentAlifeFloor(snapshot.floorKey);
+
+    let host = entities.find(e => e.type === EntityType.NPC && e.alifeId === snapshot.id && e.alive);
+    if (!host) {
+      const spawn = safeSpawnNear(snapshot.x ?? gen.spawnX, snapshot.y ?? gen.spawnY, gen.spawnX, gen.spawnY);
+      host = materializeAlifeArrival(state, world, entities, nextEntityId, snapshot.id, {
+        x: spawn.x,
+        y: spawn.y,
+        angle: snapshot.angle ?? 0,
+      }, snapshot.floorKey) ?? undefined;
+    }
+    if (!host) {
+      state.msgs.push(msg(`Не удалось материализовать нового носителя: ${snapshot.name}.`, state.time, '#f84'));
+      return;
+    }
+
+    initFactionRelations();
+    initFactionControl(world);
+    ensureProceduralSpriteSeeds(entities);
+    applyContractFloorHooks(state, world, entities, nextEntityId, host);
+    finalizeDeathContinuationHost(host);
+    state.samosborTimer = nextFloorRunSamosborCooldown(state);
+    state.samosborActive = false;
+    floorTeleportCd = 0;
+    resetPsiState();
+    clearLiftArachnaActive(state);
+    ensureRoomContainers(world, state.currentFloor);
+    ensureProductionRooms(state, world);
+    prepareEditableFloor(undefined, false, !loaded.fromMemory);
+    resetMapForLoadedFloor(loaded);
+    updateMapExploration(world, player, state);
+    restoreVoidReturnPortalForCurrentWorld();
+    applyStoryRouteGates(world, player, state);
+    publishEvent(state, {
+      type: 'floor_transition',
+      zoneId: world.zoneMap[world.idx(Math.floor(player.x), Math.floor(player.y))],
+      x: player.x,
+      y: player.y,
+      actorId: player.id,
+      actorName: player.name,
+      actorFaction: player.faction,
+      severity: 3,
+      privacy: 'local',
+      tags: ['floor', 'floor_transition', 'death_continuation', floorRunEntryFloorKey(targetEntry)],
+      data: {
+        fromFloor,
+        toFloor: targetEntry.baseFloor,
+        floorZ: targetEntry.z,
+        routeId: floorRunEntryRouteId(targetEntry),
+        continuedAsAlifeId: snapshot.id,
+      },
+    });
+    finishLoadedFloorVisuals(gen);
+  });
+  return true;
+}
+
+function continueDeathAsRandomNpc(): boolean {
+  if (!state.gameOver || state.gameWon) return false;
+  if (continueDeathAsFloorNpc()) return true;
+  return continueDeathAsAlifePopulationNpc();
 }
 
 function restorePlayerBeforeWorldBoundary(): void {
@@ -2301,6 +2422,9 @@ function handlePlayerDeath(deadActor = player): void {
   const deathTime = state.time;
   const cause = formatLastPlayerDamageCause(state, deathTime);
   closeCraftMenu();
+  if (deadActor.type === EntityType.NPC && deadActor.alifeId !== undefined) {
+    recordAlifeNpcDeath(state, deadActor);
+  }
   state.gameOver = true;
   state.deathTimer = 0;
   startDeathCamera(runtimeCamera, deadActor.x, deadActor.y, deadActor.angle);
@@ -2334,23 +2458,7 @@ function playerCanOccupy(x: number, y: number, r = PLAYER_COLLISION_R): boolean 
 
 function nudgeBlockedPlayerToFloor(actor = player): void {
   if (isNoClipActive()) return;
-  const px = Math.floor(actor.x);
-  const py = Math.floor(actor.y);
-  if (!world.solid(px, py) && playerCanOccupy(actor.x, actor.y)) return;
-  for (let r = 1; r <= 5; r++) {
-    for (let dy = -r; dy <= r; dy++) {
-      for (let dx = -r; dx <= r; dx++) {
-        if (Math.abs(dx) !== r && Math.abs(dy) !== r) continue;
-        const x = world.wrap(px + dx);
-        const y = world.wrap(py + dy);
-        if (!passableSpawnCell(x + 0.5, y + 0.5)) continue;
-        if (!playerCanOccupy(x + 0.5, y + 0.5)) continue;
-        actor.x = x + 0.5;
-        actor.y = y + 0.5;
-        return;
-      }
-    }
-  }
+  unstuckActorFromBlockers(world, actor, { radius: PLAYER_COLLISION_R, maxCellRadius: 5 });
 }
 
 function playerSprintMoveMultiplier(actor: Entity): number {
@@ -2751,18 +2859,7 @@ function playerActions(_dt: number): void {
         : false;
       const entityIndex = getEntityIndex();
       entityIndex.queryRadius(ax, ay, 1.2, meleeHitQuery, ENTITY_MASK_ACTOR);
-      let meleeTarget: Entity | undefined;
-      let meleeTargetOrder = Number.MAX_SAFE_INTEGER;
-      for (const candidate of meleeHitQuery) {
-        if ((candidate.type !== EntityType.MONSTER && candidate.type !== EntityType.NPC) || !candidate.alive) continue;
-        if (candidate.id === player.id) continue;
-        if (world.dist(ax, ay, candidate.x, candidate.y) >= 1.2) continue;
-        const order = entityIndex.orderOf(candidate);
-        if (order < meleeTargetOrder) {
-          meleeTarget = candidate;
-          meleeTargetOrder = order;
-        }
-      }
+      const meleeTarget = selectMeleeTarget(world, player, meleeHitQuery, range);
       if (meleeTarget) {
         const e = meleeTarget;
         if (e.hp !== undefined) {

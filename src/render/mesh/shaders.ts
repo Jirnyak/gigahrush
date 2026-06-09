@@ -13,10 +13,12 @@ uniform vec2 uResolution;
 uniform float uInvDet;
 uniform float uWorldSize;
 uniform float uMaxDraw;
+uniform float uMeshRadius;
 
 out vec3 vColor;
 out vec3 vNormal;
 out float vForward;
+out float vDistance;
 
 float torusDelta(float value, float origin) {
   float d = value - origin;
@@ -37,6 +39,7 @@ void main() {
   vColor = aColor;
   vNormal = normalize(aNormal);
   vForward = ty;
+  vDistance = length(vec2(dx, dy));
 }
 `;
 
@@ -46,12 +49,14 @@ precision highp float;
 in vec3 vColor;
 in vec3 vNormal;
 in float vForward;
+in float vDistance;
 
 uniform vec3 uFogColor;
 uniform float uFogDensity;
 uniform float uAmbient;
 uniform float uTime;
 uniform float uMaxDraw;
+uniform float uMeshRadius;
 
 out vec4 fragColor;
 
@@ -66,7 +71,9 @@ void main() {
   float shade = clamp(uAmbient + diffuse * 0.58 + side * 0.18, 0.12, 1.0);
   float fogBase = max(0.0, vForward * max(0.02, uFogDensity));
   float fog = clamp(1.0 - exp(-fogBase * fogBase * 1.15), 0.0, 0.92);
-  vec3 color = mix(vColor * shade, uFogColor, fog);
+  float fadeWidth = clamp(uMeshRadius * 0.22, 1.0, 3.0);
+  float edgeFade = smoothstep(max(0.0, uMeshRadius - fadeWidth), uMeshRadius, vDistance);
+  vec3 color = mix(vColor * shade, uFogColor, max(fog, edgeFade * 0.86));
   fragColor = vec4(color, 1.0);
   gl_FragDepth = clamp((vForward - MESH_DEPTH_BIAS) / max(1.0, uMaxDraw), 0.0, 1.0);
 }

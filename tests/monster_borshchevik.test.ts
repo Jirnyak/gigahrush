@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import * as assert from 'node:assert/strict';
 
-import { AIGoal, Cell, EntityType, FloorLevel, MonsterKind, type Entity } from '../src/core/types';
+import { AIGoal, Cell, DoorState, EntityType, FloorLevel, MonsterKind, RoomType, Tex, type Entity } from '../src/core/types';
 import { World } from '../src/core/world';
 import { getMonsterEcology } from '../src/data/monster_ecology';
 import { DEF, generateSprite } from '../src/entities/borshchevik';
@@ -111,6 +111,49 @@ test('burning borshchevik smoke burst respects the cell cap', () => {
   const event = getRecentEvents(state, { type: 'borshchevik_seed_puff', tags: ['smoke'], limit: 1 })[0];
   assert.ok(event);
   assert.equal(event.data?.cap, BORSHCHEVIK_SMOKE_BURST_CELL_CAP);
+});
+
+test('borshchevik root damage removes door records from opened door cells', () => {
+  const world = openWorld();
+  const plant = borshchevik(2, 10.5, 10.5);
+  const state = makeGameState({ currentFloor: FloorLevel.MAINTENANCE, worldEvents: createWorldEventState() });
+  const doorIdx = world.idx(12, 10);
+
+  world.cells[doorIdx] = Cell.DOOR;
+  world.wallTex[doorIdx] = Tex.DOOR_WOOD;
+  world.rooms[0] = {
+    id: 0,
+    type: RoomType.COMMON,
+    x: 8,
+    y: 8,
+    w: 8,
+    h: 8,
+    doors: [doorIdx],
+    sealed: false,
+    name: 'root door test',
+    apartmentId: -1,
+    wallTex: Tex.CONCRETE,
+    floorTex: Tex.F_CONCRETE,
+  };
+  world.doors.set(doorIdx, {
+    idx: doorIdx,
+    state: DoorState.CLOSED,
+    roomA: 0,
+    roomB: -1,
+    keyId: '',
+    timer: 0,
+  });
+  registerBorshchevikRootSite(world, {
+    id: 'door_roots',
+    plantIds: [plant.id],
+    weakCells: [doorIdx],
+  });
+
+  assert.equal(damageBorshchevikRootSite(world, state, plant), true);
+  assert.equal(world.cells[doorIdx], Cell.FLOOR);
+  assert.equal(world.doors.has(doorIdx), false);
+  assert.deepEqual(world.rooms[0].doors, []);
+  assert.equal(world.wallTex[doorIdx], Tex.CONCRETE);
 });
 
 test('maintenance borshchevik blockade spawns plants, sap hazard, bypass tools, and root site', () => {

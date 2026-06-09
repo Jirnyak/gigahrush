@@ -525,7 +525,7 @@ Relevant shipped architecture:
 - `src/systems/procedural_floors.ts`: per-run vertical route uses `runSeed`, route ids and `z=-50..+50`.
 - `src/systems/floor_memory.ts`: visited floors persist as live or packed snapshots keyed by route floor identity.
 - `src/systems/alife.ts`: persistent ordinary NPC identity is compact and only materializes on the active floor.
-- `src/systems/save_runtime.ts`: current local save shape version is `15`; old shapes are rejected, not migrated.
+- `src/systems/save_runtime.ts` / `save.md`: current local save shape version source; old shapes are rejected, not migrated.
 - `src/systems/save_payload.ts`: local save caps inventory, containers, quests, status, event data and avoids full live entity serialization.
 - `src/systems/interactions.ts`: shared `E` dispatcher owns doors, lifts, NPCs, containers, terminals and generated interactables.
 - `src/systems/events.ts`: bounded public/private event buffers already provide compact cross-system facts.

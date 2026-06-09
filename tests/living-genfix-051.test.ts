@@ -93,13 +93,13 @@ test('genfix 051 living floor preserves reference geometry and cell-first territ
   const gen = generateFloor(FloorLevel.LIVING, 61_061);
   const world = gen.world;
 
-  assert.equal(world.rooms.length, 10_491, 'living reference room count');
-  assert.equal(world.doors.size, 2_135, 'living reference door count');
+  assert.equal(world.rooms.length, 10_467, 'living reference room count');
+  assert.equal(world.doors.size, 2_203, 'living reference door count');
   assert.equal(world.containers.length, 67, 'living reference container count');
-  assert.equal(gen.entities.length, 9_289, 'living reference entity count');
-  assert.equal(reachableCellCount(world, gen.spawnX, gen.spawnY), 415_803, 'living reference reachability');
-  assert.equal(wallCellCount(world), 632_059, 'living reference wall count');
-  assert.equal(passableCellCount(world), 416_423, 'living reference passable count');
+  assert.equal(gen.entities.length, 9_228, 'living reference entity count');
+  assert.equal(reachableCellCount(world, gen.spawnX, gen.spawnY), 416_672, 'living reference reachability');
+  assert.equal(wallCellCount(world), 630_510, 'living reference wall count');
+  assert.equal(passableCellCount(world), 417_924, 'living reference passable count');
 
   for (const plotNpcId of [
     'shurik_baryga',

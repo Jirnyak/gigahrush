@@ -211,7 +211,6 @@ const FEATURE_MESH_DEFS: Partial<Record<Feature, FeatureMeshDef>> = {
   [Feature.APPARATUS]: { modelId: 'apparatus_cage', priority: 72, z: 0, scaleX: 0.72, scaleY: 0.72, scaleZ: 0.9, yawSalt: 29 },
   [Feature.LIFT_BUTTON]: { modelId: 'button_panel', priority: 98, z: zForBand('midWall'), scaleX: 0.3, scaleY: 0.2, scaleZ: 0.3, yawSalt: 30, flags: MeshInstanceFlag.WallMount },
   [Feature.DESK]: { modelId: 'desk_slab', priority: 62, z: 0, scaleX: 0.88, scaleY: 0.58, scaleZ: 0.48, yawSalt: 31 },
-  [Feature.SLIDE]: { modelId: 'wall_panel_flat', priority: 52, z: zForBand('midWall'), scaleX: 0.5, scaleY: 0.08, scaleZ: 0.46, yawSalt: 32, flags: MeshInstanceFlag.WallMount },
   [Feature.SCREEN]: { modelId: 'wall_panel_screen', priority: 92, z: zForBand('midWall'), scaleX: 0.52, scaleY: 0.08, scaleZ: 0.42, yawSalt: 33, flags: MeshInstanceFlag.WallMount | MeshInstanceFlag.Emissive },
 };
 
@@ -223,6 +222,7 @@ const ENTITY_QUERY_SCRATCH: Entity[] = [];
 const MAX_MERGE_RUN = 16;
 const MAX_CLUSTER_CELLS = 16;
 const MAX_CORRIDOR_CEILING_RUN = 14;
+const FIELD_COVERAGE_RING_COUNT = 4;
 const DEFAULT_CHUNK_SIZE = 8;
 const DEFAULT_MAX_CHUNKS_PER_FRAME = 8;
 const DEFAULT_VISUAL_SLOT_SCAN_CAP = 24_000;
@@ -287,6 +287,11 @@ interface FloorScatterCandidate {
   d2: number;
 }
 
+interface StableFieldCandidate {
+  d2: number;
+  seed: number;
+}
+
 const FACE_INFOS: readonly FaceInfo[] = [
   { dir: 0, nx: 1, ny: 0, tangentDx: 0, tangentDy: 1, tangentAxis: 'y', yaw: Math.PI / 2 },
   { dir: 1, nx: -1, ny: 0, tangentDx: 0, tangentDy: 1, tangentAxis: 'y', yaw: Math.PI / 2 },
@@ -347,6 +352,13 @@ export function meshInstanceSeed(seed: number, x: number, y: number, source: num
 
 function wrapFloat(value: number): number {
   return ((value % W) + W) % W;
+}
+
+function cameraCellCenter(context: MeshPassContext): { x: number; y: number } {
+  return {
+    x: wrapFloat(Math.floor(context.camera.x) + 0.5),
+    y: wrapFloat(Math.floor(context.camera.y) + 0.5),
+  };
 }
 
 function wrappedDelta(from: number, to: number): number {
@@ -1165,6 +1177,44 @@ function signedHash(seed: number, x: number, y: number, roomId: number, salt: nu
   return corridorNoise(seed, x, y, roomId, salt) * 2 - 1;
 }
 
+function selectStableFieldCoverage<T extends StableFieldCandidate>(
+  candidates: readonly T[],
+  cap: number,
+  radius: number,
+): T[] {
+  const limit = Math.max(0, Math.floor(cap));
+  if (limit <= 0 || candidates.length <= 0) return [];
+  if (candidates.length <= limit) return [...candidates];
+  const safeRadius = Math.max(0.001, radius);
+  const buckets: T[][] = Array.from({ length: FIELD_COVERAGE_RING_COUNT }, () => []);
+  for (const candidate of candidates) {
+    const distance = Math.sqrt(Math.max(0, candidate.d2));
+    const ring = Math.min(
+      FIELD_COVERAGE_RING_COUNT - 1,
+      Math.max(0, Math.floor((distance / safeRadius) * FIELD_COVERAGE_RING_COUNT)),
+    );
+    buckets[ring].push(candidate);
+  }
+  for (const bucket of buckets) {
+    bucket.sort((a, b) => a.seed - b.seed || a.d2 - b.d2);
+  }
+  const selected: T[] = [];
+  const cursors = new Uint16Array(FIELD_COVERAGE_RING_COUNT);
+  while (selected.length < limit) {
+    let advanced = false;
+    for (let ring = 0; ring < FIELD_COVERAGE_RING_COUNT && selected.length < limit; ring++) {
+      const bucket = buckets[ring];
+      const cursor = cursors[ring];
+      if (cursor >= bucket.length) continue;
+      selected.push(bucket[cursor]);
+      cursors[ring] = cursor + 1;
+      advanced = true;
+    }
+    if (!advanced) break;
+  }
+  return selected;
+}
+
 function corridorVolumeCellEligible(context: MeshPassContext, idx: number, x: number, y: number): boolean {
   const world = context.world;
   if (!isPassableVisualCell(world, idx) || doorNear(world, x, y)) return false;
@@ -1607,6 +1657,8 @@ function pipeNetworkModelId(context: MeshPassContext, gx: number, gy: number, la
 function addPipeNetworkEdgeCandidate(
   context: MeshPassContext,
   candidates: PipeNetworkCandidate[],
+  centerX: number,
+  centerY: number,
   gx: number,
   gy: number,
   layer: number,
@@ -1626,8 +1678,8 @@ function addPipeNetworkEdgeCandidate(
   if (length < 0.42 || length > 1.75) return;
   const x = wrapFloat(a.x + dx * 0.5);
   const y = wrapFloat(a.y + dy * 0.5);
-  const cdx = wrappedDelta(context.camera.x, x);
-  const cdy = wrappedDelta(context.camera.y, y);
+  const cdx = wrappedDelta(centerX, x);
+  const cdy = wrappedDelta(centerY, y);
   const d2 = cdx * cdx + cdy * cdy;
   if (d2 > r2) return;
   const h = mixHash(context.seed, gx, gy, layer, axis === 'x' ? 0x706878 : 0x706879);
@@ -1657,6 +1709,7 @@ function collectProceduralCeilingPipeNetwork(
   const radius = Math.max(2, Math.ceil(profile.proceduralFieldRadius));
   const cx = Math.floor(context.camera.x);
   const cy = Math.floor(context.camera.y);
+  const center = cameraCellCenter(context);
   const r2 = profile.proceduralFieldRadius * profile.proceduralFieldRadius;
   const detail = profile.corridorVolumeDetail;
   const layers = pipeNetworkLayerCount(context, covering);
@@ -1667,16 +1720,14 @@ function collectProceduralCeilingPipeNetwork(
       const gy = cy + oy;
       for (let ox = -radius - 1; ox <= radius; ox++) {
         const gx = cx + ox;
-        addPipeNetworkEdgeCandidate(context, candidates, gx, gy, layer, 'x', covering, detail, r2);
-        addPipeNetworkEdgeCandidate(context, candidates, gx, gy, layer, 'y', covering, detail, r2);
+        addPipeNetworkEdgeCandidate(context, candidates, center.x, center.y, gx, gy, layer, 'x', covering, detail, r2);
+        addPipeNetworkEdgeCandidate(context, candidates, center.x, center.y, gx, gy, layer, 'y', covering, detail, r2);
       }
     }
   }
 
-  candidates.sort((a, b) => a.seed - b.seed || a.d2 - b.d2);
-  const count = Math.min(cap, candidates.length);
-  for (let i = 0; i < count; i++) {
-    const candidate = candidates[i];
+  const selected = selectStableFieldCoverage(candidates, cap, profile.proceduralFieldRadius);
+  for (const candidate of selected) {
     emitInstance(out, {
       modelId: candidate.modelId,
       x: candidate.x,
@@ -1787,6 +1838,8 @@ function addFloorScatterCandidate(
   context: MeshPassContext,
   candidates: FloorScatterCandidate[],
   profile: ResolvedMeshSceneProfile,
+  centerX: number,
+  centerY: number,
   x: number,
   y: number,
   pkg: FloorScatterPackage,
@@ -1798,8 +1851,8 @@ function addFloorScatterCandidate(
   const h = mixHash(context.seed, x, y, fieldSalt, pkg === 'collector' ? 0x66636f : 0x666c69);
   const ix = wrapFloat(x + 0.12 + hashUnit(context.seed, x, y, fieldSalt, h ^ 0x7866) * 0.76);
   const iy = wrapFloat(y + 0.12 + hashUnit(context.seed, x, y, fieldSalt, h ^ 0x7966) * 0.76);
-  const dx = wrappedDelta(context.camera.x, ix);
-  const dy = wrappedDelta(context.camera.y, iy);
+  const dx = wrappedDelta(centerX, ix);
+  const dy = wrappedDelta(centerY, iy);
   const d2 = dx * dx + dy * dy;
   if (d2 > r2) return;
   const modelId = floorScatterModelId(context, x, y, fieldSalt, pkg);
@@ -1830,6 +1883,7 @@ function collectProceduralFloorScatter(
   const radius = Math.max(2, Math.ceil(profile.proceduralFieldRadius));
   const cx = Math.floor(context.camera.x);
   const cy = Math.floor(context.camera.y);
+  const center = cameraCellCenter(context);
   const r2 = profile.proceduralFieldRadius * profile.proceduralFieldRadius;
   const candidates: FloorScatterCandidate[] = [];
 
@@ -1837,14 +1891,12 @@ function collectProceduralFloorScatter(
     const y = cy + oy;
     for (let ox = -radius; ox <= radius; ox++) {
       const x = cx + ox;
-      addFloorScatterCandidate(context, candidates, profile, x, y, pkg, fieldSalt, r2);
+      addFloorScatterCandidate(context, candidates, profile, center.x, center.y, x, y, pkg, fieldSalt, r2);
     }
   }
 
-  candidates.sort((a, b) => a.seed - b.seed || a.d2 - b.d2);
-  const count = Math.min(floorScatterCap(profile), candidates.length);
-  for (let i = 0; i < count; i++) {
-    const candidate = candidates[i];
+  const selected = selectStableFieldCoverage(candidates, floorScatterCap(profile), profile.proceduralFieldRadius);
+  for (const candidate of selected) {
     emitInstance(out, {
       modelId: candidate.modelId,
       x: candidate.x,
@@ -1974,20 +2026,21 @@ function scanLocalRadiusCells(
 ): void {
   const cx = Math.floor(context.camera.x);
   const cy = Math.floor(context.camera.y);
+  const center = cameraCellCenter(context);
   const radius = profile.radiusCells;
   const r2 = profile.radius * profile.radius;
   const scope: CellScanScope = {
     kind: 'radius',
-    centerX: context.camera.x,
-    centerY: context.camera.y,
+    centerX: center.x,
+    centerY: center.y,
     radius: profile.radius,
   };
   for (let oy = -radius; oy <= radius; oy++) {
     const y = context.world.wrap(cy + oy);
     for (let ox = -radius; ox <= radius; ox++) {
       const x = context.world.wrap(cx + ox);
-      const dx = wrappedDelta(context.camera.x, x + 0.5);
-      const dy = wrappedDelta(context.camera.y, y + 0.5);
+      const dx = wrappedDelta(center.x, x + 0.5);
+      const dy = wrappedDelta(center.y, y + 0.5);
       if (dx * dx + dy * dy > r2 + 1) continue;
       scanCell(context, context.world.idx(x, y), x, y, profile, scope, out, stats);
     }
@@ -2004,6 +2057,7 @@ export function collectMeshChunk(
   const profile = resolveMeshSceneProfile(context);
   if (!profile.enabled) return out;
   const size = profile.chunkSize;
+  const center = cameraCellCenter(context);
   const chunksPerAxis = W / size;
   const cx = ((chunkX % chunksPerAxis) + chunksPerAxis) % chunksPerAxis;
   const cy = ((chunkY % chunksPerAxis) + chunksPerAxis) % chunksPerAxis;
@@ -2011,8 +2065,8 @@ export function collectMeshChunk(
   const startY = cy * size;
   const scope: CellScanScope = {
     kind: 'chunk',
-    centerX: context.camera.x,
-    centerY: context.camera.y,
+    centerX: center.x,
+    centerY: center.y,
     radius: profile.radius,
     chunkX: cx,
     chunkY: cy,
@@ -2023,8 +2077,8 @@ export function collectMeshChunk(
     const y = context.world.wrap(startY + dy);
     for (let dx = 0; dx < size; dx++) {
       const x = context.world.wrap(startX + dx);
-      const ddx = wrappedDelta(context.camera.x, x + 0.5);
-      const ddy = wrappedDelta(context.camera.y, y + 0.5);
+      const ddx = wrappedDelta(center.x, x + 0.5);
+      const ddy = wrappedDelta(center.y, y + 0.5);
       if (ddx * ddx + ddy * ddy > r2 + size) continue;
       scanCell(context, context.world.idx(x, y), x, y, profile, scope, out, stats);
     }
@@ -2093,14 +2147,10 @@ export function capMeshInstances(
 ): MeshInstance[] {
   out.length = 0;
   if (!profile.enabled || raw.length <= 0) return out;
-  const capCenterX = Math.floor(context.camera.x) + 0.5;
-  const capCenterY = Math.floor(context.camera.y) + 0.5;
+  const capCenter = cameraCellCenter(context);
   const scored = raw.map((instance, order) => {
-    const dx = wrappedDelta(context.camera.x, instance.x);
-    const dy = wrappedDelta(context.camera.y, instance.y);
-    const d2 = dx * dx + dy * dy;
-    const stableDx = wrappedDelta(capCenterX, instance.x);
-    const stableDy = wrappedDelta(capCenterY, instance.y);
+    const stableDx = wrappedDelta(capCenter.x, instance.x);
+    const stableDy = wrappedDelta(capCenter.y, instance.y);
     const stableD2 = stableDx * stableDx + stableDy * stableDy;
     const radius = (instance.flags & MeshInstanceFlag.CorridorVolume) !== 0
       ? Math.max(profile.radius, profile.proceduralFieldRadius)
@@ -2108,13 +2158,12 @@ export function capMeshInstances(
     return {
       instance,
       order,
-      d2,
       stableD2,
       radius,
       priority: priorityForModel(instance.modelId, instance.flags),
       seed: instance.seed >>> 0,
     };
-  }).filter(row => row.d2 <= row.radius * row.radius + 2);
+  }).filter(row => row.stableD2 <= row.radius * row.radius + 2);
   scored.sort((a, b) =>
     b.priority - a.priority ||
     a.stableD2 - b.stableD2 ||

@@ -11,7 +11,7 @@ function sourceFiles(dir: string): string[] {
     const stat = statSync(path);
     if (stat.isDirectory()) {
       files.push(...sourceFiles(path));
-    } else if (entry.endsWith('.ts')) {
+    } else if (/\.(?:ts|mjs|js)$/.test(entry)) {
       files.push(path);
     }
   }
@@ -23,9 +23,12 @@ function relativeSource(path: string): string {
   return path.slice(root.length);
 }
 
-test('source code no longer reads or exports the old PLOT_NPCS projection', () => {
-  const sourceRoot = fileURLToPath(new URL('../src/', import.meta.url));
-  const offenders = sourceFiles(sourceRoot)
+test('active source and scripts no longer read or export the old PLOT_NPCS projection', () => {
+  const roots = [
+    fileURLToPath(new URL('../src/', import.meta.url)),
+    fileURLToPath(new URL('../scripts/', import.meta.url)),
+  ];
+  const offenders = roots.flatMap(root => sourceFiles(root))
     .flatMap(path => {
       const lines = readFileSync(path, 'utf8').split('\n');
       return lines

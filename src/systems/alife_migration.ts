@@ -656,17 +656,19 @@ function processDueJourneys(
 ): { processed: number; arrived: number } {
   let processed = 0;
   let arrived = 0;
+  let blocked = 0;
   for (const journey of Object.values(mobility.journeys)) {
     if (processed >= maxRecords) break;
     if (journey.status !== 'in_transit' || journey.etaAt > state.time) continue;
+    const arrivalTargetsActiveFloor = journey.toFloorKey === activeFloorKey;
+    if (arrivalTargetsActiveFloor && mobility.pendingArrivals.length >= MAX_ALIFE_PENDING_ARRIVALS) {
+      blocked++;
+      continue;
+    }
     processed++;
     const before = getAlifeNpcRecordSnapshot(state, journey.alifeId);
     if (!before) {
       delete mobility.journeys[journey.id];
-      continue;
-    }
-    const arrivalTargetsActiveFloor = journey.toFloorKey === activeFloorKey;
-    if (arrivalTargetsActiveFloor && mobility.pendingArrivals.length >= MAX_ALIFE_PENDING_ARRIVALS) {
       continue;
     }
     const moved = moveAlifeNpcRecord(state, journey.alifeId, journey.toFloorKey);
@@ -683,7 +685,7 @@ function processDueJourneys(
       eventBudget.remaining--;
     }
   }
-  return { processed, arrived };
+  return { processed: Math.min(maxRecords, processed + blocked), arrived };
 }
 
 function cleanActiveId(value: string, fallback: string): string {
@@ -1139,11 +1141,12 @@ export function updateActiveAlifeDepartures(
   if (mobility.activeDepartures.length === 0) return 0;
   let processed = 0;
   let completed = 0;
-  const kept: ActiveAlifeDeparture[] = [];
+  const deferred: ActiveAlifeDeparture[] = [];
+  const rotated: ActiveAlifeDeparture[] = [];
 
   for (const departure of mobility.activeDepartures) {
     if (processed >= MAX_ACTIVE_DEPARTURE_UPDATES) {
-      kept.push(departure);
+      deferred.push(departure);
       continue;
     }
     processed++;
@@ -1152,18 +1155,18 @@ export function updateActiveAlifeDepartures(
     if (!entity || !entity.alive || entity.alifeId !== departure.alifeId) continue;
 
     if (!assignActiveDepartureGoal(world, entity, departure.anchorX, departure.anchorY)) {
-      kept.push(departure);
+      rotated.push(departure);
       continue;
     }
 
     if (world.dist2(entity.x, entity.y, departure.anchorX, departure.anchorY) > DEPARTURE_REACHED_DIST2) {
-      kept.push(departure);
+      rotated.push(departure);
       continue;
     }
 
     captureAlifeFloorState(state, [entity]);
     if (!moveAlifeNpcRecord(state, departure.alifeId, departure.toFloorKey)) {
-      kept.push(departure);
+      rotated.push(departure);
       continue;
     }
     entities.splice(entityIndex, 1);
@@ -1178,7 +1181,7 @@ export function updateActiveAlifeDepartures(
     });
   }
 
-  mobility.activeDepartures = kept;
+  mobility.activeDepartures = [...deferred, ...rotated];
   return completed;
 }
 

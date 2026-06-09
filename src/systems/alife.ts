@@ -56,6 +56,7 @@ import {
   floorRunEntryForDesignFloor,
 } from './procedural_floors';
 import { cleanFloorKey, floorKeyForDesign, floorKeyForProcedural, floorKeyForStory } from './floor_keys';
+import { getFactionRel } from '../data/relations';
 import { HUMANOID_BASE_MOVE_SPEED, getMaxHp, getMaxPsi } from './rpg';
 import {
   NPC_PLAYER_RELATION_FLUCTUATION,
@@ -247,6 +248,8 @@ export interface AlifeSaveState {
   version: number;
   seed: number;
   total: number;
+  playerRelationTargetFaction?: Faction;
+  playerRelationTargetAlifeId?: number;
   deadIds: number[];
   deadPlotNpcIds: string[];
   overrides: AlifeNpcOverride[];
@@ -283,6 +286,8 @@ interface AlifeState {
   version: number;
   seed: number;
   total: number;
+  playerRelationTargetFaction?: Faction;
+  playerRelationTargetAlifeId?: number;
   npcs: AlifeNpcRecord[];
   columns: AlifeNumericColumns;
   floorKeys: string[];
@@ -596,9 +601,7 @@ function setRecordPlayerRelation(alife: AlifeState, record: AlifeNpcRecord, valu
 function ensureRecordPlayerRelation(alife: AlifeState, record: AlifeNpcRecord): number {
   const existing = recordPlayerRelation(alife, record);
   if (existing !== undefined) return existing;
-  const relation = playerRelationForRecord(recordFaction(alife, record), record.id, alife.seed);
-  setRecordPlayerRelation(alife, record, relation);
-  return relation;
+  return defaultPlayerRelationForRecord(alife, record);
 }
 
 function recordKarma(alife: AlifeState, record: AlifeNpcRecord): number {
@@ -1077,6 +1080,27 @@ function playerRelationForRecord(faction: Faction, recordId: number, seed: numbe
   const base = getFactionPlayerRelation(faction);
   const jitter = Math.round((unit(seed, recordId, 88) * 2 - 1) * NPC_PLAYER_RELATION_FLUCTUATION);
   return clampRelation(base + jitter);
+}
+
+function playerRelationForRecordToFaction(
+  faction: Faction,
+  targetFaction: Faction,
+  recordId: number,
+  seed: number,
+  targetAlifeId = 0,
+): number {
+  const base = getFactionRel(faction, targetFaction);
+  const targetSalt = 88 + (targetAlifeId > 0 ? (targetAlifeId % 997) : targetFaction * 31);
+  const jitter = Math.round((unit(seed ^ Math.imul(targetFaction + 1, 0x45d9f3b), recordId, targetSalt) * 2 - 1) * NPC_PLAYER_RELATION_FLUCTUATION);
+  return clampRelation(base + jitter);
+}
+
+function defaultPlayerRelationForRecord(alife: AlifeState, record: AlifeNpcRecord): number {
+  const targetFaction = alife.playerRelationTargetFaction;
+  if (targetFaction === undefined) return playerRelationForRecord(recordFaction(alife, record), record.id, alife.seed);
+  const targetAlifeId = alife.playerRelationTargetAlifeId;
+  if (targetAlifeId !== undefined && record.id === targetAlifeId) return 100;
+  return playerRelationForRecordToFaction(recordFaction(alife, record), targetFaction, record.id, alife.seed, targetAlifeId);
 }
 
 function questCandidateChance(): number {
@@ -1699,7 +1723,7 @@ export function getAlifeNpcRecordSnapshot(state: GameState, alifeId: number): Al
     sprite: recordSprite(alife, record),
     npcVisualId: record.npcVisualId,
     spriteSeed: recordSpriteSeed(alife, record),
-    playerRelation: recordPlayerRelation(alife, record),
+    playerRelation: ensureRecordPlayerRelation(alife, record),
     karma: recordKarma(alife, record),
     dead: recordDead(alife, record),
     reservedKind: record.reservedKind,
@@ -1721,6 +1745,75 @@ export function setAlifeNpcPlayerRelation(state: GameState, alifeId: number, rel
   setRecordTouched(alife, record);
   alife.leaderboardVersion++;
   return true;
+}
+
+export interface ResetAlifePlayerRelationsResult {
+  updated: number;
+  newPlayerAlifeId?: number;
+}
+
+export type ExistingAlifeRelationResolver = (fromAlifeId: number, targetAlifeId: number) => number | undefined;
+
+export function resetAlifePlayerRelationsForNewPlayer(
+  state: GameState,
+  entities: readonly Entity[],
+  newPlayer: Pick<Entity, 'alifeId' | 'faction'>,
+  existingRelation?: ExistingAlifeRelationResolver,
+): ResetAlifePlayerRelationsResult {
+  const alife = ensureAlifeState(state);
+  const newPlayerAlifeId = newPlayer.alifeId !== undefined && newPlayer.alifeId > 0
+    ? Math.floor(newPlayer.alifeId)
+    : undefined;
+  const targetFaction = newPlayer.faction ?? Faction.CITIZEN;
+  let updated = 0;
+
+  alife.playerRelationTargetFaction = targetFaction;
+  alife.playerRelationTargetAlifeId = newPlayerAlifeId;
+  for (const record of alife.npcs) {
+    if (!record || recordDead(alife, record)) continue;
+    setRecordPlayerRelation(alife, record, undefined);
+    const relation = newPlayerAlifeId !== undefined && record.id !== newPlayerAlifeId
+      ? existingRelation?.(record.id, newPlayerAlifeId)
+      : undefined;
+    if (relation !== undefined) {
+      setRecordPlayerRelation(alife, record, relation);
+      setRecordTouched(alife, record);
+    }
+    updated++;
+  }
+
+  for (const entity of entities) {
+    if (entity.type !== EntityType.NPC || entity.alifeId === undefined) continue;
+    if (newPlayerAlifeId !== undefined && entity.alifeId === newPlayerAlifeId) {
+      entity.playerRelation = 100;
+      continue;
+    }
+    const record = alife.npcs[entity.alifeId - 1];
+    if (!record || recordDead(alife, record)) continue;
+    entity.playerRelation = ensureRecordPlayerRelation(alife, record);
+  }
+
+  if (updated > 0) alife.leaderboardVersion++;
+  return { updated, newPlayerAlifeId };
+}
+
+export function randomAliveAlifeNpcSnapshot(
+  state: GameState,
+  random: () => number = Math.random,
+  excludeIds: ReadonlySet<number> = new Set(),
+): AlifeNpcSnapshot | undefined {
+  const alife = ensureAlifeState(state);
+  let selected: AlifeNpcSnapshot | undefined;
+  let seen = 0;
+  for (const record of alife.npcs) {
+    if (!record || excludeIds.has(record.id) || recordDead(alife, record)) continue;
+    if (!recordCanMaterializeAsOrdinaryPopulation(record)) continue;
+    const snapshot = getAlifeNpcRecordSnapshot(state, record.id);
+    if (!snapshot || snapshot.dead) continue;
+    seen++;
+    if (random() * seen < 1) selected = snapshot;
+  }
+  return selected;
 }
 
 export function sampleAlifeFloorRecordIds(
@@ -1942,6 +2035,11 @@ export function bindReservedPlotNpcAlifeRecord(
 
 export function isPlotNpcDead(state: GameState, plotNpcId: string): boolean {
   return ensureAlifeState(state).deadPlotNpcIds.has(plotNpcId);
+}
+
+export function isPlotNpcDeadKnown(state: GameState, plotNpcId: string): boolean {
+  const alife = (state as AlifeHost).alife;
+  return alife?.deadPlotNpcIds.has(plotNpcId) ?? false;
 }
 
 export function getAlifeNpcTotalMoney(state: GameState, npc: Entity | undefined): number | undefined {
@@ -2293,6 +2391,18 @@ function applyOverride(alife: AlifeState, input: unknown): void {
   setRecordTouched(alife, record);
 }
 
+function sanitizeRelationTargetFaction(input: unknown): Faction | undefined {
+  if (typeof input !== 'number' || !Number.isFinite(input)) return undefined;
+  const faction = Math.trunc(input);
+  return faction >= Faction.CITIZEN && faction <= Faction.PLAYER ? faction as Faction : undefined;
+}
+
+function sanitizeRelationTargetAlifeId(alife: AlifeState, input: unknown): number | undefined {
+  if (typeof input !== 'number' || !Number.isFinite(input)) return undefined;
+  const id = Math.trunc(input);
+  return id > 0 && id <= alife.npcs.length ? id : undefined;
+}
+
 export function setAlifeState(state: GameState, input: unknown): AlifeState {
   const save = isRecord(input) ? input : {};
   const seed = clampInt(save.seed, Math.floor(Math.random() * 0x7fffffff), 1, 0x7fffffff);
@@ -2300,6 +2410,8 @@ export function setAlifeState(state: GameState, input: unknown): AlifeState {
     ? clampAlifePopulationTotal(save.total, 0)
     : 0;
   const alife = createAlifeState(state, seed, total);
+  alife.playerRelationTargetFaction = sanitizeRelationTargetFaction(save.playerRelationTargetFaction);
+  alife.playerRelationTargetAlifeId = sanitizeRelationTargetAlifeId(alife, save.playerRelationTargetAlifeId);
   if (Array.isArray(save.deadIds)) {
     const seenDeadIds = new Set<number>();
     for (const rawId of save.deadIds) {
@@ -2375,6 +2487,8 @@ export function alifeForSave(state: GameState): AlifeSaveState {
     version: ALIFE_VERSION,
     seed: alife.seed,
     total: alife.total,
+    playerRelationTargetFaction: alife.playerRelationTargetFaction,
+    playerRelationTargetAlifeId: alife.playerRelationTargetAlifeId,
     deadIds,
     deadPlotNpcIds: [...alife.deadPlotNpcIds],
     overrides,

@@ -2,7 +2,6 @@
 
 import {
   Cell,
-  DoorState,
   MonsterKind,
   ProjType,
   W,
@@ -15,7 +14,6 @@ import { World } from '../core/world';
 import { ITEMS } from '../data/items';
 import { Spr } from '../render/sprite_index';
 import { entityDisplayName } from '../entities/monster';
-import { setDoorState } from './door_state';
 import { publishEvent, registerWorldEventObserver } from './events';
 import { registerInventoryUseHandler, type InventoryUseHandlerContext } from './inventory';
 import { isPlayerEntity } from './player_actor';
@@ -129,11 +127,8 @@ function openRootCells(world: World, site: BloodRootSite): number {
   for (const cell of site.rootCells) {
     const old = world.cells[cell];
     if (old !== Cell.WALL && old !== Cell.DOOR) continue;
-    world.cells[cell] = Cell.FLOOR;
-    if (old === Cell.DOOR) {
-      const door = world.doors.get(cell);
-      if (door) setDoorState(world, door, DoorState.OPEN);
-    }
+    if (old === Cell.DOOR) world.removeDoorAt(cell);
+    else world.cells[cell] = Cell.FLOOR;
     opened++;
   }
   if (opened > 0) world.markCellsDirty();

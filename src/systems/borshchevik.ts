@@ -3,7 +3,6 @@
 import {
   W,
   Cell,
-  DoorState,
   MonsterKind,
   ProjType,
   msg,
@@ -14,7 +13,6 @@ import { World } from '../core/world';
 import { Spr } from '../render/sprite_index';
 import { publishEvent } from './events';
 import { cleanCellHazardsNear } from './cell_hazards';
-import { setDoorState } from './door_state';
 import { hasAirborneHazardProtection } from './status';
 import { isPlayerEntity } from './player_actor';
 
@@ -282,11 +280,8 @@ export function damageBorshchevikRootSite(world: World, state: GameState, plant:
       const y = (cell / W) | 0;
       if (world.cells[cell] !== Cell.WALL && world.cells[cell] !== Cell.DOOR) continue;
       const old = world.cells[cell];
-      world.cells[cell] = Cell.FLOOR;
-      if (old === Cell.DOOR) {
-        const door = world.doors.get(cell);
-        if (door) setDoorState(world, door, DoorState.OPEN);
-      }
+      if (old === Cell.DOOR) world.removeDoorAt(cell);
+      else world.cells[cell] = Cell.FLOOR;
       world.markCellsDirty();
       publishEvent(state, {
         type: 'collateral_damage',

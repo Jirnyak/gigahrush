@@ -616,6 +616,9 @@ export class EntityIndex {
   ): number {
     out.length = 0;
     if (radius < 0 || maxResults <= 0) return 0;
+    const capped = Number.isFinite(maxResults);
+    const cap = capped ? Math.max(0, Math.floor(maxResults)) : Infinity;
+    if (cap <= 0) return 0;
 
     const dx = wrappedDelta(x0, x1);
     const dy = wrappedDelta(y0, y1);
@@ -630,6 +633,55 @@ export class EntityIndex {
     let bucketChecks = 0;
     const includeStatic = (typeMask & ENTITY_MASK_STATIC_VISIBLE) !== 0;
     const dynamicBuckets = this.dynamicBucketsForMask(typeMask);
+    const hitTs: number[] = [];
+    const lateralDistances: number[] = [];
+    const ids: number[] = [];
+    const candidateBetterThan = (
+      hitT: number,
+      lateralD2: number,
+      id: number,
+      otherHitT: number,
+      otherLateralD2: number,
+      otherId: number,
+    ): boolean =>
+      hitT < otherHitT
+      || (hitT === otherHitT && lateralD2 < otherLateralD2)
+      || (hitT === otherHitT && lateralD2 === otherLateralD2 && id < otherId);
+    const addCandidate = (e: Entity, hitT: number, lateralD2: number): void => {
+      if (!capped) {
+        out.push(e);
+        return;
+      }
+      if (out.length >= cap) {
+        const worst = cap - 1;
+        if (!candidateBetterThan(hitT, lateralD2, e.id, hitTs[worst], lateralDistances[worst], ids[worst])) return;
+        hitTs[worst] = hitT;
+        lateralDistances[worst] = lateralD2;
+        ids[worst] = e.id;
+        out[worst] = e;
+      } else {
+        hitTs.push(hitT);
+        lateralDistances.push(lateralD2);
+        ids.push(e.id);
+        out.push(e);
+      }
+      let pos = out.length - 1;
+      while (pos > 0 && candidateBetterThan(hitTs[pos], lateralDistances[pos], ids[pos], hitTs[pos - 1], lateralDistances[pos - 1], ids[pos - 1])) {
+        const swapHitT = hitTs[pos - 1];
+        const swapLateral = lateralDistances[pos - 1];
+        const swapId = ids[pos - 1];
+        const swapEntity = out[pos - 1];
+        hitTs[pos - 1] = hitTs[pos];
+        lateralDistances[pos - 1] = lateralDistances[pos];
+        ids[pos - 1] = ids[pos];
+        out[pos - 1] = out[pos];
+        hitTs[pos] = swapHitT;
+        lateralDistances[pos] = swapLateral;
+        ids[pos] = swapId;
+        out[pos] = swapEntity;
+        pos--;
+      }
+    };
 
     for (let i = 0; i <= steps; i++) {
       const t = i / steps;
@@ -654,13 +706,8 @@ export class EntityIndex {
             else if (hitT > 1) hitT = 1;
             const px = ex - dx * hitT;
             const py = ey - dy * hitT;
-            if (px * px + py * py <= r2) {
-              out.push(e);
-              if (out.length >= maxResults) {
-                this.recordQuery(typeMask, bucketChecks, out.length, true);
-                return out.length;
-              }
-            }
+            const lateralD2 = px * px + py * py;
+            if (lateralD2 <= r2) addCandidate(e, hitT, lateralD2);
           }
           if (!includeStatic) continue;
           bucketChecks++;
@@ -675,13 +722,8 @@ export class EntityIndex {
             else if (hitT > 1) hitT = 1;
             const px = ex - dx * hitT;
             const py = ey - dy * hitT;
-            if (px * px + py * py <= r2) {
-              out.push(e);
-              if (out.length >= maxResults) {
-                this.recordQuery(typeMask, bucketChecks, out.length, true);
-                return out.length;
-              }
-            }
+            const lateralD2 = px * px + py * py;
+            if (lateralD2 <= r2) addCandidate(e, hitT, lateralD2);
           }
         }
       }

@@ -380,6 +380,30 @@ function brokenFixtureDefId(feature: Feature): string | undefined {
   return undefined;
 }
 
+function sortedBrokenFixtureCandidates(
+  world: World,
+  rooms: readonly Room[],
+  rule: BrokenFixturePlacementRule,
+  seed: number,
+  reachable: Uint8Array,
+): ObjectCandidate[] {
+  const candidates: ObjectCandidate[] = [];
+  for (const room of rooms) {
+    if (!room || room.sealed || room.w < 3 || room.h < 3) continue;
+    const roomWeight = rule.roomTypeWeights?.[room.type] ?? 1;
+    if (roomWeight <= 0) continue;
+    for (let y = room.y + 1; y < room.y + room.h - 1; y++) {
+      for (let x = room.x + 1; x < room.x + room.w - 1; x++) {
+        const idx = world.idx(x, y);
+        if (!fixtureCellAllowed(world, room, idx, rule, reachable)) continue;
+        const h = hash32(seed, idx, room.id, rule.id.length);
+        candidates.push({ room, idx, x: idx % W, y: (idx / W) | 0, score: roomWeight * 1_000_000 + (h & 0xffff) });
+      }
+    }
+  }
+  return candidates.sort((a, b) => b.score - a.score);
+}
+
 function placeBrokenFixtureRule(
   world: World,
   rooms: readonly Room[],
@@ -391,27 +415,24 @@ function placeBrokenFixtureRule(
   let placed = 0;
   const max = Math.max(0, Math.floor(Math.min(rule.max, remainingCap ?? rule.max)));
   if (max <= 0) return 0;
-  for (const room of rooms) {
-    if (!room || room.sealed || room.w < 3 || room.h < 3) continue;
-    const roomWeight = rule.roomTypeWeights?.[room.type] ?? 1;
-    if (roomWeight <= 0) continue;
-    for (let y = room.y + 1; y < room.y + room.h - 1 && placed < max; y++) {
-      for (let x = room.x + 1; x < room.x + room.w - 1 && placed < max; x++) {
-        const idx = world.idx(x, y);
-        if (!fixtureCellAllowed(world, room, idx, rule, reachable)) continue;
-        const baseChance = Math.max(0, Math.min(1, rule.baseChance * roomWeight));
-        const guaranteedDefId = baseChance >= 1 ? brokenFixtureDefId(world.features[idx] as Feature) : undefined;
-        const fixturePlaced = baseChance >= 1
-          ? !!guaranteedDefId && !!placeInteractiveAt(world, x, y, guaranteedDefId, {
-            seed: hash32(seed, idx, room.id),
-            tags: ['floor_object_profile', rule.id, ...(rule.tags ?? [])],
-          })
-          : maybePlaceBrokenFixture(world, x, y, { baseChance, salt: hash32(seed, idx, room.id) });
-        if (!fixturePlaced) continue;
-        placed++;
-      }
-    }
+  const candidates = sortedBrokenFixtureCandidates(world, rooms, rule, seed, reachable);
+  for (const candidate of candidates) {
     if (placed >= max) break;
+    if (!fixtureCellAllowed(world, candidate.room, candidate.idx, rule, reachable)) continue;
+    const roomWeight = rule.roomTypeWeights?.[candidate.room.type] ?? 1;
+    const baseChance = Math.max(0, Math.min(1, rule.baseChance * roomWeight));
+    const guaranteedDefId = baseChance >= 1 ? brokenFixtureDefId(world.features[candidate.idx] as Feature) : undefined;
+    const fixturePlaced = baseChance >= 1
+      ? !!guaranteedDefId && !!placeInteractiveAt(world, candidate.x, candidate.y, guaranteedDefId, {
+        seed: hash32(seed, candidate.idx, candidate.room.id),
+        tags: ['floor_object_profile', rule.id, ...(rule.tags ?? [])],
+      })
+      : maybePlaceBrokenFixture(world, candidate.x, candidate.y, {
+        baseChance,
+        salt: hash32(seed, candidate.idx, candidate.room.id),
+      });
+    if (!fixturePlaced) continue;
+    placed++;
   }
   return placed;
 }

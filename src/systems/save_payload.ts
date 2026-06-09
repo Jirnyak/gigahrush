@@ -430,6 +430,8 @@ function compactAlifeForPortal(input: unknown): unknown {
     version: input.version,
     seed: input.seed,
     total: input.total,
+    playerRelationTargetFaction: input.playerRelationTargetFaction,
+    playerRelationTargetAlifeId: input.playerRelationTargetAlifeId,
     deadIds: Array.isArray(input.deadIds) ? input.deadIds.slice(0, PORTAL_COMPACT_ALIFE_DEAD_ID_CAP) : [],
     deadPlotNpcIds: Array.isArray(input.deadPlotNpcIds)
       ? input.deadPlotNpcIds.slice(0, PORTAL_COMPACT_ALIFE_PLOT_DEATH_CAP)

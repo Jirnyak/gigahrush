@@ -5,6 +5,8 @@
 
 Цель: получить несколько сильных роликов для публичных тредов, Telegram/VK, DTF/forum updates, медиа-питчей и будущих platform-native постов. Промты рассчитаны на Sora 2, Veo и Gemini/video generation. Каждый блок можно копировать как есть.
 
+Для выбора конкретной Google AI поверхности сначала см. `PRCampaign/google_ai.md`: там описано, когда использовать Gemini app, Veo, Flow, Google Vids, NotebookLM, AI Studio/API, Vertex AI, Lyria, Gemini CLI, Jules и другие Google surfaces. Этот файл остается библиотекой самих видеопромтов.
+
 ## Что учитывать
 
 Проверены:

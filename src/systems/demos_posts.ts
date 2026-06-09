@@ -333,11 +333,11 @@ function chooseAuthorAlifeId(event: WorldEvent, opts: DemosPostCandidateOptions)
   }
   const fallback = (opts.fallbackAuthorAlifeIds ?? [])
     .map(positiveId)
-    .filter((id): id is number => id !== undefined)
-    .slice(0, DEMOS_AUTHOR_FALLBACK_CAP);
+    .filter((id): id is number => id !== undefined);
   if (fallback.length === 0) return undefined;
   const start = hash32(event.id, event.time | 0, opts.seedSalt ?? 0) % fallback.length;
-  for (let i = 0; i < fallback.length; i++) {
+  const checked = Math.min(fallback.length, DEMOS_AUTHOR_FALLBACK_CAP);
+  for (let i = 0; i < checked; i++) {
     const id = fallback[(start + i) % fallback.length];
     if (!snapshotDead(opts.snapshotForAlifeId?.(id))) return id;
   }

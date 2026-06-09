@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import * as assert from 'node:assert/strict';
 
-import { AIGoal, Cell, ContainerKind, EntityType, FloorLevel, MonsterKind, ProjType, RoomType, Tex, ZoneFaction, type Entity } from '../src/core/types';
+import { AIGoal, Cell, ContainerKind, DoorState, EntityType, FloorLevel, MonsterKind, ProjType, RoomType, Tex, ZoneFaction, type Entity } from '../src/core/types';
 import { World } from '../src/core/world';
 import { getMonsterEcology } from '../src/data/monster_ecology';
 import { DEF, generateSprite } from '../src/entities/blood_plant';
@@ -152,7 +152,17 @@ test('fire and cutting counterplay publish blood plant route events and open roo
   const player = makeTestPlayer({ id: 1, x: 9.5, y: 10.5, weapon: 'knife' });
   const plant = bloodPlant(2, 10.5, 10.5);
   const rootCell = world.idx(11, 10);
-  world.cells[rootCell] = Cell.WALL;
+  world.cells[rootCell] = Cell.DOOR;
+  world.wallTex[rootCell] = Tex.DOOR_WOOD;
+  world.rooms[0].doors = [rootCell];
+  world.doors.set(rootCell, {
+    idx: rootCell,
+    state: DoorState.CLOSED,
+    roomA: 0,
+    roomB: -1,
+    keyId: '',
+    timer: 0,
+  });
   registerBloodPlantRootSite(world, {
     id: 'test_blood_roots_cut',
     plantIds: [plant.id],
@@ -163,6 +173,9 @@ test('fire and cutting counterplay publish blood plant route events and open roo
 
   recordMonsterMeleeDeath(world, state, plant, 'knife', player);
   assert.equal(world.cells[rootCell], Cell.FLOOR);
+  assert.equal(world.doors.has(rootCell), false);
+  assert.deepEqual(world.rooms[0].doors, []);
+  assert.equal(world.wallTex[rootCell], Tex.CONCRETE);
   assert.ok(getRecentEvents(state, { type: 'blood_plant_root_cut', tags: ['tool'], limit: 1 })[0]);
 
   const fireWorld = openWorld();

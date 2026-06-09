@@ -6351,6 +6351,68 @@ test('smog anomaly spends wet rag bundles as short wet-cloth mitigation', () => 
   assert.equal(spent?.data?.durationSeconds, 45);
 });
 
+test('smog anomaly runtime is scoped to the current procedural floor spec', () => {
+  const baseA = makeProceduralFloorSpec(610, -35);
+  const specA: ProceduralFloorSpec = {
+    ...baseA,
+    anomalyId: 'smog',
+    danger: Math.max(3, baseA.danger) as typeof baseA.danger,
+    title: `говнячный смог: ${baseA.title}`,
+  };
+  const baseB = makeProceduralFloorSpec(611, -37);
+  const specB: ProceduralFloorSpec = {
+    ...baseB,
+    anomalyId: 'smog',
+    danger: Math.max(3, baseB.danger) as typeof baseB.danger,
+    title: `говнячный смог: ${baseB.title}`,
+  };
+  const state = makeGameState({ currentFloor: specA.baseFloor, time: 10 });
+  const smogIdx = 40 + 40 * W;
+  const worldA = new World();
+  worldA.cells[smogIdx] = Cell.FLOOR;
+  worldA.anomalySmogSource = smogIdx;
+  worldA.anomalySmogCells = [smogIdx];
+  worldA.fog[smogIdx] = 255;
+  setFloorRunState(state, {
+    runSeed: 610,
+    currentZ: specA.z,
+    specs: { [specA.key]: specA },
+    visited: {},
+  }, specA.baseFloor);
+
+  const player = makeTestPlayer({
+    id: 9003,
+    x: 40.5,
+    y: 40.5,
+    hp: 100,
+    maxHp: 100,
+    inventory: [{ defId: 'wet_rag_bundle', count: 1 }],
+  });
+  updateProceduralAnomalies(worldA, player, state, 2.5);
+
+  assert.equal(countInventoryItem(player, 'wet_rag_bundle'), 0);
+  assert.equal(getProceduralSmogStatus(worldA, player, state).protection, 'wet_cloth');
+
+  const worldB = new World();
+  worldB.cells[smogIdx] = Cell.FLOOR;
+  worldB.anomalySmogSource = smogIdx;
+  worldB.anomalySmogCells = [smogIdx];
+  worldB.fog[smogIdx] = 255;
+  state.currentFloor = specB.baseFloor;
+  setFloorRunState(state, {
+    runSeed: 611,
+    currentZ: specB.z,
+    specs: { [specB.key]: specB },
+    visited: {},
+  }, specB.baseFloor);
+  player.x = 80.5;
+  player.y = 80.5;
+
+  const status = getProceduralSmogStatus(worldB, player, state);
+  assert.equal(status.protection, 'none');
+  assert.equal(status.sourceFound, false);
+});
+
 testGenerationMatrix('living tunnels anomaly seeds roots and mutates bounded cells over time', () => {
   const base = makeProceduralFloorSpec(881, 9);
   const spec = {

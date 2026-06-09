@@ -72,7 +72,7 @@ import {
 import { getComputerOverlaySnapshot, isComputerOverlayOpen } from '../systems/computers';
 import { getGamblingOverlaySnapshot, isGamblingOverlayOpen } from '../systems/gambling';
 import { findInteractionTarget } from '../systems/interactions';
-import { npcQuestMarkerState, type NpcQuestMarkerTone } from '../systems/quests';
+import { getCurrentObjective, npcQuestMarkerState, type CurrentObjective, type NpcQuestMarkerTone } from '../systems/quests';
 import { getNetHackOverlaySnapshot, isNetHackOverlayOpen } from '../systems/net_hack';
 import { getMapEditorSnapshot, isMapEditorOpen } from '../systems/map_editor';
 import { isEmergencyPanelMenuOpen } from '../systems/emergency_panels';
@@ -468,6 +468,31 @@ function drawObjectiveRouteHint(
   ctx.font = `${6 * sy}px monospace`;
   ctx.fillStyle = '#9a8';
   ctx.fillText(fitHudText(ctx, `${objective.risk} / ${objective.returnPath}`, panelW - 12 * sx), x + 6 * sx, y + 37 * sy);
+  ctx.restore();
+}
+
+function drawCurrentObjectiveHint(
+  ctx: CanvasRenderingContext2D,
+  rect: UiRect,
+  sx: number,
+  sy: number,
+  time: number,
+  objective: CurrentObjective,
+): void {
+  const panelW = Math.min(rect.w, 188 * sx);
+  const panelH = 28 * sy;
+  const x = rect.x + rect.w - panelW;
+  const y = rect.y;
+
+  ctx.save();
+  drawNeuroPanel(ctx, x, y, panelW, panelH, time, 812);
+  ctx.textAlign = 'left';
+  ctx.font = `${6.4 * sy}px monospace`;
+  ctx.fillStyle = objective.color;
+  ctx.fillText('ЦЕЛЬ', x + 6 * sx, y + 4 * sy);
+  ctx.font = `${7 * sy}px monospace`;
+  ctx.fillStyle = '#ddd';
+  ctx.fillText(fitHudText(ctx, objective.line, panelW - 12 * sx), x + 6 * sx, y + 14 * sy);
   ctx.restore();
 }
 
@@ -1359,6 +1384,7 @@ export function drawHUD(
   const routeCue = getActiveRouteCueHud(state.time, state.currentFloor);
   const routeHintsVisible = showCompactPanels && showRouteHints && !state.samosborActive;
   const objectiveRoute = routeHintsVisible ? getObjectiveRouteHud(state, world, player) : null;
+  const currentObjective = routeHintsVisible ? getCurrentObjective(state, entities) : null;
   const routeCueVisible = !!routeCue && routeHintsVisible;
   const smallCaravan = showCompactPanels && showCaravanHints ? getNearestSmallCaravan(state, world, player) : undefined;
   const smogIndicatorVisible = showCompactPanels && anomalySafetyVisible && smogStatus.active && (smogStatus.inside || smogStatus.sourceFound || smogStatus.handled);
@@ -1490,6 +1516,10 @@ export function drawHUD(
   if (objectiveRoute) {
     const rect = allocateHudSlot(slots.topRightNavigation, 46 * sy, 188 * sx, 'right');
     drawObjectiveRouteHint(ctx, rect, sx, sy, time, objectiveRoute);
+  }
+  if (currentObjective && !objectiveRoute) {
+    const rect = allocateHudSlot(slots.topRightNavigation, 28 * sy, 188 * sx, 'right');
+    drawCurrentObjectiveHint(ctx, rect, sx, sy, time, currentObjective);
   }
   if (routeCueVisible) {
     const rect = allocateHudSlot(slots.topRightNavigation, 35 * sy, 176 * sx, 'right');
@@ -1679,7 +1709,7 @@ export function drawHUD(
 
   // ── Quest log (if toggled) ───────────────────────────────
   if (state.showQuests) {
-    drawQuestLog(ctx, state, msx, msy, time);
+    drawQuestLog(ctx, state, msx, msy, time, getCurrentObjective(state, entities));
   }
 
   // ── Faction relations matrix (F) ─────────────────────────

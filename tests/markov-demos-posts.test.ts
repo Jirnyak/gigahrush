@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { Faction, FloorLevel, Occupation, type WorldEvent } from '../src/core/types';
+import { DEMOS_AUTHOR_FALLBACK_CAP } from '../src/data/demos_posts';
 import {
   buildDemosFeedView,
   createDemosPostQueue,
@@ -119,6 +120,29 @@ test('Demos posts can resolve live entity ids to A-Life authors', () => {
   assert.equal(post?.authorAlifeId, 11);
   assert.equal(post?.args.some(arg => arg.includes('Житель 11')), true);
   assert.equal(post?.args.some(arg => arg.includes('Житель 22')), true);
+});
+
+test('Demos fallback authors are sampled from the full supplied window', () => {
+  const fallbackAuthorAlifeIds = Array.from({ length: 64 }, (_unused, index) => index + 1);
+  let authorAlifeId: number | undefined;
+  for (let id = 20; id < 120 && authorAlifeId === undefined; id++) {
+    const queue = createDemosPostQueue();
+    const post = enqueueDemosPostFromEvent(queue, worldEvent({
+      id,
+      type: 'samosbor_warning',
+    }), {
+      fallbackAuthorAlifeIds,
+      snapshotForAlifeId: alifeId => demosPostAuthorFactFromSnapshot(snapshot(
+        alifeId,
+        `Житель ${alifeId}`,
+        alifeId <= DEMOS_AUTHOR_FALLBACK_CAP,
+      )),
+    });
+    authorAlifeId = post?.authorAlifeId;
+  }
+
+  assert.equal(typeof authorAlifeId, 'number');
+  assert.ok((authorAlifeId ?? 0) > DEMOS_AUTHOR_FALLBACK_CAP);
 });
 
 test('Demos post text reconstructs deterministically from compact post fields', () => {

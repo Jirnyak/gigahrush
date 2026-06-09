@@ -22,7 +22,7 @@ import {
 } from '../src/core/types';
 import { World } from '../src/core/world';
 import { ITEMS } from '../src/data/catalog';
-import { createEconomyFloorState, normalizeEconomyState } from '../src/data/economy';
+import { ECONOMY_ROUTE_STATE_CAP, createEconomyFloorState, normalizeEconomyState } from '../src/data/economy';
 import { MAX_INVENTORY_SLOTS } from '../src/data/inventory_limits';
 import { getStack } from '../src/data/items';
 import { SIDE_QUESTS } from '../src/data/plot';
@@ -361,6 +361,29 @@ test('economy state normalizes invalid resources and preserves valid saved value
   assert.equal(floor.resources.drink_water.target, target);
   assert.equal(floor.resources.drink_water.lastDelta, 0);
   assert.equal(floor.lastTickAt, 42);
+});
+
+test('economy state restore drops invalid floor keys and caps route maps', () => {
+  const normalized = normalizeEconomyState({
+    floors: {
+      [FloorLevel.LIVING]: { floor: FloorLevel.LIVING, resources: {}, lastTickAt: 12 },
+      99: { floor: 99, resources: {}, lastTickAt: 99 },
+      bad: { floor: FloorLevel.HELL, resources: {}, lastTickAt: 77 },
+    },
+    routes: Object.fromEntries(Array.from({ length: ECONOMY_ROUTE_STATE_CAP + 5 }, (_, i) => [
+      `route_${i}`,
+      { routeId: `spoof_${i}`, heat: 200, trust: 99, debt: 999 },
+    ])),
+  });
+
+  assert.equal(normalized.floors[FloorLevel.LIVING]?.lastTickAt, 12);
+  assert.equal((normalized.floors as Record<string, unknown>)['99'], undefined);
+  assert.equal((normalized.floors as Record<string, unknown>).bad, undefined);
+  assert.equal(Object.keys(normalized.routes).length, ECONOMY_ROUTE_STATE_CAP);
+  assert.equal(normalized.routes.route_0.routeId, 'route_0');
+  assert.equal(normalized.routes.route_0.heat, 100);
+  assert.equal(normalized.routes.route_0.trust, 5);
+  assert.equal(normalized.routes.route_0.debt, 300);
 });
 
 test('economy save normalization fills missing floors and drops unknown resources', () => {
@@ -1054,6 +1077,36 @@ test('procedural quest offers have no global active quest cap', () => {
 
   assert.equal(state.quests.length, 13);
   assert.equal(npc.questId, state.quests[12].id);
+});
+
+test('procedural fetch quests do not target story-critical main plot items', () => {
+  const state = makeGameState({ worldEvents: createWorldEventState() });
+  const world = new World();
+  const npc = makeTestEntity({
+    id: 42,
+    type: EntityType.NPC,
+    x: 10,
+    y: 10,
+    name: 'Культист заявочный',
+    faction: Faction.CULTIST,
+    canGiveQuest: true,
+  });
+  const player = makeTestEntity({ id: 0, x: 11, y: 10 });
+  const randoms = [0.99, 0, 0];
+  const originalRandom = Math.random;
+
+  try {
+    Math.random = () => randoms.shift() ?? 0;
+    offerQuest(npc, player, world, [player, npc], state, state.msgs);
+  } finally {
+    Math.random = originalRandom;
+  }
+
+  assert.equal(state.quests.length, 1);
+  assert.equal(state.quests[0].type, QuestType.FETCH);
+  assert.notEqual(state.quests[0].targetItem, 'idol_chernobog');
+  assert.notEqual(state.quests[0].targetItem, 'strange_clot');
+  assert.equal(state.quests[0].targetItem, 'cigs');
 });
 
 test('timed procedural quests fail when their deadline passes', () => {

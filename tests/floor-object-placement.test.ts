@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import * as assert from 'node:assert/strict';
 
-import { Feature, FloorLevel, RoomType, Tex } from '../src/core/types';
+import { Feature, FloorLevel, RoomType, Tex, W } from '../src/core/types';
 import { World, auditReachability } from '../src/core/world';
 import { designFloorById } from '../src/data/design_floors';
 import {
@@ -15,6 +15,7 @@ import { craftStationCells } from '../src/gen/craft_stations';
 import { generateDesignFloor } from '../src/gen/design_floors/manifest';
 import { applyFloorObjectPlacementProfile } from '../src/gen/floor_object_placement';
 import { generateFloor } from '../src/gen/floor_manifest';
+import { interactiveAt } from '../src/systems/interactive';
 import { findInteractionTarget } from '../src/systems/interactions';
 import {
   addTestRoom,
@@ -136,6 +137,46 @@ test('floor object profile places decor, explicit interactives and fixture overl
   assert.equal(world.features[screenCells[0]], Feature.SCREEN);
   assert.equal(machineCells >= 3, true, 'decor machines and workbench feature should be visible');
   assert.equal(target?.defId, 'sink_broken');
+});
+
+test('broken fixture placement scores candidates instead of preferring first room order', () => {
+  const world = new World();
+  const earlyRoom = addTestRoom(world, { id: 0, type: RoomType.BATHROOM, x: 10, y: 10, w: 8, h: 8 });
+  const preferredRoom = addTestRoom(world, { id: 1, type: RoomType.MEDICAL, x: 40, y: 10, w: 8, h: 8 });
+  const earlySink = world.idx(earlyRoom.x + 2, earlyRoom.y + 2);
+  const preferredSink = world.idx(preferredRoom.x + 2, preferredRoom.y + 2);
+  world.setFeatureAt(earlySink, Feature.SINK);
+  world.setFeatureAt(preferredSink, Feature.SINK);
+
+  const profile: FloorObjectPlacementProfile = {
+    id: 'test_broken_fixture_candidate_scoring',
+    tags: ['test'],
+    density: { brokenFixtures: 1 },
+    brokenFixtures: [
+      {
+        id: 'test_scored_broken_sink',
+        baseChance: 1,
+        max: 1,
+        features: [Feature.SINK],
+        roomTypeWeights: {
+          [RoomType.BATHROOM]: 1,
+          [RoomType.MEDICAL]: 3,
+        },
+      },
+    ],
+  };
+
+  const reachable = new Uint8Array(W * W);
+  reachable[earlySink] = 1;
+  reachable[preferredSink] = 1;
+  const summary = applyFloorObjectPlacementProfile(world, [earlyRoom, preferredRoom], earlyRoom.x + 1, earlyRoom.y + 1, profile, {
+    reachable,
+    seed: 0x4f17,
+  });
+
+  assert.equal(summary?.brokenFixtures.test_scored_broken_sink, 1);
+  assert.equal(interactiveAt(world, earlySink % W, (earlySink / W) | 0).some(instance => instance.defId === 'sink_broken'), false);
+  assert.equal(interactiveAt(world, preferredSink % W, (preferredSink / W) | 0).some(instance => instance.defId === 'sink_broken'), true);
 });
 
 test('floor object profile wall decor and textures skip apartment rooms', () => {

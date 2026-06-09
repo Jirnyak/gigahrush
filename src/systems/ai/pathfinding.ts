@@ -6,8 +6,9 @@ import {
   EntityType, AIGoal, RoomType,
 } from '../../core/types';
 import { World } from '../../core/world';
+import { PATH_BLOCKER_ROWS_PER_CELL, PATH_BLOCKER_SUBDIV } from '../../core/path_blockers';
 import { getCellHazardMoveMultiplier } from '../cell_hazards';
-import { canActorOccupy } from '../movement_collision';
+import { actorOccupyRadius, canActorOccupy } from '../movement_collision';
 import { setDoorState } from '../door_state';
 import { aiPathMoveSpeed } from '../rpg';
 import { bark, BARK_ARRIVE, BARK_ARRIVE_F, BARK_CHANCE_ARRIVE } from './barks';
@@ -36,6 +37,7 @@ const PATH_LINE_SAMPLE_STEP = 0.35;
 const PATH_WAYPOINT_REACH = 0.34;
 const PATH_WAYPOINT_REACH_SQ = PATH_WAYPOINT_REACH * PATH_WAYPOINT_REACH;
 const PATH_WAYPOINT_OFFSET = 0.18;
+const PATH_NAV_ACTOR_RADIUS = 0.16;
 const BEHAVIOR_FLOW_FIELD_CACHE_MAX = 16;
 const ROUTINE_WANDER_ATTEMPTS = 4;
 const ROUTINE_FAR_ATTEMPTS = 5;
@@ -46,10 +48,12 @@ const _navQueue = new Int32Array(W * W);
 const _flowSourceScratch: number[] = [];
 let _navWorld: World | null = null;
 let _navCellVersion = -1;
+let _navPathBlockerVersion = -1;
 let _navComponents = 0;
 let _navReachable = 0;
 let _frozenNavWorld: World | null = null;
 let _frozenNavCellVersion = -1;
+let _frozenNavPathBlockerVersion = -1;
 let _frozenNavRoomCount = -1;
 let _frozenNavRefCount = 0;
 let _flowFieldTouch = 0;
@@ -69,6 +73,7 @@ interface BehaviorFlowField {
   key: string;
   world: World;
   cellVersion: number;
+  pathBlockerVersion: number;
   roomCount: number;
   next: Int32Array;
   sourceCount: number;
@@ -92,6 +97,7 @@ export interface PathSteering {
 interface SteeringPathAssignment {
   world: World;
   cellVersion: number;
+  pathBlockerVersion: number;
   target: number;
   path: number[];
   pi: number;
@@ -192,6 +198,10 @@ function navigationCacheCellVersion(world: World): number {
   return _frozenNavWorld === world ? _frozenNavCellVersion : world.cellVersion;
 }
 
+function navigationCachePathBlockerVersion(world: World): number {
+  return _frozenNavWorld === world ? _frozenNavPathBlockerVersion : world.pathBlockerVersion;
+}
+
 function navigationCacheRoomCount(world: World): number {
   return _frozenNavWorld === world ? _frozenNavRoomCount : world.rooms.length;
 }
@@ -202,11 +212,13 @@ export function freezeNavigationCacheForWorld(world: World): void {
     return;
   }
   const frozenCellVersion = world.cellVersion;
-  if (_navWorld !== world || _navCellVersion !== frozenCellVersion) {
-    bakeNavigationTree(world, frozenCellVersion);
+  const frozenPathBlockerVersion = world.pathBlockerVersion;
+  if (_navWorld !== world || _navCellVersion !== frozenCellVersion || _navPathBlockerVersion !== frozenPathBlockerVersion) {
+    bakeNavigationTree(world, frozenCellVersion, frozenPathBlockerVersion);
   }
   _frozenNavWorld = world;
   _frozenNavCellVersion = frozenCellVersion;
+  _frozenNavPathBlockerVersion = frozenPathBlockerVersion;
   _frozenNavRoomCount = world.rooms.length;
   _frozenNavRefCount = 1;
 }
@@ -215,6 +227,7 @@ export function unfreezeNavigationCacheForWorld(world?: World): void {
   if (!world) {
     _frozenNavWorld = null;
     _frozenNavCellVersion = -1;
+    _frozenNavPathBlockerVersion = -1;
     _frozenNavRoomCount = -1;
     _frozenNavRefCount = 0;
     return;
@@ -226,25 +239,56 @@ export function unfreezeNavigationCacheForWorld(world?: World): void {
   }
   _frozenNavWorld = null;
   _frozenNavCellVersion = -1;
+  _frozenNavPathBlockerVersion = -1;
   _frozenNavRoomCount = -1;
   _frozenNavRefCount = 0;
 }
 
 function isNavPassable(world: World, i: number): boolean {
   const cell = world.cells[i];
-  if (cell === Cell.FLOOR || cell === Cell.WATER) return true;
+  if (cell === Cell.FLOOR || cell === Cell.WATER) return navFinePassable(world, i);
   if (cell !== Cell.DOOR) return false;
   const door = world.doors.get(i);
   return !door || (door.state !== DoorState.LOCKED && door.state !== DoorState.HERMETIC_CLOSED);
 }
 
-function bakeNavigationTree(world: World, cacheCellVersion = world.cellVersion): void {
+function navFinePassable(world: World, i: number): boolean {
+  const offset = i * PATH_BLOCKER_ROWS_PER_CELL;
+  let hasFineBlocker = false;
+  for (let row = 0; row < PATH_BLOCKER_ROWS_PER_CELL; row++) {
+    if (world.pathBlockers[offset + row] === 0) continue;
+    hasFineBlocker = true;
+    break;
+  }
+  if (!hasFineBlocker) return true;
+
+  const cellX = i % W;
+  const cellY = (i / W) | 0;
+  for (let row = 0; row < PATH_BLOCKER_ROWS_PER_CELL; row++) {
+    const mask = world.pathBlockers[offset + row] ?? 0;
+    if (mask === 0xff) continue;
+    for (let col = 0; col < PATH_BLOCKER_SUBDIV; col++) {
+      if ((mask & (1 << col)) !== 0) continue;
+      const x = cellX + (col + 0.5) / PATH_BLOCKER_SUBDIV;
+      const y = cellY + (row + 0.5) / PATH_BLOCKER_SUBDIV;
+      if (canActorOccupy(world, x, y, PATH_NAV_ACTOR_RADIUS, { ignoreFineBlockers: true })) return true;
+    }
+  }
+  return false;
+}
+
+function bakeNavigationTree(
+  world: World,
+  cacheCellVersion = world.cellVersion,
+  cachePathBlockerVersion = world.pathBlockerVersion,
+): void {
   _bfsCalls++;
   _navParent.fill(NAV_UNKNOWN);
   _navDepth.fill(0);
   _navComponent.fill(-1);
   _navWorld = world;
   _navCellVersion = cacheCellVersion;
+  _navPathBlockerVersion = cachePathBlockerVersion;
   _navComponents = 0;
   _navReachable = 0;
 
@@ -297,16 +341,18 @@ function visitNavNeighbor(world: World, cell: number, parent: number, componentI
 
 function ensureNavigationTree(world: World): void {
   const cacheCellVersion = navigationCacheCellVersion(world);
-  if (_navWorld === world && _navCellVersion === cacheCellVersion) {
+  const cachePathBlockerVersion = navigationCachePathBlockerVersion(world);
+  if (_navWorld === world && _navCellVersion === cacheCellVersion && _navPathBlockerVersion === cachePathBlockerVersion) {
     _pathCacheHits++;
     return;
   }
-  bakeNavigationTree(world, cacheCellVersion);
+  bakeNavigationTree(world, cacheCellVersion, cachePathBlockerVersion);
 }
 
 function flowFieldValid(field: BehaviorFlowField, world: World): boolean {
   return field.world === world &&
     field.cellVersion === navigationCacheCellVersion(world) &&
+    field.pathBlockerVersion === navigationCachePathBlockerVersion(world) &&
     field.roomCount === navigationCacheRoomCount(world);
 }
 
@@ -361,6 +407,7 @@ function ensureBehaviorFlowField(
     key,
     world,
     cellVersion: navigationCacheCellVersion(world),
+    pathBlockerVersion: navigationCachePathBlockerVersion(world),
     roomCount: navigationCacheRoomCount(world),
     next,
     sourceCount: _flowSourceScratch.length,
@@ -583,6 +630,7 @@ function openPathDoor(world: World, cell: number): void {
 function validSteeringAssignment(assignment: SteeringPathAssignment, world: World, target: number): boolean {
   return assignment.world === world &&
     assignment.cellVersion === navigationCacheCellVersion(world) &&
+    assignment.pathBlockerVersion === navigationCachePathBlockerVersion(world) &&
     assignment.target === target;
 }
 
@@ -615,6 +663,7 @@ export function steerEntityTowardCell(world: World, e: Entity, tx: number, ty: n
     assignment = {
       world,
       cellVersion: navigationCacheCellVersion(world),
+      pathBlockerVersion: navigationCachePathBlockerVersion(world),
       target,
       path,
       pi: 0,
@@ -639,6 +688,7 @@ export function steerEntityTowardCell(world: World, e: Entity, tx: number, ty: n
     assignment.path = path;
     assignment.pi = 0;
     assignment.cellVersion = navigationCacheCellVersion(world);
+    assignment.pathBlockerVersion = navigationCachePathBlockerVersion(world);
   }
 
   const nextCell = assignment.path[assignment.pi];
@@ -656,10 +706,6 @@ export function steerEntityTowardCell(world: World, e: Entity, tx: number, ty: n
     nextCell,
     targetCell: target,
   };
-}
-
-function actorRadius(e: Entity): number {
-  return e.type === EntityType.MONSTER ? 0.18 : 0.16;
 }
 
 function wrapFloat(v: number): number {
@@ -807,7 +853,7 @@ export function followPath(world: World, e: Entity, dt: number): void {
     return;
   }
 
-  const r = actorRadius(e);
+  const r = actorOccupyRadius(e);
 
   while (ai.pi < ai.path.length) {
     const cell = ai.path[ai.pi];
@@ -839,6 +885,7 @@ export function followPath(world: World, e: Entity, dt: number): void {
 
   // Move toward target
   const speed = aiPathMoveSpeed(e) * getCellHazardMoveMultiplier(world, e) * dt;
+  const beforeCell = world.idx(Math.floor(e.x), Math.floor(e.y));
   const nx = e.x + (dx / dist) * speed;
   const ny = e.y + (dy / dist) * speed;
   let moved = false;
@@ -853,7 +900,12 @@ export function followPath(world: World, e: Entity, dt: number): void {
   }
 
   // Stuck detection
-  ai.stuck = moved ? Math.max(0, ai.stuck - dt * 2) : ai.stuck + dt;
+  const afterDx = world.delta(e.x, waypoint.x);
+  const afterDy = world.delta(e.y, waypoint.y);
+  const afterDistSq = afterDx * afterDx + afterDy * afterDy;
+  const afterCell = world.idx(Math.floor(e.x), Math.floor(e.y));
+  const progressed = moved && (afterDistSq < distSq - 0.0001 || afterCell !== beforeCell);
+  ai.stuck = progressed ? Math.max(0, ai.stuck - dt * 2) : ai.stuck + dt;
   if (ai.stuck > 3) {
     ai.path = [];
     ai.pi = 0;

@@ -28,6 +28,7 @@ import {
   moveAlifeNpcRecord,
   packageIdFromReservedIdentityId,
   recordAlifeNpcDeath,
+  resetAlifePlayerRelationsForNewPlayer,
   sampleAlifeFloorRecordIds,
   setAlifeState,
   type AlifePopulationPlan,
@@ -636,6 +637,57 @@ test('event-created ordinary NPC does not inherit an existing A-Life identity or
   const save = alifeForSave(state);
   assert.equal(save.deadIds.includes(npc.alifeId), true);
   assert.equal(save.deadIds.includes(reserved.id), false);
+});
+
+test('A-Life player relations are regenerated for a new death-continuation host', () => {
+  const state = minimalState();
+  initFactionRelations();
+  setAlifeState(state, {
+    seed: 12345,
+    total: 1_000,
+    overrides: [
+      { id: 1, floorKey: 'story:living', faction: Faction.LIQUIDATOR, playerRelation: 80 },
+      { id: 2, floorKey: 'story:living', faction: Faction.CULTIST, playerRelation: -80 },
+      { id: 3, floorKey: 'story:living', faction: Faction.CITIZEN, playerRelation: 80 },
+    ],
+  });
+  const guard = ambientTemplate(1, 10, 10);
+  guard.alifeId = 1;
+  guard.playerRelation = 80;
+  const host = ambientTemplate(2, 11, 10);
+  host.alifeId = 2;
+  host.faction = Faction.CULTIST;
+  host.playerRelation = -80;
+  const entities = [guard, host];
+
+  const result = resetAlifePlayerRelationsForNewPlayer(state, entities, host, (from, target) =>
+    from === 1 && target === 2 ? -73 : undefined
+  );
+
+  assert.equal(result.newPlayerAlifeId, 2);
+  assert.equal(getAlifeNpcRecordSnapshot(state, 1)?.playerRelation, -73);
+  assert.equal(guard.playerRelation, -73);
+  assert.equal(getAlifeNpcRecordSnapshot(state, 2)?.playerRelation, 100);
+  assert.equal(host.playerRelation, 100);
+  assert.notEqual(getAlifeNpcRecordSnapshot(state, 3)?.playerRelation, 80);
+});
+
+test('A-Life death-continuation relation reset stays a compact current-player baseline', () => {
+  const state = minimalState();
+  initFactionRelations();
+  setAlifeState(state, { seed: 12345, total: 20_000 });
+  const host = ambientTemplate(2, 11, 10);
+  host.alifeId = 2;
+  host.faction = Faction.CULTIST;
+
+  resetAlifePlayerRelationsForNewPlayer(state, [host], host);
+  const save = alifeForSave(state);
+
+  assert.equal(save.playerRelationTargetFaction, Faction.CULTIST);
+  assert.equal(save.playerRelationTargetAlifeId, 2);
+  assert.equal(save.overrides.length, 0);
+  assert.equal(getAlifeNpcRecordSnapshot(state, 2)?.playerRelation, 100);
+  assert.notEqual(getAlifeNpcRecordSnapshot(state, 3)?.playerRelation, undefined);
 });
 
 test('A-Life caps sanitized and saved dead ids', () => {

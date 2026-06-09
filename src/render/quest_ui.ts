@@ -16,7 +16,7 @@ import { getRecentEvents } from '../systems/events';
 import { getRecentRumorLead } from '../systems/npc_memory';
 import { currentFloorRunEntry, floorRunEntryMapLabel, formatFloorZ } from '../systems/procedural_floors';
 import { formatQuestMinutes, questDeadlineText, questHasDeadline, questRemainingMinutes } from '../systems/quest_deadlines';
-import { getActiveQuest, isQuestSelectableAsActive } from '../systems/quests';
+import { getActiveQuest, isQuestSelectableAsActive, type CurrentObjective } from '../systems/quests';
 import { drawNeuroPanel, drawGlitchText } from './hud_fx';
 import { drawWrappedText, fitText } from './ui_text';
 
@@ -236,6 +236,7 @@ export function drawQuestLog(
   state: GameState,
   sx: number, sy: number,
   uiTime = state.time,
+  currentObjective?: CurrentObjective | null,
 ): void {
   const pw = Math.min(400 * sx, ctx.canvas.width - 24 * sx);
   const ph = Math.min(320 * sy, ctx.canvas.height - 24 * sy);
@@ -257,7 +258,8 @@ export function drawQuestLog(
   if (all.length === 0) {
     ctx.fillStyle = '#666';
     ctx.font = `${8 * sy}px monospace`;
-    ctx.fillText(`Нет заданий. Поговорите с жильцами ${controlHint('interact')}.`, px + 8 * sx, py + 24 * sy);
+    const emptyLine = currentObjective?.line ?? `Нет заданий. Поговорите с жильцами ${controlHint('interact')}.`;
+    ctx.fillText(fitText(ctx, emptyLine, pw - 16 * sx), px + 8 * sx, py + 24 * sy);
     return;
   }
 

@@ -90,6 +90,33 @@ test('disassembly picks deterministic material, removes one item, and can learn 
   assert.equal(hasCraftRecipe(state, recipe.id), true);
 });
 
+test('disassembly removes the selected slot when duplicate item ids carry different data', () => {
+  const state = makeGameState({ time: 20 });
+  const player = makeTestPlayer({
+    inventory: [
+      { defId: 'pipe', count: 1, data: { dur: 1 } },
+      { defId: 'pipe', count: 1, data: { dur: 9 } },
+    ],
+  });
+  const recipe = craftRecipeByItemId('pipe');
+  assert.ok(recipe, 'pipe recipe must exist');
+  const materialId = firstMaterial(recipe.components);
+
+  const result = disassembleInventorySlot({
+    actor: player,
+    state,
+    stationKind: 'workbench',
+    slotIndex: 0,
+    rng: sequence([0, 0.5]),
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.materialId, materialId);
+  assert.equal(player.inventory?.length, 1);
+  assert.equal(player.inventory?.[0]?.defId, 'pipe');
+  assert.deepEqual(player.inventory?.[0]?.data, { dur: 9 });
+});
+
 test('disassembly learn chance does not learn recipe at or above threshold', () => {
   const state = makeGameState({ time: 21 });
   const player = makeTestPlayer({ inventory: [{ defId: 'breach_charge', count: 1 }] });

@@ -41,11 +41,6 @@ function isIosWebKit(): boolean {
 }
 
 function isIPhoneWebKit(): boolean {
-  // iPhone-only detection. iPadOS 13+ reports as MacIntel + multitouch and
-  // actually supports `documentElement.requestFullscreen`, so it goes through
-  // the native path. iPhone Safari (as of iOS 17) still rejects
-  // `requestFullscreen` on non-video elements, so the soft scroll trick is
-  // the best we can do there.
   const ua = navigator.userAgent;
   return /iphone|ipod/i.test(ua) && /applewebkit/i.test(ua);
 }
@@ -137,11 +132,7 @@ export async function toggleNativeFullscreen(target: HTMLElement = document.docu
 
 export function canUseMobileFullscreen(): boolean {
   if (isEmbeddedViewport()) return false;
-  // iPhone Safari rejects `requestFullscreen` on non-video elements, but we
-  // still expose the button there so the URL-bar scroll trick can run. iPad
-  // (including iPadOS reporting as MacIntel) supports the native path and
-  // falls through to `canRequestFullscreen`.
-  if (isIPhoneWebKit()) return true;
+  if (isIPhoneWebKit()) return false;
   return canRequestFullscreen(document.documentElement);
 }
 
@@ -151,14 +142,7 @@ export async function enterMobileFullscreen(target: HTMLElement = document.docum
     const ok = await requestNativeFullscreen(target);
     if (ok) return true;
   }
-  // iOS Safari soft-fullscreen fallback: scrolling one pixel down hides the
-  // URL bar without flipping the document into real fullscreen. There's no
-  // JS way to detect URL-bar visibility, so `isMobileFullscreenActive` will
-  // continue to return false and the button keeps its "FULL" label — that's
-  // fine, tapping again is idempotent.
-  try { window.scrollTo(0, 1); } catch {}
-  lockLandscape();
-  return true;
+  return false;
 }
 
 export async function exitMobileFullscreen(): Promise<void> {

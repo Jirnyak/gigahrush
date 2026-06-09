@@ -18,7 +18,7 @@ import {
 } from '../src/systems/demos_quest_notices';
 import { createPrefilledAlifeState, type AlifeNpcSnapshot } from '../src/systems/alife';
 import { createWorldEventState, getRecentEvents } from '../src/systems/events';
-import { floorKeyForStory } from '../src/systems/floor_keys';
+import { floorKeyForFloorInstance, floorKeyForStory } from '../src/systems/floor_keys';
 import { findDemosCursor, getDemosSnapshot } from '../src/systems/demos';
 import { makeGameState } from './helpers';
 
@@ -159,6 +159,32 @@ test('Demos notices are capped and social ticks create at most two notices', () 
   });
   assert.equal(created.length, 2);
   assert.equal(getDemosQuestBoardView(tickState, { limit: 10 }).total, 2);
+});
+
+test('Demos notice floor labels never expose raw floor keys', () => {
+  const state = makeGameState();
+  upsertDemosQuestNotice(state, {
+    id: 1,
+    giverAlifeId: 1,
+    createdAt: 1,
+    floorKey: floorKeyForFloorInstance('test_debug'),
+    templateId: 'test:floor-instance',
+    tags: ['quest_notice'],
+    urgency: 1,
+  });
+  upsertDemosQuestNotice(state, {
+    id: 2,
+    giverAlifeId: 2,
+    createdAt: 2,
+    floorKey: 'unknown:raw_debug_key',
+    templateId: 'test:unknown-floor',
+    tags: ['quest_notice'],
+    urgency: 1,
+  });
+
+  const labels = getDemosQuestBoardView(state, { limit: 10 }).notices.map(notice => notice.floorLabel);
+  assert.deepEqual(labels, ['неуточненный этаж', 'маршрут без номера']);
+  assert.equal(labels.some(label => label.includes(':') || label.includes('floor_instance') || label.includes('raw_debug_key')), false);
 });
 
 test('same seed and context selects the same notice deterministically', () => {

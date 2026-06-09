@@ -20,9 +20,11 @@ import {
   getStack,
   itemEquipSlot,
   itemHasUseAction,
+  itemUseTransformOutput,
   ITEM_TAGS,
   SILVER_SLIME_OPENED_ID,
   SILVER_SLIME_SEALED_ID,
+  type ItemUseTransformOutput,
 } from '../data/items';
 import {
   craftRecipeNoteText,
@@ -373,6 +375,32 @@ function canAddSingle(actor: Entity, defId: string): boolean {
   const inv = actor.inventory ?? [];
   return inv.some(slot => slot.defId === defId && slot.count < getStack(def) && canStackData(slot.data, undefined))
     || inv.length < MAX_INVENTORY_SLOTS;
+}
+
+function itemAddCapacityAfterConsumingSlot(e: Entity, slotIdx: number, defId: string, count: number, data?: unknown): number {
+  const def = ITEMS[defId];
+  if (!def || count <= 0) return 0;
+  const inv = e.inventory ?? [];
+  const stackMax = getStack(def);
+  let capacity = 0;
+  let occupiedAfter = inv.length;
+  for (let i = 0; i < inv.length; i++) {
+    const slot = inv[i];
+    const slotCount = i === slotIdx ? slot.count - 1 : slot.count;
+    if (slotCount <= 0) {
+      occupiedAfter--;
+      continue;
+    }
+    if (slot.defId === defId && slotCount < stackMax && canStackData(slot.data, data)) {
+      capacity += stackMax - slotCount;
+    }
+  }
+  capacity += Math.max(0, MAX_INVENTORY_SLOTS - occupiedAfter) * stackMax;
+  return capacity;
+}
+
+function canApplyUseTransformOutput(e: Entity, slotIdx: number, output: ItemUseTransformOutput): boolean {
+  return itemAddCapacityAfterConsumingSlot(e, slotIdx, output.outputId, output.count) >= output.count;
 }
 
 function decrementInventorySlot(inv: Item[], slotIdx: number): void {
@@ -1973,6 +2001,20 @@ export function useItem(e: Entity, slotIdx: number, msgs: Msg[], time: number, s
       return;
     }
     const beforeHp = e.hp;
+    const transformOutput = itemUseTransformOutput(def.id);
+    if (transformOutput) {
+      if (!canApplyUseTransformOutput(e, slotIdx, transformOutput)) {
+        const outputName = ITEMS[transformOutput.outputId]?.name ?? transformOutput.outputId;
+        msgs.push(msg(`Нет места: освободите слот или стопку под ${outputName}.`, time, '#fa0'));
+        return;
+      }
+      consumeInventorySlot(e, slotIdx);
+      const useText = def.use(e);
+      msgs.push(msg(useText + zhelemishHealingFrictionText(e, beforeHp, time), time, '#6a6'));
+      placeMonsterBait(state, world, e, e.x, e.y, def.id, 1, 'use');
+      publishPlayerItemEvent(state, e, 'player_use_item', def.id, 1, 2, zoneId);
+      return;
+    }
     const useText = def.use(e);
     msgs.push(msg(useText + zhelemishHealingFrictionText(e, beforeHp, time), time, '#6a6'));
     placeMonsterBait(state, world, e, e.x, e.y, def.id, 1, 'use');

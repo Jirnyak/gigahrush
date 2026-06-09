@@ -149,6 +149,7 @@ function getUniforms(gl: WebGL2RenderingContext, program: WebGLProgram): Record<
     'uInvDet',
     'uWorldSize',
     'uMaxDraw',
+    'uMeshRadius',
     'uFogColor',
     'uFogDensity',
     'uAmbient',
@@ -283,6 +284,7 @@ class MeshPass implements MeshPassHandle {
     gl.uniform1f(uniforms.uInvDet, invDet);
     gl.uniform1f(uniforms.uWorldSize, W);
     gl.uniform1f(uniforms.uMaxDraw, MAX_DRAW);
+    gl.uniform1f(uniforms.uMeshRadius, Math.max(0.1, context.profile.radius));
     gl.uniform3f(uniforms.uFogColor, fog[0] / 255, fog[1] / 255, fog[2] / 255);
     gl.uniform1f(uniforms.uFogDensity, fogDensity);
     gl.uniform1f(uniforms.uAmbient, 0.18);

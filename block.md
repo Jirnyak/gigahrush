@@ -25,6 +25,9 @@ Path blockers реализованы как дешевый активный сл
   construction;
 - player movement and ordinary AI local movement use the shared
   `src/systems/movement_collision.ts` coarse+fine occupancy helper;
+- actors that are restored, spawned or caught inside a current blocker mask are
+  relocated to the nearest valid coarse+fine occupancy point through the same
+  movement helper;
 - coarse route/pathfinding remains cell-level and does not become an
   `8192x8192` graph;
 - packed floor memory and save payloads do not serialize the full 8 MiB blocker
@@ -257,6 +260,8 @@ obstacles, not permission to seal route anchors or shelter exits.
 canActorOccupyCoarse(world, x, y, radius)
 canActorOccupyFine(world, x, y, radius)
 canActorOccupy(world, x, y, radius, options?)
+findNearestActorOccupyPosition(world, x, y, radius, maxCellRadius?)
+unstuckActorFromBlockers(world, entity, options?)
 ```
 
 `canActorOccupy()` combines:
@@ -275,6 +280,16 @@ inconvenient.
 
 Movement should keep X/Y separation where possible so actors slide along
 furniture instead of sticking on the first failed diagonal.
+
+Actor depenetration is a generic safety net, not furniture-specific content
+logic. It is used when the actor's current center is invalid under
+`canActorOccupy()`, for example after floor memory restore, late blocker
+rebuild, samosbor geometry replacement, a monster-specific move hook or an
+authored spawn lands inside a table/decor mask. The search first tries clear
+subcell positions in the current cell, then expands in a bounded toroidal ring
+and chooses the nearest valid coarse+fine occupancy point. A successful move
+clears stale AI path progress so the actor does not keep walking toward a path
+that began inside the obstacle.
 
 ## AI And Pathfinding
 

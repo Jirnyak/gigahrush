@@ -120,6 +120,7 @@ export function drawDemosProfilePanel(
   }
   drawRow(ctx, 'возраст', `${details.age}, ${details.ageBandLabel}, ${details.sexLabel}`, x + pad, rowY, rowW, sy); rowY += 12 * sy;
   drawRow(ctx, 'капитал', details.capitalLabel, x + pad, rowY, rowW, sy, '#edb'); rowY += 12 * sy;
+  drawRow(ctx, 'счёт', details.accountLabel, x + pad, rowY, rowW, sy, '#d9f1ed'); rowY += 12 * sy;
   drawRow(ctx, 'отношение', details.relationToPlayerLabel, x + pad, rowY, rowW, sy); rowY += 12 * sy;
   drawRow(ctx, 'семья', details.familyStatusLabel, x + pad, rowY, rowW, sy); rowY += 12 * sy;
   drawRow(ctx, 'связи', `друзья ${details.friendsCount} / враги ${details.enemiesCount} / семья ${details.familyCount}`, x + pad, rowY, rowW, sy); rowY += 12 * sy;

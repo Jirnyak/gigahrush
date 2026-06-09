@@ -1177,10 +1177,7 @@ const itemEntries = [
   ...objectKeys('src/data/documents_access.ts', 'DOCUMENT_ACCESS_ITEMS'),
 ];
 const localNpcDefEntries = objectKeysInFiles('NPC_DEFS');
-const plotNpcEntries = [
-  ...objectKeys('src/data/plot.ts', 'PLOT_NPCS'),
-  ...sideQuestNpcEntries,
-];
+const plotNpcEntries = sideQuestNpcEntries;
 const contractEntries = arrayIds('src/data/contracts.ts', 'CONTRACTS');
 const rumorEntries = arrayIds('src/data/rumors.ts', 'RUMORS');
 const slimeEntries = arrayIds('src/data/slime_defs.ts', 'SLIME_DEFS');
@@ -1342,7 +1339,7 @@ function addDocProfileSyncErrors(label, sourceEntries, docEntries, docPath) {
 }
 
 addDuplicateErrors('ITEMS', itemEntries);
-addDuplicateErrors('PLOT_NPCS/registerSideQuest', [...mainPlotNpcPackageEntries, ...plotNpcEntries]);
+addDuplicateErrors('NPC_PACKAGES/registerSideQuest', [...mainPlotNpcPackageEntries, ...plotNpcEntries]);
 addDuplicateErrors('SIDE_QUESTS', sideQuestEntries);
 addDuplicateErrors('CONTRACTS', contractEntries);
 addDuplicateErrors('RUMORS', rumorEntries);
@@ -1406,11 +1403,6 @@ for (const text of npcPackageScan.textRefs) {
 }
 if (!functionCallsFunction('src/data/plot.ts', 'registerSideQuest', 'registerNpcPackageFromPlotNpc')) {
   errors.push('src/data/plot.ts:1 registerSideQuest must register an NPC package for authored NPC data');
-}
-for (const base of objectKeys('src/data/plot.ts', 'PLOT_NPCS')) {
-  if (!npcPackageIds.has(base.id)) {
-    errors.push(`${base.file}:${base.line} direct PLOT_NPCS source "${base.id}" is not backed by an NPC package source`);
-  }
 }
 for (const folder of npcCommunityFolderEntriesList) {
   if (!folder.folderName) errors.push(`${folder.file}:${folder.line} community NPC folder must use static folderName`);
@@ -1712,6 +1704,8 @@ if (!ostovMetaObject) {
 const helperModules = new Set([
   'admin_common.ts',
   'apartments.ts',
+  'bad_apple_world.ts',
+  'common.ts',
   'content_helpers.ts',
   'content_manifest.ts',
   'index.ts',
@@ -1731,10 +1725,10 @@ const helperModules = new Set([
 const unimportedContent = [];
 for (const abs of files) {
   const rel = toRel(abs);
-  if (!/^src\/gen\/(living|ministry|maintenance|kvartiry|hell|void|design_floors)\//.test(rel)) continue;
+  if (!/^src\/gen\/(living|ministry|maintenance|kvartiry|hell|void|design_floors|procedural_anomalies)\//.test(rel)) continue;
   if (helperModules.has(path.basename(abs))) continue;
   const text = fs.readFileSync(abs, 'utf8');
-  const looksLikeContent = /registerSideQuest|registerZoneContent|export function (generate|spawn)/.test(text);
+  const looksLikeContent = /registerSideQuest|registerZoneContent|export function (generate|spawn|apply)/.test(text);
   if (looksLikeContent && !importIncoming.has(rel)) unimportedContent.push(rel);
 }
 

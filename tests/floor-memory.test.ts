@@ -7,6 +7,7 @@ import {
   DoorState,
   EntityType,
   Feature,
+  FloorLevel,
   LiftDirection,
   RoomType,
   Tex,
@@ -16,7 +17,10 @@ import {
   type Room,
   type Zone,
 } from '../src/core/types';
+import { pathBlockedAt } from '../src/core/path_blockers';
 import { SURFACE_FLAG_CHALK_MAP, World } from '../src/core/world';
+import { floorKeyForFloorInstance, floorKeyForProcedural, floorKeyForStory } from '../src/data/floor_keys';
+import { PROCEDURAL_FLOOR_ZS, proceduralFloorKey } from '../src/data/procedural_floors';
 import {
   collectFloorLiftAnchors,
   captureFloorMemory,
@@ -29,6 +33,15 @@ import {
   setFloorMemorySaveByteBudgetForTests,
   takeFloorMemory,
 } from '../src/systems/floor_memory';
+import { canActorOccupy } from '../src/systems/movement_collision';
+
+const HUMAN_R = 0.16;
+
+function proceduralMemoryKeyAt(index: number): string {
+  const z = PROCEDURAL_FLOOR_ZS[index];
+  assert.equal(typeof z, 'number');
+  return floorKeyForProcedural(proceduralFloorKey(z));
+}
 
 function entity(id: number, type: EntityType): Entity {
   return {
@@ -132,6 +145,7 @@ test('floor memory carries generation extras such as dynamic sky providers', () 
 
 test('floor memory save restores full world snapshot without regenerating baseline', () => {
   clearFloorMemory();
+  const key = proceduralMemoryKeyAt(0);
   const world = new World();
   const cellIdx = world.idx(17, 19);
   world.cells[cellIdx] = Cell.FLOOR;
@@ -159,14 +173,14 @@ test('floor memory save restores full world snapshot without regenerating baseli
   npc.x = 17.5;
   npc.y = 19.5;
 
-  assert.equal(captureFloorMemory('procedural:test_floor', world, [npc], 17.5, 19.5, 12, 3), true);
+  assert.equal(captureFloorMemory(key, world, [npc], 17.5, 19.5, 12, 3), true);
   const saved = floorMemoryStateForSave();
   assert.equal(saved.entries[0]?.world.apartmentRoomCount, 2);
   clearFloorMemory();
 
   const restored = restoreFloorMemoryFromSave(saved);
   assert.equal(restored.restored, 1);
-  const loaded = takeFloorMemory('procedural:test_floor');
+  const loaded = takeFloorMemory(key);
   assert.ok(loaded);
   const restoredWorld = loaded.generation.world;
   assert.equal(restoredWorld.apartmentRoomCount, 2);
@@ -178,6 +192,54 @@ test('floor memory save restores full world snapshot without regenerating baseli
   assert.deepEqual(loaded.generation.entities.map(e => e.id), [9]);
   assert.equal(loaded.generation.spawnX, 17.5);
   assert.equal(loaded.generation.spawnY, 19.5);
+  clearFloorMemory();
+});
+
+test('floor memory packed restore rebuilds fine blockers from saved features and containers', () => {
+  clearFloorMemory();
+  const key = floorKeyForStory(FloorLevel.LIVING);
+  const world = new World();
+  for (let y = 41; y <= 45; y++) {
+    for (let x = 40; x <= 47; x++) {
+      world.cells[world.idx(x, y)] = Cell.FLOOR;
+    }
+  }
+
+  const tableIdx = world.idx(42, 43);
+  world.features[tableIdx] = Feature.TABLE;
+  world.addContainer({
+    id: 88,
+    x: 45,
+    y: 43,
+    floor: 0,
+    roomId: -1,
+    zoneId: -1,
+    kind: ContainerKind.METAL_CABINET,
+    name: 'restored cabinet',
+    inventory: [],
+    capacitySlots: 4,
+    access: 'public',
+    discovered: true,
+    tags: ['blocker_restore'],
+  });
+
+  assert.equal(captureFloorMemory(key, world, [], 40.5, 41.5, 1, 0), true);
+  const saved = floorMemoryStateForSave();
+  assert.ok(saved.entries.some(entry => entry.key === key));
+  clearFloorMemory();
+
+  const restored = restoreFloorMemoryFromSave(saved);
+  assert.equal(restored.restored, 1);
+  const loaded = takeFloorMemory(key);
+  assert.ok(loaded);
+
+  const restoredWorld = loaded.generation.world;
+  assert.equal(restoredWorld.features[tableIdx], Feature.TABLE);
+  assert.equal(restoredWorld.containers[0]?.kind, ContainerKind.METAL_CABINET);
+  assert.equal(pathBlockedAt(restoredWorld, 42.5, 43.5), true);
+  assert.equal(pathBlockedAt(restoredWorld, 45.5, 43.5), true);
+  assert.equal(canActorOccupy(restoredWorld, 42.5, 43.5, HUMAN_R), false);
+  assert.equal(canActorOccupy(restoredWorld, 45.5, 43.5, HUMAN_R), false);
   clearFloorMemory();
 });
 
@@ -201,13 +263,13 @@ test('floor memory save view is capped and prefers newest entries', () => {
 test('floor memory restore keeps saved entries packed and capped until take', () => {
   clearFloorMemory();
   const world = new World();
-  assert.equal(captureFloorMemory('story:packed_template', world, [entity(50, EntityType.NPC)], 3, 4, 1, 0), true);
+  assert.equal(captureFloorMemory(proceduralMemoryKeyAt(0), world, [entity(50, EntityType.NPC)], 3, 4, 1, 0), true);
   const template = floorMemoryStateForSave().entries[0];
   assert.ok(template);
 
   const entries = Array.from({ length: 32 }, (_, i) => ({
     ...JSON.parse(JSON.stringify(template)),
-    key: `story:packed_${i}`,
+    key: proceduralMemoryKeyAt(i),
     capturedAt: i,
   }));
   clearFloorMemory();
@@ -224,10 +286,68 @@ test('floor memory restore keeps saved entries packed and capped until take', ()
   const stats = floorMemoryStats();
   assert.equal(stats.fullCount, 0);
   assert.equal(stats.packedCount, 24);
-  assert.ok(takeFloorMemory('story:packed_23'));
+  assert.ok(takeFloorMemory(proceduralMemoryKeyAt(23)));
   assert.equal(floorMemoryStats().fullCount, 0);
   assert.equal(floorMemoryStats().packedCount, 23);
-  assert.equal(takeFloorMemory('story:packed_31'), null);
+  assert.equal(takeFloorMemory(proceduralMemoryKeyAt(31)), null);
+  clearFloorMemory();
+});
+
+test('floor memory restore skips unknown keys before applying restored entry cap', () => {
+  clearFloorMemory();
+  const validKey = floorKeyForStory(FloorLevel.LIVING);
+  const staleInstanceKey = floorKeyForFloorInstance('not_registered');
+  assert.equal(captureFloorMemory(validKey, new World(), [entity(60, EntityType.NPC)], 5, 6, 2, 0), true);
+  const template = floorMemoryStateForSave().entries[0];
+  assert.ok(template);
+
+  const unknownEntries = Array.from({ length: 23 }, (_, i) => ({
+    ...JSON.parse(JSON.stringify(template)),
+    key: `design:missing_${i}`,
+    capturedAt: i,
+  }));
+  const entries = [
+    ...unknownEntries,
+    { ...JSON.parse(JSON.stringify(template)), key: staleInstanceKey, capturedAt: 23 },
+    { ...JSON.parse(JSON.stringify(template)), key: validKey, capturedAt: 24 },
+  ];
+  clearFloorMemory();
+
+  const restored = restoreFloorMemoryFromSave({
+    version: 1,
+    entries,
+    bytes: 0,
+    byteBudget: Number.MAX_SAFE_INTEGER,
+  });
+  assert.equal(restored.restored, 1);
+  assert.equal(restored.skipped, 24);
+  assert.deepEqual(restored.keys, [validKey]);
+  assert.equal(takeFloorMemory(staleInstanceKey), null);
+  assert.ok(takeFloorMemory(validKey));
+  clearFloorMemory();
+});
+
+test('floor memory restore resolves generation extras lazily when packed memory is taken', () => {
+  clearFloorMemory();
+  const key = floorKeyForStory(FloorLevel.LIVING);
+  assert.equal(captureFloorMemory(key, new World(), [], 3, 4, 1, 0), true);
+  const saved = floorMemoryStateForSave();
+  clearFloorMemory();
+
+  let calls = 0;
+  const restored = restoreFloorMemoryFromSave(saved, {
+    generationExtrasForKey: restoredKey => {
+      calls++;
+      return { lazyExtraKey: restoredKey };
+    },
+  });
+  assert.equal(restored.restored, 1);
+  assert.equal(calls, 0);
+
+  const loaded = takeFloorMemory(key);
+  assert.ok(loaded);
+  assert.equal(calls, 1);
+  assert.equal((loaded.generation as { lazyExtraKey?: string }).lazyExtraKey, key);
   clearFloorMemory();
 });
 
@@ -253,10 +373,11 @@ test('floor memory save byte cap skips oversized entries', () => {
 
 test('floor memory restore sanitizes billboard props as non-item entities', () => {
   clearFloorMemory();
+  const key = floorKeyForStory(FloorLevel.LIVING);
   const world = new World();
   const billboard = entity(55, EntityType.BILLBOARD);
   billboard.inventory = [{ defId: 'bread', count: 1 }];
-  assert.equal(captureFloorMemory('story:billboard_restore', world, [billboard], 10.5, 10.5, 1, 0), true);
+  assert.equal(captureFloorMemory(key, world, [billboard], 10.5, 10.5, 1, 0), true);
 
   const saved = floorMemoryStateForSave();
   const entry = JSON.parse(JSON.stringify(saved.entries[0])) as typeof saved.entries[number] & { entities: unknown[] };
@@ -267,7 +388,7 @@ test('floor memory restore sanitizes billboard props as non-item entities', () =
   const restored = restoreFloorMemoryFromSave({ version: 1, entries: [entry], bytes: 0, byteBudget: 0 });
   assert.equal(restored.restored, 1);
 
-  const loaded = takeFloorMemory('story:billboard_restore');
+  const loaded = takeFloorMemory(key);
   assert.ok(loaded);
   assert.equal(loaded.generation.entities.length, 1);
   const restoredBillboard = loaded.generation.entities[0];
@@ -279,17 +400,19 @@ test('floor memory restore sanitizes billboard props as non-item entities', () =
 
 test('floor memory restore skips corrupt snapshots and malformed nested entries', () => {
   clearFloorMemory();
+  const goodKey = floorKeyForStory(FloorLevel.LIVING);
+  const badKey = floorKeyForStory(FloorLevel.MINISTRY);
   const world = new World();
   const idx = world.idx(21, 22);
   world.cells[idx] = Cell.FLOOR;
   world.surfaceMap.set(idx, new Uint8Array(16 * 16 * 4).fill(9));
-  assert.equal(captureFloorMemory('story:tolerant_good', world, [entity(40, EntityType.NPC)], 21.5, 22.5, 5, 0), true);
+  assert.equal(captureFloorMemory(goodKey, world, [entity(40, EntityType.NPC)], 21.5, 22.5, 5, 0), true);
   const saved = floorMemoryStateForSave();
   const good = JSON.parse(JSON.stringify(saved.entries[0])) as typeof saved.entries[number];
   good.world.surfaceMap.push([world.idx(23, 24), 'not valid base64']);
   const badRle = JSON.parse(JSON.stringify(good)) as typeof good;
   (good.entities as unknown[]).push({ id: BigInt(41), type: EntityType.NPC });
-  badRle.key = 'story:tolerant_bad';
+  badRle.key = badKey;
   badRle.world.arrays[0].data = 'AAAA';
 
   clearFloorMemory();
@@ -302,16 +425,17 @@ test('floor memory restore skips corrupt snapshots and malformed nested entries'
   assert.equal(restored.restored, 1);
   assert.equal(restored.skipped, 1);
 
-  const loaded = takeFloorMemory('story:tolerant_good');
+  const loaded = takeFloorMemory(goodKey);
   assert.ok(loaded);
   assert.equal(loaded.generation.world.surfaceMap.get(idx)?.[0], 9);
   assert.deepEqual(loaded.generation.entities.map(e => e.id), [40]);
-  assert.equal(takeFloorMemory('story:tolerant_bad'), null);
+  assert.equal(takeFloorMemory(badKey), null);
   clearFloorMemory();
 });
 
 test('floor memory restore sanitizes invalid doors and malformed containers before hydration', () => {
   clearFloorMemory();
+  const key = floorKeyForStory(FloorLevel.LIVING);
   const world = new World();
   const doorIdx = world.idx(30, 30);
   world.cells[doorIdx] = Cell.DOOR;
@@ -340,7 +464,7 @@ test('floor memory restore sanitizes invalid doors and malformed containers befo
     tags: ['valid'],
   });
 
-  assert.equal(captureFloorMemory('story:sanitize_nested', world, [], 30.5, 31.5, 1, 0), true);
+  assert.equal(captureFloorMemory(key, world, [], 30.5, 31.5, 1, 0), true);
   const saved = floorMemoryStateForSave();
   const entry = JSON.parse(JSON.stringify(saved.entries[0])) as typeof saved.entries[number];
   entry.world.doors[0][1].state = 999;
@@ -373,7 +497,7 @@ test('floor memory restore sanitizes invalid doors and malformed containers befo
   assert.equal(restored.restored, 1);
   assert.equal(floorMemoryStats().packedCount, 1);
 
-  const loaded = takeFloorMemory('story:sanitize_nested');
+  const loaded = takeFloorMemory(key);
   assert.ok(loaded);
   const restoredWorld = loaded.generation.world;
   assert.equal(restoredWorld.doors.get(doorIdx)?.state, DoorState.CLOSED);

@@ -384,21 +384,22 @@ function statusText(status: NetSphereStatus): string {
 
 function netFailureText(err: unknown, channel: NetSphereChannel): string {
   const market = channel === 'market' || channel === 'market_post';
+  const marketOffline = 'Маркет offline. Игра локальна.';
   if (err instanceof NetSphereApiError) {
     if (err.status === 429) return 'Слишком часто. Пакет не принят.';
     if (err.status === 404 || err.status === 502) {
       return market
-        ? `Маркет offline (${err.status}). Цены всё равно растут.`
+        ? marketOffline
         : `API offline (${err.status}). Игра локальна.`;
     }
     if (err.status === 503) {
       return market
-        ? 'Маркет offline (503). Цены всё равно растут.'
+        ? marketOffline
         : 'Cloudflare 503: база не привязана. Игра локальна.';
     }
     if (err.status >= 500) {
       return market
-        ? `Маркет offline (${err.status}). Цены всё равно растут.`
+        ? marketOffline
         : `Сервер ${err.status}. Канал offline, игра локальна.`;
     }
     if (channel === 'chat') return 'Сообщение не доставлено: пакет битый.';
@@ -406,7 +407,7 @@ function netFailureText(err: unknown, channel: NetSphereChannel): string {
     return 'Пакет не принят. Проверь НЕТ-ГЕН.';
   }
   if (channel === 'chat') return 'Сообщение не доставлено: маршрут ушёл в самосбор.';
-  if (market) return 'Маркет offline. Цены всё равно растут.';
+  if (market) return marketOffline;
   if (channel === 'event') return 'Событие не доставлено: сервер слышит сирену.';
   return 'Канал offline. Игра локальна.';
 }

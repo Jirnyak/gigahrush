@@ -1082,6 +1082,62 @@ function demosRelationToPlayerRelation(relation: number): number {
   return Math.max(-100, Math.min(100, Math.round(clampRelation(relation) * 100 / DEMOS_RELATION_MAX)));
 }
 
+export function existingDemosRelationToNewPlayer(
+  state: GameState,
+  fromAlifeId: number,
+  targetAlifeId: number,
+): number | undefined {
+  if (!Number.isInteger(fromAlifeId) || !Number.isInteger(targetAlifeId) || fromAlifeId <= 0 || targetAlifeId <= 0 || fromAlifeId === targetAlifeId) {
+    return undefined;
+  }
+  const social = demosSocialState(state);
+  const overrides = social?.relationOverrides;
+  if (overrides) {
+    for (let i = overrides.length - 1; i >= 0; i--) {
+      const override = overrides[i];
+      if (
+        override.fromAlifeId === fromAlifeId &&
+        override.targetKind === 'alife' &&
+        override.targetAlifeId === targetAlifeId
+      ) {
+        return demosRelationToPlayerRelation(override.value);
+      }
+    }
+  }
+
+  const graph = (state as GameState & DemosSocialHost).demosSocialGraph;
+  if (!graph || !validAlifeId(graph, fromAlifeId) || !validAlifeId(graph, targetAlifeId)) return undefined;
+  initializeLazyRow(state, graph, fromAlifeId);
+  const slot = findExistingTargetSlot(graph, fromAlifeId, targetAlifeId);
+  if (slot < 0) return undefined;
+  const relation = graph.relations[edgeOffset(fromAlifeId, slot)];
+  return relation === DEMOS_RELATION_EMPTY ? undefined : demosRelationToPlayerRelation(relation);
+}
+
+export function resetDemosPlayerRelationSlotsForNewPlayer(state: GameState): void {
+  const social = demosSocialState(state);
+  if (social?.relationOverrides.length) {
+    social.relationOverrides = social.relationOverrides.filter(override => override.targetKind !== 'player');
+  }
+
+  const graph = (state as GameState & DemosSocialHost).demosSocialGraph;
+  if (!graph) return;
+  graph.overrideKeys = graph.overrideKeys.filter(key => !key.endsWith('->player'));
+  graph.socialOverrideCount = social?.relationOverrides.length ?? 0;
+  for (let alifeId = 1; alifeId <= graph.total; alifeId++) {
+    const snapshot = getAlifeNpcRecordSnapshot(state, alifeId);
+    if (!snapshot || snapshot.dead || !validAlifeId(graph, alifeId)) continue;
+    const relation = playerRelationToDemosRelation(snapshot);
+    setPlayerEdgeAtSlot(
+      graph,
+      alifeId,
+      relation,
+      relationFlags(relation),
+      roleForRelation(relation),
+    );
+  }
+}
+
 function propagationDelta(sourceDelta: number, circleRelation: number): number {
   return clampInt(Math.round(sourceDelta * clampRelation(circleRelation) / DEMOS_RELATION_MAX), 0, -32, 32);
 }

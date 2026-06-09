@@ -32,6 +32,17 @@ export interface EconomyState {
   priceVersion: number;
 }
 
+export const ECONOMY_ROUTE_STATE_CAP = 128;
+
+const ECONOMY_FLOORS = new Set<FloorLevel>([
+  FloorLevel.MINISTRY,
+  FloorLevel.KVARTIRY,
+  FloorLevel.LIVING,
+  FloorLevel.MAINTENANCE,
+  FloorLevel.HELL,
+  FloorLevel.VOID,
+]);
+
 export function createEconomyState(): EconomyState {
   return { floors: {}, routes: {}, priceVersion: 1 };
 }
@@ -83,7 +94,7 @@ function normalizeNumberMap(value: unknown, min: number, max: number, cap: numbe
 
 function normalizeEconomyRouteState(routeId: string, value: unknown): EconomyRouteState {
   const src = (value && typeof value === 'object') ? value as Partial<EconomyRouteState> : {};
-  const out = createEconomyRouteState(cleanId(src.routeId, routeId));
+  const out = createEconomyRouteState(routeId);
   out.heat = clamp(finiteOr(src.heat, out.heat), 0, 100);
   out.trust = clamp(finiteOr(src.trust, out.trust), -5, 5);
   out.debt = clamp(finiteOr(src.debt, out.debt), 0, 300);
@@ -104,7 +115,9 @@ export function normalizeEconomyState(value: unknown): EconomyState {
   out.priceVersion = Math.max(1, Math.floor(finiteOr(src.priceVersion, 1)));
   if (src.floors) {
     for (const k of Object.keys(src.floors)) {
-      const floor = Number(k) as FloorLevel;
+      const floorNumber = Number(k);
+      if (!Number.isInteger(floorNumber) || !ECONOMY_FLOORS.has(floorNumber as FloorLevel)) continue;
+      const floor = floorNumber as FloorLevel;
       const existing = src.floors[floor];
       const normalized = createEconomyFloorState(floor);
       if (existing?.resources) {
@@ -125,10 +138,13 @@ export function normalizeEconomyState(value: unknown): EconomyState {
     }
   }
   if (src.routes && typeof src.routes === 'object') {
+    let routeCount = 0;
     for (const [routeId, routeState] of Object.entries(src.routes)) {
+      if (routeCount >= ECONOMY_ROUTE_STATE_CAP) break;
       const cleanRouteId = cleanId(routeId, '');
       if (!cleanRouteId) continue;
       out.routes[cleanRouteId] = normalizeEconomyRouteState(cleanRouteId, routeState);
+      routeCount++;
     }
   }
   return out;

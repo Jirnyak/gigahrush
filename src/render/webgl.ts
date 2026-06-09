@@ -22,6 +22,14 @@ import type { SpriteData } from './sprites';
 import type { BloodParticle } from './blood';
 import { containerSpr, featureSpr } from './sprite_index';
 import { generateItemSprite, itemDropDefId, itemSpriteKey } from './item_sprites';
+import {
+  animatedEntityTextureOverride,
+  beginAnimatedEntityTextureFrame,
+  getAnimatedEntityTextureDebugStats,
+  hasAnimatedEntityTextureResolvers,
+  recordDrawnAnimatedEntityTexture,
+  resetAnimatedEntityTextureOverride,
+} from './animations/textures';
 import { ENTITY_MASK_VISIBLE, getEntityIndex } from '../systems/entity_index';
 import type { CameraView } from '../systems/camera';
 import { isPlayerEntity } from '../systems/player_actor';
@@ -69,6 +77,9 @@ export interface RenderSceneDebugStats {
   meshInstances: number;
   meshTriangles: number;
   meshDrawCalls: number;
+  activeAnimatedSprites: number;
+  drawnAnimatedSprites: number;
+  animatedSpriteTextureCacheSize: number;
 }
 
 /* ── Constants ─────────────────────────────────────────────────── */
@@ -107,6 +118,9 @@ const lastRenderSceneDebugStats: RenderSceneDebugStats = {
   meshInstances: 0,
   meshTriangles: 0,
   meshDrawCalls: 0,
+  activeAnimatedSprites: 0,
+  drawnAnimatedSprites: 0,
+  animatedSpriteTextureCacheSize: 0,
 };
 
 const enum VisibleSpriteSource {
@@ -1946,6 +1960,7 @@ export function rebuildProceduralSpriteCache(entities: readonly Entity[]): numbe
   proceduralSpriteTextures.clear();
   for (const entry of itemSpriteTextures.values()) gl.deleteTexture(entry.texture);
   itemSpriteTextures.clear();
+  resetAnimatedEntityTextureOverride(gl);
   let built = 0;
   for (const e of entities) {
     if (!e.alive || !entityUsesProceduralSprite(e)) continue;
@@ -2545,6 +2560,9 @@ export function renderSceneGL(
   lastRenderSceneDebugStats.meshInstances = 0;
   lastRenderSceneDebugStats.meshTriangles = 0;
   lastRenderSceneDebugStats.meshDrawCalls = 0;
+  lastRenderSceneDebugStats.activeAnimatedSprites = 0;
+  lastRenderSceneDebugStats.drawnAnimatedSprites = 0;
+  lastRenderSceneDebugStats.animatedSpriteTextureCacheSize = getAnimatedEntityTextureDebugStats().cacheSize;
   if (!glState) {
     lastRenderSceneDebugStats.visibleSprites = 0;
     lastRenderSceneDebugStats.drawnSprites = 0;
@@ -2898,6 +2916,8 @@ function renderSpritesGL(
   const fogR = purpleFog ? activeFogRgb[0] / 255 : skyFog ? skyFog.r / 255 : 5 / 255;
   const fogG = purpleFog ? activeFogRgb[1] / 255 : skyFog ? skyFog.g / 255 : 5 / 255;
   const fogB = purpleFog ? activeFogRgb[2] / 255 : skyFog ? skyFog.b / 255 : 8 / 255;
+  beginAnimatedEntityTextureFrame();
+  const canResolveAnimatedEntityTextures = hasAnimatedEntityTextureResolvers();
 
   // Collect visible entities without per-frame record allocation.
   let visibleCount = 0;
@@ -3034,9 +3054,17 @@ function renderSpritesGL(
       gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
     }
 
-    // Bind sprite texture. Item drops and procedural actors can override
-    // the shared atlas without changing saved entity payloads.
+    // Bind sprite texture. Item drops, animated frames and procedural actors
+    // can override the shared atlas without changing saved entity payloads.
+    let animatedSpriteTexture = false;
     let spriteTex = source === VisibleSpriteSource.ITEM_DROP ? itemDropTexture(e) : null;
+    if (!spriteTex && e && source !== VisibleSpriteSource.ITEM_DROP && canResolveAnimatedEntityTextures) {
+      const animationTexture = animatedEntityTextureOverride(gl, e, world, time, sprIdx, source, scale, spriteZ);
+      if (animationTexture) {
+        spriteTex = animationTexture.texture;
+        animatedSpriteTexture = true;
+      }
+    }
     if (!spriteTex && e) spriteTex = proceduralEntityTexture(e);
     if (!spriteTex && sprIdx >= 0 && sprIdx < glState.spriteTextures.length) {
       spriteTex = glState.spriteTextures[sprIdx];
@@ -3048,11 +3076,16 @@ function renderSpritesGL(
 
     gl.drawArrays(gl.TRIANGLES, 0, 6);
     drawnSprites++;
+    if (animatedSpriteTexture) recordDrawnAnimatedEntityTexture();
 
     // Restore depth mask if it was disabled for flame
     if (isProjectile === 2) gl.depthMask(true);
   }
   lastRenderSceneDebugStats.drawnSprites = drawnSprites;
+  const animationStats = getAnimatedEntityTextureDebugStats();
+  lastRenderSceneDebugStats.activeAnimatedSprites = animationStats.activeSprites;
+  lastRenderSceneDebugStats.drawnAnimatedSprites = animationStats.drawnSprites;
+  lastRenderSceneDebugStats.animatedSpriteTextureCacheSize = animationStats.cacheSize;
 
   gl.disable(gl.BLEND);
 }
@@ -3183,5 +3216,6 @@ export function disposeWebGL(): void {
   for (const t of glState.spriteTextures) gl.deleteTexture(t);
   for (const entry of glState.proceduralSpriteTextures.values()) gl.deleteTexture(entry.texture);
   for (const entry of glState.itemSpriteTextures.values()) gl.deleteTexture(entry.texture);
+  resetAnimatedEntityTextureOverride(gl);
   glState = null;
 }

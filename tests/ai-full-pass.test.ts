@@ -3,8 +3,10 @@ import assert from 'node:assert/strict';
 
 import { AIGoal, Cell, EntityType, FloorLevel, Faction, MonsterKind, Occupation, ZoneFaction, type Entity, type GameClock, type Msg } from '../src/core/types';
 import { World } from '../src/core/world';
+import { PATH_BLOCKER_ROWS_PER_CELL, setPathBlockerRow } from '../src/core/path_blockers';
 import { updateAI, getAiStats } from '../src/systems/ai';
 import { rebuildEntityIndexForSimulation } from '../src/systems/entity_index';
+import { canActorOccupy } from '../src/systems/movement_collision';
 import { initFactionRelations } from '../src/data/relations';
 import { makeGameState } from './helpers';
 import { isHostile } from '../src/systems/factions';
@@ -96,6 +98,11 @@ function projectile(id: number, ownerId: number): Entity {
   };
 }
 
+function blockCellFully(world: World, x: number, y: number): void {
+  const cell = world.idx(x, y);
+  for (let row = 0; row < PATH_BLOCKER_ROWS_PER_CELL; row++) setPathBlockerRow(world, cell, row, 0xff);
+}
+
 function tick(world: World, entities: Entity[], dt: number, time: number, clock: GameClock, msgs: Msg[] = []): void {
   rebuildEntityIndexForSimulation(entities, Math.floor(time * 1000));
   updateAI(world, entities, dt, time, msgs, 1, clock, false, { v: 1000 }, FloorLevel.LIVING, makeGameState({ time, clock }));
@@ -131,6 +138,26 @@ test('active AI updates every non-player actor in one isotropic pass', () => {
   assert.equal(stats.activeAttackers, 0);
   assert.equal(stats.projectileOwners, 1);
   assert.equal(stats.projectiles, 1);
+});
+
+test('AI pass depenetrates non-player actors spawned inside fine blockers', () => {
+  const world = makeOpenWorld();
+  const clock = { hour: 8, minute: 0, totalMinutes: 0 };
+  const resident = npc(2, 30.5, {
+    y: 10.5,
+    ai: { goal: AIGoal.GOTO, tx: 80, ty: 80, path: [world.idx(30, 10), world.idx(31, 10)], pi: 0, stuck: 4, timer: 0 },
+  });
+  const mob = monster(3, 40.5, MonsterKind.SBORKA);
+  mob.y = 10.5;
+  blockCellFully(world, 30, 10);
+  blockCellFully(world, 40, 10);
+
+  tick(world, [player(), resident, mob], 1 / 60, 0, clock);
+
+  assert.equal(canActorOccupy(world, resident.x, resident.y, 0.16), true);
+  assert.notEqual(world.idx(Math.floor(resident.x), Math.floor(resident.y)), world.idx(30, 10));
+  assert.equal(canActorOccupy(world, mob.x, mob.y, 0.18), true);
+  assert.notEqual(world.idx(Math.floor(mob.x), Math.floor(mob.y)), world.idx(40, 10));
 });
 
 test('remote actors tick on the same frame as everyone else', () => {

@@ -33,6 +33,7 @@ const GOVNYAK_STATUS_SOURCES = new Set<PlayerStatusSource>([
   'govnyak_sample',
   'govnyak_bad_batch',
 ]);
+const PLAYER_STATUS_RESTORE_CAP = 12;
 export const PAUPSINA_WEB_ID: PlayerStatusId = 'paupsina_web';
 export const PAUPSINA_WEB_DURATION_SEC = 4.2;
 export const PAUPSINA_WEB_ROOT_SEC = 0.65;
@@ -110,7 +111,7 @@ function statusEvent(
 export function normalizePlayerStatuses(input: unknown): PlayerStatus[] | undefined {
   if (!Array.isArray(input)) return undefined;
   const out: PlayerStatus[] = [];
-  for (const raw of input) {
+  for (const raw of input.slice(-PLAYER_STATUS_RESTORE_CAP)) {
     if (!raw || typeof raw !== 'object') continue;
     const rec = raw as Partial<PlayerStatus>;
     if (rec.id !== ZHELEMISH_SKIN_ID && rec.id !== PAUPSINA_WEB_ID && rec.id !== SPORE_HAZE_ID && !GOVNYAK_STATUS_IDS.has(rec.id as PlayerStatusId)) continue;

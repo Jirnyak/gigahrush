@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import * as assert from 'node:assert/strict';
 
-import { Cell, W } from '../src/core/types';
+import { AIGoal, Cell, EntityType, W, type Entity } from '../src/core/types';
 import { World } from '../src/core/world';
 import {
   PATH_BLOCKER_ROWS_PER_CELL,
@@ -12,6 +12,8 @@ import {
 import {
   canActorOccupy,
   canActorOccupyFine,
+  findNearestActorOccupyPosition,
+  unstuckActorFromBlockers,
 } from '../src/systems/movement_collision';
 
 const HUMAN_R = 0.16;
@@ -32,6 +34,26 @@ function stampTableLikeMask(world: World, x: number, y: number): void {
   for (let row = 2; row <= 5; row++) {
     setPathBlockerRow(world, cell, row, TABLE_CENTER_MASK);
   }
+}
+
+function blockCellFully(world: World, x: number, y: number): void {
+  const cell = world.idx(x, y);
+  for (let row = 0; row < PATH_BLOCKER_ROWS_PER_CELL; row++) setPathBlockerRow(world, cell, row, 0xff);
+}
+
+function npcInside(x: number, y: number): Entity {
+  return {
+    id: 77,
+    type: EntityType.NPC,
+    x,
+    y,
+    angle: 0,
+    pitch: 0,
+    alive: true,
+    speed: 1,
+    sprite: 0,
+    ai: { goal: AIGoal.GOTO, tx: 30, ty: 30, path: [1, 2, 3], pi: 1, stuck: 4, timer: 0 },
+  };
 }
 
 test('path blocker rows are eight consecutive bytes per world cell', () => {
@@ -107,4 +129,43 @@ test('movement occupancy samples blocker masks across the torus edge', () => {
 
   assert.equal(pathBlockedAt(world, -0.01, -0.01), true);
   assert.equal(canActorOccupy(world, -0.01, -0.01, 0.005), false);
+});
+
+test('nearest actor occupancy escapes a fine blocker without leaving the local cell when possible', () => {
+  const world = makeOpenWorld(12, 12, 3);
+  stampTableLikeMask(world, 12, 12);
+
+  const pos = findNearestActorOccupyPosition(world, 12.5, 12.5, HUMAN_R);
+
+  assert.ok(pos);
+  assert.equal(Math.floor(pos.x), 12);
+  assert.equal(Math.floor(pos.y), 12);
+  assert.equal(canActorOccupy(world, pos.x, pos.y, HUMAN_R), true);
+});
+
+test('actor blocker unstuck moves to nearest free point and clears stale path state', () => {
+  const world = makeOpenWorld(20, 20, 3);
+  blockCellFully(world, 20, 20);
+  const actor = npcInside(20.5, 20.5);
+
+  assert.equal(unstuckActorFromBlockers(world, actor), true);
+
+  assert.equal(canActorOccupy(world, actor.x, actor.y, HUMAN_R), true);
+  assert.notEqual(world.idx(Math.floor(actor.x), Math.floor(actor.y)), world.idx(20, 20));
+  assert.deepEqual(actor.ai?.path, []);
+  assert.equal(actor.ai?.pi, 0);
+  assert.equal(actor.ai?.stuck, 0);
+  assert.equal(actor.ai?.tx, Math.floor(actor.x));
+  assert.equal(actor.ai?.ty, Math.floor(actor.y));
+});
+
+test('actor blocker unstuck searches around coarse solids too', () => {
+  const world = makeOpenWorld(30, 30, 2);
+  world.set(30, 30, Cell.WALL);
+  const actor = npcInside(30.5, 30.5);
+
+  assert.equal(unstuckActorFromBlockers(world, actor), true);
+
+  assert.equal(canActorOccupy(world, actor.x, actor.y, HUMAN_R), true);
+  assert.notEqual(world.idx(Math.floor(actor.x), Math.floor(actor.y)), world.idx(30, 30));
 });

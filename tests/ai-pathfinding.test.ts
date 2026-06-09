@@ -3,6 +3,7 @@ import * as assert from 'node:assert/strict';
 
 import { AIGoal, Cell, DoorState, EntityType, RoomType, Tex, type Entity } from '../src/core/types';
 import { World } from '../src/core/world';
+import { setPathBlockerRow } from '../src/core/path_blockers';
 import {
   bfsPath,
   freezeNavigationCacheForWorld,
@@ -12,6 +13,7 @@ import {
   gotoRoom,
   setPathContext,
   steerEntityTowardCell,
+  tryAssignPathToCell,
   unfreezeNavigationCacheForWorld,
 } from '../src/systems/ai/pathfinding';
 import { setDoorState } from '../src/systems/door_state';
@@ -57,6 +59,11 @@ function makeOpenPlazaWorld(): World {
     }
   }
   return world;
+}
+
+function blockCellFully(world: World, x: number, y: number): void {
+  const idx = world.idx(x, y);
+  for (let row = 0; row < 8; row++) setPathBlockerRow(world, idx, row, 0xff);
 }
 
 function npc(id: number, x: number): Entity {
@@ -214,6 +221,36 @@ test('door state helper invalidates baked navigation when passability changes', 
 
   assert.ok(world.cellVersion > beforeVersion);
   assert.deepEqual(bfsPath(world, 0, 10, 21, 10), []);
+});
+
+test('baked navigation invalidates and respects full fine blockers', () => {
+  const world = makeCorridorWorld();
+  setPathContext([], 0);
+  assert.equal(bfsPath(world, 0, 10, 10, 10).length > 0, true);
+
+  blockCellFully(world, 5, 10);
+  setPathContext([], 0.1);
+
+  assert.deepEqual(bfsPath(world, 0, 10, 10, 10), []);
+  const actor = npc(90, 0.5);
+  assert.equal(tryAssignPathToCell(world, actor, 10, 10), 'not_found');
+});
+
+test('followPath treats split-axis drift without waypoint progress as stuck', () => {
+  const world = makeCorridorWorld();
+  const actor = npc(91, 0.5);
+  setPathContext([], 0);
+  assert.equal(tryAssignPathToCell(world, actor, 10, 10), 'assigned');
+
+  blockCellFully(world, 5, 10);
+  for (let tick = 0; tick < 40; tick++) {
+    setPathContext([], tick / 10);
+    followPath(world, actor, 0.1);
+  }
+
+  assert.equal(actor.ai!.goal, AIGoal.IDLE);
+  assert.equal(actor.ai!.path.length, 0);
+  assert.equal(actor.x < 5.1, true);
 });
 
 test('routine gotoRoom assigns every caller from baked navigation during samosbor', () => {

@@ -88,3 +88,15 @@ test('saved paupsina web statuses normalize with the same max duration cap', () 
   assert.equal(statuses?.length, 1);
   assert.equal(statuses?.[0]?.expiresAt, 20 + PAUPSINA_WEB_DURATION_SEC);
 });
+
+test('saved player statuses restore only the newest bounded entries', () => {
+  const statuses = normalizePlayerStatuses(Array.from({ length: 20 }, (_, i) => ({
+    id: 'paupsina_web',
+    source: 'paupsina_web',
+    startedAt: i,
+    expiresAt: i + 2,
+  })));
+
+  assert.equal(statuses?.length, 12);
+  assert.deepEqual(statuses?.map(status => status.startedAt), Array.from({ length: 12 }, (_, i) => i + 8));
+});

@@ -82,7 +82,7 @@ import {
 import { applyDemosRelationDelta } from './demos_social';
 import { pushNpcLogMessage } from './ai/barks';
 import { hearingRadiusMetersForActor } from './hearing';
-import { getAlifeNpcTotalMoney } from './alife';
+import { getAlifeNpcTotalMoney, isPlotNpcDeadKnown } from './alife';
 import { revealQuestTargetOnMap } from './map_exploration';
 import {
   resolveNpcPackageForEntity,
@@ -323,6 +323,31 @@ export function toggleActiveQuest(state: ActiveQuestState, questId: number): Que
   if (!quest) return getActiveQuest(state);
   state.activeQuestId = quest.id;
   return quest;
+}
+
+export function resetNonStoryQuestsForNewPlayer(state: ActiveQuestState, entities: Entity[] = []): number {
+  const removedQuestIds = new Set<number>();
+  const removedGiverIds = new Set<number>();
+  const kept: Quest[] = [];
+  for (const quest of state.quests) {
+    if (quest.plotStepIndex !== undefined) {
+      kept.push(quest);
+      continue;
+    }
+    removedQuestIds.add(quest.id);
+    removedGiverIds.add(quest.giverId);
+  }
+  if (removedQuestIds.size === 0) return 0;
+  state.quests = kept;
+  if (state.activeQuestId !== undefined && removedQuestIds.has(state.activeQuestId)) {
+    state.activeQuestId = undefined;
+  }
+  for (const entity of entities) {
+    if (entity.type !== EntityType.NPC || !removedGiverIds.has(entity.id)) continue;
+    if (removedQuestIds.has(entity.questId ?? -1)) entity.questId = -1;
+    if (!entity.plotNpcId) entity.canGiveQuest = true;
+  }
+  return removedQuestIds.size;
 }
 
 export function npcHasImportantQuestAction(npc: Entity, state: Pick<GameState, 'quests'>): boolean {
@@ -782,6 +807,13 @@ function updateHoldoutQuest(
   return q.holdProgressSeconds >= q.holdSeconds;
 }
 
+function plotTalkTargetIsDead(q: Quest, entities: readonly Entity[], state: GameState): boolean {
+  if (q.plotStepIndex === undefined || q.type !== QuestType.TALK || !q.targetPlotNpcId) return false;
+  const target = entities.find(e => e.type === EntityType.NPC && e.plotNpcId === q.targetPlotNpcId);
+  if (target) return !target.alive;
+  return isPlotNpcDeadKnown(state, q.targetPlotNpcId);
+}
+
 /* ── Check all active quests for completion ───────────────────── */
 export function checkQuests(
   player: Entity, world: World, entities: Entity[],
@@ -827,7 +859,7 @@ export function checkQuests(
         break;
 
       case QuestType.TALK:
-        // Checked in interact — when player talks to target NPC
+        complete = plotTalkTargetIsDead(q, entities, state);
         break;
     }
 
@@ -1571,6 +1603,7 @@ interface QuestContext {
 }
 
 type QuestChoice = 'fetch' | 'visit' | 'kill' | 'talk';
+const PROCEDURAL_FETCH_ITEM_BLOCKLIST = new Set(['idol_chernobog', 'strange_clot']);
 
 function buildQuestContext(npc: Entity, world: World, entities: Entity[], state: GameState): QuestContext {
   const room = world.roomAt(npc.x, npc.y);
@@ -1886,7 +1919,8 @@ function pickFetchItem(occ: Occupation | undefined, npc: Entity, ctx: QuestConte
   if (npc.faction === Faction.LIQUIDATOR || occupationHasProfileTag(occ, 'combat')) pushUnique(pool, ['ammo_9mm', 'bandage', 'canned']);
   pushUnique(pool, occupationQuestFetchItems(occ));
   pushUnique(pool, ['bread', 'water', 'bandage', 'cigs']);
-  return pool.length > 0 ? pool[Math.floor(Math.random() * pool.length)] : null;
+  const available = pool.filter(item => !PROCEDURAL_FETCH_ITEM_BLOCKLIST.has(item));
+  return available.length > 0 ? available[Math.floor(Math.random() * available.length)] : null;
 }
 
 function targetCountForItem(item: string, ctx: QuestContext): number {

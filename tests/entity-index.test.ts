@@ -198,6 +198,20 @@ test('entity index capped radius pruning preserves wrapped bucket ties', () => {
   assert.deepEqual(out.map(e => e.id), [1]);
 });
 
+test('entity index capped path query keeps earliest path hits instead of first bucket entries', () => {
+  const index = new EntityIndex();
+  index.rebuild([
+    entity(20, EntityType.NPC, 72, 15),
+    entity(10, EntityType.NPC, 41, 40),
+  ]);
+
+  const out: Entity[] = [];
+  const count = index.queryPathRadius(40, 40, 120, 40, 25, out, ENTITY_MASK_NPC, 1);
+
+  assert.equal(count, 1);
+  assert.deepEqual(out.map(e => e.id), [10]);
+});
+
 test('entity index exposes debug version, entity counts and bucket stats', () => {
   const index = new EntityIndex();
   index.rebuild([

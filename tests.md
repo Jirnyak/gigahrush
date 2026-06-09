@@ -41,6 +41,7 @@ fixtures unless they need a real generated floor.
 `test:unit` may include full floor generation only when the generated world is the subject of the test and the coverage is P0 for normal development. Examples:
 
 - One representative story floor generation for spawn, actor and critical route contracts.
+- The Living corridor-attractor regression, because it protects a gameplay-breaking AI failure that only appears after time passes on a real Living floor.
 - One representative design floor generation for an authored route's local choices.
 - A small fixed procedural subset for route lift reachability and anomaly smoke.
 - Runtime system tests using small handmade `World` fixtures.
@@ -157,6 +158,19 @@ Prefer bounded or reusable helpers:
 - Keep helper names tied to the invariant: `reachableWithDoorKeys`, `hasReachableLift`, `countRoomFeatures`, etc.
 
 If a reachability check is broad but not P0, put it in `test:generation`.
+
+## Long-Running AI Regressions
+
+Some AI failures are not visible on the first tick. The Living corridor-attractor class is one of them: NPCs can begin normally, then after several simulated minutes accumulate in a corridor pocket and repeatedly reverse over the same corridor cells. Tests for this class must measure the failure directly instead of banning normal corridor movement.
+
+Use fixed seeds and deterministic runtime randomness. Track:
+
+- local corridor pile-up, such as max actors in one corridor cell or small corridor bucket;
+- active stuck paths in corridors;
+- repeated A-B-A corridor reversals per actor over a multi-minute simulation;
+- separation between ordinary residents and intentional traveler traffic when that distinction matters.
+
+`tests/living-npc-corridor-attractors.test.ts` is intentionally kept in `test:unit` through the runner exception even though it imports `src/gen/`. Do not move it out of the normal gate unless an equally strong and cheaper regression guard replaces it.
 
 ## Assertions Should Be Stable
 

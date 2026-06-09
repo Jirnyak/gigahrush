@@ -393,7 +393,13 @@ Collection is camera-oriented and bounded. It does not scan the whole world per
 frame. Unknown visual slot codes are counted and skipped. Final instance
 capping uses model priority plus a camera-cell-centered distance/seed order, not
 the exact fractional camera position, so tiny forward/back movement inside one
-cell does not reshuffle the visible mesh set.
+cell does not reshuffle the visible mesh set. Local procedural mesh fields use
+the same camera-cell center for radius checks and a deterministic radial-ring
+coverage cap, so capped pipes, cables, surface scraps and similar generated
+details keep coverage across the local radius instead of being selected from a
+camera-fraction-dependent random edge. The shader also fades mesh color toward
+the current fog color near the active mesh radius, reducing visible hard pops
+when a camera-cell boundary changes the local collection window.
 
 Instance flags distinguish:
 
@@ -434,6 +440,10 @@ Feature-derived meshes are generic fallback detail:
 - `Feature.LIFT_BUTTON` -> `button_panel`;
 - `Feature.DESK` -> `desk_slab`;
 - `Feature.SCREEN` -> `wall_panel_screen`.
+
+`Feature.SLIDE` is deliberately texture-only. Tutorial/briefing slide walls can
+use animated or special wall textures without receiving duplicate 3D wall-panel
+meshes.
 
 This is render fallback only. The `E` action still belongs to
 `systems/interactions.ts`, `systems/interactive.ts` and related runtime systems.

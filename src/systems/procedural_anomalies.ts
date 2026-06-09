@@ -49,6 +49,7 @@ import { isPlayerEntity } from './player_actor';
 type SmogProtection = 'filter' | 'wet_cloth' | 'cloth_ready' | 'none';
 
 interface SmogRuntime {
+  runtimeKey: string;
   sourceIdx: number;
   wasInside: boolean;
   pressureAccum: number;
@@ -147,10 +148,18 @@ export function proceduralAnomalyEventData(spec: ProceduralFloorSpec | undefined
   };
 }
 
+function smogRuntimeKey(state: GameState): string {
+  const spec = currentProceduralFloorSpec(state);
+  if (!spec) return `floor:${state.currentFloor}`;
+  return `${spec.key}:${spec.z}:${spec.seed}:${spec.anomalyId}`;
+}
+
 function runtimeFor(state: GameState, world: World): SmogRuntime {
+  const runtimeKey = smogRuntimeKey(state);
   const current = smogRuntimeByState.get(state);
-  if (current && current.sourceIdx === world.anomalySmogSource) return current;
+  if (current && current.runtimeKey === runtimeKey && current.sourceIdx === world.anomalySmogSource) return current;
   const next: SmogRuntime = {
+    runtimeKey,
     sourceIdx: world.anomalySmogSource,
     wasInside: false,
     pressureAccum: 0,

@@ -30,6 +30,7 @@ import {
   cleanFloorKey,
   floorKeyBaseFloor,
   floorKeyForStory,
+  floorKeyKind,
   floorKeyZ,
 } from './floor_keys';
 import { lowerDemosCandidateContext } from './markov_context';
@@ -224,7 +225,8 @@ function floorLabel(state: GameState, floorKey: string): string {
   const baseLabel = base !== undefined ? FLOOR_LABELS[base] : undefined;
   if (z !== undefined && baseLabel) return `Этаж ${Math.trunc(z)}, ${baseLabel}`;
   if (z !== undefined) return `Этаж ${Math.trunc(z)}`;
-  return baseLabel ? `${baseLabel} / ${floorKey}` : floorKey;
+  if (baseLabel) return `${baseLabel}, маршрут без номера`;
+  return floorKeyKind(floorKey) === 'floor_instance' ? 'маршрут без номера' : 'неуточненный этаж';
 }
 
 function urgencyLabel(urgency: number): string {

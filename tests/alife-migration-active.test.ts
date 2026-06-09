@@ -381,3 +381,24 @@ test('unfinished departure captured before reaching lift does not teleport the r
   assert.equal(alifeForSave(state).overrides.some(item => item.id === 9 && item.floorKey === 'story:living'), true);
   assert.equal(alifeForSave(state).overrides.some(item => item.id === 9 && item.floorKey === 'story:kvartiry'), false);
 });
+
+test('active departure updates rotate unfinished prefix entries behind deferred departures', () => {
+  const state = stateAtLiving();
+  const world = makeLiftWorld();
+  const entities: Entity[] = [];
+  for (let id = 20; id <= 28; id++) {
+    putRecordOnLiving(state, id);
+    const nearLift = id === 28;
+    const npc = persistentNpc(id, id, nearLift ? 22.5 : 25.5, nearLift ? 22.5 : 25.5);
+    entities.push(npc);
+    assert.equal(startActiveAlifeDeparture(state, world, npc, 'story:kvartiry', `rotate_${id}`, 'routine'), true);
+  }
+
+  assert.equal(updateActiveAlifeDepartures(state, world, entities, 1 / 60), 0);
+  assert.equal(migrationState(state)?.activeDepartures[0]?.alifeId, 28);
+  assert.equal(updateActiveAlifeDepartures(state, world, entities, 1 / 60), 1);
+
+  assert.equal(entities.some(entity => entity.alifeId === 28), false);
+  assert.equal(migrationState(state)?.activeDepartures.some(item => item.alifeId === 28), false);
+  assert.equal(alifeForSave(state).overrides.some(item => item.id === 28 && item.floorKey === 'story:kvartiry'), true);
+});

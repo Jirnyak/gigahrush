@@ -28,7 +28,7 @@ import {
   type CraftRecipeSourceDef,
 } from '../data/craft_recipe_sources';
 import { itemComposition } from '../data/item_composition';
-import { addItem, canAddItem, removeItem } from './inventory';
+import { addItem, canAddItem } from './inventory';
 import { publishEvent } from './events';
 
 export type { CraftingState, MutableCraftVector };
@@ -242,6 +242,15 @@ function randomUnit(rng?: () => number): number {
   return Math.max(0, Math.min(0.999999, n));
 }
 
+function removeInventorySlotItem(actor: Entity, slotIndex: number, defId: string): boolean {
+  const inventory = actor.inventory;
+  const slot = inventory?.[slotIndex];
+  if (!slot || slot.defId !== defId || slot.count <= 0) return false;
+  slot.count--;
+  if (slot.count <= 0) inventory.splice(slotIndex, 1);
+  return true;
+}
+
 function weightedMaterial(components: CraftVector, rng?: () => number): CraftMaterialId | undefined {
   let total = 0;
   for (const count of components) total += cleanMaterialCount(count);
@@ -439,7 +448,7 @@ export function disassembleInventorySlot(ctx: CraftingActionContext): CraftingAc
   if (!composition) return fail('no_composition', 'У предмета нет состава.');
   const materialId = weightedMaterial(composition.components, ctx.rng);
   if (!materialId) return fail('no_composition', 'У предмета пустой состав.');
-  if (!removeItem(ctx.actor, slot.defId, 1)) return fail('inventory_remove_failed', 'Не удалось снять предмет со слота.');
+  if (!removeInventorySlotItem(ctx.actor, slotIndex, slot.defId)) return fail('inventory_remove_failed', 'Не удалось снять предмет со слота.');
 
   addCraftMaterial(ctx.state, materialId, 1);
   const recipe = craftRecipeByItemId(slot.defId);

@@ -22,7 +22,8 @@ import {
 } from '../core/types';
 import { World } from '../core/world';
 import { type FloorGeneration } from '../gen/floor_manifest';
-import { cleanFloorKey, floorKeyForStory } from './floor_keys';
+import { rebuildGeneratedFloorPathBlockers, rebuildPathBlockersFromWorldObjects } from '../gen/path_blockers';
+import { cleanFloorKey, floorKeyForStory, floorKeyKnown, type FloorKeyResolveContext } from './floor_keys';
 import { isNativePlayerBodyEntity } from './player_actor';
 
 export interface FloorMemoryEntry {
@@ -128,8 +129,17 @@ export interface FloorMemoryRestoreResult {
   keys: string[];
 }
 
+type FloorMemoryGenerationExtrasResolver = (key: string) => FloorMemoryGenerationExtras | undefined;
+
+export interface FloorMemoryRestoreOptions {
+  generationExtrasForKey?: FloorMemoryGenerationExtrasResolver;
+  floorKeyContext?: FloorKeyResolveContext;
+  isKnownFloorKey?: (key: string) => boolean;
+}
+
 const MAX_FLOOR_MEMORY_ENTRIES = 128;
 const MAX_FLOOR_MEMORY_SAVE_ENTRIES = 24;
+const MAX_FLOOR_MEMORY_RESTORE_SCAN_ENTRIES = MAX_FLOOR_MEMORY_SAVE_ENTRIES * 4;
 const BYTES_PER_MIB = 1024 * 1024;
 const FLOOR_MEMORY_DEFAULT_BUDGET_BYTES = 1024 * BYTES_PER_MIB;
 const FLOOR_MEMORY_MIN_BUDGET_BYTES = 384 * BYTES_PER_MIB;
@@ -165,6 +175,7 @@ const packedFloorMemory = new Map<string, {
   save: FloorMemorySaveEntry;
   estimatedBytes: number;
   generationExtras?: FloorMemoryGenerationExtras;
+  generationExtrasForKey?: FloorMemoryGenerationExtrasResolver;
 }>();
 let floorMemoryBytes = 0;
 let packedFloorMemoryBytes = 0;
@@ -756,7 +767,7 @@ function sanitizedWorldSave(input: unknown): FloorMemoryWorldSave | null {
   };
 }
 
-function worldFromSave(input: unknown): World | null {
+function worldFromSave(input: unknown, spawnX?: number, spawnY?: number): World | null {
   const savedWorld = sanitizedWorldSave(input);
   if (!savedWorld) return null;
   const world = new World();
@@ -773,6 +784,11 @@ function worldFromSave(input: unknown): World | null {
   recomputeWorldZoneLiftFlags(world);
   world.containers = sanitizeContainers(savedWorld.containers, world.rooms, world.zones);
   world.rebuildContainerMap();
+  if (Number.isFinite(spawnX) && Number.isFinite(spawnY)) {
+    rebuildGeneratedFloorPathBlockers(world, 0, spawnX as number, spawnY as number);
+  } else {
+    rebuildPathBlockersFromWorldObjects(world);
+  }
   world.surfaceMap = restoreSurfaceMap(savedWorld.surfaceMap);
   world.anomalyTeleports = new Map(savedWorld.anomalyTeleports);
   world.anomalySmogSource = savedWorld.anomalySmogSource;
@@ -783,7 +799,6 @@ function worldFromSave(input: unknown): World | null {
   world.railTrainCells = new Map(savedWorld.railTrainCells);
   world.slideCells = savedWorld.slideCells;
   world.screenCells = savedWorld.screenCells;
-  world.bakeLights();
   world.markCellsDirty();
   world.markSurfaceDirty();
   world.markWallTexDirty();
@@ -799,6 +814,19 @@ function removePackedFloorMemoryEntry(key: string): boolean {
   packedFloorMemory.delete(key);
   packedFloorMemoryBytes = Math.max(0, packedFloorMemoryBytes - existing.estimatedBytes);
   return true;
+}
+
+function resolvePackedGenerationExtras(
+  key: string,
+  packed: { generationExtras?: FloorMemoryGenerationExtras; generationExtrasForKey?: FloorMemoryGenerationExtrasResolver },
+): FloorMemoryGenerationExtras | undefined {
+  if (packed.generationExtras) return packed.generationExtras;
+  if (!packed.generationExtrasForKey) return undefined;
+  try {
+    return packed.generationExtrasForKey(key);
+  } catch {
+    return undefined;
+  }
 }
 
 function archiveFloorMemoryEntry(entry: FloorMemoryEntry): void {
@@ -1468,7 +1496,7 @@ export function takeFloorMemory(keyInput: string): FloorMemoryLoad | null {
   const packed = packedFloorMemory.get(key);
   if (!packed) return null;
   removePackedFloorMemoryEntry(key);
-  const world = worldFromSave(packed.save.world);
+  const world = worldFromSave(packed.save.world, packed.save.spawnX, packed.save.spawnY);
   if (!world) return null;
   return {
     fromMemory: true,
@@ -1477,7 +1505,7 @@ export function takeFloorMemory(keyInput: string): FloorMemoryLoad | null {
       entities: restoreEntities(packed.save.entities),
       spawnX: packed.save.spawnX,
       spawnY: packed.save.spawnY,
-      ...(packed.generationExtras ?? {}),
+      ...(resolvePackedGenerationExtras(key, packed) ?? {}),
     } as FloorGeneration,
   };
 }
@@ -1657,18 +1685,32 @@ function sanitizedSaveEntry(raw: Partial<FloorMemorySaveEntry>): FloorMemorySave
   };
 }
 
+function floorMemoryRestoreKeyKnown(key: string, options: FloorMemoryRestoreOptions): boolean {
+  try {
+    return options.isKnownFloorKey
+      ? options.isKnownFloorKey(key)
+      : floorKeyKnown(key, options.floorKeyContext);
+  } catch {
+    return false;
+  }
+}
+
 export function restoreFloorMemoryFromSave(
   input: unknown,
-  options: {
-    generationExtrasForKey?: (key: string) => FloorMemoryGenerationExtras | undefined;
-  } = {},
+  options: FloorMemoryRestoreOptions = {},
 ): FloorMemoryRestoreResult {
   clearFloorMemory();
   const result: FloorMemoryRestoreResult = { restored: 0, skipped: 0, keys: [] };
   if (!input || typeof input !== 'object' || Array.isArray(input)) return result;
   const state = input as Partial<FloorMemorySaveState>;
   if (state.version !== 1 || !Array.isArray(state.entries)) return result;
-  for (const raw of state.entries.slice(0, MAX_FLOOR_MEMORY_SAVE_ENTRIES)) {
+  for (const raw of state.entries.slice(0, MAX_FLOOR_MEMORY_RESTORE_SCAN_ENTRIES)) {
+    if (result.restored >= MAX_FLOOR_MEMORY_SAVE_ENTRIES) break;
+    const key = isRecord(raw) ? cleanFloorKey(raw.key) : '';
+    if (!key || !floorMemoryRestoreKeyKnown(key, options)) {
+      result.skipped++;
+      continue;
+    }
     try {
       const save = sanitizedSaveEntry(raw as Partial<FloorMemorySaveEntry>);
       if (!save) {
@@ -1680,7 +1722,7 @@ export function restoreFloorMemoryFromSave(
       packedFloorMemory.set(save.key, {
         save: { ...save, estimatedBytes },
         estimatedBytes,
-        generationExtras: options.generationExtrasForKey?.(save.key),
+        generationExtrasForKey: options.generationExtrasForKey,
       });
       packedFloorMemoryBytes += estimatedBytes;
       result.restored++;

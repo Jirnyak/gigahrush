@@ -8,6 +8,23 @@ import { MAX_INVENTORY_SLOTS, MAX_ITEM_STACK } from './inventory_limits';
 export const SILVER_SLIME_SEALED_ID = 'slime_sample_silver';
 export const SILVER_SLIME_OPENED_ID = 'slime_sample_silver_open';
 
+export interface ItemUseTransformOutput {
+  outputId: string;
+  count: number;
+}
+
+export const ITEM_USE_TRANSFORM_OUTPUTS: Record<string, ItemUseTransformOutput> = {
+  blue_glow_sample_sealed: { outputId: 'blue_glow_sample_open', count: 1 },
+  black_market_shells: { outputId: 'ammo_shells', count: 4 },
+  stolen_filter_pack: { outputId: 'gasmask_filter', count: 2 },
+  homemade_9mm: { outputId: 'ammo_9mm', count: 6 },
+  ammo_12g_chemical: { outputId: 'decon_fluid', count: 1 },
+};
+
+export function itemUseTransformOutput(defId: string): ItemUseTransformOutput | undefined {
+  return ITEM_USE_TRANSFORM_OUTPUTS[defId];
+}
+
 export function isSilverSlimeItem(defId: string): boolean {
   return defId === SILVER_SLIME_SEALED_ID || defId === SILVER_SLIME_OPENED_ID;
 }

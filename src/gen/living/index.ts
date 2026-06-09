@@ -40,7 +40,7 @@ import { spawnRoomItems, spawnFamilies, spawnTravelers } from './npcs';
 import { spawnSideQuestNpcs } from './side_quests';
 
 export { generateSlideTextures } from './slides';
-export { generateHintTextures } from './tutor_room';
+export { generateHintTextures } from '../../render/hint_textures';
 export { generatePosterTextures, pickPosterTex } from './posters';
 
 /* ── generateWorld — called once at game start ───────────────── */

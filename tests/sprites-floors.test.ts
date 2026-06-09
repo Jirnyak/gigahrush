@@ -466,7 +466,8 @@ testGenerationMatrix('living start tutorial hall exposes a public low-level loot
   const locker = generated.world.containers.find(container => container.name === 'Учебный шкафчик вылазки');
   assert.ok(locker, 'tutorial hall should contain a starter locker');
   const idx = generated.world.idx(locker.x, locker.y);
-  const lowLevelIds = new Set(['water', 'bread', 'bandage', 'chalk', 'cigs']);
+  const expectedIds = ['water', 'bread', 'bandage'];
+  const actualIds = locker.inventory.map(item => item.defId);
 
   assert.equal(locker.kind, ContainerKind.EMERGENCY_BOX);
   assert.equal(locker.access, 'public');
@@ -474,8 +475,8 @@ testGenerationMatrix('living start tutorial hall exposes a public low-level loot
   assert.equal(locker.roomId, hall.id);
   assert.equal(generated.world.containerMap.get(idx)?.includes(locker.id), true);
   assert.equal(generated.world.features[idx], Feature.SHELF);
-  assert.equal(locker.inventory.length >= 2 && locker.inventory.length <= 3, true);
-  assert.equal(locker.inventory.every(item => lowLevelIds.has(item.defId) && item.count > 0), true);
+  assert.deepEqual(actualIds, expectedIds);
+  assert.equal(locker.inventory.every(item => item.count > 0), true);
   assert.equal(locker.x <= hall.x + 2 && locker.y >= hall.y + hall.h - 3, true, 'starter locker should sit in a tutorial-room corner');
 });
 

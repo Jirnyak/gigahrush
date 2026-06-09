@@ -437,8 +437,8 @@ function contextByContainer(containerId: number | undefined): DocumentGateContex
   return documentGateContexts.find(ctx => ctx.containerId === containerId);
 }
 
-function contextByGuard(targetId: number | undefined, targetName: string | undefined): DocumentGateContext | undefined {
-  return documentGateContexts.find(ctx => ctx.guardId === targetId || targetName === 'Инспектор Сухарь');
+function contextByGuard(targetId: number | undefined): DocumentGateContext | undefined {
+  return documentGateContexts.find(ctx => ctx.guardId === targetId);
 }
 
 function isGateRoom(room: Room | null | undefined): room is Room {
@@ -687,7 +687,7 @@ function handleDocumentGateTheftEvent(state: GameState, event: WorldEvent): void
 
 function handleDocumentGateGuardKill(state: GameState, event: WorldEvent): void {
   if (event.type !== 'player_kill_npc' || state.currentFloor !== FloorLevel.MINISTRY) return;
-  const ctx = contextByGuard(event.targetId, event.targetName);
+  const ctx = contextByGuard(event.targetId);
   if (!ctx || ctx.violentHandled) return;
   const door = ctx.world.doors.get(ctx.gateDoorIdx);
   if (!door) return;

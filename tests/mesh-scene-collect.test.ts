@@ -124,6 +124,18 @@ test('feature mapping creates expected model id', () => {
   assert.equal(instances.some(instance => instance.modelId === 'table_slab'), true);
 });
 
+test('tutorial slide features stay texture-only and do not emit mesh panels', () => {
+  const world = openWorld();
+  const idx = world.idx(10, 10);
+  world.cells[idx] = Cell.WALL;
+  world.features[idx] = Feature.SLIDE;
+
+  const instances = collectMeshScene(context(world));
+
+  assert.equal(instances.some(instance => instance.modelId === 'wall_panel_flat'), false);
+  assert.equal(instances.some(instance => (instance.flags & MeshInstanceFlag.Feature) !== 0), false);
+});
+
 test('feature visual slot suppresses duplicate feature fallback mesh', () => {
   const world = openWorld();
   const idx = world.idx(10, 10);
@@ -764,6 +776,52 @@ test('collector procedural ceiling pipe network adds dense render-only local pip
   );
 });
 
+test('procedural local mesh fields stay stable during subcell camera movement', () => {
+  const world = corridorWorld(RoomType.CORRIDOR, 90);
+  const profile = {
+    radius: 14,
+    instanceCap: 384,
+    includeVisualSlots: false,
+    includeFeatures: false,
+    includeContainers: false,
+    includeCorridorVolumes: true,
+    corridorVolumeDetail: 1,
+    organicVolumeDetail: 0,
+    corridorVolumeStyle: 'service' as const,
+    corridorCoveringId: 'collector' as const,
+  };
+  const localFieldSignature = (cameraX: number): string => collectMeshScene(context(world, cameraX, 10.5, 0x7791, {
+    mode: 'high',
+    profile,
+  }))
+    .filter(instance =>
+      ((instance.modelId === 'ceiling_pipe_bundle' ||
+          instance.modelId === 'ceiling_cable_bundle' ||
+          instance.modelId === 'ceiling_cable') &&
+        instance.scaleX < 2) ||
+      instance.modelId === 'collector_floor_pipe' ||
+      instance.modelId === 'floor_tile_shard' ||
+      instance.modelId === 'brick_fragment' ||
+      instance.modelId === 'rubble_chunk' ||
+      instance.modelId === 'paper_sheet' ||
+      instance.modelId === 'newspaper_sheet' ||
+      instance.modelId === 'floor_crumb')
+    .map(instance => [
+      instance.modelId,
+      Math.round(instance.x * 100),
+      Math.round(instance.y * 100),
+      Math.round(instance.yaw * 100),
+      Math.round(instance.scaleX * 100),
+    ].join(':'))
+    .join('|');
+
+  const left = localFieldSignature(30.12);
+  const right = localFieldSignature(30.88);
+
+  assert.notEqual(left, '');
+  assert.equal(left, right);
+});
+
 test('collector procedural floor scatter adds render-only tile brick debris and floor pipes', () => {
   const world = corridorWorld(RoomType.CORRIDOR, 90);
   const profile = {
@@ -1049,6 +1107,31 @@ test('instance cap is stable for small camera motion inside one cell', () => {
   const profile = { radius: 12, instanceCap: 1 };
   const left = capMeshInstances(context(world, 10.49, 10.5, 123, { profile }), raw);
   const right = capMeshInstances(context(world, 10.51, 10.5, 123, { profile }), raw);
+
+  assert.equal(left.length, 1);
+  assert.equal(right.length, 1);
+  assert.equal(left[0].seed, right[0].seed);
+});
+
+test('radius capping uses camera cell center for subcell stability', () => {
+  const world = openWorld();
+  const raw: MeshInstance[] = [
+    {
+      modelId: 'table_slab',
+      x: 14.7,
+      y: 10.5,
+      z: 0,
+      yaw: 0,
+      scaleX: 1,
+      scaleY: 1,
+      scaleZ: 1,
+      seed: 42,
+      flags: MeshInstanceFlag.Feature,
+    },
+  ];
+  const profile = { radius: 4, instanceCap: 4 };
+  const left = capMeshInstances(context(world, 10.12, 10.5, 123, { profile }), raw);
+  const right = capMeshInstances(context(world, 10.88, 10.5, 123, { profile }), raw);
 
   assert.equal(left.length, 1);
   assert.equal(right.length, 1);

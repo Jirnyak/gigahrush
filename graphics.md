@@ -363,8 +363,24 @@ Runtime sprite overrides:
 - Procedural entity visuals are generated through
   `entities/procedural_visuals.ts`.
 - Item drops use generated item sprites from `src/render/item_sprites.ts`.
+- Entity sprite animations use the render-only
+  `src/render/animations/` registry/runtime. The WebGL sprite path asks for a
+  generic animated texture override after item drops and before procedural/static
+  sprite fallback, so entities without a matching clip render unchanged.
+- Animation PNG sources live under ASCII `anims/` and are packed by
+  `scripts/generate-animation-sprites.mjs` into
+  `src/render/animations/generated_frames.ts`; the browser runtime does not load
+  source PNG files.
+- `animation.md` owns the detailed render animation contract, extension rules
+  and validation coverage.
+- The first shipped entity clips are `olga_dmitrievna_walk`, a looping movement
+  clip for Olga Dmitrievna, and `olga_dmitrievna_harm`, a one-shot HP-drop clip
+  that has higher resolver priority than walk. Static Olga art remains the
+  fallback whenever no animated frame is selected.
 - Procedural entity texture cache cap: 8192.
 - Item sprite texture cache cap: 8192.
+- Animated entity texture cache cap: 512 entries, trimmed to 448 by LRU.
+- Animated entity runtime memory cap: 2048 render-only entity entries.
 - Cache entries are LRU-trimmed by use tick.
 - Save payloads do not store static item sprite ids; item visuals derive from
   item definition ids.

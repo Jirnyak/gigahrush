@@ -70,6 +70,9 @@ const UTILITY_RETHINK_BASE_SEC = 1.5;
 const UTILITY_RETHINK_SPREAD_SEC = 2.5;
 const TERRITORY_ROOM_TARGET_SCAN_CAP = 96;
 const ROUTINE_ROOM_CANDIDATE_CAP = 8;
+const ROUTINE_LOCAL_ROOM_DISTANCE = 132;
+const ROUTINE_SURVIVAL_ROOM_DISTANCE = 220;
+const ROUTINE_TRAVELER_NEED_ROOM_DISTANCE = 280;
 const NPC_TOILET_PEE_RATE = 20;
 const NPC_TOILET_POO_RATE = 15;
 const CLEANER_SURFACE_RADIUS = 1.35;
@@ -139,6 +142,13 @@ function canHoldRoutineFrame(e: Entity, intent: NpcUtilityIntentId): boolean {
   const ai = e.ai;
   if (!ai || ai.combatTargetId !== undefined || hasActivePath(e) || ai.timer <= 0) return false;
   return intent === 'work' || intent === 'social' || intent === 'patrol' || intent === 'wander';
+}
+
+function utilityIntentInterruptsActivePath(current: NpcUtilityIntentId, selected: NpcUtilityIntentId): boolean {
+  if (selected === current) return false;
+  if (selected === 'combat' || selected === 'flee') return true;
+  if (selected === 'safety' || selected === 'heal') return current !== 'safety' && current !== 'flee' && current !== 'combat';
+  return false;
 }
 
 function preferredEmergencyRoomId(world: World, e: Entity): number | undefined {
@@ -410,6 +420,14 @@ function selectAndEnterUtilityIntent(
     switchMargin: UTILITY_SWITCH_MARGIN,
     emergencyScore: UTILITY_EMERGENCY_SCORE,
   });
+  if (
+    currentIntent !== undefined &&
+    hasActivePath(e) &&
+    !utilityIntentInterruptsActivePath(currentIntent, selected.intent)
+  ) {
+    utilityNextDecisionAtByNpc.set(e, now + utilityRethinkInterval(e));
+    return { intent: currentIntent, rescored: true };
+  }
   enterUtilityIntent(e, selected.intent, selected.score, profile);
   utilityNextDecisionAtByNpc.set(e, now + utilityRethinkInterval(e));
   return { intent: selected.intent, rescored: true };
@@ -842,12 +860,17 @@ function gotoRoutineRoomOfTypes(
     if (utility <= 0 && room.id !== options.preferredRoomId && room.id !== e.assignedRoomId) return;
     const friendly = territoryFriendlyForNpc(e, territoryRoomOwner(world, room.id));
     if (!friendly && !allowFallback) return;
-    const target = routineRoomTargetCandidate(world, e, room, intent, friendly, options.preferredRoomId);
+    const cx = room.x + room.w / 2;
+    const cy = room.y + room.h / 2;
+    const distance = Math.sqrt(world.dist2(e.x, e.y, cx, cy));
+    if (distance > routineRoomDistanceLimit(e, room, intent, options.preferredRoomId)) return;
+    const target = routineRoomTargetCandidate(e, room, intent, friendly, options.preferredRoomId, distance);
     pushRoutineRoomCandidate(friendly ? routineFriendlyRoomCandidates : routineFallbackRoomCandidates, target);
   };
 
   considerRoom(options.preferredRoomId !== undefined ? world.rooms[options.preferredRoomId] : undefined);
   considerRoom(e.assignedRoomId !== undefined ? world.rooms[e.assignedRoomId] : undefined);
+  considerRoom(world.roomAt(e.x, e.y) ?? undefined);
 
   const roomCount = world.rooms.length;
   const scanCount = Math.min(roomCount, TERRITORY_ROOM_TARGET_SCAN_CAP);
@@ -865,16 +888,13 @@ function gotoRoutineRoomOfTypes(
 }
 
 function routineRoomTargetCandidate(
-  world: World,
   e: Entity,
   room: Room,
   intent: NpcUtilityIntentId,
   friendly: boolean,
   preferredRoomId: number | undefined,
+  distance: number,
 ): NpcUtilityTargetCandidate {
-  const cx = room.x + room.w / 2;
-  const cy = room.y + room.h / 2;
-  const distance = Math.sqrt(world.dist2(e.x, e.y, cx, cy));
   const assignedBonus = room.id === e.assignedRoomId ? 14 : 0;
   const preferredBonus = room.id === preferredRoomId ? 12 : 0;
   const territoryUtility = friendly ? 10 : -22;
@@ -900,7 +920,15 @@ function routineRoomTargetCandidate(
     x: room.x + Math.floor(room.w / 2),
     y: room.y + Math.floor(room.h / 2),
     utility: score,
+    distance,
   };
+}
+
+function routineRoomDistanceLimit(e: Entity, room: Room, intent: NpcUtilityIntentId, preferredRoomId: number | undefined): number {
+  if (room.id === preferredRoomId || room.id === e.assignedRoomId) return Infinity;
+  if (usesTravelerRoutine(e)) return routineIntentAllowsSurvivalTrespass(intent) ? ROUTINE_TRAVELER_NEED_ROOM_DISTANCE : Infinity;
+  if (routineIntentAllowsSurvivalTrespass(intent)) return ROUTINE_SURVIVAL_ROOM_DISTANCE;
+  return ROUTINE_LOCAL_ROOM_DISTANCE;
 }
 
 function pushRoutineRoomCandidate(candidates: NpcUtilityTargetCandidate[], candidate: NpcUtilityTargetCandidate): void {

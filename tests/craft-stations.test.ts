@@ -158,6 +158,7 @@ test('station surface flags rehydrate behavior on a restored world object', () =
   const restored = cloneWorldPrimitives(source);
   const state = makeGameState();
   const player = makeTestPlayer({ id: 1, x: room.x + 1.5, y: room.y + 2 });
+  const opened: string[] = [];
 
   const target = findInteractionTarget({
     world: restored,
@@ -169,6 +170,20 @@ test('station surface flags rehydrate behavior on a restored world object', () =
     lookY: room.y + 2,
   });
   assert.equal(target?.defId, 'craft_lathe');
+
+  const activation = activateInteraction({
+    world: restored,
+    state,
+    player,
+    entities: [player],
+    nextEntityId: { v: 2 },
+    lookX: room.x + 2,
+    lookY: room.y + 2,
+    openCraftMenu: request => opened.push(`${request.mode}:${request.station}:${request.sourceDefId}`),
+  });
+  assert.equal(activation.handled, true);
+  assert.equal(activation.openedOverlay, true);
+  assert.equal(opened.at(-1), 'craft:lathe:craft_lathe');
 });
 
 testGenerationMatrix('LIVING expedition prep exposes reachable lathe and disassembly station pair', () => {

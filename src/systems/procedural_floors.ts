@@ -35,6 +35,7 @@ import {
   floorKeyForEntry,
   floorKeyForProcedural,
   floorKeyForStory,
+  floorKeyZ,
 } from './floor_keys';
 import {
   routeDirectionBlockedByClosedGate,
@@ -441,6 +442,12 @@ function entryForZ(state: GameState, z: number): FloorRunEntry | null {
 export function floorRunEntryForDesignFloor(state: GameState, designFloorId: DesignFloorId): FloorRunEntry | null {
   const designFloor = designFloorById(designFloorId);
   return designFloor ? entryForZ(state, designFloor.z) : null;
+}
+
+export function floorRunEntryForFloorKey(state: GameState, floorKey: string): FloorRunEntry | null {
+  const run = ensureFloorRunState(state);
+  const z = floorKeyZ(floorKey, { proceduralSpecs: run.specs });
+  return z === undefined ? null : entryForZ(state, z);
 }
 
 export function currentFloorRunEntry(state: GameState): FloorRunEntry {

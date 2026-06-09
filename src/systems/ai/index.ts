@@ -19,6 +19,7 @@ import { actorHasTacticProfile, runActorTactic } from './tactics';
 import { expireMonsterBaits } from '../monster_bait';
 import { ensureEntityIndex } from '../entity_index';
 import { hearingRadiusMetersForActor } from '../hearing';
+import { unstuckActorFromBlockers } from '../movement_collision';
 import { isPlayerEntity } from '../player_actor';
 import { updateSwarmNests } from '../swarm_nests';
 
@@ -148,6 +149,7 @@ export function updateAI(world: World, entities: Entity[], dt: number, time: num
         aiStats.skipped++;
         continue;
       }
+      unstuckActorFromBlockers(world, e);
       if (e.type === EntityType.NPC) {
         if (e.ai.npcState === undefined) {
           primeNpcAlifeState(e, clock, samosborActive, isMinistry ? 'ministry' : 'default');

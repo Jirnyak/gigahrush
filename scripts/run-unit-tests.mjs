@@ -6,8 +6,12 @@ import { fileURLToPath } from 'node:url';
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
 const testsDir = join(root, 'tests');
 const tsxBin = join(root, 'node_modules', '.bin', process.platform === 'win32' ? 'tsx.cmd' : 'tsx');
+const unitGenerationExceptions = new Set([
+  'living-npc-corridor-attractors.test.ts',
+]);
 
 function isGenerationCoupledTest(fileName, source) {
+  if (unitGenerationExceptions.has(fileName)) return false;
   if (/^items_\d+_/.test(fileName)) return true;
   return source.includes("../src/gen/");
 }

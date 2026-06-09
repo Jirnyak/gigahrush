@@ -368,7 +368,7 @@ export const PLOT_CHAIN: PlotStep[] = [
   {
     giverNpcId: 'void_warning',
     type: QuestType.KILL,
-    desc: 'Убей Творца в Пустоте: загадочного демиурга за Самосборами. Данные удалены; держи укрытие между зелёными залпами.',
+    desc: 'Убей Творца в Пустоте: [ДАННЫЕ УДАЛЕНЫ]. Держи укрытие между зелёными залпами.',
     targetMonsterKind: MonsterKind.CREATOR, killNeeded: 1,
     rewardItem: 'void_spike', rewardCount: 1,
     extraRewards: [{ defId: 'psi_stabilizer', count: 1 }],

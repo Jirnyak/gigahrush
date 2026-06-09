@@ -170,6 +170,36 @@ test('due active-floor journey waits when pending arrival queue is full', () => 
   assert.equal(mobility.pendingArrivals.at(-1)?.alifeId, 1);
 });
 
+test('full active-floor pending queue does not starve later due inactive-floor journeys', () => {
+  const state = minimalState();
+  assert.equal(moveAlifeNpcRecord(state, 1, 'story:ministry'), true);
+  assert.equal(moveAlifeNpcRecord(state, 2, 'story:ministry'), true);
+  const mobility = ensureAlifeMobilityState(state);
+  mobility.journeys.blocked = journey('blocked', 1, 'story:living', 10);
+  mobility.journeys.inactive = journey('inactive', 2, 'design:black_market_88', 10);
+  for (let i = 0; i < MAX_ALIFE_PENDING_ARRIVALS; i++) {
+    mobility.pendingArrivals.push({
+      journeyId: `queued_${i}`,
+      alifeId: i + 3,
+      fromFloorKey: 'story:ministry',
+      toFloorKey: 'story:living',
+      intentId: 'queued',
+      reason: 'routine',
+      risk: 1,
+      etaAt: 0,
+      queuedAt: 0,
+    });
+  }
+  state.time = 11;
+
+  assert.equal(tickAlifeMigration(state, 0, { force: true, maxRecords: 1, activeFloorKey: 'story:living' }), 1);
+  assert.equal(mobility.journeys.blocked?.alifeId, 1);
+  assert.equal(mobility.journeys.inactive, undefined);
+  assert.equal(getAlifeNpcRecordSnapshot(state, 1)?.floorKey, 'story:ministry');
+  assert.equal(getAlifeNpcRecordSnapshot(state, 2)?.floorKey, 'design:black_market_88');
+  assert.equal(mobility.pendingArrivals.length, MAX_ALIFE_PENDING_ARRIVALS);
+});
+
 test('forced cold tick hard-caps processed records', () => {
   const state = minimalState();
   const processed = tickAlifeMigration(state, 0, {

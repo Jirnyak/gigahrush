@@ -74,6 +74,20 @@ Outside dense combat, use a hybrid:
 
 Global time can remain a soft rhythm input, but it must not force all NPCs into the same state at the same moment. Work, sleep and lunch are pressures, not commands.
 
+### Corridor Attractor Regression Guard
+
+Corridors are valid gameplay space. NPCs may pass through them, patrol them, flee through them, hold them, travel across them and temporarily gather there because the floor is alive. The forbidden failure is a corridor attractor: NPCs gradually accumulating in one corridor pocket and repeatedly walking A-B-A along the same cells because routine AI keeps changing goals, choosing unreachable or over-distant routine targets, or reassigning a new non-emergency path before the current path has had time to finish.
+
+This was a severe gameplay regression on the Living floor: the floor could start normally, then after several simulated minutes visible corridor pockets formed where NPCs looked alive only as back-and-forth noise. Treat this as P0 AI behavior, not as cosmetic traffic.
+
+Rules:
+
+- routine room selection must stay local unless the target is an assigned/preferred anchor, a traveler route or a survival/emergency need;
+- the NPC's current active path is sticky for ordinary routine intents; only emergency intents such as combat, flee, safety or healing may interrupt it mid-path;
+- active paths should be followed to completion, abandonment or a real stale-path failure, not replaced by another low-pressure work/social/wander target every rethink tick;
+- checks must distinguish normal corridor traffic from attractors by measuring local corridor cell/area pile-up, active stuck pathing and repeated corridor A-B-A reversals over time;
+- `tests/living-npc-corridor-attractors.test.ts` is the regression guard for this exact failure and must remain in the normal unit/check gate despite generating a Living floor.
+
 ## AI And A-Life Boundary
 
 AI may read live fields such as `alifeId`, `persistentNpcId`, `plotNpcId`, `faction`, `occupation`, `age`, `sex`, `needs`, `playerRelation`, `karma`, `rpg`, weapon and inventory. It may change live position, combat target, needs, health, inventory and compact transient AI state.
