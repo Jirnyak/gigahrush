@@ -159,7 +159,7 @@ export const PLOT_CHAIN: PlotStep[] = [
   {
     giverNpcId: 'olga',
     type: QuestType.TALK,
-    desc: 'Ольга вычеркнула тебя из мёртвых, теперь иди к сержанту Баринову в оружейную. Он даст ствол и восемь патронов: без железа здесь живут только до первой сирены.',
+    desc: 'Ольга вычеркнула тебя из мёртвых, теперь иди к сержанту Баринову в оружейную. Он спишет на тебя пистолет и восемь патронов: здесь без железа живут только в сводках потерь.',
     offerObjective: 'Вводная Ольги',
     activeObjective: 'Найти сержанта Баринова в оружейной и получить табельное.',
     targetNpcId: 'barni',
@@ -171,7 +171,7 @@ export const PLOT_CHAIN: PlotStep[] = [
   {
     giverNpcId: 'barni',
     type: QuestType.TALK,
-    desc: 'Возвращайся к Ольге. Оружие проверено, руки целы — значит, пора отрабатывать пайку. Она выдаст бинты с водой и объяснит, где в этой зоне можно сдохнуть с пользой.',
+    desc: 'Возвращайся к Ольге. Оружие на руках, руки пока целы — пора отрабатывать пайку. Она выдаст бинты с водой и найдет место, где ты закроешь норму.',
     activeObjective: 'Доложить Ольге Дмитриевне об успешном получении оружия.',
     targetNpcId: 'olga',
     rewardItem: 'bandage', rewardCount: 2,
@@ -187,7 +187,7 @@ export const PLOT_CHAIN: PlotStep[] = [
   {
     giverNpcId: 'olga',
     type: QuestType.TALK,
-    desc: 'Ольге нужен курьер до лаборатории Якова Давидовича. Иди {dir}. Старик проверяет слизь после сборов, и ему всегда не хватает рук, чтобы донести образцы живыми.',
+    desc: 'Ольге нужен курьер до лаборатории Якова Давидовича. Иди {dir}. Старик оформляет слизь после сборов, и ему вечно не хватает людей, чтобы донести банки без трещин.',
     activeObjective: 'Найти лабораторию Якова Давидовича {dir}.',
     targetNpcId: 'yakov',
     rewardItem: 'psi_strike', rewardCount: 1,
@@ -197,7 +197,7 @@ export const PLOT_CHAIN: PlotStep[] = [
   {
     giverNpcId: 'yakov',
     type: QuestType.FETCH,
-    desc: 'Первый полевой выход. Яков просит притащить идол Чернобога: сектанты опять лезут к гермодверям до отбоя. Принеси деревяшку, но не вздумай молиться ей в лифте.',
+    desc: 'Яков просит принести идол Чернобога с этажа: сектанты опять лезут к гермодверям до отбоя. Сдай деревяшку старику, но не вздумай слушать её в лифте.',
     targetItem: 'idol_chernobog', targetCount: 1,
     rewardItem: 'psi_mark', rewardCount: 1,
     extraRewards: [{ defId: 'antidep', count: 1 }, { defId: 'pills', count: 2 }],
@@ -207,7 +207,7 @@ export const PLOT_CHAIN: PlotStep[] = [
   {
     giverNpcId: 'yakov',
     type: QuestType.TALK,
-    desc: 'Идол подтвердил: самосборы пахнут не только химией. Яков нашёл в архивах имя — бывший студент Захаров, ныне Ванька Банчиный. Найди этого сумасшедшего {dir}.',
+    desc: 'Идол подтвердил: сажа пахнет не только химией. Яков поднял архивы на бывшего студента Захарова, ныне Ваньку Банчиного. Найди этого сумасшедшего {dir}.',
     targetNpcId: 'vanka',
     rewardItem: 'antidep', rewardCount: 1,
     relationDelta: 15, xpReward: 30,
@@ -216,7 +216,7 @@ export const PLOT_CHAIN: PlotStep[] = [
   {
     giverNpcId: 'vanka',
     type: QuestType.KILL,
-    desc: 'Ванька боится теней больше, чем комендатуры. Найди и убей теневика Петлю. Ищи широкое пространство — в узком коридоре тень удушит раньше, чем ты достанешь ствол.',
+    desc: 'Ванька боится теней больше, чем комендатуры. Найди и ликвидируй теневика по кличке Петля. Ищи широкое место — в узком коридоре тень оформляет удушье раньше, чем ты достанешь ствол.',
     targetMonsterKind: MonsterKind.SHADOW, killNeeded: 1,
     rewardItem: 'psi_recall', rewardCount: 1,
     relationDelta: 20, xpReward: 60,
@@ -225,7 +225,7 @@ export const PLOT_CHAIN: PlotStep[] = [
   {
     giverNpcId: 'vanka',
     type: QuestType.FETCH,
-    desc: 'Собери останки Петли и тащи Якову в лабораторию. Главное — не открывай банку: если сгусток почует воздух, к Якову придет не образец, а новый теневик.',
+    desc: 'Собери останки Петли и тащи Якову в лабораторию. Главное — не открывай банку: если сгусток почует воздух, к Якову придет не улика, а новый теневик.',
     targetItem: 'strange_clot', targetCount: 1,
     rewardItem: 'bandage', rewardCount: 3,
     extraRewards: [{ defId: 'pills', count: 1 }],
@@ -235,7 +235,7 @@ export const PLOT_CHAIN: PlotStep[] = [
   {
     giverNpcId: 'yakov',
     type: QuestType.TALK,
-    desc: 'Яков своё получил, а ты ему больше не нужен — старик ищет лаборанта, а не мясо. Неси рапорт вниз, к майору Громному в коллекторы. На глубине всегда не хватает стволов.',
+    desc: 'Яков закрыл акт, и лишние руки ему больше не нужны. Неси рапорт вниз, к майору Громному в коллекторы. На глубине всегда недобор смены.',
     targetNpcId: 'major_grom',
     rewardItem: 'psi_rupture', rewardCount: 1,
     relationDelta: 20, xpReward: 60, moneyReward: 80,
@@ -249,7 +249,7 @@ export const PLOT_CHAIN: PlotStep[] = [
   {
     giverNpcId: 'major_grom',
     type: QuestType.KILL,
-    desc: 'Форпост Громного захлёбывается. Положи десять тварей, пока они не прорвали периметр. Ниже этажом правила меняются — держи строй и не экономь патроны.',
+    desc: 'Форпост Громного сдает позиции. Доведи счет зачистки до десяти, пока они не прорвали периметр. Майор списывает патроны только под трупы.',
     killNeeded: 10,
     rewardItem: 'ak47', rewardCount: 1,
     extraRewards: [{ defId: 'ammo_762', count: 30 }],
@@ -269,7 +269,7 @@ export const PLOT_CHAIN: PlotStep[] = [
   {
     giverNpcId: 'major_grom',
     type: QuestType.KILL,
-    desc: 'Штурм. Твари прут не просто так — их гонит Манкобус. Найди эту тушу {dir} и преврати в фарш, иначе они продавят гермы форпоста мясом.',
+    desc: 'Осада. Твари прут не просто так — массу гонит Манкобус. Найди его {dir} и устрани, иначе они продавят гермы форпоста трупами.',
     targetMonsterKind: MonsterKind.MANCOBUS, killNeeded: 1,
     rewardItem: 'psi_storm', rewardCount: 1,
     extraRewards: [{ defId: 'bandage', count: 5 }, { defId: 'ammo_762', count: 30 }],
@@ -279,7 +279,7 @@ export const PLOT_CHAIN: PlotStep[] = [
   {
     giverNpcId: 'major_grom',
     type: QuestType.VISIT,
-    desc: 'Громный отправляет тебя в Мясной низ. Найди зону закрепления и удержи её пять минут. Не выходи за створки: твари реагируют на шум быстрее, чем ликвидаторы успеют помочь.',
+    desc: 'Громный переводит тебя в Мясной низ. Найди зону закрепления и удержи её пять минут. Не выходи за створки: твари реагируют на шум быстрее, чем подпишут акт о помощи.',
     rewardItem: 'bandage', rewardCount: 5,
     extraRewards: [{ defId: 'antidep', count: 2 }, { defId: 'ammo_762', count: 20 }],
     relationDelta: 25, xpReward: 180,
@@ -301,7 +301,7 @@ export const PLOT_CHAIN: PlotStep[] = [
   {
     giverNpcId: 'major_grom',
     type: QuestType.VISIT,
-    desc: 'Зона зачищена, но это только начало. Спускайся на Z-40, в Подад. Там стены шевелятся, а лифт вниз заблокирован. Иди и выясни, что держит шахту.',
+    desc: 'Зона зачищена, но смена продолжается. Спускайся на Z-40, в Подад. Там стены шевелятся, а лифт вниз заблокирован. Выясни, что держит шахту.',
     rewardItem: 'ammo_762', rewardCount: 24,
     extraRewards: [{ defId: 'bandage', count: 3 }],
     relationDelta: 18, xpReward: 120,
@@ -316,7 +316,7 @@ export const PLOT_CHAIN: PlotStep[] = [
   {
     giverNpcId: 'hell_contact',
     type: QuestType.TALK,
-    desc: 'Подад дышит. Найди Марфу Пороговую {dir}. Она слушает Вестников и знает, почему лифты на нижние уровни не отвечают на вызов.',
+    desc: 'Подад дышит. Найди Марфу Пороговую {dir}. Она слушает Вестников и знает, почему лифты на нижние уровни глушат вызов.',
     targetNpcId: 'herald_clue',
     rewardItem: 'psi_phase', rewardCount: 1,
     extraRewards: [{ defId: 'holy_water', count: 1 }],
@@ -328,7 +328,7 @@ export const PLOT_CHAIN: PlotStep[] = [
   {
     giverNpcId: 'herald_clue',
     type: QuestType.KILL,
-    desc: 'Три Вестника держат шахту. Найди их в Подаде и уничтожь. Пока они дышат, лифты стоят, а тоннели зарастают биомассой прямо за спиной.',
+    desc: 'Три Вестника держат шахту. Найди их в Подаде и спиши. Пока они дышат, лифты стоят, а тоннели зарастают биомассой прямо по регламенту.',
     targetMonsterKind: MonsterKind.HERALD, killNeeded: 3,
     rewardItem: 'psi_void_needle', rewardCount: 1,
     extraRewards: [{ defId: 'antidep', count: 2 }],
@@ -342,7 +342,7 @@ export const PLOT_CHAIN: PlotStep[] = [
   {
     giverNpcId: 'herald_clue',
     type: QuestType.VISIT,
-    desc: 'НИЖЕ И НИЖЕ. Вестники дохлы, шахта открыта. Спускайся до Z-50. Там голоса больше не притворяются людьми.',
+    desc: 'Вестники устранены, шахта свободна. Спускайся до Z-50. В Пустоте голоса больше не обязаны притворяться людьми.',
     rewardItem: 'psi_stabilizer', rewardCount: 1,
     extraRewards: [{ defId: 'holy_water', count: 1 }],
     relationDelta: 6, xpReward: 180,
@@ -358,7 +358,7 @@ export const PLOT_CHAIN: PlotStep[] = [
   {
     giverNpcId: 'void_warning',
     type: QuestType.FETCH,
-    desc: 'Творец вышел на связь чужим голосом. Жан просит проверить ловушку: забери голос в банке из его камеры и верни ему. И помни — крышку не открывать.',
+    desc: 'Творец вышел на связь чужим голосом. Жан просит проверить ловушку: забери голос в банке из его камеры и верни обратно. Крышку не открывать, даже если банка начнет торговаться.',
     targetItem: 'bottled_voice', targetCount: 1,
     rewardItem: 'psi_stabilizer', rewardCount: 1,
     extraRewards: [{ defId: 'antidep', count: 1 }],
@@ -368,7 +368,7 @@ export const PLOT_CHAIN: PlotStep[] = [
   {
     giverNpcId: 'void_warning',
     type: QuestType.KILL,
-    desc: 'Время убить Творца. Спускайся в Пустоту. [ДАННЫЕ УДАЛЕНЫ]. Перебегай от укрытия к укрытию между зелёными залпами.',
+    desc: 'Пора списывать Творца. Спускайся в Пустоту. [ДАННЫЕ УДАЛЕНЫ]. Держись укрытий между зелёными залпами: этот акт ты подписываешь сам.',
     targetMonsterKind: MonsterKind.CREATOR, killNeeded: 1,
     rewardItem: 'void_spike', rewardCount: 1,
     extraRewards: [{ defId: 'psi_stabilizer', count: 1 }],
@@ -378,7 +378,7 @@ export const PLOT_CHAIN: PlotStep[] = [
   {
     giverNpcId: 'void_warning',
     type: QuestType.FETCH,
-    desc: 'Забери пустотный шип и отдай Жану перед возвращением. Не тащи в жилые блоки то, что стояло по ту сторону самосборов.',
+    desc: 'Забери пустотный шип и отдай Жану перед возвращением. Не тащи в жилые блоки то, что не проходит по инвентарной описи.',
     targetItem: 'void_spike', targetCount: 1,
     rewardItem: 'holy_water', rewardCount: 2,
     extraRewards: [{ defId: 'bandage', count: 3 }, { defId: 'antidep', count: 1 }],

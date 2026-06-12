@@ -54,7 +54,7 @@ export const SLIME_DEFS: readonly SlimeDef[] = [
     routeRole: 'Кислотный containment-check: фильтрующий слой, щипцы и отдельная тара важнее цены.',
     cleanupHint: 'Кислотная проба ОВС: держать дистанцию, брать щипцами, нейтрализовать щёлочью и не класть к ткани.',
     sealedRisk: 'Целая зелёная банка опасна для ткани и еды, зато НИИ принимает её как чистый ОВС-факт.',
-    unsealedRisk: 'Вскрытая зелёная проба шипит без огня и портит соседний лут быстрее любого спора.',
+    unsealedRisk: 'Вскрытая зелёная проба шипит без огня и портит вещи рядом быстрее любого спора.',
     sampleId: 'slime_sample_green',
     rewardTier: 3,
     preferredFactions: [Faction.SCIENTIST, Faction.LIQUIDATOR],

@@ -1517,8 +1517,4 @@ export function drawFullMap(
   );
   drawMap(ctx, world, entities, player, sx, sy, pad, pad, mapW, mapH, radius, 0.85, quests, currentFloor, state, _uiTime);
 
-  ctx.fillStyle = '#666';
-  ctx.font = `${8 * sy}px monospace`;
-  const hint = `${controlHint('map')} закрыть карту  |  wheel масштаб  |  ${controlHint('mapLegend')} легенда/настройка карты  |  ${menuCloseHint()} закрыть`;
-  ctx.fillText(fitTextStable(ctx, hint, mapW - 8 * sx), pad + 4, pad + mapH - 4);
 }

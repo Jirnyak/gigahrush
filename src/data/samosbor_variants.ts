@@ -177,7 +177,7 @@ export const SAMOSBOR_BASE_SUBSYSTEMS: readonly SamosborSubsystemId[] = [
 export const SAMOSBOR_MODIFIERS: Record<SamosborModifierId, SamosborModifierDef> = {
   early_seal: {
     id: 'early_seal',
-    warningLine: 'Гермодвери закрываются раньше регламента. Не добирай лут, закрывайся сейчас.',
+    warningLine: 'Гермодвери закрываются раньше регламента. Бросай вещи, закрывайся сейчас.',
     sealTimingDelta: 8,
   },
   dense_fog: {
@@ -310,7 +310,7 @@ export const SAMOSBOR_VARIANTS: readonly SamosborVariantDef[] = [
     sealTimingDelta: 2,
     warningLines: ['На линолеуме выступает вода. Ищи сухой обход до гермы, мокрый пол сдаёт шаги.'],
     modifiers: ['wet_floor_message', 'dense_fog', 'door_twitch'],
-    gameplaySignal: 'синий туман, мокрый пол, плотнее спавн из тумана, безопаснее сухие коридоры и закрываемые шлюзы',
+    gameplaySignal: 'синий туман, мокрый пол, больше тварей лезет из тумана, безопаснее сухие коридоры и закрываемые шлюзы',
     audioCue: 'siren',
     startLine: 'МОКРЫЙ САМОСБОР НАЧАЛСЯ: вода уводит туман под двери.',
   },
@@ -350,7 +350,7 @@ export const SAMOSBOR_VARIANTS: readonly SamosborVariantDef[] = [
       'Пол липнет без воды, а шов тянет воздух внутрь. Не верь красивому обходу.',
     ],
     modifiers: ['meat_walls_hell', 'false_safe_zone', 'sparse_fog'],
-    gameplaySignal: 'красный туман, теплеющие швы, ложная безопасность, усиленный спавн тварей, держись середины прохода',
+    gameplaySignal: 'красный туман, теплеющие швы, ложная безопасность, наплыв тварей, держись середины прохода',
     audioCue: 'siren',
     startLine: 'МЯСНОЙ САМОСБОР НАЧАЛСЯ: швы тёплые, уходи от стен.',
   },
@@ -508,7 +508,7 @@ export const SAMOSBOR_AFTERMATH_BEATS: readonly SamosborAftermathBeatDef[] = [
     radius: 14,
     severity: 4,
     effect: 'monster_aftershock',
-    message: 'После отбоя в углу остался плотный туман. Рядом проснулась поздняя тварь: проверь угол до лута.',
+    message: 'После отбоя в углу остался плотный туман. Рядом проснулась поздняя тварь: проверь угол до обыска.',
     tags: ['monster', 'danger'],
     monsterKind: MonsterKind.TVAR,
   },

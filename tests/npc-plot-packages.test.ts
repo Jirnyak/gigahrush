@@ -144,7 +144,7 @@ test('plot TALK quest response remains exact locked authored text', () => {
   checkTalkQuest(barni, player, world, [player, barni], state, state.msgs);
 
   assert.equal(state.quests[0].done, true);
-  const authoredResponse = state.msgs.find(msg => /Вот Макаров и восемь патронов/.test(msg.text))?.text ?? '';
+  const authoredResponse = state.msgs.find(msg => /Макаров и восемь патронов/.test(msg.text))?.text ?? '';
   const expectedResponse = barniPack.speech.talkQuestResponse;
   assert.equal(typeof expectedResponse, 'string');
   assert.equal(authoredResponse, `${npcPackageDisplayName(barniPack)}: «${expectedResponse}»`);

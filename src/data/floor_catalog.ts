@@ -293,7 +293,7 @@ export const FLOOR_CATALOG: readonly FloorCatalogDef[] = [
     tags: ['demolition', 'timer', 'walls', 'escape'],
     rarity: 'rare',
     minDepth: 2,
-    unlockHint: 'Секция рушится по таймеру, оставляя выбор между лутом и выходом.',
+    unlockHint: 'Секция рушится по таймеру, оставляя выбор между хабаром и выходом.',
     contentStatus: 'catalog_only',
   },
 ];

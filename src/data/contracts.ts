@@ -268,7 +268,7 @@ const EXPEDITION_CONTRACTS: ContractDef[] = [
   {
     id: 'exp_hunter_dry_filter_cache', title: 'Сухой фильтр для дальнего хода', issuer: 'Проводник у гермы',
     faction: Faction.CITIZEN, rank: 2, type: QuestType.FETCH,
-    desc: 'Проводник у гермы просит сухой фильтр из нижнего тайника. Плата водой и дробью; если фильтр мокрый, вылазка кончилась раньше лута.',
+    desc: 'Проводник у гермы просит сухой фильтр из нижнего тайника. Плата водой и дробью; если фильтр мокрый, вылазка кончилась раньше сбора вещей.',
     target: { floor: FloorLevel.MAINTENANCE, roomType: RoomType.STORAGE, zoneTag: 'maintenance_cache', hint: 'Коллекторы: склад, сухой карман или шкаф у насосной; не задерживайтесь в воде и не кладите фильтр к мокрой ткани.' },
     targetItem: 'gasmask_filter', targetCount: 1,
     rewardItem: 'filtered_water', rewardCount: 2, extraRewards: [{ defId: 'ammo_shells', count: 4 }],
