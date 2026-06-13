@@ -1117,7 +1117,12 @@ void main() {
   // Render-only per-cell ceiling height: tier t → wall top reaches (1 + t*0.5).
   // Floor contact (drawEnd) and the walk level never move; only the top rises.
   float ceilH = 1.0 + float(texelFetch(uCeil, ivec2(wrapI(mapX), wrapI(mapY)), 0).r) * 0.5;
-  float drawStart = max(0.0, HALF_H - lineH * (ceilH - uCamHeight));
+  float rawDrawStart = HALF_H - lineH * (ceilH - uCamHeight);
+  // Clamp the wall top to the camera cell's ceiling so a tall wall behind a
+  // low ceiling never pokes above the near ceiling plane.
+  float camCeilH = 1.0 + float(texelFetch(uCeil, ivec2(wrapI(int(floor(uPos.x))), wrapI(int(floor(uPos.y)))), 0).r) * 0.5;
+  float camStart = HALF_H - lineH * (camCeilH - uCamHeight);
+  float drawStart = max(0.0, max(rawDrawStart, camStart));
   float drawEnd   = min(uResolution.y - 1.0, HALF_H + lineH * uCamHeight);
 
   // Texture X coordinate
@@ -1142,7 +1147,7 @@ void main() {
       if (uLightQuality > 0) { vec3 ls = sampleLightSmooth(uPos + vec2(rayDX, rayDY) * dist); baseLitWall = ls.x; lgradWall = ls.yz; }
       else baseLitWall = sampleLight(hitCell);
       float cellLit = min(1.0, uAmbient + baseLitWall * (1.0 - uAmbient) + fbWall + toolBeam * 0.82);
-      float d = row - (HALF_H - lineH * (ceilH - uCamHeight));
+      float d = row - rawDrawStart;
       int texYi = int(floor(d / lineH * TEX_F)) & (TEX_I - 1);
       vec3 c = sampleAtlas(wallTexId, texXi, texYi).rgb;
       if (texelFetch(uCells, hitCell, 0).r == ${Cell.ABYSS}u) {

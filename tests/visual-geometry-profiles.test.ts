@@ -171,10 +171,10 @@ test('visual geometry theme modulation is data-only and deterministic', () => {
   for (const row of VISUAL_CORRIDOR_COVERINGS) {
     assert.match(row.id, ID_RE, `${row.id} must stay snake_case`);
     assert.equal(['concrete', 'residential', 'ministry', 'technical', 'collector', 'cave', 'meat', 'void'].includes(row.id), true);
-    for (const key of ['wallReliefDensity', 'wallBaseDensity', 'ceilingDensity', 'floorGutterDensity', 'floorThresholdDensity', 'floorOrganicDensity'] as const) {
-      const value = row[key];
-      assert.equal(Number.isFinite(value), true, `${row.id}.${key} must be finite`);
-      assert.equal(value >= 0, true, `${row.id}.${key} must be non-negative`);
+    for (const key of ['relief', 'ledge', 'threshold', 'pipe', 'cable', 'gutter', 'stalactite', 'bulge', 'fold'] as const) {
+      const value = row.weights[key];
+      assert.equal(Number.isFinite(value), true, `${row.id}.weights.${key} must be finite`);
+      assert.equal(value >= 0, true, `${row.id}.weights.${key} must be non-negative`);
     }
   }
   for (const row of VISUAL_CORRIDOR_COVERING_RULES) {

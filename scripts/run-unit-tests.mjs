@@ -43,6 +43,7 @@ const result = spawnSync(tsxBin, ['--test', ...process.argv.slice(2), ...selecte
   cwd: root,
   env: process.env,
   stdio: 'inherit',
+  shell: process.platform === 'win32',
 });
 
 if (result.error) throw result.error;

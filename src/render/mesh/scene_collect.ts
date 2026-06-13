@@ -2199,7 +2199,9 @@ function applyCeilingHeight(world: World, instance: MeshInstance): void {
   if (tier <= 0) return;
   const ceilZ = 1 + tier * 0.5;
   if (instance.z >= 0.9) {
-    instance.z += ceilZ - 1;
+    // Nudge ceiling-mounted meshes slightly below the raycaster ceiling plane
+    // so they reliably pass the depth test after the variable-height ceiling march.
+    instance.z += ceilZ - 1 - 0.02;
   } else if (CEILING_SPAN_MODELS.has(instance.modelId)) {
     instance.scaleZ *= ceilZ;
   }
