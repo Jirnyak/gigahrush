@@ -1,23 +1,29 @@
 import type { World } from '../core/world';
-import { type Room, RoomType } from '../core/types';
+import { Cell, type Room, RoomType, W } from '../core/types';
 
 /**
  * Render-only per-cell ceiling-height tiers.
  *
  * The walk level never changes — only the rendered wall top / ceiling plane is
- * raised so different room kinds read with a different vertical volume:
+ * raised so different spaces read with a different vertical volume:
  *   tier 0 → plain rooms (default 1.0 wall height)
- *   tier 1 → corridors sit a little taller than plain rooms
+ *   tier 1 → corridors / open passages sit taller than plain rooms
  *   tier 2 → large rooms
  *   tier 3 → grand halls
  *
- * Tiers are stamped over each room's full rect (interior + wall ring) so the
- * bounding walls a ray actually hits carry the room's volume. Nothing here
- * touches gameplay, collision, AI or save state — it is pure render metadata,
- * regenerated whenever a floor is built or restored.
+ * Two generation-time passes, both cell-based so it does not depend on every
+ * corridor being a `Room` record:
+ *   1. Every open (non-wall) cell gets a tier from its room (type/area) or, if
+ *      it is a carved passage with no room record, the corridor tier.
+ *   2. Every wall cell rises to the tallest open cell it bounds, so the wall a
+ *      ray actually hits carries the volume of the space behind it.
  *
- * Expandable: add a tier constant + raise the `LARGE_AREA`/`GRAND_AREA` table
- * or branch on more `RoomType`s. The shader maps tier `t` to height `1 + t*0.5`.
+ * Nothing here touches gameplay, collision, AI or save state — it is pure
+ * render metadata, regenerated whenever a floor is built or restored.
+ *
+ * Expandable / tweakable: change the tier constants, the `LARGE_AREA` /
+ * `GRAND_AREA` thresholds, or branch on more `RoomType`s. The shader maps tier
+ * `t` to height `1 + t*0.5`.
  */
 
 const TIER_ROOM = 0;
@@ -25,8 +31,10 @@ const TIER_CORRIDOR = 1;
 const TIER_LARGE = 2;
 const TIER_GRAND = 3;
 
-const LARGE_AREA = 60;   // w*h at/above which a room reads as a hall
-const GRAND_AREA = 130;  // ...and a grand hall
+const LARGE_AREA = 80;   // w*h at/above which a room reads as a hall
+const GRAND_AREA = 150;  // ...and a grand hall
+
+const MASK = W - 1;      // W is a power of two, so wrap == & MASK
 
 function ceilingTierForRoom(room: Room): number {
   if (room.type === RoomType.CORRIDOR) return TIER_CORRIDOR;
@@ -37,18 +45,42 @@ function ceilingTierForRoom(room: Room): number {
 }
 
 export function stampCeilingHeights(world: World): void {
+  const { cells, roomMap, rooms } = world;
   const ceil = world.ceilHeight;
-  ceil.fill(0);
-  for (const room of world.rooms) {
-    if (!room) continue;
-    const tier = ceilingTierForRoom(room);
-    if (tier === TIER_ROOM) continue;
-    for (let y = room.y - 1; y <= room.y + room.h; y++) {
-      const wy = world.wrap(y);
-      for (let x = room.x - 1; x <= room.x + room.w; x++) {
-        ceil[world.idx(world.wrap(x), wy)] = tier;
-      }
+  const n = W * W;
+
+  // Pass 1: open cells get their volume tier; walls start flat.
+  for (let i = 0; i < n; i++) {
+    if (cells[i] === Cell.WALL) { ceil[i] = 0; continue; }
+    const rid = roomMap[i];
+    const room = rid >= 0 ? rooms[rid] : undefined;
+    ceil[i] = room ? ceilingTierForRoom(room) : TIER_CORRIDOR;
+  }
+
+  // Pass 2: each wall rises to the tallest open cell it bounds. Only open
+  // neighbours contribute (their stable pass-1 tier), so writing walls in this
+  // same pass never propagates height along a wall line.
+  for (let y = 0; y < W; y++) {
+    const rowUp = ((y - 1) & MASK) * W;
+    const rowMid = y * W;
+    const rowDn = ((y + 1) & MASK) * W;
+    for (let x = 0; x < W; x++) {
+      const i = rowMid + x;
+      if (cells[i] !== Cell.WALL) continue;
+      const xL = (x - 1) & MASK;
+      const xR = (x + 1) & MASK;
+      let m = 0;
+      let j = rowUp + xL; if (cells[j] !== Cell.WALL && ceil[j] > m) m = ceil[j];
+      j = rowUp + x;      if (cells[j] !== Cell.WALL && ceil[j] > m) m = ceil[j];
+      j = rowUp + xR;     if (cells[j] !== Cell.WALL && ceil[j] > m) m = ceil[j];
+      j = rowMid + xL;    if (cells[j] !== Cell.WALL && ceil[j] > m) m = ceil[j];
+      j = rowMid + xR;    if (cells[j] !== Cell.WALL && ceil[j] > m) m = ceil[j];
+      j = rowDn + xL;     if (cells[j] !== Cell.WALL && ceil[j] > m) m = ceil[j];
+      j = rowDn + x;      if (cells[j] !== Cell.WALL && ceil[j] > m) m = ceil[j];
+      j = rowDn + xR;     if (cells[j] !== Cell.WALL && ceil[j] > m) m = ceil[j];
+      ceil[i] = m;
     }
   }
+
   world.markCeilHeightDirty();
 }

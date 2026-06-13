@@ -3713,6 +3713,9 @@ function loadFloorForTarget(floor: FloorLevel, entry: FloorRunEntry | null | und
     // The fast-elevator grid is absolute and deterministic, so re-stamp it on
     // memory-restored floors too (idempotent: same fixed cells every load).
     injectFastElevators(restored.generation.world);
+    // Ceiling heights are render-only and not packed into save floor memory, so
+    // recompute them on restore (idempotent: derived from the same room data).
+    stampCeilingHeights(restored.generation.world);
     return restored;
   }
   return {

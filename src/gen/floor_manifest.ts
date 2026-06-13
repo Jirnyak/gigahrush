@@ -17,6 +17,7 @@ import { withoutNpcEntities } from './entity_filters';
 import { applyStoryFloorObjectProfile } from './floor_object_placement';
 import { fillVisualSlotsForWorldFeatures } from './visual_cell_slots';
 import { rebuildGeneratedFloorPathBlockers } from './path_blockers';
+import { stampCeilingHeights } from './ceiling_heights';
 
 export interface FloorGeneration {
   world: World;
@@ -84,5 +85,6 @@ export function generateFloor(floor: FloorLevel, runSeed = DEFAULT_STORY_FLOOR_S
   });
   rebuildGeneratedFloorPathBlockers(generation.world, seed, generation.spawnX, generation.spawnY);
   fillVisualSlotsForWorldFeatures(generation.world, seed);
+  stampCeilingHeights(generation.world);
   return floor === FloorLevel.VOID ? withoutNpcEntities(generation) : generation;
 }
