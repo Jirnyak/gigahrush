@@ -1193,7 +1193,14 @@ void main() {
       // ── Ceiling ──
       float rowDist = HALF_H - row;
       if (rowDist > 0.0) {
-        float currentDist = (uResolution.y * (1.0 - uCamHeight)) / rowDist;
+        // Render-only: lift the ceiling plane to the per-cell height so it meets
+        // the raised wall top seamlessly. Guess the cell at the standard height,
+        // read its tier, then recompute the true distance for that height.
+        float guessDist = (uResolution.y * (1.0 - uCamHeight)) / rowDist;
+        float gx = uPos.x + rayDX * guessDist;
+        float gy = uPos.y + rayDY * guessDist;
+        float ceilH = 1.0 + float(texelFetch(uCeil, ivec2(wrapI(int(floor(gx))), wrapI(int(floor(gy)))), 0).r) * 0.5;
+        float currentDist = (uResolution.y * (ceilH - uCamHeight)) / rowDist;
         if (currentDist <= MAX_DIST) {
           float floorX = uPos.x + rayDX * currentDist;
           float floorY = uPos.y + rayDY * currentDist;
