@@ -1001,6 +1001,21 @@ vec3 shadeWall(uint texId, vec3 base, ivec2 cell, int side, int texX, int texY, 
 
 vec3 shadePlane(uint texId, vec3 base, ivec2 cell, int tx, int ty, float dist, float lit, float beam, bool ceiling, bool surface) {
   vec3 color = base;
+  if (texId == ${Tex.F_WATER}u && surface) {
+    int flowX = tx + int(uTime * 5.0);
+    int flowY = ty - int(uTime * 12.0);
+    flowX += int(sin(float(ty) * 0.1 + uTime * 1.5) * 3.0);
+    color = sampleAtlas(${Tex.F_WATER}u, flowX, flowY).rgb;
+
+    float bar = max(
+      1.0 - smoothstep(1.0, 2.0, mod(float(tx), 16.0)),
+      1.0 - smoothstep(1.0, 2.0, mod(float(ty), 16.0))
+    );
+    float n = noiseI(cell.x * 64 + tx, cell.y * 64 + ty, 111);
+    vec3 grate = vec3(0.18 + n * 0.05, 0.20 + n * 0.05, 0.16 + n * 0.04);
+    color = mix(color, grate, bar);
+  }
+
   if (ceiling) {
     color = applyCeilingSurfaceProfile(color, texId, cell, tx, ty);
     if (texId == ${Tex.CEIL}u) color = applyWallMicroDetail(color, texId, cell, tx, ty);
