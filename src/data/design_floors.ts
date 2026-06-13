@@ -104,7 +104,7 @@ export const DESIGN_FLOOR_ROUTES: readonly DesignFloorRouteDef[] = [
   { id: 'communal_ring', z: 4, displayName: 'Коммунальное кольцо', baseFloor: FloorLevel.KVARTIRY, color: '#fa4', role: 'социальный обход', danger: 2 },
   { id: 'moebius_podezd', z: 2, displayName: 'Мёбиус-подъезд', baseFloor: FloorLevel.KVARTIRY, color: '#fb6', role: 'ориентация, зеркальные квартиры, паритетный шов', danger: 2 },
   { id: 'oranzhereya_betona', z: -2, displayName: 'Оранжерея бетона', baseFloor: FloorLevel.LIVING, color: '#8d6', role: 'еда, вода, споры и дефицит', danger: 3 },
-  { id: 'floor_69', z: -4, displayName: 'Этаж 69', baseFloor: FloorLevel.MAINTENANCE, color: '#f8a', role: 'населенный сбой, сделки, слухи', danger: 3 },
+  { id: 'floor_69', z: -4, displayName: 'Этаж 69', baseFloor: FloorLevel.MAINTENANCE, themeClass: FloorLevel.LIVING, color: '#f8a', role: 'населенный сбой, сделки, слухи', danger: 3 },
   { id: 'obschezhitie_smeny', z: -6, displayName: 'Общежитие смены', baseFloor: FloorLevel.LIVING, color: '#d6b37a', role: 'сон, тихая кража, свидетели и укрытие', danger: 2 },
   { id: 'penrose_laundry', z: -8, displayName: 'Прачечная Пенроуза', baseFloor: FloorLevel.LIVING, color: '#9ef', role: 'апериодичная прачечная, пар, тайники', danger: 3 },
   { id: 'black_market_88', z: -10, displayName: 'Черный рынок 88', baseFloor: FloorLevel.LIVING, color: '#fd4', role: 'торговля, контрабанда, долги', danger: 3 },
