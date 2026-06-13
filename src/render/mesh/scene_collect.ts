@@ -1236,21 +1236,34 @@ function corridorVolumeCellEligible(context: MeshPassContext, idx: number, x: nu
 function weightedCorridorWallModel(context: MeshPassContext, covering: VisualCorridorCoveringDef, x: number, y: number, h: number): VisualModelId {
   const idx = context.world.idx(x, y);
   const wallTex = context.world.wallTex[idx];
-  let wallBaseSet = covering.wallBaseSet ?? 'none';
-  if (wallTex === 20 /* Tex.MEAT */ || wallTex === 41 /* Tex.GUT */ || wallTex === 5 /* Tex.ROTTEN */) {
-    wallBaseSet = 'organic';
-  } else if (wallTex === 18 /* Tex.PIPE */) {
-    wallBaseSet = 'none';
-  }
-  if (wallBaseSet !== 'none' && covering.wallBaseDensity > 0) {
-    const roll = ((h >>> 9) & 1023) / 1023;
-    if (roll < covering.wallBaseDensity) {
-      if (wallBaseSet === 'panels') return 'corridor_side_ledge';
-      if (wallBaseSet === 'pipes') return 'pipe_wall_large';
-      if (wallBaseSet === 'cables') return 'cable_wall_loose';
-      if (wallBaseSet === 'technical') return ((h >>> 14) & 1) ? 'pipe_wall_large' : 'cable_wall_loose';
-      if (wallBaseSet === 'organic') return covering.id === 'cave' ? 'cave_wall_protrusion' : (((h >>> 15) & 3) === 0 ? 'organic_wall_bulge' : 'meat_wall_fold');
-    }
+  
+  // Overrides based on wall texture
+  const isOrganicTex = wallTex === 20 /* Tex.MEAT */ || wallTex === 41 /* Tex.GUT */ || wallTex === 5 /* Tex.ROTTEN */;
+  const isPipeTex = wallTex === 18 /* Tex.PIPE */;
+
+  const roll = ((h >>> 9) & 1023) / 1023;
+  let cursor = 0;
+
+  if (isOrganicTex) {
+    cursor += covering.weights.bulge;
+    if (roll < cursor) return 'organic_wall_bulge';
+    cursor += covering.weights.fold;
+    if (roll < cursor) return 'meat_wall_fold';
+    cursor += covering.weights.stalactite;
+    if (roll < cursor) return 'cave_wall_protrusion';
+  } else if (!isPipeTex) {
+    cursor += covering.weights.ledge;
+    if (roll < cursor) return 'corridor_side_ledge';
+    cursor += covering.weights.pipe;
+    if (roll < cursor) return 'pipe_wall_large';
+    cursor += covering.weights.cable;
+    if (roll < cursor) return 'cable_wall_loose';
+    cursor += covering.weights.bulge;
+    if (roll < cursor) return 'organic_wall_bulge';
+    cursor += covering.weights.fold;
+    if (roll < cursor) return 'meat_wall_fold';
+    cursor += covering.weights.stalactite;
+    if (roll < cursor) return 'cave_wall_protrusion';
   }
   
   return corridorReliefVariant(covering, h);
@@ -1310,7 +1323,8 @@ function emitCorridorWallVolume(
   if (faces.length <= 0) return;
   const roomId = world.roomMap[idx] ?? -1;
   const h = mixHash(context.seed, x, y, roomId, 0x766f6c);
-  const wallWeight = covering.wallReliefDensity + covering.wallBaseDensity;
+  const wallBaseWeight = covering.weights.ledge + covering.weights.pipe + covering.weights.cable + covering.weights.bulge + covering.weights.fold + covering.weights.stalactite;
+  const wallWeight = covering.weights.relief + wallBaseWeight;
   if (!corridorCoverageGate(context.seed, x, y, roomId, 0x77616c, detail, style === 'organic' ? wallWeight * 0.8 : wallWeight * 0.58)) return;
   const face = faces[h % faces.length];
   const isOrganicTex = world.wallTex[idx] === 20 /* Tex.MEAT */ || world.wallTex[idx] === 41 /* Tex.GUT */ || world.wallTex[idx] === 5 /* Tex.ROTTEN */;
@@ -1365,10 +1379,11 @@ function emitCorridorThreshold(
   const world = context.world;
   const roomId = world.roomMap[idx] ?? -1;
   const h = mixHash(context.seed, x, y, roomId, 0x746872);
-  const gutter = corridorCoverageGate(context.seed, x, y, roomId, 0x677574, detail, covering.floorGutterDensity * 0.72);
-  const threshold = corridorCoverageGate(context.seed, x, y, roomId, 0x746872, detail, covering.floorThresholdDensity * 0.9);
+  const gutter = corridorCoverageGate(context.seed, x, y, roomId, 0x677574, detail, covering.weights.gutter * 0.72);
+  const threshold = corridorCoverageGate(context.seed, x, y, roomId, 0x746872, detail, covering.weights.threshold * 0.9);
+  const organicFloorWeight = covering.weights.bulge + covering.weights.fold;
   const organicFloor = covering.style === 'organic' &&
-    corridorCoverageGate(context.seed, x, y, roomId, 0x666c64, organicDetail, covering.floorOrganicDensity * 0.72);
+    corridorCoverageGate(context.seed, x, y, roomId, 0x666c64, organicDetail, organicFloorWeight * 0.72);
   if (!gutter && !threshold && !organicFloor) return;
   const axis = openAxis(world, x, y);
   const modelId = organicFloor ? 'meat_floor_fold' : gutter ? 'collector_gutter' : 'corridor_floor_threshold';
@@ -1415,7 +1430,7 @@ function serviceCeilingGate(
   if (covering.id === 'collector') return detail > 0;
   const roomId = context.world.roomMap[idx] ?? -1;
   const salt = corridorContextSalt(context, 0x636570 ^ (axis === 'x' ? 0x7811 : 0x7911));
-  const weight = covering.ceilingSet === 'service' ? covering.ceilingDensity : 0;
+  const weight = covering.weights.pipe + covering.weights.cable;
   return corridorRunCoverageGate(context.seed, x, y, roomId, salt, detail, weight);
 }
 
@@ -1580,7 +1595,7 @@ function emitCorridorCeilingVolume(
     return;
   }
 
-  const organicCeilingWeight = covering.ceilingSet === 'organic' ? covering.ceilingDensity : 0;
+  const organicCeilingWeight = covering.weights.stalactite;
   const organicCeiling = corridorCoverageGate(context.seed, x, y, roomId, 0x737461, organicDetail, organicCeilingWeight);
   if (!organicCeiling) return;
   const modelId: VisualModelId = organicCeiling
