@@ -21,7 +21,10 @@
 
 ## Story Floors, Design Floors, Procedural Floors
 
-Story/base floors остаются шестью `FloorLevel`: Ministry, Kvartiry, Living, Maintenance, Hell and Void. Они задают большие домены мира и не расширяются ради каждой остановки лифта.
+**Floor Generation System:**
+- **Even-numbered floors** (`Z % 2 === 0`) are separate, independent design modules. Each is authored as a standalone package without inheriting biomes.
+- **Odd-numbered floors** (`Z % 2 !== 0`) are procedurally assembled by randomly mixing pieces of other floors and introducing procedural anomalies.
+
 
 Authored design floors - ручные route-stop packages с string id в `src/data/design_floors.ts` и генератором в `src/gen/design_floors/`. Это банковский этаж, архивы, коммунальные кольца, рынки, метро, подад, крыши, лаборатории, производственные пояса и другие сильные места. Они нужны там, где этаж должен иметь уникальную читаемую структуру, персонажей, решения и контент.
 

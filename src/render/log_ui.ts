@@ -15,6 +15,9 @@ export function drawLogMenu(
   const h = ctx.canvas.height;
   const time = uiTime;
 
+  ctx.save();
+  ctx.textBaseline = 'middle';
+
   // Fullscreen neuro-panel background
   ctx.fillStyle = '#00040a';
   ctx.fillRect(0, 0, w, h);
@@ -114,4 +117,6 @@ export function drawLogMenu(
     12 * sx,
     h - 8 * sy,
   );
+
+  ctx.restore();
 }

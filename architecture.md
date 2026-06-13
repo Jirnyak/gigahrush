@@ -534,6 +534,10 @@ The current `systems/events.ts` is the browser version of an EventBus. It alread
 
 ## 11. Floor Architecture
 
+**Floor Generation System:**
+- **Even-numbered floors** (`Z % 2 === 0`) are separate, independent design modules. Each is authored as a standalone package without inheriting biomes.
+- **Odd-numbered floors** (`Z % 2 !== 0`) are procedurally assembled by randomly mixing pieces of other floors and introducing procedural anomalies.
+
 Each floor should have the same outer structure:
 
 ```txt

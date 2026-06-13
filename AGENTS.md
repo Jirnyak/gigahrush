@@ -214,7 +214,10 @@ If a task needs a red file, make the smallest generic hook/API change, then keep
 
 ## Floors And Routes
 
-There are six `FloorLevel` story/base values: Ministry, Kvartiry, Living, Maintenance, Hell and Void. Do not add a new enum value for a route stop, catalog entry, anomaly or numbered lift.
+
+**Floor Generation System:**
+- **Even-numbered floors** (`Z % 2 === 0`) are separate, independent design modules. Each is authored as a standalone package without inheriting biomes.
+- **Odd-numbered floors** (`Z % 2 !== 0`) are procedurally assembled by randomly mixing pieces of other floors and introducing procedural anomalies.
 
 Normal lift travel uses the per-run vertical route in `src/systems/procedural_floors.ts` and route definitions in `src/data/design_floors.ts` / `src/data/procedural_floors.ts`. Authored design floors are string-id route stops generated through `src/gen/design_floors/manifest.ts` and expanded through `src/gen/design_floors/full_floor.ts`.
 
@@ -476,3 +479,21 @@ Reject these:
 - A generator that overwrites protected apartments or seals unreachable rooms.
 - Dead data with no reachable gameplay or debug path.
 - Large refactors before playable content delivery.
+
+## CRITICAL: NEVER OVERWRITE FILES WITH SIMPLIFIED/NAIVE VERSIONS (THE "NUKING" ANTI-PATTERN)
+
+> **NOTE TO ALL AGENTS:** These extra warnings are specifically added because "fucking Gemini" (the previous agent) proved to be completely unhinged/insane ("отбитая") and destroyed critical uncommitted changes by blindly overwriting files. Do not repeat this mistake.
+
+**NEVER** rewrite a file from scratch or "simplify" it unless you have read its FULL current contents in the repository and explicitly verified that you are not deleting advanced features. 
+
+**What causes nuking:**
+- The user asks to fix a specific bug (e.g. "elevators aren't spawning").
+- Instead of finding the exact line to fix, the agent replaces the entire file with a naive, simplified version from its context window or generic memory.
+- This silently DESTROYS hundreds of lines of advanced, working code (lighting systems, 3D meshes, loot attachments, carving logic, etc.) that were added in previous commits.
+
+**How to prevent this EVEN BY ACCIDENT:**
+1. **Always read the target file before editing.** Understand the existing logic.
+2. **Never blindly overwrite a file to "refactor" it.** Use localized text replacement tools to make surgical, localized changes.
+3. **Respect existing complexity.** If a file has hundreds of lines handling edge cases (like `aptMask`, dirty flags, carving passages, or complex rendering passes), and your proposed fix is a 15-line generic loop, **YOU ARE NUKING THE PROJECT**. Stop, read the file, and patch only the broken part.
+4. **Assume there are uncommitted changes.** The user may have written brilliant, complex code that is not yet in Git. If you overwrite the file, **GIT CANNOT RECOVER IT** and the work is permanently destroyed.
+5. **Check `git log` and recent commits** if you are confused about the state of the codebase. Do not assume your context memory of the file is the current ground truth.

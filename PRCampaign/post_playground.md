@@ -246,7 +246,7 @@ for entity in materializedNpcEntities:
 
 ## Вертикаль: маршрут поверх отдельных поверхностей
 
-ГИГАХРУЩ не является полноценной 3D-симуляцией здания. Активен один этаж. Но run имеет вертикальный маршрут: story floors, authored design floors, procedural stops, numbered lift anomalies и keyed floor identities.
+ГИГАХРУЩ не является полноценной 3D-симуляцией здания. Активен один этаж. Но run имеет вертикальный маршрут: base floors, authored design floors, procedural stops, numbered lift anomalies и keyed floor identities.
 
 Каждый route stop - маленький мир со своим generator/package, population field, danger, monster pressure, POI и памятью посещения. Лифт переводит игрока между keyed identities, а floor memory сохраняет состояние уже посещенных мест в пределах бюджета.
 

@@ -5,12 +5,12 @@ export const lookupHints = {
   "generatedFrom": {
     "coreTypes": "src/core/types.ts",
     "items": "src/data/items.ts",
-    "designFloors": "src/data/design_floors.ts",
+    "designFloors": "src/data/base_floors.ts",
     "proceduralFloors": "src/data/procedural_floors.ts",
     "npcVisuals": "src/entities/npc_visuals.ts",
     "demosSocial": "src/data/demos_social.ts",
     "npcPackages": "src/data/npc_packages.ts",
-    "npcRegistryImports": "src/gen/design_floors/manifest.ts, story content manifests"
+    "npcRegistryImports": "src/gen/base_floors/manifest.ts, story content manifests"
   },
   "limits": {
     "npcSocialLinks": 9,
@@ -104734,7 +104734,7 @@ export const lookupHints = {
       "voiceTags": [],
       "questIds": [],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/antenna_court.ts",
+      "sourceFile": "src/gen/base_floors/antenna_court.ts",
       "sourceLine": 409
     },
     {
@@ -104770,7 +104770,7 @@ export const lookupHints = {
         "antenna_expose_signal_log"
       ],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/antenna_court.ts",
+      "sourceFile": "src/gen/base_floors/antenna_court.ts",
       "sourceLine": 385
     },
     {
@@ -104805,7 +104805,7 @@ export const lookupHints = {
         "antenna_jam_raid"
       ],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/antenna_court.ts",
+      "sourceFile": "src/gen/base_floors/antenna_court.ts",
       "sourceLine": 372
     },
     {
@@ -104843,7 +104843,7 @@ export const lookupHints = {
         "antenna_tell_echo"
       ],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/antenna_court.ts",
+      "sourceFile": "src/gen/base_floors/antenna_court.ts",
       "sourceLine": 340
     },
     {
@@ -104875,7 +104875,7 @@ export const lookupHints = {
       "voiceTags": [],
       "questIds": [],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/antenna_court.ts",
+      "sourceFile": "src/gen/base_floors/antenna_court.ts",
       "sourceLine": 408
     },
     {
@@ -104910,7 +104910,7 @@ export const lookupHints = {
         "antenna_record_void"
       ],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/antenna_court.ts",
+      "sourceFile": "src/gen/base_floors/antenna_court.ts",
       "sourceLine": 366
     },
     {
@@ -104945,7 +104945,7 @@ export const lookupHints = {
         "bank_report_forged_debt_paper"
       ],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/bank_floor.ts",
+      "sourceFile": "src/gen/base_floors/bank_floor.ts",
       "sourceLine": 333
     },
     {
@@ -104981,7 +104981,7 @@ export const lookupHints = {
         "bank_cash_deposit_50"
       ],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/bank_floor.ts",
+      "sourceFile": "src/gen/base_floors/bank_floor.ts",
       "sourceLine": 350
     },
     {
@@ -105016,7 +105016,7 @@ export const lookupHints = {
         "bank_cash_forged_debt_paper"
       ],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/bank_floor.ts",
+      "sourceFile": "src/gen/base_floors/bank_floor.ts",
       "sourceLine": 409
     },
     {
@@ -105052,7 +105052,7 @@ export const lookupHints = {
         "bank_repay_corridor_loan"
       ],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/bank_floor.ts",
+      "sourceFile": "src/gen/base_floors/bank_floor.ts",
       "sourceLine": 378
     },
     {
@@ -105085,7 +105085,7 @@ export const lookupHints = {
       "voiceTags": [],
       "questIds": [],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/bank_floor.ts",
+      "sourceFile": "src/gen/base_floors/bank_floor.ts",
       "sourceLine": 407
     },
     {
@@ -105158,7 +105158,7 @@ export const lookupHints = {
         "bolnichny_treat_clean_ward"
       ],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/bolnichny_korpus.ts",
+      "sourceFile": "src/gen/base_floors/bolnichny_korpus.ts",
       "sourceLine": 80
     },
     {
@@ -105194,7 +105194,7 @@ export const lookupHints = {
         "bolnichny_escort_infected_patient"
       ],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/bolnichny_korpus.ts",
+      "sourceFile": "src/gen/base_floors/bolnichny_korpus.ts",
       "sourceLine": 83
     },
     {
@@ -105229,7 +105229,7 @@ export const lookupHints = {
         "bolnichny_steal_morphine"
       ],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/bolnichny_korpus.ts",
+      "sourceFile": "src/gen/base_floors/bolnichny_korpus.ts",
       "sourceLine": 81
     },
     {
@@ -105265,7 +105265,7 @@ export const lookupHints = {
         "bolnichny_expose_contaminated_papers"
       ],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/bolnichny_korpus.ts",
+      "sourceFile": "src/gen/base_floors/bolnichny_korpus.ts",
       "sourceLine": 84
     },
     {
@@ -105300,7 +105300,7 @@ export const lookupHints = {
         "bolnichny_kill_black_ward"
       ],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/bolnichny_korpus.ts",
+      "sourceFile": "src/gen/base_floors/bolnichny_korpus.ts",
       "sourceLine": 82
     },
     {
@@ -105335,7 +105335,7 @@ export const lookupHints = {
         "cayley_byuro_bribe_generator_r"
       ],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/cayley_byuro.ts",
+      "sourceFile": "src/gen/base_floors/cayley_byuro.ts",
       "sourceLine": 293
     },
     {
@@ -105370,7 +105370,7 @@ export const lookupHints = {
         "cayley_byuro_expose_forged_identity"
       ],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/cayley_byuro.ts",
+      "sourceFile": "src/gen/base_floors/cayley_byuro.ts",
       "sourceLine": 331
     },
     {
@@ -105405,7 +105405,7 @@ export const lookupHints = {
         "cayley_byuro_apply_forms_rs"
       ],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/cayley_byuro.ts",
+      "sourceFile": "src/gen/base_floors/cayley_byuro.ts",
       "sourceLine": 313
     },
     {
@@ -105440,7 +105440,7 @@ export const lookupHints = {
         "attic_cut_or_feed_root"
       ],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/chthonic_attic.ts",
+      "sourceFile": "src/gen/base_floors/chthonic_attic.ts",
       "sourceLine": 610
     },
     {
@@ -105475,7 +105475,7 @@ export const lookupHints = {
         "attic_black_hand_report"
       ],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/chthonic_attic.ts",
+      "sourceFile": "src/gen/base_floors/chthonic_attic.ts",
       "sourceLine": 623
     },
     {
@@ -105510,7 +105510,7 @@ export const lookupHints = {
         "attic_burn_niche"
       ],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/chthonic_attic.ts",
+      "sourceFile": "src/gen/base_floors/chthonic_attic.ts",
       "sourceLine": 650
     },
     {
@@ -105545,7 +105545,7 @@ export const lookupHints = {
         "attic_crawl_escort"
       ],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/chthonic_attic.ts",
+      "sourceFile": "src/gen/base_floors/chthonic_attic.ts",
       "sourceLine": 636
     },
     {
@@ -105581,7 +105581,7 @@ export const lookupHints = {
         "communal_shower_pressure"
       ],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/communal_ring.ts",
+      "sourceFile": "src/gen/base_floors/communal_ring.ts",
       "sourceLine": 45
     },
     {
@@ -105617,7 +105617,7 @@ export const lookupHints = {
         "communal_primus_valve"
       ],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/communal_ring.ts",
+      "sourceFile": "src/gen/base_floors/communal_ring.ts",
       "sourceLine": 49
     },
     {
@@ -105653,7 +105653,7 @@ export const lookupHints = {
         "communal_clean_bandages"
       ],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/communal_ring.ts",
+      "sourceFile": "src/gen/base_floors/communal_ring.ts",
       "sourceLine": 44
     },
     {
@@ -105689,7 +105689,7 @@ export const lookupHints = {
         "communal_through_chain_bread"
       ],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/communal_ring.ts",
+      "sourceFile": "src/gen/base_floors/communal_ring.ts",
       "sourceLine": 48
     },
     {
@@ -105725,7 +105725,7 @@ export const lookupHints = {
         "communal_pantry_theft"
       ],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/communal_ring.ts",
+      "sourceFile": "src/gen/base_floors/communal_ring.ts",
       "sourceLine": 47
     },
     {
@@ -105761,7 +105761,7 @@ export const lookupHints = {
         "communal_notice_dispute"
       ],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/communal_ring.ts",
+      "sourceFile": "src/gen/base_floors/communal_ring.ts",
       "sourceLine": 46
     },
     {
@@ -105796,7 +105796,7 @@ export const lookupHints = {
         "critical_leak_carry_dry_packet"
       ],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/critical_leak_archive.ts",
+      "sourceFile": "src/gen/base_floors/critical_leak_archive.ts",
       "sourceLine": 214
     },
     {
@@ -105832,7 +105832,7 @@ export const lookupHints = {
         "critical_leak_trade_contaminated_proof"
       ],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/critical_leak_archive.ts",
+      "sourceFile": "src/gen/base_floors/critical_leak_archive.ts",
       "sourceLine": 235
     },
     {
@@ -105869,7 +105869,7 @@ export const lookupHints = {
         "dark_metro_light_platform"
       ],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/dark_metro.ts",
+      "sourceFile": "src/gen/base_floors/dark_metro.ts",
       "sourceLine": 320
     },
     {
@@ -105903,7 +105903,7 @@ export const lookupHints = {
       "voiceTags": [],
       "questIds": [],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/dark_metro.ts",
+      "sourceFile": "src/gen/base_floors/dark_metro.ts",
       "sourceLine": 346
     },
     {
@@ -105941,7 +105941,7 @@ export const lookupHints = {
         "dark_metro_signal_box"
       ],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/dark_metro.ts",
+      "sourceFile": "src/gen/base_floors/dark_metro.ts",
       "sourceLine": 297
     },
     {
@@ -105978,7 +105978,7 @@ export const lookupHints = {
         "dark_metro_rescue_stranded"
       ],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/dark_metro.ts",
+      "sourceFile": "src/gen/base_floors/dark_metro.ts",
       "sourceLine": 333
     },
     {
@@ -106019,7 +106019,7 @@ export const lookupHints = {
         "f69_guard_key_deposit"
       ],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/floor_69.ts",
+      "sourceFile": "src/gen/base_floors/floor_69.ts",
       "sourceLine": 490
     },
     {
@@ -110152,7 +110152,7 @@ export const lookupHints = {
         "f69_clinic_supply"
       ],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/floor_69.ts",
+      "sourceFile": "src/gen/base_floors/floor_69.ts",
       "sourceLine": 556
     },
     {
@@ -114291,7 +114291,7 @@ export const lookupHints = {
         "f69_hide_worker"
       ],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/floor_69.ts",
+      "sourceFile": "src/gen/base_floors/floor_69.ts",
       "sourceLine": 531
     },
     {
@@ -114332,7 +114332,7 @@ export const lookupHints = {
         "f69_blackmail_expose"
       ],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/floor_69.ts",
+      "sourceFile": "src/gen/base_floors/floor_69.ts",
       "sourceLine": 594
     },
     {
@@ -118468,7 +118468,7 @@ export const lookupHints = {
         "f69_blackmail_profit"
       ],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/floor_69.ts",
+      "sourceFile": "src/gen/base_floors/floor_69.ts",
       "sourceLine": 468
     },
     {
@@ -118504,7 +118504,7 @@ export const lookupHints = {
         "hyperbolic_switchyard_pay_guide"
       ],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/hyperbolic_switchyard.ts",
+      "sourceFile": "src/gen/base_floors/hyperbolic_switchyard.ts",
       "sourceLine": 48
     },
     {
@@ -118540,7 +118540,7 @@ export const lookupHints = {
         "labyrinth_rechalk_safe_wall"
       ],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/istinniy_labirint.ts",
+      "sourceFile": "src/gen/base_floors/istinniy_labirint.ts",
       "sourceLine": 158
     },
     {
@@ -118575,7 +118575,7 @@ export const lookupHints = {
         "labyrinth_rescue_lost_pavel"
       ],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/istinniy_labirint.ts",
+      "sourceFile": "src/gen/base_floors/istinniy_labirint.ts",
       "sourceLine": 159
     },
     {
@@ -118610,7 +118610,7 @@ export const lookupHints = {
         "crossroads_zebra_escort"
       ],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/manhattan_crossroads.ts",
+      "sourceFile": "src/gen/base_floors/manhattan_crossroads.ts",
       "sourceLine": 310
     },
     {
@@ -118645,7 +118645,7 @@ export const lookupHints = {
         "crossroads_stolen_cargo"
       ],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/manhattan_crossroads.ts",
+      "sourceFile": "src/gen/base_floors/manhattan_crossroads.ts",
       "sourceLine": 316
     },
     {
@@ -118680,7 +118680,7 @@ export const lookupHints = {
         "crossroads_wrong_turn"
       ],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/manhattan_crossroads.ts",
+      "sourceFile": "src/gen/base_floors/manhattan_crossroads.ts",
       "sourceLine": 343
     },
     {
@@ -118716,7 +118716,7 @@ export const lookupHints = {
         "crossroads_open_junction"
       ],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/manhattan_crossroads.ts",
+      "sourceFile": "src/gen/base_floors/manhattan_crossroads.ts",
       "sourceLine": 293
     },
     {
@@ -118752,7 +118752,7 @@ export const lookupHints = {
         "markov_stairwell_pattern_stash"
       ],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/markov_stairwell.ts",
+      "sourceFile": "src/gen/base_floors/markov_stairwell.ts",
       "sourceLine": 247
     },
     {
@@ -118789,7 +118789,7 @@ export const lookupHints = {
         "number_registry_decode_residue"
       ],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/number_registry.ts",
+      "sourceFile": "src/gen/base_floors/number_registry.ts",
       "sourceLine": 272
     },
     {
@@ -118824,7 +118824,7 @@ export const lookupHints = {
         "number_registry_file_composite_path"
       ],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/number_registry.ts",
+      "sourceFile": "src/gen/base_floors/number_registry.ts",
       "sourceLine": 347
     },
     {
@@ -118859,7 +118859,7 @@ export const lookupHints = {
         "number_registry_clear_prime_corridor"
       ],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/number_registry.ts",
+      "sourceFile": "src/gen/base_floors/number_registry.ts",
       "sourceLine": 321
     },
     {
@@ -118895,7 +118895,7 @@ export const lookupHints = {
         "obschezhitie_patrol_silence"
       ],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/obschezhitie_smeny.ts",
+      "sourceFile": "src/gen/base_floors/obschezhitie_smeny.ts",
       "sourceLine": 49
     },
     {
@@ -118931,7 +118931,7 @@ export const lookupHints = {
         "obschezhitie_shelter_rollcall"
       ],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/obschezhitie_smeny.ts",
+      "sourceFile": "src/gen/base_floors/obschezhitie_smeny.ts",
       "sourceLine": 48
     },
     {
@@ -118967,7 +118967,7 @@ export const lookupHints = {
         "obschezhitie_quiet_lockers"
       ],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/obschezhitie_smeny.ts",
+      "sourceFile": "src/gen/base_floors/obschezhitie_smeny.ts",
       "sourceLine": 50
     },
     {
@@ -119002,7 +119002,7 @@ export const lookupHints = {
         "oranzhereya_burn_infestation"
       ],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/oranzhereya_betona.ts",
+      "sourceFile": "src/gen/base_floors/oranzhereya_betona.ts",
       "sourceLine": 98
     },
     {
@@ -119037,7 +119037,7 @@ export const lookupHints = {
         "oranzhereya_reroute_water"
       ],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/oranzhereya_betona.ts",
+      "sourceFile": "src/gen/base_floors/oranzhereya_betona.ts",
       "sourceLine": 97
     },
     {
@@ -119072,7 +119072,7 @@ export const lookupHints = {
         "oranzhereya_save_clean_crop"
       ],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/oranzhereya_betona.ts",
+      "sourceFile": "src/gen/base_floors/oranzhereya_betona.ts",
       "sourceLine": 96
     },
     {
@@ -119107,7 +119107,7 @@ export const lookupHints = {
         "oranzhereya_poison_market_crop"
       ],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/oranzhereya_betona.ts",
+      "sourceFile": "src/gen/base_floors/oranzhereya_betona.ts",
       "sourceLine": 99
     },
     {
@@ -119142,7 +119142,7 @@ export const lookupHints = {
         "penrose_laundry_break_lock"
       ],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/penrose_laundry.ts",
+      "sourceFile": "src/gen/base_floors/penrose_laundry.ts",
       "sourceLine": 166
     },
     {
@@ -119177,7 +119177,7 @@ export const lookupHints = {
         "penrose_laundry_divert_steam"
       ],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/penrose_laundry.ts",
+      "sourceFile": "src/gen/base_floors/penrose_laundry.ts",
       "sourceLine": 167
     },
     {
@@ -119212,7 +119212,7 @@ export const lookupHints = {
         "penrose_laundry_follow_matching_symbols"
       ],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/penrose_laundry.ts",
+      "sourceFile": "src/gen/base_floors/penrose_laundry.ts",
       "sourceLine": 165
     },
     {
@@ -119247,7 +119247,7 @@ export const lookupHints = {
         "penrose_laundry_hidden_washroom_cache"
       ],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/penrose_laundry.ts",
+      "sourceFile": "src/gen/base_floors/penrose_laundry.ts",
       "sourceLine": 168
     },
     {
@@ -119282,7 +119282,7 @@ export const lookupHints = {
         "camp_repair_loudspeaker"
       ],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/pioneer_camp.ts",
+      "sourceFile": "src/gen/base_floors/pioneer_camp.ts",
       "sourceLine": 59
     },
     {
@@ -119317,7 +119317,7 @@ export const lookupHints = {
         "camp_canteen_compote"
       ],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/pioneer_camp.ts",
+      "sourceFile": "src/gen/base_floors/pioneer_camp.ts",
       "sourceLine": 61
     },
     {
@@ -119352,7 +119352,7 @@ export const lookupHints = {
         "camp_medpost_choice"
       ],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/pioneer_camp.ts",
+      "sourceFile": "src/gen/base_floors/pioneer_camp.ts",
       "sourceLine": 60
     },
     {
@@ -119387,7 +119387,7 @@ export const lookupHints = {
         "camp_verify_roster"
       ],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/pioneer_camp.ts",
+      "sourceFile": "src/gen/base_floors/pioneer_camp.ts",
       "sourceLine": 58
     },
     {
@@ -119424,7 +119424,7 @@ export const lookupHints = {
         "prod_bad_batch"
       ],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/production_belt.ts",
+      "sourceFile": "src/gen/base_floors/production_belt.ts",
       "sourceLine": 331
     },
     {
@@ -119461,7 +119461,7 @@ export const lookupHints = {
         "prod_worker_escort"
       ],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/production_belt.ts",
+      "sourceFile": "src/gen/base_floors/production_belt.ts",
       "sourceLine": 287
     },
     {
@@ -119498,7 +119498,7 @@ export const lookupHints = {
         "prod_steal_crate"
       ],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/production_belt.ts",
+      "sourceFile": "src/gen/base_floors/production_belt.ts",
       "sourceLine": 292
     },
     {
@@ -119535,7 +119535,7 @@ export const lookupHints = {
         "prod_restore_line"
       ],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/production_belt.ts",
+      "sourceFile": "src/gen/base_floors/production_belt.ts",
       "sourceLine": 301
     },
     {
@@ -119571,7 +119571,7 @@ export const lookupHints = {
         "archive_market_license"
       ],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/raionsovet_archive.ts",
+      "sourceFile": "src/gen/base_floors/raionsovet_archive.ts",
       "sourceLine": 372
     },
     {
@@ -119607,7 +119607,7 @@ export const lookupHints = {
         "archive_swap_card"
       ],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/raionsovet_archive.ts",
+      "sourceFile": "src/gen/base_floors/raionsovet_archive.ts",
       "sourceLine": 338
     },
     {
@@ -119643,7 +119643,7 @@ export const lookupHints = {
         "archive_save_or_burn"
       ],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/raionsovet_archive.ts",
+      "sourceFile": "src/gen/base_floors/raionsovet_archive.ts",
       "sourceLine": 355
     },
     {
@@ -119679,7 +119679,7 @@ export const lookupHints = {
         "archive_get_floor_permit"
       ],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/raionsovet_archive.ts",
+      "sourceFile": "src/gen/base_floors/raionsovet_archive.ts",
       "sourceLine": 321
     },
     {
@@ -119716,7 +119716,7 @@ export const lookupHints = {
         "morgue_relative_escort"
       ],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/registry_morgue.ts",
+      "sourceFile": "src/gen/base_floors/registry_morgue.ts",
       "sourceLine": 370
     },
     {
@@ -119752,7 +119752,7 @@ export const lookupHints = {
         "morgue_medicine_lock"
       ],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/registry_morgue.ts",
+      "sourceFile": "src/gen/base_floors/registry_morgue.ts",
       "sourceLine": 409
     },
     {
@@ -119788,7 +119788,7 @@ export const lookupHints = {
         "morgue_missing_body"
       ],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/registry_morgue.ts",
+      "sourceFile": "src/gen/base_floors/registry_morgue.ts",
       "sourceLine": 349
     },
     {
@@ -119826,7 +119826,7 @@ export const lookupHints = {
         "morgue_swap_certificate"
       ],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/registry_morgue.ts",
+      "sourceFile": "src/gen/base_floors/registry_morgue.ts",
       "sourceLine": 311
     },
     {
@@ -119861,7 +119861,7 @@ export const lookupHints = {
         "service_fix_lift_machine"
       ],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/service_floor.ts",
+      "sourceFile": "src/gen/base_floors/service_floor.ts",
       "sourceLine": 496
     },
     {
@@ -119896,7 +119896,7 @@ export const lookupHints = {
         "service_rescue_pump_worker"
       ],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/service_floor.ts",
+      "sourceFile": "src/gen/base_floors/service_floor.ts",
       "sourceLine": 548
     },
     {
@@ -119931,7 +119931,7 @@ export const lookupHints = {
         "service_steal_master_key"
       ],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/service_floor.ts",
+      "sourceFile": "src/gen/base_floors/service_floor.ts",
       "sourceLine": 509
     },
     {
@@ -119966,7 +119966,7 @@ export const lookupHints = {
         "service_reroute_raid"
       ],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/service_floor.ts",
+      "sourceFile": "src/gen/base_floors/service_floor.ts",
       "sourceLine": 535
     },
     {
@@ -120001,7 +120001,7 @@ export const lookupHints = {
         "service_restore_lights"
       ],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/service_floor.ts",
+      "sourceFile": "src/gen/base_floors/service_floor.ts",
       "sourceLine": 522
     },
     {
@@ -120036,7 +120036,7 @@ export const lookupHints = {
         "slime_nii_manifest_choice"
       ],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/slime_nii.ts",
+      "sourceFile": "src/gen/base_floors/slime_nii.ts",
       "sourceLine": 66
     },
     {
@@ -120071,7 +120071,7 @@ export const lookupHints = {
         "slime_nii_black_camera_cleanup"
       ],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/slime_nii.ts",
+      "sourceFile": "src/gen/base_floors/slime_nii.ts",
       "sourceLine": 64
     },
     {
@@ -120106,7 +120106,7 @@ export const lookupHints = {
         "slime_nii_live_green_sample"
       ],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/slime_nii.ts",
+      "sourceFile": "src/gen/base_floors/slime_nii.ts",
       "sourceLine": 63
     },
     {
@@ -120141,7 +120141,7 @@ export const lookupHints = {
         "slime_nii_volunteer_witness"
       ],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/slime_nii.ts",
+      "sourceFile": "src/gen/base_floors/slime_nii.ts",
       "sourceLine": 65
     },
     {
@@ -120176,7 +120176,7 @@ export const lookupHints = {
         "spectral_tune_radio_sacristy"
       ],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/spectral_chasovnya.ts",
+      "sourceFile": "src/gen/base_floors/spectral_chasovnya.ts",
       "sourceLine": 128
     },
     {
@@ -120211,7 +120211,7 @@ export const lookupHints = {
         "spetspriemnik_stamp_release_form"
       ],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/spetspriemnik.ts",
+      "sourceFile": "src/gen/base_floors/spetspriemnik.ts",
       "sourceLine": 66
     },
     {
@@ -120246,7 +120246,7 @@ export const lookupHints = {
         "spetspriemnik_shelter_cell_check"
       ],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/spetspriemnik.ts",
+      "sourceFile": "src/gen/base_floors/spetspriemnik.ts",
       "sourceLine": 62
     },
     {
@@ -120282,7 +120282,7 @@ export const lookupHints = {
         "spetspriemnik_trigger_riot"
       ],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/spetspriemnik.ts",
+      "sourceFile": "src/gen/base_floors/spetspriemnik.ts",
       "sourceLine": 64
     },
     {
@@ -120317,7 +120317,7 @@ export const lookupHints = {
         "spetspriemnik_bribe_guard"
       ],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/spetspriemnik.ts",
+      "sourceFile": "src/gen/base_floors/spetspriemnik.ts",
       "sourceLine": 63
     },
     {
@@ -120352,7 +120352,7 @@ export const lookupHints = {
         "spetspriemnik_trade_names"
       ],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/spetspriemnik.ts",
+      "sourceFile": "src/gen/base_floors/spetspriemnik.ts",
       "sourceLine": 65
     },
     {
@@ -120387,7 +120387,7 @@ export const lookupHints = {
         "turing_nursery_inoculate_basin"
       ],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/turing_nursery.ts",
+      "sourceFile": "src/gen/base_floors/turing_nursery.ts",
       "sourceLine": 61
     },
     {
@@ -120422,7 +120422,7 @@ export const lookupHints = {
         "turing_nursery_burn_bridge"
       ],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/turing_nursery.ts",
+      "sourceFile": "src/gen/base_floors/turing_nursery.ts",
       "sourceLine": 62
     },
     {
@@ -120457,7 +120457,7 @@ export const lookupHints = {
         "turing_nursery_growth_audit"
       ],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/turing_nursery.ts",
+      "sourceFile": "src/gen/base_floors/turing_nursery.ts",
       "sourceLine": 64
     },
     {
@@ -120492,7 +120492,7 @@ export const lookupHints = {
         "turing_nursery_expose_growth_child"
       ],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/turing_nursery.ts",
+      "sourceFile": "src/gen/base_floors/turing_nursery.ts",
       "sourceLine": 63
     },
     {
@@ -120526,7 +120526,7 @@ export const lookupHints = {
         "underhell_free_witness"
       ],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/underhell.ts",
+      "sourceFile": "src/gen/base_floors/underhell.ts",
       "sourceLine": 343
     },
     {
@@ -120561,7 +120561,7 @@ export const lookupHints = {
         "underhell_burn_debt"
       ],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/underhell.ts",
+      "sourceFile": "src/gen/base_floors/underhell.ts",
       "sourceLine": 330
     },
     {
@@ -120595,7 +120595,7 @@ export const lookupHints = {
         "underhell_open_void_cut"
       ],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/underhell.ts",
+      "sourceFile": "src/gen/base_floors/underhell.ts",
       "sourceLine": 356
     },
     {
@@ -120630,7 +120630,7 @@ export const lookupHints = {
         "underhell_pay_threshold"
       ],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/underhell.ts",
+      "sourceFile": "src/gen/base_floors/underhell.ts",
       "sourceLine": 318
     },
     {
@@ -120667,7 +120667,7 @@ export const lookupHints = {
         "bureau_expose_erased_record"
       ],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/upper_bureau.ts",
+      "sourceFile": "src/gen/base_floors/upper_bureau.ts",
       "sourceLine": 675
     },
     {
@@ -120703,7 +120703,7 @@ export const lookupHints = {
         "bureau_audit_market88_help"
       ],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/upper_bureau.ts",
+      "sourceFile": "src/gen/base_floors/upper_bureau.ts",
       "sourceLine": 589
     },
     {
@@ -120739,7 +120739,7 @@ export const lookupHints = {
         "bureau_archive_toll_expose"
       ],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/upper_bureau.ts",
+      "sourceFile": "src/gen/base_floors/upper_bureau.ts",
       "sourceLine": 612
     },
     {
@@ -120776,7 +120776,7 @@ export const lookupHints = {
         "bureau_preapproval_fee"
       ],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/upper_bureau.ts",
+      "sourceFile": "src/gen/base_floors/upper_bureau.ts",
       "sourceLine": 507
     },
     {
@@ -120811,7 +120811,7 @@ export const lookupHints = {
         "bureau_permit_ambush_expose"
       ],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/upper_bureau.ts",
+      "sourceFile": "src/gen/base_floors/upper_bureau.ts",
       "sourceLine": 653
     },
     {
@@ -120848,7 +120848,7 @@ export const lookupHints = {
         "bureau_market88_warning"
       ],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/upper_bureau.ts",
+      "sourceFile": "src/gen/base_floors/upper_bureau.ts",
       "sourceLine": 548
     },
     {
@@ -120883,7 +120883,7 @@ export const lookupHints = {
         "voronoi_quarantine_forge_pass"
       ],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/voronoi_quarantine.ts",
+      "sourceFile": "src/gen/base_floors/voronoi_quarantine.ts",
       "sourceLine": 72
     },
     {
@@ -120918,7 +120918,7 @@ export const lookupHints = {
         "voronoi_quarantine_escort_infected"
       ],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/voronoi_quarantine.ts",
+      "sourceFile": "src/gen/base_floors/voronoi_quarantine.ts",
       "sourceLine": 73
     },
     {
@@ -120953,7 +120953,7 @@ export const lookupHints = {
         "voronoi_quarantine_open_supply_connector"
       ],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/voronoi_quarantine.ts",
+      "sourceFile": "src/gen/base_floors/voronoi_quarantine.ts",
       "sourceLine": 74
     },
     {
@@ -120988,7 +120988,7 @@ export const lookupHints = {
         "voronoi_quarantine_decon_border"
       ],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/voronoi_quarantine.ts",
+      "sourceFile": "src/gen/base_floors/voronoi_quarantine.ts",
       "sourceLine": 71
     },
     {
@@ -126608,7 +126608,7 @@ export const lookupHints = {
         "ministry_market_case"
       ],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/ministry.ts",
+      "sourceFile": "src/gen/base_floors/ministry.ts",
       "sourceLine": 128
     },
     {
@@ -126704,7 +126704,7 @@ export const lookupHints = {
         "ministry_shelter_list"
       ],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/ministry.ts",
+      "sourceFile": "src/gen/base_floors/ministry.ts",
       "sourceLine": 141
     },
     {
@@ -126978,7 +126978,7 @@ export const lookupHints = {
         "ministry_monster_clause"
       ],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/ministry.ts",
+      "sourceFile": "src/gen/base_floors/ministry.ts",
       "sourceLine": 154
     },
     {
@@ -127530,7 +127530,7 @@ export const lookupHints = {
         "ministry_floor_pass"
       ],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/ministry.ts",
+      "sourceFile": "src/gen/base_floors/ministry.ts",
       "sourceLine": 115
     },
     {

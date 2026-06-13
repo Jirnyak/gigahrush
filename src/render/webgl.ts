@@ -1193,14 +1193,32 @@ void main() {
       // ── Ceiling ──
       float rowDist = HALF_H - row;
       if (rowDist > 0.0) {
-        // Render-only: lift the ceiling plane to the per-cell height so it meets
-        // the raised wall top seamlessly. Guess the cell at the standard height,
-        // read its tier, then recompute the true distance for that height.
-        float guessDist = (uResolution.y * (1.0 - uCamHeight)) / rowDist;
-        float gx = uPos.x + rayDX * guessDist;
-        float gy = uPos.y + rayDY * guessDist;
-        float ceilH = 1.0 + float(texelFetch(uCeil, ivec2(wrapI(int(floor(gx))), wrapI(int(floor(gy)))), 0).r) * 0.5;
-        float currentDist = (uResolution.y * (ceilH - uCamHeight)) / rowDist;
+        // Render-only variable ceiling height. worldZ(d) = uCamHeight + slope*d
+        // rises with distance; march ceiling cells from near to far. The ray meets
+        // a cell's ceiling plane when worldZ reaches that cell's height; a step
+        // DOWN to a lower ceiling draws a vertical riser (concrete soffit) so two
+        // ceiling planes never overlap. Bounded; far flat ceiling reuses the last
+        // marched height. The step cap is tunable.
+        float slope = rowDist / uResolution.y;
+        int cmx = int(floor(uPos.x));
+        int cmy = int(floor(uPos.y));
+        float csdx = rayDX < 0.0 ? (uPos.x - float(cmx)) * ddx : (float(cmx) + 1.0 - uPos.x) * ddx;
+        float csdy = rayDY < 0.0 ? (uPos.y - float(cmy)) * ddy : (float(cmy) + 1.0 - uPos.y) * ddy;
+        float dEnter = 0.0;
+        float currentDist = -1.0;
+        bool isRiser = false;
+        float marchHc = 1.0;
+        for (int cs = 0; cs < 16; cs++) {
+          ivec2 mc = ivec2(wrapI(cmx), wrapI(cmy));
+          marchHc = 1.0 + float(texelFetch(uCeil, mc, 0).r) * 0.5;
+          if (uCamHeight + slope * dEnter >= marchHc) { currentDist = dEnter + 0.001; isRiser = true; break; }
+          float dExit = min(csdx, csdy);
+          if (uCamHeight + slope * dExit >= marchHc) { currentDist = (marchHc - uCamHeight) / slope; break; }
+          if (csdx < csdy) { dEnter = csdx; csdx += ddx; cmx += stepX; }
+          else             { dEnter = csdy; csdy += ddy; cmy += stepY; }
+          if (dEnter > MAX_DIST) break;
+        }
+        if (currentDist < 0.0) currentDist = (marchHc - uCamHeight) / slope;
         if (currentDist <= MAX_DIST) {
           float floorX = uPos.x + rayDX * currentDist;
           float floorY = uPos.y + rayDY * currentDist;
@@ -1213,6 +1231,13 @@ void main() {
           float baseLitCeil = uLightQuality > 0 ? sampleLightSmooth(vec2(floorX, floorY)).x : sampleLight(cCell);
           float cLit = min(1.0, uAmbient + baseLitCeil * (1.0 - uAmbient) + flashlightBoost(currentDist) + toolBeam * 0.82);
 
+          if (isRiser) {
+            // Vertical concrete soffit between two ceiling heights.
+            vec3 rc = sampleAtlas(${Tex.CEIL}u, ftx, fty).rgb * (0.40 + cLit * 0.42);
+            rc = applyToolBeamTint(rc, toolBeam);
+            pixel = applyLocalFog(rc, cCell, ff);
+            pixelDepth = min(1.0, currentDist / MAX_DIST);
+          } else {
           uint cCellType = texelFetch(uCells, cCell, 0).r;
           if (cCellType == ${Cell.ABYSS}u) {
             vec3 cc = sampleAtlas(${Tex.DARK}u, ftx, fty).rgb * 0.22;
@@ -1267,6 +1292,7 @@ void main() {
               pixel = applyLocalFog(cc, cCell, ff);
               pixelDepth = min(1.0, currentDist / MAX_DIST);
             }
+          }
           }
         }
       }

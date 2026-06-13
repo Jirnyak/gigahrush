@@ -343,7 +343,7 @@ for template in templates:
 
 Теперь про Z.
 
-Текущая игра не является полноценной трехмерной симуляцией здания. Каждый активный этаж - отдельная тороидальная поверхность. Вертикаль устроена как route system: есть story floors, authored design floors, procedural stops, numbered lift anomalies и z-позиции маршрута.
+Текущая игра не является полноценной трехмерной симуляцией здания. Каждый активный этаж - отдельная тороидальная поверхность. Вертикаль устроена как route system: есть base floors, authored design floors, procedural stops, numbered lift anomalies и z-позиции маршрута.
 
 Лифт переводит игрока между keyed floor identities. У каждого route stop свой генератор, свои правила, свой набор NPC/monster pressure, свои POI и память посещения.
 

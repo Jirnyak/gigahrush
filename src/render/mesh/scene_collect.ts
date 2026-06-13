@@ -2172,6 +2172,24 @@ function priorityForModel(modelId: string, flags: number): number {
   return 40;
 }
 
+// Full-height models that span floor-to-ceiling and should stretch with a taller
+// ceiling. Ordinary furniture keeps its authored height.
+const CEILING_SPAN_MODELS = new Set<string>(['column_hint', 'column_concrete_square', 'column_concrete_round']);
+
+// Render-only: lift ceiling-mounted fixtures and stretch full-height columns to
+// the per-cell ceiling height (tier t -> ceilZ = 1 + t*0.5, matching the
+// raycaster). Standard cells (tier 0) are untouched.
+function applyCeilingHeight(world: World, instance: MeshInstance): void {
+  const tier = world.ceilHeight[world.idx(world.wrap(Math.floor(instance.x)), world.wrap(Math.floor(instance.y)))];
+  if (tier <= 0) return;
+  const ceilZ = 1 + tier * 0.5;
+  if (instance.z >= 0.9) {
+    instance.z += ceilZ - 1;
+  } else if (CEILING_SPAN_MODELS.has(instance.modelId)) {
+    instance.scaleZ *= ceilZ;
+  }
+}
+
 export function capMeshInstances(
   context: MeshPassContext,
   raw: readonly MeshInstance[],
@@ -2216,6 +2234,7 @@ export function capMeshInstances(
       }
       visualSlotCount++;
     }
+    applyCeilingHeight(context.world, row.instance);
     out.push(row.instance);
   }
   return out;

@@ -16,7 +16,7 @@
 - второй архивный `/b/` тред: `http://arhivach.vc/thread/1362682/` (тот же id через `https` может сбоить);
 - `README.md`, `architecture.md`, `desdoc.md`, `samosbor.md`, `scenarist.md`, `taste.md`;
 - PR docs: `PRCampaign/KPI.md`, `campaign_plan_ru.md`, `kpi_report_2026-06-04.md`, `copy_pack_ru.md`;
-- source anchors: `src/data/design_floors.ts`, `src/data/samosbor_variants.ts`, `src/data/weapons.ts`, `src/entities/monster.ts`, `src/render/textures.ts`, plot/NPC snippets.
+- source anchors: `src/data/base_floors.ts`, `src/data/samosbor_variants.ts`, `src/data/weapons.ts`, `src/entities/monster.ts`, `src/render/textures.ts`, plot/NPC snippets.
 
 Вывод из тредов для трейлеров:
 

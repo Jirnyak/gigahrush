@@ -30,6 +30,7 @@ export function drawFastElevatorOverlay(
   const y = (h - panelH) * 0.5;
 
   ctx.save();
+  ctx.textBaseline = 'middle';
   ctx.fillStyle = 'rgba(0,0,0,0.85)';
   ctx.fillRect(0, 0, w, h);
   drawStaticNoise(ctx, 0, 0, w, h, time, 0.02);
@@ -82,9 +83,9 @@ export function drawFastElevatorOverlay(
     
     if (isSelected) {
       ctx.fillStyle = 'rgba(80, 200, 255, 0.15)';
-      ctx.fillRect(x + 12 * s, rowY - 10 * s, panelW - 24 * s, rowH);
+      ctx.fillRect(x + 12 * s, rowY - 8 * s, panelW - 24 * s, rowH);
       ctx.strokeStyle = 'rgba(80, 200, 255, 0.8)';
-      ctx.strokeRect(x + 12 * s + 0.5, rowY - 10 * s + 0.5, panelW - 24 * s - 1, rowH - 1);
+      ctx.strokeRect(x + 12 * s + 0.5, rowY - 8 * s + 0.5, panelW - 24 * s - 1, rowH - 1);
     }
 
     ctx.font = `${Math.round(10 * s)}px monospace`;

@@ -4,12 +4,12 @@
   "generatedFrom": {
     "coreTypes": "src/core/types.ts",
     "items": "src/data/items.ts",
-    "designFloors": "src/data/design_floors.ts",
+    "designFloors": "src/data/base_floors.ts",
     "proceduralFloors": "src/data/procedural_floors.ts",
     "npcVisuals": "src/entities/npc_visuals.ts",
     "demosSocial": "src/data/demos_social.ts",
     "npcPackages": "src/data/npc_packages.ts",
-    "npcRegistryImports": "src/gen/design_floors/manifest.ts, story content manifests"
+    "npcRegistryImports": "src/gen/base_floors/manifest.ts, story content manifests"
   },
   "limits": {
     "npcSocialLinks": 9,
@@ -104733,7 +104733,7 @@
       "voiceTags": [],
       "questIds": [],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/antenna_court.ts",
+      "sourceFile": "src/gen/base_floors/antenna_court.ts",
       "sourceLine": 409
     },
     {
@@ -104769,7 +104769,7 @@
         "antenna_expose_signal_log"
       ],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/antenna_court.ts",
+      "sourceFile": "src/gen/base_floors/antenna_court.ts",
       "sourceLine": 385
     },
     {
@@ -104804,7 +104804,7 @@
         "antenna_jam_raid"
       ],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/antenna_court.ts",
+      "sourceFile": "src/gen/base_floors/antenna_court.ts",
       "sourceLine": 372
     },
     {
@@ -104842,7 +104842,7 @@
         "antenna_tell_echo"
       ],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/antenna_court.ts",
+      "sourceFile": "src/gen/base_floors/antenna_court.ts",
       "sourceLine": 340
     },
     {
@@ -104874,7 +104874,7 @@
       "voiceTags": [],
       "questIds": [],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/antenna_court.ts",
+      "sourceFile": "src/gen/base_floors/antenna_court.ts",
       "sourceLine": 408
     },
     {
@@ -104909,7 +104909,7 @@
         "antenna_record_void"
       ],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/antenna_court.ts",
+      "sourceFile": "src/gen/base_floors/antenna_court.ts",
       "sourceLine": 366
     },
     {
@@ -104944,7 +104944,7 @@
         "bank_report_forged_debt_paper"
       ],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/bank_floor.ts",
+      "sourceFile": "src/gen/base_floors/bank_floor.ts",
       "sourceLine": 333
     },
     {
@@ -104980,7 +104980,7 @@
         "bank_cash_deposit_50"
       ],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/bank_floor.ts",
+      "sourceFile": "src/gen/base_floors/bank_floor.ts",
       "sourceLine": 350
     },
     {
@@ -105015,7 +105015,7 @@
         "bank_cash_forged_debt_paper"
       ],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/bank_floor.ts",
+      "sourceFile": "src/gen/base_floors/bank_floor.ts",
       "sourceLine": 409
     },
     {
@@ -105051,7 +105051,7 @@
         "bank_repay_corridor_loan"
       ],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/bank_floor.ts",
+      "sourceFile": "src/gen/base_floors/bank_floor.ts",
       "sourceLine": 378
     },
     {
@@ -105084,7 +105084,7 @@
       "voiceTags": [],
       "questIds": [],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/bank_floor.ts",
+      "sourceFile": "src/gen/base_floors/bank_floor.ts",
       "sourceLine": 407
     },
     {
@@ -105157,7 +105157,7 @@
         "bolnichny_treat_clean_ward"
       ],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/bolnichny_korpus.ts",
+      "sourceFile": "src/gen/base_floors/bolnichny_korpus.ts",
       "sourceLine": 80
     },
     {
@@ -105193,7 +105193,7 @@
         "bolnichny_escort_infected_patient"
       ],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/bolnichny_korpus.ts",
+      "sourceFile": "src/gen/base_floors/bolnichny_korpus.ts",
       "sourceLine": 83
     },
     {
@@ -105228,7 +105228,7 @@
         "bolnichny_steal_morphine"
       ],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/bolnichny_korpus.ts",
+      "sourceFile": "src/gen/base_floors/bolnichny_korpus.ts",
       "sourceLine": 81
     },
     {
@@ -105264,7 +105264,7 @@
         "bolnichny_expose_contaminated_papers"
       ],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/bolnichny_korpus.ts",
+      "sourceFile": "src/gen/base_floors/bolnichny_korpus.ts",
       "sourceLine": 84
     },
     {
@@ -105299,7 +105299,7 @@
         "bolnichny_kill_black_ward"
       ],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/bolnichny_korpus.ts",
+      "sourceFile": "src/gen/base_floors/bolnichny_korpus.ts",
       "sourceLine": 82
     },
     {
@@ -105334,7 +105334,7 @@
         "cayley_byuro_bribe_generator_r"
       ],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/cayley_byuro.ts",
+      "sourceFile": "src/gen/base_floors/cayley_byuro.ts",
       "sourceLine": 293
     },
     {
@@ -105369,7 +105369,7 @@
         "cayley_byuro_expose_forged_identity"
       ],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/cayley_byuro.ts",
+      "sourceFile": "src/gen/base_floors/cayley_byuro.ts",
       "sourceLine": 331
     },
     {
@@ -105404,7 +105404,7 @@
         "cayley_byuro_apply_forms_rs"
       ],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/cayley_byuro.ts",
+      "sourceFile": "src/gen/base_floors/cayley_byuro.ts",
       "sourceLine": 313
     },
     {
@@ -105439,7 +105439,7 @@
         "attic_cut_or_feed_root"
       ],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/chthonic_attic.ts",
+      "sourceFile": "src/gen/base_floors/chthonic_attic.ts",
       "sourceLine": 610
     },
     {
@@ -105474,7 +105474,7 @@
         "attic_black_hand_report"
       ],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/chthonic_attic.ts",
+      "sourceFile": "src/gen/base_floors/chthonic_attic.ts",
       "sourceLine": 623
     },
     {
@@ -105509,7 +105509,7 @@
         "attic_burn_niche"
       ],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/chthonic_attic.ts",
+      "sourceFile": "src/gen/base_floors/chthonic_attic.ts",
       "sourceLine": 650
     },
     {
@@ -105544,7 +105544,7 @@
         "attic_crawl_escort"
       ],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/chthonic_attic.ts",
+      "sourceFile": "src/gen/base_floors/chthonic_attic.ts",
       "sourceLine": 636
     },
     {
@@ -105580,7 +105580,7 @@
         "communal_shower_pressure"
       ],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/communal_ring.ts",
+      "sourceFile": "src/gen/base_floors/communal_ring.ts",
       "sourceLine": 45
     },
     {
@@ -105616,7 +105616,7 @@
         "communal_primus_valve"
       ],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/communal_ring.ts",
+      "sourceFile": "src/gen/base_floors/communal_ring.ts",
       "sourceLine": 49
     },
     {
@@ -105652,7 +105652,7 @@
         "communal_clean_bandages"
       ],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/communal_ring.ts",
+      "sourceFile": "src/gen/base_floors/communal_ring.ts",
       "sourceLine": 44
     },
     {
@@ -105688,7 +105688,7 @@
         "communal_through_chain_bread"
       ],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/communal_ring.ts",
+      "sourceFile": "src/gen/base_floors/communal_ring.ts",
       "sourceLine": 48
     },
     {
@@ -105724,7 +105724,7 @@
         "communal_pantry_theft"
       ],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/communal_ring.ts",
+      "sourceFile": "src/gen/base_floors/communal_ring.ts",
       "sourceLine": 47
     },
     {
@@ -105760,7 +105760,7 @@
         "communal_notice_dispute"
       ],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/communal_ring.ts",
+      "sourceFile": "src/gen/base_floors/communal_ring.ts",
       "sourceLine": 46
     },
     {
@@ -105795,7 +105795,7 @@
         "critical_leak_carry_dry_packet"
       ],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/critical_leak_archive.ts",
+      "sourceFile": "src/gen/base_floors/critical_leak_archive.ts",
       "sourceLine": 214
     },
     {
@@ -105831,7 +105831,7 @@
         "critical_leak_trade_contaminated_proof"
       ],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/critical_leak_archive.ts",
+      "sourceFile": "src/gen/base_floors/critical_leak_archive.ts",
       "sourceLine": 235
     },
     {
@@ -105868,7 +105868,7 @@
         "dark_metro_light_platform"
       ],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/dark_metro.ts",
+      "sourceFile": "src/gen/base_floors/dark_metro.ts",
       "sourceLine": 320
     },
     {
@@ -105902,7 +105902,7 @@
       "voiceTags": [],
       "questIds": [],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/dark_metro.ts",
+      "sourceFile": "src/gen/base_floors/dark_metro.ts",
       "sourceLine": 346
     },
     {
@@ -105940,7 +105940,7 @@
         "dark_metro_signal_box"
       ],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/dark_metro.ts",
+      "sourceFile": "src/gen/base_floors/dark_metro.ts",
       "sourceLine": 297
     },
     {
@@ -105977,7 +105977,7 @@
         "dark_metro_rescue_stranded"
       ],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/dark_metro.ts",
+      "sourceFile": "src/gen/base_floors/dark_metro.ts",
       "sourceLine": 333
     },
     {
@@ -106018,7 +106018,7 @@
         "f69_guard_key_deposit"
       ],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/floor_69.ts",
+      "sourceFile": "src/gen/base_floors/floor_69.ts",
       "sourceLine": 490
     },
     {
@@ -110151,7 +110151,7 @@
         "f69_clinic_supply"
       ],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/floor_69.ts",
+      "sourceFile": "src/gen/base_floors/floor_69.ts",
       "sourceLine": 556
     },
     {
@@ -114290,7 +114290,7 @@
         "f69_hide_worker"
       ],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/floor_69.ts",
+      "sourceFile": "src/gen/base_floors/floor_69.ts",
       "sourceLine": 531
     },
     {
@@ -114331,7 +114331,7 @@
         "f69_blackmail_expose"
       ],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/floor_69.ts",
+      "sourceFile": "src/gen/base_floors/floor_69.ts",
       "sourceLine": 594
     },
     {
@@ -118467,7 +118467,7 @@
         "f69_blackmail_profit"
       ],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/floor_69.ts",
+      "sourceFile": "src/gen/base_floors/floor_69.ts",
       "sourceLine": 468
     },
     {
@@ -118503,7 +118503,7 @@
         "hyperbolic_switchyard_pay_guide"
       ],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/hyperbolic_switchyard.ts",
+      "sourceFile": "src/gen/base_floors/hyperbolic_switchyard.ts",
       "sourceLine": 48
     },
     {
@@ -118539,7 +118539,7 @@
         "labyrinth_rechalk_safe_wall"
       ],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/istinniy_labirint.ts",
+      "sourceFile": "src/gen/base_floors/istinniy_labirint.ts",
       "sourceLine": 158
     },
     {
@@ -118574,7 +118574,7 @@
         "labyrinth_rescue_lost_pavel"
       ],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/istinniy_labirint.ts",
+      "sourceFile": "src/gen/base_floors/istinniy_labirint.ts",
       "sourceLine": 159
     },
     {
@@ -118609,7 +118609,7 @@
         "crossroads_zebra_escort"
       ],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/manhattan_crossroads.ts",
+      "sourceFile": "src/gen/base_floors/manhattan_crossroads.ts",
       "sourceLine": 310
     },
     {
@@ -118644,7 +118644,7 @@
         "crossroads_stolen_cargo"
       ],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/manhattan_crossroads.ts",
+      "sourceFile": "src/gen/base_floors/manhattan_crossroads.ts",
       "sourceLine": 316
     },
     {
@@ -118679,7 +118679,7 @@
         "crossroads_wrong_turn"
       ],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/manhattan_crossroads.ts",
+      "sourceFile": "src/gen/base_floors/manhattan_crossroads.ts",
       "sourceLine": 343
     },
     {
@@ -118715,7 +118715,7 @@
         "crossroads_open_junction"
       ],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/manhattan_crossroads.ts",
+      "sourceFile": "src/gen/base_floors/manhattan_crossroads.ts",
       "sourceLine": 293
     },
     {
@@ -118751,7 +118751,7 @@
         "markov_stairwell_pattern_stash"
       ],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/markov_stairwell.ts",
+      "sourceFile": "src/gen/base_floors/markov_stairwell.ts",
       "sourceLine": 247
     },
     {
@@ -118788,7 +118788,7 @@
         "number_registry_decode_residue"
       ],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/number_registry.ts",
+      "sourceFile": "src/gen/base_floors/number_registry.ts",
       "sourceLine": 272
     },
     {
@@ -118823,7 +118823,7 @@
         "number_registry_file_composite_path"
       ],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/number_registry.ts",
+      "sourceFile": "src/gen/base_floors/number_registry.ts",
       "sourceLine": 347
     },
     {
@@ -118858,7 +118858,7 @@
         "number_registry_clear_prime_corridor"
       ],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/number_registry.ts",
+      "sourceFile": "src/gen/base_floors/number_registry.ts",
       "sourceLine": 321
     },
     {
@@ -118894,7 +118894,7 @@
         "obschezhitie_patrol_silence"
       ],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/obschezhitie_smeny.ts",
+      "sourceFile": "src/gen/base_floors/obschezhitie_smeny.ts",
       "sourceLine": 49
     },
     {
@@ -118930,7 +118930,7 @@
         "obschezhitie_shelter_rollcall"
       ],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/obschezhitie_smeny.ts",
+      "sourceFile": "src/gen/base_floors/obschezhitie_smeny.ts",
       "sourceLine": 48
     },
     {
@@ -118966,7 +118966,7 @@
         "obschezhitie_quiet_lockers"
       ],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/obschezhitie_smeny.ts",
+      "sourceFile": "src/gen/base_floors/obschezhitie_smeny.ts",
       "sourceLine": 50
     },
     {
@@ -119001,7 +119001,7 @@
         "oranzhereya_burn_infestation"
       ],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/oranzhereya_betona.ts",
+      "sourceFile": "src/gen/base_floors/oranzhereya_betona.ts",
       "sourceLine": 98
     },
     {
@@ -119036,7 +119036,7 @@
         "oranzhereya_reroute_water"
       ],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/oranzhereya_betona.ts",
+      "sourceFile": "src/gen/base_floors/oranzhereya_betona.ts",
       "sourceLine": 97
     },
     {
@@ -119071,7 +119071,7 @@
         "oranzhereya_save_clean_crop"
       ],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/oranzhereya_betona.ts",
+      "sourceFile": "src/gen/base_floors/oranzhereya_betona.ts",
       "sourceLine": 96
     },
     {
@@ -119106,7 +119106,7 @@
         "oranzhereya_poison_market_crop"
       ],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/oranzhereya_betona.ts",
+      "sourceFile": "src/gen/base_floors/oranzhereya_betona.ts",
       "sourceLine": 99
     },
     {
@@ -119141,7 +119141,7 @@
         "penrose_laundry_break_lock"
       ],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/penrose_laundry.ts",
+      "sourceFile": "src/gen/base_floors/penrose_laundry.ts",
       "sourceLine": 166
     },
     {
@@ -119176,7 +119176,7 @@
         "penrose_laundry_divert_steam"
       ],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/penrose_laundry.ts",
+      "sourceFile": "src/gen/base_floors/penrose_laundry.ts",
       "sourceLine": 167
     },
     {
@@ -119211,7 +119211,7 @@
         "penrose_laundry_follow_matching_symbols"
       ],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/penrose_laundry.ts",
+      "sourceFile": "src/gen/base_floors/penrose_laundry.ts",
       "sourceLine": 165
     },
     {
@@ -119246,7 +119246,7 @@
         "penrose_laundry_hidden_washroom_cache"
       ],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/penrose_laundry.ts",
+      "sourceFile": "src/gen/base_floors/penrose_laundry.ts",
       "sourceLine": 168
     },
     {
@@ -119281,7 +119281,7 @@
         "camp_repair_loudspeaker"
       ],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/pioneer_camp.ts",
+      "sourceFile": "src/gen/base_floors/pioneer_camp.ts",
       "sourceLine": 59
     },
     {
@@ -119316,7 +119316,7 @@
         "camp_canteen_compote"
       ],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/pioneer_camp.ts",
+      "sourceFile": "src/gen/base_floors/pioneer_camp.ts",
       "sourceLine": 61
     },
     {
@@ -119351,7 +119351,7 @@
         "camp_medpost_choice"
       ],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/pioneer_camp.ts",
+      "sourceFile": "src/gen/base_floors/pioneer_camp.ts",
       "sourceLine": 60
     },
     {
@@ -119386,7 +119386,7 @@
         "camp_verify_roster"
       ],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/pioneer_camp.ts",
+      "sourceFile": "src/gen/base_floors/pioneer_camp.ts",
       "sourceLine": 58
     },
     {
@@ -119423,7 +119423,7 @@
         "prod_bad_batch"
       ],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/production_belt.ts",
+      "sourceFile": "src/gen/base_floors/production_belt.ts",
       "sourceLine": 331
     },
     {
@@ -119460,7 +119460,7 @@
         "prod_worker_escort"
       ],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/production_belt.ts",
+      "sourceFile": "src/gen/base_floors/production_belt.ts",
       "sourceLine": 287
     },
     {
@@ -119497,7 +119497,7 @@
         "prod_steal_crate"
       ],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/production_belt.ts",
+      "sourceFile": "src/gen/base_floors/production_belt.ts",
       "sourceLine": 292
     },
     {
@@ -119534,7 +119534,7 @@
         "prod_restore_line"
       ],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/production_belt.ts",
+      "sourceFile": "src/gen/base_floors/production_belt.ts",
       "sourceLine": 301
     },
     {
@@ -119570,7 +119570,7 @@
         "archive_market_license"
       ],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/raionsovet_archive.ts",
+      "sourceFile": "src/gen/base_floors/raionsovet_archive.ts",
       "sourceLine": 372
     },
     {
@@ -119606,7 +119606,7 @@
         "archive_swap_card"
       ],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/raionsovet_archive.ts",
+      "sourceFile": "src/gen/base_floors/raionsovet_archive.ts",
       "sourceLine": 338
     },
     {
@@ -119642,7 +119642,7 @@
         "archive_save_or_burn"
       ],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/raionsovet_archive.ts",
+      "sourceFile": "src/gen/base_floors/raionsovet_archive.ts",
       "sourceLine": 355
     },
     {
@@ -119678,7 +119678,7 @@
         "archive_get_floor_permit"
       ],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/raionsovet_archive.ts",
+      "sourceFile": "src/gen/base_floors/raionsovet_archive.ts",
       "sourceLine": 321
     },
     {
@@ -119715,7 +119715,7 @@
         "morgue_relative_escort"
       ],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/registry_morgue.ts",
+      "sourceFile": "src/gen/base_floors/registry_morgue.ts",
       "sourceLine": 370
     },
     {
@@ -119751,7 +119751,7 @@
         "morgue_medicine_lock"
       ],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/registry_morgue.ts",
+      "sourceFile": "src/gen/base_floors/registry_morgue.ts",
       "sourceLine": 409
     },
     {
@@ -119787,7 +119787,7 @@
         "morgue_missing_body"
       ],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/registry_morgue.ts",
+      "sourceFile": "src/gen/base_floors/registry_morgue.ts",
       "sourceLine": 349
     },
     {
@@ -119825,7 +119825,7 @@
         "morgue_swap_certificate"
       ],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/registry_morgue.ts",
+      "sourceFile": "src/gen/base_floors/registry_morgue.ts",
       "sourceLine": 311
     },
     {
@@ -119860,7 +119860,7 @@
         "service_fix_lift_machine"
       ],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/service_floor.ts",
+      "sourceFile": "src/gen/base_floors/service_floor.ts",
       "sourceLine": 496
     },
     {
@@ -119895,7 +119895,7 @@
         "service_rescue_pump_worker"
       ],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/service_floor.ts",
+      "sourceFile": "src/gen/base_floors/service_floor.ts",
       "sourceLine": 548
     },
     {
@@ -119930,7 +119930,7 @@
         "service_steal_master_key"
       ],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/service_floor.ts",
+      "sourceFile": "src/gen/base_floors/service_floor.ts",
       "sourceLine": 509
     },
     {
@@ -119965,7 +119965,7 @@
         "service_reroute_raid"
       ],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/service_floor.ts",
+      "sourceFile": "src/gen/base_floors/service_floor.ts",
       "sourceLine": 535
     },
     {
@@ -120000,7 +120000,7 @@
         "service_restore_lights"
       ],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/service_floor.ts",
+      "sourceFile": "src/gen/base_floors/service_floor.ts",
       "sourceLine": 522
     },
     {
@@ -120035,7 +120035,7 @@
         "slime_nii_manifest_choice"
       ],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/slime_nii.ts",
+      "sourceFile": "src/gen/base_floors/slime_nii.ts",
       "sourceLine": 66
     },
     {
@@ -120070,7 +120070,7 @@
         "slime_nii_black_camera_cleanup"
       ],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/slime_nii.ts",
+      "sourceFile": "src/gen/base_floors/slime_nii.ts",
       "sourceLine": 64
     },
     {
@@ -120105,7 +120105,7 @@
         "slime_nii_live_green_sample"
       ],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/slime_nii.ts",
+      "sourceFile": "src/gen/base_floors/slime_nii.ts",
       "sourceLine": 63
     },
     {
@@ -120140,7 +120140,7 @@
         "slime_nii_volunteer_witness"
       ],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/slime_nii.ts",
+      "sourceFile": "src/gen/base_floors/slime_nii.ts",
       "sourceLine": 65
     },
     {
@@ -120175,7 +120175,7 @@
         "spectral_tune_radio_sacristy"
       ],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/spectral_chasovnya.ts",
+      "sourceFile": "src/gen/base_floors/spectral_chasovnya.ts",
       "sourceLine": 128
     },
     {
@@ -120210,7 +120210,7 @@
         "spetspriemnik_stamp_release_form"
       ],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/spetspriemnik.ts",
+      "sourceFile": "src/gen/base_floors/spetspriemnik.ts",
       "sourceLine": 66
     },
     {
@@ -120245,7 +120245,7 @@
         "spetspriemnik_shelter_cell_check"
       ],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/spetspriemnik.ts",
+      "sourceFile": "src/gen/base_floors/spetspriemnik.ts",
       "sourceLine": 62
     },
     {
@@ -120281,7 +120281,7 @@
         "spetspriemnik_trigger_riot"
       ],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/spetspriemnik.ts",
+      "sourceFile": "src/gen/base_floors/spetspriemnik.ts",
       "sourceLine": 64
     },
     {
@@ -120316,7 +120316,7 @@
         "spetspriemnik_bribe_guard"
       ],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/spetspriemnik.ts",
+      "sourceFile": "src/gen/base_floors/spetspriemnik.ts",
       "sourceLine": 63
     },
     {
@@ -120351,7 +120351,7 @@
         "spetspriemnik_trade_names"
       ],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/spetspriemnik.ts",
+      "sourceFile": "src/gen/base_floors/spetspriemnik.ts",
       "sourceLine": 65
     },
     {
@@ -120386,7 +120386,7 @@
         "turing_nursery_inoculate_basin"
       ],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/turing_nursery.ts",
+      "sourceFile": "src/gen/base_floors/turing_nursery.ts",
       "sourceLine": 61
     },
     {
@@ -120421,7 +120421,7 @@
         "turing_nursery_burn_bridge"
       ],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/turing_nursery.ts",
+      "sourceFile": "src/gen/base_floors/turing_nursery.ts",
       "sourceLine": 62
     },
     {
@@ -120456,7 +120456,7 @@
         "turing_nursery_growth_audit"
       ],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/turing_nursery.ts",
+      "sourceFile": "src/gen/base_floors/turing_nursery.ts",
       "sourceLine": 64
     },
     {
@@ -120491,7 +120491,7 @@
         "turing_nursery_expose_growth_child"
       ],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/turing_nursery.ts",
+      "sourceFile": "src/gen/base_floors/turing_nursery.ts",
       "sourceLine": 63
     },
     {
@@ -120525,7 +120525,7 @@
         "underhell_free_witness"
       ],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/underhell.ts",
+      "sourceFile": "src/gen/base_floors/underhell.ts",
       "sourceLine": 343
     },
     {
@@ -120560,7 +120560,7 @@
         "underhell_burn_debt"
       ],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/underhell.ts",
+      "sourceFile": "src/gen/base_floors/underhell.ts",
       "sourceLine": 330
     },
     {
@@ -120594,7 +120594,7 @@
         "underhell_open_void_cut"
       ],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/underhell.ts",
+      "sourceFile": "src/gen/base_floors/underhell.ts",
       "sourceLine": 356
     },
     {
@@ -120629,7 +120629,7 @@
         "underhell_pay_threshold"
       ],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/underhell.ts",
+      "sourceFile": "src/gen/base_floors/underhell.ts",
       "sourceLine": 318
     },
     {
@@ -120666,7 +120666,7 @@
         "bureau_expose_erased_record"
       ],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/upper_bureau.ts",
+      "sourceFile": "src/gen/base_floors/upper_bureau.ts",
       "sourceLine": 675
     },
     {
@@ -120702,7 +120702,7 @@
         "bureau_audit_market88_help"
       ],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/upper_bureau.ts",
+      "sourceFile": "src/gen/base_floors/upper_bureau.ts",
       "sourceLine": 589
     },
     {
@@ -120738,7 +120738,7 @@
         "bureau_archive_toll_expose"
       ],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/upper_bureau.ts",
+      "sourceFile": "src/gen/base_floors/upper_bureau.ts",
       "sourceLine": 612
     },
     {
@@ -120775,7 +120775,7 @@
         "bureau_preapproval_fee"
       ],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/upper_bureau.ts",
+      "sourceFile": "src/gen/base_floors/upper_bureau.ts",
       "sourceLine": 507
     },
     {
@@ -120810,7 +120810,7 @@
         "bureau_permit_ambush_expose"
       ],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/upper_bureau.ts",
+      "sourceFile": "src/gen/base_floors/upper_bureau.ts",
       "sourceLine": 653
     },
     {
@@ -120847,7 +120847,7 @@
         "bureau_market88_warning"
       ],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/upper_bureau.ts",
+      "sourceFile": "src/gen/base_floors/upper_bureau.ts",
       "sourceLine": 548
     },
     {
@@ -120882,7 +120882,7 @@
         "voronoi_quarantine_forge_pass"
       ],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/voronoi_quarantine.ts",
+      "sourceFile": "src/gen/base_floors/voronoi_quarantine.ts",
       "sourceLine": 72
     },
     {
@@ -120917,7 +120917,7 @@
         "voronoi_quarantine_escort_infected"
       ],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/voronoi_quarantine.ts",
+      "sourceFile": "src/gen/base_floors/voronoi_quarantine.ts",
       "sourceLine": 73
     },
     {
@@ -120952,7 +120952,7 @@
         "voronoi_quarantine_open_supply_connector"
       ],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/voronoi_quarantine.ts",
+      "sourceFile": "src/gen/base_floors/voronoi_quarantine.ts",
       "sourceLine": 74
     },
     {
@@ -120987,7 +120987,7 @@
         "voronoi_quarantine_decon_border"
       ],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/voronoi_quarantine.ts",
+      "sourceFile": "src/gen/base_floors/voronoi_quarantine.ts",
       "sourceLine": 71
     },
     {
@@ -126607,7 +126607,7 @@
         "ministry_market_case"
       ],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/ministry.ts",
+      "sourceFile": "src/gen/base_floors/ministry.ts",
       "sourceLine": 128
     },
     {
@@ -126703,7 +126703,7 @@
         "ministry_shelter_list"
       ],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/ministry.ts",
+      "sourceFile": "src/gen/base_floors/ministry.ts",
       "sourceLine": 141
     },
     {
@@ -126977,7 +126977,7 @@
         "ministry_monster_clause"
       ],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/ministry.ts",
+      "sourceFile": "src/gen/base_floors/ministry.ts",
       "sourceLine": 154
     },
     {
@@ -127529,7 +127529,7 @@
         "ministry_floor_pass"
       ],
       "source": "game",
-      "sourceFile": "src/gen/design_floors/ministry.ts",
+      "sourceFile": "src/gen/base_floors/ministry.ts",
       "sourceLine": 115
     },
     {
