@@ -1,3 +1,6 @@
+import { COMMON_LIGHTING_SRC } from '../shaders_common';
+import { MAX_DRAW, W, Cell } from '../../core/types';
+
 export const MESH_VERT_SRC = /* glsl */ `#version 300 es
 precision highp float;
 
@@ -64,7 +67,34 @@ uniform float uWorldSize;
 uniform sampler2D uLight;
 uniform float uLightOn;     // 1.0 when the baked lightmap is bound
 
+// Add dynamic lighting arrays
+uniform highp usampler2D uCells;
+uniform highp usampler2D uDoorStates;
+
 out vec4 fragColor;
+
+const float MAX_DRAW = ${MAX_DRAW.toFixed(1)};
+const int W_SIZE = ${W};
+const int W_SIZE_MASK = W_SIZE - 1;
+
+uint sampleCell(ivec2 p) {
+  return texelFetch(uCells, p & W_SIZE_MASK, 0).r;
+}
+
+uint sampleDoor(ivec2 p) {
+  return texelFetch(uDoorStates, p & W_SIZE_MASK, 0).r;
+}
+
+bool lightBoundaryAt(ivec2 p) {
+  uint cell = sampleCell(p);
+  uint doorState = cell == ${Cell.DOOR}u ? sampleDoor(p) : 0u;
+  // Wall, Lift, Abyss, or closed door block light
+  if (cell == ${Cell.WALL}u || cell == ${Cell.LIFT}u || cell == ${Cell.ABYSS}u) return true;
+  if (cell != ${Cell.DOOR}u) return false;
+  return doorState != 0u && doorState != 3u;
+}
+
+${COMMON_LIGHTING_SRC}
 
 const float MESH_NEAR = 0.1;
 const float MESH_DEPTH_BIAS = 0.015;
@@ -104,7 +134,11 @@ void main() {
     float side = 0.78 + 0.08 * sin(uTime * 0.7 + vColor.r * 6.2831);
     shade = clamp(uAmbient + fakeDiffuse * 0.58 + side * 0.18, 0.12, 1.0);
   }
-
+  
+  vec3 wPos = vec3(vWorldXY.x, vWorldXY.y, 0.5); // approximate mid-height
+  vec3 dynLight = calculateDynamicLighting(wPos, nrm);
+  shade += min(1.0, dot(dynLight, vec3(0.333)));
+  
   float fogBase = max(0.0, vForward * max(0.02, uFogDensity));
   float fog = clamp(1.0 - exp(-fogBase * fogBase * 1.15), 0.0, 0.92);
   float fadeWidth = clamp(uMeshRadius * 0.22, 1.0, 3.0);

@@ -58,6 +58,7 @@ import {
   type MeshPassHandle,
   type MeshPassStats,
 } from './mesh';
+import { COMMON_LIGHTING_SRC } from './shaders_common';
 
 export interface DynamicSkyTexture {
   readonly width: number;
@@ -107,6 +108,7 @@ const ITEM_SPRITE_CACHE_TARGET = 8192;
 const ITEM_DROP_WORLD_SPRITE_SCALE = 0.34;
 const VISIBLE_SPRITE_CAP = 512;
 const VISIBLE_ENTITY_QUERY_CAP = VISIBLE_SPRITE_CAP * 2;
+
 const visibleEntityQuery: Entity[] = [];
 const STATIC_OBJECT_RADIUS = MAX_DRAW;
 const lastRenderSceneDebugStats: RenderSceneDebugStats = {
@@ -213,6 +215,7 @@ uniform vec4 uDetailLightDustColor;
 uniform vec4 uSurfaceProfileA;   // floor pattern, wall band, ceiling pattern, trim
 uniform vec4 uSurfaceProfileB;   // grime, seam strength, light panel chance, vent chance
 uniform float uSurfaceProfileSeed;
+
 
 /* ── Depth output (for sprite clipping on CPU) ────────────────── */
 // We write depth into a color attachment that gets read back
@@ -369,6 +372,8 @@ bool lightBoundaryAt(ivec2 p) {
   uint doorState = cell == ${Cell.DOOR}u ? sampleDoor(p) : 0u;
   return lightBoundary(cell, doorState);
 }
+
+${COMMON_LIGHTING_SRC}
 
 float contactAoFloor(ivec2 cell) {
   float n = 0.0;
@@ -1164,6 +1169,10 @@ void main() {
       float ndlWall = max(dot(wN, normalize(-vec2(rayDX, rayDY))), 0.0);
       float driveWall = clamp(fbWall + toolBeam + eyeLight(dist), 0.0, 1.0);
       c = applyLightFX(c, wallTexId, ndlWall, driveWall, lgradWall, 1.0);
+
+      vec3 wPos = vec3(uPos.x + rayDX * dist, uPos.y + rayDY * dist, (float(row) - rawDrawStart) / lineH);
+      vec3 dynWall = calculateDynamicLighting(wPos, vec3(wN, 0.0));
+      c = min(vec3(1.0), c + c * dynWall);
       pixel = applyLocalFog(c, hitCell, fogF);
       pixelDepth = min(1.0, dist / MAX_DIST);
   } else if (row > (hit ? drawEnd : HALF_H)) {
@@ -1204,6 +1213,11 @@ void main() {
             fc = shadePlane(floorTexId, fc, fCell, ftx, fty, currentDist, fLit, toolBeam, false, true);
             float driveFloor = clamp(fbFloor + toolBeam + eyeLight(currentDist), 0.0, 1.0);
             fc = applyLightFX(fc, floorTexId, 0.0, driveFloor, lgradFloor, 0.0);
+
+            vec3 fPos = vec3(floorX, floorY, 0.0);
+            vec3 dynFloor = calculateDynamicLighting(fPos, vec3(0.0, 0.0, 1.0));
+            fc = min(vec3(1.0), fc + fc * dynFloor);
+
             pixel = applyLocalFog(fc, fCell, ff);
             pixelDepth = min(1.0, currentDist / MAX_DIST);
           }
@@ -1295,6 +1309,9 @@ void main() {
                 } else {
                   cc = sampleAtlas(${Tex.CEIL}u, ftx, fty).rgb;
                   cc = shadePlane(${Tex.CEIL}u, cc, cCell, ftx, fty, currentDist, cLit, toolBeam, true, false);
+                  vec3 cPos = vec3(floorX, floorY, uCamHeight + slope * currentDist);
+                  vec3 dynCeil = calculateDynamicLighting(cPos, vec3(0.0, 0.0, -1.0));
+                  cc = min(vec3(1.0), cc + cc * dynCeil);
                 }
                 vec2 lampUv = (vec2(float(ftx), float(fty)) + 0.5) / TEX_F - vec2(0.5);
                 float lampR = length(lampUv);
@@ -1320,6 +1337,9 @@ void main() {
               } else {
                 cc = sampleAtlas(${Tex.CEIL}u, ftx, fty).rgb;
                 cc = shadePlane(${Tex.CEIL}u, cc, cCell, ftx, fty, currentDist, cLit, toolBeam, true, false);
+                vec3 cPos = vec3(floorX, floorY, uCamHeight + slope * currentDist);
+                vec3 dynCeil = calculateDynamicLighting(cPos, vec3(0.0, 0.0, -1.0));
+                cc = min(vec3(1.0), cc + cc * dynCeil);
               }
               if (uUseDynamicSky == 1) cc = applyToolBeamTint(cc, toolBeam);
               pixel = applyLocalFog(cc, cCell, ff);
@@ -1343,22 +1363,40 @@ void main() {
 /* ── Sprite vertex/fragment shaders ───────────────────────────── */
 const SPRITE_VERT_SRC = /* glsl */ `#version 300 es
 precision highp float;
+precision highp int;
 in vec2 aPos;       // quad corner (-0.5..0.5)
 in vec2 aTexCoord;  // 0..1
 
 uniform vec2  uResolution;
 uniform float uScreenX;     // sprite center X on screen
+uniform float uShearX;      // X shear offset (0 at top, uShearX at bottom)
 uniform float uSpriteW;     // sprite width in pixels
 uniform float uSpriteH;     // sprite height in pixels
 uniform float uStartY;      // top Y in pixels
 uniform float uDepth;       // normalized depth for z-test
+uniform vec3  uSpriteWorldPos;
+uniform vec3  uShadowTip;   // x = tipScreenX, y = tipScreenY, z = tipW
+uniform int   uIsShadow;    // 1=reflection, 2=blob, 3=dynamic shadow
 
 out vec2 vTexCoord;
 out float vDepth;
+out vec2 vWorldPos;
 
 void main() {
-  float px = uScreenX + aPos.x * uSpriteW;
+  float px = uScreenX + aPos.x * uSpriteW + (0.5 - aPos.y) * uShearX;
   float py = uStartY + (0.5 - aPos.y) * uSpriteH;
+
+  if (uIsShadow == 3) {
+    float blend = 0.5 - aPos.y; // 1.0 at top (head), 0.0 at foot (base)
+    float baseW = uSpriteW;
+    float baseX = uScreenX + uShearX; // foot X
+    float baseY = uStartY + uSpriteH; // foot Y
+    float curW = mix(baseW, uShadowTip.z, blend);
+    float curX = mix(baseX, uShadowTip.x, blend);
+    float curY = mix(baseY, uShadowTip.y, blend);
+    px = curX + aPos.x * curW;
+    py = curY;
+  }
 
   // Convert to NDC: x: [0, res.x] → [-1, 1], y: [0, res.y] → [-1, 1] (flipped)
   float ndcX = (px / uResolution.x) * 2.0 - 1.0;
@@ -1367,22 +1405,60 @@ void main() {
   gl_Position = vec4(ndcX, ndcY, 0.0, 1.0);
   vTexCoord = aTexCoord;
   vDepth = uDepth;
+  vWorldPos = uSpriteWorldPos.xy;
 }
 `;
 
 const SPRITE_FRAG_SRC = /* glsl */ `#version 300 es
 precision highp float;
+precision highp int;
 
 in vec2 vTexCoord;
 in float vDepth;
+in vec2 vWorldPos;
 uniform sampler2D uSpriteTex;
 uniform float uFogF;
 uniform vec3  uFogColor;
 uniform int   uIsProjectile;
 uniform float uTime;
 uniform float uSeed;
+uniform int   uIsShadow;      // 1 = shadow mode: sprite silhouette as floor shadow
+uniform float uShadowFloorH;  // camHeight * halfH — for per-pixel floor depth in shadow mode
+uniform vec2  uResolution;
+
+// Dynamic lights and shadows
+uniform highp usampler2D uCells;
+uniform highp usampler2D uDoorStates;
+
+const int W_SIZE = ${W};
+const int W_SIZE_MASK = W_SIZE - 1;
+
+int wrapI(int v) {
+  return v & W_SIZE_MASK;
+}
+
+uint sampleCell(ivec2 p) {
+  ivec2 wp = ivec2(wrapI(p.x), wrapI(p.y));
+  return texelFetch(uCells, wp, 0).r;
+}
+
+uint sampleDoor(ivec2 p) {
+  ivec2 wp = ivec2(wrapI(p.x), wrapI(p.y));
+  return texelFetch(uDoorStates, wp, 0).r;
+}
+
+bool lightBoundaryAt(ivec2 p) {
+  uint cell = sampleCell(p);
+  uint doorState = cell == ${Cell.DOOR}u ? sampleDoor(p) : 0u;
+  // Wall, Lift, Abyss, or closed door block light
+  if (cell == ${Cell.WALL}u || cell == ${Cell.LIFT}u || cell == ${Cell.ABYSS}u) return true;
+  if (cell != ${Cell.DOOR}u) return false;
+  return doorState != 0u && doorState != 3u;
+}
 
 out vec4 fragColor;
+
+${COMMON_LIGHTING_SRC}
 
 /* ── procedural flame noise ── */
 float fHash(float n) { return fract(sin(n) * 43758.5453123); }
@@ -1402,6 +1478,48 @@ float fFbm(vec2 p, float s) {
 }
 
 void main() {
+  /* ── Reflection (uIsShadow == 1) ── */
+  if (uIsShadow == 1) {
+    vec4 sc = texture(uSpriteTex, vec2(vTexCoord.x, vTexCoord.y));
+    if (sc.a < 0.5) discard;
+    float raycasterRow = uResolution.y - gl_FragCoord.y;
+    float belowHorizon = raycasterRow - vDepth;
+    if (belowHorizon <= 0.5) discard;
+    float floorDist = uShadowFloorH / belowHorizon;
+    gl_FragDepth = min(0.999, floorDist / ${MAX_DRAW.toFixed(1)}) - 0.0004;
+    float fade = smoothstep(1.0, 0.0, vTexCoord.y);
+    float a = uSeed * fade * (1.0 - uFogF * 0.85);
+    vec3 tintColor = mix(sc.rgb, vec3(0.05, 0.1, 0.15), 0.6);
+    fragColor = vec4(tintColor, a * sc.a);
+    return;
+  }
+
+  /* ── Drop Shadow (uIsShadow == 2) ── */
+  if (uIsShadow == 2) {
+    vec2 uv = vTexCoord - vec2(0.5, 0.5);
+    float d = length(uv);
+    float a = smoothstep(0.5, 0.1, d);
+    if (a < 0.05) discard;
+    gl_FragDepth = vDepth - 0.0004;
+    fragColor = vec4(0.0, 0.0, 0.0, a * uSeed * (1.0 - uFogF * 0.85));
+    return;
+  }
+
+  /* ── True Dynamic Shadow (uIsShadow == 3) ── */
+  if (uIsShadow == 3) {
+    vec4 sc = texture(uSpriteTex, vTexCoord);
+    if (sc.a < 0.5) discard;
+    
+    float raycasterRow = uResolution.y - gl_FragCoord.y;
+    float belowHorizon = raycasterRow - vDepth;
+    if (belowHorizon <= 0.5) discard;
+    float floorDist = uShadowFloorH / belowHorizon;
+    gl_FragDepth = min(0.999, floorDist / ${MAX_DRAW.toFixed(1)}) - 0.0004;
+    float fade = smoothstep(0.0, 0.9, vTexCoord.y); // fade out towards tip (y=0)
+    fragColor = vec4(0.0, 0.0, 0.0, uSeed * sc.a * fade * (1.0 - uFogF * 0.85));
+    return;
+  }
+
   /* ── Procedural flame tongue (uIsProjectile == 2) ── */
   if (uIsProjectile == 2) {
     vec2 uv = vTexCoord - 0.5;
@@ -1462,6 +1580,14 @@ void main() {
     fragColor = vec4(rgb, 1.0);
   } else {
     rgb = mix(rgb, uFogColor, uFogF);
+    
+    // Normal for sprite: we assume it faces the camera, but since lighting is 2D-ish
+    // let's just use an upward/camera-facing normal.
+    // Actually, a simple up-normal vec3(0,0,1) works for omni lights.
+    vec3 wPos = vec3(vWorldPos.x, vWorldPos.y, 0.5); // approximate mid-height
+    vec3 dynLight = calculateDynamicLighting(wPos, vec3(0.0, 0.0, 1.0));
+    rgb = min(vec3(1.0), rgb + rgb * dynLight);
+    
     fragColor = vec4(rgb, c.a);
   }
 }
@@ -1687,7 +1813,7 @@ interface GLState {
   rayVAO: WebGLVertexArrayObject;
   rayFBO: WebGLFramebuffer;
   rayColorTex: WebGLTexture;
-  rayDepthBuf: WebGLRenderbuffer;
+  rayDepthTex: WebGLTexture;
   // Blit
   blitProgram: WebGLProgram;
   blitVAO: WebGLVertexArrayObject;
@@ -1755,6 +1881,15 @@ interface GLState {
   rayUniforms: Record<string, WebGLUniformLocation | null>;
   blitUniforms: Record<string, WebGLUniformLocation | null>;
   spriteUniforms: Record<string, WebGLUniformLocation | null>;
+  
+  dynamicLightCount: number;
+  dynamicLightsPos: Float32Array;
+  dynamicLightsColor: Float32Array;
+  dynamicLightsRadius: Float32Array;
+
+  shadowCasterCount: number;
+  shadowCasters: Float32Array; // 32 * 4 floats (x, y, height, radius)
+
   meshPass?: MeshPassHandle;
 }
 
@@ -1903,7 +2038,7 @@ function meshPassContext(
   fogColor: readonly [number, number, number],
   profile: ResolvedVisualGeometryProfile,
   ambient: number,
-  lightTex: WebGLTexture | null,
+  state: GLState,
 ): MeshPassContext {
   return {
     world,
@@ -1914,7 +2049,13 @@ function meshPassContext(
     fogDensity,
     fogColor,
     ambient,
-    lightTex,
+    lightTex: state.lightTex,
+    cellsTex: state.cellsTex,
+    doorStatesTex: state.doorStatesTex,
+    dynamicLightCount: state.dynamicLightCount,
+    dynamicLightsPos: state.dynamicLightsPos,
+    dynamicLightsColor: state.dynamicLightsColor,
+    dynamicLightsRadius: state.dynamicLightsRadius,
     mode: profile.mode,
     profile,
   };
@@ -1931,7 +2072,7 @@ function updateAndRenderMeshPass(
   ambient: number,
 ): void {
   if (!state.meshPass) return;
-  const context = meshPassContext(world, camera, time, fogDensity, fogColor, profile, ambient, state.lightTex);
+  const context = meshPassContext(world, camera, time, fogDensity, fogColor, profile, ambient, state);
   const stats = state.meshPass.update(context);
   lastRenderSceneDebugStats.meshEnabled = stats.enabled;
   lastRenderSceneDebugStats.meshInstances = stats.visibleInstances;
@@ -2150,7 +2291,7 @@ function trimItemSpriteCache(): void {
     let oldestKey = '';
     let oldestUse = Number.MAX_SAFE_INTEGER;
     for (const [key, entry] of itemSpriteTextures) {
-      if (entry.usedAt < oldestUse) {
+      if (key === '' || entry.usedAt < oldestUse) {
         oldestUse = entry.usedAt;
         oldestKey = key;
       }
@@ -2493,8 +2634,18 @@ export function initWebGL(
     'uDetailFloorCount', 'uDetailFloor0', 'uDetailFloor1', 'uDetailFloorColor0', 'uDetailFloorColor1',
     'uDetailWallCount', 'uDetailWall0', 'uDetailWall1', 'uDetailWallColor0', 'uDetailWallColor1',
     'uDetailLightDust', 'uDetailLightDustColor',
-    'uSurfaceProfileA', 'uSurfaceProfileB', 'uSurfaceProfileSeed',
+    'uSurfaceProfileA', 'uSurfaceProfileB', 'uSurfaceProfileSeed', 'uDynamicLightCount'
   ]);
+  
+  for (let i = 0; i < 8; i++) {
+    rayUniforms[`uDynamicLights[${i}].pos`] = gl.getUniformLocation(rayProgram, `uDynamicLights[${i}].pos`);
+    rayUniforms[`uDynamicLights[${i}].color`] = gl.getUniformLocation(rayProgram, `uDynamicLights[${i}].color`);
+    rayUniforms[`uDynamicLights[${i}].radius`] = gl.getUniformLocation(rayProgram, `uDynamicLights[${i}].radius`);
+  }
+  rayUniforms['uShadowCasterCount'] = gl.getUniformLocation(rayProgram, 'uShadowCasterCount');
+  for (let i = 0; i < 32; i++) {
+    rayUniforms[`uShadowCasters[${i}]`] = gl.getUniformLocation(rayProgram, `uShadowCasters[${i}]`);
+  }
 
   // ── Blit program ──
   const blitProgram = createProgram(gl, BLIT_VERT_SRC, BLIT_FRAG_SRC);
@@ -2513,9 +2664,19 @@ export function initWebGL(
   const spriteProgram = createProgram(gl, SPRITE_VERT_SRC, SPRITE_FRAG_SRC);
   const spriteVAO = createSpriteVAO(gl, spriteProgram);
   const spriteUniforms = getUniforms(gl, spriteProgram, [
-    'uResolution', 'uScreenX', 'uSpriteW', 'uSpriteH', 'uStartY', 'uDepth',
-    'uSpriteTex', 'uFogF', 'uFogColor', 'uIsProjectile', 'uTime', 'uSeed',
+    'uResolution', 'uScreenX', 'uShearX', 'uSpriteW', 'uSpriteH', 'uStartY', 'uDepth',
+    'uSpriteTex', 'uFogColor', 'uFogF', 'uIsShadow', 'uShadowFloorH', 'uIsProjectile', 'uTime', 'uSeed', 'uSpriteWorldPos',
+    'uCells', 'uDoorStates', 'uDynamicLightCount', 'uShadowTip'
   ]);
+  for (let i = 0; i < 8; i++) {
+    spriteUniforms[`uDynamicLights[${i}].pos`] = gl.getUniformLocation(spriteProgram, `uDynamicLights[${i}].pos`);
+    spriteUniforms[`uDynamicLights[${i}].color`] = gl.getUniformLocation(spriteProgram, `uDynamicLights[${i}].color`);
+    spriteUniforms[`uDynamicLights[${i}].radius`] = gl.getUniformLocation(spriteProgram, `uDynamicLights[${i}].radius`);
+  }
+  spriteUniforms['uShadowCasterCount'] = gl.getUniformLocation(spriteProgram, 'uShadowCasterCount');
+  for (let i = 0; i < 32; i++) {
+    spriteUniforms[`uShadowCasters[${i}]`] = gl.getUniformLocation(spriteProgram, `uShadowCasters[${i}]`);
+  }
 
   // ── Particle program ──
   const particleProgram = createProgram(gl, PARTICLE_VERT_SRC, PARTICLE_FRAG_SRC);
@@ -2531,14 +2692,18 @@ export function initWebGL(
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
   gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, SCR_W, SCR_H, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
 
-  const rayDepthBuf = gl.createRenderbuffer()!;
-  gl.bindRenderbuffer(gl.RENDERBUFFER, rayDepthBuf);
-  gl.renderbufferStorage(gl.RENDERBUFFER, gl.DEPTH_COMPONENT16, SCR_W, SCR_H);
+  const rayDepthTex = gl.createTexture()!;
+  gl.bindTexture(gl.TEXTURE_2D, rayDepthTex);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.DEPTH_COMPONENT24, SCR_W, SCR_H, 0, gl.DEPTH_COMPONENT, gl.UNSIGNED_INT, null);
 
   const rayFBO = gl.createFramebuffer()!;
   gl.bindFramebuffer(gl.FRAMEBUFFER, rayFBO);
   gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, rayColorTex, 0);
-  gl.framebufferRenderbuffer(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.RENDERBUFFER, rayDepthBuf);
+  gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.TEXTURE_2D, rayDepthTex, 0);
   gl.bindFramebuffer(gl.FRAMEBUFFER, null);
 
   // ── Bloom FBOs (half-res, linear-filtered ping-pong targets) ──
@@ -2595,7 +2760,7 @@ export function initWebGL(
 
   glState = {
     gl,
-    rayProgram, rayVAO, rayFBO, rayColorTex, rayDepthBuf,
+    rayProgram, rayVAO, rayFBO, rayColorTex, rayDepthTex,
     blitProgram, blitVAO,
     bloomPrefilterProgram, bloomPrefilterUniforms,
     bloomBlurProgram, bloomBlurUniforms,
@@ -2637,6 +2802,13 @@ export function initWebGL(
     fogVersion: world.fogVersion,
     doorStatesData,
     rayUniforms, blitUniforms, spriteUniforms,
+    dynamicLightCount: 0,
+    dynamicLightsPos: new Float32Array(8 * 3),
+    dynamicLightsColor: new Float32Array(8 * 3),
+    dynamicLightsRadius: new Float32Array(8),
+
+    shadowCasterCount: 0,
+    shadowCasters: new Float32Array(32 * 4),
     meshPass,
   };
   world.clearPendingSurfaceDirtyCells();
@@ -2921,6 +3093,56 @@ export function renderSceneGL(
   uploadVisualDetailUniforms(gl, ru, visualDetailProfile);
   uploadVisualSurfaceUniforms(gl, ru, visualSurfaceProfile);
 
+  // Dynamic Lights (Framework)
+  let dynLightCount = 0;
+  if (flashlight > 0.0) {
+    gl.uniform3f(ru[`uDynamicLights[0].pos`]!, px, py, camHeight);
+    gl.uniform3f(ru[`uDynamicLights[0].color`]!, 1.5, 1.4, 1.2); // Warm bright light
+    gl.uniform1f(ru[`uDynamicLights[0].radius`]!, 10.0);
+    
+    glState.dynamicLightsPos[0] = px;
+    glState.dynamicLightsPos[1] = py;
+    glState.dynamicLightsPos[2] = camHeight;
+    glState.dynamicLightsColor[0] = 1.5;
+    glState.dynamicLightsColor[1] = 1.4;
+    glState.dynamicLightsColor[2] = 1.2;
+    glState.dynamicLightsRadius[0] = 10.0;
+    
+    dynLightCount++;
+  }
+  gl.uniform1i(ru['uDynamicLightCount']!, dynLightCount);
+  glState.dynamicLightCount = dynLightCount; // Save for mesh and sprites
+
+  // Shadow Casters
+  let shadowCasterCount = 0;
+  for (const e of entities) {
+    if (shadowCasterCount >= 32) break;
+    if (e.type === EntityType.PROJECTILE || e.type === EntityType.EFFECT || e.type === EntityType.BILLBOARD || e.type === EntityType.LIGHT) continue;
+    
+    let radius = 0.25;
+    let height = 0.8;
+    if (e.type === EntityType.ITEM_DROP) {
+      radius = 0.15;
+      height = 0.15;
+    }
+    
+    const dx = e.x - px;
+    const dy = e.y - py;
+    if (dx * dx + dy * dy > MAX_DRAW * MAX_DRAW) continue;
+
+    glState.shadowCasters[shadowCasterCount * 4 + 0] = e.x;
+    glState.shadowCasters[shadowCasterCount * 4 + 1] = e.y;
+    glState.shadowCasters[shadowCasterCount * 4 + 2] = height;
+    glState.shadowCasters[shadowCasterCount * 4 + 3] = radius;
+    shadowCasterCount++;
+  }
+  glState.shadowCasterCount = shadowCasterCount;
+  gl.uniform1i(ru['uShadowCasterCount']!, shadowCasterCount);
+  if (shadowCasterCount > 0) {
+    const loc = ru['uShadowCasters[0]'];
+    if (loc) gl.uniform4fv(loc, glState.shadowCasters.subarray(0, shadowCasterCount * 4));
+  }
+
   // Bind data textures to texture units.
   bindTextureUnit(gl, glState.cellsTex, ru['uCells']!, 0);
   bindTextureUnit(gl, glState.wallTexTex, ru['uWallTex']!, 1);
@@ -3051,6 +3273,8 @@ function distanceFogFactor(dist: number, fogDensity: number): number {
   const x = dist * fogDensity;
   return Math.min(0.985, Math.max(0, 1 - Math.exp(-x * x * 1.35)));
 }
+
+
 
 function samosborScreenFxCode(screenFx: string | undefined): number {
   switch (screenFx) {
@@ -3335,6 +3559,27 @@ function renderSpritesGL(
   gl.uniform3f(su['uFogColor']!, fogR, fogG, fogB);
   gl.uniform1f(su['uTime']!, time);
   gl.bindVertexArray(glState.spriteVAO);
+  gl.uniform1i(su['uIsShadow']!, 0);
+
+  // Dynamic Lights (Framework)
+  gl.uniform1i(su['uDynamicLightCount']!, glState.dynamicLightCount);
+  if (glState.dynamicLightCount > 0) {
+    for (let i = 0; i < glState.dynamicLightCount && i < 8; i++) {
+      gl.uniform3f(su[`uDynamicLights[${i}].pos`]!, glState.dynamicLightsPos[i * 3], glState.dynamicLightsPos[i * 3 + 1], glState.dynamicLightsPos[i * 3 + 2]);
+      gl.uniform3f(su[`uDynamicLights[${i}].color`]!, glState.dynamicLightsColor[i * 3], glState.dynamicLightsColor[i * 3 + 1], glState.dynamicLightsColor[i * 3 + 2]);
+      gl.uniform1f(su[`uDynamicLights[${i}].radius`]!, glState.dynamicLightsRadius[i]);
+    }
+  }
+
+  gl.uniform1i(su['uShadowCasterCount']!, glState.shadowCasterCount);
+  if (glState.shadowCasterCount > 0) {
+    const loc = su['uShadowCasters[0]'];
+    if (loc) gl.uniform4fv(loc, glState.shadowCasters.subarray(0, glState.shadowCasterCount * 4));
+  }
+
+  // Bind data textures for shadows
+  bindTextureUnit(gl, glState.cellsTex, su['uCells']!, 1);
+  bindTextureUnit(gl, glState.doorStatesTex, su['uDoorStates']!, 2);
 
   let drawnSprites = 0;
   for (let oi = 0; oi < visibleCount; oi++) {
@@ -3366,27 +3611,6 @@ function renderSpritesGL(
     const isProjectile = visibleProjectile[vi];
     const normDepth = Math.min(1.0, tyf / MAX_DRAW);
 
-    // Set uniforms
-    gl.uniform1f(su['uScreenX']!, spriteScreenX);
-    gl.uniform1f(su['uSpriteW']!, spriteW);
-    gl.uniform1f(su['uSpriteH']!, spriteH);
-    gl.uniform1f(su['uStartY']!, startY);
-    gl.uniform1f(su['uDepth']!, normDepth);
-    gl.uniform1f(su['uFogF']!, ff);
-    gl.uniform1i(su['uIsProjectile']!, isProjectile);
-    if (isProjectile === 2) {
-      gl.uniform1f(su['uSeed']!, visibleSeed[vi]);
-    }
-
-    // Switch blend mode: additive for projectiles (incl. flame), alpha for everything else
-    if (isProjectile) {
-      gl.blendFunc(gl.ONE, gl.ONE);
-      // Flame: disable depth write — purely additive visual, should not occlude
-      if (isProjectile === 2) gl.depthMask(false);
-    } else {
-      gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
-    }
-
     // Bind sprite texture. Item drops, animated frames and procedural actors
     // can override the shared atlas without changing saved entity payloads.
     let animatedSpriteTexture = false;
@@ -3406,6 +3630,165 @@ function renderSpritesGL(
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, spriteTex);
     gl.uniform1i(su['uSpriteTex']!, 0);
+
+    /* ── Drop Shadow & Reflection ─────────────────────────── */
+    if (!isProjectile && e && (e.type === EntityType.NPC || e.type === EntityType.MONSTER) && spriteH > 2) {
+      const ex = Math.floor(e.x), ey = Math.floor(e.y);
+      const eci = world.idx(ex, ey);
+      const eFloor = world.cells[eci] & 0xFF;
+      const eLight = world.light[eci] ?? 0;
+
+      // 1) Reflection on glossy floors (19 = F_WATER, 51 = F_MARBLE_TILE, 10 = F_TILE)
+      if (eFloor === 19 || eFloor === 51 || eFloor === 10) {
+        const refAlpha = eFloor === 19 ? 0.6 : (eFloor === 51 ? 0.25 : 0.15);
+        gl.uniform1i(su['uIsShadow']!, 1);
+        gl.uniform1f(su['uShadowFloorH']!, camHeight * SCR_H);
+        gl.uniform1f(su['uScreenX']!, spriteScreenX);
+        gl.uniform1f(su['uShearX']!, 0);
+        gl.uniform1f(su['uSpriteW']!, spriteW);
+        gl.uniform1f(su['uSpriteH']!, spriteH);
+        gl.uniform1f(su['uStartY']!, footY);
+        gl.uniform1f(su['uDepth']!, halfH);
+        gl.uniform1f(su['uFogF']!, ff);
+        gl.uniform1i(su['uIsProjectile']!, 0);
+        gl.uniform1f(su['uSeed']!, refAlpha);
+        gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+        gl.depthMask(false);
+        gl.drawArrays(gl.TRIANGLES, 0, 6);
+      }
+
+      // 2) Drop shadow blob (for ambient lighting)
+      let lgx = 0;
+      let lgy = 0;
+      let shadowIntensity = eLight;
+
+      let bestLight: { x: number, y: number, r: number, g: number, b: number } | null = null;
+      let bestWeight = -1;
+      for (let i = 0; i < glState.dynamicLightCount; i++) {
+        const lx = glState.dynamicLightsPos[i * 3];
+        const ly = glState.dynamicLightsPos[i * 3 + 1];
+        const radius = glState.dynamicLightsRadius[i];
+        const dist = Math.hypot(ex - lx, ey - ly);
+        if (dist < radius) {
+          const lr = glState.dynamicLightsColor[i * 3];
+          const lg = glState.dynamicLightsColor[i * 3 + 1];
+          const lb = glState.dynamicLightsColor[i * 3 + 2];
+          const weight = (1.0 - dist / radius) * Math.max(lr, lg, lb);
+          if (weight > bestWeight) {
+            bestWeight = weight;
+            bestLight = { x: lx, y: ly, r: lr, g: lg, b: lb };
+          }
+        }
+      }
+
+      if (bestLight) {
+        // True dynamic 2D projection drop shadow (uIsShadow == 3)
+        // Project onto floor away from the light source
+        const lx = bestLight.x;
+        const ly = bestLight.y;
+        
+        let lgx = (ex - lx);
+        let lgy = (ey - ly);
+        const ldist = Math.hypot(lgx, lgy);
+        if (ldist > 0) { lgx /= ldist; lgy /= ldist; }
+        
+        // Shadow length (longer if light is close, shorter if far, but capped)
+        const shadowLen = Math.min(4.0, Math.max(0.5, 2.0 / (ldist + 0.1)));
+        
+        const shadowWorldX = (px + dx) + lgx * shadowLen;
+        const shadowWorldY = (py + dy) + lgy * shadowLen;
+        
+        // Project shadow tip to screen
+        const dxTip = shadowWorldX - px;
+        const dyTip = shadowWorldY - py;
+        const invDet = 1.0 / (planeX * dirY - dirX * planeY);
+        const transformX = invDet * (dirY * dxTip - dirX * dyTip);
+        const transformYTip = invDet * (-planeY * dxTip + planeX * dyTip);
+
+        if (transformYTip > 0.1) {
+          const tipScreenX = (SCR_W / 2) * (1.0 + transformX / transformYTip);
+          const tipScreenY = halfH + Math.floor(camHeight * SCR_H) / transformYTip;
+          const rawHTip = Math.abs(SCR_H / transformYTip);
+          const tipW = Math.floor(rawHTip * scale);
+          
+          shadowIntensity = Math.max(shadowIntensity, bestWeight * 1.2);
+          const shadowAlpha = Math.min(0.8, 0.4 + shadowIntensity * 0.5);
+
+          gl.uniform1i(su['uIsShadow']!, 3);
+          gl.uniform1f(su['uShadowFloorH']!, camHeight * SCR_H);
+          gl.uniform3f(su['uShadowTip']!, tipScreenX, tipScreenY, tipW);
+          gl.uniform1f(su['uScreenX']!, spriteScreenX);
+          gl.uniform1f(su['uShearX']!, 0);
+          gl.uniform1f(su['uSpriteW']!, spriteW);
+          gl.uniform1f(su['uSpriteH']!, spriteH);
+          gl.uniform1f(su['uStartY']!, startY);
+          gl.uniform1f(su['uDepth']!, halfH);
+          gl.uniform1f(su['uFogF']!, ff);
+          gl.uniform1i(su['uIsProjectile']!, 0);
+          gl.uniform1f(su['uSeed']!, shadowAlpha);
+          gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+          gl.depthMask(false);
+          gl.drawArrays(gl.TRIANGLES, 0, 6);
+        }
+      } else if (eLight > 0.02) {
+        // Fallback to baked ambient lighting gradient blob shadow
+        const lr = world.light[world.idx(ex + 1, ey)] ?? 0;
+        const ll = world.light[world.idx(ex - 1, ey)] ?? 0;
+        const lu = world.light[world.idx(ex, ey + 1)] ?? 0;
+        const ld = world.light[world.idx(ex, ey - 1)] ?? 0;
+        lgx = lr - ll;
+        lgy = lu - ld;
+
+        const shadowRight = -(lgx * planeX + lgy * planeY) / (planeLen * planeLen);
+        const stretchAmount = Math.min(2.5, Math.hypot(lgx, lgy) * 3.0);
+        const shadowOffX = Math.round(shadowRight * rawH * 0.7 * (1.0 + stretchAmount));
+        const shadowW = Math.max(6, Math.floor(spriteW * (1.1 + stretchAmount * 0.3)));
+        const shadowH = Math.max(3, Math.floor(spriteW * 0.35));
+        const shadowAlpha = Math.min(0.55, 0.25 + shadowIntensity * 0.35);
+
+        gl.uniform1i(su['uIsShadow']!, 2);
+        gl.uniform1f(su['uShadowFloorH']!, camHeight * planeLen * SCR_H);
+        gl.uniform1f(su['uScreenX']!, spriteScreenX + shadowOffX);
+        gl.uniform1f(su['uShearX']!, 0);
+        gl.uniform1f(su['uSpriteW']!, shadowW);
+        gl.uniform1f(su['uSpriteH']!, shadowH);
+        gl.uniform1f(su['uStartY']!, footY - shadowH * 0.5);
+        gl.uniform1f(su['uDepth']!, normDepth);
+        gl.uniform1f(su['uFogF']!, ff);
+        gl.uniform1i(su['uIsProjectile']!, 0);
+        gl.uniform1f(su['uSeed']!, shadowAlpha);
+        gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+        gl.depthMask(false);
+        gl.drawArrays(gl.TRIANGLES, 0, 6);
+      }
+
+      gl.depthMask(true);
+      gl.uniform1i(su['uIsShadow']!, 0);
+    }
+
+    // Set uniforms for the actual sprite
+    gl.uniform1i(su['uIsShadow']!, 0);
+    gl.uniform1f(su['uScreenX']!, spriteScreenX);
+    gl.uniform1f(su['uShearX']!, 0);
+    gl.uniform1f(su['uSpriteW']!, spriteW);
+    gl.uniform1f(su['uSpriteH']!, spriteH);
+    gl.uniform1f(su['uStartY']!, startY);
+    gl.uniform1f(su['uDepth']!, normDepth);
+    gl.uniform1f(su['uFogF']!, ff);
+    gl.uniform1i(su['uIsProjectile']!, isProjectile);
+    gl.uniform3f(su['uSpriteWorldPos']!, px + dx, py + dy, spriteZ);
+    if (isProjectile === 2) {
+      gl.uniform1f(su['uSeed']!, visibleSeed[vi]);
+    }
+
+    // Switch blend mode: additive for projectiles (incl. flame), alpha for everything else
+    if (isProjectile) {
+      gl.blendFunc(gl.ONE, gl.ONE);
+      // Flame: disable depth write — purely additive visual, should not occlude
+      if (isProjectile === 2) gl.depthMask(false);
+    } else {
+      gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+    }
 
     gl.drawArrays(gl.TRIANGLES, 0, 6);
     drawnSprites++;
@@ -3535,7 +3918,7 @@ export function disposeWebGL(): void {
   gl.deleteProgram(glState.spriteProgram);
   gl.deleteProgram(glState.particleProgram);
   gl.deleteFramebuffer(glState.rayFBO);
-  gl.deleteRenderbuffer(glState.rayDepthBuf);
+  gl.deleteTexture(glState.rayDepthTex);
   gl.deleteTexture(glState.rayColorTex);
   gl.deleteFramebuffer(glState.bloomFBO_A);
   gl.deleteFramebuffer(glState.bloomFBO_B);

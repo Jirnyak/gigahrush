@@ -179,6 +179,8 @@ export enum EntityType {
   ITEM_DROP,
   PROJECTILE,
   BILLBOARD, // non-interactive visible prop entity: desks, train cars, large decor
+  EFFECT,
+  LIGHT,
 }
 
 /** Special projectile behaviour tags */

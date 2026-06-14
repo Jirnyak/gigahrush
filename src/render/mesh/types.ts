@@ -17,6 +17,13 @@ export interface MeshPassContext {
   fogColor?: readonly [number, number, number];
   ambient?: number;
   lightTex?: WebGLTexture | null;
+  cellsTex?: WebGLTexture | null;
+  doorStatesTex?: WebGLTexture | null;
+  doorTimersTex?: WebGLTexture | null;
+  dynamicLightCount?: number;
+  dynamicLightsPos?: Float32Array;
+  dynamicLightsColor?: Float32Array;
+  dynamicLightsRadius?: Float32Array;
   mode: MeshGraphicsMode;
   profile: ResolvedVisualGeometryProfile;
 }

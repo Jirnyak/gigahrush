@@ -156,9 +156,17 @@ function getUniforms(gl: WebGL2RenderingContext, program: WebGLProgram): Record<
     'uTime',
     'uLight',
     'uLightOn',
+    'uCells',
+    'uDoorStates',
+    'uDynamicLightCount',
   ];
   const out: Record<string, WebGLUniformLocation | null> = {};
   for (const name of names) out[name] = gl.getUniformLocation(program, name);
+  for (let i = 0; i < 8; i++) {
+    out[`uDynamicLights[${i}].pos`] = gl.getUniformLocation(program, `uDynamicLights[${i}].pos`);
+    out[`uDynamicLights[${i}].color`] = gl.getUniformLocation(program, `uDynamicLights[${i}].color`);
+    out[`uDynamicLights[${i}].radius`] = gl.getUniformLocation(program, `uDynamicLights[${i}].radius`);
+  }
   return out;
 }
 
@@ -300,6 +308,30 @@ class MeshPass implements MeshPassHandle {
     } else {
       gl.uniform1f(uniforms.uLightOn, 0.0);
     }
+    
+    // Dynamic Lights
+    gl.uniform1i(uniforms.uDynamicLightCount, context.dynamicLightCount ?? 0);
+    if (context.dynamicLightCount && context.dynamicLightCount > 0 && context.dynamicLightsPos && context.dynamicLightsColor && context.dynamicLightsRadius) {
+      for (let i = 0; i < context.dynamicLightCount && i < 8; i++) {
+        gl.uniform3f(uniforms[`uDynamicLights[${i}].pos`]!, context.dynamicLightsPos[i * 3], context.dynamicLightsPos[i * 3 + 1], context.dynamicLightsPos[i * 3 + 2]);
+        gl.uniform3f(uniforms[`uDynamicLights[${i}].color`]!, context.dynamicLightsColor[i * 3], context.dynamicLightsColor[i * 3 + 1], context.dynamicLightsColor[i * 3 + 2]);
+        gl.uniform1f(uniforms[`uDynamicLights[${i}].radius`]!, context.dynamicLightsRadius[i]);
+      }
+    }
+    
+    // Helper function to bind texture units cleanly
+    let texUnit = 1; // 0 is uLight
+    const bindTex = (tex: WebGLTexture | null | undefined, unif: WebGLUniformLocation | null) => {
+      if (tex && unif) {
+        gl.activeTexture(gl.TEXTURE0 + texUnit);
+        gl.bindTexture(gl.TEXTURE_2D, tex);
+        gl.uniform1i(unif, texUnit);
+        texUnit++;
+      }
+    };
+    
+    bindTex(context.cellsTex, uniforms.uCells);
+    bindTex(context.doorStatesTex, uniforms.uDoorStates);
 
     gl.disable(gl.BLEND);
     gl.disable(gl.CULL_FACE);

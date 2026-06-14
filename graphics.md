@@ -143,6 +143,17 @@ Lighting:
   by the ray shader.
 - Organic cells pulse light through `organicLightPulse()`.
 
+Dynamic entity drop shadows and reflections:
+
+- NPC and monster entities cast simple drop shadows on regular floors, and full silhouette reflections on glossy floors (water, tile, marble).
+- The reflection uses the sprite texture rendered at the entity's foot position as a dark semi-transparent overlay, colored with a dark blueish tint and fading out toward the top. It uses the exact same `raycasterRow` floor-depth projection as the raycaster, creating a perfect perspective-correct reflection that clips correctly against walls.
+- The drop shadow is a procedurally generated soft ellipse drawn beneath the entity's feet.
+- Shadow X position is offset opposite to the local `world.light` gradient, projected onto the camera right axis, so shadows point away from light sources. Reflections are always centered beneath the entity.
+- Shadow intensity scales with local light level: stronger under lamps, invisible in darkness (< 0.04 light).
+- Both shadows and reflections use `depthMask(false)` — they darken the floor but don't write depth, so the entity sprite drawn afterward still passes depth test normally.
+- Shadow fog fadeout: `alpha * (1 - fogFactor * 0.85)`.
+- This is render-only; shadows and reflections do not affect gameplay, AI or save data.
+
 Dynamic sky:
 
 - `DynamicSkyTexture` can override ceiling sampling with a procedural sky image,
@@ -546,6 +557,8 @@ These are current facts, not queued promises:
 
 - There is no per-wall-face decal storage. `surfaceMap` is per cell.
 - Light is baked from feature sources only; there is no dynamic shadow map.
+  Entity sprite shadows are a render-only silhouette projection pass, not a true
+  shadow-casting system.
 - Micro-detail is shader-side deterministic and cannot represent player-made
   persistent small clutter.
 - Static feature sprites are collected in a bounded camera-near square; this is
