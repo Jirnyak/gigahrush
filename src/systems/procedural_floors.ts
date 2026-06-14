@@ -117,10 +117,10 @@ const MAX_RUN_SEED = 0x7fffffff;
 const MAX_SAVED_TITLE = 96;
 const MAX_SAVED_ID = 64;
 export const ROUTE_LIFTS_PER_DIRECTION = 16;
-export const SAMOSBOR_DURATION_MIN_SEC = 30;
-export const SAMOSBOR_DURATION_MAX_SEC = 15 * 60;
-export const SAMOSBOR_COOLDOWN_MIN_SEC = 60;
-export const SAMOSBOR_COOLDOWN_MAX_SEC = 30 * 60;
+export const SAMOSBOR_DURATION_MIN_SEC = 20;
+export const SAMOSBOR_DURATION_MAX_SEC = 5 * 60;
+export const SAMOSBOR_COOLDOWN_MIN_SEC = 45;
+export const SAMOSBOR_COOLDOWN_MAX_SEC = 25 * 60;
 const VALID_GEOMETRY_IDS = new Set<FloorGeometryId>(FLOOR_GEOMETRIES.map(def => def.id));
 const VALID_MAJORITY_IDS = new Set<FloorMajorityId>(FLOOR_MAJORITY_FACTIONS.map(def => def.id));
 const VALID_ANOMALY_IDS = new Set<FloorAnomalyId>(FLOOR_ANOMALIES.map(def => def.id));
@@ -671,6 +671,16 @@ export function nextFloorRunSamosborCooldown(state: GameState): number {
   const depth = floorRunSamosborDepth01(state);
   const maxForDepth = SAMOSBOR_COOLDOWN_MAX_SEC -
     (SAMOSBOR_COOLDOWN_MAX_SEC - SAMOSBOR_COOLDOWN_MIN_SEC) * depth;
+  // Luck-based variance: rare back-to-back or long gap
+  const luck = Math.random();
+  if (luck < 0.08) {
+    // ~8% chance: rapid double-strike, cooldown < 2 min
+    return SAMOSBOR_COOLDOWN_MIN_SEC + Math.random() * (120 - SAMOSBOR_COOLDOWN_MIN_SEC);
+  }
+  if (luck > 0.85) {
+    // ~15% chance: long calm, cooldown > 20 min
+    return 20 * 60 + Math.random() * (maxForDepth - 20 * 60);
+  }
   return SAMOSBOR_COOLDOWN_MIN_SEC + Math.random() * (maxForDepth - SAMOSBOR_COOLDOWN_MIN_SEC);
 }
 

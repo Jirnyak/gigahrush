@@ -300,6 +300,7 @@ Avoid:
 - DOM work in systems.
 - Renderer-side gameplay state.
 - Periodic refill-to-cap population spawners.
+- **Real-time BFS or O(W²) recomputation.** Navigation tree, flow fields, light maps and path blockers are baked at floor load and after samosbor stitch — never during active simulation. During samosbor the nav cache must stay frozen; no system may unfreeze or re-bake it until samosbor ends. Stale paths during geometry mutation are acceptable. See `optimization.md` Iron Law.
 
 Use `systems/entity_index.ts` for broadphase-style nearby entity queries and follow existing AI/pathfinding field patterns instead of starting per-actor BFS work.
 
@@ -474,6 +475,7 @@ Reject these:
 - A new `FloorLevel` for a design-floor route stop, catalog entry or lift anomaly.
 - Runtime population refill that replaces killed ordinary NPCs.
 - Per-frame full-world scans.
+- Real-time BFS, `bakeNavigationTree` or `bakeLights` during active gameplay. All O(W²) work happens at floor load or post-samosbor stitch only.
 - A renderer feature that owns gameplay state.
 - A quest that requires hardcoding one NPC in generic AI.
 - A generator that overwrites protected apartments or seals unreachable rooms.

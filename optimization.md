@@ -17,6 +17,31 @@ This file is the central optimization document and also preserves the full May 2
 - "Safe optimization" here means semantics-preserving: cache, index, defer, split dirty state or remove duplicate work. Any visible simplification must be treated as a separate design change.
 - Validate performance changes with `npm run check`; use `npm run check:browser` or `npm run check:full` for render, input, UI, mobile and browser-storage changes.
 
+## Iron Law: No Real-Time BFS
+
+Date: 2026-06-14.
+
+**During active gameplay everything is pre-baked. No BFS, no full-world scans, no O(W×W) recomputation.**
+
+Baking (navigation tree, flow fields, light maps, path blockers, connectivity) happens at exactly two boundaries:
+
+1. **Floor load** — floor switch, game start, save restore.
+2. **Post-samosbor stitch** — one-time rebake after samosbor ends and geometry is finalized.
+
+During active simulation (including active samosbor with fronts mutating cells), **all lookups are O(1) from baked data**. The navigation cache must be frozen (`freezeNavigationCacheForWorld`) for the entire duration of samosbor. No system may unfreeze it until samosbor ends.
+
+Forbidden during active gameplay frames:
+
+- `bakeNavigationTree` (1M-cell BFS)
+- `ensureBehaviorFlowField` with cache miss (1M-cell BFS)
+- `rebuildPathBlockersFromWorldObjects` without freeze protection
+- `bakeLights` on the full world
+- Any new O(W²) computation triggered per-frame or per-entity
+
+If a system needs navigation during geometry mutation (e.g., monsters chasing during samosbor), it must use the frozen/cached tree from before the mutation started. Stale paths are acceptable — the world is actively collapsing.
+
+**History**: This rule exists because `cancelSamosborWave()` internally called `unfreezeNavigationCacheForWorld()` after `freezeNavigationCacheForWorld()` at samosbor start, causing every cell mutation to trigger a full 1M-cell BFS rebuild (~5-10ms/frame), resulting in 4-5x FPS drops. The bug recurred multiple times because no explicit rule prevented it.
+
 ## Path Blocker Core Storage
 
 Date: 2026-06-07.

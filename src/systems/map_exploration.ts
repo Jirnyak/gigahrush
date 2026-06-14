@@ -295,6 +295,28 @@ export function syncMapExplorationAfterSamosborWave(world: World, state: GameSta
   hideMapArea(world, snapshot.originIdx % W, (snapshot.originIdx / W) | 0, snapshot.fieldRadius + 2);
 }
 
+/** Hide specific cells on the map — re-fogs areas changed by samosbor fronts */
+export function hideMapExplorationCells(world: World, cells: ReadonlySet<number>): void {
+  const runtime = explorationByWorld.get(world);
+  if (!runtime || cells.size === 0) return;
+  const hiddenRooms = new Set<number>();
+  const hiddenZones = new Set<number>();
+  for (const idx of cells) {
+    if (runtime.explored[idx]) {
+      runtime.explored[idx] = 0;
+      runtime.seenTick[idx] = 0;
+    }
+    const roomId = world.roomMap[idx];
+    if (roomId >= 0) hiddenRooms.add(roomId);
+    const zoneId = world.zoneMap[idx];
+    if (zoneId >= 0) hiddenZones.add(zoneId);
+  }
+  for (const roomId of hiddenRooms) runtime.revealedRooms.delete(roomId);
+  for (const zoneId of hiddenZones) runtime.revealedZones.delete(zoneId);
+  runtime.version = (runtime.version + 1) | 0;
+  runtime.lastCell = -1;
+}
+
 export function isMapCellExplored(world: World, idx: number): boolean {
   const runtime = explorationByWorld.get(world);
   return !runtime || runtime.explored[idx] !== 0;

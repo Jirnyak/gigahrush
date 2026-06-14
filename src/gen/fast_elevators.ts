@@ -1,13 +1,13 @@
 import { Cell, Feature, Tex, W } from '../core/types';
 import type { World } from '../core/world';
 
-const GRID = 8;
-const STEP = Math.floor(W / GRID); // 128 on a 1024 torus
-const OFFSET = Math.floor(STEP / 2); // 64
+const GRID = 4;
+const STEP = Math.floor(W / GRID); // 256 on a 1024 torus
+const OFFSET = Math.floor(STEP / 2); // 128
 const CARVE_SEARCH_RADIUS = 40;
 
 /**
- * Absolute, deterministic 8x8 fast-elevator grid (64 cabins) stamped at fixed
+ * Absolute, deterministic 4x4 fast-elevator grid (16 cabins) stamped at fixed
  * world positions on every floor for fast travel.
  *
  * Each cabin is a `Cell.LIFT` carrying `Feature.MACHINE`. That pair is the unique

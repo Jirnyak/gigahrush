@@ -443,6 +443,7 @@ Avoid:
 - JSON parse/stringify in the game loop.
 - DOM work in systems.
 - Renderer-side gameplay state, including camera mode ownership.
+- **Real-time BFS or O(W²) recomputation during active gameplay.** Navigation tree, flow fields, light maps, path blockers and connectivity are baked at floor load and after samosbor stitch — never during active simulation. During samosbor the navigation cache must be frozen; no system may unfreeze or invalidate it until samosbor ends. See `optimization.md` Iron Law section.
 
 Default budgets:
 
@@ -451,6 +452,7 @@ Content generation: can be expensive, but bounded and done on loading/rebuild.
 Per-frame system: suspicious above 0.1 ms.
 Slow system tick: target below 0.2 ms per second on i3/MX350.
 HUD/render additions: draw from cached state, no world scans in draw calls.
+Real-time pathfinding: O(1) lookup only. All BFS is baked at boundaries.
 ```
 
 ## 8. Content Module Contract

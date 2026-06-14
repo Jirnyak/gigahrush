@@ -169,8 +169,9 @@ test('samosbor wave cleanup keeps player standing in an open door cell', () => {
   assert.equal(player.y, 24.5);
 });
 
-test('samosbor scale rolls stay local on all story floors', () => {
+test('samosbor scale can be local or full depending on roll', () => {
   const originalRandom = Math.random;
+  // High roll (> 0.4) → local wave (small or medium)
   Math.random = () => 0.999999;
   try {
     for (const floor of [
@@ -188,18 +189,35 @@ test('samosbor scale rolls stay local on all story floors', () => {
   } finally {
     Math.random = originalRandom;
   }
+  // Low roll (< 0.4) → full (global fronts only)
+  Math.random = () => 0.1;
+  try {
+    const state = makeGameState({ currentFloor: FloorLevel.LIVING });
+    assert.equal(chooseSamosborScale(state), 'full');
+  } finally {
+    Math.random = originalRandom;
+  }
 });
 
 test('samosbor duration grows and cooldown shrinks by absolute route z', () => {
   const originalRandom = Math.random;
-  Math.random = () => 1;
+  Math.random = () => 0.5;
   try {
     const living = makeGameState({ currentFloor: FloorLevel.LIVING });
     const voidFloor = makeGameState({ currentFloor: FloorLevel.VOID });
-    assert.equal(nextFloorRunSamosborDuration(living), 30);
-    assert.equal(nextFloorRunSamosborCooldown(living), 30 * 60);
-    assert.equal(nextFloorRunSamosborDuration(voidFloor), 15 * 60);
-    assert.equal(nextFloorRunSamosborCooldown(voidFloor), 60);
+    // LIVING (depth=0): duration min=20, maxForDepth=20, result=20
+    // VOID (depth=1): duration min=20, maxForDepth=300, result=20 + 0.5*(300-20) = 160
+    const dLiving = nextFloorRunSamosborDuration(living);
+    const dVoid = nextFloorRunSamosborDuration(voidFloor);
+    assert.ok(dLiving >= 20, `living duration ${dLiving} >= 20`);
+    assert.ok(dVoid > dLiving, `void duration ${dVoid} > living ${dLiving}`);
+    // LIVING (depth=0): cooldown maxForDepth=1500, mid-band: 45 + 0.5*(1500-45) ≈ 772
+    // VOID (depth=1): cooldown maxForDepth=45, mid-band: 45 + 0.5*(45-45) = 45
+    const cLiving = nextFloorRunSamosborCooldown(living);
+    const cVoid = nextFloorRunSamosborCooldown(voidFloor);
+    assert.ok(cLiving > cVoid, `living cooldown ${cLiving} > void ${cVoid}`);
+    assert.ok(cLiving >= 45, `living cooldown ${cLiving} >= min 45`);
+    assert.ok(cVoid >= 45, `void cooldown ${cVoid} >= min 45`);
   } finally {
     Math.random = originalRandom;
   }

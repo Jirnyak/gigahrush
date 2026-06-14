@@ -173,6 +173,7 @@ export class World {
   zoneMap:   Uint8Array;           // zone id per cell (0-63)
   factionControl: Uint8Array;      // per-cell faction control (ZoneFaction enum)
   fog:       Uint8Array;           // purple fog density per cell (0 = clear, 255 = full)
+  tissue:    Uint8Array;           // samosbor tissue overlay per cell (0 = clean, 255 = full infection)
   slideCells: number[] = [];       // cell indices of slide walls (cycle textures)
   screenCells: number[] = [];      // cell indices of procedural screen/TV walls
   surfaceMap: Map<number, Uint8Array> = new Map(); // sparse RGBA canvas, 16×16×4 per cell (floors + walls)
@@ -192,6 +193,7 @@ export class World {
   ceilHeightVersion = 0;           // bumped when render-only ceiling-height tiers change
   lightVersion = 0;                // bumped when baked feature light changes
   fogVersion = 0;                  // bumped when runtime fog data changes
+  tissueVersion = 0;               // bumped when tissue overlay changes
   visualSlotVersion = 0;           // bumped when render-only visual slot data changes
   visualSlotDirtyVersion = 0;      // conservative whole-layer invalidation marker for future mesh cache
   pathBlockerVersion = 0;          // bumped when path blocker masks change
@@ -206,6 +208,7 @@ export class World {
   private floorTexDirtyRects: PendingGridDirtyRects = [];
   private featureDirtyRects: PendingGridDirtyRects = [];
   private fogDirtyRects: PendingGridDirtyRects = [];
+  private tissueDirtyRects: PendingGridDirtyRects = [];
   private surfaceDirtyCells: Set<number> = new Set();
   private surfaceDirtyFull = true;
 
@@ -224,6 +227,7 @@ export class World {
     this.zoneMap  = new Uint8Array(n);              // zone id
     this.factionControl = new Uint8Array(n);        // per-cell faction (ZoneFaction)
     this.fog      = new Uint8Array(n);              // fog density
+    this.tissue   = new Uint8Array(n);              // samosbor tissue overlay
     this.liftDir  = new Uint8Array(n);              // LiftDirection (0=DOWN, 1=UP)
     this.surfaceFlags = new Uint8Array(n);
     this.ceilHeight = new Uint8Array(n);            // 0 = standard ceiling height
@@ -336,6 +340,7 @@ export class World {
     this.floorTexDirtyRects = [];
     this.featureDirtyRects = [];
     this.fogDirtyRects = [];
+    this.tissueDirtyRects = [];
   }
 
   takeCellDirtyRects(): readonly WorldGridDirtyRect[] | null {
@@ -440,6 +445,23 @@ export class World {
   markFogDirty(rects?: GridDirtyRectsInput): void {
     this.fogVersion = (this.fogVersion + 1) | 0;
     this.fogDirtyRects = appendGridDirtyRects(this.fogDirtyRects, rects);
+  }
+
+  markTissueDirty(rects?: GridDirtyRectsInput): void {
+    this.tissueVersion = (this.tissueVersion + 1) | 0;
+    this.tissueDirtyRects = appendGridDirtyRects(this.tissueDirtyRects, rects);
+  }
+
+  takeTissueDirtyRects(): readonly WorldGridDirtyRect[] | null {
+    const rects = this.tissueDirtyRects;
+    this.tissueDirtyRects = [];
+    return rects === null ? null : rects.slice();
+  }
+
+  clearTissue(): void {
+    this.tissue.fill(0);
+    this.tissueVersion = (this.tissueVersion + 1) | 0;
+    this.tissueDirtyRects = null;
   }
 
   markCeilHeightDirty(): void {
@@ -751,6 +773,7 @@ export function replaceWorldFromGeneration(target: World | null | undefined, gen
   target.zoneMap.set(source.zoneMap);
   target.factionControl.set(source.factionControl);
   target.fog.set(source.fog);
+  target.tissue.set(source.tissue);
   target.liftDir.set(source.liftDir);
 
   target.rooms = source.rooms.slice();

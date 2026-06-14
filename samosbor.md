@@ -8,14 +8,16 @@
 
 Самосбор - не перезагрузка этажа. Это локальное событие на текущем `World`:
 
-1. Система выбирает вариант и предупреждает игрока.
+1. Система выбирает вариант и предупреждает игрока (~30s warning).
 2. HUD/log получают короткую строку expected variant/action.
 3. Укрытия, гермы и локальные shelter hooks могут подготовить safe rooms.
-4. Active phase давит туманом/светом, seal logic, вариантными эффектами, монстрами и перемещением сущностей.
-5. `systems/samosbor_wave.ts` мутирует bounded local field around a random mutable source.
-6. После активной фазы свежая локальная геометрия stitched back into the same active floor through the heavy transition gate.
-7. Aftermath beats leave events, loot, shortages, rumors, marks or local hazards.
-8. The stitched active world becomes the persistent state for that floor key when floor memory captures it.
+4. Active phase запускает **3–8 одновременных фронтов** по всему этажу, каждый мутирует клетки (fog, текстуры, features) и спавнит монстров по мере распространения.
+5. Типы фронтов: `crack` (молния по коридорам), `wave` (расширяющийся диск), `tendril` (щупальце по проходам), `flash` (мгновенная вспышка).
+6. Параллельно: seal logic, вариантные эффекты, `systems/samosbor_wave.ts` local mutation, fog effects, player pressure monsters, random entity transfer.
+7. После активной фазы свежая локальная геометрия stitched back into the same active floor through the heavy transition gate.
+8. Aftermath beats leave events, loot, shortages, rumors, marks or local hazards.
+9. Tissue overlay (`World.tissue`) cleared при завершении самосбора.
+10. The stitched active world becomes the persistent state for that floor key when floor memory captures it.
 
 Current runtime counts:
 
@@ -59,6 +61,32 @@ Valid shelter sources:
 - route/floor content that marks and preserves protected room ids.
 
 Shelter hooks must be bounded. They may prepare a few rooms, publish facts, and clean up after the event. They must not scan the whole world every frame, allocate per-entity closures or create permanent global state without save/runtime ownership.
+
+## Multi-Front Chaos Engine
+
+The active phase launches 3–8 simultaneous `SamosborFront` propagation fronts across the floor:
+
+| Front type | Behavior | Budget/tick | Lifespan |
+|---|---|---|---|
+| `crack` | Narrow BFS along corridors, avoids rooms | 6 | 300 ticks |
+| `wave` | Expanding disc from origin | 18 | 500 ticks |
+| `tendril` | Winding path through corridors | 4 | 400 ticks |
+| `flash` | Instant burst, dies fast | 48 | 30 ticks |
+
+Each front mutates cells it passes through: sets fog (200+), tissue overlay, and with small probabilities mutates floor/wall textures (12%/5%) and features (3%). Monsters spawn every ~20 processed cells.
+
+Fronts **never** touch `aptMask`, `hermoWall`, `Cell.LIFT`, or shelter room cells. Front origins are distributed across different zones.
+
+Fronts tick at 20 Hz (50ms interval) during active samosbor and auto-die after their max age or when their BFS frontier is exhausted.
+
+## Timing
+
+Current timing constants (in `procedural_floors.ts`):
+
+- Duration: 20s min, 5 min max (scaled by depth and variant).
+- Cooldown: 45s min, 25 min max (scaled inversely by depth).
+- Luck variance: 8% chance of rapid double-strike (< 2 min cooldown), 15% chance of long calm (> 20 min).
+- Warning window: 30 seconds before impact.
 
 ## Local Rebuild Contract
 

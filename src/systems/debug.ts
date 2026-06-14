@@ -34,7 +34,7 @@ import { publishMaronaryShavingAcquired } from './maronary_shaving';
 import { spawnContract, spawnContractById, spawnGovnyakCourierContract, summarizeContracts } from './contracts';
 import { debugForcePneumomailCapsule } from './pneumomail';
 import { populationItemSummary } from './balance';
-import { getSamosborDebugLines } from './samosbor';
+import { getSamosborDebugLines, forceNextSamosborScale } from './samosbor';
 import { territoryOwnerAtIndex } from './territory';
 import { floorCatalogDebugLines } from './floor_catalog';
 import { summarizeHeatline } from './heatline';
@@ -1327,10 +1327,11 @@ export function execDebugCommand(
       state.msgs.push(msg('+1 000 000 XP', state.time, '#ff0'));
       break;
     }
-    case 5: { // Cycle forced samosbor variant + start
+    case 5: { // Cycle forced samosbor variant + start (full scale = global fronts)
       const variantId = cycleForcedSamosborVariant();
+      forceNextSamosborScale('full');
       state.samosborTimer = 0;
-      state.msgs.push(msg(`[DEBUG] Следующий самосбор: ${variantId}`, state.time, '#ff0'));
+      state.msgs.push(msg(`[DEBUG] Следующий самосбор: ${variantId} (глобальный)`, state.time, '#ff0'));
       break;
     }
     case 6: { // Toggle noclip
@@ -1484,23 +1485,25 @@ export function execDebugCommand(
       ));
       break;
     }
-    case 30: { // Force Veretar variant + start
+    case 30: { // Force Veretar variant + start (full scale)
       forceNextSamosborVariant('veretar');
+      forceNextSamosborScale('full');
       if (!state.samosborActive) state.samosborTimer = 0;
       if (isSmokeDebugRun()) stabilizeSmokeRecovery(world, player, entities);
       state.msgs.push(msg(
         state.samosborActive
-          ? '[DEBUG] Следующий самосбор: Веретар после текущего'
-          : '[DEBUG] Следующий самосбор: Веретар',
+          ? '[DEBUG] Следующий самосбор: Веретар (глобальный) после текущего'
+          : '[DEBUG] Следующий самосбор: Веретар (глобальный)',
         state.time,
         '#f4f1df',
       ));
       break;
     }
-    case 31: { // Force Maronary variant + start
+    case 31: { // Force Maronary variant + start (full scale)
       forceNextSamosborVariant('maronary');
+      forceNextSamosborScale('full');
       state.samosborTimer = 0;
-      state.msgs.push(msg('[DEBUG] Следующий самосбор: Маронарий', state.time, '#35ff66'));
+      state.msgs.push(msg('[DEBUG] Следующий самосбор: Маронарий (глобальный)', state.time, '#35ff66'));
       break;
     }
     case 32: { // Route cue audio/HUD smoke
@@ -1526,10 +1529,11 @@ export function execDebugCommand(
       state.msgs.push(msg(ok ? '[MAR] зелёная стружка выдана' : '[MAR] нет места для стружки', state.time, ok ? '#fc4' : '#f84'));
       break;
     }
-    case 35: { // Force Istotit variant + start
+    case 35: { // Force Istotit variant + start (full scale)
       forceNextSamosborVariant('istotit');
+      forceNextSamosborScale('full');
       state.samosborTimer = 0;
-      state.msgs.push(msg('[DEBUG] Следующий самосбор: Истотит', state.time, '#d6a64b'));
+      state.msgs.push(msg('[DEBUG] Следующий самосбор: Истотит (глобальный)', state.time, '#d6a64b'));
       break;
     }
     case 36: return { type: 'teleport_procedural_anomaly', anomalyId: 'smog' };

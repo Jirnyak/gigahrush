@@ -20,6 +20,7 @@ import type { FloorGeneration } from '../gen/floor_manifest';
 import { rebuildPathBlockersFromWorldObjects } from '../gen/path_blockers';
 import { freezeNavigationCacheForWorld, unfreezeNavigationCacheForWorld } from './ai/pathfinding';
 import { publishEvent } from './events';
+import { hideMapExplorationCells } from './map_exploration';
 import { pruneRouteCuesInCells } from './route_cues';
 import { isPlayerEntity } from './player_actor';
 
@@ -283,13 +284,16 @@ export function canRunSamosborWave(_state: GameState): boolean {
 
 export function chooseSamosborScale(state: GameState): SamosborWaveScale {
   if (!canRunSamosborWave(state)) return 'full';
+  // ~40% full (global fronts only), ~30% small, ~30% medium
+  const roll = Math.random();
+  if (roll < 0.4) return 'full';
   const defs = [SAMOSBOR_WAVE_SCALE_DEFS.small, SAMOSBOR_WAVE_SCALE_DEFS.medium];
   let total = 0;
   for (const def of defs) total += def.weight;
-  let roll = Math.random() * total;
+  let localRoll = Math.random() * total;
   for (const def of defs) {
-    roll -= def.weight;
-    if (roll <= 0) return def.scale;
+    localRoll -= def.weight;
+    if (localRoll <= 0) return def.scale;
   }
   return 'medium';
 }
@@ -1092,6 +1096,151 @@ export function getSamosborWaveDebugSnapshot(): SamosborWaveDebugSnapshot | null
     return lastWaveSnapshot;
   }
   return lastWaveSnapshot;
+}
+
+/** Clear the cached snapshot so map exploration doesn't read stale wave data */
+export function clearSamosborWaveSnapshot(): void {
+  lastWaveSnapshot = null;
+}
+
+/**
+ * Stitch a replacement floor into the world at front-touched cells.
+ * This repairs the chaotic geometry left by fronts after samosbor ends.
+ * Returns the number of cells patched.
+ */
+export function applyFrontFieldStitch(
+  world: World,
+  state: GameState,
+  touchedCells: ReadonlySet<number>,
+  replacement: FloorGeneration,
+): number {
+  if (touchedCells.size === 0) return 0;
+  const source = replacement.world;
+  const indices: number[] = [];
+  const mask = new Uint8Array(W * W);
+
+  // Build field from touched cells — filter out protected cells
+  for (const ci of touchedCells) {
+    if (world.aptMask[ci] || world.hermoWall[ci]) continue;
+    if (world.cells[ci] === Cell.LIFT) continue;
+    mask[ci] = 1;
+    indices.push(ci);
+  }
+  if (indices.length === 0) return 0;
+
+  // Also expand 1 cell around touched to smooth boundaries
+  const boundary: number[] = [];
+  for (const ci of indices) {
+    const x = ci % W;
+    const y = (ci / W) | 0;
+    for (let d = 0; d < DIR_X.length; d++) {
+      const ni = world.idx(x + DIR_X[d], y + DIR_Y[d]);
+      if (mask[ni]) continue;
+      if (world.aptMask[ni] || world.hermoWall[ni]) continue;
+      if (world.cells[ni] === Cell.LIFT) continue;
+      mask[ni] = 1;
+      boundary.push(ni);
+    }
+  }
+  const allIndices = indices.concat(boundary);
+
+  const fieldRects = dirtyRectsForIndices(allIndices);
+  const fieldSet = new Set(allIndices);
+  const visualFlags: DirtyFlags = { cells: false, wallTex: false, floorTex: false, light: false, fog: false, surface: false, visualSlots: false };
+
+  // Remove existing doors in field
+  for (const ci of allIndices) {
+    if (world.cells[ci] === Cell.DOOR || world.doors.has(ci)) {
+      world.removeDoorAt(ci);
+    }
+  }
+
+  // Copy cells from replacement floor
+  let copied = 0;
+  // Create a patch room for generic stitched cells
+  const patchRoomId = world.rooms.length;
+  world.rooms.push({
+    id: patchRoomId,
+    type: RoomType.COMMON,
+    x: 0, y: 0, w: 1, h: 1,
+    doors: [],
+    sealed: false,
+    name: 'Перестроенный участок',
+    apartmentId: -1,
+    wallTex: Tex.CONCRETE,
+    floorTex: Tex.F_CONCRETE,
+  });
+
+  for (const idx of allIndices) {
+    const oldFog = world.fog[idx];
+    const sourceCell = source.cells[idx];
+    const cell = localPatchCell(sourceCell);
+    world.cells[idx] = cell;
+    world.roomMap[idx] = walkableCell(cell) ? (source.roomMap[idx] >= 0 ? patchRoomId : -1) : -1;
+    world.wallTex[idx] = sourceCell === Cell.DOOR ? Tex.CONCRETE : cell === Cell.WALL && sourceCell === Cell.ABYSS ? Tex.DARK : source.wallTex[idx];
+    world.floorTex[idx] = sourceCell === Cell.ABYSS ? Tex.F_ABYSS : source.floorTex[idx];
+    world.features[idx] = walkableCell(cell) ? passiveGeneratedFeature(source.features[idx]) : Feature.NONE;
+    world.light[idx] = source.light[idx];
+    world.fog[idx] = walkableCell(cell) ? Math.max(oldFog, source.fog[idx]) : 0;
+    world.liftDir[idx] = 0;
+    copyGeneratedSurfaceCell(world, source, idx);
+    copyGeneratedVisualSlotsCell(world, source, idx, visualFlags);
+    copied++;
+  }
+
+  // Stitch boundaries: where the new field walls meet old floor, carve connections
+  for (const idx of allIndices) {
+    if (walkableCell(world.cells[idx])) continue;
+    const x = idx % W;
+    const y = (idx / W) | 0;
+    for (let d = 0; d < DIR_X.length; d++) {
+      const ni = world.idx(x + DIR_X[d], y + DIR_Y[d]);
+      if (mask[ni]) continue;
+      if (walkableCell(world.cells[ni])) {
+        // Adjacent old walkable cell — carve this cell to floor for connection
+        world.cells[idx] = Cell.FLOOR;
+        world.roomMap[idx] = patchRoomId;
+        world.floorTex[idx] = Tex.F_CONCRETE;
+        world.wallTex[idx] = Tex.CONCRETE;
+        world.setFeatureAt(idx, Feature.NONE, false);
+        world.fog[idx] = 0;
+        break;
+      }
+    }
+  }
+
+  refreshPassiveFeatureLists(world, source, mask);
+  clearFieldSideEffects(world, mask);
+  rebuildPathBlockersFromWorldObjects(world, (Math.random() * 0xffffffff) | 0, allIndices);
+  pruneRouteCuesInCells(world, fieldSet);
+
+  // Re-fog stitched areas so player must re-explore the changed geometry
+  hideMapExplorationCells(world, fieldSet);
+
+  world.markCellsDirty(fieldRects);
+  world.markWallTexDirty(fieldRects);
+  world.markFloorTexDirty(fieldRects);
+  world.markFeaturesDirty(true, fieldRects);
+  world.markFogDirty(fieldRects);
+  world.markSurfaceDirty();
+  if (visualFlags.visualSlots) world.markVisualSlotsDirty();
+
+  state.msgs.push(msg(`Самосбор перестроил ${copied} клеток.`, state.time, '#c8f'));
+  publishEvent(state, {
+    type: 'room_regrown',
+    x: 0,
+    y: 0,
+    severity: 5,
+    privacy: 'public',
+    tags: ['samosbor', 'fronts', 'stitch', 'full'],
+    data: {
+      scale: 'full' as SamosborWaveScale,
+      fieldCells: allIndices.length,
+      regeneratedCells: copied,
+    },
+  });
+
+  return copied;
 }
 
 export function getSamosborWaveDebugLines(): string[] {

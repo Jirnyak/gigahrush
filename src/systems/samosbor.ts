@@ -75,15 +75,13 @@ import {
   updateHermodoorBorer,
 } from './hermodoor_borer';
 import {
+  applyFrontFieldStitch,
   cancelSamosborWave,
-  chooseSamosborScale,
-  finishSamosborWave,
+  clearSamosborWaveSnapshot,
   getSamosborWaveDebugLines,
   isSamosborWaveActive,
   isSamosborWaveDebugActive,
-  startSamosborWave,
   tickSamosborWave,
-  type SamosborWaveScale,
 } from './samosbor_wave';
 import {
   type ActiveSamosborVariant,
@@ -109,13 +107,13 @@ import {
   territoryOwnerAtIndex,
 } from './territory';
 
-const MONSTERS_PER_SAMOSBOR = 10;
-const RANDOM_MAP_MONSTERS_PER_SAMOSBOR = 14;
-const FOG_SAMPLES_PER_TICK = 64;  // random cells sampled per tick for fog spread
-const FOG_SPAWN_INTERVAL  = 1.0;  // seconds between monster spawns in fog
-const SEAL_BEFORE_END = 10;       // seal apartments 10 seconds before samosbor ends
+const MONSTERS_PER_SAMOSBOR = 16;
+const RANDOM_MAP_MONSTERS_PER_SAMOSBOR = 22;
+const FOG_SAMPLES_PER_TICK = 128;  // random cells sampled per tick for fog spread (doubled for global chaos)
+const FOG_SPAWN_INTERVAL  = 1.0;   // seconds between monster spawns in fog
+const SEAL_BEFORE_END = 10;        // seal apartments 10 seconds before samosbor ends
 const SAMOSBOR_DIRECTOR_ACTIVE_INTERVAL = 12;
-const SAMOSBOR_WARNING_WINDOW = 18;
+const SAMOSBOR_WARNING_WINDOW = 30; // warning 30s before impact
 const SAMOSBOR_WARNING_SCREEN_RADIUS = 42;
 const SAMOSBOR_WARNING_SCREEN_CAP = 8;
 const SAMOSBOR_WARNING_BARK_RADIUS2 = 28 * 28;
@@ -224,8 +222,12 @@ let randomEntityTransferAccum = 0;
 let maronaryGlowNoticeAt = -Infinity;
 let maronaryGlowCells: number[] = [];
 let playerPressureSpawnAccum = 0;
-let activeSamosborScale: SamosborWaveScale = 'full';
-let activeSamosborWaveStarted = false;
+let activeSamosborScale: 'full' = 'full';
+
+/** @deprecated Scale is always 'full' now. Kept for debug command compatibility. */
+export function forceNextSamosborScale(_scale: string): void {
+  // no-op: scale is always 'full'
+}
 let istotitShelterRoomIds: number[] = [];
 let istotitShelterCycle = -1;
 let istotitShelterFloor = FloorLevel.LIVING;
@@ -233,6 +235,413 @@ let istotitSupplyContainerIds: number[] = [];
 let istotitDecisionCycle = -1;
 let istotitDecision = '';
 let samosborPlayerShelterRoomId = -1;
+
+/* ── Multi-front chaotic wave engine ──────────────────────────── */
+/*   Instead of a single fog origin, samosbor launches 3–8        */
+/*   simultaneous fronts across the entire floor. Each front       */
+/*   propagates as cracks, waves, tendrils, or flashes, mutating   */
+/*   cells and spawning monsters as it goes.                       */
+
+type SamosborFrontType = 'crack' | 'wave' | 'tendril' | 'flash';
+
+interface SamosborFront {
+  type: SamosborFrontType;
+  originIdx: number;
+  frontier: number[];       // BFS queue of cell indices to process
+  head: number;             // read pointer into frontier
+  budget: number;           // cells to process per tick
+  speed: number;            // multiplier for budget
+  age: number;              // ticks alive
+  maxAge: number;           // auto-expire after this many ticks
+  processed: number;        // total cells processed
+  changed: number;          // total cells mutated
+  monstersSpawned: number;
+  dead: boolean;
+  visited: Set<number>;     // persistent BFS visited set — avoids O(N) rebuild per tick
+}
+
+const FRONT_MIN_COUNT = 3;
+const FRONT_MAX_COUNT = 8;
+const FRONT_BUDGET_CRACK   = 6;     // narrow, fast
+const FRONT_BUDGET_WAVE    = 18;    // wide, steady
+const FRONT_BUDGET_TENDRIL = 4;     // long, winding
+const FRONT_BUDGET_FLASH   = 48;    // instant burst, short-lived
+const FRONT_MAX_AGE_CRACK   = 300;
+const FRONT_MAX_AGE_WAVE    = 500;
+const FRONT_MAX_AGE_TENDRIL = 400;
+const FRONT_MAX_AGE_FLASH   = 30;   // flashes die fast
+const FRONT_MONSTER_CELL_INTERVAL = 20; // spawn 1 monster per N processed cells
+const FRONT_TYPES: SamosborFrontType[] = ['crack', 'wave', 'tendril', 'flash'];
+const FRONT_TYPE_WEIGHTS: Record<SamosborFrontType, number> = {
+  crack: 35, wave: 30, tendril: 25, flash: 10,
+};
+
+let activeSamosborFronts: SamosborFront[] = [];
+let frontTouchedCells = new Set<number>(); // all cells mutated by fronts (for post-samosbor stitch)
+let samosborFrontTickAccum = 0;
+const SAMOSBOR_FRONT_TICK_INTERVAL = 0.05; // 20 Hz front processing
+const SAMOSBOR_FRONT_MAX_CATCHUP_TICKS = 2; // cap catch-up to prevent multi-tick bursts on FPS drops
+
+function pickFrontType(): SamosborFrontType {
+  let total = 0;
+  for (const t of FRONT_TYPES) total += FRONT_TYPE_WEIGHTS[t];
+  let roll = Math.random() * total;
+  for (const t of FRONT_TYPES) {
+    roll -= FRONT_TYPE_WEIGHTS[t];
+    if (roll <= 0) return t;
+  }
+  return 'wave';
+}
+
+function frontBudget(type: SamosborFrontType): number {
+  switch (type) {
+    case 'crack':   return FRONT_BUDGET_CRACK;
+    case 'wave':    return FRONT_BUDGET_WAVE;
+    case 'tendril': return FRONT_BUDGET_TENDRIL;
+    case 'flash':   return FRONT_BUDGET_FLASH;
+  }
+}
+
+function frontMaxAge(type: SamosborFrontType): number {
+  switch (type) {
+    case 'crack':   return FRONT_MAX_AGE_CRACK;
+    case 'wave':    return FRONT_MAX_AGE_WAVE;
+    case 'tendril': return FRONT_MAX_AGE_TENDRIL;
+    case 'flash':   return FRONT_MAX_AGE_FLASH;
+  }
+}
+
+function canFrontMutateCell(world: World, ci: number, shelterSet: ReadonlySet<number>): boolean {
+  if (world.aptMask[ci] || world.hermoWall[ci]) return false;
+  if (world.cells[ci] === Cell.LIFT) return false;
+  const roomId = world.roomMap[ci];
+  if (roomId >= 0 && shelterSet.has(roomId)) return false;
+  return true;
+}
+
+function frontExpandNeighbors(
+  world: World,
+  ci: number,
+  type: SamosborFrontType,
+  frontier: number[],
+  visited: Set<number>,
+  shelterSet: ReadonlySet<number>,
+): void {
+  const x = ci % W;
+  const y = (ci / W) | 0;
+  // Random start index for organic feel — zero allocs vs array+shuffle
+  const start = (Math.random() * 4) | 0;
+
+  const maxExpand = type === 'crack' ? 2 : type === 'tendril' ? 2 : type === 'flash' ? 4 : 4;
+  let added = 0;
+  for (let i = 0; i < 4; i++) {
+    if (added >= maxExpand) break;
+    const d = (start + i) & 3;
+    const nx = world.wrap(x + FOG_DIRS_X[d]);
+    const ny = world.wrap(y + FOG_DIRS_Y[d]);
+    const ni = world.idx(nx, ny);
+    if (visited.has(ni)) continue;
+    if (!canFrontMutateCell(world, ni, shelterSet)) continue;
+    const cell = world.cells[ni];
+    // Allow floor, water, door AND walls (walls get carved or grown)
+    if (cell !== Cell.FLOOR && cell !== Cell.WATER && cell !== Cell.DOOR && cell !== Cell.WALL) continue;
+
+    // Walls are accepted into frontier with reduced probability to keep organic spread
+    if (cell === Cell.WALL) {
+      if (type === 'crack' && Math.random() > 0.6) continue;
+      if (type === 'tendril' && Math.random() > 0.45) continue;
+      if (type === 'wave' && Math.random() > 0.5) continue;
+      if (type === 'flash' && Math.random() > 0.7) continue;
+    }
+
+    // Crack: prefer corridors (no room), random branch 20%
+    if (type === 'crack' && cell !== Cell.WALL) {
+      if (world.roomMap[ni] >= 0 && Math.random() > 0.2) continue;
+    }
+    // Tendril: follow corridors, occasional room entry
+    if (type === 'tendril' && cell !== Cell.WALL) {
+      if (world.roomMap[ni] >= 0 && Math.random() > 0.35) continue;
+    }
+    visited.add(ni);
+    frontier.push(ni);
+    added++;
+  }
+}
+
+function frontWalkableNeighborCount(world: World, ci: number): number {
+  const x = ci % W;
+  const y = (ci / W) | 0;
+  let count = 0;
+  for (let d = 0; d < 4; d++) {
+    const ni = world.idx(world.wrap(x + FOG_DIRS_X[d]), world.wrap(y + FOG_DIRS_Y[d]));
+    const c = world.cells[ni];
+    if (c === Cell.FLOOR || c === Cell.WATER || c === Cell.DOOR) count++;
+  }
+  return count;
+}
+
+function frontAdjacentLiftOrProtected(world: World, ci: number): boolean {
+  const x = ci % W;
+  const y = (ci / W) | 0;
+  for (let d = 0; d < 4; d++) {
+    const ni = world.idx(world.wrap(x + FOG_DIRS_X[d]), world.wrap(y + FOG_DIRS_Y[d]));
+    if (world.cells[ni] === Cell.LIFT || world.aptMask[ni] || world.hermoWall[ni]) return true;
+    if (world.features[ni] === Feature.LIFT_BUTTON) return true;
+  }
+  return false;
+}
+
+/** Flags returned by mutateFrontCell for batched dirty marking */
+const FRONT_DIRTY_NONE     = 0;
+const FRONT_DIRTY_CELLS    = 1;
+const FRONT_DIRTY_FLOOR_TX = 2;
+const FRONT_DIRTY_WALL_TX  = 4;
+const FRONT_DIRTY_SURFACE  = 8;
+const FRONT_DIRTY_FOG      = 16;
+
+function mutateFrontCell(
+  world: World,
+  ci: number,
+  variant: ActiveSamosborVariant,
+): number /* dirty flags bitmask */ {
+  const cell = world.cells[ci];
+  let flags = FRONT_DIRTY_NONE;
+
+  // ── Wall → Floor: carve new corridor (~40% of walls encountered) ──
+  if (cell === Cell.WALL) {
+    if (frontAdjacentLiftOrProtected(world, ci)) return FRONT_DIRTY_NONE;
+    if (frontWalkableNeighborCount(world, ci) < 1) return FRONT_DIRTY_NONE;
+    if (Math.random() < 0.40) {
+      if (world.cells[ci] === Cell.DOOR) world.removeDoorAt(ci);
+      world.cells[ci] = Cell.FLOOR;
+      world.floorTex[ci] = RANDOM_FLOOR_TEX[(Math.random() * RANDOM_FLOOR_TEX.length) | 0];
+      world.wallTex[ci] = RANDOM_WALL_TEX[(Math.random() * RANDOM_WALL_TEX.length) | 0];
+      if (world.roomMap[ci] >= 0) world.roomMap[ci] = -1;
+      if (world.features[ci] !== Feature.NONE) world.features[ci] = Feature.NONE;
+      world.fog[ci] = Math.min(255, 180 + ((Math.random() * 75) | 0));
+      world.tissue[ci] = Math.min(255, 160 + ((Math.random() * 95) | 0));
+      frontTouchedCells.add(ci);
+      return FRONT_DIRTY_CELLS | FRONT_DIRTY_FLOOR_TX | FRONT_DIRTY_WALL_TX | FRONT_DIRTY_SURFACE | FRONT_DIRTY_FOG;
+    }
+    // Even if not carved, mutate the wall texture
+    world.wallTex[ci] = RANDOM_WALL_TEX[(Math.random() * RANDOM_WALL_TEX.length) | 0];
+    return FRONT_DIRTY_WALL_TX | FRONT_DIRTY_SURFACE;
+  }
+
+  // ── Floor/Water/Door cells ──
+
+  // Floor → Wall: grow wall (~12% — block passages, create chaos)
+  if (cell === Cell.FLOOR && Math.random() < 0.12) {
+    if (!frontAdjacentLiftOrProtected(world, ci) && frontWalkableNeighborCount(world, ci) >= 3) {
+      if (world.cells[ci] === Cell.DOOR) world.removeDoorAt(ci);
+      if (world.features[ci] !== Feature.NONE) world.features[ci] = Feature.NONE;
+      world.cells[ci] = Cell.WALL;
+      world.wallTex[ci] = RANDOM_WALL_TEX[(Math.random() * RANDOM_WALL_TEX.length) | 0];
+      if (world.roomMap[ci] >= 0) world.roomMap[ci] = -1;
+      world.fog[ci] = 0;
+      world.tissue[ci] = 0;
+      frontTouchedCells.add(ci);
+      return FRONT_DIRTY_CELLS | FRONT_DIRTY_WALL_TX | FRONT_DIRTY_SURFACE | FRONT_DIRTY_FOG;
+    }
+  }
+
+  // ── Standard floor/water/door mutations (fog, tissue, textures, features) ──
+  // Set fog
+  if (world.fog[ci] < 200) {
+    world.fog[ci] = Math.min(255, 200 + ((Math.random() * 55) | 0));
+    flags |= FRONT_DIRTY_FOG;
+  }
+
+  // Set tissue overlay
+  const tissueBase = Math.max(150, Math.round(180 * (1 + variant.visual.fogDensityBonus * 10)));
+  if (world.tissue[ci] < tissueBase) {
+    world.tissue[ci] = Math.min(255, tissueBase + ((Math.random() * (255 - tissueBase)) | 0));
+    flags |= FRONT_DIRTY_FOG;
+  }
+
+  // Floor texture mutation (~35%)
+  if (cell === Cell.FLOOR && Math.random() < 0.35) {
+    world.floorTex[ci] = RANDOM_FLOOR_TEX[(Math.random() * RANDOM_FLOOR_TEX.length) | 0];
+    flags |= FRONT_DIRTY_FLOOR_TX | FRONT_DIRTY_SURFACE;
+  }
+
+  // Wall texture on adjacent walls (~20%)
+  if (Math.random() < 0.20) {
+    const x = ci % W;
+    const y = (ci / W) | 0;
+    for (let d = 0; d < 4; d++) {
+      const ni = world.idx(world.wrap(x + FOG_DIRS_X[d]), world.wrap(y + FOG_DIRS_Y[d]));
+      if (world.cells[ni] === Cell.WALL && !world.aptMask[ni] && !world.hermoWall[ni]) {
+        world.wallTex[ni] = RANDOM_WALL_TEX[(Math.random() * RANDOM_WALL_TEX.length) | 0];
+        flags |= FRONT_DIRTY_WALL_TX | FRONT_DIRTY_SURFACE;
+        break;
+      }
+    }
+  }
+
+  // Feature mutation (~12%)
+  if (Math.random() < 0.12 && cell === Cell.FLOOR) {
+    world.features[ci] = RANDOM_FEATURES[(Math.random() * RANDOM_FEATURES.length) | 0];
+    flags |= FRONT_DIRTY_SURFACE;
+  }
+
+  if (flags) frontTouchedCells.add(ci);
+  return flags;
+}
+
+function createFrontAtCell(world: World, ci: number, shelterSet: ReadonlySet<number>): SamosborFront | null {
+  if (!canFrontMutateCell(world, ci, shelterSet)) return null;
+  const cell = world.cells[ci];
+  if (cell !== Cell.FLOOR && cell !== Cell.WATER) return null;
+  const type = pickFrontType();
+  return {
+    type,
+    originIdx: ci,
+    frontier: [ci],
+    head: 0,
+    budget: frontBudget(type),
+    speed: 0.8 + Math.random() * 0.5,
+    age: 0,
+    maxAge: frontMaxAge(type),
+    processed: 0,
+    changed: 0,
+    monstersSpawned: 0,
+    dead: false,
+    visited: new Set([ci]),
+  };
+}
+
+function spawnSamosborFronts(
+  world: World,
+  _entities: Entity[],
+  _variant: ActiveSamosborVariant,
+  shelterRoomIds: readonly number[],
+): SamosborFront[] {
+  const count = FRONT_MIN_COUNT + ((Math.random() * (FRONT_MAX_COUNT - FRONT_MIN_COUNT + 1)) | 0);
+  const fronts: SamosborFront[] = [];
+  const usedZones = new Set<number>();
+  const shelterSet = new Set(shelterRoomIds);
+
+  for (let attempt = 0; attempt < 2000 && fronts.length < count; attempt++) {
+    const ci = (Math.random() * W * W) | 0;
+    if (!canFrontMutateCell(world, ci, shelterSet)) continue;
+    const cell = world.cells[ci];
+    if (cell !== Cell.FLOOR && cell !== Cell.WATER) continue;
+    // Avoid clustering: different zones preferred
+    const zid = world.zoneMap[ci];
+    if (zid >= 0 && usedZones.has(zid) && Math.random() > 0.3) continue;
+    if (zid >= 0) usedZones.add(zid);
+    const front = createFrontAtCell(world, ci, shelterSet);
+    if (front) fronts.push(front);
+  }
+  return fronts;
+}
+
+function tickSamosborFront(
+  world: World,
+  entities: Entity[],
+  nextId: { v: number },
+  front: SamosborFront,
+  variant: ActiveSamosborVariant,
+  floor: FloorLevel,
+  samosborCount: number,
+  shelterSet: ReadonlySet<number>,
+): { processed: number; changed: number; batchFlags: number } {
+  if (front.dead) return { processed: 0, changed: 0, batchFlags: FRONT_DIRTY_NONE };
+  front.age++;
+  if (front.age > front.maxAge || front.head >= front.frontier.length) {
+    front.dead = true;
+    return { processed: 0, changed: 0, batchFlags: FRONT_DIRTY_NONE };
+  }
+
+  const budgetThisTick = Math.max(1, Math.round(front.budget * front.speed));
+  let processed = 0;
+  let changed = 0;
+  let batchFlags = FRONT_DIRTY_NONE;
+
+  for (let i = 0; i < budgetThisTick && front.head < front.frontier.length; i++) {
+    const ci = front.frontier[front.head++];
+    processed++;
+    front.processed++;
+
+    if (canFrontMutateCell(world, ci, shelterSet)) {
+      const flags = mutateFrontCell(world, ci, variant);
+      if (flags) {
+        changed++;
+        batchFlags |= flags;
+        frontTickDirtyCells.push(ci);
+      }
+      front.changed++;
+
+      // Spawn monster every N processed cells
+      if (front.processed % FRONT_MONSTER_CELL_INTERVAL === 0) {
+        if (world.cells[ci] === Cell.FLOOR && !world.aptMask[ci] && canSpawnEntityType(entities, EntityType.MONSTER)) {
+          const kind = pickMonsterKindForWave(floor, samosborCount);
+          entities.push(createMonster(world, nextId, kind, (ci % W) + 0.5, ((ci / W) | 0) + 0.5, floor));
+          front.monstersSpawned++;
+        }
+      }
+    }
+
+    // Expand frontier — use persistent visited set
+    frontExpandNeighbors(world, ci, front.type, front.frontier, front.visited, shelterSet);
+  }
+
+  return { processed, changed, batchFlags };
+}
+
+/** Shared per-tick dirty cell collector — reused across fronts to avoid allocs */
+const frontTickDirtyCells: number[] = [];
+
+function tickAllSamosborFronts(
+  world: World,
+  entities: Entity[],
+  nextId: { v: number },
+  variant: ActiveSamosborVariant,
+  floor: FloorLevel,
+  samosborCount: number,
+  shelterSet: ReadonlySet<number>,
+): void {
+  let allFlags = FRONT_DIRTY_NONE;
+  frontTickDirtyCells.length = 0;
+  for (const front of activeSamosborFronts) {
+    const result = tickSamosborFront(world, entities, nextId, front, variant, floor, samosborCount, shelterSet);
+    allFlags |= result.batchFlags;
+  }
+  // Prune dead fronts
+  activeSamosborFronts = activeSamosborFronts.filter(f => !f.dead);
+
+  if (!allFlags) return;
+
+  // ── Batch dirty marks with per-cell rects for incremental GPU uploads ──
+  const rects: WorldGridDirtyRect[] = [];
+  for (let i = 0; i < frontTickDirtyCells.length; i++) {
+    const ci = frontTickDirtyCells[i];
+    rects.push({ x: ci % W, y: (ci / W) | 0, w: 1, h: 1 });
+  }
+  if (allFlags & FRONT_DIRTY_CELLS)    world.markCellsDirty(rects);
+  if (allFlags & FRONT_DIRTY_FLOOR_TX) world.markFloorTexDirty(rects);
+  if (allFlags & FRONT_DIRTY_WALL_TX)  world.markWallTexDirty(rects);
+  if (allFlags & FRONT_DIRTY_SURFACE)  world.markSurfaceCellsDirty(frontTickDirtyCells);
+  if (allFlags & FRONT_DIRTY_FOG)      { world.markFogDirty(rects); world.markTissueDirty(rects); }
+}
+
+function clearSamosborFronts(): void {
+  activeSamosborFronts = [];
+  samosborFrontTickAccum = 0;
+  // Note: frontTouchedCells is NOT cleared here — it's consumed by the stitch phase after samosbor ends
+}
+
+export function getSamosborFrontDebugLines(): string[] {
+  if (activeSamosborFronts.length === 0) return [];
+  const lines: string[] = [];
+  for (const front of activeSamosborFronts) {
+    const status = front.dead ? '✗' : '●';
+    const qLen = Math.max(0, front.frontier.length - front.head);
+    lines.push(`  ${status} ${front.type} age=${front.age}/${front.maxAge} proc=${front.processed} chg=${front.changed} mon=${front.monstersSpawned} q=${qLen}`);
+  }
+  return lines;
+}
 
 export interface SamosborRoomSirenSource {
   roomId: number;
@@ -497,8 +906,9 @@ export function resetSamosborRuntimeForTests(): void {
   istotitBellResistNoticeAt = -Infinity;
   fogSpawnAccum = 0;
   activeSamosborScale = 'full';
-  activeSamosborWaveStarted = false;
   clearSamosborRoomSirens();
+  clearSamosborFronts();
+  frontTouchedCells.clear();
   cancelSamosborWave();
   unfreezeNavigationCacheForWorld();
   aftermathRuntime.clear();
@@ -1864,6 +2274,8 @@ export function updateSamosbor(
     const variant = warning.variant;
     const warningZoneId = warning.zoneId;
     state.samosborActive = true;
+    cancelSamosborWave();
+    clearSamosborWaveSnapshot();
     freezeNavigationCacheForWorld(world);
     state.samosborTimer = Math.max(
       SAMOSBOR_DURATION_MIN_SEC,
@@ -1877,7 +2289,6 @@ export function updateSamosbor(
     activeSamosborPreviousTerritory = [];
     activeSamosborPreviousZoneFogged = false;
     activeSamosborScale = 'full';
-    activeSamosborWaveStarted = false;
     samosborDirectorAccum = 0;
     maronaryPingAccum = 0;
     randomEntityTransferAccum = 0;
@@ -1923,22 +2334,7 @@ export function updateSamosbor(
       warning.greenSourceCount,
       warning.wrongDoorIdx,
     );
-    const scale = chooseSamosborScale(state);
-    activeSamosborScale = scale;
-    if (scale !== 'full') {
-      activeSamosborWaveStarted = startSamosborWave(
-        world,
-        entities,
-        state,
-        scale,
-        warning.zoneX,
-        warning.zoneY,
-        { protectedRoomIds: getSamosborShelterRoomIds(state), durationSec: Math.max(6, state.samosborTimer - 1) },
-      );
-      if (!activeSamosborWaveStarted) activeSamosborScale = 'full';
-    } else {
-      cancelSamosborWave();
-    }
+    activeSamosborScale = 'full';
     clearSamosborWarning(false, false);
 
     // Spawn the first pressure pulse. These monsters are born from samosbor,
@@ -1947,6 +2343,10 @@ export function updateSamosbor(
 
     // Spawn extra map pressure; ongoing escalation is handled by active fog samples.
     spawnRandomMapMonsters(world, entities, nextId, state.samosborCount, variant, state.currentFloor);
+
+    // Launch multi-front chaotic waves across the entire floor
+    clearSamosborFronts();
+    activeSamosborFronts = spawnSamosborFronts(world, entities, variant, getSamosborShelterRoomIds(state));
   }
 
   // ── Seal apartments 10 seconds before samosbor ends ──
@@ -1968,10 +2368,28 @@ export function updateSamosbor(
     if (sealedShelters > 0) state.msgs.push(msg('Жёлтые гермы закрылись мягко. Внутри стало теснее.', state.time, activeVariant.def.tint));
   }
 
-  // ── Fog/light spread is universal; samosbor only activates its effect ──
+  // ── Fog/light spread is universal ──
   spreadFog(world);
-  if ((state.samosborActive || isSamosborWaveDebugActive()) && isSamosborWaveActive()) {
+  // ── Debug wave (not used during real samosbor — always full-scale fronts) ──
+  if (isSamosborWaveDebugActive() && isSamosborWaveActive()) {
     tickSamosborWave(world, entities, state);
+  }
+
+  // ── Tick multi-front chaotic wave engine during active samosbor ──
+  if (state.samosborActive && activeVariant && activeSamosborFronts.length > 0) {
+    samosborFrontTickAccum += dt;
+    // Cap catch-up to avoid multi-tick bursts on FPS drops
+    let catchup = 0;
+    const shelterSet = new Set(getSamosborShelterRoomIds(state));
+    while (samosborFrontTickAccum >= SAMOSBOR_FRONT_TICK_INTERVAL && catchup < SAMOSBOR_FRONT_MAX_CATCHUP_TICKS) {
+      samosborFrontTickAccum -= SAMOSBOR_FRONT_TICK_INTERVAL;
+      catchup++;
+      tickAllSamosborFronts(world, entities, nextId, activeVariant, state.currentFloor, state.samosborCount, shelterSet);
+    }
+    // Drain excess accumulated time beyond cap
+    if (samosborFrontTickAccum > SAMOSBOR_FRONT_TICK_INTERVAL * SAMOSBOR_FRONT_MAX_CATCHUP_TICKS) {
+      samosborFrontTickAccum = SAMOSBOR_FRONT_TICK_INTERVAL * 0.5;
+    }
   }
 
   // ── Spawn monsters in fogged areas during samosbor ──
@@ -2017,8 +2435,6 @@ export function updateSamosbor(
   if (state.samosborActive && state.samosborTimer <= 0) {
     // ── END samosbor: unseal, mark for rebuild ──
     const endedVariant = getActiveSamosborVariant();
-    const endedScale = activeSamosborScale;
-    const endedWaveStarted = activeSamosborWaveStarted;
     const aftermathZone = activeSamosborZoneId >= 0 ? world.zones[activeSamosborZoneId] : undefined;
     const endedIstotitDecision = endedVariant?.def.id === 'istotit'
       ? activeIstotitDecision(state) ?? 'none'
@@ -2069,6 +2485,8 @@ export function updateSamosbor(
     maronaryPingAccum = 0;
     clearMaronaryGlowRuntime();
     clearSamosborRoomSirens();
+    clearSamosborFronts();
+    world.clearTissue();
 
     const localShelterRoomIds = getLocalSamosborShelterRoomIds(state);
     notifyLocalSamosborShelterEnd(world, entities, state, nextId, endedVariant ?? null);
@@ -2088,25 +2506,23 @@ export function updateSamosbor(
     unfreezeNavigationCacheForWorld(world);
 
     activeSamosborScale = 'full';
-    activeSamosborWaveStarted = false;
-    if (endedScale !== 'full') {
-      const endedFloor = state.currentFloor;
-      const finishLocalPatch = (): void => {
-        if (endedWaveStarted) {
-          const replacement = replacementProvider?.() ?? generateFloor(endedFloor, ensureFloorRunState(state).runSeed);
-          finishSamosborWave(world, entities, state, replacement);
-        }
-        applyPendingSamosborAftermathAfterWave(world, entities, nextId, endedFloor);
-      };
-      if (endedWaveStarted && scheduleLocalPatch) {
-        scheduleLocalPatch(finishLocalPatch);
-      } else {
-        finishLocalPatch();
-      }
-      return false;
-    }
 
-    return true; // signal: heavy rebuild needed
+    // Full-scale fronts already mutated geometry in real-time.
+    // Now stitch: generate a fresh floor and sew it into the world at touched cells.
+    const stitchFloor = state.currentFloor;
+    const touched = new Set(frontTouchedCells);
+    frontTouchedCells.clear();
+    const doStitch = (): void => {
+      const replacement = replacementProvider?.() ?? generateFloor(stitchFloor, ensureFloorRunState(state).runSeed);
+      applyFrontFieldStitch(world, state, touched, replacement);
+      applyPendingSamosborAftermathAfterWave(world, entities, nextId, stitchFloor);
+    };
+    if (scheduleLocalPatch) {
+      scheduleLocalPatch(doStitch);
+    } else {
+      doStitch();
+    }
+    return false;
   }
 
   return false;
@@ -3076,13 +3492,21 @@ export function getSamosborDebugLines(): string[] {
     : '-';
   const istotitLine = `Истотит: shelters=${istotitShelterRoomIds.length} supplies=${istotitSupplyContainerIds.length} decision=${istotitDecision || '-'}`;
   const localShelterLines = getLocalSamosborShelterDebugLines();
+
+  // Front summary
+  const aliveFronts = activeSamosborFronts.filter(f => !f.dead);
+  const totalProcessed = activeSamosborFronts.reduce((s, f) => s + f.processed, 0);
+  const totalChanged = activeSamosborFronts.reduce((s, f) => s + f.changed, 0);
+  const totalMonstersFromFronts = activeSamosborFronts.reduce((s, f) => s + f.monstersSpawned, 0);
+
   return [
-    `Самосбор: ${active ? active.def.displayName : '-'}`,
+    `Самосбор: ${active ? active.def.displayName : '-'} | scale=${activeSamosborScale} zone=${activeSamosborZoneId >= 0 ? activeSamosborZoneId + 1 : '-'} sealed=${samosborSealed ? 'Y' : 'N'}`,
     `Предупреждение: ${warning ? `${warning.variantName} ${warningZone} ${warning.secondsLeft}s` : '-'}`,
-    `Прошлый вариант: ${getSamosborVariantName(last)}`,
-    `Следующий вариант: ${getSamosborVariantName(forced)}`,
+    `Прошлый: ${getSamosborVariantName(last)} | Следующий: ${getSamosborVariantName(forced)}`,
     istotitLine,
+    `Фронты: ${aliveFronts.length}/${activeSamosborFronts.length} alive | cells=${totalProcessed} changed=${totalChanged} mobs=${totalMonstersFromFronts}`,
     ...getSamosborWaveDebugLines(),
+    ...getSamosborFrontDebugLines(),
     ...localShelterLines,
     `Веретар: area_leak=${lastVeretarAreaLeaks} ${veretarLeakAge}`,
     `Последствия: ${beats}  cd ${hasCooldown ? cooldown : 0}s${pendingAftermath ? ' pending' : ''}`,
