@@ -566,11 +566,14 @@ function addFalseHumanEyes(t: Uint32Array, seed: number): void {
 }
 
 function addMonsterMarks(t: Uint32Array, kind: MonsterKind, seed: number): void {
-  const mark: RGB =
+  const mark: RGB | undefined =
     kind === MonsterKind.BETONNIK || kind === MonsterKind.BETONOED || kind === MonsterKind.REBAR || kind === MonsterKind.RZHAVNIK || kind === MonsterKind.ZAKALENNAYA_ARMATURA ? [40, 34, 30] :
     kind === MonsterKind.ROBOT ? [210, 160, 72] :
     kind === MonsterKind.SPIRIT ? [210, 236, 246] :
-    [72, 18, 22];
+    undefined;
+
+  if (!mark) return;
+
   const lines = 2 + Math.floor(rnd(seed, 600) * 5);
   for (let i = 0; i < lines; i++) {
     const x0 = 18 + Math.floor(rnd(seed, 601 + i) * 28);
