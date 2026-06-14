@@ -643,19 +643,25 @@ function recordMapLiftMarker(x: number, y: number, isUp: boolean, isQuestLift: b
 
 function drawMapLiftArrow(ctx: CanvasRenderingContext2D, x: number, y: number, isUp: boolean, isQuestLift: boolean, isFast: boolean): void {
   if (isFast) {
-    // Fast elevator: cyan diamond, distinct from the yellow route-lift arrows.
-    const r = 6;
-    ctx.strokeStyle = '#0a3';
+    // Fast elevator: orange icon, two triangles (up and down) side by side.
+    const fah = 6;
+    const faw = 4;
+    const ox = 3.5;
+    ctx.strokeStyle = '#630';
     ctx.lineWidth = 2;
     ctx.beginPath();
-    ctx.moveTo(x, y - r);
-    ctx.lineTo(x + r, y);
-    ctx.lineTo(x, y + r);
-    ctx.lineTo(x - r, y);
+    // Up triangle (left)
+    ctx.moveTo(x - ox, y - fah);
+    ctx.lineTo(x - ox + faw, y + fah);
+    ctx.lineTo(x - ox - faw, y + fah);
+    // Down triangle (right)
+    ctx.moveTo(x + ox, y + fah);
+    ctx.lineTo(x + ox + faw, y - fah);
+    ctx.lineTo(x + ox - faw, y - fah);
     ctx.closePath();
-    ctx.fillStyle = '#4cf';
-    ctx.fill();
     ctx.stroke();
+    ctx.fillStyle = '#f80';
+    ctx.fill();
     return;
   }
   const ah = 7;
@@ -758,10 +764,10 @@ function drawMapBaseRaster(
         } else if (cell === Cell.LIFT) {
           const isFastElevator = world.features[ci] === Feature.MACHINE;
           if (isFastElevator) {
-            // Fast-elevator cabin: cyan tint, distinct from yellow route lifts.
-            cr = highContrast ? 96 : 60;
-            cg = highContrast ? 210 : 150;
-            cb = highContrast ? 255 : 220;
+            // Fast-elevator cabin: orange tint, distinct from yellow route lifts.
+            cr = highContrast ? 255 : 220;
+            cg = highContrast ? 150 : 110;
+            cb = highContrast ? 30 : 0;
           } else {
             cr = highContrast ? 245 : 204;
             cg = highContrast ? 224 : 204;
@@ -1272,7 +1278,12 @@ function overviewCellRgb(world: World, ci: number, highContrast: boolean): [numb
   } else if (cell === Cell.ABYSS) {
     rgb = highContrast ? [28, 18, 34] : [5, 4, 8];
   } else if (cell === Cell.LIFT) {
-    rgb = highContrast ? [245, 224, 48] : [92, 160, 210];
+    const isFastElevator = world.features[ci] === Feature.MACHINE;
+    if (isFastElevator) {
+      rgb = highContrast ? [255, 150, 30] : [220, 110, 0];
+    } else {
+      rgb = highContrast ? [245, 224, 48] : [92, 160, 210];
+    }
   } else if (cell === Cell.DOOR) {
     const state = world.doors.get(ci)?.state;
     const isHermetic = state === DoorState.HERMETIC_CLOSED || state === DoorState.HERMETIC_OPEN;

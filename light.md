@@ -302,8 +302,6 @@ renderer добавляет render-only красоту поверх него.
 - применить ambient + lightmap + flashlight/tool beam response;
 - оставить projectile/flame glow stronger-than-fog, но bounded;
 - не менять gameplay entity data.
-- **Остаточные проблемы (задача на доработку):**
-  1. Нет теней от фич (features) и декоративной 3D-геометрии (от мешей нет теней, только от NPC/мобов).
 
 Критерий успеха:
 

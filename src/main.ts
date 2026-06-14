@@ -2129,6 +2129,8 @@ function initGame(runSeedOverride?: number): void {
   resetNoiseRecords();
   const initialRunSeed = normalizeFloorRunSeed(runSeedOverride);
   const gen = generateFloor(FloorLevel.LIVING, initialRunSeed);
+  injectFastElevators(gen.world);
+  stampCeilingHeights(gen.world);
   world = replaceWorldFromGeneration(null, gen);
   entities = gen.entities;
   nextEntityId.v = entities.reduce((mx, e) => Math.max(mx, e.id), 0) + 1;

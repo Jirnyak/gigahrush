@@ -3234,8 +3234,9 @@ export function renderSceneGL(
     time,
     fogRgb,
     planeLen,
-    !visualGeometryProfile.enabled,
+    true,
     visualGeometryProfile.enabled && visualGeometryProfile.includeEntities,
+    visualGeometryProfile.enabled,
   );
 
   // ── Render transient particles into FBO ──
@@ -3506,6 +3507,7 @@ function renderSpritesGL(
   planeLen: number,
   renderStaticObjectSprites: boolean,
   meshBackedBillboardSprites: boolean,
+  meshBackedFeatures: boolean = false,
 ): void {
   if (!glState) return;
   const { gl } = glState;
@@ -3681,10 +3683,12 @@ function renderSpritesGL(
     gl.bindTexture(gl.TEXTURE_2D, spriteTex);
     gl.uniform1i(su['uSpriteTex']!, 0);
 
+    const skipTexture = meshBackedFeatures && (source === VisibleSpriteSource.FEATURE || source === VisibleSpriteSource.CONTAINER);
+
     /* ── Drop Shadow & Reflection ─────────────────────────── */
-    if (!isProjectile && e && (e.type === EntityType.NPC || e.type === EntityType.MONSTER) && spriteH > 2) {
-      const ex = Math.floor(e.x), ey = Math.floor(e.y);
-      const eci = world.idx(ex, ey);
+    if (!isProjectile && spriteH > 2) {
+      const ex = px + dx, ey = py + dy;
+      const eci = world.idx(Math.floor(ex), Math.floor(ey));
       const eFloor = world.cells[eci] & 0xFF;
       const eLight = world.light[eci] ?? 0;
 
@@ -3784,6 +3788,8 @@ function renderSpritesGL(
       gl.depthMask(true);
       gl.uniform1i(su['uIsShadow']!, 0);
     }
+
+    if (skipTexture) continue;
 
     // Set uniforms for the actual sprite
     gl.uniform1i(su['uIsShadow']!, 0);
