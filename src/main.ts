@@ -491,6 +491,7 @@ import {
   markPlatformGameplayStart,
   markPlatformGameplayStop,
   markPlatformReady,
+  togglePlatformAudioMuted,
   savePlatformRawGameSave,
 } from './systems/platform_bridge';
 import { addFactionRel, addFactionRelMutual, initFactionRelations } from './data/relations';
@@ -1065,7 +1066,18 @@ const PLAYER_BAR_AUDIO_THRESHOLD = 5;
 const PLAYER_BAR_AUDIO_COOLDOWN = 1.25;
 const PLAYER_BAR_AUDIO_SLEEP_COOLDOWN = 4.0;
 
-initPlatformBridge({ onPauseChange: setPlatformPause });
+initPlatformBridge({
+  onPauseChange: setPlatformPause,
+  onAudioMuteChange: setAudioSuspendedForPlatform,
+  onLanguageDetected: (lang: string) => {
+    const isRu = lang === 'ru' || lang === 'be' || lang === 'kk' || lang === 'uk' || lang === 'uz';
+    const nextLang = isRu ? 'ru' : 'en';
+    if (titleLanguageId !== nextLang) {
+      titleLanguageId = normalizeTitleLanguageId(nextLang);
+      setLocalizationLanguage(titleLanguageId);
+    }
+  },
+});
 type PlayerBarAudioValues = Record<HudBarAudioId, number>;
 const playerBarAudio = {
   initialized: false,
@@ -5553,6 +5565,9 @@ function runGameMenuSelection(sel: number): void {
       break;
     case 'load':
       loadGame();
+      break;
+    case 'sound':
+      togglePlatformAudioMuted();
       break;
     case 'help':
       openHelpMenu();

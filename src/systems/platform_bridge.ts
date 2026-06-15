@@ -10,12 +10,14 @@ export type PortalTarget = '' | 'yandex' | 'gamepush' | 'pikabu';
 const LOCAL_SAVE_KEY = 'gigahrush_save';
 const LOCAL_PORTAL_SAVE_TIME_KEY = 'gigahrush_portal_save_saved_at';
 const GAMEPUSH_CALLBACK_NAME = 'onGPInit';
-const GAMEPUSH_SDK_BASE_URL = 'https://gamepush.com/sdk/game-score.js';
+const GAMEPUSH_SDK_BASE_URL = 'https://gamepush.com/sdk/gamepush.js';
 const GAMEPUSH_SDK_LOAD_TIMEOUT_MS = 8000;
 const PORTAL_SAVE_RECORD_KIND = 'gigahrush-save';
 
 interface PlatformBridgeOptions {
   onPauseChange?: PauseChangeHandler;
+  onAudioMuteChange?: (muted: boolean) => void;
+  onLanguageDetected?: (language: string) => void;
 }
 
 type PlatformSaveStatus = 'queued' | 'no-sdk' | 'skipped-size' | 'failed';
@@ -59,9 +61,18 @@ interface GamePushPlayer {
   sync?(options?: { storage?: 'cloud' | 'preferred' | 'platform' | 'local' | string }): Promise<void>;
 }
 
+interface GamePushSounds {
+  isMuted?: boolean;
+  mute?(): void;
+  unmute?(): void;
+  on?(event: 'mute' | 'unmute', handler: () => void): void;
+}
+
 interface GamePushSdk {
   ready?: Promise<void>;
   player?: GamePushPlayer;
+  language?: string;
+  sounds?: GamePushSounds;
   gameStart?(): void | Promise<void>;
   gameplayStart?(): void | Promise<void>;
   gameplayStop?(): void | Promise<void>;
@@ -342,10 +353,41 @@ function gamePushSdkAsync(): Promise<GamePushSdk | null> {
 }
 
 function bindGamePushEvents(gp = gamePushSdk()): void {
-  if (!gp || gamePushEventsBound || typeof gp.on !== 'function') return;
+  if (!gp || gamePushEventsBound || !gp.on) return;
   gp.on('pause', () => bridgeOptions.onPauseChange?.(true));
   gp.on('resume', () => bridgeOptions.onPauseChange?.(false));
+  if (gp.sounds && typeof gp.sounds.on === 'function') {
+    gp.sounds.on('mute', () => bridgeOptions.onAudioMuteChange?.(true));
+    gp.sounds.on('unmute', () => bridgeOptions.onAudioMuteChange?.(false));
+  }
+  if (gp.language) {
+    bridgeOptions.onLanguageDetected?.(gp.language);
+  }
   gamePushEventsBound = true;
+}
+
+let localAudioMutedFallback = false;
+
+export function isPlatformAudioMuted(): boolean {
+  const gp = gamePushSdk();
+  if (gp && gp.sounds) {
+    return gp.sounds.isMuted ?? false;
+  }
+  return localAudioMutedFallback;
+}
+
+export function togglePlatformAudioMuted(): void {
+  const gp = gamePushSdk();
+  if (gp && gp.sounds) {
+    if (gp.sounds.isMuted) {
+      if (typeof gp.sounds.unmute === 'function') gp.sounds.unmute();
+    } else {
+      if (typeof gp.sounds.mute === 'function') gp.sounds.mute();
+    }
+  } else {
+    localAudioMutedFallback = !localAudioMutedFallback;
+    bridgeOptions.onAudioMuteChange?.(localAudioMutedFallback);
+  }
 }
 
 export function isPortalCloudSaveSizeAllowed(bytes: number): boolean {

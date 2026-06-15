@@ -8,7 +8,7 @@
 
 Procedural textures, procedural sprites, procedural sound, WebGL raycasting, canvas HUD, flat entity arrays, typed-array world storage. No runtime frameworks, no asset pipeline, one browser build.
 
-Core engineering taste: no hardcoding, no crutches. Keep systems elegant, universal, minimal, modular, data-oriented and emergent.
+Core engineering taste: no hardcoding, no crutches. Keep systems elegant, universal, minimal, modular, data-oriented and emergent. Наш долгосрочный фокус — довести симуляцию до состояния «генератора историй» (как Dwarf Fortress или Space Station 13), где A-Life, процедурная генерация и Самосбор постоянно создают непредсказуемые ситуации, о которых игроки будут рассказывать байки.
 
 Storage order is never world physics. Array/index order inside `world.rooms`, `entities`, zones, anchors, factories, resources or any other runtime collection is an implementation detail, not a gameplay rule. Bounded optimization must preserve isotropy through actor-local cursors, deterministic rotated windows, spatial queries, scoring before truncation or explicit authored priority. A stable first-prefix scan such as "first 96 rooms" is hardcoding by storage accident and is forbidden for gameplay-visible decisions.
 

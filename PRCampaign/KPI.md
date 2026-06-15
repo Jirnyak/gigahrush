@@ -6,6 +6,15 @@
 
 Role: track public media presence for GIGAH|RUSH across published pages, community posts, portals, wikis, search/indexing surfaces and campaign backlog. This file is an operating brief for a future agent. It does not grant permission to spam, manipulate votes, hide developer affiliation or bypass platform moderation.
 
+## Ultimate Cultural Goal: The Story Generator
+
+Чтобы игра стала культовой и народной (как *Dwarf Fortress* или *Space Station 13* в своих нишах), наша долгосрочная PR- и геймдизайн-цель — довести игру до состояния **"генератора историй"**.
+
+Культовыми становятся игры, о которых игроки рассказывают байки:
+> *"Я спускался на 14-й этаж, началась сирена Самосбора, я заперся в пустой квартире, а там оказался сбрендивший ликвидтор без патронов, и мы вместе отбивались от слизи арматурами..."*
+
+Как только A-Life, процедурные этажи и система событий (Samosbor hooks) начнут регулярно генерировать вот такие непредсказуемые ситуации, игроки сами начнут писать об этом посты на Reddit, снимать видео на YouTube и делать мемы. Именно это закрепляет проект в массовой культуре. Наш PR должен подсвечивать эти механики и стимулировать игроков делиться своими историями выживания.
+
 **HOST BROWSER AUTOMATION RULE:** 
 The agent has the proven ability to interact with the owner's host Google Chrome / Chromium browser via AppleScript (`osascript`) and JavaScript injection. When the owner asks to "post it automatically", "do it yourself", or "действуй через хромиум апи", the agent MUST NOT refuse due to sandbox limitations. 
 - For sites with simple inputs (StopGame, PlayGround), the agent MUST write and execute an `osascript` to open the URL, inject JS to focus fields, and use `pbcopy` / `Cmd+V`.

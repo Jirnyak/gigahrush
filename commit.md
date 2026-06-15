@@ -155,9 +155,9 @@ npm run pikabu:build
 unzip -l pikabu/gigahrush-pikabu.zip | sed -n '1,80p'
 ```
 
-Критично: `index.html` должен лежать в корне ZIP. `pikabu:build` должен включать strict portal metadata только в скопированный `pikabu/index.html`, а не загрязнять обычный `dist/index.html`.
+Критично: `index.html` должен лежать в корне ZIP. `pikabu:build` должен включать strict portal metadata только в скопированный `pikabu/index.html`, а не загрязнять обычный `dist/index.html`. Скрипт `pikabu:build` автоматически вшивает GamePush SDK и ключи проекта (по умолчанию ID: 28314), делая `gigahrush-pikabu.zip` полностью готовым для загрузки в консоль Pikabu/GamePush.
 
-Без `GAMEPUSH_PROJECT_ID`/`GAMEPUSH_PUBLIC_TOKEN` или `GP_PROJECT_ID`/`GP_PUBLIC_TOKEN` это только no-credential QA-кандидат. Для реальной отправки нужны владелец/юридический статус, проект GamePush, поле игрока `progress`, реальные public credentials, `npm run check:browser`, iframe SDK save/load QA, финальные иконки/обложка/скриншоты и ручной preview в форме Pikabu Games.
+Для реальной отправки всё ещё требуются: подтвержденный владелец/юридический статус, реальный QA внутри iframe (save/load/audio), итоговые медиа-материалы (иконки/обложка) и ручной preview в консоли Pikabu Games.
 
 ## 4. Wrangler И Cloudflare Аккаунт
 
@@ -306,8 +306,8 @@ MyIndie RU использует текущий `itch/gigahrush-itch.zip` как 
 Если пользователь просит `комить и подготовить/отправить на Пикабу Игры`, тогда:
 
 1. Сверь `PRCampaign/pikabu_games_pre_submit_qa_2026-05-27.md`.
-2. Собери `pikabu/gigahrush-pikabu.zip` через `npm run pikabu:build`, при реальной отправке только с owner-provided GamePush public credentials в локальном окружении.
-3. Проверь root `index.html`, strict portal metadata, отсутствие встроенных секретов и отсутствие portal meta в обычном `dist/index.html`.
+2. Собери `pikabu/gigahrush-pikabu.zip` через `npm run pikabu:build`. Скрипт автоматически вошьет необходимые GamePush public credentials для проекта 28314 (секреты фронтенду не нужны).
+3. Проверь root `index.html`, strict portal metadata, успешное встраивание GamePush ключей и отсутствие portal meta в обычном `dist/index.html`.
 4. Запусти `npm run check:browser`, затем реальный GamePush/Pikabu iframe save/load/pause/audio/content QA.
 5. Не нажимай final submit, не принимай legal/payment terms и не создавай GamePush/Pikabu проект от имени владельца без явной команды.
 

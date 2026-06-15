@@ -13,8 +13,8 @@ const outHtml = path.resolve(outDir, 'index.html');
 const outZip = path.resolve(outDir, 'gigahrush-pikabu.zip');
 const outNotes = path.resolve(outDir, 'PIKABU_UPLOAD_NOTES.txt');
 
-const projectId = process.env.GAMEPUSH_PROJECT_ID || process.env.GP_PROJECT_ID || '';
-const publicToken = process.env.GAMEPUSH_PUBLIC_TOKEN || process.env.GP_PUBLIC_TOKEN || '';
+const projectId = process.env.GAMEPUSH_PROJECT_ID || process.env.GP_PROJECT_ID || '28314';
+const publicToken = process.env.GAMEPUSH_PUBLIC_TOKEN || process.env.GP_PUBLIC_TOKEN || 'FU2KD6CeH84MGmGTk6wxhILIlbiPgdsq';
 
 function run(command, args) {
   return new Promise((resolve, reject) => {
