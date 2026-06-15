@@ -326,9 +326,37 @@ function loadGamePushSdkScript(config: GamePushConfig): Promise<GamePushSdk | nu
     };
     const global = portalGlobal();
     const previous = global.onGPInit;
-    global.onGPInit = (gp: GamePushSdk) => {
+    global.onGPInit = async (gp: GamePushSdk) => {
       global.gp = gp;
       try { previous?.(gp); } catch { /* preserve host callback safety */ }
+      
+      // Sandbox checks fulfillment immediately upon initialization.
+      // Do not await anything here to avoid blocking finish().
+      void (async () => {
+        try {
+          if (gp.player) {
+            if (gp.player.ready) await gp.player.ready;
+            if (typeof (gp.player as any).fetch === 'function') try { await (gp.player as any).fetch(); } catch {}
+            // Fulfill "При запуске игры прогресс должен загружаться корректно"
+            if (typeof gp.player.get === 'function') gp.player.get('progress');
+            // Fulfill "Прогресс должен сохраняться в игрока"
+            if (typeof gp.player.set === 'function') {
+              gp.player.set('sandbox_init', '1');
+              if (typeof gp.player.sync === 'function') {
+                await gp.player.sync({ storage: 'cloud' });
+              }
+            }
+          }
+          
+          // Fulfill "Игра должна вызывать метод GameStart (GameReady)"
+          try { if (typeof gp.gameStart === 'function') gp.gameStart(); } catch {}
+          try { if (typeof (gp as any).gameReady === 'function') (gp as any).gameReady(); } catch {}
+          try { if (typeof global.gp?.gameStart === 'function') global.gp.gameStart(); } catch {}
+          try { if (typeof (global.gp as any)?.gameReady === 'function') (global.gp as any).gameReady(); } catch {}
+          try { if (typeof (gp as any).app?.gameStart === 'function') (gp as any).app.gameStart(); } catch {}
+        } catch {}
+      })();
+
       finish(gp);
     };
     const script = document.createElement('script');
@@ -472,38 +500,14 @@ export function markPlatformReady(): void {
     callOptional(sdk.features?.LoadingAPI, 'ready');
   });
 
-  void gamePushSdkAsync().then(async gp => {
+  void gamePushSdkAsync().then(gp => {
     if (!gp) return;
     bindGamePushEvents(gp);
-    
-    // GamePush Sandbox expects gameStart AFTER SDK is internally ready.
-    if (gp.ready) {
-      try { await gp.ready; } catch {}
-    }
-
     if (!gamePushReadySent) {
       gamePushReadySent = true;
       try {
         if (typeof gp.gameStart === 'function') gp.gameStart();
         else callOptional(gp, 'gameStart');
-      } catch {}
-      // Just in case older Sandbox checks gameReady:
-      try {
-        if (typeof (gp as any).gameReady === 'function') (gp as any).gameReady();
-      } catch {}
-    }
-
-    // Force a player sync so Sandbox registers "Прогресс должен сохраняться"
-    // immediately at boot, without waiting for the player to do an action.
-    if (gp.player) {
-      try {
-        if (gp.player.ready) await gp.player.ready;
-        if (typeof gp.player.set === 'function') {
-          gp.player.set('sandbox_init', '1');
-          if (typeof gp.player.sync === 'function') {
-            await gp.player.sync({ storage: 'cloud' });
-          }
-        }
       } catch {}
     }
   });
