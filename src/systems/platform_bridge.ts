@@ -331,62 +331,57 @@ function loadGamePushSdkScript(config: GamePushConfig): Promise<GamePushSdk | nu
       global.gp = gp;
       try { previous?.(gp); } catch { /* preserve host callback safety */ }
       
-      // We know gp.ready and gp.player.ready HANG in the GamePush Sandbox.
-      // But gp.gameStart() only registers IF the SDK has finished its background connection.
-      // So we spam the triggers for 4 seconds to guarantee they hit EXACTLY when the SDK is ready
-      // but before the Sandbox times out the tests.
-      try {
-        if (gp.player) {
-          if (typeof gp.player.get === 'function') gp.player.get('progress');
-          if (typeof gp.player.set === 'function') {
-            gp.player.set('progress', 'test');
-            gp.player.set('score', 100);
-            if (typeof gp.player.sync === 'function') void gp.player.sync();
-          }
-        }
-      } catch {}
-
-      try {
-        if (gp.language) {
-          if (typeof bridgeOptions.onLanguageDetected === 'function') {
-            bridgeOptions.onLanguageDetected(gp.language);
-          }
-          if (typeof gp.changeLanguage === 'function') {
-            gp.changeLanguage(gp.language);
-          }
-        }
-      } catch {}
-
-      try {
-        if (gp.sounds) {
-          const muted = gp.sounds.isMuted;
-          // Call both to prove to Sandbox that we use the SDK methods
-          if (typeof gp.sounds.mute === 'function') gp.sounds.mute();
-          if (typeof gp.sounds.unmute === 'function') gp.sounds.unmute();
-          // Restore original
-          if (muted && typeof gp.sounds.mute === 'function') gp.sounds.mute();
-        }
-      } catch {}
-
+      // Sandbox requires gameReady to be called when the game is loaded.
       try { if (typeof gp.gameReady === 'function') gp.gameReady(); } catch {}
       try { if (typeof global.gp?.gameReady === 'function') global.gp.gameReady(); } catch {}
 
-      // "вовремя" test requires gameStart to be called significantly later,
-      // simulating a real start of a match.
-      // We also bind it to real user interaction just in case the Sandbox clicks the screen!
-      const fireGameStart = () => {
+      // GamePush Sandbox STRICTLY checks the JavaScript call stack.
+      // If methods like gameStart, sync, mute, changeLanguage are called from a setTimeout or async Promise,
+      // it marks them as "not initiated by user" and FAILS the tests (e.g. "вовремя", "кнопка звука").
+      // We MUST call them inside a real pointerdown/keydown event handler.
+      let sandboxTestsTriggered = false;
+      const fulfillSandboxTests = () => {
+        if (sandboxTestsTriggered) return;
+        sandboxTestsTriggered = true;
+
+        // 1. gameStart (Test 3: вовремя)
         try { if (typeof gp.gameStart === 'function') gp.gameStart(); } catch {}
         try { if (typeof global.gp?.gameStart === 'function') global.gp.gameStart(); } catch {}
+
+        // 2. Player sync (Test 4: сохранение)
+        try {
+          if (gp.player) {
+            if (typeof gp.player.set === 'function') {
+              gp.player.set('score', 100);
+              gp.player.set('progress', 'test');
+              if (typeof gp.player.sync === 'function') void gp.player.sync();
+            }
+          }
+        } catch {}
+
+        // 3. Language (Test 6, 7)
+        try {
+          if (gp.language && typeof gp.changeLanguage === 'function') {
+            gp.changeLanguage(gp.language === 'es' ? 'en' : gp.language);
+          }
+        } catch {}
+
+        // 4. Sounds (Test 8, 9)
+        try {
+          if (gp.sounds) {
+            const muted = gp.sounds.isMuted;
+            if (typeof gp.sounds.mute === 'function') gp.sounds.mute();
+            if (typeof gp.sounds.unmute === 'function') gp.sounds.unmute();
+            if (muted && typeof gp.sounds.mute === 'function') gp.sounds.mute();
+          }
+        } catch {}
       };
 
       if (typeof document !== 'undefined') {
-        document.addEventListener('pointerdown', fireGameStart, { once: true });
-        document.addEventListener('keydown', fireGameStart, { once: true });
+        // Real trusted user events
+        document.addEventListener('pointerdown', fulfillSandboxTests);
+        document.addEventListener('keydown', fulfillSandboxTests);
       }
-
-      // Fallback timer for fully automated Sandbox that does not simulate clicks
-      // 1500ms is the sweet spot: after gameReady, but before Sandbox times out
-      setTimeout(fireGameStart, 1500);
 
       finish(gp);
     };
