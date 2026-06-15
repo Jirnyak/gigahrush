@@ -475,9 +475,37 @@ export function markPlatformReady(): void {
   void gamePushSdkAsync().then(async gp => {
     if (!gp) return;
     bindGamePushEvents(gp);
-    if (gamePushReadySent) return;
-    gamePushReadySent = true;
-    callOptional(gp, 'gameStart');
+    
+    // GamePush Sandbox expects gameStart AFTER SDK is internally ready.
+    if (gp.ready) {
+      try { await gp.ready; } catch {}
+    }
+
+    if (!gamePushReadySent) {
+      gamePushReadySent = true;
+      try {
+        if (typeof gp.gameStart === 'function') gp.gameStart();
+        else callOptional(gp, 'gameStart');
+      } catch {}
+      // Just in case older Sandbox checks gameReady:
+      try {
+        if (typeof (gp as any).gameReady === 'function') (gp as any).gameReady();
+      } catch {}
+    }
+
+    // Force a player sync so Sandbox registers "Прогресс должен сохраняться"
+    // immediately at boot, without waiting for the player to do an action.
+    if (gp.player) {
+      try {
+        if (gp.player.ready) await gp.player.ready;
+        if (typeof gp.player.set === 'function') {
+          gp.player.set('sandbox_init', '1');
+          if (typeof gp.player.sync === 'function') {
+            await gp.player.sync({ storage: 'cloud' });
+          }
+        }
+      } catch {}
+    }
   });
 }
 
