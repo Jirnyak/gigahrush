@@ -246,11 +246,12 @@ async function waitForGamePushReady(gp: GamePushSdk): Promise<void> {
   try {
     const promises: Promise<unknown>[] = [];
     if (gp.ready) promises.push(gp.ready);
-    if (gp.player?.ready) promises.push(gp.player.ready);
+    // gp.player.ready hangs in GamePush Sandbox, blocking initialization.
+    // Do not wait for it here, otherwise markPlatformReady is called too late and fails the "вовремя" test.
     if (promises.length === 0) return;
     await Promise.race([
       Promise.all(promises),
-      new Promise((_, reject) => setTimeout(() => reject(new Error('GP timeout')), 8000))
+      new Promise((_, reject) => setTimeout(() => reject(new Error('GP timeout')), 2000))
     ]);
   } catch {
     // GamePush readiness must never break the standalone browser build.
@@ -503,19 +504,22 @@ export function markPlatformReady(): void {
 
       // Fulfill Sandbox tests: "Прогресс должен сохраняться в игрока"
       // and "При запуске игры прогресс должен загружаться корректно"
-      try {
-        if (gp.player) {
-          if (gp.player.ready) await gp.player.ready;
-          if (typeof (gp.player as any).fetch === 'function') await (gp.player as any).fetch();
-          if (typeof gp.player.get === 'function') gp.player.get('progress');
-          if (typeof gp.player.set === 'function') {
-            gp.player.set('sandbox_init', '1');
-            if (typeof gp.player.sync === 'function') {
-              await gp.player.sync({ storage: 'cloud' });
+      // Run player init asynchronously so it doesn't block gp.gameStart()
+      void (async () => {
+        try {
+          if (gp.player) {
+            if (gp.player.ready) await gp.player.ready;
+            if (typeof (gp.player as any).fetch === 'function') await (gp.player as any).fetch();
+            if (typeof gp.player.get === 'function') gp.player.get('progress');
+            if (typeof gp.player.set === 'function') {
+              gp.player.set('sandbox_init', '1');
+              if (typeof gp.player.sync === 'function') {
+                await gp.player.sync({ storage: 'cloud' });
+              }
             }
           }
-        }
-      } catch {}
+        } catch {}
+      })();
 
       // Fulfill Sandbox test: "Игра должна вызывать метод GameStart (GameReady)"
       // Doing this here satisfies "Метод GameStart должен вызываться вовремя"
