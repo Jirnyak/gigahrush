@@ -641,6 +641,7 @@ export interface Entity {
   psiControlledBy?: number;    // entity id of PSI controller (ally override)
   phasing?: boolean;           // can move through walls (spirit)
   protocolPressureTier?: number; // quantized sprite cue for Протокольник pressure
+  activeBark?: { text: string; until: number; color: string; }; // UI: active world speech bubble
 }
 
 // ── Items ────────────────────────────────────────────────────────

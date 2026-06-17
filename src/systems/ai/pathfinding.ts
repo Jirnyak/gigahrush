@@ -881,8 +881,7 @@ export function followPath(world: World, e: Entity, dt: number): void {
 
   while (ai.pi < ai.path.length) {
     const cell = ai.path[ai.pi];
-    const cx = (cell % W) + 0.5;
-    const cy = ((cell / W) | 0) + 0.5;
+    const [cx, cy] = subcellToWorld(cell);
     if (world.dist2(e.x, e.y, cx, cy) >= PATH_WAYPOINT_REACH_SQ) break;
     ai.pi++;
     ai.stuck = 0;

@@ -28,6 +28,7 @@ export const UI_ELEMENT_DEFS = [
   { id: 'anomaly_hints', group: 'Аномалии', label: 'Смог и аномальные индикаторы', defaultEnabled: false, locked: false },
   { id: 'fps_counter', group: 'Отладка', label: 'FPS в левом углу', defaultEnabled: false, locked: false },
   { id: 'screen_fx', group: 'Экран', label: 'Нейрошум и помехи', defaultEnabled: true, locked: false },
+  { id: 'npc_barks', group: 'Экран', label: 'Реплики в мире', defaultEnabled: true, locked: false },
   { id: 'samosbor_text', group: 'Системное', label: 'Текст самосбора', defaultEnabled: true, locked: true },
   { id: 'credits', group: 'Системное', label: 'Титры и финальные экраны', defaultEnabled: true, locked: true },
 ] as const satisfies readonly UiElementDef[];
@@ -158,6 +159,7 @@ export const UI_PRESETS = [
       'hazard_warning',
       'minimap',
       'screen_fx',
+      'npc_barks',
     ],
   },
   {
@@ -171,6 +173,7 @@ export const UI_PRESETS = [
       'hazard_warning',
       'minimap',
       'screen_fx',
+      'npc_barks',
     ],
   },
   {
@@ -187,6 +190,7 @@ export const UI_PRESETS = [
       'messages',
       'minimap',
       'screen_fx',
+      'npc_barks',
     ],
   },
   {
@@ -202,6 +206,7 @@ export const UI_PRESETS = [
       'minimap',
       'route_hints',
       'screen_fx',
+      'npc_barks',
     ],
   },
   {
@@ -223,6 +228,7 @@ export const UI_PRESETS = [
       'status_hints',
       'anomaly_hints',
       'screen_fx',
+      'npc_barks',
     ],
   },
 ] as const satisfies readonly UiPresetDef[];

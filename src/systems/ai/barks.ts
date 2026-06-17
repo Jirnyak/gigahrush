@@ -142,6 +142,11 @@ export function emitMarkovBark(e: Entity, msgs: Msg[], time: number, signal: str
   
   const text = routed?.text ?? fallback;
   const heard = pushNpcBarkMessage(e, msgs, time, text, color, { signal: signal as any });
+  if (heard) {
+    // Determine display duration: minimum 2.5s, plus 0.12s per character, max 6s
+    const duration = Math.min(6, Math.max(2.5, text.length * 0.12));
+    e.activeBark = { text, until: time + duration, color };
+  }
   if (!heard) return;
   lastBarkByEntity.set(e.id, { time, text: fallback });
   if (lastBarkByEntity.size > MAX_BARK_COOLDOWNS) pruneBarkCooldowns();

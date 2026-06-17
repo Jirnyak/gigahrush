@@ -1238,6 +1238,88 @@ function drawCombatSightFeedback(
   }
 }
 
+function drawWorldSpeechBubbles(
+  ctx: CanvasRenderingContext2D,
+  world: World,
+  player: Entity,
+  entities: Entity[],
+  sx: number,
+  sy: number,
+  time: number,
+): void {
+  const ca = Math.cos(player.angle);
+  const sa = Math.sin(player.angle);
+  const s = Math.max(1, Math.min(sx, sy));
+  
+  for (const e of entities) {
+    if (!e.alive || e.id === player.id || !e.activeBark) continue;
+    if (time > e.activeBark.until) continue;
+    
+    const dx = world.delta(player.x, e.x);
+    const dy = world.delta(player.y, e.y);
+    const d2 = dx * dx + dy * dy;
+    if (d2 > 16 * 16) continue; // max 16 meters
+    
+    const forward = dx * ca + dy * sa;
+    if (forward <= 0.35) continue; // Behind camera
+    
+    const side = -dx * sa + dy * ca;
+    const projection = combatSpriteProjection(e, forward, side, player.pitch);
+    if (!projection) continue;
+    
+    const text = e.activeBark.text;
+    const color = e.activeBark.color;
+    
+    ctx.font = `${6 * s}px monospace`;
+    const lines = wrapHudText(ctx, text, 120 * s, 4);
+    const lh = 7.5 * s;
+    const padding = 4 * s;
+    const tw = Math.max(...lines.map(l => ctx.measureText(l).width));
+    const th = lines.length * lh;
+    
+    const bx = projection.screenX * sx - tw / 2 - padding;
+    const by = projection.headY * sy - th - padding * 2 - 8 * s;
+    
+    const remaining = e.activeBark.until - time;
+    const alpha = Math.min(1, remaining * 2);
+    
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    
+    ctx.fillStyle = 'rgba(10, 18, 22, 0.82)';
+    ctx.fillRect(bx, by, tw + padding * 2, th + padding * 2);
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 1;
+    ctx.strokeRect(bx + 0.5, by + 0.5, tw + padding * 2 - 1, th + padding * 2 - 1);
+    
+    ctx.beginPath();
+    ctx.moveTo(bx + tw / 2 + padding - 3 * s, by + th + padding * 2);
+    ctx.lineTo(bx + tw / 2 + padding + 3 * s, by + th + padding * 2);
+    ctx.lineTo(bx + tw / 2 + padding, by + th + padding * 2 + 5 * s);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+    
+    ctx.beginPath();
+    ctx.moveTo(bx + tw / 2 + padding - 2 * s, by + th + padding * 2);
+    ctx.lineTo(bx + tw / 2 + padding + 2 * s, by + th + padding * 2);
+    ctx.strokeStyle = 'rgba(10, 18, 22, 1)';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    
+    ctx.fillStyle = color;
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'top';
+    ctx.shadowColor = color;
+    ctx.shadowBlur = 4;
+    for (let i = 0; i < lines.length; i++) {
+      ctx.fillText(lines[i], bx + padding, by + padding + i * lh);
+    }
+    
+    ctx.restore();
+  }
+}
+
 /* ── The HUD is drawn on the 2D canvas overlaying the 3D view ── */
 export function drawHUD(
   ctx: CanvasRenderingContext2D,
@@ -1641,6 +1723,10 @@ export function drawHUD(
       ctx.stroke();
     }
     drawCombatSightFeedback(ctx, combatTarget, sx, sy);
+  }
+
+  if (!quietHud && uiElementEnabled('npc_barks')) {
+    drawWorldSpeechBubbles(ctx, world, player, entities, sx, sy, time);
   }
 
   // ── Zone info + time + room (neuro-interface left panel) ──
