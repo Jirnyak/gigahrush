@@ -37,6 +37,7 @@
 | Mobile interaction | Mobile menu accept, map legend, fullscreen/direct-page behavior and Net Sphere touch path остаются отдельным UX-risk cluster. | Browser/mobile smoke covers menu selection, legend readability, fullscreen availability and touch path without desktop-only assumptions. |
 | Validation gates | Generation/mobile gates and build-size enforcement are not uniformly wired into default broad checks. Риск: regressions survive because the right command is optional or content-specific smoke owns generic reachability. | Named generation/mobile/size gates exist or docs state exact release owner; content wiring lives in `content:audit`, not ad hoc smoke logic. |
 | Human speed source of truth | После пересадки в обычного NPC runtime нормализует human movement, но старые NPC `speed` literals remain in constructors/templates. Риск: новые gameplay-visible paths снова начнут читать raw speed as truth. | Decide whether NPC `Entity.speed` is gameplay-authoritative, status-derived or monster/projectile-only. Add audit/test that rejects new raw NPC movement speed without AGI/status reason. |
+| Mesh draw radius vs pop-in | Меши (стены, предметы) пропадают или возникают из ниоткуда при движении камеры. Увеличение общего радиуса рендера приводит к падению FPS из-за лимита энтити/вокселей. | Развязать радиус culling/draw мешей от тяжелых запросов энтити (`queryRadiusCapped`), обеспечив отрисовку до границы тумана без просадки производительности. |
 
 ## Запрещенные классы ошибок
 

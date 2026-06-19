@@ -344,7 +344,7 @@ export function tryFactionCombat(
   const effectiveReach = meleeRange + (meleeWs.hitRadius ?? 0.6);
   if (bestDist > effectiveReach) {
     if (ai.path.length === 0 || ai.timer <= 0) {
-      tryAssignPathToCell(world, e, Math.floor(target.x), Math.floor(target.y));
+      tryAssignPathToCell(world, e, target.x, target.y);
       ai.timer = 2;
     }
     followPath(world, e, dt);

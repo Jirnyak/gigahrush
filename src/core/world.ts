@@ -269,24 +269,9 @@ export class World {
     return out;
   }
 
-  initializeLampBlinks(seed: number): void {
-    const hash = (x: number, y: number, s: number) => {
-      let h = s ^ x ^ (y * 31);
-      h = Math.imul(h ^ (h >>> 16), 0x85ebca6b);
-      h = Math.imul(h ^ (h >>> 13), 0xc2b2ae35);
-      return ((h ^ (h >>> 16)) >>> 0) / 4294967296.0;
-    };
-
-    for (let i = 0; i < W * W; i++) {
-      if (this.features[i] === Feature.LAMP && this.lampBlinks[i] === 0) {
-        const x = i % W;
-        const y = Math.floor(i / W);
-        // ~12% chance for a lamp to be broken/blinking
-        if (hash(x, y, seed + 1234) < 0.12) {
-          this.lampBlinks[i] = 1 + Math.floor(hash(x, y, seed + 5678) * 3); // 1, 2, or 3 frequency
-        }
-      }
-    }
+  initializeLampBlinks(_seed: number): void {
+    // Disabled normal lamp flickering per user feedback.
+    // uSamosborAlert will still override frequency during Samosbor.
   }
 
   /* rebuild lightmap from local feature light sources */

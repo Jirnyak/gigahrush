@@ -1145,11 +1145,7 @@ void main() {
   // Floor contact (drawEnd) and the walk level never move; only the top rises.
   float ceilH = 1.0 + float(texelFetch(uCeil, ivec2(wrapI(mapX), wrapI(mapY)), 0).r) * 0.5;
   float rawDrawStart = HALF_H - lineH * (ceilH - uCamHeight);
-  // Clamp the wall top to the camera cell's ceiling so a tall wall behind a
-  // low ceiling never pokes above the near ceiling plane.
-  float camCeilH = 1.0 + float(texelFetch(uCeil, ivec2(wrapI(int(floor(uPos.x))), wrapI(int(floor(uPos.y)))), 0).r) * 0.5;
-  float camStart = HALF_H - lineH * (camCeilH - uCamHeight);
-  float drawStart = max(0.0, max(rawDrawStart, camStart));
+  float drawStart = max(0.0, rawDrawStart);
   float drawEnd   = min(uResolution.y - 1.0, HALF_H + lineH * uCamHeight);
 
   // Texture X coordinate
@@ -1164,7 +1160,12 @@ void main() {
   float fogF = distanceFog(dist);
 
   vec3 pixel = fogColor(); // default = fog
+  float wallDist = MAX_DIST + 10.0;
+  bool wallDrawn = false;
+
   if (hit && row >= drawStart && row <= drawEnd) {
+      wallDist = dist;
+      wallDrawn = true;
       // ── Wall ──
       ivec2 hitCell = ivec2(wrapI(mapX), wrapI(mapY));
       float toolBeam = toolBeamBoost(dist, rayDX, rayDY);
@@ -1197,7 +1198,9 @@ void main() {
       c = min(vec3(1.0), c + c * dynWall);
       pixel = applyLocalFog(c, hitCell, fogF);
       pixelDepth = min(1.0, dist / MAX_DIST);
-  } else if (row > (hit ? drawEnd : HALF_H)) {
+  }
+
+  if (row > (hit ? drawEnd : HALF_H)) {
       // ── Floor ──
       float rowDist = row - HALF_H;
       if (rowDist > 0.0) {
@@ -1245,7 +1248,7 @@ void main() {
           }
         }
       }
-  } else if (row < (hit ? drawStart : HALF_H)) {
+  } else if (row < HALF_H) {
       // ── Ceiling ──
       float rowDist = HALF_H - row;
       if (rowDist > 0.0) {
@@ -1278,7 +1281,7 @@ void main() {
           if (dEnter > MAX_DIST) break;
         }
         if (currentDist < 0.0) currentDist = (marchHc - uCamHeight) / slope;
-        if (currentDist <= MAX_DIST) {
+        if (currentDist <= MAX_DIST && (!wallDrawn || currentDist < wallDist)) {
           float floorX = uPos.x + rayDX * currentDist;
           float floorY = uPos.y + rayDY * currentDist;
 

@@ -95,6 +95,7 @@ export interface MeshSceneProfile {
 export interface ResolvedMeshSceneProfile {
   enabled: boolean;
   radius: number;
+  meshDrawRadius: number;
   radiusCells: number;
   proceduralFieldRadius: number;
   proceduralFieldInstanceCap: number;
@@ -123,6 +124,7 @@ export interface MeshPassContext {
   time: number;
   mode?: MeshGraphicsMode;
   profile?: MeshSceneProfile | null;
+  fogDensity?: number;
   entityIndex?: Pick<EntityIndex, 'queryRadiusCapped'>;
 }
 
@@ -481,6 +483,10 @@ export function resolveMeshSceneProfile(context: MeshPassContext): ResolvedMeshS
   const mode = context.mode ?? 'medium';
   const budget = VISUAL_GEOMETRY_MODE_BUDGETS[mode] ?? VISUAL_GEOMETRY_MODE_BUDGETS.medium;
   const radius = Math.max(0, Math.min(MAX_DRAW, Math.floor(source.radius ?? budget.radius)));
+  const dynamicDrawRadius = context.fogDensity !== undefined && context.fogDensity > 0.0
+    ? Math.max(radius, Math.ceil(2.0 / context.fogDensity))
+    : radius;
+  const meshDrawRadius = Math.max(0, Math.min(MAX_DRAW, Math.floor(dynamicDrawRadius)));
   const proceduralFieldRadius = Math.max(
     0,
     Math.min(MAX_DRAW, Math.floor(source.proceduralFieldRadius ?? budget.proceduralFieldRadius)),
@@ -509,7 +515,8 @@ export function resolveMeshSceneProfile(context: MeshPassContext): ResolvedMeshS
   return {
     enabled,
     radius,
-    radiusCells: Math.ceil(radius),
+    meshDrawRadius,
+    radiusCells: Math.ceil(meshDrawRadius),
     proceduralFieldRadius,
     proceduralFieldInstanceCap,
     instanceCap,

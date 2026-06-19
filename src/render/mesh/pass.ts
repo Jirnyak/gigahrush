@@ -113,6 +113,10 @@ function collectVoxelMeshes(context: MeshPassContext, out: VoxelChunkMesh[], sta
   out.length = 0;
   const profile = context.profile;
   if (!profile.voxelEnabled || profile.voxelRadius <= 0 || profile.triangleCap <= 0) return;
+  const dynamicDrawRadius = context.fogDensity !== undefined && context.fogDensity > 0.0
+    ? Math.max(profile.radius, Math.ceil(2.0 / context.fogDensity))
+    : profile.radius;
+  const meshDrawRadius = Math.max(0, Math.min(MAX_DRAW, Math.floor(dynamicDrawRadius)));
   const voxelTriangleCap = Math.max(48, Math.min(900, Math.floor(profile.triangleCap * 0.16)));
   const voxelProfile: VoxelProfile = {
     voxelEnabled: true,
@@ -122,7 +126,7 @@ function collectVoxelMeshes(context: MeshPassContext, out: VoxelChunkMesh[], sta
     triangleCap: voxelTriangleCap,
     solidVoxelCap: context.mode === 'high' ? 220 : 128,
     maxChunksPerFrame: Math.min(profile.maxChunksPerFrame, context.mode === 'high' ? 2 : 1),
-    voxelRadius: profile.voxelRadius,
+    voxelRadius: Math.max(profile.voxelRadius, meshDrawRadius),
     visualSlotsPerCell: 16,
     style: voxelStyleForFloorKey(context.floorKey),
   };
@@ -293,10 +297,15 @@ class MeshPass implements MeshPassHandle {
     gl.uniform2f(uniforms.uPlane, planeX, planeY);
     gl.uniform2f(uniforms.uPitchHeight, context.camera.pitch, context.camera.height);
     gl.uniform2f(uniforms.uResolution, 320, 200);
+    const dynamicDrawRadius = context.fogDensity !== undefined && context.fogDensity > 0.0
+      ? Math.max(context.profile.radius, Math.ceil(2.0 / context.fogDensity))
+      : context.profile.radius;
+    const meshDrawRadius = Math.max(0, Math.min(MAX_DRAW, Math.floor(dynamicDrawRadius)));
+
     gl.uniform1f(uniforms.uInvDet, invDet);
     gl.uniform1f(uniforms.uWorldSize, W);
     gl.uniform1f(uniforms.uMaxDraw, MAX_DRAW);
-    gl.uniform1f(uniforms.uMeshRadius, Math.max(0.1, context.profile.radius));
+    gl.uniform1f(uniforms.uMeshRadius, Math.max(0.1, meshDrawRadius));
     gl.uniform3f(uniforms.uFogColor, fog[0] / 255, fog[1] / 255, fog[2] / 255);
     gl.uniform1f(uniforms.uFogDensity, fogDensity);
     gl.uniform1f(uniforms.uAmbient, context.ambient ?? 0.18);
