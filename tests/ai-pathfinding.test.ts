@@ -180,11 +180,13 @@ test('ordinary closed doors are routeable while locked and hermetic doors block 
 
   world.doors.get(doorIdx)!.state = DoorState.LOCKED;
   world.markCellsDirty();
+  unfreezeNavigationCacheForWorld();
   setPathContext([], 1);
   assert.deepEqual(bfsPath(world, 0.5, 10.5, 21.5, 10.5), []);
 
   world.doors.get(doorIdx)!.state = DoorState.HERMETIC_CLOSED;
   world.markCellsDirty();
+  unfreezeNavigationCacheForWorld();
   setPathContext([], 2, true);
   assert.deepEqual(bfsPath(world, 0.5, 10.5, 21.5, 10.5), []);
 });
@@ -220,7 +222,7 @@ test('door state helper invalidates baked navigation when passability changes', 
   const beforeVersion = world.cellVersion;
 
   assert.equal(setDoorState(world, world.doors.get(doorIdx), DoorState.HERMETIC_CLOSED), true);
-
+  unfreezeNavigationCacheForWorld();
   assert.ok(world.cellVersion > beforeVersion);
   assert.deepEqual(bfsPath(world, 0.5, 10.5, 21.5, 10.5), []);
 });
@@ -231,6 +233,7 @@ test('baked navigation invalidates and respects full fine blockers', () => {
   assert.equal(bfsPath(world, 0.5, 10.5, 10.5, 10.5).length > 0, true);
 
   blockCellFully(world, 5, 10);
+  unfreezeNavigationCacheForWorld();
   setPathContext([], 0.1);
 
   assert.deepEqual(bfsPath(world, 0.5, 10.5, 10.5, 10.5), []);

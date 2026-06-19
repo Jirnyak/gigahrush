@@ -231,6 +231,8 @@ export function unfreezeNavigationCacheForWorld(world?: World): void {
     _frozenNavPathBlockerVersion = -1;
     _frozenNavRoomCount = -1;
     _frozenNavRefCount = 0;
+    _navWorld = null;
+    _behaviorFlowFields.clear();
     return;
   }
   if (_frozenNavWorld && _frozenNavWorld !== world) return;
@@ -243,6 +245,8 @@ export function unfreezeNavigationCacheForWorld(world?: World): void {
   _frozenNavPathBlockerVersion = -1;
   _frozenNavRoomCount = -1;
   _frozenNavRefCount = 0;
+  _navWorld = null;
+  _behaviorFlowFields.clear();
 }
 
 export function subcellIdx(worldX: number, worldY: number): number {
@@ -389,20 +393,15 @@ function visitNavNeighbor(world: World, cell: number, parent: number, componentI
 }
 
 function ensureNavigationTree(world: World): void {
-  const cacheCellVersion = navigationCacheCellVersion(world);
-  const cachePathBlockerVersion = navigationCachePathBlockerVersion(world);
-  if (_navWorld === world && _navCellVersion === cacheCellVersion && _navPathBlockerVersion === cachePathBlockerVersion) {
+  if (_navWorld === world) {
     _pathCacheHits++;
     return;
   }
-  bakeNavigationTree(world, cacheCellVersion, cachePathBlockerVersion);
+  bakeNavigationTree(world, world.cellVersion, world.pathBlockerVersion);
 }
 
 function flowFieldValid(field: BehaviorFlowField, world: World): boolean {
-  return field.world === world &&
-    field.cellVersion === navigationCacheCellVersion(world) &&
-    field.pathBlockerVersion === navigationCachePathBlockerVersion(world) &&
-    field.roomCount === navigationCacheRoomCount(world);
+  return field.world === world && field.roomCount === navigationCacheRoomCount(world);
 }
 
 function ensureBehaviorFlowField(
@@ -693,10 +692,7 @@ function openPathDoor(world: World, cell: number): void {
 }
 
 function validSteeringAssignment(assignment: SteeringPathAssignment, world: World, target: number): boolean {
-  return assignment.world === world &&
-    assignment.cellVersion === navigationCacheCellVersion(world) &&
-    assignment.pathBlockerVersion === navigationCachePathBlockerVersion(world) &&
-    assignment.target === target;
+  return assignment.world === world && assignment.target === target;
 }
 
 export function clearEntitySteeringPath(e: Entity): void {
@@ -726,8 +722,8 @@ export function steerEntityTowardCell(world: World, e: Entity, tx: number, ty: n
     }
     assignment = {
       world,
-      cellVersion: navigationCacheCellVersion(world),
-      pathBlockerVersion: navigationCachePathBlockerVersion(world),
+      cellVersion: world.cellVersion,
+      pathBlockerVersion: world.pathBlockerVersion,
       target,
       path,
       pi: 0,
@@ -750,8 +746,8 @@ export function steerEntityTowardCell(world: World, e: Entity, tx: number, ty: n
     }
     assignment.path = path;
     assignment.pi = 0;
-    assignment.cellVersion = navigationCacheCellVersion(world);
-    assignment.pathBlockerVersion = navigationCachePathBlockerVersion(world);
+    assignment.cellVersion = world.cellVersion;
+    assignment.pathBlockerVersion = world.pathBlockerVersion;
   }
 
   const nextCell = assignment.path[assignment.pi];

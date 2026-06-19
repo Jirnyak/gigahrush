@@ -533,28 +533,10 @@ export class EntityIndex {
     const distances: number[] = [];
     const ids: number[] = [];
     const addCandidate = (e: Entity, d2: number): void => {
-      if (!capped) {
-        out.push(e);
-        return;
-      }
-      let pos = distances.length;
-      while (pos > 0) {
-        if (d2 < distances[pos - 1]) {
-          pos--;
-        } else if (d2 === distances[pos - 1] && e.id < ids[pos - 1]) {
-          pos--;
-        } else {
-          break;
-        }
-      }
-      if (pos >= cap) return;
-      distances.splice(pos, 0, d2);
-      ids.splice(pos, 0, e.id);
-      out.splice(pos, 0, e);
-      if (out.length > cap) {
-        out.length = cap;
-        distances.length = cap;
-        ids.length = cap;
+      out.push(e);
+      if (capped) {
+        distances.push(d2);
+        ids.push(e.id);
       }
     };
     const bx = wrappedBucketCoord(x);
@@ -576,10 +558,6 @@ export class EntityIndex {
           if (span > 1 && ring === span) {
             minBucketD2 = bucketMinDistanceSq(x, y, xx, yy);
             if (minBucketD2 > r2) continue;
-          }
-          if (capped && out.length >= cap) {
-            if (minBucketD2 < 0) minBucketD2 = bucketMinDistanceSq(x, y, xx, yy);
-            if (minBucketD2 > distances[cap - 1]) continue;
           }
           const bucket = dynamicBuckets[bucketIndex];
           bucketChecks++;
@@ -606,6 +584,23 @@ export class EntityIndex {
           }
         }
       }
+    }
+
+    if (capped && out.length > 1) {
+      const indices = new Int32Array(out.length);
+      for (let i = 0; i < out.length; i++) indices[i] = i;
+      indices.sort((a, b) => {
+        const dDiff = distances[a] - distances[b];
+        if (dDiff !== 0) return dDiff;
+        return ids[a] - ids[b];
+      });
+      const sortedOut = [];
+      for (let i = 0; i < out.length; i++) sortedOut.push(out[indices[i]]);
+      out.length = 0;
+      for (let i = 0; i < sortedOut.length; i++) out.push(sortedOut[i]);
+    }
+    if (capped && out.length > cap) {
+      out.length = cap;
     }
 
     this.recordQuery(typeMask, bucketChecks, out.length, false);

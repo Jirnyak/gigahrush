@@ -92,11 +92,13 @@ export function clearAllPathBlockers(world: PathBlockerWorldLike): boolean {
 }
 
 export function pathBlockedAt(world: PathBlockerWorldLike, x: number, y: number): boolean {
-  const cellX = Math.floor(x);
-  const cellY = Math.floor(y);
-  const row = pathBlockerSubcell(y);
-  const col = pathBlockerSubcell(x);
-  const cellIdx = world.idx(world.wrap(cellX), world.wrap(cellY));
-  const mask = getPathBlockerRow(world, cellIdx, row);
+  const fx = Math.floor(x);
+  const fy = Math.floor(y);
+  const cellX = fx & (W - 1);
+  const cellY = fy & (W - 1);
+  const col = ((x - fx) * PATH_BLOCKER_SUBDIV) | 0;
+  const row = ((y - fy) * PATH_BLOCKER_SUBDIV) | 0;
+  const cellIdx = cellY * W + cellX;
+  const mask = world.pathBlockers[cellIdx * PATH_BLOCKER_BYTES_PER_CELL + row] ?? EMPTY_PATH_BLOCKER_ROW;
   return (mask & (1 << col)) !== 0;
 }
