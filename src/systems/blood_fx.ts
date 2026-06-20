@@ -5,7 +5,7 @@ import { World } from '../core/world';
 import { stampLocalMark, stampMark, MarkType } from './surface_marks';
 import { Spr } from '../render/sprite_index';
 import { ensureEntityIndex } from './entity_index';
-import { addVisualSlotByPriority } from '../gen/visual_cell_slots';
+import { addVisualSlotByPriority, removeVisualSlotCode } from '../gen/visual_cell_slots';
 import { SeedRng } from '../core/rand';
 
 /* ── Transient world-space particles ──────────────────────────── */
@@ -428,12 +428,19 @@ export function spawnDeathPool(world: World, ex: number, ey: number, gore = fals
 
   // Central procedural mesh chunk
   if (goreLevel >= 1) {
-    addVisualSlotByPriority(world, cy * 1024 + cx, 34, seed);
-    // Add one scattered chunk at a random adjacent open cell
+    const chunkCount = 2 + Math.floor(rng.random() * 2); // 2 to 3 chunks in center
+    for (let i = 0; i < chunkCount; i++) {
+      addVisualSlotByPriority(world, cy * 1024 + cx, 34, seed + i);
+    }
+    
+    // Add scattered chunks at random adjacent open cells
     const scx = Math.floor(((cx + Math.round(rng.random() * 2 - 1)) % 1024 + 1024) % 1024);
     const scy = Math.floor(((cy + Math.round(rng.random() * 2 - 1)) % 1024 + 1024) % 1024);
     if (!world.solid(scx, scy) && (scx !== cx || scy !== cy)) {
-      addVisualSlotByPriority(world, scy * 1024 + scx, 34, seed + 1);
+      const outerCount = 1 + Math.floor(rng.random() * 2); // 1 to 2 chunks adjacent
+      for (let i = 0; i < outerCount; i++) {
+        addVisualSlotByPriority(world, scy * 1024 + scx, 34, seed + 10 + i);
+      }
     }
   }
 
@@ -553,7 +560,19 @@ export function spawnExplosionParticles(world: World, x: number, y: number, radi
   }
 }
 
-/* ── Update particles physics ─────────────────────────────────── */
+export function clearCorpseChunks(world: World, ex: number, ey: number): void {
+  const cx = Math.floor(ex);
+  const cy = Math.floor(ey);
+  for (let dy = -1; dy <= 1; dy++) {
+    for (let dx = -1; dx <= 1; dx++) {
+      const idx = world.idx(world.wrap(cx + dx), world.wrap(cy + dy));
+      removeVisualSlotCode(world, idx, 34); // corpse_meat_chunk
+      removeVisualSlotCode(world, idx, 35); // corpse_bone_chunk
+    }
+  }
+}
+
+/* ── Update particle physics ─────────────────────────────────── */
 export function updateParticles(world: World, dt: number): void {
   if (!bindParticleWorld(world)) return;
   for (let i = particles.length - 1; i >= 0; i--) {

@@ -84,6 +84,8 @@ import {
 } from '../monster_traits';
 import { shareLocalTarget } from './monster_pack';
 import { selectMeleeTarget } from '../melee_targeting';
+import { findMeatChunkCell, removeVisualSlotCode } from '../../gen/visual_cell_slots';
+import { isCarnivoreMonster } from '../../data/monster_ecology';
 
 /* ── Shared combat target finder ──────────────────────────────── */
 const MONSTER_DETECT = 20;
@@ -262,7 +264,6 @@ const ZHORNAYA_SCENT_SCAN_SEC = 0.14;
 const OLGOY_DETECT_RADIUS = 24;
 const OLGOY_BLOOD_RADIUS = 30;
 const OLGOY_CORPSE_RADIUS = 26;
-const OLGOY_CORPSE_SCAN_CAP = 192;
 const OLGOY_COMBAT_LOCK_SQ = 2.35 * 2.35;
 const OLGOY_AMBUSH_RADIUS = 2;
 const OLGOY_DRAG_STEP = 0.82;
@@ -484,7 +485,7 @@ const mukhozhukCommandQuery: Entity[] = [];
 const cherviePulseQuery: Entity[] = [];
 const sporeCarpetPuffQuery: Entity[] = [];
 const lishennyyLightQuery: Entity[] = [];
-const olgoyFedCorpses = new WeakSet<Entity>();
+
 const lampPoweredRuntime = new WeakMap<Entity, boolean>();
 
 
@@ -3486,6 +3487,68 @@ function publishOlgoyFed(
   });
 }
 
+function tryConsumeMeatChunk(
+  world: World,
+  e: Entity,
+  target: Entity | null,
+  dt: number,
+  time: number,
+  msgs: Msg[],
+  state?: GameState,
+): boolean {
+  if (target && world.dist2(e.x, e.y, target.x, target.y) <= 12) return false;
+  
+  const ai = e.ai!;
+  const isOlgoy = hasAIFlag(e, 'meatWorm');
+  const maxRadius = isOlgoy ? OLGOY_CORPSE_RADIUS : 16;
+  
+  if (!isOlgoy && !isCarnivoreMonster(e.monsterKind)) return false;
+  if (!isOlgoy && (e.hp ?? 0) >= (e.maxHp ?? 100)) return false;
+
+  ai.meatScanCd = (ai.meatScanCd ?? 0) - dt;
+  if (ai.meatScanCd <= 0) {
+    ai.meatScanCd = deterministicScanCd(e.id, 2.5, 0.5);
+    const chunkCell = findMeatChunkCell(world, e.x, e.y, maxRadius);
+    if (chunkCell) {
+      ai.meatTargetId = chunkCell.x * 10000 + chunkCell.y;
+    } else {
+      ai.meatTargetId = undefined;
+    }
+  }
+
+  if (ai.meatTargetId === undefined) return false;
+  
+  const chunkX = Math.floor(ai.meatTargetId / 10000);
+  const chunkY = ai.meatTargetId % 10000;
+
+  ai.goal = AIGoal.HUNT;
+  ai.combatTargetId = undefined;
+  
+  if (world.dist2(e.x, e.y, chunkX, chunkY) <= 1.35 * 1.35) {
+    removeVisualSlotCode(world, world.idx(chunkX, chunkY), 34);
+    
+    if (isOlgoy) {
+      msgs.push(msg(`${entityDisplayName(e)} утянул кусок мяса в коллектор`, time, '#c86'));
+      if (state) publishOlgoyFed(state, world, e, e, time, 'corpse', { corpseType: 'chunk' });
+    } else {
+      msgs.push(msg(`${entityDisplayName(e)} сожрал кусок мяса`, time, '#c44'));
+      e.hp = Math.min(e.maxHp ?? 100, (e.hp ?? 0) + 25);
+    }
+    ai.meatTargetId = undefined;
+    ai.path = [];
+    ai.pi = 0;
+    return true;
+  }
+
+  ai.timer -= dt;
+  if (ai.path.length === 0 || ai.timer <= 0 || ai.tx !== chunkX || ai.ty !== chunkY) {
+    tryAssignPathToCell(world, e, chunkX, chunkY);
+    ai.timer = 1.5;
+  }
+  followMonsterPath(world, e, dt);
+  return true;
+}
+
 function findMeatWormTarget(world: World, e: Entity, dt: number): Entity | null {
   const ai = e.ai!;
   let target: Entity | null = null;
@@ -3526,83 +3589,8 @@ function findMeatWormTarget(world: World, e: Entity, dt: number): Entity | null 
   return target;
 }
 
-function corpseById(entities: Entity[], id: number): Entity | undefined {
-  for (const entity of entities) {
-    if (entity.id === id) return entity;
-  }
-  return undefined;
-}
 
-function findOlgoyCorpseTarget(world: World, entities: Entity[], e: Entity, dt: number): Entity | null {
-  const ai = e.ai!;
-  const radiusSq = OLGOY_CORPSE_RADIUS * OLGOY_CORPSE_RADIUS;
-  if (ai.meatTargetId !== undefined) {
-    const cached = corpseById(entities, ai.meatTargetId);
-    if (cached && !cached.alive && !olgoyFedCorpses.has(cached) && world.dist2(e.x, e.y, cached.x, cached.y) <= radiusSq) return cached;
-    ai.meatTargetId = undefined;
-  }
 
-  ai.meatScanCd = (ai.meatScanCd ?? 0) - dt;
-  if (ai.meatScanCd > 0 || entities.length === 0) return null;
-  ai.meatScanCd = deterministicScanCd(e.id, 1.35, 0.55);
-  const start = ai.meatScanOffset ?? (e.id * 37) % entities.length;
-  const limit = Math.min(entities.length, OLGOY_CORPSE_SCAN_CAP);
-  ai.meatScanOffset = (start + limit) % entities.length;
-
-  let best: Entity | null = null;
-  let bestD2 = radiusSq;
-  for (let i = 0; i < limit; i++) {
-    const corpse = entities[(start + i) % entities.length];
-    if (corpse.alive || olgoyFedCorpses.has(corpse)) continue;
-    if (corpse.type !== EntityType.NPC && corpse.type !== EntityType.MONSTER) continue;
-    const d2 = world.dist2(e.x, e.y, corpse.x, corpse.y);
-    if (d2 >= bestD2) continue;
-    bestD2 = d2;
-    best = corpse;
-  }
-  if (best) ai.meatTargetId = best.id;
-  return best;
-}
-
-function tryFollowOlgoyCorpse(
-  world: World,
-  entities: Entity[],
-  e: Entity,
-  target: Entity | null,
-  dt: number,
-  time: number,
-  msgs: Msg[],
-  state?: GameState,
-): boolean {
-  if (!hasAIFlag(e, 'meatWorm')) return false;
-  if (target && world.dist2(e.x, e.y, target.x, target.y) <= OLGOY_COMBAT_LOCK_SQ) return false;
-  const corpse = findOlgoyCorpseTarget(world, entities, e, dt);
-  if (!corpse) return false;
-
-  const ai = e.ai!;
-  ai.goal = AIGoal.HUNT;
-  ai.combatTargetId = undefined;
-  if (world.dist2(e.x, e.y, corpse.x, corpse.y) <= 1.35 * 1.35) {
-    olgoyFedCorpses.add(corpse);
-    ai.meatTargetId = undefined;
-    ai.path = [];
-    ai.pi = 0;
-    msgs.push(msg(`${entityDisplayName(e)} утянул тело в коллектор`, time, '#c86'));
-    publishOlgoyFed(state, world, e, corpse, time, 'corpse', { corpseType: EntityType[corpse.type] ?? String(corpse.type) });
-    return true;
-  }
-
-  const tx = Math.floor(corpse.x);
-  const ty = Math.floor(corpse.y);
-  ai.timer -= dt;
-  if (ai.path.length === 0 || ai.timer <= 0 || ai.tx !== tx || ai.ty !== ty) {
-    tryAssignPathToCell(world, e, tx, ty);
-    ai.timer = 1.5;
-  }
-  if (ai.path.length === 0) return false;
-  followMonsterPath(world, e, dt);
-  return true;
-}
 
 function updateOlgoyReadability(world: World, e: Entity, target: Entity, time: number, msgs: Msg[], playerId: number, state?: GameState): void {
   if (e.monsterKind !== MonsterKind.OLGOY || target.id !== playerId || e.ai?.lastSeenTargetId === playerId) return;
@@ -8865,7 +8853,7 @@ export function updateMonster(world: World, entities: Entity[], e: Entity, dt: n
   updatePomoynyRoyReadability(world, e, target, time, msgs, playerId, state);
 
   if (!hasAIFlag(e, 'scentOvercommit') && tryFollowMonsterBait(world, e, target, dt, time, msgs, state)) return;
-  if (tryFollowOlgoyCorpse(world, entities, e, target, dt, time, msgs, state)) return;
+  if (tryConsumeMeatChunk(world, e, target, dt, time, msgs, state)) return;
 
   if (!target) {
     cancelLozhnyyDukhFalsePhase(e);

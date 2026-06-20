@@ -137,6 +137,18 @@ export function clearVisualSlotRegion(world: World, x: number, y: number, w: num
   return changed;
 }
 
+export function removeVisualSlotCode(world: World, cellIdx: number, code: number): number {
+  let removed = 0;
+  const offset = visualSlotOffset(cellIdx, 0);
+  for (let slot = 0; slot < VISUAL_SLOTS_PER_CELL; slot++) {
+    if (world.visualSlots[offset + slot] === code) {
+      setVisualSlot(world, cellIdx, slot, EMPTY_VISUAL_CELL_CODE);
+      removed++;
+    }
+  }
+  return removed;
+}
+
 export function addVisualSlotFirstFree(world: World, cellIdx: number, code: number): number {
   visualDefOrThrow(code);
   const offset = visualSlotOffset(cellIdx, 0);
@@ -146,6 +158,36 @@ export function addVisualSlotFirstFree(world: World, cellIdx: number, code: numb
     return slot;
   }
   return -1;
+}
+
+export function hasVisualSlotCode(world: World, cellIdx: number, code: number): boolean {
+  const offset = visualSlotOffset(cellIdx, 0);
+  for (let slot = 0; slot < VISUAL_SLOTS_PER_CELL; slot++) {
+    if (world.visualSlots[offset + slot] === code) return true;
+  }
+  return false;
+}
+
+export function findMeatChunkCell(world: World, cx: number, cy: number, maxRadius: number): { x: number, y: number } | null {
+  const r = Math.ceil(maxRadius);
+  const maxD2 = maxRadius * maxRadius;
+  let best: { x: number, y: number } | null = null;
+  let bestD2 = maxD2;
+  
+  for (let dy = -r; dy <= r; dy++) {
+    for (let dx = -r; dx <= r; dx++) {
+      const d2 = dx * dx + dy * dy;
+      if (d2 >= bestD2) continue;
+      const x = world.wrap(cx + dx);
+      const y = world.wrap(cy + dy);
+      const idx = world.idx(x, y);
+      if (hasVisualSlotCode(world, idx, 34)) { // 34 = organic_meat_lump
+        best = { x, y };
+        bestD2 = d2;
+      }
+    }
+  }
+  return best;
 }
 
 export function addVisualSlotByPriority(world: World, cellIdx: number, code: number, seed: number): number {

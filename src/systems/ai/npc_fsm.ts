@@ -6,6 +6,8 @@ import {
   ZoneFaction, Occupation, type GameClock, Cell, type TerritoryOwner, type Room,
 } from '../../core/types';
 import { World } from '../../core/world';
+import { msg } from '../../core/types';
+import { entityDisplayName } from '../../entities/monster';
 import { WEAPON_STATS } from '../../data/catalog';
 import { ENTITY_MASK_ACTOR, ensureEntityIndex } from '../entity_index';
 import { isHostile } from '../factions';
@@ -39,6 +41,7 @@ import {
 } from '../../data/occupation_profiles';
 import { territoryOwnerAtIndex, territoryRoomOwner } from '../territory';
 import { cleanSurfaceArea } from '../surface_cleanup';
+import { findMeatChunkCell, removeVisualSlotCode } from '../../gen/visual_cell_slots';
 import {
   NPC_UTILITY_INTENTS,
   createNpcUtilityScoreBuffer,
@@ -720,6 +723,28 @@ function handleDrink(world: World, e: Entity, dt: number): void {
 function handleEat(world: World, e: Entity, dt: number): void {
   const ai = e.ai!;
   const n = e.needs;
+  
+  if (n && n.food < 15 && (e.faction === Faction.WILD || e.faction === Faction.CULTIST || Math.random() < 0.05)) {
+    const chunkCell = findMeatChunkCell(world, e.x, e.y, 16);
+    if (chunkCell) {
+      ai.goal = AIGoal.EAT;
+      if (world.dist2(e.x, e.y, chunkCell.x, chunkCell.y) <= 1.35 * 1.35) {
+        removeVisualSlotCode(world, world.idx(chunkCell.x, chunkCell.y), 34);
+        n.food = Math.min(100, n.food + 35);
+        _barkMsgs.push(msg(`${entityDisplayName(e)} сожрал кусок мяса`, _barkTime, '#c44'));
+        ai.path = [];
+        ai.pi = 0;
+        ai.timer = 2;
+        return;
+      }
+      if (ai.path.length === 0 || ai.tx !== chunkCell.x || ai.ty !== chunkCell.y) {
+        tryAssignPathToCell(world, e, chunkCell.x, chunkCell.y);
+      }
+      followPath(world, e, dt);
+      return;
+    }
+  }
+
   if (ai.timer <= 0 || ai.goal === AIGoal.IDLE) {
     ai.goal = AIGoal.EAT;
     if (!gotoRoutineRoomOfTypes(world, e, [RoomType.KITCHEN, RoomType.COMMON], 'eat', { allowTrespassFallback: true })) wanderNearby(world, e);

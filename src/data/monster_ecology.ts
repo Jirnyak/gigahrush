@@ -1751,6 +1751,13 @@ function tagHits(needles: readonly string[] | undefined, haystack: readonly stri
   return hits;
 }
 
+export function isCarnivoreMonster(kind: MonsterKind | undefined): boolean {
+  if (kind === undefined) return false;
+  const tags = MONSTER_ECOLOGY_CONTEXT[kind]?.tags;
+  if (!tags) return false;
+  return tags.includes('meat') || tags.includes('corpse') || tags.includes('predator') || tags.includes('food');
+}
+
 function ecologyTagWeight(def: MonsterEcologyDef, query: MonsterEcologyQuery): number {
   const context = MONSTER_ECOLOGY_CONTEXT[def.kind];
   if (!context) return 1;
