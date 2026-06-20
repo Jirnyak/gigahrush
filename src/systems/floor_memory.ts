@@ -1,5 +1,6 @@
 /* ── Runtime floor memory for visited route stops ─────────────── */
 
+import { safeParseJson } from '../core/json';
 import {
   Cell,
   ContainerKind,
@@ -271,7 +272,7 @@ function estimateFloorMemoryEntryBytes(world: World, entities: readonly Entity[]
 }
 
 function cloneJson<T>(value: T): T {
-  return JSON.parse(JSON.stringify(value)) as T;
+  return safeParseJson(JSON.stringify(value)) as T;
 }
 
 function bytesToBase64(bytes: Uint8Array): string {

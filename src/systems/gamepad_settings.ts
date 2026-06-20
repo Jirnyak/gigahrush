@@ -1,3 +1,5 @@
+import { safeParseJson } from '../core/json';
+
 /* ── Gamepad settings (browser-local, not part of save) ──────────
  *
  * Persistent, sanitized configuration for physical gamepad input. Stored
@@ -114,7 +116,7 @@ export function loadGamepadSettings(): GamepadSettings {
   }
   try {
     const raw = s.getItem(GAMEPAD_SETTINGS_KEY);
-    cached = sanitizeGamepadSettings(raw == null ? null : JSON.parse(raw));
+    cached = sanitizeGamepadSettings(raw == null ? null : safeParseJson(raw));
   } catch {
     cached = defaultGamepadSettings();
   }

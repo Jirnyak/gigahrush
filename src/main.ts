@@ -11,6 +11,7 @@ import {
   msg, setMsgClock,
 } from './core/types';
 import { World, replaceWorldFromGeneration } from './core/world';
+import { safeParseJson } from './core/json';
 import { hashSeed, randSeed } from './core/rand';
 import { canActorOccupy, unstuckActorFromBlockers } from './systems/movement_collision';
 import { selectMeleeTarget } from './systems/melee_targeting';
@@ -4704,7 +4705,7 @@ function loadGame(): boolean {
       state.msgs.push(msg('Нет сохранения', state.time, '#f84'));
       return false;
     }
-    const parsed = JSON.parse(raw);
+    const parsed = safeParseJson(raw);
     const versionStatus = saveShapeVersionStatus(parsed);
     if (versionStatus !== 'current') {
       const text = versionStatus === 'newer'
