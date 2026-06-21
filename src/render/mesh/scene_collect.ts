@@ -406,8 +406,11 @@ function facePosition(world: World, wallX: number, wallY: number, face: FaceInfo
 }
 
 function faceFromNormal(nx: number, ny: number): FaceInfo {
-  const face = FACE_INFOS.find(row => row.nx === nx && row.ny === ny);
-  return face ?? FACE_INFOS[0];
+  if (nx === 1 && ny === 0) return FACE_INFOS[0];
+  if (nx === -1 && ny === 0) return FACE_INFOS[1];
+  if (nx === 0 && ny === 1) return FACE_INFOS[2];
+  if (nx === 0 && ny === -1) return FACE_INFOS[3];
+  return FACE_INFOS[0];
 }
 
 function chooseFace(faces: readonly FaceInfo[], seed: number, x: number, y: number, slot: number, code: number): FaceInfo | undefined {
