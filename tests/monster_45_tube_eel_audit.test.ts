@@ -3,7 +3,8 @@ import * as assert from 'node:assert/strict';
 
 import { FloorLevel, MonsterKind } from '../src/core/types';
 import { isBaitAttractedMonster } from '../src/data/monster_ecology';
-import { DEF } from '../src/entities/tube_eel';
+import { DEF, generateSprite } from '../src/entities/tube_eel';
+import { S } from '../src/render/pixutil';
 
 test('tube eel remains a water ambusher with dry-edge counterplay', () => {
   assert.equal(DEF.kind, MonsterKind.TUBE_EEL);
@@ -20,4 +21,12 @@ test('tube eel remains a water ambusher with dry-edge counterplay', () => {
   assert.match(DEF.counterplay ?? '', /гарпун|приманк/);
   assert.match(DEF.lootHint ?? '', /слиз|манометр|труб/);
   assert.equal(isBaitAttractedMonster(MonsterKind.TUBE_EEL), true);
+});
+
+test('tube eel sprite is generated correctly and is readable', () => {
+  const sprite = generateSprite();
+  assert.equal(sprite.length, S * S);
+
+  const opaque = [...sprite].filter(px => (px >>> 24) !== 0).length;
+  assert.ok(opaque > 150, 'sprite should have enough opaque pixels to be visible in water');
 });
