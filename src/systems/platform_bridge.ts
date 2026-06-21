@@ -333,10 +333,6 @@ function loadGamePushSdkScript(config: GamePushConfig): Promise<GamePushSdk | nu
       global.gp = gp;
       try { previous?.(gp); } catch { /* preserve host callback safety */ }
       
-      // Sandbox requires gameReady to be called when the game is loaded.
-      try { if (typeof gp.gameReady === 'function') gp.gameReady(); } catch {}
-      try { if (typeof global.gp?.gameReady === 'function') global.gp.gameReady(); } catch {}
-
       // GamePush Sandbox STRICTLY checks the JavaScript call stack.
       // If methods like gameStart, sync, mute, changeLanguage are called from a setTimeout or async Promise,
       // it marks them as "not initiated by user" and FAILS the tests (e.g. "вовремя", "кнопка звука").
@@ -345,10 +341,6 @@ function loadGamePushSdkScript(config: GamePushConfig): Promise<GamePushSdk | nu
       const fulfillSandboxTests = () => {
         if (sandboxTestsTriggered) return;
         sandboxTestsTriggered = true;
-
-        // 1. gameStart (Test 3: вовремя)
-        try { if (typeof gp.gameStart === 'function') gp.gameStart(); } catch {}
-        try { if (typeof global.gp?.gameStart === 'function') global.gp.gameStart(); } catch {}
 
         // 2. Player sync (Test 4: сохранение)
         try {
@@ -534,8 +526,8 @@ export function markPlatformReady(): void {
     
     if (!gamePushReadySent) {
       gamePushReadySent = true;
-      // Actual gameplay handles gameStart, but just in case for older platforms:
-      // callOptional(gp, 'gameReady');
+      try { if (typeof gp.gameReady === 'function') gp.gameReady(); } catch {}
+      try { if (typeof gp.gameStart === 'function') gp.gameStart(); } catch {}
     }
   });
 }

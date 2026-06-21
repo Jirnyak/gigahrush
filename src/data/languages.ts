@@ -20,6 +20,10 @@ export interface TitleLanguageDef {
   setupSubtitle: string;
   setupStartLabel: string;
   setupStartValue: string;
+  setupStartHint: string;
+  setupContinueLabel: string;
+  setupContinueValue: string;
+  setupContinueHint: string;
   setupAddNpcLabel: string;
   setupAddNpcValue: string;
   setupLanguageLabel: string;
@@ -31,13 +35,22 @@ export interface TitleLanguageDef {
   setupSeedHint: string;
   setupLanguageHint: string;
   setupActorCapHint: string;
-  setupStartHint: string;
   setupControlHint: string;
   actorCapValue: (value: number, min: number, max: number) => string;
   languageHint: string;
   mobileHint: string;
   desktopHint: (move: string, interact: string) => string;
   desktopCombatHint: (attack: string, fullscreen: string, controls: string, ui: string) => string;
+  pointerGateTitle: string;
+  pointerGateSubtitle: string;
+  pointerGateWarning1: string;
+  pointerGateWarning2: string;
+  pointerGateControls1: string;
+  pointerGateControls2: string;
+  pointerGateResume: string;
+  pointerLockPrompt: string;
+  pointerLockControls1: (menu: string) => string;
+  pointerLockControls2: (back: string, interact: string) => string;
   flag: TitleFlagKind;
 }
 
@@ -60,7 +73,11 @@ export const TITLE_LANGUAGES: readonly TitleLanguageDef[] = [
     setupTitle: 'НАСТРОЙКА ЗАБЕГА',
     setupSubtitle: 'меню запуска',
     setupStartLabel: 'СТАРТ',
-    setupStartValue: 'начать игру',
+    setupStartValue: 'новая игра',
+    setupStartHint: 'ENTER запускает выбранный забег',
+    setupContinueLabel: 'ПРОДОЛЖИТЬ',
+    setupContinueValue: 'последнее сохранение',
+    setupContinueHint: 'ENTER загружает сохраненную игру',
     setupAddNpcLabel: 'ДОБАВИТЬ ПЕРСОНАЖА',
     setupAddNpcValue: 'анкета NPC',
     setupLanguageLabel: 'ЯЗЫК',
@@ -72,13 +89,22 @@ export const TITLE_LANGUAGES: readonly TitleLanguageDef[] = [
     setupSeedHint: 'пусто оставит случайный маршрутный сид',
     setupLanguageHint: '←/→ переключить язык',
     setupActorCapHint: '←/→ шаг 1024',
-    setupStartHint: 'ENTER запускает выбранный забег',
     setupControlHint: '↑/↓ выбор  |  ←/→ изменить  |  ENTER действие  |  текст в выбранном поле',
     actorCapValue: (value, min, max) => `${value} (${min}-${max})`,
     languageHint: '←/→ язык  |  ENTER далее',
     mobileHint: 'Тап — далее  |  ДЕЙСТ — действие  |  КАРТ/ЗАД/UI — рельса',
     desktopHint: (move, interact) => `Клик захватывает курсор перед стартом  |  ${move} — движение  |  ${interact} — действие`,
     desktopCombatHint: (attack, fullscreen, controls, ui) => `ЛКМ/${attack} — атака  |  ${fullscreen} — полный экран  |  ${controls} — клавиши  |  ${ui} — интерфейс`,
+    pointerGateTitle: 'КЛИКНИТЕ ПО ЭКРАНУ',
+    pointerGateSubtitle: 'ДЛЯ ЗАХВАТА КУРСОРА',
+    pointerGateWarning1: 'Данная игра является шутером от первого лица',
+    pointerGateWarning2: 'и не использует мышку.',
+    pointerGateControls1: 'Enter: меню / принять. ПКМ: назад.',
+    pointerGateControls2: 'ЛКМ: атака. ПКМ: инструмент. E: мир.',
+    pointerGateResume: 'После клика игра продолжится.',
+    pointerLockPrompt: 'Кликните по игре: мышь будет захвачена для обзора',
+    pointerLockControls1: (menu) => `После захвата ЛКМ стреляет. ПКМ использует инструмент. ${menu} меню/принять.`,
+    pointerLockControls2: (back, interact) => `${back} назад/закрыть. ${interact} действует в мире. Esc отпускает курсор браузером.`,
     flag: 'soviet',
   },
   {
@@ -99,7 +125,11 @@ export const TITLE_LANGUAGES: readonly TitleLanguageDef[] = [
     setupTitle: 'RUN SETUP',
     setupSubtitle: 'launch menu',
     setupStartLabel: 'START',
-    setupStartValue: 'start game',
+    setupStartValue: 'new game',
+    setupStartHint: 'ENTER starts the configured run',
+    setupContinueLabel: 'CONTINUE',
+    setupContinueValue: 'latest save',
+    setupContinueHint: 'ENTER loads the saved game',
     setupAddNpcLabel: 'ADD CHARACTER',
     setupAddNpcValue: 'NPC form',
     setupLanguageLabel: 'LANGUAGE',
@@ -111,13 +141,22 @@ export const TITLE_LANGUAGES: readonly TitleLanguageDef[] = [
     setupSeedHint: 'blank keeps a random route seed',
     setupLanguageHint: '←/→ switch language',
     setupActorCapHint: '←/→ step 1024',
-    setupStartHint: 'ENTER starts this run',
     setupControlHint: '↑/↓ select  |  ←/→ change  |  ENTER action  |  type in selected field',
     actorCapValue: (value, min, max) => `${value} (${min}-${max})`,
     languageHint: '←/→ language  |  ENTER next',
     mobileHint: 'Tap — next  |  ACT — interact  |  MAP/QUEST/UI — rail',
     desktopHint: (move, interact) => `Click captures cursor before start  |  ${move} — move  |  ${interact} — action`,
     desktopCombatHint: (attack, fullscreen, controls, ui) => `LMB/${attack} — attack  |  ${fullscreen} — fullscreen  |  ${controls} — keys  |  ${ui} — interface`,
+    pointerGateTitle: 'CLICK THE SCREEN',
+    pointerGateSubtitle: 'TO CAPTURE THE CURSOR',
+    pointerGateWarning1: 'This game is a first-person shooter',
+    pointerGateWarning2: 'and does not use the mouse cursor.',
+    pointerGateControls1: 'Enter: menu / accept. RMB: back.',
+    pointerGateControls2: 'LMB: attack. RMB: tool. E: world.',
+    pointerGateResume: 'Game resumes after click.',
+    pointerLockPrompt: 'Click on the game: mouse will be captured for aiming',
+    pointerLockControls1: (menu) => `After capture LMB attacks. RMB uses tool. ${menu} menu/accept.`,
+    pointerLockControls2: (back, interact) => `${back} back/close. ${interact} interacts in the world. Esc releases cursor to browser.`,
     flag: 'british_empire',
   },
 ];

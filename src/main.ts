@@ -548,24 +548,35 @@ const PLAYER_AGE_KEY = 'gigahrush_player_age';
 const PLAYER_SEX_KEY = 'gigahrush_player_sex';
 const TITLE_LANGUAGE_KEY = 'gigahrush_title_language';
 const TITLE_ACTIVE_ACTOR_SOFT_LIMIT_KEY = 'gigahrush_active_actor_soft_limit';
+const SAVE_KEY = 'gigahrush_save';
 const NET_GEN_NAME_RE = /^NET-[A-Z0-9-]{4,28}$/;
 const FULL_MAP_RADIUS_DEFAULT = 200;
 const FULL_MAP_RADIUS_MIN = 48;
 const FULL_MAP_RADIUS_MAX = W / 2;
 const FULL_MAP_ZOOM_STEP = 1.18;
-type TitleInputField = Extract<TitleHitField, 'language' | 'name' | 'age' | 'sex' | 'seed' | 'actorCap' | 'addNpc' | 'start'>;
+type TitleInputField = Extract<TitleHitField, 'language' | 'name' | 'age' | 'sex' | 'seed' | 'actorCap' | 'addNpc' | 'start' | 'continue'>;
 const NPC_INTAKE_ENABLED = Boolean((globalThis as { __GIGAHRUSH_NPC_INTAKE_ENABLED__?: boolean }).__GIGAHRUSH_NPC_INTAKE_ENABLED__);
 const smokeDebug = new URLSearchParams(window.location.search).has('smoke');
-const TITLE_SETUP_FIELDS: readonly TitleInputField[] = [
-  'start',
-  ...(NPC_INTAKE_ENABLED ? (['addNpc'] as const) : []),
-  'language',
-  'name',
-  'age',
-  'sex',
-  'seed',
-  'actorCap',
-];
+
+function hasValidSaveGame(): boolean {
+  try {
+    const raw = localStorage.getItem(SAVE_KEY);
+    if (!raw) return false;
+    const parsed = JSON.parse(raw);
+    return saveShapeVersionStatus(parsed) === 'current';
+  } catch {
+    return false;
+  }
+}
+
+function getTitleSetupFields(): readonly TitleInputField[] {
+  const fields: TitleInputField[] = [];
+  if (hasValidSaveGame()) fields.push('continue');
+  fields.push('start');
+  if (NPC_INTAKE_ENABLED) fields.push('addNpc');
+  fields.push('language', 'name', 'age', 'sex', 'seed', 'actorCap');
+  return fields;
+}
 let started = false;
 let playerNickname = loadPlayerNickname();
 let playerAge = loadPlayerAge();
@@ -573,9 +584,9 @@ let playerSex = loadPlayerSex();
 let titlePlayerAgeText = String(playerAge);
 let titleRunSeedText = '';
 let titleStartNeedsInit = true;
-let titleMode: TitleScreenMode = 'language';
+let titleMode: TitleScreenMode = 'setup';
 let titleSetupSel = 0;
-let titleInputField: TitleInputField = TITLE_SETUP_FIELDS[titleSetupSel];
+let titleInputField: TitleInputField = getTitleSetupFields()[titleSetupSel];
 let titleLanguageId = loadTitleLanguageId();
 let titleActiveActorSoftLimit = loadTitleActiveActorSoftLimit();
 let titleLanguageHits: TitleLanguageHit[] = [];
@@ -752,14 +763,16 @@ function adjustTitleActiveActorSoftLimit(dir: number): void {
 }
 
 function setTitleSelection(field: TitleInputField): void {
-  const index = TITLE_SETUP_FIELDS.indexOf(field);
+  const fields = getTitleSetupFields();
+  const index = fields.indexOf(field);
   if (index >= 0) titleSetupSel = index;
-  titleInputField = TITLE_SETUP_FIELDS[titleSetupSel] ?? 'start';
+  titleInputField = fields[titleSetupSel] ?? 'start';
 }
 
 function moveTitleSelection(delta: number): void {
-  titleSetupSel = (titleSetupSel + TITLE_SETUP_FIELDS.length + delta) % TITLE_SETUP_FIELDS.length;
-  titleInputField = TITLE_SETUP_FIELDS[titleSetupSel] ?? 'start';
+  const fields = getTitleSetupFields();
+  titleSetupSel = (titleSetupSel + fields.length + delta) % fields.length;
+  titleInputField = fields[titleSetupSel] ?? 'start';
   showTitle();
 }
 
@@ -837,15 +850,23 @@ function titleSetupRows(cursorOn: boolean): TitleSetupRowView[] {
   const nameCursor = cursorOn && selected('name') ? '_' : '';
   const ageCursor = cursorOn && selected('age') ? '_' : '';
   const seedCursor = cursorOn && selected('seed') ? '_' : '';
-  return [
-    { field: 'start', label: lang.setupStartLabel, value: lang.setupStartValue, hint: lang.setupStartHint, selected: selected('start') },
-    ...(NPC_INTAKE_ENABLED ? [{
+  const rows: TitleSetupRowView[] = [];
+  if (hasValidSaveGame()) {
+    rows.push({ field: 'continue', label: lang.setupContinueLabel, value: lang.setupContinueValue, hint: lang.setupContinueHint, selected: selected('continue') });
+  }
+  rows.push(
+    { field: 'start', label: lang.setupStartLabel, value: lang.setupStartValue, hint: lang.setupStartHint, selected: selected('start') }
+  );
+  if (NPC_INTAKE_ENABLED) {
+    rows.push({
       field: 'addNpc' as const,
       label: lang.setupAddNpcLabel,
       value: lang.setupAddNpcValue,
       hint: lang.setupAddNpcHint,
       selected: selected('addNpc'),
-    }] : []),
+    });
+  }
+  rows.push(
     { field: 'language', label: lang.setupLanguageLabel, value: titleLanguageDef(titleLanguageId).name, hint: lang.setupLanguageHint, selected: selected('language') },
     { field: 'name', label: lang.nameLabel, value: `${shownName}${nameCursor}`, hint: lang.setupNameHint, selected: selected('name') },
     { field: 'age', label: lang.ageLabel, value: `${shownAge}${ageCursor}`, hint: lang.setupAgeHint, selected: selected('age') },
@@ -858,7 +879,8 @@ function titleSetupRows(cursorOn: boolean): TitleSetupRowView[] {
       hint: lang.setupActorCapHint,
       selected: selected('actorCap'),
     },
-  ];
+  );
+  return rows;
 }
 
 function playerDemographicSex(source: Partial<Entity>): CharacterSex {
@@ -4349,7 +4371,7 @@ function toggleSelectedQuestActive(): void {
 }
 
 /* ── Save / Load ──────────────────────────────────────────────── */
-const SAVE_KEY = 'gigahrush_save';
+
 const SAVE_INVENTORY_SLOT_CAP = MAX_INVENTORY_SLOTS;
 const SAVE_QUEST_CAP = 512;
 const SAVE_TEXT_CAP = 192;
@@ -7996,6 +8018,17 @@ function startGameFromTitle(): void {
   }
   finishStartGameFromTitle();
 }
+function continueGameFromTitle(): void {
+  if (started || pendingLoad) return;
+  mobileGestureUnlock();
+  saveTitleActiveActorSoftLimit(titleActiveActorSoftLimit);
+  scheduleLoading(() => {
+    initGame();
+    titleStartNeedsInit = false;
+    finishStartGameFromTitle();
+    loadGame();
+  });
+}
 
 function startHandler(e: KeyboardEvent): void {
   if (started || e.metaKey || e.ctrlKey || e.altKey) return;
@@ -8043,7 +8076,8 @@ function startHandler(e: KeyboardEvent): void {
   }
   if (e.code === 'Enter') {
     e.preventDefault();
-    if (titleInputField === 'start') startGameFromTitle();
+    if (titleInputField === 'continue') continueGameFromTitle();
+    else if (titleInputField === 'start') startGameFromTitle();
     else if (titleInputField === 'addNpc') openNpcIntakePage();
     else if (titleInputField === 'language') cycleTitleLanguage(1);
     else if (titleInputField === 'actorCap') adjustTitleActiveActorSoftLimit(1);
@@ -8143,7 +8177,8 @@ function handleTitleGamepadInput(frame: InputFrame): void {
   }
 
   if (acceptEdge) {
-    if (titleInputField === 'start') startGameFromTitle();
+    if (titleInputField === 'continue') continueGameFromTitle();
+    else if (titleInputField === 'start') startGameFromTitle();
     else if (titleInputField === 'addNpc') openNpcIntakePage();
     else if (titleInputField === 'language') cycleTitleLanguage(1);
     else if (titleInputField === 'actorCap') adjustTitleActiveActorSoftLimit(1);

@@ -86,6 +86,7 @@ import {
 import { fitTextStable as fitUiText, setUiTextTime } from './ui_text';
 import { allocateHudSlot, createHudSlots, getMobileHudSafeContext, type UiRect } from './ui_layout';
 import { autoPickupEnabled, cameraPlaneLen, hudMotionMode, screenInterferenceMode, uiElementEnabled } from '../systems/ui_orchestrator';
+import { titleLanguageDef } from '../data/languages';
 import { getLocalizationLanguage } from '../systems/localization';
 
 const BAR_W = 50, BAR_H = 4;
@@ -1007,13 +1008,14 @@ function inferDeathCause(state: GameState, player: Entity, world: World): { titl
 }
 
 export function drawPointerCaptureGate(ctx: CanvasRenderingContext2D, time = 0): void {
+  const lang = titleLanguageDef(getLocalizationLanguage());
   const w = ctx.canvas.width;
   const h = ctx.canvas.height;
   const sx = w / SCR_W;
   const sy = h / SCR_H;
   const s = Math.max(0.78, Math.min(2.2, Math.min(sx, sy)));
   const panelW = Math.min(w - 24 * s, 430 * s);
-  const panelH = Math.min(h - 24 * s, 246 * s);
+  const panelH = Math.min(h - 24 * s, 140 * s);
   const x = (w - panelW) * 0.5;
   const y = (h - panelH) * 0.5;
 
@@ -1032,43 +1034,22 @@ export function drawPointerCaptureGate(ctx: CanvasRenderingContext2D, time = 0):
   ctx.shadowBlur = 10 * s;
   ctx.fillStyle = '#bff';
   ctx.font = `bold ${Math.round(17 * s)}px monospace`;
-  ctx.fillText(fitHudText(ctx, 'КЛИКНИТЕ ПО ЭКРАНУ', panelW - 18 * s), w * 0.5, y + 18 * s);
+  ctx.fillText(fitHudText(ctx, lang.pointerGateTitle, panelW - 18 * s), w * 0.5, y + 18 * s);
   ctx.font = `bold ${Math.round(12 * s)}px monospace`;
-  ctx.fillText(fitHudText(ctx, 'ДЛЯ ЗАХВАТА КУРСОРА', panelW - 18 * s), w * 0.5, y + 39 * s);
+  ctx.fillText(fitHudText(ctx, lang.pointerGateSubtitle, panelW - 18 * s), w * 0.5, y + 39 * s);
 
   ctx.shadowBlur = 0;
   ctx.fillStyle = '#c8d0d0';
   ctx.font = `${Math.round(9 * s)}px monospace`;
-  ctx.fillText(fitHudText(ctx, 'Данная игра является шутером от первого лица', panelW - 24 * s), w * 0.5, y + 61 * s);
-  ctx.fillText(fitHudText(ctx, 'и не использует мышку.', panelW - 24 * s), w * 0.5, y + 75 * s);
+  ctx.fillText(fitHudText(ctx, lang.pointerGateWarning1, panelW - 24 * s), w * 0.5, y + 61 * s);
+  ctx.fillText(fitHudText(ctx, lang.pointerGateWarning2, panelW - 24 * s), w * 0.5, y + 75 * s);
   ctx.fillStyle = '#9ab';
-  ctx.fillText(fitHudText(ctx, 'Enter: меню / принять. ПКМ: назад.', panelW - 24 * s), w * 0.5, y + 91 * s);
-  ctx.fillText(fitHudText(ctx, 'ЛКМ: атака. ПКМ: инструмент. E: мир.', panelW - 24 * s), w * 0.5, y + 105 * s);
+  ctx.fillText(fitHudText(ctx, lang.pointerGateControls1, panelW - 24 * s), w * 0.5, y + 91 * s);
+  ctx.fillText(fitHudText(ctx, lang.pointerGateControls2, panelW - 24 * s), w * 0.5, y + 105 * s);
 
-  ctx.strokeStyle = 'rgba(100,220,255,0.25)';
-  ctx.beginPath();
-  ctx.moveTo(x + 24 * s, y + 121 * s);
-  ctx.lineTo(x + panelW - 24 * s, y + 121 * s);
-  ctx.stroke();
-
-  ctx.shadowBlur = 10 * s;
-  ctx.fillStyle = '#bff';
-  ctx.font = `bold ${Math.round(17 * s)}px monospace`;
-  ctx.fillText(fitHudText(ctx, 'CLICK THE SCREEN', panelW - 18 * s), w * 0.5, y + 143 * s);
-  ctx.font = `bold ${Math.round(12 * s)}px monospace`;
-  ctx.fillText(fitHudText(ctx, 'TO CAPTURE THE CURSOR', panelW - 18 * s), w * 0.5, y + 164 * s);
-
-  ctx.shadowBlur = 0;
-  ctx.fillStyle = '#c8d0d0';
-  ctx.font = `${Math.round(9 * s)}px monospace`;
-  ctx.fillText(fitHudText(ctx, 'This game is a first-person shooter', panelW - 24 * s), w * 0.5, y + 186 * s);
-  ctx.fillText(fitHudText(ctx, 'and does not use the mouse cursor.', panelW - 24 * s), w * 0.5, y + 200 * s);
-  ctx.fillStyle = '#9ab';
-  ctx.fillText(fitHudText(ctx, 'Enter: menu / accept. RMB: back.', panelW - 24 * s), w * 0.5, y + 216 * s);
-  ctx.fillText(fitHudText(ctx, 'LMB: attack. RMB: tool. E: world.', panelW - 24 * s), w * 0.5, y + 230 * s);
   ctx.fillStyle = '#708888';
   ctx.font = `${Math.round(7 * s)}px monospace`;
-  ctx.fillText(fitHudText(ctx, 'После клика игра продолжится. / Game resumes after click.', panelW - 24 * s), w * 0.5, y + 240 * s);
+  ctx.fillText(fitHudText(ctx, lang.pointerGateResume, panelW - 24 * s), w * 0.5, y + 120 * s);
   ctx.textAlign = 'left';
   ctx.restore();
 }
@@ -1081,6 +1062,7 @@ function drawPointerLockPrompt(
   sy: number,
   time: number,
 ): void {
+  const lang = titleLanguageDef(getLocalizationLanguage());
   const panelW = Math.min(w - 18 * sx, 226 * sx);
   const panelH = 48 * sy;
   const x = (w - panelW) * 0.5;
@@ -1094,12 +1076,12 @@ function drawPointerLockPrompt(
   ctx.shadowBlur = 7;
   ctx.font = `${8 * sy}px monospace`;
   ctx.fillStyle = '#9df';
-  ctx.fillText(fitHudText(ctx, 'Кликните по игре: мышь будет захвачена для обзора', panelW - 14 * sx), w * 0.5, y + 6 * sy);
+  ctx.fillText(fitHudText(ctx, lang.pointerLockPrompt, panelW - 14 * sx), w * 0.5, y + 6 * sy);
   ctx.shadowBlur = 0;
   ctx.font = `${7 * sy}px monospace`;
   ctx.fillStyle = '#9ab';
-  ctx.fillText(fitHudText(ctx, `После захвата ЛКМ стреляет. ПКМ использует инструмент. ${controlHint('gameMenu')} меню/принять.`, panelW - 14 * sx), w * 0.5, y + 20 * sy);
-  ctx.fillText(fitHudText(ctx, `${menuCloseHint()} назад/закрыть. ${controlHint('interact')} действует в мире. Esc отпускает курсор браузером.`, panelW - 14 * sx), w * 0.5, y + 32 * sy);
+  ctx.fillText(fitHudText(ctx, lang.pointerLockControls1(controlHint('gameMenu')), panelW - 14 * sx), w * 0.5, y + 20 * sy);
+  ctx.fillText(fitHudText(ctx, lang.pointerLockControls2(menuCloseHint(), controlHint('interact')), panelW - 14 * sx), w * 0.5, y + 32 * sy);
   ctx.textAlign = 'left';
   ctx.restore();
 }
@@ -1432,8 +1414,8 @@ export function drawHUD(
     }
     const barAreaW = Math.max(1, bottomVitals.w - 16 * sx);
     const barSpacing = Math.max(26 * sx, Math.min(62 * sx, barAreaW / bars.length));
-    const barW = Math.max(18 * sx, Math.min(BAR_W * sx, barSpacing - 8 * sx));
     const vitalTextScale = Math.max(1, Math.min(sx, sy));
+    const barW = Math.max(18 * sx, Math.min(BAR_W * sx, barSpacing - 8 * sx));
     bars.forEach(([label, current, max, color], i) => {
       const bx = bottomVitals.x + 8 * sx + i * barSpacing;
       const by = barY + 3 * sy;

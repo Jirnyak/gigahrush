@@ -3,7 +3,7 @@ import { controlBindingLabel } from '../systems/controls';
 import { fitText } from './ui_text';
 
 export type TitleScreenMode = 'language' | 'setup';
-export type TitleHitField = 'language' | 'name' | 'age' | 'sex' | 'seed' | 'actorCap' | 'addNpc' | 'start';
+export type TitleHitField = 'language' | 'name' | 'age' | 'sex' | 'seed' | 'actorCap' | 'addNpc' | 'start' | 'continue';
 
 export interface TitleLanguageHit {
   id?: TitleLanguageId;
