@@ -8,6 +8,7 @@ import {
   hasInventoryRoom,
   readFinanceSnapshot,
   tradePriceDisplay,
+  tradeCellPriceDisplay,
 } from '../src/render/economy_ui';
 
 function state(extra: Partial<GameState> & Record<string, unknown> = {}): GameState {
@@ -87,4 +88,24 @@ test('trade price display includes fallback price reason and affordability statu
 test('inventory room check treats existing stacks as space', () => {
   assert.equal(hasInventoryRoom([{ defId: 'water', count: 1 }], 'water'), true);
   assert.equal(hasInventoryRoom(Array.from({ length: MAX_INVENTORY_SLOTS }, (_, i) => ({ defId: `missing_${i}`, count: 1 })), 'water'), false);
+});
+
+test('trade UI gracefully falls back when economy quote system throws error', () => {
+  const s = state({ quests: [] });
+  const player = entity();
+  const badNpc = entity();
+
+  Object.defineProperty(badNpc, 'faction', {
+    get() {
+      throw new Error('Simulated economy crash during quote');
+    }
+  });
+
+  const cellDisplay = tradeCellPriceDisplay(s, badNpc, 'water', 'buy');
+  assert.equal(typeof cellDisplay.text, 'string');
+  assert.ok(cellDisplay.text.endsWith('₽'));
+
+  const tradeDisplay = tradePriceDisplay(s, player, badNpc, 'water', 'buy');
+  assert.equal(typeof tradeDisplay.line, 'string');
+  assert.ok(tradeDisplay.line.includes('Цена:'));
 });
