@@ -8732,6 +8732,88 @@ function isWeepingAngelFrozen(world: World, e: Entity): boolean {
   return false;
 }
 
+export function tryPerformMonsterMeleeAttack(
+  world: World,
+  entities: Entity[],
+  e: Entity,
+  target: Entity,
+  def: MonsterDef | null,
+  dt: number,
+  time: number,
+  msgs: Msg[],
+  playerId: number,
+  nextId: { v: number },
+  bestDist: number,
+  state?: GameState
+): boolean {
+  const mRange = monsterMeleeRange(world, e);
+  if (bestDist < mRange) {
+    e.attackCd = (e.attackCd ?? 0) - dt;
+    if (e.attackCd! <= 0) {
+      const dx = world.delta(e.x, target.x);
+      const dy = world.delta(e.y, target.y);
+      e.angle = Math.atan2(dy, dx);
+
+      const ax = e.x + Math.cos(e.angle) * mRange;
+      const ay = e.y + Math.sin(e.angle) * mRange;
+      getEntityIndex().queryRadius(ax, ay, 1.2, monsterMeleeHitQuery, ENTITY_MASK_ACTOR);
+      const hitTarget = selectMeleeTarget(world, e, monsterMeleeHitQuery, mRange);
+
+      if (hitTarget) {
+        updateZombieCrowdReadability(world, e, hitTarget, time, msgs, playerId, state);
+        const baseDmg = def?.dmg ?? 10;
+        const level = e.rpg?.level ?? 1;
+        const strMult = e.rpg ? strMeleeDmgMult(e.rpg) : 1;
+        const rawDmg = Math.round(scaleMonsterDmg(baseDmg, level) * strMult * monsterDmgMult(world, e, hitTarget) * (e.monsterDmgMult ?? 1));
+        const dmg = zhelemishIncomingMeleeDamage(hitTarget, time, rawDmg);
+        if (tryZombieApocalypseInfection(world, e, hitTarget, state, msgs, time)) {
+          const hitAng = Math.atan2(hitTarget.y - e.y, hitTarget.x - e.x);
+          spawnBloodHit(world, hitTarget.x, hitTarget.y, hitAng, Math.max(2, Math.round(dmg * 0.35)), false);
+          playSoundAt(e.monsterKind === MonsterKind.FOG_SHARK ? playFogSharkBite : playGrowl, e.x, e.y);
+          e.attackCd = def?.attackRate ?? 1;
+          return true;
+        }
+        if (hitTarget.hp !== undefined) {
+          const debugImmortalPlayerHit = hitTarget.id === playerId && isDebugOnePunchManEnabled();
+          if (debugImmortalPlayerHit) {
+            keepDebugOnePunchManAlive(hitTarget);
+          } else {
+            hitTarget.hp -= dmg;
+            notifyActorDamaged(world, hitTarget, e, dmg, 'monster_melee', time, state);
+            applyLishennyyContactDecay(state, world, e, hitTarget, dmg, time, msgs, playerId);
+            applyKontorshchikGrab(state, world, e, hitTarget, time, msgs);
+            dropSlimeWomanResidue(world, e, hitTarget, time, state, 'grab');
+            if (hitTarget.id === playerId) {
+              const verb = e.monsterKind === MonsterKind.KONTORSHCHIK
+                ? 'схватил за бумаги'
+                : e.monsterKind === MonsterKind.SLIME_WOMAN
+                  ? 'схватила жижевой рукой'
+                  : e.monsterKind === MonsterKind.LISHENNYY
+                    ? 'коснулся распадом'
+                    : 'задел';
+              recordPlayerDamage(state, e, dmg, `${entityDisplayName(e)} ${verb} тебя: -${dmg}`);
+            }
+            if (hitTarget.hp <= 0) { hitTarget.alive = false; hitTarget.hp = 0; }
+            const hitAng = Math.atan2(hitTarget.y - e.y, hitTarget.x - e.x);
+            spawnBloodHit(world, hitTarget.x, hitTarget.y, hitAng, dmg, hitTarget.type === EntityType.MONSTER);
+            if (hitTarget.hp <= 0) {
+              spawnDeathPool(world, hitTarget.x, hitTarget.y, hitTarget.type === EntityType.MONSTER);
+              if (hitTarget.type === EntityType.NPC) dropNpcInventory(hitTarget, entities, nextId);
+              msgs.push(msg(`${entityDisplayName(e)} убил ${entityDisplayName(hitTarget)}`, time, '#f44'));
+              if (e.monsterKind === MonsterKind.SOBRANNYY) growSobrannyy(world, e, hitTarget, time, msgs, state, 'kill');
+            }
+          }
+        }
+        playSoundAt(e.monsterKind === MonsterKind.FOG_SHARK ? playFogSharkBite : playGrowl, e.x, e.y);
+        tryOlgoyDragTarget(world, e, hitTarget, time, msgs, state);
+        e.attackCd = def?.attackRate ?? 1;
+      }
+    }
+    return true;
+  }
+  return false;
+}
+
 /* ── Monster AI update ────────────────────────────────────────── */
 export function updateMonster(world: World, entities: Entity[], e: Entity, dt: number, time: number, msgs: Msg[], playerId: number, nextId: { v: number }, state?: GameState): void {
   const ai = e.ai!;
@@ -8965,69 +9047,7 @@ export function updateMonster(world: World, entities: Entity[], e: Entity, dt: n
   if (def?.speed === 0) return;
 
   // Melee attack if close enough
-  const mRange = monsterMeleeRange(world, e);
-  if (bestDist < mRange) {
-    e.attackCd = (e.attackCd ?? 0) - dt;
-    if (e.attackCd! <= 0) {
-      const dx = world.delta(e.x, target.x);
-      const dy = world.delta(e.y, target.y);
-      e.angle = Math.atan2(dy, dx);
-      
-      const ax = e.x + Math.cos(e.angle) * mRange;
-      const ay = e.y + Math.sin(e.angle) * mRange;
-      getEntityIndex().queryRadius(ax, ay, 1.2, monsterMeleeHitQuery, ENTITY_MASK_ACTOR);
-      const hitTarget = selectMeleeTarget(world, e, monsterMeleeHitQuery, mRange);
-      
-      if (hitTarget) {
-        updateZombieCrowdReadability(world, e, hitTarget, time, msgs, playerId, state);
-        const baseDmg = def?.dmg ?? 10;
-        const level = e.rpg?.level ?? 1;
-        const strMult = e.rpg ? strMeleeDmgMult(e.rpg) : 1;
-        const rawDmg = Math.round(scaleMonsterDmg(baseDmg, level) * strMult * monsterDmgMult(world, e, hitTarget) * (e.monsterDmgMult ?? 1));
-        const dmg = zhelemishIncomingMeleeDamage(hitTarget, time, rawDmg);
-        if (tryZombieApocalypseInfection(world, e, hitTarget, state, msgs, time)) {
-          const hitAng = Math.atan2(hitTarget.y - e.y, hitTarget.x - e.x);
-          spawnBloodHit(world, hitTarget.x, hitTarget.y, hitAng, Math.max(2, Math.round(dmg * 0.35)), false);
-          playSoundAt(e.monsterKind === MonsterKind.FOG_SHARK ? playFogSharkBite : playGrowl, e.x, e.y);
-          e.attackCd = def?.attackRate ?? 1;
-          return;
-        }
-        if (hitTarget.hp !== undefined) {
-          const debugImmortalPlayerHit = hitTarget.id === playerId && isDebugOnePunchManEnabled();
-          if (debugImmortalPlayerHit) {
-            keepDebugOnePunchManAlive(hitTarget);
-          } else {
-            hitTarget.hp -= dmg;
-            notifyActorDamaged(world, hitTarget, e, dmg, 'monster_melee', time, state);
-            applyLishennyyContactDecay(state, world, e, hitTarget, dmg, time, msgs, playerId);
-            applyKontorshchikGrab(state, world, e, hitTarget, time, msgs);
-            dropSlimeWomanResidue(world, e, hitTarget, time, state, 'grab');
-            if (hitTarget.id === playerId) {
-              const verb = e.monsterKind === MonsterKind.KONTORSHCHIK
-                ? 'схватил за бумаги'
-                : e.monsterKind === MonsterKind.SLIME_WOMAN
-                  ? 'схватила жижевой рукой'
-                  : e.monsterKind === MonsterKind.LISHENNYY
-                    ? 'коснулся распадом'
-                    : 'задел';
-              recordPlayerDamage(state, e, dmg, `${entityDisplayName(e)} ${verb} тебя: -${dmg}`);
-            }
-            if (hitTarget.hp <= 0) { hitTarget.alive = false; hitTarget.hp = 0; }
-            const hitAng = Math.atan2(hitTarget.y - e.y, hitTarget.x - e.x);
-            spawnBloodHit(world, hitTarget.x, hitTarget.y, hitAng, dmg, hitTarget.type === EntityType.MONSTER);
-            if (hitTarget.hp <= 0) {
-              spawnDeathPool(world, hitTarget.x, hitTarget.y, hitTarget.type === EntityType.MONSTER);
-              if (hitTarget.type === EntityType.NPC) dropNpcInventory(hitTarget, entities, nextId);
-              msgs.push(msg(`${entityDisplayName(e)} убил ${entityDisplayName(hitTarget)}`, time, '#f44'));
-              if (e.monsterKind === MonsterKind.SOBRANNYY) growSobrannyy(world, e, hitTarget, time, msgs, state, 'kill');
-            }
-          }
-        }
-        playSoundAt(e.monsterKind === MonsterKind.FOG_SHARK ? playFogSharkBite : playGrowl, e.x, e.y);
-        tryOlgoyDragTarget(world, e, hitTarget, time, msgs, state);
-        e.attackCd = def?.attackRate ?? 1;
-      }
-    }
+  if (tryPerformMonsterMeleeAttack(world, entities, e, target, def, dt, time, msgs, playerId, nextId, bestDist, state)) {
     return;
   }
 
