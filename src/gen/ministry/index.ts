@@ -70,32 +70,22 @@ function pickRoomType(forceHall = false): typeof MINISTRY_ROOM_TYPES[0] {
   return pool[0];
 }
 
-/* ── Main generator ───────────────────────────────────────────── */
-export function generateMinistry(): { world: World; entities: Entity[]; spawnX: number; spawnY: number } {
-  const world = new World();
-  const entities: Entity[] = [];
-  let nextId = 1;
-  let nextRoomId = 0;
+/* ── Procedural poster picker ─────────────────────────────────── */
+function pickPosterTex(x: number, y: number): Tex {
+  let h = (x * 531241233 + y * 817263851) | 0;
+  h = (h ^ (h >> 13)) * 1103515245;
+  h = (h ^ (h >> 16)) & 0x7fffffff;
+  return (Tex.POSTER_BASE + (h % 64)) as Tex;
+}
 
-  // Default wall texture = marble everywhere
-  for (let i = 0; i < W * W; i++) world.wallTex[i] = Tex.MARBLE;
+/* ── Ministry phase helpers ───────────────────────────────────── */
+function generateMinistryMaze(world: World, carpetCells: Set<number>) {
+  const CELL = 22;
+  const GRID = Math.floor(W / CELL);
+  const CORR_HALF = 2;
 
-  const rooms: Room[] = [];
-
-  /* ══════════════════════════════════════════════════════════════
-     Phase 1: DFS maze on coarse grid → macro corridors
-     Each maze cell is CELL×CELL world tiles. Corridors are 5 wide 
-     carved between cells. Creates organic, non-grid layout.
-     ══════════════════════════════════════════════════════════════ */
-  const CELL = 22;                         // maze cell size in world tiles
-  const GRID = Math.floor(W / CELL);       // number of maze cells per axis (46 for 1024/22)
-  const CORR_HALF = 2;                     // corridor half-width (total 5)
-
-  // DFS maze — visited[gy * GRID + gx]
   const visited = new Uint8Array(GRID * GRID);
-  // Edges: Set of "gx1,gy1-gx2,gy2" strings indicating connected cells
   const edges = new Set<string>();
-  // Connection count per cell (for hall placement at junctions)
   const connections = new Uint8Array(GRID * GRID);
 
   function gWrap(v: number): number { return ((v % GRID) + GRID) % GRID; }
@@ -105,48 +95,42 @@ export function generateMinistry(): { world: World; entities: Entity[]; spawnX: 
     return a < b ? `${a}-${b}` : `${b}-${a}`;
   }
 
-  // Iterative DFS with randomized neighbors
-  {
-    const stack: [number, number][] = [];
-    const startGx = Math.floor(GRID / 2), startGy = Math.floor(GRID / 2);
-    stack.push([startGx, startGy]);
-    visited[gIdx(startGx, startGy)] = 1;
+  // DFS
+  const stack: [number, number][] = [];
+  const startGx = Math.floor(GRID / 2), startGy = Math.floor(GRID / 2);
+  stack.push([startGx, startGy]);
+  visited[gIdx(startGx, startGy)] = 1;
 
-    while (stack.length > 0) {
-      const [cx, cy] = stack[stack.length - 1];
-      const neighbors: [number, number][] = [];
-      for (const [dx, dy] of [[0,-1],[1,0],[0,1],[-1,0]]) {
-        const nx = gWrap(cx + dx), ny = gWrap(cy + dy);
-        if (!visited[gIdx(nx, ny)]) neighbors.push([nx, ny]);
-      }
-      if (neighbors.length === 0) { stack.pop(); continue; }
-      const [nx, ny] = neighbors[Math.floor(Math.random() * neighbors.length)];
-      visited[gIdx(nx, ny)] = 1;
-      edges.add(edgeKey(cx, cy, nx, ny));
-      connections[gIdx(cx, cy)]++;
-      connections[gIdx(nx, ny)]++;
-      stack.push([nx, ny]);
+  while (stack.length > 0) {
+    const [cx, cy] = stack[stack.length - 1];
+    const neighbors: [number, number][] = [];
+    for (const [dx, dy] of [[0,-1],[1,0],[0,1],[-1,0]]) {
+      const nx = gWrap(cx + dx), ny = gWrap(cy + dy);
+      if (!visited[gIdx(nx, ny)]) neighbors.push([nx, ny]);
     }
-
-    // Extra edges (~15% of cells) for loops — makes exploration less tedious
-    const extraEdges = Math.floor(GRID * GRID * 0.15);
-    for (let e = 0; e < extraEdges; e++) {
-      const gx = rng(0, GRID - 1), gy = rng(0, GRID - 1);
-      const dir = rng(0, 3);
-      const dirs: [number, number][] = [[0,-1],[1,0],[0,1],[-1,0]];
-      const [dx, dy] = dirs[dir];
-      const nx = gWrap(gx + dx), ny = gWrap(gy + dy);
-      const key = edgeKey(gx, gy, nx, ny);
-      if (!edges.has(key)) {
-        edges.add(key);
-        connections[gIdx(gx, gy)]++;
-        connections[gIdx(nx, ny)]++;
-      }
-    }
+    if (neighbors.length === 0) { stack.pop(); continue; }
+    const [nx, ny] = neighbors[Math.floor(Math.random() * neighbors.length)];
+    visited[gIdx(nx, ny)] = 1;
+    edges.add(edgeKey(cx, cy, nx, ny));
+    connections[gIdx(cx, cy)]++;
+    connections[gIdx(nx, ny)]++;
+    stack.push([nx, ny]);
   }
 
-  // Carve corridors between connected maze cells
-  const carpetCells = new Set<number>();
+  const extraEdges = Math.floor(GRID * GRID * 0.15);
+  for (let e = 0; e < extraEdges; e++) {
+    const gx = rng(0, GRID - 1), gy = rng(0, GRID - 1);
+    const dir = rng(0, 3);
+    const dirs: [number, number][] = [[0,-1],[1,0],[0,1],[-1,0]];
+    const [dx, dy] = dirs[dir];
+    const nx = gWrap(gx + dx), ny = gWrap(gy + dy);
+    const key = edgeKey(gx, gy, nx, ny);
+    if (!edges.has(key)) {
+      edges.add(key);
+      connections[gIdx(gx, gy)]++;
+      connections[gIdx(nx, ny)]++;
+    }
+  }
 
   function carveCell(wx: number, wy: number, isCarpet: boolean): void {
     const ci = world.idx(wx, wy);
@@ -155,7 +139,6 @@ export function generateMinistry(): { world: World; entities: Entity[]; spawnX: 
       world.floorTex[ci] = isCarpet ? Tex.F_RED_CARPET : Tex.F_MARBLE_TILE;
       if (isCarpet) carpetCells.add(ci);
     } else if (world.cells[ci] === Cell.FLOOR && isCarpet) {
-      // Crossing corridor: upgrade marble to carpet at intersections
       world.floorTex[ci] = Tex.F_RED_CARPET;
       carpetCells.add(ci);
     }
@@ -166,45 +149,35 @@ export function generateMinistry(): { world: World; entities: Entity[]; spawnX: 
       const yc = y0;
       const minX = Math.min(x0, x1), maxX = Math.max(x0, x1);
       for (let x = minX; x <= maxX; x++) {
-        for (let t = -halfW; t <= halfW; t++) {
-          carveCell(world.wrap(x), world.wrap(yc + t), Math.abs(t) <= 1);
-        }
+        for (let t = -halfW; t <= halfW; t++) carveCell(world.wrap(x), world.wrap(yc + t), Math.abs(t) <= 1);
       }
     } else {
       const xc = x0;
       const minY = Math.min(y0, y1), maxY = Math.max(y0, y1);
       for (let y = minY; y <= maxY; y++) {
-        for (let t = -halfW; t <= halfW; t++) {
-          carveCell(world.wrap(xc + t), world.wrap(y), Math.abs(t) <= 1);
-        }
+        for (let t = -halfW; t <= halfW; t++) carveCell(world.wrap(xc + t), world.wrap(y), Math.abs(t) <= 1);
       }
     }
   }
 
-  // For each connected pair of cells, carve a corridor between their centers
   for (let gy = 0; gy < GRID; gy++) {
     for (let gx = 0; gx < GRID; gx++) {
       const cx = gx * CELL + Math.floor(CELL / 2);
       const cy = gy * CELL + Math.floor(CELL / 2);
-      // Check right neighbor
       {
         const ngx = gWrap(gx + 1);
         if (edges.has(edgeKey(gx, gy, ngx, gy))) {
           const ncx = ngx * CELL + Math.floor(CELL / 2);
-          // Handle toroidal wrap: carve in world space
           if (ngx > gx || ngx === 0) {
-            // Normal or wrap from end to 0
             if (ngx > gx) {
               carveLine(cx, cy, ncx, cy, CORR_HALF);
             } else {
-              // Wrapping: carve cx→W-1, then 0→ncx
               carveLine(cx, cy, W - 1, cy, CORR_HALF);
               carveLine(0, cy, ncx, cy, CORR_HALF);
             }
           }
         }
       }
-      // Check bottom neighbor
       {
         const ngy = gWrap(gy + 1);
         if (edges.has(edgeKey(gx, gy, gx, ngy))) {
@@ -220,7 +193,6 @@ export function generateMinistry(): { world: World; entities: Entity[]; spawnX: 
     }
   }
 
-  // Carve small clearings at each maze cell center (intersection widening)
   for (let gy = 0; gy < GRID; gy++) {
     for (let gx = 0; gx < GRID; gx++) {
       const cx = gx * CELL + Math.floor(CELL / 2);
@@ -234,59 +206,30 @@ export function generateMinistry(): { world: World; entities: Entity[]; spawnX: 
       }
     }
   }
+}
 
-  /* ══════════════════════════════════════════════════════════════
-     Phase 1b: Ministry macro graph — axes, rings, queues, service
-     backroutes and locked authority shortcuts over the organic maze.
-     ══════════════════════════════════════════════════════════════ */
-  {
-    const macro = applyMinistryMacroGeometry(world, nextRoomId);
-    nextRoomId = macro.nextRoomId;
-    for (const room of macro.rooms) rooms.push(room);
-    for (const ci of macro.carpetCells) carpetCells.add(ci);
-  }
-
-  /* ══════════════════════════════════════════════════════════════
-     Phase 2: Room placement — scan corridor walls and grow rooms
-     Room extends AWAY from corridor, door at the boundary wall.
-     Three scales: large halls, medium offices, small closets.
-     ══════════════════════════════════════════════════════════════ */
-
-  // Poster picker (coordinate-hash, like portraits)
-  function pickPosterTex(x: number, y: number): Tex {
-    let h = (x * 531241233 + y * 817263851) | 0;
-    h = (h ^ (h >> 13)) * 1103515245;
-    h = (h ^ (h >> 16)) & 0x7fffffff;
-    return (Tex.POSTER_BASE + (h % 64)) as Tex;
-  }
-
+function growMinistryRooms(world: World, rooms: Room[], nextRoomId: number): number {
   function tryGrowRoom(
-    wallX: number, wallY: number,  // wall cell adjacent to corridor
-    cdx: number, cdy: number,      // direction FROM wall TOWARD corridor
+    wallX: number, wallY: number,
+    cdx: number, cdy: number,
     rw: number, rh: number,
     rt: typeof MINISTRY_ROOM_TYPES[0],
   ): boolean {
-    // Room extends in direction opposite to corridor (-cdx, -cdy)
     let rx: number, ry: number;
     if (cdx > 0) {
-      // Corridor to the right → room extends left
       rx = world.wrap(wallX - rw);
       ry = world.wrap(wallY - Math.floor(rh / 2));
     } else if (cdx < 0) {
-      // Corridor to the left → room extends right
       rx = world.wrap(wallX + 1);
       ry = world.wrap(wallY - Math.floor(rh / 2));
     } else if (cdy > 0) {
-      // Corridor below → room extends up
       rx = world.wrap(wallX - Math.floor(rw / 2));
       ry = world.wrap(wallY - rh);
     } else {
-      // Corridor above → room extends down
       rx = world.wrap(wallX - Math.floor(rw / 2));
       ry = world.wrap(wallY + 1);
     }
 
-    // Check entire room + 1-cell border is all walls
     for (let dy = -1; dy <= rh; dy++) {
       for (let dx = -1; dx <= rw; dx++) {
         const ci = world.idx(world.wrap(rx + dx), world.wrap(ry + dy));
@@ -309,7 +252,6 @@ export function generateMinistry(): { world: World; entities: Entity[]; spawnX: 
       floorTex,
     };
 
-    // Carve room interior + ensure wall border
     for (let dy = -1; dy <= rh; dy++) {
       for (let dx = -1; dx <= rw; dx++) {
         const ci = world.idx(world.wrap(room.x + dx), world.wrap(room.y + dy));
@@ -327,7 +269,6 @@ export function generateMinistry(): { world: World; entities: Entity[]; spawnX: 
       }
     }
 
-    // Place door at the original wall cell (between corridor and room)
     const doorCi = world.idx(wallX, wallY);
     if (world.cells[doorCi] === Cell.WALL) {
       world.cells[doorCi] = Cell.DOOR;
@@ -337,11 +278,9 @@ export function generateMinistry(): { world: World; entities: Entity[]; spawnX: 
       });
       room.doors.push(doorCi);
     } else {
-      // Fallback: find any wall on room border adjacent to corridor
       connectRoomToCorridor(world, room);
     }
 
-    // Furniture
     if (rt.isHall && rw >= 8 && rh >= 6) {
       const tableY = room.y + Math.floor(rh / 2);
       for (let tx = room.x + 2; tx < room.x + rw - 2; tx++) {
@@ -374,7 +313,6 @@ export function generateMinistry(): { world: World; entities: Entity[]; spawnX: 
       if (world.cells[chci] === Cell.FLOOR && world.features[chci] === Feature.NONE)
         world.features[chci] = Feature.CHAIR;
     } else if (rt.type === RoomType.BATHROOM) {
-      // Toilets + sink
       for (let ty = 0; ty < rh; ty += 2) {
         const tci = world.idx(world.wrap(room.x), world.wrap(room.y + ty));
         if (world.cells[tci] === Cell.FLOOR && world.features[tci] === Feature.NONE)
@@ -385,7 +323,6 @@ export function generateMinistry(): { world: World; entities: Entity[]; spawnX: 
         world.features[sci] = Feature.SINK;
     }
 
-    // Portraits on room walls (only inside rooms!)
     placePortraitsOnWalls(world, room, rt);
 
     world.rooms[nextRoomId] = room;
@@ -394,7 +331,6 @@ export function generateMinistry(): { world: World; entities: Entity[]; spawnX: 
     return true;
   }
 
-  // Collect corridor-adjacent wall cells (potential doorways)
   const wallCandidates: { x: number; y: number; cdx: number; cdy: number }[] = [];
   for (let y = 0; y < W; y++) {
     for (let x = 0; x < W; x++) {
@@ -404,19 +340,17 @@ export function generateMinistry(): { world: World; entities: Entity[]; spawnX: 
         const ni = world.idx(world.wrap(x + dx), world.wrap(y + dy));
         if (world.cells[ni] === Cell.FLOOR && world.roomMap[ni] < 0) {
           wallCandidates.push({ x, y, cdx: dx, cdy: dy });
-          break; // one entry per wall cell
+          break;
         }
       }
     }
   }
 
-  // Shuffle candidates
   for (let i = wallCandidates.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
     [wallCandidates[i], wallCandidates[j]] = [wallCandidates[j], wallCandidates[i]];
   }
 
-  // Pass 1: Large halls (8-14 wide)
   let roomsPlaced = 0;
   for (const cand of wallCandidates) {
     if (roomsPlaced >= 80) break;
@@ -426,7 +360,6 @@ export function generateMinistry(): { world: World; entities: Entity[]; spawnX: 
     if (tryGrowRoom(cand.x, cand.y, cand.cdx, cand.cdy, rw, rh, rt)) roomsPlaced++;
   }
 
-  // Pass 2: Medium offices/rooms (4-9 wide)
   roomsPlaced = 0;
   for (const cand of wallCandidates) {
     if (roomsPlaced >= 320) break;
@@ -436,7 +369,6 @@ export function generateMinistry(): { world: World; entities: Entity[]; spawnX: 
     if (tryGrowRoom(cand.x, cand.y, cand.cdx, cand.cdy, rw, rh, rt)) roomsPlaced++;
   }
 
-  // Pass 3: Small closets (3-5 wide)
   const smallTypes = MINISTRY_ROOM_TYPES.filter(r => r.type === RoomType.SMOKING || r.type === RoomType.STORAGE || r.type === RoomType.MEDICAL || r.type === RoomType.BATHROOM);
   roomsPlaced = 0;
   for (const cand of wallCandidates) {
@@ -447,9 +379,10 @@ export function generateMinistry(): { world: World; entities: Entity[]; spawnX: 
     if (tryGrowRoom(cand.x, cand.y, cand.cdx, cand.cdy, rw, rh, rt)) roomsPlaced++;
   }
 
-  /* ══════════════════════════════════════════════════════════════
-     Phase 3: Procedural posters on corridor walls (~5%)
-     ══════════════════════════════════════════════════════════════ */
+  return nextRoomId;
+}
+
+function placeProceduralPosters(world: World): void {
   for (let y = 0; y < W; y++) for (let x = 0; x < W; x++) {
     const ci = world.idx(x, y);
     if (world.cells[ci] !== Cell.WALL) continue;
@@ -463,19 +396,17 @@ export function generateMinistry(): { world: World; entities: Entity[]; spawnX: 
       world.wallTex[ci] = pickPosterTex(x, y);
     }
   }
+}
 
-  /* ══════════════════════════════════════════════════════════════
-     Phase 6: Edge-aware carpet tiling
-     ══════════════════════════════════════════════════════════════ */
+function applyEdgeAwareCarpetTiling(world: World, carpetCells: Set<number>): void {
   for (const ci of carpetCells) {
     const x = ci % W;
     const y = (ci / W) | 0;
     world.floorTex[ci] = carpetEdgeTex(world, x, y);
   }
+}
 
-  /* ══════════════════════════════════════════════════════════════
-     Phase 7: Spawn point
-     ══════════════════════════════════════════════════════════════ */
+function findMinistrySpawnPoint(world: World): { spawnX: number; spawnY: number } {
   const centerX = Math.floor(W / 2);
   const centerY = Math.floor(W / 2);
   let spawnX = centerX + 0.5, spawnY = centerY + 0.5;
@@ -494,15 +425,10 @@ export function generateMinistry(): { world: World; entities: Entity[]; spawnX: 
     }
     if (found) break;
   }
+  return { spawnX, spawnY };
+}
 
-  /* ══════════════════════════════════════════════════════════════
-     Phase 8: Lifts — all DOWN (to living zone)
-     ══════════════════════════════════════════════════════════════ */
-  placeLifts(world, 16, LiftDirection.DOWN);
-
-  /* ══════════════════════════════════════════════════════════════
-     Phase 9: Zones
-     ══════════════════════════════════════════════════════════════ */
+function placeMinistryZones(world: World): void {
   generateZones(world);
   for (const z of world.zones) {
     z.level = calcZoneLevel(z.cx, z.cy, FloorLevel.MINISTRY);
@@ -511,11 +437,9 @@ export function generateMinistry(): { world: World; entities: Entity[]; spawnX: 
     else if (roll < 0.75) z.faction = 1;  // LIQUIDATOR
     else z.faction = 0;                   // CITIZEN
   }
+}
 
-  /* ══════════════════════════════════════════════════════════════
-     Phase 10: Lights
-     ══════════════════════════════════════════════════════════════ */
-  // Room lights
+function placeMinistryLights(world: World, rooms: Room[]): void {
   for (const room of rooms) {
     for (let dy = 1; dy < room.h - 1; dy += 3) {
       for (let dx = 1; dx < room.w - 1; dx += 3) {
@@ -526,7 +450,6 @@ export function generateMinistry(): { world: World; entities: Entity[]; spawnX: 
     }
   }
 
-  // Corridor lights — every ~5 cells on any corridor floor
   for (let y = 0; y < W; y += 5) {
     for (let x = 0; x < W; x += 5) {
       const ci = world.idx(x, y);
@@ -536,10 +459,9 @@ export function generateMinistry(): { world: World; entities: Entity[]; spawnX: 
   }
 
   world.bakeLights();
+}
 
-  /* ══════════════════════════════════════════════════════════════
-     Phase 11: Items
-     ══════════════════════════════════════════════════════════════ */
+function placeMinistryItems(rooms: Room[], entities: Entity[], nextId: number): number {
   for (const room of rooms) {
     const numItems = rng(0, 2);
     for (let n = 0; n < numItems; n++) {
@@ -555,10 +477,10 @@ export function generateMinistry(): { world: World; entities: Entity[]; spawnX: 
       });
     }
   }
+  return nextId;
+}
 
-  /* ══════════════════════════════════════════════════════════════
-     Phase 12: Monsters — very few
-     ══════════════════════════════════════════════════════════════ */
+function spawnMinistryMonsters(world: World, entities: Entity[], nextId: number): number {
   let monsterCount = 0;
   const monsterTarget = entitySpawnSlots(entities, EntityType.MONSTER, activeActorCountAtDefaultSoftLimit(MINISTRY_MONSTER_TARGET_AT_DEFAULT_CAP));
   for (let attempt = 0; attempt < 10_000 && monsterCount < monsterTarget; attempt++) {
@@ -581,24 +503,71 @@ export function generateMinistry(): { world: World; entities: Entity[]; spawnX: 
     });
     monsterCount++;
   }
+  return nextId;
+}
 
-  /* ══════════════════════════════════════════════════════════════
-     Phase 12b-13: Manifest-owned administrative content
-     ══════════════════════════════════════════════════════════════ */
+/* ── Main generator ───────────────────────────────────────────── */
+export function generateMinistry(): { world: World; entities: Entity[]; spawnX: number; spawnY: number } {
+  const world = new World();
+  const entities: Entity[] = [];
+  let nextId = 1;
+  let nextRoomId = 0;
+
+  // Default wall texture = marble everywhere
+  for (let i = 0; i < W * W; i++) world.wallTex[i] = Tex.MARBLE;
+
+  const rooms: Room[] = [];
+  const carpetCells = new Set<number>();
+
+  // Phase 1: DFS maze on coarse grid → macro corridors
+  generateMinistryMaze(world, carpetCells);
+
+  // Phase 1b: Ministry macro graph
+  {
+    const macro = applyMinistryMacroGeometry(world, nextRoomId);
+    nextRoomId = macro.nextRoomId;
+    for (const room of macro.rooms) rooms.push(room);
+    for (const ci of macro.carpetCells) carpetCells.add(ci);
+  }
+
+  // Phase 2: Room placement
+  nextRoomId = growMinistryRooms(world, rooms, nextRoomId);
+
+  // Phase 3: Procedural posters
+  placeProceduralPosters(world);
+
+  // Phase 6: Edge-aware carpet tiling
+  applyEdgeAwareCarpetTiling(world, carpetCells);
+
+  // Phase 7: Spawn point
+  const { spawnX, spawnY } = findMinistrySpawnPoint(world);
+
+  // Phase 8: Lifts
+  placeLifts(world, 16, LiftDirection.DOWN);
+
+  // Phase 9: Zones
+  placeMinistryZones(world);
+
+  // Phase 10: Lights
+  placeMinistryLights(world, rooms);
+
+  // Phase 11: Items
+  nextId = placeMinistryItems(rooms, entities, nextId);
+
+  // Phase 12: Monsters
+  nextId = spawnMinistryMonsters(world, entities, nextId);
+
+  // Phase 12b-13: Manifest-owned administrative content
   {
     const r = runMinistryContent(world, entities, nextRoomId, nextId, spawnX, spawnY);
     nextRoomId = r.nextRoomId;
     nextId = r.nextId;
   }
 
-  /* ══════════════════════════════════════════════════════════════
-     Phase 14: Connectivity
-     ══════════════════════════════════════════════════════════════ */
+  // Phase 14: Connectivity
   ensureConnectivity(world, spawnX, spawnY);
 
-  /* ══════════════════════════════════════════════════════════════
-     Phase 15: Rare procedural ministry monitors
-     ══════════════════════════════════════════════════════════════ */
+  // Phase 15: Rare procedural ministry monitors
   placeProceduralScreens(world, FloorLevel.MINISTRY);
 
   return { world, entities, spawnX, spawnY };
