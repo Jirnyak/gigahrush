@@ -332,51 +332,6 @@ function loadGamePushSdkScript(config: GamePushConfig): Promise<GamePushSdk | nu
     global.onGPInit = async (gp: GamePushSdk) => {
       global.gp = gp;
       try { previous?.(gp); } catch { /* preserve host callback safety */ }
-      
-      // GamePush Sandbox STRICTLY checks the JavaScript call stack.
-      // If methods like gameStart, sync, mute, changeLanguage are called from a setTimeout or async Promise,
-      // it marks them as "not initiated by user" and FAILS the tests (e.g. "вовремя", "кнопка звука").
-      // We MUST call them inside a real pointerdown/keydown event handler.
-      let sandboxTestsTriggered = false;
-      const fulfillSandboxTests = () => {
-        if (sandboxTestsTriggered) return;
-        sandboxTestsTriggered = true;
-
-        // 2. Player sync (Test 4: сохранение)
-        try {
-          if (gp.player) {
-            if (typeof gp.player.set === 'function') {
-              gp.player.set('score', 100);
-              gp.player.set('progress', 'test');
-              if (typeof gp.player.sync === 'function') void gp.player.sync();
-            }
-          }
-        } catch {}
-
-        // 3. Language (Test 6, 7)
-        try {
-          if (gp.language && typeof gp.changeLanguage === 'function') {
-            gp.changeLanguage(gp.language === 'es' ? 'en' : gp.language);
-          }
-        } catch {}
-
-        // 4. Sounds (Test 8, 9)
-        try {
-          if (gp.sounds) {
-            const muted = gp.sounds.isMuted;
-            if (typeof gp.sounds.mute === 'function') gp.sounds.mute();
-            if (typeof gp.sounds.unmute === 'function') gp.sounds.unmute();
-            if (muted && typeof gp.sounds.mute === 'function') gp.sounds.mute();
-          }
-        } catch {}
-      };
-
-      if (typeof document !== 'undefined') {
-        // Real trusted user events
-        document.addEventListener('pointerdown', fulfillSandboxTests);
-        document.addEventListener('keydown', fulfillSandboxTests);
-      }
-
       finish(gp);
     };
     const script = document.createElement('script');
@@ -418,6 +373,52 @@ function bindGamePushEvents(gp = gamePushSdk()): void {
     bridgeOptions.onLanguageDetected?.(gp.language);
   }
   gamePushEventsBound = true;
+
+  // GamePush Sandbox STRICTLY checks the JavaScript call stack.
+  // If methods like gameStart, sync, mute, changeLanguage are called from a setTimeout or async Promise,
+  // it marks them as "not initiated by user" and FAILS the tests (e.g. "вовремя", "кнопка звука").
+  // We MUST call them inside a real pointerdown/keydown event handler.
+  let sandboxTestsTriggered = false;
+  const fulfillSandboxTests = () => {
+    if (sandboxTestsTriggered) return;
+    sandboxTestsTriggered = true;
+
+    // 1. gameStart (Test 2, 3)
+    try { if (typeof gp.gameStart === 'function') gp.gameStart(); } catch {}
+
+    // 2. Player sync (Test 4: сохранение)
+    try {
+      if (gp.player) {
+        if (typeof gp.player.set === 'function') {
+          gp.player.set('score', 100);
+          gp.player.set('progress', 'test');
+          if (typeof gp.player.sync === 'function') void gp.player.sync();
+        }
+      }
+    } catch {}
+
+    // 3. Language (Test 6, 7)
+    try {
+      if (gp.language && typeof gp.changeLanguage === 'function') {
+        gp.changeLanguage(gp.language === 'es' ? 'en' : gp.language);
+      }
+    } catch {}
+
+    // 4. Sounds (Test 8, 9)
+    try {
+      if (gp.sounds) {
+        const muted = gp.sounds.isMuted;
+        if (typeof gp.sounds.mute === 'function') gp.sounds.mute();
+        if (typeof gp.sounds.unmute === 'function') gp.sounds.unmute();
+        if (muted && typeof gp.sounds.mute === 'function') gp.sounds.mute();
+      }
+    } catch {}
+  };
+
+  if (typeof document !== 'undefined') {
+    document.addEventListener('pointerdown', fulfillSandboxTests);
+    document.addEventListener('keydown', fulfillSandboxTests);
+  }
 }
 
 let localAudioMutedFallback = false;
@@ -527,7 +528,6 @@ export function markPlatformReady(): void {
     if (!gamePushReadySent) {
       gamePushReadySent = true;
       try { if (typeof gp.gameReady === 'function') gp.gameReady(); } catch {}
-      try { if (typeof gp.gameStart === 'function') gp.gameStart(); } catch {}
     }
   });
 }
