@@ -101,6 +101,8 @@ test('treskotnik is standalone brittle crack-sprinter content', () => {
   assert.equal(ecology?.rumorIds.includes('ecology_treskotnik_corner'), true);
   assert.equal(ecology?.rumorIds.some(id => id.includes(retiredVariantId)), false);
   assert.equal(RUMORS.some(r => r.id === 'monster_treskotnik_crack_pulse'), true);
+  assert.match(DEF.counterplay ?? '', /красный треск|дверь/i);
+  assert.match(DEF.lootHint ?? '', /бетонная крошка|красная пыль/i);
 });
 
 test('treskotnik sprite reads as gray plates with red fracture lines', () => {
