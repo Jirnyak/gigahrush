@@ -7,6 +7,7 @@ import {
   msg,
 } from '../core/types';
 import { World } from '../core/world';
+import { secureRandom } from '../core/rand';
 import { ITEMS } from '../data/catalog';
 import { isSilverSlimeItem, SILVER_SLIME_SEALED_ID } from '../data/items';
 import { craftRecipeSourcesForQuest, getCraftRecipeSource } from '../data/craft_recipe_sources';
@@ -231,7 +232,7 @@ export function reassignQuestGivers(entities: Entity[]): void {
     if (e.type !== EntityType.NPC || !e.alive) continue;
     if (isPlotNpc(e)) continue;
     if (e.persistentNpcId) continue;
-    e.canGiveQuest = Math.random() < proceduralQuestGiverChance();
+    e.canGiveQuest = secureRandom() < proceduralQuestGiverChance();
   }
 }
 

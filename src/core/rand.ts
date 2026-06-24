@@ -122,3 +122,13 @@ export function withSeededRandom<T>(seed: number, fn: () => T): T {
     Math.random = oldRandom;
   }
 }
+
+/**
+ * Returns a cryptographically secure random float in [0, 1).
+ * Suitable for security-sensitive logic like quest assignment or secrets.
+ */
+export function secureRandom(): number {
+  const array = new Uint32Array(1);
+  crypto.getRandomValues(array);
+  return array[0] / 4294967296;
+}
