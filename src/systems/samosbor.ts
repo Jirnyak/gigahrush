@@ -4454,9 +4454,18 @@ function stampVeretarAreaLeak(world: World, cx: number, cy: number, radius: numb
   const maxRadius = Math.max(4, radius + 4);
   const candidates = collectVeretarLeakCandidates(world, cx, cy, maxRadius);
   for (let attempt = 0; attempt < 96 && placed < target; attempt++) {
-    const ci = candidates.length > 0
-      ? candidates.splice(Math.floor(Math.random() * candidates.length), 1)[0]
-      : world.idx(world.wrap(cx + rng(-maxRadius, maxRadius)), world.wrap(cy + rng(-maxRadius, maxRadius)));
+    let ci: number;
+    if (candidates.length > 0) {
+      const idx = Math.floor(Math.random() * candidates.length);
+      ci = candidates[idx];
+      const last = candidates.length - 1;
+      if (idx !== last) {
+        candidates[idx] = candidates[last];
+      }
+      candidates.pop();
+    } else {
+      ci = world.idx(world.wrap(cx + rng(-maxRadius, maxRadius)), world.wrap(cy + rng(-maxRadius, maxRadius)));
+    }
     const x = ci % W;
     const y = (ci / W) | 0;
     if (world.aptMask[ci]) continue;
