@@ -71,12 +71,8 @@ function rnd(seed: number, salt: number): number {
   return mix32((seed + Math.imul(salt, 0x9e3779b9)) >>> 0) / 0x100000000;
 }
 
-const OCCUPATION_SPRITE_VALUES = new Set<Occupation>(
-  Object.values(Occupation).filter((value): value is Occupation => typeof value === 'number'),
-);
-
 function isOccupationSpriteHint(spriteHint: number | undefined): spriteHint is Occupation {
-  return spriteHint !== undefined && OCCUPATION_SPRITE_VALUES.has(spriteHint as Occupation);
+  return spriteHint !== undefined && typeof Occupation[spriteHint as Occupation] === 'string';
 }
 
 function rgbJitter(c: RGB, seed: number, salt: number, amp: number): RGB {
