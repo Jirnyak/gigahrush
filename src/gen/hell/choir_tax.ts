@@ -471,6 +471,7 @@ function spawnChoirBranchBacklash(
   kinds: readonly MonsterKind[],
 ): number {
   let spawned = 0;
+  const player = entities.find(entity => isPlayerEntity(entity) && entity.alive);
   for (const kind of kinds) {
     if (site.backlashSpawned >= HELL18_CHOIR_BACKLASH_CAP) break;
     const pos = findChoirBranchSpawn(world, site, site.backlashSpawned + spawned);
@@ -480,7 +481,6 @@ function spawnChoirBranchBacklash(
     const zoneLevel = world.zones[site.zoneId]?.level ?? 12;
     const level = zoneLevel + (kind === MonsterKind.EYE ? 3 : 2);
     const hp = Math.max(1, Math.round(scaleMonsterHp(def.hp, level)));
-    const player = entities.find(entity => isPlayerEntity(entity) && entity.alive);
     const monster: Entity = {
       id,
       type: EntityType.MONSTER,
