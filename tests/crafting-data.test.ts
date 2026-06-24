@@ -7,6 +7,7 @@ import {
   craftMaterialIndex,
   craftVectorTotal,
   validateCraftVector,
+  isCraftMaterialId,
 } from '../src/data/craft_materials';
 import { ITEM_COMPOSITIONS, INTENTIONAL_RARE_MATERIAL_ITEMS } from '../src/data/item_composition';
 import { CRAFT_RECIPES, CRAFT_RECIPE_EXCEPTIONS } from '../src/data/craft_recipes';
@@ -76,5 +77,24 @@ test('rare craft material usage is bounded and documented', () => {
     for (const material of expected) {
       assert.ok(vector[craftMaterialIndex(material)] > 0, `${itemId} must actually use documented rare material ${material}`);
     }
+  }
+});
+
+test('isCraftMaterialId correctly identifies valid and invalid material ids', () => {
+  // Valid ids
+  for (const id of CRAFT_MATERIAL_IDS) {
+    assert.equal(isCraftMaterialId(id), true, `${id} should be a valid craft material id`);
+  }
+
+  // Invalid strings
+  const invalidStrings = ['', 'fake_material', 'mechanic', 'bio_mass', ' '];
+  for (const str of invalidStrings) {
+    assert.equal(isCraftMaterialId(str), false, `'${str}' should not be a valid craft material id`);
+  }
+
+  // Non-string inputs
+  const nonStrings = [null, undefined, 123, 0, {}, [], true, false, () => {}];
+  for (const val of nonStrings) {
+    assert.equal(isCraftMaterialId(val), false, `${String(val)} should not be a valid craft material id`);
   }
 });
