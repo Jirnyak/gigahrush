@@ -176,18 +176,32 @@ function allowedRumorFactTexts(rumor: RumorDef, options: MarkovRumorFlavorOption
   return allowed;
 }
 
+let FORBIDDEN_ITEM_NAMES: string[] | undefined;
+let FORBIDDEN_FLOOR_NAMES: string[] | undefined;
+let FORBIDDEN_MONSTER_NAMES: string[] | undefined;
+
 function observedForbiddenFact(text: string, allowed: Set<string>): string | undefined {
   const lower = text.toLowerCase();
-  for (const name of Object.values(ITEMS).map(item => item.name.toLowerCase())) {
+
+  if (!FORBIDDEN_ITEM_NAMES) FORBIDDEN_ITEM_NAMES = Object.values(ITEMS).map(item => item.name.toLowerCase());
+  for (const name of FORBIDDEN_ITEM_NAMES) {
     if (name.length >= 4 && lower.includes(name) && !allowed.has(name)) return name;
   }
-  for (const name of Object.values(FLOOR_NAMES).map(value => value.toLowerCase())) {
+
+  if (!FORBIDDEN_FLOOR_NAMES) FORBIDDEN_FLOOR_NAMES = Object.values(FLOOR_NAMES).map(value => value.toLowerCase());
+  for (const name of FORBIDDEN_FLOOR_NAMES) {
     if (lower.includes(name) && !allowed.has(name)) return name;
   }
-  for (const kind of Object.values(MonsterKind).filter((value): value is MonsterKind => typeof value === 'number')) {
-    const name = monsterTypeName(kind).toLowerCase();
+
+  if (!FORBIDDEN_MONSTER_NAMES) {
+    FORBIDDEN_MONSTER_NAMES = Object.values(MonsterKind)
+      .filter((value): value is MonsterKind => typeof value === 'number')
+      .map(kind => monsterTypeName(kind).toLowerCase());
+  }
+  for (const name of FORBIDDEN_MONSTER_NAMES) {
     if (name.length >= 4 && lower.includes(name) && !allowed.has(name)) return name;
   }
+
   return undefined;
 }
 
