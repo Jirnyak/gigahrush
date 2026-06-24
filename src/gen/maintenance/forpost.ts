@@ -97,7 +97,7 @@ export function generateForpost(
       x: gx + 0.5, y: gy + 0.5,
       angle: 0, pitch: 0, alive: true, speed: 1.4 + Math.random() * 0.3,
       sprite: Occupation.HUNTER,
-      name: nm.name, isFemale: nm.female,
+      name: nm.name, firstName: nm.firstName, lastName: nm.lastName, isFemale: nm.female,
       needs: freshNeeds(), hp: maxHp, maxHp,
       money: 30 + Math.floor(Math.random() * 50),
       ai: { goal: AIGoal.IDLE, tx: 0, ty: 0, path: [], pi: 0, stuck: 0, timer: 0 },

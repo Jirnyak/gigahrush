@@ -586,6 +586,8 @@ export interface Entity {
   ai?: AIState;
   inventory?: Item[];
   name?: string;
+  firstName?: string;
+  lastName?: string;
   monsterKind?: MonsterKind;
   monsterDmgMult?: number;     // authored temporary monster damage multiplier
   monsterArmorStacks?: number;  // stripped armor state for standalone armored monsters

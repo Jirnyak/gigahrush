@@ -192,7 +192,7 @@ function spawnNpcAtCell(
     speed: occupation === Occupation.CHILD ? 0.8 : 1.2,
     sprite: occupation,
     spriteScale: occupation === Occupation.CHILD ? 0.6 : 1.0,
-    name: nm.name, isFemale: nm.female,
+    name: nm.name, firstName: nm.firstName, lastName: nm.lastName, isFemale: nm.female,
     needs: freshNeeds(), hp: maxHp, maxHp,
     money: rng(5, 60),
     ai: { goal: AIGoal.IDLE, tx: 0, ty: 0, path: [], pi: 0, stuck: 0, timer: 0 },

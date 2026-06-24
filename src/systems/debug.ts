@@ -1310,7 +1310,7 @@ export function execDebugCommand(
         y: player.y + Math.sin(player.angle) * 2,
         angle: player.angle + Math.PI, pitch: 0, alive: true,
         speed: 1.2, sprite: Occupation.TRAVELER,
-        name: nm.name, isFemale: nm.female,
+        name: nm.name, firstName: nm.firstName, lastName: nm.lastName, isFemale: nm.female,
         needs: freshNeeds(), hp: maxHp, maxHp,
         ai: { goal: AIGoal.IDLE, tx: 0, ty: 0, path: [], pi: 0, stuck: 0, timer: 0 },
         inventory: [], faction, occupation: Occupation.TRAVELER, isTraveler: true,

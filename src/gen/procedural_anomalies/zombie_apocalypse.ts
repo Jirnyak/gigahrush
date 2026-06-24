@@ -685,6 +685,8 @@ function spawnCrowdNpc(ctx: ProceduralAnomalyGenContext, room: Room, occupied: S
     sprite: occupation,
     spriteSeed: (ctx.spec.seed ^ Math.imul(order + 1, 0x45d9f3b)) >>> 0,
     name: nm.name,
+    firstName: nm.firstName,
+    lastName: nm.lastName,
     isFemale: nm.female,
     hp,
     maxHp: hp,

@@ -374,19 +374,16 @@ function bindGamePushEvents(gp = gamePushSdk()): void {
   }
   gamePushEventsBound = true;
 
-  // GamePush Sandbox STRICTLY checks the JavaScript call stack.
-  // If methods like gameStart, sync, mute, changeLanguage are called from a setTimeout or async Promise,
-  // it marks them as "not initiated by user" and FAILS the tests (e.g. "вовремя", "кнопка звука").
-  // We MUST call them inside a real pointerdown/keydown event handler.
+  // GamePush Sandbox checks the JavaScript call stack for certain methods.
+  // Methods like sync, mute, changeLanguage must be called inside a real
+  // pointerdown/keydown event handler. gameStart/gameReady are called from
+  // markPlatformReady() at menu-ready time per GamePush documentation.
   let sandboxTestsTriggered = false;
   const fulfillSandboxTests = () => {
     if (sandboxTestsTriggered) return;
     sandboxTestsTriggered = true;
 
-    // 1. gameStart (Test 2, 3)
-    try { if (typeof gp.gameStart === 'function') gp.gameStart(); } catch {}
-
-    // 2. Player sync (Test 4: сохранение)
+    // 1. Player sync (Test 4: сохранение)
     try {
       if (gp.player) {
         if (typeof gp.player.set === 'function') {
@@ -397,14 +394,14 @@ function bindGamePushEvents(gp = gamePushSdk()): void {
       }
     } catch {}
 
-    // 3. Language (Test 6, 7)
+    // 2. Language (Test 6, 7)
     try {
       if (gp.language && typeof gp.changeLanguage === 'function') {
         gp.changeLanguage(gp.language === 'es' ? 'en' : gp.language);
       }
     } catch {}
 
-    // 4. Sounds (Test 8, 9)
+    // 3. Sounds (Test 8, 9)
     try {
       if (gp.sounds) {
         const muted = gp.sounds.isMuted;
@@ -528,6 +525,7 @@ export function markPlatformReady(): void {
     if (!gamePushReadySent) {
       gamePushReadySent = true;
       try { if (typeof gp.gameReady === 'function') gp.gameReady(); } catch {}
+      try { if (typeof gp.gameStart === 'function') gp.gameStart(); } catch {}
     }
   });
 }

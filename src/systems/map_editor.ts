@@ -929,6 +929,8 @@ function spawnEditorEntity(world: World, entities: Entity[], nextEntityId: { v: 
       speed: 1.2,
       sprite: occupation,
       name: name.name,
+      firstName: name.firstName,
+      lastName: name.lastName,
       isFemale: name.female,
       needs: freshNeeds(),
       hp: maxHp,

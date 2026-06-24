@@ -450,6 +450,8 @@ function spawnPatrol(
       speed: 1.25,
       sprite: Occupation.HUNTER,
       name: nm.name,
+      firstName: nm.firstName,
+      lastName: nm.lastName,
       isFemale: nm.female,
       needs: freshNeeds(),
       hp: maxHp,

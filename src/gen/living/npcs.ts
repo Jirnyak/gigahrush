@@ -110,6 +110,7 @@ export function spawnFamilies(
     const apt = apartments[a];
     const familySize = 8;
     const familyFaction = randomFaction();
+    let familyLastName = '';
     for (let f = 0; f < familySize; f++) {
       const room = apt.living;
       const faction = f === 0 ? familyFaction : (Math.random() < 0.8 ? familyFaction : randomFaction());
@@ -122,6 +123,8 @@ export function spawnFamilies(
       const rpg = randomRPG(npcLevel);
       const maxHp = getMaxHp(rpg);
       const nm = randomName(faction);
+      const lastName = f === 0 ? (familyLastName = nm.lastName, nm.lastName) : familyLastName;
+      const name = f === 0 ? nm.name : `${nm.firstName} ${lastName}`;
       entities.push({
         id: nextId++, type: EntityType.NPC,
         x: room.x + rng(1, Math.max(1, room.w - 2)) + 0.5,
@@ -132,7 +135,7 @@ export function spawnFamilies(
         speed: occupation === Occupation.CHILD ? 0.8 : occupation === Occupation.ALCOHOLIC ? 0.9 : 1.2,
         sprite: occupation,
         spriteScale: occupation === Occupation.CHILD ? 0.6 : 1.0,
-        name: nm.name, isFemale: nm.female, needs: freshNeeds(),
+        name, firstName: nm.firstName, lastName, isFemale: nm.female, needs: freshNeeds(),
         hp: maxHp, maxHp,
         money: occupation === Occupation.DIRECTOR ? rng(200, 500) : occupation === Occupation.CHILD ? rng(0, 10) : rng(20, 100),
         ai: { goal: AIGoal.IDLE, tx: 0, ty: 0, path: [], pi: 0, stuck: 0, timer: 0 },
@@ -185,7 +188,7 @@ export function spawnTravelers(
         angle: Math.random() * Math.PI * 2,
         pitch: 0,
         alive: true, speed: 1.4, sprite: def.occupation,
-        name: nm.name, isFemale: nm.female, needs: freshNeeds(),
+        name: nm.name, firstName: nm.firstName, lastName: nm.lastName, isFemale: nm.female, needs: freshNeeds(),
         hp: maxHp, maxHp,
         money: rng(10, 80),
         ai: { goal: AIGoal.IDLE, tx: 0, ty: 0, path: [], pi: 0, stuck: 0, timer: 0 },

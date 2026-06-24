@@ -514,6 +514,8 @@ function createArenaCultist(world: World, room: ArenaRoomRef, nextId: { v: numbe
     speed: 1.25 + Math.random() * 0.25,
     sprite: Occupation.PILGRIM,
     name: nm.name,
+    firstName: nm.firstName,
+    lastName: nm.lastName,
     isFemale: nm.female,
     needs: freshNeeds(),
     hp: maxHp,

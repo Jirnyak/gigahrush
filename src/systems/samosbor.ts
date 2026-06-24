@@ -3632,6 +3632,8 @@ function rewriteActorAsRandomNpc(state: GameState, entity: Entity, variant: Acti
     delete entity.plotNpcId;
   }
   entity.name = wasPlayer ? `${named.name} (вы)` : named.name;
+  entity.firstName = named.firstName;
+  entity.lastName = named.lastName;
   entity.isFemale = named.female;
   entity.faction = wasPlayer ? Faction.PLAYER : faction;
   entity.occupation = occupation;
@@ -4006,6 +4008,8 @@ function createIstotitThingAtCell(
       sprite: occupation,
       spriteSeed: Math.floor(Math.random() * 0x7fffffff) + 1,
       name: named.name,
+      firstName: named.firstName,
+      lastName: named.lastName,
       isFemale: named.female,
       faction,
       occupation,

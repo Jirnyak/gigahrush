@@ -198,7 +198,7 @@ function spawnArrivalEscort(
     x: x + 0.5, y: y + 0.5,
     angle: 0, pitch: 0, alive: true, speed: def.speedBase + Math.random() * def.speedSpread,
     sprite: def.occupation,
-    name: name.name, isFemale: name.female,
+    name: name.name, firstName: name.firstName, lastName: name.lastName, isFemale: name.female,
     needs: freshNeeds(), hp: maxHp, maxHp,
     money: 20 + Math.floor(Math.random() * 50),
     ai: { goal: AIGoal.IDLE, tx: 0, ty: 0, path: [], pi: 0, stuck: 0, timer: 0 },

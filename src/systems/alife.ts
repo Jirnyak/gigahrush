@@ -40,6 +40,13 @@ import { MAX_ITEM_STACK } from '../data/inventory_limits';
 import { RPG_ATTRIBUTE_CAP, RPG_LEVEL_CAP } from '../data/rpg_progression';
 import { freshNeeds } from '../data/catalog';
 import {
+  CITIZEN_FIRST_M, CITIZEN_FIRST_F, CITIZEN_LAST_M, CITIZEN_LAST_F,
+  LIQ_RANKS, LIQ_LAST,
+  WILD_FIRST_M, WILD_FIRST_F, WILD_NICK,
+  CULT_ADJ_M, CULT_ADJ_F, CULT_NOUN_M, CULT_NOUN_F,
+  SCIENTIST_TITLE,
+} from '../data/names';
+import {
   CHARACTER_SEX_MALE,
   characterSexCode,
   characterSexFromCode,
@@ -153,6 +160,8 @@ export interface AlifeNpcSnapshot {
   faction: Faction;
   occupation: Occupation;
   name: string;
+  firstName: string;
+  lastName: string;
   female: boolean;
   age: number;
   sex: CharacterSex;
@@ -199,6 +208,8 @@ export interface MaterializeAlifeArrivalOptions {
 interface AlifeNpcRecord {
   id: number;
   name: string;
+  firstName: string;
+  lastName: string;
   npcVisualId?: string;
   weapon?: string;
   tool?: string;
@@ -219,6 +230,8 @@ export interface AlifeNpcOverride {
   floorKey?: string;
   floor?: FloorLevel;
   name?: string;
+  firstName?: string;
+  lastName?: string;
   female?: boolean;
   age?: number;
   sex?: CharacterSex;
@@ -733,15 +746,7 @@ function setRecordRpg(alife: AlifeState, record: AlifeNpcRecord, rpg: RPGStats):
   setRecordHp(alife, record, nextHp);
 }
 
-const CITIZEN_MALE = ['Иван', 'Петр', 'Алексей', 'Дмитрий', 'Сергей', 'Андрей', 'Николай', 'Михаил'];
-const CITIZEN_FEMALE = ['Мария', 'Анна', 'Елена', 'Ольга', 'Наталья', 'Татьяна', 'Ирина', 'Светлана'];
-const CITIZEN_LAST = ['Иванов', 'Петров', 'Сидоров', 'Кузнецов', 'Попов', 'Васильев', 'Соколов', 'Михайлов'];
-const LIQ_RANKS = ['Рядовой', 'Сержант', 'Лейтенант', 'Капитан', 'Майор'];
-const LIQ_LAST = ['Петренко', 'Бондаренко', 'Шевченко', 'Коваль', 'Мельник', 'Кравченко'];
-const WILD_NAMES = ['Серый', 'Толик', 'Леха', 'Колян', 'Жека', 'Саня', 'Вован', 'Костыль'];
-const WILD_NICKS = ['Бетон', 'Шило', 'Гвоздь', 'Дым', 'Кирпич', 'Резак', 'Труба', 'Цемент'];
-const CULT_ADJ = ['Черный', 'Кровавый', 'Безглазый', 'Гнилой', 'Темный', 'Слепой', 'Пепельный'];
-const CULT_NOUN = ['Идол', 'Коготь', 'Червь', 'Столп', 'Глаз', 'Шепот', 'Голод'];
+// Name pools imported from '../data/names' — single source of truth
 
 function hash32(a: number, b: number, c = 0): number {
   let x = (Math.imul(a ^ 0x9e3779b9, 0x85ebca6b) + Math.imul(b ^ 0xc2b2ae35, 0x27d4eb2d) + c) | 0;
@@ -902,32 +907,34 @@ function nameForRecord(
   occupation: Occupation,
   seed: number,
   index: number,
-): { name: string; female: boolean; sex: CharacterSex } {
+): { name: string; firstName: string; lastName: string; female: boolean; sex: CharacterSex } {
   if (faction === Faction.LIQUIDATOR) {
-    return {
-      name: `${pickDet(LIQ_RANKS, seed, index, 31)} ${pickDet(LIQ_LAST, seed, index, 32)}`,
-      female: false,
-      sex: 'male',
-    };
+    const rank = pickDet(LIQ_RANKS, seed, index, 31);
+    const last = pickDet(LIQ_LAST, seed, index, 32);
+    return { name: `${rank} ${last}`, firstName: rank, lastName: last, female: false, sex: 'male' };
   }
   if (faction === Faction.CULTIST) {
-    return {
-      name: `${pickDet(CULT_ADJ, seed, index, 33)} ${pickDet(CULT_NOUN, seed, index, 34)}`,
-      female: false,
-      sex: 'male',
-    };
+    const female = unit(seed, index, 40) < designFloorFemaleProbability(plan.key, occupation, 0.5);
+    const adj = pickDet(female ? CULT_ADJ_F : CULT_ADJ_M, seed, index, 33);
+    const noun = pickDet(female ? CULT_NOUN_F : CULT_NOUN_M, seed, index, 34);
+    return { name: `${adj} ${noun}`, firstName: adj, lastName: noun, female, sex: characterSexFromFemale(female) };
   }
   if (faction === Faction.WILD) {
-    return {
-      name: `${pickDet(WILD_NAMES, seed, index, 35)} "${pickDet(WILD_NICKS, seed, index, 36)}"`,
-      female: false,
-      sex: 'male',
-    };
+    const female = unit(seed, index, 41) < designFloorFemaleProbability(plan.key, occupation, 0.33);
+    const first = pickDet(female ? WILD_FIRST_F : WILD_FIRST_M, seed, index, 35);
+    const nick = pickDet(WILD_NICK, seed, index, 36);
+    return { name: `${first} «${nick}»`, firstName: first, lastName: nick, female, sex: characterSexFromFemale(female) };
+  }
+  if (faction === Faction.SCIENTIST) {
+    const female = unit(seed, index, 42) < designFloorFemaleProbability(plan.key, occupation, 0.4);
+    const title = pickDet(SCIENTIST_TITLE, seed, index, 43);
+    const last = pickDet(female ? CITIZEN_LAST_F : CITIZEN_LAST_M, seed, index, 44);
+    return { name: `${title} ${last}`, firstName: title, lastName: last, female, sex: characterSexFromFemale(female) };
   }
   const female = unit(seed, index, 37) < designFloorFemaleProbability(plan.key, occupation, 0.5);
-  const first = pickDet(female ? CITIZEN_FEMALE : CITIZEN_MALE, seed, index, 38);
-  const last = pickDet(CITIZEN_LAST, seed, index, 39);
-  return { name: `${first} ${last}${female ? 'а' : ''}`, female, sex: characterSexFromFemale(female) };
+  const first = pickDet(female ? CITIZEN_FIRST_F : CITIZEN_FIRST_M, seed, index, 38);
+  const last = pickDet(female ? CITIZEN_LAST_F : CITIZEN_LAST_M, seed, index, 39);
+  return { name: `${first} ${last}`, firstName: first, lastName: last, female, sex: characterSexFromFemale(female) };
 }
 
 function ageForRecord(
@@ -1112,6 +1119,8 @@ function createRecord(alife: AlifeState, id: number, plan: AlifeFloorPlan, seed:
   const record: AlifeNpcRecord = {
     id,
     name: named.name,
+    firstName: named.firstName,
+    lastName: named.lastName,
   };
   setRecordFloorKey(alife, record, plan.key);
   setRecordFloor(alife, record, plan.floor);
@@ -1294,7 +1303,12 @@ function applyReservedNpcToRecord(alife: AlifeState, record: AlifeNpcRecord, res
   if (reserved.kind) record.reservedKind = reserved.kind;
   if (reserved.presence === 'population' || reserved.presence === 'event_only') record.reservedPresence = reserved.presence;
   if (reserved.plotNpcId) record.plotNpcId = reserved.plotNpcId.slice(0, 96);
-  if (reserved.name) record.name = reserved.name.slice(0, 80);
+  if (reserved.name) {
+    record.name = reserved.name.slice(0, 80);
+    const parts = reserved.name.split(' ');
+    record.firstName = parts[0] ?? record.firstName;
+    record.lastName = parts.slice(1).join(' ') || record.lastName;
+  }
   setRecordSexFromInput(alife, record, reserved.sex, reserved.female);
   if (reserved.faction !== undefined) setRecordFaction(alife, record, reserved.faction);
   if (reserved.occupation !== undefined) setRecordOccupation(alife, record, reserved.occupation);
@@ -1584,6 +1598,8 @@ export function rewriteAlifeNpcIdentityFromEntity(state: GameState, entity: Enti
   const record = alife.npcs[entity.alifeId - 1];
   if (!record) return;
   if (entity.name) record.name = entity.name.slice(0, 80);
+  if (entity.firstName) record.firstName = entity.firstName.slice(0, 40);
+  if (entity.lastName) record.lastName = entity.lastName.slice(0, 40);
   if (entity.age !== undefined) setRecordAge(alife, record, entity.age, recordAge(alife, record));
   setRecordSexFromInput(alife, record, entity.sex, entity.isFemale);
   if (entity.faction !== undefined) setRecordFaction(alife, record, entity.faction);
@@ -1685,6 +1701,8 @@ export function getAlifeNpcRecordSnapshot(state: GameState, alifeId: number): Al
     faction: recordFaction(alife, record),
     occupation: recordOccupation(alife, record),
     name: record.name,
+    firstName: record.firstName,
+    lastName: record.lastName,
     female: recordFemale(alife, record),
     age: recordAge(alife, record),
     sex: recordSex(alife, record),
@@ -1873,6 +1891,8 @@ function arrivalRecordFromEntity(alife: AlifeState, id: number, state: GameState
   const record: AlifeNpcRecord = {
     id,
     name: (entity.name ?? `Житель ${id}`).slice(0, 80),
+    firstName: (entity.firstName ?? (entity.name ?? `Житель`).split(' ')[0]).slice(0, 40),
+    lastName: (entity.lastName ?? ((entity.name ?? `${id}`).split(' ').slice(1).join(' ') || `${id}`)).slice(0, 40),
     npcVisualId: sanitizeNpcVisualId(entity.npcVisualId),
     weapon: entity.weapon,
     tool: entity.tool,
@@ -2067,6 +2087,8 @@ function materializeEntity(record: AlifeNpcRecord, template: Entity | undefined,
     templateHasVisualOverride;
   if (adoptTemplateProfile) {
     if (template.name) record.name = template.name;
+    if (template.firstName) record.firstName = template.firstName;
+    if (template.lastName) record.lastName = template.lastName;
     if (template.isFemale !== undefined) setRecordFemale(alife, record, template.isFemale);
     if (template.occupation !== undefined) setRecordOccupation(alife, record, template.occupation);
     if (template.faction !== undefined) setRecordFaction(alife, record, template.faction);
@@ -2110,6 +2132,8 @@ function materializeEntity(record: AlifeNpcRecord, template: Entity | undefined,
     spriteSeed,
     spriteScale: occupation === Occupation.CHILD ? 0.6 : 1,
     name: record.name,
+    firstName: record.firstName,
+    lastName: record.lastName,
     isFemale: recordFemale(alife, record),
     needs: freshNeeds(),
     hp: Math.max(1, Math.min(recordHp(alife, record), maxHp)),
@@ -2199,6 +2223,8 @@ export function materializeAlifeArrival(
     sprite: recordOccupation(alife, record),
     npcVisualId: record.npcVisualId,
     name: record.name,
+    firstName: record.firstName,
+    lastName: record.lastName,
     hp: recordHp(alife, record),
     maxHp: recordMaxHp(alife, record),
     ai: {
@@ -2314,6 +2340,8 @@ function applyOverride(alife: AlifeState, input: unknown): void {
   }
   setRecordFloor(alife, record, sanitizeFloor(input.floor, recordFloor(alife, record)));
   if (typeof input.name === 'string' && input.name.length > 0) record.name = input.name.slice(0, 80);
+  if (typeof input.firstName === 'string' && input.firstName.length > 0) record.firstName = input.firstName.slice(0, 40);
+  if (typeof input.lastName === 'string' && input.lastName.length > 0) record.lastName = input.lastName.slice(0, 40);
   setRecordSexFromInput(alife, record, input.sex, input.female);
   if (input.age !== undefined) setRecordAge(alife, record, input.age, recordAge(alife, record));
   if (typeof input.faction === 'number' && Number.isFinite(input.faction)) {
@@ -2431,6 +2459,8 @@ export function alifeForSave(state: GameState): AlifeSaveState {
       floorKey: recordFloorKey(alife, record),
       floor: recordFloor(alife, record),
       name: record.name,
+      firstName: record.firstName,
+      lastName: record.lastName,
       female: recordFemale(alife, record),
       age: recordAge(alife, record),
       sex: recordSex(alife, record),

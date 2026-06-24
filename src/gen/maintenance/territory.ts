@@ -243,6 +243,8 @@ export function spawnMaintenanceFactionNpcSquads(world: World, entities: Entity[
           speed: 1.4 + Math.random() * 0.4,
           sprite: fDef.occupation,
           name: nm.name,
+          firstName: nm.firstName,
+          lastName: nm.lastName,
           isFemale: nm.female,
           needs: freshNeeds(),
           hp: maxHp, maxHp,

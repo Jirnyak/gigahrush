@@ -190,6 +190,8 @@ export function spawnMinistryNpcs(
           speed: 1.2 + Math.random() * 0.3,
           sprite: fDef.occupation,
           name: nm.name,
+          firstName: nm.firstName,
+          lastName: nm.lastName,
           isFemale: nm.female,
           sex,
           needs: freshNeeds(),

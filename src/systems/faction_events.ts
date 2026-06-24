@@ -1808,6 +1808,8 @@ function createFactionNpc(
     speed: 1.25 + Math.random() * 0.35,
     sprite: occupation,
     name: nm.name,
+    firstName: nm.firstName,
+    lastName: nm.lastName,
     isFemale: nm.female,
     needs: freshNeeds(),
     hp: maxHp,
