@@ -955,7 +955,15 @@ function applyWorkshopClusterRooms(world: World, rooms: Room[], spec: Procedural
     const hubH = horizontal ? 5 + ((seed >> 3) % 4) : 22 + Math.floor(fieldHash01(seed, row, col, 0x5803) * 22);
     const cx = Math.floor(col * slotW + slotW * (0.34 + fieldHash01(seed, col, row, 0x5804) * 0.32));
     const cy = Math.floor(row * slotH + slotH * (0.34 + fieldHash01(seed, row, col, 0x5805) * 0.32));
-    if (centers.some(center => world.dist2(center.x, center.y, cx, cy) < WORKSHOP_CLUSTER_MIN_SPACING)) continue;
+    let collision = false;
+    for (let j = 0; j < centers.length; j++) {
+      const center = centers[j];
+      if (world.dist2(center.x, center.y, cx, cy) < WORKSHOP_CLUSTER_MIN_SPACING) {
+        collision = true;
+        break;
+      }
+    }
+    if (collision) continue;
     const hx = Math.max(20, Math.min(W - hubW - 20, cx - (hubW >> 1)));
     const hy = Math.max(20, Math.min(W - hubH - 20, cy - (hubH >> 1)));
     if (!canPlaceRoom(world, hx, hy, hubW, hubH)) continue;
