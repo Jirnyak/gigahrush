@@ -1680,9 +1680,16 @@ function reinforceCommunalRingAuthoredHqTerritory(world: World): void {
     demoteCommunalFallbackHq(world, room);
   }
 
+  const roomByName = new Map<string, Room>();
+  for (const room of world.rooms) {
+    if (room.name && !roomByName.has(room.name)) {
+      roomByName.set(room.name, room);
+    }
+  }
+
   for (const compound of COMMUNAL_HQ_COMPOUNDS) {
     for (const spec of compound.rooms) {
-      const room = world.rooms.find(candidate => candidate.name === spec.name);
+      const room = roomByName.get(spec.name);
       if (!room) continue;
       room.type = spec.type;
       room.sealed = spec.type === RoomType.HQ;
@@ -1710,11 +1717,17 @@ function reinforceCommunalRingAuthoredHqTerritory(world: World): void {
   world.markFeaturesDirty(false);
 }
 
-function communalAuthoredOwnerForRoomName(name: string): TerritoryOwner | undefined {
-  for (const compound of COMMUNAL_HQ_COMPOUNDS) {
-    if (compound.rooms.some(room => room.type === RoomType.HQ && room.name === name)) return compound.owner;
+const COMMUNAL_AUTHORED_OWNER_MAP = new Map<string, TerritoryOwner>();
+for (const compound of COMMUNAL_HQ_COMPOUNDS) {
+  for (const room of compound.rooms) {
+    if (room.type === RoomType.HQ) {
+      COMMUNAL_AUTHORED_OWNER_MAP.set(room.name, compound.owner);
+    }
   }
-  return undefined;
+}
+
+function communalAuthoredOwnerForRoomName(name: string): TerritoryOwner | undefined {
+  return COMMUNAL_AUTHORED_OWNER_MAP.get(name);
 }
 
 function demoteCommunalFallbackHq(world: World, room: Room): void {
