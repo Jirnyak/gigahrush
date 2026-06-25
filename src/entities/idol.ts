@@ -28,6 +28,21 @@ export function generateSprite(): Uint32Array {
   return generateIdolSprite(13666);
 }
 
+export interface IdolParams {
+  t: Uint32Array;
+  seed: number;
+  cx: number;
+  lean: number;
+  baseW: number;
+  topW: number;
+  height: number;
+  topY: number;
+  botY: number;
+  bR: number;
+  bG: number;
+  bB: number;
+}
+
 /* ── Procedural sprite from seed — each idol unique ────────────── */
 export function generateIdolSprite(seed: number): Uint32Array {
   const t = new Uint32Array(S * S).fill(CLEAR);
@@ -53,7 +68,22 @@ export function generateIdolSprite(seed: number): Uint32Array {
   ];
   const [bR, bG, bB] = palettes[hue];
 
-  // ── Main spire body — irregular tapered column ──
+  const ctx: IdolParams = {
+    t, seed, cx, lean, baseW, topW, height, topY, botY, bR, bG, bB
+  };
+
+  drawMainSpireBody(ctx);
+  drawJaggedCrown(ctx);
+  drawCracks(ctx, numCracks);
+  drawEyes(ctx, numEyes);
+  drawOozingCracks(ctx);
+  drawGlowingRunes(ctx);
+
+  return ctx.t;
+}
+
+function drawMainSpireBody(ctx: IdolParams) {
+  const { t, seed, cx, lean, baseW, topW, topY, botY, bR, bG, bB } = ctx;
   for (let y = topY; y <= botY; y++) {
     const t01 = (y - topY) / (botY - topY); // 0 at top, 1 at bottom
     const halfW = topW + (baseW - topW) * t01;
@@ -93,8 +123,10 @@ export function generateIdolSprite(seed: number): Uint32Array {
       );
     }
   }
+}
 
-  // ── Jagged crown at top — broken stone fragments ──
+function drawJaggedCrown(ctx: IdolParams) {
+  const { t, seed, cx, lean, topW, topY, bR, bG, bB } = ctx;
   for (let i = -3; i <= 3; i++) {
     const fragH = 2 + Math.floor(noise(i + 4, 0, seed + 30) * 6);
     const fragX = Math.floor(cx + lean + i * (topW * 0.5) + noise(i + 4, 1, seed + 31) * 2);
@@ -109,8 +141,10 @@ export function generateIdolSprite(seed: number): Uint32Array {
       }
     }
   }
+}
 
-  // ── Cracks — deep dark fissures ──
+function drawCracks(ctx: IdolParams, numCracks: number) {
+  const { t, seed, cx, lean, baseW, height, topY } = ctx;
   for (let i = 0; i < numCracks; i++) {
     let cy2 = Math.floor(topY + 8 + noise(i, 0, seed + 40) * (height - 16));
     let cx2 = Math.floor(cx + lean * (1 - (cy2 - topY) / height) + (noise(0, i, seed + 41) - 0.5) * baseW * 0.6);
@@ -125,8 +159,10 @@ export function generateIdolSprite(seed: number): Uint32Array {
       cy2 += 1;
     }
   }
+}
 
-  // ── Eyes — scattered across the surface, staring ──
+function drawEyes(ctx: IdolParams, numEyes: number) {
+  const { t, seed, cx, lean, baseW, topW, height, topY } = ctx;
   for (let i = 0; i < numEyes; i++) {
     const et = 0.15 + noise(i, 0, seed + 50) * 0.7; // vertical position 15%-85%
     const ey = Math.floor(topY + et * height);
@@ -176,8 +212,10 @@ export function generateIdolSprite(seed: number): Uint32Array {
       }
     }
   }
+}
 
-  // ── Oozing dark substance from cracks (dripping) ──
+function drawOozingCracks(ctx: IdolParams) {
+  const { t, seed, cx, lean, baseW, height, topY } = ctx;
   for (let i = 0; i < 4; i++) {
     const dx2 = Math.floor(cx + lean * 0.5 + (noise(i, 3, seed + 60) - 0.5) * baseW);
     const startY = Math.floor(topY + height * 0.4 + noise(3, i, seed + 61) * height * 0.4);
@@ -193,8 +231,10 @@ export function generateIdolSprite(seed: number): Uint32Array {
       );
     }
   }
+}
 
-  // ── Faint glowing runes/symbols etched into surface ──
+function drawGlowingRunes(ctx: IdolParams) {
+  const { t, seed, cx, lean, height, topY } = ctx;
   const numRunes = 2 + (seed % 3);
   for (let i = 0; i < numRunes; i++) {
     const rt = 0.3 + noise(i, 4, seed + 70) * 0.5;
@@ -228,6 +268,4 @@ export function generateIdolSprite(seed: number): Uint32Array {
       }
     }
   }
-
-  return t;
 }
