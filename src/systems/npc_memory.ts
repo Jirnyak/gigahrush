@@ -592,11 +592,16 @@ function applyObservedFactReaction(memory: NpcMemory, event: NpcMemoryEventLike,
 }
 
 function trimObservedFacts(memory: NpcMemory, now: number): void {
-  for (let i = memory.observedFacts.length - 1; i >= 0; i--) {
-    if (now > memory.observedFacts[i].expiresAt) memory.observedFacts.splice(i, 1);
+  const facts = memory.observedFacts;
+  let keepCount = 0;
+  for (let i = 0; i < facts.length; i++) {
+    if (now <= facts[i].expiresAt) {
+      facts[keepCount++] = facts[i];
+    }
   }
-  if (memory.observedFacts.length > MAX_OBSERVED_FACTS_PER_NPC) {
-    memory.observedFacts.splice(0, memory.observedFacts.length - MAX_OBSERVED_FACTS_PER_NPC);
+  facts.length = keepCount;
+  if (keepCount > MAX_OBSERVED_FACTS_PER_NPC) {
+    memory.observedFacts = facts.slice(keepCount - MAX_OBSERVED_FACTS_PER_NPC);
   }
 }
 
