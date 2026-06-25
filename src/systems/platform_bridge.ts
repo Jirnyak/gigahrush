@@ -1,3 +1,4 @@
+import { safeParseJson } from '../core/json';
 import { SAVE_SHAPE_VERSION, saveShapeVersionStatus } from './save_runtime';
 import { designFloorProfile } from '../data/design_floor_profiles';
 
@@ -225,7 +226,7 @@ function shouldInitGamePush(): boolean {
 
 function isCurrentRawSave(raw: string): boolean {
   try {
-    return saveShapeVersionStatus(JSON.parse(raw) as unknown) === 'current';
+    return saveShapeVersionStatus(safeParseJson(raw) as unknown) === 'current';
   } catch {
     return false;
   }
@@ -477,7 +478,7 @@ function decodePortalSaveRecord(value: unknown): { raw: string; savedAt: number 
   if (typeof value === 'string') {
     if (isCurrentRawSave(value)) return { raw: value, savedAt: 0 };
     try {
-      return decodePortalSaveRecord(JSON.parse(value) as unknown);
+      return decodePortalSaveRecord(safeParseJson(value) as unknown);
     } catch {
       return null;
     }

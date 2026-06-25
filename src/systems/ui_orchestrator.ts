@@ -1,3 +1,4 @@
+import { safeParseJson } from '../core/json';
 import {
   VISUAL_GEOMETRY_DEFAULT_MODE,
   normalizeVisualGeometryMode,
@@ -396,7 +397,7 @@ function loadUiSettings(): UiSettings {
   const s = storage();
   if (!s) return defaultUiSettings();
   try {
-    return normalizeUiSettings(JSON.parse(s.getItem(UI_STORAGE_KEY) ?? 'null'));
+    return normalizeUiSettings(safeParseJson(s.getItem(UI_STORAGE_KEY) ?? 'null'));
   } catch {
     return defaultUiSettings();
   }

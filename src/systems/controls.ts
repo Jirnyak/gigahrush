@@ -1,3 +1,4 @@
+import { safeParseJson } from '../core/json';
 import { type InputState } from '../core/types';
 
 type BooleanInputKey = {
@@ -172,7 +173,7 @@ function loadControlBindings(): ControlBindings {
   const s = storage();
   if (!s) return defaultBindings();
   try {
-    return normalizeBindings(JSON.parse(s.getItem(CONTROL_STORAGE_KEY) ?? 'null'));
+    return normalizeBindings(safeParseJson(s.getItem(CONTROL_STORAGE_KEY) ?? 'null'));
   } catch {
     return defaultBindings();
   }
