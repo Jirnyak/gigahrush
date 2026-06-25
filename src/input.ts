@@ -1,6 +1,6 @@
 /* ── Input handler: keyboard + mouse (pointer lock) ──────────── */
 
-import { type InputState } from './core/types';
+import type { InputState } from './core/types';
 import {
   applyControlCode,
   clearControlInputs,
