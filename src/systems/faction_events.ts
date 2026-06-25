@@ -259,10 +259,14 @@ function rememberResidueSite(
 }
 
 function pruneResidueSites(state: GameState): void {
-  for (let i = activeFactionResidueSites.length - 1; i >= 0; i--) {
+  let writeIdx = 0;
+  for (let i = 0; i < activeFactionResidueSites.length; i++) {
     const site = activeFactionResidueSites[i];
-    if (site.floor !== state.currentFloor || state.time >= site.expiresAt) activeFactionResidueSites.splice(i, 1);
+    if (site.floor === state.currentFloor && state.time < site.expiresAt) {
+      activeFactionResidueSites[writeIdx++] = site;
+    }
   }
+  activeFactionResidueSites.length = writeIdx;
 }
 
 function nearestResidueSiteForChoice(
