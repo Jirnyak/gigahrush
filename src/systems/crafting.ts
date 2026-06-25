@@ -181,12 +181,16 @@ function sanitizeMaterialVector(input: unknown): MutableCraftVector {
   return out;
 }
 
+let _cachedDefaultKnownRecipes: Record<string, true> | null = null;
+
 function defaultKnownRecipes(): Record<string, true> {
-  const out: Record<string, true> = {};
-  for (const recipe of Object.values(CRAFT_RECIPES)) {
-    if (recipe.knownByDefault) out[recipe.id] = true;
+  if (!_cachedDefaultKnownRecipes) {
+    _cachedDefaultKnownRecipes = {};
+    for (const recipe of Object.values(CRAFT_RECIPES)) {
+      if (recipe.knownByDefault) _cachedDefaultKnownRecipes[recipe.id] = true;
+    }
   }
-  return out;
+  return { ..._cachedDefaultKnownRecipes };
 }
 
 function sanitizeKnownRecipes(input: unknown): Record<string, true> {
