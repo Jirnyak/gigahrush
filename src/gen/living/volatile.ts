@@ -25,10 +25,8 @@ import { seedLivingMacroRouteIntent } from './geometry';
 import { maybePlaceBrokenFixture } from '../interactive_fixtures';
 
 /* ── Generate the volatile gigastructure ─────────────────────── */
-export function generateVolatileMaze(world: World): void {
+function cleanupOldVolatileRooms(world: World): void {
   const aptCount = world.apartmentRoomCount;
-  let nextRoomId = aptCount;
-
   // Remove any old volatile rooms & their doors
   for (let i = aptCount; i < world.rooms.length; i++) {
     const room = world.rooms[i];
@@ -66,14 +64,9 @@ export function generateVolatileMaze(world: World): void {
     for (const di of removeDoors) world.removeDoorAt(di);
     room.sealed = false;
   }
+}
 
-  const placed: Room[] = [];
-  const connectable: Room[] = [];
-
-  /* ── Macro route intent: reserve readable public/service/shelter lanes before random rooms. */
-  seedLivingMacroRouteIntent(world);
-
-  /* ── Architectural + functional rooms ──────────────── */
+function placeArchitecturalRooms(world: World, placed: Room[], connectable: Room[], nextRoomId: number): number {
   const SGRID = 16;
   const SCELL = Math.floor(W / SGRID);
   const superCells: [number, number][] = [];
@@ -106,18 +99,16 @@ export function generateVolatileMaze(world: World): void {
     placed.push(room);
     connectable.push(room);
   }
+  return nextRoomId;
+}
 
-  /* ── MST corridors between volatile rooms only ─────── */
-  connectRoomsMST(world, connectable);
-
-  /* ── Dense fill — procedural kaleidoscope rooms ──── */
+function placeDenseFillRooms(world: World, placed: Room[], fillRooms: Room[], nextRoomId: number): number {
   const allFillTypes: RoomType[] = [
     RoomType.COMMON, RoomType.CORRIDOR, RoomType.STORAGE,
     RoomType.MEDICAL, RoomType.PRODUCTION,
     RoomType.KITCHEN, RoomType.BATHROOM,
     RoomType.SMOKING, RoomType.OFFICE,
   ];
-  const fillRooms: Room[] = [];
 
   function randFillRoom(): [number, number, RoomType] {
     const area = Math.exp(2.0 + Math.random() * 2.8);
@@ -151,100 +142,36 @@ export function generateVolatileMaze(world: World): void {
 
   /* ── Connect fill rooms to existing network ────────── */
   for (const room of fillRooms) connectToNetwork(world, room);
+  return nextRoomId;
+}
 
-  /* ── Repair + sanitize ─────────────────────────────── */
-  repairRoomWalls(world);
-  sanitizeDoors(world);
-  pruneDeadEnds(world);
-
-  /* ── Percolation — start from first volatile room ──── */
-  if (placed.length > 0) {
-    const vr = placed[0];
-    ensureConnectivity(world, vr.x + Math.floor(vr.w / 2) + 0.5, vr.y + Math.floor(vr.h / 2) + 0.5);
-  }
-
-  /* ── Shape rooms ───────────────────────────────────── */
-  for (const room of placed) shapeRoom(world, room);
-
-  /* ── Second repair pass after shaping ──────────────── */
-  repairRoomWalls(world);
-  sanitizeDoors(world);
-  pruneDeadEnds(world);
-
-  if (placed.length > 0) {
-    const vr2 = placed[0];
-    ensureConnectivity(world, vr2.x + Math.floor(vr2.w / 2) + 0.5, vr2.y + Math.floor(vr2.h / 2) + 0.5);
-  }
-
-  /* ── Connect apartments ────────────────────────────── */
-  connectApartmentsToMaze(world);
-  sanitizeDoors(world);
-
-  if (placed.length > 0) {
-    const vr3 = placed[0];
-    ensureConnectivity(world, vr3.x + Math.floor(vr3.w / 2) + 0.5, vr3.y + Math.floor(vr3.h / 2) + 0.5);
-  }
-
-  /* ── Punch thin walls for shortcut loops ────────────── */
-  punchThinWalls(world, 0.12);
-
-  /* ── Convert non-apartment doors to floor openings ─── */
-  openVolatileDoors(world);
-
-  /* ── Zone boundary airlocks ────────────────────────── */
-  placeAirlocks(world);
-  pruneDeadEnds(world);
-
-  /* ── Kill isolated single-cell floor pockets ───────── */
-  {
-    const dirs: [number, number][] = [[1,0],[-1,0],[0,1],[0,-1]];
-    let changed = true;
-    while (changed) {
-      changed = false;
-      for (let y = 0; y < W; y++) {
-        for (let x = 0; x < W; x++) {
-          const i = y * W + x;
-          if (world.cells[i] !== Cell.FLOOR) continue;
-          if (world.aptMask[i]) continue;
-          let walkN = 0;
-          for (const [dx, dy] of dirs) {
-            const ni = world.idx(world.wrap(x + dx), world.wrap(y + dy));
-            if (world.cells[ni] === Cell.FLOOR || world.cells[ni] === Cell.DOOR) walkN++;
-          }
-          if (walkN === 0) {
-            world.cells[i] = Cell.WALL;
-            world.features[i] = 0;
-            world.roomMap[i] = -1;
-            changed = true;
-          }
+function killIsolatedFloorPockets(world: World): void {
+  const dirs: [number, number][] = [[1,0],[-1,0],[0,1],[0,-1]];
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (let y = 0; y < W; y++) {
+      for (let x = 0; x < W; x++) {
+        const i = y * W + x;
+        if (world.cells[i] !== Cell.FLOOR) continue;
+        if (world.aptMask[i]) continue;
+        let walkN = 0;
+        for (const [dx, dy] of dirs) {
+          const ni = world.idx(world.wrap(x + dx), world.wrap(y + dy));
+          if (world.cells[ni] === Cell.FLOOR || world.cells[ni] === Cell.DOOR) walkN++;
+        }
+        if (walkN === 0) {
+          world.cells[i] = Cell.WALL;
+          world.features[i] = 0;
+          world.roomMap[i] = -1;
+          changed = true;
         }
       }
     }
   }
+}
 
-  /* ── Post-airlock connectivity ─────────────────────── */
-  if (placed.length > 0) {
-    const vrF = placed[0];
-    ensureConnectivity(world, vrF.x + Math.floor(vrF.w / 2) + 0.5, vrF.y + Math.floor(vrF.h / 2) + 0.5);
-  }
-
-  /* ── Connect any isolated permanent rooms (universal) ─ */
-  ensurePermanentRoomAccess(world);
-
-  /* ── Final cleanup — catch any comb/dead-end artifacts ─ */
-  sanitizeDoors(world);
-  pruneDeadEnds(world);
-
-  /* ── Decorations ───────────────────────────────────── */
-  for (const room of placed) {
-    if (room.type === RoomType.COMMON || room.type === RoomType.CORRIDOR || room.type === RoomType.PRODUCTION) {
-      decorateRoom(world, room);
-    }
-  }
-
-  /* ── Abyss pits ────────────────────────────────────── */
-  placeAbyssPits(world);
-
+function applyVolatileRoomFeatures(world: World, placed: Room[]): void {
   /* ── Volatile room textures ────────────────────────── */
   for (const room of placed) {
     for (let dy = 0; dy < room.h; dy++)
@@ -283,7 +210,9 @@ export function generateVolatileMaze(world: World): void {
       }
     }
   }
+}
 
+function applyGlobalTexturesAndCorridors(world: World): void {
   /* ── Global wall/floor/corridor textures ───────────── */
   for (let y = 0; y < W; y++) {
     for (let x = 0; x < W; x++) {
@@ -334,6 +263,102 @@ export function generateVolatileMaze(world: World): void {
       world.wallTex[i] = pickPosterTex(x, y);
     }
   }
+}
+
+export function generateVolatileMaze(world: World): void {
+  const aptCount = world.apartmentRoomCount;
+  let nextRoomId = aptCount;
+
+  cleanupOldVolatileRooms(world);
+
+  const placed: Room[] = [];
+  const connectable: Room[] = [];
+
+  /* ── Macro route intent: reserve readable public/service/shelter lanes before random rooms. */
+  seedLivingMacroRouteIntent(world);
+
+  nextRoomId = placeArchitecturalRooms(world, placed, connectable, nextRoomId);
+
+  /* ── MST corridors between volatile rooms only ─────── */
+  connectRoomsMST(world, connectable);
+
+  const fillRooms: Room[] = [];
+  nextRoomId = placeDenseFillRooms(world, placed, fillRooms, nextRoomId);
+
+  /* ── Repair + sanitize ─────────────────────────────── */
+  repairRoomWalls(world);
+  sanitizeDoors(world);
+  pruneDeadEnds(world);
+
+  /* ── Percolation — start from first volatile room ──── */
+  if (placed.length > 0) {
+    const vr = placed[0];
+    ensureConnectivity(world, vr.x + Math.floor(vr.w / 2) + 0.5, vr.y + Math.floor(vr.h / 2) + 0.5);
+  }
+
+  /* ── Shape rooms ───────────────────────────────────── */
+  for (const room of placed) shapeRoom(world, room);
+
+  /* ── Second repair pass after shaping ──────────────── */
+  repairRoomWalls(world);
+  sanitizeDoors(world);
+  pruneDeadEnds(world);
+
+  if (placed.length > 0) {
+    const vr2 = placed[0];
+    ensureConnectivity(world, vr2.x + Math.floor(vr2.w / 2) + 0.5, vr2.y + Math.floor(vr2.h / 2) + 0.5);
+  }
+
+  /* ── Connect apartments ────────────────────────────── */
+  connectApartmentsToMaze(world);
+  sanitizeDoors(world);
+
+  if (placed.length > 0) {
+    const vr3 = placed[0];
+    ensureConnectivity(world, vr3.x + Math.floor(vr3.w / 2) + 0.5, vr3.y + Math.floor(vr3.h / 2) + 0.5);
+  }
+
+  /* ── Punch thin walls for shortcut loops ────────────── */
+  punchThinWalls(world, 0.12);
+
+  /* ── Convert non-apartment doors to floor openings ─── */
+  openVolatileDoors(world);
+
+  /* ── Zone boundary airlocks ────────────────────────── */
+  placeAirlocks(world);
+  pruneDeadEnds(world);
+
+  /* ── Kill isolated single-cell floor pockets ───────── */
+  killIsolatedFloorPockets(world);
+
+  /* ── Post-airlock connectivity ─────────────────────── */
+  if (placed.length > 0) {
+    const vrF = placed[0];
+    ensureConnectivity(world, vrF.x + Math.floor(vrF.w / 2) + 0.5, vrF.y + Math.floor(vrF.h / 2) + 0.5);
+  }
+
+  /* ── Connect any isolated permanent rooms (universal) ─ */
+  ensurePermanentRoomAccess(world);
+
+  /* ── Final cleanup — catch any comb/dead-end artifacts ─ */
+  sanitizeDoors(world);
+  pruneDeadEnds(world);
+
+  /* ── Decorations ───────────────────────────────────── */
+  for (const room of placed) {
+    if (room.type === RoomType.COMMON || room.type === RoomType.CORRIDOR || room.type === RoomType.PRODUCTION) {
+      decorateRoom(world, room);
+    }
+  }
+
+  /* ── Abyss pits ────────────────────────────────────── */
+  placeAbyssPits(world);
+
+  /* ── Volatile room textures and features ───────────── */
+  applyVolatileRoomFeatures(world, placed);
+
+  /* ── Global wall/floor/corridor textures & features ── */
+  applyGlobalTexturesAndCorridors(world);
 
   /* ── Lifts + lightmap ──────────────────────────────── */
   placeLifts(world, 8, LiftDirection.DOWN);  // half go down to maintenance
