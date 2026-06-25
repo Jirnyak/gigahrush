@@ -1,6 +1,6 @@
 export function registerPwaServiceWorker(): void {
   if (!('serviceWorker' in navigator)) return;
-  if (import.meta.env.DEV) {
+  if (import.meta.env?.DEV) {
     window.addEventListener('load', () => {
       const cacheStorage = 'caches' in window ? window.caches : undefined;
       void navigator.serviceWorker.getRegistrations()
@@ -13,7 +13,9 @@ export function registerPwaServiceWorker(): void {
   }
   if (!window.isSecureContext && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') return;
   window.addEventListener('load', () => {
-    void navigator.serviceWorker.register('./sw.js').catch(() => {});
+    void navigator.serviceWorker.register('./sw.js').catch((err) => {
+      console.error('ServiceWorker registration failed: ', err);
+    });
   }, { once: true });
 }
 
