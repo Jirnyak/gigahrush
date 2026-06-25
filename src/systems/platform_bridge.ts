@@ -698,7 +698,7 @@ export async function loadPlatformRawGameSave(localRaw?: string | null): Promise
 }
 
 export async function hydratePlatformSaveFromCloud(): Promise<PlatformLoadResult> {
-  if (typeof localStorage === 'undefined') return { status: 'no-sdk' };
+  if (typeof localStorage === 'undefined' || !localStorage.getItem) return { status: 'no-sdk' };
   const localRaw = localStorage.getItem(LOCAL_SAVE_KEY);
   const result = await loadPlatformRawGameSave(localRaw);
   if (result.status !== 'loaded' || !result.raw) return result;

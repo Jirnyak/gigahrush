@@ -1,5 +1,6 @@
 import { test } from 'node:test';
 import * as assert from 'node:assert/strict';
+import { SeedRng } from '../src/core/rand';
 
 import {
   Cell,
@@ -529,10 +530,10 @@ test('samosbor director cadence, beat cooldowns, and events stay bounded', () =>
   const entities = [player];
   const nextId = { v: 100 };
   const variant = testClassicSamosborVariant();
-  const originalRandom = Math.random;
+  const originalRandom = SeedRng.prototype.random;
 
   try {
-    Math.random = () => 0;
+    SeedRng.prototype.random = () => 0;
     const first = tickSamosborDirector(world, entities, state, nextId, variant, 'active_cadence');
     assert.equal(first.fired, true);
     assert.equal(first.beatId, 'active_floor_fog_residue');
@@ -560,7 +561,7 @@ test('samosbor director cadence, beat cooldowns, and events stay bounded', () =>
     assert.equal(trace.rejectedReason, 'cooldown');
     assert.ok(trace.legalCount >= 1);
   } finally {
-    Math.random = originalRandom;
+    SeedRng.prototype.random = originalRandom;
   }
 });
 

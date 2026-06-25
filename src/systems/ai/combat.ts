@@ -15,7 +15,8 @@ import { clearFogInZone } from '../samosbor';
 import { agiAttackSpeedMult, meleeDamage } from '../rpg';
 import { zhelemishIncomingMeleeDamage } from '../status';
 import { spawnBloodHit, spawnDeathPool } from '../blood_fx';
-import { consumeDurability, getWeaponStats, removeItem } from '../inventory';
+import { consumeDurability, getWeaponStats, removeItem, addItem } from '../inventory';
+import { ITEMS } from '../../data/items';
 import { isDebugOnePunchManEnabled, keepDebugOnePunchManAlive } from '../debug_cheats';
 import { entityDisplayName } from '../../entities/monster';
 import { followPath, tryAssignPathToCell } from './pathfinding';
@@ -53,6 +54,26 @@ const NPC_FLEE_SCAN_CD = 1.5;
 const NPC_FLEE_MONSTER_SCAN_CAP = 32;
 const fleeMonsterQuery: Entity[] = [];
 const npcMeleeHitQuery: Entity[] = [];
+
+export function trySimulateNpcAmmoRestock(e: Entity, dt: number): void {
+  if (Math.random() > 0.02 * dt) return;
+
+  const weaponId = e.weapon;
+  if (!weaponId) return;
+
+  const ws = getWeaponStats(e, weaponId);
+  if (!ws || !ws.ammoType) return;
+
+  const hasAmmo = e.inventory?.some(s => s.defId === ws.ammoType && s.count > 0);
+  if (hasAmmo) return;
+
+  const ammoDef = ITEMS[ws.ammoType];
+  if (!ammoDef) return;
+
+  const price = Math.max(1, ammoDef.value || 1);
+  const count = Math.max(1, Math.floor(40 / price));
+  addItem(e, ws.ammoType, count);
+}
 
 export function tryFleeFromMonster(
   world: World, _entities: Entity[], e: Entity, dt: number, time = _barkTime,

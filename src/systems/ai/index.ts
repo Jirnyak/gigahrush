@@ -12,7 +12,7 @@ import {
 import { World } from '../../core/world';
 import { setPathContext } from './pathfinding';
 import { setEntityMap, updateMonster } from './monster';
-import { setCombatContext, tryFactionCombat, tryFleeFromMonster } from './combat';
+import { setCombatContext, tryFactionCombat, tryFleeFromMonster, trySimulateNpcAmmoRestock } from './combat';
 import { primeNpcAlifeState, setNpcContext, updateNPC } from './npc_fsm';
 import { setNpcBarkLogContext } from './barks';
 import { actorHasTacticProfile, runActorTactic } from './tactics';
@@ -165,6 +165,7 @@ export function updateAI(world: World, entities: Entity[], dt: number, time: num
       currentMsgActor = e;
       if (e.type === EntityType.NPC) {
         aiStats.updatedNpc++;
+        trySimulateNpcAmmoRestock(e, dt);
         if (actorHasTacticProfile(e) && runActorTactic(world, e, dt, time, msgs, player, state)) continue;
         if (!tryFactionCombat(world, entities, e, dt, time, msgs, nextId, state, player ?? null, {
           visualProjectiles: true,

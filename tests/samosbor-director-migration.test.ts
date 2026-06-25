@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { SeedRng } from '../src/core/rand';
 
 import { World } from '../src/core/world';
 import {
@@ -53,12 +54,15 @@ function patrolWorld(): World {
 }
 
 function withRandom<T>(value: number, run: () => T): T {
-  const original = Math.random;
+  const originalMath = Math.random;
+  const originalSeed = SeedRng.prototype.random;
   try {
     Math.random = () => value;
+    SeedRng.prototype.random = () => value;
     return run();
   } finally {
-    Math.random = original;
+    Math.random = originalMath;
+    SeedRng.prototype.random = originalSeed;
   }
 }
 
@@ -76,9 +80,8 @@ test('samosbor extra patrol is a fixed-pool A-Life migration, not anonymous refi
   const world = patrolWorld();
   const player = makeTestPlayer({ id: 1, x: 10.5, y: 10.5 });
   const entities: Entity[] = [player];
-  const nextId = { v: 20 };
-
-  const result = withRandom(0.99, () =>
+  const nextId = { v: 30 };
+  const result = withRandom(0.99, () => 
     tickSamosborDirector(world, entities, state, nextId, classicVariant(), 'active_cadence')
   );
 
