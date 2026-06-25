@@ -798,12 +798,18 @@ function paintShahtaHqTerritory(world: World, compounds: readonly ShahtaHqCompou
 }
 
 export function reinforceShahtaAtriumAuthoredHqTerritory(world: World): void {
+  const roomByName = new Map<string, Room>();
+  for (const room of world.rooms) {
+    if (room && room.name && !roomByName.has(room.name)) {
+      roomByName.set(room.name, room);
+    }
+  }
   for (const spec of SHAHTA_HQ_SPECS) {
-    const hall = world.rooms.find(room => room?.name === `Штабной коридор ${spec.key}`);
+    const hall = roomByName.get(`Штабной коридор ${spec.key}`);
     let core: Room | undefined;
     if (hall) paintShahtaRoomTerritory(world, hall, spec.owner);
     for (const roomSpec of spec.support) {
-      const room = world.rooms.find(candidate => candidate?.name === roomSpec.name);
+      const room = roomByName.get(roomSpec.name);
       if (!room) continue;
       if (roomSpec.hermetic) {
         room.type = RoomType.HQ;
