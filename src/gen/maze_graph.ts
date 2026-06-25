@@ -469,7 +469,10 @@ export function generateGrowingTreeMaze(options: GrowingTreeMazeOptions): MazeGr
     const id = active[activeIndex];
     const unvisited = neighbors(context.width, context.height, id).filter(next => visited[next] === 0);
     if (unvisited.length === 0) {
-      active.splice(activeIndex, 1);
+      const last = active.pop()!;
+      if (activeIndex < active.length) {
+        active[activeIndex] = last;
+      }
       continue;
     }
     const next = unvisited[pickIndex(unvisited, rand)];
