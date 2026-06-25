@@ -21,6 +21,7 @@ import {
   territoryOwnerToFaction,
 } from '../data/factions';
 import { getStack } from '../data/items';
+import { getEntityIndex } from './entity_index';
 import { addFactionRelMutual } from '../data/relations';
 import { stampMark, MarkType } from './surface_marks';
 import { Spr } from '../render/sprite_index';
@@ -1147,15 +1148,12 @@ function seedClashOutcomeRumors(
   }
 }
 
-function countAliveIds(entities: Entity[], ids: readonly number[]): number {
+function countAliveIds(_entities: Entity[], ids: readonly number[]): number {
   let alive = 0;
+  const byId = getEntityIndex().byId;
   for (const id of ids) {
-    for (const e of entities) {
-      if (e.id === id) {
-        if (e.alive) alive++;
-        break;
-      }
-    }
+    const e = byId.get(id);
+    if (e?.alive) alive++;
   }
   return alive;
 }
@@ -1600,10 +1598,11 @@ function recordCultProcessionPlayerHit(state: GameState, target: Entity, damage:
   }
 }
 
-function aliveProcessionNpcs(p: ActiveCultProcession, entities: Entity[]): number {
+function aliveProcessionNpcs(p: ActiveCultProcession, _entities: Entity[]): number {
   let alive = 0;
+  const byId = getEntityIndex().byId;
   for (const id of p.npcIds) {
-    const e = entities.find(ent => ent.id === id);
+    const e = byId.get(id);
     if (e?.alive) alive++;
   }
   return alive;

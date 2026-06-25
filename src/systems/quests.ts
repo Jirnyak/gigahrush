@@ -18,6 +18,7 @@ import {
 } from '../data/occupation_profiles';
 
 import { addFactionRelMutual, getFactionRel } from '../data/relations';
+import { ENTITY_MASK_MONSTER, getEntityIndex } from './entity_index';
 import {
   PLOT_CHAIN,
   SIDE_QUESTS,
@@ -651,13 +652,17 @@ function holdAnchor(q: Quest, player: Entity, world: World, state: GameState): {
   return { present: checkVisitQuestAtPlayer(q, player, world, state), x: player.x, y: player.y };
 }
 
-function countMonstersNear(world: World, entities: readonly Entity[], x: number, y: number, radius: number): number {
+const countMonstersNearQuery: Entity[] = [];
+
+function countMonstersNear(world: World, _entities: readonly Entity[], x: number, y: number, radius: number, cap: number): number {
   let count = 0;
   const r2 = radius * radius;
-  for (const e of entities) {
-    if (e.type !== EntityType.MONSTER || !e.alive) continue;
+  getEntityIndex().queryRadiusCapped(x, y, radius, countMonstersNearQuery, ENTITY_MASK_MONSTER, cap);
+  for (const e of countMonstersNearQuery) {
+    if (!e.alive) continue;
     if (world.dist2(x, y, e.x, e.y) <= r2) count++;
   }
+  countMonstersNearQuery.length = 0;
   return count;
 }
 
@@ -752,7 +757,7 @@ export function updateKillQuestPressure(
       continue;
     }
     if (state.time - last < pressure.intervalSeconds) continue;
-    if (countMonstersNear(world, entities, anchor.x, anchor.y, pressure.radius) >= pressure.maxAliveNearAnchor) continue;
+    if (countMonstersNear(world, entities, anchor.x, anchor.y, pressure.radius, pressure.maxAliveNearAnchor) >= pressure.maxAliveNearAnchor) continue;
     killPressureLastSpawnAt.set(q.id, state.time);
     const before = entities.length;
     spawnKillPressureMonstersAt(anchor.x, anchor.y, pressure, world, entities, nextEntityId, msgs, state.time);
@@ -798,7 +803,7 @@ function updateHoldoutQuest(
   if (nextEntityId && q.holdSpawnMonsters && q.holdSpawnIntervalSeconds) {
     const maxAlive = q.holdSpawnMaxAlive ?? Math.max(6, q.holdSpawnMonsters * 3);
     const lastSpawn = q.holdSpawnLastTime ?? -Infinity;
-    if (state.time - lastSpawn >= q.holdSpawnIntervalSeconds && countMonstersNear(world, entities, anchor.x, anchor.y, 30) < maxAlive) {
+    if (state.time - lastSpawn >= q.holdSpawnIntervalSeconds && countMonstersNear(world, entities, anchor.x, anchor.y, 30, maxAlive) < maxAlive) {
       q.holdSpawnLastTime = state.time;
       spawnQuestMonstersAt(anchor.x, anchor.y, world, entities, nextEntityId, q.holdSpawnMonsters, msgs, state.time);
     }
