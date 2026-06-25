@@ -782,9 +782,12 @@ function aliveHostileCount(site: AltarArenaSite): number {
   const entities = activeEntities;
   if (!entities) return 0;
   let count = 0;
-  for (const id of site.hostileIds) {
-    const hostile = entities.find(entity => entity.id === id);
-    if (hostile?.alive) count++;
+  const set = new Set(site.hostileIds);
+  for (let i = 0; i < entities.length; i++) {
+    const entity = entities[i];
+    if (entity.alive && set.has(entity.id)) {
+      count++;
+    }
   }
   return count;
 }
