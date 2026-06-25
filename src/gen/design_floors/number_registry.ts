@@ -1339,24 +1339,7 @@ export function expandNumberRegistryGeometry(world: World, rng: () => number): v
   world.markFeaturesDirty(false);
 }
 
-export function generateNumberRegistryDesignFloor(): FloorGeneration {
-  const world = new World();
-  const entities: Entity[] = [];
-  const nextId: NextId = { v: 1 };
-  let nextRoomId = 0;
-  fillDefaultTextures(world);
-
-  const rooms = {
-    hub: stampRegistryRoom(world, nextRoomId++, RoomType.COMMON, 'Зал сверки остатков', 480, 492, 64, 38, Tex.F_PARQUET),
-    mod5: stampRegistryRoom(world, nextRoomId++, RoomType.OFFICE, 'Окно остатка 2 mod 5', 430, 468, 36, 18, Tex.F_MARBLE_TILE),
-    mod7: stampRegistryRoom(world, nextRoomId++, RoomType.OFFICE, 'Касса модуля 7', 430, 532, 36, 18, Tex.F_GREEN_CARPET),
-    mod11: stampRegistryRoom(world, nextRoomId++, RoomType.OFFICE, 'Окно остатка 4 mod 11', 462, 562, 42, 18, Tex.F_MARBLE_TILE),
-    prime: stampRegistryRoom(world, nextRoomId++, RoomType.CORRIDOR, 'Простой рискованный коридор', 556, 456, 94, 18, Tex.F_RED_CARPET),
-    composite: stampRegistryRoom(world, nextRoomId++, RoomType.COMMON, 'Составной публичный обход', 556, 536, 102, 24, Tex.F_GREEN_CARPET),
-    crt: stampRegistryRoom(world, nextRoomId++, RoomType.STORAGE, 'Китайская пересечная картотека', 674, 494, 42, 30, Tex.F_MARBLE_TILE),
-    safe: stampRegistryRoom(world, nextRoomId++, RoomType.HQ, 'Сейф общего остатка', 724, 500, 24, 18, Tex.F_RED_CARPET),
-  };
-
+function carveNumberRegistryCorridors(world: World, rooms: Record<string, Room>): void {
   carveH(world, rooms.mod5.x + rooms.mod5.w, rooms.hub.x - 1, rooms.mod5.y + 9, Tex.F_PARQUET);
   carveH(world, rooms.mod7.x + rooms.mod7.w, rooms.hub.x - 1, rooms.mod7.y + 8, Tex.F_GREEN_CARPET);
   carveH(world, rooms.hub.x + rooms.hub.w, rooms.prime.x - 1, rooms.prime.y + 9, Tex.F_RED_CARPET);
@@ -1369,7 +1352,9 @@ export function generateNumberRegistryDesignFloor(): FloorGeneration {
   carveFloorRect(world, 476, 510, 4, 4, Tex.F_PARQUET);
   carveFloorRect(world, 544, 509, 12, 3, Tex.F_RED_CARPET);
   carveFloorRect(world, 544, 543, 12, 3, Tex.F_GREEN_CARPET);
+}
 
+function addNumberRegistryDoors(world: World, rooms: Record<string, Room>): void {
   addDoor(world, rooms.mod5, rooms.mod5.x + rooms.mod5.w, rooms.mod5.y + 9);
   addDoor(world, rooms.mod7, rooms.mod7.x + rooms.mod7.w, rooms.mod7.y + 8);
   addDoor(world, rooms.hub, rooms.hub.x - 1, rooms.mod5.y + 9);
@@ -1379,14 +1364,9 @@ export function generateNumberRegistryDesignFloor(): FloorGeneration {
   addDoor(world, rooms.prime, rooms.prime.x + rooms.prime.w, rooms.prime.y + 9, DoorState.LOCKED, 'key', Tex.DOOR_METAL);
   addDoor(world, rooms.composite, rooms.composite.x + rooms.composite.w, rooms.composite.y + 12);
   addDoor(world, rooms.crt, rooms.crt.x + rooms.crt.w, rooms.safe.y + 9, DoorState.LOCKED, 'archive_access_permit', Tex.DOOR_METAL);
+}
 
-  placeLiftCell(world, 476, 512, 477, 512, LiftDirection.UP);
-  placeLiftCell(world, 746, 509, 744, 509, LiftDirection.DOWN);
-
-  decorateRegistryRooms(world, rooms);
-  generateZones(world);
-  retuneZoneMap(world);
-
+function populateNumberRegistry(world: World, entities: Entity[], nextId: NextId, rooms: Record<string, Room>): void {
   const registrarId = spawnNpc(
     entities,
     nextId,
@@ -1480,6 +1460,37 @@ export function generateNumberRegistryDesignFloor(): FloorGeneration {
     ],
     ['crt_intersection', 'residue_decode', 'locked_record'],
   );
+}
+
+export function generateNumberRegistryDesignFloor(): FloorGeneration {
+  const world = new World();
+  const entities: Entity[] = [];
+  const nextId: NextId = { v: 1 };
+  let nextRoomId = 0;
+  fillDefaultTextures(world);
+
+  const rooms = {
+    hub: stampRegistryRoom(world, nextRoomId++, RoomType.COMMON, 'Зал сверки остатков', 480, 492, 64, 38, Tex.F_PARQUET),
+    mod5: stampRegistryRoom(world, nextRoomId++, RoomType.OFFICE, 'Окно остатка 2 mod 5', 430, 468, 36, 18, Tex.F_MARBLE_TILE),
+    mod7: stampRegistryRoom(world, nextRoomId++, RoomType.OFFICE, 'Касса модуля 7', 430, 532, 36, 18, Tex.F_GREEN_CARPET),
+    mod11: stampRegistryRoom(world, nextRoomId++, RoomType.OFFICE, 'Окно остатка 4 mod 11', 462, 562, 42, 18, Tex.F_MARBLE_TILE),
+    prime: stampRegistryRoom(world, nextRoomId++, RoomType.CORRIDOR, 'Простой рискованный коридор', 556, 456, 94, 18, Tex.F_RED_CARPET),
+    composite: stampRegistryRoom(world, nextRoomId++, RoomType.COMMON, 'Составной публичный обход', 556, 536, 102, 24, Tex.F_GREEN_CARPET),
+    crt: stampRegistryRoom(world, nextRoomId++, RoomType.STORAGE, 'Китайская пересечная картотека', 674, 494, 42, 30, Tex.F_MARBLE_TILE),
+    safe: stampRegistryRoom(world, nextRoomId++, RoomType.HQ, 'Сейф общего остатка', 724, 500, 24, 18, Tex.F_RED_CARPET),
+  };
+
+  carveNumberRegistryCorridors(world, rooms);
+  addNumberRegistryDoors(world, rooms);
+
+  placeLiftCell(world, 476, 512, 477, 512, LiftDirection.UP);
+  placeLiftCell(world, 746, 509, 744, 509, LiftDirection.DOWN);
+
+  decorateRegistryRooms(world, rooms);
+  generateZones(world);
+  retuneZoneMap(world);
+
+  populateNumberRegistry(world, entities, nextId, rooms);
 
   registerNumberRegistryRouteCues(world, rooms);
   sanitizeDoors(world);
