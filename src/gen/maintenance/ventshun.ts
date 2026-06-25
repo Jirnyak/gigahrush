@@ -280,8 +280,13 @@ function sealVentshun(state: GameState, ctx: VentshunContext, event: WorldEvent,
   if (ctx.cleared) return;
   ctx.sealed = true;
   let stopped = 0;
+  const entityMap = new Map<number, Entity>();
+  for (let i = 0; i < ctx.entities.length; i++) {
+    const e = ctx.entities[i];
+    entityMap.set(e.id, e);
+  }
   for (const id of ctx.threatIds) {
-    const threat = ctx.entities.find(e => e.id === id);
+    const threat = entityMap.get(id);
     if (threat?.alive) {
       threat.alive = false;
       threat.hp = 0;
