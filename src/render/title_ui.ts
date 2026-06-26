@@ -58,7 +58,7 @@ export function drawTitleScreen(ctx: CanvasRenderingContext2D, options: DrawTitl
   const cy = h / 2;
   const lang = titleLanguageDef(options.languageId);
 
-  ctx.fillStyle = '#090909';
+  ctx.fillStyle = 'rgba(9, 9, 9, 0.65)';
   ctx.fillRect(0, 0, w, h);
 
   ctx.save();

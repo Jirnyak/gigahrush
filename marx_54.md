@@ -12,17 +12,28 @@
 7. **Обязательный коммит и PR:** Обязательно делайте `git commit` ваших изменений и создавайте Pull Request (или делайте пуш) после завершения работы.
 
 ## Текущая задача
-**Контент: Расширить систему контрактов/system assignments для Базы Ликвидаторов и Арены.**
+**Система компаньонов. Рекрутинг НПЦ через высокое отношение. Компаньон ходит за игроком.**
 
 
 
 ### Контекст задачи
-`src/data/contracts.ts` (219KB!) — огромный файл системных заданий. Для Базы Ликвидаторов нужны специфические контракты: зачистка сектора, патрулирование, снабжение, арена-квесты.
+НОВАЯ СИСТЕМА. При отношении НПЦ к игроку **выше 100** (из шкалы -100..+200), появляется E-interaction опция «Присоединяйся ко мне». Шанс успеха зависит от **интеллекта** игрока: `chance = 0.3 + intelligence * 0.05` (при INT 10 = 80%). При успехе НПЦ становится КОМПАНЬОНОМ:
+
+1. **Следование**: Компаньон ходит за игроком (follow behavior, dist 2-4 клетки). При бое — помогает стрелять.
+2. **Фракция**: Временно меняется на `Faction.PLAYER` (или аналог). Все entity видят его как союзника игрока.
+3. **Старая фракция сохраняется**: В entity сохраняется `originalFaction`. При dismiss — возвращается к своей фракции.
+4. **Dismiss**: Через E-interaction → «Расстаёмся» → НПЦ возвращает `originalFaction`, уходит.
+5. **Лимит**: Максимум 1-2 компаньона одновременно (для баланса и производительности).
+6. **Смерть**: Если компаньон погибает — факт записывается в A-Life (`deathCause: 'companion'`). Отношение с его фракцией падает.
 
 ### Конкретные файлы и паттерны
-- **`src/data/contracts.ts`**: Добавьте 10-15 шаблонов `SystemAssignment` для Ликвидаторов: `'liquidator_patrol'`, `'liquidator_sweep'`, `'arena_fight_contract'`, `'supply_run'`, `'escort_caravan'`.
-- **`src/systems/quests.ts`**: Убедитесь, что новые контракты корректно обрабатываются системой.
-- **Route target**: Контракты могут отправлять на другие этажи через `QuestRouteTarget`.
+- **`src/systems/companion.ts`** [НОВЫЙ]: State machine компаньона. `CompanionState { entityId, originalFaction, followTarget }`. Follow logic: pathfind к игроку если dist > 4, idle если dist < 2.
+- **`src/systems/interactions.ts`**: Добавить E-action `'recruit_companion'` с условием `relation > 100 && companionCount < MAX_COMPANIONS`. И `'dismiss_companion'` для расставания.
+- **`src/systems/ai/npc_utility.ts`**: Для entity с `isCompanion = true` — override utility: follow player > все остальные goals. В бою — таргетить врагов игрока.
+- **`src/core/types.ts`**: Добавить `isCompanion: boolean`, `originalFaction: Faction` в entity (RED — минимально).
+- **`src/systems/alife.ts`**: При floor transition — компаньон переходит с игроком (не остаётся на старом этаже).
+- **Save**: `companionIds`, `originalFaction` сохраняются. При load — восстановить companion state.
+- **AI Combat**: Компаньон стреляет по врагам игрока, но учитывает friendly fire (marx_51). Если игрок ранил компаньона — small relation penalty но не dismissal.
 
 ### Детальная спецификация по Архитектуре и Реализации (Строго обязательно к исполнению)
 Вам необходимо детально интегрировать вашу задачу в существующие слои проекта. Ниже приведены конкретные архитектурные требования, релевантные вашей задаче:

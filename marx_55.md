@@ -20,10 +20,11 @@
 На Базе Ликвидаторов должен быть оружейник (продаёт оружие/патроны), медик (медикаменты), квартирмейстер (снаряжение/броня). Каждый — NPC с уникальным inventory и ценами.
 
 ### Конкретные файлы и паттерны
-- **`src/data/plot.ts`** / **`src/data/npc_plot_packages.ts`**: Зарегистрируйте 3 торговых NPC через `registerNpcPackageFromPlotNpc()`.
+- **`src/data/plot.ts`** / **`src/data/npc_plot_packages.ts`**: Зарегистрируйте 3 торговых NPC через `registerNpcPackageFromPlotNpc()`. Occupation: `Occupation.HUNTER` (оружейник), `Occupation.MEDIC` (медик), `Occupation.ENGINEER` (квартирмейстер).
 - **`src/gen/design_floors/liquidator_base.ts`**: Спавните их в оружейной (`RoomType.STORAGE`), медпункте (`RoomType.MEDICAL`), штабе (`RoomType.HQ`).
-- **Inventory**: Оружейник: `ak47`, `shotgun`, `ammo_762`, `shells`. Медик: `bandage`, `pills`, `antibiotic`. Квартирмейстер: `armor_liquidator_*`, `flashlight`, `radio`.
-- **Ценообразование**: Используйте существующую scarcity-adjusted систему из `src/systems/economy.ts`.
+- **ИНВЕНТАРЬ — НЕ ХАРДКОДИТЬ!** Используйте СУЩЕСТВУЮЩУЮ систему: `generateNpcTradeItems(npc)` из `src/data/occupation_profiles.ts` — она уже генерирует товары по `Occupation` + faction. Если для Ликвидаторов нужен специфический ассортимент — добавьте записи в `FACTION_TRADE_OFFERS[]` (faction=LIQUIDATOR, occupation=HUNTER/MEDIC, minRank). Не хардкодить `['ak47', 'shotgun']` — это костыль.
+- **`src/data/occupation_profiles.ts`**: Расширьте `tradeItems` для HUNTER (оружие), MEDIC (медикаменты), ENGINEER (снаряжение). Профили уже содержат `tradeItems: string[]` — добавьте недостающие id предметов туда.
+- **Ценообразование**: Используйте `src/systems/economy.ts` — scarcity-adjusted система уже работает.
 
 ### Детальная спецификация по Архитектуре и Реализации (Строго обязательно к исполнению)
 Вам необходимо детально интегрировать вашу задачу в существующие слои проекта. Ниже приведены конкретные архитектурные требования, релевантные вашей задаче:

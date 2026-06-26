@@ -242,6 +242,7 @@ Current comment-response playbook: `PRCampaign/comment_response_playbook_ru_2026
 - Treat horror as survival horror, not NSFW, unless a platform questionnaire itself requires a stricter content label.
 - When a platform blocks automation with Cloudflare, captcha, account validation or moderation review, record the blocker exactly and switch to manual-owner instructions.
 - If Chrome browser automation is needed, require `View > Developer > Allow JavaScript from Apple Events`; do not use blind coordinate clicks for final Send/Publish/File Upload actions.
+- Troll and Obsessive Commenter Policy: Do not engage in prolonged internet arguments, architectural debates, or attempts to "prove" the project's design to hostile or obsessive commenters. When faced with aggressive critique, "architecture astronauts" demanding rewrites, or commenters talking to themselves for weeks, validate their effort once (e.g., "cool idea", "thanks for the code"), briefly explain the platform constraints (e.g., "browser/WebGL has different requirements"), and permanently disengage. Never get defensive, never diagnose their mental state, and prioritize attracting maximum players and positive attention to the game over winning a pointless internet argument.
 
 ## Core Links
 

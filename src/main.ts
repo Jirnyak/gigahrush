@@ -2177,12 +2177,12 @@ function scheduleLoading(fn: () => void): void {
   pendingLoadDrawn = false;
 }
 
-function initGame(runSeedOverride?: number): void {
+function initGame(runSeedOverride?: number, initialFloor: FloorLevel = FloorLevel.LIVING): void {
   resetRuntimeCamera(runtimeCamera);
   clearFloorMemory();
   resetNoiseRecords();
   const initialRunSeed = normalizeFloorRunSeed(runSeedOverride);
-  const gen = generateFloor(FloorLevel.LIVING, initialRunSeed);
+  const gen = generateFloor(initialFloor, initialRunSeed);
   injectFastElevators(gen.world);
   stampCeilingHeights(gen.world);
   world = replaceWorldFromGeneration(null, gen);
@@ -2242,7 +2242,7 @@ function initGame(runSeedOverride?: number): void {
     quests: [],
     activeQuestId: undefined,
     nextQuestId: 1,
-    currentFloor: FloorLevel.LIVING,
+    currentFloor: initialFloor,
     fogSpreadTimer: 0,
     showMenu: false,
     menuSel: 0,
@@ -2291,7 +2291,7 @@ function initGame(runSeedOverride?: number): void {
     mapLegendSel: 0,
     mapLegendScroll: 0,
     npcLogRadiusMeters: 100,
-    msgLog: [{ text: 'Добро пожаловать в ГИГАХРУЩ. Закройте дверь.', color: '#aaa', day: 0, hour: 8, minute: 0, floor: FloorLevel.LIVING, distanceMeters: 0 }],
+    msgLog: [{ text: 'Добро пожаловать в ГИГАХРУЩ. Закройте дверь.', color: '#aaa', day: 0, hour: 8, minute: 0, floor: initialFloor, distanceMeters: 0 }],
     dmgFlash: 0,
     dmgSeed: 0,
     deathTimer: 0,
@@ -2316,12 +2316,12 @@ function initGame(runSeedOverride?: number): void {
   resetComputerState();
   resetNetHackState();
   closeMapEditorAndRefreshWorld();
-  setFloorRunState(state, { runSeed: initialRunSeed }, FloorLevel.LIVING);
+  setFloorRunState(state, { runSeed: initialRunSeed }, initialFloor);
   if (runSeedOverride !== undefined) {
     setAlifeState(state, { seed: runSeedOverride });
   }
   state.samosborTimer = nextFloorRunSamosborCooldown(state);
-  ensureFloorInstanceState(state, FloorLevel.LIVING);
+  ensureFloorInstanceState(state, initialFloor);
   ensureLiftArachnaState(state);
   ensureNetTerminalGenState(state);
   ensureMapEditorPatchState(state);
@@ -2341,12 +2341,6 @@ function initGame(runSeedOverride?: number): void {
   rebuildEntityIndex(entities, 'load');
 }
 
-function bootInitialGameOrTitle(): void {
-  titleStartNeedsInit = true;
-  showTitle();
-  markPlatformReady();
-  requestAnimationFrame(gameLoop);
-}
 
 /* ── Input ────────────────────────────────────────────────────── */
 const input = createInput();
@@ -2379,7 +2373,6 @@ document.addEventListener('pointerlockchange', () => {
   }
 });
 installSmokeDebugHook();
-bootInitialGameOrTitle();
 
 /* ── Toggles (edge-detect) ────────────────────────────────────── */
 let prevMap = false, prevDebug = false;
@@ -2389,6 +2382,19 @@ let _prevMsgCount = 0; // for syncing msgs → msgLog
 let netReportedSamosborCount = 0;
 let netDeathReported = false;
 const MSG_LOG_SYNC_DEDUPE_SCAN = 32;
+
+function bootInitialGameOrTitle(): void {
+  scheduleLoading(() => {
+    const floor = TRAILER_FLOORS[titleTrailerFloorIdx] as FloorLevel;
+    initGame(undefined, floor);
+    state.trailerMode = true;
+    titleStartNeedsInit = true;
+  });
+  markPlatformReady();
+  requestAnimationFrame(gameLoop);
+}
+
+bootInitialGameOrTitle();
 
 function sameOptionalNumber(a: number | undefined, b: number | undefined, scale = 1): boolean {
   const aa = Number.isFinite(a) ? Math.round(a! * scale) : undefined;
@@ -7584,9 +7590,6 @@ function gameLoop(now: number): void {
 
   if (!started) {
     handleTitleGamepadInput(inputFrame);
-    showTitle();
-    requestAnimationFrame(gameLoop);
-    return;
   }
 
   if (pageHiddenPause || platformPause) {
@@ -7619,10 +7622,6 @@ function gameLoop(now: number): void {
 
   // Menu input always processed (even when paused)
   handleMenuInput();
-  if (!started) {
-    requestAnimationFrame(gameLoop);
-    return;
-  }
   // If menu triggered new game / load, bail out to show loading screen
   if (pendingLoad) { requestAnimationFrame(gameLoop); return; }
 
@@ -8071,6 +8070,9 @@ function gameLoop(now: number): void {
       pointerCaptureGate: pointerCaptureGateVisible(),
     });
   }
+  if (!started) {
+    showTitle();
+  }
   lastHudDrawMs = performance.now() - hudDrawStart;
 
   requestAnimationFrame(gameLoop);
@@ -8211,7 +8213,16 @@ function startHandler(e: KeyboardEvent): void {
     if (titleInputField === 'language') cycleTitleLanguage(e.code === 'ArrowRight' ? 1 : -1);
     else if (titleInputField === 'trailer') {
       titleTrailerFloorIdx = (titleTrailerFloorIdx + (e.code === 'ArrowRight' ? 1 : TRAILER_FLOORS.length - 1)) % TRAILER_FLOORS.length;
-      showTitle();
+      if (!started && typeof state !== 'undefined') {
+        scheduleLoading(() => {
+          const floor = TRAILER_FLOORS[titleTrailerFloorIdx] as FloorLevel;
+          initGame(undefined, floor);
+          state.trailerMode = true;
+          titleStartNeedsInit = true;
+        });
+      } else {
+        showTitle();
+      }
     }
     else if (titleInputField === 'actorCap') adjustTitleActiveActorSoftLimit(e.code === 'ArrowRight' ? 1 : -1);
     else if (titleInputField === 'age') {
@@ -8315,6 +8326,19 @@ function handleTitleGamepadInput(frame: InputFrame): void {
   if (navLeft || navRight) {
     const dir = navRight ? 1 : -1;
     if (titleInputField === 'language') cycleTitleLanguage(dir);
+    else if (titleInputField === 'trailer') {
+      titleTrailerFloorIdx = (titleTrailerFloorIdx + (dir > 0 ? 1 : TRAILER_FLOORS.length - 1)) % TRAILER_FLOORS.length;
+      if (!started && typeof state !== 'undefined') {
+        scheduleLoading(() => {
+          const floor = TRAILER_FLOORS[titleTrailerFloorIdx] as FloorLevel;
+          initGame(undefined, floor);
+          state.trailerMode = true;
+          titleStartNeedsInit = true;
+        });
+      } else {
+        showTitle();
+      }
+    }
     else if (titleInputField === 'actorCap') adjustTitleActiveActorSoftLimit(dir);
     else if (titleInputField === 'age') {
       titlePlayerAgeText = String(clampCharacterAge(Number(titlePlayerAgeText || DEFAULT_PLAYER_AGE) + dir, DEFAULT_PLAYER_AGE));
