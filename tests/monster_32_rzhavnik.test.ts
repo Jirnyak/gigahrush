@@ -57,6 +57,7 @@ function rzhavnik(x: number, y: number, overrides: Partial<Entity> = {}): Entity
     maxHp: DEF.hp,
     monsterKind: MonsterKind.RZHAVNIK,
     attackCd: 0,
+    currentMag: 1,
     ai: { goal: AIGoal.IDLE, tx: Math.floor(x), ty: Math.floor(y), path: [], pi: 0, stuck: 0, timer: 0 },
     ...overrides,
   };

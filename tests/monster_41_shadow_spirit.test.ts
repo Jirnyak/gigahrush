@@ -42,6 +42,7 @@ function monster(kind: MonsterKind.SHADOW | MonsterKind.SPIRIT, id: number, x: n
     maxHp: def.hp,
     monsterKind: kind,
     attackCd: 0,
+    currentMag: 1,
     phasing: kind === MonsterKind.SPIRIT,
     ai: { goal: AIGoal.HUNT, tx: Math.floor(x), ty: Math.floor(y), path: [], pi: 0, stuck: 0, timer: 0 },
   };

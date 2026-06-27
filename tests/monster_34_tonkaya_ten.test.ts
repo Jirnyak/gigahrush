@@ -68,6 +68,7 @@ function tonkaya(x: number, y: number): Entity {
     maxHp: TONKAYA_TEN_DEF.hp,
     monsterKind: MonsterKind.TONKAYA_TEN,
     attackCd: 0,
+    currentMag: 1,
     ai: { goal: AIGoal.HUNT, tx: 0, ty: 0, path: [], pi: 0, stuck: 0, timer: 0 },
   };
 }

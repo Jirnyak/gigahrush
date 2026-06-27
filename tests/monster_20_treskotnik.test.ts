@@ -72,6 +72,7 @@ function treskotnik(x: number, y: number): Entity {
     maxHp: DEF.hp,
     monsterKind: MonsterKind.TRESKOTNIK,
     attackCd: 0,
+    currentMag: 1,
     ai: { goal: AIGoal.HUNT, tx: x, ty: y, path: [], pi: 0, stuck: 0, timer: 0 },
   };
 }

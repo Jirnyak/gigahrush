@@ -70,6 +70,7 @@ function monster(kind: MonsterKind, x: number, y: number, id = 2): Entity {
     maxHp: def.hp,
     monsterKind: kind,
     attackCd: 0,
+    currentMag: 1,
     ai: aiState(x, y),
   };
 }

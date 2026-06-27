@@ -33,6 +33,7 @@ function threat(kind: MonsterKind, x = 6.5, y = 10.5): Entity {
     maxHp: def.hp,
     monsterKind: kind,
     attackCd: 0,
+    currentMag: 1,
     ai: { goal: AIGoal.HUNT, tx: x, ty: y, path: [], pi: 0, stuck: 0, timer: 0 },
   };
 }

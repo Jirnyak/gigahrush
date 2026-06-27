@@ -65,6 +65,7 @@ function headSlug(overrides: Partial<Entity> = {}): Entity {
     monsterKind: MonsterKind.HEAD_SLUG,
     monsterStage: HEAD_SLUG_HOSTED_STAGE,
     attackCd: 0,
+    currentMag: 1,
     ai: { goal: AIGoal.WANDER, tx: 10, ty: 10, path: [], pi: 0, stuck: 0, timer: 0 },
     ...overrides,
   };

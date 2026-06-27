@@ -50,6 +50,7 @@ function chervie(x = 10.5, y = 10.5): Entity {
     maxHp: DEF.hp,
     monsterKind: MonsterKind.CHERVIE_AVATAR,
     attackCd: 0,
+    currentMag: 1,
     ai: { goal: AIGoal.WANDER, tx: x, ty: y, path: [], pi: 0, stuck: 0, timer: 0 },
   };
 }

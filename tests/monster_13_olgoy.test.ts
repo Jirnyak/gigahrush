@@ -58,6 +58,7 @@ function olgoy(overrides: Partial<Entity> = {}): Entity {
     maxHp: DEF.hp,
     monsterKind: MonsterKind.OLGOY,
     attackCd: 0,
+    currentMag: 1,
     ai: { goal: AIGoal.WANDER, tx: 0, ty: 0, path: [], pi: 0, stuck: 0, timer: 0 },
     ...overrides,
   };

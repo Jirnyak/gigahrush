@@ -118,6 +118,7 @@ function lozhnyyDukh(x: number, y: number): Entity {
     maxHp: DEF.hp,
     monsterKind: MonsterKind.LOZHNYY_DUKH,
     attackCd: 0,
+    currentMag: 1,
     ai: { goal: AIGoal.HUNT, tx: Math.floor(x), ty: Math.floor(y), path: [], pi: 0, stuck: 0, timer: 0 },
   };
 }

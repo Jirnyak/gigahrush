@@ -50,6 +50,7 @@ function mukhozhuk(overrides: Partial<Entity> = {}): Entity {
     maxHp: DEF.hp,
     monsterKind: MonsterKind.MUKHOZHUK_HOST,
     attackCd: 0,
+    currentMag: 1,
     ai: { goal: AIGoal.WANDER, tx: 12, ty: 12, path: [], pi: 0, stuck: 0, timer: 0 },
     ...overrides,
   };

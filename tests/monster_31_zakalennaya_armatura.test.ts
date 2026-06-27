@@ -26,6 +26,7 @@ function monster(overrides: Partial<Entity> = {}): Entity {
     maxHp: DEF.hp,
     monsterKind: MonsterKind.ZAKALENNAYA_ARMATURA,
     attackCd: 0,
+    currentMag: 1,
     ai: { goal: AIGoal.HUNT, tx: 0, ty: 0, path: [], pi: 0, stuck: 0, timer: 0 },
     ...overrides,
   };

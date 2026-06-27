@@ -3383,7 +3383,7 @@ function updateProjectiles(dt: number): void {
     let nearestHitT = Infinity;
     if (pt !== ProjType.FLAME) {
       for (const e of projectileHitQuery) {
-        if (!e.alive || e.id === p.ownerId) continue;
+        if (!e.alive) continue;
         if (e.type !== EntityType.MONSTER && e.type !== EntityType.NPC) continue;
         const hitT = projectilePathHitT(prevX, prevY, wx, wy, e, hitRadius);
         if (hitT <= blockingT + 0.000001 && hitT < nearestHitT) {
@@ -3393,7 +3393,7 @@ function updateProjectiles(dt: number): void {
       }
     }
     for (const e of projectileHitQuery) {
-      if (!e.alive || e.id === p.ownerId) continue;
+      if (!e.alive) continue;
       if (e.type !== EntityType.MONSTER && e.type !== EntityType.NPC) continue;
       if (pt !== ProjType.FLAME && e !== nearestHit) continue;
       const hitT = pt === ProjType.FLAME ? projectilePathHitT(prevX, prevY, wx, wy, e, hitRadius) : nearestHitT;

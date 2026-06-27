@@ -61,6 +61,7 @@ function idol(x: number, y: number): Entity {
     maxHp: DEF.hp,
     monsterKind: MonsterKind.KANTSELYARSKIY_IDOL,
     attackCd: 0,
+    currentMag: 1,
     ai: { goal: AIGoal.WANDER, tx: x, ty: y, path: [], pi: 0, stuck: 0, timer: 0 },
   };
 }

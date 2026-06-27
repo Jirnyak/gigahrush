@@ -59,6 +59,7 @@ test('occupation profiles expose routine, trade and craft facts used by systems'
     Occupation.ELECTRICIAN,
     Occupation.TURNER,
     Occupation.MECHANIC,
+    Occupation.ENGINEER,
   ]);
 });
 

@@ -51,6 +51,7 @@ function zhornaya(x: number, y: number): Entity {
     maxHp: DEF.hp,
     monsterKind: MonsterKind.ZHORNAYA_TVAR,
     attackCd: 0,
+    currentMag: 1,
     ai: { goal: AIGoal.IDLE, tx: 0, ty: 0, path: [], pi: 0, stuck: 0, timer: 0 },
   };
 }

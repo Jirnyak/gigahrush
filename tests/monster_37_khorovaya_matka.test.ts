@@ -54,6 +54,7 @@ function khorovayaMatka(): Entity {
     maxHp: def.hp,
     monsterKind: MonsterKind.KHOROVAYA_MATKA,
     attackCd: 0,
+    currentMag: 1,
     ai: { goal: AIGoal.WANDER, tx: 18, ty: 18, path: [], pi: 0, stuck: 0, timer: 0 },
   };
 }

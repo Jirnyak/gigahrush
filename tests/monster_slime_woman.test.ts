@@ -45,6 +45,7 @@ function slimeWoman(id: number, x: number, y: number): Entity {
     maxHp: DEF.hp,
     monsterKind: MonsterKind.SLIME_WOMAN,
     attackCd: 0,
+    currentMag: 1,
     ai: { goal: AIGoal.HUNT, tx: 0, ty: 0, path: [], pi: 0, stuck: 0, timer: 0 },
   };
 }

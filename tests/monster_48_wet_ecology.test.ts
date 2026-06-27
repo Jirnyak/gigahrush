@@ -35,6 +35,7 @@ function monster(kind: MonsterKind, x: number, y: number, hp?: number): Entity {
     maxHp: def.hp,
     monsterKind: kind,
     attackCd: 0,
+    currentMag: 1,
     ai: { goal: AIGoal.HUNT, tx: 0, ty: 0, path: [], pi: 0, stuck: 0, timer: 0 },
   };
 }
