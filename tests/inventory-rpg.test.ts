@@ -249,7 +249,7 @@ test('ammo and durability consumption update equipped combat state', () => {
   assert.equal(getWeaponStats(player).isRanged, true);
   assert.equal(countAmmo(player), 2);
   let readiness = getWeaponReadiness(player);
-  assert.equal(readiness.resourceLabel, '9мм 2');
+  assert.equal(readiness.resourceLabel, '9мм 0/2');
   assert.equal(readiness.cooldownLabel, 'КД 0.3с');
   assert.equal(readiness.cannotFireReason, '');
   assert.equal(consumeAmmo(player), true);
@@ -285,8 +285,9 @@ test('liquidator weapon wave uses existing ammo and self-ammo paths', () => {
   addItem(shotgunner, 'chizh3_shotgun', 1);
   addItem(shotgunner, 'ammo_shells', 3);
   shotgunner.weapon = 'chizh3_shotgun';
+  shotgunner.currentMag = 1;
   let readiness = getWeaponReadiness(shotgunner);
-  assert.equal(readiness.resourceLabel, 'дробь 3');
+  assert.equal(readiness.resourceLabel, 'дробь 0/3');
   assert.equal(readiness.damageLabel, '13x8');
   assert.equal(consumeAmmo(shotgunner), true);
   assert.equal(countAmmo(shotgunner), 2);
@@ -296,7 +297,7 @@ test('liquidator weapon wave uses existing ammo and self-ammo paths', () => {
   addItem(flamer, 'napalm_mix', 2);
   flamer.weapon = 'roks47_flamethrower';
   readiness = getWeaponReadiness(flamer);
-  assert.equal(readiness.resourceLabel, 'напалм 2');
+  assert.equal(readiness.resourceLabel, 'напалм 0/2');
   assert.equal(readiness.damageLabel, '7x2');
 
   const disposable = makePlayer();
@@ -328,6 +329,7 @@ test('NPC melee stop pushes targets through the generic faction combat path', ()
     maxHp: 100,
     faction: Faction.LIQUIDATOR,
     weapon: 'pipe',
+    currentMag: 1,
     ai: { goal: AIGoal.IDLE, tx: 0, ty: 0, path: [], pi: 0, stuck: 0, timer: 0 },
   };
   const target: Entity = {

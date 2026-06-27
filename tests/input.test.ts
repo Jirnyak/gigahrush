@@ -9,6 +9,7 @@ test('createInput returns an initial InputState with correct default values', ()
     fwd: false, back: false, left: false, right: false,
     strafeL: false, strafeR: false, sprint: false,
     attack: false, interact: false, interactHeld: false, pickup: false,
+    reload: false,
     map: false, mapLegend: false, inv: false, invUp: false, invDn: false, invLeft: false, invRight: false,
     use: false, escape: false,
     questLog: false,

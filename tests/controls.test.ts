@@ -49,7 +49,7 @@ test('main gameplay keys are rebindable and can share one physical key', () => {
   assert.deepEqual([...controlBindings('interact')], ['KeyE']);
   assert.deepEqual([...controlBindings('gameMenu')], ['Enter']);
   assert.deepEqual([...controlBindings('attack')], ['MouseLeft', 'Space']);
-  assert.deepEqual([...controlBindings('useTool')], ['KeyR', 'MouseRight']);
+  assert.deepEqual([...controlBindings('useTool')], ['MouseRight']);
   assert.equal(matchesControlAction('moveBackward', 'KeyE'), true);
   assert.equal(matchesControlAction('interact', 'KeyE'), true);
   assert.equal(matchesControlAction('quests', 'Enter'), true);
@@ -57,7 +57,8 @@ test('main gameplay keys are rebindable and can share one physical key', () => {
   assert.equal(matchesControlAction('attack', 'Space'), true);
   assert.equal(matchesControlAction('useTool', 'KeyG'), false);
   assert.equal(matchesControlAction('mapLegend', 'KeyG'), true);
-  assert.equal(matchesControlAction('useTool', 'KeyR'), true);
+  assert.equal(matchesControlAction('useTool', 'KeyR'), false);
+  assert.equal(matchesControlAction('reload', 'KeyR'), true);
   assert.equal(matchesControlAction('moveForward', 'KeyB'), true);
   assert.equal(matchesControlAction('quests', 'Escape'), true);
 });
@@ -67,7 +68,7 @@ test('menu accept, close, clear and mouse buttons are ordinary bindings', () => 
   assert.deepEqual([...controlBindings('menuClose')], []);
   assert.deepEqual([...controlBindings('controlClear')], ['Backspace']);
   assert.deepEqual([...controlBindings('attack')], ['MouseLeft']);
-  assert.deepEqual([...controlBindings('useTool')], ['KeyR', 'MouseRight']);
+  assert.deepEqual([...controlBindings('useTool')], ['MouseRight']);
   assert.deepEqual([...controlBindings('netSubmit')], ['Enter']);
   assert.deepEqual([...controlBindings('netClose')], ['Delete']);
   assert.deepEqual([...controlBindings('netErase')], ['Backspace']);

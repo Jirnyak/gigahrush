@@ -4980,27 +4980,24 @@ function loadGame(): boolean {
       state.currentFloor = floor;
       setFloorRunState(state, savedFloorRun, floor);
       setFloorInstanceState(state, loadedFloorInstances, floor);
-      setLiftArachnaState(state, dataState.liftArachna as Parameters<typeof setLiftArachnaState>[1]);
-      setPseudoliftState(state, dataState.pseudolift as Parameters<typeof setPseudoliftState>[1]);
-      state.worldEvents = normalizeWorldEventState(dataState.worldEvents as Parameters<typeof normalizeWorldEventState>[0]);
-      setAlifeMobilityState(state, dataState.alifeMobility);
-      restoreComputersFromSave(dataState.computers);
-      restoreNetHackFromSave(dataState.netHack);
-      state.crafting = restoreCraftingState(dataState.crafting);
-      restoreDemosSocialFromSave(state, dataState.demosSocial);
-      normalizeGameEconomy(state, dataState.economy);
-      (state as GameState & { banking?: BankingState }).banking = normalizeBankingState(dataState.banking);
-      normalizeGameStockMarket(state, dataState.stockMarket);
-      setProductionState(state, dataState.production, floor);
-      state.samosborActive = false;
-      if (savedSamosborActive) {
-        state.samosborTimer = Math.max(state.samosborTimer, 45);
-        state.msgs.push(msg('Активный самосбор из сохранения сброшен: маршрут восстановлен, следующий цикл пересчитан.', state.time, '#fa4'));
-      }
-      state.uvBeamFx = 0;
-      state.uvBeamLen = 0;
-      floorTeleportCd = 0;
-      state.gameOver = false;
+      setfunction applyUrinationPenalty(dt: number): void {
+  const room = world.roomAt(player.x, player.y);
+
+  if (!_urinePenaltyStarted) {
+    _urinePenaltyStarted = true;
+
+    publishEvent(state, {
+      type: 'player_urinated',
+      actorId: player.id,
+      x: player.x,
+      y: player.y,
+      roomId: room?.id,
+      severity: 1,
+      privacy: 'witnessed',
+      tags: ['urination'],
+    });
+  }
+}state.gameOver = false;
       state.gameWon = false;
       state.deathTimer = 0;
       resetRuntimeCamera(runtimeCamera);
