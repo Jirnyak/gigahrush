@@ -601,6 +601,7 @@ export interface Entity {
   familyId?: number;
   weapon?: string;            // equipped item def id
   tool?: string;              // equipped tool def id
+  armorDefId?: string;
   faction?: Faction;
   occupation?: Occupation;
   age?: number;                // compact character age; cold A-Life stores it as one byte
@@ -648,6 +649,8 @@ export interface Entity {
 }
 
 // ── Items ────────────────────────────────────────────────────────
+export enum DamageType { KINETIC = 0, BUCKSHOT = 1, ENERGY = 2, FIRE = 3, PSI = 4 }
+
 export enum ItemType { FOOD, DRINK, MEDICINE, WEAPON, TOOL, KEY, NOTE, MISC, AMMO }
 
 export interface ItemDef {
@@ -664,6 +667,7 @@ export interface ItemDef {
   deceptiveScore?: number;    // 0-100: how dangerous/fake the item looks (e.g. silver slime); creates suspicion
   stack?: number;             // override max stack size
   durability?: number;        // max durability for tools/consumable kits
+  resistances?: Partial<Record<DamageType, number>>;
   use?: (e: Entity) => string; // returns message
 }
 
@@ -865,6 +869,7 @@ export const WORLD_EVENT_TYPES = [
   'room_produced_items',
   'room_lacked_resources',
   'room_blocked_production',
+  'urination_public',
   'npc_kill_monster',
   'npc_kill_npc',
   'player_kill_monster',
