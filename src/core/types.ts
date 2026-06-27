@@ -600,6 +600,9 @@ export interface Entity {
   attackCd?: number;
   familyId?: number;
   weapon?: string;            // equipped item def id
+  currentMag?: number;        // ammo remaining in current magazine
+  reloading?: boolean;        // true if currently reloading
+  reloadTimer?: number;       // seconds remaining until reload completes
   tool?: string;              // equipped tool def id
   armorDefId?: string;
   faction?: Faction;
@@ -1299,7 +1302,7 @@ export interface InputState {
   fwd: boolean; back: boolean; left: boolean; right: boolean;
   strafeL: boolean; strafeR: boolean;
   sprint: boolean;              // Shift by default — movement speed burst
-  attack: boolean; interact: boolean; pickup: boolean;
+  attack: boolean; interact: boolean; pickup: boolean; reload: boolean;
   interactHeld: boolean;       // raw hold state for pressure/resistance mechanics
   map: boolean; mapLegend: boolean; inv: boolean;
   invUp: boolean; invDn: boolean; invLeft: boolean; invRight: boolean;
