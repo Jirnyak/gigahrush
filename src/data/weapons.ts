@@ -13,7 +13,7 @@ export interface WeaponStats {
   magazineSize?: number;
   reloadTime?: number;
   isRanged: boolean;
-  damageType?: DamageType;
+
   ammoType?: string;    // item def id for ammo
   projSpeed?: number;   // projectile speed (cells/sec)
   pellets?: number;     // projectiles per shot (shotgun)

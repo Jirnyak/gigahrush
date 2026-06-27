@@ -247,6 +247,7 @@ export enum MonsterKind {
   PROTOKOLNIK, // document-pressure horror — протокольник (давит бумагами)
   DIKIY_MERTVYAK, // fragile crowd-runner — дикий мертвяк (дверной затор)
   KONTORSHCHIK, // document-scent undead  — конторщик (идет на бумаги)
+
   TONKAYA_TEN, // bait-line shadow lure   — тонкая тень (отступает к темной линии)
   KANTSELYARSKIY_IDOL, // office-field psi hazard — канцелярский идол
   LOZHNYY_DUKH, // door phaser            — ложный дух (один проход через дверь)
@@ -657,7 +658,6 @@ export interface Entity {
 }
 
 // ── Items ────────────────────────────────────────────────────────
-export enum DamageType { KINETIC = 0, BUCKSHOT = 1, ENERGY = 2, FIRE = 3, PSI = 4 }
 
 export enum ItemType { FOOD, DRINK, MEDICINE, WEAPON, TOOL, KEY, NOTE, MISC, AMMO }
 
@@ -676,7 +676,7 @@ export interface ItemDef {
   deceptiveScore?: number;    // 0-100: how dangerous/fake the item looks (e.g. silver slime); creates suspicion
   stack?: number;             // override max stack size
   durability?: number;        // max durability for tools/consumable kits
-  resistances?: Partial<Record<DamageType, number>>;
+
   use?: (e: Entity) => string; // returns message
 }
 
