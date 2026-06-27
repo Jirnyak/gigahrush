@@ -42,7 +42,8 @@ export type DesignFloorId =
   | 'spectral_chasovnya'
   | 'cantor_pustoty'
   | 'darkness'
-  | 'liquidatorbase';
+  | 'liquidatorbase'
+  | 'horrorfloor';
 
 export interface DesignFloorRouteDef {
   id: DesignFloorId;
@@ -124,6 +125,7 @@ export const DESIGN_FLOOR_ROUTES: readonly DesignFloorRouteDef[] = [
   { id: 'cantor_pustoty', z: -44, displayName: 'Кантор пустоты', baseFloor: FloorLevel.VOID, color: '#9cf', role: 'рекурсивные разрывы, мосты и пыльные острова', danger: 5 },
     { id: 'liquidatorbase', z: -16, displayName: 'База Ликвидаторов', baseFloor: FloorLevel.MAINTENANCE, color: '#f66', role: 'штаб, торговля, ликвидаторы', danger: 4 },
   { id: 'darkness', z: -48, displayName: 'Темный отсек', baseFloor: FloorLevel.VOID, color: '#88f', role: 'позднее давление', danger: 5 },
+  { id: 'horrorfloor', z: -16, displayName: 'Хоррор-этаж', baseFloor: FloorLevel.VOID, color: '#222', role: 'лабиринт, прятки', danger: 5 },
 ];
 
 export const DESIGN_FLOOR_ZS: readonly number[] = DESIGN_FLOOR_ROUTES.map(def => def.z);
