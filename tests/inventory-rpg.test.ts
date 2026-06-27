@@ -245,15 +245,16 @@ test('ammo and durability consumption update equipped combat state', () => {
   addItem(player, 'makarov', 1);
   addItem(player, 'ammo_9mm', 2);
   player.weapon = 'makarov';
+  player.currentMag = 8;
   player.attackCd = 0.25;
   assert.equal(getWeaponStats(player).isRanged, true);
   assert.equal(countAmmo(player), 2);
   let readiness = getWeaponReadiness(player);
-  assert.equal(readiness.resourceLabel, '9мм 0/2');
+  assert.equal(readiness.resourceLabel, '9мм 8/2');
   assert.equal(readiness.cooldownLabel, 'КД 0.3с');
   assert.equal(readiness.cannotFireReason, '');
   assert.equal(consumeAmmo(player), true);
-  assert.equal(countAmmo(player), 1);
+  assert.equal(countAmmo(player), 2);
 
   player.weapon = '';
   player.tool = 'psi_rupture';
@@ -287,10 +288,10 @@ test('liquidator weapon wave uses existing ammo and self-ammo paths', () => {
   shotgunner.weapon = 'chizh3_shotgun';
   shotgunner.currentMag = 1;
   let readiness = getWeaponReadiness(shotgunner);
-  assert.equal(readiness.resourceLabel, 'дробь 0/3');
+  assert.equal(readiness.resourceLabel, 'дробь 1/3');
   assert.equal(readiness.damageLabel, '13x8');
   assert.equal(consumeAmmo(shotgunner), true);
-  assert.equal(countAmmo(shotgunner), 2);
+  assert.equal(countAmmo(shotgunner), 3);
 
   const flamer = makePlayer();
   addItem(flamer, 'roks47_flamethrower', 1);

@@ -790,7 +790,11 @@ test('A-Life generation keeps broad level tail and splits wealth mostly into acc
 
 test('A-Life materialization preserves template sprite identity for special floors', () => {
   const state = minimalState();
-  setAlifeState(state, { seed: 12345, total: 100_000 });
+  createPrefilledAlifeState(state, 12345, 1_000, {
+    version: 1, total: 1_000,
+    buckets: [{ floorKey: 'story:living', baseFloor: FloorLevel.LIVING, targetCount: 1_000, factionWeights: [], occupationWeights: [] }],
+    reserved: []
+  });
   const world = new World();
   world.cells[world.idx(12, 10)] = Cell.FLOOR;
   const template = ambientTemplate(1, 12.5, 10.5);
