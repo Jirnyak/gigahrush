@@ -521,7 +521,7 @@ export function psiAoeExplosion(
   const maxHits = 10;
   ensureEntityIndex(entities).queryRadius(proj.x, proj.y, radius, psiTargetQuery, ENTITY_MASK_ACTOR);
   for (const e of psiTargetQuery) {
-    if (!e.alive || e.id === proj.ownerId) continue;
+    if (!e.alive) continue;
     if (e.type !== EntityType.NPC && e.type !== EntityType.MONSTER) continue;
 
     const dx = world.delta(proj.x, e.x);

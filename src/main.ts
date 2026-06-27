@@ -2766,8 +2766,8 @@ function castPlayerPsi(psiId: string, ws: WeaponStats): boolean {
     const proj: Entity = {
       id: nextEntityId.v++,
       type: EntityType.PROJECTILE,
-      x: player.x + cos * 0.5,
-      y: player.y + sin * 0.5,
+      x: player.x + cos * 0.85,
+      y: player.y + sin * 0.85,
       angle: player.angle,
       pitch: 0,
       alive: true,
@@ -2936,8 +2936,8 @@ function playerActions(_dt: number): void {
             const proj: Entity = {
               id: nextEntityId.v++,
               type: EntityType.PROJECTILE,
-              x: player.x + cos * 0.5,
-              y: player.y + sin * 0.5,
+              x: player.x + cos * 0.85,
+              y: player.y + sin * 0.85,
               angle: ang,
               pitch: 0,
               alive: true,
@@ -3557,7 +3557,7 @@ function triggerExplosion(p: Entity, pt: ProjType): void {
   let hits = 0;
   getEntityIndex().queryRadius(p.x, p.y, radius, explosionHitQuery, ENTITY_MASK_ACTOR);
   for (const e of explosionHitQuery) {
-    if (!e.alive || e.id === p.ownerId) continue;
+    if (!e.alive) continue;
     if (e.type !== EntityType.NPC && e.type !== EntityType.MONSTER) continue;
     const dx = ((e.x - p.x + W / 2) % W + W) % W - W / 2;
     const dy = ((e.y - p.y + W / 2) % W + W) % W - W / 2;
@@ -4991,24 +4991,27 @@ function loadGame(): boolean {
       state.currentFloor = floor;
       setFloorRunState(state, savedFloorRun, floor);
       setFloorInstanceState(state, loadedFloorInstances, floor);
-      setfunction applyUrinationPenalty(dt: number): void {
-  const room = world.roomAt(player.x, player.y);
-
-  if (!_urinePenaltyStarted) {
-    _urinePenaltyStarted = true;
-
-    publishEvent(state, {
-      type: 'player_urinated',
-      actorId: player.id,
-      x: player.x,
-      y: player.y,
-      roomId: room?.id,
-      severity: 1,
-      privacy: 'witnessed',
-      tags: ['urination'],
-    });
-  }
-}state.gameOver = false;
+      setLiftArachnaState(state, dataState.liftArachna as Parameters<typeof setLiftArachnaState>[1]);
+      setPseudoliftState(state, dataState.pseudolift as Parameters<typeof setPseudoliftState>[1]);
+      state.worldEvents = normalizeWorldEventState(dataState.worldEvents as Parameters<typeof normalizeWorldEventState>[0]);
+      setAlifeMobilityState(state, dataState.alifeMobility);
+      restoreComputersFromSave(dataState.computers);
+      restoreNetHackFromSave(dataState.netHack);
+      state.crafting = restoreCraftingState(dataState.crafting);
+      restoreDemosSocialFromSave(state, dataState.demosSocial);
+      normalizeGameEconomy(state, dataState.economy);
+      (state as GameState & { banking?: BankingState }).banking = normalizeBankingState(dataState.banking);
+      normalizeGameStockMarket(state, dataState.stockMarket);
+      setProductionState(state, dataState.production, floor);
+      state.samosborActive = false;
+      if (savedSamosborActive) {
+        state.samosborTimer = Math.max(state.samosborTimer, 45);
+        state.msgs.push(msg('Активный самосбор из сохранения сброшен: маршрут восстановлен, следующий цикл пересчитан.', state.time, '#fa4'));
+      }
+      state.uvBeamFx = 0;
+      state.uvBeamLen = 0;
+      floorTeleportCd = 0;
+      state.gameOver = false;
       state.gameWon = false;
       state.deathTimer = 0;
       resetRuntimeCamera(runtimeCamera);

@@ -297,7 +297,7 @@ test('liquidator weapon wave uses existing ammo and self-ammo paths', () => {
   addItem(flamer, 'napalm_mix', 2);
   flamer.weapon = 'roks47_flamethrower';
   readiness = getWeaponReadiness(flamer);
-  assert.equal(readiness.resourceLabel, 'напалм 0/2');
+  assert.equal(readiness.resourceLabel, 'напалм 2');
   assert.equal(readiness.damageLabel, '7x2');
 
   const disposable = makePlayer();

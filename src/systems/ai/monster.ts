@@ -6652,8 +6652,8 @@ function fireMonsterProjectile(
   entities.push({
     id: nextId.v++,
     type: EntityType.PROJECTILE,
-    x: world.wrap(e.x + cos * 0.5),
-    y: world.wrap(e.y + sin * 0.5),
+    x: world.wrap(e.x + cos * 0.85),
+    y: world.wrap(e.y + sin * 0.85),
     angle: ang,
     pitch: 0,
     alive: true,

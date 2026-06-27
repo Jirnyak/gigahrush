@@ -533,10 +533,36 @@ export class EntityIndex {
     const distances: number[] = [];
     const ids: number[] = [];
     const addCandidate = (e: Entity, d2: number): void => {
+      if (!capped) {
+        out.push(e);
+        return;
+      }
+      if (out.length >= cap) {
+        const lastIdx = out.length - 1;
+        if (d2 > distances[lastIdx] || (d2 === distances[lastIdx] && e.id >= ids[lastIdx])) return;
+      }
       out.push(e);
-      if (capped) {
-        distances.push(d2);
-        ids.push(e.id);
+      distances.push(d2);
+      ids.push(e.id);
+      let pos = out.length - 1;
+      while (pos > 0) {
+        const pd2 = distances[pos - 1];
+        if (pd2 < d2 || (pd2 === d2 && ids[pos - 1] <= e.id)) break;
+        const swapE = out[pos - 1];
+        const swapId = ids[pos - 1];
+        const swapD2 = distances[pos - 1];
+        out[pos - 1] = out[pos];
+        ids[pos - 1] = ids[pos];
+        distances[pos - 1] = distances[pos];
+        out[pos] = swapE;
+        ids[pos] = swapId;
+        distances[pos] = swapD2;
+        pos--;
+      }
+      if (out.length > cap) {
+        out.length = cap;
+        distances.length = cap;
+        ids.length = cap;
       }
     };
     const bx = wrappedBucketCoord(x);
@@ -586,22 +612,7 @@ export class EntityIndex {
       }
     }
 
-    if (capped && out.length > 1) {
-      const indices = new Int32Array(out.length);
-      for (let i = 0; i < out.length; i++) indices[i] = i;
-      indices.sort((a, b) => {
-        const dDiff = distances[a] - distances[b];
-        if (dDiff !== 0) return dDiff;
-        return ids[a] - ids[b];
-      });
-      const sortedOut = [];
-      for (let i = 0; i < out.length; i++) sortedOut.push(out[indices[i]]);
-      out.length = 0;
-      for (let i = 0; i < sortedOut.length; i++) out.push(sortedOut[i]);
-    }
-    if (capped && out.length > cap) {
-      out.length = cap;
-    }
+
 
     this.recordQuery(typeMask, bucketChecks, out.length, false);
     return out.length;

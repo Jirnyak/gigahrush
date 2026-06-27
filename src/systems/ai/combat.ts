@@ -652,8 +652,8 @@ function npcFireProjectile(
     const proj: Entity = {
       id: nextId.v++,
       type: EntityType.PROJECTILE,
-      x: world.wrap(e.x + Math.cos(ang) * 0.5),
-      y: world.wrap(e.y + Math.sin(ang) * 0.5),
+      x: world.wrap(e.x + Math.cos(ang) * 0.85),
+      y: world.wrap(e.y + Math.sin(ang) * 0.85),
       angle: a,
       pitch: 0,
       alive: true,
