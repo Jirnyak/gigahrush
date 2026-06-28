@@ -3491,6 +3491,7 @@ function publishOlgoyFed(
 
 function tryConsumeMeatChunk(
   world: World,
+  entities: readonly Entity[],
   e: Entity,
   target: Entity | null,
   dt: number,
@@ -3506,6 +3507,31 @@ function tryConsumeMeatChunk(
   
   if (!isOlgoy && !isCarnivoreMonster(e.monsterKind)) return false;
   if (!isOlgoy && (e.hp ?? 0) >= (e.maxHp ?? 100)) return false;
+
+  if (isOlgoy) {
+    const corpse = entities.find(other => 
+      other.id !== e.id && 
+      !other.alive && 
+      world.dist2(e.x, e.y, other.x, other.y) <= maxRadius * maxRadius
+    );
+    if (corpse) {
+      if (world.dist2(e.x, e.y, corpse.x, corpse.y) <= 2.0 * 2.0) {
+        msgs.push(msg(`${entityDisplayName(e)} утянул труп ${entityDisplayName(corpse)} в коллектор`, time, '#c86'));
+        if (state) publishOlgoyFed(state, world, e, corpse, time, 'corpse', { corpseType: 'npc' });
+        return true;
+      } else {
+        ai.goal = AIGoal.HUNT;
+        ai.combatTargetId = undefined;
+        ai.timer -= dt;
+        if (ai.path.length === 0 || ai.timer <= 0 || ai.tx !== Math.floor(corpse.x) || ai.ty !== Math.floor(corpse.y)) {
+          tryAssignPathToCell(world, e, Math.floor(corpse.x), Math.floor(corpse.y));
+          ai.timer = 1.5;
+        }
+        followMonsterPath(world, e, dt);
+        return true;
+      }
+    }
+  }
 
   ai.meatScanCd = (ai.meatScanCd ?? 0) - dt;
   if (ai.meatScanCd <= 0) {
@@ -8951,7 +8977,7 @@ export function updateMonster(world: World, entities: Entity[], e: Entity, dt: n
   updatePomoynyRoyReadability(world, e, target, time, msgs, playerId, state);
 
   if (!hasAIFlag(e, 'scentOvercommit') && tryFollowMonsterBait(world, e, target, dt, time, msgs, state)) return;
-  if (tryConsumeMeatChunk(world, e, target, dt, time, msgs, state)) return;
+  if (tryConsumeMeatChunk(world, entities, e, target, dt, time, msgs, state)) return;
 
   if (!target) {
     cancelLozhnyyDukhFalsePhase(e);

@@ -21,7 +21,7 @@ import { recordWorldLogEvent } from './world_log';
 import { recordRumorEvent } from './rumor';
 import { recordRoomMemoryEvent } from './room_memory';
 
-const MAX_EVENT_TAGS = 8;
+const MAX_EVENT_TAGS = 16;
 const MAX_EVENT_TAG_LEN = 32;
 const MAX_EVENT_DATA_KEYS = 12;
 const MAX_EVENT_DATA_KEY_LEN = 32;
@@ -337,18 +337,7 @@ export function ensureWorldEventState(state: GameState): WorldEventState {
   return state.worldEvents;
 }
 
-function matchesFilter(event: WorldEvent, filter: EventFilter): boolean {
-  if (filter.type !== undefined && event.type !== filter.type) return false;
-  if (filter.zoneId !== undefined && event.zoneId !== filter.zoneId) return false;
-  if (filter.floor !== undefined && event.floor !== filter.floor) return false;
-  if (filter.minSeverity !== undefined && event.severity < filter.minSeverity) return false;
-  if (filter.privacy !== undefined && event.privacy !== filter.privacy) return false;
-  if (filter.actorId !== undefined && event.actorId !== filter.actorId) return false;
-  if (filter.targetId !== undefined && event.targetId !== filter.targetId) return false;
-  if (filter.sinceId !== undefined && event.id <= filter.sinceId) return false;
-  if (filter.tags && !filter.tags.every(t => event.tags.includes(t))) return false;
-  return true;
-}
+
 
 function enrichMonsterKillDraft(draft: WorldEventDraft): WorldEventDraft {
   if (draft.monsterKind === undefined) return draft;
@@ -634,10 +623,51 @@ export function publishResourceScarcityEvent(state: GameState, draft: ResourceSc
 
 export function getRecentEvents(state: GameState, filter: EventFilter = {}): WorldEvent[] {
   const store = ensureWorldEventState(state);
-  const limit = filter.limit ?? store.recentEvents.count;
+  const buffer = store.recentEvents;
+  const limit = filter.limit ?? buffer.count;
   const out: WorldEvent[] = [];
-  for (const event of readBuffer(store.recentEvents)) {
-    if (!matchesFilter(event, filter)) continue;
+  if (limit <= 0 || buffer.count === 0) return out;
+
+  const filterType = filter.type;
+  const filterZoneId = filter.zoneId;
+  const filterFloor = filter.floor;
+  const filterMinSeverity = filter.minSeverity;
+  const filterPrivacy = filter.privacy;
+  const filterActorId = filter.actorId;
+  const filterTargetId = filter.targetId;
+  const filterSinceId = filter.sinceId;
+  const filterTags = filter.tags;
+  const filterTagsLen = filterTags ? filterTags.length : 0;
+
+  const total = buffer.count;
+  const capacity = buffer.capacity;
+  const start = buffer.start;
+  const items = buffer.items;
+
+  for (let i = 0; i < total; i++) {
+    const idx = (start + total - 1 - i + capacity) % capacity;
+    const event = items[idx];
+    if (!event) continue;
+
+    if (filterSinceId !== undefined && event.id <= filterSinceId) continue;
+    if (filterType !== undefined && event.type !== filterType) continue;
+    if (filterZoneId !== undefined && event.zoneId !== filterZoneId) continue;
+    if (filterFloor !== undefined && event.floor !== filterFloor) continue;
+    if (filterMinSeverity !== undefined && event.severity < filterMinSeverity) continue;
+    if (filterPrivacy !== undefined && event.privacy !== filterPrivacy) continue;
+    if (filterActorId !== undefined && event.actorId !== filterActorId) continue;
+    if (filterTargetId !== undefined && event.targetId !== filterTargetId) continue;
+    if (filterTagsLen > 0) {
+      let tagsMatch = true;
+      for (let j = 0; j < filterTagsLen; j++) {
+        if (!event.tags.includes(filterTags![j])) {
+          tagsMatch = false;
+          break;
+        }
+      }
+      if (!tagsMatch) continue;
+    }
+
     out.push(event);
     if (out.length >= limit) break;
   }
@@ -650,8 +680,47 @@ export function getZoneEvents(state: GameState, zoneId: number, filter: EventFil
   if (!buffer) return [];
   const limit = filter.limit ?? buffer.count;
   const out: WorldEvent[] = [];
-  for (const event of readBuffer(buffer)) {
-    if (!matchesFilter(event, { ...filter, zoneId })) continue;
+  if (limit <= 0 || buffer.count === 0) return out;
+
+  const filterType = filter.type;
+  const filterFloor = filter.floor;
+  const filterMinSeverity = filter.minSeverity;
+  const filterPrivacy = filter.privacy;
+  const filterActorId = filter.actorId;
+  const filterTargetId = filter.targetId;
+  const filterSinceId = filter.sinceId;
+  const filterTags = filter.tags;
+  const filterTagsLen = filterTags ? filterTags.length : 0;
+
+  const total = buffer.count;
+  const capacity = buffer.capacity;
+  const start = buffer.start;
+  const items = buffer.items;
+
+  for (let i = 0; i < total; i++) {
+    const idx = (start + total - 1 - i + capacity) % capacity;
+    const event = items[idx];
+    if (!event) continue;
+
+    if (filterSinceId !== undefined && event.id <= filterSinceId) continue;
+    if (event.zoneId !== zoneId) continue;
+    if (filterType !== undefined && event.type !== filterType) continue;
+    if (filterFloor !== undefined && event.floor !== filterFloor) continue;
+    if (filterMinSeverity !== undefined && event.severity < filterMinSeverity) continue;
+    if (filterPrivacy !== undefined && event.privacy !== filterPrivacy) continue;
+    if (filterActorId !== undefined && event.actorId !== filterActorId) continue;
+    if (filterTargetId !== undefined && event.targetId !== filterTargetId) continue;
+    if (filterTagsLen > 0) {
+      let tagsMatch = true;
+      for (let j = 0; j < filterTagsLen; j++) {
+        if (!event.tags.includes(filterTags![j])) {
+          tagsMatch = false;
+          break;
+        }
+      }
+      if (!tagsMatch) continue;
+    }
+
     out.push(event);
     if (out.length >= limit) break;
   }

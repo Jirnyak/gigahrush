@@ -128,8 +128,8 @@ export const PHYS_WEAPON_STATS: Record<string, WeaponStats> = {
   o15_multijet_flamer: { magazineSize: Infinity, dmg: 6, durability: 0, range: 0, speed: 0.18, isRanged: true, ammoType: 'napalm_mix', projSpeed: 7.5, pellets: 3, spread: 0.12, projSprite: Spr.FLAME_BOLT, projType: ProjType.FLAME, soundId: 'flame' },
   shmk_disposable: { magazineSize: Infinity, dmg: 11, durability: 0, range: 0, speed: 1.6, isRanged: true, ammoType: 'shmk_disposable', projSpeed: 6, pellets: 8, spread: 0.42, projSprite: Spr.FLAME_BOLT, projType: ProjType.FLAME, soundId: 'flame' },
   foam_grenade_6p10: { magazineSize: Infinity, dmg: 18, durability: 0, range: 0, speed: 1.8, isRanged: true, ammoType: 'foam_grenade_6p10', projSpeed: 8, pellets: 1, spread: 0, projSprite: Spr.GRENADE, projType: ProjType.GRENADE, aoeRadius: 5.5, soundId: 'grenade' },
-  brt2_foam_projector: { magazineSize: 1, dmg: 12, durability: 0, range: 0, speed: 1.05, isRanged: true, ammoType: 'foam_grenade_6p10', projSpeed: 13, pellets: 1, spread: 0.018, projSprite: Spr.GRENADE, projType: ProjType.GRENADE, aoeRadius: 3.6, soundId: 'grenade' },
-  pbrog1_foam_launcher: { magazineSize: 6, dmg: 24, durability: 0, range: 0, speed: 2.1, isRanged: true, ammoType: 'pbrog1_foam_launcher', projSpeed: 12, pellets: 1, spread: 0.006, projSprite: Spr.GRENADE, projType: ProjType.GRENADE, aoeRadius: 4.8, soundId: 'grenade' },
+  brt2_foam_projector: { magazineSize: Infinity, dmg: 12, durability: 0, range: 0, speed: 1.05, isRanged: true, ammoType: 'foam_grenade_6p10', projSpeed: 13, pellets: 1, spread: 0.018, projSprite: Spr.GRENADE, projType: ProjType.GRENADE, aoeRadius: 3.6, soundId: 'grenade' },
+  pbrog1_foam_launcher: { magazineSize: Infinity, dmg: 24, durability: 0, range: 0, speed: 2.1, isRanged: true, ammoType: 'pbrog1_foam_launcher', projSpeed: 12, pellets: 1, spread: 0.006, projSprite: Spr.GRENADE, projType: ProjType.GRENADE, aoeRadius: 4.8, soundId: 'grenade' },
   breach_charge: { magazineSize: Infinity, dmg: 130, durability: 0, range: 0, speed: 2.4, isRanged: true, ammoType: 'breach_charge', projSpeed: 5, pellets: 1, spread: 0, projSprite: Spr.GRENADE, projType: ProjType.GRENADE, aoeRadius: 3.4, soundId: 'grenade' },
   concrete_breaker_grenade: { magazineSize: Infinity, dmg: 105, durability: 0, range: 0, speed: 2.05, isRanged: true, ammoType: 'concrete_breaker_grenade', projSpeed: 8, pellets: 1, spread: 0, projSprite: Spr.GRENADE, projType: ProjType.GRENADE, aoeRadius: 3.8, soundId: 'grenade' },
   pistol_grenade_launcher: { magazineSize: 1, dmg: 70, durability: 0, range: 0, speed: 2.2, isRanged: true, ammoType: 'grenade', projSpeed: 12, pellets: 1, spread: 0.015, projSprite: Spr.GRENADE, projType: ProjType.GRENADE, aoeRadius: 3.6, soundId: 'grenade' },
@@ -137,6 +137,19 @@ export const PHYS_WEAPON_STATS: Record<string, WeaponStats> = {
   g41_grenade_launcher: { magazineSize: 6, dmg: 125, durability: 0, range: 0, speed: 3.7, isRanged: true, ammoType: 'grenade', projSpeed: 10, pellets: 1, spread: 0.002, projSprite: Spr.GRENADE, projType: ProjType.GRENADE, aoeRadius: 5.6, soundId: 'grenade' },
   tracked_zhernov:{ dmg: 96, durability: 16, range: 1.25, speed: 2.4, isRanged: false, knockback: 0.82 },
 };
+
+for (const [id, ws] of Object.entries(PHYS_WEAPON_STATS)) {
+  if (!ws.isRanged) {
+    if (id === 'chainsaw') {
+      ws.magazineSize = 50;
+      ws.reloadTime = 2.0;
+      ws.ammoType = 'ammo_fuel';
+    } else {
+      ws.magazineSize = 1;
+      ws.reloadTime = ws.speed;
+    }
+  }
+}
 
 export const PHYS_WEAPON_ROLE_TIERS: Record<string, WeaponRoleTier> = {
   '': 'unarmed',

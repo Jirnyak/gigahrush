@@ -934,6 +934,9 @@ export function expandChthonicAtticRootNetwork(
   stampAtticCapillaryCracks(world, protectedMask, rng);
   stampAtticServiceIslands(world, protectedMask, rng);
   stampAtticExitCues(world);
+
+  carveChthonicLabyrinth(world, protectedMask, rng);
+
   spawnAtticAmbientMonsters(world, entities, rng, 28);
 
   world.markCellsDirty();
@@ -2268,4 +2271,243 @@ function isTracePassable(world: World, idx: number): boolean {
   if (cell !== Cell.DOOR) return false;
   const door = world.doors.get(idx);
   return !door || (door.state !== DoorState.LOCKED && door.state !== DoorState.HERMETIC_CLOSED);
+}
+
+function connectChthonicRoomsOrganic(world: World, rooms: Room[], protectedMask: Uint8Array, rng: () => number): void {
+  const n = rooms.length;
+  if (n < 2) return;
+
+  const inMST = new Uint8Array(n);
+  const minDist = new Float64Array(n).fill(Infinity);
+  const minFrom = new Int32Array(n).fill(-1);
+
+  inMST[0] = 1;
+  const cx0 = rooms[0].x + Math.floor(rooms[0].w / 2);
+  const cy0 = rooms[0].y + Math.floor(rooms[0].h / 2);
+  for (let j = 1; j < n; j++) {
+    minDist[j] = world.dist(cx0, cy0, rooms[j].x + Math.floor(rooms[j].w / 2), rooms[j].y + Math.floor(rooms[j].h / 2));
+    minFrom[j] = 0;
+  }
+
+  const mstEdges: [number, number][] = [];
+  for (let iter = 0; iter < n - 1; iter++) {
+    let best = Infinity;
+    let bestIdx = -1;
+    for (let j = 0; j < n; j++) {
+      if (!inMST[j] && minDist[j] < best) {
+        best = minDist[j];
+        bestIdx = j;
+      }
+    }
+    if (bestIdx < 0) break;
+
+    inMST[bestIdx] = 1;
+    mstEdges.push([minFrom[bestIdx], bestIdx]);
+
+    const cxB = rooms[bestIdx].x + Math.floor(rooms[bestIdx].w / 2);
+    const cyB = rooms[bestIdx].y + Math.floor(rooms[bestIdx].h / 2);
+    for (let j = 0; j < n; j++) {
+      if (inMST[j]) continue;
+      const d = world.dist(cxB, cyB, rooms[j].x + Math.floor(rooms[j].w / 2), rooms[j].y + Math.floor(rooms[j].h / 2));
+      if (d < minDist[j]) {
+        minDist[j] = d;
+        minFrom[j] = bestIdx;
+      }
+    }
+  }
+
+  const extra = Math.floor(n * 0.35);
+  for (let k = 0; k < extra; k++) {
+    const ai = Math.floor(rng() * n);
+    const bi = Math.floor(rng() * n);
+    if (ai !== bi) {
+      mstEdges.push([ai, bi]);
+    }
+  }
+
+  for (const [i, j] of mstEdges) {
+    const a = rooms[i], b = rooms[j];
+    let currX = a.x + Math.floor(a.w / 2);
+    let currY = a.y + Math.floor(a.h / 2);
+    const targetX = b.x + Math.floor(b.w / 2);
+    const targetY = b.y + Math.floor(b.h / 2);
+
+    const waypoints: { x: number; y: number }[] = [];
+    const dist = Math.hypot(targetX - currX, targetY - currY);
+    if (dist > 25) {
+      const midX = Math.floor((currX + targetX) / 2);
+      const midY = Math.floor((currY + targetY) / 2);
+      const offset = Math.floor((rng() - 0.5) * dist * 0.6);
+      let wx = midX + (targetY - currY > 0 ? offset : -offset);
+      let wy = midY + (targetX - currX > 0 ? -offset : offset);
+      wx = Math.max(20, Math.min(W - 20, wx));
+      wy = Math.max(20, Math.min(W - 20, wy));
+      waypoints.push({ x: wx, y: wy });
+    }
+    waypoints.push({ x: targetX, y: targetY });
+
+    let stepCounter = 0;
+    for (const wp of waypoints) {
+      while (currX !== wp.x || currY !== wp.y) {
+        if (currX !== wp.x && currY !== wp.y) {
+          if (rng() < 0.5) currX += Math.sign(wp.x - currX);
+          else currY += Math.sign(wp.y - currY);
+        } else if (currX !== wp.x) {
+          currX += Math.sign(wp.x - currX);
+        } else {
+          currY += Math.sign(wp.y - currY);
+        }
+        stepCounter++;
+
+        const brush = rng() < 0.15 ? 1 : 0;
+        for (let dy = -brush; dy <= brush; dy++) {
+          for (let dx = -brush; dx <= brush; dx++) {
+            const cIdx = world.idx(currX + dx, currY + dy);
+            if (protectedMask[cIdx] !== 1 && world.cells[cIdx] === Cell.WALL) {
+              world.cells[cIdx] = Cell.FLOOR;
+              world.floorTex[cIdx] = Tex.F_CONCRETE;
+              world.wallTex[cIdx] = Tex.CONCRETE;
+              world.features[cIdx] = Feature.NONE;
+              world.roomMap[cIdx] = a.id;
+              protectedMask[cIdx] = 2;
+            }
+          }
+        }
+
+        if (stepCounter % 15 === 0 || (currX === wp.x && currY === wp.y && wp !== waypoints[waypoints.length - 1])) {
+          if (rng() < 0.7) {
+            const hr = 2 + Math.floor(rng() * 4);
+            const fTex = rng() < 0.4 ? Tex.F_CONCRETE : rng() < 0.7 ? Tex.F_TILE : Tex.F_GUT;
+            const wTex = fTex === Tex.F_TILE ? Tex.METAL : fTex === Tex.F_GUT ? Tex.GUT : Tex.CONCRETE;
+            for (let hy = -hr; hy <= hr; hy++) {
+              for (let hx = -hr; hx <= hr; hx++) {
+                const tx = currX + hx, ty = currY + hy;
+                const hIdx = world.idx(tx, ty);
+                if (protectedMask[hIdx] !== 1 && world.cells[hIdx] === Cell.WALL) {
+                  let touchesOther = false;
+                  for (let ny = -1; ny <= 1; ny++) {
+                    for (let nx = -1; nx <= 1; nx++) {
+                      if (nx === 0 && ny === 0) continue;
+                      const nIdx = world.idx(tx + nx, ty + ny);
+                      if (world.cells[nIdx] !== Cell.WALL && world.roomMap[nIdx] !== -1 && world.roomMap[nIdx] !== a.id && world.roomMap[nIdx] !== b.id) {
+                        touchesOther = true;
+                        break;
+                      }
+                    }
+                    if (touchesOther) break;
+                  }
+                  if (touchesOther) continue;
+
+                  world.cells[hIdx] = Cell.FLOOR;
+                  world.floorTex[hIdx] = fTex;
+                  world.wallTex[hIdx] = wTex;
+                  world.features[hIdx] = Feature.NONE;
+                  world.roomMap[hIdx] = a.id;
+                  protectedMask[hIdx] = 2;
+                }
+              }
+            }
+            const centerIdx = world.idx(currX, currY);
+            if (protectedMask[centerIdx] !== 1 && world.cells[centerIdx] === Cell.FLOOR && world.features[centerIdx] === Feature.NONE) {
+              world.features[centerIdx] = rng() < 0.3 ? Feature.LAMP : rng() < 0.6 ? Feature.MACHINE : Feature.APPARATUS;
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+function carveChthonicLabyrinth(world: World, protectedMask: Uint8Array, rng: () => number): void {
+  const newRooms: Room[] = [];
+  const numCaverns = 1200;
+  
+  for (let i = 0; i < numCaverns; i++) {
+    let cx = 40 + Math.floor(rng() * (W - 80));
+    let cy = 40 + Math.floor(rng() * (W - 80));
+    
+    if (protectedMask[world.idx(cx, cy)] === 1) continue;
+    
+    const type = rng() < 0.3 ? RoomType.STORAGE : rng() < 0.6 ? RoomType.PRODUCTION : RoomType.CORRIDOR;
+    const room: Room = {
+      id: world.rooms.length,
+      type,
+      x: cx, y: cy, w: 0, h: 0,
+      doors: [], sealed: false,
+      name: `Старая выработка #${i + 1}`,
+      apartmentId: -1,
+      wallTex: Tex.CONCRETE,
+      floorTex: Tex.F_CONCRETE,
+    };
+    world.rooms.push(room);
+    newRooms.push(room);
+    
+    const steps = 15 + Math.floor(rng() * 30);
+    let minX = cx, maxX = cx, minY = cy, maxY = cy;
+    
+    for (let step = 0; step < steps; step++) {
+      const radius = 3 + Math.floor(rng() * 5); 
+      const r2 = radius * radius;
+      
+      for (let dy = -radius; dy <= radius; dy++) {
+        for (let dx = -radius; dx <= radius; dx++) {
+          if (dx*dx + dy*dy > r2) continue;
+          const tx = cx + dx, ty = cy + dy;
+          const idx = world.idx(tx, ty);
+          if (protectedMask[idx] === 1 || world.cells[idx] === Cell.DOOR || world.cells[idx] === Cell.LIFT) continue;
+          
+          if (world.cells[idx] === Cell.WALL) {
+            let touchesOther = false;
+            for (let ny = -1; ny <= 1; ny++) {
+              for (let nx = -1; nx <= 1; nx++) {
+                if (nx === 0 && ny === 0) continue;
+                const nIdx = world.idx(tx + nx, ty + ny);
+                if (world.cells[nIdx] !== Cell.WALL && world.roomMap[nIdx] !== -1 && world.roomMap[nIdx] !== room.id) {
+                  touchesOther = true;
+                  break;
+                }
+              }
+              if (touchesOther) break;
+            }
+            if (touchesOther) continue;
+
+            world.cells[idx] = Cell.FLOOR;
+            world.floorTex[idx] = room.floorTex;
+            world.features[idx] = Feature.NONE;
+          }
+          if (world.roomMap[idx] === -1 || world.roomMap[idx] === room.id) {
+             world.roomMap[idx] = room.id;
+             minX = Math.min(minX, tx);
+             maxX = Math.max(maxX, tx);
+             minY = Math.min(minY, ty);
+             maxY = Math.max(maxY, ty);
+             protectedMask[idx] = 2;
+          }
+        }
+      }
+      
+      cx += Math.floor(rng() * 11) - 5;
+      cy += Math.floor(rng() * 11) - 5;
+      cx = Math.max(20, Math.min(W - 20, cx));
+      cy = Math.max(20, Math.min(W - 20, cy));
+    }
+    
+    room.x = minX;
+    room.y = minY;
+    room.w = Math.max(1, maxX - minX + 1);
+    room.h = Math.max(1, maxY - minY + 1); 
+    
+    const featureCount = Math.floor((room.w * room.h) / 80);
+    for (let j = 0; j < featureCount; j++) {
+       const fx = room.x + Math.floor(rng() * room.w);
+       const fy = room.y + Math.floor(rng() * room.h);
+       const ci = world.idx(fx, fy);
+       if (world.roomMap[ci] === room.id && world.cells[ci] === Cell.FLOOR && world.features[ci] === Feature.NONE) {
+          world.features[ci] = type === RoomType.STORAGE ? Feature.SHELF : (rng() < 0.5 ? Feature.MACHINE : Feature.APPARATUS);
+       }
+    }
+  }
+  
+  const connectable = world.rooms.filter(r => !r.sealed && r.type !== RoomType.HQ);
+  connectChthonicRoomsOrganic(world, connectable, protectedMask, rng);
 }

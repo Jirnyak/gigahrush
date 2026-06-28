@@ -39,7 +39,7 @@ if (selected.length === 0) {
 
 console.log(`Unit test selection: ${selected.length} files; ${reserved} generation/content files reserved for npm run test:generation.`);
 
-const result = spawnSync(tsxBin, ['--test', ...process.argv.slice(2), ...selected], {
+const result = spawnSync(tsxBin, ['--test', '--test-concurrency=3', ...process.argv.slice(2), ...selected], {
   cwd: root,
   env: process.env,
   stdio: 'inherit',

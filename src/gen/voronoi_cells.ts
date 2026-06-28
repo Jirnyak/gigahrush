@@ -18,6 +18,10 @@ export interface VoronoiRoomSite<T> {
 }
 
 export interface VoronoiRoomBounds {
+  minDx: number;
+  minDy: number;
+  maxDx: number;
+  maxDy: number;
   minX: number;
   minY: number;
   maxX: number;
@@ -82,14 +86,14 @@ export function buildVoronoiRoomCells<T>(world: World, options: VoronoiRoomBuild
       if (parentId < 0) continue;
       const group = groups.get(parentId);
       if (!group) continue;
-      owner[idx] = nearestVoronoiRoomSiteId(x, y, group);
+      owner[idx] = nearestVoronoiRoomSiteId(world, x, y, group);
     }
   }
 
   const boundary = new Uint8Array(W * W);
   const ridges = new Map<string, VoronoiRidgeCandidate>();
-  for (let y = options.minY + 1; y < options.maxY; y++) {
-    for (let x = options.minX + 1; x < options.maxX; x++) {
+  for (let y = options.minY; y <= options.maxY; y++) {
+    for (let x = options.minX; x <= options.maxX; x++) {
       const idx = world.idx(x, y);
       const a = owner[idx];
       if (a < 0) continue;
@@ -98,7 +102,7 @@ export function buildVoronoiRoomCells<T>(world: World, options: VoronoiRoomBuild
         const b = owner[ni];
         if (b < 0 || b === a) continue;
         boundary[idx] = 1;
-        recordVoronoiRidge(ridges, options.sites, a, b, x, y, x + dx, y + dy, options.seed);
+        recordVoronoiRidge(world, ridges, options.sites, a, b, x, y, x + dx, y + dy, options.seed);
       }
     }
   }
@@ -134,7 +138,7 @@ function buildSiteBucketGroups<T>(options: VoronoiRoomBuildOptions<T>): Map<numb
     else byParent.set(site.parentId, [site]);
   }
 
-  const bucketSize = Math.max(4, Math.floor(options.bucketSize ?? 14));
+  const bucketSize = Math.max(4, Math.floor(options.bucketSize ?? 16));
   const searchRadius = Math.max(1, Math.floor(options.bucketSearchRadius ?? 2));
   const groups = new Map<number, SiteBucketGroup<T>>();
   for (const [parentId, sites] of byParent) {
@@ -150,9 +154,10 @@ function buildSiteBucketGroups<T>(options: VoronoiRoomBuildOptions<T>): Map<numb
   return groups;
 }
 
-function nearestVoronoiRoomSiteId<T>(x: number, y: number, group: SiteBucketGroup<T>): number {
+function nearestVoronoiRoomSiteId<T>(world: World, x: number, y: number, group: SiteBucketGroup<T>): number {
   const bx = Math.floor(x / group.bucketSize);
   const by = Math.floor(y / group.bucketSize);
+  const numBuckets = Math.ceil(W / group.bucketSize);
   let best = -1;
   let bestScore = Number.POSITIVE_INFINITY;
 
@@ -160,10 +165,14 @@ function nearestVoronoiRoomSiteId<T>(x: number, y: number, group: SiteBucketGrou
     for (let yy = by - radius; yy <= by + radius; yy++) {
       for (let xx = bx - radius; xx <= bx + radius; xx++) {
         if (Math.abs(xx - bx) !== radius && Math.abs(yy - by) !== radius) continue;
-        const bucket = group.buckets.get(bucketKey(xx, yy));
+        let wx = xx % numBuckets;
+        if (wx < 0) wx += numBuckets;
+        let wy = yy % numBuckets;
+        if (wy < 0) wy += numBuckets;
+        const bucket = group.buckets.get(bucketKey(wx, wy));
         if (!bucket) continue;
         for (const site of bucket) {
-          const score = voronoiSiteScore(x, y, site);
+          const score = voronoiSiteScore(world, x, y, site);
           if (score < bestScore) {
             bestScore = score;
             best = site.id;
@@ -176,7 +185,7 @@ function nearestVoronoiRoomSiteId<T>(x: number, y: number, group: SiteBucketGrou
   if (best >= 0) return best;
 
   for (const site of group.sites) {
-    const score = voronoiSiteScore(x, y, site);
+    const score = voronoiSiteScore(world, x, y, site);
     if (score < bestScore) {
       bestScore = score;
       best = site.id;
@@ -185,11 +194,10 @@ function nearestVoronoiRoomSiteId<T>(x: number, y: number, group: SiteBucketGrou
   return best;
 }
 
-function voronoiSiteScore<T>(x: number, y: number, site: VoronoiRoomSite<T>): number {
-  const dx = x - site.x;
-  const dy = y - site.y;
+function voronoiSiteScore<T>(world: World, x: number, y: number, site: VoronoiRoomSite<T>): number {
+  const d2 = world.dist2(x, y, site.x, site.y);
   const weight = site.weight ?? 0;
-  return dx * dx + dy * dy - weight * weight;
+  return d2 - weight * weight;
 }
 
 function bucketKey(x: number, y: number): number {
@@ -197,6 +205,7 @@ function bucketKey(x: number, y: number): number {
 }
 
 function recordVoronoiRidge<T>(
+  world: World,
   map: Map<string, VoronoiRidgeCandidate>,
   sites: readonly VoronoiRoomSite<T>[],
   a: number,
@@ -213,26 +222,30 @@ function recordVoronoiRidge<T>(
   const sb = sites[hi];
   if (!sa || !sb || sa.parentId !== sb.parentId) return;
   const key = `${lo}:${hi}`;
-  const mx = (sa.x + sb.x) / 2;
-  const my = (sa.y + sb.y) / 2;
-  const score = (x - mx) * (x - mx) + (y - my) * (y - my) + hash01(seed, lo, hi, x + y) * 0.01;
+  const mx = world.wrap(sa.x + world.delta(sa.x, sb.x) / 2);
+  const my = world.wrap(sa.y + world.delta(sa.y, sb.y) / 2);
+  const score = world.dist2(x, y, mx, my) + hash01(seed, lo, hi, x + y) * 0.01;
   const previous = map.get(key);
-  if (!previous || score < previous.score) map.set(key, { a: lo, b: hi, x, y, nx, ny, parentId: sa.parentId, score });
+  if (!previous || score < previous.score) map.set(key, { a: lo, b: hi, x: world.wrap(x), y: world.wrap(y), nx: world.wrap(nx), ny: world.wrap(ny), parentId: sa.parentId, score });
 }
 
 function buildVoronoiRooms<T>(world: World, owner: Int32Array, options: VoronoiRoomBuildOptions<T>): Int32Array {
-  const bounds: VoronoiRoomBounds[] = options.sites.map(() => ({ minX: W, minY: W, maxX: -1, maxY: -1, count: 0 }));
+  const bounds: VoronoiRoomBounds[] = options.sites.map(() => ({ minDx: W, minDy: W, maxDx: -W, maxDy: -W, minX: W, minY: W, maxX: -1, maxY: -1, count: 0 }));
   for (let y = options.minY; y <= options.maxY; y++) {
     for (let x = options.minX; x <= options.maxX; x++) {
       const idx = world.idx(x, y);
       const id = owner[idx];
       if (id < 0 || (world.cells[idx] !== Cell.FLOOR && world.cells[idx] !== Cell.WATER)) continue;
       const b = bounds[id]!;
+      const site = options.sites[id];
+      if (!site) continue;
       b.count++;
-      if (x < b.minX) b.minX = x;
-      if (y < b.minY) b.minY = y;
-      if (x > b.maxX) b.maxX = x;
-      if (y > b.maxY) b.maxY = y;
+      const dx = world.delta(site.x, x);
+      const dy = world.delta(site.y, y);
+      if (dx < b.minDx) b.minDx = dx;
+      if (dx > b.maxDx) b.maxDx = dx;
+      if (dy < b.minDy) b.minDy = dy;
+      if (dy > b.maxDy) b.maxDy = dy;
     }
   }
 
@@ -242,6 +255,10 @@ function buildVoronoiRooms<T>(world: World, owner: Int32Array, options: VoronoiR
   for (const site of options.sites) {
     const b = bounds[site.id]!;
     if (b.count < minRoomCells) continue;
+    b.minX = world.wrap(site.x + b.minDx);
+    b.minY = world.wrap(site.y + b.minDy);
+    b.maxX = world.wrap(site.x + b.maxDx);
+    b.maxY = world.wrap(site.y + b.maxDy);
     const room = options.createRoom(site, b, world.rooms.length);
     world.rooms.push(room);
     roomIdBySite[site.id] = room.id;

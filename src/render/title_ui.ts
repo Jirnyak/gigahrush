@@ -71,8 +71,8 @@ export function drawTitleScreen(ctx: CanvasRenderingContext2D, options: DrawTitl
   ctx.textAlign = 'center';
   ctx.fillStyle = '#c00';
   ctx.font = `bold ${Math.round(48 * s)}px monospace`;
-  const titleY = options.mode === 'setup' ? cy - 160 * s : cy - 122 * s;
-  const subtitleY = options.mode === 'setup' ? cy - 118 * s : cy - 76 * s;
+  const titleY = options.mode === 'setup' ? cy - (options.setupRows.length > 7 ? 180 : 160) * s : cy - 122 * s;
+  const subtitleY = options.mode === 'setup' ? cy - (options.setupRows.length > 7 ? 138 : 118) * s : cy - 76 * s;
   ctx.fillText(lang.title, cx, titleY);
   ctx.fillStyle = '#666';
   ctx.font = `${Math.round(16 * s)}px monospace`;
@@ -109,6 +109,9 @@ export function drawTitleScreen(ctx: CanvasRenderingContext2D, options: DrawTitl
   if (options.mode !== 'setup') ctx.fillText(fitText(ctx, lang.languageHint, w * 0.9), cx, h - 12 * s);
 
   ctx.textAlign = 'left';
+  if (typeof window !== 'undefined') {
+    (window as any).__gigahrushTitleHits = hits;
+  }
   return hits;
 }
 

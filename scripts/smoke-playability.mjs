@@ -623,6 +623,49 @@ async function clickCanvasCenter(client) {
   await pressCanvasCenter(client);
 }
 
+async function clickTitleStart(client) {
+  const point = await evaluate(client, `(() => {
+    const hits = window.__gigahrushTitleHits || [];
+    const startHit = hits.find(h => h.field === 'start');
+    const canvas = document.getElementById('game');
+    const hudCanvas = document.getElementById('hud');
+    const rect = canvas?.getBoundingClientRect();
+    if (!rect || !startHit || !hudCanvas) {
+      return rect ? { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 - 55 } : { x: window.innerWidth / 2, y: window.innerHeight / 2 - 55 };
+    }
+    const scaleX = rect.width / Math.max(1, hudCanvas.width);
+    const scaleY = rect.height / Math.max(1, hudCanvas.height);
+    return {
+      x: rect.left + (startHit.x + startHit.w / 2) * scaleX,
+      y: rect.top + (startHit.y + startHit.h / 2) * scaleY
+    };
+  })()`);
+  await client.send('Input.dispatchMouseEvent', {
+    type: 'mouseMoved',
+    x: point.x,
+    y: point.y,
+    button: 'none',
+  });
+  await client.send('Input.dispatchMouseEvent', {
+    type: 'mousePressed',
+    x: point.x,
+    y: point.y,
+    button: 'left',
+    buttons: 1,
+    clickCount: 1,
+  });
+  await waitPage(client, 80);
+  await client.send('Input.dispatchMouseEvent', {
+    type: 'mouseReleased',
+    x: point.x,
+    y: point.y,
+    button: 'left',
+    buttons: 0,
+    clickCount: 1,
+  });
+  await waitPage(client, 80);
+}
+
 async function rightClickCanvasCenter(client) {
   await pressCanvasCenter(client, 'right', 2);
 }
@@ -1520,16 +1563,17 @@ async function main() {
         await dragSelector(client, '.mobile-pad--move', 0, -42, 420);
         requireMobileLayout(await readMobileLayout(client), 'mobile gameplay layout', failures, mobileGameplayLayoutOptions);
       } else {
-        await clickCanvasCenter(client);
+        await clickTitleStart(client);
         await tapKeyImmediate(client, KEY.enter);
         await waitPage(client, 500);
         const startup = await waitForGameDebug(client, 'desktop title start', state => state.started === true);
         requireStartupGuidance(startup, 'desktop startup guidance', failures);
         await tapKey(client, KEY.e, 90, 200);
         const afterInteract = await readGameDebug(client);
-        if (afterInteract?.showNpcMenu) {
+        if (afterInteract?.showNpcMenu || afterInteract?.paused) {
           await rightClickCanvasCenter(client);
-          await waitForGameDebug(client, 'close first NPC interaction menu', state => !state.showNpcMenu);
+          await tapKey(client, KEY.escape, 90, 200);
+          await waitForGameDebug(client, 'close first interaction overlay or menu', state => !state.showNpcMenu && !state.paused);
         }
         await waitPage(client, 1800);
         movementStart = await readGameDebug(client);

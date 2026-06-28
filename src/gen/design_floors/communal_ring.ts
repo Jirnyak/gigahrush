@@ -47,6 +47,8 @@ const NPC_IDS = {
   sasha: 'communal_panhandler_sasha',
   nina: 'communal_through_nina',
   yegor: 'communal_primus_yegor',
+  arkhip: 'communal_syndicate_arkhip',
+  zoya: 'communal_inspector_zoya',
 } as const;
 
 const NPC_DEFS: Record<(typeof NPC_IDS)[keyof typeof NPC_IDS], PlotNpcDef> = {
@@ -84,7 +86,7 @@ const NPC_DEFS: Record<(typeof NPC_IDS)[keyof typeof NPC_IDS], PlotNpcDef> = {
       'Не стой босиком у третьей кабинки. После сирены там бьет грязная вода.',
     ],
     talkLinesPost: [
-      'Напор ровный. Слишком ровный, если слушать трубу.',
+      'Напор ровный. Слишком ровный, if слушать трубу.',
       'Чистая вода - это временное соглашение с нижним этажом.',
     ],
   },
@@ -136,7 +138,7 @@ const NPC_DEFS: Record<(typeof NPC_IDS)[keyof typeof NPC_IDS], PlotNpcDef> = {
     inventory: [{ defId: 'bread', count: 1 }, { defId: 'neighbor_complaint', count: 1 }, { defId: 'water_coupon', count: 1 }],
     talkLines: [
       'Коммуналка сквозная: вошёл за хлебом, вышел свидетелем.',
-      'У нас три двери и ни одной личной тишины. Зато сирену слышно раньше всех.',
+      'У нас три двери и ни одной личной тишины. Зато сирену... слышно раньше всех.',
       'Две буханки в цепочку - и я скажу, какой шкаф открывается без крика.',
       'Не стой в проходной комнате спиной к кухне. Там спор горячее плиты.',
     ],
@@ -162,6 +164,44 @@ const NPC_DEFS: Record<(typeof NPC_IDS)[keyof typeof NPC_IDS], PlotNpcDef> = {
     talkLinesPost: [
       'Кипяток пошёл. Теперь осталось пережить благодарность.',
       'Двери держатся, пока чайник шумит громче очереди.',
+    ],
+  },
+  communal_syndicate_arkhip: {
+    name: 'Архип Завхозный',
+    isFemale: false,
+    faction: Faction.CITIZEN,
+    occupation: Occupation.STOREKEEPER,
+    sprite: Occupation.STOREKEEPER,
+    hp: 120, maxHp: 120, money: 85, speed: 0.85,
+    inventory: [{ defId: 'water_coupon', count: 5 }, { defId: 'canned', count: 3 }, { defId: 'cigs', count: 5 }],
+    talkLines: [
+      'Госрезерв велик, да ключи утеряны. А где нет ключа, там решает сводка.',
+      'Очередь думает, что паёк падает сверху. Паёк течет там, где я открываю задвижку.',
+      'Принеси мне самосборную сводку (samosbor_tally). С этим списком мы быстро докажем домкому, кто здесь хозяин кольца.',
+      'По магистральным туннелям рассованы тайники синдиката. Ищи за старыми плакатами, там много дефицита.',
+    ],
+    talkLinesPost: [
+      'Сводки у меня. Теперь паёк распределяется справедливо. То есть, через меня.',
+      'Кто ищет в туннелях, тот всегда найдет лишнюю бирку или консервы.',
+    ],
+  },
+  communal_inspector_zoya: {
+    name: 'Зоя Управдомша',
+    isFemale: true,
+    faction: Faction.SCIENTIST,
+    occupation: Occupation.SECRETARY,
+    sprite: Occupation.SECRETARY,
+    hp: 110, maxHp: 110, money: 95, speed: 0.9,
+    inventory: [{ defId: 'ration_registry_extract', count: 1 }, { defId: 'sterile_bandage', count: 1 }, { defId: 'filtered_water', count: 3 }], // Исправлено с firstaid
+    talkLines: [
+      'Без строгого учета кольцо задохнется в слухах и грязной воде.',
+      'Развелось подпольных мастеров да завхозов. Каждый норовит врезаться в трубу или сорвать пломбу.',
+      'Найди выписку из реестра пайков (ration_registry_extract). Вернем железный порядок на этаж.',
+      'Будешь спускаться в водоочистку — держи ухо востро. После сирены там завелась слизь и зубастые головы.',
+    ],
+    talkLinesPost: [
+      'Аудит проведен успешно. Нарушители взяты на карандаш.',
+      'Чистая вода любит тишину и правильные подписи.',
     ],
   },
 };
@@ -260,6 +300,39 @@ registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, NPC_IDS.yegor, NPC_DEFS.commun
   eventData: { routeChoice: 'repair_primus', rumorIds: ['maint_steam_valves'] },
 }]);
 
+registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, NPC_IDS.arkhip, NPC_DEFS.communal_syndicate_arkhip, [{
+  id: 'communal_syndicate_scarcity',
+  giverNpcId: NPC_IDS.arkhip,
+  type: QuestType.FETCH,
+  desc: 'Архип Завхозный: «Принеси мне самосборную сводку (samosbor_tally). С этим списком в руках я смогу прижать официальных распределителей пайка и взять склад под полный контроль.»',
+  targetItem: 'samosbor_tally',
+  targetCount: 1,
+  rewardItem: 'water_coupon',
+  rewardCount: 4,
+  extraRewards: [{ defId: 'canned', count: 3 }, { defId: 'cigs', count: 5 }],
+  relationDelta: 15,
+  xpReward: 50,
+  moneyReward: 40,
+  eventTags: ['communal_ring', 'syndicate', 'pantry', 'black_market'],
+  eventData: { routeChoice: 'syndicate_monopoly', rumorIds: ['economy_black_market_88_medicine'] },
+}]);
+
+registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, NPC_IDS.zoya, NPC_DEFS.communal_inspector_zoya, [{
+  id: 'communal_inspector_audit',
+  giverNpcId: NPC_IDS.zoya,
+  type: QuestType.FETCH,
+  desc: 'Зоя Управдомша: «Мне нужна подлинная выписка из реестра пайков (ration_registry_extract). Прекратим эту вакханалию с подпольной торговлей дефицитом.»',
+  targetItem: 'ration_registry_extract',
+  targetCount: 1,
+  rewardItem: 'sterile_bandage',
+  rewardCount: 1,
+  extraRewards: [{ defId: 'filtered_water', count: 3 }, { defId: 'bandage', count: 2 }],
+  relationDelta: 15,
+  xpReward: 50,
+  moneyReward: 50,
+  eventTags: ['communal_ring', 'official_audit', 'domkom', 'law_and_order'],
+  eventData: { routeChoice: 'domkom_enforcement', rumorIds: ['economy_ruble_soft'] },
+}]);
 interface RingLayout {
   left: number;
   right: number;
@@ -308,6 +381,7 @@ export function generateCommunalRingDesignFloor(seed = RING_SEED): FloorGenerati
       ...serviceRooms,
       flats: buildThroughCommunalFlats(world, ring),
     };
+    fillCommunalVoids(world, entities, nextId, containerId, ring);
     generateZones(world);
     applyCommunalZones(world);
     placeRingLifts(world, ring);
@@ -784,6 +858,8 @@ function spawnCommunalNpcSet(entities: Entity[], nextId: { v: number }, rooms: C
     sasha: spawnNpc(entities, nextId, NPC_DEFS.communal_panhandler_sasha, NPC_IDS.sasha, rooms.pantry.x + 11, rooms.pantry.y - 3, 'knife'),
     nina: spawnNpc(entities, nextId, NPC_DEFS.communal_through_nina, NPC_IDS.nina, northFlat.x + 3, northFlat.y + 3),
     yegor: spawnNpc(entities, nextId, NPC_DEFS.communal_primus_yegor, NPC_IDS.yegor, southFlat.x + 4, southFlat.y + 3, 'wrench'),
+    arkhip: spawnNpc(entities, nextId, NPC_DEFS.communal_syndicate_arkhip, NPC_IDS.arkhip, 120 + 12, 60 + 10, 'pistol'),
+    zoya: spawnNpc(entities, nextId, NPC_DEFS.communal_inspector_zoya, NPC_IDS.zoya, rooms.core.x + 10, rooms.core.y - 4),
   };
   return owners;
 }
@@ -1119,3 +1195,327 @@ function spawnMonster(entities: Entity[], nextId: { v: number }, kind: MonsterKi
     ai: { goal: AIGoal.HUNT, tx: x + 0.5, ty: y + 0.5, path: [], pi: 0, stuck: 0, timer: 0 },
   });
 }
+
+function fillCommunalVoids(
+  world: World,
+  entities: Entity[],
+  nextId: { v: number },
+  containerId: { v: number },
+  _ring: RingLayout,
+): void {
+  // 1. Магистральные туннели периметра (Perimeter Bypass Tunnels)
+  // Прокладываем сквозные магистрали через всю карту 1024x1024
+  const bypassCoords = [64, 160, 256, 352, 672, 768, 864, 960];
+
+  for (const x of bypassCoords) {
+    carveMajorBypass(world, x, 32, x, W - 32, 2, true);
+    // Добавляем скрытые тайники контрабандистов вдоль вертикальных магистралей
+    for (let sy = 100; sy < W - 100; sy += 180) {
+      if (world.cells[world.idx(x, sy)] === Cell.FLOOR) {
+        markPosterWall(world, x - 1, sy, sy);
+        const stashRoom = world.rooms[world.roomMap[world.idx(x, sy)]] ?? world.rooms[0];
+        if (stashRoom) {
+          addContainer(world, containerId, stashRoom, x - stashRoom.x, sy - stashRoom.y, ContainerKind.SECRET_STASH, 'Тайник магистрального синдиката', [
+            { defId: 'water_coupon', count: 2 },
+            { defId: 'canned', count: 1 },
+            { defId: 'cigs', count: 2 },
+          ], 'secret', undefined, undefined, ['contraband', 'bypass_stash', 'secret', 'communal_ring']);
+        }
+      }
+    }
+  }
+  for (const y of bypassCoords) {
+    carveMajorBypass(world, 32, y, W - 32, y, 2, false);
+    // Добавляем скрытые тайники контрабандистов вдоль горизонтальных магистралей
+    for (let sx = 100; sx < W - 100; sx += 180) {
+      if (world.cells[world.idx(sx, y)] === Cell.FLOOR) {
+        markPosterWall(world, sx, y - 1, sx);
+        const stashRoom = world.rooms[world.roomMap[world.idx(sx, y)]] ?? world.rooms[0];
+        if (stashRoom) {
+          addContainer(world, containerId, stashRoom, sx - stashRoom.x, y - stashRoom.y, ContainerKind.SECRET_STASH, 'Тайник кольцевой контрабанды', [
+            { defId: 'valve_tag', count: 1 },
+            { defId: 'bread', count: 2 },
+            { defId: 'cloth_roll', count: 1 },
+          ], 'secret', undefined, undefined, ['contraband', 'bypass_stash', 'secret', 'communal_ring']);
+        }
+      }
+    }
+  }
+
+  // 2. Склады госрезерва и Индустриальные залы водоочистки (Логистическая и индустриальная эстетика)
+  const majorPois = [
+    { x: 120, y: 60, w: 24, h: 20, type: RoomType.STORAGE, name: 'Склад госрезерва Север-1' },
+    { x: 380, y: 60, w: 28, h: 22, type: RoomType.STORAGE, name: 'Склад госрезерва Север-2' },
+    { x: 620, y: 60, w: 26, h: 24, type: RoomType.STORAGE, name: 'Склад госрезерва Север-3' },
+    { x: 860, y: 60, w: 24, h: 20, type: RoomType.STORAGE, name: 'Склад госрезерва Север-4' },
+    { x: 120, y: W - 90, w: 26, h: 22, type: RoomType.STORAGE, name: 'Склад госрезерва Юг-1' },
+    { x: 380, y: W - 90, w: 24, h: 20, type: RoomType.STORAGE, name: 'Склад госрезерва Юг-2' },
+    { x: 620, y: W - 90, w: 28, h: 24, type: RoomType.STORAGE, name: 'Склад госрезерва Юг-3' },
+    { x: 860, y: W - 90, w: 24, h: 20, type: RoomType.STORAGE, name: 'Склад госрезерва Юг-4' },
+    { x: 60, y: 300, w: 20, h: 26, type: RoomType.PRODUCTION, name: 'Зал водоочистки Запад-1' },
+    { x: 60, y: 700, w: 22, h: 24, type: RoomType.PRODUCTION, name: 'Зал водоочистки Запад-2' },
+    { x: W - 85, y: 300, w: 22, h: 24, type: RoomType.PRODUCTION, name: 'Зал водоочистки Восток-1' },
+    { x: W - 85, y: 700, w: 20, h: 26, type: RoomType.PRODUCTION, name: 'Зал водоочистки Восток-2' },
+  ];
+
+  for (const poi of majorPois) {
+    if (isAreaTotallyFree(world, poi.x - 2, poi.y - 2, poi.w + 4, poi.h + 4)) {
+      const room = createRoom(world, world.rooms.length, poi.type, poi.x, poi.y, poi.w, poi.h, poi.name, Tex.CONCRETE, poi.type === RoomType.STORAGE ? Tex.F_CONCRETE : Tex.F_TILE);
+      if (poi.type === RoomType.STORAGE) {
+        // Упорядоченные ряды стеллажей
+        for (let sx = poi.x + 3; sx <= poi.x + poi.w - 4; sx += 3) {
+          for (let sy = poi.y + 3; sy <= poi.y + poi.h - 4; sy++) {
+            if (sy !== poi.y + Math.floor(poi.h / 2)) { // Оставляем центральный проход
+              placeFeature(world, sx, sy, Feature.SHELF);
+            }
+          }
+        }
+        addContainer(world, containerId, room, Math.floor(poi.w / 2), 2, ContainerKind.METAL_CABINET, `Учетный шкаф: ${poi.name}`, [{ defId: 'canned', count: 3 }, { defId: 'cloth_roll', count: 2 }], 'room', undefined, undefined, ['pantry', 'storage']);
+        
+        // Геймплей: Армированные ящики с квестовыми сводками и дефицитом
+        addContainer(world, containerId, room, poi.w - 4, poi.h - 3, ContainerKind.WEAPON_CRATE, `Элитный сейф госрезерва: ${poi.name}`, [
+          { defId: 'samosbor_tally', count: 1 },
+          { defId: 'ration_registry_extract', count: 1 },
+          { defId: 'water_coupon', count: 3 },
+          { defId: 'canned', count: 2 },
+        ], 'room', undefined, undefined, ['elite_storage', 'syndicate_loot']);
+
+        // Спавн бдительной охраны госрезерва
+        if (Math.random() < 0.5) {
+          spawnAmbientNpc(entities, nextId, `Охранник госрезерва (${poi.name})`, Faction.CITIZEN, Occupation.STOREKEEPER, poi.x + 4, poi.y + Math.floor(poi.h / 2), [{ defId: 'canned', count: 1 }], 'pistol');
+        }
+      } else {
+        // Резервуары водоочистки
+        for (let wx = poi.x + 4; wx <= poi.x + poi.w - 5; wx++) {
+          for (let wy = poi.y + 4; wy <= poi.y + poi.h - 5; wy++) {
+            const i = world.idx(wx, wy);
+            world.cells[i] = Cell.WATER;
+            world.floorTex[i] = Tex.F_WATER;
+          }
+        }
+        placeFeature(world, poi.x + 2, poi.y + 2, Feature.MACHINE);
+        placeFeature(world, poi.x + poi.w - 3, poi.y + poi.h - 3, Feature.MACHINE);
+        addContainer(world, containerId, room, 3, 2, ContainerKind.TOOL_LOCKER, `Ящик обслуживания: ${poi.name}`, [{ defId: 'wrench', count: 1 }, { defId: 'valve_tag', count: 2 }], 'room', undefined, undefined, ['production', 'water']);
+        
+        // Геймплей: Опасные монстры водоочистки, охраняющие вентильные бирки
+        spawnMonster(entities, nextId, MonsterKind.TUBE_EEL, poi.x + Math.floor(poi.w / 2), poi.y + 5);
+        if (Math.random() < 0.5) {
+          spawnMonster(entities, nextId, MonsterKind.SLIMEVIK, poi.x + Math.floor(poi.w / 2), poi.y + poi.h - 6);
+        }
+      }
+      // Пускаем проходческие лучи из центра зала для гарантированной связности
+      carveInfillRays(world, poi.x + Math.floor(poi.w / 2), poi.y + Math.floor(poi.h / 2));
+    }
+  }
+
+  // 3. Smart Total Infill (Квартальная застройка пустот по всей сетке 1024x1024)
+  const step = 32;
+  const roomTypes: readonly RoomType[] = [
+    RoomType.LIVING,
+    RoomType.STORAGE,
+    RoomType.COMMON,
+    RoomType.PRODUCTION,
+    RoomType.KITCHEN,
+    RoomType.BATHROOM,
+    RoomType.MEDICAL,
+  ];
+
+  for (let qy = 32; qy < W - 32; qy += step) {
+    for (let qx = 32; qx < W - 32; qx += step) {
+      if (!isAreaTotallyFree(world, qx, qy, step, step)) continue;
+
+      // Свободный квадрат 32x32: строим перекресток и 4 угловые ячейки
+      const cx = qx + 15;
+      const cy = qy + 15;
+      carveLineWidth(world, qx + 2, cy, qx + step - 3, cy, 2, Tex.F_LINO);
+      carveLineWidth(world, cx, qy + 2, cx, qy + step - 3, 2, Tex.F_LINO);
+
+      // Угловые комнаты 11x11
+      const quadrants = [
+        { x: qx + 2, y: qy + 2, doorX: qx + 7, doorY: qy + 13, doorState: DoorState.CLOSED },
+        { x: qx + 19, y: qy + 2, doorX: qx + 24, doorY: qy + 13, doorState: DoorState.CLOSED },
+        { x: qx + 2, y: qy + 19, doorX: qx + 7, doorY: qy + 18, doorState: DoorState.CLOSED },
+        { x: qx + 19, y: qy + 19, doorX: qx + 24, doorY: qy + 18, doorState: DoorState.CLOSED },
+      ];
+
+      for (const q of quadrants) {
+        const type = roomTypes[Math.floor(Math.random() * roomTypes.length)];
+        const isTile = type === RoomType.KITCHEN || type === RoomType.BATHROOM || type === RoomType.MEDICAL;
+        const isUtility = type === RoomType.STORAGE || type === RoomType.PRODUCTION;
+        const isCommon = type === RoomType.COMMON;
+
+        const wallTex = isTile ? Tex.TILE_W : isUtility ? Tex.BRICK : isCommon ? Tex.ROTTEN : Tex.PANEL;
+        const floorTex = isTile ? Tex.F_TILE : isUtility ? Tex.F_CONCRETE : isCommon ? Tex.F_LINO : Tex.F_WOOD;
+        const name = getAuxRoomName(type);
+
+        const room = createRoom(world, world.rooms.length, type, q.x, q.y, 11, 11, name, wallTex, floorTex);
+        connectRoomToCorridor(world, room, q.doorX, q.doorY, q.doorState);
+        decorateAuxRoom(world, entities, nextId, containerId, room);
+      }
+
+      // Проходческие соединительные лучи из центра квартала
+      carveInfillRays(world, cx, cy);
+    }
+  }
+
+  // 4. Органическое самосборное зашумление (Organic Samosbor Weaving)
+  // 10 000 итераций змеевидных сбоек для 100% покрытия остаточных монолитов
+  const sIter = 10000;
+  for (let s = 0; s < sIter; s++) {
+    let rx = 16 + Math.floor(Math.random() * (W - 32));
+    let ry = 16 + Math.floor(Math.random() * (W - 32));
+    if (world.cells[world.idx(rx, ry)] !== Cell.WALL || world.aptMask[world.idx(rx, ry)] === 1) continue;
+
+    let dx = Math.random() < 0.5 ? (Math.random() < 0.5 ? 1 : -1) : 0;
+    let dy = dx === 0 ? (Math.random() < 0.5 ? 1 : -1) : 0;
+    const len = 15 + Math.floor(Math.random() * 25);
+
+    for (let step = 0; step < len; step++) {
+      const i = world.idx(rx, ry);
+      if (world.aptMask[i] === 1 || world.roomMap[i] !== -1 || world.cells[i] === Cell.ABYSS) break;
+      world.cells[i] = Cell.FLOOR;
+      world.floorTex[i] = Tex.F_CONCRETE;
+
+      rx = world.wrap(rx + dx);
+      ry = world.wrap(ry + dy);
+
+      // Высокий шанс поворота (30-35%)
+      if (Math.random() < 0.32) {
+        const temp = dx;
+        dx = dy === 0 ? 0 : (Math.random() < 0.5 ? 1 : -1);
+        dy = temp === 0 ? 0 : (Math.random() < 0.5 ? 1 : -1);
+      }
+    }
+  }
+}
+
+function carveMajorBypass(
+  world: World,
+  x1: number,
+  y1: number,
+  x2: number,
+  y2: number,
+  width: number,
+  vertical: boolean,
+): void {
+  const checkMinX = vertical ? x1 - 1 : x1;
+  const checkMaxX = vertical ? x1 + width : x2;
+  const checkMinY = vertical ? y1 : y1 - 1;
+  const checkMaxY = vertical ? y2 : y1 + width;
+
+  for (let y = checkMinY; y <= checkMaxY; y++) {
+    for (let x = checkMinX; x <= checkMaxX; x++) {
+      const i = world.idx(x, y);
+      if (world.aptMask[i] === 1 || world.roomMap[i] !== -1 || world.cells[i] === Cell.ABYSS) {
+        return; // Если натыкаемся на авторскую комнату или защищенную зону, отменяем данный сегмент магистрали
+      }
+    }
+  }
+
+  carveLineWidth(world, x1, y1, x2, y2, width, Tex.F_CONCRETE);
+}
+
+function carveInfillRays(world: World, cx: number, cy: number): void {
+  const dirs = [
+    { dx: 1, dy: 0 },
+    { dx: -1, dy: 0 },
+    { dx: 0, dy: 1 },
+    { dx: 0, dy: -1 },
+  ];
+
+  for (const d of dirs) {
+    let x = world.wrap(cx + d.dx * 2);
+    let y = world.wrap(cy + d.dy * 2);
+    for (let s = 0; s < 120; s++) {
+      const i = world.idx(x, y);
+      if (world.aptMask[i] === 1 || world.cells[i] === Cell.ABYSS) break;
+      if (world.cells[i] === Cell.FLOOR || world.cells[i] === Cell.WATER || world.cells[i] === Cell.DOOR) {
+        break; // Успешно соединились с существующим пространством!
+      }
+      world.cells[i] = Cell.FLOOR;
+      world.floorTex[i] = Tex.F_CONCRETE;
+      x = world.wrap(x + d.dx);
+      y = world.wrap(y + d.dy);
+    }
+  }
+}
+
+function isAreaTotallyFree(world: World, x: number, y: number, w: number, h: number): boolean {
+  for (let dy = 0; dy < h; dy++) {
+    for (let dx = 0; dx < w; dx++) {
+      const i = world.idx(world.wrap(x + dx), world.wrap(y + dy));
+      if (world.cells[i] !== Cell.WALL || world.roomMap[i] !== -1 || world.aptMask[i] === 1) {
+        return false;
+      }
+    }
+  }
+  return true;
+}
+
+function getAuxRoomName(type: RoomType): string {
+  switch (type) {
+    case RoomType.LIVING:
+      return 'Стихийная жилая микро-ячейка';
+    case RoomType.STORAGE:
+      return 'Кладовка хранения припасов';
+    case RoomType.COMMON:
+      return 'Трущобная выгородка между коридорами';
+    case RoomType.PRODUCTION:
+      return 'Самодельная микро-мастерская';
+    case RoomType.KITCHEN:
+      return 'Тесная проходная ниша с плитой';
+    case RoomType.BATHROOM:
+      return 'Кольцевой туалетный микро-блок';
+    case RoomType.MEDICAL:
+      return 'Санитарный пункт между коридорами';
+    default:
+      return 'Тесная проходная техническая полость';
+  }
+}
+
+function decorateAuxRoom(
+  world: World,
+  entities: Entity[],
+  nextId: { v: number },
+  containerId: { v: number },
+  room: Room,
+): void {
+  if (room.type === RoomType.KITCHEN) {
+    placeFeature(world, room.x + 2, room.y + 2, Feature.STOVE);
+    placeFeature(world, room.x + room.w - 3, room.y + 2, Feature.SINK);
+    placeFeature(world, room.x + Math.floor(room.w / 2), room.y + Math.floor(room.h / 2), Feature.TABLE);
+  } else if (room.type === RoomType.BATHROOM) {
+    placeFeature(world, room.x + 2, room.y + 2, Feature.TOILET);
+    placeFeature(world, room.x + room.w - 3, room.y + room.h - 3, Feature.SINK);
+  } else if (room.type === RoomType.PRODUCTION) {
+    placeFeature(world, room.x + 2, room.y + 2, Feature.MACHINE);
+    placeFeature(world, room.x + room.w - 3, room.y + 2, Feature.TABLE);
+    placeFeature(world, room.x + 2, room.y + room.h - 3, Feature.SHELF);
+  } else {
+    placeFeature(world, room.x + 2, room.y + 2, Feature.BED);
+    placeFeature(world, room.x + room.w - 3, room.y + 2, Feature.TABLE);
+    placeFeature(world, room.x + 2, room.y + room.h - 3, Feature.SHELF);
+  }
+
+  const rand = Math.random();
+  if (rand < 0.4) {
+    const items: { defId: string; count: number }[] = [];
+    if (room.type === RoomType.KITCHEN) items.push({ defId: 'bread', count: 1 }, { defId: 'tea', count: 1 });
+    else if (room.type === RoomType.BATHROOM) items.push({ defId: 'toiletpaper', count: 1 });
+    else if (room.type === RoomType.PRODUCTION) items.push({ defId: 'wrench', count: 1 });
+    else items.push({ defId: 'kasha', count: 1 }, { defId: 'cigs', count: 1 });
+
+    const kind = room.type === RoomType.KITCHEN ? ContainerKind.FRIDGE : room.type === RoomType.PRODUCTION ? ContainerKind.TOOL_LOCKER : ContainerKind.WOODEN_CHEST;
+    addContainer(world, containerId, room, Math.floor(room.w / 2), 2, kind, `Тумба: ${room.name.toLowerCase()}`, items, 'room', undefined, undefined, ['aux_pantry', 'communal_ring']);
+  } else if (rand < 0.7) {
+    const defId = room.type === RoomType.KITCHEN ? 'bread' : room.type === RoomType.PRODUCTION ? 'cloth_roll' : 'cigs';
+    placeDrop(world, entities, nextId, room, Math.floor(room.w / 2), Math.floor(room.h / 2), defId, 1);
+  }
+
+  if (Math.random() < 0.25) {
+    const occ = room.type === RoomType.PRODUCTION ? Occupation.LOCKSMITH : room.type === RoomType.KITCHEN ? Occupation.COOK : Occupation.TRAVELER;
+    const npcName = room.type === RoomType.PRODUCTION ? 'Самодельный мастер' : room.type === RoomType.KITCHEN ? 'Стихийный кашевар' : 'Запоздалый свидетель';
+    spawnAmbientNpc(entities, nextId, npcName, Faction.CITIZEN, occ, room.x + Math.floor(room.w / 2), room.y + Math.floor(room.h / 2), [{ defId: 'bread', count: 1 }]);
+  }
+}
+

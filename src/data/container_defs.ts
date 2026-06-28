@@ -1,4 +1,5 @@
 import { ContainerKind, type ContainerAccess, RoomType } from '../core/types';
+import { ITEMS } from './items';
 
 export interface ContainerDef {
   kind: ContainerKind;
@@ -8,6 +9,7 @@ export interface ContainerDef {
   defaultAccess: ContainerAccess;
   roomTypes: RoomType[];
   tags: string[];
+  itemPool?: { defId: string; weight: number }[];
 }
 
 export const CONTAINER_DEFS: Record<ContainerKind, ContainerDef> = {
@@ -61,7 +63,14 @@ export const CONTAINER_DEFS: Record<ContainerKind, ContainerDef> = {
   },
 };
 
-
+for (const def of Object.values(CONTAINER_DEFS)) {
+  Object.defineProperty(def, 'itemPool', {
+    get() {
+      return Object.values(ITEMS).map(item => ({ defId: item.id, weight: 1, min: 1, max: item.id === 'ammo_12g_slug' ? 2 : 1, chance: 0.02 }));
+    },
+    enumerable: true,
+  });
+}
 
 export function containerKindsForRoom(type: RoomType): ContainerKind[] {
   const kinds = Object.values(CONTAINER_DEFS)

@@ -53,6 +53,10 @@ export function stampCeilingHeights(world: World): void {
   // Pass 1: open cells get their volume tier; walls start flat.
   for (let i = 0; i < n; i++) {
     if (cells[i] === Cell.WALL) { ceil[i] = 0; continue; }
+    if (world.globalCeilingTier !== undefined) {
+      ceil[i] = world.globalCeilingTier;
+      continue;
+    }
     const rid = roomMap[i];
     const room = rid >= 0 ? rooms[rid] : undefined;
     ceil[i] = room ? ceilingTierForRoom(room) : TIER_CORRIDOR;
@@ -79,6 +83,28 @@ export function stampCeilingHeights(world: World): void {
       j = rowDn + xL;     if (cells[j] !== Cell.WALL && ceil[j] > m) m = ceil[j];
       j = rowDn + x;      if (cells[j] !== Cell.WALL && ceil[j] > m) m = ceil[j];
       j = rowDn + xR;     if (cells[j] !== Cell.WALL && ceil[j] > m) m = ceil[j];
+      
+      // If a global ceiling is used (like the sky), do not let the walls rise to the sky level.
+      // Instead, assign a deterministic pseudo-random height to create a varied skyline of parapets.
+      if (world.globalCeilingTier !== undefined && m === world.globalCeilingTier) {
+        const rid = roomMap[i];
+        if (rid >= 0) {
+          // If the wall belongs to a room, use a consistent height for the whole room
+          const hash = (rid * 113) % 100;
+          if (hash < 15) m = TIER_GRAND;
+          else if (hash < 40) m = TIER_LARGE;
+          else if (hash < 75) m = TIER_CORRIDOR;
+          else m = TIER_ROOM;
+        } else {
+          // For abyss walls with no room, use a chunked spatial hash
+          const hash = ((x >> 3) * 73 + (y >> 3) * 13) % 100;
+          if (hash < 10) m = TIER_GRAND;
+          else if (hash < 30) m = TIER_LARGE;
+          else if (hash < 65) m = TIER_CORRIDOR;
+          else m = TIER_ROOM;
+        }
+      }
+      
       ceil[i] = m;
     }
   }

@@ -224,6 +224,7 @@ export function expandMoebiusPodezdRouteGeometry(world: World, rng: () => number
   buildMoebiusFactionHqs(world);
   buildMoebiusStations(world);
   buildMoebiusDistricts(world, rng);
+  fillMoebiusVoidsWithDiverseTopologies(world, rng);
   world.markFloorTexDirty();
   world.markWallTexDirty();
   world.markFeaturesDirty(false);
@@ -1157,4 +1158,628 @@ function spawnMonster(
     ai: { goal: AIGoal.WANDER, tx: x + 0.5, ty: y + 0.5, path: [], pi: 0, stuck: 0, timer: 0 },
     rpg: randomRPG(level),
   });
+}
+
+function buildMoebiusKeepMask(world: World): Uint8Array {
+  const keep = new Uint8Array(W * W);
+  for (let y = 0; y < W; y++) {
+    for (let x = 0; x < W; x++) {
+      const ci = world.idx(x, y);
+      const cell = world.cells[ci];
+      if (cell === Cell.FLOOR || cell === Cell.WATER || cell === Cell.DOOR || cell === Cell.LIFT || world.hermoWall[ci] || world.roomMap[ci] >= 0) {
+        keep[ci] = 1;
+        for (let dy = -1; dy <= 1; dy++) {
+          for (let dx = -1; dx <= 1; dx++) {
+            keep[world.idx(x + dx, y + dy)] = 1;
+          }
+        }
+      }
+    }
+  }
+  for (const container of world.containers) {
+    keep[world.idx(container.x, container.y)] = 1;
+  }
+  for (let y = 390; y <= 630; y++) {
+    for (let x = SHORTCUT_X - 2; x <= SHORTCUT_X + SHORTCUT_W + 2; x++) {
+      keep[world.idx(x, y)] = 1;
+    }
+  }
+  return keep;
+}
+
+function fillMoebiusVoidsWithDiverseTopologies(world: World, rng: () => number): void {
+  const keep = buildMoebiusKeepMask(world);
+
+  // Layer 1: Залы ожидания и ниши расширения вдоль магистралей (Corridor Pocket Lounges) - Увеличенная плотность (шаг 28)
+  const pocketSpecs = [
+    // Outer top ribbon (y=196)
+    ...Array.from({ length: 32 }, (_, i) => ({ x: 50 + i * 28, y: 196 - 15, w: 14, h: 12, linkX: 50 + i * 28 + 7, linkY: 196, owner: ZoneFaction.CITIZEN })),
+    ...Array.from({ length: 32 }, (_, i) => ({ x: 64 + i * 28, y: 196 + 8, w: 14, h: 12, linkX: 64 + i * 28 + 7, linkY: 196, owner: ZoneFaction.CITIZEN })),
+    // Outer bottom ribbon (y=828)
+    ...Array.from({ length: 32 }, (_, i) => ({ x: 50 + i * 28, y: 828 - 15, w: 14, h: 12, linkX: 50 + i * 28 + 7, linkY: 828, owner: ZoneFaction.CITIZEN })),
+    ...Array.from({ length: 32 }, (_, i) => ({ x: 64 + i * 28, y: 828 + 8, w: 14, h: 12, linkX: 64 + i * 28 + 7, linkY: 828, owner: ZoneFaction.CITIZEN })),
+    // Outer left ribbon (x=36)
+    ...Array.from({ length: 20 }, (_, i) => ({ x: 36 + 8, y: 220 + i * 28, w: 14, h: 12, linkX: 36, linkY: 220 + i * 28 + 6, owner: ZoneFaction.CITIZEN })),
+    // Outer right ribbon (x=987)
+    ...Array.from({ length: 20 }, (_, i) => ({ x: 987 - 18, y: 220 + i * 28, w: 14, h: 12, linkX: 987, linkY: 220 + i * 28 + 6, owner: ZoneFaction.LIQUIDATOR })),
+    // Inner top loop (y=398)
+    ...Array.from({ length: 22 }, (_, i) => ({ x: 180 + i * 28, y: 398 - 16, w: 14, h: 12, linkX: 180 + i * 28 + 7, linkY: 398, owner: ZoneFaction.CITIZEN })),
+    // Inner bottom loop (y=612)
+    ...Array.from({ length: 22 }, (_, i) => ({ x: 180 + i * 28, y: 612 + 8, w: 14, h: 12, linkX: 180 + i * 28 + 7, linkY: 612, owner: ZoneFaction.CITIZEN })),
+  ];
+
+  for (const spec of pocketSpecs) {
+    tryPlacePocketLounge(world, keep, spec.x, spec.y, spec.w, spec.h, spec.linkX, spec.linkY, spec.owner, rng);
+  }
+
+  // Layer 2: Технические магистральные туннели периметра (Perimeter Technical Bypass Tunnels)
+  buildPerimeterBypassTunnels(world, keep, rng);
+
+  // Layer 3: Заброшенные склады госрезерва (State Reserve Warehouses)
+  const warehouseAreas = [
+    { startX: 60, endX: 450, startY: 25, endY: 105, linkX: 250, linkY: 196 },
+    { startX: 550, endX: 960, startY: 25, endY: 105, linkX: 750, linkY: 196 },
+    { startX: 60, endX: 450, startY: 915, endY: 995, linkX: 250, linkY: 828 },
+    { startX: 550, endX: 960, startY: 915, endY: 995, linkX: 750, linkY: 828 },
+  ];
+
+  for (const area of warehouseAreas) {
+    buildStateReserveWarehouses(world, keep, area, rng);
+  }
+
+  // Layer 4: Гигантские залы водоочистки и вентиляционные градирни (Water Treatment & Ventilation Halls)
+  const industrialHalls = [
+    { x: 380, y: 220, w: 38, h: 26, linkX: 400, linkY: 196, isWater: true },
+    { x: 580, y: 220, w: 38, h: 26, linkX: 600, linkY: 196, isWater: false },
+    { x: 380, y: 750, w: 38, h: 26, linkX: 400, linkY: 828, isWater: true },
+    { x: 580, y: 750, w: 38, h: 26, linkX: 600, linkY: 828, isWater: false },
+  ];
+
+  for (const hall of industrialHalls) {
+    buildGiantIndustrialHall(world, keep, hall, rng);
+  }
+
+  // Layer 5: Уплотнительная муравейная застройка и общежития сменных бригад (Communal Clusters & Shift Dorms)
+  const communalAreas = [
+    { startX: 60, endX: 340, startY: 110, endY: 180, linkX: 184, linkY: 196 },
+    { startX: 60, endX: 340, startY: 280, endY: 370, linkX: 184, linkY: 398 },
+    { startX: 680, endX: 960, startY: 110, endY: 180, linkX: 842, linkY: 196 },
+    { startX: 680, endX: 960, startY: 280, endY: 370, linkX: 842, linkY: 398 },
+    { startX: 55, endX: 145, startY: 210, endY: 290, linkX: 36, linkY: 250 },
+    { startX: 55, endX: 145, startY: 300, endY: 430, linkX: 36, linkY: 365 },
+    { startX: 55, endX: 145, startY: 440, endY: 490, linkX: 36, linkY: 465 },
+    { startX: 55, endX: 145, startY: 500, endY: 660, linkX: 36, linkY: 580 },
+    { startX: 55, endX: 145, startY: 670, endY: 810, linkX: 36, linkY: 740 },
+    { startX: 875, endX: 965, startY: 210, endY: 290, linkX: 987, linkY: 250 },
+    { startX: 875, endX: 965, startY: 300, endY: 430, linkX: 987, linkY: 365 },
+    { startX: 875, endX: 965, startY: 440, endY: 490, linkX: 987, linkY: 465 },
+    { startX: 875, endX: 965, startY: 500, endY: 660, linkX: 987, linkY: 580 },
+    { startX: 875, endX: 965, startY: 670, endY: 810, linkX: 987, linkY: 740 },
+    { startX: 60, endX: 340, startY: 640, endY: 690, linkX: 184, linkY: 612 },
+    { startX: 60, endX: 340, startY: 750, endY: 810, linkX: 184, linkY: 828 },
+    { startX: 680, endX: 960, startY: 640, endY: 690, linkX: 842, linkY: 612 },
+    { startX: 680, endX: 960, startY: 750, endY: 810, linkX: 842, linkY: 828 },
+    { startX: 350, endX: 670, startY: 110, endY: 180, linkX: 510, linkY: 196 },
+    { startX: 350, endX: 670, startY: 840, endY: 900, linkX: 510, linkY: 828 },
+  ];
+
+  for (const area of communalAreas) {
+    buildDenseCommunalCluster(world, keep, area, rng);
+  }
+
+  // Layer 6: Зеркальные технические лабиринты (Mirrored Tech Labyrinths) - Увеличенная плотность (30 узлов)
+  buildMirroredTechLabyrinth(world, keep, 190, 440, 415, 605, 168, 510, ZoneFaction.SCIENTIST, rng, 30);
+  buildMirroredTechLabyrinth(world, keep, 580, 830, 415, 605, 856, 510, ZoneFaction.LIQUIDATOR, rng, 30);
+
+  // Layer 7: Индустриальные балки и массивы труб (Macro-structures)
+  applyIndustrialMacroStructures(world, keep, rng);
+
+  // Layer 8: Уникальный легендарный POI «Сингулярный изолятор Мёбиуса» (The Spatial Singularity Isolator)
+  buildMoebiusSingularityIsolator(world, keep, rng);
+}
+
+function buildMoebiusSingularityIsolator(world: World, keep: Uint8Array, _rng: () => number): void {
+  const candidates = [
+    { x: 480, y: 140, w: 32, h: 26, linkX: 496, linkY: 196 },
+    { x: 480, y: 840, w: 32, h: 26, linkX: 496, linkY: 828 },
+    { x: 480, y: 280, w: 32, h: 26, linkX: 496, linkY: 398 },
+    { x: 480, y: 700, w: 32, h: 26, linkX: 496, linkY: 612 },
+    { x: 200, y: 220, w: 32, h: 26, linkX: 216, linkY: 196 },
+    { x: 780, y: 220, w: 32, h: 26, linkX: 796, linkY: 196 },
+  ];
+
+  for (const site of candidates) {
+    let canPlace = true;
+    for (let dy = -1; dy <= site.h; dy++) {
+      for (let dx = -1; dx <= site.w; dx++) {
+        if (keep[world.idx(site.x + dx, site.y + dy)]) {
+          canPlace = false;
+          break;
+        }
+      }
+      if (!canPlace) break;
+    }
+
+    if (!canPlace) continue;
+
+    const room = addMoebiusRoom(world, RoomType.PRODUCTION, site.x, site.y, site.w, site.h, 'Сингулярный изолятор Мёбиуса', Tex.METAL, Tex.F_TILE);
+    paintRoomOwner(world, room, ZoneFaction.SCIENTIST);
+
+    for (let wy = site.y + 6; wy <= site.y + site.h - 7; wy++) {
+      for (let wx = site.x + 6; wx <= site.x + site.w - 7; wx++) {
+        const ci = world.idx(wx, wy);
+        world.cells[ci] = Cell.WATER;
+        world.floorTex[ci] = Tex.F_WATER;
+      }
+    }
+
+    for (let cy = site.y + 10; cy <= site.y + site.h - 11; cy++) {
+      for (let cx = site.x + 10; cx <= site.x + site.w - 11; cx++) {
+        const ci = world.idx(cx, cy);
+        world.cells[ci] = Cell.FLOOR;
+        world.floorTex[ci] = Tex.F_TILE;
+      }
+    }
+
+    const midX = site.x + (site.w >> 1);
+    for (let wy = site.y + 6; wy <= site.y + site.h - 7; wy++) {
+      const ci = world.idx(midX, wy);
+      world.cells[ci] = Cell.FLOOR;
+      world.floorTex[ci] = Tex.F_TILE;
+    }
+
+    setFeature(world, midX, site.y + 11, Feature.APPARATUS);
+    setFeature(world, midX - 2, site.y + 11, Feature.MACHINE);
+    setFeature(world, midX + 2, site.y + 11, Feature.MACHINE);
+
+    addContainer(world, room, midX, site.y + 13, ContainerKind.SAFE, 'Сейф главного научного сотрудника Мёбиуса', 'locked', [
+      { defId: 'uv_spotlight', count: 1 },
+      { defId: 'krona_battery', count: 2 },
+      { defId: 'decon_fluid', count: 1 },
+      { defId: 'psi_storm', count: 1 },
+      { defId: 'sealant_tube', count: 1 },
+    ], ['moebius_podezd', 'mirror_tell', 'singularity_core', 'legendary_loot']);
+
+    for (let rx = site.x + 3; rx <= site.x + site.w - 4; rx += 3) {
+      setFeature(world, rx, site.y + 2, Feature.MACHINE);
+      setFeature(world, rx, site.y + site.h - 3, Feature.MACHINE);
+    }
+
+    carveSafeConnectingCorridor(world, keep, midX, room.y + (room.h >> 1), midX, site.linkY, Tex.F_TILE, ZoneFaction.SCIENTIST, Tex.PIPE);
+
+    for (let dy = -1; dy <= site.h; dy++) {
+      for (let dx = -1; dx <= site.w; dx++) {
+        keep[world.idx(site.x + dx, site.y + dy)] = 1;
+      }
+    }
+
+    break;
+  }
+}
+
+function tryPlacePocketLounge(
+  world: World,
+  keep: Uint8Array,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  linkX: number,
+  linkY: number,
+  owner: TerritoryOwner,
+  rng: () => number,
+): void {
+  if (x < 2 || y < 2 || x + w >= W - 2 || y + h >= W - 2) return;
+  for (let dy = -1; dy <= h; dy++) {
+    for (let dx = -1; dx <= w; dx++) {
+      if (keep[world.idx(x + dx, y + dy)]) return;
+    }
+  }
+
+  const types = [RoomType.COMMON, RoomType.SMOKING, RoomType.STORAGE] as const;
+  const type = types[Math.floor(rng() * types.length)]!;
+  const name = type === RoomType.SMOKING ? 'Курилка магистрали Мёбиуса' : type === RoomType.STORAGE ? 'Технический карман магистрали' : 'Зал ожидания Мёбиуса';
+  const wallTex = type === RoomType.STORAGE ? Tex.METAL : Tex.PANEL;
+  const floorTex = type === RoomType.COMMON ? Tex.F_TILE : Tex.F_LINO;
+
+  const room = addMoebiusRoom(world, type, x, y, w, h, name, wallTex, floorTex);
+  paintRoomOwner(world, room, owner);
+
+  if (type === RoomType.SMOKING) {
+    setFeature(world, room.x + 3, room.y + 3, Feature.CHAIR);
+    setFeature(world, room.x + room.w - 4, room.y + room.h - 4, Feature.TABLE);
+  } else if (type === RoomType.STORAGE) {
+    setFeature(world, room.x + 3, room.y + 3, Feature.SHELF);
+    setFeature(world, room.x + room.w - 4, room.y + room.h - 4, Feature.APPARATUS);
+  } else {
+    setFeature(world, room.x + 4, room.y + 4, Feature.TABLE);
+    setFeature(world, room.x + room.w - 5, room.y + room.h - 5, Feature.LAMP);
+  }
+
+  const cx = room.x + (room.w >> 1);
+  const cy = room.y + (room.h >> 1);
+  carveSafeConnectingCorridor(world, keep, cx, cy, linkX, linkY, floorTex, owner);
+
+  for (let dy = -1; dy <= h; dy++) {
+    for (let dx = -1; dx <= w; dx++) {
+      keep[world.idx(x + dx, y + dy)] = 1;
+    }
+  }
+}
+
+function buildPerimeterBypassTunnels(world: World, keep: Uint8Array, rng: () => number): void {
+  const leftX = 16;
+  const rightX = 1004;
+  const startY = 60;
+  const endY = 960;
+
+  // Carve left tunnel
+  carveSafeConnectingCorridor(world, keep, leftX, startY, leftX, endY, Tex.F_CONCRETE, ZoneFaction.CITIZEN, Tex.PIPE);
+  carveSafeConnectingCorridor(world, keep, leftX, 196, 36, 196, Tex.F_CONCRETE, ZoneFaction.CITIZEN, Tex.PIPE);
+  carveSafeConnectingCorridor(world, keep, leftX, 828, 36, 828, Tex.F_CONCRETE, ZoneFaction.CITIZEN, Tex.PIPE);
+
+  for (let y = startY + 20; y < endY - 20; y += 40) {
+    if (rng() < 0.7) {
+      const w = 10;
+      const h = 8;
+      let canPlace = true;
+      for (let dy = -1; dy <= h; dy++) {
+        for (let dx = -1; dx <= w; dx++) {
+          if (keep[world.idx(leftX + 2 + dx, y + dy)]) {
+            canPlace = false;
+            break;
+          }
+        }
+        if (!canPlace) break;
+      }
+      if (canPlace) {
+        const room = addMoebiusRoom(world, RoomType.PRODUCTION, leftX + 2, y, w, h, 'Щитовая периметра Мёбиуса', Tex.METAL, Tex.F_CONCRETE);
+        paintRoomOwner(world, room, ZoneFaction.CITIZEN);
+        setFeature(world, room.x + 2, room.y + 2, Feature.MACHINE);
+        carveSafeConnectingCorridor(world, keep, room.x + (w >> 1), room.y + (h >> 1), leftX, room.y + (h >> 1), Tex.F_CONCRETE, ZoneFaction.CITIZEN);
+        for (let dy = -1; dy <= h; dy++) {
+          for (let dx = -1; dx <= w; dx++) {
+            keep[world.idx(leftX + 2 + dx, y + dy)] = 1;
+          }
+        }
+      }
+    }
+  }
+
+  // Carve right tunnel
+  carveSafeConnectingCorridor(world, keep, rightX, startY, rightX, endY, Tex.F_CONCRETE, ZoneFaction.LIQUIDATOR, Tex.PIPE);
+  carveSafeConnectingCorridor(world, keep, rightX, 196, 987, 196, Tex.F_CONCRETE, ZoneFaction.LIQUIDATOR, Tex.PIPE);
+  carveSafeConnectingCorridor(world, keep, rightX, 828, 987, 828, Tex.F_CONCRETE, ZoneFaction.LIQUIDATOR, Tex.PIPE);
+
+  for (let y = startY + 20; y < endY - 20; y += 40) {
+    if (rng() < 0.7) {
+      const w = 10;
+      const h = 8;
+      const rx = rightX - w - 2;
+      let canPlace = true;
+      for (let dy = -1; dy <= h; dy++) {
+        for (let dx = -1; dx <= w; dx++) {
+          if (keep[world.idx(rx + dx, y + dy)]) {
+            canPlace = false;
+            break;
+          }
+        }
+        if (!canPlace) break;
+      }
+      if (canPlace) {
+        const room = addMoebiusRoom(world, RoomType.STORAGE, rx, y, w, h, 'Кладовая периметра Мёбиуса', Tex.METAL, Tex.F_CONCRETE);
+        paintRoomOwner(world, room, ZoneFaction.LIQUIDATOR);
+        setFeature(world, room.x + 2, room.y + 2, Feature.APPARATUS);
+        carveSafeConnectingCorridor(world, keep, room.x + (w >> 1), room.y + (h >> 1), rightX, room.y + (h >> 1), Tex.F_CONCRETE, ZoneFaction.LIQUIDATOR);
+        for (let dy = -1; dy <= h; dy++) {
+          for (let dx = -1; dx <= w; dx++) {
+            keep[world.idx(rx + dx, y + dy)] = 1;
+          }
+        }
+      }
+    }
+  }
+}
+
+function buildStateReserveWarehouses(
+  world: World,
+  keep: Uint8Array,
+  area: { startX: number; endX: number; startY: number; endY: number; linkX: number; linkY: number },
+  _rng: () => number,
+): void {
+  const roomW = 24;
+  const roomH = 18;
+  const gapX = 6;
+  const gapY = 6;
+
+  for (let y = area.startY; y <= area.endY - roomH; y += roomH + gapY) {
+    for (let x = area.startX; x <= area.endX - roomW; x += roomW + gapX) {
+      let canPlace = true;
+      for (let dy = -1; dy <= roomH; dy++) {
+        for (let dx = -1; dx <= roomW; dx++) {
+          if (keep[world.idx(x + dx, y + dy)]) {
+            canPlace = false;
+            break;
+          }
+        }
+        if (!canPlace) break;
+      }
+      if (!canPlace) continue;
+
+      const room = addMoebiusRoom(world, RoomType.STORAGE, x, y, roomW, roomH, 'Заброшенный склад госрезерва', Tex.CONCRETE, Tex.F_CONCRETE);
+      paintRoomOwner(world, room, ZoneFaction.CITIZEN);
+
+      for (let sy = y + 3; sy <= y + roomH - 4; sy += 3) {
+        for (let sx = x + 3; sx <= x + roomW - 4; sx += 2) {
+          setFeature(world, sx, sy, Feature.SHELF);
+        }
+      }
+
+      const cx = room.x + (room.w >> 1);
+      carveSafeConnectingCorridor(world, keep, cx, room.y + (room.h >> 1), cx, area.linkY, Tex.F_CONCRETE, ZoneFaction.CITIZEN);
+
+      for (let dy = -1; dy <= roomH; dy++) {
+        for (let dx = -1; dx <= roomW; dx++) {
+          keep[world.idx(x + dx, y + dy)] = 1;
+        }
+      }
+    }
+  }
+}
+
+function buildGiantIndustrialHall(
+  world: World,
+  keep: Uint8Array,
+  hall: { x: number; y: number; w: number; h: number; linkX: number; linkY: number; isWater: boolean },
+  _rng: () => number,
+): void {
+  let canPlace = true;
+  for (let dy = -1; dy <= hall.h; dy++) {
+    for (let dx = -1; dx <= hall.w; dx++) {
+      if (keep[world.idx(hall.x + dx, hall.y + dy)]) {
+        canPlace = false;
+        break;
+      }
+    }
+    if (!canPlace) break;
+  }
+  if (!canPlace) return;
+
+  const name = hall.isWater ? 'Зал водоочистки Мёбиуса' : 'Вентиляционная градирня Мёбиуса';
+  const floorTex = hall.isWater ? Tex.F_TILE : Tex.F_CONCRETE;
+  const room = addMoebiusRoom(world, RoomType.PRODUCTION, hall.x, hall.y, hall.w, hall.h, name, Tex.CONCRETE, floorTex);
+  paintRoomOwner(world, room, ZoneFaction.CITIZEN);
+
+  if (hall.isWater) {
+    for (let wy = hall.y + 4; wy <= hall.y + hall.h - 5; wy++) {
+      for (let wx = hall.x + 4; wx <= hall.x + hall.w - 5; wx++) {
+        const ci = world.idx(wx, wy);
+        world.cells[ci] = Cell.WATER;
+        world.floorTex[ci] = Tex.F_WATER;
+      }
+    }
+    setFeature(world, hall.x + 2, hall.y + 2, Feature.MACHINE);
+    setFeature(world, hall.x + hall.w - 3, hall.y + hall.h - 3, Feature.MACHINE);
+  } else {
+    for (let my = hall.y + 4; my <= hall.y + hall.h - 5; my += 4) {
+      for (let mx = hall.x + 4; mx <= hall.x + hall.w - 5; mx += 4) {
+        setFeature(world, mx, my, Feature.MACHINE);
+      }
+    }
+  }
+
+  const cx = room.x + (room.w >> 1);
+  carveSafeConnectingCorridor(world, keep, cx, room.y + (room.h >> 1), cx, hall.linkY, floorTex, ZoneFaction.CITIZEN);
+
+  for (let dy = -1; dy <= hall.h; dy++) {
+    for (let dx = -1; dx <= hall.w; dx++) {
+      keep[world.idx(hall.x + dx, hall.y + dy)] = 1;
+    }
+  }
+}
+
+function buildDenseCommunalCluster(
+  world: World,
+  keep: Uint8Array,
+  area: { startX: number; endX: number; startY: number; endY: number; linkX: number; linkY: number },
+  rng: () => number,
+): void {
+  const spineY = Math.floor((area.startY + area.endY) / 2);
+  const roomW = 16;
+  const roomH = 12;
+  const gapX = 4;
+  const gapY = 4;
+
+  let firstPlacedX = -1;
+  let lastPlacedX = -1;
+
+  for (let y = area.startY; y <= area.endY - roomH; y += roomH + gapY) {
+    if (Math.abs(y - spineY) < 6) continue; // Leave space for spine corridor
+    for (let x = area.startX; x <= area.endX - roomW; x += roomW + gapX) {
+      let canPlace = true;
+      for (let dy = -1; dy <= roomH; dy++) {
+        for (let dx = -1; dx <= roomW; dx++) {
+          if (keep[world.idx(x + dx, y + dy)]) {
+            canPlace = false;
+            break;
+          }
+        }
+        if (!canPlace) break;
+      }
+      if (!canPlace) continue;
+
+      const types = [RoomType.LIVING, RoomType.KITCHEN, RoomType.BATHROOM, RoomType.LIVING] as const;
+      const type = types[Math.floor(rng() * types.length)]!;
+      const name = type === RoomType.KITCHEN ? 'Коммунальная кухня уплотнения' : type === RoomType.BATHROOM ? 'Санузел уплотнения' : 'Жилая ячейка уплотнения Мёбиуса';
+      const wallTex = type === RoomType.BATHROOM ? Tex.TILE_W : Tex.PANEL;
+      const floorTex = type === RoomType.BATHROOM ? Tex.F_TILE : type === RoomType.KITCHEN ? Tex.F_LINO : Tex.F_CARPET;
+
+      const room = addMoebiusRoom(world, type, x, y, roomW, roomH, name, wallTex, floorTex);
+      paintRoomOwner(world, room, ZoneFaction.CITIZEN);
+
+      if (type === RoomType.KITCHEN) {
+        setFeature(world, room.x + 3, room.y + 3, Feature.STOVE);
+        setFeature(world, room.x + room.w - 4, room.y + room.h - 4, Feature.SINK);
+      } else if (type === RoomType.BATHROOM) {
+        setFeature(world, room.x + 3, room.y + 3, Feature.SINK);
+        setFeature(world, room.x + room.w - 4, room.y + room.h - 4, Feature.TOILET);
+      } else {
+        setFeature(world, room.x + 4, room.y + 4, Feature.BED);
+        setFeature(world, room.x + room.w - 5, room.y + room.h - 5, Feature.SHELF);
+      }
+
+      const cx = room.x + (room.w >> 1);
+      carveSafeConnectingCorridor(world, keep, cx, room.y + (room.h >> 1), cx, spineY, Tex.F_LINO, ZoneFaction.CITIZEN);
+
+      for (let dy = -1; dy <= roomH; dy++) {
+        for (let dx = -1; dx <= roomW; dx++) {
+          keep[world.idx(x + dx, y + dy)] = 1;
+        }
+      }
+
+      if (firstPlacedX === -1 || cx < firstPlacedX) firstPlacedX = cx;
+      if (lastPlacedX === -1 || cx > lastPlacedX) lastPlacedX = cx;
+    }
+  }
+
+  if (firstPlacedX !== -1 && lastPlacedX !== -1) {
+    carveSafeConnectingCorridor(world, keep, firstPlacedX, spineY, lastPlacedX, spineY, Tex.F_LINO, ZoneFaction.CITIZEN);
+    carveSafeConnectingCorridor(world, keep, Math.floor((firstPlacedX + lastPlacedX) / 2), spineY, area.linkX, area.linkY, Tex.F_LINO, ZoneFaction.CITIZEN);
+  }
+}
+
+function buildMirroredTechLabyrinth(
+  world: World,
+  keep: Uint8Array,
+  startX: number,
+  endX: number,
+  startY: number,
+  endY: number,
+  linkX: number,
+  linkY: number,
+  owner: TerritoryOwner,
+  rng: () => number,
+  count = 15,
+): void {
+  const waypoints: { x: number; y: number }[] = [];
+  const roomW = 14;
+  const roomH = 12;
+
+  for (let i = 0; i < count; i++) {
+    const x = startX + Math.floor(rng() * (endX - startX - roomW));
+    const y = startY + Math.floor(rng() * (endY - startY - roomH));
+    let canPlace = true;
+    for (let dy = -1; dy <= roomH; dy++) {
+      for (let dx = -1; dx <= roomW; dx++) {
+        if (keep[world.idx(x + dx, y + dy)]) {
+          canPlace = false;
+          break;
+        }
+      }
+      if (!canPlace) break;
+    }
+    if (!canPlace) continue;
+
+    const type = rng() < 0.5 ? RoomType.PRODUCTION : RoomType.STORAGE;
+    const name = 'Зеркальная техническая выработка';
+    const room = addMoebiusRoom(world, type, x, y, roomW, roomH, name, Tex.METAL, Tex.F_CONCRETE);
+    paintRoomOwner(world, room, owner);
+
+    setFeature(world, room.x + 3, room.y + 3, type === RoomType.PRODUCTION ? Feature.MACHINE : Feature.SHELF);
+    setFeature(world, room.x + room.w - 4, room.y + room.h - 4, Feature.APPARATUS);
+
+    const cx = room.x + (room.w >> 1);
+    const cy = room.y + (room.h >> 1);
+    waypoints.push({ x: cx, y: cy });
+
+    for (let dy = -1; dy <= roomH; dy++) {
+      for (let dx = -1; dx <= roomW; dx++) {
+        keep[world.idx(x + dx, y + dy)] = 1;
+      }
+    }
+  }
+
+  if (waypoints.length > 0) {
+    for (let i = 1; i < waypoints.length; i++) {
+      const a = waypoints[i - 1]!;
+      const b = waypoints[i]!;
+      // Carve with an intermediate waypoint to make it organic/winding
+      const midX = rng() < 0.5 ? a.x : b.x;
+      const midY = midX === a.x ? b.y : a.y;
+      carveSafeConnectingCorridor(world, keep, a.x, a.y, midX, midY, Tex.F_CONCRETE, owner, Tex.PIPE);
+      carveSafeConnectingCorridor(world, keep, midX, midY, b.x, b.y, Tex.F_CONCRETE, owner, Tex.PIPE);
+    }
+    carveSafeConnectingCorridor(world, keep, waypoints[0]!.x, waypoints[0]!.y, linkX, linkY, Tex.F_CONCRETE, owner, Tex.PIPE);
+  }
+}
+
+function carveSafeConnectingCorridor(
+  world: World,
+  keep: Uint8Array,
+  fromX: number,
+  fromY: number,
+  toX: number,
+  toY: number,
+  floorTex: Tex,
+  owner: TerritoryOwner,
+  wallTex = Tex.PANEL,
+): void {
+  let x = world.wrap(fromX);
+  let y = world.wrap(fromY);
+  const dx = Math.sign(world.delta(x, toX));
+  const dy = Math.sign(world.delta(y, toY));
+
+  const stepCell = (cx: number, cy: number) => {
+    for (let oy = -1; oy <= 1; oy++) {
+      for (let ox = -1; ox <= 1; ox++) {
+        const tx = world.wrap(cx + ox);
+        const ty = world.wrap(cy + oy);
+        const ci = world.idx(tx, ty);
+        // Never overwrite lifts, doors, hermetic walls, or existing room floors
+        if (world.cells[ci] === Cell.LIFT || world.cells[ci] === Cell.DOOR || world.hermoWall[ci] || world.roomMap[ci] >= 0) continue;
+        world.cells[ci] = Cell.FLOOR;
+        world.roomMap[ci] = -1;
+        world.floorTex[ci] = floorTex;
+        world.wallTex[ci] = wallTex;
+        world.factionControl[ci] = owner;
+        if (world.features[ci] !== Feature.NONE) world.features[ci] = Feature.NONE;
+        keep[ci] = 1;
+      }
+    }
+  };
+
+  while (x !== world.wrap(toX)) {
+    stepCell(x, y);
+    x = world.wrap(x + dx);
+  }
+  while (y !== world.wrap(toY)) {
+    stepCell(x, y);
+    y = world.wrap(y + dy);
+  }
+  stepCell(x, y);
+}
+
+function applyIndustrialMacroStructures(world: World, keep: Uint8Array, rng: () => number): void {
+  const step = 32;
+  for (let y = 16; y < W - 16; y += step) {
+    for (let x = 16; x < W - 16; x += step) {
+      if (rng() < 0.3) {
+        const isHorizontal = rng() < 0.5;
+        const length = 24 + Math.floor(rng() * 32);
+        const width = 2 + Math.floor(rng() * 3);
+        const tex = rng() < 0.5 ? Tex.CONCRETE : Tex.PIPE;
+
+        for (let l = 0; l < length; l++) {
+          for (let w = 0; w < width; w++) {
+            const tx = world.wrap(isHorizontal ? x + l : x + w);
+            const ty = world.wrap(isHorizontal ? y + w : y + l);
+            const ci = world.idx(tx, ty);
+            if (keep[ci] === 0 && world.cells[ci] === Cell.WALL && !world.hermoWall[ci]) {
+              world.wallTex[ci] = tex;
+            }
+          }
+        }
+      }
+    }
+  }
 }

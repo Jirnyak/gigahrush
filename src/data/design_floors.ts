@@ -123,9 +123,9 @@ export const DESIGN_FLOOR_ROUTES: readonly DesignFloorRouteDef[] = [
   { id: 'podad', z: -40, displayName: 'Подад', baseFloor: FloorLevel.HELL, color: '#d34', role: 'живые тоннели, двигающиеся стены, нижний порог', danger: 5 },
   { id: 'spectral_chasovnya', z: -42, displayName: 'Спектральная часовня', baseFloor: FloorLevel.HELL, color: '#d6a64b', role: 'звук, культ, слуховая геометрия', danger: 5 },
   { id: 'cantor_pustoty', z: -44, displayName: 'Кантор пустоты', baseFloor: FloorLevel.VOID, color: '#9cf', role: 'рекурсивные разрывы, мосты и пыльные острова', danger: 5 },
-    { id: 'liquidatorbase', z: -16, displayName: 'База Ликвидаторов', baseFloor: FloorLevel.MAINTENANCE, color: '#f66', role: 'штаб, торговля, ликвидаторы', danger: 4 },
+  { id: 'liquidatorbase', z: -16, displayName: 'База Ликвидаторов', baseFloor: FloorLevel.MAINTENANCE, color: '#f66', role: 'штаб, торговля, ликвидаторы', danger: 4 },
   { id: 'darkness', z: -48, displayName: 'Темный отсек', baseFloor: FloorLevel.VOID, color: '#88f', role: 'позднее давление', danger: 5 },
-  { id: 'horrorfloor', z: -16, displayName: 'Хоррор-этаж', baseFloor: FloorLevel.VOID, color: '#222', role: 'лабиринт, прятки', danger: 5 },
+  { id: 'horrorfloor', z: -46, displayName: 'Хоррор-этаж', baseFloor: FloorLevel.VOID, color: '#222', role: 'лабиринт, прятки', danger: 5 },
 ];
 
 export const DESIGN_FLOOR_ZS: readonly number[] = DESIGN_FLOOR_ROUTES.map(def => def.z);

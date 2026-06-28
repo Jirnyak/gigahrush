@@ -363,6 +363,8 @@ export function paintRoofSkyToCanvas(provider: RoofSkyTextureProvider, canvas: H
 
 export function generateRoofDesignFloor(seed = 0): RoofGeneration {
   const world = new World();
+  world.globalCeilingTier = 14; // Force fixed high ceiling (tier 14 -> height 8) to act as sky over the abyss
+
   const entities: Entity[] = [];
   const nextId = { v: 1 };
   let nextContainerId = CONTAINER_ID_BASE;
@@ -495,10 +497,12 @@ export function expandRoofArchipelago(world: World, rng: () => number): void {
   connectRoofWalk(world, keep, signalOutpost, waterDeck, 2, true);
 
   placeRoofWideDeckNetwork(world, keep, rng);
+  placeRoofMegastructureGrid(world, keep, rng);
   const hqRooms = placeRoofFactionHqClusters(world, keep, rng);
   const deckRooms = placeRoofOpenDeckLayer(world, keep, rng);
   const midRooms = placeRoofMidServiceLayer(world, keep, rng);
   const microRooms = placeRoofMicroLayer(world, keep, rng);
+  placeCrashedProbe(world, keep, rng, routeRooms);
   connectRoomsMST(world, routeRooms.concat(deckRooms, hqRooms, midRooms, microRooms));
   normalizeRoofDoorHardware(world);
 
@@ -961,6 +965,191 @@ function clearRoofVoid(world: World, keep: Uint8Array): void {
     world.features[i] = Feature.NONE;
     world.hermoWall[i] = 0;
   }
+}
+
+function placeSolidRoofLine(
+  world: World,
+  keep: Uint8Array,
+  ax: number,
+  ay: number,
+  bx: number,
+  by: number,
+  width: number,
+  tex: Tex,
+): void {
+  const steps = Math.max(1, Math.abs(bx - ax), Math.abs(by - ay));
+  const r2 = width * width;
+  for (let step = 0; step <= steps; step++) {
+    const t = step / steps;
+    const cx = Math.round(ax + (bx - ax) * t);
+    const cy = Math.round(ay + (by - ay) * t);
+    
+    for (let dy = -width; dy <= width; dy++) {
+      for (let dx = -width; dx <= width; dx++) {
+        if (dx * dx + dy * dy > r2) continue;
+        const ci = world.idx(cx + dx, cy + dy);
+        if (keep[ci] || world.cells[ci] === Cell.FLOOR || world.cells[ci] === Cell.WATER) continue;
+        world.cells[ci] = Cell.WALL;
+        world.roomMap[ci] = -1;
+        world.wallTex[ci] = tex;
+        world.features[ci] = Feature.NONE;
+      }
+    }
+  }
+}
+
+function placeRoofMegastructureGrid(world: World, keep: Uint8Array, rng: () => number): void {
+  // Generate massive cross-map structural beams to fill the abyss with real architectural geometry
+  const numBeams = 180;
+  for (let i = 0; i < numBeams; i++) {
+    const isHorizontal = rng() < 0.5;
+    const x = Math.floor(rng() * W);
+    const y = Math.floor(rng() * W);
+    const length = 200 + Math.floor(rng() * 400);
+    const thickness = 2 + Math.floor(rng() * 8);
+    const tex = rng() < 0.4 ? Tex.PIPE : Tex.CONCRETE;
+    
+    const ax = x;
+    const ay = y;
+    const bx = isHorizontal ? x + length : x;
+    const by = isHorizontal ? y : y + length;
+    
+    placeSolidRoofLine(world, keep, ax, ay, bx, by, thickness, tex);
+  }
+  
+  // Diagonal support struts
+  const numStruts = 120;
+  for (let i = 0; i < numStruts; i++) {
+    const x = Math.floor(rng() * W);
+    const y = Math.floor(rng() * W);
+    const length = 100 + Math.floor(rng() * 300);
+    const thickness = 1 + Math.floor(rng() * 4);
+    const signX = rng() < 0.5 ? 1 : -1;
+    const signY = rng() < 0.5 ? 1 : -1;
+    
+    placeSolidRoofLine(world, keep, x, y, x + length * signX, y + length * signY, thickness, Tex.METAL);
+  }
+  
+  // Giant cylindrical cooling towers/silos in the deep abyss
+  const numTowers = 50;
+  for (let i = 0; i < numTowers; i++) {
+    const cx = Math.floor(rng() * W);
+    const cy = Math.floor(rng() * W);
+    if (world.dist(cx, cy, CX, CY) < 150) continue; // Keep center clear
+    const r = 8 + Math.floor(rng() * 12);
+    const tex = rng() < 0.5 ? Tex.CONCRETE : Tex.METAL;
+    
+    const r2 = r * r;
+    for (let dy = -r; dy <= r; dy++) {
+      for (let dx = -r; dx <= r; dx++) {
+        if (dx * dx + dy * dy > r2) continue;
+        const ci = world.idx(cx + dx, cy + dy);
+        if (keep[ci] || world.cells[ci] === Cell.FLOOR || world.cells[ci] === Cell.WATER) continue;
+        world.cells[ci] = Cell.WALL;
+        world.roomMap[ci] = -1;
+        world.wallTex[ci] = tex;
+        world.features[ci] = Feature.NONE;
+      }
+    }
+  }
+}
+
+function placeCrashedProbe(world: World, keep: Uint8Array, rng: () => number, routeRooms: Room[]): void {
+  // Find a clear spot
+  let cx = 0, cy = 0;
+  for (let i = 0; i < 50; i++) {
+    cx = 150 + Math.floor(rng() * (W - 300));
+    cy = 150 + Math.floor(rng() * (W - 300));
+    if (world.dist(cx, cy, CX, CY) < 250) continue;
+    
+    let overlaps = 0;
+    for (let dy = -25; dy <= 25; dy++) {
+      for (let dx = -25; dx <= 25; dx++) {
+        if (keep[world.idx(cx + dx, cy + dy)]) overlaps++;
+      }
+    }
+    if (overlaps < 50) break;
+    cx = 0;
+  }
+  
+  if (cx === 0) return; // Failed to find spot
+  
+  // Create crater (scorched concrete)
+  for (let dy = -20; dy <= 20; dy++) {
+    for (let dx = -20; dx <= 20; dx++) {
+      if (dx*dx + dy*dy > 400) continue;
+      const ci = world.idx(cx + dx, cy + dy);
+      if (keep[ci]) continue;
+      
+      world.cells[ci] = Cell.FLOOR;
+      world.roomMap[ci] = -1;
+      world.floorTex[ci] = Tex.F_CONCRETE;
+      world.wallTex[ci] = Tex.CONCRETE;
+      
+      if (rng() < 0.05) world.features[ci] = Feature.MACHINE;
+    }
+  }
+  
+  // The Probe hull (solid metal block)
+  for (let dy = -7; dy <= 7; dy++) {
+    for (let dx = -7; dx <= 7; dx++) {
+      if (dx*dx + dy*dy > 49) continue;
+      const ci = world.idx(cx + dx, cy + dy);
+      world.cells[ci] = Cell.WALL;
+      world.roomMap[ci] = -1;
+      world.wallTex[ci] = Tex.METAL;
+    }
+  }
+  
+  // The Probe interior (playable room)
+  const probeRoom: Room = {
+    id: world.rooms.length,
+    x: cx - 4,
+    y: cy - 4,
+    w: 9,
+    h: 9,
+    type: RoomType.PRODUCTION,
+    name: "Рухнувший стратосферный зонд",
+    doors: [],
+    sealed: false,
+    ceilingTier: 3,
+    apartmentId: -1,
+    wallTex: Tex.METAL,
+    floorTex: Tex.F_CONCRETE
+  };
+  world.rooms.push(probeRoom);
+  routeRooms.push(probeRoom);
+  
+  for (let dy = -4; dy <= 4; dy++) {
+    for (let dx = -4; dx <= 4; dx++) {
+      if (dx*dx + dy*dy > 16) continue;
+      const ci = world.idx(cx + dx, cy + dy);
+      world.cells[ci] = Cell.FLOOR;
+      world.roomMap[ci] = probeRoom.id;
+      world.floorTex[ci] = Tex.F_CONCRETE;
+    }
+  }
+  
+  // Broken entrance (carve a path out of the hull)
+  const angle = rng() * Math.PI * 2;
+  const ex = Math.round(Math.cos(angle) * 2);
+  const ey = Math.round(Math.sin(angle) * 2);
+  for (let step = 4; step <= 8; step++) {
+    const pX = cx + Math.round(ex * step * 0.5);
+    const pY = cy + Math.round(ey * step * 0.5);
+    for (const [ox, oy] of [[0,0], [1,0], [0,1], [-1,0], [0,-1]]) {
+      const ci = world.idx(pX + ox, pY + oy);
+      world.cells[ci] = Cell.FLOOR;
+      world.roomMap[ci] = probeRoom.id;
+      world.floorTex[ci] = Tex.F_CONCRETE;
+    }
+  }
+  
+  // Add rare tech
+  world.features[world.idx(cx, cy)] = Feature.APPARATUS;
+  world.features[world.idx(cx + 1, cy)] = Feature.SCREEN;
+  world.features[world.idx(cx - 1, cy)] = Feature.SCREEN;
+  world.features[world.idx(cx, cy + 1)] = Feature.MACHINE;
 }
 
 function addRoofIsland(

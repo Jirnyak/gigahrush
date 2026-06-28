@@ -75,6 +75,7 @@ const FEATURE_VISUAL_IDS: Partial<Record<Feature, readonly string[]>> = {
   [Feature.DESK]: ['furniture_desk_hint'],
   [Feature.CANDLE]: ['candle_stub_hint'],
   [Feature.SCREEN]: ['wall_panel_screen', 'cable_wall_loose'],
+  [Feature.LAMP]: ['ceiling_bulb', 'ceiling_light_panel'],
 };
 
 

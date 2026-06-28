@@ -687,7 +687,7 @@ const FACTION_TRADE_OFFERS: readonly FactionTradeOffer[] = [
   { faction: Faction.LIQUIDATOR, occupation: Occupation.HUNTER, minRank: 2, defId: 'makarov', count: 1 },
   { faction: Faction.LIQUIDATOR, occupation: Occupation.HUNTER, minRank: 3, defId: 'chizh3_shotgun', count: 1 },
   { faction: Faction.LIQUIDATOR, occupation: Occupation.HUNTER, minRank: 3, defId: 'moskvin_rifle', count: 1 },
-  { faction: Faction.LIQUIDATOR, occupation: Occupation.HUNTER, minRank: 3, defId: 'ammo_762', count: 12 },
+  { faction: Faction.LIQUIDATOR, occupation: Occupation.HUNTER, minRank: 3, defId: 'ammo_762', count: 6 },
   { faction: Faction.LIQUIDATOR, occupation: Occupation.HUNTER, minRank: 4, defId: 'rb91_auto_shotgun', count: 1 },
   { faction: Faction.LIQUIDATOR, occupation: Occupation.HUNTER, minRank: 4, defId: 'pushkin_shotgun', count: 1 },
   // Medic (MEDIC)
@@ -731,6 +731,15 @@ export function generateNpcTradeItems(npc: Entity): { defId: string; count: numb
   for (let i = 0; i < count; i++) {
     const defId = pool[Math.floor(Math.random() * pool.length)];
     items.push({ defId, count: 1 + Math.floor(Math.random() * 3) });
+  }
+  if (npc.occupation === Occupation.STOREKEEPER) {
+    items.push({ defId: 'soap_72', count: 1 }, { defId: 'lice_shampoo', count: 1 });
+  }
+  if (npc.occupation === Occupation.DOCTOR) {
+    items.push({ defId: 'lice_shampoo', count: 1 });
+  }
+  if (npc.occupation === Occupation.HUNTER) {
+    items.push({ defId: 'radio_headset_liquidator', count: 1 });
   }
   appendFactionTradeOffers(npc, items);
   return items;

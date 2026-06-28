@@ -429,7 +429,7 @@ export function generateOranzhereyaBetonaDesignFloor(seed = SEED): FloorGenerati
 
     const owners = spawnNpcs(entities, nextId, rooms);
     placeContainers(world, rooms, owners);
-    placeDrops(entities, nextId, rooms);
+    placeDrops(world, entities, nextId, rooms);
     spawnThreats(world, entities, nextId, rooms);
 
     sanitizeDoors(world);
@@ -511,6 +511,7 @@ export function expandOranzhereyaBetonaRouteGeometry(world: World, rng: () => nu
 
   carveMacroIrrigation(world, rng);
   connectExpansionRooms(world, [...anchors, ...hubs]);
+  fillOranzhereyaVoids(world, rng, [...anchors, ...hubs]);
   reinforceOranzhereyaBetonaAuthoredTerritory(world);
   world.markFloorTexDirty();
   world.markWallTexDirty();
@@ -738,9 +739,10 @@ function tryMakeRoom(
   name: string,
   wallTex: Tex,
   floorTex: Tex,
+  ceilingTier?: number,
 ): Room | null {
   if (!canStampGreenhouseRoom(world, x, y, w, h)) return null;
-  const room = makeRoom(world, type, x, y, w, h, name, wallTex, floorTex);
+  const room = makeRoom(world, type, x, y, w, h, name, wallTex, floorTex, ceilingTier);
   return room;
 }
 
@@ -811,13 +813,31 @@ function carveCultivationField(
   seed: number,
   rng: () => number,
 ): void {
+  const roomId = world.rooms.length;
+  const room: Room = {
+    id: roomId,
+    type: RoomType.PRODUCTION,
+    x: world.wrap(x),
+    y: world.wrap(y),
+    w,
+    h,
+    doors: [],
+    sealed: false,
+    name: `Внешнее поле выращивания #${roomId}`,
+    apartmentId: -1,
+    wallTex: Tex.PANEL,
+    floorTex,
+    ceilingTier: 3,
+  };
+  world.rooms.push(room);
+
   for (let dy = 0; dy < h; dy++) {
     for (let dx = 0; dx < w; dx++) {
       const row = dy % 12;
       if (row === 0 || row === 1 || row === 6) {
-        setGreenhouseFloor(world, x + dx, y + dy, row === 6 ? Tex.F_CONCRETE : floorTex);
+        setGreenhouseFloor(world, x + dx, y + dy, row === 6 ? Tex.F_CONCRETE : floorTex, false, roomId);
       } else if (dx % 13 <= 1) {
-        setGreenhouseFloor(world, x + dx, y + dy, Tex.F_WATER, true);
+        setGreenhouseFloor(world, x + dx, y + dy, Tex.F_WATER, true, roomId);
       }
       if (row === 3 && dx % 17 === 0 && rng() < 0.85) {
         const idx = world.idx(x + dx, y + dy);
@@ -826,25 +846,81 @@ function carveCultivationField(
       if ((dx * 19 + dy * 23 + seed) % 211 === 0) {
         stampSurfaceSplat(world, x + dx, y + dy, 0.5, 0.5, 1.1, 0.16, seed * 4099 + dx * 17 + dy, 62, 118, 52, true);
       }
+      if (dx > 4 && dy > 4 && dx < w - 4 && dy < h - 4) {
+        if (dx % 24 === 0 && dy % 24 === 0) {
+          const idx = world.idx(x + dx, y + dy);
+          if (!world.aptMask[idx] && !world.hermoWall[idx]) {
+            world.cells[idx] = Cell.WALL;
+            world.wallTex[idx] = Tex.PIPE;
+            world.roomMap[idx] = -1;
+            world.features[idx] = Feature.NONE;
+          }
+        } else if (dx % 24 === 2 && dy % 24 === 0) {
+          const idx = world.idx(x + dx, y + dy);
+          if (world.cells[idx] === Cell.FLOOR && world.features[idx] === Feature.NONE) {
+            world.features[idx] = Feature.MACHINE;
+          }
+        } else if (dx % 24 === 4 && dy % 24 === 0) {
+          const idx = world.idx(x + dx, y + dy);
+          if (world.cells[idx] === Cell.FLOOR && world.features[idx] === Feature.NONE) {
+            world.features[idx] = Feature.APPARATUS;
+          }
+        }
+      }
     }
   }
 }
 
 function carveWaterBasin(world: World, x: number, y: number, w: number, h: number): void {
+  const roomId = world.rooms.length;
+  const room: Room = {
+    id: roomId,
+    type: RoomType.BATHROOM,
+    x: world.wrap(x),
+    y: world.wrap(y),
+    w,
+    h,
+    doors: [],
+    sealed: false,
+    name: `Внешний питательный бассейн #${roomId}`,
+    apartmentId: -1,
+    wallTex: Tex.TILE_W,
+    floorTex: Tex.F_WATER,
+    ceilingTier: 3,
+  };
+  world.rooms.push(room);
+
   for (let dy = 0; dy < h; dy++) {
     for (let dx = 0; dx < w; dx++) {
-      if (dx <= 1 || dy <= 1 || dx >= w - 2 || dy >= h - 2) setGreenhouseFloor(world, x + dx, y + dy, Tex.F_TILE);
-      else setGreenhouseFloor(world, x + dx, y + dy, Tex.F_WATER, true);
+      if (dx <= 1 || dy <= 1 || dx >= w - 2 || dy >= h - 2) setGreenhouseFloor(world, x + dx, y + dy, Tex.F_TILE, false, roomId);
+      else setGreenhouseFloor(world, x + dx, y + dy, Tex.F_WATER, true, roomId);
+
+      if (dx > 3 && dy > 3 && dx < w - 3 && dy < h - 3) {
+        if (dx % 20 === 0 && dy % 20 === 0) {
+          const idx = world.idx(x + dx, y + dy);
+          if (!world.aptMask[idx] && !world.hermoWall[idx]) {
+            world.cells[idx] = Cell.WALL;
+            world.wallTex[idx] = Tex.CONCRETE;
+            world.roomMap[idx] = -1;
+            world.features[idx] = Feature.NONE;
+          }
+        } else if (dx % 20 === 2 && dy % 20 === 0) {
+          const idx = world.idx(x + dx, y + dy);
+          if (world.cells[idx] === Cell.FLOOR && world.features[idx] === Feature.NONE) {
+            world.features[idx] = Feature.MACHINE;
+          }
+        }
+      }
     }
   }
 }
 
-function setGreenhouseFloor(world: World, x: number, y: number, floorTex: Tex, water = false): void {
+function setGreenhouseFloor(world: World, x: number, y: number, floorTex: Tex, water = false, roomId = -1): void {
   const idx = world.idx(x, y);
   if (world.aptMask[idx] || world.cells[idx] === Cell.LIFT || world.cells[idx] === Cell.DOOR) return;
   if (world.roomMap[idx] >= 0 || world.hermoWall[idx]) return;
   world.cells[idx] = water ? Cell.WATER : Cell.FLOOR;
-  world.roomMap[idx] = -1;
+  world.roomMap[idx] = roomId;
   world.floorTex[idx] = floorTex;
   for (const [dx, dy] of [[1,0],[-1,0],[0,1],[0,-1]] as const) {
     const ni = world.idx(x + dx, y + dy);
@@ -968,18 +1044,18 @@ function initWorld(world: World): void {
 }
 
 function buildRooms(world: World): GreenhouseRooms {
-  const entry = makeRoom(world, RoomType.CORRIDOR, CX - 66, CY - 16, 132, 32, ORANZHEREYA_ROOM_NAMES.entry, Tex.PANEL, Tex.F_TILE);
-  const gallery = makeRoom(world, RoomType.COMMON, CX - 106, CY - 88, 212, 102, ORANZHEREYA_ROOM_NAMES.gallery, Tex.PANEL, Tex.F_GREEN_CARPET);
-  const pump = makeRoom(world, RoomType.PRODUCTION, CX - 62, CY - 154, 124, 44, ORANZHEREYA_ROOM_NAMES.pump, Tex.PIPE, Tex.F_CONCRETE);
-  const northRows = makeRoom(world, RoomType.KITCHEN, CX - 270, CY - 184, 156, 78, ORANZHEREYA_ROOM_NAMES.northRows, Tex.PANEL, Tex.F_GREEN_CARPET);
-  const waterBasin = makeRoom(world, RoomType.BATHROOM, CX + 112, CY - 184, 156, 78, ORANZHEREYA_ROOM_NAMES.waterBasin, Tex.TILE_W, Tex.F_WATER);
-  const burnTrench = makeRoom(world, RoomType.PRODUCTION, CX - 270, CY - 74, 116, 86, ORANZHEREYA_ROOM_NAMES.burnTrench, Tex.METAL, Tex.F_CONCRETE);
-  const guardPost = makeRoom(world, RoomType.HQ, CX + 134, CY - 68, 114, 76, ORANZHEREYA_ROOM_NAMES.guardPost, Tex.METAL, Tex.F_LINO);
-  const mushroomWard = makeRoom(world, RoomType.PRODUCTION, CX - 270, CY + 68, 158, 82, ORANZHEREYA_ROOM_NAMES.mushroomWard, Tex.ROTTEN, Tex.F_GREEN_CARPET);
-  const compost = makeRoom(world, RoomType.STORAGE, CX - 92, CY + 32, 76, 58, ORANZHEREYA_ROOM_NAMES.compost, Tex.ROTTEN, Tex.F_CONCRETE);
-  const seedVault = makeRoom(world, RoomType.STORAGE, CX - 76, CY + 96, 92, 68, ORANZHEREYA_ROOM_NAMES.seedVault, Tex.METAL, Tex.F_CONCRETE);
-  const marketStall = makeRoom(world, RoomType.COMMON, CX + 28, CY + 88, 100, 76, ORANZHEREYA_ROOM_NAMES.marketStall, Tex.BRICK, Tex.F_LINO);
-  const southRows = makeRoom(world, RoomType.KITCHEN, CX + 154, CY + 70, 156, 82, ORANZHEREYA_ROOM_NAMES.southRows, Tex.PANEL, Tex.F_GREEN_CARPET);
+  const entry = makeRoom(world, RoomType.CORRIDOR, CX - 66, CY - 16, 132, 32, ORANZHEREYA_ROOM_NAMES.entry, Tex.PANEL, Tex.F_TILE, 3);
+  const gallery = makeRoom(world, RoomType.COMMON, CX - 106, CY - 88, 212, 102, ORANZHEREYA_ROOM_NAMES.gallery, Tex.PANEL, Tex.F_GREEN_CARPET, 3);
+  const pump = makeRoom(world, RoomType.PRODUCTION, CX - 62, CY - 154, 124, 44, ORANZHEREYA_ROOM_NAMES.pump, Tex.PIPE, Tex.F_CONCRETE, 3);
+  const northRows = makeRoom(world, RoomType.KITCHEN, CX - 270, CY - 184, 156, 78, ORANZHEREYA_ROOM_NAMES.northRows, Tex.PANEL, Tex.F_GREEN_CARPET, 3);
+  const waterBasin = makeRoom(world, RoomType.BATHROOM, CX + 112, CY - 184, 156, 78, ORANZHEREYA_ROOM_NAMES.waterBasin, Tex.TILE_W, Tex.F_WATER, 3);
+  const burnTrench = makeRoom(world, RoomType.PRODUCTION, CX - 270, CY - 74, 116, 86, ORANZHEREYA_ROOM_NAMES.burnTrench, Tex.METAL, Tex.F_CONCRETE, 3);
+  const guardPost = makeRoom(world, RoomType.HQ, CX + 134, CY - 68, 114, 76, ORANZHEREYA_ROOM_NAMES.guardPost, Tex.METAL, Tex.F_LINO, 3);
+  const mushroomWard = makeRoom(world, RoomType.PRODUCTION, CX - 270, CY + 68, 158, 82, ORANZHEREYA_ROOM_NAMES.mushroomWard, Tex.ROTTEN, Tex.F_GREEN_CARPET, 3);
+  const compost = makeRoom(world, RoomType.STORAGE, CX - 92, CY + 32, 76, 58, ORANZHEREYA_ROOM_NAMES.compost, Tex.ROTTEN, Tex.F_CONCRETE, 2);
+  const seedVault = makeRoom(world, RoomType.STORAGE, CX - 76, CY + 96, 92, 68, ORANZHEREYA_ROOM_NAMES.seedVault, Tex.METAL, Tex.F_CONCRETE, 2);
+  const marketStall = makeRoom(world, RoomType.COMMON, CX + 28, CY + 88, 100, 76, ORANZHEREYA_ROOM_NAMES.marketStall, Tex.BRICK, Tex.F_LINO, 3);
+  const southRows = makeRoom(world, RoomType.KITCHEN, CX + 154, CY + 70, 156, 82, ORANZHEREYA_ROOM_NAMES.southRows, Tex.PANEL, Tex.F_GREEN_CARPET, 3);
 
   return {
     entry,
@@ -1007,11 +1083,13 @@ function makeRoom(
   name: string,
   wallTex: Tex,
   floorTex: Tex,
+  ceilingTier?: number,
 ): Room {
   const room = stampRoom(world, world.rooms.length, type, x, y, w, h, -1);
   room.name = name;
   room.wallTex = wallTex;
   room.floorTex = floorTex;
+  if (ceilingTier !== undefined) room.ceilingTier = ceilingTier;
   for (let dy = -1; dy <= h; dy++) {
     for (let dx = -1; dx <= w; dx++) {
       const idx = world.idx(x + dx, y + dy);
@@ -1068,6 +1146,278 @@ function decorateRooms(world: World, rooms: GreenhouseRooms): void {
   placeIrrigationGraph(world, rooms);
   placeRoomFixtures(world, rooms);
   stampGrowthFields(world, rooms);
+  decorateLargeRoomColumnsAndMeshes(world, rooms);
+}
+
+function decorateLargeRoomColumnsAndMeshes(world: World, rooms: GreenhouseRooms): void {
+  for (let dy = 6; dy < rooms.gallery.h - 6; dy++) {
+    for (let dx = 6; dx < rooms.gallery.w - 6; dx++) {
+      const x = rooms.gallery.x + dx;
+      const y = rooms.gallery.y + dy;
+      const idx = world.idx(x, y);
+      if (world.cells[idx] !== Cell.FLOOR || world.aptMask[idx]) continue;
+
+      if (dx % 16 === 0 && dy % 16 === 0) {
+        world.cells[idx] = Cell.WALL;
+        world.wallTex[idx] = Tex.CONCRETE;
+        world.roomMap[idx] = -1;
+        world.features[idx] = Feature.NONE;
+      } else if (dx % 16 === 2 && dy % 16 === 0) {
+        if (world.features[idx] === Feature.NONE) world.features[idx] = Feature.MACHINE;
+      } else if (dx % 16 === 4 && dy % 16 === 0) {
+        if (world.features[idx] === Feature.NONE) world.features[idx] = Feature.TABLE;
+      } else if (dx % 16 === 8 && dy % 16 === 0) {
+        if (world.features[idx] === Feature.NONE) world.features[idx] = Feature.LAMP;
+      }
+    }
+  }
+
+  for (const room of [rooms.pump, rooms.burnTrench, rooms.waterBasin, rooms.northRows, rooms.southRows, rooms.mushroomWard, rooms.guardPost, rooms.entry]) {
+    for (let dy = 5; dy < room.h - 5; dy++) {
+      for (let dx = 5; dx < room.w - 5; dx++) {
+        const x = room.x + dx;
+        const y = room.y + dy;
+        const idx = world.idx(x, y);
+        if ((world.cells[idx] !== Cell.FLOOR && world.cells[idx] !== Cell.WATER) || world.aptMask[idx]) continue;
+
+        const step = room === rooms.entry ? 18 : 14;
+        if (dx % step === 0 && dy % step === 0) {
+          world.cells[idx] = Cell.WALL;
+          world.wallTex[idx] = room === rooms.pump || room === rooms.burnTrench ? Tex.PIPE : Tex.CONCRETE;
+          world.roomMap[idx] = -1;
+          world.features[idx] = Feature.NONE;
+        } else if (dx % step === 2 && dy % step === 0) {
+          if (world.cells[idx] === Cell.FLOOR && world.features[idx] === Feature.NONE) {
+            world.features[idx] = room === rooms.guardPost ? Feature.DESK : Feature.APPARATUS;
+          }
+        }
+      }
+    }
+  }
+}
+
+function fillOranzhereyaVoids(world: World, rng: () => number, existingHubs: Room[]): void {
+  carveGreenhouseLine(world, 24, 24, 996, 24, 4, Tex.F_CONCRETE);
+  carveGreenhouseLine(world, 24, 996, 996, 996, 4, Tex.F_CONCRETE);
+  carveGreenhouseLine(world, 24, 24, 24, 996, 4, Tex.F_CONCRETE);
+  carveGreenhouseLine(world, 996, 24, 996, 996, 4, Tex.F_CONCRETE);
+
+  const newRooms: Room[] = [];
+  for (let p = 60; p < 960; p += 80) {
+    const boothN = tryMakeRoom(world, RoomType.PRODUCTION, p, 32, 16, 12, 'Периметральная щитовая О-8', Tex.PIPE, Tex.F_CONCRETE, 1);
+    if (boothN) {
+      setFeature(world, boothN.x + 4, boothN.y + 4, Feature.MACHINE);
+      setFeature(world, boothN.x + boothN.w - 5, boothN.y + 4, Feature.APPARATUS);
+      newRooms.push(boothN);
+    }
+    const boothS = tryMakeRoom(world, RoomType.PRODUCTION, p, 976, 16, 12, 'Периметральная щитовая О-8', Tex.PIPE, Tex.F_CONCRETE, 1);
+    if (boothS) {
+      setFeature(world, boothS.x + 4, boothS.y + 4, Feature.MACHINE);
+      setFeature(world, boothS.x + boothS.w - 5, boothS.y + 4, Feature.APPARATUS);
+      newRooms.push(boothS);
+    }
+    const boothW = tryMakeRoom(world, RoomType.PRODUCTION, 32, p, 12, 16, 'Трансформаторная будка О-8', Tex.METAL, Tex.F_CONCRETE, 1);
+    if (boothW) {
+      setFeature(world, boothW.x + 4, boothW.y + 4, Feature.MACHINE);
+      setFeature(world, boothW.x + 4, boothW.y + boothW.h - 5, Feature.APPARATUS);
+      newRooms.push(boothW);
+    }
+    const boothE = tryMakeRoom(world, RoomType.PRODUCTION, 976, p, 12, 16, 'Трансформаторная будка О-8', Tex.METAL, Tex.F_CONCRETE, 1);
+    if (boothE) {
+      setFeature(world, boothE.x + 4, boothE.y + 4, Feature.MACHINE);
+      setFeature(world, boothE.x + 4, boothE.y + boothE.h - 5, Feature.APPARATUS);
+      newRooms.push(boothE);
+    }
+  }
+
+  const storageCoords = [
+    { x: 120, y: 120, w: 42, h: 28 },
+    { x: 440, y: 120, w: 46, h: 30 },
+    { x: 720, y: 120, w: 40, h: 28 },
+    { x: 120, y: 860, w: 44, h: 30 },
+    { x: 720, y: 860, w: 42, h: 28 },
+    { x: 280, y: 440, w: 38, h: 26 },
+    { x: 680, y: 440, w: 40, h: 26 },
+    { x: 520, y: 740, w: 42, h: 28 },
+  ];
+  for (const sc of storageCoords) {
+    const storage = tryMakeRoom(world, RoomType.STORAGE, sc.x, sc.y, sc.w, sc.h, 'Склад госрезерва Оранжереи', Tex.BRICK, Tex.F_CONCRETE, 2);
+    if (storage) {
+      for (let dy = 5; dy < storage.h - 5; dy += 5) {
+        for (let dx = 6; dx < storage.w - 6; dx += 2) {
+          const idx = world.idx(storage.x + dx, storage.y + dy);
+          if (world.cells[idx] === Cell.FLOOR) world.features[idx] = Feature.SHELF;
+        }
+      }
+      for (let dx = 12; dx < storage.w - 12; dx += 12) {
+        const idx = world.idx(storage.x + dx, storage.y + Math.floor(storage.h / 2));
+        if (world.cells[idx] === Cell.FLOOR) {
+          world.cells[idx] = Cell.WALL;
+          world.wallTex[idx] = Tex.CONCRETE;
+          world.roomMap[idx] = -1;
+          world.features[idx] = Feature.NONE;
+        }
+      }
+      newRooms.push(storage);
+    }
+  }
+
+  const industrialCoords = [
+    { x: 200, y: 380, w: 34, h: 34, type: 'water' },
+    { x: 740, y: 380, w: 32, h: 32, type: 'vent' },
+    { x: 220, y: 560, w: 32, h: 32, type: 'vent' },
+    { x: 680, y: 560, w: 36, h: 36, type: 'water' },
+    { x: 380, y: 780, w: 34, h: 34, type: 'water' },
+    { x: 580, y: 140, w: 32, h: 32, type: 'vent' },
+  ];
+  for (const ic of industrialCoords) {
+    if (ic.type === 'water') {
+      const waterHall = tryMakeRoom(world, RoomType.PRODUCTION, ic.x, ic.y, ic.w, ic.h, 'Зал водоочистки О-8', Tex.TILE_W, Tex.F_TILE, 3);
+      if (waterHall) {
+        for (let dy = 8; dy < waterHall.h - 8; dy++) {
+          for (let dx = 8; dx < waterHall.w - 8; dx++) {
+            const idx = world.idx(waterHall.x + dx, waterHall.y + dy);
+            if (world.cells[idx] === Cell.FLOOR) {
+              world.cells[idx] = Cell.WATER;
+              world.floorTex[idx] = Tex.F_WATER;
+            }
+          }
+        }
+        for (let dx = 5; dx < waterHall.w - 5; dx += 6) {
+          setFeature(world, waterHall.x + dx, waterHall.y + 4, Feature.MACHINE);
+          setFeature(world, waterHall.x + dx, waterHall.y + waterHall.h - 5, Feature.MACHINE);
+        }
+        newRooms.push(waterHall);
+      }
+    } else {
+      const ventTower = tryMakeRoom(world, RoomType.PRODUCTION, ic.x, ic.y, ic.w, ic.h, 'Вентиляционная градирня О-8', Tex.PIPE, Tex.F_CONCRETE, 3);
+      if (ventTower) {
+        for (let dy = 6; dy < ventTower.h - 6; dy += 6) {
+          for (let dx = 6; dx < ventTower.w - 6; dx += 4) {
+            const idx = world.idx(ventTower.x + dx, ventTower.y + dy);
+            if (world.cells[idx] === Cell.FLOOR) {
+              if (dx % 12 === 0) {
+                world.cells[idx] = Cell.WALL;
+                world.wallTex[idx] = Tex.METAL;
+                world.roomMap[idx] = -1;
+                world.features[idx] = Feature.NONE;
+              } else {
+                world.features[idx] = Feature.MACHINE;
+              }
+            }
+          }
+        }
+        newRooms.push(ventTower);
+      }
+    }
+  }
+
+  const prefixes = ['Курилка агрономов', 'Зал ожидания пайки', 'Пункт проверки фильтров', 'Бытовка капельников', 'Технический карман О-8'];
+  let count = 0;
+  for (let y = 50; y < 970; y += 28) {
+    for (let x = 50; x < 970; x += 28) {
+      const w = 16 + Math.floor(rng() * 6);
+      const h = 14 + Math.floor(rng() * 6);
+      const name = prefixes[count % prefixes.length];
+      const room = tryMakeRoom(world, RoomType.COMMON, x, y, w, h, name, Tex.PANEL, Tex.F_LINO, 1);
+      if (room) {
+        setFeature(world, room.x + 4, room.y + 4, Feature.TABLE);
+        setFeature(world, room.x + room.w - 5, room.y + room.h - 5, Feature.SHELF);
+        if (rng() < 0.5) setFeature(world, room.x + Math.floor(room.w / 2), room.y + 4, Feature.APPARATUS);
+        newRooms.push(room);
+        count++;
+      }
+    }
+  }
+
+  const secretWard = tryMakeRoom(world, RoomType.PRODUCTION, 340, 480, 24, 20, 'Секретный бокс гидропоники НИИ', Tex.TILE_W, Tex.F_TILE, 3);
+  if (secretWard) {
+    setFeature(world, secretWard.x + 6, secretWard.y + 6, Feature.APPARATUS);
+    setFeature(world, secretWard.x + secretWard.w - 7, secretWard.y + 6, Feature.MACHINE);
+    addContainer(world, secretWard, 3, ContainerKind.METAL_CABINET, 'Инкубатор мутагенных культур', [
+      { defId: 'zhelemish_sample_sealed', count: 1 },
+      { defId: 'experimental_concentrate', count: 2 },
+      { defId: 'nii_sample_container', count: 1 },
+      { defId: 'antidep', count: 1 },
+    ], ['nii_bioreactor', 'secret_nii', 'mutagenic'], 'locked', Faction.SCIENTIST);
+    newRooms.push(secretWard);
+  }
+
+  const smugglePoint = tryMakeRoom(world, RoomType.STORAGE, 620, 310, 22, 18, 'Перевалочный пункт агро-контрабанды', Tex.ROTTEN, Tex.F_LINO, 1);
+  if (smugglePoint) {
+    setFeature(world, smugglePoint.x + 5, smugglePoint.y + 5, Feature.SHELF);
+    setFeature(world, smugglePoint.x + smugglePoint.w - 6, smugglePoint.y + smugglePoint.h - 6, Feature.TABLE);
+    addContainer(world, smugglePoint, 4, ContainerKind.SECRET_STASH, 'Замаскированная бочка со спиртом и спорами', [
+      { defId: 'contraband_shocker_parts', count: 1 },
+      { defId: 'black_market_shells', count: 2 },
+      { defId: 'braga_bucket', count: 1 },
+      { defId: 'technical_spirit', count: 1 },
+      { defId: 'govnyak_brick', count: 1 },
+    ], ['black_market_88', 'contraband', 'smuggling'], 'secret', Faction.WILD);
+    newRooms.push(smugglePoint);
+  }
+
+  const cleansingPost = tryMakeRoom(world, RoomType.HQ, 210, 680, 26, 22, 'Огневой рубеж хим-зачистки', Tex.METAL, Tex.F_CONCRETE, 3);
+  if (cleansingPost) {
+    setFeature(world, cleansingPost.x + 6, cleansingPost.y + 6, Feature.DESK);
+    setFeature(world, cleansingPost.x + cleansingPost.w - 7, cleansingPost.y + 6, Feature.MACHINE);
+    addContainer(world, cleansingPost, 5, ContainerKind.TOOL_LOCKER, 'Опечатанный ящик дезинфекции', [
+      { defId: 'agnia_a130', count: 1 },
+      { defId: 'decon_fluid', count: 2 },
+      { defId: 'ammo_12g_incendiary', count: 2 },
+      { defId: 'ip4_gasmask', count: 1 },
+      { defId: 'liquidator_flashlamp', count: 1 },
+    ], ['liquidator', 'burn_infestation', 'cleanup'], 'faction', Faction.LIQUIDATOR);
+    newRooms.push(cleansingPost);
+  }
+
+  const cultAltar = tryMakeRoom(world, RoomType.COMMON, 780, 520, 28, 24, 'Святилище Спор Чернобога', Tex.ROTTEN, Tex.F_GREEN_CARPET, 3);
+  if (cultAltar) {
+    setFeature(world, cultAltar.x + 8, cultAltar.y + 8, Feature.TABLE);
+    setFeature(world, cultAltar.x + cultAltar.w - 9, cultAltar.y + cultAltar.h - 9, Feature.LAMP);
+    addContainer(world, cultAltar, 6, ContainerKind.SECRET_STASH, 'Чаша истотитного подношения', [
+      { defId: 'holy_water', count: 1 },
+      { defId: 'istotit_candle', count: 2 },
+      { defId: 'maronary_shaving', count: 1 },
+      { defId: 'green_briquette', count: 2 },
+      { defId: 'zhelemish_raw', count: 1 },
+    ], ['cultist', 'istotit', 'fungal_altar'], 'public', Faction.CULTIST);
+    newRooms.push(cultAltar);
+  }
+
+  const hydroNode = tryMakeRoom(world, RoomType.PRODUCTION, 480, 210, 24, 20, 'Узел гидро-распределения О-8', Tex.PIPE, Tex.F_CONCRETE, 3);
+  if (hydroNode) {
+    setFeature(world, hydroNode.x + 6, hydroNode.y + 6, Feature.MACHINE);
+    setFeature(world, hydroNode.x + hydroNode.w - 7, hydroNode.y + 6, Feature.APPARATUS);
+    addContainer(world, hydroNode, 7, ContainerKind.TOOL_LOCKER, 'Шкаф резервных талонов и вентилей', [
+      { defId: 'manometer', count: 1 },
+      { defId: 'water_filter_regulator', count: 1 },
+      { defId: 'pump_impeller', count: 1 },
+      { defId: 'rubber_tube', count: 2 },
+      { defId: 'water_coupon', count: 2 },
+      { defId: 'hermodoor_journal', count: 1 },
+    ], ['water', 'reroute', 'maintenance'], 'locked', Faction.CITIZEN);
+    newRooms.push(hydroNode);
+  }
+
+  const allTargets = [...existingHubs, ...world.rooms.filter(r => r.name === ORANZHEREYA_ROOM_NAMES.gallery || r.name === ORANZHEREYA_ROOM_NAMES.entry)];
+  if (allTargets.length > 0) {
+    for (const room of newRooms) {
+      let bestTarget = allTargets[0];
+      let bestDist = Infinity;
+      const rc = roomCenter(room);
+      for (const target of allTargets) {
+        const tc = roomCenter(target);
+        const d = world.dist2(rc.x, rc.y, tc.x, tc.y);
+        if (d < bestDist) {
+          bestDist = d;
+          bestTarget = target;
+        }
+      }
+      connectRoomPair(world, room, bestTarget);
+      allTargets.push(room);
+    }
+  }
 }
 
 function placeCropRows(world: World, room: Room, seed: number): void {
@@ -1327,11 +1677,14 @@ function nextContainerId(world: World): number {
   return id;
 }
 
-function placeDrops(entities: Entity[], nextId: NextId, rooms: GreenhouseRooms): void {
+function placeDrops(world: World, entities: Entity[], nextId: NextId, rooms: GreenhouseRooms): void {
   dropItems(entities, nextId, rooms.northRows, ['mushroom_mass', 'mushroom_mass', 'water_coupon']);
   dropItems(entities, nextId, rooms.waterBasin, ['filtered_water', 'valve_tag']);
   dropItems(entities, nextId, rooms.mushroomWard, ['infected_mushroom', 'spore_print', 'substrate_sack']);
   dropItems(entities, nextId, rooms.burnTrench, ['rock_salt', 'ammo_fuel']);
+
+  const cleansingPost = world.rooms.find(r => r.name === 'Огневой рубеж хим-зачистки');
+  if (cleansingPost) dropItems(entities, nextId, cleansingPost, ['body_bag_roll', 'corpse_number_tag', 'contaminated_gloves']);
 }
 
 function dropItems(entities: Entity[], nextId: NextId, room: Room, itemIds: readonly string[]): void {
@@ -1359,6 +1712,18 @@ function spawnThreats(world: World, entities: Entity[], nextId: NextId, rooms: G
   spawnMonster(world, entities, nextId, MonsterKind.SPORE_CARPET, rooms.mushroomWard, 7, 3, 'Споровый ковёр у стеллажа');
   spawnMonster(world, entities, nextId, MonsterKind.CHERNOSLIZ, rooms.waterBasin, 6, 3, 'Чернослиз питательного басейна');
   spawnMonster(world, entities, nextId, MonsterKind.POMOYNY_ROY, rooms.compost, 3, 2, 'Компостный рой');
+
+  const secretWard = world.rooms.find(r => r.name === 'Секретный бокс гидропоники НИИ');
+  if (secretWard) spawnMonster(world, entities, nextId, MonsterKind.CHERNOSLIZ, secretWard, 5, 4, 'Лабораторный прото-чернослиз');
+
+  const smugglePoint = world.rooms.find(r => r.name === 'Перевалочный пункт агро-контрабанды');
+  if (smugglePoint) spawnMonster(world, entities, nextId, MonsterKind.BORSHCHEVIK, smugglePoint, 5, 4, 'Перекормленный борщевик-охранник');
+
+  const cultAltar = world.rooms.find(r => r.name === 'Святилище Спор Чернобога');
+  if (cultAltar) spawnMonster(world, entities, nextId, MonsterKind.POMOYNY_ROY, cultAltar, 5, 3, 'Благословенный рой культа');
+
+  const hydroNode = world.rooms.find(r => r.name === 'Узел гидро-распределения О-8');
+  if (hydroNode) spawnMonster(world, entities, nextId, MonsterKind.SPORE_CARPET, hydroNode, 5, 3, 'Уплотненный споровый ковер');
 }
 
 function spawnMonster(

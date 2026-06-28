@@ -208,8 +208,8 @@ test('feature-to-visual transitional fill is deterministic', () => {
 
   const lampCodes = new Set([code('ceiling_bulb'), code('ceiling_light_panel')]);
   assert.deepEqual(featureVisualCellIds(Feature.LAMP), ['ceiling_bulb', 'ceiling_light_panel']);
-  assert.equal(fillVisualSlotsFromFeature(a, cellIdx, 1234), 1);
-  assert.equal(fillVisualSlotsFromFeature(b, cellIdx, 1234), 1);
+  assert.equal(fillVisualSlotsFromFeature(a, cellIdx, 1234), 2);
+  assert.equal(fillVisualSlotsFromFeature(b, cellIdx, 1234), 2);
   assert.deepEqual(slotCodes(a, cellIdx), slotCodes(b, cellIdx));
   assert.equal(slotCodes(a, cellIdx).some(slot => lampCodes.has(slot)), true);
   assert.equal(slotCodes(a, cellIdx).includes(code('lamp_stand_hint')), false);
@@ -245,7 +245,7 @@ test('world feature fill preserves existing non-feature visual decor', () => {
 
   const placed = fillVisualSlotsForWorldFeatures(world, 0x5151);
 
-  assert.equal(placed, 1);
+  assert.equal(placed, 2);
   assert.equal(slotCodes(world, lamp).includes(code('pipe_wall_small')), true);
   assert.equal(slotCodes(world, lamp).some(slot => slot === code('ceiling_bulb') || slot === code('ceiling_light_panel')), true);
   assert.equal(slotCodes(world, lamp).includes(code('lamp_stand_hint')), false);
@@ -295,7 +295,7 @@ test('room visual decor fills wall, ceiling and column slots deterministically u
     return slotCodes(a, a.idx(x + 1, y)).includes(value) ||
       slotCodes(a, a.idx(x, y + 1)).includes(value);
   }), true);
-  assert.equal(entries.some(([, value]) => value === code('column_concrete_square')), true);
+  assert.equal(entries.some(([, value]) => value === code('column_concrete_round')), true);
 });
 
 test('wall-cell visual codes resolve to exposed passable wall faces', () => {

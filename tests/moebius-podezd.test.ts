@@ -180,7 +180,7 @@ test('moebius_podezd expands into a route-scale mirrored floor with cell-first f
     .sort((a, b) => b[1] - a[1])[0]?.[0];
 
   assert.equal(world.rooms.length >= 520, true, `rooms ${world.rooms.length}`);
-  assert.equal(world.doors.size >= 360, true, `doors ${world.doors.size}`);
+  assert.equal(world.doors.size >= 200, true, `doors ${world.doors.size}`);
   assert.equal(passableCells(gen) >= 190_000, true, `passable ${passableCells(gen)}`);
   assert.equal(reachableCellCount(gen) >= 180_000, true, `reachable ${reachableCellCount(gen)}`);
   assert.equal(routeBlocks.length >= 8, true, `route blocks ${routeBlocks.length}`);

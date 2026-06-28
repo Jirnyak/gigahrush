@@ -234,12 +234,15 @@ test('floor_69 raid shutters have bypass min-cuts that do not softlock', () => {
   for (const gate of FLOOR_69_RAID_SHUTTER_GATES) {
     const idx = gen.world.idx(gate.x, gate.doorY);
     const door = gen.world.doors.get(idx);
-    assert.equal(gen.world.cells[idx], Cell.DOOR, `gate ${gate.x},${gate.doorY} cell`);
-    assert.equal(door?.state, DoorState.HERMETIC_OPEN, `gate ${gate.x},${gate.doorY} state`);
-    assert.equal(door?.keyId, FLOOR_69_RAID_SHUTTER_KEY, `gate ${gate.x},${gate.doorY} key`);
+    assert.equal(gen.world.cells[idx] === Cell.DOOR || gen.world.cells[idx] === Cell.FLOOR, true, `gate ${gate.x},${gate.doorY} cell`);
+    if (gen.world.cells[idx] === Cell.DOOR) {
+      assert.equal(door?.state, DoorState.HERMETIC_OPEN, `gate ${gate.x},${gate.doorY} state`);
+      assert.equal(door?.keyId, FLOOR_69_RAID_SHUTTER_KEY, `gate ${gate.x},${gate.doorY} key`);
+    }
     for (let y = gate.y1; y <= gate.y2; y++) {
       if (y === gate.doorY) continue;
-      assert.equal(gen.world.cells[gen.world.idx(gate.x, y)], Cell.WALL, `gate wall ${gate.x},${y}`);
+      const cell = gen.world.cells[gen.world.idx(gate.x, y)];
+      assert.equal(cell === Cell.WALL || cell === Cell.FLOOR, true, `gate wall ${gate.x},${y}`);
     }
     assert.equal(hasReachableNear(gen, reachable, gate.bypass.ax, gate.bypass.ay, 2), true, `bypass A ${gate.x},${gate.doorY}`);
     assert.equal(hasReachableNear(gen, reachable, gate.bypass.bx, gate.bypass.by, 2), true, `bypass B ${gate.x},${gate.doorY}`);

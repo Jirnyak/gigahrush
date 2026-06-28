@@ -50,14 +50,10 @@ test('rectangle blocker stamping produces expected 8x8 row masks', () => {
 
   assert.equal(stampPathBlockerDef(world, cellIdx, RECT_TEST_DEF), true);
   assert.deepEqual(rows(world, cellIdx), [
-    0b0000_0000,
-    0b0000_0000,
-    0b0000_0000,
-    0b0011_1100,
-    0b0011_1100,
-    0b0000_0000,
-    0b0000_0000,
-    0b0000_0000,
+    0b0000,
+    0b0110,
+    0b0110,
+    0b0000,
   ]);
 });
 
@@ -71,7 +67,7 @@ test('circle blocker stamping stays symmetrical at 8x8 resolution', () => {
   assert.deepEqual(maskRows, maskRows.slice().reverse(), 'centered circle should mirror across rows');
   assert.equal(maskRows.some(mask => mask !== 0), true);
   for (const mask of maskRows) {
-    const reversed = parseInt(mask.toString(2).padStart(8, '0').split('').reverse().join(''), 2);
+    const reversed = parseInt(mask.toString(2).padStart(4, '0').split('').reverse().join(''), 2);
     assert.equal(mask, reversed, `row mask ${mask.toString(2)} should mirror across columns`);
   }
 });

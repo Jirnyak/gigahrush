@@ -456,6 +456,7 @@ function debugRouteFloorMetrics(world: World, player: Entity, entities: Entity[]
   let functionalRooms = 0;
   let reachableFunctionalRooms = 0;
   for (const room of world.rooms) {
+    if (!room) continue;
     if (roomSeen[room.id]) reachableRooms++;
     if (room.type === RoomType.CORRIDOR) continue;
     functionalRooms++;
@@ -2103,7 +2104,7 @@ export function drawDebugOverlay(
   }
 
   let funcRooms = 0;
-  for (const r of world.rooms) if (r.type !== RoomType.CORRIDOR) funcRooms++;
+  for (const r of world.rooms) if (r && r.type !== RoomType.CORRIDOR) funcRooms++;
   let lifts = 0, liftsUp = 0, liftsDown = 0;
   for (let i = 0; i < W * W; i++) if (world.cells[i] === Cell.LIFT) {
     lifts++;

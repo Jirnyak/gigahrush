@@ -18,6 +18,7 @@ import {
   Tex,
   W,
   ZoneFaction,
+  msg,
   type Entity,
   type Item,
   type Room,
@@ -36,6 +37,8 @@ import { requireSpawnedPlotNpcFromPackage } from '../plot_npc_spawn';
 import { ensureConnectivity, generateZones, sanitizeDoors } from '../shared';
 import type { FloorGeneration } from '../floor_manifest';
 import { buildVoronoiRoomCells, type VoronoiRoomSite } from '../voronoi_cells';
+import { registerContentInteractionHook, registerContentRuntimeHook, type ContentInteractionContext, type ContentRuntimeContext } from '../../systems/content_hooks';
+import { publishEvent } from '../../systems/events';
 
 const DESIGN_NPC_HOME_FLOOR_KEY = designNpcFloorKey('voronoi_quarantine');
 
@@ -96,6 +99,10 @@ interface Site extends SiteSeed {
 }
 
 interface Bounds {
+  minDx: number;
+  minDy: number;
+  maxDx: number;
+  maxDy: number;
   minX: number;
   minY: number;
   maxX: number;
@@ -175,12 +182,12 @@ export interface VoronoiQuarantineLayout {
 const SEED = hashSeed(VORONOI_QUARANTINE_ROUTE_ID);
 const CX = W >> 1;
 const CY = W >> 1;
-const CORE_MIN = 132;
-const CORE_MAX = W - CORE_MIN;
+const CORE_MIN = 0;
+const CORE_MAX = W - 1;
 const LLOYD_PASSES = 2;
 const LLOYD_STEP = 8;
 const OWNER_NONE = -1;
-const GENERATED_CELL_RING_COUNT = 2;
+const GENERATED_CELL_RING_COUNT = 4;
 const MICRO_ROOM_TARGET_MIN = 12_288;
 const MICRO_SITE_SAMPLE_ATTEMPTS = 32;
 const MICRO_EXTRA_DOOR_RATIO = 0.42;
@@ -435,7 +442,7 @@ export function generateVoronoiQuarantineDesignFloor(seed = SEED): FloorGenerati
     const nextId = { v: 1 };
 
     initWorld(world);
-    const sites = buildSites(seed);
+    const sites = buildSites(world, seed);
     const owner = assignLaguerreCells(world, sites);
     const edgeMap = collectRidgeCandidates(world, owner, sites);
     const ridgeDoors = placeRidgeDoors(world, sites, edgeMap);
@@ -550,7 +557,7 @@ function initWorld(world: World): void {
   }
 }
 
-function buildSites(seed: number): Site[] {
+function buildSites(world: World, seed: number): Site[] {
   const sites = SITE_SEEDS.map((src, id) => {
     const jx = Math.round((hash01(seed, id, 11, 0) - 0.5) * 34);
     const jy = Math.round((hash01(seed, id, 17, 0) - 0.5) * 34);
@@ -560,8 +567,8 @@ function buildSites(seed: number): Site[] {
       name: src.key ? VORONOI_QUARANTINE_ROOM_NAMES[src.key] : (src.name ?? `Вороной-ячейка ${id}`),
       originX: src.x,
       originY: src.y,
-      x: clamp(src.x + jx, CORE_MIN + 48, CORE_MAX - 48),
-      y: clamp(src.y + jy, CORE_MIN + 48, CORE_MAX - 48),
+      x: world.wrap(src.x + jx),
+      y: world.wrap(src.y + jy),
     };
   });
   const baseCount = sites.length;
@@ -570,12 +577,12 @@ function buildSites(seed: number): Site[] {
     for (let ring = 0; ring < GENERATED_CELL_RING_COUNT; ring++) {
       const roll = hash01(seed, parent, ring, 211);
       const angle = (ring / GENERATED_CELL_RING_COUNT) * Math.PI * 2 + (roll - 0.5) * 0.95;
-      const radius = 58 + ring * 26 + Math.round(hash01(seed, parent, ring, 223) * 22);
+      const radius = 80 + ring * 130 + Math.round(hash01(seed, parent, ring, 223) * 50);
       const role = generatedRoleForSite(source.role, ring);
       const faction = generatedFactionForSite(source, ring);
       const id = sites.length;
-      const x = clamp(Math.round(source.originX + Math.cos(angle) * radius), CORE_MIN + 42, CORE_MAX - 42);
-      const y = clamp(Math.round(source.originY + Math.sin(angle) * radius), CORE_MIN + 42, CORE_MAX - 42);
+      const x = world.wrap(Math.round(source.originX + Math.cos(angle) * radius));
+      const y = world.wrap(Math.round(source.originY + Math.sin(angle) * radius));
       sites.push({
         id,
         role,
@@ -596,23 +603,24 @@ function buildSites(seed: number): Site[] {
   }
 
   for (let pass = 0; pass < LLOYD_PASSES; pass++) {
-    const sx = new Float64Array(sites.length);
-    const sy = new Float64Array(sites.length);
+    const dxSum = new Float64Array(sites.length);
+    const dySum = new Float64Array(sites.length);
     const count = new Int32Array(sites.length);
     for (let y = CORE_MIN; y <= CORE_MAX; y += LLOYD_STEP) {
       for (let x = CORE_MIN; x <= CORE_MAX; x += LLOYD_STEP) {
-        const id = nearestSiteId(x, y, sites);
-        sx[id] += x;
-        sy[id] += y;
+        const id = nearestSiteId(world, x, y, sites);
+        const site = sites[id]!;
+        dxSum[id] += world.delta(site.x, x);
+        dySum[id] += world.delta(site.y, y);
         count[id]++;
       }
     }
     for (const site of sites) {
       if (count[site.id] <= 0 || (site.key && site.role === 'checkpoint')) continue;
-      const cx = sx[site.id] / count[site.id];
-      const cy = sy[site.id] / count[site.id];
-      site.x = Math.round(clamp(site.originX * 0.42 + cx * 0.58, CORE_MIN + 36, CORE_MAX - 36));
-      site.y = Math.round(clamp(site.originY * 0.42 + cy * 0.58, CORE_MIN + 36, CORE_MAX - 36));
+      const avgDx = dxSum[site.id]! / count[site.id]!;
+      const avgDy = dySum[site.id]! / count[site.id]!;
+      site.x = world.wrap(Math.round(site.x + avgDx * 0.58));
+      site.y = world.wrap(Math.round(site.y + avgDy * 0.58));
     }
   }
 
@@ -720,7 +728,7 @@ function assignLaguerreCells(world: World, sites: readonly Site[]): Int16Array {
   owner.fill(OWNER_NONE);
   for (let y = CORE_MIN; y <= CORE_MAX; y++) {
     for (let x = CORE_MIN; x <= CORE_MAX; x++) {
-      owner[world.idx(x, y)] = nearestSiteId(x, y, sites);
+      owner[world.idx(x, y)] = nearestSiteId(world, x, y, sites);
     }
   }
 
@@ -730,7 +738,7 @@ function assignLaguerreCells(world: World, sites: readonly Site[]): Int16Array {
       const id = owner[idx];
       if (id < 0) continue;
       const site = sites[id]!;
-      let border = x === CORE_MIN || x === CORE_MAX || y === CORE_MIN || y === CORE_MAX;
+      let border = false;
       for (const [dx, dy] of ORTHO_DIRS) {
         const ni = world.idx(x + dx, y + dy);
         if (owner[ni] >= 0 && owner[ni] !== id) border = true;
@@ -754,8 +762,8 @@ function collectRidgeCandidates(
   sites: readonly Site[],
 ): Map<string, RidgeCandidate> {
   const map = new Map<string, RidgeCandidate>();
-  for (let y = CORE_MIN + 1; y < CORE_MAX; y++) {
-    for (let x = CORE_MIN + 1; x < CORE_MAX; x++) {
+  for (let y = CORE_MIN; y <= CORE_MAX; y++) {
+    for (let x = CORE_MIN; x <= CORE_MAX; x++) {
       const idx = world.idx(x, y);
       const a = owner[idx];
       if (a < 0) continue;
@@ -763,7 +771,7 @@ function collectRidgeCandidates(
         const ni = world.idx(x + dx, y + dy);
         const b = owner[ni];
         if (b < 0 || b === a) continue;
-        recordRidgeCandidate(map, sites, a, b, x, y, x + dx, y + dy);
+        recordRidgeCandidate(world, map, sites, a, b, x, y, x + dx, y + dy);
       }
     }
   }
@@ -794,32 +802,44 @@ function placeRidgeDoors(
 }
 
 function buildRoomsFromOwners(world: World, sites: readonly Site[], owner: Int16Array): void {
-  const bounds: Bounds[] = sites.map(() => ({ minX: W, minY: W, maxX: -1, maxY: -1, count: 0 }));
+  const bounds: Bounds[] = sites.map(() => ({ minDx: W, minDy: W, maxDx: -W, maxDy: -W, minX: W, minY: W, maxX: -1, maxY: -1, count: 0 }));
   for (let y = CORE_MIN; y <= CORE_MAX; y++) {
     for (let x = CORE_MIN; x <= CORE_MAX; x++) {
       const idx = world.idx(x, y);
       const id = owner[idx];
       if (id < 0 || world.cells[idx] === Cell.WALL) continue;
       const b = bounds[id]!;
+      const site = sites[id]!;
       b.count++;
-      if (x < b.minX) b.minX = x;
-      if (y < b.minY) b.minY = y;
-      if (x > b.maxX) b.maxX = x;
-      if (y > b.maxY) b.maxY = y;
+      const dx = world.delta(site.x, x);
+      const dy = world.delta(site.y, y);
+      if (dx < b.minDx) b.minDx = dx;
+      if (dx > b.maxDx) b.maxDx = dx;
+      if (dy < b.minDy) b.minDy = dy;
+      if (dy > b.maxDy) b.maxDy = dy;
     }
   }
 
   world.rooms = sites.map(site => {
     const b = bounds[site.id]!;
-    const x = b.count > 0 ? b.minX : site.x - 4;
-    const y = b.count > 0 ? b.minY : site.y - 4;
+    if (b.count > 0) {
+      b.minX = site.x + b.minDx;
+      b.minY = site.y + b.minDy;
+      b.maxX = site.x + b.maxDx;
+      b.maxY = site.y + b.maxDy;
+    } else {
+      b.minX = site.x - 4;
+      b.minY = site.y - 4;
+      b.maxX = site.x + 4;
+      b.maxY = site.y + 4;
+    }
     return {
       id: site.id,
       type: site.roomType,
-      x,
-      y,
-      w: Math.max(4, b.maxX - x + 1),
-      h: Math.max(4, b.maxY - y + 1),
+      x: world.wrap(b.minX),
+      y: world.wrap(b.minY),
+      w: Math.max(4, b.maxX - b.minX + 1),
+      h: Math.max(4, b.maxY - b.minY + 1),
       doors: [],
       sealed: site.infected === true,
       name: site.name,
@@ -1005,14 +1025,14 @@ function findNearbyParentFloorCell(
   radius: number,
   used: ReadonlySet<number>,
 ): { x: number; y: number } | null {
-  const sx = clamp(x, CORE_MIN + 2, CORE_MAX - 2);
-  const sy = clamp(y, CORE_MIN + 2, CORE_MAX - 2);
+  const sx = world.wrap(x);
+  const sy = world.wrap(y);
   for (let r = 0; r <= radius; r++) {
     for (let dy = -r; dy <= r; dy++) {
       for (let dx = -r; dx <= r; dx++) {
         if (Math.abs(dx) !== r && Math.abs(dy) !== r) continue;
-        const px = clamp(sx + dx, CORE_MIN + 2, CORE_MAX - 2);
-        const py = clamp(sy + dy, CORE_MIN + 2, CORE_MAX - 2);
+        const px = world.wrap(sx + dx);
+        const py = world.wrap(sy + dy);
         const idx = world.idx(px, py);
         if (used.has(idx)) continue;
         if (owner[idx] !== parentSiteId) continue;
@@ -1086,8 +1106,8 @@ function tryStampQuarantineRoom(
   sealed: boolean,
   seed: number,
 ): Room | null {
-  const rx = clamp(Math.round(cx - w / 2), CORE_MIN + 3, CORE_MAX - w - 3);
-  const ry = clamp(Math.round(cy - h / 2), CORE_MIN + 3, CORE_MAX - h - 3);
+  const rx = world.wrap(Math.round(cx - w / 2));
+  const ry = world.wrap(Math.round(cy - h / 2));
   for (let dy = -1; dy <= h; dy++) {
     for (let dx = -1; dx <= w; dx++) {
       const idx = world.idx(rx + dx, ry + dy);
@@ -1130,8 +1150,8 @@ function tryStampQuarantineRoom(
   }
 
   const side = Math.floor(hash01(seed, siteIdValue, room.id, 91) * 4);
-  const doorX = side === 2 ? rx - 1 : side === 3 ? rx + w : rx + 1 + Math.floor(hash01(seed, room.id, 1, 0) * Math.max(1, w - 2));
-  const doorY = side === 0 ? ry - 1 : side === 1 ? ry + h : ry + 1 + Math.floor(hash01(seed, room.id, 2, 0) * Math.max(1, h - 2));
+  const doorX = world.wrap(side === 2 ? rx - 1 : side === 3 ? rx + w : rx + 1 + Math.floor(hash01(seed, room.id, 1, 0) * Math.max(1, w - 2)));
+  const doorY = world.wrap(side === 0 ? ry - 1 : side === 1 ? ry + h : ry + 1 + Math.floor(hash01(seed, room.id, 2, 0) * Math.max(1, h - 2)));
   const doorIdx = world.idx(doorX, doorY);
   world.cells[doorIdx] = Cell.DOOR;
   world.roomMap[doorIdx] = room.id;
@@ -1153,18 +1173,35 @@ function tryStampQuarantineRoom(
 }
 
 function siteBounds(world: World, sites: readonly Site[], owner: Int16Array): Bounds[] {
-  const bounds: Bounds[] = sites.map(() => ({ minX: W, minY: W, maxX: -1, maxY: -1, count: 0 }));
+  const bounds: Bounds[] = sites.map(() => ({ minDx: W, minDy: W, maxDx: -W, maxDy: -W, minX: W, minY: W, maxX: -1, maxY: -1, count: 0 }));
   for (let y = CORE_MIN; y <= CORE_MAX; y++) {
     for (let x = CORE_MIN; x <= CORE_MAX; x++) {
       const idx = world.idx(x, y);
       const id = owner[idx];
       if (id < 0 || world.cells[idx] !== Cell.FLOOR || world.roomMap[idx] !== id) continue;
       const b = bounds[id]!;
+      const site = sites[id]!;
       b.count++;
-      if (x < b.minX) b.minX = x;
-      if (y < b.minY) b.minY = y;
-      if (x > b.maxX) b.maxX = x;
-      if (y > b.maxY) b.maxY = y;
+      const dx = world.delta(site.x, x);
+      const dy = world.delta(site.y, y);
+      if (dx < b.minDx) b.minDx = dx;
+      if (dx > b.maxDx) b.maxDx = dx;
+      if (dy < b.minDy) b.minDy = dy;
+      if (dy > b.maxDy) b.maxDy = dy;
+    }
+  }
+  for (const site of sites) {
+    const b = bounds[site.id]!;
+    if (b.count > 0) {
+      b.minX = site.x + b.minDx;
+      b.minY = site.y + b.minDy;
+      b.maxX = site.x + b.maxDx;
+      b.maxY = site.y + b.maxDy;
+    } else {
+      b.minX = site.x - 4;
+      b.minY = site.y - 4;
+      b.maxX = site.x + 4;
+      b.maxY = site.y + 4;
     }
   }
   return bounds;
@@ -1380,13 +1417,12 @@ function stampContamination(world: World, sites: readonly Site[], seed: number):
   }
 }
 
-function nearestSiteId(x: number, y: number, sites: readonly Site[]): number {
+function nearestSiteId(world: World, x: number, y: number, sites: readonly Site[]): number {
   let best = 0;
   let bestScore = Number.POSITIVE_INFINITY;
   for (const site of sites) {
-    const dx = x - site.x;
-    const dy = y - site.y;
-    const score = dx * dx + dy * dy - site.weight * site.weight;
+    const d2 = world.dist2(x, y, site.x, site.y);
+    const score = d2 - site.weight * site.weight;
     if (score < bestScore) {
       bestScore = score;
       best = site.id;
@@ -1409,6 +1445,7 @@ function openOwnedCell(world: World, idx: number, roomId: number, site: Site, no
 }
 
 function recordRidgeCandidate(
+  world: World,
   map: Map<string, RidgeCandidate>,
   sites: readonly Site[],
   a: number,
@@ -1423,11 +1460,11 @@ function recordRidgeCandidate(
   const key = `${lo}:${hi}`;
   const sa = sites[lo]!;
   const sb = sites[hi]!;
-  const mx = (sa.x + sb.x) / 2;
-  const my = (sa.y + sb.y) / 2;
-  const score = (x - mx) * (x - mx) + (y - my) * (y - my) + hash01(SEED, x, y, lo + hi) * 0.01;
+  const mx = world.wrap(sa.x + world.delta(sa.x, sb.x) / 2);
+  const my = world.wrap(sa.y + world.delta(sa.y, sb.y) / 2);
+  const score = world.dist2(x, y, mx, my) + hash01(SEED, x, y, lo + hi) * 0.01;
   const previous = map.get(key);
-  if (!previous || score < previous.score) map.set(key, { a: lo, b: hi, x, y, nx, ny, score });
+  if (!previous || score < previous.score) map.set(key, { a: lo, b: hi, x: world.wrap(x), y: world.wrap(y), nx: world.wrap(nx), ny: world.wrap(ny), score });
 }
 
 function sortedCandidates(map: Map<string, RidgeCandidate>): RidgeCandidate[] {
@@ -1509,8 +1546,8 @@ function placeDoubleDoor(
   const b = sites[edge.b]!;
   setDoorCell(world, edge.x, edge.y, a.id, b.id, state, keyId);
   setDoorCell(world, edge.nx, edge.ny, b.id, a.id, state, keyId);
-  const dx = Math.sign(edge.nx - edge.x);
-  const dy = Math.sign(edge.ny - edge.y);
+  const dx = Math.sign(world.delta(edge.x, edge.nx));
+  const dy = Math.sign(world.delta(edge.y, edge.ny));
   forceOpenDisc(world, undefined, sites, a.id, edge.x - dx, edge.y - dy, 1);
   forceOpenDisc(world, undefined, sites, b.id, edge.nx + dx, edge.ny + dy, 1);
 }
@@ -1789,9 +1826,6 @@ function setFeature(world: World, x: number, y: number, feature: Feature): void 
   if (world.cells[idx] === Cell.FLOOR || world.cells[idx] === Cell.WATER) world.features[idx] = feature;
 }
 
-function clamp(value: number, min: number, max: number): number {
-  return Math.max(min, Math.min(max, value));
-}
 
 function hash01(seed: number, a: number, b: number, c: number): number {
   let x = Math.imul(seed ^ 0x9e3779b9, 0x85ebca6b) ^ Math.imul(a + 0x632be5ab, 0x27d4eb2d);
@@ -1804,3 +1838,170 @@ function hash01(seed: number, a: number, b: number, c: number): number {
   x ^= x >>> 15;
   return (x >>> 0) / 0x100000000;
 }
+
+/* ── Voronoi Quarantine Mini-Game: Protocol "Clean Ridge" (Протокол «Чистое Ребро») ────── */
+
+registerContentInteractionHook({
+  id: 'voronoi_quarantine_airlock_protocol',
+  target(ctx: ContentInteractionContext) {
+    if (ctx.state.currentFloor !== VORONOI_QUARANTINE_BASE_FLOOR) return null;
+    const lx = Math.floor(ctx.lookX);
+    const ly = Math.floor(ctx.lookY);
+    const idx = ctx.world.idx(lx, ly);
+    const feature = ctx.world.features[idx];
+    if (feature !== Feature.SCREEN && feature !== Feature.APPARATUS && feature !== Feature.MACHINE) return null;
+
+    const roomId = ctx.world.roomMap[idx];
+    const room = ctx.world.rooms[roomId];
+    if (!room) return null;
+
+    let prompt = ' Протокол Очистки Вороного';
+    if (room.name.includes('пост') || room.name.includes('Канцелярия')) {
+      prompt = ' Карантинный терминал: Пропуска';
+    } else if (room.name.includes('палата') || room.name.includes('трупная')) {
+      prompt = ' Управление гермошлюзами ячейки';
+    } else if (room.name.includes('Складовой') || room.name.includes('клиника')) {
+      prompt = ' УФ-дезинфекция и выдача пайка';
+    }
+
+    return {
+      id: idx + 530000,
+      targetId: 'voronoi_quarantine_console',
+      x: lx,
+      y: ly,
+      priority: 65,
+      prompt,
+    };
+  },
+  use(ctx: ContentInteractionContext) {
+    if (ctx.state.currentFloor !== VORONOI_QUARANTINE_BASE_FLOOR) return { handled: false };
+    const lx = Math.floor(ctx.lookX);
+    const ly = Math.floor(ctx.lookY);
+    const idx = ctx.world.idx(lx, ly);
+    const feature = ctx.world.features[idx];
+    if (feature !== Feature.SCREEN && feature !== Feature.APPARATUS && feature !== Feature.MACHINE) return { handled: false };
+
+    const roomId = ctx.world.roomMap[idx];
+    const room = ctx.world.rooms[roomId];
+    if (!room) return { handled: false };
+
+    let worldChanged = false;
+
+    if (room.name.includes('пост') || room.name.includes('Канцелярия')) {
+      // Подделка/печать пропусков и выдача фильтров
+      if (!ctx.player.inventory) ctx.player.inventory = [];
+      const hasPass = ctx.player.inventory.some(i => i.defId === 'official_quarantine_clearance');
+      if (!hasPass) {
+        ctx.player.inventory.push({ defId: 'official_quarantine_clearance', count: 1 });
+        ctx.state.msgs.push(msg('Терминал распечатал чистый официальный пропуск.', ctx.state.time, '#4a4'));
+      } else {
+        ctx.player.inventory.push({ defId: 'gasmask_filter', count: 1 });
+        ctx.state.msgs.push(msg('Синтезирован аварийный фильтр для противогаза.', ctx.state.time, '#8cf'));
+      }
+      publishEvent(ctx.state, {
+        type: 'permit_forged',
+        floor: VORONOI_QUARANTINE_BASE_FLOOR,
+        privacy: 'public',
+        severity: 2,
+        tags: [VORONOI_QUARANTINE_ROUTE_ID, 'permit', 'forgery', 'checkpoint'],
+        data: { roomName: room.name, action: 'dispense_clearance' },
+      });
+      worldChanged = true;
+    } else if (room.name.includes('палата') || room.name.includes('трупная')) {
+      // Экстренная блокировка/разблокировка гермошлюзов
+      let toggled = 0;
+      for (const doorIdx of room.doors) {
+        const door = ctx.world.doors.get(doorIdx);
+        if (!door) continue;
+        if (door.state === DoorState.HERMETIC_CLOSED || door.state === DoorState.CLOSED) {
+          door.state = DoorState.HERMETIC_OPEN;
+          toggled++;
+        } else if (door.state === DoorState.HERMETIC_OPEN || door.state === DoorState.OPEN) {
+          door.state = DoorState.HERMETIC_CLOSED;
+          toggled++;
+        }
+      }
+      ctx.state.msgs.push(msg(`Аварийный протокол гермошлюзов: переключено дверей (${toggled}).`, ctx.state.time, '#f84'));
+      publishEvent(ctx.state, {
+        type: 'emergency_panel_used',
+        floor: VORONOI_QUARANTINE_BASE_FLOOR,
+        privacy: 'public',
+        severity: 3,
+        tags: [VORONOI_QUARANTINE_ROUTE_ID, 'safeguard', 'hermetic_seal', 'quarantine'],
+        data: { roomName: room.name, toggledDoors: toggled },
+      });
+      worldChanged = true;
+    } else {
+      // УФ-дезинфекция ячейки и выдача снабжения
+      let purged = 0;
+      for (let dy = -room.h; dy <= room.h; dy++) {
+        for (let dx = -room.w; dx <= room.w; dx++) {
+          const cidx = ctx.world.idx(room.x + dx, room.y + dy);
+          if (ctx.world.roomMap[cidx] === room.id) {
+            if (ctx.world.fog[cidx] > 2) {
+              ctx.world.fog[cidx] = 2;
+              purged++;
+            }
+          }
+        }
+      }
+      // Урон монстрам в комнате
+      let monstersHurt = 0;
+      for (const entity of ctx.entities) {
+        if (entity.type === EntityType.MONSTER && entity.alive && entity.assignedRoomId === room.id) {
+          if (entity.hp !== undefined) {
+            entity.hp = Math.max(1, entity.hp - 25);
+            monstersHurt++;
+          }
+        }
+      }
+      if (!ctx.player.inventory) ctx.player.inventory = [];
+      ctx.player.inventory.push({ defId: 'decon_fluid', count: 1 });
+      ctx.state.msgs.push(msg(`Включена УФ-очистка: рассеян туман (${purged}), ослаблены угрозы (${monstersHurt}). Выдан деактиватор.`, ctx.state.time, '#9ed'));
+      publishEvent(ctx.state, {
+        type: 'emergency_panel_used',
+        floor: VORONOI_QUARANTINE_BASE_FLOOR,
+        privacy: 'public',
+        severity: 3,
+        tags: [VORONOI_QUARANTINE_ROUTE_ID, 'decon', 'purge', 'sanitation'],
+        data: { roomName: room.name, purgedFog: purged, monstersHurt },
+      });
+      worldChanged = true;
+    }
+
+    return { handled: true, worldChanged };
+  },
+});
+
+let quarantineCheckTimer = 0;
+
+registerContentRuntimeHook({
+  id: 'voronoi_quarantine_patrol_ai',
+  phases: ['floor_activity'],
+  update(ctx: ContentRuntimeContext) {
+    if (ctx.state.currentFloor !== VORONOI_QUARANTINE_BASE_FLOOR) return false;
+    quarantineCheckTimer += ctx.dt;
+    if (quarantineCheckTimer < 5.0) return false;
+    quarantineCheckTimer = 0;
+
+    // Специфичное поведение на этаже Вороной-карантин:
+    // Ликвидаторы патрулируют гермостены и проверяют наличие пропусков у нейтралов
+    let worldChanged = false;
+    for (const entity of ctx.entities) {
+      if (entity.type === EntityType.NPC && entity.alive && entity.faction === Faction.LIQUIDATOR) {
+        // Если ликвидатор находится рядом с загрязненной ячейкой, он периодически очищает пол вокруг себя
+        const ex = Math.floor(entity.x);
+        const ey = Math.floor(entity.y);
+        const eidx = ctx.world.idx(ex, ey);
+        if (ctx.world.fog[eidx] > 10) {
+          ctx.world.fog[eidx] = Math.max(2, ctx.world.fog[eidx] - 6);
+          if (ctx.world.dist2(ctx.player.x, ctx.player.y, entity.x, entity.y) < 100) {
+            ctx.state.msgs.push(msg('Патруль ликвидаторов проводит локальную дегазацию сектора.', ctx.state.time, '#8cf'));
+          }
+          worldChanged = true;
+        }
+      }
+    }
+    return { worldChanged };
+  },
+});

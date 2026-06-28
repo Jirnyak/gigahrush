@@ -42,21 +42,16 @@ console.log(`Generation test selection: ${selected.length} files; ${skipped} uni
 const inheritedArgs = process.argv.slice(2);
 const env = { ...process.env, GIGAHRUSH_GENERATION_MATRIX: '1' };
 
-for (let i = 0; i < selected.length; i++) {
-  const file = selected[i];
-  console.log(`Generation test file ${i + 1}/${selected.length}: ${file}`);
-  const result = spawnSync(tsxBin, ['--test', ...inheritedArgs, file], {
-    cwd: root,
-    env,
-    stdio: 'inherit',
-  });
-  if (result.error) throw result.error;
-  if (result.signal) {
-    console.error(`Generation test runner terminated by ${result.signal} while running ${file}.`);
-    process.exit(1);
-  }
-  if ((result.status ?? 1) !== 0) {
-    console.error(`Generation test file failed: ${file}`);
-    process.exit(result.status ?? 1);
-  }
+const result = spawnSync(tsxBin, ['--test', '--test-concurrency=2', ...inheritedArgs, ...selected], {
+  cwd: root,
+  env,
+  stdio: 'inherit',
+  shell: process.platform === 'win32',
+});
+
+if (result.error) throw result.error;
+if (result.signal) {
+  console.error(`Generation test runner terminated by ${result.signal}.`);
+  process.exit(1);
 }
+process.exit(result.status ?? 1);

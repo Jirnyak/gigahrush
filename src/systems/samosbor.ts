@@ -548,7 +548,8 @@ function tickSamosborFront(
 ): { processed: number; changed: number; batchFlags: number } {
   if (front.dead) return { processed: 0, changed: 0, batchFlags: FRONT_DIRTY_NONE };
   front.age++;
-  if (front.age > front.maxAge || front.head >= front.frontier.length) {
+  // Waves should not die by age, only when they run out of cells to process.
+  if (front.frontier.length === 0) {
     front.dead = true;
     return { processed: 0, changed: 0, batchFlags: FRONT_DIRTY_NONE };
   }
@@ -558,8 +559,19 @@ function tickSamosborFront(
   let changed = 0;
   let batchFlags = FRONT_DIRTY_NONE;
 
-  for (let i = 0; i < budgetThisTick && front.head < front.frontier.length; i++) {
-    const ci = front.frontier[front.head++];
+  for (let i = 0; i < budgetThisTick && front.frontier.length > 0; i++) {
+    let pickIdx: number;
+    if (front.type === 'wave' || front.type === 'flash') {
+      pickIdx = (Math.random() * front.frontier.length) | 0;
+    } else {
+      const lookback = Math.min(front.frontier.length, front.type === 'crack' ? 12 : 36);
+      pickIdx = front.frontier.length - 1 - ((Math.random() * lookback) | 0);
+    }
+    const ci = front.frontier[pickIdx];
+    const last = front.frontier.pop()!;
+    if (pickIdx < front.frontier.length) {
+      front.frontier[pickIdx] = last;
+    }
     processed++;
     front.processed++;
 
@@ -636,8 +648,8 @@ export function getSamosborFrontDebugLines(): string[] {
   const lines: string[] = [];
   for (const front of activeSamosborFronts) {
     const status = front.dead ? '✗' : '●';
-    const qLen = Math.max(0, front.frontier.length - front.head);
-    lines.push(`  ${status} ${front.type} age=${front.age}/${front.maxAge} proc=${front.processed} chg=${front.changed} mon=${front.monstersSpawned} q=${qLen}`);
+    const qLen = front.frontier.length;
+    lines.push(`  ${status} ${front.type} age=${front.age} proc=${front.processed} chg=${front.changed} mon=${front.monstersSpawned} q=${qLen}`);
   }
   return lines;
 }

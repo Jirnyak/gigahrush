@@ -201,6 +201,7 @@ export class World {
   visualSlotDirtyVersion = 0;      // conservative whole-layer invalidation marker for future mesh cache
   pathBlockerVersion = 0;          // bumped when path blocker masks change
   pathBlockerDirtyVersion = 0;     // conservative whole-layer path blocker invalidation marker
+  globalCeilingTier?: number;      // if set, forces all open cells to this ceiling tier
   liftDir:   Uint8Array;           // LiftDirection per cell (only meaningful where cells[i] === Cell.LIFT)
   ceilHeight: Uint8Array;          // render-only ceiling-height tier per cell (0 = standard)
   containers: WorldContainer[] = [];

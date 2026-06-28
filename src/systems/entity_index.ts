@@ -419,10 +419,62 @@ export class EntityIndex {
   ensureForCurrentEntities(entities: readonly Entity[]): void {
     if (this.isBuiltFor(entities)) return;
     if (this.builtFor === entities && !this.dirty && entities.length >= this.builtEntityCount) {
-      this.rebuildDynamicForSimulation(entities, this.simulationFrame);
+      this.appendNewEntities(entities);
       return;
     }
     this.rebuild(entities, 'ensure');
+  }
+
+  private appendNewEntities(entities: readonly Entity[]): void {
+    if (entities.length <= this.builtEntityCount) return;
+    for (let order = Math.max(0, this.builtEntityCount); order < entities.length; order++) {
+      const e = entities[order];
+      if (!e || !e.alive) continue;
+      this.byId.set(e.id, e);
+      this.entityOrder.set(e.id, order);
+      if (e.type === EntityType.NPC || e.type === EntityType.MONSTER) this.actors.push(e);
+      if (e.type === EntityType.NPC) this.debugStats.npcCount++;
+      else if (e.type === EntityType.MONSTER) this.debugStats.monsterCount++;
+      else if (e.type === EntityType.ITEM_DROP) this.debugStats.itemCount++;
+      if (e.needs) this.needs.push(e);
+      if (e.ai && (e.type === EntityType.NPC || e.type === EntityType.MONSTER)) this.ai.push(e);
+      if (e.type === EntityType.PROJECTILE) {
+        this.projectiles.push(e);
+        this.debugStats.projectileCount++;
+      }
+
+      const bucketIndex = wrappedBucketCoord(e.y) * BUCKETS_PER_AXIS + wrappedBucketCoord(e.x);
+      if ((entityMask(e) & ENTITY_MASK_STATIC_VISIBLE) !== 0) {
+        if (this.staticIndexedIds.has(e.id)) continue;
+        this.staticIndexedIds.add(e.id);
+        const bucket = this.staticBuckets[bucketIndex];
+        bucket.push(e);
+        if (bucket.length === 1) {
+          this.staticUsedBucketCount++;
+          this.debugStats.buckets.usedBucketCount++;
+        }
+        if (bucket.length > this.staticMaxBucketSize) this.staticMaxBucketSize = bucket.length;
+        if (bucket.length > this.debugStats.buckets.maxBucketSize) {
+          this.debugStats.buckets.maxBucketSize = bucket.length;
+        }
+      } else {
+        this.dynamicEntities.push(e);
+        const bucket = this.addDynamicEntityToBuckets(e, bucketIndex);
+        if (bucket.length === 1) this.debugStats.buckets.usedBucketCount++;
+        if (bucket.length > this.debugStats.buckets.maxBucketSize) {
+          this.debugStats.buckets.maxBucketSize = bucket.length;
+        }
+      }
+      this.debugStats.liveEntityCount++;
+    }
+    this.builtEntityCount = entities.length;
+    this.version++;
+    this.debugStats.version = this.version;
+    this.debugStats.rebuildReason = 'simulation';
+    this.debugStats.entityCount = entities.length;
+    if (this.debugStats.buckets.usedBucketCount > 0) {
+      this.debugStats.buckets.meanUsedBucketSize = this.debugStats.liveEntityCount / this.debugStats.buckets.usedBucketCount;
+    }
   }
 
   markDirty(): void {

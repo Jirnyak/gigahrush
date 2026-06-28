@@ -86,7 +86,7 @@ interface RuleSummary {
 }
 
 const MAX_PRICE_CACHE_ITEMS = 256;
-const MAX_QUOTE_TAGS = 10;
+const MAX_QUOTE_TAGS = 24;
 const DEFAULT_SCARCITY_MAX = 4;
 const DEFAULT_PRICE_PRESSURE_MAX = 5;
 const DEFAULT_REWARD_PRESSURE_MAX = 3;
@@ -563,16 +563,16 @@ export function recordPlayerItemSale(
   }
 
   const tags = ['player', 'trade', outcome];
-  if (def.tags) pushTags(tags, def.tags);
+  pushTags(tags, opts.tags);
   if (isContraband) pushTags(tags, ['contraband', blackMarketBuyer ? 'black_market' : 'cash']);
   else pushTags(tags, [blackMarketBuyer ? 'black_market' : 'cash']);
   
   if (scienceBuyer) pushTags(tags, ['science']);
   if (liquidatorConfiscation) pushTags(tags, ['confiscation']);
-  pushTags(tags, opts.tags);
+  if (def.tags) pushTags(tags, def.tags);
 
   publishEvent(state, {
-    type: (outcome === 'science_handoff' || liquidatorConfiscation) ? 'player_handoff_item' : 'player_sell_item',
+    type: (liquidatorConfiscation || (outcome === 'science_handoff' && !opts.tags?.includes('sell'))) ? 'player_handoff_item' : 'player_sell_item',
     zoneId,
     actorId: seller.id,
     actorName: seller.name ?? 'Вы',

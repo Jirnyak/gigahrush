@@ -2354,7 +2354,7 @@ export function consumeAmmo(e: Entity, state?: GameState, itemId = equippedComba
 /* ── Count ammo for current ranged weapon ─────────────────────── */
 export function countAmmo(e: Entity, itemId = equippedCombatItemId(e)): number {
   const ws = WEAPON_STATS[itemId];
-  if (!ws || !ws.isRanged || !ws.ammoType) return 0;
+  if (!ws || !ws.ammoType) return 0;
   let total = 0;
   for (const slot of e.inventory ?? []) {
     if (slot.defId === ws.ammoType) total += slot.count;
@@ -2482,7 +2482,7 @@ export function getWeaponReadiness(e: Entity, itemId = equippedCombatItemId(e)):
     resourceLabel = `ПСИ ${psi}/${maxPsi} -${costLabel}`;
     if (!e.rpg || (e.rpg.psi ?? 0) < cost) cannotFireReason = 'нет ПСИ';
     lowResource = psi < cost * 2;
-  } else if (ws.isRanged) {
+  } else if (ws.isRanged || ws.ammoType) {
     const ammo = countAmmo(e, id);
     resourceKind = 'ammo';
     resourceName = compactAmmoName(ws.ammoType);
@@ -2516,6 +2516,7 @@ export function getWeaponReadiness(e: Entity, itemId = equippedCombatItemId(e)):
       resourceLabel = ws.durability > 0 ? 'прочн --' : 'прочн ∞';
       if (ws.durability > 0 && id) cannotFireReason = 'нет оружия';
     }
+    if (e.reloading) cannotFireReason = 'ПЕРЕЗАРЯДКА';
   }
 
   return {

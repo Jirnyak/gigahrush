@@ -174,7 +174,7 @@ test('world event publication clamps payloads before notifying observers', () =>
     zoneId: 1,
     severity: 99 as WorldEventSeverity,
     privacy: 'public',
-    tags: ['alpha', 'alpha', '', longTag, 'b', 'c', 'd', 'e', 'f', 'g', 'h'],
+    tags: ['alpha', 'alpha', '', longTag, 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q'],
     data: {
       [longKey]: 'v'.repeat(140),
       nested: { child: { tooDeep: true } },
@@ -206,7 +206,7 @@ test('world event publication clamps payloads before notifying observers', () =>
   assert.equal(observedCount, 1);
   assert.equal(unregisterWorldEventObserver(observer), false);
   assert.equal(event.severity, 5);
-  assert.deepEqual(event.tags, ['alpha', longTag.slice(0, 32), 'b', 'c', 'd', 'e', 'f', 'g']);
+  assert.deepEqual(event.tags, ['alpha', longTag.slice(0, 32), 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o']);
   assert.equal(Object.keys(event.data ?? {}).length, 12);
   assert.equal(event.data?.[longKey.slice(0, 32)], 'v'.repeat(96));
   assert.deepEqual(event.data?.nested, { child: '[object]' });

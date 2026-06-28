@@ -425,6 +425,8 @@ export function paintTerritoryDisc(
       if (options.passableOnly && !walkableForCapture(world.cells[idx])) continue;
       const previousOwner = territoryOwnerAtIndex(world, idx);
       if (preserveSamosbor && previousOwner === ZoneFaction.SAMOSBOR) continue;
+      const roomId = world.roomMap[idx];
+      if (roomId > 0 && world.rooms[roomId]?.type === RoomType.HQ && previousOwner !== owner) continue;
       if (!setTerritoryOwnerAtIndex(world, idx, owner)) continue;
       options.onChange?.(idx, previousOwner);
       changed++;
@@ -441,6 +443,9 @@ function paintRoomOwner(
 ): number {
   const preserveAptMask = options.preserveAptMask !== false;
   const includeDoors = options.includeDoors !== false;
+  if (room.type === RoomType.HQ && dominantTerritoryOwnerInRoom(world, room.id) !== owner) {
+    return 0;
+  }
   let changed = 0;
   forEachMappedRoomCell(world, room, idx => {
     if (preserveAptMask && world.aptMask[idx]) return;
@@ -463,6 +468,8 @@ function paintOwnerPatch(world: World, x: number, y: number, owner: TerritoryOwn
       const idx = world.idx(x + dx, y + dy);
       if (world.aptMask[idx]) continue;
       if (world.cells[idx] === Cell.ABYSS || world.cells[idx] === Cell.LIFT) continue;
+      const roomId = world.roomMap[idx];
+      if (roomId > 0 && world.rooms[roomId]?.type === RoomType.HQ && territoryOwnerAtIndex(world, idx) !== owner) continue;
       if (setTerritoryOwnerAtIndex(world, idx, owner)) changed++;
     }
   }
@@ -515,6 +522,7 @@ function reinforceHqSupportRooms(world: World, hq: Room, owner: TerritoryOwner):
     .filter(room => (
       room &&
       room.id !== hq.id &&
+      room.type !== RoomType.HQ &&
       room.apartmentId < 0 &&
       autoHqRoomSpanEligible(room) &&
       room.w > 2 &&
@@ -576,6 +584,7 @@ export function territoryHqAnchors(world: World): TerritoryHqAnchor[] {
     if (seen.has(owner)) continue;
     const room = chooseAnchorRoom(world, owner, usedRooms);
     if (!room) continue;
+    hardenHqRoom(world, room, owner);
     pushTerritoryHqAnchor(anchors, room, owner);
     seen.add(owner);
     usedRooms.add(room.id);
@@ -712,6 +721,8 @@ function applyTargetTerritoryShares(world: World, shares: readonly TerritoryTarg
       for (let dy = 0; dy < TERRITORY_BUCKET_SIZE; dy++) {
         for (let dx = 0; dx < TERRITORY_BUCKET_SIZE; dx++) {
           const idx = world.idx(bx * TERRITORY_BUCKET_SIZE + dx, by * TERRITORY_BUCKET_SIZE + dy);
+          const roomId = world.roomMap[idx];
+          if (roomId > 0 && world.rooms[roomId]?.type === RoomType.HQ) continue;
           world.factionControl[idx] = owner;
         }
       }

@@ -2322,10 +2322,11 @@ export function materializeAlifeFloorPopulation(
     if (parent) {
       const dist2 = world.dist2(child.x, child.y, parent.x, parent.y);
       if (dist2 > 400) { // far away
-        const hasQuest = state.quests.some(q => q.giverId === child.id && !q.done);
+        const hasQuest = state.quests?.some(q => q.giverId === child.id && !q.done);
         if (!hasQuest) {
           const contract = CONTRACTS.find(c => c.id === 'lostchildescort');
           if (contract) {
+            if (!state.quests) state.quests = [];
             const quest = contractToQuest(contract, state.nextQuestId++, { id: child.id, name: child.name });
             quest.targetNpcId = parent.id;
             state.quests.push(quest);

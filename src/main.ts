@@ -914,12 +914,13 @@ function playerAlifeFields(source: Partial<Entity> = {}): Pick<Entity, 'persiste
   };
 }
 
-let pageHiddenPause = typeof document !== 'undefined' ? document.hidden : false;
+let pageHiddenPause = smokeDebug ? false : typeof document !== 'undefined' ? document.hidden : false;
 let pageHiddenInputCleared = false;
 let platformPause = false;
 let platformPauseInputCleared = false;
 
 function setPageHiddenPause(hidden: boolean): void {
+  if (smokeDebug) hidden = false;
   pageHiddenPause = hidden;
   pageHiddenInputCleared = false;
   setAudioSuspendedForPage(hidden);
@@ -928,6 +929,7 @@ function setPageHiddenPause(hidden: boolean): void {
 }
 
 function setPlatformPause(paused: boolean): void {
+  if (smokeDebug) paused = false;
   platformPause = paused;
   platformPauseInputCleared = false;
   setAudioSuspendedForPlatform(paused);
@@ -1844,12 +1846,27 @@ function tryUseVoidReturnPortal(playerCell: number): boolean {
 
 interface SmokeDebugSnapshot {
   started: boolean;
+  showMenu: boolean;
   showDebug: boolean;
   debugSel: number;
   showQuests: boolean;
   showInventory: boolean;
   showLog: boolean;
   showNpcMenu: boolean;
+  showContainerMenu: boolean;
+  showCraftMenu: boolean;
+  showFactions: boolean;
+  showDemos: boolean;
+  showHelp: boolean;
+  showControls: boolean;
+  showUiSettings: boolean;
+  showMapLegend: boolean;
+  isNetTerminalGenOpen: boolean;
+  isInteractableOverlayOpen: boolean;
+  isEmergencyPanelMenuOpen: boolean;
+  isMapEditorOpen: boolean;
+  pageHiddenPause: boolean;
+  platformPause: boolean;
   npcMenuSel: number;
   npcMenuTab: GameState['npcMenuTab'];
   mapMode: number;
@@ -1907,14 +1924,14 @@ declare global {
 
 function installSmokeDebugHook(): void {
   if (!smokeDebug) return;
+  if (typeof window === 'undefined') return;
   window.__gigahrushSmokeState = () => {
-    if (typeof state === 'undefined' || typeof player === 'undefined') return null;
+    if (!started || pendingLoad || typeof state === 'undefined') return null;
     return smokeSnapshot();
   };
   window.__gigahrushStressSpawn = (count: number) => {
-    if (typeof state === 'undefined' || typeof player === 'undefined') return null;
-    spawnSmokeStressPopulation(Math.max(0, Math.min(12_000, Math.floor(count))));
-    rebuildEntityIndex(entities, 'smoke_stress');
+    if (!started || pendingLoad || typeof state === 'undefined') return null;
+    spawnSmokeStressPopulation(count);
     return smokeSnapshot();
   };
 }
@@ -1954,12 +1971,27 @@ function smokeSnapshot(): SmokeDebugSnapshot {
   const interaction = interactionTargetAhead();
   return {
       started,
+      showMenu: state.showMenu,
       showDebug: state.showDebug,
       debugSel: state.debugSel,
       showQuests: state.showQuests,
       showInventory: state.showInventory,
       showLog: state.showLog,
       showNpcMenu: state.showNpcMenu,
+      showContainerMenu: state.showContainerMenu,
+      showCraftMenu: state.showCraftMenu,
+      showFactions: state.showFactions,
+      showDemos: state.showDemos,
+      showHelp: state.showHelp,
+      showControls: state.showControls,
+      showUiSettings: state.showUiSettings,
+      showMapLegend: state.showMapLegend,
+      isNetTerminalGenOpen: isNetTerminalGenOpen(),
+      isInteractableOverlayOpen: isInteractableOverlayOpen(),
+      isEmergencyPanelMenuOpen: isEmergencyPanelMenuOpen(),
+      isMapEditorOpen: isMapEditorOpen(),
+      pageHiddenPause,
+      platformPause,
       npcMenuSel: state.npcMenuSel,
       npcMenuTab: state.npcMenuTab,
       mapMode: state.mapMode,
@@ -2987,8 +3019,6 @@ function playerActions(_dt: number): void {
       const ax = player.x + Math.cos(player.angle) * range;
       const ay = player.y + Math.sin(player.angle) * range;
 
-      player.currentMag = 0; // Empty mag for melee
-
       let hitSomething = isPaupsinaWebCuttingWeapon(weaponId)
         ? reducePaupsinaWeb(player, state.time, state.msgs, state, player, 'cut')
         : false;
@@ -3055,7 +3085,17 @@ function playerActions(_dt: number): void {
         const broke = consumeDurability(player, state.msgs, state.time, state, weaponId);
         if (broke) playBreak();
       }
-      player.attackCd = ws.speed * atkSpeedMod;
+      if (ws.magazineSize === 1) {
+        player.currentMag = 0;
+        player.reloading = true;
+        player.reloadTimer = (ws.reloadTime ?? ws.speed) / reloadSpeedMod;
+        player.attackCd = 0;
+      } else if (ws.magazineSize !== Infinity) {
+        player.currentMag = Math.max(0, (player.currentMag ?? 1) - 1);
+        player.attackCd = ws.speed * atkSpeedMod;
+      } else {
+        player.attackCd = ws.speed * atkSpeedMod;
+      }
     }
   }
 }
