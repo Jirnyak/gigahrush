@@ -100,6 +100,8 @@ export interface SavePayload {
     quests: Quest[];
     nextQuestId: number;
     currentFloor: GameState['currentFloor'];
+    tutorialMode?: boolean;
+    tutorialStep?: number;
     floorRun: unknown;
     floorInstances: unknown;
     voidReturnPortal?: unknown;
@@ -300,6 +302,8 @@ export function buildSavePayload(input: SavePayloadBuildInput): SavePayload {
       quests: questsForSave(state.quests),
       nextQuestId: state.nextQuestId,
       currentFloor: state.currentFloor,
+      tutorialMode: state.tutorialMode,
+      tutorialStep: state.tutorialStep,
       floorRun: sections.floorRun,
       floorInstances: sections.floorInstances,
       voidReturnPortal: sections.voidReturnPortal,

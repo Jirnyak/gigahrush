@@ -212,7 +212,7 @@ function applyNeedTick(
   }
 
   // Player warnings
-  if (e.id === playerId) {
+  if (e.id === playerId && (!state || !state.tutorialMode)) {
     if (n.food  < 15 && Math.random() < 0.005) addMsg(msgs, 'Вы голодны...', time, '#da4');
     if (n.water < 15 && Math.random() < 0.005) addMsg(msgs, 'Хочется пить...', time, '#48c');
     if (n.sleep < 10 && Math.random() < 0.005) addMsg(msgs, 'Глаза закрываются...', time, '#a8f');

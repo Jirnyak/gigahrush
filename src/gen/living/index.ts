@@ -44,7 +44,7 @@ export { generateHintTextures } from '../../render/hint_textures';
 export { generatePosterTextures, pickPosterTex } from './posters';
 
 /* ── generateWorld — called once at game start ───────────────── */
-export function generateWorld(): { world: World; entities: Entity[]; spawnX: number; spawnY: number } {
+export function generateWorld(_seed?: number, isTutorial: boolean = false): { world: World; entities: Entity[]; spawnX: number; spawnY: number } {
   const world = new World();
   const entities: Entity[] = [];
   let nextId = 1;
@@ -53,7 +53,7 @@ export function generateWorld(): { world: World; entities: Entity[]; spawnX: num
   const apartments = generateApartments(world);
 
   /* ── A1: Start room (briefing hall) ─────────────── */
-  const startRoom = generateTutorRoom(world, world.rooms.length, entities, { v: nextId });
+  const startRoom = generateTutorRoom(world, world.rooms.length, entities, { v: nextId }, isTutorial);
   nextId = entities.reduce((mx, e) => Math.max(mx, e.id), nextId) + 1;
 
   /* ── A1b: Yakov's lab (at distance from spawn) ──── */
@@ -79,8 +79,22 @@ export function generateWorld(): { world: World; entities: Entity[]; spawnX: num
   /* ── B: Volatile gigastructure ─────────────────────── */
   generateVolatileMaze(world);
 
+  if (isTutorial) {
+    for (const doorData of world.doors.values()) {
+      const isInsideA = doorData.roomA >= 0 && doorData.roomA < world.apartmentRoomCount;
+      const isInsideB = doorData.roomB >= 0 && doorData.roomB < world.apartmentRoomCount;
+      const isOutsideA = doorData.roomA < 0 || doorData.roomA >= world.apartmentRoomCount;
+      const isOutsideB = doorData.roomB < 0 || doorData.roomB >= world.apartmentRoomCount;
+      
+      if ((isInsideA && isOutsideB) || (isInsideB && isOutsideA)) {
+        doorData.state = 2; // DoorState.LOCKED
+        doorData.keyId = 'tut_cafe_key';
+      }
+    }
+  }
+
   /* ── B0: Zone content modules (after maze — bulldoze & stamp over corridors) ── */
-  {
+  if (!isTutorial) {
     const nid = { v: nextId };
     runZoneContentModules(world, entities, nid);
     nextId = nid.v;
@@ -89,13 +103,15 @@ export function generateWorld(): { world: World; entities: Entity[]; spawnX: num
   /* ── B1: Readable hub routes and district motifs ─────────────── */
   buildLivingHubGeometry(world);
 
-  /* ── B2: Shadows near Vanka (needs corridors to exist) */
-  spawnVankaShadows(world, entities, { v: nextId });
-  nextId = entities.reduce((mx, e) => Math.max(mx, e.id), nextId) + 1;
+  if (!isTutorial) {
+    /* ── B2: Shadows near Vanka (needs corridors to exist) */
+    spawnVankaShadows(world, entities, { v: nextId });
+    nextId = entities.reduce((mx, e) => Math.max(mx, e.id), nextId) + 1;
 
-  /* ── B3: Side quest NPCs (random encounters, need FLOOR cells) */
-  spawnSideQuestNpcs(world, entities, { v: nextId });
-  nextId = entities.reduce((mx, e) => Math.max(mx, e.id), nextId) + 1;
+    /* ── B3: Side quest NPCs (random encounters, need FLOOR cells) */
+    spawnSideQuestNpcs(world, entities, { v: nextId });
+    nextId = entities.reduce((mx, e) => Math.max(mx, e.id), nextId) + 1;
+  }
 
   /* ── B4: Rare procedural TV/monitor walls in suitable rooms ─── */
   placeProceduralScreens(world, FloorLevel.LIVING);

@@ -53,6 +53,7 @@ import { stampMark, MarkType } from './systems/surface_marks';
 import { stampUrineTrace } from './systems/urination';
 import { containerMenuGridLayout, craftMenuLayout, fullscreenInventoryLayout, tradeMenuGridLayout } from './render/ui_layout';
 import { updateNeeds } from './systems/needs';
+import { startTutorial } from './systems/tutorial';
 import { updateAI, tryMonsterProjectileStagger, getAiStats, type AiStats } from './systems/ai';
 import { resolveBreachChargeExplosion } from './systems/breach_charge';
 import { dropMonsterRareLoot } from './systems/monster_drops';
@@ -2212,12 +2213,12 @@ function scheduleLoading(fn: () => void): void {
   pendingLoadDrawn = false;
 }
 
-function initGame(runSeedOverride?: number, initialFloor: FloorLevel = FloorLevel.LIVING): void {
+function initGame(runSeedOverride?: number, initialFloor: FloorLevel = FloorLevel.LIVING, isTutorial: boolean = false): void {
   resetRuntimeCamera(runtimeCamera);
   clearFloorMemory();
   resetNoiseRecords();
   const initialRunSeed = normalizeFloorRunSeed(runSeedOverride);
-  const gen = generateFloor(initialFloor, initialRunSeed);
+  const gen = generateFloor(initialFloor, initialRunSeed, isTutorial);
   injectFastElevators(gen.world);
   stampCeilingHeights(gen.world);
   world = replaceWorldFromGeneration(null, gen);
@@ -2264,7 +2265,7 @@ function initGame(runSeedOverride?: number, initialFloor: FloorLevel = FloorLeve
     time: 0,
     clock: { hour: 8, minute: 0, totalMinutes: 0 },
     samosborActive: false,
-    samosborTimer: 120 + Math.random() * 60,
+    samosborTimer: isTutorial ? 999999 : 120 + Math.random() * 60,
     samosborCount: 0,
     paused: false,
     gameOver: false,
@@ -2337,6 +2338,7 @@ function initGame(runSeedOverride?: number, initialFloor: FloorLevel = FloorLeve
     uvBeamFx: 0,
     uvBeamLen: 0,
     gameWon: false,
+    tutorialMode: isTutorial,
     crafting: createCraftingState(),
     worldEvents: createWorldEventState(),
   };
@@ -5028,6 +5030,8 @@ function loadGame(): boolean {
       state.samosborTimer = clampNumber(dataState.samosborTimer, 120, 0, 24 * 60 * 60);
       state.quests = normalizedQuests.quests;
       state.nextQuestId = normalizedQuests.nextQuestId;
+      state.tutorialMode = dataState.tutorialMode === true;
+      state.tutorialStep = typeof dataState.tutorialStep === 'number' ? dataState.tutorialStep : undefined;
       state.currentFloor = floor;
       setFloorRunState(state, savedFloorRun, floor);
       setFloorInstanceState(state, loadedFloorInstances, floor);
@@ -8322,14 +8326,18 @@ function startGameFromTitle(): void {
   savePlayerSex(playerSex);
   const seedOverride = titleRunSeedOverride();
   const trailerSelected = titleInputField === 'trailer';
+  const isNewGame = titleInputField === 'start';
   
-  if (seedOverride !== undefined || titleStartNeedsInit || trailerSelected) {
+  if (seedOverride !== undefined || titleStartNeedsInit || trailerSelected || isNewGame) {
     scheduleLoading(() => {
-      initGame(seedOverride);
+      initGame(seedOverride, undefined, isNewGame);
       titleStartNeedsInit = false;
       if (trailerSelected) {
         state.trailerMode = true;
         state.currentFloor = TRAILER_FLOORS[titleTrailerFloorIdx] as FloorLevel;
+      }
+      if (isNewGame) {
+        startTutorial(state, player);
       }
       finishStartGameFromTitle();
     });

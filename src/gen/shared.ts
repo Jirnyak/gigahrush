@@ -654,6 +654,161 @@ export function findClearArea(
   }
   return null;
 }
+function hash32Corridor(v: number): number {
+  v |= 0;
+  v ^= v >>> 16;
+  v = Math.imul(v, 0x7feb352d);
+  v ^= v >>> 15;
+  v = Math.imul(v, 0x846ca68b);
+  v ^= v >>> 16;
+  return v >>> 0;
+}
+
+export function carveOrganicCorridor(world: World, ax: number, ay: number, bx: number, by: number, seed: number, force = false): void {
+  // Reusable step function from carveCorridor
+  function step(x: number, y: number, dirX: number, dirY: number): void {
+    const i = world.idx(x, y);
+    if (!force && world.aptMask[i]) return;
+    if (world.cells[i] === Cell.FLOOR || world.cells[i] === Cell.DOOR) return;
+    
+    // If forcing through hermetic walls or apartments, we probably want doors
+    if (force && (world.hermoWall[i] || world.aptMask[i])) {
+      world.aptMask[i] = 0;
+      world.cells[i] = Cell.DOOR;
+      if (!world.doors.has(i)) {
+        world.doors.set(i, { idx: i, state: DoorState.CLOSED, roomA: -1, roomB: -1, keyId: '', timer: 0 });
+      }
+      return;
+    }
+
+    if (world.cells[i] !== Cell.WALL) return;
+
+    let crossingRoom = -1;
+    let alongsideRoom = -1;
+
+    const leftX = x === 0 ? W - 1 : x - 1;
+    const rightX = x === W - 1 ? 0 : x + 1;
+    const upY = y === 0 ? W - 1 : y - 1;
+    const downY = y === W - 1 ? 0 : y + 1;
+
+    const yW = y * W;
+    const rightI = yW + rightX;
+    const leftI = yW + leftX;
+    const downI = downY * W + x;
+    const upI = upY * W + x;
+
+    if (world.roomMap[rightI] >= 0) {
+      if (dirX !== 0) crossingRoom = world.roomMap[rightI];
+      else alongsideRoom = world.roomMap[rightI];
+    }
+    if (world.roomMap[leftI] >= 0) {
+      if (-dirX !== 0) crossingRoom = world.roomMap[leftI];
+      else alongsideRoom = world.roomMap[leftI];
+    }
+    if (world.roomMap[downI] >= 0) {
+      if (dirY !== 0) crossingRoom = world.roomMap[downI];
+      else alongsideRoom = world.roomMap[downI];
+    }
+    if (world.roomMap[upI] >= 0) {
+      if (-dirY !== 0) crossingRoom = world.roomMap[upI];
+      else alongsideRoom = world.roomMap[upI];
+    }
+
+    if (crossingRoom >= 0) {
+      let nearbyDoor = false;
+      if (world.cells[rightI] === Cell.DOOR) {
+        const d = world.doors.get(rightI);
+        if (d && (d.roomA === crossingRoom || d.roomB === crossingRoom)) nearbyDoor = true;
+      }
+      if (!nearbyDoor && world.cells[leftI] === Cell.DOOR) {
+        const d = world.doors.get(leftI);
+        if (d && (d.roomA === crossingRoom || d.roomB === crossingRoom)) nearbyDoor = true;
+      }
+      if (!nearbyDoor && world.cells[downI] === Cell.DOOR) {
+        const d = world.doors.get(downI);
+        if (d && (d.roomA === crossingRoom || d.roomB === crossingRoom)) nearbyDoor = true;
+      }
+      if (!nearbyDoor && world.cells[upI] === Cell.DOOR) {
+        const d = world.doors.get(upI);
+        if (d && (d.roomA === crossingRoom || d.roomB === crossingRoom)) nearbyDoor = true;
+      }
+
+      if (nearbyDoor) {
+        world.cells[i] = Cell.FLOOR;
+      } else {
+        world.cells[i] = Cell.DOOR;
+        if (!world.doors.has(i)) {
+          world.doors.set(i, {
+            idx: i, state: DoorState.CLOSED,
+            roomA: crossingRoom, roomB: -1, keyId: '', timer: 0,
+          });
+          const room = world.rooms[crossingRoom];
+          if (room) room.doors.push(i);
+        }
+      }
+    } else if (alongsideRoom >= 0) {
+      world.cells[i] = Cell.FLOOR;
+    } else {
+      world.cells[i] = Cell.FLOOR;
+    }
+  }
+
+  function carveSegment(x0: number, y0: number, x1: number, y1: number, depth: number): void {
+    const ddx = world.delta(x0, x1);
+    const ddy = world.delta(y0, y1);
+    const dist = Math.abs(ddx) + Math.abs(ddy);
+
+    if (dist <= 4 || depth >= 4) {
+      // Small segment: simple Manhattan carve
+      const stepX = ddx > 0 ? 1 : (ddx < 0 ? -1 : 0);
+      const stepY = ddy > 0 ? 1 : (ddy < 0 ? -1 : 0);
+      const horizFirst = (hash32Corridor(seed ^ x0 ^ y1 ^ depth) & 1) === 0;
+
+      let cx = x0, cy = y0;
+      if (horizFirst) {
+        for (let i = 0; i <= Math.abs(ddx); i++) {
+          step(cx, cy, stepX, 0);
+          if (i < Math.abs(ddx)) cx = world.wrap(cx + stepX);
+        }
+        for (let i = 0; i <= Math.abs(ddy); i++) {
+          step(cx, cy, 0, stepY);
+          if (i < Math.abs(ddy)) cy = world.wrap(cy + stepY);
+        }
+      } else {
+        for (let i = 0; i <= Math.abs(ddy); i++) {
+          step(cx, cy, 0, stepY);
+          if (i < Math.abs(ddy)) cy = world.wrap(cy + stepY);
+        }
+        for (let i = 0; i <= Math.abs(ddx); i++) {
+          step(cx, cy, stepX, 0);
+          if (i < Math.abs(ddx)) cx = world.wrap(cx + stepX);
+        }
+      }
+      return;
+    }
+
+    // Midpoint displacement
+    const midX = world.wrap(x0 + Math.floor(ddx / 2));
+    const midY = world.wrap(y0 + Math.floor(ddy / 2));
+
+    const h = hash32Corridor(seed ^ midX ^ midY ^ depth);
+    // Jitter by up to dist/4
+    const jitterMax = Math.max(1, Math.floor(dist / 4));
+    const jitter = (h % (jitterMax * 2 + 1)) - jitterMax;
+
+    let jx = midX, jy = midY;
+    if (Math.abs(ddx) > Math.abs(ddy)) {
+      jy = world.wrap(midY + jitter);
+    } else {
+      jx = world.wrap(midX + jitter);
+    }
+
+    carveSegment(x0, y0, jx, jy, depth + 1);
+    carveSegment(jx, jy, x1, y1, depth + 1);
+  }
+
+  carveSegment(ax, ay, bx, by, 0);
+}
 
 /* ── 1-wide L-corridor with auto-doors at room walls ─────────── */
 export function carveCorridor(world: World, ax: number, ay: number, bx: number, by: number): void {
@@ -867,7 +1022,7 @@ export function connectRoomsMST(world: World, rooms: Room[]): void {
     const exitB = roomExit(world, b, a.x + Math.floor(a.w / 2), a.y + Math.floor(a.h / 2));
     placeDoorAt(world, exitA.wx, exitA.wy, a.id);
     placeDoorAt(world, exitB.wx, exitB.wy, b.id);
-    carveCorridor(world, exitA.ox, exitA.oy, exitB.ox, exitB.oy);
+    carveOrganicCorridor(world, exitA.ox, exitA.oy, exitB.ox, exitB.oy, a.id ^ b.id ^ 0x629A);
   }
 
   const extra = Math.floor(n * 0.25);
@@ -879,7 +1034,7 @@ export function connectRoomsMST(world: World, rooms: Room[]): void {
       const exitB = roomExit(world, b, a.x + Math.floor(a.w / 2), a.y + Math.floor(a.h / 2));
       placeDoorAt(world, exitA.wx, exitA.wy, a.id);
       placeDoorAt(world, exitB.wx, exitB.wy, b.id);
-      carveCorridor(world, exitA.ox, exitA.oy, exitB.ox, exitB.oy);
+      carveOrganicCorridor(world, exitA.ox, exitA.oy, exitB.ox, exitB.oy, a.id ^ b.id ^ 0x629A);
     }
   }
 }
@@ -1326,7 +1481,7 @@ export function ensurePermanentRoomAccess(world: World): void {
 
   for (let ri = 0; ri < world.apartmentRoomCount; ri++) {
     const room = world.rooms[ri];
-    if (!room) continue;
+    if (!room || room.sealed) continue;
 
     /* Already reachable? */
     let ok = false;

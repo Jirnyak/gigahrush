@@ -1802,6 +1802,33 @@ function generateQuest(
     if (noticedQuest) return noticedQuest;
     markDemosNoticeFailed(state, demosNotice.id, 'contract_unavailable');
   }
+  if ((npc.age !== undefined && npc.age < 16) || npc.occupation === Occupation.CHILD) {
+    const familyId = npc.familyId;
+    if (familyId) {
+      const parent = entities.find(e =>
+        e.type === EntityType.NPC &&
+        e.id !== npc.id &&
+        e.familyId === familyId &&
+        (e.age === undefined || e.age >= 16) &&
+        e.occupation !== Occupation.CHILD
+      );
+      if (parent) {
+        const dist2 = world.dist2(npc.x, npc.y, parent.x, parent.y);
+        if (dist2 > 400) {
+          const contract = CONTRACTS.find(c => c.id === 'lostchildescort');
+          if (contract && !state.quests.some(q => q.contractId === 'lostchildescort' && !q.done)) {
+            const quest = questFromSystemContract(contract, npc, player, state);
+            quest.targetNpcId = parent.id;
+            return assignProceduralQuestDeadline(quest, state.clock.totalMinutes, {
+              samosborDanger: ctx.samosborDanger,
+              nearbyMonster: ctx.nearbyMonster !== undefined,
+              crossFloor: quest.targetFloor !== undefined && quest.targetFloor !== state.currentFloor,
+            });
+          }
+        }
+      }
+    }
+  }
   if (shouldOfferSystemQuest(npc, ctx)) {
     const systemQuest = pickSystemQuest(npc, player, ctx, state);
     if (systemQuest) return systemQuest;

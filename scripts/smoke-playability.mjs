@@ -1110,7 +1110,7 @@ function requireStartupGuidance(debug, label, failures) {
   }
   const objectiveLine = String(debug.currentObjectiveLine ?? '');
   const interactionPrompt = String(debug.interactionPrompt ?? '');
-  const hasObjective = objectiveLine.includes('Цель:');
+  const hasObjective = objectiveLine.includes('Цель:') || objectiveLine.includes('Вводная Ольги');
   const hasPrompt = debug.interactionPromptEnabled === true && interactionPrompt.length > 0;
   if (!hasObjective && !hasPrompt) {
     failures.push(`${label}: no first objective data or interaction prompt (objective="${objectiveLine}", prompt="${interactionPrompt}")`);

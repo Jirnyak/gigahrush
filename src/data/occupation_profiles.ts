@@ -531,8 +531,8 @@ export const OCCUPATION_PROFILES: Readonly<Record<Occupation, OccupationProfile>
   [Occupation.WORKER69]: p({
     id: 'worker69',
     occupation: Occupation.WORKER69,
-    label: 'Работница 69',
-    demosLabel: 'работница 69',
+    label: 'Работник 69',
+    demosLabel: 'работник 69',
     workLabel: 'держит тихую комнату',
     workRoomTypes: [RoomType.COMMON, RoomType.LIVING, RoomType.OFFICE],
     workRoomWeights: { [RoomType.COMMON]: 28, [RoomType.LIVING]: 22, [RoomType.OFFICE]: 12, [RoomType.SMOKING]: 10 },

@@ -15,6 +15,7 @@ import {
   ECONOMY_PROCEDURAL_LOOT_VALUE_CAP_BY_DANGER,
   proceduralLootValueCap as economyProceduralLootValueCap,
 } from './economics';
+import type { ProceduralRecipeId } from '../gen/procedural_geometry_recipes';
 
 export type FloorGeometryId =
   | 'living_blocks'
@@ -75,6 +76,7 @@ export interface FloorGeometryDef {
   floorTex: Tex;
   roomTypes: readonly RoomType[];
   tags: readonly string[];
+  recipePool: readonly ProceduralRecipeId[];
 }
 
 export interface FloorMajorityDef {
@@ -226,6 +228,7 @@ export const FLOOR_GEOMETRIES: readonly FloorGeometryDef[] = [
     floorTex: Tex.F_LINO,
     roomTypes: [RoomType.LIVING, RoomType.KITCHEN, RoomType.BATHROOM, RoomType.STORAGE, RoomType.COMMON],
     tags: ['residential', 'civil'],
+    recipePool: ['smart_quarter_infill', 'concentric_rings', 'voronoi_partition', 'manhattan_grid', 'dense_room_scatter', 'attractor_courtyards'],
   },
   {
     id: 'apartment_pressure',
@@ -240,6 +243,7 @@ export const FLOOR_GEOMETRIES: readonly FloorGeometryDef[] = [
     floorTex: Tex.F_LINO,
     roomTypes: [RoomType.LIVING, RoomType.KITCHEN, RoomType.BATHROOM, RoomType.COMMON, RoomType.STORAGE, RoomType.SMOKING],
     tags: ['residential', 'crowd', 'riot'],
+    recipePool: ['smart_quarter_infill', 'voronoi_partition', 'concentric_rings', 'organic_braid', 'manhattan_grid', 'dense_room_scatter'],
   },
   {
     id: 'communal_knots',
@@ -254,6 +258,7 @@ export const FLOOR_GEOMETRIES: readonly FloorGeometryDef[] = [
     floorTex: Tex.F_LINO,
     roomTypes: [RoomType.COMMON, RoomType.COMMON, RoomType.KITCHEN, RoomType.BATHROOM, RoomType.LIVING, RoomType.STORAGE, RoomType.SMOKING, RoomType.CORRIDOR],
     tags: ['residential', 'crowd', 'queue', 'canteen', 'civil'],
+    recipePool: ['concentric_rings', 'smart_quarter_infill', 'voronoi_partition', 'organic_braid', 'attractor_courtyards', 'dense_room_scatter'],
   },
   {
     id: 'attic_weatherworks',
@@ -268,6 +273,7 @@ export const FLOOR_GEOMETRIES: readonly FloorGeometryDef[] = [
     floorTex: Tex.F_CONCRETE,
     roomTypes: [RoomType.CORRIDOR, RoomType.CORRIDOR, RoomType.PRODUCTION, RoomType.STORAGE, RoomType.OFFICE, RoomType.COMMON],
     tags: ['admin', 'roofline', 'antenna', 'wind', 'documents'],
+    recipePool: ['organic_braid', 'hilbert_fill', 'dark_tunnel_web', 'attractor_courtyards', 'production_islands', 'dense_room_scatter'],
   },
   {
     id: 'archive_warrens',
@@ -282,6 +288,7 @@ export const FLOOR_GEOMETRIES: readonly FloorGeometryDef[] = [
     floorTex: Tex.F_PARQUET,
     roomTypes: [RoomType.OFFICE, RoomType.STORAGE, RoomType.STORAGE, RoomType.CORRIDOR, RoomType.COMMON, RoomType.SMOKING],
     tags: ['admin', 'documents', 'archive', 'paper_dust', 'maze'],
+    recipePool: ['hilbert_fill', 'manhattan_grid', 'smart_quarter_infill', 'voronoi_partition', 'organic_braid', 'dense_room_scatter'],
   },
   {
     id: 'collectors',
@@ -296,6 +303,7 @@ export const FLOOR_GEOMETRIES: readonly FloorGeometryDef[] = [
     floorTex: Tex.F_CONCRETE,
     roomTypes: [RoomType.CORRIDOR, RoomType.PRODUCTION, RoomType.STORAGE, RoomType.COMMON],
     tags: ['industrial', 'water', 'pipes', 'maintenance', 'emergency_panels'],
+    recipePool: ['dark_tunnel_web', 'production_islands', 'organic_braid', 'voronoi_partition', 'hilbert_fill', 'dense_room_scatter'],
   },
   {
     id: 'workshops',
@@ -310,6 +318,7 @@ export const FLOOR_GEOMETRIES: readonly FloorGeometryDef[] = [
     floorTex: Tex.F_CONCRETE,
     roomTypes: [RoomType.PRODUCTION, RoomType.PRODUCTION, RoomType.STORAGE, RoomType.OFFICE, RoomType.CORRIDOR],
     tags: ['industrial', 'workshop', 'machines', 'maintenance', 'emergency_panels'],
+    recipePool: ['production_islands', 'manhattan_grid', 'dark_tunnel_web', 'attractor_courtyards', 'hilbert_fill', 'dense_room_scatter'],
   },
   {
     id: 'service_spines',
@@ -324,6 +333,7 @@ export const FLOOR_GEOMETRIES: readonly FloorGeometryDef[] = [
     floorTex: Tex.F_CONCRETE,
     roomTypes: [RoomType.CORRIDOR, RoomType.CORRIDOR, RoomType.CORRIDOR, RoomType.PRODUCTION, RoomType.STORAGE, RoomType.OFFICE, RoomType.COMMON],
     tags: ['industrial', 'service', 'transit', 'power', 'pressure', 'maintenance', 'emergency_panels'],
+    recipePool: ['dark_tunnel_web', 'manhattan_grid', 'production_islands', 'organic_braid', 'hilbert_fill', 'dense_room_scatter'],
   },
   {
     id: 'sump_causeways',
@@ -338,6 +348,7 @@ export const FLOOR_GEOMETRIES: readonly FloorGeometryDef[] = [
     floorTex: Tex.F_CONCRETE,
     roomTypes: [RoomType.CORRIDOR, RoomType.CORRIDOR, RoomType.PRODUCTION, RoomType.STORAGE, RoomType.COMMON],
     tags: ['industrial', 'water', 'sump', 'blackwater', 'transit', 'abyss'],
+    recipePool: ['dark_tunnel_web', 'organic_braid', 'production_islands', 'voronoi_partition', 'attractor_courtyards', 'dense_room_scatter'],
   },
   {
     id: 'admin_pockets',
@@ -352,6 +363,7 @@ export const FLOOR_GEOMETRIES: readonly FloorGeometryDef[] = [
     floorTex: Tex.F_PARQUET,
     roomTypes: [RoomType.OFFICE, RoomType.OFFICE, RoomType.COMMON, RoomType.STORAGE, RoomType.STORAGE, RoomType.SMOKING, RoomType.CORRIDOR, RoomType.BATHROOM, RoomType.KITCHEN, RoomType.MEDICAL],
     tags: ['admin', 'documents'],
+    recipePool: ['manhattan_grid', 'hilbert_fill', 'smart_quarter_infill', 'concentric_rings', 'voronoi_partition', 'dense_room_scatter'],
   },
 ];
 

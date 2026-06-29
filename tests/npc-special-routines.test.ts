@@ -36,7 +36,7 @@ test('Olga tutorial lock is selected from package data and expires to ordinary A
   assert.deepEqual(olga.ai?.path, []);
   assert.equal(olga.plotDone, false);
 
-  const expired = tickNpcSpecialRoutine(olga, { hour: 9, minute: 0, totalMinutes: 60 });
+  const expired = tickNpcSpecialRoutine(olga, { hour: 12, minute: 0, totalMinutes: 240 });
   assert.deepEqual(expired, {
     routineId: 'tutorial_lock_one_hour',
     held: false,
@@ -45,7 +45,7 @@ test('Olga tutorial lock is selected from package data and expires to ordinary A
   });
   assert.equal(olga.plotDone, true);
 
-  const fallback = tickNpcSpecialRoutine(olga, { hour: 9, minute: 1, totalMinutes: 61 });
+  const fallback = tickNpcSpecialRoutine(olga, { hour: 12, minute: 1, totalMinutes: 241 });
   assert.deepEqual(fallback, {
     routineId: 'tutorial_lock_one_hour',
     held: false,

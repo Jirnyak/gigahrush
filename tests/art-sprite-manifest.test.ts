@@ -104,7 +104,7 @@ function makeNpc(id: number, visualId: string, spriteSeed: number): Entity {
 test('first-party art sprite manifest validates source files and generated pixels', () => {
   const ids = new Set<string>();
   const generatedIds = new Set(GENERATED_ART_SPRITE_IDS);
-  assert.equal(ART_SPRITE_MANIFEST.length, 21);
+  assert.equal(ART_SPRITE_MANIFEST.length, 30);
 
   for (const row of ART_SPRITE_MANIFEST) {
     assert.match(row.id, /^[a-z][a-z0-9]*(?:_[a-z0-9]+)*$/);
@@ -191,6 +191,9 @@ test('fixed art visual families reuse texture keys by visual id and variant', ()
     'first_party_art:liquidator_m_1',
     'first_party_art:liquidator_m_2',
     'first_party_art:liquidator_m_3',
+    'first_party_art:liquidator_m_4',
+    'first_party_art:liquidator_m_5',
+    'first_party_art:liquidator_m_6',
   ]);
 
   const liquidator = makeNpc(3, NPC_VISUAL_LIQUIDATOR_MALE, 303);
@@ -204,6 +207,9 @@ test('fixed art visual families reuse texture keys by visual id and variant', ()
     spriteHash(getGeneratedArtSprite('liquidator_m_1')!),
     spriteHash(getGeneratedArtSprite('liquidator_m_2')!),
     spriteHash(getGeneratedArtSprite('liquidator_m_3')!),
+    spriteHash(getGeneratedArtSprite('liquidator_m_4')!),
+    spriteHash(getGeneratedArtSprite('liquidator_m_5')!),
+    spriteHash(getGeneratedArtSprite('liquidator_m_6')!),
   ]);
   assert.equal(liquidatorHashes.has(spriteHash(liquidatorSprite)), true);
 });
@@ -226,7 +232,12 @@ test('ordinary NPC art auto-selects occupation before faction and preserves sexe
   scientist.occupation = Occupation.SCIENTIST;
   scientist.sprite = Occupation.SCIENTIST;
   scientist.isFemale = true;
-  assert.equal(spriteHash(generateProceduralEntitySprite(scientist)!), spriteHash(getGeneratedArtSprite('scientist_f_1')!));
+  const scientistSprite = generateProceduralEntitySprite(scientist)!;
+  const expectedScientistHashes = new Set([
+    spriteHash(getGeneratedArtSprite('scientist_f_1')!),
+    spriteHash(getGeneratedArtSprite('scientist_f_2')!),
+  ]);
+  assert.ok(expectedScientistHashes.has(spriteHash(scientistSprite)), 'Should generate valid scientist female art');
 });
 
 test('monster art remains a visual future path and procedural monsters still generate', () => {

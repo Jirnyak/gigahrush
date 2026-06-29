@@ -1,26 +1,56 @@
-import { DoorState, type GameState, type Entity } from '../core/types';
+import { type Entity, type GameState, msg } from '../core/types';
 import type { World } from '../core/world';
-import { msg } from '../core/types';
 
-export function handleDrinkTutorial(state: GameState, world: World, player: Entity): void {
-  for (const door of world.doors.values()) {
-    if (door.keyId === 'tut_cafe_key' && door.state === DoorState.LOCKED) {
-      if (player.needs) {
-        player.needs.pee = Math.max(15, player.needs.pee);
-      }
-      state.msgs.push(msg('Нужно в туалет. Найди ванную.', state.time, '#fff'));
-      break;
-    }
-  }
+export enum TutorialStep {
+  DRINK = 0,
+  TOILET = 1,
+  EAT = 2,
+  WORK = 3,
+  SAMOSBOR = 4,
+  ESCAPE = 5,
+  DONE = 6,
 }
 
-export function handleToiletTutorial(state: GameState, world: World): void {
-  for (const door of world.doors.values()) {
-    if (door.keyId === 'tut_cafe_key' && door.state === DoorState.LOCKED) {
-      door.state = DoorState.OPEN;
-      state.msgs.push(msg('Чисто и культурно.', state.time, '#8fc'));
-      state.msgs.push(msg('Щелчок. Дверь в столовую разблокирована.', state.time, '#fff'));
-      break;
-    }
+function logTutorialMsg(state: GameState, text: string, time: number): void {
+  const m = msg(text, time, '#fff');
+  m.hour = state.clock?.hour ?? 8;
+  m.minute = state.clock?.minute ?? 0;
+  state.msgs.push(m);
+  if (state.msgLog) state.msgLog.push(m);
+}
+
+export function startTutorial(state: GameState, player: Entity): void {
+  state.tutorialMode = true;
+  state.tutorialStep = TutorialStep.DRINK;
+  if (player.needs) {
+    player.needs.water = 20;
+    player.needs.pee = 50;
+    player.needs.poo = 50;
   }
+  logTutorialMsg(state, '-где я?', state.time + 15);
+  logTutorialMsg(state, '-я хочу пить', state.time + 15);
+}
+
+export function handleDrinkTutorial(state: GameState, _world: World, player: Entity): void {
+  if (!state.tutorialMode) return;
+  state.tutorialStep = TutorialStep.TOILET;
+  if (player.needs) {
+    player.needs.pee = Math.max(90, player.needs.pee);
+  }
+  logTutorialMsg(state, '-нужно в туалет', state.time + 15);
+}
+
+export function handleToiletTutorial(state: GameState, _world: World, _player: Entity, _entities: Entity[], _nextId: { v: number }, _lookX: number, _lookY: number): void {
+  if (!state.tutorialMode) return;
+  if (state.tutorialStep === TutorialStep.DONE) return; // Already dropped key
+  state.tutorialStep = TutorialStep.DONE; // progress to DONE
+  
+  logTutorialMsg(state, '-нужно открыть дверь где то поблизости я видел ключ', state.time + 15);
+}
+
+export function completeTutorial(state: GameState): void {
+  if (!state.tutorialMode) return;
+  state.tutorialMode = false;
+  state.tutorialStep = TutorialStep.DONE;
+  state.msgs.push(msg('Обучение завершено. Вы предоставлены сами себе.', state.time, '#8fc'));
 }

@@ -165,7 +165,7 @@ export const PLOT_CHAIN: PlotStep[] = [
     activeObjective: 'Найти сержанта Баринова в оружейной и получить табельное.',
     targetNpcId: 'barni',
     rewardItem: 'makarov', rewardCount: 1,
-    extraRewards: [{ defId: 'ammo_9mm', count: 8 }],
+    extraRewards: [{ defId: 'ammo_9mm', count: 8 }, { defId: 'flashlight', count: 1 }],
     relationDelta: 10, xpReward: 10,
   },
   // Step 1: Sergeant Barinov → report to Olga

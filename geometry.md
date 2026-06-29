@@ -165,3 +165,137 @@ npm run test:generation
 
 > [!TIP]
 > **Архитектурный завет:** Геометрия Гигахруща — это симбиоз бруталистической монументальности и клаустрофобной тесноты. Заполняйте каждую клетку смыслом, уважайте системные гарантии и сохраняйте накопленные знания для будущих поколений Агентов.
+
+---
+
+## ЧАСТЬ V: Комбинаторный Синтез Процедурных Этажей (Recipe Orchestrator)
+
+### 1. Проблема старого подхода
+
+Все 10 `FloorGeometryId` использовали единый алгоритм генерации: random scatter → MST → macro halls → connectivity repair. Отличие — только текстуры и `roomTypes`. Результат:
+
+- **90%+ чёрной пустоты.** `buildRooms()` размещал `roomCount` (56–360) комнат рандомным scatter через `canPlaceRoom` на 1024×1024 тор = ~5–8% покрытия. Macro-залы добавляли 5-9 больших комнат. `connectRoomsMST` тянул тонкие 1–2px коридоры.
+- **Однообразие.** Нет Voronoi-диаграмм, нет колец, нет Хилберт-кривых, нет Manhattan-сеток — то, что делает дизайн-этажи уникальными.
+- **Геймплейная пустота.** Нет навигационного интереса, нет контрастных топологий.
+
+### 2. Суть реворка: Рецептная библиотека
+
+**Каждый процедурный этаж комбинаторно собирается из 2-4 геометрических алгоритмов, извлечённых из дизайн-этажей.** Алгоритмы выделены в переиспользуемую библиотеку «геометрических рецептов» (`src/gen/procedural_geometry_recipes.ts`) и рандомно комбинируются при первом посещении.
+
+#### Библиотека рецептов (10 алгоритмов)
+
+| ID | Алгоритм | Источник | Эффект |
+|---|---|---|---|
+| `voronoi_partition` | Voronoi-разбиение | `voronoi_quarantine`, `voronoi_cells.ts` | Делит регион на ячейки — полное покрытие, нет чёрных пятен |
+| `manhattan_grid` | Manhattan-сетка | `manhattan_crossroads` | Ортогональные магистрали + перекрёстки + блоки |
+| `hilbert_fill` | Хилберт-кривая | `hilbert_depot` | Space-filling кривая заполняет регион складским лабиринтом |
+| `concentric_rings` | Кольцевые петли | `communal_ring` | Замкнутые концентрические кольца + радиальные соединения |
+| `organic_braid` | Органическая коса | `chthonic_attic` | Waypoints → органические тоннели → залы на пересечениях |
+| `smart_quarter_infill` | Квартальная застройка | `floor_69` | Разбиение на квадраты, автономная застройка |
+| `production_islands` | Промышленные острова | `production_belt` | Крупные промышленные комнаты + конвейерные коридоры |
+| `dark_tunnel_web` | Тоннельная сеть | `dark_metro` | Магистральные широкие тоннели + платформенные расширения |
+| `dense_room_scatter` | Улучшенный scatter | Улучшенный scatter | Высокоплотный вариант оригинального scatter |
+| `attractor_courtyards` | Дворы-аттракторы | `attractor_dvor` | Точки притяжения → дворы → коридоры |
+
+#### Архитектура комбинатора
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  src/gen/procedural_geometry_recipes.ts                      │
+│  Библиотека рецептов — 10 pure geometry functions            │
+│  + Стратегии деления тора (quadrants/stripes/radial)         │
+│  + Единый RecipeContext для всех рецептов                    │
+└───────────────┬─────────────────────────────────────────────┘
+                │
+┌───────────────▼─────────────────────────────────────────────┐
+│  src/data/procedural_floors.ts                               │
+│  FloorGeometryDef.recipePool: ProceduralRecipeId[]           │
+│  Каждый FloorGeometryId получает 4-6 совместимых рецептов    │
+└───────────────┬─────────────────────────────────────────────┘
+                │
+┌───────────────▼─────────────────────────────────────────────┐
+│  src/gen/procedural_floor.ts → buildCompositeRooms()         │
+│  Phase 1: Macro layer (большие якорные залы)                 │
+│  Phase 2: Разделить тор на 2-4 сектора по seed               │
+│           В каждом секторе запустить свой рецепт              │
+│  Phase 3: Micro-cluster overlays (existing detail passes)    │
+│  Phase 4: MST + connectivity repair + structure library      │
+│  Phase 5: Стандартный pipeline (zones, lifts, loot, NPCs)    │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### 3. Контракт рецепта
+
+Каждый рецепт — pure function `(ctx: RecipeContext) → RecipeResult`:
+
+```ts
+interface RecipeContext {
+  world: World;
+  region: RecipeRegion;     // { x0, y0, w, h }
+  seed: number;
+  tex: RecipeTexKit;        // { wallTex, floorTex, roomTypes }
+  nextRoomId: { v: number };
+  industrial: boolean;
+}
+
+interface RecipeResult {
+  rooms: Room[];
+}
+```
+
+**Обязательства рецепта:**
+- Заполнить ≥ 60% площади региона проходимым пространством (Voronoi/Hilbert дают ~95%+, concentric rings ~70%, smart infill ~100%).
+- Вернуть создённые `Room[]` для MST-связности.
+- Уважать `protectedMask` / `aptMask` / `hermoWall`.
+- Использовать `world.idx()` / `world.wrap()` для тороидальной безопасности.
+- Не мутировать глобальное состояние за пределами `world.cells`, `world.roomMap`, `world.wallTex`, `world.floorTex`, `world.features`, `world.rooms`, `world.doors`.
+
+### 4. Стратегии деления тора
+
+Комбинатор выбирает стратегию из seed:
+
+| Стратегия | Секторы | Описание |
+|---|---|---|
+| `quadrants` | 4 × 512×512 | Четыре равных квадранта |
+| `h_stripes` | 3 × 1024×341 | Горизонтальные полосы |
+| `v_stripes` | 3 × 341×1024 | Вертикальные полосы |
+| `radial` | 3 | Центральная зона + верхняя/нижняя полоса |
+
+Каждому сектору назначается уникальный рецепт из `recipePool` геометрии (с приоритетом на разнообразие — без повторов когда пул позволяет).
+
+### 5. Пулы рецептов по геометриям
+
+Каждый `FloorGeometryId` имеет свой `recipePool` из 6 совместимых рецептов:
+
+| GeometryId | Pool |
+|---|---|
+| `living_blocks` | smart_quarter_infill, concentric_rings, voronoi_partition, manhattan_grid, dense_room_scatter, attractor_courtyards |
+| `apartment_pressure` | smart_quarter_infill, voronoi_partition, concentric_rings, organic_braid, manhattan_grid, dense_room_scatter |
+| `communal_knots` | concentric_rings, smart_quarter_infill, voronoi_partition, organic_braid, attractor_courtyards, dense_room_scatter |
+| `attic_weatherworks` | organic_braid, hilbert_fill, dark_tunnel_web, attractor_courtyards, production_islands, dense_room_scatter |
+| `archive_warrens` | hilbert_fill, manhattan_grid, smart_quarter_infill, voronoi_partition, organic_braid, dense_room_scatter |
+| `collectors` | dark_tunnel_web, production_islands, organic_braid, voronoi_partition, hilbert_fill, dense_room_scatter |
+| `workshops` | production_islands, manhattan_grid, dark_tunnel_web, attractor_courtyards, hilbert_fill, dense_room_scatter |
+| `service_spines` | dark_tunnel_web, manhattan_grid, production_islands, organic_braid, hilbert_fill, dense_room_scatter |
+| `sump_causeways` | dark_tunnel_web, organic_braid, production_islands, voronoi_partition, attractor_courtyards, dense_room_scatter |
+| `admin_pockets` | manhattan_grid, hilbert_fill, smart_quarter_infill, concentric_rings, voronoi_partition, dense_room_scatter |
+
+### 6. Расширяемость
+
+Система полностью расширяема:
+
+- **Новый рецепт:** Добавить pure function в `procedural_geometry_recipes.ts` + зарегистрировать в `RECIPE_REGISTRY` + добавить id в `ProceduralRecipeId` → автоматически доступен для включения в пулы.
+- **Новый `FloorGeometryId`:** Добавить определение в `FLOOR_GEOMETRIES` с `recipePool` → автоматически работает через `buildCompositeRooms()`.
+- **Новая стратегия деления:** Добавить вариант в `SectorStrategy` + обработчик в `divideTorus()`.
+- **Конвейер не ломается:** Все post-processing шаги (micro-clusters, structure library, macro network, territory, anomalies, loot, NPCs) работают одинаково независимо от рецептов, получая `Room[]` на вход.
+
+### 7. Аномальные исключения
+
+Аномалии `conway_life` и `wall_snake` полностью заменяют `buildRooms()` собственными генераторами и обходят рецептный пайплайн. Это сохраняется — рецепты применяются только для стандартных геометрий.
+
+### 8. Уроки перехода
+
+- **Старые генераторы сохранены:** Функции `buildLivingBlockRooms()`, `buildArchiveWarrenRooms()`, `roomSize()` остаются в коде как reference (с `@ts-expect-error` подавлением). Они могут быть использованы как fallback или как источник вдохновения для новых рецептов.
+- **Micro-cluster overlays сохранены:** `applyAdminPocketMicroClusters`, `applyWorkshopClusterRooms`, `applyCollectorStationClusters`, `applyCommunalKnotClusterRooms` и `applyCollectorMirrorInfill` продолжают работать поверх рецептной геометрии, добавляя тематическую детализацию.
+- **Macro layer сохранён:** `buildProceduralMacroLayer()` продолжает размещать крупные якорные залы до запуска рецептов — они служат опорными точками для MST-связности.
+

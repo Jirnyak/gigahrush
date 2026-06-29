@@ -6,7 +6,7 @@ import {
   EntityType,  AIGoal, RoomType,
 } from '../../core/types';
 import { World } from '../../core/world';
-import { PATH_BLOCKER_SUBDIV, pathBlockedAt } from '../../core/path_blockers';
+import { PATH_BLOCKER_SUBDIV, PATH_BLOCKER_BYTES_PER_CELL } from '../../core/path_blockers';
 import { getCellHazardMoveMultiplier } from '../cell_hazards';
 import { actorOccupyRadius, canActorOccupy } from '../movement_collision';
 import { setDoorState } from '../door_state';
@@ -271,6 +271,24 @@ export function subcellToCell(si: number): number {
   return ((sy / PATH_BLOCKER_SUBDIV) | 0) * W + ((sx / PATH_BLOCKER_SUBDIV) | 0);
 }
 
+function isMacroCellPassable(world: World, ci: number, c: number): boolean {
+  if (c !== Cell.FLOOR && c !== Cell.WATER && c !== Cell.DOOR) return false;
+  if (c === Cell.DOOR) {
+    const door = world.doors.get(ci);
+    if (door && (door.state === DoorState.LOCKED || door.state === DoorState.HERMETIC_CLOSED)) return false;
+  }
+  return true;
+}
+
+function isClearanceBlocker(world: World, ci: number, c: number): boolean {
+  if (isMacroCellPassable(world, ci, c)) return false;
+  if (c === Cell.DOOR) {
+    const door = world.doors.get(ci);
+    if (door && door.state === DoorState.CLOSED) return false;
+  }
+  return true;
+}
+
 function isSubcellNavPassable(world: World, si: number): boolean {
   const sx = si % SW;
   const sy = (si / SW) | 0;
@@ -279,54 +297,49 @@ function isSubcellNavPassable(world: World, si: number): boolean {
   const cellI = cellY * W + cellX;
   const cell = world.cells[cellI];
 
-  const isMacroCellPassable = (ci: number, c: number): boolean => {
-    if (c !== Cell.FLOOR && c !== Cell.WATER && c !== Cell.DOOR) return false;
-    if (c === Cell.DOOR) {
-      const door = world.doors.get(ci);
-      if (door && (door.state === DoorState.LOCKED || door.state === DoorState.HERMETIC_CLOSED)) return false;
-    }
-    return true;
-  };
+  if (!isMacroCellPassable(world, cellI, cell)) return false;
 
-  // Openable doors should not block adjacent subcell clearance — NPCs open them on approach.
-  const isClearanceBlocker = (ci: number, c: number): boolean => {
-    if (isMacroCellPassable(ci, c)) return false;
-    // Ordinary closed doors are not clearance blockers: NPC will open them.
-    if (c === Cell.DOOR) {
-      const door = world.doors.get(ci);
-      if (door && door.state === DoorState.CLOSED) return false;
-    }
-    return true;
-  };
-
-  if (!isMacroCellPassable(cellI, cell)) return false;
-
-  // Add subcell clearance: NPCs have 0.16m radius, but subcell center is only 0.125m from the macro cell edge.
-  // Therefore, subcells touching an impassable macro cell boundary must be marked impassable to prevent corner snags.
   const rx = sx % PATH_BLOCKER_SUBDIV;
   const ry = sy % PATH_BLOCKER_SUBDIV;
 
   if (rx === 0) {
-    const nx = world.wrap(cellX - 1);
+    const nx = (cellX - 1 + W) & (W - 1);
     const nci = cellY * W + nx;
-    if (isClearanceBlocker(nci, world.cells[nci])) return false;
+    if (isClearanceBlocker(world, nci, world.cells[nci])) return false;
   } else if (rx === PATH_BLOCKER_SUBDIV - 1) {
-    const nx = world.wrap(cellX + 1);
+    const nx = (cellX + 1) & (W - 1);
     const nci = cellY * W + nx;
-    if (isClearanceBlocker(nci, world.cells[nci])) return false;
+    if (isClearanceBlocker(world, nci, world.cells[nci])) return false;
   }
 
   if (ry === 0) {
-    const ny = world.wrap(cellY - 1);
+    const ny = (cellY - 1 + W) & (W - 1);
     const nci = ny * W + cellX;
-    if (isClearanceBlocker(nci, world.cells[nci])) return false;
+    if (isClearanceBlocker(world, nci, world.cells[nci])) return false;
   } else if (ry === PATH_BLOCKER_SUBDIV - 1) {
-    const ny = world.wrap(cellY + 1);
+    const ny = (cellY + 1) & (W - 1);
     const nci = ny * W + cellX;
-    if (isClearanceBlocker(nci, world.cells[nci])) return false;
+    if (isClearanceBlocker(world, nci, world.cells[nci])) return false;
   }
 
-  return !pathBlockedAt(world, sx / PATH_BLOCKER_SUBDIV + 0.5 / PATH_BLOCKER_SUBDIV, sy / PATH_BLOCKER_SUBDIV + 0.5 / PATH_BLOCKER_SUBDIV);
+  const mask = world.pathBlockers[cellI * PATH_BLOCKER_BYTES_PER_CELL + ry] ?? 0;
+  return (mask & (1 << rx)) === 0;
+}
+
+function checkNavPassable(world: World, cell: number): boolean {
+  const p = _navParent[cell];
+  if (p !== NAV_UNKNOWN) return p !== NAV_BLOCKED;
+  const pass = isSubcellNavPassable(world, cell);
+  if (!pass) _navParent[cell] = NAV_BLOCKED;
+  return pass;
+}
+
+function checkFlowPassable(world: World, next: Int32Array, cell: number): boolean {
+  const n = next[cell];
+  if (n !== FLOW_UNREACHED) return n !== FLOW_BLOCKED;
+  const pass = isSubcellNavPassable(world, cell);
+  if (!pass) next[cell] = FLOW_BLOCKED;
+  return pass;
 }
 
 function bakeNavigationTree(
@@ -373,10 +386,10 @@ function bakeNavigationTree(
       const nSW = (cy === SW - 1 ? 0 : cy + 1) * SW + (cx === 0 ? SW - 1 : cx - 1);
       const nSE = (cy === SW - 1 ? 0 : cy + 1) * SW + (cx === SW - 1 ? 0 : cx + 1);
 
-      const passW = isSubcellNavPassable(world, nW);
-      const passE = isSubcellNavPassable(world, nE);
-      const passN = isSubcellNavPassable(world, nN);
-      const passS = isSubcellNavPassable(world, nS);
+      const passW = checkNavPassable(world, nW);
+      const passE = checkNavPassable(world, nE);
+      const passN = checkNavPassable(world, nN);
+      const passS = checkNavPassable(world, nS);
 
       if (passW) tail = visitNavNeighbor(world, nW, cur, componentId, tail);
       if (passE) tail = visitNavNeighbor(world, nE, cur, componentId, tail);
@@ -396,10 +409,7 @@ function bakeNavigationTree(
 
 function visitNavNeighbor(world: World, cell: number, parent: number, componentId: number, tail: number): number {
   if (_navParent[cell] !== NAV_UNKNOWN) return tail;
-  if (!isSubcellNavPassable(world, cell)) {
-    _navParent[cell] = NAV_BLOCKED;
-    return tail;
-  }
+  if (!checkNavPassable(world, cell)) return tail;
   _navParent[cell] = parent;
   _navDepth[cell] = _navDepth[parent] + 1;
   _navComponent[cell] = componentId;
@@ -464,10 +474,10 @@ function ensureBehaviorFlowField(
     const nSW = (cy === SW - 1 ? 0 : cy + 1) * SW + (cx === 0 ? SW - 1 : cx - 1);
     const nSE = (cy === SW - 1 ? 0 : cy + 1) * SW + (cx === SW - 1 ? 0 : cx + 1);
 
-    const passW = isSubcellNavPassable(world, nW);
-    const passE = isSubcellNavPassable(world, nE);
-    const passN = isSubcellNavPassable(world, nN);
-    const passS = isSubcellNavPassable(world, nS);
+    const passW = checkFlowPassable(world, next, nW);
+    const passE = checkFlowPassable(world, next, nE);
+    const passN = checkFlowPassable(world, next, nN);
+    const passS = checkFlowPassable(world, next, nS);
 
     if (passW) tail = visitFlowNeighbor(world, next, nW, cur, tail);
     if (passE) tail = visitFlowNeighbor(world, next, nE, cur, tail);
@@ -500,10 +510,7 @@ function ensureBehaviorFlowField(
 
 function visitFlowNeighbor(world: World, next: Int32Array, cell: number, parent: number, tail: number): number {
   if (next[cell] !== FLOW_UNREACHED) return tail;
-  if (!isSubcellNavPassable(world, cell)) {
-    next[cell] = FLOW_BLOCKED;
-    return tail;
-  }
+  if (!checkFlowPassable(world, next, cell)) return tail;
   next[cell] = parent;
   _navQueue[tail] = cell;
   return tail + 1;

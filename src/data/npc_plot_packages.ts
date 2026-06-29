@@ -188,6 +188,7 @@ export const MAIN_PLOT_NPC_PACKAGES = [
     homeFloorKey: floorKeyForStory(FloorLevel.LIVING),
     hp: 1000, maxHp: 1000, level: 10, money: 50, speed: 1.2,
     inventory: [
+      { defId: 'tut_cafe_key', count: 1 },
       { defId: 'bandage', count: 3 },
       { defId: 'pills', count: 1 },
       { defId: 'water', count: 2 },
@@ -240,7 +241,9 @@ export const MAIN_PLOT_NPC_PACKAGES = [
     homeFloorKey: floorKeyForStory(FloorLevel.LIVING),
     hp: 1200, maxHp: 1200, level: 10, money: 80, speed: 1.4,
     inventory: [
+      { defId: 'tut_cafe_key', count: 1 },
       { defId: 'makarov', count: 1 },
+      { defId: 'flashlight', count: 1 },
       { defId: 'ammo_9mm', count: 8 },
       { defId: 'canned', count: 1 },
     ],

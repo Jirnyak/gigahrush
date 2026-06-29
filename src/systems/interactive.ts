@@ -383,7 +383,9 @@ function resolveInteractive(ctx: ContentInteractionContext): ResolvedInteractive
   }
 
   const list = worldState(ctx.world).byIdx.get(idx);
-  if (!list || list.length === 0) return null;
+  if (!list || list.length === 0) {
+    return ctx.readOnly ? readOnlyResolved(ctx, idx) : null;
+  }
 
   let best: ResolvedInteractive | null = null;
   for (const instance of list.slice()) {
@@ -499,7 +501,7 @@ function runRelieve(ctx: ContentInteractionContext, resolved: ResolvedInteractiv
   publishInteractiveEvent(ctx, resolved, action);
 
   if (resolved.def.id === 'toilet_relief') {
-    handleToiletTutorial(ctx.state, ctx.world);
+    handleToiletTutorial(ctx.state, ctx.world, ctx.player, ctx.entities, ctx.nextEntityId, ctx.lookX, ctx.lookY);
   }
 
   return { handled: true };

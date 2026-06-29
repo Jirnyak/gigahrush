@@ -62,7 +62,8 @@ function cleanupOldVolatileRooms(world: World): void {
     }
     room.doors = keepDoors;
     for (const di of removeDoors) world.removeDoorAt(di);
-    room.sealed = false;
+    // Do not unseal explicitly sealed rooms (e.g. tutorial rooms)
+    // room.sealed = false;
   }
 }
 

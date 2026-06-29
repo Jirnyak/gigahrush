@@ -75,6 +75,7 @@ import {
   openNetHackTerminal,
   placeNetHackTerminal,
 } from './net_hack';
+import { completeTutorial } from './tutorial';
 import { consumeQuietDoorCharge, publishDoorNoise } from './noise';
 import {
   activateNetTerminalBank,
@@ -347,19 +348,8 @@ function lookIdx(ctx: InteractionContext): number {
   return ctx.world.idx(Math.floor(ctx.lookX), Math.floor(ctx.lookY));
 }
 
-/** Near-look: sample at 0.7 cells ahead to catch doors when the player is very close. */
-function nearLookIdx(ctx: InteractionContext): number {
-  const angle = Math.atan2(ctx.lookY - ctx.player.y, ctx.lookX - ctx.player.x);
-  const nx = ctx.player.x + Math.cos(angle) * 0.7;
-  const ny = ctx.player.y + Math.sin(angle) * 0.7;
-  return ctx.world.idx(Math.floor(nx), Math.floor(ny));
-}
-
-export function findInteractionTarget(ctx: InteractionContext): InteractionTarget | null {
+function findHighPriorityTargetForLook(ctx: InteractionContext): InteractionTarget | null {
   const idx = lookIdx(ctx);
-  const processionHint = getCultProcessionPrompt(ctx.world, ctx.state, ctx.player);
-  if (processionHint) return target('instant', 850000 + processionHint.length, 'cult_procession', ctx.player.x, ctx.player.y, 10, processionHint);
-
   if (isNetTerminalGenTarget(ctx.world, ctx.state, ctx.lookX, ctx.lookY)) {
     return target('computer', idx + 910000, 'net_terminal_gen', Math.floor(ctx.lookX), Math.floor(ctx.lookY), 20, ' НЕТ');
   }
@@ -390,20 +380,11 @@ export function findInteractionTarget(ctx: InteractionContext): InteractionTarge
     return target('emergency_panel', panel.idx + 620000, panel.defId, panel.x, panel.y, 49, ' аварийный щиток');
   }
 
-  const slimevik = findSlimevikInteractionTarget(ctx.world, ctx.player, ctx.entities);
-  if (slimevik) return target('instant', slimevik.id + 640000, 'slimevik', slimevik.x, slimevik.y, 55, ' слизневик');
+  return null;
+}
 
-  const gnilushka = findGnilushkaInteractionTarget(ctx.world, ctx.player, ctx.entities);
-  if (gnilushka) return target('instant', gnilushka.id + 645000, 'gnilushka', gnilushka.x, gnilushka.y, 54, ' разговор');
-
-  const npc = findFriendlyNpc(ctx);
-  if (npc) return target('npc', npc.id, 'npc', npc.x, npc.y, 50, ' разговор');
-
-  if (ctx.manualItemPickup) {
-    const itemDrop = findItemDrop(ctx);
-    if (itemDrop) return itemDropInteractionTarget(itemDrop);
-  }
-
+function findNormalPriorityTargetForLook(ctx: InteractionContext): InteractionTarget | null {
+  const idx = lookIdx(ctx);
   const pseudoLift = pseudoliftPrompt(ctx.world, ctx.state, ctx.lookX, ctx.lookY);
   if (pseudoLift) return target('lift', idx + 205000, 'pseudolift', idx % W, (idx / W) | 0, 58, pseudoLift);
 
@@ -433,24 +414,45 @@ export function findInteractionTarget(ctx: InteractionContext): InteractionTarge
     return target('door', idx + 100000, 'door', idx % W, (idx / W) | 0, 100, isHermetic ? ' гермодверь' : ' дверь');
   }
 
-  // Fallback: when standing very close to a door, the 1.5-cell look ray overshoots it.
-  // Check a nearer point (0.7 cells ahead) to catch doors the primary lookIdx missed.
-  const nearIdx = nearLookIdx(ctx);
-  if (nearIdx !== idx) {
-    const nearCell = ctx.world.cells[nearIdx];
-    if (nearCell === Cell.DOOR && ctx.world.doors.has(nearIdx)) {
-      const door = ctx.world.doors.get(nearIdx);
-      const isHermetic = door?.state === DoorState.HERMETIC_CLOSED || door?.state === DoorState.HERMETIC_OPEN;
-      return target('door', nearIdx + 100000, 'door', nearIdx % W, (nearIdx / W) | 0, 100, isHermetic ? ' гермодверь' : ' дверь');
-    }
-  }
-
   const container = findContainer(ctx, false);
   if (container) {
     return target('container', container.id + 300000, 'container', container.x, container.y, 110, ' контейнер');
   }
 
   return null;
+}
+
+export function findInteractionTarget(ctx: InteractionContext): InteractionTarget | null {
+  const processionHint = getCultProcessionPrompt(ctx.world, ctx.state, ctx.player);
+  if (processionHint) return target('instant', 850000 + processionHint.length, 'cult_procession', ctx.player.x, ctx.player.y, 10, processionHint);
+
+  const angle = Math.atan2(ctx.lookY - ctx.player.y, ctx.lookX - ctx.player.x);
+  const nearX = ctx.player.x + Math.cos(angle) * 0.7;
+  const nearY = ctx.player.y + Math.sin(angle) * 0.7;
+  const nearCtx: InteractionContext = { ...ctx, lookX: nearX, lookY: nearY };
+
+  const nearHigh = findHighPriorityTargetForLook(nearCtx);
+  if (nearHigh) return nearHigh;
+  const farHigh = findHighPriorityTargetForLook(ctx);
+  if (farHigh) return farHigh;
+
+  const slimevik = findSlimevikInteractionTarget(ctx.world, ctx.player, ctx.entities);
+  if (slimevik) return target('instant', slimevik.id + 640000, 'slimevik', slimevik.x, slimevik.y, 55, ' слизневик');
+
+  const gnilushka = findGnilushkaInteractionTarget(ctx.world, ctx.player, ctx.entities);
+  if (gnilushka) return target('instant', gnilushka.id + 645000, 'gnilushka', gnilushka.x, gnilushka.y, 54, ' разговор');
+
+  const npc = findFriendlyNpc(ctx);
+  if (npc) return target('npc', npc.id, 'npc', npc.x, npc.y, 50, ' разговор');
+
+  if (ctx.manualItemPickup) {
+    const itemDrop = findItemDrop(ctx);
+    if (itemDrop) return itemDropInteractionTarget(itemDrop);
+  }
+
+  const nearNormal = findNormalPriorityTargetForLook(nearCtx);
+  if (nearNormal) return nearNormal;
+  return findNormalPriorityTargetForLook(ctx);
 }
 
 function activateDoor(ctx: InteractionContext, idx: number): InteractionResult {
@@ -486,6 +488,9 @@ function activateDoor(ctx: InteractionContext, idx: number): InteractionResult {
       setDoorState(ctx.world, door, DoorState.OPEN);
       ctx.state.msgs.push(msg(quietDoor ? 'Дверь отперта тихо' : 'Дверь отперта ключом', ctx.state.time, quietDoor ? '#8cf' : '#4a4'));
       publishDoorNoise(ctx.state, ctx.player, idx, false, quietDoor);
+      if (ctx.state.tutorialMode && keyId === 'tut_cafe_key') {
+        completeTutorial(ctx.state);
+      }
     } else {
       const broke = damageDoor(ctx.world, door, 5);
       if (broke) {
@@ -518,11 +523,7 @@ function activateMetro(ctx: InteractionContext): InteractionResult {
   return { handled: true };
 }
 
-export function activateInteraction(ctx: InteractionContext): InteractionResult {
-  const idx = lookIdx(ctx);
-
-  if (tryInteractCultProcession(ctx.state, ctx.world, ctx.player, ctx.entities)) return { handled: true };
-
+function activateHighPriorityInteractionForLook(ctx: InteractionContext): InteractionResult {
   const netTerminal = tryUseNetTerminalGen(ctx.world, ctx.player, ctx.state, ctx.lookX, ctx.lookY, ctx.entities, ctx.nextEntityId);
   if (netTerminal.handled) {
     if (netTerminal.access) ctx.openMapEditor?.(ctx.world, ctx.player, ctx.state, netTerminal.terminal);
@@ -553,22 +554,11 @@ export function activateInteraction(ctx: InteractionContext): InteractionResult 
     return { handled: true, openedOverlay: true };
   }
 
-  if (tryUseGnilushkaInteraction(ctx.world, ctx.player, ctx.state, ctx.entities, ctx.nextEntityId)) return { handled: true, worldChanged: true };
-  if (tryUseSlimevikInteraction(ctx.world, ctx.player, ctx.state, ctx.entities, ctx.nextEntityId)) return { handled: true, worldChanged: true };
+  return { handled: false };
+}
 
-  const npc = findFriendlyNpc(ctx);
-  if (npc) {
-    ctx.openNpcMenu?.(npc);
-    return { handled: true, openedOverlay: true };
-  }
-
-  if (ctx.manualItemPickup) {
-    const itemDrop = findItemDrop(ctx);
-    if (itemDrop) {
-      const result = pickupDrop(ctx.world, itemDrop, ctx.player, ctx.state.msgs, ctx.state.time, ctx.state, ctx.onPickedDrop);
-      return { handled: result.handled };
-    }
-  }
+function activateNormalPriorityInteractionForLook(ctx: InteractionContext): InteractionResult {
+  const idx = lookIdx(ctx);
 
   if (tryUsePseudolift(ctx.world, ctx.entities, ctx.nextEntityId, ctx.player, ctx.state, ctx.lookX, ctx.lookY)) {
     return { handled: true, worldChanged: true };
@@ -605,13 +595,6 @@ export function activateInteraction(ctx: InteractionContext): InteractionResult 
     if (door.handled) return door;
   }
 
-  // Fallback: near-look door activation when standing very close
-  const activateNearIdx = nearLookIdx(ctx);
-  if (activateNearIdx !== idx && ctx.world.cells[activateNearIdx] === Cell.DOOR) {
-    const door = activateDoor(ctx, activateNearIdx);
-    if (door.handled) return door;
-  }
-
   ensureRoomContainers(ctx.world, ctx.state.currentFloor);
   const container = findContainer(ctx, true);
   if (container) {
@@ -620,6 +603,41 @@ export function activateInteraction(ctx: InteractionContext): InteractionResult 
   }
 
   return { handled: false };
+}
+
+export function activateInteraction(ctx: InteractionContext): InteractionResult {
+  if (tryInteractCultProcession(ctx.state, ctx.world, ctx.player, ctx.entities)) return { handled: true };
+
+  const angle = Math.atan2(ctx.lookY - ctx.player.y, ctx.lookX - ctx.player.x);
+  const nearX = ctx.player.x + Math.cos(angle) * 0.7;
+  const nearY = ctx.player.y + Math.sin(angle) * 0.7;
+  const nearCtx: InteractionContext = { ...ctx, lookX: nearX, lookY: nearY };
+
+  const nearHigh = activateHighPriorityInteractionForLook(nearCtx);
+  if (nearHigh.handled) return nearHigh;
+  const farHigh = activateHighPriorityInteractionForLook(ctx);
+  if (farHigh.handled) return farHigh;
+
+  if (tryUseGnilushkaInteraction(ctx.world, ctx.player, ctx.state, ctx.entities, ctx.nextEntityId)) return { handled: true, worldChanged: true };
+  if (tryUseSlimevikInteraction(ctx.world, ctx.player, ctx.state, ctx.entities, ctx.nextEntityId)) return { handled: true, worldChanged: true };
+
+  const npc = findFriendlyNpc(ctx);
+  if (npc) {
+    ctx.openNpcMenu?.(npc);
+    return { handled: true, openedOverlay: true };
+  }
+
+  if (ctx.manualItemPickup) {
+    const itemDrop = findItemDrop(ctx);
+    if (itemDrop) {
+      const result = pickupDrop(ctx.world, itemDrop, ctx.player, ctx.state.msgs, ctx.state.time, ctx.state, ctx.onPickedDrop);
+      return { handled: result.handled };
+    }
+  }
+
+  const nearNormal = activateNormalPriorityInteractionForLook(nearCtx);
+  if (nearNormal.handled) return nearNormal;
+  return activateNormalPriorityInteractionForLook(ctx);
 }
 
 export function isInteractableOverlayOpen(): boolean {

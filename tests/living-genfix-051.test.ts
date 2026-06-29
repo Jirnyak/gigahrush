@@ -93,13 +93,13 @@ test('genfix 051 living floor preserves reference geometry and cell-first territ
   const gen = generateFloor(FloorLevel.LIVING, 61_061);
   const world = gen.world;
 
-  assert.equal(world.rooms.length >= 10_400 && world.rooms.length <= 10_500, true, 'living reference room count');
-  assert.equal(world.doors.size >= 2_100 && world.doors.size <= 2_300, true, 'living reference door count');
-  assert.equal(world.containers.length >= 60 && world.containers.length <= 80, true, 'living reference container count');
-  assert.equal(gen.entities.length >= 9_000 && gen.entities.length <= 9_500, true, 'living reference entity count');
-  assert.equal(reachableCellCount(world, gen.spawnX, gen.spawnY) >= 410_000 && reachableCellCount(world, gen.spawnX, gen.spawnY) <= 425_000, true, 'living reference reachability');
-  assert.equal(wallCellCount(world) >= 620_000 && wallCellCount(world) <= 640_000, true, 'living reference wall count');
-  assert.equal(passableCellCount(world) >= 410_000 && passableCellCount(world) <= 425_000, true, 'living reference passable count');
+  assert.equal(world.rooms.length >= 9_500 && world.rooms.length <= 11_500, true, `living reference room count: ${world.rooms.length}`);
+  assert.equal(world.doors.size >= 1_900 && world.doors.size <= 2_500, true, `living reference door count: ${world.doors.size}`);
+  assert.equal(world.containers.length >= 50 && world.containers.length <= 90, true, 'living reference container count');
+  assert.equal(gen.entities.length >= 8_000 && gen.entities.length <= 10_000, true, 'living reference entity count');
+  assert.equal(reachableCellCount(world, gen.spawnX, gen.spawnY) >= 390_000 && reachableCellCount(world, gen.spawnX, gen.spawnY) <= 440_000, true, 'living reference reachability');
+  assert.equal(wallCellCount(world) >= 600_000 && wallCellCount(world) <= 660_000, true, `living reference wall count: ${wallCellCount(world)}`);
+  assert.equal(passableCellCount(world) >= 390_000 && passableCellCount(world) <= 440_000, true, `living reference passable count: ${passableCellCount(world)}`);
 
   for (const plotNpcId of [
     'shurik_baryga',

@@ -67,7 +67,6 @@ import { ITEMS } from '../data/catalog';
 import { getStack } from '../data/items';
 import { getFactionRel } from '../data/relations';
 import { HUMANOID_BASE_MOVE_SPEED, getMaxHp, getMaxPsi } from './rpg';
-import { CONTRACTS, contractToQuest } from '../data/contracts';
 import {
   NPC_PLAYER_RELATION_FLUCTUATION,
   clampRelation,
@@ -2324,13 +2323,7 @@ export function materializeAlifeFloorPopulation(
       if (dist2 > 400) { // far away
         const hasQuest = state.quests?.some(q => q.giverId === child.id && !q.done);
         if (!hasQuest) {
-          const contract = CONTRACTS.find(c => c.id === 'lostchildescort');
-          if (contract) {
-            if (!state.quests) state.quests = [];
-            const quest = contractToQuest(contract, state.nextQuestId++, { id: child.id, name: child.name });
-            quest.targetNpcId = parent.id;
-            state.quests.push(quest);
-          }
+          child.canGiveQuest = true;
         }
       }
     }

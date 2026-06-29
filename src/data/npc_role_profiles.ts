@@ -1,6 +1,7 @@
 import { Faction, Occupation } from '../core/types';
 
 export const NPC_VISUAL_FLOOR69_FEMALE_ID = 'floor_69_female';
+import { NPC_VISUAL_WORKER69 } from './art_sprite_manifest';
 export const FLOOR_69_WORKER_ROLE_ID = 'floor_69_worker';
 export const FLOOR_69_GUARD_ROLE_ID = 'f69_queue_guard';
 export const FLOOR_69_PERFORMER_ROLE_ID = 'f69_performer';
@@ -44,11 +45,10 @@ export const NPC_ROLE_PROFILES: readonly NpcRoleProfile[] = [
     ],
     outputOccupation: Occupation.WORKER69,
     candidateFaction: Faction.CITIZEN,
-    requiresFemale: true,
     sourceNamePrefix: 'Этаж 69: посетитель ',
-    roleNamePrefix: 'Этаж 69: работница ',
+    roleNamePrefix: 'Этаж 69: персонал ',
     promotionRate: 0.78,
-    npcVisualId: NPC_VISUAL_FLOOR69_FEMALE_ID,
+    npcVisualId: NPC_VISUAL_WORKER69,
     tags: ['floor_69', 'adult_service', 'ambient_promotion'],
   },
   {

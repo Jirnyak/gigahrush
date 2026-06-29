@@ -577,6 +577,7 @@ function deathFactAlreadyLogged(state: GameState, event: WorldEvent, text: strin
 }
 
 export function recordWorldLogEvent(state: GameState, event: WorldEvent): void {
+  if (state.tutorialMode && event.type !== 'player_pick_item') return;
   if (!state.worldEvents || !shouldLog(event)) return;
   const key = eventKey(event);
   if (state.worldEvents.lastLogKey === key && event.time - state.worldEvents.lastLogTime < DEDUPE_SECONDS && event.severity < 5) {

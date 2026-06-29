@@ -122,6 +122,7 @@ Only semantics-preserving optimizations from this plan were implemented. This pa
 | P2 Data, Registries And Tooling / avoid full sort for available contracts | implemented | `src/systems/contracts.ts` builds assigned contract ids once and preserves stable current-floor-first order with bounded buckets. |
 | P2 Data, Registries And Tooling / NPC menu options without final sort | implemented | `src/systems/npc_interaction_options.ts` merges sorted built-ins/custom options without a final per-call sort. |
 | P2 Data, Registries And Tooling / content audit memoization | implemented | `scripts/content-audit.mjs` memoizes repeated per-file AST scans used by the offline audit. |
+| P0 AI And Pathfinding / optimize BFS passability checks and remove closure allocation | implemented (2026-06-29) | `src/systems/ai/pathfinding.ts` pre-caches BFS passability checks in `_navParent`/`next`, hoists macro cell / clearance blocker functions to module level to avoid millions of closure allocations, and directly checks `pathBlockers` with bitwise arithmetic. Reduced unit test suite duration from >20 minutes to ~65 seconds. |
 
 Validation for this implementation pass:
 

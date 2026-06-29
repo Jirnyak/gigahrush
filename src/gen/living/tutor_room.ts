@@ -70,7 +70,7 @@ function addStarterLocker(world: World, room: Room, x: number, y: number): World
 }
 
 export function generateTutorRoom(
-  world: World, nextRoomId: number, entities: Entity[], nextId: { v: number },
+  world: World, nextRoomId: number, entities: Entity[], nextId: { v: number }, isTutorial: boolean = false
 ): { room: Room; spawnX: number; spawnY: number; nextRoomId: number } {
 
   /* ================================================================
@@ -107,9 +107,10 @@ export function generateTutorRoom(
 
   const room = stampRoom(world, nextRoomId++, RoomType.COMMON, hallX, hallY, hallW, hallH, -1);
   room.name = 'Актовый зал';
-  room.wallTex = Tex.PANEL;
-  room.floorTex = Tex.F_LINO;
-  protectRoom(world, hallX, hallY, hallW, hallH, Tex.PANEL, Tex.F_LINO);
+  room.wallTex = Tex.TILE_W;
+  room.floorTex = Tex.F_TILE;
+  room.sealed = false; // Must be false so ensureConnectivity punches an exit to the maze!
+  protectRoom(world, hallX, hallY, hallW, hallH, Tex.TILE_W, Tex.F_TILE);
   protectTutorialWallsAsHermetic(world, hallX, hallY, hallW, hallH);
 
   // Desks: feature layer props, not live entity billboards.
@@ -162,13 +163,18 @@ export function generateTutorRoom(
   const cafeY = hallY - cafeH - 1;
   const cafeteria = stampRoom(world, nextRoomId++, RoomType.COMMON, cafeX, cafeY, cafeW, cafeH, -1);
   cafeteria.name = 'Столовая';
-  cafeteria.wallTex = Tex.PANEL;
+  cafeteria.wallTex = Tex.TILE_W;
   cafeteria.floorTex = Tex.F_LINO;
-  protectRoom(world, cafeX, cafeY, cafeW, cafeH, Tex.PANEL, Tex.F_LINO);
+  cafeteria.sealed = true;
+  protectRoom(world, cafeX, cafeY, cafeW, cafeH, Tex.TILE_W, Tex.F_LINO);
   protectTutorialWallsAsHermetic(world, cafeX, cafeY, cafeW, cafeH);
+  
+  if (isTutorial) {
+    world.features[world.idx(cafeX + 1, cafeY + 1)] = Feature.SINK;
+  }
 
-  // Door to cafeteria starts locked
-  const hallCafeDoor = world.idx(hallX + Math.floor(hallW / 2), hallY - 1);
+  // Door to cafeteria starts locked. Move it to the side so it doesn't overlap the slide.
+  const hallCafeDoor = world.idx(hallX + Math.floor(hallW / 2) - 2, hallY - 1);
   world.cells[hallCafeDoor] = Cell.DOOR;
   world.wallTex[hallCafeDoor] = Tex.DOOR_METAL;
   world.floorTex[hallCafeDoor] = Tex.F_LINO;
@@ -184,8 +190,8 @@ export function generateTutorRoom(
   });
   room.doors.push(hallCafeDoor);
   cafeteria.doors.push(hallCafeDoor);
+  world.aptMask[world.idx(hallX + Math.floor(hallW / 2) - 3, hallY - 1)] = 1;
   world.aptMask[world.idx(hallX + Math.floor(hallW / 2) - 1, hallY - 1)] = 1;
-  world.aptMask[world.idx(hallX + Math.floor(hallW / 2) + 1, hallY - 1)] = 1;
 
   const bathX = cafeX - bathW - 1;
   const bathY = cafeY;
@@ -193,6 +199,7 @@ export function generateTutorRoom(
   bathroom.name = 'Уборная';
   bathroom.wallTex = Tex.TILE_W;
   bathroom.floorTex = Tex.F_TILE;
+  bathroom.sealed = true;
   protectRoom(world, bathX, bathY, bathW, bathH, Tex.TILE_W, Tex.F_TILE);
   protectTutorialWallsAsHermetic(world, bathX, bathY, bathW, bathH);
 
@@ -216,6 +223,18 @@ export function generateTutorRoom(
   world.aptMask[world.idx(cafeX - 1, cafeY + Math.floor(bathH / 2) + 1)] = 1;
 
   world.features[world.idx(bathX + Math.floor(bathW / 2), bathY + bathH - 2)] = Feature.TOILET;
+  if (isTutorial) {
+    entities.push({
+      id: nextId.v++,
+      type: EntityType.ITEM_DROP,
+      x: bathX + Math.floor(bathW / 2) + 0.5,
+      y: bathY + Math.floor(bathH / 2) + 0.5,
+      angle: 0, pitch: 0,
+      alive: true, speed: 0,
+      sprite: Spr.ITEM_DROP, spriteScale: 1.0,
+      inventory: [{ defId: 'tut_cafe_key', count: 1 }],
+    });
+  }
 
   /* ================================================================
    *  B. Оружейная / Стрельбище (armory + shooting range)
@@ -227,6 +246,7 @@ export function generateTutorRoom(
   armory.name = 'Оружейная';
   armory.wallTex = Tex.METAL;
   armory.floorTex = Tex.F_CONCRETE;
+  armory.sealed = true;
   protectRoom(world, armX, armY, armW, armH, Tex.METAL, Tex.F_CONCRETE);
   protectTutorialWallsAsHermetic(world, armX, armY, armW, armH);
 
@@ -241,10 +261,10 @@ export function generateTutorRoom(
   world.hermoWall[hallArmoryDoor] = 1;
   world.doors.set(hallArmoryDoor, {
     idx: hallArmoryDoor,
-    state: DoorState.HERMETIC_OPEN,
+    state: DoorState.LOCKED,
     roomA: room.id,
     roomB: armory.id,
-    keyId: '',
+    keyId: 'tut_cafe_key',
     timer: 0,
   });
   room.doors.push(hallArmoryDoor);
@@ -281,7 +301,9 @@ export function generateTutorRoom(
     inventory: [{ defId: 'ammo_9mm', count: 8 }],
   });
 
-  requireSpawnedPlotNpcFromPackage(entities, nextId, 'barni', armX + 2.5, armY + 1.5, { angle: Math.PI });
+  requireSpawnedPlotNpcFromPackage(entities, nextId, 'barni', armX + 2.5, armY + 1.5, { 
+    angle: Math.PI,
+  });
 
   // ── East wall hint posters ──
   {
@@ -304,9 +326,9 @@ export function generateTutorRoom(
     world.features[si] = Feature.SLIDE;
   }
 
-  // ── Player spawn: back of the hall, facing north ──
-  const spawnX = hallX + Math.floor(hallW / 2) + 0.5;
-  const spawnY = hallY + hallH - 2 + 0.5;
+  // ── Player spawn ──
+  const spawnX = isTutorial ? cafeX + Math.floor(cafeW / 2) + 0.5 : hallX + Math.floor(hallW / 2) + 0.5;
+  const spawnY = isTutorial ? cafeY + Math.floor(cafeH / 2) + 0.5 : hallY + hallH - 2 + 0.5;
 
   return { room, spawnX, spawnY, nextRoomId };
 }

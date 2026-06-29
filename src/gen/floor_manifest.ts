@@ -75,9 +75,14 @@ function applyStoryFloorObjects(floor: FloorLevel, generation: FloorGeneration):
   applyStoryFloorObjectProfile(generation.world, generation.spawnX, generation.spawnY, floor);
 }
 
-export function generateFloor(floor: FloorLevel, runSeed = DEFAULT_STORY_FLOOR_SEED): FloorGeneration {
+export function generateFloor(floor: FloorLevel, runSeed = DEFAULT_STORY_FLOOR_SEED, isTutorial = false): FloorGeneration {
   const seed = storyFloorGenerationSeed(floor, runSeed);
-  const generation = withSeededRandom(seed, () => FLOOR_GENERATORS[floor](seed));
+  const generation = withSeededRandom(seed, () => {
+    if (floor === FloorLevel.LIVING && isTutorial) {
+      return (FLOOR_GENERATORS[floor] as unknown as (s?: number, t?: boolean) => FloorGeneration)(seed, true);
+    }
+    return FLOOR_GENERATORS[floor](seed);
+  });
   applyStoryFloorObjects(floor, generation);
   initializeCellTerritory(generation.world, {
     seed,

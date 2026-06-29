@@ -17,9 +17,9 @@ export interface NpcSpecialRoutineDef {
 export const NPC_SPECIAL_ROUTINES: readonly NpcSpecialRoutineDef[] = [
   {
     id: 'tutorial_lock_one_hour',
-    label: 'tutorial lock until first hour expires',
+    label: 'tutorial lock until 4 hours expire',
     activeUntilPlotDone: true,
-    expireAtTotalMinutes: 60,
+    expireAtTotalMinutes: 240,
     setPlotDoneOnExpire: true,
     clearUtilityOnExpire: true,
     holdGoal: AIGoal.IDLE,

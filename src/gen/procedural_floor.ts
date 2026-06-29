@@ -61,6 +61,7 @@ import {
   proceduralMonsterFloor,
   proceduralLootValueCap,
   type ProceduralFloorSpec,
+  type FloorGeometryDef,
 } from '../data/procedural_floors';
 import { territorySharesForProceduralSpec } from '../data/floor_territory';
 import { MONSTERS } from '../entities/monster';
@@ -119,6 +120,14 @@ import {
   worldToProxy,
   type ProxyGrid,
 } from './proxy_grid';
+import {
+  executeRecipe,
+  divideTorus,
+  pickSectorStrategy,
+  type RecipeContext,
+  type ProceduralRecipeId,
+  type RecipeRegion,
+} from './procedural_geometry_recipes';
 
 const EXCLUDE_GNILUSHKA = [MonsterKind.GNILUSHKA] as const;
 const O15_ENGINEER_FLAMER_ID = 'o15_multijet_flamer';
@@ -353,6 +362,7 @@ function isIndustrialGeometry(id: ProceduralFloorSpec['geometryId']): boolean {
     || id === 'sump_causeways';
 }
 
+// @ts-expect-error TS6133 — preserved as reference; replaced by recipe system
 function roomSize(type: RoomType, industrial: boolean): { w: number; h: number } {
   if (type === RoomType.CORRIDOR) {
     return chance(0.5)
@@ -2154,6 +2164,7 @@ function restoreArchiveLandmarkNames(roomsByNode: readonly Room[], landmarkOrder
   }
 }
 
+// @ts-expect-error TS6133 — preserved as reference; replaced by recipe system
 function buildArchiveWarrenRooms(world: World, spec: ProceduralFloorSpec): { rooms: Room[]; spawnX: number; spawnY: number } {
   const graph = generateWilsonMaze({
     width: ARCHIVE_WARREN_GRID,
@@ -2311,64 +2322,312 @@ function applyAdminPocketMicroClusters(world: World, rooms: Room[], spec: Proced
     }
   }
 }
+/* ── Void-fill pass ────────────────────────────────────────── */
+/*                                                              */
+/*  Scans a coarse grid for tiles with low floor coverage and   */
+/*  aggressively scatters rooms + corridors into the gaps.      */
 
-function buildRooms(world: World, spec: ProceduralFloorSpec): { rooms: Room[]; spawnX: number; spawnY: number } {
-  if (spec.anomalyId === 'conway_life') return buildConwayLifeFieldRooms(world, spec);
-  if (spec.anomalyId === 'wall_snake') return buildWallSnakeFieldRooms(world, spec);
-  if (spec.geometryId === 'living_blocks') return buildLivingBlockRooms(world, spec);
-  if (spec.geometryId === 'archive_warrens') return buildArchiveWarrenRooms(world, spec);
+const VOID_TILE = 32;  // coarse grid tile size
+const VOID_TILES_PER_AXIS = W / VOID_TILE; // 1024/32 = 32
+const VOID_COVERAGE_THRESHOLD = 0.25; // tiles below 25% coverage are voids
+const VOID_FILL_ATTEMPTS_PER_TILE = 120;
 
-  const geom = geometryById(spec.geometryId);
-  const rooms: Room[] = [];
-  const industrial = geom.tags.includes('industrial');
-  let targetRooms = geom.roomCount + spec.danger * 6;
-  if (spec.geometryId === 'service_spines') {
-    targetRooms += 36 + spec.danger * 8 + (spec.anomalyId === 'conveyor_sorter' ? 28 : 0);
+function measureTileCoverage(world: World, tileX: number, tileY: number): number {
+  const x0 = tileX * VOID_TILE;
+  const y0 = tileY * VOID_TILE;
+  let floor = 0;
+  for (let dy = 0; dy < VOID_TILE; dy++) {
+    for (let dx = 0; dx < VOID_TILE; dx++) {
+      const ci = world.idx(x0 + dx, y0 + dy);
+      const c = world.cells[ci];
+      if (c === Cell.FLOOR || c === Cell.DOOR || c === Cell.WATER) floor++;
+    }
   }
+  return floor / (VOID_TILE * VOID_TILE);
+}
+
+function voidFillRoomSize(seed: number, industrial: boolean): { w: number; h: number; type: RoomType } {
+  const variant = (seed >>> 0) % 8;
+  switch (variant) {
+    case 0: return { w: 5 + (seed >>> 8 & 3), h: 5 + (seed >>> 10 & 3), type: RoomType.COMMON };
+    case 1: return { w: 7 + (seed >>> 8 & 5), h: 6 + (seed >>> 11 & 4), type: RoomType.STORAGE };
+    case 2: return { w: 4 + (seed >>> 8 & 3), h: 4 + (seed >>> 10 & 3), type: RoomType.BATHROOM };
+    case 3: return { w: 8 + (seed >>> 8 & 7), h: 6 + (seed >>> 11 & 5), type: RoomType.OFFICE };
+    case 4: return { w: 10 + (seed >>> 8 & 7), h: 8 + (seed >>> 11 & 5), type: industrial ? RoomType.PRODUCTION : RoomType.LIVING };
+    case 5: return { w: 6 + (seed >>> 8 & 4), h: 5 + (seed >>> 10 & 3), type: RoomType.KITCHEN };
+    case 6: return { w: 6 + (seed >>> 8 & 5), h: 6 + (seed >>> 10 & 5), type: RoomType.SMOKING };
+    default: return { w: 12 + (seed >>> 8 & 9), h: 4 + (seed >>> 12 & 2), type: RoomType.CORRIDOR };
+  }
+}
+
+function fillVoidGaps(
+  world: World,
+  rooms: Room[],
+  spec: ProceduralFloorSpec,
+  geom: FloorGeometryDef,
+  nextRoomId: { v: number },
+  industrial: boolean,
+): void {
+  // Scan coarse grid for void tiles
+  const voidTiles: { tx: number; ty: number; coverage: number }[] = [];
+  for (let ty = 0; ty < VOID_TILES_PER_AXIS; ty++) {
+    for (let tx = 0; tx < VOID_TILES_PER_AXIS; tx++) {
+      const cov = measureTileCoverage(world, tx, ty);
+      if (cov < VOID_COVERAGE_THRESHOLD) {
+        voidTiles.push({ tx, ty, coverage: cov });
+      }
+    }
+  }
+
+  if (voidTiles.length === 0) return;
+
+  // Sort by coverage ascending — fill emptiest first
+  voidTiles.sort((a, b) => a.coverage - b.coverage);
+
+  let st = (spec.seed ^ 0xDEAD_BEEF) >>> 0;
+  let filled = 0;
+  const maxFill = Math.min(voidTiles.length * 6, 800); // cap total void-fill rooms
+
+  for (const tile of voidTiles) {
+    if (filled >= maxFill) break;
+    const baseX = tile.tx * VOID_TILE;
+    const baseY = tile.ty * VOID_TILE;
+
+    for (let attempt = 0; attempt < VOID_FILL_ATTEMPTS_PER_TILE && filled < maxFill; attempt++) {
+      st ^= st << 13; st ^= st >>> 17; st ^= st << 5; st = st >>> 0;
+      const rs = voidFillRoomSize(st, industrial);
+      st ^= st << 13; st ^= st >>> 17; st ^= st << 5; st = st >>> 0;
+
+      // Place within the void tile, with a small margin to allow some overlap into neighbors
+      const margin = 2;
+      const rangeW = Math.max(1, VOID_TILE - rs.w + margin * 2);
+      const rangeH = Math.max(1, VOID_TILE - rs.h + margin * 2);
+      const x = baseX - margin + ((st >>> 0) % rangeW);
+      const y = baseY - margin + ((st >>> 16) % rangeH);
+
+      const wx = world.wrap(x);
+      const wy = world.wrap(y);
+
+      if (!canPlaceRoom(world, wx, wy, rs.w, rs.h)) continue;
+
+      nextRoomId.v = Math.max(nextRoomId.v, world.rooms.length);
+      const room = stampRoom(world, nextRoomId.v++, rs.type, wx, wy, rs.w, rs.h, -1);
+      room.name = proceduralRoomName(spec, room);
+      applyRoomTexture(world, room, geom.wallTex, geom.floorTex);
+      if (rs.type === RoomType.COMMON || rs.type === RoomType.PRODUCTION || rs.type === RoomType.CORRIDOR) {
+        if (chance(0.45)) shapeRoom(world, room);
+        decorateRoom(world, room);
+      }
+      decorateProceduralRoom(world, room, spec);
+      rooms.push(room);
+      filled++;
+    }
+  }
+}
+
+/* ── Composite recipe-based room generation ────────────────── */
+/*                                                              */
+/*  Divides the torus into 2-4 sectors and fills each with a    */
+/*  different geometry recipe from the FloorGeometryDef's pool.  */
+/*  This produces heterogeneous, dense, non-repetitive floors.  */
+
+function pickRecipesForSpec(
+  _spec: ProceduralFloorSpec,
+  geom: { recipePool: readonly ProceduralRecipeId[] },
+  sectorCount: number,
+  seed: number,
+): ProceduralRecipeId[] {
+  const pool = geom.recipePool;
+  if (pool.length === 0) return Array(sectorCount).fill('dense_room_scatter' as ProceduralRecipeId);
+  const result: ProceduralRecipeId[] = [];
+  let st = seed >>> 0;
+  const used = new Set<number>();
+  for (let i = 0; i < sectorCount; i++) {
+    // Prefer variety — avoid repeats when pool allows
+    let pickIdx: number;
+    for (let attempt = 0; attempt < 20; attempt++) {
+      st ^= st << 13; st ^= st >>> 17; st ^= st << 5; st = st >>> 0;
+      pickIdx = (st & 0x7FFFFFFF) % pool.length;
+      if (!used.has(pickIdx) || used.size >= pool.length) break;
+    }
+    pickIdx = (st & 0x7FFFFFFF) % pool.length;
+    used.add(pickIdx);
+    result.push(pool[pickIdx]);
+  }
+  return result;
+}
+
+function buildCompositeRooms(world: World, spec: ProceduralFloorSpec): { rooms: Room[]; spawnX: number; spawnY: number } {
+  const geom = geometryById(spec.geometryId);
+  const industrial = geom.tags.includes('industrial');
   const nextRoomId = { v: 0 };
-  const macroLayer = buildProceduralMacroLayer(world, rooms, spec, nextRoomId, industrial);
+  const allRooms: Room[] = [];
+
+  // Phase 1: Macro layer (large anchor halls — preserves existing behaviour)
+  const macroLayer = buildProceduralMacroLayer(world, allRooms, spec, nextRoomId, industrial);
   if (spec.geometryId === 'communal_knots') {
-    const hqAnchor = rooms[0];
+    const hqAnchor = allRooms[0];
     const hqSpawnX = hqAnchor ? hqAnchor.x + Math.floor(hqAnchor.w / 2) + 0.5 : W / 2 + 0.5;
     const hqSpawnY = hqAnchor ? hqAnchor.y + Math.floor(hqAnchor.h / 2) + 0.5 : W / 2 + 0.5;
-    placeProceduralMiniHqClusters(world, rooms, spec, hqSpawnX, hqSpawnY);
+    placeProceduralMiniHqClusters(world, allRooms, spec, hqSpawnX, hqSpawnY);
     nextRoomId.v = Math.max(nextRoomId.v, world.rooms.length);
   }
 
-  for (let attempt = 0; attempt < targetRooms * 70 && rooms.length < targetRooms; attempt++) {
-    const type = pick(geom.roomTypes);
-    const size = roomSize(type, industrial);
-    const x = irng(20, W - 20 - size.w);
-    const y = irng(20, W - 20 - size.h);
-    if (!canPlaceRoom(world, x, y, size.w, size.h)) continue;
-    const room = stampRoom(world, nextRoomId.v++, type, x, y, size.w, size.h, -1);
-    room.name = proceduralRoomName(spec, room);
-    applyRoomTexture(world, room, geom.wallTex, geom.floorTex);
-    if (type === RoomType.COMMON || type === RoomType.PRODUCTION || type === RoomType.CORRIDOR) {
-      if (chance(0.55)) shapeRoom(world, room);
-      decorateRoom(world, room);
+  // Phase 2: Composite recipe-based sector generation
+  const strategy = pickSectorStrategy(spec.seed);
+  const sectors = divideTorus(strategy, spec.seed);
+  const recipes = pickRecipesForSpec(spec, geom, sectors.length, spec.seed ^ 0xC0DE);
+
+  for (let si = 0; si < sectors.length; si++) {
+    const sector = sectors[si];
+    const recipeId = recipes[si];
+    const sectorSeed = (spec.seed ^ (si * 0x9E3779B9)) >>> 0;
+    const ctx: RecipeContext = {
+      world,
+      region: sector,
+      seed: sectorSeed,
+      tex: {
+        wallTex: geom.wallTex,
+        floorTex: geom.floorTex,
+        roomTypes: geom.roomTypes,
+      },
+      nextRoomId,
+      industrial,
+    };
+    const result = executeRecipe(recipeId, ctx);
+    for (const room of result.rooms) {
+      // Set naming consistent with geometry
+      if (!room.name || room.name.startsWith('Помещение') || room.name.startsWith('Ячейка')) {
+        room.name = proceduralRoomName(spec, room);
+      }
+      allRooms.push(room);
     }
-    decorateProceduralRoom(world, room, spec);
-    rooms.push(room);
   }
 
-  applyAdminPocketMicroClusters(world, rooms, spec, nextRoomId);
-  applyWorkshopClusterRooms(world, rooms, spec, nextRoomId);
-  applyCollectorStationClusters(world, rooms, spec, nextRoomId);
-  const firstRoom = rooms[0];
+  // Phase 2.5: Void-fill pass — fill large black gaps left by sparse recipes
+  fillVoidGaps(world, allRooms, spec, geom, nextRoomId, industrial);
+
+  // Phase 3: Specialist micro-cluster overlays (preserve existing detail passes)
+  applyAdminPocketMicroClusters(world, allRooms, spec, nextRoomId);
+  applyWorkshopClusterRooms(world, allRooms, spec, nextRoomId);
+  applyCollectorStationClusters(world, allRooms, spec, nextRoomId);
+  const firstRoom = allRooms[0];
   const earlySpawnX = firstRoom ? firstRoom.x + Math.floor(firstRoom.w / 2) + 0.5 : W / 2 + 0.5;
   const earlySpawnY = firstRoom ? firstRoom.y + Math.floor(firstRoom.h / 2) + 0.5 : W / 2 + 0.5;
-  applyCollectorMirrorInfill(world, rooms, spec, nextRoomId, earlySpawnX, earlySpawnY);
-  applyCommunalKnotClusterRooms(world, rooms, spec, nextRoomId, earlySpawnX, earlySpawnY);
-  connectRoomsMST(world, rooms);
-  const first = rooms[0];
+  applyCollectorMirrorInfill(world, allRooms, spec, nextRoomId, earlySpawnX, earlySpawnY);
+  applyCommunalKnotClusterRooms(world, allRooms, spec, nextRoomId, earlySpawnX, earlySpawnY);
+
+  // Phase 4: Connectivity
+  stitchSectorBoundaries(world, sectors, spec.seed ^ 0x9999);
+  connectRoomsMST(world, allRooms);
+  const first = allRooms[0];
   const spawnX = first ? first.x + Math.floor(first.w / 2) + 0.5 : W / 2 + 0.5;
   const spawnY = first ? first.y + Math.floor(first.h / 2) + 0.5 : W / 2 + 0.5;
-  applyProceduralStructureLibrary(world, rooms, spec, spawnX, spawnY);
-  applyProceduralMacroNetwork(world, rooms, spec, macroLayer, spawnX, spawnY);
+  applyProceduralStructureLibrary(world, allRooms, spec, spawnX, spawnY);
+  applyProceduralMacroNetwork(world, allRooms, spec, macroLayer, spawnX, spawnY);
   ensureConnectivity(world, spawnX, spawnY);
   sanitizeDoors(world);
-  return { rooms, spawnX, spawnY };
+  return { rooms: allRooms, spawnX, spawnY };
+}
+
+function buildRooms(world: World, spec: ProceduralFloorSpec): { rooms: Room[]; spawnX: number; spawnY: number } {
+  // Anomaly overrides — completely replace geometry
+  if (spec.anomalyId === 'conway_life') return buildConwayLifeFieldRooms(world, spec);
+  if (spec.anomalyId === 'wall_snake') return buildWallSnakeFieldRooms(world, spec);
+
+  // Universal composite recipe-based generation for all geometry IDs
+  return buildCompositeRooms(world, spec);
+}
+
+import { carveOrganicCorridor } from './shared';
+
+function stitchSectorBoundaries(world: World, sectors: RecipeRegion[], seed: number): void {
+  let st = seed >>> 0;
+  for (let i = 0; i < sectors.length; i++) {
+    for (let j = i + 1; j < sectors.length; j++) {
+      const A = sectors[i];
+      const B = sectors[j];
+      
+      let sharedX = -1;
+      let sharedY = -1;
+      let minCross = 0;
+      let maxCross = 0;
+      let isVerticalEdge = false;
+
+      // Horizontal adjacency
+      if (A.x0 + A.w === B.x0 || B.x0 + B.w === A.x0 || (A.x0 + A.w === W && B.x0 === 0) || (B.x0 + B.w === W && A.x0 === 0)) {
+        sharedX = (A.x0 + A.w === B.x0 || (A.x0 + A.w === W && B.x0 === 0)) ? B.x0 : A.x0;
+        isVerticalEdge = true;
+        const yStart = Math.max(A.y0, B.y0);
+        const yEnd = Math.min(A.y0 + A.h, B.y0 + B.h);
+        if (yStart < yEnd) { minCross = yStart; maxCross = yEnd; }
+      } else if (A.y0 + A.h === B.y0 || B.y0 + B.h === A.y0 || (A.y0 + A.h === W && B.y0 === 0) || (B.y0 + B.h === W && A.y0 === 0)) {
+        // Vertical adjacency
+        sharedY = (A.y0 + A.h === B.y0 || (A.y0 + A.h === W && B.y0 === 0)) ? B.y0 : A.y0;
+        isVerticalEdge = false;
+        const xStart = Math.max(A.x0, B.x0);
+        const xEnd = Math.min(A.x0 + A.w, B.x0 + B.w);
+        if (xStart < xEnd) { minCross = xStart; maxCross = xEnd; }
+      }
+
+      if (minCross < maxCross) {
+        const count = 2; // Punch 2 corridors per boundary
+        for (let c = 0; c < count; c++) {
+          st ^= st << 13; st ^= st >>> 17; st ^= st << 5; st = st >>> 0;
+          const cross = minCross + 2 + (st % Math.max(1, maxCross - minCross - 4));
+          
+          let ax = isVerticalEdge ? world.wrap(sharedX - 1) : cross;
+          let ay = isVerticalEdge ? cross : world.wrap(sharedY - 1);
+          let bx = isVerticalEdge ? sharedX : cross;
+          let by = isVerticalEdge ? cross : sharedY;
+
+          // Which sector is A and which is B relative to ax, ay?
+          // If we stepped left to ax, then ax is inside the left sector.
+          // Direction to walk into ax's sector is -1 on X.
+          let dxA = 0, dyA = 0;
+          if (isVerticalEdge) {
+            dxA = (ax === world.wrap(A.x0 + A.w - 1) || ax === world.wrap(A.x0 - 1)) ? -1 : 1;
+            // Actually, simply: the boundary is at sharedX. ax is sharedX - 1. So walking "away" from boundary is -1.
+            dxA = -1;
+          } else {
+            dyA = -1;
+          }
+          
+          let validA = false;
+          let cxA = ax, cyA = ay;
+          const pathA: number[] = [];
+          for (let step = 0; step < 40; step++) {
+            const ci = world.idx(cxA, cyA);
+            pathA.push(ci);
+            if (!world.aptMask[ci] && (world.cells[ci] === Cell.FLOOR || world.cells[ci] === Cell.DOOR)) {
+              validA = true; break;
+            }
+            cxA = world.wrap(cxA + dxA);
+            cyA = world.wrap(cyA + dyA);
+          }
+
+          let validB = false;
+          let cxB = bx, cyB = by;
+          const dxB = -dxA;
+          const dyB = -dyA;
+          const pathB: number[] = [];
+          for (let step = 0; step < 40; step++) {
+            const ci = world.idx(cxB, cyB);
+            pathB.push(ci);
+            if (!world.aptMask[ci] && (world.cells[ci] === Cell.FLOOR || world.cells[ci] === Cell.DOOR)) {
+              validB = true; break;
+            }
+            cxB = world.wrap(cxB + dxB);
+            cyB = world.wrap(cyB + dyB);
+          }
+
+          if (validA && validB) {
+            carveOrganicCorridor(world, cxA, cyA, cxB, cyB, st ^ 0x9B1A, true);
+          }
+        }
+      }
+    }
+  }
 }
 
 function proceduralRoomName(spec: ProceduralFloorSpec, room: Room): string {
@@ -7668,6 +7927,7 @@ function registerLivingBlockRouteCues(world: World, blocks: readonly LivingBlock
   if (shelterRoom) registerLivingCue(world, spec, 'shelter_spur', { x: last.centerX, y: last.centerY }, roomPoint(shelterRoom), shelterRoom, 'убежищный отросток', 'уйти в короткий тупик укрытия', 'кладовая с шансом переждать давление', '#b8d7a2', ['shelter_spur']);
 }
 
+// @ts-expect-error TS6133 — preserved as reference; replaced by recipe system
 function buildLivingBlockRooms(world: World, spec: ProceduralFloorSpec): { rooms: Room[]; spawnX: number; spawnY: number } {
   const geom = geometryById(spec.geometryId);
   const rooms: Room[] = [];
@@ -14390,71 +14650,58 @@ function placeCultRoomFeature(world: World, room: Room, feature: Feature, x: num
   return true;
 }
 
-function stampCultRitualRing(world: World, room: Room, spec: ProceduralFloorSpec, index: number): { x: number; y: number } {
-  const center = roomCenter(room);
-  const radius = Math.max(2, Math.min(6, Math.floor(Math.min(room.w, room.h) / 2) - 1));
-  const circular = index === 0 && (spec.seed & 3) === 0;
-  const rx = Math.max(2, Math.min(8, Math.floor(room.w / 2) - 2));
-  const ry = Math.max(2, Math.min(7, Math.floor(room.h / 2) - 2));
-  room.name = circular ? `Ритуальное кольцо ${room.id}` : `Ритуальное кольцо-угол ${room.id}`;
-  room.floorTex = spec.baseFloor === FloorLevel.HELL ? Tex.F_MEAT : Tex.F_CARPET;
-  for (let dy = 0; dy < room.h; dy++) {
-    for (let dx = 0; dx < room.w; dx++) {
+function stampCultAltarNook(world: World, room: Room, spec: ProceduralFloorSpec): { x: number; y: number } {
+  room.name = `Культовый алтарь ${room.id}`;
+  
+  // Find a good corner or wall cell for the altar
+  let bestX = room.x + Math.floor(room.w / 2);
+  let bestY = room.y + Math.floor(room.h / 2);
+  
+  let found = false;
+  for (let dy = 1; dy < room.h - 1 && !found; dy++) {
+    for (let dx = 1; dx < room.w - 1 && !found; dx++) {
       const x = world.wrap(room.x + dx);
       const y = world.wrap(room.y + dy);
       const ci = world.idx(x, y);
-      if (world.roomMap[ci] !== room.id || world.cells[ci] !== Cell.FLOOR) continue;
-      const lx = Math.abs(world.delta(x, center.x));
-      const ly = Math.abs(world.delta(y, center.y));
-      const onGlyph = circular
-        ? Math.abs(Math.hypot(lx, ly) - radius) <= 1.05
-        : (
-          (Math.abs(lx - rx) <= 0.75 && ly <= ry) ||
-          (Math.abs(ly - ry) <= 0.75 && lx <= rx) ||
-          ((lx <= 1 || ly <= 1) && lx + ly <= Math.max(rx, ry) + 1)
-        );
-      if (onGlyph) {
-        world.floorTex[ci] = room.floorTex;
-        if (((x * 31 + y * 17 + spec.seed) & 3) === 0) {
-          stampSurfaceSplat(world, x, y, 0.5, 0.5, 0.22, 120, spec.seed + index * 1009 + dx * 37 + dy, 82, 18, 54, false);
+      if (world.roomMap[ci] === room.id && world.cells[ci] === Cell.FLOOR) {
+        let walls = 0;
+        if (world.cells[world.idx(x - 1, y)] === Cell.WALL) walls++;
+        if (world.cells[world.idx(x + 1, y)] === Cell.WALL) walls++;
+        if (world.cells[world.idx(x, y - 1)] === Cell.WALL) walls++;
+        if (world.cells[world.idx(x, y + 1)] === Cell.WALL) walls++;
+        
+        if (walls >= 2) {
+          bestX = x;
+          bestY = y;
+          found = true;
         }
       }
     }
   }
 
-  placeCultRoomFeature(world, room, Feature.APPARATUS, center.x, center.y);
-  stampMark(world, center.x, center.y, 0.5, 0.5, 0.78, MarkType.PSI, spec.seed ^ (room.id * 199), 132, 34, 168, 210, false);
-  for (let i = 0; i < 8; i++) {
-    const a = (Math.PI * 2 * i / 8) + hashUnit3(spec.seed, room.id, i) * 0.18;
-    const angularPoints = [
-      [rx, 0],
-      [rx, ry],
-      [0, ry],
-      [-rx, ry],
-      [-rx, 0],
-      [-rx, -ry],
-      [0, -ry],
-      [rx, -ry],
-    ] as const;
-    const point = angularPoints[i];
-    const x = circular
-      ? world.wrap(center.x + Math.round(Math.cos(a) * radius))
-      : world.wrap(center.x + point[0]);
-    const y = circular
-      ? world.wrap(center.y + Math.round(Math.sin(a) * radius))
-      : world.wrap(center.y + point[1]);
-    if (placeCultRoomFeature(world, room, i % 2 === 0 ? Feature.CANDLE : Feature.LAMP, x, y)) {
-      stampMark(world, x, y, 0.5, 0.5, 0.34, MarkType.BLACK_HAND, spec.seed + room.id * 257 + i, 12, 8, 8, 190, false);
+  // Place altar
+  placeCultRoomFeature(world, room, Feature.APPARATUS, bestX, bestY);
+  stampMark(world, bestX, bestY, 0.5, 0.5, 0.78, MarkType.BLACK_HAND, spec.seed ^ (room.id * 199), 132, 34, 168, 210, false);
+  
+  // Place a couple of candles nearby
+  const offsets = [[-1, 0], [1, 0], [0, -1], [0, 1]];
+  for (const [dx, dy] of offsets) {
+    const x = world.wrap(bestX + dx);
+    const y = world.wrap(bestY + dy);
+    if (world.cells[world.idx(x, y)] === Cell.FLOOR) {
+      if (placeCultRoomFeature(world, room, Feature.CANDLE, x, y)) {
+         world.floorTex[world.idx(x, y)] = spec.baseFloor === FloorLevel.HELL ? Tex.F_MEAT : Tex.F_CARPET;
+      }
     }
   }
 
-  const zone = world.zones[world.zoneMap[world.idx(center.x, center.y)]];
+  const zone = world.zones[world.zoneMap[world.idx(bestX, bestY)]];
   if (zone) {
     zone.faction = ZoneFaction.CULTIST;
     zone.level = Math.max(zone.level, Math.min(5, spec.danger + 1));
-    zone.fogged = false;
   }
-  return center;
+  
+  return { x: bestX, y: bestY };
 }
 
 function addCultMajorityContainer(
@@ -14648,10 +14895,10 @@ function applyCultistMajorityProfile(
   if (spec.majorityId !== 'cultists') return;
   const candidates = cultMajorityCandidateRooms(world, rooms, spec, spawnX, spawnY);
   if (candidates.length === 0) return;
-  const ritualCount = Math.min(2, Math.max(1, Math.floor((spec.danger + 1) / 2)), candidates.length);
+  const ritualCount = Math.min(1, candidates.length); // Only 1 subtle altar nook
   const ritualRooms = candidates.slice(0, ritualCount);
-  const anchors = ritualRooms.map((room, index) => {
-    const anchor = stampCultRitualRing(world, room, spec, index);
+  const anchors = ritualRooms.map((room) => {
+    const anchor = stampCultAltarNook(world, room, spec);
     addCultEvidenceStash(world, spec, room, spec.seed ^ room.id * 491);
     return anchor;
   });

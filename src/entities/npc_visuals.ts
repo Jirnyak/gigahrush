@@ -139,6 +139,18 @@ const GENERATED_ART_FAMILIES: NpcVisualFamily[] = Object.entries(manifestFamilie
     },
   }));
 
+const worker69MaleIds: string[] = [];
+const worker69FemaleIds: string[] = [];
+for (const id of manifestFamilies[NPC_VISUAL_WORKER69] || []) {
+  const row = artSpriteManifestRow(id);
+  const mapping = row?.intendedMappings.find(m => m.type === 'npc_family' && m.visualId === NPC_VISUAL_WORKER69);
+  if (mapping && 'sex' in mapping && mapping.sex === 'male') {
+    worker69MaleIds.push(id);
+  } else {
+    worker69FemaleIds.push(id);
+  }
+}
+
 const worker69Family: NpcVisualFamily = {
   id: NPC_VISUAL_WORKER69,
   source: 'first_party_art',
@@ -147,20 +159,28 @@ const worker69Family: NpcVisualFamily = {
   procedural: true,
   generate: ctx => {
     const seed = mix32((ctx.seed || 1) ^ Math.imul((ctx.sprite ?? 0) + 1, 0x51ed270b));
+    if (ctx.isFemale === false) {
+      const manifestId = worker69MaleIds[seed % Math.max(1, worker69MaleIds.length)];
+      if (manifestId) return firstPartyNpcArt(manifestId) ?? new Uint32Array(0);
+      return new Uint32Array(0);
+    }
     const choice = seed % 10;
-    if (choice < 2) {
-      const manifestIds = manifestFamilies[NPC_VISUAL_WORKER69] || [];
-      const manifestId = manifestIds[choice % manifestIds.length];
+    if (choice < 4 && worker69FemaleIds.length > 0) {
+      const manifestId = worker69FemaleIds[choice % worker69FemaleIds.length];
       return firstPartyNpcArt(manifestId) ?? generateFloor69FemaleNpcSprite(floor69Variant(ctx));
     }
     return generateFloor69FemaleNpcSprite(floor69Variant(ctx));
   },
   textureKey: ctx => {
     const seed = mix32((ctx.seed || 1) ^ Math.imul((ctx.sprite ?? 0) + 1, 0x51ed270b));
+    if (ctx.isFemale === false) {
+      const manifestId = worker69MaleIds[seed % Math.max(1, worker69MaleIds.length)];
+      if (manifestId) return `first_party_art:${manifestId}`;
+      return `empty`;
+    }
     const choice = seed % 10;
-    if (choice < 2) {
-      const manifestIds = manifestFamilies[NPC_VISUAL_WORKER69] || [];
-      const manifestId = manifestIds[choice % manifestIds.length];
+    if (choice < 4 && worker69FemaleIds.length > 0) {
+      const manifestId = worker69FemaleIds[choice % worker69FemaleIds.length];
       return `first_party_art:${manifestId}`;
     }
     return `procedural_f69:${floor69Variant(ctx)}`;

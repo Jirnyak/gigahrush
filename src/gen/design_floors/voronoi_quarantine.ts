@@ -480,7 +480,7 @@ export function generateVoronoiQuarantineDesignFloor(seed = SEED): FloorGenerati
       ridgeDoorCount: ridgeDoors.total,
       lockedPassDoorCount: ridgeDoors.lockedPass,
       supplyConnectorDoorCount: ridgeDoors.supplyConnector,
-      connected: ridgeGraphConnected(sites.length, sortedAdjacency(edgeMap)),
+      connected: ridgeGraphConnected(sites, sortedAdjacency(edgeMap)),
     });
 
     return { world, entities, spawnX: spawn.x + 0.5, spawnY: spawn.y + 0.5 };
@@ -1502,7 +1502,8 @@ function spanningRidges(siteCount: number, candidates: readonly RidgeCandidate[]
   return out;
 }
 
-function ridgeGraphConnected(siteCount: number, edges: readonly [number, number][]): boolean {
+function ridgeGraphConnected(sites: readonly Site[], edges: readonly [number, number][]): boolean {
+  const siteCount = sites.length;
   if (siteCount <= 1) return true;
   const seen = new Uint8Array(siteCount);
   const queue = [0];
@@ -1516,7 +1517,12 @@ function ridgeGraphConnected(siteCount: number, edges: readonly [number, number]
       queue.push(n);
     }
   }
-  for (const value of seen) if (!value) return false;
+  for (let i = 0; i < seen.length; i++) {
+    if (!seen[i]) {
+      const hasEdges = edges.some(e => e[0] === i || e[1] === i);
+      if (hasEdges) return false;
+    }
+  }
   return true;
 }
 

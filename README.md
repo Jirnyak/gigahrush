@@ -242,6 +242,17 @@ Core loop:
 5. Survive samosbor and aftermath.
 6. Bring back loot, XP, reputation, money, story progress or trouble.
 
+## Key Features / Основные возможности
+
+В ходе активного развития проекта в симуляцию внедрены следующие ключевые механики и подсистемы:
+
+- **Туториал (Обучающий режим):** Безопасный изолированный контур со столовой, уборной и оружейной для плавного освоения базовых потребностей (жажда, туалет), взаимодействия с объектами и NPC (Ольга Дмитриевна, Сержант Баринов), а также базовой стрельбы перед выходом в открытый мир.
+- **Броня и Новые типы урона:** Комплексная система физической и пси-защиты с различными типами урона и бронежилетами, влияющими на выживаемость и характеристики в тактическом бою.
+- **База Ликвидаторов:** Специализированная зона и оплот группировки Ликвидаторов с уникальным снаряжением, заданиями, контрактами и укрепленной инфраструктурой для вылазок в опасные сектора.
+- **Арена:** Хардкорный боевой контур для проверки тактических навыков, ведения интенсивных боев и испытания возможностей оружия и арсенала.
+- **Хоррор-этажи:** Напряженные, пугающие процедурные и авторские уровни с нарастающим психологическим давлением, плотной атмосферой страха, искаженной геометрией и смертоносными аномалиями.
+- **Синематика и Динамические эффекты:** Сюжетные камеры, интерактивные последовательности, эффекты воздействия PSI, помехи нейроинтерфейса и продвинутая режиссура событий Самосбора.
+
 ## A-Life Population
 
 New runs create a compact in-memory pool around `100_000` procedural NPC records on every supported runtime, leaving unused headroom up to the `131_072` technical capacity for explicit arrivals and sanitizer clamps. A universal population plan assigns every created record to story floors, routed design floors and the per-run procedural floor deck before first active-floor generation. Only the current floor is materialized into live `entities`; other floors keep identity, floor assignment, family id, quest affordance, RPG traits, deterministic default loadout, death state and optional last known coordinates without running AI.
