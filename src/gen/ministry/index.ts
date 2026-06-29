@@ -441,20 +441,52 @@ function placeMinistryZones(world: World): void {
 
 function placeMinistryLights(world: World, rooms: Room[]): void {
   for (const room of rooms) {
-    for (let dy = 1; dy < room.h - 1; dy += 3) {
-      for (let dx = 1; dx < room.w - 1; dx += 3) {
-        const ci = world.idx(world.wrap(room.x + dx), world.wrap(room.y + dy));
-        if (world.cells[ci] === Cell.FLOOR && world.features[ci] === Feature.NONE)
-          world.features[ci] = Feature.LAMP;
+    const countX = Math.max(1, Math.floor(room.w / 8));
+    const countY = Math.max(1, Math.floor(room.h / 8));
+    for (let iy = 0; iy < countY; iy++) {
+      for (let ix = 0; ix < countX; ix++) {
+        const dx = Math.floor(room.w * (ix + 0.5) / countX);
+        const dy = Math.floor(room.h * (iy + 0.5) / countY);
+        let placed = false;
+        for (let r = 0; r <= 2 && !placed; r++) {
+          for (let sy = -r; sy <= r && !placed; sy++) {
+            for (let sx = -r; sx <= r && !placed; sx++) {
+              if (Math.abs(sx) === r || Math.abs(sy) === r) {
+                const cx = world.wrap(room.x + dx + sx);
+                const cy = world.wrap(room.y + dy + sy);
+                const ci = world.idx(cx, cy);
+                if (world.cells[ci] === Cell.FLOOR && world.features[ci] === Feature.NONE) {
+                  world.features[ci] = Feature.LAMP;
+                  placed = true;
+                }
+              }
+            }
+          }
+        }
       }
     }
   }
 
-  for (let y = 0; y < W; y += 5) {
-    for (let x = 0; x < W; x += 5) {
-      const ci = world.idx(x, y);
-      if (world.cells[ci] === Cell.FLOOR && world.roomMap[ci] < 0 && world.features[ci] === Feature.NONE)
-        world.features[ci] = Feature.LAMP;
+  for (let y = 0; y < W; y += 8) {
+    for (let x = 0; x < W; x += 8) {
+      let placed = false;
+      for (let r = 0; r <= 4 && !placed; r++) {
+        for (let sy = -r; sy <= r && !placed; sy++) {
+          for (let sx = -r; sx <= r && !placed; sx++) {
+            if (Math.abs(sx) === r || Math.abs(sy) === r) {
+              if (sx >= -3 && sx <= 4 && sy >= -3 && sy <= 4) {
+                const wx = world.wrap(x + 3 + sx);
+                const wy = world.wrap(y + 3 + sy);
+                const ci = world.idx(wx, wy);
+                if (world.cells[ci] === Cell.FLOOR && world.roomMap[ci] < 0 && world.features[ci] === Feature.NONE) {
+                  world.features[ci] = Feature.LAMP;
+                  placed = true;
+                }
+              }
+            }
+          }
+        }
+      }
     }
   }
 

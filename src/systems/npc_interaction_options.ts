@@ -524,7 +524,7 @@ registerNpcInteractionOption({
   id: 'arena',
   order: 5,
   label: () => 'Арена',
-  visible: ctx => ctx.npc.name === 'Мастер Арены',
+  visible: ctx => ctx.npc.name === 'Мастер Арены' || ctx.npc.name === 'Марко Лоло',
   activate: ctx => {
     openArena(ctx);
   },

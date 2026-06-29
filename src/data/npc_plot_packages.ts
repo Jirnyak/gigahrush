@@ -116,6 +116,26 @@ function plotNpcPackage(input: MainPlotNpcPackageInput): NpcPackageDef {
 export const MAIN_PLOT_NPC_PACKAGES = [
 
   plotNpcPackage({
+    id: 'marko_lolo',
+    displayName: 'Марко Лоло',
+    publicLine: 'Второй мастер арены, принимающий ставки и координирующий телепортацию бойцов.',
+    sex: 'male',
+    age: 35,
+    faction: Faction.LIQUIDATOR,
+    occupation: Occupation.DIRECTOR,
+    sprite: Occupation.DIRECTOR,
+    homeFloorKey: floorKeyForDesign('liquidatorbase'),
+    hp: 2500, maxHp: 2500, level: 15, money: 1500, speed: 1.1,
+    inventory: [],
+    talkLines: [
+      'Готов сделать ставку или сразу выйти на поле арены?',
+      'Здесь, в центре базы, мы держим прямой телепорт на бой.',
+    ],
+    talkLinesPost: [],
+    voiceTags: ['liquidator', 'technical'],
+  }),
+
+  plotNpcPackage({
     id: 'liquidator_armorer',
     displayName: 'Оружейник форпоста',
     publicLine: 'Ликвидатор, ответственный за учет и выдачу стволов и патронов.',

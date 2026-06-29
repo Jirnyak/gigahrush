@@ -21,6 +21,7 @@ import { checkTalkQuest } from '../src/systems/quests';
 import { makeGameState, makeTestNpc, makeTestPlayer } from './helpers';
 
 const MAIN_PLOT_IDS = [
+  'marko_lolo',
   'liquidator_armorer',
   'liquidator_medic',
   'liquidator_quartermaster',
