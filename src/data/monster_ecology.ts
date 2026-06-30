@@ -195,6 +195,13 @@ export const MONSTER_COUNTERPLAY_CUE_TASKS: readonly MonsterCueTask[] = [
     cue: 'Второй силуэт отстает от настоящего тела на один шаг.',
     task: 'Сохранять local-log предупреждение при первом темном рывке: светлый выход или стояние на месте срывают второй темп.',
   },
+  {
+    id: 'cue_gnome_concrete_scratch_audio',
+    kind: MonsterKind.GNOME,
+    channel: 'audio',
+    cue: 'Скрежет арматуры по бетону и быстрый топот в узком туннеле.',
+    task: 'Добавить звук копания и шороха камней, когда гном находится за стеной или в узком проходе.',
+  },
 ];
 
 export const MONSTER_ECOLOGY: readonly MonsterEcologyDef[] = [
@@ -418,6 +425,23 @@ export const MONSTER_ECOLOGY: readonly MonsterEcologyDef[] = [
     deathLogHint: 'Смерть от бетоноеда должна читать нерешенную слабую стену, жадный короткий путь или поздний огонь.',
     rumorIds: ['monster_betonoed_weak_wall', 'ecology_betonoed_shortcut'],
     rareDrops: [{ itemId: 'rebar', chance: 0.05 }, { itemId: 'psi_concrete_splinter', chance: 0.025 }],
+  },
+  {
+    kind: MonsterKind.GNOME,
+    role: 'Мелкий бетоноруб и собиратель арматуры, опасный в узких технических туннелях.',
+    cue: 'Скрежет мелкой арматуры по бетону, низкий топот и стук откалываемых камней.',
+    rule: 'Любит узкие технические туннели и глухие коридоры, старается избегать открытых залов; роет у стен.',
+    floorFit: 'Узкие переходы Коллекторов, технические щели Квартир и Жилой зоны.',
+    floors: [FloorLevel.MAINTENANCE, FloorLevel.KVARTIRY, FloorLevel.LIVING],
+    rooms: [RoomType.CORRIDOR, RoomType.STORAGE, RoomType.PRODUCTION],
+    spawnWeight: 1.5,
+    minSamosborCount: 1,
+    rare: false,
+    lootHint: 'мелкие детали, гайки, провода, изолента, арматура',
+    counterplay: 'Не деритесь в узком туннеле: выманите на открытое пространство. Маленький и быстрый — дробовик решает.',
+    deathLogHint: 'Смерть от гнома должна указывать на зажатость в узком туннеле или промах по мелкой цели.',
+    rumorIds: ['ecology_gnome_tunnels'],
+    rareDrops: [{ itemId: 'rebar', chance: 0.08 }, { itemId: 'wire_coil', chance: 0.05 }],
   },
   {
     kind: MonsterKind.ZOMBIE,

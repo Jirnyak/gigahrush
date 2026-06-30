@@ -64,17 +64,39 @@ export function generateSprite(): Uint32Array {
     if (xR + 1 >= 0 && xR + 1 < S) t[y * S + xR + 1] = rgba(75, 65, 55);
   }
 
+  // Sack on back (left side)
+  for (let y = 38; y < 55; y++) {
+    const halfW = 6 + Math.sin(y * 0.5) * 3;
+    for (let x = Math.floor(cx - 10 - halfW); x <= Math.ceil(cx - 4); x++) {
+      if (x < 0 || x >= S) continue;
+      const n = noise(x, y, 9213) * 15;
+      t[y * S + x] = rgba(clamp(50 + n), clamp(40 + n), clamp(30 + n));
+    }
+  }
+
+  // Giant rebar in right hand
+  for (let y = 20; y < 60; y++) {
+    let xR = Math.floor(cx + 8 + (y - 43) * 0.1);
+    if (xR >= 0 && xR < S - 2) {
+      t[y * S + xR] = rgba(100, 100, 100);
+      t[y * S + xR + 1] = rgba(80, 80, 80);
+      t[y * S + xR + 2] = rgba(60, 60, 60);
+    }
+  }
+
   // Legs (running stance/bent)
   for (let y = 55; y < 63; y++) {
     // Left leg
     let xL = Math.floor(cx - 3 - (y - 55) * 0.4);
     if (xL >= 0 && xL < S) t[y * S + xL] = rgba(65, 55, 45);
     if (xL - 1 >= 0 && xL - 1 < S) t[y * S + xL - 1] = rgba(65, 55, 45);
+    if (xL - 2 >= 0 && xL - 2 < S) t[y * S + xL - 2] = rgba(65, 55, 45);
 
     // Right leg
     let xR = Math.floor(cx + 3 + (y - 55) * 0.4);
     if (xR >= 0 && xR < S) t[y * S + xR] = rgba(65, 55, 45);
     if (xR + 1 >= 0 && xR + 1 < S) t[y * S + xR + 1] = rgba(65, 55, 45);
+    if (xR + 2 >= 0 && xR + 2 < S) t[y * S + xR + 2] = rgba(65, 55, 45);
   }
 
   return t;
