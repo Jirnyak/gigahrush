@@ -123,9 +123,9 @@ test('first-party art sprite manifest validates source files and generated pixel
 
     const generated = getGeneratedArtSprite(row.id);
     assert.ok(generated, `${row.id} generated sprite`);
-    assert.equal(generated.length, S * S);
+    assert.equal(generated.length, 128 * 128);
     assert.equal(opaquePixels(generated) > 64, true, `${row.id} should not be blank`);
-    assert.equal(rowHasOpaquePixel(generated, S - 1), true, `${row.id} should be bottom-trimmed before runtime fitting`);
+    assert.equal(rowHasOpaquePixel(generated, 127), true, `${row.id} should be bottom-trimmed before runtime fitting`);
   }
 });
 

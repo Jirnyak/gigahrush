@@ -52,7 +52,7 @@ test('nightmare sprite remains distinct from shadow and spirit silhouettes', () 
   const shadow = generateShadowSprite();
   const spirit = generateSpiritSprite();
 
-  assert.equal(nightmare.length, S * S);
+  assert.equal(nightmare.length, 128 * 128);
   assert.ok(opaquePixels(nightmare) > 400, 'NIGHTMARE sprite should not be blank');
   assert.notEqual(spriteHash(nightmare), spriteHash(shadow), 'NIGHTMARE must not collapse into SHADOW art');
   assert.notEqual(spriteHash(nightmare), spriteHash(spirit), 'NIGHTMARE must not collapse into SPIRIT art');

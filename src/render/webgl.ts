@@ -2336,21 +2336,30 @@ function buildAtlas(gl: WebGL2RenderingContext, textures: TexData[]): WebGLTextu
 }
 
 function createSpriteTexture(gl: WebGL2RenderingContext, spr: SpriteData): WebGLTexture {
-  const pixels = new Uint8Array(ATLAS_TEX_SIZE * ATLAS_TEX_SIZE * 4);
-  for (let i = 0; i < ATLAS_TEX_SIZE * ATLAS_TEX_SIZE; i++) {
-    const c = spr[i];
-    pixels[i * 4 + 0] = c & 0xFF;
-    pixels[i * 4 + 1] = (c >> 8) & 0xFF;
-    pixels[i * 4 + 2] = (c >> 16) & 0xFF;
-    pixels[i * 4 + 3] = (c >>> 24) & 0xFF;
+  const srcSize = Math.sqrt(spr.length) | 0;
+  const targetSize = 128;
+  const pixels = new Uint8Array(targetSize * targetSize * 4);
+
+  for (let y = 0; y < targetSize; y++) {
+    const sy = Math.floor((y / targetSize) * srcSize);
+    for (let x = 0; x < targetSize; x++) {
+      const sx = Math.floor((x / targetSize) * srcSize);
+      const c = spr[sy * srcSize + sx];
+      const idx = (y * targetSize + x) * 4;
+      pixels[idx + 0] = c & 0xFF;
+      pixels[idx + 1] = (c >> 8) & 0xFF;
+      pixels[idx + 2] = (c >> 16) & 0xFF;
+      pixels[idx + 3] = (c >>> 24) & 0xFF;
+    }
   }
+
   const tex = gl.createTexture()!;
   gl.bindTexture(gl.TEXTURE_2D, tex);
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, ATLAS_TEX_SIZE, ATLAS_TEX_SIZE, 0,
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, targetSize, targetSize, 0,
     gl.RGBA, gl.UNSIGNED_BYTE, pixels);
   return tex;
 }

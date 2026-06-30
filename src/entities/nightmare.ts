@@ -5,7 +5,8 @@
 
 import { FloorLevel, MonsterKind } from '../core/types';
 import type { MonsterDef } from './monster';
-import { S, rgba, noise, clamp, CLEAR, outline } from '../render/pixutil';
+import { rgba, noise, clamp, CLEAR, outline } from '../render/pixutil';
+const S = 128;
 
 export const DEF: MonsterDef = {
   kind: MonsterKind.NIGHTMARE,

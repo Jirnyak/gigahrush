@@ -84,8 +84,8 @@ test('nightmare definition, ecology, and sprite generation', () => {
   const sprite1 = generateNightmareSprite(123);
   const sprite2 = generateNightmareSprite(456);
 
-  assert.equal(sprite1.length, S * S);
-  assert.equal(sprite2.length, S * S);
+  assert.equal(sprite1.length, 128 * 128);
+  assert.equal(sprite2.length, 128 * 128);
 
   let opaque1 = 0;
   for (const px of sprite1) {

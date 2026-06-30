@@ -26,16 +26,17 @@ export const CLEAR = rgba(0, 0, 0, 0);
 /** Add a 1px border around non-transparent pixels */
 export function outline(t: Uint32Array, color: number, alphaThreshold = 0) {
   const edges: number[] = [];
-  for (let y = 0; y < S; y++) {
-    for (let x = 0; x < S; x++) {
-      const idx = y * S + x;
+  const size = Math.sqrt(t.length) | 0;
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      const idx = y * size + x;
       const alpha = (t[idx] >>> 24) & 0xff;
       if (alpha <= alphaThreshold) {
         let nearSolid = false;
         if (x > 0 && ((t[idx - 1] >>> 24) & 0xff) > alphaThreshold) nearSolid = true;
-        else if (x < S - 1 && ((t[idx + 1] >>> 24) & 0xff) > alphaThreshold) nearSolid = true;
-        else if (y > 0 && ((t[idx - S] >>> 24) & 0xff) > alphaThreshold) nearSolid = true;
-        else if (y < S - 1 && ((t[idx + S] >>> 24) & 0xff) > alphaThreshold) nearSolid = true;
+        else if (x < size - 1 && ((t[idx + 1] >>> 24) & 0xff) > alphaThreshold) nearSolid = true;
+        else if (y > 0 && ((t[idx - size] >>> 24) & 0xff) > alphaThreshold) nearSolid = true;
+        else if (y < size - 1 && ((t[idx + size] >>> 24) & 0xff) > alphaThreshold) nearSolid = true;
         if (nearSolid) edges.push(idx);
       }
     }

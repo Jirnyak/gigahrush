@@ -361,7 +361,7 @@ export function npcVisualUsesProceduralSprite(id: string | undefined): boolean {
 export function generateNpcVisualSprite(id: string | undefined, ctx: NpcVisualContext): Uint32Array | undefined {
   const family = npcVisualFamily(id);
   const sprite = family?.generate(ctx);
-  return sprite && sprite.length === S * S ? sprite : undefined;
+  return sprite && (sprite.length === S * S || sprite.length === 128 * 128) ? sprite : undefined;
 }
 
 export function npcVisualTextureKey(id: string | undefined, ctx: NpcVisualContext): string | undefined {
