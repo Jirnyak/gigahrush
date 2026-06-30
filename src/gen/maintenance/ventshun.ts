@@ -424,7 +424,7 @@ function decorateVentshunRoom(ctx: MaintContentCtx, room: Room): number[] {
   return vents;
 }
 
-export function generateVentshun(ctx: MaintContentCtx): void {
+function placeVentshunRoom(ctx: MaintContentCtx): Room {
   const pos = findMaintArea(
     ctx.world,
     Math.floor(ctx.spawnX),
@@ -435,7 +435,7 @@ export function generateVentshun(ctx: MaintContentCtx): void {
     190,
   );
 
-  const room = stampMaintRoom(
+  return stampMaintRoom(
     ctx.world,
     ctx.world.rooms.length,
     RoomType.CORRIDOR,
@@ -447,8 +447,9 @@ export function generateVentshun(ctx: MaintContentCtx): void {
     Tex.PIPE,
     Tex.F_CONCRETE,
   );
-  const ventCells = decorateVentshunRoom(ctx, room);
+}
 
+function placeVentshunContainers(ctx: MaintContentCtx, room: Room): { valveContainerId: number; rewardContainerId: number } {
   const valveContainerId = addVentshunContainer(
     ctx,
     room,
@@ -480,10 +481,21 @@ export function generateVentshun(ctx: MaintContentCtx): void {
     [TAG_REWARD, 'trace', 'loot'],
   );
 
+  return { valveContainerId, rewardContainerId };
+}
+
+function registerVentshunCueAndContext(
+  ctx: MaintContentCtx,
+  room: Room,
+  valveContainerId: number,
+  rewardContainerId: number,
+  ventCells: number[]
+): void {
   const warningX = room.x + 4.5;
   const warningY = room.y + room.h - 4.5;
   const targetX = room.x + 11.5;
   const targetY = room.y + 3.5;
+
   registerRouteCue(ctx.world, {
     id: CUE_ID,
     x: warningX,
@@ -525,4 +537,11 @@ export function generateVentshun(ctx: MaintContentCtx): void {
     sealed: false,
     cleared: false,
   });
+}
+
+export function generateVentshun(ctx: MaintContentCtx): void {
+  const room = placeVentshunRoom(ctx);
+  const ventCells = decorateVentshunRoom(ctx, room);
+  const { valveContainerId, rewardContainerId } = placeVentshunContainers(ctx, room);
+  registerVentshunCueAndContext(ctx, room, valveContainerId, rewardContainerId, ventCells);
 }
