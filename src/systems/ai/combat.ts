@@ -82,7 +82,7 @@ export function tryFleeFromMonster(
   const isCombatant = npcIsBrave(e);
   if (isCombatant) return false;
 
-  const ws = WEAPON_STATS[npcCombatItemId(e)];
+  const ws = getWeaponStats(e, npcCombatItemId(e));
   if (ws && (ws.dmg > 3 || ws.isRanged)) return false;
 
   const ai = e.ai!;
@@ -220,14 +220,14 @@ function npcCombatItemScore(e: Entity, itemId: string | undefined): number {
 function npcCombatItemId(e: Entity): string {
   const weaponId = e.weapon ?? '';
   const toolId = e.tool ?? '';
-  const toolWs = WEAPON_STATS[toolId];
+  const toolWs = getWeaponStats(e, toolId);
   const toolScore = toolWs?.psiCost ? npcCombatItemScore(e, toolId) : 0;
   const weaponScore = npcCombatItemScore(e, weaponId);
   return toolScore > weaponScore ? toolId : weaponId;
 }
 
 function npcThreatScore(e: Entity): number {
-  const ws = WEAPON_STATS[npcCombatItemId(e)] ?? WEAPON_STATS[''];
+  const ws = getWeaponStats(e, npcCombatItemId(e));
   const weapon = ws.isRanged ? ws.dmg * (ws.pellets ?? 1) * 1.6 : ws.dmg;
   const hp = Math.max(0, e.hp ?? 20) * 0.22;
   const level = Math.max(1, e.rpg?.level ?? 1) * 3;
@@ -681,7 +681,7 @@ function npcFireProjectile(
 function npcAutoEquipBestWeapon(e: Entity): void {
   if (!e.inventory) {
     e.weapon = '';
-    if (WEAPON_STATS[e.tool ?? '']?.psiCost) e.tool = '';
+    if (getWeaponStats(e, e.tool ?? '')?.psiCost) e.tool = '';
     return;
   }
   let bestWeaponScore = 0;
@@ -709,5 +709,5 @@ function npcAutoEquipBestWeapon(e: Entity): void {
   }
   e.weapon = bestWeaponId;
   if (bestPsiId) e.tool = bestPsiId;
-  else if (WEAPON_STATS[e.tool ?? '']?.psiCost) e.tool = '';
+  else if (getWeaponStats(e, e.tool ?? '')?.psiCost) e.tool = '';
 }
