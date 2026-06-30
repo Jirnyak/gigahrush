@@ -311,6 +311,7 @@ import {
   invalidateFloorMemory,
   restoreFloorMemoryFromSave,
   takeFloorMemory,
+  hasFloorMemory,
   type FloorLiftAnchor,
   type FloorMemoryLoad,
   type FloorRouteLiftMirror,
@@ -501,7 +502,7 @@ import {
   savePlatformRawGameSave,
 } from './systems/platform_bridge';
 import { addFactionRel, addFactionRelMutual, initFactionRelations } from './data/relations';
-import { createRuntimeCamera, resetRuntimeCamera, runtimeCameraView, startDeathCamera, updateRuntimeCamera, startTrailerCamera, updateTrailerCamera } from './systems/camera';
+import { createRuntimeCamera, resetRuntimeCamera, runtimeCameraView, startDeathCamera, updateRuntimeCamera, startTrailerCamera, updateTrailerCamera, startCinematicCamera } from './systems/camera';
 import { onHeraldKilled, onCreatorKilled, onHellArrival, tryCreateVoiceQuest, onVoidEntry } from './data/plot_events';
 import { randomTip } from './data/tips';
 import {
@@ -4163,6 +4164,32 @@ function switchFloor(
 
     // Update WebGL world data after floor change
     finishLoadedFloorVisuals(gen);
+
+    // Auto-trigger cinematic scenes on specific key floors
+    if (!hasFloorMemory(currentFloorMemoryKey())) {
+      const isCinematicFloor =
+        nextFloor === FloorLevel.LIVING ||
+        nextFloor === FloorLevel.HELL ||
+        nextFloor === FloorLevel.VOID ||
+        (generatedRunEntry?.designFloorId as string) === 'liquidatorbase' ||
+        (generatedRunEntry?.designFloorId as string) === 'horrorfloor' ||
+        (generatedRunEntry?.designFloorId as string) === 'cave_floor' ||
+        (generatedRunEntry?.spec?.key && (
+          generatedRunEntry.spec.key.includes('liquidatorbase') ||
+          generatedRunEntry.spec.key.includes('horrorfloor') ||
+          generatedRunEntry.spec.key.includes('cave_floor')
+        ));
+
+      if (isCinematicFloor && !activeFloorInstance && !route.activeInstance) {
+        // Preset waypoints (simple flight path from player's starting position)
+        const waypoints = [
+          [player.x, player.y],
+          [player.x + Math.cos(player.angle) * 4, player.y + Math.sin(player.angle) * 4],
+          [player.x + Math.cos(player.angle + Math.PI / 4) * 8, player.y + Math.sin(player.angle + Math.PI / 4) * 8]
+        ];
+        startCinematicCamera(runtimeCamera, player.x, player.y, waypoints);
+      }
+    }
   });
 }
 
@@ -8206,6 +8233,13 @@ function gameLoop(now: number): void {
       updateTrailerCamera(runtimeCamera, world, dt);
     } else {
       updateRuntimeCamera(runtimeCamera, world, dt, player);
+    }
+
+    // Skip cinematic mode if any key is pressed
+    if (runtimeCamera.mode === 'cinematic') {
+      if (input.fwd || input.back || input.left || input.right || input.attack || input.use || input.interact || input.escape) {
+        runtimeCamera.mode = 'player';
+      }
     }
   }
   checkRestart();
