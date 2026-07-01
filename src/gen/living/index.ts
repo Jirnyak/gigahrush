@@ -54,7 +54,7 @@ export function generateWorld(_seed?: number, isTutorial: boolean = false): { wo
 
   /* ── A1: Start room (briefing hall) ─────────────── */
   const tutorRoomStartIndex = world.rooms.length;
-  const startRoom = generateTutorRoom(world, world.rooms.length, entities, { v: nextId });
+  const startRoom = generateTutorRoom(world, world.rooms.length, entities, { v: nextId }, isTutorial);
   nextId = entities.reduce((mx, e) => Math.max(mx, e.id), nextId) + 1;
 
   /* ── A1b: Yakov's lab (at distance from spawn) ──── */

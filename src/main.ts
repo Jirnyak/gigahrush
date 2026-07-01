@@ -3818,7 +3818,7 @@ function currentRouteLocalSamosborPatchGeneration(patchSeed: number): FloorGener
 
 function currentLocalSamosborPatchGeneration(): FloorGeneration {
   const patchSeed = currentSamosborPatchSeed();
-  return currentRouteLocalSamosborPatchGeneration(patchSeed) ?? generateFloor(state.currentFloor, patchSeed);
+  return currentRouteLocalSamosborPatchGeneration(patchSeed) ?? generateFloor(state.currentFloor, patchSeed, state.tutorialMode);
 }
 
 function scheduleLocalSamosborPatch(fn: () => void): void {
@@ -3901,7 +3901,7 @@ function generateFloorForTargetInner(floor: FloorLevel, entry: FloorRunEntry | n
   if (entry?.spec) return generateProceduralFloor(entry.spec);
   const runSeed = ensureFloorRunState(state).runSeed;
   if (entry?.designFloorId) return generateDesignFloor(entry.designFloorId, runSeed);
-  return generateFloor(floor, runSeed);
+  return generateFloor(floor, runSeed, state.tutorialMode);
 }
 
 function floorMemoryGenerationExtrasForKey(key: string): Record<string, unknown> | undefined {
@@ -8043,7 +8043,7 @@ function gameLoop(now: number): void {
         clearWrongDoorRemaps(world, state, 'world_rebuild');
         clearPseudoliftActive(state, entities);
         const replacement = currentRouteRebuildGeneration();
-        rebuildWorld(world, entities, nextEntityId, state.samosborCount, state.currentFloor, replacement);
+        rebuildWorld(world, entities, nextEntityId, state.samosborCount, state.currentFloor, replacement, state.tutorialMode);
         initFactionControl(world);
         materializeCurrentAlifeFloor();
         ensureProceduralSpriteSeeds(entities);
@@ -8232,7 +8232,7 @@ function gameLoop(now: number): void {
         clearWrongDoorRemaps(world, state, 'world_rebuild');
         clearPseudoliftActive(state, entities);
         const replacement = currentRouteRebuildGeneration();
-        rebuildWorld(world, entities, nextEntityId, state.samosborCount, state.currentFloor, replacement);
+        rebuildWorld(world, entities, nextEntityId, state.samosborCount, state.currentFloor, replacement, state.tutorialMode);
         initFactionControl(world);
         materializeCurrentAlifeFloor();
         ensureProceduralSpriteSeeds(entities);

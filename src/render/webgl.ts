@@ -231,6 +231,22 @@ const int ATLAS_COLS_I = ${ATLAS_COLS};
 const float PI = 3.14159265;
 
 /* ── Helpers ──────────────────────────────────────────────────── */
+
+/* --- TONEMAPPING INJECTION --- */
+vec3 ACESFilm(vec3 x) {
+    if (uLightQuality < 2) return clamp(x, 0.0, 1.0); // fallback
+    
+    x = pow(max(x, 0.0), vec3(1.1)); // легкая цветокоррекция перед ACES
+    
+    float a = 2.51;
+    float b = 0.03;
+    float c = 2.43;
+    float d = 0.59;
+    float e = 0.14;
+    return clamp((x * (a * x + b)) / (x * (c * x + d) + e), 0.0, 1.0);
+}
+/* ----------------------------- */
+
 int wrapI(int v) {
   return ((v % W_SIZE) + W_SIZE) % W_SIZE;
 }
@@ -454,6 +470,69 @@ vec3 materialResponse(uint texId, vec3 base, int tx, int ty, ivec2 cell, float l
   return clamp(color, 0.0, 1.0);
 }
 
+/* --- NORMAL MAP INJECTION --- */
+vec2 perturbNormal(vec2 baseNormal, vec3 texColor, float strength) {
+    if (uLightQuality < 3) return baseNormal;
+    
+    // Вычисляем "высоту" на основе яркости текстуры
+    float height = dot(texColor, vec3(0.299, 0.587, 0.114));
+    
+    // Используем аппаратные производные (стандартно для WebGL2 / ES 3.0)
+    float dHx = dFdx(height);
+    float dHy = dFdy(height);
+    
+    // Формируем сдвиг нормали
+    vec2 bump = vec2(-dHx, -dHy) * strength;
+    
+    // Смешиваем с базовой нормалью (считая, что она в пространстве экрана/мира)
+    return normalize(baseNormal + bump);
+}
+/* ---------------------------- */
+
+/* --- AO INJECTION START --- */
+float computeVoxelAO(ivec2 cell, vec2 normal, highp usampler2D cellMap) {
+    if (uLightQuality < 3) return 1.0;
+    
+    vec2 tangent = vec2(-normal.y, normal.x);
+    ivec2 t1 = ivec2(tangent);
+    ivec2 t2 = ivec2(-tangent);
+    
+    ivec2 checkPos1 = cell - ivec2(normal) + t1;
+    ivec2 checkPos2 = cell - ivec2(normal) + t2;
+    
+    uint c1 = texelFetch(cellMap, checkPos1, 0).r;
+    uint c2 = texelFetch(cellMap, checkPos2, 0).r;
+    
+    float ao = 1.0;
+    bool isSolid1 = (c1 != 0u && c1 != ${Cell.ABYSS}u && c1 != ${Cell.WATER}u);
+    bool isSolid2 = (c2 != 0u && c2 != ${Cell.ABYSS}u && c2 != ${Cell.WATER}u);
+    
+    if (isSolid1) ao -= 0.35;
+    if (isSolid2) ao -= 0.35;
+    
+    return max(0.3, ao);
+}
+
+float computeFloorAO(ivec2 cell, vec2 worldPos, highp usampler2D cellMap) {
+    if (uLightQuality < 3) return 1.0;
+    
+    vec2 localPos = fract(worldPos);
+    float ao = 1.0;
+    
+    uint nN = texelFetch(cellMap, cell + ivec2(0, -1), 0).r;
+    uint nS = texelFetch(cellMap, cell + ivec2(0, 1), 0).r;
+    uint nE = texelFetch(cellMap, cell + ivec2(1, 0), 0).r;
+    uint nW = texelFetch(cellMap, cell + ivec2(-1, 0), 0).r;
+    
+    if (nN != 0u && nN != ${Cell.ABYSS}u) { if (localPos.y < 0.2) ao -= (0.2 - localPos.y) * 2.0; }
+    if (nS != 0u && nS != ${Cell.ABYSS}u) { if (localPos.y > 0.8) ao -= (localPos.y - 0.8) * 2.0; }
+    if (nW != 0u && nW != ${Cell.ABYSS}u) { if (localPos.x < 0.2) ao -= (0.2 - localPos.x) * 2.0; }
+    if (nE != 0u && nE != ${Cell.ABYSS}u) { if (localPos.x > 0.8) ao -= (localPos.x - 0.8) * 2.0; }
+    
+    return max(0.4, ao);
+}
+/* --- AO INJECTION END --- */
+
 // Render-only shine layer: hard directional diffuse shaping + specular glints
 // driven by the player's light, plus a soft bump from the baked-light gradient.
 // Sits on top of materialResponse and is gated by the lighting quality setting.
@@ -500,7 +579,7 @@ vec3 applyLightFX(vec3 color, uint texId, float ndl, float drive, vec2 grad, flo
     color *= 1.0 + bump * 0.18;
   }
 
-  return clamp(color, 0.0, 1.0);
+  return uLightQuality >= 3 ? color : clamp(color, 0.0, 1.0);
 }
 
 float flashlightBoost(float dist) {
@@ -1002,6 +1081,23 @@ vec3 applyWallMicroDetail(vec3 base, uint texId, ivec2 cell, int tx, int ty) {
   return color;
 }
 
+/* --- VOLUMETRIC INJECTION --- */
+vec3 computeVolumetricGodRays(float rayDist, vec3 baseColor, vec2 rayDir) {
+    if (uLightQuality < 3) return baseColor;
+    
+    // Фонарик светит вперед. Наш текущий луч: rayDir.
+    // Чем ближе луч к центру экрана и чем больше дистанция, тем больше "пыли" он просвечивает.
+    float centerDot = dot(normalize(rayDir), normalize(vec2(cos(uAngle), sin(uAngle))));
+    float shaft = max(0.0, centerDot);
+    shaft = pow(shaft, 12.0); // Узкий луч фонарика
+    
+    // Интегрируем по длине (чем дальше стена, тем больше пыли просвечено)
+    float volIntensity = shaft * rayDist * 0.05 * uFlashlight;
+    vec3 dustColor = vec3(0.9, 0.95, 1.0);
+    return baseColor + dustColor * volIntensity;
+}
+/* ---------------------------- */
+
 vec3 applyLightDust(vec3 base, vec2 fragCoord, float dist, float rayDX, float rayDY, float fogF) {
   float density = clamp(uDetailLightDust.y, 0.0, 1.0);
   if (density <= 0.0) return base;
@@ -1204,6 +1300,17 @@ void main() {
       // Wall face normal (XY, pointing back toward the viewer) for directional light.
       vec2 wN = side == 0 ? vec2(rayDX < 0.0 ? 1.0 : -1.0, 0.0)
                           : vec2(0.0, rayDY < 0.0 ? 1.0 : -1.0);
+
+      /* --- NORMAL MAP INJECTION --- */
+      float bumpStrength = 15.0;
+      if (wallTexId == ${Tex.F_WATER}u) { bumpStrength = 0.5; }
+      else if (wallTexId == ${Tex.TILE_W}u || wallTexId == ${Tex.METAL}u || wallTexId == ${Tex.PIPE}u ||
+               wallTexId == ${Tex.F_TILE}u || wallTexId == ${Tex.F_MARBLE_TILE}u || wallTexId == ${Tex.MARBLE}u) { bumpStrength = 3.0; }
+      else if (wallTexId == ${Tex.CONCRETE}u || wallTexId == ${Tex.BRICK}u) { bumpStrength = 25.0; }
+      bumpStrength *= max(0.0, 1.0 - dist / 15.0);
+      wN = perturbNormal(wN, c, bumpStrength);
+      /* ---------------------------- */
+
       float ndlWall = max(dot(wN, normalize(-vec2(rayDX, rayDY))), 0.0);
       float driveWall = clamp(fbWall + toolBeam + eyeLight(dist), 0.0, 1.0);
       c = applyLightFX(c, wallTexId, ndlWall, driveWall, lgradWall, 1.0);
@@ -1253,10 +1360,36 @@ void main() {
             fc = shadePlane(floorTexId, fc, fCell, ftx, fty, currentDist, fLit, toolBeam, false, true);
             float driveFloor = clamp(fbFloor + toolBeam + eyeLight(currentDist), 0.0, 1.0);
             fc = applyLightFX(fc, floorTexId, 0.0, driveFloor, lgradFloor, 0.0);
+            fc *= computeFloorAO(fCell, vec2(floorX, floorY), uCells);
 
             vec3 fPos = vec3(floorX, floorY, 0.0);
             vec3 dynFloor = calculateDynamicLighting(fPos, vec3(0.0, 0.0, 1.0));
             fc = min(vec3(1.0), fc + fc * dynFloor);
+
+            /* --- REFLECTIONS INJECTION --- */
+            if (uLightQuality >= 3 && fCellType == ${Cell.WATER}u) {
+              if (hit) {
+                float reflectFactor = 0.4 * clamp(1.0 - (currentDist / MAX_DIST), 0.0, 1.0);
+                int rXi = texXi; 
+                float wallYProj = (float(HALF_H) - rowDist - rawDrawStart) / lineH;
+                int rYi = int(fract(wallYProj) * float(TEX_I));
+                
+                if (wallYProj >= 0.0 && wallYProj <= 1.0) {
+                  vec3 reflectColor = sampleAtlas(wallTexId, rXi, rYi).rgb;
+                  float refBaseLitWall;
+                  ivec2 hitCell = ivec2(wrapI(mapX), wrapI(mapY));
+                  if (uLightQuality > 0) {
+                    vec3 ls = sampleLightSmooth(uPos + vec2(rayDX, rayDY) * dist);
+                    refBaseLitWall = ls.x;
+                  } else {
+                    refBaseLitWall = sampleLight(hitCell);
+                  }
+                  reflectColor *= refBaseLitWall; 
+                  fc = mix(fc, reflectColor, reflectFactor);
+                }
+              }
+            }
+            /* ----------------------------- */
 
             pixel = applyLocalFog(fc, fCell, ff);
             pixelDepth = min(1.0, currentDist / MAX_DIST);
@@ -1391,7 +1524,12 @@ void main() {
       }
   }
 
+  // Точечное внедрение Volumetric God Rays
+  pixel = computeVolumetricGodRays(pixelDepth * MAX_DIST, pixel, vec2(rayDX, rayDY));
   pixel = applyLightDust(pixel, fragCoord, pixelDepth * MAX_DIST, rayDX, rayDY, distanceFog(pixelDepth * MAX_DIST));
+
+  // ТОЧКА ВНЕДРЕНИЯ
+  pixel = ACESFilm(pixel);
 
   // Encode depth into alpha for CPU readback (sprite clipping)
   float normDist = dist / MAX_DIST;

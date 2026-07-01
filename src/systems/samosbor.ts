@@ -2543,7 +2543,7 @@ export function updateSamosbor(
     const touched = new Set(frontTouchedCells);
     frontTouchedCells.clear();
     const doStitch = (): void => {
-      const replacement = replacementProvider?.() ?? generateFloor(stitchFloor, ensureFloorRunState(state).runSeed);
+      const replacement = replacementProvider?.() ?? generateFloor(stitchFloor, ensureFloorRunState(state).runSeed, state.tutorialMode);
       applyFrontFieldStitch(world, state, touched, replacement);
       applyPendingSamosborAftermathAfterWave(world, entities, nextId, stitchFloor);
     };
@@ -2664,6 +2664,7 @@ export function rebuildWorld(
   world: World, entities: Entity[], nextId: { v: number }, _samosborCount: number,
   floor: FloorLevel = FloorLevel.LIVING,
   replacement?: FloorGeneration,
+  isTutorial?: boolean,
 ): void {
   clearHermodoorBorerForRebuild(world);
   if (replacement || floor !== FloorLevel.LIVING) {
@@ -2676,7 +2677,7 @@ export function rebuildWorld(
       }
     }
     entities.length = 0;
-    const gen = replacement ?? generateFloor(floor);
+    const gen = replacement ?? generateFloor(floor, undefined, isTutorial);
     const previousFog = world.fog.slice();
     // Full-floor rebuilds use the fresh generator-owned masks exactly:
     // authored shelters may keep aptMask/hermoWall, while unmarked volatile cells lose stale protection.

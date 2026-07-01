@@ -69,7 +69,7 @@ function addStarterLocker(world: World, room: Room, x: number, y: number): World
   return container;
 }
 
-export function generateTutorRoom(world: World, nextRoomId: number, entities: Entity[], nextId: { v: number }): { room: Room, spawnX: number, spawnY: number, nextRoomId: number } {
+export function generateTutorRoom(world: World, nextRoomId: number, entities: Entity[], nextId: { v: number }, isTutorial: boolean = false): { room: Room, spawnX: number, spawnY: number, nextRoomId: number } {
 
   /* ================================================================
    *  A. Актовый зал (briefing hall) — existing tutorial room
@@ -167,7 +167,9 @@ export function generateTutorRoom(world: World, nextRoomId: number, entities: En
   protectRoom(world, cafeX, cafeY, cafeW, cafeH, Tex.TILE_W, Tex.F_LINO);
   protectTutorialWallsAsHermetic(world, cafeX, cafeY, cafeW, cafeH);
   
-  world.features[world.idx(cafeX + 1, cafeY + 1)] = Feature.SINK;
+  if (isTutorial) {
+    world.features[world.idx(cafeX + 1, cafeY + 1)] = Feature.SINK;
+  }
 
   // Door to cafeteria starts locked. Move it to the side so it doesn't overlap the slide.
   const hallCafeDoor = world.idx(hallX + Math.floor(hallW / 2) - 2, hallY - 1);
@@ -219,16 +221,18 @@ export function generateTutorRoom(world: World, nextRoomId: number, entities: En
   world.aptMask[world.idx(cafeX - 1, cafeY + Math.floor(bathH / 2) + 1)] = 1;
 
   world.features[world.idx(bathX + Math.floor(bathW / 2), bathY + bathH - 2)] = Feature.TOILET;
-  entities.push({
-    id: nextId.v++,
-    type: EntityType.ITEM_DROP,
-    x: bathX + Math.floor(bathW / 2) + 0.5,
-    y: bathY + Math.floor(bathH / 2) + 0.5,
-    angle: 0, pitch: 0,
-    alive: true, speed: 0,
-    sprite: Spr.ITEM_DROP, spriteScale: 1.0,
-    inventory: [{ defId: 'tut_cafe_key', count: 1 }],
-  });
+  if (isTutorial) {
+    entities.push({
+      id: nextId.v++,
+      type: EntityType.ITEM_DROP,
+      x: bathX + Math.floor(bathW / 2) + 0.5,
+      y: bathY + Math.floor(bathH / 2) + 0.5,
+      angle: 0, pitch: 0,
+      alive: true, speed: 0,
+      sprite: Spr.ITEM_DROP, spriteScale: 1.0,
+      inventory: [{ defId: 'tut_cafe_key', count: 1 }],
+    });
+  }
 
   /* ================================================================
    *  B. Оружейная / Стрельбище (armory + shooting range)
@@ -321,8 +325,8 @@ export function generateTutorRoom(world: World, nextRoomId: number, entities: En
   }
 
   // ── Player spawn ──
-  const spawnX = cafeX + Math.floor(cafeW / 2) + 0.5;
-  const spawnY = cafeY + Math.floor(cafeH / 2) + 0.5;
+  const spawnX = isTutorial ? cafeX + Math.floor(cafeW / 2) + 0.5 : hallX + Math.floor(hallW / 2) + 0.5;
+  const spawnY = isTutorial ? cafeY + Math.floor(cafeH / 2) + 0.5 : hallY + hallH - 2 + 0.5;
 
   return { room, spawnX, spawnY, nextRoomId };
 }

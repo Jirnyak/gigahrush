@@ -142,12 +142,15 @@ Lighting:
 - Light is stored in `world.light`, uploaded through `lightVersion`, and sampled
   by the ray shader.
 - Organic cells pulse light through `organicLightPulse()`.
+- **ACES Filmic Tonemapping**: The raycaster applies an ACES curve at the end of the pipeline. This replaces hard clamping and allows high-intensity HDR light sources (`uLightQuality >= 3`) to create bright, natural roll-offs without color blowout, enhancing contrast in dark areas. A slight base gamma boost (`pow(x, 1.1)`) precedes the ACES curve to preserve shadow visibility.
+- **Normal Mapping & Relief**: The shader calculates perturbed normal vectors dynamically based on the texture's luma (brightness) using hardware derivatives when `uLightQuality >= 3`. This derivative normal mapping creates micro-relief that responds to directional light, making surfaces like concrete, rust, and brick visually tactile without requiring separate normal maps.
 
 Dynamic entity drop shadows and reflections:
 
 - NPC and monster entities cast true 3D-projected dynamic drop shadows from nearby light sources (flashlight, lamps, candles) and full silhouette reflections on glossy floors (water, tile, marble).
 - The reflection uses the sprite texture rendered at the entity's foot position as a dark semi-transparent overlay, colored with a dark blueish tint and fading out toward the top. It uses the exact same `raycasterRow` floor-depth projection as the raycaster, creating a perfect perspective-correct reflection that clips correctly against walls.
 - The dynamic drop shadow is rendered via `uIsShadow == 3`, projecting the sprite's inverted silhouette onto the floor grid, syncing perfectly with the raycaster's Z-buffer to lay flat on the floor and occlude behind walls. Legacy procedural blob shadows have been completely removed.
+- **Raytraced Floor Reflections**: For water floors (`Tex.F_WATER`), raytraced wall reflections are computed natively in the DDA floor pass when graphics quality is high (`uLightQuality >= 3`). The shader projects the wall's texture by vertically mirroring its Y coordinate downwards based on distance and seamlessly blends it with the floor color, capturing the wall's local lighting and applying a distance-based fade.
 - Shadows are cast away from the closest unoccluded dynamic light source. `webgl.ts` collects up to 8 nearby stationary lights per frame and uploads them to the GPU.
 - Both shadows and reflections use `depthMask(false)` — they darken the floor but don't write depth, so the entity sprite drawn afterward still passes depth test normally.
 - Shadow fog fadeout: `alpha * (1 - fogFactor * 0.85)`.
