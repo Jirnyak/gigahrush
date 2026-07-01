@@ -12,25 +12,101 @@
 7. **Обязательный коммит и PR:** Обязательно делайте `git commit` ваших изменений и создавайте Pull Request (или делайте пуш) после завершения работы.
 
 ## Текущая задача
-**ИИ: Монстры выламывают двери. Научить ИИ наносить урон дверям вместо их элегантного открытия.**
+**Система компаньонов. Рекрутинг НПЦ через высокое отношение. Компаньон ходит за игроком.**
 
 
 
 ### Контекст задачи
-Монстры должны выламывать двери ударами, а не открывать их ручкой.
+НОВАЯ СИСТЕМА. При отношении НПЦ к игроку **выше 100** (из шкалы -100..+200), появляется E-interaction опция «Присоединяйся ко мне». Шанс успеха зависит от **интеллекта** игрока: `chance = 0.3 + intelligence * 0.05` (при INT 10 = 80%). При успехе НПЦ становится КОМПАНЬОНОМ:
+
+1. **Следование**: Компаньон ходит за игроком (follow behavior, dist 2-4 клетки). При бое — помогает стрелять.
+2. **Фракция**: Временно меняется на `Faction.PLAYER` (или аналог). Все entity видят его как союзника игрока.
+3. **Старая фракция сохраняется**: В entity сохраняется `originalFaction`. При dismiss — возвращается к своей фракции.
+4. **Dismiss**: Через E-interaction → «Расстаёмся» → НПЦ возвращает `originalFaction`, уходит.
+5. **Лимит**: Максимум 1-2 компаньона одновременно (для баланса и производительности).
+6. **Смерть**: Если компаньон погибает — факт записывается в A-Life (`deathCause: 'companion'`). Отношение с его фракцией падает.
 
 ### Конкретные файлы и паттерны
-- **`src/systems/ai/monster.ts`**: Текущее поведение: монстр подходит к двери → открывает. Измените: если `entity.type === EntityType.MONSTER` — вместо `openDoor()` вызывайте `damageDoor(door, entity.dmg)`.
-- **`src/systems/ai/pathfinding.ts`**: Navigation tree считает closed doors проходимыми. Это правильно — монстры могут их сломать, но это займёт время.
-- **Анимация**: При ударе по двери — эффект через `publishEvent('door_hit')`, звук удара.
-- **Prочность дверей** (из marx_38): `door.hp` уменьшается за каждый удар на `entity.dmg`.
-- **НПЦ**: Обычные НПЦ (`EntityType.NPC`) продолжают открывать двери нормально.
+- **`src/systems/companion.ts`** [НОВЫЙ]: State machine компаньона. `CompanionState { entityId, originalFaction, followTarget }`. Follow logic: pathfind к игроку если dist > 4, idle если dist < 2.
+- **`src/systems/interactions.ts`**: Добавить E-action `'recruit_companion'` с условием `relation > 100 && companionCount < MAX_COMPANIONS`. И `'dismiss_companion'` для расставания.
+- **`src/systems/ai/npc_utility.ts`**: Для entity с `isCompanion = true` — override utility: follow player > все остальные goals. В бою — таргетить врагов игрока.
+- **`src/core/types.ts`**: Добавить `isCompanion: boolean`, `originalFaction: Faction` в entity (RED — минимально).
+- **`src/systems/alife.ts`**: При floor transition — компаньон переходит с игроком (не остаётся на старом этаже).
+- **Save**: `companionIds`, `originalFaction` сохраняются. При load — восстановить companion state.
+- **AI Combat**: Компаньон стреляет по врагам игрока, но учитывает friendly fire (marx_51). Если игрок ранил компаньона — small relation penalty но не dismissal.
 
 ### Детальная спецификация по Архитектуре и Реализации (Строго обязательно к исполнению)
 Вам необходимо детально интегрировать вашу задачу в существующие слои проекта. Ниже приведены конкретные архитектурные требования, релевантные вашей задаче:
 
 #### 🛠 Общие Архитектурные Рекомендации
 Ваша задача базовая, но не забывайте о разделении: логика строго в `systems/`, данные строго в `data/`, стейт сохраняемый. Никакого хардкода.
+
+
+### TypeScript Stubs / Интерфейсы (Заглушки)
+
+```typescript
+// src/core/types.ts (Модификация базовой Entity)
+export interface Entity {
+  // ...
+  isCompanion?: boolean;
+  originalFaction?: Faction;
+}
+
+// src/systems/companion.ts (Новый модуль)
+export interface CompanionState {
+  entityId: number;
+  followTargetId: number;
+  distanceThreshold: number; // e.g. 3
+}
+
+export const activeCompanions: CompanionState[] = [];
+
+export function tryRecruitCompanion(npcId: number, playerId: number, playerInt: number): boolean {
+  // Проверка relation > 100 и бросок кубика
+  return success;
+}
+
+export function dismissCompanion(npcId: number): void {
+  // Возврат фракции и удаление из activeCompanions
+}
+
+// src/systems/ai/npc_utility.ts (Интеграция утилиты следования)
+export function evaluateFollowUtility(entity: Entity, companionState: CompanionState): number {
+  const dist = getDistance(entity, companionState.followTargetId);
+  if (dist > companionState.distanceThreshold) return 500; // Высокий приоритет двигаться к игроку
+  return 0; // Иначе свободен делать другие вещи (например стрелять)
+}
+```
+
+### Детальный Пошаговый План Реализации (Workflow)
+
+#### Шаг 1: Подготовка типов (src/core/types.ts)
+- Добавьте флаги `isCompanion` и `originalFaction` в базовую структуру Entity. Эти поля необходимы для возврата к оригинальному состоянию после увольнения.
+
+#### Шаг 2: Модуль управления компаньонами (src/systems/companion.ts)
+- Создайте новый стейт-менеджер `companion.ts`.
+- Реализуйте функции найма (`tryRecruitCompanion`) с формулой: `chance = 0.3 + (INT * 0.05)`.
+- Реализуйте увольнение (`dismissCompanion`), которое восстанавливает `originalFaction`.
+- Установите жесткий лимит на количество компаньонов (константа `MAX_COMPANIONS = 2`).
+
+#### Шаг 3: Взаимодействие (src/systems/interactions.ts)
+- Добавьте опции диалога / E-actions: "Присоединяйся" (появляется только если отношение > 100).
+- Добавьте "Расстаемся" для активных компаньонов.
+
+#### Шаг 4: ИИ и Следование (src/systems/ai/npc_utility.ts)
+- Добавьте новую Utility Goal — `FOLLOW_TARGET`.
+- Если дистанция до игрока > 4, НПЦ бросает всё и бежит за игроком. Если < 2, НПЦ ждет.
+- В бою: скопируйте `combatTargetId` игрока, если компаньон свободен от ближнего боя.
+
+#### Шаг 5: Переход между этажами (src/systems/alife.ts)
+- Интегрируйтесь с системой A-Life и генерацией этажей. Когда игрок нажимает на лифт (`floor transition`), сущности с флагом `isCompanion` должны дематериализоваться и материализоваться на новом этаже рядом с игроком. Они не остаются в оффлайн-пуле старого этажа.
+
+#### Шаг 6: Сохранение и Смерть
+- При смерти компаньона (`deathCause: 'companion'`), применяйте relation penalty к его оригинальной фракции.
+- Убедитесь, что массив компаньонов корректно сериализуется в `save_runtime.ts`.
+
+#### Шаг 7: Тесты
+- Протестируйте найм, увольнение и смену этажа. Запустите `npm run check`.
 
 ## Ваши шаги:
 1. Прочитать соответствующие файлы (AGENTS.md, README.md, и исходники).

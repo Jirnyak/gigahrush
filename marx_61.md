@@ -12,34 +12,123 @@
 7. **Обязательный коммит и PR:** Обязательно делайте `git commit` ваших изменений и создавайте Pull Request (или делайте пуш) после завершения работы.
 
 ## Текущая задача
-**ИИ: Микро-цели НПЦ. Больше интересных взаимодействий и общения.**
+**Рендер: Эффекты Истотита/Веретара. Пересмотр, отключение вырвиглазных полноэкранных фильтров.**
 
 
 
 ### Контекст задачи
-Расширить спектр бытовых микро-целей НПЦ: общение, обмен сплетнями, игра в карты, починка оборудования, приготовление еды. Это то, что делает мир ЖИВЫМ. НПЦ должны заниматься КОНКРЕТНЫМ делом когда не в бою: сидеть за столом, стоять у плиты, разговаривать парами (speech bubble через marx_82), чинить станок. Каждая micro-goal = визуально читаемое действие (анимация/позиция entity). Не абстрактный state machine, а visible behavior.
+Ревью спецэффектов (Истотит, Веретар) — убрать вырвиглазные полноэкранные фильтры.
 
 ### Конкретные файлы и паттерны
-- **`src/systems/ai/npc_utility.ts`**: Добавьте intents: `'socialize'` (подойти к другому НПЦ и поболтать), `'play_cards'` (если оба несут `dice_bone` / `domino_box`).
-- **`src/systems/markov_text.ts`**: Генерация диалогов для социализации. Используйте существующие корпуса.
-- **`src/render/hud.ts`**: Показывать bubble-текст над общающимися НПЦ (координация с marx_82 — баблы).
-- **Timing**: Социальные intents — `NpcState.FREE_TIME`, низкий приоритет, стохастический выбор.
+- **`src/render/webgl.ts`**: Найдите screen effects: glitch, scan lines, chromatic aberration. README: «Do not degrade the baseline WebGL image with always-on full-screen grain, blur, scanline, dither, chromatic or noise filters.»
+- **Истотит/Веретар**: Это PSI-эффекты (plot items). Если их визуал мешает читаемости — уменьшите opacity, сократите длительность, уберите полноэкранный blur.
+- **Toggling**: Добавьте в UI settings (`U` menu) опцию «Косметические эффекты: вкл/выкл».
+- **README compliance**: Графика уже deliberately low-fi. Эффекты должны УЛУЧШАТЬ читаемость, не ухудшать.
+
 
 ### Детальная спецификация по Архитектуре и Реализации (Строго обязательно к исполнению)
-Вам необходимо детально интегрировать вашу задачу в существующие слои проекта. Ниже приведены конкретные архитектурные требования, релевантные вашей задаче:
 
-#### 🛠 Общие Архитектурные Рекомендации
-Ваша задача базовая, но не забывайте о разделении: логика строго в `systems/`, данные строго в `data/`, стейт сохраняемый. Никакого хардкода.
+Для успешного выполнения задачи агент (Jules) должен следовать этому пошаговому плану. Цель — отключить или смягчить агрессивные полноэкранные эффекты (noise, dither, chromatic aberration, scanlines), заменив их на более сдержанные и не раздражающие зрение индикаторы состояний "Истотит" и "Веретар". 
 
-## Ваши шаги:
-1. Прочитать соответствующие файлы (AGENTS.md, README.md, и исходники).
-2. Реализовать фичу строго по контрактам архитектуры.
-3. Добавить данные/интерфейсы/логику, проверить типы (`npm run typecheck`).
-4. Написать или обновить модульные тесты при необходимости.
-5. Убедиться, что функционал расширяем.
-6. Закоммитить изменения (`git commit`) с подробным описанием.
-7. Создать Pull Request (или запушить ветку).
-8. Обязательно задокументировать свои архитектурные решения в файле задачи (или в PR), чтобы Оркестратор мог это проверить.
+#### 1. Пересмотр Шейдеров и Постпроцессинга (Слой `render/`)
+Анализ `src/render/webgl.ts` (или файлов шейдеров). Исключить тяжелый и вырвиглазный noise-фильтр, если он применяется ко всему экрану.
+
+```typescript
+// В src/render/shaders.ts или там, где определяется фрагментный шейдер
+// УДАЛИТЬ ИЛИ ЗАКОММЕНТИРОВАТЬ агрессивные строки:
+// gl_FragColor.rgb += noise(uv) * 0.5; // СЛИШКОМ АГРЕССИВНО
+
+// ЗАМЕНИТЬ на мягкое виньетирование или тонирование краев:
+export const fragmentShaderSource = `
+    // ...
+    uniform float u_istotitLevel;
+    uniform float u_veretarLevel;
+    
+    void main() {
+        vec4 color = texture2D(u_sampler, v_uv);
+        
+        // Мягкий эффект Истотита (болезнь/слабость) - легкое обесцвечивание и пожелтение по краям
+        if (u_istotitLevel > 0.0) {
+            float dist = distance(v_uv, vec2(0.5));
+            vec3 istotitColor = vec3(0.8, 0.8, 0.4);
+            color.rgb = mix(color.rgb, istotitColor, dist * u_istotitLevel * 0.3);
+        }
+        
+        // Мягкий эффект Веретара (пси-активность/усталость) - фиолетовое/синее виньетирование
+        if (u_veretarLevel > 0.0) {
+            float dist = distance(v_uv, vec2(0.5));
+            vec3 veretarColor = vec3(0.4, 0.2, 0.6);
+            color.rgb = mix(color.rgb, veretarColor, dist * u_veretarLevel * 0.4);
+        }
+        
+        gl_FragColor = color;
+    }
+`;
+```
+
+#### 2. Связка Состояния со Значениями Шейдера (Слой `render/`)
+В `webgl.ts` при биндинге униформ необходимо передавать нормализованные значения эффектов.
+
+```typescript
+// В src/render/webgl.ts
+export function bindPostProcessUniforms(gl: WebGLRenderingContext, program: WebGLProgram, player: Entity) {
+    const istotitLoc = gl.getUniformLocation(program, 'u_istotitLevel');
+    const veretarLoc = gl.getUniformLocation(program, 'u_veretarLevel');
+    
+    // Предполагаем, что значения эффектов хранятся от 0 до 1 или от 0 до 100
+    const istotit = player.statusEffects?.istotit || 0;
+    const veretar = player.statusEffects?.veretar || 0;
+    
+    gl.uniform1f(istotitLoc, Math.min(istotit / 100, 1.0));
+    gl.uniform1f(veretarLoc, Math.min(veretar / 100, 1.0));
+}
+```
+
+#### 3. Альтернатива: Отключение в Настройках
+Даже мягкие эффекты могут не нравиться части игроков. Добавьте toggle в настройки.
+
+```typescript
+// В src/data/settings.ts
+export interface GraphicSettings {
+    enableStatusScreenEffects: boolean; // по умолчанию true
+}
+
+// В webgl.ts перед вызовом uniform
+if (!state.settings.enableStatusScreenEffects) {
+    gl.uniform1f(istotitLoc, 0.0);
+    gl.uniform1f(veretarLoc, 0.0);
+}
+```
+
+#### 4. UI Индикация как замена (Слой `render/UI`)
+Поскольку визуальный эффект на весь экран уменьшен, убедитесь, что в HUD есть четкая иконка, показывающая текущий статус болезни.
+
+```typescript
+// В src/render/hud.ts
+export function renderStatusIcons(ctx: CanvasRenderingContext2D, player: Entity) {
+    let xOffset = 10;
+    if (player.statusEffects?.istotit > 0) {
+        drawIcon(ctx, 'icon_istotit', xOffset, 10);
+        xOffset += 32;
+    }
+    if (player.statusEffects?.veretar > 0) {
+        drawIcon(ctx, 'icon_veretar', xOffset, 10);
+    }
+}
+```
+
+#### 5. Порядок реализации (Чеклист для агента Jules)
+1. **Анализ шейдеров:** Найти и удалить тяжелые функции `noise`, `scanlines`, `chromatic_aberration` из основного фрагментного шейдера.
+2. **Переработка эффектов:** Написать мягкое, сдержанное виньетирование для отображения Истотита и Веретара.
+3. **Биндинг данных:** Обеспечить передачу уровней болезни из сущности игрока в шейдер.
+4. **Настройки:** Добавить флаг `enableStatusScreenEffects` для полного отключения.
+5. **HUD:** Проверить наличие иконок статуса в интерфейсе, чтобы потеря агрессивного эффекта не скрыла от игрока факт болезни.
+
+#### 6. Требования к верификации, коммиту и PR
+* Выполните `npm run typecheck` и `npm run check:browser` (если есть).
+* Проверьте, что шейдер компилируется без ошибок (WebGL не выкидывает warnings в консоль).
+* Формат коммита: `refactor(render): replace aggressive screen filters with mild vignette and add toggle`.
+* В описании PR опишите, почему старые эффекты были удалены (визуальный шум, резь в глазах) и как работают новые.
 
 ---
-*Ожидается, что вы завершите задачу и оставите проект в компилируемом состоянии.*
+*Вы — независимый агент Jules. Ваша цель — надежный, протестированный код, строго соблюдающий архитектурные границы. Выполните задачу, закоммитьте код и завершите сессию.*

@@ -12,43 +12,102 @@
 7. **Обязательный коммит и PR:** Обязательно делайте `git commit` ваших изменений и создавайте Pull Request (или делайте пуш) после завершения работы.
 
 ## Текущая задача
-**Боевка: Реворк оружия. Магазины, перезарядка, унификация ближнего боя.**
-
-
+**Оптимизация: Дебаг-оверлей макро-целей.**
 
 ### Контекст задачи
-КРУПНЫЙ РЕВОРК системы оружия. Сейчас патроны расходуются напрямую — нет понятия «магазин» и «перезарядка». Это нереалистично и убирает тактический слой.
+Для балансировки глобального A-Life и войн фракций, разработчикам необходим визуальный инструментарий. Нужно добавить опциональный дебаг-оверлей на глобальную карту (или миникарту), который рисует стрелки от баз фракций к текущим `targetZone` их активных `FactionMacroGoal`. Это сугубо render/debug фича, она не влияет на симуляцию.
 
-**Новая система**:
-1. **Магазины**: У каждого оружия — `magazineSize` (вместимость магазина) и `currentMag` (патронов в текущем магазине). Стреляешь → расходуется из `currentMag`. Когда `currentMag = 0` → автоматическая перезарядка (или по кнопке R).
-2. **Перезарядка**: `reloadTime` — базовое время перезарядки в секундах. Во время перезарядки нельзя стрелять. HUD показывает progress bar.
-3. **Ловкость → скорость перезарядки**: `actualReloadTime = reloadTime / (1 + dexterity * 0.05)`. Ловкость НЕ влияет на темп стрельбы (fireRate) — только на reload. Темп стрельбы зависит от самого оружия.
-4. **Ближний бой = 1 выстрел с перезарядкой**: Удар ножом/кулаком = 1 «выстрел» с `magazineSize: 1` и `reloadTime: 0.5с` (замах). Это унифицирует ВСЕ оружие в одну систему: fire → mag check → reload.
-5. **Бензопила и огнемёт**: `magazineSize: Infinity` (бесконечная обойма). Патроны = топливо. Расходуется непрерывно пока зажата кнопка. Перезарядки нет — просто кончается топливо и оружие перестаёт работать.
+### Детальная спецификация по Архитектуре и Реализации
 
-### Конкретные файлы и паттерны
-- **`src/data/weapons.ts`**: Добавить в `WeaponDef`: `magazineSize: number`, `reloadTime: number` (секунды). Примеры: пистолет {mag:8, reload:1.5}, автомат {mag:30, reload:2.5}, дробовик {mag:2, reload:3.0}, нож {mag:1, reload:0.5}, бензопила {mag:Infinity, reload:0}.
-- **`src/systems/combat.ts`** или **`shooting.ts`**: Добавить `currentMag` в weapon state. При `fire()`: `if (currentMag <= 0) startReload(); return;`. При reload complete: `currentMag = magazineSize; ammo -= magazineSize`.
-- **`src/core/types.ts`**: Добавить `currentMag` и `reloading: boolean` и `reloadTimer: number` в entity weapon state (RED file — минимально).
-- **`src/render/hud.ts`**: Показывать `currentMag / magazineSize` рядом с ammo. Во время reload — анимация/progress bar.
-- **AI**: НПЦ и монстры тоже перезаряжаются. Во время reload они уязвимы — это тактический момент.
-- **Save**: `currentMag` и `reloading` сохраняются.
+#### 1. Модификация `src/systems/debug.ts` (или `debug_cheats.ts`)
+Добавьте поддержку новой дебаг-команды.
+```typescript
+// Stub for src/systems/debug.ts
+export const DEBUG_FLAGS = {
+    // ... existing flags ...
+    SHOW_MACRO_GOALS: false
+};
 
-### Детальная спецификация по Архитектуре и Реализации (Строго обязательно к исполнению)
-Вам необходимо детально интегрировать вашу задачу в существующие слои проекта. Ниже приведены конкретные архитектурные требования, релевантные вашей задаче:
+export function handleDebugCommand(cmd: string) {
+    if (cmd === '/macro_goals') {
+        DEBUG_FLAGS.SHOW_MACRO_GOALS = !DEBUG_FLAGS.SHOW_MACRO_GOALS;
+        publishEvent({ type: 'debug_log', message: `Macro goals overlay: ${DEBUG_FLAGS.SHOW_MACRO_GOALS}` });
+        return true;
+    }
+    // ...
+}
+```
 
-#### 🛠 Общие Архитектурные Рекомендации
-Ваша задача базовая, но не забывайте о разделении: логика строго в `systems/`, данные строго в `data/`, стейт сохраняемый. Никакого хардкода.
+#### 2. Рисование оверлея в `src/render/map_ui.ts` (или `map_renderer.ts`)
+В функции отрисовки глобальной карты добавьте слой дебага, который будет активен только если `DEBUG_FLAGS.SHOW_MACRO_GOALS === true`.
+
+```typescript
+// Stub for src/render/map_ui.ts
+import { DEBUG_FLAGS } from '../systems/debug';
+import { getFactionColor } from '../data/factions';
+
+export function drawDebugMacroGoals(ctx: CanvasRenderingContext2D, world: World, mapScale: number, offsetX: number, offsetY: number) {
+    if (!DEBUG_FLAGS.SHOW_MACRO_GOALS || !world.factionMacroGoals) return;
+
+    for (const goal of world.factionMacroGoals) {
+        if (goal.status !== 'active') continue;
+
+        const hqZone = world.zones.find(z => z.id === goal.originZoneId);
+        const targetZone = world.zones.find(z => z.id === goal.targetZoneId);
+        
+        if (!hqZone || !targetZone) continue;
+
+        const startX = (hqZone.centroidX * mapScale) + offsetX;
+        const startY = (hqZone.centroidY * mapScale) + offsetY;
+        const endX = (targetZone.centroidX * mapScale) + offsetX;
+        const endY = (targetZone.centroidY * mapScale) + offsetY;
+
+        const color = getFactionColor(goal.factionId) || 'magenta';
+
+        // Draw line
+        ctx.beginPath();
+        ctx.moveTo(startX, startY);
+        ctx.lineTo(endX, endY);
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 2;
+        ctx.setLineDash([5, 5]); // Dashed line for goals
+        ctx.stroke();
+
+        // Draw arrowhead at endX, endY
+        drawArrowhead(ctx, startX, startY, endX, endY, color);
+        ctx.setLineDash([]); // Reset
+    }
+}
+
+function drawArrowhead(ctx: CanvasRenderingContext2D, x1: number, y1: number, x2: number, y2: number, color: string) {
+    // Basic math for arrow
+    const angle = Math.atan2(y2 - y1, x2 - x1);
+    ctx.beginPath();
+    ctx.moveTo(x2, y2);
+    ctx.lineTo(x2 - 10 * Math.cos(angle - Math.PI / 6), y2 - 10 * Math.sin(angle - Math.PI / 6));
+    ctx.lineTo(x2 - 10 * Math.cos(angle + Math.PI / 6), y2 - 10 * Math.sin(angle + Math.PI / 6));
+    ctx.lineTo(x2, y2);
+    ctx.fillStyle = color;
+    ctx.fill();
+}
+```
+
+#### 3. Связь данных
+- Функция `getFactionColor` должна быть экспортирована из `src/data/factions.ts`. Если её нет, добавьте базовую логику (например, возвращать hex цвет, определенный в JSON/структуре фракции).
+- Координаты `centroidX` и `centroidY` должны присутствовать в описании зон (или вычисляться как среднее между `minX`, `maxX` и т.д.).
+
+#### 4. Тестирование и валидация
+- Убедиться, что вызов `/macro_goals` в консоли игры (терминале) включает флаг без крашей.
+- При включенном флаге карта не должна сильно проседать по FPS (Canvas stroke operations достаточно быстры, но проверяйте типы).
+- Запустить `npm run check:readonly` (typescript typecheck).
 
 ## Ваши шаги:
-1. Прочитать соответствующие файлы (AGENTS.md, README.md, и исходники).
-2. Реализовать фичу строго по контрактам архитектуры.
-3. Добавить данные/интерфейсы/логику, проверить типы (`npm run typecheck`).
-4. Написать или обновить модульные тесты при необходимости.
-5. Убедиться, что функционал расширяем.
-6. Закоммитить изменения (`git commit`) с подробным описанием.
-7. Создать Pull Request (или запушить ветку).
-8. Обязательно задокументировать свои архитектурные решения в файле задачи (или в PR), чтобы Оркестратор мог это проверить.
+1. Изучить `AGENTS.md`, `map_ui.ts`, `debug.ts`.
+2. Добавить флаг `SHOW_MACRO_GOALS` и команду `/macro_goals`.
+3. Реализовать `drawDebugMacroGoals` и интегрировать её в конец render loop карты (поверх всех слоев).
+4. Проверить доступность `centroidX/Y` у зон, при необходимости вычислять на лету (с кэшированием!).
+5. Запустить все проверки типов и сборку `npm run build`.
+6. Сделать `git commit -m "feat(debug): add map overlay for faction macro goals"` и создать PR.
 
 ---
-*Ожидается, что вы завершите задачу и оставите проект в компилируемом состоянии.*
+*Ожидается, что вы завершите задачу и оставите проект в компилируемом состоянии без сломанных тестов.*

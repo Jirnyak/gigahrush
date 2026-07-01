@@ -12,35 +12,143 @@
 7. **Обязательный коммит и PR:** Обязательно делайте `git commit` ваших изменений и создавайте Pull Request (или делайте пуш) после завершения работы.
 
 ## Текущая задача
-**ИИ: Макро-цели Фракций. Группировка в отряды, атака конкретных зон.**
+**Синематика: Система Камеры (src/systems/camera.ts). Сплайны и пролеты.**
 
 
 
 ### Контекст задачи
-НПЦ формируют отряды (2-5 человек) с макро-целями: патрулирование территории, атака чужой зоны, оборона ключевой комнаты, эскорт каравана. Это Stalker A-Life: игрок заходит в зону и видит ОТРЯД из 4 Wild идущих строем в атаку на позицию Ликвидаторов. Или группу Культистов, совершающих ритуал в тёмной комнате. Отряды формируются при floor load из A-Life pool, используют baked nav tree для движения и cached territory для выбора целей. Budget: max 8 активных отрядов на этаж, max 5 НПЦ в отряде. Создание отряда = macro_goal event.
+Расширить камеру: 1) CameraSpline — массив {x,y,angle,time} waypoints, Catmull-Rom. 2) playCinematic(spline, onComplete) — пролёт, блок управления. 3) Скорость адаптивна: медленнее у NPC, быстрее в пустоте. 4) fogDensity↓ при пролёте (видимость). 5) Skip: любая клавиша/тап. Есть TrailerCameraState и setFreeCamera() — расширяйте.
 
 ### Конкретные файлы и паттерны
-- **`src/systems/factions.ts`**: Территориальный контроль. Добавьте `FactionMacroGoal` — структуру: `{ type: 'attack'|'defend', targetZone: number, members: number[], factionId: Faction }`.
-- **`src/data/faction_events.ts`**: Дискретные фракционные события. Добавьте тип `'faction_assault'`.
-- **Cadence**: Оценка макро-целей — 1 раз в 60 секунд реального времени. Выбор зоны: найти ближайшую вражескую зону с fewest defenders (через territory counts, НЕ BFS!).
-- **Ограничение**: Максимум 3 активных макро-цели на этаж. Не создавать бесконечные отряды.
-- **НЕ делайте runtime BFS/pathfinding для выбора целей**. Используйте territory cell counts и random zone picks.
+- **`src/systems/camera.ts`**: УЖЕ есть `CameraMode: 'trailer'` и `TrailerCameraState` с path/node навигацией! Расширьте его:
+  - Добавьте `CameraMode: 'cinematic'` (или используйте 'trailer').
+  - Добавьте возможность задать ФИКСИРОВАННЫЙ path (массив waypoints), а не random.
+  - Добавьте `lookAtTarget?: { x: number, y: number }` — камера всегда смотрит на цель.
+- **API**: `startCinematicCamera(camera, waypoints: {x,y}[], lookAt?: {x,y}, speed?: number)`.
+- **Завершение**: Когда path пройден — автоматически вернуть `'player'` mode через `followPlayerCamera()`.
+
 
 ### Детальная спецификация по Архитектуре и Реализации (Строго обязательно к исполнению)
-Вам необходимо детально интегрировать вашу задачу в существующие слои проекта. Ниже приведены конкретные архитектурные требования, релевантные вашей задаче:
 
-#### 🛠 Общие Архитектурные Рекомендации
-Ваша задача базовая, но не забывайте о разделении: логика строго в `systems/`, данные строго в `data/`, стейт сохраняемый. Никакого хардкода.
+Для успешного выполнения задачи агент (Jules) должен следовать этому пошаговому плану. Цель — реализовать систему камеры, поддерживающую плавные пролеты (сплайны/интерполяцию) для катсцен, абстрагировав управление позицией от жесткой привязки к игроку.
 
-## Ваши шаги:
-1. Прочитать соответствующие файлы (AGENTS.md, README.md, и исходники).
-2. Реализовать фичу строго по контрактам архитектуры.
-3. Добавить данные/интерфейсы/логику, проверить типы (`npm run typecheck`).
-4. Написать или обновить модульные тесты при необходимости.
-5. Убедиться, что функционал расширяем.
-6. Закоммитить изменения (`git commit`) с подробным описанием.
-7. Создать Pull Request (или запушить ветку).
-8. Обязательно задокументировать свои архитектурные решения в файле задачи (или в PR), чтобы Оркестратор мог это проверить.
+#### 1. Модель данных Камеры (Слой `data/` и `core/`)
+Определите структуру стейта камеры в `World`.
+
+```typescript
+// В файле src/core/camera.ts или src/core/world.ts
+export enum CameraMode {
+    FOLLOW_PLAYER = 'FOLLOW_PLAYER',
+    FREE = 'FREE',
+    CINEMATIC_SPLINE = 'CINEMATIC_SPLINE'
+}
+
+export interface CameraState {
+    x: number;
+    y: number;
+    z: number;      // высота или zoom
+    pitch: number;  // наклон
+    yaw: number;    // поворот
+    mode: CameraMode;
+    targetEntityId?: string; // За кем следить
+    // Данные для сплайна
+    splinePoints?: Array<{x: number, y: number, time: number}>;
+    splineProgress?: number;
+    splineDuration?: number;
+}
+```
+
+#### 2. Система Обновления Камеры (Слой `systems/`)
+Реализуйте `src/systems/camera_system.ts`, которая будет вызываться каждый кадр (или tick) для вычисления текущей позиции.
+
+```typescript
+// В src/systems/camera_system.ts
+import { World, CameraMode } from '../core/types';
+
+export function updateCamera(world: World, dt: number) {
+    const cam = world.camera;
+    if (!cam) return;
+
+    switch (cam.mode) {
+        case CameraMode.FOLLOW_PLAYER:
+            const player = world.entities.find(e => e.id === world.playerId);
+            if (player) {
+                // Плавное следование (lerp)
+                const lerpFactor = 5.0 * dt;
+                cam.x += (player.x - cam.x) * lerpFactor;
+                cam.y += (player.y - cam.y) * lerpFactor;
+            }
+            break;
+
+        case CameraMode.CINEMATIC_SPLINE:
+            if (cam.splinePoints && cam.splineDuration) {
+                cam.splineProgress = (cam.splineProgress || 0) + dt;
+                const t = Math.min(cam.splineProgress / cam.splineDuration, 1.0);
+                
+                // Простая линейная интерполяция между массивом точек (или Catmull-Rom для кривых)
+                const pos = evaluateSpline(cam.splinePoints, t);
+                cam.x = pos.x;
+                cam.y = pos.y;
+
+                if (t >= 1.0) {
+                    publishEvent({ type: 'CAMERA_SPLINE_FINISHED' });
+                }
+            }
+            break;
+            
+        case CameraMode.FREE:
+            // Управление из debug или скрипта
+            break;
+    }
+}
+
+// Вспомогательная функция (Catmull-Rom или линейная)
+function evaluateSpline(points: Array<{x: number, y: number, time: number}>, t: number): {x: number, y: number} {
+    // Реализация интерполяции
+    // ...
+    return points[0]; // заглушка
+}
+```
+
+#### 3. API для Синематики (Слой `systems/` или `scripts/`)
+Добавьте функции для запуска пролетов.
+
+```typescript
+// В src/systems/cinematic_director.ts
+export function startCameraFlight(world: World, points: Array<{x: number, y: number}>, durationSec: number) {
+    world.camera.mode = CameraMode.CINEMATIC_SPLINE;
+    world.camera.splinePoints = points.map((p, i) => ({ ...p, time: i / (points.length - 1) }));
+    world.camera.splineDuration = durationSec;
+    world.camera.splineProgress = 0;
+    
+    // Отключить инпут игрока во время катсцены
+    world.playerInputDisabled = true;
+}
+```
+
+#### 4. Интеграция в Рендер (Слой `render/`)
+Обновите WebGL рендерер, чтобы он использовал `world.camera`, а не хардкодил координаты игрока.
+
+```typescript
+// В src/render/webgl.ts
+export function renderFrame(gl: WebGLRenderingContext, world: World) {
+    const camX = world.camera.x;
+    const camY = world.camera.y;
+    // ... использовать camX/camY для установки ViewMatrix
+}
+```
+
+#### 5. Порядок реализации (Чеклист для агента Jules)
+1. **Данные:** Определить структуру `CameraState` в ядре.
+2. **Логика:** Создать `camera_system.ts` с поддержкой режимов (Follow, Spline). Реализовать математику интерполяции (Catmull-Rom spline для гладкости).
+3. **Рендер:** Переключить WebGL с `player.x/y` на `world.camera.x/y`.
+4. **События:** Реализовать отключение ввода игрока на время пролета и возврат камеры после завершения сплайна.
+5. **Тестирование:** Написать юнит-тест `evaluateSpline`, чтобы убедиться, что точки правильно интерполируются по `t` от 0 до 1.
+
+#### 6. Требования к верификации, коммиту и PR
+* Выполните `npm run typecheck` и `npm run test:unit`.
+* Формат коммита: `feat(camera): implement camera state machine and cinematic spline trajectories`.
+* В описании PR: укажите математическую модель сплайна и как рендер теперь получает View Matrix.
 
 ---
-*Ожидается, что вы завершите задачу и оставите проект в компилируемом состоянии.*
+*Вы — независимый агент Jules. Ваша цель — надежный, протестированный код, строго соблюдающий архитектурные границы. Выполните задачу, закоммитьте код и завершите сессию.*

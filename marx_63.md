@@ -12,35 +12,133 @@
 7. **Обязательный коммит и PR:** Обязательно делайте `git commit` ваших изменений и создавайте Pull Request (или делайте пуш) после завершения работы.
 
 ## Текущая задача
-**А-Лайф: Симуляция Перестрелок (динамические бои отрядов).**
+**Синематика: Набор массовки (извлечение НПЦ из популяции для сцен).**
 
 
 
 ### Контекст задачи
-Динамическое разрешение макро-целей: когда два вражеских отряда встречаются — начинается ПЕРЕСТРЕЛКА. Это не абстракция — это реальные entity стреляющие друг в друга стандартной боевой AI. Игрок может: 1) наблюдать издалека и добить выживших, 2) вмешаться на стороне одной из фракций, 3) обойти зону боя. Звуки выстрелов слышны на расстоянии 40 клеток через `publishEvent('gunfire')`. Трупы после боя содержат лут обеих сторон — мотивация идти на звук!
+Механика извлечения НПЦ из A-Life популяции для массовки в синематиках.
 
 ### Конкретные файлы и паттерны
-- **`src/systems/ai/npc_utility.ts`**: НПЦ, включённые в `FactionMacroGoal.members`, получают override intent `'faction_assault'` — идти к target zone.
-- **Движение**: Используйте baked nav tree + bounded path chunks, КАК для обычного PATROL.
-- **Бой**: Когда assault group встречает враждебных НПЦ — стандартный combat loop берёт верх.
-- **Событие**: При захвате зоны — `publishEvent('zone_captured')`. Это генерирует слухи и процедурные квесты.
-- **Performance**: Члены группы НЕ координируют движение через отдельный manager — каждый просто идёт к той же target zone через свой path.
+- **`src/systems/alife.ts`**: A-Life pool хранит всех НПЦ. При синематике нужно «выхватить» 3-5 НПЦ из текущего materialized floor для массовки.
+- **Функция**: `selectCinematicExtras(world, count, nearX, nearY, radius): Entity[]` — выбрать живых НПЦ рядом с камерой.
+- **`src/systems/entity_index.ts`**: Broadphase для поиска ближайших. ОБЯЗАТЕЛЬНО через broadphase, не full scan.
+- **Они не телепортируются**: extras продолжают жить обычной AI жизнью. Камера просто пролетает мимо.
+
 
 ### Детальная спецификация по Архитектуре и Реализации (Строго обязательно к исполнению)
-Вам необходимо детально интегрировать вашу задачу в существующие слои проекта. Ниже приведены конкретные архитектурные требования, релевантные вашей задаче:
 
-#### 🛠 Общие Архитектурные Рекомендации
-Ваша задача базовая, но не забывайте о разделении: логика строго в `systems/`, данные строго в `data/`, стейт сохраняемый. Никакого хардкода.
+Для успешного выполнения задачи агент (Jules) должен следовать этому пошаговому плану. Цель — реализовать механизм "найма/извлечения" (extraction) NPC из системы A-Life для использования их в катсценах, обеспечивая сохранение их идентичности.
 
-## Ваши шаги:
-1. Прочитать соответствующие файлы (AGENTS.md, README.md, и исходники).
-2. Реализовать фичу строго по контрактам архитектуры.
-3. Добавить данные/интерфейсы/логику, проверить типы (`npm run typecheck`).
-4. Написать или обновить модульные тесты при необходимости.
-5. Убедиться, что функционал расширяем.
-6. Закоммитить изменения (`git commit`) с подробным описанием.
-7. Создать Pull Request (или запушить ветку).
-8. Обязательно задокументировать свои архитектурные решения в файле задачи (или в PR), чтобы Оркестратор мог это проверить.
+#### 1. Модель Данных Actor (Слой `data/`)
+Определите, как NPC помечается как "актер катсцены".
+
+```typescript
+// В src/data/alife_types.ts или src/core/entity.ts
+export enum NpcRole {
+    WANDERER = 'WANDERER',
+    TRADER = 'TRADER',
+    CINEMATIC_ACTOR = 'CINEMATIC_ACTOR'
+}
+
+export interface CinematicState {
+    originalRole: NpcRole;
+    originalX: number;
+    originalY: number;
+    sceneId: string;
+}
+
+// Расширение Entity
+export interface Entity {
+    // ...
+    cinematicState?: CinematicState;
+}
+```
+
+#### 2. Логика Извлечения (Слой `systems/`)
+Реализуйте функционал для временного перехвата контроля над NPC системой катсцен, отключая обычный ИИ.
+
+```typescript
+// В src/systems/cinematic_actors.ts
+import { World, Entity } from '../core/types';
+import { NpcRole } from '../data/alife_types';
+
+export function extractNpcForScene(world: World, npcId: string, sceneId: string, targetX: number, targetY: number): boolean {
+    const npc = world.entities.find(e => e.id === npcId);
+    if (!npc) return false;
+
+    // Сохраняем оригинальное состояние
+    npc.cinematicState = {
+        originalRole: npc.role || NpcRole.WANDERER,
+        originalX: npc.x,
+        originalY: npc.y,
+        sceneId: sceneId
+    };
+
+    // Отключаем стандартный AI
+    npc.role = NpcRole.CINEMATIC_ACTOR;
+    
+    // Телепортируем или назначаем путь к точке сцены
+    npc.x = targetX;
+    npc.y = targetY;
+    
+    return true;
+}
+```
+
+#### 3. Возврат в A-Life после сцены
+Когда катсцена заканчивается, актеры должны вернуться к своим обычным делам.
+
+```typescript
+// В src/systems/cinematic_actors.ts
+export function releaseNpcFromScene(world: World, npcId: string) {
+    const npc = world.entities.find(e => e.id === npcId);
+    if (!npc || !npc.cinematicState) return;
+
+    // Возвращаем роль
+    npc.role = npc.cinematicState.originalRole;
+    
+    // Опционально: отправить обратно на исходную позицию или оставить где стоит
+    npc.cinematicState = undefined;
+}
+
+export function releaseAllSceneActors(world: World, sceneId: string) {
+    world.entities.forEach(npc => {
+        if (npc.cinematicState?.sceneId === sceneId) {
+            releaseNpcFromScene(world, npc.id);
+        }
+    });
+}
+```
+
+#### 4. Интеграция с ИИ (Слой `systems/`)
+Обычный ИИ (patrol, wander, combat) должен игнорировать NPC, если у них установлена роль `CINEMATIC_ACTOR`.
+
+```typescript
+// В src/systems/ai_behavior.ts
+export function updateAi(world: World, dt: number) {
+    for (const entity of world.entities) {
+        if (entity.role === NpcRole.CINEMATIC_ACTOR) {
+            // Управляется только через cinematic_director.ts, обычный ИИ пропускает
+            continue;
+        }
+        
+        // ... обычный ИИ
+    }
+}
+```
+
+#### 5. Порядок реализации (Чеклист для агента Jules)
+1. **Данные:** Расширить `Entity` и определить `NpcRole.CINEMATIC_ACTOR` с `CinematicState`.
+2. **Извлечение:** Написать `extractNpcForScene`, обеспечивающую сохранение старого стейта.
+3. **Освобождение:** Написать `releaseNpcFromScene` и `releaseAllSceneActors`.
+4. **Блокировка ИИ:** Добавить guard clauses в системы ИИ, чтобы они не трогали актеров (не заставляли их идти патрулировать или атаковать вне сценария).
+5. **A-Life Интеграция:** Убедиться, что A-Life корректно сохраняет статус актеров, если во время сцены происходит сохранение игры (serialize/deserialize).
+
+#### 6. Требования к верификации, коммиту и PR
+* Выполните `npm run typecheck` и `npm run test:unit`.
+* Проверьте логику: напишите тест, где NPC "нанимается", его AI tick не меняет его координаты, а после "увольнения" AI снова работает.
+* Формат коммита: `feat(cinematic): implement NPC extraction and release system for directed scenes`.
 
 ---
-*Ожидается, что вы завершите задачу и оставите проект в компилируемом состоянии.*
+*Вы — независимый агент Jules. Ваша цель — надежный, протестированный код, строго соблюдающий архитектурные границы. Выполните задачу, закоммитьте код и завершите сессию.*

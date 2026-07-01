@@ -12,41 +12,103 @@
 7. **Обязательный коммит и PR:** Обязательно делайте `git commit` ваших изменений и создавайте Pull Request (или делайте пуш) после завершения работы.
 
 ## Текущая задача
-**ИИ Багфикс: Странное поведение НПЦ при атаке на них и во время боя.**
-
-
+**Самосбор: Сплошной Туман (шейдеры/плотность).**
 
 ### Контекст задачи
-БАГФИКС. НПЦ ведут себя СТРАННО когда на них нападают и во время боя. Проблемы:
+Во время события "Самосбор" атмосфера должна кардинально меняться. Видимость должна падать с условных 15 клеток до 3-5 клеток за счет густого тумана. При наступлении (warning phase) плотность тумана плавно увеличивается за 30 секунд. Также цвет тумана зависит от варианта Самосбора (обычный, мясной, мокрый). Противогаз (marx_71/54) должен позволять видеть дальше.
 
-1. **Не реагируют на атаку**: НПЦ получает удар → стоит на месте → не переключается в боевой режим. Должен: немедленно агрить на атакующего.
-2. **Бегут не туда**: Во время боя НПЦ иногда бегут НАВСТРЕЧУ врагу вместо того чтобы отступить за укрытие или стрелять с расстояния.
-3. **Застывают после убийства врага**: Убили цель → стоят столбом. Должны: вернуться к предыдущему занятию или осмотреть периметр.
-4. **Не помогают союзникам**: Союзник рядом получает урон → НПЦ игнорирует. Должен: агрить на атакующего союзника (faction solidarity).
-5. **Не прячутся при перестрелке**: Слышат стрельбу рядом → стоят. Гражданские должны прятаться/бежать, боевые — идти на звук.
+### Детальная спецификация по Архитектуре и Реализации
 
-### Конкретные файлы и паттерны
-- **`src/systems/ai/npc_utility.ts`**: Utility scoring для боевых states. Проблема скорее всего в весах: `COMBAT` intent имеет слишком низкий приоритет или `WANDER`/`IDLE` не прерывается при `takeDamage` event.
-- **`src/systems/ai/npc.ts`** или **`ai/combat.ts`**: Обработчик `onDamage` → немедленный switch в combat state. Не ждать следующий AI tick — реагировать СРАЗУ.
-- **`src/systems/events.ts`**: Событие `'attack'` должно доставляться nearby allies через `entity_index` broadphase. Радиус: 15 клеток для боевых, 20 для слуховых.
-- **State transitions**: `IDLE/WANDER → COMBAT` (при damage), `COMBAT → SEARCH` (target lost), `SEARCH → IDLE` (timeout 10s). `CIVILIAN → FLEE` (при nearby gunfire event).
-- **Post-combat**: После убийства цели → `ALERT` state (5 секунд осмотра) → `IDLE`. Не застывать.
+#### 1. Модификация `src/render/webgl.ts` (или `shader_programs.ts`)
+Убедитесь, что шейдер поддерживает униформы `u_fogDensity` и `u_fogColor`.
+Если шейдер использует экспоненциальный туман: `visibility = exp(-u_fogDensity * distance)`.
+```glsl
+// Concept stub for fragment shader
+uniform float u_fogDensity;
+uniform vec3 u_fogColor;
+// ...
+float fogFactor = clamp(exp(-u_fogDensity * distToCamera), 0.0, 1.0);
+finalColor = mix(u_fogColor, texColor * lighting, fogFactor);
+```
+В функции рендера кадра добавьте передачу этих значений.
+```typescript
+// Stub for src/render/webgl.ts
+export function applyFogUniforms(gl: WebGLRenderingContext, program: WebGLProgram, density: number, color: [number, number, number]) {
+    const densityLoc = gl.getUniformLocation(program, 'u_fogDensity');
+    const colorLoc = gl.getUniformLocation(program, 'u_fogColor');
+    gl.uniform1f(densityLoc, density);
+    gl.uniform3fv(colorLoc, color);
+}
+```
 
-### Детальная спецификация по Архитектуре и Реализации (Строго обязательно к исполнению)
-Вам необходимо детально интегрировать вашу задачу в существующие слои проекта. Ниже приведены конкретные архитектурные требования, релевантные вашей задаче:
+#### 2. Управление состоянием в `src/systems/samosbor.ts` (или `samosbor_hooks.ts`)
+В системном стейте необходимо плавно интерполировать параметры тумана.
+```typescript
+// Stub for src/systems/samosbor.ts
+import { SamosborVariant } from '../data/samosbor_variants';
 
-#### 🛠 Общие Архитектурные Рекомендации
-Ваша задача базовая, но не забывайте о разделении: логика строго в `systems/`, данные строго в `data/`, стейт сохраняемый. Никакого хардкода.
+export interface SamosborRenderState {
+    targetFogDensity: number;
+    currentFogDensity: number;
+    targetFogColor: [number, number, number];
+    currentFogColor: [number, number, number];
+}
+
+const NORMAL_FOG_DENSITY = 0.02;
+const SAMOSBOR_FOG_DENSITY = 0.15;
+
+export function updateSamosborFog(world: World, dt: number) {
+    const state = world.samosbor;
+    const renderState = world.renderState.samosbor; // Assuming render state proxy
+    
+    if (state.isActive || state.phase === 'warning') {
+        renderState.targetFogDensity = SAMOSBOR_FOG_DENSITY;
+        renderState.targetFogColor = getSamosborColor(state.variant);
+    } else {
+        renderState.targetFogDensity = NORMAL_FOG_DENSITY;
+        renderState.targetFogColor = [0.1, 0.1, 0.1]; // Default dark grey
+    }
+    
+    // Lerp (плавный переход за 30 секунд при warning)
+    const lerpSpeed = state.phase === 'warning' ? (1.0 / 30.0) * dt : 2.0 * dt;
+    renderState.currentFogDensity += (renderState.targetFogDensity - renderState.currentFogDensity) * lerpSpeed;
+    
+    // Lerp для цвета (поэлементно)
+    for (let i=0; i<3; i++) {
+        renderState.currentFogColor[i] += (renderState.targetFogColor[i] - renderState.currentFogColor[i]) * lerpSpeed;
+    }
+}
+
+function getSamosborColor(variant: SamosborVariant): [number, number, number] {
+    switch(variant) {
+        case 'meat': return [0.7, 0.1, 0.1]; // 180,30,30 normalized
+        case 'wet': return [0.4, 0.47, 0.55]; // 100,120,140 normalized
+        default: return [0.31, 0.0, 0.47]; // 80,0,120 Purple for classic samosbor
+    }
+}
+```
+
+#### 3. Связь с экипировкой (Противогаз)
+В `webgl.ts` перед отправкой `density` в шейдер проверьте состояние игрока:
+```typescript
+let actualDensity = renderState.currentFogDensity;
+if (world.player.inventory.hasEquipped('gas_mask')) {
+    actualDensity *= 0.5; // Противогаз снижает плотность тумана в 2 раза
+}
+applyFogUniforms(gl, program, actualDensity, renderState.currentFogColor);
+```
+
+#### 4. Тестирование и валидация
+- Запустить `npm run check:full` для проверки интеграции с WebGL типами.
+- Убедиться, что при вызове события `triggerSamosbor('wet')` цвет тумана плавно становится сине-серым.
+- Убедиться, что нет хардкода: цвета и лимиты берутся из констант, зависящих от `samosbor_variants.ts`.
 
 ## Ваши шаги:
-1. Прочитать соответствующие файлы (AGENTS.md, README.md, и исходники).
-2. Реализовать фичу строго по контрактам архитектуры.
-3. Добавить данные/интерфейсы/логику, проверить типы (`npm run typecheck`).
-4. Написать или обновить модульные тесты при необходимости.
-5. Убедиться, что функционал расширяем.
-6. Закоммитить изменения (`git commit`) с подробным описанием.
-7. Создать Pull Request (или запушить ветку).
-8. Обязательно задокументировать свои архитектурные решения в файле задачи (или в PR), чтобы Оркестратор мог это проверить.
+1. Изучить шейдеры в `src/render/webgl.ts` (или где хранятся GLSL строки).
+2. Реализовать логику `updateSamosborFog` в `systems/samosbor.ts`.
+3. Обновить render loop для передачи униформ.
+4. Убедиться, что `SamosborVariant` импортируется корректно из `data/`.
+5. Сделать `git commit -m "feat(render): implement dense volumetric fog for samosbor variants"` и оформить PR.
 
 ---
-*Ожидается, что вы завершите задачу и оставите проект в компилируемом состоянии.*
+*Ожидается, что вы завершите задачу и оставите проект в компилируемом состоянии без сломанных тестов.*

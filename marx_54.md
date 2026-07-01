@@ -12,44 +12,114 @@
 7. **Обязательный коммит и PR:** Обязательно делайте `git commit` ваших изменений и создавайте Pull Request (или делайте пуш) после завершения работы.
 
 ## Текущая задача
-**Система компаньонов. Рекрутинг НПЦ через высокое отношение. Компаньон ходит за игроком.**
-
-
+**Экипировка: Противогазы (защита от тумана Самосбора).**
 
 ### Контекст задачи
-НОВАЯ СИСТЕМА. При отношении НПЦ к игроку **выше 100** (из шкалы -100..+200), появляется E-interaction опция «Присоединяйся ко мне». Шанс успеха зависит от **интеллекта** игрока: `chance = 0.3 + intelligence * 0.05` (при INT 10 = 80%). При успехе НПЦ становится КОМПАНЬОНОМ:
+Без противогаза Самосбор наносит постоянный урон и ослепляет. Наличие экипированного противогаза (и расходных фильтров) спасает жизнь и позволяет свободно передвигаться во время активной фазы. НПЦ также должны проверять наличие противогаза в инвентаре, чтобы не умирать сразу. 
 
-1. **Следование**: Компаньон ходит за игроком (follow behavior, dist 2-4 клетки). При бое — помогает стрелять.
-2. **Фракция**: Временно меняется на `Faction.PLAYER` (или аналог). Все entity видят его как союзника игрока.
-3. **Старая фракция сохраняется**: В entity сохраняется `originalFaction`. При dismiss — возвращается к своей фракции.
-4. **Dismiss**: Через E-interaction → «Расстаёмся» → НПЦ возвращает `originalFaction`, уходит.
-5. **Лимит**: Максимум 1-2 компаньона одновременно (для баланса и производительности).
-6. **Смерть**: Если компаньон погибает — факт записывается в A-Life (`deathCause: 'companion'`). Отношение с его фракцией падает.
+### Детальная спецификация по Архитектуре и Реализации
 
-### Конкретные файлы и паттерны
-- **`src/systems/companion.ts`** [НОВЫЙ]: State machine компаньона. `CompanionState { entityId, originalFaction, followTarget }`. Follow logic: pathfind к игроку если dist > 4, idle если dist < 2.
-- **`src/systems/interactions.ts`**: Добавить E-action `'recruit_companion'` с условием `relation > 100 && companionCount < MAX_COMPANIONS`. И `'dismiss_companion'` для расставания.
-- **`src/systems/ai/npc_utility.ts`**: Для entity с `isCompanion = true` — override utility: follow player > все остальные goals. В бою — таргетить врагов игрока.
-- **`src/core/types.ts`**: Добавить `isCompanion: boolean`, `originalFaction: Faction` в entity (RED — минимально).
-- **`src/systems/alife.ts`**: При floor transition — компаньон переходит с игроком (не остаётся на старом этаже).
-- **Save**: `companionIds`, `originalFaction` сохраняются. При load — восстановить companion state.
-- **AI Combat**: Компаньон стреляет по врагам игрока, но учитывает friendly fire (marx_51). Если игрок ранил компаньона — small relation penalty но не dismissal.
+#### 1. Модификация `src/data/items.ts`
+Добавьте определение противогаза и фильтров:
+```typescript
+// Stub for src/data/items.ts
+export const ITEMS: Record<string, ItemDef> = {
+    // ... existing items ...
+    'gas_mask': {
+        id: 'gas_mask',
+        name: 'Противогаз',
+        type: 'equipment', // или 'tool', зависит от схемы экипировки
+        slot: 'head',
+        value: 150,
+        durabilityMax: 100 // Опционально, если износ идет по самому противогазу
+    },
+    'gas_filter': {
+        id: 'gas_filter',
+        name: 'Угольный фильтр',
+        type: 'consumable',
+        value: 30,
+        stackable: true,
+        maxStack: 5
+    }
+};
+```
 
-### Детальная спецификация по Архитектуре и Реализации (Строго обязательно к исполнению)
-Вам необходимо детально интегрировать вашу задачу в существующие слои проекта. Ниже приведены конкретные архитектурные требования, релевантные вашей задаче:
+#### 2. Интеграция урона в `src/systems/samosbor.ts` (или `combat.ts`)
+Во время активной фазы самосбора (`world.samosbor.isActive === true`), все акторы (игрок и NPCs) на незащищенных клетках (вне гермодверей) получают урон.
+```typescript
+// Stub for src/systems/samosbor.ts
+import { applyDamage } from './combat';
 
-#### 🛠 Общие Архитектурные Рекомендации
-Ваша задача базовая, но не забывайте о разделении: логика строго в `systems/`, данные строго в `data/`, стейт сохраняемый. Никакого хардкода.
+export function processSamosborDamage(world: World, dt: number) {
+    if (!world.samosbor.isActive) return;
+
+    // Таймер тика (каждые 5 секунд)
+    world.samosbor.damageTimer = (world.samosbor.damageTimer || 0) + dt;
+    if (world.samosbor.damageTimer >= 5.0) {
+        world.samosbor.damageTimer = 0;
+        
+        // Process Player
+        if (!isActorProtected(world, world.player)) {
+            applySamosborEffect(world, world.player);
+        }
+
+        // Process active NPCs on the floor
+        for (const npc of world.entities.filter(e => e.type === 'npc')) {
+            if (!isActorProtected(world, npc)) {
+                applySamosborEffect(world, npc);
+            }
+        }
+    }
+}
+
+function isActorProtected(world: World, actor: Entity): boolean {
+    // 1. Проверка на гермозону/убежище (protected cell)
+    const cell = world.getCell(Math.floor(actor.x), Math.floor(actor.y));
+    if (cell.tags && cell.tags.includes('samosbor_shelter')) return true;
+
+    // 2. Проверка инвентаря
+    if (actor.equipment && actor.equipment.head === 'gas_mask') {
+        // Уменьшаем фильтр/durability
+        return consumeFilterOrDurability(actor);
+    }
+    
+    return false;
+}
+
+function applySamosborEffect(world: World, actor: Entity) {
+    applyDamage(actor, 1, 'samosbor_toxic'); 
+    // Если это игрок, можно вызвать publishEvent для UI "Вы задыхаетесь!"
+}
+
+function consumeFilterOrDurability(actor: Entity): boolean {
+    // Условная логика: тратим 1 заряд фильтра или durability
+    if (actor.inventory.has('gas_filter')) {
+        actor.inventory.consume('gas_filter', 1);
+        return true;
+    }
+    // Если нет фильтров, противогаз бесполезен
+    return false;
+}
+```
+
+#### 3. AI Логика НПЦ (A-Life)
+В `src/systems/ai.ts` (или `faction_ai.ts`) при фазе warning НПЦ должны панически искать убежище ИЛИ, если у них есть противогаз, они могут продолжать патруль (с пониженным FOV). Это делает мир более живым. Проверьте `npc.equipment.head === 'gas_mask'`.
+
+#### 4. Взаимодействие с рендером
+Задача marx_53 уже внедряет множитель `0.5` на плотность тумана, если у игрока экипирован противогаз. Убедитесь, что стейт `actor.equipment.head === 'gas_mask'` прозрачно доступен рендереру без жесткой зависимости.
+
+#### 5. Тестирование и валидация
+- Добавьте unit-тесты: `test('samosbor damage ignores actor with gas mask and filters')`.
+- Убедитесь, что фильтры корректно тратятся, а урон начинается, как только фильтры заканчиваются.
+- Проверьте компиляцию: `npm run typecheck`.
 
 ## Ваши шаги:
-1. Прочитать соответствующие файлы (AGENTS.md, README.md, и исходники).
-2. Реализовать фичу строго по контрактам архитектуры.
-3. Добавить данные/интерфейсы/логику, проверить типы (`npm run typecheck`).
-4. Написать или обновить модульные тесты при необходимости.
-5. Убедиться, что функционал расширяем.
-6. Закоммитить изменения (`git commit`) с подробным описанием.
-7. Создать Pull Request (или запушить ветку).
-8. Обязательно задокументировать свои архитектурные решения в файле задачи (или в PR), чтобы Оркестратор мог это проверить.
+1. Прочитать `items.ts`, `samosbor.ts`, `combat.ts`.
+2. Внедрить дефы `gas_mask` и `gas_filter`.
+3. Добавить системный тик урона `processSamosborDamage` внутри активной фазы.
+4. Настроить трату фильтров/прочности.
+5. Запустить `npm run check:readonly` и юнит-тесты.
+6. Сделать `git commit -m "feat(items): add gas mask mechanics and samosbor damage logic"` и оформить PR.
 
 ---
-*Ожидается, что вы завершите задачу и оставите проект в компилируемом состоянии.*
+*Ожидается, что вы завершите задачу и оставите проект в компилируемом состоянии без сломанных тестов.*
