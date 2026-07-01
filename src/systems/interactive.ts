@@ -24,8 +24,8 @@ import {
   type ContentInteractionResult,
   type ContentInteractionTarget,
 } from './content_hooks';
+import { logTutorialMsg, TutorialStep } from './tutorial';
 import { publishEvent } from './events';
-import { handleToiletTutorial, handleDrinkTutorial } from './tutorial';
 
 export interface InteractiveInstanceState {
   status?: string;
@@ -481,8 +481,9 @@ function runDrinkWater(ctx: ContentInteractionContext, resolved: ResolvedInterac
   );
   publishInteractiveEvent(ctx, resolved, action);
 
-  if (resolved.def.id === 'sink_drink') {
-    handleDrinkTutorial(ctx.state, ctx.world, ctx.player);
+  if (ctx.state.tutorialMode && ctx.state.tutorialStep === TutorialStep.DRINK) {
+    ctx.state.tutorialStep = TutorialStep.TOILET;
+    logTutorialMsg(ctx.state, '-нужно в туалет, соседняя комната похожа на сан узел', ctx.state.time + 15);
   }
 
   return { handled: true };
@@ -499,10 +500,6 @@ function runRelieve(ctx: ContentInteractionContext, resolved: ResolvedInteractiv
   needs.poo = Math.max(0, needs.poo + Math.min(0, action.pooDelta ?? 0));
   pushMsg(ctx.state, action.message ?? 'Стало легче.', action.color);
   publishInteractiveEvent(ctx, resolved, action);
-
-  if (resolved.def.id === 'toilet_relief') {
-    handleToiletTutorial(ctx.state, ctx.world, ctx.player, ctx.entities, ctx.nextEntityId, ctx.lookX, ctx.lookY);
-  }
 
   return { handled: true };
 }

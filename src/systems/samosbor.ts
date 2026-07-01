@@ -43,7 +43,7 @@ import { getMaxHp, scaleMonsterHp, scaleMonsterSpeed, randomRPG } from './rpg';
 import { publishEvent } from './events';
 import { generateNpcLoadout } from './procedural_loot';
 import { setDoorState } from './door_state';
-import { completeTutorial } from './tutorial';
+
 import {
   ensureFloorRunState,
   nextFloorRunSamosborCooldown,
@@ -2553,9 +2553,6 @@ export function updateSamosbor(
       doStitch();
     }
     
-    if (state.tutorialMode) {
-      completeTutorial(state);
-    }
     
     return false;
   }

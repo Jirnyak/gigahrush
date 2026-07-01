@@ -81,6 +81,7 @@ import {
 } from './status';
 import { consumeNoisyDocumentDelay } from './document_scent';
 import { pushNpcLogMessage } from './ai/barks';
+import { logTutorialMsg, TutorialStep } from './tutorial';
 import { isPlayerEntity } from './player_actor';
 import {
   craftRecipeLearnedMessage,
@@ -2146,6 +2147,11 @@ function pickupDropItems(
       }
       msgs.push(msg(`Подобрано: ${def?.name ?? item.defId}`, time, '#dd4'));
       publishPlayerItemEvent(state, player, 'player_pick_item', item.defId, moved, 2, zoneId);
+
+      if (state && state.tutorialMode && item.defId === 'tut_cafe_key' && state.tutorialStep === TutorialStep.TOILET) {
+        logTutorialMsg(state, '-должно быть это ключ от двери', time + 15);
+      }
+
       pickedItems.push({ defId: item.defId, count: moved, data: acid ? undefined : item.data });
       handleVeretarPickupRisk(player, item.defId, msgs, time, state, zoneId);
       item.count -= moved;
