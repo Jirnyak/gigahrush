@@ -22,7 +22,7 @@
 /*   To add a new hand-crafted room, create a .ts file here      */
 /*   and call it from generateWorld() below.                     */
 
-import { type Entity, FloorLevel } from '../../core/types';
+import { type Entity, FloorLevel, Cell, Tex } from '../../core/types';
 import { World } from '../../core/world';
 import { reassignQuestGivers } from '../../systems/quests';
 import { calcZoneLevel } from '../../systems/rpg';
@@ -53,7 +53,8 @@ export function generateWorld(_seed?: number, isTutorial: boolean = false): { wo
   const apartments = generateApartments(world);
 
   /* ── A1: Start room (briefing hall) ─────────────── */
-  const startRoom = generateTutorRoom(world, world.rooms.length, entities, { v: nextId }, isTutorial);
+  const tutorRoomStartIndex = world.rooms.length;
+  const startRoom = generateTutorRoom(world, world.rooms.length, entities, { v: nextId });
   nextId = entities.reduce((mx, e) => Math.max(mx, e.id), nextId) + 1;
 
   /* ── A1b: Yakov's lab (at distance from spawn) ──── */
@@ -79,16 +80,32 @@ export function generateWorld(_seed?: number, isTutorial: boolean = false): { wo
   /* ── B: Volatile gigastructure ─────────────────────── */
   generateVolatileMaze(world);
 
-  if (isTutorial) {
-    for (const doorData of world.doors.values()) {
-      const isInsideA = doorData.roomA >= 0 && doorData.roomA < world.apartmentRoomCount;
-      const isInsideB = doorData.roomB >= 0 && doorData.roomB < world.apartmentRoomCount;
-      const isOutsideA = doorData.roomA < 0 || doorData.roomA >= world.apartmentRoomCount;
-      const isOutsideB = doorData.roomB < 0 || doorData.roomB >= world.apartmentRoomCount;
+  // The user strictly wants the cafeteria (tutorRoomStartIndex + 1) and 
+  // bathroom (tutorRoomStartIndex + 2) to only connect to each other 
+  // and the cafeteria to the hall (tutorRoomStartIndex).
+  // Any other doors from these two inner rooms to the outside must be removed and replaced with walls.
+  const cafeId = tutorRoomStartIndex + 1;
+  const bathId = tutorRoomStartIndex + 2;
+  const hallId = tutorRoomStartIndex;
+
+  for (const doorData of Array.from(world.doors.values())) {
+    const isInnerA = doorData.roomA === cafeId || doorData.roomA === bathId;
+    const isInnerB = doorData.roomB === cafeId || doorData.roomB === bathId;
+    const isOutsideA = doorData.roomA !== cafeId && doorData.roomA !== bathId && doorData.roomA !== hallId;
+    const isOutsideB = doorData.roomB !== cafeId && doorData.roomB !== bathId && doorData.roomB !== hallId;
+    
+    if ((isInnerA && isOutsideB) || (isInnerB && isOutsideA)) {
+      world.cells[doorData.idx] = Cell.WALL;
+      world.wallTex[doorData.idx] = Tex.TILE_W;
+      world.doors.delete(doorData.idx);
       
-      if ((isInsideA && isOutsideB) || (isInsideB && isOutsideA)) {
-        doorData.state = 2; // DoorState.LOCKED
-        doorData.keyId = 'tut_cafe_key';
+      if (doorData.roomA >= 0 && world.rooms[doorData.roomA]) {
+        const roomA = world.rooms[doorData.roomA];
+        roomA.doors = roomA.doors.filter(d => d !== doorData.idx);
+      }
+      if (doorData.roomB >= 0 && world.rooms[doorData.roomB]) {
+        const roomB = world.rooms[doorData.roomB];
+        roomB.doors = roomB.doors.filter(d => d !== doorData.idx);
       }
     }
   }
