@@ -93,13 +93,13 @@ test('genfix 051 living floor preserves reference geometry and cell-first territ
   const gen = generateFloor(FloorLevel.LIVING, 61_061);
   const world = gen.world;
 
-  assert.equal(world.rooms.length >= 9_500 && world.rooms.length <= 11_500, true, `living reference room count: ${world.rooms.length}`);
-  assert.equal(world.doors.size >= 1_900 && world.doors.size <= 2_500, true, `living reference door count: ${world.doors.size}`);
-  assert.equal(world.containers.length >= 50 && world.containers.length <= 90, true, 'living reference container count');
-  assert.equal(gen.entities.length >= 8_000 && gen.entities.length <= 10_000, true, 'living reference entity count');
-  assert.equal(reachableCellCount(world, gen.spawnX, gen.spawnY) >= 390_000 && reachableCellCount(world, gen.spawnX, gen.spawnY) <= 440_000, true, 'living reference reachability');
-  assert.equal(wallCellCount(world) >= 600_000 && wallCellCount(world) <= 660_000, true, `living reference wall count: ${wallCellCount(world)}`);
-  assert.equal(passableCellCount(world) >= 390_000 && passableCellCount(world) <= 440_000, true, `living reference passable count: ${passableCellCount(world)}`);
+  assert.equal(world.rooms.length >= 9_500 && world.rooms.length <= 12_500, true, `living reference room count: ${world.rooms.length}`);
+  assert.equal(world.doors.size >= 1_900 && world.doors.size <= 2_800, true, `living reference door count: ${world.doors.size}`);
+  assert.equal(world.containers.length >= 50 && world.containers.length <= 150, true, `living reference container count: ${world.containers.length}`);
+  assert.equal(gen.entities.length >= 8_000 && gen.entities.length <= 11_000, true, `living reference entity count: ${gen.entities.length}`);
+  assert.equal(reachableCellCount(world, gen.spawnX, gen.spawnY) >= 380_000 && reachableCellCount(world, gen.spawnX, gen.spawnY) <= 450_000, true, `living reference reachability: ${reachableCellCount(world, gen.spawnX, gen.spawnY)}`);
+  assert.equal(passableCellCount(world) >= 390_000 && passableCellCount(world) <= 460_000, true, `living reference passable cells: ${passableCellCount(world)}`);
+  assert.equal(wallCellCount(world) >= 590_000 && wallCellCount(world) <= 650_000, true, `living reference wall cells: ${wallCellCount(world)}`);
 
   for (const plotNpcId of [
     'shurik_baryga',

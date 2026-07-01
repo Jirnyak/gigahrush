@@ -649,7 +649,7 @@ export function getRecentEvents(state: GameState, filter: EventFilter = {}): Wor
     const event = items[idx];
     if (!event) continue;
 
-    if (filterSinceId !== undefined && event.id <= filterSinceId) continue;
+    if (filterSinceId !== undefined && event.id <= filterSinceId) break;
     if (filterType !== undefined && event.type !== filterType) continue;
     if (filterZoneId !== undefined && event.zoneId !== filterZoneId) continue;
     if (filterFloor !== undefined && event.floor !== filterFloor) continue;
@@ -702,7 +702,7 @@ export function getZoneEvents(state: GameState, zoneId: number, filter: EventFil
     const event = items[idx];
     if (!event) continue;
 
-    if (filterSinceId !== undefined && event.id <= filterSinceId) continue;
+    if (filterSinceId !== undefined && event.id <= filterSinceId) break;
     if (event.zoneId !== zoneId) continue;
     if (filterType !== undefined && event.type !== filterType) continue;
     if (filterFloor !== undefined && event.floor !== filterFloor) continue;

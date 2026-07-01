@@ -16,7 +16,7 @@ import {
 } from '../src/systems/alife';
 import { setFloorRunState } from '../src/systems/procedural_floors';
 import { isFloor69FemaleSprite } from '../src/entities/procedural_visuals';
-import { NPC_VISUAL_FLOOR69_FEMALE } from '../src/entities/npc_visuals';
+import { NPC_VISUAL_WORKER69 } from '../src/data/art_sprite_manifest';
 import { testGenerationMatrix } from './generator_helpers';
 
 function socialProceduralSpec(): ProceduralFloorSpec {
@@ -145,7 +145,7 @@ testGenerationMatrix('floor 69 adult sprite templates survive A-Life materializa
   assert.equal(materializedSprites.length <= templateSprites.length, true);
   assert.equal(materializedSprites.every(entity =>
     entity.isFemale === true &&
-    entity.npcVisualId === NPC_VISUAL_FLOOR69_FEMALE &&
+    entity.npcVisualId === NPC_VISUAL_WORKER69 &&
     entity.name?.startsWith('Этаж 69: работница ') &&
     entity.persistentNpcId === `alife:${entity.alifeId}`
   ), true);

@@ -46,7 +46,7 @@ export const NPC_ROLE_PROFILES: readonly NpcRoleProfile[] = [
     outputOccupation: Occupation.WORKER69,
     candidateFaction: Faction.CITIZEN,
     sourceNamePrefix: 'Этаж 69: посетитель ',
-    roleNamePrefix: 'Этаж 69: персонал ',
+    roleNamePrefix: 'Этаж 69: работница ',
     promotionRate: 0.78,
     npcVisualId: NPC_VISUAL_WORKER69,
     tags: ['floor_69', 'adult_service', 'ambient_promotion'],

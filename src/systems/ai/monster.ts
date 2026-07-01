@@ -6346,6 +6346,9 @@ function sporeCarpetContainerWakeTarget(
       break;
     }
   }
+  if (events.length === 0 && state.worldEvents) {
+    maxId = Math.max(maxId, state.worldEvents.nextId - 1);
+  }
   ai.sporeLastContainerEventId = maxId;
   return target;
 }

@@ -28,6 +28,7 @@ import { PROCEDURAL_POPULATION_PROFILES, proceduralPopulationBudget } from '../s
 import { ROUTE_GATE_DEFS } from '../src/data/route_gates';
 import { isFloor69FemaleSprite } from '../src/entities/procedural_visuals';
 import { NPC_VISUAL_FLOOR69_FEMALE } from '../src/entities/npc_visuals';
+import { NPC_VISUAL_WORKER69 } from '../src/data/art_sprite_manifest';
 import {
   commitFloorRunEntry,
   currentFloorRunEntry,
@@ -5788,7 +5789,7 @@ testGenerationMatrix('floor 69 uses the shared field as an adult social-debt rou
   assert.equal(floor69FemaleSprites.length, generatedWorkers.length);
   assert.equal(floor69FemaleSprites.every(e =>
     e.isFemale === true &&
-    e.npcVisualId === NPC_VISUAL_FLOOR69_FEMALE &&
+    e.npcVisualId === NPC_VISUAL_WORKER69 &&
     e.name?.startsWith('Этаж 69: работница ')
   ), true);
   assert.equal(generatedWorkers.every(e => isFloor69FemaleSprite(e.sprite)), true);

@@ -342,6 +342,8 @@ export function updateNPC(
           }
         }
       }
+    } else if (state.worldEvents) {
+      ai.lastSeenUrinationId = Math.max(sinceId, state.worldEvents.nextId - 1);
     }
   }
   if (special.held) {

@@ -633,9 +633,10 @@ export class EntityIndex {
           const xx = (bx + ox + BUCKETS_PER_AXIS) & BUCKET_MASK;
           const bucketIndex = yy * BUCKETS_PER_AXIS + xx;
           let minBucketD2 = -1;
-          if (span > 1 && ring === span) {
+          if (ring > 0) {
             minBucketD2 = bucketMinDistanceSq(x, y, xx, yy);
             if (minBucketD2 > r2) continue;
+            if (capped && out.length === cap && minBucketD2 > distances[out.length - 1]) continue;
           }
           const bucket = dynamicBuckets[bucketIndex];
           bucketChecks++;

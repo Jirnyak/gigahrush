@@ -442,6 +442,7 @@ export interface AIState {
   staggerTimer?: number;      // temporary interrupt / stagger lockout
   lastSeenTargetId?: number;  // event throttle for first sight / escape beats
   lastSeenUrinationId?: number;
+  microScanCd?: number;       // cooldown until next micro stimulus scan
   sprintTimer?: number;       // straight-line special burst countdown
   sprintDx?: number;          // normalized burst direction X
   sprintDy?: number;          // normalized burst direction Y

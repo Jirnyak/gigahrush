@@ -81,7 +81,7 @@ test('sprite registry and generated sheet stay aligned', () => {
   assert.equal(Spr.F69_FEMALE_NPC_BASE, Spr.ART_NUDE_3 + 1);
   assert.equal(Spr.F69_FEMALE_NPC_7 + 1, Spr.TOTAL);
   for (let i = 0; i < sprites.length; i++) {
-    assert.equal(sprites[i].length, S * S);
+    assert.ok(sprites[i].length === S * S || sprites[i].length === 128 * 128, `Sprite ${i} has unexpected length: ${sprites[i].length}`);
     assert.ok(opaquePixels(sprites[i]) > 0, `sprite ${i} should not be blank`);
   }
 

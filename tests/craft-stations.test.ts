@@ -126,6 +126,8 @@ test('craft station interaction opens generic craft and disassembly hooks', () =
   assert.equal(craft.openedOverlay, true);
   assert.equal(opened.at(-1), 'craft:lathe:craft_lathe');
 
+  player.x = room.x + 4.5;
+
   const target = findInteractionTarget({
     world,
     state,

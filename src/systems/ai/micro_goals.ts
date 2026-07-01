@@ -145,6 +145,9 @@ export function evaluateMicroStimuli(world: World, e: Entity, time: number, msgs
     return;
   }
   
+  if ((ai.microScanCd ?? 0) > time) return;
+  ai.microScanCd = time + 0.3 + Math.random() * 0.3;
+  
   // Bounded scan for greet (can happen while walking)
   if (e.type === EntityType.NPC) {
     const index = getEntityIndex();

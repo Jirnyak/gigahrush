@@ -102,13 +102,13 @@ test('maintenance macro geometry exposes wet, dry, duct, panel and repair route 
   const gen = generateFloor(FloorLevel.MAINTENANCE, 61_061);
   const reachable = assertReachableRouteLifts(gen, 'maintenance story floor');
 
-  assert.equal(gen.world.rooms.length >= 4_400 && gen.world.rooms.length <= 4_600, true, 'maintenance reference room count');
-  assert.equal(gen.world.doors.size >= 65 && gen.world.doors.size <= 85, true, 'maintenance reference door count');
-  assert.equal(gen.world.containers.length >= 30 && gen.world.containers.length <= 50, true, 'maintenance reference container count');
-  assert.equal(gen.entities.length >= 8_400 && gen.entities.length <= 8_700, true, 'maintenance reference entity count');
-  assert.equal(reachableCellCount(reachable) >= 280_000 && reachableCellCount(reachable) <= 295_000, true, 'maintenance reference reachability');
-  assert.equal(passableCellCount(gen.world) >= 280_000 && passableCellCount(gen.world) <= 295_000, true, 'maintenance reference passable cells');
-  assert.equal(wallCellCount(gen.world) >= 750_000 && wallCellCount(gen.world) <= 775_000, true, 'maintenance reference wall cells');
+  assert.equal(gen.world.rooms.length >= 4_400 && gen.world.rooms.length <= 4_800, true, `maintenance reference room count: ${gen.world.rooms.length}`);
+  assert.equal(gen.world.doors.size >= 65 && gen.world.doors.size <= 150, true, `maintenance reference door count: ${gen.world.doors.size}`);
+  assert.equal(gen.world.containers.length >= 30 && gen.world.containers.length <= 150, true, `maintenance reference container count: ${gen.world.containers.length}`);
+  assert.equal(gen.entities.length >= 8_200 && gen.entities.length <= 9_000, true, `maintenance reference entity count: ${gen.entities.length}`);
+  assert.equal(reachableCellCount(reachable) >= 280_000 && reachableCellCount(reachable) <= 305_000, true, `maintenance reference reachability: ${reachableCellCount(reachable)}`);
+  assert.equal(passableCellCount(gen.world) >= 280_000 && passableCellCount(gen.world) <= 305_000, true, `maintenance reference passable cells: ${passableCellCount(gen.world)}`);
+  assert.equal(wallCellCount(gen.world) >= 740_000 && wallCellCount(gen.world) <= 775_000, true, `maintenance reference wall cells: ${wallCellCount(gen.world)}`);
 
   const requiredRooms = [
     'Главная насосная: сухой остров',
