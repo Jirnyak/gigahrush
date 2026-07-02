@@ -61,6 +61,9 @@ export function shouldUseTouchControls(): boolean {
 
   if (window.matchMedia) {
     const isCoarse = window.matchMedia('(pointer: coarse)').matches;
+    const isFine = window.matchMedia('(pointer: fine)').matches;
+    
+    if (isFine && !isCoarse) return false;
     if (isCoarse) return true;
     
     const hasCoarse = window.matchMedia('(any-pointer: coarse)').matches;
