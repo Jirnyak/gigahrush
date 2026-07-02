@@ -42,6 +42,7 @@ import {
   disposeWebGL, setDynamicSkyTexture, getRenderSceneDebugStats, rebuildProceduralSpriteCache, type DynamicSkyTexture,
 } from './render/webgl';
 import { drawHUD, drawPointerCaptureGate } from './render/hud';
+import { drawFeedbackMenu } from './render/feedback_ui';
 import {
   spawnBloodHit, spawnDeathPool, updateBloodTrails, updateParticles, particles,
   spawnProjectileBodyImpact, spawnProjectileFloorImpact, spawnProjectileWallImpact, isEnergyProjectileImpact,
@@ -560,7 +561,7 @@ const FULL_MAP_RADIUS_DEFAULT = 200;
 const FULL_MAP_RADIUS_MIN = 48;
 const FULL_MAP_RADIUS_MAX = W / 2;
 const FULL_MAP_ZOOM_STEP = 1.18;
-type TitleInputField = Extract<TitleHitField, 'language' | 'name' | 'age' | 'sex' | 'seed' | 'actorCap' | 'addNpc' | 'start' | 'continue' | 'trailer'>;
+type TitleInputField = Extract<TitleHitField, 'language' | 'name' | 'age' | 'sex' | 'seed' | 'actorCap' | 'addNpc' | 'start' | 'continue' | 'trailer' | 'feedback'>;
 const NPC_INTAKE_ENABLED = Boolean((globalThis as { __GIGAHRUSH_NPC_INTAKE_ENABLED__?: boolean }).__GIGAHRUSH_NPC_INTAKE_ENABLED__);
 const smokeDebug = new URLSearchParams(window.location.search).has('smoke');
 
@@ -581,7 +582,7 @@ function getTitleSetupFields(): readonly TitleInputField[] {
   fields.push('start');
   if (NPC_INTAKE_ENABLED) fields.push('addNpc');
   fields.push('trailer');
-  fields.push('language', 'name', 'age', 'sex', 'seed', 'actorCap');
+  fields.push('language', 'name', 'age', 'sex', 'seed', 'actorCap', 'feedback');
   return fields;
 }
 let started = false;
@@ -805,6 +806,11 @@ function openNpcIntakePage(): void {
 }
 
 function editTitleFieldFromPointer(field: TitleInputField): void {
+  if (field === 'feedback') {
+    titleMode = 'feedback';
+    showTitle();
+    return;
+  }
   if (field === 'start') {
     startGameFromTitle();
     return;
@@ -890,6 +896,7 @@ function titleSetupRows(cursorOn: boolean): TitleSetupRowView[] {
       hint: lang.setupActorCapHint,
       selected: selected('actorCap'),
     },
+    { field: 'feedback', label: 'ОБРАТНАЯ СВЯЗЬ', value: 'ТИТРЫ И ТГ', hint: 'Команда разработчиков и комьюнити', selected: selected('feedback') },
   );
   return rows;
 }
@@ -2307,6 +2314,7 @@ function initGame(runSeedOverride?: number, initialFloor: FloorLevel = FloorLeve
     showFactions: false,
     factionRankScroll: 0,
     showDemos: false,
+    showFeedback: false,
     demosCursor: 0,
     demosSearch: '',
     demosSearchActive: false,
@@ -5927,8 +5935,40 @@ function runGameMenuSelection(sel: number): void {
     case 'graphics':
       openUiSettingsMenu('graphics', 'camera_fov');
       break;
+    case 'feedback':
+      openFeedbackMenu();
+      return;
   }
   syncPauseState();
+}
+
+function openFeedbackMenu(): void {
+  state.showMenu = false;
+  state.showInventory = false;
+  state.showQuests = false;
+  state.showNpcMenu = false;
+  closeContainerMenu();
+  closeCraftMenu();
+  state.showDebug = false;
+  state.showFactions = false;
+  state.showLog = false;
+  state.showHelp = false;
+  state.showControls = false;
+  state.showUiSettings = false;
+  state.showMapLegend = false;
+  state.showDemos = false;
+  state.mapMode = 0;
+  state.showFeedback = true;
+  cancelControlCapture();
+  resetMenuRepeats();
+  syncPauseState();
+  updateMobileContext(true);
+}
+
+function closeFeedbackMenu(): void {
+  state.showFeedback = false;
+  syncPauseState();
+  updateMobileContext(true);
 }
 
 function openDemosMenu(): void {
@@ -6802,6 +6842,11 @@ function handleMobileHudTap(x: number, y: number): void {
     return;
   }
 
+  if (state.showFeedback) {
+    closeFeedbackMenu();
+    return;
+  }
+
   if (state.showControls) {
     handleTapControls(y, h, sy);
   } else if (state.showUiSettings) {
@@ -6868,6 +6913,15 @@ let suppressNextTitleClick = false;
 function handleTitleCanvasPointerUp(e: PointerEvent): void {
   if (started || mobileControls?.isEnabled()) return;
   if (pointerCaptureGateVisible()) return;
+  if (titleMode === 'feedback') {
+    window.open('https://t.me/gigah_rush', '_blank');
+    titleMode = 'setup';
+    showTitle();
+    suppressNextTitleClick = true;
+    e.preventDefault();
+    e.stopPropagation();
+    return;
+  }
   const rect = canvas.getBoundingClientRect();
   const x = (e.clientX - rect.left) * (hudCanvas.width / Math.max(1, rect.width));
   const y = (e.clientY - rect.top) * (hudCanvas.height / Math.max(1, rect.height));
@@ -7264,6 +7318,17 @@ function handleMenuInput(): void {
   // ── One-page HELP poster ─────────────────────────────────
   if (state.showHelp) {
     if ((acceptEdge && !helpOpenedThisFrame) || closeEdge) closeHelpMenu();
+    syncMenuInputBaselines();
+    syncPauseState();
+    return;
+  }
+
+  // ── Feedback Menu ────────────────────────────────────────
+  if (state.showFeedback) {
+    if (acceptEdge) {
+      window.open('https://t.me/gigah_rush', '_blank');
+    }
+    if (acceptEdge || closeEdge) closeFeedbackMenu();
     syncMenuInputBaselines();
     syncPauseState();
     return;
@@ -8400,6 +8465,13 @@ function showTitle(): void {
     cursorOn,
     mobile: mobileControls?.isEnabled() === true,
   });
+
+  if (titleMode === 'feedback') {
+    const scale = Math.min(ctx.canvas.width / 720, ctx.canvas.height / 520);
+    const s = Math.max(0.42, Math.min(1.35, scale));
+    drawFeedbackMenu(ctx, null as any, s, s, performance.now());
+  }
+
   updateMobileContext(true);
 }
 
@@ -8497,6 +8569,19 @@ function startHandler(e: KeyboardEvent): void {
     return;
   }
 
+  if (titleMode === 'feedback') {
+    if (e.code === 'Escape' || e.code === 'Backspace') {
+      titleMode = 'setup';
+      showTitle();
+    } else if (e.code === 'Enter') {
+      window.open('https://t.me/gigah_rush', '_blank');
+      titleMode = 'setup';
+      showTitle();
+    }
+    e.preventDefault();
+    return;
+  }
+
   if (titleMode === 'language') {
     if (e.code === 'ArrowLeft' || e.code === 'ArrowRight') {
       cycleTitleLanguage(e.code === 'ArrowRight' ? 1 : -1);
@@ -8551,6 +8636,10 @@ function startHandler(e: KeyboardEvent): void {
     e.preventDefault();
     if (titleInputField === 'continue') continueGameFromTitle();
     else if (titleInputField === 'start' || titleInputField === 'trailer') startGameFromTitle();
+    else if (titleInputField === 'feedback') {
+      titleMode = 'feedback';
+      showTitle();
+    }
     else if (titleInputField === 'addNpc') openNpcIntakePage();
     else if (titleInputField === 'language') cycleTitleLanguage(1);
     else if (titleInputField === 'actorCap') adjustTitleActiveActorSoftLimit(1);

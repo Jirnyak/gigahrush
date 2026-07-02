@@ -2,8 +2,8 @@ import { TITLE_LANGUAGES, type TitleLanguageId, type TitleFlagKind, titleLanguag
 import { controlBindingLabel } from '../systems/controls';
 import { fitText } from './ui_text';
 
-export type TitleScreenMode = 'language' | 'setup';
-export type TitleHitField = 'language' | 'name' | 'age' | 'sex' | 'seed' | 'actorCap' | 'addNpc' | 'trailer' | 'start' | 'continue';
+export type TitleScreenMode = 'language' | 'setup' | 'feedback';
+export type TitleHitField = 'language' | 'name' | 'age' | 'sex' | 'seed' | 'actorCap' | 'addNpc' | 'trailer' | 'start' | 'continue' | 'feedback';
 
 export interface TitleLanguageHit {
   id?: TitleLanguageId;
@@ -80,7 +80,9 @@ export function drawTitleScreen(ctx: CanvasRenderingContext2D, options: DrawTitl
 
   const hits = options.mode === 'setup'
     ? drawSetupMenu(ctx, cx, cy - (options.setupRows.length > 7 ? 124 : options.setupRows.length > 5 ? 104 : 48) * s, s, options)
-    : drawLanguageMenu(ctx, cx, cy - 44 * s, s, options.languageId);
+    : options.mode === 'language'
+      ? drawLanguageMenu(ctx, cx, cy - 44 * s, s, options.languageId)
+      : [];
 
   ctx.fillStyle = '#555';
   ctx.font = `${Math.round(12 * s)}px monospace`;

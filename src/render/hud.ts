@@ -23,6 +23,7 @@ import { drawLogMenu } from './log_ui';
 import { drawFactionMenu } from './factions_ui';
 import { drawDemosMenu } from './demos_ui';
 import { drawGameMenu } from './menu_ui';
+import { drawFeedbackMenu } from './feedback_ui';
 import { drawControlsMenu } from './controls_ui';
 import { drawHelpMenu } from './help_ui';
 import { drawUiSettingsMenu } from './ui_settings_ui';
@@ -1827,6 +1828,11 @@ export function drawHUD(
   // ── Game menu (Enter) ────────────────────────────────────
   if (state.showMenu) {
     drawGameMenu(ctx, state, msx, msy, time);
+  }
+
+  // ── Feedback / Credits menu ──────────────────────────────
+  if (state.showFeedback) {
+    drawFeedbackMenu(ctx, state, msx, msy, time);
   }
 
   // ── NPC interaction menu ─────────────────────────────────

@@ -1220,6 +1220,7 @@ export interface GameState {
   showFactions: boolean;       // faction relations matrix (F key)
   factionRankScroll: number;   // A-Life leaderboard scroll inside F menu
   showDemos: boolean;           // read-only NPC infoset profile browser
+  showFeedback: boolean;        // feedback and credits menu
   demosCursor: number;          // zero-based A-Life profile cursor
   demosSearch: string;          // transient in-menu search query
   demosSearchActive: boolean;   // text input focus for Demos search
