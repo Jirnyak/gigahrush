@@ -71,14 +71,15 @@ function portraitCanvas(profile: DemosProfile): HTMLCanvasElement | null {
     profile.sprite,
     profile.npcVisualId,
   );
+  const side = Math.floor(Math.sqrt(data.length));
   const canvas = document.createElement('canvas');
-  canvas.width = S;
-  canvas.height = S;
+  canvas.width = side;
+  canvas.height = side;
   const ctx = canvas.getContext('2d');
   if (!ctx) return null;
-  const bytes = new Uint8ClampedArray(S * S * 4);
+  const bytes = new Uint8ClampedArray(side * side * 4);
   bytes.set(new Uint8Array(data.buffer, data.byteOffset, data.byteLength));
-  ctx.putImageData(new ImageData(bytes, S, S), 0, 0);
+  ctx.putImageData(new ImageData(bytes, side, side), 0, 0);
   portraitCache.set(key, canvas);
   trimPortraitCache();
   return canvas;
@@ -100,15 +101,17 @@ function drawFallbackPortrait(
     profile.sprite,
     profile.npcVisualId,
   );
-  const srcX0 = 10;
-  const srcX1 = 54;
-  const srcY0 = 0;
-  const srcY1 = 40;
+  const side = Math.floor(Math.sqrt(data.length));
+  const scale = side / S;
+  const srcX0 = Math.floor(10 * scale);
+  const srcX1 = Math.floor(54 * scale);
+  const srcY0 = Math.floor(0 * scale);
+  const srcY1 = Math.floor(40 * scale);
   const px = w / (srcX1 - srcX0 + 1);
   const py = h / (srcY1 - srcY0 + 1);
   for (let sy = srcY0; sy <= srcY1; sy++) {
     for (let sx = srcX0; sx <= srcX1; sx++) {
-      const c = data[sy * S + sx];
+      const c = data[sy * side + sx];
       const a = c >>> 24;
       if (a === 0) continue;
       const r = c & 0xff;
@@ -135,8 +138,9 @@ function drawProfilePortrait(
   const canvas = portraitCanvas(profile);
   const pad = Math.max(4, Math.floor(Math.min(w, h) * 0.07));
   if (canvas) {
+    const scale = canvas.width / S;
     ctx.imageSmoothingEnabled = false;
-    ctx.drawImage(canvas, 10, 0, 45, 40, x + pad, y + pad, w - pad * 2, h - pad * 2);
+    ctx.drawImage(canvas, 10 * scale, 0 * scale, 45 * scale, 40 * scale, x + pad, y + pad, w - pad * 2, h - pad * 2);
     ctx.imageSmoothingEnabled = true;
   } else {
     drawFallbackPortrait(ctx, profile, x + pad, y + pad, w - pad * 2, h - pad * 2);
