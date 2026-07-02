@@ -383,5 +383,6 @@ function roomTypeName(roomType: RoomType): string {
     case RoomType.SMOKING: return 'курилка';
     case RoomType.OFFICE: return 'кабинет';
     case RoomType.HQ: return 'штаб';
+    case RoomType.CLASSROOM: return 'класс';
   }
 }

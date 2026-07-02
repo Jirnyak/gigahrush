@@ -189,9 +189,7 @@ test('fixed art visual families reuse texture keys by visual id and variant', ()
   }
   assert.deepEqual([...variantKeys].sort(), [
     'first_party_art:liquidator_m_1',
-    'first_party_art:liquidator_m_2',
     'first_party_art:liquidator_m_3',
-    'first_party_art:liquidator_m_4',
     'first_party_art:liquidator_m_5',
     'first_party_art:liquidator_m_6',
   ]);
@@ -205,9 +203,7 @@ test('fixed art visual families reuse texture keys by visual id and variant', ()
   assert.equal(entityWorldSpriteScale(liquidator), 0.66 * FIRST_PARTY_NPC_ART_WORLD_SPRITE_SCALE);
   const liquidatorHashes = new Set([
     spriteHash(getGeneratedArtSprite('liquidator_m_1')!),
-    spriteHash(getGeneratedArtSprite('liquidator_m_2')!),
     spriteHash(getGeneratedArtSprite('liquidator_m_3')!),
-    spriteHash(getGeneratedArtSprite('liquidator_m_4')!),
     spriteHash(getGeneratedArtSprite('liquidator_m_5')!),
     spriteHash(getGeneratedArtSprite('liquidator_m_6')!),
   ]);

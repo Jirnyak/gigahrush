@@ -8,6 +8,7 @@ import {
   ZoneFaction,
   type Entity,
   type Room,
+  Occupation,
 } from '../../core/types';
 import type { World } from '../../core/world';
 import { isPlayerEntity } from '../player_actor';
@@ -160,6 +161,9 @@ export function getNpcEmergencyRole(npc: Entity): NpcEmergencyRole {
     case Faction.WILD: return 'wild';
     case Faction.SCIENTIST: return 'scientist';
     default: break;
+  }
+  if (npc.occupation === Occupation.CIVIL_DEFENSE) {
+    return 'liquidator';
   }
   if (npc.isTraveler || occupationHasAnyProfileTag(npc.occupation, ['traveler', 'patrol', 'combat'])) {
     return 'traveler';

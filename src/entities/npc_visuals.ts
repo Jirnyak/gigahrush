@@ -14,6 +14,7 @@ import {
   NPC_VISUAL_CITIZEN_OLD_FEMALE,
   NPC_VISUAL_CITIZEN_CHILD_MALE,
   NPC_VISUAL_CITIZEN_CHILD_FEMALE,
+  NPC_VISUAL_CIVIL_DEFENSE_MALE,
   artSpriteManifestRow,
 } from '../data/art_sprite_manifest';
 import { NPC_VISUAL_FLOOR69_FEMALE_ID } from '../data/design_floor_profiles';
@@ -55,6 +56,7 @@ export {
   NPC_VISUAL_CITIZEN_OLD_FEMALE,
   NPC_VISUAL_CITIZEN_CHILD_MALE,
   NPC_VISUAL_CITIZEN_CHILD_FEMALE,
+  NPC_VISUAL_CIVIL_DEFENSE_MALE,
 };
 
 export interface NpcVisualContext {

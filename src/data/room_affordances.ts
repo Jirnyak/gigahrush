@@ -58,6 +58,12 @@ export const ROOM_AFFORDANCES: Readonly<Record<RoomType, RoomAffordanceDef>> = {
     expectedFeatures: [Feature.TABLE, Feature.CHAIR],
     tags: ['social', 'public', 'hall', 'shelter'],
   },
+  [RoomType.CLASSROOM]: {
+    roomType: RoomType.CLASSROOM,
+    affordances: { social: 24, work: 24, shelter: 8 },
+    expectedFeatures: [Feature.TABLE, Feature.CHAIR, Feature.SHELF],
+    tags: ['education', 'social', 'school'],
+  },
   [RoomType.PRODUCTION]: {
     roomType: RoomType.PRODUCTION,
     affordances: { work: 35, store: 8 },

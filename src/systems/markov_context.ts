@@ -101,6 +101,7 @@ const ROOM_TAGS: Record<RoomType, string> = {
   [RoomType.SMOKING]: 'smoking',
   [RoomType.OFFICE]: 'office',
   [RoomType.HQ]: 'hq',
+  [RoomType.CLASSROOM]: 'classroom',
 };
 
 const FACTION_TAGS: Record<Faction, string> = {

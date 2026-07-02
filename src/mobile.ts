@@ -56,9 +56,20 @@ function clamp(v: number, lo: number, hi: number): number {
 export function shouldUseTouchControls(): boolean {
   const ua = navigator.userAgent;
   const mobileUa = /android|iphone|ipad|ipod|mobile/i.test(ua);
+  
+  if (mobileUa) return true;
+
+  if (window.matchMedia) {
+    const isCoarse = window.matchMedia('(pointer: coarse)').matches;
+    if (isCoarse) return true;
+    
+    const hasCoarse = window.matchMedia('(any-pointer: coarse)').matches;
+    if (!hasCoarse) return false;
+  }
+
   const touchCapable = navigator.maxTouchPoints > 0 || 'ontouchstart' in globalThis;
   const compactViewport = Math.min(window.innerWidth, window.innerHeight) < 900;
-  return mobileUa || (touchCapable && compactViewport);
+  return touchCapable && compactViewport;
 }
 
 function mobileViewportSize(): { w: number; h: number } {

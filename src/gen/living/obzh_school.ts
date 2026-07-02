@@ -468,7 +468,7 @@ function generateObzhSchool(
   const classroom = carveRoom(
     world,
     nextRoomId++,
-    RoomType.COMMON,
+    RoomType.CLASSROOM,
     CLASSROOM_NAME,
     pos.x,
     pos.y,

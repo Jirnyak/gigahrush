@@ -2348,6 +2348,18 @@ export function updateSamosbor(
       );
     }
 
+    // Switch some armed NPCs to CIVIL_DEFENSE during samosbor
+    for (const npc of entities) {
+      if (npc.type !== EntityType.NPC || !npc.alive) continue;
+      const armed = !!npc.weapon || npc.faction === Faction.LIQUIDATOR;
+      if (armed && Math.random() < 0.3) {
+        if (npc.originalOccupation === undefined) {
+           npc.originalOccupation = npc.occupation;
+        }
+        npc.occupation = Occupation.CIVIL_DEFENSE;
+      }
+    }
+
     // NPCs hide (citizens/scientists only — handled by forceHide)
     forceHide(entities, state.msgs, state.time, world, state.clock, getSamosborShelterRoomIds(state));
 
@@ -2463,6 +2475,14 @@ export function updateSamosbor(
   }
 
   if (state.samosborActive && state.samosborTimer <= 0) {
+    // Restore professions
+    for (const npc of entities) {
+      if (npc.type === EntityType.NPC && npc.alive && npc.originalOccupation !== undefined) {
+        npc.occupation = npc.originalOccupation;
+        npc.originalOccupation = undefined;
+      }
+    }
+
     // ── END samosbor: unseal, mark for rebuild ──
     const endedVariant = getActiveSamosborVariant();
     const aftermathZone = activeSamosborZoneId >= 0 ? world.zones[activeSamosborZoneId] : undefined;

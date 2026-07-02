@@ -50,6 +50,7 @@ const ROOM_TYPE_NAMES: Record<RoomType, string> = {
   [RoomType.SMOKING]: 'курилки',
   [RoomType.OFFICE]: 'кабинеты',
   [RoomType.HQ]: 'штабы',
+  [RoomType.CLASSROOM]: 'классы',
 };
 
 const QUEST_TYPE_LABELS: Record<QuestType, string> = {

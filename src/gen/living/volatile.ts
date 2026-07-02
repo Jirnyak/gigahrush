@@ -201,6 +201,7 @@ function applyVolatileRoomFeatures(world: World, placed: Room[]): void {
     [RoomType.SMOKING]:    [Feature.LAMP, Feature.CHAIR, Feature.CHAIR, Feature.TABLE],
     [RoomType.OFFICE]:     [Feature.LAMP, Feature.TABLE, Feature.TABLE, Feature.CHAIR, Feature.SHELF],
     [RoomType.HQ]:         [Feature.LAMP, Feature.TABLE, Feature.CHAIR, Feature.SHELF],
+    [RoomType.CLASSROOM]:  [Feature.LAMP, Feature.TABLE, Feature.CHAIR, Feature.CHAIR, Feature.SHELF],
   };
   for (const room of placed) {
     world.features[world.idx(room.x + Math.floor(room.w / 2), room.y + Math.floor(room.h / 2))] = Feature.LAMP;

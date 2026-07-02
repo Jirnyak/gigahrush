@@ -117,6 +117,7 @@ const ROOM_TYPE_RGB: Record<RoomType, [number, number, number]> = {
   [RoomType.SMOKING]: [78, 76, 64],
   [RoomType.OFFICE]: [74, 72, 92],
   [RoomType.HQ]: [86, 72, 96],
+  [RoomType.CLASSROOM]: [74, 82, 96],
 };
 
 const ROOM_TYPE_RGB_CONTRAST: Record<RoomType, [number, number, number]> = {
@@ -131,6 +132,7 @@ const ROOM_TYPE_RGB_CONTRAST: Record<RoomType, [number, number, number]> = {
   [RoomType.SMOKING]: [204, 184, 126],
   [RoomType.OFFICE]: [178, 160, 232],
   [RoomType.HQ]: [220, 146, 244],
+  [RoomType.CLASSROOM]: [160, 180, 240],
 };
 
 interface FloorOverviewCache {

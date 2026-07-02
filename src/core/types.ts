@@ -120,6 +120,7 @@ export enum RoomType {
   SMOKING,     // курилка — free time
   OFFICE,      // бухгалтерия — paperwork
   HQ,          // штаб фракции — spawn + охрана
+  CLASSROOM,   // класс/ясли
 }
 
 export interface Room {
@@ -352,6 +353,8 @@ export enum Occupation {
   CLEANER,     // уборщица — чистит следы и быт
   WORKER69,    // работница этажа 69 — служебные комнаты, долги, сцена
   ENGINEER,    // инженер
+  TEACHER,     // учитель
+  CIVIL_DEFENSE, // гражданская оборона
 }
 
 export interface Needs {
@@ -624,6 +627,7 @@ export interface Entity {
   armorDefId?: string;
   faction?: Faction;
   occupation?: Occupation;
+  originalOccupation?: Occupation; // remembered profession when changed during emergency
   age?: number;                // compact character age; cold A-Life stores it as one byte
   sex?: CharacterSex;          // social/gameplay sex code; isFemale remains the grammar mirror
   playerRelation?: number;    // personal attitude to player, -100..100; below hostile threshold attacks
