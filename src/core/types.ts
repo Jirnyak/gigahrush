@@ -418,6 +418,8 @@ export enum NpcState {
   BREAK,       // legacy display label for short rest
 }
 
+
+
 export interface MonsterBaitLineState {
   x: number;
   y: number;
@@ -609,6 +611,7 @@ export interface Entity {
   name?: string;
   firstName?: string;
   lastName?: string;
+  staggerTimer?: number;       // hit stagger lock/stun duration
   monsterKind?: MonsterKind;
   monsterDmgMult?: number;     // authored temporary monster damage multiplier
   monsterArmorStacks?: number;  // stripped armor state for standalone armored monsters
@@ -643,6 +646,8 @@ export interface Entity {
   persistentNpcId?: string;   // stable non-plot NPC key, e.g. alife:123
   money?: number;             // наличные рубли
   accountRubles?: number;     // банковский счет; у игрока основной счет хранится в GameState.banking
+  height?: number;            // base physical height in meters (human adults ~ 1.8)
+  radius?: number;            // physical collision boundary radius override
   spriteScale?: number;       // sprite size multiplier (child = 0.6)
   spriteZ?: number;           // vertical offset: 0=ground, 0.5=eye level (projectiles)
   plotNpcId?: string;         // story NPC key (e.g. 'olga', 'barni', 'yakov') — see data/plot.ts
@@ -672,7 +677,7 @@ export interface Entity {
   activeBark?: { text: string; until: number; color: string; }; // UI: active world speech bubble
 }
 
-export type PlayerAlife = Pick<Entity, 'persistentNpcId' | 'age' | 'sex' | 'isFemale' | 'playerRelation' | 'karma' | 'kills' | 'npcKills' | 'monsterKills'>;
+export type PlayerAlife = Pick<Entity, 'persistentNpcId' | 'age' | 'sex' | 'isFemale' | 'playerRelation' | 'karma' | 'kills' | 'npcKills' | 'monsterKills' | 'height'>;
 
 // ── Items ────────────────────────────────────────────────────────
 

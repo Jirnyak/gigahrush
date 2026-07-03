@@ -13,7 +13,6 @@ export function selectMeleeTarget(
   weaponId?: string,
 ): Entity | undefined {
   const hitRadius = WEAPON_STATS[weaponId || '']?.hitRadius ?? 0.6;
-  const hitRadius2 = hitRadius * hitRadius;
 
   const dirX = Math.cos(attacker.angle);
   const dirY = Math.sin(attacker.angle);
@@ -37,7 +36,10 @@ export function selectMeleeTarget(
     const distDy = dy - dirY * closestT;
     const dist2 = distDx * distDx + distDy * distDy;
 
-    if (dist2 > hitRadius2) continue;
+    const targetRadius = candidate.type === EntityType.MONSTER ? 0.18 : 0.16;
+    const effectiveRadius = hitRadius + targetRadius;
+
+    if (dist2 > effectiveRadius * effectiveRadius) continue;
 
     const lateral = Math.abs(dx * dirY - dy * dirX);
     const forwardMiss = Math.abs(reach - forward);

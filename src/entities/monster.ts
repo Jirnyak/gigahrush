@@ -56,6 +56,7 @@ export type MonsterAIFlag =
   | 'lightFollower';
 
 export interface MonsterDef {
+  radius?: number;
   kind: MonsterKind;
   name: string;
   hp: number;

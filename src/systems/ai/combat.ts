@@ -11,7 +11,7 @@ import {
   playHostilePsiCast, playHostileShotgun, playSoundAt,
 } from '../audio';
 import { applyDamageRelationPenalty, isHostile } from '../factions';
-import { calculateDamage } from '../combat';
+import { calculateDamage, applyHitStaggerAndKnockback } from '../combat';
 import { clearFogInZone } from '../samosbor';
 import { agiAttackSpeedMult, meleeDamage } from '../rpg';
 import { zhelemishIncomingMeleeDamage } from '../status';
@@ -425,7 +425,9 @@ export function tryFactionCombat(
         if (debugImmortalPlayerHit) {
           keepDebugOnePunchManAlive(hitTarget);
         } else {
-          hitTarget.hp -= calculateDamage(dmg, ws.damageType, hitTarget);
+          const actualDmg = calculateDamage(dmg, ws.damageType, hitTarget);
+          hitTarget.hp -= actualDmg;
+          applyHitStaggerAndKnockback(hitTarget, e.x, e.y, actualDmg);
           notifyActorDamaged(world, hitTarget, e, dmg, 'npc_melee', _time, state);
           if (isPlayerEntity(hitTarget)) recordPlayerDamage(state, e, dmg, `${entityDisplayName(e)} задел тебя: -${dmg}`);
           if (hitTarget.type === EntityType.NPC) {
@@ -623,7 +625,9 @@ function npcApplyDistantRangedDamage(
   const pelletFactor = Math.max(1, ws.pellets ?? 1);
   let dmg = Math.max(1, Math.round(ws.dmg * pelletFactor));
   if (target.type === EntityType.MONSTER) dmg = applyMonsterIncomingDamage(world, target, dmg);
-  target.hp -= calculateDamage(dmg, ws.damageType, target);
+  const actualDmg = calculateDamage(dmg, ws.damageType, target);
+  target.hp -= actualDmg;
+  applyHitStaggerAndKnockback(target, e.x, e.y, actualDmg);
   notifyActorDamaged(world, target, e, dmg, 'npc_ranged', time, state);
   if (isPlayerEntity(target)) recordPlayerDamage(state, e, dmg, `${entityDisplayName(e)} попал: -${dmg}`);
   if (target.type === EntityType.NPC) applyDamageRelationPenalty(e.faction, target.faction, dmg, target, e, state);

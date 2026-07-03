@@ -37,7 +37,11 @@ import {
   designFloorFemaleProbability,
 } from '../data/design_floor_profiles';
 import { MAX_ITEM_STACK } from '../data/inventory_limits';
-import { RPG_ATTRIBUTE_CAP, RPG_LEVEL_CAP } from '../data/rpg_progression';
+import {
+  RPG_ATTRIBUTE_CAP,
+  RPG_LEVEL_CAP,
+  generateHeight,
+} from './rpg';
 import { freshNeeds } from '../data/catalog';
 import {
   CITIZEN_FIRST_M, CITIZEN_FIRST_F, CITIZEN_LAST_M, CITIZEN_LAST_F,
@@ -2131,7 +2135,7 @@ function materializeEntity(record: AlifeNpcRecord, template: Entity | undefined,
     sprite,
     npcVisualId: record.npcVisualId,
     spriteSeed,
-    spriteScale: occupation === Occupation.CHILD ? 0.6 : 1,
+    height: generateHeight(recordAge(alife, record), recordFemale(alife, record)),
     name: record.name,
     firstName: record.firstName,
     lastName: record.lastName,

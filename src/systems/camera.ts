@@ -14,7 +14,7 @@ export interface CameraSubject {
   angle: number;
   pitch?: number;
   alive?: boolean;
-  age?: number;
+  height?: number;
 }
 
 export interface CameraPose {
@@ -475,9 +475,8 @@ function approach(current: number, target: number, rate: number, dt: number): nu
 
 function playerCameraHeight(bob: CameraBobState, subject?: CameraSubject): number {
   let baseHeight = CAMERA_STANDING_HEIGHT;
-  if (subject && subject.age !== undefined && subject.age < 16) {
-    const ageT = Math.max(0, subject.age) / 16;
-    baseHeight = 0.1 + (CAMERA_STANDING_HEIGHT - 0.1) * ageT;
+  if (subject && subject.height !== undefined) {
+    baseHeight = CAMERA_STANDING_HEIGHT * (subject.height / 1.8);
   }
   return baseHeight + bob.offset;
 }

@@ -724,8 +724,9 @@ export function proceduralEntityDefaultSpriteScale(e: Entity): number | undefine
 
 export function entityWorldSpriteScale(e: Entity): number {
   const visualScale = proceduralEntityDefaultSpriteScale(e);
-  if (visualScale !== undefined) return (e.spriteScale ?? 1) * visualScale;
-  return e.spriteScale ?? 1;
+  const baseScale = (e.spriteScale ?? 1) * (e.height !== undefined ? e.height / 1.8 : 1);
+  if (visualScale !== undefined) return baseScale * visualScale;
+  return baseScale;
 }
 
 export function generateProceduralEntitySprite(e: Entity): Uint32Array | null {

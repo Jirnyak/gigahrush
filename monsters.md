@@ -21,7 +21,7 @@
 
 ## Базовая модель
 
-`MonsterDef` хранит kind, name, HP, speed, damage, attackRate, sprite, ranged/projectile fields, aiFlags, floors, counterplay, lootHint and optional boss readability. Большинство монстров должны выражаться этими полями плюс shared AI.
+`MonsterDef` хранит kind, name, HP, speed, damage, attackRate, sprite, ranged/projectile fields, aiFlags, floors, counterplay, lootHint and optional boss readability. Также можно задать `radius` (хитбокс и физические размеры), что позволяет делать монстров разного размера (по умолчанию 0.18). Большинство монстров должны выражаться этими полями плюс shared AI.
 
 `src/data/monster_ecology.ts` задает spawn identity: floors, rooms, weights, rare flag, samosbor count, route pressure, room/floor fit, cue, rule, counterplay, death-log hint, rumors and rare drops. Генераторы выбирают monster kind через ecology/bias, а не через русские имена или частные списки в render.
 

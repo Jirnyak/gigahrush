@@ -65,6 +65,7 @@ import { getActiveSamosborVariant } from './systems/samosbor_variants_runtime';
 import { cleanCellHazardsNear, getCellHazardMoveMultiplier, tickCellHazards } from './systems/cell_hazards';
 import { adjustMonsterProjectileDamage, recordMonsterMeleeDeath, recordMonsterProjectileDeath } from './systems/monster_counterplay';
 import { applyMonsterArmorHit } from './systems/monster_armor';
+import { applyHitStaggerAndKnockback } from './systems/combat';
 import {
   pickupNearby, useItem, dropItem, getWeaponStats, equippedCombatItemId,
   addItem,
@@ -214,6 +215,7 @@ import {
   HUMANOID_BASE_MOVE_SPEED,
   normalizeHumanoidBaseMoveSpeed,
   normalizeHumanoidBaseMoveSpeeds,
+  generateHeight,
 } from './systems/rpg';
 import {
   applyPaupsinaWeb,
@@ -920,6 +922,7 @@ function playerAlifeFields(source: Partial<Entity> = {}): PlayerAlife {
     kills: clampInt(source.kills, 0, 0, 1_000_000),
     npcKills: clampInt(source.npcKills, 0, 0, 1_000_000),
     monsterKills: clampInt(source.monsterKills, 0, 0, 1_000_000),
+    height: generateHeight(age, sex === 'female'),
   };
 }
 
@@ -2598,11 +2601,48 @@ function consumePlayerSprintWater(actor: Entity, dt: number, sprintMod: number):
   needs.water = Math.max(0, needs.water - PLAYER_SPRINT_WATER_RATE * sprintLoad * dt);
 }
 
+function applyKnockbackPhysics(dt: number): void {
+  const r = 0.3; // generic body radius
+  for (const e of entities) {
+    if (!e.alive || (!e.vx && !e.vy)) continue;
+    if (e.type !== EntityType.NPC && e.type !== EntityType.MONSTER && e.id !== player.id) continue;
+    
+    const canClip = isNoClipActive() && e.id === player.id;
+    
+    if (e.vx) {
+      const nx = e.x + e.vx * dt;
+      if (canClip || canActorOccupy(world, nx, e.y, r)) {
+        e.x = ((nx % W) + W) % W;
+      } else {
+        e.vx = 0;
+      }
+      e.vx *= Math.pow(0.001, dt); // sharp friction
+      if (Math.abs(e.vx) < 0.1) e.vx = 0;
+    }
+    
+    if (e.vy) {
+      const ny = e.y + e.vy * dt;
+      if (canClip || canActorOccupy(world, e.x, ny, r)) {
+        e.y = ((ny % W) + W) % W;
+      } else {
+        e.vy = 0;
+      }
+      e.vy *= Math.pow(0.001, dt);
+      if (Math.abs(e.vy) < 0.1) e.vy = 0;
+    }
+  }
+}
+
 function movePlayer(dt: number): void {
   const actor = player;
   if (!actor.alive) return;
   if (state.sleeping || state.trailerMode) return; // no movement while sleeping or in trailer mode
   floorTeleportCd = Math.max(0, floorTeleportCd - dt);
+
+  if ((actor.staggerTimer ?? 0) > 0) {
+    actor.staggerTimer = Math.max(0, (actor.staggerTimer ?? 0) - dt);
+  }
+  const isStaggered = (actor.staggerTimer ?? 0) > 0;
 
   // Mouse look
   if (input.mouse.locked) {
@@ -2635,21 +2675,25 @@ function movePlayer(dt: number): void {
   nudgeBlockedPlayerToFloor(actor);
 
   // Movement
-  const cos = Math.cos(actor.angle);
-  const sin = Math.sin(actor.angle);
-  const fwdAxis = Math.max(-1, Math.min(1, (input.fwd ? 1 : 0) - (input.back ? 1 : 0) + input.touch.moveY + inputFrame.axes.moveY));
-  const strafeAxis = Math.max(-1, Math.min(1, (input.strafeR ? 1 : 0) - (input.strafeL ? 1 : 0) + input.touch.moveX + inputFrame.axes.moveX));
-  let mx = cos * fwdAxis - sin * strafeAxis;
-  let my = sin * fwdAxis + cos * strafeAxis;
-  const processionPull = actor.id === player.id ? updateCultProcessionCompulsion(state, world, player, input.interactHeld) : null;
-  if (processionPull) {
-    mx += processionPull.x * processionPull.strength;
-    my += processionPull.y * processionPull.strength;
-  }
-  const bellPull = actor.id === player.id ? updateIstotitBellCompulsion(world, state, player, input.interactHeld) : null;
-  if (bellPull) {
-    mx += bellPull.x * bellPull.strength;
-    my += bellPull.y * bellPull.strength;
+  let mx = 0;
+  let my = 0;
+  if (!isStaggered) {
+    const cos = Math.cos(actor.angle);
+    const sin = Math.sin(actor.angle);
+    const fwdAxis = Math.max(-1, Math.min(1, (input.fwd ? 1 : 0) - (input.back ? 1 : 0) + input.touch.moveY + inputFrame.axes.moveY));
+    const strafeAxis = Math.max(-1, Math.min(1, (input.strafeR ? 1 : 0) - (input.strafeL ? 1 : 0) + input.touch.moveX + inputFrame.axes.moveX));
+    mx = cos * fwdAxis - sin * strafeAxis;
+    my = sin * fwdAxis + cos * strafeAxis;
+    const processionPull = actor.id === player.id ? updateCultProcessionCompulsion(state, world, player, input.interactHeld) : null;
+    if (processionPull) {
+      mx += processionPull.x * processionPull.strength;
+      my += processionPull.y * processionPull.strength;
+    }
+    const bellPull = actor.id === player.id ? updateIstotitBellCompulsion(world, state, player, input.interactHeld) : null;
+    if (bellPull) {
+      mx += bellPull.x * bellPull.strength;
+      my += bellPull.y * bellPull.strength;
+    }
   }
 
   // Normalize
@@ -3572,6 +3616,9 @@ function processProjectileEntityCollision(
       keepDebugOnePunchManAlive(e);
     } else {
       e.hp -= dmg;
+      if (p.x !== undefined && p.y !== undefined) {
+        applyHitStaggerAndKnockback(e, p.x, p.y, dmg);
+      }
       tryMonsterProjectileStagger(world, state, e, p, player.id);
       if (e.type === EntityType.NPC && isPlayerOwnedProjectile(p)) {
         applyDamageRelationPenalty(player.faction, e.faction, dmg, e, player, state);
@@ -3660,6 +3707,7 @@ function triggerExplosion(p: Entity, pt: ProjType): void {
         continue;
       }
       e.hp -= finalDmg;
+      applyHitStaggerAndKnockback(e, p.x, p.y, finalDmg);
       if (isPlayerEntity(e)) {
         const detail = actor && !isPlayerEntity(actor)
           ? `Взрыв от ${entityDisplayName(actor)}: -${finalDmg}`
@@ -8029,6 +8077,7 @@ function gameLoop(now: number): void {
       }
     }
 
+    applyKnockbackPhysics(dt);
     movePlayer(dt);
     rebuildEntityIndexForSimulation(entities, entityIndexFrame).beginTelemetryFrame();
     playerActions(dt);

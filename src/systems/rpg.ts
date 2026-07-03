@@ -381,13 +381,24 @@ export function scaleMonsterSpeed(baseSpeed: number, level: number): number {
   return baseSpeed * (1 + 0.02 * (level - 1));
 }
 
-// ── Gaussian-ish random level (for NPCs) ─────────────────────────
-export function gaussianLevel(center: number, sigma = 2): number {
+// ── Gaussian random math ──────────────────────────────────────────
+export function generateHeight(age: number, isFemale?: boolean): number {
+  const base = age < 18 ? (age / 18) * 1.8 : 1.8;
+  const height = Math.max(0.2, randomGaussian(base, 0.1 * (base / 1.8)));
+  return isFemale ? height * 0.9 : height;
+}
+
+export function randomGaussian(center = 0, sigma = 1): number {
   // Box-Muller transform
   const u1 = Math.random() || 0.001;
   const u2 = Math.random();
   const z = Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2);
-  return clampRpgLevel(Math.round(center + z * sigma));
+  return center + z * sigma;
+}
+
+// ── Gaussian-ish random level (for NPCs) ─────────────────────────
+export function gaussianLevel(center: number, sigma = 2): number {
+  return clampRpgLevel(Math.round(randomGaussian(center, sigma)));
 }
 
 // ── PSI recovery is explicit: items, rewards, drains and level-ups only ──

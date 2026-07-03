@@ -170,6 +170,7 @@ Current fields:
 - `faction`: current faction, stored as a byte column.
 - `occupation`: runtime sprite/role, stored as a byte column.
 - `name`, `female`, `age`, `sex`: display, grammar and demographic context. Age is clamped to `1..100`; sex is a compact `male`/`female` value mirrored to the legacy female flag for grammar.
+- `height`, `radius`: физические габариты персонажа (игрока и NPC) напрямую зависят от возраста. У детей рост (и скейл спрайта, и коллизия) плавно растет, у взрослых используется Гауссиана вокруг 1.8м.
 - `familyId`: current compact family grouping.
 - `canGiveQuest`: active/authored quest affordance; persistent A-Life NPCs get a stable `10%` candidate roll instead of a special quest-giver caste or a universal offer flag.
 - `level`, `str`, `agi`, `int`: RPG state.

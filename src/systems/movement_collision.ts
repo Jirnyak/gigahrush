@@ -36,8 +36,15 @@ export function entityIgnoresFineBlockers(e: Pick<Entity, 'type' | 'monsterKind'
   return flags !== undefined && (flags.includes('flying') || flags.includes('noclip') || flags.includes('falsePhase'));
 }
 
-export function actorOccupyRadius(e: Pick<Entity, 'type'>): number {
-  return e.type === EntityType.MONSTER ? 0.18 : 0.16;
+export function actorOccupyRadius(e: Pick<Entity, 'type' | 'height' | 'radius' | 'monsterKind'>): number {
+  if (e.radius !== undefined) return e.radius;
+  if (e.type === EntityType.MONSTER && e.monsterKind !== undefined) {
+    const override = MONSTERS[e.monsterKind]?.radius;
+    if (override !== undefined) return override;
+    return 0.18;
+  }
+  if (e.height !== undefined) return 0.16 * (e.height / 1.8);
+  return 0.16;
 }
 
 export function canActorOccupyCoarse(world: World, x: number, y: number, radius: number): boolean {
