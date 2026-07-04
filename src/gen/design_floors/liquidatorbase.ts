@@ -1,4 +1,4 @@
-import { FloorLevel, RoomType, Tex, Cell, DoorState, EntityType } from '../../core/types';
+import { FloorLevel, RoomType, Tex, Cell, DoorState, EntityType, Feature } from '../../core/types';
 import { World as WorldClass } from '../../core/world';
 import type { FloorGeneration } from '../floor_manifest';
 import { stampRoom, protectRoom } from '../shared';
@@ -38,11 +38,34 @@ export function generateLiquidatorBaseDesignFloor(): FloorGeneration {
   protectRoom(world, medbay.x, medbay.y, medbay.w, medbay.h, medbay.wallTex, medbay.floorTex);
 
   // Generate Arena (COMMON)
-  const arena = stampRoom(world, nextRoomId++, RoomType.COMMON, spawnX - 20, spawnY - 55, 40, 35, -1);
-  arena.name = 'Арена Ликвидаторов';
+  const arena = stampRoom(world, nextRoomId++, RoomType.COMMON, spawnX - 25, spawnY - 65, 50, 50, -1);
+  arena.name = 'liquidator_arena_main';
   arena.wallTex = Tex.HERMO_WALL;
   arena.floorTex = Tex.F_CONCRETE;
   protectRoom(world, arena.x, arena.y, arena.w, arena.h, arena.wallTex, arena.floorTex);
+
+  const ringRect = { x: arena.x + 15, y: arena.y + 15, w: 20, h: 20 };
+  for (let x = ringRect.x; x < ringRect.x + ringRect.w; x++) {
+    if (x !== ringRect.x + 10 && x !== ringRect.x + 11) { // Gap for entrance
+      world.features[world.idx(x, ringRect.y)] = Feature.TABLE;
+      world.features[world.idx(x, ringRect.y + ringRect.h - 1)] = Feature.TABLE;
+    }
+  }
+  for (let y = ringRect.y; y < ringRect.y + ringRect.h; y++) {
+    if (y !== ringRect.y + 10 && y !== ringRect.y + 11) { // Gap for entrance
+      world.features[world.idx(ringRect.x, y)] = Feature.TABLE;
+      world.features[world.idx(ringRect.x + ringRect.w - 1, y)] = Feature.TABLE;
+    }
+  }
+
+  for (let y = arena.y + 2; y < arena.y + arena.h - 2; y++) {
+    for (let x = arena.x + 2; x < arena.x + arena.w - 2; x++) {
+      if (x >= ringRect.x - 2 && x <= ringRect.x + ringRect.w + 1 && y >= ringRect.y - 2 && y <= ringRect.y + ringRect.h + 1) continue;
+      if (x % 3 !== 0 && y % 3 !== 0) {
+        world.features[world.idx(x, y)] = Feature.CHAIR;
+      }
+    }
+  }
 
   // Connect them
 
