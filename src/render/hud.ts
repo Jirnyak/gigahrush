@@ -1313,6 +1313,38 @@ function drawWorldSpeechBubbles(
   }
 }
 
+function drawIcon(ctx: CanvasRenderingContext2D, icon: string, x: number, y: number): void {
+  ctx.save();
+  ctx.font = 'bold 12px monospace';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+
+  if (icon === 'icon_istotit') {
+    ctx.fillStyle = '#cc8';
+    ctx.fillText('ИСТ', x + 16, y + 16);
+    ctx.strokeStyle = '#cc8';
+    ctx.strokeRect(x, y, 32, 32);
+  } else if (icon === 'icon_veretar') {
+    ctx.fillStyle = '#84c';
+    ctx.fillText('ВЕР', x + 16, y + 16);
+    ctx.strokeStyle = '#84c';
+    ctx.strokeRect(x, y, 32, 32);
+  }
+
+  ctx.restore();
+}
+
+export function renderStatusIcons(ctx: CanvasRenderingContext2D, player: Entity) {
+  let xOffset = 10;
+  if ((player.statusEffects?.istotit ?? 0) > 0) {
+    drawIcon(ctx, 'icon_istotit', xOffset, 10);
+    xOffset += 42;
+  }
+  if ((player.statusEffects?.veretar ?? 0) > 0) {
+    drawIcon(ctx, 'icon_veretar', xOffset, 10);
+  }
+}
+
 /* ── The HUD is drawn on the 2D canvas overlaying the 3D view ── */
 export function drawHUD(
   ctx: CanvasRenderingContext2D,
@@ -2046,6 +2078,8 @@ export function drawHUD(
       terminals: getNetTerminalGenTerminals(),
     });
   }
+
+  renderStatusIcons(ctx, player);
 
   // ── Sleep overlay (Z held) ───────────────────────────────
   if (damageFeedbackVisible && state.sleeping) {
