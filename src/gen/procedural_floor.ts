@@ -1,5 +1,6 @@
 /* ── Seeded combinatoric procedural floors ───────────────────── */
 
+import { validateFloorGeometry } from './shared';
 import { stampSurfaceSplat } from '../systems/surface_marks';
 import {
   W,
@@ -16162,6 +16163,7 @@ export function generateProceduralFloor(spec: ProceduralFloorSpec): FloorGenerat
 
     world.bakeLights();
     relightBadAppleWorld(world);
+    validateFloorGeometry(world);
     return { world, entities, spawnX: spawn.spawnX, spawnY: spawn.spawnY };
   });
 }

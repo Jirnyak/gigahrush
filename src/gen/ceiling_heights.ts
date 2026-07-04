@@ -26,6 +26,14 @@ import { Cell, type Room, RoomType, W } from '../core/types';
  * `t` to height `1 + t*0.5`.
  */
 
+
+export function getCeilingHeightForTier(tier: number): number {
+  const BASE_HEIGHT = 2.0;
+  const TIER_STEP = 1.5;
+  // Cap tier just in case generators pass bad data
+  return BASE_HEIGHT + Math.min(tier, 2) * TIER_STEP;
+}
+
 const TIER_ROOM = 0;
 const TIER_CORRIDOR = 1;
 const TIER_LARGE = 2;

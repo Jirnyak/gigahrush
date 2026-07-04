@@ -131,6 +131,19 @@ function addEllerLadderFamily(mazeOpen: Uint8Array): void {
   }
 }
 
+
+export function setupMaintenanceRooms(world: World) {
+  for (const room of world.rooms) {
+    if (!room) continue;
+    // Limit ceiling tier to max 2 to prevent mesh overlapping and Z-fighting
+    if (room.type === RoomType.PRODUCTION) {
+      room.ceilingTier = 2; // High industrial ceiling, but strictly capped
+    } else {
+      room.ceilingTier = 1; // Standard corridor/room ceiling
+    }
+  }
+}
+
 export function generateMaintenance(generationSeed = MAINTENANCE_TERRITORY_SEED): { world: World; entities: Entity[]; spawnX: number; spawnY: number } {
   const world = new World();
   const entities: Entity[] = [];
