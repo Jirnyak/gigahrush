@@ -350,10 +350,10 @@ function validateWeighted<T>(errors: string[], label: string, weights: readonly 
   }
 }
 
-export function validateAlifeMigrationProfiles(): string[] {
+export function validateAlifeMigrationProfiles(intents: readonly AlifeMigrationIntentDef[] = ALIFE_MIGRATION_INTENTS): string[] {
   const errors: string[] = [];
   const seen = new Set<string>();
-  for (const intent of ALIFE_MIGRATION_INTENTS) {
+  for (const intent of intents) {
     if (!INTENT_ID_RE.test(intent.id)) errors.push(`invalid migration intent id ${intent.id}`);
     if (seen.has(intent.id)) errors.push(`duplicate migration intent ${intent.id}`);
     seen.add(intent.id);

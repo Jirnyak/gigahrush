@@ -9,7 +9,7 @@ import {
   buildAlifePopulationPlan,
   validateAlifePopulationPlan,
 } from '../src/data/alife_population_plan';
-import { validateAlifeMigrationProfiles } from '../src/data/alife_migration';
+import { validateAlifeMigrationProfiles, AlifeMigrationIntentDef } from '../src/data/alife_migration';
 import {
   floorKeyAllowsNpcs,
   floorKeyBaseFloor,
@@ -329,4 +329,120 @@ test('shared floor key resolver covers story, design and procedural A-Life keys'
   const proceduralZ = PROCEDURAL_FLOOR_ZS[0];
   assert.equal(floorKeyKnown(`procedural:z${proceduralZ}`), true);
   assert.equal(floorKeyZ(`procedural:z${proceduralZ}`), proceduralZ);
+});
+
+test('A-Life migration profiles validate bad intents', () => {
+  const badIntents: AlifeMigrationIntentDef[] = [
+    {
+      id: '123_invalid_id', // Invalid ID (starts with number)
+      reason: 'work',
+      weight: 1,
+      destination: { floorKeys: ['story:living'] },
+      eventTags: ['test'],
+    },
+    {
+      id: 'duplicate_id',
+      reason: 'work',
+      weight: 1,
+      destination: { floorKeys: ['story:living'] },
+      eventTags: ['test'],
+    },
+    {
+      id: 'duplicate_id', // Duplicate ID
+      reason: 'work',
+      weight: 1,
+      destination: { floorKeys: ['story:living'] },
+      eventTags: ['test'],
+    },
+    {
+      id: 'zero_weight',
+      reason: 'work',
+      weight: 0, // Zero weight
+      destination: { floorKeys: ['story:living'] },
+      eventTags: ['test'],
+    },
+    {
+      id: 'empty_destination',
+      reason: 'work',
+      weight: 1,
+      destination: {}, // Empty destination
+      eventTags: ['test'],
+    },
+    {
+      id: 'too_many_tags',
+      reason: 'work',
+      weight: 1,
+      destination: { floorKeys: ['story:living'] },
+      eventTags: ['1', '2', '3', '4', '5', '6', '7', '8', '9'], // Too many tags
+    },
+    {
+      id: 'invalid_tag',
+      reason: 'work',
+      weight: 1,
+      destination: { floorKeys: ['story:living'] },
+      eventTags: ['InvalidTag!'], // Invalid tag format
+    },
+    {
+      id: 'bad_faction_bias',
+      reason: 'work',
+      weight: 1,
+      destination: { floorKeys: ['story:living'] },
+      eventTags: ['test'],
+      factionBias: [{ value: Faction.CITIZEN, weight: 0 }], // Zero weight bias
+    },
+    {
+      id: 'bad_occupation_bias',
+      reason: 'work',
+      weight: 1,
+      destination: { floorKeys: ['story:living'] },
+      eventTags: ['test'],
+      occupationBias: [{ value: Occupation.DOCTOR, weight: 0 }], // Zero weight bias
+    },
+    {
+      id: 'unknown_destination',
+      reason: 'work',
+      weight: 1,
+      destination: { floorKeys: ['fake:floor'] }, // Unknown destination
+      eventTags: ['test'],
+    },
+    {
+      id: 'npc_forbidden_destination',
+      reason: 'work',
+      weight: 1,
+      destination: { floorKeys: ['story:void'] }, // NPC forbidden (void)
+      eventTags: ['test'],
+    },
+    {
+      id: 'void_base_floor',
+      reason: 'work',
+      weight: 1,
+      destination: { baseFloors: [FloorLevel.VOID] }, // VOID base floor
+      eventTags: ['test'],
+    },
+    {
+      id: 'allowed_npc_bypass',
+      reason: 'work',
+      weight: 1,
+      destination: { floorKeys: ['story:void'], allowsNpcOnly: false }, // Bypass allowsNpc check but fail on VOID ordinary
+      eventTags: ['test'],
+    }
+  ];
+
+  const errors = validateAlifeMigrationProfiles(badIntents);
+
+  assert.ok(errors.some(e => e.includes('invalid migration intent id 123_invalid_id')));
+  assert.ok(errors.some(e => e.includes('duplicate migration intent duplicate_id')));
+  assert.ok(errors.some(e => e.includes('migration intent zero_weight has non-positive weight')));
+  assert.ok(errors.some(e => e.includes('migration intent empty_destination has empty destination selector')));
+  assert.ok(errors.some(e => e.includes('migration intent too_many_tags has too many event tags')));
+  assert.ok(errors.some(e => e.includes('migration intent invalid_tag has invalid event tag InvalidTag!')));
+  assert.ok(errors.some(e => e.includes('bad_faction_bias faction bias has non-positive weight')));
+  assert.ok(errors.some(e => e.includes('bad_occupation_bias occupation bias has non-positive weight')));
+  assert.ok(errors.some(e => e.includes('migration intent unknown_destination has unknown destination fake:floor')));
+  assert.ok(errors.some(e => e.includes('migration intent npc_forbidden_destination targets NPC-forbidden destination story:void')));
+  assert.ok(errors.some(e => e.includes('migration intent npc_forbidden_destination targets VOID ordinary destination story:void')));
+  assert.ok(errors.some(e => e.includes('migration intent void_base_floor targets VOID base floor')));
+
+  assert.ok(!errors.some(e => e.includes('migration intent allowed_npc_bypass targets NPC-forbidden destination story:void')));
+  assert.ok(errors.some(e => e.includes('migration intent allowed_npc_bypass targets VOID ordinary destination story:void')));
 });
