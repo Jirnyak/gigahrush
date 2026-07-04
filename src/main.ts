@@ -17,6 +17,7 @@ import { hashSeed, randSeed } from './core/rand';
 import { canActorOccupy, unstuckActorFromBlockers } from './systems/movement_collision';
 import { selectMeleeTarget } from './systems/melee_targeting';
 import { updateProceduralScreens } from './gen/procedural_screens';
+import { updateCritters, getCritterRenderEnabled } from './render/critters';
 import { generateProceduralFloor } from './gen/procedural_floor';
 import { generateDesignFloor, isDesignFloorId } from './gen/design_floors/manifest';
 import { injectFastElevators } from './gen/fast_elevators';
@@ -8209,6 +8210,9 @@ function gameLoop(now: number): void {
       updateBloodTrails(world, entities, bloodDt);
     }
     updateParticles(world, dt);
+    if (getCritterRenderEnabled()) {
+      updateCritters(world, dt, player.x, player.y);
+    }
     updateDangerField(world, dt);
     lastBloodUpdateMs = performance.now() - bloodStart;
 
