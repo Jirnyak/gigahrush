@@ -409,6 +409,7 @@ export function updateFactionEvents(
   allowSpawns = true,
 ): void {
   resetFactionEventRuntimeIfNeeded(state);
+  if (state.tutorialMode) return;
   pruneResidueSites(state);
   updateActiveCultProcessions(state, world, player, entities, nextId, dt);
   updateActiveFactionClashes(state, world, player, entities, nextId);

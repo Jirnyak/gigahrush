@@ -118,6 +118,22 @@ test('faction events reference existing items, weapons and economy resources', (
   assert.ok(procession.procession.controlRadius <= procession.procession.actionRadius);
 });
 
+test('does not spawn faction events during tutorial', () => {
+  const state = makeGameState({ tutorialMode: true, time: 100 });
+  const world = new World();
+  const entities: Entity[] = [];
+  const player = { id: 1, type: EntityType.PLAYER, alive: true, x: 50, y: 50 } as Entity;
+  entities.push(player);
+  const nextId = { v: 2 };
+
+  updateFactionEvents(state, world, player, entities, nextId, 10, true);
+
+  // During tutorial mode, no events should be spawned regardless of time/scheduler.
+  const hasEventMsg = state.msgs.some(m => m.text.includes('отбивают') || m.text.includes('Замечена') || m.text.includes('стычка'));
+  assert.equal(hasEventMsg, false);
+  assert.equal(entities.length, 1); // Only player exists
+});
+
 test('cult procession exposes follow, report, disguise, avoid and violent disrupt paths', () => {
   resetFactionEventsForTests();
   initFactionRelations();

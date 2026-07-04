@@ -837,6 +837,7 @@ export function tickCaravans(
   player?: Entity,
   nextId?: { v: number },
 ): number {
+  if (state.tutorialMode) return 0;
   const caravans = ensureCaravanState(state);
   const elapsed = Math.max(0, dt);
   if (!force) {
