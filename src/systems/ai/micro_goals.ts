@@ -9,6 +9,7 @@ import { canActorOccupy, actorOccupyRadius, entityIgnoresFineBlockers } from '..
 import { findNoiseInvestigationTarget } from '../noise';
 import { pickupDrop } from '../inventory';
 import { getEntityIndex, ENTITY_MASK_NPC, ENTITY_MASK_ITEM_DROP } from '../entity_index';
+import { npcAutoEquipBestWeapon } from './combat';
 
 const _microQueryOut: Entity[] = new Array(32);
 
@@ -125,6 +126,7 @@ export function tickMicroGoal(world: World, entities: Entity[], e: Entity, dt: n
             const item = entities.find(x => x.id === ai.microSourceId);
             if (item && item.type === EntityType.ITEM_DROP && item.alive) {
               pickupDrop(world, item, e, _msgs, _time, undefined);
+              if (e.type === EntityType.NPC) npcAutoEquipBestWeapon(e);
             }
           }
           // Reached target early, clear goal
@@ -200,9 +202,9 @@ export function evaluateMicroStimuli(world: World, e: Entity, time: number, msgs
       
       if (dist2 < 4) {
         if ((ai.microCooldowns?.['loot_nearby'] ?? 0) <= 0) {
-          if (trySetMicroGoal(e, 'loot_nearby', { targetX: near.x, targetY: near.y, timer: 5, sourceId: near.id })) {
+          if (trySetMicroGoal(e, 'loot_nearby', { targetX: near.x, targetY: near.y, timer: 10, sourceId: near.id })) {
             ai.microCooldowns = ai.microCooldowns || {};
-            ai.microCooldowns['loot_nearby'] = 45; // 45 sec cooldown
+            ai.microCooldowns['loot_nearby'] = 1; // 1 sec cooldown
             return;
           }
         }

@@ -441,6 +441,7 @@ export interface AIState {
   stateTimer?: number;        // elapsed time in current sub-activity
   combatTargetId?: number;    // cached hostile target entity id
   combatScanCd?: number;      // cooldown until next full hostile scan
+  combatLootCd?: number;      // cooldown until next combat loot grab scan
   windupTimer?: number;       // generic readable attack windup countdown
   windupTargetId?: number;    // target locked by current windup
   windupStartHp?: number;     // HP snapshot for interruptible windups
