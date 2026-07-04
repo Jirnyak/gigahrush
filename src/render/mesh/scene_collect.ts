@@ -708,6 +708,8 @@ function emitVisualInstance(
       scaleX = scale.x;
       scaleY = scale.y;
       scaleZ = scale.z;
+    } else if (def.mount === 'floor') {
+      z += 0.01 + slot * 0.002; // Micro Z-offset to avoid Z-fighting for floor items
     } else if (def.merge === 'cluster') {
       const h = mixHash(context.seed, x, y, slot, def.code);
       scaleX = 0.45 + (h & 7) * 0.035;
