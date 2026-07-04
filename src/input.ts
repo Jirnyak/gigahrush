@@ -10,6 +10,20 @@ import {
   mouseButtonCode,
 } from './systems/controls';
 
+
+export const JOYSTICK_CONFIG = {
+  deadZoneRadius: 20,
+  maxRadius: 80,
+  touchMoveThreshold: 5,
+};
+
+export function triggerHapticFeedback(duration: number = 10): void {
+  if (typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function') {
+    // @ts-ignore
+    navigator.vibrate(duration);
+  }
+}
+
 export function createInput(): InputState {
   return {
     fwd: false, back: false, left: false, right: false,

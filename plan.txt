@@ -1,0 +1,16 @@
+1. Modify `src/input.ts` to add `triggerHapticFeedback` function. Export it so `src/mobile.ts` can use it. Also define `JOYSTICK_CONFIG` in `src/input.ts` per instructions:
+   ```typescript
+   export const JOYSTICK_CONFIG = {
+       deadZoneRadius: 20, // Increase
+       maxRadius: 80,
+       touchMoveThreshold: 5, // Decrease for responsiveness
+   };
+   ```
+2. Modify `src/mobile.ts` to:
+   - Use `JOYSTICK_CONFIG` in `updatePad` and gestures.
+   - Adjust `this.interact` size -> via CSS changes, maybe update inline styles if possible, but actually we will do CSS. Wait, CSS is in `src/index.css`.
+   - Update `updatePad` and other touch logic to respect `touchMoveThreshold` and `deadZoneRadius`.
+   - Add `triggerHapticFeedback(10)` to important actions (e.g. `this.interact` pointerdown, `actionConfirm`, etc.).
+3. Modify `src/index.css` to increase the size of `.mobile-interact` (the E button) and the `.mobile-controls` (joysticks, buttons) opacity.
+4. Complete pre commit steps
+5. Submit PR with title "feat(marx_74): improve mobile touch controllers and UI".
