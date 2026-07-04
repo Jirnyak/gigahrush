@@ -748,6 +748,7 @@ function fillSlots(text: string, snapshot: ContextSnapshot): string {
 
 function eventToStaticRumorId(event: RumorEventLike): string | undefined {
   const type = event.type ?? '';
+  if (type === 'arena_champion_crowned') return 'arena_champion_rumor';
   const dataRumor = eventDataRumorId(event);
   if (dataRumor) return dataRumor;
   const veretarWindowRumor = veretarWindowEventRumorId(event);
@@ -793,6 +794,7 @@ function eventToStaticRumorId(event: RumorEventLike): string | undefined {
 
 function isHighSignalRumorEvent(event: RumorEventLike): boolean {
   const type = event.type ?? '';
+  if (type === 'arena_champion_crowned') return true;
   if (eventDataRumorId(event)) return (event.severity ?? 0) >= 2;
   if (veretarWindowEventRumorId(event)) return (event.severity ?? 0) >= 2;
   if (event.tags?.includes('resource_shortage') || event.tags?.includes('resource_recovery')) return (event.severity ?? 0) >= 3;

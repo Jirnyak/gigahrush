@@ -59,6 +59,7 @@ const CIVIL_FLOORS = [FloorLevel.KVARTIRY, FloorLevel.LIVING, FloorLevel.MINISTR
 const DEEP_FLOORS = [FloorLevel.MAINTENANCE, FloorLevel.HELL, FloorLevel.VOID] as const;
 
 const BASE_RUMORS: readonly RumorDef[] = [
+  { id: 'arena_champion_rumor', topic: 'player_action', minTrust: 0, floors: [FloorLevel.MAINTENANCE, FloorLevel.LIVING], text: ['Видели этого психа на ринге? Уважуха.', 'Говорят, чемпион арены выжил там, где даже ликвидаторы ложатся.', 'Золотой кубок теперь у настоящего монстра. Я бы не стал стоять у него на пути.'], reveals: { kind: 'warning', tag: 'arena_champion', confidence: 4 } },
   { id: 'samosbor_vent_first', topic: 'samosbor', minTrust: -40, floors: ALL_FLOORS, text: ['Перед сиреной вентиляция первой тянет сыростью и старой водой.', 'Почуял сырой сквозняк из решетки - не стой слушать, иди к герме или за границу зоны.'], reveals: { kind: 'warning', tag: 'samosbor_warning', confidence: 2 } },
   { id: 'samosbor_zone_lamps', topic: 'samosbor', minTrust: -20, floors: ALL_FLOORS, text: ['В выбранной зоне лампы моргают не в такт.', 'Три мигания подряд - проверь карту и уходи из секции до щелчка гермы.'], reveals: { kind: 'zone', confidence: 2 } },
   { id: 'samosbor_doors_lie', topic: 'samosbor', minTrust: -30, floors: ALL_FLOORS, text: ['Во время самосбора дверь может стучать голосом знакомого.', 'Если за дверью зовут по имени во время сирены, не открывай до табло отбоя.'], reveals: { kind: 'warning', tag: 'sealed_door', confidence: 3 } },
