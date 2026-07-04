@@ -126,6 +126,7 @@ import {
   uiSettingsRowAt,
   uiSettingsRowCount,
 } from './systems/ui_orchestrator';
+import { checkPerformance } from './systems/fps_monitor';
 import { freshNeeds, ITEMS, WEAPON_STATS, type WeaponStats } from './data/catalog';
 import { INVENTORY_GRID_COLS, INVENTORY_GRID_ROWS, MAX_INVENTORY_SLOTS } from './data/inventory_limits';
 import { getStack, itemEquipSlot } from './data/items';
@@ -8406,6 +8407,7 @@ function gameLoop(now: number): void {
   checkRestart();
   updateMobileContext();
   const currentFps = updateFpsMeter(now, rawDt * 1000);
+  checkPerformance(currentFps, state);
 
   // ── Render ───────────────────────────────────────────────
   // Fog density varies by floor level
