@@ -29,6 +29,62 @@ test('stock market state normalizes from empty save', () => {
   assert.equal(normalized.quotes.toha_heavy_industries.price, 180);
 });
 
+test('stock market state normalizes from invalid primitive state', () => {
+  const normalizedNull = normalizeStockMarketState(null);
+  const normalizedString = normalizeStockMarketState('garbage');
+  const normalizedNumber = normalizeStockMarketState(42);
+
+  assert.ok(Object.keys(normalizedNull.quotes).length > 0);
+  assert.equal(normalizedNull.lastEventId, 0);
+
+  assert.deepEqual(normalizedNull, normalizedString);
+  assert.deepEqual(normalizedNull, normalizedNumber);
+});
+
+test('stock market state normalizes corrupted quotes', () => {
+  const corruptState = {
+    quotes: {
+      toha_heavy_industries: {
+        price: 'not a number',
+        lastDelta: NaN,
+        drift: Infinity,
+        volume: -5,
+        lastTickAt: -10,
+      }
+    }
+  };
+  const normalized = normalizeStockMarketState(corruptState);
+  const quote = normalized.quotes.toha_heavy_industries;
+
+  assert.equal(typeof quote.price, 'number');
+  assert.ok(quote.price > 0);
+  assert.equal(quote.lastDelta, 0);
+  assert.ok(Number.isFinite(quote.drift));
+  assert.equal(quote.volume, 0);
+  assert.equal(quote.lastTickAt, 0);
+});
+
+test('stock market state normalizes corrupted portfolio, skipping unknown corps and zero shares', () => {
+  const corruptState = {
+    portfolio: {
+      toha_heavy_industries: { shares: -5, avgPrice: 'NaN' },
+      zavod_serp_i_beton: { shares: 0, avgPrice: 100 },
+      nii_slizi_i_biologii: { shares: 10, avgPrice: -100 },
+      unknown_corp: { shares: 100, avgPrice: 50 }
+    }
+  };
+  const normalized = normalizeStockMarketState(corruptState);
+
+  assert.equal(normalized.portfolio.toha_heavy_industries, undefined);
+  assert.equal(normalized.portfolio.zavod_serp_i_beton, undefined);
+  // @ts-expect-error test
+  assert.equal(normalized.portfolio.unknown_corp, undefined);
+
+  assert.ok(normalized.portfolio.nii_slizi_i_biologii);
+  assert.equal(normalized.portfolio.nii_slizi_i_biologii.shares, 10);
+  assert.equal(normalized.portfolio.nii_slizi_i_biologii.avgPrice, 0);
+});
+
 test('buying shares debits banking account and records portfolio/event', () => {
   const state = makeMarketState(1000);
   const result = buyShares(state, 'toha_heavy_industries', 3);
@@ -115,6 +171,26 @@ test('production event raises related factory corporation quote', () => {
 
   assert.ok(market.quotes.zavod_serp_i_beton.price > before);
   assert.equal(market.lastEventId, 1);
+});
+
+test('stock market state normalizes recent trades, filtering out invalid and enforcing cap', () => {
+  const trades = Array.from({ length: 30 }, (_, i) => ({
+    id: i + 1, time: 100, corpId: 'toha_heavy_industries', side: 'buy', shares: 10,
+    unitPrice: 10, gross: 100, fee: 1, total: 101,
+  }));
+
+  trades.push(
+    { id: 31, corpId: 'unknown_corp', side: 'buy', shares: 10 } as any,
+    { id: 32, corpId: 'toha_heavy_industries', side: 'hold', shares: 10 } as any,
+    { id: 33, corpId: 'toha_heavy_industries', side: 'sell', shares: -5 } as any,
+    null as any
+  );
+
+  const normalized = normalizeStockMarketState({ recentTrades: trades, nextTradeId: -5 });
+
+  assert.equal(normalized.recentTrades.length, 24);
+  assert.equal(normalized.recentTrades[normalized.recentTrades.length - 1].id, 30);
+  assert.equal(normalized.nextTradeId, 31);
 });
 
 test('industrial monster kill and slime science events move matching corporations', () => {
