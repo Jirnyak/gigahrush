@@ -5174,6 +5174,7 @@ function loadGame(): boolean {
       state.nextQuestId = normalizedQuests.nextQuestId;
       state.tutorialMode = dataState.tutorialMode === true;
       state.tutorialStep = typeof dataState.tutorialStep === 'number' ? dataState.tutorialStep : undefined;
+      state.tutorialExitTimer = typeof dataState.tutorialExitTimer === 'number' ? dataState.tutorialExitTimer : undefined;
       state.currentFloor = floor;
       setFloorRunState(state, savedFloorRun, floor);
       setFloorInstanceState(state, loadedFloorInstances, floor);

@@ -488,20 +488,32 @@ function activateDoor(ctx: InteractionContext, idx: number): InteractionResult {
       setDoorState(ctx.world, door, DoorState.OPEN);
       ctx.state.msgs.push(msg(quietDoor ? 'Дверь отперта тихо' : 'Дверь отперта ключом', ctx.state.time, quietDoor ? '#8cf' : '#4a4'));
       publishDoorNoise(ctx.state, ctx.player, idx, false, quietDoor);
-      if (ctx.state.tutorialMode && keyId === 'tut_cafe_key') {
+      if (ctx.state.tutorialMode && door.isTutorialExit) {
+        import('./tutorial').then(({ advanceTutorial, TutorialStep }) => {
+          advanceTutorial(ctx.state, TutorialStep.EXIT_APARTMENT);
+          completeTutorial(ctx.state);
+        });
+        ctx.state.msgs.push(msg('Дверь со скрипом поддалась. Путь свободен.', ctx.state.time, '#4a4'));
+      } else if (ctx.state.tutorialMode && keyId === 'tut_cafe_key') {
         completeTutorial(ctx.state);
       }
     } else {
-      const broke = damageDoor(ctx.world, door, 5);
-      if (broke) {
-        ctx.state.msgs.push(msg('Дверь выбита!', ctx.state.time, '#4a4'));
+      if (door.isTutorialExit) {
+        ctx.state.msgs.push(msg('Заперто намертво. Нужно найти ключ.', ctx.state.time, '#f84'));
       } else {
-        ctx.state.msgs.push(msg('Заперто. Нужен ключ. (Удар -5)', ctx.state.time, '#f84'));
+        const broke = damageDoor(ctx.world, door, 5);
+        if (broke) {
+          ctx.state.msgs.push(msg('Дверь выбита!', ctx.state.time, '#4a4'));
+        } else {
+          ctx.state.msgs.push(msg('Заперто. Нужен ключ. (Удар -5)', ctx.state.time, '#f84'));
+        }
       }
     }
   }
   return { handled: true };
 }
+
+export const activateDoor_FOR_TESTING = activateDoor;
 
 function activateMetro(ctx: InteractionContext): InteractionResult {
   const metro = tryUseMetroRoute(ctx.world, ctx.player, ctx.state, ctx.lookX, ctx.lookY);
