@@ -235,6 +235,7 @@ function stateForIntent(intent: NpcUtilityIntentId, e: Entity, profile: NpcAiPro
       return profile === 'ministry' ? NpcState.MEETING : NpcState.FREE_TIME;
     case 'combat':
     case 'patrol':
+    case 'faction_assault':
       return NpcState.PATROL;
     case 'wander':
       return usesTravelerRoutine(e) ? NpcState.TRAVELING : NpcState.FREE_TIME;
@@ -254,6 +255,7 @@ function goalForIntent(intent: NpcUtilityIntentId): AIGoal {
     case 'work': return AIGoal.WORK;
     case 'heal': return AIGoal.GOTO;
     case 'combat': return AIGoal.HUNT;
+    case 'faction_assault': return AIGoal.GOTO;
     case 'social':
     case 'patrol':
     case 'wander':
@@ -359,7 +361,7 @@ export function updateNPC(
     enterUtilityIntent(e, initialIntentForNpc(e, samosborActive, profile), 0, profile);
   }
 
-  const decision = selectAndEnterUtilityIntent(world, entities, e, clock, samosborActive, profile);
+  const decision = selectAndEnterUtilityIntent(world, entities, e, clock, samosborActive, profile, state);
   const intent = decision.intent;
 
   ai.timer -= dt;
@@ -405,6 +407,9 @@ export function updateNPC(
     case 'patrol':
       handlePatrol(world, e, dt);
       break;
+    case 'faction_assault':
+      handleFactionAssault(world, e, dt, state);
+      break;
     case 'wander':
       handleWander(world, e, dt);
       break;
@@ -422,6 +427,7 @@ function selectAndEnterUtilityIntent(
   clock: GameClock,
   samosborActive: boolean,
   profile: NpcAiProfile,
+  state?: import('../../core/types').GameState,
 ): { intent: NpcUtilityIntentId; rescored: boolean } {
   const currentIntent = utilityIntentByNpc.get(e);
   const now = _barkTime;
@@ -448,6 +454,7 @@ function selectAndEnterUtilityIntent(
       isTraveler: usesTravelerRoutine(e),
     },
     local: buildLocalUtilityScores(world, e, samosborActive, profile),
+    factionGoals: state?.factionGoals,
   }, utilityScoreBuffer);
   const selected = selectNpcUtilityIntent(scores, currentIntent, {
     switchMargin: UTILITY_SWITCH_MARGIN,
@@ -884,6 +891,29 @@ function handleSocial(world: World, e: Entity, dt: number, profile: NpcAiProfile
       ai.timer = stableTimer(e, 'social_in_room', 6, 10);
     }
   }
+  followPath(world, e, dt);
+}
+
+function handleFactionAssault(world: World, e: Entity, dt: number, state?: import('../../core/types').GameState): void {
+  const ai = e.ai!;
+
+  if (ai.timer <= 0 || ai.goal === AIGoal.IDLE) {
+    ai.goal = AIGoal.GOTO;
+    ai.timer = 5;
+
+    if (state?.factionGoals) {
+      for (const goal of state.factionGoals) {
+        if (goal.type === 'attack' && goal.members.includes(e.id)) {
+          const zone = world.zones[goal.targetZone];
+          if (zone) {
+            tryAssignPathToCell(world, e, zone.cx, zone.cy);
+          }
+          break;
+        }
+      }
+    }
+  }
+
   followPath(world, e, dt);
 }
 
