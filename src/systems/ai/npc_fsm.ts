@@ -326,25 +326,7 @@ export function updateNPC(
   }
 
   if (state) {
-    const sinceId = ai.lastSeenUrinationId ?? 0;
-    const events = getRecentEvents(state, { type: 'player_urinated', sinceId, limit: 1 });
-    if (events.length > 0) {
-      const event = events[0];
-      if (event.id > sinceId) {
-        ai.lastSeenUrinationId = event.id;
-        if (event.x !== undefined && event.y !== undefined) {
-          const dist2 = world.dist2(e.x, e.y, event.x, event.y);
-          if (dist2 <= 64 && e.faction !== Faction.WILD) {
-            const isBathroom = event.roomId !== undefined && world.rooms[event.roomId]?.type === RoomType.BATHROOM;
-            if (!isBathroom) {
-              e.playerRelation = (e.playerRelation ?? 0) - 15;
-            }
-          }
-        }
-      }
-    } else if (state.worldEvents) {
-      ai.lastSeenUrinationId = Math.max(sinceId, state.worldEvents.nextId - 1);
-    }
+    processUrinationEvents(world, e, ai, state, _barkMsgs, time);
   }
   if (special.held) {
     return;
@@ -464,6 +446,33 @@ function selectAndEnterUtilityIntent(
   enterUtilityIntent(e, selected.intent, selected.score, profile);
   utilityNextDecisionAtByNpc.set(e, now + utilityRethinkInterval(e));
   return { intent: selected.intent, rescored: true };
+}
+
+export function processUrinationEvents(world: World, e: Entity, ai: import('../../core/types').AIState, state: import('../../core/types').GameState, msgs: import('../../core/types').Msg[], time: number): void {
+  const sinceId = ai.lastSeenUrinationId ?? 0;
+  const events = getRecentEvents(state, { type: 'player_urinated', sinceId, limit: 1 });
+  if (events.length > 0) {
+    const event = events[0];
+    if (event.id > sinceId) {
+      ai.lastSeenUrinationId = event.id;
+      if (event.x !== undefined && event.y !== undefined) {
+        const dist2 = world.dist2(e.x, e.y, event.x, event.y);
+        if (dist2 <= 64 && e.faction !== Faction.WILD) {
+          const isBathroom = event.roomId !== undefined && world.rooms[event.roomId]?.type === RoomType.BATHROOM;
+          if (!isBathroom) {
+            e.playerRelation = (e.playerRelation ?? 0) - 15;
+            if (e.playerRelation <= -30 && event.actorId !== undefined) {
+              ai.goal = AIGoal.HUNT;
+              ai.combatTargetId = event.actorId;
+              emitMarkovBark(e, msgs, time, 'combat', 'Извращенец!', 1.0, '#fa8');
+            }
+          }
+        }
+      }
+    }
+  } else if (state.worldEvents) {
+    ai.lastSeenUrinationId = Math.max(sinceId, state.worldEvents.nextId - 1);
+  }
 }
 
 function buildLocalUtilityScores(
