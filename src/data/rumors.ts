@@ -59,6 +59,8 @@ const CIVIL_FLOORS = [FloorLevel.KVARTIRY, FloorLevel.LIVING, FloorLevel.MINISTR
 const DEEP_FLOORS = [FloorLevel.MAINTENANCE, FloorLevel.HELL, FloorLevel.VOID] as const;
 
 const BASE_RUMORS: readonly RumorDef[] = [
+  { id: 'gnome_sighting_1', topic: 'monster', minTrust: -10, floors: ALL_FLOORS, text: ['Слышал шорох в вентиляции ночью. Опять эти мелкие твари с технического этажа скребутся. Прячь ценности.'], reveals: { kind: 'monster', monsterKind: MonsterKind.GNOME, confidence: 2 } },
+  { id: 'gnome_nest_2', topic: 'monster', minTrust: 0, floors: ALL_FLOORS, text: ['Говорят, если найти гнездо карликов, там столько хабара натащено... Но они стаей и слона загрызут.'], reveals: { kind: 'monster', monsterKind: MonsterKind.GNOME, confidence: 2 } },
   { id: 'samosbor_vent_first', topic: 'samosbor', minTrust: -40, floors: ALL_FLOORS, text: ['Перед сиреной вентиляция первой тянет сыростью и старой водой.', 'Почуял сырой сквозняк из решетки - не стой слушать, иди к герме или за границу зоны.'], reveals: { kind: 'warning', tag: 'samosbor_warning', confidence: 2 } },
   { id: 'samosbor_zone_lamps', topic: 'samosbor', minTrust: -20, floors: ALL_FLOORS, text: ['В выбранной зоне лампы моргают не в такт.', 'Три мигания подряд - проверь карту и уходи из секции до щелчка гермы.'], reveals: { kind: 'zone', confidence: 2 } },
   { id: 'samosbor_doors_lie', topic: 'samosbor', minTrust: -30, floors: ALL_FLOORS, text: ['Во время самосбора дверь может стучать голосом знакомого.', 'Если за дверью зовут по имени во время сирены, не открывай до табло отбоя.'], reveals: { kind: 'warning', tag: 'sealed_door', confidence: 3 } },
