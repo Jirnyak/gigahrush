@@ -10,10 +10,12 @@ import {
   portfolioValue,
   sellShares,
   stockMarketForSave,
+  applyRemoteStockMarketSnapshot,
   stockMarketSnapshot,
   tickStockMarket,
   type StockMarketState,
 } from '../src/systems/stock_market';
+import type { NetMarketSnapshot } from '../src/systems/net_sphere';
 import { makeGameState } from './helpers';
 
 type MarketTestState = GameState & {
@@ -97,6 +99,82 @@ test('random stock tick changes quotes within bounds', () => {
     assert.ok(quote.price >= 1 && quote.price <= 99999);
     assert.ok(Math.abs(quote.lastDelta) <= quote.price * 0.08);
   }
+});
+
+test('applyRemoteStockMarketSnapshot updates quotes based on remote snapshot', () => {
+  const state = makeMarketState(0);
+  const market = ensureStockMarketState(state);
+
+  market.lastRemoteUpdatedAt = 1000;
+  state.time = 2000;
+
+  const originalPrice = market.quotes.toha_heavy_industries.price;
+
+  const snapshot: NetMarketSnapshot = {
+    updatedAt: 1500,
+    rows: [
+      {
+        corpId: 'toha_heavy_industries',
+        price: 250,
+        lastDelta: 10,
+        volume: 5000,
+        updatedAt: 1500,
+      }
+    ]
+  };
+
+  applyRemoteStockMarketSnapshot(state, snapshot);
+
+  assert.equal(market.lastRemoteUpdatedAt, 1500);
+
+  // remotePrice = 250, oldPrice = 180 (originalPrice)
+  // maxStep = 180 * 0.025 = 4.5
+  // softDelta = clamp(70 * 0.18, -4.5, 4.5) = 4.5
+  // newPrice = 184.5
+  assert.equal(market.quotes.toha_heavy_industries.price, 184.5);
+  assert.equal(market.quotes.toha_heavy_industries.lastDelta, 4.5);
+  assert.ok(market.quotes.toha_heavy_industries.drift > 0);
+  assert.equal(market.quotes.toha_heavy_industries.volume, 5000);
+  assert.equal(market.quotes.toha_heavy_industries.lastTickAt, 2000);
+});
+
+test('applyRemoteStockMarketSnapshot ignores older or same snapshot', () => {
+  const state = makeMarketState(0);
+  const market = ensureStockMarketState(state);
+
+  market.lastRemoteUpdatedAt = 1500;
+  const originalPrice = market.quotes.toha_heavy_industries.price;
+
+  const snapshot: NetMarketSnapshot = {
+    updatedAt: 1000,
+    rows: [
+      {
+        corpId: 'toha_heavy_industries',
+        price: 250,
+        lastDelta: 10,
+        volume: 5000,
+        updatedAt: 1000,
+      }
+    ]
+  };
+
+  applyRemoteStockMarketSnapshot(state, snapshot);
+
+  assert.equal(market.lastRemoteUpdatedAt, 1500);
+  assert.equal(market.quotes.toha_heavy_industries.price, originalPrice);
+});
+
+test('applyRemoteStockMarketSnapshot handles null snapshot gracefully', () => {
+  const state = makeMarketState(0);
+  const market = ensureStockMarketState(state);
+
+  market.lastRemoteUpdatedAt = 1500;
+  const originalPrice = market.quotes.toha_heavy_industries.price;
+
+  applyRemoteStockMarketSnapshot(state, null);
+
+  assert.equal(market.lastRemoteUpdatedAt, 1500);
+  assert.equal(market.quotes.toha_heavy_industries.price, originalPrice);
 });
 
 test('production event raises related factory corporation quote', () => {
