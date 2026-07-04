@@ -1275,7 +1275,18 @@ void main() {
       float cellLit = min(1.0, uAmbient + baseLitWall * (1.0 - uAmbient) + fbWall + toolBeam * 0.82);
       float d = row - rawDrawStart;
       int texYi = int(floor(d / lineH * TEX_F)) & (TEX_I - 1);
-      vec3 c = sampleAtlas(wallTexId, texXi, texYi).rgb;
+
+      // Coordinate Hash Variation logic for textures
+      int wallHash = (mapX * 374761393 + mapY * 668265263) & 0x7FFFFFFF;
+      wallHash = (wallHash ^ (wallHash >> 13)) * 1103515245;
+      wallHash = (wallHash ^ (wallHash >> 16)) & 0x7FFFFFFF;
+      int wallHashVar = wallHash % 64;
+
+      // shift texture coordinates by hash to break tiling
+      int shiftedTexXi = (texXi + wallHashVar * 5) & (TEX_I - 1);
+      int shiftedTexYi = (texYi + wallHashVar * 7) & (TEX_I - 1);
+
+      vec3 c = sampleAtlas(wallTexId, shiftedTexXi, shiftedTexYi).rgb;
 
       uint hitCellType = texelFetch(uCells, hitCell, 0).r;
       if (hitCellType == ${Cell.DOOR}u) {
@@ -1356,7 +1367,18 @@ void main() {
               ? ${Tex.F_WATER}u
               : texelFetch(uFloorTex, fCell, 0).r;
             if (floorTexId == 0u) floorTexId = ${Tex.F_CONCRETE}u;
-            vec3 fc = sampleAtlas(floorTexId, ftx, fty).rgb;
+
+            // Coordinate Hash Variation logic for floor textures
+            int floorHash = (fCell.x * 374761393 + fCell.y * 668265263) & 0x7FFFFFFF;
+            floorHash = (floorHash ^ (floorHash >> 13)) * 1103515245;
+            floorHash = (floorHash ^ (floorHash >> 16)) & 0x7FFFFFFF;
+            int floorHashVar = floorHash % 64;
+
+            // shift texture coordinates by hash to break tiling
+            int shiftedFtx = (ftx + floorHashVar * 5) & (TEX_I - 1);
+            int shiftedFty = (fty + floorHashVar * 7) & (TEX_I - 1);
+
+            vec3 fc = sampleAtlas(floorTexId, shiftedFtx, shiftedFty).rgb;
             fc = shadePlane(floorTexId, fc, fCell, ftx, fty, currentDist, fLit, toolBeam, false, true);
             float driveFloor = clamp(fbFloor + toolBeam + eyeLight(currentDist), 0.0, 1.0);
             fc = applyLightFX(fc, floorTexId, 0.0, driveFloor, lgradFloor, 0.0);
