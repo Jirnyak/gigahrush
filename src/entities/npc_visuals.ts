@@ -167,7 +167,7 @@ const worker69Family: NpcVisualFamily = {
       return new Uint32Array(0);
     }
     const choice = seed % 10;
-    if (choice < 4 && worker69FemaleIds.length > 0) {
+    if (choice < 0 && worker69FemaleIds.length > 0) {
       const manifestId = worker69FemaleIds[choice % worker69FemaleIds.length];
       return firstPartyNpcArt(manifestId) ?? generateFloor69FemaleNpcSprite(floor69Variant(ctx));
     }
@@ -181,7 +181,7 @@ const worker69Family: NpcVisualFamily = {
       return `empty`;
     }
     const choice = seed % 10;
-    if (choice < 4 && worker69FemaleIds.length > 0) {
+    if (choice < 0 && worker69FemaleIds.length > 0) {
       const manifestId = worker69FemaleIds[choice % worker69FemaleIds.length];
       return `first_party_art:${manifestId}`;
     }

@@ -9,13 +9,11 @@ import { drawHelpMenu } from '../src/render/help_ui';
 import { drawMinimap, mapEntityDotBudget } from '../src/render/map_ui';
 import {
   allocateHudSlot,
-  containerGridScale,
   containerMenuGridLayout,
   createHudSlots,
   dialogMenuScale,
   fullscreenInventoryLayout,
   tradeMenuGridLayout,
-  tradeGridScale,
 } from '../src/render/ui_layout';
 import { CONTROL_ACTIONS } from '../src/systems/controls';
 import { rebuildEntityIndex } from '../src/systems/entity_index';
@@ -93,22 +91,21 @@ test('inventory grid is an 8x8 power-of-two actor inventory', () => {
 });
 
 test('trade and container inventories use large cells on desktop canvases', () => {
-  assert.ok(tradeGridScale(1920, 1080) >= 2.3);
-  assert.ok(containerGridScale(1920, 1080) >= 3.0);
+  assert.ok(tradeMenuGridLayout(1920, 1080).cell >= 50);
+  assert.ok(containerMenuGridLayout(1920, 1080).cell >= 66);
 });
 
 test('trade inventory scale still fits shorter canvases', () => {
   const layout = tradeMenuGridLayout(1280, 720);
-  assert.ok(layout.scale > 1.5);
+  assert.ok(layout.cell > 33);
   assert.ok(layout.startX >= -0.001);
   assert.ok(layout.npcX + layout.gridTotal <= 1280 + 0.001);
   assert.ok(layout.dealY + layout.dealH <= 720 * 0.82 + 70 * layout.scale + 0.001);
 });
 
 test('grid scale does not force tiny mobile canvases to overflow', () => {
-  const scale = containerGridScale(280, 180);
-  assert.ok(scale < 1);
   const layout = containerMenuGridLayout(280, 180);
+  assert.ok(layout.scale < 1);
   assert.ok(layout.startX >= -0.001);
   assert.ok(layout.containerX + layout.gridTotal <= 280 + 0.001);
   assert.ok(layout.startY + layout.gridTotal <= 180 * 0.82 + 0.001);

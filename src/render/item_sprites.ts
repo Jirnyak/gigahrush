@@ -15480,8 +15480,9 @@ export function drawItemGridIcon(
   const iconTop = y + (options.iconTopUnits ?? 6.4) * sy;
   const bottomReserve = (options.bottomReserveUnits ?? 5.2) * sy;
   const maxIcon = Math.max(8 * sx, cellSize - (iconTop - y) - bottomReserve);
-  const iconSize = Math.max(8 * sx, Math.min(maxIcon, (options.maxIconUnits ?? 13) * sx));
+  const iconSize = Math.max(8 * sx, Math.min(maxIcon * 2.2, (options.maxIconUnits ?? 120) * sx));
   const iconX = x + (cellSize - iconSize) / 2;
+  const canvasTop = iconTop - (iconSize - maxIcon) / 2;
 
   ctx.save();
   ctx.beginPath();
@@ -15493,7 +15494,7 @@ export function drawItemGridIcon(
   ctx.fillText(fitText(ctx, name, cellSize - 6 * sx), x + cellSize / 2 - sx, nameY);
   ctx.restore();
 
-  drawItemIcon(ctx, defId, iconX, iconTop, iconSize, iconSize, alpha);
+  drawItemIcon(ctx, defId, iconX, canvasTop, iconSize, iconSize, alpha);
 }
 
 export function clearItemIconCanvasCache(): void {

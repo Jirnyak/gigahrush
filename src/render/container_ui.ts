@@ -12,7 +12,7 @@ import {
   questItemStateLabel,
 } from './economy_ui';
 import { containerMenuGridLayout } from './ui_layout';
-import { drawCenteredWrappedText, fitText } from './ui_text';
+import { drawCenteredWrappedText, fitText, wrapTextLines } from './ui_text';
 import { drawItemGridIcon } from './item_sprites';
 
 export function drawContainerMenu(
@@ -59,17 +59,30 @@ export function drawContainerMenu(
   const containerName = fitText(ctx, container.name, columnW * 0.85);
   ctx.fillStyle = access.color;
   ctx.fillText(`${containerName}: ${containerInv.length}`, containerX, startY - 9 * sy);
+  
+  let infoY = startY + 4 * sy;
   ctx.fillStyle = access.color;
-  ctx.font = `${6.4 * sy}px monospace`;
-  ctx.fillText(fitText(ctx, access.label, columnW), containerX, startY - 18 * sy);
+  ctx.font = `${7.2 * sy}px monospace`;
+  for (const line of wrapTextLines(ctx, access.label, layout.infoW)) {
+    ctx.fillText(line, layout.infoX, infoY);
+    infoY += 9 * sy;
+  }
+  infoY += 4 * sy;
+
   ctx.fillStyle = '#888';
-  let infoY = startY + gridRows * cellSz + 34 * sy;
-  ctx.fillText(fitText(ctx, access.detail, totalW), startX, infoY);
+  ctx.font = `${6.4 * sy}px monospace`;
+  for (const line of wrapTextLines(ctx, access.detail, layout.infoW)) {
+    ctx.fillText(line, layout.infoX, infoY);
+    infoY += 8 * sy;
+  }
   const theftStatus = containerTheftStatus(container);
   if (theftStatus) {
-    infoY += 9 * sy;
+    infoY += 4 * sy;
     ctx.fillStyle = theftStatus.color;
-    ctx.fillText(fitText(ctx, `${theftStatus.label}: ${theftStatus.detail}`, totalW), startX, infoY);
+    for (const line of wrapTextLines(ctx, `${theftStatus.label}: ${theftStatus.detail}`, layout.infoW)) {
+      ctx.fillText(line, layout.infoX, infoY);
+      infoY += 8 * sy;
+    }
   }
   if (container.tags.includes('production_output')) {
     const produced = container.lastProducedItemId ? ITEMS[container.lastProducedItemId]?.name ?? container.lastProducedItemId : '';
@@ -83,8 +96,12 @@ export function drawContainerMenu(
       : produced
         ? `Цех: ${produced} x${container.lastProducedCount ?? 1}`
         : `Цех: ${container.factoryId ?? 'ожидает сырьё'}`;
+    infoY += 4 * sy;
     ctx.fillStyle = container.productionBlockedReason ? '#fa4' : '#8cf';
-    ctx.fillText(fitText(ctx, status, totalW), startX, infoY + 9 * sy);
+    for (const line of wrapTextLines(ctx, status, layout.infoW)) {
+      ctx.fillText(line, layout.infoX, infoY);
+      infoY += 8 * sy;
+    }
   }
 
   const drawGrid = (inv: { defId: string; count: number }[], gx: number, side: 'player' | 'container') => {
@@ -113,17 +130,17 @@ export function drawContainerMenu(
           ctx.fillRect(cx + 1 * sx, cy + 1 * sy, Math.max(1, 2 * sx), cellSz - 4 * sy);
           ctx.font = `${4.5 * sy}px monospace`;
           ctx.fillStyle = side === 'player' && stolenHere ? '#f84' : side === 'container' ? access.color : '#ee4';
-          ctx.fillText(ownerLabel, cx + 4 * sx, cy + 3 * sy);
+          ctx.fillText(ownerLabel, cx + 4 * sx, cy + 4.2 * sy);
           if (questLabel) {
             ctx.fillStyle = questItemStateColor(value.questState);
             ctx.textAlign = 'right';
-            ctx.fillText(questLabel, cx + cellSz - 4 * sx, cy + 3 * sy);
+            ctx.fillText(questLabel, cx + cellSz - 4 * sx, cy + 4.2 * sy);
             ctx.textAlign = 'left';
           }
           drawItemGridIcon(ctx, item.defId, def?.name ?? item.defId, cx, cy, cellSz, sx, sy, selected, selected ? 1 : 0.84, {
-            nameYUnits: 8,
-            iconTopUnits: 8.8,
-            bottomReserveUnits: 5.4,
+            nameYUnits: 10.5,
+            iconTopUnits: 11.5,
+            bottomReserveUnits: 6,
           });
           ctx.fillStyle = value.scarcityColor;
           ctx.font = `${4.8 * sy}px monospace`;
