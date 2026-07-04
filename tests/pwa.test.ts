@@ -179,6 +179,15 @@ describe('PWA Module', () => {
   });
 
   describe('isStandaloneDisplay', () => {
+    test('returns false if window is undefined', () => {
+      Object.defineProperty(globalThis, 'window', { value: undefined, writable: true });
+      assert.strictEqual(isStandaloneDisplay(), false);
+    });
+
+    test('returns false if navigator is undefined', () => {
+      Object.defineProperty(globalThis, 'navigator', { value: undefined, writable: true });
+      assert.strictEqual(isStandaloneDisplay(), false);
+    });
     test('returns true for fullscreen', () => {
       Object.defineProperty(globalThis, 'window', {
         value: {

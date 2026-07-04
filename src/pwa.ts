@@ -20,6 +20,7 @@ export function registerPwaServiceWorker(): void {
 }
 
 export function isStandaloneDisplay(): boolean {
+  if (typeof window === 'undefined' || typeof navigator === 'undefined') return false;
   return window.matchMedia?.('(display-mode: fullscreen)').matches === true ||
     window.matchMedia?.('(display-mode: standalone)').matches === true ||
     window.matchMedia?.('(display-mode: minimal-ui)').matches === true ||
