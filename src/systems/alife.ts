@@ -11,6 +11,8 @@ import {
   type GameState,
   type Item,
   type RPGStats,
+  NpcRole,
+  type CinematicState,
 } from '../core/types';
 import { World } from '../core/world';
 import {
@@ -164,6 +166,8 @@ export interface AlifeNpcSnapshot {
   floor: FloorLevel;
   faction: Faction;
   occupation: Occupation;
+  role?: NpcRole;
+  cinematicState?: CinematicState;
   name: string;
   firstName: string;
   lastName: string;
@@ -216,6 +220,8 @@ interface AlifeNpcRecord {
   firstName: string;
   lastName: string;
   npcVisualId?: string;
+  role?: NpcRole;
+  cinematicState?: CinematicState;
   weapon?: string;
   tool?: string;
   inventory?: Item[];
@@ -234,6 +240,8 @@ export interface AlifeNpcOverride {
   id: number;
   floorKey?: string;
   floor?: FloorLevel;
+  role?: NpcRole;
+  cinematicState?: CinematicState;
   name?: string;
   firstName?: string;
   lastName?: string;
@@ -1539,6 +1547,8 @@ function captureEntityToRecord(alife: AlifeState, record: AlifeNpcRecord, entity
   );
   if (entity.age !== undefined) setRecordAge(alife, record, entity.age, recordAge(alife, record));
   setRecordSexFromInput(alife, record, entity.sex, entity.isFemale);
+  record.role = entity.role;
+  record.cinematicState = entity.cinematicState ? { ...entity.cinematicState } : undefined;
   record.weapon = entity.weapon;
   record.tool = entity.tool;
   record.inventory = inventoryCopy(entity.inventory);
@@ -1705,6 +1715,8 @@ export function getAlifeNpcRecordSnapshot(state: GameState, alifeId: number): Al
     floor: recordFloor(alife, record),
     faction: recordFaction(alife, record),
     occupation: recordOccupation(alife, record),
+    role: record.role,
+    cinematicState: record.cinematicState ? { ...record.cinematicState } : undefined,
     name: record.name,
     firstName: record.firstName,
     lastName: record.lastName,
@@ -2136,6 +2148,8 @@ function materializeEntity(record: AlifeNpcRecord, template: Entity | undefined,
     npcVisualId: record.npcVisualId,
     spriteSeed,
     height: generateHeight(recordAge(alife, record), recordFemale(alife, record)),
+    role: record.role,
+    cinematicState: record.cinematicState ? { ...record.cinematicState } : undefined,
     name: record.name,
     firstName: record.firstName,
     lastName: record.lastName,
@@ -2373,6 +2387,8 @@ function applyOverride(alife: AlifeState, input: unknown): void {
     }
   }
   setRecordFloor(alife, record, sanitizeFloor(input.floor, recordFloor(alife, record)));
+  if (input.role !== undefined) record.role = input.role as NpcRole;
+  if (input.cinematicState !== undefined) record.cinematicState = input.cinematicState ? { ...(input.cinematicState as CinematicState) } : undefined;
   if (typeof input.name === 'string' && input.name.length > 0) record.name = input.name.slice(0, 80);
   if (typeof input.firstName === 'string' && input.firstName.length > 0) record.firstName = input.firstName.slice(0, 40);
   if (typeof input.lastName === 'string' && input.lastName.length > 0) record.lastName = input.lastName.slice(0, 40);
@@ -2511,6 +2527,8 @@ export function alifeForSave(state: GameState): AlifeSaveState {
       weapon: hasCustomLoadout ? record.weapon : undefined,
       tool: hasCustomLoadout ? record.tool : undefined,
       inventory: hasCustomLoadout ? inventoryCopy(record.inventory) : undefined,
+      role: record.role,
+      cinematicState: record.cinematicState ? { ...record.cinematicState } : undefined,
       rpg,
       sprite: recordSprite(alife, record),
       npcVisualId: record.npcVisualId,

@@ -6,7 +6,7 @@ export { tryMonsterProjectileStagger } from './monster';
 
 import {
   type Entity, type GameState, type Msg, type GameClock,
-  EntityType, FloorLevel, MonsterKind, AIGoal,
+  EntityType, FloorLevel, MonsterKind, AIGoal, NpcRole,
   setMsgLocationProvider,
 } from '../../core/types';
 import { World } from '../../core/world';
@@ -147,6 +147,9 @@ export function updateAI(world: World, entities: Entity[], dt: number, time: num
       if (!e || !e.alive || !e.ai) continue;
       if (isPlayerEntity(e)) {
         aiStats.skipped++;
+        continue;
+      }
+      if (e.role === NpcRole.CINEMATIC_ACTOR) {
         continue;
       }
       unstuckActorFromBlockers(world, e);

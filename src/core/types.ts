@@ -602,6 +602,8 @@ export interface Entity {
   sprite: number;             // sprite sheet index
   spriteSeed?: number;        // deterministic per-entity procedural visual seed
   npcVisualId?: string;        // optional special NPC visual generator family
+  role?: NpcRole;
+  cinematicState?: CinematicState;
   // optional components
   needs?: Needs;
   hp?: number;
@@ -1277,6 +1279,19 @@ export interface MsgLocation {
   targetId?: number;
   roomId?: number;
   zoneId?: number;
+}
+
+export enum NpcRole {
+  WANDERER = 'WANDERER',
+  TRADER = 'TRADER',
+  CINEMATIC_ACTOR = 'CINEMATIC_ACTOR'
+}
+
+export interface CinematicState {
+  originalRole: NpcRole;
+  originalX: number;
+  originalY: number;
+  sceneId: string;
 }
 
 export interface Msg extends MsgLocation {
