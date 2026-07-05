@@ -55,7 +55,8 @@ function line(t: Uint32Array, x0: number, y0: number, x1: number, y1: number, se
   }
 }
 
-function ellipse(t: Uint32Array, cx: number, cy: number, rx: number, ry: number, color: (x: number, y: number) => number): void {
+function ellipse(t: Uint32Array, opts: { cx: number, cy: number, rx: number, ry: number, color: (x: number, y: number) => number }): void {
+  const { cx, cy, rx, ry, color } = opts;
   for (let y = Math.floor(cy - ry); y <= Math.ceil(cy + ry); y++) {
     for (let x = Math.floor(cx - rx); x <= Math.ceil(cx + rx); x++) {
       const dx = (x - cx) / rx;
@@ -71,10 +72,10 @@ export function generateSprite(): Uint32Array {
   const cx = Math.floor(S / 2);
 
   // Black oil shadow under the pile keeps the idle silhouette low.
-  ellipse(t, cx, 55, 24, 6, (x, y) => {
+  ellipse(t, { cx, cy: 55, rx: 24, ry: 6, color: (x, y) => {
     const a = clamp(150 + noise(x, y, 7351) * 55);
     return rgba(18, 14, 12, a);
-  });
+  } });
 
   // Suspiciously straight idle stack: parallel rods like useful scrap.
   for (let i = 0; i < 7; i++) {
