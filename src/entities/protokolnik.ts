@@ -41,7 +41,15 @@ function stampCircle(t: Uint32Array, cx: number, cy: number, r: number, c: numbe
   }
 }
 
-function drawPage(t: Uint32Array, cx: number, cy: number, ang: number, scale: number, seed: number): void {
+interface DrawPageOptions {
+  cx: number;
+  cy: number;
+  ang: number;
+  scale: number;
+  seed: number;
+}
+
+function drawPage(t: Uint32Array, { cx, cy, ang, scale, seed }: DrawPageOptions): void {
   const cos = Math.cos(ang);
   const sin = Math.sin(ang);
   const w = 4 * scale;
@@ -126,7 +134,13 @@ export function generateProtokolnikSprite(seed = 3535, pressureTier = 0): Uint32
   for (let i = 0; i < orbitCount; i++) {
     const a = (Math.PI * 2 * i) / orbitCount + spin + noise(i, pressure, seed + 800) * 0.5;
     const r = 18 + pressure * 1.4 + noise(i, 1, seed + 801) * 3;
-    drawPage(t, cx + Math.cos(a) * r, 27 + Math.sin(a) * (r * 0.58), a + Math.PI * 0.35, 0.62, seed + 900 + i);
+    drawPage(t, {
+      cx: cx + Math.cos(a) * r,
+      cy: 27 + Math.sin(a) * (r * 0.58),
+      ang: a + Math.PI * 0.35,
+      scale: 0.62,
+      seed: seed + 900 + i
+    });
   }
 
   return t;
