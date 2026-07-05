@@ -65,7 +65,7 @@ import { getActiveSamosborVariant } from './systems/samosbor_variants_runtime';
 import { cleanCellHazardsNear, getCellHazardMoveMultiplier, tickCellHazards } from './systems/cell_hazards';
 import { adjustMonsterProjectileDamage, recordMonsterMeleeDeath, recordMonsterProjectileDeath } from './systems/monster_counterplay';
 import { applyMonsterArmorHit } from './systems/monster_armor';
-import { applyHitStaggerAndKnockback } from './systems/combat';
+import { applyHitStaggerAndKnockback , calculateReloadTime } from './systems/combat';
 import {
   pickupNearby, useItem, dropItem, getWeaponStats, equippedCombatItemId,
   addItem,
@@ -2939,8 +2939,6 @@ function handlePlayerAttack(_dt: number): void {
   const weaponId = equippedCombatItemId(player);
   const ws = getWeaponStats(player, weaponId);
 
-  // Calculate reload speed mod (agility)
-  const reloadSpeedMod = player.rpg ? (1 + (player.rpg.agi * 0.05)) : 1;
 
   // Reload Logic
   if (player.reloading) {
@@ -2970,10 +2968,10 @@ function handlePlayerAttack(_dt: number): void {
   if (input.reload && !player.reloading && ((player.currentMag ?? 0) < (ws.magazineSize ?? 1))) {
     if (ws.magazineSize !== Infinity && countAmmo(player, weaponId) > 0) {
       player.reloading = true;
-      player.reloadTimer = (ws.reloadTime ?? 1) / reloadSpeedMod;
+      player.reloadTimer = calculateReloadTime(ws.reloadTime ?? 1, player.rpg?.agi ?? 0);
     } else if (ws.magazineSize === 1) { // melee weapons
       player.reloading = true;
-      player.reloadTimer = (ws.reloadTime ?? 1) / reloadSpeedMod;
+      player.reloadTimer = calculateReloadTime(ws.reloadTime ?? 1, player.rpg?.agi ?? 0);
     }
   }
 
@@ -2982,7 +2980,7 @@ function handlePlayerAttack(_dt: number): void {
     if (!ws.psiCost && (player.currentMag ?? 0) <= 0 && ws.magazineSize !== Infinity) {
       if (countAmmo(player, weaponId) > 0 || ws.magazineSize === 1) {
         player.reloading = true;
-        player.reloadTimer = (ws.reloadTime ?? 1) / reloadSpeedMod;
+        player.reloadTimer = calculateReloadTime(ws.reloadTime ?? 1, player.rpg?.agi ?? 0);
       } else {
         // can't reload, no ammo
         player.attackCd = 0.5; // stop spam
@@ -3138,7 +3136,7 @@ function handlePlayerAttack(_dt: number): void {
       if (ws.magazineSize === 1) {
         player.currentMag = 0;
         player.reloading = true;
-        player.reloadTimer = (ws.reloadTime ?? ws.speed) / reloadSpeedMod;
+        player.reloadTimer = calculateReloadTime(ws.reloadTime ?? ws.speed, player.rpg?.agi ?? 0);
         player.attackCd = 0;
       } else if (ws.magazineSize !== Infinity) {
         player.currentMag = Math.max(0, (player.currentMag ?? 1) - 1);

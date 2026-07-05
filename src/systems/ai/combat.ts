@@ -11,7 +11,7 @@ import {
   playHostilePsiCast, playHostileShotgun, playSoundAt,
 } from '../audio';
 import { applyDamageRelationPenalty, isHostile } from '../factions';
-import { calculateDamage, applyHitStaggerAndKnockback } from '../combat';
+import { calculateDamage, applyHitStaggerAndKnockback, calculateReloadTime } from '../combat';
 import { clearFogInZone } from '../samosbor';
 import { agiAttackSpeedMult, meleeDamage } from '../rpg';
 import { zhelemishIncomingMeleeDamage } from '../status';
@@ -317,7 +317,7 @@ export function tryFactionCombat(
   }
   if (!ws.psiCost && (e.currentMag ?? 0) <= 0 && ws.magazineSize !== Infinity) {
     e.reloading = true;
-    e.reloadTimer = (ws.reloadTime ?? 1) / (e.rpg ? (1 + e.rpg.agi * 0.05) : 1);
+    e.reloadTimer = calculateReloadTime(ws.reloadTime ?? 1, e.rpg?.agi ?? 0);
     return true;
   }
   if (
