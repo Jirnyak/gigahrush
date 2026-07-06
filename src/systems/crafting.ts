@@ -220,7 +220,7 @@ function stateTime(state: GameState): number {
 }
 
 function touchCrafting(state: GameState, crafting = ensureCraftingState(state)): void {
-  crafting.learnedCount = Object.keys(crafting.knownRecipes).length;
+  crafting.learnedCount = countKnownRecipes(crafting.knownRecipes);
   crafting.lastChangedAt = stateTime(state);
 }
 
@@ -306,7 +306,7 @@ export function createCraftingState(): CraftingState {
   return {
     materials: emptyCraftVector(),
     knownRecipes,
-    learnedCount: Object.keys(knownRecipes).length,
+    learnedCount: countKnownRecipes(knownRecipes),
     lastChangedAt: 0,
   };
 }
@@ -317,9 +317,18 @@ export function sanitizeCraftingState(input: unknown): CraftingState {
   return {
     materials: sanitizeMaterialVector(input.materials),
     knownRecipes,
-    learnedCount: Object.keys(knownRecipes).length,
+    learnedCount: countKnownRecipes(knownRecipes),
     lastChangedAt: cleanTime(input.lastChangedAt),
   };
+}
+
+
+function countKnownRecipes(knownRecipes: Record<string, true>): number {
+  let count = 0;
+  for (const _ in knownRecipes) {
+    count++;
+  }
+  return count;
 }
 
 export function ensureCraftingState(state: GameState): CraftingState {
