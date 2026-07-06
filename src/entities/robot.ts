@@ -28,24 +28,6 @@ export function generateSprite(): Uint32Array {
   return generateRobotSprite(42);
 }
 
-/* ── Plasma bolt projectile sprite ────────────────────────────── */
-export function generatePlasmaSprite(): Uint32Array {
-  const t = new Uint32Array(S * S).fill(CLEAR);
-  const cx = S / 2, cy = S / 2;
-  for (let y = cy - 5; y <= cy + 5; y++) for (let x = cx - 5; x <= cx + 5; x++) {
-    const dx = (x - cx) / 5, dy = (y - cy) / 5;
-    const d2 = dx * dx + dy * dy;
-    if (d2 < 1) {
-      const bright = 1 - Math.sqrt(d2);
-      t[y * S + x] = rgba(
-        clamp(Math.floor(80 + bright * 175)),
-        clamp(Math.floor(180 + bright * 75)),
-        clamp(Math.floor(220 + bright * 35)),
-      );
-    }
-  }
-  return t;
-}
 
 /* helper: filled rect with optional noise */
 function rect(
