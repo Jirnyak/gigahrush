@@ -150,7 +150,9 @@ interface AntennaTerritorySeed {
   x: number;
   y: number;
   weight: number;
+  scaleSqInv?: number;
 }
+
 
 const ANTENNA_TERRITORY_TARGETS = [
   { owner: ZoneFaction.CITIZEN, share: 0.18 },
@@ -159,6 +161,13 @@ const ANTENNA_TERRITORY_TARGETS = [
   { owner: ZoneFaction.SCIENTIST, share: 0.24 },
   { owner: ZoneFaction.WILD, share: 0.14 },
 ] as const;
+
+const TARGET_SHARE_BY_FACTION = new Float64Array(10);
+TARGET_SHARE_BY_FACTION.fill(0.1);
+for (const entry of ANTENNA_TERRITORY_TARGETS) {
+  TARGET_SHARE_BY_FACTION[entry.owner] = entry.share;
+}
+
 
 const SIGNAL_CLUES: Record<AntennaRouteId, SignalClueDef> = {
   roof: {
@@ -1524,6 +1533,13 @@ function decorateAntennaRoomByType(world: World, room: Room, rng: () => number, 
 
 function applyAntennaCourtTerritory(world: World): void {
   const seeds = antennaTerritorySeeds(world);
+  for (const seed of seeds) {
+    const ownerTarget = TARGET_SHARE_BY_FACTION[seed.owner] ?? 0.1;
+    const ownerScale = 0.72 + ownerTarget * 2.2;
+    const scale = Math.max(0.1, seed.weight * ownerScale);
+    seed.scaleSqInv = 1 / (scale * scale);
+  }
+
   for (let i = 0; i < W * W; i++) {
     const x = i % W;
     const y = (i / W) | 0;
@@ -1561,12 +1577,9 @@ function nearestAntennaTerritoryOwner(world: World, x: number, y: number, seeds:
   let best = ZoneFaction.LIQUIDATOR;
   let bestScore = Infinity;
   for (const seed of seeds) {
-    const ownerTarget = ANTENNA_TERRITORY_TARGETS.find(entry => entry.owner === seed.owner)?.share ?? 0.1;
-    const ownerScale = 0.72 + ownerTarget * 2.2;
     const d2 = world.dist2(x, y, seed.x, seed.y);
-    const scale = Math.max(0.1, seed.weight * ownerScale);
     const wave = Math.sin((x + seed.owner * 31) * 0.019) + Math.cos((y - seed.owner * 17) * 0.017);
-    const score = d2 / (scale * scale) - wave * 520;
+    const score = d2 * (seed.scaleSqInv ?? 1) - wave * 520;
     if (score < bestScore) {
       bestScore = score;
       best = seed.owner;
