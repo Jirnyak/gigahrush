@@ -452,8 +452,15 @@ export function expandTuringNurseryRouteGeometry(world: World, rng: () => number
 }
 
 export function reinforceTuringNurseryAuthoredHqTerritory(world: World): void {
+  const hqRoomsByName = new Map<string, Room>();
+  for (const room of world.rooms) {
+    if (room?.type === RoomType.HQ && room.name) {
+      hqRoomsByName.set(room.name, room);
+    }
+  }
+
   for (const spec of TURING_HQ_SPECS) {
-    const room = world.rooms.find(candidate => candidate?.type === RoomType.HQ && candidate.name === spec.name);
+    const room = hqRoomsByName.get(spec.name);
     if (!room) continue;
     hardenTuringHqRoom(world, room, spec.owner, spec.wallTex, spec.floorTex);
   }
