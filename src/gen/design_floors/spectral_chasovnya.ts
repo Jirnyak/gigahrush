@@ -61,6 +61,11 @@ export const SPECTRAL_CHASOVNYA_ROOM_NAMES = {
 type NextId = { v: number };
 type SpectralRoomKey = keyof typeof SPECTRAL_CHASOVNYA_ROOM_NAMES;
 type SpectralRooms = Record<SpectralRoomKey, Room>;
+
+const ROOM_NAME_TO_KEY = new Map<string, SpectralRoomKey>(
+  Object.entries(SPECTRAL_CHASOVNYA_ROOM_NAMES).map(([key, name]) => [name, key as SpectralRoomKey])
+);
+
 type SpectralDecision = 'fire_loudly' | 'move_silently' | 'ring_bell' | 'avoid_focus' | 'listen_radio' | 'flee';
 
 export interface SpectralStandingWaveRoom {
@@ -266,13 +271,25 @@ function roomCenter(room: Room): { x: number; y: number } {
 
 function findSpectralRooms(world: World): SpectralRooms | undefined {
   const rooms: Partial<SpectralRooms> = {};
-  for (const key of Object.keys(SPECTRAL_CHASOVNYA_ROOM_NAMES) as SpectralRoomKey[]) {
-    const roomName = SPECTRAL_CHASOVNYA_ROOM_NAMES[key];
-    const room = world.rooms.find(candidate => candidate?.name === roomName);
-    if (!room) return undefined;
-    rooms[key] = room;
+  let foundCount = 0;
+  const targetCount = ROOM_NAME_TO_KEY.size;
+
+  for (let i = 0; i < world.rooms.length; i++) {
+    const candidate = world.rooms[i];
+    if (!candidate || !candidate.name) continue;
+
+    const key = ROOM_NAME_TO_KEY.get(candidate.name);
+    if (key !== undefined && !rooms[key]) {
+      rooms[key] = candidate;
+      foundCount++;
+      if (foundCount === targetCount) break;
+    }
   }
-  return rooms as SpectralRooms;
+
+  if (foundCount === targetCount) {
+    return rooms as SpectralRooms;
+  }
+  return undefined;
 }
 
 function ensureSpectralChasovnyaState(world: World): SpectralChasovnyaState | undefined {
