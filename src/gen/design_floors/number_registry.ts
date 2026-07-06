@@ -1012,11 +1012,6 @@ export function alignNumberRegistryAmbientNpcTerritory(world: World, entities: E
   }
 }
 
-function targetIndexForOwner(owner: TerritoryOwner): number {
-  const index = NUMBER_REGISTRY_TERRITORY_TARGETS.findIndex(target => target.owner === owner);
-  return index >= 0 ? index : 0;
-}
-
 function roomNameOwnerHint(room: Room): TerritoryOwner | undefined {
   for (const target of NUMBER_REGISTRY_TERRITORY_TARGETS) {
     if (room.name.startsWith(`${target.label}:`)) return target.owner;
@@ -1138,15 +1133,16 @@ function applyNumberRegistryTerritory(world: World): void {
   }
   assignNumberRegistryTerritory(world, biases);
   reinforceNamedRoomTerritory(world);
-  for (const target of NUMBER_REGISTRY_TERRITORY_TARGETS) {
-    const i = targetIndexForOwner(target.owner);
-    const hq = NUMBER_REGISTRY_HQ_SPECS.find(spec => spec.owner === target.owner);
+  const hqByOwner = new Map(NUMBER_REGISTRY_HQ_SPECS.map(spec => [spec.owner, spec]));
+  for (let i = 0; i < NUMBER_REGISTRY_TERRITORY_TARGETS.length; i++) {
+    const target = NUMBER_REGISTRY_TERRITORY_TARGETS[i];
+    const hq = hqByOwner.get(target.owner);
     if (!hq) continue;
     for (let dy = -7; dy <= 7; dy++) {
       for (let dx = -7; dx <= 7; dx++) {
         if (dx * dx + dy * dy > 56) continue;
         const idx = world.idx(target.hq.x + dx, target.hq.y + dy);
-        world.factionControl[idx] = NUMBER_REGISTRY_TERRITORY_TARGETS[i].owner;
+        world.factionControl[idx] = target.owner;
       }
     }
   }
