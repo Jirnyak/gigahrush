@@ -167,15 +167,6 @@ export function spawnHellAltarArena(world: World, entities: Entity[], nextId: { 
   };
 }
 
-export function getHellAltarArenaDebugSite(): AltarArenaSite | null {
-  return activeSite ? {
-    ...activeSite,
-    killedIds: [...activeSite.killedIds],
-    hostileIds: [...activeSite.hostileIds],
-    monsterIds: [...activeSite.monsterIds],
-    cultistIds: [...activeSite.cultistIds],
-  } : null;
-}
 
 export function resetHellAltarArenaForTests(): void {
   activeWorld = null;
