@@ -174,15 +174,6 @@ function stationCellValid(
   return true;
 }
 
-export function canPlaceCraftStationAt(
-  world: World,
-  x: number,
-  y: number,
-  defId: CraftStationDefId,
-  options: CraftStationPlacementOptions = {},
-): boolean {
-  return stationCellValid(world, world.idx(x, y), defId, options);
-}
 
 function attachStationInteractive(
   world: World,
