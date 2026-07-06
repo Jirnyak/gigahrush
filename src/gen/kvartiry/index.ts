@@ -310,7 +310,7 @@ export function generateKvartiry(territorySeed = 0): { world: World; entities: E
 
       if (wallSum < 2) {
         let drop = rng(0, 3);
-        // If chosen direction already has a wall, rotate
+        // Rotate if chosen direction already has a wall
         const nx = (sx + DX[drop]) & W_MASK;
         const ny = (sy + DY[drop]) & W_MASK;
         const nCheck = ny * W + nx;
