@@ -72,6 +72,7 @@ export interface DesignFloorRouteDef {
   color: string;
   role: string;
   danger: 1 | 2 | 3 | 4 | 5;
+  hasOpenSky?: boolean;
 }
 
 /**
@@ -83,7 +84,7 @@ export function designFloorThemeClass(route: DesignFloorRouteDef): FloorLevel {
 }
 
 export const DESIGN_FLOOR_ROUTES: readonly DesignFloorRouteDef[] = [
-  { id: 'roof', z: 50, displayName: 'Крыша', baseFloor: FloorLevel.MINISTRY, color: '#9cf', role: 'воздух, антенны, видимость', danger: 2 },
+  { id: 'roof', z: 50, displayName: 'Крыша', baseFloor: FloorLevel.MINISTRY, color: '#9cf', role: 'воздух, антенны, видимость', danger: 2, hasOpenSky: true },
   { id: 'chthonic_attic', z: 46, displayName: 'Чердак техслужб', baseFloor: FloorLevel.MINISTRY, color: '#c8f', role: 'техчердак, тайники, старые шахты', danger: 3 },
   { id: 'radon_exchange', z: 44, displayName: 'Радоновый обменник', baseFloor: FloorLevel.MINISTRY, color: '#bdf', role: 'скан-линии, заслонки, проекционный ключ', danger: 4 },
   { id: 'antenna_court', z: 42, displayName: 'Антенный двор', baseFloor: FloorLevel.MINISTRY, color: '#8ff', role: 'связь, наружный ветер, обзор', danger: 2 },

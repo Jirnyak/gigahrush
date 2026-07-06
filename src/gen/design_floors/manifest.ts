@@ -127,6 +127,7 @@ export function generateDesignFloor(id: DesignFloorId, runSeed = DEFAULT_DESIGN_
   return withSeededRandom(seed, () => {
     const gen = DESIGN_FLOOR_GENERATORS[id]();
     if (!route) return gen;
+    gen.world.hasOpenSky = route.hasOpenSky;
     const expanded = expandDesignFloorGeneration(gen, route);
     applyDesignFloorObjectProfile(expanded.world, expanded.spawnX, expanded.spawnY, route);
     if (id === 'markov_stairwell') reinforceMarkovStairwellAuthoredHqTerritory(expanded.world);

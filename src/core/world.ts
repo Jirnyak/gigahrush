@@ -188,6 +188,7 @@ export class World {
   railTracks: RailTrainTrack[] = [];
   railTrains: RailTrain[] = [];
   railTrainCells: Map<number, number> = new Map(); // cell idx -> train index
+  hasOpenSky?: boolean;            // true if this floor has an open sky (e.g. roof)
   cellVersion = 0;                 // bumped when runtime cell solidity changes
   surfaceVersion = 0;              // bumped when surfaceMap pixels change
   wallTexVersion = 0;              // bumped when runtime wall texture data changes
