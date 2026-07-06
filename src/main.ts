@@ -8082,7 +8082,7 @@ function gameLoop(now: number): void {
     rebuildEntityIndexForSimulation(entities, entityIndexFrame).beginTelemetryFrame();
     playerActions(dt);
     syncPlayerActorSwitchBaseline();
-    // If switchFloor was triggered, pendingLoad is set — skip the rest of this frame
+    // Skip the rest of this frame when switchFloor is triggered and pendingLoad is set
     if (pendingLoad) { requestAnimationFrame(gameLoop); return; }
     updateLiftArachnaEncounter(world, entities, player, state, dt, nextEntityId);
     updatePseudolifts(world, entities, player, state);
