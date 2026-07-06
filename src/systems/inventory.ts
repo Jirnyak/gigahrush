@@ -571,9 +571,9 @@ export function publishPlayerItemEvent(
 ): void {
   if (!state || !isPlayerEntity(actor)) return;
   const def = ITEMS[defId];
-  const tags = ['player', 'inventory', def?.type !== undefined ? `item_type_${def.type}` : 'item'];
-  for (const tag of ITEM_TAGS[defId] ?? []) if (!tags.includes(tag)) tags.push(tag);
-  for (const tag of def?.tags ?? []) if (!tags.includes(tag)) tags.push(tag);
+  const tagsSet = new Set<string>(['player', 'inventory', def?.type !== undefined ? `item_type_${def.type}` : 'item']);
+  for (const tag of ITEM_TAGS[defId] ?? []) tagsSet.add(tag);
+  for (const tag of def?.tags ?? []) tagsSet.add(tag);
   const eventSeverity = defId === 'maronary_shaving' && type === 'player_pick_item' && severity < 3 ? 3 : severity;
   publishEvent(state, {
     type,
@@ -587,7 +587,7 @@ export function publishPlayerItemEvent(
     itemValue: def?.value ?? 0,
     severity: eventSeverity,
     privacy: defId === 'maronary_shaving' ? 'local' : 'private',
-    tags,
+    tags: Array.from(tagsSet),
   });
 }
 
