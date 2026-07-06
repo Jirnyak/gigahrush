@@ -223,7 +223,7 @@ export const OCCUPATION_PROFILES: Readonly<Record<Occupation, OccupationProfile>
     sleepScoreBonus: 0,
     healIdleScoreBonus: 6,
     interests: ['бинты', 'йод', 'медкарта'],
-    tradeItems: ['bandage', 'sterile_bandage', 'pills', 'antidep', 'anti_spore_inhaler', 'burn_gel', 'sleeping_pills', 'permanganate_vial', 'lice_shampoo', 'zhelemish_boiled'],
+    tradeItems: ['bandage', 'sterile_bandage', 'pills', 'antidep', 'anti_spore_inhaler', 'burn_gel', 'sleeping_pills', 'permanganate_vial', 'lice_shampoo', 'zhelemish_boiled', 'post_samosbor_probe_kit'],
     tradeTags: ['medicine', 'medical'],
     craftTags: ['lab_lesson'],
     routineTags: ['medical', 'science'],
@@ -492,7 +492,7 @@ export const OCCUPATION_PROFILES: Readonly<Record<Occupation, OccupationProfile>
     sleepScoreBonus: 0,
     healIdleScoreBonus: 0,
     interests: ['патроны', 'следы', 'дверной клин'],
-    tradeItems: ['knife', 'canned', 'rawmeat', 'ammo_9mm', 'ammo_shells', 'gasmask_filter', 'ip4_gasmask', 'filtered_water', 'radio_headset_liquidator', 'chizh3_shotgun', 'rb91_auto_shotgun', 'makarov'],
+    tradeItems: ['knife', 'canned', 'rawmeat', 'ammo_9mm', 'ammo_shells', 'gasmask_filter', 'ip4_gasmask', 'filtered_water', 'radio_headset_liquidator', 'chizh3_shotgun', 'rb91_auto_shotgun', 'makarov', 'ptrs_liquidator', 'breach_charge'],
     tradeTags: ['weapon', 'patrol'],
     craftTags: [],
     routineTags: ['traveler', 'combat', 'patrol'],
@@ -626,7 +626,7 @@ export const OCCUPATION_PROFILES: Readonly<Record<Occupation, OccupationProfile>
     sleepScoreBonus: 0,
     healIdleScoreBonus: 0,
     interests: ['схемы', 'фильтры', 'защита'],
-    tradeItems: ['ip4_gasmask', 'gasmask_filter', 'armor_liquidator', 'armor_medium', 'fog_detector'],
+    tradeItems: ['ip4_gasmask', 'gasmask_filter', 'armor_liquidator', 'armor_medium', 'fog_detector', 'armor_heavy', 'brt2_foam_projector'],
     tradeTags: ['armor', 'tools', 'repair'],
     craftTags: ['mechanic_lesson'],
     routineTags: ['technical', 'maintenance'],
@@ -755,6 +755,12 @@ const FACTION_TRADE_OFFERS: readonly FactionTradeOffer[] = [
   { faction: Faction.LIQUIDATOR, occupation: Occupation.ENGINEER, minRank: 3, defId: 'armor_medium', count: 1 },
   { faction: Faction.LIQUIDATOR, occupation: Occupation.ENGINEER, minRank: 4, defId: 'fog_detector', count: 1 },
   { faction: Faction.LIQUIDATOR, occupation: Occupation.ENGINEER, minRank: 4, defId: 'breach_charge', count: 2 },
+
+  { faction: Faction.LIQUIDATOR, occupation: Occupation.HUNTER, minRank: 2, defId: 'ptrs_liquidator', count: 1 },
+  { faction: Faction.LIQUIDATOR, occupation: Occupation.HUNTER, minRank: 2, defId: 'breach_charge', count: 2 },
+  { faction: Faction.LIQUIDATOR, occupation: Occupation.DOCTOR, minRank: 2, defId: 'post_samosbor_probe_kit', count: 1 },
+  { faction: Faction.LIQUIDATOR, occupation: Occupation.ENGINEER, minRank: 3, defId: 'armor_heavy', count: 1 },
+  { faction: Faction.LIQUIDATOR, occupation: Occupation.ENGINEER, minRank: 3, defId: 'brt2_foam_projector', count: 1 },
 ];
 
 function tradeRankForNpc(npc: Entity): number {
