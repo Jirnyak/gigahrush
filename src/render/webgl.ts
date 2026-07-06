@@ -2786,6 +2786,125 @@ function uploadSurfaceIndexCell(gl: WebGL2RenderingContext, glState: GLState, ci
   );
 }
 
+function uploadDynamicLights(
+  gl: WebGL2RenderingContext,
+  ru: Record<string, WebGLUniformLocation | null>,
+  glState: GLState,
+  world: World,
+  px: number,
+  py: number,
+  camHeight: number,
+  flashlight: number
+): void {
+  let dynLightCount = 0;
+  if (flashlight > 0.0) {
+    gl.uniform3f(ru[`uDynamicLights[0].pos`]!, px, py, camHeight);
+    gl.uniform3f(ru[`uDynamicLights[0].color`]!, 1.5, 1.4, 1.2); // Warm bright light
+    gl.uniform1f(ru[`uDynamicLights[0].radius`]!, 10.0);
+
+    glState.dynamicLightsPos[0] = px;
+    glState.dynamicLightsPos[1] = py;
+    glState.dynamicLightsPos[2] = camHeight;
+    glState.dynamicLightsColor[0] = 1.5;
+    glState.dynamicLightsColor[1] = 1.4;
+    glState.dynamicLightsColor[2] = 1.2;
+    glState.dynamicLightsRadius[0] = 10.0;
+
+    dynLightCount++;
+  }
+
+  const maxDrawGrid = Math.ceil(MAX_DRAW);
+  const cx = Math.floor(px);
+  const cy = Math.floor(py);
+  const lightCandidates: { lx: number, ly: number, lz: number, r: number, g: number, b: number, radius: number, dist2: number }[] = [];
+
+  for (let dy = -maxDrawGrid; dy <= maxDrawGrid; dy++) {
+    for (let dx = -maxDrawGrid; dx <= maxDrawGrid; dx++) {
+      const dist2 = dx * dx + dy * dy;
+      if (dist2 > MAX_DRAW * MAX_DRAW) continue;
+
+      const wx = world.wrap(cx + dx);
+      const wy = world.wrap(cy + dy);
+      const idx = world.idx(wx, wy);
+      const feat = world.features[idx];
+
+      let lr = 0, lg = 0, lb = 0, lrad = 0;
+      if (feat === Feature.LAMP) {
+        lr = 1.0; lg = 0.9; lb = 0.8; lrad = 8.0;
+      } else if (feat === Feature.CANDLE) {
+        lr = 0.8; lg = 0.5; lb = 0.2; lrad = 5.0;
+      }
+
+      if (lrad > 0) {
+        const lx = cx + dx + 0.5;
+        const ly = cy + dy + 0.5;
+        const lz = (feat === Feature.LAMP) ? (1.0 + Math.max(0, world.ceilHeight[idx]) * 0.5) - 0.1 : 0.4;
+        lightCandidates.push({ lx, ly, lz, r: lr, g: lg, b: lb, radius: lrad, dist2 });
+      }
+    }
+  }
+
+  lightCandidates.sort((A, B) => A.dist2 - B.dist2);
+
+  for (const c of lightCandidates) {
+    if (dynLightCount >= 8) break;
+    gl.uniform3f(ru[`uDynamicLights[${dynLightCount}].pos`]!, c.lx, c.ly, c.lz);
+    gl.uniform3f(ru[`uDynamicLights[${dynLightCount}].color`]!, c.r, c.g, c.b);
+    gl.uniform1f(ru[`uDynamicLights[${dynLightCount}].radius`]!, c.radius);
+
+    glState.dynamicLightsPos[dynLightCount * 3 + 0] = c.lx;
+    glState.dynamicLightsPos[dynLightCount * 3 + 1] = c.ly;
+    glState.dynamicLightsPos[dynLightCount * 3 + 2] = c.lz;
+    glState.dynamicLightsColor[dynLightCount * 3 + 0] = c.r;
+    glState.dynamicLightsColor[dynLightCount * 3 + 1] = c.g;
+    glState.dynamicLightsColor[dynLightCount * 3 + 2] = c.b;
+    glState.dynamicLightsRadius[dynLightCount] = c.radius;
+
+    dynLightCount++;
+  }
+
+  gl.uniform1i(ru['uDynamicLightCount']!, dynLightCount);
+  glState.dynamicLightCount = dynLightCount; // Save for mesh and sprites
+}
+
+function uploadShadowCasters(
+  gl: WebGL2RenderingContext,
+  ru: Record<string, WebGLUniformLocation | null>,
+  glState: GLState,
+  entities: Entity[],
+  px: number,
+  py: number
+): void {
+  let shadowCasterCount = 0;
+  for (const e of entities) {
+    if (shadowCasterCount >= 32) break;
+    if (e.type === EntityType.PROJECTILE || e.type === EntityType.EFFECT || e.type === EntityType.BILLBOARD || e.type === EntityType.LIGHT) continue;
+
+    let radius = 0.25;
+    let height = 0.8;
+    if (e.type === EntityType.ITEM_DROP) {
+      radius = 0.15;
+      height = 0.15;
+    }
+
+    const dx = e.x - px;
+    const dy = e.y - py;
+    if (dx * dx + dy * dy > MAX_DRAW * MAX_DRAW) continue;
+
+    glState.shadowCasters[shadowCasterCount * 4 + 0] = e.x;
+    glState.shadowCasters[shadowCasterCount * 4 + 1] = e.y;
+    glState.shadowCasters[shadowCasterCount * 4 + 2] = height;
+    glState.shadowCasters[shadowCasterCount * 4 + 3] = radius;
+    shadowCasterCount++;
+  }
+  glState.shadowCasterCount = shadowCasterCount;
+  gl.uniform1i(ru['uShadowCasterCount']!, shadowCasterCount);
+  if (shadowCasterCount > 0) {
+    const loc = ru['uShadowCasters[0]'];
+    if (loc) gl.uniform4fv(loc, glState.shadowCasters.subarray(0, shadowCasterCount * 4));
+  }
+}
+
 function uploadSurfaceDirtyCells(world: World, glState: GLState, dirtyCells: readonly number[]): boolean {
   if (dirtyCells.length <= 0) return false;
   const { gl } = glState;
@@ -3380,106 +3499,8 @@ export function renderSceneGL(
   uploadVisualDetailUniforms(gl, ru, visualDetailProfile);
   uploadVisualSurfaceUniforms(gl, ru, visualSurfaceProfile);
 
-  // Dynamic Lights (Framework)
-  let dynLightCount = 0;
-  if (flashlight > 0.0) {
-    gl.uniform3f(ru[`uDynamicLights[0].pos`]!, px, py, camHeight);
-    gl.uniform3f(ru[`uDynamicLights[0].color`]!, 1.5, 1.4, 1.2); // Warm bright light
-    gl.uniform1f(ru[`uDynamicLights[0].radius`]!, 10.0);
-    
-    glState.dynamicLightsPos[0] = px;
-    glState.dynamicLightsPos[1] = py;
-    glState.dynamicLightsPos[2] = camHeight;
-    glState.dynamicLightsColor[0] = 1.5;
-    glState.dynamicLightsColor[1] = 1.4;
-    glState.dynamicLightsColor[2] = 1.2;
-    glState.dynamicLightsRadius[0] = 10.0;
-    
-    dynLightCount++;
-  }
-
-  const maxDrawGrid = Math.ceil(MAX_DRAW);
-  const cx = Math.floor(px);
-  const cy = Math.floor(py);
-  const lightCandidates: { lx: number, ly: number, lz: number, r: number, g: number, b: number, radius: number, dist2: number }[] = [];
-
-  for (let dy = -maxDrawGrid; dy <= maxDrawGrid; dy++) {
-    for (let dx = -maxDrawGrid; dx <= maxDrawGrid; dx++) {
-      const dist2 = dx * dx + dy * dy;
-      if (dist2 > MAX_DRAW * MAX_DRAW) continue;
-
-      const wx = world.wrap(cx + dx);
-      const wy = world.wrap(cy + dy);
-      const idx = world.idx(wx, wy);
-      const feat = world.features[idx];
-      
-      let lr = 0, lg = 0, lb = 0, lrad = 0;
-      if (feat === Feature.LAMP) {
-        lr = 1.0; lg = 0.9; lb = 0.8; lrad = 8.0;
-      } else if (feat === Feature.CANDLE) {
-        lr = 0.8; lg = 0.5; lb = 0.2; lrad = 5.0;
-      }
-      
-      if (lrad > 0) {
-        const lx = cx + dx + 0.5;
-        const ly = cy + dy + 0.5;
-        const lz = (feat === Feature.LAMP) ? (1.0 + Math.max(0, world.ceilHeight[idx]) * 0.5) - 0.1 : 0.4;
-        lightCandidates.push({ lx, ly, lz, r: lr, g: lg, b: lb, radius: lrad, dist2 });
-      }
-    }
-  }
-
-  lightCandidates.sort((A, B) => A.dist2 - B.dist2);
-
-  for (const c of lightCandidates) {
-    if (dynLightCount >= 8) break;
-    gl.uniform3f(ru[`uDynamicLights[${dynLightCount}].pos`]!, c.lx, c.ly, c.lz);
-    gl.uniform3f(ru[`uDynamicLights[${dynLightCount}].color`]!, c.r, c.g, c.b);
-    gl.uniform1f(ru[`uDynamicLights[${dynLightCount}].radius`]!, c.radius);
-    
-    glState.dynamicLightsPos[dynLightCount * 3 + 0] = c.lx;
-    glState.dynamicLightsPos[dynLightCount * 3 + 1] = c.ly;
-    glState.dynamicLightsPos[dynLightCount * 3 + 2] = c.lz;
-    glState.dynamicLightsColor[dynLightCount * 3 + 0] = c.r;
-    glState.dynamicLightsColor[dynLightCount * 3 + 1] = c.g;
-    glState.dynamicLightsColor[dynLightCount * 3 + 2] = c.b;
-    glState.dynamicLightsRadius[dynLightCount] = c.radius;
-    
-    dynLightCount++;
-  }
-
-  gl.uniform1i(ru['uDynamicLightCount']!, dynLightCount);
-  glState.dynamicLightCount = dynLightCount; // Save for mesh and sprites
-
-  // Shadow Casters
-  let shadowCasterCount = 0;
-  for (const e of entities) {
-    if (shadowCasterCount >= 32) break;
-    if (e.type === EntityType.PROJECTILE || e.type === EntityType.EFFECT || e.type === EntityType.BILLBOARD || e.type === EntityType.LIGHT) continue;
-    
-    let radius = 0.25;
-    let height = 0.8;
-    if (e.type === EntityType.ITEM_DROP) {
-      radius = 0.15;
-      height = 0.15;
-    }
-    
-    const dx = e.x - px;
-    const dy = e.y - py;
-    if (dx * dx + dy * dy > MAX_DRAW * MAX_DRAW) continue;
-
-    glState.shadowCasters[shadowCasterCount * 4 + 0] = e.x;
-    glState.shadowCasters[shadowCasterCount * 4 + 1] = e.y;
-    glState.shadowCasters[shadowCasterCount * 4 + 2] = height;
-    glState.shadowCasters[shadowCasterCount * 4 + 3] = radius;
-    shadowCasterCount++;
-  }
-  glState.shadowCasterCount = shadowCasterCount;
-  gl.uniform1i(ru['uShadowCasterCount']!, shadowCasterCount);
-  if (shadowCasterCount > 0) {
-    const loc = ru['uShadowCasters[0]'];
-    if (loc) gl.uniform4fv(loc, glState.shadowCasters.subarray(0, shadowCasterCount * 4));
-  }
+  uploadDynamicLights(gl, ru, glState, world, px, py, camHeight, flashlight);
+  uploadShadowCasters(gl, ru, glState, entities, px, py);
 
   // Bind data textures to texture units.
   bindTextureUnit(gl, glState.cellsTex, ru['uCells']!, 0);
