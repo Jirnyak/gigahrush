@@ -11,6 +11,7 @@ import { Spr, monsterSpr } from '../../render/sprite_index';
 import { type PlotNpcDef, registerAuthoredNpc, storyNpcFloorKey } from '../../data/plot';
 import { publishEvent, registerWorldEventObserver } from '../../systems/events';
 import { randomRPG, scaleMonsterHp, scaleMonsterSpeed } from '../../systems/rpg';
+import { MAX_INVENTORY_SLOTS } from '../../data/inventory_limits';
 import {
   type MaintContentCtx, dropItems, findMaintArea, setFeature, stampMaintRoom,
 } from './content_helpers';
@@ -158,7 +159,7 @@ function publishFiltronosEvent(
 
 function addContaminatedGloves(container: WorldContainer): boolean {
   if (container.inventory.some(item => item.defId === CONTAMINATED_GLOVES_ITEM)) return false;
-  if (container.inventory.length >= container.capacitySlots) return false;
+  if (container.inventory.length >= MAX_INVENTORY_SLOTS) return false;
   container.inventory.push({ defId: CONTAMINATED_GLOVES_ITEM, count: 1 });
   return true;
 }
@@ -178,7 +179,7 @@ function contaminateContainer(container: WorldContainer): { changed: number; glo
 
 function addRecoveredTrace(container: WorldContainer): boolean {
   const hasTrace = container.inventory.some(item => item.defId === 'filter_layer' || item.defId === 'gasmask_filter');
-  if (hasTrace || container.inventory.length >= container.capacitySlots) return false;
+  if (hasTrace || container.inventory.length >= MAX_INVENTORY_SLOTS) return false;
   container.inventory.push({ defId: 'filter_layer', count: 1 });
   return true;
 }

@@ -64,7 +64,7 @@ function unpackStolenFilterPack(e: Entity) { addStackedUseOutput(e, 'gasmask_fil
 function unpackHomemade9mm(e: Entity) { addStackedUseOutput(e, 'ammo_9mm', 6); return 'Кустарные 9мм перебраны: шесть пригодных патронов переложены в обычный подсумок. Остальное лучше не показывать посту'; }
 function unpackChemicalShell(e: Entity) { addStackedUseOutput(e, 'decon_fluid', 1); return 'Химический патрон вскрыт: реагент перелит в флакон обеззараживания. Из обычного подсумка такой выстрел не собрать'; }
 
-export type ItemEquipSlot = 'weapon' | 'tool';
+export type ItemEquipSlot = 'weapon' | 'tool' | 'armor';
 
 export function itemDefHasTag(def: ItemDef, tag: string): boolean {
   return (ITEM_TAGS[def.id]?.includes(tag) ?? false) || (def.tags?.includes(tag) ?? false);
@@ -73,6 +73,7 @@ export function itemDefHasTag(def: ItemDef, tag: string): boolean {
 export function itemEquipSlot(def: ItemDef): ItemEquipSlot | null {
   if (def.type === ItemType.WEAPON) return itemDefHasTag(def, 'psi') ? 'tool' : 'weapon';
   if (def.type === ItemType.TOOL) return 'tool';
+  if (def.resistances) return 'armor';
   return null;
 }
 
@@ -151,6 +152,8 @@ export const ITEM_TAGS: Record<string, readonly string[]> = {
   electrode_pack: ['metal', 'repair', 'repair_input', 'factory_input', 'production', 'welding', 'trade'],
   noise_can: ['noise', 'decoy', 'counterplay'],
   radio_jammer: ['noise', 'jammer', 'counterplay'],
+  camera: ['electronics', 'contraband', 'trade'],
+  brass_knuckles: ['weapon', 'melee', 'contraband'],
   felt_door_pad: ['noise', 'quiet_door', 'counterplay'],
   rubber_door_wedge: ['repair', 'seal', 'hermodoor', 'counterplay'],
   wire_coil: ['repair', 'repair_input', 'electronics', 'wire', 'tool', 'production', 'source_old_boxes', 'source_cabinets', 'trade', 'emergency_panel', 'pneumomail'],
@@ -609,6 +612,8 @@ export const ITEMS: Record<string, ItemDef> = {
   junior_tech_case:{ id:'junior_tech_case', name:'Корпус «Юный техник»', type:ItemType.MISC, desc:'Пластиковый корпус набора радиолюбителя. В него помещается прибор, долг и маленькое жужжание.', spawnRooms:[RoomType.LIVING,RoomType.STORAGE,RoomType.OFFICE], spawnW:0.7, value:24, tags:[...ITEM_TAGS.junior_tech_case], stack:6 },
   sound_emitter:{ id:'sound_emitter', name:'Звукоизлучатель', type:ItemType.MISC, desc:'Пищалка из старого стенда. Не приманка: для неё есть банка. Эту деталь берегут для датчика, продают электрику или сдают в цех.', spawnRooms:[RoomType.OFFICE,RoomType.PRODUCTION,RoomType.STORAGE], spawnW:0.35, value:58, tags:[...ITEM_TAGS.sound_emitter], stack:4 },
   keyboard_unit:{ id:'keyboard_unit', name:'Клавиатура', type:ItemType.MISC, desc:'Блок клавиш от терминала. Половина букв стерта, зато E ещё нажимается.', spawnRooms:[RoomType.OFFICE,RoomType.STORAGE,RoomType.PRODUCTION], spawnW:0.6, value:32, tags:['electronics','terminal','repair'], stack:4 },
+  camera:{ id:'camera', name:'Фотоаппарат', type:ItemType.MISC, desc:'Старая мыльница со вспышкой. Снимает плохо, но для компромата или доказательств хватает.', spawnRooms:[RoomType.LIVING,RoomType.OFFICE], spawnW:0.2, value:140, tags:[...ITEM_TAGS.camera], stack:1 },
+  brass_knuckles: { id:'brass_knuckles', name:'Кастет', type:ItemType.WEAPON, desc:'Самодельный свинцовый кастет. Весит карман, бьёт кость. Прочность 80', spawnRooms:[RoomType.LIVING,RoomType.STORAGE], spawnW:0.1, value:90, tags:[...ITEM_TAGS.brass_knuckles] },
   screen_unit:{ id:'screen_unit', name:'Экран', type:ItemType.MISC, desc:'Малый экран с зелёным послесвечением. Терминал без него только слушает.', spawnRooms:[RoomType.OFFICE,RoomType.LIVING,RoomType.STORAGE,RoomType.PRODUCTION], spawnW:0.45, value:44, tags:['electronics','screen','terminal','repair'], stack:3 },
   krona_battery:{ id:'krona_battery', name:'Батарейка «Крона»', type:ItemType.MISC, desc:'Плоская батарейка для приборов, фонарей и тихих сделок с электриком. Сберечь для инструмента или продать как дефицит питания.', spawnRooms:[RoomType.LIVING,RoomType.OFFICE,RoomType.STORAGE], spawnW:0.8, value:18, tags:[...ITEM_TAGS.krona_battery], stack:8 },
   heating_element:{ id:'heating_element', name:'Нагревательный элемент', type:ItemType.MISC, desc:'Спираль из чайника, сушилки или подпольного аппарата. Сберегите для отогрева проб, варки браги или продажи электрику.', spawnRooms:[RoomType.KITCHEN,RoomType.PRODUCTION,RoomType.STORAGE], spawnW:0.55, value:38, tags:[...ITEM_TAGS.heating_element], stack:4 },

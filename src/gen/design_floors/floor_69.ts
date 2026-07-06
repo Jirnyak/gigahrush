@@ -455,6 +455,78 @@ const NPC_DEFS: Record<string, PlotNpcDef> = {
       'В книге учета благодарность не пишут. Там видны только пустые клетки и сроки.',
     ],
   },
+
+  f69_asya_pryanikova: {
+    name: 'Ася Пряникова',
+    isFemale: true,
+    age: 35,
+    sex: 'female',
+    faction: Faction.CITIZEN,
+    occupation: Occupation.PERFORMER,
+    sprite: Occupation.PERFORMER,
+    npcVisualId: NPC_VISUAL_FLOOR69_FEMALE,
+    hp: 90, maxHp: 90, money: 12, speed: 0.8,
+    inventory: [
+      { defId: 'govnyak_roll', count: 2 },
+      { defId: 'metal_water', count: 1 },
+    ],
+    talkLines: [
+      'Я вещатель Инфосети. Транслирую эстетику распада и ужаса. Мои абоненты слушают голос из темноты.',
+      'Здесь элита социального дна. У нас своя атмосфера безысходности, ты со своим узким кругозором не поймешь.',
+      'Боря ковыряет терминал, ищет свободный канал связи. Моя кабельная макака с допуском.',
+      'Знаешь, почему я пачкаюсь? По слизи хожу. Огромные слепые псы без привязи.',
+      'Тот, кто завёл тварь с нижних ярусов, раскрыл перед собой чудесный мир говна. Оно теперь будет сопровождать вас всегда.',
+    ],
+    talkLinesPost: [
+      'Говняк зашел отлично. Абоненты скинули талонов.',
+      'Перфокарты судьбы говорят, что завтра мы опять будем курить.',
+    ],
+    talkQuestResponse: 'Принес? Давай сюда, а то меня уже ломает без вдохновения.',
+  },
+
+  f69_borya_pryanikov: {
+    name: 'Боря Пряников',
+    isFemale: false,
+    age: 30,
+    sex: 'male',
+    faction: Faction.CITIZEN,
+    occupation: Occupation.ENGINEER,
+    sprite: Occupation.ENGINEER,
+    hp: 110, maxHp: 110, money: 85, speed: 0.9,
+    inventory: [
+      { defId: 'govnyak_brick', count: 1 },
+      { defId: 'siren_energy', count: 2 },
+    ],
+    talkLines: [
+      'Я сетевой обходчик, ищу свободные кабеля. Можешь звать меня барыгой связи.',
+      'Ася там опять про свою слизь в эфир вещает? Нормально, пусть абоненты талоны скидывают.',
+      'Говняка бы сейчас с нижних гидропоник, а не вот это всё железное.',
+    ],
+    talkLinesPost: [
+      'Канал открыт, говняк скурен. Жизнь удалась.',
+    ],
+  },
+
+  f69_venya_pryanikov: {
+    name: 'Веня Пряников',
+    isFemale: false,
+    age: 5,
+    sex: 'male',
+    faction: Faction.CITIZEN,
+    occupation: Occupation.CHILD,
+    sprite: Occupation.CHILD,
+    hp: 40, maxHp: 40, money: 0, speed: 0.7,
+    inventory: [
+      { defId: 'tea', count: 1 },
+    ],
+    talkLines: [
+      'Мама опять ругается в микрофон про слепых собак...',
+      'Папа стучит по старой клавиатуре и пьет вонючую воду.',
+    ],
+    talkLinesPost: [
+      'Хочу играть.',
+    ],
+  },
 };
 
 function floor69EventTags(...tags: string[]): string[] {
@@ -651,6 +723,71 @@ registerFloorSideQuest(HOME_FLOOR_KEY, 'f69_accountant_nil', NPC_DEFS.f69_accoun
   },
 ]);
 
+registerFloorSideQuest(HOME_FLOOR_KEY, 'f69_asya_pryanikova', NPC_DEFS.f69_asya_pryanikova, [
+  {
+    id: 'f69_asya_weed',
+    giverNpcId: 'f69_asya_pryanikova',
+    type: QuestType.FETCH,
+    desc: 'Ася: «Мои абоненты скидывают талоны медленно, а вещать в Инфосеть без говняка я не могу. Принеси 10 самокруток, а то у меня творческий кризис. И без подстав, я раскидываю перфокарты судьбы и всё вижу.»',
+    targetItem: 'govnyak_roll', targetCount: 10,
+    rewardItem: 'pills', rewardCount: 2,
+    extraRewards: [{ defId: 'tea', count: 3 }],
+    relationDelta: 10, xpReward: 80, moneyReward: 50,
+    targetFloor: FLOOR_69_BASE_FLOOR,
+    targetRoomType: RoomType.SMOKING,
+    targetZoneTag: 'weed',
+    targetHint: 'Этаж 69: маргинальная квартира Аси. Риск: послушать лекцию про искусство распада. Награда: таблетки и спокойный эфир.',
+    eventTargetName: 'Говняк для Аси',
+    eventSeverity: 2,
+    eventPrivacy: 'local',
+    eventTags: floor69EventTags('weed', 'art', 'broadcast'),
+    eventData: floor69RouteEventData('supply_asya_weed', 'art criticism', 'pills and broadcaster gratitude'),
+  },
+]);
+
+registerFloorSideQuest(HOME_FLOOR_KEY, 'f69_borya_pryanikov', NPC_DEFS.f69_borya_pryanikov, [
+  {
+    id: 'f69_borya_camera',
+    giverNpcId: 'f69_borya_pryanikov',
+    type: QuestType.FETCH,
+    desc: 'Боря: «Слышь, мне тут шепнули, что в Инфосети можно задвинуть пару пленок. Найди фотик, а я отсыплю талонов. Только не тащи мусор, мне нужны хорошие кадры.»',
+    targetItem: 'camera', targetCount: 1,
+    rewardItem: 'cigs', rewardCount: 5,
+    extraRewards: [],
+    relationDelta: 15, xpReward: 100, moneyReward: 80,
+    targetFloor: FLOOR_69_BASE_FLOOR,
+    targetRoomType: RoomType.OFFICE,
+    targetZoneTag: 'contraband',
+    targetHint: 'Этаж 69: Боря ищет фотик для пленок.',
+    eventTargetName: 'Фотик для Бори',
+    eventSeverity: 1,
+    eventPrivacy: 'local',
+    eventTags: floor69EventTags('camera', 'contraband'),
+    eventData: floor69RouteEventData('supply_borya_camera', 'photo job', 'cigarettes'),
+  },
+]);
+
+registerFloorSideQuest(HOME_FLOOR_KEY, 'f69_venya_pryanikov', NPC_DEFS.f69_venya_pryanikov, [
+  {
+    id: 'f69_venya_knuckles',
+    giverNpcId: 'f69_venya_pryanikov',
+    type: QuestType.FETCH,
+    desc: 'Веня: «Братуха, накинь кастет, а то тут такие фраера пошли, что кулаки уже сбиты. Я тебе отсыплю мазей, чтоб шрамы не ныли.»',
+    targetItem: 'brass_knuckles', targetCount: 1,
+    rewardItem: 'antifungal_ointment', rewardCount: 3,
+    extraRewards: [],
+    relationDelta: 10, xpReward: 90, moneyReward: 60,
+    targetFloor: FLOOR_69_BASE_FLOOR,
+    targetRoomType: RoomType.LIVING,
+    targetZoneTag: 'weapon',
+    targetHint: 'Этаж 69: Веня просит кастет для разборок.',
+    eventTargetName: 'Кастет для Вени',
+    eventSeverity: 3,
+    eventPrivacy: 'local',
+    eventTags: floor69EventTags('weapon', 'fight'),
+    eventData: floor69RouteEventData('supply_venya_knuckles', 'brawl prep', 'ointment'),
+  },
+]);
 interface Floor69Rooms {
   publicLift: Room;
   publicCorridor: Room;
@@ -2270,6 +2407,11 @@ function spawnFloor69Npcs(world: World, entities: Entity[], nextId: { v: number 
   spawnNpc(world, entities, nextId, 'f69_performer_ira', rooms.refuge.x + 4, rooms.refuge.y + 5, 0);
   spawnNpc(world, entities, nextId, 'f69_doctor_sima', rooms.clinic.x + 8, rooms.clinic.y + 5, Math.PI / 2);
   spawnNpc(world, entities, nextId, 'f69_accountant_nil', rooms.debtOffice.x + 10, rooms.debtOffice.y + 6, Math.PI);
+
+  spawnNpc(world, entities, nextId, 'f69_asya_pryanikova', rooms.publicCorridor.x + 15, rooms.publicCorridor.y + 3, Math.PI / 2);
+  spawnNpc(world, entities, nextId, 'f69_borya_pryanikov', rooms.publicCorridor.x + 16, rooms.publicCorridor.y + 3, Math.PI / 2);
+  spawnNpc(world, entities, nextId, 'f69_venya_pryanikov', rooms.publicCorridor.x + 17, rooms.publicCorridor.y + 4, 0);
+
   spawnAmbientAdult(world, entities, nextId, 'Раиса Гардеробная', true, Occupation.SECRETARY, Faction.CITIZEN, rooms.staffRoute.x + 2, rooms.staffRoute.y + 12, [
     { defId: 'cloth_roll', count: 1 },
     { defId: 'sealed_complaint', count: 1 },

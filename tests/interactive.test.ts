@@ -228,7 +228,7 @@ test('bare decorative features become lazy loot containers on interaction', () =
   // No persistent container exists yet, but the aim prompt previews the loot
   // container, and using it creates and opens a real container.
   assert.equal(world.containersAt(fx, fy).length, 0);
-  assert.equal(findInteractionTarget(ctx)?.defId, 'container_adapter');
+  assert.equal(findInteractionTarget(ctx)?.defId, 'bare_loot_feature');
 
   const result = activateInteraction(ctx);
   assert.equal(result.handled, true);

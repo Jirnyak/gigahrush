@@ -37,6 +37,10 @@ import {
 /* ── Story NPC definition ─────────────────────────────────────── */
 export interface PlotNpcDef {
   name: string;
+  firstName?: string;
+  lastName?: string;
+  patronymic?: string;
+  nickname?: string;
   isFemale: boolean;
   age?: number;
   sex?: CharacterSex;
@@ -51,13 +55,15 @@ export interface PlotNpcDef {
   specialRoutineId?: string;
   /** Stable route key where A-Life reserves this authored NPC. */
   homeFloorKey?: string;
-  hp: number;
-  maxHp: number;
+  /** Alias of the authored room where this NPC should initially spawn on the home floor. */
+  spawnRoomAlias?: string;
+  hp?: number;
+  maxHp?: number;
   /** Authored RPG level for plot NPCs; omitted NPCs keep the low default. */
   level?: number;
   money: number;
   accountRubles?: number;
-  speed: number;
+  speed?: number;
   weapon?: string;
   inventory: { defId: string; count: number }[];
   /** Compact package tags for authored population/debug surfaces. */

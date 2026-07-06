@@ -25,6 +25,7 @@ import { World } from '../core/world';
 import { type FloorGeneration } from '../gen/floor_manifest';
 import { rebuildGeneratedFloorPathBlockers, rebuildPathBlockersFromWorldObjects } from '../gen/path_blockers';
 import { cleanFloorKey, floorKeyForStory, floorKeyKnown, type FloorKeyResolveContext } from './floor_keys';
+import { MAX_INVENTORY_SLOTS } from '../data/inventory_limits';
 import { isNativePlayerBodyEntity } from './player_actor';
 
 export interface FloorMemoryEntry {
@@ -635,7 +636,6 @@ function sanitizeContainers(
     const x = finiteInt(raw.x, -1);
     const y = finiteInt(raw.y, -1);
     if (id < 0 || seen.has(id) || x < 0 || x >= W || y < 0 || y >= W) continue;
-    const capacitySlots = finiteIntRange(raw.capacitySlots, 1, 128, 8);
     const access = typeof raw.access === 'string' && CONTAINER_ACCESS_VALUES.has(raw.access)
       ? raw.access as WorldContainer['access']
       : 'public';
@@ -648,8 +648,7 @@ function sanitizeContainers(
       zoneId: finiteIntRange(raw.zoneId, 0, Math.max(0, zones.length - 1), 0),
       kind: enumValue(raw.kind, ContainerKind, ContainerKind.METAL_CABINET) as ContainerKind,
       name: stringValue(raw.name, 'контейнер', 120),
-      inventory: sanitizeItems(raw.inventory, capacitySlots),
-      capacitySlots,
+      inventory: sanitizeItems(raw.inventory, MAX_INVENTORY_SLOTS),
       access,
       discovered: raw.discovered === true,
       tags: stringListValue(raw.tags, 16, 64),

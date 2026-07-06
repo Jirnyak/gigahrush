@@ -3739,6 +3739,7 @@ function collectStaticObjectSprites(world: World, px: number, py: number, count:
   const maxDist2 = MAX_DRAW * MAX_DRAW;
   for (const container of world.containers) {
     if (container.access === 'secret' && !container.discovered) continue;
+    if (container.tags.includes('feature_loot') || container.tags.includes('mesh_hidden')) continue;
     const ox = container.x + 0.55;
     const oy = container.y + 0.5;
     const dx = toroidalDelta(ox, px);

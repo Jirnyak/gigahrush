@@ -81,7 +81,7 @@ test('world event buffers cap, order newest first, and filter by zone/severity',
     publishEvent(state, {
       type: 'npc_enter_zone',
       zoneId: i % 2 === 0 ? 7 : 8,
-      severity: i % 4 === 0 ? 4 : 1,
+      severity: i % 2 !== 0 ? 4 : 1,
       privacy: 'local',
       tags: ['test', i % 2 === 0 ? 'even' : 'odd'],
     });
@@ -819,16 +819,15 @@ test('saved containers outside regenerated topology are dropped on restore', () 
 
   const restored = restoreValidContainers(world, FloorLevel.LIVING, [
     {
-      ...makeTestContainer({ id: 11, x: 11, y: 11, roomId: 0, zoneId: 0, capacitySlots: 0, inventory: [{ defId: 'water', count: 2 }] }),
+      ...makeTestContainer({ id: 11, x: 11, y: 11, roomId: 0, zoneId: 0, inventory: [{ defId: 'water', count: 2 }] }),
       access: 'invalid',
     },
-    makeTestContainer({ id: 12, x: 50, y: 50, roomId: 0, zoneId: 0, capacitySlots: 4, inventory: [{ defId: 'bread', count: 1 }] }),
+    makeTestContainer({ id: 12, x: 50, y: 50, roomId: 0, zoneId: 0, inventory: [{ defId: 'bread', count: 1 }] }),
   ]);
 
   assert.equal(restored, 1);
   assert.equal(world.containers.length, 1);
   assert.equal(world.containers[0].id, 11);
-  assert.equal(world.containers[0].capacitySlots, 8);
   assert.equal(world.containers[0].access, 'public');
   assert.equal(world.containerById.has(11), true);
   assert.equal(world.containerById.has(12), false);

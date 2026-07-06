@@ -33,7 +33,7 @@ import { MONSTERS } from '../../entities/monster';
 import { monsterSpr, Spr } from '../../render/sprite_index';
 import { placeEmergencyPanel } from '../../systems/emergency_panels';
 import { randomRPG } from '../../systems/rpg';
-import { requireSpawnedPlotNpcFromPackage } from '../plot_npc_spawn';
+import { requireSpawnedPlotNpcFromPackage, spawnPendingPlotNpcsForFloor } from '../plot_npc_spawn';
 import {
   ensureConnectivity,
   generateZones,
@@ -385,7 +385,7 @@ export function generateSlimeNiiDesignFloor(seed = SEED): FloorGeneration {
     placeSlimeNiiEmergencyPanels(world, rooms);
 
     const owners = spawnNpcs(entities, nextId, rooms);
-    spawnAmbientNpcs(entities, nextId, rooms);
+    spawnAmbientNpcs(world, entities, nextId, rooms);
     placeContainers(world, rooms, owners);
     placeDrops(world, entities, nextId, rooms);
     spawnThreats(world, entities, nextId, rooms);
@@ -1055,7 +1055,9 @@ function spawnNpcs(entities: Entity[], nextId: NextId, rooms: SlimeNiiRooms): Re
   };
 }
 
-function spawnAmbientNpcs(entities: Entity[], nextId: NextId, rooms: SlimeNiiRooms): void {
+function spawnAmbientNpcs(world: World, entities: Entity[], nextId: NextId, rooms: SlimeNiiRooms): void {
+  spawnPendingPlotNpcsForFloor(world, entities, nextId, DESIGN_NPC_HOME_FLOOR_KEY, { ...rooms as unknown as Record<string, Room>, clean_lab: rooms.cleanLab });
+
   spawnAmbientNpc(entities, nextId, 'Врач промывочной смены', Faction.SCIENTIST, Occupation.DOCTOR, rooms.cleanLab.x + 24, rooms.cleanLab.y + 24, [
     { defId: 'bandage', count: 2 },
     { defId: 'filter_layer', count: 1 },

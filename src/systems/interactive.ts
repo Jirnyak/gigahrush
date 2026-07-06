@@ -102,6 +102,31 @@ const LOOTABLE_DECOR_FEATURES: ReadonlySet<Feature> = new Set<Feature>([
   Feature.DESK,
 ]);
 
+function findContiguousFeatureContainer(world: World, startIdx: number, feature: Feature): WorldContainer | undefined {
+  const visited = new Set<number>();
+  const q = [startIdx];
+  visited.add(startIdx);
+  let limit = 24;
+  while (q.length > 0 && limit-- > 0) {
+    const idx = q.shift()!;
+    const cx = idx % W;
+    const cy = (idx / W) | 0;
+    const container = world.containersAt(cx, cy).find(c => c.discovered || c.access !== 'secret');
+    if (container) return container;
+
+    for (let i = 0; i < 4; i++) {
+      const nx = world.wrap(cx + (i === 1 ? 1 : i === 3 ? -1 : 0));
+      const ny = world.wrap(cy + (i === 2 ? 1 : i === 0 ? -1 : 0));
+      const nIdx = world.idx(nx, ny);
+      if (!visited.has(nIdx) && world.features[nIdx] === feature) {
+        visited.add(nIdx);
+        q.push(nIdx);
+      }
+    }
+  }
+  return undefined;
+}
+
 // A bare decorative feature has a lootable type, sits on ordinary floor (so a
 // fast-elevator MACHINE on a LIFT cell is excluded), carries no flagged or
 // instanced interactive (craft station / broken fixture), is not a sink/toilet,
@@ -111,11 +136,14 @@ function isBareLootableFeature(world: World, idx: number, feature: Feature): boo
   if (world.cells[idx] !== Cell.FLOOR) return false;
   if ((world.surfaceFlags[idx] ?? 0) !== 0) return false;
   if (autoFeatureDefs.has(feature)) return false;
-  if (world.containersAt(idx % W, (idx / W) | 0).length > 0) return false;
-  // Any non-container interactive instance (craft station, recipe billboard,
-  // broken fixture, authored device) means the feature already has an action.
+  
   const instances = states.get(world)?.byIdx.get(idx);
-  if (instances && instances.some(inst => inst.defId !== 'container_adapter')) return false;
+  if (instances) {
+    for (const inst of instances) {
+      const def = getInteractiveDef(inst.defId);
+      if (def && validInstance(world, inst, def)) return false;
+    }
+  }
   return true;
 }
 
@@ -253,7 +281,15 @@ function ensureAutoFeatureInstance(world: World, idx: number): void {
 }
 
 function visibleContainerAt(world: World, x: number, y: number): WorldContainer | undefined {
-  return world.containersAt(x, y).find(container => container.discovered || container.access !== 'secret');
+  const exact = world.containersAt(x, y).find(container => container.discovered || container.access !== 'secret');
+  if (exact) return exact;
+
+  const idx = world.idx(x, y);
+  const feature = world.features[idx] as Feature;
+  if (LOOTABLE_DECOR_FEATURES.has(feature)) {
+    return findContiguousFeatureContainer(world, idx, feature);
+  }
+  return undefined;
 }
 
 function ensureContainerInstance(ctx: ContentInteractionContext, idx: number): void {
@@ -261,38 +297,29 @@ function ensureContainerInstance(ctx: ContentInteractionContext, idx: number): v
   if (!container || existingAt(ctx.world, idx, 'container_adapter', container.id)) return;
   placeInteractive(ctx.world, {
     defId: 'container_adapter',
-    x: container.x,
-    y: container.y,
+    x: idx % W,
+    y: (idx / W) | 0,
     containerId: container.id,
     seed: instanceSeed(idx, `container:${container.id}`),
     tags: container.tags,
   });
 }
 
-// Lazily attach a deterministic, floor-level-scaled loot container to a bare
-// decorative feature so it becomes lootable through the existing container
-// adapter. The container is tagged `feature_loot` and excluded from save, so it
-// regenerates deterministically each session and never spends the persistent
-// container budget.
-function ensureFeatureLootContainer(ctx: ContentInteractionContext, idx: number): void {
-  const world = ctx.world;
-  const feature = world.features[idx] as Feature;
-  if (!isBareLootableFeature(world, idx, feature)) return;
-  const x = idx % W;
-  const y = (idx / W) | 0;
-  const floor = ctx.state.currentFloor;
-  const level = calcZoneLevel(x, y, floor);
-  const seed = featureLootSeed(idx, floor);
-  const id = world.containers.reduce((mx, c) => Math.max(mx, c.id), 0) + 1;
-  const container = makeFeatureLootContainer(id, world, x, y, floor, feature, level, seed);
-  if (container) world.addContainer(container);
-}
+
 
 function containerForInstance(world: World, instance: InteractiveInstance): WorldContainer | undefined {
   if (instance.containerId === undefined) return undefined;
   const container = world.containerById.get(instance.containerId);
   if (!container) return undefined;
-  return world.idx(container.x, container.y) === instance.idx ? container : undefined;
+  
+  if (world.idx(container.x, container.y) === instance.idx) return container;
+  
+  const feature = world.features[instance.idx] as Feature;
+  if (LOOTABLE_DECOR_FEATURES.has(feature)) {
+    const contiguous = findContiguousFeatureContainer(world, instance.idx, feature);
+    if (contiguous && contiguous.id === container.id) return container;
+  }
+  return undefined;
 }
 
 function validInstance(world: World, instance: InteractiveInstance, def: InteractiveDef): boolean {
@@ -328,7 +355,7 @@ function transientInstance(
   };
 }
 
-function readOnlyResolved(ctx: ContentInteractionContext, idx: number): ResolvedInteractive | null {
+function fallbackResolved(ctx: ContentInteractionContext, idx: number): ResolvedInteractive | null {
   const candidates: ResolvedInteractive[] = [];
   const flaggedDefId = interactiveDefIdForSurfaceFlags(ctx.world.surfaceFlags[idx] ?? 0);
   if (flaggedDefId && !existingAt(ctx.world, idx, flaggedDefId)) {
@@ -349,19 +376,8 @@ function readOnlyResolved(ctx: ContentInteractionContext, idx: number): Resolved
     const def = getInteractiveDef('container_adapter');
     if (def) candidates.push({ instance: transientInstance(ctx.world, idx, def, container), def, container });
   } else if (!container && isBareLootableFeature(ctx.world, idx, ctx.world.features[idx] as Feature)) {
-    // Preview a lazy feature-loot container so the aim prompt shows on bare
-    // decorative features before the real container is created on use.
-    const def = getInteractiveDef('container_adapter');
-    if (def) {
-      const x = idx % W;
-      const y = (idx / W) | 0;
-      const floor = ctx.state.currentFloor;
-      const preview = makeFeatureLootContainer(
-        -1, ctx.world, x, y, floor, ctx.world.features[idx] as Feature,
-        calcZoneLevel(x, y, floor), featureLootSeed(idx, floor),
-      );
-      if (preview) candidates.push({ instance: transientInstance(ctx.world, idx, def, preview), def, container: preview });
-    }
+    const def = getInteractiveDef('bare_loot_feature');
+    if (def) candidates.push({ instance: transientInstance(ctx.world, idx, def), def });
   }
 
   let best: ResolvedInteractive | null = null;
@@ -378,13 +394,12 @@ function resolveInteractive(ctx: ContentInteractionContext): ResolvedInteractive
   const idx = ctx.world.idx(x, y);
   if (!ctx.readOnly) {
     ensureAutoFeatureInstance(ctx.world, idx);
-    ensureFeatureLootContainer(ctx, idx);
     ensureContainerInstance(ctx, idx);
   }
 
   const list = worldState(ctx.world).byIdx.get(idx);
   if (!list || list.length === 0) {
-    return ctx.readOnly ? readOnlyResolved(ctx, idx) : null;
+    return fallbackResolved(ctx, idx);
   }
 
   let best: ResolvedInteractive | null = null;
@@ -399,7 +414,7 @@ function resolveInteractive(ctx: ContentInteractionContext): ResolvedInteractive
     if (!best || def.target.priority > best.def.target.priority) best = { instance, def, container };
   }
   if (best) return best;
-  return ctx.readOnly ? readOnlyResolved(ctx, idx) : null;
+  return fallbackResolved(ctx, idx);
 }
 
 function promptForResolved(resolved: ResolvedInteractive): string {
@@ -556,6 +571,58 @@ function runLearnRecipe(ctx: ContentInteractionContext, resolved: ResolvedIntera
   publishInteractiveEvent(ctx, resolved, action);
   return { handled: true };
 }
+function runSearchFeature(ctx: ContentInteractionContext, resolved: ResolvedInteractive, action: InteractiveActionDef): ContentInteractionResult {
+  if (!ctx.openContainerMenu) return { handled: false };
+  const world = ctx.world;
+  const idx = resolved.instance.idx;
+  const feature = world.features[idx] as Feature;
+  
+  // 1. Flood-fill to find if the block already has a container
+  let container: WorldContainer | undefined | null = findContiguousFeatureContainer(world, idx, feature);
+  
+  // 2. If not, generate the new feature_loot container for the block
+  if (!container) {
+    const x = idx % W;
+    const y = (idx / W) | 0;
+    const floor = ctx.state.currentFloor;
+    const level = calcZoneLevel(x, y, floor);
+    const seed = featureLootSeed(idx, floor);
+    const id = world.containers.reduce((mx, c) => Math.max(mx, c.id), 0) + 1;
+    container = makeFeatureLootContainer(id, world, x, y, floor, feature, level, seed);
+    if (container) {
+      world.addContainer(container);
+      
+      // Attach the container adapter to all contiguous features so they point to the same container
+      const visited = new Set<number>();
+      const q = [idx];
+      visited.add(idx);
+      let limit = 24;
+      while (q.length > 0 && limit-- > 0) {
+        const cIdx = q.shift()!;
+        ensureContainerInstance(ctx, cIdx);
+        const cx = cIdx % W;
+        const cy = (cIdx / W) | 0;
+        for (let i = 0; i < 4; i++) {
+          const nx = world.wrap(cx + (i === 1 ? 1 : i === 3 ? -1 : 0));
+          const ny = world.wrap(cy + (i === 2 ? 1 : i === 0 ? -1 : 0));
+          const nIdx = world.idx(nx, ny);
+          if (!visited.has(nIdx) && world.features[nIdx] === feature) {
+            visited.add(nIdx);
+            q.push(nIdx);
+          }
+        }
+      }
+    }
+  }
+
+  if (!container) return { handled: false };
+
+  // 3. Open the container
+  ctx.openContainerMenu(container);
+  // We can treat it like a container open event
+  publishInteractiveEvent(ctx, { ...resolved, container }, action);
+  return { handled: true, openedOverlay: true };
+}
 
 function runAction(ctx: ContentInteractionContext, resolved: ResolvedInteractive, action: InteractiveActionDef): ContentInteractionResult {
   if (cooldownBlocks(resolved.instance, ctx.state)) {
@@ -570,6 +637,7 @@ function runAction(ctx: ContentInteractionContext, resolved: ResolvedInteractive
   else if (action.kind === 'open_container') result = runOpenContainer(ctx, resolved, action);
   else if (action.kind === 'open_craft_menu' || action.kind === 'open_disassembly_menu') result = runOpenCraftMenu(ctx, resolved, action);
   else if (action.kind === 'learn_recipe') result = runLearnRecipe(ctx, resolved, action);
+  else if (action.kind === 'search_feature') result = runSearchFeature(ctx, resolved, action);
   else result = runMessage(ctx, resolved, action);
 
   if (result.handled) applyCooldown(resolved.instance, action, ctx.state);

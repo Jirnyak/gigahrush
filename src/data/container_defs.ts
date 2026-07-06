@@ -4,7 +4,8 @@ import { ITEMS } from './items';
 export interface ContainerDef {
   kind: ContainerKind;
   name: string;
-  capacitySlots: number;
+  /** @deprecated unified inventory uses MAX_INVENTORY_SLOTS (8x8) */
+  capacitySlots?: number;
   proceduralValueCap?: number;
   defaultAccess: ContainerAccess;
   roomTypes: RoomType[];

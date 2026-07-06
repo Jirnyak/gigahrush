@@ -5,10 +5,13 @@ import {
   type Entity,
   type Item,
   type Needs,
+  type Room,
 } from '../core/types';
+import { type World } from '../core/world';
 import { freshNeeds } from '../data/catalog';
-import { getNpcPackageByPlotNpcId, npcPackageDisplayName, type NpcPackageDef } from '../data/npc_packages';
+import { getNpcPackageByPlotNpcId, npcPackageDisplayName, type NpcPackageDef, allNpcPackages } from '../data/npc_packages';
 import { freshRPG } from '../systems/rpg';
+import { findRandomFloorCell, pickRandomRoom } from './shared';
 
 export interface PlotNpcSpawnOptions {
   angle?: number;
@@ -115,4 +118,46 @@ export function requireSpawnedPlotNpcFromPackage(
   const entity = spawnPlotNpcFromPackage(entities, nextId, plotNpcId, x, y, options);
   if (!entity) throw new Error(`[PLOT_NPC_SPAWN] missing NPC package for "${plotNpcId}"`);
   return entity as Entity & { npcPackageId: string };
+}
+
+export function spawnPendingPlotNpcsForFloor(
+  world: World,
+  entities: Entity[],
+  nextId: { v: number },
+  floorKey: string,
+  namedRooms?: Record<string, Room>,
+): void {
+  for (const pack of allNpcPackages()) {
+    if (pack.placement.homeFloorKey !== floorKey) continue;
+    if (pack.content?.plotNpcId == null) continue;
+
+    // Check if already alive to avoid duplicates (just in case, though A-Life usually handles this)
+    if (entities.some(e => e.plotNpcId === pack.content?.plotNpcId && e.alive)) continue;
+
+    let x = 0, y = 0;
+    if (pack.placement.roomId && namedRooms?.[pack.placement.roomId]) {
+      const room = namedRooms[pack.placement.roomId];
+      x = room.x + Math.floor(room.w / 2) + 0.5;
+      y = room.y + Math.floor(room.h / 2) + 0.5;
+    } else {
+      const room = pickRandomRoom(world);
+      if (room) {
+        x = room.x + Math.floor(room.w / 2) + 0.5;
+        y = room.y + Math.floor(room.h / 2) + 0.5;
+      } else {
+        const pos = findRandomFloorCell(world);
+        if (pos) {
+          x = pos.x + 0.5;
+          y = pos.y + 0.5;
+        }
+      }
+    }
+
+    if (x > 0 || y > 0) {
+      requireSpawnedPlotNpcFromPackage(entities, nextId, pack.content.plotNpcId, x, y, {
+        angle: Math.random() * Math.PI * 2,
+        canGiveQuest: true,
+      });
+    }
+  }
 }

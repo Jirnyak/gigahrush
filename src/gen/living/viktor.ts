@@ -3,17 +3,20 @@
 /* Registered automatically via registerSideQuest() at import.     */
 
 import {
-  W, Cell,
   type Entity, Faction, Occupation, QuestType,
 } from '../../core/types';
 import { World } from '../../core/world';
 import { type PlotNpcDef, registerSideQuest } from '../../data/plot';
 import { requireSpawnedPlotNpcFromPackage } from '../plot_npc_spawn';
+import { pickRandomRoom } from '../shared';
 
 /* ── NPC definition ──────────────────────────────────────────── */
 const NPC_DEF: PlotNpcDef = {
   name: 'Виктор Аргонов',
+  firstName: 'Виктор',
+  lastName: 'Аргонов',
   isFemale: false,
+  age: 42,
   faction: Faction.CITIZEN,
   occupation: Occupation.ALCOHOLIC,
   sprite: Occupation.ALCOHOLIC,
@@ -23,6 +26,7 @@ const NPC_DEF: PlotNpcDef = {
   ],
   talkLines: [
     'Баклы, лира, меф... тише, у батареи милиция слушает.',
+    'Олевия... Мухин... Они меня подставили. Они забрали мой фильтр!',
     'Принеси мне таблетки. Не для бессмертия, для ночи без стука в висках.',
     'Десять таблеток - и я допишу трек про лифт, который не вернулся.',
     'В висках горит, руки трясутся. Или баклы, или опять вентиляция травит.',
@@ -51,15 +55,12 @@ registerSideQuest('viktor_argonov', NPC_DEF, [
 export function spawnViktor(
   world: World, entities: Entity[], nextId: { v: number },
 ): void {
-  for (let i = 0; i < 2000; i++) {
-    const x = Math.floor(Math.random() * W);
-    const y = Math.floor(Math.random() * W);
-    if (world.cells[world.idx(x, y)] !== Cell.FLOOR) continue;
-    requireSpawnedPlotNpcFromPackage(entities, nextId, 'viktor_argonov', x + 0.5, y + 0.5, {
-      angle: Math.random() * Math.PI * 2,
-      canGiveQuest: true,
-      isTraveler: true,
-    });
-    return;
-  }
+  const room = pickRandomRoom(world);
+  if (!room) return;
+
+  requireSpawnedPlotNpcFromPackage(entities, nextId, 'viktor_argonov', room.x + Math.floor(room.w / 2) + 0.5, room.y + Math.floor(room.h / 2) + 0.5, {
+    angle: Math.random() * Math.PI * 2,
+    canGiveQuest: true,
+    isTraveler: true,
+  });
 }

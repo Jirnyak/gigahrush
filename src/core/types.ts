@@ -592,7 +592,11 @@ export interface AIState {
   microCooldowns?: Record<string, number>; // remaining seconds before a micro-goal type can trigger again
 }
 
-export interface Entity {
+export interface InventoryHolder {
+  inventory?: Item[];
+}
+
+export interface Entity extends InventoryHolder {
   id: number;
   type: EntityType;
   x: number; y: number;
@@ -608,7 +612,6 @@ export interface Entity {
   hp?: number;
   maxHp?: number;
   ai?: AIState;
-  inventory?: Item[];
   name?: string;
   firstName?: string;
   lastName?: string;
@@ -736,7 +739,7 @@ export enum ContainerKind {
 
 export type ContainerAccess = 'public' | 'room' | 'faction' | 'owner' | 'locked' | 'secret';
 
-export interface WorldContainer {
+export interface WorldContainer extends InventoryHolder {
   id: number;
   x: number;
   y: number;
@@ -746,7 +749,8 @@ export interface WorldContainer {
   kind: ContainerKind;
   name: string;
   inventory: Item[];
-  capacitySlots: number;
+  /** @deprecated unified inventory uses MAX_INVENTORY_SLOTS (8x8) */
+  capacitySlots?: number;
   ownerNpcId?: number;
   ownerName?: string;
   faction?: Faction;
@@ -879,9 +883,9 @@ export interface Quest {
 }
 
 // ── World events / context facts ────────────────────────────────
-export const WORLD_EVENT_RECENT_CAPACITY = 512;
-export const WORLD_EVENT_IMPORTANT_CAPACITY = 128;
-export const WORLD_EVENT_ZONE_CAPACITY = 32;
+export const WORLD_EVENT_RECENT_CAPACITY = 1024;
+export const WORLD_EVENT_IMPORTANT_CAPACITY = 512;
+export const WORLD_EVENT_ZONE_CAPACITY = 128;
 export const WORLD_EVENT_ZONE_COUNT = 64;
 
 export const WORLD_EVENT_TYPES = [

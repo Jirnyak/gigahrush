@@ -477,8 +477,8 @@ function packagePresenceForPlotNpc(homeFloorKey: string | undefined, presence: N
   return homeFloorKey?.startsWith('design:') ? 'anchor' : 'room_content';
 }
 
-function packageRuntimeSpeed(speed: number): number | undefined {
-  if (speed <= 0) return undefined;
+function packageRuntimeSpeed(speed?: number): number | undefined {
+  if (speed === undefined || speed <= 0) return undefined;
   return Math.max(0.1, Math.min(20, speed));
 }
 
@@ -526,6 +526,7 @@ export function npcPackageFromPlotNpc(input: PlotNpcPackageInput): NpcPackageDef
       homeFloorKey,
       presence: packagePresenceForPlotNpc(homeFloorKey, input.presence, quests),
       mobility: 'fixed_home',
+      roomId: input.npc.spawnRoomAlias,
     },
     speech: {
       talkLines: [...input.npc.talkLines],

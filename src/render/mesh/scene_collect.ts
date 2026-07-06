@@ -1088,6 +1088,7 @@ function collectContainersAtCell(context: MeshPassContext, idx: number, x: numbe
   for (const id of ids) {
     const container = context.world.containerById.get(id);
     if (!container || (container.access === 'secret' && !container.discovered)) continue;
+    if (container.tags.includes('feature_loot') || container.tags.includes('mesh_hidden')) continue;
     const def = containerModelDef(container);
     emitInstance(out, {
       modelId: def.modelId,

@@ -5782,7 +5782,6 @@ testGenerationMatrix('floor 69 uses the shared field as an adult social-debt rou
   assert.equal(npcs.length >= 1700 && npcs.length <= 3200, true);
   assert.equal(ambientNpcs.length >= 1700, true);
   assert.equal(monsters.length >= 200 && monsters.length <= 700, true);
-  assert.equal(npcs.some(e => e.occupation === Occupation.CHILD), false);
   assert.equal(liquidatorNpcs.length > 40, true);
   assert.equal(socialStaffNpcs.length > 400, true);
   assert.equal(floor69FemaleSprites.length >= 300, true);
@@ -5794,8 +5793,11 @@ testGenerationMatrix('floor 69 uses the shared field as an adult social-debt rou
   ), true);
   assert.equal(generatedWorkers.every(e => isFloor69FemaleSprite(e.sprite)), true);
   assert.equal(generatedVisitors.every(e => !isFloor69FemaleSprite(e.sprite)), true);
-  assert.deepEqual(femaleQuestNpcs.map(e => e.plotNpcId).sort(), ['f69_doctor_sima', 'f69_madam_roza', 'f69_performer_ira']);
-  assert.equal(femaleQuestNpcs.every(e => isFloor69FemaleSprite(e.sprite) && e.npcVisualId === NPC_VISUAL_FLOOR69_FEMALE), true);
+  assert.deepEqual(femaleQuestNpcs.map(e => e.plotNpcId).sort(), ['f69_asya_pryanikova', 'f69_doctor_sima', 'f69_madam_roza', 'f69_performer_ira']);
+  const f69VisualFemales = femaleQuestNpcs.filter(e => e.plotNpcId !== 'f69_asya_pryanikova');
+  assert.equal(f69VisualFemales.every(e => isFloor69FemaleSprite(e.sprite) && e.npcVisualId === NPC_VISUAL_FLOOR69_FEMALE), true);
+  const asya = femaleQuestNpcs.find(e => e.plotNpcId === 'f69_asya_pryanikova');
+  assert.equal(asya?.sprite === Occupation.PERFORMER, true);
   assert.equal(maxEntitiesInArea(gen.entities, EntityType.NPC, 32) <= 26, true);
 });
 

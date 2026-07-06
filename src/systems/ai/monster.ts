@@ -12,6 +12,7 @@ import { calculateDamage, applyHitStaggerAndKnockback } from '../combat';
 import { DamageType } from '../../core/types';
 import { MONSTERS, entityDisplayName, type MonsterAIFlag, type MonsterDef } from '../../entities/monster';
 import { ITEMS, ITEM_TAGS, getStack } from '../../data/items';
+import { MAX_INVENTORY_SLOTS } from '../../data/inventory_limits';
 import { occupationHasProfileTag } from '../../data/occupation_profiles';
 import { droppedToolLightScore, equippedToolLightScore } from '../../data/tool_lights';
 import {
@@ -1341,7 +1342,7 @@ function addSpoiledRation(container: WorldContainer): void {
   const existing = container.inventory.find(item => item.defId === 'sand_spoiled_ration' && item.data === undefined && item.count < stackMax);
   if (existing) {
     existing.count++;
-  } else if (container.inventory.length < container.capacitySlots) {
+  } else if (container.inventory.length < MAX_INVENTORY_SLOTS) {
     container.inventory.push({ defId: 'sand_spoiled_ration', count: 1 });
   }
   if (!container.tags.includes('mukhozhuk_spoiled')) container.tags.push('mukhozhuk_spoiled');

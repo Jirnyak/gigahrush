@@ -68,7 +68,6 @@ import { applyMonsterArmorHit } from './systems/monster_armor';
 import { applyHitStaggerAndKnockback } from './systems/combat';
 import {
   pickupNearby, useItem, dropItem, getWeaponStats, equippedCombatItemId,
-  addItem,
   consumeDurability, consumeAmmo, consumeToolDurability, getEquippedToolDurability,
   updateInventoryConditions,
 } from './systems/inventory';
@@ -6117,18 +6116,6 @@ function closeHelpMenu(): void {
 
 function useInventorySelection(): void {
   const zoneId = world.zoneMap[world.idx(Math.floor(player.x), Math.floor(player.y))];
-  if (state.invSel === MAX_INVENTORY_SLOTS) {
-    if (player.armorDefId) {
-      const defId = player.armorDefId;
-      if (addItem(player, defId, 1)) {
-        state.msgs.push(msg(`Снята броня: ${ITEMS[defId]?.name ?? defId}`, state.time, '#8cf'));
-        player.armorDefId = undefined;
-      } else {
-        state.msgs.push(msg('Нет места в инвентаре для брони.', state.time, '#f84'));
-      }
-    }
-    return;
-  }
   const slot = player.inventory?.[state.invSel];
   if (slot && applyStoryItemOutcomes({
     trigger: 'use',
@@ -6142,22 +6129,6 @@ function useInventorySelection(): void {
 }
 
 function dropInventorySelection(): void {
-  if (state.invSel === MAX_INVENTORY_SLOTS) {
-    if (player.armorDefId) {
-      // Create a temporary slot and drop it using the existing logic
-      // or implement dropArmor
-      const defId = player.armorDefId;
-      const slot = { defId, count: 1 };
-      player.inventory = player.inventory || [];
-      player.inventory.push(slot); // Temporarily put it in to drop it
-      const tempIdx = player.inventory.length - 1;
-      dropItem(player, tempIdx, entities, state.msgs, state.time, nextEntityId, state, world);
-      player.armorDefId = undefined;
-      // dropItem removes the slot from inventory.
-      // Wait, let's just make it simpler
-    }
-    return;
-  }
   dropItem(player, state.invSel, entities, state.msgs, state.time, nextEntityId, state, world);
 }
 
@@ -7501,22 +7472,14 @@ function handleMenuInput(): void {
     const dnNav = menuDownNav();
     const leftNav = menuRepeatStep('left', input.invLeft, leftEdge);
     const rightNav = menuRepeatStep('right', input.invRight, rightEdge);
-        if (upNav) {
-      if (state.invSel === MAX_INVENTORY_SLOTS) {
-        state.invSel = MAX_INVENTORY_SLOTS - 1;
-      } else {
-        state.invSel = wrapMenuIndex(state.invSel - INVENTORY_GRID_COLS, MAX_INVENTORY_SLOTS);
-      }
+    if (upNav) {
+      state.invSel = wrapMenuIndex(state.invSel - INVENTORY_GRID_COLS, MAX_INVENTORY_SLOTS);
     }
     if (dnNav) {
-      if (state.invSel >= MAX_INVENTORY_SLOTS - INVENTORY_GRID_COLS && state.invSel < MAX_INVENTORY_SLOTS) {
-        state.invSel = MAX_INVENTORY_SLOTS;
-      } else if (state.invSel !== MAX_INVENTORY_SLOTS) {
-        state.invSel = wrapMenuIndex(state.invSel + INVENTORY_GRID_COLS, MAX_INVENTORY_SLOTS);
-      }
+      state.invSel = wrapMenuIndex(state.invSel + INVENTORY_GRID_COLS, MAX_INVENTORY_SLOTS);
     }
-    if (leftNav && state.invSel !== MAX_INVENTORY_SLOTS) state.invSel = wrapMenuIndex(state.invSel - 1, MAX_INVENTORY_SLOTS);
-    if (rightNav && state.invSel !== MAX_INVENTORY_SLOTS) state.invSel = wrapMenuIndex(state.invSel + 1, MAX_INVENTORY_SLOTS);
+    if (leftNav) state.invSel = wrapMenuIndex(state.invSel - 1, MAX_INVENTORY_SLOTS);
+    if (rightNav) state.invSel = wrapMenuIndex(state.invSel + 1, MAX_INVENTORY_SLOTS);
     if (acceptEdge) useInventorySelection();
     if (dropEdge) dropInventorySelection();
     // Attribute spending (1=STR, 2=AGI, 3=INT)

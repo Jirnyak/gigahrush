@@ -18,6 +18,20 @@ import { ROOM_DEFS } from '../data/catalog';
 
 /* ── RNG helpers ─────────────────────────────────────────────── */
 export const rng = (lo: number, hi: number, rand: RandomSource = Math.random): number => irandFrom(rand, lo, hi);
+
+export function findRandomFloorCell(world: World, rand: RandomSource = Math.random, maxTries: number = 2000): { x: number; y: number } | undefined {
+  for (let i = 0; i < maxTries; i++) {
+    const x = Math.floor(rand() * W);
+    const y = Math.floor(rand() * W);
+    if (world.cells[world.idx(x, y)] === Cell.FLOOR) return { x, y };
+  }
+  return undefined;
+}
+
+export function pickRandomRoom(world: World, rand: RandomSource = Math.random): Room | undefined {
+  if (!world.rooms || world.rooms.length === 0) return undefined;
+  return pickFrom(rand, world.rooms);
+}
 export const pick = <T>(a: readonly T[], rand: RandomSource = Math.random): T => pickFrom(rand, a);
 export const shuffle = <T>(a: T[], rand: RandomSource = Math.random): T[] => shuffleWith(rand, a);
 

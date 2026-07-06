@@ -501,3 +501,19 @@ Reject these:
 4. **Assume there are uncommitted changes.** The user may have written brilliant, complex code that is not yet in Git. If you overwrite the file, **GIT CANNOT RECOVER IT** and the work is permanently destroyed.
 5. **Check `git log` and recent commits** if you are confused about the state of the codebase. Do not assume your context memory of the file is the current ground truth.
 6. **Watch out for accidental argument deletion / shifting during multi-replace.** When updating function signatures or calls, ensure that you do not accidentally swallow existing variables (like `planeLen`). A missing comma or deleted variable can cause all subsequent arguments to shift by one, silently breaking logic because JS/TS might just pass `undefined` to the tail arguments without throwing a type error. Triple-check your `diff` to verify that exactly the intended parameters are preserved.
+
+## CRITICAL: NEVER USE GIT RESET OR GIT CHECKOUT WITHOUT PERMISSION
+
+**NEVER** use commands like `git reset --hard`, `git checkout .`, `git clean`, or any other destructive Git commands unless explicitly requested or approved by the user. 
+These commands destroy uncommitted modifications in the dirty working tree. Because the project often has complex uncommitted work (including code authored by other agents in parallel), a blind `git reset` will cause catastrophic data loss that standard `git log` and `git reflog` cannot recover.
+
+**Strict Rule against Hard Resets and Checkouts:**
+Do NOT use `git reset --hard` or `git checkout` to discard changes without EXPLICIT permission from the user. These commands destroy uncommitted work in the dirty tree, causing irreversible regressions. If you need to revert changes, ask the user first or use a reversible method.
+
+**How to Recover Lost Uncommitted Data (Regression Rehabilitation):**
+If you or another agent accidentally wiped out uncommitted changes (e.g. via `git reset --hard`), the ONLY way to recover the code is by extracting it from the Antigravity Agent logs:
+1. Locate the Conversation Transcripts in the agent's AppData directory: `<appDataDir>/brain/<conversation-id>/.system_generated/logs/transcript_full.jsonl`. (Note: use `grep_search` or terminal tools to find the right conversation ID from the past).
+2. Do NOT rely on `git reflog` or `git log` to find uncommitted tree states. They only track committed snapshots.
+3. Search through `transcript_full.jsonl` for the previous conversation session where the code was written. Look for `multi_replace_file_content` or `replace_file_content` tool call blocks.
+4. Extract the exact JSON payload (specifically `ReplacementContent` or `CodeContent` fields) from the logs.
+5. Manually reconstruct the lost file by carefully applying the extracted chunks back to the source tree. This is the official rehabilitation method for uncommitted regressions.

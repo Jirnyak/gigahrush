@@ -1,7 +1,7 @@
 /* ── Inventory system: items, pickup, use ─────────────────────── */
 
 import {
-  type Entity, type GameState, type Item, type ItemDef, type Msg,
+  type Entity, type InventoryHolder, type GameState, type Item, type ItemDef, type Msg,
   type WorldEventPrivacy, type WorldEventSeverity, ItemType,
   EntityType, Faction, FloorLevel,
   msg,
@@ -855,10 +855,12 @@ export function publishItemTradeEvent(
   });
 }
 
-function consumeInventorySlot(e: Entity, slotIdx: number): void {
+export function consumeInventorySlot(e: InventoryHolder, slotIdx: number, count?: number): void {
   const slot = e.inventory?.[slotIdx];
   if (!slot) return;
-  slot.count--;
+  const toRemove = count ?? 1;
+  if (toRemove <= 0 || slot.count < toRemove) return;
+  slot.count -= toRemove;
   if (slot.count <= 0) e.inventory?.splice(slotIdx, 1);
 }
 
@@ -964,7 +966,7 @@ function handleSilverSlimeUse(
   return false;
 }
 
-function itemAddCapacity(e: Entity, defId: string, count: number, data: unknown): number {
+export function itemAddCapacity(e: InventoryHolder, defId: string, count: number, data: unknown): number {
   if (count <= 0) return 0;
   const def = ITEMS[defId];
   if (!def) return 0;
@@ -980,7 +982,7 @@ function itemAddCapacity(e: Entity, defId: string, count: number, data: unknown)
   return capacity;
 }
 
-export function canAddItem(e: Entity, defId: string, count = 1, data?: unknown): boolean {
+export function canAddItem(e: InventoryHolder, defId: string, count = 1, data?: unknown): boolean {
   if (!ITEMS[defId]) return false;
   if (count <= 0) return true;
   return itemAddCapacity(e, defId, count, data) >= count;
@@ -995,7 +997,7 @@ function defaultSlotData(defId: string, def: ItemDef, data: unknown): unknown {
   return undefined;
 }
 
-function addItemMovedCount(e: Entity, defId: string, count = 1, data?: unknown): number {
+export function addItemMovedCount(e: InventoryHolder, defId: string, count = 1, data?: unknown): number {
   const def = ITEMS[defId];
   if (!def || count <= 0) return 0;
   count = Math.min(count, itemAddCapacity(e, defId, count, data));
@@ -1026,13 +1028,13 @@ function addItemMovedCount(e: Entity, defId: string, count = 1, data?: unknown):
 }
 
 /* ── Add item to entity inventory ─────────────────────────────── */
-export function addItem(e: Entity, defId: string, count = 1, data?: unknown): boolean {
+export function addItem(e: InventoryHolder, defId: string, count = 1, data?: unknown): boolean {
   if (!canAddItem(e, defId, count, data)) return false;
   return addItemMovedCount(e, defId, count, data) === Math.max(0, count);
 }
 
 /* ── Remove item from inventory ───────────────────────────────── */
-export function removeItem(e: Entity, defId: string, count = 1): boolean {
+export function removeItem(e: InventoryHolder, defId: string, count = 1): boolean {
   if (!e.inventory) return false;
   for (let i = e.inventory.length - 1; i >= 0; i--) {
     const slot = e.inventory[i];
@@ -1048,11 +1050,11 @@ export function removeItem(e: Entity, defId: string, count = 1): boolean {
 }
 
 /* ── Check if entity has item ─────────────────────────────────── */
-export function hasItem(e: Entity, defId: string): boolean {
+export function hasItem(e: InventoryHolder, defId: string): boolean {
   return (e.inventory ?? []).some(i => i.defId === defId);
 }
 
-function inventoryCount(e: Entity, defId: string): number {
+function inventoryCount(e: InventoryHolder, defId: string): number {
   let total = 0;
   for (const slot of e.inventory ?? []) if (slot.defId === defId) total += slot.count;
   return total;
@@ -1133,12 +1135,14 @@ export function getInventorySlotActionInfo(e: Entity, slotIdx: number): Inventor
   const category = inventoryItemCategory(def.id);
   const isEquippedWeapon = equipSlot === 'weapon' && e.weapon === def.id;
   const isEquippedTool = equipSlot === 'tool' && e.tool === def.id;
+  const isEquippedArmor = equipSlot === 'armor' && e.armorDefId === def.id;
   let useLabel = '';
   let canUse = true;
 
   const accept = controlBindingLabel('gameMenu');
   if (equipSlot === 'weapon') useLabel = isEquippedWeapon ? `${accept} снять` : `${accept} экипировать`;
   else if (equipSlot === 'tool') useLabel = isEquippedTool ? `${accept} снять` : `${accept} в инструмент`;
+  else if (equipSlot === 'armor') useLabel = isEquippedArmor ? `${accept} снять` : `${accept} надеть`;
   else if (itemHasUseAction(def)) useLabel = `${accept} применить`;
   else useLabel = inventorySpecialUseLabel(def.id, def, slot);
 
@@ -1155,7 +1159,7 @@ export function getInventorySlotActionInfo(e: Entity, slotIdx: number): Inventor
     stackMax: getStack(def),
     category,
     categoryLabel: inventoryCategoryLabel(category),
-    equippedLabel: isEquippedWeapon ? 'оружие выбрано' : isEquippedTool ? 'инструмент выбран' : inventoryCategoryLabel(category),
+    equippedLabel: isEquippedWeapon ? 'оружие выбрано' : isEquippedTool ? 'инструмент выбран' : isEquippedArmor ? 'броня надета' : inventoryCategoryLabel(category),
     useLabel,
     dropLabel: def.type === ItemType.TOOL
       ? 'X выкинуть: сломать'
@@ -1962,6 +1966,20 @@ export function useItem(e: Entity, slotIdx: number, msgs: Msg[], time: number, s
     return;
   }
 
+  // Armor: equip
+  if (equipSlot === 'armor') {
+    if (e.armorDefId === def.id) {
+      e.armorDefId = undefined;
+      msgs.push(msg(`Броня снята: ${def.name}`, time, '#9d9'));
+      publishPlayerItemEvent(state, e, 'player_use_item', def.id, 1, 2, zoneId);
+      return;
+    }
+    e.armorDefId = def.id;
+    msgs.push(msg(`Надета броня: ${def.name}`, time, '#9d9'));
+    publishPlayerItemEvent(state, e, 'player_use_item', def.id, 1, 2, zoneId);
+    return;
+  }
+
   if (handleRationCouponUse(e, slotIdx, msgs, time, state, zoneId, world)) return;
 
   const govnyakUse = useGovnyakItem(e, def.id, state);
@@ -2056,6 +2074,9 @@ export function dropItem(
   }
   if (equipSlot === 'tool' && player.tool === def.id) {
     player.tool = '';
+  }
+  if (equipSlot === 'armor' && player.armorDefId === def.id) {
+    player.armorDefId = undefined;
   }
 
   // Place drop 3 cells in front of player (far enough to avoid auto-pickup)
@@ -2554,39 +2575,4 @@ export function getWeaponReadiness(e: Entity, itemId = equippedCombatItemId(e)):
     lowResource,
     warning: cannotFireReason !== '' || lowResource,
   };
-}
-
-
-export function equipArmor(state: GameState, e: Entity, defId: string): Msg | undefined {
-  if (!e.inventory) return;
-  const itemIdx = e.inventory.findIndex(i => i.defId === defId);
-  if (itemIdx === -1) return;
-
-  if (e.armorDefId) {
-    if (e.inventory.length >= MAX_INVENTORY_SLOTS) {
-      return msg('Инвентарь полон, некуда снять текущую броню', state.time, '#f84');
-    }
-    e.inventory.push({ defId: e.armorDefId, count: 1 });
-  }
-
-  e.armorDefId = defId;
-  const it = e.inventory[itemIdx];
-  if (it.count > 1) {
-    it.count--;
-  } else {
-    e.inventory.splice(itemIdx, 1);
-  }
-  return msg(`Надета броня: ${ITEMS[defId]?.name || defId}`, state.time, '#9d9');
-}
-
-export function unequipArmor(state: GameState, e: Entity): Msg | undefined {
-  if (!e.armorDefId) return;
-  if (!e.inventory) e.inventory = [];
-  if (e.inventory.length >= MAX_INVENTORY_SLOTS) {
-    return msg('Инвентарь полон, некуда снять броню', state.time, '#f84');
-  }
-  e.inventory.push({ defId: e.armorDefId, count: 1 });
-  const name = ITEMS[e.armorDefId]?.name || e.armorDefId;
-  e.armorDefId = undefined;
-  return msg(`Броня снята: ${name}`, state.time, '#9d9');
 }

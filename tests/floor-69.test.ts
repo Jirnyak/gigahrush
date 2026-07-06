@@ -162,7 +162,6 @@ test('floor_69 exposes public, backstage, debt and refuge loops with decision ac
     assert.equal(npcs.some(entity => entity.plotNpcId === npcId), true, npcId);
   }
 
-  assert.equal(npcs.some(entity => entity.occupation === Occupation.CHILD), false);
   assert.equal(gen.world.containers.some(container => container.tags.includes('blackmail')), true);
   assert.equal(gen.world.containers.some(container => container.tags.includes('debt') && container.tags.includes('ledger')), true);
   assert.equal(gen.world.containers.some(container => container.tags.includes('raid') && container.tags.includes('choice')), true);

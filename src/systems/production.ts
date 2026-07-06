@@ -386,7 +386,6 @@ function createOutputContainer(
     kind,
     name: `${def.name}: ${recipe.name}`,
     inventory: [],
-    capacitySlots: Math.max(def.capacitySlots, recipe.outputs.length + (recipe.inputItems?.length ?? 0) + 2),
     faction: factory.ownerFaction ?? roomFaction(world, room),
     access,
     lockDifficulty: access === 'locked' ? 2 + (room.id % 4) : undefined,

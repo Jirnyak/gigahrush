@@ -19,10 +19,10 @@ import { ITEMS, getStack } from '../data/items';
 import { clampCharacterAge, DEFAULT_PLAYER_AGE, DEFAULT_PLAYER_SEX, sanitizeCharacterSex } from '../data/demographics';
 
 export const SAVE_PLAYER_INVENTORY_CAP = MAX_INVENTORY_SLOTS;
-export const SAVE_CONTAINER_CAP = 128;
+export const SAVE_CONTAINER_CAP = 2048;
 export const SAVE_CONTAINER_TAG_CAP = 12;
 export const SAVE_CONTAINER_STOLEN_ITEM_CAP = 16;
-export const SAVE_QUEST_CAP = 512;
+export const SAVE_QUEST_CAP = 2048;
 export const SAVE_STATUS_CAP = 12;
 export const PORTAL_COMPACT_QUEST_CAP = 64;
 export const PORTAL_COMPACT_CONTAINER_CAP = 16;

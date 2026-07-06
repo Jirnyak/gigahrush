@@ -22,7 +22,7 @@ import { addFactionRelMutual } from '../data/relations';
 import { changeResourceStock, getEconomyQuote, type EconomyQuote } from './economy';
 import { controlHint } from './controls';
 import { publishEvent } from './events';
-import { CHALK_ITEM_ID, createChalkItemData } from './chalk';
+
 import { generateContainerLoot } from './procedural_loot';
 import { recordPermitAccess } from './permits';
 import { applyRoomMemoryRelationPenalty, applyTheftRelationPenalty } from './factions';
@@ -49,6 +49,7 @@ import {
 } from './shelter_tally';
 import { isPlayerEntity } from './player_actor';
 import { ENTITY_MASK_NPC, ensureEntityIndex } from './entity_index';
+import { itemAddCapacity, addItemMovedCount, consumeInventorySlot } from './inventory';
 
 const THEFT_WITNESS_RADIUS = 7;
 const THEFT_WITNESS_SCAN_CAP = 160;
@@ -224,7 +225,7 @@ export function makeFeatureLootContainer(
     capacitySlots: def.capacitySlots,
     access: 'public',
     discovered: true,
-    tags: [...def.tags, FEATURE_LOOT_TAG],
+    tags: [...def.tags, FEATURE_LOOT_TAG, 'mesh_hidden'],
   };
 }
 
@@ -245,16 +246,16 @@ function ensureShelterTallyStaticPath(world: World, floor: FloorLevel): void {
   if (!tallyFloorAllowsStaticSeed(floor) || !ITEMS[SHELTER_TALLY_ID]) return;
   if (hasShelterTallyStaticPath(world, floor)) return;
   const target = world.containers.find(c => c.floor === floor
-    && c.inventory.length < c.capacitySlots
+    && c.inventory.length < MAX_INVENTORY_SLOTS
     && (c.tags.includes('samosbor') || c.tags.includes('paper'))
     && c.access !== 'locked')
-    ?? world.containers.find(c => c.floor === floor && c.inventory.length < c.capacitySlots && c.access !== 'locked');
+    ?? world.containers.find(c => c.floor === floor && c.inventory.length < MAX_INVENTORY_SLOTS && c.access !== 'locked');
   if (!target) return;
   if (!target.inventory.some(item => isShelterTallyItem(item.defId))) target.inventory.push({ defId: SHELTER_TALLY_ID, count: 1 });
   if (!target.tags.includes('istotit_tally_source')) target.tags.push('istotit_tally_source');
 }
 
-function normalizeContainerInventory(input: unknown, capacitySlots: number): Item[] {
+function normalizeContainerInventory(input: unknown): Item[] {
   if (!Array.isArray(input)) return [];
   const inv: Item[] = [];
   for (const raw of input) {
@@ -270,7 +271,7 @@ function normalizeContainerInventory(input: unknown, capacitySlots: number): Ite
       count: Math.min(count, getStack(def)),
       data: item.data,
     });
-    if (inv.length >= capacitySlots) break;
+    if (inv.length >= MAX_INVENTORY_SLOTS) break;
   }
   return inv;
 }
@@ -322,10 +323,6 @@ function normalizeSavedContainer(
   if (!Number.isFinite(roomId) || !def) return null;
   const x = world.wrap(rawX);
   const y = world.wrap(rawY);
-  const savedCapacity = Math.floor(Number(src.capacitySlots));
-  const capacitySlots = Number.isFinite(savedCapacity) && savedCapacity > 0
-    ? Math.max(1, Math.min(MAX_INVENTORY_SLOTS, savedCapacity))
-    : def.capacitySlots;
   const container: WorldContainer = {
     id,
     x,
@@ -335,8 +332,8 @@ function normalizeSavedContainer(
     zoneId: world.zoneMap[world.idx(x, y)],
     kind: kind as ContainerKind,
     name: typeof src.name === 'string' ? src.name.slice(0, 96) : def.name,
-    inventory: normalizeContainerInventory(src.inventory, capacitySlots),
-    capacitySlots,
+    capacitySlots: typeof src.capacitySlots === 'number' ? src.capacitySlots : def.capacitySlots ?? 9,
+    inventory: normalizeContainerInventory(src.inventory),
     ownerNpcId: typeof src.ownerNpcId === 'number' ? src.ownerNpcId : undefined,
     ownerName: typeof src.ownerName === 'string' ? src.ownerName.slice(0, 64) : undefined,
     faction: typeof src.faction === 'number' ? src.faction : undefined,
@@ -645,48 +642,6 @@ export function containerTheftStatus(container: WorldContainer): ContainerTheftS
     detail: `Не хватает ${stolenCount} вид(а) предметов; владелец может заметить.`,
     color: '#f84',
   };
-}
-
-function inventoryFitCount(inv: Item[], defId: string, _capacitySlots: number): number {
-  const def = ITEMS[defId];
-  if (!def) return 0;
-  const maxStack = getStack(def);
-  let free = 0;
-  for (const slot of inv) {
-    if (slot.defId === defId && slot.count < maxStack) free += maxStack - slot.count;
-  }
-  free += Math.max(0, MAX_INVENTORY_SLOTS - inv.length) * maxStack;
-  return free;
-}
-
-function addToInventory(inv: Item[], item: Item, count: number, _capacitySlots: number): number {
-  const def = ITEMS[item.defId];
-  if (!def || count <= 0) return 0;
-  const maxStack = getStack(def);
-  let left = Math.min(count, inventoryFitCount(inv, item.defId, MAX_INVENTORY_SLOTS));
-  const moved = left;
-  for (const slot of inv) {
-    if (left <= 0) break;
-    if (slot.defId !== item.defId || slot.count >= maxStack) continue;
-    const add = Math.min(left, maxStack - slot.count);
-    slot.count += add;
-    left -= add;
-  }
-  while (left > 0 && inv.length < MAX_INVENTORY_SLOTS) {
-    const add = Math.min(left, maxStack);
-    const data = item.data ?? (item.defId === CHALK_ITEM_ID ? createChalkItemData(def.durability ?? 0) : undefined);
-    inv.push({ defId: item.defId, count: add, data });
-    left -= add;
-  }
-  return moved - left;
-}
-
-function removeFromInventorySlot(inv: Item[], slotIdx: number, count: number): boolean {
-  const slot = inv[slotIdx];
-  if (!slot || count <= 0 || slot.count < count) return false;
-  slot.count -= count;
-  if (slot.count <= 0) inv.splice(slotIdx, 1);
-  return true;
 }
 
 function markStolen(container: WorldContainer, item: Item): boolean {
@@ -1153,7 +1108,7 @@ export function takeFromContainer(
   const access = containerAccessInfo(container, actor, state);
   if (!access.canTake) return false;
   if (!actor.inventory) actor.inventory = [];
-  const take = Math.min(count, slot.count, inventoryFitCount(actor.inventory, slot.defId, MAX_INVENTORY_SLOTS));
+  const take = Math.min(count, slot.count, itemAddCapacity(actor, slot.defId, count, slot.data));
   if (take <= 0) return false;
   const purchase = access.purchase === true;
   const purchaseQuote = purchase ? containerPurchaseQuote(state, container, slot.defId, take) : undefined;
@@ -1161,11 +1116,18 @@ export function takeFromContainer(
   publishTheftAuditIfDue(container, actor, context);
   const defId = slot.defId;
   const itemName = def.name;
-  const item: Item = { defId, count: take, data: take === slot.count ? slot.data : undefined };
-  if (!removeFromInventorySlot(container.inventory, slotIdx, take)) return false;
-  const moved = addToInventory(actor.inventory, item, take, MAX_INVENTORY_SLOTS);
+  if (take > slot.count) return false;
+  const originalData = slot.data;
+  consumeInventorySlot(container, slotIdx, take);
+  const moved = addItemMovedCount(actor, defId, take, originalData);
+  if (moved > 0) {
+    if (container.tags.includes(FEATURE_LOOT_TAG)) {
+      container.tags = container.tags.filter(t => t !== FEATURE_LOOT_TAG);
+      container.roomId = context.world ? (context.world.roomMap[context.world.idx(container.x, container.y)] ?? -1) : -1;
+    }
+  }
   if (moved !== take) {
-    addToInventory(container.inventory, item, take - moved, container.capacitySlots);
+    addItemMovedCount(container, defId, take - moved, originalData);
     return false;
   }
   const unlock = access.unlock ? unlockContainerForActor(container, actor, state) : null;
@@ -1288,21 +1250,25 @@ export function putIntoContainer(
   if (!access.canPut) return false;
   const defId = source.defId;
   const itemName = def.name;
-  const moved = Math.min(count, source.count, inventoryFitCount(container.inventory, source.defId, container.capacitySlots));
+  const moved = Math.min(count, source.count, itemAddCapacity(container, source.defId, count, source.data));
   if (moved <= 0) return false;
   publishTheftAuditIfDue(container, actor, context);
-  const item: Item = { defId, count: moved, data: moved === source.count ? source.data : undefined };
-  if (!removeFromInventorySlot(inv, slotIdx, moved)) return false;
-  const added = addToInventory(container.inventory, item, moved, container.capacitySlots);
+  const originalData = source.data;
+  consumeInventorySlot(actor, slotIdx, moved);
+  if (container.tags.includes(FEATURE_LOOT_TAG)) {
+    container.tags = container.tags.filter(t => t !== FEATURE_LOOT_TAG);
+    container.roomId = context.world ? (context.world.roomMap[context.world.idx(container.x, container.y)] ?? -1) : -1;
+  }
+  const added = addItemMovedCount(container, defId, moved, originalData);
   if (added !== moved) {
-    addToInventory(inv, item, moved - added, MAX_INVENTORY_SLOTS);
+    addItemMovedCount(actor, defId, moved - added, originalData);
     return false;
   }
   const unlock = access.unlock ? unlockContainerForActor(container, actor, state) : null;
   container.lastOpenedBy = actor.id;
   container.lastOpenedAt = state?.time;
   if (state) {
-    const outcome = containerDepositOutcome(container, { defId, count: moved, data: item.data });
+    const outcome = containerDepositOutcome(container, { defId, count: moved, data: originalData });
     const witnesses = findTheftWitnesses(context.world, context.entities, actor, container);
     const firstWitness = witnesses.witnesses[0];
     const primaryTags = ['cult', 'supply', 'witness', 'kvartiry'].filter(tag => container.tags.includes(tag));
@@ -1364,7 +1330,7 @@ export function putIntoContainer(
 
 export function describeContainer(container: WorldContainer): string {
   const access = container.access === 'public' ? 'общий' : container.access === 'locked' ? 'заперт' : container.access === 'secret' ? 'тайник' : container.access;
-  return `#${container.id} ${container.name} ${container.inventory.length}/${container.capacitySlots} ${access}`;
+  return `#${container.id} ${container.name} ${container.inventory.length}/${MAX_INVENTORY_SLOTS} ${access}`;
 }
 
 export function countContainerItems(world: World): number {

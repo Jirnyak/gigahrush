@@ -1,0 +1,2647 @@
+[
+  {
+    "name": "Unknown",
+    "faction": "Unknown",
+    "occupation": "Unknown"
+  },
+  {
+    "name": "Unknown",
+    "faction": "Unknown",
+    "occupation": "Unknown"
+  },
+  {
+    "name": "Unknown",
+    "faction": "Unknown",
+    "occupation": "Unknown"
+  },
+  {
+    "name": "Unknown",
+    "faction": "Unknown",
+    "occupation": "Unknown"
+  },
+  {
+    "name": "Unknown",
+    "faction": "Faction.LIQUIDATOR",
+    "occupation": "Occupation.DIRECTOR",
+    "level": "15"
+  },
+  {
+    "name": "Unknown",
+    "faction": "Faction.LIQUIDATOR",
+    "occupation": "Occupation.HUNTER",
+    "level": "12"
+  },
+  {
+    "name": "Unknown",
+    "faction": "Faction.LIQUIDATOR",
+    "occupation": "Occupation.DOCTOR",
+    "level": "10"
+  },
+  {
+    "name": "Unknown",
+    "faction": "Faction.LIQUIDATOR",
+    "occupation": "Occupation.ENGINEER",
+    "level": "15"
+  },
+  {
+    "name": "Unknown",
+    "faction": "Faction.SCIENTIST",
+    "occupation": "Occupation.DOCTOR",
+    "level": "10"
+  },
+  {
+    "name": "Unknown",
+    "faction": "Faction.LIQUIDATOR",
+    "occupation": "Occupation.HUNTER",
+    "level": "10"
+  },
+  {
+    "name": "Unknown",
+    "faction": "Faction.SCIENTIST",
+    "occupation": "Occupation.SCIENTIST",
+    "level": "10"
+  },
+  {
+    "name": "Unknown",
+    "faction": "Faction.CULTIST",
+    "occupation": "Occupation.ALCOHOLIC",
+    "level": "2"
+  },
+  {
+    "name": "Unknown",
+    "faction": "Faction.LIQUIDATOR",
+    "occupation": "Occupation.HUNTER",
+    "level": "10"
+  },
+  {
+    "name": "Unknown",
+    "faction": "Faction.CULTIST",
+    "occupation": "Occupation.PILGRIM",
+    "level": "10"
+  },
+  {
+    "name": "Unknown",
+    "faction": "Faction.CULTIST",
+    "occupation": "Occupation.PRIEST",
+    "level": "10"
+  },
+  {
+    "name": "Unknown",
+    "faction": "Faction.SCIENTIST",
+    "occupation": "Occupation.SCIENTIST",
+    "level": "10"
+  },
+  {
+    "name": "Unknown",
+    "faction": "Faction.CITIZEN",
+    "occupation": "Occupation.SCIENTIST"
+  },
+  {
+    "name": "npcPackageDisplayName(pack)",
+    "faction": "pack.affiliation.faction",
+    "occupation": "pack.affiliation.occupation",
+    "level": "pack.rpg.level"
+  },
+  {
+    "name": "Unknown",
+    "faction": "Unknown",
+    "occupation": "Unknown"
+  },
+  {
+    "name": "'Мастер Арены'",
+    "faction": "Faction.LIQUIDATOR",
+    "occupation": "Occupation.DIRECTOR",
+    "level": "10"
+  },
+  {
+    "name": "Unknown",
+    "faction": "Unknown",
+    "occupation": "Unknown"
+  },
+  {
+    "file": "design_floors/antenna_court.ts",
+    "name": "'Паша Выросший'",
+    "faction": "Faction.SCIENTIST",
+    "occupation": "Occupation.ELECTRICIAN"
+  },
+  {
+    "file": "design_floors/antenna_court.ts",
+    "name": "'Мирра Глушилка'",
+    "faction": "Faction.WILD",
+    "occupation": "Occupation.TRAVELER"
+  },
+  {
+    "file": "design_floors/antenna_court.ts",
+    "name": "'Капитан Круг'",
+    "faction": "Faction.LIQUIDATOR",
+    "occupation": "Occupation.HUNTER"
+  },
+  {
+    "file": "design_floors/antenna_court.ts",
+    "name": "'Сержант Частотный'",
+    "faction": "Faction.LIQUIDATOR",
+    "occupation": "Occupation.HUNTER"
+  },
+  {
+    "file": "design_floors/antenna_court.ts",
+    "name": "'Дежурный Гц'",
+    "faction": "Faction.LIQUIDATOR",
+    "occupation": "Occupation.HUNTER"
+  },
+  {
+    "file": "design_floors/antenna_court.ts",
+    "name": "'Эхо Женя'",
+    "faction": "Faction.CITIZEN",
+    "occupation": "Occupation.CHILD"
+  },
+  {
+    "file": "design_floors/bank_floor.ts",
+    "name": "'Зинаида Балансовна'",
+    "faction": "Faction.CITIZEN",
+    "occupation": "Occupation.DIRECTOR"
+  },
+  {
+    "file": "design_floors/bank_floor.ts",
+    "name": "'Люба Кассир'",
+    "faction": "Faction.CITIZEN",
+    "occupation": "Occupation.SECRETARY"
+  },
+  {
+    "file": "design_floors/bank_floor.ts",
+    "name": "'Прохор Кредитный'",
+    "faction": "Faction.CITIZEN",
+    "occupation": "Occupation.SECRETARY"
+  },
+  {
+    "file": "design_floors/bank_floor.ts",
+    "name": "'Семен Инкассатор'",
+    "faction": "Faction.LIQUIDATOR",
+    "occupation": "Occupation.HUNTER"
+  },
+  {
+    "file": "design_floors/bank_floor.ts",
+    "name": "'Митя Просрочка'",
+    "faction": "Faction.CITIZEN",
+    "occupation": "Occupation.TRAVELER"
+  },
+  {
+    "file": "design_floors/black_market_88.ts",
+    "name": "'Марта Восьмая'",
+    "faction": "Faction.CITIZEN",
+    "occupation": "Occupation.STOREKEEPER"
+  },
+  {
+    "file": "design_floors/black_market_88.ts",
+    "name": "'Михаил Долговой'",
+    "faction": "Faction.CITIZEN",
+    "occupation": "Occupation.SECRETARY"
+  },
+  {
+    "file": "design_floors/black_market_88.ts",
+    "name": "'Злата Тишина'",
+    "faction": "Faction.WILD",
+    "occupation": "Occupation.SECRETARY"
+  },
+  {
+    "file": "design_floors/black_market_88.ts",
+    "name": "'Жока Нож'",
+    "faction": "Faction.LIQUIDATOR",
+    "occupation": "Occupation.HUNTER"
+  },
+  {
+    "file": "design_floors/black_market_88.ts",
+    "name": "'Ульяна Касса'",
+    "faction": "Faction.CITIZEN",
+    "occupation": "Occupation.STOREKEEPER"
+  },
+  {
+    "file": "design_floors/black_market_88.ts",
+    "name": "'Саша Люк'",
+    "faction": "Faction.CITIZEN",
+    "occupation": "Occupation.TRAVELER"
+  },
+  {
+    "file": "design_floors/bolnichny_korpus.ts",
+    "name": "'Галина Сортировочная'",
+    "faction": "Faction.SCIENTIST",
+    "occupation": "Occupation.DOCTOR"
+  },
+  {
+    "file": "design_floors/bolnichny_korpus.ts",
+    "name": "'Ира Аптечная'",
+    "faction": "Faction.CITIZEN",
+    "occupation": "Occupation.STOREKEEPER"
+  },
+  {
+    "file": "design_floors/bolnichny_korpus.ts",
+    "name": "'Сазан Санпропуск'",
+    "faction": "Faction.LIQUIDATOR",
+    "occupation": "Occupation.HUNTER"
+  },
+  {
+    "file": "design_floors/bolnichny_korpus.ts",
+    "name": "'Гриша Температурный'",
+    "faction": "Faction.CITIZEN",
+    "occupation": "Occupation.TRAVELER"
+  },
+  {
+    "file": "design_floors/bolnichny_korpus.ts",
+    "name": "'Нина Бумажная'",
+    "faction": "Faction.CITIZEN",
+    "occupation": "Occupation.SECRETARY"
+  },
+  {
+    "file": "design_floors/cayley_byuro.ts",
+    "name": "'Григорий Кэли'",
+    "faction": "Faction.CITIZEN",
+    "occupation": "Occupation.SECRETARY"
+  },
+  {
+    "file": "design_floors/cayley_byuro.ts",
+    "name": "'Маша Косетная'",
+    "faction": "Faction.CITIZEN",
+    "occupation": "Occupation.SECRETARY"
+  },
+  {
+    "file": "design_floors/cayley_byuro.ts",
+    "name": "'Инспектор Смежности'",
+    "faction": "Faction.LIQUIDATOR",
+    "occupation": "Occupation.DIRECTOR"
+  },
+  {
+    "file": "design_floors/chthonic_attic.ts",
+    "name": "'Аграфена Корневая'",
+    "faction": "Faction.CITIZEN",
+    "occupation": "Occupation.STOREKEEPER"
+  },
+  {
+    "file": "design_floors/chthonic_attic.ts",
+    "name": "'Дьякон Остап'",
+    "faction": "Faction.CULTIST",
+    "occupation": "Occupation.PRIEST"
+  },
+  {
+    "file": "design_floors/chthonic_attic.ts",
+    "name": "'Юра Кабельный'",
+    "faction": "Faction.CITIZEN",
+    "occupation": "Occupation.CHILD"
+  },
+  {
+    "file": "design_floors/chthonic_attic.ts",
+    "name": "'Маша Прожиг'",
+    "faction": "Faction.LIQUIDATOR",
+    "occupation": "Occupation.HUNTER"
+  },
+  {
+    "file": "design_floors/communal_ring.ts",
+    "name": "'Люба Прачечная'",
+    "faction": "Faction.CITIZEN",
+    "occupation": "Occupation.HOUSEWIFE"
+  },
+  {
+    "file": "design_floors/communal_ring.ts",
+    "name": "'Виктор Напорный'",
+    "faction": "Faction.LIQUIDATOR",
+    "occupation": "Occupation.LOCKSMITH"
+  },
+  {
+    "file": "design_floors/communal_ring.ts",
+    "name": "'Тамара Объявление'",
+    "faction": "Faction.SCIENTIST",
+    "occupation": "Occupation.SECRETARY"
+  },
+  {
+    "file": "design_floors/communal_ring.ts",
+    "name": "'Саша У Очереди'",
+    "faction": "Faction.WILD",
+    "occupation": "Occupation.TRAVELER"
+  },
+  {
+    "file": "design_floors/communal_ring.ts",
+    "name": "'Нина Сквозная'",
+    "faction": "Faction.CITIZEN",
+    "occupation": "Occupation.HOUSEWIFE"
+  },
+  {
+    "file": "design_floors/communal_ring.ts",
+    "name": "'Егор Примус'",
+    "faction": "Faction.CITIZEN",
+    "occupation": "Occupation.LOCKSMITH"
+  },
+  {
+    "file": "design_floors/communal_ring.ts",
+    "name": "'Архип Завхозный'",
+    "faction": "Faction.CITIZEN",
+    "occupation": "Occupation.STOREKEEPER"
+  },
+  {
+    "file": "design_floors/communal_ring.ts",
+    "name": "'Зоя Управдомша'",
+    "faction": "Faction.SCIENTIST",
+    "occupation": "Occupation.SECRETARY"
+  },
+  {
+    "file": "design_floors/critical_leak_archive.ts",
+    "name": "'Варвара Сухопись'",
+    "faction": "Faction.SCIENTIST",
+    "occupation": "Occupation.SECRETARY"
+  },
+  {
+    "file": "design_floors/critical_leak_archive.ts",
+    "name": "'Егор Отсечка'",
+    "faction": "Faction.LIQUIDATOR",
+    "occupation": "Occupation.HUNTER"
+  },
+  {
+    "file": "design_floors/dark_metro.ts",
+    "name": "'Нора Диспетчерская'",
+    "faction": "Faction.CITIZEN",
+    "occupation": "Occupation.SECRETARY"
+  },
+  {
+    "file": "design_floors/dark_metro.ts",
+    "name": "'Ламповщик Гена'",
+    "faction": "Faction.CITIZEN",
+    "occupation": "Occupation.STOREKEEPER"
+  },
+  {
+    "file": "design_floors/dark_metro.ts",
+    "name": "'Сержант Барсуков'",
+    "faction": "Faction.LIQUIDATOR",
+    "occupation": "Occupation.HUNTER"
+  },
+  {
+    "file": "design_floors/dark_metro.ts",
+    "name": "'Миша с повтором'",
+    "faction": "Faction.CITIZEN",
+    "occupation": "Occupation.CHILD"
+  },
+  {
+    "file": "design_floors/floor_69.ts",
+    "name": "'Роза Красная'",
+    "faction": "Faction.CITIZEN",
+    "occupation": "Occupation.DIRECTOR"
+  },
+  {
+    "file": "design_floors/floor_69.ts",
+    "name": "'Веня Шлагбаум'",
+    "faction": "Faction.LIQUIDATOR",
+    "occupation": "Occupation.HUNTER"
+  },
+  {
+    "file": "design_floors/floor_69.ts",
+    "name": "'Ира Сцена'",
+    "faction": "Faction.CITIZEN",
+    "occupation": "Occupation.TRAVELER"
+  },
+  {
+    "file": "design_floors/floor_69.ts",
+    "name": "'Доктор Сима'",
+    "faction": "Faction.SCIENTIST",
+    "occupation": "Occupation.DOCTOR"
+  },
+  {
+    "file": "design_floors/floor_69.ts",
+    "name": "'Нил Расписочный'",
+    "faction": "Faction.CITIZEN",
+    "occupation": "Occupation.STOREKEEPER"
+  },
+  {
+    "file": "design_floors/hyperbolic_switchyard.ts",
+    "name": "'Зинаида Кривых Стрелок'",
+    "faction": "Faction.CITIZEN",
+    "occupation": "Occupation.TRAVELER"
+  },
+  {
+    "file": "design_floors/istinniy_labirint.ts",
+    "name": "'Зина Ариадна'",
+    "faction": "Faction.LIQUIDATOR",
+    "occupation": "Occupation.HUNTER"
+  },
+  {
+    "file": "design_floors/istinniy_labirint.ts",
+    "name": "'Паша Без Нити'",
+    "faction": "Faction.CITIZEN",
+    "occupation": "Occupation.TRAVELER"
+  },
+  {
+    "file": "design_floors/manhattan_crossroads.ts",
+    "name": "'Сержант Оськин'",
+    "faction": "Faction.LIQUIDATOR",
+    "occupation": "Occupation.HUNTER"
+  },
+  {
+    "file": "design_floors/manhattan_crossroads.ts",
+    "name": "'Бабка Зебрина'",
+    "faction": "Faction.CITIZEN",
+    "occupation": "Occupation.HOUSEWIFE"
+  },
+  {
+    "file": "design_floors/manhattan_crossroads.ts",
+    "name": "'Дима Курьер'",
+    "faction": "Faction.CITIZEN",
+    "occupation": "Occupation.TRAVELER"
+  },
+  {
+    "file": "design_floors/manhattan_crossroads.ts",
+    "name": "'Ксю Развязка'",
+    "faction": "Faction.WILD",
+    "occupation": "Occupation.TRAVELER"
+  },
+  {
+    "file": "design_floors/markov_stairwell.ts",
+    "name": "'Павел Марков'",
+    "faction": "Faction.SCIENTIST",
+    "occupation": "Occupation.SECRETARY"
+  },
+  {
+    "file": "design_floors/ministry.ts",
+    "name": "'Семен Маршрутный'",
+    "faction": "Faction.CITIZEN",
+    "occupation": "Occupation.SECRETARY"
+  },
+  {
+    "file": "design_floors/ministry.ts",
+    "name": "'Инспектор Контррынок'",
+    "faction": "Faction.LIQUIDATOR",
+    "occupation": "Occupation.DIRECTOR"
+  },
+  {
+    "file": "design_floors/ministry.ts",
+    "name": "'Клавдия Укрытная'",
+    "faction": "Faction.CITIZEN",
+    "occupation": "Occupation.SECRETARY"
+  },
+  {
+    "file": "design_floors/ministry.ts",
+    "name": "'Нотарий Кабинный'",
+    "faction": "Faction.CITIZEN",
+    "occupation": "Occupation.DIRECTOR"
+  },
+  {
+    "file": "design_floors/number_registry.ts",
+    "name": "'Вера Модульная'",
+    "faction": "Faction.CITIZEN",
+    "occupation": "Occupation.SECRETARY"
+  },
+  {
+    "file": "design_floors/number_registry.ts",
+    "name": "'Федор Простой'",
+    "faction": "Faction.LIQUIDATOR",
+    "occupation": "Occupation.HUNTER"
+  },
+  {
+    "file": "design_floors/number_registry.ts",
+    "name": "'Семен Составной'",
+    "faction": "Faction.CITIZEN",
+    "occupation": "Occupation.STOREKEEPER"
+  },
+  {
+    "file": "design_floors/obschezhitie_smeny.ts",
+    "name": "'Рита Старшая Смены'",
+    "faction": "Faction.CITIZEN",
+    "occupation": "Occupation.STOREKEEPER"
+  },
+  {
+    "file": "design_floors/obschezhitie_smeny.ts",
+    "name": "'Глеб Ночной Обход'",
+    "faction": "Faction.LIQUIDATOR",
+    "occupation": "Occupation.HUNTER"
+  },
+  {
+    "file": "design_floors/obschezhitie_smeny.ts",
+    "name": "'Сеня Тихий'",
+    "faction": "Faction.WILD",
+    "occupation": "Occupation.TRAVELER"
+  },
+  {
+    "file": "design_floors/oranzhereya_betona.ts",
+    "name": "'Надя Агроном'",
+    "faction": "Faction.SCIENTIST",
+    "occupation": "Occupation.SCIENTIST"
+  },
+  {
+    "file": "design_floors/oranzhereya_betona.ts",
+    "name": "'Глеб Капельник'",
+    "faction": "Faction.CITIZEN",
+    "occupation": "Occupation.ELECTRICIAN"
+  },
+  {
+    "file": "design_floors/oranzhereya_betona.ts",
+    "name": "'Арсен Водомер'",
+    "faction": "Faction.LIQUIDATOR",
+    "occupation": "Occupation.HUNTER"
+  },
+  {
+    "file": "design_floors/oranzhereya_betona.ts",
+    "name": "'Соня Форточка'",
+    "faction": "Faction.WILD",
+    "occupation": "Occupation.STOREKEEPER"
+  },
+  {
+    "file": "design_floors/penrose_laundry.ts",
+    "name": "'Марфа Меточная'",
+    "faction": "Faction.CITIZEN",
+    "occupation": "Occupation.HOUSEWIFE"
+  },
+  {
+    "file": "design_floors/penrose_laundry.ts",
+    "name": "'Игорь Прищеп'",
+    "faction": "Faction.CITIZEN",
+    "occupation": "Occupation.LOCKSMITH"
+  },
+  {
+    "file": "design_floors/penrose_laundry.ts",
+    "name": "'Лидия Пароотвод'",
+    "faction": "Faction.LIQUIDATOR",
+    "occupation": "Occupation.MECHANIC"
+  },
+  {
+    "file": "design_floors/penrose_laundry.ts",
+    "name": "'Тоня Тайник'",
+    "faction": "Faction.WILD",
+    "occupation": "Occupation.STOREKEEPER"
+  },
+  {
+    "file": "design_floors/pioneer_camp.ts",
+    "name": "'Тамара Сменная'",
+    "faction": "Faction.SCIENTIST",
+    "occupation": "Occupation.DIRECTOR"
+  },
+  {
+    "file": "design_floors/pioneer_camp.ts",
+    "name": "'Егор Радиокружок'",
+    "faction": "Faction.SCIENTIST",
+    "occupation": "Occupation.ELECTRICIAN"
+  },
+  {
+    "file": "design_floors/pioneer_camp.ts",
+    "name": "'Ира Медпункт'",
+    "faction": "Faction.CITIZEN",
+    "occupation": "Occupation.DOCTOR"
+  },
+  {
+    "file": "design_floors/pioneer_camp.ts",
+    "name": "'Зоя Столовая'",
+    "faction": "Faction.CITIZEN",
+    "occupation": "Occupation.COOK"
+  },
+  {
+    "file": "design_floors/production_belt.ts",
+    "name": "'Галина Нормировщица'",
+    "faction": "Faction.CITIZEN",
+    "occupation": "Occupation.DIRECTOR"
+  },
+  {
+    "file": "design_floors/production_belt.ts",
+    "name": "'Рустам Обводной'",
+    "faction": "Faction.CITIZEN",
+    "occupation": "Occupation.MECHANIC"
+  },
+  {
+    "file": "design_floors/production_belt.ts",
+    "name": "'Егор Сменный'",
+    "faction": "Faction.CITIZEN",
+    "occupation": "Occupation.TURNER"
+  },
+  {
+    "file": "design_floors/production_belt.ts",
+    "name": "'Аудитор-БОТ 14'",
+    "faction": "Faction.LIQUIDATOR",
+    "occupation": "Occupation.SECRETARY"
+  },
+  {
+    "file": "design_floors/raionsovet_archive.ts",
+    "name": "'Лида Индексная'",
+    "faction": "Faction.CITIZEN",
+    "occupation": "Occupation.SECRETARY"
+  },
+  {
+    "file": "design_floors/raionsovet_archive.ts",
+    "name": "'Дед Бумажный'",
+    "faction": "Faction.CITIZEN",
+    "occupation": "Occupation.STOREKEEPER"
+  },
+  {
+    "file": "design_floors/raionsovet_archive.ts",
+    "name": "'Инна Огневая'",
+    "faction": "Faction.LIQUIDATOR",
+    "occupation": "Occupation.HUNTER"
+  },
+  {
+    "file": "design_floors/raionsovet_archive.ts",
+    "name": "'Гера Наследник'",
+    "faction": "Faction.WILD",
+    "occupation": "Occupation.TRAVELER"
+  },
+  {
+    "file": "design_floors/registry_morgue.ts",
+    "name": "'Фаина Реестровая'",
+    "faction": "Faction.SCIENTIST",
+    "occupation": "Occupation.SECRETARY"
+  },
+  {
+    "file": "design_floors/registry_morgue.ts",
+    "name": "'Степан Носильный'",
+    "faction": "Faction.CITIZEN",
+    "occupation": "Occupation.LOCKSMITH"
+  },
+  {
+    "file": "design_floors/registry_morgue.ts",
+    "name": "'Ира Заименованная'",
+    "faction": "Faction.CITIZEN",
+    "occupation": "Occupation.HOUSEWIFE"
+  },
+  {
+    "file": "design_floors/registry_morgue.ts",
+    "name": "'Санитар Крутов'",
+    "faction": "Faction.LIQUIDATOR",
+    "occupation": "Occupation.HUNTER"
+  },
+  {
+    "file": "design_floors/service_floor.ts",
+    "name": "'Борис Лифтёр'",
+    "faction": "Faction.LIQUIDATOR",
+    "occupation": "Occupation.MECHANIC"
+  },
+  {
+    "file": "design_floors/service_floor.ts",
+    "name": "'Надя Ключница'",
+    "faction": "Faction.CITIZEN",
+    "occupation": "Occupation.STOREKEEPER"
+  },
+  {
+    "file": "design_floors/service_floor.ts",
+    "name": "'Рома Щитовой'",
+    "faction": "Faction.SCIENTIST",
+    "occupation": "Occupation.ELECTRICIAN"
+  },
+  {
+    "file": "design_floors/service_floor.ts",
+    "name": "'Павел Без Пропуска'",
+    "faction": "Faction.CITIZEN",
+    "occupation": "Occupation.SECRETARY"
+  },
+  {
+    "file": "design_floors/service_floor.ts",
+    "name": "'Митя Насосный'",
+    "faction": "Faction.LIQUIDATOR",
+    "occupation": "Occupation.LOCKSMITH"
+  },
+  {
+    "file": "design_floors/silicon_net_well.ts",
+    "name": "'Сибо'",
+    "faction": "Faction.SCIENTIST",
+    "occupation": "Occupation.SCIENTIST"
+  },
+  {
+    "file": "design_floors/silicon_net_well.ts",
+    "name": "'Киборг-учёный Аким'",
+    "faction": "Faction.SCIENTIST",
+    "occupation": "Occupation.ELECTRICIAN"
+  },
+  {
+    "file": "design_floors/silicon_net_well.ts",
+    "name": "'Администратор НЕТ-ветки'",
+    "faction": "Faction.LIQUIDATOR",
+    "occupation": "Occupation.SECRETARY"
+  },
+  {
+    "file": "design_floors/slime_nii.ts",
+    "name": "'Лариса Гладкая'",
+    "faction": "Faction.SCIENTIST",
+    "occupation": "Occupation.DIRECTOR"
+  },
+  {
+    "file": "design_floors/slime_nii.ts",
+    "name": "'Ворон Чистый'",
+    "faction": "Faction.LIQUIDATOR",
+    "occupation": "Occupation.HUNTER"
+  },
+  {
+    "file": "design_floors/slime_nii.ts",
+    "name": "'Митя Испытуемый'",
+    "faction": "Faction.CITIZEN",
+    "occupation": "Occupation.TRAVELER"
+  },
+  {
+    "file": "design_floors/slime_nii.ts",
+    "name": "'Ада Журнальная'",
+    "faction": "Faction.SCIENTIST",
+    "occupation": "Occupation.SECRETARY"
+  },
+  {
+    "file": "design_floors/spectral_chasovnya.ts",
+    "name": "'Мирон Звонарь'",
+    "faction": "Faction.CULTIST",
+    "occupation": "Occupation.PRIEST"
+  },
+  {
+    "file": "design_floors/spetspriemnik.ts",
+    "name": "'Кривда Приёмный'",
+    "faction": "Faction.LIQUIDATOR",
+    "occupation": "Occupation.DIRECTOR"
+  },
+  {
+    "file": "design_floors/spetspriemnik.ts",
+    "name": "'Савва У решётки'",
+    "faction": "Faction.LIQUIDATOR",
+    "occupation": "Occupation.HUNTER"
+  },
+  {
+    "file": "design_floors/spetspriemnik.ts",
+    "name": "'Мира Седьмая'",
+    "faction": "Faction.CITIZEN",
+    "occupation": "Occupation.TRAVELER"
+  },
+  {
+    "file": "design_floors/spetspriemnik.ts",
+    "name": "'Толя Поимённый'",
+    "faction": "Faction.WILD",
+    "occupation": "Occupation.SECRETARY"
+  },
+  {
+    "file": "design_floors/spetspriemnik.ts",
+    "name": "'Алла Приёмная'",
+    "faction": "Faction.CITIZEN",
+    "occupation": "Occupation.SECRETARY"
+  },
+  {
+    "file": "design_floors/turing_nursery.ts",
+    "name": "'Агафья Мать-Алгоритм'",
+    "faction": "Faction.SCIENTIST",
+    "occupation": "Occupation.SCIENTIST"
+  },
+  {
+    "file": "design_floors/turing_nursery.ts",
+    "name": "'Брызга Л-10'",
+    "faction": "Faction.LIQUIDATOR",
+    "occupation": "Occupation.HUNTER"
+  },
+  {
+    "file": "design_floors/turing_nursery.ts",
+    "name": "'Сава Нулевой'",
+    "faction": "Faction.CITIZEN",
+    "occupation": "Occupation.CHILD"
+  },
+  {
+    "file": "design_floors/turing_nursery.ts",
+    "name": "'Милена Регистр'",
+    "faction": "Faction.SCIENTIST",
+    "occupation": "Occupation.SECRETARY"
+  },
+  {
+    "file": "design_floors/underhell.ts",
+    "name": "'Марфуша Постовая'",
+    "faction": "Faction.CULTIST",
+    "occupation": "Occupation.PRIEST"
+  },
+  {
+    "file": "design_floors/underhell.ts",
+    "name": "'Иона Долгожог'",
+    "faction": "Faction.CULTIST",
+    "occupation": "Occupation.STOREKEEPER"
+  },
+  {
+    "file": "design_floors/underhell.ts",
+    "name": "'Безмолвный ликвидатор'",
+    "faction": "Faction.LIQUIDATOR",
+    "occupation": "Occupation.HUNTER"
+  },
+  {
+    "file": "design_floors/underhell.ts",
+    "name": "'Ложный Яков-эхо'",
+    "faction": "Faction.CULTIST",
+    "occupation": "Occupation.SCIENTIST"
+  },
+  {
+    "file": "design_floors/upper_bureau.ts",
+    "name": "'Мадам Искра'",
+    "faction": "Faction.CITIZEN",
+    "occupation": "Occupation.SECRETARY"
+  },
+  {
+    "file": "design_floors/upper_bureau.ts",
+    "name": "'Аудитор Лев'",
+    "faction": "Faction.LIQUIDATOR",
+    "occupation": "Occupation.DIRECTOR"
+  },
+  {
+    "file": "design_floors/upper_bureau.ts",
+    "name": "'Толик Чистый'",
+    "faction": "Faction.CITIZEN",
+    "occupation": "Occupation.LOCKSMITH"
+  },
+  {
+    "file": "design_floors/upper_bureau.ts",
+    "name": "'Анна Безымянная'",
+    "faction": "Faction.CITIZEN",
+    "occupation": "Occupation.HOUSEWIFE"
+  },
+  {
+    "file": "design_floors/upper_bureau.ts",
+    "name": "'Кассир Архивной Пошлины'",
+    "faction": "Faction.CITIZEN",
+    "occupation": "Occupation.SECRETARY"
+  },
+  {
+    "file": "design_floors/upper_bureau.ts",
+    "name": "'Старший Корешков'",
+    "faction": "Faction.LIQUIDATOR",
+    "occupation": "Occupation.HUNTER"
+  },
+  {
+    "file": "design_floors/voronoi_quarantine.ts",
+    "name": "'Павел Диаграммный'",
+    "faction": "Faction.SCIENTIST",
+    "occupation": "Occupation.DOCTOR"
+  },
+  {
+    "file": "design_floors/voronoi_quarantine.ts",
+    "name": "'Зоя Рёберная'",
+    "faction": "Faction.CITIZEN",
+    "occupation": "Occupation.SECRETARY"
+  },
+  {
+    "file": "design_floors/voronoi_quarantine.ts",
+    "name": "'Лев Жёлтый'",
+    "faction": "Faction.CITIZEN",
+    "occupation": "Occupation.TRAVELER"
+  },
+  {
+    "file": "design_floors/voronoi_quarantine.ts",
+    "name": "'Марта Соединитель'",
+    "faction": "Faction.LIQUIDATOR",
+    "occupation": "Occupation.STOREKEEPER"
+  },
+  {
+    "file": "hell/choir_tax.ts",
+    "name": "'Арсений Обгорелый'",
+    "faction": "Faction.CITIZEN",
+    "occupation": "Occupation.TRAVELER"
+  },
+  {
+    "file": "hell/choir_tax.ts",
+    "name": "'Пахом Мясной Налог'",
+    "faction": "Faction.CULTIST",
+    "occupation": "Occupation.STOREKEEPER"
+  },
+  {
+    "file": "hell/choir_tax.ts",
+    "name": "'Капрал Шрамко'",
+    "faction": "Faction.LIQUIDATOR",
+    "occupation": "Occupation.HUNTER"
+  },
+  {
+    "file": "hell/madoka.ts",
+    "name": "'Мегука ПСИ-дежурная'",
+    "faction": "Faction.SCIENTIST",
+    "occupation": "Occupation.HUNTER"
+  },
+  {
+    "file": "hell/madoka.ts",
+    "name": "Unknown",
+    "faction": "Unknown",
+    "occupation": "Unknown"
+  },
+  {
+    "file": "hell/psi_meat_cache.ts",
+    "name": "'Федот Мясопев'",
+    "faction": "Faction.CULTIST",
+    "occupation": "Occupation.STOREKEEPER"
+  },
+  {
+    "file": "hell/thin_wall_chapel.ts",
+    "name": "'Сержант Коптев'",
+    "faction": "Faction.LIQUIDATOR",
+    "occupation": "Occupation.HUNTER"
+  },
+  {
+    "file": "kvartiry/ammo_smelter.ts",
+    "name": "'Геша Гильза'",
+    "faction": "Faction.WILD",
+    "occupation": "Occupation.TURNER"
+  },
+  {
+    "file": "kvartiry/ammo_smelter.ts",
+    "name": "'Полина Обходная'",
+    "faction": "Faction.LIQUIDATOR",
+    "occupation": "Occupation.HUNTER"
+  },
+  {
+    "file": "kvartiry/barricade.ts",
+    "name": "'Карпов Баррикадный'",
+    "faction": "Faction.CITIZEN",
+    "occupation": "Occupation.MECHANIC"
+  },
+  {
+    "file": "kvartiry/barricade.ts",
+    "name": "'Рая Проходная'",
+    "faction": "Faction.CITIZEN",
+    "occupation": "Occupation.STOREKEEPER"
+  },
+  {
+    "file": "kvartiry/barricade.ts",
+    "name": "'Люба с табуретом'",
+    "faction": "Faction.CITIZEN",
+    "occupation": "Occupation.HOUSEWIFE"
+  },
+  {
+    "file": "kvartiry/chernobozhiy_svod.ts",
+    "name": "'Белик Сухой Акт'",
+    "faction": "Faction.LIQUIDATOR",
+    "occupation": "Occupation.HUNTER"
+  },
+  {
+    "file": "kvartiry/chernobozhiy_svod.ts",
+    "name": "'Аня Из Списка'",
+    "faction": "Faction.CITIZEN",
+    "occupation": "Occupation.HOUSEWIFE"
+  },
+  {
+    "file": "kvartiry/chernobozhiy_svod.ts",
+    "name": "'Ефрем Сводный'",
+    "faction": "Faction.CULTIST",
+    "occupation": "Occupation.PRIEST"
+  },
+  {
+    "file": "kvartiry/communal_kitchen_feud.ts",
+    "name": "'Рая Сковородкина'",
+    "faction": "Faction.CITIZEN",
+    "occupation": "Occupation.COOK"
+  },
+  {
+    "file": "kvartiry/communal_kitchen_feud.ts",
+    "name": "'Санёк Конфорка'",
+    "faction": "Faction.WILD",
+    "occupation": "Occupation.TRAVELER"
+  },
+  {
+    "file": "kvartiry/communal_kitchen_feud.ts",
+    "name": "'Феофан у кастрюли'",
+    "faction": "Faction.CULTIST",
+    "occupation": "Occupation.PRIEST"
+  },
+  {
+    "file": "kvartiry/communal_kitchen_feud.ts",
+    "name": "'Лида Ситечко'",
+    "faction": "Faction.CITIZEN",
+    "occupation": "Occupation.SECRETARY"
+  },
+  {
+    "file": "kvartiry/communal_kitchen_feud.ts",
+    "name": "'Кипятков из обхода'",
+    "faction": "Faction.LIQUIDATOR",
+    "occupation": "Occupation.HUNTER"
+  },
+  {
+    "file": "kvartiry/cult_supply_kitchen.ts",
+    "name": "'Зина Кладовая'",
+    "faction": "Faction.CULTIST",
+    "occupation": "Occupation.COOK"
+  },
+  {
+    "file": "kvartiry/cult_supply_kitchen.ts",
+    "name": "'Нюра Вдверях'",
+    "faction": "Faction.CITIZEN",
+    "occupation": "Occupation.HOUSEWIFE"
+  },
+  {
+    "file": "kvartiry/false_neighbor.ts",
+    "name": "'Рая Подозрительная'",
+    "faction": "Faction.CITIZEN",
+    "occupation": "Occupation.HOUSEWIFE"
+  },
+  {
+    "file": "kvartiry/gorlanov.ts",
+    "name": "'Горланов'",
+    "faction": "Faction.LIQUIDATOR",
+    "occupation": "Occupation.DIRECTOR"
+  },
+  {
+    "file": "kvartiry/kv08_route_assembly.ts",
+    "name": "'Боря Прорез'",
+    "faction": "Faction.LIQUIDATOR",
+    "occupation": "Occupation.HUNTER"
+  },
+  {
+    "file": "kvartiry/kv08_route_assembly.ts",
+    "name": "'Марина Кольцевая'",
+    "faction": "Faction.CITIZEN",
+    "occupation": "Occupation.HOUSEWIFE"
+  },
+  {
+    "file": "kvartiry/kv08_route_assembly.ts",
+    "name": "'Соня Восьмая'",
+    "faction": "Faction.WILD",
+    "occupation": "Occupation.SECRETARY"
+  },
+  {
+    "file": "kvartiry/listovoy.ts",
+    "name": "'Листовой'",
+    "faction": "Faction.CITIZEN",
+    "occupation": "Occupation.DIRECTOR"
+  },
+  {
+    "file": "kvartiry/lost_child_corner.ts",
+    "name": "'Вера Потеряшкина'",
+    "faction": "Faction.CITIZEN",
+    "occupation": "Occupation.HOUSEWIFE"
+  },
+  {
+    "file": "kvartiry/medicine_swap.ts",
+    "name": "'Нина Таблеткина'",
+    "faction": "Faction.CITIZEN",
+    "occupation": "Occupation.DOCTOR"
+  },
+  {
+    "file": "kvartiry/medicine_swap.ts",
+    "name": "'Руднев Перевязочный'",
+    "faction": "Faction.LIQUIDATOR",
+    "occupation": "Occupation.DOCTOR"
+  },
+  {
+    "file": "kvartiry/medicine_swap.ts",
+    "name": "'Лёха Меняла'",
+    "faction": "Faction.WILD",
+    "occupation": "Occupation.TRAVELER"
+  },
+  {
+    "file": "kvartiry/medicine_swap.ts",
+    "name": "'Серафима Шептунья'",
+    "faction": "Faction.CULTIST",
+    "occupation": "Occupation.PRIEST"
+  },
+  {
+    "file": "kvartiry/ocherednik.ts",
+    "name": "'Люба Номерная'",
+    "faction": "Faction.CITIZEN",
+    "occupation": "Occupation.SECRETARY"
+  },
+  {
+    "file": "kvartiry/ocherednik.ts",
+    "name": "'Ефим Сверщик'",
+    "faction": "Faction.CITIZEN",
+    "occupation": "Occupation.LOCKSMITH"
+  },
+  {
+    "file": "kvartiry/ocherednik.ts",
+    "name": "'Яша Пролом'",
+    "faction": "Faction.CITIZEN",
+    "occupation": "Occupation.TRAVELER"
+  },
+  {
+    "file": "kvartiry/pakhom.ts",
+    "name": "'Пахом Братишка'",
+    "faction": "Faction.CITIZEN",
+    "occupation": "Occupation.ALCOHOLIC"
+  },
+  {
+    "file": "kvartiry/pakhom.ts",
+    "name": "Unknown",
+    "faction": "Unknown",
+    "occupation": "Unknown"
+  },
+  {
+    "file": "kvartiry/print_room.ts",
+    "name": "'Дима Печатник'",
+    "faction": "Faction.WILD",
+    "occupation": "Occupation.SECRETARY"
+  },
+  {
+    "file": "kvartiry/pustoy_sosed.ts",
+    "name": "'Лиза Сверка'",
+    "faction": "Faction.CITIZEN",
+    "occupation": "Occupation.SECRETARY"
+  },
+  {
+    "file": "kvartiry/pustoy_sosed.ts",
+    "name": "'Костя Дверной'",
+    "faction": "Faction.CITIZEN",
+    "occupation": "Occupation.LOCKSMITH"
+  },
+  {
+    "file": "kvartiry/pustoy_sosed.ts",
+    "name": "'Сержант Мерцаев'",
+    "faction": "Faction.LIQUIDATOR",
+    "occupation": "Occupation.HUNTER"
+  },
+  {
+    "file": "kvartiry/ration_queue.ts",
+    "name": "'Галина Талонница'",
+    "faction": "Faction.CITIZEN",
+    "occupation": "Occupation.STOREKEEPER"
+  },
+  {
+    "file": "kvartiry/red_corner.ts",
+    "name": "'Учительница Зоя'",
+    "faction": "Faction.SCIENTIST",
+    "occupation": "Occupation.SCIENTIST"
+  },
+  {
+    "file": "kvartiry/red_corner.ts",
+    "name": "'Ученик Петя'",
+    "faction": "Faction.CITIZEN",
+    "occupation": "Occupation.CHILD"
+  },
+  {
+    "file": "kvartiry/red_corner.ts",
+    "name": "'Ученица Маша'",
+    "faction": "Faction.CITIZEN",
+    "occupation": "Occupation.CHILD"
+  },
+  {
+    "file": "kvartiry/red_corner.ts",
+    "name": "Unknown",
+    "faction": "Unknown",
+    "occupation": "Unknown"
+  },
+  {
+    "file": "kvartiry/sery_gopnik.ts",
+    "name": "'Серый Гопник'",
+    "faction": "Faction.WILD",
+    "occupation": "Occupation.TRAVELER"
+  },
+  {
+    "file": "kvartiry/tyotya_klava.ts",
+    "name": "'Тётя Клава'",
+    "faction": "Faction.CITIZEN",
+    "occupation": "Occupation.HOUSEWIFE"
+  },
+  {
+    "file": "kvartiry/water_riot.ts",
+    "name": "'Зоя у стояка'",
+    "faction": "Faction.CITIZEN",
+    "occupation": "Occupation.HOUSEWIFE"
+  },
+  {
+    "file": "kvartiry/water_riot.ts",
+    "name": "'Серыгин Водоучёт'",
+    "faction": "Faction.LIQUIDATOR",
+    "occupation": "Occupation.HUNTER"
+  },
+  {
+    "file": "kvartiry/water_riot.ts",
+    "name": "'Костыль Канистровый'",
+    "faction": "Faction.WILD",
+    "occupation": "Occupation.TRAVELER"
+  },
+  {
+    "file": "kvartiry/water_riot.ts",
+    "name": "'Сухой Карман'",
+    "faction": "Faction.CITIZEN",
+    "occupation": "Occupation.STOREKEEPER"
+  },
+  {
+    "file": "living/apartment_raid.ts",
+    "name": "'Мира Под Столом'",
+    "faction": "Faction.CITIZEN",
+    "occupation": "Occupation.HOUSEWIFE"
+  },
+  {
+    "file": "living/apartment_raid.ts",
+    "name": "'Вика У Выхода'",
+    "faction": "Faction.CITIZEN",
+    "occupation": "Occupation.CHILD"
+  },
+  {
+    "file": "living/apartment_raid.ts",
+    "name": "'Степан Налет'",
+    "faction": "Faction.WILD",
+    "occupation": "Occupation.HUNTER"
+  },
+  {
+    "file": "living/apartment_raid.ts",
+    "name": "'Тамара Рейдовая'",
+    "faction": "Faction.LIQUIDATOR",
+    "occupation": "Occupation.HUNTER"
+  },
+  {
+    "file": "living/babka_zina.ts",
+    "name": "'Бабка Зина'",
+    "faction": "Faction.CITIZEN",
+    "occupation": "Occupation.HOUSEWIFE"
+  },
+  {
+    "file": "living/belaya_prislushka.ts",
+    "name": "'Аня Прислушка'",
+    "faction": "Faction.CITIZEN",
+    "occupation": "Occupation.SECRETARY"
+  },
+  {
+    "file": "living/belaya_prislushka.ts",
+    "name": "'Степан Тихая Дверь'",
+    "faction": "Faction.LIQUIDATOR",
+    "occupation": "Occupation.HUNTER"
+  },
+  {
+    "file": "living/belaya_prislushka.ts",
+    "name": "'Ира Матовая Проба'",
+    "faction": "Faction.SCIENTIST",
+    "occupation": "Occupation.SCIENTIST"
+  },
+  {
+    "file": "living/belaya_prislushka.ts",
+    "name": "'Ефим Тихий Акт'",
+    "faction": "Faction.CITIZEN",
+    "occupation": "Occupation.SECRETARY"
+  },
+  {
+    "file": "living/black_market_88.ts",
+    "name": "'Марта Восьмая'",
+    "faction": "Faction.CITIZEN",
+    "occupation": "Occupation.STOREKEEPER"
+  },
+  {
+    "file": "living/black_market_88.ts",
+    "name": "'Илья Долговой'",
+    "faction": "Faction.CITIZEN",
+    "occupation": "Occupation.ALCOHOLIC"
+  },
+  {
+    "file": "living/black_market_88.ts",
+    "name": "'Рыжий Пост'",
+    "faction": "Faction.LIQUIDATOR",
+    "occupation": "Occupation.HUNTER"
+  },
+  {
+    "file": "living/black_market_88.ts",
+    "name": "'Лена Подвал'",
+    "faction": "Faction.WILD",
+    "occupation": "Occupation.TRAVELER"
+  },
+  {
+    "file": "living/black_market_88.ts",
+    "name": "'Нина Шептунья'",
+    "faction": "Faction.CITIZEN",
+    "occupation": "Occupation.SECRETARY"
+  },
+  {
+    "file": "living/blood_plant_den.ts",
+    "name": "'Сеня Красная Плесень'",
+    "faction": "Faction.CULTIST",
+    "occupation": "Occupation.PILGRIM"
+  },
+  {
+    "file": "living/blood_plant_den.ts",
+    "name": "'Рая Свидетельница'",
+    "faction": "Faction.CITIZEN",
+    "occupation": "Occupation.HOUSEWIFE"
+  },
+  {
+    "file": "living/blood_plant_den.ts",
+    "name": "'Тихон Споровой'",
+    "faction": "Faction.CULTIST",
+    "occupation": "Occupation.STOREKEEPER"
+  },
+  {
+    "file": "living/caravan_exchange.ts",
+    "name": "'Нина Тарифная'",
+    "faction": "Faction.CITIZEN",
+    "occupation": "Occupation.STOREKEEPER"
+  },
+  {
+    "file": "living/caravan_exchange.ts",
+    "name": "'Ира НЕТ-маршрут'",
+    "faction": "Faction.SCIENTIST",
+    "occupation": "Occupation.SCIENTIST"
+  },
+  {
+    "file": "living/caravan_exchange.ts",
+    "name": "'Потап Ревизор'",
+    "faction": "Faction.LIQUIDATOR",
+    "occupation": "Occupation.HUNTER"
+  },
+  {
+    "file": "living/cartographer_zone_map.ts",
+    "name": "'Сева Картограф'",
+    "faction": "Faction.SCIENTIST",
+    "occupation": "Occupation.SECRETARY"
+  },
+  {
+    "file": "living/domkom_ammo_locker.ts",
+    "name": "'Зоя Патронная'",
+    "faction": "Faction.CITIZEN",
+    "occupation": "Occupation.STOREKEEPER"
+  },
+  {
+    "file": "living/domkom_ammo_locker.ts",
+    "name": "'Семен Пломба'",
+    "faction": "Faction.LIQUIDATOR",
+    "occupation": "Occupation.HUNTER"
+  },
+  {
+    "file": "living/domkom_laundry_pack.ts",
+    "name": "'Зоя Прачечная'",
+    "faction": "Faction.CITIZEN",
+    "occupation": "Occupation.HOUSEWIFE"
+  },
+  {
+    "file": "living/domkom_laundry_pack.ts",
+    "name": "'Лев Сиренный'",
+    "faction": "Faction.SCIENTIST",
+    "occupation": "Occupation.ELECTRICIAN"
+  },
+  {
+    "file": "living/domkom_laundry_pack.ts",
+    "name": "'Нина Домком'",
+    "faction": "Faction.CITIZEN",
+    "occupation": "Occupation.DIRECTOR"
+  },
+  {
+    "file": "living/domkom_laundry_pack.ts",
+    "name": "'Арсен Уплотнитель'",
+    "faction": "Faction.LIQUIDATOR",
+    "occupation": "Occupation.LOCKSMITH"
+  },
+  {
+    "file": "living/emergency_medpost.ts",
+    "name": "'Доктор Круглов'",
+    "faction": "Faction.SCIENTIST",
+    "occupation": "Occupation.DOCTOR"
+  },
+  {
+    "file": "living/emergency_medpost.ts",
+    "name": "'Фельдшер Лагунова'",
+    "faction": "Faction.CITIZEN",
+    "occupation": "Occupation.DOCTOR"
+  },
+  {
+    "file": "living/emergency_medpost.ts",
+    "name": "'Санитар Борт'",
+    "faction": "Faction.LIQUIDATOR",
+    "occupation": "Occupation.HUNTER"
+  },
+  {
+    "file": "living/emergency_medpost.ts",
+    "name": "'Игорь Очередной'",
+    "faction": "Faction.CITIZEN",
+    "occupation": "Occupation.TRAVELER"
+  },
+  {
+    "file": "living/expedition_prep.ts",
+    "name": "'Лида Маршрутная'",
+    "faction": "Faction.CITIZEN",
+    "occupation": "Occupation.SECRETARY"
+  },
+  {
+    "file": "living/expedition_prep.ts",
+    "name": "'Аня Герма'",
+    "faction": "Faction.LIQUIDATOR",
+    "occupation": "Occupation.LOCKSMITH"
+  },
+  {
+    "file": "living/expedition_prep.ts",
+    "name": "'Миша Потеряшка'",
+    "faction": "Faction.CITIZEN",
+    "occupation": "Occupation.TRAVELER"
+  },
+  {
+    "file": "living/expedition_prep.ts",
+    "name": "'Вера Возвратная'",
+    "faction": "Faction.SCIENTIST",
+    "occupation": "Occupation.SECRETARY"
+  },
+  {
+    "file": "living/external_cell_neighbor.ts",
+    "name": "'Нина Павловна'",
+    "faction": "Faction.CITIZEN",
+    "occupation": "Occupation.HOUSEWIFE"
+  },
+  {
+    "file": "living/external_cell_neighbor.ts",
+    "name": "'Тамара Сухая'",
+    "faction": "Faction.CITIZEN",
+    "occupation": "Occupation.HOUSEWIFE"
+  },
+  {
+    "file": "living/fake_medpost_zhelemish.ts",
+    "name": "'Левин Мазник'",
+    "faction": "Faction.CITIZEN",
+    "occupation": "Occupation.DOCTOR"
+  },
+  {
+    "file": "living/fake_medpost_zhelemish.ts",
+    "name": "'Даша Подмарлевая'",
+    "faction": "Faction.CITIZEN",
+    "occupation": "Occupation.HOUSEWIFE"
+  },
+  {
+    "file": "living/fake_medpost_zhelemish.ts",
+    "name": "'Лина Подмарлевая'",
+    "faction": "Faction.CITIZEN",
+    "occupation": "Occupation.SECRETARY"
+  },
+  {
+    "file": "living/fake_medpost_zhelemish.ts",
+    "name": "'Клим Заготовщик'",
+    "faction": "Faction.WILD",
+    "occupation": "Occupation.STOREKEEPER"
+  },
+  {
+    "file": "living/golos_za_dveryu.ts",
+    "name": "'Лёня Меточный'",
+    "faction": "Faction.CITIZEN",
+    "occupation": "Occupation.LOCKSMITH"
+  },
+  {
+    "file": "living/golos_za_dveryu.ts",
+    "name": "'Юрий Пломба'",
+    "faction": "Faction.LIQUIDATOR",
+    "occupation": "Occupation.HUNTER"
+  },
+  {
+    "file": "living/golos_za_dveryu.ts",
+    "name": "'Зоя Соседка'",
+    "faction": "Faction.CITIZEN",
+    "occupation": "Occupation.HOUSEWIFE"
+  },
+  {
+    "file": "living/golos_za_dveryu.ts",
+    "name": "'Клава Слухачка'",
+    "faction": "Faction.CITIZEN",
+    "occupation": "Occupation.SECRETARY"
+  },
+  {
+    "file": "living/govnyak_smoke_den.ts",
+    "name": "'Трофим Дымарь'",
+    "faction": "Faction.WILD",
+    "occupation": "Occupation.STOREKEEPER"
+  },
+  {
+    "file": "living/govnyak_smoke_den.ts",
+    "name": "'Павел Подзалог'",
+    "faction": "Faction.CITIZEN",
+    "occupation": "Occupation.ALCOHOLIC"
+  },
+  {
+    "file": "living/govnyak_smoke_den.ts",
+    "name": "'Клава Свидетельница'",
+    "faction": "Faction.CITIZEN",
+    "occupation": "Occupation.SECRETARY"
+  },
+  {
+    "file": "living/govnyak_smoke_den.ts",
+    "name": "'Маркелов из рейда'",
+    "faction": "Faction.LIQUIDATOR",
+    "occupation": "Occupation.HUNTER"
+  },
+  {
+    "file": "living/govnyak_smoke_den.ts",
+    "name": "'Рита Лаборантка'",
+    "faction": "Faction.SCIENTIST",
+    "occupation": "Occupation.SCIENTIST"
+  },
+  {
+    "file": "living/hospital_quarantine.ts",
+    "name": "'Мира Сортировочная'",
+    "faction": "Faction.SCIENTIST",
+    "occupation": "Occupation.DOCTOR"
+  },
+  {
+    "file": "living/hospital_quarantine.ts",
+    "name": "'Клава Санитарка'",
+    "faction": "Faction.CITIZEN",
+    "occupation": "Occupation.DOCTOR"
+  },
+  {
+    "file": "living/hospital_quarantine.ts",
+    "name": "'Лида Температурная'",
+    "faction": "Faction.CITIZEN",
+    "occupation": "Occupation.HOUSEWIFE"
+  },
+  {
+    "file": "living/hospital_quarantine.ts",
+    "name": "'Юра Плесневой'",
+    "faction": "Faction.CITIZEN",
+    "occupation": "Occupation.LOCKSMITH"
+  },
+  {
+    "file": "living/hospital_quarantine.ts",
+    "name": "'Тарас Санпропуск'",
+    "faction": "Faction.LIQUIDATOR",
+    "occupation": "Occupation.HUNTER"
+  },
+  {
+    "file": "living/hospital_quarantine.ts",
+    "name": "'Варвара Морговая'",
+    "faction": "Faction.SCIENTIST",
+    "occupation": "Occupation.SECRETARY"
+  },
+  {
+    "file": "living/istotit_supply_cache.ts",
+    "name": "'Агафья Свечная'",
+    "faction": "Faction.CITIZEN",
+    "occupation": "Occupation.STOREKEEPER"
+  },
+  {
+    "file": "living/istotit_supply_cache.ts",
+    "name": "'Савва Дверной'",
+    "faction": "Faction.CITIZEN",
+    "occupation": "Occupation.HUNTER"
+  },
+  {
+    "file": "living/istotit_supply_cache.ts",
+    "name": "'Маркел Обходной'",
+    "faction": "Faction.LIQUIDATOR",
+    "occupation": "Occupation.HUNTER"
+  },
+  {
+    "file": "living/istotit_supply_cache.ts",
+    "name": "'Лида Восковая'",
+    "faction": "Faction.WILD",
+    "occupation": "Occupation.SECRETARY"
+  },
+  {
+    "file": "living/library.ts",
+    "name": "'Маргарита Павловна'",
+    "faction": "Faction.SCIENTIST",
+    "occupation": "Occupation.SECRETARY"
+  },
+  {
+    "file": "living/market.ts",
+    "name": "'Шурик Барыга'",
+    "faction": "Faction.CITIZEN",
+    "occupation": "Occupation.STOREKEEPER"
+  },
+  {
+    "file": "living/market.ts",
+    "name": "'Охранник Лысый'",
+    "faction": "Faction.LIQUIDATOR",
+    "occupation": "Occupation.HUNTER"
+  },
+  {
+    "file": "living/market.ts",
+    "name": "'Охранник Кабан'",
+    "faction": "Faction.LIQUIDATOR",
+    "occupation": "Occupation.HUNTER"
+  },
+  {
+    "file": "living/mushroom_cellar.ts",
+    "name": "'Егор Плесень'",
+    "faction": "Faction.CITIZEN",
+    "occupation": "Occupation.STOREKEEPER"
+  },
+  {
+    "file": "living/mushroom_cellar.ts",
+    "name": "'Ольга Санпропуск'",
+    "faction": "Faction.LIQUIDATOR",
+    "occupation": "Occupation.DOCTOR"
+  },
+  {
+    "file": "living/mushroom_cellar.ts",
+    "name": "'Валера Мешков'",
+    "faction": "Faction.WILD",
+    "occupation": "Occupation.MECHANIC"
+  },
+  {
+    "file": "living/obzh_school.ts",
+    "name": "'Нина ОБЖ'",
+    "faction": "Faction.SCIENTIST",
+    "occupation": "Occupation.DOCTOR"
+  },
+  {
+    "file": "living/obzh_school.ts",
+    "name": "'Мира из второго ряда'",
+    "faction": "Faction.CITIZEN",
+    "occupation": "Occupation.CHILD"
+  },
+  {
+    "file": "living/obzh_school.ts",
+    "name": "'Лида из родкома'",
+    "faction": "Faction.CITIZEN",
+    "occupation": "Occupation.HOUSEWIFE"
+  },
+  {
+    "file": "living/obzh_school.ts",
+    "name": "'Роман Дежурный'",
+    "faction": "Faction.LIQUIDATOR",
+    "occupation": "Occupation.HUNTER"
+  },
+  {
+    "file": "living/obzh_school.ts",
+    "name": "'Вадим Монитор'",
+    "faction": "Faction.CITIZEN",
+    "occupation": "Occupation.CHILD"
+  },
+  {
+    "file": "living/olevia.ts",
+    "name": "'Олевия Кибер'",
+    "faction": "Faction.SCIENTIST",
+    "occupation": "Occupation.SCIENTIST"
+  },
+  {
+    "file": "living/samosbornyy_ostov.ts",
+    "name": "'Павел Сухой Обход'",
+    "faction": "Faction.LIQUIDATOR",
+    "occupation": "Occupation.HUNTER"
+  },
+  {
+    "file": "living/scientist_escort_sample.ts",
+    "name": "'Ира Пробиркина'",
+    "faction": "Faction.SCIENTIST",
+    "occupation": "Occupation.SCIENTIST"
+  },
+  {
+    "file": "living/scientist_escort_sample.ts",
+    "name": "'Павел Пропускной'",
+    "faction": "Faction.LIQUIDATOR",
+    "occupation": "Occupation.HUNTER"
+  },
+  {
+    "file": "living/scientist_escort_sample.ts",
+    "name": "'Лера Тихая Проба'",
+    "faction": "Faction.WILD",
+    "occupation": "Occupation.STOREKEEPER"
+  },
+  {
+    "file": "living/scientist_escort_sample.ts",
+    "name": "'Егор Бирочник'",
+    "faction": "Faction.CITIZEN",
+    "occupation": "Occupation.SECRETARY"
+  },
+  {
+    "file": "living/soviet_housing_pack.ts",
+    "name": "'Дядя Паша Вахтер'",
+    "faction": "Faction.CITIZEN",
+    "occupation": "Occupation.STOREKEEPER"
+  },
+  {
+    "file": "living/soviet_housing_pack.ts",
+    "name": "'Глеб Паяльник'",
+    "faction": "Faction.SCIENTIST",
+    "occupation": "Occupation.ELECTRICIAN"
+  },
+  {
+    "file": "living/soviet_housing_pack.ts",
+    "name": "'Рита Находкина'",
+    "faction": "Faction.CITIZEN",
+    "occupation": "Occupation.SECRETARY"
+  },
+  {
+    "file": "living/soviet_housing_pack.ts",
+    "name": "'Семен Гермошов'",
+    "faction": "Faction.LIQUIDATOR",
+    "occupation": "Occupation.LOCKSMITH"
+  },
+  {
+    "file": "living/soviet_housing_pack.ts",
+    "name": "'Тамара Кипяток'",
+    "faction": "Faction.CITIZEN",
+    "occupation": "Occupation.COOK"
+  },
+  {
+    "file": "living/soviet_housing_pack.ts",
+    "name": "'Кирилл Бегунок'",
+    "faction": "Faction.CITIZEN",
+    "occupation": "Occupation.TRAVELER"
+  },
+  {
+    "file": "living/stalker_mecheny.ts",
+    "name": "'Сталкер Меченый'",
+    "faction": "Faction.CITIZEN",
+    "occupation": "Occupation.TRAVELER"
+  },
+  {
+    "file": "living/stalker_mecheny.ts",
+    "name": "Unknown",
+    "faction": "Unknown",
+    "occupation": "Unknown"
+  },
+  {
+    "file": "living/temple.ts",
+    "name": "'Батюшка'",
+    "faction": "Faction.CITIZEN",
+    "occupation": "Occupation.PRIEST"
+  },
+  {
+    "file": "living/temple.ts",
+    "name": "Unknown",
+    "faction": "Unknown",
+    "occupation": "Unknown"
+  },
+  {
+    "file": "living/veretar_window_rescue.ts",
+    "name": "'Лида Белооконная'",
+    "faction": "Faction.CITIZEN",
+    "occupation": "Occupation.HOUSEWIFE"
+  },
+  {
+    "file": "living/veteran.ts",
+    "name": "'Ветеран Степаныч'",
+    "faction": "Faction.LIQUIDATOR",
+    "occupation": "Occupation.HUNTER"
+  },
+  {
+    "file": "living/veteran.ts",
+    "name": "Unknown",
+    "faction": "Unknown",
+    "occupation": "Unknown"
+  },
+  {
+    "file": "living/viktor.ts",
+    "name": "'Виктор Аргонов'",
+    "faction": "Faction.CITIZEN",
+    "occupation": "Occupation.ALCOHOLIC"
+  },
+  {
+    "file": "living/white_compulsion_room.ts",
+    "name": "'Тоня Белая'",
+    "faction": "Faction.CITIZEN",
+    "occupation": "Occupation.SECRETARY"
+  },
+  {
+    "file": "living/white_compulsion_room.ts",
+    "name": "'Даша У Порога'",
+    "faction": "Faction.CITIZEN",
+    "occupation": "Occupation.HOUSEWIFE"
+  },
+  {
+    "file": "living/white_compulsion_room.ts",
+    "name": "'Клим Пломба'",
+    "faction": "Faction.LIQUIDATOR",
+    "occupation": "Occupation.HUNTER"
+  },
+  {
+    "file": "living/white_compulsion_room.ts",
+    "name": "'Марк Пробник'",
+    "faction": "Faction.SCIENTIST",
+    "occupation": "Occupation.SCIENTIST"
+  },
+  {
+    "file": "living/white_compulsion_room.ts",
+    "name": "'Ефим Актовый'",
+    "faction": "Faction.CITIZEN",
+    "occupation": "Occupation.SECRETARY"
+  },
+  {
+    "file": "living/zhelemish_cellar.ts",
+    "name": "'Баба Мавра Желемышная'",
+    "faction": "Faction.CITIZEN",
+    "occupation": "Occupation.STOREKEEPER"
+  },
+  {
+    "file": "living/zhelemish_cellar.ts",
+    "name": "'Никита Саннадзор'",
+    "faction": "Faction.LIQUIDATOR",
+    "occupation": "Occupation.DOCTOR"
+  },
+  {
+    "file": "living/zhelemishnik.ts",
+    "name": "'Варвара Стекольная'",
+    "faction": "Faction.SCIENTIST",
+    "occupation": "Occupation.SCIENTIST"
+  },
+  {
+    "file": "living/zhelemishnik.ts",
+    "name": "'Егор Крайпятак'",
+    "faction": "Faction.WILD",
+    "occupation": "Occupation.STOREKEEPER"
+  },
+  {
+    "file": "maintenance/blue_glow_sample.ts",
+    "name": "'Вера Люминова'",
+    "faction": "Faction.SCIENTIST",
+    "occupation": "Occupation.SCIENTIST"
+  },
+  {
+    "file": "maintenance/blue_glow_sample.ts",
+    "name": "'Кирилл Глушитель'",
+    "faction": "Faction.LIQUIDATOR",
+    "occupation": "Occupation.HUNTER"
+  },
+  {
+    "file": "maintenance/charge_cage.ts",
+    "name": "'Назар Разрядный'",
+    "faction": "Faction.LIQUIDATOR",
+    "occupation": "Occupation.STOREKEEPER"
+  },
+  {
+    "file": "maintenance/charge_cage.ts",
+    "name": "'Ада Катушка'",
+    "faction": "Faction.CITIZEN",
+    "occupation": "Occupation.ELECTRICIAN"
+  },
+  {
+    "file": "maintenance/collectors_pressure_reroute.ts",
+    "name": "'Варя Напорная'",
+    "faction": "Faction.LIQUIDATOR",
+    "occupation": "Occupation.DIRECTOR"
+  },
+  {
+    "file": "maintenance/collectors_pressure_reroute.ts",
+    "name": "'Утонувший Картограф'",
+    "faction": "Faction.SCIENTIST",
+    "occupation": "Occupation.TRAVELER"
+  },
+  {
+    "file": "maintenance/collectors_pressure_reroute.ts",
+    "name": "'Ильяс Угревик'",
+    "faction": "Faction.LIQUIDATOR",
+    "occupation": "Occupation.HUNTER"
+  },
+  {
+    "file": "maintenance/collectors_pressure_reroute.ts",
+    "name": "'Федя Срывпломба'",
+    "faction": "Faction.WILD",
+    "occupation": "Occupation.LOCKSMITH"
+  },
+  {
+    "file": "maintenance/concentrate_press.ts",
+    "name": "'Инна Прессова'",
+    "faction": "Faction.CITIZEN",
+    "occupation": "Occupation.MECHANIC"
+  },
+  {
+    "file": "maintenance/concentrate_press.ts",
+    "name": "'Роман Дозатор'",
+    "faction": "Faction.CITIZEN",
+    "occupation": "Occupation.COOK"
+  },
+  {
+    "file": "maintenance/concentrate_press.ts",
+    "name": "'Старшина Клин'",
+    "faction": "Faction.LIQUIDATOR",
+    "occupation": "Occupation.HUNTER"
+  },
+  {
+    "file": "maintenance/concentrate_press.ts",
+    "name": "'Лёва Бракованный'",
+    "faction": "Faction.WILD",
+    "occupation": "Occupation.STOREKEEPER"
+  },
+  {
+    "file": "maintenance/cult_held_workshop.ts",
+    "name": "'Клава Реверс'",
+    "faction": "Faction.CITIZEN",
+    "occupation": "Occupation.MECHANIC"
+  },
+  {
+    "file": "maintenance/cult_held_workshop.ts",
+    "name": "'Омилян Черноремень'",
+    "faction": "Faction.CULTIST",
+    "occupation": "Occupation.PRIEST"
+  },
+  {
+    "file": "maintenance/cult_held_workshop.ts",
+    "name": "'Петя Нулевая Фаза'",
+    "faction": "Faction.WILD",
+    "occupation": "Occupation.ELECTRICIAN"
+  },
+  {
+    "file": "maintenance/defector_liquidator.ts",
+    "name": "'Митька Сорванный'",
+    "faction": "Faction.LIQUIDATOR",
+    "occupation": "Occupation.HUNTER"
+  },
+  {
+    "file": "maintenance/defector_liquidator.ts",
+    "name": "'Старшина Рогожа'",
+    "faction": "Faction.LIQUIDATOR",
+    "occupation": "Occupation.DIRECTOR"
+  },
+  {
+    "file": "maintenance/defector_liquidator.ts",
+    "name": "'Лида Проволочная'",
+    "faction": "Faction.SCIENTIST",
+    "occupation": "Occupation.ELECTRICIAN"
+  },
+  {
+    "file": "maintenance/defector_liquidator.ts",
+    "name": "'Сеня Черноладный'",
+    "faction": "Faction.CULTIST",
+    "occupation": "Occupation.PILGRIM"
+  },
+  {
+    "file": "maintenance/defector_liquidator.ts",
+    "name": "'Терех Зачистной'",
+    "faction": "Faction.LIQUIDATOR",
+    "occupation": "Occupation.HUNTER"
+  },
+  {
+    "file": "maintenance/diver_kot.ts",
+    "name": "'Дайвер Кот'",
+    "faction": "Faction.WILD",
+    "occupation": "Occupation.TRAVELER"
+  },
+  {
+    "file": "maintenance/filtronos.ts",
+    "name": "'Матвей Фильтровой'",
+    "faction": "Faction.LIQUIDATOR",
+    "occupation": "Occupation.LOCKSMITH"
+  },
+  {
+    "file": "maintenance/filtronos.ts",
+    "name": "Unknown",
+    "faction": "Unknown",
+    "occupation": "Unknown"
+  },
+  {
+    "file": "maintenance/flooded_lab.ts",
+    "name": "'Профессор Тесла'",
+    "faction": "Faction.SCIENTIST",
+    "occupation": "Occupation.SCIENTIST"
+  },
+  {
+    "file": "maintenance/flooded_lab.ts",
+    "name": "'Лаборант Клим'",
+    "faction": "Faction.SCIENTIST",
+    "occupation": "Occupation.SCIENTIST"
+  },
+  {
+    "file": "maintenance/flooded_lab.ts",
+    "name": "'Лаборант Соня'",
+    "faction": "Faction.SCIENTIST",
+    "occupation": "Occupation.SCIENTIST"
+  },
+  {
+    "file": "maintenance/flooded_lab.ts",
+    "name": "Unknown",
+    "faction": "Unknown",
+    "occupation": "Unknown"
+  },
+  {
+    "file": "maintenance/gordon.ts",
+    "name": "'Гордон Фримен'",
+    "faction": "Faction.SCIENTIST",
+    "occupation": "Occupation.SCIENTIST"
+  },
+  {
+    "file": "maintenance/gordon.ts",
+    "name": "Unknown",
+    "faction": "Unknown",
+    "occupation": "Unknown"
+  },
+  {
+    "file": "maintenance/heatline_zero.ts",
+    "name": "'Захар Нулевой'",
+    "faction": "Faction.CITIZEN",
+    "occupation": "Occupation.MECHANIC"
+  },
+  {
+    "file": "maintenance/heatline_zero.ts",
+    "name": "'Мира Обводная'",
+    "faction": "Faction.SCIENTIST",
+    "occupation": "Occupation.LOCKSMITH"
+  },
+  {
+    "file": "maintenance/lift_repair_shaft.ts",
+    "name": "'Саша Тросовая'",
+    "faction": "Faction.CITIZEN",
+    "occupation": "Occupation.MECHANIC"
+  },
+  {
+    "file": "maintenance/lift_repair_shaft.ts",
+    "name": "'Старшина Рельс'",
+    "faction": "Faction.LIQUIDATOR",
+    "occupation": "Occupation.HUNTER"
+  },
+  {
+    "file": "maintenance/makhno.ts",
+    "name": "'Махно'",
+    "faction": "Faction.WILD",
+    "occupation": "Occupation.TRAVELER"
+  },
+  {
+    "file": "maintenance/makhno.ts",
+    "name": "Unknown",
+    "faction": "Unknown",
+    "occupation": "Unknown"
+  },
+  {
+    "file": "maintenance/metro_error_line.ts",
+    "name": "'Жанна Жетонная'",
+    "faction": "Faction.CITIZEN",
+    "occupation": "Occupation.STOREKEEPER"
+  },
+  {
+    "file": "maintenance/metro_error_line.ts",
+    "name": "'Боря Сцепщик'",
+    "faction": "Faction.CITIZEN",
+    "occupation": "Occupation.MECHANIC"
+  },
+  {
+    "file": "maintenance/metro_error_line.ts",
+    "name": "'Лида Не-та'",
+    "faction": "Faction.CITIZEN",
+    "occupation": "Occupation.TRAVELER"
+  },
+  {
+    "file": "maintenance/mukhin.ts",
+    "name": "'Валерий Мухин'",
+    "faction": "Faction.LIQUIDATOR",
+    "occupation": "Occupation.HUNTER"
+  },
+  {
+    "file": "maintenance/nasosnaya_matka.ts",
+    "name": "'Кира Манометр'",
+    "faction": "Faction.SCIENTIST",
+    "occupation": "Occupation.MECHANIC"
+  },
+  {
+    "file": "maintenance/ostavshiysya_likvidator.ts",
+    "name": "'Оставшийся Ликвидатор'",
+    "faction": "Faction.LIQUIDATOR",
+    "occupation": "Occupation.HUNTER"
+  },
+  {
+    "file": "maintenance/ostavshiysya_likvidator.ts",
+    "name": "'Постовая Вьюга'",
+    "faction": "Faction.LIQUIDATOR",
+    "occupation": "Occupation.DIRECTOR"
+  },
+  {
+    "file": "maintenance/ostavshiysya_likvidator.ts",
+    "name": "'Слесарь Титов'",
+    "faction": "Faction.CITIZEN",
+    "occupation": "Occupation.MECHANIC"
+  },
+  {
+    "file": "maintenance/overflow_sluice.ts",
+    "name": "'Марфа Помпова'",
+    "faction": "Faction.CITIZEN",
+    "occupation": "Occupation.MECHANIC"
+  },
+  {
+    "file": "maintenance/overflow_sluice.ts",
+    "name": "'Егор Шунтов'",
+    "faction": "Faction.LIQUIDATOR",
+    "occupation": "Occupation.STOREKEEPER"
+  },
+  {
+    "file": "maintenance/overflow_sluice.ts",
+    "name": "'Тома Сливная'",
+    "faction": "Faction.SCIENTIST",
+    "occupation": "Occupation.ELECTRICIAN"
+  },
+  {
+    "file": "maintenance/pressovik.ts",
+    "name": "'Нина Стопорная'",
+    "faction": "Faction.CITIZEN",
+    "occupation": "Occupation.MECHANIC"
+  },
+  {
+    "file": "maintenance/pressure_station.ts",
+    "name": "'Борис Давленко'",
+    "faction": "Faction.CITIZEN",
+    "occupation": "Occupation.MECHANIC"
+  },
+  {
+    "file": "maintenance/radist_gleb.ts",
+    "name": "'Радист Глеб'",
+    "faction": "Faction.SCIENTIST",
+    "occupation": "Occupation.SCIENTIST"
+  },
+  {
+    "file": "maintenance/remontnik_bez_smeny.ts",
+    "name": "NPC_NAME",
+    "faction": "Faction.WILD",
+    "occupation": "Occupation.MECHANIC"
+  },
+  {
+    "file": "maintenance/sant_ivanych.ts",
+    "name": "'Сантехник Иваныч'",
+    "faction": "Faction.CITIZEN",
+    "occupation": "Occupation.LOCKSMITH"
+  },
+  {
+    "file": "maintenance/slime_deactivation_furnace.ts",
+    "name": "'Вера Гасильная'",
+    "faction": "Faction.LIQUIDATOR",
+    "occupation": "Occupation.MECHANIC"
+  },
+  {
+    "file": "maintenance/slime_deactivation_furnace.ts",
+    "name": "'Сенька Канистра'",
+    "faction": "Faction.WILD",
+    "occupation": "Occupation.STOREKEEPER"
+  },
+  {
+    "file": "maintenance/slime_sample_post.ts",
+    "name": "'Инженер Бокова'",
+    "faction": "Faction.SCIENTIST",
+    "occupation": "Occupation.SCIENTIST"
+  },
+  {
+    "file": "maintenance/slime_sample_post.ts",
+    "name": "'Сержант Середа'",
+    "faction": "Faction.LIQUIDATOR",
+    "occupation": "Occupation.HUNTER"
+  },
+  {
+    "file": "maintenance/slime_sample_post.ts",
+    "name": "'Сеня Пробирка'",
+    "faction": "Faction.WILD",
+    "occupation": "Occupation.STOREKEEPER"
+  },
+  {
+    "file": "maintenance/steam_valves.ts",
+    "name": "'Лидия Паровая'",
+    "faction": "Faction.SCIENTIST",
+    "occupation": "Occupation.SCIENTIST"
+  },
+  {
+    "file": "maintenance/watermeter_post.ts",
+    "name": "'Сава Водомер'",
+    "faction": "Faction.CITIZEN",
+    "occupation": "Occupation.SECRETARY"
+  },
+  {
+    "file": "ministry/arkhivarius.ts",
+    "name": "'Архивариус Кафкин'",
+    "faction": "Faction.CITIZEN",
+    "occupation": "Occupation.SECRETARY"
+  },
+  {
+    "file": "ministry/chernobog_archive_docket.ts",
+    "name": "'Валентина Входящая'",
+    "faction": "Faction.CITIZEN",
+    "occupation": "Occupation.SECRETARY"
+  },
+  {
+    "file": "ministry/chernobog_archive_docket.ts",
+    "name": "'Павел Копирочный'",
+    "faction": "Faction.WILD",
+    "occupation": "Occupation.STOREKEEPER"
+  },
+  {
+    "file": "ministry/chernobog_archive_docket.ts",
+    "name": "'Семен Макулатурный'",
+    "faction": "Faction.WILD",
+    "occupation": "Occupation.STOREKEEPER"
+  },
+  {
+    "file": "ministry/chernobog_archive_docket.ts",
+    "name": "'Лидия Несвидетель'",
+    "faction": "Faction.CITIZEN",
+    "occupation": "Occupation.HOUSEWIFE"
+  },
+  {
+    "file": "ministry/chernobog_archive_docket.ts",
+    "name": "'Ротмистр Чистопис'",
+    "faction": "Faction.LIQUIDATOR",
+    "occupation": "Occupation.HUNTER"
+  },
+  {
+    "file": "ministry/chernobog_archive_docket.ts",
+    "name": "'Тихон Подстрочный'",
+    "faction": "Faction.CULTIST",
+    "occupation": "Occupation.PILGRIM"
+  },
+  {
+    "file": "ministry/document_gate.ts",
+    "name": "'Галина Окошечная'",
+    "faction": "Faction.CITIZEN",
+    "occupation": "Occupation.SECRETARY"
+  },
+  {
+    "file": "ministry/document_gate.ts",
+    "name": "'Аркадий Подложный'",
+    "faction": "Faction.WILD",
+    "occupation": "Occupation.STOREKEEPER"
+  },
+  {
+    "file": "ministry/document_gate.ts",
+    "name": "'Борис Безчековый'",
+    "faction": "Faction.CITIZEN",
+    "occupation": "Occupation.DIRECTOR"
+  },
+  {
+    "file": "ministry/document_gate.ts",
+    "name": "'Инспектор Сухарь'",
+    "faction": "Faction.LIQUIDATOR",
+    "occupation": "Occupation.HUNTER"
+  },
+  {
+    "file": "ministry/document_gate.ts",
+    "name": "'Зина Очевидная'",
+    "faction": "Faction.CITIZEN",
+    "occupation": "Occupation.HOUSEWIFE"
+  },
+  {
+    "file": "ministry/document_gate.ts",
+    "name": "Unknown",
+    "faction": "Unknown",
+    "occupation": "Unknown"
+  },
+  {
+    "file": "ministry/document_gate.ts",
+    "name": "Unknown",
+    "faction": "Unknown",
+    "occupation": "Unknown"
+  },
+  {
+    "file": "ministry/glafira.ts",
+    "name": "'Буфетчица Глафира'",
+    "faction": "Faction.CITIZEN",
+    "occupation": "Occupation.COOK"
+  },
+  {
+    "file": "ministry/inspection_archive.ts",
+    "name": "'Нина Досмотрова'",
+    "faction": "Faction.CITIZEN",
+    "occupation": "Occupation.SECRETARY"
+  },
+  {
+    "file": "ministry/inspection_archive.ts",
+    "name": "'Евсей Засов'",
+    "faction": "Faction.CITIZEN",
+    "occupation": "Occupation.STOREKEEPER"
+  },
+  {
+    "file": "ministry/inspection_archive.ts",
+    "name": "'Марфа Жалобная'",
+    "faction": "Faction.CITIZEN",
+    "occupation": "Occupation.HOUSEWIFE"
+  },
+  {
+    "file": "ministry/inspection_archive.ts",
+    "name": "'Юрий Дверцов'",
+    "faction": "Faction.LIQUIDATOR",
+    "occupation": "Occupation.HUNTER"
+  },
+  {
+    "file": "ministry/interrogation.ts",
+    "name": "'Лидия Протокольная'",
+    "faction": "Faction.LIQUIDATOR",
+    "occupation": "Occupation.HUNTER"
+  },
+  {
+    "file": "ministry/interrogation.ts",
+    "name": "'Понятая Римма Нулевая'",
+    "faction": "Faction.CITIZEN",
+    "occupation": "Occupation.SECRETARY"
+  },
+  {
+    "file": "ministry/interrogation.ts",
+    "name": "Unknown",
+    "faction": "Unknown",
+    "occupation": "Unknown"
+  },
+  {
+    "file": "ministry/kartotechnik.ts",
+    "name": "'Лидия Алфавитная'",
+    "faction": "Faction.CITIZEN",
+    "occupation": "Occupation.SECRETARY"
+  },
+  {
+    "file": "ministry/kartotechnik.ts",
+    "name": "'Павел Недоописанный'",
+    "faction": "Faction.CITIZEN",
+    "occupation": "Occupation.STOREKEEPER"
+  },
+  {
+    "file": "ministry/kartotechnik.ts",
+    "name": "'Семен Пепельный'",
+    "faction": "Faction.CITIZEN",
+    "occupation": "Occupation.DIRECTOR"
+  },
+  {
+    "file": "ministry/liquidator_archive.ts",
+    "name": "'Лада Опись'",
+    "faction": "Faction.CITIZEN",
+    "occupation": "Occupation.SECRETARY"
+  },
+  {
+    "file": "ministry/liquidator_archive.ts",
+    "name": "'Интендант Л-47'",
+    "faction": "Faction.LIQUIDATOR",
+    "occupation": "Occupation.HUNTER"
+  },
+  {
+    "file": "ministry/liquidator_archive.ts",
+    "name": "'Постовой Невынос'",
+    "faction": "Faction.LIQUIDATOR",
+    "occupation": "Occupation.HUNTER"
+  },
+  {
+    "file": "ministry/liquidator_archive.ts",
+    "name": "Unknown",
+    "faction": "Unknown",
+    "occupation": "Unknown"
+  },
+  {
+    "file": "ministry/liquidator_archive.ts",
+    "name": "Unknown",
+    "faction": "Unknown",
+    "occupation": "Unknown"
+  },
+  {
+    "file": "ministry/liquidator_archive.ts",
+    "name": "Unknown",
+    "faction": "Unknown",
+    "occupation": "Unknown"
+  },
+  {
+    "file": "ministry/matka_dokumentov.ts",
+    "name": "'Нина Отменная'",
+    "faction": "Faction.CITIZEN",
+    "occupation": "Occupation.SECRETARY"
+  },
+  {
+    "file": "ministry/mukhozhuk_audit.ts",
+    "name": "'Ликвидатор-свидетель Платон'",
+    "faction": "Faction.LIQUIDATOR",
+    "occupation": "Occupation.HUNTER"
+  },
+  {
+    "file": "ministry/mukhozhuk_audit.ts",
+    "name": "'Секретарь карантинной ревизии'",
+    "faction": "Faction.CITIZEN",
+    "occupation": "Occupation.SECRETARY"
+  },
+  {
+    "file": "ministry/mukhozhuk_audit.ts",
+    "name": "Unknown",
+    "faction": "Unknown",
+    "occupation": "Unknown"
+  },
+  {
+    "file": "ministry/mukhozhuk_audit.ts",
+    "name": "Unknown",
+    "faction": "Unknown",
+    "occupation": "Unknown"
+  },
+  {
+    "file": "ministry/nii_contraband_audit.ts",
+    "name": "'Курьер с нулевой накладной'",
+    "faction": "Faction.CITIZEN",
+    "occupation": "Occupation.TRAVELER"
+  },
+  {
+    "file": "ministry/nii_contraband_audit.ts",
+    "name": "'Ирина Нулевая'",
+    "faction": "Faction.SCIENTIST",
+    "occupation": "Occupation.SCIENTIST"
+  },
+  {
+    "file": "ministry/nii_contraband_audit.ts",
+    "name": "'Максим Опечаткин'",
+    "faction": "Faction.LIQUIDATOR",
+    "occupation": "Occupation.HUNTER"
+  },
+  {
+    "file": "ministry/nii_contraband_audit.ts",
+    "name": "'Сеня Безнакладной'",
+    "faction": "Faction.WILD",
+    "occupation": "Occupation.STOREKEEPER"
+  },
+  {
+    "file": "ministry/nii_contraband_audit.ts",
+    "name": "'Практикантка без допуска'",
+    "faction": "Faction.CITIZEN",
+    "occupation": "Occupation.SECRETARY"
+  },
+  {
+    "file": "ministry/nii_contraband_audit.ts",
+    "name": "Unknown",
+    "faction": "Unknown",
+    "occupation": "Unknown"
+  },
+  {
+    "file": "ministry/npcs.ts",
+    "name": "'Председатель Канцелев'",
+    "faction": "Faction.CITIZEN",
+    "occupation": "Occupation.DIRECTOR"
+  },
+  {
+    "file": "ministry/npcs.ts",
+    "name": "'Министр Ротенбергов'",
+    "faction": "Faction.CITIZEN",
+    "occupation": "Occupation.DIRECTOR"
+  },
+  {
+    "file": "ministry/npcs.ts",
+    "name": "Unknown",
+    "faction": "Unknown",
+    "occupation": "Unknown"
+  },
+  {
+    "file": "ministry/npcs.ts",
+    "name": "Unknown",
+    "faction": "Unknown",
+    "occupation": "Unknown"
+  },
+  {
+    "file": "ministry/permit_office.ts",
+    "name": "'Вера Пропускова'",
+    "faction": "Faction.CITIZEN",
+    "occupation": "Occupation.SECRETARY"
+  },
+  {
+    "file": "ministry/permit_office.ts",
+    "name": "'Назар Секундомеров'",
+    "faction": "Faction.CITIZEN",
+    "occupation": "Occupation.SECRETARY"
+  },
+  {
+    "file": "ministry/permit_office.ts",
+    "name": "'Римма Ускорительная'",
+    "faction": "Faction.CITIZEN",
+    "occupation": "Occupation.STOREKEEPER"
+  },
+  {
+    "file": "ministry/permit_office.ts",
+    "name": "'Федя Кальковый'",
+    "faction": "Faction.CITIZEN",
+    "occupation": "Occupation.LOCKSMITH"
+  },
+  {
+    "file": "ministry/permit_office.ts",
+    "name": "'Глеб Прижимной'",
+    "faction": "Faction.CITIZEN",
+    "occupation": "Occupation.HUNTER"
+  },
+  {
+    "file": "ministry/permit_office.ts",
+    "name": "'Свидетельница Дуся Третья'",
+    "faction": "Faction.CITIZEN",
+    "occupation": "Occupation.HOUSEWIFE"
+  },
+  {
+    "file": "ministry/permit_office.ts",
+    "name": "'Понятой Аркадий Крайний'",
+    "faction": "Faction.CITIZEN",
+    "occupation": "Occupation.STOREKEEPER"
+  },
+  {
+    "file": "ministry/permit_office.ts",
+    "name": "Unknown",
+    "faction": "Unknown",
+    "occupation": "Unknown"
+  },
+  {
+    "file": "ministry/permit_office.ts",
+    "name": "Unknown",
+    "faction": "Unknown",
+    "occupation": "Unknown"
+  },
+  {
+    "file": "ministry/queue_hall.ts",
+    "name": "spec.name",
+    "faction": "Faction.CITIZEN",
+    "occupation": "spec.occupation"
+  },
+  {
+    "file": "ministry/queue_hall.ts",
+    "name": "'Осип Карточный'",
+    "faction": "Faction.CITIZEN",
+    "occupation": "Occupation.STOREKEEPER"
+  },
+  {
+    "file": "ministry/queue_hall.ts",
+    "name": "'Клавдия Очередная'",
+    "faction": "Faction.CITIZEN",
+    "occupation": "Occupation.HOUSEWIFE"
+  },
+  {
+    "file": "ministry/queue_hall.ts",
+    "name": "Unknown",
+    "faction": "Unknown",
+    "occupation": "Unknown"
+  },
+  {
+    "file": "ministry/raionsovet_archive.ts",
+    "name": "'Марфа Паспортная'",
+    "faction": "Faction.CITIZEN",
+    "occupation": "Occupation.SECRETARY"
+  },
+  {
+    "file": "ministry/raionsovet_archive.ts",
+    "name": "'Постовой Формуляр'",
+    "faction": "Faction.LIQUIDATOR",
+    "occupation": "Occupation.HUNTER"
+  },
+  {
+    "file": "ministry/raionsovet_archive.ts",
+    "name": "'Ипполит Подштампов'",
+    "faction": "Faction.CITIZEN",
+    "occupation": "Occupation.STOREKEEPER"
+  },
+  {
+    "file": "ministry/raionsovet_archive.ts",
+    "name": "'Кира Картотечная'",
+    "faction": "Faction.CITIZEN",
+    "occupation": "Occupation.SECRETARY"
+  },
+  {
+    "file": "ministry/raionsovet_archive.ts",
+    "name": "'Тимур Недостача'",
+    "faction": "Faction.LIQUIDATOR",
+    "occupation": "Occupation.HUNTER"
+  },
+  {
+    "file": "ministry/raionsovet_archive.ts",
+    "name": "Unknown",
+    "faction": "Unknown",
+    "occupation": "Unknown"
+  },
+  {
+    "file": "ministry/secret_smoking.ts",
+    "name": "'Журналистка Аврора'",
+    "faction": "Faction.CITIZEN",
+    "occupation": "Occupation.HUNTER"
+  },
+  {
+    "file": "ministry/secret_smoking.ts",
+    "name": "'Делопроизводитель Семён'",
+    "faction": "Faction.CITIZEN",
+    "occupation": "Occupation.SECRETARY"
+  },
+  {
+    "file": "ministry/secret_smoking.ts",
+    "name": "'Стенографистка Лиза'",
+    "faction": "Faction.CITIZEN",
+    "occupation": "Occupation.SECRETARY"
+  },
+  {
+    "file": "ministry/secret_smoking.ts",
+    "name": "Unknown",
+    "faction": "Unknown",
+    "occupation": "Unknown"
+  },
+  {
+    "file": "ministry/stamp_room.ts",
+    "name": "'Зоя Сургучная'",
+    "faction": "Faction.CITIZEN",
+    "occupation": "Occupation.SECRETARY"
+  },
+  {
+    "file": "ministry/stamp_room.ts",
+    "name": "'Охранник Матвей Пломба'",
+    "faction": "Faction.LIQUIDATOR",
+    "occupation": "Occupation.HUNTER"
+  },
+  {
+    "file": "ministry/stamp_room.ts",
+    "name": "'Понятая Раиса Подпись'",
+    "faction": "Faction.CITIZEN",
+    "occupation": "Occupation.SECRETARY"
+  },
+  {
+    "file": "ministry/stamp_room.ts",
+    "name": "Unknown",
+    "faction": "Unknown",
+    "occupation": "Unknown"
+  },
+  {
+    "file": "ministry/stamp_room.ts",
+    "name": "Unknown",
+    "faction": "Unknown",
+    "occupation": "Unknown"
+  },
+  {
+    "file": "ministry/streltsov.ts",
+    "name": "'Полковник Стрельцов'",
+    "faction": "Faction.LIQUIDATOR",
+    "occupation": "Occupation.HUNTER"
+  },
+  {
+    "file": "ministry/streltsov.ts",
+    "name": "Unknown",
+    "faction": "Unknown",
+    "occupation": "Unknown"
+  },
+  {
+    "file": "ministry/weapon_permit_bureau.ts",
+    "name": "'Галина Короткоствольная'",
+    "faction": "Faction.CITIZEN",
+    "occupation": "Occupation.SECRETARY"
+  },
+  {
+    "file": "ministry/weapon_permit_bureau.ts",
+    "name": "'Борис Подчисткин'",
+    "faction": "Faction.CITIZEN",
+    "occupation": "Occupation.STOREKEEPER"
+  },
+  {
+    "file": "ministry/weapon_permit_bureau.ts",
+    "name": "'Степан Патронов'",
+    "faction": "Faction.LIQUIDATOR",
+    "occupation": "Occupation.HUNTER"
+  },
+  {
+    "file": "ministry/weapon_permit_bureau.ts",
+    "name": "'Понятая Лидия Сейфовая'",
+    "faction": "Faction.CITIZEN",
+    "occupation": "Occupation.SECRETARY"
+  },
+  {
+    "file": "ministry/weapon_permit_bureau.ts",
+    "name": "Unknown",
+    "faction": "Unknown",
+    "occupation": "Unknown"
+  },
+  {
+    "file": "void/trace_seal_protocol.ts",
+    "name": "'Клерк протокола следа'",
+    "faction": "Faction.SCIENTIST",
+    "occupation": "Occupation.SECRETARY"
+  },
+  {
+    "file": "void/trace_seal_protocol.ts",
+    "name": "'Соседка, взятая взаймы'",
+    "faction": "Faction.CITIZEN",
+    "occupation": "Occupation.HOUSEWIFE"
+  }
+]
