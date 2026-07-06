@@ -366,11 +366,25 @@ export const FACTORIES: FactoryDef[] = [
 ];
 
 function appendFactoryRecipes(packs: Record<string, readonly FactoryRecipeDef[]>): void {
+  const factoryMap = new Map<string, FactoryDef>();
+  for (let i = 0; i < FACTORIES.length; i++) {
+    factoryMap.set(FACTORIES[i].id, FACTORIES[i]);
+  }
+
   for (const [factoryId, recipes] of Object.entries(packs)) {
-    const factory = FACTORIES.find(f => f.id === factoryId);
+    const factory = factoryMap.get(factoryId);
     if (!factory) continue;
+
+    const existingRecipeIds = new Set<string>();
+    for (let i = 0; i < factory.recipes.length; i++) {
+      existingRecipeIds.add(factory.recipes[i].id);
+    }
+
     for (const recipe of recipes) {
-      if (!factory.recipes.some(existing => existing.id === recipe.id)) factory.recipes.push(recipe);
+      if (!existingRecipeIds.has(recipe.id)) {
+        factory.recipes.push(recipe);
+        existingRecipeIds.add(recipe.id);
+      }
     }
   }
 }
