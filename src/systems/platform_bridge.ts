@@ -392,7 +392,7 @@ function bindGamePushEvents(gp = gamePushSdk()): void {
     // 1. gameStart fallback (Test 2, 3) — only if not already sent from markPlatformReady
     if (!gamePushGameStartSent) {
       gamePushGameStartSent = true;
-      try { if (typeof gp.gameStart === 'function') gp.gameStart(); } catch {}
+      try { if (typeof gp.gameStart === 'function') gp.gameStart(); } catch (e) { console.error('GamePush SDK error:', e); }
     }
 
     // 2. Player sync (Test 4: сохранение)
@@ -404,14 +404,14 @@ function bindGamePushEvents(gp = gamePushSdk()): void {
           if (typeof gp.player.sync === 'function') void gp.player.sync();
         }
       }
-    } catch {}
+    } catch (e) { console.error('GamePush SDK error:', e); }
 
     // 3. Language (Test 6, 7)
     try {
       if (gp.language && typeof gp.changeLanguage === 'function') {
         gp.changeLanguage(gp.language === 'es' ? 'en' : gp.language);
       }
-    } catch {}
+    } catch (e) { console.error('GamePush SDK error:', e); }
 
     // 4. Sounds (Test 8, 9)
     try {
@@ -421,7 +421,7 @@ function bindGamePushEvents(gp = gamePushSdk()): void {
         if (typeof gp.sounds.unmute === 'function') gp.sounds.unmute();
         if (muted && typeof gp.sounds.mute === 'function') gp.sounds.mute();
       }
-    } catch {}
+    } catch (e) { console.error('GamePush SDK error:', e); }
   };
 
   if (typeof document !== 'undefined') {
@@ -540,11 +540,11 @@ export function markPlatformReady(): void {
     bindGamePushEvents(gpImmediate);
     if (!gamePushReadySent) {
       gamePushReadySent = true;
-      try { if (typeof gpImmediate.gameReady === 'function') gpImmediate.gameReady(); } catch {}
+      try { if (typeof gpImmediate.gameReady === 'function') gpImmediate.gameReady(); } catch (e) { console.error('GamePush SDK error:', e); }
     }
     if (!gamePushGameStartSent) {
       gamePushGameStartSent = true;
-      try { if (typeof gpImmediate.gameStart === 'function') gpImmediate.gameStart(); } catch {}
+      try { if (typeof gpImmediate.gameStart === 'function') gpImmediate.gameStart(); } catch (e) { console.error('GamePush SDK error:', e); }
     }
   }
 
@@ -556,7 +556,7 @@ export function markPlatformReady(): void {
     
     if (!gamePushReadySent) {
       gamePushReadySent = true;
-      try { if (typeof gp.gameReady === 'function') gp.gameReady(); } catch {}
+      try { if (typeof gp.gameReady === 'function') gp.gameReady(); } catch (e) { console.error('GamePush SDK error:', e); }
     }
   });
 }
