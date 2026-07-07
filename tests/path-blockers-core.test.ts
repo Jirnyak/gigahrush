@@ -97,3 +97,30 @@ test('pathBlockedAt maps centers, subcell edges and torus wrapping', () => {
   assert.equal(pathBlockedAt(world, W - 0.01, W - 0.01), true);
   assert.equal(pathBlockedAt(world, W - 0.5, W - 0.5), false);
 });
+
+test('pathBlockedAt identifies subcell coordinate blockers with mocked world', () => {
+  const mockWorld = {
+    pathBlockers: new Uint8Array(W * W * PATH_BLOCKER_ROWS_PER_CELL),
+    pathBlockerVersion: 1,
+    pathBlockerDirtyVersion: 1,
+    wrap: (v: number) => v & (W - 1),
+    idx: (x: number, y: number) => (y & (W - 1)) * W + (x & (W - 1)),
+  };
+
+  const cellX = 5;
+  const cellY = 5;
+  const cellIdx = mockWorld.idx(cellX, cellY);
+
+  // Set row 1 (y=1/4), column 2 (x=2/4) to blocked (0b0100)
+  setPathBlockerRow(mockWorld, cellIdx, 1, 0b0100);
+
+  // 0.5 is 2/4. + 0.1 puts it nicely in the third subdiv (col 2).
+  // 0.25 is 1/4. + 0.1 puts it nicely in the second subdiv (row 1).
+  assert.equal(pathBlockedAt(mockWorld, cellX + 0.6, cellY + 0.35), true);
+
+  // Test unblocked subcell at col 1, row 1
+  assert.equal(pathBlockedAt(mockWorld, cellX + 0.35, cellY + 0.35), false);
+
+  // Test unblocked subcell elsewhere in the cell
+  assert.equal(pathBlockedAt(mockWorld, cellX + 0.9, cellY + 0.9), false);
+});
