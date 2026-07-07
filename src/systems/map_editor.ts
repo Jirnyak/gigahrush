@@ -364,7 +364,11 @@ function normalizePatchState(input: Partial<MapEditorPatchState> | null | undefi
   const patches: Record<string, MapEditorPatch> = {};
   const srcPatches = input?.patches;
   if (srcPatches && typeof srcPatches === 'object') {
-    for (const [key, raw] of Object.entries(srcPatches).slice(-PATCH_FLOOR_CAP)) {
+    const keys = Object.keys(srcPatches);
+    const start = Math.max(0, keys.length - PATCH_FLOOR_CAP);
+    for (let i = start; i < keys.length; i++) {
+      const key = keys[i];
+      const raw = (srcPatches as any)[key];
       if (!raw || typeof raw !== 'object') continue;
       const src = raw as Partial<MapEditorPatch>;
       if (typeof src.floorKey !== 'string' || src.floorKey !== key || !Array.isArray(src.ops)) continue;
