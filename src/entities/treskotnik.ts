@@ -22,7 +22,7 @@ function put(t: Uint32Array, x: number, y: number, color: number): void {
   if (x >= 0 && x < S && y >= 0 && y < S) t[y * S + x] = color;
 }
 
-function drawCrack(t: Uint32Array, sx: number, sy: number, len: number, seed: number, dir: number): void {
+function drawCrack(t: Uint32Array, { sx, sy, len, seed, dir }: { sx: number; sy: number; len: number; seed: number; dir: number }): void {
   let x = sx;
   let y = sy;
   for (let i = 0; i < len; i++) {
@@ -67,7 +67,7 @@ export function generateSprite(): Uint32Array {
     const sy = 14 + Math.floor(noise(i, 2, 21032) * 25);
     const len = 8 + Math.floor(noise(i, 3, 21033) * 14);
     const dir = noise(i, 4, 21034) > 0.5 ? 1 : -1;
-    drawCrack(t, sx, sy, len, 21100 + i * 17, dir);
+    drawCrack(t, { sx, sy, len, seed: 21100 + i * 17, dir });
   }
 
   for (let i = 0; i < 45; i++) {
