@@ -519,14 +519,19 @@ export function expandOranzhereyaBetonaRouteGeometry(world: World, rng: () => nu
 }
 
 export function reinforceOranzhereyaBetonaAuthoredTerritory(world: World): void {
+  const roomsByName = new Map<string, Room>();
+  for (const room of world.rooms) {
+    if (room?.name) roomsByName.set(room.name, room);
+  }
+
   for (const spec of ORANZHEREYA_HQ_SPECS) {
-    const hq = world.rooms.find(room => room.name === spec.name);
+    const hq = roomsByName.get(spec.name);
     if (hq) {
       hardenAuthoredHq(world, hq, spec.owner);
       paintRoomTerritory(world, hq, spec.owner);
     }
     for (const support of spec.supports) {
-      const room = world.rooms.find(candidate => candidate.name === hqSupportName(spec, support));
+      const room = roomsByName.get(hqSupportName(spec, support));
       if (room) paintRoomTerritory(world, room, spec.owner);
     }
   }
@@ -539,7 +544,7 @@ export function reinforceOranzhereyaBetonaAuthoredTerritory(world: World): void 
     [ORANZHEREYA_ROOM_NAMES.marketStall, ZoneFaction.WILD],
     [ORANZHEREYA_ROOM_NAMES.compost, ZoneFaction.CULTIST],
   ] as const) {
-    const room = world.rooms.find(candidate => candidate.name === name);
+    const room = roomsByName.get(name);
     if (!room) continue;
     if (
       name === ORANZHEREYA_ROOM_NAMES.guardPost ||
@@ -551,7 +556,7 @@ export function reinforceOranzhereyaBetonaAuthoredTerritory(world: World): void 
 
   for (const room of world.rooms) {
     if (!room?.name) continue;
-    const block = GREENHOUSE_BLOCKS.find(spec => room.name.startsWith(spec.name));
+    const block = GREENHOUSE_BLOCKS.find(spec => room.name!.startsWith(spec.name));
     if (block) paintRoomTerritory(world, room, block.owner);
   }
   world.markWallTexDirty();
