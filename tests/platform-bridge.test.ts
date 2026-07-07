@@ -45,6 +45,42 @@ test('platform bridge detects explicit portal query safely', () => {
   assert.equal(gamePushConfigFromSearch('?gpProjectId=123'), null);
 });
 
+
+test('portalTargetFromSearchOrMeta correctly parses search and meta values with fallbacks', () => {
+  // Priority: Search takes precedence over meta
+  assert.equal(portalTargetFromSearchOrMeta('?portal=gamepush', 'yandex'), 'gamepush');
+  assert.equal(portalTargetFromSearchOrMeta('?portal=yandex', 'pikabu'), 'yandex');
+  assert.equal(portalTargetFromSearchOrMeta('?portal=pikabu', 'gamepush'), 'pikabu');
+
+  // Search Happy Paths & Aliases (ignoring meta if search matches)
+  assert.equal(portalTargetFromSearchOrMeta('?portal=ya', 'invalid'), 'yandex');
+  assert.equal(portalTargetFromSearchOrMeta('?portal=gp', 'invalid'), 'gamepush');
+  assert.equal(portalTargetFromSearchOrMeta('?portal=pikabu-games', 'invalid'), 'pikabu');
+  assert.equal(portalTargetFromSearchOrMeta('?portal=pikabu_games', 'invalid'), 'pikabu');
+
+  // Search Edge Cases
+  assert.equal(portalTargetFromSearchOrMeta('portal=yandex', ''), 'yandex'); // Missing '?'
+  assert.equal(portalTargetFromSearchOrMeta('?foo=bar&portal=gp&baz=qux', ''), 'gamepush'); // Multiple params
+  assert.equal(portalTargetFromSearchOrMeta('?portal=YANDEX', ''), 'yandex'); // Case insensitivity in search is handled by normalizePortalTarget
+
+  // Meta Happy Paths & Edge Cases (Search is empty or invalid)
+  assert.equal(portalTargetFromSearchOrMeta('', 'gamepush'), 'gamepush');
+  assert.equal(portalTargetFromSearchOrMeta('?other=value', 'yandex'), 'yandex'); // Search missing 'portal' key
+  assert.equal(portalTargetFromSearchOrMeta('?portal=invalid', 'pikabu'), 'pikabu'); // Search 'portal' value is invalid
+  assert.equal(portalTargetFromSearchOrMeta('?portal=', 'yandex'), 'yandex'); // Search 'portal' value is empty
+
+  // Meta Normalization (whitespace, casing, aliases)
+  assert.equal(portalTargetFromSearchOrMeta('', '  YANDEX  '), 'yandex');
+  assert.equal(portalTargetFromSearchOrMeta('', 'Ya'), 'yandex');
+  assert.equal(portalTargetFromSearchOrMeta('', 'GP'), 'gamepush');
+  assert.equal(portalTargetFromSearchOrMeta('', 'pikabu-games'), 'pikabu');
+
+  // Both Empty/Invalid
+  assert.equal(portalTargetFromSearchOrMeta('', ''), '');
+  assert.equal(portalTargetFromSearchOrMeta('?portal=invalid', 'invalid'), '');
+  assert.equal(portalTargetFromSearchOrMeta('malformed_search_string', 'unknown_meta'), '');
+});
+
 test('portal compact save keeps a current-shape resume profile without heavy floor memory', () => {
   const payload: SavePayload & { version: number } = {
     version: SAVE_SHAPE_VERSION,
