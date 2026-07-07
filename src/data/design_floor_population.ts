@@ -2120,22 +2120,8 @@ function defaultPlacementKind(route: DesignFloorRouteDef): PlacementKind {
   return 'social';
 }
 
-function placementProfile(kind: PlacementKind, actor: 'npc' | 'monster', target: number): DesignPlacementFieldProfile {
-  const maxPerBucket = actor === 'npc'
-    ? Math.max(2, Math.min(10, Math.ceil(target / 520)))
-    : Math.max(3, Math.min(18, Math.ceil(target / 620)));
-  const base: DesignPlacementFieldProfile = {
-    noiseScale: actor === 'npc' ? 96 : 128,
-    noiseStrength: actor === 'npc' ? 0.22 : 0.18,
-    openWeight: actor === 'npc' ? 1.0 : 1.05,
-    bucketSize: actor === 'npc' ? 32 : 28,
-    maxPerBucket,
-    smoothingPasses: 2,
-    smoothingBlend: 0.55,
-  };
-  switch (kind) {
-    case 'social':
-      return {
+const PLACEMENT_PROFILE_GENERATORS: Record<PlacementKind, (actor: 'npc' | 'monster', target: number, base: DesignPlacementFieldProfile, maxPerBucket: number) => DesignPlacementFieldProfile> = {
+  social: (actor, _target, base, _maxPerBucket) => ({
         ...base,
         roomWeights: actor === 'npc'
           ? { [RoomType.LIVING]: 1.45, [RoomType.KITCHEN]: 1.5, [RoomType.COMMON]: 1.35, [RoomType.CORRIDOR]: 1.2, [RoomType.SMOKING]: 1.15, [RoomType.STORAGE]: 0.75 }
@@ -2143,9 +2129,8 @@ function placementProfile(kind: PlacementKind, actor: 'npc' | 'monster', target:
         zoneWeights: actor === 'npc'
           ? { [ZoneFaction.CITIZEN]: 1.18, [ZoneFaction.WILD]: 1.08, [ZoneFaction.LIQUIDATOR]: 0.9, [ZoneFaction.CULTIST]: 0.72 }
           : { [ZoneFaction.WILD]: 1.28, [ZoneFaction.CULTIST]: 1.2, [ZoneFaction.LIQUIDATOR]: 1.04, [ZoneFaction.CITIZEN]: 0.84 },
-      };
-    case 'floor_69':
-      return {
+      }),
+  floor_69: (actor, _target, base, _maxPerBucket) => ({
         ...base,
         noiseScale: actor === 'npc' ? 84 : 112,
         noiseStrength: actor === 'npc' ? 0.2 : 0.14,
@@ -2190,9 +2175,8 @@ function placementProfile(kind: PlacementKind, actor: 'npc' | 'monster', target:
             { x: 736, y: 552, radius: 150, weight: 1.2 },
             { x: 904, y: 608, radius: 90, weight: 1.16 },
           ],
-      };
-    case 'communal':
-      return {
+      }),
+  communal: (actor, _target, base, _maxPerBucket) => ({
         ...base,
         roomWeights: actor === 'npc'
           ? {
@@ -2221,9 +2205,8 @@ function placementProfile(kind: PlacementKind, actor: 'npc' | 'monster', target:
         zoneWeights: actor === 'npc'
           ? { [ZoneFaction.CITIZEN]: 1.22, [ZoneFaction.WILD]: 1.1, [ZoneFaction.LIQUIDATOR]: 1.02, [ZoneFaction.SAMOSBOR]: 0.76, [ZoneFaction.CULTIST]: 0.62 }
           : { [ZoneFaction.SAMOSBOR]: 1.38, [ZoneFaction.WILD]: 1.24, [ZoneFaction.CULTIST]: 1.08, [ZoneFaction.LIQUIDATOR]: 0.98, [ZoneFaction.CITIZEN]: 0.74 },
-      };
-	    case 'admin':
-      return {
+      }),
+  admin: (actor, _target, base, _maxPerBucket) => ({
         ...base,
         roomWeights: actor === 'npc'
           ? { [RoomType.OFFICE]: 1.8, [RoomType.COMMON]: 1.55, [RoomType.HQ]: 1.5, [RoomType.CORRIDOR]: 1.08, [RoomType.STORAGE]: 0.78, [RoomType.SMOKING]: 1.05 }
@@ -2231,9 +2214,8 @@ function placementProfile(kind: PlacementKind, actor: 'npc' | 'monster', target:
         zoneWeights: actor === 'npc'
           ? { [ZoneFaction.CITIZEN]: 1.18, [ZoneFaction.LIQUIDATOR]: 1.38, [ZoneFaction.WILD]: 0.68, [ZoneFaction.CULTIST]: 0.56, [ZoneFaction.SAMOSBOR]: 0.42 }
           : { [ZoneFaction.SAMOSBOR]: 1.52, [ZoneFaction.WILD]: 1.28, [ZoneFaction.CULTIST]: 1.16, [ZoneFaction.LIQUIDATOR]: 0.94, [ZoneFaction.CITIZEN]: 0.72 },
-      };
-    case 'bank':
-      return actor === 'npc'
+      }),
+  bank: (actor, _target, base, _maxPerBucket) => (actor === 'npc'
         ? {
           ...base,
           noiseScale: 84,
@@ -2271,9 +2253,8 @@ function placementProfile(kind: PlacementKind, actor: 'npc' | 'monster', target:
             { x: 612, y: 552, radius: 72, weight: 1.9 },
             { x: 512, y: 733, radius: 92, weight: 1.85 },
           ],
-        };
-    case 'industrial':
-      return {
+        }),
+  industrial: (actor, _target, base, _maxPerBucket) => ({
         ...base,
         roomWeights: actor === 'npc'
           ? { [RoomType.PRODUCTION]: 1.58, [RoomType.HQ]: 1.38, [RoomType.COMMON]: 1.22, [RoomType.OFFICE]: 1.18, [RoomType.STORAGE]: 1.02, [RoomType.CORRIDOR]: 0.96 }
@@ -2281,9 +2262,8 @@ function placementProfile(kind: PlacementKind, actor: 'npc' | 'monster', target:
         zoneWeights: actor === 'npc'
           ? { [ZoneFaction.LIQUIDATOR]: 1.22, [ZoneFaction.CITIZEN]: 1.0, [ZoneFaction.WILD]: 0.96, [ZoneFaction.CULTIST]: 0.78 }
           : { [ZoneFaction.SAMOSBOR]: 1.24, [ZoneFaction.WILD]: 1.14, [ZoneFaction.CULTIST]: 1.1, [ZoneFaction.LIQUIDATOR]: 0.94 },
-      };
-    case 'silicon':
-      return {
+      }),
+  silicon: (actor, _target, base, _maxPerBucket) => ({
         ...base,
         noiseScale: actor === 'npc' ? 76 : 118,
         noiseStrength: actor === 'npc' ? 0.14 : 0.18,
@@ -2313,9 +2293,8 @@ function placementProfile(kind: PlacementKind, actor: 'npc' | 'monster', target:
         zoneWeights: actor === 'npc'
           ? { [ZoneFaction.LIQUIDATOR]: 1.46, [ZoneFaction.CITIZEN]: 0.92, [ZoneFaction.CULTIST]: 0.62, [ZoneFaction.WILD]: 0.58, [ZoneFaction.SAMOSBOR]: 0.34 }
           : { [ZoneFaction.SAMOSBOR]: 1.56, [ZoneFaction.WILD]: 1.32, [ZoneFaction.CULTIST]: 1.08, [ZoneFaction.CITIZEN]: 0.78, [ZoneFaction.LIQUIDATOR]: 0.58 },
-      };
-    case 'slime':
-      return {
+      }),
+  slime: (actor, target, base, _maxPerBucket) => ({
         ...base,
         noiseScale: actor === 'npc' ? 88 : 112,
         noiseStrength: actor === 'npc' ? 0.18 : 0.14,
@@ -2348,9 +2327,9 @@ function placementProfile(kind: PlacementKind, actor: 'npc' | 'monster', target:
         zoneWeights: actor === 'npc'
           ? { [ZoneFaction.LIQUIDATOR]: 1.22, [ZoneFaction.CITIZEN]: 1.04, [ZoneFaction.WILD]: 0.78, [ZoneFaction.CULTIST]: 0.58, [ZoneFaction.SAMOSBOR]: 0.38 }
           : { [ZoneFaction.WILD]: 1.26, [ZoneFaction.SAMOSBOR]: 1.18, [ZoneFaction.LIQUIDATOR]: 1.02, [ZoneFaction.CULTIST]: 0.92, [ZoneFaction.CITIZEN]: 0.76 },
-      };
-    case 'attic': {
-      const atticBase: DesignPlacementFieldProfile = actor === 'monster'
+      }),
+  attic: (actor, target, base, _maxPerBucket) => {
+    const atticBase: DesignPlacementFieldProfile = actor === 'monster'
         ? {
           ...base,
           noiseScale: 112,
@@ -2369,9 +2348,8 @@ function placementProfile(kind: PlacementKind, actor: 'npc' | 'monster', target:
           ? { [ZoneFaction.LIQUIDATOR]: 1.18, [ZoneFaction.CULTIST]: 1.0, [ZoneFaction.WILD]: 0.82, [ZoneFaction.CITIZEN]: 0.62, [ZoneFaction.SAMOSBOR]: 0.35 }
           : { [ZoneFaction.SAMOSBOR]: 1.42, [ZoneFaction.CULTIST]: 1.28, [ZoneFaction.WILD]: 1.16, [ZoneFaction.LIQUIDATOR]: 0.82, [ZoneFaction.CITIZEN]: 0.46 },
       };
-    }
-    case 'hell':
-      return {
+  },
+  hell: (actor, _target, base, _maxPerBucket) => ({
         ...base,
         noiseStrength: actor === 'npc' ? 0.12 : 0.08,
         roomWeights: actor === 'npc'
@@ -2380,9 +2358,8 @@ function placementProfile(kind: PlacementKind, actor: 'npc' | 'monster', target:
         zoneWeights: actor === 'npc'
           ? { [ZoneFaction.LIQUIDATOR]: 1.24, [ZoneFaction.CULTIST]: 1.2, [ZoneFaction.WILD]: 0.92, [ZoneFaction.CITIZEN]: 0.64 }
           : { [ZoneFaction.CULTIST]: 1.18, [ZoneFaction.SAMOSBOR]: 1.28, [ZoneFaction.WILD]: 1.06, [ZoneFaction.LIQUIDATOR]: 0.88 },
-      };
-    case 'underhell':
-      return {
+      }),
+  underhell: (actor, target, base, _maxPerBucket) => ({
         ...base,
         noiseScale: actor === 'npc' ? 112 : 150,
         noiseStrength: actor === 'npc' ? 0.08 : 0.07,
@@ -2437,17 +2414,15 @@ function placementProfile(kind: PlacementKind, actor: 'npc' | 'monster', target:
             { x: 512, y: 512, radius: 76, weight: 0.4 },
             { x: 448, y: 526, radius: 64, weight: 0.55 },
           ],
-      };
-    case 'void':
-      return {
+      }),
+  void: (_actor, _target, base, _maxPerBucket) => ({
         ...base,
         noiseScale: 160,
         noiseStrength: 0.08,
         roomWeights: { [RoomType.CORRIDOR]: 1.25, [RoomType.STORAGE]: 1.1, [RoomType.HQ]: 0.85 },
         zoneWeights: { [ZoneFaction.SAMOSBOR]: 1.35, [ZoneFaction.CULTIST]: 1.08, [ZoneFaction.WILD]: 1.0, [ZoneFaction.CITIZEN]: 0.72 },
-      };
-    case 'roof':
-      return {
+      }),
+  roof: (_actor, target, base, _maxPerBucket) => ({
         ...base,
         noiseScale: 208,
         noiseStrength: 0.08,
@@ -2456,9 +2431,8 @@ function placementProfile(kind: PlacementKind, actor: 'npc' | 'monster', target:
         maxPerBucket: Math.max(base.maxPerBucket ?? 0, Math.min(32, Math.ceil(target / 180))),
         roomWeights: { [RoomType.PRODUCTION]: 1.75, [RoomType.HQ]: 1.4, [RoomType.CORRIDOR]: 1.28, [RoomType.STORAGE]: 1.18, [RoomType.COMMON]: 1.05, [RoomType.OFFICE]: 0.72 },
         zoneWeights: { [ZoneFaction.SAMOSBOR]: 1.28, [ZoneFaction.WILD]: 1.22, [ZoneFaction.CITIZEN]: 0.86, [ZoneFaction.LIQUIDATOR]: 0.92 },
-      };
-    case 'camp':
-      return {
+      }),
+  camp: (actor, target, base, _maxPerBucket) => ({
         ...base,
         noiseScale: actor === 'npc' ? 82 : 118,
         noiseStrength: actor === 'npc' ? 0.16 : 0.14,
@@ -2473,9 +2447,8 @@ function placementProfile(kind: PlacementKind, actor: 'npc' | 'monster', target:
         zoneWeights: actor === 'npc'
           ? { [ZoneFaction.CITIZEN]: 1.38, [ZoneFaction.LIQUIDATOR]: 0.78, [ZoneFaction.WILD]: 0.42, [ZoneFaction.SAMOSBOR]: 0.26, [ZoneFaction.CULTIST]: 0.34 }
           : { [ZoneFaction.WILD]: 1.72, [ZoneFaction.SAMOSBOR]: 1.42, [ZoneFaction.LIQUIDATOR]: 1.06, [ZoneFaction.CITIZEN]: 0.48, [ZoneFaction.CULTIST]: 1.04 },
-      };
-    case 'morgue':
-      return {
+      }),
+  morgue: (actor, _target, base, _maxPerBucket) => ({
         ...base,
         noiseScale: actor === 'npc' ? 84 : 142,
         noiseStrength: actor === 'npc' ? 0.16 : 0.1,
@@ -2485,9 +2458,8 @@ function placementProfile(kind: PlacementKind, actor: 'npc' | 'monster', target:
         zoneWeights: actor === 'npc'
           ? { [ZoneFaction.LIQUIDATOR]: 1.24, [ZoneFaction.CITIZEN]: 1.1, [ZoneFaction.WILD]: 0.66, [ZoneFaction.CULTIST]: 0.58, [ZoneFaction.SAMOSBOR]: 0.42 }
           : { [ZoneFaction.SAMOSBOR]: 1.46, [ZoneFaction.CULTIST]: 1.18, [ZoneFaction.WILD]: 1.08, [ZoneFaction.LIQUIDATOR]: 0.92, [ZoneFaction.CITIZEN]: 0.7 },
-      };
-    case 'crossroads':
-      return {
+      }),
+  crossroads: (actor, target, base, _maxPerBucket) => ({
         ...base,
         noiseScale: actor === 'npc' ? 72 : 104,
         noiseStrength: actor === 'npc' ? 0.16 : 0.12,
@@ -2550,9 +2522,8 @@ function placementProfile(kind: PlacementKind, actor: 'npc' | 'monster', target:
             { x: 104, y: 676, radius: 118, weight: 1.42 },
             { x: 512, y: 920, radius: 112, weight: 1.36 },
           ],
-      };
-    case 'metro':
-      return {
+      }),
+  metro: (actor, target, base, maxPerBucket) => ({
         ...base,
         noiseScale: actor === 'npc' ? 112 : 144,
         noiseStrength: actor === 'npc' ? 0.12 : 0.2,
@@ -2566,7 +2537,25 @@ function placementProfile(kind: PlacementKind, actor: 'npc' | 'monster', target:
           ? { [ZoneFaction.LIQUIDATOR]: 1.72, [ZoneFaction.WILD]: 0.7, [ZoneFaction.CITIZEN]: 0.56, [ZoneFaction.CULTIST]: 0.58, [ZoneFaction.SAMOSBOR]: 0.32 }
           : { [ZoneFaction.SAMOSBOR]: 1.48, [ZoneFaction.WILD]: 1.34, [ZoneFaction.CULTIST]: 1.18, [ZoneFaction.LIQUIDATOR]: 0.62, [ZoneFaction.CITIZEN]: 0.58 },
         anchors: actor === 'npc' ? METRO_NPC_ANCHORS : METRO_MONSTER_ANCHORS,
-      };
+      }),
+};
+
+function placementProfile(kind: PlacementKind, actor: 'npc' | 'monster', target: number): DesignPlacementFieldProfile {
+  const maxPerBucket = actor === 'npc'
+    ? Math.max(2, Math.min(10, Math.ceil(target / 520)))
+    : Math.max(3, Math.min(18, Math.ceil(target / 620)));
+  const base: DesignPlacementFieldProfile = {
+    noiseScale: actor === 'npc' ? 96 : 128,
+    noiseStrength: actor === 'npc' ? 0.22 : 0.18,
+    openWeight: actor === 'npc' ? 1.0 : 1.05,
+    bucketSize: actor === 'npc' ? 32 : 28,
+    maxPerBucket,
+    smoothingPasses: 2,
+    smoothingBlend: 0.55,
+  };
+  const generator = PLACEMENT_PROFILE_GENERATORS[kind];
+  if (generator) {
+    return generator(actor, target, base, maxPerBucket);
   }
   return base;
 }
