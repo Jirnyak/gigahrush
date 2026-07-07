@@ -12,6 +12,7 @@ import { Spr, monsterSpr } from '../render/sprite_index';
 import { randomRPG, scaleMonsterHp, scaleMonsterSpeed } from '../systems/rpg';
 import { MONSTERS } from '../entities/monster';
 import { requireSpawnedPlotNpcFromPackage } from './plot_npc_spawn';
+import { genLog } from './log';
 
 export type NextId = { v: number };
 
@@ -79,7 +80,7 @@ export function createAdminRoom(
     ?? findClearArea(world, cx, cy, spec.w, spec.h, 0, Math.floor(world.dist(0, 0, 512, 512)))
     ?? findAdminFallbackArea(world, cx, cy, spec.w, spec.h, spec.minDist, spec.maxDist);
   if (!pos) {
-    console.warn(`[MINISTRY_ADMIN] failed to place ${spec.name}`);
+    genLog(`[MINISTRY_ADMIN] failed to place ${spec.name}`);
     return null;
   }
 
