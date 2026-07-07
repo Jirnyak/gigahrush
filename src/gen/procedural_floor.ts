@@ -2622,11 +2622,10 @@ function stitchSectorBoundaries(world: World, sectors: RecipeRegion[], seed: num
 
           // Which sector is A and which is B relative to ax, ay?
           // If we stepped left to ax, then ax is inside the left sector.
-          // Direction to walk into ax's sector is -1 on X.
+          // The boundary is at sharedX (or sharedY). ax is sharedX - 1 (or ay is sharedY - 1).
+          // So walking "away" from boundary is -1.
           let dxA = 0, dyA = 0;
           if (isVerticalEdge) {
-            dxA = (ax === world.wrap(A.x0 + A.w - 1) || ax === world.wrap(A.x0 - 1)) ? -1 : 1;
-            // Actually, simply: the boundary is at sharedX. ax is sharedX - 1. So walking "away" from boundary is -1.
             dxA = -1;
           } else {
             dyA = -1;
