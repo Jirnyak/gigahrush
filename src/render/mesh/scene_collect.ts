@@ -17,6 +17,7 @@ import {
   VISUAL_SLOTS_PER_CELL,
   type World,
 } from '../../core/world';
+import { getCeilingHeightForTier } from '../../gen/ceiling_heights';
 import {
   VISUAL_CELL_DEFS,
   visualCellDefByCode,
@@ -2248,7 +2249,7 @@ const CEILING_SPAN_MODELS = new Set<string>(['column_hint', 'column_concrete_squ
 // raycaster). Standard cells (tier 0) are untouched.
 function applyCeilingHeight(world: World, instance: MeshInstance): void {
   const tier = world.ceilHeight[world.idx(world.wrap(Math.floor(instance.x)), world.wrap(Math.floor(instance.y)))];
-  const ceilZ = 1 + Math.max(0, tier) * 0.5;
+  const ceilZ = getCeilingHeightForTier(Math.max(0, tier));
   if (instance.z >= 0.9) {
     // Nudge ceiling-mounted meshes slightly below the raycaster ceiling plane
     // so they reliably pass the depth test after the variable-height ceiling march.

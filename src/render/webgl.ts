@@ -1242,7 +1242,8 @@ void main() {
   float lineH = uResolution.y / dist;
   // Render-only per-cell ceiling height: tier t → wall top reaches (1 + t*0.5).
   // Floor contact (drawEnd) and the walk level never move; only the top rises.
-  float ceilH = 1.0 + float(texelFetch(uCeil, ivec2(wrapI(mapX), wrapI(mapY)), 0).r) * 0.5;
+  float rawTier = float(texelFetch(uCeil, ivec2(wrapI(mapX), wrapI(mapY)), 0).r);
+  float ceilH = 2.0 + min(rawTier, 2.0) * 1.5;
   float rawDrawStart = HALF_H - lineH * (ceilH - uCamHeight);
   float drawStart = max(0.0, rawDrawStart);
   float drawEnd   = min(uResolution.y - 1.0, HALF_H + lineH * uCamHeight);
@@ -1417,10 +1418,12 @@ void main() {
         bool isRiser = false;
         int cside = 0;
         float marchHc = 1.0;
-        float prevHc = 1.0 + float(texelFetch(uCeil, ivec2(wrapI(int(floor(uPos.x))), wrapI(int(floor(uPos.y)))), 0).r) * 0.5;
+        float rawPrevTier = float(texelFetch(uCeil, ivec2(wrapI(int(floor(uPos.x))), wrapI(int(floor(uPos.y)))), 0).r);
+        float prevHc = 2.0 + min(rawPrevTier, 2.0) * 1.5;
         for (int cs = 0; cs < 16; cs++) {
           ivec2 mc = ivec2(wrapI(cmx), wrapI(cmy));
-          marchHc = 1.0 + float(texelFetch(uCeil, mc, 0).r) * 0.5;
+          float rawMarchTier = float(texelFetch(uCeil, mc, 0).r);
+          marchHc = 2.0 + min(rawMarchTier, 2.0) * 1.5;
           if (uCamHeight + slope * dEnter >= marchHc) { currentDist = dEnter + 0.001; isRiser = true; break; }
           float dExit = min(csdx, csdy);
           if (uCamHeight + slope * dExit >= marchHc) { currentDist = (marchHc - uCamHeight) / slope; break; }
@@ -3747,7 +3750,7 @@ function featureSpriteZ(feature: Feature, tier: number = 0): number {
     case Feature.LIFT_BUTTON:
     case Feature.SCREEN:
     case Feature.SLIDE: return 0.22;
-    case Feature.LAMP: return (1.0 + Math.max(0, tier) * 0.5) - 0.88;
+    case Feature.LAMP: return (2.0 + Math.min(Math.max(0, tier), 2) * 1.5) - 0.88;
     default: return 0;
   }
 }

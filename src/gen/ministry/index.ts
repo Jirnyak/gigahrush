@@ -539,6 +539,19 @@ function spawnMinistryMonsters(world: World, entities: Entity[], nextId: number)
 }
 
 /* ── Main generator ───────────────────────────────────────────── */
+
+export function setupMinistryRooms(world: World) {
+  for (const room of world.rooms) {
+    if (!room) continue;
+    // Limit ceiling tier to max 2 to prevent mesh overlapping and Z-fighting
+    if (room.type === RoomType.COMMON) { // Hall / Grand hall
+      room.ceilingTier = 2; // High ceiling for halls, but capped at 2
+    } else {
+      room.ceilingTier = 1; // Standard ceiling
+    }
+  }
+}
+
 export function generateMinistry(): { world: World; entities: Entity[]; spawnX: number; spawnY: number } {
   const world = new World();
   const entities: Entity[] = [];
@@ -588,6 +601,8 @@ export function generateMinistry(): { world: World; entities: Entity[]; spawnX: 
 
   // Phase 12: Monsters
   nextId = spawnMinistryMonsters(world, entities, nextId);
+
+  setupMinistryRooms(world);
 
   // Phase 12b-13: Manifest-owned administrative content
   {

@@ -2303,3 +2303,18 @@ export function stampHQRooms(world: World): void {
     }
   }
 }
+
+
+// Room sanity check post-generation
+export function validateFloorGeometry(world: World): void {
+  for (const room of world.rooms) {
+    if (!room) continue;
+    if (room.ceilingTier !== undefined && room.ceilingTier > 2) {
+      console.warn(`[Sanity] Room ${room.id} has invalid ceilingTier ${room.ceilingTier}. Capping to 2.`);
+      room.ceilingTier = 2;
+    }
+    if (room.ceilingTier !== undefined && room.ceilingTier < 0) {
+      room.ceilingTier = 0;
+    }
+  }
+}
