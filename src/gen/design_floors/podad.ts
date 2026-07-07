@@ -820,11 +820,18 @@ function podadTopologyNodes(world: World): PodadTopologyNode[] {
     ['upper_lift', 'Верхняя створка Подада', ['podad', 'upper_lift', 'retreat']],
   ];
   const out: PodadTopologyNode[] = [];
-  for (const [id, marker, tags] of specs) {
-    const room = world.rooms.find(candidate => candidate.name.includes(marker));
-    if (!room) continue;
-    const c = roomCenter(room);
-    out.push({ id, roomId: room.id, roomName: room.name, x: c.x + 0.5, y: c.y + 0.5, tags });
+  const roomsLen = world.rooms.length;
+  for (let i = 0; i < specs.length; i++) {
+    const spec = specs[i];
+    const marker = spec[1];
+    for (let j = 0; j < roomsLen; j++) {
+      const room = world.rooms[j];
+      if (room.name.includes(marker)) {
+        const c = roomCenter(room);
+        out.push({ id: spec[0], roomId: room.id, roomName: room.name, x: c.x + 0.5, y: c.y + 0.5, tags: spec[2] });
+        break;
+      }
+    }
   }
   return out;
 }
