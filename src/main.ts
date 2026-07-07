@@ -3494,9 +3494,21 @@ function updateProjectiles(dt: number): void {
     const baseDmg = p.projDmg ?? 0;
     const hitRadius = pt === ProjType.FLAME ? 0.8 : 0.6;
     entityIndex.queryPathRadius(prevX, prevY, wx, wy, hitRadius, projectileHitQuery, ENTITY_MASK_ACTOR, pt === ProjType.FLAME ? FLAME_HIT_QUERY_CAP : PROJECTILE_HIT_QUERY_CAP);
-    let nearestHit: Entity | undefined;
-    let nearestHitT = Infinity;
-    if (pt !== ProjType.FLAME) {
+
+    if (pt === ProjType.FLAME) {
+      for (const e of projectileHitQuery) {
+        if (!e.alive) continue;
+        if (e.type !== EntityType.MONSTER && e.type !== EntityType.NPC) continue;
+        const hitT = projectilePathHitT({ x0: prevX, y0: prevY, x1: wx, y1: wy, e, radius: hitRadius });
+        if (hitT <= blockingT + 0.000001) {
+          if (processProjectileEntityCollision(p, e, pt, hitT, prevX, wx, prevY, wy, prevSpriteZ, nextSpriteZ, baseDmg)) {
+            break;
+          }
+        }
+      }
+    } else {
+      let nearestHit: Entity | undefined;
+      let nearestHitT = Infinity;
       for (const e of projectileHitQuery) {
         if (!e.alive) continue;
         if (e.type !== EntityType.MONSTER && e.type !== EntityType.NPC) continue;
@@ -3506,18 +3518,11 @@ function updateProjectiles(dt: number): void {
           nearestHitT = hitT;
         }
       }
-    }
-    for (const e of projectileHitQuery) {
-      if (!e.alive) continue;
-      if (e.type !== EntityType.MONSTER && e.type !== EntityType.NPC) continue;
-      if (pt !== ProjType.FLAME && e !== nearestHit) continue;
-      const hitT = pt === ProjType.FLAME ? projectilePathHitT({ x0: prevX, y0: prevY, x1: wx, y1: wy, e, radius: hitRadius }) : nearestHitT;
-      if (hitT <= blockingT + 0.000001) {
-        if (processProjectileEntityCollision(p, e, pt, hitT, prevX, wx, prevY, wy, prevSpriteZ, nextSpriteZ, baseDmg)) {
-          break;
-        }
+      if (nearestHit !== undefined && nearestHitT <= blockingT + 0.000001) {
+        processProjectileEntityCollision(p, nearestHit, pt, nearestHitT, prevX, wx, prevY, wy, prevSpriteZ, nextSpriteZ, baseDmg);
       }
     }
+
     if (!p.alive) continue;
 
     if (wallHit && wallHit.t <= floorHitT + 0.000001) {
