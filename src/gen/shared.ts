@@ -685,7 +685,7 @@ export function carveOrganicCorridor(world: World, ax: number, ay: number, bx: n
     if (!force && world.aptMask[i]) return;
     if (world.cells[i] === Cell.FLOOR || world.cells[i] === Cell.DOOR) return;
     
-    // If forcing through hermetic walls or apartments, we probably want doors
+    // When forcing through hermetic walls or apartments, we probably want doors
     if (force && (world.hermoWall[i] || world.aptMask[i])) {
       world.aptMask[i] = 0;
       world.cells[i] = Cell.DOOR;
@@ -1618,7 +1618,7 @@ export function repairRoomWalls(world: World): void {
         const wx = world.wrap(room.x + dx);
         const wy = world.wrap(room.y + dy);
         const ci = world.idx(wx, wy);
-        // If a perimeter cell became FLOOR, restore it to WALL
+        // When a perimeter cell became FLOOR, restore it to WALL
         // Skip cells intentionally assigned to a room (hand-crafted passages)
         if (world.cells[ci] === Cell.FLOOR && world.roomMap[ci] < 0) {
           world.cells[ci] = Cell.WALL;
