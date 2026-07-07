@@ -40,6 +40,7 @@ import {
   pushNpcLogMessage,
 } from './barks';
 import { selectMeleeTarget } from '../melee_targeting';
+import { publishEvent } from '../events';
 
 /* ── Module-level bark refs (set each frame) ─────────────────── */
 let _barkMsgs: Msg[] = [];
@@ -582,6 +583,17 @@ function npcCommitRangedShot(
   time: number,
   state?: GameState,
 ): boolean {
+  if (state) {
+    publishEvent(state, {
+      type: 'faction_event',
+      x: e.x, y: e.y,
+      severity: 3,
+      privacy: 'public',
+      tags: ['gunfire'],
+      data: { volume: 40 }
+    });
+  }
+
   if (ws.psiCost) {
     if (!e.rpg || e.rpg.psi < ws.psiCost) return false;
     e.rpg.psi -= ws.psiCost;

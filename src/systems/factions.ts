@@ -38,6 +38,7 @@ import {
 import { applyDemosRelationDelta } from './demos_social';
 import { addKarma } from './alife_rating';
 import { isPassiveDefensiveNeutralMonster } from './monster_traits';
+import { checkAssaultResolution } from './alife/squad_logic';
 
 /* ── Faction relation accessors (dynamic — reads live matrix) ─── */
 // Monsters use a fixed attitude, not tracked in the matrix
@@ -356,7 +357,7 @@ export function updateFactionActivity(
   const elapsed = activityAccum;
   activityAccum = 0;
   updateNoisePatrolResponse(world, entities, state);
-  evaluateMacroGoalsGC(state, elapsed, entities);
+  evaluateMacroGoalsGC(world, state, elapsed, entities);
   updateFactionEvents(state, world, player, entities, nextId, elapsed, allowSpawns);
   tickCaravans(state, elapsed, false, MAX_CARAVAN_LANES_PER_TICK, world, entities, player, nextId);
   factionUiSnapshotAccum += elapsed;
@@ -519,9 +520,15 @@ export function canCreateMacroGoal(state: GameState): boolean {
   return (state.factionGoals?.length ?? 0) < MAX_ACTIVE_MACRO_GOALS;
 }
 
-export function evaluateMacroGoalsGC(state: GameState, dt: number, entities: Entity[]): void {
+export function evaluateMacroGoalsGC(world: World, state: GameState, dt: number, entities: Entity[]): void {
+  // Check assault resolution periodically
   if (state.factionGoalsTimer === undefined) state.factionGoalsTimer = 0;
   state.factionGoalsTimer += dt;
+
+  if (state.factionGoalsTimer % 5 < dt) {
+    checkAssaultResolution(world, state, dt);
+  }
+
   if (state.factionGoalsTimer < 60) return;
   state.factionGoalsTimer = 0;
 
