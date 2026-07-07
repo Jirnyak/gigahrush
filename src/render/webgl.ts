@@ -33,6 +33,7 @@ import {
 } from './animations/textures';
 import { ENTITY_MASK_VISIBLE, getEntityIndex } from '../systems/entity_index';
 import type { CameraView } from '../systems/camera';
+import { uiElementEnabled } from '../systems/ui_orchestrator';
 import { isPlayerEntity } from '../systems/player_actor';
 import {
   EMPTY_RESOLVED_VISUAL_DETAIL_PROFILE,
@@ -1873,6 +1874,8 @@ uniform vec3 uSamosborTint;
 uniform float uScreenInterference;
 uniform sampler2D uBloomTex;   // blurred bright-pass glow (additive)
 uniform float uBloomStrength;  // 0 disables bloom entirely
+uniform float u_istotitLevel;
+uniform float u_veretarLevel;
 out vec4 fragColor;
 
 /* ── Noise helpers ────────────────────────────────────────────── */
@@ -1969,6 +1972,18 @@ void main() {
     float scanPulse = step(0.972, fract(gl_FragCoord.y * 0.067 + t * 1.6));
     float stylePulse = (uSamosborStyle == 2 || uSamosborStyle == 4 || uSamosborStyle == 6) ? 1.25 : 0.85;
     color += uSamosborTint * (gridNoise * 0.08 + scanPulse * 0.045 * stylePulse) * post;
+  }
+
+  if (u_istotitLevel > 0.0) {
+    float dist = distance(vUV, vec2(0.5));
+    vec3 istotitColor = vec3(0.8, 0.8, 0.4);
+    color.rgb = mix(color.rgb, istotitColor, dist * u_istotitLevel * 0.3);
+  }
+
+  if (u_veretarLevel > 0.0) {
+    float dist = distance(vUV, vec2(0.5));
+    vec3 veretarColor = vec3(0.4, 0.2, 0.6);
+    color.rgb = mix(color.rgb, veretarColor, dist * u_veretarLevel * 0.4);
   }
 
   color += texture(uBloomTex, vUV).rgb * uBloomStrength;
@@ -3047,7 +3062,7 @@ export function initWebGL(
   // ── Blit program ──
   const blitProgram = createProgram(gl, BLIT_VERT_SRC, BLIT_FRAG_SRC);
   const blitVAO = createQuadVAO(gl, blitProgram);
-  const blitUniforms = getUniforms(gl, blitProgram, ['uTex', 'uGlitch', 'uTime', 'uSamosborActive', 'uSamosborStyle', 'uSamosborPost', 'uSamosborTint', 'uScreenInterference', 'uBloomTex', 'uBloomStrength']);
+  const blitUniforms = getUniforms(gl, blitProgram, ['uTex', 'uGlitch', 'uTime', 'uSamosborActive', 'uSamosborStyle', 'uSamosborPost', 'uSamosborTint', 'uScreenInterference', 'uBloomTex', 'uBloomStrength', 'u_istotitLevel', 'u_veretarLevel']);
 
   // ── Bloom programs (bright-pass prefilter + separable blur) ──
   const bloomPrefilterProgram = createProgram(gl, BLIT_VERT_SRC, BLOOM_PREFILTER_FRAG_SRC);
@@ -3626,6 +3641,13 @@ export function renderSceneGL(
   gl.uniform1f(glState.blitUniforms['uSamosborPost']!, samosborPost);
   gl.uniform3f(glState.blitUniforms['uSamosborTint']!, fogRgb[0] / 255, fogRgb[1] / 255, fogRgb[2] / 255);
   gl.uniform1f(glState.blitUniforms['uScreenInterference']!, Math.max(0, Math.min(1, screenInterference)));
+
+  const thePlayer = entities.find(isPlayerEntity);
+  const showStatusFx = uiElementEnabled('status_fx');
+  const istotitLevel = showStatusFx ? Math.min((thePlayer?.statusEffects?.istotit || 0) / 100, 1.0) : 0.0;
+  const veretarLevel = showStatusFx ? Math.min((thePlayer?.statusEffects?.veretar || 0) / 100, 1.0) : 0.0;
+  gl.uniform1f(glState.blitUniforms['u_istotitLevel']!, istotitLevel);
+  gl.uniform1f(glState.blitUniforms['u_veretarLevel']!, veretarLevel);
 
   gl.bindVertexArray(glState.blitVAO);
   gl.drawArrays(gl.TRIANGLES, 0, 6);

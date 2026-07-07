@@ -670,6 +670,7 @@ export interface Entity extends InventoryHolder {
   burnTimer?: number;         // fire: remaining burn time on floor cell
   rpg?: RPGStats;             // RPG stats (level, XP, attributes)
   statuses?: PlayerStatus[];  // bounded timed player/NPC conditions
+  statusEffects?: { istotit?: number; veretar?: number }; // Specific plot-item/Samosbor states
   isFemale?: boolean;          // gender for kill message grammar
   isFogBoss?: boolean;         // fog boss — killing stops fog in zone
   fogBossZone?: number;        // zone id this boss guards
