@@ -75,7 +75,7 @@ export function getSamosborBeatDefs(): readonly SamosborBeatDef[] {
   return registry;
 }
 
-const BASELINE_BEATS: readonly SamosborBeatDef[] = [
+const WARNING_BEATS: readonly SamosborBeatDef[] = [
   {
     id: 'pre_airlock_warning',
     phase: 'warning',
@@ -244,6 +244,9 @@ const BASELINE_BEATS: readonly SamosborBeatDef[] = [
     color: '#d6a64b',
     severity: 4,
   },
+];
+
+const ACTIVE_BEATS: readonly SamosborBeatDef[] = [
   {
     id: 'active_floor_fog_residue',
     phase: 'active',
@@ -428,6 +431,9 @@ const BASELINE_BEATS: readonly SamosborBeatDef[] = [
     color: '#58c',
     severity: 3,
   },
+];
+
+const AFTERMATH_BEATS: readonly SamosborBeatDef[] = [
   {
     id: 'after_food_shortage',
     phase: 'aftermath',
@@ -541,6 +547,12 @@ const BASELINE_BEATS: readonly SamosborBeatDef[] = [
     color: '#f4f1df',
     severity: 3,
   },
+];
+
+const BASELINE_BEATS: readonly SamosborBeatDef[] = [
+  ...WARNING_BEATS,
+  ...ACTIVE_BEATS,
+  ...AFTERMATH_BEATS,
 ];
 
 for (const beat of BASELINE_BEATS) registerSamosborBeat(beat);
