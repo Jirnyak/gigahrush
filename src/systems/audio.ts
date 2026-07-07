@@ -26,7 +26,7 @@ export type AudioCueBudgetId =
   | 'break'
   | 'psi_cast'
   | 'flame'
-  | 'hud_bar_change';
+  | 'hud_bar_change' | 'roach_crunch';
 
 export type HudBarAudioId = 'hp' | 'psi' | 'food' | 'water' | 'sleep' | 'toilet' | 'xp';
 
@@ -60,7 +60,7 @@ const AUDIO_BUDGETS: Record<AudioCueBudgetId, AudioBudgetDef> = {
   hostile_ranged: { cooldownSec: 0.055, windowSec: 0.5, maxPerWindow: 8 },
   projectile_impact: { cooldownSec: 0.035, windowSec: 0.35, maxPerWindow: 9 },
   energy_impact: { cooldownSec: 0.045, windowSec: 0.45, maxPerWindow: 7 },
-  flesh_hit: { cooldownSec: 0.05, windowSec: 0.4, maxPerWindow: 6 },
+  flesh_hit: { cooldownSec: 0.05, windowSec: 0.4, maxPerWindow: 6 }, roach_crunch: { cooldownSec: 0.05, windowSec: 0.4, maxPerWindow: 6 },
   break: { cooldownSec: 0.16, windowSec: 1.0, maxPerWindow: 4 },
   psi_cast: { cooldownSec: 0.07, windowSec: 0.5, maxPerWindow: 6 },
   flame: { cooldownSec: 0.04, windowSec: 0.35, maxPerWindow: 8 },
@@ -836,6 +836,30 @@ export function playBreak(): void {
 }
 
 /* ── Fleshy damage hit: wet organic impact ───────────────────── */
+
+export function playRoachCrunch(): void {
+  const ac = beginCue('roach_crunch');
+  if (!ac) return;
+  const len = 0.2;
+  const buf = ac.createBuffer(1, ac.sampleRate * len, ac.sampleRate);
+  const d = buf.getChannelData(0);
+  for (let i = 0; i < d.length; i++) {
+    const t = i / d.length;
+    const env = Math.exp(-t * 15);
+    // high-pitched crackle
+    d[i] = (Math.random() * 2 - 1) * env;
+  }
+  const src = ac.createBufferSource();
+  src.buffer = buf;
+  const g = ac.createGain();
+  g.gain.value = 0.5;
+  const lp = ac.createBiquadFilter();
+  lp.type = 'highpass';
+  lp.frequency.value = 2500;
+  src.connect(lp).connect(g).connect(gain());
+  src.start();
+}
+
 export function playFleshHit(): void {
   const ac = beginCue('flesh_hit');
   if (!ac) return;
