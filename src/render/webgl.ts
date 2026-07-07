@@ -1494,41 +1494,16 @@ void main() {
             pixelDepth = min(1.0, currentDist / MAX_DIST);
           } else {
             uint feat = texelFetch(uFeatures, cCell, 0).r;
-            if (feat == ${Feature.LAMP}u) {
-              vec3 cc;
-              if (organicLightCell(cCell)) {
-                cc = sampleAtlas(${Tex.CEIL}u, ftx, fty).rgb * (0.25 + cLit * 0.35);
-                cc = applyHellLamp(cc, ftx, fty, cCell.x, cCell.y, currentDist);
-                cc = applyToolBeamTint(cc, toolBeam);
-              } else {
-                if (uUseDynamicSky == 1) {
-                  vec2 skyUv = wrapF(vec2(floorX, floorY)) / float(W_SIZE);
-                  cc = texture(uDynamicSky, skyUv).rgb * uDynamicSkyTint;
-                  cc *= 0.45 + cLit * 0.55;
-                } else {
-                  cc = sampleAtlas(${Tex.CEIL}u, ftx, fty).rgb;
-                  cc = shadePlane(${Tex.CEIL}u, cc, cCell, ftx, fty, currentDist, cLit, toolBeam, true, false);
-                  vec3 cPos = vec3(floorX, floorY, uCamHeight + slope * currentDist);
-                  vec3 dynCeil = calculateDynamicLighting(cPos, vec3(0.0, 0.0, -1.0));
-                  cc = min(vec3(1.0), cc + cc * dynCeil);
-                }
-                vec2 lampUv = (vec2(float(ftx), float(fty)) + 0.5) / TEX_F - vec2(0.5);
-                float lampR = length(lampUv);
-                float spot = 1.0 - smoothstep(0.045, 0.16, lampR);
-                float halo = 1.0 - smoothstep(0.10, 0.34, lampR);
-                float distGlow = max(0.0, 1.0 - currentDist * 0.16);
-                vec3 lampTint = uSamosborAlert == 1 ? vec3(1.0, 0.1, 0.1) : vec3(1.0, 190.0/255.0, 74.0/255.0);
-                cc = min(cc + lampTint * distGlow * (spot * 0.34 + halo * 0.075), vec3(1.0));
-                if (uUseDynamicSky == 1) cc = applyToolBeamTint(cc, toolBeam);
-              }
-              pixel = applyLocalFog(cc, cCell, ff);
-              pixelDepth = min(1.0, currentDist / MAX_DIST);
-            } else if (feat == ${Feature.CANDLE}u) {
+            vec3 cc;
+            bool organicLamp = (feat == ${Feature.LAMP}u) && organicLightCell(cCell);
+
+            if (feat == ${Feature.CANDLE}u) {
               float glow = max(0.0, 1.0 - currentDist * 0.18);
-              pixel = applyLocalFog(vec3(240.0/255.0 * glow, 180.0/255.0 * glow, 50.0/255.0 * glow), cCell, ff);
-              pixelDepth = min(1.0, currentDist / MAX_DIST);
+              cc = vec3(240.0/255.0 * glow, 180.0/255.0 * glow, 50.0/255.0 * glow);
+            } else if (organicLamp) {
+              cc = sampleAtlas(${Tex.CEIL}u, ftx, fty).rgb * (0.25 + cLit * 0.35);
+              cc = applyHellLamp(cc, ftx, fty, cCell.x, cCell.y, currentDist);
             } else {
-              vec3 cc;
               if (uUseDynamicSky == 1) {
                 vec2 skyUv = wrapF(vec2(floorX, floorY)) / float(W_SIZE);
                 cc = texture(uDynamicSky, skyUv).rgb * uDynamicSkyTint;
@@ -1540,10 +1515,22 @@ void main() {
                 vec3 dynCeil = calculateDynamicLighting(cPos, vec3(0.0, 0.0, -1.0));
                 cc = min(vec3(1.0), cc + cc * dynCeil);
               }
-              if (uUseDynamicSky == 1) cc = applyToolBeamTint(cc, toolBeam);
-              pixel = applyLocalFog(cc, cCell, ff);
-              pixelDepth = min(1.0, currentDist / MAX_DIST);
+
+              if (feat == ${Feature.LAMP}u) {
+                vec2 lampUv = (vec2(float(ftx), float(fty)) + 0.5) / TEX_F - vec2(0.5);
+                float lampR = length(lampUv);
+                float spot = 1.0 - smoothstep(0.045, 0.16, lampR);
+                float halo = 1.0 - smoothstep(0.10, 0.34, lampR);
+                float distGlow = max(0.0, 1.0 - currentDist * 0.16);
+                vec3 lampTint = uSamosborAlert == 1 ? vec3(1.0, 0.1, 0.1) : vec3(1.0, 190.0/255.0, 74.0/255.0);
+                cc = min(cc + lampTint * distGlow * (spot * 0.34 + halo * 0.075), vec3(1.0));
+              }
             }
+
+            if (uUseDynamicSky == 1 || organicLamp) cc = applyToolBeamTint(cc, toolBeam);
+
+            pixel = applyLocalFog(cc, cCell, ff);
+            pixelDepth = min(1.0, currentDist / MAX_DIST);
           }
           }
         }
