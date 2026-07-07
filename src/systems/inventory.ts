@@ -292,6 +292,19 @@ function getInventoryUseHandlers(): InventoryUseHandler[] {
   return inventoryUseHandlers;
 }
 
+
+export function transferMoney(from: import('../core/types').Entity | null, to: import('../core/types').Entity | null, amount: number): boolean {
+  if (amount <= 0) return false;
+  if (from) {
+    if ((from.money ?? 0) < amount) return false;
+    from.money = (from.money ?? 0) - amount;
+  }
+  if (to) {
+    to.money = (to.money ?? 0) + amount;
+  }
+  return true;
+}
+
 export function registerInventoryUseHandler(handler: InventoryUseHandler): void {
   const handlers = getInventoryUseHandlers();
   if (!handlers.includes(handler)) handlers.push(handler);
