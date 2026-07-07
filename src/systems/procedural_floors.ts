@@ -735,7 +735,11 @@ export function summarizeFloorRun(state: GameState): string[] {
     if (spec.anomalyId === 'none') continue;
     anomalyCounts[spec.anomalyId] = (anomalyCounts[spec.anomalyId] ?? 0) + 1;
   }
-  const anomalyLine = Object.entries(anomalyCounts).map(([id, count]) => `${id}=${count}`).join(' ');
+  let anomalyLine = '';
+  for (const id of Object.keys(anomalyCounts)) {
+    if (anomalyLine) anomalyLine += ' ';
+    anomalyLine += `${id}=${anomalyCounts[id]}`;
+  }
   if (anomalyLine) out.push(`anomalies ${anomalyLine}`);
   if (entry.designFloorId) out.push(`route=${entry.designFloorId} base=${FloorLevel[entry.baseFloor]}`);
   return out;
