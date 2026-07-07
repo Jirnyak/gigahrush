@@ -11,6 +11,11 @@ import {
   classifyReachabilityCell,
   describeReachability,
   hasReachableAdjacentCell,
+  setVisualSlot,
+  getVisualSlot,
+  clearVisualSlots,
+  VISUAL_SLOTS_PER_CELL,
+  EMPTY_VISUAL_CELL_CODE,
 } from '../src/core/world';
 
 test('World wraps coordinates and measures toroidal distance', () => {
@@ -215,4 +220,64 @@ test('World bakeLights makes candles smaller and weaker than lamps', () => {
   assert.ok(candleWorld.light[candleWorld.idx(cx, cy)] < lampWorld.light[lampWorld.idx(cx, cy)]);
   assert.ok(candleWorld.light[candleWorld.idx(cx + 4, cy)] > 0);
   assert.equal(candleWorld.light[candleWorld.idx(cx + 6, cy)], 0);
+});
+test('clearVisualSlots resets slots for a given cell, marks dirty, and returns true', () => {
+  const world = new World();
+  const cellIdx = world.idx(10, 10);
+
+  setVisualSlot(world, cellIdx, 0, 1);
+  setVisualSlot(world, cellIdx, 1, 2);
+  setVisualSlot(world, cellIdx, VISUAL_SLOTS_PER_CELL - 1, 3);
+
+  const versionBefore = world.visualSlotVersion;
+
+  const changed = clearVisualSlots(world, cellIdx);
+
+  assert.equal(changed, true);
+  assert.ok(world.visualSlotVersion > versionBefore);
+  assert.equal(world.visualSlotVersion, world.visualSlotDirtyVersion);
+
+  for (let i = 0; i < VISUAL_SLOTS_PER_CELL; i++) {
+    assert.equal(getVisualSlot(world, cellIdx, i), EMPTY_VISUAL_CELL_CODE);
+  }
+});
+
+test('clearVisualSlots returns false and does not mark dirty if slots are already empty', () => {
+  const world = new World();
+  const cellIdx = world.idx(10, 10);
+
+  const versionBefore = world.visualSlotVersion;
+
+  const changed = clearVisualSlots(world, cellIdx);
+
+  assert.equal(changed, false);
+  assert.equal(world.visualSlotVersion, versionBefore);
+
+  for (let i = 0; i < VISUAL_SLOTS_PER_CELL; i++) {
+    assert.equal(getVisualSlot(world, cellIdx, i), EMPTY_VISUAL_CELL_CODE);
+  }
+});
+
+test('clearVisualSlots only clears the targeted cell and leaves adjacent cells untouched', () => {
+  const world = new World();
+  const cellIdx = world.idx(10, 10);
+  const adjacentCellIdx1 = world.idx(10, 11);
+  const adjacentCellIdx2 = world.idx(11, 10);
+
+  setVisualSlot(world, cellIdx, 0, 1);
+  setVisualSlot(world, adjacentCellIdx1, 0, 2);
+  setVisualSlot(world, adjacentCellIdx2, 0, 3);
+
+  const changed = clearVisualSlots(world, cellIdx);
+
+  assert.equal(changed, true);
+
+  // Target cell is empty
+  for (let i = 0; i < VISUAL_SLOTS_PER_CELL; i++) {
+    assert.equal(getVisualSlot(world, cellIdx, i), EMPTY_VISUAL_CELL_CODE);
+  }
+
+  // Adjacent cells remain untouched
+  assert.equal(getVisualSlot(world, adjacentCellIdx1, 0), 2);
+  assert.equal(getVisualSlot(world, adjacentCellIdx2, 0), 3);
 });
