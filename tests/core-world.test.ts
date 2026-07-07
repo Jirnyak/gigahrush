@@ -54,6 +54,60 @@ test('World get() and set() correctly handle out-of-bounds coordinates via toroi
   assert.equal(world.get(5, 5), Cell.LIFT);
 });
 
+test('classifyReachabilityCell correctly classifies all cell types and door states', () => {
+  const world = new World();
+  const floorIdx = world.idx(1, 1);
+  const waterIdx = world.idx(1, 2);
+  const liftIdx = world.idx(1, 3);
+  const wallIdx = world.idx(1, 4);
+  const abyssIdx = world.idx(1, 5);
+  const blockedIdx = world.idx(1, 6);
+  const doorMissingIdx = world.idx(2, 1);
+  const doorOpenIdx = world.idx(2, 2);
+  const doorClosedIdx = world.idx(2, 3);
+  const doorLockedIdx = world.idx(2, 4);
+  const doorHermeticOpenIdx = world.idx(2, 5);
+  const doorHermeticClosedIdx = world.idx(2, 6);
+
+  world.cells[floorIdx] = Cell.FLOOR;
+  world.cells[waterIdx] = Cell.WATER;
+  world.cells[liftIdx] = Cell.LIFT;
+  world.cells[wallIdx] = Cell.WALL;
+  world.cells[abyssIdx] = Cell.ABYSS;
+  world.cells[blockedIdx] = 99 as Cell;
+
+  world.cells[doorMissingIdx] = Cell.DOOR;
+
+  world.cells[doorOpenIdx] = Cell.DOOR;
+  world.doors.set(doorOpenIdx, { idx: doorOpenIdx, state: DoorState.OPEN, roomA: -1, roomB: -1, keyId: '', timer: 0 });
+
+  world.cells[doorClosedIdx] = Cell.DOOR;
+  world.doors.set(doorClosedIdx, { idx: doorClosedIdx, state: DoorState.CLOSED, roomA: -1, roomB: -1, keyId: '', timer: 0 });
+
+  world.cells[doorLockedIdx] = Cell.DOOR;
+  world.doors.set(doorLockedIdx, { idx: doorLockedIdx, state: DoorState.LOCKED, roomA: -1, roomB: -1, keyId: '', timer: 0 });
+
+  world.cells[doorHermeticOpenIdx] = Cell.DOOR;
+  world.doors.set(doorHermeticOpenIdx, { idx: doorHermeticOpenIdx, state: DoorState.HERMETIC_OPEN, roomA: -1, roomB: -1, keyId: '', timer: 0 });
+
+  world.cells[doorHermeticClosedIdx] = Cell.DOOR;
+  world.doors.set(doorHermeticClosedIdx, { idx: doorHermeticClosedIdx, state: DoorState.HERMETIC_CLOSED, roomA: -1, roomB: -1, keyId: '', timer: 0 });
+
+  assert.deepEqual(classifyReachabilityCell(world, floorIdx), { passable: true, reason: 'open', gateMask: REACH_GATE_NONE });
+  assert.deepEqual(classifyReachabilityCell(world, waterIdx), { passable: true, reason: 'water', gateMask: REACH_GATE_NONE });
+  assert.deepEqual(classifyReachabilityCell(world, liftIdx), { passable: false, reason: 'lift', gateMask: REACH_GATE_NONE });
+  assert.deepEqual(classifyReachabilityCell(world, wallIdx), { passable: false, reason: 'wall', gateMask: REACH_GATE_NONE });
+  assert.deepEqual(classifyReachabilityCell(world, abyssIdx), { passable: false, reason: 'abyss', gateMask: REACH_GATE_NONE });
+  assert.deepEqual(classifyReachabilityCell(world, blockedIdx), { passable: false, reason: 'blocked', gateMask: REACH_GATE_NONE });
+
+  assert.deepEqual(classifyReachabilityCell(world, doorMissingIdx), { passable: false, reason: 'door_missing', gateMask: REACH_GATE_NONE });
+  assert.deepEqual(classifyReachabilityCell(world, doorOpenIdx), { passable: true, reason: 'door_open', gateMask: REACH_GATE_NONE });
+  assert.deepEqual(classifyReachabilityCell(world, doorClosedIdx), { passable: true, reason: 'door_closed', gateMask: REACH_GATE_NONE });
+  assert.deepEqual(classifyReachabilityCell(world, doorLockedIdx), { passable: true, reason: 'door_locked', gateMask: REACH_GATE_KEY });
+  assert.deepEqual(classifyReachabilityCell(world, doorHermeticOpenIdx), { passable: true, reason: 'door_hermetic_open', gateMask: REACH_GATE_NONE });
+  assert.deepEqual(classifyReachabilityCell(world, doorHermeticClosedIdx), { passable: true, reason: 'door_hermetic_closed', gateMask: REACH_GATE_HERMETIC });
+});
+
 test('World solid() respects door states and passable cells', () => {
   const world = new World();
   const i = world.idx(10, 10);
