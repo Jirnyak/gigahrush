@@ -2,6 +2,13 @@
 
 import { FloorLevel, MonsterKind, RoomType } from '../core/types';
 
+export interface MonsterLootEntry {
+  itemDefId: string;
+  chance: number;
+  minCount?: number;
+  maxCount?: number;
+}
+
 export interface MonsterRareDrop {
   itemId: string;
   chance: number;
@@ -24,6 +31,7 @@ export interface MonsterEcologyDef {
   deathLogHint?: string;
   rumorIds: readonly string[];
   rareDrops: readonly MonsterRareDrop[];
+  lootTable?: readonly MonsterLootEntry[];
 }
 
 export type MonsterCueTaskChannel = 'data' | 'text' | 'sprite' | 'audio';
@@ -425,6 +433,10 @@ export const MONSTER_ECOLOGY: readonly MonsterEcologyDef[] = [
     deathLogHint: 'Смерть от бетоноеда должна читать нерешенную слабую стену, жадный короткий путь или поздний огонь.',
     rumorIds: ['monster_betonoed_weak_wall', 'ecology_betonoed_shortcut'],
     rareDrops: [{ itemId: 'rebar', chance: 0.05 }, { itemId: 'psi_concrete_splinter', chance: 0.025 }],
+    lootTable: [
+      { itemDefId: 'rawmeat', chance: 0.25, minCount: 1, maxCount: 2 },
+      { itemDefId: 'metal_sheet', chance: 0.1, minCount: 1, maxCount: 1 }
+    ],
   },
   {
     kind: MonsterKind.GNOME,
@@ -442,6 +454,10 @@ export const MONSTER_ECOLOGY: readonly MonsterEcologyDef[] = [
     deathLogHint: 'Смерть от гнома должна указывать на зажатость в узком туннеле или промах по мелкой цели.',
     rumorIds: ['ecology_gnome_tunnels'],
     rareDrops: [{ itemId: 'rebar', chance: 0.08 }, { itemId: 'wire_coil', chance: 0.05 }],
+    lootTable: [
+      { itemDefId: 'wire_coil', chance: 0.35, minCount: 1, maxCount: 2 },
+      { itemDefId: 'metal_sheet', chance: 0.15, minCount: 1, maxCount: 1 }
+    ],
   },
   {
     kind: MonsterKind.ZOMBIE,
@@ -459,6 +475,10 @@ export const MONSTER_ECOLOGY: readonly MonsterEcologyDef[] = [
     deathLogHint: 'Смерть от мертвяка должна показывать, что игрок пустил его в толпу, кухню или дверной хват.',
     rumorIds: ['monster_zombie_human', 'ecology_zombie_neighbor'],
     rareDrops: [{ itemId: 'note', chance: 0.05 }, { itemId: 'cigs', chance: 0.03 }],
+    lootTable: [
+      { itemDefId: 'wet_rag_bundle', chance: 0.35, minCount: 1, maxCount: 1 },
+      { itemDefId: 'rawmeat', chance: 0.15, minCount: 1, maxCount: 2 }
+    ],
   },
   {
     kind: MonsterKind.DIKIY_MERTVYAK,

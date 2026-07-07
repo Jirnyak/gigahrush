@@ -13,7 +13,7 @@ import {
 } from './core/types';
 import { World, replaceWorldFromGeneration } from './core/world';
 import { safeParseJson } from './core/json';
-import { hashSeed, randSeed } from './core/rand';
+import { hashSeed, randSeed , xorshift32 } from './core/rand';
 import { canActorOccupy, unstuckActorFromBlockers } from './systems/movement_collision';
 import { selectMeleeTarget } from './systems/melee_targeting';
 import { updateProceduralScreens } from './gen/procedural_screens';
@@ -58,7 +58,7 @@ import { updateNeeds } from './systems/needs';
 import { startTutorial } from './systems/tutorial';
 import { updateAI, tryMonsterProjectileStagger, getAiStats, type AiStats } from './systems/ai';
 import { resolveBreachChargeExplosion } from './systems/breach_charge';
-import { dropMonsterRareLoot } from './systems/monster_drops';
+import { dropMonsterRareLoot, dropMonsterLoot } from './systems/monster_drops';
 import { generateNpcTradeItems } from './data/occupation_profiles';
 import { generateTalkText } from './systems/dialogue';
 import { updateSamosbor, rebuildWorld, clearFogInZone, updateIstotitBellCompulsion, getSamosborWarningSnapshot } from './systems/samosbor';
@@ -3257,7 +3257,15 @@ function handleKill(e: Entity, killerIsPlayer: boolean, pvx = 0, pvy = 0, goreLe
   }
   if (e.monsterKind !== undefined) {
     if (killerIsPlayer) notifyKill(e.monsterKind, state);
-    const rareLoot = killerIsPlayer ? dropMonsterRareLoot(e, entities, nextEntityId) : undefined;
+    const dropRng = xorshift32(((state.time * 1000) + e.id) >>> 0);
+    const regularLoot = dropMonsterLoot(e, entities, nextEntityId, dropRng);
+    if (regularLoot.length > 0) {
+      for (const loot of regularLoot) {
+        const def = ITEMS[loot.itemDefId];
+        state.msgs.push(msg(`С монстра упало: ${def?.name ?? loot.itemDefId}${loot.amount > 1 ? ' ×' + loot.amount : ''}.`, state.time, '#9cf'));
+      }
+    }
+    const rareLoot = killerIsPlayer ? dropMonsterRareLoot(e, entities, nextEntityId, dropRng) : undefined;
     if (rareLoot) {
       const def = ITEMS[rareLoot.itemId];
       state.msgs.push(msg(`На месте боя осталось: ${def?.name ?? rareLoot.itemId}${rareLoot.count > 1 ? ' ×' + rareLoot.count : ''}.`, state.time, '#9cf'));

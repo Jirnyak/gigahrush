@@ -1,4 +1,5 @@
-import { Faction, type ItemDef, ItemType, type Item } from '../core/types';
+import { Faction, type ItemDef, ItemType, type Item, MonsterKind } from '../core/types';
+import { getMonsterEcology } from '../data/monster_ecology';
 import { ITEMS, itemEquipSlot, itemDefHasTag } from '../data/items';
 import { WEAPON_STATS } from '../data/catalog';
 
@@ -185,4 +186,30 @@ export function generateMerchantStock(faction: Faction | undefined, level: numbe
     }
   }
   return inventory;
+}
+
+
+export interface GeneratedLoot {
+    itemDefId: string;
+    amount: number;
+}
+
+export function generateMonsterLoot(kind: MonsterKind, rand: () => number): GeneratedLoot[] {
+    const ecology = getMonsterEcology(kind);
+    if (!ecology || !ecology.lootTable) return [];
+
+    const results = [];
+    for (const entry of ecology.lootTable) {
+        if (rand() <= entry.chance) {
+            const min = entry.minCount ?? 1;
+            const max = entry.maxCount ?? 1;
+            const amount = Math.floor(rand() * (max - min + 1)) + min;
+            if (amount > 0) {
+                results.push({ itemDefId: entry.itemDefId, amount });
+            }
+        }
+    }
+
+    // Hard cap at 3 items to avoid clutter
+    return results.slice(0, 3);
 }
