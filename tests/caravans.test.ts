@@ -54,6 +54,12 @@ function caravanNpc(overrides: Partial<Entity> = {}): Entity {
   });
 }
 
+test('does not tick caravans during tutorial', () => {
+  const state = makeGameState({ tutorialMode: true });
+  const processed = tickCaravans(state, 1);
+  assert.equal(processed, 0);
+});
+
 test('caravan lane definitions validate and cover required supply lanes', () => {
   assert.equal(CARAVAN_LANES.length >= 6, true);
   assert.equal(SMALL_CARAVAN_TEMPLATES.length >= 5, true);

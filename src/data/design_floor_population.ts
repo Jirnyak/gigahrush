@@ -349,7 +349,12 @@ const COMMUNAL_MONSTER_ANCHORS: readonly DesignPlacementFieldAnchor[] = [
   { x: 372, y: 496, radius: 74, weight: 1.25 },
 ];
 
-const DESIGN_FLOOR_POPULATION_OVERRIDES: Readonly<Record<DesignFloorId, DesignFloorPopulationOverride>> = {
+const DESIGN_FLOOR_POPULATION_OVERRIDES: Readonly<Record<string, DesignFloorPopulationOverride>> = {
+  tutorial: {
+    npcTarget: 3,
+    monsterTarget: 0,
+    npcPlacementKind: 'social',
+  },
   roof: {
     npcTarget: 0,
     monsterTarget: 'active_actor_cap',

@@ -2864,6 +2864,30 @@ function applyPendingSamosborAftermath(
 
   const state = pending.state;
 
+  if (state.tutorialMode) {
+    const rng = new SeedRng(state.time + pending.samosborCount * 1337);
+    const count = 2 + Math.floor(rng.nextU32() / 4294967296 * 3); // 2 to 4
+    const slots = entitySpawnSlots(entities, EntityType.MONSTER, count);
+
+    const corridorCells: number[] = [];
+    for (let ci = 0; ci < world.cells.length; ci++) {
+      if (world.cells[ci] === Cell.FLOOR && !world.aptMask[ci]) {
+        corridorCells.push(ci);
+      }
+    }
+
+    for (let i = 0; i < slots && corridorCells.length > 0; i++) {
+      const idx = Math.floor(rng.nextU32() / 4294967296 * corridorCells.length);
+      const ci = corridorCells[idx];
+      corridorCells[idx] = corridorCells[corridorCells.length - 1];
+      corridorCells.pop();
+
+      const x = (ci % W) + 0.5;
+      const y = ((ci / W) | 0) + 0.5;
+      entities.push(createMonster(world, nextId, MonsterKind.SBORKA, x, y, floor));
+    }
+  }
+
   if (pending.variant.def.id === 'meat') {
     const rng = new SeedRng(state.time + pending.samosborCount * 1337);
     const count = 3 + Math.floor(rng.nextU32() / 4294967296 * 3); // 3 to 5
