@@ -150,8 +150,28 @@ export function removeVisualSlotCode(world: World, cellIdx: number, code: number
   return removed;
 }
 
+function hasConflictingMount(world: World, cellIdx: number, mount: string): boolean {
+  const isCenter = mount === 'volume' || mount === 'cellCenter';
+  if (!isCenter) return false;
+  const offset = visualSlotOffset(cellIdx, 0);
+  for (let slot = 0; slot < VISUAL_SLOTS_PER_CELL; slot++) {
+    const existingCode = world.visualSlots[offset + slot];
+    if (existingCode === EMPTY_VISUAL_CELL_CODE) continue;
+    const def = visualCellDefByCode(existingCode);
+    if (!def) continue;
+    const existingIsCenter = def.mount === 'volume' || def.mount === 'cellCenter';
+    if (isCenter && existingIsCenter) {
+      return true;
+    }
+  }
+  return false;
+}
+
 export function addVisualSlotFirstFree(world: World, cellIdx: number, code: number): number {
-  visualDefOrThrow(code);
+  const def = visualDefOrThrow(code);
+  if (hasConflictingMount(world, cellIdx, def.mount)) {
+    return -1;
+  }
   const offset = visualSlotOffset(cellIdx, 0);
   for (let slot = 0; slot < VISUAL_SLOTS_PER_CELL; slot++) {
     if (world.visualSlots[offset + slot] !== EMPTY_VISUAL_CELL_CODE) continue;
@@ -199,11 +219,23 @@ export function addVisualSlotByPriority(world: World, cellIdx: number, code: num
   const free = addVisualSlotFirstFree(world, cellIdx, code);
   if (free >= 0) return free;
 
+  // If free placement failed due to conflict but no slots are actually
+  // full, it means there's a mount conflict (e.g. two 'volume' items).
+  // We should evaluate if the new item can replace the conflicting item.
+  const isIncomingCenter = (incoming.mount === 'volume' || incoming.mount === 'cellCenter');
+  const hasCenterConflict = isIncomingCenter && hasConflictingMount(world, cellIdx, incoming.mount);
+
   let replaceSlot = -1;
   let replaceScore = Number.POSITIVE_INFINITY;
   for (let slot = 0; slot < VISUAL_SLOTS_PER_CELL; slot++) {
     const existingCode = getVisualSlot(world, cellIdx, slot);
     const existing = visualCellDefByCode(existingCode);
+
+    // If there's a center conflict, the ONLY valid replacement is the existing center object
+    if (hasCenterConflict && existing && existing.mount !== 'volume' && existing.mount !== 'cellCenter') {
+      continue;
+    }
+
     const score = existing
       ? visualPriorityScore(existing, seed, cellIdx, slot)
       : Number.NEGATIVE_INFINITY;
