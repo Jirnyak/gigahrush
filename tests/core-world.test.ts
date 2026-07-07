@@ -127,6 +127,78 @@ test('reachability audit classifies door gates, water, and lift adjacency', () =
   assert.equal(hasReachableAdjacentCell(world, audit, lift), true);
 });
 
+test('reachability audit returns empty early if start cell is impassable', () => {
+  const world = new World();
+  const start = world.idx(5, 5);
+  world.cells[start] = Cell.WALL;
+
+  const audit = auditReachability(world, start);
+  assert.equal(audit.reachable[start], 0);
+  assert.equal(describeReachability(audit, world, start), 'unreachable (wall)');
+});
+
+test('reachability audit upgrades queue rank when finding better paths', () => {
+  const world = new World();
+  world.cells.fill(Cell.WALL);
+
+  const start = world.idx(10, 10);
+  world.cells[start] = Cell.FLOOR;
+
+  world.cells[world.idx(11, 10)] = Cell.DOOR;
+  world.doors.set(world.idx(11, 10), { idx: world.idx(11, 10), state: DoorState.LOCKED, roomA: -1, roomB: -1, keyId: 'key', timer: 0 });
+
+  world.cells[world.idx(12, 10)] = Cell.FLOOR;
+
+  const target = world.idx(13, 10);
+  world.cells[target] = Cell.DOOR;
+  world.doors.set(target, { idx: target, state: DoorState.HERMETIC_CLOSED, roomA: -1, roomB: -1, keyId: '', timer: 0 });
+
+  world.cells[world.idx(10, 11)] = Cell.DOOR;
+  world.doors.set(world.idx(10, 11), { idx: world.idx(10, 11), state: DoorState.HERMETIC_CLOSED, roomA: -1, roomB: -1, keyId: '', timer: 0 });
+
+  world.cells[world.idx(10, 12)] = Cell.FLOOR;
+  world.cells[world.idx(11, 12)] = Cell.FLOOR;
+  world.cells[world.idx(12, 12)] = Cell.FLOOR;
+  world.cells[world.idx(13, 12)] = Cell.FLOOR;
+  world.cells[world.idx(13, 11)] = Cell.FLOOR;
+
+  const audit = auditReachability(world, start);
+
+  assert.equal(describeReachability(audit, world, target), 'gated by hermetic door');
+});
+
+test('hasReachableAdjacentCell short-circuits on different sides', () => {
+  const world = new World();
+  world.cells.fill(Cell.WALL);
+
+  let start = world.idx(11, 10);
+  world.cells[start] = Cell.FLOOR;
+  let audit = auditReachability(world, start);
+  assert.equal(hasReachableAdjacentCell(world, audit, world.idx(10, 10)), true);
+
+  world.cells.fill(Cell.WALL);
+  start = world.idx(9, 10);
+  world.cells[start] = Cell.FLOOR;
+  audit = auditReachability(world, start);
+  assert.equal(hasReachableAdjacentCell(world, audit, world.idx(10, 10)), true);
+
+  world.cells.fill(Cell.WALL);
+  start = world.idx(10, 11);
+  world.cells[start] = Cell.FLOOR;
+  audit = auditReachability(world, start);
+  assert.equal(hasReachableAdjacentCell(world, audit, world.idx(10, 10)), true);
+
+  world.cells.fill(Cell.WALL);
+  start = world.idx(10, 9);
+  world.cells[start] = Cell.FLOOR;
+  audit = auditReachability(world, start);
+  assert.equal(hasReachableAdjacentCell(world, audit, world.idx(10, 10)), true);
+
+  world.cells.fill(Cell.WALL);
+  audit = auditReachability(world, world.idx(0, 0));
+  assert.equal(hasReachableAdjacentCell(world, audit, world.idx(10, 10)), false);
+});
+
 test('World dirty markers are monotonic signed counters', () => {
   const world = new World();
   const wallVersion = world.wallTexVersion;
