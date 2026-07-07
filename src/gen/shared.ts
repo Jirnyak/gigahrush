@@ -91,9 +91,6 @@ export function oppositeLiftDirection(direction: LiftDirection): LiftDirection {
   return direction === LiftDirection.DOWN ? LiftDirection.UP : LiftDirection.DOWN;
 }
 
-export function routeArrivalLiftDirection(travelDirection: LiftDirection, canContinueRoute: boolean): LiftDirection {
-  return canContinueRoute ? travelDirection : oppositeLiftDirection(travelDirection);
-}
 
 function liftDirectionName(direction: LiftDirection | undefined): string {
   if (direction === LiftDirection.UP) return 'up';
