@@ -562,15 +562,31 @@ function buildCampFactionHqs(world: World, mask: Uint8Array): void {
 }
 
 function ensureCampHqHermeticDoors(world: World): void {
-  for (const site of CAMP_HQ_SITES) {
-    const room = world.rooms.find(candidate => candidate.name === site.name);
-    if (!room) continue;
-    const hasHermeticDoor = room.doors.some(doorIdx => {
-      const door = world.doors.get(doorIdx);
-      return door?.state === DoorState.HERMETIC_OPEN || door?.state === DoorState.HERMETIC_CLOSED;
-    });
-    if (hasHermeticDoor) continue;
-    connectCampRoomToHub(world, room, site.linkX, site.linkY, DoorState.HERMETIC_OPEN, site.floorTex);
+  const hqSitesMap = new Map(CAMP_HQ_SITES.map(site => [site.name, site]));
+  let remainingHqSites = hqSitesMap.size;
+
+  for (let i = 0; i < world.rooms.length; i++) {
+    const room = world.rooms[i];
+    const site = hqSitesMap.get(room.name);
+    if (!site) continue;
+
+    hqSitesMap.delete(room.name);
+    remainingHqSites--;
+
+    let hasHermeticDoor = false;
+    for (let j = 0; j < room.doors.length; j++) {
+      const door = world.doors.get(room.doors[j]);
+      if (door && (door.state === DoorState.HERMETIC_OPEN || door.state === DoorState.HERMETIC_CLOSED)) {
+        hasHermeticDoor = true;
+        break;
+      }
+    }
+
+    if (!hasHermeticDoor) {
+      connectCampRoomToHub(world, room, site.linkX, site.linkY, DoorState.HERMETIC_OPEN, site.floorTex);
+    }
+
+    if (remainingHqSites === 0) break;
   }
 }
 
