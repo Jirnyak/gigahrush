@@ -175,8 +175,14 @@ test('platform cloud save keeps the raw payload under the strictest portal limit
   assert.equal(isPortalCloudSaveSizeAllowed(PORTAL_RAW_SAVE_LIMIT_BYTES), true);
   assert.equal(isPortalCloudSaveSizeAllowed(PORTAL_RAW_SAVE_LIMIT_BYTES + 1), false);
   assert.equal(isPortalCloudSaveSizeAllowed(-1), false);
+  assert.equal(isPortalCloudSaveSizeAllowed(NaN), false);
+  assert.equal(isPortalCloudSaveSizeAllowed(Infinity), false);
+
   assert.equal(isGamePushCloudSaveSizeAllowed(GAMEPUSH_RAW_SAVE_LIMIT_BYTES), true);
   assert.equal(isGamePushCloudSaveSizeAllowed(GAMEPUSH_RAW_SAVE_LIMIT_BYTES + 1), false);
+  assert.equal(isGamePushCloudSaveSizeAllowed(-1), false);
+  assert.equal(isGamePushCloudSaveSizeAllowed(NaN), false);
+  assert.equal(isGamePushCloudSaveSizeAllowed(Infinity), false);
 });
 
 test('platform cloud save is a no-op without an SDK', async () => {
