@@ -184,6 +184,14 @@ Definitions  ->  Generation  ->  Runtime Systems  ->  Render/UI
 - The render-only mesh pass is documented in `mesh.md`. It reads `World`, `CameraView`, `visualSlots`, features, containers, corridor topology and resolved floor/generator profiles, then draws bounded low-poly corridor-covering/voxel detail after the raycaster and before sprites. It must not mutate gameplay, collision, save or floor memory truth.
 - Do not put gameplay decisions here.
 
+### Critters And Ambient VFX
+
+Critters (rats, roaches, flies) and similar ambient visual effects are pure client-side visual dressing, not simulation entities.
+- They do not exist in the `entities` array, they have no hitboxes, and they cannot interact with physics or events.
+- Their logic lives in `src/render/critters.ts` and uses a lightweight 2D coordinate update loop that reads `world.get` for collision.
+- They are drawn in a single instanced array call (`gl.drawArraysInstanced`) making them effectively free for CPU and AI.
+- Future ambient life or micro-details should follow this exact pattern: data-oriented update loops producing visual particles, entirely disconnected from the heavy A-Life, saving, or AI routing systems.
+
 ### Mesh And Fine Blocker Boundary
 
 `mesh.md` is the active contract for the shipped decorative mesh pass.

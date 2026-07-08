@@ -2,6 +2,7 @@ import { crittersEnabled } from '../systems/ui_orchestrator';
 import { World } from '../core/world';
 import { Cell } from '../core/types';
 import { playRoachCrunch, playSoundAt } from '../systems/audio';
+import { CRITTER_DEFS, getRandomCritterDefId } from '../data/critters';
 
 /**
  * Returns whether critters (and small particles like flies/roaches) should be rendered.
@@ -18,11 +19,9 @@ export function getCritterRenderEnabled(fps?: number): boolean {
   return crittersEnabled();
 }
 
-export type CritterType = 'rat' | 'roach' | 'fly';
-
 export interface Critter {
   active: boolean;
-  type: CritterType;
+  defId: string;
   x: number;
   y: number;
   z: number;
@@ -32,9 +31,9 @@ export interface Critter {
   phase: number;
 }
 
-export const MAX_CRITTERS = 64;
+export const MAX_CRITTERS = 256;
 export const CRITTERS_POOL: Critter[] = Array.from({ length: MAX_CRITTERS }, () => ({
-  active: false, type: 'roach', x: 0, y: 0, z: 0, targetX: 0, targetY: 0, speed: 1, phase: 0
+  active: false, defId: 'roach', x: 0, y: 0, z: 0, targetX: 0, targetY: 0, speed: 1, phase: 0
 }));
 
 export function updateCritters(world: World, dt: number, playerX: number, playerY: number) {
@@ -53,21 +52,32 @@ export function updateCritters(world: World, dt: number, playerX: number, player
     const sx = Math.round(playerX + Math.cos(angle) * dist);
     const sy = Math.round(playerY + Math.sin(angle) * dist);
     const cell = world.get(sx, sy);
+    
     if (cell === Cell.FLOOR) {
-      for (let i = 0; i < MAX_CRITTERS; i++) {
+      const defId = getRandomCritterDefId();
+      const def = CRITTER_DEFS[defId];
+      
+      const spawnCount = def.spawnBatch[0] + Math.floor(Math.random() * (def.spawnBatch[1] - def.spawnBatch[0] + 1));
+      let spawned = 0;
+      
+      for (let i = 0; i < MAX_CRITTERS && spawned < spawnCount; i++) {
         if (!CRITTERS_POOL[i].active) {
           const nc = CRITTERS_POOL[i];
           nc.active = true;
-          const r = Math.random();
-          nc.type = r < 0.4 ? 'roach' : (r < 0.8 ? 'rat' : 'fly');
-          nc.x = sx;
-          nc.y = sy;
-          nc.z = nc.type === 'fly' ? 0.2 + Math.random() * 0.3 : (nc.type === 'rat' ? 0.05 : 0.02);
-          nc.targetX = sx;
-          nc.targetY = sy;
-          nc.speed = 1.0;
-          nc.phase = Math.random() * 10;
-          break;
+          nc.defId = defId;
+          
+          // Spread swarms slightly, precise center for single entities
+          const offsetX = spawnCount > 1 ? (Math.random() - 0.5) * 1.5 : 0;
+          const offsetY = spawnCount > 1 ? (Math.random() - 0.5) * 1.5 : 0;
+          
+          nc.x = sx + offsetX;
+          nc.y = sy + offsetY;
+          nc.z = def.baseZ + (Math.random() - 0.5) * def.zVariance;
+          nc.targetX = nc.x;
+          nc.targetY = nc.y;
+          nc.speed = def.speed;
+          nc.phase = Math.random() * 100;
+          spawned++;
         }
       }
     }
@@ -76,6 +86,12 @@ export function updateCritters(world: World, dt: number, playerX: number, player
   for (let i = 0; i < MAX_CRITTERS; i++) {
     const c = CRITTERS_POOL[i];
     if (!c.active) continue;
+
+    const def = CRITTER_DEFS[c.defId];
+    if (!def) {
+      c.active = false;
+      continue;
+    }
 
     // Despawn if too far
     const dxP = c.x - playerX;
@@ -86,10 +102,16 @@ export function updateCritters(world: World, dt: number, playerX: number, player
       continue;
     }
 
-    if (c.type === 'roach' && distP < 0.5) {
+    if (def.crunchable && distP < 0.5) {
       c.active = false;
       playSoundAt(playRoachCrunch, c.x, c.y);
       continue;
+    }
+
+    // Update Z for flying critters
+    if (def.zVariance > 0) {
+      c.phase += dt * 2.0; // Phase speed
+      c.z = def.baseZ + Math.sin(c.phase) * def.zVariance;
     }
 
     const dx = c.targetX - c.x;
@@ -97,7 +119,7 @@ export function updateCritters(world: World, dt: number, playerX: number, player
     const dist = Math.sqrt(dx * dx + dy * dy);
 
     if (dist < 0.1) {
-      pickNewCritterTarget(world, c, playerX, playerY);
+      pickNewCritterTarget(world, c, playerX, playerY, def, distP);
     } else {
       c.x += (dx / dist) * c.speed * dt;
       c.y += (dy / dist) * c.speed * dt;
@@ -134,19 +156,18 @@ function hasAdjacentWall(world: World, x: number, y: number): boolean {
   return false;
 }
 
-export function pickNewCritterTarget(world: World, c: Critter, playerX: number, playerY: number) {
+export function pickNewCritterTarget(world: World, c: Critter, playerX: number, playerY: number, def: any, distToPlayer: number) {
   if (Math.random() > 0.05) return;
 
-  if (c.type === 'rat') {
-    const dx = c.x - playerX;
-    const dy = c.y - playerY;
-    const distToPlayer = Math.sqrt(dx * dx + dy * dy);
-    if (distToPlayer < 3.0) {
-      c.speed = 4.0;
+  if (def.behavior === 'flee_player') {
+    if (distToPlayer < def.fleeDist) {
+      c.speed = def.fleeSpeed;
+      const dx = c.x - playerX;
+      const dy = c.y - playerY;
       c.targetX = c.x + (dx > 0 ? 1 : -1);
       c.targetY = c.y + (dy > 0 ? 1 : -1);
     } else {
-      c.speed = 1.0;
+      c.speed = def.speed;
       const candidates = getAdjacentFloors(world, c.x, c.y);
       if (candidates.length > 0) {
         let nearWall = null;
@@ -166,14 +187,12 @@ export function pickNewCritterTarget(world: World, c: Critter, playerX: number, 
         }
       }
     }
-  } else if (c.type === 'roach') {
-    const dx = c.x - playerX;
-    const dy = c.y - playerY;
-    const distToPlayer = Math.sqrt(dx * dx + dy * dy);
-    if (distToPlayer < 2.0 && Math.random() < 0.8) {
+  } else if (def.behavior === 'wander_pause') {
+    if (distToPlayer < def.fleeDist && Math.random() < 0.8) {
+      // Roaches tend to freeze when approached
       c.speed = 0;
     } else {
-      c.speed = 1.5;
+      c.speed = def.speed;
       const candidates = getAdjacentFloors(world, c.x, c.y);
       if (candidates.length > 0) {
         const rC = candidates[Math.floor(Math.random() * candidates.length)];
@@ -181,11 +200,14 @@ export function pickNewCritterTarget(world: World, c: Critter, playerX: number, 
         c.targetY = rC.y;
       }
     }
-  } else if (c.type === 'fly') {
-    c.speed = 2.0;
-    const tx = Math.round(c.x) + (Math.random() > 0.5 ? 1 : -1);
-    const ty = Math.round(c.y) + (Math.random() > 0.5 ? 1 : -1);
-    if (world.get(tx, ty) === Cell.FLOOR) {
+  } else if (def.behavior === 'swarm') {
+    c.speed = def.speed;
+    // Erratic, tight orbit
+    const tx = c.x + (Math.random() - 0.5) * 2.0;
+    const ty = c.y + (Math.random() - 0.5) * 2.0;
+    const cell = world.get(Math.round(tx), Math.round(ty));
+    // Flies don't care too much about precise floors, but let's keep them from flying completely through walls
+    if (cell === Cell.FLOOR) {
       c.targetX = tx;
       c.targetY = ty;
     }

@@ -1149,7 +1149,7 @@ for (const abs of files) {
           || rel === 'src/gen/craft_stations.ts'
         ) {
           interactiveRefs.push({ id: value, prop: name, file: rel, line: lineOf(sf, node) });
-        } else {
+        } else if (!rel.includes('critters.ts')) {
           itemRefs.push({ id: value, prop: name, file: rel, line: lineOf(sf, node) });
         }
       }

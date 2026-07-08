@@ -1790,7 +1790,7 @@ export function execDebugCommand(
           if (world.get(sx, sy) === Cell.FLOOR) {
             c.active = true;
             const r = Math.random();
-            c.type = r < 0.4 ? 'roach' : (r < 0.8 ? 'rat' : 'fly');
+            c.defId = r < 0.4 ? 'roach' : (r < 0.8 ? 'rat' : 'fly');
             c.x = sx;
             c.y = sy;
             c.z = 0;

@@ -21,6 +21,7 @@ import type { TexData } from './textures';
 import type { SpriteData } from './sprites';
 import type { BloodParticle } from './blood';
 import { getCritterRenderEnabled, CRITTERS_POOL } from './critters';
+import { CRITTER_DEFS } from '../data/critters';
 import { containerSpr, featureSpr } from './sprite_index';
 import { generateItemSprite, itemDropDefId, itemSpriteKey } from './item_sprites';
 import {
@@ -2065,9 +2066,15 @@ out vec4 fragColor;
 void main() {
   float d = length(vLocal);
   if (d > 0.5) discard;
-  float edge = 1.0 - smoothstep(0.18, 0.5, d);
+  
+  // Softer spherical edge to hide hard wall intersections
+  float edge = 1.0 - smoothstep(0.1, 0.5, d);
+  
+  // Fade out the bottom half to blend smoothly with the floor (fake AO / soft intersection)
+  float bottomFade = smoothstep(0.5, 0.0, vLocal.y);
+  
   gl_FragDepth = vDepth;
-  fragColor = vec4(vColor.rgb, vColor.a * edge);
+  fragColor = vec4(vColor.rgb, vColor.a * edge * bottomFade);
 }
 `;
 
@@ -3578,12 +3585,12 @@ export function renderSceneGL(
     renderParticlesGL(bloodParticles, px, py, pAngle, pPitch, camHeight, fogDensity, purpleFog, fogRgb, planeLen);
   }
 
-  gl.disable(gl.DEPTH_TEST);
-
   // ── Render critters pass ──
   if (getCritterRenderEnabled(currentFps)) {
     drawCritters(px, py, pAngle, pPitch, fogDensity, purpleFog, fogRgb, planeLen);
   }
+
+  gl.disable(gl.DEPTH_TEST);
 
   // ── Pass 1.5: Bloom (bright-pass prefilter + separable Gaussian blur) ──
   // Render-only glow; gated to high/experimental lighting quality. Result lands in bloomTexA.
@@ -4238,9 +4245,12 @@ function drawCritters(px: number, py: number, pAngle: number, pPitch: number, fo
     if (tyf <= 0.1) continue;
 
     const sx = Math.floor((SCR_W / 2) * (1 + txf / tyf));
-    const size = c.type === 'rat' ? 0.4 : 0.2;
+    const def = CRITTER_DEFS[c.defId];
+    if (!def) continue;
+
+    const size = def.size;
     const screenSize = Math.min(
-      PARTICLE_MAX_SCREEN_SIZE,
+      PARTICLE_MAX_SCREEN_SIZE * 2.0,
       (SCR_H / tyf) * PARTICLE_WORLD_SCREEN_SCALE * size
     );
     if (screenSize < PARTICLE_MIN_SCREEN_SIZE) continue;
@@ -4254,10 +4264,10 @@ function drawCritters(px: number, py: number, pAngle: number, pPitch: number, fo
     const alpha = 1.0 * (1 - fogF * 0.75);
     if (alpha <= 0.03) continue;
 
-    let r = 0, g = 0, b = 0;
-    if (c.type === 'rat') { r = 60/255; g = 50/255; b = 50/255; }
-    else if (c.type === 'roach') { r = 80/255; g = 40/255; b = 20/255; }
-    else if (c.type === 'fly') { r = 20/255; g = 20/255; b = 20/255; }
+    const [r, g, b] = def.color;
+    const rNorm = r / 255;
+    const gNorm = g / 255;
+    const bNorm = b / 255;
 
     const invFogF = 1 - fogF;
     const normDepth = Math.max(0.0, Math.min(0.999, 1.0 - 0.1 / Math.max(0.1, tyf)));
@@ -4266,9 +4276,9 @@ function drawCritters(px: number, py: number, pAngle: number, pPitch: number, fo
     instanceData[di + 1] = sy;
     instanceData[di + 2] = screenSize;
     instanceData[di + 3] = normDepth;
-    colorData[di] = r * invFogF + fogR * fogF;
-    colorData[di + 1] = g * invFogF + fogG * fogF;
-    colorData[di + 2] = b * invFogF + fogB * fogF;
+    colorData[di] = rNorm * invFogF + fogR * fogF;
+    colorData[di + 1] = gNorm * invFogF + fogG * fogF;
+    colorData[di + 2] = bNorm * invFogF + fogB * fogF;
     colorData[di + 3] = alpha;
     visibleCount++;
   }
