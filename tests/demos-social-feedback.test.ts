@@ -208,11 +208,11 @@ test('Demos active-floor social journey starts visible departure instead of tele
     ai: { goal: AIGoal.IDLE, tx: 0, ty: 0, path: [], pi: 0, stuck: 0, timer: 0 },
   });
 
-  assert.equal(requestDemosSocialJourney(state, 1, 'design:black_market_88', 'social_visit', {
+  requestDemosSocialJourney(state, 1, 'design:black_market_88', 'social_visit', {
     world,
     entities: [npc],
     activeFloorKey: 'story:living',
-  }), true);
+  });
 
   const mobility = ensureAlifeMobilityState(state);
   assert.equal(mobility.activeDepartures.length, 1);

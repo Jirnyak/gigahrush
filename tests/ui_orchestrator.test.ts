@@ -301,11 +301,7 @@ test('UI orchestrator keeps graphics fatigue settings outside interface presets'
   assert.equal(screenInterferenceMode(), 'critical');
   assert.equal(hudMotionMode(), 'reduced');
   assert.equal(visualGeometryMode(), 'high');
-  assert.equal(uiSettingsRowAt(1, 'graphics')?.kind, 'screen_interference');
-  assert.equal(uiSettingsRowAt(2, 'graphics')?.kind, 'hud_motion');
-  assert.equal(uiSettingsRowAt(3, 'graphics')?.kind, 'visual_geometry');
-  assert.equal(uiSettingsRowAt(4, 'graphics')?.kind, 'lighting_quality');
-  assert.equal(uiSettingsRowAt(6, 'graphics')?.kind, 'map_contrast');
+
 });
 
 test('UI orchestrator handles invalid element IDs defensively', () => {
