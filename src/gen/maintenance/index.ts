@@ -507,6 +507,7 @@ function placeMonsters(world: World, entities: Entity[], nextIdStart: number): n
     const kind = Math.random() < 0.10
       ? pick([MonsterKind.EYE, MonsterKind.NIGHTMARE, MonsterKind.REBAR, MonsterKind.BETONNIK, MonsterKind.MATKA])
       : pick([
+      MonsterKind.GNOME, MonsterKind.GNOME,
       MonsterKind.SBORKA, MonsterKind.SBORKA,
       MonsterKind.POLZUN,
       MonsterKind.ZOMBIE,
@@ -517,6 +518,7 @@ function placeMonsters(world: World, entities: Entity[], nextIdStart: number): n
       [MonsterKind.SBORKA]: { hp: 5,  speed: 2.8, sprite: monsterSpr(MonsterKind.SBORKA) },
       [MonsterKind.TVAR]:   { hp: 40, speed: 1.8, sprite: monsterSpr(MonsterKind.TVAR) },
       [MonsterKind.POLZUN]: { hp: 80, speed: 1.0, sprite: monsterSpr(MonsterKind.POLZUN) },
+      [MonsterKind.GNOME]:  { hp: 15, speed: 2.6, sprite: monsterSpr(MonsterKind.GNOME) },
       [MonsterKind.ZOMBIE]: { hp: 25, speed: 1.4, sprite: monsterSpr(MonsterKind.ZOMBIE) },
       [MonsterKind.SHADOW]: { hp: 45, speed: 2.4, sprite: monsterSpr(MonsterKind.SHADOW) },
       [MonsterKind.EYE]:       { hp: 30,  speed: 2.0, sprite: monsterSpr(MonsterKind.EYE) },

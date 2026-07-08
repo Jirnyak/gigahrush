@@ -444,15 +444,15 @@ export const MONSTER_ECOLOGY: readonly MonsterEcologyDef[] = [
     cue: 'Скрежет мелкой арматуры по бетону, низкий топот и стук откалываемых камней.',
     rule: 'Любит узкие технические туннели и глухие коридоры, старается избегать открытых залов; роет у стен.',
     floorFit: 'Узкие переходы Коллекторов, технические щели Квартир и Жилой зоны.',
-    floors: [FloorLevel.MAINTENANCE, FloorLevel.KVARTIRY, FloorLevel.LIVING],
-    rooms: [RoomType.CORRIDOR, RoomType.STORAGE, RoomType.PRODUCTION],
+    floors: [FloorLevel.MAINTENANCE, FloorLevel.LIVING],
+    rooms: [RoomType.STORAGE, RoomType.CORRIDOR, RoomType.PRODUCTION],
     spawnWeight: 1.5,
     minSamosborCount: 1,
     rare: false,
-    lootHint: 'мелкие детали, гайки, провода, изолента, арматура',
-    counterplay: 'Не деритесь в узком туннеле: выманите на открытое пространство. Маленький и быстрый — дробовик решает.',
+    lootHint: 'Собирают блестящий мусор: провода, платы, болты. Редко — краденые ювелирные изделия.',
+    counterplay: 'Гномы быстры, но хрупки. Используйте дробовик на подходе или загоняйте их в узкие коридоры. Они трусливы поодиночке, убейте вожака — остальные разбегутся.',
     deathLogHint: 'Смерть от гнома должна указывать на зажатость в узком туннеле или промах по мелкой цели.',
-    rumorIds: ['ecology_gnome_tunnels'],
+    rumorIds: ['gnome_sighting_1', 'gnome_nest_2'],
     rareDrops: [{ itemId: 'rebar', chance: 0.08 }, { itemId: 'wire_coil', chance: 0.05 }],
     lootTable: [
       { itemDefId: 'wire_coil', chance: 0.35, minCount: 1, maxCount: 2 },
@@ -1419,6 +1419,13 @@ interface MonsterEcologyContext {
 }
 
 const MONSTER_ECOLOGY_CONTEXT: Partial<Record<MonsterKind, MonsterEcologyContext>> = {
+  [MonsterKind.GNOME]: {
+    tags: ['maintenance', 'corridor', 'storage', 'production', 'dark', 'low_light', 'tunnels', 'pack', 'noise', 'metal'],
+    anchorTags: ['maintenance', 'corridor', 'storage', 'dark', 'low_light'],
+    avoidTags: ['open', 'bright', 'light', 'lamp'],
+    anchorPenalty: 0.3,
+    avoidPenalty: 0.5,
+  },
   [MonsterKind.SBORKA]: {
     tags: ['corridor', 'storage', 'swarm', 'samosbor', 'meat', 'food', 'fog', 'crowd'],
     anchorTags: ['corridor', 'storage', 'samosbor', 'meat', 'food', 'crowd'],

@@ -504,17 +504,17 @@ const LOOT_BY_TAG: Record<string, readonly string[]> = {
 };
 
 const MONSTERS_BY_TAG: Record<string, readonly MonsterKind[]> = {
-  residential: [MonsterKind.SBORKA, MonsterKind.TVAR, MonsterKind.ZOMBIE, MonsterKind.DIKIY_MERTVYAK, MonsterKind.KRYSNOZHKA, MonsterKind.GREEN_DOG, MonsterKind.NELYUD, MonsterKind.BEZEKHIY, MonsterKind.TRESKOTNIK],
-  civil: [MonsterKind.SHOVNIK, MonsterKind.LAMPOVY, MonsterKind.LAMPOGLAZ, MonsterKind.SBORKA, MonsterKind.BEZEKHIY, MonsterKind.TRESKOTNIK],
+  residential: [MonsterKind.GNOME, MonsterKind.SBORKA, MonsterKind.TVAR, MonsterKind.ZOMBIE, MonsterKind.DIKIY_MERTVYAK, MonsterKind.KRYSNOZHKA, MonsterKind.GREEN_DOG, MonsterKind.NELYUD, MonsterKind.BEZEKHIY, MonsterKind.TRESKOTNIK],
+  civil: [MonsterKind.GNOME, MonsterKind.SHOVNIK, MonsterKind.LAMPOVY, MonsterKind.LAMPOGLAZ, MonsterKind.SBORKA, MonsterKind.BEZEKHIY, MonsterKind.TRESKOTNIK],
   crowd: [MonsterKind.ZOMBIE, MonsterKind.DIKIY_MERTVYAK, MonsterKind.KRYSNOZHKA, MonsterKind.GREEN_DOG, MonsterKind.NELYUD, MonsterKind.SHADOW, MonsterKind.TRESKOTNIK],
   riot: [MonsterKind.ZOMBIE, MonsterKind.DIKIY_MERTVYAK, MonsterKind.SHOVNIK, MonsterKind.PECHATEED, MonsterKind.NELYUD],
   queue: [MonsterKind.ZOMBIE, MonsterKind.DIKIY_MERTVYAK, MonsterKind.NELYUD, MonsterKind.KRYSNOZHKA, MonsterKind.SHOVNIK],
   canteen: [MonsterKind.KRYSNOZHKA, MonsterKind.GREEN_DOG, MonsterKind.ZOMBIE, MonsterKind.DIKIY_MERTVYAK, MonsterKind.TVAR],
-  industrial: [MonsterKind.REBAR, MonsterKind.RZHAVNIK, MonsterKind.POLZUN, MonsterKind.ROBOT, MonsterKind.TRUBNYY_AVTOMAT, MonsterKind.LAMPOVY, MonsterKind.SAFEGUARD],
-  maintenance: [MonsterKind.LAMPOVY, MonsterKind.ROBOT, MonsterKind.TRUBNYY_AVTOMAT, MonsterKind.REBAR, MonsterKind.RZHAVNIK, MonsterKind.TUBE_EEL, MonsterKind.VODYANOY_KOSHMAR, MonsterKind.OLGOY, MonsterKind.BORSHCHEVIK],
+  industrial: [MonsterKind.GNOME, MonsterKind.REBAR, MonsterKind.RZHAVNIK, MonsterKind.POLZUN, MonsterKind.ROBOT, MonsterKind.TRUBNYY_AVTOMAT, MonsterKind.LAMPOVY, MonsterKind.SAFEGUARD],
+  maintenance: [MonsterKind.GNOME, MonsterKind.LAMPOVY, MonsterKind.ROBOT, MonsterKind.TRUBNYY_AVTOMAT, MonsterKind.REBAR, MonsterKind.RZHAVNIK, MonsterKind.TUBE_EEL, MonsterKind.VODYANOY_KOSHMAR, MonsterKind.OLGOY, MonsterKind.BORSHCHEVIK],
   emergency_panels: [MonsterKind.LAMPOVY, MonsterKind.ROBOT, MonsterKind.EYE],
-  workshop: [MonsterKind.REBAR, MonsterKind.RZHAVNIK, MonsterKind.ROBOT, MonsterKind.SBORKA],
-  service: [MonsterKind.LAMPOVY, MonsterKind.ROBOT, MonsterKind.TRUBNYY_AVTOMAT, MonsterKind.REBAR, MonsterKind.RZHAVNIK, MonsterKind.TUBE_EEL, MonsterKind.VODYANOY_KOSHMAR, MonsterKind.BORSHCHEVIK],
+  workshop: [MonsterKind.GNOME, MonsterKind.REBAR, MonsterKind.RZHAVNIK, MonsterKind.ROBOT, MonsterKind.SBORKA],
+  service: [MonsterKind.GNOME, MonsterKind.LAMPOVY, MonsterKind.ROBOT, MonsterKind.TRUBNYY_AVTOMAT, MonsterKind.REBAR, MonsterKind.RZHAVNIK, MonsterKind.TUBE_EEL, MonsterKind.VODYANOY_KOSHMAR, MonsterKind.BORSHCHEVIK],
   power: [MonsterKind.LAMPOVY, MonsterKind.LAMPOGLAZ, MonsterKind.ROBOT, MonsterKind.EYE],
   machines: [MonsterKind.ROBOT, MonsterKind.TRUBNYY_AVTOMAT, MonsterKind.LAMPOVY, MonsterKind.REBAR, MonsterKind.RZHAVNIK, MonsterKind.SAFEGUARD],
   pipes: [MonsterKind.TUBE_EEL, MonsterKind.TRUBNYY_AVTOMAT, MonsterKind.VODYANOY_KOSHMAR, MonsterKind.OLGOY, MonsterKind.POLZUN, MonsterKind.REBAR],
