@@ -138,10 +138,10 @@ export function generateLiquidatorBaseDesignFloor(): FloorGeneration {
 
 
   // Decorate and spawn NPCs
-  requireSpawnedPlotNpcFromPackage(entities, nextId, 'liquidator_quartermaster', hq.x + hq.w / 2, hq.y + hq.h / 2, { angle: Math.PI / 2 });
+  requireSpawnedPlotNpcFromPackage(entities, nextId, 'liq_quartermaster', hq.x + hq.w / 2, hq.y + hq.h / 2, { angle: Math.PI / 2 });
   requireSpawnedPlotNpcFromPackage(entities, nextId, 'marko_lolo', hq.x + hq.w / 2 - 2, hq.y + hq.h / 2 + 2, { angle: Math.PI / 2 });
-  requireSpawnedPlotNpcFromPackage(entities, nextId, 'liquidator_armorer', armory.x + armory.w / 2, armory.y + armory.h / 2, { angle: 0 });
-  requireSpawnedPlotNpcFromPackage(entities, nextId, 'liquidator_medic', medbay.x + medbay.w / 2, medbay.y + medbay.h / 2, { angle: Math.PI });
+  requireSpawnedPlotNpcFromPackage(entities, nextId, 'liq_armorer', armory.x + armory.w / 2, armory.y + armory.h / 2, { angle: 0 });
+  requireSpawnedPlotNpcFromPackage(entities, nextId, 'liq_medic', medbay.x + medbay.w / 2, medbay.y + medbay.h / 2, { angle: Math.PI });
 
   return { world, entities, spawnX, spawnY };
 }

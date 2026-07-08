@@ -548,3 +548,14 @@ export const MAIN_PLOT_NPC_PACKAGES = [
     voiceTags: ['story_voice'],
   }),
 ] as const satisfies readonly NpcPackageDef[];
+
+
+
+import { registerNpcPackageFromPlotNpc } from './npc_packages';
+import type { PlotNpcDef } from './plot';
+
+export function registerFactionTraders(npcs: Record<string, PlotNpcDef>) {
+  registerNpcPackageFromPlotNpc({ id: 'liq_armorer', npc: npcs['liq_armorer'] });
+  registerNpcPackageFromPlotNpc({ id: 'liq_medic', npc: npcs['liq_medic'] });
+  registerNpcPackageFromPlotNpc({ id: 'liq_quartermaster', npc: npcs['liq_quartermaster'] });
+}

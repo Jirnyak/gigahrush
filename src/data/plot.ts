@@ -21,9 +21,6 @@ import {
 import type { QuestRouteTarget } from './contracts';
 import { designFloorAtZ, designFloorById } from './design_floors';
 import {
-  MAIN_PLOT_NPC_PACKAGES,
-} from './npc_plot_packages';
-import {
   allNpcPackages,
   getNpcPackageByPlotNpcId,
   npcPackageDisplayName,
@@ -33,6 +30,34 @@ import {
   type NpcPackageDef,
 } from './npc_packages';
 
+
+export enum NpcRole { TRADER = 1 }
+export const PLOT_NPCS: Record<string, PlotNpcDef & { role?: NpcRole }> = {
+  'liq_armorer': {
+    name: 'Капитан Броня',
+    isFemale: false,
+    faction: Faction.LIQUIDATOR,
+    occupation: Occupation.HUNTER,
+    role: NpcRole.TRADER,
+    sprite: 0, hp: 100, maxHp: 100, money: 500, speed: 1.0, inventory: [], talkLines: [], talkLinesPost: []
+  },
+  'liq_medic': {
+    name: 'Доктор Смерть',
+    isFemale: false,
+    faction: Faction.LIQUIDATOR,
+    occupation: Occupation.DOCTOR,
+    role: NpcRole.TRADER,
+    sprite: 0, hp: 100, maxHp: 100, money: 500, speed: 1.0, inventory: [], talkLines: [], talkLinesPost: []
+  },
+  'liq_quartermaster': {
+    name: 'Снабженец Петрович',
+    isFemale: false,
+    faction: Faction.LIQUIDATOR,
+    occupation: Occupation.ENGINEER,
+    role: NpcRole.TRADER,
+    sprite: 0, hp: 100, maxHp: 100, money: 500, speed: 1.0, inventory: [], talkLines: [], talkLinesPost: []
+  }
+};
 
 /* ── Story NPC definition ─────────────────────────────────────── */
 export interface PlotNpcDef {
@@ -93,7 +118,6 @@ export function designNpcFloorKey(routeId: string): string {
 
 /* ── Story NPC package adapter ───────────────────────────────── */
 
-registerNpcPackages(MAIN_PLOT_NPC_PACKAGES);
 
 function cloneItems(items: readonly Item[] | undefined): { defId: string; count: number }[] {
   return (items ?? []).map(item => ({ defId: item.defId, count: item.count }));
@@ -830,3 +854,9 @@ registerSideQuest('arena_master', {
   talkLines: ['Готов сделать ставку?'],
   talkLinesPost: []
 }, [], { tags: ['arena'] });
+
+import { MAIN_PLOT_NPC_PACKAGES } from './npc_plot_packages';
+registerNpcPackages(MAIN_PLOT_NPC_PACKAGES);
+
+import { registerFactionTraders } from './npc_plot_packages';
+registerFactionTraders(PLOT_NPCS);
