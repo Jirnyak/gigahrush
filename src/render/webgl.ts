@@ -472,18 +472,21 @@ vec3 materialResponse(uint texId, vec3 base, int tx, int ty, ivec2 cell, float l
 }
 
 /* --- NORMAL MAP INJECTION --- */
-vec2 perturbNormal(vec2 baseNormal, vec3 texColor, float strength) {
+vec2 perturbNormal(uint texId, int tx, int ty, vec2 baseNormal, float strength) {
     if (uLightQuality < 3) return baseNormal;
     
-    // Вычисляем "высоту" на основе яркости текстуры
-    float height = dot(texColor, vec3(0.299, 0.587, 0.114));
+    // Сэмплируем текстуру для вычисления локального градиента (в пространстве текстуры)
+    vec3 c0 = sampleAtlas(texId, tx, ty).rgb;
+    vec3 cX = sampleAtlas(texId, (tx + 1) & (TEX_I - 1), ty).rgb;
+    vec3 cY = sampleAtlas(texId, tx, (ty + 1) & (TEX_I - 1)).rgb;
     
-    // Используем аппаратные производные (стандартно для WebGL2 / ES 3.0)
-    float dHx = dFdx(height);
-    float dHy = dFdy(height);
+    // Вычисляем "высоту" на основе яркости текстуры
+    float h0 = dot(c0, vec3(0.299, 0.587, 0.114));
+    float hX = dot(cX, vec3(0.299, 0.587, 0.114));
+    float hY = dot(cY, vec3(0.299, 0.587, 0.114));
     
     // Формируем сдвиг нормали
-    vec2 bump = vec2(-dHx, -dHy) * strength;
+    vec2 bump = vec2(-(hX - h0), -(hY - h0)) * strength;
     
     // Смешиваем с базовой нормалью (считая, что она в пространстве экрана/мира)
     return normalize(baseNormal + bump);
@@ -1243,7 +1246,7 @@ void main() {
   // Render-only per-cell ceiling height: tier t → wall top reaches (1 + t*0.5).
   // Floor contact (drawEnd) and the walk level never move; only the top rises.
   float rawTier = float(texelFetch(uCeil, ivec2(wrapI(mapX), wrapI(mapY)), 0).r);
-  float ceilH = 2.0 + min(rawTier, 2.0) * 1.5;
+  float ceilH = 1.0 + rawTier * 0.5;
   float rawDrawStart = HALF_H - lineH * (ceilH - uCamHeight);
   float drawStart = max(0.0, rawDrawStart);
   float drawEnd   = min(uResolution.y - 1.0, HALF_H + lineH * uCamHeight);
@@ -1278,17 +1281,7 @@ void main() {
       float d = row - rawDrawStart;
       int texYi = int(floor(d / lineH * TEX_F)) & (TEX_I - 1);
 
-      // Coordinate Hash Variation logic for textures
-      int wallHash = (mapX * 374761393 + mapY * 668265263) & 0x7FFFFFFF;
-      wallHash = (wallHash ^ (wallHash >> 13)) * 1103515245;
-      wallHash = (wallHash ^ (wallHash >> 16)) & 0x7FFFFFFF;
-      int wallHashVar = wallHash % 64;
-
-      // shift texture coordinates by hash to break tiling
-      int shiftedTexXi = (texXi + wallHashVar * 5) & (TEX_I - 1);
-      int shiftedTexYi = (texYi + wallHashVar * 7) & (TEX_I - 1);
-
-      vec3 c = sampleAtlas(wallTexId, shiftedTexXi, shiftedTexYi).rgb;
+      vec3 c = sampleAtlas(wallTexId, texXi, texYi).rgb;
 
       uint hitCellType = texelFetch(uCells, hitCell, 0).r;
       if (hitCellType == ${Cell.DOOR}u) {
@@ -1321,7 +1314,7 @@ void main() {
                wallTexId == ${Tex.F_TILE}u || wallTexId == ${Tex.F_MARBLE_TILE}u || wallTexId == ${Tex.MARBLE}u) { bumpStrength = 3.0; }
       else if (wallTexId == ${Tex.CONCRETE}u || wallTexId == ${Tex.BRICK}u) { bumpStrength = 25.0; }
       bumpStrength *= max(0.0, 1.0 - dist / 15.0);
-      wN = perturbNormal(wN, c, bumpStrength);
+      wN = perturbNormal(wallTexId, texXi, texYi, wN, bumpStrength);
       /* ---------------------------- */
 
       float ndlWall = max(dot(wN, normalize(-vec2(rayDX, rayDY))), 0.0);
@@ -1370,17 +1363,7 @@ void main() {
               : texelFetch(uFloorTex, fCell, 0).r;
             if (floorTexId == 0u) floorTexId = ${Tex.F_CONCRETE}u;
 
-            // Coordinate Hash Variation logic for floor textures
-            int floorHash = (fCell.x * 374761393 + fCell.y * 668265263) & 0x7FFFFFFF;
-            floorHash = (floorHash ^ (floorHash >> 13)) * 1103515245;
-            floorHash = (floorHash ^ (floorHash >> 16)) & 0x7FFFFFFF;
-            int floorHashVar = floorHash % 64;
-
-            // shift texture coordinates by hash to break tiling
-            int shiftedFtx = (ftx + floorHashVar * 5) & (TEX_I - 1);
-            int shiftedFty = (fty + floorHashVar * 7) & (TEX_I - 1);
-
-            vec3 fc = sampleAtlas(floorTexId, shiftedFtx, shiftedFty).rgb;
+            vec3 fc = sampleAtlas(floorTexId, ftx, fty).rgb;
             fc = shadePlane(floorTexId, fc, fCell, ftx, fty, currentDist, fLit, toolBeam, false, true);
             float driveFloor = clamp(fbFloor + toolBeam + eyeLight(currentDist), 0.0, 1.0);
             fc = applyLightFX(fc, floorTexId, 0.0, driveFloor, lgradFloor, 0.0);
@@ -1441,11 +1424,11 @@ void main() {
         int cside = 0;
         float marchHc = 1.0;
         float rawPrevTier = float(texelFetch(uCeil, ivec2(wrapI(int(floor(uPos.x))), wrapI(int(floor(uPos.y)))), 0).r);
-        float prevHc = 2.0 + min(rawPrevTier, 2.0) * 1.5;
+        float prevHc = 1.0 + rawPrevTier * 0.5;
         for (int cs = 0; cs < 16; cs++) {
           ivec2 mc = ivec2(wrapI(cmx), wrapI(cmy));
           float rawMarchTier = float(texelFetch(uCeil, mc, 0).r);
-          marchHc = 2.0 + min(rawMarchTier, 2.0) * 1.5;
+          marchHc = 1.0 + rawMarchTier * 0.5;
           if (uCamHeight + slope * dEnter >= marchHc) { currentDist = dEnter + 0.001; isRiser = true; break; }
           float dExit = min(csdx, csdy);
           if (uCamHeight + slope * dExit >= marchHc) { currentDist = (marchHc - uCamHeight) / slope; break; }
@@ -3765,7 +3748,7 @@ function featureSpriteZ(feature: Feature, tier: number = 0): number {
     case Feature.LIFT_BUTTON:
     case Feature.SCREEN:
     case Feature.SLIDE: return 0.22;
-    case Feature.LAMP: return (2.0 + Math.min(Math.max(0, tier), 2) * 1.5) - 0.88;
+    case Feature.LAMP: return (1.0 + Math.max(0, tier) * 0.5) - 0.88;
     default: return 0;
   }
 }

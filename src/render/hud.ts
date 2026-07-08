@@ -1365,26 +1365,21 @@ export function drawHUD(
   const sx = w / SCR_W;
   const sy = h / SCR_H;
   const menuScale = Math.max(0.72, Math.min(1.68, Math.min(sx, sy)));
-  const uiScale = Math.min(1, w / 800);
-  const scaledSx = sx * uiScale;
-  const scaledSy = sy * uiScale;
+  const msx = menuScale;
+  const msy = menuScale;
 
-  const msx = menuScale * uiScale;
-  const msy = menuScale * uiScale;
-
-  ctx.font = `${Math.max(12, 10 * scaledSy)}px monospace`;
+  ctx.font = `${10 * sy}px monospace`;
   ctx.textBaseline = 'top';
 
   const time = uiTime;
   const gameTime = Number.isFinite(state.time) ? state.time : time;
   setUiTextTime(time);
   const mobileHud = getMobileHudSafeContext();
-  const aspectSplit = (w / h) < 0.5;
-  const slots = createHudSlots(w, h, scaledSx, scaledSy, {
+  const slots = createHudSlots(w, h, sx, sy, {
     mobileControls: mobileHud.enabled,
     safeInsets: mobileHud.safeInsets,
-    bottomVitalsHeight: aspectSplit ? NEEDS_PANEL_H * scaledSy * 1.5 : NEEDS_PANEL_H * scaledSy,
-    topRightWidth: 212 * scaledSx,
+    bottomVitalsHeight: NEEDS_PANEL_H * sy,
+    topRightWidth: 212 * sx,
   });
   if (typeof window !== 'undefined' && window.location.search.includes('smoke')) {
     window.__gigahrushLastHudLayout = {

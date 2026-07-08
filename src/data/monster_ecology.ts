@@ -444,7 +444,7 @@ export const MONSTER_ECOLOGY: readonly MonsterEcologyDef[] = [
     cue: 'Скрежет мелкой арматуры по бетону, низкий топот и стук откалываемых камней.',
     rule: 'Любит узкие технические туннели и глухие коридоры, старается избегать открытых залов; роет у стен.',
     floorFit: 'Узкие переходы Коллекторов, технические щели Квартир и Жилой зоны.',
-    floors: [FloorLevel.MAINTENANCE, FloorLevel.LIVING],
+    floors: [FloorLevel.MAINTENANCE, FloorLevel.KVARTIRY, FloorLevel.LIVING],
     rooms: [RoomType.STORAGE, RoomType.CORRIDOR, RoomType.PRODUCTION],
     spawnWeight: 1.5,
     minSamosborCount: 1,
