@@ -14,6 +14,7 @@ import { getPermitDef, type PermitAccessTag } from '../data/permits';
 import { FACTION_NAMES } from '../data/relations';
 import { MONSTERS, monsterTypeName } from '../entities/monster';
 import { monsterSpr, Spr } from '../render/sprite_index';
+import { CRITTERS_POOL, MAX_CRITTERS } from '../render/critters';
 import { awardXP, randomRPG, getMaxHp } from './rpg';
 import { isDebugNoClipEnabled, toggleDebugNoClip } from './psi';
 import { cycleForcedSamosborVariant, forceNextSamosborVariant, getActiveSamosborVariant } from './samosbor_variants_runtime';
@@ -218,6 +219,7 @@ type BaseDebugCommandId =
   | 'teleport_rail_trains'
   | 'spawn_bad_apple_world'
   | 'spawn_sculpture'
+  | 'spawn_critters'
   | 'verification_contract_route'
   | 'publish_verification_event'
   | 'route_floor_summary'
@@ -1776,6 +1778,31 @@ export function execDebugCommand(
       state.msgs.push(msg('[DEBUG] Скульптура заспавнена перед игроком', state.time, '#ff0'));
       break;
     }
+    case 90: {
+      let spawned = 0;
+      for (let i = 0; i < MAX_CRITTERS && spawned < 10; i++) {
+        const c = CRITTERS_POOL[i];
+        if (!c.active) {
+          const angle = Math.random() * Math.PI * 2;
+          const dist = 1 + Math.random() * 3;
+          const sx = Math.round(player.x + Math.cos(angle) * dist);
+          const sy = Math.round(player.y + Math.sin(angle) * dist);
+          if (world.get(sx, sy) === Cell.FLOOR) {
+            c.active = true;
+            const r = Math.random();
+            c.type = r < 0.4 ? 'roach' : (r < 0.8 ? 'rat' : 'fly');
+            c.x = sx;
+            c.y = sy;
+            c.z = 0;
+            c.targetX = sx;
+            c.targetY = sy;
+            spawned++;
+          }
+        }
+      }
+      state.msgs.push(msg(`[DEBUG] Заспавнено криттеров: ${spawned}`, state.time, '#ff0'));
+      break;
+    }
   }
   return null;
 }
@@ -1882,6 +1909,7 @@ const BASE_CMD_DEFS = [
   { id: 'spawn_all_psi', label: 'Все ПСИ-сгустки' },
   { id: 'spawn_all_tools', label: 'Все инструменты' },
   { id: 'spawn_sculpture', label: 'Спавн Скульптуры' },
+  { id: 'spawn_critters', label: 'DEBUG: спавн криттеров' },
 ] as const satisfies readonly DebugCommandDef[];
 
 const BASE_CMD_VISUAL_BEFORE_DESIGN = [
@@ -1978,6 +2006,7 @@ const BASE_CMD_VISUAL_AFTER_DESIGN = [
   'force_pneumomail_capsule',
   'force_hermodoor_borer',
   'spawn_sculpture',
+  'spawn_critters',
 ] as const satisfies readonly BaseDebugCommandId[];
 
 function designFloorCommandId(id: DesignFloorId): DebugCommandId {

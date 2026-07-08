@@ -4287,7 +4287,10 @@ function drawCritters(px: number, py: number, pAngle: number, pPitch: number, fo
     gl.bufferSubData(gl.ARRAY_BUFFER, 0, instanceData, 0, visibleCount * 4);
     gl.bindBuffer(gl.ARRAY_BUFFER, glState.particleColorBuffer);
     gl.bufferSubData(gl.ARRAY_BUFFER, 0, colorData, 0, visibleCount * 4);
-    gl.drawArraysInstanced(gl.TRIANGLE_FAN, 0, 4, visibleCount);
+    gl.drawArraysInstanced(gl.TRIANGLES, 0, 6, visibleCount);
+
+    gl.depthMask(true);
+    gl.disable(gl.BLEND);
   }
 }
 
