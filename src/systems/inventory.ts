@@ -1,5 +1,6 @@
 /* ── Inventory system: items, pickup, use ─────────────────────── */
 
+import { calculateReloadTime } from './combat';
 import {
   type Entity, type InventoryHolder, type GameState, type Item, type ItemDef, type Msg,
   type WorldEventPrivacy, type WorldEventSeverity, ItemType,
@@ -2481,6 +2482,11 @@ function weaponStatLabel(e: Entity, base: WeaponStats, effective: WeaponStats): 
     if (base.isRanged && (base.spread ?? 0) > 0 && effective.spread !== undefined) {
       parts.push(`разброс -${statReductionPercent(agiRangedSpreadMult(rpg))}%`);
     }
+    const baseReload = base.reloadTime ?? base.speed;
+    const actualReload = calculateReloadTime(baseReload, rpg.agi);
+    if (actualReload < baseReload) {
+      parts.push(`ЛОВ ПЕРЕЗ -${Math.round((1 - actualReload / baseReload) * 100)}%`);
+    }
   }
   if (base.psiCost && effective.psiCost !== undefined && effective.psiCost < base.psiCost) {
     parts.push(`ИНТ ПСИ -${statReductionPercent(effective.psiCost / base.psiCost)}%`);
@@ -2526,7 +2532,8 @@ export function getWeaponReadiness(e: Entity, itemId = equippedCombatItemId(e)):
   let resourceLabel = 'без расхода';
   let cannotFireReason = '';
   let lowResource = false;
-  let reloadPct = e.reloading ? (1 - Math.max(0, e.reloadTimer ?? 0) / (ws.reloadTime || 1)) : 0;
+  const actualReloadTime = calculateReloadTime(ws.reloadTime || 1, e.rpg?.agi ?? 0);
+  let reloadPct = e.reloading ? (1 - Math.max(0, e.reloadTimer ?? 0) / actualReloadTime) : 0;
 
   if (ws.psiCost) {
     const cost = ws.psiCost;

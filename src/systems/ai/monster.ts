@@ -1,5 +1,6 @@
 /* ── Monster behavior: hunt player + hostile NPCs ─────────────── */
 
+import { calculateReloadTime } from '../combat';
 import {
   W,
   type Entity, type GameState, type MonsterBaitLineState, type Msg, type Room, type WorldContainer,
@@ -8788,7 +8789,7 @@ export function tryPerformMonsterMeleeAttack(
   }
   if ((e.currentMag ?? 0) <= 0) {
     e.reloading = true;
-    e.reloadTimer = (def?.attackRate ?? 1) / (e.rpg ? (1 + e.rpg.agi * 0.05) : 1); // fallback if reloadTime not available directly here
+    e.reloadTimer = calculateReloadTime(def?.attackRate ?? 1, e.rpg?.agi ?? 0); // fallback if reloadTime not available directly here
     return true;
   }
   const mRange = monsterMeleeRange(world, e);
