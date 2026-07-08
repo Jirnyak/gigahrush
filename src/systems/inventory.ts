@@ -2206,6 +2206,13 @@ function pickupDropItems(
         logTutorialMsg(state, '-должно быть это ключ от двери', time + 15);
       }
 
+      if (state && state.tutorialMode && item.defId === 'key_tutorial_apartment' && state.tutorialStep === TutorialStep.FIND_KEY) {
+        import('./tutorial').then(({ advanceTutorial }) => {
+          advanceTutorial(state, TutorialStep.UNLOCK_DOOR);
+        });
+        logTutorialMsg(state, 'Ключ найден. Откройте входную дверь.', time + 15);
+      }
+
       pickedItems.push({ defId: item.defId, count: moved, data: acid ? undefined : item.data });
       handleVeretarPickupRisk(player, item.defId, msgs, time, state, zoneId);
       item.count -= moved;

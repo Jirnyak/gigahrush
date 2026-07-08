@@ -102,6 +102,7 @@ export interface SavePayload {
     currentFloor: GameState['currentFloor'];
     tutorialMode?: boolean;
     tutorialStep?: number;
+    tutorialExitTimer?: number;
     floorRun: unknown;
     floorInstances: unknown;
     voidReturnPortal?: unknown;
@@ -304,6 +305,7 @@ export function buildSavePayload(input: SavePayloadBuildInput): SavePayload {
       currentFloor: state.currentFloor,
       tutorialMode: state.tutorialMode,
       tutorialStep: state.tutorialStep,
+      tutorialExitTimer: state.tutorialExitTimer,
       floorRun: sections.floorRun,
       floorInstances: sections.floorInstances,
       voidReturnPortal: sections.voidReturnPortal,
