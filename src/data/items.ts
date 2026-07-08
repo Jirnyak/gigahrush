@@ -374,6 +374,17 @@ export const ITEM_TAGS: Record<string, readonly string[]> = {
 };
 
 export const ITEMS: Record<string, ItemDef> = {
+  'arena_gold_trophy': {
+    id: 'arena_gold_trophy',
+    type: 7, // ItemType.MISC
+    name: 'Золотой Кубок Арены',
+    desc: 'Тяжелый кубок из переплавленного металла мутантов. Доказательство абсолютного доминирования на Арене. Ликвидаторы смотрят на него с уважением.',
+    value: 1500,
+    stack: 1,
+    spawnRooms: [],
+    spawnW: 0,
+    tags: ['arena_reward', 'trophy'],
+  },
 
   // ── Armor ────────────────────────────────────────────────────────
   armor_light: { id: 'armor_light', name: 'Лёгкая броня', type: ItemType.MISC, desc: 'Базовая защита от кинетического урона и дроби.', spawnRooms: [RoomType.COMMON, RoomType.PRODUCTION], spawnW: 50, value: 500, resistances: { [DamageType.KINETIC]: 20, [DamageType.BUCKSHOT]: 30, [DamageType.FIRE]: 5 } },
