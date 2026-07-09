@@ -1,4 +1,5 @@
 /* ── Procedural sound engine (Web Audio API) ─────────────────── */
+import { masterAudioEnabled, sfxVolume } from './ui_orchestrator';
 
 let ctx: AudioContext | null = null;
 let mainGain: GainNode | null = null;
@@ -180,16 +181,22 @@ function ensureContext(): AudioContext {
     if (!Ctor) throw new Error('AudioContext is unavailable');
     ctx = new Ctor();
     mainGain = ctx.createGain();
-    mainGain.gain.value = 0.3;
+    mainGain.gain.value = masterAudioEnabled() ? 0.3 * sfxVolume() : 0;
     mainGain.connect(ctx.destination);
   }
   if (!audioSuspended() && ctx.state === 'suspended') void ctx.resume();
   return ctx;
 }
 
+export function syncAudioSettings(): void {
+  if (mainGain) {
+    mainGain.gain.value = masterAudioEnabled() ? 0.3 * sfxVolume() : 0;
+  }
+}
+
 function gain(): GainNode { return scopedGain ?? mainGain!; }
 
-function audioSuspended(): boolean {
+export function audioSuspended(): boolean {
   return audioSuspendReasons.size > 0;
 }
 

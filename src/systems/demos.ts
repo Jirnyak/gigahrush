@@ -7,7 +7,8 @@ import {
   type GameState,
 } from '../core/types';
 import { occupationProfile } from '../data/occupation_profiles';
-import { cleanFloorKey, floorKeyForStory, floorKeyZ } from './floor_keys';
+import { cleanFloorKey, floorKeyForStory, floorKeyZ, floorKeyKind, floorKeyRouteId, floorKeyBaseFloor } from './floor_keys';
+import { designFloorById } from '../data/design_floors';
 import {
   alifeNpcRecordCount,
   getAlifeNpcRecordSnapshot,
@@ -246,8 +247,20 @@ function demosCurrentRouteZ(state: GameState): number | undefined {
 
 function demosFloorKeyLabel(state: GameState, floorKeyInput: unknown, fallbackFloor?: FloorLevel): string {
   const key = cleanLabel(floorKeyInput);
-  const floorNumber = demosFloorNumberLabel(demosFloorKeyZ(state, key, fallbackFloor));
-  return floorNumber ? `${floorNumber} ${key || '?'}` : key;
+  const z = demosFloorKeyZ(state, key, fallbackFloor);
+  const floorNumber = demosFloorNumberLabel(z);
+  
+  let keyLabel = key;
+  const kind = floorKeyKind(key);
+  if (kind === 'design') {
+    const designDef = designFloorById(floorKeyRouteId(key));
+    if (designDef) keyLabel = designDef.displayName;
+  } else if (kind === 'story') {
+    const baseFloor = floorKeyBaseFloor(key);
+    if (baseFloor !== undefined) keyLabel = FLOOR_LABELS[baseFloor] ?? key;
+  }
+  
+  return floorNumber ? `${floorNumber}, ${keyLabel || '?'}` : (keyLabel || '?');
 }
 
 function findMobilityLabel(state: GameState, alifeId: number): string {
@@ -282,12 +295,35 @@ function locationLabel(state: GameState, entities: readonly Entity[], snapshot: 
   }
   const mobility = findMobilityLabel(state, snapshot.id);
   if (mobility) return mobility;
-  const floor = FLOOR_LABELS[snapshot.floor] ?? `этаж ${snapshot.floor}`;
-  const floorNumber = demosFloorNumberLabel(demosFloorKeyZ(state, snapshot.floorKey, snapshot.floor));
+  
+  const baseFloorLabel = FLOOR_LABELS[snapshot.floor] ?? `этаж ${snapshot.floor}`;
+  const z = demosFloorKeyZ(state, snapshot.floorKey, snapshot.floor);
+  const floorNumber = demosFloorNumberLabel(z);
+  
+  let keyLabel = snapshot.floorKey;
+  const kind = floorKeyKind(snapshot.floorKey);
+  if (kind === 'design') {
+    const designDef = designFloorById(floorKeyRouteId(snapshot.floorKey));
+    if (designDef) keyLabel = designDef.displayName;
+  } else if (kind === 'story') {
+    keyLabel = ''; // Redundant with baseFloorLabel
+  }
+
+  const locationParts = [];
+  if (floorNumber) locationParts.push(floorNumber);
+  
+  if (keyLabel) {
+    if (kind === 'design') locationParts.push(keyLabel);
+    else locationParts.push(`${baseFloorLabel} / ${keyLabel}`);
+  } else {
+    locationParts.push(baseFloorLabel);
+  }
+
   const coords = Number.isFinite(snapshot.x) && Number.isFinite(snapshot.y)
     ? `, ${Math.floor(snapshot.x ?? 0)}:${Math.floor(snapshot.y ?? 0)}`
     : '';
-  return `${floorNumber ? `${floorNumber}, ` : ''}${floor} / ${snapshot.floorKey}${coords}`;
+  
+  return `${locationParts.join(', ')}${coords}`;
 }
 
 function fallbackSpriteSeed(snapshot: AlifeNpcSnapshot): number {

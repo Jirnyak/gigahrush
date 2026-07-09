@@ -14,8 +14,10 @@ const NPC_DEF: PlotNpcDef = {
   faction: Faction.LIQUIDATOR,
   occupation: Occupation.HUNTER,
   sprite: Occupation.HUNTER,
-    level: 10,
-    money: 300, inventory: [
+  homeFloorKey: 'story:living',
+  level: 10,
+  money: 300,
+  inventory: [
     { defId: 'used_gasmask_filter', count: 3 },
     { defId: 'duct_tape', count: 2 },
   ],

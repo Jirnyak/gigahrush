@@ -310,10 +310,11 @@ function scaledPopulationCount(
   band: ProceduralPopulationBand,
   danger: number,
   anomalyPressure: number,
+  extraRawBonus = 0,
 ): number {
   const boundedDanger = Math.max(1, Math.min(5, Math.round(danger)));
   const boundedPressure = Math.max(0, Math.min(4, Math.round(anomalyPressure)));
-  const raw = activeActorCountAtDefaultSoftLimit(scale.base) +
+  const raw = activeActorCountAtDefaultSoftLimit(scale.base + extraRawBonus) +
     boundedDanger * activeActorCountAtDefaultSoftLimit(scale.perDanger) +
     boundedPressure * activeActorCountAtDefaultSoftLimit(scale.perAnomalyPressure) +
     activeActorCountAtDefaultSoftLimit(scale.bandBonus[band]);
@@ -327,7 +328,9 @@ function effectivePopulationCap(scale: ProceduralPopulationScale): number {
 export function proceduralPopulationBudget(input: ProceduralPopulationBudgetInput): ProceduralPopulationBudget {
   const profile = PROCEDURAL_POPULATION_PROFILES[input.profileId];
   const band = proceduralPopulationBand(input.z);
-  const monsterRaw = scaledPopulationCount(profile.monsters, band, input.danger, input.anomalyPressure);
+  
+  const zMonsterShift = Math.max(0, 1 - Math.abs(input.z) / 10) * 180;
+  const monsterRaw = scaledPopulationCount(profile.monsters, band, input.danger, input.anomalyPressure, zMonsterShift);
   const rawNpcs = input.npcAllowed ? scaledPopulationCount(profile.npcs, band, input.danger, input.anomalyPressure) : 0;
   const rawMonsters = Math.min(effectivePopulationCap(profile.monsters), monsterRaw + (input.industrial ? activeActorCountAtDefaultSoftLimit(profile.monsters.industrialBonus) : 0));
   const fitted = fitActiveActorCounts(rawNpcs, rawMonsters);

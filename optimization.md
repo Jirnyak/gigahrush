@@ -456,3 +456,11 @@ Minimum checks by change type:
 - Data/registry only: `npm run typecheck`; prefer `npm run check:readonly`.
 - Runtime/generation/save/render/UI/browser: `npm run check`.
 - Render/UI/mobile/storage: also `npm run check:browser` when Chrome is available, plus manual visual/browser validation.
+
+## Applied Optimizations
+
+**Date:** 2026-07-09
+**Target:** FPS drop in dense areas (e.g., Kvartiry).
+**Changes:**
+1. **`getWeaponStats` Fast Path:** Skipped evaluating `govnyakAimSpreadMult` and `sporeHazeAimSpreadMult` for entities without statuses or for melee weapons. This prevents allocating empty arrays `(e.statuses ?? [])` and doing `.findIndex()` multiple times per frame per NPC.
+2. **`queryRadiusCapped` / `queryPathRadius` In-Place Sort:** Replaced array `.push()`, `.pop()`, and `.length = cap` resizing in hot loops with a GC-free, in-place insertion sort logic. This eliminates major array reallocation overhead in V8 when spatial limits are hit.

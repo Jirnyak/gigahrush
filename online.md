@@ -1767,3 +1767,36 @@ Official Cloudflare sources checked on 2026-05-24, with pricing rechecked on 202
 - Workers pricing: https://developers.cloudflare.com/workers/platform/pricing/
 - Workers limits: https://developers.cloudflare.com/workers/platform/limits/
 - Cloudflare budget alerts: https://developers.cloudflare.com/billing/manage/budget-alerts/
+
+## 18. Online Prototype (POC)
+
+**Внимание: у нас вышел онлайн прототип!** Ниже приведена реализация и описание POC:
+
+### Online Prototype Steps
+
+Этот документ отслеживает прогресс создания минимального онлайн-режима (POC) для ГИГАХРУЩ.
+Мы используем Cloudflare Durable Objects как relay. Хост симулирует мир, пиры получают обновления.
+
+#### Фаза 1: Инфраструктура Cloudflare и UI (ВЫПОЛНЕНО)
+- [x] Добавить `FloorRoomDO` в `wrangler.jsonc`.
+- [x] Создать `functions/do/floor_room.ts` (Durable Object для релея WS сообщений).
+- [x] Добавить роуты `/api/online/v1/join` и `/api/online/v1/ws` в `functions/worker.ts`.
+- [x] Добавить в `net_sphere_ui.ts` кнопки "Создать сеть" и "Присоединиться".
+- [x] Написать базовый `src/systems/online_client.ts` для коннекта к WS.
+
+#### Фаза 2: Синхронизация сейва / стейта этажа (ВЫПОЛНЕНО)
+- [x] Хост при старте комнаты сериализует текущий этаж (аналог packed floor memory).
+- [x] При подключении пира хост отправляет этот стейт чанками через DO.
+- [x] Пир получает стейт, десериализует его и загружает как активный `World` (без симуляции AI).
+
+#### Фаза 3: Минимальный рендеринг игроков и AOI (ВЫПОЛНЕНО)
+- [x] Пир перехватывает свой `playerActions` и `movePlayer` и шлет как инпут на хост. (Реализована отправка позиции пира).
+- [x] Хост применяет инпуты к remote actors (фейковые сущности типа PLAYER для пиров). (Сущности типа NPC с peerSlot).
+- [x] Хост собирает сетку 16x16 вокруг каждого пира (AOI) + данные remote actors и шлет пирам.
+- [x] Пир обновляет свой `World` и сущности на основе AOI от хоста.
+
+#### Фаза 4: Синхронизация визуальной части и экшена (ВЫПОЛНЕНО)
+- [x] Пир рендерит других игроков и хоста.
+- [x] Хост рендерит пиров (спрайт зависит от пола: `citizen_male` / `citizen_female`).
+- [x] Базовая синхронизация стрельбы: пир шлет `peer_shoot`, хост просчитывает физику и урон, затем рассылает `broadcast_shoot` для визуала.
+- [x] Синхронизация выброшенных предметов через `peer_drop_item`.

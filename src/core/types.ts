@@ -1260,7 +1260,7 @@ export interface GameState {
   controlSel: number;
   controlScroll: number;
   showUiSettings: boolean;      // configurable HUD element screen
-  uiSettingsView: 'interface' | 'graphics';
+  uiSettingsView: 'interface' | 'graphics' | 'audio';
   uiSettingsSel: number;
   uiSettingsScroll: number;
   showMapLegend: boolean;       // separate full-map legend/settings screen

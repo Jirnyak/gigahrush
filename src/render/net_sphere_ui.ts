@@ -132,9 +132,7 @@ export function drawNetSphereMenu(
   }
 
   ctx.fillStyle = '#607080';
-  ctx.fillText(fitText(ctx, '/netgen NET-...  /new  /clear', leftW), leftX, commandY);
-  ctx.fillStyle = '#607080';
-  ctx.fillText(fitText(ctx, `${controlHint('netSphere')} открыть/закрыть  ПКМ/${controlHint('netClose')} закрыть  ${controlHint('netSubmit')} чат/отправить  ${controlHint('netErase')} стереть`, leftW), leftX, commandY + 10 * s);
+  ctx.fillText(fitText(ctx, '/help все команды', leftW), leftX, commandY);
   ctx.restore();
 
   ctx.strokeStyle = 'rgba(92,246,255,0.34)';

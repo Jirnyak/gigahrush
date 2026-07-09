@@ -64,6 +64,8 @@ import { generateTalkText } from './systems/dialogue';
 import { updateSamosbor, rebuildWorld, clearFogInZone, updateIstotitBellCompulsion, getSamosborWarningSnapshot } from './systems/samosbor';
 import { getActiveSamosborVariant } from './systems/samosbor_variants_runtime';
 import { cleanCellHazardsNear, getCellHazardMoveMultiplier, tickCellHazards } from './systems/cell_hazards';
+import { musicSystem } from './systems/music';
+
 import { adjustMonsterProjectileDamage, recordMonsterMeleeDeath, recordMonsterProjectileDeath } from './systems/monster_counterplay';
 import { applyMonsterArmorHit } from './systems/monster_armor';
 import { applyHitStaggerAndKnockback , calculateReloadTime } from './systems/combat';
@@ -125,6 +127,10 @@ import {
   mapLegendRowCount,
   uiSettingsRowAt,
   uiSettingsRowCount,
+  toggleMasterAudioEnabled,
+  adjustMusicVolume,
+  adjustSfxVolume,
+  resetAudioSettings,
 } from './systems/ui_orchestrator';
 import { checkPerformance } from './systems/fps_monitor';
 import { freshNeeds, ITEMS, WEAPON_STATS, type WeaponStats } from './data/catalog';
@@ -171,7 +177,7 @@ import {
   playGauss, playPlasma, playBFG, playFlame, playPsiBeam,
   playProjectileImpact, playEnergyImpact, playProjectileBodyHit,
   startAmbientDrone, setListenerPos, playSoundAt, playHudBarChange,
-  setAudioSuspendedForPage, setAudioSuspendedForPlatform,
+  setAudioSuspendedForPage, setAudioSuspendedForPlatform, syncAudioSettings,
   type HudBarAudioId,
 } from './systems/audio';
 import {
@@ -503,7 +509,6 @@ import {
   markPlatformGameplayStart,
   markPlatformGameplayStop,
   markPlatformReady,
-  togglePlatformAudioMuted,
   savePlatformRawGameSave,
 } from './systems/platform_bridge';
 import { addFactionRel, addFactionRelMutual, initFactionRelations } from './data/relations';
@@ -5993,7 +5998,7 @@ function runGameMenuSelection(sel: number): void {
       loadGame();
       break;
     case 'sound':
-      togglePlatformAudioMuted();
+      openUiSettingsMenu('audio');
       break;
     case 'help':
       openHelpMenu();
@@ -6474,7 +6479,7 @@ function closeUiSettingsMenu(): void {
   syncPauseState();
 }
 
-function applyUiSettingsSelection(index: number): void {
+function applyUiSettingsSelection(index: number, dir = 1): void {
   const row = uiSettingsRowAt(index, state.uiSettingsView);
   if (!row) return;
   if (row.kind === 'reset_interface') {
@@ -6487,6 +6492,30 @@ function applyUiSettingsSelection(index: number): void {
     state.msgs.push(msg('Графика сброшена: FOV 90°, помехи критично, HUD меньше движения, 3D высокая', state.time, '#8cf'));
     return;
   }
+  if (row.kind === 'reset_audio') {
+    resetAudioSettings();
+    syncAudioSettings();
+    state.msgs.push(msg('Аудио сброшено по умолчанию', state.time, '#8cf'));
+    return;
+  }
+  if (row.kind === 'master_audio') {
+    const enabled = toggleMasterAudioEnabled();
+    syncAudioSettings();
+    state.msgs.push(msg(`ОБЩИЙ ЗВУК: ${enabled ? 'ВКЛ' : 'ВЫКЛ'}`, state.time, enabled ? '#8cf' : '#fc8'));
+    return;
+  }
+  if (row.kind === 'music_volume') {
+    const vol = adjustMusicVolume(dir);
+    syncAudioSettings();
+    state.msgs.push(msg(`Музыка: ${Math.round(vol * 100)}%`, state.time, '#8cf'));
+    return;
+  }
+  if (row.kind === 'sfx_volume') {
+    const vol = adjustSfxVolume(dir);
+    syncAudioSettings();
+    state.msgs.push(msg(`Эффекты: ${Math.round(vol * 100)}%`, state.time, '#8cf'));
+    return;
+  }
   if (row.kind === 'preset') {
     if (applyUiPreset(row.preset.id)) {
       state.msgs.push(msg(`UI пресет: ${row.preset.label}`, state.time, '#8cf'));
@@ -6494,17 +6523,17 @@ function applyUiSettingsSelection(index: number): void {
     return;
   }
   if (row.kind === 'mobile_sensitivity') {
-    const sensitivity = adjustMobileLookSensitivity(1);
+    const sensitivity = adjustMobileLookSensitivity(dir);
     state.msgs.push(msg(`Мобильный обзор: ${Math.round(sensitivity * 100)}%`, state.time, '#8cf'));
     return;
   }
   if (row.kind === 'camera_fov') {
-    const fov = adjustCameraFov(1);
+    const fov = adjustCameraFov(dir);
     state.msgs.push(msg(`FOV: ${fov}°`, state.time, '#8cf'));
     return;
   }
   if (row.kind === 'screen_interference') {
-    const mode = cycleScreenInterferenceMode(1);
+    const mode = cycleScreenInterferenceMode(dir);
     const label = mode === 'off' ? 'выкл' : mode === 'full' ? 'полные' : 'слабые';
     state.msgs.push(msg(`Помехи экрана: ${label}`, state.time, mode === 'off' ? '#fc8' : '#8cf'));
     return;
@@ -6515,12 +6544,12 @@ function applyUiSettingsSelection(index: number): void {
     return;
   }
   if (row.kind === 'visual_geometry') {
-    const mode = cycleVisualGeometryMode(1);
+    const mode = cycleVisualGeometryMode(dir);
     state.msgs.push(msg(`3D детализация: ${visualGeometryModeLabel(mode).toLowerCase()}`, state.time, mode === 'off' ? '#fc8' : '#8cf'));
     return;
   }
   if (row.kind === 'lighting_quality') {
-    const mode = cycleLightingQualityMode(1);
+    const mode = cycleLightingQualityMode(dir);
     state.msgs.push(msg(`Качество света: ${lightingQualityModeLabel(mode).toLowerCase()}`, state.time, mode === 'off' ? '#fc8' : '#8cf'));
     return;
   }
@@ -7440,12 +7469,21 @@ function handleMenuInput(): void {
     const fixedUiCommand = acceptEdge || closeEdge;
     const upNav = !fixedUiCommand && menuUpNav();
     const dnNav = !fixedUiCommand && menuDownNav();
+    const leftNav = !fixedUiCommand && menuRepeatStep('left', input.invLeft, leftEdge);
+    const rightNav = !fixedUiCommand && menuRepeatStep('right', input.invRight || input.drop, rightEdge);
+
     if (upNav) state.uiSettingsSel = Math.max(0, state.uiSettingsSel - 1);
     if (dnNav) state.uiSettingsSel = Math.min(uiSettingsRowCount(state.uiSettingsView) - 1, state.uiSettingsSel + 1);
     keepUiSettingsSelectionVisible();
+    
     if (acceptEdge) {
-      applyUiSettingsSelection(state.uiSettingsSel);
+      applyUiSettingsSelection(state.uiSettingsSel, 1);
+    } else if (leftNav) {
+      applyUiSettingsSelection(state.uiSettingsSel, -1);
+    } else if (rightNav) {
+      applyUiSettingsSelection(state.uiSettingsSel, 1);
     }
+    
     if (closeEdge) closeUiSettingsMenu();
 
     syncMenuInputBaselines();
@@ -8457,6 +8495,7 @@ function gameLoop(now: number): void {
 
   // Update dynamic world data (fog, door states, wallTex for slides)
   updateGeneratedDynamicSky(dt);
+  musicSystem.tick(world, entities, renderActor, state, dt);
   updateDynamicData(world, camX, camY);
 
   // WebGL raycaster + sprites

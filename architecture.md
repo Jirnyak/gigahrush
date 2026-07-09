@@ -3,6 +3,8 @@
 > Центральный документ архитектуры.
 >
 > Роль: описывает крупные системы игры и то, как они стыкуются: 1024x1024 toroidal `World`, typed arrays, flat entities, rooms, items, monsters, NPC, projectiles, traces, samosbor, path fields, save/runtime state, generation, systems and render. Главные принципы: универсальность, минимализм, модульность, процедурность, комбинаторность, оптимизация, отсутствие hardcoded content paths and honest emergence.
+>
+> **Парадигма Бритвы Оккама:** Минимум систем, максимум функциональности. Если какая-то логика, слой или сущность дублируется или является излишеством, она должна быть обрезана.
 
 Purpose: turn the current TypeScript/Vite raycaster game into a content factory where many agents can add rooms, NPCs, quests, events, monsters, documents, economy hooks, and floor variants without fighting over the same files.
 

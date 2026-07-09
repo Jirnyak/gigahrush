@@ -2,6 +2,7 @@ import { FloorLevel, type Entity, type GameState } from '../core/types';
 import { getControlCaptureAction, matchesControlAction } from './controls';
 import { portalAllowsOptionalNetwork } from './platform_bridge';
 import { currentFloorRunEntry, ensureFloorRunState, floorRunEntryRouteId } from './procedural_floors';
+import { startOnlineHost, joinOnlinePeer } from './online_client';
 
 type NetSphereStatus = 'idle' | 'syncing' | 'online' | 'offline';
 export type NetSphereEventType = 'samosbor' | 'death';
@@ -651,6 +652,20 @@ async function sendChat(body: string): Promise<void> {
   }
 }
 
+function addLocalSystemMessage(body: string): void {
+  runtime.chat.push({
+    id: Date.now() + Math.random(),
+    nickname: 'СИСТЕМА',
+    body,
+    createdAt: Date.now()
+  });
+  if (runtime.chat.length > CHAT_LIMIT) {
+    const removed = runtime.chat.length - CHAT_LIMIT;
+    runtime.chat.splice(0, removed);
+  }
+  runtime.chatScroll = 0;
+}
+
 function submitDraft(): void {
   const draft = runtime.draft.trim();
   runtime.draft = '';
@@ -658,43 +673,69 @@ function submitDraft(): void {
   if (draft.startsWith('/')) {
     const [command, ...parts] = draft.split(/\s+/);
     const arg = parts.join(' ');
-    if (command === '/netgen' || command === '/ген') {
-      const next = cleanNetGen(arg);
-      if (!next) {
-        runtime.error = 'НЕТ-ГЕН: нужен NET-XXXX-XXXX-XXXX';
+    
+    switch (command) {
+      case '/netgen':
+      case '/ген': {
+        const next = cleanNetGen(arg);
+        if (!next) {
+          addLocalSystemMessage('Ошибка: нужен NET-XXXX-XXXX-XXXX');
+          return;
+        }
+        runtime.netGen = next;
+        runtime.profile = null;
+        runtime.chat = [];
+        runtime.events = [];
+        runtime.chatScroll = 0;
+        runtime.lastChatId = 0;
+        storageSet(localStorage, NET_GEN_KEY, runtime.netGen);
+        runtime.nextHeartbeatAt = 0;
+        runtime.nextPollAt = 0;
+        addLocalSystemMessage('НЕТ-ГЕН изменен.');
         return;
       }
-      runtime.netGen = next;
-      runtime.profile = null;
-      runtime.chat = [];
-      runtime.events = [];
-      runtime.chatScroll = 0;
-      runtime.lastChatId = 0;
-      storageSet(localStorage, NET_GEN_KEY, runtime.netGen);
-      runtime.nextHeartbeatAt = 0;
-      runtime.nextPollAt = 0;
-      return;
+      case '/new': {
+        runtime.netGen = randomId('NET', 3);
+        runtime.profile = null;
+        runtime.chat = [];
+        runtime.events = [];
+        runtime.chatScroll = 0;
+        runtime.lastChatId = 0;
+        storageSet(localStorage, NET_GEN_KEY, runtime.netGen);
+        runtime.nextHeartbeatAt = 0;
+        runtime.nextPollAt = 0;
+        addLocalSystemMessage('Сгенерирован новый НЕТ-ГЕН.');
+        return;
+      }
+      case '/clear': {
+        runtime.chat = [];
+        runtime.chatScroll = 0;
+        runtime.lastChatId = 0;
+        return;
+      }
+      case '/host': {
+        const roomId = startOnlineHost();
+        addLocalSystemMessage(`Хост запущен. Код комнаты: ${roomId}`);
+        return;
+      }
+      case '/join': {
+        if (!arg) {
+          addLocalSystemMessage('Укажите код комнаты: /join CODE');
+          return;
+        }
+        joinOnlinePeer(arg);
+        addLocalSystemMessage(`Подключение к комнате ${arg}...`);
+        return;
+      }
+      case '/help': {
+        addLocalSystemMessage('Команды: /host, /join CODE, /netgen, /new, /clear, /help');
+        return;
+      }
+      default: {
+        addLocalSystemMessage('Неизвестная команда. Введите /help');
+        return;
+      }
     }
-    if (command === '/new') {
-      runtime.netGen = randomId('NET', 3);
-      runtime.profile = null;
-      runtime.chat = [];
-      runtime.events = [];
-      runtime.chatScroll = 0;
-      runtime.lastChatId = 0;
-      storageSet(localStorage, NET_GEN_KEY, runtime.netGen);
-      runtime.nextHeartbeatAt = 0;
-      runtime.nextPollAt = 0;
-      return;
-    }
-    if (command === '/clear') {
-      runtime.chat = [];
-      runtime.chatScroll = 0;
-      runtime.lastChatId = 0;
-      return;
-    }
-    runtime.error = 'Команды: /netgen, /new, /clear';
-    return;
   }
   void sendChat(draft);
 }

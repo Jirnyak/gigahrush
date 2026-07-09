@@ -598,32 +598,30 @@ export class EntityIndex {
         return;
       }
       if (out.length >= cap) {
-        const lastIdx = out.length - 1;
+        const lastIdx = cap - 1;
         if (d2 > distances[lastIdx] || (d2 === distances[lastIdx] && e.id >= ids[lastIdx])) return;
       }
-      out.push(e);
-      distances.push(d2);
-      ids.push(e.id);
-      let pos = out.length - 1;
+
+      let pos = out.length;
+      if (pos >= cap) {
+        pos = cap - 1;
+      } else {
+        out.push(e);
+        distances.push(d2);
+        ids.push(e.id);
+      }
+
       while (pos > 0) {
         const pd2 = distances[pos - 1];
         if (pd2 < d2 || (pd2 === d2 && ids[pos - 1] <= e.id)) break;
-        const swapE = out[pos - 1];
-        const swapId = ids[pos - 1];
-        const swapD2 = distances[pos - 1];
-        out[pos - 1] = out[pos];
-        ids[pos - 1] = ids[pos];
-        distances[pos - 1] = distances[pos];
-        out[pos] = swapE;
-        ids[pos] = swapId;
-        distances[pos] = swapD2;
+        out[pos] = out[pos - 1];
+        ids[pos] = ids[pos - 1];
+        distances[pos] = distances[pos - 1];
         pos--;
       }
-      if (out.length > cap) {
-        out.length = cap;
-        distances.length = cap;
-        ids.length = cap;
-      }
+      out[pos] = e;
+      ids[pos] = e.id;
+      distances[pos] = d2;
     };
     const bx = wrappedBucketCoord(x);
     const by = wrappedBucketCoord(y);
@@ -730,32 +728,29 @@ export class EntityIndex {
       if (out.length >= cap) {
         const worst = cap - 1;
         if (!candidateBetterThan(hitT, lateralD2, e.id, hitTs[worst], lateralDistances[worst], ids[worst])) return;
-        hitTs[worst] = hitT;
-        lateralDistances[worst] = lateralD2;
-        ids[worst] = e.id;
-        out[worst] = e;
+      }
+
+      let pos = out.length;
+      if (pos >= cap) {
+        pos = cap - 1;
       } else {
         hitTs.push(hitT);
         lateralDistances.push(lateralD2);
         ids.push(e.id);
         out.push(e);
       }
-      let pos = out.length - 1;
-      while (pos > 0 && candidateBetterThan(hitTs[pos], lateralDistances[pos], ids[pos], hitTs[pos - 1], lateralDistances[pos - 1], ids[pos - 1])) {
-        const swapHitT = hitTs[pos - 1];
-        const swapLateral = lateralDistances[pos - 1];
-        const swapId = ids[pos - 1];
-        const swapEntity = out[pos - 1];
-        hitTs[pos - 1] = hitTs[pos];
-        lateralDistances[pos - 1] = lateralDistances[pos];
-        ids[pos - 1] = ids[pos];
-        out[pos - 1] = out[pos];
-        hitTs[pos] = swapHitT;
-        lateralDistances[pos] = swapLateral;
-        ids[pos] = swapId;
-        out[pos] = swapEntity;
+
+      while (pos > 0 && candidateBetterThan(hitT, lateralD2, e.id, hitTs[pos - 1], lateralDistances[pos - 1], ids[pos - 1])) {
+        hitTs[pos] = hitTs[pos - 1];
+        lateralDistances[pos] = lateralDistances[pos - 1];
+        ids[pos] = ids[pos - 1];
+        out[pos] = out[pos - 1];
         pos--;
       }
+      hitTs[pos] = hitT;
+      lateralDistances[pos] = lateralD2;
+      ids[pos] = e.id;
+      out[pos] = e;
     };
 
     for (let i = 0; i <= steps; i++) {

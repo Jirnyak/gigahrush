@@ -2289,9 +2289,8 @@ export function equippedCombatItemId(e: Entity): string {
 /* ── Get full weapon stats ────────────────────────────────────── */
 export function getWeaponStats(e: Entity, itemId = equippedCombatItemId(e)): WeaponStats {
   const ws = WEAPON_STATS[itemId] ?? WEAPON_STATS[''];
-  const govnyakSpread = govnyakAimSpreadMult(e);
-  const sporeSpread = sporeHazeAimSpreadMult(e);
-  if (!e.rpg && govnyakSpread === 1 && sporeSpread === 1) return ws;
+  if (!e.rpg && (!e.statuses || e.statuses.length === 0)) return ws;
+
   let speed = ws.speed;
   let spread = ws.spread;
   let psiCost = ws.psiCost;
@@ -2302,6 +2301,8 @@ export function getWeaponStats(e: Entity, itemId = equippedCombatItemId(e)): Wea
     if (nextSpeed !== ws.speed) { speed = nextSpeed; changed = true; }
   }
   if (ws.isRanged && ws.spread !== undefined && ws.spread > 0) {
+    const govnyakSpread = e.statuses ? govnyakAimSpreadMult(e) : 1;
+    const sporeSpread = e.statuses ? sporeHazeAimSpreadMult(e) : 1;
     const nextSpread = ws.spread * (e.rpg ? agiRangedSpreadMult(e.rpg) : 1) * govnyakSpread * sporeSpread;
     if (nextSpread !== ws.spread) { spread = nextSpread; changed = true; }
   }

@@ -71,10 +71,10 @@ test('Olga walk and harm clip frame facts match the frame pack contract', () => 
   assert.ok(harm);
   assert.equal(renderAnimationFrameCount(walk), 6);
   assert.equal(renderAnimationFrameCount(harm), 3);
-  assert.equal(walk.source.width, 64);
-  assert.equal(walk.source.height, 64);
-  assert.equal(harm.source.width, 64);
-  assert.equal(harm.source.height, 64);
+  assert.equal(walk.source.width, 128);
+  assert.equal(walk.source.height, 128);
+  assert.equal(harm.source.width, 128);
+  assert.equal(harm.source.height, 128);
   assert.equal(walk.source.fallback, 'static');
   assert.equal(harm.source.fallback, 'static');
 });
