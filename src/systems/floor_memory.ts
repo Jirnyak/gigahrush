@@ -188,7 +188,7 @@ export function floorMemoryKeyForStoryFloor(floor: FloorLevel): string {
   return floorKeyForStory(floor);
 }
 
-function storableEntity(entity: Entity): boolean {
+export function storableEntity(entity: Entity): boolean {
   return !isNativePlayerBodyEntity(entity) && entity.type !== EntityType.PROJECTILE;
 }
 
@@ -423,7 +423,7 @@ function numberEntryListForSave(input: Iterable<readonly [number, number]>): Arr
   return out;
 }
 
-function worldForSave(world: World): FloorMemoryWorldSave {
+export function worldForSave(world: World): FloorMemoryWorldSave {
   return {
     arrays: WORLD_ARRAY_FIELDS.map(def => encodeRleArray(worldArray(world, def.field), def.field, def.type)),
     rooms: cloneJson(world.rooms),
@@ -769,7 +769,7 @@ function sanitizedWorldSave(input: unknown): FloorMemoryWorldSave | null {
   };
 }
 
-function worldFromSave(input: unknown, spawnX?: number, spawnY?: number): World | null {
+export function worldFromSave(input: unknown, spawnX?: number, spawnY?: number): World | null {
   const savedWorld = sanitizedWorldSave(input);
   if (!savedWorld) return null;
   const world = new World();

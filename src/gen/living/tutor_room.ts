@@ -20,7 +20,7 @@ import { World } from '../../core/world';
 import { stampRoom, protectRoom } from '../shared';
 import { requireSpawnedPlotNpcFromPackage } from '../plot_npc_spawn';
 import { Spr } from '../../render/sprite_index';
-import { spawnTutorialExitDoor, spawnTutorialKey } from '../design_floors/tutorial_apartments';
+import { spawnTutorialKey } from '../design_floors/tutorial_apartments';
 
 function protectTutorialWallsAsHermetic(world: World, x: number, y: number, w: number, h: number): void {
   for (let dy = -1; dy <= h; dy++) {
@@ -330,7 +330,6 @@ export function generateTutorRoom(world: World, nextRoomId: number, entities: En
   const spawnY = isTutorial ? cafeY + Math.floor(cafeH / 2) + 0.5 : hallY + hallH - 2 + 0.5;
 
   if (isTutorial) {
-    spawnTutorialExitDoor(world, hallX + Math.floor(hallW / 2), hallY + hallH);
     spawnTutorialKey(world, nextId, hallX + 2, hallY + 2);
   }
 

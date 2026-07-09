@@ -604,6 +604,7 @@ export interface Entity extends InventoryHolder {
   angle: number;
   pitch: number;              // vertical look: -1..1 (y-shearing)
   alive: boolean;
+  peerSlot?: number;          // optional: online player slot
   speed: number;
   sprite: number;             // sprite sheet index
   spriteSeed?: number;        // deterministic per-entity procedural visual seed
