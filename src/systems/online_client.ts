@@ -77,9 +77,13 @@ export interface SyncEntity {
   faction?: number; staggerTimer?: number;
   speed: number; monsterKind?: number;
   dropDefId?: string; dropCount?: number;
+  syncInventory?: { defId: string; count: number }[];
 }
 
 export function compactEntity(e: Entity): SyncEntity {
+  const syncInv = e.peerSlot !== undefined && e.inventory
+    ? e.inventory.map(i => ({ defId: i.defId, count: i.count }))
+    : undefined;
   return {
     id: e.id, type: e.type,
     x: +e.x.toFixed(2), y: +e.y.toFixed(2),
@@ -92,6 +96,7 @@ export function compactEntity(e: Entity): SyncEntity {
     speed: e.speed, monsterKind: e.monsterKind,
     dropDefId: e.inventory?.[0]?.defId,
     dropCount: e.inventory?.[0]?.count,
+    syncInventory: syncInv,
   };
 }
 

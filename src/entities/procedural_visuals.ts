@@ -544,14 +544,15 @@ function monsterTint(kind: MonsterKind, seed: number): RGB {
 }
 
 function mutateMonsterSprite(base: Uint32Array, kind: MonsterKind, seed: number): Uint32Array {
-  const out = new Uint32Array(S * S).fill(CLEAR);
+  const srcS = Math.sqrt(base.length) | 0;
+  const out = new Uint32Array(srcS * srcS).fill(CLEAR);
   const tint = monsterTint(kind, seed);
   const strength = 0.18 + rnd(seed, 401) * 0.28;
   const alphaMul = kind === MonsterKind.SPIRIT ? 0.62 + rnd(seed, 402) * 0.22 : 1;
   const dark = kind === MonsterKind.SHADOW ? 0.48 : 1;
 
-  for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) {
-    const c = base[y * S + x];
+  for (let y = 0; y < srcS; y++) for (let x = 0; x < srcS; x++) {
+    const c = base[y * srcS + x];
     const a = c >>> 24;
     if (a === 0) continue;
     const pock = noise(x * 2, y * 2, seed + 31);
@@ -561,7 +562,7 @@ function mutateMonsterSprite(base: Uint32Array, kind: MonsterKind, seed: number)
     const r = component(c, 0);
     const g = component(c, 8);
     const b = component(c, 16);
-    out[y * S + x] = rgba(
+    out[y * srcS + x] = rgba(
       clamp((r * (1 - strength) + tint[0] * strength + n + vein) * dark),
       clamp((g * (1 - strength) + tint[1] * strength + n - vein * 0.35) * dark),
       clamp((b * (1 - strength) + tint[2] * strength + n - vein * 0.45) * dark),

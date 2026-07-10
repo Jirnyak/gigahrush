@@ -880,13 +880,20 @@ setOnlineMessageHandler((msgData: any) => {
     for (const se of syncEntities) {
       seenIds.add(se.id);
       if (se.peerSlot === mySlot) {
-        // Update local player from host authoritative position
-        player.x = se.x;
-        player.y = se.y;
+        // Only snap position if far from host truth (>6 cells = teleport/correction)
+        const pdx = world.delta(player.x, se.x);
+        const pdy = world.delta(player.y, se.y);
+        if (pdx * pdx + pdy * pdy > 36) {
+          player.x = se.x;
+          player.y = se.y;
+        }
+        // Authoritative state always accepted
         player.hp = se.hp;
         player.maxHp = se.maxHp;
         player.alive = se.alive;
         player.staggerTimer = se.staggerTimer;
+        // Sync inventory from host
+        if (se.syncInventory) player.inventory = se.syncInventory;
         continue;
       }
       // Find existing entity by id
@@ -8612,7 +8619,7 @@ function gameLoop(now: number): void {
     updateBlockCrushDamage(world, entities, state, dt);
     updateProceduralAnomalies(world, player, state, dt);
     const samosborStart = performance.now();
-    const samosborRebuild = updateSamosbor(world, entities, state, dt, nextEntityId, currentLocalSamosborPatchGeneration, scheduleLocalSamosborPatch);
+    const samosborRebuild = isOnlineConnected() ? false : updateSamosbor(world, entities, state, dt, nextEntityId, currentLocalSamosborPatchGeneration, scheduleLocalSamosborPatch);
     lastSamosborUpdateMs = performance.now() - samosborStart;
     if (samosborRebuild) {
       closeCraftMenu();
@@ -8806,7 +8813,7 @@ function gameLoop(now: number): void {
     updateAI(world, entities, dt, state.time, state.msgs, listener.id, state.clock, state.samosborActive, nextEntityId, state.currentFloor, state);
     lastAiUpdateMs = performance.now() - aiStart;
     tickCellHazards(world, entities, state, dt, player, false);
-    if (updateSamosbor(world, entities, state, dt, nextEntityId, currentLocalSamosborPatchGeneration, scheduleLocalSamosborPatch)) {
+    if (!isOnlineConnected() && updateSamosbor(world, entities, state, dt, nextEntityId, currentLocalSamosborPatchGeneration, scheduleLocalSamosborPatch)) {
       closeCraftMenu();
       reportNetSphereProgressEvents();
       scheduleLoading(() => {

@@ -48,6 +48,7 @@ import {
   ensureFloorRunState,
   nextFloorRunSamosborCooldown,
   nextFloorRunSamosborDuration,
+  floorRunSamosborDepth01,
   SAMOSBOR_DURATION_MAX_SEC,
   SAMOSBOR_DURATION_MIN_SEC,
 } from './procedural_floors';
@@ -258,6 +259,7 @@ interface SamosborFront {
   processed: number;        // total cells processed
   changed: number;          // total cells mutated
   monstersSpawned: number;
+  monsterCap: number;
   dead: boolean;
   visited: Set<number>;     // persistent BFS visited set — avoids O(N) rebuild per tick
 }
@@ -491,7 +493,7 @@ function mutateFrontCell(
   return flags;
 }
 
-function createFrontAtCell(world: World, ci: number, shelterSet: ReadonlySet<number>): SamosborFront | null {
+function createFrontAtCell(world: World, ci: number, shelterSet: ReadonlySet<number>, variant: ActiveSamosborVariant, depth01: number): SamosborFront | null {
   if (!canFrontMutateCell(world, ci, shelterSet)) return null;
   const cell = world.cells[ci];
   if (cell !== Cell.FLOOR && cell !== Cell.WATER) return null;
@@ -508,6 +510,7 @@ function createFrontAtCell(world: World, ci: number, shelterSet: ReadonlySet<num
     processed: 0,
     changed: 0,
     monstersSpawned: 0,
+    monsterCap: Math.max(1, Math.round((type === 'flash' ? 1 : type === 'crack' ? 2 : type === 'tendril' ? 3 : 5) * variant.spawnMult * (3 + depth01 * 32))),
     dead: false,
     visited: new Set([ci]),
   };
@@ -518,6 +521,7 @@ function spawnSamosborFronts(
   _entities: Entity[],
   _variant: ActiveSamosborVariant,
   shelterRoomIds: readonly number[],
+  depth01: number,
 ): SamosborFront[] {
   const count = FRONT_MIN_COUNT + ((Math.random() * (FRONT_MAX_COUNT - FRONT_MIN_COUNT + 1)) | 0);
   const fronts: SamosborFront[] = [];
@@ -533,7 +537,7 @@ function spawnSamosborFronts(
     const zid = world.zoneMap[ci];
     if (zid >= 0 && usedZones.has(zid) && Math.random() > 0.3) continue;
     if (zid >= 0) usedZones.add(zid);
-    const front = createFrontAtCell(world, ci, shelterSet);
+    const front = createFrontAtCell(world, ci, shelterSet, _variant, depth01);
     if (front) fronts.push(front);
   }
   return fronts;
@@ -587,8 +591,8 @@ function tickSamosborFront(
       }
       front.changed++;
 
-      // Spawn monster every N processed cells
-      if (front.processed % FRONT_MONSTER_CELL_INTERVAL === 0) {
+      // Spawn monster every N processed cells, up to the front's cap
+      if (front.processed % FRONT_MONSTER_CELL_INTERVAL === 0 && front.monstersSpawned < front.monsterCap) {
         if (world.cells[ci] === Cell.FLOOR && !world.aptMask[ci] && canSpawnEntityType(entities, EntityType.MONSTER)) {
           const kind = pickMonsterKindForWave(floor, samosborCount);
           entities.push(createMonster(world, nextId, kind, (ci % W) + 0.5, ((ci / W) | 0) + 0.5, floor));
@@ -2388,7 +2392,7 @@ export function updateSamosbor(
 
     // Launch multi-front chaotic waves across the entire floor
     clearSamosborFronts();
-    activeSamosborFronts = spawnSamosborFronts(world, entities, variant, getSamosborShelterRoomIds(state));
+    activeSamosborFronts = spawnSamosborFronts(world, entities, variant, getSamosborShelterRoomIds(state), floorRunSamosborDepth01(state));
   }
 
   // ── Seal apartments 10 seconds before samosbor ends ──

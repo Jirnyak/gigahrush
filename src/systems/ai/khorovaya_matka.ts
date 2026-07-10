@@ -17,6 +17,7 @@ import { canSpawnEntityType } from '../entity_limits';
 import { publishEvent } from '../events';
 import { randomRPG, scaleMonsterHp, scaleMonsterSpeed } from '../rpg';
 import { playGrowl, playSoundAt } from '../audio';
+import { hasClearLineOfFire } from './monster';
 
 export const KHOROVAYA_MATKA_CHILD_CAP = 7;
 export const KHOROVAYA_MATKA_VULNERABLE_SEC = 8;
@@ -109,6 +110,7 @@ function applyMembraneDamageGate(e: Entity): void {
 
 function findChoirSpawnCell(world: World, e: Entity, slot: number): { x: number; y: number } | null {
   const base = e.id * 0.61803398875 + slot * 1.917;
+  const sourceRoom = world.roomMap[world.idx(Math.floor(e.x), Math.floor(e.y))];
   for (let attempt = 0; attempt < CHOIR_SPAWN_ATTEMPTS; attempt++) {
     const angle = base + attempt * 2.3999632297;
     const dist = 2 + ((attempt + slot) % 4);
@@ -118,6 +120,7 @@ function findChoirSpawnCell(world: World, e: Entity, slot: number): { x: number;
     const cell = world.cells[ci];
     if (cell !== Cell.FLOOR && cell !== Cell.WATER) continue;
     if (world.solid(x, y)) continue;
+    if (world.roomMap[ci] !== sourceRoom && !hasClearLineOfFire(world, e, { x: x + 0.5, y: y + 0.5 } as Entity, dist + 1)) continue;
     return { x, y };
   }
   return null;
