@@ -141,13 +141,20 @@ export function isOnlineConnected(): boolean {
   return ws !== null && ws.readyState === WebSocket.OPEN;
 }
 
+function generateRoomCode(): string {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  let result = '';
+  for (let i = 0; i < 6; i++) result += chars.charAt(Math.floor(Math.random() * chars.length));
+  return result;
+}
+
 export function startOnlineHost(): string {
   if (ws) {
     ws.close();
   }
   
   // Generate random room ID
-  const roomId = 'ROOM-' + Math.random().toString(36).substring(2, 8).toUpperCase();
+  const roomId = generateRoomCode();
   currentRoomId = roomId;
   isHost = true;
   
