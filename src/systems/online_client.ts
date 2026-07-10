@@ -43,6 +43,7 @@ export function maybeSendPeerInput(p: {
   x: number; y: number; angle: number; pitch: number;
   weapon: string; tool: string; sprite: number;
   npcVisualId?: string; sex?: string;
+  fire?: boolean; interact?: boolean;
 }): void {
   if (isHost) return; // host doesn't send input to itself
   const now = performance.now();
@@ -53,6 +54,8 @@ export function maybeSendPeerInput(p: {
     x: p.x, y: p.y, angle: p.angle, pitch: p.pitch,
     weapon: p.weapon, tool: p.tool, sprite: p.sprite,
     npcVisualId: p.npcVisualId, sex: p.sex,
+    fire: p.fire || undefined,
+    interact: p.interact || undefined,
   });
 }
 
@@ -67,6 +70,7 @@ export interface SyncEntity {
   sex?: string; npcVisualId?: string;
   faction?: number; staggerTimer?: number;
   speed: number; monsterKind?: number;
+  dropDefId?: string; dropCount?: number;
 }
 
 export function compactEntity(e: Entity): SyncEntity {
@@ -80,6 +84,8 @@ export function compactEntity(e: Entity): SyncEntity {
     sex: e.sex, npcVisualId: e.npcVisualId,
     faction: e.faction, staggerTimer: e.staggerTimer,
     speed: e.speed, monsterKind: e.monsterKind,
+    dropDefId: e.inventory?.[0]?.defId,
+    dropCount: e.inventory?.[0]?.count,
   };
 }
 

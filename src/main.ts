@@ -717,6 +717,91 @@ setOnlineMessageHandler((msgData: any) => {
       if (msgData.sprite !== undefined) actor.sprite = msgData.sprite;
       if (msgData.npcVisualId !== undefined) actor.npcVisualId = msgData.npcVisualId;
       if (msgData.sex !== undefined) actor.sex = msgData.sex;
+
+      // ── Peer fire: spawn projectile from remote actor ──
+      if (msgData.fire) {
+        const weaponId = equippedCombatItemId(actor);
+        const ws = getWeaponStats(actor, weaponId);
+        // Decrement cooldown by approximate peer input interval
+        actor.attackCd = Math.max(0, (actor.attackCd ?? 0) - 0.1);
+        if (actor.attackCd <= 0) {
+          if (ws.isRanged) {
+            const cos = Math.cos(actor.angle);
+            const sin = Math.sin(actor.angle);
+            const pellets = ws.pellets ?? 1;
+            const spread = ws.spread ?? 0;
+            const pt = ws.projType ?? ProjType.NORMAL;
+            for (let p = 0; p < pellets; p++) {
+              const ang = actor.angle + (Math.random() - 0.5) * spread;
+              const spd = ws.projSpeed ?? 15;
+              const proj: Entity = {
+                id: nextEntityId.v++,
+                type: EntityType.PROJECTILE,
+                x: actor.x + cos * 0.85,
+                y: actor.y + sin * 0.85,
+                angle: ang, pitch: 0,
+                alive: true, speed: 0,
+                sprite: ws.projSprite ?? Spr.BULLET,
+                vx: Math.cos(ang) * spd,
+                vy: Math.sin(ang) * spd,
+                vz: (actor.pitch ?? 0) * spd * 0.5,
+                projDmg: ws.dmg,
+                projLife: pt === ProjType.GRENADE ? 1.5 : pt === ProjType.FLAME ? 0.7 : 3.0,
+                ownerId: actor.id,
+                weapon: weaponId,
+                spriteScale: pt === ProjType.BFG ? 0.6 : pt === ProjType.FLAME ? 0.55 : pt === ProjType.GRENADE ? 0.35 : 0.25,
+                spriteZ: 0.5,
+                projType: pt,
+              };
+              if (ws.aoeRadius) { proj.aoeRadius = ws.aoeRadius; proj.aoeDmg = ws.dmg; }
+              entities.push(proj);
+            }
+            actor.attackCd = ws.speed;
+          } else {
+            // Melee
+            const range = ws.range;
+            const ax = actor.x + Math.cos(actor.angle) * range;
+            const ay = actor.y + Math.sin(actor.angle) * range;
+            const entityIndex = getEntityIndex();
+            const meleeQuery: Entity[] = [];
+            entityIndex.queryRadius(ax, ay, 1.2, meleeQuery, ENTITY_MASK_ACTOR);
+            for (const e of meleeQuery) {
+              if (e.id === actor.id || !e.alive || e.hp === undefined) continue;
+              const d2 = world.dist2(actor.x, actor.y, e.x, e.y);
+              if (d2 > (range + 0.5) * (range + 0.5)) continue;
+              const rawDmg = ws.dmg;
+              e.hp -= rawDmg;
+              e.staggerTimer = 0.15;
+              if (e.hp <= 0) { e.alive = false; e.hp = 0; }
+              break;
+            }
+            actor.attackCd = ws.speed;
+          }
+        }
+      }
+
+      // ── Peer interact: toggle doors ──
+      if (msgData.interact) {
+        const lx = actor.x + Math.cos(actor.angle) * 1.5;
+        const ly = actor.y + Math.sin(actor.angle) * 1.5;
+        const cx = Math.floor(world.wrap(lx));
+        const cy = Math.floor(world.wrap(ly));
+        const idx = cy * W + cx;
+        if (world.cells[idx] === Cell.DOOR && world.doors.has(idx)) {
+          const door = world.doors.get(idx)!;
+          if (door.state === DoorState.CLOSED) {
+            setDoorState(world, door, DoorState.OPEN);
+            door.timer = 0;
+          } else if (door.state === DoorState.OPEN) {
+            setDoorState(world, door, DoorState.CLOSED);
+          } else if (door.state === DoorState.HERMETIC_CLOSED && !state.samosborActive) {
+            setDoorState(world, door, DoorState.HERMETIC_OPEN);
+            door.timer = 0;
+          } else if (door.state === DoorState.HERMETIC_OPEN) {
+            setDoorState(world, door, DoorState.HERMETIC_CLOSED);
+          }
+        }
+      }
     }
   }
 
@@ -783,6 +868,7 @@ setOnlineMessageHandler((msgData: any) => {
         sex: se.sex, npcVisualId: se.npcVisualId,
         faction: se.faction, staggerTimer: se.staggerTimer,
         speed: se.speed, monsterKind: se.monsterKind,
+        inventory: se.dropDefId ? [{ defId: se.dropDefId, count: se.dropCount ?? 1 }] : undefined,
       } as Entity;
       if (se.peerSlot === mySlot) {
         // Update local player from host authoritative position
@@ -801,6 +887,19 @@ setOnlineMessageHandler((msgData: any) => {
     if (!foundSelf) newEntities.push(player);
     entities = newEntities;
     rebuildEntityIndex(entities, 'load');
+  }
+
+  // ── PEER: door state sync from host ──
+  if (msgData.type === 'door_sync' && isOnlinePeer() && onlinePeerFloorReady) {
+    const doors: { idx: number; state: number }[] = msgData.doors;
+    if (doors) {
+      for (const ds of doors) {
+        const door = world.doors.get(ds.idx);
+        if (door && door.state !== ds.state) {
+          setDoorState(world, door, ds.state as DoorState);
+        }
+      }
+    }
   }
 
   // ── HOST: peer disconnected ──
@@ -8260,7 +8359,10 @@ function gameLoop(now: number): void {
         weapon: player.weapon ?? '', tool: player.tool ?? '',
         sprite: player.sprite,
         npcVisualId: player.npcVisualId, sex: player.sex,
+        fire: !!(input.attack || input.mouseAttack),
+        interact: !!input.interact,
       });
+      if (input.interact) input.interact = false;
     }
     if (isOnlineHost() && shouldSendHostSync()) {
       // Find all peer actors to build AOI centers
@@ -8282,6 +8384,14 @@ function gameLoop(now: number): void {
         // Also include host player
         syncEntities.push(compactEntity(player));
         sendOnlineMessage({ type: 'entity_sync', entities: syncEntities });
+        // Send door state sync — compact array of open/changed doors
+        const doorSync: { idx: number; state: number }[] = [];
+        for (const [idx, door] of world.doors) {
+          doorSync.push({ idx, state: door.state });
+        }
+        if (doorSync.length > 0) {
+          sendOnlineMessage({ type: 'door_sync', doors: doorSync });
+        }
       }
     }
   }
