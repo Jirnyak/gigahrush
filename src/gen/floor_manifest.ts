@@ -77,20 +77,22 @@ function applyStoryFloorObjects(floor: FloorLevel, generation: FloorGeneration):
 
 export function generateFloor(floor: FloorLevel, runSeed = DEFAULT_STORY_FLOOR_SEED, isTutorial = false): FloorGeneration {
   const seed = storyFloorGenerationSeed(floor, runSeed);
-  const generation = withSeededRandom(seed, () => {
+  return withSeededRandom(seed, () => {
+    let generation: FloorGeneration;
     if (floor === FloorLevel.LIVING && isTutorial) {
-      return (FLOOR_GENERATORS[floor] as unknown as (s?: number, t?: boolean) => FloorGeneration)(seed, true);
+      generation = (FLOOR_GENERATORS[floor] as unknown as (s?: number, t?: boolean) => FloorGeneration)(seed, true);
+    } else {
+      generation = FLOOR_GENERATORS[floor](seed);
     }
-    return FLOOR_GENERATORS[floor](seed);
+    applyStoryFloorObjects(floor, generation);
+    initializeCellTerritory(generation.world, {
+      seed,
+      targetShares: territorySharesForStoryFloor(floor),
+    });
+    rebuildGeneratedFloorPathBlockers(generation.world, seed, generation.spawnX, generation.spawnY);
+    fillVisualSlotsForWorldFeatures(generation.world, seed);
+    generation.world.initializeLampBlinks(seed);
+    stampCeilingHeights(generation.world);
+    return floor === FloorLevel.VOID ? withoutNpcEntities(generation) : generation;
   });
-  applyStoryFloorObjects(floor, generation);
-  initializeCellTerritory(generation.world, {
-    seed,
-    targetShares: territorySharesForStoryFloor(floor),
-  });
-  rebuildGeneratedFloorPathBlockers(generation.world, seed, generation.spawnX, generation.spawnY);
-  fillVisualSlotsForWorldFeatures(generation.world, seed);
-  generation.world.initializeLampBlinks(seed);
-  stampCeilingHeights(generation.world);
-  return floor === FloorLevel.VOID ? withoutNpcEntities(generation) : generation;
 }

@@ -14,6 +14,7 @@ import {
   getOnlineSlot,
   compactEntity,
   shouldSendHostSync,
+  getPeerGen,
   type SyncEntity,
 } from './systems/online_client';
 
@@ -643,6 +644,7 @@ setActiveActorSoftLimit(titleActiveActorSoftLimit);
 // ── Online multiplayer message handler ──────────────────────
 let onlinePeerFloorReady = false;
 const _lastPeerActor = new Map<number, Record<string, unknown>>();  // delta-merge: last received actor state per slot
+const _peerAckedGen = new Map<number, number>();  // last processed peer gen per slot
 
 setOnlineMessageHandler((msgData: any) => {
   // ── HOST: peer joined → spawn remote actor, send floor seed ──
@@ -723,6 +725,7 @@ setOnlineMessageHandler((msgData: any) => {
         if (peerChanged('needs') && a.needs && actor.needs) Object.assign(actor.needs, a.needs);
         if (peerChanged('rpg') && a.rpg && actor.rpg) Object.assign(actor.rpg, a.rpg);
         _lastPeerActor.set(slot, structuredClone(a));
+        if (typeof msgData.gen === 'number') _peerAckedGen.set(slot, msgData.gen);
       }
     }
   }
@@ -916,12 +919,17 @@ setOnlineMessageHandler((msgData: any) => {
           player.x = se.x;
           player.y = se.y;
         }
-        // Host-authoritative fields: damage, death, pickups
-        player.hp = se.hp;
-        player.maxHp = se.maxHp;
-        player.alive = se.alive;
-        player.staggerTimer = se.staggerTimer;
-        if (se.syncInventory) player.inventory = se.syncInventory;
+        // Host-authoritative fields — only accept if host has acked our latest gen
+        // (prevents entity_sync from undoing local changes before host processes them)
+        const hostAcked = se.ackPeerGen !== undefined && se.ackPeerGen >= getPeerGen();
+        if (hostAcked) {
+          player.hp = se.hp;
+          player.maxHp = se.maxHp;
+          player.staggerTimer = se.staggerTimer;
+          if (se.syncInventory) player.inventory = se.syncInventory;
+        }
+        // Death is always accepted unconditionally
+        if (!se.alive) player.alive = false;
         continue;
       }
       // Find existing entity by id
@@ -8512,7 +8520,9 @@ function gameLoop(now: number): void {
         // Cap and compact
         const syncEntities: ReturnType<typeof compactEntity>[] = [];
         for (let i = 0; i < candidates.length && syncEntities.length < MAX_SYNC; i++) {
-          syncEntities.push(compactEntity(candidates[i].e));
+          const ce = candidates[i].e;
+          const ackGen = ce.peerSlot !== undefined ? _peerAckedGen.get(ce.peerSlot) : undefined;
+          syncEntities.push(compactEntity(ce, ackGen));
         }
         sendOnlineMessage({ type: 'entity_sync', entities: syncEntities });
         // Send door state sync — only doors near any peer or host

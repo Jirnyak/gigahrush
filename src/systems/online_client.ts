@@ -46,6 +46,9 @@ export function sendPeerAction(action: Record<string, unknown>): void {
   sendOnlineMessage({ type: 'peer_action', ...action });
 }
 
+let _peerGen = 0;  // generation counter: bumped on each peer_input send
+export function getPeerGen(): number { return _peerGen; }
+
 /** Full peer actor state snapshot. Host uses delta-merge: only applies fields
  *  the peer actually changed vs. the previous snapshot, preserving host-side
  *  mutations (monster damage, item pickups) that the peer hasn't seen yet. */
@@ -73,6 +76,7 @@ export function maybeSendPeerInput(p: {
     type: 'peer_input',
     x: p.x, y: p.y, angle: p.angle, pitch: p.pitch,
     actor: p.actor,
+    gen: ++_peerGen,
   });
 }
 
@@ -89,9 +93,10 @@ export interface SyncEntity {
   speed: number; monsterKind?: number;
   dropDefId?: string; dropCount?: number;
   syncInventory?: { defId: string; count: number }[];
+  ackPeerGen?: number;  // last processed peer gen — peer skips overwrite until acked
 }
 
-export function compactEntity(e: Entity): SyncEntity {
+export function compactEntity(e: Entity, ackPeerGen?: number): SyncEntity {
   const syncInv = e.peerSlot !== undefined && e.inventory
     ? e.inventory.map(i => ({ defId: i.defId, count: i.count }))
     : undefined;
@@ -108,6 +113,7 @@ export function compactEntity(e: Entity): SyncEntity {
     dropDefId: e.inventory?.[0]?.defId,
     dropCount: e.inventory?.[0]?.count,
     syncInventory: syncInv,
+    ackPeerGen,
   };
 }
 

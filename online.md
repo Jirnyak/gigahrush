@@ -1883,29 +1883,45 @@ Current shipped online implementation:
 - Samosbor disabled during online sessions to prevent desync.
 - AI loop skips peer actors (`peerSlot !== undefined`) — remote players control their own entities.
 
-**Architecture — Delta-Merge:**
+**Architecture — Delta-Merge + Generation Counter:**
 
-Core sync mechanism. The host stores `_lastPeerActor` — the last received actor snapshot per slot. On each `peer_input` (20Hz):
+Two-layer sync mechanism:
+
+**Layer 1: Delta-merge (host side).** Host stores `_lastPeerActor` — the last received actor snapshot per slot. On each `peer_input` (20Hz):
 
 1. Compare new snapshot vs. previous for each field
 2. Only apply fields where the **peer's value changed** (peer intentionally modified it)
 3. Fields the peer didn't touch → host value preserved (monster damage, item pickups survive)
 4. Store new snapshot as the next baseline
 
-Entity_sync (8Hz) sends hp, maxHp, alive, stagger, inventory back to the peer. The peer updates its local state. Next peer_input then includes these host-provided values, and since they match the previous snapshot, they produce no diff → no overwrite. The cycle converges.
+**Layer 2: Generation counter (peer side).** Prevents entity_sync from undoing peer-local changes before the host has processed them:
+
+1. Peer maintains `_peerGen` counter, bumped on each `peer_input` send
+2. `peer_input` includes `gen: _peerGen`
+3. Host stores `_peerAckedGen[slot]` from `peer_input.gen`
+4. Host includes `ackPeerGen` in entity_sync for each peer entity
+5. Peer only accepts hp/inv/stagger from entity_sync when `ackPeerGen >= _peerGen`
+6. Death (`alive=false`) is always accepted unconditionally
 
 ```
-Peer heals → hp changes in peer snapshot → diff detects → host applies heal ✓
-Monster hits peer actor on host → hp unchanged in peer snapshot → diff=none → host hp preserved ✓  
-Host picks up item for peer → inv unchanged in peer snapshot → diff=none → host inv preserved ✓
-Peer drops item → inv changes in peer snapshot → diff detects → host applies removal ✓
+Peer drops item → peer gen=6, inv=[B]. Host hasn't processed yet (ackGen=5).
+  entity_sync arrives with inv=[A,B], ackGen=5. 5 < 6 → skip overwrite. inv stays [B] ✓
+  Host processes peer_input gen=6 → delta-merge removes A → ackGen=6.
+  Next entity_sync: ackGen=6, inv=[B]. 6 >= 6 → accept. inv=[B] ✓
+
+Host monster kills peer → actor.alive=false.
+  entity_sync: alive=false. Death is unconditional → peer.alive=false ✓
+
+Peer heals → hp=120, gen=7. Host ackGen=6.
+  entity_sync arrives with hp=80, ackGen=6. 6 < 7 → skip. peer hp stays 120 ✓
+  Host processes peer_input gen=7 → delta-merge applies hp=120. ackGen=7.
 ```
 
 **Edge cases (accepted under relaxed-trust):**
 
 - Simultaneous mutation (both sides change same field within 50ms): peer wins. Example: monster damage + peer heal in same window → damage may be lost. Extremely rare in practice.
 - Simultaneous pickup + drop: if host adds item B while peer drops item A in the same 50ms window, peer's next snapshot may not include B → B lost. Extremely rare.
-- First connect: no previous snapshot → all fields applied (correct initial state).
+- First connect: no previous snapshot → all fields applied, ackGen=undefined → accept all (correct initial state).
 
 **Other Architecture:**
 
