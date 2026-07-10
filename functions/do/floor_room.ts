@@ -87,7 +87,7 @@ export class FloorRoomDO {
       const session = this.sessions.get(server);
       if (session?.role === 'host') {
         this.hostWs = null;
-        // Optionally notify peers that host is gone
+        // Notify peers that host is gone
         for (const [ws, s] of this.sessions.entries()) {
           if (s.role === 'peer') {
             try {
@@ -96,7 +96,12 @@ export class FloorRoomDO {
           }
         }
       } else if (session?.role === 'peer') {
-        // Free slot? For POC, maybe keep it simple
+        // Notify host that peer left
+        if (this.hostWs) {
+          try {
+            this.hostWs.send(JSON.stringify({ type: 'peer_disconnected', slot: session.slot }));
+          } catch (e) {}
+        }
       }
       this.sessions.delete(server);
     });

@@ -1,126 +1,34 @@
-// Base online client imports
+// ── Online client transport ────────────────────────────────
+// Minimal host-relay POC: host simulates, peer is render+input only.
+// Messages: peer→host input at 10Hz, host→peer entity sync at 8Hz.
 
-import { type Entity, W } from '../core/types';
-import { type World } from '../core/world';
-import { worldForSave, worldFromSave, storableEntity } from './floor_memory';
+import { type Entity } from '../core/types';
+
+// ── Connection state ──────────────────────────────────────
 
 let ws: WebSocket | null = null;
 let currentRoomId: string | null = null;
 let isHost = false;
+let mySlot: number | undefined;
 let messageCallback: ((msg: any) => void) | null = null;
+let lastInputSendTime = 0;
+let lastHostSyncTime = 0;
+
+const PEER_INPUT_INTERVAL_MS = 100;  // 10 Hz
+const HOST_SYNC_INTERVAL_MS = 125;   // 8 Hz
+
+// ── Public queries ────────────────────────────────────────
+
+export function getOnlineSlot(): number | undefined { return mySlot; }
+export function isOnlineHost(): boolean { return isHost; }
+export function isOnlinePeer(): boolean { return !isHost && isOnlineConnected(); }
+export function isOnlineConnected(): boolean { return ws !== null && ws.readyState === WebSocket.OPEN; }
+export function getOnlineRoomId(): string | null { return currentRoomId; }
+
+// ── Message handler ───────────────────────────────────────
 
 export function setOnlineMessageHandler(cb: (msg: any) => void) {
   messageCallback = cb;
-}
-
-export function generateOnlineSnapshot(world: World, entities: readonly Entity[]): string {
-  const save = worldForSave(world);
-  const storedEntities = entities.filter(storableEntity);
-  return JSON.stringify({
-    type: 'snapshot',
-    world: save,
-    entities: storedEntities
-  });
-}
-
-export function applyOnlineSnapshot(data: any): { world: World, entities: Entity[] } | null {
-  if (data.type !== 'snapshot' || !data.world) return null;
-  const world = worldFromSave(data.world);
-  if (!world) return null;
-  return { world, entities: data.entities || [] };
-}
-
-export function generateOnlineAoi(world: World, entities: readonly Entity[], cx: number, cy: number, radius: number): any {
-  const size = radius * 2 + 1;
-  const cells = new Uint8Array(size * size);
-  const wallTex = new Uint16Array(size * size);
-  const floorTex = new Uint16Array(size * size);
-  const feature = new Uint8Array(size * size);
-  const light = new Uint8Array(size * size);
-  
-  for (let dy = -radius; dy <= radius; dy++) {
-    for (let dx = -radius; dx <= radius; dx++) {
-      const wx = Math.floor(cx) + dx;
-      const wy = Math.floor(cy) + dy;
-      const widx = world.idx(wx, wy);
-      const lidx = (dy + radius) * size + (dx + radius);
-      
-      cells[lidx] = world.cells[widx];
-      wallTex[lidx] = world.wallTex[widx];
-      floorTex[lidx] = world.floorTex[widx];
-      feature[lidx] = world.features[widx];
-      light[lidx] = world.light[widx];
-    }
-  }
-
-  const aoiEntities = entities.filter(e => {
-     if (!e.alive || !storableEntity(e)) return false;
-     let edx = Math.abs(e.x - cx);
-     let edy = Math.abs(e.y - cy);
-     if (edx > W/2) edx = W - edx;
-     if (edy > W/2) edy = W - edy;
-     return edx <= radius && edy <= radius;
-  });
-
-  return {
-    type: 'aoi',
-    cx: Math.floor(cx),
-    cy: Math.floor(cy),
-    radius,
-    cells: Array.from(cells),
-    wallTex: Array.from(wallTex),
-    floorTex: Array.from(floorTex),
-    feature: Array.from(feature),
-    light: Array.from(light),
-    entities: aoiEntities,
-  };
-}
-
-export function applyOnlineAoi(world: World, currentEntities: Entity[], aoi: any): Entity[] {
-  const { cx, cy, radius, cells, wallTex, floorTex, feature, light, entities } = aoi;
-  const size = radius * 2 + 1;
-
-  for (let dy = -radius; dy <= radius; dy++) {
-    for (let dx = -radius; dx <= radius; dx++) {
-      const wx = cx + dx;
-      const wy = cy + dy;
-      const widx = world.idx(wx, wy);
-      const lidx = (dy + radius) * size + (dx + radius);
-      
-      world.cells[widx] = cells[lidx];
-      world.wallTex[widx] = wallTex[lidx];
-      world.floorTex[widx] = floorTex[lidx];
-      world.features[widx] = feature[lidx];
-      world.light[widx] = light[lidx];
-    }
-  }
-  world.markSurfaceUploadDirty();
-
-  const localPlayer = currentEntities.find(e => e.peerSlot === undefined && e.alive && e.inventory !== undefined);
-  
-  const merged = entities.filter((e: any) => localPlayer ? e.id !== localPlayer.id : true);
-  if (localPlayer) {
-    merged.push(localPlayer);
-  }
-  
-  return merged as Entity[];
-}
-
-export function sendPeerPosition(player: Entity) {
-  sendOnlineMessage({
-    type: 'peer_position',
-    x: player.x,
-    y: player.y,
-    angle: player.angle,
-    pitch: player.pitch,
-    hp: player.hp,
-    weapon: player.weapon,
-    tool: player.tool,
-    npcVisualId: player.npcVisualId,
-    sprite: player.sprite,
-    staggerTimer: player.staggerTimer,
-    sex: player.sex
-  });
 }
 
 export function sendOnlineMessage(msg: any) {
@@ -129,17 +37,62 @@ export function sendOnlineMessage(msg: any) {
   }
 }
 
-export function getOnlineRoomId(): string | null {
-  return currentRoomId;
+// ── Peer→Host: throttled input ────────────────────────────
+
+export function maybeSendPeerInput(p: {
+  x: number; y: number; angle: number; pitch: number;
+  weapon: string; tool: string; sprite: number;
+  npcVisualId?: string; sex?: string;
+}): void {
+  if (isHost) return; // host doesn't send input to itself
+  const now = performance.now();
+  if (now - lastInputSendTime < PEER_INPUT_INTERVAL_MS) return;
+  lastInputSendTime = now;
+  sendOnlineMessage({
+    type: 'peer_input',
+    x: p.x, y: p.y, angle: p.angle, pitch: p.pitch,
+    weapon: p.weapon, tool: p.tool, sprite: p.sprite,
+    npcVisualId: p.npcVisualId, sex: p.sex,
+  });
 }
 
-export function isOnlineHost(): boolean {
-  return isHost;
+// ── Host→Peers: compact entity sync ──────────────────────
+
+export interface SyncEntity {
+  id: number; type: number;
+  x: number; y: number; angle: number; pitch: number;
+  alive: boolean; hp: number; maxHp: number;
+  sprite: number; weapon: string; tool: string;
+  name: string; peerSlot?: number;
+  sex?: string; npcVisualId?: string;
+  faction?: number; staggerTimer?: number;
+  speed: number; monsterKind?: number;
 }
 
-export function isOnlineConnected(): boolean {
-  return ws !== null && ws.readyState === WebSocket.OPEN;
+export function compactEntity(e: Entity): SyncEntity {
+  return {
+    id: e.id, type: e.type,
+    x: +e.x.toFixed(2), y: +e.y.toFixed(2),
+    angle: +e.angle.toFixed(3), pitch: +(e.pitch ?? 0).toFixed(3),
+    alive: e.alive, hp: e.hp ?? 0, maxHp: e.maxHp ?? 100,
+    sprite: e.sprite, weapon: e.weapon || '', tool: e.tool || '',
+    name: e.name || '', peerSlot: e.peerSlot,
+    sex: e.sex, npcVisualId: e.npcVisualId,
+    faction: e.faction, staggerTimer: e.staggerTimer,
+    speed: e.speed, monsterKind: e.monsterKind,
+  };
 }
+
+/** Returns true if it's time to send the next entity sync. */
+export function shouldSendHostSync(): boolean {
+  if (!isHost) return false;
+  const now = performance.now();
+  if (now - lastHostSyncTime < HOST_SYNC_INTERVAL_MS) return false;
+  lastHostSyncTime = now;
+  return true;
+}
+
+// ── Room management ───────────────────────────────────────
 
 function generateRoomCode(): string {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -149,62 +102,68 @@ function generateRoomCode(): string {
 }
 
 export function startOnlineHost(): string {
-  if (ws) {
-    ws.close();
-  }
-  
-  // Generate random room ID
+  if (ws) ws.close();
   const roomId = generateRoomCode();
   currentRoomId = roomId;
   isHost = true;
-  
   connectWs(roomId, 'host');
   return roomId;
 }
 
 export function joinOnlinePeer(roomId: string): void {
-  if (ws) {
-    ws.close();
-  }
-  
+  if (ws) ws.close();
   currentRoomId = roomId;
   isHost = false;
-  
   connectWs(roomId, 'peer');
+}
+
+export function disconnectOnline(): void {
+  if (ws) {
+    ws.close();
+    ws = null;
+  }
+  currentRoomId = null;
+  isHost = false;
+  mySlot = undefined;
 }
 
 function connectWs(roomId: string, role: 'host' | 'peer') {
   const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
   const url = `${protocol}//${window.location.host}/api/online/v1/ws?room=${roomId}&role=${role}`;
-  
+
   ws = new WebSocket(url);
-  
+
   ws.onopen = () => {
-    console.log(`Connected to room ${roomId} as ${role}`);
+    console.log(`[online] connected to room ${roomId} as ${role}`);
   };
-  
+
   ws.onmessage = (event) => {
     try {
       const data = JSON.parse(event.data);
       if (data.type === 'welcome') {
-        console.log('Welcome to room, assigned slot:', data.slot);
+        mySlot = data.slot;
+        console.log(`[online] slot=${mySlot}, role=${role}`);
+        if (role === 'peer') {
+          ws?.send(JSON.stringify({ type: 'peer_join' }));
+        }
       }
-      if (messageCallback) {
-        messageCallback(data);
-      }
+      if (messageCallback) messageCallback(data);
     } catch (e) {
-      console.error('Failed to parse WS message', e);
+      console.error('[online] bad message', e);
     }
   };
-  
+
   ws.onclose = () => {
-    console.log('WS connection closed');
+    console.log('[online] disconnected');
     ws = null;
     currentRoomId = null;
     isHost = false;
+    mySlot = undefined;
+    // Notify game about disconnect
+    if (messageCallback) messageCallback({ type: 'disconnected' });
   };
-  
+
   ws.onerror = (err) => {
-    console.error('WS error', err);
+    console.error('[online] ws error', err);
   };
 }

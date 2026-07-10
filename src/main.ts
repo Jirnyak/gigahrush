@@ -3,6 +3,18 @@ import { countAmmo, removeItem, publishPlayerItemEvent } from './systems/invento
 import './index.css';
 import './systems/demos_runtime';
 import { registerPwaServiceWorker } from './pwa';
+import {
+  setOnlineMessageHandler,
+  sendOnlineMessage,
+  isOnlineHost,
+  isOnlinePeer,
+  isOnlineConnected,
+  maybeSendPeerInput,
+  getOnlineSlot,
+  compactEntity,
+  shouldSendHostSync,
+  type SyncEntity,
+} from './systems/online_client';
 
 import {
   W, Cell, DoorState, FloorLevel, Tex, RoomType, LiftDirection,
@@ -464,7 +476,13 @@ import {
   openNetSphere,
   reportNetSphereEvent,
   tickNetSphere,
+  _test_storage
 } from './systems/net_sphere';
+
+// We add local system message directly via the internal net sphere storage logic 
+// but since `addLocalSystemMessage` is private in `net_sphere.ts`, we'll just push directly to runtime
+// Wait, `net_sphere.ts` does not export `addLocalSystemMessage`.
+// We can just use `msg(state, '...')` instead, which shows it on the HUD!
 import {
   claimNetTerminalGenFleshDrop,
   closeNetTerminalGen,
@@ -620,6 +638,181 @@ let pointerCaptureGateReason: PointerCaptureGateReason = 'released';
 installCanvasLocalization();
 setLocalizationLanguage(titleLanguageId);
 setActiveActorSoftLimit(titleActiveActorSoftLimit);
+
+// ── Online multiplayer message handler ──────────────────────
+let onlinePeerFloorReady = false;
+
+setOnlineMessageHandler((msgData: any) => {
+  // ── HOST: peer joined → spawn remote actor, send floor seed ──
+  if (msgData.type === 'peer_join' && isOnlineHost()) {
+    const peerSlot = msgData._peerSlot;
+    state.msgs.push(msg(`Игрок ${peerSlot} подключился.`, state.time, '#8cf'));
+
+    // Find a lift cell for spawn
+    const lifts: number[] = [];
+    for (let i = 0; i < world.cells.length; i++) {
+      if (world.cells[i] === Cell.LIFT) lifts.push(i);
+    }
+    let spawnX = player.x, spawnY = player.y;
+    if (lifts.length > 0) {
+      const idx = lifts[Math.floor(Math.random() * lifts.length)];
+      spawnX = (idx % W) + 0.5;
+      spawnY = Math.floor(idx / W) + 0.5;
+    }
+
+    const remoteActor: Entity = {
+      id: nextEntityId.v++,
+      type: EntityType.NPC,
+      x: spawnX, y: spawnY,
+      angle: -Math.PI / 2, pitch: 0,
+      alive: true,
+      speed: HUMANOID_BASE_MOVE_SPEED,
+      sprite: 0,
+      needs: freshNeeds(),
+      hp: 100, maxHp: 100,
+      money: 100,
+      inventory: [],
+      weapon: '', tool: '',
+      name: `Игрок ${peerSlot}`,
+      rpg: freshRPG(1),
+      faction: Faction.PLAYER,
+      peerSlot,
+      ...playerAlifeFields(),
+    } as Entity;
+    entities.push(remoteActor);
+
+    // Tell peer to generate floor from seed — no full-world transfer
+    const runSeed = ensureFloorRunState(state).runSeed;
+    sendOnlineMessage({
+      type: 'floor_init',
+      _targetSlot: peerSlot,
+      floor: state.currentFloor,
+      runSeed,
+      peerSlot,
+      spawnX, spawnY,
+    });
+  }
+
+  // ── HOST: apply peer input to remote actor ──
+  if (msgData.type === 'peer_input' && isOnlineHost()) {
+    const actor = entities.find(e => e.peerSlot === msgData._peerSlot && e.alive);
+    if (actor) {
+      // Validate position — only accept if the target cell is passable
+      const nx = world.wrap(msgData.x);
+      const ny = world.wrap(msgData.y);
+      if (!world.solid(Math.floor(nx), Math.floor(ny))) {
+        actor.x = nx;
+        actor.y = ny;
+      }
+      actor.angle = msgData.angle ?? actor.angle;
+      actor.pitch = msgData.pitch ?? actor.pitch;
+      if (msgData.weapon !== undefined) actor.weapon = msgData.weapon;
+      if (msgData.tool !== undefined) actor.tool = msgData.tool;
+      if (msgData.sprite !== undefined) actor.sprite = msgData.sprite;
+      if (msgData.npcVisualId !== undefined) actor.npcVisualId = msgData.npcVisualId;
+      if (msgData.sex !== undefined) actor.sex = msgData.sex;
+    }
+  }
+
+  // ── PEER: receive floor seed and generate locally ──
+  if (msgData.type === 'floor_init' && isOnlinePeer()) {
+    state.msgs.push(msg('Генерирую этаж хоста...', state.time, '#8cf'));
+    const gen = generateFloor(msgData.floor, msgData.runSeed, false);
+    injectFastElevators(gen.world);
+    world = replaceWorldFromGeneration(world, gen);
+    entities = []; // host will populate via entity_sync
+
+    // Create local player actor for camera attachment
+    const mySlot = getOnlineSlot();
+    const localPlayer: Entity = {
+      id: nextEntityId.v++,
+      type: EntityType.NPC,
+      x: msgData.spawnX ?? 512, y: msgData.spawnY ?? 512,
+      angle: -Math.PI / 2, pitch: 0,
+      alive: true,
+      speed: HUMANOID_BASE_MOVE_SPEED,
+      sprite: 0,
+      needs: freshNeeds(),
+      hp: 100, maxHp: 100,
+      money: 100,
+      inventory: [],
+      weapon: '', tool: '',
+      name: 'Вы',
+      rpg: freshRPG(1),
+      faction: Faction.PLAYER,
+      peerSlot: mySlot,
+      ...playerAlifeFields(),
+    } as Entity;
+    entities.push(localPlayer);
+    player = localPlayer;
+    setCurrentPlayerEntity(player);
+    onlinePeerFloorReady = true;
+    state.msgs.push(msg('Этаж загружен. Ожидание синхронизации...', state.time, '#8cf'));
+  }
+
+  // ── PEER: entity sync from host — replace all entities ──
+  if (msgData.type === 'entity_sync' && isOnlinePeer() && onlinePeerFloorReady) {
+    const syncEntities: SyncEntity[] = msgData.entities;
+    if (!syncEntities) return;
+
+    const mySlot = getOnlineSlot();
+    // Rebuild entity list from host data
+    const newEntities: Entity[] = [];
+    let foundSelf = false;
+    for (const se of syncEntities) {
+      const e: Entity = {
+        id: se.id, type: se.type,
+        x: se.x, y: se.y, angle: se.angle, pitch: se.pitch,
+        alive: se.alive, hp: se.hp, maxHp: se.maxHp,
+        sprite: se.sprite, weapon: se.weapon, tool: se.tool,
+        name: se.name, peerSlot: se.peerSlot,
+        sex: se.sex, npcVisualId: se.npcVisualId,
+        faction: se.faction, staggerTimer: se.staggerTimer,
+        speed: se.speed, monsterKind: se.monsterKind,
+      } as Entity;
+      if (se.peerSlot === mySlot) {
+        // Update local player from host authoritative position
+        player.x = se.x;
+        player.y = se.y;
+        player.hp = se.hp;
+        player.maxHp = se.maxHp;
+        player.alive = se.alive;
+        player.staggerTimer = se.staggerTimer;
+        newEntities.push(player);
+        foundSelf = true;
+      } else {
+        newEntities.push(e);
+      }
+    }
+    if (!foundSelf) newEntities.push(player);
+    entities = newEntities;
+    rebuildEntityIndex(entities, 'load');
+  }
+
+  // ── HOST: peer disconnected ──
+  if (msgData.type === 'peer_disconnected' && isOnlineHost()) {
+    // Remove remote actor for the disconnected peer
+    const slot = msgData.slot;
+    const idx = entities.findIndex(e => e.peerSlot === slot);
+    if (idx >= 0) {
+      entities.splice(idx, 1);
+      rebuildEntityIndex(entities, 'load');
+    }
+    state.msgs.push(msg(`Игрок ${slot} отключился.`, state.time, '#f88'));
+  }
+
+  // ── PEER: host disconnected ──
+  if (msgData.type === 'host_disconnected' && isOnlinePeer()) {
+    state.msgs.push(msg('Хост отключился. Сессия завершена.', state.time, '#f44'));
+    onlinePeerFloorReady = false;
+  }
+
+  // ── Connection lost ──
+  if (msgData.type === 'disconnected') {
+    onlinePeerFloorReady = false;
+    state.msgs.push(msg('Соединение потеряно.', state.time, '#f44'));
+  }
+});
 
 function looksLikeNetGenName(value: string): boolean {
   const clean = value.trim().toUpperCase().replace(/[^A-Z0-9-]/g, '').slice(0, 32);
@@ -8044,6 +8237,26 @@ function gameLoop(now: number): void {
   let dt = frameDt;
   tickNetSphere(state, player);
 
+  // ── Online: peer sends throttled input, host sends entity sync ──
+  if (isOnlineConnected()) {
+    if (isOnlinePeer()) {
+      maybeSendPeerInput({
+        x: player.x, y: player.y,
+        angle: player.angle, pitch: player.pitch ?? 0,
+        weapon: player.weapon ?? '', tool: player.tool ?? '',
+        sprite: player.sprite,
+        npcVisualId: player.npcVisualId, sex: player.sex,
+      });
+    }
+    if (isOnlineHost() && shouldSendHostSync()) {
+      const syncEntities = entities
+        .filter(e => e.alive)
+        .map(compactEntity);
+      sendOnlineMessage({ type: 'entity_sync', entities: syncEntities });
+    }
+  }
+  const peerMode = isOnlinePeer() && onlinePeerFloorReady;
+
   // ── Sleep: hold Z to sleep (time acceleration ×10) ───────
   const SLEEP_TIME_MULT = 10;
   // Restore rate: 100 sleep in 5 game-hours (300 game-min = 300 real-sec at 1x)
@@ -8076,7 +8289,7 @@ function gameLoop(now: number): void {
     updateRuntimeCamera(runtimeCamera, world, dt);
   }
 
-  if (!state.paused && !state.gameOver) {
+  if (!state.paused && !state.gameOver && !peerMode) {
     const simStart = performance.now();
     lastNeedsUpdateMs = 0;
     lastContentHookMs = 0;
@@ -8340,7 +8553,7 @@ function gameLoop(now: number): void {
   }
 
   // ── World simulation continues after death (NPC, monsters, samosbor keep running) ──
-  if (!state.paused && state.gameOver) {
+  if (!state.paused && state.gameOver && !peerMode) {
     state.time += dt;
     state.tick++;
     state.clock.totalMinutes += dt;

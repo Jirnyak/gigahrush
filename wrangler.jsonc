@@ -35,7 +35,7 @@
   "migrations": [
     {
       "tag": "v1",
-      "new_classes": ["FloorRoomDO"]
+      "new_sqlite_classes": ["FloorRoomDO"]
     }
   ]
 }
