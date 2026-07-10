@@ -6,6 +6,8 @@ import { onRequestGet as getMarket, onRequestPost as postMarket } from './api/ne
 import { apiError, type Env as NetEnv, type PagesContext } from './api/net/common';
 // @ts-ignore The hosted intake worker is a dependency-free MJS subproject.
 import npcIntakeWorker from '../gigahrush-npc-intake/hosted/worker.mjs';
+import { handleJoin, handleWs } from './api/online/v1/room';
+export { FloorRoomDO } from './do/floor_room';
 
 interface AssetBinding {
   fetch(request: Request): Promise<Response>;
@@ -15,6 +17,7 @@ interface WorkerEnv extends NetEnv {
   ASSETS: AssetBinding;
   NPC_DB?: unknown;
   NPC_SUBMISSIONS?: unknown;
+  ONLINE_FLOORS?: any;
   // nosemgrep
   TENEVIK_REVIEW_TOKEN?: string;
   // nosemgrep
@@ -30,6 +33,8 @@ const NET_ROUTES: Record<string, Partial<Record<Method, Handler>>> = {
   '/api/net/event': { POST: postEvent },
   '/api/net/chat': { GET: getChat, POST: postChat },
   '/api/net/market': { GET: getMarket, POST: postMarket },
+  '/api/online/v1/join': { POST: handleJoin as any },
+  '/api/online/v1/ws': { GET: handleWs as any },
 };
 
 function methodNotAllowed(allowed: string[]): Response {
@@ -43,7 +48,7 @@ function notFound(): Response {
 }
 
 function isNetApiPath(pathname: string): boolean {
-  return pathname === '/api/net' || pathname.startsWith('/api/net/');
+  return pathname === '/api/net' || pathname.startsWith('/api/net/') || pathname.startsWith('/api/online/');
 }
 
 function isNpcIntakeApiPath(pathname: string): boolean {
