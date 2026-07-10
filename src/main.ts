@@ -8319,6 +8319,14 @@ function gameLoop(now: number): void {
     updateRuntimeCamera(runtimeCamera, world, dt);
   }
 
+  // ── Peer-mode local update: camera + movement only ──────
+  if (peerMode && !state.paused && !state.gameOver) {
+    state.time += dt;
+    state.tick++;
+    applyKnockbackPhysics(dt);
+    movePlayer(dt);
+  }
+
   if (!state.paused && !state.gameOver && !peerMode) {
     const simStart = performance.now();
     lastNeedsUpdateMs = 0;
