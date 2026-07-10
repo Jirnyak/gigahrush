@@ -642,6 +642,7 @@ setActiveActorSoftLimit(titleActiveActorSoftLimit);
 
 // ── Online multiplayer message handler ──────────────────────
 let onlinePeerFloorReady = false;
+const _lastPeerActor = new Map<number, Record<string, unknown>>();  // delta-merge: last received actor state per slot
 
 setOnlineMessageHandler((msgData: any) => {
   // ── HOST: peer joined → spawn remote actor, send floor seed ──
@@ -685,7 +686,7 @@ setOnlineMessageHandler((msgData: any) => {
     });
   }
 
-  // ── HOST: apply peer input to remote actor ──
+  // ── HOST: apply peer input to remote actor (delta-merge) ──
   if (msgData.type === 'peer_input' && isOnlineHost()) {
     const actor = entities.find(e => e.peerSlot === msgData._peerSlot && e.alive);
     if (actor) {
@@ -698,19 +699,30 @@ setOnlineMessageHandler((msgData: any) => {
       }
       actor.angle = msgData.angle ?? actor.angle;
       actor.pitch = msgData.pitch ?? actor.pitch;
-      // Universal actor state sync: apply entire blob from peer
+      // Delta-merge: compare with last snapshot, only apply fields peer changed
       const a = msgData.actor;
       if (a) {
-        actor.hp = a.hp; actor.maxHp = a.maxHp; actor.alive = a.alive;
-        actor.weapon = a.weapon; actor.tool = a.tool; actor.sprite = a.sprite;
-        if (a.npcVisualId !== undefined) actor.npcVisualId = a.npcVisualId;
-        if (a.sex !== undefined) actor.sex = a.sex;
-        if (a.armorDefId !== undefined) actor.armorDefId = a.armorDefId;
-        if (a.money !== undefined) actor.money = a.money;
-        if (a.staggerTimer !== undefined) actor.staggerTimer = a.staggerTimer;
-        if (a.inventory) actor.inventory = a.inventory;
-        if (a.needs && actor.needs) Object.assign(actor.needs, a.needs);
-        if (a.rpg && actor.rpg) Object.assign(actor.rpg, a.rpg);
+        const slot = msgData._peerSlot as number;
+        const prev = _lastPeerActor.get(slot);
+        const peerChanged = (key: string): boolean => {
+          if (!prev) return true; // first message — apply all
+          return JSON.stringify((a as Record<string, unknown>)[key]) !== JSON.stringify((prev as Record<string, unknown>)[key]);
+        };
+        if (peerChanged('hp')) actor.hp = a.hp;
+        if (peerChanged('maxHp')) actor.maxHp = a.maxHp;
+        if (peerChanged('alive')) actor.alive = a.alive;
+        if (peerChanged('weapon')) actor.weapon = a.weapon;
+        if (peerChanged('tool')) actor.tool = a.tool;
+        if (peerChanged('sprite')) actor.sprite = a.sprite;
+        if (peerChanged('npcVisualId')) actor.npcVisualId = a.npcVisualId;
+        if (peerChanged('sex')) actor.sex = a.sex;
+        if (peerChanged('armorDefId')) actor.armorDefId = a.armorDefId;
+        if (peerChanged('money')) actor.money = a.money;
+        if (peerChanged('staggerTimer')) actor.staggerTimer = a.staggerTimer;
+        if (peerChanged('inventory')) actor.inventory = a.inventory;
+        if (peerChanged('needs') && a.needs && actor.needs) Object.assign(actor.needs, a.needs);
+        if (peerChanged('rpg') && a.rpg && actor.rpg) Object.assign(actor.rpg, a.rpg);
+        _lastPeerActor.set(slot, structuredClone(a));
       }
     }
   }
@@ -904,9 +916,11 @@ setOnlineMessageHandler((msgData: any) => {
           player.x = se.x;
           player.y = se.y;
         }
-        // Host-authoritative: only accept alive status (death must be respected)
+        // Host-authoritative fields: damage, death, pickups
+        player.hp = se.hp;
+        player.maxHp = se.maxHp;
         player.alive = se.alive;
-        // Sync inventory from host (pickup by host logic)
+        player.staggerTimer = se.staggerTimer;
         if (se.syncInventory) player.inventory = se.syncInventory;
         continue;
       }

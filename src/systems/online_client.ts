@@ -46,7 +46,9 @@ export function sendPeerAction(action: Record<string, unknown>): void {
   sendOnlineMessage({ type: 'peer_action', ...action });
 }
 
-/** Compact peer actor state — everything the host needs to keep the peer NPC in sync. */
+/** Full peer actor state snapshot. Host uses delta-merge: only applies fields
+ *  the peer actually changed vs. the previous snapshot, preserving host-side
+ *  mutations (monster damage, item pickups) that the peer hasn't seen yet. */
 export interface PeerActorState {
   hp: number; maxHp: number; alive: boolean;
   weapon: string; tool: string; sprite: number;

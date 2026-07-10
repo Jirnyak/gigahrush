@@ -1878,20 +1878,47 @@ Current shipped online implementation:
 - Peer can drop items — drop entity spawned on host, visible to both.
 - Peer can open/close doors including locked doors with keys.
 - Peer can attack (ranged and melee) with host-authoritative hit resolution.
+- Monsters see and attack peer actors (faction-based targeting).
+- Peer healing, eating, leveling, equipping work via delta-merge.
 - Samosbor disabled during online sessions to prevent desync.
+- AI loop skips peer actors (`peerSlot !== undefined`) — remote players control their own entities.
 
-**Architecture:**
+**Architecture — Delta-Merge:**
 
-- **Universal actor state sync (`PeerActorState`)**: peer sends entire actor state blob (HP, maxHP, alive, weapon, tool, needs, RPG stats, PSI, money, armor, inventory, stagger) in `peer_input` (20Hz). Host applies it wholesale to the peer NPC actor. This means any gameplay system that modifies the player entity (healing, eating, leveling, equipping, crafting) automatically works online without per-feature code. Host sends `syncInventory` and `alive` back for host-initiated changes (pickups, death).
-- **Monster/NPC AI targets peer actors**: peer actor is `EntityType.NPC` with `Faction.PLAYER`, so all AI systems (monster targeting, faction combat) treat peer actors as valid targets. AI updates all entities per frame with no distance skip from host.
-- **Relaxed trust**: peer is authoritative for own state (position, HP, inventory, RPG, needs). Host is authoritative for entity spawns, world mutations, and death. No anti-cheat.
+Core sync mechanism. The host stores `_lastPeerActor` — the last received actor snapshot per slot. On each `peer_input` (20Hz):
+
+1. Compare new snapshot vs. previous for each field
+2. Only apply fields where the **peer's value changed** (peer intentionally modified it)
+3. Fields the peer didn't touch → host value preserved (monster damage, item pickups survive)
+4. Store new snapshot as the next baseline
+
+Entity_sync (8Hz) sends hp, maxHp, alive, stagger, inventory back to the peer. The peer updates its local state. Next peer_input then includes these host-provided values, and since they match the previous snapshot, they produce no diff → no overwrite. The cycle converges.
+
+```
+Peer heals → hp changes in peer snapshot → diff detects → host applies heal ✓
+Monster hits peer actor on host → hp unchanged in peer snapshot → diff=none → host hp preserved ✓  
+Host picks up item for peer → inv unchanged in peer snapshot → diff=none → host inv preserved ✓
+Peer drops item → inv changes in peer snapshot → diff detects → host applies removal ✓
+```
+
+**Edge cases (accepted under relaxed-trust):**
+
+- Simultaneous mutation (both sides change same field within 50ms): peer wins. Example: monster damage + peer heal in same window → damage may be lost. Extremely rare in practice.
+- Simultaneous pickup + drop: if host adds item B while peer drops item A in the same 50ms window, peer's next snapshot may not include B → B lost. Extremely rare.
+- First connect: no previous snapshot → all fields applied (correct initial state).
+
+**Other Architecture:**
+
+- **Monster/NPC AI targets peer actors**: peer actor is `EntityType.NPC` with `Faction.PLAYER`, so monster targeting/combat systems treat them as valid targets. AI skips peer actors in the update loop (controlled by remote player, not local NPC logic).
+- **Relaxed trust**: no anti-cheat. Both sides converge via delta-merge. Peer can only affect own entity state.
 - **Entity sync**: host sends AOI-filtered entity snapshots (32-cell radius, 64 entity cap) at 8Hz with position lerp on peer side.
 - **Door sync**: host sends nearby door states at 8Hz alongside entity sync.
 - **Edge actions**: interact (E) and fire sent as immediate `peer_action` messages, bypassing throttle.
 
 **Files:**
 
-- `src/systems/online_client.ts`: connection, message transport, `SyncEntity`, `compactEntity`, `maybeSendPeerInput`, `sendPeerAction`.
-- `src/main.ts`: online message handler (peer_join, peer_input, peer_action, entity_sync, door_sync, floor_init), host sync sender, peer local loop.
+- `src/systems/online_client.ts`: connection, message transport, `PeerActorState`, `SyncEntity`, `compactEntity`, `maybeSendPeerInput`, `sendPeerAction`.
+- `src/main.ts`: online message handler (peer_join, peer_input with delta-merge, peer_action, entity_sync, door_sync, floor_init), `_lastPeerActor` map, host sync sender, peer local loop.
+- `src/systems/ai/index.ts`: AI loop skips `peerSlot` entities.
 - `functions/api/online/v1/ws.ts`: Cloudflare Worker WebSocket route.
 - `cloudflare/durable_objects/FloorRoomDO.ts`: Durable Object room relay.

@@ -149,6 +149,10 @@ export function updateAI(world: World, entities: Entity[], dt: number, time: num
         aiStats.skipped++;
         continue;
       }
+      if (e.peerSlot !== undefined) {
+        aiStats.skipped++;
+        continue; // peer actors are controlled by remote players, not AI
+      }
       if (e.role === NpcRole.CINEMATIC_ACTOR) {
         continue;
       }
