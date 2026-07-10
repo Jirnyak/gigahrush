@@ -6,6 +6,7 @@ import { registerPwaServiceWorker } from './pwa';
 import {
   setOnlineMessageHandler,
   sendOnlineMessage,
+  sendPeerAction,
   isOnlineHost,
   isOnlinePeer,
   isOnlineConnected,
@@ -82,7 +83,7 @@ import { adjustMonsterProjectileDamage, recordMonsterMeleeDeath, recordMonsterPr
 import { applyMonsterArmorHit } from './systems/monster_armor';
 import { applyHitStaggerAndKnockback , calculateReloadTime } from './systems/combat';
 import {
-  pickupNearby, useItem, dropItem, getWeaponStats, equippedCombatItemId,
+  pickupNearby, pickupDrop, useItem, dropItem, getWeaponStats, equippedCombatItemId,
   consumeDurability, consumeAmmo, consumeToolDurability, getEquippedToolDurability,
   updateInventoryConditions,
 } from './systems/inventory';
@@ -717,13 +718,56 @@ setOnlineMessageHandler((msgData: any) => {
       if (msgData.sprite !== undefined) actor.sprite = msgData.sprite;
       if (msgData.npcVisualId !== undefined) actor.npcVisualId = msgData.npcVisualId;
       if (msgData.sex !== undefined) actor.sex = msgData.sex;
+    }
+  }
 
-      // ── Peer fire: spawn projectile from remote actor ──
+  // ── HOST: peer edge action (interact, fire) — reliable, not throttled ──
+  if (msgData.type === 'peer_action' && isOnlineHost()) {
+    const actor = entities.find(e => e.peerSlot === msgData._peerSlot && e.alive);
+    if (actor) {
+      // ── Peer interact: doors + item pickup ──
+      if (msgData.interact) {
+        let handled = false;
+        // Try door first
+        const lx = actor.x + Math.cos(actor.angle) * 1.5;
+        const ly = actor.y + Math.sin(actor.angle) * 1.5;
+        const cx = Math.floor(world.wrap(lx));
+        const cy = Math.floor(world.wrap(ly));
+        const idx = cy * W + cx;
+        if (world.cells[idx] === Cell.DOOR && world.doors.has(idx)) {
+          const door = world.doors.get(idx)!;
+          if (door.state === DoorState.CLOSED) {
+            setDoorState(world, door, DoorState.OPEN);
+            door.timer = 0; handled = true;
+          } else if (door.state === DoorState.OPEN) {
+            setDoorState(world, door, DoorState.CLOSED); handled = true;
+          } else if (door.state === DoorState.HERMETIC_CLOSED && !state.samosborActive) {
+            setDoorState(world, door, DoorState.HERMETIC_OPEN);
+            door.timer = 0; handled = true;
+          } else if (door.state === DoorState.HERMETIC_OPEN) {
+            setDoorState(world, door, DoorState.HERMETIC_CLOSED); handled = true;
+          }
+        }
+        // Try item pickup if door wasn't toggled
+        if (!handled) {
+          let bestDrop: Entity | null = null;
+          let bestD2 = 2.5 * 2.5; // max 2.5 cell range
+          for (const e of entities) {
+            if (e.type !== EntityType.ITEM_DROP || !e.alive) continue;
+            const d2 = world.dist2(actor.x, actor.y, e.x, e.y);
+            if (d2 < bestD2) { bestDrop = e; bestD2 = d2; }
+          }
+          if (bestDrop) {
+            pickupDrop(world, bestDrop, actor, state.msgs, state.time, state);
+          }
+        }
+      }
+
+      // ── Peer fire edge ──
       if (msgData.fire) {
         const weaponId = equippedCombatItemId(actor);
         const ws = getWeaponStats(actor, weaponId);
-        // Decrement cooldown by approximate peer input interval
-        actor.attackCd = Math.max(0, (actor.attackCd ?? 0) - 0.1);
+        actor.attackCd = Math.max(0, (actor.attackCd ?? 0) - 0.05);
         if (actor.attackCd <= 0) {
           if (ws.isRanged) {
             const cos = Math.cos(actor.angle);
@@ -779,29 +823,6 @@ setOnlineMessageHandler((msgData: any) => {
           }
         }
       }
-
-      // ── Peer interact: toggle doors ──
-      if (msgData.interact) {
-        const lx = actor.x + Math.cos(actor.angle) * 1.5;
-        const ly = actor.y + Math.sin(actor.angle) * 1.5;
-        const cx = Math.floor(world.wrap(lx));
-        const cy = Math.floor(world.wrap(ly));
-        const idx = cy * W + cx;
-        if (world.cells[idx] === Cell.DOOR && world.doors.has(idx)) {
-          const door = world.doors.get(idx)!;
-          if (door.state === DoorState.CLOSED) {
-            setDoorState(world, door, DoorState.OPEN);
-            door.timer = 0;
-          } else if (door.state === DoorState.OPEN) {
-            setDoorState(world, door, DoorState.CLOSED);
-          } else if (door.state === DoorState.HERMETIC_CLOSED && !state.samosborActive) {
-            setDoorState(world, door, DoorState.HERMETIC_OPEN);
-            door.timer = 0;
-          } else if (door.state === DoorState.HERMETIC_OPEN) {
-            setDoorState(world, door, DoorState.HERMETIC_CLOSED);
-          }
-        }
-      }
     }
   }
 
@@ -849,27 +870,15 @@ setOnlineMessageHandler((msgData: any) => {
     });
   }
 
-  // ── PEER: entity sync from host — replace all entities ──
+  // ── PEER: entity sync from host — patch in-place, lerp positions ──
   if (msgData.type === 'entity_sync' && isOnlinePeer() && onlinePeerFloorReady) {
     const syncEntities: SyncEntity[] = msgData.entities;
     if (!syncEntities) return;
 
     const mySlot = getOnlineSlot();
-    // Rebuild entity list from host data
-    const newEntities: Entity[] = [];
-    let foundSelf = false;
+    const seenIds = new Set<number>();
     for (const se of syncEntities) {
-      const e: Entity = {
-        id: se.id, type: se.type,
-        x: se.x, y: se.y, angle: se.angle, pitch: se.pitch,
-        alive: se.alive, hp: se.hp, maxHp: se.maxHp,
-        sprite: se.sprite, weapon: se.weapon, tool: se.tool,
-        name: se.name, peerSlot: se.peerSlot,
-        sex: se.sex, npcVisualId: se.npcVisualId,
-        faction: se.faction, staggerTimer: se.staggerTimer,
-        speed: se.speed, monsterKind: se.monsterKind,
-        inventory: se.dropDefId ? [{ defId: se.dropDefId, count: se.dropCount ?? 1 }] : undefined,
-      } as Entity;
+      seenIds.add(se.id);
       if (se.peerSlot === mySlot) {
         // Update local player from host authoritative position
         player.x = se.x;
@@ -878,14 +887,52 @@ setOnlineMessageHandler((msgData: any) => {
         player.maxHp = se.maxHp;
         player.alive = se.alive;
         player.staggerTimer = se.staggerTimer;
-        newEntities.push(player);
-        foundSelf = true;
+        continue;
+      }
+      // Find existing entity by id
+      let existing: Entity | undefined;
+      for (let i = 0; i < entities.length; i++) {
+        if (entities[i].id === se.id && entities[i] !== player) { existing = entities[i]; break; }
+      }
+      if (existing) {
+        // Lerp position for smooth movement (blend toward target)
+        const LERP = 0.4;
+        const dx = world.delta(existing.x, se.x);
+        const dy = world.delta(existing.y, se.y);
+        if (dx * dx + dy * dy < 16) { // only lerp if close (< 4 cells)
+          existing.x = world.wrap(existing.x + dx * LERP);
+          existing.y = world.wrap(existing.y + dy * LERP);
+        } else {
+          existing.x = se.x; existing.y = se.y; // teleport if far
+        }
+        existing.angle = se.angle; existing.pitch = se.pitch;
+        existing.alive = se.alive; existing.hp = se.hp; existing.maxHp = se.maxHp;
+        existing.sprite = se.sprite; existing.weapon = se.weapon; existing.tool = se.tool;
+        existing.name = se.name; existing.peerSlot = se.peerSlot;
+        existing.sex = se.sex as Entity['sex']; existing.npcVisualId = se.npcVisualId;
+        existing.faction = se.faction; existing.staggerTimer = se.staggerTimer;
+        existing.speed = se.speed; existing.monsterKind = se.monsterKind;
+        existing.inventory = se.dropDefId ? [{ defId: se.dropDefId, count: se.dropCount ?? 1 }] : undefined;
       } else {
-        newEntities.push(e);
+        // New entity — add it
+        entities.push({
+          id: se.id, type: se.type,
+          x: se.x, y: se.y, angle: se.angle, pitch: se.pitch,
+          alive: se.alive, hp: se.hp, maxHp: se.maxHp,
+          sprite: se.sprite, weapon: se.weapon, tool: se.tool,
+          name: se.name, peerSlot: se.peerSlot,
+          sex: se.sex, npcVisualId: se.npcVisualId,
+          faction: se.faction, staggerTimer: se.staggerTimer,
+          speed: se.speed, monsterKind: se.monsterKind,
+          inventory: se.dropDefId ? [{ defId: se.dropDefId, count: se.dropCount ?? 1 }] : undefined,
+        } as Entity);
       }
     }
-    if (!foundSelf) newEntities.push(player);
-    entities = newEntities;
+    // Remove entities not in sync (except local player)
+    for (let i = entities.length - 1; i >= 0; i--) {
+      if (entities[i] === player) continue;
+      if (!seenIds.has(entities[i].id)) entities.splice(i, 1);
+    }
     rebuildEntityIndex(entities, 'load');
   }
 
@@ -8350,44 +8397,73 @@ function gameLoop(now: number): void {
   let dt = frameDt;
   tickNetSphere(state, player);
 
-  // ── Online: peer sends throttled input, host sends entity sync ──
+  // ── Online: peer sends throttled input + immediate edge actions ──
   if (isOnlineConnected()) {
     if (isOnlinePeer()) {
+      // Continuous state (position, angle, equipment) — throttled
       maybeSendPeerInput({
         x: player.x, y: player.y,
         angle: player.angle, pitch: player.pitch ?? 0,
         weapon: player.weapon ?? '', tool: player.tool ?? '',
         sprite: player.sprite,
         npcVisualId: player.npcVisualId, sex: player.sex,
-        fire: !!(input.attack || input.mouseAttack),
-        interact: !!input.interact,
       });
-      if (input.interact) input.interact = false;
+      // Edge actions — sent immediately, bypass throttle
+      if (input.interact) {
+        sendPeerAction({ interact: true });
+        input.interact = false;
+      }
+      if (input.attack || input.mouseAttack) {
+        sendPeerAction({ fire: true });
+      }
     }
     if (isOnlineHost() && shouldSendHostSync()) {
       // Find all peer actors to build AOI centers
       const peerActors = entities.filter(e => e.peerSlot !== undefined && e.peerSlot > 0 && e.alive);
       if (peerActors.length > 0) {
-        const AOI_R2 = 100 * 100; // 100 cell radius squared
-        const syncEntities = entities
-          .filter(e => {
-            if (!e.alive) return false;
-            // Always include peer actors themselves
-            if (e.peerSlot !== undefined) return true;
-            // Include if near any peer
-            for (const pa of peerActors) {
-              if (world.dist2(e.x, e.y, pa.x, pa.y) < AOI_R2) return true;
-            }
-            return false;
-          })
-          .map(compactEntity);
-        // Also include host player
-        syncEntities.push(compactEntity(player));
+        const AOI_R2 = 32 * 32; // 32 cell radius squared
+        const MAX_SYNC = 64;
+        // Collect candidates with distance score
+        const candidates: { e: Entity; minD2: number }[] = [];
+        for (const e of entities) {
+          if (!e.alive) continue;
+          // Always include peer actors and host player
+          if (e.peerSlot !== undefined) {
+            candidates.push({ e, minD2: -1 });
+            continue;
+          }
+          // Find nearest peer distance
+          let nearest = Infinity;
+          for (const pa of peerActors) {
+            const d2 = world.dist2(e.x, e.y, pa.x, pa.y);
+            if (d2 < nearest) nearest = d2;
+          }
+          // Also check host distance
+          const hostD2 = world.dist2(e.x, e.y, player.x, player.y);
+          if (hostD2 < nearest) nearest = hostD2;
+          if (nearest < AOI_R2) candidates.push({ e, minD2: nearest });
+        }
+        // Always add host player
+        candidates.push({ e: player, minD2: -1 });
+        // Sort: peers/host first (minD2 = -1), then by distance
+        candidates.sort((a, b) => a.minD2 - b.minD2);
+        // Cap and compact
+        const syncEntities: ReturnType<typeof compactEntity>[] = [];
+        for (let i = 0; i < candidates.length && syncEntities.length < MAX_SYNC; i++) {
+          syncEntities.push(compactEntity(candidates[i].e));
+        }
         sendOnlineMessage({ type: 'entity_sync', entities: syncEntities });
-        // Send door state sync — compact array of open/changed doors
+        // Send door state sync — only doors near any peer or host
+        const DOOR_R2 = 32 * 32;
         const doorSync: { idx: number; state: number }[] = [];
         for (const [idx, door] of world.doors) {
-          doorSync.push({ idx, state: door.state });
+          const dx = idx % W, dy = Math.floor(idx / W);
+          let near = false;
+          for (const pa of peerActors) {
+            if (world.dist2(dx + 0.5, dy + 0.5, pa.x, pa.y) < DOOR_R2) { near = true; break; }
+          }
+          if (!near && world.dist2(dx + 0.5, dy + 0.5, player.x, player.y) < DOOR_R2) near = true;
+          if (near) doorSync.push({ idx, state: door.state });
         }
         if (doorSync.length > 0) {
           sendOnlineMessage({ type: 'door_sync', doors: doorSync });

@@ -1,6 +1,7 @@
 // ── Online client transport ────────────────────────────────
 // Minimal host-relay POC: host simulates, peer is render+input only.
-// Messages: peer→host input at 10Hz, host→peer entity sync at 8Hz.
+// Messages: peer→host continuous state at 20Hz, edge actions immediately,
+// host→peer entity sync at 8Hz.
 
 import { type Entity } from '../core/types';
 
@@ -14,8 +15,8 @@ let messageCallback: ((msg: any) => void) | null = null;
 let lastInputSendTime = 0;
 let lastHostSyncTime = 0;
 
-const PEER_INPUT_INTERVAL_MS = 100;  // 10 Hz
-const HOST_SYNC_INTERVAL_MS = 250;   // 4 Hz
+const PEER_INPUT_INTERVAL_MS = 50;   // 20 Hz continuous state
+const HOST_SYNC_INTERVAL_MS = 125;   // 8 Hz entity sync
 
 // ── Public queries ────────────────────────────────────────
 
@@ -37,13 +38,20 @@ export function sendOnlineMessage(msg: any) {
   }
 }
 
-// ── Peer→Host: throttled input ────────────────────────────
+// ── Peer→Host: immediate edge action (interact, fire edge) ──
+
+/** Send a one-shot action that must not be lost to throttling. */
+export function sendPeerAction(action: Record<string, unknown>): void {
+  if (isHost) return;
+  sendOnlineMessage({ type: 'peer_action', ...action });
+}
+
+// ── Peer→Host: throttled continuous state ─────────────────
 
 export function maybeSendPeerInput(p: {
   x: number; y: number; angle: number; pitch: number;
   weapon: string; tool: string; sprite: number;
   npcVisualId?: string; sex?: string;
-  fire?: boolean; interact?: boolean;
 }): void {
   if (isHost) return; // host doesn't send input to itself
   const now = performance.now();
@@ -54,8 +62,6 @@ export function maybeSendPeerInput(p: {
     x: p.x, y: p.y, angle: p.angle, pitch: p.pitch,
     weapon: p.weapon, tool: p.tool, sprite: p.sprite,
     npcVisualId: p.npcVisualId, sex: p.sex,
-    fire: p.fire || undefined,
-    interact: p.interact || undefined,
   });
 }
 

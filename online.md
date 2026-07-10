@@ -1800,3 +1800,68 @@ Official Cloudflare sources checked on 2026-05-24, with pricing rechecked on 202
 - [x] Хост рендерит пиров (спрайт зависит от пола: `citizen_male` / `citizen_female`).
 - [x] Базовая синхронизация стрельбы: пир шлет `peer_shoot`, хост просчитывает физику и урон, затем рассылает `broadcast_shoot` для визуала.
 - [x] Синхронизация выброшенных предметов через `peer_drop_item`.
+
+## Current Shipped Implementation (2026-07-10)
+
+### Transport Layer
+
+- **`src/systems/online_client.ts`**: WebSocket transport, room management, throttled input and immediate edge actions.
+- **`functions/do/floor_room.ts`**: Cloudflare Durable Object relay. Generic JSON message relay: host→peers (with `_targetSlot`/`_excludeSlot` filtering), peer→host (with `_peerSlot` injection). Room cap: 4 slots (0 = host, 1-3 = peers). No AI, no World, no state — pure relay.
+- **`functions/worker.ts`**: Routes `/api/online/v1/ws` to `FloorRoomDO` by room code. All other `/api/net/*` and static assets unchanged.
+
+### Protocol Messages
+
+| Direction | Type | Content | Cadence |
+| --- | --- | --- | --- |
+| peer→host | `peer_input` | x, y, angle, pitch, weapon, tool, sprite, npcVisualId, sex | 20 Hz (50ms throttle) |
+| peer→host | `peer_action` | interact, fire (edge events) | Immediate, no throttle |
+| host→peer | `floor_init` | floor, runSeed, peerSlot, spawnX, spawnY | Once on join |
+| host→peer | `entity_sync` | Array of `SyncEntity` (id, type, x, y, angle, alive, hp, sprite, weapon, name, faction, speed, monsterKind, dropDefId...) | 8 Hz (125ms) |
+| host→peer | `door_sync` | Array of `{idx, state}` for nearby doors | 8 Hz (with entity_sync) |
+| peer→host | `peer_join` | (empty, triggers remote actor spawn) | Once |
+| DO→host | `peer_disconnected` | slot | On peer close |
+| DO→peer | `host_disconnected` | (empty) | On host close |
+| DO→all | `welcome` | slot, role | On connect |
+
+### Host-Side
+
+- On `peer_join`: spawns remote actor (EntityType.NPC, faction PLAYER) near a lift. Sends `floor_init` with runSeed and floor level so peer generates the same geometry.
+- On `peer_input`: validates position (passable cell check), applies x/y/angle/pitch/weapon/tool/sprite/sex/npcVisualId to the remote actor.
+- On `peer_action` with `interact`: tries door toggle first (checks cell in front of actor for DOOR), then tries item pickup (`pickupDrop()` on nearest ITEM_DROP within 2.5 cells).
+- On `peer_action` with `fire`: spawns projectiles or applies melee from the remote actor using the actor's equipped weapon stats, with attack cooldown.
+- Entity sync: collects entities within AOI (32 cell radius) around all peers and host, priority-sorted by distance, capped at 64 entities. Doors synced only within 32 cells of any peer/host.
+
+### Peer-Side
+
+- On `floor_init`: generates floor from seed (same `generateFloor` call), creates local player entity, clears entity list.
+- On `entity_sync`: patches entities in-place (lerps positions for smooth movement, teleports if >4 cells apart), adds new entities, removes entities not in sync. Local player position is hard-applied from host (authoritative).
+- On `door_sync`: applies door state changes from host.
+- Input: sends continuous state at 20 Hz. Interact and fire are sent as immediate `peer_action` messages that bypass throttle.
+- The `peerMode` flag suppresses local AI, combat simulation, inventory ticks, NPC spawning, samosbor and other host-only systems.
+
+### AOI and Network Budget
+
+- AOI radius: 32 cells (1024 dist²).
+- Entity cap per sync: 64 entities, priority: peers/host first, then nearest alive entities.
+- Door sync: only doors within 32 cells of any peer or host.
+- Estimated payload: ~2-4 KB per entity_sync at 64 entities, ~0.5-1 KB for nearby doors.
+
+### Solved Problems
+
+| Problem | Root Cause | Fix |
+| --- | --- | --- |
+| Peer interact unreliable (doors required many presses) | `input.interact` cleared every frame but `maybeSendPeerInput` throttled at 100ms — edge events silently dropped | Split into throttled continuous state (`peer_input`) and immediate edge actions (`peer_action`) |
+| Peer couldn't pick up items | Host `peer_input` handler only had door toggle code, no item pickup path | Added `pickupDrop()` call in `peer_action` interact handler on host |
+| Peer visually jerky | `entity_sync` replaced entire entity array from scratch every 250ms; AOI radius 100 sent hundreds of entities; all doors synced every frame | In-place entity update with position lerp (LERP=0.4); AOI reduced to 32 cells; 64 entity cap; door sync filtered to nearby; sync rate 125ms |
+| Peer fire lost to throttle | Fire flag was sent inside throttled `peer_input` | Fire sent as immediate `peer_action` edge event |
+
+### Known Remaining Issues
+
+- Peer auto-pickup not implemented (only manual E-pickup). Host runs auto-pickup only for the local player.
+- No reconnect support. If WebSocket drops, peer must rejoin manually.
+- Host loss freezes/ends the room. No handoff.
+- NPC/monster AI only considers host player as interest anchor, not peer actors. Far-peer areas may have cold AI.
+- Peer has no inventory UI sync from host. Picked items go into the remote actor's inventory on host but are not reflected on peer's HUD.
+- No projectile sync — peer sees host projectiles as entities but doesn't see its own projectiles locally (only the host spawns them).
+- Peer cannot use NPCs, containers, terminals, lifts or quest interactions.
+- Save is fully separate: peer's online session doesn't affect their local offline save.
