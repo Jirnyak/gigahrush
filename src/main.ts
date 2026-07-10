@@ -648,16 +648,22 @@ setOnlineMessageHandler((msgData: any) => {
     const peerSlot = msgData._peerSlot;
     state.msgs.push(msg(`Игрок ${peerSlot} подключился.`, state.time, '#8cf'));
 
-    // Find a lift cell for spawn
-    const lifts: number[] = [];
-    for (let i = 0; i < world.cells.length; i++) {
-      if (world.cells[i] === Cell.LIFT) lifts.push(i);
-    }
+    // Find a passable cell near a lift for spawn
     let spawnX = player.x, spawnY = player.y;
-    if (lifts.length > 0) {
-      const idx = lifts[Math.floor(Math.random() * lifts.length)];
-      spawnX = (idx % W) + 0.5;
-      spawnY = Math.floor(idx / W) + 0.5;
+    for (let i = 0; i < world.cells.length; i++) {
+      if (world.cells[i] === Cell.LIFT) {
+        const lx = i % W, ly = Math.floor(i / W);
+        // Check 4 neighbors for a passable floor cell
+        for (const [dx, dy] of [[1,0],[-1,0],[0,1],[0,-1]] as const) {
+          const nx = world.wrap(lx + dx), ny = world.wrap(ly + dy);
+          if (!world.solid(nx, ny)) {
+            spawnX = nx + 0.5;
+            spawnY = ny + 0.5;
+            break;
+          }
+        }
+        if (spawnX !== player.x) break; // found one
+      }
     }
 
     const remoteActor: Entity = {
@@ -717,37 +723,45 @@ setOnlineMessageHandler((msgData: any) => {
   // ── PEER: receive floor seed and generate locally ──
   if (msgData.type === 'floor_init' && isOnlinePeer()) {
     state.msgs.push(msg('Генерирую этаж хоста...', state.time, '#8cf'));
-    const gen = generateFloor(msgData.floor, msgData.runSeed, false);
-    injectFastElevators(gen.world);
-    world = replaceWorldFromGeneration(world, gen);
-    entities = []; // host will populate via entity_sync
+    const peerFloor = msgData.floor as FloorLevel;
+    const peerRunSeed = msgData.runSeed as number;
+    const peerSpawnX = msgData.spawnX ?? 512;
+    const peerSpawnY = msgData.spawnY ?? 512;
+    const peerMySlot = getOnlineSlot();
 
-    // Create local player actor for camera attachment
-    const mySlot = getOnlineSlot();
-    const localPlayer: Entity = {
-      id: nextEntityId.v++,
-      type: EntityType.NPC,
-      x: msgData.spawnX ?? 512, y: msgData.spawnY ?? 512,
-      angle: -Math.PI / 2, pitch: 0,
-      alive: true,
-      speed: HUMANOID_BASE_MOVE_SPEED,
-      sprite: 0,
-      needs: freshNeeds(),
-      hp: 100, maxHp: 100,
-      money: 100,
-      inventory: [],
-      weapon: '', tool: '',
-      name: 'Вы',
-      rpg: freshRPG(1),
-      faction: Faction.PLAYER,
-      peerSlot: mySlot,
-      ...playerAlifeFields(),
-    } as Entity;
-    entities.push(localPlayer);
-    player = localPlayer;
-    setCurrentPlayerEntity(player);
-    onlinePeerFloorReady = true;
-    state.msgs.push(msg('Этаж загружен. Ожидание синхронизации...', state.time, '#8cf'));
+    scheduleLoading(() => {
+      const gen = generateFloor(peerFloor, peerRunSeed, false);
+      injectFastElevators(gen.world);
+      world = replaceWorldFromGeneration(world, gen);
+      entities = []; // host will populate via entity_sync
+
+      // Create local player actor for camera attachment
+      const localPlayer: Entity = {
+        id: nextEntityId.v++,
+        type: EntityType.NPC,
+        x: peerSpawnX, y: peerSpawnY,
+        angle: -Math.PI / 2, pitch: 0,
+        alive: true,
+        speed: HUMANOID_BASE_MOVE_SPEED,
+        sprite: 0,
+        needs: freshNeeds(),
+        hp: 100, maxHp: 100,
+        money: 100,
+        inventory: [],
+        weapon: '', tool: '',
+        name: 'Вы',
+        rpg: freshRPG(1),
+        faction: Faction.PLAYER,
+        peerSlot: peerMySlot,
+        ...playerAlifeFields(),
+      } as Entity;
+      entities.push(localPlayer);
+      player = localPlayer;
+      setCurrentPlayerEntity(player);
+      finishLoadedFloorVisuals(gen);
+      onlinePeerFloorReady = true;
+      state.msgs.push(msg('Этаж загружен. Ожидание синхронизации...', state.time, '#8cf'));
+    });
   }
 
   // ── PEER: entity sync from host — replace all entities ──
@@ -8249,10 +8263,26 @@ function gameLoop(now: number): void {
       });
     }
     if (isOnlineHost() && shouldSendHostSync()) {
-      const syncEntities = entities
-        .filter(e => e.alive)
-        .map(compactEntity);
-      sendOnlineMessage({ type: 'entity_sync', entities: syncEntities });
+      // Find all peer actors to build AOI centers
+      const peerActors = entities.filter(e => e.peerSlot !== undefined && e.peerSlot > 0 && e.alive);
+      if (peerActors.length > 0) {
+        const AOI_R2 = 100 * 100; // 100 cell radius squared
+        const syncEntities = entities
+          .filter(e => {
+            if (!e.alive) return false;
+            // Always include peer actors themselves
+            if (e.peerSlot !== undefined) return true;
+            // Include if near any peer
+            for (const pa of peerActors) {
+              if (world.dist2(e.x, e.y, pa.x, pa.y) < AOI_R2) return true;
+            }
+            return false;
+          })
+          .map(compactEntity);
+        // Also include host player
+        syncEntities.push(compactEntity(player));
+        sendOnlineMessage({ type: 'entity_sync', entities: syncEntities });
+      }
     }
   }
   const peerMode = isOnlinePeer() && onlinePeerFloorReady;

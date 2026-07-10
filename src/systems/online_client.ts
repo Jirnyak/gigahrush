@@ -15,7 +15,7 @@ let lastInputSendTime = 0;
 let lastHostSyncTime = 0;
 
 const PEER_INPUT_INTERVAL_MS = 100;  // 10 Hz
-const HOST_SYNC_INTERVAL_MS = 125;   // 8 Hz
+const HOST_SYNC_INTERVAL_MS = 250;   // 4 Hz
 
 // ── Public queries ────────────────────────────────────────
 
