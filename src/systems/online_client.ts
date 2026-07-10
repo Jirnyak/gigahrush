@@ -46,12 +46,22 @@ export function sendPeerAction(action: Record<string, unknown>): void {
   sendOnlineMessage({ type: 'peer_action', ...action });
 }
 
-// ── Peer→Host: throttled continuous state ─────────────────
+/** Compact peer actor state — everything the host needs to keep the peer NPC in sync. */
+export interface PeerActorState {
+  hp: number; maxHp: number; alive: boolean;
+  weapon: string; tool: string; sprite: number;
+  npcVisualId?: string; sex?: string;
+  armorDefId?: string;
+  money?: number;
+  staggerTimer?: number;
+  inventory?: { defId: string; count: number }[];
+  needs?: { food: number; water: number; sleep: number; pee: number; poo: number };
+  rpg?: { level: number; xp: number; attrPoints: number; str: number; agi: number; int: number; psi: number; maxPsi: number };
+}
 
 export function maybeSendPeerInput(p: {
   x: number; y: number; angle: number; pitch: number;
-  weapon: string; tool: string; sprite: number;
-  npcVisualId?: string; sex?: string;
+  actor: PeerActorState;
 }): void {
   if (isHost) return; // host doesn't send input to itself
   const now = performance.now();
@@ -60,8 +70,7 @@ export function maybeSendPeerInput(p: {
   sendOnlineMessage({
     type: 'peer_input',
     x: p.x, y: p.y, angle: p.angle, pitch: p.pitch,
-    weapon: p.weapon, tool: p.tool, sprite: p.sprite,
-    npcVisualId: p.npcVisualId, sex: p.sex,
+    actor: p.actor,
   });
 }
 

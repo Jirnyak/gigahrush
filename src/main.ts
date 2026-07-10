@@ -698,11 +698,20 @@ setOnlineMessageHandler((msgData: any) => {
       }
       actor.angle = msgData.angle ?? actor.angle;
       actor.pitch = msgData.pitch ?? actor.pitch;
-      if (msgData.weapon !== undefined) actor.weapon = msgData.weapon;
-      if (msgData.tool !== undefined) actor.tool = msgData.tool;
-      if (msgData.sprite !== undefined) actor.sprite = msgData.sprite;
-      if (msgData.npcVisualId !== undefined) actor.npcVisualId = msgData.npcVisualId;
-      if (msgData.sex !== undefined) actor.sex = msgData.sex;
+      // Universal actor state sync: apply entire blob from peer
+      const a = msgData.actor;
+      if (a) {
+        actor.hp = a.hp; actor.maxHp = a.maxHp; actor.alive = a.alive;
+        actor.weapon = a.weapon; actor.tool = a.tool; actor.sprite = a.sprite;
+        if (a.npcVisualId !== undefined) actor.npcVisualId = a.npcVisualId;
+        if (a.sex !== undefined) actor.sex = a.sex;
+        if (a.armorDefId !== undefined) actor.armorDefId = a.armorDefId;
+        if (a.money !== undefined) actor.money = a.money;
+        if (a.staggerTimer !== undefined) actor.staggerTimer = a.staggerTimer;
+        if (a.inventory) actor.inventory = a.inventory;
+        if (a.needs && actor.needs) Object.assign(actor.needs, a.needs);
+        if (a.rpg && actor.rpg) Object.assign(actor.rpg, a.rpg);
+      }
     }
   }
 
@@ -731,6 +740,13 @@ setOnlineMessageHandler((msgData: any) => {
             door.timer = 0; handled = true;
           } else if (door.state === DoorState.HERMETIC_OPEN) {
             setDoorState(world, door, DoorState.HERMETIC_CLOSED); handled = true;
+          } else if (door.state === DoorState.LOCKED) {
+            const keyId = door.keyId || 'key';
+            if (actor.inventory?.some((i: { defId: string }) => i.defId === keyId)) {
+              setDoorState(world, door, DoorState.OPEN);
+              door.timer = 0; handled = true;
+              state.msgs.push(msg(`Игрок ${actor.peerSlot} отпер дверь ключом`, state.time, '#4a4'));
+            }
           }
         }
         // Try item pickup if door wasn't toggled
@@ -745,6 +761,22 @@ setOnlineMessageHandler((msgData: any) => {
           if (bestDrop) {
             pickupDrop(world, bestDrop, actor, state.msgs, state.time, state);
           }
+        }
+      }
+
+      // ── Peer drop item ──
+      if (msgData.drop) {
+        const dropX = actor.x + Math.cos(actor.angle) * 3.0;
+        const dropY = actor.y + Math.sin(actor.angle) * 3.0;
+        const defId = msgData.defId as string;
+        const count = (msgData.count as number) || 1;
+        if (defId) {
+          entities.push({
+            id: nextEntityId.v++, type: EntityType.ITEM_DROP,
+            x: dropX, y: dropY, angle: 0, pitch: 0, alive: true, speed: 0, sprite: Spr.ITEM_DROP,
+            inventory: [{ defId, count }],
+          } as Entity);
+          state.msgs.push(msg(`Игрок ${actor.peerSlot} выбросил предмет`, state.time, '#aa6'));
         }
       }
 
@@ -872,12 +904,9 @@ setOnlineMessageHandler((msgData: any) => {
           player.x = se.x;
           player.y = se.y;
         }
-        // Authoritative state always accepted
-        player.hp = se.hp;
-        player.maxHp = se.maxHp;
+        // Host-authoritative: only accept alive status (death must be respected)
         player.alive = se.alive;
-        player.staggerTimer = se.staggerTimer;
-        // Sync inventory from host
+        // Sync inventory from host (pickup by host logic)
         if (se.syncInventory) player.inventory = se.syncInventory;
         continue;
       }
@@ -6507,6 +6536,24 @@ function useInventorySelection(): void {
 }
 
 function dropInventorySelection(): void {
+  if (isOnlinePeer()) {
+    // Peer: remove locally + tell host to spawn the drop entity
+    const slot = player.inventory?.[state.invSel];
+    if (!slot) return;
+    const defId = slot.defId;
+    const count = slot.count;
+    // Unequip if needed
+    const def = ITEMS[defId];
+    if (def) {
+      const es = itemEquipSlot(def);
+      if (es === 'weapon' && player.weapon === defId) player.weapon = '';
+      if (es === 'tool' && player.tool === defId) player.tool = '';
+    }
+    player.inventory!.splice(state.invSel, 1);
+    state.msgs.push(msg(`Выброшено: ${def?.name ?? defId}${count > 1 ? ' ×' + count : ''}`, state.time, '#aa6'));
+    sendPeerAction({ drop: true, defId, count });
+    return;
+  }
   dropItem(player, state.invSel, entities, state.msgs, state.time, nextEntityId, state, world);
 }
 
@@ -8396,9 +8443,18 @@ function gameLoop(now: number): void {
       maybeSendPeerInput({
         x: player.x, y: player.y,
         angle: player.angle, pitch: player.pitch ?? 0,
-        weapon: player.weapon ?? '', tool: player.tool ?? '',
-        sprite: player.sprite,
-        npcVisualId: player.npcVisualId, sex: player.sex,
+        actor: {
+          hp: player.hp ?? 100, maxHp: player.maxHp ?? 100, alive: player.alive,
+          weapon: player.weapon ?? '', tool: player.tool ?? '',
+          sprite: player.sprite,
+          npcVisualId: player.npcVisualId, sex: player.sex,
+          armorDefId: player.armorDefId,
+          money: player.money,
+          staggerTimer: player.staggerTimer,
+          inventory: player.inventory?.map(i => ({ defId: i.defId, count: i.count })),
+          needs: player.needs ? { food: player.needs.food, water: player.needs.water, sleep: player.needs.sleep, pee: player.needs.pee, poo: player.needs.poo } : undefined,
+          rpg: player.rpg ? { level: player.rpg.level, xp: player.rpg.xp, attrPoints: player.rpg.attrPoints, str: player.rpg.str, agi: player.rpg.agi, int: player.rpg.int, psi: player.rpg.psi, maxPsi: player.rpg.maxPsi } : undefined,
+        },
       });
       // Edge actions — sent immediately, bypass throttle
       if (input.interact) {

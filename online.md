@@ -1857,11 +1857,41 @@ Official Cloudflare sources checked on 2026-05-24, with pricing rechecked on 202
 
 ### Known Remaining Issues
 
-- Peer auto-pickup not implemented (only manual E-pickup). Host runs auto-pickup only for the local player.
 - No reconnect support. If WebSocket drops, peer must rejoin manually.
 - Host loss freezes/ends the room. No handoff.
-- NPC/monster AI only considers host player as interest anchor, not peer actors. Far-peer areas may have cold AI.
-- Peer has no inventory UI sync from host. Picked items go into the remote actor's inventory on host but are not reflected on peer's HUD.
 - No projectile sync — peer sees host projectiles as entities but doesn't see its own projectiles locally (only the host spawns them).
 - Peer cannot use NPCs, containers, terminals, lifts or quest interactions.
 - Save is fully separate: peer's online session doesn't affect their local offline save.
+- Samosbor disabled in online mode to avoid host/peer desync.
+
+### Implementation Update 2026-07-10
+
+Current shipped online implementation:
+
+**Working:**
+
+- `/host` and `/join` chat commands create/join rooms via Cloudflare DO relay.
+- Host and peer see each other as sprites with real-time position tracking.
+- Peer movement is smooth — client-side prediction with snap-correction only for large divergence (>6 cells).
+- Peer spawns at host player position (guaranteed passable).
+- Peer can pick up items via E — items appear in peer's inventory and disappear from world.
+- Peer can drop items — drop entity spawned on host, visible to both.
+- Peer can open/close doors including locked doors with keys.
+- Peer can attack (ranged and melee) with host-authoritative hit resolution.
+- Samosbor disabled during online sessions to prevent desync.
+
+**Architecture:**
+
+- **Universal actor state sync (`PeerActorState`)**: peer sends entire actor state blob (HP, maxHP, alive, weapon, tool, needs, RPG stats, PSI, money, armor, inventory, stagger) in `peer_input` (20Hz). Host applies it wholesale to the peer NPC actor. This means any gameplay system that modifies the player entity (healing, eating, leveling, equipping, crafting) automatically works online without per-feature code. Host sends `syncInventory` and `alive` back for host-initiated changes (pickups, death).
+- **Monster/NPC AI targets peer actors**: peer actor is `EntityType.NPC` with `Faction.PLAYER`, so all AI systems (monster targeting, faction combat) treat peer actors as valid targets. AI updates all entities per frame with no distance skip from host.
+- **Relaxed trust**: peer is authoritative for own state (position, HP, inventory, RPG, needs). Host is authoritative for entity spawns, world mutations, and death. No anti-cheat.
+- **Entity sync**: host sends AOI-filtered entity snapshots (32-cell radius, 64 entity cap) at 8Hz with position lerp on peer side.
+- **Door sync**: host sends nearby door states at 8Hz alongside entity sync.
+- **Edge actions**: interact (E) and fire sent as immediate `peer_action` messages, bypassing throttle.
+
+**Files:**
+
+- `src/systems/online_client.ts`: connection, message transport, `SyncEntity`, `compactEntity`, `maybeSendPeerInput`, `sendPeerAction`.
+- `src/main.ts`: online message handler (peer_join, peer_input, peer_action, entity_sync, door_sync, floor_init), host sync sender, peer local loop.
+- `functions/api/online/v1/ws.ts`: Cloudflare Worker WebSocket route.
+- `cloudflare/durable_objects/FloorRoomDO.ts`: Durable Object room relay.
