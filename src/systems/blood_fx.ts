@@ -396,7 +396,7 @@ export function spawnDeathPool(world: World, ex: number, ey: number, gore = fals
   stampMark(world, cx, cy, fx, fy, poolRadius, MarkType.POOL, seed, sr, sg, sb, 255);
   
   // Danger/Blood vector field impulse
-  const fieldIdx = cy * 1024 + cx;
+  const fieldIdx = world.idx(cx, cy);
   world.dangerField[fieldIdx] = Math.min(255, world.dangerField[fieldIdx] + 50);
 
   const rng = new SeedRng(seed);
@@ -430,16 +430,16 @@ export function spawnDeathPool(world: World, ex: number, ey: number, gore = fals
   if (goreLevel >= 1) {
     const chunkCount = 2 + Math.floor(rng.random() * 2); // 2 to 3 chunks in center
     for (let i = 0; i < chunkCount; i++) {
-      addVisualSlotByPriority(world, cy * 1024 + cx, 34, seed + i);
+      addVisualSlotByPriority(world, world.idx(cx, cy), 34, seed + i);
     }
     
     // Add scattered chunks at random adjacent open cells
-    const scx = Math.floor(((cx + Math.round(rng.random() * 2 - 1)) % 1024 + 1024) % 1024);
-    const scy = Math.floor(((cy + Math.round(rng.random() * 2 - 1)) % 1024 + 1024) % 1024);
+    const scx = world.wrap(cx + Math.round(rng.random() * 2 - 1));
+    const scy = world.wrap(cy + Math.round(rng.random() * 2 - 1));
     if (!world.solid(scx, scy) && (scx !== cx || scy !== cy)) {
       const outerCount = 1 + Math.floor(rng.random() * 2); // 1 to 2 chunks adjacent
       for (let i = 0; i < outerCount; i++) {
-        addVisualSlotByPriority(world, scy * 1024 + scx, 34, seed + 10 + i);
+        addVisualSlotByPriority(world, world.idx(scx, scy), 34, seed + 10 + i);
       }
     }
   }

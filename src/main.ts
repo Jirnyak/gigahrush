@@ -649,23 +649,8 @@ setOnlineMessageHandler((msgData: any) => {
     const peerSlot = msgData._peerSlot;
     state.msgs.push(msg(`Игрок ${peerSlot} подключился.`, state.time, '#8cf'));
 
-    // Find a passable cell near a lift for spawn
-    let spawnX = player.x, spawnY = player.y;
-    for (let i = 0; i < world.cells.length; i++) {
-      if (world.cells[i] === Cell.LIFT) {
-        const lx = i % W, ly = Math.floor(i / W);
-        // Check 4 neighbors for a passable floor cell
-        for (const [dx, dy] of [[1,0],[-1,0],[0,1],[0,-1]] as const) {
-          const nx = world.wrap(lx + dx), ny = world.wrap(ly + dy);
-          if (!world.solid(nx, ny)) {
-            spawnX = nx + 0.5;
-            spawnY = ny + 0.5;
-            break;
-          }
-        }
-        if (spawnX !== player.x) break; // found one
-      }
-    }
+    // Spawn peer at host player position (guaranteed passable)
+    const spawnX = player.x, spawnY = player.y;
 
     const remoteActor: Entity = {
       id: nextEntityId.v++,
