@@ -1,17 +1,21 @@
-/* ── Online container sync (host-authoritative) ───────────────────
+/* ── Online container sync (host-authoritative, inventory-copy model) ──
  *
- * Peers never mutate host-world containers directly. They send cell-keyed
- * open/take/put requests; the host runs the real `takeFromContainer` /
- * `putIntoContainer` against the peer actor (so every theft/karma/purchase/
- * event side effect stays host-owned) and echoes the authoritative container
- * contents back with `applyContainerSyncPayload`. Peer inventory reconciles
- * through the existing `entity_sync` + generation-counter path, exactly like
- * item pickup already does.
+ * A container is just an inventory. Peers never generate, register or mutate a
+ * host-world container — that relied on a floor seed which is NOT deterministic
+ * in practice, and registering a peer-side container spawned a phantom mesh over
+ * the underlying feature. Instead the flow mirrors how the peer's own inventory
+ * already works:
  *
- * Container identity on the wire is the cell (cx, cy), NOT the local id: a
- * feature-loot container searched independently on host and peer gets different
- * numeric ids but always occupies the same cell, and static snapshot containers
- * share their cell too. Cell-keyed sync makes both cases converge. */
+ *   1. Peer presses E → host runs the interaction virtually against the peer
+ *      actor, resolving (or lazily generating) the container authoritatively.
+ *   2. Host sends the container's inventory to the peer as a transient COPY.
+ *   3. Peer renders a menu backed by that copy (held only in `containerById`
+ *      under a fixed synthetic id, so it never enters `containerMap`/`containers`
+ *      and therefore never draws a world mesh).
+ *   4. Take/put/close are requests to the host; the host runs the real
+ *      `takeFromContainer`/`putIntoContainer` and echoes fresh contents. Peer
+ *      inventory reconciles through the existing `entity_sync` path.
+ *   5. On close both sides destroy the copy. */
 
 import { W, type Item, type WorldContainer } from '../core/types';
 import { World } from '../core/world';
@@ -26,12 +30,13 @@ export interface ContainerSyncPayload {
   name: string;
   access: string;
   discovered: boolean;
+  tags: string[];
   inventory: { defId: string; count: number; data?: unknown }[];
 }
 
 const MAX_SYNC_SLOTS = 64;
 
-function cellItems(inventory: readonly Item[] | undefined): ContainerSyncPayload['inventory'] {
+function packItems(inventory: readonly Item[] | undefined): ContainerSyncPayload['inventory'] {
   const out: ContainerSyncPayload['inventory'] = [];
   if (!inventory) return out;
   for (const it of inventory) {
@@ -44,7 +49,20 @@ function cellItems(inventory: readonly Item[] | undefined): ContainerSyncPayload
   return out;
 }
 
-/** Serialize one container's networked state for a `container_sync` message. */
+function unpackItems(input: unknown): Item[] {
+  const out: Item[] = [];
+  for (const raw of Array.isArray(input) ? input : []) {
+    if (!raw || typeof (raw as Item).defId !== 'string') continue;
+    const count = Math.max(0, Math.floor((raw as Item).count ?? 0));
+    if (count <= 0) continue;
+    const data = (raw as Item).data;
+    out.push(data !== undefined ? { defId: (raw as Item).defId, count, data } : { defId: (raw as Item).defId, count });
+    if (out.length >= MAX_SYNC_SLOTS) break;
+  }
+  return out;
+}
+
+/** Host: serialize one container's contents for a `container_open`/`container_sync`. */
 export function containerSyncPayload(container: WorldContainer): ContainerSyncPayload {
   return {
     cx: container.x,
@@ -54,14 +72,15 @@ export function containerSyncPayload(container: WorldContainer): ContainerSyncPa
     name: container.name,
     access: container.access,
     discovered: container.discovered === true,
-    inventory: cellItems(container.inventory),
+    tags: Array.isArray(container.tags) ? container.tags.slice(0, 16) : [],
+    inventory: packItems(container.inventory),
   };
 }
 
-/** Host side: resolve the container a peer is acting on at a given cell,
- *  lazily generating a feature-loot container (search) if the cell holds a
- *  searchable decor feature and none exists yet. Returns null when the cell has
- *  no visible/generatable container. */
+/** Host: resolve the container a peer is trying to open/search at a cell — an
+ *  existing visible container, or a lazily-generated feature-loot container when
+ *  the cell holds a searchable decor feature. Authoritative: the host is the
+ *  only side that ever generates, so floor-seed determinism is irrelevant. */
 export function resolvePeerContainerAtCell(
   world: World,
   floor: FloorLevel,
@@ -70,57 +89,32 @@ export function resolvePeerContainerAtCell(
 ): WorldContainer | null {
   const x = ((Math.floor(cx) % W) + W) % W;
   const y = ((Math.floor(cy) % W) + W) % W;
-  const existing = world.containersAt(x, y).find(c => c.discovered || c.access !== 'secret');
-  if (existing) {
-    if (existing.access === 'secret') existing.discovered = true;
-    return existing;
-  }
-  const secret = world.containersAt(x, y).find(c => c.access === 'secret');
+  const at = world.containersAt(x, y);
+  const visible = at.find(c => c.discovered || c.access !== 'secret');
+  if (visible) return visible;
+  const secret = at.find(c => c.access === 'secret');
   if (secret) { secret.discovered = true; return secret; }
-  // No container yet — try lazy feature-loot generation (the "обыскать" path).
   return resolveOrCreateFeatureLootContainer(world, floor, world.idx(x, y));
 }
 
-/** Peer side: upsert the authoritative container contents by cell. Matches an
- *  existing local container at that cell (snapshot or peer-generated) and
- *  overwrites its mutable state; if the peer has none there yet, registers a
- *  minimal one so the open menu can render host truth immediately. */
-export function applyContainerSyncPayload(world: World, payload: ContainerSyncPayload): WorldContainer | null {
-  if (!payload || typeof payload.cx !== 'number' || typeof payload.cy !== 'number') return null;
+/** Peer: build the transient menu-backing container copy from a host payload.
+ *  Assigned a caller-provided synthetic id and stored ONLY in `containerById`
+ *  (never `containerMap`/`containers`), so it renders in the menu but spawns no
+ *  world mesh and collides with nothing. */
+export function buildRemoteContainer(world: World, payload: ContainerSyncPayload, syntheticId: number): WorldContainer {
   const x = ((Math.floor(payload.cx) % W) + W) % W;
   const y = ((Math.floor(payload.cy) % W) + W) % W;
-  const inventory: Item[] = [];
-  for (const raw of Array.isArray(payload.inventory) ? payload.inventory : []) {
-    if (!raw || typeof raw.defId !== 'string') continue;
-    const count = Math.max(0, Math.floor(raw.count ?? 0));
-    if (count <= 0) continue;
-    inventory.push(raw.data !== undefined ? { defId: raw.defId, count, data: raw.data } : { defId: raw.defId, count });
-    if (inventory.length >= MAX_SYNC_SLOTS) break;
-  }
-
-  const local = world.containersAt(x, y)[0];
-  if (local) {
-    local.inventory = inventory;
-    local.discovered = payload.discovered === true || local.discovered;
-    return local;
-  }
-
-  // Peer hasn't materialized this container locally — register a minimal record
-  // so the menu (keyed by id) can show host truth. Geometry/type come from the
-  // host payload; the peer only ever reads it.
-  const container: WorldContainer = {
-    id: payload.id,
+  return {
+    id: syntheticId,
     x, y,
     floor: world.containers[0]?.floor ?? (0 as FloorLevel),
-    roomId: world.roomMap[world.idx(x, y)] ?? -1,
-    zoneId: world.zoneMap[world.idx(x, y)] ?? 0,
+    roomId: -1,
+    zoneId: 0,
     kind: payload.kind as ContainerKind,
     name: typeof payload.name === 'string' ? payload.name : 'контейнер',
-    inventory,
+    inventory: unpackItems(payload.inventory),
     access: (payload.access as ContainerAccess) ?? 'public',
-    discovered: payload.discovered === true,
-    tags: [],
+    discovered: true,
+    tags: Array.isArray(payload.tags) ? payload.tags.slice(0, 16) : [],
   };
-  world.addContainer(container);
-  return container;
 }

@@ -395,6 +395,7 @@ import { clearWrongDoorRemaps, tryUseWrongDoorRemap, updateWrongDoorRemaps } fro
 import {
   containerAccessInfo,
   ensureRoomContainers,
+  firstNearbyContainer,
   putIntoContainer,
   restoreValidContainers,
   takeFromContainer,
@@ -403,7 +404,7 @@ import {
 import {
   containerSyncPayload,
   resolvePeerContainerAtCell,
-  applyContainerSyncPayload,
+  buildRemoteContainer,
   type ContainerSyncPayload,
 } from './systems/online_containers';
 import { normalizeGameEconomy, primeTradePriceCache } from './systems/economy';
@@ -663,6 +664,13 @@ const _lastPeerActor = new Map<number, Record<string, unknown>>();  // delta-mer
 const _peerAckedGen = new Map<number, number>();  // last processed peer gen per slot
 const _peerNextFireAt = new Map<number, number>();  // wall-clock ms gate: next allowed peer attack per slot
 
+// Peer-side transient remote container copy: a single reserved synthetic id kept
+// only in containerById (never containerMap/containers → no world mesh). Backs the
+// container menu the peer views for a host-owned container. Its cell is remembered
+// so take/put/close requests can be addressed back to the host by (cx, cy).
+const PEER_REMOTE_CONTAINER_ID = -777001;
+let _peerRemoteContainerCell: { x: number; y: number } | null = null;
+
 // Peer-side floor checkpoint reassembly (chunks arrive in order from host).
 let _snapChunks: (string | undefined)[] | null = null;
 let _snapTotal = 0;
@@ -822,6 +830,29 @@ setOnlineMessageHandler((msgData: any) => {
           }
           if (bestDrop) {
             pickupDrop(world, bestDrop, actor, state.msgs, state.time, state);
+            handled = true;
+          }
+        }
+        // Try opening / searching a container in front of the peer. Host is the
+        // sole authority: it resolves (or lazily generates) the container and
+        // sends the peer a transient inventory copy to view — the peer never
+        // generates anything (floor seed is non-deterministic) and never spawns
+        // a world mesh for it.
+        if (!handled) {
+          // Prefer the cell the peer faces (matches the local look-direction
+          // targeting and lets "обыскать" generate loot on the faced feature),
+          // then fall back to a nearby container.
+          const container = resolvePeerContainerAtCell(world, state.currentFloor, Math.floor(cx), Math.floor(cy))
+            ?? firstNearbyContainer(world, actor, state)
+            ?? resolvePeerContainerAtCell(world, state.currentFloor, Math.floor(actor.x), Math.floor(actor.y));
+          if (container) {
+            container.lastOpenedBy = actor.id;
+            container.lastOpenedAt = state.time;
+            sendOnlineMessage({
+              type: 'container_open',
+              _targetSlot: actor.peerSlot,
+              container: containerSyncPayload(container),
+            });
           }
         }
       }
@@ -930,23 +961,30 @@ setOnlineMessageHandler((msgData: any) => {
         }
       }
 
-      // ── Peer container: open / take / put — host-authoritative ──
-      // Peer sends the acting cell; host resolves (or lazily generates via
-      // search) the container, runs the real take/put against the peer actor so
-      // all theft/karma/purchase/event side effects stay host-owned, then echoes
-      // authoritative contents back. Peer inventory reconciles via entity_sync.
+      // ── Peer container: take / put / close — host-authoritative ──
+      // Peer sends the container's cell + slot; host resolves the real container
+      // there, runs the real take/put against the peer actor (all theft/karma/
+      // purchase/event side effects stay host-owned), then echoes fresh contents
+      // back to that peer. Peer inventory reconciles via entity_sync. On close
+      // the host just drops any transient generated loot bookkeeping — the
+      // container itself lives in the host world.
       if (msgData.container) {
         const op = msgData.container as { op: string; cx: number; cy: number; slot?: number };
-        const container = resolvePeerContainerAtCell(world, state.currentFloor, op.cx, op.cy);
-        if (container) {
-          const slot = Math.max(0, Math.floor(op.slot ?? 0));
-          if (op.op === 'take') {
-            takeFromContainer(container, actor, slot, 1, { state, world, entities });
-          } else if (op.op === 'put') {
-            putIntoContainer(container, actor, slot, 1, { state, world, entities });
+        if (op.op !== 'close') {
+          const container = resolvePeerContainerAtCell(world, state.currentFloor, op.cx, op.cy);
+          if (container) {
+            const slot = Math.max(0, Math.floor(op.slot ?? 0));
+            if (op.op === 'take') {
+              takeFromContainer(container, actor, slot, 1, { state, world, entities });
+            } else if (op.op === 'put') {
+              putIntoContainer(container, actor, slot, 1, { state, world, entities });
+            }
+            sendOnlineMessage({
+              type: 'container_sync',
+              _targetSlot: actor.peerSlot,
+              container: containerSyncPayload(container),
+            });
           }
-          // Echo authoritative contents to every peer so shared containers converge.
-          sendOnlineMessage({ type: 'container_sync', container: containerSyncPayload(container) });
         }
       }
     }
@@ -1112,19 +1150,32 @@ setOnlineMessageHandler((msgData: any) => {
     }
   }
 
-  // ── PEER: authoritative container contents from host (cell-keyed) ──
-  if (msgData.type === 'container_sync' && isOnlinePeer() && onlinePeerFloorReady) {
+  // ── PEER: host opened/searched a container → show its inventory copy ──
+  // The copy lives ONLY in containerById under a fixed synthetic id, so it backs
+  // the menu but never enters containerMap/containers (no world mesh, no cell
+  // collision). Same "inventory as a synced copy" model the peer already uses.
+  if (msgData.type === 'container_open' && isOnlinePeer() && onlinePeerFloorReady) {
     const payload = msgData.container as ContainerSyncPayload | undefined;
     if (payload) {
-      const container = applyContainerSyncPayload(world, payload);
-      // Re-point an open container menu at the host-truth id so the peer keeps
-      // viewing the same cell after a lazily-generated container swaps ids.
-      if (container && state.showContainerMenu) {
-        const open = world.containerById.get(state.containerMenuTarget);
-        if (!open || (open.x === container.x && open.y === container.y)) {
-          state.containerMenuTarget = container.id;
-        }
-      }
+      const copy = buildRemoteContainer(world, payload, PEER_REMOTE_CONTAINER_ID);
+      world.containerById.set(PEER_REMOTE_CONTAINER_ID, copy);
+      state.showContainerMenu = true;
+      state.containerMenuTarget = PEER_REMOTE_CONTAINER_ID;
+      state.containerCursorX = 0;
+      state.containerCursorY = 0;
+      state.containerSide = 'container';
+      _peerRemoteContainerCell = { x: copy.x, y: copy.y };
+      syncPauseState();
+    }
+  }
+
+  // ── PEER: fresh contents for the open container copy (after take/put) ──
+  if (msgData.type === 'container_sync' && isOnlinePeer() && onlinePeerFloorReady) {
+    const payload = msgData.container as ContainerSyncPayload | undefined;
+    if (payload && state.showContainerMenu && state.containerMenuTarget === PEER_REMOTE_CONTAINER_ID) {
+      const copy = buildRemoteContainer(world, payload, PEER_REMOTE_CONTAINER_ID);
+      world.containerById.set(PEER_REMOTE_CONTAINER_ID, copy);
+      _peerRemoteContainerCell = { x: copy.x, y: copy.y };
     }
   }
 
@@ -5070,16 +5121,14 @@ function openNpcMenu(npc: Entity): void {
 }
 
 function openContainerMenu(container: WorldContainer): void {
+  // Online peer never opens a host-world container locally — the host drives the
+  // menu via a `container_open` message with an inventory copy (see handler).
+  if (isOnlinePeer()) return;
   state.showContainerMenu = true;
   state.containerMenuTarget = container.id;
   state.containerCursorX = 0;
   state.containerCursorY = 0;
   state.containerSide = 'container';
-  // Online peer: ask the host to resolve (or lazily search-generate) this cell's
-  // container and echo its authoritative contents, so the menu shows host truth.
-  if (isOnlinePeer()) {
-    sendPeerAction({ container: { op: 'open', cx: container.x, cy: container.y, slot: 0 } });
-  }
   const access = containerAccessInfo(container, player, state);
   if (!access.canTake && !access.canPut) {
     state.msgs.push(msg(access.detail, state.time, '#f84'));
@@ -5088,10 +5137,10 @@ function openContainerMenu(container: WorldContainer): void {
   }
 }
 
-/** Online peer: mirror a container take/put to the host instead of mutating the
- *  host-world container locally. The host runs the authoritative operation and
- *  echoes contents back via `container_sync`; the peer's own inventory syncs
- *  through `entity_sync`. Keeps all container side effects host-owned. */
+/** Online peer: mirror a container take/put to the host instead of mutating a
+ *  host-world container locally. The container copy carries the host cell in its
+ *  x/y, so the host resolves the real container there. Contents echo back via
+ *  `container_sync`; the peer's own inventory syncs through `entity_sync`. */
 function peerContainerActivate(container: WorldContainer): void {
   const idx = state.containerCursorY * INVENTORY_GRID_COLS + state.containerCursorX;
   if (state.containerSide === 'container') {
@@ -5108,6 +5157,15 @@ function peerContainerActivate(container: WorldContainer): void {
 }
 
 function closeContainerMenu(): void {
+  // Peer: destroy the transient remote container copy and tell the host we closed
+  // (symmetric with the inventory-copy model — both sides drop the copy).
+  if (isOnlinePeer() && state.containerMenuTarget === PEER_REMOTE_CONTAINER_ID) {
+    world.containerById.delete(PEER_REMOTE_CONTAINER_ID);
+    if (_peerRemoteContainerCell) {
+      sendPeerAction({ container: { op: 'close', cx: _peerRemoteContainerCell.x, cy: _peerRemoteContainerCell.y } });
+      _peerRemoteContainerCell = null;
+    }
+  }
   state.showContainerMenu = false;
   state.containerMenuTarget = -1;
   state.containerCursorX = 0;
@@ -6818,15 +6876,6 @@ function activateContainerSelection(container: WorldContainer): void {
       state.msgs.push(msg(slot ? 'Контейнер полон.' : 'Пустой слот.', state.time, '#888'));
     }
   }
-  broadcastContainerIfHost(container);
-}
-
-/** Host: propagate a locally-mutated container's contents to peers so their
- *  copies converge (peers otherwise only resync a container when they open it). */
-function broadcastContainerIfHost(container: WorldContainer): void {
-  if (isOnlineHost()) {
-    sendOnlineMessage({ type: 'container_sync', container: containerSyncPayload(container) });
-  }
 }
 
 function activateNpcMainSelection(npc: Entity | undefined): void {
@@ -8247,7 +8296,6 @@ function handleMenuInput(): void {
             state.msgs.push(msg(slot ? 'Контейнер полон.' : 'Пустой слот.', state.time, '#888'));
           }
         }
-        broadcastContainerIfHost(container);
         }
       }
     }
@@ -8661,11 +8709,16 @@ function gameLoop(now: number): void {
           rpg: player.rpg ? { level: player.rpg.level, xp: player.rpg.xp, attrPoints: player.rpg.attrPoints, str: player.rpg.str, agi: player.rpg.agi, int: player.rpg.int, psi: player.rpg.psi, maxPsi: player.rpg.maxPsi } : undefined,
         },
       });
-      // Edge actions — sent immediately, bypass throttle
-      // NOTE: do NOT clear input.interact here — the local handlePlayerInteract
-      // must also see it so doors/containers/NPCs work for the peer locally.
+      // Edge actions — sent immediately, bypass throttle. The peer does NOT run
+      // playerActions/handlePlayerInteract (host-authoritative), so clear the
+      // interact edge here or it would re-fire every frame while E is held
+      // (reopening containers / re-toggling doors endlessly). Suppress world
+      // interact while any menu overlay is open — E then belongs to the menu.
+      const peerMenuOpen = state.showContainerMenu || state.showInventory || state.showNpcMenu
+        || state.showCraftMenu || state.showMenu;
       if (input.interact) {
-        sendPeerAction({ interact: true });
+        if (!peerMenuOpen) sendPeerAction({ interact: true });
+        input.interact = false;
       }
       if (input.attack || input.mouseAttack) {
         sendPeerAction({ fire: true });

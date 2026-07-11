@@ -1819,8 +1819,9 @@ Official Cloudflare sources checked on 2026-05-24, with pricing rechecked on 202
 | host→peer | `floor_snapshot_chunk` | i, data (base64/JSON slice of the packed floor checkpoint) | Once on join, N chunks |
 | host→peer | `entity_sync` | Array of `SyncEntity` (id, type, x, y, angle, alive, hp, sprite, weapon, name, faction, speed, monsterKind, dropDefId...) | 8 Hz (125ms) |
 | host→peer | `door_sync` | Array of `{idx, state}` for nearby doors | 8 Hz (with entity_sync) |
-| peer→host | `peer_action.container` | `{op: open\|take\|put, cx, cy, slot}` — host-authoritative container loot/deposit/search | Immediate, no throttle |
-| host→peer | `container_sync` | `ContainerSyncPayload` (cell-keyed authoritative container contents) | On peer container op / host container mutation |
+| peer→host | `peer_action.container` | `{op: take\|put\|close, cx, cy, slot}` — host-authoritative container loot/deposit | Immediate, no throttle |
+| host→peer | `container_open` | `ContainerSyncPayload` — host opened/searched a container for this peer; opens the menu with a transient copy | On peer E over a container |
+| host→peer | `container_sync` | `ContainerSyncPayload` — fresh contents for the peer's open copy after take/put | On peer take/put |
 | peer→host | `peer_join` | (empty, triggers remote actor spawn) | Once |
 | DO→host | `peer_disconnected` | slot | On peer close |
 | DO→peer | `host_disconnected` | (empty) | On host close |
@@ -1875,12 +1876,20 @@ Official Cloudflare sources checked on 2026-05-24, with pricing rechecked on 202
 - The host no longer sends a bare seed (`floor_init` removed). Peers restore the host's exact mutated floor, killing every geometry/mutation desync class (the "peer walks far and the floor is wrong" bug). Transport is chunked (48 KB slices) to stay under the Cloudflare DO WebSocket frame limit; the join is one-shot so payload size over speed is an accepted trade.
 - **Peer→host PvP damage fix (HP siphon):** peer melee previously did a raw `e.hp -=` with no armor/blood/stagger/death-cause and drained HP as an untimed trickle (the fire edge streams every frame it is held). Peer attacks now resolve through the same pipeline the host uses for its own strikes (`selectMeleeTarget` → `applyMonsterArmorHit` → blood + `notifyActorDamaged`/`recordPlayerDamage` → kill handling) and are paced by the weapon's real fire interval (wall-clock gate per slot), so hits register discretely instead of siphoning.
 
-**Host-authoritative container looting + deposit + search (`src/systems/online_containers.ts`):**
+**Host-authoritative container looting + deposit + search (`src/systems/online_containers.ts`) — inventory-copy model:**
 
-- Peers can now open, loot and deposit into host-world containers, and trigger "обыскать" (search) on decor features. Container identity on the wire is the **cell** (cx, cy), not the local numeric id — a feature-loot container searched independently on host and peer gets different ids but always occupies the same cell.
-- New peer→host `peer_action.container` op (`open` / `take` / `put`, with `cx, cy, slot`). The host resolves the container at that cell — lazily generating the feature-loot container via the refactored, now-exported `resolveOrCreateFeatureLootContainer` (interactive.ts) when the cell holds a searchable decor feature — then runs the real `takeFromContainer` / `putIntoContainer` against the **peer actor**, so all theft/karma/purchase/witness/event side effects stay host-owned. The peer's own inventory reconciles through the existing `entity_sync` + generation-counter path (identical to item pickup).
-- New host→peer `container_sync` (cell-keyed) echoes authoritative container contents. `applyContainerSyncPayload` upserts by cell into the peer world (matching a snapshot or peer-generated container, preserving its local id so an open menu stays valid) and re-points the open container menu. The host also broadcasts `container_sync` when it mutates a container itself, so shared containers converge for all peers.
-- Peer menus no longer mutate host-world containers locally — the take/put UI paths (`activateContainerSelection`, keyboard + tap handlers) route through the host when `isOnlinePeer()`, keeping the peer a thin viewer + requester. Known bound: a host-looted container only pushes to peers on the host's own edge action / the peer's next open, not continuously.
+A container is just an inventory, so peer container access reuses the exact "synced copy" model the peer inventory already uses. The peer never generates, registers or mutates a host-world container — the earlier seed-based/local-registration attempt failed because **the floor seed is not deterministic in practice** (host and peer generate different loot) and registering a peer-side container spawned a phantom mesh over the underlying feature (e.g. a cabinet mesh over a table).
+
+Flow:
+
+1. Peer presses E → `sendPeerAction({interact})` (the peer does not run `handlePlayerInteract`; interact is host-only). The peer clears its own interact edge and suppresses world-interact while a menu overlay is open.
+2. Host resolves the interaction virtually against the peer actor: door → item pickup → container. For containers it tries `firstNearbyContainer`, then the faced cell, then the actor cell, lazily generating a feature-loot container ("обыскать") via the now-exported `resolveOrCreateFeatureLootContainer` (interactive.ts) — **the host is the sole generator**, so seed determinism is irrelevant.
+3. Host sends `container_open` (targeted to that peer) with a `ContainerSyncPayload` (cell, kind, name, access, tags, inventory).
+4. Peer stores the copy ONLY in `world.containerById` under a fixed synthetic id (`-777001`) — never `containerMap`/`containers`, so it backs the menu but spawns **no world mesh** and collides with nothing. The existing container menu/render/tap paths read it unchanged.
+5. Take/put are `peer_action.container` (`op: take|put`, with the copy's host cell `cx, cy` + `slot`). The host resolves the real container there and runs the real `takeFromContainer`/`putIntoContainer` against the peer actor — all theft/karma/purchase/witness/event side effects stay host-owned. It echoes fresh contents back to that peer via `container_sync` (targeted). Peer inventory reconciles through the existing `entity_sync` + gen-counter path (identical to item pickup).
+6. On close the peer deletes the copy from `containerById` and sends `peer_action.container {op: close}`; both sides drop the copy.
+
+The old broadcast-on-host-mutation (`broadcastContainerIfHost`) was removed — it pushed unrelated container state to peers and was the source of the phantom-mesh overlap. A host looting its own container no longer perturbs a peer's open copy.
 
 
 ### Implementation Update 2026-07-10
