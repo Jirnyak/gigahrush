@@ -6,9 +6,7 @@ import { stampLocalMark, stampMark, MarkType } from './surface_marks';
 import { Spr } from '../render/sprite_index';
 import { ensureEntityIndex } from './entity_index';
 import { addVisualSlotByPriority, removeVisualSlotCode } from '../gen/visual_cell_slots.js';
-import { SeedRng } from '../core/rand.js';
-const _localBloodRng = new SeedRng(Date.now() % 99999);
-const rng = () => _localBloodRng.random();
+import { mathRng as rng, SeedRng } from '../core/rand';
 
 /* ── Transient world-space particles ──────────────────────────── */
 export type ParticleKind =

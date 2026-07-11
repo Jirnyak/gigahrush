@@ -1,7 +1,7 @@
 import { type Entity } from '../core/types';
 import { SURFACE_FLAG_CHALK_MAP, type World } from '../core/world';
 import { paintSurfacePixel } from './surface_marks';
-import { rng } from '../core/rand';
+import { mathRng as rng } from '../core/rand';
 
 export const CHALK_ITEM_ID = 'chalk';
 const CHALK_PIXEL_ALPHA = 235;

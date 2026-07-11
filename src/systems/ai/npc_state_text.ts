@@ -1,5 +1,5 @@
 import { NpcState } from '../../core/types';
-import { rng } from '../../core/rand';
+import { mathRng as rng } from '../../core/rand';
 
 const STATE_TEXTS: Record<NpcState, string[]> = {
   [NpcState.SLEEPING]: ['Сплю, если тут вообще можно спать.', 'Дай закрыть глаза.', 'Мне надо отлежаться.'],

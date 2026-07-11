@@ -36,6 +36,8 @@ import { generateProceduralFloor } from './gen/procedural_floor';
 import { generateDesignFloor, isDesignFloorId } from './gen/design_floors/manifest';
 import { injectFastElevators } from './gen/fast_elevators';
 import { stampCeilingHeights } from './gen/ceiling_heights';
+import { fillVisualSlotsForWorldFeatures } from './gen/visual_cell_slots';
+import { syncNextEntityId } from './gen/content_manifest_utils';
 import {
   floorInstanceGenerationExtrasForKey,
   floorInstanceSamosborReplacementAllowed,
@@ -341,6 +343,14 @@ import {
   type FloorRouteLiftMirror,
 } from './systems/floor_memory';
 import {
+  packFloorForNetwork,
+  serializeFloorSnapshot,
+  chunkFloorSnapshot,
+  deserializeFloorSnapshot,
+  unpackFloorFromNetwork,
+  reassembleFloorSnapshot,
+} from './systems/floor_serialization';
+import {
   commitFloorRunEntry,
   currentFloorRunEntry,
   ensureFloorRunState,
@@ -645,6 +655,14 @@ setActiveActorSoftLimit(titleActiveActorSoftLimit);
 let onlinePeerFloorReady = false;
 const _lastPeerActor = new Map<number, Record<string, unknown>>();  // delta-merge: last received actor state per slot
 const _peerAckedGen = new Map<number, number>();  // last processed peer gen per slot
+const _peerNextFireAt = new Map<number, number>();  // wall-clock ms gate: next allowed peer attack per slot
+
+// Peer-side floor checkpoint reassembly (chunks arrive in order from host).
+let _snapChunks: (string | undefined)[] | null = null;
+let _snapTotal = 0;
+let _snapReceived = 0;
+let _snapSpawnX = W / 2;
+let _snapSpawnY = W / 2;
 
 setOnlineMessageHandler((msgData: any) => {
   // ── HOST: peer joined → spawn remote actor, send floor seed ──
@@ -676,16 +694,39 @@ setOnlineMessageHandler((msgData: any) => {
     } as Entity;
     entities.push(remoteActor);
 
-    // Tell peer to generate floor from seed — no full-world transfer
+    // Full-floor checkpoint: pack the host's live, mutated World + entities and
+    // stream it to the peer in order. The peer restores this verbatim instead of
+    // regenerating from seed, so runtime mutations (doors, containers, loot,
+    // route lifts, carved passages) can never desync. Seed is still sent as a
+    // fallback identity hint.
     const runSeed = ensureFloorRunState(state).runSeed;
+    const snapshot = packFloorForNetwork(world, entities, {
+      floor: state.currentFloor,
+      runSeed,
+      floorKey: currentFloorMemoryKey(),
+      spawnX, spawnY,
+      samosborCount: state.samosborCount,
+      gameTime: state.time,
+      nextEntityId: nextEntityId.v,
+    });
+    const chunks = chunkFloorSnapshot(serializeFloorSnapshot(snapshot));
     sendOnlineMessage({
-      type: 'floor_init',
+      type: 'floor_snapshot_begin',
       _targetSlot: peerSlot,
+      total: chunks.length,
       floor: state.currentFloor,
       runSeed,
       peerSlot,
       spawnX, spawnY,
     });
+    for (let i = 0; i < chunks.length; i++) {
+      sendOnlineMessage({
+        type: 'floor_snapshot_chunk',
+        _targetSlot: peerSlot,
+        i,
+        data: chunks[i],
+      });
+    }
   }
 
   // ── HOST: apply peer input to remote actor (delta-merge) ──
@@ -797,10 +838,17 @@ setOnlineMessageHandler((msgData: any) => {
 
       // ── Peer fire edge ──
       if (msgData.fire) {
+        const slot = msgData._peerSlot as number;
         const weaponId = equippedCombatItemId(actor);
         const ws = getWeaponStats(actor, weaponId);
-        actor.attackCd = Math.max(0, (actor.attackCd ?? 0) - 0.05);
-        if (actor.attackCd <= 0) {
+        // Pace attacks by wall-clock, not by message count: the peer streams a
+        // `fire` edge every frame it holds attack, so decrementing a cooldown per
+        // message let damage arrive as an untimed trickle (the "HP siphon" bug).
+        // Gate on the weapon's real fire interval instead.
+        const nowMs = performance.now();
+        const nextAt = _peerNextFireAt.get(slot) ?? 0;
+        if (nowMs >= nextAt) {
+          _peerNextFireAt.set(slot, nowMs + Math.max(0.05, ws.speed) * 1000);
           if (ws.isRanged) {
             const cos = Math.cos(actor.angle);
             const sin = Math.sin(actor.angle);
@@ -832,52 +880,98 @@ setOnlineMessageHandler((msgData: any) => {
               if (ws.aoeRadius) { proj.aoeRadius = ws.aoeRadius; proj.aoeDmg = ws.dmg; }
               entities.push(proj);
             }
-            actor.attackCd = ws.speed;
           } else {
-            // Melee
+            // ── Melee: resolve exactly like a host-owned attack so the hit
+            // registers (armor, blood, stagger, kill), and — when the victim is
+            // the host player — records the damage so it lands as a real hit
+            // with a death cause and vignette flash instead of silently draining.
             const range = ws.range;
             const ax = actor.x + Math.cos(actor.angle) * range;
             const ay = actor.y + Math.sin(actor.angle) * range;
             const entityIndex = getEntityIndex();
             const meleeQuery: Entity[] = [];
             entityIndex.queryRadius(ax, ay, 1.2, meleeQuery, ENTITY_MASK_ACTOR);
-            for (const e of meleeQuery) {
-              if (e.id === actor.id || !e.alive || e.hp === undefined) continue;
-              const d2 = world.dist2(actor.x, actor.y, e.x, e.y);
-              if (d2 > (range + 0.5) * (range + 0.5)) continue;
-              const rawDmg = ws.dmg;
-              e.hp -= rawDmg;
-              e.staggerTimer = 0.15;
-              if (e.hp <= 0) { e.alive = false; e.hp = 0; }
-              break;
+            const target = selectMeleeTarget(world, actor, meleeQuery, range, weaponId);
+            if (target && target.hp !== undefined) {
+              const armor = applyMonsterArmorHit(world, state, target, {
+                damage: ws.dmg,
+                attacker: actor,
+                weaponId,
+              });
+              const dmg = armor.damage;
+              target.hp -= dmg;
+              target.staggerTimer = 0.15;
+              const mSpd = 6;
+              const mVx = Math.cos(actor.angle) * mSpd;
+              const mVy = Math.sin(actor.angle) * mSpd;
+              spawnBloodHit(world, target.x, target.y, actor.angle, dmg, target.type === EntityType.MONSTER, mVx, mVy, 0.5);
+              if (isPlayerEntity(target)) {
+                // Peer-vs-host PvP: register the hit on the host's damage channel.
+                recordPlayerDamage(state, actor, dmg, `Удар от ${actor.name || 'игрока'}: -${dmg}`, 'npc');
+                state.dmgFlash = Math.max(state.dmgFlash, Math.min(1, 0.3 + dmg / (target.maxHp ?? 100) * 1.5));
+              } else {
+                notifyActorDamaged(world, target, actor, dmg, 'player_melee', state.time, state);
+              }
+              if (target.hp <= 0) {
+                target.hp = 0;
+                target.alive = false;
+                if (!isPlayerEntity(target)) {
+                  handleKill(target, true, mVx, mVy, 1);
+                }
+              }
             }
-            actor.attackCd = ws.speed;
           }
         }
       }
     }
   }
 
-  // ── PEER: receive floor seed and generate locally ──
-  if (msgData.type === 'floor_init' && isOnlinePeer()) {
-    state.msgs.push(msg('Генерирую этаж хоста...', state.time, '#8cf'));
-    const peerFloor = msgData.floor as FloorLevel;
-    const peerRunSeed = msgData.runSeed as number;
-    const peerSpawnX = msgData.spawnX ?? 512;
-    const peerSpawnY = msgData.spawnY ?? 512;
-    const peerMySlot = getOnlineSlot();
+  // ── PEER: full-floor checkpoint stream from host ──
+  if (msgData.type === 'floor_snapshot_begin' && isOnlinePeer()) {
+    state.msgs.push(msg('Получаю этаж хоста...', state.time, '#8cf'));
+    _snapTotal = Math.max(0, Math.floor(msgData.total ?? 0));
+    _snapChunks = new Array(_snapTotal);
+    _snapReceived = 0;
+    _snapSpawnX = msgData.spawnX ?? W / 2;
+    _snapSpawnY = msgData.spawnY ?? W / 2;
+    onlinePeerFloorReady = false;
+  }
 
+  if (msgData.type === 'floor_snapshot_chunk' && isOnlinePeer() && _snapChunks) {
+    const i = Math.floor(msgData.i ?? -1);
+    if (i >= 0 && i < _snapTotal && _snapChunks[i] === undefined) {
+      _snapChunks[i] = typeof msgData.data === 'string' ? msgData.data : '';
+      _snapReceived++;
+    }
+    if (_snapReceived < _snapTotal) return;
+    // All chunks in — reassemble, unpack, and swap in the host's floor.
+    const serialized = reassembleFloorSnapshot(_snapChunks, _snapTotal);
+    _snapChunks = null;
+    const snapshot = serialized !== null ? deserializeFloorSnapshot(serialized) : null;
+    const unpacked = snapshot ? unpackFloorFromNetwork(snapshot) : null;
+    if (!unpacked) {
+      state.msgs.push(msg('Ошибка распаковки этажа хоста.', state.time, '#f44'));
+      return;
+    }
+    const spawnX = _snapSpawnX, spawnY = _snapSpawnY;
+    const peerMySlot = getOnlineSlot();
     scheduleLoading(() => {
-      const gen = generateFloor(peerFloor, peerRunSeed, false);
-      injectFastElevators(gen.world);
-      world = replaceWorldFromGeneration(world, gen);
-      entities = []; // host will populate via entity_sync
+      // Re-stamp the derived, non-serialized layers that generation owns
+      // (mirrors loadFloorForTarget for memory-restored floors).
+      injectFastElevators(unpacked.world);
+      fillVisualSlotsForWorldFeatures(unpacked.world, unpacked.meta.runSeed);
+      stampCeilingHeights(unpacked.world);
+      state.currentFloor = unpacked.meta.floor;
+      world = replaceWorldFromGeneration(world, { world: unpacked.world });
+      entities = unpacked.entities;
+      // Never mint a local id that collides with a host-authored entity.
+      nextEntityId.v = Math.max(nextEntityId.v, unpacked.meta.nextEntityId, syncNextEntityId(entities, nextEntityId.v));
 
       // Create local player actor for camera attachment
       const localPlayer: Entity = {
         id: nextEntityId.v++,
         type: EntityType.NPC,
-        x: peerSpawnX, y: peerSpawnY,
+        x: spawnX, y: spawnY,
         angle: -Math.PI / 2, pitch: 0,
         alive: true,
         speed: HUMANOID_BASE_MOVE_SPEED,
@@ -896,9 +990,10 @@ setOnlineMessageHandler((msgData: any) => {
       entities.push(localPlayer);
       player = localPlayer;
       setCurrentPlayerEntity(player);
-      finishLoadedFloorVisuals(gen);
+      finishLoadedFloorVisuals();
+      rebuildEntityIndex(entities, 'load');
       onlinePeerFloorReady = true;
-      state.msgs.push(msg('Этаж загружен. Ожидание синхронизации...', state.time, '#8cf'));
+      state.msgs.push(msg('Этаж загружен. Синхронизация...', state.time, '#8cf'));
     });
   }
 
@@ -1001,6 +1096,9 @@ setOnlineMessageHandler((msgData: any) => {
       entities.splice(idx, 1);
       rebuildEntityIndex(entities, 'load');
     }
+    _lastPeerActor.delete(slot);
+    _peerAckedGen.delete(slot);
+    _peerNextFireAt.delete(slot);
     state.msgs.push(msg(`Игрок ${slot} отключился.`, state.time, '#f88'));
   }
 

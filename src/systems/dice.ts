@@ -1,6 +1,6 @@
 import { msg, type Entity, type GameState } from '../core/types';
 import { publishEvent } from './events';
-import { rng } from '../core/rand';
+import { mathRng as rng } from '../core/rand';
 
 export type DiceWinner = 'player' | 'npc' | 'draw' | '';
 export type DicePhase = 'player_turn' | 'npc_turn' | 'finished';

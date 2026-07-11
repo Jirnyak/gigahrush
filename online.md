@@ -1815,7 +1815,8 @@ Official Cloudflare sources checked on 2026-05-24, with pricing rechecked on 202
 | --- | --- | --- | --- |
 | peer→host | `peer_input` | x, y, angle, pitch, weapon, tool, sprite, npcVisualId, sex | 20 Hz (50ms throttle) |
 | peer→host | `peer_action` | interact, fire (edge events) | Immediate, no throttle |
-| host→peer | `floor_init` | floor, runSeed, peerSlot, spawnX, spawnY | Once on join |
+| host→peer | `floor_snapshot_begin` | total chunks, floor, runSeed, spawnX, spawnY | Once on join |
+| host→peer | `floor_snapshot_chunk` | i, data (base64/JSON slice of the packed floor checkpoint) | Once on join, N chunks |
 | host→peer | `entity_sync` | Array of `SyncEntity` (id, type, x, y, angle, alive, hp, sprite, weapon, name, faction, speed, monsterKind, dropDefId...) | 8 Hz (125ms) |
 | host→peer | `door_sync` | Array of `{idx, state}` for nearby doors | 8 Hz (with entity_sync) |
 | peer→host | `peer_join` | (empty, triggers remote actor spawn) | Once |
@@ -1825,7 +1826,7 @@ Official Cloudflare sources checked on 2026-05-24, with pricing rechecked on 202
 
 ### Host-Side
 
-- On `peer_join`: spawns remote actor (EntityType.NPC, faction PLAYER) near a lift. Sends `floor_init` with runSeed and floor level so peer generates the same geometry.
+- On `peer_join`: spawns remote actor (EntityType.NPC, faction PLAYER) near a lift. Packs the host's **live current-floor checkpoint** (`packFloorForNetwork` in `src/systems/floor_serialization.ts`) — RLE-compressed World arrays + rooms/zones/doors/containers/surface/anomaly/rail state (reusing `worldForSave`/`worldFromSave` from `floor_memory.ts`) plus sanitized live entities and floor metadata — and streams it to the joining peer as ordered `floor_snapshot_begin` + `floor_snapshot_chunk` messages. The peer restores this verbatim instead of regenerating from seed, so host runtime mutations (opened/carved doors, looted containers, moved route lifts, killed NPCs, dropped loot) can never desync.
 - On `peer_input`: validates position (passable cell check), applies x/y/angle/pitch/weapon/tool/sprite/sex/npcVisualId to the remote actor.
 - On `peer_action` with `interact`: tries door toggle first (checks cell in front of actor for DOOR), then tries item pickup (`pickupDrop()` on nearest ITEM_DROP within 2.5 cells).
 - On `peer_action` with `fire`: spawns projectiles or applies melee from the remote actor using the actor's equipped weapon stats, with attack cooldown.
@@ -1833,7 +1834,7 @@ Official Cloudflare sources checked on 2026-05-24, with pricing rechecked on 202
 
 ### Peer-Side
 
-- On `floor_init`: generates floor from seed (same `generateFloor` call), creates local player entity, clears entity list.
+- On `floor_snapshot_begin` + `floor_snapshot_chunk`: buffers ordered chunks, reassembles + `deserializeFloorSnapshot`/`unpackFloorFromNetwork` once all arrive, then swaps in the host's restored `World` (re-stamping the derived, non-serialized layers generation owns: fast elevators, visual slots, ceiling heights; `worldFromSave` already rebuilt dirty flags + path blockers), materializes the host's live entities, aligns `nextEntityId`, and creates the local player entity. No `generateFloor` / seed regeneration — the peer runs the host's exact floor.
 - On `entity_sync`: patches entities in-place (lerps positions for smooth movement, teleports if >4 cells apart), adds new entities, removes entities not in sync. Local player position is hard-applied from host (authoritative).
 - On `door_sync`: applies door state changes from host.
 - Input: sends continuous state at 20 Hz. Interact and fire are sent as immediate `peer_action` messages that bypass throttle.
@@ -1863,6 +1864,14 @@ Official Cloudflare sources checked on 2026-05-24, with pricing rechecked on 202
 - Peer cannot use NPCs, containers, terminals, lifts or quest interactions.
 - Save is fully separate: peer's online session doesn't affect their local offline save.
 - Samosbor disabled in online mode to avoid host/peer desync.
+
+### Implementation Update 2026-07-11
+
+**Full-floor checkpoint on `/join` (serialization refactor):**
+
+- New `src/systems/floor_serialization.ts`: `packFloorForNetwork` / `unpackFloorFromNetwork` + `serializeFloorSnapshot` / `deserializeFloorSnapshot` + `chunkFloorSnapshot` / `reassembleFloorSnapshot`. Reuses `worldForSave`/`worldFromSave` (RLE geometry) from `floor_memory.ts` verbatim — no new runtime deps, no duplicated compression. Projectiles and remote peer actors are excluded from the checkpoint; the host player body and live NPCs/monsters/drops are included.
+- The host no longer sends a bare seed (`floor_init` removed). Peers restore the host's exact mutated floor, killing every geometry/mutation desync class (the "peer walks far and the floor is wrong" bug). Transport is chunked (48 KB slices) to stay under the Cloudflare DO WebSocket frame limit; the join is one-shot so payload size over speed is an accepted trade.
+- **Peer→host PvP damage fix (HP siphon):** peer melee previously did a raw `e.hp -=` with no armor/blood/stagger/death-cause and drained HP as an untimed trickle (the fire edge streams every frame it is held). Peer attacks now resolve through the same pipeline the host uses for its own strikes (`selectMeleeTarget` → `applyMonsterArmorHit` → blood + `notifyActorDamaged`/`recordPlayerDamage` → kill handling) and are paced by the weapon's real fire interval (wall-clock gate per slot), so hits register discretely instead of siphoning.
 
 ### Implementation Update 2026-07-10
 

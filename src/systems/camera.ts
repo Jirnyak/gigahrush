@@ -5,9 +5,7 @@
 import { W } from '../core/types';
 import { World } from '../core/world';
 import { bfsPath, subcellToWorld } from './ai/pathfinding.js';
-import { SeedRng } from '../core/rand.js';
-const _localCameraRng = new SeedRng(Date.now() % 99999);
-const rng = () => _localCameraRng.random();
+import { mathRng as rng } from '../core/rand';
 
 export type CameraMode = 'player' | 'free' | 'death' | 'trailer' | 'cinematic';
 

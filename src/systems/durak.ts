@@ -1,6 +1,6 @@
 import { msg, type Entity, type GameState } from '../core/types';
 import { publishEvent } from './events';
-import { rng } from '../core/rand';
+import { mathRng as rng } from '../core/rand';
 
 export type DurakSuit = 'clubs' | 'diamonds' | 'hearts' | 'spades';
 export type DurakRank = 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14;

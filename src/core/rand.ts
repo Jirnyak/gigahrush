@@ -23,6 +23,17 @@ export function seedGlobalRng(seed: number): void {
   _s = (seed | 0) || 1;
 }
 
+/** Local game RNG — based on Math.random(). Returns [0, 1).
+ *  Use for visual, audio, and UI to avoid breaking deterministic seeds. */
+export function mathRng(): number {
+  return Math.random();
+}
+
+/** Inclusive integer in [a, b] using Math.random(). */
+export function mathIrand(a: number, b: number): number {
+  return a + Math.floor(Math.random() * (b - a + 1));
+}
+
 /** Test-only: override rng() to return values from the given function. */
 export function _overrideRng(fn: () => number): void { _rngOverride = fn; }
 

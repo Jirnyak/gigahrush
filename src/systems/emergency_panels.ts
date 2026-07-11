@@ -40,7 +40,7 @@ import { applyInfrastructureRelationResponse } from './factions';
 import { territoryFactionAt } from './territory';
 import { setDoorState } from './door_state';
 import { ENTITY_MASK_NPC, ensureEntityIndex } from './entity_index';
-import { rng } from '../core/rand';
+import { rng, mathRng } from '../core/rand';
 
 type PanelAction = Exclude<EmergencyPanelActionId, 'leave'>;
 type PanelStatus = 'idle' | 'repaired' | 'shutdown' | 'forced' | 'overloaded';
@@ -486,7 +486,7 @@ function spawnPanelThreat(
       type: EntityType.MONSTER,
       x: x + 0.5,
       y: y + 0.5,
-      angle: rng() * Math.PI * 2,
+      angle: mathRng() * Math.PI * 2,
       pitch: 0,
       alive: true,
       speed: monsterDef.speed,

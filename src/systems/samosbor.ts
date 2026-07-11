@@ -1,4 +1,4 @@
-import { rng, xorshift32, irand } from '../core/rand';
+import { rng, xorshift32, irand, mathRng } from '../core/rand';
 /* ── САМОСБОР — the maze restructures itself ─────────────────── */
 /*   Every floor runs a local wave from a random mutable map point. */
 /*   Protected rooms, hermowalls and lifts are preserved.           */
@@ -1410,7 +1410,7 @@ function stampIstotitGoldDust(world: World, x: number, y: number, count: number,
     const py = world.wrap(y + irand(-2, 2));
     const ci = world.idx(px, py);
     if (world.cells[ci] !== Cell.FLOOR && world.cells[ci] !== Cell.DOOR) continue;
-    stampMark(world, px, py, rng(), rng(), 0.22 + rng() * 0.18, MarkType.PSI, seedBase + i * 977, 214, 166, 75, 125);
+    stampMark(world, px, py, mathRng(), mathRng(), 0.22 + mathRng() * 0.18, MarkType.PSI, seedBase + i * 977, 214, 166, 75, 125);
     stamped++;
   }
   return stamped;
@@ -4622,7 +4622,7 @@ function stampVeretarAreaLeak(world: World, cx: number, cy: number, radius: numb
     if (world.aptMask[ci]) continue;
     if (world.cells[ci] !== Cell.FLOOR && world.cells[ci] !== Cell.DOOR) continue;
     const seed = 91_000 + ci + placed * 977;
-    stampMark(world, x, y, rng(), rng(), 0.44 + rng() * 0.24, MarkType.SPLAT, seed, 244, 241, 223, 150);
+    stampMark(world, x, y, mathRng(), mathRng(), 0.44 + mathRng() * 0.24, MarkType.SPLAT, seed, 244, 241, 223, 150);
     const door = world.doors.get(ci);
     if (door) {
       if (door.state === DoorState.CLOSED) setDoorState(world, door, DoorState.OPEN);

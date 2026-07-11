@@ -3,7 +3,7 @@
 import { FloorLevel, MonsterKind } from '../core/types';
 import type { MonsterDef } from './monster';
 import { S, rgba, noise, clamp, CLEAR } from '../render/pixutil';
-import { rng } from '../core/rand';
+import { mathRng as rng } from '../core/rand';
 
 export const DEF: MonsterDef = {
   kind: MonsterKind.SCULPTURE,

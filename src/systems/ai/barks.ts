@@ -8,7 +8,7 @@ import {
   resolveNpcPackageForEntity,
   selectNpcCuratedFallback,
 } from '../npc_package_speech';
-import { rng } from '../../core/rand';
+import { mathRng as rng } from '../../core/rand';
 
 /* ── Probabilities ────────────────────────────────────────────── */
 

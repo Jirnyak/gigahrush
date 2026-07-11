@@ -10,7 +10,7 @@ import { World } from '../core/world';
 import { GAMBLING_MACHINES, getGamblingMachineDef, type GamblingDefId, type GamblingMachineDef } from '../data/gambling';
 import { ITEMS, ITEM_TAGS } from '../data/items';
 import { publishEvent } from './events';
-import { rng } from '../core/rand';
+import { mathRng as rng } from '../core/rand';
 
 export interface GamblingMachine {
   idx: number;

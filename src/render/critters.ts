@@ -2,9 +2,6 @@ import { crittersEnabled } from '../systems/ui_orchestrator';
 import { World } from '../core/world';
 import { Cell } from '../core/types';
 import { playRoachCrunch, playSoundAt } from '../systems/audio';
-import { SeedRng } from '../core/rand.js';
-const _localCritterRng = new SeedRng(Date.now() % 99999);
-const rng = () => _localCritterRng.random();
 import { CRITTER_DEFS, getRandomCritterDefId } from '../data/critters';
 
 /**
@@ -48,10 +45,10 @@ export function updateCritters(world: World, dt: number, playerX: number, player
     if (c.active) activeCount++;
   }
 
-  if (activeCount < MAX_CRITTERS && rng() < 0.1) {
+  if (activeCount < MAX_CRITTERS && Math.random() < 0.1) {
     // Attempt to spawn
-    const angle = rng() * Math.PI * 2;
-    const dist = 5 + rng() * 10; // spawn between 5 and 15 cells away
+    const angle = Math.random() * Math.PI * 2;
+    const dist = 5 + Math.random() * 10; // spawn between 5 and 15 cells away
     const sx = Math.round(playerX + Math.cos(angle) * dist);
     const sy = Math.round(playerY + Math.sin(angle) * dist);
     const cell = world.get(sx, sy);
@@ -60,7 +57,7 @@ export function updateCritters(world: World, dt: number, playerX: number, player
       const defId = getRandomCritterDefId();
       const def = CRITTER_DEFS[defId];
       
-      const spawnCount = def.spawnBatch[0] + Math.floor(rng() * (def.spawnBatch[1] - def.spawnBatch[0] + 1));
+      const spawnCount = def.spawnBatch[0] + Math.floor(Math.random() * (def.spawnBatch[1] - def.spawnBatch[0] + 1));
       let spawned = 0;
       
       for (let i = 0; i < MAX_CRITTERS && spawned < spawnCount; i++) {
@@ -70,16 +67,16 @@ export function updateCritters(world: World, dt: number, playerX: number, player
           nc.defId = defId;
           
           // Spread swarms slightly, precise center for single entities
-          const offsetX = spawnCount > 1 ? (rng() - 0.5) * 1.5 : 0;
-          const offsetY = spawnCount > 1 ? (rng() - 0.5) * 1.5 : 0;
+          const offsetX = spawnCount > 1 ? (Math.random() - 0.5) * 1.5 : 0;
+          const offsetY = spawnCount > 1 ? (Math.random() - 0.5) * 1.5 : 0;
           
           nc.x = sx + offsetX;
           nc.y = sy + offsetY;
-          nc.z = def.baseZ + (rng() - 0.5) * def.zVariance;
+          nc.z = def.baseZ + (Math.random() - 0.5) * def.zVariance;
           nc.targetX = nc.x;
           nc.targetY = nc.y;
           nc.speed = def.speed;
-          nc.phase = rng() * 100;
+          nc.phase = Math.random() * 100;
           spawned++;
         }
       }
@@ -160,7 +157,7 @@ function hasAdjacentWall(world: World, x: number, y: number): boolean {
 }
 
 export function pickNewCritterTarget(world: World, c: Critter, playerX: number, playerY: number, def: any, distToPlayer: number) {
-  if (rng() > 0.05) return;
+  if (Math.random() > 0.05) return;
 
   if (def.behavior === 'flee_player') {
     if (distToPlayer < def.fleeDist) {
@@ -184,21 +181,21 @@ export function pickNewCritterTarget(world: World, c: Critter, playerX: number, 
           c.targetX = nearWall.x;
           c.targetY = nearWall.y;
         } else {
-          const rC = candidates[Math.floor(rng() * candidates.length)];
+          const rC = candidates[Math.floor(Math.random() * candidates.length)];
           c.targetX = rC.x;
           c.targetY = rC.y;
         }
       }
     }
   } else if (def.behavior === 'wander_pause') {
-    if (distToPlayer < def.fleeDist && rng() < 0.8) {
+    if (distToPlayer < def.fleeDist && Math.random() < 0.8) {
       // Roaches tend to freeze when approached
       c.speed = 0;
     } else {
       c.speed = def.speed;
       const candidates = getAdjacentFloors(world, c.x, c.y);
       if (candidates.length > 0) {
-        const rC = candidates[Math.floor(rng() * candidates.length)];
+        const rC = candidates[Math.floor(Math.random() * candidates.length)];
         c.targetX = rC.x;
         c.targetY = rC.y;
       }
@@ -206,8 +203,8 @@ export function pickNewCritterTarget(world: World, c: Critter, playerX: number, 
   } else if (def.behavior === 'swarm') {
     c.speed = def.speed;
     // Erratic, tight orbit
-    const tx = c.x + (rng() - 0.5) * 2.0;
-    const ty = c.y + (rng() - 0.5) * 2.0;
+    const tx = c.x + (Math.random() - 0.5) * 2.0;
+    const ty = c.y + (Math.random() - 0.5) * 2.0;
     const cell = world.get(Math.round(tx), Math.round(ty));
     // Flies don't care too much about precise floors, but let's keep them from flying completely through walls
     if (cell === Cell.FLOOR) {

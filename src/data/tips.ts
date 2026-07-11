@@ -1,4 +1,4 @@
-import { rng } from '../core/rand';
+import { mathRng as rng } from '../core/rand';
 /* ── Советы (показываются на экране загрузки) ────────────────── */
 
 const TARGET_TIP_COUNT = 1000;

@@ -81,7 +81,7 @@ import { getAiStats } from './ai';
 import { canSpawnEntityType, entitySpawnSlots } from './entity_limits';
 import { CHALK_ITEM_ID } from './chalk';
 import { isPlayerEntity } from './player_actor';
-import { rng } from '../core/rand';
+import { rng, mathRng } from '../core/rand';
 
 /* ── Command execution ───────────────────────────────────────── */
 
@@ -1784,13 +1784,13 @@ export function execDebugCommand(
       for (let i = 0; i < MAX_CRITTERS && spawned < 10; i++) {
         const c = CRITTERS_POOL[i];
         if (!c.active) {
-          const angle = rng() * Math.PI * 2;
-          const dist = 1 + rng() * 3;
+          const angle = mathRng() * Math.PI * 2;
+          const dist = 1 + mathRng() * 3;
           const sx = Math.round(player.x + Math.cos(angle) * dist);
           const sy = Math.round(player.y + Math.sin(angle) * dist);
           if (world.get(sx, sy) === Cell.FLOOR) {
             c.active = true;
-            const r = rng();
+            const r = mathRng();
             c.defId = r < 0.4 ? 'roach' : (r < 0.8 ? 'rat' : 'fly');
             c.x = sx;
             c.y = sy;

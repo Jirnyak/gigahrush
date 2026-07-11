@@ -3,7 +3,7 @@ import { GameState } from '../core/types.js';
 import { World } from '../core/world.js';
 import { audioSuspended } from './audio.js';
 import { masterAudioEnabled, musicVolume } from './ui_orchestrator.js';
-import { SeedRng } from '../core/rand.js';
+import { mathRng } from '../core/rand.js';
 
 // Import all .ogg files from the music folder. Vite will bundle them (as base64 via viteSingleFile or as static assets).
 const musicFiles = import.meta.glob('../../music/*.ogg', { eager: true, as: 'url' });
@@ -17,7 +17,6 @@ class MusicSystem {
   private fadeOutAudio: HTMLAudioElement | null = null;
   private fadeTimer: number = 0;
   private readonly fadeDuration = 2.0; // 2 seconds crossfade
-  private localRng = new SeedRng(Date.now() % 99999);
 
   private tracks: Record<string, string> = {};
 
@@ -39,7 +38,7 @@ class MusicSystem {
 
     let nextTrack;
     do {
-      nextTrack = valid[Math.floor(this.localRng.random() * valid.length)];
+      nextTrack = valid[Math.floor(mathRng() * valid.length)];
     } while (nextTrack === this.currentTrackName);
     
     return nextTrack;

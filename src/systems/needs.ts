@@ -17,7 +17,7 @@ import { isDebugOnePunchManEnabled, keepDebugOnePunchManAlive } from './debug_ch
 import { ENTITY_MASK_NPC, ensureEntityIndex } from './entity_index';
 import { entitySpawnSlots } from './entity_limits';
 import { stampUrineTraceCadenced } from './urination';
-import { rng } from '../core/rand';
+import { mathRng as rng } from '../core/rand';
 
 // Rates per second
 const FOOD_RATE  = 0.08;

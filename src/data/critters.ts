@@ -1,4 +1,4 @@
-import { rng } from '../core/rand';
+import { mathRng as rng } from '../core/rand';
 export type CritterBehavior = 'flee_player' | 'wander_pause' | 'swarm';
 
 export interface CritterDef {

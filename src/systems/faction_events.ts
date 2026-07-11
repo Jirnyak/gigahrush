@@ -42,7 +42,7 @@ import {
   territoryOwnerAt,
   territoryOwnerAtIndex,
 } from './territory';
-import { rng } from '../core/rand';
+import { rng, mathRng } from '../core/rand';
 
 const SCHEDULER_TICK_SEC = 10;
 const MIN_EVENT_GAP_SEC = 45;
@@ -1943,15 +1943,15 @@ function placeResidueMarks(world: World, cx: number, cy: number, zoneId: number,
 
 function stampResidueMark(world: World, x: number, y: number, mark: FactionResidueMarkDef, seed: number): void {
   const visual = residueMarkVisual(mark);
-  const fx = 0.2 + rng() * 0.6;
-  const fy = 0.2 + rng() * 0.6;
+  const fx = 0.2 + mathRng() * 0.6;
+  const fy = 0.2 + mathRng() * 0.6;
   stampMark(
     world,
     x, y,
     fx, fy,
     mark.radius,
     visual.type,
-    seed + Math.floor(rng() * 100_000),
+    seed + Math.floor(mathRng() * 100_000),
     visual.r, visual.g, visual.b,
     mark.intensity ?? visual.intensity,
   );
