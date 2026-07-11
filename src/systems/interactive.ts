@@ -575,23 +575,45 @@ function runSearchFeature(ctx: ContentInteractionContext, resolved: ResolvedInte
   if (!ctx.openContainerMenu) return { handled: false };
   const world = ctx.world;
   const idx = resolved.instance.idx;
+  const container = resolveOrCreateFeatureLootContainer(world, ctx.state.currentFloor, idx, ctx);
+  if (!container) return { handled: false };
+
+  // Open the container
+  ctx.openContainerMenu(container);
+  // We can treat it like a container open event
+  publishInteractiveEvent(ctx, { ...resolved, container }, action);
+  return { handled: true, openedOverlay: true };
+}
+
+/** Resolve the loot container bound to a searchable decor feature cell, lazily
+ *  generating (and attaching container adapters across the contiguous feature
+ *  block) if one does not exist yet. Deterministic from cell+floor seed, so the
+ *  online host and every peer that searches the same spot converge on identical
+ *  contents. When `ctx` is omitted (host resolving a peer's search request) the
+ *  container is still created and registered — only the local adapter placement,
+ *  which is a render/interaction convenience, is skipped. */
+export function resolveOrCreateFeatureLootContainer(
+  world: World,
+  floor: FloorLevel,
+  idx: number,
+  ctx?: ContentInteractionContext,
+): WorldContainer | null {
   const feature = world.features[idx] as Feature;
-  
+
   // 1. Flood-fill to find if the block already has a container
   let container: WorldContainer | undefined | null = findContiguousFeatureContainer(world, idx, feature);
-  
+
   // 2. If not, generate the new feature_loot container for the block
   if (!container) {
     const x = idx % W;
     const y = (idx / W) | 0;
-    const floor = ctx.state.currentFloor;
     const level = calcZoneLevel(x, y, floor);
     const seed = featureLootSeed(idx, floor);
     const id = world.containers.reduce((mx, c) => Math.max(mx, c.id), 0) + 1;
     container = makeFeatureLootContainer(id, world, x, y, floor, feature, level, seed);
     if (container) {
       world.addContainer(container);
-      
+
       // Attach the container adapter to all contiguous features so they point to the same container
       const visited = new Set<number>();
       const q = [idx];
@@ -599,7 +621,7 @@ function runSearchFeature(ctx: ContentInteractionContext, resolved: ResolvedInte
       let limit = 24;
       while (q.length > 0 && limit-- > 0) {
         const cIdx = q.shift()!;
-        ensureContainerInstance(ctx, cIdx);
+        if (ctx) ensureContainerInstance(ctx, cIdx);
         const cx = cIdx % W;
         const cy = (cIdx / W) | 0;
         for (let i = 0; i < 4; i++) {
@@ -615,13 +637,7 @@ function runSearchFeature(ctx: ContentInteractionContext, resolved: ResolvedInte
     }
   }
 
-  if (!container) return { handled: false };
-
-  // 3. Open the container
-  ctx.openContainerMenu(container);
-  // We can treat it like a container open event
-  publishInteractiveEvent(ctx, { ...resolved, container }, action);
-  return { handled: true, openedOverlay: true };
+  return container ?? null;
 }
 
 function runAction(ctx: ContentInteractionContext, resolved: ResolvedInteractive, action: InteractiveActionDef): ContentInteractionResult {

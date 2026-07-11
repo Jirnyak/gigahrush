@@ -400,6 +400,12 @@ import {
   takeFromContainer,
   tickContainerAudits,
 } from './systems/containers';
+import {
+  containerSyncPayload,
+  resolvePeerContainerAtCell,
+  applyContainerSyncPayload,
+  type ContainerSyncPayload,
+} from './systems/online_containers';
 import { normalizeGameEconomy, primeTradePriceCache } from './systems/economy';
 import {
   addTradeAskFromSlot,
@@ -923,10 +929,29 @@ setOnlineMessageHandler((msgData: any) => {
           }
         }
       }
+
+      // ── Peer container: open / take / put — host-authoritative ──
+      // Peer sends the acting cell; host resolves (or lazily generates via
+      // search) the container, runs the real take/put against the peer actor so
+      // all theft/karma/purchase/event side effects stay host-owned, then echoes
+      // authoritative contents back. Peer inventory reconciles via entity_sync.
+      if (msgData.container) {
+        const op = msgData.container as { op: string; cx: number; cy: number; slot?: number };
+        const container = resolvePeerContainerAtCell(world, state.currentFloor, op.cx, op.cy);
+        if (container) {
+          const slot = Math.max(0, Math.floor(op.slot ?? 0));
+          if (op.op === 'take') {
+            takeFromContainer(container, actor, slot, 1, { state, world, entities });
+          } else if (op.op === 'put') {
+            putIntoContainer(container, actor, slot, 1, { state, world, entities });
+          }
+          // Echo authoritative contents to every peer so shared containers converge.
+          sendOnlineMessage({ type: 'container_sync', container: containerSyncPayload(container) });
+        }
+      }
     }
   }
 
-  // ── PEER: full-floor checkpoint stream from host ──
   if (msgData.type === 'floor_snapshot_begin' && isOnlinePeer()) {
     state.msgs.push(msg('Получаю этаж хоста...', state.time, '#8cf'));
     _snapTotal = Math.max(0, Math.floor(msgData.total ?? 0));
@@ -1082,6 +1107,22 @@ setOnlineMessageHandler((msgData: any) => {
         const door = world.doors.get(ds.idx);
         if (door && door.state !== ds.state) {
           setDoorState(world, door, ds.state as DoorState);
+        }
+      }
+    }
+  }
+
+  // ── PEER: authoritative container contents from host (cell-keyed) ──
+  if (msgData.type === 'container_sync' && isOnlinePeer() && onlinePeerFloorReady) {
+    const payload = msgData.container as ContainerSyncPayload | undefined;
+    if (payload) {
+      const container = applyContainerSyncPayload(world, payload);
+      // Re-point an open container menu at the host-truth id so the peer keeps
+      // viewing the same cell after a lazily-generated container swaps ids.
+      if (container && state.showContainerMenu) {
+        const open = world.containerById.get(state.containerMenuTarget);
+        if (!open || (open.x === container.x && open.y === container.y)) {
+          state.containerMenuTarget = container.id;
         }
       }
     }
@@ -5034,11 +5075,35 @@ function openContainerMenu(container: WorldContainer): void {
   state.containerCursorX = 0;
   state.containerCursorY = 0;
   state.containerSide = 'container';
+  // Online peer: ask the host to resolve (or lazily search-generate) this cell's
+  // container and echo its authoritative contents, so the menu shows host truth.
+  if (isOnlinePeer()) {
+    sendPeerAction({ container: { op: 'open', cx: container.x, cy: container.y, slot: 0 } });
+  }
   const access = containerAccessInfo(container, player, state);
   if (!access.canTake && !access.canPut) {
     state.msgs.push(msg(access.detail, state.time, '#f84'));
   } else if (access.theft) {
     state.msgs.push(msg('Чужой контейнер: взятие будет кражей.', state.time, '#f84'));
+  }
+}
+
+/** Online peer: mirror a container take/put to the host instead of mutating the
+ *  host-world container locally. The host runs the authoritative operation and
+ *  echoes contents back via `container_sync`; the peer's own inventory syncs
+ *  through `entity_sync`. Keeps all container side effects host-owned. */
+function peerContainerActivate(container: WorldContainer): void {
+  const idx = state.containerCursorY * INVENTORY_GRID_COLS + state.containerCursorX;
+  if (state.containerSide === 'container') {
+    const slot = container.inventory[idx];
+    if (!slot) { state.msgs.push(msg('Пустой слот.', state.time, '#888')); return; }
+    sendPeerAction({ container: { op: 'take', cx: container.x, cy: container.y, slot: idx } });
+    state.msgs.push(msg(`Взять: ${ITEMS[slot.defId]?.name ?? slot.defId}`, state.time, '#8f8'));
+  } else {
+    const slot = player.inventory?.[idx];
+    if (!slot) { state.msgs.push(msg('Пустой слот.', state.time, '#888')); return; }
+    sendPeerAction({ container: { op: 'put', cx: container.x, cy: container.y, slot: idx } });
+    state.msgs.push(msg(`Положить: ${ITEMS[slot.defId]?.name ?? slot.defId}`, state.time, '#8cf'));
   }
 }
 
@@ -6730,6 +6795,7 @@ function activateNpcQuest(npc: Entity | undefined): void {
 }
 
 function activateContainerSelection(container: WorldContainer): void {
+  if (isOnlinePeer()) { peerContainerActivate(container); return; }
   const idx = state.containerCursorY * INVENTORY_GRID_COLS + state.containerCursorX;
     const access = containerAccessInfo(container, player, state);
   if (state.containerSide === 'container') {
@@ -6751,6 +6817,15 @@ function activateContainerSelection(container: WorldContainer): void {
     } else {
       state.msgs.push(msg(slot ? 'Контейнер полон.' : 'Пустой слот.', state.time, '#888'));
     }
+  }
+  broadcastContainerIfHost(container);
+}
+
+/** Host: propagate a locally-mutated container's contents to peers so their
+ *  copies converge (peers otherwise only resync a container when they open it). */
+function broadcastContainerIfHost(container: WorldContainer): void {
+  if (isOnlineHost()) {
+    sendOnlineMessage({ type: 'container_sync', container: containerSyncPayload(container) });
   }
 }
 
@@ -8147,6 +8222,9 @@ function handleMenuInput(): void {
         }
       }
       if (acceptEdge) {
+        if (isOnlinePeer()) {
+          peerContainerActivate(container);
+        } else {
         const idx = state.containerCursorY * INVENTORY_GRID_COLS + state.containerCursorX;
         const access = containerAccessInfo(container, player, state);
         if (state.containerSide === 'container') {
@@ -8168,6 +8246,8 @@ function handleMenuInput(): void {
           } else {
             state.msgs.push(msg(slot ? 'Контейнер полон.' : 'Пустой слот.', state.time, '#888'));
           }
+        }
+        broadcastContainerIfHost(container);
         }
       }
     }

@@ -1819,6 +1819,8 @@ Official Cloudflare sources checked on 2026-05-24, with pricing rechecked on 202
 | host→peer | `floor_snapshot_chunk` | i, data (base64/JSON slice of the packed floor checkpoint) | Once on join, N chunks |
 | host→peer | `entity_sync` | Array of `SyncEntity` (id, type, x, y, angle, alive, hp, sprite, weapon, name, faction, speed, monsterKind, dropDefId...) | 8 Hz (125ms) |
 | host→peer | `door_sync` | Array of `{idx, state}` for nearby doors | 8 Hz (with entity_sync) |
+| peer→host | `peer_action.container` | `{op: open\|take\|put, cx, cy, slot}` — host-authoritative container loot/deposit/search | Immediate, no throttle |
+| host→peer | `container_sync` | `ContainerSyncPayload` (cell-keyed authoritative container contents) | On peer container op / host container mutation |
 | peer→host | `peer_join` | (empty, triggers remote actor spawn) | Once |
 | DO→host | `peer_disconnected` | slot | On peer close |
 | DO→peer | `host_disconnected` | (empty) | On host close |
@@ -1861,7 +1863,7 @@ Official Cloudflare sources checked on 2026-05-24, with pricing rechecked on 202
 - No reconnect support. If WebSocket drops, peer must rejoin manually.
 - Host loss freezes/ends the room. No handoff.
 - No projectile sync — peer sees host projectiles as entities but doesn't see its own projectiles locally (only the host spawns them).
-- Peer cannot use NPCs, containers, terminals, lifts or quest interactions.
+- Peer cannot use NPCs, terminals, lifts or quest interactions. (Static containers, deposit and "обыскать" search now work host-authoritatively — see the 2026-07-11 update.)
 - Save is fully separate: peer's online session doesn't affect their local offline save.
 - Samosbor disabled in online mode to avoid host/peer desync.
 
@@ -1872,6 +1874,14 @@ Official Cloudflare sources checked on 2026-05-24, with pricing rechecked on 202
 - New `src/systems/floor_serialization.ts`: `packFloorForNetwork` / `unpackFloorFromNetwork` + `serializeFloorSnapshot` / `deserializeFloorSnapshot` + `chunkFloorSnapshot` / `reassembleFloorSnapshot`. Reuses `worldForSave`/`worldFromSave` (RLE geometry) from `floor_memory.ts` verbatim — no new runtime deps, no duplicated compression. Projectiles and remote peer actors are excluded from the checkpoint; the host player body and live NPCs/monsters/drops are included.
 - The host no longer sends a bare seed (`floor_init` removed). Peers restore the host's exact mutated floor, killing every geometry/mutation desync class (the "peer walks far and the floor is wrong" bug). Transport is chunked (48 KB slices) to stay under the Cloudflare DO WebSocket frame limit; the join is one-shot so payload size over speed is an accepted trade.
 - **Peer→host PvP damage fix (HP siphon):** peer melee previously did a raw `e.hp -=` with no armor/blood/stagger/death-cause and drained HP as an untimed trickle (the fire edge streams every frame it is held). Peer attacks now resolve through the same pipeline the host uses for its own strikes (`selectMeleeTarget` → `applyMonsterArmorHit` → blood + `notifyActorDamaged`/`recordPlayerDamage` → kill handling) and are paced by the weapon's real fire interval (wall-clock gate per slot), so hits register discretely instead of siphoning.
+
+**Host-authoritative container looting + deposit + search (`src/systems/online_containers.ts`):**
+
+- Peers can now open, loot and deposit into host-world containers, and trigger "обыскать" (search) on decor features. Container identity on the wire is the **cell** (cx, cy), not the local numeric id — a feature-loot container searched independently on host and peer gets different ids but always occupies the same cell.
+- New peer→host `peer_action.container` op (`open` / `take` / `put`, with `cx, cy, slot`). The host resolves the container at that cell — lazily generating the feature-loot container via the refactored, now-exported `resolveOrCreateFeatureLootContainer` (interactive.ts) when the cell holds a searchable decor feature — then runs the real `takeFromContainer` / `putIntoContainer` against the **peer actor**, so all theft/karma/purchase/witness/event side effects stay host-owned. The peer's own inventory reconciles through the existing `entity_sync` + generation-counter path (identical to item pickup).
+- New host→peer `container_sync` (cell-keyed) echoes authoritative container contents. `applyContainerSyncPayload` upserts by cell into the peer world (matching a snapshot or peer-generated container, preserving its local id so an open menu stays valid) and re-points the open container menu. The host also broadcasts `container_sync` when it mutates a container itself, so shared containers converge for all peers.
+- Peer menus no longer mutate host-world containers locally — the take/put UI paths (`activateContainerSelection`, keyboard + tap handlers) route through the host when `isOnlinePeer()`, keeping the peer a thin viewer + requester. Known bound: a host-looted container only pushes to peers on the host's own edge action / the peer's next open, not continuously.
+
 
 ### Implementation Update 2026-07-10
 
